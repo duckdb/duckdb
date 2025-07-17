@@ -734,10 +734,10 @@ typedef struct _duckdb_arrow_array {
 	void *internal_ptr;
 } * duckdb_arrow_array;
 
-//! The Client Properties
-typedef struct _duckdb_client_properties {
+//! The arrow options used during arrow production.
+typedef struct _duckdb_arrow_options {
 	void *internal_ptr;
-} * duckdb_client_properties;
+} * duckdb_arrow_options;
 
 //===--------------------------------------------------------------------===//
 // DuckDB extension access
@@ -873,12 +873,12 @@ DUCKDB_C_API void duckdb_connection_get_client_context(duckdb_connection connect
                                                        duckdb_client_context *out_context);
 
 /*!
-Retrieves the client properties of the connection.
+Retrieves the arrow options of the connection.
 
 * @param connection The connection.
 */
-DUCKDB_C_API void duckdb_connection_get_client_properties(duckdb_connection connection,
-                                                          duckdb_client_properties *out_properties);
+DUCKDB_C_API void duckdb_connection_get_arrow_options(duckdb_connection connection,
+                                                      duckdb_arrow_options *out_arrow_options);
 
 /*!
 Returns the connection id of the client context.
@@ -896,10 +896,10 @@ Destroys the client context and deallocates its memory.
 DUCKDB_C_API void duckdb_destroy_client_context(duckdb_client_context *context);
 
 /*!
-Destroys the client properties and deallocates its memory.
+Destroys the arrow options and deallocates its memory.
 
 */
-DUCKDB_C_API void duckdb_destroy_client_properties(duckdb_client_properties *properties);
+DUCKDB_C_API void duckdb_destroy_arrow_options(duckdb_arrow_options *arrow_options);
 
 /*!
 Returns the version of the linked DuckDB, with a version postfix for dev versions
@@ -1102,16 +1102,12 @@ Returns `NULL` if the column is out of range.
 DUCKDB_C_API duckdb_logical_type duckdb_column_logical_type(duckdb_result *result, idx_t col);
 
 /*!
-Returns the client properties associated with the given result.
-
-This provides metadata about the client that executed the query, such as whether SSL was used or the client’s
-identifier.
-
-Returns default-initialized properties if unavailable.
-* @param result The result object to fetch client properties from.
-* @return The client properties associated with the given result.
+Returns the arrow options associated with the given result. These options are definitions of how the arrow arrays/schema
+should be produced.
+* @param result The result object to fetch arrow options from.
+* @return The arrow options associated with the given result.
 */
-DUCKDB_C_API duckdb_client_properties duckdb_client_property(duckdb_result *result);
+DUCKDB_C_API duckdb_arrow_options duckdb_result_get_arrow_options(duckdb_result *result);
 
 /*!
 Returns the number of columns present in a the result object.
@@ -4531,28 +4527,27 @@ DUCKDB_C_API char *duckdb_table_description_get_column_name(duckdb_table_descrip
 /*!
 Transforms a DuckDB Schema into an Arrow Schema
 
-* @param client_properties The client properties to extract the arrow settings from.
+* @param arrow_options The Arrow settings used to produce arrow.
 * @param types The DuckDB Logical Types for each column in the schema.
 * @param names The names for each column in the schema.
 * @param column_count The number of columns that exist in the schema.
 * @param out_schema The resulting arrow schema. Must be destroyed with `out_schema->release(out_schema)`.
 * @return The error data.
 */
-DUCKDB_C_API duckdb_error_data duckdb_to_arrow_schema(duckdb_client_properties client_properties,
-                                                      duckdb_logical_type *types, char **names, idx_t column_count,
-                                                      struct ArrowSchema *out_schema);
+DUCKDB_C_API duckdb_error_data duckdb_to_arrow_schema(duckdb_arrow_options arrow_options, duckdb_logical_type *types,
+                                                      char **names, idx_t column_count, struct ArrowSchema *out_schema);
 
 /*!
 Transforms a DuckDB data chunk into an Arrow array.
 
-* @param client_properties The client properties to extract the Arrow settings from.
+* @param arrow_options The Arrow settings used to produce arrow.
 * @param chunk The DuckDB data chunk to convert.
 * @param out_arrow_array The output Arrow structure that will hold the converted data. Must be released with
 `out_arrow_array->release(out_arrow_array)`
 * @return The error data.
 */
-DUCKDB_C_API duckdb_error_data duckdb_data_chunk_to_arrow(duckdb_client_properties client_properties,
-                                                          duckdb_data_chunk chunk, struct ArrowArray *out_arrow_array);
+DUCKDB_C_API duckdb_error_data duckdb_data_chunk_to_arrow(duckdb_arrow_options arrow_options, duckdb_data_chunk chunk,
+                                                          struct ArrowArray *out_arrow_array);
 
 /*!
 Transforms an Arrow Schema into a DuckDB Schema.

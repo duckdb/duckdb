@@ -550,10 +550,10 @@ static int get_schema(struct ArrowArrayStream *stream, struct ArrowSchema *out) 
 	}
 	OutNamesWrapper out_names_wrapper(names, count);
 
-	auto client_properties = duckdb_client_property(&result_wrapper->result);
+	auto arrow_options = duckdb_result_get_arrow_options(&result_wrapper->result);
 
-	auto res = duckdb_to_arrow_schema(client_properties, &types[0], names, count, out);
-	duckdb_destroy_client_properties(&client_properties);
+	auto res = duckdb_to_arrow_schema(arrow_options, &types[0], names, count, out);
+	duckdb_destroy_arrow_options(&arrow_options);
 	for (auto &type : types) {
 		duckdb_destroy_logical_type(&type);
 	}
@@ -575,10 +575,10 @@ static int get_next(struct ArrowArrayStream *stream, struct ArrowArray *out) {
 	if (!duckdb_chunk) {
 		return DuckDBSuccess;
 	}
-	auto client_properties = duckdb_client_property(&result_wrapper->result);
+	auto arrow_options = duckdb_result_get_arrow_options(&result_wrapper->result);
 
-	auto conversion_success = duckdb_data_chunk_to_arrow(client_properties, duckdb_chunk, out);
-	duckdb_destroy_client_properties(&client_properties);
+	auto conversion_success = duckdb_data_chunk_to_arrow(arrow_options, duckdb_chunk, out);
+	duckdb_destroy_arrow_options(&arrow_options);
 	duckdb_destroy_data_chunk(&duckdb_chunk);
 
 	if (conversion_success) {
@@ -815,10 +815,10 @@ AdbcStatusCode StatementGetParameterSchema(struct AdbcStatement *statement, stru
 		std::strcpy(names[i], name.c_str());
 	}
 
-	duckdb_client_properties client_properties;
-	duckdb_connection_get_client_properties(wrapper->connection, &client_properties);
+	duckdb_arrow_options arrow_options;
+	duckdb_connection_get_arrow_options(wrapper->connection, &arrow_options);
 
-	auto res = duckdb_to_arrow_schema(client_properties, &types[0], names, count, schema);
+	auto res = duckdb_to_arrow_schema(arrow_options, &types[0], names, count, schema);
 	for (idx_t i = 0; i < count; i++) {
 		delete[] names[i];
 	}
@@ -826,7 +826,7 @@ AdbcStatusCode StatementGetParameterSchema(struct AdbcStatement *statement, stru
 		duckdb_destroy_logical_type(&type);
 	}
 	delete[] names;
-	duckdb_destroy_client_properties(&client_properties);
+	duckdb_destroy_arrow_options(&arrow_options);
 
 	if (res) {
 		SetError(error, duckdb_error_data_message(res));

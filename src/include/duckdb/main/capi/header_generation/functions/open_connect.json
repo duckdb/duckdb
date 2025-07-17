@@ -228,7 +228,7 @@
             }
         },
         {
-            "name": "duckdb_connection_get_client_properties",
+            "name": "duckdb_connection_get_arrow_options",
             "return_type": "void",
             "params": [
                 {
@@ -236,15 +236,15 @@
                     "name": "connection"
                 },
                 {
-                    "type": "duckdb_client_properties*",
-                    "name": "out_properties"
+                    "type": "duckdb_arrow_options *",
+                    "name": "out_arrow_options"
                 }
             ],
             "comment": {
-                "description": "Retrieves the client properties of the connection.\n\n",
+                "description": "Retrieves the arrow options of the connection.\n\n",
                 "param_comments": {
                     "connection": "The connection.",
-                    "out_context": "The client properties of the connection. Must be destroyed with `duckdb_destroy_client_properties`."
+                    "out_context": "The arrow options of the connection. Must be destroyed with `duckdb_destroy_arrow_options`."
                 }
             }
         },
@@ -282,18 +282,18 @@
             }
         },
          {
-            "name": "duckdb_destroy_client_properties",
+            "name": "duckdb_destroy_arrow_options",
             "return_type": "void",
             "params": [
                 {
-                    "type": "duckdb_client_properties *",
-                    "name": "properties"
+                    "type": "duckdb_arrow_options *",
+                    "name": "arrow_options"
                 }
             ],
             "comment": {
-                "description": "Destroys the client properties and deallocates its memory.\n\n",
+                "description": "Destroys the arrow options and deallocates its memory.\n\n",
                 "param_comments": {
-                    "context": "The client properties to destroy."
+                    "context": "The arrow options to destroy."
                 }
             }
         },

@@ -733,10 +733,10 @@ typedef struct _duckdb_arrow_array {
 	void *internal_ptr;
 } * duckdb_arrow_array;
 
-//! The Client Properties
-typedef struct _duckdb_client_properties {
+//! The arrow options used during arrow production.
+typedef struct _duckdb_arrow_options {
 	void *internal_ptr;
-} * duckdb_client_properties;
+} * duckdb_arrow_options;
 
 
 //===--------------------------------------------------------------------===//

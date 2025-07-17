@@ -545,9 +545,9 @@ typedef struct {
 
 // New arrow interface functions
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
-	duckdb_error_data (*duckdb_to_arrow_schema)(duckdb_client_properties client_properties, duckdb_logical_type *types,
+	duckdb_error_data (*duckdb_to_arrow_schema)(duckdb_arrow_options arrow_options, duckdb_logical_type *types,
 	                                            char **names, idx_t column_count, struct ArrowSchema *out_schema);
-	duckdb_error_data (*duckdb_data_chunk_to_arrow)(duckdb_client_properties client_properties, duckdb_data_chunk chunk,
+	duckdb_error_data (*duckdb_data_chunk_to_arrow)(duckdb_arrow_options arrow_options, duckdb_data_chunk chunk,
 	                                                struct ArrowArray *out_arrow_array);
 	duckdb_error_data (*arrow_to_duckdb_schema)(duckdb_connection connection, struct ArrowSchema *schema,
 	                                            duckdb_arrow_converted_schema *out_types, char ***out_names,
@@ -573,14 +573,13 @@ typedef struct {
 	void (*duckdb_destroy_client_context)(duckdb_client_context *context);
 	void (*duckdb_connection_get_client_context)(duckdb_connection connection, duckdb_client_context *out_context);
 	duckdb_value (*duckdb_get_table_names)(duckdb_connection connection, const char *query, bool qualified);
-	void (*duckdb_connection_get_client_properties)(duckdb_connection connection,
-	                                                duckdb_client_properties *out_properties);
-	void (*duckdb_destroy_client_properties)(duckdb_client_properties *properties);
+	void (*duckdb_connection_get_arrow_options)(duckdb_connection connection, duckdb_arrow_options *out_arrow_options);
+	void (*duckdb_destroy_arrow_options)(duckdb_arrow_options *arrow_options);
 #endif
 
 // New query execution functions
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
-	duckdb_client_properties (*duckdb_client_property)(duckdb_result *result);
+	duckdb_arrow_options (*duckdb_result_get_arrow_options)(duckdb_result *result);
 #endif
 
 // New functions around scalar function binding
@@ -1059,14 +1058,14 @@ typedef struct {
 
 // Version unstable_new_open_connect_functions
 #define duckdb_connection_get_client_context    duckdb_ext_api.duckdb_connection_get_client_context
-#define duckdb_connection_get_client_properties duckdb_ext_api.duckdb_connection_get_client_properties
+#define duckdb_connection_get_arrow_options     duckdb_ext_api.duckdb_connection_get_arrow_options
 #define duckdb_client_context_get_connection_id duckdb_ext_api.duckdb_client_context_get_connection_id
 #define duckdb_destroy_client_context           duckdb_ext_api.duckdb_destroy_client_context
-#define duckdb_destroy_client_properties        duckdb_ext_api.duckdb_destroy_client_properties
+#define duckdb_destroy_arrow_options            duckdb_ext_api.duckdb_destroy_arrow_options
 #define duckdb_get_table_names                  duckdb_ext_api.duckdb_get_table_names
 
 // Version unstable_new_query_execution_functions
-#define duckdb_client_property duckdb_ext_api.duckdb_client_property
+#define duckdb_result_get_arrow_options duckdb_ext_api.duckdb_result_get_arrow_options
 
 // Version unstable_new_scalar_function_functions
 #define duckdb_scalar_function_set_bind            duckdb_ext_api.duckdb_scalar_function_set_bind

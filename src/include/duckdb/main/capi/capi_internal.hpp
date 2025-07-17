@@ -42,8 +42,8 @@ struct CClientContextWrapper {
 	ClientContext &context;
 };
 
-struct CClientPropertiesWrapper {
-	explicit CClientPropertiesWrapper(ClientProperties &properties) : properties(properties) {};
+struct CClientArrowOptionsWrapper {
+	explicit CClientArrowOptionsWrapper(ClientProperties &properties) : properties(properties) {};
 	ClientProperties properties;
 };
 

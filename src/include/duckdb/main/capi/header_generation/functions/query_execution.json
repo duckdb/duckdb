@@ -129,8 +129,8 @@
             }
         },
         {
-            "name": "duckdb_client_property",
-            "return_type": "duckdb_client_properties",
+            "name": "duckdb_result_get_arrow_options",
+            "return_type": "duckdb_arrow_options",
             "params": [
                 {
                     "type": "duckdb_result *",
@@ -138,11 +138,11 @@
                 }
             ],
            "comment": {
-                "description": "Returns the client properties associated with the given result.\n\nThis provides metadata about the client that executed the query, such as whether SSL was used or the client’s identifier.\n\nReturns default-initialized properties if unavailable.\n",
+                "description": "Returns the arrow options associated with the given result. These options are definitions of how the arrow arrays/schema should be produced.\n",
                 "param_comments": {
-                    "result": "The result object to fetch client properties from."
+                    "result": "The result object to fetch arrow options from."
                 },
-                "return_value": "The client properties associated with the given result."
+                "return_value": "The arrow options associated with the given result."
             }
         },
         {

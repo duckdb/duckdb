@@ -6,7 +6,7 @@
     "duckdb_destroy_client_context",
     "duckdb_connection_get_client_context",
     "duckdb_get_table_names",
-    "duckdb_connection_get_client_properties",
-    "duckdb_destroy_client_properties"
+    "duckdb_connection_get_arrow_options",
+    "duckdb_destroy_arrow_options"
   ]
 }
