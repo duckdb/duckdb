@@ -718,7 +718,7 @@ typedef struct _duckdb_arrow_stream {
 	void *internal_ptr;
 } * duckdb_arrow_stream;
 
-//! Holds an arrow schema. Must be destroyed with `duckdb_destroy_arrow_schema`
+//! Holds an arrow schema. Remember to release the respective ArrowSchema object.
 typedef struct _duckdb_arrow_schema {
 	void *internal_ptr;
 } * duckdb_arrow_schema;
@@ -729,7 +729,7 @@ typedef struct _duckdb_arrow_converted_schema {
 	void *internal_ptr;
 } * duckdb_arrow_converted_schema;
 
-//! Holds an arrow array. Must be destroyed with `duckdb_destroy_arrow_array`
+//! Holds an arrow array. Remember to release the respective ArrowSchema object.
 typedef struct _duckdb_arrow_array {
 	void *internal_ptr;
 } * duckdb_arrow_array;

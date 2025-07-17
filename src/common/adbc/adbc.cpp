@@ -556,7 +556,6 @@ static int get_schema(struct ArrowArrayStream *stream, struct ArrowSchema *out) 
 	for (auto &type : types) {
 		duckdb_destroy_logical_type(&type);
 	}
-	// OutNamesWrapper will clean up names
 	if (res) {
 		duckdb_destroy_error_data(&res);
 		return DuckDBError;
