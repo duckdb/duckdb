@@ -126,21 +126,25 @@ void ColumnCheckpointState::FlushSegmentInternal(unique_ptr<ColumnSegment> segme
 		return;
 	} // LCOV_EXCL_STOP
 
-	// merge the segment stats into the global stats
+	// Merge the segment statistics into the global statistics.
 	global_stats->Merge(segment->stats.statistics);
 
-	// get the buffer of the segment and pin it
-	auto &db = column_data.GetDatabase();
-	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	block_id_t block_id = INVALID_BLOCK;
 	uint32_t offset_in_block = 0;
 
 	unique_lock<mutex> partial_block_lock;
-	if (!segment->stats.statistics.IsConstant()) {
+	if (segment->stats.statistics.IsConstant()) {
+		// Constant block.
+		segment->ConvertToPersistent(partial_block_manager.GetClientContext(), nullptr, INVALID_BLOCK);
+
+	} else if (segment_size != 0) {
+		// Non-constant block with data that has to go to disk.
+		auto &db = column_data.GetDatabase();
+		auto &buffer_manager = BufferManager::GetBufferManager(db);
 		partial_block_lock = partial_block_manager.GetLock();
 
-		// non-constant block
-		auto allocation = partial_block_manager.GetBlockAllocation(NumericCast<uint32_t>(segment_size));
+		auto cast_segment_size = NumericCast<uint32_t>(segment_size);
+		auto allocation = partial_block_manager.GetBlockAllocation(cast_segment_size);
 		block_id = allocation.state.block_id;
 		offset_in_block = allocation.state.offset;
 
@@ -169,8 +173,12 @@ void ColumnCheckpointState::FlushSegmentInternal(unique_ptr<ColumnSegment> segme
 		}
 		// Writer will decide whether to reuse this block.
 		partial_block_manager.RegisterPartialBlock(std::move(allocation));
+
 	} else {
-		segment->ConvertToPersistent(partial_block_manager.GetClientContext(), nullptr, INVALID_BLOCK);
+		// Empty segment, which does not have to go to disk.
+		// We still need to change its type to persistent, because we need to write its metadata.
+		segment->segment_type = ColumnSegmentType::PERSISTENT;
+		segment->block.reset();
 	}
 
 	// construct the data pointer
