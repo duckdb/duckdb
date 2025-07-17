@@ -314,12 +314,13 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
 
 	/* Report an error if the results do not match expectation */
 	if (error) {
-		if (expected_result == ExpectedResult::RESULT_SUCCESS && SkipErrorMessage(result.GetError()) &&
-		    SkipLoggingSameError(statement.file_name)) {
+		if (expected_result == ExpectedResult::RESULT_SUCCESS && SkipErrorMessage(result.GetError())) {
 			runner.finished_processing_file = true;
 			return true;
 		}
-		logger.UnexpectedStatement(expected_result == ExpectedResult::RESULT_SUCCESS, result);
+		if (!SkipLoggingSameError(statement.file_name)) {
+			logger.UnexpectedStatement(expected_result == ExpectedResult::RESULT_SUCCESS, result);
+		}
 		return false;
 	}
 	if (error) {
