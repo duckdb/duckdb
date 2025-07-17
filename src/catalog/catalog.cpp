@@ -892,10 +892,12 @@ CatalogEntryLookup Catalog::TryLookupDefaultTable(CatalogEntryRetriever &retriev
 
 	vector<CatalogLookup> catalog_by_name_lookups;
 	auto catalog_by_name = GetCatalogEntry(retriever, lookup_info.GetEntryName());
+
 	if (catalog_by_name && catalog_by_name->HasDefaultTable()) {
 		QueryErrorContext context;
-		EntryLookupInfo info = EntryLookupInfo(CatalogType::TABLE_ENTRY, catalog_by_name->GetDefaultTable(),
-		                                       lookup_info.GetAtClause(), context);
+		auto default_table = catalog_by_name->GetDefaultTable();
+		EntryLookupInfo info =
+		    EntryLookupInfo(CatalogType::TABLE_ENTRY, default_table, lookup_info.GetAtClause(), context);
 		catalog_by_name_lookups.emplace_back(*catalog_by_name, catalog_by_name->GetDefaultTableSchema(), info);
 		return TryLookupEntry(retriever, catalog_by_name_lookups, lookup_info, if_not_found);
 	}
