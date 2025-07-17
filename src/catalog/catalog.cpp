@@ -897,6 +897,7 @@ CatalogEntryLookup Catalog::TryLookupDefaultTable(CatalogEntryRetriever &retriev
 		EntryLookupInfo info = EntryLookupInfo(CatalogType::TABLE_ENTRY, catalog_by_name->GetDefaultTable(),
 		                                       lookup_info.GetAtClause(), context);
 		catalog_by_name_lookups.emplace_back(*catalog_by_name, catalog_by_name->GetDefaultTableSchema(), info);
+		return TryLookupEntry(retriever, catalog_by_name_lookups, lookup_info, if_not_found);
 	}
 
 	return TryLookupEntry(retriever, catalog_by_name_lookups, lookup_info, if_not_found);
