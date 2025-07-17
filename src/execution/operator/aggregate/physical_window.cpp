@@ -591,10 +591,20 @@ static LogicalType PrefixStructType(HashedSortGlobalSinkState::Orders &orders, c
 		std::pair<string, LogicalType> child {name, type};
 		partition_children.emplace_back(child);
 	}
+	//	For single children, don;t build a struct - compare will be slow
+	if (partition_children.size() == 1) {
+		return partition_children[0].second;
+	}
 	return LogicalType::STRUCT(partition_children);
 }
 
 static void ReferenceStructColumns(DataChunk &chunk, Vector &vec, column_t begin = 0) {
+	//	Check for single column
+	if (vec.GetType().InternalType() != PhysicalType::STRUCT) {
+		vec.Reference(chunk.data[begin]);
+		return;
+	}
+
 	auto &entries = StructVector::GetEntries(vec);
 	for (column_t i = 0; i < entries.size(); ++i) {
 		entries[i]->Reference(chunk.data[begin + i]);
@@ -664,6 +674,7 @@ void WindowHashGroup::ComputeMasks(ValidityMask &partition_mask, OrderMasks &ord
 			prev_count = 1;
 			sel_t last = UnsafeNumericCast<sel_t>(scanned.size() - 1);
 			SelectionVector sel(&last);
+			delayed.Reset();
 			scanned.Copy(delayed, sel, prev_count);
 			prev = &delayed;
 
@@ -707,7 +718,7 @@ void WindowHashGroup::ComputeMasks(ValidityMask &partition_mask, OrderMasks &ord
 		const auto remaining = prev_count - n;
 		if (remaining) {
 			//	If n is 0, neither SV has been filled in?
-			auto sub_select = n ? &matching : nullptr;
+			auto sub_sel = n ? &matching : FlatVector::IncrementalSelectionVector();
 			for (auto &order_mask : order_masks) {
 				// If there are no order columns, then all the partition elements are peers and we are done
 				if (partitions.size() == order_mask.first) {
@@ -719,10 +730,15 @@ void WindowHashGroup::ComputeMasks(ValidityMask &partition_mask, OrderMasks &ord
 				auto &order_curr = prefix.data[1];
 				ReferenceStructColumns(*prev, order_prev, partitions.size());
 				ReferenceStructColumns(*curr, order_curr, partitions.size());
+				if (n) {
+					prefix.Slice(*sub_sel, remaining);
+				} else {
+					prefix.SetCardinality(remaining);
+				}
 				const auto m =
-				    VectorOperations::DistinctFrom(order_curr, order_prev, sub_select, remaining, &distinct, nullptr);
+				    VectorOperations::DistinctFrom(order_curr, order_prev, nullptr, remaining, &distinct, nullptr);
 				for (idx_t i = 0; i < m; ++i) {
-					const idx_t curr_index = row_idx + distinct.get_index(i);
+					const idx_t curr_index = row_idx + sub_sel->get_index(distinct.get_index(i));
 					order_mask.second.SetValidUnsafe(curr_index);
 				}
 			}
