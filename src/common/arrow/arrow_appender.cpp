@@ -260,13 +260,13 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 	case LogicalTypeId::ENUM:
 		switch (type.InternalType()) {
 		case PhysicalType::UINT8:
-			InitializeAppenderForType<ArrowEnumData<int8_t>>(append_data);
+			InitializeAppenderForType<ArrowEnumData<uint8_t>>(append_data);
 			break;
 		case PhysicalType::UINT16:
-			InitializeAppenderForType<ArrowEnumData<int16_t>>(append_data);
+			InitializeAppenderForType<ArrowEnumData<uint16_t>>(append_data);
 			break;
 		case PhysicalType::UINT32:
-			InitializeAppenderForType<ArrowEnumData<int32_t>>(append_data);
+			InitializeAppenderForType<ArrowEnumData<uint32_t>>(append_data);
 			break;
 		default:
 			throw InternalException("Unsupported internal enum type");

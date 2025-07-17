@@ -17,15 +17,27 @@ LogicalMergeInto::LogicalMergeInto(ClientContext &context, const unique_ptr<Crea
 }
 
 idx_t LogicalMergeInto::EstimateCardinality(ClientContext &context) {
-	return 1;
+	return return_chunk ? LogicalOperator::EstimateCardinality(context) : 1;
+}
+
+vector<idx_t> LogicalMergeInto::GetTableIndex() const {
+	return vector<idx_t> {table_index};
 }
 
 vector<ColumnBinding> LogicalMergeInto::GetColumnBindings() {
+	if (return_chunk) {
+		return GenerateColumnBindings(table_index, table.GetTypes().size() + 1);
+	}
 	return {ColumnBinding(0, 0)};
 }
 
 void LogicalMergeInto::ResolveTypes() {
-	types.emplace_back(LogicalType::BIGINT);
+	if (return_chunk) {
+		types = table.GetTypes();
+		types.push_back(LogicalType::VARCHAR);
+	} else {
+		types.emplace_back(LogicalType::BIGINT);
+	}
 }
 
 } // namespace duckdb

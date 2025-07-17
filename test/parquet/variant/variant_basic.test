@@ -3,9 +3,6 @@
 
 require parquet
 
-statement ok
-set variant_legacy_encoding=true;
-
 # Array
 query II
 from 'data/parquet-testing/variant_array_array_string_and_integer.parquet';
@@ -81,7 +78,7 @@ from 'data/parquet-testing/variant_array_array_string.parquet';
 ----
 1	[["string","iceberg"],["apple","banana"]]
 
-# TIMESTAMP_NANOS_NTZ
+# TIMESTAMP_MICROS
 query II
 from 'data/parquet-testing/variant_timestamp_micros.parquet';
 ----
@@ -116,7 +113,7 @@ from 'data/parquet-testing/variant_decimal16_negative.parquet';
 query II
 from 'data/parquet-testing/variant_timestamp_nanos1.parquet';
 ----
-1	"1957-11-07 12:33:54.123456789+00"
+1	"1957-11-07 12:33:54.123457+00"
 
 query II
 from 'data/parquet-testing/variant_decimal8_negative.parquet';
@@ -136,7 +133,7 @@ from 'data/parquet-testing/variant_int8_positive.parquet';
 query II
 from 'data/parquet-testing/variant_timestamp_nanos2.parquet';
 ----
-1	"2024-11-07 12:33:54.123456789+00"
+1	"2024-11-07 12:33:54.123456+00"
 
 query II
 from 'data/parquet-testing/variant_int8_negative.parquet';
@@ -181,7 +178,7 @@ from 'data/parquet-testing/variant_object_empty.parquet';
 query II
 from 'data/parquet-testing/variant_null.parquet';
 ----
-1	null
+1	NULL
 
 # -10.11 in the test that it was generated from
 query II

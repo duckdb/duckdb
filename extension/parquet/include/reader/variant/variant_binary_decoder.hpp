@@ -1,7 +1,8 @@
 #pragma once
 
 #include "duckdb/common/types/string_type.hpp"
-#include "yyjson.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "reader/variant/variant_value.hpp"
 
 using namespace duckdb_yyjson;
 
@@ -130,23 +131,20 @@ public:
 
 class VariantBinaryDecoder {
 public:
-	explicit VariantBinaryDecoder(ClientContext &context);
+	VariantBinaryDecoder() = delete;
 
 public:
-	yyjson_mut_val *Decode(yyjson_mut_doc *doc, const VariantMetadata &metadata, const_data_ptr_t data);
+	static VariantValue Decode(const VariantMetadata &metadata, const_data_ptr_t data);
 
 public:
-	yyjson_mut_val *PrimitiveTypeDecode(yyjson_mut_doc *doc, const VariantMetadata &metadata,
-	                                    const VariantValueMetadata &value_metadata, const_data_ptr_t data);
-	yyjson_mut_val *ShortStringDecode(yyjson_mut_doc *doc, const VariantMetadata &metadata,
-	                                  const VariantValueMetadata &value_metadata, const_data_ptr_t data);
-	yyjson_mut_val *ObjectDecode(yyjson_mut_doc *doc, const VariantMetadata &metadata,
-	                             const VariantValueMetadata &value_metadata, const_data_ptr_t data);
-	yyjson_mut_val *ArrayDecode(yyjson_mut_doc *doc, const VariantMetadata &metadata,
-	                            const VariantValueMetadata &value_metadata, const_data_ptr_t data);
-
-public:
-	ClientContext &context;
+	static VariantValue PrimitiveTypeDecode(const VariantMetadata &metadata, const VariantValueMetadata &value_metadata,
+	                                        const_data_ptr_t data);
+	static VariantValue ShortStringDecode(const VariantMetadata &metadata, const VariantValueMetadata &value_metadata,
+	                                      const_data_ptr_t data);
+	static VariantValue ObjectDecode(const VariantMetadata &metadata, const VariantValueMetadata &value_metadata,
+	                                 const_data_ptr_t data);
+	static VariantValue ArrayDecode(const VariantMetadata &metadata, const VariantValueMetadata &value_metadata,
+	                                const_data_ptr_t data);
 };
 
 } // namespace duckdb

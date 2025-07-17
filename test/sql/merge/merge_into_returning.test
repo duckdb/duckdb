@@ -1,0 +1,77 @@
+# name: test/sql/merge/merge_into_returning.test
+# description: Test MERGE INTO with RETURNING
+# group: [merge]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE Stock(item_id int, balance int);
+
+statement ok
+CREATE TABLE Buy(item_id int, volume int);
+
+statement ok
+INSERT INTO Buy values(10, 1000);
+
+statement ok
+INSERT INTO Buy values(30, 300);
+
+# basic returning
+query III
+WITH initial_stocks(item_id, balance) AS (VALUES (10, 2200), (20, 1900))
+MERGE INTO Stock USING initial_stocks ON FALSE
+WHEN MATCHED THEN DO NOTHING
+WHEN NOT MATCHED THEN INSERT VALUES (initial_stocks.item_id, initial_stocks.balance)
+RETURNING merge_action, *
+----
+INSERT	10	2200
+INSERT	20	1900
+
+# do nothing returns nothing
+query II
+WITH initial_stocks(item_id, balance) AS (VALUES (10, 2200), (20, 1900))
+MERGE INTO Stock USING initial_stocks ON (Stock.item_id = initial_stocks.item_id)
+WHEN NOT MATCHED THEN INSERT VALUES (initial_stocks.item_id, initial_stocks.balance)
+RETURNING *
+----
+
+# update and insert
+query III
+MERGE INTO Stock AS s USING Buy AS b ON s.item_id = b.item_id
+WHEN MATCHED THEN UPDATE SET balance = balance + b.volume
+WHEN NOT MATCHED THEN INSERT VALUES (b.item_id, b.volume)
+RETURNING *, merge_action;
+----
+10	3200	UPDATE
+30	300	INSERT
+
+# sell - deleting all rows that are fully sold
+statement ok
+CREATE TABLE Sale(item_id int, volume int);
+
+statement ok
+INSERT INTO Sale VALUES (10, 2200);
+
+statement ok
+INSERT INTO Sale VALUES (20, 1900);
+
+query III
+MERGE INTO Stock USING Sale ON Stock.item_id = Sale.item_id
+WHEN MATCHED AND Sale.volume > balance THEN ERROR
+WHEN MATCHED AND Sale.volume = balance THEN DELETE
+WHEN MATCHED AND TRUE THEN UPDATE SET balance = balance - Sale.volume
+WHEN MATCHED THEN ERROR
+WHEN NOT MATCHED THEN ERROR
+RETURNING Stock.item_id, merge_action, Stock.balance
+----
+20	DELETE	1900
+10	UPDATE	1000
+
+query III
+WITH deleted_stocks(item_id) AS (VALUES (30))
+MERGE INTO Stock USING deleted_stocks ON Stock.item_id = deleted_stocks.item_id
+WHEN MATCHED THEN DELETE
+RETURNING *, merge_action;
+----
+30	300	DELETE

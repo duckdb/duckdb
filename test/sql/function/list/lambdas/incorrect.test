@@ -2,6 +2,8 @@
 # description: Test incorrect usage of the lambda functions
 # group: [lambdas]
 
+require no_extension_autoloading "EXPECTED: This tests is not compatible with JSON extension, that will otherwise be autoloaded"
+
 statement ok
 PRAGMA enable_verification;
 

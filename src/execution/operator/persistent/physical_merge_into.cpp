@@ -6,9 +6,10 @@ namespace duckdb {
 
 PhysicalMergeInto::PhysicalMergeInto(PhysicalPlan &physical_plan, vector<LogicalType> types,
                                      map<MergeActionCondition, vector<unique_ptr<MergeIntoOperator>>> actions_p,
-                                     idx_t row_id_index, optional_idx source_marker, bool parallel_p)
+                                     idx_t row_id_index, optional_idx source_marker, bool parallel_p,
+                                     bool return_chunk_p)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::MERGE_INTO, std::move(types), 1),
-      row_id_index(row_id_index), source_marker(source_marker), parallel(parallel_p) {
+      row_id_index(row_id_index), source_marker(source_marker), parallel(parallel_p), return_chunk(return_chunk_p) {
 
 	map<MergeActionCondition, MergeActionRange> ranges;
 	for (auto &entry : actions_p) {
@@ -396,15 +397,119 @@ SinkFinalizeType PhysicalMergeInto::Finalize(Pipeline &pipeline, Event &event, C
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
+class MergeGlobalSourceState : public GlobalSourceState {
+public:
+	explicit MergeGlobalSourceState(ClientContext &context, const PhysicalMergeInto &op) {
+		if (!op.return_chunk) {
+			return;
+		}
+		auto &g = op.sink_state->Cast<MergeIntoGlobalState>();
+		for (idx_t i = 0; i < op.actions.size(); i++) {
+			auto &action = *op.actions[i];
+			unique_ptr<GlobalSourceState> global_state;
+			if (action.op) {
+				// assign the global sink state
+				action.op->sink_state = std::move(g.sink_states[i]);
+				// initialize the global source state
+				global_state = action.op->GetGlobalSourceState(context);
+			}
+			global_states.push_back(std::move(global_state));
+		}
+	}
+
+	vector<unique_ptr<GlobalSourceState>> global_states;
+};
+
+class MergeLocalSourceState : public LocalSourceState {
+public:
+	explicit MergeLocalSourceState(ExecutionContext &context, const PhysicalMergeInto &op,
+	                               MergeGlobalSourceState &gstate) {
+		if (!op.return_chunk) {
+			return;
+		}
+		for (idx_t i = 0; i < op.actions.size(); i++) {
+			auto &action = *op.actions[i];
+			unique_ptr<LocalSourceState> local_state;
+			if (action.op) {
+				local_state = action.op->GetLocalSourceState(context, *gstate.global_states[i]);
+			}
+			local_states.push_back(std::move(local_state));
+		}
+		vector<LogicalType> scan_types;
+		for (idx_t c = 0; c < op.types.size() - 1; c++) {
+			scan_types.emplace_back(op.types[c]);
+		}
+		scan_chunk.Initialize(context.client, scan_types);
+	}
+
+	DataChunk scan_chunk;
+	vector<unique_ptr<LocalSourceState>> local_states;
+	idx_t index = 0;
+};
+
 unique_ptr<GlobalSourceState> PhysicalMergeInto::GetGlobalSourceState(ClientContext &context) const {
-	return make_uniq<GlobalSourceState>();
+	return make_uniq<MergeGlobalSourceState>(context, *this);
+}
+
+unique_ptr<LocalSourceState> PhysicalMergeInto::GetLocalSourceState(ExecutionContext &context,
+                                                                    GlobalSourceState &gstate) const {
+	return make_uniq<MergeLocalSourceState>(context, *this, gstate.Cast<MergeGlobalSourceState>());
 }
 
 SourceResultType PhysicalMergeInto::GetData(ExecutionContext &context, DataChunk &chunk,
                                             OperatorSourceInput &input) const {
 	auto &g = sink_state->Cast<MergeIntoGlobalState>();
-	chunk.SetCardinality(1);
-	chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(g.merged_count.load())));
+	if (!return_chunk) {
+		chunk.SetCardinality(1);
+		chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(g.merged_count.load())));
+		return SourceResultType::FINISHED;
+	}
+	auto &gstate = input.global_state.Cast<MergeGlobalSourceState>();
+	auto &lstate = input.local_state.Cast<MergeLocalSourceState>();
+	chunk.Reset();
+	for (; lstate.index < actions.size(); lstate.index++) {
+		auto &action = *actions[lstate.index];
+		if (!action.op) {
+			// no action to scan from
+			continue;
+		}
+		auto &child_gstate = *gstate.global_states[lstate.index];
+		auto &child_lstate = *lstate.local_states[lstate.index];
+		OperatorSourceInput source_input {child_gstate, child_lstate, input.interrupt_state};
+
+		auto result = action.op->GetData(context, lstate.scan_chunk, source_input);
+		if (lstate.scan_chunk.size() > 0) {
+			// construct the result chunk
+			for (idx_t c = 0; c < lstate.scan_chunk.ColumnCount(); c++) {
+				chunk.data[c].Reference(lstate.scan_chunk.data[c]);
+			}
+			// set the merge action
+			string merge_action_name;
+			switch (action.action_type) {
+			case MergeActionType::MERGE_UPDATE:
+				merge_action_name = "UPDATE";
+				break;
+			case MergeActionType::MERGE_INSERT:
+				merge_action_name = "INSERT";
+				break;
+			case MergeActionType::MERGE_DELETE:
+				merge_action_name = "DELETE";
+				break;
+			default:
+				throw InternalException("Unsupported merge action for RETURNING");
+			}
+			Value merge_action(merge_action_name);
+			chunk.data.back().Reference(merge_action);
+			chunk.SetCardinality(lstate.scan_chunk.size());
+		}
+
+		if (result != SourceResultType::FINISHED) {
+			return result;
+		}
+		if (chunk.size() != 0) {
+			return SourceResultType::HAVE_MORE_OUTPUT;
+		}
+	}
 	return SourceResultType::FINISHED;
 }
 

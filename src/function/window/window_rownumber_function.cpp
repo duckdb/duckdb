@@ -113,7 +113,7 @@ void WindowRowNumberExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate
                                                idx_t row_idx) const {
 	auto &grstate = gstate.Cast<WindowRowNumberGlobalState>();
 	auto &lrstate = lstate.Cast<WindowRowNumberLocalState>();
-	auto rdata = FlatVector::GetData<uint64_t>(result);
+	auto rdata = FlatVector::GetData<int64_t>(result);
 
 	if (grstate.use_framing) {
 		auto frame_begin = FlatVector::GetData<const idx_t>(lrstate.bounds.data[FRAME_BEGIN]);
@@ -121,11 +121,11 @@ void WindowRowNumberExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate
 		if (grstate.token_tree) {
 			for (idx_t i = 0; i < count; ++i, ++row_idx) {
 				// Row numbers are unique ranks
-				rdata[i] = grstate.token_tree->Rank(frame_begin[i], frame_end[i], row_idx);
+				rdata[i] = UnsafeNumericCast<int64_t>(grstate.token_tree->Rank(frame_begin[i], frame_end[i], row_idx));
 			}
 		} else {
 			for (idx_t i = 0; i < count; ++i, ++row_idx) {
-				rdata[i] = row_idx - frame_begin[i] + 1;
+				rdata[i] = UnsafeNumericCast<int64_t>(row_idx - frame_begin[i] + 1);
 			}
 		}
 		return;
@@ -133,7 +133,7 @@ void WindowRowNumberExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate
 
 	auto partition_begin = FlatVector::GetData<const idx_t>(lrstate.bounds.data[PARTITION_BEGIN]);
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
-		rdata[i] = row_idx - partition_begin[i] + 1;
+		rdata[i] = UnsafeNumericCast<int64_t>(row_idx - partition_begin[i] + 1);
 	}
 }
 

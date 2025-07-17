@@ -16,6 +16,9 @@ MergeIntoStatement::MergeIntoStatement(const MergeIntoStatement &other) : SQLSta
 			action_list.push_back(action->Copy());
 		}
 	}
+	for (auto &entry : other.returning_list) {
+		returning_list.push_back(entry->Copy());
+	}
 	cte_map = other.cte_map.Copy();
 }
 
@@ -58,6 +61,20 @@ string MergeIntoStatement::ToString() const {
 			result += MergeIntoStatement::ActionConditionToString(entry.first);
 			result += " ";
 			result += action->ToString();
+		}
+	}
+	if (!returning_list.empty()) {
+		result += " RETURNING ";
+		for (idx_t i = 0; i < returning_list.size(); i++) {
+			if (i > 0) {
+				result += ", ";
+			}
+			auto column = returning_list[i]->ToString();
+			if (!returning_list[i]->GetAlias().empty()) {
+				column +=
+				    StringUtil::Format(" AS %s", KeywordHelper::WriteOptionallyQuoted(returning_list[i]->GetAlias()));
+			}
+			result += column;
 		}
 	}
 	return result;
