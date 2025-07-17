@@ -38,15 +38,22 @@ struct WindowSourceTask {
 class ColumnDataCollectionScanner {
 public:
 	ColumnDataCollectionScanner(ColumnDataCollection &collection, const vector<column_t> &scan_ids,
-	                            const idx_t begin_idx, const idx_t end_idx)
-	    : collection(collection), end_idx(end_idx) {
+	                            const idx_t begin_idx)
+	    : collection(collection), curr_idx(0) {
 		collection.InitializeScan(state, scan_ids);
 		collection.InitializeScanChunk(state, chunk);
 
+		Seek(begin_idx);
+	}
+
+	void Seek(idx_t begin_idx) {
 		idx_t chunk_idx;
 		idx_t seg_idx;
 		idx_t row_idx;
-		for (idx_t curr_idx = 0; curr_idx < begin_idx; ++curr_idx) {
+		for (; curr_idx > begin_idx; --curr_idx) {
+			collection.PrevScanIndex(state, chunk_idx, seg_idx, row_idx);
+		}
+		for (; curr_idx < begin_idx; ++curr_idx) {
 			collection.NextScanIndex(state, chunk_idx, seg_idx, row_idx);
 		}
 	}
@@ -61,15 +68,10 @@ public:
 		return state.next_row_index;
 	}
 
-	bool Remaining() const {
-		return curr_idx < end_idx;
-	}
-
 	ColumnDataCollection &collection;
 	ColumnDataScanState state;
 	DataChunk chunk;
 	idx_t curr_idx;
-	const idx_t end_idx;
 };
 
 class WindowHashGroup {
@@ -83,6 +85,7 @@ public:
 	using ThreadLocalStates = vector<ExecutorLocalStates>;
 	using Task = WindowSourceTask;
 	using TaskPtr = optional_ptr<Task>;
+	using ScannerPtr = unique_ptr<ColumnDataCollectionScanner>;
 
 	WindowHashGroup(WindowGlobalSinkState &gsink, const idx_t hash_bin_p);
 
@@ -101,8 +104,9 @@ public:
 	// Set up the task parameters
 	idx_t InitTasks(idx_t per_thread);
 
-	// Scan all of the chunks
-	unique_ptr<ColumnDataCollectionScanner> GetScanner(const idx_t begin_idx, const idx_t end_idx) const;
+	// Scan all of the chunks, starting at a given point
+	ScannerPtr GetScanner(const idx_t begin_idx) const;
+	void UpdateScanner(ScannerPtr &scanner, idx_t begin_idx) const;
 
 	// The processing stage for this group
 	WindowGroupStage GetStage() const {
@@ -574,13 +578,22 @@ WindowHashGroup::WindowHashGroup(WindowGlobalSinkState &gsink, const idx_t hash_
 	collection = make_uniq<WindowCollection>(buffer_manager, count, types);
 }
 
-unique_ptr<ColumnDataCollectionScanner> WindowHashGroup::GetScanner(const idx_t begin_idx, const idx_t end_idx) const {
+unique_ptr<ColumnDataCollectionScanner> WindowHashGroup::GetScanner(const idx_t begin_idx) const {
 	if (!rows) {
 		return nullptr;
 	}
 
 	auto &scan_ids = gsink.global_partition->scan_ids;
-	return make_uniq<ColumnDataCollectionScanner>(*rows, scan_ids, begin_idx, end_idx);
+	return make_uniq<ColumnDataCollectionScanner>(*rows, scan_ids, begin_idx);
+}
+
+void WindowHashGroup::UpdateScanner(ScannerPtr &scanner, idx_t begin_idx) const {
+	if (!scanner || &scanner->collection != rows.get()) {
+		scanner.reset();
+		scanner = GetScanner(begin_idx);
+	} else {
+		scanner->Seek(begin_idx);
+	}
 }
 
 static LogicalType PrefixStructType(HashedSortGlobalSinkState::Orders &orders, column_t end, column_t begin = 0) {
@@ -852,7 +865,7 @@ void WindowLocalSourceState::Sink() {
 	}
 
 	//	First pass over the input without flushing
-	scanner = window_hash_group->GetScanner(task->begin_idx, task->end_idx);
+	scanner = window_hash_group->GetScanner(task->begin_idx);
 	if (!scanner) {
 		return;
 	}
@@ -1052,10 +1065,8 @@ void WindowLocalSourceState::ExecuteTask(DataChunk &result) {
 void WindowLocalSourceState::GetData(DataChunk &result) {
 	D_ASSERT(window_hash_group->GetStage() == WindowGroupStage::GETDATA);
 
-	if (!scanner || !scanner->Remaining()) {
-		scanner = window_hash_group->GetScanner(task->begin_idx, task->end_idx);
-		batch_index = window_hash_group->batch_base + task->begin_idx;
-	}
+	window_hash_group->UpdateScanner(scanner, task->begin_idx);
+	batch_index = window_hash_group->batch_base + task->begin_idx;
 
 	const auto position = scanner->Scanned();
 	auto &input_chunk = scanner->Scan();
@@ -1089,10 +1100,8 @@ void WindowLocalSourceState::GetData(DataChunk &result) {
 		result.data[out_idx++].Reference(output_chunk.data[col_idx]);
 	}
 
-	// If we done with this block, move to the next one
-	if (!scanner->Remaining()) {
-		++task->begin_idx;
-	}
+	// Move to the next chunk
+	++task->begin_idx;
 
 	result.Verify();
 }
