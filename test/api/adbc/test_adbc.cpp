@@ -2182,13 +2182,18 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		// Create table 'foreign_table'
 		db.Query("CREATE TABLE foreign_table (id INTEGER PRIMARY KEY)");
 		// Create table 'my_table' with constraints
-		db.Query("CREATE TABLE my_table ("                         //
-		         "primary_key INTEGER PRIMARY KEY, "               //
-		         "not_null INTEGER NOT NULL, "                     //
-		         "custom_check INTEGER CHECK (custom_check > 0), " //
-		         "unique_value INTEGER UNIQUE, "                   //
-		         "foreign_id INTEGER REFERENCES foreign_table(id)" //
-		         ")");
+		db.Query(R"(
+			CREATE TABLE my_table (
+				primary_key INTEGER PRIMARY KEY,
+				not_null INTEGER NOT NULL,
+				custom_check INTEGER CHECK (custom_check > 0),
+				unique_single INTEGER UNIQUE,
+				unique_multi1 INTEGER,
+				unique_multi2 INTEGER,
+				UNIQUE (unique_multi2, unique_multi1),
+				foreign_id INTEGER REFERENCES foreign_table(id)
+			)
+		)");
 
 		AdbcError adbc_error;
 		InitializeADBCError(&adbc_error);
@@ -2241,9 +2246,14 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 							"'constraint_column_names': [primary_key], "
 							"'constraint_column_usage': []"
 						"}, {"
-							"'constraint_name': my_table_unique_value_key, "
+							"'constraint_name': my_table_unique_multi2_unique_multi1_key, "
 							"'constraint_type': UNIQUE, "
-							"'constraint_column_names': [unique_value], "
+							"'constraint_column_names': [unique_multi2, unique_multi1], "
+							"'constraint_column_usage': []"
+						"}, {"
+							"'constraint_name': my_table_unique_single_key, "
+							"'constraint_type': UNIQUE, "
+							"'constraint_column_names': [unique_single], "
 							"'constraint_column_usage': []"
 						"}]"
 					"}"
