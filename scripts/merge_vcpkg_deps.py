@@ -68,7 +68,7 @@ if merged_overlay_ports:
 else:
     data['vcpkg-configuration'] = {}
 
-REGISTRY_BASELINE = '43e8fec50b84e68d1731ff265564084e193cba16'
+REGISTRY_BASELINE = '869bddccca976e0abe25894356e7f49e77765169'
 # NOTE: use 'scripts/list_vcpkg_registry_packages.py --baseline <baseline>' to generate the list of packages
 data['vcpkg-configuration']['registries'] = [
     {
