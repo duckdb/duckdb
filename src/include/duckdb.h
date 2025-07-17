@@ -3531,6 +3531,23 @@ If the set is incomplete or a function with this name already exists DuckDBError
 */
 DUCKDB_C_API duckdb_state duckdb_register_scalar_function_set(duckdb_connection con, duckdb_scalar_function_set set);
 
+/*!
+Returns the number of input arguments of the scalar function.
+
+* @param info The bind info.
+* @return The number of input arguments.
+*/
+DUCKDB_C_API idx_t duckdb_scalar_function_bind_get_argument_count(duckdb_bind_info info);
+
+/*!
+Returns the input argument at index of the scalar function.
+
+* @param info The bind info.
+* @param index The argument index.
+* @return The input argument at index. Must be destroyed with `duckdb_destroy_expression`.
+*/
+DUCKDB_C_API duckdb_expression duckdb_scalar_function_bind_get_argument(duckdb_bind_info info, idx_t index);
+
 //===--------------------------------------------------------------------===//
 // Selection Vector Interface
 //===--------------------------------------------------------------------===//
@@ -4915,37 +4932,21 @@ Returns the return type of an expression.
 DUCKDB_C_API duckdb_logical_type duckdb_expression_return_type(duckdb_expression expr);
 
 /*!
-Returns whether the expression is a constant expression or not.
+Returns whether the expression is foldable into a value or not.
 
 * @param expr The expression.
-* @return True, if the expression is a constant expression, else false.
+* @return True, if the expression is foldable, else false.
 */
-DUCKDB_C_API bool duckdb_is_constant_expression(duckdb_expression expr);
+DUCKDB_C_API bool duckdb_expression_is_foldable(duckdb_expression expr);
 
 /*!
-Returns the value of a constant expression.
+Folds an expression and returns the folded value.
 
-* @param expr The expression. The expression class of the expression must be DUCKDB_EXPR_CLASS_CONSTANT.
-* @return The constant value. Must be destroyed with `duckdb_destroy_value`.
+* @param context The client context.
+* @param expr The expression. Must be foldable.
+* @return The folded value. Must be destroyed with `duckdb_destroy_value`.
 */
-DUCKDB_C_API duckdb_value duckdb_constant_expression_value(duckdb_expression expr);
-
-/*!
-Returns the number of input arguments of the scalar function.
-
-* @param info The bind info.
-* @return The number of input arguments.
-*/
-DUCKDB_C_API idx_t duckdb_bind_argument_count(duckdb_bind_info info);
-
-/*!
-Returns the input argument at index of the scalar function.
-
-* @param info The bind info.
-* @param index The argument index.
-* @return The input argument at index. Must be destroyed with `duckdb_destroy_expression`.
-*/
-DUCKDB_C_API duckdb_expression duckdb_bind_argument_at(duckdb_bind_info info, idx_t index);
+DUCKDB_C_API duckdb_value duckdb_expression_fold(duckdb_client_context context, duckdb_expression expr);
 
 #endif
 

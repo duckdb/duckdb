@@ -483,10 +483,8 @@ typedef struct {
 
 	void (*duckdb_destroy_expression)(duckdb_expression *expr);
 	duckdb_logical_type (*duckdb_expression_return_type)(duckdb_expression expr);
-	bool (*duckdb_is_constant_expression)(duckdb_expression expr);
-	duckdb_value (*duckdb_constant_expression_value)(duckdb_expression expr);
-	idx_t (*duckdb_bind_argument_count)(duckdb_bind_info info);
-	duckdb_expression (*duckdb_bind_argument_at)(duckdb_bind_info info, idx_t index);
+	bool (*duckdb_expression_is_foldable)(duckdb_expression expr);
+	duckdb_value (*duckdb_expression_fold)(duckdb_client_context context, duckdb_expression expr);
 	// New functions around the client context
 
 	idx_t (*duckdb_client_context_get_connection_id)(duckdb_client_context context);
@@ -502,6 +500,8 @@ typedef struct {
 	                                             duckdb_delete_callback_t destroy);
 	void *(*duckdb_scalar_function_get_bind_data)(duckdb_function_info info);
 	void *(*duckdb_scalar_function_bind_get_extra_info)(duckdb_bind_info info);
+	idx_t (*duckdb_scalar_function_bind_get_argument_count)(duckdb_bind_info info);
+	duckdb_expression (*duckdb_scalar_function_bind_get_argument)(duckdb_bind_info info, idx_t index);
 	// New string functions that are added
 
 	char *(*duckdb_value_to_string)(duckdb_value value);
@@ -945,10 +945,8 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_error_data_has_error = duckdb_error_data_has_error;
 	result.duckdb_destroy_expression = duckdb_destroy_expression;
 	result.duckdb_expression_return_type = duckdb_expression_return_type;
-	result.duckdb_is_constant_expression = duckdb_is_constant_expression;
-	result.duckdb_constant_expression_value = duckdb_constant_expression_value;
-	result.duckdb_bind_argument_count = duckdb_bind_argument_count;
-	result.duckdb_bind_argument_at = duckdb_bind_argument_at;
+	result.duckdb_expression_is_foldable = duckdb_expression_is_foldable;
+	result.duckdb_expression_fold = duckdb_expression_fold;
 	result.duckdb_client_context_get_connection_id = duckdb_client_context_get_connection_id;
 	result.duckdb_destroy_client_context = duckdb_destroy_client_context;
 	result.duckdb_connection_get_client_context = duckdb_connection_get_client_context;
@@ -959,6 +957,8 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_scalar_function_set_bind_data = duckdb_scalar_function_set_bind_data;
 	result.duckdb_scalar_function_get_bind_data = duckdb_scalar_function_get_bind_data;
 	result.duckdb_scalar_function_bind_get_extra_info = duckdb_scalar_function_bind_get_extra_info;
+	result.duckdb_scalar_function_bind_get_argument_count = duckdb_scalar_function_bind_get_argument_count;
+	result.duckdb_scalar_function_bind_get_argument = duckdb_scalar_function_bind_get_argument;
 	result.duckdb_value_to_string = duckdb_value_to_string;
 	result.duckdb_create_map_value = duckdb_create_map_value;
 	result.duckdb_create_union_value = duckdb_create_union_value;

@@ -36,7 +36,7 @@
       }
     },
     {
-      "name": "duckdb_is_constant_expression",
+      "name": "duckdb_expression_is_foldable",
       "return_type": "bool",
       "params": [
         {
@@ -45,67 +45,33 @@
         }
       ],
       "comment": {
-        "description": "Returns whether the expression is a constant expression or not.\n\n",
+        "description": "Returns whether the expression is foldable into a value or not.\n\n",
         "param_comments": {
           "expr": "The expression."
         },
-        "return_value": "True, if the expression is a constant expression, else false."
+        "return_value": "True, if the expression is foldable, else false."
       }
     },
     {
-      "name": "duckdb_constant_expression_value",
+      "name": "duckdb_expression_fold",
       "return_type": "duckdb_value",
       "params": [
+        {
+          "type": "duckdb_client_context",
+          "name": "context"
+        },
         {
           "type": "duckdb_expression",
           "name": "expr"
         }
       ],
       "comment": {
-        "description": "Returns the value of a constant expression.\n\n",
+        "description": "Folds an expression and returns the folded value.\n\n",
         "param_comments": {
-          "expr": "The expression. The expression class of the expression must be DUCKDB_EXPR_CLASS_CONSTANT."
+          "context": "The client context.",
+          "expr": "The expression. Must be foldable."
         },
-        "return_value": "The constant value. Must be destroyed with `duckdb_destroy_value`."
-      }
-    },
-    {
-      "name": "duckdb_bind_argument_count",
-      "return_type": "idx_t",
-      "params": [
-        {
-          "type": "duckdb_bind_info",
-          "name": "info"
-        }
-      ],
-      "comment": {
-        "description": "Returns the number of input arguments of the scalar function.\n\n",
-        "param_comments": {
-          "info": "The bind info."
-        },
-        "return_value": "The number of input arguments."
-      }
-    },
-    {
-      "name": "duckdb_bind_argument_at",
-      "return_type": "duckdb_expression",
-      "params": [
-        {
-          "type": "duckdb_bind_info",
-          "name": "info"
-        },
-        {
-          "type": "idx_t",
-          "name": "index"
-        }
-      ],
-      "comment": {
-        "description": "Returns the input argument at index of the scalar function.\n\n",
-        "param_comments": {
-          "info": "The bind info.",
-          "index": "The argument index."
-        },
-        "return_value": "The input argument at index. Must be destroyed with `duckdb_destroy_expression`."
+        "return_value": "The folded value. Must be destroyed with `duckdb_destroy_value`."
       }
     }
   ]

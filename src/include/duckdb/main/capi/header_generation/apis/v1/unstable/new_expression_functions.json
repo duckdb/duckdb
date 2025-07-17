@@ -4,9 +4,7 @@
   "entries": [
     "duckdb_destroy_expression",
     "duckdb_expression_return_type",
-    "duckdb_is_constant_expression",
-    "duckdb_constant_expression_value",
-    "duckdb_bind_argument_count",
-    "duckdb_bind_argument_at"
+    "duckdb_expression_is_foldable",
+    "duckdb_expression_fold"
   ]
 }

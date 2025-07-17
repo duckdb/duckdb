@@ -409,6 +409,7 @@ TEST_CASE("Test Scalar Function Overloads C API", "[capi]") {
 
 struct ConnectionIdStruct {
 	idx_t connection_id;
+	idx_t folded_value;
 };
 
 void GetConnectionIdBind(duckdb_bind_info info) {
@@ -419,14 +420,36 @@ void GetConnectionIdBind(duckdb_bind_info info) {
 		return;
 	}
 
+	// Get the connection ID.
 	duckdb_client_context context;
 	duckdb_scalar_function_get_client_context(info, &context);
 	auto connection_id = duckdb_client_context_get_connection_id(context);
+
+	// Get the folded value.
+	auto argument_count = duckdb_scalar_function_bind_get_argument_count(info);
+	REQUIRE(argument_count == 1);
+	auto expr = duckdb_scalar_function_bind_get_argument(info, 0);
+	auto foldable = duckdb_expression_is_foldable(expr);
+	if (!foldable) {
+		duckdb_scalar_function_bind_set_error(info, "input argument must be foldable");
+		return;
+	}
+
+	// Fold the expression.
+	auto value = duckdb_expression_fold(context, expr);
+	auto value_type = duckdb_get_value_type(value);
+	auto value_type_id = duckdb_get_type_id(value_type);
+	REQUIRE(value_type_id == DUCKDB_TYPE_UBIGINT);
+	auto uint64_value = duckdb_get_uint64(value);
+
+	duckdb_destroy_value(&value);
+	duckdb_destroy_expression(&expr);
 	duckdb_destroy_client_context(&context);
 
 	// Set the connection id.
 	auto bind_data = reinterpret_cast<ConnectionIdStruct *>(malloc(sizeof(ConnectionIdStruct)));
 	bind_data->connection_id = connection_id;
+	bind_data->folded_value = uint64_value;
 	duckdb_scalar_function_set_bind_data(info, bind_data, free);
 }
 
@@ -437,7 +460,7 @@ void GetConnectionId(duckdb_function_info info, duckdb_data_chunk input, duckdb_
 
 	auto result_data = reinterpret_cast<uint64_t *>(duckdb_vector_get_data(output));
 	for (idx_t row_idx = 0; row_idx < input_size; row_idx++) {
-		result_data[row_idx] = bind_data->connection_id;
+		result_data[row_idx] = bind_data->connection_id + bind_data->folded_value;
 	}
 }
 
@@ -449,6 +472,7 @@ static void CAPIRegisterGetConnectionId(duckdb_connection connection) {
 
 	// Set the return type to UBIGINT.
 	auto type = duckdb_create_logical_type(DUCKDB_TYPE_UBIGINT);
+	duckdb_scalar_function_add_parameter(function, type);
 	duckdb_scalar_function_set_return_type(function, type);
 	duckdb_destroy_logical_type(&type);
 
@@ -475,30 +499,31 @@ TEST_CASE("Test Scalar Function with Bind Info", "[capi]") {
 	REQUIRE(tester.OpenDatabase(nullptr));
 	CAPIRegisterGetConnectionId(tester.connection);
 
-	result = tester.Query("SELECT get_connection_id()");
-	REQUIRE_NO_FAIL(*result);
-	auto first_connection_id = result->Fetch<uint64_t>(0, 0);
-	REQUIRE(first_connection_id != 0);
-
 	duckdb_client_context context;
 	duckdb_connection_get_client_context(tester.connection, &context);
 	auto first_conn_id = duckdb_client_context_get_connection_id(context);
 	duckdb_destroy_client_context(&context);
-	REQUIRE(first_conn_id == first_connection_id);
+
+	result = tester.Query("SELECT get_connection_id((40 + 2)::UBIGINT)");
+	REQUIRE_NO_FAIL(*result);
+	auto first_result = result->Fetch<uint64_t>(0, 0);
+	REQUIRE(first_result == first_conn_id + 42);
 
 	tester.ChangeConnection();
-
-	result = tester.Query("SELECT get_connection_id()");
-	REQUIRE_NO_FAIL(*result);
-	auto second_connection_id = result->Fetch<uint64_t>(0, 0);
-	REQUIRE(second_connection_id != 0);
 
 	duckdb_connection_get_client_context(tester.connection, &context);
 	auto second_conn_id = duckdb_client_context_get_connection_id(context);
 	duckdb_destroy_client_context(&context);
-	REQUIRE(second_conn_id == second_connection_id);
 
-	REQUIRE(first_connection_id != second_connection_id);
+	result = tester.Query("SELECT get_connection_id((44 - 2)::UBIGINT)");
+	REQUIRE_NO_FAIL(*result);
+	auto second_result = result->Fetch<uint64_t>(0, 0);
+	REQUIRE(second_conn_id + 42 == second_result);
+	REQUIRE(first_result != second_result);
+
+	result = tester.Query("SELECT get_connection_id(random()::UBIGINT)");
+	REQUIRE_FAIL(result);
+	REQUIRE(StringUtil::Contains(result->ErrorMessage(), "input argument must be foldable"));
 }
 
 void ListSum(duckdb_function_info, duckdb_data_chunk input, duckdb_vector output) {
