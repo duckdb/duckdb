@@ -89,6 +89,8 @@ public:
 
 	WindowHashGroup(WindowGlobalSinkState &gsink, const idx_t hash_bin_p);
 
+	static LogicalType PrefixStructType(HashedSortGlobalSinkState::Orders &orders, column_t end, column_t begin = 0);
+	static void ReferenceStructColumns(DataChunk &chunk, Vector &vec, column_t end, column_t begin = 0);
 	void ComputeMasks(ValidityMask &partition_mask, OrderMasks &order_masks);
 
 	ExecutorGlobalStates &Initialize();
@@ -596,7 +598,7 @@ void WindowHashGroup::UpdateScanner(ScannerPtr &scanner, idx_t begin_idx) const 
 	}
 }
 
-static LogicalType PrefixStructType(HashedSortGlobalSinkState::Orders &orders, column_t end, column_t begin = 0) {
+LogicalType WindowHashGroup::PrefixStructType(HashedSortGlobalSinkState::Orders &orders, column_t end, column_t begin) {
 	child_list_t<LogicalType> partition_children;
 	for (auto c = begin; c < end; ++c) {
 		auto name = std::to_string(c);
@@ -611,14 +613,16 @@ static LogicalType PrefixStructType(HashedSortGlobalSinkState::Orders &orders, c
 	return LogicalType::STRUCT(partition_children);
 }
 
-static void ReferenceStructColumns(DataChunk &chunk, Vector &vec, column_t begin = 0) {
+void WindowHashGroup::ReferenceStructColumns(DataChunk &chunk, Vector &vec, column_t end, column_t begin) {
 	//	Check for single column
-	if (vec.GetType().InternalType() != PhysicalType::STRUCT) {
+	const auto width = end - begin;
+	if (width == 1) {
 		vec.Reference(chunk.data[begin]);
 		return;
 	}
 
 	auto &entries = StructVector::GetEntries(vec);
+	D_ASSERT(width == entries.size());
 	for (column_t i = 0; i < entries.size(); ++i) {
 		entries[i]->Reference(chunk.data[begin + i]);
 	}
@@ -712,8 +716,8 @@ void WindowHashGroup::ComputeMasks(ValidityMask &partition_mask, OrderMasks &ord
 		}
 
 		//	Reference the partition prefix as a struct to simplify the compares.
-		ReferenceStructColumns(*prev, partition_prev);
-		ReferenceStructColumns(*curr, partition_curr);
+		ReferenceStructColumns(*prev, partition_prev, partitions.size());
+		ReferenceStructColumns(*curr, partition_curr, partitions.size());
 
 		//	Compare the partition subset first because if that differs, then so does the full ordering
 		const auto n =
@@ -741,8 +745,8 @@ void WindowHashGroup::ComputeMasks(ValidityMask &partition_mask, OrderMasks &ord
 				prefix.Reset();
 				auto &order_prev = prefix.data[0];
 				auto &order_curr = prefix.data[1];
-				ReferenceStructColumns(*prev, order_prev, partitions.size());
-				ReferenceStructColumns(*curr, order_curr, partitions.size());
+				ReferenceStructColumns(*prev, order_prev, order_mask.first, partitions.size());
+				ReferenceStructColumns(*curr, order_curr, order_mask.first, partitions.size());
 				if (n) {
 					prefix.Slice(*sub_sel, remaining);
 				} else {
