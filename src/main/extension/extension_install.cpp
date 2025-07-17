@@ -91,7 +91,7 @@ vector<duckdb::string> ExtensionHelper::DefaultExtensionFolders(FileSystem &fs) 
 		}
 
 		// Check if directory starts with "~/"
-		if (dir.length() >= 2 && dir[0] == '~' && dir[1] == '/') {
+		if (dir.length() >= 2 && dir[0] == '~' && dir[1] == fs.PathSeparator("")[0]) {
 			string home_directory = fs.GetHomeDirectory();
 			if (!fs.DirectoryExists(home_directory)) {
 				throw IOException("Can't find the home directory at '%s'\nSpecify a home directory using the SET "
