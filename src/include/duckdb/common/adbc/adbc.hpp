@@ -83,23 +83,20 @@ private:
 };
 class OutNamesWrapper {
 public:
-	OutNamesWrapper(char **names, idx_t count) : names(names), count(count) {
+	explicit OutNamesWrapper(duckdb::vector<const char *> &names) : names(names) {
 	}
 	~OutNamesWrapper() {
-		if (names) {
-			for (idx_t i = 0; i < count; i++) {
-				delete[] names[i];
-			}
-			delete[] names;
-		}
+		for (auto name: names) {
+		delete[] name;
 	}
-	char **get() const {
-		return names;
+	}
+
+	const char **get() const {
+		return names.data();
 	}
 
 private:
-	char **names;
-	idx_t count = 0;
+	duckdb::vector<const char *> &names;
 };
 
 AdbcStatusCode DatabaseNew(struct AdbcDatabase *database, struct AdbcError *error);

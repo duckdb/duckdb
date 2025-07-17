@@ -16,7 +16,7 @@ using duckdb::PreparedStatementWrapper;
 using duckdb::QueryResult;
 using duckdb::QueryResultType;
 
-duckdb_error_data duckdb_to_arrow_schema(duckdb_arrow_options arrow_options, duckdb_logical_type *types, char **names,
+duckdb_error_data duckdb_to_arrow_schema(duckdb_arrow_options arrow_options, duckdb_logical_type *types, const char **names,
                                          idx_t column_count, struct ArrowSchema *out_schema) {
 
 	if (!types || !names || !arrow_options || !out_schema) {
@@ -73,21 +73,17 @@ duckdb_error_data arrow_to_duckdb_schema(duckdb_connection connection, struct Ar
 	}
 	duckdb::vector<std::string> names;
 	auto conn = reinterpret_cast<Connection *>(connection);
-	auto arrow_table = new duckdb::ArrowTableType();
-	*out_types = reinterpret_cast<duckdb_arrow_converted_schema>(arrow_table);
+	auto arrow_table = duckdb::make_uniq<duckdb::ArrowTableType>();
 	try {
 		duckdb::vector<LogicalType> return_types;
 		duckdb::ArrowTableFunction::PopulateArrowTableType(duckdb::DBConfig::GetConfig(*conn->context), *arrow_table,
 		                                                   *schema, names, return_types);
 		QueryResult::DeduplicateColumns(names);
 	} catch (const duckdb::Exception &ex) {
-		delete arrow_table;
 		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, ex.what());
 	} catch (const std::exception &ex) {
-		delete arrow_table;
 		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, ex.what());
 	} catch (...) {
-		delete arrow_table;
 		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, "Unknown error occurred during conversion");
 	}
 	const idx_t column_count = names.size();
@@ -99,6 +95,7 @@ duckdb_error_data arrow_to_duckdb_schema(duckdb_connection connection, struct Ar
 	}
 	// null-terminate the list
 	(*out_names)[column_count] = nullptr;
+	*out_types = reinterpret_cast<duckdb_arrow_converted_schema>(arrow_table.release());
 	return nullptr;
 }
 
@@ -111,15 +108,14 @@ duckdb_error_data arrow_to_duckdb_data_chunk(duckdb_connection connection, struc
 	}
 	auto arrow_table = reinterpret_cast<duckdb::ArrowTableType *>(converted_schema);
 	auto conn = reinterpret_cast<Connection *>(connection);
-	auto &type_vector = arrow_table->GetTypes();
-	std::vector<duckdb::LogicalType *> types_ptr(type_vector.size());
-	for (idx_t i = 0; i < type_vector.size(); i++) {
-		types_ptr[i] = &type_vector[i];
-	}
+	auto &types = arrow_table->GetTypes();
 
-	*out_chunk = duckdb_create_data_chunk(reinterpret_cast<duckdb_logical_type *>(&types_ptr[0]), types_ptr.size());
-	auto &arrow_types = arrow_table->GetColumns();
+	auto result = duckdb::make_uniq<duckdb::DataChunk>();
 	auto output_size = duckdb::MinValue<idx_t>(STANDARD_VECTOR_SIZE, duckdb::NumericCast<idx_t>(arrow_array->length));
+	result->Initialize(duckdb::Allocator::DefaultAllocator(), types, output_size);
+	*out_chunk = reinterpret_cast<duckdb_data_chunk>(result.release());
+
+	auto &arrow_types = arrow_table->GetColumns();
 	auto dchunk = reinterpret_cast<duckdb::DataChunk *>(*out_chunk);
 
 	dchunk->SetCardinality(output_size);
@@ -141,11 +137,20 @@ duckdb_error_data arrow_to_duckdb_data_chunk(duckdb_connection connection, struc
 
 		switch (array_physical_type) {
 		case duckdb::ArrowArrayPhysicalType::DEFAULT:
-			duckdb::ArrowToDuckDBConversion::SetValidityMask(dchunk->data[i], *array, 0, dchunk->size(),
-			                                                 parent_array.offset, -1);
+			try {
+				duckdb::ArrowToDuckDBConversion::SetValidityMask(dchunk->data[i], *array, 0, dchunk->size(),
+				                                                 parent_array.offset, -1);
 
-			duckdb::ArrowToDuckDBConversion::ColumnArrowToDuckDB(dchunk->data[i], *array, 0, *array_state,
-			                                                     dchunk->size(), *arrow_type);
+				duckdb::ArrowToDuckDBConversion::ColumnArrowToDuckDB(dchunk->data[i], *array, 0, *array_state,
+				                                                     dchunk->size(), *arrow_type);
+			} catch (const duckdb::Exception &ex) {
+				return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, ex.what());
+			} catch (const std::exception &ex) {
+				return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, ex.what());
+			} catch (...) {
+				return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, "Unknown error occurred during conversion");
+			}
+
 			break;
 		default:
 			return duckdb_create_error_data(DUCKDB_ERROR_NOT_IMPLEMENTED,

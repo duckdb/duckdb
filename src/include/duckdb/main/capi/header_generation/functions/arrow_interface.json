@@ -15,7 +15,7 @@
                     "name": "types"
                 },
                 {
-                    "type": "char **",
+                    "type": "const char **",
                     "name": "names"
                 },
                 {
