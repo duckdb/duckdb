@@ -16,8 +16,8 @@ using duckdb::PreparedStatementWrapper;
 using duckdb::QueryResult;
 using duckdb::QueryResultType;
 
-duckdb_error_data duckdb_to_arrow_schema(duckdb_arrow_options arrow_options, duckdb_logical_type *types, const char **names,
-                                         idx_t column_count, struct ArrowSchema *out_schema) {
+duckdb_error_data duckdb_to_arrow_schema(duckdb_arrow_options arrow_options, duckdb_logical_type *types,
+                                         const char **names, idx_t column_count, struct ArrowSchema *out_schema) {
 
 	if (!types || !names || !arrow_options || !out_schema) {
 		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, "Invalid argument(s) to duckdb_to_arrow_schema");
@@ -65,20 +65,18 @@ duckdb_error_data duckdb_data_chunk_to_arrow(duckdb_arrow_options arrow_options,
 }
 
 duckdb_error_data arrow_to_duckdb_schema(duckdb_connection connection, struct ArrowSchema *schema,
-                                         duckdb_arrow_converted_schema *out_types, char ***out_names,
-                                         idx_t *out_column_count) {
-	if (!connection || !out_types || !out_names || !out_column_count || !schema) {
+                                         duckdb_arrow_converted_schema *out_types) {
+	if (!connection || !out_types || !schema) {
 		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT,
 		                                "Invalid argument(s) to duckdb_data_chunk_to_arrow");
 	}
 	duckdb::vector<std::string> names;
-	auto conn = reinterpret_cast<Connection *>(connection);
+	const auto conn = reinterpret_cast<Connection *>(connection);
 	auto arrow_table = duckdb::make_uniq<duckdb::ArrowTableType>();
 	try {
 		duckdb::vector<LogicalType> return_types;
 		duckdb::ArrowTableFunction::PopulateArrowTableType(duckdb::DBConfig::GetConfig(*conn->context), *arrow_table,
-		                                                   *schema, names, return_types);
-		QueryResult::DeduplicateColumns(names);
+		                                                   *schema);
 	} catch (const duckdb::Exception &ex) {
 		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, ex.what());
 	} catch (const std::exception &ex) {
@@ -86,15 +84,6 @@ duckdb_error_data arrow_to_duckdb_schema(duckdb_connection connection, struct Ar
 	} catch (...) {
 		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, "Unknown error occurred during conversion");
 	}
-	const idx_t column_count = names.size();
-	*out_column_count = column_count;
-	*out_names = new char *[column_count + 1];
-	for (idx_t i = 0; i < column_count; i++) {
-		(*out_names)[i] = new char[names[i].size() + 1];
-		std::strcpy((*out_names)[i], names[i].c_str());
-	}
-	// null-terminate the list
-	(*out_names)[column_count] = nullptr;
 	*out_types = reinterpret_cast<duckdb_arrow_converted_schema>(arrow_table.release());
 	return nullptr;
 }

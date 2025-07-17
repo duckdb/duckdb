@@ -540,17 +540,14 @@ static int get_schema(struct ArrowArrayStream *stream, struct ArrowSchema *out) 
 	auto count = duckdb_column_count(&result_wrapper->result);
 	std::vector<duckdb_logical_type> types(count);
 
-	// Use OutNamesWrapper for column names
+	std::vector<std::string> owned_names(count);
 	duckdb::vector<const char *> names(count);
-
 	for (idx_t i = 0; i < count; i++) {
 		types[i] = duckdb_column_logical_type(&result_wrapper->result, i);
 		auto column_name = duckdb_column_name(&result_wrapper->result, i);
-		auto new_name = new char[strlen(column_name) + 1];
-		std::strcpy(new_name, column_name);
-		names[i] = new_name;
+		owned_names.emplace_back(column_name);
+		names[i] = owned_names.back().c_str();
 	}
-	OutNamesWrapper out_names_wrapper(&names);
 
 	auto arrow_options = duckdb_result_get_arrow_options(&result_wrapper->result);
 
@@ -648,23 +645,19 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, cons
 
 	duckdb::ArrowSchemaWrapper arrow_schema_wrapper;
 	ConvertedSchemaWrapper out_types;
-	char **out_names = nullptr;
-	idx_t out_column_count;
 
 	input->get_schema(input, &arrow_schema_wrapper.arrow_schema);
-	auto res = arrow_to_duckdb_schema(connection, &arrow_schema_wrapper.arrow_schema, out_types.GetPtr(), &out_names,
-	                                  &out_column_count);
+	auto res = arrow_to_duckdb_schema(connection, &arrow_schema_wrapper.arrow_schema, out_types.GetPtr());
 	if (res) {
 		SetError(error, duckdb_error_data_message(res));
 		duckdb_destroy_error_data(&res);
 		return ADBC_STATUS_INTERNAL;
 	}
-	OutNamesWrapper out_names_wrapper(out_names, out_column_count);
 
-	std::vector<duckdb::LogicalType> types(out_column_count);
-	std::vector<duckdb::LogicalType *> types_ptr(out_column_count);
 	auto &d_converted_schema = *reinterpret_cast<duckdb::ArrowTableType *>(out_types.Get());
-	auto columns = d_converted_schema.GetColumns();
+	auto types = d_converted_schema.GetTypes();
+	auto names = d_converted_schema.GetNames();
+
 	if (ingestion_mode == IngestionMode::CREATE) {
 		// We must construct the create table SQL query
 		std::ostringstream create_table;
@@ -673,12 +666,10 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, cons
 			create_table << schema << ".";
 		}
 		create_table << table_name << " (";
-		for (idx_t i = 0; i < out_column_count; i++) {
-			create_table << out_names[i] << " ";
-			types[i] = columns.at(i)->GetDuckType(true);
-			types_ptr[i] = &types[i];
+		for (idx_t i = 0; i < types.size(); i++) {
+			create_table << names[i] << " ";
 			create_table << types[i].ToString();
-			if (i + 1 < out_column_count) {
+			if (i + 1 < types.size()) {
 				create_table << ", ";
 			}
 		}
@@ -806,28 +797,27 @@ AdbcStatusCode StatementGetParameterSchema(struct AdbcStatement *statement, stru
 		count = 1;
 	}
 	std::vector<duckdb_logical_type> types(count);
-	auto names = new char *[count];
+	std::vector<std::string> owned_names(count);
+	duckdb::vector<const char *> names(count);
+
 	for (idx_t i = 0; i < count; i++) {
 		// FIXME: we don't support named parameters yet, but when we do, this needs to be updated
-		auto name = std::to_string(i);
 		// Every prepared parameter type is UNKNOWN, which we need to map to NULL according to the spec of
 		// 'AdbcStatementGetParameterSchema'
 		types[i] = duckdb_create_logical_type(DUCKDB_TYPE_SQLNULL);
-		names[i] = new char[name.size() + 1];
-		std::strcpy(names[i], name.c_str());
+		auto column_name = std::to_string(i);
+		owned_names.emplace_back(column_name);
+		names[i] = owned_names.back().c_str();
 	}
 
 	duckdb_arrow_options arrow_options;
 	duckdb_connection_get_arrow_options(wrapper->connection, &arrow_options);
 
-	auto res = duckdb_to_arrow_schema(arrow_options, &types[0], names, count, schema);
-	for (idx_t i = 0; i < count; i++) {
-		delete[] names[i];
-	}
+	auto res = duckdb_to_arrow_schema(arrow_options, &types[0], names.data(), count, schema);
+
 	for (auto &type : types) {
 		duckdb_destroy_logical_type(&type);
 	}
-	delete[] names;
 	duckdb_destroy_arrow_options(&arrow_options);
 
 	if (res) {
@@ -878,32 +868,19 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 	if (has_stream) {
 		// A stream was bound to the statement, use that to bind parameters
 		ArrowArrayStream stream = wrapper->ingestion_stream;
-
-		idx_t out_column_count;
 		ConvertedSchemaWrapper out_types;
 		duckdb::ArrowSchemaWrapper arrow_schema_wrapper;
 		stream.get_schema(&stream, &arrow_schema_wrapper.arrow_schema);
 		try {
-			char **names = nullptr;
-			auto res = arrow_to_duckdb_schema(wrapper->connection, &arrow_schema_wrapper.arrow_schema,
-			                                  out_types.GetPtr(), &names, &out_column_count);
+			auto res =
+			    arrow_to_duckdb_schema(wrapper->connection, &arrow_schema_wrapper.arrow_schema, out_types.GetPtr());
 			if (res) {
 				SetError(error, duckdb_error_data_message(res));
 				duckdb_destroy_error_data(&res);
 			}
-			OutNamesWrapper out_names_wrapper(names, out_column_count);
 		} catch (...) {
 			free(stream_wrapper);
 			return ADBC_STATUS_INTERNAL;
-		}
-		auto &d_converted_schema = *reinterpret_cast<duckdb::ArrowTableType *>(*out_types.GetPtr());
-		auto &columns = d_converted_schema.GetColumns();
-		std::vector<duckdb::LogicalType> types(out_column_count);
-		std::vector<duckdb::LogicalType *> types_ptr(out_column_count);
-
-		for (idx_t i = 0; i < out_column_count; i++) {
-			types[i] = columns.at(i)->GetDuckType(true);
-			types_ptr[i] = &types[i];
 		}
 		auto prepared_statement_params =
 		    reinterpret_cast<duckdb::PreparedStatementWrapper *>(wrapper->statement)->statement->named_param_map.size();

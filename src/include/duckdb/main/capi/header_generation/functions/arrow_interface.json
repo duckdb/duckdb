@@ -81,14 +81,6 @@
             {
               "type": "duckdb_arrow_converted_schema *",
               "name": "out_types"
-            },
-            {
-              "type": "char ***",
-              "name": "out_names"
-            },
-            {
-              "type": "idx_t *",
-              "name": "out_column_count"
             }
           ],
           "comment": {
@@ -96,9 +88,7 @@
             "param_comments": {
               "connection": "The connection to get the transformation settings from.",
               "schema": "The input Arrow schema. Must be released with `schema->release(schema)`.",
-              "out_types": "The Arrow converted schema with extra information about the Arrow Types. Must be destroyed with `duckdb_destroy_arrow_converted_schema`.",
-              "out_names": "The resulting column names array. Must be appropriately deleted.",
-              "out_column_count": "The number of columns extracted from the Arrow schema."
+              "out_types": "The Arrow converted schema with extra information about the Arrow Types. Must be destroyed with `duckdb_destroy_arrow_converted_schema`."
             },
             "return_value": "The error data."
           }

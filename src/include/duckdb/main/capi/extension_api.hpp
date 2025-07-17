@@ -479,8 +479,7 @@ typedef struct {
 	duckdb_error_data (*duckdb_data_chunk_to_arrow)(duckdb_arrow_options arrow_options, duckdb_data_chunk chunk,
 	                                                struct ArrowArray *out_arrow_array);
 	duckdb_error_data (*arrow_to_duckdb_schema)(duckdb_connection connection, struct ArrowSchema *schema,
-	                                            duckdb_arrow_converted_schema *out_types, char ***out_names,
-	                                            idx_t *out_column_count);
+	                                            duckdb_arrow_converted_schema *out_types);
 	duckdb_error_data (*arrow_to_duckdb_data_chunk)(duckdb_connection connection, struct ArrowArray *arrow_array,
 	                                                duckdb_arrow_converted_schema converted_schema,
 	                                                duckdb_data_chunk *out_chunk);

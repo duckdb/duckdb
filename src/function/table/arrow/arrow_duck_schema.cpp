@@ -8,12 +8,14 @@
 
 namespace duckdb {
 
-void ArrowTableType::AddColumn(idx_t index, shared_ptr<ArrowType> type) {
+void ArrowTableType::AddColumn(idx_t index, shared_ptr<ArrowType> type, const string &name) {
 	D_ASSERT(arrow_convert_data.find(index) == arrow_convert_data.end());
 	if (index >= types.size()) {
 		types.resize(index + 1);
+		column_names.resize(index + 1);
 	}
 	types[index] = type->GetDuckType(true);
+	column_names[index] = name;
 	arrow_convert_data.emplace(std::make_pair(index, std::move(type)));
 }
 
@@ -24,6 +26,9 @@ vector<LogicalType> &ArrowTableType::GetTypes() {
 	return types;
 }
 
+vector<string> &ArrowTableType::GetNames() {
+	return column_names;
+}
 void ArrowType::SetDictionary(unique_ptr<ArrowType> dictionary) {
 	D_ASSERT(!this->dictionary_type);
 	dictionary_type = std::move(dictionary);

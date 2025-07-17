@@ -41,10 +41,8 @@ py::object PythonTableArrowArrayStreamFactory::ProduceScanner(DBConfig &config, 
 	D_ASSERT(!py::isinstance<py::capsule>(arrow_obj_handle));
 	ArrowSchemaWrapper schema;
 	PythonTableArrowArrayStreamFactory::GetSchemaInternal(arrow_obj_handle, schema);
-	vector<string> unused_names;
-	vector<LogicalType> unused_types;
 	ArrowTableType arrow_table;
-	ArrowTableFunction::PopulateArrowTableType(config, arrow_table, schema.arrow_schema, unused_names, unused_types);
+	ArrowTableFunction::PopulateArrowTableType(config, arrow_table, schema.arrow_schema);
 
 	auto filters = parameters.filters;
 	auto &column_list = parameters.projected_columns.columns;

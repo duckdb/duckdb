@@ -81,23 +81,6 @@ public:
 private:
 	duckdb_arrow_converted_schema schema;
 };
-class OutNamesWrapper {
-public:
-	explicit OutNamesWrapper(duckdb::vector<const char *> &names) : names(names) {
-	}
-	~OutNamesWrapper() {
-		for (auto name: names) {
-		delete[] name;
-	}
-	}
-
-	const char **get() const {
-		return names.data();
-	}
-
-private:
-	duckdb::vector<const char *> &names;
-};
 
 AdbcStatusCode DatabaseNew(struct AdbcDatabase *database, struct AdbcError *error);
 
