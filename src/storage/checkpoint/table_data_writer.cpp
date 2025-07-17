@@ -120,7 +120,7 @@ void InMemoryTableDataWriter::FinalizeTable(const TableStatistics &global_stats,
 }
 
 unique_ptr<RowGroupWriter> InMemoryTableDataWriter::GetRowGroupWriter(RowGroup &row_group) {
-	throw InternalException("Unsupported operator InMemoryTableDataWriter::GetRowGroupWriter");
+	return make_uniq<InMemoryRowGroupWriter>(table, checkpoint_manager.GetPartialBlockManager(), *this);
 }
 
 CheckpointType InMemoryTableDataWriter::GetCheckpointType() const {

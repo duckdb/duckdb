@@ -130,6 +130,8 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context, StorageOptions
 		block_manager = make_uniq<InMemoryBlockManager>(BufferManager::GetBufferManager(db), DEFAULT_BLOCK_ALLOC_SIZE,
 		                                                DEFAULT_BLOCK_HEADER_STORAGE_SIZE);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager, DEFAULT_ROW_GROUP_SIZE);
+		// in-memory databases can always use the latest storage version
+		storage_version = GetSerializationVersion("latest");
 		load_complete = true;
 		return;
 	}
@@ -395,7 +397,7 @@ bool SingleFileStorageManager::IsCheckpointClean(MetaBlockPointer checkpoint_id)
 unique_ptr<CheckpointWriter> SingleFileStorageManager::CreateCheckpointWriter(QueryContext context,
                                                                               CheckpointOptions options) const {
 	if (InMemory()) {
-		return make_uniq<InMemoryCheckpointer>(context, db);
+		return make_uniq<InMemoryCheckpointer>(context, db, *block_manager);
 	}
 	return make_uniq<SingleFileCheckpointWriter>(context, db, *block_manager, options.type);
 }

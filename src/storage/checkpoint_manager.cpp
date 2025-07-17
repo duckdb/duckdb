@@ -604,8 +604,9 @@ void CheckpointReader::ReadTableData(CatalogTransaction transaction, Deserialize
 //===--------------------------------------------------------------------===//
 // In-Memory Checkpoint Writer
 //===--------------------------------------------------------------------===//
-InMemoryCheckpointer::InMemoryCheckpointer(QueryContext context, AttachedDatabase &db)
-    : CheckpointWriter(db), context(context.GetClientContext()) {
+InMemoryCheckpointer::InMemoryCheckpointer(QueryContext context, AttachedDatabase &db, BlockManager &block_manager)
+    : CheckpointWriter(db), context(context.GetClientContext()),
+      partial_block_manager(context, block_manager, PartialBlockType::APPEND_TO_TABLE) {
 }
 
 void InMemoryCheckpointer::CreateCheckpoint() {
@@ -644,7 +645,13 @@ unique_ptr<TableDataWriter> InMemoryCheckpointer::GetTableDataWriter(TableCatalo
 
 void InMemoryCheckpointer::WriteTable(TableCatalogEntry &table, Serializer &serializer) {
 	InMemoryTableDataWriter data_writer(*this, table);
+
+	// Write the table data
+	auto table_lock = table.GetStorage().GetCheckpointLock();
 	table.GetStorage().Checkpoint(data_writer, serializer);
+	// flush any partial blocks BEFORE releasing the table lock
+	// flushing partial blocks updates where data lives and is not thread-safe
+	partial_block_manager.FlushPartialBlocks();
 }
 
 } // namespace duckdb

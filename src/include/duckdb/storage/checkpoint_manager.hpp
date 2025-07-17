@@ -135,7 +135,7 @@ private:
 
 class InMemoryCheckpointer final : public CheckpointWriter {
 public:
-	InMemoryCheckpointer(QueryContext context, AttachedDatabase &db);
+	InMemoryCheckpointer(QueryContext context, AttachedDatabase &db, BlockManager &block_manager);
 
 	void CreateCheckpoint() override;
 
@@ -145,12 +145,18 @@ public:
 	optional_ptr<ClientContext> GetClientContext() const {
 		return context;
 	}
+	PartialBlockManager &GetPartialBlockManager() {
+		return partial_block_manager;
+	}
 
 public:
 	void WriteTable(TableCatalogEntry &table, Serializer &serializer) override;
 
 private:
 	optional_ptr<ClientContext> context;
+	//! Because this is single-file storage, we can share partial blocks across
+	//! an entire checkpoint.
+	PartialBlockManager partial_block_manager;
 };
 
 } // namespace duckdb
