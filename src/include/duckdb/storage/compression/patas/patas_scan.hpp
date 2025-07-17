@@ -11,6 +11,10 @@
 #include "duckdb/storage/compression/chimp/chimp.hpp"
 #include "duckdb/storage/compression/chimp/algorithm/chimp_utils.hpp"
 #include "duckdb/storage/compression/chimp/algorithm/packed_data.hpp"
+#include "duckdb/storage/compression/chimp/algorithm/byte_reader.hpp"
+#include "duckdb/storage/compression/patas/shared.hpp"
+#include "duckdb/storage/compression/patas/algorithm/patas.hpp"
+#include "duckdb/storage/compression/patas/patas.hpp"
 
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/types/null_value.hpp"
