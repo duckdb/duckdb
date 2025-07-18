@@ -210,7 +210,7 @@ false	false
 query II
 select row_group_bytes, row_group_compressed_bytes from parquet_metadata('__TEST_DIR__/test.parquet');
 ----
-43	NULL
+43	1
 
 query II
 select row_group_bytes, row_group_compressed_bytes from parquet_metadata('data/parquet-testing/varchar_stats.parquet');
