@@ -1,0 +1,10 @@
+CreateIndexStmt <- Unique? 'INDEX'i IfNotExists? IndexName? 'ON'i BaseTableName IndexType? Parens(List(IndexElement)) WithList?
+
+WithList <- 'WITH'i Parens(List(RelOption)) / Oids
+Oids <- ('WITH'i / 'WITHOUT'i) 'OIDS'i
+IndexElement <- Expression DescOrAsc? NullsFirstOrLast?
+Unique <- 'UNIQUE'i
+IndexType <- 'USING'i Identifier
+RelOption <- ColLabel ('.' ColLabel)* ('=' DefArg)?
+DefArg <- FuncType / ReservedKeyword / StringLiteral / NumberLiteral / 'NONE'i
+FuncType <- Type / ('SETOF'i? TypeFuncName '%' 'TYPE'i)

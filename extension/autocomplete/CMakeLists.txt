@@ -4,8 +4,9 @@ project(AutoCompleteExtension)
 
 include_directories(include)
 
-set(AUTOCOMPLETE_EXTENSION_FILES autocomplete_extension.cpp matcher.cpp
-                                 tokenizer.cpp)
+set(AUTOCOMPLETE_EXTENSION_FILES
+    autocomplete_extension.cpp matcher.cpp tokenizer.cpp keyword_helper.cpp
+    keyword_map.cpp)
 
 build_static_extension(autocomplete ${AUTOCOMPLETE_EXTENSION_FILES})
 set(PARAMETERS "-warnings")
