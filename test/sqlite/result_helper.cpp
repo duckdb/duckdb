@@ -12,8 +12,6 @@
 #include <thread>
 
 namespace duckdb {
-// we need this shared among all types of result checks
-static std::set<std::string> reported_files;
 
 bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &context,
                                         duckdb::unique_ptr<MaterializedQueryResult> owned_result) {
@@ -33,7 +31,7 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 		}
 		// here we don't have a file name and can probably repeat some queries in different test cases
 		// we distinguish them by combiation of the sql_query and the error
-		if (!SkipLoggingSameError(context.sql_query + ": " + result.GetError())) {
+		if (!FailureSummary::Instance().SkipLoggingSameError(context.sql_query + ": " + result.GetError())) {
 			logger.UnexpectedFailure(result);
 		}
 		return false;
@@ -299,7 +297,7 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
 					// e.g. log only the first failure in
 					// `./build/debug/test/unittest --on-init "SET max_memory='400kb';"
 					// test/fuzzer/pedro/concurrent_catalog_usage.test`
-					if (!SkipErrorMessage(result.GetError()) && !SkipLoggingSameError(statement.file_name)) {
+					if (!SkipErrorMessage(result.GetError()) && !FailureSummary::Instance().SkipLoggingSameError(statement.file_name)) {
 						logger.ExpectedErrorMismatch(statement.expected_error, result);
 						return false;
 					}
@@ -318,7 +316,7 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
 			runner.finished_processing_file = true;
 			return true;
 		}
-		if (!SkipLoggingSameError(statement.file_name)) {
+		if (!FailureSummary::Instance().SkipLoggingSameError(statement.file_name)) {
 			logger.UnexpectedStatement(expected_result == ExpectedResult::RESULT_SUCCESS, result);
 		}
 		return false;
@@ -379,14 +377,6 @@ bool TestResultHelper::SkipErrorMessage(const string &message) {
 			return true;
 		}
 	}
-	return false;
-}
-
-bool TestResultHelper::SkipLoggingSameError(const string &file_name) {
-	if (reported_files.count(file_name) > 0) {
-		return true;
-	}
-	reported_files.insert(file_name);
 	return false;
 }
 

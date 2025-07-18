@@ -366,4 +366,13 @@ idx_t FailureSummary::GetSummaryCounter() {
 	return ++summary.failures_summary_counter;
 }
 
+bool FailureSummary::SkipLoggingSameError(const string &file_name) {
+	lock_guard<mutex> lock(failures_lock);
+	if (reported_files.count(file_name) > 0) {
+		return true;
+	}
+	reported_files.insert(file_name);
+	return false;
+}
+
 } // namespace duckdb
