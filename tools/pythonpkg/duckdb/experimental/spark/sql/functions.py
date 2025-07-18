@@ -104,7 +104,35 @@ def _inner_expr_or_val(val):
     return val.expr if isinstance(val, Column) else val
 
 
-def struct(*cols: Column) -> Column:
+def struct(*cols: Union["ColumnOrName", Union[List["ColumnOrName"], Tuple["ColumnOrName", ...]]]
+) -> Column:
+    """Creates a new struct column.
+
+    .. versionadded:: 1.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    cols : list, set, str or :class:`~pyspark.sql.Column`
+        column names or :class:`~pyspark.sql.Column`\\s to contain in the output struct.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        a struct type column of given columns.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([("Alice", 2), ("Bob", 5)], ("name", "age"))
+    >>> df.select(struct('age', 'name').alias("struct")).collect()
+    [Row(struct=Row(age=2, name='Alice')), Row(struct=Row(age=5, name='Bob'))]
+    >>> df.select(struct([df.age, df.name]).alias("struct")).collect()
+    [Row(struct=Row(age=2, name='Alice')), Row(struct=Row(age=5, name='Bob'))]
+    """
+    if len(cols) == 1 and isinstance(cols[0], (list, set)):
+        cols = cols[0]
     return Column(
         FunctionExpression("struct_pack", *[_inner_expr_or_val(x) for x in cols])
     )
