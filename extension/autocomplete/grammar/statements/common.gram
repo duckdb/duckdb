@@ -32,12 +32,17 @@ Statement <-
 
 CatalogName <- Identifier
 SchemaName <- Identifier
+ReservedSchemaName <- Identifier
 TableName <- Identifier
+ReservedTableName <- Identifier
+ReservedIdentifier <- Identifier
 ColumnName <- Identifier
+ReservedColumnName <- Identifier
 IndexName <- Identifier
 SettingName <- Identifier
 PragmaName <- Identifier
 FunctionName <- Identifier
+ReservedFunctionName <- Identifier
 TableFunctionName <- Identifier
 ConstraintName <- ColIdOrString
 SequenceName <- Identifier

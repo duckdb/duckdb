@@ -308,10 +308,6 @@ public:
 		// variable matchers match anything except for reserved keywords
 		auto &token_text = state.tokens[state.token_index].text;
 
-		bool succeeds_dot = false;
-		if (state.token_index > 0 && state.tokens[state.token_index - 1].text == ".") {
-			succeeds_dot = true;
-		}
 		auto category = KeywordHelper::Instance().KeywordCategoryType(token_text);
 		switch (suggestion_type) {
 		case SuggestionState::SUGGEST_TYPE_NAME:
@@ -320,9 +316,6 @@ public:
 			}
 			break;
 		default: {
-			if (succeeds_dot) {
-				break;
-			}
 			const auto disallowed_flags = KeywordCategory::KEYWORD_RESERVED | GetBannedCategory();
 
 			const bool has_banned_flag = HasFlag(category, disallowed_flags);
@@ -337,7 +330,6 @@ public:
 			return MatchResultType::FAIL;
 		}
 		state.token_index++;
-		// Printer::PrintF("Success for %s", token_text.c_str());
 		return MatchResultType::SUCCESS;
 	}
 
@@ -398,6 +390,26 @@ public:
 	}
 
 	SuggestionState suggestion_type;
+};
+
+class ReservedIdentifierMatcher : public IdentifierMatcher {
+public:
+	static constexpr MatcherType TYPE = MatcherType::VARIABLE;
+
+public:
+	explicit ReservedIdentifierMatcher(SuggestionState suggestion_type) : IdentifierMatcher(suggestion_type) {
+	}
+
+	MatchResultType Match(MatchState &state) const override {
+		// reserved variable matchers match anything
+		auto &token_text = state.tokens[state.token_index].text;
+		if (!IsIdentifier(token_text)) {
+			return MatchResultType::FAIL;
+		}
+		state.token_index++;
+		return MatchResultType::SUCCESS;
+	}
+
 };
 
 class StringLiteralMatcher : public Matcher {
@@ -541,6 +553,10 @@ private:
 	Matcher &TableFunctionName() const;
 	Matcher &PragmaName() const;
 	Matcher &SettingName() const;
+	Matcher &ReservedSchemaName() const;
+	Matcher &ReservedTableName() const;
+	Matcher &ReservedColumnName() const;
+	Matcher &ReservedScalarFunctionName() const;
 	Matcher &ReservedVariable() const;
 
 	void AddKeywordOverride(const char *name, uint32_t score, char extra_char = ' ');
@@ -589,7 +605,6 @@ Matcher &MatcherFactory::Variable() const {
 Matcher &MatcherFactory::ReservedVariable() const {
 	return allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE));
 }
-
 Matcher &MatcherFactory::CatalogName() const {
 	return allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_CATALOG_NAME));
 }
@@ -598,12 +613,24 @@ Matcher &MatcherFactory::SchemaName() const {
 	return allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_SCHEMA_NAME));
 }
 
+Matcher &MatcherFactory::ReservedSchemaName() const {
+	return allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_SCHEMA_NAME));
+}
+
 Matcher &MatcherFactory::TableName() const {
 	return allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_TABLE_NAME));
 }
 
+Matcher &MatcherFactory::ReservedTableName() const {
+	return allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_TABLE_NAME));
+}
+
 Matcher &MatcherFactory::ColumnName() const {
 	return allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_COLUMN_NAME));
+}
+
+Matcher &MatcherFactory::ReservedColumnName() const {
+	return allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_COLUMN_NAME));
 }
 
 Matcher &MatcherFactory::TypeName() const {
@@ -612,6 +639,10 @@ Matcher &MatcherFactory::TypeName() const {
 
 Matcher &MatcherFactory::ScalarFunctionName() const {
 	return allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME));
+}
+
+Matcher &MatcherFactory::ReservedScalarFunctionName() const {
+	return allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME));
 }
 
 Matcher &MatcherFactory::TableFunctionName() const {
@@ -1143,11 +1174,15 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	AddRuleOverride("ReservedIdentifier", ReservedVariable());
 	AddRuleOverride("TypeName", TypeName());
 	AddRuleOverride("TableName", TableName());
+	AddRuleOverride("ReservedTableName", ReservedTableName());
 	AddRuleOverride("CatalogName", CatalogName());
 	AddRuleOverride("SchemaName", SchemaName());
+	AddRuleOverride("ReservedSchemaName", ReservedSchemaName());
 	AddRuleOverride("ColumnName", ColumnName());
+	AddRuleOverride("ReservedColumnName", ReservedColumnName());
 	AddRuleOverride("TableFunctionName", TableFunctionName());
 	AddRuleOverride("FunctionName", ScalarFunctionName());
+	AddRuleOverride("ReservedFunctionName", ReservedScalarFunctionName());
 	AddRuleOverride("PragmaName", PragmaName());
 	AddRuleOverride("SettingName", SettingName());
 	AddRuleOverride("NumberLiteral", NumberLiteral());
