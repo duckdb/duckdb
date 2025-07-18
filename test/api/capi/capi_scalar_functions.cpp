@@ -425,12 +425,15 @@ void GetConnectionIdBind(duckdb_bind_info info) {
 	duckdb_scalar_function_get_client_context(info, &context);
 	auto connection_id = duckdb_client_context_get_connection_id(context);
 
-	// Get the folded value.
+	// Get the expression.
 	auto argument_count = duckdb_scalar_function_bind_get_argument_count(info);
 	REQUIRE(argument_count == 1);
 	auto expr = duckdb_scalar_function_bind_get_argument(info, 0);
+
 	auto foldable = duckdb_expression_is_foldable(expr);
 	if (!foldable) {
+		duckdb_destroy_expression(&expr);
+		duckdb_destroy_client_context(&context);
 		duckdb_scalar_function_bind_set_error(info, "input argument must be foldable");
 		return;
 	}
