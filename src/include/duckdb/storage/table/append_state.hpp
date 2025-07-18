@@ -89,7 +89,7 @@ struct LocalAppendState {
 	TableAppendState append_state;
 	LocalTableStorage *storage;
 	unique_ptr<ConstraintState> constraint_state;
-	bool wal_append = false; // TODO: should this be an enum?
+	bool wal_append = false;
 };
 
 } // namespace duckdb
