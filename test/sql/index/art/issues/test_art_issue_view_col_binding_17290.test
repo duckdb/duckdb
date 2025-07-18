@@ -1,4 +1,4 @@
-# name: test/sql/index/art/issues/test_art_issue_view_coll_binding_17290.test
+# name: test/sql/index/art/issues/test_art_issue_view_col_binding_17290.test
 # description: Test Index Scan push down against views with reordered projections
 # group: [issues]
 
@@ -10,6 +10,7 @@ create or replace table test as (
         cast(unnest(range(3000,4000)) as varchar) as z
 );
 
+# test simple permutation of initial table projection
 statement ok
 create index test_x on test(x);
 
@@ -18,5 +19,14 @@ create view test_view as (select z, y, x from test);
 
 query II
 explain analyze select * from test_view where x = '525';
+----
+analyzed_plan	<REGEX>:.*Index Scan.*
+
+# test columnref as a child of function
+statement ok
+create index test_upper_x on test(upper(x));
+
+query II
+explain analyze select * from test_view where upper(x) = '525';
 ----
 analyzed_plan	<REGEX>:.*Index Scan.*
