@@ -120,6 +120,7 @@ void PartialBlockManager::RegisterPartialBlock(PartialBlockAllocation allocation
 		// check if the block is STILL partially filled after adding the segment_size
 		if (new_space_left >= block_manager.GetBlockSize() - max_partial_block_size) {
 			// the block is still partially filled: add it to the partially_filled_blocks list
+			D_ASSERT(allocation.partial_block->state.offset > 0);
 			partially_filled_blocks.insert(make_pair(new_space_left, std::move(allocation.partial_block)));
 		}
 	}

@@ -217,8 +217,27 @@ runs:
         python3 scripts/get_test_list.py --file-contains 'require ' --list '"*.test"' > test.list
         python3 scripts/get_test_list.py --file-contains 'require-env LOCAL_EXTENSION_REPO' --list '"*.test"' >> test.list
         ${{ inputs.unittest_script }} '-f test.list'
-        rm -rf build/release/extension
-        mv build/extension_tmp build/release/extension
+
+    - name: Run tests with auto loading with VS2019 C++ stdlib
+      if: ${{ inputs.run_autoload_tests == '1' && inputs.vcpkg_target_triplet == 'x64-windows-static-md' }}
+      shell: bash
+      env:
+        LOCAL_EXTENSION_REPO: ${{ inputs.run_autoload_tests == '1' && github.workspace || ''}}
+      run: |
+        choco install wget -y --no-progress
+        cd  ${{ inputs.build_dir }}
+        TEST_RUNNER_DIR=./build/release/test/Release
+        if [ ! -f ${TEST_RUNNER_DIR}/unittest.exe ]; then
+          echo "Invalid unit tests runner dir: ${TEST_RUNNER_DIR}, check 'inputs.unittest_script' argument"
+          exit 1
+        fi
+        wget -P ${TEST_RUNNER_DIR} https://blobs.duckdb.org/ci/msvcp140.dll
+        ls ${TEST_RUNNER_DIR}
+        # test.list is generated on the previous step
+        ${{ inputs.unittest_script }} '-f test.list'
+        rm ${TEST_RUNNER_DIR}/msvcp140.dll
+        rm -rf ./build/release/extension
+        mv ./build/extension_tmp ./build/release/extension
 
     - name: Deploy
       if: ${{ inputs.deploy_as != '' }}
