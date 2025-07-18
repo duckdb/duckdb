@@ -409,7 +409,6 @@ public:
 		state.token_index++;
 		return MatchResultType::SUCCESS;
 	}
-
 };
 
 class StringLiteralMatcher : public Matcher {
