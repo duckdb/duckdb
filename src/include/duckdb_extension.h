@@ -549,11 +549,11 @@ typedef struct {
 	                                            const char **names, idx_t column_count, struct ArrowSchema *out_schema);
 	duckdb_error_data (*duckdb_data_chunk_to_arrow)(duckdb_arrow_options arrow_options, duckdb_data_chunk chunk,
 	                                                struct ArrowArray *out_arrow_array);
-	duckdb_error_data (*arrow_to_duckdb_schema)(duckdb_connection connection, struct ArrowSchema *schema,
-	                                            duckdb_arrow_converted_schema *out_types);
-	duckdb_error_data (*arrow_to_duckdb_data_chunk)(duckdb_connection connection, struct ArrowArray *arrow_array,
-	                                                duckdb_arrow_converted_schema converted_schema,
-	                                                duckdb_data_chunk *out_chunk);
+	duckdb_error_data (*duckdb_schema_from_arrow)(duckdb_connection connection, struct ArrowSchema *schema,
+	                                              duckdb_arrow_converted_schema *out_types);
+	duckdb_error_data (*duckdb_data_chunk_from_arrow)(duckdb_connection connection, struct ArrowArray *arrow_array,
+	                                                  duckdb_arrow_converted_schema converted_schema,
+	                                                  duckdb_data_chunk *out_chunk);
 	void (*duckdb_destroy_arrow_converted_schema)(duckdb_arrow_converted_schema *arrow_converted_schema);
 #endif
 
@@ -1044,8 +1044,8 @@ typedef struct {
 // Version unstable_new_arrow_functions
 #define duckdb_to_arrow_schema                duckdb_ext_api.duckdb_to_arrow_schema
 #define duckdb_data_chunk_to_arrow            duckdb_ext_api.duckdb_data_chunk_to_arrow
-#define arrow_to_duckdb_schema                duckdb_ext_api.arrow_to_duckdb_schema
-#define arrow_to_duckdb_data_chunk            duckdb_ext_api.arrow_to_duckdb_data_chunk
+#define duckdb_schema_from_arrow              duckdb_ext_api.duckdb_schema_from_arrow
+#define duckdb_data_chunk_from_arrow          duckdb_ext_api.duckdb_data_chunk_from_arrow
 #define duckdb_destroy_arrow_converted_schema duckdb_ext_api.duckdb_destroy_arrow_converted_schema
 
 // Version unstable_new_error_data_functions

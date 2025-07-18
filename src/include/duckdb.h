@@ -703,6 +703,8 @@ typedef void (*duckdb_replacement_callback_t)(duckdb_replacement_scan_info info,
 //===--------------------------------------------------------------------===//
 
 //! Forward declare Arrow structs
+//! It is important to notice that these structs are not defined by DuckDB but are actually Arrow external objects.
+//! They're defined by the C Data Interface Arrow spec: https://arrow.apache.org/docs/format/CDataInterface.html
 
 struct ArrowArray;
 
@@ -724,7 +726,9 @@ typedef struct _duckdb_arrow_schema {
 } * duckdb_arrow_schema;
 
 //! Holds an arrow converted schema (i.e., duckdb::ArrowTableSchema).
-//! Must be destroyed with `duckdb_destroy_arrow_converted_schema`
+//! In practice, this object holds the information necessary to do proper conversion between Arrow Types and DuckDB
+//! Types. Check duckdb/function/table/arrow/arrow_duck_schema.hpp for more details! Must be destroyed with
+//! `duckdb_destroy_arrow_converted_schema`
 typedef struct _duckdb_arrow_converted_schema {
 	void *internal_ptr;
 } * duckdb_arrow_converted_schema;
@@ -734,7 +738,8 @@ typedef struct _duckdb_arrow_array {
 	void *internal_ptr;
 } * duckdb_arrow_array;
 
-//! The arrow options used during arrow production.
+//! The arrow options used when transforming the DuckDB schema and datachunks into Arrow schema and arrays.
+//! Used in `duckdb_to_arrow_schema` and `duckdb_data_chunk_to_arrow`
 typedef struct _duckdb_arrow_options {
 	void *internal_ptr;
 } * duckdb_arrow_options;
@@ -898,6 +903,7 @@ DUCKDB_C_API void duckdb_destroy_client_context(duckdb_client_context *context);
 /*!
 Destroys the arrow options and deallocates its memory.
 
+* @param arrow_options The arrow options to destroy.
 */
 DUCKDB_C_API void duckdb_destroy_arrow_options(duckdb_arrow_options *arrow_options);
 
@@ -1105,7 +1111,8 @@ DUCKDB_C_API duckdb_logical_type duckdb_column_logical_type(duckdb_result *resul
 Returns the arrow options associated with the given result. These options are definitions of how the arrow arrays/schema
 should be produced.
 * @param result The result object to fetch arrow options from.
-* @return The arrow options associated with the given result.
+* @return The arrow options associated with the given result. This must be destroyed with
+`duckdb_destroy_arrow_options`.
 */
 DUCKDB_C_API duckdb_arrow_options duckdb_result_get_arrow_options(duckdb_result *result);
 
@@ -4528,11 +4535,11 @@ DUCKDB_C_API char *duckdb_table_description_get_column_name(duckdb_table_descrip
 Transforms a DuckDB Schema into an Arrow Schema
 
 * @param arrow_options The Arrow settings used to produce arrow.
-* @param types The DuckDB Logical Types for each column in the schema.
+* @param types The DuckDB logical types for each column in the schema.
 * @param names The names for each column in the schema.
 * @param column_count The number of columns that exist in the schema.
 * @param out_schema The resulting arrow schema. Must be destroyed with `out_schema->release(out_schema)`.
-* @return The error data.
+* @return The error data. Must be destroyed with `duckdb_destroy_error_data`.
 */
 DUCKDB_C_API duckdb_error_data duckdb_to_arrow_schema(duckdb_arrow_options arrow_options, duckdb_logical_type *types,
                                                       const char **names, idx_t column_count,
@@ -4545,7 +4552,7 @@ Transforms a DuckDB data chunk into an Arrow array.
 * @param chunk The DuckDB data chunk to convert.
 * @param out_arrow_array The output Arrow structure that will hold the converted data. Must be released with
 `out_arrow_array->release(out_arrow_array)`
-* @return The error data.
+* @return The error data. Must be destroyed with `duckdb_destroy_error_data`.
 */
 DUCKDB_C_API duckdb_error_data duckdb_data_chunk_to_arrow(duckdb_arrow_options arrow_options, duckdb_data_chunk chunk,
                                                           struct ArrowArray *out_arrow_array);
@@ -4555,27 +4562,27 @@ Transforms an Arrow Schema into a DuckDB Schema.
 
 * @param connection The connection to get the transformation settings from.
 * @param schema The input Arrow schema. Must be released with `schema->release(schema)`.
-* @param out_types The Arrow converted schema with extra information about the Arrow Types. Must be destroyed with
+* @param out_types The Arrow converted schema with extra information about the arrow types. Must be destroyed with
 `duckdb_destroy_arrow_converted_schema`.
-* @return The error data.
+* @return The error data. Must be destroyed with `duckdb_destroy_error_data`.
 */
-DUCKDB_C_API duckdb_error_data arrow_to_duckdb_schema(duckdb_connection connection, struct ArrowSchema *schema,
-                                                      duckdb_arrow_converted_schema *out_types);
+DUCKDB_C_API duckdb_error_data duckdb_schema_from_arrow(duckdb_connection connection, struct ArrowSchema *schema,
+                                                        duckdb_arrow_converted_schema *out_types);
 
 /*!
 Transforms an Arrow array into a DuckDB data chunk. The data chunk will retain ownership of the underlying Arrow data.
- However, arrow_array must still be destroyed with `duckdb_destroy_arrow_array`
 
 * @param connection The connection to get the transformation settings from.
 * @param arrow_array The input Arrow array. Data ownership is passed on to DuckDB's DataChunk, the underlying object
 does not need to be released and won't have ownership of the data.
-* @param converted_schema The Arrow converted schema with extra information about the Arrow Types.
+* @param converted_schema The Arrow converted schema with extra information about the arrow types.
 * @param out_chunk The resulting DuckDB data chunk. Must be destroyed by duckdb_destroy_data_chunk.
-* @return The error data.
+* @return The error data. Must be destroyed with `duckdb_destroy_error_data`.
 */
-DUCKDB_C_API duckdb_error_data arrow_to_duckdb_data_chunk(duckdb_connection connection, struct ArrowArray *arrow_array,
-                                                          duckdb_arrow_converted_schema converted_schema,
-                                                          duckdb_data_chunk *out_chunk);
+DUCKDB_C_API duckdb_error_data duckdb_data_chunk_from_arrow(duckdb_connection connection,
+                                                            struct ArrowArray *arrow_array,
+                                                            duckdb_arrow_converted_schema converted_schema,
+                                                            duckdb_data_chunk *out_chunk);
 
 /*!
 Destroys the arrow converted schema and de-allocates all memory allocated for that arrow converted schema.

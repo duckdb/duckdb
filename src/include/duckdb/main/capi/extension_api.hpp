@@ -478,11 +478,11 @@ typedef struct {
 	                                            const char **names, idx_t column_count, struct ArrowSchema *out_schema);
 	duckdb_error_data (*duckdb_data_chunk_to_arrow)(duckdb_arrow_options arrow_options, duckdb_data_chunk chunk,
 	                                                struct ArrowArray *out_arrow_array);
-	duckdb_error_data (*arrow_to_duckdb_schema)(duckdb_connection connection, struct ArrowSchema *schema,
-	                                            duckdb_arrow_converted_schema *out_types);
-	duckdb_error_data (*arrow_to_duckdb_data_chunk)(duckdb_connection connection, struct ArrowArray *arrow_array,
-	                                                duckdb_arrow_converted_schema converted_schema,
-	                                                duckdb_data_chunk *out_chunk);
+	duckdb_error_data (*duckdb_schema_from_arrow)(duckdb_connection connection, struct ArrowSchema *schema,
+	                                              duckdb_arrow_converted_schema *out_types);
+	duckdb_error_data (*duckdb_data_chunk_from_arrow)(duckdb_connection connection, struct ArrowArray *arrow_array,
+	                                                  duckdb_arrow_converted_schema converted_schema,
+	                                                  duckdb_data_chunk *out_chunk);
 	void (*duckdb_destroy_arrow_converted_schema)(duckdb_arrow_converted_schema *arrow_converted_schema);
 	// New functions for duckdb error data
 
@@ -949,8 +949,8 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_appender_error_data = duckdb_appender_error_data;
 	result.duckdb_to_arrow_schema = duckdb_to_arrow_schema;
 	result.duckdb_data_chunk_to_arrow = duckdb_data_chunk_to_arrow;
-	result.arrow_to_duckdb_schema = arrow_to_duckdb_schema;
-	result.arrow_to_duckdb_data_chunk = arrow_to_duckdb_data_chunk;
+	result.duckdb_schema_from_arrow = duckdb_schema_from_arrow;
+	result.duckdb_data_chunk_from_arrow = duckdb_data_chunk_from_arrow;
 	result.duckdb_destroy_arrow_converted_schema = duckdb_destroy_arrow_converted_schema;
 	result.duckdb_create_error_data = duckdb_create_error_data;
 	result.duckdb_destroy_error_data = duckdb_destroy_error_data;

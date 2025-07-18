@@ -244,7 +244,7 @@
                 "description": "Retrieves the arrow options of the connection.\n\n",
                 "param_comments": {
                     "connection": "The connection.",
-                    "out_context": "The arrow options of the connection. Must be destroyed with `duckdb_destroy_arrow_options`."
+                    "duckdb_arrow_options": "The arrow options of the connection. Must be destroyed with `duckdb_destroy_arrow_options`."
                 }
             }
         },
@@ -293,7 +293,7 @@
             "comment": {
                 "description": "Destroys the arrow options and deallocates its memory.\n\n",
                 "param_comments": {
-                    "context": "The arrow options to destroy."
+                    "arrow_options": "The arrow options to destroy."
                 }
             }
         },

@@ -362,7 +362,7 @@ TEST_CASE("Test C-API Arrow conversion functions", "[capi][arrow]") {
 		duckdb_arrow_converted_schema converted_schema = nullptr;
 		// Convert schema (simulate real use)
 
-		err = arrow_to_duckdb_schema(tester.connection, &arrow_schema_wrapper.arrow_schema, &converted_schema);
+		err = duckdb_schema_from_arrow(tester.connection, &arrow_schema_wrapper.arrow_schema, &converted_schema);
 		REQUIRE(err == nullptr);
 		// 5. For each Arrow array, convert back to DuckDB chunk and validate
 		for (size_t idx = 0, offset = 0; idx < arrow_arrays.size(); idx++) {
@@ -370,7 +370,7 @@ TEST_CASE("Test C-API Arrow conversion functions", "[capi][arrow]") {
 			// Prepare output chunk
 			duckdb_data_chunk out_chunk;
 			// Convert Arrow array to DuckDB chunk
-			err = arrow_to_duckdb_data_chunk(tester.connection, duckdb_arrow_array, converted_schema, &out_chunk);
+			err = duckdb_data_chunk_from_arrow(tester.connection, duckdb_arrow_array, converted_schema, &out_chunk);
 			REQUIRE(err == nullptr);
 			idx_t chunk_size = duckdb_data_chunk_get_size(out_chunk);
 			auto vec = duckdb_data_chunk_get_vector(out_chunk, 0);
@@ -435,26 +435,26 @@ TEST_CASE("Test C-API Arrow conversion functions", "[capi][arrow]") {
 		REQUIRE(err != nullptr);
 		duckdb_destroy_error_data(&err);
 
-		// Test arrow_to_duckdb_schema
+		// Test duckdb_schema_from_arrow
 		ArrowSchema schema;
 		duckdb_arrow_converted_schema converted_schema = nullptr;
-		err = arrow_to_duckdb_schema(nullptr, &schema, &converted_schema);
+		err = duckdb_schema_from_arrow(nullptr, &schema, &converted_schema);
 		REQUIRE(err != nullptr);
 		duckdb_destroy_error_data(&err);
-		err = arrow_to_duckdb_schema(tester.connection, &schema, nullptr);
+		err = duckdb_schema_from_arrow(tester.connection, &schema, nullptr);
 		REQUIRE(err != nullptr);
 		duckdb_destroy_error_data(&err);
 
-		// Test arrow_to_duckdb_data_chunk
+		// Test duckdb_data_chunk_from_arrow
 		ArrowArray arr;
 		duckdb_data_chunk out_chunk = nullptr;
-		err = arrow_to_duckdb_data_chunk(nullptr, &arr, converted_schema, &out_chunk);
+		err = duckdb_data_chunk_from_arrow(nullptr, &arr, converted_schema, &out_chunk);
 		REQUIRE(err != nullptr);
 		duckdb_destroy_error_data(&err);
-		err = arrow_to_duckdb_data_chunk(tester.connection, &arr, nullptr, &out_chunk);
+		err = duckdb_data_chunk_from_arrow(tester.connection, &arr, nullptr, &out_chunk);
 		REQUIRE(err != nullptr);
 		duckdb_destroy_error_data(&err);
-		err = arrow_to_duckdb_data_chunk(tester.connection, &arr, converted_schema, nullptr);
+		err = duckdb_data_chunk_from_arrow(tester.connection, &arr, converted_schema, nullptr);
 		REQUIRE(err != nullptr);
 		duckdb_destroy_error_data(&err);
 		duckdb_destroy_arrow_options(&arrow_options);

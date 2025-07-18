@@ -142,7 +142,7 @@
                 "param_comments": {
                     "result": "The result object to fetch arrow options from."
                 },
-                "return_value": "The arrow options associated with the given result."
+                "return_value": "The arrow options associated with the given result. This must be destroyed with `duckdb_destroy_arrow_options`."
             }
         },
         {

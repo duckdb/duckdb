@@ -646,7 +646,7 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, cons
 	ConvertedSchemaWrapper out_types;
 
 	input->get_schema(input, &arrow_schema_wrapper.arrow_schema);
-	auto res = arrow_to_duckdb_schema(connection, &arrow_schema_wrapper.arrow_schema, out_types.GetPtr());
+	auto res = duckdb_schema_from_arrow(connection, &arrow_schema_wrapper.arrow_schema, out_types.GetPtr());
 	if (res) {
 		SetError(error, duckdb_error_data_message(res));
 		duckdb_destroy_error_data(&res);
@@ -690,8 +690,8 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, cons
 	input->get_next(input, &arrow_array_wrapper.arrow_array);
 	while (arrow_array_wrapper.arrow_array.release) {
 		DataChunkWrapper out_chunk;
-		auto res =
-		    arrow_to_duckdb_data_chunk(connection, &arrow_array_wrapper.arrow_array, out_types.Get(), &out_chunk.chunk);
+		auto res = duckdb_data_chunk_from_arrow(connection, &arrow_array_wrapper.arrow_array, out_types.Get(),
+		                                        &out_chunk.chunk);
 		if (res) {
 			SetError(error, duckdb_error_data_message(res));
 			duckdb_destroy_error_data(&res);
@@ -872,7 +872,7 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 		stream.get_schema(&stream, &arrow_schema_wrapper.arrow_schema);
 		try {
 			auto res =
-			    arrow_to_duckdb_schema(wrapper->connection, &arrow_schema_wrapper.arrow_schema, out_types.GetPtr());
+			    duckdb_schema_from_arrow(wrapper->connection, &arrow_schema_wrapper.arrow_schema, out_types.GetPtr());
 			if (res) {
 				SetError(error, duckdb_error_data_message(res));
 				duckdb_destroy_error_data(&res);
@@ -891,8 +891,8 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 		while (arrow_array_wrapper.arrow_array.release) {
 			// This is a valid arrow array, let's make it into a data chunk
 			DataChunkWrapper out_chunk;
-			auto res_conv = arrow_to_duckdb_data_chunk(wrapper->connection, &arrow_array_wrapper.arrow_array,
-			                                           out_types.Get(), &out_chunk.chunk);
+			auto res_conv = duckdb_data_chunk_from_arrow(wrapper->connection, &arrow_array_wrapper.arrow_array,
+			                                             out_types.Get(), &out_chunk.chunk);
 			if (res_conv) {
 				SetError(error, duckdb_error_data_message(res_conv));
 				duckdb_destroy_error_data(&res_conv);

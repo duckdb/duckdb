@@ -64,8 +64,8 @@ duckdb_error_data duckdb_data_chunk_to_arrow(duckdb_arrow_options arrow_options,
 	return nullptr;
 }
 
-duckdb_error_data arrow_to_duckdb_schema(duckdb_connection connection, struct ArrowSchema *schema,
-                                         duckdb_arrow_converted_schema *out_types) {
+duckdb_error_data duckdb_schema_from_arrow(duckdb_connection connection, struct ArrowSchema *schema,
+                                           duckdb_arrow_converted_schema *out_types) {
 	if (!connection || !out_types || !schema) {
 		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT,
 		                                "Invalid argument(s) to duckdb_data_chunk_to_arrow");
@@ -88,9 +88,9 @@ duckdb_error_data arrow_to_duckdb_schema(duckdb_connection connection, struct Ar
 	return nullptr;
 }
 
-duckdb_error_data arrow_to_duckdb_data_chunk(duckdb_connection connection, struct ArrowArray *arrow_array,
-                                             duckdb_arrow_converted_schema converted_schema,
-                                             duckdb_data_chunk *out_chunk) {
+duckdb_error_data duckdb_data_chunk_from_arrow(duckdb_connection connection, struct ArrowArray *arrow_array,
+                                               duckdb_arrow_converted_schema converted_schema,
+                                               duckdb_data_chunk *out_chunk) {
 	if (!connection || !converted_schema || !out_chunk || !arrow_array) {
 		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT,
 		                                "Invalid argument(s) to duckdb_data_chunk_to_arrow");
@@ -110,10 +110,10 @@ duckdb_error_data arrow_to_duckdb_data_chunk(duckdb_connection connection, struc
 		auto arrow_type = arrow_types.at(i);
 		auto array_physical_type = arrow_type->GetPhysicalType();
 		auto array_state = duckdb::make_uniq<duckdb::ArrowArrayScanState>(*conn->context);
-		// We need to make sure that our chunk will hold ze ownership
+		// We need to make sure that our chunk will hold the ownership
 		array_state->owned_data = duckdb::make_shared_ptr<duckdb::ArrowArrayWrapper>();
 		array_state->owned_data->arrow_array = *arrow_array;
-		// We set it to nullptr to effectively transfer ze ownership
+		// We set it to nullptr to effectively transfer the ownership
 		arrow_array->release = nullptr;
 		try {
 			switch (array_physical_type) {

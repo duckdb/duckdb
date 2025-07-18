@@ -4,8 +4,8 @@
     "entries": [
         "duckdb_to_arrow_schema",
         "duckdb_data_chunk_to_arrow",
-        "arrow_to_duckdb_schema",
-        "arrow_to_duckdb_data_chunk",
+        "duckdb_schema_from_arrow",
+        "duckdb_data_chunk_from_arrow",
         "duckdb_destroy_arrow_converted_schema"
     ]
 }
