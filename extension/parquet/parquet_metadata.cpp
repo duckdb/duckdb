@@ -200,6 +200,9 @@ void ParquetMetaDataOperatorData::BindMetaData(vector<LogicalType> &return_types
 
 	names.emplace_back("max_is_exact");
 	return_types.emplace_back(LogicalType::BOOLEAN);
+
+	names.emplace_back("row_group_compressed_bytes");
+	return_types.emplace_back(LogicalType::BIGINT);
 }
 
 static Value ConvertParquetStats(const LogicalType &type, const ParquetColumnSchema &schema_ele, bool stats_is_set,
@@ -349,6 +352,11 @@ void ParquetMetaDataOperatorData::LoadRowGroupMetadata(ClientContext &context, c
 			// max_is_exact, LogicalType::BOOLEAN
 			current_chunk.SetValue(27, count,
 			                       ParquetElementBoolean(stats.is_max_value_exact, stats.__isset.is_max_value_exact));
+
+			// row_group_compressed_bytes
+			current_chunk.SetValue(
+			    28, count,
+			    ParquetElementBigint(row_group.__isset.total_compressed_size, row_group.__isset.total_compressed_size));
 
 			count++;
 			if (count >= STANDARD_VECTOR_SIZE) {
