@@ -27,10 +27,6 @@
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
-#include "duckdb/storage/compression/chimp/algorithm/byte_reader.hpp"
-#include "duckdb/storage/compression/patas/algorithm/patas.hpp"
-#include "duckdb/storage/compression/patas/shared.hpp"
-#include "duckdb/storage/compression/patas/patas.hpp"
 
 namespace duckdb {
 
