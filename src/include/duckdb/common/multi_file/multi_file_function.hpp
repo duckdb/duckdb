@@ -181,11 +181,11 @@ public:
 		                             std::move(file_options), std::move(options), std::move(interface));
 	}
 
-	static unique_ptr<FunctionData> MultiFileBindCopy(ClientContext &context, CopyInfo &info,
+	static unique_ptr<FunctionData> MultiFileBindCopy(ClientContext &context, CopyFromFunctionBindInput &input,
 	                                                  vector<string> &expected_names,
 	                                                  vector<LogicalType> &expected_types) {
 		auto multi_file_reader = MultiFileReader::CreateDefault("COPY");
-		vector<string> paths = {info.file_path};
+		vector<string> paths = {input.info.file_path};
 		auto file_list = multi_file_reader->CreateFileList(context, paths);
 
 		auto interface = OP::InitializeInterface(context, *multi_file_reader, *file_list);
@@ -193,7 +193,7 @@ public:
 		auto options = interface->InitializeOptions(context, nullptr);
 		MultiFileOptions file_options;
 
-		for (auto &option : info.options) {
+		for (auto &option : input.info.options) {
 			auto loption = StringUtil::Lower(option.first);
 			if (interface->ParseCopyOption(context, loption, option.second, *options, expected_names, expected_types)) {
 				continue;
