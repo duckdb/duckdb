@@ -24,11 +24,20 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &table)
 	row_groups = make_shared_ptr<RowGroupCollection>(data_table_info, io_manager, types, MAX_ROW_ID, 0);
 	row_groups->InitializeEmpty();
 
-	data_table_info->GetIndexes().BindAndScan<ART>(context, *data_table_info, [&](ART &art) {
-		auto constraint_type = art.GetConstraintType();
-		if (constraint_type == IndexConstraintType::NONE) {
+	data_table_info->GetIndexes().Scan([&](Index &index) {
+		auto constraint = index.GetConstraintType();
+		if (constraint == IndexConstraintType::NONE) {
 			return false;
 		}
+
+		if (!index.IsBound()) {
+			auto &unbound_index = index.Cast<UnboundIndex>();
+			delete_indexes.AddIndex(std::move(unbound_index.Copy()));
+			append_indexes.AddIndex(std::move(unbound_index.Copy()));
+			return false;
+		}
+
+		auto &art = index.Cast<ART>();
 
 		// UNIQUE constraint.
 		vector<unique_ptr<Expression>> expressions;
@@ -39,13 +48,15 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &table)
 		}
 
 		// Create a delete index and a local index.
-		auto delete_index = make_uniq<ART>(art.GetIndexName(), constraint_type, art.GetColumnIds(),
-		                                   art.table_io_manager, std::move(delete_expressions), art.db);
+		auto &name = art.GetIndexName();
+		auto &io_manager = art.table_io_manager;
+		auto delete_index =
+		    make_uniq<ART>(name, constraint, art.GetColumnIds(), io_manager, std::move(delete_expressions), art.db);
 		delete_indexes.AddIndex(std::move(delete_index));
 
-		auto index = make_uniq<ART>(art.GetIndexName(), constraint_type, art.GetColumnIds(), art.table_io_manager,
-		                            std::move(expressions), art.db);
-		append_indexes.AddIndex(std::move(index));
+		auto append_index =
+		    make_uniq<ART>(name, constraint, art.GetColumnIds(), io_manager, std::move(expressions), art.db);
+		append_indexes.AddIndex(std::move(append_index));
 		return false;
 	});
 }
@@ -161,7 +172,7 @@ ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGr
 		}
 		mock_chunk.SetCardinality(chunk);
 		// append this chunk to the indexes of the table
-		error = DataTable::AppendToIndexes(index_list, delete_indexes, mock_chunk, start_row, index_append_mode);
+		error = DataTable::AppendToIndexes(index_list, delete_indexes, mock_chunk, start_row, index_append_mode, false);
 		if (error.HasError()) {
 			return false;
 		}
@@ -381,7 +392,9 @@ bool LocalStorage::NextParallelScan(ClientContext &context, DataTable &table, Pa
 }
 
 void LocalStorage::InitializeAppend(LocalAppendState &state, DataTable &table) {
-	table.InitializeIndexes(context);
+	if (!state.wal_append) {
+		table.InitializeIndexes(context);
+	}
 	state.storage = &table_manager.GetOrCreateStorage(context, table);
 	state.storage->row_groups->InitializeAppend(TransactionData(transaction), state.append_state);
 }
@@ -416,7 +429,7 @@ void LocalStorage::Append(LocalAppendState &state, DataChunk &chunk) {
 	idx_t base_id = offset + state.append_state.total_append_count;
 
 	auto error = DataTable::AppendToIndexes(storage->append_indexes, storage->delete_indexes, chunk,
-	                                        NumericCast<row_t>(base_id), storage->index_append_mode);
+	                                        NumericCast<row_t>(base_id), storage->index_append_mode, state.wal_append);
 	if (error.HasError()) {
 		error.Throw();
 	}
@@ -516,10 +529,9 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_
 		storage.Rollback();
 		return;
 	}
-	idx_t append_count = storage.row_groups->GetTotalRows() - storage.deleted_rows;
-	table.InitializeIndexes(context);
 
-	const idx_t row_group_size = storage.row_groups->GetRowGroupSize();
+	auto append_count = storage.row_groups->GetTotalRows() - storage.deleted_rows;
+	const auto row_group_size = storage.row_groups->GetRowGroupSize();
 
 	TableAppendState append_state;
 	table.AppendLock(append_state);
@@ -529,9 +541,7 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_
 		// table is currently empty OR we are bulk appending: move over the storage directly
 		// first flush any outstanding blocks
 		storage.FlushBlocks();
-		// now append to the indexes (if there are any)
-		// FIXME: we should be able to merge the transaction-local index directly into the main table index
-		// as long we just rewrite some row-ids
+		// Append to the indexes.
 		if (table.HasIndexes()) {
 			storage.AppendToIndexes(transaction, append_state, false);
 		}
