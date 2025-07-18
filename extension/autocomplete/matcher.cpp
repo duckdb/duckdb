@@ -300,31 +300,44 @@ public:
 		return BaseTokenizer::CharacterIsKeyword(text[0]);
 	}
 
+	bool HasFlag(KeywordCategory mask, KeywordCategory flag) const {
+		return (mask & flag) != KeywordCategory::KEYWORD_NONE;
+	}
+
 	MatchResultType Match(MatchState &state) const override {
 		// variable matchers match anything except for reserved keywords
 		auto &token_text = state.tokens[state.token_index].text;
+
+		bool succeeds_dot = false;
+		if (state.token_index > 0 && state.tokens[state.token_index - 1].text == ".") {
+			succeeds_dot = true;
+		}
 		auto category = KeywordHelper::Instance().KeywordCategoryType(token_text);
 		switch (suggestion_type) {
-		case SuggestionState::SUGGEST_CATALOG_NAME:
-		case SuggestionState::SUGGEST_SCHEMA_NAME:
-		case SuggestionState::SUGGEST_TABLE_NAME:
-			if (category == KeywordCategory::KEYWORD_RESERVED || category == KeywordCategory::KEYWORD_TYPE_FUNC) {
+		case SuggestionState::SUGGEST_TYPE_NAME:
+			if (HasFlag(category, KeywordCategory::KEYWORD_RESERVED | GetBannedCategory())) {
 				return MatchResultType::FAIL;
 			}
 			break;
-		case SuggestionState::SUGGEST_RESERVED_SCHEMA_NAME:
-		case SuggestionState::SUGGEST_RESERVED_TABLE_NAME:
-			break;
-		default:
-			if (category == KeywordCategory::KEYWORD_RESERVED || category == GetBannedCategory()) {
+		default: {
+			if (succeeds_dot) {
+				break;
+			}
+			const auto disallowed_flags = KeywordCategory::KEYWORD_RESERVED | GetBannedCategory();
+
+			const bool has_banned_flag = HasFlag(category, disallowed_flags);
+			const bool has_allowed_flag = ((category & ~disallowed_flags) != KeywordCategory::KEYWORD_NONE);
+			if (has_banned_flag && !has_allowed_flag) {
 				return MatchResultType::FAIL;
 			}
 			break;
+		}
 		}
 		if (!IsIdentifier(token_text)) {
 			return MatchResultType::FAIL;
 		}
 		state.token_index++;
+		// Printer::PrintF("Success for %s", token_text.c_str());
 		return MatchResultType::SUCCESS;
 	}
 
@@ -1145,6 +1158,7 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	AddRuleOverride("SchemaName", SchemaName());
 	AddRuleOverride("ColumnName", ColumnName());
 	AddRuleOverride("TableFunctionName", TableFunctionName());
+	AddRuleOverride("FunctionName", ScalarFunctionName());
 	AddRuleOverride("PragmaName", PragmaName());
 	AddRuleOverride("SettingName", SettingName());
 	AddRuleOverride("NumberLiteral", NumberLiteral());
