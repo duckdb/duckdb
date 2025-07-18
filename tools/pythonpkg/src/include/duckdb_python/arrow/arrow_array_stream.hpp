@@ -89,7 +89,7 @@ private:
 	//! We transform a TableFilterSet to an Arrow Expression Object
 	static py::object TransformFilter(TableFilterSet &filters, std::unordered_map<idx_t, string> &columns,
 	                                  unordered_map<idx_t, idx_t> filter_to_col,
-	                                  const ClientProperties &client_properties, const ArrowTableType &arrow_table);
+	                                  const ClientProperties &client_properties, const ArrowTableSchema &arrow_table);
 
 	static py::object ProduceScanner(DBConfig &config, py::object &arrow_scanner, py::handle &arrow_obj_handle,
 	                                 ArrowStreamParameters &parameters, const ClientProperties &client_properties);

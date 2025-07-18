@@ -42,6 +42,11 @@ struct CClientContextWrapper {
 	ClientContext &context;
 };
 
+struct CClientArrowOptionsWrapper {
+	explicit CClientArrowOptionsWrapper(ClientProperties &properties) : properties(properties) {};
+	ClientProperties properties;
+};
+
 struct PreparedStatementWrapper {
 	//! Map of name -> values
 	case_insensitive_map_t<BoundParameterData> values;
