@@ -535,7 +535,7 @@ bool TryScanIndex(ART &art, const ColumnList &column_list, TableFunctionInitInpu
 	auto &indexed_columns = art.GetColumnIds();
 
 	// NOTE: We do not push down multi-column filters, e.g., 42 = a + b.
-	if (indexed_columns.size() != 1) {	
+	if (indexed_columns.size() != 1) {
 		return false;
 	}
 
