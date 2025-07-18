@@ -10,10 +10,6 @@ KeywordHelper::KeywordHelper() {
 	InitializeKeywordMap();
 }
 
-bool KeywordHelper::IsKeyword(const std::string &text) const {
-	return keyword_map.find(text) != keyword_map.end();
-}
-
 KeywordCategory KeywordHelper::KeywordCategoryType(const std::string &text) const {
 	auto it = keyword_map.find(text);
 	if (it != keyword_map.end()) {

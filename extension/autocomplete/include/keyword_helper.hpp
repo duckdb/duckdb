@@ -5,12 +5,27 @@
 
 namespace duckdb {
 enum class KeywordCategory : uint8_t {
-	KEYWORD_RESERVED,
-	KEYWORD_UNRESERVED,
-	KEYWORD_TYPE_FUNC,
-	KEYWORD_COL_NAME,
-	KEYWORD_NONE
+	KEYWORD_NONE = 0,            // 00000000
+	KEYWORD_UNRESERVED = 1 << 0, // 00000001 (1)
+	KEYWORD_RESERVED = 1 << 1,   // 00000010 (2)
+	KEYWORD_TYPE_FUNC = 1 << 2,  // 00000100 (4)
+	KEYWORD_COL_NAME = 1 << 3    // 00001000 (8)
 };
+
+inline KeywordCategory operator|(KeywordCategory a, KeywordCategory b) {
+	return static_cast<KeywordCategory>(static_cast<uint8_t>(a) | static_cast<uint8_t>(b));
+}
+inline KeywordCategory operator&(KeywordCategory a, KeywordCategory b) {
+	return static_cast<KeywordCategory>(static_cast<uint8_t>(a) & static_cast<uint8_t>(b));
+}
+inline KeywordCategory &operator|=(KeywordCategory &a, KeywordCategory b) {
+	a = a | b;
+	return a;
+}
+
+inline KeywordCategory operator~(KeywordCategory a) {
+	return static_cast<KeywordCategory>(~static_cast<uint8_t>(a));
+}
 
 struct ParserKeyword {
 	string name;
@@ -20,10 +35,8 @@ struct ParserKeyword {
 class KeywordHelper {
 public:
 	static KeywordHelper &Instance();
-	bool IsKeyword(const string &text) const;
 	KeywordCategory KeywordCategoryType(const string &text) const;
 	void InitializeKeywordMap();
-	void InsertKeyword(const string &kw, KeywordCategory cat);
 
 private:
 	KeywordHelper();
