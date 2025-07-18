@@ -40,6 +40,7 @@
 #include "duckdb/common/enums/metric_type.hpp"
 #include "duckdb/common/enums/on_create_conflict.hpp"
 #include "duckdb/common/enums/on_entry_not_found.hpp"
+#include "duckdb/common/enums/on_timetravel_not_supported.hpp"
 #include "duckdb/common/enums/operator_result_type.hpp"
 #include "duckdb/common/enums/optimizer_type.hpp"
 #include "duckdb/common/enums/order_preservation_type.hpp"
@@ -2888,6 +2889,24 @@ const char* EnumUtil::ToChars<OnEntryNotFound>(OnEntryNotFound value) {
 template<>
 OnEntryNotFound EnumUtil::FromString<OnEntryNotFound>(const char *value) {
 	return static_cast<OnEntryNotFound>(StringUtil::StringToEnum(GetOnEntryNotFoundValues(), 2, "OnEntryNotFound", value));
+}
+
+const StringUtil::EnumStringLiteral *GetOnTimetravelNotSupportedValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(OnTimetravelNotSupported::THROW_EXCEPTION), "THROW_EXCEPTION" },
+		{ static_cast<uint32_t>(OnTimetravelNotSupported::IGNORE_TIMETRAVEL), "IGNORE_TIMETRAVEL" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<OnTimetravelNotSupported>(OnTimetravelNotSupported value) {
+	return StringUtil::EnumToString(GetOnTimetravelNotSupportedValues(), 2, "OnTimetravelNotSupported", static_cast<uint32_t>(value));
+}
+
+template<>
+OnTimetravelNotSupported EnumUtil::FromString<OnTimetravelNotSupported>(const char *value) {
+	return static_cast<OnTimetravelNotSupported>(StringUtil::StringToEnum(GetOnTimetravelNotSupportedValues(), 2, "OnTimetravelNotSupported", value));
 }
 
 const StringUtil::EnumStringLiteral *GetOperatorFinalResultTypeValues() {

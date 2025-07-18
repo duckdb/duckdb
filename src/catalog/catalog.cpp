@@ -767,8 +767,10 @@ CatalogException Catalog::CreateMissingEntryException(CatalogEntryRetriever &ret
 }
 
 CatalogEntryLookup Catalog::TryLookupEntryInternal(CatalogTransaction transaction, const string &schema,
-                                                   const EntryLookupInfo &lookup_info) {
-	if (lookup_info.GetAtClause() && !SupportsTimeTravel()) {
+                                                   const EntryLookupInfo &lookup_info,
+                                                   OnTimetravelNotSupported on_timetravel_unsupported) {
+	if (lookup_info.GetAtClause() && !SupportsTimeTravel() &&
+	    on_timetravel_unsupported == OnTimetravelNotSupported::THROW_EXCEPTION) {
 		return {nullptr, nullptr, ErrorData(BinderException("Catalog type does not support time travel"))};
 	}
 	auto schema_lookup = EntryLookupInfo::SchemaLookup(lookup_info, schema);
@@ -839,14 +841,16 @@ CatalogEntryLookup Catalog::LookupEntry(CatalogEntryRetriever &retriever, const 
 }
 
 CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, const vector<CatalogLookup> &lookups,
-                                           const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found) {
+                                           const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found,
+                                           OnTimetravelNotSupported on_timetravel_not_supported) {
 	auto &context = retriever.GetContext();
 	reference_set_t<SchemaCatalogEntry> schemas;
 	bool all_errors = true;
 	ErrorData error_data;
 	for (auto &lookup : lookups) {
 		auto transaction = lookup.catalog.GetCatalogTransaction(context);
-		auto result = lookup.catalog.TryLookupEntryInternal(transaction, lookup.schema, lookup.lookup_info);
+		auto result = lookup.catalog.TryLookupEntryInternal(transaction, lookup.schema, lookup.lookup_info,
+		                                                    on_timetravel_not_supported);
 		if (result.Found()) {
 			return result;
 		}
@@ -888,10 +892,14 @@ CatalogEntryLookup Catalog::TryLookupDefaultTable(CatalogEntryRetriever &retriev
 
 	vector<CatalogLookup> catalog_by_name_lookups;
 	auto catalog_by_name = GetCatalogEntry(retriever, lookup_info.GetEntryName());
+
 	if (catalog_by_name && catalog_by_name->HasDefaultTable()) {
-		catalog_by_name_lookups.emplace_back(*catalog_by_name, CatalogType::TABLE_ENTRY,
-		                                     catalog_by_name->GetDefaultTableSchema(),
-		                                     catalog_by_name->GetDefaultTable());
+		QueryErrorContext context;
+		auto default_table = catalog_by_name->GetDefaultTable();
+		EntryLookupInfo info =
+		    EntryLookupInfo(CatalogType::TABLE_ENTRY, default_table, lookup_info.GetAtClause(), context);
+		catalog_by_name_lookups.emplace_back(*catalog_by_name, catalog_by_name->GetDefaultTableSchema(), info);
+		return TryLookupEntry(retriever, catalog_by_name_lookups, lookup_info, if_not_found);
 	}
 
 	return TryLookupEntry(retriever, catalog_by_name_lookups, lookup_info, if_not_found);
@@ -945,25 +953,23 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, con
 		lookups.emplace_back(std::move(lookup));
 	}
 
-	// Do the main lookup
-	auto lookup_result = TryLookupEntry(retriever, lookups, lookup_info, if_not_found);
-
 	// Special case for tables: we do a second lookup searching for catalogs with default tables that also match this
 	// lookup
 	if (lookup_info.GetCatalogType() == CatalogType::TABLE_ENTRY) {
-		auto lookup_result_default_table =
+		auto default_table_lookup =
 		    TryLookupDefaultTable(retriever, catalog, schema, lookup_info, OnEntryNotFound::RETURN_NULL);
-
-		if (lookup_result_default_table.Found() && lookup_result.Found()) {
-			ThrowDefaultTableAmbiguityException(lookup_result, lookup_result_default_table, lookup_info.GetEntryName());
-		}
-
-		if (lookup_result_default_table.Found()) {
-			return lookup_result_default_table;
+		if (default_table_lookup.Found()) {
+			auto lookup_for_ambiguous_error = TryLookupEntry(retriever, lookups, lookup_info, if_not_found,
+			                                                 OnTimetravelNotSupported::IGNORE_TIMETRAVEL);
+			if (lookup_for_ambiguous_error.Found()) {
+				ThrowDefaultTableAmbiguityException(lookup_for_ambiguous_error, default_table_lookup,
+				                                    lookup_info.GetEntryName());
+			}
+			return default_table_lookup;
 		}
 	}
 
-	return lookup_result;
+	return TryLookupEntry(retriever, lookups, lookup_info, if_not_found);
 }
 
 CatalogEntry &Catalog::GetEntry(ClientContext &context, CatalogType catalog_type, const string &catalog_name,
