@@ -10,23 +10,8 @@ on:
         description: 'Base hash'
         type: string
   repository_dispatch:
-  push:
-    branches-ignore:
-      - 'main'
-      - 'feature'
-      - 'v*.*-*'
-    paths-ignore:
-      - '**.md'
-      - 'test/configs/**'
-      - 'tools/**'
-      - '!tools/pythonpkg/**'
-      - '.github/patches/duckdb-wasm/**'
-      - '.github/workflows/**'
-      - '!.github/workflows/Regression.yml'
-      - '.github/config/out_of_tree_extensions.cmake'
   merge_group:
-  pull_request:
-    types: [opened, reopened, ready_for_review, converted_to_draft]
+  push:
     paths-ignore:
       - '**.md'
       - 'test/configs/**'
@@ -36,9 +21,8 @@ on:
       - '.github/workflows/**'
       - '!.github/workflows/Regression.yml'
       - '.github/config/out_of_tree_extensions.cmake'
-
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
+  group: regression-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
   cancel-in-progress: true
 
 env:
@@ -47,17 +31,8 @@ env:
   BASE_HASH: ${{ inputs.base_hash }}
 
 jobs:
-  check-draft:
-    # We run all other jobs on PRs only if they are not draft PR
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Preliminary checks on CI 
-        run: echo "Event name is ${{ github.event_name }}"
-      
   regression-test-benchmark-runner:
     name: Regression Tests
-    needs: check-draft
     runs-on: ubuntu-22.04
     env:
       CC: gcc-10
@@ -195,7 +170,6 @@ jobs:
 
   regression-test-storage:
     name: Storage Size Regression Test
-    needs: check-draft
     runs-on: ubuntu-22.04
     env:
       CC: gcc-10
@@ -276,7 +250,6 @@ jobs:
 
   regression-test-binary-size:
     name: Regression test binary size
-    needs: check-draft
     runs-on: ubuntu-22.04
     env:
       CC: gcc-10
@@ -319,7 +292,6 @@ jobs:
 
   regression-test-plan-cost:
     name: Regression Test Join Order Plan Cost
-    needs: check-draft
     runs-on: ubuntu-22.04
     env:
       CC: gcc-10

@@ -21,10 +21,6 @@ on:
       run_all:
         type: string
   push:
-    branches-ignore:
-      - 'main'
-      - 'feature'
-      - 'v*.*-*'
     paths-ignore:
       - '**.md'
       - 'test/configs/**'
