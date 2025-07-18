@@ -752,10 +752,9 @@ WithData <- 'WITH'i 'NO'i? 'DATA'i
 IdentifierList <- Parens(List(Identifier))
 CreateColumnList <- Parens(CreateTableColumnList)
 IfNotExists <- 'IF'i 'NOT'i 'EXISTS'i
-QualifiedName <- (CatalogQualification ReservedSchemaQualification ReservedTableName) / (SchemaQualification ReservedTableName) / (Identifier / StringLiteral)
+QualifiedName <- CatalogQualification? SchemaQualification? (Identifier / StringLiteral)
 CatalogQualification <- CatalogName '.'
 SchemaQualification <- SchemaName '.'
-ReservedSchemaQualification <- ReservedSchemaName '.'
 TableQualification <- TableName '.'
 
 CreateTableColumnList <- List(CreateTableColumnElement)
@@ -936,7 +935,7 @@ PivotTargetList <- Identifier / Parens(TargetList)
 
 Lateral <- 'LATERAL'i
 
-BaseTableName <- (CatalogQualification ReservedSchemaQualification ReservedTableName) / (SchemaQualification ReservedTableName) / TableName
+BaseTableName <- CatalogQualification? SchemaQualification? TableName
 
 TableFunction <- TableFunctionLateralOpt / TableFunctionAliasColon
 TableFunctionLateralOpt <- Lateral? QualifiedTableFunction TableFunctionArguments TableAlias?
@@ -1185,9 +1184,7 @@ Statement <-
 
 CatalogName <- Identifier
 SchemaName <- Identifier
-ReservedSchemaName <- Identifier
 TableName <- Identifier
-ReservedTableName <- Identifier
 ColumnName <- Identifier
 IndexName <- Identifier
 SettingName <- Identifier
@@ -1317,7 +1314,7 @@ DetachStatement <- 'DETACH'i Database? IfExists? CatalogName
 
 UseStatement <- 'USE'i UseTarget
 
-UseTarget <- (CatalogName '.' ReservedSchemaName) / SchemaName / CatalogName
+UseTarget <- (CatalogName '.' SchemaName) / SchemaName / CatalogName
 
 CallStatement <- 'CALL'i TableFunctionName TableFunctionArguments
 

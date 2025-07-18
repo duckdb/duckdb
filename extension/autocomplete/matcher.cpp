@@ -343,7 +343,6 @@ public:
 
 	bool SupportsStringLiteral() const {
 		switch (suggestion_type) {
-		case SuggestionState::SUGGEST_RESERVED_TABLE_NAME:
 		case SuggestionState::SUGGEST_TABLE_NAME:
 		case SuggestionState::SUGGEST_FILE_NAME:
 			return true;
@@ -375,12 +374,8 @@ public:
 			return "CATALOG_NAME";
 		case SuggestionState::SUGGEST_SCHEMA_NAME:
 			return "SCHEMA_NAME";
-		case SuggestionState::SUGGEST_RESERVED_SCHEMA_NAME:
-			return "RESERVED_SCHEMA_NAME";
 		case SuggestionState::SUGGEST_TABLE_NAME:
 			return "TABLE_NAME";
-		case SuggestionState::SUGGEST_RESERVED_TABLE_NAME:
-			return "RESERVED_TABLE_NAME";
 		case SuggestionState::SUGGEST_TYPE_NAME:
 			return "TYPE_NAME";
 		case SuggestionState::SUGGEST_COLUMN_NAME:
@@ -546,8 +541,7 @@ private:
 	Matcher &TableFunctionName() const;
 	Matcher &PragmaName() const;
 	Matcher &SettingName() const;
-	Matcher &ReservedTableName() const;
-	Matcher &ReservedSchemaName() const;
+	Matcher &ReservedVariable() const;
 
 	void AddKeywordOverride(const char *name, uint32_t score, char extra_char = ' ');
 	void AddRuleOverride(const char *name, Matcher &matcher);
@@ -592,12 +586,8 @@ Matcher &MatcherFactory::Variable() const {
 	return allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE));
 }
 
-Matcher &MatcherFactory::ReservedTableName() const {
-	return allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_RESERVED_TABLE_NAME));
-}
-
-Matcher &MatcherFactory::ReservedSchemaName() const {
-	return allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_RESERVED_SCHEMA_NAME));
+Matcher &MatcherFactory::ReservedVariable() const {
+	return allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE));
 }
 
 Matcher &MatcherFactory::CatalogName() const {
@@ -1149,9 +1139,8 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	AddKeywordOverride(".", 0, '\0');
 	AddKeywordOverride("(", 0, '\0');
 	// rule overrides
-	AddRuleOverride("ReservedTableName", ReservedTableName());
-	AddRuleOverride("ReservedSchemaName", ReservedSchemaName());
 	AddRuleOverride("Identifier", Variable());
+	AddRuleOverride("ReservedIdentifier", ReservedVariable());
 	AddRuleOverride("TypeName", TypeName());
 	AddRuleOverride("TableName", TableName());
 	AddRuleOverride("CatalogName", CatalogName());

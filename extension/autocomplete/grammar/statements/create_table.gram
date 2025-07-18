@@ -9,10 +9,9 @@ WithData <- 'WITH'i 'NO'i? 'DATA'i
 IdentifierList <- Parens(List(Identifier))
 CreateColumnList <- Parens(CreateTableColumnList)
 IfNotExists <- 'IF'i 'NOT'i 'EXISTS'i
-QualifiedName <- (CatalogQualification ReservedSchemaQualification ReservedTableName) / (SchemaQualification ReservedTableName) / (Identifier / StringLiteral)
+QualifiedName <- CatalogQualification? SchemaQualification? (Identifier / StringLiteral)
 CatalogQualification <- CatalogName '.'
 SchemaQualification <- SchemaName '.'
-ReservedSchemaQualification <- ReservedSchemaName '.'
 TableQualification <- TableName '.'
 
 CreateTableColumnList <- List(CreateTableColumnElement)

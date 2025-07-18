@@ -513,11 +513,9 @@ static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(Clien
 			new_suggestions = SuggestCatalogName(context);
 			break;
 		case SuggestionState::SUGGEST_SCHEMA_NAME:
-		case SuggestionState::SUGGEST_RESERVED_SCHEMA_NAME:
 			new_suggestions = SuggestSchemaName(context);
 			break;
 		case SuggestionState::SUGGEST_TABLE_NAME:
-		case SuggestionState::SUGGEST_RESERVED_TABLE_NAME:
 			new_suggestions = SuggestTableName(context);
 			break;
 		case SuggestionState::SUGGEST_COLUMN_NAME:
