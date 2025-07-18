@@ -1,0 +1,22 @@
+# name: test/sql/index/art/issues/test_art_issue_view_coll_binding_17290.test
+# description: Test Index Scan push down against views with reordered projections
+# group: [issues]
+
+statement ok
+create or replace table test as (
+    select
+        cast(unnest(range(1000)) as varchar) as x,
+        cast(unnest(range(2000,3000)) as varchar) as y,
+        cast(unnest(range(3000,4000)) as varchar) as z
+);
+
+statement ok
+create index test_x on test(x);
+
+statement ok
+create view test_view as (select z, y, x from test);
+
+query II
+explain analyze select * from test_view where x = '525';
+----
+analyzed_plan	<REGEX>:.*Index Scan.*

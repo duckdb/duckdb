@@ -2,15 +2,22 @@
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/dependency_list.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/optimizer/matcher/expression_matcher.hpp"
+#include "duckdb/parser/base_expression.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/expression/bound_between_expression.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
@@ -494,6 +501,19 @@ bool TryScanIndex(ART &art, const ColumnList &column_list, TableFunctionInitInpu
 
 	auto index_expr = art.unbound_expressions[0]->Copy();
 	auto &indexed_columns = art.GetColumnIds();
+
+	// If the index expression is a bound column ref, update its column index
+	// to be intelligible against the current input column bindings
+	if (index_expr->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
+		auto bound_column_ref_expr = &index_expr->Cast<BoundColumnRefExpression>();
+
+		for (idx_t i=0; i < input.column_ids.size(); ++i) {
+			if (input.column_ids[i] == indexed_columns[0]) {
+				bound_column_ref_expr->binding.column_index = i;
+				break;
+			}
+		}
+	}
 
 	// NOTE: We do not push down multi-column filters, e.g., 42 = a + b.
 	if (indexed_columns.size() != 1) {
