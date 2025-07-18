@@ -1,0 +1,78 @@
+{
+  "group": "expression_interface",
+  "deprecated": false,
+  "entries": [
+    {
+      "name": "duckdb_destroy_expression",
+      "return_type": "void",
+      "params": [
+        {
+          "type": "duckdb_expression *",
+          "name": "expr"
+        }
+      ],
+      "comment": {
+        "description": "Destroys the expression and de-allocates its memory.\n\n",
+        "param_comments": {
+          "expr": "A pointer to the expression."
+        }
+      }
+    },
+    {
+      "name": "duckdb_expression_return_type",
+      "return_type": "duckdb_logical_type",
+      "params": [
+        {
+          "type": "duckdb_expression",
+          "name": "expr"
+        }
+      ],
+      "comment": {
+        "description": "Returns the return type of an expression.\n\n",
+        "param_comments": {
+          "expr": "The expression."
+        },
+        "return_value": "The return type. Must be destroyed with `duckdb_destroy_logical_type`."
+      }
+    },
+    {
+      "name": "duckdb_expression_is_foldable",
+      "return_type": "bool",
+      "params": [
+        {
+          "type": "duckdb_expression",
+          "name": "expr"
+        }
+      ],
+      "comment": {
+        "description": "Returns whether the expression is foldable into a value or not.\n\n",
+        "param_comments": {
+          "expr": "The expression."
+        },
+        "return_value": "True, if the expression is foldable, else false."
+      }
+    },
+    {
+      "name": "duckdb_expression_fold",
+      "return_type": "duckdb_value",
+      "params": [
+        {
+          "type": "duckdb_client_context",
+          "name": "context"
+        },
+        {
+          "type": "duckdb_expression",
+          "name": "expr"
+        }
+      ],
+      "comment": {
+        "description": "Folds an expression and returns the folded value.\n\n",
+        "param_comments": {
+          "context": "The client context.",
+          "expr": "The expression. Must be foldable."
+        },
+        "return_value": "The folded value. Must be destroyed with `duckdb_destroy_value`."
+      }
+    }
+  ]
+}

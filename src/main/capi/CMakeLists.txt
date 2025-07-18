@@ -13,6 +13,7 @@ add_library_unity(
   duckdb-c.cpp
   duckdb_value-c.cpp
   error_data-c.cpp
+  expression-c.cpp
   helper-c.cpp
   hugeint-c.cpp
   logical_types-c.cpp
