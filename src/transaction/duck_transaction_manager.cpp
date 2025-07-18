@@ -102,6 +102,9 @@ DuckTransactionManager::CanCheckpoint(DuckTransaction &transaction, unique_ptr<S
 	if (db.IsSystem()) {
 		return CheckpointDecision("system transaction");
 	}
+	if (transaction.IsReadOnly()) {
+		return CheckpointDecision("transaction is read-only");
+	}
 	auto &storage_manager = db.GetStorageManager();
 	if (!storage_manager.IsLoaded()) {
 		return CheckpointDecision("cannot checkpoint while loading");
