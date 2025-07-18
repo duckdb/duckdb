@@ -724,8 +724,9 @@ TEST_CASE("Test append duckdb_value values in C API", "[capi]") {
 	             "lt30 timetz,"
 	             "lt31 timestamptz,"
 	             // lt34 any - not a valid type in SQL
-	             "lt35 varint," // no duckdb_create_varint (yet)
-	             "lt36 integer" // for sqlnull
+	             "lt35 varint,"  // no duckdb_create_varint (yet)
+	             "lt36 integer," // for sqlnull
+	             "lt37 time_ns,"
 	             ")");
 	duckdb_appender appender;
 
@@ -949,6 +950,11 @@ TEST_CASE("Test append duckdb_value values in C API", "[capi]") {
 	REQUIRE(duckdb_append_value(appender, null_value) == DuckDBSuccess);
 	duckdb_destroy_value(&null_value);
 
+	duckdb_time_ns time_ns {86400123456789};
+	auto time_ns_value = duckdb_create_time_ns(time_ns);
+	REQUIRE(duckdb_append_value(appender, time_ns_value) == DuckDBSuccess);
+	duckdb_destroy_value(&time_ns_value);
+
 	REQUIRE(duckdb_appender_end_row(appender) == DuckDBSuccess);
 
 	REQUIRE(duckdb_appender_flush(appender) == DuckDBSuccess);
@@ -1032,6 +1038,9 @@ TEST_CASE("Test append duckdb_value values in C API", "[capi]") {
 	REQUIRE(duckdb_validity_row_is_valid(chunk->GetValidity(33), 0) == false); // no duckdb_create_varint (yet)
 
 	REQUIRE(duckdb_validity_row_is_valid(chunk->GetValidity(34), 0) == false); // sqlnull
+
+	REQUIRE(reinterpret_cast<duckdb_time_ns *>(chunk->GetData(35))[0].nanos == time_ns.nanos);
+
 	tester.Cleanup();
 }
 
