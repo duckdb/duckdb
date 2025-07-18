@@ -54,10 +54,6 @@ public:
 		ScanBound<T>(callback);
 	}
 
-	//! Returns a reference to the indexes.
-	const vector<unique_ptr<Index>> &Indexes() const {
-		return indexes;
-	}
 	//! Adds an index to the list of indexes.
 	void AddIndex(unique_ptr<Index> index);
 	//! Removes an index from the list of indexes.

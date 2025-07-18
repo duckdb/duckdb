@@ -106,8 +106,12 @@ void TableIndexList::InitializeIndexes(ClientContext &context, DataTableInfo &ta
 			// Create an IndexBinder to bind the index
 			IndexBinder idx_binder(*binder, context);
 
-			// Replace the unbound index with a bound index.
-			auto bound_idx = idx_binder.BindIndex(index->Cast<UnboundIndex>());
+			// Apply any outstanding appends and replace the unbound index with a bound index.
+			auto &unbound_index = index->Cast<UnboundIndex>();
+			auto bound_idx = idx_binder.BindIndex(unbound_index);
+			if (unbound_index.HasBufferedAppends()) {
+				bound_idx->ApplyBufferedAppends(unbound_index.GetBufferedAppends());
+			}
 			index = std::move(bound_idx);
 		}
 	}
