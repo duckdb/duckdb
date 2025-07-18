@@ -1,4 +1,4 @@
-# name: test/sql/types/struct/inet_struct_comparison.test
+# name: test/sql/types/struct/create_type_struct.test
 # description: Test create struct list with schema
 # group: [struct]
 
