@@ -150,7 +150,7 @@ UnreservedKeyword <- 'ABORT'i /
 'MATCHED'i /
 'MATERIALIZED'i /
 'MAXVALUE'i /
-'MERGED'i /
+'MERGE'i /
 'METHOD'i /
 'MICROSECOND'i /
 'MICROSECONDS'i /
@@ -475,6 +475,7 @@ FuncNameKeyword <- 'ASOF'i /
 'JOIN'i /
 'LEFT'i /
 'LIKE'i /
+'MAP'i /
 'NATURAL'i /
 'NOTNULL'i /
 'OUTER'i /
@@ -482,6 +483,7 @@ FuncNameKeyword <- 'ASOF'i /
 'POSITIONAL'i /
 'RIGHT'i /
 'SIMILAR'i /
+'STRUCT'i /
 'TABLESAMPLE'i /
 'VERBOSE'i
 TypeNameKeyword <- 'ASOF'i /
@@ -490,6 +492,7 @@ TypeNameKeyword <- 'ASOF'i /
 'BINARY'i /
 'BY'i /
 'COLLATION'i /
+'COLUMNS'i /
 'CONCURRENTLY'i /
 'CROSS'i /
 'FREEZE'i /
@@ -511,6 +514,7 @@ TypeNameKeyword <- 'ASOF'i /
 'UNPACK'i /
 'SIMILAR'i /
 'TABLESAMPLE'i /
+'TRY_CAST'i /
 'VERBOSE'i /
 'SEMI'i /
 'ANTI'i
