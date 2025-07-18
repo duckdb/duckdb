@@ -65,22 +65,4 @@ private:
 	MetadataWriter &table_data_writer;
 };
 
-// Writes data for an entire row group.
-class InMemoryRowGroupWriter : public RowGroupWriter {
-public:
-	InMemoryRowGroupWriter(TableCatalogEntry &table, PartialBlockManager &partial_block_manager,
-	                       TableDataWriter &writer);
-
-public:
-	CheckpointType GetCheckpointType() const override;
-	WriteStream &GetPayloadWriter() override;
-	MetaBlockPointer GetMetaBlockPointer() override;
-	optional_ptr<MetadataManager> GetMetadataManager() override;
-
-private:
-	//! Underlying writer object
-	TableDataWriter &writer;
-	// Nop metadata writer
-	MemoryStream metadata_writer;
-};
 } // namespace duckdb

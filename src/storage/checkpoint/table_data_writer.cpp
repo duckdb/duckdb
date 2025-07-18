@@ -110,21 +110,4 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	serializer.WritePropertyWithDefault(104, "index_storage_infos", index_storage_infos);
 }
 
-InMemoryTableDataWriter::InMemoryTableDataWriter(InMemoryCheckpointer &checkpoint_manager, TableCatalogEntry &table)
-    : TableDataWriter(table, checkpoint_manager.GetClientContext()), checkpoint_manager(checkpoint_manager) {
-}
-
-void InMemoryTableDataWriter::FinalizeTable(const TableStatistics &global_stats, DataTableInfo *info,
-                                            Serializer &serializer) {
-	// nop: no need to write anything
-}
-
-unique_ptr<RowGroupWriter> InMemoryTableDataWriter::GetRowGroupWriter(RowGroup &row_group) {
-	return make_uniq<InMemoryRowGroupWriter>(table, checkpoint_manager.GetPartialBlockManager(), *this);
-}
-
-CheckpointType InMemoryTableDataWriter::GetCheckpointType() const {
-	return CheckpointType::FULL_CHECKPOINT;
-}
-
 } // namespace duckdb

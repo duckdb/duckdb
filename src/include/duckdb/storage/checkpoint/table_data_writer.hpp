@@ -61,17 +61,4 @@ private:
 	MetadataWriter &table_data_writer;
 };
 
-class InMemoryTableDataWriter : public TableDataWriter {
-public:
-	InMemoryTableDataWriter(InMemoryCheckpointer &checkpoint_manager, TableCatalogEntry &table);
-
-public:
-	void FinalizeTable(const TableStatistics &global_stats, DataTableInfo *info, Serializer &serializer) override;
-	unique_ptr<RowGroupWriter> GetRowGroupWriter(RowGroup &row_group) override;
-	CheckpointType GetCheckpointType() const override;
-
-private:
-	InMemoryCheckpointer &checkpoint_manager;
-};
-
 } // namespace duckdb

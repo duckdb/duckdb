@@ -12,6 +12,7 @@
 #include "duckdb/storage/single_file_block_manager.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/storage/table/column_data.hpp"
+#include "duckdb/storage/table/in_memory_checkpoint.hpp"
 #include "mbedtls_wrapper.hpp"
 
 namespace duckdb {
