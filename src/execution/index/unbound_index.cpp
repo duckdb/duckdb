@@ -34,10 +34,6 @@ void UnboundIndex::CommitDrop() {
 	}
 }
 
-unique_ptr<UnboundIndex> UnboundIndex::Copy() {
-	return make_uniq<UnboundIndex>(create_info->Copy(), storage_info, table_io_manager, db);
-}
-
 void UnboundIndex::BufferChunk(DataChunk &chunk, Vector &row_ids) {
 	auto types = chunk.GetTypes();
 	types.push_back(LogicalType::ROW_TYPE);

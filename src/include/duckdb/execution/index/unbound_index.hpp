@@ -54,7 +54,6 @@ public:
 
 	void CommitDrop() override;
 
-	unique_ptr<UnboundIndex> Copy();
 	void BufferChunk(DataChunk &chunk, Vector &row_ids);
 	bool HasBufferedAppends() const {
 		return buffered_appends != nullptr;

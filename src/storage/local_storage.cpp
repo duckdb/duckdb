@@ -29,11 +29,7 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &table)
 		if (constraint == IndexConstraintType::NONE) {
 			return false;
 		}
-
 		if (!index.IsBound()) {
-			auto &unbound_index = index.Cast<UnboundIndex>();
-			delete_indexes.AddIndex(std::move(unbound_index.Copy()));
-			append_indexes.AddIndex(std::move(unbound_index.Copy()));
 			return false;
 		}
 
