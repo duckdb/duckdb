@@ -32,6 +32,7 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/LinuxRelease.yml'
+      - 'test-uploaded-ext'
   merge_group:
   pull_request:
     types: [opened, reopened, ready_for_review, converted_to_draft]
@@ -384,6 +385,24 @@ jobs:
       run: |
         echo "There are differences in src/include/duckdb/main/extension_entries.hpp"
         echo "Check the uploaded extension_entries.hpp (in the workflow Summary), and check that in instead of src/include/duckdb/main/extension_entries.hpp"
+
+ test-install-load-extensions:
+  name: Test Linux Extensions
+  needs: 
+    - upload-linux-extensions-64-aarch64
+    - upload-linux-extensions-64-musl
+    - upload-linux-extensions-64
+  uses: duckdb/duckdb-build-status/.github/workflows/VerifyBuild.yml@main
+  strategy:
+    matrix:
+      config: [ { runs_on: ubuntu-latest, duckdb_arch: amd64, duckdb_binary: linux-amd64 }, { runs_on: ubuntu-24.04-arm, duckdb_arch: arm64, duckdb_binary: linux-arm64 } ]
+  with:
+    runs_on: ${{ matrix.config.runs_on }}
+    duckdb_arch: ${{ matrix.config.duckdb_arch }}
+    run_id: ${{ github.run_id }}
+    duckdb_binary: ${{ matrix.config.duckdb_binary }}
+    nightly_build: 'linux'
+    branch: ${{ github.ref_name }}
 
  symbol-leakage:
     name: Symbol Leakage
