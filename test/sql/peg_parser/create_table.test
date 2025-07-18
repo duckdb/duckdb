@@ -5,6 +5,9 @@
 require autocomplete
 
 statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$CREATE TABLE test (bar GENERATED ALWAYS AS (1));$TEST_PEG_PARSER$);
+
+statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$CREATE TABLE database.schema.table(col INTEGER);$TEST_PEG_PARSER$);
 
 statement ok
