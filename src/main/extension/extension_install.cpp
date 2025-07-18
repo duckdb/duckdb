@@ -75,14 +75,8 @@ vector<duckdb::string> ExtensionHelper::DefaultExtensionFolders(FileSystem &fs) 
 		return default_folders;
 	}
 
-#ifdef _WIN32
-	const char separator = ';';
-#else
-	const char separator = ':';
-#endif
-
 	// Split the string by separator
-	auto directories = StringUtil::Split(dirs_string, separator);
+	auto directories = StringUtil::Split(dirs_string, ';');
 
 	for (auto &dir : directories) {
 		// Skip empty directories
