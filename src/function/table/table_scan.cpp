@@ -488,7 +488,7 @@ vector<unique_ptr<Expression>> ExtractFilterExpressions(const ColumnDefinition &
 }
 
 // Recursively updates column bindings in an index expression to match the current input projection,
-// even if they are the child of an operator or function
+// even if they are the child of a function or cast
 void UpdateIndexExprColumnBindings(unique_ptr<Expression> &expr, const vector<column_t> &input_column_ids,
 						  		   const vector<column_t> &indexed_columns) {
 	if (!expr) { return; }
@@ -512,6 +512,12 @@ void UpdateIndexExprColumnBindings(unique_ptr<Expression> &expr, const vector<co
 			}
 			break;
 		}
+		// TODO: never end up here, TableScanInitGlobal called without filters in input
+		// case ExpressionClass::BOUND_CAST: {
+		// 	auto &cast_expr = expr->Cast<BoundCastExpression>();
+		// 	UpdateIndexExprColumnBindings(cast_expr.child, input_column_ids, indexed_columns);
+		// 	break;
+		// }
 		default:
 			break;
 	}

@@ -22,6 +22,9 @@ explain analyze select * from test_view where x = '525';
 ----
 analyzed_plan	<REGEX>:.*Index Scan.*
 
+statement ok
+drop index test_x;
+
 # test columnref as a child of function
 statement ok
 create index test_upper_x on test(upper(x));
@@ -30,3 +33,18 @@ query II
 explain analyze select * from test_view where upper(x) = '525';
 ----
 analyzed_plan	<REGEX>:.*Index Scan.*
+
+statement ok
+drop index test_upper_x;
+
+# test columnref as child of nested cast operation (very contrived??)
+# statement ok
+# create index test_cast_x on test(cast(x as integer));
+
+# query II
+# explain analyze select * from test_view where cast(x as integer) = 525;
+# ----
+# analyzed_plan	<REGEX>:.*Index Scan.*
+
+# statement ok
+# drop index test_cast_x;
