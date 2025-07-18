@@ -297,7 +297,8 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
 					// e.g. log only the first failure in
 					// `./build/debug/test/unittest --on-init "SET max_memory='400kb';"
 					// test/fuzzer/pedro/concurrent_catalog_usage.test`
-					if (!SkipErrorMessage(result.GetError()) && !FailureSummary::Instance().SkipLoggingSameError(statement.file_name)) {
+					if (!SkipErrorMessage(result.GetError()) &&
+					    !FailureSummary::Instance().SkipLoggingSameError(statement.file_name)) {
 						logger.ExpectedErrorMismatch(statement.expected_error, result);
 						return false;
 					}

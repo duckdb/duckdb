@@ -69,7 +69,7 @@ private:
 class FailureSummary {
 public:
 	FailureSummary();
-	
+
 	static FailureSummary &Instance();
 	static void Log(string message);
 	static string GetFailureSummary();
