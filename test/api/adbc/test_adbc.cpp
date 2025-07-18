@@ -1869,7 +1869,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                         'table_type': VIEW,
                         'table_columns': [
                             {
-                                'column_name': value,
+                                'column_name': a,
                                 'ordinal_position': 1,
                                 'remarks': '',
                                 'xdbc_data_type': NULL,
@@ -2122,7 +2122,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                         'table_type': VIEW,
                         'table_columns': [
                             {
-                                'column_name': value,
+                                'column_name': a,
                                 'ordinal_position': 1,
                                 'remarks': '',
                                 'xdbc_data_type': NULL,
@@ -2221,7 +2221,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 				) as catalog_db_schemas
 			FROM result
 			WHERE catalog_name == 'test_constraints'
-        )";
+		)";
 		auto res = db.Query(select_catalog_db_schemas);
 		REQUIRE((res->RowCount() == 1));
 		// clang-format off
@@ -2239,7 +2239,12 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 							"'constraint_name': my_table_foreign_id_id_fkey, "
 							"'constraint_type': FOREIGN KEY, "
 							"'constraint_column_names': [foreign_id], "
-							"'constraint_column_usage': []" // TODO: USAGE_SCHEMA isn't implemented yet
+							"'constraint_column_usage': [{"
+								"'fk_catalog': test_constraints, "
+								"'fk_db_schema': main, "
+								"'fk_table': foreign_table, "
+								"'fk_column_name': id"
+							"}]"
 						"}, {"
 							"'constraint_name': my_table_primary_key_pkey, "
 							"'constraint_type': PRIMARY KEY, "

@@ -1396,39 +1396,36 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
 					WHERE column_name LIKE '%s'
 					GROUP BY table_catalog, table_schema, table_name
 				),
-				column_constraints AS (
-					SELECT
-						table_catalog,
-						table_schema,
-						table_name,
-						constraint_name,
-						constraint_type,
-						LIST(column_name) as column_names
-					FROM information_schema.constraint_column_usage
-					WHERE column_name LIKE '%s'
-					GROUP BY
-						table_catalog,
-						table_schema,
-						table_name,
-						constraint_name,
-						constraint_type
-				),
 				constraints AS (
 					SELECT
-						table_catalog,
-						table_schema,
+						database_name AS table_catalog,
+						schema_name AS table_schema,
 						table_name,
-						LIST(
-							{
-								constraint_name: constraint_name,
-								constraint_type: constraint_type,
-								constraint_column_names: column_names,
-								-- TODO: USAGE_SCHEMA isn't implemented yet
-								constraint_column_usage: []::STRUCT(fk_catalog VARCHAR, fk_db_schema VARCHAR, fk_table VARCHAR, fk_column_name VARCHAR)[],
-							}
-						) table_constraints
-					FROM column_constraints
-					GROUP BY table_catalog, table_schema, table_name
+						LIST({
+							constraint_name: constraint_name,
+							constraint_type: constraint_type,
+							constraint_column_names: constraint_column_names,
+							constraint_column_usage: list_transform(
+								referenced_column_names,
+								lambda name: {
+									fk_catalog: database_name,
+									fk_db_schema: schema_name,
+									fk_table: referenced_table,
+									fk_column_name: name,
+								}
+							)
+						}) table_constraints
+					FROM duckdb_constraints()
+					WHERE
+						constraint_type NOT IN ('NOT NULL') AND
+						list_has_any(
+							constraint_column_names,
+							list_filter(
+								constraint_column_names,
+								lambda name: name LIKE '%s'
+							)
+						)
+					GROUP BY database_name, schema_name, table_name
 				),
 				tables AS (
 					SELECT
