@@ -142,6 +142,9 @@ struct RenameFieldInfo : public AlterTableInfo {
 public:
 	unique_ptr<AlterInfo> Copy() const override;
 	string ToString() const override;
+	string GetColumnName() const override {
+		return column_path[0];
+	}
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<AlterTableInfo> Deserialize(Deserializer &deserializer);

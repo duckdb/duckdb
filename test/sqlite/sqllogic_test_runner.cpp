@@ -544,14 +544,6 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 #endif
 	}
 
-	if (param == "no_block_verification") {
-#ifdef DUCKDB_BLOCK_VERIFICATION
-		return RequireResult::MISSING;
-#else
-		return RequireResult::PRESENT;
-#endif
-	}
-
 	if (param == "no_vector_verification") {
 		auto &test_config = TestConfiguration::Get();
 		if (test_config.GetVectorVerification() != DebugVectorVerification::NONE) {
