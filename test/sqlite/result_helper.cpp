@@ -29,9 +29,7 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 			runner.finished_processing_file = true;
 			return true;
 		}
-		// here we don't have a file name and can probably repeat some queries in different test cases
-		// we distinguish them by combiation of the sql_query and the error
-		if (!FailureSummary::Instance().SkipLoggingSameError(context.sql_query + ": " + result.GetError())) {
+		if (!FailureSummary::Instance().SkipLoggingSameError(context.error_file)) {
 			logger.UnexpectedFailure(result);
 		}
 		return false;
