@@ -11,7 +11,10 @@ create table t (s struct(c1 varchar, c2 integer));
 statement ok
 insert into t values(('c1', 1));
 
+statement ok
+create or replace view test as select * from t;
+
 query II
-explain with v as (select * from t) select s.c1 from v;
+explain select s.c1 from test;
 ----
 physical_plan	<REGEX>:.*SEQ_SCAN.*Projections: s.c1.*
