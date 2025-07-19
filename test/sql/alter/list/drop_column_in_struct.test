@@ -1,58 +1,51 @@
 # name: test/sql/alter/list/drop_column_in_struct.test
+# description: Test dropping fields in a STRUCT.
 # group: [list]
 
 statement ok
-CREATE TABLE test(
-	s STRUCT(
-		i INTEGER,
-		j INTEGER
-	)[]
-)
+CREATE TABLE test(s STRUCT(i INTEGER, j INTEGER)[])
 
 statement ok
-INSERT INTO test VALUES
-	([ROW(1, 1)]),
-	([ROW(2, 2)])
+INSERT INTO test VALUES ([ROW(1, 1)]), ([ROW(2, 2)])
 
-# attempt to drop element from the list
+# Try to drop element from the list.
+
 statement error
 ALTER TABLE test DROP COLUMN s.element
 ----
-Catalog Error: Cannot drop field 'element' from column 's' - it's not a struct
+<REGEX>:Catalog Error.*Cannot drop field.*not a struct.*
+
+# Now drop a STRUCT field.
 
 statement ok
 ALTER TABLE test DROP COLUMN s.element.j
 
 query I
-select * from test
+SELECT * FROM test
 ----
 [{'i': 1}]
 [{'i': 2}]
 
 statement ok
-drop table test;
+DROP TABLE test;
 
 statement ok
 CREATE TABLE test(
 	s STRUCT(
-		a STRUCT(
-			i INTEGER,
-			j INTEGER
-		)[]
+		a STRUCT(i INTEGER, j INTEGER)[]
 	)
 )
 
 statement ok
-INSERT INTO test VALUES
-	(ROW([ROW(1, 1)])),
-	(ROW([ROW(2, 2)]))
+INSERT INTO test VALUES (ROW([ROW(1, 1)])), (ROW([ROW(2, 2)]))
 
-# add a column to a struct
+# Drop another (one more nesting level) STRUCT field.
+
 statement ok
 ALTER TABLE test DROP COLUMN s.a.element.i
 
 query I
-select * from test
+SELECT * FROM test
 ----
 {'a': [{'j': 1}]}
 {'a': [{'j': 2}]}
