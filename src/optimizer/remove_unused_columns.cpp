@@ -1,5 +1,6 @@
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 
+#include "duckdb/common/assert.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/parser/parsed_data/vacuum_info.hpp"
@@ -196,6 +197,22 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 				// in this case we only need to project a single constant
 				proj.expressions.push_back(make_uniq<BoundConstantExpression>(Value::INTEGER(42)));
 			}
+			for (idx_t idx = 0; idx < proj.expressions.size(); idx++) {
+				auto &expr = proj.expressions[idx];
+				VisitExpression(&expr);
+				if (expr->type != ExpressionType::BOUND_COLUMN_REF) {
+					continue;
+				}
+				auto &colref = expr->Cast<BoundColumnRefExpression>();
+				auto record = column_references.find(ColumnBinding(proj.table_index, idx));
+				if (record != column_references.end() && !record->second.child_columns.empty()) {
+					auto my_record = column_references.find(colref.binding);
+					D_ASSERT(column_references.find(colref.binding) != column_references.end());
+					my_record->second.child_columns = record->second.child_columns;
+				}
+			}
+			VisitOperator(*op.children[0]);
+			return;
 		}
 		// then recurse into the children of this projection
 		RemoveUnusedColumns remove(binder, context);
