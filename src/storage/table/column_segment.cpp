@@ -253,6 +253,10 @@ void ColumnSegment::MarkAsPersistent(shared_ptr<BlockHandle> block_p, uint32_t o
 	D_ASSERT(segment_type == ColumnSegmentType::TRANSIENT);
 	segment_type = ColumnSegmentType::PERSISTENT;
 
+	SetBlock(std::move(block_p), offset_p);
+}
+
+void ColumnSegment::SetBlock(shared_ptr<BlockHandle> block_p, uint32_t offset_p) {
 	block_id = block_p->BlockId();
 	offset = offset_p;
 	block = std::move(block_p);

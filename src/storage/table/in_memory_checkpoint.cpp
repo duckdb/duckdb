@@ -115,6 +115,7 @@ void InMemoryPartialBlock::Merge(PartialBlock &other_p, idx_t offset, idx_t othe
 }
 
 void InMemoryPartialBlock::AddSegmentToTail(ColumnData &data, ColumnSegment &segment, uint32_t offset_in_block) {
+	segment.SetBlock(block_handle, offset_in_block);
 }
 
 void InMemoryPartialBlock::Clear() {
