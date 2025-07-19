@@ -618,6 +618,7 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 		if (res->HasError()) {
 			return RequireResult::MISSING;
 		}
+		extensions.insert(param);
 	}
 	return RequireResult::PRESENT;
 }
