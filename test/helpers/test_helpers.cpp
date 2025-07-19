@@ -179,6 +179,10 @@ unique_ptr<DBConfig> GetTestConfig() {
 	result->options.trim_free_blocks = true;
 #endif
 	result->options.allow_unsigned_extensions = true;
+	auto storage_version = test_config.GetStorageVersion();
+	if (!storage_version.empty()) {
+		result->options.serialization_compatibility = SerializationCompatibility::FromString(storage_version);
+	}
 
 	auto max_threads = test_config.GetMaxThreads();
 	if (max_threads.IsValid()) {

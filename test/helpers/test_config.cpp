@@ -40,6 +40,7 @@ static const TestConfigOption test_config_options[] = {
     {"skip_error_messages", "Skip compiled tests", LogicalType::LIST(LogicalType::VARCHAR), nullptr},
     {"statically_loaded_extensions", "Extensions to be loaded (from the statically available one)",
      LogicalType::LIST(LogicalType::VARCHAR), nullptr},
+    {"storage_version", "Database storage version to use by default", LogicalType::VARCHAR, nullptr},
     {nullptr, nullptr, LogicalType::INVALID, nullptr},
 };
 
@@ -308,6 +309,10 @@ bool TestConfiguration::GetSummarizeFailures() {
 
 bool TestConfiguration::GetSkipCompiledTests() {
 	return GetOptionOrDefault("skip_compiled", false);
+}
+
+string TestConfiguration::GetStorageVersion() {
+	return GetOptionOrDefault("storage_version", string());
 }
 
 DebugVectorVerification TestConfiguration::GetVectorVerification() {
