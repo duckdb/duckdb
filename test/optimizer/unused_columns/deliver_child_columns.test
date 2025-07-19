@@ -1,0 +1,17 @@
+# name: test/optimizer/unused_columns/deliver_child_columns.test
+# description: deliver child columns in RemoveUnusedColumns optimizer
+# group: [unused_columns]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table t (s struct(c1 varchar, c2 integer));
+
+statement ok
+insert into t values(('c1', 1));
+
+query II
+explain with v as (select * from t) select s.c1 from v;
+----
+physical_plan	<REGEX>:.*SEQ_SCAN.*Projections: s.c1.*
