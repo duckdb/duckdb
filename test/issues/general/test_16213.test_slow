@@ -2,6 +2,8 @@
 # description: Issue 16213 - Specific query not finishing since v1.1.0 and filling up all temp disk space
 # group: [general]
 
+require no_extension_autoloading "EXPECTED: ICU casts to Date do not trigger autoloading"
+
 require icu
 
 # replicate date generation in issue, but in SQL
