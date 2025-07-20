@@ -589,7 +589,7 @@ timestamp_t LocalFileSystem::GetLastModifiedTime(FileHandle &handle) {
 		throw IOException("Failed to get last modified time for file \"%s\": %s", {{"errno", std::to_string(errno)}},
 		                  handle.path, strerror(errno));
 	}
-	return Timestamp::FromTimeT(s.st_mtime);
+	return Timestamp::FromEpochSeconds(s.st_mtime);
 }
 
 FileType LocalFileSystem::GetFileType(FileHandle &handle) {

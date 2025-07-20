@@ -15,6 +15,9 @@ ExceptionFormatValue::ExceptionFormatValue(double dbl_val)
 ExceptionFormatValue::ExceptionFormatValue(int64_t int_val)
     : type(ExceptionFormatValueType::FORMAT_VALUE_TYPE_INTEGER), int_val(int_val) {
 }
+ExceptionFormatValue::ExceptionFormatValue(idx_t uint_val)
+    : type(ExceptionFormatValueType::FORMAT_VALUE_TYPE_INTEGER), int_val(Hugeint::Convert(uint_val)) {
+}
 ExceptionFormatValue::ExceptionFormatValue(hugeint_t huge_val)
     : type(ExceptionFormatValueType::FORMAT_VALUE_TYPE_STRING), str_val(Hugeint::ToString(huge_val)) {
 }
@@ -66,6 +69,10 @@ ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const char *value) 
 template <>
 ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(char *value) {
 	return ExceptionFormatValue(string(value));
+}
+template <>
+ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(idx_t value) {
+	return ExceptionFormatValue(value);
 }
 template <>
 ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(hugeint_t value) {

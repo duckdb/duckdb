@@ -39,7 +39,7 @@ public:
 public:
 	PhysicalMergeInto(PhysicalPlan &physical_plan, vector<LogicalType> types,
 	                  map<MergeActionCondition, vector<unique_ptr<MergeIntoOperator>>> actions, idx_t row_id_index,
-	                  optional_idx source_marker, bool parallel);
+	                  optional_idx source_marker, bool parallel, bool return_chunk);
 
 	//! List of all actions
 	vector<unique_ptr<MergeIntoOperator>> actions;
@@ -50,10 +50,13 @@ public:
 	idx_t row_id_index;
 	optional_idx source_marker;
 	bool parallel;
+	bool return_chunk;
 
 public:
 	// Source interface
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
+	unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context,
+	                                                 GlobalSourceState &gstate) const override;
 	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
 
 	bool IsSource() const override {

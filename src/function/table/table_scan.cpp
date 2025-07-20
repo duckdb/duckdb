@@ -109,14 +109,19 @@ public:
 class DuckIndexScanState : public TableScanGlobalState {
 public:
 	DuckIndexScanState(ClientContext &context, const FunctionData *bind_data_p)
-	    : TableScanGlobalState(context, bind_data_p), next_batch_index(0), finished(false) {
+	    : TableScanGlobalState(context, bind_data_p), next_batch_index(0), arena(Allocator::Get(context)),
+	      row_ids(nullptr), row_id_count(0), finished(false) {
 	}
 
 	//! The batch index of the next Sink.
 	//! Also determines the offset of the next chunk. I.e., offset = next_batch_index * STANDARD_VECTOR_SIZE.
 	atomic<idx_t> next_batch_index;
-	//! The total scanned row IDs.
-	unsafe_vector<row_t> row_ids;
+	//! The arena allocator containing the memory of the row IDs.
+	ArenaAllocator arena;
+	//! A pointer to the row IDs.
+	row_t *row_ids;
+	//! The number of scanned row IDs.
+	idx_t row_id_count;
 	//! The column IDs of the to-be-scanned columns.
 	vector<StorageIndex> column_ids;
 	//! True, if no more row IDs must be scanned.
@@ -154,7 +159,6 @@ public:
 		auto &storage = duck_table.GetStorage();
 		auto &l_state = data_p.local_state->Cast<IndexScanLocalState>();
 
-		auto row_id_count = row_ids.size();
 		idx_t scan_count = 0;
 		idx_t offset = 0;
 
@@ -173,7 +177,7 @@ public:
 		}
 
 		if (scan_count != 0) {
-			auto row_id_data = (data_ptr_t)&row_ids[0 + offset]; // NOLINT - this is not pretty
+			auto row_id_data = reinterpret_cast<data_ptr_t>(row_ids + offset);
 			Vector local_vector(LogicalType::ROW_TYPE, row_id_data);
 
 			if (CanRemoveFilterColumns()) {
@@ -198,13 +202,11 @@ public:
 	}
 
 	double TableScanProgress(ClientContext &context, const FunctionData *bind_data_p) const override {
-		auto total_rows = row_ids.size();
-		if (total_rows == 0) {
+		if (row_id_count == 0) {
 			return 100;
 		}
-
 		auto scanned_rows = next_batch_index * STANDARD_VECTOR_SIZE;
-		auto percentage = 100 * (static_cast<double>(scanned_rows) / static_cast<double>(total_rows));
+		auto percentage = 100 * (static_cast<double>(scanned_rows) / static_cast<double>(row_id_count));
 		return percentage > 100 ? 100 : percentage;
 	}
 
@@ -339,26 +341,20 @@ unique_ptr<GlobalTableFunctionState> DuckTableScanInitGlobal(ClientContext &cont
 }
 
 unique_ptr<GlobalTableFunctionState> DuckIndexScanInitGlobal(ClientContext &context, TableFunctionInitInput &input,
-                                                             const TableScanBindData &bind_data,
-                                                             unsafe_vector<row_t> &row_ids) {
+                                                             const TableScanBindData &bind_data, set<row_t> &row_ids) {
 	auto g_state = make_uniq<DuckIndexScanState>(context, input.bind_data.get());
-	if (!row_ids.empty()) {
-		// Duplicate-eliminate row IDs.
-		unordered_set<row_t> row_id_set;
-		auto it = row_ids.begin();
-		while (it != row_ids.end()) {
-			if (row_id_set.find(*it) == row_id_set.end()) {
-				row_id_set.insert(*it++);
-				continue;
-			}
-			// Found a duplicate.
-			it = row_ids.erase(it);
-		}
+	g_state->finished = row_ids.empty() ? true : false;
 
-		std::sort(row_ids.begin(), row_ids.end());
-		g_state->row_ids = std::move(row_ids);
+	if (!row_ids.empty()) {
+		auto row_id_ptr = g_state->arena.AllocateAligned(row_ids.size() * sizeof(row_t));
+		g_state->row_ids = reinterpret_cast<row_t *>(row_id_ptr);
+		g_state->row_id_count = row_ids.size();
+
+		idx_t row_id_count = 0;
+		for (const auto row_id : row_ids) {
+			g_state->row_ids[row_id_count++] = row_id;
+		}
 	}
-	g_state->finished = g_state->row_ids.empty() ? true : false;
 
 	auto &duck_table = bind_data.table.Cast<DuckTableEntry>();
 	if (input.CanRemoveFilterColumns()) {
@@ -482,7 +478,7 @@ vector<unique_ptr<Expression>> ExtractFilterExpressions(const ColumnDefinition &
 }
 
 bool TryScanIndex(ART &art, const ColumnList &column_list, TableFunctionInitInput &input, TableFilterSet &filter_set,
-                  idx_t max_count, unsafe_vector<row_t> &row_ids) {
+                  idx_t max_count, set<row_t> &row_ids) {
 	// FIXME: No support for index scans on compound ARTs.
 	// See note above on multi-filter support.
 	if (art.unbound_expressions.size() > 1) {
@@ -579,7 +575,7 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 
 	auto &column_list = duck_table.GetColumns();
 	bool index_scan = false;
-	unsafe_vector<row_t> row_ids;
+	set<row_t> row_ids;
 
 	info->GetIndexes().BindAndScan<ART>(context, *info, [&](ART &art) {
 		index_scan = TryScanIndex(art, column_list, input, filter_set, max_count, row_ids);
