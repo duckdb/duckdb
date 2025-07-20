@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "sorted_run.hpp"
+#include "duckdb/common/sorting/sorted_run.hpp"
 #include "duckdb/common/types/row/tuple_data_layout.hpp"
 #include "duckdb/execution/physical_operator_states.hpp"
 #include "duckdb/common/sorting/sort_projection_column.hpp"
