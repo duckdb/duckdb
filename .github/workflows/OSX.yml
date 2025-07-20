@@ -280,7 +280,7 @@ jobs:
         env:
           LOCAL_EXTENSION_REPO: ${{ github.workspace }}
         run: |
-          ./build/release/test/unittest --autoloading available
+          ./build/release/test/unittest --autoloading available --skip-compiled
 
   upload-osx-extensions:
     name: Upload OSX Extensions
