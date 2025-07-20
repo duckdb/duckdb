@@ -21,7 +21,7 @@ index 33890b5..f91adf6 100644
  
  	auto result = make_uniq<XLSXReadData>();
 -	result->file_path = info.file_path;
-+	result->file_path = input.info.file_path;
++	result->file_path = input.info.file_path; 
  
  	// TODO: Parse options
 -	ParseCopyFromOptions(*result, info.options);
