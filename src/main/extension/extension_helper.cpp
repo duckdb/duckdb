@@ -433,6 +433,8 @@ ExtensionLoadResult ExtensionHelper::LoadExtension(DuckDB &db, const std::string
 
 ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std::string &extension,
                                                            bool initial_load) {
+#ifdef DUCKDB_EXTENSIONS_TEST_WITH_LOADABLE
+	// A more proper review is needed, but this should be enabled in general and not only for test settings
 	if (!initial_load) {
 		Connection con(db);
 		auto result = con.Query("LOAD " + extension);
@@ -440,6 +442,8 @@ ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std
 			return ExtensionLoadResult::LOADED_EXTENSION;
 		}
 	}
+#endif
+
 #ifdef DUCKDB_TEST_REMOTE_INSTALL
 	if (!initial_load && StringUtil::Contains(DUCKDB_TEST_REMOTE_INSTALL, extension)) {
 		Connection con(db);
