@@ -625,14 +625,12 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 
 	if (!stmt.returning_list.empty()) {
 		insert->return_chunk = true;
-		result.types.clear();
-		result.names.clear();
 		auto insert_table_index = GenerateTableIndex();
 		insert->table_index = insert_table_index;
 		unique_ptr<LogicalOperator> index_as_logicaloperator = std::move(insert);
 
 		return BindReturning(std::move(stmt.returning_list), table, stmt.table_ref ? stmt.table_ref->alias : string(),
-		                     insert_table_index, std::move(index_as_logicaloperator), std::move(result));
+		                     insert_table_index, std::move(index_as_logicaloperator));
 	}
 
 	D_ASSERT(result.types.size() == result.names.size());

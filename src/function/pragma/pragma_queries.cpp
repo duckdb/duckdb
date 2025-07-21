@@ -19,19 +19,32 @@ static string PragmaTableInfo(ClientContext &context, const FunctionParameters &
 	                          KeywordHelper::WriteQuoted(parameters.values[0].ToString(), '\''));
 }
 
-string PragmaShowTables() {
+string PragmaShowTables(const string &database, const string &schema) {
+	string where_clause = "";
+	vector<string> where_conditions;
+	if (!database.empty()) {
+		where_conditions.push_back(StringUtil::Format("lower(database_name) = lower(%s)", SQLString(database)));
+	}
+	if (!schema.empty()) {
+		where_conditions.push_back(StringUtil::Format("lower(schema_name) = lower(%s)", SQLString(schema)));
+	}
+	if (where_conditions.empty()) {
+		where_conditions.push_back("in_search_path(database_name, schema_name)");
+	}
+	where_clause = "WHERE " + StringUtil::Join(where_conditions, " AND ");
+
 	// clang-format off
-	return R"EOF(
+	string query = R"EOF(
 	with "tables" as
 	(
 		SELECT table_name as "name"
 		FROM duckdb_tables
-		where in_search_path(database_name, schema_name)
+		)EOF" + where_clause + R"EOF(
 	), "views" as
 	(
 		SELECT view_name as "name"
 		FROM duckdb_views
-		where in_search_path(database_name, schema_name)
+		)EOF" + where_clause + R"EOF(
 	), db_objects as
 	(
 		SELECT "name" FROM "tables"
@@ -41,6 +54,8 @@ string PragmaShowTables() {
 	SELECT "name"
 	FROM db_objects
 	ORDER BY "name";)EOF";
+
+	return query;
 	// clang-format on
 }
 

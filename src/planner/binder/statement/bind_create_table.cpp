@@ -35,8 +35,8 @@ static void CreateColumnDependencyManager(BoundCreateTableInfo &info) {
 	}
 }
 
-static void VerifyCompressionType(optional_ptr<StorageManager> storage_manager, DBConfig &config,
-                                  BoundCreateTableInfo &info) {
+static void VerifyCompressionType(ClientContext &context, optional_ptr<StorageManager> storage_manager,
+                                  DBConfig &config, BoundCreateTableInfo &info) {
 	auto &base = info.base->Cast<CreateTableInfo>();
 	for (auto &col : base.columns.Logical()) {
 		auto compression_type = col.CompressionType();
@@ -45,7 +45,15 @@ static void VerifyCompressionType(optional_ptr<StorageManager> storage_manager, 
 			                      "and only has decompress support",
 			                      CompressionTypeToString(compression_type));
 		}
-		const auto &logical_type = col.GetType();
+		auto logical_type = col.GetType();
+		if (logical_type.id() == LogicalTypeId::USER && logical_type.HasAlias()) {
+			// Resolve user type if possible
+			const auto type_entry = Catalog::GetEntry<TypeCatalogEntry>(
+			    context, INVALID_CATALOG, INVALID_SCHEMA, logical_type.GetAlias(), OnEntryNotFound::RETURN_NULL);
+			if (type_entry) {
+				logical_type = type_entry->user_type;
+			}
+		}
 		auto physical_type = logical_type.InternalType();
 		if (compression_type == CompressionType::COMPRESSION_AUTO) {
 			continue;
@@ -630,7 +638,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		});
 
 		auto &config = DBConfig::Get(catalog.GetAttached());
-		VerifyCompressionType(storage_manager, config, *result);
+		VerifyCompressionType(context, storage_manager, config, *result);
 		CreateColumnDependencyManager(*result);
 		// bind the generated column expressions
 		BindGeneratedColumns(*result);

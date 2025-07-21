@@ -102,6 +102,9 @@ unique_ptr<SQLStatement> Transformer::TransformMergeInto(duckdb_libpgquery::PGMe
 	for (auto &entry : unconditional_actions) {
 		result->actions[entry.first].push_back(std::move(entry.second));
 	}
+	if (stmt.returningList) {
+		TransformExpressionList(*stmt.returningList, result->returning_list);
+	}
 	return std::move(result);
 }
 
