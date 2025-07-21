@@ -47,9 +47,11 @@ keyword_sets = {category: set() for category in CPP_MAP_NAMES.keys()}
 reserved_set = set()
 unreserved_set = set()
 
+
 def load_keywords(filepath):
     with open(filepath, "r") as f:
         return [line.strip().lower() for line in f if line.strip()]
+
 
 for filename in os.listdir(keywords_dir):
     if filename not in FILENAME_TO_CATEGORY:
@@ -81,23 +83,24 @@ with open(output_path, "w") as f:
     f.write("#include \"keyword_helper.hpp\"\n\n")
     f.write("namespace duckdb {\n")
     f.write("void KeywordHelper::InitializeKeywordMaps() { // Renamed for clarity\n")
-    f.write("    if (initialized) return;\n")
-    f.write("    initialized = true;\n\n")
+    f.write("\tif (initialized) { return; };\n")
+    f.write("\tinitialized = true;\n\n")
 
     # Iterate through each category and generate code for each map
     for category, keywords in keyword_sets.items():
         cpp_map_name = CPP_MAP_NAMES[category]
-        f.write(f"    // Populating {cpp_map_name}\n")
+        f.write(f"\t// Populating {cpp_map_name}\n")
         # Sort keywords for deterministic output
         for kw in sorted(list(keywords)):
             # Populate the C++ map with true
-            f.write(f'    {cpp_map_name}.insert("{kw}");\n')
-        f.write("\n") # Add a newline for readability
+            f.write(f'\t{cpp_map_name}.insert("{kw}");\n')
+        f.write("\n")  # Add a newline for readability
 
     f.write("}\n")
     f.write("}\n")
 
 print(f"Successfully generated {output_path}")
+
 
 def filename_to_upper_camel(file):
     name, _ = os.path.splitext(file)  # column_name_keywords
