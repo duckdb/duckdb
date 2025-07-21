@@ -989,8 +989,8 @@ const ParquetRowGroup &ParquetReader::GetGroup(ParquetReaderScanState &state) {
 }
 
 uint64_t ParquetReader::GetGroupCompressedSize(ParquetReaderScanState &state) {
-	auto &group = GetGroup(state);
-	auto total_compressed_size = group.total_compressed_size;
+	const auto &group = GetGroup(state);
+	int64_t total_compressed_size = group.__isset.total_compressed_size ? group.total_compressed_size : 0;
 
 	idx_t calc_compressed_size = 0;
 
