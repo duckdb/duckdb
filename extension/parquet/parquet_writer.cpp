@@ -543,12 +543,15 @@ void ParquetWriter::FlushRowGroup(PreparedRowGroup &prepared) {
 	// let's make sure all offsets are ay-okay
 	ValidateColumnOffsets(file_name, writer->GetTotalWritten(), row_group);
 
-	// append the row group to the file meta data
+	row_group.total_compressed_size = NumericCast<int64_t>(writer->GetTotalWritten()) - row_group.file_offset;
+	row_group.__isset.total_compressed_size = true;
+
+	// append the row group to the file metadata
 	file_meta_data.row_groups.push_back(row_group);
 	file_meta_data.num_rows += row_group.num_rows;
 
 	total_written = writer->GetTotalWritten();
-	num_row_groups++;
+	++num_row_groups;
 }
 
 void ParquetWriter::Flush(ColumnDataCollection &buffer) {
