@@ -56,7 +56,7 @@ static vector<unordered_set<idx_t>> GetAllNeighborSets(vector<idx_t> neighbors) 
 			ret.push_back(d);
 		}
 	} while (!added.empty());
-#if 0
+#if DEBUG
 	// drive by test to make sure we have an accurate amount of
 	// subsets, and that each neighbor is in a correct amount
 	// of those subsets.
