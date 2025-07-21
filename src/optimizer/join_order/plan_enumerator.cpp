@@ -68,7 +68,7 @@ static vector<unordered_set<idx_t>> GetAllNeighborSets(vector<idx_t> neighbors) 
 				count += 1;
 			}
 		}
-		D_ASSERT(count == static_cast<size_t>(std::pow(2, neighbors.size()) - 1));
+		D_ASSERT(count == static_cast<size_t>(std::pow(2, neighbors.size() - 1)));
 	}
 #endif
 	return ret;
