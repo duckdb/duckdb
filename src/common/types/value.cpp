@@ -1741,7 +1741,8 @@ const string &StringValue::Get(const Value &value) {
 	if (value.is_null) {
 		throw InternalException("Calling StringValue::Get on a NULL value");
 	}
-	D_ASSERT(value.type().InternalType() == PhysicalType::VARCHAR);
+	D_ASSERT(value.type().InternalType() == PhysicalType::VARCHAR ||
+	         value.type().InternalType() == PhysicalType::VARINT);
 	D_ASSERT(value.value_info_);
 	return value.value_info_->Get<StringValueInfo>().GetString();
 }
@@ -2092,7 +2093,8 @@ void Value::SerializeInternal(Serializer &serializer, bool serialize_type) const
 	case PhysicalType::INTERVAL:
 		serializer.WriteProperty(102, "value", value_.interval);
 		break;
-	case PhysicalType::VARCHAR: {
+	case PhysicalType::VARCHAR:
+	case PhysicalType::VARINT: {
 		if (type_.id() == LogicalTypeId::BLOB) {
 			auto blob_str = Blob::ToString(StringValue::Get(*this));
 			serializer.WriteProperty(102, "value", blob_str);
@@ -2175,7 +2177,8 @@ Value Value::Deserialize(Deserializer &deserializer) {
 	case PhysicalType::INTERVAL:
 		new_value.value_.interval = deserializer.ReadProperty<interval_t>(102, "value");
 		break;
-	case PhysicalType::VARCHAR: {
+	case PhysicalType::VARCHAR:
+	case PhysicalType::VARINT: {
 		auto str = deserializer.ReadProperty<string>(102, "value");
 		if (type.id() == LogicalTypeId::BLOB) {
 			new_value.value_info_ = make_shared_ptr<StringValueInfo>(Blob::ToBlob(str));

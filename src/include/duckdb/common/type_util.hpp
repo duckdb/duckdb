@@ -94,6 +94,9 @@ bool StorageTypeCompatible(PhysicalType type) {
 	if (std::is_same<T, uint8_t>()) {
 		return type == PhysicalType::UINT8 || type == PhysicalType::BOOL;
 	}
+	if (std::is_same<T, string_t>()) {
+		return type == PhysicalType::VARCHAR || type == PhysicalType::VARINT;
+	}
 	return type == GetTypeId<T>();
 }
 
