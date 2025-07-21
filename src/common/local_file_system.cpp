@@ -1599,7 +1599,7 @@ vector<OpenFileInfo> LocalFileSystem::GlobHive(const string &path, optional_ptr<
 		}
 		if (is_last_chunk) {
 			if (hive_partitioning) {
-				hive_partitioning->Finalize();
+				hive_partitioning->Finalize(result.size(), result.size());
 			}
 			return result;
 		}

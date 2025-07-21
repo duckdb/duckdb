@@ -203,10 +203,10 @@ bool HivePartitioning::ApplyFiltersToFile(OpenFileInfo &file) {
 	return should_prune_file;
 }
 
-void HivePartitioning::Finalize() {
+void HivePartitioning::Finalize(idx_t filtered_files, idx_t total_files) {
 	D_ASSERT(filters.size() >= pruned_filters.size());
-	info.extra_info.total_files = pruned_files.size();
-	info.extra_info.filtered_files = pruned_files.size();
+	info.extra_info.total_files = total_files;
+	info.extra_info.filtered_files = filtered_files;
 	filters = std::move(pruned_filters);
 	consumed = true;
 }
@@ -227,8 +227,7 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<Ope
 	for (idx_t i = 0; i < files.size(); i++) {
 		hive_partitioning.ApplyFiltersToFile(files[i]);
 	}
-	hive_partitioning.Finalize();
-	info.extra_info.total_files = files.size();
+	hive_partitioning.Finalize(hive_partitioning.pruned_files.size(), files.size());
 	files = std::move(hive_partitioning.pruned_files);
 }
 

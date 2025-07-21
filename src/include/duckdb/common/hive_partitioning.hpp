@@ -49,7 +49,7 @@ public:
 											      const MultiFileOptions &options,
 	                                              MultiFilePushdownInfo &info);
 	//! Finalize the hive partitioning
-	DUCKDB_API void Finalize();
+	DUCKDB_API void Finalize(idx_t filtered_files, idx_t total_files);
 
 	DUCKDB_API static Value GetValue(ClientContext &context, const string &key, const string &value,
 	                                 const LogicalType &type);
