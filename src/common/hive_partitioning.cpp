@@ -165,12 +165,11 @@ HivePartitioningFilterInfo HivePartitioning::GetFilterInfo(const MultiFilePushdo
 void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<OpenFileInfo> &files,
                                               vector<unique_ptr<Expression>> &filters,
 											  const MultiFileOptions &options,
-                                              MultiFilePushdownInfo &info) {
+                                              MultiFilePushdownInfo &info, unordered_set<idx_t> &filters_applied_to_files) {
 
 	vector<OpenFileInfo> pruned_files;
 	vector<bool> have_preserved_filter(filters.size(), false);
 	vector<unique_ptr<Expression>> pruned_filters;
-	unordered_set<idx_t> filters_applied_to_files;
 	auto table_index = info.table_index;
 
 	auto filter_info = GetFilterInfo(info, options);

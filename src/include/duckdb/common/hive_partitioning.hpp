@@ -38,7 +38,8 @@ public:
 	DUCKDB_API static void ApplyFiltersToFileList(ClientContext &context, vector<OpenFileInfo> &files,
 	                                              vector<unique_ptr<Expression>> &filters,
 											      const MultiFileOptions &options,
-	                                              MultiFilePushdownInfo &info);
+	                                              MultiFilePushdownInfo &info,
+												  unordered_set<idx_t> &filters_applied_to_files);
 
 	DUCKDB_API static Value GetValue(ClientContext &context, const string &key, const string &value,
 	                                 const LogicalType &type);
