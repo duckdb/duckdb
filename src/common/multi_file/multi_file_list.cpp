@@ -30,8 +30,7 @@ MultiFilePushdownInfo::MultiFilePushdownInfo(idx_t table_index, const vector<str
 bool PushdownInternal(ClientContext &context, const MultiFileOptions &options, MultiFilePushdownInfo &info,
                       vector<unique_ptr<Expression>> &filters, vector<OpenFileInfo> &expanded_files) {
 	auto start_files = expanded_files.size();
-	unordered_set<idx_t> filters_applied_to_files;
-	HivePartitioning::ApplyFiltersToFileList(context, expanded_files, filters, options, info, filters_applied_to_files);
+	HivePartitioning::ApplyFiltersToFileList(context, expanded_files, filters, options, info);
 
 	if (expanded_files.size() != start_files) {
 		return true;

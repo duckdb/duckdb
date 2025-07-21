@@ -162,64 +162,74 @@ HivePartitioningFilterInfo HivePartitioning::GetFilterInfo(const MultiFilePushdo
 
 // TODO: this can still be improved by removing the parts of filter expressions that are true for all remaining files.
 //		 currently, only expressions that cannot be evaluated during pushdown are removed.
+bool HivePartitioning::ApplyFiltersToFile(OpenFileInfo &file) {
+	if (consumed) {
+		// TODO: throw an error, shouldn't try applying filters after finalizing
+		return false;
+	}
+	auto table_index = info.table_index;
+	bool should_prune_file = false;
+	auto known_values = GetKnownColumnValues(file.path, filter_info);
+
+	for (idx_t j = 0; j < filters.size(); j++) {
+		auto &filter = filters[j];
+		unique_ptr<Expression> filter_copy = filter->Copy();
+		ConvertKnownColRefToConstants(context, filter_copy, known_values, table_index);
+		// Evaluate the filter, if it can be evaluated here, we can not prune this filter
+		Value result_value;
+
+		if (!filter_copy->IsScalar() || !filter_copy->IsFoldable() ||
+			!ExpressionExecutor::TryEvaluateScalar(context, *filter_copy, result_value)) {
+			// can not be evaluated only with the filename/hive columns added, we can not prune this filter
+			if (!have_preserved_filter[j]) {
+				pruned_filters.emplace_back(filter->Copy());
+				have_preserved_filter[j] = true;
+			}
+		} else if (result_value.IsNull() || !result_value.GetValue<bool>()) {
+			// filter evaluates to false
+			should_prune_file = true;
+			// convert the filter to a table filter.
+			if (filters_applied_to_files.find(j) == filters_applied_to_files.end()) {
+				info.extra_info.file_filters += filter->ToString();
+				filters_applied_to_files.insert(j);
+			}
+		}
+	}
+
+	if (!should_prune_file) {
+		pruned_files.push_back(file);
+	}
+
+	return should_prune_file;
+}
+
+void HivePartitioning::Finalize() {
+	D_ASSERT(filters.size() >= pruned_filters.size());
+	info.extra_info.total_files = pruned_files.size();
+	info.extra_info.filtered_files = pruned_files.size();
+	filters = std::move(pruned_filters);
+	consumed = true;
+}
+
+
 void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<OpenFileInfo> &files,
                                               vector<unique_ptr<Expression>> &filters,
 											  const MultiFileOptions &options,
-                                              MultiFilePushdownInfo &info, unordered_set<idx_t> &filters_applied_to_files) {
-
-	vector<OpenFileInfo> pruned_files;
-	vector<bool> have_preserved_filter(filters.size(), false);
-	vector<unique_ptr<Expression>> pruned_filters;
-	auto table_index = info.table_index;
-
+                                              MultiFilePushdownInfo &info) {
+	
 	auto filter_info = GetFilterInfo(info, options);
 
 	if ((!filter_info.filename_enabled && !filter_info.hive_enabled) || filters.empty()) {
 		return;
 	}
+	HivePartitioning hive_partitioning(context, filters, options, info);
 
 	for (idx_t i = 0; i < files.size(); i++) {
-		auto &file = files[i];
-		bool should_prune_file = false;
-		auto known_values = GetKnownColumnValues(file.path, filter_info);
-
-		for (idx_t j = 0; j < filters.size(); j++) {
-			auto &filter = filters[j];
-			unique_ptr<Expression> filter_copy = filter->Copy();
-			ConvertKnownColRefToConstants(context, filter_copy, known_values, table_index);
-			// Evaluate the filter, if it can be evaluated here, we can not prune this filter
-			Value result_value;
-
-			if (!filter_copy->IsScalar() || !filter_copy->IsFoldable() ||
-			    !ExpressionExecutor::TryEvaluateScalar(context, *filter_copy, result_value)) {
-				// can not be evaluated only with the filename/hive columns added, we can not prune this filter
-				if (!have_preserved_filter[j]) {
-					pruned_filters.emplace_back(filter->Copy());
-					have_preserved_filter[j] = true;
-				}
-			} else if (result_value.IsNull() || !result_value.GetValue<bool>()) {
-				// filter evaluates to false
-				should_prune_file = true;
-				// convert the filter to a table filter.
-				if (filters_applied_to_files.find(j) == filters_applied_to_files.end()) {
-					info.extra_info.file_filters += filter->ToString();
-					filters_applied_to_files.insert(j);
-				}
-			}
-		}
-
-		if (!should_prune_file) {
-			pruned_files.push_back(file);
-		}
+		hive_partitioning.ApplyFiltersToFile(files[i]);
 	}
-
-	D_ASSERT(filters.size() >= pruned_filters.size());
-
+	hive_partitioning.Finalize();
 	info.extra_info.total_files = files.size();
-	info.extra_info.filtered_files = pruned_files.size();
-
-	filters = std::move(pruned_filters);
-	files = std::move(pruned_files);
+	files = std::move(hive_partitioning.pruned_files);
 }
 
 void HivePartitionedColumnData::InitializeKeys() {

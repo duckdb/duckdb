@@ -30,16 +30,26 @@ struct HivePartitioningFilterInfo {
 
 class HivePartitioning {
 public:
+	// Constructor
+	HivePartitioning(ClientContext &context, vector<unique_ptr<Expression>> &filters, const MultiFileOptions &options, MultiFilePushdownInfo &info) : context(context), filters(filters), options(options), info(info), have_preserved_filter(filters.size(), false), consumed(false) {
+		filter_info = GetFilterInfo(info, options);
+	}
+
 	//! Parse a filename that follows the hive partitioning scheme
 	DUCKDB_API static std::map<string, string> Parse(const string &filename);
+
+	//! Prunes a file based on a set of filters
+	DUCKDB_API bool ApplyFiltersToFile(OpenFileInfo &file);
+
 	//! Prunes a list of filenames based on a set of filters, can be used by TableFunctions in the
 	//! pushdown_complex_filter function to skip files with filename-based filters. Also removes the filters that always
 	//! evaluate to true.
 	DUCKDB_API static void ApplyFiltersToFileList(ClientContext &context, vector<OpenFileInfo> &files,
 	                                              vector<unique_ptr<Expression>> &filters,
 											      const MultiFileOptions &options,
-	                                              MultiFilePushdownInfo &info,
-												  unordered_set<idx_t> &filters_applied_to_files);
+	                                              MultiFilePushdownInfo &info);
+	//! Finalize the hive partitioning
+	DUCKDB_API void Finalize();
 
 	DUCKDB_API static Value GetValue(ClientContext &context, const string &key, const string &value,
 	                                 const LogicalType &type);
@@ -49,6 +59,18 @@ public:
 	DUCKDB_API static string Unescape(const string &input);
 
 	DUCKDB_API static HivePartitioningFilterInfo GetFilterInfo(const MultiFilePushdownInfo &info, const MultiFileOptions &options);
+
+private:
+	ClientContext &context;
+	vector<unique_ptr<Expression>> &filters;
+	const MultiFileOptions &options;
+	MultiFilePushdownInfo &info;
+	HivePartitioningFilterInfo filter_info;
+	unordered_set<idx_t> filters_applied_to_files;
+	vector<unique_ptr<Expression>> pruned_filters;
+	vector<OpenFileInfo> pruned_files;
+	vector<bool> have_preserved_filter;
+	bool consumed;
 };
 
 struct HivePartitionKey {
