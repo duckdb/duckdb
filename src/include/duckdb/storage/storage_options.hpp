@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/types/value.hpp"
 
 namespace duckdb {
 
