@@ -37,7 +37,7 @@ struct SortedAggregateBindData : public FunctionData {
 		//	The first sort column is the group number. It is prefixed onto the buffered data
 		sort_types.emplace_back(LogicalType::USMALLINT);
 		orders.emplace_back(BoundOrderByNode(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST,
-		                                     make_uniq<BoundReferenceExpression>(sort_types.back(), 0)));
+		                                     make_uniq<BoundReferenceExpression>(sort_types.back(), 0U)));
 
 		// Determine whether we are sorted on all the arguments.
 		// Even if we are not, we want to share inputs for sorting.
