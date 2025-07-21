@@ -37,17 +37,20 @@ duckdb_error_data duckdb_expression_fold(duckdb_client_context context, duckdb_e
 		return nullptr;
 	}
 
+	auto value = new duckdb::Value;
 	try {
 		auto context_wrapper = reinterpret_cast<CClientContextWrapper *>(context);
 		auto expr_wrapper = reinterpret_cast<ExpressionWrapper *>(expr);
-		auto value = new duckdb::Value;
 		*value = duckdb::ExpressionExecutor::EvaluateScalar(context_wrapper->context, *expr_wrapper->expr);
 		*out_value = reinterpret_cast<duckdb_value>(value);
 	} catch (const duckdb::Exception &ex) {
+		delete value;
 		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, ex.what());
 	} catch (const std::exception &ex) {
+		delete value;
 		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, ex.what());
 	} catch (...) {
+		delete value;
 		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, "unknown error occurred during folding");
 	}
 	return nullptr;
