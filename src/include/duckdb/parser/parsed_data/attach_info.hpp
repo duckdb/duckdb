@@ -9,11 +9,9 @@
 #pragma once
 
 #include "duckdb/parser/parsed_data/parse_info.hpp"
-#include "duckdb/common/vector.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/enums/on_create_conflict.hpp"
-#include "duckdb/storage/storage_options.hpp"
 
 namespace duckdb {
 

@@ -13,7 +13,6 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/catalog/catalog_entry.hpp"
-#include "duckdb/storage/storage_options.hpp"
 
 namespace duckdb {
 class Catalog;
