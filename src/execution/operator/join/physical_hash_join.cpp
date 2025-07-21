@@ -331,10 +331,55 @@ SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, DataChunk &chun
 		filter_pushdown->Sink(lstate.join_keys, *lstate.local_filter_state);
 	}
 
-	if (payload_columns.col_types.empty()) { // there are only keys: place an empty chunk in the payload
-		lstate.payload_chunk.SetCardinality(chunk.size());
-	} else { // there are payload columns
-		lstate.payload_chunk.ReferenceColumns(chunk, payload_columns.col_idxs);
+	// Apply MySQL-style NOT IN behavior for MARK joins - filter right side with NULLs
+	SelectionVector mysql_sel(STANDARD_VECTOR_SIZE);
+	idx_t mysql_approved_count = chunk.size();
+	bool mysql_filtered = false;
+
+	if (gstate.hash_table->join_type == JoinType::MARK) {
+		auto &config = ClientConfig::GetConfig(context.client);
+		if (config.enable_mysql_not_in_behavior) {
+			// In MySQL mode, filter out rows with NULL values from right side before building
+			mysql_approved_count = 0;
+
+			for (idx_t i = 0; i < chunk.size(); i++) {
+				bool has_right_null = false;
+				// Check if this row has any NULL values in the join keys
+				for (idx_t col = 0; col < lstate.join_keys.ColumnCount(); col++) {
+					if (FlatVector::IsNull(lstate.join_keys.data[col], i)) {
+						has_right_null = true;
+						break;
+					}
+				}
+				if (!has_right_null) {
+					mysql_sel.set_index(mysql_approved_count++, i);
+				}
+			}
+
+			if (mysql_approved_count < chunk.size()) {
+				mysql_filtered = true;
+			}
+		}
+	}
+
+	if (mysql_filtered) {
+		// Create filtered chunks
+		lstate.join_keys.Slice(mysql_sel, mysql_approved_count);
+		
+		if (payload_columns.col_types.empty()) { // there are only keys: place an empty chunk in the payload
+			lstate.payload_chunk.SetCardinality(mysql_approved_count);
+		} else { // there are payload columns
+			DataChunk filtered_payload;
+			filtered_payload.Initialize(Allocator::DefaultAllocator(), chunk.GetTypes());
+			filtered_payload.Slice(chunk, mysql_sel, mysql_approved_count);
+			lstate.payload_chunk.ReferenceColumns(filtered_payload, payload_columns.col_idxs);
+		}
+	} else {
+		if (payload_columns.col_types.empty()) { // there are only keys: place an empty chunk in the payload
+			lstate.payload_chunk.SetCardinality(chunk.size());
+		} else { // there are payload columns
+			lstate.payload_chunk.ReferenceColumns(chunk, payload_columns.col_idxs);
+		}
 	}
 
 	// build the HT
@@ -990,7 +1035,7 @@ OperatorResultType PhysicalHashJoin::ExecuteInternal(ExecutionContext &context, 
 			return OperatorResultType::FINISHED;
 		}
 		state.lhs_output.ReferenceColumns(input, lhs_output_columns.col_idxs);
-		ConstructEmptyJoinResult(sink.hash_table->join_type, sink.hash_table->has_null, state.lhs_output, chunk);
+		ConstructEmptyJoinResult(context, sink.hash_table->join_type, sink.hash_table->has_null, state.lhs_output, chunk);
 		return OperatorResultType::NEED_MORE_INPUT;
 	}
 
@@ -1025,7 +1070,49 @@ OperatorResultType PhysicalHashJoin::ExecuteInternal(ExecutionContext &context, 
 		}
 	}
 
-	state.lhs_output.ReferenceColumns(input, lhs_output_columns.col_idxs);
+	// Apply MySQL-style NOT IN behavior for MARK joins - filter left side with NULLs
+	SelectionVector mysql_sel(STANDARD_VECTOR_SIZE);
+	idx_t mysql_approved_count = input.size();
+	bool mysql_filtered = false;
+	
+	if (sink.hash_table->join_type == JoinType::MARK) {
+		auto &config = ClientConfig::GetConfig(sink.context);
+		if (config.enable_mysql_not_in_behavior) {
+			// In MySQL mode, filter out rows with NULL values from left side before processing
+			mysql_approved_count = 0;
+			
+			for (idx_t i = 0; i < input.size(); i++) {
+				bool has_left_null = false;
+				// Check if this row has any NULL values in the relevant columns
+				for (idx_t col_idx = 0; col_idx < lhs_output_columns.col_idxs.size(); col_idx++) {
+					auto col = lhs_output_columns.col_idxs[col_idx];
+					if (FlatVector::IsNull(input.data[col], i)) {
+						has_left_null = true;
+						break;
+					}
+				}
+				if (!has_left_null) {
+					mysql_sel.set_index(mysql_approved_count++, i);
+				}
+			}
+			
+			if (mysql_approved_count < input.size()) {
+				mysql_filtered = true;
+			}
+		}
+	}
+	
+	if (mysql_filtered) {
+		// Create filtered join keys and output
+		state.lhs_join_keys.Slice(mysql_sel, mysql_approved_count);
+		DataChunk filtered_input;
+		filtered_input.Initialize(Allocator::DefaultAllocator(), input.GetTypes());
+		filtered_input.Slice(input, mysql_sel, mysql_approved_count);
+		state.lhs_output.ReferenceColumns(filtered_input, lhs_output_columns.col_idxs);
+	} else {
+		state.lhs_output.ReferenceColumns(input, lhs_output_columns.col_idxs);
+	}
+	
 	state.scan_structure.Next(state.lhs_join_keys, state.lhs_output, chunk);
 
 	if (state.scan_structure.PointersExhausted() && chunk.size() == 0) {
@@ -1409,7 +1496,11 @@ void HashJoinLocalSourceState::ExternalProbe(HashJoinGlobalSinkState &sink, Hash
 	lhs_output.ReferenceColumns(lhs_probe_chunk, sink.op.lhs_output_columns.col_idxs);
 
 	if (sink.hash_table->Count() == 0 && !gstate.op.EmptyResultIfRHSIsEmpty()) {
-		gstate.op.ConstructEmptyJoinResult(sink.hash_table->join_type, sink.hash_table->has_null, lhs_output, chunk);
+		// Temporarily create a minimal execution context
+		// TODO: Find a better way to get the proper ThreadContext
+		thread_local static ThreadContext dummy_thread_context(sink.context);
+		ExecutionContext exec_context(sink.context, dummy_thread_context, nullptr);
+		gstate.op.ConstructEmptyJoinResult(exec_context, sink.hash_table->join_type, sink.hash_table->has_null, lhs_output, chunk);
 		empty_ht_probe_in_progress = true;
 		return;
 	}

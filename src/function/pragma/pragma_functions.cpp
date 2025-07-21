@@ -153,6 +153,14 @@ static void PragmaDisableOptimizer(ClientContext &context, const FunctionParamet
 	ClientConfig::GetConfig(context).enable_optimizer = false;
 }
 
+static void PragmaEnableMySQLNotInBehavior(ClientContext &context, const FunctionParameters &parameters) {
+	ClientConfig::GetConfig(context).enable_mysql_not_in_behavior = true;
+}
+
+static void PragmaDisableMySQLNotInBehavior(ClientContext &context, const FunctionParameters &parameters) {
+	ClientConfig::GetConfig(context).enable_mysql_not_in_behavior = false;
+}
+
 void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	RegisterEnableProfiling(set);
 
@@ -182,6 +190,9 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_optimizer", PragmaEnableOptimizer));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_optimizer", PragmaDisableOptimizer));
+
+	set.AddFunction(PragmaFunction::PragmaStatement("enable_mysql_not_in_behavior", PragmaEnableMySQLNotInBehavior));
+	set.AddFunction(PragmaFunction::PragmaStatement("disable_mysql_not_in_behavior", PragmaDisableMySQLNotInBehavior));
 
 	set.AddFunction(PragmaFunction::PragmaStatement("force_checkpoint", PragmaForceCheckpoint));
 

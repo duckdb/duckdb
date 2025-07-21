@@ -72,7 +72,7 @@ void PhysicalComparisonJoin::ReorderConditions(vector<JoinCondition> &conditions
 	}
 }
 
-void PhysicalComparisonJoin::ConstructEmptyJoinResult(JoinType join_type, bool has_null, DataChunk &input,
+void PhysicalComparisonJoin::ConstructEmptyJoinResult(ExecutionContext &context, JoinType join_type, bool has_null, DataChunk &input,
                                                       DataChunk &result) {
 	// empty hash table, special case
 	if (join_type == JoinType::ANTI) {
@@ -94,10 +94,33 @@ void PhysicalComparisonJoin::ConstructEmptyJoinResult(JoinType join_type, bool h
 		// if the HT has no NULL values (i.e. empty result set), return a vector that has false for every input
 		// entry if the HT has NULL values (i.e. result set had values, but all were NULL), return a vector that
 		// has NULL for every input entry
-		if (!has_null) {
+		// HOWEVER, if MySQL-style NOT IN behavior is enabled, we ignore NULLs and return false instead of NULL
+		auto &config = ClientConfig::GetConfig(context.client);
+		if (!has_null || config.enable_mysql_not_in_behavior) {
 			auto bool_result = FlatVector::GetData<bool>(result_vector);
-			for (idx_t i = 0; i < result.size(); i++) {
-				bool_result[i] = false;
+			if (config.enable_mysql_not_in_behavior) {
+				// In MySQL mode, filter out rows with NULL values from left side
+				for (idx_t i = 0; i < result.size(); i++) {
+					bool has_left_null = false;
+					// Check if this row has any NULL values
+					for (idx_t col = 0; col < input.ColumnCount(); col++) {
+						if (FlatVector::IsNull(input.data[col], i)) {
+							has_left_null = true;
+							break;
+						}
+					}
+					if (has_left_null) {
+						// Set to NULL for rows with NULL values in MySQL mode
+						FlatVector::SetNull(result_vector, i, true);
+					} else {
+						// Set to FALSE for rows without NULL values
+						bool_result[i] = false;
+					}
+				}
+			} else {
+				for (idx_t i = 0; i < result.size(); i++) {
+					bool_result[i] = false;
+				}
 			}
 		} else {
 			FlatVector::Validity(result_vector).SetAllInvalid(result.size());

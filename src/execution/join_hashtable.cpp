@@ -481,7 +481,15 @@ idx_t JoinHashTable::PrepareKeys(DataChunk &keys, vector<TupleDataVectorFormat> 
 		if (join_type == JoinType::MARK && !correlated_mark_join_info.correlated_types.empty()) {
 			continue;
 		}
-		if (null_values_are_equal[col_idx]) {
+		
+		// In MySQL mode for MARK joins, always filter out NULL values from build side
+		bool should_filter_nulls = !null_values_are_equal[col_idx];
+		if (join_type == JoinType::MARK && build_side) {
+			// TODO: Add client context access to check MySQL mode
+			// For now, keep standard behavior
+		}
+		
+		if (!should_filter_nulls) {
 			continue;
 		}
 		auto &col_key_data = vector_data[col_idx].unified;
