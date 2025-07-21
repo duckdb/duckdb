@@ -84,7 +84,7 @@ SourceResultType PhysicalCopyDatabase::GetData(ExecutionContext &context, DataCh
 
 		data_table.AddIndex(std::move(unbound_index));
 		auto &data_table_info = *data_table.GetDataTableInfo();
-		data_table_info.GetIndexes().InitializeIndexes(context.client, data_table_info);
+		data_table_info.GetIndexes().Bind(context.client, data_table_info);
 	}
 
 	return SourceResultType::FINISHED;

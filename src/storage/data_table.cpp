@@ -9,6 +9,7 @@
 #include "duckdb/common/types/constraint_conflict_info.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/constraints/list.hpp"
@@ -38,7 +39,7 @@ DataTableInfo::DataTableInfo(AttachedDatabase &db, shared_ptr<TableIOManager> ta
 }
 
 void DataTableInfo::InitializeIndexes(ClientContext &context, const char *index_type) {
-	indexes.InitializeIndexes(context, *this, index_type);
+	indexes.Bind(context, *this, index_type);
 }
 
 bool DataTableInfo::IsTemporary() const {
@@ -673,15 +674,24 @@ void DataTable::VerifyNewConstraint(LocalStorage &local_storage, DataTable &pare
 	local_storage.VerifyNewConstraint(parent, constraint);
 }
 
-void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<LocalTableStorage> storage, DataChunk &chunk,
+void DataTable::VerifyUniqueIndexes(ClientContext &context, TableIndexList &indexes,
+                                    optional_ptr<LocalTableStorage> storage, DataChunk &chunk,
                                     optional_ptr<ConflictManager> manager) {
+	auto data_table_info = GetDataTableInfo();
+	indexes.Bind(context, *data_table_info);
+	if (storage) {
+		storage->append_indexes.Bind(context, *data_table_info);
+		storage->delete_indexes.Bind(context, *data_table_info);
+	}
+
 	// Verify the constraint without a conflict manager.
 	if (!manager) {
-		return indexes.ScanBound<ART>([&](ART &art) {
-			if (!art.IsUnique()) {
+		return indexes.Scan([&](Index &index) {
+			D_ASSERT(index.IsBound());
+			if (!index.IsUnique()) {
 				return false;
 			}
-
+			auto &art = index.Cast<ART>();
 			if (storage) {
 				auto delete_index = storage->delete_indexes.Find(art.GetIndexName());
 				IndexAppendInfo index_append_info(IndexAppendMode::DEFAULT, delete_index);
@@ -698,14 +708,15 @@ void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<LocalT
 	auto &conflict_info = manager->GetConflictInfo();
 
 	// Find all indexes matching the conflict target.
-	indexes.ScanBound<ART>([&](ART &art) {
-		if (!art.IsUnique()) {
+	indexes.Scan([&](Index &index) {
+		D_ASSERT(index.IsBound());
+		if (!index.IsUnique()) {
 			return false;
 		}
-		if (!conflict_info.ConflictTargetMatches(art)) {
+		if (!conflict_info.ConflictTargetMatches(index)) {
 			return false;
 		}
-
+		auto &art = index.Cast<ART>();
 		if (storage) {
 			auto delete_index = storage->delete_indexes.Find(art.GetIndexName());
 			manager->AddIndex(art, delete_index);
@@ -727,14 +738,15 @@ void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<LocalT
 
 	// Scan the other indexes and throw, if there are any conflicts.
 	manager->SetMode(ConflictManagerMode::THROW);
-	indexes.ScanBound<ART>([&](ART &art) {
-		if (!art.IsUnique()) {
+	indexes.Scan([&](Index &index) {
+		D_ASSERT(index.IsBound());
+		if (!index.IsUnique()) {
 			return false;
 		}
-		if (manager->IndexMatches(art)) {
+		if (manager->IndexMatches(index.Cast<BoundIndex>())) {
 			return false;
 		}
-
+		auto &art = index.Cast<ART>();
 		if (storage) {
 			auto delete_index = storage->delete_indexes.Find(art.GetIndexName());
 			IndexAppendInfo index_append_info(IndexAppendMode::DEFAULT, delete_index);
@@ -770,7 +782,7 @@ void DataTable::VerifyAppendConstraints(ConstraintState &constraint_state, Clien
 	}
 
 	if (HasUniqueIndexes()) {
-		VerifyUniqueIndexes(info->indexes, storage, chunk, manager);
+		VerifyUniqueIndexes(context, info->indexes, storage, chunk, manager);
 	}
 
 	auto &constraints = table.GetConstraints();

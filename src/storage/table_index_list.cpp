@@ -57,14 +57,17 @@ bool TableIndexList::NameIsUnique(const string &name) {
 optional_ptr<BoundIndex> TableIndexList::Find(const string &name) {
 	for (auto &index : indexes) {
 		if (index->GetIndexName() == name) {
+			if (!index->IsBound()) {
+				throw InternalException("cannot return an unbound index in TableIndexList::Find");
+			}
 			return index->Cast<BoundIndex>();
 		}
 	}
 	return nullptr;
 }
 
-void TableIndexList::InitializeIndexes(ClientContext &context, DataTableInfo &table_info, const char *index_type) {
-	// Fast path: do we have any unbound indexes?
+void TableIndexList::Bind(ClientContext &context, DataTableInfo &table_info, const char *index_type) {
+	// Early-out, if we have no unbound indexes.
 	bool needs_binding = false;
 	{
 		lock_guard<mutex> lock(indexes_lock);

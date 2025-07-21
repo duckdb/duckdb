@@ -13,6 +13,8 @@
 
 namespace duckdb {
 
+class ColumnDataCollection;
+
 class UnboundIndex final : public Index {
 private:
 	//! The CreateInfo of the index.
@@ -61,6 +63,7 @@ public:
 	ColumnDataCollection &GetBufferedAppends() const {
 		return *buffered_appends;
 	}
+	unique_ptr<UnboundIndex> Copy() const;
 };
 
 } // namespace duckdb

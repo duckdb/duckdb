@@ -33,27 +33,6 @@ public:
 		}
 	}
 
-	//! Scan the indexes, invoking the callback method for every bound entry of type T.
-	template <class T, class FUNC>
-	void ScanBound(FUNC &&callback) {
-		lock_guard<mutex> lock(indexes_lock);
-		for (auto &index : indexes) {
-			if (index->IsBound() && T::TYPE_NAME == index->GetIndexType()) {
-				if (callback(index->Cast<T>())) {
-					break;
-				}
-			}
-		}
-	}
-
-	// Bind any unbound indexes of type T and invoke the callback method.
-	template <class T, class FUNC>
-	void BindAndScan(ClientContext &context, DataTableInfo &table_info, FUNC &&callback) {
-		// FIXME: optimize this by only looping through the indexes once without re-acquiring the lock.
-		InitializeIndexes(context, table_info, T::TYPE_NAME);
-		ScanBound<T>(callback);
-	}
-
 	//! Adds an index to the list of indexes.
 	void AddIndex(unique_ptr<Index> index);
 	//! Removes an index from the list of indexes.
@@ -64,9 +43,8 @@ public:
 	bool NameIsUnique(const string &name);
 	//! Returns an optional pointer to the index matching the name.
 	optional_ptr<BoundIndex> Find(const string &name);
-	//! Initializes unknown indexes that are possibly present after an extension load, optionally throwing an exception
-	//! on failure.
-	void InitializeIndexes(ClientContext &context, DataTableInfo &table_info, const char *index_type = nullptr);
+	//! Binds unbound indexes possibly present after loading an extension.
+	void Bind(ClientContext &context, DataTableInfo &table_info, const char *index_type = nullptr);
 	//! Returns true, if there are no indexes in this list.
 	bool Empty();
 	//! Returns the number of indexes in this list.

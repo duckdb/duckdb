@@ -30,6 +30,9 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &table)
 			return false;
 		}
 		if (!index.IsBound()) {
+			auto &unbound_index = index.Cast<UnboundIndex>();
+			delete_indexes.AddIndex(std::move(unbound_index.Copy()));
+			append_indexes.AddIndex(std::move(unbound_index.Copy()));
 			return false;
 		}
 
@@ -121,7 +124,9 @@ idx_t LocalTableStorage::EstimatedSize() {
 	// get the index size
 	idx_t index_sizes = 0;
 	append_indexes.Scan([&](Index &index) {
-		D_ASSERT(index.IsBound());
+		if (!index.IsBound()) {
+			return false;
+		}
 		index_sizes += index.Cast<BoundIndex>().GetInMemorySize();
 		return false;
 	});
@@ -405,12 +410,13 @@ void LocalTableStorage::AppendToDeleteIndexes(Vector &row_ids, DataChunk &delete
 		return;
 	}
 
-	delete_indexes.ScanBound<ART>([&](ART &art) {
-		if (!art.IsUnique()) {
+	delete_indexes.Scan([&](Index &index) {
+		D_ASSERT(index.IsBound());
+		if (!index.IsUnique()) {
 			return false;
 		}
 		IndexAppendInfo index_append_info(IndexAppendMode::IGNORE_DUPLICATES, nullptr);
-		auto result = art.Cast<BoundIndex>().Append(delete_chunk, row_ids, index_append_info);
+		auto result = index.Cast<BoundIndex>().Append(delete_chunk, row_ids, index_append_info);
 		if (result.HasError()) {
 			throw InternalException("unexpected constraint violation on delete ART: ", result.Message());
 		}

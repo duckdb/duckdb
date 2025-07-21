@@ -577,7 +577,10 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 	bool index_scan = false;
 	set<row_t> row_ids;
 
-	info->GetIndexes().BindAndScan<ART>(context, *info, [&](ART &art) {
+	info->InitializeIndexes(context);
+	info->GetIndexes().Scan([&](Index &index) {
+		D_ASSERT(index.IsBound());
+		auto &art = index.Cast<ART>();
 		index_scan = TryScanIndex(art, column_list, input, filter_set, max_count, row_ids);
 		return index_scan;
 	});

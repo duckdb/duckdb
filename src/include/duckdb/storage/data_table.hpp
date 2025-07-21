@@ -264,9 +264,9 @@ public:
 
 	idx_t GetRowGroupSize() const;
 
-	static void VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<LocalTableStorage> storage, DataChunk &chunk,
-	                                optional_ptr<ConflictManager> manager);
-
+	//! Verify any unique indexes using optional delete indexes in the local storage.
+	void VerifyUniqueIndexes(ClientContext &context, TableIndexList &indexes, optional_ptr<LocalTableStorage> storage,
+	                         DataChunk &chunk, optional_ptr<ConflictManager> manager);
 	//! AddIndex initializes an index and adds it to the table's index list.
 	//! It is either empty, or initialized via its index storage information.
 	void AddIndex(const ColumnList &columns, const vector<LogicalIndex> &column_indexes, const IndexConstraintType type,

@@ -1,5 +1,6 @@
 #include "duckdb/execution/index/unbound_index.hpp"
 
+#include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/index_storage_info.hpp"
@@ -51,6 +52,10 @@ void UnboundIndex::BufferChunk(DataChunk &chunk, Vector &row_ids) {
 	combined_chunk.data.back().Reference(row_ids);
 	combined_chunk.SetCardinality(chunk.size());
 	buffered_appends->Append(combined_chunk);
+}
+
+unique_ptr<UnboundIndex> UnboundIndex::Copy() const {
+	return make_uniq<UnboundIndex>(create_info->Copy(), storage_info, table_io_manager, db);
 }
 
 } // namespace duckdb
