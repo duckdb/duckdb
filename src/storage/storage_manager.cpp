@@ -476,8 +476,12 @@ void SingleFileStorageManager::CreateCheckpoint(QueryContext context, Checkpoint
 			throw FatalException("Failed to create checkpoint because of error: %s", error.RawMessage());
 		}
 	}
-	if (!InMemory() && options.wal_action == CheckpointWALAction::DELETE_WAL) {
-		ResetWAL();
+	if (!InMemory()) {
+		if (options.wal_action == CheckpointWALAction::DELETE_WAL) {
+			ResetWAL();
+		}
+	} else {
+		in_memory_change_size = 0;
 	}
 
 	if (db.GetStorageExtension()) {
