@@ -46,7 +46,7 @@ void StorageOptions::Initialize(const unordered_map<string, Value> &options) {
 			storage_version_user_provided = entry.second.ToString();
 			storage_version = SerializationCompatibility::FromString(entry.second.ToString()).serialization_version;
 		} else if (entry.first == "compress") {
-			if (entry.second.GetValue<bool>()) {
+			if (entry.second.DefaultCastAs(LogicalType::BOOLEAN).GetValue<bool>()) {
 				compress_in_memory = CompressInMemory::COMPRESS;
 			} else {
 				compress_in_memory = CompressInMemory::DO_NOT_COMPRESS;
