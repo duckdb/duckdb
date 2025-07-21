@@ -398,7 +398,7 @@ bool SingleFileStorageManager::IsCheckpointClean(MetaBlockPointer checkpoint_id)
 unique_ptr<CheckpointWriter> SingleFileStorageManager::CreateCheckpointWriter(QueryContext context,
                                                                               CheckpointOptions options) const {
 	if (InMemory()) {
-		return make_uniq<InMemoryCheckpointer>(context, db, *block_manager);
+		return make_uniq<InMemoryCheckpointer>(context, db, *block_manager, options.type);
 	}
 	return make_uniq<SingleFileCheckpointWriter>(context, db, *block_manager, options.type);
 }

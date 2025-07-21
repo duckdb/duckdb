@@ -16,7 +16,8 @@ namespace duckdb {
 
 class InMemoryCheckpointer final : public CheckpointWriter {
 public:
-	InMemoryCheckpointer(QueryContext context, AttachedDatabase &db, BlockManager &block_manager);
+	InMemoryCheckpointer(QueryContext context, AttachedDatabase &db, BlockManager &block_manager,
+	                     CheckpointType checkpoint_type);
 
 	void CreateCheckpoint() override;
 
@@ -25,6 +26,9 @@ public:
 	unique_ptr<TableDataWriter> GetTableDataWriter(TableCatalogEntry &table) override;
 	optional_ptr<ClientContext> GetClientContext() const {
 		return context;
+	}
+	CheckpointType GetCheckpointType() const {
+		return checkpoint_type;
 	}
 	PartialBlockManager &GetPartialBlockManager() {
 		return partial_block_manager;
@@ -35,9 +39,8 @@ public:
 
 private:
 	optional_ptr<ClientContext> context;
-	//! Because this is single-file storage, we can share partial blocks across
-	//! an entire checkpoint.
 	PartialBlockManager partial_block_manager;
+	CheckpointType checkpoint_type;
 };
 
 class InMemoryTableDataWriter : public TableDataWriter {
@@ -56,7 +59,7 @@ private:
 class InMemoryRowGroupWriter : public RowGroupWriter {
 public:
 	InMemoryRowGroupWriter(TableCatalogEntry &table, PartialBlockManager &partial_block_manager,
-	                       TableDataWriter &writer);
+	                       InMemoryCheckpointer &checkpoint_manager);
 
 public:
 	CheckpointType GetCheckpointType() const override;
@@ -66,7 +69,7 @@ public:
 
 private:
 	//! Underlying writer object
-	TableDataWriter &writer;
+	InMemoryCheckpointer &checkpoint_manager;
 	// Nop metadata writer
 	MemoryStream metadata_writer;
 };

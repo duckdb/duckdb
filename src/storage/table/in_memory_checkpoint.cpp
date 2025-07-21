@@ -9,9 +9,11 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // In-Memory Checkpoint Writer
 //===--------------------------------------------------------------------===//
-InMemoryCheckpointer::InMemoryCheckpointer(QueryContext context, AttachedDatabase &db, BlockManager &block_manager)
+InMemoryCheckpointer::InMemoryCheckpointer(QueryContext context, AttachedDatabase &db, BlockManager &block_manager,
+                                           CheckpointType checkpoint_type)
     : CheckpointWriter(db), context(context.GetClientContext()),
-      partial_block_manager(context, block_manager, PartialBlockType::IN_MEMORY_CHECKPOINT) {
+      partial_block_manager(context, block_manager, PartialBlockType::IN_MEMORY_CHECKPOINT),
+      checkpoint_type(checkpoint_type) {
 }
 
 void InMemoryCheckpointer::CreateCheckpoint() {
@@ -60,12 +62,12 @@ void InMemoryCheckpointer::WriteTable(TableCatalogEntry &table, Serializer &seri
 }
 
 InMemoryRowGroupWriter::InMemoryRowGroupWriter(TableCatalogEntry &table, PartialBlockManager &partial_block_manager,
-                                               TableDataWriter &writer)
-    : RowGroupWriter(table, partial_block_manager), writer(writer) {
+                                               InMemoryCheckpointer &checkpoint_manager)
+    : RowGroupWriter(table, partial_block_manager), checkpoint_manager(checkpoint_manager) {
 }
 
 CheckpointType InMemoryRowGroupWriter::GetCheckpointType() const {
-	return CheckpointType::FULL_CHECKPOINT;
+	return checkpoint_manager.GetCheckpointType();
 }
 
 WriteStream &InMemoryRowGroupWriter::GetPayloadWriter() {
@@ -90,16 +92,17 @@ void InMemoryTableDataWriter::FinalizeTable(const TableStatistics &global_stats,
 }
 
 unique_ptr<RowGroupWriter> InMemoryTableDataWriter::GetRowGroupWriter(RowGroup &row_group) {
-	return make_uniq<InMemoryRowGroupWriter>(table, checkpoint_manager.GetPartialBlockManager(), *this);
+	return make_uniq<InMemoryRowGroupWriter>(table, checkpoint_manager.GetPartialBlockManager(), checkpoint_manager);
 }
 
 CheckpointType InMemoryTableDataWriter::GetCheckpointType() const {
-	return CheckpointType::FULL_CHECKPOINT;
+	return checkpoint_manager.GetCheckpointType();
 }
 
 InMemoryPartialBlock::InMemoryPartialBlock(ColumnData &data, ColumnSegment &segment, PartialBlockState state,
                                            BlockManager &block_manager)
     : PartialBlock(state, block_manager, segment.block) {
+	AddSegmentToTail(data, segment, 0);
 }
 
 InMemoryPartialBlock::~InMemoryPartialBlock() {
