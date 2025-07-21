@@ -6,9 +6,6 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-SET threads=1
-
-statement ok
 CREATE TABLE a(i INTEGER)
 
 loop i 0 10

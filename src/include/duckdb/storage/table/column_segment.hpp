@@ -122,6 +122,7 @@ public:
 	}
 
 	idx_t GetBlockOffset() {
+		D_ASSERT(segment_type == ColumnSegmentType::PERSISTENT || offset == 0);
 		return offset;
 	}
 
