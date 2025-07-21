@@ -1,0 +1,9 @@
+{
+  "description": "Enable compression on an in-memory database",
+  "on_init": "ATTACH ':memory:' AS __compress_in_memory (COMPRESS);",
+  "on_new_connection": "USE __compress_in_memory;",
+  "on_load": "skip",
+  "skip_compiled": "true",
+  "skip_tests": [
+  ]
+}

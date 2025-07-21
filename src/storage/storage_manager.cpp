@@ -19,8 +19,58 @@ namespace duckdb {
 
 using SHA256State = duckdb_mbedtls::MbedTlsWrapper::SHA256State;
 
-StorageManager::StorageManager(AttachedDatabase &db, string path_p, bool read_only)
-    : db(db), path(std::move(path_p)), read_only(read_only), in_memory_change_size(0) {
+void StorageOptions::Initialize(const unordered_map<string, Value> &options) {
+	string storage_version_user_provided = "";
+	for (auto &entry : options) {
+		if (entry.first == "block_size") {
+			// Extract the block allocation size. This is NOT the actual memory available on a block (block_size),
+			// even though the corresponding option we expose to the user is called "block_size".
+			block_alloc_size = entry.second.GetValue<uint64_t>();
+		} else if (entry.first == "encryption_key") {
+			// check the type of the key
+			auto type = entry.second.type();
+			if (type.id() != LogicalTypeId::VARCHAR) {
+				throw BinderException("\"%s\" is not a valid key. A key must be of type VARCHAR",
+				                      entry.second.ToString());
+			} else if (entry.second.GetValue<string>().empty()) {
+				throw BinderException("Not a valid key. A key cannot be empty");
+			}
+			user_key = make_shared_ptr<string>(StringValue::Get(entry.second.DefaultCastAs(LogicalType::BLOB)));
+			block_header_size = DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE;
+			encryption = true;
+		} else if (entry.first == "encryption_cipher") {
+			throw BinderException("\"%s\" is not a valid cipher. Only AES GCM is supported.", entry.second.ToString());
+		} else if (entry.first == "row_group_size") {
+			row_group_size = entry.second.GetValue<uint64_t>();
+		} else if (entry.first == "storage_version") {
+			storage_version_user_provided = entry.second.ToString();
+			storage_version = SerializationCompatibility::FromString(entry.second.ToString()).serialization_version;
+		} else if (entry.first == "compress") {
+			if (entry.second.GetValue<bool>()) {
+				compress_in_memory = CompressInMemory::COMPRESS;
+			} else {
+				compress_in_memory = CompressInMemory::DO_NOT_COMPRESS;
+			}
+		} else {
+			throw BinderException("Unrecognized option for attach \"%s\"", entry.first);
+		}
+	}
+	if (encryption &&
+	    (!storage_version.IsValid() ||
+	     storage_version.GetIndex() < SerializationCompatibility::FromString("v1.4.0").serialization_version)) {
+		if (!storage_version_user_provided.empty()) {
+			throw InvalidInputException(
+			    "Explicit provided STORAGE_VERSION (\"%s\") and ENCRYPTION_KEY (storage >= v1.4.0) are not compatible",
+			    storage_version_user_provided);
+		}
+		// set storage version to v1.4.0
+		storage_version = SerializationCompatibility::FromString("v1.4.0").serialization_version;
+	}
+}
+
+StorageManager::StorageManager(AttachedDatabase &db, string path_p, const AttachOptions &options)
+    : db(db), path(std::move(path_p)), read_only(options.access_mode == AccessMode::READ_ONLY),
+      in_memory_change_size(0) {
 
 	if (path.empty()) {
 		path = IN_MEMORY_PATH;
@@ -28,6 +78,8 @@ StorageManager::StorageManager(AttachedDatabase &db, string path_p, bool read_on
 	}
 	auto &fs = FileSystem::Get(db);
 	path = fs.ExpandPath(path);
+
+	storage_options.Initialize(options.options);
 }
 
 StorageManager::~StorageManager() {
@@ -84,17 +136,17 @@ bool StorageManager::InMemory() const {
 	return path == IN_MEMORY_PATH;
 }
 
-void StorageManager::Initialize(QueryContext context, StorageOptions &options) {
+void StorageManager::Initialize(QueryContext context) {
 	bool in_memory = InMemory();
 	if (in_memory && read_only) {
 		throw CatalogException("Cannot launch in-memory database in read-only mode!");
 	}
 
 	// Create or load the database from disk, if not in-memory mode.
-	LoadDatabase(context, options);
+	LoadDatabase(context);
 
-	if (options.encryption) {
-		ClearUserKey(options.user_key);
+	if (storage_options.encryption) {
+		ClearUserKey(storage_options.user_key);
 	}
 }
 
@@ -122,19 +174,22 @@ public:
 	}
 };
 
-SingleFileStorageManager::SingleFileStorageManager(AttachedDatabase &db, string path, bool read_only)
-    : StorageManager(db, std::move(path), read_only) {
+SingleFileStorageManager::SingleFileStorageManager(AttachedDatabase &db, string path, const AttachOptions &options)
+    : StorageManager(db, std::move(path), options) {
 }
 
-void SingleFileStorageManager::LoadDatabase(QueryContext context, StorageOptions &storage_options) {
+void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 	if (InMemory()) {
 		block_manager = make_uniq<InMemoryBlockManager>(BufferManager::GetBufferManager(db), DEFAULT_BLOCK_ALLOC_SIZE,
 		                                                DEFAULT_BLOCK_HEADER_STORAGE_SIZE);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager, DEFAULT_ROW_GROUP_SIZE);
 		// in-memory databases can always use the latest storage version
-		storage_version = GetSerializationVersion("v1.0.0");
+		storage_version = GetSerializationVersion("latest");
 		load_complete = true;
 		return;
+	}
+	if (storage_options.compress_in_memory != CompressInMemory::AUTOMATIC) {
+		throw InvalidInputException("COMPRESS can only be set for in-memory databases");
 	}
 
 	auto &fs = FileSystem::Get(db);

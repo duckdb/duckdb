@@ -156,6 +156,12 @@ DuckTransactionManager::CanCheckpoint(DuckTransaction &transaction, unique_ptr<S
 			}
 		}
 	}
+	if (storage_manager.InMemory() && !storage_manager.CompressionIsEnabled()) {
+		if (checkpoint_type == CheckpointType::CONCURRENT_CHECKPOINT) {
+			return CheckpointDecision("Cannot vacuum, and compression is disabled for in-memory table");
+		}
+		return CheckpointDecision(CheckpointType::VACUUM_ONLY);
+	}
 	return CheckpointDecision(checkpoint_type);
 }
 

@@ -38,7 +38,7 @@ struct AttachOptions {
 	//! Constructor for databases we attach outside of the ATTACH DATABASE statement.
 	explicit AttachOptions(const DBConfigOptions &options);
 	//! Constructor for databases we attach when using ATTACH DATABASE.
-	AttachOptions(const unique_ptr<AttachInfo> &info, const AccessMode default_access_mode);
+	AttachOptions(const unordered_map<string, Value> &options, const AccessMode default_access_mode);
 
 	//! Defaults to the access mode configured in the DBConfig, unless specified otherwise.
 	AccessMode access_mode;
@@ -63,7 +63,7 @@ public:
 	~AttachedDatabase() override;
 
 	//! Initializes the catalog and storage of the attached database.
-	void Initialize(optional_ptr<ClientContext> context = nullptr, StorageOptions options = StorageOptions());
+	void Initialize(optional_ptr<ClientContext> context = nullptr);
 	void FinalizeLoad(optional_ptr<ClientContext> context);
 	void Close();
 

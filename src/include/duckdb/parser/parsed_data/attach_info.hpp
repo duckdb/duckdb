@@ -35,8 +35,6 @@ public:
 	OnCreateConflict on_conflict = OnCreateConflict::ERROR_ON_CONFLICT;
 
 public:
-	//! Returns the storage options
-	StorageOptions GetStorageOptions() const;
 	//! Copies this AttachInfo and returns an unique pointer to the new AttachInfo.
 	unique_ptr<AttachInfo> Copy() const;
 	string ToString() const;
