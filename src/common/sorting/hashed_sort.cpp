@@ -81,7 +81,7 @@ HashedSortGlobalSinkState::HashedSortGlobalSinkState(ClientContext &context,
 
 	const auto memory_per_thread = PhysicalOperator::GetMaxThreadMemory(context);
 	const auto thread_pages = PreviousPowerOfTwo(memory_per_thread / (4 * buffer_manager.GetBlockAllocSize()));
-	while (max_bits < 10 && (thread_pages >> max_bits) > 1) {
+	while (max_bits < 8 && (thread_pages >> max_bits) > 1) {
 		++max_bits;
 	}
 
@@ -382,7 +382,7 @@ void HashedSortLocalSinkState::Combine() {
 			continue;
 		}
 
-		partition.InitializeScan(scan_state, column_ids);
+		partition.InitializeScan(scan_state, column_ids, TupleDataPinProperties::DESTROY_AFTER_DONE);
 		if (chunk.data.empty()) {
 			partition.InitializeScanChunk(scan_state, chunk);
 		}
