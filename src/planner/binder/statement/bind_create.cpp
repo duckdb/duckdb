@@ -347,10 +347,7 @@ LogicalType Binder::BindLogicalTypeInternal(const LogicalType &type, optional_pt
 		}
 		if (!IsValidUserType(entry)) {
 			entry = entry_retriever.GetEntry(INVALID_CATALOG, INVALID_SCHEMA, type_lookup,
-			                                 OnEntryNotFound::RETURN_NULL);
-		}
-		if (!IsValidUserType(entry)) {
-			throw CatalogException("Unable to find user type in current or system catalog");
+			                                 OnEntryNotFound::THROW_EXCEPTION);
 		}
 		auto &type_entry = entry->Cast<TypeCatalogEntry>();
 		result = type_entry.user_type;

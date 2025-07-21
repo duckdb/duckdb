@@ -46,5 +46,4 @@ create table B (
 	vis db2.schema3.bar[]
 );
 ----
-Catalog Error: Unable to find user type in current or system catalog
-
+Catalog Error: Type with name bar does not exist!
