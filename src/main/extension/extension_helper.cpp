@@ -434,17 +434,6 @@ ExtensionLoadResult ExtensionHelper::LoadExtension(DuckDB &db, const std::string
 ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std::string &extension,
                                                            bool initial_load) {
 #ifdef DUCKDB_EXTENSIONS_TEST_WITH_LOADABLE
-	// A more proper review is needed, but this should be enabled in general and not only for test settings
-	if (!initial_load) {
-		Connection con(db);
-		auto result = con.Query("LOAD " + extension);
-		if (!result->HasError()) {
-			return ExtensionLoadResult::LOADED_EXTENSION;
-		}
-	}
-#endif
-
-#ifdef DUCKDB_EXTENSIONS_TEST_WITH_LOADABLE
 	// Note: weird comma's are on purpose to do easy string contains on a list of extension names
 	if (!initial_load && StringUtil::Contains(DUCKDB_EXTENSIONS_TEST_WITH_LOADABLE, "," + extension + ",")) {
 		Connection con(db);
