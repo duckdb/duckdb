@@ -1,4 +1,6 @@
 #include "duckdb/storage/partial_block_manager.hpp"
+#include "duckdb/storage/table/in_memory_checkpoint.hpp"
+#include "duckdb/storage/table/column_checkpoint_state.hpp"
 
 namespace duckdb {
 

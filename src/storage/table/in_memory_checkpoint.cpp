@@ -2,7 +2,6 @@
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
-#include "duckdb/storage/table/in_memory_checkpoint.hpp"
 
 namespace duckdb {
 
