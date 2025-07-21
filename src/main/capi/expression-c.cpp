@@ -31,13 +31,24 @@ bool duckdb_expression_is_foldable(duckdb_expression expr) {
 	return wrapper->expr->IsFoldable();
 }
 
-duckdb_value duckdb_expression_fold(duckdb_client_context context, duckdb_expression expr) {
+duckdb_error_data duckdb_expression_fold(duckdb_client_context context, duckdb_expression expr,
+                                         duckdb_value *out_value) {
 	if (!expr || !duckdb_expression_is_foldable(expr)) {
 		return nullptr;
 	}
-	auto context_wrapper = reinterpret_cast<CClientContextWrapper *>(context);
-	auto expr_wrapper = reinterpret_cast<ExpressionWrapper *>(expr);
-	auto value = new duckdb::Value;
-	*value = duckdb::ExpressionExecutor::EvaluateScalar(context_wrapper->context, *expr_wrapper->expr);
-	return reinterpret_cast<duckdb_value>(value);
+
+	try {
+		auto context_wrapper = reinterpret_cast<CClientContextWrapper *>(context);
+		auto expr_wrapper = reinterpret_cast<ExpressionWrapper *>(expr);
+		auto value = new duckdb::Value;
+		*value = duckdb::ExpressionExecutor::EvaluateScalar(context_wrapper->context, *expr_wrapper->expr);
+		*out_value = reinterpret_cast<duckdb_value>(value);
+	} catch (const duckdb::Exception &ex) {
+		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, ex.what());
+	} catch (const std::exception &ex) {
+		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, ex.what());
+	} catch (...) {
+		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, "unknown error occurred during folding");
+	}
+	return nullptr;
 }

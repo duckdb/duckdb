@@ -54,7 +54,7 @@
     },
     {
       "name": "duckdb_expression_fold",
-      "return_type": "duckdb_value",
+      "return_type": "duckdb_error_data",
       "params": [
         {
           "type": "duckdb_client_context",
@@ -63,15 +63,20 @@
         {
           "type": "duckdb_expression",
           "name": "expr"
+        },
+        {
+          "type": "duckdb_value *",
+          "name": "out_value"
         }
       ],
       "comment": {
-        "description": "Folds an expression and returns the folded value.\n\n",
+        "description": "Folds an expression creating a folded value.\n\n",
         "param_comments": {
           "context": "The client context.",
-          "expr": "The expression. Must be foldable."
+          "expr": "The expression. Must be foldable.",
+          "out_value": "The folded value, if folding was successful. Must be destroyed with `duckdb_destroy_value`."
         },
-        "return_value": "The folded value. Must be destroyed with `duckdb_destroy_value`."
+        "return_value": "The error data. Must be destroyed with `duckdb_destroy_error_data`."
       }
     }
   ]

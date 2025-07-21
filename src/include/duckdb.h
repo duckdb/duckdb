@@ -5046,13 +5046,15 @@ Returns whether the expression is foldable into a value or not.
 DUCKDB_C_API bool duckdb_expression_is_foldable(duckdb_expression expr);
 
 /*!
-Folds an expression and returns the folded value.
+Folds an expression creating a folded value.
 
 * @param context The client context.
 * @param expr The expression. Must be foldable.
-* @return The folded value. Must be destroyed with `duckdb_destroy_value`.
+* @param out_value The folded value, if folding was successful. Must be destroyed with `duckdb_destroy_value`.
+* @return The error data. Must be destroyed with `duckdb_destroy_error_data`.
 */
-DUCKDB_C_API duckdb_value duckdb_expression_fold(duckdb_client_context context, duckdb_expression expr);
+DUCKDB_C_API duckdb_error_data duckdb_expression_fold(duckdb_client_context context, duckdb_expression expr,
+                                                      duckdb_value *out_value);
 
 #endif
 

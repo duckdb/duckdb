@@ -571,7 +571,8 @@ typedef struct {
 	void (*duckdb_destroy_expression)(duckdb_expression *expr);
 	duckdb_logical_type (*duckdb_expression_return_type)(duckdb_expression expr);
 	bool (*duckdb_expression_is_foldable)(duckdb_expression expr);
-	duckdb_value (*duckdb_expression_fold)(duckdb_client_context context, duckdb_expression expr);
+	duckdb_error_data (*duckdb_expression_fold)(duckdb_client_context context, duckdb_expression expr,
+	                                            duckdb_value *out_value);
 #endif
 
 // New functions around the client context

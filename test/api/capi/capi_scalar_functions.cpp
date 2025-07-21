@@ -432,14 +432,25 @@ void GetConnectionIdBind(duckdb_bind_info info) {
 
 	auto foldable = duckdb_expression_is_foldable(expr);
 	if (!foldable) {
+		duckdb_scalar_function_bind_set_error(info, "input argument must be foldable");
 		duckdb_destroy_expression(&expr);
 		duckdb_destroy_client_context(&context);
-		duckdb_scalar_function_bind_set_error(info, "input argument must be foldable");
 		return;
 	}
 
 	// Fold the expression.
-	auto value = duckdb_expression_fold(context, expr);
+	duckdb_value value;
+	auto error_data = duckdb_expression_fold(context, expr, &value);
+	auto has_error = duckdb_error_data_has_error(error_data);
+	if (has_error) {
+		auto error_msg = duckdb_error_data_message(error_data);
+		duckdb_scalar_function_bind_set_error(info, error_msg);
+		duckdb_destroy_expression(&expr);
+		duckdb_destroy_client_context(&context);
+		duckdb_destroy_error_data(&error_data);
+		return;
+	}
+
 	auto value_type = duckdb_get_value_type(value);
 	auto value_type_id = duckdb_get_type_id(value_type);
 	REQUIRE(value_type_id == DUCKDB_TYPE_UBIGINT);
@@ -527,6 +538,10 @@ TEST_CASE("Test Scalar Function with Bind Info", "[capi]") {
 	result = tester.Query("SELECT get_connection_id(random()::UBIGINT)");
 	REQUIRE_FAIL(result);
 	REQUIRE(StringUtil::Contains(result->ErrorMessage(), "input argument must be foldable"));
+
+	result = tester.Query("SELECT get_connection_id(200::UTINYINT + 200::UTINYINT)");
+	REQUIRE_FAIL(result);
+	REQUIRE(StringUtil::Contains(result->ErrorMessage(), "Overflow in addition of"));
 }
 
 void ListSum(duckdb_function_info, duckdb_data_chunk input, duckdb_vector output) {
