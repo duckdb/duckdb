@@ -17,7 +17,7 @@ namespace duckdb {
 class InMemoryCheckpointer final : public CheckpointWriter {
 public:
 	InMemoryCheckpointer(QueryContext context, AttachedDatabase &db, BlockManager &block_manager,
-	                     CheckpointType checkpoint_type);
+	                     StorageManager &storage_manager, CheckpointType checkpoint_type);
 
 	void CreateCheckpoint() override;
 
@@ -40,6 +40,7 @@ public:
 private:
 	optional_ptr<ClientContext> context;
 	PartialBlockManager partial_block_manager;
+	StorageManager &storage_manager;
 	CheckpointType checkpoint_type;
 };
 

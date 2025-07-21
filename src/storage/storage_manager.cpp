@@ -451,9 +451,9 @@ bool SingleFileStorageManager::IsCheckpointClean(MetaBlockPointer checkpoint_id)
 }
 
 unique_ptr<CheckpointWriter> SingleFileStorageManager::CreateCheckpointWriter(QueryContext context,
-                                                                              CheckpointOptions options) const {
+                                                                              CheckpointOptions options) {
 	if (InMemory()) {
-		return make_uniq<InMemoryCheckpointer>(context, db, *block_manager, options.type);
+		return make_uniq<InMemoryCheckpointer>(context, db, *block_manager, *this, options.type);
 	}
 	return make_uniq<SingleFileCheckpointWriter>(context, db, *block_manager, options.type);
 }
@@ -476,12 +476,8 @@ void SingleFileStorageManager::CreateCheckpoint(QueryContext context, Checkpoint
 			throw FatalException("Failed to create checkpoint because of error: %s", error.RawMessage());
 		}
 	}
-	if (!InMemory()) {
-		if (options.wal_action == CheckpointWALAction::DELETE_WAL) {
-			ResetWAL();
-		}
-	} else {
-		in_memory_change_size = 0;
+	if (!InMemory() && options.wal_action == CheckpointWALAction::DELETE_WAL) {
+		ResetWAL();
 	}
 
 	if (db.GetStorageExtension()) {

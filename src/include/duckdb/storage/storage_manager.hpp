@@ -118,6 +118,9 @@ public:
 	void AddInMemoryChange(idx_t size) {
 		in_memory_change_size += size;
 	}
+	void ResetInMemoryChange() {
+		in_memory_change_size = 0;
+	}
 	bool CompressionIsEnabled() const {
 		return storage_options.compress_in_memory == CompressInMemory::COMPRESS;
 	}
@@ -181,6 +184,6 @@ public:
 protected:
 	void LoadDatabase(QueryContext context) override;
 
-	unique_ptr<CheckpointWriter> CreateCheckpointWriter(QueryContext context, CheckpointOptions options) const;
+	unique_ptr<CheckpointWriter> CreateCheckpointWriter(QueryContext context, CheckpointOptions options);
 };
 } // namespace duckdb

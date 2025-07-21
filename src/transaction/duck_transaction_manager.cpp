@@ -265,7 +265,9 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 
 		// after we finish writing to the WAL we grab the transaction lock again
 		t_lock.lock();
-	} else if (!db.IsSystem()) {
+	}
+	// in-memory databases don't have a WAL - we estimate how large their changeset is based on the undo properties
+	if (!db.IsSystem()) {
 		auto &storage_manager = db.GetStorageManager();
 		if (storage_manager.InMemory()) {
 			storage_manager.AddInMemoryChange(undo_properties.estimated_size);
