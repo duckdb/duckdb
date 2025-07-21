@@ -197,21 +197,18 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 				// in this case we only need to project a single constant
 				proj.expressions.push_back(make_uniq<BoundConstantExpression>(Value::INTEGER(42)));
 			}
+			RemoveUnusedColumns remove(binder, context);
+			auto tmp_deliver = remove.deliver_child;
 			for (idx_t idx = 0; idx < proj.expressions.size(); idx++) {
 				auto &expr = proj.expressions[idx];
-				VisitExpression(&expr);
-				if (expr->type != ExpressionType::BOUND_COLUMN_REF) {
-					continue;
-				}
-				auto &colref = expr->Cast<BoundColumnRefExpression>();
 				auto record = column_references.find(ColumnBinding(proj.table_index, idx));
 				if (record != column_references.end() && !record->second.child_columns.empty()) {
-					auto my_record = column_references.find(colref.binding);
-					D_ASSERT(column_references.find(colref.binding) != column_references.end());
-					my_record->second.child_columns = record->second.child_columns;
+					remove.deliver_child = record->second.child_columns;
 				}
+				remove.VisitExpression(&expr);
+				remove.deliver_child = tmp_deliver;
 			}
-			VisitOperator(*op.children[0]);
+			remove.VisitOperator(*op.children[0]);
 			return;
 		}
 		// then recurse into the children of this projection
@@ -492,7 +489,15 @@ void BaseColumnPruner::VisitExpression(unique_ptr<Expression> *expression) {
 unique_ptr<Expression> BaseColumnPruner::VisitReplace(BoundColumnRefExpression &expr,
                                                       unique_ptr<Expression> *expr_ptr) {
 	// add a reference to the entire column
-	AddBinding(expr);
+	
+	if (deliver_child.empty()) {
+		AddBinding(expr);
+	} else {
+		for (auto& child_idx: deliver_child) {
+			AddBinding(expr, child_idx);
+		}
+	}
+	
 	return nullptr;
 }
 

@@ -27,6 +27,8 @@ class BaseColumnPruner : public LogicalOperatorVisitor {
 protected:
 	//! The map of column references
 	column_binding_map_t<ReferencedColumn> column_references;
+	
+	vector<ColumnIndex> deliver_child;
 
 protected:
 	void VisitExpression(unique_ptr<Expression> *expression) override;
