@@ -1,0 +1,65 @@
+name: Extension Build and Deploy
+on:
+  workflow_call:
+    inputs:
+      artifact_prefix:
+        required: true
+        type: string
+      extension_config:
+        required: true
+        type: string
+      exclude_archs:
+        required: false
+        type: string
+        default: ''
+      extra_toolchains:
+        required: false
+        type: string
+        default: ""
+      duckdb_ref:
+        required: false
+        type: string
+        default: ""
+      override_tag:
+        required: false
+        type: string
+        default: ""
+      skip_tests:
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  build:
+    name: Build
+    uses: samansmink/extension-ci-tools/.github/workflows/_extension_distribution.yml@add-extension-config-injection
+    with:
+      # We piggy-back extension-template to build the extensions in extension_config, it's hacky, but it works ¯\_(ツ)_/¯
+      override_repository: duckdb/extension-template
+      override_ref: v1.4-andium
+
+      # Note when `upload_all_extensions` is true, the extension name is used as prefix to the artifact holding all built extensions
+      upload_all_extensions: true
+      extension_name: ${{ inputs.artifact_prefix }}
+
+      # DuckDB version is overridden to the current commit of the current repository
+      duckdb_version: ${{ inputs.duckdb_ref == '' && github.sha || inputs.duckdb_ref }}
+      override_duckdb_repository: https://github.com/${{ github.repository }}.git # TODO: required to run this on forks?
+
+      # CI tools is pinned to main
+      override_ci_tools_repository: samansmink/extension-ci-tools # TODO: remove once merged
+      ci_tools_version: add-extension-config-injection # TODO: switch to main once merged
+
+      exclude_archs: ${{ inputs.exclude_archs }}
+
+      extra_toolchains: ${{ inputs.extra_toolchains }}
+      use_merged_vcpkg_manifest: '1'
+
+      duckdb_tag: ${{ inputs.override_tag }}
+
+      skip_tests: ${{ inputs.skip_tests }}
+
+      save_cache: true
+
+      # The extension_config.cmake configuration that gets built
+      extra_extension_config: ${{ inputs.extension_config }}

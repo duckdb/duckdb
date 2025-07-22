@@ -1,3 +1,9 @@
+# # # # # # # # # # # # # # # # # #
+#
+# WARNING: DEPRECATED!
+#
+# # # # # # # # # # # # # # # # # #
+
 name: "Build Extensions"
 description: "Build, test and deploy the DuckDB extensions"
 inputs:

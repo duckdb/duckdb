@@ -125,6 +125,7 @@ jobs:
           update-rtools: true
           rtools-version: '42' # linker bug in 43 ^^
 
+      # TODO: this action is deprecated, can we rework this to avoid using it?
       - uses: ./.github/actions/build_extensions
         with:
           duckdb_arch: windows_amd64_mingw
