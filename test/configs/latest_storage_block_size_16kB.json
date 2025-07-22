@@ -4,6 +4,7 @@
   "on_new_connection": "USE __test__config__latest_storage_block_size_16kB;",
   "on_load": "skip",
   "skip_compiled": "true",
+  "block_size": "16384",
   "skip_tests": [
     "test/fuzzer/sqlsmith/current_schemas_null.test",
     "test/sql/attach/attach_database_size.test",
