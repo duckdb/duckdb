@@ -1,6 +1,7 @@
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 
 #include "duckdb/common/assert.hpp"
+#include "duckdb/common/pair.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/parser/parsed_data/vacuum_info.hpp"
@@ -21,10 +22,11 @@
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/operator/logical_simple.hpp"
 #include "duckdb/function/scalar/struct_utils.hpp"
+#include <utility>
 
 namespace duckdb {
 
-void BaseColumnPruner::ReplaceBinding(ColumnBinding current_binding, ColumnBinding new_binding) {
+void BaseColumnPruner::ReplaceBinding(ColumnBinding current_binding, ColumnBinding new_binding, bool source) {
 	auto colrefs = column_references.find(current_binding);
 	if (colrefs != column_references.end()) {
 		for (auto &colref_p : colrefs->second.bindings) {
@@ -32,11 +34,16 @@ void BaseColumnPruner::ReplaceBinding(ColumnBinding current_binding, ColumnBindi
 			D_ASSERT(colref.binding == current_binding);
 			colref.binding = new_binding;
 		}
+		if (!source) {
+			auto record = std::move(colrefs->second);
+			column_references.erase(current_binding);
+			column_references.insert(make_pair(new_binding, std::move(record)));
+		}
 	}
 }
 
 template <class T>
-void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &list, idx_t table_idx, bool replace) {
+void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &list, idx_t table_idx, bool replace, bool source) {
 	idx_t offset = 0;
 	for (idx_t col_idx = 0; col_idx < list.size(); col_idx++) {
 		auto current_binding = ColumnBinding(table_idx, col_idx + offset);
@@ -48,7 +55,7 @@ void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &list, idx_t table_id
 			col_idx--;
 		} else if (offset > 0 && replace) {
 			// column is used but the ColumnBinding has changed because of removed columns
-			ReplaceBinding(current_binding, ColumnBinding(table_idx, col_idx));
+			ReplaceBinding(current_binding, ColumnBinding(table_idx, col_idx), source);
 		}
 	}
 }
@@ -68,7 +75,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		}
 		if (!everything_referenced && !new_root) {
 			// FIXME: groups that are not referenced need to stay -> but they don't need to be scanned and output!
-			ClearUnusedExpressions(aggr.expressions, aggr.aggregate_index);
+			ClearUnusedExpressions(aggr.expressions, aggr.aggregate_index, true, false);
 			if (aggr.expressions.empty() && aggr.groups.empty()) {
 				// removed all expressions from the aggregate: push a COUNT(*)
 				auto count_star_fun = CountStarFun::GetFunction();
@@ -249,7 +256,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			// Create a copy that we can use to match ids later
 			auto col_sel = proj_sel;
 			// Clear unused ids, exclude filter columns that are projected out immediately
-			ClearUnusedExpressions(proj_sel, get.table_index, false);
+			ClearUnusedExpressions(proj_sel, get.table_index, false, true);
 
 			vector<unique_ptr<Expression>> filter_expressions;
 			// for every table filter, push a column binding into the column references map to prevent the column from
@@ -279,7 +286,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			}
 
 			// Clear unused ids, include filter columns that are projected out immediately
-			ClearUnusedExpressions(col_sel, get.table_index);
+			ClearUnusedExpressions(col_sel, get.table_index, true, true);
 
 			// Now set the column ids in the LogicalGet using the "selection vector"
 			vector<ColumnIndex> column_ids;
@@ -489,7 +496,6 @@ void BaseColumnPruner::VisitExpression(unique_ptr<Expression> *expression) {
 unique_ptr<Expression> BaseColumnPruner::VisitReplace(BoundColumnRefExpression &expr,
                                                       unique_ptr<Expression> *expr_ptr) {
 	// add a reference to the entire column
-	
 	if (deliver_child.empty()) {
 		AddBinding(expr);
 	} else {

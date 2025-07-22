@@ -43,7 +43,7 @@ protected:
 	void AddBinding(BoundColumnRefExpression &col, ColumnIndex child_column);
 	//! Perform a replacement of the ColumnBinding, iterating over all the currently found column references and
 	//! replacing the bindings
-	void ReplaceBinding(ColumnBinding current_binding, ColumnBinding new_binding);
+	void ReplaceBinding(ColumnBinding current_binding, ColumnBinding new_binding, bool source);
 
 	bool HandleStructExtract(Expression &expr);
 
@@ -69,6 +69,6 @@ private:
 
 private:
 	template <class T>
-	void ClearUnusedExpressions(vector<T> &list, idx_t table_idx, bool replace = true);
+	void ClearUnusedExpressions(vector<T> &list, idx_t table_idx, bool replace = true, bool source = false);
 };
 } // namespace duckdb

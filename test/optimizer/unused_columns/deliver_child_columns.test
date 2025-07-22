@@ -18,7 +18,7 @@ create or replace view test as select * from t;
 query II
 explain select s.c1 from test;
 ----
-physical_plan	<REGEX>:.*SEQ_SCAN.*Projections: s.c1.*
+physical_plan	<REGEX>:.*SEQ_SCAN.*Projections:.*s.c1.*
 
 statement ok
 select s.c1 from test;
@@ -30,7 +30,7 @@ create or replace view test as select s.c1, s.c2, s from t;
 query II
 explain select s.c2, s.c1 from test;
 ----
-physical_plan	<REGEX>:.*SEQ_SCAN.*Projections: s.c1.*
+physical_plan	<REGEX>:.*SEQ_SCAN.*Projections:.*s.c1.*
 
 statement ok
 select s.c2, s.c1 from test;
@@ -42,7 +42,31 @@ create or replace view test as select s s1, s s2 from t;
 query II
 explain select s1.c2, s2.c1 from test;
 ----
-physical_plan	<REGEX>:.*SEQ_SCAN.*Projections: s.c1.*
+physical_plan	<REGEX>:.*SEQ_SCAN.*Projections:.*s.c1.*
 
 statement ok
 select s1.c2, s2.c1 from test;
+
+# query4
+statement ok
+create or replace view test as select upper(s.c1), s.c2, s from t;
+
+query II
+explain select s.c2, s.c1 from test;
+----
+physical_plan	<REGEX>:.*SEQ_SCAN.*Projections:.*s.c1.*
+
+statement ok
+select s.c2, s.c1 from test;
+
+# query5
+statement ok
+create or replace view test as select s.c1, s.c2, s from t;
+
+query II
+explain select s.c2, upper(s.c1) from test;
+----
+physical_plan	<REGEX>:.*SEQ_SCAN.*Projections:.*s.c1.*
+
+statement ok
+select s.c2, upper(s.c1) from test;
