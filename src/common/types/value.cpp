@@ -2175,7 +2175,7 @@ Value Value::Deserialize(Deserializer &deserializer) {
 	case PhysicalType::INTERVAL:
 		new_value.value_.interval = deserializer.ReadProperty<interval_t>(102, "value");
 		break;
-	case PhysicalType::VARCHAR:{
+	case PhysicalType::VARCHAR: {
 		auto str = deserializer.ReadProperty<string>(102, "value");
 		if (type.id() == LogicalTypeId::BLOB) {
 			new_value.value_info_ = make_shared_ptr<StringValueInfo>(Blob::ToBlob(str));

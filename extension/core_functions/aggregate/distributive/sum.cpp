@@ -59,9 +59,52 @@ struct DoubleSumOperation : public BaseSumOperation<SumSetOperation, ADD_OPERATO
 	}
 };
 
-using NumericSumOperation = DoubleSumOperation<RegularAdd>;
+struct NumericSumOperation : public BaseSumOperation<SumSetOperation, RegularAdd> {
+	template <class T, class STATE>
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (!state.isset) {
+			finalize_data.ReturnNull();
+		} else {
+			target = state.value;
+		}
+	}
+
+	template <class T>
+	static inline void AssignValue(T &target, T new_value, AggregateInputData &aggregate_input_data) {
+		target = new_value;
+	}
+
+	template <class T>
+	static inline void CreateValue(T &value) {
+	}
+};
+
 using KahanSumOperation = DoubleSumOperation<KahanAdd>;
 
+template <>
+void NumericSumOperation::CreateValue(varint_t &value) {
+	value = 0;
+}
+
+template <>
+void NumericSumOperation::AssignValue(varint_t &target, varint_t new_value, AggregateInputData &aggregate_input_data) {
+	if (new_value.value.IsInlined()) {
+		target.value = new_value.value;
+	} else {
+		// non-inlined string, need to allocate space for it
+		auto len = new_value.value.GetSize();
+		char *ptr;
+		if (!target.value.IsInlined() && target.value.GetSize() >= len) {
+			// Target has enough space, reuse ptr
+			ptr = target.value.GetPointer();
+		} else {
+			// Target might be too small, allocate
+			ptr = reinterpret_cast<char *>(aggregate_input_data.allocator.Allocate(len));
+		}
+		memcpy(ptr, new_value.value.GetData(), len);
+		target.value = string_t(ptr, UnsafeNumericCast<uint32_t>(len));
+	}
+}
 struct HugeintSumOperation : public BaseSumOperation<SumSetOperation, HugeintAdd> {
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {

@@ -183,7 +183,6 @@ struct BaseSumOperation {
 		STATEOP::template AddValues<STATE>(state, count);
 		ADDOP::template AddConstant<STATE, INPUT_TYPE>(state, input, count);
 	}
-
 	static bool IgnoreNull() {
 		return true;
 	}
