@@ -276,8 +276,8 @@ static int64_t ImplicitCastTimestamp(const LogicalType &to) {
 
 static int64_t ImplicitCastVarint(const LogicalType &to) {
 	switch (to.id()) {
-	case LogicalTypeId::DOUBLE:
-		return TargetTypeCost(to);
+	// case LogicalTypeId::DOUBLE:
+	// 	return TargetTypeCost(to);
 	default:
 		return -1;
 	}
