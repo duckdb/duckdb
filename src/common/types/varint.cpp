@@ -308,6 +308,7 @@ string Varint::VarcharToVarInt(const string_t &value) {
 	return result;
 }
 
+
 bool Varint::VarintToDouble(const string_t &blob, double &result, bool &strict) {
 	result = 0;
 
