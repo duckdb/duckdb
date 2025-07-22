@@ -181,16 +181,19 @@ bool HivePartitioning::ApplyFiltersToFile(OpenFileInfo &file) {
 		if (!filter_copy->IsScalar() || !filter_copy->IsFoldable() ||
 			!ExpressionExecutor::TryEvaluateScalar(context, *filter_copy, result_value)) {
 			// can not be evaluated only with the filename/hive columns added, we can not prune this filter
-			have_preserved_filter[j] = true;
-		} else if (result_value.IsNull() || !result_value.GetValue<bool>()) {
-			// filter evaluates to false
-			should_prune_file = true;
-			// convert the filter to a table filter.
-			if (filters_applied_to_files.find(j) == filters_applied_to_files.end()) {
-				info.extra_info.file_filters += filter->ToString();
-				filters_applied_to_files.insert(j);
+		} else {
+			// Able to evaluate, so we do not preserve the filter
+			have_preserved_filter[j] = false;
+			if (result_value.IsNull() || !result_value.GetValue<bool>()) {
+				// filter evaluates to false
+				should_prune_file = true;
+				// convert the filter to a table filter.
+				if (filters_applied_to_files.find(j) == filters_applied_to_files.end()) {
+					info.extra_info.file_filters += filter->ToString();
+					filters_applied_to_files.insert(j);
+				}
 			}
-		}
+		} 
 	}
 
 	if (!should_prune_file) {
@@ -205,7 +208,7 @@ void HivePartitioning::Finalize(idx_t filtered_files, idx_t total_files) {
 	info.extra_info.total_files = total_files;
 	info.extra_info.filtered_files = filtered_files;
 	for (idx_t i = 0; i < have_preserved_filter.size(); i++) {
-		if (!have_preserved_filter[i]) {
+		if (have_preserved_filter[i]) {
 			pruned_filters.emplace_back(filters[i]->Copy());
 		}
 	}
