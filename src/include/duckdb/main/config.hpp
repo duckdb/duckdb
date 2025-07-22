@@ -222,8 +222,9 @@ struct DBConfigOptions {
 	ArrowOffsetSize arrow_offset_size = ArrowOffsetSize::REGULAR;
 	//! Whether LISTs should produce Arrow ListViews
 	bool arrow_use_list_view = false;
-	//! Whenever a DuckDB type does not have a clear native or canonical extension match in Arrow, export the types
-	//! with a duckdb.type_name extension name
+	//! For DuckDB types without an obvious corresponding Arrow type, export to an Arrow extension type instead of a
+	//! more portable but less efficient format. For example, UUIDs are exported to UTF-8 (string) when false, and
+	//! arrow.uuid type when true.
 	bool arrow_lossless_conversion = false;
 	//! Whether when producing arrow objects we produce string_views or regular strings
 	bool produce_arrow_string_views = false;
@@ -271,6 +272,8 @@ struct DBConfigOptions {
 	bool old_implicit_casting = false;
 	//!  By default, WAL is encrypted for encrypted databases
 	bool wal_encryption = true;
+	//! Encrypt the temp files
+	bool temp_file_encryption = false;
 	//! The default block allocation size for new duckdb database files (new as-in, they do not yet exist).
 	idx_t default_block_alloc_size = DUCKDB_BLOCK_ALLOC_SIZE;
 	//! The default block header size for new duckdb database files.
@@ -311,6 +314,8 @@ struct DBConfigOptions {
 #endif
 	//! Whether to pin threads to cores (linux only, default AUTOMATIC: on when there are more than 64 cores)
 	ThreadPinMode pin_threads = ThreadPinMode::AUTO;
+	//! Enable the Parquet reader to identify a Variant group structurally
+	bool variant_legacy_encoding = false;
 
 	bool operator==(const DBConfigOptions &other) const;
 };

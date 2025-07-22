@@ -181,11 +181,11 @@ public:
 		                             std::move(file_options), std::move(options), std::move(interface));
 	}
 
-	static unique_ptr<FunctionData> MultiFileBindCopy(ClientContext &context, CopyInfo &info,
+	static unique_ptr<FunctionData> MultiFileBindCopy(ClientContext &context, CopyFromFunctionBindInput &input,
 	                                                  vector<string> &expected_names,
 	                                                  vector<LogicalType> &expected_types) {
 		auto multi_file_reader = MultiFileReader::CreateDefault("COPY");
-		vector<string> paths = {info.file_path};
+		vector<string> paths = {input.info.file_path};
 		auto file_list = multi_file_reader->CreateFileList(context, paths);
 
 		auto interface = OP::InitializeInterface(context, *multi_file_reader, *file_list);
@@ -193,7 +193,7 @@ public:
 		auto options = interface->InitializeOptions(context, nullptr);
 		MultiFileOptions file_options;
 
-		for (auto &option : info.options) {
+		for (auto &option : input.info.options) {
 			auto loption = StringUtil::Lower(option.first);
 			if (interface->ParseCopyOption(context, loption, option.second, *options, expected_names, expected_types)) {
 				continue;
@@ -369,7 +369,7 @@ public:
 			}
 		}
 		lstate.scan_chunk.Destroy();
-		lstate.scan_chunk.Initialize(context, intermediate_chunk_types);
+		lstate.scan_chunk.Initialize(BufferAllocator::Get(context), intermediate_chunk_types);
 
 		auto &executor = lstate.executor;
 		executor.ClearExpressions();
@@ -501,6 +501,7 @@ public:
 		result->file_index = 0;
 		result->column_indexes = input.column_indexes;
 		result->filters = input.filters.get();
+		result->op = input.op;
 		result->global_state = bind_data.interface->InitializeGlobalState(context, bind_data, *result);
 		result->max_threads = NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
 
@@ -610,11 +611,6 @@ public:
 	                                                     column_t column_index) {
 		auto &bind_data = bind_data_p->Cast<MultiFileBindData>();
 
-		// NOTE: we do not want to parse the file metadata for the sole purpose of getting column statistics
-		if (bind_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES) {
-			// multiple files, no luck!
-			return nullptr;
-		}
 		if (!bind_data.initial_reader) {
 			// no reader
 			return nullptr;
@@ -623,7 +619,32 @@ public:
 		if (IsVirtualColumn(column_index)) {
 			return nullptr;
 		}
-		return bind_data.initial_reader->GetStatistics(context, bind_data.names[column_index]);
+
+		const auto &col_name = bind_data.names[column_index];
+
+		// NOTE: we do not want to parse the file metadata for the sole purpose of getting column statistics
+		if (bind_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES) {
+			if (!bind_data.file_options.union_by_name) {
+				// multiple files, but no union_by_name: no luck!
+				return nullptr;
+			}
+
+			auto merged_stats = bind_data.initial_reader->GetStatistics(context, col_name);
+			if (!merged_stats) {
+				return nullptr;
+			}
+
+			for (idx_t i = 1; i < bind_data.union_readers.size(); i++) {
+				auto &union_reader = *bind_data.union_readers[i];
+				auto stats = union_reader.GetStatistics(context, col_name);
+				if (!stats || merged_stats->GetType() != stats->GetType()) {
+					return nullptr;
+				}
+				merged_stats->Merge(*stats);
+			}
+			return merged_stats;
+		}
+		return bind_data.initial_reader->GetStatistics(context, col_name);
 	}
 
 	static double MultiFileProgress(ClientContext &context, const FunctionData *bind_data_p,

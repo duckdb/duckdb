@@ -42,6 +42,11 @@ struct CClientContextWrapper {
 	ClientContext &context;
 };
 
+struct CClientArrowOptionsWrapper {
+	explicit CClientArrowOptionsWrapper(ClientProperties &properties) : properties(properties) {};
+	ClientProperties properties;
+};
+
 struct PreparedStatementWrapper {
 	//! Map of name -> values
 	case_insensitive_map_t<BoundParameterData> values;
@@ -75,6 +80,10 @@ struct TableDescriptionWrapper {
 
 struct ErrorDataWrapper {
 	ErrorData error_data;
+};
+
+struct ExpressionWrapper {
+	unique_ptr<Expression> expr;
 };
 
 enum class CAPIResultSetType : uint8_t {

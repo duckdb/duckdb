@@ -195,6 +195,20 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 		}
 		break;
 	}
+	case LogicalOperatorType::LOGICAL_MERGE_INTO: {
+		auto &merge_into = op.Cast<LogicalMergeInto>();
+		for (auto &entry : merge_into.actions) {
+			for (auto &action : entry.second) {
+				if (action->condition) {
+					callback(&action->condition);
+				}
+				for (auto &expr : action->expressions) {
+					callback(&expr);
+				}
+			}
+		}
+		break;
+	}
 	default:
 		break;
 	}

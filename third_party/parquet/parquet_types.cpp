@@ -372,6 +372,41 @@ std::string to_string(const FieldRepetitionType::type& val) {
   }
 }
 
+int _kEdgeInterpolationAlgorithmValues[] = {
+  EdgeInterpolationAlgorithm::SPHERICAL,
+  EdgeInterpolationAlgorithm::VINCENTY,
+  EdgeInterpolationAlgorithm::THOMAS,
+  EdgeInterpolationAlgorithm::ANDOYER,
+  EdgeInterpolationAlgorithm::KARNEY
+};
+const char* _kEdgeInterpolationAlgorithmNames[] = {
+  "SPHERICAL",
+  "VINCENTY",
+  "THOMAS",
+  "ANDOYER",
+  "KARNEY"
+};
+const std::map<int, const char*> _EdgeInterpolationAlgorithm_VALUES_TO_NAMES(::apache::thrift::TEnumIterator(5, _kEdgeInterpolationAlgorithmValues, _kEdgeInterpolationAlgorithmNames), ::apache::thrift::TEnumIterator(-1, nullptr, nullptr));
+
+std::ostream& operator<<(std::ostream& out, const EdgeInterpolationAlgorithm::type& val) {
+  std::map<int, const char*>::const_iterator it = _EdgeInterpolationAlgorithm_VALUES_TO_NAMES.find(val);
+  if (it != _EdgeInterpolationAlgorithm_VALUES_TO_NAMES.end()) {
+    out << it->second;
+  } else {
+    out << static_cast<int>(val);
+  }
+  return out;
+}
+
+std::string to_string(const EdgeInterpolationAlgorithm::type& val) {
+  std::map<int, const char*>::const_iterator it = _EdgeInterpolationAlgorithm_VALUES_TO_NAMES.find(val);
+  if (it != _EdgeInterpolationAlgorithm_VALUES_TO_NAMES.end()) {
+    return std::string(it->second);
+  } else {
+    return std::to_string(static_cast<int>(val));
+  }
+}
+
 int _kEncodingValues[] = {
   /**
    * Default encoding.
@@ -802,6 +837,406 @@ void SizeStatistics::printTo(std::ostream& out) const {
 }
 
 
+BoundingBox::~BoundingBox() noexcept {
+}
+
+BoundingBox::BoundingBox() noexcept
+   : xmin(0),
+     xmax(0),
+     ymin(0),
+     ymax(0),
+     zmin(0),
+     zmax(0),
+     mmin(0),
+     mmax(0) {
+}
+
+void BoundingBox::__set_xmin(const double val) {
+  this->xmin = val;
+}
+
+void BoundingBox::__set_xmax(const double val) {
+  this->xmax = val;
+}
+
+void BoundingBox::__set_ymin(const double val) {
+  this->ymin = val;
+}
+
+void BoundingBox::__set_ymax(const double val) {
+  this->ymax = val;
+}
+
+void BoundingBox::__set_zmin(const double val) {
+  this->zmin = val;
+__isset.zmin = true;
+}
+
+void BoundingBox::__set_zmax(const double val) {
+  this->zmax = val;
+__isset.zmax = true;
+}
+
+void BoundingBox::__set_mmin(const double val) {
+  this->mmin = val;
+__isset.mmin = true;
+}
+
+void BoundingBox::__set_mmax(const double val) {
+  this->mmax = val;
+__isset.mmax = true;
+}
+std::ostream& operator<<(std::ostream& out, const BoundingBox& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
+
+uint32_t BoundingBox::read(::apache::thrift::protocol::TProtocol* iprot) {
+
+  ::apache::thrift::protocol::TInputRecursionTracker tracker(*iprot);
+  uint32_t xfer = 0;
+  std::string fname;
+  ::apache::thrift::protocol::TType ftype;
+  int16_t fid;
+
+  xfer += iprot->readStructBegin(fname);
+
+  using ::apache::thrift::protocol::TProtocolException;
+
+  bool isset_xmin = false;
+  bool isset_xmax = false;
+  bool isset_ymin = false;
+  bool isset_ymax = false;
+
+  while (true)
+  {
+    xfer += iprot->readFieldBegin(fname, ftype, fid);
+    if (ftype == ::apache::thrift::protocol::T_STOP) {
+      break;
+    }
+    switch (fid)
+    {
+      case 1:
+        if (ftype == ::apache::thrift::protocol::T_DOUBLE) {
+          xfer += iprot->readDouble(this->xmin);
+          isset_xmin = true;
+        } else {
+          xfer += iprot->skip(ftype);
+        }
+        break;
+      case 2:
+        if (ftype == ::apache::thrift::protocol::T_DOUBLE) {
+          xfer += iprot->readDouble(this->xmax);
+          isset_xmax = true;
+        } else {
+          xfer += iprot->skip(ftype);
+        }
+        break;
+      case 3:
+        if (ftype == ::apache::thrift::protocol::T_DOUBLE) {
+          xfer += iprot->readDouble(this->ymin);
+          isset_ymin = true;
+        } else {
+          xfer += iprot->skip(ftype);
+        }
+        break;
+      case 4:
+        if (ftype == ::apache::thrift::protocol::T_DOUBLE) {
+          xfer += iprot->readDouble(this->ymax);
+          isset_ymax = true;
+        } else {
+          xfer += iprot->skip(ftype);
+        }
+        break;
+      case 5:
+        if (ftype == ::apache::thrift::protocol::T_DOUBLE) {
+          xfer += iprot->readDouble(this->zmin);
+          this->__isset.zmin = true;
+        } else {
+          xfer += iprot->skip(ftype);
+        }
+        break;
+      case 6:
+        if (ftype == ::apache::thrift::protocol::T_DOUBLE) {
+          xfer += iprot->readDouble(this->zmax);
+          this->__isset.zmax = true;
+        } else {
+          xfer += iprot->skip(ftype);
+        }
+        break;
+      case 7:
+        if (ftype == ::apache::thrift::protocol::T_DOUBLE) {
+          xfer += iprot->readDouble(this->mmin);
+          this->__isset.mmin = true;
+        } else {
+          xfer += iprot->skip(ftype);
+        }
+        break;
+      case 8:
+        if (ftype == ::apache::thrift::protocol::T_DOUBLE) {
+          xfer += iprot->readDouble(this->mmax);
+          this->__isset.mmax = true;
+        } else {
+          xfer += iprot->skip(ftype);
+        }
+        break;
+      default:
+        xfer += iprot->skip(ftype);
+        break;
+    }
+    xfer += iprot->readFieldEnd();
+  }
+
+  xfer += iprot->readStructEnd();
+
+  if (!isset_xmin)
+    throw TProtocolException(TProtocolException::INVALID_DATA);
+  if (!isset_xmax)
+    throw TProtocolException(TProtocolException::INVALID_DATA);
+  if (!isset_ymin)
+    throw TProtocolException(TProtocolException::INVALID_DATA);
+  if (!isset_ymax)
+    throw TProtocolException(TProtocolException::INVALID_DATA);
+  return xfer;
+}
+
+uint32_t BoundingBox::write(::apache::thrift::protocol::TProtocol* oprot) const {
+  uint32_t xfer = 0;
+  ::apache::thrift::protocol::TOutputRecursionTracker tracker(*oprot);
+  xfer += oprot->writeStructBegin("BoundingBox");
+
+  xfer += oprot->writeFieldBegin("xmin", ::apache::thrift::protocol::T_DOUBLE, 1);
+  xfer += oprot->writeDouble(this->xmin);
+  xfer += oprot->writeFieldEnd();
+
+  xfer += oprot->writeFieldBegin("xmax", ::apache::thrift::protocol::T_DOUBLE, 2);
+  xfer += oprot->writeDouble(this->xmax);
+  xfer += oprot->writeFieldEnd();
+
+  xfer += oprot->writeFieldBegin("ymin", ::apache::thrift::protocol::T_DOUBLE, 3);
+  xfer += oprot->writeDouble(this->ymin);
+  xfer += oprot->writeFieldEnd();
+
+  xfer += oprot->writeFieldBegin("ymax", ::apache::thrift::protocol::T_DOUBLE, 4);
+  xfer += oprot->writeDouble(this->ymax);
+  xfer += oprot->writeFieldEnd();
+
+  if (this->__isset.zmin) {
+    xfer += oprot->writeFieldBegin("zmin", ::apache::thrift::protocol::T_DOUBLE, 5);
+    xfer += oprot->writeDouble(this->zmin);
+    xfer += oprot->writeFieldEnd();
+  }
+  if (this->__isset.zmax) {
+    xfer += oprot->writeFieldBegin("zmax", ::apache::thrift::protocol::T_DOUBLE, 6);
+    xfer += oprot->writeDouble(this->zmax);
+    xfer += oprot->writeFieldEnd();
+  }
+  if (this->__isset.mmin) {
+    xfer += oprot->writeFieldBegin("mmin", ::apache::thrift::protocol::T_DOUBLE, 7);
+    xfer += oprot->writeDouble(this->mmin);
+    xfer += oprot->writeFieldEnd();
+  }
+  if (this->__isset.mmax) {
+    xfer += oprot->writeFieldBegin("mmax", ::apache::thrift::protocol::T_DOUBLE, 8);
+    xfer += oprot->writeDouble(this->mmax);
+    xfer += oprot->writeFieldEnd();
+  }
+  xfer += oprot->writeFieldStop();
+  xfer += oprot->writeStructEnd();
+  return xfer;
+}
+
+void swap(BoundingBox &a, BoundingBox &b) {
+  using ::std::swap;
+  swap(a.xmin, b.xmin);
+  swap(a.xmax, b.xmax);
+  swap(a.ymin, b.ymin);
+  swap(a.ymax, b.ymax);
+  swap(a.zmin, b.zmin);
+  swap(a.zmax, b.zmax);
+  swap(a.mmin, b.mmin);
+  swap(a.mmax, b.mmax);
+  swap(a.__isset, b.__isset);
+}
+
+BoundingBox::BoundingBox(const BoundingBox& other14) noexcept {
+  xmin = other14.xmin;
+  xmax = other14.xmax;
+  ymin = other14.ymin;
+  ymax = other14.ymax;
+  zmin = other14.zmin;
+  zmax = other14.zmax;
+  mmin = other14.mmin;
+  mmax = other14.mmax;
+  __isset = other14.__isset;
+}
+BoundingBox& BoundingBox::operator=(const BoundingBox& other15) noexcept {
+  xmin = other15.xmin;
+  xmax = other15.xmax;
+  ymin = other15.ymin;
+  ymax = other15.ymax;
+  zmin = other15.zmin;
+  zmax = other15.zmax;
+  mmin = other15.mmin;
+  mmax = other15.mmax;
+  __isset = other15.__isset;
+  return *this;
+}
+void BoundingBox::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "BoundingBox(";
+  out << "xmin=" << to_string(xmin);
+  out << ", " << "xmax=" << to_string(xmax);
+  out << ", " << "ymin=" << to_string(ymin);
+  out << ", " << "ymax=" << to_string(ymax);
+  out << ", " << "zmin="; (__isset.zmin ? (out << to_string(zmin)) : (out << "<null>"));
+  out << ", " << "zmax="; (__isset.zmax ? (out << to_string(zmax)) : (out << "<null>"));
+  out << ", " << "mmin="; (__isset.mmin ? (out << to_string(mmin)) : (out << "<null>"));
+  out << ", " << "mmax="; (__isset.mmax ? (out << to_string(mmax)) : (out << "<null>"));
+  out << ")";
+}
+
+
+GeospatialStatistics::~GeospatialStatistics() noexcept {
+}
+
+GeospatialStatistics::GeospatialStatistics() noexcept {
+}
+
+void GeospatialStatistics::__set_bbox(const BoundingBox& val) {
+  this->bbox = val;
+__isset.bbox = true;
+}
+
+void GeospatialStatistics::__set_geospatial_types(const duckdb::vector<int32_t> & val) {
+  this->geospatial_types = val;
+__isset.geospatial_types = true;
+}
+std::ostream& operator<<(std::ostream& out, const GeospatialStatistics& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
+
+uint32_t GeospatialStatistics::read(::apache::thrift::protocol::TProtocol* iprot) {
+
+  ::apache::thrift::protocol::TInputRecursionTracker tracker(*iprot);
+  uint32_t xfer = 0;
+  std::string fname;
+  ::apache::thrift::protocol::TType ftype;
+  int16_t fid;
+
+  xfer += iprot->readStructBegin(fname);
+
+  using ::apache::thrift::protocol::TProtocolException;
+
+
+  while (true)
+  {
+    xfer += iprot->readFieldBegin(fname, ftype, fid);
+    if (ftype == ::apache::thrift::protocol::T_STOP) {
+      break;
+    }
+    switch (fid)
+    {
+      case 1:
+        if (ftype == ::apache::thrift::protocol::T_STRUCT) {
+          xfer += this->bbox.read(iprot);
+          this->__isset.bbox = true;
+        } else {
+          xfer += iprot->skip(ftype);
+        }
+        break;
+      case 2:
+        if (ftype == ::apache::thrift::protocol::T_LIST) {
+          {
+            this->geospatial_types.clear();
+            uint32_t _size16;
+            ::apache::thrift::protocol::TType _etype19;
+            xfer += iprot->readListBegin(_etype19, _size16);
+            this->geospatial_types.resize(_size16);
+            uint32_t _i20;
+            for (_i20 = 0; _i20 < _size16; ++_i20)
+            {
+              xfer += iprot->readI32(this->geospatial_types[_i20]);
+            }
+            xfer += iprot->readListEnd();
+          }
+          this->__isset.geospatial_types = true;
+        } else {
+          xfer += iprot->skip(ftype);
+        }
+        break;
+      default:
+        xfer += iprot->skip(ftype);
+        break;
+    }
+    xfer += iprot->readFieldEnd();
+  }
+
+  xfer += iprot->readStructEnd();
+
+  return xfer;
+}
+
+uint32_t GeospatialStatistics::write(::apache::thrift::protocol::TProtocol* oprot) const {
+  uint32_t xfer = 0;
+  ::apache::thrift::protocol::TOutputRecursionTracker tracker(*oprot);
+  xfer += oprot->writeStructBegin("GeospatialStatistics");
+
+  if (this->__isset.bbox) {
+    xfer += oprot->writeFieldBegin("bbox", ::apache::thrift::protocol::T_STRUCT, 1);
+    xfer += this->bbox.write(oprot);
+    xfer += oprot->writeFieldEnd();
+  }
+  if (this->__isset.geospatial_types) {
+    xfer += oprot->writeFieldBegin("geospatial_types", ::apache::thrift::protocol::T_LIST, 2);
+    {
+      xfer += oprot->writeListBegin(::apache::thrift::protocol::T_I32, static_cast<uint32_t>(this->geospatial_types.size()));
+      duckdb::vector<int32_t> ::const_iterator _iter21;
+      for (_iter21 = this->geospatial_types.begin(); _iter21 != this->geospatial_types.end(); ++_iter21)
+      {
+        xfer += oprot->writeI32((*_iter21));
+      }
+      xfer += oprot->writeListEnd();
+    }
+    xfer += oprot->writeFieldEnd();
+  }
+  xfer += oprot->writeFieldStop();
+  xfer += oprot->writeStructEnd();
+  return xfer;
+}
+
+void swap(GeospatialStatistics &a, GeospatialStatistics &b) {
+  using ::std::swap;
+  swap(a.bbox, b.bbox);
+  swap(a.geospatial_types, b.geospatial_types);
+  swap(a.__isset, b.__isset);
+}
+
+GeospatialStatistics::GeospatialStatistics(const GeospatialStatistics& other22) {
+  bbox = other22.bbox;
+  geospatial_types = other22.geospatial_types;
+  __isset = other22.__isset;
+}
+GeospatialStatistics& GeospatialStatistics::operator=(const GeospatialStatistics& other23) {
+  bbox = other23.bbox;
+  geospatial_types = other23.geospatial_types;
+  __isset = other23.__isset;
+  return *this;
+}
+void GeospatialStatistics::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "GeospatialStatistics(";
+  out << "bbox="; (__isset.bbox ? (out << to_string(bbox)) : (out << "<null>"));
+  out << ", " << "geospatial_types="; (__isset.geospatial_types ? (out << to_string(geospatial_types)) : (out << "<null>"));
+  out << ")";
+}
+
+
 Statistics::~Statistics() noexcept {
 }
 
@@ -1022,27 +1457,27 @@ void swap(Statistics &a, Statistics &b) {
   swap(a.__isset, b.__isset);
 }
 
-Statistics::Statistics(const Statistics& other14) {
-  max = other14.max;
-  min = other14.min;
-  null_count = other14.null_count;
-  distinct_count = other14.distinct_count;
-  max_value = other14.max_value;
-  min_value = other14.min_value;
-  is_max_value_exact = other14.is_max_value_exact;
-  is_min_value_exact = other14.is_min_value_exact;
-  __isset = other14.__isset;
+Statistics::Statistics(const Statistics& other24) {
+  max = other24.max;
+  min = other24.min;
+  null_count = other24.null_count;
+  distinct_count = other24.distinct_count;
+  max_value = other24.max_value;
+  min_value = other24.min_value;
+  is_max_value_exact = other24.is_max_value_exact;
+  is_min_value_exact = other24.is_min_value_exact;
+  __isset = other24.__isset;
 }
-Statistics& Statistics::operator=(const Statistics& other15) {
-  max = other15.max;
-  min = other15.min;
-  null_count = other15.null_count;
-  distinct_count = other15.distinct_count;
-  max_value = other15.max_value;
-  min_value = other15.min_value;
-  is_max_value_exact = other15.is_max_value_exact;
-  is_min_value_exact = other15.is_min_value_exact;
-  __isset = other15.__isset;
+Statistics& Statistics::operator=(const Statistics& other25) {
+  max = other25.max;
+  min = other25.min;
+  null_count = other25.null_count;
+  distinct_count = other25.distinct_count;
+  max_value = other25.max_value;
+  min_value = other25.min_value;
+  is_max_value_exact = other25.is_max_value_exact;
+  is_min_value_exact = other25.is_min_value_exact;
+  __isset = other25.__isset;
   return *this;
 }
 void Statistics::printTo(std::ostream& out) const {
@@ -1116,11 +1551,11 @@ void swap(StringType &a, StringType &b) {
   (void) b;
 }
 
-StringType::StringType(const StringType& other16) noexcept {
-  (void) other16;
+StringType::StringType(const StringType& other26) noexcept {
+  (void) other26;
 }
-StringType& StringType::operator=(const StringType& other17) noexcept {
-  (void) other17;
+StringType& StringType::operator=(const StringType& other27) noexcept {
+  (void) other27;
   return *this;
 }
 void StringType::printTo(std::ostream& out) const {
@@ -1186,11 +1621,11 @@ void swap(UUIDType &a, UUIDType &b) {
   (void) b;
 }
 
-UUIDType::UUIDType(const UUIDType& other18) noexcept {
-  (void) other18;
+UUIDType::UUIDType(const UUIDType& other28) noexcept {
+  (void) other28;
 }
-UUIDType& UUIDType::operator=(const UUIDType& other19) noexcept {
-  (void) other19;
+UUIDType& UUIDType::operator=(const UUIDType& other29) noexcept {
+  (void) other29;
   return *this;
 }
 void UUIDType::printTo(std::ostream& out) const {
@@ -1256,11 +1691,11 @@ void swap(MapType &a, MapType &b) {
   (void) b;
 }
 
-MapType::MapType(const MapType& other20) noexcept {
-  (void) other20;
+MapType::MapType(const MapType& other30) noexcept {
+  (void) other30;
 }
-MapType& MapType::operator=(const MapType& other21) noexcept {
-  (void) other21;
+MapType& MapType::operator=(const MapType& other31) noexcept {
+  (void) other31;
   return *this;
 }
 void MapType::printTo(std::ostream& out) const {
@@ -1326,11 +1761,11 @@ void swap(ListType &a, ListType &b) {
   (void) b;
 }
 
-ListType::ListType(const ListType& other22) noexcept {
-  (void) other22;
+ListType::ListType(const ListType& other32) noexcept {
+  (void) other32;
 }
-ListType& ListType::operator=(const ListType& other23) noexcept {
-  (void) other23;
+ListType& ListType::operator=(const ListType& other33) noexcept {
+  (void) other33;
   return *this;
 }
 void ListType::printTo(std::ostream& out) const {
@@ -1396,11 +1831,11 @@ void swap(EnumType &a, EnumType &b) {
   (void) b;
 }
 
-EnumType::EnumType(const EnumType& other24) noexcept {
-  (void) other24;
+EnumType::EnumType(const EnumType& other34) noexcept {
+  (void) other34;
 }
-EnumType& EnumType::operator=(const EnumType& other25) noexcept {
-  (void) other25;
+EnumType& EnumType::operator=(const EnumType& other35) noexcept {
+  (void) other35;
   return *this;
 }
 void EnumType::printTo(std::ostream& out) const {
@@ -1466,11 +1901,11 @@ void swap(DateType &a, DateType &b) {
   (void) b;
 }
 
-DateType::DateType(const DateType& other26) noexcept {
-  (void) other26;
+DateType::DateType(const DateType& other36) noexcept {
+  (void) other36;
 }
-DateType& DateType::operator=(const DateType& other27) noexcept {
-  (void) other27;
+DateType& DateType::operator=(const DateType& other37) noexcept {
+  (void) other37;
   return *this;
 }
 void DateType::printTo(std::ostream& out) const {
@@ -1536,11 +1971,11 @@ void swap(Float16Type &a, Float16Type &b) {
   (void) b;
 }
 
-Float16Type::Float16Type(const Float16Type& other28) noexcept {
-  (void) other28;
+Float16Type::Float16Type(const Float16Type& other38) noexcept {
+  (void) other38;
 }
-Float16Type& Float16Type::operator=(const Float16Type& other29) noexcept {
-  (void) other29;
+Float16Type& Float16Type::operator=(const Float16Type& other39) noexcept {
+  (void) other39;
   return *this;
 }
 void Float16Type::printTo(std::ostream& out) const {
@@ -1606,11 +2041,11 @@ void swap(NullType &a, NullType &b) {
   (void) b;
 }
 
-NullType::NullType(const NullType& other30) noexcept {
-  (void) other30;
+NullType::NullType(const NullType& other40) noexcept {
+  (void) other40;
 }
-NullType& NullType::operator=(const NullType& other31) noexcept {
-  (void) other31;
+NullType& NullType::operator=(const NullType& other41) noexcept {
+  (void) other41;
   return *this;
 }
 void NullType::printTo(std::ostream& out) const {
@@ -1721,13 +2156,13 @@ void swap(DecimalType &a, DecimalType &b) {
   swap(a.precision, b.precision);
 }
 
-DecimalType::DecimalType(const DecimalType& other32) noexcept {
-  scale = other32.scale;
-  precision = other32.precision;
+DecimalType::DecimalType(const DecimalType& other42) noexcept {
+  scale = other42.scale;
+  precision = other42.precision;
 }
-DecimalType& DecimalType::operator=(const DecimalType& other33) noexcept {
-  scale = other33.scale;
-  precision = other33.precision;
+DecimalType& DecimalType::operator=(const DecimalType& other43) noexcept {
+  scale = other43.scale;
+  precision = other43.precision;
   return *this;
 }
 void DecimalType::printTo(std::ostream& out) const {
@@ -1795,11 +2230,11 @@ void swap(MilliSeconds &a, MilliSeconds &b) {
   (void) b;
 }
 
-MilliSeconds::MilliSeconds(const MilliSeconds& other34) noexcept {
-  (void) other34;
+MilliSeconds::MilliSeconds(const MilliSeconds& other44) noexcept {
+  (void) other44;
 }
-MilliSeconds& MilliSeconds::operator=(const MilliSeconds& other35) noexcept {
-  (void) other35;
+MilliSeconds& MilliSeconds::operator=(const MilliSeconds& other45) noexcept {
+  (void) other45;
   return *this;
 }
 void MilliSeconds::printTo(std::ostream& out) const {
@@ -1865,11 +2300,11 @@ void swap(MicroSeconds &a, MicroSeconds &b) {
   (void) b;
 }
 
-MicroSeconds::MicroSeconds(const MicroSeconds& other36) noexcept {
-  (void) other36;
+MicroSeconds::MicroSeconds(const MicroSeconds& other46) noexcept {
+  (void) other46;
 }
-MicroSeconds& MicroSeconds::operator=(const MicroSeconds& other37) noexcept {
-  (void) other37;
+MicroSeconds& MicroSeconds::operator=(const MicroSeconds& other47) noexcept {
+  (void) other47;
   return *this;
 }
 void MicroSeconds::printTo(std::ostream& out) const {
@@ -1935,11 +2370,11 @@ void swap(NanoSeconds &a, NanoSeconds &b) {
   (void) b;
 }
 
-NanoSeconds::NanoSeconds(const NanoSeconds& other38) noexcept {
-  (void) other38;
+NanoSeconds::NanoSeconds(const NanoSeconds& other48) noexcept {
+  (void) other48;
 }
-NanoSeconds& NanoSeconds::operator=(const NanoSeconds& other39) noexcept {
-  (void) other39;
+NanoSeconds& NanoSeconds::operator=(const NanoSeconds& other49) noexcept {
+  (void) other49;
   return *this;
 }
 void NanoSeconds::printTo(std::ostream& out) const {
@@ -2066,17 +2501,17 @@ void swap(TimeUnit &a, TimeUnit &b) {
   swap(a.__isset, b.__isset);
 }
 
-TimeUnit::TimeUnit(const TimeUnit& other40) noexcept {
-  MILLIS = other40.MILLIS;
-  MICROS = other40.MICROS;
-  NANOS = other40.NANOS;
-  __isset = other40.__isset;
+TimeUnit::TimeUnit(const TimeUnit& other50) noexcept {
+  MILLIS = other50.MILLIS;
+  MICROS = other50.MICROS;
+  NANOS = other50.NANOS;
+  __isset = other50.__isset;
 }
-TimeUnit& TimeUnit::operator=(const TimeUnit& other41) noexcept {
-  MILLIS = other41.MILLIS;
-  MICROS = other41.MICROS;
-  NANOS = other41.NANOS;
-  __isset = other41.__isset;
+TimeUnit& TimeUnit::operator=(const TimeUnit& other51) noexcept {
+  MILLIS = other51.MILLIS;
+  MICROS = other51.MICROS;
+  NANOS = other51.NANOS;
+  __isset = other51.__isset;
   return *this;
 }
 void TimeUnit::printTo(std::ostream& out) const {
@@ -2189,13 +2624,13 @@ void swap(TimestampType &a, TimestampType &b) {
   swap(a.unit, b.unit);
 }
 
-TimestampType::TimestampType(const TimestampType& other42) noexcept {
-  isAdjustedToUTC = other42.isAdjustedToUTC;
-  unit = other42.unit;
+TimestampType::TimestampType(const TimestampType& other52) noexcept {
+  isAdjustedToUTC = other52.isAdjustedToUTC;
+  unit = other52.unit;
 }
-TimestampType& TimestampType::operator=(const TimestampType& other43) noexcept {
-  isAdjustedToUTC = other43.isAdjustedToUTC;
-  unit = other43.unit;
+TimestampType& TimestampType::operator=(const TimestampType& other53) noexcept {
+  isAdjustedToUTC = other53.isAdjustedToUTC;
+  unit = other53.unit;
   return *this;
 }
 void TimestampType::printTo(std::ostream& out) const {
@@ -2307,13 +2742,13 @@ void swap(TimeType &a, TimeType &b) {
   swap(a.unit, b.unit);
 }
 
-TimeType::TimeType(const TimeType& other44) noexcept {
-  isAdjustedToUTC = other44.isAdjustedToUTC;
-  unit = other44.unit;
+TimeType::TimeType(const TimeType& other54) noexcept {
+  isAdjustedToUTC = other54.isAdjustedToUTC;
+  unit = other54.unit;
 }
-TimeType& TimeType::operator=(const TimeType& other45) noexcept {
-  isAdjustedToUTC = other45.isAdjustedToUTC;
-  unit = other45.unit;
+TimeType& TimeType::operator=(const TimeType& other55) noexcept {
+  isAdjustedToUTC = other55.isAdjustedToUTC;
+  unit = other55.unit;
   return *this;
 }
 void TimeType::printTo(std::ostream& out) const {
@@ -2426,13 +2861,13 @@ void swap(IntType &a, IntType &b) {
   swap(a.isSigned, b.isSigned);
 }
 
-IntType::IntType(const IntType& other46) noexcept {
-  bitWidth = other46.bitWidth;
-  isSigned = other46.isSigned;
+IntType::IntType(const IntType& other56) noexcept {
+  bitWidth = other56.bitWidth;
+  isSigned = other56.isSigned;
 }
-IntType& IntType::operator=(const IntType& other47) noexcept {
-  bitWidth = other47.bitWidth;
-  isSigned = other47.isSigned;
+IntType& IntType::operator=(const IntType& other57) noexcept {
+  bitWidth = other57.bitWidth;
+  isSigned = other57.isSigned;
   return *this;
 }
 void IntType::printTo(std::ostream& out) const {
@@ -2500,11 +2935,11 @@ void swap(JsonType &a, JsonType &b) {
   (void) b;
 }
 
-JsonType::JsonType(const JsonType& other48) noexcept {
-  (void) other48;
+JsonType::JsonType(const JsonType& other58) noexcept {
+  (void) other58;
 }
-JsonType& JsonType::operator=(const JsonType& other49) noexcept {
-  (void) other49;
+JsonType& JsonType::operator=(const JsonType& other59) noexcept {
+  (void) other59;
   return *this;
 }
 void JsonType::printTo(std::ostream& out) const {
@@ -2570,16 +3005,332 @@ void swap(BsonType &a, BsonType &b) {
   (void) b;
 }
 
-BsonType::BsonType(const BsonType& other50) noexcept {
-  (void) other50;
+BsonType::BsonType(const BsonType& other60) noexcept {
+  (void) other60;
 }
-BsonType& BsonType::operator=(const BsonType& other51) noexcept {
-  (void) other51;
+BsonType& BsonType::operator=(const BsonType& other61) noexcept {
+  (void) other61;
   return *this;
 }
 void BsonType::printTo(std::ostream& out) const {
   using ::apache::thrift::to_string;
   out << "BsonType(";
+  out << ")";
+}
+
+
+VariantType::~VariantType() noexcept {
+}
+
+VariantType::VariantType() noexcept
+   : specification_version(0) {
+}
+
+void VariantType::__set_specification_version(const int8_t val) {
+  this->specification_version = val;
+__isset.specification_version = true;
+}
+std::ostream& operator<<(std::ostream& out, const VariantType& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
+
+uint32_t VariantType::read(::apache::thrift::protocol::TProtocol* iprot) {
+
+  ::apache::thrift::protocol::TInputRecursionTracker tracker(*iprot);
+  uint32_t xfer = 0;
+  std::string fname;
+  ::apache::thrift::protocol::TType ftype;
+  int16_t fid;
+
+  xfer += iprot->readStructBegin(fname);
+
+  using ::apache::thrift::protocol::TProtocolException;
+
+
+  while (true)
+  {
+    xfer += iprot->readFieldBegin(fname, ftype, fid);
+    if (ftype == ::apache::thrift::protocol::T_STOP) {
+      break;
+    }
+    switch (fid)
+    {
+      case 1:
+        if (ftype == ::apache::thrift::protocol::T_BYTE) {
+          xfer += iprot->readByte(this->specification_version);
+          this->__isset.specification_version = true;
+        } else {
+          xfer += iprot->skip(ftype);
+        }
+        break;
+      default:
+        xfer += iprot->skip(ftype);
+        break;
+    }
+    xfer += iprot->readFieldEnd();
+  }
+
+  xfer += iprot->readStructEnd();
+
+  return xfer;
+}
+
+uint32_t VariantType::write(::apache::thrift::protocol::TProtocol* oprot) const {
+  uint32_t xfer = 0;
+  ::apache::thrift::protocol::TOutputRecursionTracker tracker(*oprot);
+  xfer += oprot->writeStructBegin("VariantType");
+
+  if (this->__isset.specification_version) {
+    xfer += oprot->writeFieldBegin("specification_version", ::apache::thrift::protocol::T_BYTE, 1);
+    xfer += oprot->writeByte(this->specification_version);
+    xfer += oprot->writeFieldEnd();
+  }
+  xfer += oprot->writeFieldStop();
+  xfer += oprot->writeStructEnd();
+  return xfer;
+}
+
+void swap(VariantType &a, VariantType &b) {
+  using ::std::swap;
+  swap(a.specification_version, b.specification_version);
+  swap(a.__isset, b.__isset);
+}
+
+VariantType::VariantType(const VariantType& other62) noexcept {
+  specification_version = other62.specification_version;
+  __isset = other62.__isset;
+}
+VariantType& VariantType::operator=(const VariantType& other63) noexcept {
+  specification_version = other63.specification_version;
+  __isset = other63.__isset;
+  return *this;
+}
+void VariantType::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "VariantType(";
+  out << "specification_version="; (__isset.specification_version ? (out << to_string(specification_version)) : (out << "<null>"));
+  out << ")";
+}
+
+
+GeometryType::~GeometryType() noexcept {
+}
+
+GeometryType::GeometryType() noexcept
+   : crs() {
+}
+
+void GeometryType::__set_crs(const std::string& val) {
+  this->crs = val;
+__isset.crs = true;
+}
+std::ostream& operator<<(std::ostream& out, const GeometryType& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
+
+uint32_t GeometryType::read(::apache::thrift::protocol::TProtocol* iprot) {
+
+  ::apache::thrift::protocol::TInputRecursionTracker tracker(*iprot);
+  uint32_t xfer = 0;
+  std::string fname;
+  ::apache::thrift::protocol::TType ftype;
+  int16_t fid;
+
+  xfer += iprot->readStructBegin(fname);
+
+  using ::apache::thrift::protocol::TProtocolException;
+
+
+  while (true)
+  {
+    xfer += iprot->readFieldBegin(fname, ftype, fid);
+    if (ftype == ::apache::thrift::protocol::T_STOP) {
+      break;
+    }
+    switch (fid)
+    {
+      case 1:
+        if (ftype == ::apache::thrift::protocol::T_STRING) {
+          xfer += iprot->readString(this->crs);
+          this->__isset.crs = true;
+        } else {
+          xfer += iprot->skip(ftype);
+        }
+        break;
+      default:
+        xfer += iprot->skip(ftype);
+        break;
+    }
+    xfer += iprot->readFieldEnd();
+  }
+
+  xfer += iprot->readStructEnd();
+
+  return xfer;
+}
+
+uint32_t GeometryType::write(::apache::thrift::protocol::TProtocol* oprot) const {
+  uint32_t xfer = 0;
+  ::apache::thrift::protocol::TOutputRecursionTracker tracker(*oprot);
+  xfer += oprot->writeStructBegin("GeometryType");
+
+  if (this->__isset.crs) {
+    xfer += oprot->writeFieldBegin("crs", ::apache::thrift::protocol::T_STRING, 1);
+    xfer += oprot->writeString(this->crs);
+    xfer += oprot->writeFieldEnd();
+  }
+  xfer += oprot->writeFieldStop();
+  xfer += oprot->writeStructEnd();
+  return xfer;
+}
+
+void swap(GeometryType &a, GeometryType &b) {
+  using ::std::swap;
+  swap(a.crs, b.crs);
+  swap(a.__isset, b.__isset);
+}
+
+GeometryType::GeometryType(const GeometryType& other64) {
+  crs = other64.crs;
+  __isset = other64.__isset;
+}
+GeometryType& GeometryType::operator=(const GeometryType& other65) {
+  crs = other65.crs;
+  __isset = other65.__isset;
+  return *this;
+}
+void GeometryType::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "GeometryType(";
+  out << "crs="; (__isset.crs ? (out << to_string(crs)) : (out << "<null>"));
+  out << ")";
+}
+
+
+GeographyType::~GeographyType() noexcept {
+}
+
+GeographyType::GeographyType() noexcept
+   : crs(),
+     algorithm(static_cast<EdgeInterpolationAlgorithm::type>(0)) {
+}
+
+void GeographyType::__set_crs(const std::string& val) {
+  this->crs = val;
+__isset.crs = true;
+}
+
+void GeographyType::__set_algorithm(const EdgeInterpolationAlgorithm::type val) {
+  this->algorithm = val;
+__isset.algorithm = true;
+}
+std::ostream& operator<<(std::ostream& out, const GeographyType& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
+
+uint32_t GeographyType::read(::apache::thrift::protocol::TProtocol* iprot) {
+
+  ::apache::thrift::protocol::TInputRecursionTracker tracker(*iprot);
+  uint32_t xfer = 0;
+  std::string fname;
+  ::apache::thrift::protocol::TType ftype;
+  int16_t fid;
+
+  xfer += iprot->readStructBegin(fname);
+
+  using ::apache::thrift::protocol::TProtocolException;
+
+
+  while (true)
+  {
+    xfer += iprot->readFieldBegin(fname, ftype, fid);
+    if (ftype == ::apache::thrift::protocol::T_STOP) {
+      break;
+    }
+    switch (fid)
+    {
+      case 1:
+        if (ftype == ::apache::thrift::protocol::T_STRING) {
+          xfer += iprot->readString(this->crs);
+          this->__isset.crs = true;
+        } else {
+          xfer += iprot->skip(ftype);
+        }
+        break;
+      case 2:
+        if (ftype == ::apache::thrift::protocol::T_I32) {
+          int32_t ecast66;
+          xfer += iprot->readI32(ecast66);
+          this->algorithm = static_cast<EdgeInterpolationAlgorithm::type>(ecast66);
+          this->__isset.algorithm = true;
+        } else {
+          xfer += iprot->skip(ftype);
+        }
+        break;
+      default:
+        xfer += iprot->skip(ftype);
+        break;
+    }
+    xfer += iprot->readFieldEnd();
+  }
+
+  xfer += iprot->readStructEnd();
+
+  return xfer;
+}
+
+uint32_t GeographyType::write(::apache::thrift::protocol::TProtocol* oprot) const {
+  uint32_t xfer = 0;
+  ::apache::thrift::protocol::TOutputRecursionTracker tracker(*oprot);
+  xfer += oprot->writeStructBegin("GeographyType");
+
+  if (this->__isset.crs) {
+    xfer += oprot->writeFieldBegin("crs", ::apache::thrift::protocol::T_STRING, 1);
+    xfer += oprot->writeString(this->crs);
+    xfer += oprot->writeFieldEnd();
+  }
+  if (this->__isset.algorithm) {
+    xfer += oprot->writeFieldBegin("algorithm", ::apache::thrift::protocol::T_I32, 2);
+    xfer += oprot->writeI32(static_cast<int32_t>(this->algorithm));
+    xfer += oprot->writeFieldEnd();
+  }
+  xfer += oprot->writeFieldStop();
+  xfer += oprot->writeStructEnd();
+  return xfer;
+}
+
+void swap(GeographyType &a, GeographyType &b) {
+  using ::std::swap;
+  swap(a.crs, b.crs);
+  swap(a.algorithm, b.algorithm);
+  swap(a.__isset, b.__isset);
+}
+
+GeographyType::GeographyType(const GeographyType& other67) {
+  crs = other67.crs;
+  algorithm = other67.algorithm;
+  __isset = other67.__isset;
+}
+GeographyType& GeographyType::operator=(const GeographyType& other68) {
+  crs = other68.crs;
+  algorithm = other68.algorithm;
+  __isset = other68.__isset;
+  return *this;
+}
+void GeographyType::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "GeographyType(";
+  out << "crs="; (__isset.crs ? (out << to_string(crs)) : (out << "<null>"));
+  out << ", " << "algorithm="; (__isset.algorithm ? (out << to_string(algorithm)) : (out << "<null>"));
   out << ")";
 }
 
@@ -2658,6 +3409,21 @@ __isset.UUID = true;
 void LogicalType::__set_FLOAT16(const Float16Type& val) {
   this->FLOAT16 = val;
 __isset.FLOAT16 = true;
+}
+
+void LogicalType::__set_VARIANT(const VariantType& val) {
+  this->VARIANT = val;
+__isset.VARIANT = true;
+}
+
+void LogicalType::__set_GEOMETRY(const GeometryType& val) {
+  this->GEOMETRY = val;
+__isset.GEOMETRY = true;
+}
+
+void LogicalType::__set_GEOGRAPHY(const GeographyType& val) {
+  this->GEOGRAPHY = val;
+__isset.GEOGRAPHY = true;
 }
 std::ostream& operator<<(std::ostream& out, const LogicalType& obj)
 {
@@ -2799,6 +3565,30 @@ uint32_t LogicalType::read(::apache::thrift::protocol::TProtocol* iprot) {
           xfer += iprot->skip(ftype);
         }
         break;
+      case 16:
+        if (ftype == ::apache::thrift::protocol::T_STRUCT) {
+          xfer += this->VARIANT.read(iprot);
+          this->__isset.VARIANT = true;
+        } else {
+          xfer += iprot->skip(ftype);
+        }
+        break;
+      case 17:
+        if (ftype == ::apache::thrift::protocol::T_STRUCT) {
+          xfer += this->GEOMETRY.read(iprot);
+          this->__isset.GEOMETRY = true;
+        } else {
+          xfer += iprot->skip(ftype);
+        }
+        break;
+      case 18:
+        if (ftype == ::apache::thrift::protocol::T_STRUCT) {
+          xfer += this->GEOGRAPHY.read(iprot);
+          this->__isset.GEOGRAPHY = true;
+        } else {
+          xfer += iprot->skip(ftype);
+        }
+        break;
       default:
         xfer += iprot->skip(ftype);
         break;
@@ -2886,6 +3676,21 @@ uint32_t LogicalType::write(::apache::thrift::protocol::TProtocol* oprot) const 
     xfer += this->FLOAT16.write(oprot);
     xfer += oprot->writeFieldEnd();
   }
+  if (this->__isset.VARIANT) {
+    xfer += oprot->writeFieldBegin("VARIANT", ::apache::thrift::protocol::T_STRUCT, 16);
+    xfer += this->VARIANT.write(oprot);
+    xfer += oprot->writeFieldEnd();
+  }
+  if (this->__isset.GEOMETRY) {
+    xfer += oprot->writeFieldBegin("GEOMETRY", ::apache::thrift::protocol::T_STRUCT, 17);
+    xfer += this->GEOMETRY.write(oprot);
+    xfer += oprot->writeFieldEnd();
+  }
+  if (this->__isset.GEOGRAPHY) {
+    xfer += oprot->writeFieldBegin("GEOGRAPHY", ::apache::thrift::protocol::T_STRUCT, 18);
+    xfer += this->GEOGRAPHY.write(oprot);
+    xfer += oprot->writeFieldEnd();
+  }
   xfer += oprot->writeFieldStop();
   xfer += oprot->writeStructEnd();
   return xfer;
@@ -2907,42 +3712,51 @@ void swap(LogicalType &a, LogicalType &b) {
   swap(a.BSON, b.BSON);
   swap(a.UUID, b.UUID);
   swap(a.FLOAT16, b.FLOAT16);
+  swap(a.VARIANT, b.VARIANT);
+  swap(a.GEOMETRY, b.GEOMETRY);
+  swap(a.GEOGRAPHY, b.GEOGRAPHY);
   swap(a.__isset, b.__isset);
 }
 
-LogicalType::LogicalType(const LogicalType& other52) noexcept {
-  STRING = other52.STRING;
-  MAP = other52.MAP;
-  LIST = other52.LIST;
-  ENUM = other52.ENUM;
-  DECIMAL = other52.DECIMAL;
-  DATE = other52.DATE;
-  TIME = other52.TIME;
-  TIMESTAMP = other52.TIMESTAMP;
-  INTEGER = other52.INTEGER;
-  UNKNOWN = other52.UNKNOWN;
-  JSON = other52.JSON;
-  BSON = other52.BSON;
-  UUID = other52.UUID;
-  FLOAT16 = other52.FLOAT16;
-  __isset = other52.__isset;
+LogicalType::LogicalType(const LogicalType& other69) {
+  STRING = other69.STRING;
+  MAP = other69.MAP;
+  LIST = other69.LIST;
+  ENUM = other69.ENUM;
+  DECIMAL = other69.DECIMAL;
+  DATE = other69.DATE;
+  TIME = other69.TIME;
+  TIMESTAMP = other69.TIMESTAMP;
+  INTEGER = other69.INTEGER;
+  UNKNOWN = other69.UNKNOWN;
+  JSON = other69.JSON;
+  BSON = other69.BSON;
+  UUID = other69.UUID;
+  FLOAT16 = other69.FLOAT16;
+  VARIANT = other69.VARIANT;
+  GEOMETRY = other69.GEOMETRY;
+  GEOGRAPHY = other69.GEOGRAPHY;
+  __isset = other69.__isset;
 }
-LogicalType& LogicalType::operator=(const LogicalType& other53) noexcept {
-  STRING = other53.STRING;
-  MAP = other53.MAP;
-  LIST = other53.LIST;
-  ENUM = other53.ENUM;
-  DECIMAL = other53.DECIMAL;
-  DATE = other53.DATE;
-  TIME = other53.TIME;
-  TIMESTAMP = other53.TIMESTAMP;
-  INTEGER = other53.INTEGER;
-  UNKNOWN = other53.UNKNOWN;
-  JSON = other53.JSON;
-  BSON = other53.BSON;
-  UUID = other53.UUID;
-  FLOAT16 = other53.FLOAT16;
-  __isset = other53.__isset;
+LogicalType& LogicalType::operator=(const LogicalType& other70) {
+  STRING = other70.STRING;
+  MAP = other70.MAP;
+  LIST = other70.LIST;
+  ENUM = other70.ENUM;
+  DECIMAL = other70.DECIMAL;
+  DATE = other70.DATE;
+  TIME = other70.TIME;
+  TIMESTAMP = other70.TIMESTAMP;
+  INTEGER = other70.INTEGER;
+  UNKNOWN = other70.UNKNOWN;
+  JSON = other70.JSON;
+  BSON = other70.BSON;
+  UUID = other70.UUID;
+  FLOAT16 = other70.FLOAT16;
+  VARIANT = other70.VARIANT;
+  GEOMETRY = other70.GEOMETRY;
+  GEOGRAPHY = other70.GEOGRAPHY;
+  __isset = other70.__isset;
   return *this;
 }
 void LogicalType::printTo(std::ostream& out) const {
@@ -2962,6 +3776,9 @@ void LogicalType::printTo(std::ostream& out) const {
   out << ", " << "BSON="; (__isset.BSON ? (out << to_string(BSON)) : (out << "<null>"));
   out << ", " << "UUID="; (__isset.UUID ? (out << to_string(UUID)) : (out << "<null>"));
   out << ", " << "FLOAT16="; (__isset.FLOAT16 ? (out << to_string(FLOAT16)) : (out << "<null>"));
+  out << ", " << "VARIANT="; (__isset.VARIANT ? (out << to_string(VARIANT)) : (out << "<null>"));
+  out << ", " << "GEOMETRY="; (__isset.GEOMETRY ? (out << to_string(GEOMETRY)) : (out << "<null>"));
+  out << ", " << "GEOGRAPHY="; (__isset.GEOGRAPHY ? (out << to_string(GEOGRAPHY)) : (out << "<null>"));
   out << ")";
 }
 
@@ -3060,9 +3877,9 @@ uint32_t SchemaElement::read(::apache::thrift::protocol::TProtocol* iprot) {
     {
       case 1:
         if (ftype == ::apache::thrift::protocol::T_I32) {
-          int32_t ecast54;
-          xfer += iprot->readI32(ecast54);
-          this->type = static_cast<Type::type>(ecast54);
+          int32_t ecast71;
+          xfer += iprot->readI32(ecast71);
+          this->type = static_cast<Type::type>(ecast71);
           this->__isset.type = true;
         } else {
           xfer += iprot->skip(ftype);
@@ -3078,9 +3895,9 @@ uint32_t SchemaElement::read(::apache::thrift::protocol::TProtocol* iprot) {
         break;
       case 3:
         if (ftype == ::apache::thrift::protocol::T_I32) {
-          int32_t ecast55;
-          xfer += iprot->readI32(ecast55);
-          this->repetition_type = static_cast<FieldRepetitionType::type>(ecast55);
+          int32_t ecast72;
+          xfer += iprot->readI32(ecast72);
+          this->repetition_type = static_cast<FieldRepetitionType::type>(ecast72);
           this->__isset.repetition_type = true;
         } else {
           xfer += iprot->skip(ftype);
@@ -3104,9 +3921,9 @@ uint32_t SchemaElement::read(::apache::thrift::protocol::TProtocol* iprot) {
         break;
       case 6:
         if (ftype == ::apache::thrift::protocol::T_I32) {
-          int32_t ecast56;
-          xfer += iprot->readI32(ecast56);
-          this->converted_type = static_cast<ConvertedType::type>(ecast56);
+          int32_t ecast73;
+          xfer += iprot->readI32(ecast73);
+          this->converted_type = static_cast<ConvertedType::type>(ecast73);
           this->__isset.converted_type = true;
         } else {
           xfer += iprot->skip(ftype);
@@ -3232,31 +4049,31 @@ void swap(SchemaElement &a, SchemaElement &b) {
   swap(a.__isset, b.__isset);
 }
 
-SchemaElement::SchemaElement(const SchemaElement& other57) {
-  type = other57.type;
-  type_length = other57.type_length;
-  repetition_type = other57.repetition_type;
-  name = other57.name;
-  num_children = other57.num_children;
-  converted_type = other57.converted_type;
-  scale = other57.scale;
-  precision = other57.precision;
-  field_id = other57.field_id;
-  logicalType = other57.logicalType;
-  __isset = other57.__isset;
+SchemaElement::SchemaElement(const SchemaElement& other74) {
+  type = other74.type;
+  type_length = other74.type_length;
+  repetition_type = other74.repetition_type;
+  name = other74.name;
+  num_children = other74.num_children;
+  converted_type = other74.converted_type;
+  scale = other74.scale;
+  precision = other74.precision;
+  field_id = other74.field_id;
+  logicalType = other74.logicalType;
+  __isset = other74.__isset;
 }
-SchemaElement& SchemaElement::operator=(const SchemaElement& other58) {
-  type = other58.type;
-  type_length = other58.type_length;
-  repetition_type = other58.repetition_type;
-  name = other58.name;
-  num_children = other58.num_children;
-  converted_type = other58.converted_type;
-  scale = other58.scale;
-  precision = other58.precision;
-  field_id = other58.field_id;
-  logicalType = other58.logicalType;
-  __isset = other58.__isset;
+SchemaElement& SchemaElement::operator=(const SchemaElement& other75) {
+  type = other75.type;
+  type_length = other75.type_length;
+  repetition_type = other75.repetition_type;
+  name = other75.name;
+  num_children = other75.num_children;
+  converted_type = other75.converted_type;
+  scale = other75.scale;
+  precision = other75.precision;
+  field_id = other75.field_id;
+  logicalType = other75.logicalType;
+  __isset = other75.__isset;
   return *this;
 }
 void SchemaElement::printTo(std::ostream& out) const {
@@ -3348,9 +4165,9 @@ uint32_t DataPageHeader::read(::apache::thrift::protocol::TProtocol* iprot) {
         break;
       case 2:
         if (ftype == ::apache::thrift::protocol::T_I32) {
-          int32_t ecast59;
-          xfer += iprot->readI32(ecast59);
-          this->encoding = static_cast<Encoding::type>(ecast59);
+          int32_t ecast76;
+          xfer += iprot->readI32(ecast76);
+          this->encoding = static_cast<Encoding::type>(ecast76);
           isset_encoding = true;
         } else {
           xfer += iprot->skip(ftype);
@@ -3358,9 +4175,9 @@ uint32_t DataPageHeader::read(::apache::thrift::protocol::TProtocol* iprot) {
         break;
       case 3:
         if (ftype == ::apache::thrift::protocol::T_I32) {
-          int32_t ecast60;
-          xfer += iprot->readI32(ecast60);
-          this->definition_level_encoding = static_cast<Encoding::type>(ecast60);
+          int32_t ecast77;
+          xfer += iprot->readI32(ecast77);
+          this->definition_level_encoding = static_cast<Encoding::type>(ecast77);
           isset_definition_level_encoding = true;
         } else {
           xfer += iprot->skip(ftype);
@@ -3368,9 +4185,9 @@ uint32_t DataPageHeader::read(::apache::thrift::protocol::TProtocol* iprot) {
         break;
       case 4:
         if (ftype == ::apache::thrift::protocol::T_I32) {
-          int32_t ecast61;
-          xfer += iprot->readI32(ecast61);
-          this->repetition_level_encoding = static_cast<Encoding::type>(ecast61);
+          int32_t ecast78;
+          xfer += iprot->readI32(ecast78);
+          this->repetition_level_encoding = static_cast<Encoding::type>(ecast78);
           isset_repetition_level_encoding = true;
         } else {
           xfer += iprot->skip(ftype);
@@ -3445,21 +4262,21 @@ void swap(DataPageHeader &a, DataPageHeader &b) {
   swap(a.__isset, b.__isset);
 }
 
-DataPageHeader::DataPageHeader(const DataPageHeader& other62) {
-  num_values = other62.num_values;
-  encoding = other62.encoding;
-  definition_level_encoding = other62.definition_level_encoding;
-  repetition_level_encoding = other62.repetition_level_encoding;
-  statistics = other62.statistics;
-  __isset = other62.__isset;
+DataPageHeader::DataPageHeader(const DataPageHeader& other79) {
+  num_values = other79.num_values;
+  encoding = other79.encoding;
+  definition_level_encoding = other79.definition_level_encoding;
+  repetition_level_encoding = other79.repetition_level_encoding;
+  statistics = other79.statistics;
+  __isset = other79.__isset;
 }
-DataPageHeader& DataPageHeader::operator=(const DataPageHeader& other63) {
-  num_values = other63.num_values;
-  encoding = other63.encoding;
-  definition_level_encoding = other63.definition_level_encoding;
-  repetition_level_encoding = other63.repetition_level_encoding;
-  statistics = other63.statistics;
-  __isset = other63.__isset;
+DataPageHeader& DataPageHeader::operator=(const DataPageHeader& other80) {
+  num_values = other80.num_values;
+  encoding = other80.encoding;
+  definition_level_encoding = other80.definition_level_encoding;
+  repetition_level_encoding = other80.repetition_level_encoding;
+  statistics = other80.statistics;
+  __isset = other80.__isset;
   return *this;
 }
 void DataPageHeader::printTo(std::ostream& out) const {
@@ -3530,11 +4347,11 @@ void swap(IndexPageHeader &a, IndexPageHeader &b) {
   (void) b;
 }
 
-IndexPageHeader::IndexPageHeader(const IndexPageHeader& other64) noexcept {
-  (void) other64;
+IndexPageHeader::IndexPageHeader(const IndexPageHeader& other81) noexcept {
+  (void) other81;
 }
-IndexPageHeader& IndexPageHeader::operator=(const IndexPageHeader& other65) noexcept {
-  (void) other65;
+IndexPageHeader& IndexPageHeader::operator=(const IndexPageHeader& other82) noexcept {
+  (void) other82;
   return *this;
 }
 void IndexPageHeader::printTo(std::ostream& out) const {
@@ -3605,9 +4422,9 @@ uint32_t DictionaryPageHeader::read(::apache::thrift::protocol::TProtocol* iprot
         break;
       case 2:
         if (ftype == ::apache::thrift::protocol::T_I32) {
-          int32_t ecast66;
-          xfer += iprot->readI32(ecast66);
-          this->encoding = static_cast<Encoding::type>(ecast66);
+          int32_t ecast83;
+          xfer += iprot->readI32(ecast83);
+          this->encoding = static_cast<Encoding::type>(ecast83);
           isset_encoding = true;
         } else {
           xfer += iprot->skip(ftype);
@@ -3668,17 +4485,17 @@ void swap(DictionaryPageHeader &a, DictionaryPageHeader &b) {
   swap(a.__isset, b.__isset);
 }
 
-DictionaryPageHeader::DictionaryPageHeader(const DictionaryPageHeader& other67) noexcept {
-  num_values = other67.num_values;
-  encoding = other67.encoding;
-  is_sorted = other67.is_sorted;
-  __isset = other67.__isset;
+DictionaryPageHeader::DictionaryPageHeader(const DictionaryPageHeader& other84) noexcept {
+  num_values = other84.num_values;
+  encoding = other84.encoding;
+  is_sorted = other84.is_sorted;
+  __isset = other84.__isset;
 }
-DictionaryPageHeader& DictionaryPageHeader::operator=(const DictionaryPageHeader& other68) noexcept {
-  num_values = other68.num_values;
-  encoding = other68.encoding;
-  is_sorted = other68.is_sorted;
-  __isset = other68.__isset;
+DictionaryPageHeader& DictionaryPageHeader::operator=(const DictionaryPageHeader& other85) noexcept {
+  num_values = other85.num_values;
+  encoding = other85.encoding;
+  is_sorted = other85.is_sorted;
+  __isset = other85.__isset;
   return *this;
 }
 void DictionaryPageHeader::printTo(std::ostream& out) const {
@@ -3797,9 +4614,9 @@ uint32_t DataPageHeaderV2::read(::apache::thrift::protocol::TProtocol* iprot) {
         break;
       case 4:
         if (ftype == ::apache::thrift::protocol::T_I32) {
-          int32_t ecast69;
-          xfer += iprot->readI32(ecast69);
-          this->encoding = static_cast<Encoding::type>(ecast69);
+          int32_t ecast86;
+          xfer += iprot->readI32(ecast86);
+          this->encoding = static_cast<Encoding::type>(ecast86);
           isset_encoding = true;
         } else {
           xfer += iprot->skip(ftype);
@@ -3918,27 +4735,27 @@ void swap(DataPageHeaderV2 &a, DataPageHeaderV2 &b) {
   swap(a.__isset, b.__isset);
 }
 
-DataPageHeaderV2::DataPageHeaderV2(const DataPageHeaderV2& other70) {
-  num_values = other70.num_values;
-  num_nulls = other70.num_nulls;
-  num_rows = other70.num_rows;
-  encoding = other70.encoding;
-  definition_levels_byte_length = other70.definition_levels_byte_length;
-  repetition_levels_byte_length = other70.repetition_levels_byte_length;
-  is_compressed = other70.is_compressed;
-  statistics = other70.statistics;
-  __isset = other70.__isset;
+DataPageHeaderV2::DataPageHeaderV2(const DataPageHeaderV2& other87) {
+  num_values = other87.num_values;
+  num_nulls = other87.num_nulls;
+  num_rows = other87.num_rows;
+  encoding = other87.encoding;
+  definition_levels_byte_length = other87.definition_levels_byte_length;
+  repetition_levels_byte_length = other87.repetition_levels_byte_length;
+  is_compressed = other87.is_compressed;
+  statistics = other87.statistics;
+  __isset = other87.__isset;
 }
-DataPageHeaderV2& DataPageHeaderV2::operator=(const DataPageHeaderV2& other71) {
-  num_values = other71.num_values;
-  num_nulls = other71.num_nulls;
-  num_rows = other71.num_rows;
-  encoding = other71.encoding;
-  definition_levels_byte_length = other71.definition_levels_byte_length;
-  repetition_levels_byte_length = other71.repetition_levels_byte_length;
-  is_compressed = other71.is_compressed;
-  statistics = other71.statistics;
-  __isset = other71.__isset;
+DataPageHeaderV2& DataPageHeaderV2::operator=(const DataPageHeaderV2& other88) {
+  num_values = other88.num_values;
+  num_nulls = other88.num_nulls;
+  num_rows = other88.num_rows;
+  encoding = other88.encoding;
+  definition_levels_byte_length = other88.definition_levels_byte_length;
+  repetition_levels_byte_length = other88.repetition_levels_byte_length;
+  is_compressed = other88.is_compressed;
+  statistics = other88.statistics;
+  __isset = other88.__isset;
   return *this;
 }
 void DataPageHeaderV2::printTo(std::ostream& out) const {
@@ -4012,11 +4829,11 @@ void swap(SplitBlockAlgorithm &a, SplitBlockAlgorithm &b) {
   (void) b;
 }
 
-SplitBlockAlgorithm::SplitBlockAlgorithm(const SplitBlockAlgorithm& other72) noexcept {
-  (void) other72;
+SplitBlockAlgorithm::SplitBlockAlgorithm(const SplitBlockAlgorithm& other89) noexcept {
+  (void) other89;
 }
-SplitBlockAlgorithm& SplitBlockAlgorithm::operator=(const SplitBlockAlgorithm& other73) noexcept {
-  (void) other73;
+SplitBlockAlgorithm& SplitBlockAlgorithm::operator=(const SplitBlockAlgorithm& other90) noexcept {
+  (void) other90;
   return *this;
 }
 void SplitBlockAlgorithm::printTo(std::ostream& out) const {
@@ -4105,13 +4922,13 @@ void swap(BloomFilterAlgorithm &a, BloomFilterAlgorithm &b) {
   swap(a.__isset, b.__isset);
 }
 
-BloomFilterAlgorithm::BloomFilterAlgorithm(const BloomFilterAlgorithm& other74) noexcept {
-  BLOCK = other74.BLOCK;
-  __isset = other74.__isset;
+BloomFilterAlgorithm::BloomFilterAlgorithm(const BloomFilterAlgorithm& other91) noexcept {
+  BLOCK = other91.BLOCK;
+  __isset = other91.__isset;
 }
-BloomFilterAlgorithm& BloomFilterAlgorithm::operator=(const BloomFilterAlgorithm& other75) noexcept {
-  BLOCK = other75.BLOCK;
-  __isset = other75.__isset;
+BloomFilterAlgorithm& BloomFilterAlgorithm::operator=(const BloomFilterAlgorithm& other92) noexcept {
+  BLOCK = other92.BLOCK;
+  __isset = other92.__isset;
   return *this;
 }
 void BloomFilterAlgorithm::printTo(std::ostream& out) const {
@@ -4178,11 +4995,11 @@ void swap(XxHash &a, XxHash &b) {
   (void) b;
 }
 
-XxHash::XxHash(const XxHash& other76) noexcept {
-  (void) other76;
+XxHash::XxHash(const XxHash& other93) noexcept {
+  (void) other93;
 }
-XxHash& XxHash::operator=(const XxHash& other77) noexcept {
-  (void) other77;
+XxHash& XxHash::operator=(const XxHash& other94) noexcept {
+  (void) other94;
   return *this;
 }
 void XxHash::printTo(std::ostream& out) const {
@@ -4271,13 +5088,13 @@ void swap(BloomFilterHash &a, BloomFilterHash &b) {
   swap(a.__isset, b.__isset);
 }
 
-BloomFilterHash::BloomFilterHash(const BloomFilterHash& other78) noexcept {
-  XXHASH = other78.XXHASH;
-  __isset = other78.__isset;
+BloomFilterHash::BloomFilterHash(const BloomFilterHash& other95) noexcept {
+  XXHASH = other95.XXHASH;
+  __isset = other95.__isset;
 }
-BloomFilterHash& BloomFilterHash::operator=(const BloomFilterHash& other79) noexcept {
-  XXHASH = other79.XXHASH;
-  __isset = other79.__isset;
+BloomFilterHash& BloomFilterHash::operator=(const BloomFilterHash& other96) noexcept {
+  XXHASH = other96.XXHASH;
+  __isset = other96.__isset;
   return *this;
 }
 void BloomFilterHash::printTo(std::ostream& out) const {
@@ -4344,11 +5161,11 @@ void swap(Uncompressed &a, Uncompressed &b) {
   (void) b;
 }
 
-Uncompressed::Uncompressed(const Uncompressed& other80) noexcept {
-  (void) other80;
+Uncompressed::Uncompressed(const Uncompressed& other97) noexcept {
+  (void) other97;
 }
-Uncompressed& Uncompressed::operator=(const Uncompressed& other81) noexcept {
-  (void) other81;
+Uncompressed& Uncompressed::operator=(const Uncompressed& other98) noexcept {
+  (void) other98;
   return *this;
 }
 void Uncompressed::printTo(std::ostream& out) const {
@@ -4437,13 +5254,13 @@ void swap(BloomFilterCompression &a, BloomFilterCompression &b) {
   swap(a.__isset, b.__isset);
 }
 
-BloomFilterCompression::BloomFilterCompression(const BloomFilterCompression& other82) noexcept {
-  UNCOMPRESSED = other82.UNCOMPRESSED;
-  __isset = other82.__isset;
+BloomFilterCompression::BloomFilterCompression(const BloomFilterCompression& other99) noexcept {
+  UNCOMPRESSED = other99.UNCOMPRESSED;
+  __isset = other99.__isset;
 }
-BloomFilterCompression& BloomFilterCompression::operator=(const BloomFilterCompression& other83) noexcept {
-  UNCOMPRESSED = other83.UNCOMPRESSED;
-  __isset = other83.__isset;
+BloomFilterCompression& BloomFilterCompression::operator=(const BloomFilterCompression& other100) noexcept {
+  UNCOMPRESSED = other100.UNCOMPRESSED;
+  __isset = other100.__isset;
   return *this;
 }
 void BloomFilterCompression::printTo(std::ostream& out) const {
@@ -4594,17 +5411,17 @@ void swap(BloomFilterHeader &a, BloomFilterHeader &b) {
   swap(a.compression, b.compression);
 }
 
-BloomFilterHeader::BloomFilterHeader(const BloomFilterHeader& other84) noexcept {
-  numBytes = other84.numBytes;
-  algorithm = other84.algorithm;
-  hash = other84.hash;
-  compression = other84.compression;
+BloomFilterHeader::BloomFilterHeader(const BloomFilterHeader& other101) noexcept {
+  numBytes = other101.numBytes;
+  algorithm = other101.algorithm;
+  hash = other101.hash;
+  compression = other101.compression;
 }
-BloomFilterHeader& BloomFilterHeader::operator=(const BloomFilterHeader& other85) noexcept {
-  numBytes = other85.numBytes;
-  algorithm = other85.algorithm;
-  hash = other85.hash;
-  compression = other85.compression;
+BloomFilterHeader& BloomFilterHeader::operator=(const BloomFilterHeader& other102) noexcept {
+  numBytes = other102.numBytes;
+  algorithm = other102.algorithm;
+  hash = other102.hash;
+  compression = other102.compression;
   return *this;
 }
 void BloomFilterHeader::printTo(std::ostream& out) const {
@@ -4697,9 +5514,9 @@ uint32_t PageHeader::read(::apache::thrift::protocol::TProtocol* iprot) {
     {
       case 1:
         if (ftype == ::apache::thrift::protocol::T_I32) {
-          int32_t ecast86;
-          xfer += iprot->readI32(ecast86);
-          this->type = static_cast<PageType::type>(ecast86);
+          int32_t ecast103;
+          xfer += iprot->readI32(ecast103);
+          this->type = static_cast<PageType::type>(ecast103);
           isset_type = true;
         } else {
           xfer += iprot->skip(ftype);
@@ -4839,27 +5656,27 @@ void swap(PageHeader &a, PageHeader &b) {
   swap(a.__isset, b.__isset);
 }
 
-PageHeader::PageHeader(const PageHeader& other87) {
-  type = other87.type;
-  uncompressed_page_size = other87.uncompressed_page_size;
-  compressed_page_size = other87.compressed_page_size;
-  crc = other87.crc;
-  data_page_header = other87.data_page_header;
-  index_page_header = other87.index_page_header;
-  dictionary_page_header = other87.dictionary_page_header;
-  data_page_header_v2 = other87.data_page_header_v2;
-  __isset = other87.__isset;
+PageHeader::PageHeader(const PageHeader& other104) {
+  type = other104.type;
+  uncompressed_page_size = other104.uncompressed_page_size;
+  compressed_page_size = other104.compressed_page_size;
+  crc = other104.crc;
+  data_page_header = other104.data_page_header;
+  index_page_header = other104.index_page_header;
+  dictionary_page_header = other104.dictionary_page_header;
+  data_page_header_v2 = other104.data_page_header_v2;
+  __isset = other104.__isset;
 }
-PageHeader& PageHeader::operator=(const PageHeader& other88) {
-  type = other88.type;
-  uncompressed_page_size = other88.uncompressed_page_size;
-  compressed_page_size = other88.compressed_page_size;
-  crc = other88.crc;
-  data_page_header = other88.data_page_header;
-  index_page_header = other88.index_page_header;
-  dictionary_page_header = other88.dictionary_page_header;
-  data_page_header_v2 = other88.data_page_header_v2;
-  __isset = other88.__isset;
+PageHeader& PageHeader::operator=(const PageHeader& other105) {
+  type = other105.type;
+  uncompressed_page_size = other105.uncompressed_page_size;
+  compressed_page_size = other105.compressed_page_size;
+  crc = other105.crc;
+  data_page_header = other105.data_page_header;
+  index_page_header = other105.index_page_header;
+  dictionary_page_header = other105.dictionary_page_header;
+  data_page_header_v2 = other105.data_page_header_v2;
+  __isset = other105.__isset;
   return *this;
 }
 void PageHeader::printTo(std::ostream& out) const {
@@ -4978,15 +5795,15 @@ void swap(KeyValue &a, KeyValue &b) {
   swap(a.__isset, b.__isset);
 }
 
-KeyValue::KeyValue(const KeyValue& other89) {
-  key = other89.key;
-  value = other89.value;
-  __isset = other89.__isset;
+KeyValue::KeyValue(const KeyValue& other106) {
+  key = other106.key;
+  value = other106.value;
+  __isset = other106.__isset;
 }
-KeyValue& KeyValue::operator=(const KeyValue& other90) {
-  key = other90.key;
-  value = other90.value;
-  __isset = other90.__isset;
+KeyValue& KeyValue::operator=(const KeyValue& other107) {
+  key = other107.key;
+  value = other107.value;
+  __isset = other107.__isset;
   return *this;
 }
 void KeyValue::printTo(std::ostream& out) const {
@@ -5120,15 +5937,15 @@ void swap(SortingColumn &a, SortingColumn &b) {
   swap(a.nulls_first, b.nulls_first);
 }
 
-SortingColumn::SortingColumn(const SortingColumn& other91) noexcept {
-  column_idx = other91.column_idx;
-  descending = other91.descending;
-  nulls_first = other91.nulls_first;
+SortingColumn::SortingColumn(const SortingColumn& other108) noexcept {
+  column_idx = other108.column_idx;
+  descending = other108.descending;
+  nulls_first = other108.nulls_first;
 }
-SortingColumn& SortingColumn::operator=(const SortingColumn& other92) noexcept {
-  column_idx = other92.column_idx;
-  descending = other92.descending;
-  nulls_first = other92.nulls_first;
+SortingColumn& SortingColumn::operator=(const SortingColumn& other109) noexcept {
+  column_idx = other109.column_idx;
+  descending = other109.descending;
+  nulls_first = other109.nulls_first;
   return *this;
 }
 void SortingColumn::printTo(std::ostream& out) const {
@@ -5194,9 +6011,9 @@ uint32_t PageEncodingStats::read(::apache::thrift::protocol::TProtocol* iprot) {
     {
       case 1:
         if (ftype == ::apache::thrift::protocol::T_I32) {
-          int32_t ecast93;
-          xfer += iprot->readI32(ecast93);
-          this->page_type = static_cast<PageType::type>(ecast93);
+          int32_t ecast110;
+          xfer += iprot->readI32(ecast110);
+          this->page_type = static_cast<PageType::type>(ecast110);
           isset_page_type = true;
         } else {
           xfer += iprot->skip(ftype);
@@ -5204,9 +6021,9 @@ uint32_t PageEncodingStats::read(::apache::thrift::protocol::TProtocol* iprot) {
         break;
       case 2:
         if (ftype == ::apache::thrift::protocol::T_I32) {
-          int32_t ecast94;
-          xfer += iprot->readI32(ecast94);
-          this->encoding = static_cast<Encoding::type>(ecast94);
+          int32_t ecast111;
+          xfer += iprot->readI32(ecast111);
+          this->encoding = static_cast<Encoding::type>(ecast111);
           isset_encoding = true;
         } else {
           xfer += iprot->skip(ftype);
@@ -5267,15 +6084,15 @@ void swap(PageEncodingStats &a, PageEncodingStats &b) {
   swap(a.count, b.count);
 }
 
-PageEncodingStats::PageEncodingStats(const PageEncodingStats& other95) noexcept {
-  page_type = other95.page_type;
-  encoding = other95.encoding;
-  count = other95.count;
+PageEncodingStats::PageEncodingStats(const PageEncodingStats& other112) noexcept {
+  page_type = other112.page_type;
+  encoding = other112.encoding;
+  count = other112.count;
 }
-PageEncodingStats& PageEncodingStats::operator=(const PageEncodingStats& other96) noexcept {
-  page_type = other96.page_type;
-  encoding = other96.encoding;
-  count = other96.count;
+PageEncodingStats& PageEncodingStats::operator=(const PageEncodingStats& other113) noexcept {
+  page_type = other113.page_type;
+  encoding = other113.encoding;
+  count = other113.count;
   return *this;
 }
 void PageEncodingStats::printTo(std::ostream& out) const {
@@ -5375,6 +6192,11 @@ void ColumnMetaData::__set_size_statistics(const SizeStatistics& val) {
   this->size_statistics = val;
 __isset.size_statistics = true;
 }
+
+void ColumnMetaData::__set_geospatial_statistics(const GeospatialStatistics& val) {
+  this->geospatial_statistics = val;
+__isset.geospatial_statistics = true;
+}
 std::ostream& operator<<(std::ostream& out, const ColumnMetaData& obj)
 {
   obj.printTo(out);
@@ -5413,9 +6235,9 @@ uint32_t ColumnMetaData::read(::apache::thrift::protocol::TProtocol* iprot) {
     {
       case 1:
         if (ftype == ::apache::thrift::protocol::T_I32) {
-          int32_t ecast97;
-          xfer += iprot->readI32(ecast97);
-          this->type = static_cast<Type::type>(ecast97);
+          int32_t ecast114;
+          xfer += iprot->readI32(ecast114);
+          this->type = static_cast<Type::type>(ecast114);
           isset_type = true;
         } else {
           xfer += iprot->skip(ftype);
@@ -5425,16 +6247,16 @@ uint32_t ColumnMetaData::read(::apache::thrift::protocol::TProtocol* iprot) {
         if (ftype == ::apache::thrift::protocol::T_LIST) {
           {
             this->encodings.clear();
-            uint32_t _size98;
-            ::apache::thrift::protocol::TType _etype101;
-            xfer += iprot->readListBegin(_etype101, _size98);
-            this->encodings.resize(_size98);
-            uint32_t _i102;
-            for (_i102 = 0; _i102 < _size98; ++_i102)
+            uint32_t _size115;
+            ::apache::thrift::protocol::TType _etype118;
+            xfer += iprot->readListBegin(_etype118, _size115);
+            this->encodings.resize(_size115);
+            uint32_t _i119;
+            for (_i119 = 0; _i119 < _size115; ++_i119)
             {
-              int32_t ecast103;
-              xfer += iprot->readI32(ecast103);
-              this->encodings[_i102] = static_cast<Encoding::type>(ecast103);
+              int32_t ecast120;
+              xfer += iprot->readI32(ecast120);
+              this->encodings[_i119] = static_cast<Encoding::type>(ecast120);
             }
             xfer += iprot->readListEnd();
           }
@@ -5447,14 +6269,14 @@ uint32_t ColumnMetaData::read(::apache::thrift::protocol::TProtocol* iprot) {
         if (ftype == ::apache::thrift::protocol::T_LIST) {
           {
             this->path_in_schema.clear();
-            uint32_t _size104;
-            ::apache::thrift::protocol::TType _etype107;
-            xfer += iprot->readListBegin(_etype107, _size104);
-            this->path_in_schema.resize(_size104);
-            uint32_t _i108;
-            for (_i108 = 0; _i108 < _size104; ++_i108)
+            uint32_t _size121;
+            ::apache::thrift::protocol::TType _etype124;
+            xfer += iprot->readListBegin(_etype124, _size121);
+            this->path_in_schema.resize(_size121);
+            uint32_t _i125;
+            for (_i125 = 0; _i125 < _size121; ++_i125)
             {
-              xfer += iprot->readString(this->path_in_schema[_i108]);
+              xfer += iprot->readString(this->path_in_schema[_i125]);
             }
             xfer += iprot->readListEnd();
           }
@@ -5465,9 +6287,9 @@ uint32_t ColumnMetaData::read(::apache::thrift::protocol::TProtocol* iprot) {
         break;
       case 4:
         if (ftype == ::apache::thrift::protocol::T_I32) {
-          int32_t ecast109;
-          xfer += iprot->readI32(ecast109);
-          this->codec = static_cast<CompressionCodec::type>(ecast109);
+          int32_t ecast126;
+          xfer += iprot->readI32(ecast126);
+          this->codec = static_cast<CompressionCodec::type>(ecast126);
           isset_codec = true;
         } else {
           xfer += iprot->skip(ftype);
@@ -5501,14 +6323,14 @@ uint32_t ColumnMetaData::read(::apache::thrift::protocol::TProtocol* iprot) {
         if (ftype == ::apache::thrift::protocol::T_LIST) {
           {
             this->key_value_metadata.clear();
-            uint32_t _size110;
-            ::apache::thrift::protocol::TType _etype113;
-            xfer += iprot->readListBegin(_etype113, _size110);
-            this->key_value_metadata.resize(_size110);
-            uint32_t _i114;
-            for (_i114 = 0; _i114 < _size110; ++_i114)
+            uint32_t _size127;
+            ::apache::thrift::protocol::TType _etype130;
+            xfer += iprot->readListBegin(_etype130, _size127);
+            this->key_value_metadata.resize(_size127);
+            uint32_t _i131;
+            for (_i131 = 0; _i131 < _size127; ++_i131)
             {
-              xfer += this->key_value_metadata[_i114].read(iprot);
+              xfer += this->key_value_metadata[_i131].read(iprot);
             }
             xfer += iprot->readListEnd();
           }
@@ -5553,14 +6375,14 @@ uint32_t ColumnMetaData::read(::apache::thrift::protocol::TProtocol* iprot) {
         if (ftype == ::apache::thrift::protocol::T_LIST) {
           {
             this->encoding_stats.clear();
-            uint32_t _size115;
-            ::apache::thrift::protocol::TType _etype118;
-            xfer += iprot->readListBegin(_etype118, _size115);
-            this->encoding_stats.resize(_size115);
-            uint32_t _i119;
-            for (_i119 = 0; _i119 < _size115; ++_i119)
+            uint32_t _size132;
+            ::apache::thrift::protocol::TType _etype135;
+            xfer += iprot->readListBegin(_etype135, _size132);
+            this->encoding_stats.resize(_size132);
+            uint32_t _i136;
+            for (_i136 = 0; _i136 < _size132; ++_i136)
             {
-              xfer += this->encoding_stats[_i119].read(iprot);
+              xfer += this->encoding_stats[_i136].read(iprot);
             }
             xfer += iprot->readListEnd();
           }
@@ -5589,6 +6411,14 @@ uint32_t ColumnMetaData::read(::apache::thrift::protocol::TProtocol* iprot) {
         if (ftype == ::apache::thrift::protocol::T_STRUCT) {
           xfer += this->size_statistics.read(iprot);
           this->__isset.size_statistics = true;
+        } else {
+          xfer += iprot->skip(ftype);
+        }
+        break;
+      case 17:
+        if (ftype == ::apache::thrift::protocol::T_STRUCT) {
+          xfer += this->geospatial_statistics.read(iprot);
+          this->__isset.geospatial_statistics = true;
         } else {
           xfer += iprot->skip(ftype);
         }
@@ -5633,10 +6463,10 @@ uint32_t ColumnMetaData::write(::apache::thrift::protocol::TProtocol* oprot) con
   xfer += oprot->writeFieldBegin("encodings", ::apache::thrift::protocol::T_LIST, 2);
   {
     xfer += oprot->writeListBegin(::apache::thrift::protocol::T_I32, static_cast<uint32_t>(this->encodings.size()));
-    duckdb::vector<Encoding::type> ::const_iterator _iter120;
-    for (_iter120 = this->encodings.begin(); _iter120 != this->encodings.end(); ++_iter120)
+    duckdb::vector<Encoding::type> ::const_iterator _iter137;
+    for (_iter137 = this->encodings.begin(); _iter137 != this->encodings.end(); ++_iter137)
     {
-      xfer += oprot->writeI32(static_cast<int32_t>((*_iter120)));
+      xfer += oprot->writeI32(static_cast<int32_t>((*_iter137)));
     }
     xfer += oprot->writeListEnd();
   }
@@ -5645,10 +6475,10 @@ uint32_t ColumnMetaData::write(::apache::thrift::protocol::TProtocol* oprot) con
   xfer += oprot->writeFieldBegin("path_in_schema", ::apache::thrift::protocol::T_LIST, 3);
   {
     xfer += oprot->writeListBegin(::apache::thrift::protocol::T_STRING, static_cast<uint32_t>(this->path_in_schema.size()));
-    duckdb::vector<std::string> ::const_iterator _iter121;
-    for (_iter121 = this->path_in_schema.begin(); _iter121 != this->path_in_schema.end(); ++_iter121)
+    duckdb::vector<std::string> ::const_iterator _iter138;
+    for (_iter138 = this->path_in_schema.begin(); _iter138 != this->path_in_schema.end(); ++_iter138)
     {
-      xfer += oprot->writeString((*_iter121));
+      xfer += oprot->writeString((*_iter138));
     }
     xfer += oprot->writeListEnd();
   }
@@ -5674,10 +6504,10 @@ uint32_t ColumnMetaData::write(::apache::thrift::protocol::TProtocol* oprot) con
     xfer += oprot->writeFieldBegin("key_value_metadata", ::apache::thrift::protocol::T_LIST, 8);
     {
       xfer += oprot->writeListBegin(::apache::thrift::protocol::T_STRUCT, static_cast<uint32_t>(this->key_value_metadata.size()));
-      duckdb::vector<KeyValue> ::const_iterator _iter122;
-      for (_iter122 = this->key_value_metadata.begin(); _iter122 != this->key_value_metadata.end(); ++_iter122)
+      duckdb::vector<KeyValue> ::const_iterator _iter139;
+      for (_iter139 = this->key_value_metadata.begin(); _iter139 != this->key_value_metadata.end(); ++_iter139)
       {
-        xfer += (*_iter122).write(oprot);
+        xfer += (*_iter139).write(oprot);
       }
       xfer += oprot->writeListEnd();
     }
@@ -5706,10 +6536,10 @@ uint32_t ColumnMetaData::write(::apache::thrift::protocol::TProtocol* oprot) con
     xfer += oprot->writeFieldBegin("encoding_stats", ::apache::thrift::protocol::T_LIST, 13);
     {
       xfer += oprot->writeListBegin(::apache::thrift::protocol::T_STRUCT, static_cast<uint32_t>(this->encoding_stats.size()));
-      duckdb::vector<PageEncodingStats> ::const_iterator _iter123;
-      for (_iter123 = this->encoding_stats.begin(); _iter123 != this->encoding_stats.end(); ++_iter123)
+      duckdb::vector<PageEncodingStats> ::const_iterator _iter140;
+      for (_iter140 = this->encoding_stats.begin(); _iter140 != this->encoding_stats.end(); ++_iter140)
       {
-        xfer += (*_iter123).write(oprot);
+        xfer += (*_iter140).write(oprot);
       }
       xfer += oprot->writeListEnd();
     }
@@ -5728,6 +6558,11 @@ uint32_t ColumnMetaData::write(::apache::thrift::protocol::TProtocol* oprot) con
   if (this->__isset.size_statistics) {
     xfer += oprot->writeFieldBegin("size_statistics", ::apache::thrift::protocol::T_STRUCT, 16);
     xfer += this->size_statistics.write(oprot);
+    xfer += oprot->writeFieldEnd();
+  }
+  if (this->__isset.geospatial_statistics) {
+    xfer += oprot->writeFieldBegin("geospatial_statistics", ::apache::thrift::protocol::T_STRUCT, 17);
+    xfer += this->geospatial_statistics.write(oprot);
     xfer += oprot->writeFieldEnd();
   }
   xfer += oprot->writeFieldStop();
@@ -5753,46 +6588,49 @@ void swap(ColumnMetaData &a, ColumnMetaData &b) {
   swap(a.bloom_filter_offset, b.bloom_filter_offset);
   swap(a.bloom_filter_length, b.bloom_filter_length);
   swap(a.size_statistics, b.size_statistics);
+  swap(a.geospatial_statistics, b.geospatial_statistics);
   swap(a.__isset, b.__isset);
 }
 
-ColumnMetaData::ColumnMetaData(const ColumnMetaData& other124) {
-  type = other124.type;
-  encodings = other124.encodings;
-  path_in_schema = other124.path_in_schema;
-  codec = other124.codec;
-  num_values = other124.num_values;
-  total_uncompressed_size = other124.total_uncompressed_size;
-  total_compressed_size = other124.total_compressed_size;
-  key_value_metadata = other124.key_value_metadata;
-  data_page_offset = other124.data_page_offset;
-  index_page_offset = other124.index_page_offset;
-  dictionary_page_offset = other124.dictionary_page_offset;
-  statistics = other124.statistics;
-  encoding_stats = other124.encoding_stats;
-  bloom_filter_offset = other124.bloom_filter_offset;
-  bloom_filter_length = other124.bloom_filter_length;
-  size_statistics = other124.size_statistics;
-  __isset = other124.__isset;
+ColumnMetaData::ColumnMetaData(const ColumnMetaData& other141) {
+  type = other141.type;
+  encodings = other141.encodings;
+  path_in_schema = other141.path_in_schema;
+  codec = other141.codec;
+  num_values = other141.num_values;
+  total_uncompressed_size = other141.total_uncompressed_size;
+  total_compressed_size = other141.total_compressed_size;
+  key_value_metadata = other141.key_value_metadata;
+  data_page_offset = other141.data_page_offset;
+  index_page_offset = other141.index_page_offset;
+  dictionary_page_offset = other141.dictionary_page_offset;
+  statistics = other141.statistics;
+  encoding_stats = other141.encoding_stats;
+  bloom_filter_offset = other141.bloom_filter_offset;
+  bloom_filter_length = other141.bloom_filter_length;
+  size_statistics = other141.size_statistics;
+  geospatial_statistics = other141.geospatial_statistics;
+  __isset = other141.__isset;
 }
-ColumnMetaData& ColumnMetaData::operator=(const ColumnMetaData& other125) {
-  type = other125.type;
-  encodings = other125.encodings;
-  path_in_schema = other125.path_in_schema;
-  codec = other125.codec;
-  num_values = other125.num_values;
-  total_uncompressed_size = other125.total_uncompressed_size;
-  total_compressed_size = other125.total_compressed_size;
-  key_value_metadata = other125.key_value_metadata;
-  data_page_offset = other125.data_page_offset;
-  index_page_offset = other125.index_page_offset;
-  dictionary_page_offset = other125.dictionary_page_offset;
-  statistics = other125.statistics;
-  encoding_stats = other125.encoding_stats;
-  bloom_filter_offset = other125.bloom_filter_offset;
-  bloom_filter_length = other125.bloom_filter_length;
-  size_statistics = other125.size_statistics;
-  __isset = other125.__isset;
+ColumnMetaData& ColumnMetaData::operator=(const ColumnMetaData& other142) {
+  type = other142.type;
+  encodings = other142.encodings;
+  path_in_schema = other142.path_in_schema;
+  codec = other142.codec;
+  num_values = other142.num_values;
+  total_uncompressed_size = other142.total_uncompressed_size;
+  total_compressed_size = other142.total_compressed_size;
+  key_value_metadata = other142.key_value_metadata;
+  data_page_offset = other142.data_page_offset;
+  index_page_offset = other142.index_page_offset;
+  dictionary_page_offset = other142.dictionary_page_offset;
+  statistics = other142.statistics;
+  encoding_stats = other142.encoding_stats;
+  bloom_filter_offset = other142.bloom_filter_offset;
+  bloom_filter_length = other142.bloom_filter_length;
+  size_statistics = other142.size_statistics;
+  geospatial_statistics = other142.geospatial_statistics;
+  __isset = other142.__isset;
   return *this;
 }
 void ColumnMetaData::printTo(std::ostream& out) const {
@@ -5814,6 +6652,7 @@ void ColumnMetaData::printTo(std::ostream& out) const {
   out << ", " << "bloom_filter_offset="; (__isset.bloom_filter_offset ? (out << to_string(bloom_filter_offset)) : (out << "<null>"));
   out << ", " << "bloom_filter_length="; (__isset.bloom_filter_length ? (out << to_string(bloom_filter_length)) : (out << "<null>"));
   out << ", " << "size_statistics="; (__isset.size_statistics ? (out << to_string(size_statistics)) : (out << "<null>"));
+  out << ", " << "geospatial_statistics="; (__isset.geospatial_statistics ? (out << to_string(geospatial_statistics)) : (out << "<null>"));
   out << ")";
 }
 
@@ -5874,11 +6713,11 @@ void swap(EncryptionWithFooterKey &a, EncryptionWithFooterKey &b) {
   (void) b;
 }
 
-EncryptionWithFooterKey::EncryptionWithFooterKey(const EncryptionWithFooterKey& other126) noexcept {
-  (void) other126;
+EncryptionWithFooterKey::EncryptionWithFooterKey(const EncryptionWithFooterKey& other143) noexcept {
+  (void) other143;
 }
-EncryptionWithFooterKey& EncryptionWithFooterKey::operator=(const EncryptionWithFooterKey& other127) noexcept {
-  (void) other127;
+EncryptionWithFooterKey& EncryptionWithFooterKey::operator=(const EncryptionWithFooterKey& other144) noexcept {
+  (void) other144;
   return *this;
 }
 void EncryptionWithFooterKey::printTo(std::ostream& out) const {
@@ -5936,14 +6775,14 @@ uint32_t EncryptionWithColumnKey::read(::apache::thrift::protocol::TProtocol* ip
         if (ftype == ::apache::thrift::protocol::T_LIST) {
           {
             this->path_in_schema.clear();
-            uint32_t _size128;
-            ::apache::thrift::protocol::TType _etype131;
-            xfer += iprot->readListBegin(_etype131, _size128);
-            this->path_in_schema.resize(_size128);
-            uint32_t _i132;
-            for (_i132 = 0; _i132 < _size128; ++_i132)
+            uint32_t _size145;
+            ::apache::thrift::protocol::TType _etype148;
+            xfer += iprot->readListBegin(_etype148, _size145);
+            this->path_in_schema.resize(_size145);
+            uint32_t _i149;
+            for (_i149 = 0; _i149 < _size145; ++_i149)
             {
-              xfer += iprot->readString(this->path_in_schema[_i132]);
+              xfer += iprot->readString(this->path_in_schema[_i149]);
             }
             xfer += iprot->readListEnd();
           }
@@ -5982,10 +6821,10 @@ uint32_t EncryptionWithColumnKey::write(::apache::thrift::protocol::TProtocol* o
   xfer += oprot->writeFieldBegin("path_in_schema", ::apache::thrift::protocol::T_LIST, 1);
   {
     xfer += oprot->writeListBegin(::apache::thrift::protocol::T_STRING, static_cast<uint32_t>(this->path_in_schema.size()));
-    duckdb::vector<std::string> ::const_iterator _iter133;
-    for (_iter133 = this->path_in_schema.begin(); _iter133 != this->path_in_schema.end(); ++_iter133)
+    duckdb::vector<std::string> ::const_iterator _iter150;
+    for (_iter150 = this->path_in_schema.begin(); _iter150 != this->path_in_schema.end(); ++_iter150)
     {
-      xfer += oprot->writeString((*_iter133));
+      xfer += oprot->writeString((*_iter150));
     }
     xfer += oprot->writeListEnd();
   }
@@ -6008,15 +6847,15 @@ void swap(EncryptionWithColumnKey &a, EncryptionWithColumnKey &b) {
   swap(a.__isset, b.__isset);
 }
 
-EncryptionWithColumnKey::EncryptionWithColumnKey(const EncryptionWithColumnKey& other134) {
-  path_in_schema = other134.path_in_schema;
-  key_metadata = other134.key_metadata;
-  __isset = other134.__isset;
+EncryptionWithColumnKey::EncryptionWithColumnKey(const EncryptionWithColumnKey& other151) {
+  path_in_schema = other151.path_in_schema;
+  key_metadata = other151.key_metadata;
+  __isset = other151.__isset;
 }
-EncryptionWithColumnKey& EncryptionWithColumnKey::operator=(const EncryptionWithColumnKey& other135) {
-  path_in_schema = other135.path_in_schema;
-  key_metadata = other135.key_metadata;
-  __isset = other135.__isset;
+EncryptionWithColumnKey& EncryptionWithColumnKey::operator=(const EncryptionWithColumnKey& other152) {
+  path_in_schema = other152.path_in_schema;
+  key_metadata = other152.key_metadata;
+  __isset = other152.__isset;
   return *this;
 }
 void EncryptionWithColumnKey::printTo(std::ostream& out) const {
@@ -6126,15 +6965,15 @@ void swap(ColumnCryptoMetaData &a, ColumnCryptoMetaData &b) {
   swap(a.__isset, b.__isset);
 }
 
-ColumnCryptoMetaData::ColumnCryptoMetaData(const ColumnCryptoMetaData& other136) {
-  ENCRYPTION_WITH_FOOTER_KEY = other136.ENCRYPTION_WITH_FOOTER_KEY;
-  ENCRYPTION_WITH_COLUMN_KEY = other136.ENCRYPTION_WITH_COLUMN_KEY;
-  __isset = other136.__isset;
+ColumnCryptoMetaData::ColumnCryptoMetaData(const ColumnCryptoMetaData& other153) {
+  ENCRYPTION_WITH_FOOTER_KEY = other153.ENCRYPTION_WITH_FOOTER_KEY;
+  ENCRYPTION_WITH_COLUMN_KEY = other153.ENCRYPTION_WITH_COLUMN_KEY;
+  __isset = other153.__isset;
 }
-ColumnCryptoMetaData& ColumnCryptoMetaData::operator=(const ColumnCryptoMetaData& other137) {
-  ENCRYPTION_WITH_FOOTER_KEY = other137.ENCRYPTION_WITH_FOOTER_KEY;
-  ENCRYPTION_WITH_COLUMN_KEY = other137.ENCRYPTION_WITH_COLUMN_KEY;
-  __isset = other137.__isset;
+ColumnCryptoMetaData& ColumnCryptoMetaData::operator=(const ColumnCryptoMetaData& other154) {
+  ENCRYPTION_WITH_FOOTER_KEY = other154.ENCRYPTION_WITH_FOOTER_KEY;
+  ENCRYPTION_WITH_COLUMN_KEY = other154.ENCRYPTION_WITH_COLUMN_KEY;
+  __isset = other154.__isset;
   return *this;
 }
 void ColumnCryptoMetaData::printTo(std::ostream& out) const {
@@ -6385,29 +7224,29 @@ void swap(ColumnChunk &a, ColumnChunk &b) {
   swap(a.__isset, b.__isset);
 }
 
-ColumnChunk::ColumnChunk(const ColumnChunk& other138) {
-  file_path = other138.file_path;
-  file_offset = other138.file_offset;
-  meta_data = other138.meta_data;
-  offset_index_offset = other138.offset_index_offset;
-  offset_index_length = other138.offset_index_length;
-  column_index_offset = other138.column_index_offset;
-  column_index_length = other138.column_index_length;
-  crypto_metadata = other138.crypto_metadata;
-  encrypted_column_metadata = other138.encrypted_column_metadata;
-  __isset = other138.__isset;
+ColumnChunk::ColumnChunk(const ColumnChunk& other155) {
+  file_path = other155.file_path;
+  file_offset = other155.file_offset;
+  meta_data = other155.meta_data;
+  offset_index_offset = other155.offset_index_offset;
+  offset_index_length = other155.offset_index_length;
+  column_index_offset = other155.column_index_offset;
+  column_index_length = other155.column_index_length;
+  crypto_metadata = other155.crypto_metadata;
+  encrypted_column_metadata = other155.encrypted_column_metadata;
+  __isset = other155.__isset;
 }
-ColumnChunk& ColumnChunk::operator=(const ColumnChunk& other139) {
-  file_path = other139.file_path;
-  file_offset = other139.file_offset;
-  meta_data = other139.meta_data;
-  offset_index_offset = other139.offset_index_offset;
-  offset_index_length = other139.offset_index_length;
-  column_index_offset = other139.column_index_offset;
-  column_index_length = other139.column_index_length;
-  crypto_metadata = other139.crypto_metadata;
-  encrypted_column_metadata = other139.encrypted_column_metadata;
-  __isset = other139.__isset;
+ColumnChunk& ColumnChunk::operator=(const ColumnChunk& other156) {
+  file_path = other156.file_path;
+  file_offset = other156.file_offset;
+  meta_data = other156.meta_data;
+  offset_index_offset = other156.offset_index_offset;
+  offset_index_length = other156.offset_index_length;
+  column_index_offset = other156.column_index_offset;
+  column_index_length = other156.column_index_length;
+  crypto_metadata = other156.crypto_metadata;
+  encrypted_column_metadata = other156.encrypted_column_metadata;
+  __isset = other156.__isset;
   return *this;
 }
 void ColumnChunk::printTo(std::ostream& out) const {
@@ -6503,14 +7342,14 @@ uint32_t RowGroup::read(::apache::thrift::protocol::TProtocol* iprot) {
         if (ftype == ::apache::thrift::protocol::T_LIST) {
           {
             this->columns.clear();
-            uint32_t _size140;
-            ::apache::thrift::protocol::TType _etype143;
-            xfer += iprot->readListBegin(_etype143, _size140);
-            this->columns.resize(_size140);
-            uint32_t _i144;
-            for (_i144 = 0; _i144 < _size140; ++_i144)
+            uint32_t _size157;
+            ::apache::thrift::protocol::TType _etype160;
+            xfer += iprot->readListBegin(_etype160, _size157);
+            this->columns.resize(_size157);
+            uint32_t _i161;
+            for (_i161 = 0; _i161 < _size157; ++_i161)
             {
-              xfer += this->columns[_i144].read(iprot);
+              xfer += this->columns[_i161].read(iprot);
             }
             xfer += iprot->readListEnd();
           }
@@ -6539,14 +7378,14 @@ uint32_t RowGroup::read(::apache::thrift::protocol::TProtocol* iprot) {
         if (ftype == ::apache::thrift::protocol::T_LIST) {
           {
             this->sorting_columns.clear();
-            uint32_t _size145;
-            ::apache::thrift::protocol::TType _etype148;
-            xfer += iprot->readListBegin(_etype148, _size145);
-            this->sorting_columns.resize(_size145);
-            uint32_t _i149;
-            for (_i149 = 0; _i149 < _size145; ++_i149)
+            uint32_t _size162;
+            ::apache::thrift::protocol::TType _etype165;
+            xfer += iprot->readListBegin(_etype165, _size162);
+            this->sorting_columns.resize(_size162);
+            uint32_t _i166;
+            for (_i166 = 0; _i166 < _size162; ++_i166)
             {
-              xfer += this->sorting_columns[_i149].read(iprot);
+              xfer += this->sorting_columns[_i166].read(iprot);
             }
             xfer += iprot->readListEnd();
           }
@@ -6605,10 +7444,10 @@ uint32_t RowGroup::write(::apache::thrift::protocol::TProtocol* oprot) const {
   xfer += oprot->writeFieldBegin("columns", ::apache::thrift::protocol::T_LIST, 1);
   {
     xfer += oprot->writeListBegin(::apache::thrift::protocol::T_STRUCT, static_cast<uint32_t>(this->columns.size()));
-    duckdb::vector<ColumnChunk> ::const_iterator _iter150;
-    for (_iter150 = this->columns.begin(); _iter150 != this->columns.end(); ++_iter150)
+    duckdb::vector<ColumnChunk> ::const_iterator _iter167;
+    for (_iter167 = this->columns.begin(); _iter167 != this->columns.end(); ++_iter167)
     {
-      xfer += (*_iter150).write(oprot);
+      xfer += (*_iter167).write(oprot);
     }
     xfer += oprot->writeListEnd();
   }
@@ -6626,10 +7465,10 @@ uint32_t RowGroup::write(::apache::thrift::protocol::TProtocol* oprot) const {
     xfer += oprot->writeFieldBegin("sorting_columns", ::apache::thrift::protocol::T_LIST, 4);
     {
       xfer += oprot->writeListBegin(::apache::thrift::protocol::T_STRUCT, static_cast<uint32_t>(this->sorting_columns.size()));
-      duckdb::vector<SortingColumn> ::const_iterator _iter151;
-      for (_iter151 = this->sorting_columns.begin(); _iter151 != this->sorting_columns.end(); ++_iter151)
+      duckdb::vector<SortingColumn> ::const_iterator _iter168;
+      for (_iter168 = this->sorting_columns.begin(); _iter168 != this->sorting_columns.end(); ++_iter168)
       {
-        xfer += (*_iter151).write(oprot);
+        xfer += (*_iter168).write(oprot);
       }
       xfer += oprot->writeListEnd();
     }
@@ -6667,25 +7506,25 @@ void swap(RowGroup &a, RowGroup &b) {
   swap(a.__isset, b.__isset);
 }
 
-RowGroup::RowGroup(const RowGroup& other152) {
-  columns = other152.columns;
-  total_byte_size = other152.total_byte_size;
-  num_rows = other152.num_rows;
-  sorting_columns = other152.sorting_columns;
-  file_offset = other152.file_offset;
-  total_compressed_size = other152.total_compressed_size;
-  ordinal = other152.ordinal;
-  __isset = other152.__isset;
+RowGroup::RowGroup(const RowGroup& other169) {
+  columns = other169.columns;
+  total_byte_size = other169.total_byte_size;
+  num_rows = other169.num_rows;
+  sorting_columns = other169.sorting_columns;
+  file_offset = other169.file_offset;
+  total_compressed_size = other169.total_compressed_size;
+  ordinal = other169.ordinal;
+  __isset = other169.__isset;
 }
-RowGroup& RowGroup::operator=(const RowGroup& other153) {
-  columns = other153.columns;
-  total_byte_size = other153.total_byte_size;
-  num_rows = other153.num_rows;
-  sorting_columns = other153.sorting_columns;
-  file_offset = other153.file_offset;
-  total_compressed_size = other153.total_compressed_size;
-  ordinal = other153.ordinal;
-  __isset = other153.__isset;
+RowGroup& RowGroup::operator=(const RowGroup& other170) {
+  columns = other170.columns;
+  total_byte_size = other170.total_byte_size;
+  num_rows = other170.num_rows;
+  sorting_columns = other170.sorting_columns;
+  file_offset = other170.file_offset;
+  total_compressed_size = other170.total_compressed_size;
+  ordinal = other170.ordinal;
+  __isset = other170.__isset;
   return *this;
 }
 void RowGroup::printTo(std::ostream& out) const {
@@ -6758,11 +7597,11 @@ void swap(TypeDefinedOrder &a, TypeDefinedOrder &b) {
   (void) b;
 }
 
-TypeDefinedOrder::TypeDefinedOrder(const TypeDefinedOrder& other154) noexcept {
-  (void) other154;
+TypeDefinedOrder::TypeDefinedOrder(const TypeDefinedOrder& other171) noexcept {
+  (void) other171;
 }
-TypeDefinedOrder& TypeDefinedOrder::operator=(const TypeDefinedOrder& other155) noexcept {
-  (void) other155;
+TypeDefinedOrder& TypeDefinedOrder::operator=(const TypeDefinedOrder& other172) noexcept {
+  (void) other172;
   return *this;
 }
 void TypeDefinedOrder::printTo(std::ostream& out) const {
@@ -6851,13 +7690,13 @@ void swap(ColumnOrder &a, ColumnOrder &b) {
   swap(a.__isset, b.__isset);
 }
 
-ColumnOrder::ColumnOrder(const ColumnOrder& other156) noexcept {
-  TYPE_ORDER = other156.TYPE_ORDER;
-  __isset = other156.__isset;
+ColumnOrder::ColumnOrder(const ColumnOrder& other173) noexcept {
+  TYPE_ORDER = other173.TYPE_ORDER;
+  __isset = other173.__isset;
 }
-ColumnOrder& ColumnOrder::operator=(const ColumnOrder& other157) noexcept {
-  TYPE_ORDER = other157.TYPE_ORDER;
-  __isset = other157.__isset;
+ColumnOrder& ColumnOrder::operator=(const ColumnOrder& other174) noexcept {
+  TYPE_ORDER = other174.TYPE_ORDER;
+  __isset = other174.__isset;
   return *this;
 }
 void ColumnOrder::printTo(std::ostream& out) const {
@@ -6990,15 +7829,15 @@ void swap(PageLocation &a, PageLocation &b) {
   swap(a.first_row_index, b.first_row_index);
 }
 
-PageLocation::PageLocation(const PageLocation& other158) noexcept {
-  offset = other158.offset;
-  compressed_page_size = other158.compressed_page_size;
-  first_row_index = other158.first_row_index;
+PageLocation::PageLocation(const PageLocation& other175) noexcept {
+  offset = other175.offset;
+  compressed_page_size = other175.compressed_page_size;
+  first_row_index = other175.first_row_index;
 }
-PageLocation& PageLocation::operator=(const PageLocation& other159) noexcept {
-  offset = other159.offset;
-  compressed_page_size = other159.compressed_page_size;
-  first_row_index = other159.first_row_index;
+PageLocation& PageLocation::operator=(const PageLocation& other176) noexcept {
+  offset = other176.offset;
+  compressed_page_size = other176.compressed_page_size;
+  first_row_index = other176.first_row_index;
   return *this;
 }
 void PageLocation::printTo(std::ostream& out) const {
@@ -7058,14 +7897,14 @@ uint32_t OffsetIndex::read(::apache::thrift::protocol::TProtocol* iprot) {
         if (ftype == ::apache::thrift::protocol::T_LIST) {
           {
             this->page_locations.clear();
-            uint32_t _size160;
-            ::apache::thrift::protocol::TType _etype163;
-            xfer += iprot->readListBegin(_etype163, _size160);
-            this->page_locations.resize(_size160);
-            uint32_t _i164;
-            for (_i164 = 0; _i164 < _size160; ++_i164)
+            uint32_t _size177;
+            ::apache::thrift::protocol::TType _etype180;
+            xfer += iprot->readListBegin(_etype180, _size177);
+            this->page_locations.resize(_size177);
+            uint32_t _i181;
+            for (_i181 = 0; _i181 < _size177; ++_i181)
             {
-              xfer += this->page_locations[_i164].read(iprot);
+              xfer += this->page_locations[_i181].read(iprot);
             }
             xfer += iprot->readListEnd();
           }
@@ -7078,14 +7917,14 @@ uint32_t OffsetIndex::read(::apache::thrift::protocol::TProtocol* iprot) {
         if (ftype == ::apache::thrift::protocol::T_LIST) {
           {
             this->unencoded_byte_array_data_bytes.clear();
-            uint32_t _size165;
-            ::apache::thrift::protocol::TType _etype168;
-            xfer += iprot->readListBegin(_etype168, _size165);
-            this->unencoded_byte_array_data_bytes.resize(_size165);
-            uint32_t _i169;
-            for (_i169 = 0; _i169 < _size165; ++_i169)
+            uint32_t _size182;
+            ::apache::thrift::protocol::TType _etype185;
+            xfer += iprot->readListBegin(_etype185, _size182);
+            this->unencoded_byte_array_data_bytes.resize(_size182);
+            uint32_t _i186;
+            for (_i186 = 0; _i186 < _size182; ++_i186)
             {
-              xfer += iprot->readI64(this->unencoded_byte_array_data_bytes[_i169]);
+              xfer += iprot->readI64(this->unencoded_byte_array_data_bytes[_i186]);
             }
             xfer += iprot->readListEnd();
           }
@@ -7116,10 +7955,10 @@ uint32_t OffsetIndex::write(::apache::thrift::protocol::TProtocol* oprot) const 
   xfer += oprot->writeFieldBegin("page_locations", ::apache::thrift::protocol::T_LIST, 1);
   {
     xfer += oprot->writeListBegin(::apache::thrift::protocol::T_STRUCT, static_cast<uint32_t>(this->page_locations.size()));
-    duckdb::vector<PageLocation> ::const_iterator _iter170;
-    for (_iter170 = this->page_locations.begin(); _iter170 != this->page_locations.end(); ++_iter170)
+    duckdb::vector<PageLocation> ::const_iterator _iter187;
+    for (_iter187 = this->page_locations.begin(); _iter187 != this->page_locations.end(); ++_iter187)
     {
-      xfer += (*_iter170).write(oprot);
+      xfer += (*_iter187).write(oprot);
     }
     xfer += oprot->writeListEnd();
   }
@@ -7129,10 +7968,10 @@ uint32_t OffsetIndex::write(::apache::thrift::protocol::TProtocol* oprot) const 
     xfer += oprot->writeFieldBegin("unencoded_byte_array_data_bytes", ::apache::thrift::protocol::T_LIST, 2);
     {
       xfer += oprot->writeListBegin(::apache::thrift::protocol::T_I64, static_cast<uint32_t>(this->unencoded_byte_array_data_bytes.size()));
-      duckdb::vector<int64_t> ::const_iterator _iter171;
-      for (_iter171 = this->unencoded_byte_array_data_bytes.begin(); _iter171 != this->unencoded_byte_array_data_bytes.end(); ++_iter171)
+      duckdb::vector<int64_t> ::const_iterator _iter188;
+      for (_iter188 = this->unencoded_byte_array_data_bytes.begin(); _iter188 != this->unencoded_byte_array_data_bytes.end(); ++_iter188)
       {
-        xfer += oprot->writeI64((*_iter171));
+        xfer += oprot->writeI64((*_iter188));
       }
       xfer += oprot->writeListEnd();
     }
@@ -7150,15 +7989,15 @@ void swap(OffsetIndex &a, OffsetIndex &b) {
   swap(a.__isset, b.__isset);
 }
 
-OffsetIndex::OffsetIndex(const OffsetIndex& other172) {
-  page_locations = other172.page_locations;
-  unencoded_byte_array_data_bytes = other172.unencoded_byte_array_data_bytes;
-  __isset = other172.__isset;
+OffsetIndex::OffsetIndex(const OffsetIndex& other189) {
+  page_locations = other189.page_locations;
+  unencoded_byte_array_data_bytes = other189.unencoded_byte_array_data_bytes;
+  __isset = other189.__isset;
 }
-OffsetIndex& OffsetIndex::operator=(const OffsetIndex& other173) {
-  page_locations = other173.page_locations;
-  unencoded_byte_array_data_bytes = other173.unencoded_byte_array_data_bytes;
-  __isset = other173.__isset;
+OffsetIndex& OffsetIndex::operator=(const OffsetIndex& other190) {
+  page_locations = other190.page_locations;
+  unencoded_byte_array_data_bytes = other190.unencoded_byte_array_data_bytes;
+  __isset = other190.__isset;
   return *this;
 }
 void OffsetIndex::printTo(std::ostream& out) const {
@@ -7243,14 +8082,14 @@ uint32_t ColumnIndex::read(::apache::thrift::protocol::TProtocol* iprot) {
         if (ftype == ::apache::thrift::protocol::T_LIST) {
           {
             this->null_pages.clear();
-            uint32_t _size174;
-            ::apache::thrift::protocol::TType _etype177;
-            xfer += iprot->readListBegin(_etype177, _size174);
-            this->null_pages.resize(_size174);
-            uint32_t _i178;
-            for (_i178 = 0; _i178 < _size174; ++_i178)
+            uint32_t _size191;
+            ::apache::thrift::protocol::TType _etype194;
+            xfer += iprot->readListBegin(_etype194, _size191);
+            this->null_pages.resize(_size191);
+            uint32_t _i195;
+            for (_i195 = 0; _i195 < _size191; ++_i195)
             {
-              xfer += iprot->readBool(this->null_pages[_i178]);
+              xfer += iprot->readBool(this->null_pages[_i195]);
             }
             xfer += iprot->readListEnd();
           }
@@ -7263,14 +8102,14 @@ uint32_t ColumnIndex::read(::apache::thrift::protocol::TProtocol* iprot) {
         if (ftype == ::apache::thrift::protocol::T_LIST) {
           {
             this->min_values.clear();
-            uint32_t _size179;
-            ::apache::thrift::protocol::TType _etype182;
-            xfer += iprot->readListBegin(_etype182, _size179);
-            this->min_values.resize(_size179);
-            uint32_t _i183;
-            for (_i183 = 0; _i183 < _size179; ++_i183)
+            uint32_t _size196;
+            ::apache::thrift::protocol::TType _etype199;
+            xfer += iprot->readListBegin(_etype199, _size196);
+            this->min_values.resize(_size196);
+            uint32_t _i200;
+            for (_i200 = 0; _i200 < _size196; ++_i200)
             {
-              xfer += iprot->readBinary(this->min_values[_i183]);
+              xfer += iprot->readBinary(this->min_values[_i200]);
             }
             xfer += iprot->readListEnd();
           }
@@ -7283,14 +8122,14 @@ uint32_t ColumnIndex::read(::apache::thrift::protocol::TProtocol* iprot) {
         if (ftype == ::apache::thrift::protocol::T_LIST) {
           {
             this->max_values.clear();
-            uint32_t _size184;
-            ::apache::thrift::protocol::TType _etype187;
-            xfer += iprot->readListBegin(_etype187, _size184);
-            this->max_values.resize(_size184);
-            uint32_t _i188;
-            for (_i188 = 0; _i188 < _size184; ++_i188)
+            uint32_t _size201;
+            ::apache::thrift::protocol::TType _etype204;
+            xfer += iprot->readListBegin(_etype204, _size201);
+            this->max_values.resize(_size201);
+            uint32_t _i205;
+            for (_i205 = 0; _i205 < _size201; ++_i205)
             {
-              xfer += iprot->readBinary(this->max_values[_i188]);
+              xfer += iprot->readBinary(this->max_values[_i205]);
             }
             xfer += iprot->readListEnd();
           }
@@ -7301,9 +8140,9 @@ uint32_t ColumnIndex::read(::apache::thrift::protocol::TProtocol* iprot) {
         break;
       case 4:
         if (ftype == ::apache::thrift::protocol::T_I32) {
-          int32_t ecast189;
-          xfer += iprot->readI32(ecast189);
-          this->boundary_order = static_cast<BoundaryOrder::type>(ecast189);
+          int32_t ecast206;
+          xfer += iprot->readI32(ecast206);
+          this->boundary_order = static_cast<BoundaryOrder::type>(ecast206);
           isset_boundary_order = true;
         } else {
           xfer += iprot->skip(ftype);
@@ -7313,14 +8152,14 @@ uint32_t ColumnIndex::read(::apache::thrift::protocol::TProtocol* iprot) {
         if (ftype == ::apache::thrift::protocol::T_LIST) {
           {
             this->null_counts.clear();
-            uint32_t _size190;
-            ::apache::thrift::protocol::TType _etype193;
-            xfer += iprot->readListBegin(_etype193, _size190);
-            this->null_counts.resize(_size190);
-            uint32_t _i194;
-            for (_i194 = 0; _i194 < _size190; ++_i194)
+            uint32_t _size207;
+            ::apache::thrift::protocol::TType _etype210;
+            xfer += iprot->readListBegin(_etype210, _size207);
+            this->null_counts.resize(_size207);
+            uint32_t _i211;
+            for (_i211 = 0; _i211 < _size207; ++_i211)
             {
-              xfer += iprot->readI64(this->null_counts[_i194]);
+              xfer += iprot->readI64(this->null_counts[_i211]);
             }
             xfer += iprot->readListEnd();
           }
@@ -7333,14 +8172,14 @@ uint32_t ColumnIndex::read(::apache::thrift::protocol::TProtocol* iprot) {
         if (ftype == ::apache::thrift::protocol::T_LIST) {
           {
             this->repetition_level_histograms.clear();
-            uint32_t _size195;
-            ::apache::thrift::protocol::TType _etype198;
-            xfer += iprot->readListBegin(_etype198, _size195);
-            this->repetition_level_histograms.resize(_size195);
-            uint32_t _i199;
-            for (_i199 = 0; _i199 < _size195; ++_i199)
+            uint32_t _size212;
+            ::apache::thrift::protocol::TType _etype215;
+            xfer += iprot->readListBegin(_etype215, _size212);
+            this->repetition_level_histograms.resize(_size212);
+            uint32_t _i216;
+            for (_i216 = 0; _i216 < _size212; ++_i216)
             {
-              xfer += iprot->readI64(this->repetition_level_histograms[_i199]);
+              xfer += iprot->readI64(this->repetition_level_histograms[_i216]);
             }
             xfer += iprot->readListEnd();
           }
@@ -7353,14 +8192,14 @@ uint32_t ColumnIndex::read(::apache::thrift::protocol::TProtocol* iprot) {
         if (ftype == ::apache::thrift::protocol::T_LIST) {
           {
             this->definition_level_histograms.clear();
-            uint32_t _size200;
-            ::apache::thrift::protocol::TType _etype203;
-            xfer += iprot->readListBegin(_etype203, _size200);
-            this->definition_level_histograms.resize(_size200);
-            uint32_t _i204;
-            for (_i204 = 0; _i204 < _size200; ++_i204)
+            uint32_t _size217;
+            ::apache::thrift::protocol::TType _etype220;
+            xfer += iprot->readListBegin(_etype220, _size217);
+            this->definition_level_histograms.resize(_size217);
+            uint32_t _i221;
+            for (_i221 = 0; _i221 < _size217; ++_i221)
             {
-              xfer += iprot->readI64(this->definition_level_histograms[_i204]);
+              xfer += iprot->readI64(this->definition_level_histograms[_i221]);
             }
             xfer += iprot->readListEnd();
           }
@@ -7397,10 +8236,10 @@ uint32_t ColumnIndex::write(::apache::thrift::protocol::TProtocol* oprot) const 
   xfer += oprot->writeFieldBegin("null_pages", ::apache::thrift::protocol::T_LIST, 1);
   {
     xfer += oprot->writeListBegin(::apache::thrift::protocol::T_BOOL, static_cast<uint32_t>(this->null_pages.size()));
-    duckdb::vector<bool> ::const_iterator _iter205;
-    for (_iter205 = this->null_pages.begin(); _iter205 != this->null_pages.end(); ++_iter205)
+    duckdb::vector<bool> ::const_iterator _iter222;
+    for (_iter222 = this->null_pages.begin(); _iter222 != this->null_pages.end(); ++_iter222)
     {
-      xfer += oprot->writeBool((*_iter205));
+      xfer += oprot->writeBool((*_iter222));
     }
     xfer += oprot->writeListEnd();
   }
@@ -7409,10 +8248,10 @@ uint32_t ColumnIndex::write(::apache::thrift::protocol::TProtocol* oprot) const 
   xfer += oprot->writeFieldBegin("min_values", ::apache::thrift::protocol::T_LIST, 2);
   {
     xfer += oprot->writeListBegin(::apache::thrift::protocol::T_STRING, static_cast<uint32_t>(this->min_values.size()));
-    duckdb::vector<std::string> ::const_iterator _iter206;
-    for (_iter206 = this->min_values.begin(); _iter206 != this->min_values.end(); ++_iter206)
+    duckdb::vector<std::string> ::const_iterator _iter223;
+    for (_iter223 = this->min_values.begin(); _iter223 != this->min_values.end(); ++_iter223)
     {
-      xfer += oprot->writeBinary((*_iter206));
+      xfer += oprot->writeBinary((*_iter223));
     }
     xfer += oprot->writeListEnd();
   }
@@ -7421,10 +8260,10 @@ uint32_t ColumnIndex::write(::apache::thrift::protocol::TProtocol* oprot) const 
   xfer += oprot->writeFieldBegin("max_values", ::apache::thrift::protocol::T_LIST, 3);
   {
     xfer += oprot->writeListBegin(::apache::thrift::protocol::T_STRING, static_cast<uint32_t>(this->max_values.size()));
-    duckdb::vector<std::string> ::const_iterator _iter207;
-    for (_iter207 = this->max_values.begin(); _iter207 != this->max_values.end(); ++_iter207)
+    duckdb::vector<std::string> ::const_iterator _iter224;
+    for (_iter224 = this->max_values.begin(); _iter224 != this->max_values.end(); ++_iter224)
     {
-      xfer += oprot->writeBinary((*_iter207));
+      xfer += oprot->writeBinary((*_iter224));
     }
     xfer += oprot->writeListEnd();
   }
@@ -7438,10 +8277,10 @@ uint32_t ColumnIndex::write(::apache::thrift::protocol::TProtocol* oprot) const 
     xfer += oprot->writeFieldBegin("null_counts", ::apache::thrift::protocol::T_LIST, 5);
     {
       xfer += oprot->writeListBegin(::apache::thrift::protocol::T_I64, static_cast<uint32_t>(this->null_counts.size()));
-      duckdb::vector<int64_t> ::const_iterator _iter208;
-      for (_iter208 = this->null_counts.begin(); _iter208 != this->null_counts.end(); ++_iter208)
+      duckdb::vector<int64_t> ::const_iterator _iter225;
+      for (_iter225 = this->null_counts.begin(); _iter225 != this->null_counts.end(); ++_iter225)
       {
-        xfer += oprot->writeI64((*_iter208));
+        xfer += oprot->writeI64((*_iter225));
       }
       xfer += oprot->writeListEnd();
     }
@@ -7451,10 +8290,10 @@ uint32_t ColumnIndex::write(::apache::thrift::protocol::TProtocol* oprot) const 
     xfer += oprot->writeFieldBegin("repetition_level_histograms", ::apache::thrift::protocol::T_LIST, 6);
     {
       xfer += oprot->writeListBegin(::apache::thrift::protocol::T_I64, static_cast<uint32_t>(this->repetition_level_histograms.size()));
-      duckdb::vector<int64_t> ::const_iterator _iter209;
-      for (_iter209 = this->repetition_level_histograms.begin(); _iter209 != this->repetition_level_histograms.end(); ++_iter209)
+      duckdb::vector<int64_t> ::const_iterator _iter226;
+      for (_iter226 = this->repetition_level_histograms.begin(); _iter226 != this->repetition_level_histograms.end(); ++_iter226)
       {
-        xfer += oprot->writeI64((*_iter209));
+        xfer += oprot->writeI64((*_iter226));
       }
       xfer += oprot->writeListEnd();
     }
@@ -7464,10 +8303,10 @@ uint32_t ColumnIndex::write(::apache::thrift::protocol::TProtocol* oprot) const 
     xfer += oprot->writeFieldBegin("definition_level_histograms", ::apache::thrift::protocol::T_LIST, 7);
     {
       xfer += oprot->writeListBegin(::apache::thrift::protocol::T_I64, static_cast<uint32_t>(this->definition_level_histograms.size()));
-      duckdb::vector<int64_t> ::const_iterator _iter210;
-      for (_iter210 = this->definition_level_histograms.begin(); _iter210 != this->definition_level_histograms.end(); ++_iter210)
+      duckdb::vector<int64_t> ::const_iterator _iter227;
+      for (_iter227 = this->definition_level_histograms.begin(); _iter227 != this->definition_level_histograms.end(); ++_iter227)
       {
-        xfer += oprot->writeI64((*_iter210));
+        xfer += oprot->writeI64((*_iter227));
       }
       xfer += oprot->writeListEnd();
     }
@@ -7490,25 +8329,25 @@ void swap(ColumnIndex &a, ColumnIndex &b) {
   swap(a.__isset, b.__isset);
 }
 
-ColumnIndex::ColumnIndex(const ColumnIndex& other211) {
-  null_pages = other211.null_pages;
-  min_values = other211.min_values;
-  max_values = other211.max_values;
-  boundary_order = other211.boundary_order;
-  null_counts = other211.null_counts;
-  repetition_level_histograms = other211.repetition_level_histograms;
-  definition_level_histograms = other211.definition_level_histograms;
-  __isset = other211.__isset;
+ColumnIndex::ColumnIndex(const ColumnIndex& other228) {
+  null_pages = other228.null_pages;
+  min_values = other228.min_values;
+  max_values = other228.max_values;
+  boundary_order = other228.boundary_order;
+  null_counts = other228.null_counts;
+  repetition_level_histograms = other228.repetition_level_histograms;
+  definition_level_histograms = other228.definition_level_histograms;
+  __isset = other228.__isset;
 }
-ColumnIndex& ColumnIndex::operator=(const ColumnIndex& other212) {
-  null_pages = other212.null_pages;
-  min_values = other212.min_values;
-  max_values = other212.max_values;
-  boundary_order = other212.boundary_order;
-  null_counts = other212.null_counts;
-  repetition_level_histograms = other212.repetition_level_histograms;
-  definition_level_histograms = other212.definition_level_histograms;
-  __isset = other212.__isset;
+ColumnIndex& ColumnIndex::operator=(const ColumnIndex& other229) {
+  null_pages = other229.null_pages;
+  min_values = other229.min_values;
+  max_values = other229.max_values;
+  boundary_order = other229.boundary_order;
+  null_counts = other229.null_counts;
+  repetition_level_histograms = other229.repetition_level_histograms;
+  definition_level_histograms = other229.definition_level_histograms;
+  __isset = other229.__isset;
   return *this;
 }
 void ColumnIndex::printTo(std::ostream& out) const {
@@ -7645,17 +8484,17 @@ void swap(AesGcmV1 &a, AesGcmV1 &b) {
   swap(a.__isset, b.__isset);
 }
 
-AesGcmV1::AesGcmV1(const AesGcmV1& other213) {
-  aad_prefix = other213.aad_prefix;
-  aad_file_unique = other213.aad_file_unique;
-  supply_aad_prefix = other213.supply_aad_prefix;
-  __isset = other213.__isset;
+AesGcmV1::AesGcmV1(const AesGcmV1& other230) {
+  aad_prefix = other230.aad_prefix;
+  aad_file_unique = other230.aad_file_unique;
+  supply_aad_prefix = other230.supply_aad_prefix;
+  __isset = other230.__isset;
 }
-AesGcmV1& AesGcmV1::operator=(const AesGcmV1& other214) {
-  aad_prefix = other214.aad_prefix;
-  aad_file_unique = other214.aad_file_unique;
-  supply_aad_prefix = other214.supply_aad_prefix;
-  __isset = other214.__isset;
+AesGcmV1& AesGcmV1::operator=(const AesGcmV1& other231) {
+  aad_prefix = other231.aad_prefix;
+  aad_file_unique = other231.aad_file_unique;
+  supply_aad_prefix = other231.supply_aad_prefix;
+  __isset = other231.__isset;
   return *this;
 }
 void AesGcmV1::printTo(std::ostream& out) const {
@@ -7788,17 +8627,17 @@ void swap(AesGcmCtrV1 &a, AesGcmCtrV1 &b) {
   swap(a.__isset, b.__isset);
 }
 
-AesGcmCtrV1::AesGcmCtrV1(const AesGcmCtrV1& other215) {
-  aad_prefix = other215.aad_prefix;
-  aad_file_unique = other215.aad_file_unique;
-  supply_aad_prefix = other215.supply_aad_prefix;
-  __isset = other215.__isset;
+AesGcmCtrV1::AesGcmCtrV1(const AesGcmCtrV1& other232) {
+  aad_prefix = other232.aad_prefix;
+  aad_file_unique = other232.aad_file_unique;
+  supply_aad_prefix = other232.supply_aad_prefix;
+  __isset = other232.__isset;
 }
-AesGcmCtrV1& AesGcmCtrV1::operator=(const AesGcmCtrV1& other216) {
-  aad_prefix = other216.aad_prefix;
-  aad_file_unique = other216.aad_file_unique;
-  supply_aad_prefix = other216.supply_aad_prefix;
-  __isset = other216.__isset;
+AesGcmCtrV1& AesGcmCtrV1::operator=(const AesGcmCtrV1& other233) {
+  aad_prefix = other233.aad_prefix;
+  aad_file_unique = other233.aad_file_unique;
+  supply_aad_prefix = other233.supply_aad_prefix;
+  __isset = other233.__isset;
   return *this;
 }
 void AesGcmCtrV1::printTo(std::ostream& out) const {
@@ -7909,15 +8748,15 @@ void swap(EncryptionAlgorithm &a, EncryptionAlgorithm &b) {
   swap(a.__isset, b.__isset);
 }
 
-EncryptionAlgorithm::EncryptionAlgorithm(const EncryptionAlgorithm& other217) {
-  AES_GCM_V1 = other217.AES_GCM_V1;
-  AES_GCM_CTR_V1 = other217.AES_GCM_CTR_V1;
-  __isset = other217.__isset;
+EncryptionAlgorithm::EncryptionAlgorithm(const EncryptionAlgorithm& other234) {
+  AES_GCM_V1 = other234.AES_GCM_V1;
+  AES_GCM_CTR_V1 = other234.AES_GCM_CTR_V1;
+  __isset = other234.__isset;
 }
-EncryptionAlgorithm& EncryptionAlgorithm::operator=(const EncryptionAlgorithm& other218) {
-  AES_GCM_V1 = other218.AES_GCM_V1;
-  AES_GCM_CTR_V1 = other218.AES_GCM_CTR_V1;
-  __isset = other218.__isset;
+EncryptionAlgorithm& EncryptionAlgorithm::operator=(const EncryptionAlgorithm& other235) {
+  AES_GCM_V1 = other235.AES_GCM_V1;
+  AES_GCM_CTR_V1 = other235.AES_GCM_CTR_V1;
+  __isset = other235.__isset;
   return *this;
 }
 void EncryptionAlgorithm::printTo(std::ostream& out) const {
@@ -8023,14 +8862,14 @@ uint32_t FileMetaData::read(::apache::thrift::protocol::TProtocol* iprot) {
         if (ftype == ::apache::thrift::protocol::T_LIST) {
           {
             this->schema.clear();
-            uint32_t _size219;
-            ::apache::thrift::protocol::TType _etype222;
-            xfer += iprot->readListBegin(_etype222, _size219);
-            this->schema.resize(_size219);
-            uint32_t _i223;
-            for (_i223 = 0; _i223 < _size219; ++_i223)
+            uint32_t _size236;
+            ::apache::thrift::protocol::TType _etype239;
+            xfer += iprot->readListBegin(_etype239, _size236);
+            this->schema.resize(_size236);
+            uint32_t _i240;
+            for (_i240 = 0; _i240 < _size236; ++_i240)
             {
-              xfer += this->schema[_i223].read(iprot);
+              xfer += this->schema[_i240].read(iprot);
             }
             xfer += iprot->readListEnd();
           }
@@ -8051,14 +8890,14 @@ uint32_t FileMetaData::read(::apache::thrift::protocol::TProtocol* iprot) {
         if (ftype == ::apache::thrift::protocol::T_LIST) {
           {
             this->row_groups.clear();
-            uint32_t _size224;
-            ::apache::thrift::protocol::TType _etype227;
-            xfer += iprot->readListBegin(_etype227, _size224);
-            this->row_groups.resize(_size224);
-            uint32_t _i228;
-            for (_i228 = 0; _i228 < _size224; ++_i228)
+            uint32_t _size241;
+            ::apache::thrift::protocol::TType _etype244;
+            xfer += iprot->readListBegin(_etype244, _size241);
+            this->row_groups.resize(_size241);
+            uint32_t _i245;
+            for (_i245 = 0; _i245 < _size241; ++_i245)
             {
-              xfer += this->row_groups[_i228].read(iprot);
+              xfer += this->row_groups[_i245].read(iprot);
             }
             xfer += iprot->readListEnd();
           }
@@ -8071,14 +8910,14 @@ uint32_t FileMetaData::read(::apache::thrift::protocol::TProtocol* iprot) {
         if (ftype == ::apache::thrift::protocol::T_LIST) {
           {
             this->key_value_metadata.clear();
-            uint32_t _size229;
-            ::apache::thrift::protocol::TType _etype232;
-            xfer += iprot->readListBegin(_etype232, _size229);
-            this->key_value_metadata.resize(_size229);
-            uint32_t _i233;
-            for (_i233 = 0; _i233 < _size229; ++_i233)
+            uint32_t _size246;
+            ::apache::thrift::protocol::TType _etype249;
+            xfer += iprot->readListBegin(_etype249, _size246);
+            this->key_value_metadata.resize(_size246);
+            uint32_t _i250;
+            for (_i250 = 0; _i250 < _size246; ++_i250)
             {
-              xfer += this->key_value_metadata[_i233].read(iprot);
+              xfer += this->key_value_metadata[_i250].read(iprot);
             }
             xfer += iprot->readListEnd();
           }
@@ -8099,14 +8938,14 @@ uint32_t FileMetaData::read(::apache::thrift::protocol::TProtocol* iprot) {
         if (ftype == ::apache::thrift::protocol::T_LIST) {
           {
             this->column_orders.clear();
-            uint32_t _size234;
-            ::apache::thrift::protocol::TType _etype237;
-            xfer += iprot->readListBegin(_etype237, _size234);
-            this->column_orders.resize(_size234);
-            uint32_t _i238;
-            for (_i238 = 0; _i238 < _size234; ++_i238)
+            uint32_t _size251;
+            ::apache::thrift::protocol::TType _etype254;
+            xfer += iprot->readListBegin(_etype254, _size251);
+            this->column_orders.resize(_size251);
+            uint32_t _i255;
+            for (_i255 = 0; _i255 < _size251; ++_i255)
             {
-              xfer += this->column_orders[_i238].read(iprot);
+              xfer += this->column_orders[_i255].read(iprot);
             }
             xfer += iprot->readListEnd();
           }
@@ -8163,10 +9002,10 @@ uint32_t FileMetaData::write(::apache::thrift::protocol::TProtocol* oprot) const
   xfer += oprot->writeFieldBegin("schema", ::apache::thrift::protocol::T_LIST, 2);
   {
     xfer += oprot->writeListBegin(::apache::thrift::protocol::T_STRUCT, static_cast<uint32_t>(this->schema.size()));
-    duckdb::vector<SchemaElement> ::const_iterator _iter239;
-    for (_iter239 = this->schema.begin(); _iter239 != this->schema.end(); ++_iter239)
+    duckdb::vector<SchemaElement> ::const_iterator _iter256;
+    for (_iter256 = this->schema.begin(); _iter256 != this->schema.end(); ++_iter256)
     {
-      xfer += (*_iter239).write(oprot);
+      xfer += (*_iter256).write(oprot);
     }
     xfer += oprot->writeListEnd();
   }
@@ -8179,10 +9018,10 @@ uint32_t FileMetaData::write(::apache::thrift::protocol::TProtocol* oprot) const
   xfer += oprot->writeFieldBegin("row_groups", ::apache::thrift::protocol::T_LIST, 4);
   {
     xfer += oprot->writeListBegin(::apache::thrift::protocol::T_STRUCT, static_cast<uint32_t>(this->row_groups.size()));
-    duckdb::vector<RowGroup> ::const_iterator _iter240;
-    for (_iter240 = this->row_groups.begin(); _iter240 != this->row_groups.end(); ++_iter240)
+    duckdb::vector<RowGroup> ::const_iterator _iter257;
+    for (_iter257 = this->row_groups.begin(); _iter257 != this->row_groups.end(); ++_iter257)
     {
-      xfer += (*_iter240).write(oprot);
+      xfer += (*_iter257).write(oprot);
     }
     xfer += oprot->writeListEnd();
   }
@@ -8192,10 +9031,10 @@ uint32_t FileMetaData::write(::apache::thrift::protocol::TProtocol* oprot) const
     xfer += oprot->writeFieldBegin("key_value_metadata", ::apache::thrift::protocol::T_LIST, 5);
     {
       xfer += oprot->writeListBegin(::apache::thrift::protocol::T_STRUCT, static_cast<uint32_t>(this->key_value_metadata.size()));
-      duckdb::vector<KeyValue> ::const_iterator _iter241;
-      for (_iter241 = this->key_value_metadata.begin(); _iter241 != this->key_value_metadata.end(); ++_iter241)
+      duckdb::vector<KeyValue> ::const_iterator _iter258;
+      for (_iter258 = this->key_value_metadata.begin(); _iter258 != this->key_value_metadata.end(); ++_iter258)
       {
-        xfer += (*_iter241).write(oprot);
+        xfer += (*_iter258).write(oprot);
       }
       xfer += oprot->writeListEnd();
     }
@@ -8210,10 +9049,10 @@ uint32_t FileMetaData::write(::apache::thrift::protocol::TProtocol* oprot) const
     xfer += oprot->writeFieldBegin("column_orders", ::apache::thrift::protocol::T_LIST, 7);
     {
       xfer += oprot->writeListBegin(::apache::thrift::protocol::T_STRUCT, static_cast<uint32_t>(this->column_orders.size()));
-      duckdb::vector<ColumnOrder> ::const_iterator _iter242;
-      for (_iter242 = this->column_orders.begin(); _iter242 != this->column_orders.end(); ++_iter242)
+      duckdb::vector<ColumnOrder> ::const_iterator _iter259;
+      for (_iter259 = this->column_orders.begin(); _iter259 != this->column_orders.end(); ++_iter259)
       {
-        xfer += (*_iter242).write(oprot);
+        xfer += (*_iter259).write(oprot);
       }
       xfer += oprot->writeListEnd();
     }
@@ -8248,29 +9087,29 @@ void swap(FileMetaData &a, FileMetaData &b) {
   swap(a.__isset, b.__isset);
 }
 
-FileMetaData::FileMetaData(const FileMetaData& other243) {
-  version = other243.version;
-  schema = other243.schema;
-  num_rows = other243.num_rows;
-  row_groups = other243.row_groups;
-  key_value_metadata = other243.key_value_metadata;
-  created_by = other243.created_by;
-  column_orders = other243.column_orders;
-  encryption_algorithm = other243.encryption_algorithm;
-  footer_signing_key_metadata = other243.footer_signing_key_metadata;
-  __isset = other243.__isset;
+FileMetaData::FileMetaData(const FileMetaData& other260) {
+  version = other260.version;
+  schema = other260.schema;
+  num_rows = other260.num_rows;
+  row_groups = other260.row_groups;
+  key_value_metadata = other260.key_value_metadata;
+  created_by = other260.created_by;
+  column_orders = other260.column_orders;
+  encryption_algorithm = other260.encryption_algorithm;
+  footer_signing_key_metadata = other260.footer_signing_key_metadata;
+  __isset = other260.__isset;
 }
-FileMetaData& FileMetaData::operator=(const FileMetaData& other244) {
-  version = other244.version;
-  schema = other244.schema;
-  num_rows = other244.num_rows;
-  row_groups = other244.row_groups;
-  key_value_metadata = other244.key_value_metadata;
-  created_by = other244.created_by;
-  column_orders = other244.column_orders;
-  encryption_algorithm = other244.encryption_algorithm;
-  footer_signing_key_metadata = other244.footer_signing_key_metadata;
-  __isset = other244.__isset;
+FileMetaData& FileMetaData::operator=(const FileMetaData& other261) {
+  version = other261.version;
+  schema = other261.schema;
+  num_rows = other261.num_rows;
+  row_groups = other261.row_groups;
+  key_value_metadata = other261.key_value_metadata;
+  created_by = other261.created_by;
+  column_orders = other261.column_orders;
+  encryption_algorithm = other261.encryption_algorithm;
+  footer_signing_key_metadata = other261.footer_signing_key_metadata;
+  __isset = other261.__isset;
   return *this;
 }
 void FileMetaData::printTo(std::ostream& out) const {
@@ -8389,15 +9228,15 @@ void swap(FileCryptoMetaData &a, FileCryptoMetaData &b) {
   swap(a.__isset, b.__isset);
 }
 
-FileCryptoMetaData::FileCryptoMetaData(const FileCryptoMetaData& other245) {
-  encryption_algorithm = other245.encryption_algorithm;
-  key_metadata = other245.key_metadata;
-  __isset = other245.__isset;
+FileCryptoMetaData::FileCryptoMetaData(const FileCryptoMetaData& other262) {
+  encryption_algorithm = other262.encryption_algorithm;
+  key_metadata = other262.key_metadata;
+  __isset = other262.__isset;
 }
-FileCryptoMetaData& FileCryptoMetaData::operator=(const FileCryptoMetaData& other246) {
-  encryption_algorithm = other246.encryption_algorithm;
-  key_metadata = other246.key_metadata;
-  __isset = other246.__isset;
+FileCryptoMetaData& FileCryptoMetaData::operator=(const FileCryptoMetaData& other263) {
+  encryption_algorithm = other263.encryption_algorithm;
+  key_metadata = other263.key_metadata;
+  __isset = other263.__isset;
   return *this;
 }
 void FileCryptoMetaData::printTo(std::ostream& out) const {

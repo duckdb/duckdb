@@ -36,7 +36,7 @@ bool PartialBlockForCheckpoint::IsFlushed() {
 	return segments.empty();
 }
 
-void PartialBlockForCheckpoint::Flush(const idx_t free_space_left) {
+void PartialBlockForCheckpoint::Flush(QueryContext context, const idx_t free_space_left) {
 	if (IsFlushed()) {
 		throw InternalException("Flush called on partial block that was already flushed");
 	}
@@ -58,7 +58,7 @@ void PartialBlockForCheckpoint::Flush(const idx_t free_space_left) {
 		if (i == 0) {
 			// the first segment is converted to persistent - this writes the data for ALL segments to disk
 			D_ASSERT(segment.offset_in_block == 0);
-			segment.segment.ConvertToPersistent(&block_manager, state.block_id);
+			segment.segment.ConvertToPersistent(context, &block_manager, state.block_id);
 			// update the block after it has been converted to a persistent segment
 			block_handle = segment.segment.block;
 		} else {
@@ -117,29 +117,34 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, Buff
 
 void ColumnCheckpointState::FlushSegmentInternal(unique_ptr<ColumnSegment> segment, idx_t segment_size) {
 	auto block_size = partial_block_manager.GetBlockManager().GetBlockSize();
-	D_ASSERT(segment_size <= block_size);
+	if (segment_size > block_size) {
+		throw InternalException("segment size exceeds block size in ColumnCheckpointState::FlushSegmentInternal");
+	}
 
 	auto tuple_count = segment->count.load();
 	if (tuple_count == 0) { // LCOV_EXCL_START
 		return;
 	} // LCOV_EXCL_STOP
 
-	// merge the segment stats into the global stats
+	// Merge the segment statistics into the global statistics.
 	global_stats->Merge(segment->stats.statistics);
 
-	// get the buffer of the segment and pin it
-	auto &db = column_data.GetDatabase();
-	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	block_id_t block_id = INVALID_BLOCK;
 	uint32_t offset_in_block = 0;
 
 	unique_lock<mutex> partial_block_lock;
-	if (!segment->stats.statistics.IsConstant()) {
+	if (segment->stats.statistics.IsConstant()) {
+		// Constant block.
+		segment->ConvertToPersistent(partial_block_manager.GetClientContext(), nullptr, INVALID_BLOCK);
+
+	} else if (segment_size != 0) {
+		// Non-constant block with data that has to go to disk.
+		auto &db = column_data.GetDatabase();
+		auto &buffer_manager = BufferManager::GetBufferManager(db);
 		partial_block_lock = partial_block_manager.GetLock();
 
-		// non-constant block
-		PartialBlockAllocation allocation =
-		    partial_block_manager.GetBlockAllocation(NumericCast<uint32_t>(segment_size));
+		auto cast_segment_size = NumericCast<uint32_t>(segment_size);
+		auto allocation = partial_block_manager.GetBlockAllocation(cast_segment_size);
 		block_id = allocation.state.block_id;
 		offset_in_block = allocation.state.offset;
 
@@ -168,8 +173,12 @@ void ColumnCheckpointState::FlushSegmentInternal(unique_ptr<ColumnSegment> segme
 		}
 		// Writer will decide whether to reuse this block.
 		partial_block_manager.RegisterPartialBlock(std::move(allocation));
+
 	} else {
-		segment->ConvertToPersistent(nullptr, INVALID_BLOCK);
+		// Empty segment, which does not have to go to disk.
+		// We still need to change its type to persistent, because we need to write its metadata.
+		segment->segment_type = ColumnSegmentType::PERSISTENT;
+		segment->block.reset();
 	}
 
 	// construct the data pointer

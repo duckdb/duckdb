@@ -111,7 +111,7 @@ void Leaf::TransformToDeprecated(ART &art, Node &node) {
 	}
 
 	// Collect all row IDs and free the nested leaf.
-	unsafe_vector<row_t> row_ids;
+	set<row_t> row_ids;
 	Iterator it(art);
 	it.FindMinimum(node);
 	ARTKey empty_key = ARTKey();
@@ -121,7 +121,7 @@ void Leaf::TransformToDeprecated(ART &art, Node &node) {
 
 	// Create the deprecated leaves.
 	idx_t remaining = row_ids.size();
-	idx_t copy_count = 0;
+	auto row_ids_it = row_ids.begin();
 	reference<Node> ref(node);
 	while (remaining) {
 		ref.get() = Node::GetAllocator(art, LEAF).New();
@@ -132,10 +132,9 @@ void Leaf::TransformToDeprecated(ART &art, Node &node) {
 		leaf.count = UnsafeNumericCast<uint8_t>(min);
 
 		for (uint8_t i = 0; i < leaf.count; i++) {
-			leaf.row_ids[i] = row_ids[copy_count + i];
+			leaf.row_ids[i] = *row_ids_it;
+			row_ids_it++;
 		}
-
-		copy_count += leaf.count;
 		remaining -= leaf.count;
 
 		ref = leaf.ptr;
@@ -159,7 +158,7 @@ void Leaf::DeprecatedFree(ART &art, Node &node) {
 	node.Clear();
 }
 
-bool Leaf::DeprecatedGetRowIds(ART &art, const Node &node, unsafe_vector<row_t> &row_ids, const idx_t max_count) {
+bool Leaf::DeprecatedGetRowIds(ART &art, const Node &node, set<row_t> &row_ids, const idx_t max_count) {
 	D_ASSERT(node.GetType() == LEAF);
 
 	reference<const Node> ref(node);
@@ -170,7 +169,7 @@ bool Leaf::DeprecatedGetRowIds(ART &art, const Node &node, unsafe_vector<row_t> 
 			return false;
 		}
 		for (uint8_t i = 0; i < leaf.count; i++) {
-			row_ids.push_back(leaf.row_ids[i]);
+			row_ids.insert(leaf.row_ids[i]);
 		}
 		ref = leaf.ptr;
 	}

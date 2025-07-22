@@ -195,6 +195,8 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 		return Bind(statement.Cast<CopyDatabaseStatement>());
 	case StatementType::UPDATE_EXTENSIONS_STATEMENT:
 		return Bind(statement.Cast<UpdateExtensionsStatement>());
+	case StatementType::MERGE_INTO_STATEMENT:
+		return BindWithCTE(statement.Cast<MergeIntoStatement>());
 	default: // LCOV_EXCL_START
 		throw NotImplementedException("Unimplemented statement type \"%s\" for Bind",
 		                              StatementTypeToString(statement.type));
@@ -289,6 +291,9 @@ unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
 		break;
 	case TableReferenceType::DELIM_GET:
 		result = Bind(ref.Cast<DelimGetRef>());
+		break;
+	case TableReferenceType::BOUND_TABLE_REF:
+		result = Bind(ref.Cast<BoundRefWrapper>());
 		break;
 	case TableReferenceType::CTE:
 	case TableReferenceType::INVALID:
@@ -542,10 +547,10 @@ void VerifyNotExcluded(const ParsedExpression &root_expr) {
 
 BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> returning_list, TableCatalogEntry &table,
                                      const string &alias, idx_t update_table_index,
-                                     unique_ptr<LogicalOperator> child_operator, BoundStatement result) {
+                                     unique_ptr<LogicalOperator> child_operator, virtual_column_map_t virtual_columns) {
 
 	vector<LogicalType> types;
-	vector<std::string> names;
+	vector<string> names;
 
 	auto binder = Binder::CreateBinder(context);
 
@@ -560,12 +565,14 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 		column_count++;
 	}
 
-	binder->bind_context.AddBaseTable(update_table_index, alias, names, types, bound_columns, table, false);
+	binder->bind_context.AddBaseTable(update_table_index, alias, names, types, bound_columns, table,
+	                                  std::move(virtual_columns));
 	ReturningBinder returning_binder(*binder, context);
 
 	vector<unique_ptr<Expression>> projection_expressions;
 	LogicalType result_type;
 	vector<unique_ptr<ParsedExpression>> new_returning_list;
+	BoundStatement result;
 	binder->ExpandStarExpressions(returning_list, new_returning_list);
 	for (auto &returning_expr : new_returning_list) {
 		VerifyNotExcluded(*returning_expr);

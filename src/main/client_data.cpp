@@ -83,9 +83,6 @@ public:
 	idx_t GetBlockSize() const override {
 		return buffer_manager.GetBlockSize();
 	}
-	idx_t GetTemporaryBlockHeaderSize() const override {
-		return buffer_manager.GetTemporaryBlockHeaderSize();
-	}
 	idx_t GetQueryMaxMemory() const override {
 		return buffer_manager.GetQueryMaxMemory();
 	}
@@ -130,6 +127,9 @@ public:
 	}
 	bool HasTemporaryDirectory() const override {
 		return buffer_manager.HasTemporaryDirectory();
+	}
+	bool HasFilesInTemporaryDirectory() const override {
+		return buffer_manager.HasFilesInTemporaryDirectory();
 	}
 
 	unique_ptr<FileBuffer> ConstructManagedBuffer(idx_t size, idx_t block_header_size, unique_ptr<FileBuffer> &&source,

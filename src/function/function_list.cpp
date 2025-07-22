@@ -55,6 +55,7 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(InternalCompressIntegralUtinyintFun),
 	DUCKDB_SCALAR_FUNCTION(InternalCompressStringHugeintFun),
 	DUCKDB_SCALAR_FUNCTION(InternalCompressStringUbigintFun),
+	DUCKDB_SCALAR_FUNCTION(InternalCompressStringUhugeintFun),
 	DUCKDB_SCALAR_FUNCTION(InternalCompressStringUintegerFun),
 	DUCKDB_SCALAR_FUNCTION(InternalCompressStringUsmallintFun),
 	DUCKDB_SCALAR_FUNCTION(InternalCompressStringUtinyintFun),

@@ -2,6 +2,8 @@
 # description: Tests for autoloading with no autoinstall
 # group: [extension]
 
+require httpfs
+
 # This test assumes icu and json to be available in the LOCAL_EXTENSION_REPO and NOT linked into duckdb statically
 # -> this should be the case for our autoloading tests where we have the local_extension_repo variable set
 require-env LOCAL_EXTENSION_REPO

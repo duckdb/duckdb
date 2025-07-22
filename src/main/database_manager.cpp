@@ -30,8 +30,8 @@ void DatabaseManager::InitializeSystemCatalog() {
 }
 
 void DatabaseManager::FinalizeStartup() {
-	auto databases = GetDatabases();
-	for (auto &db : databases) {
+	auto dbs = GetDatabases();
+	for (auto &db : dbs) {
 		db.get().FinalizeLoad(nullptr);
 	}
 }
@@ -113,40 +113,34 @@ void DatabaseManager::DetachDatabase(ClientContext &context, const string &name,
 	}
 }
 
-optional_ptr<AttachedDatabase> DatabaseManager::GetDatabaseFromPath(ClientContext &context, const string &path) {
-	auto database_list = GetDatabases(context);
-	for (auto &db_ref : database_list) {
-		auto &db = db_ref.get();
-		if (db.IsSystem()) {
-			continue;
-		}
-		auto &catalog = Catalog::GetCatalog(db);
-		if (catalog.InMemory()) {
-			continue;
-		}
-		auto db_path = catalog.GetDBPath();
-		if (StringUtil::CIEquals(path, db_path)) {
-			return &db;
-		}
-	}
-	return nullptr;
-}
-
 void DatabaseManager::CheckPathConflict(ClientContext &context, const string &path) {
-	// ensure that we did not already attach a database with the same path
-	bool path_exists;
+	// Ensure that we did not already attach a database with the same path.
+	string db_name = "";
 	{
 		lock_guard<mutex> path_lock(db_paths_lock);
-		path_exists = db_paths.find(path) != db_paths.end();
-	}
-	if (path_exists) {
-		// check that the database is actually still attached
-		auto entry = GetDatabaseFromPath(context, path);
-		if (entry) {
-			throw BinderException("Unique file handle conflict: Database \"%s\" is already attached with path \"%s\", ",
-			                      entry->name, path);
+		auto it = db_paths_to_name.find(path);
+		if (it != db_paths_to_name.end()) {
+			db_name = it->second;
 		}
 	}
+	if (db_name.empty()) {
+		return;
+	}
+
+	// Check against the catalog set.
+	auto entry = GetDatabase(context, db_name);
+	if (!entry) {
+		return;
+	}
+	if (entry->IsSystem()) {
+		return;
+	}
+	auto &catalog = Catalog::GetCatalog(*entry);
+	if (catalog.InMemory()) {
+		return;
+	}
+	throw BinderException("Unique file handle conflict: Database \"%s\" is already attached with path \"%s\", ",
+	                      db_name, path);
 }
 
 void DatabaseManager::InsertDatabasePath(ClientContext &context, const string &path, const string &name) {
@@ -156,7 +150,7 @@ void DatabaseManager::InsertDatabasePath(ClientContext &context, const string &p
 
 	CheckPathConflict(context, path);
 	lock_guard<mutex> path_lock(db_paths_lock);
-	db_paths.insert(path);
+	db_paths_to_name[path] = name;
 }
 
 void DatabaseManager::EraseDatabasePath(const string &path) {
@@ -164,17 +158,17 @@ void DatabaseManager::EraseDatabasePath(const string &path) {
 		return;
 	}
 	lock_guard<mutex> path_lock(db_paths_lock);
-	auto path_it = db_paths.find(path);
-	if (path_it != db_paths.end()) {
-		db_paths.erase(path_it);
+	auto path_it = db_paths_to_name.find(path);
+	if (path_it != db_paths_to_name.end()) {
+		db_paths_to_name.erase(path_it);
 	}
 }
 
 vector<string> DatabaseManager::GetAttachedDatabasePaths() {
 	lock_guard<mutex> path_lock(db_paths_lock);
 	vector<string> paths;
-	for (auto &path : db_paths) {
-		paths.push_back(path);
+	for (auto &entry : db_paths_to_name) {
+		paths.push_back(entry.first);
 	}
 	return paths;
 }

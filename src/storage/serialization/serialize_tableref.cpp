@@ -181,6 +181,8 @@ void ShowRef::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<string>(200, "table_name", table_name);
 	serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(201, "query", query);
 	serializer.WriteProperty<ShowType>(202, "show_type", show_type);
+	serializer.WritePropertyWithDefault<string>(203, "catalog_name", catalog_name);
+	serializer.WritePropertyWithDefault<string>(204, "schema_name", schema_name);
 }
 
 unique_ptr<TableRef> ShowRef::Deserialize(Deserializer &deserializer) {
@@ -188,6 +190,8 @@ unique_ptr<TableRef> ShowRef::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<string>(200, "table_name", result->table_name);
 	deserializer.ReadPropertyWithDefault<unique_ptr<QueryNode>>(201, "query", result->query);
 	deserializer.ReadProperty<ShowType>(202, "show_type", result->show_type);
+	deserializer.ReadPropertyWithDefault<string>(203, "catalog_name", result->catalog_name);
+	deserializer.ReadPropertyWithDefault<string>(204, "schema_name", result->schema_name);
 	return std::move(result);
 }
 

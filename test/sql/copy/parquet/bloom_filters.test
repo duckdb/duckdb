@@ -129,6 +129,15 @@ select row_group_id, bloom_filter_offset IS NOT NULL, bloom_filter_length IS NOT
 ----
 0	false	false
 
+# no bloom filter - disabled explicitly
+statement ok
+copy (select (r1.range*10)::BIGINT r,
+from range(100) r1, range(100) order by r) to '__TEST_DIR__/disable_bloom_filter.parquet' (format parquet, ROW_GROUP_SIZE 10000, write_bloom_filter false);
+
+query III
+select row_group_id, bloom_filter_offset IS NOT NULL, bloom_filter_length IS NOT NULL from parquet_metadata('__TEST_DIR__/disable_bloom_filter.parquet') order by row_group_id;
+----
+0	false	false
 
 # still no bloom filter, limit off-by-one
 statement ok
