@@ -54,10 +54,10 @@ public:
 //===--------------------------------------------------------------------===//
 
 //! A class representing the state of the first_value, last_value and nth_value functions
-class WindowValueLocalState : public WindowExecutorBoundsState {
+class WindowValueLocalState : public WindowExecutorBoundsLocalState {
 public:
-	explicit WindowValueLocalState(const WindowValueGlobalState &gvstate)
-	    : WindowExecutorBoundsState(gvstate), gvstate(gvstate) {
+	explicit WindowValueLocalState(ExecutionContext &context, const WindowValueGlobalState &gvstate)
+	    : WindowExecutorBoundsLocalState(context, gvstate), gvstate(gvstate) {
 		WindowAggregatorLocalState::InitSubFrames(frames, gvstate.executor.wexpr.exclude_clause);
 
 		if (gvstate.value_tree) {
@@ -89,7 +89,7 @@ public:
 
 void WindowValueLocalState::Sink(WindowExecutorGlobalState &gstate, DataChunk &sink_chunk, DataChunk &coll_chunk,
                                  idx_t input_idx) {
-	WindowExecutorBoundsState::Sink(gstate, sink_chunk, coll_chunk, input_idx);
+	WindowExecutorBoundsLocalState::Sink(gstate, sink_chunk, coll_chunk, input_idx);
 
 	if (local_value) {
 		idx_t filtered = 0;
@@ -119,7 +119,7 @@ void WindowValueLocalState::Sink(WindowExecutorGlobalState &gstate, DataChunk &s
 }
 
 void WindowValueLocalState::Finalize(WindowExecutorGlobalState &gstate, CollectionPtr collection) {
-	WindowExecutorBoundsState::Finalize(gstate, collection);
+	WindowExecutorBoundsLocalState::Finalize(gstate, collection);
 
 	if (local_value) {
 		auto &value_state = local_value->Cast<WindowIndexTreeLocalState>();
@@ -171,9 +171,10 @@ void WindowValueExecutor::Finalize(WindowExecutorGlobalState &gstate, WindowExec
 	WindowExecutor::Finalize(gstate, lstate, collection);
 }
 
-unique_ptr<WindowExecutorLocalState> WindowValueExecutor::GetLocalState(const WindowExecutorGlobalState &gstate) const {
+unique_ptr<WindowExecutorLocalState> WindowValueExecutor::GetLocalState(ExecutionContext &context,
+                                                                        const WindowExecutorGlobalState &gstate) const {
 	const auto &gvstate = gstate.Cast<WindowValueGlobalState>();
-	return make_uniq<WindowValueLocalState>(gvstate);
+	return make_uniq<WindowValueLocalState>(context, gvstate);
 }
 
 //===--------------------------------------------------------------------===//
@@ -234,7 +235,8 @@ public:
 //===--------------------------------------------------------------------===//
 class WindowLeadLagLocalState : public WindowValueLocalState {
 public:
-	explicit WindowLeadLagLocalState(const WindowLeadLagGlobalState &gstate) : WindowValueLocalState(gstate) {
+	explicit WindowLeadLagLocalState(ExecutionContext &context, const WindowLeadLagGlobalState &gstate)
+	    : WindowValueLocalState(context, gstate) {
 		if (gstate.row_tree) {
 			local_row = gstate.row_tree->GetLocalState();
 		}
@@ -288,9 +290,9 @@ unique_ptr<WindowExecutorGlobalState> WindowLeadLagExecutor::GetGlobalState(cons
 }
 
 unique_ptr<WindowExecutorLocalState>
-WindowLeadLagExecutor::GetLocalState(const WindowExecutorGlobalState &gstate) const {
+WindowLeadLagExecutor::GetLocalState(ExecutionContext &context, const WindowExecutorGlobalState &gstate) const {
 	const auto &glstate = gstate.Cast<WindowLeadLagGlobalState>();
-	return make_uniq<WindowLeadLagLocalState>(glstate);
+	return make_uniq<WindowLeadLagLocalState>(context, glstate);
 }
 
 void WindowLeadLagExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
@@ -888,7 +890,8 @@ public:
 
 class WindowFillLocalState : public WindowLeadLagLocalState {
 public:
-	explicit WindowFillLocalState(const WindowLeadLagGlobalState &gvstate) : WindowLeadLagLocalState(gvstate) {
+	explicit WindowFillLocalState(ExecutionContext &context, const WindowLeadLagGlobalState &gvstate)
+	    : WindowLeadLagLocalState(context, gvstate) {
 	}
 
 	//! Finish the sinking and prepare to scan
@@ -914,9 +917,10 @@ unique_ptr<WindowExecutorGlobalState> WindowFillExecutor::GetGlobalState(const i
 	return make_uniq<WindowFillGlobalState>(*this, payload_count, partition_mask, order_mask);
 }
 
-unique_ptr<WindowExecutorLocalState> WindowFillExecutor::GetLocalState(const WindowExecutorGlobalState &gstate) const {
+unique_ptr<WindowExecutorLocalState> WindowFillExecutor::GetLocalState(ExecutionContext &context,
+                                                                       const WindowExecutorGlobalState &gstate) const {
 	const auto &gfstate = gstate.Cast<WindowFillGlobalState>();
-	return make_uniq<WindowFillLocalState>(gfstate);
+	return make_uniq<WindowFillLocalState>(context, gfstate);
 }
 
 void WindowFillExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,

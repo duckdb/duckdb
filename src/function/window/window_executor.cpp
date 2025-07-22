@@ -7,17 +7,18 @@
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
-// WindowExecutorBoundsState
+// WindowExecutorBoundsLocalState
 //===--------------------------------------------------------------------===//
-WindowExecutorBoundsState::WindowExecutorBoundsState(const WindowExecutorGlobalState &gstate)
-    : WindowExecutorLocalState(gstate), partition_mask(gstate.partition_mask), order_mask(gstate.order_mask),
+WindowExecutorBoundsLocalState::WindowExecutorBoundsLocalState(ExecutionContext &context,
+                                                               const WindowExecutorGlobalState &gstate)
+    : WindowExecutorLocalState(context, gstate), partition_mask(gstate.partition_mask), order_mask(gstate.order_mask),
       state(gstate.executor.wexpr, gstate.payload_count) {
 	vector<LogicalType> bounds_types(8, LogicalType(LogicalTypeId::UBIGINT));
 	bounds.Initialize(Allocator::Get(gstate.executor.context), bounds_types);
 }
 
-void WindowExecutorBoundsState::UpdateBounds(WindowExecutorGlobalState &gstate, idx_t row_idx, DataChunk &eval_chunk,
-                                             optional_ptr<WindowCursor> range) {
+void WindowExecutorBoundsLocalState::UpdateBounds(WindowExecutorGlobalState &gstate, idx_t row_idx,
+                                                  DataChunk &eval_chunk, optional_ptr<WindowCursor> range) {
 	// Evaluate the row-level arguments
 	WindowInputExpression boundary_start(eval_chunk, gstate.executor.boundary_start_idx);
 	WindowInputExpression boundary_end(eval_chunk, gstate.executor.boundary_end_idx);
@@ -48,7 +49,7 @@ bool WindowExecutor::IgnoreNulls() const {
 
 void WindowExecutor::Evaluate(idx_t row_idx, DataChunk &eval_chunk, Vector &result, WindowExecutorLocalState &lstate,
                               WindowExecutorGlobalState &gstate) const {
-	auto &lbstate = lstate.Cast<WindowExecutorBoundsState>();
+	auto &lbstate = lstate.Cast<WindowExecutorBoundsLocalState>();
 	lbstate.UpdateBounds(gstate, row_idx, eval_chunk, lstate.range_cursor);
 
 	const auto count = eval_chunk.size();
@@ -65,7 +66,8 @@ WindowExecutorGlobalState::WindowExecutorGlobalState(const WindowExecutor &execu
 	}
 }
 
-WindowExecutorLocalState::WindowExecutorLocalState(const WindowExecutorGlobalState &gstate) {
+WindowExecutorLocalState::WindowExecutorLocalState(ExecutionContext &context, const WindowExecutorGlobalState &gstate)
+    : context(context) {
 }
 
 void WindowExecutorLocalState::Sink(WindowExecutorGlobalState &gstate, DataChunk &sink_chunk, DataChunk &coll_chunk,
@@ -85,8 +87,9 @@ unique_ptr<WindowExecutorGlobalState> WindowExecutor::GetGlobalState(const idx_t
 	return make_uniq<WindowExecutorGlobalState>(*this, payload_count, partition_mask, order_mask);
 }
 
-unique_ptr<WindowExecutorLocalState> WindowExecutor::GetLocalState(const WindowExecutorGlobalState &gstate) const {
-	return make_uniq<WindowExecutorBoundsState>(gstate);
+unique_ptr<WindowExecutorLocalState> WindowExecutor::GetLocalState(ExecutionContext &context,
+                                                                   const WindowExecutorGlobalState &gstate) const {
+	return make_uniq<WindowExecutorBoundsLocalState>(context, gstate);
 }
 
 void WindowExecutor::Sink(DataChunk &sink_chunk, DataChunk &coll_chunk, const idx_t input_idx,

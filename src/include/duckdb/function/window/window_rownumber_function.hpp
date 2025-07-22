@@ -18,7 +18,8 @@ public:
 
 	unique_ptr<WindowExecutorGlobalState> GetGlobalState(const idx_t payload_count, const ValidityMask &partition_mask,
 	                                                     const ValidityMask &order_mask) const override;
-	unique_ptr<WindowExecutorLocalState> GetLocalState(const WindowExecutorGlobalState &gstate) const override;
+	unique_ptr<WindowExecutorLocalState> GetLocalState(ExecutionContext &context,
+	                                                   const WindowExecutorGlobalState &gstate) const override;
 
 	//! The evaluation index of the NTILE column
 	column_t ntile_idx = DConstants::INVALID_INDEX;

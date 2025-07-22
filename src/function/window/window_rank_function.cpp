@@ -39,10 +39,10 @@ public:
 // WindowPeerLocalState
 //===--------------------------------------------------------------------===//
 //	Base class for non-aggregate functions that use peer boundaries
-class WindowPeerLocalState : public WindowExecutorBoundsState {
+class WindowPeerLocalState : public WindowExecutorBoundsLocalState {
 public:
-	explicit WindowPeerLocalState(const WindowPeerGlobalState &gpstate)
-	    : WindowExecutorBoundsState(gpstate), gpstate(gpstate) {
+	explicit WindowPeerLocalState(ExecutionContext &context, const WindowPeerGlobalState &gpstate)
+	    : WindowExecutorBoundsLocalState(context, gpstate), gpstate(gpstate) {
 		if (gpstate.token_tree) {
 			local_tree = gpstate.token_tree->GetLocalState();
 		}
@@ -68,7 +68,7 @@ public:
 
 void WindowPeerLocalState::Sink(WindowExecutorGlobalState &gstate, DataChunk &sink_chunk, DataChunk &coll_chunk,
                                 idx_t input_idx) {
-	WindowExecutorBoundsState::Sink(gstate, sink_chunk, coll_chunk, input_idx);
+	WindowExecutorBoundsLocalState::Sink(gstate, sink_chunk, coll_chunk, input_idx);
 
 	if (local_tree) {
 		auto &local_tokens = local_tree->Cast<WindowMergeSortTreeLocalState>();
@@ -77,7 +77,7 @@ void WindowPeerLocalState::Sink(WindowExecutorGlobalState &gstate, DataChunk &si
 }
 
 void WindowPeerLocalState::Finalize(WindowExecutorGlobalState &gstate, CollectionPtr collection) {
-	WindowExecutorBoundsState::Finalize(gstate, collection);
+	WindowExecutorBoundsLocalState::Finalize(gstate, collection);
 
 	if (local_tree) {
 		auto &local_tokens = local_tree->Cast<WindowMergeSortTreeLocalState>();
@@ -117,8 +117,9 @@ unique_ptr<WindowExecutorGlobalState> WindowPeerExecutor::GetGlobalState(const i
 	return make_uniq<WindowPeerGlobalState>(*this, payload_count, partition_mask, order_mask);
 }
 
-unique_ptr<WindowExecutorLocalState> WindowPeerExecutor::GetLocalState(const WindowExecutorGlobalState &gstate) const {
-	return make_uniq<WindowPeerLocalState>(gstate.Cast<WindowPeerGlobalState>());
+unique_ptr<WindowExecutorLocalState> WindowPeerExecutor::GetLocalState(ExecutionContext &context,
+                                                                       const WindowExecutorGlobalState &gstate) const {
+	return make_uniq<WindowPeerLocalState>(context, gstate.Cast<WindowPeerGlobalState>());
 }
 
 //===--------------------------------------------------------------------===//

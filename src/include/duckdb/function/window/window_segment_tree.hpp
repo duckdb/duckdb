@@ -20,7 +20,8 @@ public:
 
 	unique_ptr<WindowAggregatorState> GetGlobalState(ClientContext &context, idx_t group_count,
 	                                                 const ValidityMask &partition_mask) const override;
-	unique_ptr<WindowAggregatorState> GetLocalState(const WindowAggregatorState &gstate) const override;
+	unique_ptr<WindowAggregatorState> GetLocalState(ExecutionContext &context,
+	                                                const WindowAggregatorState &gstate) const override;
 	void Finalize(WindowAggregatorState &gstate, WindowAggregatorState &lstate, CollectionPtr collection,
 	              const FrameStats &stats) override;
 

@@ -77,7 +77,7 @@ WindowConstantAggregatorGlobalState::WindowConstantAggregatorGlobalState(ClientC
 //===--------------------------------------------------------------------===//
 class WindowConstantAggregatorLocalState : public WindowAggregatorLocalState {
 public:
-	explicit WindowConstantAggregatorLocalState(const WindowConstantAggregatorGlobalState &gstate);
+	WindowConstantAggregatorLocalState(ExecutionContext &context, const WindowConstantAggregatorGlobalState &gstate);
 	~WindowConstantAggregatorLocalState() override {
 	}
 
@@ -103,8 +103,9 @@ public:
 };
 
 WindowConstantAggregatorLocalState::WindowConstantAggregatorLocalState(
-    const WindowConstantAggregatorGlobalState &gstate)
-    : gstate(gstate), statep(Value::POINTER(0)), statef(gstate.statef.aggr), partition(0) {
+    ExecutionContext &context, const WindowConstantAggregatorGlobalState &gstate)
+    : WindowAggregatorLocalState(context), gstate(gstate), statep(Value::POINTER(0)), statef(gstate.statef.aggr),
+      partition(0) {
 	matches.Initialize();
 
 	//	Start the aggregates
@@ -313,8 +314,10 @@ void WindowConstantAggregator::Finalize(WindowAggregatorState &gstate, WindowAgg
 	}
 }
 
-unique_ptr<WindowAggregatorState> WindowConstantAggregator::GetLocalState(const WindowAggregatorState &gstate) const {
-	return make_uniq<WindowConstantAggregatorLocalState>(gstate.Cast<WindowConstantAggregatorGlobalState>());
+unique_ptr<WindowAggregatorState> WindowConstantAggregator::GetLocalState(ExecutionContext &context,
+                                                                          const WindowAggregatorState &gstate) const {
+	auto &gcastate = gstate.Cast<WindowConstantAggregatorGlobalState>();
+	return make_uniq<WindowConstantAggregatorLocalState>(context, gcastate);
 }
 
 void WindowConstantAggregator::Evaluate(const WindowAggregatorState &gsink, WindowAggregatorState &lstate,

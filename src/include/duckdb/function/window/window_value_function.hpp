@@ -22,7 +22,8 @@ public:
 
 	unique_ptr<WindowExecutorGlobalState> GetGlobalState(const idx_t payload_count, const ValidityMask &partition_mask,
 	                                                     const ValidityMask &order_mask) const override;
-	unique_ptr<WindowExecutorLocalState> GetLocalState(const WindowExecutorGlobalState &gstate) const override;
+	unique_ptr<WindowExecutorLocalState> GetLocalState(ExecutionContext &context,
+	                                                   const WindowExecutorGlobalState &gstate) const override;
 
 	//! The column index of the value column
 	column_t child_idx = DConstants::INVALID_INDEX;
@@ -42,7 +43,8 @@ public:
 
 	unique_ptr<WindowExecutorGlobalState> GetGlobalState(const idx_t payload_count, const ValidityMask &partition_mask,
 	                                                     const ValidityMask &order_mask) const override;
-	unique_ptr<WindowExecutorLocalState> GetLocalState(const WindowExecutorGlobalState &gstate) const override;
+	unique_ptr<WindowExecutorLocalState> GetLocalState(ExecutionContext &context,
+	                                                   const WindowExecutorGlobalState &gstate) const override;
 
 protected:
 	void EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate, DataChunk &eval_chunk,
@@ -87,7 +89,8 @@ public:
 
 	unique_ptr<WindowExecutorGlobalState> GetGlobalState(const idx_t payload_count, const ValidityMask &partition_mask,
 	                                                     const ValidityMask &order_mask) const override;
-	unique_ptr<WindowExecutorLocalState> GetLocalState(const WindowExecutorGlobalState &gstate) const override;
+	unique_ptr<WindowExecutorLocalState> GetLocalState(ExecutionContext &context,
+	                                                   const WindowExecutorGlobalState &gstate) const override;
 
 	//! Secondary order collection index
 	idx_t order_idx = DConstants::INVALID_INDEX;

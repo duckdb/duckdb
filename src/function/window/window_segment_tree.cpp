@@ -131,9 +131,9 @@ public:
 	vector<RightEntry> right_stack;
 };
 
-class WindowSegmentTreeState : public WindowAggregatorLocalState {
+class WindowSegmentTreeLocalState : public WindowAggregatorLocalState {
 public:
-	WindowSegmentTreeState() {
+	explicit WindowSegmentTreeLocalState(ExecutionContext &context) : WindowAggregatorLocalState(context) {
 	}
 
 	void Finalize(WindowAggregatorGlobalState &gastate, CollectionPtr collection) override;
@@ -187,8 +187,9 @@ unique_ptr<WindowAggregatorState> WindowSegmentTree::GetGlobalState(ClientContex
 	return make_uniq<WindowSegmentTreeGlobalState>(context, *this, group_count);
 }
 
-unique_ptr<WindowAggregatorState> WindowSegmentTree::GetLocalState(const WindowAggregatorState &gstate) const {
-	return make_uniq<WindowSegmentTreeState>();
+unique_ptr<WindowAggregatorState> WindowSegmentTree::GetLocalState(ExecutionContext &context,
+                                                                   const WindowAggregatorState &gstate) const {
+	return make_uniq<WindowSegmentTreeLocalState>(context);
 }
 
 void WindowSegmentTreePart::FlushStates(bool combining) {
@@ -335,7 +336,7 @@ WindowSegmentTreeGlobalState::WindowSegmentTreeGlobalState(ClientContext &contex
 	}
 }
 
-void WindowSegmentTreeState::Finalize(WindowAggregatorGlobalState &gastate, CollectionPtr collection) {
+void WindowSegmentTreeLocalState::Finalize(WindowAggregatorGlobalState &gastate, CollectionPtr collection) {
 	WindowAggregatorLocalState::Finalize(gastate, collection);
 
 	//	Single part for constructing the tree
@@ -393,12 +394,12 @@ void WindowSegmentTreeState::Finalize(WindowAggregatorGlobalState &gastate, Coll
 void WindowSegmentTree::Evaluate(const WindowAggregatorState &gsink, WindowAggregatorState &lstate,
                                  const DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx) const {
 	const auto &gtstate = gsink.Cast<WindowSegmentTreeGlobalState>();
-	auto &ltstate = lstate.Cast<WindowSegmentTreeState>();
+	auto &ltstate = lstate.Cast<WindowSegmentTreeLocalState>();
 	ltstate.Evaluate(gtstate, bounds, result, count, row_idx);
 }
 
-void WindowSegmentTreeState::Evaluate(const WindowSegmentTreeGlobalState &gtstate, const DataChunk &bounds,
-                                      Vector &result, idx_t count, idx_t row_idx) {
+void WindowSegmentTreeLocalState::Evaluate(const WindowSegmentTreeGlobalState &gtstate, const DataChunk &bounds,
+                                           Vector &result, idx_t count, idx_t row_idx) {
 	auto window_begin = FlatVector::GetData<const idx_t>(bounds.data[FRAME_BEGIN]);
 	auto window_end = FlatVector::GetData<const idx_t>(bounds.data[FRAME_END]);
 	auto peer_begin = FlatVector::GetData<const idx_t>(bounds.data[PEER_BEGIN]);

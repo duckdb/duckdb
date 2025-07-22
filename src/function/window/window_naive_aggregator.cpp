@@ -5,7 +5,6 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/function/window/window_aggregate_function.hpp"
-#include "duckdb/parallel/thread_context.hpp"
 
 namespace duckdb {
 
@@ -49,7 +48,7 @@ public:
 
 	using RowSet = std::unordered_set<idx_t, HashRow, EqualRow>;
 
-	explicit WindowNaiveLocalState(const WindowNaiveAggregator &gsink);
+	WindowNaiveLocalState(ExecutionContext &context, const WindowNaiveAggregator &gsink);
 
 	void Finalize(WindowAggregatorGlobalState &gastate, CollectionPtr collection) override;
 
@@ -98,9 +97,9 @@ protected:
 	SelectionVector orderby_sel;
 };
 
-WindowNaiveLocalState::WindowNaiveLocalState(const WindowNaiveAggregator &aggregator_p)
-    : aggregator(aggregator_p), state(aggregator.state_size * STANDARD_VECTOR_SIZE), statef(LogicalType::POINTER),
-      statep((LogicalType::POINTER)), flush_count(0), hashes(LogicalType::HASH) {
+WindowNaiveLocalState::WindowNaiveLocalState(ExecutionContext &context, const WindowNaiveAggregator &aggregator)
+    : WindowAggregatorLocalState(context), aggregator(aggregator), state(aggregator.state_size * STANDARD_VECTOR_SIZE),
+      statef(LogicalType::POINTER), statep((LogicalType::POINTER)), flush_count(0), hashes(LogicalType::HASH) {
 	InitSubFrames(frames, aggregator.exclude_mode);
 
 	update_sel.Initialize();
@@ -130,7 +129,7 @@ void WindowNaiveLocalState::Finalize(WindowAggregatorGlobalState &gastate, Colle
 		arg_orderer = make_uniq<WindowCursor>(*collection, aggregator.arg_order_idx);
 		auto input_types = arg_orderer->chunk.GetTypes();
 		input_types.emplace_back(LogicalType::UBIGINT);
-		orderby_sink.Initialize(BufferAllocator::Get(gastate.context), input_types);
+		orderby_sink.Initialize(BufferAllocator::Get(gastate.client), input_types);
 
 		//	The sort expressions have already been computed, so we just need to reference them
 		vector<BoundOrderByNode> orders;
@@ -143,7 +142,7 @@ void WindowNaiveLocalState::Finalize(WindowAggregatorGlobalState &gastate, Colle
 
 		//	We only want the row numbers
 		vector<idx_t> projection_map(1, input_types.size() - 1);
-		orderby_scan.Initialize(BufferAllocator::Get(gastate.context), {input_types.back()});
+		orderby_scan.Initialize(BufferAllocator::Get(gastate.client), {input_types.back()});
 		sort = make_uniq<Sort>(aggregator.executor.context, orders, input_types, projection_map);
 
 		orderby_sel.Initialize();
@@ -152,7 +151,7 @@ void WindowNaiveLocalState::Finalize(WindowAggregatorGlobalState &gastate, Colle
 	// Initialise the chunks
 	const auto types = cursor->chunk.GetTypes();
 	if (leaves.ColumnCount() == 0 && !types.empty()) {
-		leaves.Initialize(BufferAllocator::Get(gastate.context), types);
+		leaves.Initialize(BufferAllocator::Get(context.client), types);
 	}
 }
 
@@ -241,13 +240,9 @@ void WindowNaiveLocalState::Evaluate(const WindowAggregatorGlobalState &gsink, c
 
 		// 	Sort the input rows by the argument
 		if (arg_orderer) {
-			auto &client = aggregator.executor.context;
-			ThreadContext thread(client);
-			ExecutionContext context(client, thread, nullptr);
-			InterruptState interrupt;
-
 			auto global_sink = sort->GetGlobalSinkState(context.client);
 			auto local_sink = sort->GetLocalSinkState(context);
+			InterruptState interrupt;
 			OperatorSinkInput sink {*global_sink, *local_sink, interrupt};
 
 			idx_t orderby_count = 0;
@@ -291,9 +286,9 @@ void WindowNaiveLocalState::Evaluate(const WindowAggregatorGlobalState &gsink, c
 			sort->Combine(context, combine);
 
 			OperatorSinkFinalizeInput finalize {*global_sink, interrupt};
-			sort->Finalize(client, finalize);
+			sort->Finalize(context.client, finalize);
 
-			auto global_source = sort->GetGlobalSourceState(client, *global_sink);
+			auto global_source = sort->GetGlobalSourceState(context.client, *global_sink);
 			auto local_source = sort->GetLocalSourceState(context, *global_source);
 			OperatorSourceInput source {*global_source, *local_source, interrupt};
 			orderby_scan.Reset();
@@ -364,8 +359,9 @@ void WindowNaiveLocalState::Evaluate(const WindowAggregatorGlobalState &gsink, c
 	}
 }
 
-unique_ptr<WindowAggregatorState> WindowNaiveAggregator::GetLocalState(const WindowAggregatorState &gstate) const {
-	return make_uniq<WindowNaiveLocalState>(*this);
+unique_ptr<WindowAggregatorState> WindowNaiveAggregator::GetLocalState(ExecutionContext &context,
+                                                                       const WindowAggregatorState &gstate) const {
+	return make_uniq<WindowNaiveLocalState>(context, *this);
 }
 
 void WindowNaiveAggregator::Evaluate(const WindowAggregatorState &gsink, WindowAggregatorState &lstate,

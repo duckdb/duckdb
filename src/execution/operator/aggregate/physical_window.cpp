@@ -230,8 +230,8 @@ public:
 
 	//! Parent operator
 	const PhysicalWindow &op;
-	//! Execution context
-	ClientContext &context;
+	//! Client context
+	ClientContext &client;
 	//! The partitioned sunk data
 	unique_ptr<HashedSortGlobalSinkState> global_partition;
 	//! The callback for completed hash groups
@@ -285,56 +285,56 @@ PhysicalWindow::PhysicalWindow(PhysicalPlan &physical_plan, vector<LogicalType> 
 	}
 }
 
-static unique_ptr<WindowExecutor> WindowExecutorFactory(BoundWindowExpression &wexpr, ClientContext &context,
+static unique_ptr<WindowExecutor> WindowExecutorFactory(BoundWindowExpression &wexpr, ClientContext &client,
                                                         WindowSharedExpressions &shared, WindowAggregationMode mode) {
 	switch (wexpr.GetExpressionType()) {
 	case ExpressionType::WINDOW_AGGREGATE:
-		return make_uniq<WindowAggregateExecutor>(wexpr, context, shared, mode);
+		return make_uniq<WindowAggregateExecutor>(wexpr, client, shared, mode);
 	case ExpressionType::WINDOW_ROW_NUMBER:
-		return make_uniq<WindowRowNumberExecutor>(wexpr, context, shared);
+		return make_uniq<WindowRowNumberExecutor>(wexpr, client, shared);
 	case ExpressionType::WINDOW_RANK_DENSE:
-		return make_uniq<WindowDenseRankExecutor>(wexpr, context, shared);
+		return make_uniq<WindowDenseRankExecutor>(wexpr, client, shared);
 	case ExpressionType::WINDOW_RANK:
-		return make_uniq<WindowRankExecutor>(wexpr, context, shared);
+		return make_uniq<WindowRankExecutor>(wexpr, client, shared);
 	case ExpressionType::WINDOW_PERCENT_RANK:
-		return make_uniq<WindowPercentRankExecutor>(wexpr, context, shared);
+		return make_uniq<WindowPercentRankExecutor>(wexpr, client, shared);
 	case ExpressionType::WINDOW_CUME_DIST:
-		return make_uniq<WindowCumeDistExecutor>(wexpr, context, shared);
+		return make_uniq<WindowCumeDistExecutor>(wexpr, client, shared);
 	case ExpressionType::WINDOW_NTILE:
-		return make_uniq<WindowNtileExecutor>(wexpr, context, shared);
+		return make_uniq<WindowNtileExecutor>(wexpr, client, shared);
 	case ExpressionType::WINDOW_LEAD:
 	case ExpressionType::WINDOW_LAG:
-		return make_uniq<WindowLeadLagExecutor>(wexpr, context, shared);
+		return make_uniq<WindowLeadLagExecutor>(wexpr, client, shared);
 	case ExpressionType::WINDOW_FILL:
-		return make_uniq<WindowFillExecutor>(wexpr, context, shared);
+		return make_uniq<WindowFillExecutor>(wexpr, client, shared);
 	case ExpressionType::WINDOW_FIRST_VALUE:
-		return make_uniq<WindowFirstValueExecutor>(wexpr, context, shared);
+		return make_uniq<WindowFirstValueExecutor>(wexpr, client, shared);
 	case ExpressionType::WINDOW_LAST_VALUE:
-		return make_uniq<WindowLastValueExecutor>(wexpr, context, shared);
+		return make_uniq<WindowLastValueExecutor>(wexpr, client, shared);
 	case ExpressionType::WINDOW_NTH_VALUE:
-		return make_uniq<WindowNthValueExecutor>(wexpr, context, shared);
+		return make_uniq<WindowNthValueExecutor>(wexpr, client, shared);
 		break;
 	default:
 		throw InternalException("Window aggregate type %s", ExpressionTypeToString(wexpr.GetExpressionType()));
 	}
 }
 
-WindowGlobalSinkState::WindowGlobalSinkState(const PhysicalWindow &op, ClientContext &context)
-    : op(op), context(context), callback(*this) {
+WindowGlobalSinkState::WindowGlobalSinkState(const PhysicalWindow &op, ClientContext &client)
+    : op(op), client(client), callback(*this) {
 
 	D_ASSERT(op.select_list[op.order_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 	auto &wexpr = op.select_list[op.order_idx]->Cast<BoundWindowExpression>();
 
-	const auto mode = DBConfig::GetConfig(context).options.window_mode;
+	const auto mode = DBConfig::GetConfig(client).options.window_mode;
 	for (idx_t expr_idx = 0; expr_idx < op.select_list.size(); ++expr_idx) {
 		D_ASSERT(op.select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 		auto &wexpr = op.select_list[expr_idx]->Cast<BoundWindowExpression>();
-		auto wexec = WindowExecutorFactory(wexpr, context, shared, mode);
+		auto wexec = WindowExecutorFactory(wexpr, client, shared, mode);
 		executors.emplace_back(std::move(wexec));
 	}
 
 	global_partition =
-	    make_uniq<HashedSortGlobalSinkState>(context, wexpr.partitions, wexpr.orders, op.children[0].get().GetTypes(),
+	    make_uniq<HashedSortGlobalSinkState>(client, wexpr.partitions, wexpr.orders, op.children[0].get().GetTypes(),
 	                                         wexpr.partitions_stats, op.estimated_cardinality);
 }
 
@@ -361,11 +361,11 @@ unique_ptr<LocalSinkState> PhysicalWindow::GetLocalSinkState(ExecutionContext &c
 	return make_uniq<WindowLocalSinkState>(context, gstate);
 }
 
-unique_ptr<GlobalSinkState> PhysicalWindow::GetGlobalSinkState(ClientContext &context) const {
-	return make_uniq<WindowGlobalSinkState>(*this, context);
+unique_ptr<GlobalSinkState> PhysicalWindow::GetGlobalSinkState(ClientContext &client) const {
+	return make_uniq<WindowGlobalSinkState>(*this, client);
 }
 
-SinkFinalizeType PhysicalWindow::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
+SinkFinalizeType PhysicalWindow::Finalize(Pipeline &pipeline, Event &event, ClientContext &client,
                                           OperatorSinkFinalizeInput &input) const {
 	auto &gsink = input.global_state.Cast<WindowGlobalSinkState>();
 	auto &gpart = *gsink.global_partition;
@@ -387,7 +387,7 @@ SinkFinalizeType PhysicalWindow::Finalize(Pipeline &pipeline, Event &event, Clie
 		return SinkFinalizeType::READY;
 	}
 
-	gsink.Finalize(context, input.interrupt_state);
+	gsink.Finalize(client, input.interrupt_state);
 
 	// Find the first group to sort
 	if (!gsink.global_partition->HasMergeTasks()) {
@@ -425,7 +425,7 @@ public:
 	bool TryNextTask(TaskPtr &task, Task &task_local);
 
 	//! Context for executing computations
-	ClientContext &context;
+	ClientContext &client;
 	//! All the sunk data
 	WindowGlobalSinkState &gsink;
 	//! The total number of blocks to process;
@@ -461,9 +461,8 @@ protected:
 	void FinishTask(TaskPtr task);
 };
 
-WindowGlobalSourceState::WindowGlobalSourceState(ClientContext &context_p, WindowGlobalSinkState &gsink_p)
-    : context(context_p), gsink(gsink_p), next_group(0), locals(0), started(0), finished(0), stopped(false),
-      returned(0) {
+WindowGlobalSourceState::WindowGlobalSourceState(ClientContext &client, WindowGlobalSinkState &gsink_p)
+    : client(client), gsink(gsink_p), next_group(0), locals(0), started(0), finished(0), stopped(false), returned(0) {
 	auto &window_hash_groups = gsink.window_hash_groups;
 
 	for (auto &window_hash_group : window_hash_groups) {
@@ -500,7 +499,7 @@ void WindowGlobalSourceState::CreateTaskList() {
 	std::sort(partition_blocks.begin(), partition_blocks.end(), std::greater<PartitionBlock>());
 
 	//	Schedule the largest group on as many threads as possible
-	auto &ts = TaskScheduler::GetScheduler(context);
+	auto &ts = TaskScheduler::GetScheduler(client);
 	const auto threads = NumericCast<idx_t>(ts.NumberOfThreads());
 
 	const auto &max_block = partition_blocks.front();
@@ -576,7 +575,7 @@ WindowHashGroup::WindowHashGroup(WindowGlobalSinkState &gsink, const idx_t hash_
 	for (auto &expr : shared) {
 		types.emplace_back(expr->return_type);
 	}
-	auto &buffer_manager = BufferManager::GetBufferManager(gsink.context);
+	auto &buffer_manager = BufferManager::GetBufferManager(gsink.client);
 	collection = make_uniq<WindowCollection>(buffer_manager, count, types);
 }
 
@@ -773,7 +772,7 @@ public:
 	using Task = WindowGlobalSourceState::Task;
 	using TaskPtr = optional_ptr<Task>;
 
-	explicit WindowLocalSourceState(WindowGlobalSourceState &gsource);
+	WindowLocalSourceState(ExecutionContext &context, WindowGlobalSourceState &gsource);
 
 	void ReleaseLocalStates() {
 		auto &local_states = window_hash_group->thread_states.at(task->thread_idx);
@@ -791,6 +790,8 @@ public:
 
 	//! The shared source state
 	WindowGlobalSourceState &gsource;
+	//! The execution context for local states
+	ExecutionContext &context;
 	//! The current batch index (for output reordering)
 	idx_t batch_index;
 	//! The task this thread is working on
@@ -864,7 +865,7 @@ void WindowLocalSourceState::Sink() {
 	auto &local_states = window_hash_group->thread_states.at(task->thread_idx);
 	if (local_states.empty()) {
 		for (idx_t w = 0; w < executors.size(); ++w) {
-			local_states.emplace_back(executors[w]->GetLocalState(*gestates[w]));
+			local_states.emplace_back(executors[w]->GetLocalState(context, *gestates[w]));
 		}
 	}
 
@@ -936,9 +937,9 @@ void WindowLocalSourceState::Finalize() {
 	task->begin_idx = task->end_idx;
 }
 
-WindowLocalSourceState::WindowLocalSourceState(WindowGlobalSourceState &gsource)
-    : gsource(gsource), batch_index(0), coll_exec(gsource.context), sink_exec(gsource.context),
-      eval_exec(gsource.context) {
+WindowLocalSourceState::WindowLocalSourceState(ExecutionContext &context, WindowGlobalSourceState &gsource)
+    : gsource(gsource), context(context), batch_index(0), coll_exec(context.client), sink_exec(context.client),
+      eval_exec(context.client) {
 	auto &gsink = gsource.gsink;
 	auto &global_partition = *gsink.global_partition;
 
@@ -1113,12 +1114,12 @@ void WindowLocalSourceState::GetData(DataChunk &result) {
 unique_ptr<LocalSourceState> PhysicalWindow::GetLocalSourceState(ExecutionContext &context,
                                                                  GlobalSourceState &gsource_p) const {
 	auto &gsource = gsource_p.Cast<WindowGlobalSourceState>();
-	return make_uniq<WindowLocalSourceState>(gsource);
+	return make_uniq<WindowLocalSourceState>(context, gsource);
 }
 
-unique_ptr<GlobalSourceState> PhysicalWindow::GetGlobalSourceState(ClientContext &context) const {
+unique_ptr<GlobalSourceState> PhysicalWindow::GetGlobalSourceState(ClientContext &client) const {
 	auto &gsink = sink_state->Cast<WindowGlobalSinkState>();
-	return make_uniq<WindowGlobalSourceState>(context, gsink);
+	return make_uniq<WindowGlobalSourceState>(client, gsink);
 }
 
 bool PhysicalWindow::SupportsPartitioning(const OperatorPartitionInfo &partition_info) const {
@@ -1146,7 +1147,7 @@ OrderPreservationType PhysicalWindow::SourceOrder() const {
 	return OrderPreservationType::FIXED_ORDER;
 }
 
-ProgressData PhysicalWindow::GetProgress(ClientContext &context, GlobalSourceState &gsource_p) const {
+ProgressData PhysicalWindow::GetProgress(ClientContext &client, GlobalSourceState &gsource_p) const {
 	auto &gsource = gsource_p.Cast<WindowGlobalSourceState>();
 	const auto returned = gsource.returned.load();
 

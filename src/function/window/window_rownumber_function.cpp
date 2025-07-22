@@ -44,10 +44,10 @@ public:
 //===--------------------------------------------------------------------===//
 // WindowRowNumberLocalState
 //===--------------------------------------------------------------------===//
-class WindowRowNumberLocalState : public WindowExecutorBoundsState {
+class WindowRowNumberLocalState : public WindowExecutorBoundsLocalState {
 public:
-	explicit WindowRowNumberLocalState(const WindowRowNumberGlobalState &grstate)
-	    : WindowExecutorBoundsState(grstate), grstate(grstate) {
+	explicit WindowRowNumberLocalState(ExecutionContext &context, const WindowRowNumberGlobalState &grstate)
+	    : WindowExecutorBoundsLocalState(context, grstate), grstate(grstate) {
 		if (grstate.token_tree) {
 			local_tree = grstate.token_tree->GetLocalState();
 		}
@@ -67,7 +67,7 @@ public:
 
 void WindowRowNumberLocalState::Sink(WindowExecutorGlobalState &gstate, DataChunk &sink_chunk, DataChunk &coll_chunk,
                                      idx_t input_idx) {
-	WindowExecutorBoundsState::Sink(gstate, sink_chunk, coll_chunk, input_idx);
+	WindowExecutorBoundsLocalState::Sink(gstate, sink_chunk, coll_chunk, input_idx);
 
 	if (local_tree) {
 		auto &local_tokens = local_tree->Cast<WindowMergeSortTreeLocalState>();
@@ -76,7 +76,7 @@ void WindowRowNumberLocalState::Sink(WindowExecutorGlobalState &gstate, DataChun
 }
 
 void WindowRowNumberLocalState::Finalize(WindowExecutorGlobalState &gstate, CollectionPtr collection) {
-	WindowExecutorBoundsState::Finalize(gstate, collection);
+	WindowExecutorBoundsLocalState::Finalize(gstate, collection);
 
 	if (local_tree) {
 		auto &local_tokens = local_tree->Cast<WindowMergeSortTreeLocalState>();
@@ -104,8 +104,8 @@ unique_ptr<WindowExecutorGlobalState> WindowRowNumberExecutor::GetGlobalState(co
 }
 
 unique_ptr<WindowExecutorLocalState>
-WindowRowNumberExecutor::GetLocalState(const WindowExecutorGlobalState &gstate) const {
-	return make_uniq<WindowRowNumberLocalState>(gstate.Cast<WindowRowNumberGlobalState>());
+WindowRowNumberExecutor::GetLocalState(ExecutionContext &context, const WindowExecutorGlobalState &gstate) const {
+	return make_uniq<WindowRowNumberLocalState>(context, gstate.Cast<WindowRowNumberGlobalState>());
 }
 
 void WindowRowNumberExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,

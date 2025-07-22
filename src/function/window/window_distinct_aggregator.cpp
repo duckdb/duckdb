@@ -198,7 +198,8 @@ optional_ptr<LocalSortState> WindowDistinctAggregatorGlobalState::InitializeLoca
 
 class WindowDistinctAggregatorLocalState : public WindowAggregatorLocalState {
 public:
-	explicit WindowDistinctAggregatorLocalState(const WindowDistinctAggregatorGlobalState &aggregator);
+	WindowDistinctAggregatorLocalState(ExecutionContext &context,
+	                                   const WindowDistinctAggregatorGlobalState &aggregator);
 
 	~WindowDistinctAggregatorLocalState() override {
 		statef.Destroy();
@@ -248,10 +249,10 @@ protected:
 };
 
 WindowDistinctAggregatorLocalState::WindowDistinctAggregatorLocalState(
-    const WindowDistinctAggregatorGlobalState &gastate)
-    : tree_allocator(gastate.CreateTreeAllocator()), update_v(LogicalType::POINTER), source_v(LogicalType::POINTER),
-      target_v(LogicalType::POINTER), gastate(gastate), statef(gastate.aggr), statep(LogicalType::POINTER),
-      statel(LogicalType::POINTER), flush_count(0) {
+    ExecutionContext &context, const WindowDistinctAggregatorGlobalState &gastate)
+    : WindowAggregatorLocalState(context), tree_allocator(gastate.CreateTreeAllocator()),
+      update_v(LogicalType::POINTER), source_v(LogicalType::POINTER), target_v(LogicalType::POINTER), gastate(gastate),
+      statef(gastate.aggr), statep(LogicalType::POINTER), statel(LogicalType::POINTER), flush_count(0) {
 	InitSubFrames(frames, gastate.aggregator.exclude_mode);
 	payload_chunk.Initialize(Allocator::DefaultAllocator(), gastate.payload_types);
 
@@ -761,8 +762,10 @@ void WindowDistinctAggregatorLocalState::Evaluate(const WindowDistinctAggregator
 	statef.Destroy();
 }
 
-unique_ptr<WindowAggregatorState> WindowDistinctAggregator::GetLocalState(const WindowAggregatorState &gstate) const {
-	return make_uniq<WindowDistinctAggregatorLocalState>(gstate.Cast<const WindowDistinctAggregatorGlobalState>());
+unique_ptr<WindowAggregatorState> WindowDistinctAggregator::GetLocalState(ExecutionContext &context,
+                                                                          const WindowAggregatorState &gstate) const {
+	auto &gdstate = gstate.Cast<const WindowDistinctAggregatorGlobalState>();
+	return make_uniq<WindowDistinctAggregatorLocalState>(context, gdstate);
 }
 
 void WindowDistinctAggregator::Evaluate(const WindowAggregatorState &gsink, WindowAggregatorState &lstate,

@@ -28,7 +28,8 @@ public:
 	              const FrameStats &stats) override;
 
 	//	Evaluate
-	unique_ptr<WindowAggregatorState> GetLocalState(const WindowAggregatorState &gstate) const override;
+	unique_ptr<WindowAggregatorState> GetLocalState(ExecutionContext &context,
+	                                                const WindowAggregatorState &gstate) const override;
 	void Evaluate(const WindowAggregatorState &gsink, WindowAggregatorState &lstate, const DataChunk &bounds,
 	              Vector &result, idx_t count, idx_t row_idx) const override;
 
