@@ -27,7 +27,8 @@ varint_t IntegerToVarint(T int_value) {
 	varint_t result;
 
 	uint32_t blob_size = data_byte_size + Varint::VARINT_HEADER_SIZE;
-	result.value.resize(blob_size);
+	result.value = make_uniq_array<char>(blob_size);
+	result.size = blob_size;
 	auto writable_blob = &result.value[0];
 	Varint::SetHeader(writable_blob, data_byte_size, is_negative);
 
