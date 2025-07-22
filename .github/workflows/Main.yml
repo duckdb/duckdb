@@ -414,12 +414,6 @@ jobs:
       run: |
         ./build/release/test/unittest --test-config test/configs/small_block_size.json
 
-    - name: test/configs/default_storage_block_size_16kB.json
-      if: (success() || failure()) && steps.build.conclusion == 'success'
-      shell: bash
-      run: |
-        ./build/release/test/unittest --test-config test/configs/default_storage_block_size_16kB.json
-
     - name: test/configs/latest_storage_block_size_16kB.json
       if: (success() || failure()) && steps.build.conclusion == 'success'
       shell: bash
