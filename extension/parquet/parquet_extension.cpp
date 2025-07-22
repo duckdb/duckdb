@@ -215,12 +215,10 @@ struct ParquetWriteBindData : public TableFunctionData {
 	bool debug_use_openssl = true;
 
 	//! After how many distinct values should we abandon dictionary compression and bloom filters?
-	idx_t dictionary_size_limit = row_group_size / 20;
-
-	void SetToDefaultDictionarySizeLimit() {
-		// This depends on row group size so we should "reset" if the row group size is changed
-		dictionary_size_limit = row_group_size / 20;
-	}
+	//! Defaults to 1/20th of the row group size if unset (in templated_column_writer.hpp)
+	//! This needs to be set dynamically because row groups can be much smaller than "row_group_size" set here,
+	//! e.g., due to less data or row_group_size_bytes
+	optional_idx dictionary_size_limit;
 
 	//! This is huge but we grow it starting from 1 MB
 	idx_t string_dictionary_page_size_limit = PrimitiveColumnWriter::MAX_UNCOMPRESSED_DICT_PAGE_SIZE;
@@ -274,7 +272,6 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 	D_ASSERT(names.size() == sql_types.size());
 	bool row_group_size_bytes_set = false;
 	bool compression_level_set = false;
-	bool dictionary_size_limit_set = false;
 	auto bind_data = make_uniq<ParquetWriteBindData>();
 	for (auto &option : input.info.options) {
 		const auto loption = StringUtil::Lower(option.first);
@@ -284,9 +281,6 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 		}
 		if (loption == "row_group_size" || loption == "chunk_size") {
 			bind_data->row_group_size = option.second[0].GetValue<uint64_t>();
-			if (!dictionary_size_limit_set) {
-				bind_data->SetToDefaultDictionarySizeLimit();
-			}
 		} else if (loption == "row_group_size_bytes") {
 			auto roption = option.second[0];
 			if (roption.GetTypeMutable().id() == LogicalTypeId::VARCHAR) {
@@ -684,8 +678,8 @@ static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserialize
 	    110, "row_groups_per_file", default_value.row_groups_per_file);
 	data->debug_use_openssl =
 	    deserializer.ReadPropertyWithExplicitDefault<bool>(111, "debug_use_openssl", default_value.debug_use_openssl);
-	data->dictionary_size_limit = deserializer.ReadPropertyWithExplicitDefault<idx_t>(
-	    112, "dictionary_size_limit", default_value.dictionary_size_limit);
+	data->dictionary_size_limit =
+	    deserializer.ReadPropertyWithExplicitDefault<optional_idx>(112, "dictionary_size_limit", optional_idx());
 	data->bloom_filter_false_positive_ratio = deserializer.ReadPropertyWithExplicitDefault<double>(
 	    113, "bloom_filter_false_positive_ratio", default_value.bloom_filter_false_positive_ratio);
 	data->parquet_version =
