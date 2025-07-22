@@ -93,7 +93,7 @@ public:
 	static void ReferenceStructColumns(DataChunk &chunk, Vector &vec, column_t end, column_t begin = 0);
 	void ComputeMasks(ValidityMask &partition_mask, OrderMasks &order_masks);
 
-	ExecutorGlobalStates &Initialize();
+	ExecutorGlobalStates &Initialize(ClientContext &client);
 
 	// The total number of tasks we will execute (SINK, FINALIZE, GETDATA per thread)
 	inline idx_t GetTaskCount() const {
@@ -291,28 +291,28 @@ static unique_ptr<WindowExecutor> WindowExecutorFactory(BoundWindowExpression &w
 	case ExpressionType::WINDOW_AGGREGATE:
 		return make_uniq<WindowAggregateExecutor>(wexpr, client, shared, mode);
 	case ExpressionType::WINDOW_ROW_NUMBER:
-		return make_uniq<WindowRowNumberExecutor>(wexpr, client, shared);
+		return make_uniq<WindowRowNumberExecutor>(wexpr, shared);
 	case ExpressionType::WINDOW_RANK_DENSE:
-		return make_uniq<WindowDenseRankExecutor>(wexpr, client, shared);
+		return make_uniq<WindowDenseRankExecutor>(wexpr, shared);
 	case ExpressionType::WINDOW_RANK:
-		return make_uniq<WindowRankExecutor>(wexpr, client, shared);
+		return make_uniq<WindowRankExecutor>(wexpr, shared);
 	case ExpressionType::WINDOW_PERCENT_RANK:
-		return make_uniq<WindowPercentRankExecutor>(wexpr, client, shared);
+		return make_uniq<WindowPercentRankExecutor>(wexpr, shared);
 	case ExpressionType::WINDOW_CUME_DIST:
-		return make_uniq<WindowCumeDistExecutor>(wexpr, client, shared);
+		return make_uniq<WindowCumeDistExecutor>(wexpr, shared);
 	case ExpressionType::WINDOW_NTILE:
-		return make_uniq<WindowNtileExecutor>(wexpr, client, shared);
+		return make_uniq<WindowNtileExecutor>(wexpr, shared);
 	case ExpressionType::WINDOW_LEAD:
 	case ExpressionType::WINDOW_LAG:
-		return make_uniq<WindowLeadLagExecutor>(wexpr, client, shared);
+		return make_uniq<WindowLeadLagExecutor>(wexpr, shared);
 	case ExpressionType::WINDOW_FILL:
-		return make_uniq<WindowFillExecutor>(wexpr, client, shared);
+		return make_uniq<WindowFillExecutor>(wexpr, shared);
 	case ExpressionType::WINDOW_FIRST_VALUE:
-		return make_uniq<WindowFirstValueExecutor>(wexpr, client, shared);
+		return make_uniq<WindowFirstValueExecutor>(wexpr, shared);
 	case ExpressionType::WINDOW_LAST_VALUE:
-		return make_uniq<WindowLastValueExecutor>(wexpr, client, shared);
+		return make_uniq<WindowLastValueExecutor>(wexpr, shared);
 	case ExpressionType::WINDOW_NTH_VALUE:
-		return make_uniq<WindowNthValueExecutor>(wexpr, client, shared);
+		return make_uniq<WindowNthValueExecutor>(wexpr, shared);
 		break;
 	default:
 		throw InternalException("Window aggregate type %s", ExpressionTypeToString(wexpr.GetExpressionType()));
@@ -772,7 +772,7 @@ public:
 	using Task = WindowGlobalSourceState::Task;
 	using TaskPtr = optional_ptr<Task>;
 
-	WindowLocalSourceState(ExecutionContext &context, WindowGlobalSourceState &gsource);
+	explicit WindowLocalSourceState(WindowGlobalSourceState &gsource);
 
 	void ReleaseLocalStates() {
 		auto &local_states = window_hash_group->thread_states.at(task->thread_idx);
@@ -786,12 +786,10 @@ public:
 	//! Assign the next task
 	bool TryAssignTask();
 	//! Execute a step in the current task
-	void ExecuteTask(DataChunk &chunk);
+	void ExecuteTask(ExecutionContext &context, DataChunk &chunk);
 
 	//! The shared source state
 	WindowGlobalSourceState &gsource;
-	//! The execution context for local states
-	ExecutionContext &context;
 	//! The current batch index (for output reordering)
 	idx_t batch_index;
 	//! The task this thread is working on
@@ -806,9 +804,9 @@ public:
 	DataChunk output_chunk;
 
 protected:
-	void Sink();
-	void Finalize();
-	void GetData(DataChunk &chunk);
+	void Sink(ExecutionContext &context);
+	void Finalize(ExecutionContext &context);
+	void GetData(ExecutionContext &context, DataChunk &chunk);
 
 	//! Storage and evaluation for the fully materialised data
 	unique_ptr<WindowBuilder> builder;
@@ -832,7 +830,7 @@ idx_t WindowHashGroup::InitTasks(idx_t per_thread_p) {
 	return GetTaskCount();
 }
 
-WindowHashGroup::ExecutorGlobalStates &WindowHashGroup::Initialize() {
+WindowHashGroup::ExecutorGlobalStates &WindowHashGroup::Initialize(ClientContext &client) {
 	//	Single-threaded building as this is mostly memory allocation
 	lock_guard<mutex> gestate_guard(lock);
 	const auto &executors = gsink.executors;
@@ -844,13 +842,13 @@ WindowHashGroup::ExecutorGlobalStates &WindowHashGroup::Initialize() {
 	for (auto &wexec : executors) {
 		auto &wexpr = wexec->wexpr;
 		auto &order_mask = order_masks[wexpr.partitions.size() + wexpr.orders.size()];
-		gestates.emplace_back(wexec->GetGlobalState(count, partition_mask, order_mask));
+		gestates.emplace_back(wexec->GetGlobalState(client, count, partition_mask, order_mask));
 	}
 
 	return gestates;
 }
 
-void WindowLocalSourceState::Sink() {
+void WindowLocalSourceState::Sink(ExecutionContext &context) {
 	D_ASSERT(task);
 	D_ASSERT(task->stage == WindowGroupStage::SINK);
 
@@ -859,13 +857,13 @@ void WindowLocalSourceState::Sink() {
 
 	// Create the global state for each function
 	// These can be large so we defer building them until we are ready.
-	auto &gestates = window_hash_group->Initialize();
+	auto &gestates = window_hash_group->Initialize(context.client);
 
 	//	Set up the local states
 	auto &local_states = window_hash_group->thread_states.at(task->thread_idx);
 	if (local_states.empty()) {
 		for (idx_t w = 0; w < executors.size(); ++w) {
-			local_states.emplace_back(executors[w]->GetLocalState(context, *gestates[w]));
+			local_states.emplace_back(executors[w]->GetLocalState(*gestates[w]));
 		}
 	}
 
@@ -904,7 +902,7 @@ void WindowLocalSourceState::Sink() {
 		}
 
 		for (idx_t w = 0; w < executors.size(); ++w) {
-			executors[w]->Sink(sink_chunk, coll_chunk, input_idx, *gestates[w], *local_states[w]);
+			executors[w]->Sink(context, sink_chunk, coll_chunk, input_idx, *gestates[w], *local_states[w]);
 		}
 
 		window_hash_group->sunk += input_chunk.size();
@@ -912,7 +910,7 @@ void WindowLocalSourceState::Sink() {
 	scanner.reset();
 }
 
-void WindowLocalSourceState::Finalize() {
+void WindowLocalSourceState::Finalize(ExecutionContext &context) {
 	D_ASSERT(task);
 	D_ASSERT(task->stage == WindowGroupStage::FINALIZE);
 
@@ -929,7 +927,7 @@ void WindowLocalSourceState::Finalize() {
 	auto &gestates = window_hash_group->gestates;
 	auto &local_states = window_hash_group->thread_states.at(task->thread_idx);
 	for (idx_t w = 0; w < executors.size(); ++w) {
-		executors[w]->Finalize(*gestates[w], *local_states[w], window_hash_group->collection);
+		executors[w]->Finalize(context, *gestates[w], *local_states[w], window_hash_group->collection);
 	}
 
 	//	Mark this range as done
@@ -937,9 +935,9 @@ void WindowLocalSourceState::Finalize() {
 	task->begin_idx = task->end_idx;
 }
 
-WindowLocalSourceState::WindowLocalSourceState(ExecutionContext &context, WindowGlobalSourceState &gsource)
-    : gsource(gsource), context(context), batch_index(0), coll_exec(context.client), sink_exec(context.client),
-      eval_exec(context.client) {
+WindowLocalSourceState::WindowLocalSourceState(WindowGlobalSourceState &gsource)
+    : gsource(gsource), batch_index(0), coll_exec(gsource.client), sink_exec(gsource.client),
+      eval_exec(gsource.client) {
 	auto &gsink = gsource.gsink;
 	auto &global_partition = *gsink.global_partition;
 
@@ -1037,7 +1035,7 @@ bool WindowLocalSourceState::TryAssignTask() {
 	return gsource.TryNextTask(task, task_local);
 }
 
-void WindowLocalSourceState::ExecuteTask(DataChunk &result) {
+void WindowLocalSourceState::ExecuteTask(ExecutionContext &context, DataChunk &result) {
 	auto &gsink = gsource.gsink;
 
 	// Update the hash group
@@ -1046,16 +1044,16 @@ void WindowLocalSourceState::ExecuteTask(DataChunk &result) {
 	// Process the new state
 	switch (task->stage) {
 	case WindowGroupStage::SINK:
-		Sink();
+		Sink(context);
 		D_ASSERT(TaskFinished());
 		break;
 	case WindowGroupStage::FINALIZE:
-		Finalize();
+		Finalize(context);
 		D_ASSERT(TaskFinished());
 		break;
 	case WindowGroupStage::GETDATA:
 		D_ASSERT(!TaskFinished());
-		GetData(result);
+		GetData(context, result);
 		break;
 	default:
 		throw InternalException("Invalid window source state.");
@@ -1067,7 +1065,7 @@ void WindowLocalSourceState::ExecuteTask(DataChunk &result) {
 	}
 }
 
-void WindowLocalSourceState::GetData(DataChunk &result) {
+void WindowLocalSourceState::GetData(ExecutionContext &context, DataChunk &result) {
 	D_ASSERT(window_hash_group->GetStage() == WindowGroupStage::GETDATA);
 
 	window_hash_group->UpdateScanner(scanner, task->begin_idx);
@@ -1091,7 +1089,7 @@ void WindowLocalSourceState::GetData(DataChunk &result) {
 			eval_chunk.Reset();
 			eval_exec.Execute(input_chunk, eval_chunk);
 		}
-		executor.Evaluate(position, eval_chunk, result, lstate, gstate);
+		executor.Evaluate(context, position, eval_chunk, result, lstate, gstate);
 	}
 	output_chunk.SetCardinality(input_chunk);
 	output_chunk.Verify();
@@ -1114,7 +1112,7 @@ void WindowLocalSourceState::GetData(DataChunk &result) {
 unique_ptr<LocalSourceState> PhysicalWindow::GetLocalSourceState(ExecutionContext &context,
                                                                  GlobalSourceState &gsource_p) const {
 	auto &gsource = gsource_p.Cast<WindowGlobalSourceState>();
-	return make_uniq<WindowLocalSourceState>(context, gsource);
+	return make_uniq<WindowLocalSourceState>(gsource);
 }
 
 unique_ptr<GlobalSourceState> PhysicalWindow::GetGlobalSourceState(ClientContext &client) const {
@@ -1181,7 +1179,7 @@ SourceResultType PhysicalWindow::GetData(ExecutionContext &context, DataChunk &c
 	while (gsource.HasUnfinishedTasks() && chunk.size() == 0) {
 		if (!lsource.TaskFinished() || lsource.TryAssignTask()) {
 			try {
-				lsource.ExecuteTask(chunk);
+				lsource.ExecuteTask(context, chunk);
 			} catch (...) {
 				gsource.stopped = true;
 				throw;

@@ -112,18 +112,18 @@ public:
 	//	Threading states
 	virtual unique_ptr<WindowAggregatorState> GetGlobalState(ClientContext &client, idx_t group_count,
 	                                                         const ValidityMask &partition_mask) const;
-	virtual unique_ptr<WindowAggregatorState> GetLocalState(ExecutionContext &context,
-	                                                        const WindowAggregatorState &gstate) const = 0;
+	virtual unique_ptr<WindowAggregatorState> GetLocalState(const WindowAggregatorState &gstate) const = 0;
 
 	//	Build
-	virtual void Sink(WindowAggregatorState &gstate, WindowAggregatorState &lstate, DataChunk &sink_chunk,
-	                  DataChunk &coll_chunk, idx_t input_idx, optional_ptr<SelectionVector> filter_sel, idx_t filtered);
-	virtual void Finalize(WindowAggregatorState &gstate, WindowAggregatorState &lstate, CollectionPtr collection,
-	                      const FrameStats &stats);
+	virtual void Sink(ExecutionContext &context, WindowAggregatorState &gstate, WindowAggregatorState &lstate,
+	                  DataChunk &sink_chunk, DataChunk &coll_chunk, idx_t input_idx,
+	                  optional_ptr<SelectionVector> filter_sel, idx_t filtered);
+	virtual void Finalize(ExecutionContext &context, WindowAggregatorState &gstate, WindowAggregatorState &lstate,
+	                      CollectionPtr collection, const FrameStats &stats);
 
 	//	Probe
-	virtual void Evaluate(const WindowAggregatorState &gsink, WindowAggregatorState &lstate, const DataChunk &bounds,
-	                      Vector &result, idx_t count, idx_t row_idx) const = 0;
+	virtual void Evaluate(ExecutionContext &context, const WindowAggregatorState &gsink, WindowAggregatorState &lstate,
+	                      const DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx) const = 0;
 
 	//! The window function
 	const BoundWindowExpression &wexpr;
@@ -182,14 +182,13 @@ public:
 
 	static void InitSubFrames(SubFrames &frames, const WindowExcludeMode exclude_mode);
 
-	explicit WindowAggregatorLocalState(ExecutionContext &context) : context(context) {
+	WindowAggregatorLocalState() {
 	}
 
-	void Sink(WindowAggregatorGlobalState &gastate, DataChunk &sink_chunk, DataChunk &coll_chunk, idx_t row_idx);
-	virtual void Finalize(WindowAggregatorGlobalState &gastate, CollectionPtr collection);
+	void Sink(ExecutionContext &context, WindowAggregatorGlobalState &gastate, DataChunk &sink_chunk,
+	          DataChunk &coll_chunk, idx_t row_idx);
+	virtual void Finalize(ExecutionContext &context, WindowAggregatorGlobalState &gastate, CollectionPtr collection);
 
-	//! The execution context for this thread
-	ExecutionContext &context;
 	//! The state used for reading the collection
 	unique_ptr<WindowCursor> cursor;
 };
