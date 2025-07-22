@@ -1,0 +1,19 @@
+# name: test/sql/types/varint/test_varint_sum.test
+# description: Test that varints don't try to cast to values they should now
+# group: [varint]
+
+statement ok
+CREATE TABLE numbers ( x varint );
+
+statement ok
+INSERT INTO numbers (x) VALUES (9223372036854775808::VARINT), (1::VARINT);
+
+# query I
+# select 9223372036854775808::VARINT + 1::VARINT
+# ----
+# 9223372036854775809
+
+query I
+SELECT sum(x)::varint FROM numbers;
+----
+9223372036854775809
