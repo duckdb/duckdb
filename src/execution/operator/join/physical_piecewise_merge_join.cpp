@@ -20,9 +20,7 @@ PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(PhysicalPlan &physical_pl
                                                        idx_t estimated_cardinality,
                                                        unique_ptr<JoinFilterPushdownInfo> pushdown_info_p)
     : PhysicalRangeJoin(physical_plan, op, PhysicalOperatorType::PIECEWISE_MERGE_JOIN, left, right, std::move(cond),
-                        join_type, estimated_cardinality) {
-
-	filter_pushdown = std::move(pushdown_info_p);
+                        join_type, estimated_cardinality, std::move(pushdown_info_p)) {
 
 	for (auto &join_cond : conditions) {
 		D_ASSERT(join_cond.left->return_type == join_cond.right->return_type);

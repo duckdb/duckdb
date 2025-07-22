@@ -9,6 +9,7 @@
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/common/checksum.hpp"
+#include "duckdb/common/encryption_functions.hpp"
 #include "duckdb/common/encryption_key_manager.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
@@ -160,13 +161,14 @@ public:
 		const idx_t ciphertext_size = size + sizeof(uint64_t);
 		std::unique_ptr<uint8_t[]> temp_buf(new uint8_t[ciphertext_size]);
 
+		EncryptionNonce nonce;
+		EncryptionTag tag;
+
 		// generate nonce
-		uint8_t nonce[MainHeader::AES_IV_LEN];
-		memset(nonce, 0, MainHeader::AES_IV_LEN);
-		encryption_state->GenerateRandomData(static_cast<data_ptr_t>(nonce), MainHeader::AES_NONCE_LEN);
+		encryption_state->GenerateRandomData(nonce.data(), nonce.size());
 
 		stream->Write<uint64_t>(size);
-		stream->WriteData(nonce, MainHeader::AES_NONCE_LEN);
+		stream->WriteData(nonce.data(), nonce.size());
 
 		//! store the checksum in the temp buffer
 		memcpy(temp_buf.get(), &checksum, sizeof(checksum));
@@ -174,20 +176,18 @@ public:
 		memcpy(temp_buf.get() + sizeof(checksum), memory_stream.GetData(), memory_stream.GetPosition());
 
 		//! encrypt the temp buf
-		encryption_state->InitializeEncryption(nonce, MainHeader::AES_NONCE_LEN, keys.GetKey(encryption_key_id),
+		encryption_state->InitializeEncryption(nonce.data(), nonce.size(), keys.GetKey(encryption_key_id),
 		                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 		encryption_state->Process(temp_buf.get(), ciphertext_size, temp_buf.get(), ciphertext_size);
 
 		//! calculate the tag (for GCM)
-		uint8_t tag[MainHeader::AES_TAG_LEN];
-		memset(tag, 0, MainHeader::AES_TAG_LEN);
-		encryption_state->Finalize(temp_buf.get(), ciphertext_size, tag, MainHeader::AES_TAG_LEN);
+		encryption_state->Finalize(temp_buf.get(), ciphertext_size, tag.data(), tag.size());
 
 		// write data to the underlying stream
 		stream->WriteData(temp_buf.get(), ciphertext_size);
 
 		// Write the tag to the stream
-		stream->WriteData(tag, MainHeader::AES_TAG_LEN);
+		stream->WriteData(tag.data(), tag.size());
 
 		// rewind the buffer
 		memory_stream.Rewind();
@@ -357,19 +357,18 @@ void WriteAheadLog::WriteDropTableMacro(const TableMacroCatalogEntry &entry) {
 
 void SerializeIndex(AttachedDatabase &db, WriteAheadLogSerializer &serializer, TableIndexList &list,
                     const string &name) {
+	case_insensitive_map_t<Value> options;
 	auto storage_version = db.GetStorageManager().GetStorageVersion();
 	auto v1_0_0_storage = storage_version < 3;
-	case_insensitive_map_t<Value> options;
 	if (!v1_0_0_storage) {
-		options.emplace("v1_0_0_storage", v1_0_0_storage);
+		options["v1_0_0_storage"] = v1_0_0_storage;
 	}
 
 	list.Scan([&](Index &index) {
 		if (name == index.GetIndexName()) {
 			// We never write an unbound index to the WAL.
 			D_ASSERT(index.IsBound());
-
-			const auto &info = index.Cast<BoundIndex>().GetStorageInfo(options, true);
+			const auto &info = index.Cast<BoundIndex>().SerializeToWAL(options);
 			serializer.WriteProperty(102, "index_storage_info", info);
 			serializer.WriteList(103, "index_storage", info.buffers.size(), [&](Serializer::List &list, idx_t i) {
 				auto &buffers = info.buffers[i];

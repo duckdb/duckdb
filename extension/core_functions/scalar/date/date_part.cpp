@@ -13,6 +13,7 @@
 
 namespace duckdb {
 
+namespace {
 DatePartSpecifier GetDateTypePartSpecifier(const string &specifier, LogicalType &type) {
 	const auto part = GetDatePartSpecifier(specifier);
 	switch (type.id()) {
@@ -88,7 +89,7 @@ DatePartSpecifier GetDateTypePartSpecifier(const string &specifier, LogicalType 
 }
 
 template <int64_t MIN, int64_t MAX>
-static unique_ptr<BaseStatistics> PropagateSimpleDatePartStatistics(vector<BaseStatistics> &child_stats) {
+unique_ptr<BaseStatistics> PropagateSimpleDatePartStatistics(vector<BaseStatistics> &child_stats) {
 	// we can always propagate simple date part statistics
 	// since the min and max can never exceed these bounds
 	auto result = NumericStats::CreateEmpty(LogicalType::BIGINT);
@@ -766,7 +767,7 @@ struct DatePart {
 };
 
 template <class OP, class T>
-static void DatePartCachedFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+void DatePartCachedFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<DateCacheLocalState<OP>>();
 	UnaryExecutor::ExecuteWithNulls<T, int64_t>(
 	    args.data[0], result, args.size(),
@@ -1438,26 +1439,6 @@ double DatePart::JulianDayOperator::Operation(date_t input) {
 }
 
 template <>
-double DatePart::JulianDayOperator::Operation(interval_t input) {
-	throw NotImplementedException("interval units \"julian\" not recognized");
-}
-
-template <>
-double DatePart::JulianDayOperator::Operation(dtime_t input) {
-	throw NotImplementedException("\"time\" units \"julian\" not recognized");
-}
-
-template <>
-double DatePart::JulianDayOperator::Operation(dtime_ns_t input) {
-	return JulianDayOperator::Operation<dtime_t, double>(input.time());
-}
-
-template <>
-double DatePart::JulianDayOperator::Operation(dtime_tz_t input) {
-	return JulianDayOperator::Operation<dtime_t, double>(input.time());
-}
-
-template <>
 void DatePart::StructOperator::Operation(bigint_vec &bigint_values, double_vec &double_values, const dtime_t &input,
                                          const idx_t idx, const part_mask_t mask) {
 	int64_t *part_data;
@@ -1708,7 +1689,7 @@ void DatePart::StructOperator::Operation(bigint_vec &bigint_values, double_vec &
 }
 
 template <typename T>
-static int64_t ExtractElement(DatePartSpecifier type, T element) {
+int64_t ExtractElement(DatePartSpecifier type, T element) {
 	switch (type) {
 	case DatePartSpecifier::YEAR:
 		return DatePart::YearOperator::template Operation<T, int64_t>(element);
@@ -1760,7 +1741,7 @@ static int64_t ExtractElement(DatePartSpecifier type, T element) {
 }
 
 template <typename T>
-static void DatePartFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+void DatePartFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 2);
 	auto &spec_arg = args.data[0];
 	auto &date_arg = args.data[1];
@@ -1776,8 +1757,8 @@ static void DatePartFunction(DataChunk &args, ExpressionState &state, Vector &re
 	    });
 }
 
-static unique_ptr<FunctionData> DatePartBind(ClientContext &context, ScalarFunction &bound_function,
-                                             vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> DatePartBind(ClientContext &context, ScalarFunction &bound_function,
+                                      vector<unique_ptr<Expression>> &arguments) {
 	//	If we are only looking for Julian Days for timestamps,
 	//	then return doubles.
 	if (arguments[0]->HasParameter() || !arguments[0]->IsFoldable()) {
@@ -1869,7 +1850,7 @@ ScalarFunctionSet GetGenericDatePartFunction(scalar_function_t date_func, scalar
 }
 
 template <class OP>
-static ScalarFunctionSet GetDatePartFunction() {
+ScalarFunctionSet GetDatePartFunction() {
 	return GetGenericDatePartFunction(
 	    DatePart::UnaryFunction<date_t, int64_t, OP>, DatePart::UnaryFunction<timestamp_t, int64_t, OP>,
 	    ScalarFunction::UnaryFunction<interval_t, int64_t, OP>, OP::template PropagateStatistics<date_t>,
@@ -1898,7 +1879,7 @@ ScalarFunctionSet GetGenericTimePartFunction(const LogicalType &result_type, sca
 }
 
 template <class OP, class TR = int64_t>
-static ScalarFunctionSet GetTimePartFunction(const LogicalType &result_type = LogicalType::BIGINT) {
+ScalarFunctionSet GetTimePartFunction(const LogicalType &result_type = LogicalType::BIGINT) {
 	return GetGenericTimePartFunction(
 	    result_type, DatePart::UnaryFunction<date_t, TR, OP>, DatePart::UnaryFunction<timestamp_t, TR, OP>,
 	    ScalarFunction::UnaryFunction<interval_t, TR, OP>, ScalarFunction::UnaryFunction<dtime_t, TR, OP>,
@@ -2153,6 +2134,8 @@ ScalarFunctionSet GetCachedDatepartFunction() {
 	    ScalarFunction::UnaryFunction<interval_t, int64_t, OP>, OP::template PropagateStatistics<date_t>,
 	    OP::template PropagateStatistics<timestamp_t>);
 }
+
+} // namespace
 
 ScalarFunctionSet YearFun::GetFunctions() {
 	return GetCachedDatepartFunction<DatePart::YearOperator>();

@@ -52,6 +52,9 @@ static scalar_function_t GetScalarIntegerUnaryFunctionFixedReturn(const LogicalT
 //===--------------------------------------------------------------------===//
 // nextafter
 //===--------------------------------------------------------------------===//
+
+namespace {
+
 struct NextAfterOperator {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA base, TB exponent) {
@@ -67,6 +70,8 @@ struct NextAfterOperator {
 		return nextafterf(input, approximate_to);
 	}
 };
+
+} // namespace
 
 ScalarFunctionSet NextAfterFun::GetFunctions() {
 	ScalarFunctionSet next_after_fun;
@@ -204,6 +209,9 @@ ScalarFunctionSet AbsOperatorFun::GetFunctions() {
 //===--------------------------------------------------------------------===//
 // bit_count
 //===--------------------------------------------------------------------===//
+
+namespace {
+
 struct BitCntOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
@@ -236,10 +244,11 @@ struct BitStringBitCntOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
 		TR count = Bit::BitCount(input);
-		return count;
+		return UnsafeNumericCast<TR>(count);
 	}
 };
 
+} // namespace
 ScalarFunctionSet BitCountFun::GetFunctions() {
 	ScalarFunctionSet functions;
 	functions.AddFunction(ScalarFunction({LogicalType::TINYINT}, LogicalType::TINYINT,
@@ -253,13 +262,15 @@ ScalarFunctionSet BitCountFun::GetFunctions() {
 	functions.AddFunction(ScalarFunction({LogicalType::HUGEINT}, LogicalType::TINYINT,
 	                                     ScalarFunction::UnaryFunction<hugeint_t, int8_t, HugeIntBitCntOperator>));
 	functions.AddFunction(ScalarFunction({LogicalType::BIT}, LogicalType::BIGINT,
-	                                     ScalarFunction::UnaryFunction<string_t, idx_t, BitStringBitCntOperator>));
+	                                     ScalarFunction::UnaryFunction<string_t, int64_t, BitStringBitCntOperator>));
 	return functions;
 }
 
 //===--------------------------------------------------------------------===//
 // sign
 //===--------------------------------------------------------------------===//
+namespace {
+
 struct SignOperator {
 	template <class TA, class TR>
 	static TR Operation(TA input) {
@@ -295,6 +306,7 @@ int8_t SignOperator::Operation(double input) {
 	}
 }
 
+} // namespace
 ScalarFunctionSet SignFun::GetFunctions() {
 	ScalarFunctionSet sign;
 	for (auto &type : LogicalType::Numeric()) {
@@ -312,12 +324,14 @@ ScalarFunctionSet SignFun::GetFunctions() {
 //===--------------------------------------------------------------------===//
 // ceil
 //===--------------------------------------------------------------------===//
+namespace {
 struct CeilOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA left) {
 		return std::ceil(left);
 	}
 };
+} // namespace
 
 template <class T, class POWERS_OF_TEN, class OP>
 static void GenericRoundFunctionDecimal(DataChunk &input, ExpressionState &state, Vector &result) {
@@ -326,8 +340,8 @@ static void GenericRoundFunctionDecimal(DataChunk &input, ExpressionState &state
 }
 
 template <class OP>
-unique_ptr<FunctionData> BindGenericRoundFunctionDecimal(ClientContext &context, ScalarFunction &bound_function,
-                                                         vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> BindGenericRoundFunctionDecimal(ClientContext &context, ScalarFunction &bound_function,
+                                                                vector<unique_ptr<Expression>> &arguments) {
 	// ceil essentially removes the scale
 	auto &decimal_type = arguments[0]->return_type;
 	auto scale = DecimalType::GetScale(decimal_type);
@@ -355,6 +369,7 @@ unique_ptr<FunctionData> BindGenericRoundFunctionDecimal(ClientContext &context,
 	return nullptr;
 }
 
+namespace {
 struct CeilDecimalOperator {
 	template <class T, class POWERS_OF_TEN_CLASS>
 	static void Operation(DataChunk &input, uint8_t scale, Vector &result) {
@@ -370,6 +385,7 @@ struct CeilDecimalOperator {
 		});
 	}
 };
+} // namespace
 
 ScalarFunctionSet CeilFun::GetFunctions() {
 	ScalarFunctionSet ceil;
@@ -401,6 +417,7 @@ ScalarFunctionSet CeilFun::GetFunctions() {
 //===--------------------------------------------------------------------===//
 // floor
 //===--------------------------------------------------------------------===//
+namespace {
 struct FloorOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA left) {
@@ -423,6 +440,7 @@ struct FloorDecimalOperator {
 		});
 	}
 };
+} // namespace
 
 ScalarFunctionSet FloorFun::GetFunctions() {
 	ScalarFunctionSet floor;
@@ -454,6 +472,8 @@ ScalarFunctionSet FloorFun::GetFunctions() {
 //===--------------------------------------------------------------------===//
 // trunc
 //===--------------------------------------------------------------------===//
+namespace {
+
 struct TruncOperator {
 	// Integer truncation is a NOP
 	template <class TA, class TR>
@@ -472,6 +492,8 @@ struct TruncDecimalOperator {
 		});
 	}
 };
+
+} // namespace
 
 ScalarFunctionSet TruncFun::GetFunctions() {
 	ScalarFunctionSet trunc;
@@ -512,6 +534,7 @@ ScalarFunctionSet TruncFun::GetFunctions() {
 //===--------------------------------------------------------------------===//
 // round
 //===--------------------------------------------------------------------===//
+namespace {
 struct RoundOperatorPrecision {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA input, TB precision) {
@@ -611,6 +634,8 @@ struct RoundPrecisionFunctionData : public FunctionData {
 	}
 };
 
+} // namespace
+
 template <class T, class POWERS_OF_TEN_CLASS>
 static void DecimalRoundNegativePrecisionFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
@@ -654,8 +679,8 @@ static void DecimalRoundPositivePrecisionFunction(DataChunk &input, ExpressionSt
 	});
 }
 
-unique_ptr<FunctionData> BindDecimalRoundPrecision(ClientContext &context, ScalarFunction &bound_function,
-                                                   vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> BindDecimalRoundPrecision(ClientContext &context, ScalarFunction &bound_function,
+                                                          vector<unique_ptr<Expression>> &arguments) {
 	auto &decimal_type = arguments[0]->return_type;
 	if (arguments[1]->HasParameter()) {
 		throw ParameterNotResolvedException();
@@ -776,12 +801,16 @@ ScalarFunctionSet RoundFun::GetFunctions() {
 //===--------------------------------------------------------------------===//
 // exp
 //===--------------------------------------------------------------------===//
+namespace {
+
 struct ExpOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA left) {
 		return std::exp(left);
 	}
 };
+
+} // namespace
 
 ScalarFunction ExpFun::GetFunction() {
 	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
@@ -791,6 +820,8 @@ ScalarFunction ExpFun::GetFunction() {
 //===--------------------------------------------------------------------===//
 // pow
 //===--------------------------------------------------------------------===//
+namespace {
+
 struct PowOperator {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA base, TB exponent) {
@@ -798,6 +829,7 @@ struct PowOperator {
 	}
 };
 
+} // namespace
 ScalarFunction PowOperatorFun::GetFunction() {
 	return ScalarFunction({LogicalType::DOUBLE, LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                      ScalarFunction::BinaryFunction<double, double, double, PowOperator>);
@@ -806,6 +838,7 @@ ScalarFunction PowOperatorFun::GetFunction() {
 //===--------------------------------------------------------------------===//
 // sqrt
 //===--------------------------------------------------------------------===//
+namespace {
 struct SqrtOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
@@ -815,6 +848,7 @@ struct SqrtOperator {
 		return std::sqrt(input);
 	}
 };
+} // namespace
 
 ScalarFunction SqrtFun::GetFunction() {
 	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
@@ -826,12 +860,16 @@ ScalarFunction SqrtFun::GetFunction() {
 //===--------------------------------------------------------------------===//
 // cbrt
 //===--------------------------------------------------------------------===//
+namespace {
+
 struct CbRtOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA left) {
 		return std::cbrt(left);
 	}
 };
+
+} // namespace
 
 ScalarFunction CbrtFun::GetFunction() {
 	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
@@ -841,6 +879,7 @@ ScalarFunction CbrtFun::GetFunction() {
 //===--------------------------------------------------------------------===//
 // ln
 //===--------------------------------------------------------------------===//
+namespace {
 
 struct LnOperator {
 	template <class TA, class TR>
@@ -855,6 +894,7 @@ struct LnOperator {
 	}
 };
 
+} // namespace
 ScalarFunction LnFun::GetFunction() {
 	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                        ScalarFunction::UnaryFunction<double, double, LnOperator>);
@@ -865,6 +905,8 @@ ScalarFunction LnFun::GetFunction() {
 //===--------------------------------------------------------------------===//
 // log
 //===--------------------------------------------------------------------===//
+namespace {
+
 struct Log10Operator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
@@ -878,6 +920,8 @@ struct Log10Operator {
 	}
 };
 
+} // namespace
+
 ScalarFunction Log10Fun::GetFunction() {
 	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                        ScalarFunction::UnaryFunction<double, double, Log10Operator>);
@@ -888,6 +932,8 @@ ScalarFunction Log10Fun::GetFunction() {
 //===--------------------------------------------------------------------===//
 // log with base
 //===--------------------------------------------------------------------===//
+namespace {
+
 struct LogBaseOperator {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA b, TB x) {
@@ -898,6 +944,8 @@ struct LogBaseOperator {
 		return Log10Operator::Operation<TB, TR>(x) / divisor;
 	}
 };
+
+} // namespace
 
 ScalarFunctionSet LogFun::GetFunctions() {
 	ScalarFunctionSet funcs;
@@ -914,6 +962,7 @@ ScalarFunctionSet LogFun::GetFunctions() {
 //===--------------------------------------------------------------------===//
 // log2
 //===--------------------------------------------------------------------===//
+namespace {
 struct Log2Operator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
@@ -926,6 +975,7 @@ struct Log2Operator {
 		return std::log2(input);
 	}
 };
+} // namespace
 
 ScalarFunction Log2Fun::GetFunction() {
 	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
@@ -950,12 +1000,14 @@ ScalarFunction PiFun::GetFunction() {
 //===--------------------------------------------------------------------===//
 // degrees
 //===--------------------------------------------------------------------===//
+namespace {
 struct DegreesOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA left) {
 		return left * (180 / PI);
 	}
 };
+} // namespace
 
 ScalarFunction DegreesFun::GetFunction() {
 	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
@@ -965,12 +1017,14 @@ ScalarFunction DegreesFun::GetFunction() {
 //===--------------------------------------------------------------------===//
 // radians
 //===--------------------------------------------------------------------===//
+namespace {
 struct RadiansOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA left) {
 		return left * (PI / 180);
 	}
 };
+} // namespace
 
 ScalarFunction RadiansFun::GetFunction() {
 	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
@@ -980,12 +1034,14 @@ ScalarFunction RadiansFun::GetFunction() {
 //===--------------------------------------------------------------------===//
 // isnan
 //===--------------------------------------------------------------------===//
+namespace {
 struct IsNanOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
 		return Value::IsNan(input);
 	}
 };
+} // namespace
 
 ScalarFunctionSet IsNanFun::GetFunctions() {
 	ScalarFunctionSet funcs;
@@ -999,12 +1055,14 @@ ScalarFunctionSet IsNanFun::GetFunctions() {
 //===--------------------------------------------------------------------===//
 // signbit
 //===--------------------------------------------------------------------===//
+namespace {
 struct SignBitOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
 		return std::signbit(input);
 	}
 };
+} // namespace
 
 ScalarFunctionSet SignBitFun::GetFunctions() {
 	ScalarFunctionSet funcs;
@@ -1018,6 +1076,7 @@ ScalarFunctionSet SignBitFun::GetFunctions() {
 //===--------------------------------------------------------------------===//
 // isinf
 //===--------------------------------------------------------------------===//
+namespace {
 struct IsInfiniteOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
@@ -1034,6 +1093,8 @@ template <>
 bool IsInfiniteOperator::Operation(timestamp_t input) {
 	return !Value::IsFinite(input);
 }
+
+} // namespace
 
 ScalarFunctionSet IsInfiniteFun::GetFunctions() {
 	ScalarFunctionSet funcs("isinf");
@@ -1053,12 +1114,16 @@ ScalarFunctionSet IsInfiniteFun::GetFunctions() {
 //===--------------------------------------------------------------------===//
 // isfinite
 //===--------------------------------------------------------------------===//
+namespace {
+
 struct IsFiniteOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
 		return Value::IsFinite(input);
 	}
 };
+
+} // namespace
 
 ScalarFunctionSet IsFiniteFun::GetFunctions() {
 	ScalarFunctionSet funcs;
@@ -1078,6 +1143,7 @@ ScalarFunctionSet IsFiniteFun::GetFunctions() {
 //===--------------------------------------------------------------------===//
 // sin
 //===--------------------------------------------------------------------===//
+namespace {
 template <class OP>
 struct NoInfiniteDoubleWrapper {
 	template <class INPUT_TYPE, class RESULT_TYPE>
@@ -1099,6 +1165,8 @@ struct SinOperator {
 	}
 };
 
+} // namespace
+
 ScalarFunction SinFun::GetFunction() {
 	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                        ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<SinOperator>>);
@@ -1109,12 +1177,14 @@ ScalarFunction SinFun::GetFunction() {
 //===--------------------------------------------------------------------===//
 // cos
 //===--------------------------------------------------------------------===//
+namespace {
 struct CosOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
 		return (double)std::cos(input);
 	}
 };
+} // namespace
 
 ScalarFunction CosFun::GetFunction() {
 	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
@@ -1126,12 +1196,14 @@ ScalarFunction CosFun::GetFunction() {
 //===--------------------------------------------------------------------===//
 // tan
 //===--------------------------------------------------------------------===//
+namespace {
 struct TanOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
 		return (double)std::tan(input);
 	}
 };
+} // namespace
 
 ScalarFunction TanFun::GetFunction() {
 	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
@@ -1143,6 +1215,7 @@ ScalarFunction TanFun::GetFunction() {
 //===--------------------------------------------------------------------===//
 // asin
 //===--------------------------------------------------------------------===//
+namespace {
 struct ASinOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
@@ -1152,6 +1225,7 @@ struct ASinOperator {
 		return (double)std::asin(input);
 	}
 };
+} // namespace
 
 ScalarFunction AsinFun::GetFunction() {
 	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
@@ -1163,12 +1237,14 @@ ScalarFunction AsinFun::GetFunction() {
 //===--------------------------------------------------------------------===//
 // atan
 //===--------------------------------------------------------------------===//
+namespace {
 struct ATanOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
 		return (double)std::atan(input);
 	}
 };
+} // namespace
 
 ScalarFunction AtanFun::GetFunction() {
 	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
@@ -1178,12 +1254,14 @@ ScalarFunction AtanFun::GetFunction() {
 //===--------------------------------------------------------------------===//
 // atan2
 //===--------------------------------------------------------------------===//
+namespace {
 struct ATan2 {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA left, TB right) {
 		return (double)std::atan2(left, right);
 	}
 };
+} // namespace
 
 ScalarFunction Atan2Fun::GetFunction() {
 	return ScalarFunction({LogicalType::DOUBLE, LogicalType::DOUBLE}, LogicalType::DOUBLE,
@@ -1193,6 +1271,7 @@ ScalarFunction Atan2Fun::GetFunction() {
 //===--------------------------------------------------------------------===//
 // acos
 //===--------------------------------------------------------------------===//
+namespace {
 struct ACos {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
@@ -1202,6 +1281,7 @@ struct ACos {
 		return (double)std::acos(input);
 	}
 };
+} // namespace
 
 ScalarFunction AcosFun::GetFunction() {
 	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
@@ -1213,12 +1293,14 @@ ScalarFunction AcosFun::GetFunction() {
 //===--------------------------------------------------------------------===//
 // cosh
 //===--------------------------------------------------------------------===//
+namespace {
 struct CoshOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
 		return (double)std::cosh(input);
 	}
 };
+} // namespace
 
 ScalarFunction CoshFun::GetFunction() {
 	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
@@ -1228,12 +1310,14 @@ ScalarFunction CoshFun::GetFunction() {
 //===--------------------------------------------------------------------===//
 // acosh
 //===--------------------------------------------------------------------===//
+namespace {
 struct AcoshOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
 		return (double)std::acosh(input);
 	}
 };
+} // namespace
 
 ScalarFunction AcoshFun::GetFunction() {
 	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
@@ -1243,12 +1327,14 @@ ScalarFunction AcoshFun::GetFunction() {
 //===--------------------------------------------------------------------===//
 // sinh
 //===--------------------------------------------------------------------===//
+namespace {
 struct SinhOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
 		return (double)std::sinh(input);
 	}
 };
+} // namespace
 
 ScalarFunction SinhFun::GetFunction() {
 	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
@@ -1258,12 +1344,14 @@ ScalarFunction SinhFun::GetFunction() {
 //===--------------------------------------------------------------------===//
 // asinh
 //===--------------------------------------------------------------------===//
+namespace {
 struct AsinhOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
 		return (double)std::asinh(input);
 	}
 };
+} // namespace
 
 ScalarFunction AsinhFun::GetFunction() {
 	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
@@ -1273,12 +1361,14 @@ ScalarFunction AsinhFun::GetFunction() {
 //===--------------------------------------------------------------------===//
 // tanh
 //===--------------------------------------------------------------------===//
+namespace {
 struct TanhOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
 		return (double)std::tanh(input);
 	}
 };
+} // namespace
 
 ScalarFunction TanhFun::GetFunction() {
 	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
@@ -1288,6 +1378,7 @@ ScalarFunction TanhFun::GetFunction() {
 //===--------------------------------------------------------------------===//
 // atanh
 //===--------------------------------------------------------------------===//
+namespace {
 struct AtanhOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
@@ -1300,6 +1391,7 @@ struct AtanhOperator {
 		return (double)std::atanh(input);
 	}
 };
+} // namespace
 
 ScalarFunction AtanhFun::GetFunction() {
 	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
@@ -1311,6 +1403,7 @@ ScalarFunction AtanhFun::GetFunction() {
 //===--------------------------------------------------------------------===//
 // cot
 //===--------------------------------------------------------------------===//
+namespace {
 template <class OP>
 struct NoInfiniteNoZeroDoubleWrapper {
 	template <class INPUT_TYPE, class RESULT_TYPE>
@@ -1334,7 +1427,7 @@ struct CotOperator {
 		return 1.0 / (double)std::tan(input);
 	}
 };
-
+} // namespace
 ScalarFunction CotFun::GetFunction() {
 	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                        ScalarFunction::UnaryFunction<double, double, NoInfiniteNoZeroDoubleWrapper<CotOperator>>);
@@ -1345,6 +1438,7 @@ ScalarFunction CotFun::GetFunction() {
 //===--------------------------------------------------------------------===//
 // gamma
 //===--------------------------------------------------------------------===//
+namespace {
 struct GammaOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
@@ -1354,6 +1448,7 @@ struct GammaOperator {
 		return std::tgamma(input);
 	}
 };
+} // namespace
 
 ScalarFunction GammaFun::GetFunction() {
 	auto func = ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
@@ -1365,6 +1460,7 @@ ScalarFunction GammaFun::GetFunction() {
 //===--------------------------------------------------------------------===//
 // gamma
 //===--------------------------------------------------------------------===//
+namespace {
 struct LogGammaOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
@@ -1374,6 +1470,7 @@ struct LogGammaOperator {
 		return std::lgamma(input);
 	}
 };
+} // namespace
 
 ScalarFunction LogGammaFun::GetFunction() {
 	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
@@ -1385,6 +1482,7 @@ ScalarFunction LogGammaFun::GetFunction() {
 //===--------------------------------------------------------------------===//
 // factorial(), !
 //===--------------------------------------------------------------------===//
+namespace {
 struct FactorialOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA left) {
@@ -1397,6 +1495,7 @@ struct FactorialOperator {
 		return ret;
 	}
 };
+} // namespace
 
 ScalarFunction FactorialOperatorFun::GetFunction() {
 	ScalarFunction function({LogicalType::INTEGER}, LogicalType::HUGEINT,
@@ -1408,6 +1507,7 @@ ScalarFunction FactorialOperatorFun::GetFunction() {
 //===--------------------------------------------------------------------===//
 // even
 //===--------------------------------------------------------------------===//
+namespace {
 struct EvenOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA left) {
@@ -1427,6 +1527,7 @@ struct EvenOperator {
 		return value;
 	}
 };
+} // namespace
 
 ScalarFunction EvenFun::GetFunction() {
 	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
@@ -1438,6 +1539,7 @@ ScalarFunction EvenFun::GetFunction() {
 //===--------------------------------------------------------------------===//
 
 // should be replaced with std::gcd in a newer C++ standard
+namespace {
 template <class TA>
 TA GreatestCommonDivisor(TA left, TA right) {
 	TA a = left;
@@ -1470,6 +1572,8 @@ struct GreatestCommonDivisorOperator {
 	}
 };
 
+} // namespace
+
 ScalarFunctionSet GreatestCommonDivisorFun::GetFunctions() {
 	ScalarFunctionSet funcs;
 	funcs.AddFunction(
@@ -1484,7 +1588,7 @@ ScalarFunctionSet GreatestCommonDivisorFun::GetFunctions() {
 //===--------------------------------------------------------------------===//
 // lcm
 //===--------------------------------------------------------------------===//
-
+namespace {
 // should be replaced with std::lcm in a newer C++ standard
 struct LeastCommonMultipleOperator {
 	template <class TA, class TB, class TR>
@@ -1499,6 +1603,8 @@ struct LeastCommonMultipleOperator {
 		return TryAbsOperator::Operation<TR, TR>(result);
 	}
 };
+
+} // namespace
 
 ScalarFunctionSet LeastCommonMultipleFun::GetFunctions() {
 	ScalarFunctionSet funcs;

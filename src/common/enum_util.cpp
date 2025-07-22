@@ -61,6 +61,7 @@
 #include "duckdb/common/enums/subquery_type.hpp"
 #include "duckdb/common/enums/tableref_type.hpp"
 #include "duckdb/common/enums/thread_pin_mode.hpp"
+#include "duckdb/common/enums/tuple_data_layout_enums.hpp"
 #include "duckdb/common/enums/undo_flags.hpp"
 #include "duckdb/common/enums/vector_type.hpp"
 #include "duckdb/common/enums/wal_type.hpp"
@@ -478,6 +479,25 @@ const char* EnumUtil::ToChars<AppenderType>(AppenderType value) {
 template<>
 AppenderType EnumUtil::FromString<AppenderType>(const char *value) {
 	return static_cast<AppenderType>(StringUtil::StringToEnum(GetAppenderTypeValues(), 2, "AppenderType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetArrowArrayPhysicalTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ArrowArrayPhysicalType::DICTIONARY_ENCODED), "DICTIONARY_ENCODED" },
+		{ static_cast<uint32_t>(ArrowArrayPhysicalType::RUN_END_ENCODED), "RUN_END_ENCODED" },
+		{ static_cast<uint32_t>(ArrowArrayPhysicalType::DEFAULT), "DEFAULT" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ArrowArrayPhysicalType>(ArrowArrayPhysicalType value) {
+	return StringUtil::EnumToString(GetArrowArrayPhysicalTypeValues(), 3, "ArrowArrayPhysicalType", static_cast<uint32_t>(value));
+}
+
+template<>
+ArrowArrayPhysicalType EnumUtil::FromString<ArrowArrayPhysicalType>(const char *value) {
+	return static_cast<ArrowArrayPhysicalType>(StringUtil::StringToEnum(GetArrowArrayPhysicalTypeValues(), 3, "ArrowArrayPhysicalType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetArrowDateTimeTypeValues() {
@@ -3838,19 +3858,20 @@ SettingScope EnumUtil::FromString<SettingScope>(const char *value) {
 const StringUtil::EnumStringLiteral *GetShowTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(ShowType::SUMMARY), "SUMMARY" },
-		{ static_cast<uint32_t>(ShowType::DESCRIBE), "DESCRIBE" }
+		{ static_cast<uint32_t>(ShowType::DESCRIBE), "DESCRIBE" },
+		{ static_cast<uint32_t>(ShowType::SHOW_FROM), "SHOW_FROM" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<ShowType>(ShowType value) {
-	return StringUtil::EnumToString(GetShowTypeValues(), 2, "ShowType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetShowTypeValues(), 3, "ShowType", static_cast<uint32_t>(value));
 }
 
 template<>
 ShowType EnumUtil::FromString<ShowType>(const char *value) {
-	return static_cast<ShowType>(StringUtil::StringToEnum(GetShowTypeValues(), 2, "ShowType", value));
+	return static_cast<ShowType>(StringUtil::StringToEnum(GetShowTypeValues(), 3, "ShowType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetSimplifiedTokenTypeValues() {
@@ -4499,6 +4520,24 @@ TransactionType EnumUtil::FromString<TransactionType>(const char *value) {
 	return static_cast<TransactionType>(StringUtil::StringToEnum(GetTransactionTypeValues(), 4, "TransactionType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetTupleDataNestednessTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(TupleDataNestednessType::TOP_LEVEL_LAYOUT), "TOP_LEVEL_LAYOUT" },
+		{ static_cast<uint32_t>(TupleDataNestednessType::NESTED_STRUCT_LAYOUT), "NESTED_STRUCT_LAYOUT" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<TupleDataNestednessType>(TupleDataNestednessType value) {
+	return StringUtil::EnumToString(GetTupleDataNestednessTypeValues(), 2, "TupleDataNestednessType", static_cast<uint32_t>(value));
+}
+
+template<>
+TupleDataNestednessType EnumUtil::FromString<TupleDataNestednessType>(const char *value) {
+	return static_cast<TupleDataNestednessType>(StringUtil::StringToEnum(GetTupleDataNestednessTypeValues(), 2, "TupleDataNestednessType", value));
+}
+
 const StringUtil::EnumStringLiteral *GetTupleDataPinPropertiesValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(TupleDataPinProperties::INVALID), "INVALID" },
@@ -4518,6 +4557,24 @@ const char* EnumUtil::ToChars<TupleDataPinProperties>(TupleDataPinProperties val
 template<>
 TupleDataPinProperties EnumUtil::FromString<TupleDataPinProperties>(const char *value) {
 	return static_cast<TupleDataPinProperties>(StringUtil::StringToEnum(GetTupleDataPinPropertiesValues(), 5, "TupleDataPinProperties", value));
+}
+
+const StringUtil::EnumStringLiteral *GetTupleDataValidityTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(TupleDataValidityType::CAN_HAVE_NULL_VALUES), "CAN_HAVE_NULL_VALUES" },
+		{ static_cast<uint32_t>(TupleDataValidityType::CANNOT_HAVE_NULL_VALUES), "CANNOT_HAVE_NULL_VALUES" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<TupleDataValidityType>(TupleDataValidityType value) {
+	return StringUtil::EnumToString(GetTupleDataValidityTypeValues(), 2, "TupleDataValidityType", static_cast<uint32_t>(value));
+}
+
+template<>
+TupleDataValidityType EnumUtil::FromString<TupleDataValidityType>(const char *value) {
+	return static_cast<TupleDataValidityType>(StringUtil::StringToEnum(GetTupleDataValidityTypeValues(), 2, "TupleDataValidityType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetUndoFlagsValues() {

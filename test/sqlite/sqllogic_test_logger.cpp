@@ -24,9 +24,12 @@ void SQLLogicTestLogger::LogFailure(const string &log_message) {
 	AppendFailure(log_message);
 }
 
-void SQLLogicTestLogger::Log(const string &str) {
-	std::cerr << str;
-	AppendFailure(str);
+void SQLLogicTestLogger::LogFailureAnnotation(const string header) {
+	const char *ci = std::getenv("CI");
+	// check the value is "true" otherwise you'll see the prefix in local run outputs
+	auto prefix = (ci && string(ci) == "true") ? "\n::error::" : "";
+	std::cerr << prefix << header << std::endl;
+	AppendFailure(header + "\n");
 }
 
 void SQLLogicTestLogger::PrintSummaryHeader(const std::string &file_name) {
@@ -89,7 +92,7 @@ void SQLLogicTestLogger::PrintSQL() {
 			query += ";";
 		}
 	}
-	Log(query + "\n");
+	LogFailure(query + "\n");
 }
 
 void SQLLogicTestLogger::PrintSQLFormatted() {
@@ -128,18 +131,7 @@ void SQLLogicTestLogger::PrintErrorHeader(const string &file_name, idx_t query_l
 	std::ostringstream oss;
 	PrintSummaryHeader(file_name);
 	oss << termcolor::red << termcolor::bold << description << " " << termcolor::reset;
-	if (!file_name.empty()) {
-		oss << termcolor::bold << "(" << file_name << ":" << query_line << ")!" << termcolor::reset;
-	}
-	LogFailure(oss.str() + "\n");
 	LogFailureAnnotation(oss.str());
-}
-
-void SQLLogicTestLogger::LogFailureAnnotation(const string header) {
-	const char *ci = std::getenv("CI");
-	// check the value is "true" otherwise you'll see the prefix in local run outputs
-	auto prefix = (ci && string(ci) == "true") ? "\n::error::" : "";
-	std::cout << prefix << header << std::endl;
 }
 
 void SQLLogicTestLogger::PrintErrorHeader(const string &description) {
@@ -174,7 +166,7 @@ void SQLLogicTestLogger::PrintResultError(MaterializedQueryResult &result, const
 
 void SQLLogicTestLogger::UnexpectedFailure(MaterializedQueryResult &result) {
 	std::ostringstream oss;
-	PrintErrorHeader("Query unexpectedly failed (" + file_name + ":" + to_string(query_line) + ")\n");
+	PrintErrorHeader("Query unexpectedly failed:");
 	LogFailure(oss.str());
 	PrintLineSep();
 	PrintSQL();

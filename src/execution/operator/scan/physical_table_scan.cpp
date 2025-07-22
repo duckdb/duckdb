@@ -32,7 +32,7 @@ public:
 		if (op.function.init_global) {
 			auto filters = table_filters ? *table_filters : GetTableFilters(op);
 			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.projection_ids, filters,
-			                             op.extra_info.sample_options);
+			                             op.extra_info.sample_options, &op);
 
 			global_state = op.function.init_global(context, input);
 			if (global_state) {
@@ -47,7 +47,7 @@ public:
 			for (auto &param : op.parameters) {
 				input_types.push_back(param.type());
 			}
-			input_chunk.Initialize(context, input_types);
+			input_chunk.Initialize(BufferAllocator::Get(context), input_types);
 			for (idx_t c = 0; c < op.parameters.size(); c++) {
 				input_chunk.data[c].Reference(op.parameters[c]);
 			}
@@ -76,7 +76,7 @@ public:
 	                          const PhysicalTableScan &op) {
 		if (op.function.init_local) {
 			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.projection_ids,
-			                             gstate.GetTableFilters(op), op.extra_info.sample_options);
+			                             gstate.GetTableFilters(op), op.extra_info.sample_options, &op);
 			local_state = op.function.init_local(context, input, gstate.global_state.get());
 		}
 	}

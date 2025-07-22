@@ -304,7 +304,7 @@ uint32_t ParquetWriter::WriteData(const const_data_ptr_t buffer, const uint32_t 
 	}
 }
 
-void VerifyUniqueNames(const vector<string> &names) {
+static void VerifyUniqueNames(const vector<string> &names) {
 #ifdef DEBUG
 	unordered_set<string> name_set;
 	name_set.reserve(names.size());
@@ -543,12 +543,15 @@ void ParquetWriter::FlushRowGroup(PreparedRowGroup &prepared) {
 	// let's make sure all offsets are ay-okay
 	ValidateColumnOffsets(file_name, writer->GetTotalWritten(), row_group);
 
-	// append the row group to the file meta data
+	row_group.total_compressed_size = NumericCast<int64_t>(writer->GetTotalWritten()) - row_group.file_offset;
+	row_group.__isset.total_compressed_size = true;
+
+	// append the row group to the file metadata
 	file_meta_data.row_groups.push_back(row_group);
 	file_meta_data.num_rows += row_group.num_rows;
 
 	total_written = writer->GetTotalWritten();
-	num_row_groups++;
+	++num_row_groups;
 }
 
 void ParquetWriter::Flush(ColumnDataCollection &buffer) {
@@ -692,7 +695,7 @@ struct NullStatsUnifier : public ColumnStatsUnifier {
 	}
 };
 
-unique_ptr<ColumnStatsUnifier> GetBaseStatsUnifier(const LogicalType &type) {
+static unique_ptr<ColumnStatsUnifier> GetBaseStatsUnifier(const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
 		return make_uniq<NullStatsUnifier>();
@@ -757,8 +760,8 @@ unique_ptr<ColumnStatsUnifier> GetBaseStatsUnifier(const LogicalType &type) {
 	}
 }
 
-void GetStatsUnifier(const ParquetColumnSchema &schema, vector<unique_ptr<ColumnStatsUnifier>> &unifiers,
-                     string base_name = string()) {
+static void GetStatsUnifier(const ParquetColumnSchema &schema, vector<unique_ptr<ColumnStatsUnifier>> &unifiers,
+                            string base_name = string()) {
 	if (!base_name.empty()) {
 		base_name += ".";
 	}

@@ -5,9 +5,10 @@
 
 namespace duckdb {
 
+namespace {
+
 struct ListBindData : public FunctionData {
 	explicit ListBindData(const LogicalType &stype_p);
-	~ListBindData() override;
 
 	LogicalType stype;
 	ListSegmentFunctions functions;
@@ -28,9 +29,6 @@ ListBindData::ListBindData(const LogicalType &stype_p) : stype(stype_p) {
 	GetSegmentDataFunctions(functions, type);
 }
 
-ListBindData::~ListBindData() {
-}
-
 struct ListAggState {
 	LinkedList linked_list;
 };
@@ -47,8 +45,8 @@ struct ListFunction {
 	}
 };
 
-static void ListUpdateFunction(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
-                               Vector &state_vector, idx_t count) {
+void ListUpdateFunction(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count, Vector &state_vector,
+                        idx_t count) {
 
 	D_ASSERT(input_count == 1);
 	auto &input = inputs[0];
@@ -68,8 +66,7 @@ static void ListUpdateFunction(Vector inputs[], AggregateInputData &aggr_input_d
 	}
 }
 
-static void ListAbsorbFunction(Vector &states_vector, Vector &combined, AggregateInputData &aggr_input_data,
-                               idx_t count) {
+void ListAbsorbFunction(Vector &states_vector, Vector &combined, AggregateInputData &aggr_input_data, idx_t count) {
 	D_ASSERT(aggr_input_data.combine_type == AggregateCombineType::ALLOW_DESTRUCTIVE);
 
 	UnifiedVectorFormat states_data;
@@ -99,8 +96,8 @@ static void ListAbsorbFunction(Vector &states_vector, Vector &combined, Aggregat
 	}
 }
 
-static void ListFinalize(Vector &states_vector, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
-                         idx_t offset) {
+void ListFinalize(Vector &states_vector, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
+                  idx_t offset) {
 
 	UnifiedVectorFormat states_data;
 	states_vector.ToUnifiedFormat(count, states_data);
@@ -149,8 +146,7 @@ static void ListFinalize(Vector &states_vector, AggregateInputData &aggr_input_d
 	ListVector::SetListSize(result, total_len);
 }
 
-static void ListCombineFunction(Vector &states_vector, Vector &combined, AggregateInputData &aggr_input_data,
-                                idx_t count) {
+void ListCombineFunction(Vector &states_vector, Vector &combined, AggregateInputData &aggr_input_data, idx_t count) {
 
 	//	Can we use destructive combining?
 	if (aggr_input_data.combine_type == AggregateCombineType::ALLOW_DESTRUCTIVE) {
@@ -198,6 +194,8 @@ unique_ptr<FunctionData> ListBindFunction(ClientContext &context, AggregateFunct
 	function.return_type = LogicalType::LIST(arguments[0]->return_type);
 	return make_uniq<ListBindData>(function.return_type);
 }
+
+} // namespace
 
 AggregateFunction ListFun::GetFunction() {
 	auto func =

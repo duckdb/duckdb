@@ -1,3 +1,52 @@
+diff --git a/src/hnsw/hnsw_index.cpp b/src/hnsw/hnsw_index.cpp
+index ce89f08..5ef1fc1 100644
+--- a/src/hnsw/hnsw_index.cpp
++++ b/src/hnsw/hnsw_index.cpp
+@@ -523,7 +523,7 @@ void HNSWIndex::PersistToDisk() {
+ 	is_dirty = false;
+ }
+ 
+-IndexStorageInfo HNSWIndex::GetStorageInfo(const case_insensitive_map_t<Value> &options, const bool to_wal) {
++IndexStorageInfo HNSWIndex::SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) {
+ 
+ 	PersistToDisk();
+ 
+@@ -531,17 +531,26 @@ IndexStorageInfo HNSWIndex::GetStorageInfo(const case_insensitive_map_t<Value> &
+ 	info.name = name;
+ 	info.root = root_block_ptr.Get();
+ 
+-	if (!to_wal) {
+-		// use the partial block manager to serialize all allocator data
+-		auto &block_manager = table_io_manager.GetIndexBlockManager();
+-		PartialBlockManager partial_block_manager(block_manager, PartialBlockType::FULL_CHECKPOINT);
+-		linked_block_allocator->SerializeBuffers(partial_block_manager);
+-		partial_block_manager.FlushPartialBlocks();
+-	} else {
+-		info.buffers.push_back(linked_block_allocator->InitSerializationToWAL());
+-	}
++	// Use the partial block manager to serialize allocator data.
++	auto &block_manager = table_io_manager.GetIndexBlockManager();
++	PartialBlockManager partial_block_manager(context, block_manager, PartialBlockType::FULL_CHECKPOINT);
++	linked_block_allocator->SerializeBuffers(partial_block_manager);
++	partial_block_manager.FlushPartialBlocks();
++	info.allocator_infos.push_back(linked_block_allocator->GetInfo());
++
++	return info;
++}
+ 
++IndexStorageInfo HNSWIndex::SerializeToWAL(const case_insensitive_map_t<Value> &options) {
++
++	PersistToDisk();
++
++	IndexStorageInfo info;
++	info.name = name;
++	info.root = root_block_ptr.Get();
++	info.buffers.push_back(linked_block_allocator->InitSerializationToWAL());
+ 	info.allocator_infos.push_back(linked_block_allocator->GetInfo());
++
+ 	return info;
+ }
+ 
 diff --git a/src/hnsw/hnsw_index_macros.cpp b/src/hnsw/hnsw_index_macros.cpp
 index 774b409..450f75a 100644
 --- a/src/hnsw/hnsw_index_macros.cpp
@@ -127,7 +176,7 @@ index a05f1a6..573593e 100644
  #include "hnsw/hnsw.hpp"
  #include "hnsw/hnsw_index.hpp"
 diff --git a/src/hnsw/hnsw_optimize_join.cpp b/src/hnsw/hnsw_optimize_join.cpp
-index 1a8d93b..58917b7 100644
+index 1a8d93b..6a2b646 100644
 --- a/src/hnsw/hnsw_optimize_join.cpp
 +++ b/src/hnsw/hnsw_optimize_join.cpp
 @@ -34,9 +34,9 @@ class PhysicalHNSWIndexJoin final : public PhysicalOperator {
@@ -141,6 +190,15 @@ index 1a8d93b..58917b7 100644
 +	    : PhysicalOperator(physical_plan, TYPE, types_p, estimated_cardinality), table(table_p), hnsw_index(hnsw_index_p),
  	      limit(limit_p) {
  	}
+ 
+@@ -129,7 +129,7 @@ OperatorResultType PhysicalHNSWIndexJoin::Execute(ExecutionContext &context, Dat
+ 	const auto rhs_vector_ptr = FlatVector::GetData<float>(rhs_vector_child);
+ 
+ 	// We mimic the window row_number() operator here and output the row number in each batch, basically.
+-	const auto row_number_vector = FlatVector::GetData<idx_t>(chunk.data[MATCH_COLUMN_OFFSET]);
++	const auto row_number_vector = FlatVector::GetData<int64_t>(chunk.data[MATCH_COLUMN_OFFSET]);
+ 
+ 	hnsw_index.ResetMultiScan(*state.index_state);
  
 diff --git a/src/hnsw/hnsw_optimize_scan.cpp b/src/hnsw/hnsw_optimize_scan.cpp
 index d5aded4..73fa183 100644
@@ -218,6 +276,23 @@ index 5f0b55e..c5dd550 100644
  	static void RegisterScanOptimizer(DatabaseInstance &db);
  	static void RegisterJoinOptimizer(DatabaseInstance &db);
  };
+diff --git a/src/include/hnsw/hnsw_index.hpp b/src/include/hnsw/hnsw_index.hpp
+index 75783a0..b9ce61a 100644
+--- a/src/include/hnsw/hnsw_index.hpp
++++ b/src/include/hnsw/hnsw_index.hpp
+@@ -77,7 +77,11 @@ public:
+ 	//! Insert a chunk of entries into the index
+ 	ErrorData Insert(IndexLock &lock, DataChunk &data, Vector &row_ids) override;
+ 
+-	IndexStorageInfo GetStorageInfo(const case_insensitive_map_t<Value> &options, const bool to_wal) override;
++	//! Serializes HNSW memory to disk and returns the index storage information.
++	IndexStorageInfo SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) override;
++	//! Serializes HNSW memory to the WAL and returns the index storage information.
++	IndexStorageInfo SerializeToWAL(const case_insensitive_map_t<Value> &options) override;
++
+ 	idx_t GetInMemorySize(IndexLock &state) override;
+ 
+ 	//! Merge another index into this index. The lock obtained from InitializeLock must be held, and the other
 diff --git a/src/include/hnsw/hnsw_index_physical_create.hpp b/src/include/hnsw/hnsw_index_physical_create.hpp
 index 8b3e19d..2b1cc6a 100644
 --- a/src/include/hnsw/hnsw_index_physical_create.hpp

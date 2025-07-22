@@ -6,6 +6,7 @@
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/common/checksum.hpp"
+#include "duckdb/common/encryption_functions.hpp"
 #include "duckdb/common/encryption_key_manager.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
@@ -125,16 +126,17 @@ public:
 			auto offset = stream.CurrentOffset();
 			auto file_size = stream.FileSize();
 
-			if (offset + MainHeader::AES_NONCE_LEN + ciphertext_size + MainHeader::AES_TAG_LEN > file_size) {
+			EncryptionNonce nonce;
+			EncryptionTag tag;
+
+			if (offset + nonce.size() + ciphertext_size + tag.size() > file_size) {
 				throw SerializationException(
 				    "Corrupt Encrypted WAL file: entry size exceeded remaining data in file at byte position %llu "
 				    "(found entry with size %llu bytes, file size %llu bytes)",
 				    offset, size, file_size);
 			}
 
-			uint8_t nonce[MainHeader::AES_IV_LEN];
-			memset(nonce, 0, MainHeader::AES_IV_LEN);
-			stream.ReadData(nonce, MainHeader::AES_NONCE_LEN);
+			stream.ReadData(nonce.data(), nonce.size());
 
 			auto &keys = EncryptionKeyManager::Get(state_p.db.GetDatabase());
 			auto &catalog = state_p.db.GetCatalog().Cast<DuckCatalog>();
@@ -142,7 +144,7 @@ public:
 			//! initialize the decryption
 			auto encryption_state = database.GetEncryptionUtil()->CreateEncryptionState(
 			    derived_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
-			encryption_state->InitializeDecryption(nonce, MainHeader::AES_NONCE_LEN, derived_key,
+			encryption_state->InitializeDecryption(nonce.data(), nonce.size(), derived_key,
 			                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 
 			//! Allocate a decryption buffer
@@ -153,11 +155,9 @@ public:
 			encryption_state->Process(buffer.get(), ciphertext_size, buffer.get(), ciphertext_size);
 
 			//! read and verify the stored tag
-			uint8_t tag[MainHeader::AES_TAG_LEN];
-			memset(tag, 0, MainHeader::AES_TAG_LEN);
-			stream.ReadData(tag, MainHeader::AES_TAG_LEN);
+			stream.ReadData(tag.data(), tag.size());
 
-			encryption_state->Finalize(buffer.get(), ciphertext_size, tag, MainHeader::AES_TAG_LEN);
+			encryption_state->Finalize(buffer.get(), ciphertext_size, tag.data(), tag.size());
 
 			//! read the stored checksum
 			auto stored_checksum = Load<uint64_t>(buffer.get());
@@ -233,6 +233,9 @@ protected:
 	void ReplayDelete();
 	void ReplayUpdate();
 	void ReplayCheckpoint();
+
+private:
+	void ReplayIndexData(IndexStorageInfo &info);
 
 private:
 	ReplayState &state;
@@ -499,12 +502,10 @@ void ReplayWithoutIndex(ClientContext &context, Catalog &catalog, AlterInfo &inf
 	catalog.Alter(context, info);
 }
 
-void ReplayIndexData(AttachedDatabase &db, BinaryDeserializer &deserializer, IndexStorageInfo &info,
-                     const bool deserialize_only) {
+void WriteAheadLogDeserializer::ReplayIndexData(IndexStorageInfo &info) {
 	D_ASSERT(info.IsValid() && !info.name.empty());
 
-	auto &storage_manager = db.GetStorageManager();
-	auto &single_file_sm = storage_manager.Cast<SingleFileStorageManager>();
+	auto &single_file_sm = db.GetStorageManager().Cast<SingleFileStorageManager>();
 	auto &block_manager = single_file_sm.block_manager;
 	auto &buffer_manager = block_manager->buffer_manager;
 
@@ -524,7 +525,8 @@ void ReplayIndexData(AttachedDatabase &db, BinaryDeserializer &deserializer, Ind
 			// Convert the buffer handle to a persistent block and store the block id.
 			if (!deserialize_only) {
 				auto block_id = block_manager->GetFreeBlockId();
-				block_manager->ConvertToPersistent(block_id, std::move(block_handle), std::move(buffer_handle));
+				block_manager->ConvertToPersistent(QueryContext(context), block_id, std::move(block_handle),
+				                                   std::move(buffer_handle));
 				data_info.block_pointers[j].block_id = block_id;
 			}
 		}
@@ -539,7 +541,7 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 	}
 
 	auto index_storage_info = deserializer.ReadProperty<IndexStorageInfo>(102, "index_storage_info");
-	ReplayIndexData(db, deserializer, index_storage_info, DeserializeOnly());
+	ReplayIndexData(index_storage_info);
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -756,7 +758,7 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 	auto create_info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(101, "index_catalog_entry");
 	auto index_info = deserializer.ReadProperty<IndexStorageInfo>(102, "index_storage_info");
 
-	ReplayIndexData(db, deserializer, index_info, DeserializeOnly());
+	ReplayIndexData(index_info);
 	if (DeserializeOnly()) {
 		return;
 	}

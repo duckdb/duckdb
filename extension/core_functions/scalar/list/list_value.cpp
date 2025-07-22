@@ -14,6 +14,8 @@
 
 namespace duckdb {
 
+namespace {
+
 struct PrimitiveAssign {
 	template <class T>
 	static T Assign(const T &input, Vector &result) {
@@ -29,7 +31,7 @@ struct StringAssign {
 };
 
 template <class T, class OP = PrimitiveAssign>
-static void TemplatedPopulateChild(DataChunk &args, Vector &result) {
+void TemplatedPopulateChild(DataChunk &args, Vector &result) {
 	const auto column_count = args.ColumnCount();
 	const auto row_count = args.size();
 
@@ -53,7 +55,7 @@ static void TemplatedPopulateChild(DataChunk &args, Vector &result) {
 	}
 }
 
-static void PopulateChildFallback(DataChunk &args, Vector &result) {
+void PopulateChildFallback(DataChunk &args, Vector &result) {
 	auto &child_type = ListType::GetChildType(result.GetType());
 	auto result_data = FlatVector::GetData<list_entry_t>(result);
 	for (idx_t i = 0; i < args.size(); i++) {
@@ -66,11 +68,11 @@ static void PopulateChildFallback(DataChunk &args, Vector &result) {
 	}
 }
 
-static void ListFunction(DataChunk &args, Vector &result);
-static bool StructFunction(DataChunk &args, Vector &result);
+void ListFunction(DataChunk &args, Vector &result);
+bool StructFunction(DataChunk &args, Vector &result);
 
 template <class OP = PrimitiveAssign>
-static bool PopulateChild(DataChunk &args, Vector &result) {
+bool PopulateChild(DataChunk &args, Vector &result) {
 	switch (result.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
@@ -131,7 +133,7 @@ static bool PopulateChild(DataChunk &args, Vector &result) {
 	return true;
 }
 
-static void ListFunction(DataChunk &args, Vector &result) {
+void ListFunction(DataChunk &args, Vector &result) {
 	const idx_t column_count = args.ColumnCount();
 
 	vector<idx_t> col_offsets;
@@ -183,7 +185,7 @@ static void ListFunction(DataChunk &args, Vector &result) {
 	ListVector::SetListSize(result, offset_sum);
 }
 
-static bool StructFunction(DataChunk &args, Vector &result) {
+bool StructFunction(DataChunk &args, Vector &result) {
 	const idx_t column_count = args.ColumnCount();
 	auto &result_members = StructVector::GetEntries(result);
 
@@ -226,7 +228,7 @@ static bool StructFunction(DataChunk &args, Vector &result) {
 	return true;
 }
 
-static void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -261,8 +263,8 @@ static void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &r
 }
 
 template <bool IS_UNPIVOT = false>
-static unique_ptr<FunctionData> ListValueBind(ClientContext &context, ScalarFunction &bound_function,
-                                              vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> ListValueBind(ClientContext &context, ScalarFunction &bound_function,
+                                       vector<unique_ptr<Expression>> &arguments) {
 	// collect names and deconflict, construct return type
 	LogicalType child_type =
 	    arguments.empty() ? LogicalType::SQLNULL : ExpressionBinder::GetExpressionReturnType(*arguments[0]);
@@ -311,6 +313,8 @@ unique_ptr<BaseStatistics> ListValueStats(ClientContext &context, FunctionStatis
 	}
 	return list_stats.ToUnique();
 }
+
+} // namespace
 
 ScalarFunction ListValueFun::GetFunction() {
 	// the arguments and return types are actually set in the binder function

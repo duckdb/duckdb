@@ -10,8 +10,8 @@
 
 namespace duckdb {
 
-TableDataWriter::TableDataWriter(TableCatalogEntry &table_p, optional_ptr<ClientContext> client_context_p)
-    : table(table_p.Cast<DuckTableEntry>()), client_context(client_context_p) {
+TableDataWriter::TableDataWriter(TableCatalogEntry &table_p, QueryContext context)
+    : table(table_p.Cast<DuckTableEntry>()), context(context.GetClientContext()) {
 	D_ASSERT(table_p.IsDuckTable());
 }
 
@@ -23,10 +23,6 @@ void TableDataWriter::WriteTableData(Serializer &metadata_serializer) {
 	table.GetStorage().Checkpoint(*this, metadata_serializer);
 }
 
-CompressionType TableDataWriter::GetColumnCompressionType(idx_t i) {
-	return table.GetColumn(LogicalIndex(i)).CompressionType();
-}
-
 void TableDataWriter::AddRowGroup(RowGroupPointer &&row_group_pointer, unique_ptr<RowGroupWriter> writer) {
 	row_group_pointers.push_back(std::move(row_group_pointer));
 }
@@ -36,8 +32,8 @@ DatabaseInstance &TableDataWriter::GetDatabase() {
 }
 
 unique_ptr<TaskExecutor> TableDataWriter::CreateTaskExecutor() {
-	if (client_context) {
-		return make_uniq<TaskExecutor>(*client_context);
+	if (context) {
+		return make_uniq<TaskExecutor>(*context);
 	}
 	return make_uniq<TaskExecutor>(TaskScheduler::GetScheduler(GetDatabase()));
 }
@@ -96,7 +92,7 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	if (!v1_0_0_storage) {
 		options.emplace("v1_0_0_storage", v1_0_0_storage);
 	}
-	auto index_storage_infos = info->GetIndexes().GetStorageInfos(options);
+	auto index_storage_infos = info->GetIndexes().SerializeToDisk(context, options);
 
 #ifdef DUCKDB_BLOCK_VERIFICATION
 	for (auto &entry : index_storage_infos) {

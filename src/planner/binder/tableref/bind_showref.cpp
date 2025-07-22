@@ -9,6 +9,10 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_search_path.hpp"
+#include "duckdb/main/client_data.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
@@ -151,6 +155,32 @@ unique_ptr<BoundTableRef> Binder::BindShowTable(ShowRef &ref) {
 		sql = PragmaShowDatabases();
 	} else if (lname == "\"tables\"") {
 		sql = PragmaShowTables();
+	} else if (ref.show_type == ShowType::SHOW_FROM) {
+		auto catalog_name = ref.catalog_name;
+		auto schema_name = ref.schema_name;
+
+		// Check for unqualified name, promote schema to catalog if unambiguous, and set schema_name to empty if so
+		Binder::BindSchemaOrCatalog(catalog_name, schema_name);
+
+		// If fully qualified, check if the schema exists
+		if (!catalog_name.empty() && !schema_name.empty()) {
+			auto schema_entry = Catalog::GetSchema(context, catalog_name, schema_name, OnEntryNotFound::RETURN_NULL);
+			if (!schema_entry) {
+				throw CatalogException("SHOW TABLES FROM: No catalog + schema named \"%s.%s\" found.", catalog_name,
+				                       schema_name);
+			}
+		} else if (catalog_name.empty() && !schema_name.empty()) {
+			// We have a schema name, use default catalog
+			auto &client_data = ClientData::Get(context);
+			auto &default_entry = client_data.catalog_search_path->GetDefault();
+			catalog_name = default_entry.catalog;
+			auto schema_entry = Catalog::GetSchema(context, catalog_name, schema_name, OnEntryNotFound::RETURN_NULL);
+			if (!schema_entry) {
+				throw CatalogException("SHOW TABLES FROM: No catalog + schema named \"%s.%s\" found.", catalog_name,
+				                       schema_name);
+			}
+		}
+		sql = PragmaShowTables(catalog_name, schema_name);
 	} else if (lname == "\"variables\"") {
 		sql = PragmaShowVariables();
 	} else if (lname == "__show_tables_expanded") {

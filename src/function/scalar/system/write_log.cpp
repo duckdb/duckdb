@@ -7,6 +7,8 @@
 
 namespace duckdb {
 
+namespace {
+
 struct WriteLogBindData : FunctionData {
 	//! Config
 	bool disable_logging = false;
@@ -43,7 +45,7 @@ public:
 	}
 };
 
-static void ThrowIfNotConstant(const Expression &arg) {
+void ThrowIfNotConstant(const Expression &arg) {
 	if (!arg.IsFoldable()) {
 		throw BinderException("write_log: argument '%s' must be constant", arg.alias);
 	}
@@ -110,8 +112,8 @@ unique_ptr<FunctionData> WriteLogBind(ClientContext &context, ScalarFunction &bo
 }
 
 template <class T>
-static void WriteLogValues(T &LogSource, LogLevel level, const string_t *data, const SelectionVector *sel, idx_t size,
-                           const string &type) {
+void WriteLogValues(T &LogSource, LogLevel level, const string_t *data, const SelectionVector *sel, idx_t size,
+                    const string &type) {
 	if (!type.empty()) {
 		for (idx_t i = 0; i < size; i++) {
 			DUCKDB_LOG_INTERNAL(LogSource, type.c_str(), level, data[sel->get_index(i)]);
@@ -123,7 +125,7 @@ static void WriteLogValues(T &LogSource, LogLevel level, const string_t *data, c
 	}
 }
 
-static void WriteLogFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+void WriteLogFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() >= 1);
 
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
@@ -157,6 +159,8 @@ static void WriteLogFunction(DataChunk &args, ExpressionState &state, Vector &re
 		result.Reference(Value(LogicalType::VARCHAR));
 	}
 }
+
+} // namespace
 
 ScalarFunctionSet WriteLogFun::GetFunctions() {
 	ScalarFunctionSet set("write_log");
