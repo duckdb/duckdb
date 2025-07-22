@@ -33,6 +33,7 @@ public:
 	//! The database
 	AttachedDatabase &db;
 
+	virtual void CreateCheckpoint() = 0;
 	virtual MetadataManager &GetMetadataManager() = 0;
 	virtual MetadataWriter &GetMetadataWriter() = 0;
 	virtual unique_ptr<TableDataWriter> GetTableDataWriter(TableCatalogEntry &table) = 0;
@@ -100,9 +101,7 @@ public:
 	SingleFileCheckpointWriter(QueryContext context, AttachedDatabase &db, BlockManager &block_manager,
 	                           CheckpointType checkpoint_type);
 
-	//! Checkpoint the current state of the WAL and flush it to the main storage. This should be called BEFORE any
-	//! connection is available because right now the checkpointing cannot be done online. (TODO)
-	void CreateCheckpoint();
+	void CreateCheckpoint() override;
 
 	MetadataWriter &GetMetadataWriter() override;
 	MetadataManager &GetMetadataManager() override;
