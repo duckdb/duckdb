@@ -133,21 +133,21 @@ void WindowRankExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, Win
                                           DataChunk &eval_chunk, Vector &result, idx_t count, idx_t row_idx) const {
 	auto &gpeer = gstate.Cast<WindowPeerGlobalState>();
 	auto &lpeer = lstate.Cast<WindowPeerLocalState>();
-	auto rdata = FlatVector::GetData<uint64_t>(result);
+	auto rdata = FlatVector::GetData<int64_t>(result);
 
 	if (gpeer.use_framing) {
 		auto frame_begin = FlatVector::GetData<const idx_t>(lpeer.bounds.data[FRAME_BEGIN]);
 		auto frame_end = FlatVector::GetData<const idx_t>(lpeer.bounds.data[FRAME_END]);
 		if (gpeer.token_tree) {
 			for (idx_t i = 0; i < count; ++i, ++row_idx) {
-				rdata[i] = gpeer.token_tree->Rank(frame_begin[i], frame_end[i], row_idx);
+				rdata[i] = UnsafeNumericCast<int64_t>(gpeer.token_tree->Rank(frame_begin[i], frame_end[i], row_idx));
 			}
 		} else {
 			auto peer_begin = FlatVector::GetData<const idx_t>(lpeer.bounds.data[PEER_BEGIN]);
 			for (idx_t i = 0; i < count; ++i, ++row_idx) {
 				//	Clamp peer to the frame
 				const auto frame_peer_begin = MaxValue(frame_begin[i], peer_begin[i]);
-				rdata[i] = (frame_peer_begin - frame_begin[i]) + 1;
+				rdata[i] = UnsafeNumericCast<int64_t>((frame_peer_begin - frame_begin[i]) + 1);
 			}
 		}
 		return;
@@ -161,7 +161,7 @@ void WindowRankExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, Win
 
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
 		lpeer.NextRank(partition_begin[i], peer_begin[i], row_idx);
-		rdata[i] = lpeer.rank;
+		rdata[i] = UnsafeNumericCast<int64_t>(lpeer.rank);
 	}
 }
 

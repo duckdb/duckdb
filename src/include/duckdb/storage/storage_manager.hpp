@@ -58,8 +58,7 @@ struct CheckpointOptions {
 	CheckpointType type;
 };
 
-//! StorageManager is responsible for managing the physical storage of the
-//! database on disk
+//! StorageManager is responsible for managing the physical storage of a persistent database.
 class StorageManager {
 public:
 	StorageManager(AttachedDatabase &db, string path, bool read_only);
@@ -72,7 +71,7 @@ public:
 	//! Initialize a database or load an existing database from the database file path. The block_alloc_size is
 	//! either set, or invalid. If invalid, then DuckDB defaults to the default_block_alloc_size (DBConfig),
 	//! or the file's block allocation size, if it is an existing database.
-	void Initialize(StorageOptions options);
+	void Initialize(QueryContext context, StorageOptions &options);
 
 	DatabaseInstance &GetDatabase();
 	AttachedDatabase &GetAttached() {
@@ -100,8 +99,7 @@ public:
 	virtual bool AutomaticCheckpoint(idx_t estimated_wal_bytes) = 0;
 	virtual unique_ptr<StorageCommitState> GenStorageCommitState(WriteAheadLog &wal) = 0;
 	virtual bool IsCheckpointClean(MetaBlockPointer checkpoint_id) = 0;
-	virtual void CreateCheckpoint(optional_ptr<ClientContext> client_context,
-	                              CheckpointOptions options = CheckpointOptions()) = 0;
+	virtual void CreateCheckpoint(QueryContext context, CheckpointOptions options = CheckpointOptions()) = 0;
 	virtual DatabaseSize GetDatabaseSize() = 0;
 	virtual vector<MetadataBlockInfo> GetMetadataInfo() = 0;
 	virtual shared_ptr<TableIOManager> GetTableIOManager(BoundCreateTableInfo *info) = 0;
@@ -119,10 +117,10 @@ public:
 	}
 
 protected:
-	virtual void LoadDatabase(StorageOptions options) = 0;
+	virtual void LoadDatabase(QueryContext context, StorageOptions &options) = 0;
 
 protected:
-	//! The database this storage manager belongs to
+	//! The attached database managed by this storage manager.
 	AttachedDatabase &db;
 	//! The path of the database
 	string path;
@@ -149,28 +147,28 @@ public:
 	}
 };
 
-//! Stores database in a single file.
+//! Stores the database in a single file.
 class SingleFileStorageManager : public StorageManager {
 public:
 	SingleFileStorageManager() = delete;
 	SingleFileStorageManager(AttachedDatabase &db, string path, bool read_only);
 
-	//! The BlockManager to read/store meta information and data in blocks
+	//! The BlockManager to read from and write to blocks (meta data and data).
 	unique_ptr<BlockManager> block_manager;
-	//! TableIoManager
+	//! The table I/O manager.
 	unique_ptr<TableIOManager> table_io_manager;
 
 public:
 	bool AutomaticCheckpoint(idx_t estimated_wal_bytes) override;
 	unique_ptr<StorageCommitState> GenStorageCommitState(WriteAheadLog &wal) override;
 	bool IsCheckpointClean(MetaBlockPointer checkpoint_id) override;
-	void CreateCheckpoint(optional_ptr<ClientContext> client_context, CheckpointOptions options) override;
+	void CreateCheckpoint(QueryContext context, CheckpointOptions options) override;
 	DatabaseSize GetDatabaseSize() override;
 	vector<MetadataBlockInfo> GetMetadataInfo() override;
 	shared_ptr<TableIOManager> GetTableIOManager(BoundCreateTableInfo *info) override;
 	BlockManager &GetBlockManager() override;
 
 protected:
-	void LoadDatabase(StorageOptions options) override;
+	void LoadDatabase(QueryContext context, StorageOptions &options) override;
 };
 } // namespace duckdb

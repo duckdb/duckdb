@@ -22,12 +22,13 @@
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/storage/string_uncompressed.hpp"
+#include "duckdb/common/types/uuid.hpp"
 #include "fsst.h"
 
 #include <cstring> // strlen() on Solaris
 namespace duckdb {
 
-UnifiedVectorFormat::UnifiedVectorFormat() : sel(nullptr), data(nullptr) {
+UnifiedVectorFormat::UnifiedVectorFormat() : sel(nullptr), data(nullptr), physical_type(PhysicalType::INVALID) {
 }
 
 UnifiedVectorFormat::UnifiedVectorFormat(UnifiedVectorFormat &&other) noexcept : sel(nullptr), data(nullptr) {
@@ -36,6 +37,7 @@ UnifiedVectorFormat::UnifiedVectorFormat(UnifiedVectorFormat &&other) noexcept :
 	std::swap(data, other.data);
 	std::swap(validity, other.validity);
 	std::swap(owned_sel, other.owned_sel);
+	std::swap(physical_type, other.physical_type);
 	if (refers_to_self) {
 		sel = &owned_sel;
 	}
@@ -47,6 +49,7 @@ UnifiedVectorFormat &UnifiedVectorFormat::operator=(UnifiedVectorFormat &&other)
 	std::swap(data, other.data);
 	std::swap(validity, other.validity);
 	std::swap(owned_sel, other.owned_sel);
+	std::swap(physical_type, other.physical_type);
 	if (refers_to_self) {
 		sel = &owned_sel;
 	}
@@ -144,10 +147,9 @@ void Vector::ReferenceAndSetType(const Vector &other) {
 
 void Vector::Reinterpret(const Vector &other) {
 	vector_type = other.vector_type;
-#ifdef DEBUG
 	auto &this_type = GetType();
 	auto &other_type = other.GetType();
-
+#ifdef DEBUG
 	auto type_is_same = other_type == this_type;
 	bool this_is_nested = this_type.IsNested();
 	bool other_is_nested = other_type.IsNested();
@@ -160,7 +162,7 @@ void Vector::Reinterpret(const Vector &other) {
 	D_ASSERT((not_nested && type_size_equal) || type_is_same);
 #endif
 	AssignSharedPointer(buffer, other.buffer);
-	if (vector_type == VectorType::DICTIONARY_VECTOR) {
+	if (vector_type == VectorType::DICTIONARY_VECTOR && other_type != this_type) {
 		Vector new_vector(GetType(), nullptr);
 		new_vector.Reinterpret(DictionaryVector::Child(other));
 		auxiliary = make_shared_ptr<VectorChildBuffer>(std::move(new_vector));
@@ -412,7 +414,9 @@ void Vector::Resize(idx_t current_size, idx_t new_size) {
 		}
 
 		// Copy the data buffer to a resized buffer.
-		auto new_data = Allocator::DefaultAllocator().Allocate(target_size);
+		auto stored_allocator = resize_info_entry.buffer->GetAllocator();
+		auto new_data = stored_allocator ? stored_allocator->Allocate(target_size)
+		                                 : Allocator::DefaultAllocator().Allocate(target_size);
 		memcpy(new_data.get(), resize_info_entry.data, old_size);
 		resize_info_entry.buffer->SetData(std::move(new_data));
 		resize_info_entry.vec.data = resize_info_entry.buffer->GetData();
@@ -584,7 +588,8 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		case VectorType::SEQUENCE_VECTOR: {
 			int64_t start, increment;
 			SequenceVector::GetSequence(*vector, start, increment);
-			return Value::Numeric(vector->GetType(), start + increment * NumericCast<int64_t>(index));
+			return Value::Numeric(vector->GetType(),
+			                      start + static_cast<int64_t>(static_cast<uint64_t>(increment) * index));
 		}
 		default:
 			throw InternalException("Unimplemented vector type for Vector::GetValue");
@@ -630,6 +635,8 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		return Value::DATE(reinterpret_cast<date_t *>(data)[index]);
 	case LogicalTypeId::TIME:
 		return Value::TIME(reinterpret_cast<dtime_t *>(data)[index]);
+	case LogicalTypeId::TIME_NS:
+		return Value::TIME_NS(reinterpret_cast<dtime_ns_t *>(data)[index]);
 	case LogicalTypeId::TIME_TZ:
 		return Value::TIMETZ(reinterpret_cast<dtime_tz_t *>(data)[index]);
 	case LogicalTypeId::BIGINT:
@@ -832,7 +839,8 @@ string Vector::ToString(idx_t count) const {
 		int64_t start, increment;
 		SequenceVector::GetSequence(*this, start, increment);
 		for (idx_t i = 0; i < count; i++) {
-			retval += to_string(start + increment * UnsafeNumericCast<int64_t>(i)) + (i == count - 1 ? "" : ", ");
+			retval += to_string(start + static_cast<int64_t>(static_cast<uint64_t>(increment) * i)) +
+			          (i == count - 1 ? "" : ", ");
 		}
 		break;
 	}
@@ -1155,6 +1163,7 @@ void Vector::Flatten(const SelectionVector &sel, idx_t count) {
 }
 
 void Vector::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) {
+	format.physical_type = GetType().InternalType();
 	switch (GetVectorType()) {
 	case VectorType::DICTIONARY_VECTOR: {
 		auto &sel = DictionaryVector::SelVector(*this);
@@ -1820,7 +1829,8 @@ void Vector::DebugTransformToDictionary(Vector &vector, idx_t count) {
 		original_sel.set_index(offset++, verify_count - 1 - i * 2);
 	}
 	// now slice the inverted vector with the inverted selection vector
-	vector.Slice(inverted_vector, original_sel, count);
+	vector.Dictionary(inverted_vector, verify_count, original_sel, count);
+	DictionaryVector::SetDictionaryId(vector, UUID::ToString(UUID::GenerateRandomUUID()));
 	vector.Verify(count);
 }
 
@@ -2073,7 +2083,12 @@ VectorStringBuffer &StringVector::GetStringBuffer(Vector &vector) {
 		                        vector.GetType());
 	}
 	if (!vector.auxiliary) {
-		vector.auxiliary = make_buffer<VectorStringBuffer>();
+		auto stored_allocator = vector.buffer ? vector.buffer->GetAllocator() : nullptr;
+		if (stored_allocator) {
+			vector.auxiliary = make_buffer<VectorStringBuffer>(*stored_allocator);
+		} else {
+			vector.auxiliary = make_buffer<VectorStringBuffer>();
+		}
 	}
 	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::STRING_BUFFER);
 	return vector.auxiliary.get()->Cast<VectorStringBuffer>();

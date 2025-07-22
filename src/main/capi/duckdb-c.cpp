@@ -1,5 +1,6 @@
 #include "duckdb/main/capi/capi_internal.hpp"
 
+using duckdb::CClientArrowOptionsWrapper;
 using duckdb::CClientContextWrapper;
 using duckdb::Connection;
 using duckdb::DatabaseWrapper;
@@ -151,6 +152,16 @@ void duckdb_connection_get_client_context(duckdb_connection connection, duckdb_c
 	*out_context = reinterpret_cast<duckdb_client_context>(wrapper);
 }
 
+void duckdb_connection_get_arrow_options(duckdb_connection connection, duckdb_arrow_options *out_arrow_options) {
+	if (!connection || !out_arrow_options) {
+		return;
+	}
+	Connection *conn = reinterpret_cast<Connection *>(connection);
+	auto client_properties = conn->context->GetClientProperties();
+	auto wrapper = new CClientArrowOptionsWrapper(client_properties);
+	*out_arrow_options = reinterpret_cast<duckdb_arrow_options>(wrapper);
+}
+
 idx_t duckdb_client_context_get_connection_id(duckdb_client_context context) {
 	auto wrapper = reinterpret_cast<CClientContextWrapper *>(context);
 	return wrapper->context.GetConnectionId();
@@ -161,6 +172,14 @@ void duckdb_destroy_client_context(duckdb_client_context *context) {
 		auto wrapper = reinterpret_cast<CClientContextWrapper *>(*context);
 		delete wrapper;
 		*context = nullptr;
+	}
+}
+
+void duckdb_destroy_arrow_options(duckdb_arrow_options *arrow_options) {
+	if (arrow_options && *arrow_options) {
+		auto wrapper = reinterpret_cast<CClientArrowOptionsWrapper *>(*arrow_options);
+		delete wrapper;
+		*arrow_options = nullptr;
 	}
 }
 

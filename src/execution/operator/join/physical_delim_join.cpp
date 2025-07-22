@@ -4,11 +4,11 @@
 
 namespace duckdb {
 
-PhysicalDelimJoin::PhysicalDelimJoin(PhysicalOperatorType type, vector<LogicalType> types,
+PhysicalDelimJoin::PhysicalDelimJoin(PhysicalPlan &physical_plan, PhysicalOperatorType type, vector<LogicalType> types,
                                      PhysicalOperator &original_join, PhysicalOperator &distinct,
                                      const vector<const_reference<PhysicalOperator>> &delim_scans,
                                      idx_t estimated_cardinality, optional_idx delim_idx)
-    : PhysicalOperator(type, std::move(types), estimated_cardinality), join(original_join),
+    : PhysicalOperator(physical_plan, type, std::move(types), estimated_cardinality), join(original_join),
       distinct(distinct.Cast<PhysicalHashAggregate>()), delim_scans(delim_scans), delim_idx(delim_idx) {
 	D_ASSERT(type == PhysicalOperatorType::LEFT_DELIM_JOIN || type == PhysicalOperatorType::RIGHT_DELIM_JOIN);
 }

@@ -99,7 +99,7 @@ void CAPIAggregateUpdate(Vector inputs[], AggregateInputData &aggr_input_data, i
 	chunk.SetCardinality(count);
 
 	auto &bind_data = aggr_input_data.bind_data->Cast<CAggregateFunctionBindData>();
-	auto state_data = FlatVector::GetData<duckdb_aggregate_state>(state);
+	auto state_data = FlatVector::GetDataUnsafe<duckdb_aggregate_state>(state);
 	auto c_input_chunk = reinterpret_cast<duckdb_data_chunk>(&chunk);
 
 	CAggregateExecuteInfo exec_info(bind_data.info);
@@ -113,8 +113,8 @@ void CAPIAggregateUpdate(Vector inputs[], AggregateInputData &aggr_input_data, i
 void CAPIAggregateCombine(Vector &state, Vector &combined, AggregateInputData &aggr_input_data, idx_t count) {
 	state.Flatten(count);
 	auto &bind_data = aggr_input_data.bind_data->Cast<CAggregateFunctionBindData>();
-	auto input_state_data = FlatVector::GetData<duckdb_aggregate_state>(state);
-	auto result_state_data = FlatVector::GetData<duckdb_aggregate_state>(combined);
+	auto input_state_data = FlatVector::GetDataUnsafe<duckdb_aggregate_state>(state);
+	auto result_state_data = FlatVector::GetDataUnsafe<duckdb_aggregate_state>(combined);
 	CAggregateExecuteInfo exec_info(bind_data.info);
 	auto c_function_info = reinterpret_cast<duckdb_function_info>(&exec_info);
 	bind_data.info.combine(c_function_info, input_state_data, result_state_data, count);
@@ -127,7 +127,7 @@ void CAPIAggregateFinalize(Vector &state, AggregateInputData &aggr_input_data, V
                            idx_t offset) {
 	state.Flatten(count);
 	auto &bind_data = aggr_input_data.bind_data->Cast<CAggregateFunctionBindData>();
-	auto input_state_data = FlatVector::GetData<duckdb_aggregate_state>(state);
+	auto input_state_data = FlatVector::GetDataUnsafe<duckdb_aggregate_state>(state);
 	auto result_vector = reinterpret_cast<duckdb_vector>(&result);
 
 	CAggregateExecuteInfo exec_info(bind_data.info);
@@ -140,7 +140,7 @@ void CAPIAggregateFinalize(Vector &state, AggregateInputData &aggr_input_data, V
 
 void CAPIAggregateDestructor(Vector &state, AggregateInputData &aggr_input_data, idx_t count) {
 	auto &bind_data = aggr_input_data.bind_data->Cast<CAggregateFunctionBindData>();
-	auto input_state_data = FlatVector::GetData<duckdb_aggregate_state>(state);
+	auto input_state_data = FlatVector::GetDataUnsafe<duckdb_aggregate_state>(state);
 	bind_data.info.destroy(input_state_data, count);
 }
 

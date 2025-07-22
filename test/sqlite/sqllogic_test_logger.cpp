@@ -132,6 +132,14 @@ void SQLLogicTestLogger::PrintErrorHeader(const string &file_name, idx_t query_l
 		oss << termcolor::bold << "(" << file_name << ":" << query_line << ")!" << termcolor::reset;
 	}
 	LogFailure(oss.str() + "\n");
+	LogFailureAnnotation(oss.str());
+}
+
+void SQLLogicTestLogger::LogFailureAnnotation(const string header) {
+	const char *ci = std::getenv("CI");
+	// check the value is "true" otherwise you'll see the prefix in local run outputs
+	auto prefix = (ci && string(ci) == "true") ? "\n::error::" : "";
+	std::cout << prefix << header << std::endl;
 }
 
 void SQLLogicTestLogger::PrintErrorHeader(const string &description) {
@@ -288,9 +296,11 @@ void SQLLogicTestLogger::SplitMismatch(idx_t row_number, idx_t expected_column_c
 	PrintLineSep();
 }
 
-void SQLLogicTestLogger::WrongResultHash(QueryResult *expected_result, MaterializedQueryResult &result) {
+void SQLLogicTestLogger::WrongResultHash(QueryResult *expected_result, MaterializedQueryResult &result,
+                                         const string &expected_hash, const string &actual_hash) {
 	if (expected_result) {
 		expected_result->Print();
+		expected_result->ToString();
 	} else {
 		LogFailure("???\n");
 	}

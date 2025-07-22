@@ -35,7 +35,7 @@ struct PowOperatorFun {
 	static constexpr const char *Name = "**";
 	static constexpr const char *Parameters = "x,y";
 	static constexpr const char *Description = "Computes x to the power of y";
-	static constexpr const char *Example = "pow(2, 3)";
+	static constexpr const char *Example = "pow(2, 3)\002power(2, 3)\0022 ** 3\0022 ^ 3";
 	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
@@ -325,7 +325,7 @@ struct Log10Fun {
 
 struct LogFun {
 	static constexpr const char *Name = "log";
-	static constexpr const char *Parameters = "b, x";
+	static constexpr const char *Parameters = "b,x";
 	static constexpr const char *Description = "Computes the logarithm of x to base b. b may be omitted, in which case the default 10";
 	static constexpr const char *Example = "log(2, 64)";
 	static constexpr const char *Categories = "";
@@ -335,7 +335,7 @@ struct LogFun {
 
 struct NextAfterFun {
 	static constexpr const char *Name = "nextafter";
-	static constexpr const char *Parameters = "x, y";
+	static constexpr const char *Parameters = "x,y";
 	static constexpr const char *Description = "Returns the next floating point value after x in the direction of y";
 	static constexpr const char *Example = "nextafter(1::float, 2::float)";
 	static constexpr const char *Categories = "";

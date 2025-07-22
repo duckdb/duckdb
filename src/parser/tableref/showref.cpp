@@ -1,4 +1,5 @@
 #include "duckdb/parser/tableref/showref.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
 
 namespace duckdb {
 
@@ -9,6 +10,17 @@ string ShowRef::ToString() const {
 	string result;
 	if (show_type == ShowType::SUMMARY) {
 		result += "SUMMARIZE ";
+	} else if (show_type == ShowType::SHOW_FROM) {
+		result += "SHOW TABLES FROM ";
+		string name = "";
+		if (!catalog_name.empty()) {
+			name += KeywordHelper::WriteOptionallyQuoted(catalog_name, '"');
+			if (!schema_name.empty()) {
+				name += ".";
+			}
+		}
+		name += KeywordHelper::WriteOptionallyQuoted(schema_name, '"');
+		result += name;
 	} else {
 		result += "DESCRIBE ";
 	}
@@ -38,6 +50,8 @@ bool ShowRef::Equals(const TableRef &other_p) const {
 unique_ptr<TableRef> ShowRef::Copy() {
 	auto copy = make_uniq<ShowRef>();
 
+	copy->catalog_name = catalog_name;
+	copy->schema_name = schema_name;
 	copy->table_name = table_name;
 	copy->query = query ? query->Copy() : nullptr;
 	copy->show_type = show_type;

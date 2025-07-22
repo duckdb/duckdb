@@ -4,18 +4,13 @@
 
 namespace duckdb {
 
-struct DistinctBinaryLambdaWrapper {
-	template <class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
-	static inline RESULT_TYPE Operation(LEFT_TYPE left, RIGHT_TYPE right, bool is_left_null, bool is_right_null) {
-		return OP::template Operation<LEFT_TYPE>(left, right, is_left_null, is_right_null);
-	}
-};
+namespace {
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP>
-static void DistinctExecuteGenericLoop(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
-                                       RESULT_TYPE *__restrict result_data, const SelectionVector *__restrict lsel,
-                                       const SelectionVector *__restrict rsel, idx_t count, ValidityMask &lmask,
-                                       ValidityMask &rmask, ValidityMask &result_mask) {
+void DistinctExecuteGenericLoop(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
+                                RESULT_TYPE *__restrict result_data, const SelectionVector *__restrict lsel,
+                                const SelectionVector *__restrict rsel, idx_t count, ValidityMask &lmask,
+                                ValidityMask &rmask, ValidityMask &result_mask) {
 	for (idx_t i = 0; i < count; i++) {
 		auto lindex = lsel->get_index(i);
 		auto rindex = rsel->get_index(i);
@@ -27,7 +22,7 @@ static void DistinctExecuteGenericLoop(const LEFT_TYPE *__restrict ldata, const 
 }
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP>
-static void DistinctExecuteConstant(Vector &left, Vector &right, Vector &result) {
+void DistinctExecuteConstant(Vector &left, Vector &right, Vector &result) {
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);
 
 	auto ldata = ConstantVector::GetData<LEFT_TYPE>(left);
@@ -38,7 +33,7 @@ static void DistinctExecuteConstant(Vector &left, Vector &right, Vector &result)
 }
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP>
-static void DistinctExecuteGeneric(Vector &left, Vector &right, Vector &result, idx_t count) {
+void DistinctExecuteGeneric(Vector &left, Vector &right, Vector &result, idx_t count) {
 	if (left.GetVectorType() == VectorType::CONSTANT_VECTOR && right.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		DistinctExecuteConstant<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OP>(left, right, result);
 	} else {
@@ -56,12 +51,12 @@ static void DistinctExecuteGeneric(Vector &left, Vector &right, Vector &result, 
 }
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP>
-static void DistinctExecuteSwitch(Vector &left, Vector &right, Vector &result, idx_t count) {
+void DistinctExecuteSwitch(Vector &left, Vector &right, Vector &result, idx_t count) {
 	DistinctExecuteGeneric<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OP>(left, right, result, count);
 }
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP>
-static void DistinctExecute(Vector &left, Vector &right, Vector &result, idx_t count) {
+void DistinctExecute(Vector &left, Vector &right, Vector &result, idx_t count) {
 	DistinctExecuteSwitch<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OP>(left, right, result, count);
 }
 
@@ -70,11 +65,10 @@ template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool NO_NULL, bool HAS_TR
 #else
 template <class LEFT_TYPE, class RIGHT_TYPE, class OP>
 #endif
-static inline idx_t
-DistinctSelectGenericLoop(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
-                          const SelectionVector *__restrict lsel, const SelectionVector *__restrict rsel,
-                          const SelectionVector *__restrict result_sel, idx_t count, ValidityMask &lmask,
-                          ValidityMask &rmask, SelectionVector *true_sel, SelectionVector *false_sel) {
+idx_t DistinctSelectGenericLoop(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
+                                const SelectionVector *__restrict lsel, const SelectionVector *__restrict rsel,
+                                const SelectionVector *__restrict result_sel, idx_t count, ValidityMask &lmask,
+                                ValidityMask &rmask, SelectionVector *true_sel, SelectionVector *false_sel) {
 #ifdef DUCKDB_SMALLER_BINARY
 	bool HAS_TRUE_SEL = true_sel;
 	bool HAS_FALSE_SEL = false_sel;
@@ -118,11 +112,10 @@ DistinctSelectGenericLoop(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *_
 
 #ifndef DUCKDB_SMALLER_BINARY
 template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool NO_NULL>
-static inline idx_t
-DistinctSelectGenericLoopSelSwitch(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
-                                   const SelectionVector *__restrict lsel, const SelectionVector *__restrict rsel,
-                                   const SelectionVector *__restrict result_sel, idx_t count, ValidityMask &lmask,
-                                   ValidityMask &rmask, SelectionVector *true_sel, SelectionVector *false_sel) {
+idx_t DistinctSelectGenericLoopSelSwitch(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
+                                         const SelectionVector *__restrict lsel, const SelectionVector *__restrict rsel,
+                                         const SelectionVector *__restrict result_sel, idx_t count, ValidityMask &lmask,
+                                         ValidityMask &rmask, SelectionVector *true_sel, SelectionVector *false_sel) {
 	if (true_sel && false_sel) {
 		return DistinctSelectGenericLoop<LEFT_TYPE, RIGHT_TYPE, OP, NO_NULL, true, true>(
 		    ldata, rdata, lsel, rsel, result_sel, count, lmask, rmask, true_sel, false_sel);
@@ -138,11 +131,10 @@ DistinctSelectGenericLoopSelSwitch(const LEFT_TYPE *__restrict ldata, const RIGH
 #endif
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class OP>
-static inline idx_t
-DistinctSelectGenericLoopSwitch(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
-                                const SelectionVector *__restrict lsel, const SelectionVector *__restrict rsel,
-                                const SelectionVector *__restrict result_sel, idx_t count, ValidityMask &lmask,
-                                ValidityMask &rmask, SelectionVector *true_sel, SelectionVector *false_sel) {
+idx_t DistinctSelectGenericLoopSwitch(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
+                                      const SelectionVector *__restrict lsel, const SelectionVector *__restrict rsel,
+                                      const SelectionVector *__restrict result_sel, idx_t count, ValidityMask &lmask,
+                                      ValidityMask &rmask, SelectionVector *true_sel, SelectionVector *false_sel) {
 #ifndef DUCKDB_SMALLER_BINARY
 	if (!lmask.AllValid() || !rmask.AllValid()) {
 		return DistinctSelectGenericLoopSelSwitch<LEFT_TYPE, RIGHT_TYPE, OP, false>(
@@ -158,8 +150,8 @@ DistinctSelectGenericLoopSwitch(const LEFT_TYPE *__restrict ldata, const RIGHT_T
 }
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class OP>
-static idx_t DistinctSelectGeneric(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
-                                   SelectionVector *true_sel, SelectionVector *false_sel) {
+idx_t DistinctSelectGeneric(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+                            SelectionVector *true_sel, SelectionVector *false_sel) {
 	UnifiedVectorFormat ldata, rdata;
 
 	left.ToUnifiedFormat(count, ldata);
@@ -173,9 +165,9 @@ static idx_t DistinctSelectGeneric(Vector &left, Vector &right, const SelectionV
 #ifndef DUCKDB_SMALLER_BINARY
 template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool LEFT_CONSTANT, bool RIGHT_CONSTANT, bool NO_NULL,
           bool HAS_TRUE_SEL, bool HAS_FALSE_SEL>
-static inline idx_t DistinctSelectFlatLoop(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata,
-                                           const SelectionVector *sel, idx_t count, ValidityMask &lmask,
-                                           ValidityMask &rmask, SelectionVector *true_sel, SelectionVector *false_sel) {
+idx_t DistinctSelectFlatLoop(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata, const SelectionVector *sel,
+                             idx_t count, ValidityMask &lmask, ValidityMask &rmask, SelectionVector *true_sel,
+                             SelectionVector *false_sel) {
 	idx_t true_count = 0, false_count = 0;
 	for (idx_t i = 0; i < count; i++) {
 		idx_t result_idx = sel->get_index(i);
@@ -201,10 +193,9 @@ static inline idx_t DistinctSelectFlatLoop(LEFT_TYPE *__restrict ldata, RIGHT_TY
 }
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool LEFT_CONSTANT, bool RIGHT_CONSTANT, bool NO_NULL>
-static inline idx_t DistinctSelectFlatLoopSelSwitch(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata,
-                                                    const SelectionVector *sel, idx_t count, ValidityMask &lmask,
-                                                    ValidityMask &rmask, SelectionVector *true_sel,
-                                                    SelectionVector *false_sel) {
+idx_t DistinctSelectFlatLoopSelSwitch(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata,
+                                      const SelectionVector *sel, idx_t count, ValidityMask &lmask, ValidityMask &rmask,
+                                      SelectionVector *true_sel, SelectionVector *false_sel) {
 	if (true_sel && false_sel) {
 		return DistinctSelectFlatLoop<LEFT_TYPE, RIGHT_TYPE, OP, LEFT_CONSTANT, RIGHT_CONSTANT, NO_NULL, true, true>(
 		    ldata, rdata, sel, count, lmask, rmask, true_sel, false_sel);
@@ -219,17 +210,16 @@ static inline idx_t DistinctSelectFlatLoopSelSwitch(LEFT_TYPE *__restrict ldata,
 }
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool LEFT_CONSTANT, bool RIGHT_CONSTANT>
-static inline idx_t DistinctSelectFlatLoopSwitch(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata,
-                                                 const SelectionVector *sel, idx_t count, ValidityMask &lmask,
-                                                 ValidityMask &rmask, SelectionVector *true_sel,
-                                                 SelectionVector *false_sel) {
+idx_t DistinctSelectFlatLoopSwitch(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata,
+                                   const SelectionVector *sel, idx_t count, ValidityMask &lmask, ValidityMask &rmask,
+                                   SelectionVector *true_sel, SelectionVector *false_sel) {
 	return DistinctSelectFlatLoopSelSwitch<LEFT_TYPE, RIGHT_TYPE, OP, LEFT_CONSTANT, RIGHT_CONSTANT, true>(
 	    ldata, rdata, sel, count, lmask, rmask, true_sel, false_sel);
 }
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool LEFT_CONSTANT, bool RIGHT_CONSTANT>
-static idx_t DistinctSelectFlat(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
-                                SelectionVector *true_sel, SelectionVector *false_sel) {
+idx_t DistinctSelectFlat(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+                         SelectionVector *true_sel, SelectionVector *false_sel) {
 	auto ldata = FlatVector::GetData<LEFT_TYPE>(left);
 	auto rdata = FlatVector::GetData<RIGHT_TYPE>(right);
 	if (LEFT_CONSTANT) {
@@ -254,8 +244,8 @@ static idx_t DistinctSelectFlat(Vector &left, Vector &right, const SelectionVect
 #endif
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class OP>
-static idx_t DistinctSelectConstant(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
-                                    SelectionVector *true_sel, SelectionVector *false_sel) {
+idx_t DistinctSelectConstant(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+                             SelectionVector *true_sel, SelectionVector *false_sel) {
 	auto ldata = ConstantVector::GetData<LEFT_TYPE>(left);
 	auto rdata = ConstantVector::GetData<RIGHT_TYPE>(right);
 
@@ -278,7 +268,7 @@ static idx_t DistinctSelectConstant(Vector &left, Vector &right, const Selection
 	}
 }
 
-static void UpdateNullMask(Vector &vec, const SelectionVector &sel, idx_t count, ValidityMask &null_mask) {
+void UpdateNullMask(Vector &vec, const SelectionVector &sel, idx_t count, ValidityMask &null_mask) {
 	UnifiedVectorFormat vdata;
 	vec.ToUnifiedFormat(count, vdata);
 
@@ -296,9 +286,8 @@ static void UpdateNullMask(Vector &vec, const SelectionVector &sel, idx_t count,
 }
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class OP>
-static idx_t DistinctSelect(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
-                            SelectionVector *true_sel, SelectionVector *false_sel,
-                            optional_ptr<ValidityMask> null_mask) {
+idx_t DistinctSelect(Vector &left, Vector &right, const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
+                     SelectionVector *false_sel, optional_ptr<ValidityMask> null_mask) {
 	if (!sel) {
 		sel = FlatVector::IncrementalSelectionVector();
 	}
@@ -328,9 +317,9 @@ static idx_t DistinctSelect(Vector &left, Vector &right, const SelectionVector *
 }
 
 template <class OP>
-static idx_t DistinctSelectNotNull(Vector &left, Vector &right, const idx_t count, idx_t &true_count,
-                                   const SelectionVector &sel, SelectionVector &maybe_vec, OptionalSelection &true_opt,
-                                   OptionalSelection &false_opt, optional_ptr<ValidityMask> null_mask) {
+idx_t DistinctSelectNotNull(Vector &left, Vector &right, const idx_t count, idx_t &true_count,
+                            const SelectionVector &sel, SelectionVector &maybe_vec, OptionalSelection &true_opt,
+                            OptionalSelection &false_opt, optional_ptr<ValidityMask> null_mask) {
 	UnifiedVectorFormat lvdata, rvdata;
 	left.ToUnifiedFormat(count, lvdata);
 	right.ToUnifiedFormat(count, rvdata);
@@ -457,61 +446,6 @@ idx_t PositionComparator::Final<duckdb::DistinctFrom>(Vector &left, Vector &righ
 	return VectorOperations::NestedNotEquals(left, right, &sel, count, true_sel, false_sel, null_mask);
 }
 
-// Non-strict inequalities must use strict comparisons for Definite
-template <>
-idx_t PositionComparator::Definite<duckdb::DistinctLessThanEquals>(Vector &left, Vector &right,
-                                                                   const SelectionVector &sel, idx_t count,
-                                                                   optional_ptr<SelectionVector> true_sel,
-                                                                   SelectionVector &false_sel,
-                                                                   optional_ptr<ValidityMask> null_mask) {
-	return VectorOperations::DistinctGreaterThan(right, left, &sel, count, true_sel, &false_sel, null_mask);
-}
-
-template <>
-idx_t PositionComparator::Final<duckdb::DistinctLessThanEquals>(Vector &left, Vector &right, const SelectionVector &sel,
-                                                                idx_t count, optional_ptr<SelectionVector> true_sel,
-                                                                optional_ptr<SelectionVector> false_sel,
-                                                                optional_ptr<ValidityMask> null_mask) {
-	return VectorOperations::DistinctGreaterThanEquals(right, left, &sel, count, true_sel, false_sel, null_mask);
-}
-
-template <>
-idx_t PositionComparator::Definite<duckdb::DistinctGreaterThanEquals>(Vector &left, Vector &right,
-                                                                      const SelectionVector &sel, idx_t count,
-                                                                      optional_ptr<SelectionVector> true_sel,
-                                                                      SelectionVector &false_sel,
-                                                                      optional_ptr<ValidityMask> null_mask) {
-	return VectorOperations::DistinctGreaterThan(left, right, &sel, count, true_sel, &false_sel, null_mask);
-}
-
-template <>
-idx_t PositionComparator::Final<duckdb::DistinctGreaterThanEquals>(Vector &left, Vector &right,
-                                                                   const SelectionVector &sel, idx_t count,
-                                                                   optional_ptr<SelectionVector> true_sel,
-                                                                   optional_ptr<SelectionVector> false_sel,
-                                                                   optional_ptr<ValidityMask> null_mask) {
-	return VectorOperations::DistinctGreaterThanEquals(left, right, &sel, count, true_sel, false_sel, null_mask);
-}
-
-// Strict inequalities just use strict for both Definite and Final
-template <>
-idx_t PositionComparator::Final<duckdb::DistinctLessThan>(Vector &left, Vector &right, const SelectionVector &sel,
-                                                          idx_t count, optional_ptr<SelectionVector> true_sel,
-                                                          optional_ptr<SelectionVector> false_sel,
-                                                          optional_ptr<ValidityMask> null_mask) {
-	return VectorOperations::DistinctGreaterThan(right, left, &sel, count, true_sel, false_sel, null_mask);
-}
-
-template <>
-idx_t PositionComparator::Final<duckdb::DistinctLessThanNullsFirst>(Vector &left, Vector &right,
-                                                                    const SelectionVector &sel, idx_t count,
-                                                                    optional_ptr<SelectionVector> true_sel,
-                                                                    optional_ptr<SelectionVector> false_sel,
-                                                                    optional_ptr<ValidityMask> null_mask) {
-	// DistinctGreaterThan has NULLs last
-	return VectorOperations::DistinctGreaterThan(right, left, &sel, count, true_sel, false_sel, null_mask);
-}
-
 template <>
 idx_t PositionComparator::Final<duckdb::DistinctGreaterThan>(Vector &left, Vector &right, const SelectionVector &sel,
                                                              idx_t count, optional_ptr<SelectionVector> true_sel,
@@ -532,8 +466,8 @@ idx_t PositionComparator::Final<duckdb::DistinctGreaterThanNullsFirst>(Vector &l
 
 using StructEntries = vector<unique_ptr<Vector>>;
 
-static void ExtractNestedSelection(const SelectionVector &slice_sel, const idx_t count, const SelectionVector &sel,
-                                   OptionalSelection &opt) {
+void ExtractNestedSelection(const SelectionVector &slice_sel, const idx_t count, const SelectionVector &sel,
+                            OptionalSelection &opt) {
 
 	for (idx_t i = 0; i < count;) {
 		const auto slice_idx = slice_sel.get_index(i);
@@ -543,8 +477,8 @@ static void ExtractNestedSelection(const SelectionVector &slice_sel, const idx_t
 	opt.Advance(count);
 }
 
-static void ExtractNestedMask(const SelectionVector &slice_sel, const idx_t count, const SelectionVector &sel,
-                              ValidityMask *child_mask, optional_ptr<ValidityMask> null_mask) {
+void ExtractNestedMask(const SelectionVector &slice_sel, const idx_t count, const SelectionVector &sel,
+                       ValidityMask *child_mask, optional_ptr<ValidityMask> null_mask) {
 
 	if (!child_mask) {
 		return;
@@ -561,16 +495,16 @@ static void ExtractNestedMask(const SelectionVector &slice_sel, const idx_t coun
 	child_mask->Reset(null_mask->Capacity());
 }
 
-static void DensifyNestedSelection(const SelectionVector &dense_sel, const idx_t count, SelectionVector &slice_sel) {
+void DensifyNestedSelection(const SelectionVector &dense_sel, const idx_t count, SelectionVector &slice_sel) {
 	for (idx_t i = 0; i < count; ++i) {
 		slice_sel.set_index(i, dense_sel.get_index(i));
 	}
 }
 
 template <class OP>
-static idx_t DistinctSelectStruct(Vector &left, Vector &right, idx_t count, const SelectionVector &sel,
-                                  OptionalSelection &true_opt, OptionalSelection &false_opt,
-                                  optional_ptr<ValidityMask> null_mask) {
+idx_t DistinctSelectStruct(Vector &left, Vector &right, idx_t count, const SelectionVector &sel,
+                           OptionalSelection &true_opt, OptionalSelection &false_opt,
+                           optional_ptr<ValidityMask> null_mask) {
 	if (count == 0) {
 		return 0;
 	}
@@ -679,9 +613,9 @@ static void PositionListCursor(SelectionVector &cursor, UnifiedVectorFormat &vda
 }
 
 template <class OP>
-static idx_t DistinctSelectList(Vector &left, Vector &right, idx_t count, const SelectionVector &sel,
-                                OptionalSelection &true_opt, OptionalSelection &false_opt,
-                                optional_ptr<ValidityMask> null_mask) {
+idx_t DistinctSelectList(Vector &left, Vector &right, idx_t count, const SelectionVector &sel,
+                         OptionalSelection &true_opt, OptionalSelection &false_opt,
+                         optional_ptr<ValidityMask> null_mask) {
 	if (count == 0) {
 		return count;
 	}
@@ -815,8 +749,8 @@ static idx_t DistinctSelectList(Vector &left, Vector &right, idx_t count, const 
 	return match_count;
 }
 
-static void PositionArrayCursor(SelectionVector &cursor, UnifiedVectorFormat &vdata, const idx_t pos,
-                                const SelectionVector &slice_sel, const idx_t count, idx_t array_size) {
+void PositionArrayCursor(SelectionVector &cursor, UnifiedVectorFormat &vdata, const idx_t pos,
+                         const SelectionVector &slice_sel, const idx_t count, idx_t array_size) {
 	for (idx_t i = 0; i < count; ++i) {
 		const auto slice_idx = slice_sel.get_index(i);
 		const auto lidx = vdata.sel->get_index(slice_idx);
@@ -826,9 +760,9 @@ static void PositionArrayCursor(SelectionVector &cursor, UnifiedVectorFormat &vd
 }
 
 template <class OP>
-static idx_t DistinctSelectArray(Vector &left, Vector &right, idx_t count, const SelectionVector &sel,
-                                 OptionalSelection &true_opt, OptionalSelection &false_opt,
-                                 optional_ptr<ValidityMask> null_mask) {
+idx_t DistinctSelectArray(Vector &left, Vector &right, idx_t count, const SelectionVector &sel,
+                          OptionalSelection &true_opt, OptionalSelection &false_opt,
+                          optional_ptr<ValidityMask> null_mask) {
 	if (count == 0) {
 		return count;
 	}
@@ -948,9 +882,9 @@ static idx_t DistinctSelectArray(Vector &left, Vector &right, idx_t count, const
 }
 
 template <class OP>
-static idx_t DistinctSelectNested(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel,
-                                  const idx_t count, optional_ptr<SelectionVector> true_sel,
-                                  optional_ptr<SelectionVector> false_sel, optional_ptr<ValidityMask> null_mask) {
+idx_t DistinctSelectNested(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel, const idx_t count,
+                           optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel,
+                           optional_ptr<ValidityMask> null_mask) {
 	// The Select operations all use a dense pair of input vectors to partition
 	// a selection vector in a single pass. But to implement progressive comparisons,
 	// we have to make multiple passes, so we need to keep track of the original input positions
@@ -1007,14 +941,14 @@ static idx_t DistinctSelectNested(Vector &left, Vector &right, optional_ptr<cons
 }
 
 template <typename OP>
-static void NestedDistinctExecute(Vector &left, Vector &right, Vector &result, idx_t count);
+void NestedDistinctExecute(Vector &left, Vector &right, Vector &result, idx_t count);
 
 template <class T, class OP>
-static inline void TemplatedDistinctExecute(Vector &left, Vector &right, Vector &result, idx_t count) {
+void TemplatedDistinctExecute(Vector &left, Vector &right, Vector &result, idx_t count) {
 	DistinctExecute<T, T, bool, OP>(left, right, result, count);
 }
 template <class OP>
-static void ExecuteDistinct(Vector &left, Vector &right, Vector &result, idx_t count) {
+void ExecuteDistinct(Vector &left, Vector &right, Vector &result, idx_t count) {
 	D_ASSERT(left.GetType() == right.GetType() && result.GetType() == LogicalType::BOOLEAN);
 	// the inplace loops take the result as the last parameter
 	switch (left.GetType().InternalType()) {
@@ -1072,10 +1006,9 @@ static void ExecuteDistinct(Vector &left, Vector &right, Vector &result, idx_t c
 }
 
 template <class OP>
-static idx_t TemplatedDistinctSelectOperation(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel,
-                                              idx_t count, optional_ptr<SelectionVector> true_sel,
-                                              optional_ptr<SelectionVector> false_sel,
-                                              optional_ptr<ValidityMask> null_mask) {
+idx_t TemplatedDistinctSelectOperation(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel,
+                                       idx_t count, optional_ptr<SelectionVector> true_sel,
+                                       optional_ptr<SelectionVector> false_sel, optional_ptr<ValidityMask> null_mask) {
 
 	switch (left.GetType().InternalType()) {
 	case PhysicalType::BOOL:
@@ -1131,7 +1064,7 @@ static idx_t TemplatedDistinctSelectOperation(Vector &left, Vector &right, optio
 }
 
 template <typename OP>
-static void NestedDistinctExecute(Vector &left, Vector &right, Vector &result, idx_t count) {
+void NestedDistinctExecute(Vector &left, Vector &right, Vector &result, idx_t count) {
 	const auto left_constant = left.GetVectorType() == VectorType::CONSTANT_VECTOR;
 	const auto right_constant = right.GetVectorType() == VectorType::CONSTANT_VECTOR;
 
@@ -1166,6 +1099,8 @@ static void NestedDistinctExecute(Vector &left, Vector &right, Vector &result, i
 		result_data[idx] = false;
 	}
 }
+
+} // namespace
 
 void VectorOperations::DistinctFrom(Vector &left, Vector &right, Vector &result, idx_t count) {
 	ExecuteDistinct<duckdb::DistinctFrom>(left, right, result, count);

@@ -36,7 +36,7 @@ bool PartialBlockForCheckpoint::IsFlushed() {
 	return segments.empty();
 }
 
-void PartialBlockForCheckpoint::Flush(const idx_t free_space_left) {
+void PartialBlockForCheckpoint::Flush(QueryContext context, const idx_t free_space_left) {
 	if (IsFlushed()) {
 		throw InternalException("Flush called on partial block that was already flushed");
 	}
@@ -58,7 +58,7 @@ void PartialBlockForCheckpoint::Flush(const idx_t free_space_left) {
 		if (i == 0) {
 			// the first segment is converted to persistent - this writes the data for ALL segments to disk
 			D_ASSERT(segment.offset_in_block == 0);
-			segment.segment.ConvertToPersistent(&block_manager, state.block_id);
+			segment.segment.ConvertToPersistent(context, &block_manager, state.block_id);
 			// update the block after it has been converted to a persistent segment
 			block_handle = segment.segment.block;
 		} else {
@@ -135,7 +135,7 @@ void ColumnCheckpointState::FlushSegmentInternal(unique_ptr<ColumnSegment> segme
 	unique_lock<mutex> partial_block_lock;
 	if (segment->stats.statistics.IsConstant()) {
 		// Constant block.
-		segment->ConvertToPersistent(nullptr, INVALID_BLOCK);
+		segment->ConvertToPersistent(partial_block_manager.GetClientContext(), nullptr, INVALID_BLOCK);
 
 	} else if (segment_size != 0) {
 		// Non-constant block with data that has to go to disk.
