@@ -181,10 +181,7 @@ bool HivePartitioning::ApplyFiltersToFile(OpenFileInfo &file) {
 		if (!filter_copy->IsScalar() || !filter_copy->IsFoldable() ||
 			!ExpressionExecutor::TryEvaluateScalar(context, *filter_copy, result_value)) {
 			// can not be evaluated only with the filename/hive columns added, we can not prune this filter
-			if (!have_preserved_filter[j]) {
-				pruned_filters.emplace_back(filter->Copy());
-				have_preserved_filter[j] = true;
-			}
+			have_preserved_filter[j] = true;
 		} else if (result_value.IsNull() || !result_value.GetValue<bool>()) {
 			// filter evaluates to false
 			should_prune_file = true;
@@ -207,6 +204,11 @@ void HivePartitioning::Finalize(idx_t filtered_files, idx_t total_files) {
 	D_ASSERT(filters.size() >= pruned_filters.size());
 	info.extra_info.total_files = total_files;
 	info.extra_info.filtered_files = filtered_files;
+	for (idx_t i = 0; i < have_preserved_filter.size(); i++) {
+		if (!have_preserved_filter[i]) {
+			pruned_filters.emplace_back(filters[i]->Copy());
+		}
+	}
 	filters = std::move(pruned_filters);
 	consumed = true;
 }
