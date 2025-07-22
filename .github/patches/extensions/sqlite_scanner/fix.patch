@@ -132,7 +132,7 @@ index f85328f..c2f7c81 100644
 -}
  }
 diff --git a/src/sqlite_storage.cpp b/src/sqlite_storage.cpp
-index 09d212d..c5cac00 100644
+index 09d212d..38255f6 100644
 --- a/src/sqlite_storage.cpp
 +++ b/src/sqlite_storage.cpp
 @@ -12,22 +12,24 @@
@@ -146,8 +146,9 @@ index 09d212d..c5cac00 100644
 +                                        AttachOptions &attach_options) {
  	SQLiteOpenOptions options;
 -	options.access_mode = access_mode;
+-	for (auto &entry : info.options) {
 +	options.access_mode = attach_options.access_mode;
- 	for (auto &entry : info.options) {
++	for (auto &entry : attach_options.options) {
  		if (StringUtil::CIEquals(entry.first, "busy_timeout")) {
  			options.busy_timeout = entry.second.GetValue<uint64_t>();
  		} else if (StringUtil::CIEquals(entry.first, "journal_mode")) {
