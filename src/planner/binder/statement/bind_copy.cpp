@@ -383,9 +383,9 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 			expected_names.push_back(col.Name());
 		}
 	}
-
+	CopyFromFunctionBindInput input(*stmt.info, copy_function.function.copy_from_function);
 	auto function_data =
-	    copy_function.function.copy_from_bind(context, *stmt.info, expected_names, bound_insert.expected_types);
+	    copy_function.function.copy_from_bind(context, input, expected_names, bound_insert.expected_types);
 	auto get = make_uniq<LogicalGet>(GenerateTableIndex(), copy_function.function.copy_from_function,
 	                                 std::move(function_data), bound_insert.expected_types, expected_names);
 	for (idx_t i = 0; i < bound_insert.expected_types.size(); i++) {

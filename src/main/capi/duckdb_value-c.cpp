@@ -352,7 +352,7 @@ duckdb_value duckdb_create_list_value(duckdb_logical_type type, duckdb_value *va
 		}
 		unwrapped_values.push_back(UnwrapValue(value));
 	}
-	duckdb::Value *list_value = new duckdb::Value;
+	auto list_value = new duckdb::Value;
 	try {
 		*list_value = duckdb::Value::LIST(logical_type, std::move(unwrapped_values));
 	} catch (...) {

@@ -64,6 +64,8 @@ enum class AlterViewType : uint8_t;
 
 enum class AppenderType : uint8_t;
 
+enum class ArrowArrayPhysicalType : uint8_t;
+
 enum class ArrowDateTimeType : uint8_t;
 
 enum class ArrowOffsetSize : uint8_t;
@@ -478,6 +480,9 @@ const char* EnumUtil::ToChars<AlterViewType>(AlterViewType value);
 
 template<>
 const char* EnumUtil::ToChars<AppenderType>(AppenderType value);
+
+template<>
+const char* EnumUtil::ToChars<ArrowArrayPhysicalType>(ArrowArrayPhysicalType value);
 
 template<>
 const char* EnumUtil::ToChars<ArrowDateTimeType>(ArrowDateTimeType value);
@@ -1076,6 +1081,9 @@ AlterViewType EnumUtil::FromString<AlterViewType>(const char *value);
 
 template<>
 AppenderType EnumUtil::FromString<AppenderType>(const char *value);
+
+template<>
+ArrowArrayPhysicalType EnumUtil::FromString<ArrowArrayPhysicalType>(const char *value);
 
 template<>
 ArrowDateTimeType EnumUtil::FromString<ArrowDateTimeType>(const char *value);

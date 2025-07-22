@@ -1,0 +1,132 @@
+Statement <-
+	CreateStatement /
+	SelectStatement /
+	SetStatement /
+	PragmaStatement /
+	CallStatement /
+	InsertStatement /
+	DropStatement /
+	CopyStatement /
+	ExplainStatement /
+	UpdateStatement /
+	PrepareStatement /
+	ExecuteStatement /
+	AlterStatement /
+	TransactionStatement /
+	DeleteStatement /
+	AttachStatement /
+	UseStatement /
+	DetachStatement /
+	CheckpointStatement /
+	VacuumStatement /
+	ResetStatement /
+	ExportStatement /
+	ImportStatement /
+	CommentStatement /
+	DeallocateStatement /
+	TruncateStatement /
+	LoadStatement /
+	InstallStatement /
+	AnalyzeStatement /
+	MergeIntoStatement
+
+CatalogName <- Identifier
+SchemaName <- Identifier
+ReservedSchemaName <- Identifier
+TableName <- Identifier
+ReservedTableName <- Identifier
+ReservedIdentifier <- Identifier
+ColumnName <- Identifier
+ReservedColumnName <- Identifier
+IndexName <- Identifier
+SettingName <- Identifier
+PragmaName <- Identifier
+FunctionName <- Identifier
+ReservedFunctionName <- Identifier
+TableFunctionName <- Identifier
+ConstraintName <- ColIdOrString
+SequenceName <- Identifier
+CollationName <- Identifier
+CopyOptionName <- ColLabel
+SecretName <- ColId
+
+NumberLiteral <- < [+-]?[0-9]*([.][0-9]*)? >
+StringLiteral <- '\'' [^\']* '\''
+
+Type <- (TimeType / IntervalType / BitType / RowType / MapType / UnionType / NumericType / SimpleType) ArrayBounds*
+SimpleType <- (QualifiedTypeName / CharacterType) TypeModifiers?
+CharacterType <- ('CHARACTER'i 'VARYING'i?) /
+                 ('CHAR'i 'VARYING'i?) /
+                 ('NATIONAL'i 'CHARACTER'i 'VARYING'i?) /
+                 ('NATIONAL'i 'CHAR'i 'VARYING'i?) /
+                 ('NCHAR'i 'VARYING'i?) /
+                 'VARCHAR'i
+IntervalType <- ('INTERVAL'i Interval?) / ('INTERVAL'i Parens(NumberLiteral))
+
+YearKeyword         <- 'YEAR'i / 'YEARS'i
+MonthKeyword        <- 'MONTH'i / 'MONTHS'i
+DayKeyword          <- 'DAY'i / 'DAYS'i
+HourKeyword         <- 'HOUR'i / 'HOURS'i
+MinuteKeyword       <- 'MINUTE'i / 'MINUTES'i
+SecondKeyword       <- 'SECOND'i / 'SECONDS'i
+MillisecondKeyword  <- 'MILLISECOND'i / 'MILLISECONDS'i
+MicrosecondKeyword  <- 'MICROSECOND'i / 'MICROSECONDS'i
+WeekKeyword         <- 'WEEK'i / 'WEEKS'i
+QuarterKeyword      <- 'QUARTER'i / 'QUARTERS'i
+DecadeKeyword       <- 'DECADE'i / 'DECADES'i
+CenturyKeyword      <- 'CENTURY'i / 'CENTURIES'i
+MillenniumKeyword   <- 'MILLENNIUM'i / 'MILLENNIA'i
+
+Interval <- YearKeyword /
+    MonthKeyword /
+    DayKeyword /
+    HourKeyword /
+    MinuteKeyword /
+    SecondKeyword /
+    MillisecondKeyword /
+    MicrosecondKeyword /
+    WeekKeyword /
+    QuarterKeyword /
+    DecadeKeyword /
+    CenturyKeyword /
+    MillenniumKeyword /
+    (YearKeyword 'TO'i MonthKeyword) /
+    (DayKeyword 'TO'i HourKeyword) /
+    (DayKeyword 'TO'i MinuteKeyword) /
+    (DayKeyword 'TO'i SecondKeyword) /
+    (HourKeyword 'TO'i MinuteKeyword) /
+    (HourKeyword 'TO'i SecondKeyword) /
+    (MinuteKeyword 'TO'i SecondKeyword)
+
+BitType <- 'BIT'i 'VARYING'i? Parens(List(Expression))?
+
+NumericType <- 'INT'i /
+               'INTEGER'i /
+               'SMALLINT'i /
+               'BIGINT'i /
+               'REAL'i /
+               'BOOLEAN'i /
+               ('FLOAT'i Parens(NumberLiteral)?) /
+               ('DOUBLE'i 'PRECISION'i) /
+               ('DECIMAL'i TypeModifiers?) /
+               ('DEC'i TypeModifiers?) /
+               ('NUMERIC'i TypeModifiers?)
+
+QualifiedTypeName <- CatalogQualification? SchemaQualification? TypeName
+TypeModifiers <- Parens(List(Expression)?)
+RowType <- RowOrStruct Parens(List(ColIdType))
+UnionType <- 'UNION'i Parens(List(ColIdType))
+MapType <- 'MAP'i Parens(List(Type))
+ColIdType <- ColId Type
+ArrayBounds <- ('[' NumberLiteral? ']') / 'ARRAY'i
+TimeType <- TimeOrTimestamp TypeModifiers? TimeZone?
+TimeOrTimestamp <- 'TIME'i / 'TIMESTAMP'i
+TimeZone <- WithOrWithout 'TIME'i 'ZONE'i
+WithOrWithout <- 'WITH'i / 'WITHOUT'i
+
+RowOrStruct <- 'ROW'i / 'STRUCT'i
+
+# internal definitions
+%whitespace <- [ \t\n\r]*
+List(D) <- D (',' D)* ','?
+Parens(D) <- '(' D ')'

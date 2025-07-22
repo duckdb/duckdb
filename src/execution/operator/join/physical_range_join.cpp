@@ -7,6 +7,7 @@
 #include "duckdb/common/sort/sort.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -167,12 +168,15 @@ void PhysicalRangeJoin::GlobalSortedTable::Finalize(Pipeline &pipeline, Event &e
 
 PhysicalRangeJoin::PhysicalRangeJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op, PhysicalOperatorType type,
                                      PhysicalOperator &left, PhysicalOperator &right, vector<JoinCondition> cond,
-                                     JoinType join_type, idx_t estimated_cardinality)
+                                     JoinType join_type, idx_t estimated_cardinality,
+                                     unique_ptr<JoinFilterPushdownInfo> pushdown_info)
     : PhysicalComparisonJoin(physical_plan, op, type, std::move(cond), join_type, estimated_cardinality) {
+	filter_pushdown = std::move(pushdown_info);
 	// Reorder the conditions so that ranges are at the front.
 	// TODO: use stats to improve the choice?
 	// TODO: Prefer fixed length types?
 	if (conditions.size() > 1) {
+		unordered_map<idx_t, idx_t> cond_idx;
 		vector<JoinCondition> conditions_p(conditions.size());
 		std::swap(conditions_p, conditions);
 		idx_t range_position = 0;
@@ -184,10 +188,19 @@ PhysicalRangeJoin::PhysicalRangeJoin(PhysicalPlan &physical_plan, LogicalCompari
 			case ExpressionType::COMPARE_GREATERTHAN:
 			case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 				conditions[range_position++] = std::move(conditions_p[i]);
+				cond_idx[i] = range_position - 1;
 				break;
 			default:
 				conditions[--other_position] = std::move(conditions_p[i]);
+				cond_idx[i] = other_position;
 				break;
+			}
+		}
+		if (filter_pushdown) {
+			for (auto &idx : filter_pushdown->join_condition) {
+				if (cond_idx.find(idx) != cond_idx.end()) {
+					idx = cond_idx[idx];
+				}
 			}
 		}
 	}

@@ -472,6 +472,18 @@ typedef struct {
 	duckdb_state (*duckdb_append_default_to_chunk)(duckdb_appender appender, duckdb_data_chunk chunk, idx_t col,
 	                                               idx_t row);
 	duckdb_error_data (*duckdb_appender_error_data)(duckdb_appender appender);
+	// New arrow interface functions
+
+	duckdb_error_data (*duckdb_to_arrow_schema)(duckdb_arrow_options arrow_options, duckdb_logical_type *types,
+	                                            const char **names, idx_t column_count, struct ArrowSchema *out_schema);
+	duckdb_error_data (*duckdb_data_chunk_to_arrow)(duckdb_arrow_options arrow_options, duckdb_data_chunk chunk,
+	                                                struct ArrowArray *out_arrow_array);
+	duckdb_error_data (*duckdb_schema_from_arrow)(duckdb_connection connection, struct ArrowSchema *schema,
+	                                              duckdb_arrow_converted_schema *out_types);
+	duckdb_error_data (*duckdb_data_chunk_from_arrow)(duckdb_connection connection, struct ArrowArray *arrow_array,
+	                                                  duckdb_arrow_converted_schema converted_schema,
+	                                                  duckdb_data_chunk *out_chunk);
+	void (*duckdb_destroy_arrow_converted_schema)(duckdb_arrow_converted_schema *arrow_converted_schema);
 	// New functions for duckdb error data
 
 	duckdb_error_data (*duckdb_create_error_data)(duckdb_error_type type, const char *message);
@@ -479,12 +491,24 @@ typedef struct {
 	duckdb_error_type (*duckdb_error_data_error_type)(duckdb_error_data error_data);
 	const char *(*duckdb_error_data_message)(duckdb_error_data error_data);
 	bool (*duckdb_error_data_has_error)(duckdb_error_data error_data);
+	// API to create and manipulate expressions
+
+	void (*duckdb_destroy_expression)(duckdb_expression *expr);
+	duckdb_logical_type (*duckdb_expression_return_type)(duckdb_expression expr);
+	bool (*duckdb_expression_is_foldable)(duckdb_expression expr);
+	duckdb_error_data (*duckdb_expression_fold)(duckdb_client_context context, duckdb_expression expr,
+	                                            duckdb_value *out_value);
 	// New functions around the client context
 
 	idx_t (*duckdb_client_context_get_connection_id)(duckdb_client_context context);
 	void (*duckdb_destroy_client_context)(duckdb_client_context *context);
 	void (*duckdb_connection_get_client_context)(duckdb_connection connection, duckdb_client_context *out_context);
 	duckdb_value (*duckdb_get_table_names)(duckdb_connection connection, const char *query, bool qualified);
+	void (*duckdb_connection_get_arrow_options)(duckdb_connection connection, duckdb_arrow_options *out_arrow_options);
+	void (*duckdb_destroy_arrow_options)(duckdb_arrow_options *arrow_options);
+	// New query execution functions
+
+	duckdb_arrow_options (*duckdb_result_get_arrow_options)(duckdb_result *result);
 	// New functions around scalar function binding
 
 	void (*duckdb_scalar_function_set_bind)(duckdb_scalar_function scalar_function, duckdb_scalar_function_bind_t bind);
@@ -494,6 +518,8 @@ typedef struct {
 	                                             duckdb_delete_callback_t destroy);
 	void *(*duckdb_scalar_function_get_bind_data)(duckdb_function_info info);
 	void *(*duckdb_scalar_function_bind_get_extra_info)(duckdb_bind_info info);
+	idx_t (*duckdb_scalar_function_bind_get_argument_count)(duckdb_bind_info info);
+	duckdb_expression (*duckdb_scalar_function_bind_get_argument)(duckdb_bind_info info, idx_t index);
 	// New string functions that are added
 
 	char *(*duckdb_value_to_string)(duckdb_value value);
@@ -930,21 +956,35 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_destroy_instance_cache = duckdb_destroy_instance_cache;
 	result.duckdb_append_default_to_chunk = duckdb_append_default_to_chunk;
 	result.duckdb_appender_error_data = duckdb_appender_error_data;
+	result.duckdb_to_arrow_schema = duckdb_to_arrow_schema;
+	result.duckdb_data_chunk_to_arrow = duckdb_data_chunk_to_arrow;
+	result.duckdb_schema_from_arrow = duckdb_schema_from_arrow;
+	result.duckdb_data_chunk_from_arrow = duckdb_data_chunk_from_arrow;
+	result.duckdb_destroy_arrow_converted_schema = duckdb_destroy_arrow_converted_schema;
 	result.duckdb_create_error_data = duckdb_create_error_data;
 	result.duckdb_destroy_error_data = duckdb_destroy_error_data;
 	result.duckdb_error_data_error_type = duckdb_error_data_error_type;
 	result.duckdb_error_data_message = duckdb_error_data_message;
 	result.duckdb_error_data_has_error = duckdb_error_data_has_error;
+	result.duckdb_destroy_expression = duckdb_destroy_expression;
+	result.duckdb_expression_return_type = duckdb_expression_return_type;
+	result.duckdb_expression_is_foldable = duckdb_expression_is_foldable;
+	result.duckdb_expression_fold = duckdb_expression_fold;
 	result.duckdb_client_context_get_connection_id = duckdb_client_context_get_connection_id;
 	result.duckdb_destroy_client_context = duckdb_destroy_client_context;
 	result.duckdb_connection_get_client_context = duckdb_connection_get_client_context;
 	result.duckdb_get_table_names = duckdb_get_table_names;
+	result.duckdb_connection_get_arrow_options = duckdb_connection_get_arrow_options;
+	result.duckdb_destroy_arrow_options = duckdb_destroy_arrow_options;
+	result.duckdb_result_get_arrow_options = duckdb_result_get_arrow_options;
 	result.duckdb_scalar_function_set_bind = duckdb_scalar_function_set_bind;
 	result.duckdb_scalar_function_bind_set_error = duckdb_scalar_function_bind_set_error;
 	result.duckdb_scalar_function_get_client_context = duckdb_scalar_function_get_client_context;
 	result.duckdb_scalar_function_set_bind_data = duckdb_scalar_function_set_bind_data;
 	result.duckdb_scalar_function_get_bind_data = duckdb_scalar_function_get_bind_data;
 	result.duckdb_scalar_function_bind_get_extra_info = duckdb_scalar_function_bind_get_extra_info;
+	result.duckdb_scalar_function_bind_get_argument_count = duckdb_scalar_function_bind_get_argument_count;
+	result.duckdb_scalar_function_bind_get_argument = duckdb_scalar_function_bind_get_argument;
 	result.duckdb_value_to_string = duckdb_value_to_string;
 	result.duckdb_create_map_value = duckdb_create_map_value;
 	result.duckdb_create_union_value = duckdb_create_union_value;
