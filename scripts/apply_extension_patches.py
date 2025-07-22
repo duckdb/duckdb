@@ -51,6 +51,7 @@ prev_output_lines.sort()
 subprocess.run(["git", "clean", "-f"], check=True)
 subprocess.run(["git", "reset", "--hard", "HEAD"], check=True)
 
+
 def apply_patch(patch_file):
     ARGUMENTS = ["patch", "-p1", "--forward", "-i"]
     arguments = []
@@ -94,6 +95,5 @@ if len(output_lines) <= len(prev_output_lines) and prev_output_lines != output_l
     print("--------------------------------------------------")
     print(f"(cd {os.getcwd()} && git diff > {os.path.join(directory, 'fix.patch')})")
     print("--------------------------------------------------")
-
 
     exit(1)
