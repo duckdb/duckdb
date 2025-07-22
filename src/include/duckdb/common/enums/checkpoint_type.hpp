@@ -32,7 +32,9 @@ enum class CheckpointType {
 	FULL_CHECKPOINT,
 	//! Concurrent checkpoints write committed data to disk but do less clean-up
 	//! They can be run even when active transactions need to read old data
-	CONCURRENT_CHECKPOINT
+	CONCURRENT_CHECKPOINT,
+	//! Only run vacuum - this can be triggered for in-memory tables
+	VACUUM_ONLY
 };
 
 } // namespace duckdb

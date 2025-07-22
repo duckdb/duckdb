@@ -60,6 +60,7 @@ struct PartialBlock {
 public:
 	//! Add regions that need zero-initialization to avoid leaking memory
 	void AddUninitializedRegion(const idx_t start, const idx_t end);
+	virtual void AddSegmentToTail(ColumnData &data, ColumnSegment &segment, uint32_t offset_in_block);
 	//! Flush the block to disk and zero-initialize any free space and uninitialized regions
 	virtual void Flush(QueryContext context, const idx_t free_space_left) = 0;
 	void FlushInternal(const idx_t free_space_left);
@@ -85,7 +86,7 @@ struct PartialBlockAllocation {
 	unique_ptr<PartialBlock> partial_block;
 };
 
-enum class PartialBlockType { FULL_CHECKPOINT, APPEND_TO_TABLE };
+enum class PartialBlockType { FULL_CHECKPOINT, APPEND_TO_TABLE, IN_MEMORY_CHECKPOINT };
 
 //! Enables sharing blocks across some scope. Scope is whatever we want to share
 //! blocks across. It may be an entire checkpoint or just a single row group.
@@ -121,6 +122,9 @@ public:
 
 	//! Flush any remaining partial blocks to disk
 	void FlushPartialBlocks();
+
+	unique_ptr<PartialBlock> CreatePartialBlock(ColumnData &data, ColumnSegment &segment, PartialBlockState state,
+	                                            BlockManager &block_manager);
 
 	unique_lock<mutex> GetLock() {
 		return unique_lock<mutex>(partial_block_lock);
