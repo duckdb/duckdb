@@ -467,6 +467,7 @@
         "name": "extension_directory",
         "description": "Set the directory to store extensions in",
         "type": "VARCHAR",
+        "alternative_type": "VARCHAR[]",
         "return_type": "vector<string>",
         "scope": "global",
         "custom_implementation": true

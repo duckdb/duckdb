@@ -80,6 +80,7 @@ struct ConfigurationOption {
 	const char *name;
 	const char *description;
 	const char *parameter_type;
+	const char *alternative_parameter_type;
 	set_global_function_t set_global;
 	set_local_function_t set_local;
 	reset_global_function_t reset_global;
@@ -395,6 +396,8 @@ public:
 	DUCKDB_API void SetOption(const string &name, Value value);
 	DUCKDB_API void ResetOption(const string &name);
 	static LogicalType ParseLogicalType(const string &type);
+	static Value CastOptionIfNecessary(ClientContext &context, const Value &value, const ConfigurationOption &option);
+	static Value CastOptionIfNecessary(const Value &value, const ConfigurationOption &option);
 
 	DUCKDB_API void CheckLock(const string &name);
 
