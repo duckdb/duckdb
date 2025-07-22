@@ -1,4 +1,3 @@
-
 if (NOT MINGW)
     duckdb_extension_load(avro
             APPLY_PATCHES

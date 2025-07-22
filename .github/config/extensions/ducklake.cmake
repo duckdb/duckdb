@@ -1,4 +1,3 @@
-
 #duckdb_extension_load(ducklake
 #    DONT_LINK
 #    GIT_URL https://github.com/duckdb/ducklake

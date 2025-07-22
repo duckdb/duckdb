@@ -1,4 +1,3 @@
-
 if (NOT MINGW AND NOT ${WASM_ENABLED})
     duckdb_extension_load(aws
             APPLY_PATCHES

@@ -1,4 +1,3 @@
-
 duckdb_extension_load(inet
     LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb-inet

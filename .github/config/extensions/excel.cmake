@@ -1,4 +1,3 @@
-
 duckdb_extension_load(excel
     APPLY_PATCHES
     LOAD_TESTS

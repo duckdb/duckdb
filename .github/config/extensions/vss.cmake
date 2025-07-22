@@ -1,4 +1,3 @@
-
 duckdb_extension_load(vss
         LOAD_TESTS
         DONT_LINK

@@ -1,4 +1,3 @@
-
 # Static linking on windows does not properly work due to symbol collision
 if (WIN32)
     set(STATIC_LINK_SQLITE "DONT_LINK")

@@ -1,4 +1,3 @@
-
 if (NOT MINGW AND ${BUILD_COMPLETE_EXTENSION_SET})
 ################# SPATIAL
 duckdb_extension_load(spatial
