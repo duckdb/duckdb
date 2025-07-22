@@ -215,7 +215,7 @@ struct ParquetWriteBindData : public TableFunctionData {
 	bool debug_use_openssl = true;
 
 	//! After how many distinct values should we abandon dictionary compression and bloom filters?
-	//! Defaults to 1/20th of the row group size if unset (in templated_column_writer.hpp)
+	//! Defaults to 1/5th of the row group size if unset (in templated_column_writer.hpp)
 	//! This needs to be set dynamically because row groups can be much smaller than "row_group_size" set here,
 	//! e.g., due to less data or row_group_size_bytes
 	optional_idx dictionary_size_limit;
@@ -357,7 +357,6 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 				throw BinderException("dictionary_size_limit must be greater than 0 or 0 to disable");
 			}
 			bind_data->dictionary_size_limit = val;
-			dictionary_size_limit_set = true;
 		} else if (loption == "string_dictionary_page_size_limit") {
 			auto val = option.second[0].GetValue<uint64_t>();
 			if (val > PrimitiveColumnWriter::MAX_UNCOMPRESSED_DICT_PAGE_SIZE || val == 0) {
