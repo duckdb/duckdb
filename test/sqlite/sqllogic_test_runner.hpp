@@ -76,6 +76,7 @@ public:
 	string ReplaceLoopIterator(string text, string loop_iterator_name, string replacement);
 	string LoopReplacement(string text, const vector<LoopDefinition> &loops);
 	bool ForEachTokenReplace(const string &parameter, vector<string> &result);
+	static ExtensionLoadResult LoadExtension(DuckDB &db, const std::string &extension);
 
 private:
 	RequireResult CheckRequire(SQLLogicParser &parser, const vector<string> &params);

@@ -112,6 +112,15 @@ void SQLLogicTestRunner::EndLoop() {
 	}
 }
 
+ExtensionLoadResult SQLLogicTestRunner::LoadExtension(DuckDB &db, const std::string &extension) {
+	Connection con(db);
+	auto result = con.Query("LOAD " + extension);
+	if (!result->HasError()) {
+		return ExtensionLoadResult::LOADED_EXTENSION;
+	}
+	return ExtensionHelper::LoadExtension(db, extension);
+}
+
 void SQLLogicTestRunner::LoadDatabase(string dbpath, bool load_extensions) {
 	loaded_databases.push_back(dbpath);
 
@@ -127,7 +136,7 @@ void SQLLogicTestRunner::LoadDatabase(string dbpath, bool load_extensions) {
 
 		auto &test_config = TestConfiguration::Get();
 		for (auto ext : test_config.ExtensionToBeLoadedOnLoad()) {
-			ExtensionHelper::LoadExtension(*db, ext);
+			SQLLogicTestRunner::LoadExtension(*db, ext);
 		}
 	} catch (std::exception &ex) {
 		ErrorData err(ex);
@@ -139,7 +148,7 @@ void SQLLogicTestRunner::LoadDatabase(string dbpath, bool load_extensions) {
 	// load any previously loaded extensions again
 	if (load_extensions) {
 		for (auto &extension : extensions) {
-			ExtensionHelper::LoadExtension(*db, extension);
+			SQLLogicTestRunner::LoadExtension(*db, extension);
 		}
 	}
 }
@@ -587,7 +596,7 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 	bool perform_install = false;
 	bool perform_load = false;
 	if (!config->options.autoload_known_extensions) {
-		auto result = ExtensionHelper::LoadExtension(*db, param);
+		auto result = SQLLogicTestRunner::LoadExtension(*db, param);
 		if (result == ExtensionLoadResult::LOADED_EXTENSION) {
 			// add the extension to the list of loaded extensions
 			extensions.insert(param);
@@ -618,6 +627,7 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 		if (res->HasError()) {
 			return RequireResult::MISSING;
 		}
+		extensions.insert(param);
 	}
 	return RequireResult::PRESENT;
 }
