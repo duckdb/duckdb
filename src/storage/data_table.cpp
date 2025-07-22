@@ -678,10 +678,10 @@ void DataTable::VerifyUniqueIndexes(ClientContext &context, TableIndexList &inde
                                     optional_ptr<LocalTableStorage> storage, DataChunk &chunk,
                                     optional_ptr<ConflictManager> manager) {
 	auto data_table_info = GetDataTableInfo();
-	indexes.Bind(context, *data_table_info);
+	indexes.Bind(context, *data_table_info, ART::TYPE_NAME);
 	if (storage) {
-		storage->append_indexes.Bind(context, *data_table_info);
-		storage->delete_indexes.Bind(context, *data_table_info);
+		storage->append_indexes.Bind(context, *data_table_info, ART::TYPE_NAME);
+		storage->delete_indexes.Bind(context, *data_table_info, ART::TYPE_NAME);
 	}
 
 	// Verify the constraint without a conflict manager.
