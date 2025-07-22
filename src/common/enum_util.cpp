@@ -3327,7 +3327,6 @@ const StringUtil::EnumStringLiteral *GetPhysicalTypeValues() {
 		{ static_cast<uint32_t>(PhysicalType::INT128), "INT128" },
 		{ static_cast<uint32_t>(PhysicalType::UNKNOWN), "UNKNOWN" },
 		{ static_cast<uint32_t>(PhysicalType::BIT), "BIT" },
-		{ static_cast<uint32_t>(PhysicalType::VARINT), "VARINT" },
 		{ static_cast<uint32_t>(PhysicalType::INVALID), "INVALID" }
 	};
 	return values;

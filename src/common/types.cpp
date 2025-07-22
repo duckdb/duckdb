@@ -111,7 +111,6 @@ PhysicalType LogicalType::GetInternalType() {
 		}
 	}
 	case LogicalTypeId::VARINT:
-		return PhysicalType::VARINT;
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::CHAR:
 	case LogicalTypeId::BLOB:
@@ -295,8 +294,6 @@ string TypeIdToString(PhysicalType type) {
 		return "INVALID";
 	case PhysicalType::BIT:
 		return "BIT";
-	case PhysicalType::VARINT:
-		return "VARINT";
 	case PhysicalType::UNKNOWN:
 		return "UNKNOWN";
 	}
@@ -334,7 +331,6 @@ idx_t GetTypeIdSize(PhysicalType type) {
 	case PhysicalType::DOUBLE:
 		return sizeof(double);
 	case PhysicalType::VARCHAR:
-	case PhysicalType::VARINT:
 		return sizeof(string_t);
 	case PhysicalType::INTERVAL:
 		return sizeof(interval_t);

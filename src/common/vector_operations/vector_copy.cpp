@@ -155,7 +155,6 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 	case PhysicalType::INTERVAL:
 		TemplatedCopy<interval_t>(*source, *sel, target, source_offset, target_offset, copy_count);
 		break;
-	case PhysicalType::VARINT:
 	case PhysicalType::VARCHAR: {
 		auto ldata = FlatVector::GetData<string_t>(*source);
 		auto tdata = FlatVector::GetData<string_t>(target);

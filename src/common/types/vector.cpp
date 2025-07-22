@@ -494,8 +494,7 @@ void Vector::SetValue(idx_t index, const Value &val) {
 	case PhysicalType::INTERVAL:
 		reinterpret_cast<interval_t *>(data)[index] = val.GetValueUnsafe<interval_t>();
 		break;
-	case PhysicalType::VARCHAR:
-	case PhysicalType::VARINT: {
+	case PhysicalType::VARCHAR: {
 		if (!val.IsNull()) {
 			reinterpret_cast<string_t *>(data)[index] = StringVector::AddStringOrBlob(*this, StringValue::Get(val));
 		}
@@ -1319,8 +1318,7 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 		serializer.WriteProperty(102, "data", ptr.get(), write_size);
 	} else {
 		switch (logical_type.InternalType()) {
-		case PhysicalType::VARCHAR:
-		case PhysicalType::VARINT: {
+		case PhysicalType::VARCHAR: {
 			auto strings = UnifiedVectorFormat::GetData<string_t>(vdata);
 
 			// Serialize data as a list
@@ -1432,7 +1430,6 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 		VectorOperations::ReadFromStorage(ptr.get(), count, *this);
 	} else {
 		switch (logical_type.InternalType()) {
-		case PhysicalType::VARINT:
 		case PhysicalType::VARCHAR: {
 			auto strings = FlatVector::GetData<string_t>(*this);
 			deserializer.ReadList(102, "data", [&](Deserializer::List &list, idx_t i) {
@@ -2081,8 +2078,7 @@ string_t StringVector::AddString(Vector &vector, const string &data) {
 }
 
 VectorStringBuffer &StringVector::GetStringBuffer(Vector &vector) {
-	if (vector.GetType().InternalType() != PhysicalType::VARCHAR &&
-	    vector.GetType().InternalType() != PhysicalType::VARINT) {
+	if (vector.GetType().InternalType() != PhysicalType::VARCHAR) {
 		throw InternalException("StringVector::GetStringBuffer - vector is not of internal type VARCHAR but of type %s",
 		                        vector.GetType());
 	}
@@ -2109,8 +2105,7 @@ string_t StringVector::AddString(Vector &vector, string_t data) {
 }
 
 string_t StringVector::AddStringOrBlob(Vector &vector, string_t data) {
-	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR ||
-	         vector.GetType().InternalType() == PhysicalType::VARINT);
+	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR);
 	if (data.IsInlined()) {
 		// string will be inlined: no need to store in string heap
 		return data;
@@ -2120,8 +2115,7 @@ string_t StringVector::AddStringOrBlob(Vector &vector, string_t data) {
 }
 
 string_t StringVector::EmptyString(Vector &vector, idx_t len) {
-	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR ||
-	         vector.GetType().InternalType() == PhysicalType::VARINT);
+	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR);
 	if (len <= string_t::INLINE_LENGTH) {
 		return string_t(UnsafeNumericCast<uint32_t>(len));
 	}

@@ -913,7 +913,6 @@ ColumnDataCopyFunction ColumnDataCollection::GetCopyFunction(const LogicalType &
 		function = ColumnDataCopy<interval_t>;
 		break;
 	case PhysicalType::VARCHAR:
-	case PhysicalType::VARINT:
 		function = ColumnDataCopy<string_t>;
 		break;
 	case PhysicalType::STRUCT: {
