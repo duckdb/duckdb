@@ -102,6 +102,7 @@ public:
 	virtual vector<OpenFileInfo> GetAllFiles() = 0;
 	virtual FileExpandResult GetExpandResult() = 0;
 	virtual idx_t GetTotalFileCount() = 0;
+	virtual void Clear() {};
 
 	virtual unique_ptr<NodeStatistics> GetCardinality(ClientContext &context);
 	virtual unique_ptr<MultiFileList> Copy();
@@ -171,6 +172,7 @@ public:
 	vector<OpenFileInfo> GetAllFiles() override;
 	FileExpandResult GetExpandResult() override;
 	idx_t GetTotalFileCount() override;
+	void Clear() override;
 
 protected:
 	//! Main MultiFileList API
@@ -184,6 +186,8 @@ protected:
 	bool ExpandPathInternal(idx_t &current_path, vector<OpenFileInfo> &result, idx_t max_files = 0, optional_ptr<HiveFilterParams> hive_filter_params = nullptr) const;
 	//! Whether all files have been expanded
 	bool IsFullyExpanded() const;
+	//! Clear the expanded files
+	void ClearInternal();
 
 	//! The ClientContext for globbing
 	ClientContext &context;

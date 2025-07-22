@@ -165,7 +165,13 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 			throw InvalidInputException("Cannot use NULL as argument for \"%s\"", key);
 		}
 		options.union_by_name = BooleanValue::Get(val);
-	} else if (loption == "hive_types_autocast" || loption == "hive_type_autocast") {
+	} else if (loption == "hive_lazy_listing") {
+		if (val.IsNull()) {
+			throw InvalidInputException("Cannot use NULL as argument for \"%s\"", key);
+		}
+		options.hive_lazy_listing = BooleanValue::Get(val);
+	}
+	 else if (loption == "hive_types_autocast" || loption == "hive_type_autocast") {
 		if (val.IsNull()) {
 			throw InvalidInputException("Cannot use NULL as argument for \"%s\"", key);
 		}
@@ -230,6 +236,11 @@ void MultiFileReader::BindOptions(MultiFileOptions &options, MultiFileList &file
 		bind_data.filename_idx = names.size();
 		return_types.emplace_back(LogicalType::VARCHAR);
 		names.emplace_back(options.filename_column);
+	}
+
+	if (options.union_by_name) {
+		// union_by_name requires reading all files eagerly
+		options.hive_lazy_listing = false;
 	}
 
 	// Add generated constant columns from hive partitioning scheme
@@ -768,6 +779,16 @@ void MultiFileOptions::AutoDetectHivePartitioning(MultiFileList &files, ClientCo
 		// hive_types flag implies hive_partitioning
 		hive_partitioning = true;
 		auto_detect_hive_partitioning = false;
+	}
+	// TODO: find earliest place to do this check
+	if (union_by_name) {
+		// union_by_name requires reading all files eagerly
+		hive_lazy_listing = false;
+	}
+	// Clear earlier files used for peeking at hive partitioning, eagerly read them all
+	if (!hive_lazy_listing) {
+		files.Clear();
+		files.GetAllFiles();
 	}
 	if (auto_detect_hive_partitioning) {
 		hive_partitioning = AutoDetectHivePartitioningInternal(files, context);

@@ -272,10 +272,16 @@ unique_ptr<MultiFileList> GlobMultiFileList::ComplexFilterPushdown(ClientContext
 
 	// Expand all
 	// Restart the expansion, since previous expansion might have only expanded the first file
-	current_path = 0;
-	expanded_files.clear();
-	HiveFilterParams hive_filter_params(context, filters, options, info);
-	while (ExpandNextPath(std::numeric_limits<idx_t>::max(), &hive_filter_params)) {
+	if (options.hive_lazy_listing) {
+		ClearInternal();
+		HiveFilterParams hive_filter_params(context, filters, options, info);
+		while (ExpandNextPath(std::numeric_limits<idx_t>::max(), &hive_filter_params)) {
+		}
+	} else {
+		auto res = PushdownInternal(context, options, info, filters, expanded_files);
+		if (res) {
+			return make_uniq<SimpleMultiFileList>(expanded_files);
+		}
 	}
 
 	if (!options.hive_partitioning && !options.filename) {
@@ -283,10 +289,7 @@ unique_ptr<MultiFileList> GlobMultiFileList::ComplexFilterPushdown(ClientContext
 	}
 
 	return make_uniq<SimpleMultiFileList>(expanded_files);
-	// auto res = PushdownInternal(context, options, info, filters, expanded_files);
-	// if (res) {
-	// 	return make_uniq<SimpleMultiFileList>(expanded_files);
-	// }
+
 
 	// return nullptr;
 }
@@ -331,6 +334,16 @@ idx_t GlobMultiFileList::GetTotalFileCount() {
 
 FileExpandResult GlobMultiFileList::GetExpandResult() {
 	return FileExpandResult::MULTIPLE_FILES;
+	// // GetFile(1) will ensure at least the first 2 files are expanded if they are available
+	// GetFile(1);
+
+	// if (expanded_files.size() > 1) {
+	// 	return FileExpandResult::MULTIPLE_FILES;
+	// } else if (expanded_files.size() == 1) {
+	// 	return FileExpandResult::SINGLE_FILE;
+	// }
+
+	// return FileExpandResult::NO_FILES;
 }
 
 OpenFileInfo GlobMultiFileList::GetFile(idx_t i) {
@@ -346,6 +359,16 @@ OpenFileInfo GlobMultiFileList::GetFileInternal(idx_t i) {
 	}
 	D_ASSERT(expanded_files.size() > i);
 	return expanded_files[i];
+}
+
+void GlobMultiFileList::Clear() {
+	lock_guard<mutex> lck(lock);
+	ClearInternal();
+}
+
+void GlobMultiFileList::ClearInternal() {
+	expanded_files.clear();
+	current_path = 0;
 }
 
 bool GlobMultiFileList::ExpandPathInternal(idx_t &current_path, vector<OpenFileInfo> &result, idx_t max_files, optional_ptr<HiveFilterParams> hive_filter_params) const {
