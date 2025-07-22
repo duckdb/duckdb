@@ -41,12 +41,4 @@ const optional_ptr<BoundAtClause> EntryLookupInfo::GetAtClause() const {
 	return at_clause;
 }
 
-void EntryLookupInfo::SetThrowOnUnsupportedAtClause(bool throw_on_unsupported_at_clause_p) {
-	throw_on_unsupported_at_clause = throw_on_unsupported_at_clause_p;
-}
-
-bool EntryLookupInfo::ShouldThrowOnUnsupportedAtClause() const {
-	return throw_on_unsupported_at_clause;
-}
-
 } // namespace duckdb
