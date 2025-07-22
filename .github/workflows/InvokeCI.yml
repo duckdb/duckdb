@@ -45,24 +45,6 @@ jobs:
       skip_tests: ${{ inputs.skip_tests }}
       run_all: ${{ inputs.run_all }}
 
-  python:
-    uses: ./.github/workflows/Python.yml
-    secrets: inherit
-    with:
-      override_git_describe: ${{ inputs.override_git_describe }}
-      git_ref: ${{ inputs.git_ref }}
-      skip_tests: ${{ inputs.skip_tests }}
-      run_all: ${{ inputs.run_all }}
-      override_twine_upload: ${{ inputs.twine_upload }}
-
-  pyodide:
-    uses: ./.github/workflows/Pyodide.yml
-    secrets: inherit
-    with:
-      override_git_describe: ${{ inputs.override_git_describe }}
-      git_ref: ${{ inputs.git_ref }}
-      skip_tests: ${{ inputs.skip_tests }}
-
   R:
     uses: ./.github/workflows/R.yml
     secrets: inherit
@@ -94,8 +76,6 @@ jobs:
       - osx
       - linux-release
       - windows
-      - python
-      - pyodide
       - R
       - Wasm
       - static-libraries
@@ -108,8 +88,6 @@ jobs:
           if [[ "${{ needs.osx.result }}" == "success" && \
                 "${{ needs.linux-release.result }}" == "success" && \
                 "${{ needs.windows.result }}" == "success" && \
-                "${{ needs.python.result }}" == "success" && \
-                "${{ needs.pyodide.result }}" == "success" && \
                 "${{ needs.R.result }}" == "success" && \
                 "${{ needs.Wasm.result }}" == "success" && \
                 "${{ needs.static-libraries.result }}" == "success" ]]; then
