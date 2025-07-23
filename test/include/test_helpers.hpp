@@ -32,6 +32,7 @@
 namespace duckdb {
 
 void RegisterSqllogictests();
+bool SummarizeFailures();
 
 void DeleteDatabase(string path);
 void TestDeleteDirectory(string path);

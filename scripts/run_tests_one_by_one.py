@@ -84,6 +84,7 @@ profile = args.profile
 assertions = args.no_assertions
 time_execution = args.time_execution
 timeout = args.timeout
+
 summarize_failures = args.summarize_failures
 if summarize_failures is None:
     # get from env
@@ -93,7 +94,6 @@ if summarize_failures is None:
     elif 'CI' in os.environ:
         # enable by default in CI if not set explicitly
         summarize_failures = True
-
 
 # Use the '-l' parameter to output the list of tests to run
 proc = subprocess.run([unittest_program, '-l'] + extra_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -314,4 +314,5 @@ if summarize_failures and len(error_container):
     for i, error in enumerate(error_container.get_errors(), start=1):
         print(f"\n{i}:", error["test"], "\n")
         print(error["stderr"])
+
 exit(1)

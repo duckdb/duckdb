@@ -243,7 +243,11 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 		}
 		break;
 	case LogicalTypeId::VARCHAR:
-		if (append_data.options.produce_arrow_string_view && append_data.options.arrow_output_version >= 14) {
+	case LogicalTypeId::BLOB:
+	case LogicalTypeId::BIT:
+	case LogicalTypeId::VARINT:
+		if ((append_data.options.produce_arrow_string_view || type.id() != LogicalTypeId::VARCHAR) &&
+		    append_data.options.arrow_output_version >= 14) {
 			InitializeAppenderForType<ArrowVarcharToStringViewData>(append_data);
 		} else {
 			if (append_data.options.arrow_offset_size == ArrowOffsetSize::LARGE) {
@@ -253,25 +257,16 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 			}
 		}
 		break;
-	case LogicalTypeId::BLOB:
-	case LogicalTypeId::BIT:
-	case LogicalTypeId::VARINT:
-		if (append_data.options.arrow_offset_size == ArrowOffsetSize::LARGE) {
-			InitializeAppenderForType<ArrowVarcharData<>>(append_data);
-		} else {
-			InitializeAppenderForType<ArrowVarcharData<string_t, ArrowVarcharConverter, int32_t>>(append_data);
-		}
-		break;
 	case LogicalTypeId::ENUM:
 		switch (type.InternalType()) {
 		case PhysicalType::UINT8:
-			InitializeAppenderForType<ArrowEnumData<int8_t>>(append_data);
+			InitializeAppenderForType<ArrowEnumData<uint8_t>>(append_data);
 			break;
 		case PhysicalType::UINT16:
-			InitializeAppenderForType<ArrowEnumData<int16_t>>(append_data);
+			InitializeAppenderForType<ArrowEnumData<uint16_t>>(append_data);
 			break;
 		case PhysicalType::UINT32:
-			InitializeAppenderForType<ArrowEnumData<int32_t>>(append_data);
+			InitializeAppenderForType<ArrowEnumData<uint32_t>>(append_data);
 			break;
 		default:
 			throw InternalException("Unsupported internal enum type");

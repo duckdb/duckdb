@@ -1,0 +1,42 @@
+# name: test/sql/merge/merge_into_by_source.test
+# group: [merge]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE Stock(item_id int, balance int);
+
+statement ok
+INSERT INTO Stock VALUES (5, 10), (10, 20), (20, 30);
+
+# WHEN NOT MATCHED BY SOURCE
+# basically, this turns "Stock" into "new_accounts"
+# -> if we have a match we update to the new value
+# -> if we have a row in new_accounts that does not exist in Stock, insert it
+# -> if we have a row in Stock that does not exist in new_accounts, delete it
+query I
+MERGE INTO Stock USING (VALUES (5, 20), (10, 30)) new_accounts(item_id, balance) USING (item_id)
+WHEN MATCHED THEN UPDATE
+WHEN NOT MATCHED BY TARGET THEN INSERT
+WHEN NOT MATCHED BY SOURCE THEN DELETE
+----
+3
+
+query II
+FROM Stock ORDER BY ALL
+----
+5	20
+10	30
+
+# WHEN NOT MATCHED BY SOURCE only
+query I
+MERGE INTO Stock USING (VALUES (10)) new_accounts(item_id) USING (item_id)
+WHEN NOT MATCHED BY SOURCE THEN DELETE
+----
+1
+
+query II
+FROM Stock ORDER BY ALL
+----
+10	30

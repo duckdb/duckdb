@@ -281,6 +281,20 @@ Statement::Statement(SQLLogicTestRunner &runner) : Command(runner) {
 Query::Query(SQLLogicTestRunner &runner) : Command(runner) {
 }
 
+ResetLabel::ResetLabel(SQLLogicTestRunner &runner) : Command(runner) {
+}
+
+void ResetLabel::ExecuteInternal(ExecuteContext &context) const {
+	runner.hash_label_map.WithLock([&](unordered_map<string, CachedLabelData> &map) {
+		auto it = map.find(query_label);
+		//! should we allow this to be missing at all?
+		if (it == map.end()) {
+			FAIL_LINE(file_name, query_line, 0);
+		}
+		map.erase(it);
+	});
+}
+
 RestartCommand::RestartCommand(SQLLogicTestRunner &runner, bool load_extensions_p)
     : Command(runner), load_extensions(load_extensions_p) {
 }
@@ -538,7 +552,6 @@ SleepUnit SleepCommand::ParseUnit(const string &unit) {
 
 void Statement::ExecuteInternal(ExecuteContext &context) const {
 	auto connection = CommandConnection(context);
-
 	{
 		SQLLogicTestLogger logger(context, *this);
 		if (runner.output_result_mode || runner.debug_mode) {
@@ -554,6 +567,7 @@ void Statement::ExecuteInternal(ExecuteContext &context) const {
 			return;
 		}
 	}
+
 	auto result = ExecuteQuery(context, connection, file_name, query_line);
 
 	TestResultHelper helper(runner);

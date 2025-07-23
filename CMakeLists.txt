@@ -259,7 +259,7 @@ set(VERSIONING_TAG_MATCH "v*.*.*")
 # - scripts/package_build.py
 # - tools/pythonpkg/setup.py
 ######
-option(MAIN_BRANCH_VERSIONING "Versioning scheme for main branch" FALSE)
+option(MAIN_BRANCH_VERSIONING "Versioning scheme for main branch" TRUE)
 if(${MAIN_BRANCH_VERSIONING})
   set(VERSIONING_TAG_MATCH "v*.*.0")
 endif()
@@ -430,6 +430,7 @@ option(EXTENSION_STATIC_BUILD
 
 if(WIN32 OR ZOS)
   set(EXTENSION_STATIC_BUILD TRUE)
+  add_definitions(-D_SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS=1)
 endif()
 
 option(BUILD_EXTENSIONS_ONLY "Build all extension as linkable, overriding DONT_LINK, and don't build core." FALSE)
@@ -438,6 +439,7 @@ option(BUILD_TPCE "Enable building of the TPC-E tool." FALSE)
 option(DISABLE_BUILTIN_EXTENSIONS "Disable linking extensions." FALSE)
 option(GENERATE_EXTENSION_ENTRIES "Build for generating extension_entries.hpp" FALSE)
 option(BUILD_PYTHON "Build the DuckDB Python extension" FALSE)
+option(PYTHON_DEV "Build Intellisense and clang-tidy support and install dev dependencies" FALSE)
 option(USER_SPACE "Build the DuckDB Python in the user space" FALSE)
 option(FORCE_QUERY_LOG "If enabled, all queries will be logged to the specified path" OFF)
 option(BUILD_SHELL "Build the DuckDB Shell and SQLite API Wrappers" TRUE)
@@ -681,15 +683,18 @@ include_directories(third_party/fmt/include)
 include_directories(third_party/hyperloglog)
 include_directories(third_party/fastpforlib)
 include_directories(third_party/skiplist)
+include_directories(third_party/ska_sort)
 include_directories(third_party/fast_float)
 include_directories(third_party/re2)
 include_directories(third_party/miniz)
 include_directories(third_party/utf8proc/include)
 include_directories(third_party/concurrentqueue)
 include_directories(third_party/pcg)
+include_directories(third_party/pdqsort)
 include_directories(third_party/tdigest)
 include_directories(third_party/mbedtls/include)
 include_directories(third_party/jaro_winkler)
+include_directories(third_party/vergesort)
 include_directories(third_party/yyjson/include)
 include_directories(third_party/zstd/include)
 
@@ -914,7 +919,7 @@ function(build_loadable_extension_directory NAME ABI_TYPE OUTPUT_DIRECTORY EXTEN
       if (APPLE)
         set_target_properties(${TARGET_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
         # Note that on MacOS we need to use the -exported_symbol whitelist feature due to a lack of -exclude-libs flag in mac's ld variant
-        set(WHITELIST "-Wl,-exported_symbol,_${NAME}_init -Wl,-exported_symbol,_${NAME}_version -Wl,-exported_symbol,_${NAME}_storage_ini*")
+        set(WHITELIST "-Wl,-exported_symbol,_${NAME}_duckdb_cpp_init")
         target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,-dead_strip ${WHITELIST})
       elseif (ZOS)
         target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS})
@@ -958,7 +963,7 @@ function(build_loadable_extension_directory NAME ABI_TYPE OUTPUT_DIRECTORY EXTEN
     set(TO_BE_LINKED ${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_LINKED_LIBS} )
     separate_arguments(TO_BE_LINKED)
     if (${ABI_TYPE} STREQUAL "CPP")
-      set(EXPORTED_FUNCTIONS "_${NAME}_init,_${NAME}_version")
+      set(EXPORTED_FUNCTIONS "_${NAME}_duckdb_cpp_init")
     elseif (${ABI_TYPE} STREQUAL "C_STRUCT" OR ${ABI_TYPE} STREQUAL "C_STRUCT_UNSTABLE")
       set(EXPORTED_FUNCTIONS "_${NAME}_init_c_api")
     endif()
@@ -1192,14 +1197,6 @@ function(duckdb_extension_load NAME)
     return()
   endif()
 
-  # Running this function in whitelist mode will only build the extensions in the whitelist
-  if (${DUCKDB_EXTENSION_LOAD_WHITELIST_SET})
-    list (FIND DUCKDB_EXTENSION_LOAD_WHITELIST ${EXTENSION_NAME_LOWERCASE} _index)
-    if (${_index} EQUAL -1)
-      return()
-    endif()
-  endif()
-
   list (FIND SKIP_EXTENSIONS ${EXTENSION_NAME_LOWERCASE} _index)
   if (${_index} GREATER -1)
     return()
@@ -1283,21 +1280,20 @@ foreach(EXT IN LISTS DUCKDB_EXTENSION_NAMES)
   endif()
 endforeach()
 
+set(EXTENSION_CONFIG_BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/.github/config/extensions/")
+
 # Load extensions passed through cmake config var
 foreach(EXT IN LISTS BUILD_EXTENSIONS)
   if(NOT "${EXT}" STREQUAL "")
-    duckdb_extension_load(${EXT})
+    if (EXISTS "${EXTENSION_CONFIG_BASE_DIR}/${EXT}.cmake")
+      # out-of-tree extension: load cmake file
+      include("${EXTENSION_CONFIG_BASE_DIR}/${EXT}.cmake")
+    else()
+      # in-tree or non-existent extension: load it
+      duckdb_extension_load(${EXT})
+    endif()
   endif()
 endforeach()
-
-if (NOT "${CORE_EXTENSIONS}" STREQUAL "")
-    SET(DUCKDB_EXTENSION_LOAD_WHITELIST ${CORE_EXTENSIONS})
-    SET(DUCKDB_EXTENSION_LOAD_WHITELIST_SET 1)
-    include(${CMAKE_CURRENT_SOURCE_DIR}/.github/config/out_of_tree_extensions.cmake)
-    include(${CMAKE_CURRENT_SOURCE_DIR}/.github/config/in_tree_extensions.cmake)
-    SET(DUCKDB_EXTENSION_LOAD_WHITELIST "")
-    SET(DUCKDB_EXTENSION_LOAD_WHITELIST_SET 0)
-endif()
 
 # Custom extension configs passed in DUCKDB_EXTENSION_CONFIGS parameter
 foreach(DUCKDB_EXTENSION_CONFIG IN LISTS DUCKDB_EXTENSION_CONFIGS)
@@ -1311,7 +1307,7 @@ if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/extension/extension_config_local.cmake)
   include(${CMAKE_CURRENT_SOURCE_DIR}/extension/extension_config_local.cmake)
 endif()
 
-# Load client specific config
+# Load Python client specific config
 if(BUILD_PYTHON)
   include(${CMAKE_CURRENT_SOURCE_DIR}/tools/pythonpkg/duckdb_extension_config.cmake)
 endif()
@@ -1469,7 +1465,11 @@ if(BUILD_PYTHON)
       DUCKDB_LIBS="${duckdb_libs}"
     )
 
-  if(PYTHON_EDITABLE_BUILD)
+  if(PYTHON_DEV)
+    set(PIP_COMMAND ${PIP_COMMAND} ${Python3_EXECUTABLE} -m pip install .[dev])
+    # Enable intellisense / clang-tidy support for IDEs
+    add_subdirectory(tools/pythonpkg EXCLUDE_FROM_ALL)
+  elseif(PYTHON_EDITABLE_BUILD)
     set(PIP_COMMAND ${PIP_COMMAND} ${Python3_EXECUTABLE} -m pip install --editable .)
   else()
     set(PIP_COMMAND ${PIP_COMMAND} ${Python3_EXECUTABLE} -m pip install .)
@@ -1500,7 +1500,7 @@ if(NOT DUCKDB_EXPLICIT_PLATFORM)
   add_custom_command(
           OUTPUT ${PROJECT_BINARY_DIR}/duckdb_platform_out
           DEPENDS duckdb_platform_binary
-          COMMAND duckdb_platform_binary > ${PROJECT_BINARY_DIR}/duckdb_platform_out || ( echo "Provide explicit DUCKDB_PLATFORM=your_target_arch to avoid build-type detection of the platform" && exit 1 )
+	  COMMAND $<TARGET_FILE:duckdb_platform_binary> > ${PROJECT_BINARY_DIR}/duckdb_platform_out || ( echo "Provide explicit DUCKDB_PLATFORM=your_target_arch to avoid build-type detection of the platform" && exit 1 )
           WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
           )
 else()

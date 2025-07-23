@@ -6,6 +6,8 @@
 
 namespace duckdb {
 
+namespace {
+
 struct BoolState {
 	bool empty;
 	bool val;
@@ -90,6 +92,8 @@ struct BoolOrFunFunction {
 		return true;
 	}
 };
+
+} // namespace
 
 AggregateFunction BoolOrFun::GetFunction() {
 	auto fun = AggregateFunction::UnaryAggregate<BoolState, bool, bool, BoolOrFunFunction>(

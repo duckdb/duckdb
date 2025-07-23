@@ -38,6 +38,10 @@ ColumnCheckpointState &ColumnDataCheckpointData::GetCheckpointState() {
 	return *checkpoint_state;
 }
 
+StorageManager &ColumnDataCheckpointData::GetStorageManager() {
+	return *storage_manager;
+}
+
 //! ColumnDataCheckpointer
 
 static Vector CreateIntermediateVector(vector<reference<ColumnCheckpointState>> &states) {
@@ -48,6 +52,9 @@ static Vector CreateIntermediateVector(vector<reference<ColumnCheckpointState>> 
 	auto &type = col_data.type;
 	if (type.id() == LogicalTypeId::VALIDITY) {
 		return Vector(LogicalType::BOOLEAN, true, /* initialize_to_zero = */ true);
+	}
+	if (type.InternalType() == PhysicalType::LIST) {
+		return Vector(LogicalType::UBIGINT, true, false);
 	}
 	return Vector(type, true, false);
 }
@@ -325,8 +332,8 @@ void ColumnDataCheckpointer::WriteToDisk() {
 		auto &checkpoint_state = checkpoint_states[i];
 		auto &col_data = checkpoint_state.get().column_data;
 
-		checkpoint_data[i] =
-		    ColumnDataCheckpointData(checkpoint_state, col_data, col_data.GetDatabase(), row_group, checkpoint_info);
+		checkpoint_data[i] = ColumnDataCheckpointData(checkpoint_state, col_data, col_data.GetDatabase(), row_group,
+		                                              checkpoint_info, storage_manager);
 		compression_states[i] = function->init_compression(checkpoint_data[i], std::move(analyze_state));
 	}
 

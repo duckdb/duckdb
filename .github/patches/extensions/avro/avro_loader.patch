@@ -1,0 +1,71 @@
+diff --git a/src/avro_extension.cpp b/src/avro_extension.cpp
+index 875149b..24d3723 100644
+--- a/src/avro_extension.cpp
++++ b/src/avro_extension.cpp
+@@ -1,5 +1,3 @@
+-#define DUCKDB_EXTENSION_MAIN
+-
+ #include "avro_extension.hpp"
+ 
+ #include "duckdb.hpp"
+@@ -7,7 +5,7 @@
+ #include "duckdb/common/string_util.hpp"
+ #include "duckdb/function/scalar_function.hpp"
+ 
+-#include "duckdb/main/extension_util.hpp"
++#include "duckdb/main/extension/extension_loader.hpp"
+ #include "include/avro_reader.hpp"
+ #include "duckdb/common/multi_file/multi_file_reader.hpp"
+ #include "avro_multi_file_info.hpp"
+@@ -17,15 +15,15 @@
+ 
+ namespace duckdb {
+ 
+-static void LoadInternal(DatabaseInstance &instance) {
++static void LoadInternal(ExtensionLoader &loader) {
+ 	// Register a scalar function
+ 	auto table_function = MultiFileFunction<AvroMultiFileInfo>("read_avro");
+ 	table_function.projection_pushdown = true;
+-	ExtensionUtil::RegisterFunction(instance, MultiFileReader::CreateFunctionSet(table_function));
++	loader.RegisterFunction(MultiFileReader::CreateFunctionSet(table_function));
+ }
+ 
+-void AvroExtension::Load(DuckDB &db) {
+-	LoadInternal(*db.instance);
++void AvroExtension::Load(ExtensionLoader &loader) {
++	LoadInternal(loader);
+ }
+ std::string AvroExtension::Name() {
+ 	return "avro";
+@@ -43,16 +41,8 @@ std::string AvroExtension::Version() const {
+ 
+ extern "C" {
+ 
+-DUCKDB_EXTENSION_API void avro_init(duckdb::DatabaseInstance &db) {
+-	duckdb::DuckDB db_wrapper(db);
+-	db_wrapper.LoadExtension<duckdb::AvroExtension>();
++DUCKDB_CPP_EXTENSION_ENTRY(avro, loader) {
++	duckdb::LoadInternal(loader);
+ }
+ 
+-DUCKDB_EXTENSION_API const char *avro_version() {
+-	return duckdb::DuckDB::LibraryVersion();
+-}
+ }
+-
+-#ifndef DUCKDB_EXTENSION_MAIN
+-#error DUCKDB_EXTENSION_MAIN not defined
+-#endif
+diff --git a/src/include/avro_extension.hpp b/src/include/avro_extension.hpp
+index 941d511..f056000 100644
+--- a/src/include/avro_extension.hpp
++++ b/src/include/avro_extension.hpp
+@@ -6,7 +6,7 @@ namespace duckdb {
+ 
+ class AvroExtension : public Extension {
+ public:
+-	void Load(DuckDB &db) override;
++	void Load(ExtensionLoader &loader) override;
+ 	std::string Name() override;
+ 	std::string Version() const override;
+ };

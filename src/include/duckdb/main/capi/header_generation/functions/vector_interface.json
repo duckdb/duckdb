@@ -16,7 +16,12 @@
                 }
             ],
             "comment": {
-                "description": "Creates a flat vector.\n\n"
+                "description": "Creates a flat vector. Must be destroyed with `duckdb_destroy_vector`.\n\n",
+                "param_comments": {
+                    "type": "The logical type of the vector.",
+                    "capacity": "The capacity of the vector."
+                },
+                "return_value": "The vector."
             }
         },
         {
@@ -29,7 +34,10 @@
                 }
             ],
             "comment": {
-                "description": "Destroys the vector and de-allocates all memory allocated for that vector, if unused else where.\n\n"
+                "description": "Destroys the vector and de-allocates its memory.\n\n",
+                "param_comments": {
+                    "vector": "A pointer to the vector."
+                }
             }
         },
         {
@@ -248,7 +256,7 @@
                 }
             ],
             "comment": {
-                "description": "Retrieves the child vector of a struct vector.\n\nThe resulting vector is valid as long as the parent vector is valid.\n\n",
+                "description": "Retrieves the child vector of a struct vector.\nThe resulting vector is valid as long as the parent vector is valid.\n\n",
                 "param_comments": {
                     "vector": "The vector",
                     "index": "The child index"
@@ -266,7 +274,7 @@
                 }
             ],
             "comment": {
-                "description": "Retrieves the child vector of an array vector.\n\nThe resulting vector is valid as long as the parent vector is valid.\nThe resulting vector has the size of the parent vector multiplied by the array size.\n\n",
+                "description": "Retrieves the child vector of an array vector.\nThe resulting vector is valid as long as the parent vector is valid.\nThe resulting vector has the size of the parent vector multiplied by the array size.\n\n",
                 "param_comments": {
                     "vector": "The vector"
                 },
@@ -283,7 +291,7 @@
                 },
                 {
                     "type": "duckdb_selection_vector",
-                    "name": "selection"
+                    "name": "sel"
                 },
                 {
                     "type": "idx_t",
@@ -291,11 +299,52 @@
                 }
             ],
             "comment": {
-                "description": "Slice a vector with a selection vector.\n\nThe max value in the selection vector must be less than the length of the vector\n\nThe resulting vector happens to be a dictionary vector.\n\n",
+                "description": "Slice a vector with a selection vector.\nThe length of the selection vector must be less than or equal to the length of the vector.\nTurns the vector into a dictionary vector.\n\n",
                 "param_comments": {
-                    "vector": "The vector which is to become a dictionary",
-                    "selection": "The selection vector",
-                    "len": "The length of the selection vector"
+                    "vector": "The vector to slice.",
+                    "sel": "The selection vector.",
+                    "len": "The length of the selection vector."
+                }
+            }
+        },
+        {
+            "name": "duckdb_vector_copy_sel",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_vector",
+                    "name": "src"
+                },
+                {
+                    "type": "duckdb_vector",
+                    "name": "dst"
+                },
+                {
+                    "type": "duckdb_selection_vector",
+                    "name": "sel"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "src_count"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "src_offset"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "dst_offset"
+                }
+            ],
+            "comment": {
+                "description": "Copy the src vector to the dst with a selection vector that identifies which indices to copy.\n\n",
+                "param_comments": {
+                    "src": "The vector to copy from.",
+                    "dst": "The vector to copy to.",
+                    "sel": "The selection vector. The length of the selection vector should not be more than the length of the src vector",
+                    "src_count": "The number of entries from selection vector to copy. Think of this as the effective length of the selection vector starting from index 0",
+                    "src_offset": "The offset in the selection vector to copy from (important: actual number of items copied = src_count - src_offset).",
+                    "dst_offset": "The offset in the dst vector to start copying to."
                 }
             }
         },
@@ -313,7 +362,11 @@
                 }
             ],
             "comment": {
-                "description": "Copies the value from `value` to `vector`.\n"
+                "description": "Copies the value from `value` to `vector`.\n\n",
+                "param_comments": {
+                    "vector": "The receiving vector.",
+                    "value": "The value to copy into the vector."
+                }
             }
         },
         {
@@ -330,7 +383,11 @@
                 }
             ],
             "comment": {
-                "description": "References the `from` vector in the `to` vector, this makes take shared ownership of the values buffer \n\n"
+                "description": "Changes `to_vector` to reference `from_vector. After, the vectors share ownership of the data.\n\n",
+                "param_comments": {
+                    "to_vector": "The receiving vector.",
+                    "from_vector": "The vector to reference."
+                }
             }
         }
     ]

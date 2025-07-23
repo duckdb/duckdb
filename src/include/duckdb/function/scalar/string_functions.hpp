@@ -20,7 +20,7 @@ struct UpperFun {
 	static constexpr const char *Parameters = "string";
 	static constexpr const char *Description = "Converts `string` to upper case.";
 	static constexpr const char *Example = "upper('Hello')";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Categories = "string";
 
 	static ScalarFunction GetFunction();
 };
@@ -34,9 +34,9 @@ struct UcaseFun {
 struct LowerFun {
 	static constexpr const char *Name = "lower";
 	static constexpr const char *Parameters = "string";
-	static constexpr const char *Description = "Converts `string` to lower case";
+	static constexpr const char *Description = "Converts `string` to lower case.";
 	static constexpr const char *Example = "lower('Hello')";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Categories = "string";
 
 	static ScalarFunction GetFunction();
 };
@@ -50,29 +50,29 @@ struct LcaseFun {
 struct ConcatWsFun {
 	static constexpr const char *Name = "concat_ws";
 	static constexpr const char *Parameters = "separator,string,...";
-	static constexpr const char *Description = "Concatenates strings together separated by the specified separator.";
+	static constexpr const char *Description = "Concatenates many strings, separated by `separator`. `NULL` inputs are skipped.";
 	static constexpr const char *Example = "concat_ws(', ', 'Banana', 'Apple', 'Melon')";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Categories = "string";
 
 	static ScalarFunction GetFunction();
 };
 
 struct ConcatFun {
 	static constexpr const char *Name = "concat";
-	static constexpr const char *Parameters = "string,...";
-	static constexpr const char *Description = "Concatenates many strings together.";
-	static constexpr const char *Example = "concat('Hello', ' ', 'World')";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Parameters = "value,...";
+	static constexpr const char *Description = "Concatenates multiple strings or lists. `NULL` inputs are skipped. See also operator `||`.";
+	static constexpr const char *Example = "concat('Hello', ' ', 'World')\002concat([1, 2, 3], NULL, [4, 5, 6])";
+	static constexpr const char *Categories = "string,list";
 
 	static ScalarFunction GetFunction();
 };
 
 struct ListConcatFun {
 	static constexpr const char *Name = "list_concat";
-	static constexpr const char *Parameters = "list1,list2";
-	static constexpr const char *Description = "Concatenates two lists.";
-	static constexpr const char *Example = "list_concat([2, 3], [4, 5, 6])";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Parameters = "list,...";
+	static constexpr const char *Description = "Concatenates lists. `NULL` inputs are skipped. See also operator `||`.";
+	static constexpr const char *Example = "list_concat([2, 3], [4, 5, 6], [7])";
+	static constexpr const char *Categories = "list";
 
 	static ScalarFunction GetFunction();
 };
@@ -97,9 +97,9 @@ struct ArrayCatFun {
 
 struct ConcatOperatorFun {
 	static constexpr const char *Name = "||";
-	static constexpr const char *Parameters = "string,string";
-	static constexpr const char *Description = "Concatenates two strings, lists, or blobs. Any `NULL` input results in `NULL`. See also `concat(string, ...)` and `list_concat(list1, list2)`";
-	static constexpr const char *Example = "'Duck' || 'DB'\2[1, 2, 3] || [4, 5, 6]\2'\\xAA'::BLOB || '\\xBB'::BLOB";
+	static constexpr const char *Parameters = "arg1,arg2";
+	static constexpr const char *Description = "Concatenates two strings, lists, or blobs. Any `NULL` input results in `NULL`. See also `concat(arg1, arg2, ...)` and `list_concat(list1, list2, ...)`.";
+	static constexpr const char *Example = "'Duck' || 'DB'\002[1, 2, 3] || [4, 5, 6]\002'\\xAA'::BLOB || '\\xBB'::BLOB";
 	static constexpr const char *Categories = "string,list,blob";
 
 	static ScalarFunction GetFunction();
@@ -107,20 +107,20 @@ struct ConcatOperatorFun {
 
 struct PrefixFun {
 	static constexpr const char *Name = "prefix";
-	static constexpr const char *Parameters = "";
-	static constexpr const char *Description = "";
-	static constexpr const char *Example = "";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Parameters = "string,search_string";
+	static constexpr const char *Description = "Returns `true` if `string` starts with `search_string`.";
+	static constexpr const char *Example = "prefix('abc', 'ab')";
+	static constexpr const char *Categories = "string";
 
 	static ScalarFunction GetFunction();
 };
 
 struct SuffixFun {
 	static constexpr const char *Name = "suffix";
-	static constexpr const char *Parameters = "";
-	static constexpr const char *Description = "";
-	static constexpr const char *Example = "";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Parameters = "string,search_string";
+	static constexpr const char *Description = "Returns `true` if `string` ends with `search_string`.";
+	static constexpr const char *Example = "suffix('abc', 'bc')";
+	static constexpr const char *Categories = "string";
 
 	static ScalarFunction GetFunction();
 };
@@ -133,10 +133,10 @@ struct EndsWithFun {
 
 struct ContainsFun {
 	static constexpr const char *Name = "contains";
-	static constexpr const char *Parameters = "string::VARCHAR,search_string::VARCHAR\1list::ANY[],element::ANY\1map::MAP(ANY,ANY),key::ANY";
-	static constexpr const char *Description = "Returns true if `search_string` is found within `string`.\1Returns true if the `list` contains the `element`.\1Checks if a `map` contains a given `key`.";
-	static constexpr const char *Example = "contains('abc', 'a')\1contains([1, 2, NULL], 1)\1contains(MAP {'key1': 10, 'key2': 20, 'key3': 30}, 'key2')";
-	static constexpr const char *Categories = "\1\1";
+	static constexpr const char *Parameters = "string::VARCHAR,search_string::VARCHAR\001list::ANY[],element::ANY\001map::MAP(ANY,ANY),key::ANY";
+	static constexpr const char *Description = "Returns `true` if `search_string` is found within `string`.\001Returns `true` if the `list` contains the `element`.\001Checks if a `map` contains a given `key`.";
+	static constexpr const char *Example = "contains('abc', 'a')\001contains([1, 2, NULL], 1)\001contains(MAP {'key1': 10, 'key2': 20, 'key3': 30}, 'key2')";
+	static constexpr const char *Categories = "string\001list\001map";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -146,7 +146,7 @@ struct StripAccentsFun {
 	static constexpr const char *Parameters = "string";
 	static constexpr const char *Description = "Strips accents from `string`.";
 	static constexpr const char *Example = "strip_accents('mühleisen')";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Categories = "string";
 
 	static ScalarFunction GetFunction();
 };
@@ -155,18 +155,18 @@ struct NFCNormalizeFun {
 	static constexpr const char *Name = "nfc_normalize";
 	static constexpr const char *Parameters = "string";
 	static constexpr const char *Description = "Converts `string` to Unicode NFC normalized string. Useful for comparisons and ordering if text data is mixed between NFC normalized and not.";
-	static constexpr const char *Example = "nfc_normalize('ardèch')";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Example = "nfc_normalize('ardèch')";
+	static constexpr const char *Categories = "string";
 
 	static ScalarFunction GetFunction();
 };
 
 struct LengthFun {
 	static constexpr const char *Name = "length";
-	static constexpr const char *Parameters = "string";
-	static constexpr const char *Description = "Number of characters in `string`.";
-	static constexpr const char *Example = "length('Hello🦆')";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Parameters = "string::VARCHAR\001bit::BIT\001list::ANY[]";
+	static constexpr const char *Description = "Number of characters in `string`.\001Returns the bit-length of the `bit` argument.\001Returns the length of the `list`.";
+	static constexpr const char *Example = "length('Hello🦆')\001length(42::TINYINT::BIT)\001length([1,2,3])";
+	static constexpr const char *Categories = "string\001numeric\001list";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -194,27 +194,27 @@ struct StrlenFun {
 	static constexpr const char *Parameters = "string";
 	static constexpr const char *Description = "Number of bytes in `string`.";
 	static constexpr const char *Example = "strlen('🦆')";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Categories = "string";
 
 	static ScalarFunction GetFunction();
 };
 
 struct BitLengthFun {
 	static constexpr const char *Name = "bit_length";
-	static constexpr const char *Parameters = "";
-	static constexpr const char *Description = "";
-	static constexpr const char *Example = "";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Parameters = "string::VARCHAR\001bit::BIT";
+	static constexpr const char *Description = "Number of bits in a `string`.\001Returns the bit-length of the `bit` argument.";
+	static constexpr const char *Example = "bit_length('abc')\001bit_length(42::TINYINT::BIT)";
+	static constexpr const char *Categories = "string\001numeric";
 
 	static ScalarFunctionSet GetFunctions();
 };
 
 struct OctetLengthFun {
 	static constexpr const char *Name = "octet_length";
-	static constexpr const char *Parameters = "blob::BLOB\1bitstring::BIT";
-	static constexpr const char *Description = "Number of bytes in `blob`.\1Returns the number of bytes in the `bitstring`.";
-	static constexpr const char *Example = "octet_length('\\xAA\\xBB'::BLOB)\1octet_length('1101011'::BITSTRING)";
-	static constexpr const char *Categories = "blob\1bitstring";
+	static constexpr const char *Parameters = "blob::BLOB\001bitstring::BIT";
+	static constexpr const char *Description = "Number of bytes in `blob`.\001Returns the number of bytes in the `bitstring`.";
+	static constexpr const char *Example = "octet_length('\\xAA\\xBB'::BLOB)\001octet_length('1101011'::BITSTRING)";
+	static constexpr const char *Categories = "blob\001bitstring";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -224,17 +224,17 @@ struct LengthGraphemeFun {
 	static constexpr const char *Parameters = "string";
 	static constexpr const char *Description = "Number of grapheme clusters in `string`.";
 	static constexpr const char *Example = "length_grapheme('🤦🏼‍♂️🤦🏽‍♀️')";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Categories = "string";
 
 	static ScalarFunctionSet GetFunctions();
 };
 
 struct ArrayLengthFun {
 	static constexpr const char *Name = "array_length";
-	static constexpr const char *Parameters = "list";
-	static constexpr const char *Description = "Returns the length of the `list`.";
-	static constexpr const char *Example = "array_length([1,2,3])";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Parameters = "list::ANY[]\001list::ANY[],dimension::ANY";
+	static constexpr const char *Description = "Returns the length of the `list`.\001`array_length` for lists with dimensions other than 1 not implemented";
+	static constexpr const char *Example = "array_length([1, 2, 3])\001";
+	static constexpr const char *Categories = "list\001";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -242,9 +242,9 @@ struct ArrayLengthFun {
 struct SubstringFun {
 	static constexpr const char *Name = "substring";
 	static constexpr const char *Parameters = "string,start,length";
-	static constexpr const char *Description = "Extract substring of `length` characters starting from character `start`. Note that a start value of 1 refers to the first character of the `string`.";
-	static constexpr const char *Example = "substring('Hello', 2, 2)";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Description = "Extracts substring starting from character `start` up to the end of the string. If optional argument `length` is set, extracts a substring of `length` characters instead. Note that a `start` value of `1` refers to the first character of the `string`.";
+	static constexpr const char *Example = "substring('Hello', 2)\002substring('Hello', 2, 2)";
+	static constexpr const char *Categories = "string";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -258,9 +258,9 @@ struct SubstrFun {
 struct SubstringGraphemeFun {
 	static constexpr const char *Name = "substring_grapheme";
 	static constexpr const char *Parameters = "string,start,length";
-	static constexpr const char *Description = "Extract substring of `length` grapheme clusters starting from character `start`. Note that a start value of 1 refers to the first character of the `string`.";
-	static constexpr const char *Example = "substring_grapheme('🦆🤦🏼‍♂️🤦🏽‍♀️🦆', 3, 2)";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Description = "Extracts substring starting from grapheme clusters `start` up to the end of the string. If optional argument `length` is set, extracts a substring of `length` grapheme clusters instead. Note that a `start` value of `1` refers to the `first` character of the `string`.";
+	static constexpr const char *Example = "substring_grapheme('🦆🤦🏼‍♂️🤦🏽‍♀️🦆', 3)\002substring_grapheme('🦆🤦🏼‍♂️🤦🏽‍♀️🦆', 3, 2)";
+	static constexpr const char *Categories = "string";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -268,9 +268,9 @@ struct SubstringGraphemeFun {
 struct StringSplitFun {
 	static constexpr const char *Name = "string_split";
 	static constexpr const char *Parameters = "string,separator";
-	static constexpr const char *Description = "Splits the `string` along the `separator`";
+	static constexpr const char *Description = "Splits the `string` along the `separator`.";
 	static constexpr const char *Example = "string_split('hello-world', '-')";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Categories = "string";
 
 	static ScalarFunction GetFunction();
 };
@@ -295,10 +295,10 @@ struct SplitFun {
 
 struct StringSplitRegexFun {
 	static constexpr const char *Name = "string_split_regex";
-	static constexpr const char *Parameters = "string,regex";
-	static constexpr const char *Description = "Splits the `string` along the `regex`";
+	static constexpr const char *Parameters = "string,regex,options";
+	static constexpr const char *Description = "Splits the `string` along the `regex`. A set of optional regex `options` can be set.";
 	static constexpr const char *Example = "string_split_regex('hello world; 42', ';? ')";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Categories = "regex";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -317,50 +317,50 @@ struct RegexpSplitToArrayFun {
 
 struct RegexpFun {
 	static constexpr const char *Name = "regexp_full_match";
-	static constexpr const char *Parameters = "string,regex[,options]";
-	static constexpr const char *Description = "Returns true if the entire `string` matches the `regex`. A set of optional `options` can be set.";
+	static constexpr const char *Parameters = "string,regex";
+	static constexpr const char *Description = "Returns `true` if the entire `string` matches the `regex`. A set of optional regex `options` can be set.";
 	static constexpr const char *Example = "regexp_full_match('anabanana', '(an)*')";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Categories = "regex";
 
 	static ScalarFunctionSet GetFunctions();
 };
 
 struct RegexpMatchesFun {
 	static constexpr const char *Name = "regexp_matches";
-	static constexpr const char *Parameters = "string,pattern[,options]";
-	static constexpr const char *Description = "Returns true if `string` contains the regexp `pattern`, false otherwise. A set of optional `options` can be set.";
+	static constexpr const char *Parameters = "string,regex,options";
+	static constexpr const char *Description = "Returns `true` if `string` contains the `regex`, `false` otherwise. A set of optional regex `options` can be set.";
 	static constexpr const char *Example = "regexp_matches('anabanana', '(an)*')";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Categories = "regex";
 
 	static ScalarFunctionSet GetFunctions();
 };
 
 struct RegexpReplaceFun {
 	static constexpr const char *Name = "regexp_replace";
-	static constexpr const char *Parameters = "string,pattern,replacement[,options]";
-	static constexpr const char *Description = "If `string` contains the regexp `pattern`, replaces the matching part with `replacement`. A set of optional `options` can be set.";
+	static constexpr const char *Parameters = "string,regex,replacement,options";
+	static constexpr const char *Description = "If `string` contains the `regex`, replaces the matching part with `replacement`. A set of optional regex `options` can be set.";
 	static constexpr const char *Example = "regexp_replace('hello', '[lo]', '-')";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Categories = "regex";
 
 	static ScalarFunctionSet GetFunctions();
 };
 
 struct RegexpExtractFun {
 	static constexpr const char *Name = "regexp_extract";
-	static constexpr const char *Parameters = "string,pattern[,group = 0][,options]";
-	static constexpr const char *Description = "If `string` contains the regexp `pattern`, returns the capturing group specified by optional parameter `group`. The group must be a constant value. If no group is given, it defaults to 0. A set of optional `options` can be set.";
-	static constexpr const char *Example = "regexp_extract('abc', '([a-z])(b)', 1)";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Parameters = "string::VARCHAR,regex::VARCHAR\001string::VARCHAR,regex::VARCHAR,group::INTEGER\001string::VARCHAR,regex::VARCHAR,group::INTEGER,options::VARCHAR\001string::VARCHAR,regex::VARCHAR,name_list::VARCHAR[]\001string::VARCHAR,regex::VARCHAR,name_list::VARCHAR[],options::VARCHAR";
+	static constexpr const char *Description = "If `string` contains the `regex` pattern, returns the capturing group specified by optional parameter `group`; otherwise, returns the empty string. The `group` must be a constant value. If no `group` is given, it defaults to 0. A set of optional regex `options` can be set.\001If `string` contains the `regex` pattern, returns the capturing group specified by optional parameter `group`; otherwise, returns the empty string. The `group` must be a constant value. If no `group` is given, it defaults to 0. A set of optional regex `options` can be set.\001If `string` contains the `regex` pattern, returns the capturing group specified by optional parameter `group`; otherwise, returns the empty string. The `group` must be a constant value. If no `group` is given, it defaults to 0. A set of optional regex `options` can be set.\001If `string` contains the `regex` pattern, returns the capturing groups as a struct with corresponding names from `name_list`; otherwise, returns a struct with the same keys and empty strings as values. A set of optional regex `options` can be set.\001If `string` contains the `regex` pattern, returns the capturing groups as a struct with corresponding names from `name_list`; otherwise, returns a struct with the same keys and empty strings as values. A set of optional regex `options` can be set.";
+	static constexpr const char *Example = "regexp_extract('abcde', '[a-z]{3}')\001regexp_extract('abc', '([a-z])(b)', 1)\001regexp_extract('ABC', '([a-z])(b)', 1, 'i')\001regexp_extract('2023-04-15', '(\\d+)-(\\d+)-(\\d+)', ['y', 'm', 'd'])\001regexp_extract('John Doe', '([a-z]+) ([a-z]+)', ['first_name', 'last_name'], 'i')";
+	static constexpr const char *Categories = "regex\001regex\001regex\001regex\001regex";
 
 	static ScalarFunctionSet GetFunctions();
 };
 
 struct RegexpExtractAllFun {
 	static constexpr const char *Name = "regexp_extract_all";
-	static constexpr const char *Parameters = "string, regex[, group = 0][, options]";
-	static constexpr const char *Description = "Splits the `string` along the `regex` and extract all occurrences of `group`. A set of optional `options` can be set.";
-	static constexpr const char *Example = "regexp_extract_all('hello_world', '([a-z ]+)_?', 1)";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Parameters = "string,regex,group,options";
+	static constexpr const char *Description = "Finds non-overlapping occurrences of the `regex` in the `string` and returns the corresponding values of the capturing `group`. A set of optional regex `options` can be set.";
+	static constexpr const char *Example = "regexp_extract_all('Peter: 33, Paul:14', '(\\w+):\\s*(\\d+)', 2)";
+	static constexpr const char *Categories = "regex";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -368,9 +368,9 @@ struct RegexpExtractAllFun {
 struct RegexpEscapeFun {
 	static constexpr const char *Name = "regexp_escape";
 	static constexpr const char *Parameters = "string";
-	static constexpr const char *Description = "Escapes special patterns to turn string into a regular expression similarly to Python's re.escape function.";
+	static constexpr const char *Description = "Escapes special patterns to turn `string` into a regular expression similarly to Python's `re.escape` function.";
 	static constexpr const char *Example = "regexp_escape('https://duckdb.org')";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Categories = "regex";
 
 	static ScalarFunction GetFunction();
 };
@@ -428,9 +428,9 @@ struct NotILikeFun {
 struct LikeEscapeFun {
 	static constexpr const char *Name = "like_escape";
 	static constexpr const char *Parameters = "string,like_specifier,escape_character";
-	static constexpr const char *Description = "Returns true if the `string` matches the `like_specifier` (see Pattern Matching) using case-sensitive matching. `escape_character` is used to search for wildcard characters in the `string`.";
+	static constexpr const char *Description = "Returns `true` if the `string` matches the `like_specifier` (see Pattern Matching) using case-sensitive matching. `escape_character` is used to search for wildcard characters in the `string`.";
 	static constexpr const char *Example = "like_escape('a%c', 'a$%c', '$')";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Categories = "string";
 
 	static ScalarFunction GetFunction();
 };
@@ -438,9 +438,9 @@ struct LikeEscapeFun {
 struct NotLikeEscapeFun {
 	static constexpr const char *Name = "not_like_escape";
 	static constexpr const char *Parameters = "string,like_specifier,escape_character";
-	static constexpr const char *Description = "Returns false if the `string` matches the `like_specifier` (see Pattern Matching) using case-sensitive matching. `escape_character` is used to search for wildcard characters in the `string`.";
+	static constexpr const char *Description = "Returns `false` if the `string` matches the `like_specifier` (see Pattern Matching) using case-sensitive matching. `escape_character` is used to search for wildcard characters in the `string`.";
 	static constexpr const char *Example = "not_like_escape('a%c', 'a$%c', '$')";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Categories = "string";
 
 	static ScalarFunction GetFunction();
 };
@@ -448,9 +448,9 @@ struct NotLikeEscapeFun {
 struct IlikeEscapeFun {
 	static constexpr const char *Name = "ilike_escape";
 	static constexpr const char *Parameters = "string,like_specifier,escape_character";
-	static constexpr const char *Description = "Returns true if the `string` matches the `like_specifier` (see Pattern Matching) using case-insensitive matching. `escape_character` is used to search for wildcard characters in the `string`.";
+	static constexpr const char *Description = "Returns `true` if the `string` matches the `like_specifier` (see Pattern Matching) using case-insensitive matching. `escape_character` is used to search for wildcard characters in the `string`.";
 	static constexpr const char *Example = "ilike_escape('A%c', 'a$%C', '$')";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Categories = "string";
 
 	static ScalarFunction GetFunction();
 };
@@ -458,49 +458,49 @@ struct IlikeEscapeFun {
 struct NotIlikeEscapeFun {
 	static constexpr const char *Name = "not_ilike_escape";
 	static constexpr const char *Parameters = "string,like_specifier,escape_character";
-	static constexpr const char *Description = "Returns false if the `string` matches the `like_specifier` (see Pattern Matching) using case-insensitive matching. `escape_character` is used to search for wildcard characters in the `string`.";
+	static constexpr const char *Description = "Returns `false` if the `string` matches the `like_specifier` (see Pattern Matching) using case-insensitive matching. `escape_character` is used to search for wildcard characters in the `string`.";
 	static constexpr const char *Example = "not_ilike_escape('A%c', 'a$%C', '$')";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Categories = "string";
 
 	static ScalarFunction GetFunction();
 };
 
 struct MD5Fun {
 	static constexpr const char *Name = "md5";
-	static constexpr const char *Parameters = "value";
-	static constexpr const char *Description = "Returns the MD5 hash of the `value` as a string";
-	static constexpr const char *Example = "md5('123')";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Parameters = "string::VARCHAR\001blob::BLOB";
+	static constexpr const char *Description = "Returns the MD5 hash of the `string` as a `VARCHAR`.\001Returns the MD5 hash of the `blob` as a `VARCHAR`.";
+	static constexpr const char *Example = "md5('abc')\001md5('\\xAA\\xBB'::BLOB)";
+	static constexpr const char *Categories = "string\001blob";
 
 	static ScalarFunctionSet GetFunctions();
 };
 
 struct MD5NumberFun {
 	static constexpr const char *Name = "md5_number";
-	static constexpr const char *Parameters = "value";
-	static constexpr const char *Description = "Returns the MD5 hash of the `value` as an INT128";
-	static constexpr const char *Example = "md5_number('123')";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Parameters = "string::VARCHAR\001blob::BLOB";
+	static constexpr const char *Description = "Returns the MD5 hash of the `string` as a `HUGEINT`.\001Returns the MD5 hash of the `blob` as a `HUGEINT`.";
+	static constexpr const char *Example = "md5_number('abc')\001md5_number('\\xAA\\xBB'::BLOB)";
+	static constexpr const char *Categories = "string\001blob";
 
 	static ScalarFunctionSet GetFunctions();
 };
 
 struct SHA1Fun {
 	static constexpr const char *Name = "sha1";
-	static constexpr const char *Parameters = "value";
-	static constexpr const char *Description = "Returns the SHA1 hash of the `value`";
-	static constexpr const char *Example = "sha1('hello')";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Parameters = "value::VARCHAR\001blob::BLOB";
+	static constexpr const char *Description = "Returns a `VARCHAR` with the SHA-1 hash of the `value`.\001Returns a `VARCHAR` with the SHA-1 hash of the `blob`.";
+	static constexpr const char *Example = "sha1('🦆')\001sha1('\\xAA\\xBB'::BLOB)";
+	static constexpr const char *Categories = "string\001blob";
 
 	static ScalarFunctionSet GetFunctions();
 };
 
 struct SHA256Fun {
 	static constexpr const char *Name = "sha256";
-	static constexpr const char *Parameters = "value";
-	static constexpr const char *Description = "Returns the SHA256 hash of the `value`";
-	static constexpr const char *Example = "sha256('hello')";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Parameters = "value::VARCHAR\001blob::BLOB";
+	static constexpr const char *Description = "Returns a `VARCHAR` with the SHA-256 hash of the `value`\001Returns a `VARCHAR` with the SHA-256 hash of the `blob`.";
+	static constexpr const char *Example = "sha256('🦆')\001sha256('\\xAA\\xBB'::BLOB)";
+	static constexpr const char *Categories = "string\001blob";
 
 	static ScalarFunctionSet GetFunctions();
 };

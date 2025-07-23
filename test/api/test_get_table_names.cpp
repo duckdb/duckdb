@@ -19,8 +19,6 @@ TEST_CASE("Test GetTableNames", "[api]") {
 	REQUIRE(table_names.size() == 1);
 	REQUIRE(table_names.count("my_table"));
 
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE my_table(i INT)"));
-
 	// fetch a specific column
 	table_names = con.GetTableNames("SELECT col_a FROM my_table");
 	REQUIRE(table_names.size() == 1);
@@ -74,11 +72,12 @@ TEST_CASE("Test GetTableNames", "[api]") {
 	REQUIRE(table_names.count("my_table2"));
 
 	// views are expanded
-	REQUIRE_NO_FAIL(con.Query("CREATE VIEW v1 AS SELECT * FROM my_table"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE my_table_for_view(i INT)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE VIEW v1 AS SELECT * FROM my_table_for_view"));
 
 	table_names = con.GetTableNames("SELECT col_a FROM v1");
 	REQUIRE(table_names.size() == 1);
-	REQUIRE(table_names.count("my_table"));
+	REQUIRE(table_names.count("my_table_for_view"));
 
 	// * exclude
 	table_names = con.GetTableNames("select * exclude (x) from df");
@@ -90,13 +89,7 @@ TEST_CASE("Test GetTableNames", "[api]") {
 	REQUIRE(table_names.size() == 1);
 	REQUIRE(table_names.count("df"));
 
-	// qualified
-	REQUIRE_NO_FAIL(con.Query("CREATE SCHEMA schema1"));
-	auto test_dir = TestDirectoryPath();
-	REQUIRE_NO_FAIL(con.Query("ATTACH '" + test_dir + "/catalog2.db'"));
-	REQUIRE_NO_FAIL(con.Query("CREATE SCHEMA catalog2.schema2"));
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE schema1.table1(i INT)"));
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE catalog2.schema2.table2(i INT)"));
+	// qualified with schema.table and catalog.schema.table
 	string query = "SELECT * FROM schema1.table1, catalog2.schema2.table2";
 	table_names = con.GetTableNames(query, true);
 	REQUIRE(table_names.size() == 2);
@@ -104,13 +97,22 @@ TEST_CASE("Test GetTableNames", "[api]") {
 	REQUIRE(table_names.count("catalog2.schema2.table2"));
 
 	// qualified and escaped
-	REQUIRE_NO_FAIL(con.Query("CREATE SCHEMA catalog2.\"schema.3\""));
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE catalog2.\"schema.3\".\"table.3\"(i INT)"));
 	query = "SELECT * FROM schema1.table1, catalog3.\"schema.2\".\"table.2\"";
 	table_names = con.GetTableNames(query, true);
 	REQUIRE(table_names.size() == 2);
 	REQUIRE(table_names.count("schema1.table1"));
 	REQUIRE(table_names.count("catalog3.\"schema.2\".\"table.2\""));
+
+	// With alias
+	query = "SELECT * FROM schema1.table1 alias1, catalog3.\"schema.2\".\"table.2\" alias2";
+	table_names = con.GetTableNames(query, true); // qualified
+	REQUIRE(table_names.size() == 2);
+	REQUIRE(table_names.count("schema1.table1 AS alias1"));
+	REQUIRE(table_names.count("catalog3.\"schema.2\".\"table.2\" AS alias2"));
+	table_names = con.GetTableNames(query); // default
+	REQUIRE(table_names.size() == 2);
+	REQUIRE(table_names.count("table1"));
+	REQUIRE(table_names.count("table.2"));
 
 	// generate_series
 	table_names = con.GetTableNames("with series_generator as (select * from generate_series(TIMESTAMP '2001-04-10', "

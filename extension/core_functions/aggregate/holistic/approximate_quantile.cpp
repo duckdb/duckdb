@@ -10,6 +10,8 @@
 
 namespace duckdb {
 
+namespace {
+
 struct ApproxQuantileState {
 	duckdb_tdigest::TDigest *h;
 	idx_t pos;
@@ -168,7 +170,7 @@ struct ApproxQuantileScalarOperation : public ApproxQuantileOperation {
 	}
 };
 
-static AggregateFunction GetApproximateQuantileAggregateFunction(const LogicalType &type) {
+AggregateFunction GetApproximateQuantileAggregateFunction(const LogicalType &type) {
 	//	Not binary comparable
 	if (type == LogicalType::TIME_TZ) {
 		return AggregateFunction::UnaryAggregateDestructor<ApproxQuantileState, dtime_tz_t, dtime_tz_t,
@@ -201,7 +203,7 @@ static AggregateFunction GetApproximateQuantileAggregateFunction(const LogicalTy
 	}
 }
 
-static AggregateFunction GetApproximateQuantileDecimalAggregateFunction(const LogicalType &type) {
+AggregateFunction GetApproximateQuantileDecimalAggregateFunction(const LogicalType &type) {
 	switch (type.InternalType()) {
 	case PhysicalType::INT8:
 		return GetApproximateQuantileAggregateFunction(LogicalType::TINYINT);
@@ -218,7 +220,7 @@ static AggregateFunction GetApproximateQuantileDecimalAggregateFunction(const Lo
 	}
 }
 
-static float CheckApproxQuantile(const Value &quantile_val) {
+float CheckApproxQuantile(const Value &quantile_val) {
 	if (quantile_val.IsNull()) {
 		throw BinderException("APPROXIMATE QUANTILE parameter cannot be NULL");
 	}
@@ -326,7 +328,7 @@ struct ApproxQuantileListOperation : public ApproxQuantileOperation {
 };
 
 template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>
-static AggregateFunction ApproxQuantileListAggregate(const LogicalType &input_type, const LogicalType &child_type) {
+AggregateFunction ApproxQuantileListAggregate(const LogicalType &input_type, const LogicalType &child_type) {
 	LogicalType result_type = LogicalType::LIST(child_type);
 	return AggregateFunction(
 	    {input_type}, result_type, AggregateFunction::StateSize<STATE>, AggregateFunction::StateInitialize<STATE, OP>,
@@ -441,6 +443,7 @@ AggregateFunction GetApproxQuantileDecimalList() {
 	fun.deserialize = ApproxQuantileDecimalDeserialize;
 	return fun;
 }
+} // namespace
 
 AggregateFunctionSet ApproxQuantileFun::GetFunctions() {
 	AggregateFunctionSet approx_quantile;

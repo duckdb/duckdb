@@ -15,7 +15,7 @@
 namespace duckdb {
 
 LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &table)
-    : table_ref(table), allocator(Allocator::Get(table.db)), deleted_rows(0), optimistic_writer(table),
+    : table_ref(table), allocator(Allocator::Get(table.db)), deleted_rows(0), optimistic_writer(context, table),
       merged_storage(false) {
 
 	auto types = table.GetTypes();
@@ -653,8 +653,15 @@ void LocalStorage::FetchChunk(DataTable &table, Vector &row_ids, idx_t count, co
 	if (!storage) {
 		throw InternalException("LocalStorage::FetchChunk - local storage not found");
 	}
-
 	storage->row_groups->Fetch(transaction, chunk, col_ids, row_ids, count, fetch_state);
+}
+
+bool LocalStorage::CanFetch(DataTable &table, const row_t row_id) {
+	auto storage = table_manager.GetStorage(table);
+	if (!storage) {
+		throw InternalException("LocalStorage::CanFetch - local storage not found");
+	}
+	return storage->row_groups->CanFetch(transaction, row_id);
 }
 
 TableIndexList &LocalStorage::GetIndexes(ClientContext &context, DataTable &table) {

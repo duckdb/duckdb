@@ -13,6 +13,7 @@ add_subdirectory(tree_renderer)
 add_subdirectory(row_operations)
 add_subdirectory(serializer)
 add_subdirectory(sort)
+add_subdirectory(sorting)
 add_subdirectory(types)
 add_subdirectory(value_operations)
 add_subdirectory(vector_operations)
@@ -38,6 +39,8 @@ add_library_unity(
   compressed_file_system.cpp
   constants.cpp
   checksum.cpp
+  encryption_functions.cpp
+  encryption_key_manager.cpp
   encryption_state.cpp
   exception.cpp
   exception_format_value.cpp

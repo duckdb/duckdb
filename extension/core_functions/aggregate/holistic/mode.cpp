@@ -21,6 +21,7 @@ namespace std {} // namespace std
 
 namespace duckdb {
 
+namespace {
 struct ModeAttr {
 	ModeAttr() : count(0), first_row(std::numeric_limits<idx_t>::max()) {
 	}
@@ -466,6 +467,8 @@ unique_ptr<FunctionData> BindModeAggregate(ClientContext &context, AggregateFunc
 	return nullptr;
 }
 
+} // namespace
+
 AggregateFunctionSet ModeFun::GetFunctions() {
 	AggregateFunctionSet mode("mode");
 	mode.AddFunction(AggregateFunction({LogicalTypeId::ANY}, LogicalTypeId::ANY, nullptr, nullptr, nullptr, nullptr,
@@ -476,8 +479,10 @@ AggregateFunctionSet ModeFun::GetFunctions() {
 //===--------------------------------------------------------------------===//
 // Entropy
 //===--------------------------------------------------------------------===//
+namespace {
+
 template <class STATE>
-static double FinalizeEntropy(STATE &state) {
+double FinalizeEntropy(STATE &state) {
 	if (!state.frequency_map) {
 		return 0;
 	}
@@ -562,6 +567,8 @@ unique_ptr<FunctionData> BindEntropyAggregate(ClientContext &context, AggregateF
 	function.name = "entropy";
 	return nullptr;
 }
+
+} // namespace
 
 AggregateFunctionSet EntropyFun::GetFunctions() {
 	AggregateFunctionSet entropy("entropy");

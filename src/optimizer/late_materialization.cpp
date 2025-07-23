@@ -137,7 +137,7 @@ void LateMaterialization::ReplaceTopLevelTableIndex(LogicalOperator &root, idx_t
 			// visit the expressions of the operator and continue into the child node
 			auto &top_n = op.Cast<LogicalTopN>();
 			for (auto &order : top_n.orders) {
-				ReplaceTableReferences(*order.expression, new_index);
+				ReplaceTableReferences(order.expression, new_index);
 			}
 			current_op = *op.children[0];
 			break;
@@ -147,7 +147,7 @@ void LateMaterialization::ReplaceTopLevelTableIndex(LogicalOperator &root, idx_t
 		case LogicalOperatorType::LOGICAL_LIMIT: {
 			// visit the expressions of the operator and continue into the child node
 			for (auto &expr : op.expressions) {
-				ReplaceTableReferences(*expr, new_index);
+				ReplaceTableReferences(expr, new_index);
 			}
 			current_op = *op.children[0];
 			break;
@@ -158,14 +158,11 @@ void LateMaterialization::ReplaceTopLevelTableIndex(LogicalOperator &root, idx_t
 	}
 }
 
-void LateMaterialization::ReplaceTableReferences(Expression &expr, idx_t new_table_index) {
-	if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-		auto &bound_column_ref = expr.Cast<BoundColumnRefExpression>();
-		bound_column_ref.binding.table_index = new_table_index;
-	}
-
-	ExpressionIterator::EnumerateChildren(expr,
-	                                      [&](Expression &child) { ReplaceTableReferences(child, new_table_index); });
+void LateMaterialization::ReplaceTableReferences(unique_ptr<Expression> &root_expr, idx_t new_table_index) {
+	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
+	    root_expr, [&](BoundColumnRefExpression &bound_column_ref, unique_ptr<Expression> &expr) {
+		    bound_column_ref.binding.table_index = new_table_index;
+	    });
 }
 
 unique_ptr<Expression> LateMaterialization::GetExpression(LogicalOperator &op, idx_t column_index) {
@@ -186,15 +183,11 @@ unique_ptr<Expression> LateMaterialization::GetExpression(LogicalOperator &op, i
 	}
 }
 
-void LateMaterialization::ReplaceExpressionReferences(LogicalOperator &next_op, unique_ptr<Expression> &expr) {
-	if (expr->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-		auto &bound_column_ref = expr->Cast<BoundColumnRefExpression>();
-		expr = GetExpression(next_op, bound_column_ref.binding.column_index);
-		return;
-	}
-
-	ExpressionIterator::EnumerateChildren(
-	    *expr, [&](unique_ptr<Expression> &child) { ReplaceExpressionReferences(next_op, child); });
+void LateMaterialization::ReplaceExpressionReferences(LogicalOperator &next_op, unique_ptr<Expression> &root_expr) {
+	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
+	    root_expr, [&](BoundColumnRefExpression &bound_column_ref, unique_ptr<Expression> &expr) {
+		    expr = GetExpression(next_op, bound_column_ref.binding.column_index);
+	    });
 }
 
 bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op) {
@@ -384,7 +377,7 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 		proj->children.push_back(std::move(join));
 
 		for (auto &order : final_orders) {
-			ReplaceTableReferences(*order.expression, proj_index);
+			ReplaceTableReferences(order.expression, proj_index);
 		}
 		auto order = make_uniq<LogicalOrder>(std::move(final_orders));
 		if (proj->has_estimated_cardinality) {

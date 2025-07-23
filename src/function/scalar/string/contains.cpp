@@ -4,9 +4,12 @@
 #include "duckdb/function/scalar/map_functions.hpp"
 #include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/function/scalar/struct_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
+
+namespace {
 
 struct ContainsAligned {
 	template <class UNSIGNED>
@@ -61,6 +64,15 @@ static idx_t Contains(const unsigned char *haystack, idx_t haystack_size, const 
 	return DConstants::INVALID_INDEX;
 }
 
+struct ContainsOperator {
+	template <class TA, class TB, class TR>
+	static inline TR Operation(TA left, TB right) {
+		return FindStrInStr(left, right) != DConstants::INVALID_INDEX;
+	}
+};
+
+} // namespace
+
 idx_t FindStrInStr(const unsigned char *haystack, idx_t haystack_size, const unsigned char *needle, idx_t needle_size) {
 	D_ASSERT(needle_size > 0);
 	// start off by performing a memchr to find the first character of the
@@ -106,13 +118,6 @@ idx_t FindStrInStr(const string_t &haystack_s, const string_t &needle_s) {
 	return FindStrInStr(haystack, haystack_size, needle, needle_size);
 }
 
-struct ContainsOperator {
-	template <class TA, class TB, class TR>
-	static inline TR Operation(TA left, TB right) {
-		return FindStrInStr(left, right) != DConstants::INVALID_INDEX;
-	}
-};
-
 ScalarFunction GetStringContains() {
 	ScalarFunction string_fun("contains", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
 	                          ScalarFunction::BinaryFunction<string_t, string_t, bool, ContainsOperator>);
@@ -124,10 +129,12 @@ ScalarFunctionSet ContainsFun::GetFunctions() {
 	auto string_fun = GetStringContains();
 	auto list_fun = ListContainsFun::GetFunction();
 	auto map_fun = MapContainsFun::GetFunction();
+	auto struct_fun = StructContainsFun::GetFunction();
 	ScalarFunctionSet set("contains");
 	set.AddFunction(string_fun);
 	set.AddFunction(list_fun);
 	set.AddFunction(map_fun);
+	set.AddFunction(struct_fun);
 	return set;
 }
 

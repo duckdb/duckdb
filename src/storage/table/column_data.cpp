@@ -392,7 +392,8 @@ FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilt
 	if (!state.current) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
-	state.segment_checked = true;
+	// for dynamic filters we never consider the segment being "checked" as it can always change
+	state.segment_checked = filter.filter_type != TableFilterType::DYNAMIC_FILTER;
 	FilterPropagateResult prune_result;
 	{
 		lock_guard<mutex> l(stats_lock);
@@ -497,6 +498,9 @@ void ColumnData::RevertAppend(row_t start_row) {
 	auto l = data.Lock();
 	// check if this row is in the segment tree at all
 	auto last_segment = data.GetLastSegment(l);
+	if (!last_segment) {
+		return;
+	}
 	if (NumericCast<idx_t>(start_row) >= last_segment->start + last_segment->count) {
 		// the start row is equal to the final portion of the column data: nothing was ever appended here
 		D_ASSERT(NumericCast<idx_t>(start_row) == last_segment->start + last_segment->count);
@@ -538,13 +542,18 @@ void ColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, 
 	FetchUpdateRow(transaction, row_id, result, result_idx);
 }
 
+idx_t ColumnData::FetchUpdateData(row_t *row_ids, Vector &base_vector) {
+	ColumnScanState state;
+	auto fetch_count = Fetch(state, row_ids[0], base_vector);
+	base_vector.Flatten(fetch_count);
+	return fetch_count;
+}
+
 void ColumnData::Update(TransactionData transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
                         idx_t update_count) {
 	Vector base_vector(type);
-	ColumnScanState state;
-	auto fetch_count = Fetch(state, row_ids[0], base_vector);
+	FetchUpdateData(row_ids, base_vector);
 
-	base_vector.Flatten(fetch_count);
 	UpdateInternal(transaction, column_index, update_vector, row_ids, update_count, base_vector);
 }
 

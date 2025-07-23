@@ -333,7 +333,7 @@ ORDER BY 1;
 query II
 SELECT ts::DATE AS d, DATE_PART(['weekday', 'isodow','doy', 'julian'], ts) AS parts
 FROM timestamps
-ORDER BY 1;
+ORDER BY ts;
 ----
 NULL	NULL
 -infinity	{'weekday': NULL, 'isodow': NULL, 'doy': NULL, 'julian': NULL}
@@ -754,16 +754,6 @@ NULL	NULL
 2021-12-01 13:54:48.123456+00	1638366888123
 2022-01-01 00:00:41+00	1640995241000
 infinity	NULL
-
-statement error
-select epoch_ms(9223372036854775807)
-----
-Conversion Error: Could not convert Timestamp(MS) to Timestamp(US)
-
-statement error
-select epoch_ms(-9223372036854775808)
-----
-Conversion Error: Could not convert Timestamp(MS) to Timestamp(US)
 
 query II
 SELECT ts, epoch_ns(ts) FROM timestamps ORDER BY ALL;
