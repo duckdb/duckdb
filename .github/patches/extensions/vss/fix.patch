@@ -385,3 +385,23 @@ index c010292..0a73510 100644
 -#ifndef DUCKDB_EXTENSION_MAIN
 -#error DUCKDB_EXTENSION_MAIN not defined
 -#endif
+diff --git a/test/sql/hnsw/hnsw_lateral_join.test b/test/sql/hnsw/hnsw_lateral_join.test
+index 0362f3c..90d87f1 100644
+--- a/test/sql/hnsw/hnsw_lateral_join.test
++++ b/test/sql/hnsw/hnsw_lateral_join.test
+@@ -64,7 +64,7 @@ statement ok
+ CREATE INDEX my_idx ON b USING HNSW (b_vec);
+ 
+ query IIIIII rowsort a_has_null
+-select * from a, lateral (select *, a_id as id_dup from b order by array_distance(a.a_vec, b.b_vec) limit 2);
++select * from a, lateral (select *, a_id as id_dup from b order by array_distance(a.a_vec, b.b_vec), b_str limit 2);
+ 
+ # Test with a grouping function
+ query II rowsort
+@@ -72,4 +72,4 @@ select a_id, list(b_str) from a, lateral (select *, a_id as id_dup from b order
+ ----
+ 1	[a, b]
+ 2	[b, a]
+-3	[a, b]
+\ No newline at end of file
++3	[a, b]
