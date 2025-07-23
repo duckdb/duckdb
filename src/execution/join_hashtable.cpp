@@ -172,6 +172,10 @@ static void AddPointerToCompare(JoinHashTable::ProbeState &state, const ht_entry
 
 	state.keys_to_compare_sel.set_index(keys_to_compare_count, row_index);
 	row_ptr_insert_to[row_index] = entry.GetPointer();
+
+	// If the key does not match, we have to continue linear probing, we need to store the ht_offset and the salt
+	// for this element together with the row id. We can't get the offset from the hash as we already might have
+	// some linear probing steps when arriving here.
 	ht_offsets_and_salts[row_index] = row_ht_offset | entry.GetSaltWithNulls();
 	keys_to_compare_count += 1;
 }
@@ -300,12 +304,10 @@ static void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &key_sta
 
 		const auto ht_offsets_and_salts = FlatVector::GetData<idx_t>(state.ht_offsets_and_salts_v);
 		const auto hashes_dense = FlatVector::GetData<hash_t>(state.hashes_dense_v);
+
+		// For all the non-matches, increment the offset to continue probing but keep the salt intact
 		for (idx_t i = 0; i < keys_no_match_count; i++) {
 			const auto row_index = state.keys_no_match_sel.get_index(i);
-			// The ProbeForPointers function calculates the ht_offset from the hash; therefore, we have to write the
-			// new offset into the hashes_v; otherwise the next iteration will start at the old position. This might
-			// seem as an overhead but assures that the first call of ProbeForPointers is optimized as conceding
-			// calls are unlikely (Max 1-(65535/65536)^VectorSize = 3.1%)
 			auto ht_offset_and_salt = ht_offsets_and_salts[row_index];
 			IncrementAndWrap(ht_offset_and_salt, ht.bitmask | ht_entry_t::SALT_MASK);
 			hashes_dense[i] = ht_offset_and_salt; // populate dense again
