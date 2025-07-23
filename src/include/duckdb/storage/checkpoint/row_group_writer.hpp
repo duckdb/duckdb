@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/storage/checkpoint_manager.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
 
 namespace duckdb {
 struct ColumnCheckpointState;
@@ -31,7 +32,9 @@ public:
 	CompressionType GetColumnCompressionType(idx_t i);
 
 	virtual CheckpointType GetCheckpointType() const = 0;
-	virtual MetadataWriter &GetPayloadWriter() = 0;
+	virtual WriteStream &GetPayloadWriter() = 0;
+	virtual MetaBlockPointer GetMetaBlockPointer() = 0;
+	virtual optional_ptr<MetadataManager> GetMetadataManager() = 0;
 
 	PartialBlockManager &GetPartialBlockManager() {
 		return partial_block_manager;
@@ -50,7 +53,9 @@ public:
 
 public:
 	CheckpointType GetCheckpointType() const override;
-	MetadataWriter &GetPayloadWriter() override;
+	WriteStream &GetPayloadWriter() override;
+	MetaBlockPointer GetMetaBlockPointer() override;
+	optional_ptr<MetadataManager> GetMetadataManager() override;
 
 private:
 	//! Underlying writer object
