@@ -3,11 +3,6 @@
 
 namespace duckdb {
 void KeywordHelper::InitializeKeywordMaps() { // Renamed for clarity
-	if (initialized) {
-		return;
-	};
-	initialized = true;
-
 	// Populating reserved_keyword_map
 	reserved_keyword_map.insert("all");
 	reserved_keyword_map.insert("analyse");

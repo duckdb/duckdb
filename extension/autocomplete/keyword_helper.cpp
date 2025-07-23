@@ -3,6 +3,7 @@
 namespace duckdb {
 KeywordHelper &KeywordHelper::Instance() {
 	static KeywordHelper instance;
+	std::call_once(instance.init_flag, &KeywordHelper::InitializeKeywordMaps, &instance);
 	return instance;
 }
 
