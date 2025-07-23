@@ -174,7 +174,7 @@ static void AddPointerToCompare(JoinHashTable::ProbeState &state, const ht_entry
 	row_ptr_insert_to[row_index] = entry.GetPointer();
 
 	// If the key does not match, we have to continue linear probing, we need to store the ht_offset and the salt
-	// for this element together with the row id. We can't get the offset from the hash as we already might have
+	// for this element based on the row_index. We can't get the offset from the hash as we already might have
 	// some linear probing steps when arriving here.
 	ht_offsets_and_salts[row_index] = row_ht_offset | entry.GetSaltWithNulls();
 	keys_to_compare_count += 1;
