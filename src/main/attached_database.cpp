@@ -110,8 +110,8 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Sto
 		type = AttachedDatabaseType::READ_WRITE_DATABASE;
 	}
 
-	StorageExtensionInfo *storage_info = storage_extension->storage_info.get();
-	catalog = storage_extension->attach(storage_info, context, *this, name, info, options.access_mode);
+	optional_ptr<StorageExtensionInfo> storage_info = storage_extension->storage_info.get();
+	catalog = storage_extension->attach(storage_info, context, *this, name, info, options);
 	if (!catalog) {
 		throw InternalException("AttachedDatabase - attach function did not return a catalog");
 	}
