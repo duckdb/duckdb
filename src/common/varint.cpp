@@ -32,13 +32,51 @@ bool IsLHSBigger(string_t &lhs, string_t &rhs) {
 	return false;
 }
 
-void AddBinaryBuffersInPlace(char *target_buffer, size_t target_size, const char *source_buffer, size_t source_size) {
+void AddBinaryBuffers(char *target_buffer, idx_t target_size, const char *source_buffer, idx_t source_size, const char *source_buffer_2, idx_t source_size_2) {
+	// Setup header based on sign of first source buffer
+	bool is_negative = source_buffer[0] & 0x80;
+	Varint::SetHeader(target_buffer, target_size - Varint::VARINT_HEADER_SIZE, is_negative);
+
+	char carry = 0;
+
+	// Indices for source buffers (rightmost byte index)
+	idx_t i_a = source_size - 1;
+	idx_t i_b = source_size_2 - 1;
+
+	// Index for target buffer (rightmost byte index)
+	idx_t i_t = target_size - 1;
+
+	// Add bytes from right to left until at least one source buffer is fully consumed
+	while (i_a >= Varint::VARINT_HEADER_SIZE || i_b >= Varint::VARINT_HEADER_SIZE) {
+		int val_a = (i_a >= Varint::VARINT_HEADER_SIZE) ? static_cast<unsigned char>(source_buffer[i_a]) : 0;
+		int val_b = (i_b >= Varint::VARINT_HEADER_SIZE) ? static_cast<unsigned char>(source_buffer_2[i_b]) : 0;
+
+		int sum = val_a + val_b + carry;
+		target_buffer[i_t] = static_cast<char>(sum & 0xFF);
+		carry = static_cast<char>((sum >> 8) & 0xFF);
+
+		--i_a;
+		--i_b;
+		--i_t;
+	}
+
+	// Propagate carry in target buffer if needed (up to header boundary)
+	while (i_t >= Varint::VARINT_HEADER_SIZE && carry != 0) {
+		int sum = static_cast<unsigned char>(target_buffer[i_t]) + carry;
+		target_buffer[i_t] = static_cast<char>(sum & 0xFF);
+		carry = static_cast<char>((sum >> 8) & 0xFF);
+		--i_t;
+	}
+	D_ASSERT(carry == 0 && "Addition overflowed the buffer size");
+}
+
+void AddBinaryBuffersInPlace(char *target_buffer, idx_t target_size, const char *source_buffer, idx_t source_size) {
 	D_ASSERT(target_size >= source_size && "Buffer a must be at least as large as b");
 
 	char carry = 0;
 	// Add from right (LSB) to left (MSB)
-	ssize_t i_a = static_cast<ssize_t>(target_size) - 1; // last byte index in a
-	ssize_t i_b = static_cast<ssize_t>(source_size) - 1; // last byte index in b
+	idx_t i_a = target_size - 1; // last byte index in a
+	idx_t i_b = source_size - 1; // last byte index in b
 
 	// Add from right (LSB) to left (MSB), but skip metadata bytes at start
 	while (i_b >= Varint::VARINT_HEADER_SIZE) {
@@ -48,19 +86,21 @@ void AddBinaryBuffersInPlace(char *target_buffer, size_t target_size, const char
 
 		target_buffer[i_a] = static_cast<char>(sum & 0xFF);
 		carry = static_cast<char>((sum >> 8) & 0xFF);
-
 		--i_a;
 		--i_b;
 	}
 
 	// Propagate carry in target if needed
 	while (i_a >= Varint::VARINT_HEADER_SIZE && carry != 0) {
-		char target_value = target_buffer[i_a];
-		int sum = target_value + carry;
+		const char target_value = target_buffer[i_a];
+		const int sum = target_value + carry;
 
 		target_buffer[i_a] = static_cast<char>(sum & 0xFF);
 		carry = static_cast<char>((sum >> 8) & 0xFF);
 		--i_a;
+	}
+	if (i_a == 3) {
+		target_buffer[i_a] = 0;
 	}
 
 	D_ASSERT(carry == 0 && "Addition overflowed the buffer size");
@@ -91,8 +131,17 @@ varint_t &varint_t::operator+=(const string_t &rhs) {
 			throw NotImplementedException("bla");
 		}
 	} else {
-		// Realloc is not 100% guaranteed to happen, but we should assume it does
-		throw NotImplementedException("bla");
-	}
+			idx_t new_target_size = target_size+1;
+			auto new_target_ptr = reinterpret_cast<char*>(allocator->Allocate(new_target_size));
+			AddBinaryBuffers(new_target_ptr, new_target_size, target_ptr,target_size,source_ptr,source_size);
+			if (new_target_ptr[3] == 0) {
+				// Turns out we did not need to resize (:
+				throw NotImplementedException("dont resize me senpai");
+			} else {
+				SetPointer(new_target_ptr);
+				SetSizeAndFinalize(new_target_size);
+				return *this;
+			}
+		}
 }
 } // namespace duckdb
