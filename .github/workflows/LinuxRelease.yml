@@ -334,7 +334,7 @@ jobs:
       with:
         python-version: '3.9'
 
-    - name: Install
+    - name: Install Ninja
       shell: bash
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
@@ -399,6 +399,10 @@ jobs:
     - uses: actions/setup-python@v5
       with:
         python-version: '3.12'
+
+    - name: Install Ninja
+      shell: bash
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
