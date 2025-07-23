@@ -20,7 +20,7 @@ namespace duckdb {
 struct varint_t : public string_t { // NOLINT: use numeric casing
 	ArenaAllocator *allocator;
 	DUCKDB_API explicit varint_t(ArenaAllocator &allocator) : allocator(&allocator) {};
-	DUCKDB_API varint_t(ArenaAllocator &allocator, idx_t blob_size);
+	DUCKDB_API varint_t(ArenaAllocator &allocator, uint32_t blob_size);
 	varint_t() : allocator(nullptr) {
 	}
 	bool Initialized() const {
@@ -94,7 +94,7 @@ struct varint_t : public string_t { // NOLINT: use numeric casing
 	}
 
 	static varint_t FromBlob(ArenaAllocator &allocator, string_t value) {
-		idx_t blob_size = value.GetSize();
+		uint32_t blob_size = value.GetSize();
 		varint_t result(allocator, blob_size);
 		// Don't we have to initialize the string_t here?
 		auto writable_blob = result.GetDataWriteable();

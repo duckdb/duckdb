@@ -17,3 +17,17 @@ query I
 SELECT sum(x)::varint FROM numbers;
 ----
 9223372036854775809
+
+statement ok
+DROP TABLE numbers;
+
+statement ok
+CREATE TABLE numbers ( x varint );
+
+statement ok
+INSERT INTO numbers (x) VALUES (255::VARINT), (255::VARINT);
+
+query I
+SELECT sum(x)::varint FROM numbers;
+----
+510
