@@ -21,9 +21,16 @@ SELECT upper(decode('\xF6\x96\xB0\x85'::BLOB, 'strict')::VARCHAR);
 
 # invalid utf8, replace mode
 query I
-SELECT decode('\xA0\x50\x51'::BLOB, 'replace')::VARCHAR;
+SELECT decode('\xA0\x50\x51\xA0\xA0'::BLOB, 'replace')::VARCHAR;
 ----
-?PQ
+?PQ??
+
+# invalid utf8, ignore mode
+query I
+SELECT decode('\xA0\x50\x51\xA0\xA0'::BLOB, 'ignore')::VARCHAR;
+----
+PQ
+
 
 query I
 SELECT upper(decode('\xF0\x9F\x98\x84'::BLOB)::VARCHAR);

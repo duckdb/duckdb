@@ -2,10 +2,11 @@
     {
         "name": "decode",
         "parameters": "blob,varchar",
-        "description": "Converts `blob` to `VARCHAR`. Invalid UTF-8 is handled based on the error behavior argument. Can be 'abort' (default, fail), 'strict' (return NULL), or 'replace'",
+        "description": "Converts `blob` to `VARCHAR`. Invalid UTF-8 is handled based on the error behavior argument. Can be 'strict' (default, fail), 'replace' to replace invalid characters with '?', or 'ignore' to skip invalid characters.",
         "examples": [
             "decode('\\xC3\\xBC'::BLOB)",
-            "decode('\\xA0'::BLOB, 'replace')"
+            "decode('\\xA0'::BLOB, 'replace')",
+            "decode('\\xA0'::BLOB, 'ignore')"
         ],
         "type": "scalar_function_set",
         "categories": ["blob"]
