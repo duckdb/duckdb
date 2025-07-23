@@ -116,6 +116,7 @@
 #include "duckdb/main/extension.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/extension_install_info.hpp"
+#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/main/settings.hpp"
@@ -3347,6 +3348,24 @@ const char* EnumUtil::ToChars<ProfilerPrintFormat>(ProfilerPrintFormat value) {
 template<>
 ProfilerPrintFormat EnumUtil::FromString<ProfilerPrintFormat>(const char *value) {
 	return static_cast<ProfilerPrintFormat>(StringUtil::StringToEnum(GetProfilerPrintFormatValues(), 6, "ProfilerPrintFormat", value));
+}
+
+const StringUtil::EnumStringLiteral *GetProfilingCoverageValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ProfilingCoverage::SELECT), "SELECT" },
+		{ static_cast<uint32_t>(ProfilingCoverage::ALL), "ALL" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ProfilingCoverage>(ProfilingCoverage value) {
+	return StringUtil::EnumToString(GetProfilingCoverageValues(), 2, "ProfilingCoverage", static_cast<uint32_t>(value));
+}
+
+template<>
+ProfilingCoverage EnumUtil::FromString<ProfilingCoverage>(const char *value) {
+	return static_cast<ProfilingCoverage>(StringUtil::StringToEnum(GetProfilingCoverageValues(), 2, "ProfilingCoverage", value));
 }
 
 const StringUtil::EnumStringLiteral *GetQuantileSerializationTypeValues() {
