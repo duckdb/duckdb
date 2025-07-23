@@ -69,6 +69,7 @@ static const StaticFunctionDefinition core_functions[] = {
 	DUCKDB_SCALAR_FUNCTION(AliasFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(ApplyFun),
 	DUCKDB_AGGREGATE_FUNCTION(ApproxCountDistinctFun),
+	DUCKDB_SCALAR_FUNCTION(ApproxDatabaseCountFun),
 	DUCKDB_AGGREGATE_FUNCTION_SET(ApproxQuantileFun),
 	DUCKDB_AGGREGATE_FUNCTION(ApproxTopKFun),
 	DUCKDB_AGGREGATE_FUNCTION_SET(ArgMaxFun),

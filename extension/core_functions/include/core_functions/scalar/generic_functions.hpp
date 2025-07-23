@@ -195,4 +195,14 @@ struct CastToTypeFun {
 	static ScalarFunction GetFunction();
 };
 
+struct ApproxDatabaseCountFun {
+	static constexpr const char *Name = "approx_database_count";
+	static constexpr const char *Parameters = "";
+	static constexpr const char *Description = "Returns the approximate count of attached databases";
+	static constexpr const char *Example = "approx_database_count()";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
 } // namespace duckdb

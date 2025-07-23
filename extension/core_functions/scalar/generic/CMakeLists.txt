@@ -2,6 +2,7 @@ add_library_unity(
   duckdb_core_functions_generic
   OBJECT
   alias.cpp
+  approx_database_count.cpp
   binning.cpp
   cast_to_type.cpp
   can_implicitly_cast.cpp
