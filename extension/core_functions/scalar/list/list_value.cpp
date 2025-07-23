@@ -332,4 +332,22 @@ ScalarFunction UnpivotListFun::GetFunction() {
 	return fun;
 }
 
+static void MakePairFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &parts = StructVector::GetEntries(result);
+	parts[0]->Reference(args.data[0]);
+	parts[1]->Reference(args.data[1]);
+	if (args.AllConstant()) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	}
+}
+
+ScalarFunction MakePairFun::GetFunction() {
+	auto element_type = LogicalType::TEMPLATE();
+	auto pair_type = LogicalType::STRUCT({{"first", element_type}, {"second", element_type}});
+
+	ScalarFunction fun("make_pair", {element_type, element_type}, pair_type, MakePairFunction);
+	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	return fun;
+}
+
 } // namespace duckdb

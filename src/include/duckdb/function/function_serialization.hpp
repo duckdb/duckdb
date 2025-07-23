@@ -143,6 +143,12 @@ public:
 			bind_data = FunctionDeserialize<FUNC>(deserializer, function);
 			deserializer.Unset<LogicalType>();
 		} else {
+
+			FunctionBinder binder(context);
+
+			// Resolve templates
+			binder.ResolveTemplateTypes(function, children);
+
 			if (function.bind) {
 				try {
 					bind_data = function.bind(context, function, children);
@@ -152,7 +158,7 @@ public:
 					                             error.RawMessage());
 				}
 			}
-			FunctionBinder binder(context);
+
 			binder.CastToFunctionArguments(function, children);
 		}
 

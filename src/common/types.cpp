@@ -151,6 +151,7 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::UNKNOWN:
 	case LogicalTypeId::STRING_LITERAL:
 	case LogicalTypeId::INTEGER_LITERAL:
+	case LogicalTypeId::TEMPLATE:
 		return PhysicalType::INVALID;
 	case LogicalTypeId::USER:
 		return PhysicalType::UNKNOWN;
@@ -514,6 +515,12 @@ string LogicalType::ToString() const {
 	case LogicalTypeId::SQLNULL: {
 		return "\"NULL\"";
 	}
+	case LogicalTypeId::TEMPLATE: {
+		if (!type_info_) {
+			return "T";
+		}
+		return TemplateType::GetName(*this);
+	}
 	default:
 		return EnumUtil::ToString(id_);
 	}
@@ -735,6 +742,7 @@ bool LogicalType::IsComplete() const {
 		case LogicalTypeId::INVALID:
 		case LogicalTypeId::UNKNOWN:
 		case LogicalTypeId::ANY:
+		case LogicalTypeId::TEMPLATE:
 			return true; // These are incomplete by default
 		case LogicalTypeId::LIST:
 		case LogicalTypeId::MAP:
@@ -1237,6 +1245,7 @@ static idx_t GetLogicalTypeScore(const LogicalType &type) {
 	case LogicalTypeId::SQLNULL:
 	case LogicalTypeId::UNKNOWN:
 	case LogicalTypeId::ANY:
+	case LogicalTypeId::TEMPLATE:
 	case LogicalTypeId::STRING_LITERAL:
 	case LogicalTypeId::INTEGER_LITERAL:
 		return 0;
@@ -1932,6 +1941,31 @@ LogicalType LogicalType::INTEGER_LITERAL(const Value &constant) { // NOLINT
 	}
 	auto type_info = make_shared_ptr<IntegerLiteralTypeInfo>(constant);
 	return LogicalType(LogicalTypeId::INTEGER_LITERAL, std::move(type_info));
+}
+
+//===--------------------------------------------------------------------===//
+// Template Type
+//===--------------------------------------------------------------------===//
+LogicalType LogicalType::TEMPLATE(idx_t index) {
+	auto type_info = make_shared_ptr<TemplateTypeInfo>(index);
+
+	// Reuse the ANY type id for template types, as they are not a specific type but rather a placeholder
+	return LogicalType(LogicalTypeId::TEMPLATE, std::move(type_info));
+}
+
+idx_t TemplateType::GetIndex(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::TEMPLATE);
+	auto info = type.AuxInfo();
+	D_ASSERT(info->type == ExtraTypeInfoType::TEMPLATE_TYPE_INFO);
+	return info->Cast<TemplateTypeInfo>().index;
+}
+
+string TemplateType::GetName(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::TEMPLATE);
+	auto info = type.AuxInfo();
+	D_ASSERT(info->type == ExtraTypeInfoType::TEMPLATE_TYPE_INFO);
+	auto index = info->Cast<TemplateTypeInfo>().index;
+	return "T" + to_string(index + 1); // Print 1-indexed, start at T1
 }
 
 //===--------------------------------------------------------------------===//

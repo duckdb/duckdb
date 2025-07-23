@@ -260,6 +260,7 @@ static const StaticFunctionDefinition core_functions[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(LtrimFun),
 	DUCKDB_AGGREGATE_FUNCTION_SET(MadFun),
 	DUCKDB_SCALAR_FUNCTION_SET(MakeDateFun),
+	DUCKDB_SCALAR_FUNCTION(MakePairFun),
 	DUCKDB_SCALAR_FUNCTION(MakeTimeFun),
 	DUCKDB_SCALAR_FUNCTION_SET(MakeTimestampFun),
 	DUCKDB_SCALAR_FUNCTION_SET(MakeTimestampMsFun),

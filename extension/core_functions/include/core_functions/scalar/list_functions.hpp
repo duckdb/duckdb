@@ -359,6 +359,16 @@ struct UnpivotListFun {
 	static ScalarFunction GetFunction();
 };
 
+struct MakePairFun {
+	static constexpr const char *Name = "make_pair";
+	static constexpr const char *Parameters = "v1,v2";
+	static constexpr const char *Description = "TODO";
+	static constexpr const char *Example = "TODO";
+	static constexpr const char *Categories = "list";
+
+	static ScalarFunction GetFunction();
+};
+
 struct ListHasAnyFun {
 	static constexpr const char *Name = "list_has_any";
 	static constexpr const char *Parameters = "list1,list2";

@@ -341,6 +341,10 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		// parameter expression can be cast to anything for no cost
 		return 0;
 	}
+	if (to.id() == LogicalTypeId::TEMPLATE) {
+		// we can cast anything to a template type for a high cost
+		return 10000;
+	}
 	if (from.id() == LogicalTypeId::STRING_LITERAL) {
 		// string literals can be cast to any type for low cost as long as the type is valid
 		// i.e. we cannot cast to LIST(ANY) as we don't know what "ANY" should be
