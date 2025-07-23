@@ -278,79 +278,6 @@ jobs:
         shell: bash
         run: build/release/test/unittest
 
-  linux-tarball:
-     name: Python 3 Tarball
-     runs-on: ubuntu-22.04
-     needs: linux-memory-leaks
-     steps:
-     - uses: actions/checkout@v3
-       with:
-         fetch-depth: 0
-
-     - uses: actions/setup-python@v5
-       with:
-         python-version: '3.12'
-
-     - name: Install
-       shell: bash
-       working-directory: tools/pythonpkg
-       run: pip install -r requirements-dev.txt
-
-     - name: Setup Ccache
-       uses: hendrikmuhs/ccache-action@main
-       with:
-         key: ${{ github.job }}
-         save: ${{ env.CCACHE_SAVE }}
-
-     - name: Build
-       shell: bash
-       run: |
-         python --version
-         git archive --format zip --output test-tarball.zip HEAD
-         mkdir duckdb-test-tarball
-         mv test-tarball.zip duckdb-test-tarball
-         cd duckdb-test-tarball
-         unzip test-tarball.zip
-         cd tools/pythonpkg
-         export SETUPTOOLS_SCM_PRETEND_VERSION=0.2.2
-         export DISTUTILS_C_COMPILER_LAUNCHER=ccache
-         pip install . --user
-         (cd tests/ && python -m pytest)
-
-  python-sqllogic:
-     name: Python SQLLogicTest Library (Linux)
-     runs-on: ubuntu-22.04
-     env:
-        GEN: ninja
-        DUCKDEBUG: 1
-        ASAN_OPTIONS: detect_leaks=0
-
-     steps:
-     - uses: actions/checkout@v3
-       with:
-         fetch-depth: 0
-
-     - uses: actions/setup-python@v5
-       with:
-         python-version: '3.10'
-
-     - name: Install Python Test Dependencies
-       shell: bash
-       run: |
-         cd tools/pythonpkg
-         python3 -m pip install -r requirements-dev.txt
-
-     - name: Install DuckDB Python
-       shell: bash
-       run: |
-         cd tools/pythonpkg
-         python3 -m pip install .
-
-     - name: Run Python SQLLogicTester
-       shell: bash
-       run: |
-         python3 -m pytest './tools/pythonpkg/sqllogic/' --verbose --test-dir './test'
-
   sqllogic:
      name: Sqllogic tests
      runs-on: ubuntu-latest # Secondary task of this CI job is to test building duckdb on latest ubuntu
@@ -723,7 +650,3 @@ jobs:
           name: coverage
           path: coverage.zip
           if-no-files-found: error
-
-  pyodide:
-    uses: ./.github/workflows/Pyodide.yml
-    secrets: inherit
