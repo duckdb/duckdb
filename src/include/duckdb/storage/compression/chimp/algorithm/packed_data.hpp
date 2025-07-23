@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/storage/compression/chimp/packed_data.hpp
+// duckdb/storage/compression/chimp/algorithm/packed_data.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/storage/compression/chimp/algorithm/chimp_utils.hpp"
+#include "duckdb/common/assert.hpp"
 #include "duckdb.h"
 
 namespace duckdb {

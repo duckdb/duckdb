@@ -45,7 +45,7 @@ jobs:
         run: echo "Event name is ${{ github.event_name }}"
       
  linux-debug:
-    name: Linux DEBUG + sanitizers
+    name: Linux Debug
     # This tests release build while enabling slow verifiers (masked by #ifdef DEBUG) and sanitizers
     needs: check-draft
     runs-on: ubuntu-22.04

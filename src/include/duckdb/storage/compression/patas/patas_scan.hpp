@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/storage/compression/chimp/chimp_scan.hpp
+// duckdb/common/storage/compression/patas/patas_scan.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -10,6 +10,7 @@
 
 #include "duckdb/storage/compression/chimp/chimp.hpp"
 #include "duckdb/storage/compression/chimp/algorithm/chimp_utils.hpp"
+#include "duckdb/storage/compression/chimp/algorithm/packed_data.hpp"
 #include "duckdb/storage/compression/chimp/algorithm/byte_reader.hpp"
 #include "duckdb/storage/compression/patas/shared.hpp"
 #include "duckdb/storage/compression/patas/algorithm/patas.hpp"
