@@ -83,8 +83,6 @@ with open(output_path, "w") as f:
     f.write("#include \"keyword_helper.hpp\"\n\n")
     f.write("namespace duckdb {\n")
     f.write("void KeywordHelper::InitializeKeywordMaps() { // Renamed for clarity\n")
-    f.write("\tif (initialized) {\n\t\treturn;\n\t};\n")
-    f.write("\tinitialized = true;\n\n")
 
     # Get the total number of categories to handle the last item differently
     num_categories = len(keyword_sets)
