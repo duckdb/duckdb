@@ -690,7 +690,7 @@ void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<LocalT
 			auto &art = index.Cast<ART>();
 			if (storage) {
 				auto delete_index = storage->delete_indexes.Find(art.GetIndexName());
-				D_ASSERT(delete_index->IsBound());
+				D_ASSERT(!delete_index || delete_index->IsBound());
 				IndexAppendInfo index_append_info(IndexAppendMode::DEFAULT, delete_index);
 				art.VerifyAppend(chunk, index_append_info, nullptr);
 			} else {
@@ -716,7 +716,7 @@ void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<LocalT
 		auto &art = index.Cast<ART>();
 		if (storage) {
 			auto delete_index = storage->delete_indexes.Find(art.GetIndexName());
-			D_ASSERT(delete_index->IsBound());
+			D_ASSERT(!delete_index || delete_index->IsBound());
 			manager->AddIndex(art, delete_index);
 		} else {
 			manager->AddIndex(art, nullptr);
@@ -747,7 +747,7 @@ void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<LocalT
 		auto &art = index.Cast<ART>();
 		if (storage) {
 			auto delete_index = storage->delete_indexes.Find(art.GetIndexName());
-			D_ASSERT(delete_index->IsBound());
+			D_ASSERT(!delete_index || delete_index->IsBound());
 			IndexAppendInfo index_append_info(IndexAppendMode::DEFAULT, delete_index);
 			art.VerifyAppend(chunk, index_append_info, *manager);
 		} else {
