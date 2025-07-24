@@ -6,10 +6,10 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_map_set.hpp"
 #include "duckdb/common/types/string_type.hpp"
-#include "peg_keyword_helper.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
 #include "tokenizer.hpp"
+#include "duckdb/parser/parser_keyword_manager.hpp"
 #ifdef PEG_PARSER_SOURCE_FILE
 #include <fstream>
 #else
@@ -303,11 +303,11 @@ public:
 	MatchResultType Match(MatchState &state) const override {
 		// variable matchers match anything except for reserved keywords
 		auto &token_text = state.tokens[state.token_index].text;
-		const auto &keyword_helper = PEGKeywordHelper::Instance();
+		auto &keyword_manager = state.keyword_manager;
 		switch (suggestion_type) {
 		case SuggestionState::SUGGEST_TYPE_NAME:
-			if (keyword_helper.KeywordCategoryType(token_text, KeywordCategory::KEYWORD_RESERVED) ||
-			    keyword_helper.KeywordCategoryType(token_text, GetBannedCategory())) {
+			if (keyword_manager.IsKeywordInCategory(token_text, KeywordCategory::KEYWORD_RESERVED) ||
+			    keyword_manager.IsKeywordInCategory(token_text, GetBannedCategory())) {
 				return MatchResultType::FAIL;
 			}
 			break;
@@ -317,13 +317,13 @@ public:
 			                                           ? KeywordCategory::KEYWORD_TYPE_FUNC
 			                                           : KeywordCategory::KEYWORD_COL_NAME;
 
-			const bool is_reserved = keyword_helper.KeywordCategoryType(token_text, KeywordCategory::KEYWORD_RESERVED);
-			const bool has_extra_banned_category = keyword_helper.KeywordCategoryType(token_text, banned_category);
+			const bool is_reserved = keyword_manager.IsKeywordInCategory(token_text, KeywordCategory::KEYWORD_RESERVED);
+			const bool has_extra_banned_category = keyword_manager.IsKeywordInCategory(token_text, banned_category);
 			const bool has_banned_flag = is_reserved || has_extra_banned_category;
 
 			const bool is_unreserved =
-			    keyword_helper.KeywordCategoryType(token_text, KeywordCategory::KEYWORD_UNRESERVED);
-			const bool has_override_flag = keyword_helper.KeywordCategoryType(token_text, allowed_override_category);
+			    keyword_manager.IsKeywordInCategory(token_text, KeywordCategory::KEYWORD_UNRESERVED);
+			const bool has_override_flag = keyword_manager.IsKeywordInCategory(token_text, allowed_override_category);
 			const bool has_allowed_flag = is_unreserved || has_override_flag;
 
 			if (has_banned_flag && !has_allowed_flag) {

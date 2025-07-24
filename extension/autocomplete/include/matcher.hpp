@@ -11,6 +11,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/reference_map.hpp"
+#include "duckdb/parser/parser_keyword_manager.hpp"
 
 namespace duckdb {
 class Matcher;
@@ -96,17 +97,18 @@ struct MatcherSuggestion {
 };
 
 struct MatchState {
-	MatchState(vector<MatcherToken> &tokens, vector<MatcherSuggestion> &suggestions)
-	    : tokens(tokens), suggestions(suggestions), token_index(0) {
+	MatchState(vector<MatcherToken> &tokens, vector<MatcherSuggestion> &suggestions, ParserKeywordManager &keyword_manager)
+	    : tokens(tokens), suggestions(suggestions), token_index(0), keyword_manager(keyword_manager) {
 	}
 	MatchState(MatchState &state)
-	    : tokens(state.tokens), suggestions(state.suggestions), token_index(state.token_index) {
+	    : tokens(state.tokens), suggestions(state.suggestions), token_index(state.token_index), keyword_manager(state.keyword_manager) {
 	}
 
 	vector<MatcherToken> &tokens;
 	vector<MatcherSuggestion> &suggestions;
 	reference_set_t<const Matcher> added_suggestions;
 	idx_t token_index;
+	const ParserKeywordManager &keyword_manager;
 
 	void AddSuggestion(MatcherSuggestion suggestion);
 };
