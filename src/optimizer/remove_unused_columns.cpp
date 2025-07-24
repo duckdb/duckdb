@@ -26,7 +26,7 @@
 
 namespace duckdb {
 
-void BaseColumnPruner::ReplaceBinding(ColumnBinding current_binding, ColumnBinding new_binding, bool source) {
+void BaseColumnPruner::ReplaceBinding(ColumnBinding current_binding, ColumnBinding new_binding) {
 	auto colrefs = column_references.find(current_binding);
 	if (colrefs != column_references.end()) {
 		for (auto &colref_p : colrefs->second.bindings) {
@@ -34,16 +34,14 @@ void BaseColumnPruner::ReplaceBinding(ColumnBinding current_binding, ColumnBindi
 			D_ASSERT(colref.binding == current_binding);
 			colref.binding = new_binding;
 		}
-		if (!source) {
-			auto record = std::move(colrefs->second);
-			column_references.erase(current_binding);
-			column_references.insert(make_pair(new_binding, std::move(record)));
-		}
+		auto record = std::move(colrefs->second);
+		column_references.erase(current_binding);
+		column_references.insert(make_pair(new_binding, std::move(record)));
 	}
 }
 
 template <class T>
-void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &list, idx_t table_idx, bool replace, bool source) {
+void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &list, idx_t table_idx, bool replace) {
 	idx_t offset = 0;
 	for (idx_t col_idx = 0; col_idx < list.size(); col_idx++) {
 		auto current_binding = ColumnBinding(table_idx, col_idx + offset);
@@ -55,7 +53,7 @@ void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &list, idx_t table_id
 			col_idx--;
 		} else if (offset > 0 && replace) {
 			// column is used but the ColumnBinding has changed because of removed columns
-			ReplaceBinding(current_binding, ColumnBinding(table_idx, col_idx), source);
+			ReplaceBinding(current_binding, ColumnBinding(table_idx, col_idx));
 		}
 	}
 }
@@ -75,7 +73,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		}
 		if (!everything_referenced && !new_root) {
 			// FIXME: groups that are not referenced need to stay -> but they don't need to be scanned and output!
-			ClearUnusedExpressions(aggr.expressions, aggr.aggregate_index, true, false);
+			ClearUnusedExpressions(aggr.expressions, aggr.aggregate_index, true);
 			if (aggr.expressions.empty() && aggr.groups.empty()) {
 				// removed all expressions from the aggregate: push a COUNT(*)
 				auto count_star_fun = CountStarFun::GetFunction();
@@ -256,7 +254,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			// Create a copy that we can use to match ids later
 			auto col_sel = proj_sel;
 			// Clear unused ids, exclude filter columns that are projected out immediately
-			ClearUnusedExpressions(proj_sel, get.table_index, false, true);
+			ClearUnusedExpressions(proj_sel, get.table_index, false);
 
 			vector<unique_ptr<Expression>> filter_expressions;
 			// for every table filter, push a column binding into the column references map to prevent the column from
@@ -286,13 +284,14 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			}
 
 			// Clear unused ids, include filter columns that are projected out immediately
-			ClearUnusedExpressions(col_sel, get.table_index, true, true);
+			ClearUnusedExpressions(col_sel, get.table_index, true);
 
 			// Now set the column ids in the LogicalGet using the "selection vector"
 			vector<ColumnIndex> column_ids;
 			column_ids.reserve(col_sel.size());
-			for (auto col_sel_idx : col_sel) {
-				auto entry = column_references.find(ColumnBinding(get.table_index, col_sel_idx));
+			for (idx_t idx = 0;idx<col_sel.size();idx++) {
+				auto col_sel_idx = col_sel[idx];
+				auto entry = column_references.find(ColumnBinding(get.table_index, idx));
 				if (entry == column_references.end()) {
 					throw InternalException("RemoveUnusedColumns - could not find referenced column");
 				}
@@ -425,6 +424,14 @@ bool BaseColumnPruner::HandleStructExtract(Expression &expr) {
 	return true;
 }
 
+bool BaseColumnPruner::HandleStructPack(Expression &expr) {
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
+		return false;
+	}
+	auto &function = expr.Cast<BoundFunctionExpression>();
+	return function.function.name == "struct_pack";
+}
+
 void MergeChildColumns(vector<ColumnIndex> &current_child_columns, ColumnIndex &new_child_column) {
 	if (current_child_columns.empty()) {
 		// there's already a reference to the full column - we can't extract only a subfield
@@ -489,6 +496,13 @@ void BaseColumnPruner::VisitExpression(unique_ptr<Expression> *expression) {
 		// already handled
 		return;
 	}
+	if (HandleStructPack(expr)) {
+		auto tmp_deliver = deliver_child;
+		deliver_child = vector<ColumnIndex>();
+		LogicalOperatorVisitor::VisitExpression(expression);
+		deliver_child = tmp_deliver;
+		return;
+	}
 	// recurse
 	LogicalOperatorVisitor::VisitExpression(expression);
 }
@@ -499,7 +513,7 @@ unique_ptr<Expression> BaseColumnPruner::VisitReplace(BoundColumnRefExpression &
 	if (deliver_child.empty()) {
 		AddBinding(expr);
 	} else {
-		for (auto& child_idx: deliver_child) {
+		for (auto& child_idx   : deliver_child ) {
 			AddBinding(expr, child_idx);
 		}
 	}

@@ -43,12 +43,14 @@ protected:
 	void AddBinding(BoundColumnRefExpression &col, ColumnIndex child_column);
 	//! Perform a replacement of the ColumnBinding, iterating over all the currently found column references and
 	//! replacing the bindings
-	void ReplaceBinding(ColumnBinding current_binding, ColumnBinding new_binding, bool source);
+	void ReplaceBinding(ColumnBinding current_binding, ColumnBinding new_binding);
 
 	bool HandleStructExtract(Expression &expr);
 
 	bool HandleStructExtractRecursive(Expression &expr, optional_ptr<BoundColumnRefExpression> &colref,
 	                                  vector<idx_t> &indexes);
+
+	bool HandleStructPack(Expression &expr);								  
 };
 
 //! The RemoveUnusedColumns optimizer traverses the logical operator tree and removes any columns that are not required
@@ -69,6 +71,6 @@ private:
 
 private:
 	template <class T>
-	void ClearUnusedExpressions(vector<T> &list, idx_t table_idx, bool replace = true, bool source = false);
+	void ClearUnusedExpressions(vector<T> &list, idx_t table_idx, bool replace = true);
 };
 } // namespace duckdb

@@ -70,3 +70,13 @@ physical_plan	<REGEX>:.*SEQ_SCAN.*Projections:.*s.c1.*
 
 statement ok
 select s.c2, upper(s.c1) from test;
+
+# query6
+statement ok
+create table t2 (s struct(c1 varchar, c2 integer), c3 integer);
+
+statement ok
+insert into t2 values(('c1', 2), 3);
+
+statement ok
+select struct_extract(pack, 'c3') from (select struct_pack(s:=s, c3:=c3) as pack from t2) as sub;
