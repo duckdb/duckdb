@@ -517,7 +517,8 @@ ScalarFunction ListAggregateFun::GetFunction() {
 
 ScalarFunction ListDistinctFun::GetFunction() {
 	return ScalarFunction({LogicalType::LIST(LogicalType::TEMPLATE())}, LogicalType::LIST(LogicalType::TEMPLATE()),
-	                      ListDistinctFunction, ListAggregatesBind<false>, nullptr, nullptr, ListAggregatesInitLocalState);
+	                      ListDistinctFunction, ListAggregatesBind<false>, nullptr, nullptr,
+	                      ListAggregatesInitLocalState);
 }
 
 ScalarFunction ListUniqueFun::GetFunction() {

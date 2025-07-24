@@ -357,6 +357,7 @@ struct LogicalType {
 
 	DUCKDB_API bool IsValid() const;
 	DUCKDB_API bool IsComplete() const;
+	DUCKDB_API bool IsTemplated() const;
 
 	//! True, if this type supports in-place updates.
 	bool SupportsRegularUpdate() const;

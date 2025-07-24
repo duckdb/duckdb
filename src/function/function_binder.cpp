@@ -482,8 +482,11 @@ static void InferTemplateType(ClientContext &context, const LogicalType &source,
 		}
 
 		// If we reach here, it means the types are incompatible
-		throw BinderException(current_expr.GetQueryLocation(), "Cannot infer template type '%s' given '%s' (previously deduced as: '%s'), an explicit cast is required",
-							  TemplateType::GetName(source), LogicalType::NormalizeType(it->second).ToString(), LogicalType::NormalizeType(target).ToString());
+		throw BinderException(
+		    current_expr.GetQueryLocation(),
+		    "Cannot infer template type '%s' given '%s' (previously deduced as: '%s'), an explicit cast is required",
+		    TemplateType::GetName(source), LogicalType::NormalizeType(it->second).ToString(),
+		    LogicalType::NormalizeType(target).ToString());
 	}
 
 	// Otherwise, recurse downwards into nested types, and try to infer nested type members
@@ -552,12 +555,6 @@ static void InferTemplateType(ClientContext &context, const LogicalType &source,
 
 static void SubstituteTemplateType(LogicalType &type, unordered_map<idx_t, LogicalType> &bindings) {
 
-	// Before replacing types, check if there even is a template type in the type.
-	if (!TypeVisitor::Contains(type, LogicalTypeId::TEMPLATE)) {
-		// no template type in the type, nothing to do
-		return;
-	}
-
 	// Replace all template types in with their bound concrete types.
 	type = TypeVisitor::VisitReplace(type, [&](const LogicalType &t) -> LogicalType {
 		if (t.id() == LogicalTypeId::TEMPLATE) {
@@ -580,35 +577,40 @@ static void SubstituteTemplateType(LogicalType &type, unordered_map<idx_t, Logic
 void FunctionBinder::ResolveTemplateTypes(BaseScalarFunction &bound_function,
                                           const vector<unique_ptr<Expression>> &children) {
 	unordered_map<idx_t, LogicalType> bindings;
+	vector<reference<LogicalType>> to_substitute;
 
-	// Infer template types in the function arguments from the actual types of the children
+	// First, we need to infer the template types from the children.
 	for (idx_t i = 0; i < bound_function.arguments.size(); i++) {
 		auto &param = bound_function.arguments[i];
-		auto actual = ExpressionBinder::GetExpressionReturnType(*children[i]);
 
-		InferTemplateType(context, param, actual, bindings, *children[i]);
+		// If the parameter is not templated, we can skip it.
+		if (param.IsTemplated()) {
+			auto actual = ExpressionBinder::GetExpressionReturnType(*children[i]);
+			InferTemplateType(context, param, actual, bindings, *children[i]);
+
+			to_substitute.emplace_back(param);
+		}
 	}
 
-	if (bound_function.HasVarArgs()) {
-		// If there are more children than arguments, we assume that the extra children are varargs.
+	// If the function has a templated varargs, we need to infer its type too
+	if (bound_function.varargs.IsTemplated()) {
+		// All remaining children are considered varargs.
 		for (idx_t i = bound_function.arguments.size(); i < children.size(); i++) {
 			auto actual = ExpressionBinder::GetExpressionReturnType(*children[i]);
 			InferTemplateType(context, bound_function.varargs, actual, bindings, *children[i]);
 		}
+		to_substitute.emplace_back(bound_function.varargs);
 	}
 
-	// Now try to substitute argument types
-	for (auto &arg : bound_function.arguments) {
-		SubstituteTemplateType(arg, bindings);
+	// If the return type is templated, we need to subsitute it as well
+	if (bound_function.return_type.IsTemplated()) {
+		to_substitute.emplace_back(bound_function.return_type);
 	}
 
-	if (bound_function.HasVarArgs()) {
-		// Substitute the varargs type as well
-		SubstituteTemplateType(bound_function.varargs, bindings);
+	// Finally, substitute all template types in the bound function with their concrete types.
+	for (auto &templated_type : to_substitute) {
+		SubstituteTemplateType(templated_type, bindings);
 	}
-
-	// Also substitue the return type
-	SubstituteTemplateType(bound_function.return_type, bindings);
 }
 
 unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunction bound_function,

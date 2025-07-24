@@ -263,7 +263,7 @@ void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &result) 
 }
 
 unique_ptr<FunctionData> UnpivotBind(ClientContext &context, ScalarFunction &bound_function,
-                                       vector<unique_ptr<Expression>> &arguments) {
+                                     vector<unique_ptr<Expression>> &arguments) {
 	// collect names and deconflict, construct return type
 	LogicalType child_type =
 	    arguments.empty() ? LogicalType::SQLNULL : ExpressionBinder::GetExpressionReturnType(*arguments[0]);
@@ -281,9 +281,8 @@ unique_ptr<FunctionData> UnpivotBind(ClientContext &context, ScalarFunction &bou
 				}
 				list_arguments += arguments[k]->ToString() + " " + arguments[k]->return_type.ToString();
 			}
-			auto error =
-			    StringUtil::Format("Cannot unpivot columns of types %s and %s - an explicit cast is required",
-			                       child_type.ToString(), arg_type.ToString());
+			auto error = StringUtil::Format("Cannot unpivot columns of types %s and %s - an explicit cast is required",
+			                                child_type.ToString(), arg_type.ToString());
 			throw BinderException(arguments[i]->GetQueryLocation(),
 			                      QueryErrorContext::Format(list_arguments, error, error_index, false));
 		}
