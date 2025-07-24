@@ -67,7 +67,7 @@ public:
 	inline static uhugeint_t Multiply(uhugeint_t lhs, uhugeint_t rhs) {
 		uhugeint_t result;
 		if (!TryMultiply(lhs, rhs, result)) {
-			throw OutOfRangeException("Overflow in UHUGEINT multiplication!: %s + %s", lhs.ToString(), rhs.ToString());
+			throw OutOfRangeException("Overflow in UHUGEINT multiplication: %s * %s", lhs.ToString(), rhs.ToString());
 		}
 		return result;
 	}
@@ -106,7 +106,7 @@ public:
 	template <bool CHECK_OVERFLOW = true>
 	inline static uhugeint_t Subtract(uhugeint_t lhs, uhugeint_t rhs) {
 		if (!TrySubtractInPlace(lhs, rhs)) {
-			throw OutOfRangeException("Underflow in HUGEINT addition: %s - %s", lhs.ToString(), rhs.ToString());
+			throw OutOfRangeException("Underflow in HUGEINT subtraction: %s - %s", lhs.ToString(), rhs.ToString());
 		}
 		return lhs;
 	}
