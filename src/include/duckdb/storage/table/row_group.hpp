@@ -65,6 +65,7 @@ struct RowGroupWriteInfo {
 struct RowGroupWriteData {
 	vector<unique_ptr<ColumnCheckpointState>> states;
 	vector<BaseStatistics> statistics;
+	vector<MetaBlockPointer> existing_pointers;
 };
 
 class RowGroup : public SegmentBase<RowGroup> {

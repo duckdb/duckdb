@@ -1042,7 +1042,10 @@ vector<MetaBlockPointer> RowGroup::GetColumnPointers() {
 RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 	if (!column_pointers.empty() && !HasChanges()) {
 		// we have existing metadata and the row group has not been changed
-		return RowGroupWriteData();
+		// re-use previous metadata
+		RowGroupWriteData result;
+		result.existing_pointers = GetColumnPointers();
+		return result;
 	}
 	auto &compression_types = writer.GetCompressionTypes();
 	if (columns.size() != compression_types.size()) {
@@ -1069,11 +1072,11 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 	// construct the row group pointer and write the column meta data to disk
 	row_group_pointer.row_start = start;
 	row_group_pointer.tuple_count = count;
-	if (write_data.states.empty()) {
-		// we haven't written anything - re-use previous metadata
+	if (!write_data.existing_pointers.empty()) {
+		// we are re-using the previous metadata
 		row_group_pointer.data_pointers = column_pointers;
 		row_group_pointer.deletes_pointers = deletes_pointers;
-		metadata_manager->ClearModifiedBlocks(GetColumnPointers());
+		metadata_manager->ClearModifiedBlocks(write_data.existing_pointers);
 		metadata_manager->ClearModifiedBlocks(deletes_pointers);
 		return row_group_pointer;
 	}
