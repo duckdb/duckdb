@@ -1,4 +1,4 @@
-# name: test/sql/storage/metadata/full_table_metadata_reuse_nested.test
+# name: test/sql/storage/metadata/full_table_metadata_reuse_nested.test_slow
 # description: Test full table metadata reuse of complex nested data
 # group: [metadata]
 
