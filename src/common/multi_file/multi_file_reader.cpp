@@ -785,10 +785,10 @@ void MultiFileOptions::AutoDetectHivePartitioning(MultiFileList &files, ClientCo
 		hive_lazy_listing = false;
 	}
 	// Clear earlier files used for peeking at hive partitioning, eagerly read them all
-	if (!hive_lazy_listing) {
-		files.Clear();
-		files.GetAllFiles();
-	}
+	// if (!hive_lazy_listing) {
+	// 	files.Clear();
+	// 	files.GetAllFiles();
+	// }
 	if (auto_detect_hive_partitioning) {
 		hive_partitioning = AutoDetectHivePartitioningInternal(files, context);
 	}

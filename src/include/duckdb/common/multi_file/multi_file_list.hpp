@@ -84,7 +84,7 @@ public:
 	bool Scan(MultiFileListScanData &iterator, OpenFileInfo &result_file);
 
 	//! Returns the first file or an empty string if GetTotalFileCount() == 0
-	OpenFileInfo GetFirstFile();
+	virtual OpenFileInfo GetFirstFile();
 	//! Syntactic sugar for GetExpandResult() == FileExpandResult::NO_FILES
 	bool IsEmpty();
 
@@ -177,11 +177,12 @@ public:
 protected:
 	//! Main MultiFileList API
 	OpenFileInfo GetFile(idx_t i) override;
+	OpenFileInfo GetFirstFile() override;
 
 	//! Get the i-th expanded file
-	OpenFileInfo GetFileInternal(idx_t i);
+	OpenFileInfo GetFileInternal(idx_t i, bool first_files);
 	//! Grabs the next path and expands it into Expanded paths: returns false if no more files to expand
-	bool ExpandNextPath(idx_t max_files = std::numeric_limits<idx_t>::max(),
+	bool ExpandNextPath(idx_t max_files = std::numeric_limits<idx_t>::max(), bool first_files = false,
 	                    optional_ptr<HiveFilterParams> hive_filter_params = nullptr);
 	//! Grabs the next path and expands it into Expanded paths: returns false if no more files to expand
 	bool ExpandPathInternal(idx_t &current_path, vector<OpenFileInfo> &result,
@@ -196,8 +197,12 @@ protected:
 	ClientContext &context;
 	//! The current path to expand
 	idx_t current_path;
+	//! The current path to expand for the first files
+	idx_t first_files_current_path;
 	//! The expanded files
 	vector<OpenFileInfo> expanded_files;
+	//! The first expanded files used during binding
+	vector<OpenFileInfo> first_expanded_files;
 
 	mutable mutex lock;
 };

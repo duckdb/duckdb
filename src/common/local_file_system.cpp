@@ -1561,6 +1561,12 @@ vector<OpenFileInfo> LocalFileSystem::GlobHive(const string &path, FileOpener *o
 		                                                hive_params->options, hive_params->info);
 	}
 
+	if (previous_directories.empty()) {
+		previous_directories.push_back(OpenFileInfo());
+	}
+
+	//splits.back().find("multi_bloom") != std::string::npos
+
 	vector<OpenFileInfo> result;
 	for (auto &prev_directory : previous_directories) {
 		ProcessSplit(splits, start_index, prev_directory.path, result, opener, max_files, hive_partitioning);

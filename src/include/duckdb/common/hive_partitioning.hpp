@@ -33,7 +33,7 @@ public:
 	// Constructor
 	HivePartitioning(ClientContext &context, vector<unique_ptr<Expression>> &filters, const MultiFileOptions &options,
 	                 MultiFilePushdownInfo &info)
-	    : context(context), filters(filters), options(options), info(info), have_preserved_filter(filters.size(), true),
+	    : context(context), filters(filters), info(info), have_preserved_filter(filters.size(), true),
 	      consumed(false) {
 		filter_info = GetFilterInfo(info, options);
 	}
@@ -51,7 +51,8 @@ public:
 	                                              vector<unique_ptr<Expression>> &filters,
 	                                              const MultiFileOptions &options, MultiFilePushdownInfo &info);
 	//! Finalize the hive filtering
-	DUCKDB_API void Finalize(idx_t filtered_files = -1, idx_t total_files = -1);
+	DUCKDB_API void Finalize(idx_t filtered_files, idx_t total_files);
+	DUCKDB_API void Finalize();
 
 	DUCKDB_API static Value GetValue(ClientContext &context, const string &key, const string &value,
 	                                 const LogicalType &type);
@@ -66,7 +67,6 @@ public:
 private:
 	ClientContext &context;
 	vector<unique_ptr<Expression>> &filters;
-	const MultiFileOptions &options;
 	MultiFilePushdownInfo &info;
 	HivePartitioningFilterInfo filter_info;
 	unordered_set<idx_t> filters_applied_to_files;

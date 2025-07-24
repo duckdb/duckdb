@@ -261,7 +261,7 @@ idx_t SimpleMultiFileList::GetTotalFileCount() {
 // GlobMultiFileList
 //===--------------------------------------------------------------------===//
 GlobMultiFileList::GlobMultiFileList(ClientContext &context_p, vector<OpenFileInfo> paths_p, FileGlobOptions options)
-    : MultiFileList(std::move(paths_p), options), context(context_p), current_path(0) {
+    : MultiFileList(std::move(paths_p), options), context(context_p), current_path(0), first_files_current_path(0) {
 }
 
 unique_ptr<MultiFileList> GlobMultiFileList::ComplexFilterPushdown(ClientContext &context_p,
@@ -275,7 +275,7 @@ unique_ptr<MultiFileList> GlobMultiFileList::ComplexFilterPushdown(ClientContext
 	if (options.hive_lazy_listing) {
 		ClearInternal();
 		HiveFilterParams hive_filter_params(context, filters, options, info);
-		while (ExpandNextPath(std::numeric_limits<idx_t>::max(), &hive_filter_params)) {
+		while (ExpandNextPath(std::numeric_limits<idx_t>::max(), false, &hive_filter_params)) {
 		}
 	} else {
 		auto res = PushdownInternal(context, options, info, filters, expanded_files);
@@ -319,44 +319,51 @@ GlobMultiFileList::DynamicFilterPushdown(ClientContext &context, const MultiFile
 
 vector<OpenFileInfo> GlobMultiFileList::GetAllFiles() {
 	lock_guard<mutex> lck(lock);
-	while (ExpandNextPath()) {
+	while (ExpandNextPath(std::numeric_limits<idx_t>::max())) {
 	}
 	return expanded_files;
 }
 
 idx_t GlobMultiFileList::GetTotalFileCount() {
 	lock_guard<mutex> lck(lock);
-	while (ExpandNextPath()) {
+	while (ExpandNextPath(std::numeric_limits<idx_t>::max())) {
 	}
 	return expanded_files.size();
 }
 
 FileExpandResult GlobMultiFileList::GetExpandResult() {
+	return FileExpandResult::MULTIPLE_FILES;
 	// GetFile(1) will ensure at least the first 2 files are expanded if they are available
-	GetFile(1);
+	// GetFile(1);
 
-	if (expanded_files.size() > 1) {
-		return FileExpandResult::MULTIPLE_FILES;
-	} else if (expanded_files.size() == 1) {
-		return FileExpandResult::SINGLE_FILE;
-	}
+	// if (expanded_files.size() > 1) {
+	// 	return FileExpandResult::MULTIPLE_FILES;
+	// } else if (expanded_files.size() == 1) {
+	// 	return FileExpandResult::SINGLE_FILE;
+	// }
 
-	return FileExpandResult::NO_FILES;
+	// return FileExpandResult::NO_FILES;
 }
 
 OpenFileInfo GlobMultiFileList::GetFile(idx_t i) {
 	lock_guard<mutex> lck(lock);
-	return GetFileInternal(i);
+	return GetFileInternal(i, false);
 }
 
-OpenFileInfo GlobMultiFileList::GetFileInternal(idx_t i) {
-	while (expanded_files.size() <= i) {
-		if (!ExpandNextPath(i + 1)) {
+OpenFileInfo GlobMultiFileList::GetFirstFile() {
+	lock_guard<mutex> lck(lock);
+	return GetFileInternal(0, true);
+}
+
+OpenFileInfo GlobMultiFileList::GetFileInternal(idx_t i, bool first_files) {
+	auto &files = first_files ? first_expanded_files : expanded_files;
+	while (files.size() <= i) {
+		if (!ExpandNextPath(first_files ? i + 1 : std::numeric_limits<idx_t>::max(), first_files)) {
 			return OpenFileInfo("");
 		}
 	}
-	D_ASSERT(expanded_files.size() > i);
-	return expanded_files[i];
+	D_ASSERT(files.size() > i);
+	return files[i];
 }
 
 void GlobMultiFileList::Clear() {
@@ -384,8 +391,11 @@ bool GlobMultiFileList::ExpandPathInternal(idx_t &current_path, vector<OpenFileI
 	return true;
 }
 
-bool GlobMultiFileList::ExpandNextPath(idx_t max_files, optional_ptr<HiveFilterParams> hive_filter_params) {
-	return ExpandPathInternal(current_path, expanded_files, max_files, hive_filter_params);
+bool GlobMultiFileList::ExpandNextPath(idx_t max_files, bool first_files,
+                                       optional_ptr<HiveFilterParams> hive_filter_params) {
+	return ExpandPathInternal(first_files ? first_files_current_path : current_path,
+	                          first_files ? first_expanded_files : expanded_files, max_files,
+	                          hive_filter_params);
 }
 
 bool GlobMultiFileList::IsFullyExpanded() const {
