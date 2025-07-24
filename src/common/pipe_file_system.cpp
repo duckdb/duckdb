@@ -16,15 +16,15 @@ public:
 	unique_ptr<FileHandle> child_handle;
 
 public:
-	int64_t ReadChunk(void *buffer, int64_t nr_bytes);
+	int64_t ReadChunk(ClientContext &context, void *buffer, int64_t nr_bytes);
 	int64_t WriteChunk(void *buffer, int64_t nr_bytes);
 
 	void Close() override {
 	}
 };
 
-int64_t PipeFile::ReadChunk(void *buffer, int64_t nr_bytes) {
-	return child_handle->Read(buffer, UnsafeNumericCast<idx_t>(nr_bytes));
+int64_t PipeFile::ReadChunk(ClientContext &context, void *buffer, int64_t nr_bytes) {
+	return child_handle->Read(context, buffer, UnsafeNumericCast<idx_t>(nr_bytes));
 }
 int64_t PipeFile::WriteChunk(void *buffer, int64_t nr_bytes) {
 	return child_handle->Write(buffer, UnsafeNumericCast<idx_t>(nr_bytes));
@@ -34,9 +34,9 @@ void PipeFileSystem::Reset(FileHandle &handle) {
 	throw InternalException("Cannot reset pipe file system");
 }
 
-int64_t PipeFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
+int64_t PipeFileSystem::Read(ClientContext &context, FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	auto &pipe = handle.Cast<PipeFile>();
-	return pipe.ReadChunk(buffer, nr_bytes);
+	return pipe.ReadChunk(context, buffer, nr_bytes);
 }
 
 int64_t PipeFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {

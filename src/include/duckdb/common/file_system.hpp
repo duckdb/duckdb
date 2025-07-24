@@ -63,7 +63,7 @@ public:
 
 	// Read at [nr_bytes] bytes into [buffer], and return the bytes actually read.
 	// File offset will be changed, which advances for number of bytes read.
-	DUCKDB_API int64_t Read(void *buffer, idx_t nr_bytes);
+	DUCKDB_API int64_t Read(ClientContext &context, void *buffer, idx_t nr_bytes);
 	DUCKDB_API int64_t Write(void *buffer, idx_t nr_bytes);
 	// Read at [nr_bytes] bytes into [buffer].
 	// File offset will not be changed.
@@ -74,7 +74,7 @@ public:
 	DUCKDB_API idx_t SeekPosition();
 	DUCKDB_API void Sync();
 	DUCKDB_API void Truncate(int64_t new_size);
-	DUCKDB_API string ReadLine();
+	DUCKDB_API string ReadLine(ClientContext &context);
 	DUCKDB_API bool Trim(idx_t offset_bytes, idx_t length_bytes);
 	DUCKDB_API virtual idx_t GetProgress();
 	DUCKDB_API virtual FileCompressionType GetFileCompressionType();
@@ -262,7 +262,8 @@ public:
 	//! in a file on-disk are much cheaper than e.g. random reads in a file over the network
 	DUCKDB_API virtual bool OnDiskFile(FileHandle &handle);
 
-	DUCKDB_API virtual unique_ptr<FileHandle> OpenCompressedFile(unique_ptr<FileHandle> handle, bool write);
+	DUCKDB_API virtual unique_ptr<FileHandle> OpenCompressedFile(ClientContext &context, unique_ptr<FileHandle> handle,
+	                                                             bool write);
 
 	//! Create a LocalFileSystem.
 	DUCKDB_API static unique_ptr<FileSystem> CreateLocal();

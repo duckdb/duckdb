@@ -8,10 +8,11 @@ CSVBuffer::CSVBuffer(ClientContext &context, idx_t buffer_size_p, CSVFileHandle 
     : context(context), requested_size(buffer_size_p), can_seek(file_handle.CanSeek()), is_pipe(file_handle.IsPipe()) {
 	AllocateBuffer(buffer_size_p);
 	auto buffer = Ptr();
-	actual_buffer_size = file_handle.Read(buffer, buffer_size_p);
+	actual_buffer_size = file_handle.Read(context, buffer, buffer_size_p);
 	while (actual_buffer_size < buffer_size_p && !file_handle.FinishedReading()) {
 		// We keep reading until this block is full
-		actual_buffer_size += file_handle.Read(&buffer[actual_buffer_size], buffer_size_p - actual_buffer_size);
+		actual_buffer_size +=
+		    file_handle.Read(context, &buffer[actual_buffer_size], buffer_size_p - actual_buffer_size);
 	}
 	global_csv_start = global_csv_current_position;
 	last_buffer = file_handle.FinishedReading();
@@ -23,10 +24,10 @@ CSVBuffer::CSVBuffer(CSVFileHandle &file_handle, ClientContext &context, idx_t b
       can_seek(file_handle.CanSeek()), is_pipe(file_handle.IsPipe()), buffer_idx(buffer_idx_p) {
 	AllocateBuffer(buffer_size);
 	auto buffer = handle.Ptr();
-	actual_buffer_size = file_handle.Read(handle.Ptr(), buffer_size);
+	actual_buffer_size = file_handle.Read(context, handle.Ptr(), buffer_size);
 	while (actual_buffer_size < buffer_size && !file_handle.FinishedReading()) {
 		// We keep reading until this block is full
-		actual_buffer_size += file_handle.Read(&buffer[actual_buffer_size], buffer_size - actual_buffer_size);
+		actual_buffer_size += file_handle.Read(context, &buffer[actual_buffer_size], buffer_size - actual_buffer_size);
 	}
 	last_buffer = file_handle.FinishedReading();
 }
@@ -63,7 +64,7 @@ void CSVBuffer::Reload(CSVFileHandle &file_handle) {
 	AllocateBuffer(actual_buffer_size);
 	// If we can seek, we seek and return the correct pointers
 	file_handle.Seek(global_csv_start);
-	file_handle.Read(handle.Ptr(), actual_buffer_size);
+	file_handle.Read(context, handle.Ptr(), actual_buffer_size);
 }
 
 shared_ptr<CSVBufferHandle> CSVBuffer::Pin(CSVFileHandle &file_handle, bool &has_seeked) {

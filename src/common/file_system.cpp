@@ -671,7 +671,8 @@ bool FileSystem::IsManuallySet() {
 	return false;
 }
 
-unique_ptr<FileHandle> FileSystem::OpenCompressedFile(unique_ptr<FileHandle> handle, bool write) {
+unique_ptr<FileHandle> FileSystem::OpenCompressedFile(ClientContext &context, unique_ptr<FileHandle> handle,
+                                                      bool write) {
 	throw NotImplementedException("%s: OpenCompressedFile is not implemented!", GetName());
 }
 
@@ -687,7 +688,8 @@ FileHandle::FileHandle(FileSystem &file_system, string path_p, FileOpenFlags fla
 FileHandle::~FileHandle() {
 }
 
-int64_t FileHandle::Read(void *buffer, idx_t nr_bytes) {
+int64_t FileHandle::Read(ClientContext &context, void *buffer, idx_t nr_bytes) {
+	// FIXME: Add profiling.
 	return file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes));
 }
 
@@ -732,11 +734,11 @@ bool FileHandle::IsPipe() {
 	return file_system.IsPipe(path);
 }
 
-string FileHandle::ReadLine() {
+string FileHandle::ReadLine(ClientContext &context) {
 	string result;
 	char buffer[1];
 	while (true) {
-		auto tuples_read = UnsafeNumericCast<idx_t>(Read(buffer, 1));
+		auto tuples_read = UnsafeNumericCast<idx_t>(Read(context, buffer, 1));
 		if (tuples_read == 0 || buffer[0] == '\n') {
 			return result;
 		}

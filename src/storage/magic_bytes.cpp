@@ -4,7 +4,7 @@
 
 namespace duckdb {
 
-DataFileType MagicBytes::CheckMagicBytes(FileSystem &fs, const string &path) {
+DataFileType MagicBytes::CheckMagicBytes(ClientContext &context, FileSystem &fs, const string &path) {
 	if (path.empty() || path == IN_MEMORY_PATH) {
 		return DataFileType::DUCKDB_FILE;
 	}
@@ -16,7 +16,7 @@ DataFileType MagicBytes::CheckMagicBytes(FileSystem &fs, const string &path) {
 	constexpr const idx_t MAGIC_BYTES_READ_SIZE = 16;
 	char buffer[MAGIC_BYTES_READ_SIZE] = {};
 
-	handle->Read(buffer, MAGIC_BYTES_READ_SIZE);
+	handle->Read(context, buffer, MAGIC_BYTES_READ_SIZE);
 	if (memcmp(buffer, "SQLite format 3\0", 16) == 0) {
 		return DataFileType::SQLITE_FILE;
 	}

@@ -78,7 +78,8 @@ CSVEncoder::CSVEncoder(ClientContext &context, const string &encoding_name_to_fi
 	encoding_function = function;
 }
 
-idx_t CSVEncoder::Encode(FileHandle &file_handle_input, char *output_buffer, const idx_t decoded_buffer_size) {
+idx_t CSVEncoder::Encode(ClientContext &context, FileHandle &file_handle_input, char *output_buffer,
+                         const idx_t decoded_buffer_size) {
 	idx_t output_buffer_pos = 0;
 	// Check if we have some left-overs. These can either be
 	// 1. missing decoded bytes
@@ -117,14 +118,14 @@ idx_t CSVEncoder::Encode(FileHandle &file_handle_input, char *output_buffer, con
 			encoded_buffer.Ptr()[pass_on_buffer.size()] = pass_on_byte;
 		}
 		auto actual_encoded_bytes = static_cast<idx_t>(
-		    file_handle_input.Read(encoded_buffer.Ptr() + pass_on_buffer.size() + has_pass_on_byte,
+		    file_handle_input.Read(context, encoded_buffer.Ptr() + pass_on_buffer.size() + has_pass_on_byte,
 		                           encoded_buffer.GetCapacity() - pass_on_buffer.size() - has_pass_on_byte));
 		encoded_buffer.SetSize(actual_encoded_bytes + pass_on_buffer.size() + has_pass_on_byte);
 		if (actual_encoded_bytes < encoded_buffer.GetCapacity() - pass_on_buffer.size()) {
 			encoded_buffer.last_buffer = true;
 			has_pass_on_byte = false;
 		} else {
-			auto bytes_read = static_cast<idx_t>(file_handle_input.Read(&pass_on_byte, 1));
+			auto bytes_read = static_cast<idx_t>(file_handle_input.Read(context, &pass_on_byte, 1));
 			if (bytes_read == 0) {
 				encoded_buffer.last_buffer = true;
 				has_pass_on_byte = false;

@@ -15,9 +15,9 @@ void DBPathAndType::ExtractExtensionPrefix(string &path, string &db_type) {
 	}
 }
 
-void DBPathAndType::CheckMagicBytes(FileSystem &fs, string &path, string &db_type) {
+void DBPathAndType::CheckMagicBytes(ClientContext &context, FileSystem &fs, string &path, string &db_type) {
 	// if there isn't - check the magic bytes of the file (if any)
-	auto file_type = MagicBytes::CheckMagicBytes(fs, path);
+	auto file_type = MagicBytes::CheckMagicBytes(context, fs, path);
 	db_type = string();
 	switch (file_type) {
 	case DataFileType::SQLITE_FILE:

@@ -67,7 +67,7 @@ public:
 	string PathSeparator(const string &path) override;
 
 protected:
-	unique_ptr<FileHandle> OpenFileExtended(const OpenFileInfo &file, FileOpenFlags flags,
+	unique_ptr<FileHandle> OpenFileExtended(ClientContext &context, const OpenFileInfo &file, FileOpenFlags flags,
 	                                        optional_ptr<FileOpener> opener) override;
 	bool SupportsOpenFileExtended() const override {
 		return true;

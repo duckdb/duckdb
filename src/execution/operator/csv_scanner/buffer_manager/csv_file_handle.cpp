@@ -75,14 +75,14 @@ bool CSVFileHandle::FinishedReading() const {
 	return finished;
 }
 
-idx_t CSVFileHandle::Read(void *buffer, idx_t nr_bytes) {
+idx_t CSVFileHandle::Read(ClientContext &context, void *buffer, idx_t nr_bytes) {
 	requested_bytes += nr_bytes;
 	// if this is a plain file source OR we can seek we are not caching anything
 	idx_t bytes_read = 0;
 	if (encoder.encoding_name == "utf-8") {
-		bytes_read = static_cast<idx_t>(file_handle->Read(buffer, nr_bytes));
+		bytes_read = static_cast<idx_t>(file_handle->Read(context, buffer, nr_bytes));
 	} else {
-		bytes_read = encoder.Encode(*file_handle, static_cast<char *>(buffer), nr_bytes);
+		bytes_read = encoder.Encode(context, *file_handle, static_cast<char *>(buffer), nr_bytes);
 	}
 	if (!finished) {
 		finished = bytes_read == 0;
@@ -91,12 +91,12 @@ idx_t CSVFileHandle::Read(void *buffer, idx_t nr_bytes) {
 	return UnsafeNumericCast<idx_t>(bytes_read);
 }
 
-string CSVFileHandle::ReadLine() {
+string CSVFileHandle::ReadLine(ClientContext &context) {
 	bool carriage_return = false;
 	string result;
 	char buffer[1];
 	while (true) {
-		idx_t bytes_read = Read(buffer, 1);
+		idx_t bytes_read = Read(context, buffer, 1);
 		if (bytes_read == 0) {
 			return result;
 		}

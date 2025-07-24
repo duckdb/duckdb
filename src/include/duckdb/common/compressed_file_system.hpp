@@ -32,7 +32,7 @@ struct StreamData {
 struct StreamWrapper {
 	DUCKDB_API virtual ~StreamWrapper();
 
-	DUCKDB_API virtual void Initialize(CompressedFile &file, bool write) = 0;
+	DUCKDB_API virtual void Initialize(ClientContext &context, CompressedFile &file, bool write) = 0;
 	DUCKDB_API virtual bool Read(StreamData &stream_data) = 0;
 	DUCKDB_API virtual void Write(CompressedFile &file, StreamData &stream_data, data_ptr_t buffer,
 	                              int64_t nr_bytes) = 0;
@@ -41,10 +41,10 @@ struct StreamWrapper {
 
 class CompressedFileSystem : public FileSystem {
 public:
-	DUCKDB_API int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
+	DUCKDB_API int64_t Read(ClientContext &context, FileHandle &handle, void *buffer, int64_t nr_bytes) override;
 	DUCKDB_API int64_t Write(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
 
-	DUCKDB_API void Reset(FileHandle &handle) override;
+	DUCKDB_API void Reset(ClientContext &context, FileHandle &handle) override;
 
 	DUCKDB_API int64_t GetFileSize(FileHandle &handle) override;
 
@@ -70,8 +70,8 @@ public:
 	StreamData stream_data;
 
 public:
-	DUCKDB_API void Initialize(bool write);
-	DUCKDB_API int64_t ReadData(void *buffer, int64_t nr_bytes);
+	DUCKDB_API void Initialize(ClientContext &context, bool write);
+	DUCKDB_API int64_t ReadData(ClientContext &context, void *buffer, int64_t nr_bytes);
 	DUCKDB_API int64_t WriteData(data_ptr_t buffer, int64_t nr_bytes);
 	DUCKDB_API void Close() override;
 
