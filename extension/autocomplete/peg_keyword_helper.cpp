@@ -1,17 +1,17 @@
-#include "keyword_helper.hpp"
+#include "peg_keyword_helper.hpp"
 
 namespace duckdb {
-KeywordHelper &KeywordHelper::Instance() {
-	static KeywordHelper instance;
-	std::call_once(instance.init_flag, &KeywordHelper::InitializeKeywordMaps, &instance);
+PEGKeywordHelper &PEGKeywordHelper::Instance() {
+	static PEGKeywordHelper instance;
+	std::call_once(instance.init_flag, &PEGKeywordHelper::InitializeKeywordMaps, &instance);
 	return instance;
 }
 
-KeywordHelper::KeywordHelper() {
+PEGKeywordHelper::PEGKeywordHelper() {
 	InitializeKeywordMaps();
 }
 
-bool KeywordHelper::KeywordCategoryType(const std::string &text, const KeywordCategory type) const {
+bool PEGKeywordHelper::KeywordCategoryType(const std::string &text, const KeywordCategory type) const {
 	switch (type) {
 	case KeywordCategory::KEYWORD_RESERVED: {
 		auto it = reserved_keyword_map.find(text);
