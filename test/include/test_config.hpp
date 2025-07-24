@@ -52,6 +52,7 @@ public:
 	vector<string> ExtensionToBeLoadedOnLoad();
 	vector<string> ErrorMessagesToBeSkipped();
 	string GetStorageVersion();
+	string GetOverrideTestFolder();
 
 	static bool TestForceStorage();
 	static bool TestForceReload();

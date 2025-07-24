@@ -36,6 +36,7 @@ static const TestConfigOption test_config_options[] = {
     {"on_init", "SQL statements to execute on init", LogicalType::VARCHAR, nullptr},
     {"on_load", "SQL statements to execute on explicit load", LogicalType::VARCHAR, nullptr},
     {"on_new_connection", "SQL statements to execute on connection", LogicalType::VARCHAR, nullptr},
+    {"override_test_folder", "Relative path to where test are to be searched", LogicalType::VARCHAR, nullptr},
     {"skip_tests", "Tests to be skipped", LogicalType::LIST(LogicalType::VARCHAR), nullptr},
     {"skip_compiled", "Skip compiled tests", LogicalType::BOOLEAN, nullptr},
     {"skip_error_messages", "Skip compiled tests", LogicalType::LIST(LogicalType::VARCHAR), nullptr},
@@ -326,6 +327,10 @@ bool TestConfiguration::GetSkipCompiledTests() {
 
 string TestConfiguration::GetStorageVersion() {
 	return GetOptionOrDefault("storage_version", string());
+}
+
+string TestConfiguration::GetOverrideTestFolder() {
+	return GetOptionOrDefault("override_test_folder", string());
 }
 
 DebugVectorVerification TestConfiguration::GetVectorVerification() {
