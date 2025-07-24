@@ -306,8 +306,6 @@ void MetadataManager::ClearModifiedBlocks(const vector<MetaBlockPointer> &pointe
 			throw InternalException("ClearModifiedBlocks - Block id %llu not found in modified_blocks", block_id);
 		}
 		auto &modified_list = entry->second;
-		// verify the block has been modified
-		D_ASSERT(modified_list && (1ULL << block_index));
 		// unset the bit
 		modified_list &= ~(1ULL << block_index);
 	}
