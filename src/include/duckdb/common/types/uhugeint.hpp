@@ -78,7 +78,7 @@ public:
 	inline static uhugeint_t Divide(uhugeint_t lhs, uhugeint_t rhs) {
 		// division between two same-size unsigned integers can only go wrong with division by zero
 		if (rhs == 0) {
-			throw OutOfRangeException("Division of UHUGEINT by zero!");
+			throw OutOfRangeException("Division of UHUGEINT by zero: %s / %s", lhs.ToString(), rhs.ToString());
 		}
 		return Divide<false>(lhs, rhs);
 	}
@@ -86,7 +86,7 @@ public:
 	template <bool CHECK_OVERFLOW = true>
 	inline static uhugeint_t Modulo(uhugeint_t lhs, uhugeint_t rhs) {
 		if (rhs == 0) {
-			throw OutOfRangeException("Modulo of UHUGEINT by zero!");
+			throw OutOfRangeException("Modulo of UHUGEINT by zero: %s %% %s", lhs.ToString(), rhs.ToString());
 		}
 		return Modulo<false>(lhs, rhs);
 	}
