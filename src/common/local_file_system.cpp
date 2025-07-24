@@ -1344,8 +1344,7 @@ void LocalFileSystem::RecursiveGlobDirectories(const vector<string> &splits, idx
 				    result.push_back(std::move(info));
 			    }
 		    }
-	    },
-	    nullptr);
+	    });
 }
 
 void LocalFileSystem::GlobFilesInternal(const vector<string> &splits, idx_t i, const string &path, const string &glob,
@@ -1375,8 +1374,7 @@ void LocalFileSystem::GlobFilesInternal(const vector<string> &splits, idx_t i, c
 				    result.push_back(std::move(info));
 			    }
 		    }
-	    },
-	    nullptr);
+	    });
 }
 
 vector<OpenFileInfo> LocalFileSystem::FetchFileWithoutGlob(const string &path, FileOpener *opener, bool absolute_path) {
