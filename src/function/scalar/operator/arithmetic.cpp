@@ -315,11 +315,13 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &type) {
 void VarcharAdd(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &allocator = state.GetAllocator();
 	ArenaAllocator arena(allocator);
-	BinaryExecutor::Execute<string_t, string_t, string_t>(
-	    args.data[0], args.data[1], result, args.size(), [&](string_t a, string_t b) {
-			varint_t varint_a (arena ,a.GetData(), a.GetSize());
-	    	return varint_a += b;
-	    });
+	BinaryExecutor::Execute<string_t, string_t, string_t>(args.data[0], args.data[1], result, args.size(),
+	                                                      [&](string_t a, string_t b) {
+		                                                      varint_t varint_a(arena, a.GetData(), a.GetSize());
+		                                                      varint_a += b;
+		                                                      varint_a.Trim();
+		                                                      return varint_a;
+	                                                      });
 }
 
 ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const LogicalType &right_type) {
@@ -347,14 +349,13 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const Logi
 	}
 
 	switch (left_type.id()) {
-		case LogicalTypeId::VARINT:
-			if (right_type.id() == LogicalTypeId::VARINT) {
-				ScalarFunction function("+", {left_type, right_type}, LogicalType::VARINT,
-			                        VarcharAdd);
+	case LogicalTypeId::VARINT:
+		if (right_type.id() == LogicalTypeId::VARINT) {
+			ScalarFunction function("+", {left_type, right_type}, LogicalType::VARINT, VarcharAdd);
 			BaseScalarFunction::SetReturnsError(function);
-				return function;
-			}
-			break;
+			return function;
+		}
+		break;
 
 	case LogicalTypeId::DATE:
 		if (right_type.id() == LogicalTypeId::INTEGER) {
@@ -499,7 +500,6 @@ ScalarFunctionSet OperatorAddFun::GetFunctions() {
 
 	// we can add varints together
 	add.AddFunction(AddFunction::GetFunction(LogicalType::VARINT, LogicalType::VARINT));
-
 
 	return add;
 }

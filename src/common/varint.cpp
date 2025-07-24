@@ -22,31 +22,69 @@ varint_t &varint_t::operator+=(const varint_t &rhs) {
 	return *this;
 }
 
+void PrintBits(unsigned char value) {
+	for (int i = 7; i >= 0; --i) {
+		std::cout << ((value >> i) & 1);
+	}
+	std::cout << std::endl;
+}
+
 void AddBinaryBuffersInPlace(char *target_buffer, idx_t target_size, const char *source_buffer, idx_t source_size) {
 	D_ASSERT(target_size >= source_size && "Buffer a must be at least as large as b");
+
+	bool is_target_negative = (target_buffer[0] & 0x80) == 0;
+	bool is_source_negative = (source_buffer[0] & 0x80) == 0;
+
 	uint16_t carry = 0;
 	idx_t i_a = target_size - 1;
 	idx_t i_b = source_size - 1;
 
 	while (i_b >= Varint::VARINT_HEADER_SIZE) {
-		uint8_t target_val = static_cast<uint8_t>(target_buffer[i_a]);
-		uint8_t source_val = static_cast<uint8_t>(source_buffer[i_b]);
-		uint16_t sum = static_cast<uint16_t>(target_val) + static_cast<uint16_t>(source_val) + carry;
-		target_buffer[i_a] = static_cast<char>(sum & 0xFF);
+		uint16_t target_val = static_cast<uint8_t>(target_buffer[i_a]);
+		uint16_t source_val = static_cast<uint8_t>(source_buffer[i_b]);
+
+		// If both our numbers are negative we have to do some fixaroo since we don't follow
+		// 2's complements
+		if (is_target_negative && is_source_negative) {
+			target_val += 1;
+			source_val += 1;
+		}
+
+		uint16_t sum = target_val + source_val + carry;
+
+		char res = static_cast<char>(sum & 0xFF);
+
+		// Revert our little shift
+		if (is_target_negative && is_source_negative) {
+			res = static_cast<char>(res - 1);
+		}
+
+		target_buffer[i_a] = res;
+
 		carry = (sum >> 8) & 0xFF;
 		--i_a;
 		--i_b;
 	}
 
 	while (i_a >= Varint::VARINT_HEADER_SIZE && carry != 0) {
-		uint8_t target_val = static_cast<uint8_t>(target_buffer[i_a]);
-		uint16_t sum = static_cast<uint16_t>(target_val) + carry;
-		target_buffer[i_a] = static_cast<char>(sum & 0xFF);
+		uint16_t target_val = static_cast<uint8_t>(target_buffer[i_a]);
+
+		if (is_target_negative) {
+			target_val += 1;
+		}
+
+		uint16_t sum = target_val + carry;
+		char res = static_cast<char>(sum & 0xFF);
+
+		if (is_target_negative) {
+			res = static_cast<char>(res - 1);
+		}
+
+		target_buffer[i_a] = res;
+
 		carry = (sum >> 8) & 0xFF;
 		--i_a;
 	}
-
-	D_ASSERT(carry == 0 && "Addition overflowed the buffer size");
 }
 
 void varint_t::Trim() {
@@ -68,7 +106,7 @@ void varint_t::Trim() {
 		auto new_target_ptr = reinterpret_cast<char *>(allocator->Allocate(new_size));
 		Varint::SetHeader(new_target_ptr, new_size - Varint::VARINT_HEADER_SIZE, is_negative);
 		for (idx_t i = Varint::VARINT_HEADER_SIZE; i < new_size; ++i) {
-			new_target_ptr[i] = cur_ptr[i+bytes_to_trim];
+			new_target_ptr[i] = cur_ptr[i + bytes_to_trim];
 		}
 		varint_t new_varint(*allocator, new_target_ptr, new_size);
 		*this = new_varint;
@@ -118,17 +156,22 @@ varint_t &varint_t::operator+=(const string_t &rhs) {
 	const bool same_sign = (target_ptr[0] & 0x80) == (source_ptr[0] & 0x80);
 	if (target_size < source_size) {
 		// We must reallocate
-		Reallocate(source_size+1);
+		Reallocate(source_size + 1);
 		// Get new pointer/size
 		target_ptr = GetDataWriteable();
 		target_size = GetSize();
-	}
-	else if (same_sign && target_size == source_size) {
+	} else if (same_sign && target_size == source_size) {
 		// If they both have the same sign and same size there might be a chance..
 		// But only if the MSD of the MSB from the data is set
-		if ((target_ptr[3] & 0x80) != 0 || (source_ptr[3] & 0x80) != 0) {
+		bool is_msd_msb_set;
+		if ((target_ptr[0] & 0x80) == 0) {
+			is_msd_msb_set = (target_ptr[3] & 0x80) == 0 || (source_ptr[3] & 0x80) == 0;
+		} else {
+			is_msd_msb_set = (target_ptr[3] & 0x80) != 0 || (source_ptr[3] & 0x80) != 0;
+		}
+		if (is_msd_msb_set) {
 			// We must reallocate
-			Reallocate(target_size+1);
+			Reallocate(target_size + 1);
 			// Get new pointer/size
 			target_ptr = GetDataWriteable();
 			target_size = GetSize();
