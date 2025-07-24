@@ -33,7 +33,7 @@ static bool endsWith(const string &mainStr, const string &toMatch) {
 	        mainStr.compare(mainStr.size() - toMatch.size(), toMatch.size(), toMatch) == 0);
 }
 
-template <bool VERIFICATION, bool AUTO_SWITCH_TEST_DIR = false>
+template <bool VERIFICATION, bool AUTO_SWITCH_TEST_DIR = false, bool MOVE_TO_INNER = false>
 static void testRunner() {
 	// this is an ugly hack that uses the test case name to pass the script file
 	// name if someone has a better idea...
@@ -66,6 +66,7 @@ static void testRunner() {
 	// We assume the test working dir for extensions to be one dir above the test/sql. Note that this is very hacky.
 	// however for now it suffices: we use it to run tests from out-of-tree extensions that are based on the extension
 	// template which adheres to this convention.
+	string test_to_be_executed = name;
 	if (AUTO_SWITCH_TEST_DIR) {
 		prev_directory = TestGetCurrentDirectory();
 
@@ -74,13 +75,16 @@ static void testRunner() {
 			throw InvalidInputException("Failed to auto detect working dir for test '" + name +
 			                            "' because a non-standard path was used!");
 		}
-		auto test_working_dir = name.substr(0, found);
+		auto test_working_dir = test_to_be_executed.substr(0, found);
+		if (MOVE_TO_INNER) {
+			test_to_be_executed = test_to_be_executed.substr(test_working_dir.size());
+		}
 
 		// Parse the test dir automatically
 		TestChangeDirectory(test_working_dir);
 	}
 	try {
-		runner.ExecuteFile(name);
+		runner.ExecuteFile(test_to_be_executed);
 	} catch (...) {
 		// This is to allow cleanup to be executed, failure is already logged
 	}
@@ -222,13 +226,28 @@ void RegisterSqllogictests() {
 			}
 		}
 	});
-	listFiles(*fs, "test", [&](const string &path) {
+	auto &test_config = TestConfiguration::Get();
+	string override_base_folder = test_config.GetOverrideTestFolder();
+
+	string base_folder = "test";
+	bool is_standard_folder = true;
+	if (!override_base_folder.empty()) {
+		is_standard_folder = false;
+		base_folder = override_base_folder;
+	}
+
+	listFiles(*fs, base_folder, [&](const string &path) {
 		if (endsWith(path, ".test") || endsWith(path, ".test_slow") || endsWith(path, ".test_coverage")) {
 			// parse the name / group from the test
-			REGISTER_TEST_CASE(testRunner<false>, StringUtil::Replace(path, "\\", "/"), ParseGroupFromPath(path));
+			if (is_standard_folder) {
+				auto fun = testRunner<false, false>;
+				REGISTER_TEST_CASE(fun, StringUtil::Replace(path, "\\", "/"), ParseGroupFromPath(path));
+			} else {
+				auto fun = testRunner<false, true, true>;
+				REGISTER_TEST_CASE(fun, StringUtil::Replace(path, "\\", "/"), ParseGroupFromPath(path));
+			}
 		}
 	});
-
 #if defined(GENERATED_EXTENSION_HEADERS) && GENERATED_EXTENSION_HEADERS && !defined(DUCKDB_AMALGAMATION)
 	for (const auto &extension_test_path : LoadedExtensionTestPaths()) {
 		listFiles(*fs, extension_test_path, [&](const string &path) {
