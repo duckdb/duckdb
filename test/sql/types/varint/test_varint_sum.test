@@ -8,10 +8,10 @@ CREATE TABLE numbers ( x varint );
 statement ok
 INSERT INTO numbers (x) VALUES (9223372036854775808::VARINT), (1::VARINT);
 
-# query I
-# select (-1)::VARINT +  100::VARINT
-# ----
-# 9223372036854775807
+query I
+select (-1)::VARINT +  9223372036854775807::VARINT
+----
+9223372036854775806
 
 query I
 select 9223372036854775808::VARINT + 1::VARINT

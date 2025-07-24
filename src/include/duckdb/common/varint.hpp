@@ -50,6 +50,7 @@ struct varint_t : public string_t { // NOLINT: use numeric casing
 	void Reallocate(idx_t min_size);
 	//! In case we have unnecessary extra 0's or 1's in our varint we trim them
 	void Trim();
+	idx_t GetStartDataPos() const;
 
 	template <class T>
 	static varint_t FromInteger(ArenaAllocator &allocator, T int_value) {

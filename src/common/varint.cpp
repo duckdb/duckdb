@@ -29,14 +29,37 @@ void PrintBits(unsigned char value) {
 	std::cout << std::endl;
 }
 
-void AddBinaryBuffersInPlace(char *target_buffer, idx_t target_size, const char *source_buffer, idx_t source_size) {
+void AddBinaryBuffersInPlace(char *target_buffer, idx_t target_size, const char *source_buffer, idx_t source_size,
+                             idx_t target_start_pos) {
 
 	const idx_t header_size = Varint::VARINT_HEADER_SIZE;
 
 	// Parse sign from header (sign bit: 0 = negative, 1 = positive as per your notes)
 	bool target_negative = (target_buffer[0] & 0x80) == 0;
 	bool source_negative = (source_buffer[0] & 0x80) == 0;
-
+	bool result_positive = !target_negative;
+	if (target_negative != source_negative) {
+		// check sizes
+		if (target_size - target_start_pos > source_size - Varint::VARINT_HEADER_SIZE) {
+			result_positive = !target_negative;
+		} else if (target_size - target_start_pos < source_size - Varint::VARINT_HEADER_SIZE) {
+			result_positive = target_negative;
+		} else {
+			// they have the same size then
+			idx_t i = target_start_pos;
+			for (; i < target_size; ++i) {
+				if (target_buffer[i] > ~source_buffer[i]) {
+					result_positive = !target_negative;
+				} else if (target_buffer[i] < ~source_buffer[i]) {
+					result_positive = target_negative;
+				}
+			}
+			if (i == target_size) {
+				// this is a zero
+				result_positive = true;
+			}
+		}
+	}
 	// Prepare working pointers (indexes)
 	idx_t i_target = target_size - 1; // last byte index in target
 	idx_t i_source = source_size - 1; // last byte index in source
@@ -66,21 +89,33 @@ void AddBinaryBuffersInPlace(char *target_buffer, idx_t target_size, const char 
 		target_buffer[i_target] = static_cast<char>(result_byte);
 		i_target--;
 	}
+	if (result_positive != !target_negative) {
+		// We should set the header again
+		Varint::SetHeader(target_buffer, target_size - Varint::VARINT_HEADER_SIZE, !result_positive);
+	}
 }
 
-void varint_t::Trim() {
+idx_t varint_t::GetStartDataPos() const {
 	auto cur_ptr = GetDataWriteable();
 	auto cur_size = GetSize();
 	bool is_negative = (cur_ptr[0] & 0x80) == 0;
 	char value_to_trim = is_negative ? static_cast<char>(0xFF) : 0;
-	idx_t bytes_to_trim = 0;
+	idx_t data_start = 0;
 	for (idx_t i = Varint::VARINT_HEADER_SIZE; i < cur_size; ++i) {
 		if (cur_ptr[i] == value_to_trim) {
-			bytes_to_trim++;
+			data_start++;
 		} else {
 			break;
 		}
 	}
+	return data_start;
+}
+void varint_t::Trim() {
+	auto bytes_to_trim = GetStartDataPos();
+	auto cur_ptr = GetDataWriteable();
+	auto cur_size = GetSize();
+	bool is_negative = (cur_ptr[0] & 0x80) == 0;
+
 	if (bytes_to_trim > 0) {
 		// This bad-boy is wearing shoe lifts, time to prune it.
 		auto new_size = cur_size - bytes_to_trim;
@@ -158,7 +193,8 @@ varint_t &varint_t::operator+=(const string_t &rhs) {
 		}
 	}
 	// We for sure are not going to realloc, we can do it in-place
-	AddBinaryBuffersInPlace(target_ptr, target_size, source_ptr, source_size);
+	AddBinaryBuffersInPlace(target_ptr, target_size, source_ptr, source_size,
+	                        GetStartDataPos() + Varint::VARINT_HEADER_SIZE);
 	Finalize();
 	return *this;
 }
