@@ -315,13 +315,18 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &type) {
 void VarcharAdd(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &allocator = state.GetAllocator();
 	ArenaAllocator arena(allocator);
-	BinaryExecutor::Execute<string_t, string_t, string_t>(args.data[0], args.data[1], result, args.size(),
-	                                                      [&](string_t a, string_t b) {
-		                                                      varint_t varint_a(arena, a.GetData(), a.GetSize());
-		                                                      varint_a += b;
-		                                                      varint_a.Trim();
-		                                                      return varint_a;
-	                                                      });
+	BinaryExecutor::Execute<string_t, string_t, string_t>(
+	    args.data[0], args.data[1], result, args.size(), [&](string_t a, string_t b) {
+		    varint_t varint_a(arena, a.GetData(), a.GetSize());
+		    varint_a += b;
+		    varint_a.Trim();
+		    auto target = StringVector::EmptyString(result, varint_a.GetSize());
+		    auto target_data = target.GetDataWriteable();
+
+		    memcpy(target_data, varint_a.GetData(), varint_a.GetSize());
+		    target.Finalize();
+		    return target;
+	    });
 }
 
 ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const LogicalType &right_type) {

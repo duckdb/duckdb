@@ -8,6 +8,11 @@ CREATE TABLE numbers ( x varint );
 statement ok
 INSERT INTO numbers (x) VALUES (9223372036854775808::VARINT), (1::VARINT);
 
+# query I
+# select (-1)::VARINT +  100::VARINT
+# ----
+# 9223372036854775807
+
 query I
 select 9223372036854775808::VARINT + 1::VARINT
 ----
@@ -18,10 +23,23 @@ select (-10)::VARINT + (-1)::VARINT
 ----
 -11
 
-# query I
-# select 9223372036854775808::VARINT + (-1)::VARINT
-# ----
-# 9223372036854775807
+query I
+select (-999999999)::VARINT + (-1)::VARINT
+----
+-1000000000
+
+
+query I
+select 9223372036854775808::VARINT + (-1)::VARINT
+----
+9223372036854775807
+
+query I
+select (-1000)::VARINT +  (-1000)::VARINT
+----
+-2000
+
+
 
 query I
 SELECT sum(x)::varint FROM numbers;

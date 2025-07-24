@@ -30,60 +30,41 @@ void PrintBits(unsigned char value) {
 }
 
 void AddBinaryBuffersInPlace(char *target_buffer, idx_t target_size, const char *source_buffer, idx_t source_size) {
-	D_ASSERT(target_size >= source_size && "Buffer a must be at least as large as b");
 
-	bool is_target_negative = (target_buffer[0] & 0x80) == 0;
-	bool is_source_negative = (source_buffer[0] & 0x80) == 0;
+	const idx_t header_size = Varint::VARINT_HEADER_SIZE;
 
+	// Parse sign from header (sign bit: 0 = negative, 1 = positive as per your notes)
+	bool target_negative = (target_buffer[0] & 0x80) == 0;
+	bool source_negative = (source_buffer[0] & 0x80) == 0;
+
+	// Prepare working pointers (indexes)
+	idx_t i_target = target_size - 1; // last byte index in target
+	idx_t i_source = source_size - 1; // last byte index in source
+
+	// Carry for addition
 	uint16_t carry = 0;
-	idx_t i_a = target_size - 1;
-	idx_t i_b = source_size - 1;
-
-	while (i_b >= Varint::VARINT_HEADER_SIZE) {
-		uint16_t target_val = static_cast<uint8_t>(target_buffer[i_a]);
-		uint16_t source_val = static_cast<uint8_t>(source_buffer[i_b]);
-
-		// If both our numbers are negative we have to do some fixaroo since we don't follow
-		// 2's complements
-		if (is_target_negative && is_source_negative) {
-			target_val += 1;
-			source_val += 1;
+	// Add bytes from right to left (LSB to MSB)
+	while (i_target >= header_size) {
+		uint8_t target_byte = static_cast<uint8_t>(target_buffer[i_target]);
+		uint8_t source_byte;
+		if (i_source >= header_size) {
+			source_byte = static_cast<uint8_t>(source_buffer[i_source]);
+			i_source--;
+		} else {
+			// Sign-extend source if source shorter than target
+			source_byte = source_negative ? 0xFF : 0x00;
 		}
 
-		uint16_t sum = target_val + source_val + carry;
-
-		char res = static_cast<char>(sum & 0xFF);
-
-		// Revert our little shift
-		if (is_target_negative && is_source_negative) {
-			res = static_cast<char>(res - 1);
+		// Add bytes and carry
+		uint16_t sum = static_cast<uint16_t>(target_byte) + static_cast<uint16_t>(source_byte) + carry;
+		uint8_t result_byte = static_cast<uint8_t>(sum & 0xFF);
+		if ((target_negative || source_negative) && i_target == target_size - 1) {
+			result_byte += 1;
 		}
-
-		target_buffer[i_a] = res;
-
 		carry = (sum >> 8) & 0xFF;
-		--i_a;
-		--i_b;
-	}
 
-	while (i_a >= Varint::VARINT_HEADER_SIZE && carry != 0) {
-		uint16_t target_val = static_cast<uint8_t>(target_buffer[i_a]);
-
-		if (is_target_negative) {
-			target_val += 1;
-		}
-
-		uint16_t sum = target_val + carry;
-		char res = static_cast<char>(sum & 0xFF);
-
-		if (is_target_negative) {
-			res = static_cast<char>(res - 1);
-		}
-
-		target_buffer[i_a] = res;
-
-		carry = (sum >> 8) & 0xFF;
-		--i_a;
+		target_buffer[i_target] = static_cast<char>(result_byte);
+		i_target--;
 	}
 }
 
@@ -118,7 +99,7 @@ void varint_t::Reallocate(idx_t min_size) {
 	// Notice that this might temporarily create an INVALID varint
 	// Be sure to call TRIM, to make it valid again.
 	auto current_size = GetSize();
-	auto new_size = current_size * 2;
+	auto new_size = min_size * 2;
 	auto new_target_ptr = reinterpret_cast<char *>(allocator->Allocate(new_size));
 	auto old_data = GetData();
 	bool is_negative = (old_data[0] & 0x80) == 0;
@@ -150,7 +131,6 @@ varint_t &varint_t::operator+=(const string_t &rhs) {
 	// Let's first figure out if we need realloc, or if we can do the sum in-place
 	auto target_ptr = GetDataWriteable();
 	auto source_ptr = rhs.GetDataWriteable();
-
 	auto target_size = GetSize();
 	auto source_size = rhs.GetSize();
 	const bool same_sign = (target_ptr[0] & 0x80) == (source_ptr[0] & 0x80);
@@ -178,12 +158,8 @@ varint_t &varint_t::operator+=(const string_t &rhs) {
 		}
 	}
 	// We for sure are not going to realloc, we can do it in-place
-	if (same_sign) {
-		AddBinaryBuffersInPlace(target_ptr, target_size, source_ptr, source_size);
-		Finalize();
-		return *this;
-	} else {
-		throw NotImplementedException("bla");
-	}
+	AddBinaryBuffersInPlace(target_ptr, target_size, source_ptr, source_size);
+	Finalize();
+	return *this;
 }
 } // namespace duckdb
