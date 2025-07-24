@@ -1,4 +1,5 @@
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/varint.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/interpolate.hpp"
 #include "duckdb/common/operator/multiply.hpp"
@@ -311,6 +312,16 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &type) {
 	}
 }
 
+void VarcharAdd(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &allocator = state.GetAllocator();
+	ArenaAllocator arena(allocator);
+	BinaryExecutor::Execute<string_t, string_t, string_t>(
+	    args.data[0], args.data[1], result, args.size(), [&](string_t a, string_t b) {
+			varint_t varint_a (arena ,a.GetData(), a.GetSize());
+	    	return varint_a += b;
+	    });
+}
+
 ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const LogicalType &right_type) {
 	if (left_type.IsNumeric() && left_type.id() == right_type.id()) {
 		if (left_type.id() == LogicalTypeId::DECIMAL) {
@@ -336,6 +347,15 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const Logi
 	}
 
 	switch (left_type.id()) {
+		case LogicalTypeId::VARINT:
+			if (right_type.id() == LogicalTypeId::VARINT) {
+				ScalarFunction function("+", {left_type, right_type}, LogicalType::VARINT,
+			                        VarcharAdd);
+			BaseScalarFunction::SetReturnsError(function);
+				return function;
+			}
+			break;
+
 	case LogicalTypeId::DATE:
 		if (right_type.id() == LogicalTypeId::INTEGER) {
 			ScalarFunction function("+", {left_type, right_type}, LogicalType::DATE,
@@ -476,6 +496,10 @@ ScalarFunctionSet OperatorAddFun::GetFunctions() {
 
 	// we can add lists together
 	add.AddFunction(ListConcatFun::GetFunction());
+
+	// we can add varints together
+	add.AddFunction(AddFunction::GetFunction(LogicalType::VARINT, LogicalType::VARINT));
+
 
 	return add;
 }
