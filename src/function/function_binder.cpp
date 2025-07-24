@@ -459,8 +459,8 @@ static void InferTemplateType(ClientContext &context, const LogicalType &source,
 		return;
 	}
 
-	switch (source.id()) {
-	case LogicalTypeId::TEMPLATE: {
+	// If the source is a template type, we bind it, or try to unify its existing binding with the target type.
+	if (source.id() == LogicalTypeId::TEMPLATE) {
 		const auto &index = TemplateType::GetIndex(source);
 		auto it = bindings.find(index);
 		if (it == bindings.end()) {
@@ -473,25 +473,32 @@ static void InferTemplateType(ClientContext &context, const LogicalType &source,
 			return;
 		}
 
-		// Try to unify the types
+		// Try to unify (promote) the type candidates
 		LogicalType result;
 		if (LogicalType::TryGetMaxLogicalType(context, it->second, target, result)) {
 			// Type unification was successful, update the binding
-
-			// TODO: Ensure we can actually cast to the unified type
 			it->second = std::move(result);
 			return;
 		}
 
 		// If we reach here, it means the types are incompatible
 		throw BinderException(current_expr.GetQueryLocation(), "Cannot infer template type '%s' given '%s' (previously deduced as: '%s'), an explicit cast is required",
-		                      TemplateType::GetName(source), LogicalType::NormalizeType(it->second).ToString(), LogicalType::NormalizeType(target).ToString());
+							  TemplateType::GetName(source), LogicalType::NormalizeType(it->second).ToString(), LogicalType::NormalizeType(target).ToString());
+	}
 
-	} break;
+	// Otherwise, recurse downwards into nested types, and try to infer nested type members
+	// This only works if the source and target types are completely defined (excluding templates),
+	// i.e. they have aux info.
+	if (!(source.IsNested() && target.IsNested() && source.AuxInfo() && target.AuxInfo())) {
+		return;
+	}
+
+	switch (source.id()) {
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::ARRAY: {
 		if ((source.id() == LogicalTypeId::ARRAY || source.id() == LogicalTypeId::LIST) &&
 		    (target.id() == LogicalTypeId::LIST || target.id() == LogicalTypeId::ARRAY)) {
+
 			const auto &source_child =
 			    source.id() == LogicalTypeId::LIST ? ListType::GetChildType(source) : ArrayType::GetChildType(source);
 			const auto &target_child =
