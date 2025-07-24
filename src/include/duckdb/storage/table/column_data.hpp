@@ -102,6 +102,11 @@ public:
 	//! Whether or not the column has any updates
 	bool HasUpdates() const;
 	bool HasChanges(idx_t start_row, idx_t end_row) const;
+	//! Whether or not the column has changes at this level
+	bool HasChanges() const;
+
+	//! Whether or not the column has ANY changes, including in child columns
+	virtual bool HasAnyChanges() const;
 	//! Whether or not we can scan an entire vector
 	virtual ScanVectorType GetVectorScanType(ColumnScanState &state, idx_t scan_count, Vector &result);
 

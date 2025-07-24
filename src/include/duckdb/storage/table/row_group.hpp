@@ -92,6 +92,12 @@ public:
 	RowGroupCollection &GetCollection() {
 		return collection.get();
 	}
+	//! Returns the list of meta block pointers used by the columns
+	vector<MetaBlockPointer> GetColumnPointers();
+	//! Returns the list of meta block pointers used by the deletes
+	const vector<MetaBlockPointer> &GetDeletesPointers() const {
+		return deletes_pointers;
+	}
 	BlockManager &GetBlockManager();
 	DataTableInfo &GetTableInfo();
 
@@ -106,6 +112,7 @@ public:
 	void CommitDropColumn(const idx_t column_index);
 
 	void InitializeEmpty(const vector<LogicalType> &types);
+	bool HasChanges() const;
 
 	//! Initialize a scan over this row_group
 	bool InitializeScan(CollectionScanState &state);

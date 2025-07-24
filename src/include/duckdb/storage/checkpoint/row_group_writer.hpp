@@ -23,13 +23,13 @@ class SegmentStatistics;
 // Writes data for an entire row group.
 class RowGroupWriter {
 public:
-	RowGroupWriter(TableCatalogEntry &table, PartialBlockManager &partial_block_manager)
-	    : table(table), partial_block_manager(partial_block_manager) {
-	}
+	RowGroupWriter(TableCatalogEntry &table, PartialBlockManager &partial_block_manager);
 	virtual ~RowGroupWriter() {
 	}
 
-	CompressionType GetColumnCompressionType(idx_t i);
+	const vector<CompressionType> &GetCompressionTypes() const {
+		return compression_types;
+	}
 
 	virtual CheckpointType GetCheckpointType() const = 0;
 	virtual WriteStream &GetPayloadWriter() = 0;
@@ -43,6 +43,7 @@ public:
 protected:
 	TableCatalogEntry &table;
 	PartialBlockManager &partial_block_manager;
+	vector<CompressionType> compression_types;
 };
 
 // Writes data for an entire row group.

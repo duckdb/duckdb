@@ -1006,10 +1006,36 @@ bool RowGroup::HasUnloadedDeletes() const {
 	return !deletes_is_loaded;
 }
 
-RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
-	vector<CompressionType> compression_types;
-	compression_types.reserve(columns.size());
+vector<MetaBlockPointer> RowGroup::GetColumnPointers() {
+	vector<MetaBlockPointer> result;
+	if (column_pointers.empty()) {
+		// no pointers
+		return result;
+	}
+	// column_pointers stores the beginning of each column
+	// if columns are big - they may span multiple metadata blocks
+	// we need to figure out all blocks that this row group points to
+	// we need to follow the linked list in the metadata blocks to allow for this
+	auto &metadata_manager = GetCollection().GetMetadataManager();
+	idx_t last_idx = column_pointers.size() - 1;
+	if (column_pointers.size() > 1) {
+		// for all but the last column pointer - we can just follow the linked list until we reach the last column
+		MetadataReader reader(metadata_manager, column_pointers[0]);
+		auto last_pointer = column_pointers[last_idx];
+		result = reader.GetRemainingBlocks(last_pointer);
+	}
+	// for the last column we need to deserialize the column - because we don't know where it stops
+	auto &types = GetCollection().GetTypes();
+	MetadataReader reader(metadata_manager, column_pointers[last_idx], &result);
+	ColumnData::Deserialize(GetBlockManager(), GetTableInfo(), last_idx, start, reader, types[last_idx]);
+	return result;
+}
 
+RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
+	auto &compression_types = writer.GetCompressionTypes();
+	if (columns.size() != compression_types.size()) {
+		throw InternalException("RowGroup::WriteToDisk - mismatch in column count vs compression types");
+	}
 	for (idx_t column_idx = 0; column_idx < GetColumnCount(); column_idx++) {
 		auto &column = GetColumn(column_idx);
 		if (column.count != this->count) {
@@ -1017,8 +1043,6 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 			                        "group has %llu rows, column has %llu)",
 			                        column_idx, this->count.load(), column.count.load());
 		}
-		auto compression_type = writer.GetColumnCompressionType(column_idx);
-		compression_types.push_back(compression_type);
 	}
 
 	RowGroupWriteInfo info(writer.GetPartialBlockManager(), compression_types, writer.GetCheckpointType());
@@ -1062,6 +1086,24 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 	}
 	Verify();
 	return row_group_pointer;
+}
+
+bool RowGroup::HasChanges() const {
+	if (version_info.load()) {
+		// we have deletes
+		return true;
+	}
+	// check if any of the columns have changes
+	// avoid loading unloaded columns - unloaded columns can never have changes
+	for (idx_t c = 0; c < columns.size(); c++) {
+		if (is_loaded && !is_loaded[c]) {
+			continue;
+		}
+		if (columns[c]->HasAnyChanges()) {
+			return true;
+		}
+	}
+	return false;
 }
 
 bool RowGroup::IsPersistent() const {

@@ -23,6 +23,11 @@ public:
 
 	void Initialize(PersistentTableData &data);
 
+	bool HasChanges(SegmentLock &lock) const;
+	MetaBlockPointer GetRootPointer() const {
+		return root_pointer;
+	}
+
 protected:
 	unique_ptr<RowGroup> LoadSegment() override;
 
@@ -30,6 +35,7 @@ protected:
 	idx_t current_row_group;
 	idx_t max_row_group;
 	unique_ptr<MetadataReader> reader;
+	MetaBlockPointer root_pointer;
 };
 
 } // namespace duckdb
