@@ -158,19 +158,20 @@ void MetaTransaction::SetActiveQuery(transaction_t query_number) {
 }
 
 void MetaTransaction::ModifyDatabase(AttachedDatabase &db) {
-	if (db.IsSystem() || db.IsTemporary()) {
-		// we can always modify the system and temp databases
-		return;
-	}
 	if (IsReadOnly()) {
 		throw TransactionException("Cannot write to database \"%s\" - transaction is launched in read-only mode",
 		                           db.GetName());
 	}
+	auto &transaction = GetTransaction(db);
+	if (transaction.IsReadOnly()) {
+		transaction.SetReadWrite();
+	}
+	if (db.IsSystem() || db.IsTemporary()) {
+		// we can always modify the system and temp databases
+		return;
+	}
 	if (!modified_database) {
 		modified_database = &db;
-
-		auto &transaction = GetTransaction(db);
-		transaction.SetReadWrite();
 		return;
 	}
 	if (&db != modified_database.get()) {

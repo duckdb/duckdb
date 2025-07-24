@@ -18,8 +18,16 @@ CheckpointType SingleFileRowGroupWriter::GetCheckpointType() const {
 	return writer.GetCheckpointType();
 }
 
-MetadataWriter &SingleFileRowGroupWriter::GetPayloadWriter() {
+WriteStream &SingleFileRowGroupWriter::GetPayloadWriter() {
 	return table_data_writer;
+}
+
+MetaBlockPointer SingleFileRowGroupWriter::GetMetaBlockPointer() {
+	return table_data_writer.GetMetaBlockPointer();
+}
+
+optional_ptr<MetadataManager> SingleFileRowGroupWriter::GetMetadataManager() {
+	return table_data_writer.GetManager();
 }
 
 } // namespace duckdb

@@ -1,28 +1,25 @@
 #include "duckdb/storage/table/row_group.hpp"
-#include "duckdb/common/types/vector.hpp"
+
 #include "duckdb/common/exception.hpp"
-#include "duckdb/storage/table/column_data.hpp"
-#include "duckdb/storage/table/column_checkpoint_state.hpp"
-#include "duckdb/storage/table/update_segment.hpp"
-#include "duckdb/storage/table_storage_info.hpp"
-#include "duckdb/planner/table_filter.hpp"
+#include "duckdb/common/serializer/binary_serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/execution/adaptive_filter.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
-#include "duckdb/transaction/duck_transaction_manager.hpp"
-#include "duckdb/main/database.hpp"
-#include "duckdb/main/attached_database.hpp"
-#include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/storage/table/append_state.hpp"
-#include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/storage/table/column_checkpoint_state.hpp"
+#include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/row_version_manager.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/serializer/deserializer.hpp"
-#include "duckdb/common/serializer/binary_serializer.hpp"
-#include "duckdb/planner/filter/conjunction_filter.hpp"
-#include "duckdb/planner/filter/struct_filter.hpp"
-#include "duckdb/planner/filter/optional_filter.hpp"
-#include "duckdb/execution/adaptive_filter.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/storage/table/update_segment.hpp"
+#include "duckdb/storage/table_storage_info.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/transaction/duck_transaction_manager.hpp"
 
 namespace duckdb {
 
@@ -1044,7 +1041,7 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 	for (auto &state : write_data.states) {
 		// get the current position of the table data writer
 		auto &data_writer = writer.GetPayloadWriter();
-		auto pointer = data_writer.GetMetaBlockPointer();
+		auto pointer = writer.GetMetaBlockPointer();
 
 		// store the stats and the data pointers in the row group pointers
 		row_group_pointer.data_pointers.push_back(pointer);
@@ -1059,7 +1056,10 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 		persistent_data.Serialize(serializer);
 		serializer.End();
 	}
-	row_group_pointer.deletes_pointers = CheckpointDeletes(writer.GetPayloadWriter().GetManager());
+	auto metadata_manager = writer.GetMetadataManager();
+	if (metadata_manager) {
+		row_group_pointer.deletes_pointers = CheckpointDeletes(*metadata_manager);
+	}
 	Verify();
 	return row_group_pointer;
 }

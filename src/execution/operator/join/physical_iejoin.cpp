@@ -23,9 +23,7 @@ PhysicalIEJoin::PhysicalIEJoin(PhysicalPlan &physical_plan, LogicalComparisonJoi
                                PhysicalOperator &right, vector<JoinCondition> cond, JoinType join_type,
                                idx_t estimated_cardinality, unique_ptr<JoinFilterPushdownInfo> pushdown_info)
     : PhysicalRangeJoin(physical_plan, op, PhysicalOperatorType::IE_JOIN, left, right, std::move(cond), join_type,
-                        estimated_cardinality) {
-
-	filter_pushdown = std::move(pushdown_info);
+                        estimated_cardinality, std::move(pushdown_info)) {
 
 	// 1. let L1 (resp. L2) be the array of column X (resp. Y)
 	D_ASSERT(conditions.size() >= 2);
