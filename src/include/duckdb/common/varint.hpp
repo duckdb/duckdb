@@ -21,6 +21,7 @@ struct varint_t : public string_t { // NOLINT: use numeric casing
 	ArenaAllocator *allocator;
 	DUCKDB_API explicit varint_t(ArenaAllocator &allocator) : allocator(&allocator) {};
 	DUCKDB_API varint_t(ArenaAllocator &allocator, uint32_t blob_size);
+	DUCKDB_API varint_t(ArenaAllocator &allocator, const char *data, size_t len);
 	varint_t() : allocator(nullptr) {
 	}
 	bool Initialized() const {
@@ -30,13 +31,6 @@ struct varint_t : public string_t { // NOLINT: use numeric casing
 	// DUCKDB_API varint_t(hugeint_t value);
 	// DUCKDB_API varint_t(uhugeint_t value);
 	// DUCKDB_API varint_t(string_t value);
-
-	// explicit varint_t(const char *data, size_t len) : value(nullptr), size(len) {
-	// 	if (len > 0) {
-	// 		value = make_uniq_array<char>(len);
-	// 		memcpy(value.get(), data, len);
-	// 	}
-	// }
 
 	varint_t(const varint_t &rhs) = default;
 	varint_t(varint_t &&other) = default;
@@ -96,7 +90,7 @@ struct varint_t : public string_t { // NOLINT: use numeric casing
 	}
 
 	static varint_t FromBlob(ArenaAllocator &allocator, string_t value) {
-		uint32_t blob_size = value.GetSize();
+		auto blob_size = static_cast<uint32_t>(value.GetSize());
 		varint_t result(allocator, blob_size);
 		// Don't we have to initialize the string_t here?
 		auto writable_blob = result.GetDataWriteable();

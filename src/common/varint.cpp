@@ -11,6 +11,10 @@ varint_t::varint_t(ArenaAllocator &allocator, uint32_t blob_size) : string_t(blo
 	}
 }
 
+varint_t::varint_t(ArenaAllocator &allocator, const char *data, size_t len)
+    : string_t(data, len), allocator(&allocator) {
+}
+
 varint_t varint_t::operator*(const varint_t &rhs) const {
 	return *this;
 }
@@ -28,9 +32,10 @@ bool IsLHSBigger(string_t &lhs, string_t &rhs) {
 	return false;
 }
 
-void AddBinaryBuffers(char *target_buffer, idx_t target_size, const char *source_buffer, idx_t source_size, const char *source_buffer_2, idx_t source_size_2) {
+void AddBinaryBuffers(char *target_buffer, idx_t target_size, const char *source_buffer, idx_t source_size,
+                      const char *source_buffer_2, idx_t source_size_2) {
 	// Setup header based on sign of first source buffer
-	bool is_negative = source_buffer[0] & 0x80;
+	bool is_negative = (source_buffer[0] & 0x80) == 0;
 	Varint::SetHeader(target_buffer, target_size - Varint::VARINT_HEADER_SIZE, is_negative);
 
 	char carry = 0;
@@ -68,93 +73,101 @@ void AddBinaryBuffers(char *target_buffer, idx_t target_size, const char *source
 
 void AddBinaryBuffersInPlace(char *target_buffer, idx_t target_size, const char *source_buffer, idx_t source_size) {
 	D_ASSERT(target_size >= source_size && "Buffer a must be at least as large as b");
+	uint16_t carry = 0;
+	idx_t i_a = target_size - 1;
+	idx_t i_b = source_size - 1;
 
-	char carry = 0;
-	// Add from right (LSB) to left (MSB)
-	idx_t i_a = target_size - 1; // last byte index in a
-	idx_t i_b = source_size - 1; // last byte index in b
-
-	// Add from right (LSB) to left (MSB), but skip metadata bytes at start
 	while (i_b >= Varint::VARINT_HEADER_SIZE) {
-		const char target_val = target_buffer[i_a];
-		const char source_val = source_buffer[i_b];
-		const int sum = target_val + source_val + carry;
-
+		uint8_t target_val = static_cast<uint8_t>(target_buffer[i_a]);
+		uint8_t source_val = static_cast<uint8_t>(source_buffer[i_b]);
+		uint16_t sum = static_cast<uint16_t>(target_val) + static_cast<uint16_t>(source_val) + carry;
 		target_buffer[i_a] = static_cast<char>(sum & 0xFF);
-		carry = static_cast<char>((sum >> 8) & 0xFF);
+		carry = (sum >> 8) & 0xFF;
 		--i_a;
 		--i_b;
 	}
 
-	// Propagate carry in target if needed
 	while (i_a >= Varint::VARINT_HEADER_SIZE && carry != 0) {
-		const char target_value = target_buffer[i_a];
-		const int sum = target_value + carry;
-
+		uint8_t target_val = static_cast<uint8_t>(target_buffer[i_a]);
+		uint16_t sum = static_cast<uint16_t>(target_val) + carry;
 		target_buffer[i_a] = static_cast<char>(sum & 0xFF);
-		carry = static_cast<char>((sum >> 8) & 0xFF);
+		carry = (sum >> 8) & 0xFF;
 		--i_a;
-	}
-	if (i_a == 3) {
-		target_buffer[i_a] = 0;
 	}
 
 	D_ASSERT(carry == 0 && "Addition overflowed the buffer size");
 }
 
 void varint_t::ReallocateVarint() {
-	// If we have to reallocate it we just double the current size
-	uint32_t current_size = GetSize();
-	current_size *=2;
-	auto new_target_ptr = reinterpret_cast<char*>(allocator->Allocate(current_size));
-	for (idx_t i = 0; i < current_size; ++i) {
-		// initialize the whole pointer
-		new_target_ptr[i] = 0;
+	// When reallocating, we double the size and properly set the new values
+	// Notice that this might temporarily create an INVALID varint
+	// Be sure to call TRIM, to make it valid again.
+	auto current_size = GetSize();
+	auto new_size = current_size * 2;
+	auto new_target_ptr = reinterpret_cast<char *>(allocator->Allocate(new_size));
+	auto old_data = GetData();
+	bool is_negative = (old_data[0] & 0x80) == 0;
+	// We initialize the new pointer
+	// First we do the new header
+	Varint::SetHeader(new_target_ptr, new_size - Varint::VARINT_HEADER_SIZE, is_negative);
+
+	// Then we initialize to 0's until we have valid data again
+	for (idx_t i = Varint::VARINT_HEADER_SIZE; i < Varint::VARINT_HEADER_SIZE + (new_size - current_size); ++i) {
+		// initialize all new values with 0 if positive or 0xFF if negative
+		if (!is_negative) {
+			new_target_ptr[i] = 0;
+		} else {
+			new_target_ptr[i] = static_cast<char>(0xFF);
+		}
 	}
-	SetPointer(new_target_ptr);
-	SetSizeAndFinalize(current_size);
+	// Now we copy the old data to the new data
+	idx_t j = Varint::VARINT_HEADER_SIZE;
+	for (idx_t i = Varint::VARINT_HEADER_SIZE + (new_size - current_size); i < new_size; ++i) {
+		new_target_ptr[i] = old_data[j++];
+	}
+	// Verify we reached the end of the old string
+	D_ASSERT(j == GetSize());
+	varint_t new_varint(*allocator, new_target_ptr, new_size);
+	*this = new_varint;
+	// SetPointer(new_target_ptr);
+	// SetSizeAndFinalize(new_size);
 }
 
 varint_t &varint_t::operator+=(const string_t &rhs) {
 	// Let's first figure out if we need realloc, or if we can do the sum in-place
-	bool realloc = false;
 	auto target_ptr = GetDataWriteable();
-	auto source_ptr = rhs.GetData();
+	auto source_ptr = rhs.GetDataWriteable();
 
-	const auto target_size = GetSize();
-	const auto source_size = rhs.GetSize();
+	auto target_size = GetSize();
+	auto source_size = rhs.GetSize();
 	const bool same_sign = (target_ptr[0] & 0x80) == (source_ptr[0] & 0x80);
 
 	// If target is smaller than source we absolutely have to realloc
 	if (target_size < source_size) {
-
+		// we should switcharoo the pointers and sizes
+		std::swap(target_ptr, source_ptr);
+		std::swap(target_size, source_size);
+		// We set the pointer to the new target pointer
+		SetPointer(target_ptr);
 	}
 	if (same_sign && target_size == source_size) {
 		// If they both have the same sign and same size there might be a chance..
 		// But only if the MSD of the MSB from the data is set
-		realloc = (target_ptr[3] & 0x80) || (source_ptr[3] & 0x80);
+		if ((target_ptr[3] & 0x80) != 0 || (source_ptr[3] & 0x80) != 0) {
+			// We must reallocate
+			ReallocateVarint();
+			// Get new pointer/size
+			target_ptr = GetDataWriteable();
+			target_size = GetSize();
+		}
 	}
-	if (!realloc) {
-		// We for sure are not going to realloc, we can do it in-place
-		if (same_sign) {
-			AddBinaryBuffersInPlace(target_ptr, target_size, source_ptr, source_size);
-			Finalize();
-			return *this;
-		} else {
-			throw NotImplementedException("bla");
-		}
+	// We for sure are not going to realloc, we can do it in-place
+	if (same_sign) {
+		AddBinaryBuffersInPlace(target_ptr, target_size, source_ptr, source_size);
+		Finalize();
+		return *this;
 	} else {
-			idx_t new_target_size = target_size+1;
-			auto new_target_ptr = reinterpret_cast<char*>(allocator->Allocate(new_target_size));
-			AddBinaryBuffers(new_target_ptr, new_target_size, target_ptr,target_size,source_ptr,source_size);
-			if (new_target_ptr[3] == 0) {
-				// Turns out we did not need to resize (:
-				throw NotImplementedException("dont resize me senpai");
-			} else {
-				SetPointer(new_target_ptr);
-				SetSizeAndFinalize(new_target_size);
-				return *this;
-			}
-		}
+		throw NotImplementedException("bla");
+	}
 }
 } // namespace duckdb

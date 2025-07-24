@@ -121,7 +121,7 @@ public:
 	}
 
 	void SetPointer(char *new_ptr) {
-		//D_ASSERT(!IsInlined());
+		D_ASSERT(!IsInlined());
 		value.pointer.ptr = new_ptr;
 	}
 
