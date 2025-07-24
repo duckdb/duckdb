@@ -11,10 +11,6 @@ varint_t::varint_t(ArenaAllocator &allocator, uint32_t blob_size) : string_t(blo
 	}
 }
 
-// varint_t::varint_t(string_t input) {
-// 	value = input.GetString();
-// }
-
 varint_t varint_t::operator*(const varint_t &rhs) const {
 	return *this;
 }
@@ -106,6 +102,19 @@ void AddBinaryBuffersInPlace(char *target_buffer, idx_t target_size, const char 
 	D_ASSERT(carry == 0 && "Addition overflowed the buffer size");
 }
 
+void varint_t::ReallocateVarint() {
+	// If we have to reallocate it we just double the current size
+	uint32_t current_size = GetSize();
+	current_size *=2;
+	auto new_target_ptr = reinterpret_cast<char*>(allocator->Allocate(current_size));
+	for (idx_t i = 0; i < current_size; ++i) {
+		// initialize the whole pointer
+		new_target_ptr[i] = 0;
+	}
+	SetPointer(new_target_ptr);
+	SetSizeAndFinalize(current_size);
+}
+
 varint_t &varint_t::operator+=(const string_t &rhs) {
 	// Let's first figure out if we need realloc, or if we can do the sum in-place
 	bool realloc = false;
@@ -116,6 +125,10 @@ varint_t &varint_t::operator+=(const string_t &rhs) {
 	const auto source_size = rhs.GetSize();
 	const bool same_sign = (target_ptr[0] & 0x80) == (source_ptr[0] & 0x80);
 
+	// If target is smaller than source we absolutely have to realloc
+	if (target_size < source_size) {
+
+	}
 	if (same_sign && target_size == source_size) {
 		// If they both have the same sign and same size there might be a chance..
 		// But only if the MSD of the MSB from the data is set

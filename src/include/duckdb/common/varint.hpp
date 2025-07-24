@@ -53,6 +53,8 @@ struct varint_t : public string_t { // NOLINT: use numeric casing
 
 	DUCKDB_API varint_t &operator+=(const string_t &rhs);
 
+	void ReallocateVarint();
+
 	template <class T>
 	static varint_t FromInteger(ArenaAllocator &allocator, T int_value) {
 		const bool is_negative = int_value < 0;
