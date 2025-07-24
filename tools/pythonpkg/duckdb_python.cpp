@@ -985,7 +985,7 @@ static void RegisterStatementType(py::handle &m) {
 	    duckdb::StatementType::RELATION_STATEMENT,     duckdb::StatementType::EXTENSION_STATEMENT,
 	    duckdb::StatementType::LOGICAL_PLAN_STATEMENT, duckdb::StatementType::ATTACH_STATEMENT,
 	    duckdb::StatementType::DETACH_STATEMENT,       duckdb::StatementType::MULTI_STATEMENT,
-	    duckdb::StatementType::COPY_DATABASE_STATEMENT};
+	    duckdb::StatementType::COPY_DATABASE_STATEMENT,	duckdb::StatementType::MERGE_INTO_STATEMENT};
 	static const idx_t AMOUNT = sizeof(TYPES) / sizeof(duckdb::StatementType);
 	for (idx_t i = 0; i < AMOUNT; i++) {
 		auto &type = TYPES[i];
