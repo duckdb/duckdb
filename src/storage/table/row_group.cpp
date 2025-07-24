@@ -1040,8 +1040,8 @@ vector<MetaBlockPointer> RowGroup::GetColumnPointers() {
 }
 
 RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
-	if (!HasChanges()) {
-		// nothing to write - return
+	if (!column_pointers.empty() && !HasChanges()) {
+		// we have existing metadata and the row group has not been changed
 		return RowGroupWriteData();
 	}
 	auto &compression_types = writer.GetCompressionTypes();
@@ -1067,7 +1067,6 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 
 	auto metadata_manager = writer.GetMetadataManager();
 	// construct the row group pointer and write the column meta data to disk
-	D_ASSERT(write_data.states.size() == columns.size());
 	row_group_pointer.row_start = start;
 	row_group_pointer.tuple_count = count;
 	if (write_data.states.empty()) {
@@ -1078,6 +1077,7 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 		metadata_manager->ClearModifiedBlocks(deletes_pointers);
 		return row_group_pointer;
 	}
+	D_ASSERT(write_data.states.size() == columns.size());
 	{
 		auto lock = global_stats.GetLock();
 		for (idx_t column_idx = 0; column_idx < GetColumnCount(); column_idx++) {
