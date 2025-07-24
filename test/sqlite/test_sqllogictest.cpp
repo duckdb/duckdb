@@ -233,7 +233,10 @@ void RegisterSqllogictests() {
 	bool is_standard_folder = true;
 	if (!override_base_folder.empty()) {
 		is_standard_folder = false;
-		base_folder = override_base_folder;
+		base_folder = override_base_folder + "/test/sql";
+		// This is the other side of the hack above, see the line:
+		// 'We assume the test working dir for extensions to be one dir above the test/sql...'
+		// This does mean only tests in the test/sql subfolder are actually executed
 	}
 
 	listFiles(*fs, base_folder, [&](const string &path) {
