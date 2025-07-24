@@ -205,8 +205,12 @@ bool HivePartitioning::ApplyFiltersToFile(OpenFileInfo &file) {
 
 void HivePartitioning::Finalize(idx_t filtered_files, idx_t total_files) {
 	D_ASSERT(filters.size() >= pruned_filters.size());
-	info.extra_info.total_files = total_files;
-	info.extra_info.filtered_files = filtered_files;
+	if (total_files != -1) {
+		info.extra_info.total_files = total_files;
+	}
+	if (filtered_files != -1) {
+		info.extra_info.filtered_files = filtered_files;
+	}
 	for (idx_t i = 0; i < have_preserved_filter.size(); i++) {
 		if (have_preserved_filter[i]) {
 			pruned_filters.emplace_back(filters[i]->Copy());

@@ -1564,7 +1564,7 @@ vector<OpenFileInfo> LocalFileSystem::GlobHive(const string &path, FileOpener *o
 	}
 
 	if (hive_partitioning) {
-		hive_partitioning->Finalize(result.size(), result.size());
+		hive_partitioning->Finalize();
 	}
 	return result;
 

@@ -48,8 +48,8 @@ public:
 	                                              vector<unique_ptr<Expression>> &filters,
 											      const MultiFileOptions &options,
 	                                              MultiFilePushdownInfo &info);
-	//! Finalize the hive partitioning
-	DUCKDB_API void Finalize(idx_t filtered_files, idx_t total_files);
+	//! Finalize the hive filtering
+	DUCKDB_API void Finalize(idx_t filtered_files = -1, idx_t total_files = -1);
 
 	DUCKDB_API static Value GetValue(ClientContext &context, const string &key, const string &value,
 	                                 const LogicalType &type);
