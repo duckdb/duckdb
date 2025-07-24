@@ -386,7 +386,7 @@ index c010292..0a73510 100644
 -#error DUCKDB_EXTENSION_MAIN not defined
 -#endif
 diff --git a/test/sql/hnsw/hnsw_lateral_join.test b/test/sql/hnsw/hnsw_lateral_join.test
-index 0362f3c..90d87f1 100644
+index 0362f3c..9ef67da 100644
 --- a/test/sql/hnsw/hnsw_lateral_join.test
 +++ b/test/sql/hnsw/hnsw_lateral_join.test
 @@ -64,7 +64,7 @@ statement ok
@@ -394,7 +394,7 @@ index 0362f3c..90d87f1 100644
  
  query IIIIII rowsort a_has_null
 -select * from a, lateral (select *, a_id as id_dup from b order by array_distance(a.a_vec, b.b_vec) limit 2);
-+select * from a, lateral (select *, a_id as id_dup from b order by array_distance(a.a_vec, b.b_vec), b_str limit 2);
++select * from a, lateral (select *, a_id as id_dup from b order by array_distance(a.a_vec, b.b_vec) b_str DESC limit 2);
  
  # Test with a grouping function
  query II rowsort
