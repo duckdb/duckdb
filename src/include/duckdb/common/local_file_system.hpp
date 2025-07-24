@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/hive_partitioning.hpp"
 #include "duckdb/common/windows_undefs.hpp"
 
 namespace duckdb {
@@ -65,7 +66,7 @@ public:
 
 	//! Runs a glob on the file system, returning a list of matching files
 	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener) override;
-	vector<OpenFileInfo> GlobHive(const string &path = "", optional_ptr<HiveFilterParams> hive_params = nullptr, FileOpener *opener = nullptr, idx_t max_files = 0) override;
+	vector<OpenFileInfo> GlobHive(const string &path = "", FileOpener *opener = nullptr, idx_t max_files = std::numeric_limits<idx_t>::max(), optional_ptr<HiveFilterParams> hive_params = nullptr) override;
 
 	bool CanHandleFile(const string &fpath) override {
 		//! Whether or not a sub-system can handle a specific file path
@@ -99,7 +100,7 @@ public:
 
 protected:
 	bool ListFilesExtended(const string &directory, const std::function<void(OpenFileInfo &info)> &callback,
-	                       optional_ptr<FileOpener> opener, const bool &stop) override;
+	                       optional_ptr<FileOpener> opener) override;
 
 	bool SupportsListFilesExtended() const override {
 		return true;
@@ -111,6 +112,17 @@ private:
 	idx_t GetFilePointer(FileHandle &handle);
 
 	vector<OpenFileInfo> FetchFileWithoutGlob(const string &path, FileOpener *opener, bool absolute_path);
+	void ProcessSplit(const vector<string> &splits, idx_t i, const string &path, vector<OpenFileInfo> &result, FileOpener *opener, idx_t &added_files, idx_t max_files, optional_ptr<HivePartitioning> hive_partitioning);
+	void RecursiveGlobDirectories(const vector<string> &splits, idx_t i, const string &path, vector<OpenFileInfo> &result, FileOpener *opener, idx_t &added_files, idx_t max_files, optional_ptr<HivePartitioning> hive_partitioning);
+	void GlobFilesInternal(const vector<string> &splits, idx_t i, const string &path, const string &glob, vector<OpenFileInfo> &result, FileOpener *opener, idx_t &added_files, idx_t max_files, optional_ptr<HivePartitioning> hive_partitioning);
+};
+
+struct GlobState {
+	vector<string> splits;
+	vector<OpenFileInfo> previous_directories;
+	vector<OpenFileInfo> result;
+	FileOpener *opener;
+	optional_ptr<HivePartitioning> hive_partitioning;
 };
 
 } // namespace duckdb

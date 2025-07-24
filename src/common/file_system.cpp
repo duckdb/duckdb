@@ -374,7 +374,7 @@ unique_ptr<FileHandle> FileSystem::OpenFileExtended(const OpenFileInfo &path, Fi
 }
 
 bool FileSystem::ListFilesExtended(const string &directory, const std::function<void(OpenFileInfo &info)> &callback,
-                                   optional_ptr<FileOpener> opener, const bool &stop) {
+                                   optional_ptr<FileOpener> opener) {
 	throw NotImplementedException("%s: ListFilesExtended is not implemented!", GetName());
 }
 
@@ -505,7 +505,7 @@ bool FileSystem::IsDirectory(const OpenFileInfo &info) {
 }
 
 bool FileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
-                           FileOpener *opener, const bool &stop) {
+                           FileOpener *opener) {
 	if (SupportsListFilesExtended()) {
 		return ListFilesExtended(
 		    directory,
@@ -513,15 +513,15 @@ bool FileSystem::ListFiles(const string &directory, const std::function<void(con
 			    bool is_dir = IsDirectory(info);
 			    callback(info.path, is_dir);
 		    },
-		    opener, stop);
+		    opener);
 	}
 	throw NotImplementedException("%s: ListFiles is not implemented!", GetName());
 }
 
 bool FileSystem::ListFiles(const string &directory, const std::function<void(OpenFileInfo &info)> &callback,
-                           optional_ptr<FileOpener> opener, const bool &stop) {
+                           optional_ptr<FileOpener> opener) {
 	if (SupportsListFilesExtended()) {
-		return ListFilesExtended(directory, callback, opener, stop);
+		return ListFilesExtended(directory, callback, opener);
 	} else {
 		return ListFiles(
 		    directory,
@@ -533,7 +533,7 @@ bool FileSystem::ListFiles(const string &directory, const std::function<void(Ope
 			    }
 			    callback(info);
 		    },
-		    opener.get(), stop);
+		    opener.get());
 	}
 }
 
@@ -579,7 +579,7 @@ bool FileSystem::HasGlob(const string &str) {
 	return false;
 }
 
-vector<OpenFileInfo> FileSystem::GlobHive(const string &path, optional_ptr<HiveFilterParams> hive_params, FileOpener *opener, idx_t max_files) {
+vector<OpenFileInfo> FileSystem::GlobHive(const string &path, FileOpener *opener, idx_t max_files, optional_ptr<HiveFilterParams> hive_params) {
 	// Override this method to implement partial lazy loading and hive filtering optimization
 	return Glob(path, opener);
 }
@@ -625,9 +625,9 @@ static string LookupExtensionForPattern(const string &pattern) {
 	return "";
 }
 
-vector<OpenFileInfo> FileSystem::GlobFiles(const string &pattern, ClientContext &context, FileGlobOptions options, idx_t max_files,  optional_ptr<HiveFilterParams> hive_params) {
+vector<OpenFileInfo> FileSystem::GlobFiles(const string &pattern, ClientContext &context, FileGlobOptions options, idx_t max_files, optional_ptr<HiveFilterParams> hive_params) {
 	vector<OpenFileInfo> result;
-	result = GlobHive(pattern, hive_params, nullptr, max_files);
+	result = GlobHive(pattern, nullptr, max_files, hive_params);
 	if (result.empty()) {
 		string required_extension = LookupExtensionForPattern(pattern);
 		if (!required_extension.empty() && !context.db->ExtensionIsLoaded(required_extension)) {
