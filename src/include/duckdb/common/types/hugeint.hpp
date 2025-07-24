@@ -116,7 +116,7 @@ public:
 	template <bool CHECK_OVERFLOW = true>
 	inline static hugeint_t Subtract(hugeint_t lhs, hugeint_t rhs) {
 		if (!TrySubtractInPlace(lhs, rhs)) {
-			throw OutOfRangeException("Underflow in HUGEINT addition: %s - %s", lhs.ToString(), rhs.ToString());
+			throw OutOfRangeException("Underflow in HUGEINT subtraction: %s - %s", lhs.ToString(), rhs.ToString());
 		}
 		return lhs;
 	}
