@@ -31,7 +31,10 @@ struct HivePartitioningFilterInfo {
 class HivePartitioning {
 public:
 	// Constructor
-	HivePartitioning(ClientContext &context, vector<unique_ptr<Expression>> &filters, const MultiFileOptions &options, MultiFilePushdownInfo &info) : context(context), filters(filters), options(options), info(info), have_preserved_filter(filters.size(), true), consumed(false) {
+	HivePartitioning(ClientContext &context, vector<unique_ptr<Expression>> &filters, const MultiFileOptions &options,
+	                 MultiFilePushdownInfo &info)
+	    : context(context), filters(filters), options(options), info(info), have_preserved_filter(filters.size(), true),
+	      consumed(false) {
 		filter_info = GetFilterInfo(info, options);
 	}
 
@@ -46,8 +49,7 @@ public:
 	//! evaluate to true.
 	DUCKDB_API static void ApplyFiltersToFileList(ClientContext &context, vector<OpenFileInfo> &files,
 	                                              vector<unique_ptr<Expression>> &filters,
-											      const MultiFileOptions &options,
-	                                              MultiFilePushdownInfo &info);
+	                                              const MultiFileOptions &options, MultiFilePushdownInfo &info);
 	//! Finalize the hive filtering
 	DUCKDB_API void Finalize(idx_t filtered_files = -1, idx_t total_files = -1);
 
@@ -58,7 +60,8 @@ public:
 	//! Unescape a hive partition key or value encoded using URL encoding
 	DUCKDB_API static string Unescape(const string &input);
 
-	DUCKDB_API static HivePartitioningFilterInfo GetFilterInfo(const MultiFilePushdownInfo &info, const MultiFileOptions &options);
+	DUCKDB_API static HivePartitioningFilterInfo GetFilterInfo(const MultiFilePushdownInfo &info,
+	                                                           const MultiFileOptions &options);
 
 private:
 	ClientContext &context;

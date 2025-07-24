@@ -579,7 +579,8 @@ bool FileSystem::HasGlob(const string &str) {
 	return false;
 }
 
-vector<OpenFileInfo> FileSystem::GlobHive(const string &path, FileOpener *opener, idx_t max_files, optional_ptr<HiveFilterParams> hive_params) {
+vector<OpenFileInfo> FileSystem::GlobHive(const string &path, FileOpener *opener, idx_t max_files,
+                                          optional_ptr<HiveFilterParams> hive_params) {
 	// Override this method to implement partial lazy loading and hive filtering optimization
 	return Glob(path, opener);
 }
@@ -625,7 +626,8 @@ static string LookupExtensionForPattern(const string &pattern) {
 	return "";
 }
 
-vector<OpenFileInfo> FileSystem::GlobFiles(const string &pattern, ClientContext &context, FileGlobOptions options, idx_t max_files, optional_ptr<HiveFilterParams> hive_params) {
+vector<OpenFileInfo> FileSystem::GlobFiles(const string &pattern, ClientContext &context, FileGlobOptions options,
+                                           idx_t max_files, optional_ptr<HiveFilterParams> hive_params) {
 	vector<OpenFileInfo> result;
 	result = GlobHive(pattern, nullptr, max_files, hive_params);
 	if (result.empty()) {

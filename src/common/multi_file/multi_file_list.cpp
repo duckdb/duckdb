@@ -290,7 +290,6 @@ unique_ptr<MultiFileList> GlobMultiFileList::ComplexFilterPushdown(ClientContext
 
 	return make_uniq<SimpleMultiFileList>(expanded_files);
 
-
 	// return nullptr;
 }
 
@@ -352,7 +351,7 @@ OpenFileInfo GlobMultiFileList::GetFile(idx_t i) {
 
 OpenFileInfo GlobMultiFileList::GetFileInternal(idx_t i) {
 	while (expanded_files.size() <= i) {
-		if (!ExpandNextPath(i+1)) {
+		if (!ExpandNextPath(i + 1)) {
 			return OpenFileInfo("");
 		}
 	}
@@ -370,7 +369,8 @@ void GlobMultiFileList::ClearInternal() {
 	current_path = 0;
 }
 
-bool GlobMultiFileList::ExpandPathInternal(idx_t &current_path, vector<OpenFileInfo> &result, idx_t max_files, optional_ptr<HiveFilterParams> hive_filter_params) const {
+bool GlobMultiFileList::ExpandPathInternal(idx_t &current_path, vector<OpenFileInfo> &result, idx_t max_files,
+                                           optional_ptr<HiveFilterParams> hive_filter_params) const {
 	if (current_path >= paths.size()) {
 		return false;
 	}

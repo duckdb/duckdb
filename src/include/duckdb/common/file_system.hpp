@@ -39,10 +39,11 @@ struct HiveFilterParams {
 	vector<unique_ptr<Expression>> &filters;
 	const MultiFileOptions &options;
 	MultiFilePushdownInfo &info;
-	
-	HiveFilterParams(ClientContext &context, vector<unique_ptr<Expression>> &filters,
-	                const MultiFileOptions &options, MultiFilePushdownInfo &info)
-	    : context(context), filters(filters), options(options), info(info) {}
+
+	HiveFilterParams(ClientContext &context, vector<unique_ptr<Expression>> &filters, const MultiFileOptions &options,
+	                 MultiFilePushdownInfo &info)
+	    : context(context), filters(filters), options(options), info(info) {
+	}
 };
 
 class AttachedDatabase;
@@ -244,7 +245,9 @@ public:
 	//! Whether there is a glob in the string
 	DUCKDB_API static bool HasGlob(const string &str);
 	//! Runs a glob on the file system, returning a list of matching files
-	DUCKDB_API virtual vector<OpenFileInfo> GlobHive(const string &path = "", FileOpener *opener = nullptr, idx_t max_files = std::numeric_limits<idx_t>::max(), optional_ptr<HiveFilterParams> hive_params = nullptr);
+	DUCKDB_API virtual vector<OpenFileInfo> GlobHive(const string &path = "", FileOpener *opener = nullptr,
+	                                                 idx_t max_files = std::numeric_limits<idx_t>::max(),
+	                                                 optional_ptr<HiveFilterParams> hive_params = nullptr);
 	DUCKDB_API virtual vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr);
 	DUCKDB_API vector<OpenFileInfo> GlobFiles(const string &path, ClientContext &context,
 	                                          FileGlobOptions options = FileGlobOptions::DISALLOW_EMPTY,

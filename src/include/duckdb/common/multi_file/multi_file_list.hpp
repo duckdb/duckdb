@@ -181,9 +181,12 @@ protected:
 	//! Get the i-th expanded file
 	OpenFileInfo GetFileInternal(idx_t i);
 	//! Grabs the next path and expands it into Expanded paths: returns false if no more files to expand
-	bool ExpandNextPath(idx_t max_files = std::numeric_limits<idx_t>::max(), optional_ptr<HiveFilterParams> hive_filter_params = nullptr);
+	bool ExpandNextPath(idx_t max_files = std::numeric_limits<idx_t>::max(),
+	                    optional_ptr<HiveFilterParams> hive_filter_params = nullptr);
 	//! Grabs the next path and expands it into Expanded paths: returns false if no more files to expand
-	bool ExpandPathInternal(idx_t &current_path, vector<OpenFileInfo> &result, idx_t max_files = std::numeric_limits<idx_t>::max(), optional_ptr<HiveFilterParams> hive_filter_params = nullptr) const;
+	bool ExpandPathInternal(idx_t &current_path, vector<OpenFileInfo> &result,
+	                        idx_t max_files = std::numeric_limits<idx_t>::max(),
+	                        optional_ptr<HiveFilterParams> hive_filter_params = nullptr) const;
 	//! Whether all files have been expanded
 	bool IsFullyExpanded() const;
 	//! Clear the expanded files

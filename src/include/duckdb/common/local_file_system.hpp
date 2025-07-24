@@ -66,7 +66,9 @@ public:
 
 	//! Runs a glob on the file system, returning a list of matching files
 	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener) override;
-	vector<OpenFileInfo> GlobHive(const string &path = "", FileOpener *opener = nullptr, idx_t max_files = std::numeric_limits<idx_t>::max(), optional_ptr<HiveFilterParams> hive_params = nullptr) override;
+	vector<OpenFileInfo> GlobHive(const string &path = "", FileOpener *opener = nullptr,
+	                              idx_t max_files = std::numeric_limits<idx_t>::max(),
+	                              optional_ptr<HiveFilterParams> hive_params = nullptr) override;
 
 	bool CanHandleFile(const string &fpath) override {
 		//! Whether or not a sub-system can handle a specific file path
@@ -112,9 +114,14 @@ private:
 	idx_t GetFilePointer(FileHandle &handle);
 
 	vector<OpenFileInfo> FetchFileWithoutGlob(const string &path, FileOpener *opener, bool absolute_path);
-	void ProcessSplit(const vector<string> &splits, idx_t i, const string &path, vector<OpenFileInfo> &result, FileOpener *opener, idx_t max_files, optional_ptr<HivePartitioning> hive_partitioning);
-	void RecursiveGlobDirectories(const vector<string> &splits, idx_t i, const string &path, vector<OpenFileInfo> &result, FileOpener *opener, idx_t max_files, optional_ptr<HivePartitioning> hive_partitioning);
-	void GlobFilesInternal(const vector<string> &splits, idx_t i, const string &path, const string &glob, vector<OpenFileInfo> &result, FileOpener *opener, idx_t max_files, optional_ptr<HivePartitioning> hive_partitioning);
+	void ProcessSplit(const vector<string> &splits, idx_t i, const string &path, vector<OpenFileInfo> &result,
+	                  FileOpener *opener, idx_t max_files, optional_ptr<HivePartitioning> hive_partitioning);
+	void RecursiveGlobDirectories(const vector<string> &splits, idx_t i, const string &path,
+	                              vector<OpenFileInfo> &result, FileOpener *opener, idx_t max_files,
+	                              optional_ptr<HivePartitioning> hive_partitioning);
+	void GlobFilesInternal(const vector<string> &splits, idx_t i, const string &path, const string &glob,
+	                       vector<OpenFileInfo> &result, FileOpener *opener, idx_t max_files,
+	                       optional_ptr<HivePartitioning> hive_partitioning);
 };
 
 struct GlobState {
