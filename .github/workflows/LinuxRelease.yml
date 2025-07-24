@@ -334,7 +334,7 @@ jobs:
       with:
         python-version: '3.9'
 
-    - name: Install
+    - name: Install Ninja
       shell: bash
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
@@ -390,6 +390,9 @@ jobs:
     runs-on: ubuntu-22.04
     needs: linux-extensions-64
     if: ${{ inputs.skip_tests != 'true' }}
+    env:
+      GEN: ninja
+
     steps:
     - uses: actions/checkout@v3
       with:
@@ -399,6 +402,10 @@ jobs:
     - uses: actions/setup-python@v5
       with:
         python-version: '3.12'
+
+    - name: Install Ninja
+      shell: bash
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
