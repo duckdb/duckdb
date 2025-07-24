@@ -77,7 +77,7 @@ public:
 	inline static hugeint_t Divide(hugeint_t lhs, hugeint_t rhs) {
 		// No division by zero
 		if (rhs == 0) {
-			throw OutOfRangeException("Division of HUGEINT by zero!");
+			throw OutOfRangeException("Division of HUGEINT by zero: %s / %s", lhs.ToString(), rhs.ToString());
 		}
 
 		// division only has one reason to overflow: MINIMUM / -1
