@@ -46,6 +46,7 @@ RowGroup::RowGroup(RowGroupCollection &collection_p, RowGroupPointer pointer)
 	}
 	this->deletes_pointers = std::move(pointer.deletes_pointers);
 	this->deletes_is_loaded = false;
+	this->column_metadata = std::move(pointer.column_metadata);
 
 	Verify();
 }
@@ -1015,6 +1016,10 @@ bool RowGroup::HasUnloadedDeletes() const {
 }
 
 vector<MetaBlockPointer> RowGroup::GetColumnPointers() {
+	if (!column_metadata.empty()) {
+		// we have the column metadata from the file itself - no need to deserialize metadata to fetch it
+		return column_metadata;
+	}
 	vector<MetaBlockPointer> result;
 	if (column_pointers.empty()) {
 		// no pointers
@@ -1087,6 +1092,7 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 			global_stats.GetStats(*lock, column_idx).Statistics().Merge(write_data.statistics[column_idx]);
 		}
 	}
+	writer.StartWritingColumns(row_group_pointer.column_metadata);
 	for (auto &state : write_data.states) {
 		// get the current position of the table data writer
 		auto &data_writer = writer.GetPayloadWriter();
@@ -1105,6 +1111,7 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 		persistent_data.Serialize(serializer);
 		serializer.End();
 	}
+	writer.FinishWritingColumns();
 	if (metadata_manager) {
 		row_group_pointer.deletes_pointers = CheckpointDeletes(*metadata_manager);
 	}
@@ -1171,6 +1178,9 @@ void RowGroup::Serialize(RowGroupPointer &pointer, Serializer &serializer) {
 	serializer.WriteProperty(101, "tuple_count", pointer.tuple_count);
 	serializer.WriteProperty(102, "data_pointers", pointer.data_pointers);
 	serializer.WriteProperty(103, "delete_pointers", pointer.deletes_pointers);
+	if (serializer.ShouldSerialize(6)) {
+		serializer.WriteProperty(104, "column_metadata", pointer.column_metadata);
+	}
 }
 
 RowGroupPointer RowGroup::Deserialize(Deserializer &deserializer) {
@@ -1179,6 +1189,7 @@ RowGroupPointer RowGroup::Deserialize(Deserializer &deserializer) {
 	result.tuple_count = deserializer.ReadProperty<uint64_t>(101, "tuple_count");
 	result.data_pointers = deserializer.ReadProperty<vector<MetaBlockPointer>>(102, "data_pointers");
 	result.deletes_pointers = deserializer.ReadProperty<vector<MetaBlockPointer>>(103, "delete_pointers");
+	result.column_metadata = deserializer.ReadPropertyWithDefault<vector<MetaBlockPointer>>(104, "column_metadata");
 	return result;
 }
 

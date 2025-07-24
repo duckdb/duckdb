@@ -71,6 +71,8 @@ struct RowGroupPointer {
 	vector<MetaBlockPointer> data_pointers;
 	//! Data pointers to the delete information of the row group (if any)
 	vector<MetaBlockPointer> deletes_pointers;
+	//! All metadata block pointers of column metadata - only set for newer databases
+	vector<MetaBlockPointer> column_metadata;
 };
 
 } // namespace duckdb
