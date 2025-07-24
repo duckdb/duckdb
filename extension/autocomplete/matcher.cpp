@@ -303,7 +303,7 @@ public:
 	MatchResultType Match(MatchState &state) const override {
 		// variable matchers match anything except for reserved keywords
 		auto &token_text = state.tokens[state.token_index].text;
-		const auto &keyword_helper = KeywordHelper::Instance();
+		const auto &keyword_helper = PEGKeywordHelper::Instance();
 		switch (suggestion_type) {
 		case SuggestionState::SUGGEST_TYPE_NAME:
 			if (keyword_helper.KeywordCategoryType(token_text, KeywordCategory::KEYWORD_RESERVED) ||

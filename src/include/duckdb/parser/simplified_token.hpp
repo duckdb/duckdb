@@ -29,17 +29,4 @@ struct SimplifiedToken {
 	idx_t start;
 };
 
-enum class KeywordCategory : uint8_t {
-	KEYWORD_RESERVED,
-	KEYWORD_UNRESERVED,
-	KEYWORD_TYPE_FUNC,
-	KEYWORD_COL_NAME,
-	KEYWORD_NONE
-};
-
-struct ParserKeyword {
-	string name;
-	KeywordCategory category;
-};
-
 } // namespace duckdb
