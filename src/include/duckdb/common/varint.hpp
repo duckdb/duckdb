@@ -46,8 +46,10 @@ struct varint_t : public string_t { // NOLINT: use numeric casing
 	DUCKDB_API varint_t &operator+=(const varint_t &rhs);
 
 	DUCKDB_API varint_t &operator+=(const string_t &rhs);
-
-	void ReallocateVarint();
+	//! Reallocate the Varint 2x-ing its size
+	void Reallocate();
+	//! In case we have unnecessary extra 0's or 1's in our varint we trim them
+	void Trim();
 
 	template <class T>
 	static varint_t FromInteger(ArenaAllocator &allocator, T int_value) {

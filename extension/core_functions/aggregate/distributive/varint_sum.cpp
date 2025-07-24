@@ -58,6 +58,7 @@ struct VarintOperation {
 		if (!state.is_set) {
 			finalize_data.ReturnNull();
 		} else {
+			state.value.Trim();
 			target = state.value;
 		}
 	}

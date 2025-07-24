@@ -22,16 +22,6 @@ varint_t &varint_t::operator+=(const varint_t &rhs) {
 	return *this;
 }
 
-bool IsLHSBigger(string_t &lhs, string_t &rhs) {
-	if (lhs.GetSize() > rhs.GetSize()) {
-		return true;
-	}
-	if (lhs.GetSize() < rhs.GetSize()) {
-		return false;
-	}
-	return false;
-}
-
 void AddBinaryBuffersInPlace(char *target_buffer, idx_t target_size, const char *source_buffer, idx_t source_size) {
 	D_ASSERT(target_size >= source_size && "Buffer a must be at least as large as b");
 	uint16_t carry = 0;
@@ -59,7 +49,33 @@ void AddBinaryBuffersInPlace(char *target_buffer, idx_t target_size, const char 
 	D_ASSERT(carry == 0 && "Addition overflowed the buffer size");
 }
 
-void varint_t::ReallocateVarint() {
+void varint_t::Trim() {
+	auto cur_ptr = GetDataWriteable();
+	auto cur_size = GetSize();
+	bool is_negative = (cur_ptr[0] & 0x80) == 0;
+	char value_to_trim = is_negative ? static_cast<char>(0xFF) : 0;
+	idx_t bytes_to_trim = 0;
+	for (idx_t i = Varint::VARINT_HEADER_SIZE; i < cur_size; ++i) {
+		if (cur_ptr[i] == value_to_trim) {
+			bytes_to_trim++;
+		} else {
+			break;
+		}
+	}
+	if (bytes_to_trim > 0) {
+		// This bad-boy is wearing shoe lifts, time to prune it.
+		auto new_size = cur_size - bytes_to_trim;
+		auto new_target_ptr = reinterpret_cast<char *>(allocator->Allocate(new_size));
+		Varint::SetHeader(new_target_ptr, new_size - Varint::VARINT_HEADER_SIZE, is_negative);
+		for (idx_t i = Varint::VARINT_HEADER_SIZE; i < new_size; ++i) {
+			new_target_ptr[i] = cur_ptr[i+bytes_to_trim];
+		}
+		varint_t new_varint(*allocator, new_target_ptr, new_size);
+		*this = new_varint;
+	}
+}
+
+void varint_t::Reallocate() {
 	// When reallocating, we double the size and properly set the new values
 	// Notice that this might temporarily create an INVALID varint
 	// Be sure to call TRIM, to make it valid again.
@@ -90,8 +106,6 @@ void varint_t::ReallocateVarint() {
 	D_ASSERT(j == GetSize());
 	varint_t new_varint(*allocator, new_target_ptr, new_size);
 	*this = new_varint;
-	// SetPointer(new_target_ptr);
-	// SetSizeAndFinalize(new_size);
 }
 
 varint_t &varint_t::operator+=(const string_t &rhs) {
@@ -116,7 +130,7 @@ varint_t &varint_t::operator+=(const string_t &rhs) {
 		// But only if the MSD of the MSB from the data is set
 		if ((target_ptr[3] & 0x80) != 0 || (source_ptr[3] & 0x80) != 0) {
 			// We must reallocate
-			ReallocateVarint();
+			Reallocate();
 			// Get new pointer/size
 			target_ptr = GetDataWriteable();
 			target_size = GetSize();
