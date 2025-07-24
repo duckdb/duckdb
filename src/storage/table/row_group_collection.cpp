@@ -50,18 +50,6 @@ unique_ptr<RowGroup> RowGroupSegmentTree::LoadSegment() {
 	return make_uniq<RowGroup>(collection, std::move(row_group_pointer));
 }
 
-bool RowGroupSegmentTree::HasChanges(SegmentLock &l) const {
-	// check if any changes have been made
-	// any row groups that are not loaded by definition do not have any changes - so avoid loading extra row groups
-	auto &segments = ReferenceLoadedSegments(l);
-	for (auto &segment : segments) {
-		if (segment.node->HasChanges()) {
-			return true;
-		}
-	}
-	return false;
-}
-
 //===--------------------------------------------------------------------===//
 // Row Group Collection
 //===--------------------------------------------------------------------===//
@@ -1053,19 +1041,6 @@ unique_ptr<CheckpointTask> RowGroupCollection::GetCheckpointTask(CollectionCheck
 
 void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &global_stats) {
 	auto l = row_groups->Lock();
-	if (metadata_pointer.IsValid() && !row_groups->HasChanges(l)) {
-		vector<MetaBlockPointer> data_pointers;
-		for (auto &row_group : row_groups->Segments(l)) {
-			auto column_pointers = row_group.GetColumnPointers();
-			data_pointers.insert(data_pointers.end(), column_pointers.begin(), column_pointers.end());
-
-			auto &deletes_pointers = row_group.GetDeletesPointers();
-			data_pointers.insert(data_pointers.end(), deletes_pointers.begin(), deletes_pointers.end());
-		}
-		writer.WriteUnchangedTable(metadata_pointer, total_rows.load(), std::move(data_pointers));
-		return;
-	}
-
 	auto segments = row_groups->MoveSegments(l);
 
 	CollectionCheckpointState checkpoint_state(*this, writer, segments, global_stats);
@@ -1109,6 +1084,39 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	checkpoint_state.executor->WorkOnTasks();
 
 	// no errors - finalize the row groups
+	// if the table already exists on disk - check if all row groups have stayed the same
+	if (metadata_pointer.IsValid()) {
+		bool table_has_changes = false;
+		for (idx_t segment_idx = 0; segment_idx < segments.size(); segment_idx++) {
+			auto &entry = segments[segment_idx];
+			if (!entry.node) {
+				table_has_changes = true;
+				break;
+			}
+			auto &write_state = checkpoint_state.write_data[segment_idx];
+			if (write_state.existing_pointers.empty()) {
+				table_has_changes = true;
+				break;
+			}
+		}
+		if (!table_has_changes) {
+			// table is unmodified and already exists on disk
+			// we can directly re-use the metadata pointer
+			// mark all blocks associated with row groups as still being in-use
+			auto &metadata_manager = writer.GetMetadataManager();
+			for (idx_t segment_idx = 0; segment_idx < segments.size(); segment_idx++) {
+				auto &entry = segments[segment_idx];
+				auto &row_group = *entry.node;
+				auto &write_state = checkpoint_state.write_data[segment_idx];
+				metadata_manager.ClearModifiedBlocks(write_state.existing_pointers);
+				metadata_manager.ClearModifiedBlocks(row_group.GetDeletesPointers());
+				row_groups->AppendSegment(l, std::move(entry.node));
+			}
+			writer.WriteUnchangedTable(metadata_pointer, total_rows.load());
+			return;
+		}
+	}
+
 	idx_t new_total_rows = 0;
 	for (idx_t segment_idx = 0; segment_idx < segments.size(); segment_idx++) {
 		auto &entry = segments[segment_idx];

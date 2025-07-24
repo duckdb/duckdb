@@ -66,8 +66,13 @@ RowGroup::RowGroup(RowGroupCollection &collection_p, PersistentRowGroupData &dat
 void RowGroup::MoveToCollection(RowGroupCollection &collection_p, idx_t new_start) {
 	this->collection = collection_p;
 	this->start = new_start;
-	for (auto &column : GetColumns()) {
-		column->SetStart(new_start);
+	for (idx_t c = 0; c < columns.size(); c++) {
+		if (is_loaded && !is_loaded[c]) {
+			// we only need to set the column start position if it is already loaded
+			// if it is not loaded - we will set the correct start position upon loading
+			continue;
+		}
+		columns[c]->SetStart(new_start);
 	}
 	if (!HasUnloadedDeletes()) {
 		auto vinfo = GetVersionInfo();
@@ -1032,6 +1037,13 @@ vector<MetaBlockPointer> RowGroup::GetColumnPointers() {
 }
 
 RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
+	if (!column_pointers.empty() && !HasChanges()) {
+		// we have existing metadata and the row group has not been changed
+		// re-use previous metadata
+		RowGroupWriteData result;
+		result.existing_pointers = GetColumnPointers();
+		return result;
+	}
 	auto &compression_types = writer.GetCompressionTypes();
 	if (columns.size() != compression_types.size()) {
 		throw InternalException("RowGroup::WriteToDisk - mismatch in column count vs compression types");
@@ -1053,15 +1065,25 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
                                      TableStatistics &global_stats) {
 	RowGroupPointer row_group_pointer;
 
-	auto lock = global_stats.GetLock();
-	for (idx_t column_idx = 0; column_idx < GetColumnCount(); column_idx++) {
-		global_stats.GetStats(*lock, column_idx).Statistics().Merge(write_data.statistics[column_idx]);
-	}
-
+	auto metadata_manager = writer.GetMetadataManager();
 	// construct the row group pointer and write the column meta data to disk
-	D_ASSERT(write_data.states.size() == columns.size());
 	row_group_pointer.row_start = start;
 	row_group_pointer.tuple_count = count;
+	if (!write_data.existing_pointers.empty()) {
+		// we are re-using the previous metadata
+		row_group_pointer.data_pointers = column_pointers;
+		row_group_pointer.deletes_pointers = deletes_pointers;
+		metadata_manager->ClearModifiedBlocks(write_data.existing_pointers);
+		metadata_manager->ClearModifiedBlocks(deletes_pointers);
+		return row_group_pointer;
+	}
+	D_ASSERT(write_data.states.size() == columns.size());
+	{
+		auto lock = global_stats.GetLock();
+		for (idx_t column_idx = 0; column_idx < GetColumnCount(); column_idx++) {
+			global_stats.GetStats(*lock, column_idx).Statistics().Merge(write_data.statistics[column_idx]);
+		}
+	}
 	for (auto &state : write_data.states) {
 		// get the current position of the table data writer
 		auto &data_writer = writer.GetPayloadWriter();
@@ -1080,7 +1102,6 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 		persistent_data.Serialize(serializer);
 		serializer.End();
 	}
-	auto metadata_manager = writer.GetMetadataManager();
 	if (metadata_manager) {
 		row_group_pointer.deletes_pointers = CheckpointDeletes(*metadata_manager);
 	}
