@@ -22,7 +22,7 @@ string JoinRef::ToString() const {
 		result += EnumUtil::ToString(type) + " JOIN ";
 		break;
 	case JoinRefType::CROSS:
-		result += ", ";
+		result += "CROSS JOIN ";
 		break;
 	case JoinRefType::POSITIONAL:
 		result += "POSITIONAL JOIN ";
