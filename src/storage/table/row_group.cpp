@@ -1009,6 +1009,31 @@ bool RowGroup::HasUnloadedDeletes() const {
 	return !deletes_is_loaded;
 }
 
+vector<MetaBlockPointer> RowGroup::GetColumnPointers() {
+	vector<MetaBlockPointer> result;
+	if (column_pointers.empty()) {
+		// no pointers
+		return result;
+	}
+	// column_pointers stores the beginning of each column
+	// if columns are big - they may span multiple metadata blocks
+	// we need to figure out all blocks that this row group points to
+	// we need to follow the linked list in the metadata blocks to allow for this
+	auto &metadata_manager = GetCollection().GetMetadataManager();
+	idx_t last_idx = column_pointers.size() - 1;
+	if (column_pointers.size() > 1) {
+		// for all but the last column pointer - we can just follow the linked list until we reach the last column
+		MetadataReader reader(metadata_manager, column_pointers[0]);
+		auto last_pointer = column_pointers[last_idx];
+		result = reader.GetRemainingBlocks(last_pointer);
+	}
+	// for the last column we need to deserialize the column - because we don't know where it stops
+	auto &types = GetCollection().GetTypes();
+	MetadataReader reader(metadata_manager, column_pointers[last_idx], &result);
+	ColumnData::Deserialize(GetBlockManager(), GetTableInfo(), last_idx, start, reader, types[last_idx]);
+	return result;
+}
+
 RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 	auto &compression_types = writer.GetCompressionTypes();
 	if (columns.size() != compression_types.size()) {
