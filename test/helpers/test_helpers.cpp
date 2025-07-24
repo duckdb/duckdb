@@ -13,6 +13,7 @@
 #include "test_config.hpp"
 #include "pid.hpp"
 #include "duckdb/function/table/read_csv.hpp"
+#include "duckdb/storage/storage_info.hpp"
 #include <cmath>
 #include <fstream>
 
@@ -184,6 +185,13 @@ unique_ptr<DBConfig> GetTestConfig() {
 	if (max_threads.IsValid()) {
 		result->options.maximum_threads = max_threads.GetIndex();
 	}
+
+	auto block_alloc_size = test_config.GetBlockAllocSize();
+	if (block_alloc_size.IsValid()) {
+		Storage::VerifyBlockAllocSize(block_alloc_size.GetIndex());
+		result->options.default_block_alloc_size = block_alloc_size.GetIndex();
+	}
+
 	result->options.debug_initialize = test_config.GetDebugInitialize();
 	result->options.debug_verify_vector = test_config.GetVectorVerification();
 	return result;

@@ -408,6 +408,18 @@ jobs:
       run: |
         ./build/release/test/unittest --test-config test/configs/no_local_filesystem.json
 
+    - name: test/configs/small_block_size.json
+      if: (success() || failure()) && steps.build.conclusion == 'success'
+      shell: bash
+      run: |
+        ./build/release/test/unittest --test-config test/configs/small_block_size.json
+
+    - name: test/configs/latest_storage_block_size_16kB.json
+      if: (success() || failure()) && steps.build.conclusion == 'success'
+      shell: bash
+      run: |
+        ./build/release/test/unittest --test-config test/configs/latest_storage_block_size_16kB.json
+
     - name: Test dictionary_expression
       if: (success() || failure()) && steps.build.conclusion == 'success'
       shell: bash
