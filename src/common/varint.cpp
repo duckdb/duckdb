@@ -32,45 +32,6 @@ bool IsLHSBigger(string_t &lhs, string_t &rhs) {
 	return false;
 }
 
-void AddBinaryBuffers(char *target_buffer, idx_t target_size, const char *source_buffer, idx_t source_size,
-                      const char *source_buffer_2, idx_t source_size_2) {
-	// Setup header based on sign of first source buffer
-	bool is_negative = (source_buffer[0] & 0x80) == 0;
-	Varint::SetHeader(target_buffer, target_size - Varint::VARINT_HEADER_SIZE, is_negative);
-
-	char carry = 0;
-
-	// Indices for source buffers (rightmost byte index)
-	idx_t i_a = source_size - 1;
-	idx_t i_b = source_size_2 - 1;
-
-	// Index for target buffer (rightmost byte index)
-	idx_t i_t = target_size - 1;
-
-	// Add bytes from right to left until at least one source buffer is fully consumed
-	while (i_a >= Varint::VARINT_HEADER_SIZE || i_b >= Varint::VARINT_HEADER_SIZE) {
-		int val_a = (i_a >= Varint::VARINT_HEADER_SIZE) ? static_cast<unsigned char>(source_buffer[i_a]) : 0;
-		int val_b = (i_b >= Varint::VARINT_HEADER_SIZE) ? static_cast<unsigned char>(source_buffer_2[i_b]) : 0;
-
-		int sum = val_a + val_b + carry;
-		target_buffer[i_t] = static_cast<char>(sum & 0xFF);
-		carry = static_cast<char>((sum >> 8) & 0xFF);
-
-		--i_a;
-		--i_b;
-		--i_t;
-	}
-
-	// Propagate carry in target buffer if needed (up to header boundary)
-	while (i_t >= Varint::VARINT_HEADER_SIZE && carry != 0) {
-		int sum = static_cast<unsigned char>(target_buffer[i_t]) + carry;
-		target_buffer[i_t] = static_cast<char>(sum & 0xFF);
-		carry = static_cast<char>((sum >> 8) & 0xFF);
-		--i_t;
-	}
-	D_ASSERT(carry == 0 && "Addition overflowed the buffer size");
-}
-
 void AddBinaryBuffersInPlace(char *target_buffer, idx_t target_size, const char *source_buffer, idx_t source_size) {
 	D_ASSERT(target_size >= source_size && "Buffer a must be at least as large as b");
 	uint16_t carry = 0;
