@@ -124,12 +124,4 @@ private:
 	                       optional_ptr<HivePartitioning> hive_partitioning);
 };
 
-struct GlobState {
-	vector<string> splits;
-	vector<OpenFileInfo> previous_directories;
-	vector<OpenFileInfo> result;
-	FileOpener *opener;
-	optional_ptr<HivePartitioning> hive_partitioning;
-};
-
 } // namespace duckdb
