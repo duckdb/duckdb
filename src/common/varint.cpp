@@ -12,7 +12,7 @@ varint_t::varint_t(ArenaAllocator &allocator, uint32_t blob_size) : string_t(blo
 }
 
 varint_t::varint_t(ArenaAllocator &allocator, const char *data, size_t len)
-    : string_t(data, len), allocator(&allocator) {
+    : string_t(data, static_cast<uint32_t>(len)), allocator(&allocator) {
 }
 
 varint_t varint_t::operator*(const varint_t &rhs) const {
@@ -75,7 +75,7 @@ void varint_t::Trim() {
 	}
 }
 
-void varint_t::Reallocate() {
+void varint_t::Reallocate(idx_t min_size) {
 	// When reallocating, we double the size and properly set the new values
 	// Notice that this might temporarily create an INVALID varint
 	// Be sure to call TRIM, to make it valid again.
@@ -116,21 +116,19 @@ varint_t &varint_t::operator+=(const string_t &rhs) {
 	auto target_size = GetSize();
 	auto source_size = rhs.GetSize();
 	const bool same_sign = (target_ptr[0] & 0x80) == (source_ptr[0] & 0x80);
-
-	// If target is smaller than source we absolutely have to realloc
 	if (target_size < source_size) {
-		// we should switcharoo the pointers and sizes
-		std::swap(target_ptr, source_ptr);
-		std::swap(target_size, source_size);
-		// We set the pointer to the new target pointer
-		SetPointer(target_ptr);
+		// We must reallocate
+		Reallocate(source_size+1);
+		// Get new pointer/size
+		target_ptr = GetDataWriteable();
+		target_size = GetSize();
 	}
-	if (same_sign && target_size == source_size) {
+	else if (same_sign && target_size == source_size) {
 		// If they both have the same sign and same size there might be a chance..
 		// But only if the MSD of the MSB from the data is set
 		if ((target_ptr[3] & 0x80) != 0 || (source_ptr[3] & 0x80) != 0) {
 			// We must reallocate
-			Reallocate();
+			Reallocate(target_size+1);
 			// Get new pointer/size
 			target_ptr = GetDataWriteable();
 			target_size = GetSize();

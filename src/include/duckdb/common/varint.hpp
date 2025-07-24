@@ -47,7 +47,7 @@ struct varint_t : public string_t { // NOLINT: use numeric casing
 
 	DUCKDB_API varint_t &operator+=(const string_t &rhs);
 	//! Reallocate the Varint 2x-ing its size
-	void Reallocate();
+	void Reallocate(idx_t min_size);
 	//! In case we have unnecessary extra 0's or 1's in our varint we trim them
 	void Trim();
 
