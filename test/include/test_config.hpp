@@ -21,6 +21,8 @@ namespace duckdb {
 
 class TestConfiguration {
 public:
+	enum class ExtensionAutoLoadingMode { NONE = 0, AVAILABLE = 1, ALL = 2 };
+
 	static TestConfiguration &Get();
 
 	void Initialize();
@@ -42,12 +44,14 @@ public:
 	bool GetSkipCompiledTests();
 	DebugVectorVerification GetVectorVerification();
 	DebugInitialize GetDebugInitialize();
+	ExtensionAutoLoadingMode GetExtensionAutoLoadingMode();
 	bool ShouldSkipTest(const string &test_name);
 	string OnInitCommand();
 	string OnLoadCommand();
 	string OnConnectionCommand();
 	vector<string> ExtensionToBeLoadedOnLoad();
 	vector<string> ErrorMessagesToBeSkipped();
+	string GetStorageVersion();
 
 	static bool TestForceStorage();
 	static bool TestForceReload();

@@ -83,7 +83,7 @@ jobs:
     runs-on: ubuntu-22.04
 
     env:
-      CIBW_BUILD: 'cp310-*'
+      CIBW_BUILD: cp310-manylinux_x86_64
       CIBW_ARCHS: 'x86_64'
       CIBW_TEST_COMMAND: 'python -m pytest {project}/tests --verbose'
       # FIXME: add this back to CIBW_TEST_COMMAND '&& USE_ACTUAL_SPARK=true JAVA_HOME=$(dirname $(dirname $(readlink -f $(which java)))) SPARK_HOME={project}/spark_installation/spark python -m pytest {project}/tests/fast/spark --verbose'
@@ -144,35 +144,29 @@ jobs:
 
   linux-python3:
     name: Python 3 Linux
-    runs-on: ubuntu-22.04
+    runs-on: ${{ matrix.platform.os }}
     needs: linux-python3-10
     strategy:
       fail-fast: false
       matrix:
-        duckdb_arch: [linux_amd64]
-        arch: [x86_64, aarch64]
-        python_build: [ cp39-*, cp310-*, cp311-*, cp312-*, cp313-*]
-        manylinux: [manylinux_2_28]
+        platform:
+          - { os: ubuntu-24.04,     arch: x86_64 }
+          - { os: ubuntu-24.04-arm, arch: aarch64 }
+        python: [ cp39, cp310, cp311, cp312, cp313]
         isRelease:
           - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || inputs.run_all == 'true' }}
         exclude:
           # Speed things up a bit for non-releases
-          - isRelease: false
-            python_build: 'cp310-*'
-          - isRelease: false
-            python_build: 'cp311-*'
-          - isRelease: false
-            python_build: 'cp312-*'
-          - isRelease: false
-            arch: aarch64
+          - { isRelease: false, python: cp310 }
+          - { isRelease: false, python: cp311 }
+          - { isRelease: false, python: cp312 }
     env:
-      CIBW_BUILD: ${{ matrix.python_build}}
-      CIBW_SKIP: '*-musllinux_aarch64'
-      CIBW_ARCHS: ${{ matrix.arch == 'aarch64' && 'aarch64' || 'auto64' }}
-      CIBW_MANYLINUX_AARCH64_IMAGE: ${{ matrix.manylinux }}
-      CIBW_MANYLINUX_PYPY_AARCH64_IMAGE: ${{ matrix.manylinux }}
-      CIBW_MANYLINUX_X86_64_IMAGE: ${{ matrix.manylinux }}
-      CIBW_MANYLINUX_PYPY_X86_64_IMAGE: ${{ matrix.manylinux }}
+      CIBW_BUILD: ${{ matrix.python }}-manylinux_${{ matrix.platform.arch }}
+      CIBW_ARCHS: ${{ matrix.platform.arch }}
+      CIBW_MANYLINUX_AARCH64_IMAGE: manylinux_2_28
+      CIBW_MANYLINUX_PYPY_AARCH64_IMAGE: manylinux_2_28
+      CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
+      CIBW_MANYLINUX_PYPY_X86_64_IMAGE: manylinux_2_28
       PYTEST_TIMEOUT: '600'
       DUCKDB_BUILD_UNITY: 1
       CIBW_ENVIRONMENT: 'OVERRIDE_GIT_DESCRIBE=${{ inputs.override_git_describe }}'
@@ -197,10 +191,6 @@ jobs:
             git tag ${{ inputs.override_git_describe }}
         fi
 
-    - name: Set up QEMU
-      uses: docker/setup-qemu-action@v3
-      if: ${{ matrix.arch == 'aarch64' }}
-
     - uses: actions/setup-python@v5
       with:
         python-version: '3.11'
@@ -214,7 +204,7 @@ jobs:
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@v1.2.11 # Note: pinned due to GLIBC incompatibility in later releases
       with:
-        key: ${{ github.job }}-${{ matrix.arch }}-${{ matrix.python_build }}
+        key: ${{ github.job }}-${{ matrix.platform.arch }}-${{ matrix.python }}
         save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build

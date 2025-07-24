@@ -566,6 +566,15 @@ typedef struct {
 	bool (*duckdb_error_data_has_error)(duckdb_error_data error_data);
 #endif
 
+// API to create and manipulate expressions
+#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+	void (*duckdb_destroy_expression)(duckdb_expression *expr);
+	duckdb_logical_type (*duckdb_expression_return_type)(duckdb_expression expr);
+	bool (*duckdb_expression_is_foldable)(duckdb_expression expr);
+	duckdb_error_data (*duckdb_expression_fold)(duckdb_client_context context, duckdb_expression expr,
+	                                            duckdb_value *out_value);
+#endif
+
 // New functions around the client context
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
 	idx_t (*duckdb_client_context_get_connection_id)(duckdb_client_context context);
@@ -590,6 +599,8 @@ typedef struct {
 	                                             duckdb_delete_callback_t destroy);
 	void *(*duckdb_scalar_function_get_bind_data)(duckdb_function_info info);
 	void *(*duckdb_scalar_function_bind_get_extra_info)(duckdb_bind_info info);
+	idx_t (*duckdb_scalar_function_bind_get_argument_count)(duckdb_bind_info info);
+	duckdb_expression (*duckdb_scalar_function_bind_get_argument)(duckdb_bind_info info, idx_t index);
 #endif
 
 // New string functions that are added
@@ -1055,6 +1066,12 @@ typedef struct {
 #define duckdb_error_data_message    duckdb_ext_api.duckdb_error_data_message
 #define duckdb_error_data_has_error  duckdb_ext_api.duckdb_error_data_has_error
 
+// Version unstable_new_expression_functions
+#define duckdb_destroy_expression     duckdb_ext_api.duckdb_destroy_expression
+#define duckdb_expression_return_type duckdb_ext_api.duckdb_expression_return_type
+#define duckdb_expression_is_foldable duckdb_ext_api.duckdb_expression_is_foldable
+#define duckdb_expression_fold        duckdb_ext_api.duckdb_expression_fold
+
 // Version unstable_new_open_connect_functions
 #define duckdb_connection_get_client_context    duckdb_ext_api.duckdb_connection_get_client_context
 #define duckdb_connection_get_arrow_options     duckdb_ext_api.duckdb_connection_get_arrow_options
@@ -1067,12 +1084,14 @@ typedef struct {
 #define duckdb_result_get_arrow_options duckdb_ext_api.duckdb_result_get_arrow_options
 
 // Version unstable_new_scalar_function_functions
-#define duckdb_scalar_function_set_bind            duckdb_ext_api.duckdb_scalar_function_set_bind
-#define duckdb_scalar_function_set_bind_data       duckdb_ext_api.duckdb_scalar_function_set_bind_data
-#define duckdb_scalar_function_bind_set_error      duckdb_ext_api.duckdb_scalar_function_bind_set_error
-#define duckdb_scalar_function_bind_get_extra_info duckdb_ext_api.duckdb_scalar_function_bind_get_extra_info
-#define duckdb_scalar_function_get_bind_data       duckdb_ext_api.duckdb_scalar_function_get_bind_data
-#define duckdb_scalar_function_get_client_context  duckdb_ext_api.duckdb_scalar_function_get_client_context
+#define duckdb_scalar_function_set_bind                duckdb_ext_api.duckdb_scalar_function_set_bind
+#define duckdb_scalar_function_set_bind_data           duckdb_ext_api.duckdb_scalar_function_set_bind_data
+#define duckdb_scalar_function_bind_set_error          duckdb_ext_api.duckdb_scalar_function_bind_set_error
+#define duckdb_scalar_function_bind_get_extra_info     duckdb_ext_api.duckdb_scalar_function_bind_get_extra_info
+#define duckdb_scalar_function_get_bind_data           duckdb_ext_api.duckdb_scalar_function_get_bind_data
+#define duckdb_scalar_function_get_client_context      duckdb_ext_api.duckdb_scalar_function_get_client_context
+#define duckdb_scalar_function_bind_get_argument_count duckdb_ext_api.duckdb_scalar_function_bind_get_argument_count
+#define duckdb_scalar_function_bind_get_argument       duckdb_ext_api.duckdb_scalar_function_bind_get_argument
 
 // Version unstable_new_string_functions
 #define duckdb_value_to_string duckdb_ext_api.duckdb_value_to_string

@@ -55,6 +55,13 @@ MetadataHandle MetadataManager::AllocateHandle() {
 MetadataHandle MetadataManager::Pin(const MetadataPointer &pointer) {
 	D_ASSERT(pointer.index < METADATA_BLOCK_COUNT);
 	auto &block = blocks[UnsafeNumericCast<int64_t>(pointer.block_index)];
+#ifdef DEBUG
+	for (auto &free_block : block.free_blocks) {
+		if (free_block == pointer.index) {
+			throw InternalException("Pinning block %d.%d but it is marked as a free block", block.block_id, free_block);
+		}
+	}
+#endif
 
 	MetadataHandle handle;
 	handle.pointer.block_index = pointer.block_index;
@@ -299,8 +306,6 @@ void MetadataManager::ClearModifiedBlocks(const vector<MetaBlockPointer> &pointe
 			throw InternalException("ClearModifiedBlocks - Block id %llu not found in modified_blocks", block_id);
 		}
 		auto &modified_list = entry->second;
-		// verify the block has been modified
-		D_ASSERT(modified_list && (1ULL << block_index));
 		// unset the bit
 		modified_list &= ~(1ULL << block_index);
 	}

@@ -1,0 +1,27 @@
+# name: test/sql/delete/in_memory_truncate.test_slow
+# description: Test that repeated truncate of in-memory table frees up memory
+# group: [delete]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE a(i INTEGER)
+
+loop i 0 10
+
+statement ok
+INSERT INTO a FROM range(1000000)
+
+statement ok
+TRUNCATE a
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT memory_usage_bytes FROM duckdb_memory() WHERE tag='IN_MEMORY_TABLE'
+----
+0
+
+endloop

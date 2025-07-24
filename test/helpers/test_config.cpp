@@ -31,6 +31,7 @@ static const TestConfigOption test_config_options[] = {
     {"test_memory_leaks", "Run memory leak tests", LogicalType::BOOLEAN, nullptr},
     {"verify_vector", "Run vector verification for a specific vector type", LogicalType::VARCHAR, nullptr},
     {"debug_initialize", "Initialize buffers with all 0 or all 1", LogicalType::VARCHAR, nullptr},
+    {"autoloading", "Loading strategy for extensions not bundled in", LogicalType::VARCHAR, nullptr},
     {"init_script", "Script to execute on init", LogicalType::VARCHAR, TestConfiguration::ParseConnectScript},
     {"on_init", "SQL statements to execute on init", LogicalType::VARCHAR, nullptr},
     {"on_load", "SQL statements to execute on explicit load", LogicalType::VARCHAR, nullptr},
@@ -40,6 +41,7 @@ static const TestConfigOption test_config_options[] = {
     {"skip_error_messages", "Skip compiled tests", LogicalType::LIST(LogicalType::VARCHAR), nullptr},
     {"statically_loaded_extensions", "Extensions to be loaded (from the statically available one)",
      LogicalType::LIST(LogicalType::VARCHAR), nullptr},
+    {"storage_version", "Database storage version to use by default", LogicalType::VARCHAR, nullptr},
     {nullptr, nullptr, LogicalType::INVALID, nullptr},
 };
 
@@ -167,8 +169,20 @@ void TestConfiguration::ParseOption(const string &name, const Value &value) {
 	}
 }
 
-bool TestConfiguration::ShouldSkipTest(const string &test) {
-	return tests_to_be_skipped.count(test);
+TestConfiguration::ExtensionAutoLoadingMode TestConfiguration::GetExtensionAutoLoadingMode() {
+	string res = StringUtil::Lower(GetOptionOrDefault("autoloading", string("default")));
+	if (res == "none" || res == "default") {
+		return TestConfiguration::ExtensionAutoLoadingMode::NONE;
+	} else if (res == "available") {
+		return TestConfiguration::ExtensionAutoLoadingMode::AVAILABLE;
+	} else if (res == "all") {
+		return TestConfiguration::ExtensionAutoLoadingMode::ALL;
+	}
+	throw std::runtime_error("Unknown autoloading mode");
+}
+
+bool TestConfiguration::ShouldSkipTest(const string &test_name) {
+	return tests_to_be_skipped.count(test_name);
 }
 
 string TestConfiguration::OnInitCommand() {
@@ -308,6 +322,10 @@ bool TestConfiguration::GetSummarizeFailures() {
 
 bool TestConfiguration::GetSkipCompiledTests() {
 	return GetOptionOrDefault("skip_compiled", false);
+}
+
+string TestConfiguration::GetStorageVersion() {
+	return GetOptionOrDefault("storage_version", string());
 }
 
 DebugVectorVerification TestConfiguration::GetVectorVerification() {

@@ -29,6 +29,8 @@ public:
 public:
 	void WriteTableData(Serializer &metadata_serializer);
 
+	virtual void WriteUnchangedTable(MetaBlockPointer pointer, idx_t total_rows,
+	                                 vector<MetaBlockPointer> data_pointers) = 0;
 	virtual void FinalizeTable(const TableStatistics &global_stats, DataTableInfo *info, Serializer &serializer) = 0;
 	virtual unique_ptr<RowGroupWriter> GetRowGroupWriter(RowGroup &row_group) = 0;
 
@@ -51,6 +53,8 @@ public:
 	                          MetadataWriter &table_data_writer);
 
 public:
+	void WriteUnchangedTable(MetaBlockPointer pointer, idx_t total_rows,
+	                         vector<MetaBlockPointer> data_pointers) override;
 	void FinalizeTable(const TableStatistics &global_stats, DataTableInfo *info, Serializer &serializer) override;
 	unique_ptr<RowGroupWriter> GetRowGroupWriter(RowGroup &row_group) override;
 	CheckpointType GetCheckpointType() const override;
@@ -59,6 +63,10 @@ private:
 	SingleFileCheckpointWriter &checkpoint_manager;
 	//! Writes the actual table data
 	MetadataWriter &table_data_writer;
+	//! The root pointer, if we are re-using metadata of the table
+	MetaBlockPointer existing_pointer;
+	optional_idx existing_rows;
+	vector<MetaBlockPointer> existing_pointers;
 };
 
 } // namespace duckdb

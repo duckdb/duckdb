@@ -33,6 +33,7 @@ void RowGroupSegmentTree::Initialize(PersistentTableData &data) {
 	max_row_group = data.row_group_count;
 	finished_loading = false;
 	reader = make_uniq<MetadataReader>(collection.GetMetadataManager(), data.block_pointer);
+	root_pointer = data.block_pointer;
 }
 
 unique_ptr<RowGroup> RowGroupSegmentTree::LoadSegment() {
@@ -47,6 +48,18 @@ unique_ptr<RowGroup> RowGroupSegmentTree::LoadSegment() {
 	deserializer.End();
 	current_row_group++;
 	return make_uniq<RowGroup>(collection, std::move(row_group_pointer));
+}
+
+bool RowGroupSegmentTree::HasChanges(SegmentLock &l) const {
+	// check if any changes have been made
+	// any row groups that are not loaded by definition do not have any changes - so avoid loading extra row groups
+	auto &segments = ReferenceLoadedSegments(l);
+	for (auto &segment : segments) {
+		if (segment.node->HasChanges()) {
+			return true;
+		}
+	}
+	return false;
 }
 
 //===--------------------------------------------------------------------===//
@@ -95,6 +108,7 @@ void RowGroupCollection::Initialize(PersistentTableData &data) {
 	this->total_rows = data.total_rows;
 	row_groups->Initialize(data);
 	stats.Initialize(types, data);
+	metadata_pointer = data.base_table_pointer;
 }
 
 void RowGroupCollection::Initialize(PersistentCollectionData &data) {
@@ -940,9 +954,10 @@ private:
 
 void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkpoint_state, VacuumState &state,
                                                vector<SegmentNode<RowGroup>> &segments) {
-	bool is_full_checkpoint = checkpoint_state.writer.GetCheckpointType() == CheckpointType::FULL_CHECKPOINT;
+	auto checkpoint_type = checkpoint_state.writer.GetCheckpointType();
+	bool vacuum_is_allowed = checkpoint_type != CheckpointType::CONCURRENT_CHECKPOINT;
 	// currently we can only vacuum deletes if we are doing a full checkpoint and there are no indexes
-	state.can_vacuum_deletes = info->GetIndexes().Empty() && is_full_checkpoint;
+	state.can_vacuum_deletes = info->GetIndexes().Empty() && vacuum_is_allowed;
 	if (!state.can_vacuum_deletes) {
 		return;
 	}
@@ -1038,6 +1053,19 @@ unique_ptr<CheckpointTask> RowGroupCollection::GetCheckpointTask(CollectionCheck
 
 void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &global_stats) {
 	auto l = row_groups->Lock();
+	if (metadata_pointer.IsValid() && !row_groups->HasChanges(l)) {
+		vector<MetaBlockPointer> data_pointers;
+		for (auto &row_group : row_groups->Segments(l)) {
+			auto column_pointers = row_group.GetColumnPointers();
+			data_pointers.insert(data_pointers.end(), column_pointers.begin(), column_pointers.end());
+
+			auto &deletes_pointers = row_group.GetDeletesPointers();
+			data_pointers.insert(data_pointers.end(), deletes_pointers.begin(), deletes_pointers.end());
+		}
+		writer.WriteUnchangedTable(metadata_pointer, total_rows.load(), std::move(data_pointers));
+		return;
+	}
+
 	auto segments = row_groups->MoveSegments(l);
 
 	CollectionCheckpointState checkpoint_state(*this, writer, segments, global_stats);
@@ -1065,8 +1093,10 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			}
 			// schedule a checkpoint task for this row group
 			entry.node->MoveToCollection(*this, vacuum_state.row_start);
-			auto checkpoint_task = GetCheckpointTask(checkpoint_state, segment_idx);
-			checkpoint_state.executor->ScheduleTask(std::move(checkpoint_task));
+			if (writer.GetCheckpointType() != CheckpointType::VACUUM_ONLY) {
+				auto checkpoint_task = GetCheckpointTask(checkpoint_state, segment_idx);
+				checkpoint_state.executor->ScheduleTask(std::move(checkpoint_task));
+			}
 			vacuum_state.row_start += entry.node->count;
 		}
 	} catch (const std::exception &e) {
@@ -1087,6 +1117,13 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			continue;
 		}
 		auto &row_group = *entry.node;
+		if (!checkpoint_state.writers[segment_idx]) {
+			// row group was not checkpointed - this can happen if compressing is disabled for in-memory tables
+			D_ASSERT(writer.GetCheckpointType() == CheckpointType::VACUUM_ONLY);
+			row_groups->AppendSegment(l, std::move(entry.node));
+			new_total_rows += row_group.count;
+			continue;
+		}
 		auto row_group_writer = std::move(checkpoint_state.writers[segment_idx]);
 		if (!row_group_writer) {
 			throw InternalException("Missing row group writer for index %llu", segment_idx);
