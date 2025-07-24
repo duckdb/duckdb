@@ -97,11 +97,13 @@ struct MatcherSuggestion {
 };
 
 struct MatchState {
-	MatchState(vector<MatcherToken> &tokens, vector<MatcherSuggestion> &suggestions, ParserKeywordManager &keyword_manager)
+	MatchState(vector<MatcherToken> &tokens, vector<MatcherSuggestion> &suggestions,
+	           ParserKeywordManager &keyword_manager)
 	    : tokens(tokens), suggestions(suggestions), token_index(0), keyword_manager(keyword_manager) {
 	}
 	MatchState(MatchState &state)
-	    : tokens(state.tokens), suggestions(state.suggestions), token_index(state.token_index), keyword_manager(state.keyword_manager) {
+	    : tokens(state.tokens), suggestions(state.suggestions), token_index(state.token_index),
+	      keyword_manager(state.keyword_manager) {
 	}
 
 	vector<MatcherToken> &tokens;

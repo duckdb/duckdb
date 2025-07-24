@@ -236,5 +236,4 @@ void ExtensionLoader::RegisterKeyword(const string &keyword, const KeywordCatego
 	config.keyword_manager->RegisterKeyword(keyword, category);
 }
 
-
 } // namespace duckdb
