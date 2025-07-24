@@ -54,9 +54,11 @@ CheckpointType SingleFileTableDataWriter::GetCheckpointType() const {
 	return checkpoint_manager.GetCheckpointType();
 }
 
-void SingleFileTableDataWriter::WriteUnchangedTable(MetaBlockPointer pointer, idx_t total_rows) {
+void SingleFileTableDataWriter::WriteUnchangedTable(MetaBlockPointer pointer, idx_t total_rows,
+                                                    vector<MetaBlockPointer> data_pointers) {
 	existing_pointer = pointer;
 	existing_rows = total_rows;
+	existing_pointers = std::move(data_pointers);
 }
 
 void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stats, DataTableInfo *info,
@@ -100,6 +102,8 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 		MetadataReader reader(metadata_manager, pointer);
 		auto blocks = reader.GetRemainingBlocks();
 		metadata_manager.ClearModifiedBlocks(blocks);
+
+		metadata_manager.ClearModifiedBlocks(existing_pointers);
 	}
 
 	// Now begin the metadata as a unit

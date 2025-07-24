@@ -92,6 +92,12 @@ public:
 	RowGroupCollection &GetCollection() {
 		return collection.get();
 	}
+	const vector<MetaBlockPointer> &GetColumnPointers() const {
+		return column_pointers;
+	}
+	const vector<MetaBlockPointer> &GetDeletesPointers() const {
+		return deletes_pointers;
+	}
 	BlockManager &GetBlockManager();
 	DataTableInfo &GetTableInfo();
 

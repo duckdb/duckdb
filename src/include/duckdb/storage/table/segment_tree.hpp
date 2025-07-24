@@ -255,6 +255,10 @@ public:
 		return SegmentIterationHelper(*this);
 	}
 
+	SegmentIterationHelper Segments(SegmentLock &l) {
+		return SegmentIterationHelper(*this, l);
+	}
+
 	void Reinitialize() {
 		if (nodes.empty()) {
 			return;
@@ -292,22 +296,27 @@ private:
 	public:
 		explicit SegmentIterationHelper(SegmentTree &tree) : tree(tree) {
 		}
+		SegmentIterationHelper(SegmentTree &tree, SegmentLock &l) : tree(tree), lock(l) {
+		}
 
 	private:
 		SegmentTree &tree;
+		optional_ptr<SegmentLock> lock;
 
 	private:
 		class SegmentIterator {
 		public:
-			SegmentIterator(SegmentTree &tree_p, T *current_p) : tree(tree_p), current(current_p) {
+			SegmentIterator(SegmentTree &tree_p, T *current_p, optional_ptr<SegmentLock> lock)
+			    : tree(tree_p), current(current_p), lock(lock) {
 			}
 
 			SegmentTree &tree;
 			T *current;
+			optional_ptr<SegmentLock> lock;
 
 		public:
 			void Next() {
-				current = tree.GetNextSegment(current);
+				current = lock ? tree.GetNextSegment(*lock, current) : tree.GetNextSegment(current);
 			}
 
 			SegmentIterator &operator++() {
@@ -325,10 +334,11 @@ private:
 
 	public:
 		SegmentIterator begin() { // NOLINT: match stl API
-			return SegmentIterator(tree, tree.GetRootSegment());
+			auto root = lock ? tree.GetRootSegment(*lock) : tree.GetRootSegment();
+			return SegmentIterator(tree, root, lock);
 		}
 		SegmentIterator end() { // NOLINT: match stl API
-			return SegmentIterator(tree, nullptr);
+			return SegmentIterator(tree, nullptr, lock);
 		}
 	};
 

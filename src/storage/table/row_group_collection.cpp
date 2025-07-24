@@ -1054,7 +1054,15 @@ unique_ptr<CheckpointTask> RowGroupCollection::GetCheckpointTask(CollectionCheck
 void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &global_stats) {
 	auto l = row_groups->Lock();
 	if (metadata_pointer.IsValid() && !row_groups->HasChanges(l)) {
-		writer.WriteUnchangedTable(metadata_pointer, total_rows.load());
+		vector<MetaBlockPointer> data_pointers;
+		for (auto &row_group : row_groups->Segments(l)) {
+			auto &column_pointers = row_group.GetColumnPointers();
+			data_pointers.insert(data_pointers.end(), column_pointers.begin(), column_pointers.end());
+
+			auto &deletes_pointers = row_group.GetDeletesPointers();
+			data_pointers.insert(data_pointers.end(), deletes_pointers.begin(), deletes_pointers.end());
+		}
+		writer.WriteUnchangedTable(metadata_pointer, total_rows.load(), std::move(data_pointers));
 		return;
 	}
 

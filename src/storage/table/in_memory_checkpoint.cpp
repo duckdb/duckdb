@@ -86,7 +86,8 @@ InMemoryTableDataWriter::InMemoryTableDataWriter(InMemoryCheckpointer &checkpoin
     : TableDataWriter(table, checkpoint_manager.GetClientContext()), checkpoint_manager(checkpoint_manager) {
 }
 
-void InMemoryTableDataWriter::WriteUnchangedTable(MetaBlockPointer pointer, idx_t total_rows) {
+void InMemoryTableDataWriter::WriteUnchangedTable(MetaBlockPointer pointer, idx_t total_rows,
+                                                  vector<MetaBlockPointer> data_pointers) {
 }
 
 void InMemoryTableDataWriter::FinalizeTable(const TableStatistics &global_stats, DataTableInfo *info,
