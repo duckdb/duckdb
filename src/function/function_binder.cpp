@@ -434,7 +434,7 @@ static void HandleCollations(ClientContext &context, ScalarFunction &bound_funct
 }
 
 static void InferTemplateType(ClientContext &context, const LogicalType &source, const LogicalType &target,
-                              unordered_map<idx_t, LogicalType> &bindings) {
+                              unordered_map<idx_t, LogicalType> &bindings, const Expression &current_expr) {
 
 	if (target.id() == LogicalTypeId::UNKNOWN || target.id() == LogicalTypeId::SQLNULL) {
 		// If the actual type is unknown, we cannot infer anything more.
@@ -484,8 +484,8 @@ static void InferTemplateType(ClientContext &context, const LogicalType &source,
 		}
 
 		// If we reach here, it means the types are incompatible
-		throw BinderException("Cannot unify template type '%s' with types '%s' and '%s', an explicit cast is required",
-		                      TemplateType::GetName(source), it->second.ToString(), target.ToString());
+		throw BinderException(current_expr.GetQueryLocation(), "Cannot infer template type '%s' given '%s' (previously deduced as: '%s'), an explicit cast is required",
+		                      TemplateType::GetName(source), LogicalType::NormalizeType(it->second).ToString(), LogicalType::NormalizeType(target).ToString());
 
 	} break;
 	case LogicalTypeId::LIST:
@@ -496,7 +496,7 @@ static void InferTemplateType(ClientContext &context, const LogicalType &source,
 			    source.id() == LogicalTypeId::LIST ? ListType::GetChildType(source) : ArrayType::GetChildType(source);
 			const auto &target_child =
 			    target.id() == LogicalTypeId::LIST ? ListType::GetChildType(target) : ArrayType::GetChildType(target);
-			InferTemplateType(context, source_child, target_child, bindings);
+			InferTemplateType(context, source_child, target_child, bindings, current_expr);
 		}
 	} break;
 	case LogicalTypeId::MAP: {
@@ -507,8 +507,8 @@ static void InferTemplateType(ClientContext &context, const LogicalType &source,
 			const auto &target_key = MapType::KeyType(target);
 			const auto &target_val = MapType::ValueType(target);
 
-			InferTemplateType(context, source_key, target_key, bindings);
-			InferTemplateType(context, source_val, target_val, bindings);
+			InferTemplateType(context, source_key, target_key, bindings, current_expr);
+			InferTemplateType(context, source_val, target_val, bindings, current_expr);
 		}
 	} break;
 	case LogicalTypeId::UNION: {
@@ -520,7 +520,7 @@ static void InferTemplateType(ClientContext &context, const LogicalType &source,
 			for (idx_t i = 0; i < common_members; i++) {
 				const auto &source_member_type = UnionType::GetMemberType(source, i);
 				const auto &target_member_type = UnionType::GetMemberType(target, i);
-				InferTemplateType(context, source_member_type, target_member_type, bindings);
+				InferTemplateType(context, source_member_type, target_member_type, bindings, current_expr);
 			}
 		}
 	} break;
@@ -534,7 +534,7 @@ static void InferTemplateType(ClientContext &context, const LogicalType &source,
 			for (idx_t i = 0; i < common_children; i++) {
 				const auto &source_child_type = source_children[i].second;
 				const auto &target_child_type = target_children[i].second;
-				InferTemplateType(context, source_child_type, target_child_type, bindings);
+				InferTemplateType(context, source_child_type, target_child_type, bindings, current_expr);
 			}
 		}
 	} break;
@@ -575,17 +575,29 @@ void FunctionBinder::ResolveTemplateTypes(BaseScalarFunction &bound_function,
 	unordered_map<idx_t, LogicalType> bindings;
 
 	// Infer template types in the function arguments from the actual types of the children
-	D_ASSERT(bound_function.arguments.size() <= children.size());
 	for (idx_t i = 0; i < bound_function.arguments.size(); i++) {
 		auto &param = bound_function.arguments[i];
-		auto &actual = children[i]->return_type;
+		auto actual = ExpressionBinder::GetExpressionReturnType(*children[i]);
 
-		InferTemplateType(context, param, actual, bindings);
+		InferTemplateType(context, param, actual, bindings, *children[i]);
+	}
+
+	if (bound_function.HasVarArgs()) {
+		// If there are more children than arguments, we assume that the extra children are varargs.
+		for (idx_t i = bound_function.arguments.size(); i < children.size(); i++) {
+			auto actual = ExpressionBinder::GetExpressionReturnType(*children[i]);
+			InferTemplateType(context, bound_function.varargs, actual, bindings, *children[i]);
+		}
 	}
 
 	// Now try to substitute argument types
 	for (auto &arg : bound_function.arguments) {
 		SubstituteTemplateType(arg, bindings);
+	}
+
+	if (bound_function.HasVarArgs()) {
+		// Substitute the varargs type as well
+		SubstituteTemplateType(bound_function.varargs, bindings);
 	}
 
 	// Also substitue the return type

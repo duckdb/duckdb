@@ -6,35 +6,6 @@
 
 namespace duckdb {
 
-template <bool EXTRACT_VALUE>
-static unique_ptr<FunctionData> MapExtractBind(ClientContext &, ScalarFunction &bound_function,
-                                               vector<unique_ptr<Expression>> &arguments) {
-	if (arguments.size() != 2) {
-		throw BinderException("MAP_EXTRACT must have exactly two arguments");
-	}
-
-	const auto &map_type = arguments[0]->return_type;
-	const auto &input_type = arguments[1]->return_type;
-
-	if (map_type.id() == LogicalTypeId::SQLNULL) {
-		bound_function.return_type = EXTRACT_VALUE ? LogicalTypeId::SQLNULL : LogicalType::LIST(LogicalTypeId::SQLNULL);
-		return make_uniq<VariableReturnBindData>(bound_function.return_type);
-	}
-
-	if (map_type.id() != LogicalTypeId::MAP) {
-		throw BinderException("'%s' can only operate on MAPs", bound_function.name);
-	}
-	auto &value_type = MapType::ValueType(map_type);
-
-	//! Here we have to construct the List Type that will be returned
-	bound_function.return_type = EXTRACT_VALUE ? value_type : LogicalType::LIST(value_type);
-	const auto &key_type = MapType::KeyType(map_type);
-	if (key_type.id() != LogicalTypeId::SQLNULL && input_type.id() != LogicalTypeId::SQLNULL) {
-		bound_function.arguments[1] = MapType::KeyType(map_type);
-	}
-	return make_uniq<VariableReturnBindData>(bound_function.return_type);
-}
-
 static void MapExtractValueFunc(DataChunk &args, ExpressionState &state, Vector &result) {
 	const auto count = args.size();
 
@@ -166,17 +137,19 @@ static void MapExtractListFunc(DataChunk &args, ExpressionState &state, Vector &
 }
 
 ScalarFunction MapExtractValueFun::GetFunction() {
-	ScalarFunction fun({LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY, MapExtractValueFunc,
-	                   MapExtractBind<true>);
-	fun.varargs = LogicalType::ANY;
+	auto key_type = LogicalType::TEMPLATE(0);
+	auto val_type = LogicalType::TEMPLATE(1);
+
+	ScalarFunction fun({LogicalType::MAP(key_type, val_type), key_type}, val_type, MapExtractValueFunc);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return fun;
 }
 
 ScalarFunction MapExtractFun::GetFunction() {
-	ScalarFunction fun({LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY, MapExtractListFunc,
-	                   MapExtractBind<false>);
-	fun.varargs = LogicalType::ANY;
+	auto key_type = LogicalType::TEMPLATE(0);
+	auto val_type = LogicalType::TEMPLATE(1);
+
+	ScalarFunction fun({LogicalType::MAP(key_type, val_type), key_type}, LogicalType::LIST(val_type), MapExtractListFunc);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return fun;
 }

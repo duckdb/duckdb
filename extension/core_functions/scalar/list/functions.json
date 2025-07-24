@@ -196,14 +196,6 @@
         "type": "scalar_function"
     },
     {
-        "name": "make_pair",
-        "parameters": "v1, v2",
-        "description": "TODO",
-        "example": "TODO",
-        "categories": ["list"],
-        "type": "scalar_function"
-    },
-    {
         "name": "list_has_any",
         "parameters": "list1,list2",
         "description": "Returns true if the lists have any element in common. NULLs are ignored.",

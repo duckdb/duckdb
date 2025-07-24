@@ -262,8 +262,7 @@ void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &result) 
 	ListVector::SetListSize(result, column_count * args.size());
 }
 
-template <bool IS_UNPIVOT = false>
-unique_ptr<FunctionData> ListValueBind(ClientContext &context, ScalarFunction &bound_function,
+unique_ptr<FunctionData> UnpivotBind(ClientContext &context, ScalarFunction &bound_function,
                                        vector<unique_ptr<Expression>> &arguments) {
 	// collect names and deconflict, construct return type
 	LogicalType child_type =
@@ -271,28 +270,22 @@ unique_ptr<FunctionData> ListValueBind(ClientContext &context, ScalarFunction &b
 	for (idx_t i = 1; i < arguments.size(); i++) {
 		auto arg_type = ExpressionBinder::GetExpressionReturnType(*arguments[i]);
 		if (!LogicalType::TryGetMaxLogicalType(context, child_type, arg_type, child_type)) {
-			if (IS_UNPIVOT) {
-				string list_arguments = "Full list: ";
-				idx_t error_index = list_arguments.size();
-				for (idx_t k = 0; k < arguments.size(); k++) {
-					if (k > 0) {
-						list_arguments += ", ";
-					}
-					if (k == i) {
-						error_index = list_arguments.size();
-					}
-					list_arguments += arguments[k]->ToString() + " " + arguments[k]->return_type.ToString();
+			string list_arguments = "Full list: ";
+			idx_t error_index = list_arguments.size();
+			for (idx_t k = 0; k < arguments.size(); k++) {
+				if (k > 0) {
+					list_arguments += ", ";
 				}
-				auto error =
-				    StringUtil::Format("Cannot unpivot columns of types %s and %s - an explicit cast is required",
-				                       child_type.ToString(), arg_type.ToString());
-				throw BinderException(arguments[i]->GetQueryLocation(),
-				                      QueryErrorContext::Format(list_arguments, error, error_index, false));
-			} else {
-				throw BinderException(arguments[i]->GetQueryLocation(),
-				                      "Cannot create a list of types %s and %s - an explicit cast is required",
-				                      child_type.ToString(), arg_type.ToString());
+				if (k == i) {
+					error_index = list_arguments.size();
+				}
+				list_arguments += arguments[k]->ToString() + " " + arguments[k]->return_type.ToString();
 			}
+			auto error =
+			    StringUtil::Format("Cannot unpivot columns of types %s and %s - an explicit cast is required",
+			                       child_type.ToString(), arg_type.ToString());
+			throw BinderException(arguments[i]->GetQueryLocation(),
+			                      QueryErrorContext::Format(list_arguments, error, error_index, false));
 		}
 	}
 	child_type = LogicalType::NormalizeType(child_type);
@@ -318,34 +311,18 @@ unique_ptr<BaseStatistics> ListValueStats(ClientContext &context, FunctionStatis
 
 ScalarFunction ListValueFun::GetFunction() {
 	// the arguments and return types are actually set in the binder function
-	ScalarFunction fun("list_value", {}, LogicalTypeId::LIST, ListValueFunction, ListValueBind, nullptr,
+	auto element_type = LogicalType::TEMPLATE();
+	ScalarFunction fun("list_value", {}, LogicalType::LIST(element_type), ListValueFunction, nullptr, nullptr,
 	                   ListValueStats);
-	fun.varargs = LogicalType::ANY;
+	fun.varargs = element_type;
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return fun;
 }
 
 ScalarFunction UnpivotListFun::GetFunction() {
-	auto fun = ListValueFun::GetFunction();
-	fun.name = "unpivot_list";
-	fun.bind = ListValueBind<true>;
-	return fun;
-}
-
-static void MakePairFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &parts = StructVector::GetEntries(result);
-	parts[0]->Reference(args.data[0]);
-	parts[1]->Reference(args.data[1]);
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
-}
-
-ScalarFunction MakePairFun::GetFunction() {
-	auto element_type = LogicalType::TEMPLATE();
-	auto pair_type = LogicalType::STRUCT({{"first", element_type}, {"second", element_type}});
-
-	ScalarFunction fun("make_pair", {element_type, element_type}, pair_type, MakePairFunction);
+	ScalarFunction fun("unpivot_list", {}, LogicalTypeId::LIST, ListValueFunction, UnpivotBind, nullptr,
+	                   ListValueStats);
+	fun.varargs = LogicalTypeId::ANY;
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return fun;
 }
