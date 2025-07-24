@@ -1056,7 +1056,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	if (metadata_pointer.IsValid() && !row_groups->HasChanges(l)) {
 		vector<MetaBlockPointer> data_pointers;
 		for (auto &row_group : row_groups->Segments(l)) {
-			auto &column_pointers = row_group.GetColumnPointers();
+			auto column_pointers = row_group.GetColumnPointers();
 			data_pointers.insert(data_pointers.end(), column_pointers.begin(), column_pointers.end());
 
 			auto &deletes_pointers = row_group.GetDeletesPointers();

@@ -92,9 +92,9 @@ public:
 	RowGroupCollection &GetCollection() {
 		return collection.get();
 	}
-	const vector<MetaBlockPointer> &GetColumnPointers() const {
-		return column_pointers;
-	}
+	//! Returns the list of meta block pointers used by the columns
+	vector<MetaBlockPointer> GetColumnPointers();
+	//! Returns the list of meta block pointers used by the deletes
 	const vector<MetaBlockPointer> &GetDeletesPointers() const {
 		return deletes_pointers;
 	}
