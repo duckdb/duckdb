@@ -50,18 +50,6 @@ unique_ptr<RowGroup> RowGroupSegmentTree::LoadSegment() {
 	return make_uniq<RowGroup>(collection, std::move(row_group_pointer));
 }
 
-bool RowGroupSegmentTree::HasChanges(SegmentLock &l) const {
-	// check if any changes have been made
-	// any row groups that are not loaded by definition do not have any changes - so avoid loading extra row groups
-	auto &segments = ReferenceLoadedSegments(l);
-	for (auto &segment : segments) {
-		if (segment.node->HasChanges()) {
-			return true;
-		}
-	}
-	return false;
-}
-
 //===--------------------------------------------------------------------===//
 // Row Group Collection
 //===--------------------------------------------------------------------===//
