@@ -386,10 +386,17 @@ index c010292..0a73510 100644
 -#error DUCKDB_EXTENSION_MAIN not defined
 -#endif
 diff --git a/test/sql/hnsw/hnsw_lateral_join.test b/test/sql/hnsw/hnsw_lateral_join.test
-index 0362f3c..c9d7d24 100644
+index 0362f3c..521264f 100644
 --- a/test/sql/hnsw/hnsw_lateral_join.test
 +++ b/test/sql/hnsw/hnsw_lateral_join.test
-@@ -64,7 +64,7 @@ statement ok
+@@ -58,13 +58,13 @@ statement ok
+ INSERT INTO a VALUES (NULL, 3);
+ 
+ query IIIIII rowsort a_has_null
+-select * from a, lateral (select *, a_id as id_dup from b order by array_distance(a.a_vec, b.b_vec) limit 2);
++select * from a, lateral (select *, a_id as id_dup from b order by array_distance(a.a_vec, b.b_vec), b_str DESC limit 2);
+ 
+ statement ok
  CREATE INDEX my_idx ON b USING HNSW (b_vec);
  
  query IIIIII rowsort a_has_null
