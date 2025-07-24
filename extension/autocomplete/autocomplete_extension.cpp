@@ -670,7 +670,7 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 void CheckPEGParserFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 }
 
-void LoadInternal(ExtensionLoader &loader) {
+static void LoadInternal(ExtensionLoader &loader) {
 	TableFunction auto_complete_fun("sql_auto_complete", {LogicalType::VARCHAR}, SQLAutoCompleteFunction,
 	                                SQLAutoCompleteBind, SQLAutoCompleteInit);
 	loader.RegisterFunction(auto_complete_fun);
