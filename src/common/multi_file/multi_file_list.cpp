@@ -376,11 +376,7 @@ bool GlobMultiFileList::ExpandPathInternal(idx_t &current_path, vector<OpenFileI
 	}
 
 	auto &fs = FileSystem::GetFileSystem(context);
-	std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
 	auto glob_files = fs.GlobFiles(paths[current_path].path, context, glob_options, max_files, hive_filter_params);
-	std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-	std::chrono::duration<double> duration = end - start;
-	std::cout << "GlobFiles took " << duration.count() << " seconds" << std::endl;
 	std::sort(glob_files.begin(), glob_files.end());
 	result.insert(result.end(), glob_files.begin(), glob_files.end());
 
