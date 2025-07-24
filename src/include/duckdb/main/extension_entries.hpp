@@ -65,6 +65,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"alias", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"apply", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"approx_count_distinct", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
+    {"approx_database_count", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"approx_quantile", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"approx_top_k", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"arg_max", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},

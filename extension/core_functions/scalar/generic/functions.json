@@ -124,6 +124,13 @@
         "type": "scalar_function"
     },
     {
+        "name": "approx_database_count",
+        "parameters": "",
+        "description": "Returns the approximate count of attached databases",
+        "example": "approx_database_count()",
+        "type": "scalar_function"
+    },
+    {
         "name": "cast_to_type",
         "parameters": "param,type",
         "description": "Casts the first argument to the type of the second argument",
