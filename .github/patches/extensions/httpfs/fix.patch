@@ -1,5 +1,5 @@
 diff --git a/extension/httpfs/create_secret_functions.cpp b/extension/httpfs/create_secret_functions.cpp
-index b3984b3..476bc14 100644
+index c9ae0a7..cf9997a 100644
 --- a/extension/httpfs/create_secret_functions.cpp
 +++ b/extension/httpfs/create_secret_functions.cpp
 @@ -1,15 +1,15 @@
@@ -24,7 +24,7 @@ index b3984b3..476bc14 100644
  }
  
  static Value MapToStruct(const Value &map) {
-@@ -205,7 +205,7 @@ void CreateS3SecretFunctions::SetBaseNamedParams(CreateSecretFunction &function,
+@@ -212,7 +212,7 @@ void CreateS3SecretFunctions::SetBaseNamedParams(CreateSecretFunction &function,
  	}
  }
  
@@ -33,7 +33,7 @@ index b3984b3..476bc14 100644
  	// Register the new type
  	SecretType secret_type;
  	secret_type.name = type;
-@@ -213,31 +213,31 @@ void CreateS3SecretFunctions::RegisterCreateSecretFunction(DatabaseInstance &ins
+@@ -220,31 +220,31 @@ void CreateS3SecretFunctions::RegisterCreateSecretFunction(DatabaseInstance &ins
  	secret_type.default_provider = "config";
  	secret_type.extension = "httpfs";
  
@@ -72,10 +72,10 @@ index b3984b3..476bc14 100644
  
  unique_ptr<BaseSecret> CreateBearerTokenFunctions::CreateSecretFunctionInternal(ClientContext &context,
 diff --git a/extension/httpfs/crypto.cpp b/extension/httpfs/crypto.cpp
-index 04bd795..3a3e89e 100644
+index 3a89ca5..3e61afa 100644
 --- a/extension/httpfs/crypto.cpp
 +++ b/extension/httpfs/crypto.cpp
-@@ -42,11 +42,11 @@ AESStateSSL::~AESStateSSL() {
+@@ -21,11 +21,11 @@ AESStateSSL::~AESStateSSL() {
  	EVP_CIPHER_CTX_free(context);
  }
  
@@ -89,7 +89,7 @@ index 04bd795..3a3e89e 100644
  		case 16:
  			return EVP_aes_128_gcm();
  		case 24:
-@@ -57,7 +57,7 @@ const EVP_CIPHER *AESStateSSL::GetCipher(const string &key) {
+@@ -36,7 +36,7 @@ const EVP_CIPHER *AESStateSSL::GetCipher(const string &key) {
  			throw InternalException("Invalid AES key length");
  		}
  	case CTR:
@@ -98,7 +98,7 @@ index 04bd795..3a3e89e 100644
  		case 16:
  			return EVP_aes_128_ctr();
  		case 24:
-@@ -78,20 +78,34 @@ void AESStateSSL::GenerateRandomData(data_ptr_t data, idx_t len) {
+@@ -57,20 +57,34 @@ void AESStateSSL::GenerateRandomData(data_ptr_t data, idx_t len) {
  	RAND_bytes(data, len);
  }
  
@@ -110,13 +110,13 @@ index 04bd795..3a3e89e 100644
 +	if (1 != EVP_EncryptInit_ex(context, GetCipher(key_len), NULL, key, iv)) {
  		throw InternalException("EncryptInit failed");
  	}
-+	
++
 +	int len;
 +	if (aad_len > 0){
 +		if (!EVP_DecryptUpdate(context, NULL, &len, aad, aad_len)) {
-+    			throw InternalException("Setting Additional Authenticated Data  failed");
++			throw InternalException("Setting Additional Authenticated Data  failed");
 +		}
-+	}	
++	}
  }
  
 -void AESStateSSL::InitializeDecryption(const_data_ptr_t iv, idx_t iv_len, const string *key) {
@@ -129,16 +129,16 @@ index 04bd795..3a3e89e 100644
  	}
 +
 +	int len;
-+        if (aad_len > 0){
-+                if (!EVP_DecryptUpdate(context, NULL, &len, aad, aad_len)) {
-+                        throw InternalException("Setting Additional Authenticated Data  failed");
-+                }
++	if (aad_len > 0){
++		if (!EVP_DecryptUpdate(context, NULL, &len, aad, aad_len)) {
++			throw InternalException("Setting Additional Authenticated Data  failed");
++		}
 +	}
  }
  
  size_t AESStateSSL::Process(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len) {
 diff --git a/extension/httpfs/httpfs.cpp b/extension/httpfs/httpfs.cpp
-index 686162f..cd43a64 100644
+index 20f85a6..50b7ae9 100644
 --- a/extension/httpfs/httpfs.cpp
 +++ b/extension/httpfs/httpfs.cpp
 @@ -7,6 +7,7 @@
@@ -149,7 +149,7 @@ index 686162f..cd43a64 100644
  #include "duckdb/function/scalar/strftime_format.hpp"
  #include "duckdb/logging/file_system_logger.hpp"
  #include "duckdb/main/client_context.hpp"
-@@ -263,19 +264,6 @@ unique_ptr<HTTPResponse> HTTPFileSystem::GetRangeRequest(FileHandle &handle, str
+@@ -259,19 +260,6 @@ unique_ptr<HTTPResponse> HTTPFileSystem::GetRangeRequest(FileHandle &handle, str
  	return response;
  }
  
@@ -169,7 +169,7 @@ index 686162f..cd43a64 100644
  HTTPFileHandle::HTTPFileHandle(FileSystem &fs, const OpenFileInfo &file, FileOpenFlags flags,
                                 unique_ptr<HTTPParams> params_p)
      : FileHandle(fs, file.path, flags), params(std::move(params_p)), http_params(params->Cast<HTTPFSParams>()),
-@@ -286,7 +274,7 @@ HTTPFileHandle::HTTPFileHandle(FileSystem &fs, const OpenFileInfo &file, FileOpe
+@@ -282,7 +270,7 @@ HTTPFileHandle::HTTPFileHandle(FileSystem &fs, const OpenFileInfo &file, FileOpe
  		auto &info = file.extended_info->options;
  		auto lm_entry = info.find("last_modified");
  		if (lm_entry != info.end()) {
@@ -178,7 +178,7 @@ index 686162f..cd43a64 100644
  		}
  		auto etag_entry = info.find("etag");
  		if (etag_entry != info.end()) {
-@@ -466,7 +454,7 @@ int64_t HTTPFileSystem::GetFileSize(FileHandle &handle) {
+@@ -462,7 +450,7 @@ int64_t HTTPFileSystem::GetFileSize(FileHandle &handle) {
  	return sfh.length;
  }
  
@@ -187,7 +187,7 @@ index 686162f..cd43a64 100644
  	auto &sfh = handle.Cast<HTTPFileHandle>();
  	return sfh.last_modified;
  }
-@@ -549,20 +537,14 @@ void HTTPFileHandle::FullDownload(HTTPFileSystem &hfs, bool &should_write_cache)
+@@ -545,20 +533,14 @@ void HTTPFileHandle::FullDownload(HTTPFileSystem &hfs, bool &should_write_cache)
  	}
  }
  
@@ -213,7 +213,7 @@ index 686162f..cd43a64 100644
  }
  
 diff --git a/extension/httpfs/httpfs_extension.cpp b/extension/httpfs/httpfs_extension.cpp
-index c9bc985..c800ff2 100644
+index 392d249..15a90ba 100644
 --- a/extension/httpfs/httpfs_extension.cpp
 +++ b/extension/httpfs/httpfs_extension.cpp
 @@ -1,5 +1,3 @@
@@ -222,9 +222,9 @@ index c9bc985..c800ff2 100644
  #include "httpfs_extension.hpp"
  
  #include "create_secret_functions.hpp"
-@@ -10,7 +8,8 @@
- 
- namespace duckdb {
+@@ -31,7 +29,8 @@ static void SetHttpfsClientImplementation(DBConfig &config, const string &value)
+ 		                            "`default` are currently supported");
+ 	}
  
 -static void LoadInternal(DatabaseInstance &instance) {
 +static void LoadInternal(ExtensionLoader &loader) {
@@ -232,7 +232,7 @@ index c9bc985..c800ff2 100644
  	auto &fs = instance.GetFileSystem();
  
  	fs.RegisterSubSystem(make_uniq<HTTPFileSystem>());
-@@ -66,14 +65,14 @@ static void LoadInternal(DatabaseInstance &instance) {
+@@ -98,16 +97,16 @@ static void LoadInternal(DatabaseInstance &instance) {
  	auto provider = make_uniq<AWSEnvironmentCredentialsProvider>(config);
  	provider->SetAll();
  
@@ -241,8 +241,10 @@ index c9bc985..c800ff2 100644
 +	CreateS3SecretFunctions::Register(loader);
 +	CreateBearerTokenFunctions::Register(loader);
  
+ #ifdef OVERRIDE_ENCRYPTION_UTILS
  	// set pointer to OpenSSL encryption state
  	config.encryption_util = make_shared_ptr<AESStateSSLFactory>();
+ #endif // OVERRIDE_ENCRYPTION_UTILS
  }
 -void HttpfsExtension::Load(DuckDB &db) {
 -	LoadInternal(*db.instance);
@@ -251,7 +253,7 @@ index c9bc985..c800ff2 100644
  }
  std::string HttpfsExtension::Name() {
  	return "httpfs";
-@@ -91,15 +90,8 @@ std::string HttpfsExtension::Version() const {
+@@ -125,15 +124,8 @@ std::string HttpfsExtension::Version() const {
  
  extern "C" {
  
@@ -306,7 +308,7 @@ index 54b7566..bd3bc4a 100644
  protected:
  	//! Internal function to create bearer token
 diff --git a/extension/httpfs/include/crypto.hpp b/extension/httpfs/include/crypto.hpp
-index f819356..aa6ad70 100644
+index f819356..1e142df 100644
 --- a/extension/httpfs/include/crypto.hpp
 +++ b/extension/httpfs/include/crypto.hpp
 @@ -29,13 +29,13 @@ public:
@@ -326,35 +328,15 @@ index f819356..aa6ad70 100644
  	size_t FinalizeGCM(data_ptr_t out, idx_t out_len, data_ptr_t tag, idx_t tag_len);
  
  private:
-@@ -48,16 +48,16 @@ private:
- 
- extern "C" {
- 
--class DUCKDB_EXTENSION_API AESStateSSLFactory : public duckdb::EncryptionUtil {
--public:
--	explicit AESStateSSLFactory() {
--	}
-+	class DUCKDB_EXTENSION_API AESStateSSLFactory : public duckdb::EncryptionUtil {
-+	public:
-+		explicit AESStateSSLFactory() {
-+		}
+@@ -53,7 +53,7 @@ public:
+ 	explicit AESStateSSLFactory() {
+ 	}
  
 -	duckdb::shared_ptr<duckdb::EncryptionState> CreateEncryptionState(const std::string *key = nullptr) const override {
--		return duckdb::make_shared_ptr<duckdb::AESStateSSL>();
--	}
-+		duckdb::shared_ptr<duckdb::EncryptionState> CreateEncryptionState(duckdb::const_data_ptr_t key = nullptr, duckdb::idx_t key_len = 0) const override {
-+			return duckdb::make_shared_ptr<duckdb::AESStateSSL>();
-+		}
++	duckdb::shared_ptr<duckdb::EncryptionState> CreateEncryptionState(duckdb::const_data_ptr_t key = nullptr, duckdb::idx_t key_len = 0) const override {
+ 		return duckdb::make_shared_ptr<duckdb::AESStateSSL>();
+ 	}
  
--	~AESStateSSLFactory() override {
--	}
--};
--}
-+		~AESStateSSLFactory() override {
-+		}
-+	};
-+}
-\ No newline at end of file
 diff --git a/extension/httpfs/include/http_metadata_cache.hpp b/extension/httpfs/include/http_metadata_cache.hpp
 index 8fc7909..83a05cc 100644
 --- a/extension/httpfs/include/http_metadata_cache.hpp
