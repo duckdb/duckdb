@@ -8,22 +8,23 @@ void ParserKeywordManager::RegisterKeyword(const string &keyword, KeywordCategor
 	lock_guard<mutex> lock(keyword_mutex);
 
 	if (category == KeywordCategory::KEYWORD_RESERVED) {
-		if (unreserved_keywords.count(keyword) || type_func_keywords.count(keyword) || col_name_keywords.count(keyword)) {
+		if (unreserved_keywords.count(keyword) || type_func_keywords.count(keyword) ||
+		    col_name_keywords.count(keyword)) {
 			throw InvalidInputException(
-				"Cannot register keyword \"%s\" as RESERVED, as it is already registered in a conflicting category.",
-				keyword);
+			    "Cannot register keyword \"%s\" as RESERVED, as it is already registered in a conflicting category.",
+			    keyword);
 		}
 	} else if (category == KeywordCategory::KEYWORD_UNRESERVED) {
 		if (reserved_keywords.count(keyword)) {
 			throw InvalidInputException(
-				"Cannot register keyword \"%s\" as UNRESERVED, as it is already registered as RESERVED.", keyword);
+			    "Cannot register keyword \"%s\" as UNRESERVED, as it is already registered as RESERVED.", keyword);
 		}
 	} else if (category == KeywordCategory::KEYWORD_TYPE_FUNC || category == KeywordCategory::KEYWORD_COL_NAME) {
 		if (reserved_keywords.count(keyword)) {
-			const char *category_name =
-				(category == KeywordCategory::KEYWORD_TYPE_FUNC) ? "TYPE_FUNC" : "COL_NAME";
-			throw InvalidInputException("Cannot register keyword \"%s\" as %s, as it is already registered as RESERVED.",
-										keyword, category_name);
+			const char *category_name = (category == KeywordCategory::KEYWORD_TYPE_FUNC) ? "TYPE_FUNC" : "COL_NAME";
+			throw InvalidInputException(
+			    "Cannot register keyword \"%s\" as %s, as it is already registered as RESERVED.", keyword,
+			    category_name);
 		}
 	}
 
