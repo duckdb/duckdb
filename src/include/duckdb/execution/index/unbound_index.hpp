@@ -63,7 +63,6 @@ public:
 	ColumnDataCollection &GetBufferedAppends() const {
 		return *buffered_appends;
 	}
-	unique_ptr<UnboundIndex> Copy() const;
 };
 
 } // namespace duckdb

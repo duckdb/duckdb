@@ -54,8 +54,4 @@ void UnboundIndex::BufferChunk(DataChunk &chunk, Vector &row_ids) {
 	buffered_appends->Append(combined_chunk);
 }
 
-unique_ptr<UnboundIndex> UnboundIndex::Copy() const {
-	return make_uniq<UnboundIndex>(create_info->Copy(), storage_info, table_io_manager, db);
-}
-
 } // namespace duckdb

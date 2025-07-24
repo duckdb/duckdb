@@ -30,13 +30,12 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &table)
 		if (constraint == IndexConstraintType::NONE) {
 			return false;
 		}
-		if (!index.IsBound()) {
-			auto &unbound_index = index.Cast<UnboundIndex>();
-			delete_indexes.AddIndex(std::move(unbound_index.Copy()));
-			append_indexes.AddIndex(std::move(unbound_index.Copy()));
+		if (index.GetIndexType() != ART::TYPE_NAME) {
 			return false;
 		}
-
+		if (!index.IsBound()) {
+			return false;
+		}
 		auto &art = index.Cast<ART>();
 
 		// UNIQUE constraint.
@@ -174,7 +173,7 @@ ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGr
 		}
 		mock_chunk.SetCardinality(chunk);
 		// append this chunk to the indexes of the table
-		error = DataTable::AppendToIndexes(index_list, delete_indexes, mock_chunk, start_row, index_append_mode, false);
+		error = DataTable::AppendToIndexes(index_list, delete_indexes, mock_chunk, start_row, index_append_mode);
 		if (error.HasError()) {
 			return false;
 		}
@@ -394,15 +393,11 @@ bool LocalStorage::NextParallelScan(ClientContext &context, DataTable &table, Pa
 }
 
 void LocalStorage::InitializeAppend(LocalAppendState &state, DataTable &table) {
-	if (!state.wal_append) {
-		table.InitializeIndexes(context);
-	}
 	state.storage = &table_manager.GetOrCreateStorage(context, table);
 	state.storage->row_groups->InitializeAppend(TransactionData(transaction), state.append_state);
 }
 
 void LocalStorage::InitializeStorage(LocalAppendState &state, DataTable &table) {
-	table.InitializeIndexes(context);
 	state.storage = &table_manager.GetOrCreateStorage(context, table);
 }
 
@@ -432,7 +427,7 @@ void LocalStorage::Append(LocalAppendState &state, DataChunk &chunk) {
 	idx_t base_id = offset + state.append_state.total_append_count;
 
 	auto error = DataTable::AppendToIndexes(storage->append_indexes, storage->delete_indexes, chunk,
-	                                        NumericCast<row_t>(base_id), storage->index_append_mode, state.wal_append);
+	                                        NumericCast<row_t>(base_id), storage->index_append_mode);
 	if (error.HasError()) {
 		error.Throw();
 	}

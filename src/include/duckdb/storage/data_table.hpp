@@ -186,8 +186,7 @@ public:
 	ErrorData AppendToIndexes(optional_ptr<TableIndexList> delete_indexes, DataChunk &chunk, row_t row_start,
 	                          const IndexAppendMode index_append_mode);
 	static ErrorData AppendToIndexes(TableIndexList &indexes, optional_ptr<TableIndexList> delete_indexes,
-	                                 DataChunk &chunk, row_t row_start, const IndexAppendMode index_append_mode,
-	                                 const bool wal_append);
+	                                 DataChunk &chunk, row_t row_start, const IndexAppendMode index_append_mode);
 	//! Remove a chunk with the row ids [row_start, ..., row_start + chunk.size()] from all indexes of the table
 	void RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, row_t row_start);
 	//! Remove the chunk with the specified set of row identifiers from all indexes of the table
@@ -248,7 +247,7 @@ public:
 
 	shared_ptr<DataTableInfo> &GetDataTableInfo();
 
-	void InitializeIndexes(ClientContext &context);
+	void BindIndexes(ClientContext &context);
 	bool HasIndexes() const;
 	bool HasUniqueIndexes() const;
 	bool HasForeignKeyIndex(const vector<PhysicalIndex> &keys, ForeignKeyType type);
@@ -265,8 +264,8 @@ public:
 	idx_t GetRowGroupSize() const;
 
 	//! Verify any unique indexes using optional delete indexes in the local storage.
-	void VerifyUniqueIndexes(ClientContext &context, TableIndexList &indexes, optional_ptr<LocalTableStorage> storage,
-	                         DataChunk &chunk, optional_ptr<ConflictManager> manager);
+	void VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<LocalTableStorage> storage, DataChunk &chunk,
+	                         optional_ptr<ConflictManager> manager);
 	//! AddIndex initializes an index and adds it to the table's index list.
 	//! It is either empty, or initialized via its index storage information.
 	void AddIndex(const ColumnList &columns, const vector<LogicalIndex> &column_indexes, const IndexConstraintType type,
