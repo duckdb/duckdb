@@ -43,24 +43,6 @@ bool ParserKeywordManager::IsKeyword(const string &text) const {
 	return false;
 }
 
-vector<KeywordCategory> ParserKeywordManager::GetKeywordCategories(const string &text) const {
-	std::lock_guard<std::mutex> lock(keyword_mutex);
-	vector<KeywordCategory> categories;
-	if (reserved_keywords.count(text)) {
-		categories.push_back(KeywordCategory::KEYWORD_RESERVED);
-	}
-	if (unreserved_keywords.count(text)) {
-		categories.push_back(KeywordCategory::KEYWORD_UNRESERVED);
-	}
-	if (type_func_keywords.count(text)) {
-		categories.push_back(KeywordCategory::KEYWORD_TYPE_FUNC);
-	}
-	if (col_name_keywords.count(text)) {
-		categories.push_back(KeywordCategory::KEYWORD_COL_NAME);
-	}
-	return categories;
-}
-
 bool ParserKeywordManager::IsKeywordInCategory(const string &text, KeywordCategory category) const {
 	std::lock_guard<std::mutex> lock(keyword_mutex);
 	switch (category) {

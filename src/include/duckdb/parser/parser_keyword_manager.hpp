@@ -33,9 +33,6 @@ public:
 	//! Checks if the given text is a registered keyword of any category.
 	bool IsKeyword(const string &text) const;
 
-	//! Returns a list of all categories a given keyword belongs to.
-	vector<KeywordCategory> GetKeywordCategories(const string &text) const;
-
 	//! Checks if a keyword belongs to a specific category.
 	bool IsKeywordInCategory(const string &text, KeywordCategory category) const;
 
