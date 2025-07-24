@@ -5,7 +5,7 @@ namespace duckdb {
 
 void ParserKeywordManager::RegisterKeyword(const string &keyword, KeywordCategory category) {
 	// Lock the mutex to ensure thread-safe modification of the sets
-	std::lock_guard<std::mutex> lock(keyword_mutex);
+	lock_guard<mutex> lock(keyword_mutex);
 
 	if (category == KeywordCategory::KEYWORD_RESERVED) {
 		if (unreserved_keywords.count(keyword) || type_func_keywords.count(keyword) || col_name_keywords.count(keyword)) {
@@ -47,7 +47,6 @@ void ParserKeywordManager::RegisterKeyword(const string &keyword, KeywordCategor
 }
 
 bool ParserKeywordManager::IsKeyword(const string &text) const {
-	std::lock_guard<std::mutex> lock(keyword_mutex);
 	if (reserved_keywords.count(text)) {
 		return true;
 	}
@@ -64,7 +63,6 @@ bool ParserKeywordManager::IsKeyword(const string &text) const {
 }
 
 bool ParserKeywordManager::IsKeywordInCategory(const string &text, KeywordCategory category) const {
-	std::lock_guard<std::mutex> lock(keyword_mutex);
 	switch (category) {
 	case KeywordCategory::KEYWORD_RESERVED:
 		return reserved_keywords.count(text);

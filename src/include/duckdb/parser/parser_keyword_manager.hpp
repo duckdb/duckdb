@@ -44,6 +44,6 @@ private:
 	case_insensitive_set_t col_name_keywords;
 
 	//! Mutex to protect the sets during concurrent registrations.
-	mutable std::mutex keyword_mutex;
+	mutex keyword_mutex;
 };
 } // namespace duckdb
