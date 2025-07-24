@@ -69,8 +69,13 @@ RowGroup::RowGroup(RowGroupCollection &collection_p, PersistentRowGroupData &dat
 void RowGroup::MoveToCollection(RowGroupCollection &collection_p, idx_t new_start) {
 	this->collection = collection_p;
 	this->start = new_start;
-	for (auto &column : GetColumns()) {
-		column->SetStart(new_start);
+	for (idx_t c = 0; c < columns.size(); c++) {
+		if (is_loaded && !is_loaded[c]) {
+			// we only need to set the column start position if it is already loaded
+			// if it is not loaded - we will set the correct start position upon loading
+			continue;
+		}
+		columns[c]->SetStart(new_start);
 	}
 	if (!HasUnloadedDeletes()) {
 		auto vinfo = GetVersionInfo();
@@ -965,10 +970,6 @@ CompressionType ColumnCheckpointInfo::GetCompressionType() {
 
 RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriteInfo &info) {
 	RowGroupWriteData result;
-	if (!HasChanges()) {
-		// nothing to write - return
-		return result;
-	}
 	result.states.reserve(columns.size());
 	result.statistics.reserve(columns.size());
 
@@ -1039,6 +1040,10 @@ vector<MetaBlockPointer> RowGroup::GetColumnPointers() {
 }
 
 RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
+	if (!HasChanges()) {
+		// nothing to write - return
+		return RowGroupWriteData();
+	}
 	auto &compression_types = writer.GetCompressionTypes();
 	if (columns.size() != compression_types.size()) {
 		throw InternalException("RowGroup::WriteToDisk - mismatch in column count vs compression types");
@@ -1069,7 +1074,7 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 		// we haven't written anything - re-use previous metadata
 		row_group_pointer.data_pointers = column_pointers;
 		row_group_pointer.deletes_pointers = deletes_pointers;
-		metadata_manager->ClearModifiedBlocks(column_pointers);
+		metadata_manager->ClearModifiedBlocks(GetColumnPointers());
 		metadata_manager->ClearModifiedBlocks(deletes_pointers);
 		return row_group_pointer;
 	}
