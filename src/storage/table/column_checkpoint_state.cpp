@@ -25,7 +25,7 @@ unique_ptr<BaseStatistics> ColumnCheckpointState::GetStatistics() {
 PartialBlockForCheckpoint::PartialBlockForCheckpoint(ColumnData &data, ColumnSegment &segment, PartialBlockState state,
                                                      BlockManager &block_manager)
     : PartialBlock(state, block_manager, segment.block) {
-	AddSegmentToTail(data, segment, 0);
+	PartialBlockForCheckpoint::AddSegmentToTail(data, segment, 0);
 }
 
 PartialBlockForCheckpoint::~PartialBlockForCheckpoint() {
@@ -151,7 +151,7 @@ void ColumnCheckpointState::FlushSegmentInternal(unique_ptr<ColumnSegment> segme
 		if (allocation.partial_block) {
 			// Use an existing block.
 			D_ASSERT(offset_in_block > 0);
-			auto &pstate = allocation.partial_block->Cast<PartialBlockForCheckpoint>();
+			auto &pstate = *allocation.partial_block;
 			// pin the source block
 			auto old_handle = buffer_manager.Pin(segment->block);
 			// pin the target block
@@ -168,8 +168,8 @@ void ColumnCheckpointState::FlushSegmentInternal(unique_ptr<ColumnSegment> segme
 				segment->Resize(block_size);
 			}
 			D_ASSERT(offset_in_block == 0);
-			allocation.partial_block = make_uniq<PartialBlockForCheckpoint>(column_data, *segment, allocation.state,
-			                                                                *allocation.block_manager);
+			allocation.partial_block = partial_block_manager.CreatePartialBlock(column_data, *segment, allocation.state,
+			                                                                    *allocation.block_manager);
 		}
 		// Writer will decide whether to reuse this block.
 		partial_block_manager.RegisterPartialBlock(std::move(allocation));

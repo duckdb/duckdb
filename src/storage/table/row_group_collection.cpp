@@ -940,9 +940,10 @@ private:
 
 void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkpoint_state, VacuumState &state,
                                                vector<SegmentNode<RowGroup>> &segments) {
-	bool is_full_checkpoint = checkpoint_state.writer.GetCheckpointType() == CheckpointType::FULL_CHECKPOINT;
+	auto checkpoint_type = checkpoint_state.writer.GetCheckpointType();
+	bool vacuum_is_allowed = checkpoint_type != CheckpointType::CONCURRENT_CHECKPOINT;
 	// currently we can only vacuum deletes if we are doing a full checkpoint and there are no indexes
-	state.can_vacuum_deletes = info->GetIndexes().Empty() && is_full_checkpoint;
+	state.can_vacuum_deletes = info->GetIndexes().Empty() && vacuum_is_allowed;
 	if (!state.can_vacuum_deletes) {
 		return;
 	}
@@ -1065,8 +1066,10 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			}
 			// schedule a checkpoint task for this row group
 			entry.node->MoveToCollection(*this, vacuum_state.row_start);
-			auto checkpoint_task = GetCheckpointTask(checkpoint_state, segment_idx);
-			checkpoint_state.executor->ScheduleTask(std::move(checkpoint_task));
+			if (writer.GetCheckpointType() != CheckpointType::VACUUM_ONLY) {
+				auto checkpoint_task = GetCheckpointTask(checkpoint_state, segment_idx);
+				checkpoint_state.executor->ScheduleTask(std::move(checkpoint_task));
+			}
 			vacuum_state.row_start += entry.node->count;
 		}
 	} catch (const std::exception &e) {
@@ -1087,6 +1090,13 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			continue;
 		}
 		auto &row_group = *entry.node;
+		if (!checkpoint_state.writers[segment_idx]) {
+			// row group was not checkpointed - this can happen if compressing is disabled for in-memory tables
+			D_ASSERT(writer.GetCheckpointType() == CheckpointType::VACUUM_ONLY);
+			row_groups->AppendSegment(l, std::move(entry.node));
+			new_total_rows += row_group.count;
+			continue;
+		}
 		auto row_group_writer = std::move(checkpoint_state.writers[segment_idx]);
 		if (!row_group_writer) {
 			throw InternalException("Missing row group writer for index %llu", segment_idx);

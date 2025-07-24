@@ -17,7 +17,7 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
                                          OperatorSourceInput &input) const {
 	// parse the options
 	auto &config = DBConfig::GetConfig(context.client);
-	AttachOptions options(info, config.options.access_mode);
+	AttachOptions options(info->options, config.options.access_mode);
 
 	// get the name and path of the database
 	auto &name = info->name;
@@ -67,8 +67,7 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 	auto attached_db = db_manager.AttachDatabase(context.client, *info, options);
 
 	//! Initialize the database.
-	const auto storage_options = info->GetStorageOptions();
-	attached_db->Initialize(context.client, storage_options);
+	attached_db->Initialize(context.client);
 	if (!options.default_table.name.empty()) {
 		attached_db->GetCatalog().SetDefaultTable(options.default_table.schema, options.default_table.name);
 	}
