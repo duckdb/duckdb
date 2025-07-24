@@ -38,7 +38,7 @@ public:
 
 	//! Locks the segment tree. All methods to the segment tree either lock the segment tree, or take an already
 	//! obtained lock.
-	SegmentLock Lock() {
+	SegmentLock Lock() const {
 		return SegmentLock(node_lock);
 	}
 
@@ -76,12 +76,15 @@ public:
 		auto l = Lock();
 		return ReferenceSegments(l);
 	}
+	const vector<SegmentNode<T>> &ReferenceLoadedSegments(SegmentLock &l) const {
+		return nodes;
+	}
 
 	idx_t GetSegmentCount() {
 		auto l = Lock();
 		return GetSegmentCount(l);
 	}
-	idx_t GetSegmentCount(SegmentLock &l) {
+	idx_t GetSegmentCount(SegmentLock &l) const {
 		return nodes.size();
 	}
 	//! Gets a pointer to the nth segment. Negative numbers start from the back.
@@ -274,17 +277,17 @@ protected:
 		return nullptr;
 	}
 
+	T *GetRootSegmentInternal() const {
+		return nodes.empty() ? nullptr : nodes[0].node.get();
+	}
+
 private:
 	//! The nodes in the tree, can be binary searched
 	vector<SegmentNode<T>> nodes;
 	//! Lock to access or modify the nodes
-	mutex node_lock;
+	mutable mutex node_lock;
 
 private:
-	T *GetRootSegmentInternal() {
-		return nodes.empty() ? nullptr : nodes[0].node.get();
-	}
-
 	class SegmentIterationHelper {
 	public:
 		explicit SegmentIterationHelper(SegmentTree &tree) : tree(tree) {

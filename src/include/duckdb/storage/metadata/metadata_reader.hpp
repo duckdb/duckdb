@@ -32,6 +32,8 @@ public:
 	MetadataManager &GetMetadataManager() {
 		return manager;
 	}
+	//! Gets a list of all remaining blocks to be read by this metadata reader - consumes all blocks
+	vector<MetaBlockPointer> GetRemainingBlocks();
 
 private:
 	data_ptr_t BasePtr();

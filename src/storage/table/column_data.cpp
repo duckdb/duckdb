@@ -77,6 +77,29 @@ bool ColumnData::HasChanges(idx_t start_row, idx_t end_row) const {
 	return false;
 }
 
+bool ColumnData::HasChanges() const {
+	auto l = data.Lock();
+	auto &nodes = data.ReferenceLoadedSegments(l);
+	for (idx_t segment_idx = 0; segment_idx < nodes.size(); segment_idx++) {
+		auto segment = nodes[segment_idx].node.get();
+		if (segment->segment_type == ColumnSegmentType::TRANSIENT) {
+			// transient segment: always need to write to disk
+			return true;
+		}
+		// persistent segment; check if there were any updates or deletions in this segment
+		idx_t start_row_idx = segment->start - start;
+		idx_t end_row_idx = start_row_idx + segment->count;
+		if (HasChanges(start_row_idx, end_row_idx)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+bool ColumnData::HasAnyChanges() const {
+	return HasChanges();
+}
+
 void ColumnData::ClearUpdates() {
 	lock_guard<mutex> update_guard(update_lock);
 	updates.reset();

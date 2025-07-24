@@ -1063,6 +1063,19 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 	return row_group_pointer;
 }
 
+bool RowGroup::HasChanges() const {
+	// avoid loading unloaded columns - they can never have changes
+	for (idx_t c = 0; c < columns.size(); c++) {
+		if (is_loaded && !is_loaded[c]) {
+			continue;
+		}
+		if (columns[c]->HasAnyChanges()) {
+			return true;
+		}
+	}
+	return false;
+}
+
 bool RowGroup::IsPersistent() const {
 	for (auto &column : columns) {
 		if (!column->IsPersistent()) {
