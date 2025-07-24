@@ -978,11 +978,6 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriteInfo &info) {
 	// pointers all end up densely packed, and thus more cache-friendly.
 	for (idx_t column_idx = 0; column_idx < GetColumnCount(); column_idx++) {
 		auto &column = GetColumn(column_idx);
-		if (column.count != this->count) {
-			throw InternalException("Corrupted in-memory column - column with index %llu has misaligned count (row "
-			                        "group has %llu rows, column has %llu)",
-			                        column_idx, this->count.load(), column.count.load());
-		}
 		ColumnCheckpointInfo checkpoint_info(info, column_idx);
 		auto checkpoint_state = column.Checkpoint(*this, checkpoint_info);
 		D_ASSERT(checkpoint_state);
@@ -1018,6 +1013,14 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 	auto &compression_types = writer.GetCompressionTypes();
 	if (columns.size() != compression_types.size()) {
 		throw InternalException("RowGroup::WriteToDisk - mismatch in column count vs compression types");
+	}
+	for (idx_t column_idx = 0; column_idx < GetColumnCount(); column_idx++) {
+		auto &column = GetColumn(column_idx);
+		if (column.count != this->count) {
+			throw InternalException("Corrupted in-memory column - column with index %llu has misaligned count (row "
+			                        "group has %llu rows, column has %llu)",
+			                        column_idx, this->count.load(), column.count.load());
+		}
 	}
 
 	RowGroupWriteInfo info(writer.GetPartialBlockManager(), compression_types, writer.GetCheckpointType());
@@ -1064,7 +1067,12 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 }
 
 bool RowGroup::HasChanges() const {
-	// avoid loading unloaded columns - they can never have changes
+	if (version_info.load()) {
+		// we have deletes
+		return true;
+	}
+	// check if any of the columns have changes
+	// avoid loading unloaded columns - unloaded columns can never have changes
 	for (idx_t c = 0; c < columns.size(); c++) {
 		if (is_loaded && !is_loaded[c]) {
 			continue;
