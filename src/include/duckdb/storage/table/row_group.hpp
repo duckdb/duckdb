@@ -217,7 +217,8 @@ private:
 	vector<MetaBlockPointer> column_pointers;
 	unique_ptr<atomic<bool>[]> is_loaded;
 	vector<MetaBlockPointer> deletes_pointers;
-	vector<MetaBlockPointer> column_metadata;
+	bool has_metadata_blocks = false;
+	vector<idx_t> extra_metadata_blocks;
 	atomic<bool> deletes_is_loaded;
 	atomic<idx_t> allocation_size;
 };

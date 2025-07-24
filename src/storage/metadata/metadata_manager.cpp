@@ -9,7 +9,10 @@
 
 namespace duckdb {
 
-MetadataBlock::MetadataBlock(MetadataBlock &&other) noexcept {
+MetadataBlock::MetadataBlock() : block_id(INVALID_BLOCK), dirty(false) {
+}
+
+MetadataBlock::MetadataBlock(MetadataBlock &&other) noexcept : dirty(false) {
 	std::swap(block, other.block);
 	std::swap(block_id, other.block_id);
 	std::swap(free_blocks, other.free_blocks);

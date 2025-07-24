@@ -20,8 +20,7 @@ class DatabaseInstance;
 struct MetadataBlockInfo;
 
 struct MetadataBlock {
-	MetadataBlock() : block_id(INVALID_BLOCK), dirty(false) {
-	}
+	MetadataBlock();
 	// disable copy constructors
 	MetadataBlock(const MetadataBlock &other) = delete;
 	MetadataBlock &operator=(const MetadataBlock &) = delete;
