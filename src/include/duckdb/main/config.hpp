@@ -315,8 +315,6 @@ struct DBConfigOptions {
 #endif
 	//! Whether to pin threads to cores (linux only, default AUTOMATIC: on when there are more than 64 cores)
 	ThreadPinMode pin_threads = ThreadPinMode::AUTO;
-	//! Enable the Parquet reader to identify a Variant group structurally
-	bool variant_legacy_encoding = false;
 
 	bool operator==(const DBConfigOptions &other) const;
 };

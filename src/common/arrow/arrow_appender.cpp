@@ -214,7 +214,7 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 		break;
 	case LogicalTypeId::DECIMAL:
 		switch (type.InternalType()) {
-			case PhysicalType::INT16:
+		case PhysicalType::INT16:
 			if (append_data.options.arrow_output_version > ArrowFormatVersion::V1_4) {
 				InitializeAppenderForType<ArrowScalarData<int32_t, int16_t>>(append_data);
 			} else {
@@ -285,7 +285,8 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 		InitializeAppenderForType<ArrowFixedSizeListData>(append_data);
 		break;
 	case LogicalTypeId::LIST: {
-		if (append_data.options.arrow_use_list_view && append_data.options.arrow_output_version >= ArrowFormatVersion::V1_4) {
+		if (append_data.options.arrow_use_list_view &&
+		    append_data.options.arrow_output_version >= ArrowFormatVersion::V1_4) {
 			if (append_data.options.arrow_offset_size == ArrowOffsetSize::LARGE) {
 				InitializeAppenderForType<ArrowListViewData<>>(append_data);
 			} else {
