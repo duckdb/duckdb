@@ -635,18 +635,20 @@ bool DBConfig::operator!=(const DBConfig &other) {
 	return !(other.options == options);
 }
 
-OrderType DBConfig::ResolveOrder(OrderType order_type) const {
+OrderType DBConfig::ResolveOrder(ClientContext &context, OrderType order_type) const {
 	if (order_type != OrderType::ORDER_DEFAULT) {
 		return order_type;
 	}
-	return options.default_order_type;
+	return GetEnum<DefaultOrderSetting>(context);
 }
 
-OrderByNullType DBConfig::ResolveNullOrder(OrderType order_type, OrderByNullType null_type) const {
+OrderByNullType DBConfig::ResolveNullOrder(ClientContext &context, OrderType order_type,
+                                           OrderByNullType null_type) const {
 	if (null_type != OrderByNullType::ORDER_DEFAULT) {
 		return null_type;
 	}
-	switch (options.default_null_order) {
+	auto null_order = GetEnum<DefaultNullOrderSetting>(context);
+	switch (null_order) {
 	case DefaultOrderByNullType::NULLS_FIRST:
 		return OrderByNullType::NULLS_FIRST;
 	case DefaultOrderByNullType::NULLS_LAST:

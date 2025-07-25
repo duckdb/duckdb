@@ -330,7 +330,7 @@ public:
 	DUCKDB_API DBConfig(const case_insensitive_map_t<Value> &config_dict, bool read_only);
 	DUCKDB_API ~DBConfig();
 
-	mutex config_lock;
+	mutable mutex config_lock;
 	//! Replacement table scans are automatically attempted when a table name cannot be found in the schema
 	vector<ReplacementScan> replacement_scans;
 
@@ -430,19 +430,25 @@ public:
 	void SetDefaultMaxMemory();
 	void SetDefaultTempDirectory();
 
-	OrderType ResolveOrder(OrderType order_type) const;
-	OrderByNullType ResolveNullOrder(OrderType order_type, OrderByNullType null_type) const;
+	OrderType ResolveOrder(ClientContext &context, OrderType order_type) const;
+	OrderByNullType ResolveNullOrder(ClientContext &context, OrderType order_type, OrderByNullType null_type) const;
 	const string UserAgent() const;
 
 	template <class OP>
-	typename OP::RETURN_TYPE GetSetting(const ClientContext &context) {
-		std::lock_guard<mutex> lock(config_lock);
+	typename OP::RETURN_TYPE GetSetting(const ClientContext &context) const {
+		lock_guard<mutex> lock(config_lock);
 		return OP::GetSetting(context).template GetValue<typename OP::RETURN_TYPE>();
 	}
 
 	template <class OP>
-	Value GetSettingValue(const ClientContext &context) {
-		std::lock_guard<mutex> lock(config_lock);
+	typename OP::RETURN_TYPE GetEnum(const ClientContext &context) const {
+		lock_guard<mutex> lock(config_lock);
+		return EnumUtil::FromString<typename OP::RETURN_TYPE>(OP::GetSetting(context).template GetValue<string>());
+	}
+
+	template <class OP>
+	Value GetSettingValue(const ClientContext &context) const {
+		lock_guard<mutex> lock(config_lock);
 		return OP::GetSetting(context);
 	}
 

@@ -432,7 +432,7 @@ struct DefaultNullOrderSetting {
 };
 
 struct DefaultOrderSetting {
-	using RETURN_TYPE = string;
+	using RETURN_TYPE = OrderType;
 	static constexpr const char *Name = "default_order";
 	static constexpr const char *Description = "The order type used when none is specified (ASC or DESC)";
 	static constexpr const char *InputType = "VARCHAR";

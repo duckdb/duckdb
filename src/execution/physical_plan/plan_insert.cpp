@@ -45,7 +45,7 @@ bool PhysicalPlanGenerator::PreserveInsertionOrder(ClientContext &context, Physi
 		return false;
 	}
 	// preserve insertion order - check flags
-	if (!config.options.preserve_insertion_order) {
+	if (!config.GetSetting<PreserveInsertionOrderSetting>(context)) {
 		// preserving insertion order is disabled by config
 		return false;
 	}

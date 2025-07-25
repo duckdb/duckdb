@@ -275,6 +275,7 @@
         "name": "default_order",
         "description": "The order type used when none is specified (ASC or DESC)",
         "type": "VARCHAR",
+        "return_type": "OrderType",
         "scope": "global",
         "internal_setting": "default_order_type",
         "custom_implementation": [
