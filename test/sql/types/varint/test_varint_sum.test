@@ -4,6 +4,7 @@
 
 mode skip
 
+
 statement ok
 CREATE TABLE numbers ( x varint );
 
@@ -165,7 +166,6 @@ SELECT (-18446744073709551615)::VARINT + (-1)::VARINT;
 ----
 -18446744073709551616
 
-mode unskip
 
 # Mixed range aggregation
 statement ok
@@ -175,12 +175,47 @@ statement ok
 INSERT INTO mixed_values VALUES
     (0::VARINT),
     (1::VARINT),
-    ((-1)::VARINT),
-    (9223372036854775808::VARINT),
-    ((-9223372036854775808)::VARINT),
-    (100::VARINT),
-    ((-100)::VARINT),
-    (NULL);
+    ((-1)::VARINT);
+
+query I
+SELECT sum(x)::VARINT FROM mixed_values;
+----
+0
+
+statement ok
+INSERT INTO mixed_values VALUES (9223372036854775808::VARINT)
+
+query I
+SELECT sum(x)::VARINT FROM mixed_values;
+----
+9223372036854775808
+
+statement ok
+INSERT INTO mixed_values VALUES ((-9223372036854775808)::VARINT)
+
+query I
+SELECT sum(x)::VARINT FROM mixed_values;
+----
+0
+
+statement ok
+INSERT INTO mixed_values VALUES ((100)::VARINT)
+
+query I
+SELECT sum(x)::VARINT FROM mixed_values;
+----
+100
+
+statement ok
+INSERT INTO mixed_values VALUES ((-100)::VARINT)
+
+query I
+SELECT sum(x)::VARINT FROM mixed_values;
+----
+0
+
+statement ok
+INSERT INTO mixed_values VALUES (NULL)
 
 query I
 SELECT sum(x)::VARINT FROM mixed_values;
@@ -189,6 +224,9 @@ SELECT sum(x)::VARINT FROM mixed_values;
 
 statement ok
 DROP TABLE mixed_values;
+
+mode unskip
+
 
 # Chained operations
 query I

@@ -26,6 +26,14 @@ void PrintBits(unsigned char value) {
 	for (int i = 7; i >= 0; --i) {
 		std::cout << ((value >> i) & 1);
 	}
+}
+
+void PrintBytes(const char* ptr, idx_t length) {
+	for (idx_t i = 0; i < length; ++i) {
+		PrintBits(ptr[i]);
+		std::cout <<"  ";
+	}
+
 	std::cout << std::endl;
 }
 
@@ -34,7 +42,6 @@ void AddBinaryBuffersInPlace(char *target_buffer, idx_t target_size, const char 
 
 	const idx_t header_size = Varint::VARINT_HEADER_SIZE;
 
-	// Parse sign from header (sign bit: 0 = negative, 1 = positive as per your notes)
 	bool target_negative = (target_buffer[0] & 0x80) == 0;
 	bool source_negative = (source_buffer[0] & 0x80) == 0;
 	bool result_positive = !target_negative;
@@ -49,21 +56,29 @@ void AddBinaryBuffersInPlace(char *target_buffer, idx_t target_size, const char 
 			is_target_absolute_bigger = false;
 		} else {
 			// they have the same size then
-			idx_t i = target_start_pos;
-			for (; i < target_size; ++i) {
-				if (target_buffer[i] > ~source_buffer[i]) {
+			idx_t target_idx = target_start_pos;
+			idx_t source_idx = Varint::VARINT_HEADER_SIZE;
+			while (target_idx < target_size) {
+				if (target_buffer[target_idx] > ~source_buffer[source_idx]) {
 					is_target_absolute_bigger = true;
 					result_positive = !target_negative;
 					break;
-				} else if (target_buffer[i] < ~source_buffer[i]) {
+				} else if (target_buffer[target_idx] < ~source_buffer[source_idx]) {
 					is_target_absolute_bigger = false;
 					result_positive = target_negative;
 					break;
 				}
+				target_idx++;
+				source_idx++;
 			}
-			if (i == target_size) {
-				// they are ze same
-				result_positive = true;
+			if (target_idx == target_size) {
+				// they are ze same values, but opposing signs
+				// Set target to 0 and skedaddle
+				Varint::SetHeader(target_buffer, target_size - Varint::VARINT_HEADER_SIZE, false);
+				for (idx_t i = Varint::VARINT_HEADER_SIZE; i < target_size; ++i) {
+					target_buffer[i] = 0 ;
+				}
+				return;
 			}
 		}
 	}
@@ -127,7 +142,13 @@ void varint_t::Trim() {
 	auto cur_size = GetSize();
 	bool is_negative = (cur_ptr[0] & 0x80) == 0;
 	// Our data must always have at least header + 1 bytes, so we avoid trimming the value 0
-	if (bytes_to_trim > 0 && cur_size - bytes_to_trim > Varint::VARINT_HEADER_SIZE + 1) {
+	if (bytes_to_trim > 0) {
+		if (cur_size - bytes_to_trim < Varint::VARINT_HEADER_SIZE + 1) {
+			// This guy is a 0
+			while (bytes_to_trim > 0 && cur_size - bytes_to_trim < Varint::VARINT_HEADER_SIZE + 1) {
+				bytes_to_trim--;
+			}
+		}
 		// This bad-boy is wearing shoe lifts, time to prune it.
 		auto new_size = cur_size - bytes_to_trim;
 		auto new_target_ptr = reinterpret_cast<char *>(allocator->Allocate(new_size));
