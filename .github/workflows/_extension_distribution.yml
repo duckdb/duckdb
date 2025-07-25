@@ -32,7 +32,7 @@ on:
 jobs:
   build:
     name: Build
-    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@main
+    uses: samansmink/extension-ci-tools/.github/workflows/_extension_distribution.yml@add-checkout-to-caller
     with:
       # We piggy-back extension-template to build the extensions in extension_config, it's hacky, but it works ¯\_(ツ)_/¯
       override_repository: duckdb/extension-template
@@ -43,12 +43,13 @@ jobs:
       extension_name: ${{ inputs.artifact_prefix }}
 
       # DuckDB version is overridden to the current commit of the current repository
-      duckdb_version: ${{ inputs.duckdb_ref == '' && github.ref || inputs.duckdb_ref }}
-      override_duckdb_repository: https://github.com/${{ github.repository }}.git
+      set_caller_as_duckdb: true;
+      duckdb_version: ${{ github.sha }}
+#      override_duckdb_repository: https://github.com/${{ github.repository }}.git
 
       # CI tools is pinned to main
-      override_ci_tools_repository: duckdb/extension-ci-tools
-      ci_tools_version: main
+      override_ci_tools_repository: samansmink/extension-ci-tools
+      ci_tools_version: add-checkout-to-caller
 
       exclude_archs: ${{ inputs.exclude_archs }}
 
