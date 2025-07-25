@@ -149,7 +149,6 @@ public:
 	BatchInsertGlobalState(ClientContext &context, DuckTableEntry &table, const idx_t minimum_memory_per_thread)
 	    : memory_manager(context, minimum_memory_per_thread), table(table), insert_count(0),
 	      optimistically_written(false), minimum_memory_per_thread(minimum_memory_per_thread) {
-		table.GetStorage().BindIndexes(context);
 		row_group_size = table.GetStorage().GetRowGroupSize();
 	}
 

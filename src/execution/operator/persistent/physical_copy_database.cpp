@@ -82,6 +82,11 @@ SourceResultType PhysicalCopyDatabase::GetData(ExecutionContext &context, DataCh
 		auto unbound_index = make_uniq<UnboundIndex>(create_index_info.Copy(), storage_info,
 		                                             data_table.GetTableIOManager(), catalog.GetAttached());
 		data_table.AddIndex(std::move(unbound_index));
+
+		// We add unbound indexes, so we immediately bind them.
+		// Otherwise, WAL serialization fails due to unbound indexes.
+		auto &data_table_info = *data_table.GetDataTableInfo();
+		data_table_info.BindIndexes(context.client);
 	}
 
 	return SourceResultType::FINISHED;

@@ -619,9 +619,10 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	} else {
 		root = make_uniq<LogicalDummyScan>(GenerateTableIndex());
 	}
-	insert->AddChild(std::move(root));
 
+	insert->AddChild(std::move(root));
 	BindOnConflictClause(*insert, table, stmt);
+	insert->table.GetStorage().BindIndexes(context);
 
 	if (!stmt.returning_list.empty()) {
 		insert->return_chunk = true;
