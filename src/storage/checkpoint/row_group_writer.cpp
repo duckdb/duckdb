@@ -5,8 +5,11 @@
 
 namespace duckdb {
 
-CompressionType RowGroupWriter::GetColumnCompressionType(idx_t i) {
-	return table.GetColumn(LogicalIndex(i)).CompressionType();
+RowGroupWriter::RowGroupWriter(TableCatalogEntry &table, PartialBlockManager &partial_block_manager)
+    : table(table), partial_block_manager(partial_block_manager) {
+	for (auto &col : table.GetColumns().Physical()) {
+		compression_types.push_back(col.CompressionType());
+	}
 }
 
 SingleFileRowGroupWriter::SingleFileRowGroupWriter(TableCatalogEntry &table, PartialBlockManager &partial_block_manager,
@@ -28,6 +31,14 @@ MetaBlockPointer SingleFileRowGroupWriter::GetMetaBlockPointer() {
 
 optional_ptr<MetadataManager> SingleFileRowGroupWriter::GetMetadataManager() {
 	return table_data_writer.GetManager();
+}
+
+void SingleFileRowGroupWriter::StartWritingColumns(vector<MetaBlockPointer> &column_metadata) {
+	table_data_writer.SetWrittenPointers(column_metadata);
+}
+
+void SingleFileRowGroupWriter::FinishWritingColumns() {
+	table_data_writer.SetWrittenPointers(nullptr);
 }
 
 } // namespace duckdb

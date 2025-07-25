@@ -1282,6 +1282,15 @@ endforeach()
 
 set(EXTENSION_CONFIG_BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/.github/config/extensions/")
 
+if(DEFINED CORE_EXTENSIONS)
+  message(DEPRECATION "CORE_EXTENSIONS is deprecated. Use BUILD_EXTENSIONS instead.")
+  if(NOT DEFINED BUILD_EXTENSIONS)
+    set(BUILD_EXTENSIONS ${CORE_EXTENSIONS})
+  else()
+    list(APPEND BUILD_EXTENSIONS ${CORE_EXTENSIONS})
+  endif()
+endif()
+
 # Load extensions passed through cmake config var
 foreach(EXT IN LISTS BUILD_EXTENSIONS)
   if(NOT "${EXT}" STREQUAL "")

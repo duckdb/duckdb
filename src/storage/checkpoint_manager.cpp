@@ -595,7 +595,7 @@ void CheckpointReader::ReadTableData(CatalogTransaction transaction, Deserialize
 	auto &reader = dynamic_cast<MetadataReader &>(binary_deserializer.GetStream());
 
 	MetadataReader table_data_reader(reader.GetMetadataManager(), table_pointer);
-	TableDataReader data_reader(table_data_reader, bound_info);
+	TableDataReader data_reader(table_data_reader, bound_info, table_pointer);
 	data_reader.ReadTableData();
 
 	bound_info.data->total_rows = total_rows;
