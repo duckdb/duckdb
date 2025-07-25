@@ -28,10 +28,10 @@ void PrintBits(unsigned char value) {
 	}
 }
 
-void PrintBytes(const char* ptr, idx_t length) {
+void PrintBytes(const char *ptr, idx_t length) {
 	for (idx_t i = 0; i < length; ++i) {
 		PrintBits(ptr[i]);
-		std::cout <<"  ";
+		std::cout << "  ";
 	}
 
 	std::cout << std::endl;
@@ -58,25 +58,43 @@ void AddBinaryBuffersInPlace(char *target_buffer, idx_t target_size, const char 
 			// they have the same size then
 			idx_t target_idx = target_start_pos;
 			idx_t source_idx = Varint::VARINT_HEADER_SIZE;
-			while (target_idx < target_size) {
-				if (target_buffer[target_idx] > ~source_buffer[source_idx]) {
-					is_target_absolute_bigger = true;
-					result_positive = !target_negative;
-					break;
-				} else if (target_buffer[target_idx] < ~source_buffer[source_idx]) {
-					is_target_absolute_bigger = false;
-					result_positive = target_negative;
-					break;
+			if (target_negative) {
+				while (target_idx < target_size) {
+					if (~target_buffer[target_idx] > source_buffer[source_idx]) {
+						is_target_absolute_bigger = true;
+						break;
+					} else if (~target_buffer[target_idx] < source_buffer[source_idx]) {
+						is_target_absolute_bigger = false;
+						break;
+					}
+					target_idx++;
+					source_idx++;
 				}
-				target_idx++;
-				source_idx++;
+			} else {
+				while (target_idx < target_size) {
+					if (target_buffer[target_idx] > ~source_buffer[source_idx]) {
+						is_target_absolute_bigger = true;
+						break;
+					} else if (target_buffer[target_idx] < ~source_buffer[source_idx]) {
+						is_target_absolute_bigger = false;
+						break;
+					}
+					target_idx++;
+					source_idx++;
+				}
 			}
+			if (is_target_absolute_bigger) {
+				result_positive = !target_negative;
+			} else {
+				result_positive = !source_negative;
+			}
+
 			if (target_idx == target_size) {
 				// they are ze same values, but opposing signs
 				// Set target to 0 and skedaddle
 				Varint::SetHeader(target_buffer, target_size - Varint::VARINT_HEADER_SIZE, false);
 				for (idx_t i = Varint::VARINT_HEADER_SIZE; i < target_size; ++i) {
-					target_buffer[i] = 0 ;
+					target_buffer[i] = 0;
 				}
 				return;
 			}
@@ -103,12 +121,11 @@ void AddBinaryBuffersInPlace(char *target_buffer, idx_t target_size, const char 
 		// Add bytes and carry
 		uint16_t sum = static_cast<uint16_t>(target_byte) + static_cast<uint16_t>(source_byte) + carry;
 		uint8_t result_byte = static_cast<uint8_t>(sum & 0xFF);
-		if ( (target_negative || source_negative) && i_target == target_size - 1) {
+		if ((target_negative || source_negative) && i_target == target_size - 1) {
 			// select (-1)::VARINT +  9223372036854775807::VARINT;
 			if (!(target_negative && !source_negative && is_target_absolute_bigger)) {
 				result_byte += 1;
 			}
-
 		}
 		carry = (sum >> 8) & 0xFF;
 
@@ -193,8 +210,6 @@ void varint_t::Reallocate(idx_t min_size) {
 	varint_t new_varint(*allocator, new_target_ptr, new_size);
 	*this = new_varint;
 }
-
-
 
 varint_t &varint_t::operator+=(const string_t &rhs) {
 	// Let's first figure out if we need realloc, or if we can do the sum in-place
