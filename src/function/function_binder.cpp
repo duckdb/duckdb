@@ -434,7 +434,8 @@ static void HandleCollations(ClientContext &context, ScalarFunction &bound_funct
 }
 
 static void InferTemplateType(ClientContext &context, const LogicalType &source, const LogicalType &target,
-                              unordered_map<idx_t, LogicalType> &bindings, const Expression &current_expr) {
+                              unordered_map<idx_t, vector<LogicalType>> &bindings, const Expression &current_expr,
+                              const BaseScalarFunction &function) {
 
 	if (target.id() == LogicalTypeId::UNKNOWN || target.id() == LogicalTypeId::SQLNULL) {
 		// If the actual type is unknown, we cannot infer anything more.
@@ -451,7 +452,7 @@ static void InferTemplateType(ClientContext &context, const LogicalType &source,
 				const auto index = TemplateType::GetIndex(child);
 				if (bindings.find(index) == bindings.end()) {
 					// not found, add the binding
-					bindings[index] = target.id();
+					bindings[index] = {target.id()};
 				}
 			}
 			return false; // continue visiting
@@ -465,28 +466,43 @@ static void InferTemplateType(ClientContext &context, const LogicalType &source,
 		auto it = bindings.find(index);
 		if (it == bindings.end()) {
 			// not found, add the binding
-			bindings[index] = target;
+			bindings[index] = {target};
 			return;
 		}
-		if (it->second == target) {
+		if (it->second.back() == target) {
 			// already bound to the same type
 			return;
 		}
 
 		// Try to unify (promote) the type candidates
 		LogicalType result;
-		if (LogicalType::TryGetMaxLogicalType(context, it->second, target, result)) {
-			// Type unification was successful, update the binding
-			it->second = std::move(result);
+		if (LogicalType::TryGetMaxLogicalType(context, it->second.back(), target, result)) {
+			// Type unification was successful
+			if (it->second.back() != result) {
+				// update the binding
+				it->second.push_back(target);
+				it->second.push_back(std::move(result)); // Push the new promoted type
+			}
 			return;
 		}
 
 		// If we reach here, it means the types are incompatible
-		throw BinderException(
-		    current_expr.GetQueryLocation(),
-		    "Cannot infer template type '%s' given '%s' (previously deduced as: '%s'), an explicit cast is required",
-		    TemplateType::GetName(source), LogicalType::NormalizeType(target).ToString(),
-		    LogicalType::NormalizeType(it->second).ToString());
+		string msg =
+		    StringUtil::Format("Cannot deduce template type '%s' in function: '%s'\nType '%s' was inferred to be:\n",
+		                       TemplateType::GetName(source), function.ToString(), TemplateType::GetName(source));
+		const auto &steps = it->second;
+
+		for (idx_t i = 0; i < steps.size(); i += 2) {
+			if (i == 0) {
+				// Normalize the first step to ensure it is a valid type
+				msg += StringUtil::Format(" - '%s', from first occurence\n", steps[i].ToString());
+			} else {
+				msg += StringUtil::Format(" - '%s', by promoting '%s' + '%s'\n", steps[i].ToString(),
+				                          steps[i - 2].ToString(), steps[i - 1]);
+			}
+		}
+		msg += StringUtil::Format(" - '%s', which is incompatible with previously inferred type!", target.ToString());
+		throw BinderException(current_expr.GetQueryLocation(), msg);
 	}
 
 	// Otherwise, recurse downwards into nested types, and try to infer nested type members
@@ -506,7 +522,7 @@ static void InferTemplateType(ClientContext &context, const LogicalType &source,
 			    source.id() == LogicalTypeId::LIST ? ListType::GetChildType(source) : ArrayType::GetChildType(source);
 			const auto &target_child =
 			    target.id() == LogicalTypeId::LIST ? ListType::GetChildType(target) : ArrayType::GetChildType(target);
-			InferTemplateType(context, source_child, target_child, bindings, current_expr);
+			InferTemplateType(context, source_child, target_child, bindings, current_expr, function);
 		}
 	} break;
 	case LogicalTypeId::MAP: {
@@ -517,8 +533,8 @@ static void InferTemplateType(ClientContext &context, const LogicalType &source,
 			const auto &target_key = MapType::KeyType(target);
 			const auto &target_val = MapType::ValueType(target);
 
-			InferTemplateType(context, source_key, target_key, bindings, current_expr);
-			InferTemplateType(context, source_val, target_val, bindings, current_expr);
+			InferTemplateType(context, source_key, target_key, bindings, current_expr, function);
+			InferTemplateType(context, source_val, target_val, bindings, current_expr, function);
 		}
 	} break;
 	case LogicalTypeId::UNION: {
@@ -530,7 +546,7 @@ static void InferTemplateType(ClientContext &context, const LogicalType &source,
 			for (idx_t i = 0; i < common_members; i++) {
 				const auto &source_member_type = UnionType::GetMemberType(source, i);
 				const auto &target_member_type = UnionType::GetMemberType(target, i);
-				InferTemplateType(context, source_member_type, target_member_type, bindings, current_expr);
+				InferTemplateType(context, source_member_type, target_member_type, bindings, current_expr, function);
 			}
 		}
 	} break;
@@ -544,7 +560,7 @@ static void InferTemplateType(ClientContext &context, const LogicalType &source,
 			for (idx_t i = 0; i < common_children; i++) {
 				const auto &source_child_type = source_children[i].second;
 				const auto &target_child_type = target_children[i].second;
-				InferTemplateType(context, source_child_type, target_child_type, bindings, current_expr);
+				InferTemplateType(context, source_child_type, target_child_type, bindings, current_expr, function);
 			}
 		}
 	} break;
@@ -553,7 +569,7 @@ static void InferTemplateType(ClientContext &context, const LogicalType &source,
 	}
 }
 
-static void SubstituteTemplateType(LogicalType &type, unordered_map<idx_t, LogicalType> &bindings,
+static void SubstituteTemplateType(LogicalType &type, unordered_map<idx_t, vector<LogicalType>> &bindings,
                                    const string function_name) {
 
 	// Replace all template types in with their bound concrete types.
@@ -563,7 +579,7 @@ static void SubstituteTemplateType(LogicalType &type, unordered_map<idx_t, Logic
 			auto it = bindings.find(index);
 			if (it != bindings.end()) {
 				// found a binding, return the concrete type
-				return LogicalType::NormalizeType(it->second);
+				return LogicalType::NormalizeType(it->second.back());
 			}
 
 			// If we reach here, the template type was not bound to any concrete type.
@@ -577,7 +593,7 @@ static void SubstituteTemplateType(LogicalType &type, unordered_map<idx_t, Logic
 
 void FunctionBinder::ResolveTemplateTypes(BaseScalarFunction &bound_function,
                                           const vector<unique_ptr<Expression>> &children) {
-	unordered_map<idx_t, LogicalType> bindings;
+	unordered_map<idx_t, vector<LogicalType>> bindings;
 	vector<reference<LogicalType>> to_substitute;
 
 	// First, we need to infer the template types from the children.
@@ -587,7 +603,7 @@ void FunctionBinder::ResolveTemplateTypes(BaseScalarFunction &bound_function,
 		// If the parameter is not templated, we can skip it.
 		if (param.IsTemplated()) {
 			auto actual = ExpressionBinder::GetExpressionReturnType(*children[i]);
-			InferTemplateType(context, param, actual, bindings, *children[i]);
+			InferTemplateType(context, param, actual, bindings, *children[i], bound_function);
 
 			to_substitute.emplace_back(param);
 		}
@@ -598,7 +614,7 @@ void FunctionBinder::ResolveTemplateTypes(BaseScalarFunction &bound_function,
 		// All remaining children are considered varargs.
 		for (idx_t i = bound_function.arguments.size(); i < children.size(); i++) {
 			auto actual = ExpressionBinder::GetExpressionReturnType(*children[i]);
-			InferTemplateType(context, bound_function.varargs, actual, bindings, *children[i]);
+			InferTemplateType(context, bound_function.varargs, actual, bindings, *children[i], bound_function);
 		}
 		to_substitute.emplace_back(bound_function.varargs);
 	}
