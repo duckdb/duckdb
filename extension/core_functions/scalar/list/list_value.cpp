@@ -262,16 +262,6 @@ void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &result) 
 	ListVector::SetListSize(result, column_count * args.size());
 }
 
-unique_ptr<FunctionData> ListValueBind(ClientContext &context, ScalarFunction &bound_function,
-                                       vector<unique_ptr<Expression>> &arguments) {
-	// We cant infer the template type if there are no arguments, so we set it to SQLNULL here
-	if (arguments.empty()) {
-		bound_function.return_type = LogicalType::LIST(LogicalType::SQLNULL);
-		bound_function.varargs = LogicalType::SQLNULL;
-	}
-	return make_uniq<VariableReturnBindData>(bound_function.return_type);
-}
-
 unique_ptr<FunctionData> UnpivotBind(ClientContext &context, ScalarFunction &bound_function,
                                      vector<unique_ptr<Expression>> &arguments) {
 	// collect names and deconflict, construct return type
@@ -318,14 +308,24 @@ unique_ptr<BaseStatistics> ListValueStats(ClientContext &context, FunctionStatis
 
 } // namespace
 
-ScalarFunction ListValueFun::GetFunction() {
-	// the arguments and return types are actually set in the binder function
+ScalarFunctionSet ListValueFun::GetFunctions() {
+
+	ScalarFunctionSet set("list_value");
+
+	// Overload for 0 arguments, which returns an empty list.
+	ScalarFunction empty_fun({}, LogicalType::LIST(LogicalType::SQLNULL), ListValueFunction, nullptr, nullptr,
+	                         ListValueStats);
+	set.AddFunction(empty_fun);
+
+	// Overload for 1 + N arguments, which returns a list of the arguments.
 	auto element_type = LogicalType::TEMPLATE();
-	ScalarFunction fun("list_value", {}, LogicalType::LIST(element_type), ListValueFunction, ListValueBind, nullptr,
-	                   ListValueStats);
-	fun.varargs = element_type;
-	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	return fun;
+	ScalarFunction value_fun({element_type}, LogicalType::LIST(element_type), ListValueFunction, nullptr, nullptr,
+	                         ListValueStats);
+	value_fun.varargs = element_type;
+	value_fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	set.AddFunction(value_fun);
+
+	return set;
 }
 
 ScalarFunction UnpivotListFun::GetFunction() {
