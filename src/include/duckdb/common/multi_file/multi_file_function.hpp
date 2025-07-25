@@ -731,7 +731,15 @@ public:
 		auto &bind_data = bind_data_p->Cast<MultiFileBindData>();
 
 		vector<Value> file_path;
-		for (const auto &file : bind_data.file_list->Files()) {
+		unique_ptr<MultiFileList> mlist;
+		MultiFileList* list;
+		if (bind_data.file_options.hive_lazy_listing) {
+			mlist = bind_data.file_list->GetFirstFileList();
+			list = mlist.get();
+		} else {
+			list = bind_data.file_list.get();
+		}
+		for (const auto &file : list->Files()) {
 			file_path.emplace_back(file.path);
 		}
 

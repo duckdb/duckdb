@@ -85,6 +85,8 @@ public:
 
 	//! Returns the first file or an empty string if GetTotalFileCount() == 0
 	virtual OpenFileInfo GetFirstFile();
+	//! Returns a list with the first file
+	virtual unique_ptr<MultiFileList> GetFirstFileList();
 	//! Syntactic sugar for GetExpandResult() == FileExpandResult::NO_FILES
 	bool IsEmpty();
 

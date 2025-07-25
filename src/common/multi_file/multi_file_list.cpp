@@ -179,6 +179,10 @@ OpenFileInfo MultiFileList::GetFirstFile() {
 	return GetFile(0);
 }
 
+unique_ptr<MultiFileList> MultiFileList::GetFirstFileList() {
+	return make_uniq<SimpleMultiFileList>(vector<OpenFileInfo>{GetFirstFile()});
+}
+
 bool MultiFileList::IsEmpty() {
 	return GetExpandResult() == FileExpandResult::NO_FILES;
 }
@@ -332,17 +336,18 @@ idx_t GlobMultiFileList::GetTotalFileCount() {
 }
 
 FileExpandResult GlobMultiFileList::GetExpandResult() {
-	return FileExpandResult::MULTIPLE_FILES;
-	// GetFile(1) will ensure at least the first 2 files are expanded if they are available
-	// GetFile(1);
+	// return FileExpandResult::MULTIPLE_FILES;
+	// Ensure at least the first 2 files are expanded if they are available
+	lock_guard<mutex> lck(lock);
+	GetFileInternal(1, true);
 
-	// if (expanded_files.size() > 1) {
-	// 	return FileExpandResult::MULTIPLE_FILES;
-	// } else if (expanded_files.size() == 1) {
-	// 	return FileExpandResult::SINGLE_FILE;
-	// }
+	if (first_expanded_files.size() > 1) {
+		return FileExpandResult::MULTIPLE_FILES;
+	} else if (first_expanded_files.size() == 1) {
+		return FileExpandResult::SINGLE_FILE;
+	}
 
-	// return FileExpandResult::NO_FILES;
+	return FileExpandResult::NO_FILES;
 }
 
 OpenFileInfo GlobMultiFileList::GetFile(idx_t i) {
@@ -352,6 +357,9 @@ OpenFileInfo GlobMultiFileList::GetFile(idx_t i) {
 
 OpenFileInfo GlobMultiFileList::GetFirstFile() {
 	lock_guard<mutex> lck(lock);
+	// Ensure at least the first 2 files are expanded if they are available
+	GetFileInternal(1, true);
+	// Just return the first file
 	return GetFileInternal(0, true);
 }
 

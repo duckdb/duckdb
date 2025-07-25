@@ -247,10 +247,15 @@ void MultiFileReader::BindOptions(MultiFileOptions &options, MultiFileList &file
 		D_ASSERT(files.GetExpandResult() != FileExpandResult::NO_FILES);
 		auto partitions = HivePartitioning::Parse(files.GetFirstFile().path);
 		// verify that all files have the same hive partitioning scheme
-		for (const auto &file : files.Files()) {
-			if (options.hive_lazy_listing) {
-				break;
-			}
+		unique_ptr<MultiFileList> mlist;
+		MultiFileList* list;
+		if (options.hive_lazy_listing) {
+			mlist = files.GetFirstFileList();
+			list = mlist.get();
+		} else {
+			list = &files;
+		}
+		for (const auto &file : list->Files()) {
 			auto file_partitions = HivePartitioning::Parse(file.path);
 			for (auto &part_info : partitions) {
 				if (file_partitions.find(part_info.first) == file_partitions.end()) {
@@ -723,7 +728,16 @@ void MultiFileOptions::AutoDetectHiveTypesInternal(MultiFileList &files, ClientC
 	const LogicalType candidates[] = {LogicalType::DATE, LogicalType::TIMESTAMP, LogicalType::BIGINT};
 
 	unordered_map<string, LogicalType> detected_types;
-	for (const auto &file : files.Files()) {
+	unique_ptr<MultiFileList> mlist;
+	MultiFileList* list;
+	if (hive_lazy_listing) {
+		mlist = files.GetFirstFileList();
+		list = mlist.get();
+	} else {
+		list = &files;
+	}
+
+	for (const auto &file : list->Files()) {
 		auto partitions = HivePartitioning::Parse(file.path);
 		if (partitions.empty()) {
 			return;
@@ -755,10 +769,6 @@ void MultiFileOptions::AutoDetectHiveTypesInternal(MultiFileList &files, ClientC
 					entry->second = LogicalType::VARCHAR;
 				}
 			}
-		}
-
-		if (hive_lazy_listing) {
-			break;
 		}
 	}
 	for (auto &entry : detected_types) {
