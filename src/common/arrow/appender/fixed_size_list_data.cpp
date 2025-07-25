@@ -18,7 +18,7 @@ void ArrowFixedSizeListData::Append(ArrowAppendData &append_data, Vector &input,
 	UnifiedVectorFormat format;
 	input.ToUnifiedFormat(input_size, format);
 	idx_t size = to - from;
-	AppendValidity(append_data, format, from, to);
+	append_data.AppendValidity(format, from, to);
 	input.Flatten(input_size);
 	auto array_size = ArrayType::GetSize(input.GetType());
 	auto &child_vector = ArrayVector::GetEntry(input);
