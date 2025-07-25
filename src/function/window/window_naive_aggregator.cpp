@@ -87,7 +87,7 @@ protected:
 
 	//! The state used for scanning ORDER BY values from the collection
 	unique_ptr<Sort> sort;
-	//! The The order by collection
+	//! The order by collection
 	unique_ptr<WindowCursor> arg_orderer;
 	//! Reusable sort key chunk
 	DataChunk orderby_sink;
