@@ -124,8 +124,8 @@ void varint_t::Trim() {
 	auto cur_ptr = GetDataWriteable();
 	auto cur_size = GetSize();
 	bool is_negative = (cur_ptr[0] & 0x80) == 0;
-
-	if (bytes_to_trim > 0) {
+	// Our data must always have at least header + 1 bytes, so we avoid trimming the value 0
+	if (bytes_to_trim > 0 && cur_size - bytes_to_trim > Varint::VARINT_HEADER_SIZE + 1) {
 		// This bad-boy is wearing shoe lifts, time to prune it.
 		auto new_size = cur_size - bytes_to_trim;
 		auto new_target_ptr = reinterpret_cast<char *>(allocator->Allocate(new_size));
