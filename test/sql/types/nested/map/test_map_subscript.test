@@ -224,17 +224,17 @@ select MAP_EXTRACT(MAP([],[]), NULL)
 query I
 select MAP_EXTRACT(MAP(NULL, NULL), NULL)
 ----
-[]
+NULL
 
 query I
 select MAP_EXTRACT(NULL, NULL)
 ----
-[]
+NULL
 
 query I
 select MAP_EXTRACT(NULL::MAP("NULL", "NULL"), NULL)
 ----
-[]
+NULL
 
 query I
 select MAP_EXTRACT(NULL::MAP(INT, BIGINT), NULL)
