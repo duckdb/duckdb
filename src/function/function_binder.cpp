@@ -538,21 +538,12 @@ static void InferTemplateType(ClientContext &context, const LogicalType &source,
 		}
 	} break;
 	case LogicalTypeId::UNION: {
-		// Unions are only implicitly castable to unions, so we only need to handle this case here.
-		if (target.id() == LogicalTypeId::UNION) {
-			const auto source_member_count = UnionType::GetMemberCount(source);
-			const auto target_member_count = UnionType::GetMemberCount(target);
-			const auto common_members = MinValue(source_member_count, target_member_count);
-			for (idx_t i = 0; i < common_members; i++) {
-				const auto &source_member_type = UnionType::GetMemberType(source, i);
-				const auto &target_member_type = UnionType::GetMemberType(target, i);
-				InferTemplateType(context, source_member_type, target_member_type, bindings, current_expr, function);
-			}
-		}
+		// TODO: Support union types with template member types.
+		throw NotImplementedException("Union types cannot infer templated member types yet!");
 	} break;
 	case LogicalTypeId::STRUCT: {
 		// Structs are only implicitly castable to structs, so we only need to handle this case here.
-		if (target.id() == LogicalTypeId::STRUCT) {
+		if (target.id() == LogicalTypeId::STRUCT && StructType::IsUnnamed(source) && StructType::IsUnnamed(target)) {
 			const auto &source_children = StructType::GetChildTypes(source);
 			const auto &target_children = StructType::GetChildTypes(target);
 
@@ -562,6 +553,9 @@ static void InferTemplateType(ClientContext &context, const LogicalType &source,
 				const auto &target_child_type = target_children[i].second;
 				InferTemplateType(context, source_child_type, target_child_type, bindings, current_expr, function);
 			}
+		} else {
+			// TODO: Support named structs with template child types.
+			throw NotImplementedException("Named structs cannot infer templated child types yet!");
 		}
 	} break;
 	default:
