@@ -1315,36 +1315,34 @@ void LocalFileSystem::RecursiveGlobDirectories(const vector<string> &splits, idx
                                                vector<OpenFileInfo> &result, FileOpener *opener, idx_t max_files,
                                                optional_ptr<HivePartitioning> hive_partitioning) {
 	bool is_last_chunk = i + 1 == splits.size();
-	ListFiles(
-	    path,
-	    [&](OpenFileInfo &info) {
-		    if (result.size() >= max_files) {
-			    return;
-		    }
-		    if (path != ".") {
-			    info.path = JoinPath(path, info.path);
-		    }
-		    if (IsSymbolicLink(info.path)) {
-			    return;
-		    }
-		    bool is_directory = FileSystem::IsDirectory(info);
-		    if (is_directory) {
-			    if (hive_partitioning && hive_partitioning->ApplyFiltersToFile(info)) {
-				    return;
-			    }
-			    if (!is_last_chunk) {
-				    ProcessSplit(splits, i + 1, info.path, result, opener, max_files, hive_partitioning);
-			    }
-			    if (result.size() >= max_files) {
-				    return;
-			    }
-			    RecursiveGlobDirectories(splits, i, info.path, result, opener, max_files, hive_partitioning);
-		    } else {
-			    if (is_last_chunk) {
-				    result.push_back(std::move(info));
-			    }
-		    }
-	    });
+	ListFiles(path, [&](OpenFileInfo &info) {
+		if (result.size() >= max_files) {
+			return;
+		}
+		if (path != ".") {
+			info.path = JoinPath(path, info.path);
+		}
+		if (IsSymbolicLink(info.path)) {
+			return;
+		}
+		bool is_directory = FileSystem::IsDirectory(info);
+		if (is_directory) {
+			if (hive_partitioning && hive_partitioning->ApplyFiltersToFile(info)) {
+				return;
+			}
+			if (!is_last_chunk) {
+				ProcessSplit(splits, i + 1, info.path, result, opener, max_files, hive_partitioning);
+			}
+			if (result.size() >= max_files) {
+				return;
+			}
+			RecursiveGlobDirectories(splits, i, info.path, result, opener, max_files, hive_partitioning);
+		} else {
+			if (is_last_chunk) {
+				result.push_back(std::move(info));
+			}
+		}
+	});
 }
 
 void LocalFileSystem::GlobFilesInternal(const vector<string> &splits, idx_t i, const string &path, const string &glob,
@@ -1352,29 +1350,29 @@ void LocalFileSystem::GlobFilesInternal(const vector<string> &splits, idx_t i, c
                                         optional_ptr<HivePartitioning> hive_partitioning) {
 	bool is_last_chunk = i + 1 == splits.size();
 
-	ListFiles(
-	    path,
-	    [&](OpenFileInfo &info) {
-		    if (result.size() >= max_files) {
-			    return;
-		    }
-		    bool is_directory = FileSystem::IsDirectory(info);
-		    if (is_last_chunk && is_directory) {
-			    return;
-		    }
-		    if (duckdb::Glob(info.path.c_str(), info.path.size(), glob.c_str(), glob.size())) {
-			    if (path != ".") {
-				    info.path = JoinPath(path, info.path);
-			    }
-			    if (is_directory) {
-				    if (!is_last_chunk) {
-					    ProcessSplit(splits, i + 1, info.path, result, opener, max_files, hive_partitioning);
-				    }
-			    } else {
-				    result.push_back(std::move(info));
-			    }
-		    }
-	    });
+	ListFiles(path, [&](OpenFileInfo &info) {
+		if (result.size() >= max_files) {
+			return;
+		}
+		bool is_directory = FileSystem::IsDirectory(info);
+		if (is_last_chunk && is_directory) {
+			return;
+		}
+		if (duckdb::Glob(info.path.c_str(), info.path.size(), glob.c_str(), glob.size())) {
+			if (path != ".") {
+				info.path = JoinPath(path, info.path);
+			}
+			if (is_directory) {
+				if (!is_last_chunk) {
+					ProcessSplit(splits, i + 1, info.path, result, opener, max_files, hive_partitioning);
+				}
+			} else {
+				if (is_last_chunk) {
+					result.push_back(std::move(info));
+				}
+			}
+		}
+	});
 }
 
 vector<OpenFileInfo> LocalFileSystem::FetchFileWithoutGlob(const string &path, FileOpener *opener, bool absolute_path) {
@@ -1555,6 +1553,10 @@ vector<OpenFileInfo> LocalFileSystem::GlobHive(const string &path, FileOpener *o
 		start_index = 0;
 	}
 
+	vector<OpenFileInfo> result;
+	if (start_index >= splits.size()) {
+		return result;
+	}
 	unique_ptr<HivePartitioning> hive_partitioning;
 	if (hive_params) {
 		hive_partitioning = make_uniq<HivePartitioning>(hive_params->context, hive_params->filters,
@@ -1565,9 +1567,14 @@ vector<OpenFileInfo> LocalFileSystem::GlobHive(const string &path, FileOpener *o
 		previous_directories.push_back(OpenFileInfo());
 	}
 
-	vector<OpenFileInfo> result;
 	for (auto &prev_directory : previous_directories) {
 		ProcessSplit(splits, start_index, prev_directory.path, result, opener, max_files, hive_partitioning);
+	}
+
+	if (result.empty()) {
+		// no result found that matches the glob
+		// last ditch effort: search the path as a string literal
+		return FetchFileWithoutGlob(path, opener, absolute_path);
 	}
 
 	if (hive_partitioning) {
