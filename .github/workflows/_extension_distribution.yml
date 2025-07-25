@@ -32,7 +32,7 @@ on:
 jobs:
   build:
     name: Build
-    uses: samansmink/extension-ci-tools/.github/workflows/_extension_distribution.yml@add-extension-config-injection
+    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@main
     with:
       # We piggy-back extension-template to build the extensions in extension_config, it's hacky, but it works ¯\_(ツ)_/¯
       override_repository: duckdb/extension-template
@@ -44,11 +44,11 @@ jobs:
 
       # DuckDB version is overridden to the current commit of the current repository
       duckdb_version: ${{ inputs.duckdb_ref == '' && github.sha || inputs.duckdb_ref }}
-      override_duckdb_repository: https://github.com/${{ github.repository }}.git # TODO: required to run this on forks?
+      override_duckdb_repository: https://github.com/${{ github.repository }}.git
 
       # CI tools is pinned to main
-      override_ci_tools_repository: samansmink/extension-ci-tools # TODO: remove once merged
-      ci_tools_version: add-extension-config-injection # TODO: switch to main once merged
+      override_ci_tools_repository: duckdb/extension-ci-tools
+      ci_tools_version: main
 
       exclude_archs: ${{ inputs.exclude_archs }}
 
