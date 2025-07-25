@@ -226,6 +226,7 @@ AggregateFunctionSet SumFun::GetFunctions() {
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT128));
 	sum.AddFunction(AggregateFunction::UnaryAggregate<SumState<double>, double, double, NumericSumOperation>(
 	    LogicalType::DOUBLE, LogicalType::DOUBLE));
+	sum.AddFunction(VarintSumFun::GetFunction());
 	return sum;
 }
 

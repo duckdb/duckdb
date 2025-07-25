@@ -161,11 +161,11 @@ void varint_t::Reallocate(ArenaAllocator &allocator, idx_t min_size) {
 	// When reallocating, we double the size and properly set the new values
 	// Notice that this might temporarily create an INVALID varint
 	// Be sure to call TRIM, to make it valid again.
-	auto current_size = data.GetSize();
-	auto new_size = min_size * 2;
-	auto new_target_ptr = reinterpret_cast<char *>(allocator.Allocate(new_size));
-	auto old_data = data.GetData();
-	bool is_negative = (old_data[0] & 0x80) == 0;
+	const auto current_size = data.GetSize();
+	const auto new_size = min_size * 2;
+	const auto new_target_ptr = reinterpret_cast<char *>(allocator.Allocate(new_size));
+	const auto old_data = data.GetData();
+	const bool is_negative = (old_data[0] & 0x80) == 0;
 	// We initialize the new pointer
 	// First we do the new header
 	Varint::SetHeader(new_target_ptr, new_size - Varint::VARINT_HEADER_SIZE, is_negative);

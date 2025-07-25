@@ -238,12 +238,6 @@ struct SkewnessFun {
 };
 
 struct VarintSumFun {
-	static constexpr const char *Name = "sum";
-	static constexpr const char *Parameters = "x";
-	static constexpr const char *Description = "Returns the sum of all input values.";
-	static constexpr const char *Example = "sum(A)";
-	static constexpr const char *Categories = "";
-
 	static AggregateFunction GetFunction();
 };
 
