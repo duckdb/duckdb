@@ -85,6 +85,8 @@ public:
 
 	//! Returns the first file or an empty string if GetTotalFileCount() == 0
 	virtual OpenFileInfo GetFirstFile();
+	//! Returns an initial file used for metadata sampling, may differ from first file in expanded file list
+	virtual OpenFileInfo PeekFirstFile();
 	//! Returns a list with the first file
 	virtual unique_ptr<MultiFileList> GetFirstFileList();
 	//! Syntactic sugar for GetExpandResult() == FileExpandResult::NO_FILES
@@ -179,7 +181,7 @@ public:
 protected:
 	//! Main MultiFileList API
 	OpenFileInfo GetFile(idx_t i) override;
-	OpenFileInfo GetFirstFile() override;
+	OpenFileInfo PeekFirstFile() override;
 
 	//! Get the i-th expanded file
 	OpenFileInfo GetFileInternal(idx_t i, bool first_files);

@@ -245,10 +245,10 @@ void MultiFileReader::BindOptions(MultiFileOptions &options, MultiFileList &file
 	// Add generated constant columns from hive partitioning scheme
 	if (options.hive_partitioning) {
 		D_ASSERT(files.GetExpandResult() != FileExpandResult::NO_FILES);
-		auto partitions = HivePartitioning::Parse(files.GetFirstFile().path);
+		auto partitions = HivePartitioning::Parse(files.PeekFirstFile().path);
 		// verify that all files have the same hive partitioning scheme
 		unique_ptr<MultiFileList> mlist;
-		MultiFileList* list;
+		MultiFileList *list;
 		if (options.hive_lazy_listing) {
 			mlist = files.GetFirstFileList();
 			list = mlist.get();
@@ -262,18 +262,18 @@ void MultiFileReader::BindOptions(MultiFileOptions &options, MultiFileList &file
 					string error = "Hive partition mismatch between file \"%s\" and \"%s\": key \"%s\" not found";
 					if (options.auto_detect_hive_partitioning == true) {
 						throw InternalException(error + "(hive partitioning was autodetected)",
-						                        files.GetFirstFile().path, file.path, part_info.first);
+						                        files.PeekFirstFile().path, file.path, part_info.first);
 					}
-					throw BinderException(error.c_str(), files.GetFirstFile().path, file.path, part_info.first);
+					throw BinderException(error.c_str(), files.PeekFirstFile().path, file.path, part_info.first);
 				}
 			}
 			if (partitions.size() != file_partitions.size()) {
 				string error_msg = "Hive partition mismatch between file \"%s\" and \"%s\"";
 				if (options.auto_detect_hive_partitioning == true) {
 					throw InternalException(error_msg + "(hive partitioning was autodetected)",
-					                        files.GetFirstFile().path, file.path);
+					                        files.PeekFirstFile().path, file.path);
 				}
-				throw BinderException(error_msg.c_str(), files.GetFirstFile().path, file.path);
+				throw BinderException(error_msg.c_str(), files.PeekFirstFile().path, file.path);
 			}
 		}
 
@@ -585,7 +585,7 @@ MultiFileReaderBindData MultiFileReader::BindReader(ClientContext &context, vect
 		return BindUnionReader(context, return_types, names, files, result, options, file_options);
 	} else {
 		shared_ptr<BaseFileReader> reader;
-		reader = CreateReader(context, files.GetFirstFile(), options, file_options, *result.interface);
+		reader = CreateReader(context, files.PeekFirstFile(), options, file_options, *result.interface);
 		auto &columns = reader->GetColumns();
 		for (auto &column : columns) {
 			return_types.emplace_back(column.type);
@@ -697,7 +697,7 @@ void UnionByName::CombineUnionTypes(const vector<string> &col_names, const vecto
 }
 
 bool MultiFileOptions::AutoDetectHivePartitioningInternal(MultiFileList &files, ClientContext &context) {
-	auto first_file = files.GetFirstFile();
+	auto first_file = files.PeekFirstFile();
 	auto partitions = HivePartitioning::Parse(first_file.path);
 	if (partitions.empty()) {
 		// no partitions found in first file
@@ -729,7 +729,7 @@ void MultiFileOptions::AutoDetectHiveTypesInternal(MultiFileList &files, ClientC
 
 	unordered_map<string, LogicalType> detected_types;
 	unique_ptr<MultiFileList> mlist;
-	MultiFileList* list;
+	MultiFileList *list;
 	if (hive_lazy_listing) {
 		mlist = files.GetFirstFileList();
 		list = mlist.get();
@@ -794,11 +794,6 @@ void MultiFileOptions::AutoDetectHivePartitioning(MultiFileList &files, ClientCo
 		// union_by_name requires reading all files eagerly
 		hive_lazy_listing = false;
 	}
-	// Clear earlier files used for peeking at hive partitioning, eagerly read them all
-	// if (!hive_lazy_listing) {
-	// 	files.Clear();
-	// 	files.GetAllFiles();
-	// }
 	if (auto_detect_hive_partitioning) {
 		hive_partitioning = AutoDetectHivePartitioningInternal(files, context);
 	}

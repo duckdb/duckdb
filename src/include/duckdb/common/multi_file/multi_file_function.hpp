@@ -732,7 +732,7 @@ public:
 
 		vector<Value> file_path;
 		unique_ptr<MultiFileList> mlist;
-		MultiFileList* list;
+		MultiFileList *list;
 		if (bind_data.file_options.hive_lazy_listing) {
 			mlist = bind_data.file_list->GetFirstFileList();
 			list = mlist.get();

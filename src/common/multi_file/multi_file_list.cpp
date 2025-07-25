@@ -179,8 +179,12 @@ OpenFileInfo MultiFileList::GetFirstFile() {
 	return GetFile(0);
 }
 
+OpenFileInfo MultiFileList::PeekFirstFile() {
+	return GetFirstFile();
+}
+
 unique_ptr<MultiFileList> MultiFileList::GetFirstFileList() {
-	return make_uniq<SimpleMultiFileList>(vector<OpenFileInfo>{GetFirstFile()});
+	return make_uniq<SimpleMultiFileList>(vector<OpenFileInfo> {PeekFirstFile()});
 }
 
 bool MultiFileList::IsEmpty() {
@@ -275,9 +279,7 @@ unique_ptr<MultiFileList> GlobMultiFileList::ComplexFilterPushdown(ClientContext
 	lock_guard<mutex> lck(lock);
 
 	// Expand all
-	// Restart the expansion, since previous expansion might have only expanded the first file
 	if (options.hive_lazy_listing) {
-		ClearInternal();
 		HiveFilterParams hive_filter_params(context, filters, options, info);
 		while (ExpandNextPath(std::numeric_limits<idx_t>::max(), false, &hive_filter_params)) {
 		}
@@ -307,7 +309,6 @@ GlobMultiFileList::DynamicFilterPushdown(ClientContext &context, const MultiFile
 	lock_guard<mutex> lck(lock);
 
 	// Expand all paths into a copy
-	// FIXME: lazy expansion and push filters into glob
 	idx_t path_index = current_path;
 	auto file_list = expanded_files;
 	while (ExpandPathInternal(path_index, file_list)) {
@@ -355,7 +356,7 @@ OpenFileInfo GlobMultiFileList::GetFile(idx_t i) {
 	return GetFileInternal(i, false);
 }
 
-OpenFileInfo GlobMultiFileList::GetFirstFile() {
+OpenFileInfo GlobMultiFileList::PeekFirstFile() {
 	lock_guard<mutex> lck(lock);
 	// Ensure at least the first 2 files are expanded if they are available
 	GetFileInternal(1, true);
@@ -402,8 +403,7 @@ bool GlobMultiFileList::ExpandPathInternal(idx_t &current_path, vector<OpenFileI
 bool GlobMultiFileList::ExpandNextPath(idx_t max_files, bool first_files,
                                        optional_ptr<HiveFilterParams> hive_filter_params) {
 	return ExpandPathInternal(first_files ? first_files_current_path : current_path,
-	                          first_files ? first_expanded_files : expanded_files, max_files,
-	                          hive_filter_params);
+	                          first_files ? first_expanded_files : expanded_files, max_files, hive_filter_params);
 }
 
 bool GlobMultiFileList::IsFullyExpanded() const {
