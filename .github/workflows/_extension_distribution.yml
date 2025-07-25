@@ -45,6 +45,7 @@ jobs:
       # DuckDB version is overridden to the current commit of the current repository
       set_caller_as_duckdb: true
       duckdb_version: ${{ github.sha }}
+
 #      override_duckdb_repository: https://github.com/${{ github.repository }}.git
 
       # CI tools is pinned to main
