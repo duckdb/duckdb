@@ -15,7 +15,7 @@ namespace duckdb {
 
 enum class ArrowOffsetSize : uint8_t { REGULAR, LARGE };
 
-enum ArrowFormatVersion : uint8_t {
+enum class ArrowFormatVersion : uint8_t {
 	//! Base Version
 	V1_0 = 10,
 	//! Added 256-bit Decimal type.
@@ -47,7 +47,7 @@ struct ClientProperties {
 	bool arrow_use_list_view = false;
 	bool produce_arrow_string_view = false;
 	bool arrow_lossless_conversion = false;
-	ArrowFormatVersion arrow_output_version = V1_0;
+	ArrowFormatVersion arrow_output_version = ArrowFormatVersion::V1_0;
 	optional_ptr<ClientContext> client_context;
 };
 } // namespace duckdb
