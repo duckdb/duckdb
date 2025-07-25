@@ -3,44 +3,25 @@
 
 namespace duckdb {
 
-varint_t::varint_t(ArenaAllocator &allocator, uint32_t blob_size) : string_t(blob_size), allocator(&allocator) {
-	if (blob_size > string_t::INLINE_BYTES) {
-		// This is a big boy, gotta allocate it
-		auto ptr = allocator.Allocate(blob_size);
-		SetPointer(reinterpret_cast<char *>(ptr));
-	}
-}
-
-varint_t::varint_t(ArenaAllocator &allocator, const char *data, size_t len)
-    : string_t(data, static_cast<uint32_t>(len)), allocator(&allocator) {
-}
-
-varint_t varint_t::operator*(const varint_t &rhs) const {
-	return *this;
-}
-varint_t &varint_t::operator+=(const varint_t &rhs) {
-	return *this;
-}
-
-void PrintBits(unsigned char value) {
+void PrintBits(const unsigned char value) {
 	for (int i = 7; i >= 0; --i) {
 		std::cout << ((value >> i) & 1);
 	}
 }
 
-void PrintBytes(const char *ptr, idx_t length) {
+void varint_t::Print() const {
+	auto ptr = data.GetData();
+	auto length = data.GetSize();
 	for (idx_t i = 0; i < length; ++i) {
 		PrintBits(ptr[i]);
 		std::cout << "  ";
 	}
-
 	std::cout << std::endl;
 }
 
 void AddBinaryBuffersInPlace(char *target_buffer, idx_t target_size, const char *source_buffer, idx_t source_size,
                              idx_t target_start_pos) {
-
-	const idx_t header_size = Varint::VARINT_HEADER_SIZE;
+	constexpr idx_t header_size = Varint::VARINT_HEADER_SIZE;
 
 	bool target_negative = (target_buffer[0] & 0x80) == 0;
 	bool source_negative = (source_buffer[0] & 0x80) == 0;
@@ -100,13 +81,13 @@ void AddBinaryBuffersInPlace(char *target_buffer, idx_t target_size, const char 
 			}
 		}
 	}
-	// Prepare working pointers (indexes)
+
 	idx_t i_target = target_size - 1; // last byte index in target
 	idx_t i_source = source_size - 1; // last byte index in source
 
 	// Carry for addition
 	uint16_t carry = 0;
-	// Add bytes from right to left (LSB to MSB)
+	// Add bytes from right to left
 	while (i_target >= header_size) {
 		uint8_t target_byte = static_cast<uint8_t>(target_buffer[i_target]);
 		uint8_t source_byte;
@@ -122,7 +103,6 @@ void AddBinaryBuffersInPlace(char *target_buffer, idx_t target_size, const char 
 		uint16_t sum = static_cast<uint16_t>(target_byte) + static_cast<uint16_t>(source_byte) + carry;
 		uint8_t result_byte = static_cast<uint8_t>(sum & 0xFF);
 		if ((target_negative || source_negative) && i_target == target_size - 1) {
-			// select (-1)::VARINT +  9223372036854775807::VARINT;
 			if (!(target_negative && !source_negative && is_target_absolute_bigger)) {
 				result_byte += 1;
 			}
@@ -139,8 +119,8 @@ void AddBinaryBuffersInPlace(char *target_buffer, idx_t target_size, const char 
 }
 
 idx_t varint_t::GetStartDataPos() const {
-	auto cur_ptr = GetDataWriteable();
-	auto cur_size = GetSize();
+	auto cur_ptr = data.GetDataWriteable();
+	auto cur_size = data.GetSize();
 	bool is_negative = (cur_ptr[0] & 0x80) == 0;
 	char value_to_trim = is_negative ? static_cast<char>(0xFF) : 0;
 	idx_t data_start = 0;
@@ -153,10 +133,10 @@ idx_t varint_t::GetStartDataPos() const {
 	}
 	return data_start;
 }
-void varint_t::Trim() {
+void varint_t::Trim(ArenaAllocator &allocator) {
 	auto bytes_to_trim = GetStartDataPos();
-	auto cur_ptr = GetDataWriteable();
-	auto cur_size = GetSize();
+	auto cur_ptr = data.GetDataWriteable();
+	auto cur_size = data.GetSize();
 	bool is_negative = (cur_ptr[0] & 0x80) == 0;
 	// Our data must always have at least header + 1 bytes, so we avoid trimming the value 0
 	if (bytes_to_trim > 0) {
@@ -168,24 +148,23 @@ void varint_t::Trim() {
 		}
 		// This bad-boy is wearing shoe lifts, time to prune it.
 		auto new_size = cur_size - bytes_to_trim;
-		auto new_target_ptr = reinterpret_cast<char *>(allocator->Allocate(new_size));
+		auto new_target_ptr = reinterpret_cast<char *>(allocator.Allocate(new_size));
 		Varint::SetHeader(new_target_ptr, new_size - Varint::VARINT_HEADER_SIZE, is_negative);
 		for (idx_t i = Varint::VARINT_HEADER_SIZE; i < new_size; ++i) {
 			new_target_ptr[i] = cur_ptr[i + bytes_to_trim];
 		}
-		varint_t new_varint(*allocator, new_target_ptr, new_size);
-		*this = new_varint;
+		data = string_t(new_target_ptr, new_size);
 	}
 }
 
-void varint_t::Reallocate(idx_t min_size) {
+void varint_t::Reallocate(ArenaAllocator &allocator, idx_t min_size) {
 	// When reallocating, we double the size and properly set the new values
 	// Notice that this might temporarily create an INVALID varint
 	// Be sure to call TRIM, to make it valid again.
-	auto current_size = GetSize();
+	auto current_size = data.GetSize();
 	auto new_size = min_size * 2;
-	auto new_target_ptr = reinterpret_cast<char *>(allocator->Allocate(new_size));
-	auto old_data = GetData();
+	auto new_target_ptr = reinterpret_cast<char *>(allocator.Allocate(new_size));
+	auto old_data = data.GetData();
 	bool is_negative = (old_data[0] & 0x80) == 0;
 	// We initialize the new pointer
 	// First we do the new header
@@ -206,24 +185,23 @@ void varint_t::Reallocate(idx_t min_size) {
 		new_target_ptr[i] = old_data[j++];
 	}
 	// Verify we reached the end of the old string
-	D_ASSERT(j == GetSize());
-	varint_t new_varint(*allocator, new_target_ptr, new_size);
-	*this = new_varint;
+	D_ASSERT(j == data.GetSize());
+	data = string_t(new_target_ptr, new_size);
 }
 
-varint_t &varint_t::operator+=(const string_t &rhs) {
+void varint_t::AddInPlace(ArenaAllocator &allocator, const varint_t &rhs) {
 	// Let's first figure out if we need realloc, or if we can do the sum in-place
-	auto target_ptr = GetDataWriteable();
-	auto source_ptr = rhs.GetDataWriteable();
-	auto target_size = GetSize();
-	auto source_size = rhs.GetSize();
+	auto target_ptr = data.GetDataWriteable();
+	auto source_ptr = rhs.data.GetDataWriteable();
+	auto target_size = data.GetSize();
+	auto source_size = rhs.data.GetSize();
 	const bool same_sign = (target_ptr[0] & 0x80) == (source_ptr[0] & 0x80);
 	if (target_size < source_size) {
 		// We must reallocate
-		Reallocate(source_size + 1);
+		Reallocate(allocator, source_size + 1);
 		// Get new pointer/size
-		target_ptr = GetDataWriteable();
-		target_size = GetSize();
+		target_ptr = data.GetDataWriteable();
+		target_size = data.GetSize();
 	} else if (same_sign) {
 		// If they both have the same sign and the MSD of the MSB from the data is set, there is a chance we might
 		// need to resize
@@ -235,16 +213,16 @@ varint_t &varint_t::operator+=(const string_t &rhs) {
 		}
 		if (is_msd_msb_set) {
 			// We must reallocate
-			Reallocate(target_size + 1);
+			Reallocate(allocator, target_size + 1);
 			// Get new pointer/size
-			target_ptr = GetDataWriteable();
-			target_size = GetSize();
+			target_ptr = data.GetDataWriteable();
+			target_size = data.GetSize();
 		}
 	}
 	// We for sure are not going to realloc, we can do it in-place
 	AddBinaryBuffersInPlace(target_ptr, target_size, source_ptr, source_size,
 	                        GetStartDataPos() + Varint::VARINT_HEADER_SIZE);
-	Finalize();
-	return *this;
+	data.Finalize();
 }
+
 } // namespace duckdb

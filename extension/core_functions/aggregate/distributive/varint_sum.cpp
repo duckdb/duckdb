@@ -33,14 +33,14 @@ struct VarintOperation {
 		if (!state.is_set) {
 			state.is_set = true;
 			// We have the allocator here, let's initialize our main varint
-			state.value = varint_t::FromBlob(unary_input.input.allocator, input);
+			state.value = input;
 		} else {
-			state.value += input;
+			state.value.AddInPlace(unary_input.input.allocator, input);
 		}
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &input) {
 		if (!source.is_set) {
 			return;
 		}
@@ -49,7 +49,7 @@ struct VarintOperation {
 			target.is_set = true;
 			return;
 		}
-		target.value += source.value;
+		target.value.AddInPlace(input.allocator, source.value);
 		target.is_set = true;
 	}
 
@@ -58,7 +58,7 @@ struct VarintOperation {
 		if (!state.is_set) {
 			finalize_data.ReturnNull();
 		} else {
-			state.value.Trim();
+			state.value.Trim(finalize_data.input.allocator);
 			target = state.value;
 		}
 	}
@@ -71,7 +71,7 @@ struct VarintOperation {
 } // namespace
 
 AggregateFunction VarintSumFun::GetFunction() {
-	return AggregateFunction::UnaryAggregate<VarintState, string_t, varint_t, VarintOperation>(LogicalType::VARINT,
+	return AggregateFunction::UnaryAggregate<VarintState, varint_t, varint_t, VarintOperation>(LogicalType::VARINT,
 	                                                                                           LogicalType::VARINT);
 }
 

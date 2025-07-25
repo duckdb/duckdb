@@ -312,18 +312,17 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &type) {
 	}
 }
 
-void VarcharAdd(DataChunk &args, ExpressionState &state, Vector &result) {
+void VarintAdd(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &allocator = state.GetAllocator();
 	ArenaAllocator arena(allocator);
-	BinaryExecutor::Execute<string_t, string_t, string_t>(
-	    args.data[0], args.data[1], result, args.size(), [&](string_t a, string_t b) {
-		    varint_t varint_a(arena, a.GetData(), a.GetSize());
-		    varint_a += b;
-		    varint_a.Trim();
-		    auto target = StringVector::EmptyString(result, varint_a.GetSize());
-		    auto target_data = target.GetDataWriteable();
+	BinaryExecutor::Execute<varint_t, varint_t, string_t>(
+	    args.data[0], args.data[1], result, args.size(), [&](varint_t a, varint_t b) {
+		    a.AddInPlace(arena, b);
+		    a.Trim(arena);
 
-		    memcpy(target_data, varint_a.GetData(), varint_a.GetSize());
+		    auto target = StringVector::EmptyString(result, a.data.GetSize());
+		    auto target_data = target.GetDataWriteable();
+		    memcpy(target_data, a.data.GetData(), a.data.GetSize());
 		    target.Finalize();
 		    return target;
 	    });
@@ -356,7 +355,7 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const Logi
 	switch (left_type.id()) {
 	case LogicalTypeId::VARINT:
 		if (right_type.id() == LogicalTypeId::VARINT) {
-			ScalarFunction function("+", {left_type, right_type}, LogicalType::VARINT, VarcharAdd);
+			ScalarFunction function("+", {left_type, right_type}, LogicalType::VARINT, VarintAdd);
 			BaseScalarFunction::SetReturnsError(function);
 			return function;
 		}
