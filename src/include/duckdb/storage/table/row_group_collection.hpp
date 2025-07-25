@@ -167,6 +167,8 @@ private:
 	TableStatistics stats;
 	//! Allocation size, only tracked for appends
 	atomic<idx_t> allocation_size;
+	//! Root metadata pointer, if the collection is loaded from disk
+	MetaBlockPointer metadata_pointer;
 };
 
 } // namespace duckdb

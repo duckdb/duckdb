@@ -23,18 +23,22 @@ class SegmentStatistics;
 // Writes data for an entire row group.
 class RowGroupWriter {
 public:
-	RowGroupWriter(TableCatalogEntry &table, PartialBlockManager &partial_block_manager)
-	    : table(table), partial_block_manager(partial_block_manager) {
-	}
+	RowGroupWriter(TableCatalogEntry &table, PartialBlockManager &partial_block_manager);
 	virtual ~RowGroupWriter() {
 	}
 
-	CompressionType GetColumnCompressionType(idx_t i);
+	const vector<CompressionType> &GetCompressionTypes() const {
+		return compression_types;
+	}
 
 	virtual CheckpointType GetCheckpointType() const = 0;
 	virtual WriteStream &GetPayloadWriter() = 0;
 	virtual MetaBlockPointer GetMetaBlockPointer() = 0;
 	virtual optional_ptr<MetadataManager> GetMetadataManager() = 0;
+	virtual void StartWritingColumns(vector<MetaBlockPointer> &column_metadata) {
+	}
+	virtual void FinishWritingColumns() {
+	}
 
 	PartialBlockManager &GetPartialBlockManager() {
 		return partial_block_manager;
@@ -43,6 +47,7 @@ public:
 protected:
 	TableCatalogEntry &table;
 	PartialBlockManager &partial_block_manager;
+	vector<CompressionType> compression_types;
 };
 
 // Writes data for an entire row group.
@@ -56,6 +61,8 @@ public:
 	WriteStream &GetPayloadWriter() override;
 	MetaBlockPointer GetMetaBlockPointer() override;
 	optional_ptr<MetadataManager> GetMetadataManager() override;
+	void StartWritingColumns(vector<MetaBlockPointer> &column_metadata) override;
+	void FinishWritingColumns() override;
 
 private:
 	//! Underlying writer object
