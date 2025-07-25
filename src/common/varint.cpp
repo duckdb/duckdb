@@ -90,8 +90,10 @@ void AddBinaryBuffersInPlace(char *target_buffer, idx_t target_size, const char 
 		uint8_t result_byte = static_cast<uint8_t>(sum & 0xFF);
 		if ( (target_negative || source_negative) && i_target == target_size - 1) {
 			// select (-1)::VARINT +  9223372036854775807::VARINT;
+			if (!(target_negative && !source_negative && is_target_absolute_bigger)) {
+				result_byte += 1;
+			}
 
-			result_byte += 1;
 		}
 		carry = (sum >> 8) & 0xFF;
 

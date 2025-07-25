@@ -146,7 +146,6 @@ SELECT (-5)::VARINT + 10000000000000000000::VARINT;
 ----
 9999999999999999995
 
-mode unskip
 
 # Large negative + small positive
 query I
@@ -165,6 +164,8 @@ query I
 SELECT (-18446744073709551615)::VARINT + (-1)::VARINT;
 ----
 -18446744073709551616
+
+mode unskip
 
 # Mixed range aggregation
 statement ok
