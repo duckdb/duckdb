@@ -145,7 +145,6 @@ jobs:
     name: Out-of-tree Extensions
     needs:
       - load-extension-configs
-#      - in-tree-extensions # TODO: this dependency is intended to avoid building all extensions when the build itself fails
     uses: ./.github/workflows/_extension_distribution.yml
     with:
       artifact_prefix: out-of-tree-extensions
@@ -160,7 +159,6 @@ jobs:
     name: Rust-based Extensions
     needs:
       - load-extension-configs
-#      - in-tree-extensions
     uses: ./.github/workflows/_extension_distribution.yml
     with:
       exclude_archs: ${{ needs.load-extension-configs.outputs.rust_based_extensions_exclude_archs }}
