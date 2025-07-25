@@ -70,15 +70,13 @@ jobs:
     runs-on: ubuntu-latest
     needs: check-draft
     outputs:
-      in_tree_extensions_config: ${{ steps.set-in-tree-extensions.outputs.extension_config }}
-      in_tree_extensions_exclude_archs: ${{ steps.set-in-tree-extensions.outputs.exclude_archs }}
-      out_of_tree_extensions_config: ${{ steps.set-out-of-tree-extensions.outputs.extension_config }}
-      out_of_tree_extensions_exclude_archs: ${{ steps.set-out-of-tree-extensions.outputs.exclude_archs }}
+      main_extensions_config: ${{ steps.set-main-extensions.outputs.extension_config }}
+      main_extensions_exclude_archs: ${{ steps.set-main-extensions.outputs.exclude_archs }}
       rust_based_extensions_config: ${{ steps.set-rust-based-extensions.outputs.extension_config }}
       rust_based_extensions_exclude_archs: ${{ steps.set-rust-based-extensions.outputs.exclude_archs }}
     env:
       # NOTE: on PRs we exclude some archs to speed things up TODO: improve further on this
-      BASE_EXCLUDE_ARCHS: ${{ github.event_name == 'pull_request' && 'wasm_eh;wasm_wasm_threads;windows_amd64_mingw;osx_amd64;linux_arm64;linux_amd64_musl;' || '' }}
+      BASE_EXCLUDE_ARCHS: ${{ github.event_name == 'pull_request' && 'wasm_eh;wasm_threads;windows_amd64_mingw;osx_amd64;linux_arm64;linux_amd64_musl;' || '' }}
       EXTRA_EXCLUDE_ARCHS: ${{ inputs.extra_exclude_archs }}
     steps:
       - uses: actions/checkout@v4
@@ -86,29 +84,20 @@ jobs:
           fetch-depth: 0
           ref: ${{ inputs.override_duckdb_version }}
 
-      - id: set-in-tree-extensions
-        name: Configure In-tree extensions
+      - id: set-main-extensions
+        name: Configure main extensions
         env:
-          CONFIG_FILE: .github/config/in_tree_extensions.cmake
+          IN_TREE_CONFIG_FILE: .github/config/in_tree_extensions.cmake
+          OUT_OF_TREE_CONFIG_FILE: .github/config/out_of_tree_extensions.cmake
           DEFAULT_EXCLUDE_ARCHS: ''
         run: |
           # Set config
           echo exclude_archs="$DEFAULT_EXCLUDE_ARCHS;$BASE_EXCLUDE_ARCHS;$EXTRA_EXCLUDE_ARCHS" >> $GITHUB_OUTPUT
-          in_tree_extensions="`cat $CONFIG_FILE`"
+          in_tree_extensions="`cat $IN_TREE_CONFIG_FILE`"
+          out_of_tree_extensions="`cat $OUT_OF_TREE_CONFIG_FILE`"
           echo "extension_config<<EOF" >> $GITHUB_OUTPUT
           echo "$in_tree_extensions" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-          cat $GITHUB_OUTPUT
-
-      - id: set-out-of-tree-extensions
-        name: Configure Out-of-tree extensions
-        env:
-          CONFIG_FILE: .github/config/out_of_tree_extensions.cmake
-          DEFAULT_EXCLUDE_ARCHS: ''
-        run: |
-          echo exclude_archs="$DEFAULT_EXCLUDE_ARCHS;$BASE_EXCLUDE_ARCHS;$EXTRA_EXCLUDE_ARCHS" >> $GITHUB_OUTPUT
-          out_of_tree_extensions="`cat $CONFIG_FILE`"
-          echo "extension_config<<EOF" >> $GITHUB_OUTPUT
+          echo -e "\n" >> $GITHUB_OUTPUT
           echo "$out_of_tree_extensions" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
           cat $GITHUB_OUTPUT
@@ -127,29 +116,15 @@ jobs:
           cat $GITHUB_OUTPUT
 
   # Build the extensions from .github/config/in_tree_extensions.cmake
-  in-tree-extensions:
-    name: In-tree Extensions
+  main-extensions:
+    name: Main Extensions
     needs:
       - load-extension-configs
     uses: ./.github/workflows/_extension_distribution.yml
     with:
-      artifact_prefix: in-tree-extensions
-      exclude_archs: ${{ needs.load-extension-configs.outputs.in_tree_extensions_exclude_archs }}
-      extension_config: ${{ needs.load-extension-configs.outputs.in_tree_extensions_config }}
-      override_tag: ${{ inputs.override_git_describe }}
-      duckdb_ref: ${{ inputs.override_duckdb_version }}
-      skip_tests: ${{ inputs.skip_tests && true || false }}
-
-  # Build the extensions from .github/config/out_of_tree_extensions.cmake
-  out-of-tree-extensions:
-    name: Out-of-tree Extensions
-    needs:
-      - load-extension-configs
-    uses: ./.github/workflows/_extension_distribution.yml
-    with:
-      artifact_prefix: out-of-tree-extensions
-      exclude_archs: ${{ needs.load-extension-configs.outputs.out_of_tree_extensions_exclude_archs }}
-      extension_config: ${{ needs.load-extension-configs.outputs.out_of_tree_extensions_config }}
+      artifact_prefix: main-extensions
+      exclude_archs: ${{ needs.load-extension-configs.outputs.main_extensions_exclude_archs }}
+      extension_config: ${{ needs.load-extension-configs.outputs.main_extensions_config }}
       override_tag: ${{ inputs.override_git_describe }}
       duckdb_ref: ${{ inputs.override_duckdb_version }}
       skip_tests: ${{ inputs.skip_tests && true || false }}
@@ -174,8 +149,7 @@ jobs:
     name: Create Extension Repository
     runs-on: ubuntu-latest
     needs:
-      - in-tree-extensions
-      - out-of-tree-extensions
+      - main-extensions
       - rust-based-extensions
     steps:
       - uses: actions/checkout@v4
@@ -184,16 +158,10 @@ jobs:
           submodules: 'true'
 
       - uses: actions/download-artifact@v4
-        name: Download in-tree extensions
+        name: Download main extensions
         with:
-          pattern: in-tree-extensions-${{ github.sha }}*
-          path: /tmp/repository_generation/in-tree-extensions
-
-      - uses: actions/download-artifact@v4
-        name: Download out-of-tree extensions
-        with:
-          pattern: out-of-tree-extensions-${{ github.sha }}*
-          path: /tmp/repository_generation/out-of-tree-extensions
+          pattern: main-extensions-${{ github.sha }}*
+          path: /tmp/repository_generation/main-extensions
 
       - uses: actions/download-artifact@v4
         name: Download rust-based extensions
