@@ -60,7 +60,6 @@ jobs:
       duckdb_tag: ${{ inputs.override_tag }}
 
       skip_tests: ${{ inputs.skip_tests }}
-
       save_cache: true
 
       # The extension_config.cmake configuration that gets built
