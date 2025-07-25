@@ -72,6 +72,12 @@ public:
 	//! Create a new local sort
 	optional_ptr<LocalSortState> InitializeLocalSort() const;
 
+	ArenaAllocator &CreateTreeAllocator() const {
+		lock_guard<mutex> tree_lock(lock);
+		tree_allocators.emplace_back(make_uniq<ArenaAllocator>(Allocator::DefaultAllocator()));
+		return *tree_allocators.back();
+	}
+
 	//! Patch up the previous index block boundaries
 	void PatchPrevIdcs();
 	bool TryPrepareNextStage(WindowDistinctAggregatorLocalState &lstate);
@@ -80,6 +86,10 @@ public:
 	ClientContext &context;
 	idx_t memory_per_thread;
 
+	//! The tree allocators.
+	//! We need to hold onto them for the tree lifetime,
+	//! not the lifetime of the local state that constructed part of the tree
+	mutable vector<unique_ptr<ArenaAllocator>> tree_allocators;
 	//! Finalize guard
 	mutable mutex lock;
 	//! Finalize stage
@@ -202,6 +212,8 @@ public:
 	void Evaluate(const WindowDistinctAggregatorGlobalState &gdstate, const DataChunk &bounds, Vector &result,
 	              idx_t count, idx_t row_idx);
 
+	//! The thread-local allocator for building the tree
+	ArenaAllocator &tree_allocator;
 	//! Thread-local sorting data
 	optional_ptr<LocalSortState> local_sort;
 	//! Finalize stage
@@ -237,8 +249,9 @@ protected:
 
 WindowDistinctAggregatorLocalState::WindowDistinctAggregatorLocalState(
     const WindowDistinctAggregatorGlobalState &gastate)
-    : update_v(LogicalType::POINTER), source_v(LogicalType::POINTER), target_v(LogicalType::POINTER), gastate(gastate),
-      statef(gastate.aggr), statep(LogicalType::POINTER), statel(LogicalType::POINTER), flush_count(0) {
+    : tree_allocator(gastate.CreateTreeAllocator()), update_v(LogicalType::POINTER), source_v(LogicalType::POINTER),
+      target_v(LogicalType::POINTER), gastate(gastate), statef(gastate.aggr), statep(LogicalType::POINTER),
+      statel(LogicalType::POINTER), flush_count(0) {
 	InitSubFrames(frames, gastate.aggregator.exclude_mode);
 	payload_chunk.Initialize(Allocator::DefaultAllocator(), gastate.payload_types);
 
@@ -593,7 +606,6 @@ void WindowDistinctSortTree::Build(WindowDistinctAggregatorLocalState &ldastate)
 
 void WindowDistinctSortTree::BuildRun(idx_t level_nr, idx_t run_idx, WindowDistinctAggregatorLocalState &ldastate) {
 	auto &aggr = gdastate.aggr;
-	auto &allocator = gdastate.allocator;
 	auto &inputs = ldastate.cursor->chunk;
 	auto &levels_flat_native = gdastate.levels_flat_native;
 
@@ -601,7 +613,7 @@ void WindowDistinctSortTree::BuildRun(idx_t level_nr, idx_t run_idx, WindowDisti
 	auto &leaves = ldastate.leaves;
 	auto &sel = ldastate.sel;
 
-	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
+	AggregateInputData aggr_input_data(aggr.GetFunctionData(), ldastate.tree_allocator);
 
 	//! The states to update
 	auto &update_v = ldastate.update_v;
@@ -698,7 +710,7 @@ void WindowDistinctAggregatorLocalState::FlushStates() {
 	}
 
 	const auto &aggr = gastate.aggr;
-	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
+	AggregateInputData aggr_input_data(aggr.GetFunctionData(), tree_allocator);
 	statel.Verify(flush_count);
 	aggr.function.combine(statel, statep, aggr_input_data, flush_count);
 

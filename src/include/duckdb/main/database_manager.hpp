@@ -72,6 +72,11 @@ public:
 	                                                 const optional_idx max_db_count = optional_idx());
 	//! Scans the catalog set and returns each committed database entry
 	vector<reference<AttachedDatabase>> GetDatabases();
+	//! Returns the approximate count of attached databases.
+	idx_t ApproxDatabaseCount() {
+		lock_guard<mutex> path_lock(db_paths_lock);
+		return db_paths_to_name.size();
+	}
 	//! Removes all databases from the catalog set. This is necessary for the database instance's destructor,
 	//! as the database manager has to be alive when destroying the catalog set objects.
 	void ResetDatabases(unique_ptr<TaskScheduler> &scheduler);

@@ -41,6 +41,13 @@ public:
 	ProgressData GetProgress(ClientContext &context, GlobalSourceState &gstate) const;
 
 public:
+	//===--------------------------------------------------------------------===//
+	// Non-Standard Interface
+	//===--------------------------------------------------------------------===//
+	SourceResultType MaterializeMerge(ExecutionContext &context, OperatorSourceInput &input) const;
+	unique_ptr<SortedRun> GetMaterialized(GlobalSourceState &global_state);
+
+public:
 	const Expression &decode_sort_key;
 	shared_ptr<TupleDataLayout> key_layout;
 	vector<unique_ptr<SortedRun>> sorted_runs;

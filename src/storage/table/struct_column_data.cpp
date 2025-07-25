@@ -328,6 +328,18 @@ bool StructColumnData::IsPersistent() {
 	return true;
 }
 
+bool StructColumnData::HasAnyChanges() const {
+	if (validity.HasAnyChanges()) {
+		return true;
+	}
+	for (auto &child_col : sub_columns) {
+		if (child_col->HasAnyChanges()) {
+			return true;
+		}
+	}
+	return false;
+}
+
 PersistentColumnData StructColumnData::Serialize() {
 	PersistentColumnData persistent_data(PhysicalType::STRUCT);
 	persistent_data.child_columns.push_back(validity.Serialize());
