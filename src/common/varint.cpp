@@ -3,7 +3,7 @@
 
 namespace duckdb {
 
-void PrintBits(const unsigned char value) {
+void PrintBits(const char value) {
 	for (int i = 7; i >= 0; --i) {
 		std::cout << ((value >> i) & 1);
 	}
@@ -153,7 +153,7 @@ void varint_t::Trim(ArenaAllocator &allocator) {
 		for (idx_t i = Varint::VARINT_HEADER_SIZE; i < new_size; ++i) {
 			new_target_ptr[i] = cur_ptr[i + bytes_to_trim];
 		}
-		data = string_t(new_target_ptr, new_size);
+		data = string_t(new_target_ptr, static_cast<uint32_t>(new_size));
 	}
 }
 
@@ -186,7 +186,7 @@ void varint_t::Reallocate(ArenaAllocator &allocator, idx_t min_size) {
 	}
 	// Verify we reached the end of the old string
 	D_ASSERT(j == data.GetSize());
-	data = string_t(new_target_ptr, new_size);
+	data = string_t(new_target_ptr, static_cast<uint32_t>(new_size));
 }
 
 void varint_t::AddInPlace(ArenaAllocator &allocator, const varint_t &rhs) {
@@ -203,15 +203,14 @@ void varint_t::AddInPlace(ArenaAllocator &allocator, const varint_t &rhs) {
 		target_ptr = data.GetDataWriteable();
 		target_size = data.GetSize();
 	} else if (same_sign) {
-		// If they both have the same sign and the MSD of the MSB from the data is set, there is a chance we might
-		// need to resize
-		bool is_msd_msb_set;
+		// If they both have the same sign and the most significant bit of the data is set, we need to resize.
+		bool is_msb;
 		if ((target_ptr[0] & 0x80) == 0) {
-			is_msd_msb_set = (target_ptr[3] & 0x80) == 0 || (source_ptr[3] & 0x80) == 0;
+			is_msb = (target_ptr[3] & 0x80) == 0 || (source_ptr[3] & 0x80) == 0;
 		} else {
-			is_msd_msb_set = (target_ptr[3] & 0x80) != 0 || (source_ptr[3] & 0x80) != 0;
+			is_msb = (target_ptr[3] & 0x80) != 0 || (source_ptr[3] & 0x80) != 0;
 		}
-		if (is_msd_msb_set) {
+		if (is_msb) {
 			// We must reallocate
 			Reallocate(allocator, target_size + 1);
 			// Get new pointer/size
