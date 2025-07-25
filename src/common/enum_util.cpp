@@ -161,6 +161,7 @@
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/table/chunk_info.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
+#include "duckdb/storage/table/table_index_list.hpp"
 #include "duckdb/storage/temporary_file_manager.hpp"
 #include "duckdb/verification/statement_verifier.hpp"
 
@@ -2123,6 +2124,25 @@ const char* EnumUtil::ToChars<IndexAppendMode>(IndexAppendMode value) {
 template<>
 IndexAppendMode EnumUtil::FromString<IndexAppendMode>(const char *value) {
 	return static_cast<IndexAppendMode>(StringUtil::StringToEnum(GetIndexAppendModeValues(), 3, "IndexAppendMode", value));
+}
+
+const StringUtil::EnumStringLiteral *GetIndexBindStateValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(IndexBindState::UNBOUND), "UNBOUND" },
+		{ static_cast<uint32_t>(IndexBindState::BINDING), "BINDING" },
+		{ static_cast<uint32_t>(IndexBindState::BOUND), "BOUND" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<IndexBindState>(IndexBindState value) {
+	return StringUtil::EnumToString(GetIndexBindStateValues(), 3, "IndexBindState", static_cast<uint32_t>(value));
+}
+
+template<>
+IndexBindState EnumUtil::FromString<IndexBindState>(const char *value) {
+	return static_cast<IndexBindState>(StringUtil::StringToEnum(GetIndexBindStateValues(), 3, "IndexBindState", value));
 }
 
 const StringUtil::EnumStringLiteral *GetIndexConstraintTypeValues() {

@@ -1181,7 +1181,7 @@ ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<Table
 	Vector row_ids(LogicalType::ROW_TYPE);
 	VectorOperations::GenerateSequence(row_ids, chunk.size(), row_start, 1);
 
-	vector<BoundIndex *> already_appended;
+	vector<reference<BoundIndex>> already_appended;
 	bool append_failed = false;
 
 	// Append the entries to the indexes.
@@ -1215,14 +1215,14 @@ ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<Table
 			return true;
 		}
 
-		already_appended.push_back(&bound_index);
+		already_appended.push_back(bound_index);
 		return false;
 	});
 
 	if (append_failed) {
 		// Constraint violation: remove any appended entries from previous indexes (if any).
-		for (auto *index : already_appended) {
-			index->Delete(chunk, row_ids);
+		for (auto index : already_appended) {
+			index.get().Delete(chunk, row_ids);
 		}
 	}
 	return error;

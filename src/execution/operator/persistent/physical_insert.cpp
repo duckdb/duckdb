@@ -359,7 +359,7 @@ static void PrepareSortKeys(DataChunk &input, unordered_map<column_t, unique_ptr
 }
 
 static map<idx_t, vector<idx_t>> CheckDistinctness(DataChunk &input, ConflictInfo &info,
-                                                   unordered_set<Index *> &matched_indexes) {
+                                                   reference_set_t<Index> &matched_indexes) {
 	map<idx_t, vector<idx_t>> conflicts;
 	unordered_map<idx_t, unique_ptr<Vector>> sort_keys;
 	//! Register which rows have already caused a conflict
@@ -368,7 +368,7 @@ static map<idx_t, vector<idx_t>> CheckDistinctness(DataChunk &input, ConflictInf
 	auto &column_ids = info.column_ids;
 	if (column_ids.empty()) {
 		for (auto index : matched_indexes) {
-			auto &index_column_ids = index->GetColumnIdSet();
+			auto &index_column_ids = index.get().GetColumnIdSet();
 			PrepareSortKeys(input, sort_keys, index_column_ids);
 			vector<reference<Vector>> columns;
 			for (auto &idx : index_column_ids) {
@@ -530,7 +530,7 @@ idx_t PhysicalInsert::OnConflictHandling(TableCatalogEntry &table, ExecutionCont
 	}
 
 	ConflictInfo conflict_info(conflict_target);
-	unordered_set<Index *> matching_indexes;
+	reference_set_t<Index> matching_indexes;
 
 	if (conflict_info.column_ids.empty()) {
 		auto &global_indexes = data_table.GetDataTableInfo()->GetIndexes();
@@ -541,7 +541,7 @@ idx_t PhysicalInsert::OnConflictHandling(TableCatalogEntry &table, ExecutionCont
 			}
 			D_ASSERT(index.IsBound());
 			if (conflict_info.ConflictTargetMatches(index)) {
-				matching_indexes.insert(&index);
+				matching_indexes.insert(index);
 			}
 			return false;
 		});
@@ -553,7 +553,7 @@ idx_t PhysicalInsert::OnConflictHandling(TableCatalogEntry &table, ExecutionCont
 			D_ASSERT(index.IsBound());
 			if (conflict_info.ConflictTargetMatches(index)) {
 				auto &bound_index = index.Cast<BoundIndex>();
-				matching_indexes.insert(&bound_index);
+				matching_indexes.insert(bound_index);
 			}
 			return false;
 		});
