@@ -38,24 +38,31 @@ void AddBinaryBuffersInPlace(char *target_buffer, idx_t target_size, const char 
 	bool target_negative = (target_buffer[0] & 0x80) == 0;
 	bool source_negative = (source_buffer[0] & 0x80) == 0;
 	bool result_positive = !target_negative;
+	bool is_target_absolute_bigger = false;
 	if (target_negative != source_negative) {
 		// check sizes
 		if (target_size - target_start_pos > source_size - Varint::VARINT_HEADER_SIZE) {
 			result_positive = !target_negative;
+			is_target_absolute_bigger = true;
 		} else if (target_size - target_start_pos < source_size - Varint::VARINT_HEADER_SIZE) {
 			result_positive = target_negative;
+			is_target_absolute_bigger = false;
 		} else {
 			// they have the same size then
 			idx_t i = target_start_pos;
 			for (; i < target_size; ++i) {
 				if (target_buffer[i] > ~source_buffer[i]) {
+					is_target_absolute_bigger = true;
 					result_positive = !target_negative;
+					break;
 				} else if (target_buffer[i] < ~source_buffer[i]) {
+					is_target_absolute_bigger = false;
 					result_positive = target_negative;
+					break;
 				}
 			}
 			if (i == target_size) {
-				// this is a zero
+				// they are ze same
 				result_positive = true;
 			}
 		}
@@ -81,7 +88,9 @@ void AddBinaryBuffersInPlace(char *target_buffer, idx_t target_size, const char 
 		// Add bytes and carry
 		uint16_t sum = static_cast<uint16_t>(target_byte) + static_cast<uint16_t>(source_byte) + carry;
 		uint8_t result_byte = static_cast<uint8_t>(sum & 0xFF);
-		if ((target_negative || source_negative) && i_target == target_size - 1) {
+		if ( (target_negative || source_negative) && i_target == target_size - 1) {
+			// select (-1)::VARINT +  9223372036854775807::VARINT;
+
 			result_byte += 1;
 		}
 		carry = (sum >> 8) & 0xFF;
@@ -162,6 +171,8 @@ void varint_t::Reallocate(idx_t min_size) {
 	*this = new_varint;
 }
 
+
+
 varint_t &varint_t::operator+=(const string_t &rhs) {
 	// Let's first figure out if we need realloc, or if we can do the sum in-place
 	auto target_ptr = GetDataWriteable();
@@ -175,9 +186,9 @@ varint_t &varint_t::operator+=(const string_t &rhs) {
 		// Get new pointer/size
 		target_ptr = GetDataWriteable();
 		target_size = GetSize();
-	} else if (same_sign && target_size == source_size) {
-		// If they both have the same sign and same size there might be a chance..
-		// But only if the MSD of the MSB from the data is set
+	} else if (same_sign) {
+		// If they both have the same sign and the MSD of the MSB from the data is set, there is a chance we might
+		// need to resize
 		bool is_msd_msb_set;
 		if ((target_ptr[0] & 0x80) == 0) {
 			is_msd_msb_set = (target_ptr[3] & 0x80) == 0 || (source_ptr[3] & 0x80) == 0;
