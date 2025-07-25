@@ -77,6 +77,7 @@ public:
 	void CastToFunctionArguments(SimpleFunction &function, vector<unique_ptr<Expression>> &children);
 
 	void ResolveTemplateTypes(BaseScalarFunction &bound_function, const vector<unique_ptr<Expression>> &children);
+	void VerifyTemplateTypes(const BaseScalarFunction &bound_function);
 
 private:
 	optional_idx BindVarArgsFunctionCost(const SimpleFunction &func, const vector<LogicalType> &arguments);

@@ -159,6 +159,9 @@ public:
 				}
 			}
 
+			// Verify that all templates are bound to concrete types.
+			binder.VerifyTemplateTypes(function);
+
 			binder.CastToFunctionArguments(function, children);
 		}
 

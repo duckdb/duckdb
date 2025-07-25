@@ -553,7 +553,8 @@ static void InferTemplateType(ClientContext &context, const LogicalType &source,
 	}
 }
 
-static void SubstituteTemplateType(LogicalType &type, unordered_map<idx_t, LogicalType> &bindings) {
+static void SubstituteTemplateType(LogicalType &type, unordered_map<idx_t, LogicalType> &bindings,
+                                   const string function_name) {
 
 	// Replace all template types in with their bound concrete types.
 	type = TypeVisitor::VisitReplace(type, [&](const LogicalType &t) -> LogicalType {
@@ -566,9 +567,9 @@ static void SubstituteTemplateType(LogicalType &type, unordered_map<idx_t, Logic
 			}
 
 			// If we reach here, the template type was not bound to any concrete type.
-			throw BinderException(
-			    "Function '%s' has a template type '%s' that could not be resolved to a concrete type", t.ToString(),
-			    TemplateType::GetName(t));
+			// We dont throw an error here, but give users a chance to handle unresolved template type later in the
+			// "bind_scalar_function_t" callback. We then throw an error if the template type is still not bound
+			// in the "VerifyTemplateTypes" method afterwards.
 		}
 		return t;
 	});
@@ -609,8 +610,28 @@ void FunctionBinder::ResolveTemplateTypes(BaseScalarFunction &bound_function,
 
 	// Finally, substitute all template types in the bound function with their concrete types.
 	for (auto &templated_type : to_substitute) {
-		SubstituteTemplateType(templated_type, bindings);
+		SubstituteTemplateType(templated_type, bindings, bound_function.name);
 	}
+}
+
+static void VerifyTemplateType(const LogicalType &type, const string &function_name) {
+	TypeVisitor::Contains(type, [&](const LogicalType &type) {
+		if (type.id() == LogicalTypeId::TEMPLATE) {
+			const auto msg =
+			    "Function '%s' has a template parameter type '%s' that could not be resolved to a concrete type";
+			throw BinderException(msg, function_name, TemplateType::GetName(type));
+		}
+		return false; // continue visiting
+	});
+}
+
+// Verify that all template types are bound to concrete types.
+void FunctionBinder::VerifyTemplateTypes(const BaseScalarFunction &bound_function) {
+	for (const auto &arg : bound_function.arguments) {
+		VerifyTemplateType(arg, bound_function.name);
+	}
+	VerifyTemplateType(bound_function.varargs, bound_function.name);
+	VerifyTemplateType(bound_function.return_type, bound_function.name);
 }
 
 unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunction bound_function,
@@ -633,6 +654,9 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunction bound_f
 		ScalarFunctionBindInput bind_input(*binder);
 		bind_info = bound_function.bind_extended(bind_input, bound_function, children);
 	}
+
+	// After the "bind" callback, we verify that all template types are bound to concrete types.
+	VerifyTemplateTypes(bound_function);
 
 	if (bound_function.get_modified_databases && binder) {
 		auto &properties = binder->GetStatementProperties();
@@ -673,6 +697,8 @@ unique_ptr<BoundAggregateExpression> FunctionBinder::BindAggregateFunction(Aggre
 		// we may have lost some arguments in the bind
 		children.resize(MinValue(bound_function.arguments.size(), children.size()));
 	}
+
+	VerifyTemplateTypes(bound_function);
 
 	// check if we need to add casts to the children
 	CastToFunctionArguments(bound_function, children);

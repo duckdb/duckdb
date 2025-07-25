@@ -262,6 +262,16 @@ void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &result) 
 	ListVector::SetListSize(result, column_count * args.size());
 }
 
+unique_ptr<FunctionData> ListValueBind(ClientContext &context, ScalarFunction &bound_function,
+                                       vector<unique_ptr<Expression>> &arguments) {
+	// We cant infer the template type if there are no arguments, so we set it to SQLNULL here
+	if (arguments.empty()) {
+		bound_function.return_type = LogicalType::LIST(LogicalType::SQLNULL);
+		bound_function.varargs = LogicalType::SQLNULL;
+	}
+	return make_uniq<VariableReturnBindData>(bound_function.return_type);
+}
+
 unique_ptr<FunctionData> UnpivotBind(ClientContext &context, ScalarFunction &bound_function,
                                      vector<unique_ptr<Expression>> &arguments) {
 	// collect names and deconflict, construct return type
@@ -311,7 +321,7 @@ unique_ptr<BaseStatistics> ListValueStats(ClientContext &context, FunctionStatis
 ScalarFunction ListValueFun::GetFunction() {
 	// the arguments and return types are actually set in the binder function
 	auto element_type = LogicalType::TEMPLATE();
-	ScalarFunction fun("list_value", {}, LogicalType::LIST(element_type), ListValueFunction, nullptr, nullptr,
+	ScalarFunction fun("list_value", {}, LogicalType::LIST(element_type), ListValueFunction, ListValueBind, nullptr,
 	                   ListValueStats);
 	fun.varargs = element_type;
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
