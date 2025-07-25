@@ -485,8 +485,8 @@ static void InferTemplateType(ClientContext &context, const LogicalType &source,
 		throw BinderException(
 		    current_expr.GetQueryLocation(),
 		    "Cannot infer template type '%s' given '%s' (previously deduced as: '%s'), an explicit cast is required",
-		    TemplateType::GetName(source), LogicalType::NormalizeType(it->second).ToString(),
-		    LogicalType::NormalizeType(target).ToString());
+		    TemplateType::GetName(source), LogicalType::NormalizeType(target).ToString(),
+		    LogicalType::NormalizeType(it->second).ToString());
 	}
 
 	// Otherwise, recurse downwards into nested types, and try to infer nested type members
