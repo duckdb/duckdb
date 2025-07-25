@@ -42,7 +42,9 @@ for file in sys.argv[1:]:
         if 'overlay-ports' in data['vcpkg-configuration']:
             merged_overlay_ports += prefix_overlay_ports_or_triples(data['vcpkg-configuration']['overlay-ports'], file)
         if 'overlay-triplets' in data['vcpkg-configuration']:
-            merged_overlay_triplets += prefix_overlay_ports_or_triples(data['vcpkg-configuration']['overlay-triplets'], file)
+            merged_overlay_triplets += prefix_overlay_ports_or_triples(
+                data['vcpkg-configuration']['overlay-triplets'], file
+            )
 
 final_deduplicated_deps = list()
 dedup_set = set()

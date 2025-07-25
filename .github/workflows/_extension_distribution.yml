@@ -43,7 +43,7 @@ jobs:
       extension_name: ${{ inputs.artifact_prefix }}
 
       # DuckDB version is overridden to the current commit of the current repository
-      duckdb_version: ${{ inputs.duckdb_ref == '' && github.sha || inputs.duckdb_ref }}
+      duckdb_version: ${{ inputs.duckdb_ref == '' && github.ref || inputs.duckdb_ref }}
       override_duckdb_repository: https://github.com/${{ github.repository }}.git
 
       # CI tools is pinned to main
