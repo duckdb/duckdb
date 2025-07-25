@@ -33,4 +33,12 @@ optional_ptr<MetadataManager> SingleFileRowGroupWriter::GetMetadataManager() {
 	return table_data_writer.GetManager();
 }
 
+void SingleFileRowGroupWriter::StartWritingColumns(vector<MetaBlockPointer> &column_metadata) {
+	table_data_writer.SetWrittenPointers(column_metadata);
+}
+
+void SingleFileRowGroupWriter::FinishWritingColumns() {
+	table_data_writer.SetWrittenPointers(nullptr);
+}
+
 } // namespace duckdb

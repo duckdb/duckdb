@@ -9,6 +9,28 @@
 
 namespace duckdb {
 
+MetadataBlock::MetadataBlock() : block_id(INVALID_BLOCK), dirty(false) {
+}
+
+MetadataBlock::MetadataBlock(MetadataBlock &&other) noexcept : dirty(false) {
+	std::swap(block, other.block);
+	std::swap(block_id, other.block_id);
+	std::swap(free_blocks, other.free_blocks);
+	auto dirty_val = dirty.load();
+	dirty = other.dirty.load();
+	other.dirty = dirty_val;
+}
+
+MetadataBlock &MetadataBlock::operator=(MetadataBlock &&other) noexcept {
+	std::swap(block, other.block);
+	std::swap(block_id, other.block_id);
+	std::swap(free_blocks, other.free_blocks);
+	auto dirty_val = dirty.load();
+	dirty = other.dirty.load();
+	other.dirty = dirty_val;
+	return *this;
+}
+
 MetadataManager::MetadataManager(BlockManager &block_manager, BufferManager &buffer_manager)
     : block_manager(block_manager), buffer_manager(buffer_manager) {
 }
@@ -37,6 +59,8 @@ MetadataHandle MetadataManager::AllocateHandle() {
 	MetadataPointer pointer;
 	pointer.block_index = UnsafeNumericCast<idx_t>(free_block);
 	auto &block = blocks[free_block];
+	// the block is now dirty
+	block.dirty = true;
 	if (block.block->BlockId() < MAXIMUM_BLOCK) {
 		// this block is a disk-backed block, yet we are planning to write to it
 		// we need to convert it into a transient block before we can write to it
@@ -81,6 +105,7 @@ void MetadataManager::ConvertToTransient(MetadataBlock &metadata_block) {
 	// copy the data to the transient block
 	memcpy(new_buffer.Ptr(), old_buffer.Ptr(), block_manager.GetBlockSize());
 	metadata_block.block = std::move(new_block);
+	metadata_block.dirty = true;
 
 	// unregister the old block
 	block_manager.UnregisterBlock(metadata_block.block_id);
@@ -96,6 +121,7 @@ block_id_t MetadataManager::AllocateNewBlock() {
 	for (idx_t i = 0; i < METADATA_BLOCK_COUNT; i++) {
 		new_block.free_blocks.push_back(NumericCast<uint8_t>(METADATA_BLOCK_COUNT - i - 1));
 	}
+	new_block.dirty = true;
 	// zero-initialize the handle
 	memset(handle.Ptr(), 0, block_manager.GetBlockSize());
 	AddBlock(std::move(new_block));
@@ -115,6 +141,9 @@ void MetadataManager::AddBlock(MetadataBlock new_block, bool if_exists) {
 void MetadataManager::AddAndRegisterBlock(MetadataBlock block) {
 	if (block.block) {
 		throw InternalException("Calling AddAndRegisterBlock on block that already exists");
+	}
+	if (block.block_id >= MAXIMUM_BLOCK) {
+		throw InternalException("AddAndRegisterBlock called with a transient block id");
 	}
 	block.block = block_manager.RegisterBlock(block.block_id);
 	AddBlock(std::move(block), true);
@@ -152,7 +181,7 @@ MetadataPointer MetadataManager::RegisterDiskPointer(MetaBlockPointer pointer) {
 	auto block_id = pointer.GetBlockId();
 	MetadataBlock block;
 	block.block_id = block_id;
-	AddAndRegisterBlock(block);
+	AddAndRegisterBlock(std::move(block));
 	return FromDiskPointer(pointer);
 }
 
@@ -188,6 +217,12 @@ void MetadataManager::Flush() {
 
 	for (auto &kv : blocks) {
 		auto &block = kv.second;
+		if (!block.dirty) {
+			if (block.block->BlockId() >= MAXIMUM_BLOCK) {
+				throw InternalException("Transient blocks must always be marked as dirty");
+			}
+			continue;
+		}
 		auto handle = buffer_manager.Pin(block.block);
 		// zero-initialize the few leftover bytes
 		memset(handle.Ptr() + total_metadata_size, 0, block_manager.GetBlockSize() - total_metadata_size);
@@ -196,11 +231,13 @@ void MetadataManager::Flush() {
 			// Convert the temporary block to a persistent block.
 			block.block =
 			    block_manager.ConvertToPersistent(QueryContext(), kv.first, std::move(block.block), std::move(handle));
-			continue;
+		} else {
+			// Already a persistent block, so we only need to write it.
+			D_ASSERT(block.block->BlockId() == block.block_id);
+			block_manager.Write(QueryContext(), handle.GetFileBuffer(), block.block_id);
 		}
-		// Already a persistent block, so we only need to write it.
-		D_ASSERT(block.block->BlockId() == block.block_id);
-		block_manager.Write(QueryContext(), handle.GetFileBuffer(), block.block_id);
+		// the block is no longer dirty
+		block.dirty = false;
 	}
 }
 
