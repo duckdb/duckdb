@@ -71,18 +71,6 @@ static void MapExtractListFunc(DataChunk &args, ExpressionState &state, Vector &
 	auto &map_vec = args.data[0];
 	auto &arg_vec = args.data[1];
 
-	const auto map_is_null = map_vec.GetType().id() == LogicalTypeId::SQLNULL;
-	const auto arg_is_null = arg_vec.GetType().id() == LogicalTypeId::SQLNULL;
-
-	if (map_is_null || arg_is_null) {
-		// Short-circuit if either the map or the arg is NULL
-		ListVector::SetListSize(result, 0);
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::GetData<list_entry_t>(result)[0] = {0, 0};
-		result.Verify(count);
-		return;
-	}
-
 	auto &key_vec = MapVector::GetKeys(map_vec);
 	auto &val_vec = MapVector::GetValues(map_vec);
 

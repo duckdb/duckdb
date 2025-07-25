@@ -175,7 +175,7 @@ select list_has_all([1, 2], 1);
 statement error
 select list_has_any([[1,2], [2,4]], ['abc', 'def']);
 ----
-Binder Error: Cannot unify template type 'T1' with types 'INTEGER[]' and 'VARCHAR', an explicit cast is required
+Binder Error: Cannot deduce template type
 
 # Test Function in Function
 

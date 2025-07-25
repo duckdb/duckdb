@@ -543,7 +543,7 @@ static void InferTemplateType(ClientContext &context, const LogicalType &source,
 	} break;
 	case LogicalTypeId::STRUCT: {
 		// Structs are only implicitly castable to structs, so we only need to handle this case here.
-		if (target.id() == LogicalTypeId::STRUCT && StructType::IsUnnamed(source) && StructType::IsUnnamed(target)) {
+		if (target.id() == LogicalTypeId::STRUCT && StructType::IsUnnamed(source)) {
 			const auto &source_children = StructType::GetChildTypes(source);
 			const auto &target_children = StructType::GetChildTypes(target);
 
