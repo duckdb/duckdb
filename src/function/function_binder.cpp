@@ -564,7 +564,7 @@ static void InferTemplateType(ClientContext &context, const LogicalType &source,
 }
 
 static void SubstituteTemplateType(LogicalType &type, unordered_map<idx_t, vector<LogicalType>> &bindings,
-                                   const string function_name) {
+                                   const string &function_name) {
 
 	// Replace all template types in with their bound concrete types.
 	type = TypeVisitor::VisitReplace(type, [&](const LogicalType &t) -> LogicalType {
