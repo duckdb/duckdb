@@ -140,6 +140,8 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_STRING_LITERAL = 37,
 	// enum type, only useful as logical type
 	DUCKDB_TYPE_INTEGER_LITERAL = 38,
+	// duckdb_time_ns (nanoseconds)
+	DUCKDB_TYPE_TIME_NS = 39,
 } duckdb_type;
 
 //! An enum over the returned state of different functions.
@@ -289,6 +291,11 @@ typedef struct {
 	int8_t sec;
 	int32_t micros;
 } duckdb_time_struct;
+
+//! TIME_NS is stored as nanoseconds since 00:00:00.
+typedef struct {
+	int64_t nanos;
+} duckdb_time_ns;
 
 //! TIME_TZ is stored as 40 bits for the int64_t microseconds, and 24 bits for the int32_t offset.
 //! Use the `duckdb_from_time_tz` function to extract individual information.
@@ -2305,6 +2312,14 @@ Creates a value from a time
 DUCKDB_C_API duckdb_value duckdb_create_time(duckdb_time input);
 
 /*!
+Creates a value from a time_ns
+
+* @param input The time value
+* @return The value. This must be destroyed with `duckdb_destroy_value`.
+*/
+DUCKDB_C_API duckdb_value duckdb_create_time_ns(duckdb_time_ns input);
+
+/*!
 Creates a value from a time_tz.
 Not to be confused with `duckdb_create_time_tz`, which creates a duckdb_time_tz_t.
 
@@ -2522,6 +2537,14 @@ Returns the time value of the given value.
 * @return A duckdb_time, or MinValue<time> if the value cannot be converted
 */
 DUCKDB_C_API duckdb_time duckdb_get_time(duckdb_value val);
+
+/*!
+Returns the time_ns value of the given value.
+
+* @param val A duckdb_value containing a time_ns
+* @return A duckdb_time_ns, or MinValue<time_ns> if the value cannot be converted
+*/
+DUCKDB_C_API duckdb_time_ns duckdb_get_time_ns(duckdb_value val);
 
 /*!
 Returns the time_tz value of the given value.
