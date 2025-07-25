@@ -1382,6 +1382,25 @@ Value ProfilingModeSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Profiling Coverage Setting
+//===----------------------------------------------------------------------===//
+void ProfilingCoverageSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto setting_type = EnumUtil::FromString<ProfilingCoverage>(input.ToString());
+	auto &config = ClientConfig::GetConfig(context);
+	config.profiling_coverage = setting_type;
+}
+
+void ProfilingCoverageSetting::ResetLocal(ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.profiling_coverage = ProfilingCoverage::SELECT;
+}
+
+Value ProfilingCoverageSetting::GetSetting(const ClientContext &context) {
+	const auto &config = ClientConfig::GetConfig(context);
+	return Value(EnumUtil::ToString(config.profiling_coverage));
+}
+
+//===----------------------------------------------------------------------===//
 // Progress Bar Time
 //===----------------------------------------------------------------------===//
 void ProgressBarTimeSetting::SetLocal(ClientContext &context, const Value &input) {
@@ -1527,6 +1546,49 @@ void TempDirectorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 Value TempDirectorySetting::GetSetting(const ClientContext &context) {
 	auto &buffer_manager = BufferManager::GetBufferManager(context);
 	return Value(buffer_manager.GetTemporaryDirectory());
+}
+
+//===----------------------------------------------------------------------===//
+// Temporary File Encryption
+//===----------------------------------------------------------------------===//
+void TempFileEncryptionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto setting = input.GetValue<bool>();
+	if (config.options.temp_file_encryption == setting) {
+		// setting is the current setting
+		return;
+	}
+
+	if (db) {
+		auto &buffer_manager = BufferManager::GetBufferManager(*db);
+		if (buffer_manager.HasFilesInTemporaryDirectory()) {
+			throw PermissionException("Existing temporary files found: Modifying the temp_file_encryption setting "
+			                          "while there are existing temporary files is disabled.");
+		}
+	}
+
+	config.options.temp_file_encryption = setting;
+}
+
+void TempFileEncryptionSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	if (config.options.temp_file_encryption == true) {
+		// setting is the current setting
+		return;
+	}
+
+	if (db) {
+		auto &buffer_manager = BufferManager::GetBufferManager(*db);
+		if (buffer_manager.HasFilesInTemporaryDirectory()) {
+			throw PermissionException("Existing temporary files found: Modifying the temp_file_encryption setting "
+			                          "while there are existing temporary files is disabled.");
+		}
+	}
+
+	config.options.temp_file_encryption = true;
+}
+
+Value TempFileEncryptionSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.temp_file_encryption);
 }
 
 //===----------------------------------------------------------------------===//

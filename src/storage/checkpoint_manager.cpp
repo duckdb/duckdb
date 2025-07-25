@@ -31,16 +31,17 @@
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
 
 namespace duckdb {
 
 void ReorderTableEntries(catalog_entry_vector_t &tables);
 
-SingleFileCheckpointWriter::SingleFileCheckpointWriter(optional_ptr<ClientContext> client_context_p,
-                                                       AttachedDatabase &db, BlockManager &block_manager,
-                                                       CheckpointType checkpoint_type)
-    : CheckpointWriter(db), client_context(client_context_p),
-      partial_block_manager(block_manager, PartialBlockType::FULL_CHECKPOINT), checkpoint_type(checkpoint_type) {
+SingleFileCheckpointWriter::SingleFileCheckpointWriter(QueryContext context, AttachedDatabase &db,
+                                                       BlockManager &block_manager, CheckpointType checkpoint_type)
+    : CheckpointWriter(db), context(context.GetClientContext()),
+      partial_block_manager(context, block_manager, PartialBlockType::FULL_CHECKPOINT),
+      checkpoint_type(checkpoint_type) {
 }
 
 BlockManager &SingleFileCheckpointWriter::GetBlockManager() {
@@ -211,7 +212,7 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	header.meta_block = meta_block.block_pointer;
 	header.block_alloc_size = block_manager.GetBlockAllocSize();
 	header.vector_size = STANDARD_VECTOR_SIZE;
-	block_manager.WriteHeader(header);
+	block_manager.WriteHeader(context, header);
 
 #ifdef DUCKDB_BLOCK_VERIFICATION
 	// extend verify_block_usage_count
@@ -594,7 +595,7 @@ void CheckpointReader::ReadTableData(CatalogTransaction transaction, Deserialize
 	auto &reader = dynamic_cast<MetadataReader &>(binary_deserializer.GetStream());
 
 	MetadataReader table_data_reader(reader.GetMetadataManager(), table_pointer);
-	TableDataReader data_reader(table_data_reader, bound_info);
+	TableDataReader data_reader(table_data_reader, bound_info, table_pointer);
 	data_reader.ReadTableData();
 
 	bound_info.data->total_rows = total_rows;

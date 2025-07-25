@@ -129,6 +129,23 @@
             }
         },
         {
+            "name": "duckdb_result_get_arrow_options",
+            "return_type": "duckdb_arrow_options",
+            "params": [
+                {
+                    "type": "duckdb_result *",
+                    "name": "result"
+                }
+            ],
+           "comment": {
+                "description": "Returns the arrow options associated with the given result. These options are definitions of how the arrow arrays/schema should be produced.\n",
+                "param_comments": {
+                    "result": "The result object to fetch arrow options from."
+                },
+                "return_value": "The arrow options associated with the given result. This must be destroyed with `duckdb_destroy_arrow_options`."
+            }
+        },
+        {
             "name": "duckdb_column_count",
             "return_type": "idx_t",
             "params": [

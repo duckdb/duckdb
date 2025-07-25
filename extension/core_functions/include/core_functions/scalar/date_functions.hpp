@@ -283,10 +283,10 @@ struct LastDayFun {
 
 struct MakeDateFun {
 	static constexpr const char *Name = "make_date";
-	static constexpr const char *Parameters = "year,month,day\1date-struct::STRUCT(year BIGINT, month BIGINT, day BIGINT)";
-	static constexpr const char *Description = "The date for the given parts\1The date for the given struct.";
-	static constexpr const char *Example = "make_date(1992, 9, 20)\1make_date({'year': 2024, 'month': 11, 'day': 14})";
-	static constexpr const char *Categories = "\1";
+	static constexpr const char *Parameters = "year,month,day\001date-struct::STRUCT(year BIGINT, month BIGINT, day BIGINT)";
+	static constexpr const char *Description = "The date for the given parts.\001The date for the given struct.";
+	static constexpr const char *Example = "make_date(1992, 9, 20)\001make_date({'year': 2024, 'month': 11, 'day': 14})";
+	static constexpr const char *Categories = "\001";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -311,11 +311,21 @@ struct MakeTimestampFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
+struct MakeTimestampMsFun {
+	static constexpr const char *Name = "make_timestamp_ms";
+	static constexpr const char *Parameters = "nanos";
+	static constexpr const char *Description = "The timestamp for the given microseconds since the epoch";
+	static constexpr const char *Example = "make_timestamp_ms(1732117793000000)";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
 struct MakeTimestampNsFun {
 	static constexpr const char *Name = "make_timestamp_ns";
 	static constexpr const char *Parameters = "nanos";
 	static constexpr const char *Description = "The timestamp for the given nanoseconds since epoch";
-	static constexpr const char *Example = "make_timestamp(1732117793000000000)";
+	static constexpr const char *Example = "make_timestamp_ns(1732117793000000000)";
 	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();

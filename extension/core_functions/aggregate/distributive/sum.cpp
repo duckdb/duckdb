@@ -7,6 +7,8 @@
 
 namespace duckdb {
 
+namespace {
+
 struct SumSetOperation {
 	template <class STATE>
 	static void Initialize(STATE &state) {
@@ -208,6 +210,8 @@ unique_ptr<FunctionData> BindDecimalSum(ClientContext &context, AggregateFunctio
 	function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 	return nullptr;
 }
+
+} // namespace
 
 AggregateFunctionSet SumFun::GetFunctions() {
 	AggregateFunctionSet sum;

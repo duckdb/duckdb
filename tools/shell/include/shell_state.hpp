@@ -56,6 +56,8 @@ enum class RenderMode : uint32_t {
 
 enum class PrintOutput { STDOUT, STDERR };
 
+enum class InputMode { STANDARD, FILE };
+
 enum class LargeNumberRendering { NONE = 0, FOOTER = 1, ALL = 2, DEFAULT = 3 };
 
 /*
@@ -203,11 +205,11 @@ public:
 	void NewTempFile(const char *zSuffix);
 	int DoMetaCommand(char *zLine);
 
-	int RunOneSqlLine(char *zSql);
+	int RunOneSqlLine(InputMode mode, char *zSql);
 	string GetDefaultDuckDBRC();
 	bool ProcessDuckDBRC(const char *file);
 	bool ProcessFile(const string &file, bool is_duckdb_rc = false);
-	int ProcessInput();
+	int ProcessInput(InputMode mode);
 };
 
 } // namespace duckdb_shell

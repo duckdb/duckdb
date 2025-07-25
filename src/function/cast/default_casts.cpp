@@ -120,6 +120,8 @@ BoundCastInfo DefaultCasts::GetDefaultCastFunction(BindCastInput &input, const L
 		return DateCastSwitch(input, source, target);
 	case LogicalTypeId::TIME:
 		return TimeCastSwitch(input, source, target);
+	case LogicalTypeId::TIME_NS:
+		return TimeNsCastSwitch(input, source, target);
 	case LogicalTypeId::TIME_TZ:
 		return TimeTzCastSwitch(input, source, target);
 	case LogicalTypeId::TIMESTAMP:

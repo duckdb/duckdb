@@ -1,0 +1,11 @@
+{
+    "version": "unstable_new_arrow_functions",
+    "description": "New arrow interface functions",
+    "entries": [
+        "duckdb_to_arrow_schema",
+        "duckdb_data_chunk_to_arrow",
+        "duckdb_schema_from_arrow",
+        "duckdb_data_chunk_from_arrow",
+        "duckdb_destroy_arrow_converted_schema"
+    ]
+}

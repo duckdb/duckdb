@@ -91,7 +91,8 @@ using duckdb_apache::thrift::transport::TTransport;
 class EncryptionTransport : public TTransport {
 public:
 	EncryptionTransport(TProtocol &prot_p, const string &key, const EncryptionUtil &encryption_util_p)
-	    : prot(prot_p), trans(*prot.getTransport()), aes(encryption_util_p.CreateEncryptionState(&key)),
+	    : prot(prot_p), trans(*prot.getTransport()),
+	      aes(encryption_util_p.CreateEncryptionState(reinterpret_cast<const_data_ptr_t>(key.data()), key.size())),
 	      allocator(Allocator::DefaultAllocator(), ParquetCrypto::CRYPTO_BLOCK_SIZE) {
 		Initialize(key);
 	}
@@ -150,7 +151,8 @@ private:
 		// Generate Nonce
 		aes->GenerateRandomData(nonce, ParquetCrypto::NONCE_BYTES);
 		// Initialize Encryption
-		aes->InitializeEncryption(nonce, ParquetCrypto::NONCE_BYTES, &key);
+		aes->InitializeEncryption(nonce, ParquetCrypto::NONCE_BYTES, reinterpret_cast<const_data_ptr_t>(key.data()),
+		                          key.size());
 	}
 
 private:
@@ -172,7 +174,8 @@ private:
 class DecryptionTransport : public TTransport {
 public:
 	DecryptionTransport(TProtocol &prot_p, const string &key, const EncryptionUtil &encryption_util_p)
-	    : prot(prot_p), trans(*prot.getTransport()), aes(encryption_util_p.CreateEncryptionState(&key)),
+	    : prot(prot_p), trans(*prot.getTransport()),
+	      aes(encryption_util_p.CreateEncryptionState(reinterpret_cast<const_data_ptr_t>(key.data()), key.size())),
 	      read_buffer_size(0), read_buffer_offset(0) {
 		Initialize(key);
 	}
@@ -235,7 +238,8 @@ private:
 		// Read nonce and initialize AES
 		transport_remaining -= trans.read(nonce, ParquetCrypto::NONCE_BYTES);
 		// check whether context is initialized
-		aes->InitializeDecryption(nonce, ParquetCrypto::NONCE_BYTES, &key);
+		aes->InitializeDecryption(nonce, ParquetCrypto::NONCE_BYTES, reinterpret_cast<const_data_ptr_t>(key.data()),
+		                          key.size());
 	}
 
 	void ReadBlock(uint8_t *buf) {
@@ -373,7 +377,7 @@ bool ParquetCrypto::ValidKey(const std::string &key) {
 	}
 }
 
-string Base64Decode(const string &key) {
+static string Base64Decode(const string &key) {
 	auto result_size = Blob::FromBase64Size(key);
 	auto output = duckdb::unique_ptr<unsigned char[]>(new unsigned char[result_size]);
 	Blob::FromBase64(key, output.get(), result_size);

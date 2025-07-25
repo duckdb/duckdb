@@ -87,7 +87,23 @@ QueryProfiler &QueryProfiler::Get(ClientContext &context) {
 	return *ClientData::Get(context).profiler;
 }
 
-void QueryProfiler::StartQuery(string query, bool is_explain_analyze_p, bool start_at_optimizer) {
+void QueryProfiler::Start(const string &query) {
+	Reset();
+	query_info.query_name = query;
+	running = true;
+	main_query.Start();
+}
+
+void QueryProfiler::Reset() {
+	tree_map.clear();
+	root = nullptr;
+	phase_timings.clear();
+	phase_stack.clear();
+	running = false;
+	query_info.query_name = "";
+}
+
+void QueryProfiler::StartQuery(const string &query, bool is_explain_analyze_p, bool start_at_optimizer) {
 	lock_guard<std::mutex> guard(lock);
 	if (is_explain_analyze_p) {
 		StartExplainAnalyze();
@@ -104,17 +120,15 @@ void QueryProfiler::StartQuery(string query, bool is_explain_analyze_p, bool sta
 		D_ASSERT(PrintOptimizerOutput());
 		return;
 	}
-
-	running = true;
-	query_info.query_name = std::move(query);
-	tree_map.clear();
-	root = nullptr;
-	phase_timings.clear();
-	phase_stack.clear();
-	main_query.Start();
+	Start(query);
 }
 
-bool QueryProfiler::OperatorRequiresProfiling(PhysicalOperatorType op_type) {
+bool QueryProfiler::OperatorRequiresProfiling(const PhysicalOperatorType op_type) {
+	const auto &config = ClientConfig::GetConfig(context);
+	if (config.profiling_coverage == ProfilingCoverage::ALL) {
+		return true;
+	}
+
 	switch (op_type) {
 	case PhysicalOperatorType::ORDER_BY:
 	case PhysicalOperatorType::RESERVOIR_SAMPLE:
@@ -222,7 +236,6 @@ void QueryProfiler::EndQuery() {
 		}
 	}
 	running = false;
-
 	bool emit_output = false;
 
 	// Print or output the query profiling after query termination.
@@ -892,7 +905,7 @@ void QueryProfiler::Initialize(const PhysicalOperator &root_op) {
 	root = CreateTree(root_op, config.profiler_settings, 0);
 	if (!query_requires_profiling) {
 		// query does not require profiling: disable profiling for this query
-		this->running = false;
+		running = false;
 		tree_map.clear();
 		root = nullptr;
 		phase_timings.clear();

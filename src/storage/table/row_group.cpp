@@ -66,8 +66,13 @@ RowGroup::RowGroup(RowGroupCollection &collection_p, PersistentRowGroupData &dat
 void RowGroup::MoveToCollection(RowGroupCollection &collection_p, idx_t new_start) {
 	this->collection = collection_p;
 	this->start = new_start;
-	for (auto &column : GetColumns()) {
-		column->SetStart(new_start);
+	for (idx_t c = 0; c < columns.size(); c++) {
+		if (is_loaded && !is_loaded[c]) {
+			// we only need to set the column start position if it is already loaded
+			// if it is not loaded - we will set the correct start position upon loading
+			continue;
+		}
+		columns[c]->SetStart(new_start);
 	}
 	if (!HasUnloadedDeletes()) {
 		auto vinfo = GetVersionInfo();
@@ -1006,10 +1011,43 @@ bool RowGroup::HasUnloadedDeletes() const {
 	return !deletes_is_loaded;
 }
 
-RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
-	vector<CompressionType> compression_types;
-	compression_types.reserve(columns.size());
+vector<MetaBlockPointer> RowGroup::GetColumnPointers() {
+	vector<MetaBlockPointer> result;
+	if (column_pointers.empty()) {
+		// no pointers
+		return result;
+	}
+	// column_pointers stores the beginning of each column
+	// if columns are big - they may span multiple metadata blocks
+	// we need to figure out all blocks that this row group points to
+	// we need to follow the linked list in the metadata blocks to allow for this
+	auto &metadata_manager = GetCollection().GetMetadataManager();
+	idx_t last_idx = column_pointers.size() - 1;
+	if (column_pointers.size() > 1) {
+		// for all but the last column pointer - we can just follow the linked list until we reach the last column
+		MetadataReader reader(metadata_manager, column_pointers[0]);
+		auto last_pointer = column_pointers[last_idx];
+		result = reader.GetRemainingBlocks(last_pointer);
+	}
+	// for the last column we need to deserialize the column - because we don't know where it stops
+	auto &types = GetCollection().GetTypes();
+	MetadataReader reader(metadata_manager, column_pointers[last_idx], &result);
+	ColumnData::Deserialize(GetBlockManager(), GetTableInfo(), last_idx, start, reader, types[last_idx]);
+	return result;
+}
 
+RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
+	if (!column_pointers.empty() && !HasChanges()) {
+		// we have existing metadata and the row group has not been changed
+		// re-use previous metadata
+		RowGroupWriteData result;
+		result.existing_pointers = GetColumnPointers();
+		return result;
+	}
+	auto &compression_types = writer.GetCompressionTypes();
+	if (columns.size() != compression_types.size()) {
+		throw InternalException("RowGroup::WriteToDisk - mismatch in column count vs compression types");
+	}
 	for (idx_t column_idx = 0; column_idx < GetColumnCount(); column_idx++) {
 		auto &column = GetColumn(column_idx);
 		if (column.count != this->count) {
@@ -1017,8 +1055,6 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 			                        "group has %llu rows, column has %llu)",
 			                        column_idx, this->count.load(), column.count.load());
 		}
-		auto compression_type = writer.GetColumnCompressionType(column_idx);
-		compression_types.push_back(compression_type);
 	}
 
 	RowGroupWriteInfo info(writer.GetPartialBlockManager(), compression_types, writer.GetCheckpointType());
@@ -1029,19 +1065,29 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
                                      TableStatistics &global_stats) {
 	RowGroupPointer row_group_pointer;
 
-	auto lock = global_stats.GetLock();
-	for (idx_t column_idx = 0; column_idx < GetColumnCount(); column_idx++) {
-		global_stats.GetStats(*lock, column_idx).Statistics().Merge(write_data.statistics[column_idx]);
-	}
-
+	auto metadata_manager = writer.GetMetadataManager();
 	// construct the row group pointer and write the column meta data to disk
-	D_ASSERT(write_data.states.size() == columns.size());
 	row_group_pointer.row_start = start;
 	row_group_pointer.tuple_count = count;
+	if (!write_data.existing_pointers.empty()) {
+		// we are re-using the previous metadata
+		row_group_pointer.data_pointers = column_pointers;
+		row_group_pointer.deletes_pointers = deletes_pointers;
+		metadata_manager->ClearModifiedBlocks(write_data.existing_pointers);
+		metadata_manager->ClearModifiedBlocks(deletes_pointers);
+		return row_group_pointer;
+	}
+	D_ASSERT(write_data.states.size() == columns.size());
+	{
+		auto lock = global_stats.GetLock();
+		for (idx_t column_idx = 0; column_idx < GetColumnCount(); column_idx++) {
+			global_stats.GetStats(*lock, column_idx).Statistics().Merge(write_data.statistics[column_idx]);
+		}
+	}
 	for (auto &state : write_data.states) {
 		// get the current position of the table data writer
 		auto &data_writer = writer.GetPayloadWriter();
-		auto pointer = data_writer.GetMetaBlockPointer();
+		auto pointer = writer.GetMetaBlockPointer();
 
 		// store the stats and the data pointers in the row group pointers
 		row_group_pointer.data_pointers.push_back(pointer);
@@ -1056,9 +1102,29 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 		persistent_data.Serialize(serializer);
 		serializer.End();
 	}
-	row_group_pointer.deletes_pointers = CheckpointDeletes(writer.GetPayloadWriter().GetManager());
+	if (metadata_manager) {
+		row_group_pointer.deletes_pointers = CheckpointDeletes(*metadata_manager);
+	}
 	Verify();
 	return row_group_pointer;
+}
+
+bool RowGroup::HasChanges() const {
+	if (version_info.load()) {
+		// we have deletes
+		return true;
+	}
+	// check if any of the columns have changes
+	// avoid loading unloaded columns - unloaded columns can never have changes
+	for (idx_t c = 0; c < columns.size(); c++) {
+		if (is_loaded && !is_loaded[c]) {
+			continue;
+		}
+		if (columns[c]->HasAnyChanges()) {
+			return true;
+		}
+	}
+	return false;
 }
 
 bool RowGroup::IsPersistent() const {

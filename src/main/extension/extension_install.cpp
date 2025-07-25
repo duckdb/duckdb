@@ -52,7 +52,7 @@ string ExtensionHelper::ExtensionInstallDocumentationLink(const string &extensio
 	string link = "https://duckdb.org/docs/stable/extensions/troubleshooting";
 
 	if (components.size() >= 2) {
-		link += "/?version=" + components[0] + "&platform=" + components[1] + "&extension=" + extension_name;
+		link += "?version=" + components[0] + "&platform=" + components[1] + "&extension=" + extension_name;
 	}
 
 	return link;
@@ -165,7 +165,7 @@ unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtension(ClientContext
 	return InstallExtensionInternal(db, fs, local_path, extension, options, context);
 }
 
-unsafe_unique_array<data_t> ReadExtensionFileFromDisk(FileSystem &fs, const string &path, idx_t &file_size) {
+static unsafe_unique_array<data_t> ReadExtensionFileFromDisk(FileSystem &fs, const string &path, idx_t &file_size) {
 	auto source_file = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ);
 	file_size = source_file->GetFileSize();
 	auto in_buffer = make_unsafe_uniq_array<data_t>(file_size);

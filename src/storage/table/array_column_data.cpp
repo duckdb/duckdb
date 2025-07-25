@@ -313,6 +313,10 @@ bool ArrayColumnData::IsPersistent() {
 	return validity.IsPersistent() && child_column->IsPersistent();
 }
 
+bool ArrayColumnData::HasAnyChanges() const {
+	return child_column->HasAnyChanges() || validity.HasAnyChanges();
+}
+
 PersistentColumnData ArrayColumnData::Serialize() {
 	PersistentColumnData persistent_data(PhysicalType::ARRAY);
 	persistent_data.child_columns.push_back(validity.Serialize());

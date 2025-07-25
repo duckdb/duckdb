@@ -148,6 +148,7 @@ void CAPIScalarFunction(DataChunk &input, ExpressionState &state, Vector &result
 
 } // namespace duckdb
 
+using duckdb::ExpressionWrapper;
 using duckdb::GetCScalarFunction;
 using duckdb::GetCScalarFunctionBindInfo;
 using duckdb::GetCScalarFunctionInfo;
@@ -227,6 +228,14 @@ void *duckdb_scalar_function_get_extra_info(duckdb_function_info info) {
 	return function_info.bind_data.info.extra_info;
 }
 
+void *duckdb_scalar_function_bind_get_extra_info(duckdb_bind_info info) {
+	if (!info) {
+		return nullptr;
+	}
+	auto &bind_info = GetCScalarFunctionBindInfo(info);
+	return bind_info.bind_data.info.extra_info;
+}
+
 void *duckdb_scalar_function_get_bind_data(duckdb_function_info info) {
 	if (!info) {
 		return nullptr;
@@ -260,6 +269,24 @@ void duckdb_scalar_function_bind_set_error(duckdb_bind_info info, const char *er
 	auto &bind_info = GetCScalarFunctionBindInfo(info);
 	bind_info.error = error;
 	bind_info.success = false;
+}
+
+idx_t duckdb_scalar_function_bind_get_argument_count(duckdb_bind_info info) {
+	if (!info) {
+		return 0;
+	}
+	auto &bind_info = GetCScalarFunctionBindInfo(info);
+	return bind_info.arguments.size();
+}
+
+duckdb_expression duckdb_scalar_function_bind_get_argument(duckdb_bind_info info, idx_t index) {
+	if (!info || index >= duckdb_scalar_function_bind_get_argument_count(info)) {
+		return nullptr;
+	}
+	auto &bind_info = GetCScalarFunctionBindInfo(info);
+	auto wrapper = new ExpressionWrapper();
+	wrapper->expr = bind_info.arguments[index]->Copy();
+	return reinterpret_cast<duckdb_expression>(wrapper);
 }
 
 void duckdb_scalar_function_set_extra_info(duckdb_scalar_function function, void *extra_info,
