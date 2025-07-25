@@ -76,6 +76,7 @@ void PhysicalInsert::GetInsertInfo(const BoundCreateTableInfo &info, vector<Logi
 InsertGlobalState::InsertGlobalState(ClientContext &context, const vector<LogicalType> &return_types,
                                      DuckTableEntry &table)
     : table(table), insert_count(0), return_collection(context, return_types) {
+	table.GetStorage().BindIndexes(context);
 }
 
 InsertLocalState::InsertLocalState(ClientContext &context, const vector<LogicalType> &types,
