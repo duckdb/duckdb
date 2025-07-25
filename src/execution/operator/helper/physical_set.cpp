@@ -14,6 +14,9 @@ void PhysicalSet::SetExtensionVariable(ClientContext &context, ExtensionOption &
 	if (extension_option.set_function) {
 		extension_option.set_function(context, scope, target_value);
 	}
+	if (scope == SetScope::AUTOMATIC) {
+		scope = extension_option.default_scope;
+	}
 	if (scope == SetScope::GLOBAL) {
 		config.SetOption(name, std::move(target_value));
 	} else {

@@ -92,15 +92,16 @@ typedef void (*set_option_callback_t)(ClientContext &context, SetScope scope, Va
 struct ExtensionOption {
 	// NOLINTNEXTLINE: work around bug in clang-tidy
 	ExtensionOption(string description_p, LogicalType type_p, set_option_callback_t set_function_p,
-	                Value default_value_p)
+	                Value default_value_p, SetScope default_scope_p)
 	    : description(std::move(description_p)), type(std::move(type_p)), set_function(set_function_p),
-	      default_value(std::move(default_value_p)) {
+	      default_value(std::move(default_value_p)), default_scope(default_scope_p) {
 	}
 
 	string description;
 	LogicalType type;
 	set_option_callback_t set_function;
 	Value default_value;
+	SetScope default_scope;
 };
 
 class SerializationCompatibility {
@@ -382,7 +383,8 @@ public:
 	DUCKDB_API static bool IsInMemoryDatabase(const char *database_path);
 
 	DUCKDB_API void AddExtensionOption(const string &name, string description, LogicalType parameter,
-	                                   const Value &default_value = Value(), set_option_callback_t function = nullptr);
+	                                   const Value &default_value = Value(), set_option_callback_t function = nullptr,
+	                                   SetScope default_scope = SetScope::LOCAL);
 	//! Fetch an option by index. Returns a pointer to the option, or nullptr if out of range
 	DUCKDB_API static optional_ptr<const ConfigurationOption> GetOptionByIndex(idx_t index);
 	//! Fetch an option by name. Returns a pointer to the option, or nullptr if none exists.
