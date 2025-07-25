@@ -138,7 +138,7 @@ jobs:
       extension_config: ${{ needs.load-extension-configs.outputs.in_tree_extensions_config }}
       override_tag: ${{ inputs.override_git_describe }}
       duckdb_ref: ${{ inputs.override_duckdb_version }}
-      skip_tests: ${{ inputs.skip_tests }}
+      skip_tests: ${{ inputs.skip_tests && true || false }}
 
   # Build the extensions from .github/config/out_of_tree_extensions.cmake
   out-of-tree-extensions:
@@ -153,7 +153,7 @@ jobs:
       extension_config: ${{ needs.load-extension-configs.outputs.out_of_tree_extensions_config }}
       override_tag: ${{ inputs.override_git_describe }}
       duckdb_ref: ${{ inputs.override_duckdb_version }}
-      skip_tests: ${{ inputs.skip_tests }}
+      skip_tests: ${{ inputs.skip_tests && true || false }}
 
   # Build the extensions from .github/config/rust_based_extensions.cmake
   rust-based-extensions:
@@ -169,7 +169,7 @@ jobs:
       extra_toolchains: 'rust'
       override_tag: ${{ inputs.override_git_describe }}
       duckdb_ref: ${{ inputs.override_duckdb_version }}
-      skip_tests: ${{ inputs.skip_tests }}
+      skip_tests: ${{ inputs.skip_tests && true || false }}
 
   # Merge all extensions into a single, versioned repository
   create-extension-repository:
