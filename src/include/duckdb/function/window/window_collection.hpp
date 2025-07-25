@@ -143,4 +143,48 @@ public:
 	DataChunk chunk;
 };
 
+class WindowCollectionChunkScanner {
+public:
+	WindowCollectionChunkScanner(ColumnDataCollection &collection, const vector<column_t> &scan_ids,
+	                             const idx_t begin_idx)
+	    : collection(collection), curr_idx(0) {
+		collection.InitializeScan(state, scan_ids);
+		collection.InitializeScanChunk(state, chunk);
+
+		Seek(begin_idx);
+	}
+
+	void Seek(idx_t begin_idx) {
+		idx_t chunk_idx;
+		idx_t seg_idx;
+		idx_t row_idx;
+		for (; curr_idx > begin_idx; --curr_idx) {
+			collection.PrevScanIndex(state, chunk_idx, seg_idx, row_idx);
+		}
+		for (; curr_idx < begin_idx; ++curr_idx) {
+			collection.NextScanIndex(state, chunk_idx, seg_idx, row_idx);
+		}
+	}
+
+	bool Scan() {
+		const auto result = collection.Scan(state, chunk);
+		++curr_idx;
+		return result;
+	}
+
+	idx_t Scanned() const {
+		return state.next_row_index;
+	}
+
+	//! Return a struct type for comparing keys
+	LogicalType PrefixStructType(column_t end, column_t begin = 0);
+	//! Reference the chunk into a struct vector matching the keys
+	static void ReferenceStructColumns(DataChunk &chunk, Vector &vec, column_t end, column_t begin = 0);
+
+	ColumnDataCollection &collection;
+	ColumnDataScanState state;
+	DataChunk chunk;
+	idx_t curr_idx;
+};
+
 } // namespace duckdb

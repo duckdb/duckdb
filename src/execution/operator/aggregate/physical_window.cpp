@@ -35,45 +35,6 @@ struct WindowSourceTask {
 	idx_t end_idx = 0;
 };
 
-class ColumnDataCollectionScanner {
-public:
-	ColumnDataCollectionScanner(ColumnDataCollection &collection, const vector<column_t> &scan_ids,
-	                            const idx_t begin_idx)
-	    : collection(collection), curr_idx(0) {
-		collection.InitializeScan(state, scan_ids);
-		collection.InitializeScanChunk(state, chunk);
-
-		Seek(begin_idx);
-	}
-
-	void Seek(idx_t begin_idx) {
-		idx_t chunk_idx;
-		idx_t seg_idx;
-		idx_t row_idx;
-		for (; curr_idx > begin_idx; --curr_idx) {
-			collection.PrevScanIndex(state, chunk_idx, seg_idx, row_idx);
-		}
-		for (; curr_idx < begin_idx; ++curr_idx) {
-			collection.NextScanIndex(state, chunk_idx, seg_idx, row_idx);
-		}
-	}
-
-	DataChunk &Scan() {
-		collection.Scan(state, chunk);
-		++curr_idx;
-		return chunk;
-	}
-
-	idx_t Scanned() const {
-		return state.next_row_index;
-	}
-
-	ColumnDataCollection &collection;
-	ColumnDataScanState state;
-	DataChunk chunk;
-	idx_t curr_idx;
-};
-
 class WindowHashGroup {
 public:
 	using HashGroupPtr = unique_ptr<HashedSortGroup>;
@@ -85,12 +46,10 @@ public:
 	using ThreadLocalStates = vector<ExecutorLocalStates>;
 	using Task = WindowSourceTask;
 	using TaskPtr = optional_ptr<Task>;
-	using ScannerPtr = unique_ptr<ColumnDataCollectionScanner>;
+	using ScannerPtr = unique_ptr<WindowCollectionChunkScanner>;
 
 	WindowHashGroup(WindowGlobalSinkState &gsink, const idx_t hash_bin_p);
 
-	static LogicalType PrefixStructType(HashedSortGlobalSinkState::Orders &orders, column_t end, column_t begin = 0);
-	static void ReferenceStructColumns(DataChunk &chunk, Vector &vec, column_t end, column_t begin = 0);
 	void ComputeMasks(ValidityMask &partition_mask, OrderMasks &order_masks);
 
 	ExecutorGlobalStates &Initialize(ClientContext &client);
@@ -579,13 +538,13 @@ WindowHashGroup::WindowHashGroup(WindowGlobalSinkState &gsink, const idx_t hash_
 	collection = make_uniq<WindowCollection>(buffer_manager, count, types);
 }
 
-unique_ptr<ColumnDataCollectionScanner> WindowHashGroup::GetScanner(const idx_t begin_idx) const {
+unique_ptr<WindowCollectionChunkScanner> WindowHashGroup::GetScanner(const idx_t begin_idx) const {
 	if (!rows) {
 		return nullptr;
 	}
 
 	auto &scan_ids = gsink.global_partition->scan_ids;
-	return make_uniq<ColumnDataCollectionScanner>(*rows, scan_ids, begin_idx);
+	return make_uniq<WindowCollectionChunkScanner>(*rows, scan_ids, begin_idx);
 }
 
 void WindowHashGroup::UpdateScanner(ScannerPtr &scanner, idx_t begin_idx) const {
@@ -597,49 +556,17 @@ void WindowHashGroup::UpdateScanner(ScannerPtr &scanner, idx_t begin_idx) const 
 	}
 }
 
-LogicalType WindowHashGroup::PrefixStructType(HashedSortGlobalSinkState::Orders &orders, column_t end, column_t begin) {
-	child_list_t<LogicalType> partition_children;
-	for (auto c = begin; c < end; ++c) {
-		auto name = std::to_string(c);
-		auto type = orders[c].expression->return_type;
-		std::pair<string, LogicalType> child {name, type};
-		partition_children.emplace_back(child);
-	}
-	//	For single children, don;t build a struct - compare will be slow
-	if (partition_children.size() == 1) {
-		return partition_children[0].second;
-	}
-	return LogicalType::STRUCT(partition_children);
-}
-
-void WindowHashGroup::ReferenceStructColumns(DataChunk &chunk, Vector &vec, column_t end, column_t begin) {
-	//	Check for single column
-	const auto width = end - begin;
-	if (width == 1) {
-		vec.Reference(chunk.data[begin]);
-		return;
-	}
-
-	auto &entries = StructVector::GetEntries(vec);
-	D_ASSERT(width == entries.size());
-	for (column_t i = 0; i < entries.size(); ++i) {
-		entries[i]->Reference(chunk.data[begin + i]);
-	}
-}
-
 void WindowHashGroup::ComputeMasks(ValidityMask &partition_mask, OrderMasks &order_masks) {
 	D_ASSERT(count > 0);
 
 	//	Collection scanning
 	auto &collection = *rows;
-	ColumnDataScanState state;
-	DataChunk scanned;
-	collection.InitializeScan(state, gsink.global_partition->sort_ids);
-	collection.InitializeScanChunk(state, scanned);
+	WindowCollectionChunkScanner scanner(collection, gsink.global_partition->sort_ids, 0);
+	auto &scanned = scanner.chunk;
 
 	//	Shifted buffer for the next values
 	DataChunk next;
-	collection.InitializeScanChunk(state, next);
+	collection.InitializeScanChunk(scanner.state, next);
 
 	//	Delay buffer for the previous row
 	DataChunk delayed;
@@ -647,18 +574,17 @@ void WindowHashGroup::ComputeMasks(ValidityMask &partition_mask, OrderMasks &ord
 
 	//	Set up the partition compare structs
 	auto &partitions = gsink.global_partition->partitions;
-	auto partition_type = PrefixStructType(partitions, partitions.size());
+	auto partition_type = scanner.PrefixStructType(partitions.size());
 	Vector partition_curr(partition_type);
 	Vector partition_prev(partition_type);
 	partition_mask.SetValidUnsafe(0);
 
 	//	Set up the order data structures
-	auto &orders = gsink.global_partition->orders;
 	unordered_map<idx_t, DataChunk> prefixes;
 	for (auto &order_mask : order_masks) {
 		order_mask.second.SetValidUnsafe(0);
 		D_ASSERT(order_mask.first >= partitions.size());
-		auto order_type = PrefixStructType(orders, order_mask.first, partitions.size());
+		auto order_type = scanner.PrefixStructType(order_mask.first, partitions.size());
 		vector<LogicalType> types(2, order_type);
 		auto &keys = prefixes[order_mask.first];
 		// We can't use InitializeEmpty here because it doesn't set up all of the STRUCT internals...
@@ -666,7 +592,7 @@ void WindowHashGroup::ComputeMasks(ValidityMask &partition_mask, OrderMasks &ord
 	}
 
 	//	Read the first chunk
-	if (!collection.Scan(state, scanned)) {
+	if (!scanner.Scan()) {
 		return;
 	}
 
@@ -695,7 +621,7 @@ void WindowHashGroup::ComputeMasks(ValidityMask &partition_mask, OrderMasks &ord
 			prev = &delayed;
 
 			// Try to read the next chunk
-			if (!collection.Scan(state, scanned)) {
+			if (!scanner.Scan()) {
 				break;
 			}
 			curr = &scanned;
@@ -715,8 +641,8 @@ void WindowHashGroup::ComputeMasks(ValidityMask &partition_mask, OrderMasks &ord
 		}
 
 		//	Reference the partition prefix as a struct to simplify the compares.
-		ReferenceStructColumns(*prev, partition_prev, partitions.size());
-		ReferenceStructColumns(*curr, partition_curr, partitions.size());
+		scanner.ReferenceStructColumns(*prev, partition_prev, partitions.size());
+		scanner.ReferenceStructColumns(*curr, partition_curr, partitions.size());
 
 		//	Compare the partition subset first because if that differs, then so does the full ordering
 		const auto n =
@@ -744,8 +670,8 @@ void WindowHashGroup::ComputeMasks(ValidityMask &partition_mask, OrderMasks &ord
 				prefix.Reset();
 				auto &order_prev = prefix.data[0];
 				auto &order_curr = prefix.data[1];
-				ReferenceStructColumns(*prev, order_prev, order_mask.first, partitions.size());
-				ReferenceStructColumns(*curr, order_curr, order_mask.first, partitions.size());
+				scanner.ReferenceStructColumns(*prev, order_prev, order_mask.first, partitions.size());
+				scanner.ReferenceStructColumns(*curr, order_curr, order_mask.first, partitions.size());
 				if (n) {
 					prefix.Slice(*sub_sel, remaining);
 				} else {
@@ -799,7 +725,7 @@ public:
 	//! The current source being processed
 	optional_ptr<WindowHashGroup> window_hash_group;
 	//! The scan cursor
-	unique_ptr<ColumnDataCollectionScanner> scanner;
+	unique_ptr<WindowCollectionChunkScanner> scanner;
 	//! Buffer for window results
 	DataChunk output_chunk;
 
@@ -874,10 +800,10 @@ void WindowLocalSourceState::Sink(ExecutionContext &context) {
 	}
 	for (; task->begin_idx < task->end_idx; ++task->begin_idx) {
 		const idx_t input_idx = scanner->Scanned();
-		auto &input_chunk = scanner->Scan();
-		if (input_chunk.size() == 0) {
+		if (!scanner->Scan()) {
 			break;
 		}
+		auto &input_chunk = scanner->chunk;
 
 		//	Compute fully materialised expressions
 		if (coll_chunk.data.empty()) {
@@ -1072,7 +998,8 @@ void WindowLocalSourceState::GetData(ExecutionContext &context, DataChunk &resul
 	batch_index = window_hash_group->batch_base + task->begin_idx;
 
 	const auto position = scanner->Scanned();
-	auto &input_chunk = scanner->Scan();
+	auto &input_chunk = scanner->chunk;
+	scanner->Scan();
 
 	const auto &executors = gsource.gsink.executors;
 	auto &gestates = window_hash_group->gestates;
