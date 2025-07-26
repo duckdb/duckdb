@@ -32,9 +32,13 @@ SourceResultType PhysicalReset::GetData(ExecutionContext &context, DataChunk &ch
 		// check if this is an extra extension variable
 		auto entry = config.extension_parameters.find(name);
 		if (entry == config.extension_parameters.end()) {
-			Catalog::AutoloadExtensionByConfigName(context.client, name);
+			auto extension_name = Catalog::AutoloadExtensionByConfigName(context.client, name);
 			entry = config.extension_parameters.find(name);
-			D_ASSERT(entry != config.extension_parameters.end());
+			if (entry == config.extension_parameters.end()) {
+				// TODO: This is likely to harsh, but given this has a side-effect loaded the extension it should be
+				// somehow brough back to users
+				throw InternalException("Extension %s did not provide the '%s' config setting", extension_name, name);
+			}
 		}
 		ResetExtensionVariable(context, config, entry->second);
 		return SourceResultType::FINISHED;

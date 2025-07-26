@@ -188,7 +188,8 @@ jobs:
           -e ENABLE_EXTENSION_AUTOINSTALL=1                                      \
           -e BUILD_BENCHMARK=1                                                   \
           -e FORCE_WARN_UNUSED=1                                                 \
-          quay.io/pypa/manylinux_2_28_${{ matrix.config.image }}                  \
+          -e EXPORT_DYNAMIC_SYMBOLS=1                                            \
+          quay.io/pypa/manylinux_2_28_${{ matrix.config.image }}                 \
           bash -c "
             set -e
             yum install -y perl-IPC-Cmd gcc-toolset-12 gcc-toolset-12-gcc-c++
