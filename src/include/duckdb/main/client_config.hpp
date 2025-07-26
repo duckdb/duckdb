@@ -71,6 +71,10 @@ struct ClientConfig {
 	bool verify_serializer = false;
 	//! Enable the running of optimizers
 	bool enable_optimizer = true;
+	//add start
+	//! Enable non-standard NOT IN behavior that ignores NULLs (MySQL-style)
+	bool enable_mysql_not_in_behavior = false;
+	//add end
 	//! Enable caching operators
 	bool enable_caching_operators = true;
 	//! Force parallelism of small tables, used for testing
