@@ -90,6 +90,7 @@ void MultiFileReader::AddParameters(TableFunction &table_function) {
 	table_function.named_parameters["union_by_name"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["hive_types"] = LogicalType::ANY;
 	table_function.named_parameters["hive_types_autocast"] = LogicalType::BOOLEAN;
+	table_function.named_parameters["hive_lazy_listing"] = LogicalType::BOOLEAN;
 }
 
 vector<string> MultiFileReader::ParsePaths(const Value &input) {
