@@ -18,7 +18,6 @@
 include("${EXTENSION_CONFIG_BASE_DIR}/avro.cmake")
 include("${EXTENSION_CONFIG_BASE_DIR}/aws.cmake")
 include("${EXTENSION_CONFIG_BASE_DIR}/azure.cmake")
-include("${EXTENSION_CONFIG_BASE_DIR}/delta.cmake")
 include("${EXTENSION_CONFIG_BASE_DIR}/ducklake.cmake")
 include("${EXTENSION_CONFIG_BASE_DIR}/encodings.cmake")
 include("${EXTENSION_CONFIG_BASE_DIR}/excel.cmake")
