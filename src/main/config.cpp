@@ -24,38 +24,38 @@ bool DBConfigOptions::debug_print_bindings = false;
 
 #define DUCKDB_GLOBAL(_PARAM)                                                                                          \
 	{                                                                                                                  \
-		_PARAM::Name, _PARAM::Description, _PARAM::InputType, _PARAM::SetGlobal, nullptr, _PARAM::ResetGlobal,         \
-		    nullptr, _PARAM::GetSetting                                                                                \
+		_PARAM::Name, _PARAM::Description, _PARAM::InputType, _PARAM::AlternativeInputType, _PARAM::SetGlobal,         \
+		    nullptr, _PARAM::ResetGlobal, nullptr, _PARAM::GetSetting                                                  \
 	}
 #define DUCKDB_GLOBAL_ALIAS(_ALIAS, _PARAM)                                                                            \
 	{                                                                                                                  \
-		_ALIAS, _PARAM::Description, _PARAM::InputType, _PARAM::SetGlobal, nullptr, _PARAM::ResetGlobal, nullptr,      \
-		    _PARAM::GetSetting                                                                                         \
+		_ALIAS, _PARAM::Description, _PARAM::InputType, _PARAM::AlternativeInputType, _PARAM::SetGlobal, nullptr,      \
+		    _PARAM::ResetGlobal, nullptr, _PARAM::GetSetting                                                           \
 	}
 
 #define DUCKDB_LOCAL(_PARAM)                                                                                           \
 	{                                                                                                                  \
-		_PARAM::Name, _PARAM::Description, _PARAM::InputType, nullptr, _PARAM::SetLocal, nullptr, _PARAM::ResetLocal,  \
-		    _PARAM::GetSetting                                                                                         \
+		_PARAM::Name, _PARAM::Description, _PARAM::InputType, _PARAM::AlternativeInputType, nullptr, _PARAM::SetLocal, \
+		    nullptr, _PARAM::ResetLocal, _PARAM::GetSetting                                                            \
 	}
 #define DUCKDB_LOCAL_ALIAS(_ALIAS, _PARAM)                                                                             \
 	{                                                                                                                  \
-		_ALIAS, _PARAM::Description, _PARAM::InputType, nullptr, _PARAM::SetLocal, nullptr, _PARAM::ResetLocal,        \
-		    _PARAM::GetSetting                                                                                         \
+		_ALIAS, _PARAM::Description, _PARAM::InputType, _PARAM::AlternativeInputType, nullptr, _PARAM::SetLocal,       \
+		    nullptr, _PARAM::ResetLocal, _PARAM::GetSetting                                                            \
 	}
 
 #define DUCKDB_GLOBAL_LOCAL(_PARAM)                                                                                    \
 	{                                                                                                                  \
-		_PARAM::Name, _PARAM::Description, _PARAM::InputType, _PARAM::SetGlobal, _PARAM::SetLocal,                     \
-		    _PARAM::ResetGlobal, _PARAM::ResetLocal, _PARAM::GetSetting                                                \
+		_PARAM::Name, _PARAM::Description, _PARAM::InputType, _PARAM::AlternativeInputType, _PARAM::SetGlobal,         \
+		    _PARAM::SetLocal, _PARAM::ResetGlobal, _PARAM::ResetLocal, _PARAM::GetSetting                              \
 	}
 #define DUCKDB_GLOBAL_LOCAL_ALIAS(_ALIAS, _PARAM)                                                                      \
 	{                                                                                                                  \
-		_ALIAS, _PARAM::Description, _PARAM::InputType, _PARAM::SetGlobal, _PARAM::SetLocal, _PARAM::ResetGlobal,      \
-		    _PARAM::ResetLocal, _PARAM::GetSetting                                                                     \
+		_ALIAS, _PARAM::Description, _PARAM::InputType, _PARAM::AlternativeInputType, _PARAM::SetGlobal, nullptr,      \
+		    _PARAM::ResetGlobal, nullptr, _PARAM::GetSetting                                                           \
 	}
 #define FINAL_SETTING                                                                                                  \
-	{ nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr }
+	{ nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr }
 
 static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(AccessModeSetting),
@@ -267,7 +267,7 @@ void DBConfig::SetOption(DatabaseInstance *db, const ConfigurationOption &option
 		throw InvalidInputException("Could not set option \"%s\" as a global option", option.name);
 	}
 	D_ASSERT(option.reset_global);
-	Value input = value.DefaultCastAs(ParseLogicalType(option.parameter_type));
+	Value input = DBConfig::CastOptionIfNecessary(value, option);
 	option.set_global(db, *this, input);
 }
 
@@ -387,6 +387,28 @@ LogicalType DBConfig::ParseLogicalType(const string &type) {
 		                        type);
 	}
 	return type_id;
+}
+
+Value DBConfig::CastOptionIfNecessary(ClientContext &context, const Value &value, const ConfigurationOption &option) {
+	if (value.type() == DBConfig::ParseLogicalType(option.parameter_type)) {
+		return value;
+	}
+	if (option.alternative_parameter_type != nullptr &&
+	    value.type() == DBConfig::ParseLogicalType(option.alternative_parameter_type)) {
+		return value;
+	}
+	return value.CastAs(context, DBConfig::ParseLogicalType(option.parameter_type));
+}
+
+Value DBConfig::CastOptionIfNecessary(const Value &value, const ConfigurationOption &option) {
+	if (value.type() == DBConfig::ParseLogicalType(option.parameter_type)) {
+		return value;
+	}
+	if (option.alternative_parameter_type != nullptr &&
+	    value.type() == DBConfig::ParseLogicalType(option.alternative_parameter_type)) {
+		return value;
+	}
+	return value.DefaultCastAs(DBConfig::ParseLogicalType(option.parameter_type));
 }
 
 void DBConfig::AddExtensionOption(const string &name, string description, LogicalType parameter,
