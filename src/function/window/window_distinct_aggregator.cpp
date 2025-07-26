@@ -98,6 +98,7 @@ public:
 	vector<LogicalType> sort_types;
 
 	//! Sorting operations
+	vector<idx_t> sort_cols;
 	unique_ptr<Sort> sort;
 	unique_ptr<GlobalSinkState> global_sink;
 	//! Local sort sets
@@ -136,10 +137,10 @@ WindowDistinctAggregatorGlobalState::WindowDistinctAggregatorGlobalState(ClientC
 	for (const auto &type : sort_types) {
 		auto expr = make_uniq<BoundReferenceExpression>(type, orders.size());
 		orders.emplace_back(BoundOrderByNode(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, std::move(expr)));
+		sort_cols.emplace_back(sort_cols.size());
 	}
 
-	vector<idx_t> projection_map;
-	sort = make_uniq<Sort>(client, orders, sort_types, projection_map);
+	sort = make_uniq<Sort>(client, orders, sort_types, sort_cols);
 	global_sink = sort->GetGlobalSinkState(client);
 
 	//	6:	prevIdcs ← []
@@ -312,10 +313,13 @@ void WindowDistinctAggregatorLocalState::ExecuteTask(ExecutionContext &context,
 		break;
 	case WindowDistinctSortStage::FINALIZE: {
 		auto &sort = *gdstate.sort;
+		InterruptState interrupt;
+		OperatorSinkFinalizeInput finalize {*gdstate.global_sink, interrupt};
+		gdstate.sort->Finalize(context.client, finalize);
 		auto sort_global = sort.GetGlobalSourceState(context.client, *gdstate.global_sink);
 		auto sort_local = sort.GetLocalSourceState(context, *sort_global);
-		InterruptState interrupt;
 		OperatorSourceInput source {*sort_global, *sort_local, interrupt};
+		sort.MaterializeColumnData(context, source);
 		gdstate.sorted = gdstate.sort->GetColumnData(source);
 		break;
 	}
@@ -362,6 +366,7 @@ bool WindowDistinctAggregatorGlobalState::TryPrepareNextStage(WindowDistinctAggr
 		}
 		//	Move on to building the tree in parallel
 		total_tasks = local_sinks.size();
+		seconds.resize(total_tasks);
 		tasks_completed = 0;
 		tasks_assigned = 0;
 		lstate.stage = stage = WindowDistinctSortStage::SORTED;
@@ -425,7 +430,7 @@ void WindowDistinctAggregatorLocalState::Sorted() {
 	const auto block_end = ((block_idx + 1) * collection.ChunkCount()) / gdstate.total_tasks;
 
 	//	Scan all the columns
-	WindowCollectionChunkScanner scanner(collection, {}, 0);
+	WindowCollectionChunkScanner scanner(collection, gdstate.sort_cols, block_begin ? block_begin - 1 : 0);
 	auto &scanned = scanner.chunk;
 
 	//	Shifted buffer for the next values
@@ -442,22 +447,29 @@ void WindowDistinctAggregatorLocalState::Sorted() {
 	Vector compare_curr(compare_type);
 	Vector compare_prev(compare_type);
 
+	idx_t block_curr = block_begin;
 	bool boundary_compare = false;
 	idx_t prev_i = 0;
 	if (!block_begin) {
 		// First block, so set up initial sentinel
-		auto input_idx = FlatVector::GetData<idx_t>(scanned.data[0]);
-		auto i = input_idx[0];
-		prev_idcs[i] = ZippedTuple(0, i);
-		std::get<0>(gdstate.seconds[block_idx]) = i;
-		prev_i = i;
+		if (!scanner.Scan()) {
+			return;
+		}
+		auto input_idx = FlatVector::GetData<idx_t>(scanned.data.back());
+		prev_i = input_idx[0];
+		prev_idcs[prev_i] = ZippedTuple(0, prev_i);
+		std::get<0>(gdstate.seconds[block_idx]) = prev_i;
 	} else {
 		// Move to the to end of the previous block
 		// so we can record the comparison result for the first row
-		scanner.Seek(block_begin - 1);
-		auto input_idx = FlatVector::GetData<idx_t>(scanned.data[0]);
+		scanner.Seek(--block_curr);
+		if (!scanner.Scan()) {
+			return;
+		}
+		auto input_idx = FlatVector::GetData<idx_t>(scanned.data.back());
 		auto scan_idx = scanned.size() - 1;
-		std::get<0>(gdstate.seconds[block_idx]) = input_idx[scan_idx];
+		prev_i = input_idx[scan_idx];
+		std::get<0>(gdstate.seconds[block_idx]) = prev_i;
 		boundary_compare = true;
 	}
 
@@ -467,7 +479,7 @@ void WindowDistinctAggregatorLocalState::Sorted() {
 	SelectionVector matching(STANDARD_VECTOR_SIZE);
 
 	//	8:	for i ← 1 to in.size do
-	while (scanner.curr_idx < block_end) {
+	while (block_curr < block_end) {
 		//	Compare the current to the previous;
 		DataChunk *curr = nullptr;
 		DataChunk *prev = nullptr;
@@ -483,7 +495,8 @@ void WindowDistinctAggregatorLocalState::Sorted() {
 			prev = &delayed;
 
 			// Try to read the next chunk
-			if (!scanner.Scan() || scanner.curr_idx >= block_end) {
+			++block_curr;
+			if (block_curr >= block_end || !scanner.Scan()) {
 				break;
 			}
 			curr = &scanned;
