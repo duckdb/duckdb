@@ -5079,6 +5079,10 @@ Folds an expression creating a folded value.
 DUCKDB_C_API duckdb_error_data duckdb_expression_fold(duckdb_client_context context, duckdb_expression expr,
                                                       duckdb_value *out_value);
 
+typedef void (*duckdb_progress_callback_t)(duckdb_query_progress_type progress);
+
+DUCKDB_API void duckdb_set_progress_callback(duckdb_connection connection, duckdb_progress_callback_t callback);
+
 #endif
 
 #ifdef __cplusplus
