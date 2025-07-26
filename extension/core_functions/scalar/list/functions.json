@@ -41,7 +41,7 @@
         "description": "Creates a LIST containing the argument values.",
         "example": "list_value(4, 5, 6)",
         "categories": ["list"],
-        "type": "scalar_function",
+        "type": "scalar_function_set",
         "aliases": ["list_pack"]
     },
     {

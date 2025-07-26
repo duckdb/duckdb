@@ -6,6 +6,9 @@
 # Currently, they use UNNEST(...) ORDER BY, because unordered maps seem to 'sort'
 # different on Windows and other systems
 
+statement ok
+pragma enable_verification
+
 # test null or empty
 query I
 SELECT list_distinct(NULL)

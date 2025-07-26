@@ -98,7 +98,7 @@ struct ListValueFun {
 	static constexpr const char *Example = "list_value(4, 5, 6)";
 	static constexpr const char *Categories = "list";
 
-	static ScalarFunction GetFunction();
+	static ScalarFunctionSet GetFunctions();
 };
 
 struct ListPackFun {

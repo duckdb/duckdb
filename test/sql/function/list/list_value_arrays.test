@@ -172,4 +172,4 @@ INSERT INTO mixed_array_table VALUES ([1, 2], ['a', 'b'], [1.5, 2.5]);
 statement error
 SELECT list_value(a, b, c) FROM mixed_array_table;
 ----
-Binder Error: Cannot create a list of types INTEGER[2] and VARCHAR[2] - an explicit cast is required
+Binder Error: Cannot deduce template type

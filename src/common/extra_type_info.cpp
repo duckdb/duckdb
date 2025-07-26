@@ -488,4 +488,23 @@ shared_ptr<ExtraTypeInfo> IntegerLiteralTypeInfo::Copy() const {
 	return make_shared_ptr<IntegerLiteralTypeInfo>(*this);
 }
 
+//===--------------------------------------------------------------------===//
+// Template Type Info
+//===--------------------------------------------------------------------===//
+TemplateTypeInfo::TemplateTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::TEMPLATE_TYPE_INFO), index(0) {
+}
+
+TemplateTypeInfo::TemplateTypeInfo(idx_t index_p)
+    : ExtraTypeInfo(ExtraTypeInfoType::TEMPLATE_TYPE_INFO), index(index_p) {
+}
+
+bool TemplateTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
+	auto &other = other_p->Cast<TemplateTypeInfo>();
+	return index == other.index;
+}
+
+shared_ptr<ExtraTypeInfo> TemplateTypeInfo::Copy() const {
+	return make_shared_ptr<TemplateTypeInfo>(*this);
+}
+
 } // namespace duckdb
