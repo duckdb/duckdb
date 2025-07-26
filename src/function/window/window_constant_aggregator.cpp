@@ -81,8 +81,8 @@ public:
 	~WindowConstantAggregatorLocalState() override {
 	}
 
-	void Sink(DataChunk &sink_chunk, DataChunk &coll_chunk, idx_t input_idx, optional_ptr<SelectionVector> filter_sel,
-	          idx_t filtered);
+	void Sink(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk, idx_t input_idx,
+	          optional_ptr<SelectionVector> filter_sel, idx_t filtered);
 	void Combine(WindowConstantAggregatorGlobalState &gstate);
 
 public:
@@ -206,16 +206,16 @@ unique_ptr<WindowAggregatorState> WindowConstantAggregator::GetGlobalState(Clien
 	return make_uniq<WindowConstantAggregatorGlobalState>(context, *this, group_count, partition_mask);
 }
 
-void WindowConstantAggregator::Sink(WindowAggregatorState &gsink, WindowAggregatorState &lstate, DataChunk &sink_chunk,
-                                    DataChunk &coll_chunk, idx_t input_idx, optional_ptr<SelectionVector> filter_sel,
-                                    idx_t filtered) {
+void WindowConstantAggregator::Sink(ExecutionContext &context, WindowAggregatorState &gsink,
+                                    WindowAggregatorState &lstate, DataChunk &sink_chunk, DataChunk &coll_chunk,
+                                    idx_t input_idx, optional_ptr<SelectionVector> filter_sel, idx_t filtered) {
 	auto &lastate = lstate.Cast<WindowConstantAggregatorLocalState>();
 
-	lastate.Sink(sink_chunk, coll_chunk, input_idx, filter_sel, filtered);
+	lastate.Sink(context, sink_chunk, coll_chunk, input_idx, filter_sel, filtered);
 }
 
-void WindowConstantAggregatorLocalState::Sink(DataChunk &sink_chunk, DataChunk &coll_chunk, idx_t row,
-                                              optional_ptr<SelectionVector> filter_sel, idx_t filtered) {
+void WindowConstantAggregatorLocalState::Sink(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk,
+                                              idx_t row, optional_ptr<SelectionVector> filter_sel, idx_t filtered) {
 	auto &partition_offsets = gstate.partition_offsets;
 	const auto &aggr = gstate.aggr;
 	const auto chunk_begin = row;
@@ -298,8 +298,9 @@ void WindowConstantAggregatorLocalState::Sink(DataChunk &sink_chunk, DataChunk &
 	}
 }
 
-void WindowConstantAggregator::Finalize(WindowAggregatorState &gstate, WindowAggregatorState &lstate,
-                                        CollectionPtr collection, const FrameStats &stats) {
+void WindowConstantAggregator::Finalize(ExecutionContext &context, WindowAggregatorState &gstate,
+                                        WindowAggregatorState &lstate, CollectionPtr collection,
+                                        const FrameStats &stats) {
 	auto &gastate = gstate.Cast<WindowConstantAggregatorGlobalState>();
 	auto &lastate = lstate.Cast<WindowConstantAggregatorLocalState>();
 
@@ -317,8 +318,9 @@ unique_ptr<WindowAggregatorState> WindowConstantAggregator::GetLocalState(const 
 	return make_uniq<WindowConstantAggregatorLocalState>(gstate.Cast<WindowConstantAggregatorGlobalState>());
 }
 
-void WindowConstantAggregator::Evaluate(const WindowAggregatorState &gsink, WindowAggregatorState &lstate,
-                                        const DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx) const {
+void WindowConstantAggregator::Evaluate(ExecutionContext &context, const WindowAggregatorState &gsink,
+                                        WindowAggregatorState &lstate, const DataChunk &bounds, Vector &result,
+                                        idx_t count, idx_t row_idx) const {
 	auto &gasink = gsink.Cast<WindowConstantAggregatorGlobalState>();
 	const auto &partition_offsets = gasink.partition_offsets;
 	const auto &results = *gasink.results;
