@@ -173,6 +173,7 @@ public:
 	unique_ptr<RowRenderer> GetRowRenderer();
 	unique_ptr<RowRenderer> GetRowRenderer(RenderMode mode);
 	void ExecutePreparedStatementColumnar(sqlite3_stmt *pStmt);
+	void RenderStreamingResult(sqlite3_stmt *pStmt, RenderMode render_mode);
 	char **TableColumnList(const char *zTab);
 	void ExecutePreparedStatement(sqlite3_stmt *pStmt);
 
