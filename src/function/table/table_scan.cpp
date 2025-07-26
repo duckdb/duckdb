@@ -2,15 +2,19 @@
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/dependency_list.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_config.hpp"
-#include "duckdb/optimizer/matcher/expression_matcher.hpp"
-#include "duckdb/planner/expression/bound_between_expression.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
@@ -477,6 +481,42 @@ vector<unique_ptr<Expression>> ExtractFilterExpressions(const ColumnDefinition &
 	return expressions;
 }
 
+// Recursively updates column bindings in an index expression to match the current input projection,
+// even if they are the child of a function or cast
+void UpdateIndexExprColumnBindings(unique_ptr<Expression> &expr, const vector<column_t> &input_column_ids,
+						  		   const vector<column_t> &indexed_columns) {
+	if (!expr) { return; }
+
+	switch (expr->GetExpressionClass()) {
+		case ExpressionClass::BOUND_COLUMN_REF: {
+			auto &bound_column_ref_expr = expr->Cast<BoundColumnRefExpression>();
+
+			for (idx_t i=0; i < input_column_ids.size(); ++i) {
+				if (input_column_ids[i] == indexed_columns[0]) {
+					bound_column_ref_expr.binding.column_index = i;
+					break;
+				}
+			}
+			break;
+		}
+		case ExpressionClass::BOUND_FUNCTION: {
+			auto &func_expr = expr->Cast<BoundFunctionExpression>();
+			for (auto &child : func_expr.children) {
+				UpdateIndexExprColumnBindings(child, input_column_ids, indexed_columns);
+			}
+			break;
+		}
+		// TODO: never end up here, TableScanInitGlobal called without filters in input
+		// case ExpressionClass::BOUND_CAST: {
+		// 	auto &cast_expr = expr->Cast<BoundCastExpression>();
+		// 	UpdateIndexExprColumnBindings(cast_expr.child, input_column_ids, indexed_columns);
+		// 	break;
+		// }
+		default:
+			break;
+	}
+}
+
 bool TryScanIndex(ART &art, const ColumnList &column_list, TableFunctionInitInput &input, TableFilterSet &filter_set,
                   idx_t max_count, set<row_t> &row_ids) {
 	// FIXME: No support for index scans on compound ARTs.
@@ -492,6 +532,9 @@ bool TryScanIndex(ART &art, const ColumnList &column_list, TableFunctionInitInpu
 	if (indexed_columns.size() != 1) {
 		return false;
 	}
+
+	// Resolve bound column references in the index_expr against the current input
+	UpdateIndexExprColumnBindings(index_expr, input.column_ids, indexed_columns);
 
 	// Get ART column.
 	auto &col = column_list.GetColumn(LogicalIndex(indexed_columns[0]));
