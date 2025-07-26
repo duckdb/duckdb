@@ -27,7 +27,7 @@ class BaseColumnPruner : public LogicalOperatorVisitor {
 protected:
 	//! The map of column references
 	column_binding_map_t<ReferencedColumn> column_references;
-	
+
 	vector<ColumnIndex> deliver_child;
 
 protected:
@@ -50,7 +50,7 @@ protected:
 	bool HandleStructExtractRecursive(Expression &expr, optional_ptr<BoundColumnRefExpression> &colref,
 	                                  vector<idx_t> &indexes);
 
-	bool HandleStructPack(Expression &expr);								  
+	bool HandleStructPack(Expression &expr);
 };
 
 //! The RemoveUnusedColumns optimizer traverses the logical operator tree and removes any columns that are not required

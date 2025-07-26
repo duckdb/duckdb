@@ -73,7 +73,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		}
 		if (!everything_referenced && !new_root) {
 			// FIXME: groups that are not referenced need to stay -> but they don't need to be scanned and output!
-			ClearUnusedExpressions(aggr.expressions, aggr.aggregate_index, true);
+			ClearUnusedExpressions(aggr.expressions, aggr.aggregate_index);
 			if (aggr.expressions.empty() && aggr.groups.empty()) {
 				// removed all expressions from the aggregate: push a COUNT(*)
 				auto count_star_fun = CountStarFun::GetFunction();
@@ -284,12 +284,12 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			}
 
 			// Clear unused ids, include filter columns that are projected out immediately
-			ClearUnusedExpressions(col_sel, get.table_index, true);
+			ClearUnusedExpressions(col_sel, get.table_index);
 
 			// Now set the column ids in the LogicalGet using the "selection vector"
 			vector<ColumnIndex> column_ids;
 			column_ids.reserve(col_sel.size());
-			for (idx_t idx = 0;idx<col_sel.size();idx++) {
+			for (idx_t idx = 0; idx < col_sel.size(); idx++) {
 				auto col_sel_idx = col_sel[idx];
 				auto entry = column_references.find(ColumnBinding(get.table_index, idx));
 				if (entry == column_references.end()) {
@@ -513,11 +513,11 @@ unique_ptr<Expression> BaseColumnPruner::VisitReplace(BoundColumnRefExpression &
 	if (deliver_child.empty()) {
 		AddBinding(expr);
 	} else {
-		for (auto& child_idx   : deliver_child ) {
+		for (auto &child_idx : deliver_child) {
 			AddBinding(expr, child_idx);
 		}
 	}
-	
+
 	return nullptr;
 }
 
