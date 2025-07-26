@@ -264,6 +264,8 @@ enum class OnCreateConflict : uint8_t;
 
 enum class OnEntryNotFound : uint8_t;
 
+enum class OnTimetravelNotSupported : uint8_t;
+
 enum class OperatorFinalResultType : uint8_t;
 
 enum class OperatorFinalizeResultType : uint8_t;
@@ -780,6 +782,9 @@ const char* EnumUtil::ToChars<OnCreateConflict>(OnCreateConflict value);
 
 template<>
 const char* EnumUtil::ToChars<OnEntryNotFound>(OnEntryNotFound value);
+
+template<>
+const char* EnumUtil::ToChars<OnTimetravelNotSupported>(OnTimetravelNotSupported value);
 
 template<>
 const char* EnumUtil::ToChars<OperatorFinalResultType>(OperatorFinalResultType value);
@@ -1381,6 +1386,9 @@ OnCreateConflict EnumUtil::FromString<OnCreateConflict>(const char *value);
 
 template<>
 OnEntryNotFound EnumUtil::FromString<OnEntryNotFound>(const char *value);
+
+template<>
+OnTimetravelNotSupported EnumUtil::FromString<OnTimetravelNotSupported>(const char *value);
 
 template<>
 OperatorFinalResultType EnumUtil::FromString<OperatorFinalResultType>(const char *value);
