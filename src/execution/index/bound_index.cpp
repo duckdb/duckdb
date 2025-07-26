@@ -154,4 +154,31 @@ string BoundIndex::AppendRowError(DataChunk &input, idx_t index) {
 	return error;
 }
 
+void BoundIndex::ApplyBufferedAppends(ColumnDataCollection &buffered_appends) {
+	IndexAppendInfo index_append_info(IndexAppendMode::INSERT_DUPLICATES, nullptr);
+
+	ColumnDataScanState state;
+	buffered_appends.InitializeScan(state);
+
+	DataChunk scan_chunk;
+	buffered_appends.InitializeScanChunk(scan_chunk);
+
+	auto append_types = scan_chunk.GetTypes();
+	append_types.pop_back();
+	DataChunk append_chunk;
+	append_chunk.InitializeEmpty(append_types);
+
+	while (buffered_appends.Scan(state, scan_chunk)) {
+		for (idx_t i = 0; i < append_chunk.ColumnCount(); i++) {
+			append_chunk.data[i].Reference(scan_chunk.data[i]);
+		}
+		append_chunk.SetCardinality(scan_chunk.size());
+
+		auto error = Append(append_chunk, scan_chunk.data.back(), index_append_info);
+		if (error.HasError()) {
+			throw InternalException("error while applying buffered appends: " + error.Message());
+		}
+	}
+}
+
 } // namespace duckdb

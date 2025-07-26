@@ -150,6 +150,7 @@ public:
 	    : memory_manager(context, minimum_memory_per_thread), table(table), insert_count(0),
 	      optimistically_written(false), minimum_memory_per_thread(minimum_memory_per_thread) {
 		row_group_size = table.GetStorage().GetRowGroupSize();
+		table.GetStorage().BindIndexes(context);
 	}
 
 	BatchMemoryManager memory_manager;

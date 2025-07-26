@@ -76,6 +76,7 @@ void PhysicalInsert::GetInsertInfo(const BoundCreateTableInfo &info, vector<Logi
 InsertGlobalState::InsertGlobalState(ClientContext &context, const vector<LogicalType> &return_types,
                                      DuckTableEntry &table)
     : table(table), insert_count(0), return_collection(context, return_types) {
+	table.GetStorage().BindIndexes(context);
 }
 
 InsertLocalState::InsertLocalState(ClientContext &context, const vector<LogicalType> &types,
@@ -358,7 +359,7 @@ static void PrepareSortKeys(DataChunk &input, unordered_map<column_t, unique_ptr
 }
 
 static map<idx_t, vector<idx_t>> CheckDistinctness(DataChunk &input, ConflictInfo &info,
-                                                   unordered_set<BoundIndex *> &matched_indexes) {
+                                                   reference_set_t<Index> &matched_indexes) {
 	map<idx_t, vector<idx_t>> conflicts;
 	unordered_map<idx_t, unique_ptr<Vector>> sort_keys;
 	//! Register which rows have already caused a conflict
@@ -367,7 +368,7 @@ static map<idx_t, vector<idx_t>> CheckDistinctness(DataChunk &input, ConflictInf
 	auto &column_ids = info.column_ids;
 	if (column_ids.empty()) {
 		for (auto index : matched_indexes) {
-			auto &index_column_ids = index->GetColumnIdSet();
+			auto &index_column_ids = index.get().GetColumnIdSet();
 			PrepareSortKeys(input, sort_keys, index_column_ids);
 			vector<reference<Vector>> columns;
 			for (auto &idx : index_column_ids) {
@@ -423,7 +424,7 @@ static void VerifyOnConflictCondition(ExecutionContext &context, DataChunk &comb
 
 	auto &indexes = local_storage.GetIndexes(context.client, data_table);
 	auto storage = local_storage.GetStorage(data_table);
-	DataTable::VerifyUniqueIndexes(indexes, storage, tuples, nullptr);
+	data_table.VerifyUniqueIndexes(indexes, storage, tuples, nullptr);
 	throw InternalException("VerifyUniqueIndexes was expected to throw but didn't");
 }
 
@@ -445,7 +446,7 @@ static idx_t HandleInsertConflicts(TableCatalogEntry &table, ExecutionContext &c
 		data_table.VerifyAppendConstraints(constraint_state, context.client, tuples, storage, &conflict_manager);
 	} else {
 		auto &indexes = local_storage.GetIndexes(context.client, data_table);
-		DataTable::VerifyUniqueIndexes(indexes, storage, tuples, &conflict_manager);
+		data_table.VerifyUniqueIndexes(indexes, storage, tuples, &conflict_manager);
 	}
 
 	if (!conflict_manager.HasConflicts()) {
@@ -529,32 +530,30 @@ idx_t PhysicalInsert::OnConflictHandling(TableCatalogEntry &table, ExecutionCont
 	}
 
 	ConflictInfo conflict_info(conflict_target);
+	reference_set_t<Index> matching_indexes;
 
-	auto &global_indexes = data_table.GetDataTableInfo()->GetIndexes();
-	auto &local_indexes = local_storage.GetIndexes(context.client, data_table);
-
-	unordered_set<BoundIndex *> matching_indexes;
 	if (conflict_info.column_ids.empty()) {
+		auto &global_indexes = data_table.GetDataTableInfo()->GetIndexes();
 		// We care about every index that applies to the table if no ON CONFLICT (...) target is given
 		global_indexes.Scan([&](Index &index) {
 			if (!index.IsUnique()) {
 				return false;
 			}
+			D_ASSERT(index.IsBound());
 			if (conflict_info.ConflictTargetMatches(index)) {
-				D_ASSERT(index.IsBound());
-				auto &bound_index = index.Cast<BoundIndex>();
-				matching_indexes.insert(&bound_index);
+				matching_indexes.insert(index);
 			}
 			return false;
 		});
+		auto &local_indexes = local_storage.GetIndexes(context.client, data_table);
 		local_indexes.Scan([&](Index &index) {
 			if (!index.IsUnique()) {
 				return false;
 			}
+			D_ASSERT(index.IsBound());
 			if (conflict_info.ConflictTargetMatches(index)) {
-				D_ASSERT(index.IsBound());
 				auto &bound_index = index.Cast<BoundIndex>();
-				matching_indexes.insert(&bound_index);
+				matching_indexes.insert(bound_index);
 			}
 			return false;
 		});
