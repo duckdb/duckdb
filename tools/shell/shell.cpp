@@ -1684,8 +1684,8 @@ void ShellState::ExecutePreparedStatement(sqlite3_stmt *pStmt) {
 		size_t max_rows = this->max_rows;
 		size_t max_width = this->max_width;
 		if (!outfile.empty() && outfile[0] != '|') {
-			max_rows = (size_t)-1;
-			max_width = (size_t)-1;
+			RenderStreamingResult(pStmt, RenderMode::CSV);
+			return;
 		}
 		LargeNumberRendering large_rendering = large_number_rendering;
 		if (!stdout_is_console) {
@@ -1710,6 +1710,13 @@ void ShellState::ExecutePreparedStatement(sqlite3_stmt *pStmt) {
 		ExecutePreparedStatementColumnar(pStmt);
 		return;
 	}
+	// All other streaming modes (CSV, LIST, etc.)
+	RenderStreamingResult(pStmt, cMode);
+}
+
+void ShellState::RenderStreamingResult(sqlite3_stmt *pStmt, RenderMode render_mode) {
+	auto saved_cMode = cMode;
+	cMode = render_mode;
 
 	/* perform the first step.  this will tell us if we
 	** have a result set or not and how wide it is.
@@ -1717,6 +1724,7 @@ void ShellState::ExecutePreparedStatement(sqlite3_stmt *pStmt) {
 	int rc = sqlite3_step(pStmt);
 	/* if we have a result set... */
 	if (SQLITE_ROW != rc) {
+		cMode = saved_cMode;
 		return;
 	}
 	RowResult result;
@@ -1757,6 +1765,7 @@ void ShellState::ExecutePreparedStatement(sqlite3_stmt *pStmt) {
 	} while (SQLITE_ROW == rc);
 
 	renderer->RenderFooter(result);
+	cMode = saved_cMode;
 }
 
 /*
