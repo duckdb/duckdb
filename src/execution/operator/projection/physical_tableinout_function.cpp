@@ -11,6 +11,7 @@ public:
 	idx_t row_index;
 	bool new_row;
 	DataChunk input_chunk;
+	idx_t current_ordinality_idx = 1;
 };
 
 class TableInOutGlobalState : public GlobalOperatorState {
@@ -68,7 +69,13 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 	TableFunctionInput data(bind_data.get(), state.local_state.get(), gstate.global_state.get());
 	if (projected_input.empty()) {
 		// straightforward case - no need to project input
-		return function.in_out_function(context, data, input, chunk);
+		auto result = function.in_out_function(context, data, input, chunk);
+		if (this->ordinality_idx.IsValid()) {
+			const idx_t ordinality = chunk.size();
+			SetOrdinality(chunk, this->ordinality_idx, state.current_ordinality_idx, ordinality);
+			state.current_ordinality_idx += ordinality;
+		}
+		return result;
 	}
 	// when project_input is set we execute the input function row-by-row
 	if (state.new_row) {
@@ -87,6 +94,7 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 		state.input_chunk.SetCardinality(1);
 		state.row_index++;
 		state.new_row = false;
+		state.current_ordinality_idx = 1;
 	}
 	// set up the output data in "chunk"
 	D_ASSERT(chunk.ColumnCount() > projected_input.size());
@@ -98,6 +106,11 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 		ConstantVector::Reference(chunk.data[target_idx], input.data[source_idx], state.row_index - 1, 1);
 	}
 	auto result = function.in_out_function(context, data, state.input_chunk, chunk);
+	if (this->ordinality_idx.IsValid()) {
+		const idx_t ordinality = chunk.size();
+		SetOrdinality(chunk, this->ordinality_idx, state.current_ordinality_idx, ordinality);
+		state.current_ordinality_idx += ordinality;
+	}
 	if (result == OperatorResultType::FINISHED) {
 		return result;
 	}
