@@ -166,54 +166,6 @@ string LogicalTypeIdToString(LogicalTypeId type) {
 	return EnumUtil::ToString(type);
 }
 
-constexpr const LogicalTypeId LogicalType::INVALID;
-constexpr const LogicalTypeId LogicalType::SQLNULL;
-constexpr const LogicalTypeId LogicalType::UNKNOWN;
-constexpr const LogicalTypeId LogicalType::BOOLEAN;
-constexpr const LogicalTypeId LogicalType::TINYINT;
-constexpr const LogicalTypeId LogicalType::UTINYINT;
-constexpr const LogicalTypeId LogicalType::SMALLINT;
-constexpr const LogicalTypeId LogicalType::USMALLINT;
-constexpr const LogicalTypeId LogicalType::INTEGER;
-constexpr const LogicalTypeId LogicalType::UINTEGER;
-constexpr const LogicalTypeId LogicalType::BIGINT;
-constexpr const LogicalTypeId LogicalType::UBIGINT;
-constexpr const LogicalTypeId LogicalType::HUGEINT;
-constexpr const LogicalTypeId LogicalType::UHUGEINT;
-constexpr const LogicalTypeId LogicalType::UUID;
-constexpr const LogicalTypeId LogicalType::FLOAT;
-constexpr const LogicalTypeId LogicalType::DOUBLE;
-constexpr const LogicalTypeId LogicalType::DATE;
-
-constexpr const LogicalTypeId LogicalType::TIMESTAMP;
-constexpr const LogicalTypeId LogicalType::TIMESTAMP_MS;
-constexpr const LogicalTypeId LogicalType::TIMESTAMP_NS;
-constexpr const LogicalTypeId LogicalType::TIMESTAMP_S;
-
-constexpr const LogicalTypeId LogicalType::TIME;
-constexpr const LogicalTypeId LogicalType::TIME_NS;
-
-constexpr const LogicalTypeId LogicalType::TIME_TZ;
-constexpr const LogicalTypeId LogicalType::TIMESTAMP_TZ;
-
-constexpr const LogicalTypeId LogicalType::HASH;
-constexpr const LogicalTypeId LogicalType::POINTER;
-
-constexpr const LogicalTypeId LogicalType::VARCHAR;
-
-constexpr const LogicalTypeId LogicalType::BLOB;
-constexpr const LogicalTypeId LogicalType::BIT;
-constexpr const LogicalTypeId LogicalType::VARINT;
-
-constexpr const LogicalTypeId LogicalType::INTERVAL;
-constexpr const LogicalTypeId LogicalType::ROW_TYPE;
-
-// TODO these are incomplete and should maybe not exist as such
-constexpr const LogicalTypeId LogicalType::TABLE;
-constexpr const LogicalTypeId LogicalType::LAMBDA;
-
-constexpr const LogicalTypeId LogicalType::ANY;
-
 const vector<LogicalType> LogicalType::Numeric() {
 	vector<LogicalType> types = {LogicalType::TINYINT,   LogicalType::SMALLINT,  LogicalType::INTEGER,
 	                             LogicalType::BIGINT,    LogicalType::HUGEINT,   LogicalType::FLOAT,
