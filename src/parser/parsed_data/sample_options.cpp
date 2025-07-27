@@ -1,6 +1,4 @@
 #include "duckdb/parser/parsed_data/sample_options.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
