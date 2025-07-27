@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/exception.hpp"
 
