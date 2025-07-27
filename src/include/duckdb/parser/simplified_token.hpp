@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
-
 namespace duckdb {
 
 //! Simplified tokens are a simplified (dense) representation of the lexer
