@@ -1450,16 +1450,23 @@ void LocalFileSystem::ProcessSplit(const vector<string> &splits, idx_t i, const 
 	if (result.size() >= max_files) {
 		return;
 	}
-	bool is_last_chunk = i + 1 == splits.size();
 	bool has_glob = HasGlob(splits[i]);
 	if (!has_glob) {
 		// no glob, just append as-is
 		const string filename = JoinPath(path, splits[i]);
+		bool is_last_chunk = i + 1 == splits.size();
 		if (is_last_chunk) {
 			if (FileExists(filename, opener)) {
 				result.push_back(filename);
 			}
 		} else {
+			if (hive_partitioning) {
+				auto info = OpenFileInfo(filename);
+				bool is_deepest_directory = i + 2 >= splits.size();
+				if (hive_partitioning->ApplyFiltersToFile(info, is_deepest_directory)) {
+					return;
+				}
+			}
 			ProcessSplit(splits, i + 1, filename, result, opener, max_files, hive_partitioning);
 		}
 
