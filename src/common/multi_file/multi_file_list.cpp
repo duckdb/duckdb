@@ -364,22 +364,17 @@ FileExpandResult GlobMultiFileList::GetExpandResult() {
 }
 
 unique_ptr<MultiFileList> GlobMultiFileList::GetFirstFileList(idx_t max_files) {
-	if (first_expanded_files.size() >= max_files) {
-		// TODO: this can be written better
-		return make_uniq<SimpleMultiFileList>(vector<OpenFileInfo>(first_expanded_files.begin(), first_expanded_files.begin() + max_files));
+	if (first_expanded_files.size() < max_files) {
+		ClearPeek();
+		PeekFile(max_files - 1);
 	}
 
-	ClearPeek();
+	auto list = make_uniq<SimpleMultiFileList>(
+	    vector<OpenFileInfo>(first_expanded_files.begin(),
+	                         first_expanded_files.begin() +
+	                             (first_expanded_files.size() < max_files ? first_expanded_files.size() : max_files)));
 
-	vector<OpenFileInfo> files;
-	for (idx_t i = 0; i < max_files; i++) {
-		auto file = PeekFile(i);
-		if (file.path.empty()) {
-			break;
-		}
-		files.push_back(file);
-	}
-	return make_uniq<SimpleMultiFileList>(files);
+	return list;
 }
 
 OpenFileInfo GlobMultiFileList::GetFile(idx_t i) {
