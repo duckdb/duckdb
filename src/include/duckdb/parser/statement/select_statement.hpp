@@ -8,11 +8,8 @@
 
 #pragma once
 
-#include "duckdb/common/unordered_map.hpp"
-#include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/parser/tableref.hpp"
-#include "duckdb/parser/query_node.hpp"
 
 namespace duckdb {
 
