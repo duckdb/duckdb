@@ -5,6 +5,7 @@
 #include "parquet_crypto.hpp"
 #include "parquet_timestamp.hpp"
 #include "resizable_buffer.hpp"
+#include <duckdb/parser/keyword_helper.hpp>
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
@@ -174,13 +175,6 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type, duckdb_p
 		schema_ele.logicalType.__set_JSON(duckdb_parquet::JsonType());
 		return;
 	}
-	if (duckdb_type.GetAlias() == "WKB_BLOB") {
-		schema_ele.__isset.logicalType = true;
-		schema_ele.logicalType.__isset.GEOMETRY = true;
-		// TODO: Set CRS in the future
-		schema_ele.logicalType.GEOMETRY.__isset.crs = false;
-		return;
-	}
 	switch (duckdb_type.id()) {
 	case LogicalTypeId::TINYINT:
 		schema_ele.converted_type = ConvertedType::INT_8;
@@ -336,11 +330,6 @@ struct ColumnStatsUnifier {
 	bool can_have_nan = false;
 	bool has_nan = false;
 
-	unique_ptr<GeometryStats> geo_stats;
-
-	virtual void UnifyGeoStats(const GeometryStats &other) {
-	}
-
 	virtual void UnifyMinMax(const string &new_min, const string &new_max) = 0;
 	virtual string StatsToString(const string &stats) = 0;
 };
@@ -353,10 +342,10 @@ public:
 ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file_name_p, vector<LogicalType> types_p,
                              vector<string> names_p, CompressionCodec::type codec, ChildFieldIDs field_ids_p,
                              const vector<pair<string, string>> &kv_metadata,
-                             shared_ptr<ParquetEncryptionConfig> encryption_config_p,
-                             optional_idx dictionary_size_limit_p, idx_t string_dictionary_page_size_limit_p,
-                             bool enable_bloom_filters_p, double bloom_filter_false_positive_ratio_p,
-                             int64_t compression_level_p, bool debug_use_openssl_p, ParquetVersion parquet_version)
+                             shared_ptr<ParquetEncryptionConfig> encryption_config_p, idx_t dictionary_size_limit_p,
+                             idx_t string_dictionary_page_size_limit_p, bool enable_bloom_filters_p,
+                             double bloom_filter_false_positive_ratio_p, int64_t compression_level_p,
+                             bool debug_use_openssl_p, ParquetVersion parquet_version)
     : context(context), file_name(std::move(file_name_p)), sql_types(std::move(types_p)),
       column_names(std::move(names_p)), codec(codec), field_ids(std::move(field_ids_p)),
       encryption_config(std::move(encryption_config_p)), dictionary_size_limit(dictionary_size_limit_p),
@@ -459,7 +448,7 @@ void ParquetWriter::PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGro
 			write_states.emplace_back(col_writers.back().get().InitializeWriteState(row_group));
 		}
 
-		for (auto &chunk : buffer.Chunks(column_ids)) {
+		for (auto &chunk : buffer.Chunks({column_ids})) {
 			for (idx_t i = 0; i < next; i++) {
 				if (col_writers[i].get().HasAnalyze()) {
 					col_writers[i].get().Analyze(*write_states[i], nullptr, chunk.data[i], chunk.size());
@@ -480,7 +469,7 @@ void ParquetWriter::PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGro
 
 		for (auto &chunk : buffer.Chunks({column_ids})) {
 			for (idx_t i = 0; i < next; i++) {
-				col_writers[i].get().Prepare(*write_states[i], nullptr, chunk.data[i], chunk.size(), true);
+				col_writers[i].get().Prepare(*write_states[i], nullptr, chunk.data[i], chunk.size());
 			}
 		}
 
@@ -684,50 +673,6 @@ struct BlobStatsUnifier : public BaseStringStatsUnifier {
 	}
 };
 
-struct GeoStatsUnifier : public ColumnStatsUnifier {
-
-	void UnifyGeoStats(const GeometryStats &other) override {
-		if (geo_stats) {
-			geo_stats->bbox.Combine(other.bbox);
-			geo_stats->types.Combine(other.types);
-		} else {
-			// Make copy
-			geo_stats = make_uniq<GeometryStats>();
-			geo_stats->bbox = other.bbox;
-			geo_stats->types = other.types;
-		}
-	}
-
-	void UnifyMinMax(const string &new_min, const string &new_max) override {
-		// Do nothing
-	}
-
-	string StatsToString(const string &stats) override {
-		if (!geo_stats) {
-			return string();
-		}
-
-		const auto &bbox = geo_stats->bbox;
-		const auto &types = geo_stats->types;
-
-		const auto bbox_value = Value::STRUCT({{"xmin", bbox.xmin},
-		                                       {"xmax", bbox.xmax},
-		                                       {"ymin", bbox.ymin},
-		                                       {"ymax", bbox.ymax},
-		                                       {"zmin", bbox.zmin},
-		                                       {"zmax", bbox.zmax},
-		                                       {"mmin", bbox.mmin},
-		                                       {"mmax", bbox.mmax}});
-
-		vector<Value> type_strings;
-		for (const auto &type : types.ToString(true)) {
-			type_strings.push_back(Value(StringUtil::Lower(type)));
-		}
-
-		return Value::STRUCT({{"bbox", bbox_value}, {"types", Value::LIST(type_strings)}}).ToString();
-	}
-};
-
 struct UUIDStatsUnifier : public BaseStringStatsUnifier {
 	string StatsToString(const string &stats) override {
 		if (stats.size() != 16) {
@@ -810,11 +755,7 @@ static unique_ptr<ColumnStatsUnifier> GetBaseStatsUnifier(const LogicalType &typ
 		}
 	}
 	case LogicalTypeId::BLOB:
-		if (type.GetAlias() == "WKB_BLOB") {
-			return make_uniq<GeoStatsUnifier>();
-		} else {
-			return make_uniq<BlobStatsUnifier>();
-		}
+		return make_uniq<BlobStatsUnifier>();
 	case LogicalTypeId::VARCHAR:
 		return make_uniq<StringStatsUnifier>();
 	case LogicalTypeId::UUID:
@@ -871,9 +812,6 @@ void ParquetWriter::FlushColumnStats(idx_t col_idx, duckdb_parquet::ColumnChunk 
 		} else {
 			stats_unifier->all_nulls_set = false;
 		}
-		if (writer_stats && writer_stats->HasGeoStats()) {
-			stats_unifier->UnifyGeoStats(*writer_stats->GetGeoStats());
-		}
 		stats_unifier->column_size_bytes += column.meta_data.total_compressed_size;
 	}
 }
@@ -901,33 +839,6 @@ void ParquetWriter::GatherWrittenStatistics() {
 		}
 		if (stats_unifier->can_have_nan) {
 			column_stats["has_nan"] = Value::BOOLEAN(stats_unifier->has_nan);
-		}
-		if (stats_unifier->geo_stats) {
-			const auto &bbox = stats_unifier->geo_stats->bbox;
-			const auto &types = stats_unifier->geo_stats->types;
-
-			column_stats["bbox_xmin"] = Value::DOUBLE(bbox.xmin);
-			column_stats["bbox_xmax"] = Value::DOUBLE(bbox.xmax);
-			column_stats["bbox_ymin"] = Value::DOUBLE(bbox.ymin);
-			column_stats["bbox_ymax"] = Value::DOUBLE(bbox.ymax);
-
-			if (bbox.HasZ()) {
-				column_stats["bbox_zmin"] = Value::DOUBLE(bbox.zmin);
-				column_stats["bbox_zmax"] = Value::DOUBLE(bbox.zmax);
-			}
-
-			if (bbox.HasM()) {
-				column_stats["bbox_mmin"] = Value::DOUBLE(bbox.mmin);
-				column_stats["bbox_mmax"] = Value::DOUBLE(bbox.mmax);
-			}
-
-			if (!types.IsEmpty()) {
-				vector<Value> type_strings;
-				for (const auto &type : types.ToString(true)) {
-					type_strings.push_back(Value(StringUtil::Lower(type)));
-				}
-				column_stats["geo_types"] = Value::LIST(type_strings);
-			}
 		}
 		written_stats->column_statistics.insert(make_pair(stats_unifier->column_name, std::move(column_stats)));
 	}
@@ -975,7 +886,7 @@ void ParquetWriter::Finalize() {
 	}
 
 	// Add geoparquet metadata to the file metadata
-	if (geoparquet_data && GeoParquetFileMetadata::IsGeoParquetConversionEnabled(context)) {
+	if (geoparquet_data) {
 		geoparquet_data->Write(file_meta_data);
 	}
 

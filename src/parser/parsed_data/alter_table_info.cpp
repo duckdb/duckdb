@@ -3,6 +3,8 @@
 
 #include "duckdb/parser/constraint.hpp"
 
+#include <duckdb/parser/keyword_helper.hpp>
+
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//

@@ -29,6 +29,7 @@
 #include <string>
 #include <thread>
 #include <time.h>
+#include <duckdb/parser/keyword_helper.hpp>
 
 using namespace duckdb;
 using namespace std;

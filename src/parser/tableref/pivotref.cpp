@@ -2,6 +2,8 @@
 
 #include "duckdb/common/limits.hpp"
 
+#include <duckdb/parser/expression_util.hpp>
+
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//

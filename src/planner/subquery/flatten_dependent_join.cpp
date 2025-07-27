@@ -16,6 +16,8 @@
 #include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
 
+#include <duckdb/common/exception/parser_exception.hpp>
+
 namespace duckdb {
 
 FlattenDependentJoins::FlattenDependentJoins(Binder &binder, const CorrelatedColumns &correlated, bool perform_delim,
