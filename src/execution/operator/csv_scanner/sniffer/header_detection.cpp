@@ -4,6 +4,9 @@
 
 #include "utf8proc.hpp"
 
+#include <duckdb/parser/keyword_helper.hpp>
+#include <duckdb/parser/simplified_token.hpp>
+
 namespace duckdb {
 // Helper function to generate column names
 static string GenerateColumnName(const idx_t total_cols, const idx_t col_number, const string &prefix = "column") {

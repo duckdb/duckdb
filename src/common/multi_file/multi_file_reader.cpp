@@ -15,6 +15,7 @@
 #include "duckdb/common/multi_file/multi_file_function.hpp"
 #include "duckdb/common/multi_file/union_by_name.hpp"
 #include <algorithm>
+#include <duckdb/common/exception/parser_exception.hpp>
 
 namespace duckdb {
 

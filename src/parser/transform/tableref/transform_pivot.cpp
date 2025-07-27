@@ -5,6 +5,8 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 
+#include <duckdb/common/exception/parser_exception.hpp>
+
 namespace duckdb {
 
 bool Transformer::TransformPivotInList(unique_ptr<ParsedExpression> &expr, PivotColumnEntry &entry, bool root_entry) {

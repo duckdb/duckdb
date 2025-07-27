@@ -6,6 +6,8 @@
 #include "parquet_timestamp.hpp"
 #include "resizable_buffer.hpp"
 
+#include <duckdb/parser/keyword_helper.hpp>
+
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"

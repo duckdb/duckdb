@@ -4,6 +4,8 @@
 #include "duckdb/parser/statement/alter_statement.hpp"
 #include "duckdb/parser/transformer.hpp"
 
+#include <duckdb/common/exception/parser_exception.hpp>
+
 namespace duckdb {
 
 OnEntryNotFound Transformer::TransformOnEntryNotFound(bool missing_ok) {

@@ -12,6 +12,8 @@
 #include "duckdb/parser/statement/copy_statement.hpp"
 #include "duckdb/parser/statement/export_statement.hpp"
 
+#include <duckdb/parser/keyword_helper.hpp>
+
 namespace duckdb {
 
 static string PragmaTableInfo(ClientContext &context, const FunctionParameters &parameters) {
