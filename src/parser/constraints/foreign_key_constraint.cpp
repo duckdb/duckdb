@@ -1,6 +1,4 @@
 #include "duckdb/parser/constraints/foreign_key_constraint.hpp"
-
-#include "duckdb/common/limits.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 
 namespace duckdb {

@@ -1,11 +1,7 @@
 #include "duckdb/parser/expression/window_expression.hpp"
 
-#include "duckdb/common/limits.hpp"
 #include "duckdb/common/string_util.hpp"
 
-#include "duckdb/common/enum_util.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 

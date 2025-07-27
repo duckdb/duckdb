@@ -1,6 +1,4 @@
 #include "duckdb/parser/query_node/cte_node.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
