@@ -1575,14 +1575,14 @@ vector<OpenFileInfo> LocalFileSystem::GlobHive(const string &path, FileOpener *o
 		ProcessSplit(splits, start_index, prev_directory.path, result, opener, max_files, hive_partitioning);
 	}
 
+	if (hive_partitioning) {
+		hive_partitioning->Finalize();
+	}
+
 	if (result.empty()) {
 		// no result found that matches the glob
 		// last ditch effort: search the path as a string literal
 		return FetchFileWithoutGlob(path, opener, absolute_path);
-	}
-
-	if (hive_partitioning) {
-		hive_partitioning->Finalize();
 	}
 	return result;
 }

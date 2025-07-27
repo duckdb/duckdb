@@ -652,7 +652,7 @@ vector<OpenFileInfo> FileSystem::GlobFiles(const string &pattern, ClientContext 
 			}
 			return GlobFiles(pattern, context, options, max_files, hive_params);
 		}
-		if (options == FileGlobOptions::DISALLOW_EMPTY) {
+		if (options == FileGlobOptions::DISALLOW_EMPTY && !hive_params) {
 			throw IOException("No files found that match the pattern \"%s\"", pattern);
 		}
 	}
