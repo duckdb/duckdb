@@ -164,7 +164,7 @@ HivePartitioningFilterInfo HivePartitioning::GetFilterInfo(const MultiFilePushdo
 
 // TODO: this can still be improved by removing the parts of filter expressions that are true for all remaining files.
 //		 currently, only expressions that cannot be evaluated during pushdown are removed.
-bool HivePartitioning::ApplyFiltersToFile(OpenFileInfo &file) {
+bool HivePartitioning::ApplyFiltersToFile(OpenFileInfo &file, bool is_deepest_directory) {
 	if (consumed) {
 		// TODO: throw an error, shouldn't try applying filters after finalizing
 		return false;
@@ -183,9 +183,10 @@ bool HivePartitioning::ApplyFiltersToFile(OpenFileInfo &file) {
 		if (!filter_copy->IsScalar() || !filter_copy->IsFoldable() ||
 		    !ExpressionExecutor::TryEvaluateScalar(context, *filter_copy, result_value)) {
 			// can not be evaluated only with the filename/hive columns added, we can not prune this filter
+			if (is_deepest_directory && !have_preserved_filter[j]) {
+				have_preserved_filter[j] = true;
+			}
 		} else {
-			// Able to evaluate, so we do not preserve the filter
-			have_preserved_filter[j] = false;
 			if (result_value.IsNull() || !result_value.GetValue<bool>()) {
 				// filter evaluates to false
 				should_prune_file = true;
@@ -234,7 +235,7 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<Ope
 	HivePartitioning hive_partitioning(context, filters, options, info);
 
 	for (idx_t i = 0; i < files.size(); i++) {
-		hive_partitioning.ApplyFiltersToFile(files[i]);
+		hive_partitioning.ApplyFiltersToFile(files[i], true);
 	}
 	hive_partitioning.Finalize(hive_partitioning.pruned_files.size(), files.size());
 	files = std::move(hive_partitioning.pruned_files);

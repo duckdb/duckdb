@@ -33,7 +33,7 @@ public:
 	// Constructor
 	HivePartitioning(ClientContext &context, vector<unique_ptr<Expression>> &filters, const MultiFileOptions &options,
 	                 MultiFilePushdownInfo &info)
-	    : context(context), filters(filters), info(info), have_preserved_filter(filters.size(), true),
+	    : context(context), filters(filters), info(info), have_preserved_filter(filters.size(), false),
 	      consumed(false) {
 		filter_info = GetFilterInfo(info, options);
 	}
@@ -42,7 +42,7 @@ public:
 	DUCKDB_API static std::map<string, string> Parse(const string &filename);
 
 	//! Prunes a file based on a set of filters
-	DUCKDB_API bool ApplyFiltersToFile(OpenFileInfo &file);
+	DUCKDB_API bool ApplyFiltersToFile(OpenFileInfo &file, bool is_deepest_directory);
 
 	//! Prunes a list of filenames based on a set of filters, can be used by TableFunctions in the
 	//! pushdown_complex_filter function to skip files with filename-based filters. Also removes the filters that always

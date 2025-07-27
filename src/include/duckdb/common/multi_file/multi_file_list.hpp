@@ -88,7 +88,7 @@ public:
 	//! Returns an initial file used for metadata sampling, may differ from first file in expanded file list
 	virtual OpenFileInfo PeekFirstFile();
 	//! Returns a list with the first file
-	virtual unique_ptr<MultiFileList> GetFirstFileList();
+	virtual unique_ptr<MultiFileList> GetFirstFileList(idx_t max_files = 1);
 	//! Syntactic sugar for GetExpandResult() == FileExpandResult::NO_FILES
 	bool IsEmpty();
 
@@ -114,6 +114,8 @@ public:
 protected:
 	//! Get the i-th expanded file
 	virtual OpenFileInfo GetFile(idx_t i) = 0;
+	//! Get the i-th sampled file used for metadata in binding
+	virtual OpenFileInfo PeekFile(idx_t i);
 
 protected:
 	//! The unexpanded input paths
@@ -173,6 +175,7 @@ public:
 	                                                TableFilterSet &filters) const override;
 
 	//! Main MultiFileList API
+	unique_ptr<MultiFileList> GetFirstFileList(idx_t max_files = 1) override;
 	vector<OpenFileInfo> GetAllFiles() override;
 	FileExpandResult GetExpandResult() override;
 	idx_t GetTotalFileCount() override;
@@ -181,6 +184,7 @@ public:
 protected:
 	//! Main MultiFileList API
 	OpenFileInfo GetFile(idx_t i) override;
+	OpenFileInfo PeekFile(idx_t i) override;
 	OpenFileInfo PeekFirstFile() override;
 
 	//! Get the i-th expanded file
@@ -196,6 +200,10 @@ protected:
 	bool IsFullyExpanded() const;
 	//! Clear the expanded files
 	void ClearInternal();
+	//! Clear the peeked files
+	void ClearPeek();
+	//! Clear the first expanded files
+	void ClearPeekInternal();
 
 	//! The ClientContext for globbing
 	ClientContext &context;

@@ -175,6 +175,10 @@ unique_ptr<NodeStatistics> MultiFileList::GetCardinality(ClientContext &context)
 	return nullptr;
 }
 
+OpenFileInfo MultiFileList::PeekFile(idx_t i) {
+	return GetFile(i);
+}
+
 OpenFileInfo MultiFileList::GetFirstFile() {
 	return GetFile(0);
 }
@@ -183,8 +187,16 @@ OpenFileInfo MultiFileList::PeekFirstFile() {
 	return GetFirstFile();
 }
 
-unique_ptr<MultiFileList> MultiFileList::GetFirstFileList() {
-	return make_uniq<SimpleMultiFileList>(vector<OpenFileInfo> {PeekFirstFile()});
+unique_ptr<MultiFileList> MultiFileList::GetFirstFileList(idx_t max_files) {
+	vector<OpenFileInfo> files;
+	for (idx_t i = 0; i < max_files; i++) {
+		auto file = PeekFile(i);
+		if (file.path.empty()) {
+			break;
+		}
+		files.push_back(file);
+	}
+	return make_uniq<SimpleMultiFileList>(files);
 }
 
 bool MultiFileList::IsEmpty() {
@@ -351,9 +363,33 @@ FileExpandResult GlobMultiFileList::GetExpandResult() {
 	return FileExpandResult::NO_FILES;
 }
 
+unique_ptr<MultiFileList> GlobMultiFileList::GetFirstFileList(idx_t max_files) {
+	if (first_expanded_files.size() >= max_files) {
+		// TODO: this can be written better
+		return make_uniq<SimpleMultiFileList>(vector<OpenFileInfo>(first_expanded_files.begin(), first_expanded_files.begin() + max_files));
+	}
+
+	ClearPeek();
+
+	vector<OpenFileInfo> files;
+	for (idx_t i = 0; i < max_files; i++) {
+		auto file = PeekFile(i);
+		if (file.path.empty()) {
+			break;
+		}
+		files.push_back(file);
+	}
+	return make_uniq<SimpleMultiFileList>(files);
+}
+
 OpenFileInfo GlobMultiFileList::GetFile(idx_t i) {
 	lock_guard<mutex> lck(lock);
 	return GetFileInternal(i, false);
+}
+
+OpenFileInfo GlobMultiFileList::PeekFile(idx_t i) {
+	lock_guard<mutex> lck(lock);
+	return GetFileInternal(i, true);
 }
 
 OpenFileInfo GlobMultiFileList::PeekFirstFile() {
@@ -383,6 +419,16 @@ void GlobMultiFileList::Clear() {
 void GlobMultiFileList::ClearInternal() {
 	expanded_files.clear();
 	current_path = 0;
+}
+
+void GlobMultiFileList::ClearPeek() {
+	lock_guard<mutex> lck(lock);
+	ClearPeekInternal();
+}
+
+void GlobMultiFileList::ClearPeekInternal() {
+	first_expanded_files.clear();
+	first_files_current_path = 0;
 }
 
 bool GlobMultiFileList::ExpandPathInternal(idx_t &current_path, vector<OpenFileInfo> &result, idx_t max_files,

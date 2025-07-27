@@ -1315,6 +1315,7 @@ void LocalFileSystem::RecursiveGlobDirectories(const vector<string> &splits, idx
                                                vector<OpenFileInfo> &result, FileOpener *opener, idx_t max_files,
                                                optional_ptr<HivePartitioning> hive_partitioning) {
 	bool is_last_chunk = i + 1 == splits.size();
+	bool is_deepest_directory = i + 2 >= splits.size();
 	ListFiles(path, [&](OpenFileInfo &info) {
 		if (result.size() >= max_files) {
 			return;
@@ -1327,7 +1328,7 @@ void LocalFileSystem::RecursiveGlobDirectories(const vector<string> &splits, idx
 		}
 		bool is_directory = FileSystem::IsDirectory(info);
 		if (is_directory) {
-			if (hive_partitioning && hive_partitioning->ApplyFiltersToFile(info)) {
+			if (hive_partitioning && hive_partitioning->ApplyFiltersToFile(info, is_deepest_directory)) {
 				return;
 			}
 			if (!is_last_chunk) {
@@ -1349,7 +1350,7 @@ void LocalFileSystem::GlobFilesInternal(const vector<string> &splits, idx_t i, c
                                         vector<OpenFileInfo> &result, FileOpener *opener, idx_t max_files,
                                         optional_ptr<HivePartitioning> hive_partitioning) {
 	bool is_last_chunk = i + 1 == splits.size();
-
+	bool is_deepest_directory = i + 2 >= splits.size();
 	ListFiles(path, [&](OpenFileInfo &info) {
 		if (result.size() >= max_files) {
 			return;
@@ -1363,6 +1364,9 @@ void LocalFileSystem::GlobFilesInternal(const vector<string> &splits, idx_t i, c
 				info.path = JoinPath(path, info.path);
 			}
 			if (is_directory) {
+				if (hive_partitioning && hive_partitioning->ApplyFiltersToFile(info, is_deepest_directory)) {
+					return;
+				}
 				if (!is_last_chunk) {
 					ProcessSplit(splits, i + 1, info.path, result, opener, max_files, hive_partitioning);
 				}
