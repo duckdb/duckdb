@@ -8,10 +8,11 @@ statement ok
 CALL dbgen(sf=1)
 
 query I
-select sum(l_orderkey::varint) from lineitem
+select sum(l_orderkey::varint) as l_orderkey from lineitem
 ----
 18005322964949
 
 query I
 select sum((select sum(l_orderkey::varint) from lineitem)) from lineitem;
 ----
+108053814257096413035

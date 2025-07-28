@@ -205,10 +205,15 @@ void varint_t::AddInPlace(ArenaAllocator &allocator, const varint_t &rhs) {
 	} else if (same_sign) {
 		// If they both have the same sign and the most significant bit of the data is set, we need to resize.
 		bool is_msb;
-		if ((target_ptr[0] & 0x80) == 0) {
-			is_msb = (target_ptr[3] & 0x80) == 0 || (source_ptr[3] & 0x80) == 0;
+		bool is_negative = (target_ptr[0] & 0x80) == 0;
+		if (is_negative) {
+			// if both are negative numbers we care if msb is 0 on target. If both numbers have the same size, we care
+			// also about the source msb.
+			is_msb = (target_ptr[3] & 0x80) == 0 || ((source_ptr[3] & 0x80) == 0 && target_size == source_size);
 		} else {
-			is_msb = (target_ptr[3] & 0x80) != 0 || (source_ptr[3] & 0x80) != 0;
+			// If both are positive numbers we care if msb is 1 on target. If both numbers have the same size, we care
+			// also about the source msb.
+			is_msb = (target_ptr[3] & 0x80) != 0 || ((source_ptr[3] & 0x80) != 0) && target_size == source_size;
 		}
 		if (is_msb) {
 			// We must reallocate
