@@ -3334,12 +3334,12 @@ const StringUtil::EnumStringLiteral *GetPhysicalTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<PhysicalType>(PhysicalType value) {
-	return StringUtil::EnumToString(GetPhysicalTypeValues(), 22, "PhysicalType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetPhysicalTypeValues(), 21, "PhysicalType", static_cast<uint32_t>(value));
 }
 
 template<>
 PhysicalType EnumUtil::FromString<PhysicalType>(const char *value) {
-	return static_cast<PhysicalType>(StringUtil::StringToEnum(GetPhysicalTypeValues(), 22, "PhysicalType", value));
+	return static_cast<PhysicalType>(StringUtil::StringToEnum(GetPhysicalTypeValues(), 21, "PhysicalType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetPragmaTypeValues() {

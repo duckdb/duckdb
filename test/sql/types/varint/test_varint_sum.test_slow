@@ -2,7 +2,6 @@
 # description: Test TPC-H Varint Sum
 # group: [varint]
 
-
 require tpch
 
 statement ok

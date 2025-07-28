@@ -237,10 +237,6 @@ struct SkewnessFun {
 	static AggregateFunction GetFunction();
 };
 
-struct VarintSumFun {
-	static AggregateFunction GetFunction();
-};
-
 struct StringAggFun {
 	static constexpr const char *Name = "string_agg";
 	static constexpr const char *Parameters = "str,arg";

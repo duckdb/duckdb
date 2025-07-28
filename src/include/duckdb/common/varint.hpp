@@ -12,9 +12,6 @@
 #include "duckdb/common/string.hpp"
 #include <stdint.h>
 
-#include "hugeint.hpp"
-#include "types/varint.hpp"
-
 namespace duckdb {
 
 struct varint_t {

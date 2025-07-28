@@ -1,6 +1,6 @@
 # name: benchmark/types/varint/varint_sum.benchmark
 # description: sum of very big varints
-# group: [cast]
+# group: [varint]
 
 name Sum of 10000 Varints with 100k digits
 group varint

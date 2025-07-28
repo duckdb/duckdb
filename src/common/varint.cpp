@@ -213,7 +213,7 @@ void varint_t::AddInPlace(ArenaAllocator &allocator, const varint_t &rhs) {
 		} else {
 			// If both are positive numbers we care if msb is 1 on target. If both numbers have the same size, we care
 			// also about the source msb.
-			is_msb = (target_ptr[3] & 0x80) != 0 || ((source_ptr[3] & 0x80) != 0) && target_size == source_size;
+			is_msb = (target_ptr[3] & 0x80) != 0 || ((source_ptr[3] & 0x80) != 0 && target_size == source_size);
 		}
 		if (is_msb) {
 			// We must reallocate
