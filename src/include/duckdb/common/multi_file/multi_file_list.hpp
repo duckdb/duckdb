@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/multi_file/multi_file_options.hpp"
+#include "duckdb/common/multi_file/multi_file_data.hpp"
 #include "duckdb/common/extra_operator_info.hpp"
 #include "duckdb/common/open_file_info.hpp"
 
@@ -96,7 +97,8 @@ public:
 public:
 	virtual unique_ptr<MultiFileList> ComplexFilterPushdown(ClientContext &context, const MultiFileOptions &options,
 	                                                        MultiFilePushdownInfo &info,
-	                                                        vector<unique_ptr<Expression>> &filters);
+	                                                        vector<unique_ptr<Expression>> &filters,
+	                                                        vector<HivePartitioningIndex> &hive_partitioning_indexes);
 	virtual unique_ptr<MultiFileList> DynamicFilterPushdown(ClientContext &context, const MultiFileOptions &options,
 	                                                        const vector<string> &names,
 	                                                        const vector<LogicalType> &types,
@@ -145,7 +147,8 @@ public:
 	//! Copy `paths` to `filtered_files` and apply the filters
 	unique_ptr<MultiFileList> ComplexFilterPushdown(ClientContext &context, const MultiFileOptions &options,
 	                                                MultiFilePushdownInfo &info,
-	                                                vector<unique_ptr<Expression>> &filters) override;
+	                                                vector<unique_ptr<Expression>> &filters,
+	                                                vector<HivePartitioningIndex> &hive_partitioning_indexes) override;
 	unique_ptr<MultiFileList> DynamicFilterPushdown(ClientContext &context, const MultiFileOptions &options,
 	                                                const vector<string> &names, const vector<LogicalType> &types,
 	                                                const vector<column_t> &column_ids,
@@ -168,7 +171,8 @@ public:
 	//! Calls ExpandAll, then prunes the expanded_files using the hive/filename filters
 	unique_ptr<MultiFileList> ComplexFilterPushdown(ClientContext &context, const MultiFileOptions &options,
 	                                                MultiFilePushdownInfo &info,
-	                                                vector<unique_ptr<Expression>> &filters) override;
+	                                                vector<unique_ptr<Expression>> &filters,
+	                                                vector<HivePartitioningIndex> &hive_partitioning_indexes) override;
 	unique_ptr<MultiFileList> DynamicFilterPushdown(ClientContext &context, const MultiFileOptions &options,
 	                                                const vector<string> &names, const vector<LogicalType> &types,
 	                                                const vector<column_t> &column_ids,

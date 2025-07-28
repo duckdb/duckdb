@@ -40,8 +40,8 @@ struct HiveFilterParams {
 	const MultiFileOptions &options;
 	MultiFilePushdownInfo &info;
 
-	HiveFilterParams(ClientContext &context, vector<unique_ptr<Expression>> &filters, const MultiFileOptions &options,
-	                 MultiFilePushdownInfo &info)
+	HiveFilterParams(ClientContext &context, vector<unique_ptr<Expression>> &filters,
+	                 const MultiFileOptions &options, MultiFilePushdownInfo &info)
 	    : context(context), filters(filters), options(options), info(info) {
 	}
 };

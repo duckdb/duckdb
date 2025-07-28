@@ -717,8 +717,10 @@ public:
 		auto &data = bind_data_p->Cast<MultiFileBindData>();
 
 		MultiFilePushdownInfo info(get);
-		auto new_list =
-		    data.multi_file_reader->ComplexFilterPushdown(context, *data.file_list, data.file_options, info, filters);
+		// TODO: If Hive partitioning indexes get cleared, remove the columns in it from data.columns and other data.*
+		// related fields
+		data.columns auto new_list = data.multi_file_reader->ComplexFilterPushdown(
+		    context, *data.file_list, data.file_options, info, filters, data.reader_bind.hive_partitioning_indexes);
 
 		if (new_list) {
 			data.file_list = std::move(new_list);

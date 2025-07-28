@@ -208,8 +208,9 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 unique_ptr<MultiFileList> MultiFileReader::ComplexFilterPushdown(ClientContext &context, MultiFileList &files,
                                                                  const MultiFileOptions &options,
                                                                  MultiFilePushdownInfo &info,
-                                                                 vector<unique_ptr<Expression>> &filters) {
-	return files.ComplexFilterPushdown(context, options, info, filters);
+                                                                 vector<unique_ptr<Expression>> &filters,
+                                                                 vector<HivePartitioningIndex> &hive_partitioning_indexes) {
+	return files.ComplexFilterPushdown(context, options, info, filters, hive_partitioning_indexes);
 }
 
 unique_ptr<MultiFileList> MultiFileReader::DynamicFilterPushdown(
