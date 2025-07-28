@@ -75,8 +75,6 @@ public:
 		return *tree_allocators.back();
 	}
 
-	//! Patch up the previous index block boundaries
-	void PatchPrevIdcs();
 	bool TryPrepareNextStage(WindowDistinctAggregatorLocalState &lstate);
 
 	//! The tree allocators.
@@ -106,8 +104,6 @@ public:
 	//! The resulting sorted data
 	unique_ptr<ColumnDataCollection> sorted;
 
-	//! The block boundary seconds
-	mutable ZippedElements seconds;
 	//! The MST with the distinct back pointers
 	mutable MergeSortTree<ZippedTuple> zipped_tree;
 	//! The merge sort tree for the aggregate.
@@ -366,7 +362,6 @@ bool WindowDistinctAggregatorGlobalState::TryPrepareNextStage(WindowDistinctAggr
 		}
 		//	Move on to building the tree in parallel
 		total_tasks = local_sinks.size();
-		seconds.resize(total_tasks);
 		tasks_completed = 0;
 		tasks_assigned = 0;
 		lstate.stage = stage = WindowDistinctSortStage::SORTED;
@@ -383,8 +378,6 @@ bool WindowDistinctAggregatorGlobalState::TryPrepareNextStage(WindowDistinctAggr
 			// Sleep while other tasks finish
 			return false;
 		}
-		// Last task patches the boundaries
-		PatchPrevIdcs();
 		break;
 	default:
 		break;
@@ -458,7 +451,6 @@ void WindowDistinctAggregatorLocalState::Sorted() {
 		auto input_idx = FlatVector::GetData<idx_t>(scanned.data.back());
 		prev_i = input_idx[0];
 		prev_idcs[prev_i] = ZippedTuple(0, prev_i);
-		std::get<0>(gdstate.seconds[block_idx]) = prev_i;
 	} else {
 		// Move to the to end of the previous block
 		// so we can record the comparison result for the first row
@@ -469,7 +461,6 @@ void WindowDistinctAggregatorLocalState::Sorted() {
 		auto input_idx = FlatVector::GetData<idx_t>(scanned.data.back());
 		auto scan_idx = scanned.size() - 1;
 		prev_i = input_idx[scan_idx];
-		std::get<0>(gdstate.seconds[block_idx]) = prev_i;
 		boundary_compare = true;
 	}
 
@@ -548,26 +539,7 @@ void WindowDistinctAggregatorLocalState::Sorted() {
 		boundary_compare = !boundary_compare;
 		prev_i = input_idx[input_format.sel->get_index(prev_count - 1)];
 	}
-
-	// Save the last value of i for patching up the block boundaries
-	std::get<1>(gdstate.seconds[block_idx]) = prev_i;
-}
-
-void WindowDistinctAggregatorGlobalState::PatchPrevIdcs() {
 	//	13:	return prevIdcs
-
-	// Patch up the indices at block boundaries
-	// (We don't need to patch block 0.)
-	auto &prev_idcs = zipped_tree.LowestLevel();
-	for (idx_t block_idx = 1; block_idx < seconds.size(); ++block_idx) {
-		// We only need to patch if the first index in the block
-		// was a back link to the previous block (10:)
-		auto i = std::get<0>(seconds.at(block_idx));
-		if (std::get<0>(prev_idcs[i])) {
-			auto second = std::get<1>(seconds.at(block_idx - 1));
-			prev_idcs[i] = ZippedTuple(second + 1, i);
-		}
-	}
 }
 
 bool WindowDistinctSortTree::TryNextRun(idx_t &level_idx, idx_t &run_idx) {
