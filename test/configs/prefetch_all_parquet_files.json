@@ -7,6 +7,9 @@
   ],
   "skip_compiled": "true",
   "skip_tests": [
-    "test/sql/copy/csv/zstd_crash.test"
+    {
+      "reason": "",
+      "path": "test/sql/copy/csv/zstd_crash.test"
+    }
   ]
 }

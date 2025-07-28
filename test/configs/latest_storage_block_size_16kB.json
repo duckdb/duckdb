@@ -6,33 +6,81 @@
   "skip_compiled": "true",
   "block_size": "16384",
   "skip_tests": [
-    "test/fuzzer/sqlsmith/current_schemas_null.test",
-    "test/sql/attach/attach_database_size.test",
-    "test/sql/attach/attach_default_table.test",
-    "test/sql/attach/attach_did_you_mean.test",
-    "test/sql/attach/attach_duckdb_type.test",
-    "test/sql/attach/attach_filepath_roundtrip.test",
-    "test/sql/attach/attach_show_all_tables.test",
-    "test/sql/attach/attach_table_info.test",
-    "test/sql/attach/attach_views.test",
-    "test/sql/attach/show_databases.test",
-    "test/sql/catalog/function/attached_macro.test",
-    "test/sql/catalog/test_set_search_path.test",
-    "test/sql/catalog/test_temporary.test",
-    "test/sql/copy_database/copy_table_with_sequence.test",
-    "test/sql/json/test_json_serialize_sql.test",
-    "test/sql/pg_catalog/system_functions.test",
-    "test/sql/pragma/test_show_tables_temp_views.test",
-    "test/sql/settings/drop_set_schema.test",
-    "test/sql/show_select/test_describe_all.test",
-    "test/sql/storage/buffer_manager_temp_dir.test",
-    "test/sql/table_function/duckdb_columns.test",
-    "test/sql/table_function/duckdb_constraints_fk.test",
-    "test/sql/table_function/duckdb_databases.test",
-    "test/sql/table_function/duckdb_sequences.test",
-    "test/sql/table_function/duckdb_tables.test",
-    "test/sql/table_function/duckdb_views.test",
-    "test/sql/table_function/information_schema.test",
-    "test/sql/tpch/dbgen_error.test"
+    {
+      "reason": "",
+      "path": "test/fuzzer/sqlsmith/current_schemas_null.test"
+    },
+    {
+      "reason": "",
+      "path": "test/sql/attach/attach_default_table.test"
+    },
+    {
+      "reason": "",
+      "path": "test/sql/attach/attach_did_you_mean.test"
+    },
+    {
+      "reason": "",
+      "path": "test/sql/attach/attach_show_all_tables.test"
+    },
+    {
+      "reason": "",
+      "path": "test/sql/attach/attach_table_info.test"
+    },
+    {
+      "reason": "",
+      "path": "test/sql/attach/attach_views.test"
+    },
+    {
+      "reason": "",
+      "path": "test/sql/attach/show_databases.test"
+    },
+    {
+      "reason": "",
+      "path": "test/sql/catalog/function/attached_macro.test"
+    },
+    {
+      "reason": "",
+      "path": "test/sql/catalog/test_set_search_path.test"
+    },
+    {
+      "reason": "",
+      "path": "test/sql/catalog/test_temporary.test"
+    },
+    {
+      "reason": "",
+      "path": "test/sql/copy_database/copy_table_with_sequence.test"
+    },
+    {
+      "reason": "",
+      "path": "test/sql/json/test_json_serialize_sql.test"
+    },
+    {
+      "reason": "",
+      "path": "test/sql/pg_catalog/system_functions.test"
+    },
+    {
+      "reason": "",
+      "path": "test/sql/pragma/test_show_tables_temp_views.test"
+    },
+    {
+      "reason": "",
+      "path": "test/sql/settings/drop_set_schema.test"
+    },
+    {
+      "reason": "",
+      "path": "test/sql/show_select/test_describe_all.test"
+    },
+    {
+      "reason": "",
+      "path": "test/sql/storage/buffer_manager_temp_dir.test"
+    },
+    {
+      "reason": "",
+      "path": "test/sql/table_function/duckdb_databases.test"
+    },
+    {
+      "reason": "",
+      "path": "test/sql/tpch/dbgen_error.test"
+    }
   ]
 }

@@ -6,6 +6,9 @@
     "LocalFileSystem"
   ],
   "skip_tests": [
-    "test/sql/attach/attach_filepath_roundtrip.test"
+    {
+      "reason": "",
+      "path": "test/sql/attach/attach_filepath_roundtrip.test"
+    }
   ]
 }
