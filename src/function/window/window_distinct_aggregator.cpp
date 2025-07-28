@@ -300,23 +300,24 @@ void WindowDistinctAggregatorLocalState::Finalize(ExecutionContext &context, Win
 void WindowDistinctAggregatorLocalState::ExecuteTask(ExecutionContext &context,
                                                      WindowDistinctAggregatorGlobalState &gdstate) {
 	switch (stage) {
-	case WindowDistinctSortStage::COMBINE:
-		if (local_sink) {
-			InterruptState interrupt_state;
-			OperatorSinkCombineInput combine {*gdstate.global_sink, *local_sink, interrupt_state};
-			gdstate.sort->Combine(context, combine);
-		}
+	case WindowDistinctSortStage::COMBINE: {
+		auto &local_sink = *gdstate.local_sinks[block_idx];
+		InterruptState interrupt_state;
+		OperatorSinkCombineInput combine {*gdstate.global_sink, local_sink, interrupt_state};
+		gdstate.sort->Combine(context, combine);
 		break;
+	}
 	case WindowDistinctSortStage::FINALIZE: {
+		//	5: Sort sorted lexicographically increasing
 		auto &sort = *gdstate.sort;
 		InterruptState interrupt;
 		OperatorSinkFinalizeInput finalize {*gdstate.global_sink, interrupt};
-		gdstate.sort->Finalize(context.client, finalize);
+		sort.Finalize(context.client, finalize);
 		auto sort_global = sort.GetGlobalSourceState(context.client, *gdstate.global_sink);
 		auto sort_local = sort.GetLocalSourceState(context, *sort_global);
 		OperatorSourceInput source {*sort_global, *sort_local, interrupt};
 		sort.MaterializeColumnData(context, source);
-		gdstate.sorted = gdstate.sort->GetColumnData(source);
+		gdstate.sorted = sort.GetColumnData(source);
 		break;
 	}
 	case WindowDistinctSortStage::SORTED:
@@ -368,7 +369,6 @@ bool WindowDistinctAggregatorGlobalState::TryPrepareNextStage(WindowDistinctAggr
 		lstate.block_idx = tasks_assigned++;
 		return true;
 	case WindowDistinctSortStage::SORTED:
-		//	5: Sort sorted lexicographically increasing
 		if (tasks_assigned < total_tasks) {
 			lstate.stage = WindowDistinctSortStage::SORTED;
 			lstate.block_idx = tasks_assigned++;
