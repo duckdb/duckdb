@@ -665,8 +665,7 @@ void MultiFileReader::PruneReaders(MultiFileBindData &data, MultiFileList &file_
 	}
 }
 
-HivePartitioningIndex::HivePartitioningIndex(string value_p, idx_t index)
-    : value(std::move(value_p)), index(index), valid(true) {
+HivePartitioningIndex::HivePartitioningIndex(string value_p, idx_t index) : value(std::move(value_p)), index(index) {
 }
 
 void MultiFileOptions::AddBatchInfo(BindInfo &bind_info) const {
