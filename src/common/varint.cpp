@@ -43,10 +43,12 @@ void AddBinaryBuffersInPlace(char *target_buffer, idx_t target_size, const char 
 			idx_t source_idx = Varint::VARINT_HEADER_SIZE;
 			if (target_negative) {
 				while (target_idx < target_size) {
-					if (~target_buffer[target_idx] > source_buffer[source_idx]) {
+					if (static_cast<uint8_t>(~target_buffer[target_idx]) >
+					    static_cast<uint8_t>(source_buffer[source_idx])) {
 						is_target_absolute_bigger = true;
 						break;
-					} else if (~target_buffer[target_idx] < source_buffer[source_idx]) {
+					} else if (static_cast<uint8_t>(~target_buffer[target_idx]) <
+					           static_cast<uint8_t>(source_buffer[source_idx])) {
 						is_target_absolute_bigger = false;
 						break;
 					}
@@ -55,10 +57,12 @@ void AddBinaryBuffersInPlace(char *target_buffer, idx_t target_size, const char 
 				}
 			} else {
 				while (target_idx < target_size) {
-					if (target_buffer[target_idx] > ~source_buffer[source_idx]) {
+					if (static_cast<uint8_t>(target_buffer[target_idx]) >
+					    static_cast<uint8_t>(~source_buffer[source_idx])) {
 						is_target_absolute_bigger = true;
 						break;
-					} else if (target_buffer[target_idx] < ~source_buffer[source_idx]) {
+					} else if (static_cast<uint8_t>(target_buffer[target_idx]) <
+					           static_cast<uint8_t>(~source_buffer[source_idx])) {
 						is_target_absolute_bigger = false;
 						break;
 					}
@@ -82,6 +86,9 @@ void AddBinaryBuffersInPlace(char *target_buffer, idx_t target_size, const char 
 				return;
 			}
 		}
+	}
+	if (result_positive != !target_negative) {
+		idx_t i = 0;
 	}
 
 	// Both numbers have the same sign, we can simply add them.
@@ -128,6 +135,10 @@ void AddBinaryBuffersInPlace(char *target_buffer, idx_t target_size, const char 
 	}
 
 	if (result_positive != !target_negative) {
+		// If we are flipping the sign we must be sure that we are flipping all extra bits from our target
+		for (idx_t i = Varint::VARINT_HEADER_SIZE; i < target_size - (source_size - Varint::VARINT_HEADER_SIZE); ++i) {
+			target_buffer[i] = result_positive ? 0x00 : static_cast<char>(0xFF);
+		}
 		// We should set the header again
 		Varint::SetHeader(target_buffer, target_size - Varint::VARINT_HEADER_SIZE, !result_positive);
 	}

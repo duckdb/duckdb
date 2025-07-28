@@ -5,6 +5,11 @@
 statement ok
 CREATE TABLE numbers ( x varint );
 
+query I
+select sum(x) from (values ('1'::varint), ('-2'::varint)) t(x), range(100000) t(y);
+----
+-100000
+
 statement ok
 INSERT INTO numbers (x) VALUES (9223372036854775808::VARINT), (1::VARINT);
 
