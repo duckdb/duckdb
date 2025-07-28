@@ -130,7 +130,7 @@ index 68a181d..b7f1368 100644
  	                         idx_t estimated_cardinality);
  
 diff --git a/src/spatial/index/rtree/rtree_index_plan_scan.cpp b/src/spatial/index/rtree/rtree_index_plan_scan.cpp
-index e35132c..b14323c 100644
+index e35132c..768c966 100644
 --- a/src/spatial/index/rtree/rtree_index_plan_scan.cpp
 +++ b/src/spatial/index/rtree/rtree_index_plan_scan.cpp
 @@ -177,7 +177,13 @@ public:
@@ -138,9 +138,9 @@ index e35132c..b14323c 100644
  		                                            "ST_CoveredBy", "ST_ContainsProperly"};
  
 -		table_info.GetIndexes().BindAndScan<RTreeIndex>(context, table_info, [&](RTreeIndex &index_entry) {
-+		table_info.InitializeIndexes(context, RTreeIndex::TYPE_NAME);
++		table_info.BindIndexes(context, RTreeIndex::TYPE_NAME);
 +		table_info.GetIndexes().Scan([&](Index &index) {
-+			if (!index->IsBound() || RTreeIndex::TYPE_NAME != index->GetIndexType()) {
++			if (!index.IsBound() || RTreeIndex::TYPE_NAME != index.GetIndexType()) {
 +				return false;
 +			}
 +			auto &index_entry = index.Cast<RTreeIndex>();
@@ -149,7 +149,7 @@ index e35132c..b14323c 100644
  			bool rewrite_possible = true;
  			auto index_expr = index_entry.unbound_expressions[0]->Copy();
 diff --git a/src/spatial/index/rtree/rtree_index_pragmas.cpp b/src/spatial/index/rtree/rtree_index_pragmas.cpp
-index 4aa428e..760a1f9 100644
+index 4aa428e..6005491 100644
 --- a/src/spatial/index/rtree/rtree_index_pragmas.cpp
 +++ b/src/spatial/index/rtree/rtree_index_pragmas.cpp
 @@ -9,7 +9,7 @@
@@ -168,9 +168,9 @@ index 4aa428e..760a1f9 100644
 -		table_info.GetIndexes().BindAndScan<RTreeIndex>(context, table_info, [&](RTreeIndex &index) {
 -			if (index.name == index_entry.name) {
 -				rtree_index = &index;
-+		table_info.InitializeIndexes(context, RTreeIndex::TYPE_NAME);
++		table_info.BindIndexes(context, RTreeIndex::TYPE_NAME);
 +		table_info.GetIndexes().Scan([&](Index &index) {
-+			if (!index->IsBound() || RTreeIndex::TYPE_NAME != index->GetIndexType()) {
++			if (!index.IsBound() || RTreeIndex::TYPE_NAME != index.GetIndexType()) {
 +				return false;
 +			}
 +			auto &rtree = index.Cast<RTreeIndex>();
@@ -184,9 +184,9 @@ index 4aa428e..760a1f9 100644
  
  	auto &table_info = *storage.GetDataTableInfo();
 -	table_info.GetIndexes().BindAndScan<RTreeIndex>(context, table_info, [&](RTreeIndex &index) {
-+	table_info.InitializeIndexes(context, RTreeIndex::TYPE_NAME);
++	table_info.BindIndexes(context, RTreeIndex::TYPE_NAME);
 +	table_info.GetIndexes().Scan([&](Index &index) {
-+		if (!index->IsBound() || RTreeIndex::TYPE_NAME != index->GetIndexType()) {
++		if (!index.IsBound() || RTreeIndex::TYPE_NAME != index.GetIndexType()) {
 +			return false;
 +		}
 +		auto &rtree = index.Cast<RTreeIndex>();
@@ -219,7 +219,7 @@ index 4aa428e..760a1f9 100644
  } // namespace duckdb
 \ No newline at end of file
 diff --git a/src/spatial/index/rtree/rtree_index_scan.cpp b/src/spatial/index/rtree/rtree_index_scan.cpp
-index adf0135..620eef3 100644
+index adf0135..74dca64 100644
 --- a/src/spatial/index/rtree/rtree_index_scan.cpp
 +++ b/src/spatial/index/rtree/rtree_index_scan.cpp
 @@ -12,7 +12,7 @@
@@ -237,9 +237,9 @@ index adf0135..620eef3 100644
  	unique_ptr<RTreeIndexScanBindData> result = nullptr;
 -
 -	table_info.GetIndexes().BindAndScan<RTreeIndex>(context, table_info, [&](RTreeIndex &index_entry) {
-+	table_info.InitializeIndexes(context, RTreeIndex::TYPE_NAME);
++	table_info.BindIndexes(context, RTreeIndex::TYPE_NAME);
 +	table_info.GetIndexes().Scan([&](Index &index) {
-+		if (!index->IsBound() || RTreeIndex::TYPE_NAME != index->GetIndexType()) {
++		if (!index.IsBound() || RTreeIndex::TYPE_NAME != index.GetIndexType()) {
 +			return false;
 +		}
 +		auto &index_entry = index.Cast<RTreeIndex>();

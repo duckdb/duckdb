@@ -30,7 +30,7 @@ CHECKPOINT;
 restart
 
 query I
-SELECT * FROM tbl;
+SELECT * FROM tbl ORDER BY ALL;
 ----
 helloo
 hellooo
