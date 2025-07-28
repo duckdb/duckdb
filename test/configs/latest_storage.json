@@ -1,5 +1,5 @@
 {
-  "description": "Equivalent to CI --force-storage: persistent DuckDB database AND verify_fetch_row",
+  "description": "Run with the latest storage on persistent databases.",
   "on_init": "ATTACH '__TEST_DIR__/{BASE_TEST_NAME}__test__config__latest__storage.db' AS __test__config__latest__storage (STORAGE_VERSION 'latest'); SET storage_compatibility_version='latest';",
   "on_new_connection": "USE __test__config__latest__storage;",
   "on_load": "skip",

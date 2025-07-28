@@ -1,5 +1,5 @@
 {
-  "description": "Using a DuckDB encrypted database as the default database",
+  "description": "Run on persistent encrypted databases as storage.",
   "on_init": "ATTACH '__TEST_DIR__/{BASE_TEST_NAME}__test__config__crypto.db' AS __test__config__crypto (ENCRYPTION_KEY 'key={BASE_TEST_NAME}');",
   "on_new_connection": "USE __test__config__crypto;",
   "on_load": "skip",

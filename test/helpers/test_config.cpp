@@ -93,7 +93,7 @@ bool TestConfiguration::ParseArgument(const string &arg, idx_t argc, char **argv
 		return true;
 	}
 	if (arg == "--force-storage") {
-		ParseOption("initial_db", Value("{TEST_DIR}/{BASE_TEST_NAME}/memory.db"));
+		ParseOption("initial_db", Value("{TEST_DIR}/{BASE_TEST_NAME}__test__config__force_storage.db"));
 		return true;
 	}
 	if (arg == "--force-reload") {
