@@ -25,8 +25,10 @@ void AddBinaryBuffersInPlace(char *target_buffer, idx_t target_size, const char 
 
 	bool target_negative = (target_buffer[0] & 0x80) == 0;
 	bool source_negative = (source_buffer[0] & 0x80) == 0;
+
 	bool result_positive = !target_negative;
 	bool is_target_absolute_bigger = false;
+
 	if (target_negative != source_negative) {
 		// check sizes
 		if (target_size - target_start_pos > source_size - Varint::VARINT_HEADER_SIZE) {
@@ -82,36 +84,49 @@ void AddBinaryBuffersInPlace(char *target_buffer, idx_t target_size, const char 
 		}
 	}
 
+	// Both numbers have the same sign, we can simply add them.
 	idx_t i_target = target_size - 1; // last byte index in target
 	idx_t i_source = source_size - 1; // last byte index in source
 
 	// Carry for addition
 	uint16_t carry = 0;
+	uint16_t borrow = 0;
 	// Add bytes from right to left
 	while (i_target >= header_size) {
-		uint8_t target_byte = static_cast<uint8_t>(target_buffer[i_target]);
+		// If the numbers are negative we bit flip them
+		uint8_t target_byte = target_negative ? static_cast<uint8_t>(~target_buffer[i_target])
+		                                      : static_cast<uint8_t>(target_buffer[i_target]);
 		uint8_t source_byte;
 		if (i_source >= header_size) {
-			source_byte = static_cast<uint8_t>(source_buffer[i_source]);
+			source_byte = source_negative ? static_cast<uint8_t>(~source_buffer[i_source])
+			                              : static_cast<uint8_t>(source_buffer[i_source]);
 			i_source--;
 		} else {
 			// Sign-extend source if source shorter than target
-			source_byte = source_negative ? 0xFF : 0x00;
+			source_byte = 0x00;
 		}
 
 		// Add bytes and carry
-		uint16_t sum = static_cast<uint16_t>(target_byte) + static_cast<uint16_t>(source_byte) + carry;
-		uint8_t result_byte = static_cast<uint8_t>(sum & 0xFF);
-		if ((target_negative || source_negative) && i_target == target_size - 1) {
-			if (!(target_negative && !source_negative && is_target_absolute_bigger)) {
-				result_byte += 1;
+		uint16_t sum;
+		if (target_negative == source_negative) {
+			sum = static_cast<uint16_t>(target_byte) + static_cast<uint16_t>(source_byte) + carry;
+			carry = (sum >> 8) & 0xFF;
+		} else {
+			if (is_target_absolute_bigger) {
+				sum = static_cast<uint16_t>(target_byte) - static_cast<uint16_t>(source_byte) - borrow;
+				borrow = sum > static_cast<uint16_t>(target_byte) ? 1 : 0;
+			} else {
+				sum = static_cast<uint16_t>(source_byte) - static_cast<uint16_t>(target_byte) - borrow;
+				borrow = sum > static_cast<uint16_t>(source_byte) ? 1 : 0;
 			}
 		}
-		carry = (sum >> 8) & 0xFF;
+		uint8_t result_byte = static_cast<uint8_t>(sum & 0xFF);
 
-		target_buffer[i_target] = static_cast<char>(result_byte);
+		// If the result is not positive, we must flip the bits again
+		target_buffer[i_target] = !result_positive ? static_cast<char>(~result_byte) : static_cast<char>(result_byte);
 		i_target--;
 	}
+
 	if (result_positive != !target_negative) {
 		// We should set the header again
 		Varint::SetHeader(target_buffer, target_size - Varint::VARINT_HEADER_SIZE, !result_positive);
