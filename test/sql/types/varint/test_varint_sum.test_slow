@@ -1,6 +1,7 @@
-# name: test/sql/types/varint/test_varint_tpch_sum.test
+# name: test/sql/types/varint/test_varint_sum.test_slow
 # description: Test TPC-H Varint Sum
 # group: [varint]
+
 
 require tpch
 
