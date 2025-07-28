@@ -717,10 +717,37 @@ public:
 		auto &data = bind_data_p->Cast<MultiFileBindData>();
 
 		MultiFilePushdownInfo info(get);
-		// TODO: If Hive partitioning indexes get cleared, remove the columns in it from data.columns and other data.*
-		// related fields
-		data.columns auto new_list = data.multi_file_reader->ComplexFilterPushdown(
-		    context, *data.file_list, data.file_options, info, filters, data.reader_bind.hive_partitioning_indexes);
+		// TODO: Might remove, left behind for review only
+		// HACK: If Hive partitioning indexes get cleared, remove the columns in it from data.columns and other data.*
+		// related fields. This might not be feasible given the number of column-related fields in binding, so might
+		// remove.
+		vector<HivePartitioningIndex> hive_partitioning_indexes = data.reader_bind.hive_partitioning_indexes;
+		// vector<HivePartitioningIndex> old_hive_partitioning_indexes = data.reader_bind.hive_partitioning_indexes;
+		auto new_list = data.multi_file_reader->ComplexFilterPushdown(context, *data.file_list, data.file_options, info,
+		                                                              filters, hive_partitioning_indexes);
+
+		// if (hive_partitioning_indexes.size() != old_hive_partitioning_indexes.size()) {
+		// 	auto new_columns = vector<MultiFileColumnDefinition>();
+		// 	auto new_column_ids = vector<column_t>();
+		// 	for (idx_t i = 0; i < data.columns.size(); i++) {
+		// 		// Find the HivePartitioningIndex that has the same column_index as the current column
+		// 		auto hive_partitioning_index =
+		// 		    std::find_if(old_hive_partitioning_indexes.begin(), old_hive_partitioning_indexes.end(),
+		// 		                 [i](const HivePartitioningIndex &hive_partitioning_index) {
+		// 			                 return hive_partitioning_index.index == i;
+		// 		                 });
+		// 		if (hive_partitioning_index == old_hive_partitioning_indexes.end()) {
+		// 			// Only add non-Hive columns
+		// 			new_columns.push_back(data.columns[i]);
+		// 			if (i < data.column_ids.size()) {
+		// 				new_column_ids.push_back(data.column_ids[i]);
+		// 			}
+		// 		}
+		// 	}
+		// 	data.columns = std::move(new_columns);
+		// 	data.column_ids = std::move(new_column_ids);
+		// }
+		// data.reader_bind.hive_partitioning_indexes = std::move(hive_partitioning_indexes);
 
 		if (new_list) {
 			data.file_list = std::move(new_list);

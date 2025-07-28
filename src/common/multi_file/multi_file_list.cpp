@@ -311,16 +311,17 @@ GlobMultiFileList::ComplexFilterPushdown(ClientContext &context_p, const MultiFi
 
 	auto res = make_uniq<SimpleMultiFileList>(expanded_files);
 
+	// TODO: Left behind for review purposes, will likely remove
 	// Hive type validation on remaining files if lazy listing is enabled
-	if (options.hive_lazy_listing) {
-		MultiFileOptions options_copy = options;
-		options_copy.hive_lazy_listing = false;
-		options_copy.AutoDetectHivePartitioning(*res, context);
-		// If the final list is not entirely hive partitioned, clear the hive partitioning columns
-		if (!options_copy.hive_partitioning) {
-			hive_partitioning_indexes.clear();
-		}
-	}
+	// if (options.hive_lazy_listing) {
+	// 	MultiFileOptions options_copy = options;
+	// 	options_copy.hive_lazy_listing = false;
+	// 	options_copy.AutoDetectHivePartitioning(*res, context);
+	// 	// If the final list is not entirely hive partitioned, clear the hive partitioning columns
+	// 	if (!options_copy.hive_partitioning) {
+	// 		hive_partitioning_indexes.clear();
+	// 	}
+	// }
 
 	return make_uniq<SimpleMultiFileList>(expanded_files);
 

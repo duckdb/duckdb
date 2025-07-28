@@ -205,11 +205,10 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 	return true;
 }
 
-unique_ptr<MultiFileList> MultiFileReader::ComplexFilterPushdown(ClientContext &context, MultiFileList &files,
-                                                                 const MultiFileOptions &options,
-                                                                 MultiFilePushdownInfo &info,
-                                                                 vector<unique_ptr<Expression>> &filters,
-                                                                 vector<HivePartitioningIndex> &hive_partitioning_indexes) {
+unique_ptr<MultiFileList>
+MultiFileReader::ComplexFilterPushdown(ClientContext &context, MultiFileList &files, const MultiFileOptions &options,
+                                       MultiFilePushdownInfo &info, vector<unique_ptr<Expression>> &filters,
+                                       vector<HivePartitioningIndex> &hive_partitioning_indexes) {
 	return files.ComplexFilterPushdown(context, options, info, filters, hive_partitioning_indexes);
 }
 
@@ -666,7 +665,8 @@ void MultiFileReader::PruneReaders(MultiFileBindData &data, MultiFileList &file_
 	}
 }
 
-HivePartitioningIndex::HivePartitioningIndex(string value_p, idx_t index) : value(std::move(value_p)), index(index) {
+HivePartitioningIndex::HivePartitioningIndex(string value_p, idx_t index)
+    : value(std::move(value_p)), index(index), valid(true) {
 }
 
 void MultiFileOptions::AddBatchInfo(BindInfo &bind_info) const {
@@ -791,13 +791,12 @@ void MultiFileOptions::AutoDetectHivePartitioning(MultiFileList &files, ClientCo
 		hive_partitioning = true;
 		auto_detect_hive_partitioning = false;
 	}
-	// TODO: find earliest place to do this check
-	if (union_by_name) {
-		// union_by_name requires reading all files eagerly
-		hive_lazy_listing = false;
-	}
 	if (auto_detect_hive_partitioning) {
 		hive_partitioning = AutoDetectHivePartitioningInternal(files, context);
+	}
+	// TODO: find earliest place to do this check
+	if (union_by_name || !hive_partitioning) {
+		hive_lazy_listing = false;
 	}
 	if (hive_partitioning && hive_types_autocast) {
 		AutoDetectHiveTypesInternal(files, context);
