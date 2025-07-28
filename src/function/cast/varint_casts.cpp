@@ -160,7 +160,6 @@ string_t HugeintCastToVarInt::Operation(hugeint_t int_value, Vector &result) {
 }
 
 // Varchar to Varint
-// TODO: This is a slow quadratic algorithm, we can still optimize it further.
 template <>
 bool TryCastToVarInt::Operation(string_t input_value, string_t &result_value, Vector &result,
                                 CastParameters &parameters) {
@@ -271,6 +270,35 @@ BoundCastInfo DefaultCasts::VarintCastSwitch(BindCastInput &input, const Logical
 	D_ASSERT(source.id() == LogicalTypeId::VARINT);
 	// now switch on the result type
 	switch (target.id()) {
+	case LogicalTypeId::TINYINT:
+		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<string_t, int8_t, VarintToIntCast>);
+	case LogicalTypeId::UTINYINT:
+		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<string_t, uint8_t, VarintToIntCast>);
+
+	case LogicalTypeId::SMALLINT:
+		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<string_t, int16_t, VarintToIntCast>);
+
+	case LogicalTypeId::USMALLINT:
+		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<string_t, uint16_t, VarintToIntCast>);
+
+	case LogicalTypeId::INTEGER:
+		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<string_t, int32_t, VarintToIntCast>);
+
+	case LogicalTypeId::UINTEGER:
+		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<string_t, uint32_t, VarintToIntCast>);
+
+	case LogicalTypeId::BIGINT:
+		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<string_t, int64_t, VarintToIntCast>);
+
+	case LogicalTypeId::UBIGINT:
+		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<string_t, uint64_t, VarintToIntCast>);
+
+	case LogicalTypeId::HUGEINT:
+		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<string_t, hugeint_t, VarintToIntCast>);
+
+	case LogicalTypeId::UHUGEINT:
+		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<string_t, uhugeint_t, VarintToIntCast>);
+
 	case LogicalTypeId::VARCHAR:
 		return BoundCastInfo(&VectorCastHelpers::StringCast<string_t, VarIntCastToVarchar>);
 	case LogicalTypeId::DOUBLE:

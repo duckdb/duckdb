@@ -280,10 +280,10 @@ AggregateFunctionSet SumFun::GetFunctions() {
 	                                  nullptr, nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr,
 	                                  BindDecimalSum));
 	sum.AddFunction(GetSumAggregate(PhysicalType::BOOL));
-	sum.AddFunction(GetSumAggregate(PhysicalType::INT16));
-	sum.AddFunction(GetSumAggregate(PhysicalType::INT32));
-	sum.AddFunction(GetSumAggregate(PhysicalType::INT64));
-	sum.AddFunction(GetSumAggregate(PhysicalType::INT128));
+	// sum.AddFunction(GetSumAggregate(PhysicalType::INT16));
+	// sum.AddFunction(GetSumAggregate(PhysicalType::INT32));
+	// sum.AddFunction(GetSumAggregate(PhysicalType::INT64));
+	// sum.AddFunction(GetSumAggregate(PhysicalType::INT128));
 	sum.AddFunction(AggregateFunction::UnaryAggregate<SumState<double>, double, double, NumericSumOperation>(
 	    LogicalType::DOUBLE, LogicalType::DOUBLE));
 	sum.AddFunction(AggregateFunction::UnaryAggregate<VarintState, varint_t, varint_t, VarintOperation>(
