@@ -73,9 +73,13 @@ endloop
 
 query I
 WITH tbl(w) AS (
-	SELECT total_blocks * 2.1 > SUM (total_blocks) OVER (ROWS BETWEEN 0 PRECEDING AND 1 FOLLOWING) AS w
-	FROM total_blocks_tbl)
-SELECT list_filter(LIST(w), lambda x: NOT x) FROM tbl;
+	SELECT struct_pack(
+		total_blocks := total_blocks,
+		sum := SUM (total_blocks) OVER (ROWS BETWEEN 0 PRECEDING AND 1 FOLLOWING)
+	 ) AS w
+	FROM total_blocks_tbl
+	LIMIT 19)
+SELECT list_filter(LIST(w), lambda x: x.total_blocks * 2.5 < x.sum) FROM tbl;
 ----
 []
 
@@ -84,7 +88,7 @@ SELECT list_filter(LIST(w), lambda x: NOT x) FROM tbl;
 query I
 WITH tbl(l) AS (
 	SELECT LIST(total_blocks) AS l FROM total_blocks_tbl)
-SELECT list_sum(l) < (list_count(l) * l[1] + l[1]) FROM tbl;
+SELECT list_sum(l) < (list_count(l) * l[3] + 2 * l[3]) FROM tbl;
 ----
 true
 
