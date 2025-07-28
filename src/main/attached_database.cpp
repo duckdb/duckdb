@@ -21,10 +21,10 @@ AttachOptions::AttachOptions(const DBConfigOptions &options)
     : access_mode(options.access_mode), db_type(options.database_type) {
 }
 
-AttachOptions::AttachOptions(const unique_ptr<AttachInfo> &info, const AccessMode default_access_mode)
+AttachOptions::AttachOptions(const unordered_map<string, Value> &attach_options, const AccessMode default_access_mode)
     : access_mode(default_access_mode) {
 
-	for (auto &entry : info->options) {
+	for (auto &entry : attach_options) {
 		if (entry.first == "readonly" || entry.first == "read_only") {
 			// Extract the read access mode.
 
@@ -58,8 +58,7 @@ AttachOptions::AttachOptions(const unique_ptr<AttachInfo> &info, const AccessMod
 			default_table = QualifiedName::Parse(StringValue::Get(entry.second.DefaultCastAs(LogicalType::VARCHAR)));
 			continue;
 		}
-
-		options[entry.first] = entry.second;
+		options.emplace(entry.first, entry.second);
 	}
 }
 
@@ -75,7 +74,9 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, AttachedDatabaseType ty
 	// This database does not have storage, or uses temporary_objects for in-memory storage.
 	D_ASSERT(type == AttachedDatabaseType::TEMP_DATABASE || type == AttachedDatabaseType::SYSTEM_DATABASE);
 	if (type == AttachedDatabaseType::TEMP_DATABASE) {
-		storage = make_uniq<SingleFileStorageManager>(*this, string(IN_MEMORY_PATH), false);
+		unordered_map<string, Value> options;
+		AttachOptions attach_options(options, AccessMode::READ_WRITE);
+		storage = make_uniq<SingleFileStorageManager>(*this, string(IN_MEMORY_PATH), attach_options);
 	}
 
 	catalog = make_uniq<DuckCatalog>(*this);
@@ -92,28 +93,9 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, str
 	} else {
 		type = AttachedDatabaseType::READ_WRITE_DATABASE;
 	}
-	for (auto &entry : options.options) {
-		if (StringUtil::CIEquals(entry.first, "block_size")) {
-			continue;
-		}
-		if (StringUtil::CIEquals(entry.first, "encryption_key")) {
-			continue;
-		}
-		if (StringUtil::CIEquals(entry.first, "encryption_cipher")) {
-			continue;
-		}
-		if (StringUtil::CIEquals(entry.first, "row_group_size")) {
-			continue;
-		}
-		if (StringUtil::CIEquals(entry.first, "storage_version")) {
-			continue;
-		}
-		throw BinderException("Unrecognized option for attach \"%s\"", entry.first);
-	}
 	// We create the storage after the catalog to guarantee we allow extensions to instantiate the DuckCatalog.
 	catalog = make_uniq<DuckCatalog>(*this);
-	auto read_only = options.access_mode == AccessMode::READ_ONLY;
-	storage = make_uniq<SingleFileStorageManager>(*this, std::move(file_path_p), read_only);
+	storage = make_uniq<SingleFileStorageManager>(*this, std::move(file_path_p), options);
 	transaction_manager = make_uniq<DuckTransactionManager>(*this);
 	internal = true;
 }
@@ -128,15 +110,14 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Sto
 		type = AttachedDatabaseType::READ_WRITE_DATABASE;
 	}
 
-	StorageExtensionInfo *storage_info = storage_extension->storage_info.get();
-	catalog = storage_extension->attach(storage_info, context, *this, name, info, options.access_mode);
+	optional_ptr<StorageExtensionInfo> storage_info = storage_extension->storage_info.get();
+	catalog = storage_extension->attach(storage_info, context, *this, name, info, options);
 	if (!catalog) {
 		throw InternalException("AttachedDatabase - attach function did not return a catalog");
 	}
 	if (catalog->IsDuckCatalog()) {
 		// The attached database uses the DuckCatalog.
-		auto read_only = options.access_mode == AccessMode::READ_ONLY;
-		storage = make_uniq<SingleFileStorageManager>(*this, info.path, read_only);
+		storage = make_uniq<SingleFileStorageManager>(*this, info.path, options);
 	}
 	transaction_manager = storage_extension->create_transaction_manager(storage_info, *this, *catalog);
 	if (!transaction_manager) {
@@ -177,14 +158,14 @@ string AttachedDatabase::ExtractDatabaseName(const string &dbpath, FileSystem &f
 	return name;
 }
 
-void AttachedDatabase::Initialize(optional_ptr<ClientContext> context, StorageOptions options) {
+void AttachedDatabase::Initialize(optional_ptr<ClientContext> context) {
 	if (IsSystem()) {
 		catalog->Initialize(context, true);
 	} else {
 		catalog->Initialize(context, false);
 	}
 	if (storage) {
-		storage->Initialize(QueryContext(context), options);
+		storage->Initialize(QueryContext(context));
 	}
 }
 

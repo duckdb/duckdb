@@ -248,8 +248,12 @@ void ColumnSegment::ConvertToPersistent(QueryContext context, optional_ptr<Block
 
 void ColumnSegment::MarkAsPersistent(shared_ptr<BlockHandle> block_p, uint32_t offset_p) {
 	D_ASSERT(segment_type == ColumnSegmentType::TRANSIENT);
-	segment_type = ColumnSegmentType::PERSISTENT;
 	block_id = block_p->BlockId();
+	SetBlock(std::move(block_p), offset_p);
+}
+
+void ColumnSegment::SetBlock(shared_ptr<BlockHandle> block_p, uint32_t offset_p) {
+	segment_type = ColumnSegmentType::PERSISTENT;
 	offset = offset_p;
 	block = std::move(block_p);
 }

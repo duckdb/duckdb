@@ -180,6 +180,7 @@ class StatementType:
     DETACH: StatementType
     MULTI: StatementType
     COPY_DATABASE: StatementType
+    MERGE_INTO: StatementType
     def __int__(self) -> int: ...
     def __index__(self) -> int: ...
     @property

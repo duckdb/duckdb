@@ -12,7 +12,7 @@ statement ok
 FROM 'https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv'
 
 query IIII
-SELECT 
+SELECT
 	request.type,
 	request.url,
 	response.status,
