@@ -18,6 +18,7 @@
 namespace duckdb {
 
 class ClientContext;
+class QueryContext;
 class BufferHandle;
 class FileOpenFlags;
 class FileSystem;
