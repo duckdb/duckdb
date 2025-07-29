@@ -106,6 +106,13 @@
         "id": 207,
         "name": "duplicate_eliminated_columns",
         "type": "vector<unique_ptr<ParsedExpression>>"
+      },
+      {
+        "id": 208,
+        "name": "is_implicit",
+        "type": "bool",
+        "default": "true",
+        "version": "v1.4.0"
       }
     ]
   },

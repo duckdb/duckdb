@@ -102,10 +102,10 @@ DuckTransactionManager::CanCheckpoint(DuckTransaction &transaction, unique_ptr<S
 	if (db.IsSystem()) {
 		return CheckpointDecision("system transaction");
 	}
-	auto &storage_manager = db.GetStorageManager();
-	if (storage_manager.InMemory()) {
-		return CheckpointDecision("in memory db");
+	if (transaction.IsReadOnly()) {
+		return CheckpointDecision("transaction is read-only");
 	}
+	auto &storage_manager = db.GetStorageManager();
 	if (!storage_manager.IsLoaded()) {
 		return CheckpointDecision("cannot checkpoint while loading");
 	}
@@ -156,15 +156,17 @@ DuckTransactionManager::CanCheckpoint(DuckTransaction &transaction, unique_ptr<S
 			}
 		}
 	}
+	if (storage_manager.InMemory() && !storage_manager.CompressionIsEnabled()) {
+		if (checkpoint_type == CheckpointType::CONCURRENT_CHECKPOINT) {
+			return CheckpointDecision("Cannot vacuum, and compression is disabled for in-memory table");
+		}
+		return CheckpointDecision(CheckpointType::VACUUM_ONLY);
+	}
 	return CheckpointDecision(checkpoint_type);
 }
 
 void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
 	auto &storage_manager = db.GetStorageManager();
-	if (storage_manager.InMemory()) {
-		return;
-	}
-
 	auto current = Transaction::TryGet(context, db);
 	if (current) {
 		if (force) {
@@ -263,6 +265,13 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 
 		// after we finish writing to the WAL we grab the transaction lock again
 		t_lock.lock();
+	}
+	// in-memory databases don't have a WAL - we estimate how large their changeset is based on the undo properties
+	if (!db.IsSystem()) {
+		auto &storage_manager = db.GetStorageManager();
+		if (storage_manager.InMemory()) {
+			storage_manager.AddInMemoryChange(undo_properties.estimated_size);
+		}
 	}
 	// obtain a commit id for the transaction
 	transaction_t commit_id = GetCommitTimestamp();

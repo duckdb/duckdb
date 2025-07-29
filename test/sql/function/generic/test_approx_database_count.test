@@ -1,0 +1,20 @@
+# name: test/sql/function/generic/test_approx_database_count.test
+# description: Test the approx_database_count scalar function.
+# group: [generic]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+ATTACH '__TEST_DIR__/board1.db' AS b1;
+
+statement ok
+ATTACH '__TEST_DIR__/board2.db' AS b2;
+
+statement ok
+ATTACH '__TEST_DIR__/board3.db' AS b3;
+
+query I
+SELECT approx_count >= 3 FROM duckdb_approx_database_count();
+----
+True

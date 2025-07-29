@@ -71,6 +71,11 @@ struct RowGroupPointer {
 	vector<MetaBlockPointer> data_pointers;
 	//! Data pointers to the delete information of the row group (if any)
 	vector<MetaBlockPointer> deletes_pointers;
+	//! Whether or not we have all metadata blocks defined in the pointer
+	bool has_metadata_blocks = false;
+	//! Metadata blocks of the columns that are not mentioned in "data_pointers"
+	//! This is often empty - but can be set for wide columns with a lot of metadata
+	vector<idx_t> extra_metadata_blocks;
 };
 
 } // namespace duckdb

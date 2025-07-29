@@ -84,7 +84,6 @@ profile = args.profile
 assertions = args.no_assertions
 time_execution = args.time_execution
 timeout = args.timeout
-tests_per_invocation = args.tests_per_invocation
 
 summarize_failures = args.summarize_failures
 if summarize_failures is None:

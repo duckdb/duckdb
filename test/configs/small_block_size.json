@@ -1,0 +1,5 @@
+{
+  "description": "Tests with smallest possible block size",
+  "block_size": "16384",
+  "skip_compiled": "true"
+}
