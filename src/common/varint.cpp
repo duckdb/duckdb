@@ -16,7 +16,7 @@ void varint_t::Print() const {
 		PrintBits(ptr[i]);
 		std::cout << "  ";
 	}
-	std::cout << std::endl;
+	std::cout << '\n';
 }
 
 void VarintIntermediate::Print() const {
@@ -24,7 +24,7 @@ void VarintIntermediate::Print() const {
 		PrintBits(static_cast<char>(data[i]));
 		std::cout << "  ";
 	}
-	std::cout << std::endl;
+	std::cout << '\n';
 }
 
 VarintIntermediate::VarintIntermediate(const varint_t &value) {
