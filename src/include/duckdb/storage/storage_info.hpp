@@ -26,10 +26,6 @@ struct FileHandle;
 
 //! The default block allocation size.
 #define DEFAULT_BLOCK_ALLOC_SIZE 262144ULL
-//! The configurable block allocation size.
-#ifndef DUCKDB_BLOCK_ALLOC_SIZE
-#define DUCKDB_BLOCK_ALLOC_SIZE DEFAULT_BLOCK_ALLOC_SIZE
-#endif
 //! The default block header size.
 #define DEFAULT_BLOCK_HEADER_STORAGE_SIZE 8ULL
 //! The default block header size.
@@ -196,9 +192,6 @@ struct DatabaseHeader {
 #endif
 #if (DEFAULT_BLOCK_ALLOC_SIZE & (DEFAULT_BLOCK_ALLOC_SIZE - 1) != 0)
 #error The default block allocation size must be a power of two
-#endif
-#if (DUCKDB_BLOCK_ALLOC_SIZE & (DUCKDB_BLOCK_ALLOC_SIZE - 1) != 0)
-#error The duckdb block allocation size must be a power of two
 #endif
 
 } // namespace duckdb
