@@ -14,6 +14,7 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 

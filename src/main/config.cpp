@@ -700,7 +700,7 @@ Value DBConfig::GetSettingInternal(const DBConfig &config, const char *setting, 
 }
 
 Value DBConfig::GetSettingInternal(const DatabaseInstance &db, const char *setting, const char *default_value) {
-	return GetSettingInternal(db.config, setting, default_value);
+	return GetSettingInternal(DBConfig::GetConfig(db), setting, default_value);
 }
 
 SettingLookupResult DBConfig::TryGetCurrentSetting(const string &key, Value &result) const {

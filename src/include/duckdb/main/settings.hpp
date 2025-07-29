@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/main/config.hpp"
 #include "duckdb/main/setting_info.hpp"
 #include "duckdb/common/enums/access_mode.hpp"
 #include "duckdb/common/enums/checkpoint_abort.hpp"

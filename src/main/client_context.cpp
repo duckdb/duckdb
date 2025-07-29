@@ -44,6 +44,7 @@
 #include "duckdb/transaction/transaction_context.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/logging/log_type.hpp"
+#include "duckdb/logging/log_manager.hpp"
 #include "duckdb/main/settings.hpp"
 
 namespace duckdb {
