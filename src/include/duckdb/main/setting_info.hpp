@@ -63,7 +63,7 @@ struct SettingCallbackInfo {
 	SetScope scope;
 };
 
-typedef void (*set_callback)(SettingCallbackInfo &info, Value &parameter);
+typedef void (*set_callback_t)(SettingCallbackInfo &info, Value &parameter);
 typedef void (*set_global_function_t)(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 typedef void (*set_local_function_t)(ClientContext &context, const Value &parameter);
 typedef void (*reset_global_function_t)(DatabaseInstance *db, DBConfig &config);
@@ -81,7 +81,7 @@ struct ConfigurationOption {
 	get_setting_function_t get_setting;
 	SetScope default_scope;
 	const char *default_value;
-	set_callback set_callback;
+	set_callback_t set_callback;
 };
 
 struct ConfigurationAlias {
