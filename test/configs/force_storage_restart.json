@@ -1,6 +1,76 @@
 {
-  "description": "Equivalent to CI --force-storage: persistent DuckDB database AND verify_fetch_row",
-  "initial_db": "{TEST_DIR}/{BASE_TEST_NAME}/memory.db",
+  "description": "Run on persistent databases as storage and restart after each query.",
+  "initial_db": "{TEST_DIR}/{BASE_TEST_NAME}__test__config__force_storage_restart.db",
   "force_restart": "true",
-  "skip_compiled": "true"
+  "skip_compiled": "true",
+  "skip_tests": [
+    {
+      "reason": "Expects the memory catalog.",
+      "path": "test/sql/show_select/test_describe_all.test"
+    },
+    {
+      "reason": "'USE memory' does not work with a persistent DB.",
+      "path": "test/sql/constraints/foreignkey/test_fk_eager_constraint_checking.test"
+    },
+    {
+      "reason": "Uses the memory catalog.",
+      "path": "test/sql/catalog/function/attached_macro.test"
+    },
+    {
+      "reason": "Uses the memory catalog.",
+      "path": "test/sql/catalog/test_temporary.test"
+    },
+    {
+      "reason": "SHOW ALL TABLES shows in-memory or persistent tables (different catalog names).",
+      "path": "test/sql/pragma/test_show_tables_temp_views.test"
+    },
+    {
+      "reason": "Expects the memory catalog.",
+      "path": "test/sql/pg_catalog/system_functions.test"
+    },
+    {
+      "reason": "Expects the main catalog.",
+      "path": "test/sql/pg_catalog/sqlalchemy.test"
+    },
+    {
+      "reason": "Expects the memory catalog.",
+      "path": "test/sql/attach/attach_table_info.test"
+    },
+    {
+      "reason": "Expects the memory catalog.",
+      "path": "test/sql/attach/attach_defaults.test"
+    },
+    {
+      "reason": "Error message expects the memory catalog.",
+      "path": "test/sql/attach/attach_did_you_mean.test"
+    },
+    {
+      "reason": "Expects the memory catalog for ambiguity checks and USE.",
+      "path": "test/sql/attach/attach_default_table.test"
+    },
+    {
+      "reason": "SHOW ALL TABLES shows in-memory or persistent tables (different catalog names).",
+      "path": "test/sql/attach/attach_show_all_tables.test"
+    },
+    {
+      "reason": "Expects the memory catalog.",
+      "path": "test/sql/attach/attach_issue7711.test"
+    },
+    {
+      "reason": "Expects the memory catalog.",
+      "path": "test/sql/attach/attach_issue_7660.test"
+    },
+    {
+      "reason": "SHOW DATABASES expects the memory catalog.",
+      "path": "test/sql/attach/show_databases.test"
+    },
+    {
+      "reason": "Expects the memory catalog.",
+      "path": "test/sql/attach/attach_views.test"
+    },
+    {
+      "reason": "Expects to copy an in-memory database.",
+      "path": "test/sql/copy_database/copy_table_with_sequence.test"
+    }
+  ]
 }

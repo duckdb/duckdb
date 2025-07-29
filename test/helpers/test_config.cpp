@@ -37,7 +37,9 @@ static const TestConfigOption test_config_options[] = {
     {"on_init", "SQL statements to execute on init", LogicalType::VARCHAR, nullptr},
     {"on_load", "SQL statements to execute on explicit load", LogicalType::VARCHAR, nullptr},
     {"on_new_connection", "SQL statements to execute on connection", LogicalType::VARCHAR, nullptr},
-    {"skip_tests", "Tests to be skipped", LogicalType::LIST(LogicalType::VARCHAR), nullptr},
+    {"skip_tests", "Tests to be skipped",
+     LogicalType::LIST(LogicalType::STRUCT({{"reason", LogicalType::VARCHAR}, {"path", LogicalType::VARCHAR}})),
+     nullptr},
     {"skip_compiled", "Skip compiled tests", LogicalType::BOOLEAN, nullptr},
     {"skip_error_messages", "Skip compiled tests", LogicalType::LIST(LogicalType::VARCHAR), nullptr},
     {"statically_loaded_extensions", "Extensions to be loaded (from the statically available one)",
@@ -93,7 +95,7 @@ bool TestConfiguration::ParseArgument(const string &arg, idx_t argc, char **argv
 		return true;
 	}
 	if (arg == "--force-storage") {
-		ParseOption("initial_db", Value("{TEST_DIR}/{BASE_TEST_NAME}/memory.db"));
+		ParseOption("initial_db", Value("{TEST_DIR}/{BASE_TEST_NAME}__test__config__force_storage.db"));
 		return true;
 	}
 	if (arg == "--force-reload") {
@@ -262,10 +264,10 @@ void TestConfiguration::LoadConfig(const string &config_path) {
 	// Convert to unordered_set<string> the list of tests to be skipped
 	auto entry = options.find("skip_tests");
 	if (entry != options.end()) {
-		vector<Value> skip_list = ListValue::GetChildren(entry->second);
-
-		for (auto x : skip_list) {
-			tests_to_be_skipped.insert(x.GetValue<string>());
+		auto skip_list = ListValue::GetChildren(entry->second);
+		for (const auto &value : skip_list) {
+			auto children = StructValue::GetChildren(value);
+			tests_to_be_skipped.insert(children[1].GetValue<string>());
 		}
 	}
 }
