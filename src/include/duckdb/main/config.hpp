@@ -173,16 +173,6 @@ struct DBConfigOptions {
 	BitpackingMode force_bitpacking_mode = BitpackingMode::AUTO;
 	//! Debug setting for window aggregation mode: (window, combine, separate)
 	WindowAggregationMode window_mode = WindowAggregationMode::WINDOW;
-	//! Whether Arrow Arrays use Large or Regular buffers
-	ArrowOffsetSize arrow_offset_size = ArrowOffsetSize::REGULAR;
-	//! Whether LISTs should produce Arrow ListViews
-	bool arrow_use_list_view = false;
-	//! For DuckDB types without an obvious corresponding Arrow type, export to an Arrow extension type instead of a
-	//! more portable but less efficient format. For example, UUIDs are exported to UTF-8 (string) when false, and
-	//! arrow.uuid type when true.
-	bool arrow_lossless_conversion = false;
-	//! Whether when producing arrow objects we produce string_views or regular strings
-	bool produce_arrow_string_views = false;
 	//! Database configuration variables as controlled by SET
 	case_insensitive_map_t<Value> set_variables;
 	//! Database configuration variable default values;
@@ -241,8 +231,6 @@ struct DBConfigOptions {
 	LogConfig log_config = LogConfig();
 	//! Whether to enable external file caching using CachingFileSystem
 	bool enable_external_file_cache = true;
-	//! Output version of arrow depending on the format version
-	ArrowFormatVersion arrow_output_version = ArrowFormatVersion::V1_0;
 	//! Partially process tasks before rescheduling - allows for more scheduler fairness between separate queries
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
 	bool scheduler_process_partial = true;

@@ -62,6 +62,7 @@ overrides = {
         "DELETE_REQUEST": "DELETE",
         "POST_REQUEST": "POST",
     },
+    "ArrowFormatVersion": {"V1_0": "1.0", "V1_1": "1.1", "V1_2": "1.2", "V1_3": "1.3", "V1_4": "1.4", "V1_5": "1.5"},
 }
 
 # get all the headers

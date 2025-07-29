@@ -123,49 +123,10 @@ Value AllowUnsignedExtensionsSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
-// Arrow Large Buffer Size
-//===----------------------------------------------------------------------===//
-void ArrowLargeBufferSizeSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.arrow_offset_size = DBConfig().options.arrow_offset_size;
-}
-
-//===----------------------------------------------------------------------===//
-// Arrow Lossless Conversion
-//===----------------------------------------------------------------------===//
-void ArrowLosslessConversionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.arrow_lossless_conversion = input.GetValue<bool>();
-}
-
-void ArrowLosslessConversionSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.arrow_lossless_conversion = DBConfig().options.arrow_lossless_conversion;
-}
-
-Value ArrowLosslessConversionSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::BOOLEAN(config.options.arrow_lossless_conversion);
-}
-
-//===----------------------------------------------------------------------===//
-// Arrow Output List View
-//===----------------------------------------------------------------------===//
-void ArrowOutputListViewSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.arrow_use_list_view = input.GetValue<bool>();
-}
-
-void ArrowOutputListViewSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.arrow_use_list_view = DBConfig().options.arrow_use_list_view;
-}
-
-Value ArrowOutputListViewSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::BOOLEAN(config.options.arrow_use_list_view);
-}
-
-//===----------------------------------------------------------------------===//
 // Arrow Output Version
 //===----------------------------------------------------------------------===//
-void ArrowOutputVersionSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.arrow_output_version = DBConfig().options.arrow_output_version;
+void ArrowOutputVersionSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	EnumUtil::FromString<ArrowFormatVersion>(StringValue::Get(parameter));
 }
 
 //===----------------------------------------------------------------------===//
@@ -943,22 +904,6 @@ void PreserveIdentifierCaseSetting::ResetLocal(ClientContext &context) {
 Value PreserveIdentifierCaseSetting::GetSetting(const ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	return Value::BOOLEAN(config.preserve_identifier_case);
-}
-
-//===----------------------------------------------------------------------===//
-// Produce Arrow String View
-//===----------------------------------------------------------------------===//
-void ProduceArrowStringViewSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.produce_arrow_string_views = input.GetValue<bool>();
-}
-
-void ProduceArrowStringViewSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.produce_arrow_string_views = DBConfig().options.produce_arrow_string_views;
-}
-
-Value ProduceArrowStringViewSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::BOOLEAN(config.options.produce_arrow_string_views);
 }
 
 //===----------------------------------------------------------------------===//

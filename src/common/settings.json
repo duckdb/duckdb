@@ -94,36 +94,30 @@
         "name": "arrow_large_buffer_size",
         "description": "Whether Arrow buffers for strings, blobs, uuids and bits should be exported using large buffers",
         "type": "BOOLEAN",
-        "scope": "global",
-        "internal_setting": "arrow_offset_size",
-        "custom_implementation": [
-            "set",
-            "get"
-        ]
+        "default_scope": "global",
+        "default_value": "false"
     },
     {
         "name": "arrow_lossless_conversion",
         "description": "Whenever a DuckDB type does not have a clear native or canonical extension match in Arrow, export the types with a duckdb.type_name extension name.",
         "type": "BOOLEAN",
-        "scope": "global"
+        "default_scope": "global",
+        "default_value": "false"
     },
     {
         "name": "arrow_output_list_view",
         "description": "Whether export to Arrow format should use ListView as the physical layout for LIST columns",
         "type": "BOOLEAN",
         "internal_setting": "arrow_use_list_view",
-        "scope": "global"
+        "default_scope": "global",
+        "default_value": "false"
     },
     {
         "name": "arrow_output_version",
         "description": "Whether strings should be produced by DuckDB in Utf8View format instead of Utf8",
-        "type": "VARCHAR",
-        "scope": "global",
-        "internal_setting": "arrow_output_version",
-        "custom_implementation": [
-            "set",
-            "get"
-        ]
+        "type": "ENUM<ArrowFormatVersion>",
+        "default_scope": "global",
+        "default_value": "1.0"
     },
     {
         "name": "asof_loop_join_threshold",
@@ -757,10 +751,10 @@
     },
     {
         "name": "produce_arrow_string_view",
-        "description": "Whether strings should be produced by DuckDB in Utf8View format instead of Utf8",
+        "description": "Whether Arrow strings should be produced by DuckDB in Utf8View format instead of Utf8",
         "type": "BOOLEAN",
-        "scope": "global",
-        "internal_setting": "produce_arrow_string_views"
+        "default_scope": "global",
+        "default_value": "false"
     },
     {
         "name": "profile_output",

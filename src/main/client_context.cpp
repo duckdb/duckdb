@@ -44,6 +44,7 @@
 #include "duckdb/transaction/transaction_context.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/logging/log_type.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -1384,12 +1385,20 @@ ClientProperties ClientContext::GetClientProperties() {
 	if (TryGetCurrentSetting("TimeZone", result)) {
 		timezone = result.ToString();
 	}
+	ArrowOffsetSize arrow_offset_size = ArrowOffsetSize::REGULAR;
+	if (DBConfig::GetSetting<ArrowLargeBufferSizeSetting>(*this)) {
+		arrow_offset_size = ArrowOffsetSize::LARGE;
+	}
+	bool arrow_use_list_view = DBConfig::GetSetting<ArrowOutputListViewSetting>(*this);
+	bool arrow_lossless_conversion = DBConfig::GetSetting<ArrowLosslessConversionSetting>(*this);
+	bool arrow_use_string_view = DBConfig::GetSetting<ProduceArrowStringViewSetting>(*this);
+	auto arrow_format_version = DBConfig::GetEnum<ArrowOutputVersionSetting>(*this);
 	return {timezone,
-	        db->config.options.arrow_offset_size,
-	        db->config.options.arrow_use_list_view,
-	        db->config.options.produce_arrow_string_views,
-	        db->config.options.arrow_lossless_conversion,
-	        db->config.options.arrow_output_version,
+	        arrow_offset_size,
+	        arrow_use_list_view,
+	        arrow_use_string_view,
+	        arrow_lossless_conversion,
+	        arrow_format_version,
 	        this};
 }
 
