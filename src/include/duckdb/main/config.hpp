@@ -71,10 +71,11 @@ enum class CheckpointAbort : uint8_t {
 };
 
 struct SettingCallbackInfo {
-	explicit SettingCallbackInfo(ClientContext &context);
+	explicit SettingCallbackInfo(ClientContext &context, SetScope scope);
 
 	optional_ptr<DatabaseInstance> db;
 	optional_ptr<ClientContext> context;
+	SetScope scope;
 };
 
 typedef void (*set_callback)(SettingCallbackInfo &info, Value &parameter);
@@ -401,6 +402,7 @@ public:
 	DUCKDB_API void ResetOption(DatabaseInstance *db, const ConfigurationOption &option);
 	DUCKDB_API void SetOption(const string &name, Value value);
 	DUCKDB_API void ResetOption(const string &name);
+	DUCKDB_API void ResetGenericOption(const string &name);
 	static LogicalType ParseLogicalType(const string &type);
 
 	DUCKDB_API void CheckLock(const string &name);

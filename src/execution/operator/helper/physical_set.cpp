@@ -40,7 +40,9 @@ SourceResultType PhysicalSet::GetData(ExecutionContext &context, DataChunk &chun
 		if (entry == config.extension_parameters.end()) {
 			Catalog::AutoloadExtensionByConfigName(context.client, name);
 			entry = config.extension_parameters.find(name);
-			D_ASSERT(entry != config.extension_parameters.end());
+			if (entry == config.extension_parameters.end()) {
+				throw InvalidInputException("Extension parameter %s was not found after autoloading", name);
+			}
 		}
 		SetExtensionVariable(context.client, entry->second, name, scope, value);
 		return SourceResultType::FINISHED;
@@ -59,7 +61,7 @@ SourceResultType PhysicalSet::GetData(ExecutionContext &context, DataChunk &chun
 	Value input_val = value.CastAs(context.client, DBConfig::ParseLogicalType(option->parameter_type));
 	if (option->default_value) {
 		if (option->set_callback) {
-			SettingCallbackInfo info(context.client);
+			SettingCallbackInfo info(context.client, variable_scope);
 			option->set_callback(info, input_val);
 		}
 		SetGenericVariable(context.client, option->name, variable_scope, std::move(input_val));
@@ -71,7 +73,6 @@ SourceResultType PhysicalSet::GetData(ExecutionContext &context, DataChunk &chun
 			throw CatalogException("option \"%s\" cannot be set globally", name);
 		}
 		auto &db = DatabaseInstance::GetDatabase(context.client);
-		auto &config = DBConfig::GetConfig(context.client);
 		config.SetOption(&db, *option, input_val);
 		break;
 	}

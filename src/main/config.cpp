@@ -201,7 +201,8 @@ vector<ConfigurationOption> DBConfig::GetOptions() {
 	return options;
 }
 
-SettingCallbackInfo::SettingCallbackInfo(ClientContext &context_p) : db(context_p.db.get()), context(context_p) {
+SettingCallbackInfo::SettingCallbackInfo(ClientContext &context_p, SetScope scope)
+    : db(context_p.db.get()), context(context_p), scope(scope) {
 }
 
 idx_t DBConfig::GetOptionCount() {
@@ -308,6 +309,11 @@ void DBConfig::ResetOption(const string &name) {
 		// Otherwise just remove it from the 'set_variables' map
 		options.set_variables.erase(name);
 	}
+}
+
+void DBConfig::ResetGenericOption(const string &name) {
+	lock_guard<mutex> l(config_lock);
+	options.set_variables.erase(name);
 }
 
 LogicalType DBConfig::ParseLogicalType(const string &type) {

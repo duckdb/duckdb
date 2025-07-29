@@ -7,7 +7,7 @@ namespace duckdb {
 
 struct DuckDBSettingValue {
 	string name;
-	string value;
+	Value value;
 	string description;
 	string input_type;
 	string scope;
@@ -53,12 +53,10 @@ unique_ptr<GlobalTableFunctionState> DuckDBSettingsInit(ClientContext &context, 
 		auto scope = option->set_global ? SettingScope::GLOBAL : SettingScope::LOCAL;
 		value.name = option->name;
 		if (option->get_setting) {
-			value.value = option->get_setting(context).ToString();
+			value.value = option->get_setting(context);
 		} else {
-			Value setting_value;
-			auto lookup_result = context.TryGetCurrentSetting(value.name, setting_value);
+			auto lookup_result = context.TryGetCurrentSetting(value.name, value.value);
 			if (lookup_result) {
-				value.value = setting_value.ToString();
 				scope = lookup_result.GetScope();
 			} else {
 				value.value = option->default_value;
@@ -72,16 +70,14 @@ unique_ptr<GlobalTableFunctionState> DuckDBSettingsInit(ClientContext &context, 
 	}
 	for (auto &ext_param : config.extension_parameters) {
 		Value setting_val;
-		string setting_str_val;
 		auto scope = SettingScope::GLOBAL;
 		auto lookup_result = context.TryGetCurrentSetting(ext_param.first, setting_val);
 		if (lookup_result) {
-			setting_str_val = setting_val.ToString();
 			scope = lookup_result.GetScope();
 		}
 		DuckDBSettingValue value;
 		value.name = ext_param.first;
-		value.value = std::move(setting_str_val);
+		value.value = std::move(setting_val);
 		value.description = ext_param.second.description;
 		value.input_type = ext_param.second.type.ToString();
 		value.scope = EnumUtil::ToString(scope);
@@ -107,7 +103,7 @@ void DuckDBSettingsFunction(ClientContext &context, TableFunctionInput &data_p, 
 		// name, LogicalType::VARCHAR
 		output.SetValue(0, count, Value(entry.name));
 		// value, LogicalType::VARCHAR
-		output.SetValue(1, count, Value(entry.value));
+		output.SetValue(1, count, entry.value.CastAs(context, LogicalType::VARCHAR));
 		// description, LogicalType::VARCHAR
 		output.SetValue(2, count, Value(entry.description));
 		// input_type, LogicalType::VARCHAR

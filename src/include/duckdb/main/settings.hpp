@@ -426,7 +426,7 @@ struct DefaultNullOrderSetting {
 	static constexpr const char *Name = "default_null_order";
 	static constexpr const char *Description = "NULL ordering used when none is specified (NULLS_FIRST or NULLS_LAST)";
 	static constexpr const char *InputType = "VARCHAR";
-	static constexpr const char *DefaultValue = "NULLS LAST";
+	static constexpr const char *DefaultValue = "NULLS_LAST";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
