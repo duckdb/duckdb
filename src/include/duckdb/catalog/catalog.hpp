@@ -44,6 +44,7 @@ struct MetadataBlockInfo;
 
 class AttachedDatabase;
 class ClientContext;
+class QueryContext;
 class Transaction;
 
 class AggregateFunctionCatalogEntry;
@@ -245,16 +246,18 @@ public:
 	DUCKDB_API optional_ptr<CatalogEntry> GetEntry(ClientContext &context, CatalogType catalog_type,
 	                                               const string &schema, const string &name,
 	                                               OnEntryNotFound if_not_found);
-	DUCKDB_API optional_ptr<CatalogEntry> GetEntry(CatalogEntryRetriever &retriever, const string &schema,
-	                                               const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found);
+	DUCKDB_API optional_ptr<CatalogEntry> GetEntry(QueryContext context, CatalogEntryRetriever &retriever,
+	                                               const string &schema, const EntryLookupInfo &lookup_info,
+	                                               OnEntryNotFound if_not_found);
 	DUCKDB_API CatalogEntry &GetEntry(ClientContext &context, const string &schema, const EntryLookupInfo &lookup_info);
 	//! Gets the "catalog.schema.name" entry of the specified type, if entry does not exist behavior depends on
 	//! OnEntryNotFound
 	DUCKDB_API static optional_ptr<CatalogEntry> GetEntry(ClientContext &context, const string &catalog,
 	                                                      const string &schema, const EntryLookupInfo &lookup_info,
 	                                                      OnEntryNotFound if_not_found);
-	DUCKDB_API static optional_ptr<CatalogEntry> GetEntry(CatalogEntryRetriever &retriever, const string &catalog,
-	                                                      const string &schema, const EntryLookupInfo &lookup_info,
+	DUCKDB_API static optional_ptr<CatalogEntry> GetEntry(QueryContext context, CatalogEntryRetriever &retriever,
+	                                                      const string &catalog, const string &schema,
+	                                                      const EntryLookupInfo &lookup_info,
 	                                                      OnEntryNotFound if_not_found);
 	DUCKDB_API static CatalogEntry &GetEntry(ClientContext &context, const string &catalog, const string &schema,
 	                                         const EntryLookupInfo &lookup_info);
@@ -377,7 +380,8 @@ public:
 	//! Autoload the extension required for `configuration_name` or throw a CatalogException
 	static void AutoloadExtensionByConfigName(ClientContext &context, const string &configuration_name);
 	//! Autoload the extension required for `function_name` or throw a CatalogException
-	static bool AutoLoadExtensionByCatalogEntry(DatabaseInstance &db, CatalogType type, const string &entry_name);
+	static bool AutoLoadExtensionByCatalogEntry(QueryContext context, DatabaseInstance &db, CatalogType type,
+	                                            const string &entry_name);
 	DUCKDB_API static bool TryAutoLoad(ClientContext &context, const string &extension_name) noexcept;
 
 	//! Called when the catalog is detached

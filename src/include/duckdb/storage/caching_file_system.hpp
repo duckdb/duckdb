@@ -40,7 +40,7 @@ public:
 	DUCKDB_API FileHandle &GetFileHandle();
 	//! Read (seek) nr_bytes from the file (or cache) at location. The pointer will be set to the requested range
 	//! The buffer is guaranteed to stay in memory as long as the returned BufferHandle is in scope
-	DUCKDB_API BufferHandle Read(data_ptr_t &buffer, idx_t nr_bytes, idx_t location);
+	DUCKDB_API BufferHandle Read(QueryContext context, data_ptr_t &buffer, idx_t nr_bytes, idx_t location);
 	//! Read (non-seeking) nr bytes from the file (or cache), same as above, also sets nr_bytes to actually read bytes
 	DUCKDB_API BufferHandle Read(data_ptr_t &buffer, idx_t &nr_bytes);
 	//! Get some properties of the file
@@ -68,7 +68,7 @@ private:
 	                                shared_ptr<CachedFileRange> &new_file_range);
 	//! Read from file and copy from cached buffers until the requested read is complete
 	//! If actually_read is false, no reading happens, only the number of non-cached reads is counted and returned
-	idx_t ReadAndCopyInterleaved(const vector<shared_ptr<CachedFileRange>> &overlapping_ranges,
+	idx_t ReadAndCopyInterleaved(QueryContext context, const vector<shared_ptr<CachedFileRange>> &overlapping_ranges,
 	                             const shared_ptr<CachedFileRange> &new_file_range, data_ptr_t buffer, idx_t nr_bytes,
 	                             idx_t location, bool actually_read);
 

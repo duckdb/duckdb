@@ -67,7 +67,8 @@ public:
 	bool GetPositionAndSize(idx_t &position, idx_t &size, idx_t requested_size);
 	bool Read(char *pointer, idx_t &read_size, idx_t requested_size);
 	//! Read at position optionally allows passing a custom handle to read from, otherwise the default one is used
-	void ReadAtPosition(char *pointer, idx_t size, idx_t position, optional_ptr<FileHandle> override_handle = nullptr);
+	void ReadAtPosition(QueryContext context, char *pointer, idx_t size, idx_t position,
+	                    optional_ptr<FileHandle> override_handle = nullptr);
 
 private:
 	idx_t ReadInternal(char *pointer, const idx_t requested_size);

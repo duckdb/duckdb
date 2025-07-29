@@ -699,7 +699,7 @@ int64_t FileHandle::Write(void *buffer, idx_t nr_bytes) {
 	return file_system.Write(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes));
 }
 
-void FileHandle::Read(void *buffer, idx_t nr_bytes, idx_t location) {
+void FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) {
 	file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
 }
 
