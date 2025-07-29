@@ -189,7 +189,7 @@ unique_ptr<DBConfig> GetTestConfig() {
 		result->options.maximum_threads = max_threads.GetIndex();
 	}
 	result->options.debug_initialize = test_config.GetDebugInitialize();
-	result->options.debug_verify_vector = test_config.GetVectorVerification();
+	result->options.set_variables.emplace("debug_verify_vector", EnumUtil::ToString(test_config.GetVectorVerification()));
 	return result;
 }
 

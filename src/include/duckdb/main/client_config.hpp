@@ -77,8 +77,6 @@ struct ClientConfig {
 	bool verify_parallelism = false;
 	//! Force out-of-core computation for operators that support it, used for testing
 	bool force_external = false;
-	//! Force disable cross product generation when hyper graph isn't connected, used for testing
-	bool force_no_cross_product = false;
 	//! Force use of fetch row instead of scan, used for testing
 	bool force_fetch_row = false;
 	//! Use range joins for inequalities, even if there are equality predicates

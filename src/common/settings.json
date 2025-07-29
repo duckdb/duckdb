@@ -215,20 +215,22 @@
         "name": "debug_force_no_cross_product",
         "description": "DEBUG SETTING: Force disable cross product generation when hyper graph isn't connected, used for testing",
         "type": "BOOLEAN",
-        "scope": "local",
-        "internal_setting": "force_no_cross_product"
+        "default_scope": "local",
+        "default_value": "false"
     },
     {
         "name": "debug_skip_checkpoint_on_commit",
         "description": "DEBUG SETTING: skip checkpointing on commit",
         "type": "BOOLEAN",
-        "scope": "global"
+        "default_scope": "global",
+        "default_value": "false"
     },
     {
         "name": "debug_verify_vector",
         "description": "DEBUG SETTING: enable vector verification",
         "type": "ENUM<DebugVectorVerification>",
-        "scope": "global"
+        "default_scope": "global",
+        "default_value": "NONE"
     },
     {
         "name": "debug_window_mode",

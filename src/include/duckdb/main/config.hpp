@@ -215,10 +215,6 @@ struct DBConfigOptions {
 	idx_t default_block_header_size = DUCKDB_BLOCK_HEADER_STORAGE_SIZE;
 	//!  Whether or not to abort if a serialization exception is thrown during WAL playback (when reading truncated WAL)
 	bool abort_on_wal_failure = false;
-	//!  Whether or not to always write to the WAL file, even if this is not required
-	bool debug_skip_checkpoint_on_commit = false;
-	//! Vector verification to enable (debug setting only)
-	DebugVectorVerification debug_verify_vector = DebugVectorVerification::NONE;
 	//! The maximum amount of vacuum tasks to schedule during a checkpoint
 	idx_t max_vacuum_tasks = 100;
 	//! Paths that are explicitly allowed, even if enable_external_access is false

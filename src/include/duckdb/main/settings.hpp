@@ -323,9 +323,8 @@ struct DebugForceNoCrossProductSetting {
 	static constexpr const char *Description =
 	    "DEBUG SETTING: Force disable cross product generation when hyper graph isn't connected, used for testing";
 	static constexpr const char *InputType = "BOOLEAN";
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
 
 struct DebugSkipCheckpointOnCommitSetting {
@@ -333,9 +332,8 @@ struct DebugSkipCheckpointOnCommitSetting {
 	static constexpr const char *Name = "debug_skip_checkpoint_on_commit";
 	static constexpr const char *Description = "DEBUG SETTING: skip checkpointing on commit";
 	static constexpr const char *InputType = "BOOLEAN";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
 
 struct DebugVerifyVectorSetting {
@@ -343,9 +341,9 @@ struct DebugVerifyVectorSetting {
 	static constexpr const char *Name = "debug_verify_vector";
 	static constexpr const char *Description = "DEBUG SETTING: enable vector verification";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "NONE";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct DebugWindowModeSetting {

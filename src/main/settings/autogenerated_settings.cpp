@@ -233,53 +233,10 @@ Value DebugForceExternalSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
-// Debug Force No Cross Product
-//===----------------------------------------------------------------------===//
-void DebugForceNoCrossProductSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto &config = ClientConfig::GetConfig(context);
-	config.force_no_cross_product = input.GetValue<bool>();
-}
-
-void DebugForceNoCrossProductSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).force_no_cross_product = ClientConfig().force_no_cross_product;
-}
-
-Value DebugForceNoCrossProductSetting::GetSetting(const ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	return Value::BOOLEAN(config.force_no_cross_product);
-}
-
-//===----------------------------------------------------------------------===//
-// Debug Skip Checkpoint On Commit
-//===----------------------------------------------------------------------===//
-void DebugSkipCheckpointOnCommitSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.debug_skip_checkpoint_on_commit = input.GetValue<bool>();
-}
-
-void DebugSkipCheckpointOnCommitSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.debug_skip_checkpoint_on_commit = DBConfig().options.debug_skip_checkpoint_on_commit;
-}
-
-Value DebugSkipCheckpointOnCommitSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::BOOLEAN(config.options.debug_skip_checkpoint_on_commit);
-}
-
-//===----------------------------------------------------------------------===//
 // Debug Verify Vector
 //===----------------------------------------------------------------------===//
-void DebugVerifyVectorSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	auto str_input = StringUtil::Upper(input.GetValue<string>());
-	config.options.debug_verify_vector = EnumUtil::FromString<DebugVectorVerification>(str_input);
-}
-
-void DebugVerifyVectorSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.debug_verify_vector = DBConfig().options.debug_verify_vector;
-}
-
-Value DebugVerifyVectorSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value(StringUtil::Lower(EnumUtil::ToString(config.options.debug_verify_vector)));
+void DebugVerifyVectorSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	EnumUtil::FromString<DebugVectorVerification>(StringValue::Get(parameter));
 }
 
 //===----------------------------------------------------------------------===//
