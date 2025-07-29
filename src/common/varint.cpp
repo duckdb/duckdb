@@ -20,7 +20,7 @@ void varint_t::Print() const {
 
 void VarintIntermediate::Print() const {
 	for (idx_t i = 0; i < size; ++i) {
-		PrintBits(data[i]);
+		PrintBits(static_cast<char>(data[i]));
 		std::cout << "  ";
 	}
 	std::cout << std::endl;
@@ -29,7 +29,7 @@ void VarintIntermediate::Print() const {
 VarintIntermediate::VarintIntermediate(const varint_t &value) {
 	is_negative = (value.data.GetData()[0] & 0x80) == 0;
 	data = reinterpret_cast<data_ptr_t>(value.data.GetDataWriteable() + Varint::VARINT_HEADER_SIZE);
-	size = value.data.GetSize() - Varint::VARINT_HEADER_SIZE;
+	size = static_cast<uint32_t>(value.data.GetSize()) - Varint::VARINT_HEADER_SIZE;
 }
 
 uint8_t VarintIntermediate::GetAbsoluteByte(int64_t index) const {
@@ -57,7 +57,7 @@ int8_t VarintIntermediate::IsAbsoluteBigger(const VarintIntermediate &rhs) const
 			idx_t source_idx = 0;
 			while (target_idx < size) {
 				auto data_byte = GetAbsoluteByte(static_cast<int64_t>(target_idx));
-				auto rhs_byte = GetAbsoluteByte(static_cast<int64_t>(source_idx));
+				auto rhs_byte = rhs.GetAbsoluteByte(static_cast<int64_t>(source_idx));
 				if (data_byte > rhs_byte) {
 					return 1;
 				} else if (data_byte < rhs_byte) {
@@ -81,7 +81,6 @@ bool VarintIntermediate::IsMSBSet() const {
 	return (data[0] & 0x80) != 0;
 }
 void VarintIntermediate::Initialize(ArenaAllocator &allocator) {
-	D_ASSERT(data == nullptr);
 	is_negative = false;
 	size = 1;
 	data = allocator.Allocate(size);
@@ -103,7 +102,7 @@ idx_t VarintIntermediate::GetStartDataPos() const {
 }
 
 void VarintIntermediate::Reallocate(ArenaAllocator &allocator, idx_t min_size) {
-	idx_t new_size = size;
+	uint32_t new_size = size;
 	while (new_size < min_size) {
 		new_size *= 2;
 	}
@@ -123,6 +122,7 @@ void VarintIntermediate::Trim() {
 	size -= actual_start;
 	if (size == 0) {
 		// Always keep at least one byte
+		actual_start = 0;
 		size++;
 	}
 	memmove(data, data + actual_start, size);
@@ -203,7 +203,7 @@ void VarintIntermediate::AddInPlace(ArenaAllocator &allocator, const VarintInter
 		}
 		uint8_t result_byte = static_cast<uint8_t>(sum & 0xFF);
 		// If the result is not positive, we must flip the bits again
-		data[i_target] = is_result_negative ? static_cast<char>(~result_byte) : static_cast<char>(result_byte);
+		data[i_target] = is_result_negative ? ~result_byte : result_byte;
 		i_target--;
 		i_source--;
 	}
@@ -211,7 +211,7 @@ void VarintIntermediate::AddInPlace(ArenaAllocator &allocator, const VarintInter
 	if (is_result_negative != is_negative) {
 		// If we are flipping the sign we must be sure that we are flipping all extra bits from our target
 		for (idx_t i = 0; i < size - rhs.size; ++i) {
-			data[i] = is_result_negative ? static_cast<char>(0xFF) : 0x00;
+			data[i] = is_result_negative ? 0xFF : 0x00;
 		}
 		is_negative = is_result_negative;
 	}

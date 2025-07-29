@@ -235,11 +235,10 @@ struct VarintOperation {
 	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input) {
 		if (!state.is_set) {
 			state.is_set = true;
-			state.value = VarintIntermediate(input);
-		} else {
-			VarintIntermediate rhs(input);
-			state.value.AddInPlace(unary_input.input.allocator, rhs);
+			state.value.Initialize(unary_input.input.allocator);
 		}
+		VarintIntermediate rhs(input);
+		state.value.AddInPlace(unary_input.input.allocator, rhs);
 	}
 
 	template <class STATE, class OP>
@@ -254,6 +253,7 @@ struct VarintOperation {
 		}
 		// source.value.Trim();
 		target.value.AddInPlace(input.allocator, source.value);
+		target.is_set = true;
 	}
 
 	template <class TARGET_TYPE, class STATE>
