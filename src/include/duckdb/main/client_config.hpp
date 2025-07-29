@@ -93,10 +93,6 @@ struct ClientConfig {
 	idx_t partitioned_write_flush_threshold = idx_t(1) << idx_t(19);
 	//! The amount of rows we can keep open before we close and flush them during a partitioned write
 	idx_t partitioned_write_max_open_files = idx_t(100);
-	//! The maximum number of rows on either table to choose a nested loop join
-	idx_t nested_loop_join_threshold = 5;
-	//! The maximum number of rows on either table to choose a merge join over an IE join
-	idx_t merge_join_threshold = 1000;
 
 	//! The maximum amount of memory to keep buffered in a streaming query result. Default: 1mb.
 	idx_t streaming_buffer_size = 1000000;
@@ -113,19 +109,10 @@ struct ClientConfig {
 	//! The threshold at which we switch from using filtered aggregates to LIST with a dedicated pivot operator
 	idx_t pivot_filter_threshold = 20;
 
-	//! The maximum amount of rows in the LIMIT/SAMPLE for which we trigger late materialization
-	idx_t late_materialization_max_rows = 50;
-
-	//! Whether the "/" division operator defaults to integer division or floating point division
-	bool integer_division = false;
 	//! When a scalar subquery returns multiple rows - return a random row instead of returning an error
 	bool scalar_subquery_error_on_multiple_rows = true;
 	//! Use IEE754-compliant floating point operations (returning NAN instead of errors/NULL)
 	bool ieee_floating_point_ops = true;
-	//! Allow ordering by non-integer literals - ordering by such literals has no effect
-	bool order_by_non_integer_literal = false;
-	//! Disable casting from timestamp => timestamptz (naïve timestamps)
-	bool disable_timestamptz_casts = false;
 	//! If DEFAULT or ENABLE_SINGLE_ARROW, it is possible to use the deprecated single arrow operator (->) for lambda
 	//! functions. Otherwise, DISABLE_SINGLE_ARROW.
 	LambdaSyntax lambda_syntax = LambdaSyntax::DEFAULT;

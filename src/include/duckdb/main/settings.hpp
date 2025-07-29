@@ -351,9 +351,9 @@ struct DebugWindowModeSetting {
 	static constexpr const char *Name = "debug_window_mode";
 	static constexpr const char *Description = "DEBUG SETTING: switch window mode to use";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "WINDOW";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct DefaultBlockSizeSetting {
@@ -426,9 +426,8 @@ struct DisableTimestamptzCastsSetting {
 	static constexpr const char *Name = "disable_timestamptz_casts";
 	static constexpr const char *Description = "Disable casting from timestamp to timestamptz ";
 	static constexpr const char *InputType = "BOOLEAN";
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
 
 struct DisabledCompressionMethodsSetting {
@@ -521,9 +520,8 @@ struct EnableFSSTVectorsSetting {
 	static constexpr const char *Description =
 	    "Allow scans on FSST compressed segments to emit compressed vectors to utilize late decompression";
 	static constexpr const char *InputType = "BOOLEAN";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
 
 struct EnableHTTPLoggingSetting {
@@ -571,9 +569,8 @@ struct EnableObjectCacheSetting {
 	static constexpr const char *Name = "enable_object_cache";
 	static constexpr const char *Description = "[PLACEHOLDER] Legacy setting - does nothing";
 	static constexpr const char *InputType = "BOOLEAN";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
 
 struct EnableProfilingSetting {
@@ -771,9 +768,8 @@ struct ImmediateTransactionModeSetting {
 	static constexpr const char *Description =
 	    "Whether transactions should be started lazily when needed, or immediately when BEGIN TRANSACTION is called";
 	static constexpr const char *InputType = "BOOLEAN";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
 
 struct IndexScanMaxCountSetting {
@@ -805,9 +801,8 @@ struct IntegerDivisionSetting {
 	static constexpr const char *Description =
 	    "Whether or not the / operator defaults to integer division, or to floating point division";
 	static constexpr const char *InputType = "BOOLEAN";
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
 
 struct LambdaSyntaxSetting {
@@ -827,9 +822,8 @@ struct LateMaterializationMaxRowsSetting {
 	static constexpr const char *Description =
 	    "The maximum amount of rows in the LIMIT/SAMPLE for which we trigger late materialization";
 	static constexpr const char *InputType = "UBIGINT";
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "50";
+	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
 
 struct LockConfigurationSetting {
@@ -921,9 +915,8 @@ struct MaxVacuumTasksSetting {
 	static constexpr const char *Name = "max_vacuum_tasks";
 	static constexpr const char *Description = "The maximum vacuum tasks to schedule during a checkpoint.";
 	static constexpr const char *InputType = "UBIGINT";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "100";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
 
 struct MergeJoinThresholdSetting {
@@ -931,9 +924,8 @@ struct MergeJoinThresholdSetting {
 	static constexpr const char *Name = "merge_join_threshold";
 	static constexpr const char *Description = "The maximum number of rows on either table to choose a merge join";
 	static constexpr const char *InputType = "UBIGINT";
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "1000";
+	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
 
 struct NestedLoopJoinThresholdSetting {
@@ -942,9 +934,8 @@ struct NestedLoopJoinThresholdSetting {
 	static constexpr const char *Description =
 	    "The maximum number of rows on either table to choose a nested loop join";
 	static constexpr const char *InputType = "UBIGINT";
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "5";
+	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
 
 struct OldImplicitCastingSetting {
@@ -962,9 +953,8 @@ struct OrderByNonIntegerLiteralSetting {
 	static constexpr const char *Description =
 	    "Allow ordering by non-integer literals - ordering by such literals has no effect.";
 	static constexpr const char *InputType = "BOOLEAN";
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
 
 struct OrderedAggregateThresholdSetting {

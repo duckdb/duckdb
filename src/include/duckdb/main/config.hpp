@@ -169,8 +169,6 @@ struct DBConfigOptions {
 	set<CompressionType> disabled_compression_methods;
 	//! Force a specific bitpacking mode to be used when using the bitpacking compression method
 	BitpackingMode force_bitpacking_mode = BitpackingMode::AUTO;
-	//! Debug setting for window aggregation mode: (window, combine, separate)
-	WindowAggregationMode window_mode = WindowAggregationMode::WINDOW;
 	//! Database configuration variables as controlled by SET
 	case_insensitive_map_t<Value> set_variables;
 	//! Database configuration variable default values;
@@ -181,8 +179,6 @@ struct DBConfigOptions {
 	bool allow_unsigned_extensions = false;
 	//! Whether community extensions should be loaded
 	bool allow_community_extensions = true;
-	//! Enable emitting FSST Vectors
-	bool enable_fsst_vectors = false;
 	//! Start transactions immediately in all attached databases - instead of lazily when a database is referenced
 	bool immediate_transaction_mode = false;
 	//! Debug setting - how to initialize  blocks in the storage layer when allocating
@@ -215,8 +211,6 @@ struct DBConfigOptions {
 	idx_t default_block_header_size = DUCKDB_BLOCK_HEADER_STORAGE_SIZE;
 	//!  Whether or not to abort if a serialization exception is thrown during WAL playback (when reading truncated WAL)
 	bool abort_on_wal_failure = false;
-	//! The maximum amount of vacuum tasks to schedule during a checkpoint
-	idx_t max_vacuum_tasks = 100;
 	//! Paths that are explicitly allowed, even if enable_external_access is false
 	unordered_set<string> allowed_paths;
 	//! Directories that are explicitly allowed, even if enable_external_access is false

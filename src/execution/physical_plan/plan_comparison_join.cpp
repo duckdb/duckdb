@@ -67,15 +67,16 @@ PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoi
 	}
 
 	D_ASSERT(op.left_projection_map.empty());
-	if (left.estimated_cardinality <= client_config.nested_loop_join_threshold ||
-	    right.estimated_cardinality <= client_config.nested_loop_join_threshold) {
+	idx_t nested_loop_join_threshold = DBConfig::GetSetting<NestedLoopJoinThresholdSetting>(context);
+	if (left.estimated_cardinality <= nested_loop_join_threshold ||
+	    right.estimated_cardinality <= nested_loop_join_threshold) {
 		can_iejoin = false;
 		can_merge = false;
 	}
 
 	if (can_merge && can_iejoin) {
-		if (left.estimated_cardinality <= client_config.merge_join_threshold ||
-		    right.estimated_cardinality <= client_config.merge_join_threshold) {
+		idx_t merge_join_threshold = DBConfig::GetSetting<MergeJoinThresholdSetting>(context);
+		if (left.estimated_cardinality <= merge_join_threshold || right.estimated_cardinality <= merge_join_threshold) {
 			can_iejoin = false;
 		}
 	}

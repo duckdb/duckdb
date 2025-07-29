@@ -242,18 +242,8 @@ void DebugVerifyVectorSetting::OnSet(SettingCallbackInfo &info, Value &parameter
 //===----------------------------------------------------------------------===//
 // Debug Window Mode
 //===----------------------------------------------------------------------===//
-void DebugWindowModeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	auto str_input = StringUtil::Upper(input.GetValue<string>());
-	config.options.window_mode = EnumUtil::FromString<WindowAggregationMode>(str_input);
-}
-
-void DebugWindowModeSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.window_mode = DBConfig().options.window_mode;
-}
-
-Value DebugWindowModeSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value(StringUtil::Lower(EnumUtil::ToString(config.options.window_mode)));
+void DebugWindowModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	EnumUtil::FromString<WindowAggregationMode>(StringValue::Get(parameter));
 }
 
 //===----------------------------------------------------------------------===//
@@ -279,23 +269,6 @@ Value DisableDatabaseInvalidationSetting::GetSetting(const ClientContext &contex
 }
 
 //===----------------------------------------------------------------------===//
-// Disable Timestamptz Casts
-//===----------------------------------------------------------------------===//
-void DisableTimestamptzCastsSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto &config = ClientConfig::GetConfig(context);
-	config.disable_timestamptz_casts = input.GetValue<bool>();
-}
-
-void DisableTimestamptzCastsSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).disable_timestamptz_casts = ClientConfig().disable_timestamptz_casts;
-}
-
-Value DisableTimestamptzCastsSetting::GetSetting(const ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	return Value::BOOLEAN(config.disable_timestamptz_casts);
-}
-
-//===----------------------------------------------------------------------===//
 // Enable External Access
 //===----------------------------------------------------------------------===//
 void EnableExternalAccessSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -315,22 +288,6 @@ void EnableExternalAccessSetting::ResetGlobal(DatabaseInstance *db, DBConfig &co
 Value EnableExternalAccessSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value::BOOLEAN(config.options.enable_external_access);
-}
-
-//===----------------------------------------------------------------------===//
-// Enable F S S T Vectors
-//===----------------------------------------------------------------------===//
-void EnableFSSTVectorsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.enable_fsst_vectors = input.GetValue<bool>();
-}
-
-void EnableFSSTVectorsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.enable_fsst_vectors = DBConfig().options.enable_fsst_vectors;
-}
-
-Value EnableFSSTVectorsSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::BOOLEAN(config.options.enable_fsst_vectors);
 }
 
 //===----------------------------------------------------------------------===//
@@ -523,56 +480,6 @@ Value IEEEFloatingPointOpsSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
-// Immediate Transaction Mode
-//===----------------------------------------------------------------------===//
-void ImmediateTransactionModeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.immediate_transaction_mode = input.GetValue<bool>();
-}
-
-void ImmediateTransactionModeSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.immediate_transaction_mode = DBConfig().options.immediate_transaction_mode;
-}
-
-Value ImmediateTransactionModeSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::BOOLEAN(config.options.immediate_transaction_mode);
-}
-
-//===----------------------------------------------------------------------===//
-// Integer Division
-//===----------------------------------------------------------------------===//
-void IntegerDivisionSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto &config = ClientConfig::GetConfig(context);
-	config.integer_division = input.GetValue<bool>();
-}
-
-void IntegerDivisionSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).integer_division = ClientConfig().integer_division;
-}
-
-Value IntegerDivisionSetting::GetSetting(const ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	return Value::BOOLEAN(config.integer_division);
-}
-
-//===----------------------------------------------------------------------===//
-// Late Materialization Max Rows
-//===----------------------------------------------------------------------===//
-void LateMaterializationMaxRowsSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto &config = ClientConfig::GetConfig(context);
-	config.late_materialization_max_rows = input.GetValue<idx_t>();
-}
-
-void LateMaterializationMaxRowsSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).late_materialization_max_rows = ClientConfig().late_materialization_max_rows;
-}
-
-Value LateMaterializationMaxRowsSetting::GetSetting(const ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	return Value::UBIGINT(config.late_materialization_max_rows);
-}
-
-//===----------------------------------------------------------------------===//
 // Lock Configuration
 //===----------------------------------------------------------------------===//
 void LockConfigurationSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -603,73 +510,6 @@ void MaxExpressionDepthSetting::ResetLocal(ClientContext &context) {
 Value MaxExpressionDepthSetting::GetSetting(const ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	return Value::UBIGINT(config.max_expression_depth);
-}
-
-//===----------------------------------------------------------------------===//
-// Max Vacuum Tasks
-//===----------------------------------------------------------------------===//
-void MaxVacuumTasksSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.max_vacuum_tasks = input.GetValue<idx_t>();
-}
-
-void MaxVacuumTasksSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.max_vacuum_tasks = DBConfig().options.max_vacuum_tasks;
-}
-
-Value MaxVacuumTasksSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::UBIGINT(config.options.max_vacuum_tasks);
-}
-
-//===----------------------------------------------------------------------===//
-// Merge Join Threshold
-//===----------------------------------------------------------------------===//
-void MergeJoinThresholdSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto &config = ClientConfig::GetConfig(context);
-	config.merge_join_threshold = input.GetValue<idx_t>();
-}
-
-void MergeJoinThresholdSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).merge_join_threshold = ClientConfig().merge_join_threshold;
-}
-
-Value MergeJoinThresholdSetting::GetSetting(const ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	return Value::UBIGINT(config.merge_join_threshold);
-}
-
-//===----------------------------------------------------------------------===//
-// Nested Loop Join Threshold
-//===----------------------------------------------------------------------===//
-void NestedLoopJoinThresholdSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto &config = ClientConfig::GetConfig(context);
-	config.nested_loop_join_threshold = input.GetValue<idx_t>();
-}
-
-void NestedLoopJoinThresholdSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).nested_loop_join_threshold = ClientConfig().nested_loop_join_threshold;
-}
-
-Value NestedLoopJoinThresholdSetting::GetSetting(const ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	return Value::UBIGINT(config.nested_loop_join_threshold);
-}
-
-//===----------------------------------------------------------------------===//
-// Order By Non Integer Literal
-//===----------------------------------------------------------------------===//
-void OrderByNonIntegerLiteralSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto &config = ClientConfig::GetConfig(context);
-	config.order_by_non_integer_literal = input.GetValue<bool>();
-}
-
-void OrderByNonIntegerLiteralSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).order_by_non_integer_literal = ClientConfig().order_by_non_integer_literal;
-}
-
-Value OrderByNonIntegerLiteralSetting::GetSetting(const ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	return Value::BOOLEAN(config.order_by_non_integer_literal);
 }
 
 //===----------------------------------------------------------------------===//

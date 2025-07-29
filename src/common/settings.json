@@ -236,8 +236,8 @@
         "name": "debug_window_mode",
         "description": "DEBUG SETTING: switch window mode to use",
         "type": "ENUM<WindowAggregationMode>",
-        "scope": "global",
-        "internal_setting": "window_mode"
+        "default_scope": "global",
+        "default_value": "WINDOW"
     },
     {
         "name": "default_block_size",
@@ -300,7 +300,8 @@
         "name": "disable_timestamptz_casts",
         "description": "Disable casting from timestamp to timestamptz ",
         "type": "BOOLEAN",
-        "scope": "local"
+        "default_scope": "local",
+        "default_value": "false"
     },
     {
         "name": "disabled_compression_methods",
@@ -367,7 +368,8 @@
         "name": "enable_fsst_vectors",
         "description": "Allow scans on FSST compressed segments to emit compressed vectors to utilize late decompression",
         "type": "BOOLEAN",
-        "scope": "global",
+        "default_scope": "global",
+        "default_value": "false",
         "struct": "EnableFSSTVectorsSetting"
     },
     {
@@ -405,9 +407,8 @@
         "name": "enable_object_cache",
         "description": "[PLACEHOLDER] Legacy setting - does nothing",
         "type": "BOOLEAN",
-        "scope": "global",
-        "internal_setting": "object_cache_enable",
-        "custom_implementation": true
+        "default_scope": "global",
+        "default_value": "false"
     },
     {
         "name": "enable_profiling",
@@ -548,7 +549,8 @@
         "name": "immediate_transaction_mode",
         "description": "Whether transactions should be started lazily when needed, or immediately when BEGIN TRANSACTION is called",
         "type": "BOOLEAN",
-        "scope": "global"
+        "default_scope": "global",
+        "default_value": "false"
     },
     {
         "name": "index_scan_max_count",
@@ -571,7 +573,8 @@
         "name": "integer_division",
         "description": "Whether or not the / operator defaults to integer division, or to floating point division",
         "type": "BOOLEAN",
-        "scope": "local"
+        "default_scope": "local",
+        "default_value": "false"
     },
     {
         "name": "lambda_syntax",
@@ -584,7 +587,8 @@
         "name": "late_materialization_max_rows",
         "description": "The maximum amount of rows in the LIMIT/SAMPLE for which we trigger late materialization",
         "type": "UBIGINT",
-        "scope": "local"
+        "default_scope": "local",
+        "default_value": "50"
     },
     {
         "name": "lock_configuration",
@@ -650,19 +654,22 @@
         "name": "max_vacuum_tasks",
         "description": "The maximum vacuum tasks to schedule during a checkpoint.",
         "type": "UBIGINT",
-        "scope": "global"
+        "default_scope": "global",
+        "default_value": "100"
     },
     {
         "name": "merge_join_threshold",
         "description": "The maximum number of rows on either table to choose a merge join",
         "type": "UBIGINT",
-        "scope": "local"
+        "default_scope": "local",
+        "default_value": "1000"
     },
     {
         "name": "nested_loop_join_threshold",
         "description": "The maximum number of rows on either table to choose a nested loop join",
         "type": "UBIGINT",
-        "scope": "local"
+        "default_scope": "local",
+        "default_value": "5"
     },
     {
         "name": "old_implicit_casting",
@@ -675,7 +682,8 @@
         "name": "order_by_non_integer_literal",
         "description": "Allow ordering by non-integer literals - ordering by such literals has no effect.",
         "type": "BOOLEAN",
-        "scope": "local"
+        "default_scope": "local",
+        "default_value": "false"
     },
     {
         "name": "ordered_aggregate_threshold",

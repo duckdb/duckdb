@@ -18,6 +18,7 @@
 #include "duckdb/planner/expression_binder/base_select_binder.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -159,8 +160,8 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 			if (order.expression->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 				auto &const_expr = order.expression->Cast<ConstantExpression>();
 				if (!const_expr.value.type().IsIntegral()) {
-					auto &config = ClientConfig::GetConfig(context);
-					if (!config.order_by_non_integer_literal) {
+					auto order_by_non_integer_literal = DBConfig::GetSetting<OrderByNonIntegerLiteralSetting>(context);
+					if (!order_by_non_integer_literal) {
 						throw BinderException(
 						    *order.expression,
 						    "ORDER BY non-integer literal has no effect.\n* SET order_by_non_integer_literal=true to "
