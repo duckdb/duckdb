@@ -88,9 +88,8 @@ struct AllowExtensionsMetadataMismatchSetting {
 	static constexpr const char *Name = "allow_extensions_metadata_mismatch";
 	static constexpr const char *Description = "Allow to load extensions with not compatible metadata";
 	static constexpr const char *InputType = "BOOLEAN";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
 
 struct AllowPersistentSecretsSetting {

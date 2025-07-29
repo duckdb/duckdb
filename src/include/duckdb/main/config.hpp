@@ -193,8 +193,6 @@ struct DBConfigOptions {
 	bool allow_unsigned_extensions = false;
 	//! Whether community extensions should be loaded
 	bool allow_community_extensions = true;
-	//! Whether extensions with missing metadata should be loaded
-	bool allow_extensions_metadata_mismatch = false;
 	//! Enable emitting FSST Vectors
 	bool enable_fsst_vectors = false;
 	//! Start transactions immediately in all attached databases - instead of lazily when a database is referenced
@@ -385,6 +383,10 @@ public:
 	template <class OP>
 	static typename OP::RETURN_TYPE GetSetting(const DBConfig &config) {
 		return GetSettingInternal(config, OP::Name, OP::DefaultValue).template GetValue<typename OP::RETURN_TYPE>();
+	}
+	template <class OP>
+	static typename OP::RETURN_TYPE GetSetting(const DatabaseInstance &db) {
+		return GetSetting<OP>(GetConfig(db));
 	}
 
 	template <class OP>

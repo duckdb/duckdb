@@ -10,6 +10,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/extension.hpp"
 #include "duckdb/main/extension_install_info.hpp"
+#include "duckdb/main/settings.hpp"
 
 // Note that c++ preprocessor doesn't have a nice way to clean this up so we need to set the defines we use to false
 // explicitly when they are undefined
@@ -259,8 +260,6 @@ static ExtensionUpdateResult UpdateExtensionInternal(ClientContext &context, Dat
 	ExtensionUpdateResult result;
 	result.extension_name = extension_name;
 
-	auto &config = DBConfig::GetConfig(db);
-
 	if (!fs.FileExists(full_extension_path)) {
 		result.tag = ExtensionUpdateResultTag::NOT_INSTALLED;
 		return result;
@@ -276,7 +275,7 @@ static ExtensionUpdateResult UpdateExtensionInternal(ClientContext &context, Dat
 	// Parse the version of the extension before updating
 	auto ext_binary_handle = fs.OpenFile(full_extension_path, FileOpenFlags::FILE_FLAGS_READ);
 	auto parsed_metadata = ExtensionHelper::ParseExtensionMetaData(*ext_binary_handle);
-	if (!parsed_metadata.AppearsValid() && !config.options.allow_extensions_metadata_mismatch) {
+	if (!parsed_metadata.AppearsValid() && !DBConfig::GetSetting<AllowExtensionsMetadataMismatchSetting>(context)) {
 		throw IOException(
 		    "Failed to update extension: '%s', the metadata of the extension appears invalid! To resolve this, either "
 		    "reinstall the extension using 'FORCE INSTALL %s', manually remove the file '%s', or enable '"

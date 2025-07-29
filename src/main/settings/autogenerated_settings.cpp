@@ -79,22 +79,6 @@ Value AllowCommunityExtensionsSetting::GetSetting(const ClientContext &context) 
 }
 
 //===----------------------------------------------------------------------===//
-// Allow Extensions Metadata Mismatch
-//===----------------------------------------------------------------------===//
-void AllowExtensionsMetadataMismatchSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.allow_extensions_metadata_mismatch = input.GetValue<bool>();
-}
-
-void AllowExtensionsMetadataMismatchSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.allow_extensions_metadata_mismatch = DBConfig().options.allow_extensions_metadata_mismatch;
-}
-
-Value AllowExtensionsMetadataMismatchSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::BOOLEAN(config.options.allow_extensions_metadata_mismatch);
-}
-
-//===----------------------------------------------------------------------===//
 // Allow Unredacted Secrets
 //===----------------------------------------------------------------------===//
 void AllowUnredactedSecretsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {

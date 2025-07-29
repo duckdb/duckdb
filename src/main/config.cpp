@@ -62,7 +62,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(AllocatorBulkDeallocationFlushThresholdSetting),
     DUCKDB_GLOBAL(AllocatorFlushThresholdSetting),
     DUCKDB_GLOBAL(AllowCommunityExtensionsSetting),
-    DUCKDB_GLOBAL(AllowExtensionsMetadataMismatchSetting),
+    DUCKDB_SETTING(AllowExtensionsMetadataMismatchSetting),
     DUCKDB_GLOBAL(AllowPersistentSecretsSetting),
     DUCKDB_GLOBAL(AllowUnredactedSecretsSetting),
     DUCKDB_GLOBAL(AllowUnsignedExtensionsSetting),
