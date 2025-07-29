@@ -794,12 +794,18 @@ std::string LocalFileSystem::GetLastErrorAsString() {
 	if (errorMessageID == 0)
 		return std::string(); // No error message has been recorded
 
-	LPSTR messageBuffer = nullptr;
+	LPWSTR messageBuffer = nullptr;
 	idx_t size =
-	    FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-	                   NULL, errorMessageID, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&messageBuffer, 0, NULL);
+	    FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+	                   NULL, errorMessageID, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPWSTR)&messageBuffer, 0, NULL);
 
-	std::string message(messageBuffer, size);
+	if (size == 0) {
+		return std::string();
+	}
+
+	// Convert wide string to UTF-8
+	std::wstring wideMessage(messageBuffer, size);
+	std::string message = WindowsUtil::UnicodeToUTF8(wideMessage.c_str());
 
 	// Free the buffer.
 	LocalFree(messageBuffer);
