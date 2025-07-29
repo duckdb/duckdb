@@ -177,13 +177,13 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(ZstdMinStringLengthSetting),
     FINAL_SETTING};
 
-static const ConfigurationAlias internal_aliases[] = {DUCKDB_SETTING_ALIAS("memory_limit", 82),
-                                                      DUCKDB_SETTING_ALIAS("null_order", 33),
-                                                      DUCKDB_SETTING_ALIAS("profiling_output", 101),
-                                                      DUCKDB_SETTING_ALIAS("user", 115),
-                                                      DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 20),
-                                                      DUCKDB_SETTING_ALIAS("worker_threads", 114),
-                                                      FINAL_ALIAS};
+static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("memory_limit", 82),
+                                                     DUCKDB_SETTING_ALIAS("null_order", 33),
+                                                     DUCKDB_SETTING_ALIAS("profiling_output", 101),
+                                                     DUCKDB_SETTING_ALIAS("user", 115),
+                                                     DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 20),
+                                                     DUCKDB_SETTING_ALIAS("worker_threads", 114),
+                                                     FINAL_ALIAS};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {
 	vector<ConfigurationOption> options;
@@ -206,7 +206,7 @@ idx_t DBConfig::GetOptionCount() {
 }
 
 idx_t DBConfig::GetAliasCount() {
-	return sizeof(internal_aliases) / sizeof(ConfigurationAlias) - 1;
+	return sizeof(setting_aliases) / sizeof(ConfigurationAlias) - 1;
 }
 
 vector<string> DBConfig::GetOptionNames() {
@@ -214,8 +214,8 @@ vector<string> DBConfig::GetOptionNames() {
 	for (idx_t index = 0; internal_options[index].name; index++) {
 		names.emplace_back(internal_options[index].name);
 	}
-	for (idx_t index = 0; internal_aliases[index].alias; index++) {
-		names.emplace_back(internal_aliases[index].alias);
+	for (idx_t index = 0; setting_aliases[index].alias; index++) {
+		names.emplace_back(setting_aliases[index].alias);
 	}
 	return names;
 }
@@ -231,7 +231,7 @@ optional_ptr<const ConfigurationAlias> DBConfig::GetAliasByIndex(idx_t target_in
 	if (target_index >= GetAliasCount()) {
 		return nullptr;
 	}
-	return internal_aliases + target_index;
+	return setting_aliases + target_index;
 }
 
 optional_ptr<const ConfigurationOption> DBConfig::GetOptionByName(const string &name) {
@@ -242,10 +242,10 @@ optional_ptr<const ConfigurationOption> DBConfig::GetOptionByName(const string &
 			return internal_options + index;
 		}
 	}
-	for (idx_t index = 0; internal_aliases[index].alias; index++) {
+	for (idx_t index = 0; setting_aliases[index].alias; index++) {
 		D_ASSERT(StringUtil::Lower(internal_options[index].name) == string(internal_options[index].name));
-		if (internal_aliases[index].alias == lname) {
-			return GetOptionByIndex(internal_aliases[index].option_index);
+		if (setting_aliases[index].alias == lname) {
+			return GetOptionByIndex(setting_aliases[index].option_index);
 		}
 	}
 	return nullptr;

@@ -43,7 +43,7 @@ def generate_scope_code(file):
 
     new_array_section = ',\n    '.join([x[1] for x in new_entries])
     new_array_section += ',    FINAL_SETTING};\n\n'
-    new_array_section += 'static const ConfigurationAlias internal_aliases[] = {'
+    new_array_section += 'static const ConfigurationAlias setting_aliases[] = {'
     new_array_section += ',\n    '.join([x[2] for x in new_aliases])
 
     return before_array + new_array_section + after_array
