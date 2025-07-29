@@ -33,8 +33,6 @@ OrderPreservationType PhysicalPlanGenerator::OrderPreservationRecursive(Physical
 }
 
 bool PhysicalPlanGenerator::PreserveInsertionOrder(ClientContext &context, PhysicalOperator &plan) {
-	auto &config = DBConfig::GetConfig(context);
-
 	auto preservation_type = OrderPreservationRecursive(plan);
 	if (preservation_type == OrderPreservationType::FIXED_ORDER) {
 		// always need to maintain preservation order
@@ -45,7 +43,7 @@ bool PhysicalPlanGenerator::PreserveInsertionOrder(ClientContext &context, Physi
 		return false;
 	}
 	// preserve insertion order - check flags
-	if (!config.GetSetting<PreserveInsertionOrderSetting>(context)) {
+	if (!DBConfig::GetSetting<PreserveInsertionOrderSetting>(context)) {
 		// preserving insertion order is disabled by config
 		return false;
 	}

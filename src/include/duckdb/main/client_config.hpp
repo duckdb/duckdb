@@ -119,9 +119,6 @@ struct ClientConfig {
 	//! The threshold at which we switch from using filtered aggregates to LIST with a dedicated pivot operator
 	idx_t pivot_filter_threshold = 20;
 
-	//! The maximum amount of OR filters we generate dynamically from a hash join
-	idx_t dynamic_or_filter_threshold = 50;
-
 	//! The maximum amount of rows in the LIMIT/SAMPLE for which we trigger late materialization
 	idx_t late_materialization_max_rows = 50;
 

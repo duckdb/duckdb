@@ -134,7 +134,6 @@ bool Pipeline::ScheduleParallel(shared_ptr<Event> &event) {
 }
 
 bool Pipeline::IsOrderDependent() const {
-	auto &config = DBConfig::GetConfig(executor.context);
 	if (source) {
 		auto source_order = source->SourceOrder();
 		if (source_order == OrderPreservationType::FIXED_ORDER) {
@@ -153,7 +152,7 @@ bool Pipeline::IsOrderDependent() const {
 			return true;
 		}
 	}
-	if (!config.GetSetting<PreserveInsertionOrderSetting>(executor.context)) {
+	if (!DBConfig::GetSetting<PreserveInsertionOrderSetting>(executor.context)) {
 		return false;
 	}
 	if (sink && sink->SinkOrderDependent()) {

@@ -495,31 +495,10 @@ Value DefaultBlockSizeSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Default Collation
 //===----------------------------------------------------------------------===//
-void DefaultCollationSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	auto parameter = StringUtil::Lower(input.ToString());
-	config.options.collation = parameter;
-}
-
-void DefaultCollationSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.collation = DBConfig().options.collation;
-}
-
-void DefaultCollationSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto parameter = input.ToString();
-	// bind the collation to verify that it exists
-	ExpressionBinder::TestCollation(context, parameter);
-	auto &config = DBConfig::GetConfig(context);
-	config.options.collation = parameter;
-}
-
-void DefaultCollationSetting::ResetLocal(ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	config.options.collation = DBConfig().options.collation;
-}
-
-Value DefaultCollationSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value(config.options.collation);
+void DefaultCollationSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (info.context) {
+		ExpressionBinder::TestCollation(*info.context, input.ToString());
+	}
 }
 
 //===----------------------------------------------------------------------===//
@@ -1145,12 +1124,11 @@ Value HTTPLoggingOutputSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Index Scan Percentage
 //===----------------------------------------------------------------------===//
-bool IndexScanPercentageSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void IndexScanPercentageSetting::OnSet(SettingCallbackInfo &, Value &input) {
 	auto index_scan_percentage = input.GetValue<double>();
 	if (index_scan_percentage < 0 || index_scan_percentage > 1.0) {
 		throw InvalidInputException("the index scan percentage must be within [0, 1]");
 	}
-	return true;
 }
 
 //===----------------------------------------------------------------------===//

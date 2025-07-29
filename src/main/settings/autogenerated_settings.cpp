@@ -250,22 +250,6 @@ Value AutoloadKnownExtensionsSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
-// Catalog Error Max Schemas
-//===----------------------------------------------------------------------===//
-void CatalogErrorMaxSchemasSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.catalog_error_max_schemas = input.GetValue<idx_t>();
-}
-
-void CatalogErrorMaxSchemasSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.catalog_error_max_schemas = DBConfig().options.catalog_error_max_schemas;
-}
-
-Value CatalogErrorMaxSchemasSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::UBIGINT(config.options.catalog_error_max_schemas);
-}
-
-//===----------------------------------------------------------------------===//
 // Checkpoint Threshold
 //===----------------------------------------------------------------------===//
 void CheckpointThresholdSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
@@ -454,23 +438,6 @@ Value DisableTimestamptzCastsSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
-// Dynamic Or Filter Threshold
-//===----------------------------------------------------------------------===//
-void DynamicOrFilterThresholdSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto &config = ClientConfig::GetConfig(context);
-	config.dynamic_or_filter_threshold = input.GetValue<idx_t>();
-}
-
-void DynamicOrFilterThresholdSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).dynamic_or_filter_threshold = ClientConfig().dynamic_or_filter_threshold;
-}
-
-Value DynamicOrFilterThresholdSetting::GetSetting(const ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	return Value::UBIGINT(config.dynamic_or_filter_threshold);
-}
-
-//===----------------------------------------------------------------------===//
 // Enable External Access
 //===----------------------------------------------------------------------===//
 void EnableExternalAccessSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -525,22 +492,6 @@ Value EnableHTTPMetadataCacheSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
-// Enable Macro Dependencies
-//===----------------------------------------------------------------------===//
-void EnableMacroDependenciesSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.enable_macro_dependencies = input.GetValue<bool>();
-}
-
-void EnableMacroDependenciesSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.enable_macro_dependencies = DBConfig().options.enable_macro_dependencies;
-}
-
-Value EnableMacroDependenciesSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::BOOLEAN(config.options.enable_macro_dependencies);
-}
-
-//===----------------------------------------------------------------------===//
 // Enable Progress Bar
 //===----------------------------------------------------------------------===//
 void EnableProgressBarSetting::SetLocal(ClientContext &context, const Value &input) {
@@ -561,22 +512,6 @@ void EnableProgressBarSetting::ResetLocal(ClientContext &context) {
 Value EnableProgressBarSetting::GetSetting(const ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	return Value::BOOLEAN(config.enable_progress_bar);
-}
-
-//===----------------------------------------------------------------------===//
-// Enable View Dependencies
-//===----------------------------------------------------------------------===//
-void EnableViewDependenciesSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.enable_view_dependencies = input.GetValue<bool>();
-}
-
-void EnableViewDependenciesSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.enable_view_dependencies = DBConfig().options.enable_view_dependencies;
-}
-
-Value EnableViewDependenciesSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::BOOLEAN(config.options.enable_view_dependencies);
 }
 
 //===----------------------------------------------------------------------===//
@@ -746,41 +681,6 @@ Value ImmediateTransactionModeSetting::GetSetting(const ClientContext &context) 
 }
 
 //===----------------------------------------------------------------------===//
-// Index Scan Max Count
-//===----------------------------------------------------------------------===//
-void IndexScanMaxCountSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.index_scan_max_count = input.GetValue<idx_t>();
-}
-
-void IndexScanMaxCountSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.index_scan_max_count = DBConfig().options.index_scan_max_count;
-}
-
-Value IndexScanMaxCountSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::UBIGINT(config.options.index_scan_max_count);
-}
-
-//===----------------------------------------------------------------------===//
-// Index Scan Percentage
-//===----------------------------------------------------------------------===//
-void IndexScanPercentageSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (!OnGlobalSet(db, config, input)) {
-		return;
-	}
-	config.options.index_scan_percentage = input.GetValue<double>();
-}
-
-void IndexScanPercentageSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.index_scan_percentage = DBConfig().options.index_scan_percentage;
-}
-
-Value IndexScanPercentageSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::DOUBLE(config.options.index_scan_percentage);
-}
-
-//===----------------------------------------------------------------------===//
 // Integer Division
 //===----------------------------------------------------------------------===//
 void IntegerDivisionSetting::SetLocal(ClientContext &context, const Value &input) {
@@ -895,22 +795,6 @@ void NestedLoopJoinThresholdSetting::ResetLocal(ClientContext &context) {
 Value NestedLoopJoinThresholdSetting::GetSetting(const ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	return Value::UBIGINT(config.nested_loop_join_threshold);
-}
-
-//===----------------------------------------------------------------------===//
-// Old Implicit Casting
-//===----------------------------------------------------------------------===//
-void OldImplicitCastingSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.old_implicit_casting = input.GetValue<bool>();
-}
-
-void OldImplicitCastingSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.old_implicit_casting = DBConfig().options.old_implicit_casting;
-}
-
-Value OldImplicitCastingSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::BOOLEAN(config.options.old_implicit_casting);
 }
 
 //===----------------------------------------------------------------------===//
@@ -1075,22 +959,6 @@ void PreserveIdentifierCaseSetting::ResetLocal(ClientContext &context) {
 Value PreserveIdentifierCaseSetting::GetSetting(const ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	return Value::BOOLEAN(config.preserve_identifier_case);
-}
-
-//===----------------------------------------------------------------------===//
-// Preserve Insertion Order
-//===----------------------------------------------------------------------===//
-void PreserveInsertionOrderSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.preserve_insertion_order = input.GetValue<bool>();
-}
-
-void PreserveInsertionOrderSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.preserve_insertion_order = DBConfig().options.preserve_insertion_order;
-}
-
-Value PreserveInsertionOrderSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::BOOLEAN(config.options.preserve_insertion_order);
 }
 
 //===----------------------------------------------------------------------===//

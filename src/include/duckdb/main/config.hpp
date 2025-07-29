@@ -195,8 +195,6 @@ struct DBConfigOptions {
 	bool buffer_manager_track_eviction_timestamps = false;
 	//! Whether or not to allow printing unredacted secrets
 	bool allow_unredacted_secrets = false;
-	//! The collation type of the database
-	string collation = string();
 	//! Disables invalidating the database instance when encountering a fatal error.
 	bool disable_database_invalidation = false;
 	//! enable COPY and related commands
@@ -232,8 +230,6 @@ struct DBConfigOptions {
 	BitpackingMode force_bitpacking_mode = BitpackingMode::AUTO;
 	//! Debug setting for window aggregation mode: (window, combine, separate)
 	WindowAggregationMode window_mode = WindowAggregationMode::WINDOW;
-	//! Whether preserving insertion order should be preserved
-	bool preserve_insertion_order = true;
 	//! Whether Arrow Arrays use Large or Regular buffers
 	ArrowOffsetSize arrow_offset_size = ArrowOffsetSize::REGULAR;
 	//! Whether LISTs should produce Arrow ListViews
@@ -258,10 +254,6 @@ struct DBConfigOptions {
 	bool allow_extensions_metadata_mismatch = false;
 	//! Enable emitting FSST Vectors
 	bool enable_fsst_vectors = false;
-	//! Enable VIEWs to create dependencies
-	bool enable_view_dependencies = false;
-	//! Enable macros to create dependencies
-	bool enable_macro_dependencies = false;
 	//! Start transactions immediately in all attached databases - instead of lazily when a database is referenced
 	bool immediate_transaction_mode = false;
 	//! Debug setting - how to initialize  blocks in the storage layer when allocating
@@ -296,16 +288,6 @@ struct DBConfigOptions {
 	idx_t default_block_header_size = DUCKDB_BLOCK_HEADER_STORAGE_SIZE;
 	//!  Whether or not to abort if a serialization exception is thrown during WAL playback (when reading truncated WAL)
 	bool abort_on_wal_failure = false;
-	//! The index_scan_percentage sets a threshold for index scans.
-	//! If fewer than MAX(index_scan_max_count, index_scan_percentage * total_row_count)
-	//! rows match, we perform an index scan instead of a table scan.
-	double index_scan_percentage = 0.001;
-	//! The index_scan_max_count sets a threshold for index scans.
-	//! If fewer than MAX(index_scan_max_count, index_scan_percentage * total_row_count)
-	//! rows match, we perform an index scan instead of a table scan.
-	idx_t index_scan_max_count = STANDARD_VECTOR_SIZE;
-	//! The maximum number of schemas we will look through for "did you mean..." style errors in the catalog
-	idx_t catalog_error_max_schemas = 100;
 	//!  Whether or not to always write to the WAL file, even if this is not required
 	bool debug_skip_checkpoint_on_commit = false;
 	//! Vector verification to enable (debug setting only)
@@ -454,13 +436,12 @@ public:
 	const string UserAgent() const;
 
 	template <class OP>
-	typename OP::RETURN_TYPE GetSetting(const ClientContext &context) const {
-		lock_guard<mutex> lock(config_lock);
-		return OP::GetSetting(context).template GetValue<typename OP::RETURN_TYPE>();
+	static typename OP::RETURN_TYPE GetSetting(const ClientContext &context) {
+		return GetSettingInternal(context, OP::Name, OP::DefaultValue).template GetValue<typename OP::RETURN_TYPE>();
 	}
 
 	template <class OP>
-	typename OP::RETURN_TYPE GetEnum(const ClientContext &context) const {
+	static typename OP::RETURN_TYPE GetEnum(const ClientContext &context) {
 		return EnumUtil::FromString<typename OP::RETURN_TYPE>(
 		    GetEnumSettingInternal(context, OP::Name, OP::DefaultValue));
 	}
@@ -477,6 +458,7 @@ public:
 	string SanitizeAllowedPath(const string &path) const;
 
 private:
+	static Value GetSettingInternal(const ClientContext &context, const char *setting, const char *default_value);
 	static string GetEnumSettingInternal(const ClientContext &context, const char *setting, const char *default_value);
 
 private:

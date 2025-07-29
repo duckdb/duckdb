@@ -76,7 +76,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(AutoinstallExtensionRepositorySetting),
     DUCKDB_GLOBAL(AutoinstallKnownExtensionsSetting),
     DUCKDB_GLOBAL(AutoloadKnownExtensionsSetting),
-    DUCKDB_GLOBAL(CatalogErrorMaxSchemasSetting),
+    DUCKDB_SETTING(CatalogErrorMaxSchemasSetting),
     DUCKDB_GLOBAL(CheckpointThresholdSetting),
     DUCKDB_GLOBAL(CustomExtensionRepositorySetting),
     DUCKDB_LOCAL(CustomProfilingSettingsSetting),
@@ -89,7 +89,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(DebugVerifyVectorSetting),
     DUCKDB_GLOBAL(DebugWindowModeSetting),
     DUCKDB_GLOBAL(DefaultBlockSizeSetting),
-    DUCKDB_GLOBAL_LOCAL(DefaultCollationSetting),
+    DUCKDB_SETTING_CALLBACK(DefaultCollationSetting),
     DUCKDB_SETTING_CALLBACK(DefaultNullOrderSetting),
     DUCKDB_SETTING_CALLBACK(DefaultOrderSetting),
     DUCKDB_GLOBAL(DefaultSecretStorageSetting),
@@ -100,19 +100,19 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(DisabledLogTypes),
     DUCKDB_GLOBAL(DisabledOptimizersSetting),
     DUCKDB_GLOBAL(DuckDBAPISetting),
-    DUCKDB_LOCAL(DynamicOrFilterThresholdSetting),
+    DUCKDB_SETTING(DynamicOrFilterThresholdSetting),
     DUCKDB_GLOBAL(EnableExternalAccessSetting),
     DUCKDB_GLOBAL(EnableExternalFileCacheSetting),
     DUCKDB_GLOBAL(EnableFSSTVectorsSetting),
     DUCKDB_LOCAL(EnableHTTPLoggingSetting),
     DUCKDB_GLOBAL(EnableHTTPMetadataCacheSetting),
     DUCKDB_GLOBAL(EnableLogging),
-    DUCKDB_GLOBAL(EnableMacroDependenciesSetting),
+    DUCKDB_SETTING(EnableMacroDependenciesSetting),
     DUCKDB_GLOBAL(EnableObjectCacheSetting),
     DUCKDB_LOCAL(EnableProfilingSetting),
     DUCKDB_LOCAL(EnableProgressBarSetting),
     DUCKDB_LOCAL(EnableProgressBarPrintSetting),
-    DUCKDB_GLOBAL(EnableViewDependenciesSetting),
+    DUCKDB_SETTING(EnableViewDependenciesSetting),
     DUCKDB_GLOBAL(EnabledLogTypes),
     DUCKDB_LOCAL(ErrorsAsJSONSetting),
     DUCKDB_LOCAL(ExplainOutputSetting),
@@ -128,8 +128,8 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(HTTPProxyUsernameSetting),
     DUCKDB_LOCAL(IEEEFloatingPointOpsSetting),
     DUCKDB_GLOBAL(ImmediateTransactionModeSetting),
-    DUCKDB_GLOBAL(IndexScanMaxCountSetting),
-    DUCKDB_GLOBAL(IndexScanPercentageSetting),
+    DUCKDB_SETTING(IndexScanMaxCountSetting),
+    DUCKDB_SETTING_CALLBACK(IndexScanPercentageSetting),
     DUCKDB_LOCAL(IntegerDivisionSetting),
     DUCKDB_LOCAL(LambdaSyntaxSetting),
     DUCKDB_LOCAL(LateMaterializationMaxRowsSetting),
@@ -144,7 +144,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(MaxVacuumTasksSetting),
     DUCKDB_LOCAL(MergeJoinThresholdSetting),
     DUCKDB_LOCAL(NestedLoopJoinThresholdSetting),
-    DUCKDB_GLOBAL(OldImplicitCastingSetting),
+    DUCKDB_SETTING(OldImplicitCastingSetting),
     DUCKDB_LOCAL(OrderByNonIntegerLiteralSetting),
     DUCKDB_LOCAL(OrderedAggregateThresholdSetting),
     DUCKDB_LOCAL(PartitionedWriteFlushThresholdSetting),
@@ -156,7 +156,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_LOCAL(PivotLimitSetting),
     DUCKDB_LOCAL(PreferRangeJoinsSetting),
     DUCKDB_LOCAL(PreserveIdentifierCaseSetting),
-    DUCKDB_GLOBAL(PreserveInsertionOrderSetting),
+    DUCKDB_SETTING(PreserveInsertionOrderSetting),
     DUCKDB_GLOBAL(ProduceArrowStringViewSetting),
     DUCKDB_LOCAL(ProfileOutputSetting),
     DUCKDB_LOCAL(ProfilingCoverageSetting),
@@ -681,6 +681,14 @@ OrderType DBConfig::ResolveOrder(ClientContext &context, OrderType order_type) c
 		return order_type;
 	}
 	return GetEnum<DefaultOrderSetting>(context);
+}
+
+Value DBConfig::GetSettingInternal(const ClientContext &context, const char *setting, const char *default_value) {
+	Value result_val;
+	if (context.TryGetCurrentSetting(setting, result_val)) {
+		return result_val;
+	}
+	return Value(default_value);
 }
 
 string DBConfig::GetEnumSettingInternal(const ClientContext &context, const char *setting, const char *default_value) {

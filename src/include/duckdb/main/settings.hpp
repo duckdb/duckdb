@@ -279,9 +279,8 @@ struct CatalogErrorMaxSchemasSetting {
 	static constexpr const char *Description =
 	    "The maximum number of schemas the system will scan for \"did you mean...\" style errors in the catalog";
 	static constexpr const char *InputType = "UBIGINT";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "100";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
 
 struct CheckpointThresholdSetting {
@@ -414,11 +413,9 @@ struct DefaultCollationSetting {
 	static constexpr const char *Name = "default_collation";
 	static constexpr const char *Description = "The collation setting used when none is specified";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct DefaultNullOrderSetting {
@@ -531,9 +528,8 @@ struct DynamicOrFilterThresholdSetting {
 	static constexpr const char *Description =
 	    "The maximum amount of OR filters we generate dynamically from a hash join";
 	static constexpr const char *InputType = "UBIGINT";
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "50";
+	static constexpr SetScope DefaultScope = SetScope::LOCAL;
 };
 
 struct EnableExternalAccessSetting {
@@ -607,9 +603,8 @@ struct EnableMacroDependenciesSetting {
 	static constexpr const char *Description =
 	    "Enable created MACROs to create dependencies on the referenced objects (such as tables)";
 	static constexpr const char *InputType = "BOOLEAN";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
 
 struct EnableObjectCacheSetting {
@@ -663,9 +658,8 @@ struct EnableViewDependenciesSetting {
 	static constexpr const char *Description =
 	    "Enable created VIEWs to create dependencies on the referenced objects (such as tables)";
 	static constexpr const char *InputType = "BOOLEAN";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
 
 struct EnabledLogTypes {
@@ -830,9 +824,8 @@ struct IndexScanMaxCountSetting {
 	    "The maximum index scan count sets a threshold for index scans. If fewer than MAX(index_scan_max_count, "
 	    "index_scan_percentage * total_row_count) rows match, we perform an index scan instead of a table scan.";
 	static constexpr const char *InputType = "UBIGINT";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "2048";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
 
 struct IndexScanPercentageSetting {
@@ -842,10 +835,9 @@ struct IndexScanPercentageSetting {
 	    "The index scan percentage sets a threshold for index scans. If fewer than MAX(index_scan_max_count, "
 	    "index_scan_percentage * total_row_count) rows match, we perform an index scan instead of a table scan.";
 	static constexpr const char *InputType = "DOUBLE";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static bool OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "0.001";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct IntegerDivisionSetting {
@@ -1001,9 +993,8 @@ struct OldImplicitCastingSetting {
 	static constexpr const char *Name = "old_implicit_casting";
 	static constexpr const char *Description = "Allow implicit casting to/from VARCHAR";
 	static constexpr const char *InputType = "BOOLEAN";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
 
 struct OrderByNonIntegerLiteralSetting {
@@ -1130,9 +1121,8 @@ struct PreserveInsertionOrderSetting {
 	    "Whether or not to preserve insertion order. If set to false the system is allowed to re-order any results "
 	    "that do not contain ORDER BY clauses.";
 	static constexpr const char *InputType = "BOOLEAN";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "true";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
 
 struct ProduceArrowStringViewSetting {

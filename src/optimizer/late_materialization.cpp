@@ -412,7 +412,7 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 
 bool LateMaterialization::OptimizeLargeLimit(LogicalLimit &limit, idx_t limit_val, bool has_offset) {
 	auto &config = DBConfig::GetConfig(optimizer.context);
-	if (!has_offset && !config.GetSetting<PreserveInsertionOrderSetting>(optimizer.context)) {
+	if (!has_offset && !DBConfig::GetSetting<PreserveInsertionOrderSetting>(optimizer.context)) {
 		// we avoid optimizing large limits if preserve insertion order is false
 		// since the limit is executed in parallel anyway
 		return false;

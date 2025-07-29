@@ -212,9 +212,8 @@ bool ExtensionHelper::TryAutoLoadExtension(ClientContext &context, const string 
 	auto &dbconfig = DBConfig::GetConfig(context);
 	try {
 		if (dbconfig.options.autoinstall_known_extensions) {
-			auto &config = DBConfig::GetConfig(context);
 			auto autoinstall_repo = ExtensionRepository::GetRepositoryByUrl(
-			    StringValue::Get(config.GetSetting<AutoinstallExtensionRepositorySetting>(context)));
+			    StringValue::Get(DBConfig::GetConfig(context).options.autoinstall_extension_repo));
 			ExtensionInstallOptions options;
 			options.repository = autoinstall_repo;
 			ExtensionHelper::InstallExtension(context, extension_name, options);
