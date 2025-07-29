@@ -547,11 +547,11 @@ void ParquetWriter::FlushRowGroup(PreparedRowGroup &prepared) {
 	row_group.__isset.total_compressed_size = true;
 
 	if (encryption_config) {
-		auto row_group_ordinal = num_row_groups.load(std::memory_order_relaxed);
+		auto row_group_ordinal = num_row_groups.load();
 		if (row_group_ordinal > std::numeric_limits<int16_t>::max()) {
 			throw InvalidInputException("RowGroup ordinal exceeds 32767 when encryption enabled");
 		}
-		row_group.ordinal = static_cast<int16_t>(num_row_groups);
+		row_group.ordinal = NumericCast<int16_t>(row_group_ordinal);
 		row_group.__isset.ordinal = true;
 	}
 
