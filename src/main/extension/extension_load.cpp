@@ -168,7 +168,8 @@ static void ComputeSHA256String(const string &to_hash, string *res) {
 	*res = duckdb_mbedtls::MbedTlsWrapper::ComputeSha256Hash(to_hash);
 }
 
-static void ComputeSHA256FileSegment(FileHandle *handle, const idx_t start, const idx_t end, string *res) {
+static void ComputeSHA256FileSegment(QueryContext context, FileHandle *handle, const idx_t start, const idx_t end,
+                                     string *res) {
 	idx_t iter = start;
 	const idx_t segment_size = 1024ULL * 8ULL;
 
@@ -178,7 +179,7 @@ static void ComputeSHA256FileSegment(FileHandle *handle, const idx_t start, cons
 	while (iter < end) {
 		idx_t len = std::min(end - iter, segment_size);
 		to_hash.resize(len);
-		handle->Read((void *)to_hash.data(), len, iter);
+		handle->Read(context, (void *)to_hash.data(), len, iter);
 
 		state.AddString(to_hash);
 
@@ -250,7 +251,7 @@ ParsedExtensionMetaData ExtensionHelper::ParseExtensionMetaData(FileHandle &hand
 		    ParsedExtensionMetaData::FOOTER_SIZE);
 	}
 
-	handle.Read((void *)metadata_segment.data(), metadata_segment.size(),
+	handle.Read(QueryContext(), (void *)metadata_segment.data(), metadata_segment.size(),
 	            handle.GetFileSize() - ParsedExtensionMetaData::FOOTER_SIZE);
 
 	return ParseExtensionMetaData(metadata_segment.data());
@@ -274,7 +275,8 @@ bool ExtensionHelper::CheckExtensionSignature(FileHandle &handle, ParsedExtensio
 	vector<std::thread> threads;
 	threads.reserve(numChunks);
 	for (idx_t i = 0; i < numChunks; i++) {
-		threads.emplace_back(ComputeSHA256FileSegment, &handle, splits[i], splits[i + 1], &hash_chunks[i]);
+		threads.emplace_back(ComputeSHA256FileSegment, QueryContext(), &handle, splits[i], splits[i + 1],
+		                     &hash_chunks[i]);
 	}
 
 	for (auto &thread : threads) {
@@ -282,7 +284,7 @@ bool ExtensionHelper::CheckExtensionSignature(FileHandle &handle, ParsedExtensio
 	}
 #else
 	for (idx_t i = 0; i < numChunks; i++) {
-		ComputeSHA256FileSegment(&handle, splits[i], splits[i + 1], &hash_chunks[i]);
+		ComputeSHA256FileSegment(QueryContext(), &handle, splits[i], splits[i + 1], &hash_chunks[i]);
 	}
 #endif // DUCKDB_NO_THREADS
 
@@ -297,7 +299,8 @@ bool ExtensionHelper::CheckExtensionSignature(FileHandle &handle, ParsedExtensio
 	ComputeSHA256String(hash_concatenation, &two_level_hash);
 
 	// TODO maybe we should do a stream read / hash update here
-	handle.Read((void *)parsed_metadata.signature.data(), parsed_metadata.signature.size(), signature_offset);
+	handle.Read(QueryContext(), (void *)parsed_metadata.signature.data(), parsed_metadata.signature.size(),
+	            signature_offset);
 
 	for (auto &key : ExtensionHelper::GetPublicKeys(allow_community_extensions)) {
 		if (duckdb_mbedtls::MbedTlsWrapper::IsValidSha256Signature(key, parsed_metadata.signature, two_level_hash)) {

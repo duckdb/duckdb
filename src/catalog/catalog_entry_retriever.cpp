@@ -36,7 +36,8 @@ LogicalType CatalogEntryRetriever::GetType(const string &catalog, const string &
 optional_ptr<CatalogEntry> CatalogEntryRetriever::GetEntry(const string &catalog, const string &schema,
                                                            const EntryLookupInfo &lookup_info,
                                                            OnEntryNotFound on_entry_not_found) {
-	return ReturnAndCallback(Catalog::GetEntry(*this, catalog, schema, lookup_info, on_entry_not_found));
+	return ReturnAndCallback(
+	    Catalog::GetEntry(QueryContext(context), *this, catalog, schema, lookup_info, on_entry_not_found));
 }
 
 optional_ptr<SchemaCatalogEntry> CatalogEntryRetriever::GetSchema(const string &catalog,
@@ -57,7 +58,7 @@ optional_ptr<SchemaCatalogEntry> CatalogEntryRetriever::GetSchema(const string &
 optional_ptr<CatalogEntry> CatalogEntryRetriever::GetEntry(Catalog &catalog, const string &schema,
                                                            const EntryLookupInfo &lookup_info,
                                                            OnEntryNotFound on_entry_not_found) {
-	return ReturnAndCallback(catalog.GetEntry(*this, schema, lookup_info, on_entry_not_found));
+	return ReturnAndCallback(catalog.GetEntry(QueryContext(context), *this, schema, lookup_info, on_entry_not_found));
 }
 
 optional_ptr<CatalogEntry> CatalogEntryRetriever::ReturnAndCallback(optional_ptr<CatalogEntry> result) {

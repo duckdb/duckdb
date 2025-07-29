@@ -88,14 +88,14 @@ bool JSONFileHandle::GetPositionAndSize(idx_t &position, idx_t &size, idx_t requ
 	return true;
 }
 
-void JSONFileHandle::ReadAtPosition(char *pointer, idx_t size, idx_t position,
+void JSONFileHandle::ReadAtPosition(QueryContext context, char *pointer, idx_t size, idx_t position,
                                     optional_ptr<FileHandle> override_handle) {
 	if (IsPipe()) {
 		throw InternalException("ReadAtPosition is not supported for pipes");
 	}
 	if (size != 0) {
 		auto &handle = override_handle ? *override_handle.get() : *file_handle.get();
-		handle.Read(pointer, size, position);
+		handle.Read(context, pointer, size, position);
 	}
 
 	const auto incremented_actual_reads = ++actual_reads;
@@ -1051,8 +1051,8 @@ void JSONReader::ReadNextBufferSeek(JSONReaderScanState &scan_state) {
 		}
 
 		// Now read the file lock-free!
-		file_handle.ReadAtPosition(scan_state.buffer_ptr + read_offset, scan_state.read_size, scan_state.read_position,
-		                           scan_state.thread_local_filehandle);
+		file_handle.ReadAtPosition(QueryContext(context), scan_state.buffer_ptr + read_offset, scan_state.read_size,
+		                           scan_state.read_position, scan_state.thread_local_filehandle);
 	}
 	scan_state.buffer_size = read_offset + scan_state.read_size;
 	scan_state.buffer_offset = read_offset;
