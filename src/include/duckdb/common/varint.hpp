@@ -56,12 +56,6 @@ struct varint_t {
 	varint_t &operator=(const varint_t &rhs) = default;
 	varint_t &operator=(varint_t &&rhs) = default;
 
-	//! Reallocate the Varint 2x-ing its size
-
-	// void AddInPlace(ArenaAllocator &allocator, const varint_t &rhs);
-	//
-	// idx_t GetStartDataPos() const;
-
 	void Print() const;
 };
 
