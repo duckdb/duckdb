@@ -244,8 +244,8 @@
     "members": [
       {
         "id": 200,
-        "name": "index",
-        "type": "idx_t"
+        "name": "name",
+        "type": "string"
       }
     ]
   }

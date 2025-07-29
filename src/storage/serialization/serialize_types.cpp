@@ -194,12 +194,12 @@ shared_ptr<ExtraTypeInfo> StructTypeInfo::Deserialize(Deserializer &deserializer
 
 void TemplateTypeInfo::Serialize(Serializer &serializer) const {
 	ExtraTypeInfo::Serialize(serializer);
-	serializer.WritePropertyWithDefault<idx_t>(200, "index", index);
+	serializer.WritePropertyWithDefault<string>(200, "name", name);
 }
 
 shared_ptr<ExtraTypeInfo> TemplateTypeInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::shared_ptr<TemplateTypeInfo>(new TemplateTypeInfo());
-	deserializer.ReadPropertyWithDefault<idx_t>(200, "index", result->index);
+	deserializer.ReadPropertyWithDefault<string>(200, "name", result->name);
 	return std::move(result);
 }
 

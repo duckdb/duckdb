@@ -434,7 +434,7 @@ static void HandleCollations(ClientContext &context, ScalarFunction &bound_funct
 }
 
 static void InferTemplateType(ClientContext &context, const LogicalType &source, const LogicalType &target,
-                              unordered_map<idx_t, vector<LogicalType>> &bindings, const Expression &current_expr,
+                              case_insensitive_map_t<vector<LogicalType>> &bindings, const Expression &current_expr,
                               const BaseScalarFunction &function) {
 
 	if (target.id() == LogicalTypeId::UNKNOWN || target.id() == LogicalTypeId::SQLNULL) {
@@ -449,7 +449,7 @@ static void InferTemplateType(ClientContext &context, const LogicalType &source,
 
 		TypeVisitor::Contains(source, [&](const LogicalType &child) {
 			if (child.id() == LogicalTypeId::TEMPLATE) {
-				const auto index = TemplateType::GetIndex(child);
+				const auto index = TemplateType::GetName(child);
 				if (bindings.find(index) == bindings.end()) {
 					// not found, add the binding
 					bindings[index] = {target.id()};
@@ -462,7 +462,7 @@ static void InferTemplateType(ClientContext &context, const LogicalType &source,
 
 	// If the source is a template type, we bind it, or try to unify its existing binding with the target type.
 	if (source.id() == LogicalTypeId::TEMPLATE) {
-		const auto &index = TemplateType::GetIndex(source);
+		const auto &index = TemplateType::GetName(source);
 		auto it = bindings.find(index);
 		if (it == bindings.end()) {
 			// not found, add the binding
@@ -563,13 +563,13 @@ static void InferTemplateType(ClientContext &context, const LogicalType &source,
 	}
 }
 
-static void SubstituteTemplateType(LogicalType &type, unordered_map<idx_t, vector<LogicalType>> &bindings,
+static void SubstituteTemplateType(LogicalType &type, case_insensitive_map_t<vector<LogicalType>> &bindings,
                                    const string &function_name) {
 
 	// Replace all template types in with their bound concrete types.
 	type = TypeVisitor::VisitReplace(type, [&](const LogicalType &t) -> LogicalType {
 		if (t.id() == LogicalTypeId::TEMPLATE) {
-			const auto index = TemplateType::GetIndex(t);
+			const auto index = TemplateType::GetName(t);
 			auto it = bindings.find(index);
 			if (it != bindings.end()) {
 				// found a binding, return the concrete type
@@ -587,7 +587,7 @@ static void SubstituteTemplateType(LogicalType &type, unordered_map<idx_t, vecto
 
 void FunctionBinder::ResolveTemplateTypes(BaseScalarFunction &bound_function,
                                           const vector<unique_ptr<Expression>> &children) {
-	unordered_map<idx_t, vector<LogicalType>> bindings;
+	case_insensitive_map_t<vector<LogicalType>> bindings;
 	vector<reference<LogicalType>> to_substitute;
 
 	// First, we need to infer the template types from the children.

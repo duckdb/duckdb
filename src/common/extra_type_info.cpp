@@ -491,16 +491,16 @@ shared_ptr<ExtraTypeInfo> IntegerLiteralTypeInfo::Copy() const {
 //===--------------------------------------------------------------------===//
 // Template Type Info
 //===--------------------------------------------------------------------===//
-TemplateTypeInfo::TemplateTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::TEMPLATE_TYPE_INFO), index(0) {
+TemplateTypeInfo::TemplateTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::TEMPLATE_TYPE_INFO) {
 }
 
-TemplateTypeInfo::TemplateTypeInfo(idx_t index_p)
-    : ExtraTypeInfo(ExtraTypeInfoType::TEMPLATE_TYPE_INFO), index(index_p) {
+TemplateTypeInfo::TemplateTypeInfo(string name_p)
+    : ExtraTypeInfo(ExtraTypeInfoType::TEMPLATE_TYPE_INFO), name(std::move(name_p)) {
 }
 
 bool TemplateTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
 	auto &other = other_p->Cast<TemplateTypeInfo>();
-	return index == other.index;
+	return name == other.name;
 }
 
 shared_ptr<ExtraTypeInfo> TemplateTypeInfo::Copy() const {

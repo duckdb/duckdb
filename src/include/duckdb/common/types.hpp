@@ -424,7 +424,8 @@ public:
 	DUCKDB_API static LogicalType ENUM(Vector &ordered_data, idx_t size); // NOLINT
 	// ANY but with special rules (default is LogicalType::ANY, 5)
 	DUCKDB_API static LogicalType ANY_PARAMS(LogicalType target, idx_t cast_score = 5); // NOLINT
-	DUCKDB_API static LogicalType TEMPLATE(idx_t index = 0);							// NOLINT
+	DUCKDB_API static LogicalType TEMPLATE();											// NOLINT
+	DUCKDB_API static LogicalType TEMPLATE(const string &name);							// NOLINT
 	//! Integer literal of the specified value
 	DUCKDB_API static LogicalType INTEGER_LITERAL(const Value &constant);               // NOLINT
 	// DEPRECATED - provided for backwards compatibility
@@ -529,8 +530,7 @@ struct IntegerLiteral {
 
 struct TemplateType {
 	// Get the name of the template type
-	DUCKDB_API static idx_t GetIndex(const LogicalType &type);
-	DUCKDB_API static string GetName(const LogicalType &type);
+	DUCKDB_API static const string &GetName(const LogicalType &type);
 };
 
 // **DEPRECATED**: Use EnumUtil directly instead.

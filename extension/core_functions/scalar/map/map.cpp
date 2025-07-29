@@ -177,8 +177,8 @@ ScalarFunctionSet MapFun::GetFunctions() {
 	ScalarFunction empty_func({}, LogicalType::MAP(LogicalType::SQLNULL, LogicalType::SQLNULL), MapFunction);
 	BaseScalarFunction::SetReturnsError(empty_func);
 
-	auto key_type = LogicalType::TEMPLATE(0);
-	auto val_type = LogicalType::TEMPLATE(1);
+	auto key_type = LogicalType::TEMPLATE("K");
+	auto val_type = LogicalType::TEMPLATE("V");
 	ScalarFunction value_func({LogicalType::LIST(key_type), LogicalType::LIST(val_type)},
 	                          LogicalType::MAP(key_type, val_type), MapFunction);
 	BaseScalarFunction::SetReturnsError(value_func);

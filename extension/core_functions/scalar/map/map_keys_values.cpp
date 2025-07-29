@@ -53,8 +53,8 @@ static void MapValuesFunction(DataChunk &args, ExpressionState &state, Vector &r
 
 ScalarFunction MapKeysFun::GetFunction() {
 	//! the arguments and return types are actually set in the binder function
-	auto key_type = LogicalType::TEMPLATE(0);
-	auto val_type = LogicalType::TEMPLATE(1);
+	auto key_type = LogicalType::TEMPLATE("K");
+	auto val_type = LogicalType::TEMPLATE("V");
 
 	ScalarFunction function({LogicalType::MAP(key_type, val_type)}, LogicalType::LIST(key_type), MapKeysFunction);
 	function.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
@@ -64,8 +64,8 @@ ScalarFunction MapKeysFun::GetFunction() {
 }
 
 ScalarFunction MapValuesFun::GetFunction() {
-	auto key_type = LogicalType::TEMPLATE(0);
-	auto val_type = LogicalType::TEMPLATE(1);
+	auto key_type = LogicalType::TEMPLATE("K");
+	auto val_type = LogicalType::TEMPLATE("V");
 
 	ScalarFunction function({LogicalType::MAP(key_type, val_type)}, LogicalType::LIST(val_type), MapValuesFunction);
 	function.null_handling = FunctionNullHandling::SPECIAL_HANDLING;

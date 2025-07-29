@@ -20,8 +20,8 @@ static void MapFromEntriesFunction(DataChunk &args, ExpressionState &state, Vect
 }
 
 ScalarFunction MapFromEntriesFun::GetFunction() {
-	auto key_type = LogicalType::TEMPLATE(0);
-	auto val_type = LogicalType::TEMPLATE(1);
+	auto key_type = LogicalType::TEMPLATE("K");
+	auto val_type = LogicalType::TEMPLATE("V");
 	auto map_type = LogicalType::MAP(key_type, val_type);
 	auto row_type = LogicalType::STRUCT({{"", key_type}, {"", val_type}});
 

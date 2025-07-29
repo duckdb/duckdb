@@ -19,8 +19,8 @@ static void MapContainsFunction(DataChunk &input, ExpressionState &state, Vector
 }
 
 ScalarFunction MapContainsFun::GetFunction() {
-	auto key_type = LogicalType::TEMPLATE(0);
-	auto val_type = LogicalType::TEMPLATE(1);
+	auto key_type = LogicalType::TEMPLATE("K");
+	auto val_type = LogicalType::TEMPLATE("V");
 
 	ScalarFunction fun("map_contains", {LogicalType::MAP(key_type, val_type), key_type}, LogicalType::BOOLEAN,
 	                   MapContainsFunction);

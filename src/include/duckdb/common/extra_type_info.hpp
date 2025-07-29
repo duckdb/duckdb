@@ -261,11 +261,10 @@ private:
 };
 
 struct TemplateTypeInfo : public ExtraTypeInfo {
-	//! Constructor for template type info
-	TemplateTypeInfo();
-	explicit TemplateTypeInfo(idx_t index_p);
 
-	idx_t index;
+	explicit TemplateTypeInfo(string name_p);
+
+	string name;
 
 public:
 	void Serialize(Serializer &serializer) const override;
@@ -274,6 +273,7 @@ public:
 
 protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
+	TemplateTypeInfo();
 };
 
 } // namespace duckdb

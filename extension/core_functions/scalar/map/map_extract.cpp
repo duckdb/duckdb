@@ -114,8 +114,8 @@ static void MapExtractListFunc(DataChunk &args, ExpressionState &state, Vector &
 }
 
 ScalarFunction MapExtractValueFun::GetFunction() {
-	auto key_type = LogicalType::TEMPLATE(0);
-	auto val_type = LogicalType::TEMPLATE(1);
+	auto key_type = LogicalType::TEMPLATE("K");
+	auto val_type = LogicalType::TEMPLATE("V");
 
 	ScalarFunction fun({LogicalType::MAP(key_type, val_type), key_type}, val_type, MapExtractValueFunc);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
@@ -123,8 +123,8 @@ ScalarFunction MapExtractValueFun::GetFunction() {
 }
 
 ScalarFunction MapExtractFun::GetFunction() {
-	auto key_type = LogicalType::TEMPLATE(0);
-	auto val_type = LogicalType::TEMPLATE(1);
+	auto key_type = LogicalType::TEMPLATE("K");
+	auto val_type = LogicalType::TEMPLATE("V");
 
 	ScalarFunction fun({LogicalType::MAP(key_type, val_type), key_type}, LogicalType::LIST(val_type),
 	                   MapExtractListFunc);

@@ -1950,26 +1950,19 @@ LogicalType LogicalType::INTEGER_LITERAL(const Value &constant) { // NOLINT
 //===--------------------------------------------------------------------===//
 // Template Type
 //===--------------------------------------------------------------------===//
-LogicalType LogicalType::TEMPLATE(idx_t index) {
-	auto type_info = make_shared_ptr<TemplateTypeInfo>(index);
-
-	// Reuse the ANY type id for template types, as they are not a specific type but rather a placeholder
+LogicalType LogicalType::TEMPLATE() {
+	return LogicalType::TEMPLATE("T"); // Default template type name
+}
+LogicalType LogicalType::TEMPLATE(const string &name) {
+	auto type_info = make_shared_ptr<TemplateTypeInfo>(name);
 	return LogicalType(LogicalTypeId::TEMPLATE, std::move(type_info));
 }
 
-idx_t TemplateType::GetIndex(const LogicalType &type) {
+const string &TemplateType::GetName(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::TEMPLATE);
 	auto info = type.AuxInfo();
 	D_ASSERT(info->type == ExtraTypeInfoType::TEMPLATE_TYPE_INFO);
-	return info->Cast<TemplateTypeInfo>().index;
-}
-
-string TemplateType::GetName(const LogicalType &type) {
-	D_ASSERT(type.id() == LogicalTypeId::TEMPLATE);
-	auto info = type.AuxInfo();
-	D_ASSERT(info->type == ExtraTypeInfoType::TEMPLATE_TYPE_INFO);
-	auto index = info->Cast<TemplateTypeInfo>().index;
-	return "T" + to_string(index + 1); // Print 1-indexed, start at T1
+	return info->Cast<TemplateTypeInfo>().name;
 }
 
 //===--------------------------------------------------------------------===//
