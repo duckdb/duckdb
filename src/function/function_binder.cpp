@@ -495,7 +495,7 @@ static void InferTemplateType(ClientContext &context, const LogicalType &source,
 		for (idx_t i = 0; i < steps.size(); i += 2) {
 			if (i == 0) {
 				// Normalize the first step to ensure it is a valid type
-				msg += StringUtil::Format(" - '%s', from first occurence\n", steps[i].ToString());
+				msg += StringUtil::Format(" - '%s', from first occurrence\n", steps[i].ToString());
 			} else {
 				msg += StringUtil::Format(" - '%s', by promoting '%s' + '%s'\n", steps[i].ToString(),
 				                          steps[i - 2].ToString(), steps[i - 1]);
