@@ -17,6 +17,7 @@ namespace duckdb {
 struct CatalogTransaction;
 class SecretManager;
 class ClientContext;
+class HTTPUtil;
 class Value;
 class Logger;
 
