@@ -296,9 +296,9 @@ void MiniZStreamWrapper::Close() {
 
 class GZipFile : public CompressedFile {
 public:
-	GZipFile(ClientContext &context, unique_ptr<FileHandle> child_handle_p, const string &path, bool write)
+	GZipFile(QueryContext context, unique_ptr<FileHandle> child_handle_p, const string &path, bool write)
 	    : CompressedFile(gzip_fs, std::move(child_handle_p), path) {
-		Initialize(QueryContext(context), write);
+		Initialize(context, write);
 	}
 	FileCompressionType GetFileCompressionType() override {
 		return FileCompressionType::GZIP;

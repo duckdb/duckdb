@@ -23,7 +23,7 @@ enum class DataFileType : uint8_t {
 
 class MagicBytes {
 public:
-	static DataFileType CheckMagicBytes(ClientContext &context, FileSystem &fs, const string &path);
+	static DataFileType CheckMagicBytes(QueryContext context, FileSystem &fs, const string &path);
 };
 
 } // namespace duckdb

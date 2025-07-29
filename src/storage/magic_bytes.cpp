@@ -4,7 +4,7 @@
 
 namespace duckdb {
 
-DataFileType MagicBytes::CheckMagicBytes(ClientContext &context, FileSystem &fs, const string &path) {
+DataFileType MagicBytes::CheckMagicBytes(QueryContext context, FileSystem &fs, const string &path) {
 	if (path.empty() || path == IN_MEMORY_PATH) {
 		return DataFileType::DUCKDB_FILE;
 	}

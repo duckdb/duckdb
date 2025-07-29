@@ -36,9 +36,9 @@ public:
 
 	bool FinishedReading() const;
 
-	idx_t Read(ClientContext &context, void *buffer, idx_t nr_bytes);
+	idx_t Read(QueryContext context, void *buffer, idx_t nr_bytes);
 
-	string ReadLine(ClientContext &context);
+	string ReadLine(QueryContext context);
 
 	string GetFilePath();
 

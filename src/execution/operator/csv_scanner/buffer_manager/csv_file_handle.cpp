@@ -75,7 +75,7 @@ bool CSVFileHandle::FinishedReading() const {
 	return finished;
 }
 
-idx_t CSVFileHandle::Read(ClientContext &context, void *buffer, idx_t nr_bytes) {
+idx_t CSVFileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes) {
 	requested_bytes += nr_bytes;
 	// if this is a plain file source OR we can seek we are not caching anything
 	idx_t bytes_read = 0;
@@ -91,7 +91,7 @@ idx_t CSVFileHandle::Read(ClientContext &context, void *buffer, idx_t nr_bytes) 
 	return UnsafeNumericCast<idx_t>(bytes_read);
 }
 
-string CSVFileHandle::ReadLine(ClientContext &context) {
+string CSVFileHandle::ReadLine(QueryContext context) {
 	bool carriage_return = false;
 	string result;
 	char buffer[1];

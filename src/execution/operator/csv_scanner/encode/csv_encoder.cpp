@@ -1,4 +1,6 @@
 #include "duckdb/execution/operator/csv_scanner/encode/csv_encoder.hpp"
+
+#include "../../../../../test/sqlite/sqllogic_command.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/function/encoding_function.hpp"
@@ -78,7 +80,7 @@ CSVEncoder::CSVEncoder(ClientContext &context, const string &encoding_name_to_fi
 	encoding_function = function;
 }
 
-idx_t CSVEncoder::Encode(ClientContext &context, FileHandle &file_handle_input, char *output_buffer,
+idx_t CSVEncoder::Encode(QueryContext context, FileHandle &file_handle_input, char *output_buffer,
                          const idx_t decoded_buffer_size) {
 	idx_t output_buffer_pos = 0;
 	// Check if we have some left-overs. These can either be
