@@ -150,14 +150,14 @@ SettingsList: List[Setting] = []
 def find_start_end_indexes(source_code, start_marker, end_marker, file_path):
     start_matches = list(re.finditer(start_marker, source_code))
     if len(start_matches) == 0:
-        raise ValueError(f"Couldn't find start marker in {file_path}")
+        raise ValueError(f"Couldn't find start marker {start_marker} in {file_path}")
     elif len(start_matches) > 1:
         raise ValueError(f"Start marker found more than once in {file_path}")
     start_index = start_matches[0].end()
 
     end_matches = list(re.finditer(end_marker, source_code[start_index:]))
     if len(end_matches) == 0:
-        raise ValueError(f"Couldn't find end marker in {file_path}")
+        raise ValueError(f"Couldn't find end marker {end_marker} in {file_path}")
     elif len(end_matches) > 1:
         raise ValueError(f"End marker found more than once in {file_path}")
     end_index = start_index + end_matches[0].start()

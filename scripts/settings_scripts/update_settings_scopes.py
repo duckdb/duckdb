@@ -1,8 +1,8 @@
 from .config import SettingsList, VALID_SCOPE_VALUES, find_start_end_indexes, write_content_to_file
 
 # markers
-START_MARKER = r'static const ConfigurationOption internal_options\[\] = \{'
-END_MARKER = r',\s*FINAL_SETTING};'
+START_MARKER = r'static const ConfigurationOption internal_options\[\] = \{\n'
+END_MARKER = r',\s*FINAL_ALIAS};'
 
 
 # generate the scope code for the ConfigurationOption array and insert into the config file
@@ -19,6 +19,7 @@ def generate_scope_code(file):
 
     # generate new entries for the settings array
     new_entries = []
+    new_aliases = []
     for setting in SettingsList:
         if setting.is_generic_setting:
             if setting.on_set:
@@ -27,12 +28,16 @@ def generate_scope_code(file):
                 new_entries.append(f"DUCKDB_SETTING({setting.struct_name})")
         elif setting.scope in VALID_SCOPE_VALUES:  # valid setting_scope values
             new_entries.append(f"DUCKDB_{setting.scope}({setting.struct_name})")
-            for alias in setting.aliases:
-                new_entries.append(f"DUCKDB_{setting.scope}_ALIAS(\"{alias}\", {setting.struct_name})")
         else:
             raise ValueError(f"Setting {setting.name} has invalid input scope value")
-
+        for alias in setting.aliases:
+            new_aliases.append(f"DUCKDB_SETTING_ALIAS(\"{alias}\", {setting.struct_name})")
     new_array_section = ',\n    '.join(new_entries)
+    new_array_section += ',    FINAL_SETTING};\n\n'
+    new_array_section += 'static const ConfigurationAlias internal_aliases[] = {'
+    new_array_section += ',\n    '.join(new_aliases)
+    print(new_array_section)
+
     return before_array + new_array_section + after_array
 
 

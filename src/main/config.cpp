@@ -37,37 +37,31 @@ bool DBConfigOptions::debug_print_bindings = false;
 		_PARAM::Name, _PARAM::Description, _PARAM::InputType, _PARAM::SetGlobal, nullptr, _PARAM::ResetGlobal,         \
 		    nullptr, _PARAM::GetSetting, SetScope::AUTOMATIC, nullptr, nullptr                                         \
 	}
-#define DUCKDB_GLOBAL_ALIAS(_ALIAS, _PARAM)                                                                            \
-	{                                                                                                                  \
-		_ALIAS, _PARAM::Description, _PARAM::InputType, _PARAM::SetGlobal, nullptr, _PARAM::ResetGlobal, nullptr,      \
-		    _PARAM::GetSetting, SetScope::AUTOMATIC, nullptr, nullptr                                                  \
-	}
-
 #define DUCKDB_LOCAL(_PARAM)                                                                                           \
 	{                                                                                                                  \
 		_PARAM::Name, _PARAM::Description, _PARAM::InputType, nullptr, _PARAM::SetLocal, nullptr, _PARAM::ResetLocal,  \
 		    _PARAM::GetSetting, SetScope::AUTOMATIC, nullptr, nullptr                                                  \
 	}
-#define DUCKDB_LOCAL_ALIAS(_ALIAS, _PARAM)                                                                             \
-	{                                                                                                                  \
-		_ALIAS, _PARAM::Description, _PARAM::InputType, nullptr, _PARAM::SetLocal, nullptr, _PARAM::ResetLocal,        \
-		    _PARAM::GetSetting, SetScope::AUTOMATIC, nullptr, nullptr                                                  \
-	}
-
 #define DUCKDB_GLOBAL_LOCAL(_PARAM)                                                                                    \
 	{                                                                                                                  \
 		_PARAM::Name, _PARAM::Description, _PARAM::InputType, _PARAM::SetGlobal, _PARAM::SetLocal,                     \
 		    _PARAM::ResetGlobal, _PARAM::ResetLocal, _PARAM::GetSetting, SetScope::AUTOMATIC, nullptr, nullptr         \
 	}
-#define DUCKDB_GLOBAL_LOCAL_ALIAS(_ALIAS, _PARAM)                                                                      \
-	{                                                                                                                  \
-		_ALIAS, _PARAM::Description, _PARAM::InputType, _PARAM::SetGlobal, _PARAM::SetLocal, _PARAM::ResetGlobal,      \
-		    _PARAM::ResetLocal, _PARAM::GetSetting, SetScope::AUTOMATIC, nullptr, nullptr                              \
-	}
 #define FINAL_SETTING                                                                                                  \
 	{ nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, SetScope::AUTOMATIC, nullptr, nullptr }
 
+struct ConfigurationAlias {
+	const char *alias;
+	const char *option_name;
+};
+
+#define DUCKDB_SETTING_ALIAS(_ALIAS, _SETTING)                                                                         \
+	{ _ALIAS, _SETTING::Name }
+#define FINAL_ALIAS                                                                                                    \
+	{ nullptr, nullptr }
+
 static const ConfigurationOption internal_options[] = {
+
     DUCKDB_GLOBAL(AccessModeSetting),
     DUCKDB_GLOBAL(AllocatorBackgroundThreadsSetting),
     DUCKDB_GLOBAL(AllocatorBulkDeallocationFlushThresholdSetting),
@@ -89,7 +83,6 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(AutoloadKnownExtensionsSetting),
     DUCKDB_GLOBAL(CatalogErrorMaxSchemasSetting),
     DUCKDB_GLOBAL(CheckpointThresholdSetting),
-    DUCKDB_GLOBAL_ALIAS("wal_autocheckpoint", CheckpointThresholdSetting),
     DUCKDB_GLOBAL(CustomExtensionRepositorySetting),
     DUCKDB_LOCAL(CustomProfilingSettingsSetting),
     DUCKDB_GLOBAL(CustomUserAgentSetting),
@@ -152,7 +145,6 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(LoggingStorage),
     DUCKDB_LOCAL(MaxExpressionDepthSetting),
     DUCKDB_GLOBAL(MaxMemorySetting),
-    DUCKDB_GLOBAL_ALIAS("memory_limit", MaxMemorySetting),
     DUCKDB_GLOBAL(MaxTempDirectorySizeSetting),
     DUCKDB_GLOBAL(MaxVacuumTasksSetting),
     DUCKDB_LOCAL(MergeJoinThresholdSetting),
@@ -172,7 +164,6 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(PreserveInsertionOrderSetting),
     DUCKDB_GLOBAL(ProduceArrowStringViewSetting),
     DUCKDB_LOCAL(ProfileOutputSetting),
-    DUCKDB_LOCAL_ALIAS("profiling_output", ProfileOutputSetting),
     DUCKDB_LOCAL(ProfilingCoverageSetting),
     DUCKDB_LOCAL(ProfilingModeSetting),
     DUCKDB_LOCAL(ProgressBarTimeSetting),
@@ -186,12 +177,19 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(TempDirectorySetting),
     DUCKDB_GLOBAL(TempFileEncryptionSetting),
     DUCKDB_GLOBAL(ThreadsSetting),
-    DUCKDB_GLOBAL_ALIAS("worker_threads", ThreadsSetting),
     DUCKDB_GLOBAL(UsernameSetting),
-    DUCKDB_GLOBAL_ALIAS("user", UsernameSetting),
     DUCKDB_GLOBAL(WalEncryptionSetting),
     DUCKDB_GLOBAL(ZstdMinStringLengthSetting),
     FINAL_SETTING};
+
+static const ConfigurationAlias internal_aliases[] = {
+    DUCKDB_SETTING_ALIAS("wal_autocheckpoint", CheckpointThresholdSetting),
+    DUCKDB_SETTING_ALIAS("null_order", DefaultNullOrderSetting),
+    DUCKDB_SETTING_ALIAS("memory_limit", MaxMemorySetting),
+    DUCKDB_SETTING_ALIAS("profiling_output", ProfileOutputSetting),
+    DUCKDB_SETTING_ALIAS("worker_threads", ThreadsSetting),
+    DUCKDB_SETTING_ALIAS("user", UsernameSetting),
+    FINAL_ALIAS};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {
 	vector<ConfigurationOption> options;
@@ -210,21 +208,34 @@ idx_t DBConfig::GetOptionCount() {
 	for (idx_t index = 0; internal_options[index].name; index++) {
 		count++;
 	}
+	for (idx_t index = 0; internal_aliases[index].alias; index++) {
+		count++;
+	}
 	return count;
 }
 
-vector<std::string> DBConfig::GetOptionNames() {
+vector<string> DBConfig::GetOptionNames() {
 	vector<string> names;
-	for (idx_t i = 0, option_count = DBConfig::GetOptionCount(); i < option_count; i++) {
-		names.emplace_back(DBConfig::GetOptionByIndex(i)->name);
+	for (idx_t index = 0; internal_options[index].name; index++) {
+		names.emplace_back(internal_options[index].name);
+	}
+	for (idx_t index = 0; internal_aliases[index].alias; index++) {
+		names.emplace_back(internal_aliases[index].alias);
 	}
 	return names;
 }
 
 optional_ptr<const ConfigurationOption> DBConfig::GetOptionByIndex(idx_t target_index) {
-	for (idx_t index = 0; internal_options[index].name; index++) {
+	idx_t index;
+	for (index = 0; internal_options[index].name; index++) {
 		if (index == target_index) {
 			return internal_options + index;
+		}
+	}
+	idx_t base_index = index;
+	for (index = 0; internal_aliases[index].alias; index++) {
+		if (index + base_index == target_index) {
+			return GetOptionByName(internal_aliases[index].option_name);
 		}
 	}
 	return nullptr;
@@ -236,6 +247,12 @@ optional_ptr<const ConfigurationOption> DBConfig::GetOptionByName(const string &
 		D_ASSERT(StringUtil::Lower(internal_options[index].name) == string(internal_options[index].name));
 		if (internal_options[index].name == lname) {
 			return internal_options + index;
+		}
+	}
+	for (idx_t index = 0; internal_aliases[index].alias; index++) {
+		D_ASSERT(StringUtil::Lower(internal_options[index].name) == string(internal_options[index].name));
+		if (internal_aliases[index].alias == lname) {
+			return GetOptionByName(internal_aliases[index].option_name);
 		}
 	}
 	return nullptr;

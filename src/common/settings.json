@@ -262,6 +262,9 @@
         "default_scope": "global",
         "custom_implementation": [
             "set"
+        ],
+        "aliases": [
+            "null_order"
         ]
     },
     {
