@@ -1,5 +1,6 @@
 #include "duckdb/common/varint.hpp"
 #include "duckdb/common/types/varint.hpp"
+#include <iostream>
 
 namespace duckdb {
 void PrintBits(const char value) {

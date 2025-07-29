@@ -11,8 +11,24 @@
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/common/string.hpp"
 #include <stdint.h>
+#include "duckdb/common/types/string_type.hpp"
+#include "duckdb/storage/arena_allocator.hpp"
 
 namespace duckdb {
+
+struct varint_t {
+	string_t data;
+
+	varint_t() : data() {
+	}
+
+	varint_t(const varint_t &rhs) = default;
+	varint_t(varint_t &&other) = default;
+	varint_t &operator=(const varint_t &rhs) = default;
+	varint_t &operator=(varint_t &&rhs) = default;
+
+	void Print() const;
+};
 
 struct VarintIntermediate {
 	VarintIntermediate() : is_negative(false), size(0), data(nullptr) {};
@@ -47,20 +63,6 @@ struct VarintIntermediate {
 	varint_t ToVarint(ArenaAllocator &allocator);
 	//! Or Vector allocated
 	string_t ToVarint(Vector &result);
-};
-
-struct varint_t {
-	string_t data;
-
-	varint_t() : data() {
-	}
-
-	varint_t(const varint_t &rhs) = default;
-	varint_t(varint_t &&other) = default;
-	varint_t &operator=(const varint_t &rhs) = default;
-	varint_t &operator=(varint_t &&rhs) = default;
-
-	void Print() const;
 };
 
 } // namespace duckdb
