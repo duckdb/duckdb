@@ -251,7 +251,6 @@ struct VarintOperation {
 			target.is_set = true;
 			return;
 		}
-		// source.value.Trim();
 		target.value.AddInPlace(input.allocator, source.value);
 		target.is_set = true;
 	}

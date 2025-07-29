@@ -43,18 +43,22 @@ uint8_t VarintIntermediate::GetAbsoluteByte(int64_t index) const {
 int8_t VarintIntermediate::IsAbsoluteBigger(const VarintIntermediate &rhs) const {
 	idx_t actual_start_pos = GetStartDataPos();
 	idx_t actual_size = size - actual_start_pos;
+
+	idx_t rhs_actual_start_pos = rhs.GetStartDataPos();
+	idx_t rhs_actual_size = rhs.size - rhs_actual_start_pos;
+
 	if (is_negative != rhs.is_negative) {
 		// we have opposing signs, gotta do a bunch of checks to figure out who is the biggest
 		// check sizes
-		if (actual_size > rhs.size) {
+		if (actual_size > rhs_actual_size) {
 			return 1;
 		}
-		if (actual_size < rhs.size) {
+		if (actual_size < rhs_actual_size) {
 			return -1;
 		} else {
 			// they have the same size then
 			idx_t target_idx = actual_start_pos;
-			idx_t source_idx = 0;
+			idx_t source_idx = rhs_actual_start_pos;
 			while (target_idx < size) {
 				auto data_byte = GetAbsoluteByte(static_cast<int64_t>(target_idx));
 				auto rhs_byte = rhs.GetAbsoluteByte(static_cast<int64_t>(source_idx));
@@ -102,8 +106,11 @@ idx_t VarintIntermediate::GetStartDataPos() const {
 }
 
 void VarintIntermediate::Reallocate(ArenaAllocator &allocator, idx_t min_size) {
+	if (min_size < size) {
+		return;
+	}
 	uint32_t new_size = size;
-	while (new_size < min_size) {
+	while (new_size <= min_size) {
 		new_size *= 2;
 	}
 	auto new_data = allocator.Allocate(new_size);
@@ -143,9 +150,7 @@ varint_t VarintIntermediate::ToVarint(ArenaAllocator &allocator) {
 
 string_t VarintIntermediate::ToVarint(Vector &result_vector) {
 	Trim();
-	varint_t result;
 	uint32_t varint_size = Varint::VARINT_HEADER_SIZE + size;
-
 	auto target = StringVector::EmptyString(result_vector, varint_size);
 	auto target_data = target.GetDataWriteable();
 	// Set Header
@@ -158,9 +163,11 @@ string_t VarintIntermediate::ToVarint(Vector &result_vector) {
 
 void VarintIntermediate::AddInPlace(ArenaAllocator &allocator, const VarintIntermediate &rhs) {
 	const bool same_sign = is_negative == rhs.is_negative;
-	if (size < rhs.size || (same_sign && (IsMSBSet() || (rhs.IsMSBSet() && size == rhs.size)))) {
+	idx_t actual_size = size - GetStartDataPos();
+	idx_t actual_rhs_size = rhs.size - rhs.GetStartDataPos();
+	if (actual_size < actual_rhs_size || (same_sign && (IsMSBSet() || (rhs.IsMSBSet() && size == rhs.size)))) {
 		// We must reallocate
-		idx_t min_size = size < rhs.size ? rhs.size + 1 : size + 1;
+		idx_t min_size = actual_size < actual_rhs_size ? actual_rhs_size + 1 : size + 1;
 		Reallocate(allocator, min_size);
 	}
 
