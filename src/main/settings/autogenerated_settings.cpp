@@ -130,23 +130,6 @@ void ArrowOutputVersionSetting::OnSet(SettingCallbackInfo &info, Value &paramete
 }
 
 //===----------------------------------------------------------------------===//
-// Asof Loop Join Threshold
-//===----------------------------------------------------------------------===//
-void AsofLoopJoinThresholdSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto &config = ClientConfig::GetConfig(context);
-	config.asof_loop_join_threshold = input.GetValue<idx_t>();
-}
-
-void AsofLoopJoinThresholdSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).asof_loop_join_threshold = ClientConfig().asof_loop_join_threshold;
-}
-
-Value AsofLoopJoinThresholdSetting::GetSetting(const ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	return Value::UBIGINT(config.asof_loop_join_threshold);
-}
-
-//===----------------------------------------------------------------------===//
 // Autoinstall Extension Repository
 //===----------------------------------------------------------------------===//
 void AutoinstallExtensionRepositorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -226,37 +209,10 @@ Value CustomUserAgentSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
-// Debug Asof Iejoin
-//===----------------------------------------------------------------------===//
-void DebugAsofIejoinSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto &config = ClientConfig::GetConfig(context);
-	config.force_asof_iejoin = input.GetValue<bool>();
-}
-
-void DebugAsofIejoinSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).force_asof_iejoin = ClientConfig().force_asof_iejoin;
-}
-
-Value DebugAsofIejoinSetting::GetSetting(const ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	return Value::BOOLEAN(config.force_asof_iejoin);
-}
-
-//===----------------------------------------------------------------------===//
 // Debug Checkpoint Abort
 //===----------------------------------------------------------------------===//
-void DebugCheckpointAbortSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	auto str_input = StringUtil::Upper(input.GetValue<string>());
-	config.options.checkpoint_abort = EnumUtil::FromString<CheckpointAbort>(str_input);
-}
-
-void DebugCheckpointAbortSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.checkpoint_abort = DBConfig().options.checkpoint_abort;
-}
-
-Value DebugCheckpointAbortSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value(StringUtil::Lower(EnumUtil::ToString(config.options.checkpoint_abort)));
+void DebugCheckpointAbortSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	EnumUtil::FromString<CheckpointAbort>(StringValue::Get(parameter));
 }
 
 //===----------------------------------------------------------------------===//

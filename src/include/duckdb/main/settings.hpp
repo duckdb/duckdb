@@ -198,9 +198,8 @@ struct AsofLoopJoinThresholdSetting {
 	static constexpr const char *Description =
 	    "The maximum number of rows we need on the left side of an ASOF join to use a nested loop join";
 	static constexpr const char *InputType = "UBIGINT";
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "64";
+	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
 
 struct AutoinstallExtensionRepositorySetting {
@@ -292,9 +291,8 @@ struct DebugAsofIejoinSetting {
 	static constexpr const char *Name = "debug_asof_iejoin";
 	static constexpr const char *Description = "DEBUG SETTING: force use of IEJoin to implement AsOf joins";
 	static constexpr const char *InputType = "BOOLEAN";
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
 
 struct DebugCheckpointAbortSetting {
@@ -303,9 +301,9 @@ struct DebugCheckpointAbortSetting {
 	static constexpr const char *Description =
 	    "DEBUG SETTING: trigger an abort while checkpointing for testing purposes";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "NONE";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct DebugForceExternalSetting {

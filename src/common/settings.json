@@ -123,7 +123,8 @@
         "name": "asof_loop_join_threshold",
         "description": "The maximum number of rows we need on the left side of an ASOF join to use a nested loop join",
         "type": "UBIGINT",
-        "scope": "local"
+        "default_scope": "local",
+        "default_value": "64"
     },
     {
         "name": "autoinstall_extension_repository",
@@ -193,15 +194,15 @@
         "name": "debug_asof_iejoin",
         "description": "DEBUG SETTING: force use of IEJoin to implement AsOf joins",
         "type": "BOOLEAN",
-        "scope": "local",
-        "internal_setting": "force_asof_iejoin"
+        "default_scope": "local",
+        "default_value": "false"
     },
     {
         "name": "debug_checkpoint_abort",
         "description": "DEBUG SETTING: trigger an abort while checkpointing for testing purposes",
         "type": "ENUM<CheckpointAbort>",
-        "internal_setting": "checkpoint_abort",
-        "scope": "global"
+        "default_scope": "global",
+        "default_value": "NONE"
     },
     {
         "name": "debug_force_external",

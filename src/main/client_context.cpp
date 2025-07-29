@@ -1392,7 +1392,7 @@ ClientProperties ClientContext::GetClientProperties() {
 	bool arrow_use_list_view = DBConfig::GetSetting<ArrowOutputListViewSetting>(*this);
 	bool arrow_lossless_conversion = DBConfig::GetSetting<ArrowLosslessConversionSetting>(*this);
 	bool arrow_use_string_view = DBConfig::GetSetting<ProduceArrowStringViewSetting>(*this);
-	auto arrow_format_version = DBConfig::GetEnum<ArrowOutputVersionSetting>(*this);
+	auto arrow_format_version = DBConfig::GetSetting<ArrowOutputVersionSetting>(*this);
 	return {timezone,
 	        arrow_offset_size,
 	        arrow_use_list_view,

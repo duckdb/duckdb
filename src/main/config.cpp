@@ -72,7 +72,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(ArrowLosslessConversionSetting),
     DUCKDB_SETTING(ArrowOutputListViewSetting),
     DUCKDB_SETTING_CALLBACK(ArrowOutputVersionSetting),
-    DUCKDB_LOCAL(AsofLoopJoinThresholdSetting),
+    DUCKDB_SETTING(AsofLoopJoinThresholdSetting),
     DUCKDB_GLOBAL(AutoinstallExtensionRepositorySetting),
     DUCKDB_GLOBAL(AutoinstallKnownExtensionsSetting),
     DUCKDB_GLOBAL(AutoloadKnownExtensionsSetting),
@@ -81,8 +81,8 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(CustomExtensionRepositorySetting),
     DUCKDB_LOCAL(CustomProfilingSettingsSetting),
     DUCKDB_GLOBAL(CustomUserAgentSetting),
-    DUCKDB_LOCAL(DebugAsofIejoinSetting),
-    DUCKDB_GLOBAL(DebugCheckpointAbortSetting),
+    DUCKDB_SETTING(DebugAsofIejoinSetting),
+    DUCKDB_SETTING_CALLBACK(DebugCheckpointAbortSetting),
     DUCKDB_LOCAL(DebugForceExternalSetting),
     DUCKDB_LOCAL(DebugForceNoCrossProductSetting),
     DUCKDB_GLOBAL(DebugSkipCheckpointOnCommitSetting),
@@ -680,7 +680,7 @@ OrderType DBConfig::ResolveOrder(ClientContext &context, OrderType order_type) c
 	if (order_type != OrderType::ORDER_DEFAULT) {
 		return order_type;
 	}
-	return GetEnum<DefaultOrderSetting>(context);
+	return GetSetting<DefaultOrderSetting>(context);
 }
 
 Value DBConfig::GetSettingInternal(const ClientContext &context, const char *setting, const char *default_value) {
@@ -698,12 +698,9 @@ Value DBConfig::GetSettingInternal(const DBConfig &config, const char *setting, 
 	}
 	return Value(default_value);
 }
-string DBConfig::GetEnumSettingInternal(const ClientContext &context, const char *setting, const char *default_value) {
-	Value result_val;
-	if (context.TryGetCurrentSetting(setting, result_val)) {
-		return result_val.GetValue<string>();
-	}
-	return default_value;
+
+Value DBConfig::GetSettingInternal(const DatabaseInstance &db, const char *setting, const char *default_value) {
+	return GetSettingInternal(db.config, setting, default_value);
 }
 
 SettingLookupResult DBConfig::TryGetCurrentSetting(const string &key, Value &result) const {
@@ -728,7 +725,7 @@ OrderByNullType DBConfig::ResolveNullOrder(ClientContext &context, OrderType ord
 	if (null_type != OrderByNullType::ORDER_DEFAULT) {
 		return null_type;
 	}
-	auto null_order = GetEnum<DefaultNullOrderSetting>(context);
+	auto null_order = GetSetting<DefaultNullOrderSetting>(context);
 	switch (null_order) {
 	case DefaultOrderByNullType::NULLS_FIRST:
 		return OrderByNullType::NULLS_FIRST;

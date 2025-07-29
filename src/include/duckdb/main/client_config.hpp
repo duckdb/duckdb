@@ -79,8 +79,6 @@ struct ClientConfig {
 	bool force_external = false;
 	//! Force disable cross product generation when hyper graph isn't connected, used for testing
 	bool force_no_cross_product = false;
-	//! Force use of IEJoin to implement AsOfJoin, used for testing
-	bool force_asof_iejoin = false;
 	//! Force use of fetch row instead of scan, used for testing
 	bool force_fetch_row = false;
 	//! Use range joins for inequalities, even if there are equality predicates
@@ -101,8 +99,6 @@ struct ClientConfig {
 	idx_t nested_loop_join_threshold = 5;
 	//! The maximum number of rows on either table to choose a merge join over an IE join
 	idx_t merge_join_threshold = 1000;
-	//! The maximum number of rows to use the nested loop join implementation
-	idx_t asof_loop_join_threshold = 64;
 
 	//! The maximum amount of memory to keep buffered in a streaming query result. Default: 1mb.
 	idx_t streaming_buffer_size = 1000000;

@@ -156,8 +156,6 @@ struct DBConfigOptions {
 	bool checkpoint_on_shutdown = true;
 	//! Serialize the metadata on checkpoint with compatibility for a given DuckDB version.
 	SerializationCompatibility serialization_compatibility = SerializationCompatibility::Default();
-	//! Debug flag that decides when a checkpoing should be aborted. Only used for testing purposes.
-	CheckpointAbort checkpoint_abort = CheckpointAbort::NO_ABORT;
 	//! Initialize the database with the standard set of DuckDB functions
 	//! You should probably not touch this unless you know what you are doing
 	bool initialize_default_database = true;
@@ -363,24 +361,18 @@ public:
 	const string UserAgent() const;
 
 	SettingLookupResult TryGetCurrentSetting(const string &key, Value &result) const;
-	template <class OP>
-	static typename OP::RETURN_TYPE GetSetting(const ClientContext &context) {
-		return GetSettingInternal(context, OP::Name, OP::DefaultValue).template GetValue<typename OP::RETURN_TYPE>();
-	}
 
-	template <class OP>
-	static typename OP::RETURN_TYPE GetSetting(const DBConfig &config) {
-		return GetSettingInternal(config, OP::Name, OP::DefaultValue).template GetValue<typename OP::RETURN_TYPE>();
-	}
-	template <class OP>
-	static typename OP::RETURN_TYPE GetSetting(const DatabaseInstance &db) {
-		return GetSetting<OP>(GetConfig(db));
-	}
-
-	template <class OP>
-	static typename OP::RETURN_TYPE GetEnum(const ClientContext &context) {
+	template <class OP, class SOURCE>
+	static typename std::enable_if<std::is_enum<typename OP::RETURN_TYPE>::value, typename OP::RETURN_TYPE>::type
+	GetSetting(const SOURCE &source) {
 		return EnumUtil::FromString<typename OP::RETURN_TYPE>(
-		    GetEnumSettingInternal(context, OP::Name, OP::DefaultValue));
+		    GetSettingInternal(source, OP::Name, OP::DefaultValue).ToString());
+	}
+
+	template <class OP, class SOURCE>
+	static typename std::enable_if<!std::is_enum<typename OP::RETURN_TYPE>::value, typename OP::RETURN_TYPE>::type
+	GetSetting(const SOURCE &source) {
+		return GetSettingInternal(source, OP::Name, OP::DefaultValue).template GetValue<typename OP::RETURN_TYPE>();
 	}
 
 	template <class OP>
@@ -395,9 +387,9 @@ public:
 	string SanitizeAllowedPath(const string &path) const;
 
 private:
+	static Value GetSettingInternal(const DatabaseInstance &db, const char *setting, const char *default_value);
 	static Value GetSettingInternal(const DBConfig &config, const char *setting, const char *default_value);
 	static Value GetSettingInternal(const ClientContext &context, const char *setting, const char *default_value);
-	static string GetEnumSettingInternal(const ClientContext &context, const char *setting, const char *default_value);
 
 private:
 	unique_ptr<CompressionFunctionSet> compression_functions;
