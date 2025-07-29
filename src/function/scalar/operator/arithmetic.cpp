@@ -317,10 +317,9 @@ void VarintAdd(DataChunk &args, ExpressionState &state, Vector &result) {
 	ArenaAllocator arena(allocator);
 	BinaryExecutor::Execute<varint_t, varint_t, string_t>(args.data[0], args.data[1], result, args.size(),
 	                                                      [&](varint_t a, varint_t b) {
-		                                                      VarintIntermediate lhs(a);
+		                                                      const VarintIntermediate lhs(a);
 		                                                      const VarintIntermediate rhs(b);
-		                                                      lhs.AddInPlace(arena, rhs);
-		                                                      return lhs.ToVarint(result);
+		                                                      return VarintIntermediate::Add(result, lhs, rhs);
 	                                                      });
 }
 

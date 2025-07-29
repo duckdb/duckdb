@@ -92,9 +92,9 @@ void VarintIntermediate::Initialize(ArenaAllocator &allocator) {
 	data[0] = 0;
 }
 
-idx_t VarintIntermediate::GetStartDataPos() const {
+uint32_t VarintIntermediate::GetStartDataPos(data_ptr_t data, idx_t size, bool is_negative) {
 	uint8_t non_initialized = is_negative ? 0xFF : 0x00;
-	idx_t actual_start = 0;
+	uint32_t actual_start = 0;
 	for (idx_t i = 0; i < size; ++i) {
 		if (data[i] == non_initialized) {
 			actual_start++;
@@ -103,6 +103,10 @@ idx_t VarintIntermediate::GetStartDataPos() const {
 		}
 	}
 	return actual_start;
+}
+
+uint32_t VarintIntermediate::GetStartDataPos() const {
+	return GetStartDataPos(data, size, is_negative);
 }
 
 void VarintIntermediate::Reallocate(ArenaAllocator &allocator, idx_t min_size) {
@@ -123,10 +127,10 @@ void VarintIntermediate::Reallocate(ArenaAllocator &allocator, idx_t min_size) {
 	size = new_size;
 }
 
-void VarintIntermediate::Trim() {
-	auto actual_start = GetStartDataPos();
+idx_t VarintIntermediate::Trim(data_ptr_t data, uint32_t &size, bool is_negative) {
+	auto actual_start = GetStartDataPos(data, size, is_negative);
 	if (actual_start == 0) {
-		return;
+		return 0;
 	}
 	// This bad-boy is wearing shoe lifts, time to prune it.
 	D_ASSERT(actual_start <= size);
@@ -137,6 +141,11 @@ void VarintIntermediate::Trim() {
 		size++;
 	}
 	memmove(data, data + actual_start, size);
+	return actual_start;
+}
+
+void VarintIntermediate::Trim() {
+	Trim(data, size, is_negative);
 }
 varint_t VarintIntermediate::ToVarint(ArenaAllocator &allocator) {
 	// This must be trimmed before transforming
@@ -165,6 +174,89 @@ string_t VarintIntermediate::ToVarint(Vector &result_vector) {
 	return target;
 }
 
+void VarintAddition(data_ptr_t result, int64_t result_start, int64_t result_end, bool is_target_absolute_bigger,
+                    const VarintIntermediate &lhs, const VarintIntermediate &rhs) {
+	bool is_result_negative = is_target_absolute_bigger ? lhs.is_negative : rhs.is_negative;
+
+	int64_t i_target = lhs.size - 1;   // last byte index in target
+	int64_t i_source = rhs.size - 1;   // last byte index in source
+	int64_t i_result = result_end - 1; // last byte index in source
+
+	// Carry for addition
+	uint16_t carry = 0;
+	uint16_t borrow = 0;
+	// Add bytes from right to left
+	while (i_result >= result_start) {
+		// If the numbers are negative we bit flip them
+		uint8_t target_byte = lhs.GetAbsoluteByte(i_target);
+		uint8_t source_byte = rhs.GetAbsoluteByte(i_source);
+		// Add bytes and carry
+		uint16_t sum;
+		if (lhs.is_negative == rhs.is_negative) {
+			sum = static_cast<uint16_t>(target_byte) + static_cast<uint16_t>(source_byte) + carry;
+			carry = (sum >> 8) & 0xFF;
+		} else {
+			if (is_target_absolute_bigger) {
+				sum = static_cast<uint16_t>(target_byte) - static_cast<uint16_t>(source_byte) - borrow;
+				borrow = sum > static_cast<uint16_t>(target_byte) ? 1 : 0;
+			} else {
+				sum = static_cast<uint16_t>(source_byte) - static_cast<uint16_t>(target_byte) - borrow;
+				borrow = sum > static_cast<uint16_t>(source_byte) ? 1 : 0;
+			}
+		}
+		uint8_t result_byte = static_cast<uint8_t>(sum & 0xFF);
+		// If the result is not positive, we must flip the bits again
+		result[i_result] = is_result_negative ? ~result_byte : result_byte;
+		i_target--;
+		i_source--;
+		i_result--;
+	}
+
+	if (is_result_negative != lhs.is_negative) {
+		// If we are flipping the sign we must be sure that we are flipping all extra bits from our target
+		for (int64_t i = result_start; i < result_end - result_start - rhs.size; ++i) {
+			result[i] = is_result_negative ? 0xFF : 0x00;
+		}
+	}
+}
+
+string_t VarintIntermediate::Add(Vector &result_vector, const VarintIntermediate &lhs, const VarintIntermediate &rhs) {
+	const bool same_sign = lhs.is_negative == rhs.is_negative;
+	const uint32_t actual_size = lhs.size - lhs.GetStartDataPos();
+	const uint32_t actual_rhs_size = rhs.size - rhs.GetStartDataPos();
+	uint32_t result_size = actual_size;
+	if (actual_size < actual_rhs_size || (same_sign && (lhs.IsMSBSet() || (rhs.IsMSBSet() && lhs.size == rhs.size)))) {
+		result_size = actual_size < actual_rhs_size ? actual_rhs_size + 1 : actual_size + 1;
+	}
+	auto is_absolute_bigger = lhs.IsAbsoluteBigger(rhs);
+	bool is_target_absolute_bigger = true;
+	if (is_absolute_bigger == 0) {
+		// We set this value to 0
+		auto target = StringVector::EmptyString(result_vector, result_size);
+		auto target_data = target.GetDataWriteable();
+		Varint::SetHeader(target_data, 1, false);
+		target_data[Varint::VARINT_HEADER_SIZE] = 0;
+		return target;
+
+	} else if (is_absolute_bigger == -1) {
+		is_target_absolute_bigger = false;
+	}
+	if (result_size == 0) {
+		result_size++;
+	}
+	result_size += Varint::VARINT_HEADER_SIZE;
+
+	auto target = StringVector::EmptyString(result_vector, result_size);
+	auto target_data = target.GetDataWriteable();
+	VarintAddition(reinterpret_cast<data_ptr_t>(target_data), Varint::VARINT_HEADER_SIZE, result_size,
+	               is_target_absolute_bigger, lhs, rhs);
+	bool is_result_negative = is_target_absolute_bigger ? lhs.is_negative : rhs.is_negative;
+	auto result_size_data = result_size - Varint::VARINT_HEADER_SIZE;
+	Trim(reinterpret_cast<data_ptr_t>(target_data + Varint::VARINT_HEADER_SIZE), result_size_data, is_result_negative);
+	Varint::SetHeader(target_data, result_size_data, is_result_negative);
+	target.SetSizeAndFinalize(result_size_data + Varint::VARINT_HEADER_SIZE);
+	return target;
+}
 void VarintIntermediate::AddInPlace(ArenaAllocator &allocator, const VarintIntermediate &rhs) {
 	const bool same_sign = is_negative == rhs.is_negative;
 	idx_t actual_size = size - GetStartDataPos();
@@ -185,45 +277,10 @@ void VarintIntermediate::AddInPlace(ArenaAllocator &allocator, const VarintInter
 	} else if (is_absolute_bigger == -1) {
 		is_target_absolute_bigger = false;
 	}
+
 	bool is_result_negative = is_target_absolute_bigger ? is_negative : rhs.is_negative;
-
-	int64_t i_target = size - 1;     // last byte index in target
-	int64_t i_source = rhs.size - 1; // last byte index in source
-
-	// Carry for addition
-	uint16_t carry = 0;
-	uint16_t borrow = 0;
-	// Add bytes from right to left
-	while (i_target >= 0) {
-		// If the numbers are negative we bit flip them
-		uint8_t target_byte = GetAbsoluteByte(i_target);
-		uint8_t source_byte = rhs.GetAbsoluteByte(i_source);
-		// Add bytes and carry
-		uint16_t sum;
-		if (is_negative == rhs.is_negative) {
-			sum = static_cast<uint16_t>(target_byte) + static_cast<uint16_t>(source_byte) + carry;
-			carry = (sum >> 8) & 0xFF;
-		} else {
-			if (is_target_absolute_bigger) {
-				sum = static_cast<uint16_t>(target_byte) - static_cast<uint16_t>(source_byte) - borrow;
-				borrow = sum > static_cast<uint16_t>(target_byte) ? 1 : 0;
-			} else {
-				sum = static_cast<uint16_t>(source_byte) - static_cast<uint16_t>(target_byte) - borrow;
-				borrow = sum > static_cast<uint16_t>(source_byte) ? 1 : 0;
-			}
-		}
-		uint8_t result_byte = static_cast<uint8_t>(sum & 0xFF);
-		// If the result is not positive, we must flip the bits again
-		data[i_target] = is_result_negative ? ~result_byte : result_byte;
-		i_target--;
-		i_source--;
-	}
-
+	VarintAddition(data, 0, size, is_target_absolute_bigger, *this, rhs);
 	if (is_result_negative != is_negative) {
-		// If we are flipping the sign we must be sure that we are flipping all extra bits from our target
-		for (idx_t i = 0; i < size - rhs.size; ++i) {
-			data[i] = is_result_negative ? 0xFF : 0x00;
-		}
 		is_negative = is_result_negative;
 	}
 }

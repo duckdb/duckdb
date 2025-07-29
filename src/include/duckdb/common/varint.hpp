@@ -34,11 +34,15 @@ struct VarintIntermediate {
 	void Initialize(ArenaAllocator &allocator);
 	//! If necessary, we reallocate our intermediate to the next power of 2.
 	void Reallocate(ArenaAllocator &allocator, idx_t min_size);
-	idx_t GetStartDataPos() const;
+	static uint32_t GetStartDataPos(data_ptr_t data, idx_t size, bool is_negative);
+	uint32_t GetStartDataPos() const;
 	//! In case we have unnecessary extra 0's or 1's in our varint we trim them
+	static idx_t Trim(data_ptr_t data, uint32_t &size, bool is_negative);
 	void Trim();
 	//! Add a VarintIntermediate to another VarintIntermediate, equivalent of a +=
 	void AddInPlace(ArenaAllocator &allocator, const VarintIntermediate &rhs);
+	//! Adds two VarintIntermediates and returns a string_t result, equivalent of a +
+	static string_t Add(Vector &result, const VarintIntermediate &lhs, const VarintIntermediate &rhs);
 	//! Exports to a varint, either arena allocated
 	varint_t ToVarint(ArenaAllocator &allocator);
 	//! Or Vector allocated

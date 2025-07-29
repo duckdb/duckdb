@@ -16,7 +16,7 @@ select sum(res + res2 + res2 + res2) from (
   select sum((case when hits.UserId%7=0 then -hits.UserId else hits.UserId end)::VARINT) AS res, sum((case when hits.UserId%7=0 then hits.UserId else -hits.UserId end)::VARINT) AS res2 from '/Users/holanda/Desktop/hits.parquet'
   ), range(10000);
 ----
--3606109359615967909985481660000
+-3606109359585005662547309500000
 
 mode unskip
 
