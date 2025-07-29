@@ -22,40 +22,50 @@ namespace duckdb {
 bool DBConfigOptions::debug_print_bindings = false;
 #endif
 
+#define DUCKDB_SETTING(_PARAM)                                                                                         \
+	{                                                                                                                  \
+		_PARAM::Name, _PARAM::Description, _PARAM::InputType, nullptr, nullptr, nullptr, nullptr, nullptr,             \
+		    _PARAM::DefaultScope, _PARAM::DefaultValue, nullptr                                                        \
+	}
+#define DUCKDB_SETTING_CALLBACK(_PARAM)                                                                                \
+	{                                                                                                                  \
+		_PARAM::Name, _PARAM::Description, _PARAM::InputType, nullptr, nullptr, nullptr, nullptr, nullptr,             \
+		    _PARAM::DefaultScope, _PARAM::DefaultValue, _PARAM::OnSet                                                  \
+	}
 #define DUCKDB_GLOBAL(_PARAM)                                                                                          \
 	{                                                                                                                  \
 		_PARAM::Name, _PARAM::Description, _PARAM::InputType, _PARAM::SetGlobal, nullptr, _PARAM::ResetGlobal,         \
-		    nullptr, _PARAM::GetSetting                                                                                \
+		    nullptr, _PARAM::GetSetting, SetScope::AUTOMATIC, nullptr, nullptr                                         \
 	}
 #define DUCKDB_GLOBAL_ALIAS(_ALIAS, _PARAM)                                                                            \
 	{                                                                                                                  \
 		_ALIAS, _PARAM::Description, _PARAM::InputType, _PARAM::SetGlobal, nullptr, _PARAM::ResetGlobal, nullptr,      \
-		    _PARAM::GetSetting                                                                                         \
+		    _PARAM::GetSetting, SetScope::AUTOMATIC, nullptr, nullptr                                                  \
 	}
 
 #define DUCKDB_LOCAL(_PARAM)                                                                                           \
 	{                                                                                                                  \
 		_PARAM::Name, _PARAM::Description, _PARAM::InputType, nullptr, _PARAM::SetLocal, nullptr, _PARAM::ResetLocal,  \
-		    _PARAM::GetSetting                                                                                         \
+		    _PARAM::GetSetting, SetScope::AUTOMATIC, nullptr, nullptr                                                  \
 	}
 #define DUCKDB_LOCAL_ALIAS(_ALIAS, _PARAM)                                                                             \
 	{                                                                                                                  \
 		_ALIAS, _PARAM::Description, _PARAM::InputType, nullptr, _PARAM::SetLocal, nullptr, _PARAM::ResetLocal,        \
-		    _PARAM::GetSetting                                                                                         \
+		    _PARAM::GetSetting, SetScope::AUTOMATIC, nullptr, nullptr                                                  \
 	}
 
 #define DUCKDB_GLOBAL_LOCAL(_PARAM)                                                                                    \
 	{                                                                                                                  \
 		_PARAM::Name, _PARAM::Description, _PARAM::InputType, _PARAM::SetGlobal, _PARAM::SetLocal,                     \
-		    _PARAM::ResetGlobal, _PARAM::ResetLocal, _PARAM::GetSetting                                                \
+		    _PARAM::ResetGlobal, _PARAM::ResetLocal, _PARAM::GetSetting, SetScope::AUTOMATIC, nullptr, nullptr         \
 	}
 #define DUCKDB_GLOBAL_LOCAL_ALIAS(_ALIAS, _PARAM)                                                                      \
 	{                                                                                                                  \
 		_ALIAS, _PARAM::Description, _PARAM::InputType, _PARAM::SetGlobal, _PARAM::SetLocal, _PARAM::ResetGlobal,      \
-		    _PARAM::ResetLocal, _PARAM::GetSetting                                                                     \
+		    _PARAM::ResetLocal, _PARAM::GetSetting, SetScope::AUTOMATIC, nullptr, nullptr                              \
 	}
 #define FINAL_SETTING                                                                                                  \
-	{ nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr }
+	{ nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, SetScope::AUTOMATIC, nullptr, nullptr }
 
 static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(AccessModeSetting),
@@ -92,9 +102,8 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(DebugWindowModeSetting),
     DUCKDB_GLOBAL(DefaultBlockSizeSetting),
     DUCKDB_GLOBAL_LOCAL(DefaultCollationSetting),
-    DUCKDB_GLOBAL(DefaultNullOrderSetting),
-    DUCKDB_GLOBAL_ALIAS("null_order", DefaultNullOrderSetting),
-    DUCKDB_GLOBAL(DefaultOrderSetting),
+    DUCKDB_SETTING_CALLBACK(DefaultNullOrderSetting),
+    DUCKDB_SETTING_CALLBACK(DefaultOrderSetting),
     DUCKDB_GLOBAL(DefaultSecretStorageSetting),
     DUCKDB_GLOBAL(DisableDatabaseInvalidationSetting),
     DUCKDB_LOCAL(DisableTimestamptzCastsSetting),
@@ -190,6 +199,9 @@ vector<ConfigurationOption> DBConfig::GetOptions() {
 		options.push_back(internal_options[index]);
 	}
 	return options;
+}
+
+SettingCallbackInfo::SettingCallbackInfo(ClientContext &context_p) : db(context_p.db.get()), context(context_p) {
 }
 
 idx_t DBConfig::GetOptionCount() {
@@ -639,6 +651,14 @@ OrderType DBConfig::ResolveOrder(ClientContext &context, OrderType order_type) c
 		return order_type;
 	}
 	return GetEnum<DefaultOrderSetting>(context);
+}
+
+string DBConfig::GetEnumSettingInternal(const ClientContext &context, const char *setting, const char *default_value) {
+	Value result_val;
+	if (context.TryGetCurrentSetting(setting, result_val)) {
+		return result_val.GetValue<string>();
+	}
+	return default_value;
 }
 
 OrderByNullType DBConfig::ResolveNullOrder(ClientContext &context, OrderType order_type,

@@ -415,25 +415,6 @@ Value DebugWindowModeSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
-// Default Null Order
-//===----------------------------------------------------------------------===//
-void DefaultNullOrderSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.default_null_order = DBConfig().options.default_null_order;
-}
-
-Value DefaultNullOrderSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value(StringUtil::Lower(EnumUtil::ToString(config.options.default_null_order)));
-}
-
-//===----------------------------------------------------------------------===//
-// Default Order
-//===----------------------------------------------------------------------===//
-void DefaultOrderSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.default_order_type = DBConfig().options.default_order_type;
-}
-
-//===----------------------------------------------------------------------===//
 // Disable Database Invalidation
 //===----------------------------------------------------------------------===//
 void DisableDatabaseInvalidationSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {

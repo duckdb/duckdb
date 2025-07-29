@@ -2,8 +2,7 @@
     {
         "name": "access_mode",
         "description": "Access mode of the database (AUTOMATIC, READ_ONLY or READ_WRITE)",
-        "type": "VARCHAR",
-        "return_type": "AccessMode",
+        "type": "ENUM<AccessMode>",
         "scope": "global",
         "on_callbacks": [
             "set"
@@ -204,8 +203,7 @@
     {
         "name": "debug_checkpoint_abort",
         "description": "DEBUG SETTING: trigger an abort while checkpointing for testing purposes",
-        "type": "VARCHAR",
-        "return_type": "CheckpointAbort",
+        "type": "ENUM<CheckpointAbort>",
         "internal_setting": "checkpoint_abort",
         "scope": "global"
     },
@@ -232,15 +230,13 @@
     {
         "name": "debug_verify_vector",
         "description": "DEBUG SETTING: enable vector verification",
-        "type": "VARCHAR",
-        "return_type": "DebugVectorVerification",
+        "type": "ENUM<DebugVectorVerification>",
         "scope": "global"
     },
     {
         "name": "debug_window_mode",
         "description": "DEBUG SETTING: switch window mode to use",
-        "type": "VARCHAR",
-        "return_type": "WindowAggregationMode",
+        "type": "ENUM<WindowAggregationMode>",
         "scope": "global",
         "internal_setting": "window_mode"
     },
@@ -261,26 +257,21 @@
     {
         "name": "default_null_order",
         "description": "NULL ordering used when none is specified (NULLS_FIRST or NULLS_LAST)",
-        "type": "VARCHAR",
-        "return_type": "DefaultOrderByNullType",
-        "scope": "global",
+        "type": "ENUM<DefaultOrderByNullType>",
+        "default_value": "NULLS LAST",
+        "default_scope": "global",
         "custom_implementation": [
             "set"
-        ],
-        "aliases": [
-            "null_order"
         ]
     },
     {
         "name": "default_order",
         "description": "The order type used when none is specified (ASC or DESC)",
-        "type": "VARCHAR",
-        "return_type": "OrderType",
-        "scope": "global",
-        "internal_setting": "default_order_type",
+        "type": "ENUM<OrderType>",
+        "default_value": "ASCENDING",
+        "default_scope": "global",
         "custom_implementation": [
-            "set",
-            "get"
+            "set"
         ]
     },
     {
@@ -459,8 +450,7 @@
     {
         "name": "explain_output",
         "description": "Output of EXPLAIN statements (ALL, OPTIMIZED_ONLY, PHYSICAL_ONLY)",
-        "type": "VARCHAR",
-        "return_type": "ExplainOutputType",
+        "type": "ENUM<ExplainOutputType>",
         "scope": "local",
         "internal_setting": "explain_output_type"
     },
@@ -717,8 +707,7 @@
     {
         "name": "pin_threads",
         "description": "Whether to pin threads to cores (Linux only, default AUTO: on when there are more than 64 cores)",
-        "type": "VARCHAR",
-        "return_type": "ThreadPinMode",
+        "type": "ENUM<ThreadPinMode>",
         "scope": "global"
     },
     {

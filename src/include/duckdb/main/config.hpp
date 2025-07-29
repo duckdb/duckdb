@@ -70,6 +70,14 @@ enum class CheckpointAbort : uint8_t {
 	DEBUG_ABORT_AFTER_FREE_LIST_WRITE = 3
 };
 
+struct SettingCallbackInfo {
+	explicit SettingCallbackInfo(ClientContext &context);
+
+	optional_ptr<DatabaseInstance> db;
+	optional_ptr<ClientContext> context;
+};
+
+typedef void (*set_callback)(SettingCallbackInfo &info, Value &parameter);
 typedef void (*set_global_function_t)(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 typedef void (*set_local_function_t)(ClientContext &context, const Value &parameter);
 typedef void (*reset_global_function_t)(DatabaseInstance *db, DBConfig &config);
@@ -85,6 +93,9 @@ struct ConfigurationOption {
 	reset_global_function_t reset_global;
 	reset_local_function_t reset_local;
 	get_setting_function_t get_setting;
+	SetScope default_scope;
+	const char *default_value;
+	set_callback set_callback;
 };
 
 typedef void (*set_option_callback_t)(ClientContext &context, SetScope scope, Value &parameter);
@@ -178,12 +189,8 @@ struct DBConfigOptions {
 	bool allow_unredacted_secrets = false;
 	//! The collation type of the database
 	string collation = string();
-	//! The order type used when none is specified (default: ASC)
-	OrderType default_order_type = OrderType::ASCENDING;
 	//! Disables invalidating the database instance when encountering a fatal error.
 	bool disable_database_invalidation = false;
-	//! NULL ordering used when none is specified (default: NULLS LAST)
-	DefaultOrderByNullType default_null_order = DefaultOrderByNullType::NULLS_LAST;
 	//! enable COPY and related commands
 	bool enable_external_access = true;
 	//! Whether or not the global http metadata cache is used
@@ -442,8 +449,8 @@ public:
 
 	template <class OP>
 	typename OP::RETURN_TYPE GetEnum(const ClientContext &context) const {
-		lock_guard<mutex> lock(config_lock);
-		return EnumUtil::FromString<typename OP::RETURN_TYPE>(OP::GetSetting(context).template GetValue<string>());
+		return EnumUtil::FromString<typename OP::RETURN_TYPE>(
+		    GetEnumSettingInternal(context, OP::Name, OP::DefaultValue));
 	}
 
 	template <class OP>
@@ -456,6 +463,9 @@ public:
 	void AddAllowedDirectory(const string &path);
 	void AddAllowedPath(const string &path);
 	string SanitizeAllowedPath(const string &path) const;
+
+private:
+	static string GetEnumSettingInternal(const ClientContext &context, const char *setting, const char *default_value);
 
 private:
 	unique_ptr<CompressionFunctionSet> compression_functions;

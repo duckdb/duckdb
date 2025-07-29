@@ -52,7 +52,18 @@ unique_ptr<GlobalTableFunctionState> DuckDBSettingsInit(ClientContext &context, 
 		DuckDBSettingValue value;
 		auto scope = option->set_global ? SettingScope::GLOBAL : SettingScope::LOCAL;
 		value.name = option->name;
-		value.value = option->get_setting(context).ToString();
+		if (option->get_setting) {
+			value.value = option->get_setting(context).ToString();
+		} else {
+			Value setting_value;
+			auto lookup_result = context.TryGetCurrentSetting(value.name, setting_value);
+			if (lookup_result) {
+				value.value = setting_value.ToString();
+				scope = lookup_result.GetScope();
+			} else {
+				value.value = option->default_value;
+			}
+		}
 		value.description = option->description;
 		value.input_type = option->parameter_type;
 		value.scope = EnumUtil::ToString(scope);

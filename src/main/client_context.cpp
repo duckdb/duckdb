@@ -1349,7 +1349,7 @@ SettingLookupResult ClientContext::TryGetCurrentSetting(const std::string &key, 
 	// first check the built-in settings
 	auto &db_config = DBConfig::GetConfig(*this);
 	auto option = db_config.GetOptionByName(key);
-	if (option) {
+	if (option && option->get_setting) {
 		result = option->get_setting(*this);
 		return SettingLookupResult(SettingScope::LOCAL);
 	}

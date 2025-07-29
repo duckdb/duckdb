@@ -29,7 +29,6 @@ class Setting:
         self,
         name: str,
         description: str,
-        return_type: str,
         sql_type: str,
         scope: str,
         internal_setting: str,
@@ -37,23 +36,20 @@ class Setting:
         custom_implementation,
         struct_name: str,
         aliases: List[str],
+        default_scope: str,
+        default_value: str,
     ):
         self.name = self._get_valid_name(name)
         self.description = description
         self.sql_type = self._get_sql_type(sql_type)
-        if return_type == '':
-            self.return_type = self._get_setting_type(sql_type)
-            self.is_enum = False
-        else:
-            if sql_type != 'VARCHAR':
-                raise ValueError(
-                    f'Setting {self.name} - could not set return type to {return_type} - enum types require the setting type to be VARCHAR'
-                )
-            self.return_type = return_type
-            self.is_enum = True
+        self.return_type = self._get_setting_type(sql_type)
+        self.is_enum = sql_type.startswith('ENUM')
         self.internal_setting = internal_setting
-        self.scope = self._get_valid_scope(scope)
+        self.scope = self._get_valid_scope(scope) if scope is not None else None
         self.on_set, self.on_reset = self._get_on_callbacks(on_callbacks)
+        self.is_generic_setting = self.scope is None
+        if self.is_enum and self.is_generic_setting:
+            self.on_set = True
         custom_callbacks = ['set', 'reset', 'get']
         if type(custom_implementation) is bool:
             self.all_custom = custom_implementation
@@ -68,6 +64,8 @@ class Setting:
             self.custom_implementation = custom_implementation
         self.aliases = self._get_aliases(aliases)
         self.struct_name = self._get_struct_name() if len(struct_name) == 0 else struct_name
+        self.default_scope = self._get_valid_scope(default_scope) if default_scope is not None else None
+        self.default_value = default_value
 
     # define all comparisons to be based on the setting's name attribute
     def __eq__(self, other) -> bool:
@@ -100,6 +98,8 @@ class Setting:
 
     # validate and return the correct type format
     def _get_sql_type(self, sql_type) -> str:
+        if sql_type.startswith('ENUM'):
+            return 'VARCHAR'
         if sql_type.endswith('[]'):
             # recurse into child-element
             sub_type = self._get_sql_type(sql_type[:-2])
@@ -110,6 +110,8 @@ class Setting:
 
     # validate and return the cpp input type
     def _get_setting_type(self, type) -> str:
+        if type.startswith('ENUM'):
+            return type[len('ENUM<') : -1]
         if type.endswith('[]'):
             subtype = self._get_setting_type(type[:-2])
             return "vector<" + subtype + ">"

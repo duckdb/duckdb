@@ -20,7 +20,12 @@ def generate_scope_code(file):
     # generate new entries for the settings array
     new_entries = []
     for setting in SettingsList:
-        if setting.scope in VALID_SCOPE_VALUES:  # valid setting_scope values
+        if setting.is_generic_setting:
+            if setting.on_set:
+                new_entries.append(f"DUCKDB_SETTING_CALLBACK({setting.struct_name})")
+            else:
+                new_entries.append(f"DUCKDB_SETTING({setting.struct_name})")
+        elif setting.scope in VALID_SCOPE_VALUES:  # valid setting_scope values
             new_entries.append(f"DUCKDB_{setting.scope}({setting.struct_name})")
             for alias in setting.aliases:
                 new_entries.append(f"DUCKDB_{setting.scope}_ALIAS(\"{alias}\", {setting.struct_name})")
