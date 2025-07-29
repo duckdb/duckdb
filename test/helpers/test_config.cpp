@@ -38,7 +38,8 @@ static const TestConfigOption test_config_options[] = {
     {"on_load", "SQL statements to execute on explicit load", LogicalType::VARCHAR, nullptr},
     {"on_new_connection", "SQL statements to execute on connection", LogicalType::VARCHAR, nullptr},
     {"skip_tests", "Tests to be skipped",
-     LogicalType::LIST(LogicalType::STRUCT({{"reason", LogicalType::VARCHAR}, {"path", LogicalType::VARCHAR}})),
+     LogicalType::LIST(
+         LogicalType::STRUCT({{"reason", LogicalType::VARCHAR}, {"paths", LogicalType::LIST(LogicalType::VARCHAR)}})),
      nullptr},
     {"skip_compiled", "Skip compiled tests", LogicalType::BOOLEAN, nullptr},
     {"skip_error_messages", "Skip compiled tests", LogicalType::LIST(LogicalType::VARCHAR), nullptr},
@@ -264,10 +265,13 @@ void TestConfiguration::LoadConfig(const string &config_path) {
 	// Convert to unordered_set<string> the list of tests to be skipped
 	auto entry = options.find("skip_tests");
 	if (entry != options.end()) {
-		auto skip_list = ListValue::GetChildren(entry->second);
-		for (const auto &value : skip_list) {
+		auto skip_list_entry = ListValue::GetChildren(entry->second);
+		for (const auto &value : skip_list_entry) {
 			auto children = StructValue::GetChildren(value);
-			tests_to_be_skipped.insert(children[1].GetValue<string>());
+			auto skip_list = ListValue::GetChildren(children[1]);
+			for (const auto &skipped_test : skip_list) {
+				tests_to_be_skipped.insert(skipped_test.GetValue<string>());
+			}
 		}
 	}
 }
