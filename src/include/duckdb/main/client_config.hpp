@@ -55,9 +55,6 @@ struct ClientConfig {
 	//! The wait time before showing the progress bar
 	int wait_time = 2000;
 
-	//! Preserve identifier case while parsing.
-	//! If false, all unquoted identifiers are lower-cased (e.g. "MyTable" -> "mytable").
-	bool preserve_identifier_case = true;
 	//! The maximum expression depth limit in the parser
 	idx_t max_expression_depth = 1000;
 
@@ -79,8 +76,6 @@ struct ClientConfig {
 	bool force_external = false;
 	//! Force use of fetch row instead of scan, used for testing
 	bool force_fetch_row = false;
-	//! Use range joins for inequalities, even if there are equality predicates
-	bool prefer_range_joins = false;
 	//! If this context should also try to use the available replacement scans
 	//! True by default
 	bool use_replacement_scans = true;
@@ -89,10 +84,6 @@ struct ClientConfig {
 	idx_t perfect_ht_threshold = 12;
 	//! The maximum number of rows to accumulate before sorting ordered aggregates.
 	idx_t ordered_aggregate_threshold = (idx_t(1) << 18);
-	//! The number of rows to accumulate before flushing during a partitioned write
-	idx_t partitioned_write_flush_threshold = idx_t(1) << idx_t(19);
-	//! The amount of rows we can keep open before we close and flush them during a partitioned write
-	idx_t partitioned_write_max_open_files = idx_t(100);
 
 	//! The maximum amount of memory to keep buffered in a streaming query result. Default: 1mb.
 	idx_t streaming_buffer_size = 1000000;
@@ -103,14 +94,6 @@ struct ClientConfig {
 	//! The explain output type used when none is specified (default: PHYSICAL_ONLY)
 	ExplainOutputType explain_output_type = ExplainOutputType::PHYSICAL_ONLY;
 
-	//! The maximum amount of pivot columns
-	idx_t pivot_limit = 100000;
-
-	//! The threshold at which we switch from using filtered aggregates to LIST with a dedicated pivot operator
-	idx_t pivot_filter_threshold = 20;
-
-	//! When a scalar subquery returns multiple rows - return a random row instead of returning an error
-	bool scalar_subquery_error_on_multiple_rows = true;
 	//! Use IEE754-compliant floating point operations (returning NAN instead of errors/NULL)
 	bool ieee_floating_point_ops = true;
 	//! If DEFAULT or ENABLE_SINGLE_ARROW, it is possible to use the deprecated single arrow operator (->) for lambda

@@ -533,41 +533,6 @@ Value OrderedAggregateThresholdSetting::GetSetting(const ClientContext &context)
 }
 
 //===----------------------------------------------------------------------===//
-// Partitioned Write Flush Threshold
-//===----------------------------------------------------------------------===//
-void PartitionedWriteFlushThresholdSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto &config = ClientConfig::GetConfig(context);
-	config.partitioned_write_flush_threshold = input.GetValue<idx_t>();
-}
-
-void PartitionedWriteFlushThresholdSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).partitioned_write_flush_threshold =
-	    ClientConfig().partitioned_write_flush_threshold;
-}
-
-Value PartitionedWriteFlushThresholdSetting::GetSetting(const ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	return Value::UBIGINT(config.partitioned_write_flush_threshold);
-}
-
-//===----------------------------------------------------------------------===//
-// Partitioned Write Max Open Files
-//===----------------------------------------------------------------------===//
-void PartitionedWriteMaxOpenFilesSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto &config = ClientConfig::GetConfig(context);
-	config.partitioned_write_max_open_files = input.GetValue<idx_t>();
-}
-
-void PartitionedWriteMaxOpenFilesSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).partitioned_write_max_open_files = ClientConfig().partitioned_write_max_open_files;
-}
-
-Value PartitionedWriteMaxOpenFilesSetting::GetSetting(const ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	return Value::UBIGINT(config.partitioned_write_max_open_files);
-}
-
-//===----------------------------------------------------------------------===//
 // Perfect Ht Threshold
 //===----------------------------------------------------------------------===//
 void PerfectHtThresholdSetting::ResetLocal(ClientContext &context) {
@@ -589,92 +554,6 @@ void PinThreadsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 Value PinThreadsSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value(StringUtil::Lower(EnumUtil::ToString(config.options.pin_threads)));
-}
-
-//===----------------------------------------------------------------------===//
-// Pivot Filter Threshold
-//===----------------------------------------------------------------------===//
-void PivotFilterThresholdSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto &config = ClientConfig::GetConfig(context);
-	config.pivot_filter_threshold = input.GetValue<idx_t>();
-}
-
-void PivotFilterThresholdSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).pivot_filter_threshold = ClientConfig().pivot_filter_threshold;
-}
-
-Value PivotFilterThresholdSetting::GetSetting(const ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	return Value::UBIGINT(config.pivot_filter_threshold);
-}
-
-//===----------------------------------------------------------------------===//
-// Pivot Limit
-//===----------------------------------------------------------------------===//
-void PivotLimitSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto &config = ClientConfig::GetConfig(context);
-	config.pivot_limit = input.GetValue<idx_t>();
-}
-
-void PivotLimitSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).pivot_limit = ClientConfig().pivot_limit;
-}
-
-Value PivotLimitSetting::GetSetting(const ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	return Value::UBIGINT(config.pivot_limit);
-}
-
-//===----------------------------------------------------------------------===//
-// Prefer Range Joins
-//===----------------------------------------------------------------------===//
-void PreferRangeJoinsSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto &config = ClientConfig::GetConfig(context);
-	config.prefer_range_joins = input.GetValue<bool>();
-}
-
-void PreferRangeJoinsSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).prefer_range_joins = ClientConfig().prefer_range_joins;
-}
-
-Value PreferRangeJoinsSetting::GetSetting(const ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	return Value::BOOLEAN(config.prefer_range_joins);
-}
-
-//===----------------------------------------------------------------------===//
-// Preserve Identifier Case
-//===----------------------------------------------------------------------===//
-void PreserveIdentifierCaseSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto &config = ClientConfig::GetConfig(context);
-	config.preserve_identifier_case = input.GetValue<bool>();
-}
-
-void PreserveIdentifierCaseSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).preserve_identifier_case = ClientConfig().preserve_identifier_case;
-}
-
-Value PreserveIdentifierCaseSetting::GetSetting(const ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	return Value::BOOLEAN(config.preserve_identifier_case);
-}
-
-//===----------------------------------------------------------------------===//
-// Scalar Subquery Error On Multiple Rows
-//===----------------------------------------------------------------------===//
-void ScalarSubqueryErrorOnMultipleRowsSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto &config = ClientConfig::GetConfig(context);
-	config.scalar_subquery_error_on_multiple_rows = input.GetValue<bool>();
-}
-
-void ScalarSubqueryErrorOnMultipleRowsSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).scalar_subquery_error_on_multiple_rows =
-	    ClientConfig().scalar_subquery_error_on_multiple_rows;
-}
-
-Value ScalarSubqueryErrorOnMultipleRowsSetting::GetSetting(const ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	return Value::BOOLEAN(config.scalar_subquery_error_on_multiple_rows);
 }
 
 //===----------------------------------------------------------------------===//

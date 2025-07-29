@@ -698,13 +698,15 @@
         "name": "partitioned_write_flush_threshold",
         "description": "The threshold in number of rows after which we flush a thread state when writing using PARTITION_BY",
         "type": "UBIGINT",
-        "scope": "local"
+        "default_scope": "local",
+        "default_value": "524288"
     },
     {
         "name": "partitioned_write_max_open_files",
         "description": "The maximum amount of files the system can keep open before flushing to disk when writing using PARTITION_BY",
         "type": "UBIGINT",
-        "scope": "local"
+        "default_scope": "local",
+        "default_value": "100"
     },
     {
         "name": "password",
@@ -733,25 +735,29 @@
         "name": "pivot_filter_threshold",
         "description": "The threshold to switch from using filtered aggregates to LIST with a dedicated pivot operator",
         "type": "UBIGINT",
-        "scope": "local"
+        "default_scope": "local",
+        "default_value": "20"
     },
     {
         "name": "pivot_limit",
         "description": "The maximum number of pivot columns in a pivot statement",
         "type": "UBIGINT",
-        "scope": "local"
+        "default_scope": "local",
+        "default_value": "100000"
     },
     {
         "name": "prefer_range_joins",
         "description": "Force use of range joins with mixed predicates",
         "type": "BOOLEAN",
-        "scope": "local"
+        "default_scope": "local",
+        "default_value": "false"
     },
     {
         "name": "preserve_identifier_case",
         "description": "Whether or not to preserve the identifier case, instead of always lowercasing all non-quoted identifiers",
         "type": "BOOLEAN",
-        "scope": "local"
+        "default_scope": "local",
+        "default_value": "true"
     },
     {
         "name": "preserve_insertion_order",
@@ -802,7 +808,8 @@
         "name": "scalar_subquery_error_on_multiple_rows",
         "description": "When a scalar subquery returns multiple rows - return a random row instead of returning an error.",
         "type": "BOOLEAN",
-        "scope": "local"
+        "default_scope": "local",
+        "default_value": "true"
     },
     {
         "name": "scheduler_process_partial",

@@ -53,10 +53,9 @@ PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoi
 	default:
 		break;
 	}
-	auto &client_config = ClientConfig::GetConfig(context);
-
 	//	TODO: Extend PWMJ to handle all comparisons and projection maps
-	const auto prefer_range_joins = client_config.prefer_range_joins && can_iejoin;
+	bool prefer_range_joins = DBConfig::GetSetting<PreferRangeJoinsSetting>(context);
+	prefer_range_joins = prefer_range_joins && can_iejoin;
 	if (has_equality && !prefer_range_joins) {
 		// Equality join with small number of keys : possible perfect join optimization
 		auto &join = Make<PhysicalHashJoin>(op, left, right, std::move(op.conditions), op.join_type,

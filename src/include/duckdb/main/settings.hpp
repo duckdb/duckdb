@@ -974,9 +974,8 @@ struct PartitionedWriteFlushThresholdSetting {
 	static constexpr const char *Description =
 	    "The threshold in number of rows after which we flush a thread state when writing using PARTITION_BY";
 	static constexpr const char *InputType = "UBIGINT";
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "524288";
+	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
 
 struct PartitionedWriteMaxOpenFilesSetting {
@@ -985,9 +984,8 @@ struct PartitionedWriteMaxOpenFilesSetting {
 	static constexpr const char *Description =
 	    "The maximum amount of files the system can keep open before flushing to disk when writing using PARTITION_BY";
 	static constexpr const char *InputType = "UBIGINT";
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "100";
+	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
 
 struct PasswordSetting {
@@ -1027,9 +1025,8 @@ struct PivotFilterThresholdSetting {
 	static constexpr const char *Description =
 	    "The threshold to switch from using filtered aggregates to LIST with a dedicated pivot operator";
 	static constexpr const char *InputType = "UBIGINT";
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "20";
+	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
 
 struct PivotLimitSetting {
@@ -1037,9 +1034,8 @@ struct PivotLimitSetting {
 	static constexpr const char *Name = "pivot_limit";
 	static constexpr const char *Description = "The maximum number of pivot columns in a pivot statement";
 	static constexpr const char *InputType = "UBIGINT";
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "100000";
+	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
 
 struct PreferRangeJoinsSetting {
@@ -1047,9 +1043,8 @@ struct PreferRangeJoinsSetting {
 	static constexpr const char *Name = "prefer_range_joins";
 	static constexpr const char *Description = "Force use of range joins with mixed predicates";
 	static constexpr const char *InputType = "BOOLEAN";
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
 
 struct PreserveIdentifierCaseSetting {
@@ -1058,9 +1053,8 @@ struct PreserveIdentifierCaseSetting {
 	static constexpr const char *Description =
 	    "Whether or not to preserve the identifier case, instead of always lowercasing all non-quoted identifiers";
 	static constexpr const char *InputType = "BOOLEAN";
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "true";
+	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
 
 struct PreserveInsertionOrderSetting {
@@ -1132,9 +1126,8 @@ struct ScalarSubqueryErrorOnMultipleRowsSetting {
 	static constexpr const char *Description =
 	    "When a scalar subquery returns multiple rows - return a random row instead of returning an error.";
 	static constexpr const char *InputType = "BOOLEAN";
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "true";
+	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
 
 struct SchedulerProcessPartialSetting {

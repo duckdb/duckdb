@@ -1371,7 +1371,7 @@ SettingLookupResult ClientContext::TryGetCurrentSetting(const std::string &key, 
 ParserOptions ClientContext::GetParserOptions() const {
 	auto &client_config = ClientConfig::GetConfig(*this);
 	ParserOptions options;
-	options.preserve_identifier_case = client_config.preserve_identifier_case;
+	options.preserve_identifier_case = DBConfig::GetSetting<PreserveIdentifierCaseSetting>(*this);
 	options.integer_division = DBConfig::GetSetting<IntegerDivisionSetting>(*this);
 	options.max_expression_depth = client_config.max_expression_depth;
 	options.extensions = &DBConfig::GetConfig(*this).parser_extensions;
