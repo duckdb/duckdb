@@ -167,13 +167,13 @@ static void ListHasAllFunction(DataChunk &args, ExpressionState &state, Vector &
 }
 
 ScalarFunction ListHasAnyFun::GetFunction() {
-	ScalarFunction fun({LogicalType::LIST(LogicalType::TEMPLATE()), LogicalType::LIST(LogicalType::TEMPLATE())},
+	ScalarFunction fun({LogicalType::LIST(LogicalType::TEMPLATE("T")), LogicalType::LIST(LogicalType::TEMPLATE("T"))},
 	                   LogicalType::BOOLEAN, ListHasAnyFunction);
 	return fun;
 }
 
 ScalarFunction ListHasAllFun::GetFunction() {
-	ScalarFunction fun({LogicalType::LIST(LogicalType::TEMPLATE()), LogicalType::LIST(LogicalType::TEMPLATE())},
+	ScalarFunction fun({LogicalType::LIST(LogicalType::TEMPLATE("T")), LogicalType::LIST(LogicalType::TEMPLATE("T"))},
 	                   LogicalType::BOOLEAN, ListHasAllFunction);
 	return fun;
 }

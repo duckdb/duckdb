@@ -264,6 +264,8 @@ struct TemplateTypeInfo : public ExtraTypeInfo {
 
 	explicit TemplateTypeInfo(string name_p);
 
+	// The name of the template, e.g. `T`, or `KEY_TYPE`. Used to distinguish between different template types within
+	// the same function. The binder tries to resolve all templates with the same name to the same concrete type.
 	string name;
 
 public:

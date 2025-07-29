@@ -151,14 +151,16 @@ void ListSelectFunction(DataChunk &args, ExpressionState &state, Vector &result)
 } // namespace
 
 ScalarFunction ListWhereFun::GetFunction() {
-	auto fun = ScalarFunction({LogicalType::LIST(LogicalType::TEMPLATE()), LogicalType::LIST(LogicalType::BOOLEAN)},
-	                          LogicalType::LIST(LogicalType::TEMPLATE()), ListSelectFunction<SetSelectionVectorWhere>);
+	auto fun =
+	    ScalarFunction({LogicalType::LIST(LogicalType::TEMPLATE("T")), LogicalType::LIST(LogicalType::BOOLEAN)},
+	                   LogicalType::LIST(LogicalType::TEMPLATE("T")), ListSelectFunction<SetSelectionVectorWhere>);
 	return fun;
 }
 
 ScalarFunction ListSelectFun::GetFunction() {
-	auto fun = ScalarFunction({LogicalType::LIST(LogicalType::TEMPLATE()), LogicalType::LIST(LogicalType::BIGINT)},
-	                          LogicalType::LIST(LogicalType::TEMPLATE()), ListSelectFunction<SetSelectionVectorSelect>);
+	auto fun =
+	    ScalarFunction({LogicalType::LIST(LogicalType::TEMPLATE("T")), LogicalType::LIST(LogicalType::BIGINT)},
+	                   LogicalType::LIST(LogicalType::TEMPLATE("T")), ListSelectFunction<SetSelectionVectorSelect>);
 	return fun;
 }
 

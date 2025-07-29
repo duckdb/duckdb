@@ -191,7 +191,7 @@ unique_ptr<FunctionData> ListBindFunction(ClientContext &context, AggregateFunct
 
 AggregateFunction ListFun::GetFunction() {
 	auto func = AggregateFunction(
-	    {LogicalType::TEMPLATE()}, LogicalType::LIST(LogicalType::TEMPLATE()),
+	    {LogicalType::TEMPLATE("T")}, LogicalType::LIST(LogicalType::TEMPLATE("T")),
 	    AggregateFunction::StateSize<ListAggState>, AggregateFunction::StateInitialize<ListAggState, ListFunction>,
 	    ListUpdateFunction, ListCombineFunction, ListFinalize, nullptr, ListBindFunction, nullptr, nullptr, nullptr);
 

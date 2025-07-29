@@ -186,7 +186,14 @@ enum class LogicalTypeId : uint8_t {
 	UNKNOWN = 2, /* unknown type, used for parameter expressions */
 	ANY = 3,     /* ANY type, used for functions that accept any type as parameter */
 	USER = 4,    /* A User Defined Type (e.g., ENUMs before the binder) */
-	TEMPLATE = 5, /* A Template Type, used for functions that accept a template type as parameter */
+
+
+	// A "template" type functions as a "placeholder" type for function arguments and return types.
+	// Templates only exist during the binding phase, in the scope of a function, and are replaced with concrete types
+	// before execution. When defining a template, you provide a name to distinguish between different template types,
+	// specifying to the binder that they dont need to resolve to the same concrete type. Two templates with the same
+	// name are always resolved to the same concrete type.
+	TEMPLATE = 5,
 
 	BOOLEAN = 10,
 	TINYINT = 11,
@@ -424,7 +431,6 @@ public:
 	DUCKDB_API static LogicalType ENUM(Vector &ordered_data, idx_t size); // NOLINT
 	// ANY but with special rules (default is LogicalType::ANY, 5)
 	DUCKDB_API static LogicalType ANY_PARAMS(LogicalType target, idx_t cast_score = 5); // NOLINT
-	DUCKDB_API static LogicalType TEMPLATE();											// NOLINT
 	DUCKDB_API static LogicalType TEMPLATE(const string &name);							// NOLINT
 	//! Integer literal of the specified value
 	DUCKDB_API static LogicalType INTEGER_LITERAL(const Value &constant);               // NOLINT

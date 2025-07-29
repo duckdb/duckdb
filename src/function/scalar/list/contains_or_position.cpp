@@ -27,12 +27,12 @@ static void ListSearchFunction(DataChunk &input, ExpressionState &state, Vector 
 }
 
 ScalarFunction ListContainsFun::GetFunction() {
-	return ScalarFunction({LogicalType::LIST(LogicalType::TEMPLATE()), LogicalType::TEMPLATE()}, LogicalType::BOOLEAN,
-	                      ListSearchFunction<bool>);
+	return ScalarFunction({LogicalType::LIST(LogicalType::TEMPLATE("T")), LogicalType::TEMPLATE("T")},
+	                      LogicalType::BOOLEAN, ListSearchFunction<bool>);
 }
 
 ScalarFunction ListPositionFun::GetFunction() {
-	auto fun = ScalarFunction({LogicalType::LIST(LogicalType::TEMPLATE()), LogicalType::TEMPLATE()},
+	auto fun = ScalarFunction({LogicalType::LIST(LogicalType::TEMPLATE("T")), LogicalType::TEMPLATE("T")},
 	                          LogicalType::INTEGER, ListSearchFunction<int32_t, true>);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return fun;

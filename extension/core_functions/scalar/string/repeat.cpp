@@ -64,8 +64,8 @@ ScalarFunctionSet RepeatFun::GetFunctions() {
 	for (const auto &type : {LogicalType::VARCHAR, LogicalType::BLOB}) {
 		repeat.AddFunction(ScalarFunction({type, LogicalType::BIGINT}, type, RepeatFunction));
 	}
-	repeat.AddFunction(ScalarFunction({LogicalType::LIST(LogicalType::TEMPLATE()), LogicalType::BIGINT},
-	                                  LogicalType::LIST(LogicalType::TEMPLATE()), RepeatListFunction));
+	repeat.AddFunction(ScalarFunction({LogicalType::LIST(LogicalType::TEMPLATE("T")), LogicalType::BIGINT},
+	                                  LogicalType::LIST(LogicalType::TEMPLATE("T")), RepeatListFunction));
 	for (auto &func : repeat.functions) {
 		BaseScalarFunction::SetReturnsError(func);
 	}

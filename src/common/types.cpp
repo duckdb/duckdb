@@ -1950,10 +1950,8 @@ LogicalType LogicalType::INTEGER_LITERAL(const Value &constant) { // NOLINT
 //===--------------------------------------------------------------------===//
 // Template Type
 //===--------------------------------------------------------------------===//
-LogicalType LogicalType::TEMPLATE() {
-	return LogicalType::TEMPLATE("T"); // Default template type name
-}
 LogicalType LogicalType::TEMPLATE(const string &name) {
+	D_ASSERT(!name.empty());
 	auto type_info = make_shared_ptr<TemplateTypeInfo>(name);
 	return LogicalType(LogicalTypeId::TEMPLATE, std::move(type_info));
 }

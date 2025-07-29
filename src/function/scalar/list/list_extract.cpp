@@ -153,8 +153,8 @@ ScalarFunctionSet ListExtractFun::GetFunctions() {
 	ScalarFunctionSet list_extract_set("list_extract");
 
 	// the arguments and return types are actually set in the binder function
-	ScalarFunction lfun({LogicalType::LIST(LogicalType::TEMPLATE()), LogicalType::BIGINT}, LogicalType::TEMPLATE(),
-	                    ListExtractFunction, ListExtractBind, nullptr, ListExtractStats);
+	ScalarFunction lfun({LogicalType::LIST(LogicalType::TEMPLATE("T")), LogicalType::BIGINT},
+	                    LogicalType::TEMPLATE("T"), ListExtractFunction, ListExtractBind, nullptr, ListExtractStats);
 
 	ScalarFunction sfun({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR, ListExtractFunction);
 	BaseScalarFunction::SetReturnsError(lfun);
@@ -168,8 +168,8 @@ ScalarFunctionSet ArrayExtractFun::GetFunctions() {
 	ScalarFunctionSet array_extract_set("array_extract");
 
 	// the arguments and return types are actually set in the binder function
-	ScalarFunction lfun({LogicalType::LIST(LogicalType::TEMPLATE()), LogicalType::BIGINT}, LogicalType::TEMPLATE(),
-	                    ListExtractFunction, ListExtractBind, nullptr, ListExtractStats);
+	ScalarFunction lfun({LogicalType::LIST(LogicalType::TEMPLATE("T")), LogicalType::BIGINT},
+	                    LogicalType::TEMPLATE("T"), ListExtractFunction, ListExtractBind, nullptr, ListExtractStats);
 
 	ScalarFunction sfun({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR, ListExtractFunction);
 

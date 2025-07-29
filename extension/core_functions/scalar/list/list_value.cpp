@@ -318,7 +318,7 @@ ScalarFunctionSet ListValueFun::GetFunctions() {
 	set.AddFunction(empty_fun);
 
 	// Overload for 1 + N arguments, which returns a list of the arguments.
-	auto element_type = LogicalType::TEMPLATE();
+	auto element_type = LogicalType::TEMPLATE("T");
 	ScalarFunction value_fun({element_type}, LogicalType::LIST(element_type), ListValueFunction, nullptr, nullptr,
 	                         ListValueStats);
 	value_fun.varargs = element_type;
