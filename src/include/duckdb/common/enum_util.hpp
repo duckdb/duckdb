@@ -68,6 +68,8 @@ enum class ArrowArrayPhysicalType : uint8_t;
 
 enum class ArrowDateTimeType : uint8_t;
 
+enum class ArrowFormatVersion : uint8_t;
+
 enum class ArrowOffsetSize : uint8_t;
 
 enum class ArrowTypeInfoType : uint8_t;
@@ -486,6 +488,9 @@ const char* EnumUtil::ToChars<ArrowArrayPhysicalType>(ArrowArrayPhysicalType val
 
 template<>
 const char* EnumUtil::ToChars<ArrowDateTimeType>(ArrowDateTimeType value);
+
+template<>
+const char* EnumUtil::ToChars<ArrowFormatVersion>(ArrowFormatVersion value);
 
 template<>
 const char* EnumUtil::ToChars<ArrowOffsetSize>(ArrowOffsetSize value);
@@ -1087,6 +1092,9 @@ ArrowArrayPhysicalType EnumUtil::FromString<ArrowArrayPhysicalType>(const char *
 
 template<>
 ArrowDateTimeType EnumUtil::FromString<ArrowDateTimeType>(const char *value);
+
+template<>
+ArrowFormatVersion EnumUtil::FromString<ArrowFormatVersion>(const char *value);
 
 template<>
 ArrowOffsetSize EnumUtil::FromString<ArrowOffsetSize>(const char *value);

@@ -523,6 +523,28 @@ ArrowDateTimeType EnumUtil::FromString<ArrowDateTimeType>(const char *value) {
 	return static_cast<ArrowDateTimeType>(StringUtil::StringToEnum(GetArrowDateTimeTypeValues(), 7, "ArrowDateTimeType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetArrowFormatVersionValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ArrowFormatVersion::V1_0), "V1_0" },
+		{ static_cast<uint32_t>(ArrowFormatVersion::V1_1), "V1_1" },
+		{ static_cast<uint32_t>(ArrowFormatVersion::V1_2), "V1_2" },
+		{ static_cast<uint32_t>(ArrowFormatVersion::V1_3), "V1_3" },
+		{ static_cast<uint32_t>(ArrowFormatVersion::V1_4), "V1_4" },
+		{ static_cast<uint32_t>(ArrowFormatVersion::V1_5), "V1_5" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ArrowFormatVersion>(ArrowFormatVersion value) {
+	return StringUtil::EnumToString(GetArrowFormatVersionValues(), 6, "ArrowFormatVersion", static_cast<uint32_t>(value));
+}
+
+template<>
+ArrowFormatVersion EnumUtil::FromString<ArrowFormatVersion>(const char *value) {
+	return static_cast<ArrowFormatVersion>(StringUtil::StringToEnum(GetArrowFormatVersionValues(), 6, "ArrowFormatVersion", value));
+}
+
 const StringUtil::EnumStringLiteral *GetArrowOffsetSizeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(ArrowOffsetSize::REGULAR), "REGULAR" },
@@ -2996,10 +3018,10 @@ const StringUtil::EnumStringLiteral *GetOrderByNullTypeValues() {
 		{ static_cast<uint32_t>(OrderByNullType::INVALID), "INVALID" },
 		{ static_cast<uint32_t>(OrderByNullType::ORDER_DEFAULT), "ORDER_DEFAULT" },
 		{ static_cast<uint32_t>(OrderByNullType::ORDER_DEFAULT), "DEFAULT" },
-		{ static_cast<uint32_t>(OrderByNullType::NULLS_FIRST), "NULLS_FIRST" },
 		{ static_cast<uint32_t>(OrderByNullType::NULLS_FIRST), "NULLS FIRST" },
-		{ static_cast<uint32_t>(OrderByNullType::NULLS_LAST), "NULLS_LAST" },
-		{ static_cast<uint32_t>(OrderByNullType::NULLS_LAST), "NULLS LAST" }
+		{ static_cast<uint32_t>(OrderByNullType::NULLS_FIRST), "NULLS_FIRST" },
+		{ static_cast<uint32_t>(OrderByNullType::NULLS_LAST), "NULLS LAST" },
+		{ static_cast<uint32_t>(OrderByNullType::NULLS_LAST), "NULLS_LAST" }
 	};
 	return values;
 }

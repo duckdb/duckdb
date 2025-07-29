@@ -503,18 +503,23 @@ bool DuckDB::ExtensionIsLoaded(const std::string &name) {
 	return instance->ExtensionIsLoaded(name);
 }
 
-SettingLookupResult DatabaseInstance::TryGetCurrentSetting(const std::string &key, Value &result) const {
+SettingLookupResult DatabaseInstance::TryGetCurrentSetting(const string &key, Value &result) const {
 	// check the session values
 	auto &db_config = DBConfig::GetConfig(*this);
 	const auto &global_config_map = db_config.options.set_variables;
 
 	auto global_value = global_config_map.find(key);
-	bool found_global_value = global_value != global_config_map.end();
-	if (!found_global_value) {
-		return SettingLookupResult();
+	if (global_value != global_config_map.end()) {
+		result = global_value->second;
+		return SettingLookupResult(SettingScope::GLOBAL);
 	}
-	result = global_value->second;
-	return SettingLookupResult(SettingScope::GLOBAL);
+	auto option = db_config.GetOptionByName(key);
+	if (option && option->default_value) {
+		auto input_type = db_config.ParseLogicalType(option->parameter_type);
+		result = Value(option->default_value).DefaultCastAs(input_type);
+		return SettingLookupResult(SettingScope::GLOBAL);
+	}
+	return SettingLookupResult();
 }
 
 shared_ptr<EncryptionUtil> DatabaseInstance::GetEncryptionUtil() const {

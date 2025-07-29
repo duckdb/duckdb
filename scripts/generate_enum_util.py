@@ -36,8 +36,8 @@ overrides = {
     },
     "OrderByNullType": {
         "ORDER_DEFAULT": ["ORDER_DEFAULT", "DEFAULT"],
-        "NULLS_FIRST": ["NULLS_FIRST", "NULLS FIRST"],
-        "NULLS_LAST": ["NULLS_LAST", "NULLS LAST"],
+        "NULLS_FIRST": ["NULLS FIRST", "NULLS_FIRST"],
+        "NULLS_LAST": ["NULLS LAST", "NULLS_LAST"],
     },
     "CheckpointAbort": {
         "NO_ABORT": "NONE",
