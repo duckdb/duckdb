@@ -16,6 +16,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/enums/access_mode.hpp"
+#include "duckdb/common/enums/checkpoint_abort.hpp"
 #include "duckdb/common/enums/thread_pin_mode.hpp"
 #include "duckdb/common/enums/compression_type.hpp"
 #include "duckdb/common/enums/optimizer_type.hpp"
@@ -39,6 +40,7 @@
 #include "duckdb/function/encoding_function.hpp"
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/common/enums/debug_vector_verification.hpp"
+#include "duckdb/main/setting_info.hpp"
 #include "duckdb/logging/logging.hpp"
 
 namespace duckdb {
@@ -62,66 +64,7 @@ class HTTPUtil;
 struct CompressionFunctionSet;
 struct DatabaseCacheEntry;
 struct DBConfig;
-
-enum class CheckpointAbort : uint8_t {
-	NO_ABORT = 0,
-	DEBUG_ABORT_BEFORE_TRUNCATE = 1,
-	DEBUG_ABORT_BEFORE_HEADER = 2,
-	DEBUG_ABORT_AFTER_FREE_LIST_WRITE = 3
-};
-
-struct SettingCallbackInfo {
-	explicit SettingCallbackInfo(ClientContext &context, SetScope scope);
-	explicit SettingCallbackInfo(DBConfig &config, optional_ptr<DatabaseInstance> db);
-
-	DBConfig &config;
-	optional_ptr<DatabaseInstance> db;
-	optional_ptr<ClientContext> context;
-	SetScope scope;
-};
-
-typedef void (*set_callback)(SettingCallbackInfo &info, Value &parameter);
-typedef void (*set_global_function_t)(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-typedef void (*set_local_function_t)(ClientContext &context, const Value &parameter);
-typedef void (*reset_global_function_t)(DatabaseInstance *db, DBConfig &config);
-typedef void (*reset_local_function_t)(ClientContext &context);
-typedef Value (*get_setting_function_t)(const ClientContext &context);
-
-struct ConfigurationOption {
-	const char *name;
-	const char *description;
-	const char *parameter_type;
-	set_global_function_t set_global;
-	set_local_function_t set_local;
-	reset_global_function_t reset_global;
-	reset_local_function_t reset_local;
-	get_setting_function_t get_setting;
-	SetScope default_scope;
-	const char *default_value;
-	set_callback set_callback;
-};
-
-struct ConfigurationAlias {
-	const char *alias;
-	idx_t option_index;
-};
-
-typedef void (*set_option_callback_t)(ClientContext &context, SetScope scope, Value &parameter);
-
-struct ExtensionOption {
-	// NOLINTNEXTLINE: work around bug in clang-tidy
-	ExtensionOption(string description_p, LogicalType type_p, set_option_callback_t set_function_p,
-	                Value default_value_p, SetScope default_scope_p)
-	    : description(std::move(description_p)), type(std::move(type_p)), set_function(set_function_p),
-	      default_value(std::move(default_value_p)), default_scope(default_scope_p) {
-	}
-
-	string description;
-	LogicalType type;
-	set_option_callback_t set_function;
-	Value default_value;
-	SetScope default_scope;
-};
+struct SettingLookupResult;
 
 class SerializationCompatibility {
 public:
@@ -276,8 +219,6 @@ struct DBConfigOptions {
 	string duckdb_api;
 	//! Metadata from DuckDB callers
 	string custom_user_agent;
-	//! Use old implicit casting style (i.e. allow everything to be implicitly casted to VARCHAR)
-	bool old_implicit_casting = false;
 	//!  By default, WAL is encrypted for encrypted databases
 	bool wal_encryption = true;
 	//! Encrypt the temp files
@@ -380,7 +321,7 @@ public:
 
 	DUCKDB_API void AddExtensionOption(const string &name, string description, LogicalType parameter,
 	                                   const Value &default_value = Value(), set_option_callback_t function = nullptr,
-	                                   SetScope default_scope = SetScope::LOCAL);
+	                                   SetScope default_scope = SetScope::SESSION);
 	//! Fetch an option by index. Returns a pointer to the option, or nullptr if out of range
 	DUCKDB_API static optional_ptr<const ConfigurationOption> GetOptionByIndex(idx_t index);
 	//! Fetcha n alias by index, or nullptr if out of range
@@ -435,9 +376,15 @@ public:
 	OrderByNullType ResolveNullOrder(ClientContext &context, OrderType order_type, OrderByNullType null_type) const;
 	const string UserAgent() const;
 
+	SettingLookupResult TryGetCurrentSetting(const string &key, Value &result) const;
 	template <class OP>
 	static typename OP::RETURN_TYPE GetSetting(const ClientContext &context) {
 		return GetSettingInternal(context, OP::Name, OP::DefaultValue).template GetValue<typename OP::RETURN_TYPE>();
+	}
+
+	template <class OP>
+	static typename OP::RETURN_TYPE GetSetting(const DBConfig &config) {
+		return GetSettingInternal(config, OP::Name, OP::DefaultValue).template GetValue<typename OP::RETURN_TYPE>();
 	}
 
 	template <class OP>
@@ -458,6 +405,7 @@ public:
 	string SanitizeAllowedPath(const string &path) const;
 
 private:
+	static Value GetSettingInternal(const DBConfig &config, const char *setting, const char *default_value);
 	static Value GetSettingInternal(const ClientContext &context, const char *setting, const char *default_value);
 	static string GetEnumSettingInternal(const ClientContext &context, const char *setting, const char *default_value);
 

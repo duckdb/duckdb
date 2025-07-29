@@ -25,7 +25,7 @@
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/common/types/value_map.hpp"
-
+#include "duckdb/main/settings.hpp"
 #include <list>
 
 namespace duckdb {

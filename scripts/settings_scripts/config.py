@@ -64,7 +64,7 @@ class Setting:
             self.custom_implementation = custom_implementation
         self.aliases = self._get_aliases(aliases)
         self.struct_name = self._get_struct_name() if len(struct_name) == 0 else struct_name
-        self.default_scope = self._get_valid_scope(default_scope) if default_scope is not None else None
+        self.default_scope = self._get_valid_default_scope(default_scope) if default_scope is not None else None
         self.default_value = default_value
 
     # define all comparisons to be based on the setting's name attribute
@@ -95,6 +95,14 @@ class Setting:
         if scope in VALID_SCOPE_VALUES:
             return scope
         return INVALID_SCOPE_VALUE
+
+    def _get_valid_default_scope(self, scope: str) -> str:
+        scope = scope.upper()
+        if scope == 'GLOBAL':
+            return scope
+        elif scope == 'LOCAL':
+            return 'SESSION'
+        raise Exception(f"Invalid default scope value {scope}")
 
     # validate and return the correct type format
     def _get_sql_type(self, sql_type) -> str:

@@ -10,7 +10,7 @@
 
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/winapi.hpp"
-#include "duckdb/main/settings.hpp"
+#include "duckdb/main/setting_info.hpp"
 
 namespace duckdb {
 

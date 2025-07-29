@@ -691,12 +691,36 @@ Value DBConfig::GetSettingInternal(const ClientContext &context, const char *set
 	return Value(default_value);
 }
 
+Value DBConfig::GetSettingInternal(const DBConfig &config, const char *setting, const char *default_value) {
+	Value result_val;
+	if (config.TryGetCurrentSetting(setting, result_val)) {
+		return result_val;
+	}
+	return Value(default_value);
+}
 string DBConfig::GetEnumSettingInternal(const ClientContext &context, const char *setting, const char *default_value) {
 	Value result_val;
 	if (context.TryGetCurrentSetting(setting, result_val)) {
 		return result_val.GetValue<string>();
 	}
 	return default_value;
+}
+
+SettingLookupResult DBConfig::TryGetCurrentSetting(const string &key, Value &result) const {
+	const auto &global_config_map = options.set_variables;
+
+	auto global_value = global_config_map.find(key);
+	if (global_value != global_config_map.end()) {
+		result = global_value->second;
+		return SettingLookupResult(SettingScope::GLOBAL);
+	}
+	auto option = GetOptionByName(key);
+	if (option && option->default_value) {
+		auto input_type = ParseLogicalType(option->parameter_type);
+		result = Value(option->default_value).DefaultCastAs(input_type);
+		return SettingLookupResult(SettingScope::GLOBAL);
+	}
+	return SettingLookupResult();
 }
 
 OrderByNullType DBConfig::ResolveNullOrder(ClientContext &context, OrderType order_type,

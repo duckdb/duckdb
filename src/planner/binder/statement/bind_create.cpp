@@ -43,6 +43,7 @@
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/common/extension_type_info.hpp"
 #include "duckdb/common/type_visitor.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -185,7 +186,6 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 
 	auto &dependencies = base.dependencies;
 	auto &catalog = Catalog::GetCatalog(context, info.catalog);
-	auto &db_config = DBConfig::GetConfig(context);
 	// try to bind each of the included functions
 	unordered_set<idx_t> positional_parameters;
 	for (auto &function : base.macros) {

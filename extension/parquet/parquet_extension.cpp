@@ -48,6 +48,7 @@
 #include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/common/multi_file/multi_file_function.hpp"
 #include "duckdb/common/primitive_dictionary.hpp"
+#include "duckdb/main/settings.hpp"
 #include "parquet_multi_file_info.hpp"
 
 namespace duckdb {
