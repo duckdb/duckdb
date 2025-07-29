@@ -43,7 +43,7 @@ public:
 	//! The buffer is guaranteed to stay in memory as long as the returned BufferHandle is in scope
 	DUCKDB_API BufferHandle Read(QueryContext context, data_ptr_t &buffer, idx_t nr_bytes, idx_t location);
 	//! Read (non-seeking) nr bytes from the file (or cache), same as above, also sets nr_bytes to actually read bytes
-	DUCKDB_API BufferHandle Read(data_ptr_t &buffer, idx_t &nr_bytes);
+	DUCKDB_API BufferHandle Read(QueryContext context, data_ptr_t &buffer, idx_t &nr_bytes);
 	//! Get some properties of the file
 	DUCKDB_API string GetPath() const;
 	DUCKDB_API idx_t GetFileSize();
@@ -109,7 +109,7 @@ public:
 	DUCKDB_API ~CachingFileSystem();
 
 public:
-	DUCKDB_API static CachingFileSystem Get(QueryContext context);
+	DUCKDB_API static CachingFileSystem Get(ClientContext &context);
 
 	DUCKDB_API unique_ptr<CachingFileHandle> OpenFile(const OpenFileInfo &path, FileOpenFlags flags);
 

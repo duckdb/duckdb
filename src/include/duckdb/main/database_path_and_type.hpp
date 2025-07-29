@@ -20,6 +20,6 @@ struct DBPathAndType {
 	static void CheckMagicBytes(QueryContext context, FileSystem &fs, string &path, string &db_type);
 
 	//! Run ExtractExtensionPrefix followed by CheckMagicBytes
-	static void ResolveDatabaseType(FileSystem &fs, string &path, string &db_type);
+	static void ResolveDatabaseType(QueryContext context, FileSystem &fs, string &path, string &db_type);
 };
 } // namespace duckdb

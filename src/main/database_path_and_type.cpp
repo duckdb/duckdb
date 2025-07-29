@@ -39,7 +39,7 @@ void DBPathAndType::CheckMagicBytes(QueryContext context, FileSystem &fs, string
 	}
 }
 
-void DBPathAndType::ResolveDatabaseType(FileSystem &fs, string &path, string &db_type) {
+void DBPathAndType::ResolveDatabaseType(QueryContext context, FileSystem &fs, string &path, string &db_type) {
 	if (!db_type.empty()) {
 		// database type specified explicitly - no need to check
 		return;
@@ -51,7 +51,7 @@ void DBPathAndType::ResolveDatabaseType(FileSystem &fs, string &path, string &db
 		return;
 	}
 	// check database type by reading the magic bytes of a file
-	DBPathAndType::CheckMagicBytes(fs, path, db_type);
+	DBPathAndType::CheckMagicBytes(context, fs, path, db_type);
 }
 
 } // namespace duckdb

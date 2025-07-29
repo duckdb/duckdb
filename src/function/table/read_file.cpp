@@ -118,7 +118,7 @@ static void AssertMaxFileSize(const string &file_name, idx_t file_size) {
 }
 
 template <class OP>
-static void ReadFileExecute(QueryContext context, TableFunctionInput &input, DataChunk &output) {
+static void ReadFileExecute(ClientContext &context, TableFunctionInput &input, DataChunk &output) {
 	auto &bind_data = input.bind_data->Cast<ReadFileBindData>();
 	auto &state = input.global_state->Cast<ReadFileGlobalState>();
 	auto fs = CachingFileSystem::Get(context);
@@ -175,12 +175,12 @@ static void ReadFileExecute(QueryContext context, TableFunctionInput &input, Dat
 							// Remote file: caching read
 							data_ptr_t read_ptr;
 							actually_read = NumericCast<idx_t>(bytes_to_read);
-							auto buffer_handle = file_handle->Read(read_ptr, actually_read);
+							auto buffer_handle = file_handle->Read(QueryContext(context), read_ptr, actually_read);
 							memcpy(content_string_ptr, read_ptr, actually_read);
 						} else {
 							// Local file: non-caching read
 							actually_read = NumericCast<idx_t>(file_handle->GetFileHandle().Read(
-							    context, content_string_ptr, UnsafeNumericCast<idx_t>(bytes_to_read)));
+							    QueryContext(context), content_string_ptr, UnsafeNumericCast<idx_t>(bytes_to_read)));
 						}
 
 						if (actually_read == 0) {
