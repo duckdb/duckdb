@@ -214,7 +214,7 @@ unique_ptr<FunctionData> BindDecimalSum(ClientContext &context, AggregateFunctio
 
 struct VarintState {
 	bool is_set;
-	varint_t value;
+	VarintIntermediate value;
 };
 
 struct VarintOperation {
@@ -235,10 +235,10 @@ struct VarintOperation {
 	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input) {
 		if (!state.is_set) {
 			state.is_set = true;
-			// We have the allocator here, let's initialize our main varint
-			state.value = input;
+			state.value = VarintIntermediate(input);
 		} else {
-			state.value.AddInPlace(unary_input.input.allocator, input);
+			VarintIntermediate rhs(input);
+			state.value.AddInPlace(unary_input.input.allocator, rhs);
 		}
 	}
 
@@ -252,8 +252,8 @@ struct VarintOperation {
 			target.is_set = true;
 			return;
 		}
+		// source.value.Trim();
 		target.value.AddInPlace(input.allocator, source.value);
-		target.is_set = true;
 	}
 
 	template <class TARGET_TYPE, class STATE>
@@ -261,8 +261,7 @@ struct VarintOperation {
 		if (!state.is_set) {
 			finalize_data.ReturnNull();
 		} else {
-			state.value.Trim(finalize_data.input.allocator);
-			target = state.value;
+			target = state.value.ToVarint(finalize_data.input.allocator);
 		}
 	}
 

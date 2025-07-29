@@ -68,13 +68,13 @@ public:
 	DUCKDB_API static bool VarintToDouble(const string_t &blob, double &result, bool &strict);
 	template <class T>
 	static bool VarintToInt(const string_t &blob, T &result, bool &strict) {
-		uint8_t data_byte_size = blob.GetSize() - VARINT_HEADER_SIZE;
+		auto data_byte_size = blob.GetSize() - VARINT_HEADER_SIZE;
 		auto data = blob.GetData();
 		bool is_negative = (data[0] & 0x80) == 0;
 
-		uint64_t abs_value = 0;
+		uhugeint_t abs_value = 0;
 		for (idx_t i = 0; i < data_byte_size; ++i) {
-			uint8_t byte = data[Varint::VARINT_HEADER_SIZE + i];
+			uint8_t byte = static_cast<uint8_t>(data[Varint::VARINT_HEADER_SIZE + i]);
 			if (is_negative) {
 				byte = ~byte;
 			}
@@ -82,15 +82,15 @@ public:
 		}
 
 		if (is_negative) {
-			if (abs_value > static_cast<uint64_t>(std::numeric_limits<T>::max()) + 1) {
+			if (abs_value > static_cast<uhugeint_t>(std::numeric_limits<T>::max()) + 1) {
 				throw OutOfRangeException("Negative varint too small for type");
 			}
-			result = static_cast<T>(-static_cast<int64_t>(abs_value));
+			result = static_cast<T>(-static_cast<hugeint_t>(abs_value));
 		} else {
-			if (abs_value > static_cast<uint64_t>(std::numeric_limits<T>::max())) {
+			if (abs_value > static_cast<uhugeint_t>(std::numeric_limits<T>::max())) {
 				throw OutOfRangeException("Positive varint too large for type");
 			}
-			result = abs_value;
+			result = static_cast<T>(abs_value);
 		}
 		return true;
 	}
