@@ -16,7 +16,7 @@ class PipeFileSystem : public FileSystem {
 public:
 	static unique_ptr<FileHandle> OpenPipe(unique_ptr<FileHandle> handle);
 
-	int64_t Read(ClientContext &context, FileHandle &handle, void *buffer, int64_t nr_bytes) override;
+	int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
 	int64_t Write(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
 
 	int64_t GetFileSize(FileHandle &handle) override;

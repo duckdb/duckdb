@@ -12,8 +12,8 @@ VirtualFileSystem::VirtualFileSystem(unique_ptr<FileSystem> &&inner) : default_f
 	VirtualFileSystem::RegisterSubSystem(FileCompressionType::GZIP, make_uniq<GZipFileSystem>());
 }
 
-unique_ptr<FileHandle> VirtualFileSystem::OpenFileExtended(ClientContext &context, const OpenFileInfo &file,
-                                                           FileOpenFlags flags, optional_ptr<FileOpener> opener) {
+unique_ptr<FileHandle> VirtualFileSystem::OpenFileExtended(const OpenFileInfo &file, FileOpenFlags flags,
+                                                           optional_ptr<FileOpener> opener) {
 	auto compression = flags.Compression();
 	if (compression == FileCompressionType::AUTO_DETECT) {
 		// auto-detect compression settings based on file name
@@ -49,7 +49,7 @@ unique_ptr<FileHandle> VirtualFileSystem::OpenFileExtended(ClientContext &contex
 			throw NotImplementedException(
 			    "Attempting to open a compressed file, but the compression type is not supported");
 		}
-		file_handle = entry->second->OpenCompressedFile(context, std::move(file_handle), flags.OpenForWriting());
+		file_handle = entry->second->OpenCompressedFile(QueryContext(), std::move(file_handle), flags.OpenForWriting());
 	}
 	return file_handle;
 }

@@ -1,0 +1,591 @@
+diff --git a/src/common/compressed_file_system.cpp b/src/common/compressed_file_system.cpp
+index d222bf13de..7a5b619791 100644
+--- a/src/common/compressed_file_system.cpp
++++ b/src/common/compressed_file_system.cpp
+@@ -18,7 +18,7 @@ CompressedFile::~CompressedFile() {
+ 	}
+ }
+ 
+-void CompressedFile::Initialize(bool write) {
++void CompressedFile::Initialize(ClientContext &context, bool write) {
+ 	Close();
+ 
+ 	this->write = write;
+@@ -34,14 +34,14 @@ void CompressedFile::Initialize(bool write) {
+ 	current_position = 0;
+ 
+ 	stream_wrapper = compressed_fs.CreateStream();
+-	stream_wrapper->Initialize(*this, write);
++	stream_wrapper->Initialize(context, *this, write);
+ }
+ 
+ idx_t CompressedFile::GetProgress() {
+ 	return current_position;
+ }
+ 
+-int64_t CompressedFile::ReadData(void *buffer, int64_t remaining) {
++int64_t CompressedFile::ReadData(ClientContext &context, void *buffer, int64_t remaining) {
+ 	idx_t total_read = 0;
+ 	while (true) {
+ 		// first check if there are input bytes available in the output buffers
+@@ -78,7 +78,7 @@ int64_t CompressedFile::ReadData(void *buffer, int64_t remaining) {
+ 			memmove(stream_data.in_buff.get(), stream_data.in_buff_start, UnsafeNumericCast<size_t>(bufrem));
+ 			stream_data.in_buff_start = stream_data.in_buff.get();
+ 			// refill the rest of input buffer
+-			auto sz = child_handle->Read(stream_data.in_buff_start + bufrem,
++			auto sz = child_handle->Read(context, stream_data.in_buff_start + bufrem,
+ 			                             stream_data.in_buf_size - UnsafeNumericCast<idx_t>(bufrem));
+ 			stream_data.in_buff_end = stream_data.in_buff_start + bufrem + sz;
+ 			if (sz <= 0) {
+@@ -92,7 +92,7 @@ int64_t CompressedFile::ReadData(void *buffer, int64_t remaining) {
+ 			// empty input buffer: refill from the start
+ 			stream_data.in_buff_start = stream_data.in_buff.get();
+ 			stream_data.in_buff_end = stream_data.in_buff_start;
+-			auto sz = child_handle->Read(stream_data.in_buff.get(), stream_data.in_buf_size);
++			auto sz = child_handle->Read(context, stream_data.in_buff.get(), stream_data.in_buf_size);
+ 			if (sz <= 0) {
+ 				stream_wrapper.reset();
+ 				break;
+@@ -129,9 +129,9 @@ void CompressedFile::Close() {
+ 	stream_data.refresh = false;
+ }
+ 
+-int64_t CompressedFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
++int64_t CompressedFileSystem::Read(ClientContext &context, FileHandle &handle, void *buffer, int64_t nr_bytes) {
+ 	auto &compressed_file = handle.Cast<CompressedFile>();
+-	return compressed_file.ReadData(buffer, nr_bytes);
++	return compressed_file.ReadData(context, buffer, nr_bytes);
+ }
+ 
+ int64_t CompressedFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
+@@ -139,10 +139,10 @@ int64_t CompressedFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr
+ 	return compressed_file.WriteData(data_ptr_cast(buffer), nr_bytes);
+ }
+ 
+-void CompressedFileSystem::Reset(FileHandle &handle) {
++void CompressedFileSystem::Reset(ClientContext &context, FileHandle &handle) {
+ 	auto &compressed_file = handle.Cast<CompressedFile>();
+ 	compressed_file.child_handle->Reset();
+-	compressed_file.Initialize(compressed_file.write);
++	compressed_file.Initialize(context, compressed_file.write);
+ }
+ 
+ int64_t CompressedFileSystem::GetFileSize(FileHandle &handle) {
+diff --git a/src/common/file_system.cpp b/src/common/file_system.cpp
+index f661b2de5e..55e7a53a2e 100644
+--- a/src/common/file_system.cpp
++++ b/src/common/file_system.cpp
+@@ -671,7 +671,8 @@ bool FileSystem::IsManuallySet() {
+ 	return false;
+ }
+ 
+-unique_ptr<FileHandle> FileSystem::OpenCompressedFile(unique_ptr<FileHandle> handle, bool write) {
++unique_ptr<FileHandle> FileSystem::OpenCompressedFile(ClientContext &context, unique_ptr<FileHandle> handle,
++                                                      bool write) {
+ 	throw NotImplementedException("%s: OpenCompressedFile is not implemented!", GetName());
+ }
+ 
+@@ -687,7 +688,8 @@ FileHandle::FileHandle(FileSystem &file_system, string path_p, FileOpenFlags fla
+ FileHandle::~FileHandle() {
+ }
+ 
+-int64_t FileHandle::Read(void *buffer, idx_t nr_bytes) {
++int64_t FileHandle::Read(ClientContext &context, void *buffer, idx_t nr_bytes) {
++	// FIXME: Add profiling.
+ 	return file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes));
+ }
+ 
+@@ -732,11 +734,11 @@ bool FileHandle::IsPipe() {
+ 	return file_system.IsPipe(path);
+ }
+ 
+-string FileHandle::ReadLine() {
++string FileHandle::ReadLine(ClientContext &context) {
+ 	string result;
+ 	char buffer[1];
+ 	while (true) {
+-		auto tuples_read = UnsafeNumericCast<idx_t>(Read(buffer, 1));
++		auto tuples_read = UnsafeNumericCast<idx_t>(Read(context, buffer, 1));
+ 		if (tuples_read == 0 || buffer[0] == '\n') {
+ 			return result;
+ 		}
+diff --git a/src/common/gzip_file_system.cpp b/src/common/gzip_file_system.cpp
+index ffb07eb5c0..52e494bbed 100644
+--- a/src/common/gzip_file_system.cpp
++++ b/src/common/gzip_file_system.cpp
+@@ -53,10 +53,10 @@ namespace duckdb {
+ 
+  */
+ 
+-static idx_t GZipConsumeString(FileHandle &input) {
++static idx_t GZipConsumeString(ClientContext &context, FileHandle &input) {
+ 	idx_t size = 1; // terminator
+ 	char buffer[1];
+-	while (input.Read(buffer, 1) == 1) {
++	while (input.Read(context, buffer, 1) == 1) {
+ 		if (buffer[0] == '\0') {
+ 			break;
+ 		}
+@@ -75,7 +75,7 @@ struct MiniZStreamWrapper : public StreamWrapper {
+ 	idx_t total_size;
+ 
+ public:
+-	void Initialize(CompressedFile &file, bool write) override;
++	void Initialize(ClientContext &context, CompressedFile &file, bool write) override;
+ 
+ 	bool Read(StreamData &stream_data) override;
+ 	void Write(CompressedFile &file, StreamData &stream_data, data_ptr_t buffer, int64_t nr_bytes) override;
+@@ -96,7 +96,7 @@ MiniZStreamWrapper::~MiniZStreamWrapper() {
+ 	}
+ }
+ 
+-void MiniZStreamWrapper::Initialize(CompressedFile &file, bool write) {
++void MiniZStreamWrapper::Initialize(ClientContext &context, CompressedFile &file, bool write) {
+ 	Close();
+ 	this->file = &file;
+ 	mz_stream_ptr = make_uniq<duckdb_miniz::mz_stream>();
+@@ -119,20 +119,20 @@ void MiniZStreamWrapper::Initialize(CompressedFile &file, bool write) {
+ 		}
+ 	} else {
+ 		idx_t data_start = GZIP_HEADER_MINSIZE;
+-		auto read_count = file.child_handle->Read(gzip_hdr, GZIP_HEADER_MINSIZE);
++		auto read_count = file.child_handle->Read(context, gzip_hdr, GZIP_HEADER_MINSIZE);
+ 		GZipFileSystem::VerifyGZIPHeader(gzip_hdr, NumericCast<idx_t>(read_count), &file);
+ 		// Skip over the extra field if necessary
+ 		if (gzip_hdr[3] & GZIP_FLAG_EXTRA) {
+ 			uint8_t gzip_xlen[2];
+ 			file.child_handle->Seek(data_start);
+-			file.child_handle->Read(gzip_xlen, 2);
++			file.child_handle->Read(context, gzip_xlen, 2);
+ 			auto xlen = NumericCast<idx_t>((uint8_t)gzip_xlen[0] | (uint8_t)gzip_xlen[1] << 8);
+ 			data_start += xlen + 2;
+ 		}
+ 		// Skip over the file name if necessary
+ 		if (gzip_hdr[3] & GZIP_FLAG_NAME) {
+ 			file.child_handle->Seek(data_start);
+-			data_start += GZipConsumeString(*file.child_handle);
++			data_start += GZipConsumeString(context, *file.child_handle);
+ 		}
+ 		file.child_handle->Seek(data_start);
+ 		// stream is now set to beginning of payload data
+@@ -296,9 +296,9 @@ void MiniZStreamWrapper::Close() {
+ 
+ class GZipFile : public CompressedFile {
+ public:
+-	GZipFile(unique_ptr<FileHandle> child_handle_p, const string &path, bool write)
++	GZipFile(ClientContext &context, unique_ptr<FileHandle> child_handle_p, const string &path, bool write)
+ 	    : CompressedFile(gzip_fs, std::move(child_handle_p), path) {
+-		Initialize(write);
++		Initialize(context, write);
+ 	}
+ 	FileCompressionType GetFileCompressionType() override {
+ 		return FileCompressionType::GZIP;
+@@ -407,9 +407,10 @@ string GZipFileSystem::UncompressGZIPString(const char *data, idx_t size) {
+ 	return decompressed;
+ }
+ 
+-unique_ptr<FileHandle> GZipFileSystem::OpenCompressedFile(unique_ptr<FileHandle> handle, bool write) {
++unique_ptr<FileHandle> GZipFileSystem::OpenCompressedFile(ClientContext &context, unique_ptr<FileHandle> handle,
++                                                          bool write) {
+ 	auto path = handle->path;
+-	return make_uniq<GZipFile>(std::move(handle), path, write);
++	return make_uniq<GZipFile>(context, std::move(handle), path, write);
+ }
+ 
+ unique_ptr<StreamWrapper> GZipFileSystem::CreateStream() {
+diff --git a/src/common/pipe_file_system.cpp b/src/common/pipe_file_system.cpp
+index 3345e4987f..08adbef3e0 100644
+--- a/src/common/pipe_file_system.cpp
++++ b/src/common/pipe_file_system.cpp
+@@ -16,15 +16,15 @@ public:
+ 	unique_ptr<FileHandle> child_handle;
+ 
+ public:
+-	int64_t ReadChunk(void *buffer, int64_t nr_bytes);
++	int64_t ReadChunk(ClientContext &context, void *buffer, int64_t nr_bytes);
+ 	int64_t WriteChunk(void *buffer, int64_t nr_bytes);
+ 
+ 	void Close() override {
+ 	}
+ };
+ 
+-int64_t PipeFile::ReadChunk(void *buffer, int64_t nr_bytes) {
+-	return child_handle->Read(buffer, UnsafeNumericCast<idx_t>(nr_bytes));
++int64_t PipeFile::ReadChunk(ClientContext &context, void *buffer, int64_t nr_bytes) {
++	return child_handle->Read(context, buffer, UnsafeNumericCast<idx_t>(nr_bytes));
+ }
+ int64_t PipeFile::WriteChunk(void *buffer, int64_t nr_bytes) {
+ 	return child_handle->Write(buffer, UnsafeNumericCast<idx_t>(nr_bytes));
+@@ -34,9 +34,9 @@ void PipeFileSystem::Reset(FileHandle &handle) {
+ 	throw InternalException("Cannot reset pipe file system");
+ }
+ 
+-int64_t PipeFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
++int64_t PipeFileSystem::Read(ClientContext &context, FileHandle &handle, void *buffer, int64_t nr_bytes) {
+ 	auto &pipe = handle.Cast<PipeFile>();
+-	return pipe.ReadChunk(buffer, nr_bytes);
++	return pipe.ReadChunk(context, buffer, nr_bytes);
+ }
+ 
+ int64_t PipeFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
+diff --git a/src/common/virtual_file_system.cpp b/src/common/virtual_file_system.cpp
+index 472248850c..6889f67c7b 100644
+--- a/src/common/virtual_file_system.cpp
++++ b/src/common/virtual_file_system.cpp
+@@ -12,8 +12,8 @@ VirtualFileSystem::VirtualFileSystem(unique_ptr<FileSystem> &&inner) : default_f
+ 	VirtualFileSystem::RegisterSubSystem(FileCompressionType::GZIP, make_uniq<GZipFileSystem>());
+ }
+ 
+-unique_ptr<FileHandle> VirtualFileSystem::OpenFileExtended(const OpenFileInfo &file, FileOpenFlags flags,
+-                                                           optional_ptr<FileOpener> opener) {
++unique_ptr<FileHandle> VirtualFileSystem::OpenFileExtended(ClientContext &context, const OpenFileInfo &file,
++                                                           FileOpenFlags flags, optional_ptr<FileOpener> opener) {
+ 	auto compression = flags.Compression();
+ 	if (compression == FileCompressionType::AUTO_DETECT) {
+ 		// auto-detect compression settings based on file name
+@@ -49,7 +49,7 @@ unique_ptr<FileHandle> VirtualFileSystem::OpenFileExtended(const OpenFileInfo &f
+ 			throw NotImplementedException(
+ 			    "Attempting to open a compressed file, but the compression type is not supported");
+ 		}
+-		file_handle = entry->second->OpenCompressedFile(std::move(file_handle), flags.OpenForWriting());
++		file_handle = entry->second->OpenCompressedFile(context, std::move(file_handle), flags.OpenForWriting());
+ 	}
+ 	return file_handle;
+ }
+diff --git a/src/execution/operator/csv_scanner/buffer_manager/csv_buffer.cpp b/src/execution/operator/csv_scanner/buffer_manager/csv_buffer.cpp
+index 575d69d7d9..e57d08eb2d 100644
+--- a/src/execution/operator/csv_scanner/buffer_manager/csv_buffer.cpp
++++ b/src/execution/operator/csv_scanner/buffer_manager/csv_buffer.cpp
+@@ -8,10 +8,11 @@ CSVBuffer::CSVBuffer(ClientContext &context, idx_t buffer_size_p, CSVFileHandle
+     : context(context), requested_size(buffer_size_p), can_seek(file_handle.CanSeek()), is_pipe(file_handle.IsPipe()) {
+ 	AllocateBuffer(buffer_size_p);
+ 	auto buffer = Ptr();
+-	actual_buffer_size = file_handle.Read(buffer, buffer_size_p);
++	actual_buffer_size = file_handle.Read(context, buffer, buffer_size_p);
+ 	while (actual_buffer_size < buffer_size_p && !file_handle.FinishedReading()) {
+ 		// We keep reading until this block is full
+-		actual_buffer_size += file_handle.Read(&buffer[actual_buffer_size], buffer_size_p - actual_buffer_size);
++		actual_buffer_size +=
++		    file_handle.Read(context, &buffer[actual_buffer_size], buffer_size_p - actual_buffer_size);
+ 	}
+ 	global_csv_start = global_csv_current_position;
+ 	last_buffer = file_handle.FinishedReading();
+@@ -23,10 +24,10 @@ CSVBuffer::CSVBuffer(CSVFileHandle &file_handle, ClientContext &context, idx_t b
+       can_seek(file_handle.CanSeek()), is_pipe(file_handle.IsPipe()), buffer_idx(buffer_idx_p) {
+ 	AllocateBuffer(buffer_size);
+ 	auto buffer = handle.Ptr();
+-	actual_buffer_size = file_handle.Read(handle.Ptr(), buffer_size);
++	actual_buffer_size = file_handle.Read(context, handle.Ptr(), buffer_size);
+ 	while (actual_buffer_size < buffer_size && !file_handle.FinishedReading()) {
+ 		// We keep reading until this block is full
+-		actual_buffer_size += file_handle.Read(&buffer[actual_buffer_size], buffer_size - actual_buffer_size);
++		actual_buffer_size += file_handle.Read(context, &buffer[actual_buffer_size], buffer_size - actual_buffer_size);
+ 	}
+ 	last_buffer = file_handle.FinishedReading();
+ }
+@@ -63,7 +64,7 @@ void CSVBuffer::Reload(CSVFileHandle &file_handle) {
+ 	AllocateBuffer(actual_buffer_size);
+ 	// If we can seek, we seek and return the correct pointers
+ 	file_handle.Seek(global_csv_start);
+-	file_handle.Read(handle.Ptr(), actual_buffer_size);
++	file_handle.Read(context, handle.Ptr(), actual_buffer_size);
+ }
+ 
+ shared_ptr<CSVBufferHandle> CSVBuffer::Pin(CSVFileHandle &file_handle, bool &has_seeked) {
+diff --git a/src/execution/operator/csv_scanner/buffer_manager/csv_file_handle.cpp b/src/execution/operator/csv_scanner/buffer_manager/csv_file_handle.cpp
+index 5c39deab45..a09d9c72fb 100644
+--- a/src/execution/operator/csv_scanner/buffer_manager/csv_file_handle.cpp
++++ b/src/execution/operator/csv_scanner/buffer_manager/csv_file_handle.cpp
+@@ -75,14 +75,14 @@ bool CSVFileHandle::FinishedReading() const {
+ 	return finished;
+ }
+ 
+-idx_t CSVFileHandle::Read(void *buffer, idx_t nr_bytes) {
++idx_t CSVFileHandle::Read(ClientContext &context, void *buffer, idx_t nr_bytes) {
+ 	requested_bytes += nr_bytes;
+ 	// if this is a plain file source OR we can seek we are not caching anything
+ 	idx_t bytes_read = 0;
+ 	if (encoder.encoding_name == "utf-8") {
+-		bytes_read = static_cast<idx_t>(file_handle->Read(buffer, nr_bytes));
++		bytes_read = static_cast<idx_t>(file_handle->Read(context, buffer, nr_bytes));
+ 	} else {
+-		bytes_read = encoder.Encode(*file_handle, static_cast<char *>(buffer), nr_bytes);
++		bytes_read = encoder.Encode(context, *file_handle, static_cast<char *>(buffer), nr_bytes);
+ 	}
+ 	if (!finished) {
+ 		finished = bytes_read == 0;
+@@ -91,12 +91,12 @@ idx_t CSVFileHandle::Read(void *buffer, idx_t nr_bytes) {
+ 	return UnsafeNumericCast<idx_t>(bytes_read);
+ }
+ 
+-string CSVFileHandle::ReadLine() {
++string CSVFileHandle::ReadLine(ClientContext &context) {
+ 	bool carriage_return = false;
+ 	string result;
+ 	char buffer[1];
+ 	while (true) {
+-		idx_t bytes_read = Read(buffer, 1);
++		idx_t bytes_read = Read(context, buffer, 1);
+ 		if (bytes_read == 0) {
+ 			return result;
+ 		}
+diff --git a/src/execution/operator/csv_scanner/encode/csv_encoder.cpp b/src/execution/operator/csv_scanner/encode/csv_encoder.cpp
+index 17fe9837c7..8b3386a5b8 100644
+--- a/src/execution/operator/csv_scanner/encode/csv_encoder.cpp
++++ b/src/execution/operator/csv_scanner/encode/csv_encoder.cpp
+@@ -78,7 +78,8 @@ CSVEncoder::CSVEncoder(ClientContext &context, const string &encoding_name_to_fi
+ 	encoding_function = function;
+ }
+ 
+-idx_t CSVEncoder::Encode(FileHandle &file_handle_input, char *output_buffer, const idx_t decoded_buffer_size) {
++idx_t CSVEncoder::Encode(ClientContext &context, FileHandle &file_handle_input, char *output_buffer,
++                         const idx_t decoded_buffer_size) {
+ 	idx_t output_buffer_pos = 0;
+ 	// Check if we have some left-overs. These can either be
+ 	// 1. missing decoded bytes
+@@ -117,14 +118,14 @@ idx_t CSVEncoder::Encode(FileHandle &file_handle_input, char *output_buffer, con
+ 			encoded_buffer.Ptr()[pass_on_buffer.size()] = pass_on_byte;
+ 		}
+ 		auto actual_encoded_bytes = static_cast<idx_t>(
+-		    file_handle_input.Read(encoded_buffer.Ptr() + pass_on_buffer.size() + has_pass_on_byte,
++		    file_handle_input.Read(context, encoded_buffer.Ptr() + pass_on_buffer.size() + has_pass_on_byte,
+ 		                           encoded_buffer.GetCapacity() - pass_on_buffer.size() - has_pass_on_byte));
+ 		encoded_buffer.SetSize(actual_encoded_bytes + pass_on_buffer.size() + has_pass_on_byte);
+ 		if (actual_encoded_bytes < encoded_buffer.GetCapacity() - pass_on_buffer.size()) {
+ 			encoded_buffer.last_buffer = true;
+ 			has_pass_on_byte = false;
+ 		} else {
+-			auto bytes_read = static_cast<idx_t>(file_handle_input.Read(&pass_on_byte, 1));
++			auto bytes_read = static_cast<idx_t>(file_handle_input.Read(context, &pass_on_byte, 1));
+ 			if (bytes_read == 0) {
+ 				encoded_buffer.last_buffer = true;
+ 				has_pass_on_byte = false;
+diff --git a/src/function/table/read_file.cpp b/src/function/table/read_file.cpp
+index 7ea4b9700a..ec0c94b1f5 100644
+--- a/src/function/table/read_file.cpp
++++ b/src/function/table/read_file.cpp
+@@ -180,7 +180,7 @@ static void ReadFileExecute(ClientContext &context, TableFunctionInput &input, D
+ 						} else {
+ 							// Local file: non-caching read
+ 							actually_read = NumericCast<idx_t>(file_handle->GetFileHandle().Read(
+-							    content_string_ptr, UnsafeNumericCast<idx_t>(bytes_to_read)));
++							    context, content_string_ptr, UnsafeNumericCast<idx_t>(bytes_to_read)));
+ 						}
+ 
+ 						if (actually_read == 0) {
+diff --git a/src/include/duckdb/common/compressed_file_system.hpp b/src/include/duckdb/common/compressed_file_system.hpp
+index ff6cffab8a..a11382841b 100644
+--- a/src/include/duckdb/common/compressed_file_system.hpp
++++ b/src/include/duckdb/common/compressed_file_system.hpp
+@@ -32,7 +32,7 @@ struct StreamData {
+ struct StreamWrapper {
+ 	DUCKDB_API virtual ~StreamWrapper();
+ 
+-	DUCKDB_API virtual void Initialize(CompressedFile &file, bool write) = 0;
++	DUCKDB_API virtual void Initialize(ClientContext &context, CompressedFile &file, bool write) = 0;
+ 	DUCKDB_API virtual bool Read(StreamData &stream_data) = 0;
+ 	DUCKDB_API virtual void Write(CompressedFile &file, StreamData &stream_data, data_ptr_t buffer,
+ 	                              int64_t nr_bytes) = 0;
+@@ -41,10 +41,10 @@ struct StreamWrapper {
+ 
+ class CompressedFileSystem : public FileSystem {
+ public:
+-	DUCKDB_API int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
++	DUCKDB_API int64_t Read(ClientContext &context, FileHandle &handle, void *buffer, int64_t nr_bytes) override;
+ 	DUCKDB_API int64_t Write(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
+ 
+-	DUCKDB_API void Reset(FileHandle &handle) override;
++	DUCKDB_API void Reset(ClientContext &context, FileHandle &handle) override;
+ 
+ 	DUCKDB_API int64_t GetFileSize(FileHandle &handle) override;
+ 
+@@ -70,8 +70,8 @@ public:
+ 	StreamData stream_data;
+ 
+ public:
+-	DUCKDB_API void Initialize(bool write);
+-	DUCKDB_API int64_t ReadData(void *buffer, int64_t nr_bytes);
++	DUCKDB_API void Initialize(ClientContext &context, bool write);
++	DUCKDB_API int64_t ReadData(ClientContext &context, void *buffer, int64_t nr_bytes);
+ 	DUCKDB_API int64_t WriteData(data_ptr_t buffer, int64_t nr_bytes);
+ 	DUCKDB_API void Close() override;
+ 
+diff --git a/src/include/duckdb/common/file_system.hpp b/src/include/duckdb/common/file_system.hpp
+index 62059ca940..a51984d6e9 100644
+--- a/src/include/duckdb/common/file_system.hpp
++++ b/src/include/duckdb/common/file_system.hpp
+@@ -63,7 +63,7 @@ public:
+ 
+ 	// Read at [nr_bytes] bytes into [buffer], and return the bytes actually read.
+ 	// File offset will be changed, which advances for number of bytes read.
+-	DUCKDB_API int64_t Read(void *buffer, idx_t nr_bytes);
++	DUCKDB_API int64_t Read(ClientContext &context, void *buffer, idx_t nr_bytes);
+ 	DUCKDB_API int64_t Write(void *buffer, idx_t nr_bytes);
+ 	// Read at [nr_bytes] bytes into [buffer].
+ 	// File offset will not be changed.
+@@ -74,7 +74,7 @@ public:
+ 	DUCKDB_API idx_t SeekPosition();
+ 	DUCKDB_API void Sync();
+ 	DUCKDB_API void Truncate(int64_t new_size);
+-	DUCKDB_API string ReadLine();
++	DUCKDB_API string ReadLine(ClientContext &context);
+ 	DUCKDB_API bool Trim(idx_t offset_bytes, idx_t length_bytes);
+ 	DUCKDB_API virtual idx_t GetProgress();
+ 	DUCKDB_API virtual FileCompressionType GetFileCompressionType();
+@@ -262,7 +262,8 @@ public:
+ 	//! in a file on-disk are much cheaper than e.g. random reads in a file over the network
+ 	DUCKDB_API virtual bool OnDiskFile(FileHandle &handle);
+ 
+-	DUCKDB_API virtual unique_ptr<FileHandle> OpenCompressedFile(unique_ptr<FileHandle> handle, bool write);
++	DUCKDB_API virtual unique_ptr<FileHandle> OpenCompressedFile(ClientContext &context, unique_ptr<FileHandle> handle,
++	                                                             bool write);
+ 
+ 	//! Create a LocalFileSystem.
+ 	DUCKDB_API static unique_ptr<FileSystem> CreateLocal();
+diff --git a/src/include/duckdb/common/gzip_file_system.hpp b/src/include/duckdb/common/gzip_file_system.hpp
+index fffe726e89..9000dbdfb3 100644
+--- a/src/include/duckdb/common/gzip_file_system.hpp
++++ b/src/include/duckdb/common/gzip_file_system.hpp
+@@ -17,7 +17,8 @@ class GZipFileSystem : public CompressedFileSystem {
+ 	static constexpr const idx_t BUFFER_SIZE = 1u << 15;
+ 
+ public:
+-	unique_ptr<FileHandle> OpenCompressedFile(unique_ptr<FileHandle> handle, bool write) override;
++	unique_ptr<FileHandle> OpenCompressedFile(ClientContext &context, unique_ptr<FileHandle> handle,
++	                                          bool write) override;
+ 
+ 	std::string GetName() const override {
+ 		return "GZipFileSystem";
+diff --git a/src/include/duckdb/common/pipe_file_system.hpp b/src/include/duckdb/common/pipe_file_system.hpp
+index a84433d210..088022ed5c 100644
+--- a/src/include/duckdb/common/pipe_file_system.hpp
++++ b/src/include/duckdb/common/pipe_file_system.hpp
+@@ -16,7 +16,7 @@ class PipeFileSystem : public FileSystem {
+ public:
+ 	static unique_ptr<FileHandle> OpenPipe(unique_ptr<FileHandle> handle);
+ 
+-	int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
++	int64_t Read(ClientContext &context, FileHandle &handle, void *buffer, int64_t nr_bytes) override;
+ 	int64_t Write(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
+ 
+ 	int64_t GetFileSize(FileHandle &handle) override;
+diff --git a/src/include/duckdb/common/virtual_file_system.hpp b/src/include/duckdb/common/virtual_file_system.hpp
+index 30969f93d2..0834bf54f2 100644
+--- a/src/include/duckdb/common/virtual_file_system.hpp
++++ b/src/include/duckdb/common/virtual_file_system.hpp
+@@ -67,7 +67,7 @@ public:
+ 	string PathSeparator(const string &path) override;
+ 
+ protected:
+-	unique_ptr<FileHandle> OpenFileExtended(const OpenFileInfo &file, FileOpenFlags flags,
++	unique_ptr<FileHandle> OpenFileExtended(ClientContext &context, const OpenFileInfo &file, FileOpenFlags flags,
+ 	                                        optional_ptr<FileOpener> opener) override;
+ 	bool SupportsOpenFileExtended() const override {
+ 		return true;
+diff --git a/src/include/duckdb/execution/operator/csv_scanner/csv_file_handle.hpp b/src/include/duckdb/execution/operator/csv_scanner/csv_file_handle.hpp
+index 7370be584b..2597695e04 100644
+--- a/src/include/duckdb/execution/operator/csv_scanner/csv_file_handle.hpp
++++ b/src/include/duckdb/execution/operator/csv_scanner/csv_file_handle.hpp
+@@ -36,9 +36,9 @@ public:
+ 
+ 	bool FinishedReading() const;
+ 
+-	idx_t Read(void *buffer, idx_t nr_bytes);
++	idx_t Read(ClientContext &context, void *buffer, idx_t nr_bytes);
+ 
+-	string ReadLine();
++	string ReadLine(ClientContext &context);
+ 
+ 	string GetFilePath();
+ 
+diff --git a/src/include/duckdb/execution/operator/csv_scanner/encode/csv_encoder.hpp b/src/include/duckdb/execution/operator/csv_scanner/encode/csv_encoder.hpp
+index 0fdafef5f0..af6b595a9e 100644
+--- a/src/include/duckdb/execution/operator/csv_scanner/encode/csv_encoder.hpp
++++ b/src/include/duckdb/execution/operator/csv_scanner/encode/csv_encoder.hpp
+@@ -50,7 +50,8 @@ public:
+ 	//! Constructor, basically takes an encoding and the output buffer size
+ 	CSVEncoder(ClientContext &context, const string &encoding_name, idx_t buffer_size);
+ 	//! Main encode function, it reads the file into an encoded buffer and converts it to the output buffer
+-	idx_t Encode(FileHandle &file_handle_input, char *output_buffer, const idx_t decoded_buffer_size);
++	idx_t Encode(ClientContext &context, FileHandle &file_handle_input, char *output_buffer,
++	             const idx_t decoded_buffer_size);
+ 	string encoding_name;
+ 
+ private:
+diff --git a/src/include/duckdb/main/database_path_and_type.hpp b/src/include/duckdb/main/database_path_and_type.hpp
+index cbf2a56f3b..438783c988 100644
+--- a/src/include/duckdb/main/database_path_and_type.hpp
++++ b/src/include/duckdb/main/database_path_and_type.hpp
+@@ -17,7 +17,7 @@ struct DBPathAndType {
+ 	//! Parse database extension type and rest of path from combined form (type:path)
+ 	static void ExtractExtensionPrefix(string &path, string &db_type);
+ 	//! Check the magic bytes of a file and set the database type based on that
+-	static void CheckMagicBytes(FileSystem &fs, string &path, string &db_type);
++	static void CheckMagicBytes(ClientContext &context, FileSystem &fs, string &path, string &db_type);
+ 
+ 	//! Run ExtractExtensionPrefix followed by CheckMagicBytes
+ 	static void ResolveDatabaseType(FileSystem &fs, string &path, string &db_type);
+diff --git a/src/include/duckdb/storage/magic_bytes.hpp b/src/include/duckdb/storage/magic_bytes.hpp
+index 7e3a578817..0602b606a0 100644
+--- a/src/include/duckdb/storage/magic_bytes.hpp
++++ b/src/include/duckdb/storage/magic_bytes.hpp
+@@ -23,7 +23,7 @@ enum class DataFileType : uint8_t {
+ 
+ class MagicBytes {
+ public:
+-	static DataFileType CheckMagicBytes(FileSystem &fs, const string &path);
++	static DataFileType CheckMagicBytes(ClientContext &context, FileSystem &fs, const string &path);
+ };
+ 
+ } // namespace duckdb
+diff --git a/src/main/database_manager.cpp b/src/main/database_manager.cpp
+index f3b1599a2e..2c8a1685a4 100644
+--- a/src/main/database_manager.cpp
++++ b/src/main/database_manager.cpp
+@@ -187,7 +187,7 @@ void DatabaseManager::GetDatabaseType(ClientContext &context, AttachInfo &info,
+ 		CheckPathConflict(context, info.path);
+ 
+ 		auto &fs = FileSystem::GetFileSystem(context);
+-		DBPathAndType::CheckMagicBytes(fs, info.path, options.db_type);
++		DBPathAndType::CheckMagicBytes(context, fs, info.path, options.db_type);
+ 	}
+ 
+ 	if (options.db_type.empty()) {
+diff --git a/src/main/database_path_and_type.cpp b/src/main/database_path_and_type.cpp
+index 3cae9b54f6..3bf5208e0c 100644
+--- a/src/main/database_path_and_type.cpp
++++ b/src/main/database_path_and_type.cpp
+@@ -15,9 +15,9 @@ void DBPathAndType::ExtractExtensionPrefix(string &path, string &db_type) {
+ 	}
+ }
+ 
+-void DBPathAndType::CheckMagicBytes(FileSystem &fs, string &path, string &db_type) {
++void DBPathAndType::CheckMagicBytes(ClientContext &context, FileSystem &fs, string &path, string &db_type) {
+ 	// if there isn't - check the magic bytes of the file (if any)
+-	auto file_type = MagicBytes::CheckMagicBytes(fs, path);
++	auto file_type = MagicBytes::CheckMagicBytes(context, fs, path);
+ 	db_type = string();
+ 	switch (file_type) {
+ 	case DataFileType::SQLITE_FILE:
+diff --git a/src/storage/magic_bytes.cpp b/src/storage/magic_bytes.cpp
+index a4f32896fa..b02db72c22 100644
+--- a/src/storage/magic_bytes.cpp
++++ b/src/storage/magic_bytes.cpp
+@@ -4,7 +4,7 @@
+ 
+ namespace duckdb {
+ 
+-DataFileType MagicBytes::CheckMagicBytes(FileSystem &fs, const string &path) {
++DataFileType MagicBytes::CheckMagicBytes(ClientContext &context, FileSystem &fs, const string &path) {
+ 	if (path.empty() || path == IN_MEMORY_PATH) {
+ 		return DataFileType::DUCKDB_FILE;
+ 	}
+@@ -16,7 +16,7 @@ DataFileType MagicBytes::CheckMagicBytes(FileSystem &fs, const string &path) {
+ 	constexpr const idx_t MAGIC_BYTES_READ_SIZE = 16;
+ 	char buffer[MAGIC_BYTES_READ_SIZE] = {};
+ 
+-	handle->Read(buffer, MAGIC_BYTES_READ_SIZE);
++	handle->Read(context, buffer, MAGIC_BYTES_READ_SIZE);
+ 	if (memcmp(buffer, "SQLite format 3\0", 16) == 0) {
+ 		return DataFileType::SQLITE_FILE;
+ 	}

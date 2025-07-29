@@ -118,7 +118,7 @@ static void AssertMaxFileSize(const string &file_name, idx_t file_size) {
 }
 
 template <class OP>
-static void ReadFileExecute(ClientContext &context, TableFunctionInput &input, DataChunk &output) {
+static void ReadFileExecute(QueryContext context, TableFunctionInput &input, DataChunk &output) {
 	auto &bind_data = input.bind_data->Cast<ReadFileBindData>();
 	auto &state = input.global_state->Cast<ReadFileGlobalState>();
 	auto fs = CachingFileSystem::Get(context);

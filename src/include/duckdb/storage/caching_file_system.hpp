@@ -108,7 +108,7 @@ public:
 	DUCKDB_API ~CachingFileSystem();
 
 public:
-	DUCKDB_API static CachingFileSystem Get(ClientContext &context);
+	DUCKDB_API static CachingFileSystem Get(QueryContext context);
 
 	DUCKDB_API unique_ptr<CachingFileHandle> OpenFile(const OpenFileInfo &path, FileOpenFlags flags);
 

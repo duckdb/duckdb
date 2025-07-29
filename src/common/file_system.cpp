@@ -17,6 +17,8 @@
 
 #include <cstdint>
 #include <cstdio>
+
+#include "../../test/sqlite/sqllogic_command.hpp"
 #include "duckdb/logging/file_system_logger.hpp"
 
 #ifndef _WIN32
@@ -671,8 +673,7 @@ bool FileSystem::IsManuallySet() {
 	return false;
 }
 
-unique_ptr<FileHandle> FileSystem::OpenCompressedFile(ClientContext &context, unique_ptr<FileHandle> handle,
-                                                      bool write) {
+unique_ptr<FileHandle> FileSystem::OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle, bool write) {
 	throw NotImplementedException("%s: OpenCompressedFile is not implemented!", GetName());
 }
 
@@ -688,7 +689,7 @@ FileHandle::FileHandle(FileSystem &file_system, string path_p, FileOpenFlags fla
 FileHandle::~FileHandle() {
 }
 
-int64_t FileHandle::Read(ClientContext &context, void *buffer, idx_t nr_bytes) {
+int64_t FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes) {
 	// FIXME: Add profiling.
 	return file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes));
 }
@@ -734,7 +735,7 @@ bool FileHandle::IsPipe() {
 	return file_system.IsPipe(path);
 }
 
-string FileHandle::ReadLine(ClientContext &context) {
+string FileHandle::ReadLine(QueryContext context) {
 	string result;
 	char buffer[1];
 	while (true) {

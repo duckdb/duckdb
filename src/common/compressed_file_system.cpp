@@ -1,5 +1,6 @@
 #include "duckdb/common/compressed_file_system.hpp"
 #include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
@@ -18,7 +19,7 @@ CompressedFile::~CompressedFile() {
 	}
 }
 
-void CompressedFile::Initialize(ClientContext &context, bool write) {
+void CompressedFile::Initialize(QueryContext context, bool write) {
 	Close();
 
 	this->write = write;
@@ -41,7 +42,7 @@ idx_t CompressedFile::GetProgress() {
 	return current_position;
 }
 
-int64_t CompressedFile::ReadData(ClientContext &context, void *buffer, int64_t remaining) {
+int64_t CompressedFile::ReadData(QueryContext context, void *buffer, int64_t remaining) {
 	idx_t total_read = 0;
 	while (true) {
 		// first check if there are input bytes available in the output buffers
@@ -129,9 +130,9 @@ void CompressedFile::Close() {
 	stream_data.refresh = false;
 }
 
-int64_t CompressedFileSystem::Read(ClientContext &context, FileHandle &handle, void *buffer, int64_t nr_bytes) {
+int64_t CompressedFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	auto &compressed_file = handle.Cast<CompressedFile>();
-	return compressed_file.ReadData(context, buffer, nr_bytes);
+	return compressed_file.ReadData(QueryContext(), buffer, nr_bytes);
 }
 
 int64_t CompressedFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
@@ -139,10 +140,10 @@ int64_t CompressedFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr
 	return compressed_file.WriteData(data_ptr_cast(buffer), nr_bytes);
 }
 
-void CompressedFileSystem::Reset(ClientContext &context, FileHandle &handle) {
+void CompressedFileSystem::Reset(FileHandle &handle) {
 	auto &compressed_file = handle.Cast<CompressedFile>();
 	compressed_file.child_handle->Reset();
-	compressed_file.Initialize(context, compressed_file.write);
+	compressed_file.Initialize(QueryContext(), compressed_file.write);
 }
 
 int64_t CompressedFileSystem::GetFileSize(FileHandle &handle) {
