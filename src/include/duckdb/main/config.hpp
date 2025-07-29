@@ -99,6 +99,11 @@ struct ConfigurationOption {
 	set_callback set_callback;
 };
 
+struct ConfigurationAlias {
+	const char *alias;
+	idx_t option_index;
+};
+
 typedef void (*set_option_callback_t)(ClientContext &context, SetScope scope, Value &parameter);
 
 struct ExtensionOption {
@@ -385,6 +390,7 @@ public:
 	DUCKDB_API static const DBConfig &GetConfig(const DatabaseInstance &db);
 	DUCKDB_API static vector<ConfigurationOption> GetOptions();
 	DUCKDB_API static idx_t GetOptionCount();
+	DUCKDB_API static idx_t GetAliasCount();
 	DUCKDB_API static vector<string> GetOptionNames();
 	DUCKDB_API static bool IsInMemoryDatabase(const char *database_path);
 
@@ -393,6 +399,8 @@ public:
 	                                   SetScope default_scope = SetScope::LOCAL);
 	//! Fetch an option by index. Returns a pointer to the option, or nullptr if out of range
 	DUCKDB_API static optional_ptr<const ConfigurationOption> GetOptionByIndex(idx_t index);
+	//! Fetcha n alias by index, or nullptr if out of range
+	DUCKDB_API static optional_ptr<const ConfigurationAlias> GetAliasByIndex(idx_t index);
 	//! Fetch an option by name. Returns a pointer to the option, or nullptr if none exists.
 	DUCKDB_API static optional_ptr<const ConfigurationOption> GetOptionByName(const string &name);
 	DUCKDB_API void SetOption(const ConfigurationOption &option, const Value &value);

@@ -11,6 +11,7 @@ struct DuckDBSettingValue {
 	string description;
 	string input_type;
 	string scope;
+	vector<Value> aliases;
 };
 
 struct DuckDBSettingsData : public GlobalTableFunctionState {
@@ -38,11 +39,20 @@ static unique_ptr<FunctionData> DuckDBSettingsBind(ClientContext &context, Table
 	names.emplace_back("scope");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
+	names.emplace_back("aliases");
+	return_types.emplace_back(LogicalType::LIST(LogicalType::VARCHAR));
+
 	return nullptr;
 }
 
 unique_ptr<GlobalTableFunctionState> DuckDBSettingsInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_uniq<DuckDBSettingsData>();
+
+	unordered_map<idx_t, vector<Value>> aliases;
+	for (idx_t i = 0; i < DBConfig::GetAliasCount(); i++) {
+		auto alias = DBConfig::GetAliasByIndex(i);
+		aliases[alias->option_index].emplace_back(alias->alias);
+	}
 
 	auto &config = DBConfig::GetConfig(context);
 	auto options_count = DBConfig::GetOptionCount();
@@ -65,6 +75,10 @@ unique_ptr<GlobalTableFunctionState> DuckDBSettingsInit(ClientContext &context, 
 		value.description = option->description;
 		value.input_type = option->parameter_type;
 		value.scope = EnumUtil::ToString(scope);
+		auto entry = aliases.find(i);
+		if (entry != aliases.end()) {
+			value.aliases = std::move(entry->second);
+		}
 
 		result->settings.push_back(std::move(value));
 	}
@@ -110,6 +124,8 @@ void DuckDBSettingsFunction(ClientContext &context, TableFunctionInput &data_p, 
 		output.SetValue(3, count, Value(entry.input_type));
 		// scope, LogicalType::VARCHAR
 		output.SetValue(4, count, Value(entry.scope));
+		// aliases, LogicalType::VARCHAR[]
+		output.SetValue(5, count, Value::LIST(LogicalType::VARCHAR, std::move(entry.aliases)));
 		count++;
 	}
 	output.SetCardinality(count);

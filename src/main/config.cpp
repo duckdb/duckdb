@@ -50,15 +50,10 @@ bool DBConfigOptions::debug_print_bindings = false;
 #define FINAL_SETTING                                                                                                  \
 	{ nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, SetScope::AUTOMATIC, nullptr, nullptr }
 
-struct ConfigurationAlias {
-	const char *alias;
-	const char *option_name;
-};
-
-#define DUCKDB_SETTING_ALIAS(_ALIAS, _SETTING)                                                                         \
-	{ _ALIAS, _SETTING::Name }
+#define DUCKDB_SETTING_ALIAS(_ALIAS, _SETTING_INDEX)                                                                   \
+	{ _ALIAS, _SETTING_INDEX }
 #define FINAL_ALIAS                                                                                                    \
-	{ nullptr, nullptr }
+	{ nullptr, 0 }
 
 static const ConfigurationOption internal_options[] = {
 
@@ -182,14 +177,13 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(ZstdMinStringLengthSetting),
     FINAL_SETTING};
 
-static const ConfigurationAlias internal_aliases[] = {
-    DUCKDB_SETTING_ALIAS("wal_autocheckpoint", CheckpointThresholdSetting),
-    DUCKDB_SETTING_ALIAS("null_order", DefaultNullOrderSetting),
-    DUCKDB_SETTING_ALIAS("memory_limit", MaxMemorySetting),
-    DUCKDB_SETTING_ALIAS("profiling_output", ProfileOutputSetting),
-    DUCKDB_SETTING_ALIAS("worker_threads", ThreadsSetting),
-    DUCKDB_SETTING_ALIAS("user", UsernameSetting),
-    FINAL_ALIAS};
+static const ConfigurationAlias internal_aliases[] = {DUCKDB_SETTING_ALIAS("memory_limit", 82),
+                                                      DUCKDB_SETTING_ALIAS("null_order", 33),
+                                                      DUCKDB_SETTING_ALIAS("profiling_output", 101),
+                                                      DUCKDB_SETTING_ALIAS("user", 115),
+                                                      DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 20),
+                                                      DUCKDB_SETTING_ALIAS("worker_threads", 114),
+                                                      FINAL_ALIAS};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {
 	vector<ConfigurationOption> options;
@@ -204,14 +198,11 @@ SettingCallbackInfo::SettingCallbackInfo(ClientContext &context_p, SetScope scop
 }
 
 idx_t DBConfig::GetOptionCount() {
-	idx_t count = 0;
-	for (idx_t index = 0; internal_options[index].name; index++) {
-		count++;
-	}
-	for (idx_t index = 0; internal_aliases[index].alias; index++) {
-		count++;
-	}
-	return count;
+	return sizeof(internal_options) / sizeof(ConfigurationOption) - 1;
+}
+
+idx_t DBConfig::GetAliasCount() {
+	return sizeof(internal_aliases) / sizeof(ConfigurationAlias) - 1;
 }
 
 vector<string> DBConfig::GetOptionNames() {
@@ -226,19 +217,17 @@ vector<string> DBConfig::GetOptionNames() {
 }
 
 optional_ptr<const ConfigurationOption> DBConfig::GetOptionByIndex(idx_t target_index) {
-	idx_t index;
-	for (index = 0; internal_options[index].name; index++) {
-		if (index == target_index) {
-			return internal_options + index;
-		}
+	if (target_index >= GetOptionCount()) {
+		return nullptr;
 	}
-	idx_t base_index = index;
-	for (index = 0; internal_aliases[index].alias; index++) {
-		if (index + base_index == target_index) {
-			return GetOptionByName(internal_aliases[index].option_name);
-		}
+	return internal_options + target_index;
+}
+
+optional_ptr<const ConfigurationAlias> DBConfig::GetAliasByIndex(idx_t target_index) {
+	if (target_index >= GetAliasCount()) {
+		return nullptr;
 	}
-	return nullptr;
+	return internal_aliases + target_index;
 }
 
 optional_ptr<const ConfigurationOption> DBConfig::GetOptionByName(const string &name) {
@@ -252,7 +241,7 @@ optional_ptr<const ConfigurationOption> DBConfig::GetOptionByName(const string &
 	for (idx_t index = 0; internal_aliases[index].alias; index++) {
 		D_ASSERT(StringUtil::Lower(internal_options[index].name) == string(internal_options[index].name));
 		if (internal_aliases[index].alias == lname) {
-			return GetOptionByName(internal_aliases[index].option_name);
+			return GetOptionByIndex(internal_aliases[index].option_index);
 		}
 	}
 	return nullptr;
