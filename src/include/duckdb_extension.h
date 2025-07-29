@@ -613,6 +613,8 @@ typedef struct {
 	duckdb_value (*duckdb_create_map_value)(duckdb_logical_type map_type, duckdb_value *keys, duckdb_value *values,
 	                                        idx_t entry_count);
 	duckdb_value (*duckdb_create_union_value)(duckdb_logical_type union_type, idx_t tag_index, duckdb_value value);
+	duckdb_value (*duckdb_create_time_ns)(duckdb_time_ns input);
+	duckdb_time_ns (*duckdb_get_time_ns)(duckdb_value val);
 #endif
 
 // API to create and manipulate vector types
@@ -1097,6 +1099,8 @@ typedef struct {
 #define duckdb_value_to_string duckdb_ext_api.duckdb_value_to_string
 
 // Version unstable_new_value_functions
+#define duckdb_create_time_ns     duckdb_ext_api.duckdb_create_time_ns
+#define duckdb_get_time_ns        duckdb_ext_api.duckdb_get_time_ns
 #define duckdb_create_map_value   duckdb_ext_api.duckdb_create_map_value
 #define duckdb_create_union_value duckdb_ext_api.duckdb_create_union_value
 

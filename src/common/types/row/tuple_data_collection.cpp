@@ -54,6 +54,10 @@ void TupleDataCollection::GetAllColumnIDs(vector<column_t> &column_ids) {
 	GetAllColumnIDsInternal(column_ids, layout.ColumnCount());
 }
 
+shared_ptr<TupleDataLayout> TupleDataCollection::GetLayoutPtr() const {
+	return layout_ptr;
+}
+
 const TupleDataLayout &TupleDataCollection::GetLayout() const {
 	return layout;
 }

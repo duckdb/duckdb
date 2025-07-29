@@ -49,9 +49,11 @@ public:
 	InMemoryTableDataWriter(InMemoryCheckpointer &checkpoint_manager, TableCatalogEntry &table);
 
 public:
+	void WriteUnchangedTable(MetaBlockPointer pointer, idx_t total_rows) override;
 	void FinalizeTable(const TableStatistics &global_stats, DataTableInfo *info, Serializer &serializer) override;
 	unique_ptr<RowGroupWriter> GetRowGroupWriter(RowGroup &row_group) override;
 	CheckpointType GetCheckpointType() const override;
+	MetadataManager &GetMetadataManager() override;
 
 private:
 	InMemoryCheckpointer &checkpoint_manager;

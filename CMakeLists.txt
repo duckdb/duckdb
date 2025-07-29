@@ -579,7 +579,6 @@ function(is_number input_string return_var)
 endfunction()
 
 set(STANDARD_VECTOR_SIZE "" CACHE STRING "Set a custom STANDARD_VECTOR_SIZE at compile time")
-set(BLOCK_ALLOC_SIZE "" CACHE STRING "Set a custom BLOCK_ALLOC_SIZE at compile time")
 
 if(DEFINED STANDARD_VECTOR_SIZE AND NOT STANDARD_VECTOR_SIZE STREQUAL "")
     is_number(${STANDARD_VECTOR_SIZE} is_number_result)
@@ -588,16 +587,6 @@ if(DEFINED STANDARD_VECTOR_SIZE AND NOT STANDARD_VECTOR_SIZE STREQUAL "")
         message(STATUS "STANDARD_VECTOR_SIZE is set to ${STANDARD_VECTOR_SIZE}")
     else()
         message(FATAL_ERROR "STANDARD_VECTOR_SIZE must be a number, not ${STANDARD_VECTOR_SIZE}")
-    endif()
-endif()
-
-if(DEFINED BLOCK_ALLOC_SIZE AND NOT BLOCK_ALLOC_SIZE STREQUAL "")
-    is_number(${BLOCK_ALLOC_SIZE} is_number_result)
-    if(is_number_result)
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_BLOCK_ALLOC_SIZE=${BLOCK_ALLOC_SIZE}")
-        message(STATUS "BLOCK_ALLOC_SIZE is set to ${BLOCK_ALLOC_SIZE}")
-    else()
-        message(FATAL_ERROR "BLOCK_ALLOC_SIZE must be a number, not ${BLOCK_ALLOC_SIZE}")
     endif()
 endif()
 
@@ -1281,6 +1270,15 @@ foreach(EXT IN LISTS DUCKDB_EXTENSION_NAMES)
 endforeach()
 
 set(EXTENSION_CONFIG_BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/.github/config/extensions/")
+
+if(DEFINED CORE_EXTENSIONS)
+  message(DEPRECATION "CORE_EXTENSIONS is deprecated. Use BUILD_EXTENSIONS instead.")
+  if(NOT DEFINED BUILD_EXTENSIONS)
+    set(BUILD_EXTENSIONS ${CORE_EXTENSIONS})
+  else()
+    list(APPEND BUILD_EXTENSIONS ${CORE_EXTENSIONS})
+  endif()
+endif()
 
 # Load extensions passed through cmake config var
 foreach(EXT IN LISTS BUILD_EXTENSIONS)
