@@ -373,6 +373,10 @@ bool ListColumnData::IsPersistent() {
 	return ColumnData::IsPersistent() && validity.IsPersistent() && child_column->IsPersistent();
 }
 
+bool ListColumnData::HasAnyChanges() const {
+	return ColumnData::HasAnyChanges() || validity.HasAnyChanges() || child_column->HasAnyChanges();
+}
+
 PersistentColumnData ListColumnData::Serialize() {
 	auto persistent_data = ColumnData::Serialize();
 	persistent_data.child_columns.push_back(validity.Serialize());

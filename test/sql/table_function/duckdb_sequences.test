@@ -18,5 +18,3 @@ SELECT database_name, schema_name, sequence_name, temporary, start_value, min_va
 ----
 memory	main	seq	False	1	1	9223372036854775807	1	False
 temp	main	seq2	True	4	3	5	1	True
-
-

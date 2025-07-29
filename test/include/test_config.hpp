@@ -21,6 +21,8 @@ namespace duckdb {
 
 class TestConfiguration {
 public:
+	enum class ExtensionAutoLoadingMode { NONE = 0, AVAILABLE = 1, ALL = 2 };
+
 	static TestConfiguration &Get();
 
 	void Initialize();
@@ -34,6 +36,7 @@ public:
 	string GetDescription();
 	string GetInitialDBPath();
 	optional_idx GetMaxThreads();
+	optional_idx GetBlockAllocSize();
 	idx_t GetCheckpointWALSize();
 	bool GetForceRestart();
 	bool GetCheckpointOnShutdown();
@@ -42,6 +45,7 @@ public:
 	bool GetSkipCompiledTests();
 	DebugVectorVerification GetVectorVerification();
 	DebugInitialize GetDebugInitialize();
+	ExtensionAutoLoadingMode GetExtensionAutoLoadingMode();
 	bool ShouldSkipTest(const string &test_name);
 	string OnInitCommand();
 	string OnLoadCommand();
