@@ -194,7 +194,11 @@ vector<ConfigurationOption> DBConfig::GetOptions() {
 }
 
 SettingCallbackInfo::SettingCallbackInfo(ClientContext &context_p, SetScope scope)
-    : db(context_p.db.get()), context(context_p), scope(scope) {
+    : config(DBConfig::GetConfig(context_p)), db(context_p.db.get()), context(context_p), scope(scope) {
+}
+
+SettingCallbackInfo::SettingCallbackInfo(DBConfig &config, optional_ptr<DatabaseInstance> db)
+    : config(config), db(db), context(nullptr), scope(SetScope::GLOBAL) {
 }
 
 idx_t DBConfig::GetOptionCount() {
@@ -279,23 +283,37 @@ void DBConfig::SetOptionsByName(const case_insensitive_map_t<Value> &values) {
 	}
 }
 
-void DBConfig::SetOption(DatabaseInstance *db, const ConfigurationOption &option, const Value &value) {
+void DBConfig::SetOption(optional_ptr<DatabaseInstance> db, const ConfigurationOption &option, const Value &value) {
 	lock_guard<mutex> l(config_lock);
+	Value input = value.DefaultCastAs(ParseLogicalType(option.parameter_type));
+	if (option.default_value) {
+		// generic option
+		if (option.set_callback) {
+			SettingCallbackInfo info(*this, db);
+			option.set_callback(info, input);
+		}
+		options.set_variables.emplace(option.name, std::move(input));
+		return;
+	}
 	if (!option.set_global) {
 		throw InvalidInputException("Could not set option \"%s\" as a global option", option.name);
 	}
 	D_ASSERT(option.reset_global);
-	Value input = value.DefaultCastAs(ParseLogicalType(option.parameter_type));
-	option.set_global(db, *this, input);
+	option.set_global(db.get(), *this, input);
 }
 
-void DBConfig::ResetOption(DatabaseInstance *db, const ConfigurationOption &option) {
+void DBConfig::ResetOption(optional_ptr<DatabaseInstance> db, const ConfigurationOption &option) {
 	lock_guard<mutex> l(config_lock);
+	if (option.default_value) {
+		// generic option
+		options.set_variables.erase(option.name);
+		return;
+	}
 	if (!option.reset_global) {
 		throw InternalException("Could not reset option \"%s\" as a global option", option.name);
 	}
 	D_ASSERT(option.set_global);
-	option.reset_global(db, *this);
+	option.reset_global(db.get(), *this);
 }
 
 void DBConfig::SetOption(const string &name, Value value) {
