@@ -25,9 +25,9 @@ void WindowTokenTreeLocalState::BuildLeaves() {
 		deltas[0] = 0;
 	}
 
-	const auto &key_cols = token_tree.key_cols;
-	const auto key_count = key_cols.size();
-	WindowDeltaScanner(collection, block_begin, block_end, key_cols, key_count,
+	const auto &scan_cols = token_tree.key_cols;
+	const auto key_count = scan_cols.size();
+	WindowDeltaScanner(collection, block_begin, block_end, scan_cols, key_count,
 	                   [&](const idx_t row_idx, DataChunk &prev, DataChunk &curr, const idx_t ndistinct,
 	                       SelectionVector &distinct, const SelectionVector &matching) {
 		                   //	Same as previous - token delta is 0

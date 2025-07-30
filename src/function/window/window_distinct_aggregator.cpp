@@ -422,123 +422,62 @@ void WindowDistinctAggregatorLocalState::Sorted() {
 	const auto block_begin = (block_idx * collection.ChunkCount()) / gdstate.total_tasks;
 	const auto block_end = ((block_idx + 1) * collection.ChunkCount()) / gdstate.total_tasks;
 
-	//	Scan all the columns
-	WindowCollectionChunkScanner scanner(collection, gdstate.sort_cols, block_begin ? block_begin - 1 : 0);
+	const auto &scan_cols = gdstate.sort_cols;
+	const auto key_count = aggregator.arg_types.size();
+
+	//	Setting up the first row is a bit tricky - we have to scan the first value ourselves
+	WindowCollectionChunkScanner scanner(collection, scan_cols, block_begin ? block_begin - 1 : 0);
 	auto &scanned = scanner.chunk;
+	if (!scanner.Scan()) {
+		return;
+	}
 
-	//	Shifted buffer for the next values
-	DataChunk next;
-	collection.InitializeScanChunk(scanner.state, next);
-
-	//	Delay buffer for the previous row
-	DataChunk delayed;
-	collection.InitializeScanChunk(scanner.state, delayed);
-
-	//	Only compare the sort arguments.
-	const auto compare_count = aggregator.arg_types.size();
-	const auto compare_type = scanner.PrefixStructType(compare_count);
-	Vector compare_curr(compare_type);
-	Vector compare_prev(compare_type);
-
-	idx_t block_curr = block_begin;
-	bool boundary_compare = false;
 	idx_t prev_i = 0;
 	if (!block_begin) {
 		// First block, so set up initial sentinel
-		if (!scanner.Scan()) {
-			return;
-		}
 		auto input_idx = FlatVector::GetData<idx_t>(scanned.data.back());
 		prev_i = input_idx[0];
 		prev_idcs[prev_i] = ZippedTuple(0, prev_i);
 	} else {
 		// Move to the to end of the previous block
 		// so we can record the comparison result for the first row
-		scanner.Seek(--block_curr);
-		if (!scanner.Scan()) {
-			return;
-		}
 		auto input_idx = FlatVector::GetData<idx_t>(scanned.data.back());
 		auto scan_idx = scanned.size() - 1;
 		prev_i = input_idx[scan_idx];
-		boundary_compare = true;
 	}
-
-	//	Process chunks offset by 1
-	SelectionVector next_sel(1, STANDARD_VECTOR_SIZE);
-	SelectionVector distinct(STANDARD_VECTOR_SIZE);
-	SelectionVector matching(STANDARD_VECTOR_SIZE);
 
 	//	8:	for i ← 1 to in.size do
-	while (block_curr < block_end) {
-		//	Compare the current to the previous;
-		DataChunk *curr = nullptr;
-		DataChunk *prev = nullptr;
+	WindowDeltaScanner(collection, block_begin, block_end, scan_cols, key_count,
+	                   [&](const idx_t row_idx, DataChunk &prev, DataChunk &curr, const idx_t ndistinct,
+	                       SelectionVector &distinct, const SelectionVector &matching) {
+		                   const auto count = MinValue<idx_t>(prev.size(), curr.size());
 
-		idx_t prev_count = 0;
-		if (boundary_compare) {
-			//	Save the last row of the scanned chunk
-			prev_count = 1;
-			sel_t last = UnsafeNumericCast<sel_t>(scanned.size() - 1);
-			SelectionVector sel(&last);
-			delayed.Reset();
-			scanned.Copy(delayed, sel, prev_count);
-			prev = &delayed;
+		                   // The input index has probably been sliced.
+		                   UnifiedVectorFormat input_format;
+		                   curr.data.back().ToUnifiedFormat(count, input_format);
+		                   auto input_idx = UnifiedVectorFormat::GetData<idx_t>(input_format);
 
-			// Try to read the next chunk
-			++block_curr;
-			if (block_curr >= block_end || !scanner.Scan()) {
-				break;
-			}
-			curr = &scanned;
-		} else {
-			//	Compare the [1..size) values with the [0..size-1) values
-			prev_count = scanned.size() - 1;
-			if (!prev_count) {
-				//	1 row scanned, so just skip the rest of the loop.
-				boundary_compare = true;
-				continue;
-			}
-			prev = &scanned;
+		                   const auto nmatch = count - ndistinct;
+		                   //	9:	if sorted[i].first == sorted[i-1].first then
+		                   //	10:		prevIdcs[i] ← sorted[i-1].second
+		                   for (idx_t j = 0; j < nmatch; ++j) {
+			                   auto scan_idx = matching.get_index(j);
+			                   auto i = input_idx[input_format.sel->get_index(scan_idx)];
+			                   auto second = scan_idx ? input_idx[input_format.sel->get_index(scan_idx - 1)] : prev_i;
+			                   prev_idcs[i] = ZippedTuple(second + 1, i);
+		                   }
+		                   //	11:	else
+		                   //	12:		prevIdcs[i] ← “-”
+		                   for (idx_t j = 0; j < ndistinct; ++j) {
+			                   auto scan_idx = distinct.get_index(j);
+			                   auto i = input_idx[input_format.sel->get_index(scan_idx)];
+			                   prev_idcs[i] = ZippedTuple(0, i);
+		                   }
 
-			// Slice the current back one into the previous
-			next.Slice(scanned, next_sel, prev_count);
-			curr = &next;
-		}
-		UnifiedVectorFormat input_format;
-		curr->data.back().ToUnifiedFormat(prev_count, input_format);
-		auto input_idx = UnifiedVectorFormat::GetData<idx_t>(input_format);
+		                   //	Remember the last input_idx of this chunk.
+		                   prev_i = input_idx[input_format.sel->get_index(count - 1)];
+	                   });
 
-		//	Reference the comparison prefix as a struct to simplify the compares.
-		scanner.ReferenceStructColumns(*prev, compare_prev, compare_count);
-		scanner.ReferenceStructColumns(*curr, compare_curr, compare_count);
-
-		//	9:	if sorted[i].first == sorted[i-1].first then
-		const auto n =
-		    VectorOperations::DistinctFrom(compare_curr, compare_prev, nullptr, prev_count, &distinct, &matching);
-
-		//	If n is 0, neither SV has been filled in?
-		const auto remaining = prev_count - n;
-		auto match_sel = n ? &matching : FlatVector::IncrementalSelectionVector();
-		//	10:		prevIdcs[i] ← sorted[i-1].second
-		for (idx_t j = 0; j < remaining; ++j) {
-			auto scan_idx = match_sel->get_index(j);
-			auto i = input_idx[input_format.sel->get_index(scan_idx)];
-			auto second = scan_idx ? input_idx[input_format.sel->get_index(scan_idx - 1)] : prev_i;
-			prev_idcs[i] = ZippedTuple(second + 1, i);
-		}
-		//	11:	else
-		//	12:		prevIdcs[i] ← “-”
-		for (idx_t j = 0; j < n; ++j) {
-			auto scan_idx = distinct.get_index(j);
-			auto i = input_idx[input_format.sel->get_index(scan_idx)];
-			prev_idcs[i] = ZippedTuple(0, i);
-		}
-
-		//	Transition between comparison ranges.
-		boundary_compare = !boundary_compare;
-		prev_i = input_idx[input_format.sel->get_index(prev_count - 1)];
-	}
 	//	13:	return prevIdcs
 }
 
