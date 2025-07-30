@@ -66,9 +66,9 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 			rhs_comparison_type = ExpressionType::COMPARE_LESSTHANOREQUALTO;
 			break;
-		}
 		default:
 			break;
+		}
 	}
 
 	// Check whether trunc(date_part, constant_rhs) = constant_rhs.
