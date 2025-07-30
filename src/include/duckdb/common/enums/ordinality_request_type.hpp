@@ -12,5 +12,4 @@ namespace duckdb {
 
 enum class OrdinalityType : uint8_t { WITHOUT_ORDINALITY = 0, WITH_ORDINALITY = 1 };
 
-
 } // namespace duckdb

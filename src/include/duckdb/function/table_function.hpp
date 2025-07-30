@@ -19,7 +19,6 @@
 #include "duckdb/function/partition_stats.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
 
-
 #include <functional>
 
 namespace duckdb {

@@ -62,8 +62,8 @@ unique_ptr<GlobalOperatorState> PhysicalTableInOutFunction::GetGlobalOperatorSta
 	return std::move(result);
 }
 
-void PhysicalTableInOutFunction::SetOrdinality(DataChunk &chunk, const optional_idx &ordinality_column_idx, const idx_t &ordinality_idx,
-						  const idx_t &ordinality) {
+void PhysicalTableInOutFunction::SetOrdinality(DataChunk &chunk, const optional_idx &ordinality_column_idx,
+                                               const idx_t &ordinality_idx, const idx_t &ordinality) {
 	D_ASSERT(ordinality_column_idx.IsValid());
 	if (ordinality > 0) {
 		constexpr idx_t step = 1;
