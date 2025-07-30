@@ -250,6 +250,9 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 			for (auto &n : return_names) {
 				ci_return_names.insert(n);
 			}
+			for (auto &n : column_name_alias) {
+				ci_return_names.insert(n);
+			}
 			while (ci_return_names.find(ordinality_column_name) != ci_return_names.end()) {
 				ordinality_column_name = ordinality_name + to_string(ordinality_name_suffix++);
 			}
