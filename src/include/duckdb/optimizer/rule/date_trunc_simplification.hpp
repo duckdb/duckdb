@@ -47,7 +47,7 @@ public:
 
 	static string DatePartToFunc(const DatePartSpecifier &date_part);
 
-        unique_ptr<Expression> CreateTrunc(const BoundConstantExpression &date_part, const BoundConstantExpression &rhs,
+	unique_ptr<Expression> CreateTrunc(const BoundConstantExpression &date_part, const BoundConstantExpression &rhs,
 	                                   const LogicalType &return_type);
 	unique_ptr<Expression> CreateTruncAdd(const BoundConstantExpression &date_part, const BoundConstantExpression &rhs,
 	                                      const LogicalType &return_type);

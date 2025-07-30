@@ -176,8 +176,10 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
 	case ExpressionType::COMPARE_GREATERTHAN:
-		// date_trunc(part, column) <= constant_rhs  -->  column <= date_trunc(part, date_add(constant_rhs, INTERVAL 1 part))
-		// date_trunc(part, column) >  constant_rhs  -->  column >= date_trunc(part, date_add(constant_rhs, INTERVAL 1 part))
+		// date_trunc(part, column) <= constant_rhs  -->  column <= date_trunc(part, date_add(constant_rhs,
+		//                                                                                    INTERVAL 1 part))
+		// date_trunc(part, column) >  constant_rhs  -->  column >= date_trunc(part, date_add(constant_rhs,
+		//                                                                                    INTERVAL 1 part))
 		{
 			// Create date_trunc(part, date_add(rhs, INTERVAL 1 part)) and fold the constant.
 			auto trunc = CreateTruncAdd(date_part, rhs, column_part.return_type);
