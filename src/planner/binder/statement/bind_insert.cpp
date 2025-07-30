@@ -56,7 +56,11 @@ void Binder::TryReplaceDefaultExpression(unique_ptr<ParsedExpression> &expr, con
 	expr = ExpandDefaultExpression(column);
 }
 
-void ExpressionBinder::DoUpdateSetQualifyInLambda(FunctionExpression &function, const string &table_name,
+
+void DoUpdateSetQualify(unique_ptr<ParsedExpression> &expr, const string &table_name,
+										  vector<unordered_set<string>> &lambda_params);
+
+void DoUpdateSetQualifyInLambda(FunctionExpression &function, const string &table_name,
                                                   vector<unordered_set<string>> &lambda_params) {
 
 	for (auto &child : function.children) {
@@ -98,7 +102,7 @@ void ExpressionBinder::DoUpdateSetQualifyInLambda(FunctionExpression &function, 
 	}
 }
 
-void ExpressionBinder::DoUpdateSetQualify(unique_ptr<ParsedExpression> &expr, const string &table_name,
+void DoUpdateSetQualify(unique_ptr<ParsedExpression> &expr, const string &table_name,
                                           vector<unordered_set<string>> &lambda_params) {
 
 	// We avoid ambiguity with EXCLUDED columns by qualifying all column references.
@@ -190,7 +194,7 @@ void Binder::BindDoUpdateSetExpressions(const string &table_alias, BoundOnConfli
 
 		// Avoid ambiguity between existing table columns and EXCLUDED columns.
 		vector<unordered_set<string>> lambda_params;
-		update_binder.DoUpdateSetQualify(expr, table_alias, lambda_params);
+		DoUpdateSetQualify(expr, table_alias, lambda_params);
 
 		auto bound_expr = update_binder.Bind(expr);
 		D_ASSERT(bound_expr);
@@ -385,7 +389,7 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 
 		// Avoid ambiguity between existing table columns and EXCLUDED columns.
 		vector<unordered_set<string>> lambda_params;
-		where_binder.DoUpdateSetQualify(on_conflict.condition, table_alias, lambda_params);
+		DoUpdateSetQualify(on_conflict.condition, table_alias, lambda_params);
 
 		// Bind the ON CONFLICT ... WHERE clause.
 		auto condition = where_binder.Bind(on_conflict.condition);
@@ -454,7 +458,7 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 
 		// Avoid ambiguity between existing table columns and EXCLUDED columns.
 		vector<unordered_set<string>> lambda_params;
-		where_binder.DoUpdateSetQualify(set_info.condition, table_alias, lambda_params);
+		DoUpdateSetQualify(set_info.condition, table_alias, lambda_params);
 
 		// Bind the SET ... WHERE clause.
 		auto condition = where_binder.Bind(set_info.condition);
@@ -522,16 +526,6 @@ void Binder::BindInsertColumnList(TableCatalogEntry &table, vector<string> &colu
 			expected_types.push_back(col.Type());
 		}
 	}
-}
-
-void QualifyOnConflictColumn(ParsedExpression &expr, const string &table_name) {
-	ParsedExpressionIterator::VisitExpressionMutable<ColumnRefExpression>(expr, [&](ColumnRefExpression &colref) {
-		auto &col_names = colref.column_names;
-		if (col_names.size() == 1) {
-			// not explicitly qualified - add qualification
-			col_names.insert(col_names.begin(), table_name);
-		}
-	});
 }
 
 unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertStatement &stmt, TableCatalogEntry &table) {
@@ -678,10 +672,12 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertStatement &stmt, 
 		auto update_action = make_uniq<MergeIntoAction>();
 		update_action->action_type = MergeActionType::MERGE_UPDATE;
 		for (auto &col : on_conflict_info.set_info->expressions) {
-			QualifyOnConflictColumn(*col, table_name);
+			vector<unordered_set<string>> lambda_params;
+			DoUpdateSetQualify(col, table_name, lambda_params);
 		}
 		if (on_conflict_info.set_info->condition) {
-			QualifyOnConflictColumn(*on_conflict_info.set_info->condition, table_name);
+			vector<unordered_set<string>> lambda_params;
+			DoUpdateSetQualify(on_conflict_info.set_info->condition, table_name, lambda_params);
 			update_action->condition = std::move(on_conflict_info.set_info->condition);
 		}
 		update_action->update_info = std::move(on_conflict_info.set_info);
@@ -693,6 +689,7 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertStatement &stmt, 
 	merge_into->cte_map = std::move(stmt.cte_map);
 	merge_into->returning_list = std::move(stmt.returning_list);
 
+	// Printer::PrintF("%s", merge_into->ToString());
 	return merge_into;
 }
 

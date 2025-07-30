@@ -13,6 +13,9 @@ BindResult ProjectionBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_pt
 	if (result.HasError()) {
 		return result;
 	}
+	if (result.expression->GetExpressionClass() == ExpressionClass::BOUND_LAMBDA_REF) {
+		return result;
+	}
 	// we have successfully bound a column - push it into the projection and emit a reference
 	auto proj_ref = make_uniq<BoundColumnRefExpression>(result.expression->return_type,
 	                                                    ColumnBinding(proj_index, proj_expressions.size()));
