@@ -57,6 +57,8 @@ public:
 	unique_ptr<TupleDataCollection> CreateUnique() const;
 
 public:
+	//! Get the layout (shared pointer) of the rows
+	shared_ptr<TupleDataLayout> GetLayoutPtr() const;
 	//! The layout of the stored rows
 	const TupleDataLayout &GetLayout() const;
 	//! How many tuples fit per block

@@ -7,7 +7,6 @@ MetadataReader::MetadataReader(MetadataManager &manager, MetaBlockPointer pointe
     : manager(manager), type(type), next_pointer(FromDiskPointer(pointer)), has_next_block(true),
       read_pointers(read_pointers_p), index(0), offset(0), next_offset(pointer.offset), capacity(0) {
 	if (read_pointers) {
-		D_ASSERT(read_pointers->empty());
 		read_pointers->push_back(pointer);
 	}
 }

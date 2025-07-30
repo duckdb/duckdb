@@ -83,6 +83,12 @@ duckdb_time CAPIResult::Fetch(idx_t col, idx_t row) {
 }
 
 template <>
+duckdb_time_ns CAPIResult::Fetch(idx_t col, idx_t row) {
+	auto data = (duckdb_time_ns *)duckdb_column_data(&result, col);
+	return data[row];
+}
+
+template <>
 duckdb_timestamp CAPIResult::Fetch(idx_t col, idx_t row) {
 	auto data = (duckdb_timestamp *)duckdb_column_data(&result, col);
 	return data[row];

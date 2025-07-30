@@ -534,14 +534,14 @@ bool Catalog::TryAutoLoad(ClientContext &context, const string &original_name) n
 	return false;
 }
 
-void Catalog::AutoloadExtensionByConfigName(ClientContext &context, const string &configuration_name) {
+string Catalog::AutoloadExtensionByConfigName(ClientContext &context, const string &configuration_name) {
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
 	auto &dbconfig = DBConfig::GetConfig(context);
 	if (dbconfig.options.autoload_known_extensions) {
 		auto extension_name = ExtensionHelper::FindExtensionInEntries(configuration_name, EXTENSION_SETTINGS);
 		if (ExtensionHelper::CanAutoloadExtension(extension_name)) {
 			ExtensionHelper::AutoLoadExtension(context, extension_name);
-			return;
+			return extension_name;
 		}
 	}
 #endif

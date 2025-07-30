@@ -86,8 +86,7 @@ InMemoryTableDataWriter::InMemoryTableDataWriter(InMemoryCheckpointer &checkpoin
     : TableDataWriter(table, checkpoint_manager.GetClientContext()), checkpoint_manager(checkpoint_manager) {
 }
 
-void InMemoryTableDataWriter::WriteUnchangedTable(MetaBlockPointer pointer, idx_t total_rows,
-                                                  vector<MetaBlockPointer> data_pointers) {
+void InMemoryTableDataWriter::WriteUnchangedTable(MetaBlockPointer pointer, idx_t total_rows) {
 }
 
 void InMemoryTableDataWriter::FinalizeTable(const TableStatistics &global_stats, DataTableInfo *info,
@@ -101,6 +100,10 @@ unique_ptr<RowGroupWriter> InMemoryTableDataWriter::GetRowGroupWriter(RowGroup &
 
 CheckpointType InMemoryTableDataWriter::GetCheckpointType() const {
 	return checkpoint_manager.GetCheckpointType();
+}
+
+MetadataManager &InMemoryTableDataWriter::GetMetadataManager() {
+	return checkpoint_manager.GetMetadataManager();
 }
 
 InMemoryPartialBlock::InMemoryPartialBlock(ColumnData &data, ColumnSegment &segment, PartialBlockState state,

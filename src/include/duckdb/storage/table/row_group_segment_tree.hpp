@@ -23,7 +23,6 @@ public:
 
 	void Initialize(PersistentTableData &data);
 
-	bool HasChanges(SegmentLock &lock) const;
 	MetaBlockPointer GetRootPointer() const {
 		return root_pointer;
 	}
