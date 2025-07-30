@@ -6,10 +6,10 @@ statement ok
 PRAGMA enable_verification;
 
 
-statement error
+query II
 SELECT * FROM range(1) WITH ORDINALITY AS _(ordinality);
 ----
-Binder Error: table "_" has duplicate column name "ordinality"
+0	1
 
 
 query II
