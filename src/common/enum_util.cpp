@@ -1745,19 +1745,20 @@ const StringUtil::EnumStringLiteral *GetExtraTypeInfoTypeValues() {
 		{ static_cast<uint32_t>(ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO), "AGGREGATE_STATE_TYPE_INFO" },
 		{ static_cast<uint32_t>(ExtraTypeInfoType::ARRAY_TYPE_INFO), "ARRAY_TYPE_INFO" },
 		{ static_cast<uint32_t>(ExtraTypeInfoType::ANY_TYPE_INFO), "ANY_TYPE_INFO" },
-		{ static_cast<uint32_t>(ExtraTypeInfoType::INTEGER_LITERAL_TYPE_INFO), "INTEGER_LITERAL_TYPE_INFO" }
+		{ static_cast<uint32_t>(ExtraTypeInfoType::INTEGER_LITERAL_TYPE_INFO), "INTEGER_LITERAL_TYPE_INFO" },
+		{ static_cast<uint32_t>(ExtraTypeInfoType::TEMPLATE_TYPE_INFO), "TEMPLATE_TYPE_INFO" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<ExtraTypeInfoType>(ExtraTypeInfoType value) {
-	return StringUtil::EnumToString(GetExtraTypeInfoTypeValues(), 12, "ExtraTypeInfoType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetExtraTypeInfoTypeValues(), 13, "ExtraTypeInfoType", static_cast<uint32_t>(value));
 }
 
 template<>
 ExtraTypeInfoType EnumUtil::FromString<ExtraTypeInfoType>(const char *value) {
-	return static_cast<ExtraTypeInfoType>(StringUtil::StringToEnum(GetExtraTypeInfoTypeValues(), 12, "ExtraTypeInfoType", value));
+	return static_cast<ExtraTypeInfoType>(StringUtil::StringToEnum(GetExtraTypeInfoTypeValues(), 13, "ExtraTypeInfoType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetFileBufferTypeValues() {
@@ -2475,6 +2476,7 @@ const StringUtil::EnumStringLiteral *GetLogicalTypeIdValues() {
 		{ static_cast<uint32_t>(LogicalTypeId::UNKNOWN), "UNKNOWN" },
 		{ static_cast<uint32_t>(LogicalTypeId::ANY), "ANY" },
 		{ static_cast<uint32_t>(LogicalTypeId::USER), "USER" },
+		{ static_cast<uint32_t>(LogicalTypeId::TEMPLATE), "TEMPLATE" },
 		{ static_cast<uint32_t>(LogicalTypeId::BOOLEAN), "BOOLEAN" },
 		{ static_cast<uint32_t>(LogicalTypeId::TINYINT), "TINYINT" },
 		{ static_cast<uint32_t>(LogicalTypeId::SMALLINT), "SMALLINT" },
@@ -2524,12 +2526,12 @@ const StringUtil::EnumStringLiteral *GetLogicalTypeIdValues() {
 
 template<>
 const char* EnumUtil::ToChars<LogicalTypeId>(LogicalTypeId value) {
-	return StringUtil::EnumToString(GetLogicalTypeIdValues(), 48, "LogicalTypeId", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetLogicalTypeIdValues(), 49, "LogicalTypeId", static_cast<uint32_t>(value));
 }
 
 template<>
 LogicalTypeId EnumUtil::FromString<LogicalTypeId>(const char *value) {
-	return static_cast<LogicalTypeId>(StringUtil::StringToEnum(GetLogicalTypeIdValues(), 48, "LogicalTypeId", value));
+	return static_cast<LogicalTypeId>(StringUtil::StringToEnum(GetLogicalTypeIdValues(), 49, "LogicalTypeId", value));
 }
 
 const StringUtil::EnumStringLiteral *GetLookupResultTypeValues() {

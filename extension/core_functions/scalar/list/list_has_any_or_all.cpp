@@ -6,52 +6,6 @@
 
 namespace duckdb {
 
-static unique_ptr<FunctionData> ListHasAnyOrAllBind(ClientContext &context, ScalarFunction &bound_function,
-                                                    vector<unique_ptr<Expression>> &arguments) {
-
-	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
-	arguments[1] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[1]));
-
-	const auto &lhs_type = arguments[0]->return_type;
-	const auto &rhs_type = arguments[1]->return_type;
-
-	if (lhs_type.IsUnknown() && rhs_type.IsUnknown()) {
-		bound_function.arguments[0] = rhs_type;
-		bound_function.arguments[1] = lhs_type;
-		bound_function.return_type = LogicalType::UNKNOWN;
-		return nullptr;
-	}
-
-	// LHS and RHS must have the same input type.
-	// Thus, we can proceed binding, even if we only know the type of one of the arguments.
-
-	if (lhs_type.IsUnknown() || rhs_type.IsUnknown()) {
-		bound_function.arguments[0] = lhs_type.IsUnknown() ? rhs_type : lhs_type;
-		bound_function.arguments[1] = rhs_type.IsUnknown() ? lhs_type : rhs_type;
-		return nullptr;
-	}
-
-	// Ensure the lists have the same child type, else throw.
-
-	bound_function.arguments[0] = lhs_type;
-	bound_function.arguments[1] = rhs_type;
-
-	const auto &lhs_child = ListType::GetChildType(bound_function.arguments[0]);
-	const auto &rhs_child = ListType::GetChildType(bound_function.arguments[1]);
-
-	if (lhs_child != LogicalType::SQLNULL && rhs_child != LogicalType::SQLNULL && lhs_child != rhs_child) {
-		LogicalType common_child;
-		if (!LogicalType::TryGetMaxLogicalType(context, lhs_child, rhs_child, common_child)) {
-			throw BinderException("'%s' cannot compare lists of different types: '%s' and '%s'", bound_function.name,
-			                      lhs_child.ToString(), rhs_child.ToString());
-		}
-		bound_function.arguments[0] = LogicalType::LIST(common_child);
-		bound_function.arguments[1] = LogicalType::LIST(common_child);
-	}
-
-	return nullptr;
-}
-
 static void ListHasAnyFunction(DataChunk &args, ExpressionState &, Vector &result) {
 
 	auto &l_vec = args.data[0];
@@ -213,14 +167,14 @@ static void ListHasAllFunction(DataChunk &args, ExpressionState &state, Vector &
 }
 
 ScalarFunction ListHasAnyFun::GetFunction() {
-	ScalarFunction fun({LogicalType::LIST(LogicalType::ANY), LogicalType::LIST(LogicalType::ANY)}, LogicalType::BOOLEAN,
-	                   ListHasAnyFunction, ListHasAnyOrAllBind);
+	ScalarFunction fun({LogicalType::LIST(LogicalType::TEMPLATE("T")), LogicalType::LIST(LogicalType::TEMPLATE("T"))},
+	                   LogicalType::BOOLEAN, ListHasAnyFunction);
 	return fun;
 }
 
 ScalarFunction ListHasAllFun::GetFunction() {
-	ScalarFunction fun({LogicalType::LIST(LogicalType::ANY), LogicalType::LIST(LogicalType::ANY)}, LogicalType::BOOLEAN,
-	                   ListHasAllFunction, ListHasAnyOrAllBind);
+	ScalarFunction fun({LogicalType::LIST(LogicalType::TEMPLATE("T")), LogicalType::LIST(LogicalType::TEMPLATE("T"))},
+	                   LogicalType::BOOLEAN, ListHasAllFunction);
 	return fun;
 }
 
