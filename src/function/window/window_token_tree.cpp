@@ -25,18 +25,21 @@ void WindowTokenTreeLocalState::BuildLeaves() {
 		deltas[0] = 0;
 	}
 
-	WindowDeltaScanner(collection, block_begin, block_end, token_tree.key_cols,
-	                   [&](const idx_t row_idx, const idx_t prev_count, const idx_t n, const SelectionVector &distinct,
-	                       const SelectionVector &match_sel) {
+	const auto &key_cols = token_tree.key_cols;
+	const auto key_count = key_cols.size();
+	WindowDeltaScanner(collection, block_begin, block_end, key_cols, key_count,
+	                   [&](const idx_t row_idx, DataChunk &prev, DataChunk &curr, const idx_t ndistinct,
+	                       SelectionVector &distinct, const SelectionVector &matching) {
 		                   //	Same as previous - token delta is 0
-		                   const auto remaining = prev_count - n;
-		                   for (idx_t j = 0; j < remaining; ++j) {
-			                   auto scan_idx = match_sel.get_index(j);
+		                   const auto count = MinValue<idx_t>(prev.size(), curr.size());
+		                   const auto nmatch = count - ndistinct;
+		                   for (idx_t j = 0; j < nmatch; ++j) {
+			                   auto scan_idx = matching.get_index(j);
 			                   deltas[scan_idx + row_idx] = 0;
 		                   }
 
 		                   //	Different value - token delta is 1
-		                   for (idx_t j = 0; j < n; ++j) {
+		                   for (idx_t j = 0; j < ndistinct; ++j) {
 			                   auto scan_idx = distinct.get_index(j);
 			                   deltas[scan_idx + row_idx] = 1;
 		                   }
