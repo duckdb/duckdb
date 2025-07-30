@@ -62,6 +62,15 @@ unique_ptr<GlobalOperatorState> PhysicalTableInOutFunction::GetGlobalOperatorSta
 	return std::move(result);
 }
 
+void PhysicalTableInOutFunction::SetOrdinality(DataChunk &chunk, const optional_idx &ordinality_column_idx, const idx_t &ordinality_idx,
+						  const idx_t &ordinality) {
+	D_ASSERT(ordinality_column_idx.IsValid());
+	if (ordinality > 0) {
+		constexpr idx_t step = 1;
+		chunk.data[ordinality_column_idx.GetIndex()].Sequence(static_cast<int64_t>(ordinality_idx), step, ordinality);
+	}
+}
+
 OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                                        GlobalOperatorState &gstate_p, OperatorState &state_p) const {
 	auto &gstate = gstate_p.Cast<TableInOutGlobalState>();

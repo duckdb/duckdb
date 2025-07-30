@@ -18,7 +18,7 @@
 #include "duckdb/common/table_column.hpp"
 #include "duckdb/function/partition_stats.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
-#include "duckdb/common/enums/ordinality_request_type.hpp"
+
 
 #include <functional>
 
