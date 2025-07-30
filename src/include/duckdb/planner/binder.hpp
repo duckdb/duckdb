@@ -58,6 +58,7 @@ class BoundAtClause;
 
 struct CreateInfo;
 struct BoundCreateTableInfo;
+struct BoundOnConflictInfo;
 struct CommonTableExpressionInfo;
 struct BoundParameterMap;
 struct BoundPragmaInfo;
@@ -206,7 +207,8 @@ public:
 	                   TableCatalogEntry &table, vector<PhysicalIndex> &columns,
 	                   vector<unique_ptr<Expression>> &update_expressions,
 	                   vector<unique_ptr<Expression>> &projection_expressions);
-	void BindDoUpdateSetExpressions(const string &table_alias, LogicalInsert &insert, UpdateSetInfo &set_info,
+	void BindDoUpdateSetExpressions(const string &table_alias, BoundOnConflictInfo &on_conflict_info,
+	                                vector<unique_ptr<Expression>> &expressions, UpdateSetInfo &set_info,
 	                                TableCatalogEntry &table, TableStorageInfo &storage_info);
 	void BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &table, InsertStatement &stmt);
 
@@ -474,6 +476,8 @@ private:
 	                                                 unique_ptr<LogicalOperator> &root, MergeIntoAction &action,
 	                                                 const vector<BindingAlias> &source_aliases,
 	                                                 const vector<string> &source_names);
+
+	unique_ptr<MergeIntoStatement> GenerateMergeInto(InsertStatement &stmt, TableCatalogEntry &table);
 
 private:
 	Binder(ClientContext &context, shared_ptr<Binder> parent, BinderType binder_type);

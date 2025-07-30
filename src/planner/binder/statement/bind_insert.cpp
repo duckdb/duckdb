@@ -2,6 +2,7 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
+#include "duckdb/parser/statement/merge_into_statement.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/expressionlistref.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -25,6 +26,7 @@
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/parser/tableref/subqueryref.hpp"
 
 namespace duckdb {
 
@@ -147,15 +149,14 @@ void ReplaceColumnBindings(Expression &expr, idx_t source, idx_t dest) {
 	    expr, [&](unique_ptr<Expression> &child) { ReplaceColumnBindings(*child, source, dest); });
 }
 
-void Binder::BindDoUpdateSetExpressions(const string &table_alias, LogicalInsert &insert, UpdateSetInfo &set_info,
+void Binder::BindDoUpdateSetExpressions(const string &table_alias, BoundOnConflictInfo &on_conflict_info,
+                                        vector<unique_ptr<Expression>> &expressions, UpdateSetInfo &set_info,
                                         TableCatalogEntry &table, TableStorageInfo &storage_info) {
-	D_ASSERT(insert.children.size() == 1);
 
 	vector<column_t> logical_column_ids;
 	vector<string> column_names;
 	D_ASSERT(set_info.columns.size() == set_info.expressions.size());
 
-	auto &on_conflict_info = insert.on_conflict_info;
 	for (idx_t i = 0; i < set_info.columns.size(); i++) {
 		auto &colname = set_info.columns[i];
 		auto &expr = set_info.expressions[i];
@@ -193,7 +194,7 @@ void Binder::BindDoUpdateSetExpressions(const string &table_alias, LogicalInsert
 
 		auto bound_expr = update_binder.Bind(expr);
 		D_ASSERT(bound_expr);
-		insert.expressions.push_back(std::move(bound_expr));
+		expressions.push_back(std::move(bound_expr));
 	}
 
 	// Figure out which columns are indexed on
@@ -268,11 +269,12 @@ vector<column_t> GetColumnsToFetch(const TableBinding &binding) {
 }
 
 void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &table, InsertStatement &stmt) {
-	auto &on_conflict_info = insert.on_conflict_info;
 	if (!stmt.on_conflict_info) {
-		on_conflict_info.action_type = OnConflictAction::THROW;
+		// no conflict info to bind - return
 		return;
 	}
+	BoundOnConflictInfo on_conflict_info;
+	vector<unique_ptr<Expression>> expressions;
 	D_ASSERT(stmt.table_ref->type == TableReferenceType::BASE_TABLE);
 
 	// visit the table reference
@@ -459,7 +461,7 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 		on_conflict_info.do_update_condition = std::move(condition);
 	}
 
-	BindDoUpdateSetExpressions(table_alias, insert, set_info, table, storage_info);
+	BindDoUpdateSetExpressions(table_alias, on_conflict_info, expressions, set_info, table, storage_info);
 
 	// Get the column_ids we need to fetch later on from the conflicting tuples
 	// of the original table, to execute the expressions
@@ -468,7 +470,7 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 	on_conflict_info.columns_to_fetch = GetColumnsToFetch(table_binding);
 
 	// Replace the column bindings to refer to the child operator
-	for (auto &expr : insert.expressions) {
+	for (auto &expr : expressions) {
 		// Change the non-excluded column references to refer to the projection index
 		ReplaceColumnBindings(*expr, table_index, projection_index.GetIndex());
 	}
@@ -522,6 +524,178 @@ void Binder::BindInsertColumnList(TableCatalogEntry &table, vector<string> &colu
 	}
 }
 
+void QualifyOnConflictColumn(ParsedExpression &expr, const string &table_name) {
+	ParsedExpressionIterator::VisitExpressionMutable<ColumnRefExpression>(expr, [&](ColumnRefExpression &colref) {
+		auto &col_names = colref.column_names;
+		if (col_names.size() == 1) {
+			// not explicitly qualified - add qualification
+			col_names.insert(col_names.begin(), table_name);
+		}
+	});
+}
+
+unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertStatement &stmt, TableCatalogEntry &table) {
+	D_ASSERT(stmt.on_conflict_info);
+
+	auto &on_conflict_info = *stmt.on_conflict_info;
+	auto merge_into = make_uniq<MergeIntoStatement>();
+	// set up the target table
+	string table_name = !stmt.table_ref->alias.empty() ? stmt.table_ref->alias : stmt.table;
+	merge_into->target = std::move(stmt.table_ref);
+
+	auto storage_info = table.GetStorageInfo(context);
+	auto &columns = table.GetColumns();
+	// set up the columns on which to join
+	if (on_conflict_info.indexed_columns.empty()) {
+		// When omitting the conflict target, we derive the join columns from the primary key/unique constraints
+		// traverse the primary key/unique constraints
+
+		unique_ptr<ParsedExpression> join_condition;
+		// We check if there are any constraints on the table, if there aren't we throw an error.
+		idx_t found_matching_indexes = 0;
+		for (auto &index : storage_info.index_info) {
+			if (!index.is_unique) {
+				continue;
+			}
+			unique_ptr<ParsedExpression> condition;
+			auto &indexed_columns = index.column_set;
+			for (auto &column : columns.Physical()) {
+				if (indexed_columns.count(column.Physical().index)) {
+					auto lhs = make_uniq<ColumnRefExpression>(column.Name(), table_name);
+					auto rhs = make_uniq<ColumnRefExpression>(column.Name(), "excluded");
+					auto new_condition =
+					    make_uniq<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, std::move(lhs), std::move(rhs));
+					if (condition) {
+						// AND together
+						auto and_condition = make_uniq<ConjunctionExpression>(
+						    ExpressionType::CONJUNCTION_AND, std::move(condition), std::move(new_condition));
+						condition = std::move(and_condition);
+					} else {
+						condition = std::move(new_condition);
+					}
+				}
+			}
+			if (!condition) {
+				continue;
+			}
+			if (join_condition) {
+				// OR together
+				auto or_condition = make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_OR,
+				                                                     std::move(join_condition), std::move(condition));
+				join_condition = std::move(or_condition);
+			} else {
+				join_condition = std::move(condition);
+			}
+			found_matching_indexes++;
+		}
+		merge_into->join_condition = std::move(join_condition);
+
+		if (!found_matching_indexes) {
+			throw BinderException("There are no UNIQUE/PRIMARY KEY constraints that refer to this table, specify ON "
+			                      "CONFLICT columns manually");
+		} else if (found_matching_indexes != 1) {
+			if (on_conflict_info.action_type != OnConflictAction::NOTHING) {
+				// When no conflict target is provided, and the action type is UPDATE,
+				// we only allow the operation when only a single Index exists
+				throw BinderException("Conflict target has to be provided for a DO UPDATE operation when the table has "
+				                      "multiple UNIQUE/PRIMARY KEY constraints");
+			}
+		}
+	} else {
+		// when on conflict columns are explicitly provided - use them directly
+		// first figure out if there is an index on the columns or not
+		case_insensitive_map_t<idx_t> specified_columns;
+		for (idx_t i = 0; i < on_conflict_info.indexed_columns.size(); i++) {
+			specified_columns[on_conflict_info.indexed_columns[i]] = i;
+			auto column_index = table.GetColumnIndex(on_conflict_info.indexed_columns[i]);
+			if (column_index.index == COLUMN_IDENTIFIER_ROW_ID) {
+				throw BinderException("Cannot specify ROWID as ON CONFLICT target");
+			}
+			auto &col = columns.GetColumn(column_index);
+			if (col.Generated()) {
+				throw BinderException("Cannot specify a generated column as ON CONFLICT target");
+			}
+		}
+		unordered_set<column_t> on_conflict_filter;
+		for (auto &col : columns.Physical()) {
+			auto entry = specified_columns.find(col.Name());
+			if (entry != specified_columns.end()) {
+				// column was specified, set to the index
+				on_conflict_filter.insert(col.Physical().index);
+			}
+		}
+		bool index_references_columns = false;
+		for (auto &index : storage_info.index_info) {
+			if (!index.is_unique) {
+				continue;
+			}
+			bool index_matches = on_conflict_filter == index.column_set;
+			if (index_matches) {
+				index_references_columns = true;
+				break;
+			}
+		}
+		if (!index_references_columns) {
+			// Same as before, this is essentially a no-op, turning this into a DO THROW instead
+			// But since this makes no logical sense, it's probably better to throw an error
+			throw BinderException("The specified columns as conflict target are not referenced by a UNIQUE/PRIMARY KEY "
+			                      "CONSTRAINT or INDEX");
+		}
+		merge_into->using_columns = std::move(on_conflict_info.indexed_columns);
+	}
+
+	// set up the data source
+	// FIXME: include a DISTINCT ON (unique_columns)
+	auto source = make_uniq<SubqueryRef>(std::move(stmt.select_statement), "excluded");
+	if (stmt.column_order == InsertColumnOrder::INSERT_BY_POSITION) {
+		// if we are inserting by position add the columns of the target table as an alias to the source
+		if (stmt.columns.empty()) {
+			for (auto &column : columns.Physical()) {
+				source->column_name_alias.push_back(column.Name());
+			}
+		} else {
+			source->column_name_alias = stmt.columns;
+		}
+	}
+	merge_into->source = std::move(source);
+
+	// now set up the merge actions
+	// first set up the base (insert) action when not matched
+	auto insert_action = make_uniq<MergeIntoAction>();
+	insert_action->action_type = MergeActionType::MERGE_INSERT;
+	insert_action->insert_columns = std::move(stmt.columns);
+	insert_action->column_order = stmt.column_order;
+	insert_action->default_values = stmt.default_values;
+
+	merge_into->actions[MergeActionCondition::WHEN_NOT_MATCHED_BY_TARGET].push_back(std::move(insert_action));
+
+	if (on_conflict_info.condition) {
+		throw BinderException("ON CONFLICT WHERE clause is only supported in DO UPDATE SET ... WHERE ...\nThe WHERE "
+		                      "clause after the conflict columns is used for partial indexes which are not supported.");
+	}
+	if (on_conflict_info.action_type == OnConflictAction::UPDATE) {
+		// when doing UPDATE set up the when matched action
+		auto update_action = make_uniq<MergeIntoAction>();
+		update_action->action_type = MergeActionType::MERGE_UPDATE;
+		for (auto &col : on_conflict_info.set_info->expressions) {
+			QualifyOnConflictColumn(*col, table_name);
+		}
+		if (on_conflict_info.set_info->condition) {
+			QualifyOnConflictColumn(*on_conflict_info.set_info->condition, table_name);
+			update_action->condition = std::move(on_conflict_info.set_info->condition);
+		}
+		update_action->update_info = std::move(on_conflict_info.set_info);
+
+		merge_into->actions[MergeActionCondition::WHEN_MATCHED].push_back(std::move(update_action));
+	}
+
+	// move over extra properties
+	merge_into->cte_map = std::move(stmt.cte_map);
+	merge_into->returning_list = std::move(stmt.returning_list);
+
+	return merge_into;
+}
+
 BoundStatement Binder::Bind(InsertStatement &stmt) {
 	BoundStatement result;
 	result.names = {"Count"};
@@ -529,6 +703,11 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 
 	BindSchemaOrCatalog(stmt.catalog, stmt.schema);
 	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, stmt.catalog, stmt.schema, stmt.table);
+	if (stmt.on_conflict_info) {
+		// generate a MERGE INTO statement and bind it instead
+		auto merge_into = GenerateMergeInto(stmt, table);
+		return Bind(*merge_into);
+	}
 	if (!table.temporary) {
 		// inserting into a non-temporary table: alters underlying database
 		auto &properties = GetStatementProperties();

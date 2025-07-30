@@ -128,10 +128,11 @@ PhysicalOperator &DuckCatalog::PlanInsert(ClientContext &context, PhysicalPlanGe
 	}
 
 	auto &insert = planner.Make<PhysicalInsert>(
-	    op.types, op.table, std::move(op.bound_constraints), std::move(op.expressions), std::move(op.on_conflict_info.set_columns),
-	    std::move(op.on_conflict_info.set_types), op.estimated_cardinality, op.return_chunk,
-	    parallel_streaming_insert && num_threads > 1, op.on_conflict_info.action_type, std::move(op.on_conflict_info.on_conflict_condition),
-	    std::move(op.on_conflict_info.do_update_condition), std::move(op.on_conflict_info.on_conflict_filter), std::move(op.on_conflict_info.columns_to_fetch),
+	    op.types, op.table, std::move(op.bound_constraints), std::move(op.expressions),
+	    std::move(op.on_conflict_info.set_columns), std::move(op.on_conflict_info.set_types), op.estimated_cardinality,
+	    op.return_chunk, parallel_streaming_insert && num_threads > 1, op.on_conflict_info.action_type,
+	    std::move(op.on_conflict_info.on_conflict_condition), std::move(op.on_conflict_info.do_update_condition),
+	    std::move(op.on_conflict_info.on_conflict_filter), std::move(op.on_conflict_info.columns_to_fetch),
 	    op.on_conflict_info.update_is_del_and_insert);
 	insert.children.push_back(*plan);
 	return insert;
