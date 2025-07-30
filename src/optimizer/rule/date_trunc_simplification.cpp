@@ -1,7 +1,10 @@
 #include "duckdb/optimizer/rule/date_trunc_simplification.hpp"
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/optimizer/matcher/expression_matcher.hpp"
@@ -17,7 +20,7 @@ DateTruncSimplificationRule::DateTruncSimplificationRule(ExpressionRewriter &rew
 	auto op = make_uniq<ComparisonExpressionMatcher>();
 
 	auto lhs = make_uniq<FunctionExpressionMatcher>();
-	lhs->function = make_uniq<ManyFunctionMatcher>(unordered_set<string> { "date_trunc", "datetrunc" });
+	lhs->function = make_uniq<ManyFunctionMatcher>(unordered_set<string> {"date_trunc", "datetrunc"});
 	lhs->matchers.push_back(make_uniq<ConstantExpressionMatcher>());
 	lhs->matchers.push_back(make_uniq<ExpressionMatcher>());
 	lhs->policy = SetMatcher::Policy::ORDERED;
@@ -66,10 +69,11 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 	// Check whether trunc(date_part, constant_rhs) = constant_rhs.
 	const bool is_truncated = DateIsTruncated(date_part, rhs);
 
-	switch(rhs_comparison_type) {
+	switch (rhs_comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
 		// date_trunc(part, column) = constant_rhs  -->  column >= date_trunc(part, constant_rhs) AND
-		//                                               column < date_trunc(part, date_add(constant_rhs, INTERVAL 1 part)
+		//                                               column < date_trunc(part, date_add(constant_rhs,
+		//                                                                                  INTERVAL 1 part)
 		//    or, if date_trunc(part, constant_rhs) <> constant_rhs, this is unsatisfiable
 		{
 			if (!is_truncated) {
@@ -88,8 +92,8 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 
 			auto gteq = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
 			                                                 column_part.Copy(), std::move(trunc));
-			auto lt = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_LESSTHAN,
-			                                               column_part.Copy(), std::move(trunc_add));
+			auto lt = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_LESSTHAN, column_part.Copy(),
+			                                               std::move(trunc_add));
 
 			return make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(gteq),
 			                                             std::move(lt));
@@ -97,7 +101,8 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 
 	case ExpressionType::COMPARE_NOTEQUAL:
 		// date_trunc(part, column) <> constant_rhs  -->  column < date_trunc(part, constant_rhs) OR
-		//                                                column >= date_trunc(part, date_add(constant_rhs, INTERVAL 1 part)
+		//                                                column >= date_trunc(part, date_add(constant_rhs,
+		//                                                                                    INTERVAL 1 part)
 		//   or, if date_trunc(part, constant_rhs) <> constant_rhs, this is always true
 		{
 			if (!is_truncated) {
@@ -114,19 +119,22 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 				return nullptr;
 			}
 
-			auto lt = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_LESSTHAN,
-			                                               column_part.Copy(), std::move(trunc));
+			auto lt = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_LESSTHAN, column_part.Copy(),
+			                                               std::move(trunc));
 			auto gteq = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
 			                                                 column_part.Copy(), std::move(trunc_add));
 
-			return make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR, std::move(gteq), std::move(lt));
+			return make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR, std::move(gteq),
+			                                             std::move(lt));
 		}
 		return nullptr;
 
 	case ExpressionType::COMPARE_LESSTHAN:
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		// date_trunc(part, column) <  constant_rhs  -->  column <  date_trunc(part, date_add(constant_rhs, INTERVAL 1 part))
-		// date_trunc(part, column) >= constant_rhs  -->  column >= date_trunc(part, date_add(constant_rhs, INTERVAL 1 part))
+		// date_trunc(part, column) <  constant_rhs  -->  column <  date_trunc(part, date_add(constant_rhs,
+		//                                                                                    INTERVAL 1 part))
+		// date_trunc(part, column) >= constant_rhs  -->  column >= date_trunc(part, date_add(constant_rhs,
+		//                                                                                    INTERVAL 1 part))
 		{
 			// The optimization for < and >= is a little tricky: if trunc(rhs) = rhs, then we need to just
 			// use the rhs as-is, instead of using trunc(rhs + 1 date_part).
@@ -203,8 +211,8 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 	}
 }
 
-string DateTruncSimplificationRule::DatePartToFunc(const DatePartSpecifier& date_part) {
-	switch(date_part) {
+string DateTruncSimplificationRule::DatePartToFunc(const DatePartSpecifier &date_part) {
+	switch (date_part) {
 	// These specifiers can be used as intervals.
 	case DatePartSpecifier::YEAR:
 		return "to_year";
@@ -327,8 +335,8 @@ unique_ptr<Expression> DateTruncSimplificationRule::CreateTruncAdd(const BoundCo
 	return trunc;
 }
 
-bool DateTruncSimplificationRule::DateIsTruncated(const BoundConstantExpression& date_part,
-                                                  const BoundConstantExpression& rhs) {
+bool DateTruncSimplificationRule::DateIsTruncated(const BoundConstantExpression &date_part,
+                                                  const BoundConstantExpression &rhs) {
 	// Create the node date_trunc(date_part, rhs).
 	auto trunc = CreateTrunc(date_part, rhs, rhs.return_type);
 

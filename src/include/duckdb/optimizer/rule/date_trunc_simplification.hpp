@@ -45,19 +45,16 @@ public:
 	unique_ptr<Expression> Apply(LogicalOperator &op, vector<reference<Expression>> &bindings, bool &changes_made,
 	                             bool is_root) override;
 
-	static string DatePartToFunc(const DatePartSpecifier& date_part);
+	static string DatePartToFunc(const DatePartSpecifier &date_part);
 
-	unique_ptr<Expression> CreateTrunc(const BoundConstantExpression &date_part,
-	                                   const BoundConstantExpression &rhs,
+        unique_ptr<Expression> CreateTrunc(const BoundConstantExpression &date_part, const BoundConstantExpression &rhs,
 	                                   const LogicalType &return_type);
-	unique_ptr<Expression> CreateTruncAdd(const BoundConstantExpression &date_part,
-	                                      const BoundConstantExpression &rhs,
+	unique_ptr<Expression> CreateTruncAdd(const BoundConstantExpression &date_part, const BoundConstantExpression &rhs,
 	                                      const LogicalType &return_type);
 
 	bool DateIsTruncated(const BoundConstantExpression &date_part, const BoundConstantExpression &rhs);
 
-	unique_ptr<Expression> CastAndEvaluate(unique_ptr<Expression> rhs,
-	                                       const LogicalType &return_type);
+	unique_ptr<Expression> CastAndEvaluate(unique_ptr<Expression> rhs, const LogicalType &return_type);
 };
 
 } // namespace duckdb
