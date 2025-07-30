@@ -14,6 +14,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
+#include "duckdb/common/varint.hpp"
 
 namespace duckdb {
 using digit_t = uint32_t;
@@ -61,15 +62,15 @@ public:
 	//! Function to create a VARINT blob from a byte array containing the absolute value, plus an is_negative bool
 	DUCKDB_API static string FromByteArray(uint8_t *data, idx_t size, bool is_negative);
 	//! Function to convert VARINT blob to a VARCHAR
-	DUCKDB_API static string VarIntToVarchar(const string_t &blob);
+	DUCKDB_API static string VarIntToVarchar(const varint_t &blob);
 	//! Function to convert Varchar to VARINT blob
-	DUCKDB_API static string VarcharToVarInt(const string_t &value);
+	DUCKDB_API static string VarcharToVarInt(const varint_t &value);
 	//! ----------------------------------- Double Cast ----------------------------------- //
-	DUCKDB_API static bool VarintToDouble(const string_t &blob, double &result, bool &strict);
+	DUCKDB_API static bool VarintToDouble(const varint_t &blob, double &result, bool &strict);
 	template <class T>
-	static bool VarintToInt(const string_t &blob, T &result, bool &strict) {
-		auto data_byte_size = blob.GetSize() - VARINT_HEADER_SIZE;
-		auto data = blob.GetData();
+	static bool VarintToInt(const varint_t &blob, T &result, bool &strict) {
+		auto data_byte_size = blob.data.GetSize() - VARINT_HEADER_SIZE;
+		auto data = blob.data.GetData();
 		bool is_negative = (data[0] & 0x80) == 0;
 
 		uhugeint_t abs_value = 0;
@@ -128,7 +129,7 @@ DUCKDB_API bool TryCastToVarInt::Operation(float float_value, string_t &result_v
                                            CastParameters &parameters);
 
 template <>
-DUCKDB_API bool TryCastToVarInt::Operation(string_t input_value, string_t &result_value, Vector &result,
+DUCKDB_API bool TryCastToVarInt::Operation(varint_t input_value, string_t &result_value, Vector &result,
                                            CastParameters &parameters);
 
 struct VarIntCastToVarchar {

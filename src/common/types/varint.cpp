@@ -1,3 +1,4 @@
+#include "duckdb/common/varint.hpp"
 #include "duckdb/common/types/varint.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/numeric_utils.hpp"
@@ -190,11 +191,11 @@ string Varint::FromByteArray(uint8_t *data, idx_t size, bool is_negative) {
 }
 
 // Following CPython and Knuth (TAOCP, Volume 2 (3rd edn), section 4.4, Method 1b).
-string Varint::VarIntToVarchar(const string_t &blob) {
+string Varint::VarIntToVarchar(const varint_t &blob) {
 	string decimal_string;
 	vector<uint8_t> byte_array;
 	bool is_negative;
-	GetByteArray(byte_array, is_negative, blob);
+	GetByteArray(byte_array, is_negative, blob.data);
 	vector<digit_t> digits;
 	// Rounding byte_array to digit_bytes multiple size, so that we can process every digit_bytes bytes
 	// at a time without if check in the for loop
@@ -244,17 +245,17 @@ string Varint::VarIntToVarchar(const string_t &blob) {
 	return decimal_string;
 }
 
-string Varint::VarcharToVarInt(const string_t &value) {
+string Varint::VarcharToVarInt(const varint_t &value) {
 	idx_t start_pos, end_pos;
 	bool is_negative, is_zero;
-	if (!VarcharFormatting(value, start_pos, end_pos, is_negative, is_zero)) {
-		throw ConversionException("Could not convert string \'%s\' to Varint", value.GetString());
+	if (!VarcharFormatting(value.data, start_pos, end_pos, is_negative, is_zero)) {
+		throw ConversionException("Could not convert string \'%s\' to Varint", value.data.GetString());
 	}
 	if (is_zero) {
 		// Return Value 0
 		return InitializeVarintZero();
 	}
-	auto int_value_char = value.GetData();
+	auto int_value_char = value.data.GetData();
 	idx_t actual_size = end_pos - start_pos;
 
 	// we initalize result with space for our header
@@ -308,18 +309,18 @@ string Varint::VarcharToVarInt(const string_t &value) {
 	return result;
 }
 
-bool Varint::VarintToDouble(const string_t &blob, double &result, bool &strict) {
+bool Varint::VarintToDouble(const varint_t &blob, double &result, bool &strict) {
 	result = 0;
 
-	if (blob.GetSize() < 4) {
+	if (blob.data.GetSize() < 4) {
 		throw InvalidInputException("Invalid blob size.");
 	}
-	auto blob_ptr = blob.GetData();
+	auto blob_ptr = blob.data.GetData();
 
 	// Determine if the number is negative
 	bool is_negative = (blob_ptr[0] & 0x80) == 0;
 	idx_t byte_pos = 0;
-	for (idx_t i = blob.GetSize() - 1; i > 2; i--) {
+	for (idx_t i = blob.data.GetSize() - 1; i > 2; i--) {
 		if (is_negative) {
 			result += static_cast<uint8_t>(~blob_ptr[i]) * pow(256, static_cast<double>(byte_pos));
 		} else {

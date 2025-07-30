@@ -30,6 +30,15 @@ struct varint_t {
 	void Print() const;
 };
 
+enum AbsoluteNumberComparison: uint8_t {
+	// If number is equal
+	EQUAL = 0,
+	// If compared number is greater
+	GREATER = 1,
+	// If compared number is smaller
+	SMALLER = 2,
+};
+
 struct VarintIntermediate {
 	VarintIntermediate() : is_negative(false), size(0), data(nullptr) {};
 	explicit VarintIntermediate(const varint_t &value);
@@ -41,7 +50,7 @@ struct VarintIntermediate {
 	data_ptr_t data;
 	//! If the absolute number is  bigger than the absolute rhs
 	//! 1 = true, 0 = equal, -1 = false
-	int8_t IsAbsoluteBigger(const VarintIntermediate &rhs) const;
+	AbsoluteNumberComparison IsAbsoluteBigger(const VarintIntermediate &rhs) const;
 	//! Get the absolute value of a byte
 	uint8_t GetAbsoluteByte(int64_t index) const;
 	//! If most significant bit of the first byte is set.
@@ -61,8 +70,6 @@ struct VarintIntermediate {
 	static string_t Add(Vector &result, const VarintIntermediate &lhs, const VarintIntermediate &rhs);
 	//! Exports to a varint, either arena allocated
 	varint_t ToVarint(ArenaAllocator &allocator);
-	//! Or Vector allocated
-	string_t ToVarint(Vector &result);
 };
 
 } // namespace duckdb

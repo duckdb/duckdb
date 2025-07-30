@@ -41,21 +41,20 @@ uint8_t VarintIntermediate::GetAbsoluteByte(int64_t index) const {
 	return is_negative ? static_cast<uint8_t>(~data[index]) : static_cast<uint8_t>(data[index]);
 }
 
-int8_t VarintIntermediate::IsAbsoluteBigger(const VarintIntermediate &rhs) const {
+AbsoluteNumberComparison VarintIntermediate::IsAbsoluteBigger(const VarintIntermediate &rhs) const {
 	idx_t actual_start_pos = GetStartDataPos();
 	idx_t actual_size = size - actual_start_pos;
 
 	idx_t rhs_actual_start_pos = rhs.GetStartDataPos();
 	idx_t rhs_actual_size = rhs.size - rhs_actual_start_pos;
 
-	if (is_negative != rhs.is_negative) {
 		// we have opposing signs, gotta do a bunch of checks to figure out who is the biggest
 		// check sizes
 		if (actual_size > rhs_actual_size) {
-			return 1;
+			return GREATER;
 		}
 		if (actual_size < rhs_actual_size) {
-			return -1;
+			return SMALLER;
 		} else {
 			// they have the same size then
 			idx_t target_idx = actual_start_pos;
@@ -64,19 +63,17 @@ int8_t VarintIntermediate::IsAbsoluteBigger(const VarintIntermediate &rhs) const
 				auto data_byte = GetAbsoluteByte(static_cast<int64_t>(target_idx));
 				auto rhs_byte = rhs.GetAbsoluteByte(static_cast<int64_t>(source_idx));
 				if (data_byte > rhs_byte) {
-					return 1;
+					return GREATER;
 				} else if (data_byte < rhs_byte) {
-					return -1;
+					return SMALLER;
 				}
 				target_idx++;
 				source_idx++;
 			}
 		}
-		// If we got here, the values are equal.
-		return 0;
-	} else {
-		return 1;
-	}
+	// If we got here, the values are equal.
+	return EQUAL;
+
 }
 
 bool VarintIntermediate::IsMSBSet() const {
@@ -162,19 +159,6 @@ varint_t VarintIntermediate::ToVarint(ArenaAllocator &allocator) {
 	return result;
 }
 
-string_t VarintIntermediate::ToVarint(Vector &result_vector) {
-	Trim();
-	uint32_t varint_size = Varint::VARINT_HEADER_SIZE + size;
-	auto target = StringVector::EmptyString(result_vector, varint_size);
-	auto target_data = target.GetDataWriteable();
-	// Set Header
-	Varint::SetHeader(target_data, size, is_negative);
-	// Copy data
-	memcpy(target_data + Varint::VARINT_HEADER_SIZE, data, size);
-	target.Finalize();
-	return target;
-}
-
 void VarintAddition(data_ptr_t result, int64_t result_start, int64_t result_end, bool is_target_absolute_bigger,
                     const VarintIntermediate &lhs, const VarintIntermediate &rhs) {
 	bool is_result_negative = is_target_absolute_bigger ? lhs.is_negative : rhs.is_negative;
@@ -229,18 +213,20 @@ string_t VarintIntermediate::Add(Vector &result_vector, const VarintIntermediate
 	if (actual_size < actual_rhs_size || (same_sign && (lhs.IsMSBSet() || (rhs.IsMSBSet() && lhs.size == rhs.size)))) {
 		result_size = actual_size < actual_rhs_size ? actual_rhs_size + 1 : actual_size + 1;
 	}
-	auto is_absolute_bigger = lhs.IsAbsoluteBigger(rhs);
 	bool is_target_absolute_bigger = true;
-	if (is_absolute_bigger == 0) {
-		// We set this value to 0
-		auto target = StringVector::EmptyString(result_vector, result_size);
-		auto target_data = target.GetDataWriteable();
-		Varint::SetHeader(target_data, 1, false);
-		target_data[Varint::VARINT_HEADER_SIZE] = 0;
-		return target;
+	if (lhs.is_negative != rhs.is_negative) {
+		auto is_absolute_bigger = lhs.IsAbsoluteBigger(rhs);
+		if (is_absolute_bigger == EQUAL) {
+			// We set this value to 0
+			auto target = StringVector::EmptyString(result_vector, result_size);
+			auto target_data = target.GetDataWriteable();
+			Varint::SetHeader(target_data, 1, false);
+			target_data[Varint::VARINT_HEADER_SIZE] = 0;
+			return target;
 
-	} else if (is_absolute_bigger == -1) {
-		is_target_absolute_bigger = false;
+		} else if (is_absolute_bigger == SMALLER) {
+			is_target_absolute_bigger = false;
+		}
 	}
 	if (result_size == 0) {
 		result_size++;
@@ -267,144 +253,23 @@ void VarintIntermediate::AddInPlace(ArenaAllocator &allocator, const VarintInter
 		idx_t min_size = actual_size < actual_rhs_size ? actual_rhs_size + 1 : size + 1;
 		Reallocate(allocator, min_size);
 	}
-
-	auto is_absolute_bigger = IsAbsoluteBigger(rhs);
 	bool is_target_absolute_bigger = true;
-	if (is_absolute_bigger == 0) {
-		// We set this value to 0
-		*this = VarintIntermediate();
-		Initialize(allocator);
-		return;
-	} else if (is_absolute_bigger == -1) {
-		is_target_absolute_bigger = false;
+	if (rhs.is_negative != is_negative) {
+		auto is_absolute_bigger = IsAbsoluteBigger(rhs);
+		if (is_absolute_bigger == EQUAL) {
+			// We set this value to 0
+			*this = VarintIntermediate();
+			Initialize(allocator);
+			return;
+		} else if (is_absolute_bigger == SMALLER) {
+			is_target_absolute_bigger = false;
+		}
 	}
 
 	bool is_result_negative = is_target_absolute_bigger ? is_negative : rhs.is_negative;
 	VarintAddition(data, 0, size, is_target_absolute_bigger, *this, rhs);
 	if (is_result_negative != is_negative) {
 		is_negative = is_result_negative;
-	}
-}
-
-void AddBinaryBuffersInPlace(char *target_buffer, idx_t target_size, const char *source_buffer, idx_t source_size,
-                             idx_t target_start_pos) {
-	constexpr idx_t header_size = Varint::VARINT_HEADER_SIZE;
-
-	bool target_negative = (target_buffer[0] & 0x80) == 0;
-	bool source_negative = (source_buffer[0] & 0x80) == 0;
-
-	bool result_positive = !target_negative;
-	bool is_target_absolute_bigger = false;
-
-	if (target_negative != source_negative) {
-		// check sizes
-		if (target_size - target_start_pos > source_size - Varint::VARINT_HEADER_SIZE) {
-			result_positive = !target_negative;
-			is_target_absolute_bigger = true;
-		} else if (target_size - target_start_pos < source_size - Varint::VARINT_HEADER_SIZE) {
-			result_positive = target_negative;
-			is_target_absolute_bigger = false;
-		} else {
-			// they have the same size then
-			idx_t target_idx = target_start_pos;
-			idx_t source_idx = Varint::VARINT_HEADER_SIZE;
-			if (target_negative) {
-				while (target_idx < target_size) {
-					if (static_cast<uint8_t>(~target_buffer[target_idx]) >
-					    static_cast<uint8_t>(source_buffer[source_idx])) {
-						is_target_absolute_bigger = true;
-						break;
-					} else if (static_cast<uint8_t>(~target_buffer[target_idx]) <
-					           static_cast<uint8_t>(source_buffer[source_idx])) {
-						is_target_absolute_bigger = false;
-						break;
-					}
-					target_idx++;
-					source_idx++;
-				}
-			} else {
-				while (target_idx < target_size) {
-					if (static_cast<uint8_t>(target_buffer[target_idx]) >
-					    static_cast<uint8_t>(~source_buffer[source_idx])) {
-						is_target_absolute_bigger = true;
-						break;
-					} else if (static_cast<uint8_t>(target_buffer[target_idx]) <
-					           static_cast<uint8_t>(~source_buffer[source_idx])) {
-						is_target_absolute_bigger = false;
-						break;
-					}
-					target_idx++;
-					source_idx++;
-				}
-			}
-			if (is_target_absolute_bigger) {
-				result_positive = !target_negative;
-			} else {
-				result_positive = !source_negative;
-			}
-
-			if (target_idx == target_size) {
-				// they are ze same values, but opposing signs
-				// Set target to 0 and skedaddle
-				Varint::SetHeader(target_buffer, target_size - Varint::VARINT_HEADER_SIZE, false);
-				for (idx_t i = Varint::VARINT_HEADER_SIZE; i < target_size; ++i) {
-					target_buffer[i] = 0;
-				}
-				return;
-			}
-		}
-	}
-
-	// Both numbers have the same sign, we can simply add them.
-	idx_t i_target = target_size - 1; // last byte index in target
-	idx_t i_source = source_size - 1; // last byte index in source
-
-	// Carry for addition
-	uint16_t carry = 0;
-	uint16_t borrow = 0;
-	// Add bytes from right to left
-	while (i_target >= header_size) {
-		// If the numbers are negative we bit flip them
-		uint8_t target_byte = target_negative ? static_cast<uint8_t>(~target_buffer[i_target])
-		                                      : static_cast<uint8_t>(target_buffer[i_target]);
-		uint8_t source_byte;
-		if (i_source >= header_size) {
-			source_byte = source_negative ? static_cast<uint8_t>(~source_buffer[i_source])
-			                              : static_cast<uint8_t>(source_buffer[i_source]);
-			i_source--;
-		} else {
-			// Sign-extend source if source shorter than target
-			source_byte = 0x00;
-		}
-
-		// Add bytes and carry
-		uint16_t sum;
-		if (target_negative == source_negative) {
-			sum = static_cast<uint16_t>(target_byte) + static_cast<uint16_t>(source_byte) + carry;
-			carry = (sum >> 8) & 0xFF;
-		} else {
-			if (is_target_absolute_bigger) {
-				sum = static_cast<uint16_t>(target_byte) - static_cast<uint16_t>(source_byte) - borrow;
-				borrow = sum > static_cast<uint16_t>(target_byte) ? 1 : 0;
-			} else {
-				sum = static_cast<uint16_t>(source_byte) - static_cast<uint16_t>(target_byte) - borrow;
-				borrow = sum > static_cast<uint16_t>(source_byte) ? 1 : 0;
-			}
-		}
-		uint8_t result_byte = static_cast<uint8_t>(sum & 0xFF);
-
-		// If the result is not positive, we must flip the bits again
-		target_buffer[i_target] = !result_positive ? static_cast<char>(~result_byte) : static_cast<char>(result_byte);
-		i_target--;
-	}
-
-	if (result_positive != !target_negative) {
-		// If we are flipping the sign we must be sure that we are flipping all extra bits from our target
-		for (idx_t i = Varint::VARINT_HEADER_SIZE; i < target_size - (source_size - Varint::VARINT_HEADER_SIZE); ++i) {
-			target_buffer[i] = result_positive ? 0x00 : static_cast<char>(0xFF);
-		}
-		// We should set the header again
-		Varint::SetHeader(target_buffer, target_size - Varint::VARINT_HEADER_SIZE, !result_positive);
 	}
 }
 

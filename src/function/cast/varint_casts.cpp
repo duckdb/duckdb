@@ -3,6 +3,7 @@
 #include "duckdb/function/cast/vector_cast_helpers.hpp"
 #include "duckdb/common/types/varint.hpp"
 #include <cmath>
+#include "duckdb/common/varint.hpp"
 
 namespace duckdb {
 
@@ -161,7 +162,7 @@ string_t HugeintCastToVarInt::Operation(hugeint_t int_value, Vector &result) {
 
 // Varchar to Varint
 template <>
-bool TryCastToVarInt::Operation(string_t input_value, string_t &result_value, Vector &result,
+bool TryCastToVarInt::Operation(varint_t input_value, string_t &result_value, Vector &result,
                                 CastParameters &parameters) {
 	auto blob_string = Varint::VarcharToVarInt(input_value);
 
@@ -271,38 +272,38 @@ BoundCastInfo DefaultCasts::VarintCastSwitch(BindCastInput &input, const Logical
 	// now switch on the result type
 	switch (target.id()) {
 	case LogicalTypeId::TINYINT:
-		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<string_t, int8_t, VarintToIntCast>);
+		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<varint_t, int8_t, VarintToIntCast>);
 	case LogicalTypeId::UTINYINT:
-		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<string_t, uint8_t, VarintToIntCast>);
+		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<varint_t, uint8_t, VarintToIntCast>);
 
 	case LogicalTypeId::SMALLINT:
-		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<string_t, int16_t, VarintToIntCast>);
+		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<varint_t, int16_t, VarintToIntCast>);
 
 	case LogicalTypeId::USMALLINT:
-		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<string_t, uint16_t, VarintToIntCast>);
+		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<varint_t, uint16_t, VarintToIntCast>);
 
 	case LogicalTypeId::INTEGER:
-		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<string_t, int32_t, VarintToIntCast>);
+		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<varint_t, int32_t, VarintToIntCast>);
 
 	case LogicalTypeId::UINTEGER:
-		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<string_t, uint32_t, VarintToIntCast>);
+		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<varint_t, uint32_t, VarintToIntCast>);
 
 	case LogicalTypeId::BIGINT:
-		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<string_t, int64_t, VarintToIntCast>);
+		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<varint_t, int64_t, VarintToIntCast>);
 
 	case LogicalTypeId::UBIGINT:
-		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<string_t, uint64_t, VarintToIntCast>);
+		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<varint_t, uint64_t, VarintToIntCast>);
 
 	case LogicalTypeId::HUGEINT:
-		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<string_t, hugeint_t, VarintToIntCast>);
+		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<varint_t, hugeint_t, VarintToIntCast>);
 
 	case LogicalTypeId::UHUGEINT:
-		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<string_t, uhugeint_t, VarintToIntCast>);
+		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<varint_t, uhugeint_t, VarintToIntCast>);
 
 	case LogicalTypeId::VARCHAR:
-		return BoundCastInfo(&VectorCastHelpers::StringCast<string_t, VarIntCastToVarchar>);
+		return BoundCastInfo(&VectorCastHelpers::StringCast<varint_t, VarIntCastToVarchar>);
 	case LogicalTypeId::DOUBLE:
-		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<string_t, double, VarintToDoubleCast>);
+		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<varint_t, double, VarintToDoubleCast>);
 	default:
 		return TryVectorNullCast;
 	}
