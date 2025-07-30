@@ -4,8 +4,7 @@
 #include "duckdb/main/relation/setop_relation.hpp"
 #include "duckdb/main/relation/materialized_relation.hpp"
 #include "duckdb/common/enums/set_operation_type.hpp"
-
-#include <duckdb/common/printer.hpp>
+#include "duckdb/common/printer.hpp"
 
 duckdb::unique_ptr<duckdb::ArrowArrayStreamWrapper>
 ArrowStreamTestFactory::CreateStream(uintptr_t this_ptr, duckdb::ArrowStreamParameters &parameters) {

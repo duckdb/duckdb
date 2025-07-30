@@ -1,8 +1,6 @@
 #include "duckdb/parser/tableref/pivotref.hpp"
-
+#include "duckdb/parser/expression_util.hpp"
 #include "duckdb/common/limits.hpp"
-
-#include <duckdb/parser/expression_util.hpp>
 
 namespace duckdb {
 

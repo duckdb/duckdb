@@ -1,5 +1,6 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/function_binder.hpp"
@@ -30,7 +31,6 @@
 #include "duckdb/planner/expression_binder/where_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 
-#include <duckdb/common/exception/parser_exception.hpp>
 
 namespace duckdb {
 

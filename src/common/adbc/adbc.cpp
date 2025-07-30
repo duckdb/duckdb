@@ -18,7 +18,7 @@
 
 #include "duckdb/main/prepared_statement_data.hpp"
 
-#include <duckdb/parser/keyword_helper.hpp>
+#include "duckdb/parser/keyword_helper.hpp"
 
 // We must leak the symbols of the init function
 AdbcStatusCode duckdb_adbc_init(int version, void *driver, struct AdbcError *error) {

@@ -19,6 +19,8 @@
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/common/types/blob.hpp"
 
+#endif
+
 namespace duckdb {
 
 using namespace duckdb_apache::thrift;            // NOLINT

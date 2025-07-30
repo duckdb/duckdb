@@ -2,6 +2,7 @@
 
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/operator/add.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -15,8 +16,6 @@
 #include "duckdb/planner/operator/logical_dependent_join.hpp"
 #include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
-
-#include <duckdb/common/exception/parser_exception.hpp>
 
 namespace duckdb {
 

@@ -1,11 +1,11 @@
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
+#include "duckdb/parser/simplified_token.hpp"
 
 #include "utf8proc.hpp"
 
-#include <duckdb/parser/keyword_helper.hpp>
-#include <duckdb/parser/simplified_token.hpp>
 
 namespace duckdb {
 // Helper function to generate column names

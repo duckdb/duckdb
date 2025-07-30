@@ -2,8 +2,8 @@
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
 
-#include <duckdb/common/exception/parser_exception.hpp>
 
 namespace duckdb {
 

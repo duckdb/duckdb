@@ -1,10 +1,10 @@
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/transformer.hpp"
 
-#include <duckdb/common/exception/parser_exception.hpp>
 
 namespace duckdb {
 
