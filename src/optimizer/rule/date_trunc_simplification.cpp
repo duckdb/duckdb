@@ -125,7 +125,8 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 
 	case ExpressionType::COMPARE_LESSTHAN:
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		// date_trunc(part, column) < constant_rhs  -->  column < date_trunc(part, date_add(constant_rhs, INTERVAL 1 part))
+		// date_trunc(part, column) <  constant_rhs  -->  column <  date_trunc(part, date_add(constant_rhs, INTERVAL 1 part))
+		// date_trunc(part, column) >= constant_rhs  -->  column >= date_trunc(part, date_add(constant_rhs, INTERVAL 1 part))
 		{
 			// The optimization for < and >= is a little tricky: if trunc(rhs) = rhs, then we need to just
 			// use the rhs as-is, instead of using trunc(rhs + 1 date_part).
@@ -270,8 +271,7 @@ unique_ptr<Expression> DateTruncSimplificationRule::CreateTrunc(const BoundConst
 			return std::move(trunc);
 		}
 
-		auto res = make_uniq<BoundConstantExpression>(result);
-		return res;
+		return make_uniq<BoundConstantExpression>(result);
 	}
 
 	return std::move(trunc);
