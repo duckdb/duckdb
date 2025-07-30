@@ -52,7 +52,7 @@ SourceResultType PhysicalSet::GetData(ExecutionContext &context, DataChunk &chun
 		}
 	}
 
-	Value input_val = value.CastAs(context.client, DBConfig::ParseLogicalType(option->parameter_type));
+	Value input_val = DBConfig::CastOptionIfNecessary(context.client, value, *option);
 	switch (variable_scope) {
 	case SetScope::GLOBAL: {
 		if (!option->set_global) {
