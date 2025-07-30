@@ -4,6 +4,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/logging/log_manager.hpp"
 
 namespace duckdb {
 

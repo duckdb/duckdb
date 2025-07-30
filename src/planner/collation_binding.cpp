@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/function/function_binder.hpp"
 
@@ -18,7 +19,7 @@ bool PushVarcharCollation(ClientContext &context, unique_ptr<Expression> &source
 	auto str_collation = StringType::GetCollation(sql_type);
 	string collation;
 	if (str_collation.empty()) {
-		collation = DBConfig::GetConfig(context).options.collation;
+		collation = DBConfig::GetSetting<DefaultCollationSetting>(context);
 	} else {
 		collation = str_collation;
 	}

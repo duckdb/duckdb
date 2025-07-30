@@ -1,4 +1,5 @@
 #include "duckdb/storage/table/row_group_collection.hpp"
+
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
@@ -15,6 +16,7 @@
 #include "duckdb/storage/table/row_group_segment_tree.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -1051,12 +1053,11 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	try {
 		// schedule tasks
 		idx_t total_vacuum_tasks = 0;
-		auto &config = DBConfig::GetConfig(writer.GetDatabase());
-
+		auto max_vacuum_tasks = DBConfig::GetSetting<MaxVacuumTasksSetting>(writer.GetDatabase());
 		for (idx_t segment_idx = 0; segment_idx < segments.size(); segment_idx++) {
 			auto &entry = segments[segment_idx];
-			auto vacuum_tasks = ScheduleVacuumTasks(checkpoint_state, vacuum_state, segment_idx,
-			                                        total_vacuum_tasks < config.options.max_vacuum_tasks);
+			auto vacuum_tasks =
+			    ScheduleVacuumTasks(checkpoint_state, vacuum_state, segment_idx, total_vacuum_tasks < max_vacuum_tasks);
 			if (vacuum_tasks) {
 				// vacuum tasks were scheduled - don't schedule a checkpoint task yet
 				total_vacuum_tasks++;

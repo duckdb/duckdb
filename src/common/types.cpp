@@ -25,6 +25,7 @@
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/main/settings.hpp"
 
 #include <cmath>
 
@@ -1236,7 +1237,7 @@ struct ForceGetTypeOperation {
 
 bool LogicalType::TryGetMaxLogicalType(ClientContext &context, const LogicalType &left, const LogicalType &right,
                                        LogicalType &result) {
-	if (DBConfig::GetConfig(context).options.old_implicit_casting) {
+	if (DBConfig::GetSetting<OldImplicitCastingSetting>(context)) {
 		result = LogicalType::ForceMaxLogicalType(left, right);
 		return true;
 	}
