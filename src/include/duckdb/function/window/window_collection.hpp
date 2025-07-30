@@ -187,4 +187,100 @@ public:
 	idx_t curr_idx;
 };
 
+template <typename OP>
+static void WindowDeltaScanner(ColumnDataCollection &collection, idx_t block_begin, idx_t block_end,
+                               const vector<column_t> &key_cols, OP operation) {
+
+	//	Stop if there is no work to do
+	if (!collection.Count()) {
+		return;
+	}
+
+	//	Start back one to get the overlap
+	idx_t block_curr = block_begin ? block_begin - 1 : 0;
+
+	//	Scan the sort columns
+	WindowCollectionChunkScanner scanner(collection, key_cols, block_curr);
+	auto &scanned = scanner.chunk;
+
+	//	Shifted buffer for the next values
+	DataChunk next;
+	collection.InitializeScanChunk(scanner.state, next);
+
+	//	Delay buffer for the previous row
+	DataChunk delayed;
+	collection.InitializeScanChunk(scanner.state, delayed);
+
+	//	Only compare the sort arguments.
+	const auto compare_count = key_cols.size();
+	const auto compare_type = scanner.PrefixStructType(compare_count);
+	Vector compare_curr(compare_type);
+	Vector compare_prev(compare_type);
+
+	bool boundary_compare = (block_begin > 0);
+	idx_t row_idx = 1;
+	if (!scanner.Scan()) {
+		return;
+	}
+
+	//	Process chunks offset by 1
+	SelectionVector next_sel(1, STANDARD_VECTOR_SIZE);
+	SelectionVector distinct(STANDARD_VECTOR_SIZE);
+	SelectionVector matching(STANDARD_VECTOR_SIZE);
+
+	while (block_curr < block_end) {
+		//	Compare the current to the previous;
+		DataChunk *curr = nullptr;
+		DataChunk *prev = nullptr;
+
+		idx_t prev_count = 0;
+		if (boundary_compare) {
+			//	Save the last row of the scanned chunk
+			prev_count = 1;
+			sel_t last = UnsafeNumericCast<sel_t>(scanned.size() - 1);
+			SelectionVector sel(&last);
+			delayed.Reset();
+			scanned.Copy(delayed, sel, prev_count);
+			prev = &delayed;
+
+			// Try to read the next chunk
+			++block_curr;
+			row_idx = scanner.Scanned();
+			if (block_curr >= block_end || !scanner.Scan()) {
+				break;
+			}
+			curr = &scanned;
+		} else {
+			//	Compare the [1..size) values with the [0..size-1) values
+			prev_count = scanned.size() - 1;
+			if (!prev_count) {
+				//	1 row scanned, so just skip the rest of the loop.
+				boundary_compare = true;
+				continue;
+			}
+			prev = &scanned;
+
+			// Slice the current back one into the previous
+			next.Slice(scanned, next_sel, prev_count);
+			curr = &next;
+		}
+
+		//	Reference the comparison prefix as a struct to simplify the compares.
+		scanner.ReferenceStructColumns(*prev, compare_prev, compare_count);
+		scanner.ReferenceStructColumns(*curr, compare_curr, compare_count);
+
+		const auto n =
+		    VectorOperations::DistinctFrom(compare_curr, compare_prev, nullptr, prev_count, &distinct, &matching);
+
+		//	If n is 0, neither SV has been filled in?
+		auto match_sel = n ? &matching : FlatVector::IncrementalSelectionVector();
+
+		operation(row_idx, prev_count, n, distinct, *match_sel);
+
+		//	Transition between comparison ranges.
+		boundary_compare = !boundary_compare;
+		row_idx += prev_count;
+	}
+}
+
 } // namespace duckdb
