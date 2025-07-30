@@ -7,8 +7,10 @@
   ],
   "skip_tests": [
     {
-      "reason": "",
-      "path": "test/sql/attach/attach_filepath_roundtrip.test"
+      "reason": "TODO",
+      "paths": [
+        "test/sql/attach/attach_filepath_roundtrip.test"
+      ]
     }
   ]
 }

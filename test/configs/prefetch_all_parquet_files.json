@@ -8,8 +8,10 @@
   "skip_compiled": "true",
   "skip_tests": [
     {
-      "reason": "",
-      "path": "test/sql/copy/csv/zstd_crash.test"
+      "reason": "TODO",
+      "paths": [
+        "test/sql/copy/csv/zstd_crash.test"
+      ]
     }
   ]
 }
