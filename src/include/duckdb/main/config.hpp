@@ -36,7 +36,7 @@
 #include "duckdb/storage/compression/bitpacking.hpp"
 #include "duckdb/function/encoding_function.hpp"
 #include "duckdb/main/setting_info.hpp"
-#include "duckdb/logging/logging.hpp"
+#include "duckdb/logging/logger.hpp"
 
 namespace duckdb {
 
