@@ -29,6 +29,7 @@
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/table_filter_state.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
+#include "duckdb/logging/log_manager.hpp"
 
 #include <cassert>
 #include <chrono>
@@ -779,7 +780,8 @@ ParquetOptions::ParquetOptions(ClientContext &context) {
 	Value lookup_value;
 	if (context.TryGetCurrentSetting("binary_as_string", lookup_value)) {
 		binary_as_string = lookup_value.GetValue<bool>();
-	} else if (context.TryGetCurrentSetting("variant_legacy_encoding", lookup_value)) {
+	}
+	if (context.TryGetCurrentSetting("variant_legacy_encoding", lookup_value)) {
 		variant_legacy_encoding = lookup_value.GetValue<bool>();
 	}
 }

@@ -18,38 +18,12 @@ static void MapContainsFunction(DataChunk &input, ExpressionState &state, Vector
 	}
 }
 
-static unique_ptr<FunctionData> MapContainsBind(ClientContext &context, ScalarFunction &bound_function,
-                                                vector<unique_ptr<Expression>> &arguments) {
-	D_ASSERT(bound_function.arguments.size() == 2);
-
-	const auto &map = arguments[0]->return_type;
-	const auto &key = arguments[1]->return_type;
-
-	if (map.id() == LogicalTypeId::UNKNOWN) {
-		throw ParameterNotResolvedException();
-	}
-
-	if (key.id() == LogicalTypeId::UNKNOWN) {
-		// Infer the argument type from the map type
-		bound_function.arguments[0] = map;
-		bound_function.arguments[1] = MapType::KeyType(map);
-	} else {
-		LogicalType max_child_type;
-		if (!LogicalType::TryGetMaxLogicalType(context, MapType::KeyType(map), key, max_child_type)) {
-			throw BinderException(
-			    "%s: Cannot match element of type '%s' in a map of type '%s' - an explicit cast is required",
-			    bound_function.name, key.ToString(), map.ToString());
-		}
-
-		bound_function.arguments[0] = LogicalType::MAP(max_child_type, MapType::ValueType(map));
-		bound_function.arguments[1] = max_child_type;
-	}
-	return nullptr;
-}
-
 ScalarFunction MapContainsFun::GetFunction() {
-	ScalarFunction fun("map_contains", {LogicalType::MAP(LogicalType::ANY, LogicalType::ANY), LogicalType::ANY},
-	                   LogicalType::BOOLEAN, MapContainsFunction, MapContainsBind);
+	auto key_type = LogicalType::TEMPLATE("K");
+	auto val_type = LogicalType::TEMPLATE("V");
+
+	ScalarFunction fun("map_contains", {LogicalType::MAP(key_type, val_type), key_type}, LogicalType::BOOLEAN,
+	                   MapContainsFunction);
 	return fun;
 }
 

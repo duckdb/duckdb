@@ -68,6 +68,8 @@ enum class ArrowArrayPhysicalType : uint8_t;
 
 enum class ArrowDateTimeType : uint8_t;
 
+enum class ArrowFormatVersion : uint8_t;
+
 enum class ArrowOffsetSize : uint8_t;
 
 enum class ArrowTypeInfoType : uint8_t;
@@ -203,6 +205,8 @@ enum class HLLStorageType : uint8_t;
 enum class HTTPStatusCode : uint16_t;
 
 enum class IndexAppendMode : uint8_t;
+
+enum class IndexBindState : uint8_t;
 
 enum class IndexConstraintType : uint8_t;
 
@@ -488,6 +492,9 @@ template<>
 const char* EnumUtil::ToChars<ArrowDateTimeType>(ArrowDateTimeType value);
 
 template<>
+const char* EnumUtil::ToChars<ArrowFormatVersion>(ArrowFormatVersion value);
+
+template<>
 const char* EnumUtil::ToChars<ArrowOffsetSize>(ArrowOffsetSize value);
 
 template<>
@@ -690,6 +697,9 @@ const char* EnumUtil::ToChars<HTTPStatusCode>(HTTPStatusCode value);
 
 template<>
 const char* EnumUtil::ToChars<IndexAppendMode>(IndexAppendMode value);
+
+template<>
+const char* EnumUtil::ToChars<IndexBindState>(IndexBindState value);
 
 template<>
 const char* EnumUtil::ToChars<IndexConstraintType>(IndexConstraintType value);
@@ -1089,6 +1099,9 @@ template<>
 ArrowDateTimeType EnumUtil::FromString<ArrowDateTimeType>(const char *value);
 
 template<>
+ArrowFormatVersion EnumUtil::FromString<ArrowFormatVersion>(const char *value);
+
+template<>
 ArrowOffsetSize EnumUtil::FromString<ArrowOffsetSize>(const char *value);
 
 template<>
@@ -1291,6 +1304,9 @@ HTTPStatusCode EnumUtil::FromString<HTTPStatusCode>(const char *value);
 
 template<>
 IndexAppendMode EnumUtil::FromString<IndexAppendMode>(const char *value);
+
+template<>
+IndexBindState EnumUtil::FromString<IndexBindState>(const char *value);
 
 template<>
 IndexConstraintType EnumUtil::FromString<IndexConstraintType>(const char *value);

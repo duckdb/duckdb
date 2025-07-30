@@ -8,6 +8,7 @@
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/extension_manager.hpp"
+#include "duckdb/main/settings.hpp"
 #include "mbedtls_wrapper.hpp"
 
 #ifndef DUCKDB_NO_THREADS
@@ -404,7 +405,7 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 		if (!signature_valid) {
 			throw IOException(db.config.error_manager->FormatException(ErrorType::UNSIGNED_EXTENSION, filename));
 		}
-	} else if (!db.config.options.allow_extensions_metadata_mismatch) {
+	} else if (!DBConfig::GetSetting<AllowExtensionsMetadataMismatchSetting>(db)) {
 		if (!metadata_mismatch_error.empty()) {
 			// Unsigned extensions AND configuration allowing n, loading allowed, mainly for
 			// debugging purposes

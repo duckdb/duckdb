@@ -8,6 +8,7 @@
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -33,8 +34,6 @@ OrderPreservationType PhysicalPlanGenerator::OrderPreservationRecursive(Physical
 }
 
 bool PhysicalPlanGenerator::PreserveInsertionOrder(ClientContext &context, PhysicalOperator &plan) {
-	auto &config = DBConfig::GetConfig(context);
-
 	auto preservation_type = OrderPreservationRecursive(plan);
 	if (preservation_type == OrderPreservationType::FIXED_ORDER) {
 		// always need to maintain preservation order
@@ -45,7 +44,7 @@ bool PhysicalPlanGenerator::PreserveInsertionOrder(ClientContext &context, Physi
 		return false;
 	}
 	// preserve insertion order - check flags
-	if (!config.options.preserve_insertion_order) {
+	if (!DBConfig::GetSetting<PreserveInsertionOrderSetting>(context)) {
 		// preserving insertion order is disabled by config
 		return false;
 	}

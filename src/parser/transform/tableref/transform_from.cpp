@@ -10,8 +10,9 @@ unique_ptr<TableRef> Transformer::TransformFrom(optional_ptr<duckdb_libpgquery::
 	}
 
 	if (root->length > 1) {
-		// Cross Product
+		// Implicit Cross Product
 		auto result = make_uniq<JoinRef>(JoinRefType::CROSS);
+		result->is_implicit = true;
 		JoinRef *cur_root = result.get();
 		idx_t list_size = 0;
 		for (auto node = root->head; node != nullptr; node = node->next) {
@@ -24,6 +25,7 @@ unique_ptr<TableRef> Transformer::TransformFrom(optional_ptr<duckdb_libpgquery::
 			} else {
 				auto old_res = std::move(result);
 				result = make_uniq<JoinRef>(JoinRefType::CROSS);
+				result->is_implicit = true;
 				result->left = std::move(old_res);
 				result->right = std::move(next);
 				cur_root = result.get();

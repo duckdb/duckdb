@@ -14,6 +14,7 @@
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/common/windows_util.hpp"
 #include "duckdb/common/operator/multiply.hpp"
+#include "duckdb/logging/log_manager.hpp"
 
 #include <cstdint>
 #include <cstdio>

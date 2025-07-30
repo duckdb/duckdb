@@ -35,6 +35,10 @@ public:
 	virtual WriteStream &GetPayloadWriter() = 0;
 	virtual MetaBlockPointer GetMetaBlockPointer() = 0;
 	virtual optional_ptr<MetadataManager> GetMetadataManager() = 0;
+	virtual void StartWritingColumns(vector<MetaBlockPointer> &column_metadata) {
+	}
+	virtual void FinishWritingColumns() {
+	}
 
 	PartialBlockManager &GetPartialBlockManager() {
 		return partial_block_manager;
@@ -57,6 +61,8 @@ public:
 	WriteStream &GetPayloadWriter() override;
 	MetaBlockPointer GetMetaBlockPointer() override;
 	optional_ptr<MetadataManager> GetMetadataManager() override;
+	void StartWritingColumns(vector<MetaBlockPointer> &column_metadata) override;
+	void FinishWritingColumns() override;
 
 private:
 	//! Underlying writer object
