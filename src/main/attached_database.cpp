@@ -147,11 +147,17 @@ bool AttachedDatabase::NameIsReserved(const string &name) {
 	return name == DEFAULT_SCHEMA || name == TEMP_CATALOG || name == SYSTEM_CATALOG;
 }
 
+static string RemoveQueryParams(const string &name) {
+	auto vec = StringUtil::Split(name, "?");
+	D_ASSERT(!vec.empty());
+	return vec[0];
+}
+
 string AttachedDatabase::ExtractDatabaseName(const string &dbpath, FileSystem &fs) {
 	if (dbpath.empty() || dbpath == IN_MEMORY_PATH) {
 		return "memory";
 	}
-	auto name = fs.ExtractBaseName(dbpath);
+	auto name = RemoveQueryParams(fs.ExtractBaseName(dbpath));
 	if (NameIsReserved(name)) {
 		name += "_db";
 	}

@@ -51,10 +51,10 @@ unique_ptr<FunctionData> CurrentSettingBind(ClientContext &context, ScalarFuncti
 	auto key = StringUtil::Lower(StringValue::Get(key_val));
 	Value val;
 	if (!context.TryGetCurrentSetting(key, val)) {
-		Catalog::AutoloadExtensionByConfigName(context, key);
+		auto extension_name = Catalog::AutoloadExtensionByConfigName(context, key);
 		// If autoloader didn't throw, the config is now available
 		if (!context.TryGetCurrentSetting(key, val)) {
-			throw InvalidInputException("Config %s not available after auto-loading", key);
+			throw InternalException("Extension %s did not provide the '%s' config setting", extension_name, key);
 		}
 	}
 

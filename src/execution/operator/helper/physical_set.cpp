@@ -38,7 +38,7 @@ SourceResultType PhysicalSet::GetData(ExecutionContext &context, DataChunk &chun
 		// check if this is an extra extension variable
 		auto entry = config.extension_parameters.find(name);
 		if (entry == config.extension_parameters.end()) {
-			Catalog::AutoloadExtensionByConfigName(context.client, name);
+			auto extension_name = Catalog::AutoloadExtensionByConfigName(context.client, name);
 			entry = config.extension_parameters.find(name);
 			if (entry == config.extension_parameters.end()) {
 				throw InvalidInputException("Extension parameter %s was not found after autoloading", name);

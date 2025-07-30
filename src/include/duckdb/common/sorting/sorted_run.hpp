@@ -21,7 +21,7 @@ class SortedRun {
 public:
 	SortedRun(ClientContext &context, shared_ptr<TupleDataLayout> key_layout,
 	          shared_ptr<TupleDataLayout> payload_layout, bool is_index_sort);
-
+	unique_ptr<SortedRun> CreateRunForMaterialization() const;
 	~SortedRun();
 
 public:

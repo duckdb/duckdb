@@ -501,28 +501,6 @@ unique_ptr<FunctionData> ListAggregateBind(ClientContext &context, ScalarFunctio
 	return ListAggregatesBind<true>(context, bound_function, arguments);
 }
 
-unique_ptr<FunctionData> ListDistinctBind(ClientContext &context, ScalarFunction &bound_function,
-                                          vector<unique_ptr<Expression>> &arguments) {
-
-	D_ASSERT(bound_function.arguments.size() == 1);
-	D_ASSERT(arguments.size() == 1);
-
-	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
-	bound_function.return_type = arguments[0]->return_type;
-
-	return ListAggregatesBind<>(context, bound_function, arguments);
-}
-
-unique_ptr<FunctionData> ListUniqueBind(ClientContext &context, ScalarFunction &bound_function,
-                                        vector<unique_ptr<Expression>> &arguments) {
-
-	D_ASSERT(bound_function.arguments.size() == 1);
-	D_ASSERT(arguments.size() == 1);
-	bound_function.return_type = LogicalType::UBIGINT;
-
-	return ListAggregatesBind<>(context, bound_function, arguments);
-}
-
 } // namespace
 
 ScalarFunction ListAggregateFun::GetFunction() {
@@ -538,13 +516,14 @@ ScalarFunction ListAggregateFun::GetFunction() {
 }
 
 ScalarFunction ListDistinctFun::GetFunction() {
-	return ScalarFunction({LogicalType::LIST(LogicalType::ANY)}, LogicalType::LIST(LogicalType::ANY),
-	                      ListDistinctFunction, ListDistinctBind, nullptr, nullptr, ListAggregatesInitLocalState);
+	return ScalarFunction({LogicalType::LIST(LogicalType::TEMPLATE("T"))},
+	                      LogicalType::LIST(LogicalType::TEMPLATE("T")), ListDistinctFunction,
+	                      ListAggregatesBind<false>, nullptr, nullptr, ListAggregatesInitLocalState);
 }
 
 ScalarFunction ListUniqueFun::GetFunction() {
 	return ScalarFunction({LogicalType::LIST(LogicalType::ANY)}, LogicalType::UBIGINT, ListUniqueFunction,
-	                      ListUniqueBind, nullptr, nullptr, ListAggregatesInitLocalState);
+	                      ListAggregatesBind<false>, nullptr, nullptr, ListAggregatesInitLocalState);
 }
 
 } // namespace duckdb

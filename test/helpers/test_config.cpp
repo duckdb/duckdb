@@ -23,6 +23,7 @@ static const TestConfigOption test_config_options[] = {
     {"comment", "Extra free form comment line", LogicalType::VARCHAR, nullptr},
     {"initial_db", "Initial database path", LogicalType::VARCHAR, nullptr},
     {"max_threads", "Max threads to use during tests", LogicalType::BIGINT, nullptr},
+    {"block_size", "Block Alloction Size; must be a power of 2", LogicalType::BIGINT, nullptr},
     {"checkpoint_wal_size", "Size in bytes after which to trigger automatic checkpointing", LogicalType::BIGINT,
      nullptr},
     {"checkpoint_on_shutdown", "Whether or not to checkpoint on database shutdown", LogicalType::BOOLEAN, nullptr},
@@ -298,6 +299,10 @@ string TestConfiguration::GetInitialDBPath() {
 
 optional_idx TestConfiguration::GetMaxThreads() {
 	return GetOptionOrDefault<optional_idx, idx_t>("max_threads", optional_idx());
+}
+
+optional_idx TestConfiguration::GetBlockAllocSize() {
+	return GetOptionOrDefault<optional_idx, idx_t>("block_size", DEFAULT_BLOCK_ALLOC_SIZE);
 }
 
 idx_t TestConfiguration::GetCheckpointWALSize() {

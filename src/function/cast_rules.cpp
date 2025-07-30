@@ -38,6 +38,9 @@ static int64_t TargetTypeCost(const LogicalType &type) {
 		return 160;
 	case LogicalTypeId::ANY:
 		return int64_t(AnyType::GetCastScore(type));
+	case LogicalTypeId::TEMPLATE:
+		// we can cast anything to a template type, but prefer to cast to anything else!
+		return 1000000;
 	default:
 		return 110;
 	}
@@ -333,7 +336,11 @@ bool LogicalTypeIsValid(const LogicalType &type) {
 }
 
 int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) {
-	if (from.id() == LogicalTypeId::SQLNULL || to.id() == LogicalTypeId::ANY) {
+	if (from.id() == LogicalTypeId::SQLNULL && to.id() == LogicalTypeId::TEMPLATE) {
+		// Prefer the TEMPLATE type for NULL casts, as it is the most generic
+		return 5;
+	}
+	if (from.id() == LogicalTypeId::SQLNULL || to.id() == LogicalTypeId::ANY || to.id() == LogicalTypeId::TEMPLATE) {
 		// NULL expression can be cast to anything
 		return TargetTypeCost(to);
 	}
