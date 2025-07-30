@@ -11,7 +11,7 @@ from duckdb_logs
 ----
 
 statement ok
-pragma enable_logging;
+ CALL enable_logging();
 
 statement ok
 set logging_level='debug';

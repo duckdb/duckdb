@@ -1,5 +1,5 @@
 #include "duckdb/common/bind_helpers.hpp"
-#include "duckdb/common/csv_utils.hpp"
+#include "duckdb/common/csv_writer.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
@@ -20,8 +20,6 @@
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/common/multi_file/multi_file_function.hpp"
-
-#include <limits>
 
 namespace duckdb {
 
@@ -116,13 +114,6 @@ void BaseCSVData::Finalize() {
 	}
 }
 
-// TODO: remove?
-string TransformNewLine(string new_line) {
-	new_line = StringUtil::Replace(new_line, "\\r", "\r");
-	return StringUtil::Replace(new_line, "\\n", "\n");
-	;
-}
-
 static vector<unique_ptr<Expression>> CreateCastExpressions(WriteCSVData &bind_data, ClientContext &context,
                                                             const vector<string> &names,
                                                             const vector<LogicalType> &sql_types) {
@@ -181,7 +172,7 @@ static vector<unique_ptr<Expression>> CreateCastExpressions(WriteCSVData &bind_d
 
 static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyFunctionBindInput &input,
                                              const vector<string> &names, const vector<LogicalType> &sql_types) {
-	auto bind_data = make_uniq<WriteCSVData>(input.info.file_path, sql_types, names);
+	auto bind_data = make_uniq<WriteCSVData>(names);
 
 	// check all the options in the copy info
 	for (auto &option : input.info.options) {
@@ -214,19 +205,6 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyFunctio
 	auto expressions = CreateCastExpressions(*bind_data, context, names, sql_types);
 	bind_data->cast_expressions = std::move(expressions);
 
-	// bind_data->writer_options.requires_quotes = make_unsafe_uniq_array<bool>(256);
-	// memset(bind_data->writer_options.requires_quotes.get(), 0, sizeof(bool) * 256);
-	// bind_data->writer_options.requires_quotes['\n'] = true;
-	// bind_data->writer_options.requires_quotes['\r'] = true;
-	// bind_data->writer_options.requires_quotes[NumericCast<idx_t>(
-	//     bind_data->options.dialect_options.state_machine_options.delimiter.GetValue()[0])] = true;
-	// bind_data->writer_options.requires_quotes[NumericCast<idx_t>(
-	//     bind_data->options.dialect_options.state_machine_options.quote.GetValue())] = true;
-	//
-	// if (!bind_data->options.write_newline.empty()) {
-	// 	bind_data->writer_options.newline = TransformNewLine(bind_data->options.write_newline);
-	// }
-
 	return std::move(bind_data);
 }
 
@@ -245,11 +223,13 @@ public:
 	//! A chunk with VARCHAR columns to cast intermediates into
 	DataChunk cast_chunk;
 	//! Local state for the CSV writer
-	CSVWriterLocalState writer_local_state;
+	CSVWriterState writer_local_state;
 };
 
 struct GlobalWriteCSVData : public GlobalFunctionData {
-	GlobalWriteCSVData(CSVReaderOptions &options, FileSystem &fs, const string &file_path, FileCompressionType compression) : writer(options, fs, file_path, compression) {
+	GlobalWriteCSVData(CSVReaderOptions &options, FileSystem &fs, const string &file_path,
+	                   FileCompressionType compression)
+	    : writer(options, fs, file_path, compression) {
 	}
 
 	idx_t FileSize() {
@@ -278,18 +258,13 @@ static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &co
 	auto global_data =
 	    make_uniq<GlobalWriteCSVData>(options, FileSystem::GetFileSystem(context), file_path, options.compression);
 
-	if (!options.prefix.empty()) {
-		global_data->writer.WriteRawString(options.prefix);
-	}
-
-	if (!(options.dialect_options.header.IsSetByUser() && !options.dialect_options.header.GetValue())) {
-		global_data->writer.WriteHeader();
-	}
+	global_data->writer.Initialize();
 
 	return std::move(global_data);
 }
 
-static void WriteCSVChunkInternal(CSVWriter &writer, CSVWriterLocalState &writer_local_state, DataChunk &cast_chunk, DataChunk &input, ExpressionExecutor &executor) {
+static void WriteCSVChunkInternal(CSVWriter &writer, CSVWriterState &writer_local_state, DataChunk &cast_chunk,
+                                  DataChunk &input, ExpressionExecutor &executor) {
 	// first cast the columns of the chunk to varchar
 	cast_chunk.Reset();
 	cast_chunk.SetCardinality(input);
@@ -306,7 +281,8 @@ static void WriteCSVSink(ExecutionContext &context, FunctionData &bind_data, Glo
 	auto &local_data = lstate.Cast<LocalWriteCSVData>();
 	auto &global_state = gstate.Cast<GlobalWriteCSVData>();
 
-	WriteCSVChunkInternal(global_state.writer, local_data.writer_local_state, local_data.cast_chunk, input, local_data.executor);
+	WriteCSVChunkInternal(global_state.writer, local_data.writer_local_state, local_data.cast_chunk, input,
+	                      local_data.executor);
 }
 
 //===--------------------------------------------------------------------===//
@@ -327,13 +303,11 @@ void WriteCSVFinalize(ClientContext &context, FunctionData &bind_data, GlobalFun
 	auto &csv_data = bind_data.Cast<WriteCSVData>();
 	auto &options = csv_data.options;
 
-	CSVWriterLocalState local_state(context);
 	if (!options.suffix.empty()) {
 		global_state.writer.WriteRawString(options.suffix);
 	} else if (global_state.writer.WrittenAnything()) {
 		global_state.writer.WriteRawString(global_state.writer.writer_options.newline);
 	}
-	global_state.writer.Flush(local_state);
 	global_state.writer.Close();
 }
 
@@ -353,12 +327,12 @@ CopyFunctionExecutionMode WriteCSVExecutionMode(bool preserve_insertion_order, b
 // Prepare Batch
 //===--------------------------------------------------------------------===//
 struct WriteCSVBatchData : public PreparedBatchData {
-	explicit WriteCSVBatchData(ClientContext &context) : writer_local_state(make_uniq<CSVWriterLocalState>(context)) {
+	explicit WriteCSVBatchData(ClientContext &context) : writer_local_state(make_uniq<CSVWriterState>(context)) {
 		writer_local_state->require_manual_flush = true;
 	}
 
 	//! The thread-local buffer to write data into
-	unique_ptr<CSVWriterLocalState> writer_local_state;
+	unique_ptr<CSVWriterState> writer_local_state;
 };
 
 unique_ptr<PreparedBatchData> WriteCSVPrepareBatch(ClientContext &context, FunctionData &bind_data,

@@ -18,7 +18,7 @@
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_file_scanner.hpp"
-#include "duckdb/common/csv_utils.hpp"
+#include "duckdb/common/csv_writer.hpp"
 
 namespace duckdb {
 class BaseScanner;
@@ -41,19 +41,13 @@ struct BaseCSVData : public TableFunctionData {
 };
 
 struct WriteCSVData : public BaseCSVData {
-	WriteCSVData(string file_path, vector<LogicalType> sql_types, vector<string> names)
-	    : sql_types(std::move(sql_types)) {
-		// files.push_back(std::move(file_path));
+	WriteCSVData(vector<string> names) {
 		options.name_list = std::move(names);
 		if (options.dialect_options.state_machine_options.escape == '\0') {
 			options.dialect_options.state_machine_options.escape = options.dialect_options.state_machine_options.quote;
 		}
 	}
 
-	//! The file path of the CSV file to read or write
-	// vector<string> files;
-	//! The SQL types to write
-	vector<LogicalType> sql_types;
 	//! Expressions used to convert the input into strings
 	vector<unique_ptr<Expression>> cast_expressions;
 };

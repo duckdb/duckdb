@@ -6,7 +6,7 @@ require noforcestorage
 
 # Enable FileSystem logging to single csv file  
 statement ok
-pragma enable_logging(['FileSystem'], storage='file', storage_config={'path': '__TEST_DIR__/logging_file_bind_replace_log.csv'});
+CALL enable_logging(['FileSystem'], storage='file', storage_config={'path': '__TEST_DIR__/logging_file_bind_replace_log.csv'});
 
 # Read some data to trigger FileSystem log
 statement ok
@@ -16,7 +16,7 @@ statement ok
 FROM duckdb_logs_parsed('FileSystem');
 
 statement ok
-pragma disable_logging;
+CALL disable_logging();
 
 query IIIIII nosort describe_duckdb_logs
 DESCRIBE FROM duckdb_logs;
@@ -32,7 +32,7 @@ pragma truncate_duckdb_logs;
 
 # Enable FileSystem logging to double csv file  
 statement ok
-pragma enable_logging(['FileSystem'], storage='file', storage_config={'entries_path': '__TEST_DIR__/logging_file_bind_replace_entries.csv', 'contexts_path': '__TEST_DIR__/logging_file_bind_replace_contexts.csv'});
+CALL enable_logging(['FileSystem'], storage='file', storage_config={'entries_path': '__TEST_DIR__/logging_file_bind_replace_entries.csv', 'contexts_path': '__TEST_DIR__/logging_file_bind_replace_contexts.csv'});
 
 # Read some data to trigger FileSystem log
 statement ok
@@ -43,7 +43,7 @@ statement ok
 FROM duckdb_logs
 
 statement ok
-pragma disable_logging;
+CALL disable_logging();
 
 query IIIIII nosort describe_duckdb_logs
 DESCRIBE FROM duckdb_logs
@@ -59,14 +59,14 @@ pragma truncate_duckdb_logs;
 
 # Now rerun with the in-memory storage to ensure everything matches up
 statement ok
-pragma enable_logging(['FileSystem'], storage='memory');
+CALL enable_logging(['FileSystem'], storage='memory');
 
 # Read some data to trigger FileSystem log
 statement ok
 FROM "data/csv/big_number.csv"
 
 statement ok
-pragma disable_logging;
+CALL disable_logging();
 
 query IIIIII nosort describe_duckdb_logs
 DESCRIBE FROM duckdb_logs
@@ -83,14 +83,14 @@ pragma truncate_duckdb_logs;
 # Now rerun with all log types enabled 
 
 statement ok
-pragma enable_logging(level='trace', storage='memory');
+CALL enable_logging(level='trace', storage='memory');
 
 # Read some data to trigger FileSystem log
 statement ok
 FROM "data/csv/big_number.csv"
 
 statement ok
-pragma disable_logging;
+CALL disable_logging();
 
 query IIIIII nosort describe_duckdb_logs
 DESCRIBE FROM duckdb_logs

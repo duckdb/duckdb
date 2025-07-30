@@ -1,6 +1,6 @@
 #include "duckdb/logging/log_storage.hpp"
 
-#include "duckdb/common/csv_utils.hpp"
+#include "duckdb/common/csv_writer.hpp"
 #include "duckdb/common/local_file_system.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
@@ -11,7 +11,11 @@
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/tableref.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
+#include "duckdb/function/cast/vector_cast_helpers.hpp"
+#include "duckdb/common/operator/string_cast.hpp"
+#include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
 
+#include <complex>
 #include <iostream>
 
 namespace duckdb {
@@ -52,113 +56,11 @@ unique_ptr<TableRef> LogStorage::BindReplaceContexts(ClientContext &context, Tab
 	return nullptr;
 }
 
-static void WriteDelim(LogStorageCsvConfig &config, WriteStream &writer) {
-	writer.WriteData(const_data_ptr_cast(config.delim.c_str()), config.delim.size());
-}
-
-static void WriteOptionalId(LogStorageCsvConfig &config, WriteStream &writer, const optional_idx &id,
-                            bool write_delim = true) {
-	string result_string;
-	if (id.IsValid()) {
-		result_string = to_string(id.GetIndex());
-	}
-	writer.WriteData(const_data_ptr_cast(result_string.c_str()), result_string.size());
-	if (write_delim) {
-		WriteDelim(config, writer);
-	}
-}
-
-static void WriteString(LogStorageCsvConfig &config, WriteStream &writer, const string &value,
-                        bool write_delim = true) {
-	writer.WriteData(const_data_ptr_cast(value.c_str()), value.size());
-	if (write_delim) {
-		WriteDelim(config, writer);
-	}
-}
-
-template <class T>
-static void WriteEnum(LogStorageCsvConfig &config, WriteStream &writer, const T &enum_value, bool write_delim = true) {
-	auto scope_string = EnumUtil::ToString(enum_value);
-	writer.WriteData(const_data_ptr_cast(scope_string.c_str()), scope_string.size());
-	if (write_delim) {
-		WriteDelim(config, writer);
-	}
-}
-
-static void WriteLogEntryToCSVString(LogStorageCsvConfig &config, WriteStream &writer, timestamp_t timestamp,
-                                     LogLevel level, const string &log_type, const string &log_message,
-                                     const RegisteredLoggingContext &context, bool normalize_context = false) {
-
-	auto context_id_string = to_string(context.context_id);
-	writer.WriteData(const_data_ptr_cast(context_id_string.c_str()), context_id_string.size());
-	WriteDelim(config, writer);
-	if (!normalize_context) {
-		WriteEnum(config, writer, context.context.scope);
-		WriteOptionalId(config, writer, context.context.connection_id);
-		WriteOptionalId(config, writer, context.context.transaction_id);
-		WriteOptionalId(config, writer, context.context.query_id);
-		WriteOptionalId(config, writer, context.context.thread_id);
-	}
-
-	// Write timestamp
-	auto timestamp_string = Value::TIMESTAMP(timestamp).ToString();
-	writer.WriteData(const_data_ptr_cast(timestamp_string.c_str()), timestamp_string.size());
-	WriteDelim(config, writer);
-
-	// Write level
-	WriteEnum(config, writer, level);
-
-	// Write log type
-	writer.WriteData(const_data_ptr_cast(log_type.c_str()), log_type.size());
-	WriteDelim(config, writer);
-
-	// Write message
-	CSVWriter::WriteQuotedString(writer, log_message.c_str(), log_message.size(), false, config.null_strings,
-	                            config.requires_quotes, config.quote, config.escape);
-
-	writer.WriteData(const_data_ptr_cast(config.newline.c_str()), config.newline.size());
-}
-
-static void WriteLogContextToCSVString(LogStorageCsvConfig &config, WriteStream &writer,
-                                       const RegisteredLoggingContext &context) {
-	auto context_id_string = to_string(context.context_id);
-	writer.WriteData(const_data_ptr_cast(context_id_string.c_str()), context_id_string.size());
-	WriteDelim(config, writer);
-	WriteEnum(config, writer, context.context.scope);
-	WriteOptionalId(config, writer, context.context.connection_id);
-	WriteOptionalId(config, writer, context.context.transaction_id);
-	WriteOptionalId(config, writer, context.context.query_id);
-	WriteOptionalId(config, writer, context.context.thread_id, false);
-	writer.WriteData(const_data_ptr_cast(config.newline.c_str()), config.newline.size());
-}
-
-CSVLogStorage::CSVLogStorage(DatabaseInstance &db) {
-	log_entries_stream = make_uniq<MemoryStream>();
-	log_contexts_stream = make_uniq<MemoryStream>();
-}
-
 CSVLogStorage::~CSVLogStorage() {
 }
 
-void CSVLogStorage::WriteLogEntry(timestamp_t timestamp, LogLevel level, const string &log_type,
-                                  const string &log_message, const RegisteredLoggingContext &context) {
-	lock_guard<mutex> lck(lock);
-
-	if (normalize_contexts && registered_contexts.find(context.context_id) == registered_contexts.end()) {
-		WriteLogContextToCSVString(csv_config, *log_contexts_stream, context);
-		registered_contexts.insert(context.context_id);
-	}
-
-	WriteLogEntryToCSVString(csv_config, *log_entries_stream, timestamp, level, log_type, log_message, context,
-	                         normalize_contexts);
-
-	if (log_entries_stream->GetPosition() > buffer_limit) {
-		FlushInternal();
-	}
-}
-
-void CSVLogStorage::WriteLogEntries(DataChunk &chunk, const RegisteredLoggingContext &context) {
-	throw NotImplementedException("CSVLogStorage::WriteLogEntries");
+CSVLogStorage::CSVLogStorage(DatabaseInstance &db) : BufferingLogStorage(db) {
+	ResetCastChunk();
 }
 
 void CSVLogStorage::UpdateConfig(DatabaseInstance &db, case_insensitive_map_t<Value> &config) {
@@ -166,9 +68,133 @@ void CSVLogStorage::UpdateConfig(DatabaseInstance &db, case_insensitive_map_t<Va
 	return UpdateConfigInternal(db, config);
 }
 
-void CSVLogStorage::Flush() {
-	lock_guard<mutex> lck(lock);
-	FlushInternal();
+void CSVLogStorage::ExecuteCast() {
+	log_entries_cast_buffer->Reset();
+	log_contexts_cast_buffer->Reset();
+
+	bool success = true;
+
+	CastParameters cast_params;
+
+	if (normalize_contexts) {
+		// -- Cast Log Entries
+		// context_id: LogicalType::UBIGINT
+		success &= VectorCastHelpers::StringCast<idx_t, duckdb::StringCast>(
+		    log_entries_buffer->data[0], log_entries_cast_buffer->data[0], log_entries_buffer->size(), cast_params);
+		// timestamp: LogicalType::TIMESTAMP
+		success &= VectorCastHelpers::StringCast<timestamp_t, duckdb::StringCast>(
+		    log_entries_buffer->data[1], log_entries_cast_buffer->data[1], log_entries_buffer->size(), cast_params);
+		// log_type: LogicalType::VARCHAR  (no cast)
+		log_entries_cast_buffer->data[2].Reference(log_entries_buffer->data[2]);
+		// level: LogicalType::VARCHAR  (no cast)
+		log_entries_cast_buffer->data[3].Reference(log_entries_buffer->data[3]);
+		// message: LogicalType::VARCHAR  (no cast)
+		log_entries_cast_buffer->data[4].Reference(log_entries_buffer->data[4]);
+
+		log_entries_cast_buffer->SetCardinality(log_entries_buffer->size());
+
+		// -- Cast Log Contexts
+		// context_id: LogicalType::UBIGINT
+		success &= VectorCastHelpers::StringCast<idx_t, duckdb::StringCast>(
+		    log_contexts_buffer->data[0], log_contexts_cast_buffer->data[0], log_contexts_buffer->size(), cast_params);
+		// scope: LogicalType::VARCHAR (no cast)
+		log_contexts_cast_buffer->data[1].Reference(log_contexts_buffer->data[1]);
+		// connection_id: LogicalType::UBIGINT
+		success &= VectorCastHelpers::StringCast<idx_t, duckdb::StringCast>(
+		    log_contexts_buffer->data[2], log_contexts_cast_buffer->data[2], log_contexts_buffer->size(), cast_params);
+		// transaction_id: LogicalType::UBIGINT
+		success &= VectorCastHelpers::StringCast<idx_t, duckdb::StringCast>(
+		    log_contexts_buffer->data[3], log_contexts_cast_buffer->data[3], log_contexts_buffer->size(), cast_params);
+		// query_id: LogicalType::UBIGINT
+		success &= VectorCastHelpers::StringCast<idx_t, duckdb::StringCast>(
+		    log_contexts_buffer->data[4], log_contexts_cast_buffer->data[4], log_contexts_buffer->size(), cast_params);
+		// thread: LogicalType::UBIGINT
+		success &= VectorCastHelpers::StringCast<idx_t, duckdb::StringCast>(
+		    log_contexts_buffer->data[5], log_contexts_cast_buffer->data[5], log_contexts_buffer->size(), cast_params);
+		// scope is already string so doesn't need casting
+
+		log_contexts_cast_buffer->SetCardinality(log_contexts_buffer->size());
+	} else {
+		// -- Cast Log Entries
+
+		// context_id: LogicalType::UBIGINT
+		success &= VectorCastHelpers::StringCast<idx_t, duckdb::StringCast>(
+		    log_entries_buffer->data[0], log_entries_cast_buffer->data[0], log_entries_buffer->size(), cast_params);
+		// scope: LogicalType::VARCHAR (no cast)
+		log_entries_cast_buffer->data[1].Reference(log_entries_buffer->data[1]);
+		// connection_id: LogicalType::UBIGINT
+		success &= VectorCastHelpers::StringCast<idx_t, duckdb::StringCast>(
+		    log_entries_buffer->data[2], log_entries_cast_buffer->data[2], log_entries_buffer->size(), cast_params);
+		// transaction_id: LogicalType::UBIGINT
+		success &= VectorCastHelpers::StringCast<idx_t, duckdb::StringCast>(
+		    log_entries_buffer->data[3], log_entries_cast_buffer->data[3], log_entries_buffer->size(), cast_params);
+		// query_id: LogicalType::UBIGINT
+		success &= VectorCastHelpers::StringCast<idx_t, duckdb::StringCast>(
+		    log_entries_buffer->data[4], log_entries_cast_buffer->data[4], log_entries_buffer->size(), cast_params);
+		// thread: LogicalType::UBIGINT
+		success &= VectorCastHelpers::StringCast<idx_t, duckdb::StringCast>(
+		    log_entries_buffer->data[5], log_entries_cast_buffer->data[5], log_entries_buffer->size(), cast_params);
+		// timestamp: LogicalType::TIMESTAMP
+		success &= VectorCastHelpers::StringCast<timestamp_t, duckdb::StringCast>(
+		    log_entries_buffer->data[6], log_entries_cast_buffer->data[6], log_entries_buffer->size(), cast_params);
+		// log_type: LogicalType::VARCHAR  (no cast)
+		log_entries_cast_buffer->data[7].Reference(log_entries_buffer->data[7]);
+		// level: LogicalType::VARCHAR  (no cast)
+		log_entries_cast_buffer->data[8].Reference(log_entries_buffer->data[8]);
+		// message: LogicalType::VARCHAR  (no cast)
+		log_entries_cast_buffer->data[9].Reference(log_entries_buffer->data[9]);
+
+		log_entries_cast_buffer->SetCardinality(log_entries_buffer->size());
+	}
+
+	if (!success) {
+		throw InvalidInputException("Failed to cast log entries");
+	}
+}
+
+void CSVLogStorage::ResetAllBuffers() {
+	BufferingLogStorage::ResetAllBuffers();
+	ResetCastChunk();
+}
+
+void CSVLogStorage::ResetCastChunk() {
+	log_entries_cast_buffer = make_uniq<DataChunk>();
+	log_contexts_cast_buffer = make_uniq<DataChunk>();
+
+	// Initialize the Cast chunks for casting everything to strings
+	vector<LogicalType> types;
+	types.resize(log_entries_buffer->ColumnCount(), LogicalType::VARCHAR);
+	log_entries_cast_buffer->Initialize(Allocator::DefaultAllocator(), types);
+
+	types.resize(log_contexts_buffer->ColumnCount(), LogicalType::VARCHAR);
+	log_contexts_cast_buffer->Initialize(Allocator::DefaultAllocator(), types);
+}
+
+void CSVLogStorage::SetWriterConfigs(CSVWriter &writer, vector<string> column_names) {
+	writer.options.dialect_options.state_machine_options.escape = '\"';
+	writer.options.dialect_options.state_machine_options.quote = '\"';
+	writer.options.dialect_options.state_machine_options.delimiter = CSVOption<string>("\t");
+	writer.options.name_list = column_names;
+
+	writer.options.force_quote = vector<bool>(column_names.size(), false);
+}
+
+void CSVLogStorage::FlushInternal() {
+	// Execute the cast
+	ExecuteCast();
+
+	// Write the cast data to sCSV
+	if (log_entries_cast_buffer->size() > 0) {
+		log_entries_writer->WriteChunk(*log_entries_cast_buffer);
+		log_entries_writer->Flush();
+		log_entries_buffer->Reset();
+	}
+
+	if (log_contexts_cast_buffer->size() > 0) {
+		log_contexts_writer->WriteChunk(*log_contexts_cast_buffer);
+		log_contexts_writer->Flush();
+		log_contexts_buffer->Reset();
+	}
 }
 
 void CSVLogStorage::UpdateConfigInternal(DatabaseInstance &db, case_insensitive_map_t<Value> &config) {
@@ -182,16 +208,23 @@ void CSVLogStorage::UpdateConfigInternal(DatabaseInstance &db, case_insensitive_
 }
 
 StdOutLogStorage::StdOutLogStorage(DatabaseInstance &db) : CSVLogStorage(db) {
+	log_entries_stream = make_uniq<MemoryStream>();
+	log_contexts_stream = make_uniq<MemoryStream>();
+	log_entries_writer = make_uniq<CSVWriter>(*log_contexts_stream, GetEntriesColumnNames(true), false);
+	log_contexts_writer = make_uniq<CSVWriter>(*log_contexts_stream, GetContextsColumnNames(), false);
+
+	SetWriterConfigs(*log_entries_writer, GetEntriesColumnNames(normalize_contexts));
+	SetWriterConfigs(*log_contexts_writer, GetContextsColumnNames());
 }
 
 StdOutLogStorage::~StdOutLogStorage() {
 }
 
-void StdOutLogStorage::Truncate() {
-	// NOP
-}
-
 void StdOutLogStorage::FlushInternal() {
+	// Flush CSV buffer into stream
+	CSVLogStorage::FlushInternal();
+
+	// Write stream to stdout
 	std::cout.write(const_char_ptr_cast(log_entries_stream->GetData()),
 	                NumericCast<int64_t>(log_entries_stream->GetPosition()));
 	std::cout.flush();
@@ -211,66 +244,54 @@ static string GetDefaultPath(DatabaseInstance &db, const string &filename) {
 string FileLogStorage::GetDefaultLogEntriesFilePath(DatabaseInstance &db) {
 	return GetDefaultPath(db, "log_entries.csv");
 }
+
 string FileLogStorage::GetDefaultLogContextsFilePath(DatabaseInstance &db) {
 	return GetDefaultPath(db, "log_contexts.csv");
 }
 
-FileLogStorage::FileLogStorage(DatabaseInstance &db_p) : CSVLogStorage(db_p), db(db_p) {
+FileLogStorage::FileLogStorage(DatabaseInstance &db_p)
+    : CSVLogStorage(db_p), db(db_p), log_contexts_path(GetDefaultLogContextsFilePath(db)),
+      log_entries_path(GetDefaultLogEntriesFilePath(db)) {
 }
 
 FileLogStorage::~FileLogStorage() {
 }
 
-void FileLogStorage::WriteLogEntriesHeader() {
-	MemoryStream buffer;
-	WriteString(csv_config, buffer, "context_id");
-	if (!normalize_contexts) {
-		WriteString(csv_config, buffer, "scope");
-		WriteString(csv_config, buffer, "connection_id");
-		WriteString(csv_config, buffer, "transaction_id");
-		WriteString(csv_config, buffer, "query_id");
-		WriteString(csv_config, buffer, "thread_id");
-	}
-	WriteString(csv_config, buffer, "timestamp");
-	WriteString(csv_config, buffer, "log_level");
-	WriteString(csv_config, buffer, "type");
-	WriteString(csv_config, buffer, "message", false);
-	buffer.WriteData(const_data_ptr_cast(csv_config.newline.c_str()), csv_config.newline.size());
-	log_entries_file_handle->Write(buffer.GetData(), buffer.GetPosition());
-	log_entries_should_write_header = false;
+void FileLogStorage::InitializeFile(DatabaseInstance &db, const string &path,
+                                    unique_ptr<BufferedFileWriter> &file_writer, unique_ptr<CSVWriter> &csv_writer,
+                                    vector<string> column_names) {
+	//! Create file writer
+	file_writer = InitializeFileWriter(db, path);
+
+	//! Create CSV writer that writes to file
+	csv_writer = make_uniq<CSVWriter>(*file_writer, column_names, false);
+	SetWriterConfigs(*csv_writer, column_names);
+
+	bool should_write_header = file_writer->handle->GetFileSize() == 0;
+
+	// We write the header only if the file was empty: when appending to the file we don't
+	csv_writer->options.dialect_options.header = {should_write_header, true};
+
+	// Initialize the writer, this writes out the header if required
+	csv_writer->Initialize();
+
+	// Needed to ensure we correctly start with a newline
+	csv_writer->SetWrittenAnything(true);
+
+	// Ensures that the file is fully initialized when this function returns
+	file_writer->Sync();
 }
 
-void FileLogStorage::WriteLogContextsHeader() {
-	MemoryStream buffer;
-	WriteString(csv_config, buffer, "context_id");
-	WriteString(csv_config, buffer, "scope");
-	WriteString(csv_config, buffer, "connection_id");
-	WriteString(csv_config, buffer, "transaction_id");
-	WriteString(csv_config, buffer, "query_id");
-	WriteString(csv_config, buffer, "thread_id", false);
-	buffer.WriteData(const_data_ptr_cast(csv_config.newline.c_str()), csv_config.newline.size());
-	log_contexts_file_handle->Write(buffer.GetData(), buffer.GetPosition());
-	log_contexts_should_write_header = false;
+void FileLogStorage::InitializeLogContextsFile(DatabaseInstance &db) {
+	InitializeFile(db, log_contexts_path, log_contexts_file_writer, log_contexts_writer, GetContextsColumnNames());
 }
 
-void FileLogStorage::InitializeLogContextsFile(DatabaseInstance &db, const string &path) {
-	if (path.empty()) {
-		return InitializeFile(db, GetDefaultLogContextsFilePath(db), log_contexts_file_handle,
-		                      log_contexts_should_write_header);
-	}
-	return InitializeFile(db, path, log_contexts_file_handle, log_contexts_should_write_header);
+void FileLogStorage::InitializeLogEntriesFile(DatabaseInstance &db) {
+	InitializeFile(db, log_entries_path, log_entries_file_writer, log_entries_writer,
+	               GetEntriesColumnNames(normalize_contexts));
 }
 
-void FileLogStorage::InitializeLogEntriesFile(DatabaseInstance &db, const string &path) {
-	if (path.empty()) {
-		return InitializeFile(db, GetDefaultLogEntriesFilePath(db), log_entries_file_handle,
-		                      log_entries_should_write_header);
-	}
-	return InitializeFile(db, path, log_entries_file_handle, log_entries_should_write_header);
-}
-
-void FileLogStorage::InitializeFile(DatabaseInstance &db, const string &path, unique_ptr<FileHandle> &handle,
-                                    bool &should_write_header) {
+unique_ptr<BufferedFileWriter> FileLogStorage::InitializeFileWriter(DatabaseInstance &db, const string &path) {
 	auto &fs = db.GetFileSystem();
 
 	// Create parent directories if non existent
@@ -279,93 +300,103 @@ void FileLogStorage::InitializeFile(DatabaseInstance &db, const string &path, un
 		fs.CreateDirectoriesRecursive(path.substr(0, pos));
 	}
 
+	FileOpenFlags flags;
 	if (!fs.FileExists(path)) {
-		handle = fs.OpenFile(path,
-		                     FileFlags::FILE_FLAGS_DISABLE_LOGGING | FileFlags::FILE_FLAGS_WRITE |
-		                         FileFlags::FILE_FLAGS_FILE_CREATE_NEW,
-		                     nullptr);
+		flags = FileFlags::FILE_FLAGS_DISABLE_LOGGING | FileFlags::FILE_FLAGS_WRITE |
+		        FileFlags::FILE_FLAGS_FILE_CREATE_NEW | FileCompressionType::UNCOMPRESSED;
 	} else {
-		handle = fs.OpenFile(
-		    path, FileFlags::FILE_FLAGS_DISABLE_LOGGING | FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_APPEND,
-		    nullptr);
+		flags = FileFlags::FILE_FLAGS_DISABLE_LOGGING | FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_APPEND;
 	}
 
-	if (handle->GetFileSize() == 0) {
-		should_write_header = true;
-	}
+	return make_uniq<BufferedFileWriter>(fs, path, flags);
 }
 
 void FileLogStorage::Truncate() {
 	lock_guard<mutex> lck(lock);
 
-	log_entries_file_handle->Truncate(0);
-	log_entries_stream->Rewind();
+	// Reset buffers
+	ResetAllBuffers();
 
-	if (log_contexts_file_handle) {
-		log_contexts_file_handle->Truncate(0);
-		log_contexts_stream->Rewind();
+	// Truncate the writers
+	if (log_entries_file_writer) {
+		log_entries_file_writer->Truncate(0);
+		log_entries_writer->Initialize(true);
+		log_entries_file_writer->Sync();
+	}
+	if (log_contexts_file_writer) {
+		log_contexts_file_writer->Truncate(0);
+		log_contexts_writer->Initialize(true);
+		log_contexts_file_writer->Sync();
 	}
 }
 
 void FileLogStorage::FlushInternal() {
+	// Early out if buffers empty
+	if (log_contexts_buffer->size() == 0 && log_entries_buffer->size() == 0) {
+		return;
+	}
+
+	Initialize();
+
+	// Call base class FlushInternal to perform cast and write buffers to CSVWriters
+	CSVLogStorage::FlushInternal();
+
+	// Sync the writers to disk
+	if (log_contexts_file_writer) {
+		log_contexts_file_writer->Sync();
+	}
+	if (log_entries_file_writer) {
+		log_entries_file_writer->Sync();
+	}
+}
+
+void FileLogStorage::Initialize() {
 	if (!initialized) {
 		InitializeLogEntriesFile(db);
 		if (normalize_contexts) {
 			InitializeLogContextsFile(db);
 		}
-		initialized = true;
-	}
-
-	// Write entries
-	if (log_entries_stream->GetPosition() > 0) {
-		if (log_entries_should_write_header) {
-			WriteLogEntriesHeader();
-		}
-		log_entries_file_handle->Write((void *)log_entries_stream->GetData(), log_entries_stream->GetPosition());
-		log_entries_stream->Rewind();
-	}
-
-	// Write contexts
-	if (log_contexts_stream->GetPosition() > 0) {
-		if (log_contexts_should_write_header) {
-			WriteLogContextsHeader();
-		}
-		log_contexts_file_handle->Write((void *)log_contexts_stream->GetData(), log_contexts_stream->GetPosition());
-		log_contexts_stream->Rewind();
 	}
 }
 
 void FileLogStorage::UpdateConfigInternal(DatabaseInstance &db, case_insensitive_map_t<Value> &config) {
 	auto config_copy = config;
 
-	string contexts_path;
-	string entries_path;
+	string contexts_path_new_value = log_contexts_path;
+	string entries_path_new_value = log_entries_path;
+	bool normalize_contexts_new_value = normalize_contexts;
 
 	vector<string> to_remove;
 	for (const auto &it : config_copy) {
 		if (StringUtil::Lower(it.first) == "path") {
-			entries_path = it.second.ToString();
+			entries_path_new_value = it.second.ToString();
 			to_remove.push_back(it.first);
-			normalize_contexts = false;
+			normalize_contexts_new_value = false;
 		} else if (StringUtil::Lower(it.first) == "contexts_path") {
-			contexts_path = it.second.ToString();
+			contexts_path_new_value = it.second.ToString();
 			to_remove.push_back(it.first);
-			normalize_contexts = true;
+			normalize_contexts_new_value = true;
 		} else if (StringUtil::Lower(it.first) == "entries_path") {
-			entries_path = it.second.ToString();
+			entries_path_new_value = it.second.ToString();
 			to_remove.push_back(it.first);
-			normalize_contexts = true;
+			normalize_contexts_new_value = true;
 		}
 	}
 
-	if (!contexts_path.empty() || !entries_path.empty()) {
+	// If we are initialized, we need to flush first
+	if (initialized) {
 		FlushInternal();
 	}
-	if (!entries_path.empty()) {
-		InitializeLogEntriesFile(db, entries_path);
-	}
-	if (!contexts_path.empty()) {
-		InitializeLogContextsFile(db, contexts_path);
+
+	log_entries_path = entries_path_new_value;
+	log_contexts_path = contexts_path_new_value;
+
+	bool normalize_contexts_changed = normalize_contexts != normalize_contexts_new_value;
+	normalize_contexts = normalize_contexts_new_value;
+
+	// Reset the buffers to ensure they have the correct schema
+	if (normalize_contexts_changed) {
+		ResetAllBuffers();
 	}
 
 	for (const auto &it : to_remove) {
@@ -376,11 +407,13 @@ void FileLogStorage::UpdateConfigInternal(DatabaseInstance &db, case_insensitive
 }
 
 unique_ptr<TableRef> FileLogStorage::BindReplaceInternal(ClientContext &context, TableFunctionBindInput &input,
-                                                         const string &path, const string &select_clause) {
+                                                         const string &path, const string &select_clause,
+                                                         const string &csv_columns) {
 	string sub_query_string;
 
 	string escaped_path = KeywordHelper::WriteOptionallyQuoted(path);
-	sub_query_string = StringUtil::Format("%s FROM %s", select_clause, escaped_path);
+	sub_query_string =
+	    StringUtil::Format("%s FROM read_csv_auto(%s, columns={%s})", select_clause, escaped_path, csv_columns);
 
 	Parser parser(context.GetParserOptions());
 	parser.ParseQuery(sub_query_string);
@@ -393,33 +426,57 @@ unique_ptr<TableRef> FileLogStorage::BindReplaceEntries(ClientContext &context, 
 	lock_guard<mutex> lck(lock);
 	FlushInternal();
 
-	if (log_entries_file_handle) {
-		return BindReplaceInternal(
-		    context, input, log_entries_file_handle->path,
-		    "SELECT context_id::UBIGINT as context_id, timestamp::TIMESTAMP as timestamp, type::VARCHAR as type, "
-		    "log_level::VARCHAR as log_level, message::VARCHAR as message");
+	string columns;
+	string select;
+	if (normalize_contexts) {
+		select = "SELECT *";
+		columns = "'context_id': 'UBIGINT', 'timestamp': 'TIMESTAMP', 'type': 'VARCHAR', 'log_level': 'VARCHAR' , "
+		          "'message': 'VARCHAR'";
+	} else {
+		select = "SELECT context_id, timestamp, type, log_level, message";
+		columns = "'context_id': 'UBIGINT', 'scope': 'VARCHAR', 'connection_id': 'UBIGINT', 'transaction_id': "
+		          "'UBIGINT', 'query_id': 'UBIGINT', 'thread_id': 'UBIGINT', 'timestamp': 'TIMESTAMP', 'type': "
+		          "'VARCHAR', 'log_level': 'VARCHAR' , 'message': 'VARCHAR'";
 	}
-	return nullptr;
+
+	return BindReplaceInternal(context, input, log_entries_path, select, columns);
 }
 
 unique_ptr<TableRef> FileLogStorage::BindReplaceContexts(ClientContext &context, TableFunctionBindInput &input) {
 	lock_guard<mutex> lck(lock);
+
 	FlushInternal();
 	if (normalize_contexts) {
-		D_ASSERT(log_contexts_file_handle);
-		return BindReplaceInternal(context, input, log_contexts_file_handle->path,
-		                           "SELECT context_id::UBIGINT as context_id, scope::VARCHAR as scope, "
-		                           "connection_id::UBIGINT as connection_id, transaction_id::UBIGINT as "
-		                           "transaction_id, query_id::UBIGINT as query_id, thread_id::UBIGINT as thread_id");
+		string columns = "'context_id': 'UBIGINT', 'scope': 'VARCHAR', 'connection_id': 'UBIGINT', 'transaction_id': "
+		                 "'UBIGINT', 'query_id': 'UBIGINT', 'thread_id': 'UBIGINT'";
+		return BindReplaceInternal(context, input, log_contexts_path, "SELECT *", columns);
 	}
 
 	// When log contexts are denormalized in the csv files, we will be reading them horribly inefficiently by doing a
-	// select DISTINCT on the log_entries_file_handle
-	// TODO: fix? throw?
-	return BindReplaceInternal(context, input, log_entries_file_handle->path,
-	                           "SELECT DISTINCT context_id::UBIGINT as context_id, scope::VARCHAR as scope, "
-	                           "connection_id::UBIGINT as connection_id, transaction_id::UBIGINT as transaction_id, "
-	                           "query_id::UBIGINT as query_id, thread_id::UBIGINT as thread_id");
+	// select DISTINCT on the log_entries_file_handl TODO: fix? throw?
+	string columns = "'context_id': 'UBIGINT', 'scope': 'VARCHAR', 'connection_id': 'UBIGINT', 'transaction_id': "
+	                 "'UBIGINT', 'query_id': 'UBIGINT', 'thread_id': 'UBIGINT', 'timestamp': 'TIMESTAMP', 'type': "
+	                 "'VARCHAR', 'log_level': 'VARCHAR' , 'message': 'VARCHAR'";
+	string query =
+	    "SELECT DISTINCT context_id as context_id, scope, connection_id, transaction_id, query_id, thread_id";
+	return BindReplaceInternal(context, input, log_entries_path, query, columns);
+}
+
+BufferingLogStorage::BufferingLogStorage(DatabaseInstance &db_p) {
+	ResetLogBuffers();
+}
+
+void BufferingLogStorage::ResetLogBuffers() {
+	max_buffer_size = STANDARD_VECTOR_SIZE;
+	log_entries_buffer = make_uniq<DataChunk>();
+	log_contexts_buffer = make_uniq<DataChunk>();
+	log_entries_buffer->Initialize(Allocator::DefaultAllocator(), GetEntriesSchema(normalize_contexts),
+	                               max_buffer_size);
+	log_contexts_buffer->Initialize(Allocator::DefaultAllocator(), GetContextsSchema(), max_buffer_size);
+}
+
+void BufferingLogStorage::ResetAllBuffers() {
+	ResetLogBuffers();
 }
 
 InMemoryLogStorageScanState::InMemoryLogStorageScanState() {
@@ -427,142 +484,198 @@ InMemoryLogStorageScanState::InMemoryLogStorageScanState() {
 InMemoryLogStorageScanState::~InMemoryLogStorageScanState() {
 }
 
-InMemoryLogStorage::InMemoryLogStorage(DatabaseInstance &db_p)
-    : entry_buffer(make_uniq<DataChunk>()), log_context_buffer(make_uniq<DataChunk>()) {
-	// LogEntry Schema
-	vector<LogicalType> log_entry_schema = {
+InMemoryLogStorage::InMemoryLogStorage(DatabaseInstance &db_p) : BufferingLogStorage(db_p) {
+	max_buffer_size = STANDARD_VECTOR_SIZE;
+	log_entries = make_uniq<ColumnDataCollection>(db_p.GetBufferManager(), GetEntriesSchema(true));
+	log_contexts = make_uniq<ColumnDataCollection>(db_p.GetBufferManager(), GetContextsSchema());
+}
+
+vector<LogicalType> BufferingLogStorage::GetEntriesSchema(bool normalize) {
+	if (normalize) {
+		return {
+		    LogicalType::UBIGINT,   // context_id
+		    LogicalType::TIMESTAMP, // timestamp
+		    LogicalType::VARCHAR,   // log_type
+		    LogicalType::VARCHAR,   // level
+		    LogicalType::VARCHAR,   // message
+		};
+	}
+
+	return {
 	    LogicalType::UBIGINT,   // context_id
+	    LogicalType::VARCHAR,   // scope
+	    LogicalType::UBIGINT,   // connection_id
+	    LogicalType::UBIGINT,   // transaction_id
+	    LogicalType::UBIGINT,   // query_id
+	    LogicalType::UBIGINT,   // thread
 	    LogicalType::TIMESTAMP, // timestamp
-	    LogicalType::VARCHAR,   // log_type TODO: const vector where possible?
-	    LogicalType::VARCHAR,   // level TODO: enumify
+	    LogicalType::VARCHAR,   // log_type
+	    LogicalType::VARCHAR,   // level
 	    LogicalType::VARCHAR,   // message
 	};
+}
 
-	// LogContext Schema
-	vector<LogicalType> log_context_schema = {
+vector<LogicalType> BufferingLogStorage::GetContextsSchema() {
+	return {
 	    LogicalType::UBIGINT, // context_id
-	    LogicalType::VARCHAR, // scope TODO: enumify
+	    LogicalType::VARCHAR, // scope
 	    LogicalType::UBIGINT, // connection_id
 	    LogicalType::UBIGINT, // transaction_id
 	    LogicalType::UBIGINT, // query_id
 	    LogicalType::UBIGINT, // thread
 	};
-
-	max_buffer_size = STANDARD_VECTOR_SIZE;
-	entry_buffer->Initialize(Allocator::DefaultAllocator(), log_entry_schema, max_buffer_size);
-	log_context_buffer->Initialize(Allocator::DefaultAllocator(), log_context_schema, max_buffer_size);
-	log_entries = make_uniq<ColumnDataCollection>(db_p.GetBufferManager(), log_entry_schema);
-	log_contexts = make_uniq<ColumnDataCollection>(db_p.GetBufferManager(), log_context_schema);
 }
 
-void InMemoryLogStorage::ResetBuffers() {
-	entry_buffer->Reset();
-	log_context_buffer->Reset();
+vector<string> BufferingLogStorage::GetEntriesColumnNames(bool normalize) {
+	if (normalize) {
+		return {"context_id", "timestamp", "type", "log_level", "message"};
+	}
 
+	return {
+	    "context_id", "scope",     "connection_id", "transaction_id", "query_id",
+	    "thread_id",  "timestamp", "type",          "log_level",      "message",
+	};
+}
+
+vector<string> BufferingLogStorage::GetContextsColumnNames() {
+	return {
+	    "context_id", "scope", "connection_id", "transaction_id", "query_id", "thread_id",
+	};
+}
+
+void InMemoryLogStorage::ResetAllBuffers() {
+	BufferingLogStorage::ResetAllBuffers();
 	log_entries->Reset();
 	log_contexts->Reset();
-
-	registered_contexts.clear();
 }
 
 InMemoryLogStorage::~InMemoryLogStorage() {
 }
 
-void InMemoryLogStorage::WriteLogEntry(timestamp_t timestamp, LogLevel level, const string &log_type,
-                                       const string &log_message, const RegisteredLoggingContext &context) {
+BufferingLogStorage::~BufferingLogStorage() {
+}
+
+static void WriteLoggingContextsToChunk(DataChunk &chunk, const RegisteredLoggingContext &context, idx_t &col) {
+
+	auto size = chunk.size();
+
+	auto context_id_data = FlatVector::GetData<idx_t>(chunk.data[col++]);
+	context_id_data[size] = context.context_id;
+
+	auto context_scope_data = FlatVector::GetData<string_t>(chunk.data[col]);
+	context_scope_data[size] = StringVector::AddString(chunk.data[col++], EnumUtil::ToString(context.context.scope));
+
+	if (context.context.connection_id.IsValid()) {
+		auto client_context_data = FlatVector::GetData<idx_t>(chunk.data[col++]);
+		client_context_data[size] = context.context.connection_id.GetIndex();
+	} else {
+		FlatVector::Validity(chunk.data[col++]).SetInvalid(size);
+	}
+	if (context.context.transaction_id.IsValid()) {
+		auto client_context_data = FlatVector::GetData<idx_t>(chunk.data[col++]);
+		client_context_data[size] = context.context.transaction_id.GetIndex();
+	} else {
+		FlatVector::Validity(chunk.data[col++]).SetInvalid(size);
+	}
+	if (context.context.query_id.IsValid()) {
+		auto client_context_data = FlatVector::GetData<idx_t>(chunk.data[col++]);
+		client_context_data[size] = context.context.query_id.GetIndex();
+	} else {
+		FlatVector::Validity(chunk.data[col++]).SetInvalid(size);
+	}
+
+	if (context.context.thread_id.IsValid()) {
+		auto thread_data = FlatVector::GetData<idx_t>(chunk.data[col++]);
+		thread_data[size] = context.context.thread_id.GetIndex();
+	} else {
+		FlatVector::Validity(chunk.data[col++]).SetInvalid(size);
+	}
+
+	chunk.SetCardinality(size + 1);
+}
+
+void BufferingLogStorage::WriteLogEntry(timestamp_t timestamp, LogLevel level, const string &log_type,
+                                        const string &log_message, const RegisteredLoggingContext &context) {
 	unique_lock<mutex> lck(lock);
 
 	if (registered_contexts.find(context.context_id) == registered_contexts.end()) {
 		WriteLoggingContext(context);
 	}
 
-	auto size = entry_buffer->size();
-	auto context_id_data = FlatVector::GetData<idx_t>(entry_buffer->data[0]);
-	auto timestamp_data = FlatVector::GetData<timestamp_t>(entry_buffer->data[1]);
-	auto type_data = FlatVector::GetData<string_t>(entry_buffer->data[2]);
-	auto level_data = FlatVector::GetData<string_t>(entry_buffer->data[3]);
-	auto message_data = FlatVector::GetData<string_t>(entry_buffer->data[4]);
+	auto size = log_entries_buffer->size();
 
-	context_id_data[size] = context.context_id;
+	idx_t col = 0;
+
+	if (normalize_contexts) {
+		auto context_id_data = FlatVector::GetData<idx_t>(log_entries_buffer->data[col++]);
+		context_id_data[size] = context.context_id;
+	} else {
+		WriteLoggingContextsToChunk(*log_entries_buffer, context, col);
+	}
+
+	auto timestamp_data = FlatVector::GetData<timestamp_t>(log_entries_buffer->data[col++]);
 	timestamp_data[size] = timestamp;
-	type_data[size] = StringVector::AddString(entry_buffer->data[2], log_type);
-	level_data[size] = StringVector::AddString(entry_buffer->data[3], EnumUtil::ToString(level));
-	message_data[size] = StringVector::AddString(entry_buffer->data[4], log_message);
 
-	entry_buffer->SetCardinality(size + 1);
+	auto type_data = FlatVector::GetData<string_t>(log_entries_buffer->data[col]);
+	type_data[size] = StringVector::AddString(log_entries_buffer->data[col++], log_type);
+
+	auto level_data = FlatVector::GetData<string_t>(log_entries_buffer->data[col]);
+	level_data[size] = StringVector::AddString(log_entries_buffer->data[col++],
+	                                           EnumUtil::ToString(level)); // TODO: do cast on write out
+
+	auto message_data = FlatVector::GetData<string_t>(log_entries_buffer->data[col]);
+	message_data[size] = StringVector::AddString(log_entries_buffer->data[col++], log_message);
+
+	log_entries_buffer->SetCardinality(size + 1);
 
 	if (size + 1 >= max_buffer_size) {
 		FlushInternal();
 	}
 }
 
-void InMemoryLogStorage::WriteLogEntries(DataChunk &chunk, const RegisteredLoggingContext &context) {
-	log_entries->Append(chunk);
+void BufferingLogStorage::WriteLogEntries(DataChunk &chunk, const RegisteredLoggingContext &context) {
+	throw NotImplementedException("BufferingLogStorage::WriteLogEntries(DataChunk &chunk) not implemented");
 }
 
-void InMemoryLogStorage::Flush() {
+void BufferingLogStorage::Flush() {
 	unique_lock<mutex> lck(lock);
 	FlushInternal();
 }
 
+void BufferingLogStorage::Truncate() {
+	unique_lock<mutex> lck(lock);
+	ResetAllBuffers();
+}
+
 void InMemoryLogStorage::Truncate() {
 	unique_lock<mutex> lck(lock);
-	ResetBuffers();
+	ResetAllBuffers();
 }
 
 void InMemoryLogStorage::FlushInternal() {
-	if (entry_buffer->size() > 0) {
-		log_entries->Append(*entry_buffer);
-		entry_buffer->Reset();
+	if (log_entries_buffer->size() > 0) {
+		log_entries->Append(*log_entries_buffer);
+		log_entries_buffer->Reset();
 	}
 
-	if (log_context_buffer->size() > 0) {
-		log_contexts->Append(*log_context_buffer);
-		log_context_buffer->Reset();
+	if (log_contexts_buffer->size() > 0) {
+		log_contexts->Append(*log_contexts_buffer);
+		log_contexts_buffer->Reset();
 	}
 }
 
-void InMemoryLogStorage::WriteLoggingContext(const RegisteredLoggingContext &context) {
+void BufferingLogStorage::WriteLoggingContext(const RegisteredLoggingContext &context) {
 	registered_contexts.insert(context.context_id);
 
-	auto size = log_context_buffer->size();
-
-	auto context_id_data = FlatVector::GetData<idx_t>(log_context_buffer->data[0]);
-	context_id_data[size] = context.context_id;
-
-	auto context_scope_data = FlatVector::GetData<string_t>(log_context_buffer->data[1]);
-	context_scope_data[size] =
-	    StringVector::AddString(log_context_buffer->data[1], EnumUtil::ToString(context.context.scope));
-
-	if (context.context.connection_id.IsValid()) {
-		auto client_context_data = FlatVector::GetData<idx_t>(log_context_buffer->data[2]);
-		client_context_data[size] = context.context.connection_id.GetIndex();
-	} else {
-		FlatVector::Validity(log_context_buffer->data[2]).SetInvalid(size);
-	}
-	if (context.context.transaction_id.IsValid()) {
-		auto client_context_data = FlatVector::GetData<idx_t>(log_context_buffer->data[3]);
-		client_context_data[size] = context.context.transaction_id.GetIndex();
-	} else {
-		FlatVector::Validity(log_context_buffer->data[3]).SetInvalid(size);
-	}
-	if (context.context.query_id.IsValid()) {
-		auto client_context_data = FlatVector::GetData<idx_t>(log_context_buffer->data[4]);
-		client_context_data[size] = context.context.query_id.GetIndex();
-	} else {
-		FlatVector::Validity(log_context_buffer->data[4]).SetInvalid(size);
+	// If we don't normalize the contexts they are written out on every log entry
+	if (!normalize_contexts) {
+		return;
 	}
 
-	if (context.context.thread_id.IsValid()) {
-		auto thread_data = FlatVector::GetData<idx_t>(log_context_buffer->data[5]);
-		thread_data[size] = context.context.thread_id.GetIndex();
-	} else {
-		FlatVector::Validity(log_context_buffer->data[5]).SetInvalid(size);
-	}
+	idx_t col = 0;
+	WriteLoggingContextsToChunk(*log_contexts_buffer, context, col);
 
-	log_context_buffer->SetCardinality(size + 1);
-
-	if (size + 1 >= max_buffer_size) {
+	if (log_contexts_buffer->size() >= max_buffer_size) {
 		FlushInternal();
 	}
 }

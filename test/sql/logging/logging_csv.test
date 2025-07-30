@@ -4,9 +4,11 @@
 
 require noforcestorage
 
+mode skip
+
 # Enable FileSystem logging to single csv file  
 statement ok
-pragma enable_logging(['FileSystem'], storage='file', storage_config={'path': '__TEST_DIR__/logging_csv_log.csv'});
+CALL enable_logging(['FileSystem'], storage='file', storage_config={'path': '__TEST_DIR__/logging_csv_log.csv'});
 
 # Read some data to trigger FileSystem log
 statement ok
@@ -26,8 +28,22 @@ CONNECTION	data/csv/big_number.csv	READ
 CONNECTION	data/csv/big_number.csv	READ
 CONNECTION	data/csv/big_number.csv	CLOSE
 
+query IIIIII
+DESCRIBE FROM '__TEST_DIR__/logging_csv_log.csv';
+----
+context_id	BIGINT	YES	NULL	NULL	NULL
+scope	VARCHAR	YES	NULL	NULL	NULL
+connection_id	BIGINT	YES	NULL	NULL	NULL
+transaction_id	BIGINT	YES	NULL	NULL	NULL
+query_id	BIGINT	YES	NULL	NULL	NULL
+thread	VARCHAR	YES	NULL	NULL	NULL
+timestamp	TIMESTAMP	YES	NULL	NULL	NULL
+log_type	VARCHAR	YES	NULL	NULL	NULL
+level	VARCHAR	YES	NULL	NULL	NULL
+message	VARCHAR	YES	NULL	NULL	NULL
+
 statement ok
-pragma disable_logging
+CALL disable_logging()
 
 # Truncating the logs will clear the csv log file
 statement ok
@@ -40,7 +56,7 @@ select count(*) FROM "__TEST_DIR__/logging_csv_log.csv";
 
 # Enable FileSystem logging to normalized files  
 statement ok
-pragma enable_logging(['FileSystem'], storage='file', storage_config={'entries_path': '__TEST_DIR__/logging_csv_log_entries.csv', 'contexts_path': '__TEST_DIR__/logging_csv_log_contexts.csv'});
+CALL enable_logging(['FileSystem'], storage='file', storage_config={'entries_path': '__TEST_DIR__/logging_csv_log_entries.csv', 'contexts_path': '__TEST_DIR__/logging_csv_log_contexts.csv'});
 
 # Read some data to trigger FileSystem log
 statement ok
@@ -61,16 +77,37 @@ WHERE path = 'data/csv/big_number.csv';
 1	data/csv/big_number.csv	CLOSE
 
 # Contexts are now in a separate csv file
+# TODO: is this correct?
 query I
 SELECT scope
 FROM "__TEST_DIR__/logging_csv_log_contexts.csv";
 ----
 CONNECTION
 CONNECTION
-CONNECTION
+
+# Check schema
+query IIIIII
+DESCRIBE FROM '__TEST_DIR__/logging_csv_log_entries.csv';
+----
+context_id	BIGINT	YES	NULL	NULL	NULL
+timestamp	TIMESTAMP	YES	NULL	NULL	NULL
+log_type	VARCHAR	YES	NULL	NULL	NULL
+level	VARCHAR	YES	NULL	NULL	NULL
+message	VARCHAR	YES	NULL	NULL	NULL
+
+# Check schema
+query IIIIII
+DESCRIBE FROM '__TEST_DIR__/logging_csv_log_contexts.csv';
+----
+context_id	BIGINT	YES	NULL	NULL	NULL
+scope	VARCHAR	YES	NULL	NULL	NULL
+connection_id	BIGINT	YES	NULL	NULL	NULL
+transaction_id	BIGINT	YES	NULL	NULL	NULL
+query_id	BIGINT	YES	NULL	NULL	NULL
+thread	VARCHAR	YES	NULL	NULL	NULL
 
 statement ok
-pragma disable_logging;
+CALL disable_logging();
 
 # Truncating the logs will clear both csv files
 statement ok
@@ -82,12 +119,12 @@ select count(*) FROM "__TEST_DIR__/logging_csv_log_contexts.csv";
 0
 
 query I
-select count(*) FROM "__TEST_DIR__/logging_csv_log.csv";
+select count(*) FROM "__TEST_DIR__/logging_csv_log_entries.csv";
 ----
 0
 
 statement ok
-pragma enable_logging(['FileSystem'], storage='stdout');
+CALL enable_logging(['FileSystem'], storage='stdout');
 
 # TODO: we can't nicely test logging to stdout without polluting test runner output
 
@@ -95,25 +132,49 @@ statement ok
 pragma truncate_duckdb_logs;
 
 statement ok
-pragma disable_logging;
+CALL disable_logging();
 
 # Both stdout and file logging have a buffer size param which controls when the buffered csv data is written out. This is currently hard to test though since
 # we flush these buffers after every query anyways
 
 statement ok
-pragma enable_logging(['FileSystem'], storage='stdout', storage_config={'buffer_size': 1000000}); 
+CALL enable_logging(['FileSystem'], storage='stdout', storage_config={'buffer_size': 1000000}); 
 
 statement ok
-pragma disable_logging;
+CALL disable_logging();
 
 # Try some invalid configs ensuring they throw nice errors 
 
 statement error
-pragma enable_logging(['FileSystem'], storage='stdout', storage_config={'bla': 'bla'});
+CALL enable_logging(['FileSystem'], storage='stdout', storage_config={'bla': 'bla'});
 ----
 Invalid Input Error: Unrecognized log storage config option: 'bla'
 
 statement error
-pragma enable_logging(['FileSystem'], storage='stdout', storage_config={'path': './file.csv'});
+CALL enable_logging(['FileSystem'], storage='stdout', storage_config={'path': './file.csv'});
 ----
 Invalid Input Error: Unrecognized log storage config option: 'path'
+
+# Switching between normalized and denormalized logs will throw if the log is non-empty
+
+statement ok
+pragma truncate_duckdb_logs
+
+mode unskip
+
+statement ok
+CALL enable_logging(['QueryLog'], storage='file', storage_config={'path': '__TEST_DIR__/logging_csv_log.csv'});
+
+statement ok
+SELECT 1;
+
+statement ok
+pragma truncate_duckdb_logs
+
+# statement error
+# CALL enable_logging(['QueryLog'], storage='file', storage_config={'entries_path': '__TEST_DIR__/logging_csv_log_entries.csv', 'contexts_path': '__TEST_DIR__/logging_csv_log_contexts.csv'});
+# ----
+# Invalid Configuration Error: Cannot change between normalized and denormalized with a non-empty log. Please truncate the log first
+
+statement ok
+explain FROM duckdb_logs

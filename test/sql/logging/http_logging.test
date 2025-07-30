@@ -8,7 +8,7 @@ require noforcestorage
 require httpfs
 
 statement ok
-PRAGMA enable_logging('HTTP');
+CALL enable_logging('HTTP');
 
 statement ok
 FROM 'https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv'

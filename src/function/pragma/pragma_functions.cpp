@@ -115,55 +115,6 @@ static void PragmaDisableCheckpointOnShutdown(ClientContext &context, const Func
 	DBConfig::GetConfig(context).options.checkpoint_on_shutdown = false;
 }
 
-static void PragmaEnableLogging(ClientContext &context, const FunctionParameters &parameters) {
-	if (parameters.values.size() > 1) {
-		throw InvalidInputException("PragmaEnableLogging: expected 0 or 1 parameter");
-	}
-
-	case_insensitive_map_t<Value> storage_config;
-
-	for (const auto &param : parameters.named_parameters) {
-		if (StringUtil::Lower(param.first) == "level") {
-			context.db->GetLogManager().SetLogLevel(EnumUtil::FromString<LogLevel>(param.second.ToString()));
-		} else if (StringUtil::Lower(param.first) == "storage") {
-			context.db->GetLogManager().SetLogStorage(*context.db, param.second.ToString());
-		} else if (StringUtil::Lower(param.first) == "storage_config") {
-			auto &children = StructValue::GetChildren(param.second);
-			for (idx_t i = 0; i < children.size(); i++) {
-				storage_config[StructType::GetChildName(param.second.type(), i)] = children[i];
-			}
-		} else {
-			throw InvalidInputException("PragmaEnableLogging: unknown named parameter: %s", param.first.c_str());
-		}
-	}
-
-	if (!storage_config.empty()) {
-		context.db->GetLogManager().UpdateLogStorageConfig(*context.db, storage_config);
-	}
-
-	if (parameters.values.empty()) {
-		context.db->GetLogManager().SetEnableLogging(true);
-		return;
-	}
-
-	vector<string> types;
-	if (parameters.values[0].type() == LogicalType::VARCHAR) {
-		types.push_back(parameters.values[0].GetValue<string>());
-	} else if (parameters.values[0].type() == LogicalType::LIST(LogicalType::VARCHAR)) {
-		for (const auto &child : ListValue::GetChildren(parameters.values[0])) {
-			types.push_back(child.GetValue<string>());
-		}
-	} else {
-		throw InvalidInputException("Unexpected type for PragmaEnableLogging");
-	}
-
-	context.db->GetLogManager().SetEnableStructuredLoggers(types);
-}
-
-static void PragmaDisableLogging(ClientContext &context, const FunctionParameters &parameters) {
-	context.db->GetLogManager().SetEnableLogging(false);
-}
-
 static void PragmaEnableOptimizer(ClientContext &context, const FunctionParameters &parameters) {
 	ClientConfig::GetConfig(context).enable_optimizer = true;
 }
@@ -195,13 +146,6 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_object_cache", PragmaEnableObjectCache));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_object_cache", PragmaDisableObjectCache));
-
-	auto logging_enable_function =
-	    PragmaFunction::PragmaCall("enable_logging", PragmaEnableLogging, {}, LogicalType::ANY);
-	logging_enable_function.named_parameters = {
-	    {"storage", LogicalType::VARCHAR}, {"level", LogicalType::VARCHAR}, {"storage_config", LogicalType::ANY}};
-	set.AddFunction(logging_enable_function);
-	set.AddFunction(PragmaFunction::PragmaStatement("disable_logging", PragmaDisableLogging));
 
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_optimizer", PragmaEnableOptimizer));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_optimizer", PragmaDisableOptimizer));

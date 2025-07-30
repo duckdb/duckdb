@@ -7,14 +7,14 @@ load __TEST_DIR__/logging_file_persistence.test
 
 # Enable FileSystem logging to single csv file  
 statement ok
-pragma enable_logging('FileSystem', storage='file', storage_config={'path': '__TEST_DIR__/logging_file_persistence.csv'});
+CALL enable_logging('FileSystem', storage='file', storage_config={'path': '__TEST_DIR__/logging_file_persistence.csv'});
 
 # Read some data to trigger FileSystem log
 statement ok
 FROM "data/csv/big_number.csv"
 
 statement ok
-pragma disable_logging;
+CALL disable_logging();
 
 query IIIIIIIII nosort log_output
 FROM duckdb_logs;
@@ -24,10 +24,10 @@ restart
 
 # TODO: configuring log storage config is clunky now
 statement ok
-pragma enable_logging('FileSystem', storage='file', storage_config={'path': '__TEST_DIR__/logging_file_persistence.csv'});
+CALL enable_logging('FileSystem', storage='file', storage_config={'path': '__TEST_DIR__/logging_file_persistence.csv'});
 
 statement ok
-pragma disable_logging;
+CALL disable_logging();
 
 query IIIIIIIII nosort log_output
 FROM duckdb_logs;
