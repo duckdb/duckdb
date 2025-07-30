@@ -50,9 +50,7 @@ class TestArrowDecimalTypes(object):
 
     def test_invalide_opt(self, duckdb_cursor):
         duckdb_cursor = duckdb.connect()
-        with pytest.raises(
-            duckdb.NotImplementedException, match="unrecognized"
-        ):
+        with pytest.raises(duckdb.NotImplementedException, match="unrecognized"):
             duckdb_cursor.execute(f"SET arrow_output_version = 999.9")
 
     def test_view_v1_4(self, duckdb_cursor):
