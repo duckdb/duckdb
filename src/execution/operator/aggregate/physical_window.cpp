@@ -11,7 +11,6 @@
 #include "duckdb/function/window/window_value_function.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/main/settings.hpp"
-#include <numeric>
 
 namespace duckdb {
 
@@ -791,7 +790,7 @@ void WindowLocalSourceState::Sink(ExecutionContext &context) {
 	auto &local_states = window_hash_group->thread_states.at(task->thread_idx);
 	if (local_states.empty()) {
 		for (idx_t w = 0; w < executors.size(); ++w) {
-			local_states.emplace_back(executors[w]->GetLocalState(*gestates[w]));
+			local_states.emplace_back(executors[w]->GetLocalState(context, *gestates[w]));
 		}
 	}
 

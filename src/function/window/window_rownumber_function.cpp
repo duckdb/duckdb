@@ -47,10 +47,10 @@ public:
 //===--------------------------------------------------------------------===//
 class WindowRowNumberLocalState : public WindowExecutorBoundsLocalState {
 public:
-	explicit WindowRowNumberLocalState(const WindowRowNumberGlobalState &grstate)
-	    : WindowExecutorBoundsLocalState(grstate), grstate(grstate) {
+	explicit WindowRowNumberLocalState(ExecutionContext &context, const WindowRowNumberGlobalState &grstate)
+	    : WindowExecutorBoundsLocalState(context, grstate), grstate(grstate) {
 		if (grstate.token_tree) {
-			local_tree = grstate.token_tree->GetLocalState();
+			local_tree = grstate.token_tree->GetLocalState(context);
 		}
 	}
 
@@ -58,7 +58,7 @@ public:
 	void Sink(ExecutionContext &context, WindowExecutorGlobalState &gstate, DataChunk &sink_chunk,
 	          DataChunk &coll_chunk, idx_t input_idx) override;
 	//! Finish the sinking and prepare to scan
-	void Finalize(WindowExecutorGlobalState &gstate, CollectionPtr collection) override;
+	void Finalize(ExecutionContext &context, WindowExecutorGlobalState &gstate, CollectionPtr collection) override;
 
 	//! The corresponding global peer state
 	const WindowRowNumberGlobalState &grstate;
@@ -72,16 +72,17 @@ void WindowRowNumberLocalState::Sink(ExecutionContext &context, WindowExecutorGl
 
 	if (local_tree) {
 		auto &local_tokens = local_tree->Cast<WindowMergeSortTreeLocalState>();
-		local_tokens.SinkChunk(sink_chunk, input_idx, nullptr, 0);
+		local_tokens.Sink(context, sink_chunk, input_idx, nullptr, 0);
 	}
 }
 
-void WindowRowNumberLocalState::Finalize(WindowExecutorGlobalState &gstate, CollectionPtr collection) {
-	WindowExecutorBoundsLocalState::Finalize(gstate, collection);
+void WindowRowNumberLocalState::Finalize(ExecutionContext &context, WindowExecutorGlobalState &gstate,
+                                         CollectionPtr collection) {
+	WindowExecutorBoundsLocalState::Finalize(context, gstate, collection);
 
 	if (local_tree) {
 		auto &local_tokens = local_tree->Cast<WindowMergeSortTreeLocalState>();
-		local_tokens.Sort();
+		local_tokens.Finalize(context);
 		local_tokens.window_tree.Build();
 	}
 }
@@ -105,8 +106,8 @@ unique_ptr<WindowExecutorGlobalState> WindowRowNumberExecutor::GetGlobalState(Cl
 }
 
 unique_ptr<WindowExecutorLocalState>
-WindowRowNumberExecutor::GetLocalState(const WindowExecutorGlobalState &gstate) const {
-	return make_uniq<WindowRowNumberLocalState>(gstate.Cast<WindowRowNumberGlobalState>());
+WindowRowNumberExecutor::GetLocalState(ExecutionContext &context, const WindowExecutorGlobalState &gstate) const {
+	return make_uniq<WindowRowNumberLocalState>(context, gstate.Cast<WindowRowNumberGlobalState>());
 }
 
 void WindowRowNumberExecutor::EvaluateInternal(ExecutionContext &context, WindowExecutorGlobalState &gstate,
