@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/optimizer/rule.hpp"
 
 namespace duckdb {
