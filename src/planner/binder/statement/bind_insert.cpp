@@ -653,6 +653,11 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertStatement &stmt, 
 	}
 	merge_into->source = std::move(source);
 
+	if (on_conflict_info.action_type == OnConflictAction::REPLACE) {
+		D_ASSERT(!on_conflict_info.set_info);
+		on_conflict_info.set_info = CreateSetInfoForReplace(table, stmt, storage_info);
+		on_conflict_info.action_type = OnConflictAction::UPDATE;
+	}
 	// now set up the merge actions
 	// first set up the base (insert) action when not matched
 	auto insert_action = make_uniq<MergeIntoAction>();
