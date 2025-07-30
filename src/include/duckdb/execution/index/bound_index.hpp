@@ -60,19 +60,18 @@ public:
 	//! The index constraint type
 	IndexConstraintType index_constraint_type;
 
+	vector<unique_ptr<Expression>> unbound_expressions;
+
 public:
 	bool IsBound() const override {
 		return true;
 	}
-
 	const string &GetIndexType() const override {
 		return index_type;
 	}
-
 	const string &GetIndexName() const override {
 		return name;
 	}
-
 	IndexConstraintType GetConstraintType() const override {
 		return index_constraint_type;
 	}
@@ -156,7 +155,7 @@ public:
 	virtual string GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index,
 	                                             DataChunk &input) = 0;
 
-	vector<unique_ptr<Expression>> unbound_expressions;
+	void ApplyBufferedAppends(ColumnDataCollection &buffered_appends);
 
 protected:
 	//! Lock used for any changes to the index
