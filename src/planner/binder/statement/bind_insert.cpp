@@ -155,6 +155,7 @@ void Binder::BindDoUpdateSetExpressions(const string &table_alias, LogicalInsert
 	vector<string> column_names;
 	D_ASSERT(set_info.columns.size() == set_info.expressions.size());
 
+	auto &on_conflict_info = insert.on_conflict_info;
 	for (idx_t i = 0; i < set_info.columns.size(); i++) {
 		auto &colname = set_info.columns[i];
 		auto &expr = set_info.expressions[i];
@@ -165,18 +166,18 @@ void Binder::BindDoUpdateSetExpressions(const string &table_alias, LogicalInsert
 		if (column.Generated()) {
 			throw BinderException("Cant update column \"%s\" because it is a generated column!", column.Name());
 		}
-		if (std::find(insert.set_columns.begin(), insert.set_columns.end(), column.Physical()) !=
-		    insert.set_columns.end()) {
+		if (std::find(on_conflict_info.set_columns.begin(), on_conflict_info.set_columns.end(), column.Physical()) !=
+		    on_conflict_info.set_columns.end()) {
 			throw BinderException("Multiple assignments to same column \"%s\"", colname);
 		}
 
 		if (!column.Type().SupportsRegularUpdate()) {
-			insert.update_is_del_and_insert = true;
+			on_conflict_info.update_is_del_and_insert = true;
 		}
 
-		insert.set_columns.push_back(column.Physical());
+		on_conflict_info.set_columns.push_back(column.Physical());
 		logical_column_ids.push_back(column.Oid());
-		insert.set_types.push_back(column.Type());
+		on_conflict_info.set_types.push_back(column.Type());
 		column_names.push_back(colname);
 		if (expr->GetExpressionType() == ExpressionType::VALUE_DEFAULT) {
 			expr = ExpandDefaultExpression(column);
@@ -208,7 +209,7 @@ void Binder::BindDoUpdateSetExpressions(const string &table_alias, LogicalInsert
 	for (idx_t i = 0; i < logical_column_ids.size(); i++) {
 		auto &column = logical_column_ids[i];
 		if (indexed_columns.count(column)) {
-			insert.update_is_del_and_insert = true;
+			on_conflict_info.update_is_del_and_insert = true;
 			break;
 		}
 	}
@@ -267,8 +268,9 @@ vector<column_t> GetColumnsToFetch(const TableBinding &binding) {
 }
 
 void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &table, InsertStatement &stmt) {
+	auto &on_conflict_info = insert.on_conflict_info;
 	if (!stmt.on_conflict_info) {
-		insert.action_type = OnConflictAction::THROW;
+		on_conflict_info.action_type = OnConflictAction::THROW;
 		return;
 	}
 	D_ASSERT(stmt.table_ref->type == TableReferenceType::BASE_TABLE);
@@ -284,7 +286,7 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 
 	auto &on_conflict = *stmt.on_conflict_info;
 	D_ASSERT(on_conflict.action_type != OnConflictAction::THROW);
-	insert.action_type = on_conflict.action_type;
+	on_conflict_info.action_type = on_conflict.action_type;
 
 	// obtain the table storage info
 	auto storage_info = table.GetStorageInfo(context);
@@ -310,7 +312,7 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 			auto entry = specified_columns.find(col.Name());
 			if (entry != specified_columns.end()) {
 				// column was specified, set to the index
-				insert.on_conflict_filter.insert(col.Physical().index);
+				on_conflict_info.on_conflict_filter.insert(col.Physical().index);
 			}
 		}
 		bool index_references_columns = false;
@@ -318,7 +320,7 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 			if (!index.is_unique) {
 				continue;
 			}
-			bool index_matches = insert.on_conflict_filter == index.column_set;
+			bool index_matches = on_conflict_info.on_conflict_filter == index.column_set;
 			if (index_matches) {
 				index_references_columns = true;
 				break;
@@ -354,7 +356,7 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 			throw BinderException(
 			    "There are no UNIQUE/PRIMARY KEY Indexes that refer to this table, ON CONFLICT is a no-op");
 		} else if (found_matching_indexes != 1) {
-			if (insert.action_type != OnConflictAction::NOTHING) {
+			if (on_conflict_info.action_type != OnConflictAction::NOTHING) {
 				// When no conflict target is provided, and the action type is UPDATE,
 				// we only allow the operation when only a single Index exists
 				throw BinderException("Conflict target has to be provided for a DO UPDATE operation when the table has "
@@ -367,7 +369,7 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 	AddTableName("excluded");
 	// add a bind context entry for it
 	auto excluded_index = GenerateTableIndex();
-	insert.excluded_table_index = excluded_index;
+	on_conflict_info.excluded_table_index = excluded_index;
 	vector<string> table_column_names;
 	vector<LogicalType> table_column_types;
 	for (auto &col : columns.Physical()) {
@@ -385,7 +387,7 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 
 		// Bind the ON CONFLICT ... WHERE clause.
 		auto condition = where_binder.Bind(on_conflict.condition);
-		insert.on_conflict_condition = std::move(condition);
+		on_conflict_info.on_conflict_condition = std::move(condition);
 	}
 
 	optional_idx projection_index;
@@ -415,29 +417,29 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 	auto table_index = original_binding->index;
 
 	// Replace any column bindings to refer to the projection table_index, rather than the source table
-	if (insert.on_conflict_condition) {
-		ReplaceColumnBindings(*insert.on_conflict_condition, table_index, projection_index.GetIndex());
+	if (on_conflict_info.on_conflict_condition) {
+		ReplaceColumnBindings(*on_conflict_info.on_conflict_condition, table_index, projection_index.GetIndex());
 	}
 
-	if (insert.action_type == OnConflictAction::REPLACE) {
+	if (on_conflict_info.action_type == OnConflictAction::REPLACE) {
 		D_ASSERT(on_conflict.set_info == nullptr);
 		on_conflict.set_info = CreateSetInfoForReplace(table, stmt, storage_info);
-		insert.action_type = OnConflictAction::UPDATE;
+		on_conflict_info.action_type = OnConflictAction::UPDATE;
 	}
 	if (on_conflict.set_info && on_conflict.set_info->columns.empty()) {
 		// if we are doing INSERT OR REPLACE on a table with no columns outside of the primary key column
 		// convert to INSERT OR IGNORE
-		insert.action_type = OnConflictAction::NOTHING;
+		on_conflict_info.action_type = OnConflictAction::NOTHING;
 	}
-	if (insert.action_type == OnConflictAction::NOTHING) {
-		if (!insert.on_conflict_condition) {
+	if (on_conflict_info.action_type == OnConflictAction::NOTHING) {
+		if (!on_conflict_info.on_conflict_condition) {
 			return;
 		}
 		// Get the column_ids we need to fetch later on from the conflicting tuples
 		// of the original table, to execute the expressions
 		D_ASSERT(original_binding->binding_type == BindingType::TABLE);
 		auto &table_binding = original_binding->Cast<TableBinding>();
-		insert.columns_to_fetch = GetColumnsToFetch(table_binding);
+		on_conflict_info.columns_to_fetch = GetColumnsToFetch(table_binding);
 		return;
 	}
 
@@ -454,7 +456,7 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 
 		// Bind the SET ... WHERE clause.
 		auto condition = where_binder.Bind(set_info.condition);
-		insert.do_update_condition = std::move(condition);
+		on_conflict_info.do_update_condition = std::move(condition);
 	}
 
 	BindDoUpdateSetExpressions(table_alias, insert, set_info, table, storage_info);
@@ -463,7 +465,7 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 	// of the original table, to execute the expressions
 	D_ASSERT(original_binding->binding_type == BindingType::TABLE);
 	auto &table_binding = original_binding->Cast<TableBinding>();
-	insert.columns_to_fetch = GetColumnsToFetch(table_binding);
+	on_conflict_info.columns_to_fetch = GetColumnsToFetch(table_binding);
 
 	// Replace the column bindings to refer to the child operator
 	for (auto &expr : insert.expressions) {
@@ -471,8 +473,8 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 		ReplaceColumnBindings(*expr, table_index, projection_index.GetIndex());
 	}
 	// Do the same for the (optional) DO UPDATE condition
-	if (insert.do_update_condition) {
-		ReplaceColumnBindings(*insert.do_update_condition, table_index, projection_index.GetIndex());
+	if (on_conflict_info.do_update_condition) {
+		ReplaceColumnBindings(*on_conflict_info.do_update_condition, table_index, projection_index.GetIndex());
 	}
 }
 
