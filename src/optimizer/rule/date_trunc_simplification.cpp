@@ -7,6 +7,7 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/optimizer/matcher/expression_matcher.hpp"
@@ -66,6 +67,8 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 			rhs_comparison_type = ExpressionType::COMPARE_LESSTHANOREQUALTO;
 			break;
 		}
+		default:
+			break;
 	}
 
 	// Check whether trunc(date_part, constant_rhs) = constant_rhs.
