@@ -44,8 +44,7 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 	const bool col_is_lhs = (expr.left->GetExpressionClass() == ExpressionClass::BOUND_FUNCTION);
 
 	// We want to treat rhs >= col equivalently to col <= rhs.
-	// So, get the expression type if it was ordered such that the constant
-	// was actually on the right hand side.
+	// So, get the expression type if it was ordered such that the constant was actually on the right hand side.
 	ExpressionType rhs_comparison_type = comparison_type;
 	if (!col_is_lhs) {
 		switch (comparison_type) {
@@ -69,7 +68,8 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 
 	switch(rhs_comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
-		// date_trunc(part, column) = constant_rhs  -->  column >= date_trunc(part, constant_rhs) AND column < date_trunc(part, date_add(constant_rhs, INTERVAL 1 part)
+		// date_trunc(part, column) = constant_rhs  -->  column >= date_trunc(part, constant_rhs) AND
+		//                                               column < date_trunc(part, date_add(constant_rhs, INTERVAL 1 part)
 		//    or, if date_trunc(part, constant_rhs) <> constant_rhs, this is unsatisfiable
 		{
 			if (!is_truncated) {
@@ -86,14 +86,18 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 				return nullptr;
 			}
 
-			auto gteq = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, column_part.Copy(), std::move(trunc));
-			auto lt = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_LESSTHAN, column_part.Copy(), std::move(trunc_add));
+			auto gteq = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
+			                                                 column_part.Copy(), std::move(trunc));
+			auto lt = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_LESSTHAN,
+			                                               column_part.Copy(), std::move(trunc_add));
 
-			return make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(gteq), std::move(lt));
+			return make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(gteq),
+			                                             std::move(lt));
 		}
 
 	case ExpressionType::COMPARE_NOTEQUAL:
-		// date_trunc(part, column) <> constant_rhs  -->  column < date_trunc(part, constant_rhs) OR column >= date_trunc(part, date_add(constant_rhs, INTERVAL 1 part)
+		// date_trunc(part, column) <> constant_rhs  -->  column < date_trunc(part, constant_rhs) OR
+		//                                                column >= date_trunc(part, date_add(constant_rhs, INTERVAL 1 part)
 		//   or, if date_trunc(part, constant_rhs) <> constant_rhs, this is always true
 		{
 			if (!is_truncated) {
@@ -110,8 +114,10 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 				return nullptr;
 			}
 
-			auto lt = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_LESSTHAN, column_part.Copy(), std::move(trunc));
-			auto gteq = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, column_part.Copy(), std::move(trunc_add));
+			auto lt = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_LESSTHAN,
+			                                               column_part.Copy(), std::move(trunc));
+			auto gteq = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
+			                                                 column_part.Copy(), std::move(trunc_add));
 
 			return make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR, std::move(gteq), std::move(lt));
 		}
@@ -121,9 +127,8 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 		// date_trunc(part, column) < constant_rhs  -->  column < date_trunc(part, date_add(constant_rhs, INTERVAL 1 part))
 		{
-			// The optimization for < and >= is a little tricky: if
-			// trunc(rhs) = rhs, then we need to just use the rhs
-			// as-is, instead of using trunc(rhs + 1 date_part).
+			// The optimization for < and >= is a little tricky: if trunc(rhs) = rhs, then we need to just
+			// use the rhs as-is, instead of using trunc(rhs + 1 date_part).
 			if (!is_truncated) {
 				// Create date_trunc(part, date_add(rhs, INTERVAL 1 part)) and fold the constant.
 				auto trunc = CreateTruncAdd(date_part, rhs, column_part.return_type);
@@ -139,8 +144,7 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 					expr.left = std::move(trunc);
 				}
 			} else {
-				// If the RHS is already truncated (i.e.
-				// date_trunc(part, rhs) = rhs), then we can use
+				// If the RHS is already truncated (i.e.  date_trunc(part, rhs) = rhs), then we can use
 				// it as-is.
 				if (col_is_lhs) {
 					expr.left = column_part.Copy();
