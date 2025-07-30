@@ -16,7 +16,7 @@
 #include "duckdb/parser/constraints/foreign_key_constraint.hpp"
 #include "duckdb/catalog/dependency_catalog_set.hpp"
 
-#include <duckdb/common/printer.hpp>
+#include "duckdb/common/printer.hpp"
 
 namespace duckdb {
 
