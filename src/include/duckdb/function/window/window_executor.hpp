@@ -57,11 +57,11 @@ class WindowExecutorLocalState : public WindowExecutorState {
 public:
 	using CollectionPtr = optional_ptr<WindowCollection>;
 
-	explicit WindowExecutorLocalState(const WindowExecutorGlobalState &gstate);
+	WindowExecutorLocalState(ExecutionContext &context, const WindowExecutorGlobalState &gstate);
 
 	virtual void Sink(ExecutionContext &context, WindowExecutorGlobalState &gstate, DataChunk &sink_chunk,
 	                  DataChunk &coll_chunk, idx_t input_idx);
-	virtual void Finalize(WindowExecutorGlobalState &gstate, CollectionPtr collection);
+	virtual void Finalize(ExecutionContext &context, WindowExecutorGlobalState &gstate, CollectionPtr collection);
 
 	//! The state used for reading the range collection
 	unique_ptr<WindowCursor> range_cursor;
@@ -69,7 +69,7 @@ public:
 
 class WindowExecutorBoundsLocalState : public WindowExecutorLocalState {
 public:
-	explicit WindowExecutorBoundsLocalState(const WindowExecutorGlobalState &gstate);
+	WindowExecutorBoundsLocalState(ExecutionContext &context, const WindowExecutorGlobalState &gstate);
 	~WindowExecutorBoundsLocalState() override {
 	}
 
@@ -96,7 +96,8 @@ public:
 	virtual unique_ptr<WindowExecutorGlobalState> GetGlobalState(ClientContext &client, const idx_t payload_count,
 	                                                             const ValidityMask &partition_mask,
 	                                                             const ValidityMask &order_mask) const;
-	virtual unique_ptr<WindowExecutorLocalState> GetLocalState(const WindowExecutorGlobalState &gstate) const;
+	virtual unique_ptr<WindowExecutorLocalState> GetLocalState(ExecutionContext &context,
+	                                                           const WindowExecutorGlobalState &gstate) const;
 
 	virtual void Sink(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk, const idx_t input_idx,
 	                  WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate) const;

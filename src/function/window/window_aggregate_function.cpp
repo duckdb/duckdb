@@ -100,8 +100,9 @@ unique_ptr<WindowExecutorGlobalState> WindowAggregateExecutor::GetGlobalState(Cl
 
 class WindowAggregateExecutorLocalState : public WindowExecutorBoundsLocalState {
 public:
-	WindowAggregateExecutorLocalState(const WindowExecutorGlobalState &gstate, const WindowAggregator &aggregator)
-	    : WindowExecutorBoundsLocalState(gstate), filter_executor(gstate.client) {
+	WindowAggregateExecutorLocalState(ExecutionContext &context, const WindowExecutorGlobalState &gstate,
+	                                  const WindowAggregator &aggregator)
+	    : WindowExecutorBoundsLocalState(context, gstate), filter_executor(gstate.client) {
 
 		auto &gastate = gstate.Cast<WindowAggregateExecutorGlobalState>();
 		aggregator_state = aggregator.GetLocalState(*gastate.gsink);
@@ -124,8 +125,8 @@ public:
 };
 
 unique_ptr<WindowExecutorLocalState>
-WindowAggregateExecutor::GetLocalState(const WindowExecutorGlobalState &gstate) const {
-	return make_uniq<WindowAggregateExecutorLocalState>(gstate, *aggregator);
+WindowAggregateExecutor::GetLocalState(ExecutionContext &context, const WindowExecutorGlobalState &gstate) const {
+	return make_uniq<WindowAggregateExecutorLocalState>(context, gstate, *aggregator);
 }
 
 void WindowAggregateExecutor::Sink(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk,

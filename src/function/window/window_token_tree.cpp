@@ -4,8 +4,8 @@ namespace duckdb {
 
 class WindowTokenTreeLocalState : public WindowMergeSortTreeLocalState {
 public:
-	explicit WindowTokenTreeLocalState(WindowTokenTree &token_tree)
-	    : WindowMergeSortTreeLocalState(token_tree), token_tree(token_tree) {
+	WindowTokenTreeLocalState(ExecutionContext &context, WindowTokenTree &token_tree)
+	    : WindowMergeSortTreeLocalState(context, token_tree), token_tree(token_tree) {
 	}
 	//! Process sorted leaf data
 	void BuildLeaves() override;
@@ -14,39 +14,119 @@ public:
 };
 
 void WindowTokenTreeLocalState::BuildLeaves() {
-	auto &global_sort = *token_tree.global_sort;
-	if (global_sort.sorted_blocks.empty()) {
+	auto &collection = *token_tree.sorted;
+	if (!collection.Count()) {
 		return;
 	}
 
-	//	Scan the sort keys and note deltas
-	SBIterator curr(global_sort, ExpressionType::COMPARE_LESSTHAN);
-	SBIterator prev(global_sort, ExpressionType::COMPARE_LESSTHAN);
-	const auto &sort_layout = global_sort.sort_layout;
+	// Find our chunk range
+	const auto block_begin = (build_task * collection.ChunkCount()) / token_tree.total_tasks;
+	const auto block_end = ((build_task + 1) * collection.ChunkCount()) / token_tree.total_tasks;
 
-	const auto block_begin = token_tree.block_starts.at(build_task);
-	const auto block_end = token_tree.block_starts.at(build_task + 1);
+	//	Start back one to get the overlap
+	idx_t block_curr = block_begin ? block_begin - 1 : 0;
+
+	//	Scan the sort columns
+	WindowCollectionChunkScanner scanner(collection, token_tree.key_cols, block_curr);
+	auto &scanned = scanner.chunk;
+
+	//	Shifted buffer for the next values
+	DataChunk next;
+	collection.InitializeScanChunk(scanner.state, next);
+
+	//	Delay buffer for the previous row
+	DataChunk delayed;
+	collection.InitializeScanChunk(scanner.state, delayed);
+
+	//	Only compare the sort arguments.
+	const auto compare_count = token_tree.key_cols.size();
+	const auto compare_type = scanner.PrefixStructType(compare_count);
+	Vector compare_curr(compare_type);
+	Vector compare_prev(compare_type);
+
 	auto &deltas = token_tree.deltas;
+	bool boundary_compare = false;
+	idx_t row_idx = 1;
 	if (!block_begin) {
 		// First block, so set up initial delta
 		deltas[0] = 0;
 	} else {
 		// Move to the to end of the previous block
 		// so we can record the comparison result for the first row
-		curr.SetIndex(block_begin - 1);
-		prev.SetIndex(block_begin - 1);
+		boundary_compare = true;
+	}
+	if (!scanner.Scan()) {
+		return;
 	}
 
-	for (++curr; curr.GetIndex() < block_end; ++curr, ++prev) {
-		int lt = 0;
-		if (sort_layout.all_constant) {
-			lt = FastMemcmp(prev.entry_ptr, curr.entry_ptr, sort_layout.comparison_size);
+	//	Process chunks offset by 1
+	SelectionVector next_sel(1, STANDARD_VECTOR_SIZE);
+	SelectionVector distinct(STANDARD_VECTOR_SIZE);
+	SelectionVector matching(STANDARD_VECTOR_SIZE);
+
+	while (block_curr < block_end) {
+		//	Compare the current to the previous;
+		DataChunk *curr = nullptr;
+		DataChunk *prev = nullptr;
+
+		idx_t prev_count = 0;
+		if (boundary_compare) {
+			//	Save the last row of the scanned chunk
+			prev_count = 1;
+			sel_t last = UnsafeNumericCast<sel_t>(scanned.size() - 1);
+			SelectionVector sel(&last);
+			delayed.Reset();
+			scanned.Copy(delayed, sel, prev_count);
+			prev = &delayed;
+
+			// Try to read the next chunk
+			++block_curr;
+			row_idx = scanner.Scanned();
+			if (block_curr >= block_end || !scanner.Scan()) {
+				break;
+			}
+			curr = &scanned;
 		} else {
-			lt = Comparators::CompareTuple(prev.scan, curr.scan, prev.entry_ptr, curr.entry_ptr, sort_layout,
-			                               prev.external);
+			//	Compare the [1..size) values with the [0..size-1) values
+			prev_count = scanned.size() - 1;
+			if (!prev_count) {
+				//	1 row scanned, so just skip the rest of the loop.
+				boundary_compare = true;
+				continue;
+			}
+			prev = &scanned;
+
+			// Slice the current back one into the previous
+			next.Slice(scanned, next_sel, prev_count);
+			curr = &next;
 		}
 
-		deltas[curr.GetIndex()] = (lt != 0);
+		//	Reference the comparison prefix as a struct to simplify the compares.
+		scanner.ReferenceStructColumns(*prev, compare_prev, compare_count);
+		scanner.ReferenceStructColumns(*curr, compare_curr, compare_count);
+
+		const auto n =
+		    VectorOperations::DistinctFrom(compare_curr, compare_prev, nullptr, prev_count, &distinct, &matching);
+
+		//	If n is 0, neither SV has been filled in?
+		const auto remaining = prev_count - n;
+		auto match_sel = n ? &matching : FlatVector::IncrementalSelectionVector();
+
+		//	Same as previous - token delta is 0
+		for (idx_t j = 0; j < remaining; ++j) {
+			auto scan_idx = match_sel->get_index(j);
+			deltas[scan_idx + row_idx] = 0;
+		}
+
+		//	Different value - token delta is 1
+		for (idx_t j = 0; j < n; ++j) {
+			auto scan_idx = distinct.get_index(j);
+			deltas[scan_idx + row_idx] = 1;
+		}
+
+		//	Transition between comparison ranges.
+		boundary_compare = !boundary_compare;
+		row_idx += prev_count;
 	}
 }
 
@@ -60,18 +140,22 @@ idx_t WindowTokenTree::MeasurePayloadBlocks() {
 
 template <typename T>
 static void BuildTokens(WindowTokenTree &token_tree, vector<T> &tokens) {
-	PayloadScanner scanner(*token_tree.global_sort);
-	DataChunk payload_chunk;
-	payload_chunk.Initialize(token_tree.context, token_tree.global_sort->payload_layout.GetTypes());
+	auto &collection = *token_tree.sorted;
+	if (!collection.Count()) {
+		return;
+	}
+	//	Scan the index column
+	vector<column_t> scan_ids(1, token_tree.scan_cols.size() - 1);
+	WindowCollectionChunkScanner scanner(collection, scan_ids, 0);
+	auto &payload_chunk = scanner.chunk;
+
 	const T *row_idx = nullptr;
 	idx_t i = 0;
 
 	T token = 0;
 	for (auto &d : token_tree.deltas) {
 		if (i >= payload_chunk.size()) {
-			payload_chunk.Reset();
-			scanner.Scan(payload_chunk);
-			if (!payload_chunk.size()) {
+			if (!scanner.Scan()) {
 				break;
 			}
 			row_idx = FlatVector::GetDataUnsafe<T>(payload_chunk.data[0]);
@@ -83,23 +167,27 @@ static void BuildTokens(WindowTokenTree &token_tree, vector<T> &tokens) {
 	}
 }
 
-unique_ptr<WindowAggregatorState> WindowTokenTree::GetLocalState() {
-	return make_uniq<WindowTokenTreeLocalState>(*this);
+unique_ptr<WindowAggregatorState> WindowTokenTree::GetLocalState(ExecutionContext &context) {
+	return make_uniq<WindowTokenTreeLocalState>(context, *this);
 }
 
-void WindowTokenTree::CleanupSort() {
+void WindowTokenTree::Finished() {
 	//	Convert the deltas to tokens
 	if (mst64) {
 		BuildTokens(*this, mst64->LowestLevel());
 	} else {
 		BuildTokens(*this, mst32->LowestLevel());
 	}
-
+	/*
+	    for (const auto &d : deltas) {
+	        Printer::Print(StringUtil::Format("%lld", d));
+	    }
+	*/
 	// Deallocate memory
 	vector<uint8_t> empty;
 	deltas.swap(empty);
 
-	WindowMergeSortTree::CleanupSort();
+	WindowMergeSortTree::Finished();
 }
 
 template <typename TREE>

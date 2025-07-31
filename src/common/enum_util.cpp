@@ -15,8 +15,10 @@
 #include "duckdb/common/box_renderer.hpp"
 #include "duckdb/common/enums/access_mode.hpp"
 #include "duckdb/common/enums/aggregate_handling.hpp"
+#include "duckdb/common/enums/arrow_format_version.hpp"
 #include "duckdb/common/enums/catalog_lookup_behavior.hpp"
 #include "duckdb/common/enums/catalog_type.hpp"
+#include "duckdb/common/enums/checkpoint_abort.hpp"
 #include "duckdb/common/enums/compression_type.hpp"
 #include "duckdb/common/enums/copy_overwrite_mode.hpp"
 #include "duckdb/common/enums/cte_materialize.hpp"
@@ -112,11 +114,10 @@
 #include "duckdb/function/table/arrow/enum/arrow_type_info_type.hpp"
 #include "duckdb/function/table/arrow/enum/arrow_variable_size_type.hpp"
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/function/window/window_merge_sort_tree.hpp"
 #include "duckdb/logging/logging.hpp"
 #include "duckdb/main/appender.hpp"
 #include "duckdb/main/capi/capi_internal.hpp"
-#include "duckdb/main/client_properties.hpp"
-#include "duckdb/main/config.hpp"
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/main/extension.hpp"
 #include "duckdb/main/extension_helper.hpp"
@@ -124,7 +125,7 @@
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/secret/secret.hpp"
-#include "duckdb/main/settings.hpp"
+#include "duckdb/main/setting_info.hpp"
 #include "duckdb/parallel/interrupt.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/task.hpp"
@@ -522,6 +523,28 @@ const char* EnumUtil::ToChars<ArrowDateTimeType>(ArrowDateTimeType value) {
 template<>
 ArrowDateTimeType EnumUtil::FromString<ArrowDateTimeType>(const char *value) {
 	return static_cast<ArrowDateTimeType>(StringUtil::StringToEnum(GetArrowDateTimeTypeValues(), 7, "ArrowDateTimeType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetArrowFormatVersionValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ArrowFormatVersion::V1_0), "1.0" },
+		{ static_cast<uint32_t>(ArrowFormatVersion::V1_1), "1.1" },
+		{ static_cast<uint32_t>(ArrowFormatVersion::V1_2), "1.2" },
+		{ static_cast<uint32_t>(ArrowFormatVersion::V1_3), "1.3" },
+		{ static_cast<uint32_t>(ArrowFormatVersion::V1_4), "1.4" },
+		{ static_cast<uint32_t>(ArrowFormatVersion::V1_5), "1.5" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ArrowFormatVersion>(ArrowFormatVersion value) {
+	return StringUtil::EnumToString(GetArrowFormatVersionValues(), 6, "ArrowFormatVersion", static_cast<uint32_t>(value));
+}
+
+template<>
+ArrowFormatVersion EnumUtil::FromString<ArrowFormatVersion>(const char *value) {
+	return static_cast<ArrowFormatVersion>(StringUtil::StringToEnum(GetArrowFormatVersionValues(), 6, "ArrowFormatVersion", value));
 }
 
 const StringUtil::EnumStringLiteral *GetArrowOffsetSizeValues() {
@@ -3018,10 +3041,10 @@ const StringUtil::EnumStringLiteral *GetOrderByNullTypeValues() {
 		{ static_cast<uint32_t>(OrderByNullType::INVALID), "INVALID" },
 		{ static_cast<uint32_t>(OrderByNullType::ORDER_DEFAULT), "ORDER_DEFAULT" },
 		{ static_cast<uint32_t>(OrderByNullType::ORDER_DEFAULT), "DEFAULT" },
-		{ static_cast<uint32_t>(OrderByNullType::NULLS_FIRST), "NULLS_FIRST" },
 		{ static_cast<uint32_t>(OrderByNullType::NULLS_FIRST), "NULLS FIRST" },
-		{ static_cast<uint32_t>(OrderByNullType::NULLS_LAST), "NULLS_LAST" },
-		{ static_cast<uint32_t>(OrderByNullType::NULLS_LAST), "NULLS LAST" }
+		{ static_cast<uint32_t>(OrderByNullType::NULLS_FIRST), "NULLS_FIRST" },
+		{ static_cast<uint32_t>(OrderByNullType::NULLS_LAST), "NULLS LAST" },
+		{ static_cast<uint32_t>(OrderByNullType::NULLS_LAST), "NULLS_LAST" }
 	};
 	return values;
 }
@@ -4860,6 +4883,27 @@ const char* EnumUtil::ToChars<WindowExcludeMode>(WindowExcludeMode value) {
 template<>
 WindowExcludeMode EnumUtil::FromString<WindowExcludeMode>(const char *value) {
 	return static_cast<WindowExcludeMode>(StringUtil::StringToEnum(GetWindowExcludeModeValues(), 4, "WindowExcludeMode", value));
+}
+
+const StringUtil::EnumStringLiteral *GetWindowMergeSortStageValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(WindowMergeSortStage::INIT), "INIT" },
+		{ static_cast<uint32_t>(WindowMergeSortStage::COMBINE), "COMBINE" },
+		{ static_cast<uint32_t>(WindowMergeSortStage::FINALIZE), "FINALIZE" },
+		{ static_cast<uint32_t>(WindowMergeSortStage::SORTED), "SORTED" },
+		{ static_cast<uint32_t>(WindowMergeSortStage::FINISHED), "FINISHED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<WindowMergeSortStage>(WindowMergeSortStage value) {
+	return StringUtil::EnumToString(GetWindowMergeSortStageValues(), 5, "WindowMergeSortStage", static_cast<uint32_t>(value));
+}
+
+template<>
+WindowMergeSortStage EnumUtil::FromString<WindowMergeSortStage>(const char *value) {
+	return static_cast<WindowMergeSortStage>(StringUtil::StringToEnum(GetWindowMergeSortStageValues(), 5, "WindowMergeSortStage", value));
 }
 
 }
