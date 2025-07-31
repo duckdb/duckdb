@@ -54,8 +54,8 @@ struct Storage {
 	constexpr static idx_t DEFAULT_BLOCK_HEADER_SIZE = sizeof(idx_t);
 	//! The default block header size for blocks written to storage.
 	constexpr static idx_t MAX_BLOCK_HEADER_SIZE = 128ULL;
-	//! Block header size for encrypted blocks (40 bytes)
-	constexpr static idx_t ENCRYPTED_BLOCK_HEADER_SIZE = 40ULL;
+	//! Block header size for encrypted blocks (64 bytes)
+	constexpr static idx_t ENCRYPTED_BLOCK_HEADER_SIZE = 64ULL;
 	//! The default block size.
 	constexpr static idx_t DEFAULT_BLOCK_SIZE = DEFAULT_BLOCK_ALLOC_SIZE - DEFAULT_BLOCK_HEADER_SIZE;
 
@@ -102,8 +102,7 @@ struct MainHeader {
 	//! this is used for early detection of a wrong key
 	static constexpr idx_t CANARY_BYTE_SIZE = 8;
 	//! Nonce, IV (nonce + counter) and tag length
-	static constexpr uint64_t AES_NONCE_LEN = 12;
-	static constexpr uint64_t AES_IV_LEN = 16;
+	static constexpr uint64_t AES_NONCE_LEN = 16;
 	static constexpr uint64_t AES_TAG_LEN = 16;
 
 	static void CheckMagicBytes(FileHandle &handle);

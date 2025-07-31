@@ -12,23 +12,20 @@ Binder Error: Not a valid key. A key cannot be empty
 statement error
 ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER 'random');
 ----
-Binder Error: "random" is not a valid cipher. Try 'gcm', 'ctr', or 'cbc'.
+Binder Error: "random" is not a valid cipher. Try 'gcm' or 'ctr'.
 
 statement error
 ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '');
 ----
-Binder Error: "" is not a valid cipher. Try 'gcm', 'ctr', or 'cbc'.
+Binder Error: "" is not a valid cipher. Try 'gcm' or 'ctr'.
 
 statement error
 ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER 42);
 ----
-Binder Error: "42" is not a valid cipher. Try 'gcm', 'ctr', or 'cbc'.
+Binder Error: "42" is not a valid cipher. Try 'gcm' or 'ctr'.
 
 statement ok
 ATTACH '__TEST_DIR__/encrypted_gcm.duckdb' AS encrypted_gcm (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER 'gcm');
 
-# statement ok
-# ATTACH '__TEST_DIR__/encrypted_ctr.duckdb' AS encrypted_ctr (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER 'ctr');
-#
-# statement ok
-# ATTACH '__TEST_DIR__/encrypted_cbc.duckdb' AS encrypted_cbc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER 'cbc');
+statement ok
+ATTACH '__TEST_DIR__/encrypted_ctr.duckdb' AS encrypted_ctr (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER 'ctr');

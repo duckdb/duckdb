@@ -85,9 +85,9 @@ void EncryptionEngine::EncryptBlock(AttachedDatabase &attached_db, const string 
 	}
 
 	//! Finalize and extract the tag
-	aes_res = encryption_state->Finalize(block.InternalBuffer() + delta, 0, tag.data(), tag.size());
+	encryption_state->Finalize(block.InternalBuffer() + delta, 0, tag.data(), tag.size());
 
-	//! store the generated tag after consequetively the nonce
+	//! store the generated tag *behind* the nonce (but still at the beginning of the block)
 	memcpy(block_offset_internal + nonce.size(), tag.data(), tag.size());
 }
 
@@ -121,7 +121,7 @@ void EncryptionEngine::DecryptBlock(AttachedDatabase &attached_db, const string 
 	}
 
 	//! check the tag
-	aes_res = encryption_state->Finalize(internal_buffer + delta, 0, tag.data(), tag.size());
+	encryption_state->Finalize(internal_buffer + delta, 0, tag.data(), tag.size());
 }
 
 void EncryptionEngine::EncryptTemporaryBuffer(DatabaseInstance &db, data_ptr_t buffer, idx_t buffer_size,

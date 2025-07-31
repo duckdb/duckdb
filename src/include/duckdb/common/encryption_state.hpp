@@ -15,7 +15,7 @@ namespace duckdb {
 class EncryptionTypes {
 
 public:
-	enum CipherType : uint8_t { UNKNOWN = 0, GCM = 1, CTR = 2, CBC = 3 };
+	enum CipherType : uint8_t { UNKNOWN = 0, GCM = 1, CTR = 2 };
 	enum KeyDerivationFunction : uint8_t { DEFAULT = 0, SHA256 = 1, PBKDF2 = 2 };
 
 	static string CipherToString(CipherType cipher_p) {
@@ -24,8 +24,6 @@ public:
 			return "gcm";
 		case CTR:
 			return "ctr";
-		case CBC:
-			return "cbc";
 		default:
 			return "unknown";
 		}
@@ -36,8 +34,6 @@ public:
 			return CipherType::GCM;
 		} else if (encryption_cipher == "ctr") {
 			return CipherType::CTR;
-		} else if (encryption_cipher == "cbc") {
-			return CipherType::CBC;
 		}
 		return CipherType::UNKNOWN;
 	}
@@ -77,7 +73,7 @@ public:
 	DUCKDB_API virtual void InitializeDecryption(const_data_ptr_t iv, idx_t iv_len, const_data_ptr_t key, idx_t key_len,
 	                                             const_data_ptr_t aad = nullptr, idx_t aad_len = 0);
 	DUCKDB_API virtual size_t Process(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len);
-	DUCKDB_API virtual size_t Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, idx_t tag_len);
+	DUCKDB_API virtual void Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, idx_t tag_len);
 	DUCKDB_API virtual void GenerateRandomData(data_ptr_t data, idx_t len);
 };
 

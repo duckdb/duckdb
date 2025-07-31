@@ -42,7 +42,7 @@ void StorageOptions::Initialize(const unordered_map<string, Value> &options) {
 			encryption_cipher = StringUtil::Lower(entry.second.ToString());
 			auto parsed_cipher = EncryptionTypes::StringToCipher(encryption_cipher);
 			if (parsed_cipher == EncryptionTypes::CipherType::UNKNOWN) {
-				throw BinderException("\"%s\" is not a valid cipher. Try 'gcm', 'ctr', or 'cbc'.", encryption_cipher);
+				throw BinderException("\"%s\" is not a valid cipher. Try 'gcm' or 'ctr'.", encryption_cipher);
 			}
 		} else if (entry.first == "row_group_size") {
 			row_group_size = entry.second.GetValue<uint64_t>();
