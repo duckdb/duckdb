@@ -16,12 +16,13 @@ DESCRIBE
 ----
 memory	main	integers	[i, j, a]	[INTEGER, INTEGER, INTEGER]	false
 
-# issue #6393
+# Issue 6393
+
 statement ok
 DROP TABLE integers
 
 statement ok
-create table t(plant text, dt date, mwh bigint);
+CREATE TABLE t(plant TEXT, dt DATE, mwh BIGINT);
 
 query TTTTTT
 DESCRIBE;
