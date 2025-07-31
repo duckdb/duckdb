@@ -283,11 +283,19 @@ MainHeader ConstructMainHeader(idx_t version_number) {
 	return main_header;
 }
 
-void SingleFileBlockManager::StoreEncryptedCanary(DatabaseInstance &db, MainHeader &main_header, const string &key_id) {
-	const_data_ptr_t key = EncryptionEngine::GetKeyFromCache(db, key_id);
+void SingleFileBlockManager::StoreEncryptedCanary(AttachedDatabase &attached_db, MainHeader &main_header, const string &key_id) {
+	const_data_ptr_t key = EncryptionEngine::GetKeyFromCache(attached_db.GetDatabase(), key_id);
 	// Encrypt canary with the derived key
+
+	// TODO this should not happen here
+	auto cipher = EncryptionTypes::StringToCipher(attached_db.GetStorageManager().GetCipher());
+	if (cipher == EncryptionTypes::UNKNOWN) {
+		throw InternalException("Unknown cipher type %s", attached_db.GetStorageManager().GetCipher());
+	}
+
+
 	auto encryption_state =
-	    db.GetEncryptionUtil()->CreateEncryptionState(key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	    attached_db.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(EncryptionState::GCM, key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 	EncryptCanary(main_header, encryption_state, key);
 }
 
@@ -327,8 +335,14 @@ void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header, s
 	data_t derived_key[MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH];
 	EncryptionKeyManager::DeriveKey(user_key, salt, derived_key);
 
+	// TODO this should not happen here
+	auto cipher = EncryptionTypes::StringToCipher(db.GetStorageManager().GetCipher());
+	if (cipher == EncryptionTypes::UNKNOWN) {
+		throw InternalException("Unknown cipher type %s", db.GetStorageManager().GetCipher());
+	}
+	// FIXME
 	auto encryption_state = db.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(
-	    derived_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	  EncryptionState::GCM,  derived_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 	if (!DecryptCanary(main_header, encryption_state, derived_key)) {
 		throw IOException("Wrong encryption key used to open the database file");
 	}
@@ -384,7 +398,7 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 		//! Store all metadata in the main header
 		StoreEncryptionMetadata(main_header);
 		StoreSalt(main_header, salt);
-		StoreEncryptedCanary(db.GetDatabase(), main_header, options.encryption_options.derived_key_id);
+		StoreEncryptedCanary(db, main_header, options.encryption_options.derived_key_id);
 	}
 
 	SerializeHeaderStructure<MainHeader>(main_header, header_buffer.buffer);
@@ -456,6 +470,8 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 	}
 
 	if (main_header.IsEncrypted()) {
+		// TODO if there is no cipher in the config, use the one from the existing config
+		// TODO if a cipher was provided, check if it is the same than in the config!
 		if (options.encryption_options.encryption_enabled) {
 			//! Encryption is set
 			//! Check if the given key upon attach is correct
@@ -548,7 +564,7 @@ void SingleFileBlockManager::ReadAndChecksum(FileBuffer &block, uint64_t locatio
 
 	if (options.encryption_options.encryption_enabled && !skip_block_header) {
 		auto key_id = options.encryption_options.derived_key_id;
-		EncryptionEngine::DecryptBlock(db.GetDatabase(), key_id, block.InternalBuffer(), block.Size(), delta);
+		EncryptionEngine::DecryptBlock(db, key_id, block.InternalBuffer(), block.Size(), delta);
 	}
 
 	CheckChecksum(block, location, delta, skip_block_header);
@@ -579,7 +595,7 @@ void SingleFileBlockManager::ChecksumAndWrite(QueryContext context, FileBuffer &
 		auto key_id = options.encryption_options.derived_key_id;
 		temp_buffer_manager =
 		    make_uniq<FileBuffer>(Allocator::Get(db), block.GetBufferType(), block.Size(), GetBlockHeaderSize());
-		EncryptionEngine::EncryptBlock(db.GetDatabase(), key_id, block, *temp_buffer_manager, delta);
+		EncryptionEngine::EncryptBlock(db, key_id, block, *temp_buffer_manager, delta);
 		temp_buffer_manager->Write(context, *handle, location);
 	} else {
 		block.Write(context, *handle, location);
@@ -851,7 +867,7 @@ void SingleFileBlockManager::ReadBlock(data_ptr_t internal_buffer, uint64_t bloc
 	uint64_t delta = GetBlockHeaderSize() - Storage::DEFAULT_BLOCK_HEADER_SIZE;
 
 	if (options.encryption_options.encryption_enabled && !skip_block_header) {
-		EncryptionEngine::DecryptBlock(db.GetDatabase(), options.encryption_options.derived_key_id, internal_buffer,
+		EncryptionEngine::DecryptBlock(db, options.encryption_options.derived_key_id, internal_buffer,
 		                               block_size, delta);
 	}
 
@@ -867,7 +883,7 @@ void SingleFileBlockManager::ReadBlock(Block &block, bool skip_block_header) con
 	uint64_t delta = GetBlockHeaderSize() - Storage::DEFAULT_BLOCK_HEADER_SIZE;
 
 	if (options.encryption_options.encryption_enabled && !skip_block_header) {
-		EncryptionEngine::DecryptBlock(db.GetDatabase(), options.encryption_options.derived_key_id,
+		EncryptionEngine::DecryptBlock(db, options.encryption_options.derived_key_id,
 		                               block.InternalBuffer(), block.Size(), delta);
 	}
 

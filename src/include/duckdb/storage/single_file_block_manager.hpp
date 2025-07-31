@@ -131,7 +131,7 @@ private:
 	idx_t GetBlockLocation(block_id_t block_id) const;
 
 	// Encrypt, Store, Decrypt the canary
-	static void StoreEncryptedCanary(DatabaseInstance &db, MainHeader &main_header, const string &key_id);
+	static void StoreEncryptedCanary(AttachedDatabase &attached_db, MainHeader &main_header, const string &key_id);
 	static void StoreSalt(MainHeader &main_header, data_ptr_t salt);
 	void StoreEncryptionMetadata(MainHeader &main_header) const;
 

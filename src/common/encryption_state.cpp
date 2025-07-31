@@ -2,7 +2,7 @@
 
 namespace duckdb {
 
-EncryptionState::EncryptionState(const_data_ptr_t key, idx_t key_len) {
+EncryptionState::EncryptionState(Cipher cipher, const_data_ptr_t key, idx_t key_len) {
 	// abstract class, no implementation needed
 }
 

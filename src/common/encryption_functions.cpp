@@ -3,6 +3,7 @@
 #include "duckdb/common/encryption_functions.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "mbedtls_wrapper.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 
 namespace duckdb {
 
@@ -48,19 +49,27 @@ void EncryptionEngine::AddTempKeyToCache(DatabaseInstance &db) {
 	const auto length = MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH;
 	data_t temp_key[length];
 
-	auto encryption_state = db.GetEncryptionUtil()->CreateEncryptionState(temp_key, length);
+	auto encryption_state = db.GetEncryptionUtil()->CreateEncryptionState(EncryptionState::GCM, temp_key, length);
 	encryption_state->GenerateRandomData(temp_key, length);
 
 	string key_id = "temp_key";
 	AddKeyToCache(db, temp_key, key_id);
 }
 
-void EncryptionEngine::EncryptBlock(DatabaseInstance &db, const string &key_id, FileBuffer &block,
+void EncryptionEngine::EncryptBlock(AttachedDatabase &attached_db, const string &key_id, FileBuffer &block,
                                     FileBuffer &temp_buffer_manager, uint64_t delta) {
+	auto& db = attached_db.GetDatabase();
 	data_ptr_t block_offset_internal = temp_buffer_manager.InternalBuffer();
-	auto encrypt_key = GetKeyFromCache(db, key_id);
+	auto encrypt_key = GetKeyFromCache(db , key_id);
+
+	// TODO this should not happen here
+	auto cipher = EncryptionTypes::StringToCipher(attached_db.GetStorageManager().GetCipher());
+	if (cipher == EncryptionTypes::UNKNOWN) {
+		throw InternalException("Unknown cipher type %s", attached_db.GetStorageManager().GetCipher());
+	}
+
 	auto encryption_state =
-	    db.GetEncryptionUtil()->CreateEncryptionState(encrypt_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	    db.GetEncryptionUtil()->CreateEncryptionState(EncryptionState::GCM,  encrypt_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 
 	EncryptionTag tag;
 	EncryptionNonce nonce;
@@ -89,12 +98,21 @@ void EncryptionEngine::EncryptBlock(DatabaseInstance &db, const string &key_id, 
 	memcpy(block_offset_internal + nonce.size(), tag.data(), tag.size());
 }
 
-void EncryptionEngine::DecryptBlock(DatabaseInstance &db, const string &key_id, data_ptr_t internal_buffer,
+void EncryptionEngine::DecryptBlock(AttachedDatabase &attached_db, const string &key_id, data_ptr_t internal_buffer,
                                     uint64_t block_size, uint64_t delta) {
 	//! initialize encryption state
+	auto& db = attached_db.GetDatabase();
+
+
+	// TODO this should not happen here
+	auto cipher = EncryptionTypes::StringToCipher(attached_db.GetStorageManager().GetCipher());
+	if (cipher == EncryptionTypes::UNKNOWN) {
+		throw InternalException("Unknown cipher type %s", attached_db.GetStorageManager().GetCipher());
+	}
+
 	auto decrypt_key = GetKeyFromCache(db, key_id);
 	auto encryption_state =
-	    db.GetEncryptionUtil()->CreateEncryptionState(decrypt_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	    db.GetEncryptionUtil()->CreateEncryptionState(EncryptionState::GCM, decrypt_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 
 	//! load the stored nonce and tag
 	EncryptionTag tag;
@@ -129,7 +147,7 @@ void EncryptionEngine::EncryptTemporaryBuffer(DatabaseInstance &db, data_ptr_t b
 	auto temp_key = GetKeyFromCache(db, "temp_key");
 
 	auto encryption_util = db.GetEncryptionUtil();
-	auto encryption_state = encryption_util->CreateEncryptionState(temp_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	auto encryption_state = encryption_util->CreateEncryptionState(EncryptionState::GCM, temp_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 
 	// zero-out the metadata buffer
 	memset(metadata, 0, DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE);
@@ -188,7 +206,7 @@ void EncryptionEngine::DecryptTemporaryBuffer(DatabaseInstance &db, data_ptr_t b
 	//! initialize encryption state
 	auto encryption_util = db.GetEncryptionUtil();
 	auto temp_key = GetKeyFromCache(db, "temp_key");
-	auto encryption_state = encryption_util->CreateEncryptionState(temp_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	auto encryption_state = encryption_util->CreateEncryptionState(EncryptionState::GCM, temp_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 
 	DecryptBuffer(*encryption_state, temp_key, buffer, buffer_size, metadata);
 }

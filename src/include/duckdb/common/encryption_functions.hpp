@@ -56,9 +56,9 @@ public:
 	static void AddTempKeyToCache(DatabaseInstance &db);
 
 	//! Encryption Functions
-	static void EncryptBlock(DatabaseInstance &db, const string &key_id, FileBuffer &block,
+	static void EncryptBlock(AttachedDatabase &attached_db, const string &key_id, FileBuffer &block,
 	                         FileBuffer &temp_buffer_manager, uint64_t delta);
-	static void DecryptBlock(DatabaseInstance &db, const string &key_id, data_ptr_t internal_buffer,
+	static void DecryptBlock(AttachedDatabase &attached_db, const string &key_id, data_ptr_t internal_buffer,
 	                         uint64_t block_size, uint64_t delta);
 
 	static void EncryptTemporaryBuffer(DatabaseInstance &db, data_ptr_t buffer, idx_t buffer_size, data_ptr_t metadata);

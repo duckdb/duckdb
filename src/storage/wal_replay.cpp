@@ -141,8 +141,11 @@ public:
 			auto &keys = EncryptionKeyManager::Get(state_p.db.GetDatabase());
 			auto &catalog = state_p.db.GetCatalog().Cast<DuckCatalog>();
 			auto derived_key = keys.GetKey(catalog.GetEncryptionKeyId());
+
+			// TODO get the actual cipher!
+
 			//! initialize the decryption
-			auto encryption_state = database.GetEncryptionUtil()->CreateEncryptionState(
+			auto encryption_state = database.GetEncryptionUtil()->CreateEncryptionState(EncryptionState::GCM,
 			    derived_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 			encryption_state->InitializeDecryption(nonce.data(), nonce.size(), derived_key,
 			                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);

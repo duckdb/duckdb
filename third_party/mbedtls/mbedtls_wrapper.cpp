@@ -244,7 +244,6 @@ const mbedtls_cipher_info_t *MbedTlsWrapper::AESStateMBEDTLS::GetCipher(size_t k
 		    default:
 			    throw runtime_error("Invalid AES key length");
 		    }
-
 		case CTR:
 		    switch (key_len) {
 		    case 16:
@@ -256,13 +255,25 @@ const mbedtls_cipher_info_t *MbedTlsWrapper::AESStateMBEDTLS::GetCipher(size_t k
 		    default:
 			    throw runtime_error("Invalid AES key length");
 		    }
+	case CBC:
+		switch (key_len) {
+		case 16:
+			return mbedtls_cipher_info_from_type(MBEDTLS_CIPHER_AES_128_CBC);
+		case 24:
+			return mbedtls_cipher_info_from_type(MBEDTLS_CIPHER_AES_192_CBC);
+		case 32:
+			return mbedtls_cipher_info_from_type(MBEDTLS_CIPHER_AES_256_CBC);
+		default:
+			throw runtime_error("Invalid AES key length");
+		}
 
 		default:
 			throw duckdb::InternalException("Invalid Encryption/Decryption Cipher: %d", static_cast<int>(cipher));
 	}
 }
 
-MbedTlsWrapper::AESStateMBEDTLS::AESStateMBEDTLS(duckdb::const_data_ptr_t key, duckdb::idx_t key_len) : context(duckdb::make_uniq<mbedtls_cipher_context_t>()) {
+// TODO move cipher into superclass
+MbedTlsWrapper::AESStateMBEDTLS::AESStateMBEDTLS(Cipher cipher_p, duckdb::const_data_ptr_t, duckdb::idx_t key_len) : EncryptionState(cipher_p), cipher(cipher_p), context(duckdb::make_uniq<mbedtls_cipher_context_t>()) {
 	mbedtls_cipher_init(context.get());
 
 	auto cipher_info = GetCipher(key_len);
