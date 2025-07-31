@@ -165,7 +165,7 @@ Value::Value(String val) : type_(LogicalType::VARCHAR), is_null(false) {
 	if (!Value::StringIsValid(val.c_str(), val.GetSize())) {
 		throw ErrorManager::InvalidUnicodeError(val, "value construction");
 	}
-	value_info_ = make_shared_ptr<StringValueInfo>(std::move(val.ToStdString()));
+	value_info_ = make_shared_ptr<StringValueInfo>(val.ToStdString());
 }
 
 Value::~Value() {
