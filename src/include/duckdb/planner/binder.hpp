@@ -207,10 +207,6 @@ public:
 	                   TableCatalogEntry &table, vector<PhysicalIndex> &columns,
 	                   vector<unique_ptr<Expression>> &update_expressions,
 	                   vector<unique_ptr<Expression>> &projection_expressions);
-	void BindDoUpdateSetExpressions(const string &table_alias, BoundOnConflictInfo &on_conflict_info,
-	                                vector<unique_ptr<Expression>> &expressions, UpdateSetInfo &set_info,
-	                                TableCatalogEntry &table, TableStorageInfo &storage_info);
-	void BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &table, InsertStatement &stmt);
 
 	void BindVacuumTable(LogicalVacuum &vacuum, unique_ptr<LogicalOperator> &root);
 
