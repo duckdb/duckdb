@@ -23,7 +23,7 @@ insert into tbl VALUES
 # - both conflicts with the existing data as well as within the to-be-inserted-data
 statement ok
 insert into tbl VALUES
-	(1, 'a'),	-- conflict (existing)
+	(1, 'c'),	-- conflict (existing)
 	(6, 'yep'),
 	(3, 'abc'),	-- conflict (existing)
 	(4, 'abc'),
