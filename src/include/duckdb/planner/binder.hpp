@@ -466,6 +466,9 @@ private:
 	                          vector<LogicalIndex> &named_column_map, vector<LogicalType> &expected_types,
 	                          IndexVector<idx_t, PhysicalIndex> &column_index_map);
 	void TryReplaceDefaultExpression(unique_ptr<ParsedExpression> &expr, const ColumnDefinition &column);
+	void ExpandDefaultInValuesList(InsertStatement &stmt, TableCatalogEntry &table,
+	                               optional_ptr<ExpressionListRef> values_list,
+	                               const vector<LogicalIndex> &named_column_map);
 	unique_ptr<BoundMergeIntoAction> BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table,
 	                                                 LogicalGet &get, idx_t proj_index,
 	                                                 vector<unique_ptr<Expression>> &expressions,

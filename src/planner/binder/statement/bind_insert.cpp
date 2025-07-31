@@ -56,6 +56,42 @@ void Binder::TryReplaceDefaultExpression(unique_ptr<ParsedExpression> &expr, con
 	expr = ExpandDefaultExpression(column);
 }
 
+void Binder::ExpandDefaultInValuesList(InsertStatement &stmt, TableCatalogEntry &table,
+                                       optional_ptr<ExpressionListRef> values_list,
+                                       const vector<LogicalIndex> &named_column_map) {
+	if (!values_list) {
+		return;
+	}
+	idx_t expected_columns = stmt.columns.empty() ? table.GetColumns().PhysicalColumnCount() : stmt.columns.size();
+
+	// special case: check if we are inserting from a VALUES statement
+	if (values_list) {
+		auto &expr_list = values_list->Cast<ExpressionListRef>();
+		expr_list.expected_types.resize(expected_columns);
+		expr_list.expected_names.resize(expected_columns);
+
+		D_ASSERT(!expr_list.values.empty());
+		CheckInsertColumnCountMismatch(expected_columns, expr_list.values[0].size(), !stmt.columns.empty(),
+		                               table.name.c_str());
+
+		// VALUES list!
+		for (idx_t col_idx = 0; col_idx < expected_columns; col_idx++) {
+			D_ASSERT(named_column_map.size() >= col_idx);
+			auto &table_col_idx = named_column_map[col_idx];
+
+			// set the expected types as the types for the INSERT statement
+			auto &column = table.GetColumn(table_col_idx);
+			expr_list.expected_types[col_idx] = column.Type();
+			expr_list.expected_names[col_idx] = column.Name();
+
+			// now replace any DEFAULT values with the corresponding default expression
+			for (idx_t list_idx = 0; list_idx < expr_list.values.size(); list_idx++) {
+				TryReplaceDefaultExpression(expr_list.values[list_idx][col_idx], column);
+			}
+		}
+	}
+}
+
 void DoUpdateSetQualify(unique_ptr<ParsedExpression> &expr, const string &table_name,
                         vector<unordered_set<string>> &lambda_params);
 
@@ -280,7 +316,8 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertStatement &stmt, 
 			join_condition = std::move(join_conditions[0]);
 		} else {
 			// OR together
-			join_condition= make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_OR, std::move(join_conditions));
+			join_condition =
+			    make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_OR, std::move(join_conditions));
 		}
 		merge_into->join_condition = std::move(join_condition);
 
@@ -338,6 +375,22 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertStatement &stmt, 
 		merge_into->using_columns = std::move(on_conflict_info.indexed_columns);
 	}
 
+	// expand any default values
+	auto values_list = stmt.GetValuesList();
+	if (values_list) {
+		vector<LogicalIndex> named_column_map;
+		if (stmt.columns.empty()) {
+			for (auto &col : table.GetColumns().Physical()) {
+				named_column_map.push_back(col.Logical());
+			}
+		} else {
+			for (auto &col_name : stmt.columns) {
+				auto &col = table.GetColumn(col_name);
+				named_column_map.push_back(col.Logical());
+			}
+		}
+		ExpandDefaultInValuesList(stmt, table, values_list, named_column_map);
+	}
 	// set up the data source
 	// FIXME: include a DISTINCT ON (unique_columns)
 	auto source = make_uniq<SubqueryRef>(std::move(stmt.select_statement), "excluded");
@@ -487,33 +540,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	}
 	// Exclude the generated columns from this amount
 	idx_t expected_columns = stmt.columns.empty() ? table.GetColumns().PhysicalColumnCount() : stmt.columns.size();
-
-	// special case: check if we are inserting from a VALUES statement
-	if (values_list) {
-		auto &expr_list = values_list->Cast<ExpressionListRef>();
-		expr_list.expected_types.resize(expected_columns);
-		expr_list.expected_names.resize(expected_columns);
-
-		D_ASSERT(!expr_list.values.empty());
-		CheckInsertColumnCountMismatch(expected_columns, expr_list.values[0].size(), !stmt.columns.empty(),
-		                               table.name.c_str());
-
-		// VALUES list!
-		for (idx_t col_idx = 0; col_idx < expected_columns; col_idx++) {
-			D_ASSERT(named_column_map.size() >= col_idx);
-			auto &table_col_idx = named_column_map[col_idx];
-
-			// set the expected types as the types for the INSERT statement
-			auto &column = table.GetColumn(table_col_idx);
-			expr_list.expected_types[col_idx] = column.Type();
-			expr_list.expected_names[col_idx] = column.Name();
-
-			// now replace any DEFAULT values with the corresponding default expression
-			for (idx_t list_idx = 0; list_idx < expr_list.values.size(); list_idx++) {
-				TryReplaceDefaultExpression(expr_list.values[list_idx][col_idx], column);
-			}
-		}
-	}
+	ExpandDefaultInValuesList(stmt, table, values_list, named_column_map);
 
 	// parse select statement and add to logical plan
 	unique_ptr<LogicalOperator> root;
