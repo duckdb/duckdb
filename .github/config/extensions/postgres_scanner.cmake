@@ -2,9 +2,8 @@
 #       uses a remote rds server but that's not something we want to run here.
 if (NOT MINGW AND NOT ${WASM_ENABLED})
     duckdb_extension_load(postgres_scanner
-            APPLY_PATCHES
             DONT_LINK
             GIT_URL https://github.com/duckdb/duckdb-postgres
-            GIT_TAG 9b24967e06a4af0a3cd43f8372114202a400f5f5
+            GIT_TAG e58cd1dfed98a04ce3e928d5b941e5e2c533ba12
             )
 endif()
