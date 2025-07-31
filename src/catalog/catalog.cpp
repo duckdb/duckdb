@@ -590,8 +590,7 @@ static bool CompareCatalogTypes(CatalogType type_a, CatalogType type_b) {
 	return false;
 }
 
-bool Catalog::AutoLoadExtensionByCatalogEntry(QueryContext context, DatabaseInstance &db, CatalogType type,
-                                              const string &entry_name) {
+bool Catalog::AutoLoadExtensionByCatalogEntry(DatabaseInstance &db, CatalogType type, const string &entry_name) {
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
 	auto &dbconfig = DBConfig::GetConfig(db);
 	if (dbconfig.options.autoload_known_extensions) {
@@ -985,14 +984,13 @@ CatalogEntry &Catalog::GetEntry(ClientContext &context, CatalogType catalog_type
 	return GetEntry(context, schema_name, lookup_info);
 }
 
-optional_ptr<CatalogEntry> Catalog::GetEntry(QueryContext context, CatalogEntryRetriever &retriever,
-                                             const string &schema_name, const EntryLookupInfo &lookup_info,
-                                             OnEntryNotFound if_not_found) {
+optional_ptr<CatalogEntry> Catalog::GetEntry(CatalogEntryRetriever &retriever, const string &schema_name,
+                                             const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found) {
 	auto lookup_entry = TryLookupEntry(retriever, schema_name, lookup_info, if_not_found);
 
 	// Try autoloading extension to resolve lookup
 	if (!lookup_entry.Found()) {
-		if (AutoLoadExtensionByCatalogEntry(context, *retriever.GetContext().db, lookup_info.GetCatalogType(),
+		if (AutoLoadExtensionByCatalogEntry(*retriever.GetContext().db, lookup_info.GetCatalogType(),
 		                                    lookup_info.GetEntryName())) {
 			lookup_entry = TryLookupEntry(retriever, schema_name, lookup_info, if_not_found);
 		}
@@ -1008,21 +1006,21 @@ optional_ptr<CatalogEntry> Catalog::GetEntry(QueryContext context, CatalogEntryR
 optional_ptr<CatalogEntry> Catalog::GetEntry(ClientContext &context, const string &schema_name,
                                              const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found) {
 	CatalogEntryRetriever retriever(context);
-	return GetEntry(QueryContext(context), retriever, schema_name, lookup_info, if_not_found);
+	return GetEntry(retriever, schema_name, lookup_info, if_not_found);
 }
 
 CatalogEntry &Catalog::GetEntry(ClientContext &context, const string &schema, const EntryLookupInfo &lookup_info) {
 	return *Catalog::GetEntry(context, schema, lookup_info, OnEntryNotFound::THROW_EXCEPTION);
 }
 
-optional_ptr<CatalogEntry> Catalog::GetEntry(QueryContext context, CatalogEntryRetriever &retriever,
-                                             const string &catalog, const string &schema,
-                                             const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found) {
+optional_ptr<CatalogEntry> Catalog::GetEntry(CatalogEntryRetriever &retriever, const string &catalog,
+                                             const string &schema, const EntryLookupInfo &lookup_info,
+                                             OnEntryNotFound if_not_found) {
 	auto result = TryLookupEntry(retriever, catalog, schema, lookup_info, if_not_found);
 
 	// Try autoloading extension to resolve lookup
 	if (!result.Found()) {
-		if (AutoLoadExtensionByCatalogEntry(context, *retriever.GetContext().db, lookup_info.GetCatalogType(),
+		if (AutoLoadExtensionByCatalogEntry(*retriever.GetContext().db, lookup_info.GetCatalogType(),
 		                                    lookup_info.GetEntryName())) {
 			result = TryLookupEntry(retriever, catalog, schema, lookup_info, if_not_found);
 		}
@@ -1041,7 +1039,7 @@ optional_ptr<CatalogEntry> Catalog::GetEntry(QueryContext context, CatalogEntryR
 optional_ptr<CatalogEntry> Catalog::GetEntry(ClientContext &context, const string &catalog, const string &schema,
                                              const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found) {
 	CatalogEntryRetriever retriever(context);
-	return GetEntry(QueryContext(context), retriever, catalog, schema, lookup_info, if_not_found);
+	return GetEntry(retriever, catalog, schema, lookup_info, if_not_found);
 }
 
 CatalogEntry &Catalog::GetEntry(ClientContext &context, const string &catalog, const string &schema,

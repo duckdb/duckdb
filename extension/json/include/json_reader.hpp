@@ -46,7 +46,7 @@ public:
 
 struct JSONFileHandle {
 public:
-	JSONFileHandle(unique_ptr<FileHandle> file_handle, Allocator &allocator);
+	JSONFileHandle(QueryContext context, unique_ptr<FileHandle> file_handle, Allocator &allocator);
 
 	bool IsOpen() const;
 	void Close();
@@ -67,14 +67,15 @@ public:
 	bool GetPositionAndSize(idx_t &position, idx_t &size, idx_t requested_size);
 	bool Read(char *pointer, idx_t &read_size, idx_t requested_size);
 	//! Read at position optionally allows passing a custom handle to read from, otherwise the default one is used
-	void ReadAtPosition(QueryContext context, char *pointer, idx_t size, idx_t position,
-	                    optional_ptr<FileHandle> override_handle = nullptr);
+	void ReadAtPosition(char *pointer, idx_t size, idx_t position, optional_ptr<FileHandle> override_handle = nullptr);
 
 private:
 	idx_t ReadInternal(char *pointer, const idx_t requested_size);
 	idx_t ReadFromCache(char *&pointer, idx_t &size, atomic<idx_t> &position);
 
 private:
+	QueryContext context;
+
 	//! The JSON file handle
 	unique_ptr<FileHandle> file_handle;
 	Allocator &allocator;

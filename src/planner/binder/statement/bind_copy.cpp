@@ -47,14 +47,14 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 	    stmt.info->is_format_auto_detected ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	CatalogEntryRetriever entry_retriever {context};
 	auto &catalog = Catalog::GetSystemCatalog(context);
-	auto entry = catalog.GetEntry(QueryContext(context), entry_retriever, DEFAULT_SCHEMA,
+	auto entry = catalog.GetEntry(entry_retriever, DEFAULT_SCHEMA,
 	                              {CatalogType::COPY_FUNCTION_ENTRY, stmt.info->format}, on_entry_do);
 
 	if (!entry) {
 		IsFormatExtensionKnown(stmt.info->format);
 		// If we did not find an entry, we default to a CSV
-		entry = catalog.GetEntry(QueryContext(context), entry_retriever, DEFAULT_SCHEMA,
-		                         {CatalogType::COPY_FUNCTION_ENTRY, "csv"}, OnEntryNotFound::THROW_EXCEPTION);
+		entry = catalog.GetEntry(entry_retriever, DEFAULT_SCHEMA, {CatalogType::COPY_FUNCTION_ENTRY, "csv"},
+		                         OnEntryNotFound::THROW_EXCEPTION);
 	}
 	// lookup the format in the catalog
 	auto &copy_function = entry->Cast<CopyFunctionCatalogEntry>();
@@ -351,13 +351,13 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 	auto on_entry_do =
 	    stmt.info->is_format_auto_detected ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	CatalogEntryRetriever entry_retriever {context};
-	auto entry = catalog.GetEntry(QueryContext(context), entry_retriever, DEFAULT_SCHEMA,
+	auto entry = catalog.GetEntry(entry_retriever, DEFAULT_SCHEMA,
 	                              {CatalogType::COPY_FUNCTION_ENTRY, stmt.info->format}, on_entry_do);
 	if (!entry) {
 		IsFormatExtensionKnown(stmt.info->format);
 		// If we did not find an entry, we default to a CSV
-		entry = catalog.GetEntry(QueryContext(context), entry_retriever, DEFAULT_SCHEMA,
-		                         {CatalogType::COPY_FUNCTION_ENTRY, "csv"}, OnEntryNotFound::THROW_EXCEPTION);
+		entry = catalog.GetEntry(entry_retriever, DEFAULT_SCHEMA, {CatalogType::COPY_FUNCTION_ENTRY, "csv"},
+		                         OnEntryNotFound::THROW_EXCEPTION);
 	}
 	// lookup the format in the catalog
 	auto &copy_function = entry->Cast<CopyFunctionCatalogEntry>();

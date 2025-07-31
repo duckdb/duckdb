@@ -14,10 +14,10 @@ JSONBufferHandle::JSONBufferHandle(JSONReader &reader, idx_t buffer_index_p, idx
       buffer_size(buffer_size_p), buffer_start(buffer_start_p) {
 }
 
-JSONFileHandle::JSONFileHandle(unique_ptr<FileHandle> file_handle_p, Allocator &allocator_p)
-    : file_handle(std::move(file_handle_p)), allocator(allocator_p), can_seek(file_handle->CanSeek()),
-      file_size(file_handle->GetFileSize()), read_position(0), requested_reads(0), actual_reads(0),
-      last_read_requested(false), cached_size(0) {
+JSONFileHandle::JSONFileHandle(QueryContext context_p, unique_ptr<FileHandle> file_handle_p, Allocator &allocator_p)
+    : context(context_p), file_handle(std::move(file_handle_p)), allocator(allocator_p),
+      can_seek(file_handle->CanSeek()), file_size(file_handle->GetFileSize()), read_position(0), requested_reads(0),
+      actual_reads(0), last_read_requested(false), cached_size(0) {
 }
 
 bool JSONFileHandle::IsOpen() const {
@@ -88,7 +88,7 @@ bool JSONFileHandle::GetPositionAndSize(idx_t &position, idx_t &size, idx_t requ
 	return true;
 }
 
-void JSONFileHandle::ReadAtPosition(QueryContext context, char *pointer, idx_t size, idx_t position,
+void JSONFileHandle::ReadAtPosition(char *pointer, idx_t size, idx_t position,
                                     optional_ptr<FileHandle> override_handle) {
 	if (IsPipe()) {
 		throw InternalException("ReadAtPosition is not supported for pipes");
@@ -184,7 +184,8 @@ void JSONReader::OpenJSONFile() {
 	if (!IsOpen()) {
 		auto &fs = FileSystem::GetFileSystem(context);
 		auto regular_file_handle = fs.OpenFile(file, FileFlags::FILE_FLAGS_READ | options.compression);
-		file_handle = make_uniq<JSONFileHandle>(std::move(regular_file_handle), BufferAllocator::Get(context));
+		file_handle = make_uniq<JSONFileHandle>(QueryContext(context), std::move(regular_file_handle),
+		                                        BufferAllocator::Get(context));
 	}
 	Reset();
 }
@@ -1051,8 +1052,8 @@ void JSONReader::ReadNextBufferSeek(JSONReaderScanState &scan_state) {
 		}
 
 		// Now read the file lock-free!
-		file_handle.ReadAtPosition(QueryContext(context), scan_state.buffer_ptr + read_offset, scan_state.read_size,
-		                           scan_state.read_position, scan_state.thread_local_filehandle);
+		file_handle.ReadAtPosition(scan_state.buffer_ptr + read_offset, scan_state.read_size, scan_state.read_position,
+		                           scan_state.thread_local_filehandle);
 	}
 	scan_state.buffer_size = read_offset + scan_state.read_size;
 	scan_state.buffer_offset = read_offset;

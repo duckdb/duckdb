@@ -20,8 +20,6 @@
 #include <algorithm>
 #include <cstring>
 
-#include "../../test/sqlite/sqllogic_command.hpp"
-
 namespace duckdb {
 
 const char MainHeader::MAGIC_BYTES[] = "DUCK";
