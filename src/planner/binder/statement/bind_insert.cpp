@@ -243,14 +243,15 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertStatement &stmt, 
 		// When omitting the conflict target, we derive the join columns from the primary key/unique constraints
 		// traverse the primary key/unique constraints
 
-		unique_ptr<ParsedExpression> join_condition;
+		vector<unique_ptr<ParsedExpression>> join_conditions;
 		// We check if there are any constraints on the table, if there aren't we throw an error.
 		idx_t found_matching_indexes = 0;
 		for (auto &index : storage_info.index_info) {
 			if (!index.is_unique) {
 				continue;
 			}
-			unique_ptr<ParsedExpression> condition;
+
+			vector<unique_ptr<ParsedExpression>> and_children;
 			auto &indexed_columns = index.column_set;
 			for (auto &column : columns.Physical()) {
 				if (indexed_columns.count(column.Physical().index)) {
@@ -258,28 +259,28 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertStatement &stmt, 
 					auto rhs = make_uniq<ColumnRefExpression>(column.Name(), "excluded");
 					auto new_condition =
 					    make_uniq<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, std::move(lhs), std::move(rhs));
-					if (condition) {
-						// AND together
-						auto and_condition = make_uniq<ConjunctionExpression>(
-						    ExpressionType::CONJUNCTION_AND, std::move(condition), std::move(new_condition));
-						condition = std::move(and_condition);
-					} else {
-						condition = std::move(new_condition);
-					}
+					and_children.push_back(std::move(new_condition));
 				}
 			}
-			if (!condition) {
+			if (and_children.empty()) {
 				continue;
 			}
-			if (join_condition) {
-				// OR together
-				auto or_condition = make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_OR,
-				                                                     std::move(join_condition), std::move(condition));
-				join_condition = std::move(or_condition);
+			unique_ptr<ParsedExpression> condition;
+			if (and_children.size() == 1) {
+				condition = std::move(and_children[0]);
 			} else {
-				join_condition = std::move(condition);
+				// AND together
+				condition = make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(and_children));
 			}
+			join_conditions.push_back(std::move(condition));
 			found_matching_indexes++;
+		}
+		unique_ptr<ParsedExpression> join_condition;
+		if (join_conditions.size() == 1) {
+			join_condition = std::move(join_conditions[0]);
+		} else {
+			// OR together
+			join_condition= make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_OR, std::move(join_conditions));
 		}
 		merge_into->join_condition = std::move(join_condition);
 
