@@ -87,16 +87,20 @@ vector<string> SQLLogicParser::ExtractExpectedResult() {
 	return result;
 }
 
-string SQLLogicParser::ExtractExpectedError(bool expect_ok, bool original_sqlite_test) {
+string SQLLogicParser::ExtractExpectedError(ExpectedResult expected_result, bool original_sqlite_test) {
+	bool expect_error_message =
+	    expected_result == ExpectedResult::RESULT_ERROR || expected_result == ExpectedResult::RESULT_UNKNOWN;
+
 	// check if there is an expected error at all
 	if (current_line >= lines.size() || lines[current_line] != "----") {
-		if (!expect_ok && !original_sqlite_test) {
-			Fail("Failed to parse statement: statement error needs to have an expected error message");
+		if (expect_error_message && !original_sqlite_test) {
+			Fail("Failed to parse statement: statement error and maybe needs to have an expected error message");
 		}
 		return string();
 	}
-	if (expect_ok) {
-		Fail("Failed to parse statement: only statement error can have an expected error message, not statement ok");
+	if (!expect_error_message) {
+		Fail("Failed to parse statement: only statement error or maybe can have an expected error message, not "
+		     "statement ok");
 	}
 	current_line++;
 	string error;
