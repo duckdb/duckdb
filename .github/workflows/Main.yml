@@ -441,7 +441,7 @@ jobs:
       run: |
         ./build/release/test/unittest --verify-vector nested_shuffle --skip-compiled
 
- linux-relassert-configs:
+ linux-debug-configs:
    name: Tests relassert with different configurations
    runs-on: ubuntu-24.04
    env:
@@ -472,7 +472,7 @@ jobs:
        env:
          CORE_EXTENSIONS: "json;parquet;icu;tpch;tpcds"
          GEN: ninja
-       run: make relassert
+       run: make debug
 
      - name: test/configs/force_storage.json
        if: (success() || failure()) && steps.build.conclusion == 'success'
