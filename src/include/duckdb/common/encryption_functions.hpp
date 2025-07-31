@@ -1,15 +1,13 @@
 #pragma once
 
 #include "duckdb/common/helper.hpp"
-#include "duckdb/common/types/value.hpp"
-#include "duckdb/common/encryption_state.hpp"
-#include "duckdb/common/encryption_key_manager.hpp"
 
-#ifndef DUCKDB_AMALGAMATION
-#include "duckdb/storage/object_cache.hpp"
-#endif
 
 namespace duckdb {
+
+class DatabaseInstance;
+class AttachedDatabase;
+class FileBuffer;
 
 struct EncryptionTag {
 	EncryptionTag() = default;
@@ -62,61 +60,10 @@ public:
 	                         uint64_t block_size, uint64_t delta);
 
 	static void EncryptTemporaryBuffer(DatabaseInstance &db, data_ptr_t buffer, idx_t buffer_size, data_ptr_t metadata);
-	static void DecryptBuffer(EncryptionState &encryption_state, const_data_ptr_t temp_key, data_ptr_t buffer,
-	                          idx_t buffer_size, data_ptr_t metadata);
+
 	static void DecryptTemporaryBuffer(DatabaseInstance &db, data_ptr_t buffer, idx_t buffer_size, data_ptr_t metadata);
 };
 
-class EncryptionTypes {
 
-public:
-	enum CipherType : uint8_t { UNKNOWN = 0, GCM = 1, CTR = 2, CBC = 3 };
-	enum KeyDerivationFunction : uint8_t { DEFAULT = 0, SHA256 = 1, PBKDF2 = 2 };
-
-	string CipherToString(CipherType cipher_p) const {
-		switch (cipher_p) {
-		case GCM:
-			return "gcm";
-		case CTR:
-			return "ctr";
-		case CBC:
-			return "cbc";
-		default:
-			return "unknown";
-		}
-	}
-
-	static CipherType StringToCipher(const string &encryption_cipher) {
-		if (encryption_cipher == "gcm") {
-			return CipherType::GCM;
-		} else if (encryption_cipher == "ctr") {
-			return CipherType::CTR;
-		} else if (encryption_cipher == "cbc") {
-			return CipherType::CBC;
-		}
-		return CipherType::UNKNOWN;
-	}
-
-	string KDFToString(KeyDerivationFunction kdf_p) const {
-		switch (kdf_p) {
-		case SHA256:
-			return "sha256";
-		case PBKDF2:
-			return "pbkdf2";
-		default:
-			return "default";
-		}
-	}
-
-	KeyDerivationFunction StringToKDF(const string &key_derivation_function) const {
-		if (key_derivation_function == "sha256") {
-			return KeyDerivationFunction::SHA256;
-		} else if (key_derivation_function == "pbkdf2") {
-			return KeyDerivationFunction::PBKDF2;
-		} else {
-			return KeyDerivationFunction::DEFAULT;
-		}
-	}
-};
 
 } // namespace duckdb

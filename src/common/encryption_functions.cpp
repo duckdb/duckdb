@@ -49,7 +49,7 @@ void EncryptionEngine::AddTempKeyToCache(DatabaseInstance &db) {
 	const auto length = MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH;
 	data_t temp_key[length];
 
-	auto encryption_state = db.GetEncryptionUtil()->CreateEncryptionState(EncryptionState::GCM, temp_key, length);
+	auto encryption_state = db.GetEncryptionUtil()->CreateEncryptionState(EncryptionTypes::UNKNOWN, temp_key, length);
 	encryption_state->GenerateRandomData(temp_key, length);
 
 	string key_id = "temp_key";
@@ -69,7 +69,7 @@ void EncryptionEngine::EncryptBlock(AttachedDatabase &attached_db, const string 
 	}
 
 	auto encryption_state =
-	    db.GetEncryptionUtil()->CreateEncryptionState(EncryptionState::GCM,  encrypt_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	    db.GetEncryptionUtil()->CreateEncryptionState(cipher,  encrypt_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 
 	EncryptionTag tag;
 	EncryptionNonce nonce;
@@ -112,7 +112,7 @@ void EncryptionEngine::DecryptBlock(AttachedDatabase &attached_db, const string 
 
 	auto decrypt_key = GetKeyFromCache(db, key_id);
 	auto encryption_state =
-	    db.GetEncryptionUtil()->CreateEncryptionState(EncryptionState::GCM, decrypt_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	    db.GetEncryptionUtil()->CreateEncryptionState(cipher, decrypt_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 
 	//! load the stored nonce and tag
 	EncryptionTag tag;
@@ -147,7 +147,8 @@ void EncryptionEngine::EncryptTemporaryBuffer(DatabaseInstance &db, data_ptr_t b
 	auto temp_key = GetKeyFromCache(db, "temp_key");
 
 	auto encryption_util = db.GetEncryptionUtil();
-	auto encryption_state = encryption_util->CreateEncryptionState(EncryptionState::GCM, temp_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	// we hard-code GCM here for now, it's the safest and we don't know what is configured here
+	auto encryption_state = encryption_util->CreateEncryptionState(EncryptionTypes::GCM, temp_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 
 	// zero-out the metadata buffer
 	memset(metadata, 0, DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE);
@@ -179,7 +180,7 @@ void EncryptionEngine::EncryptTemporaryBuffer(DatabaseInstance &db, data_ptr_t b
 	D_ASSERT(memcmp(tag.data(), metadata + nonce.size(), tag.size()) == 0);
 }
 
-void EncryptionEngine::DecryptBuffer(EncryptionState &encryption_state, const_data_ptr_t temp_key, data_ptr_t buffer,
+static void DecryptBuffer(EncryptionState &encryption_state, const_data_ptr_t temp_key, data_ptr_t buffer,
                                      idx_t buffer_size, data_ptr_t metadata) {
 	//! load the stored nonce and tag
 	EncryptionTag tag;
@@ -206,7 +207,7 @@ void EncryptionEngine::DecryptTemporaryBuffer(DatabaseInstance &db, data_ptr_t b
 	//! initialize encryption state
 	auto encryption_util = db.GetEncryptionUtil();
 	auto temp_key = GetKeyFromCache(db, "temp_key");
-	auto encryption_state = encryption_util->CreateEncryptionState(EncryptionState::GCM, temp_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	auto encryption_state = encryption_util->CreateEncryptionState(EncryptionTypes::GCM, temp_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 
 	DecryptBuffer(*encryption_state, temp_key, buffer, buffer_size, metadata);
 }

@@ -233,7 +233,7 @@ void MbedTlsWrapper::SHA1State::FinishHex(char *out) {
 const mbedtls_cipher_info_t *MbedTlsWrapper::AESStateMBEDTLS::GetCipher(size_t key_len){
 
 	switch(cipher){
-		case GCM:
+		case duckdb::EncryptionTypes::CipherType::GCM:
 		    switch (key_len) {
 		    case 16:
 			    return mbedtls_cipher_info_from_type(MBEDTLS_CIPHER_AES_128_GCM);
@@ -244,7 +244,7 @@ const mbedtls_cipher_info_t *MbedTlsWrapper::AESStateMBEDTLS::GetCipher(size_t k
 		    default:
 			    throw runtime_error("Invalid AES key length");
 		    }
-		case CTR:
+		case duckdb::EncryptionTypes::CipherType::CTR:
 		    switch (key_len) {
 		    case 16:
 			    return mbedtls_cipher_info_from_type(MBEDTLS_CIPHER_AES_128_CTR);
@@ -255,7 +255,7 @@ const mbedtls_cipher_info_t *MbedTlsWrapper::AESStateMBEDTLS::GetCipher(size_t k
 		    default:
 			    throw runtime_error("Invalid AES key length");
 		    }
-	case CBC:
+	case duckdb::EncryptionTypes::CipherType::CBC:
 		switch (key_len) {
 		case 16:
 			return mbedtls_cipher_info_from_type(MBEDTLS_CIPHER_AES_128_CBC);
@@ -267,13 +267,13 @@ const mbedtls_cipher_info_t *MbedTlsWrapper::AESStateMBEDTLS::GetCipher(size_t k
 			throw runtime_error("Invalid AES key length");
 		}
 
-		default:
-			throw duckdb::InternalException("Invalid Encryption/Decryption Cipher: %d", static_cast<int>(cipher));
+	default:
+			throw duckdb::InternalException("Invalid Encryption/Decryption Cipher: %s", duckdb::EncryptionTypes::CipherToString(cipher));
 	}
 }
 
 // TODO move cipher into superclass
-MbedTlsWrapper::AESStateMBEDTLS::AESStateMBEDTLS(Cipher cipher_p, duckdb::const_data_ptr_t, duckdb::idx_t key_len) : EncryptionState(cipher_p), cipher(cipher_p), context(duckdb::make_uniq<mbedtls_cipher_context_t>()) {
+MbedTlsWrapper::AESStateMBEDTLS::AESStateMBEDTLS(duckdb::EncryptionTypes::CipherType cipher_p, duckdb::const_data_ptr_t, duckdb::idx_t key_len) : EncryptionState(cipher_p), cipher(cipher_p), context(duckdb::make_uniq<mbedtls_cipher_context_t>()) {
 	mbedtls_cipher_init(context.get());
 
 	auto cipher_info = GetCipher(key_len);

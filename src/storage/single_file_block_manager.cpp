@@ -295,7 +295,7 @@ void SingleFileBlockManager::StoreEncryptedCanary(AttachedDatabase &attached_db,
 
 
 	auto encryption_state =
-	    attached_db.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(EncryptionState::GCM, key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	    attached_db.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(cipher, key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 	EncryptCanary(main_header, encryption_state, key);
 }
 
@@ -342,7 +342,7 @@ void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header, s
 	}
 	// FIXME
 	auto encryption_state = db.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(
-	  EncryptionState::GCM,  derived_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	  cipher,  derived_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 	if (!DecryptCanary(main_header, encryption_state, derived_key)) {
 		throw IOException("Wrong encryption key used to open the database file");
 	}
