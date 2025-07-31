@@ -283,19 +283,13 @@ MainHeader ConstructMainHeader(idx_t version_number) {
 	return main_header;
 }
 
-void SingleFileBlockManager::StoreEncryptedCanary(AttachedDatabase &attached_db, MainHeader &main_header, const string &key_id) {
+void SingleFileBlockManager::StoreEncryptedCanary(AttachedDatabase &attached_db, MainHeader &main_header,
+                                                  const string &key_id) {
 	const_data_ptr_t key = EncryptionEngine::GetKeyFromCache(attached_db.GetDatabase(), key_id);
 	// Encrypt canary with the derived key
 
-	// TODO this should not happen here
-	auto cipher = EncryptionTypes::StringToCipher(attached_db.GetStorageManager().GetCipher());
-	if (cipher == EncryptionTypes::UNKNOWN) {
-		throw InternalException("Unknown cipher type %s", attached_db.GetStorageManager().GetCipher());
-	}
-
-
-	auto encryption_state =
-	    attached_db.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(cipher, key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	auto encryption_state = attached_db.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(
+	    attached_db.GetStorageManager().GetCipher(), key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 	EncryptCanary(main_header, encryption_state, key);
 }
 
@@ -336,13 +330,10 @@ void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header, s
 	EncryptionKeyManager::DeriveKey(user_key, salt, derived_key);
 
 	// TODO this should not happen here
-	auto cipher = EncryptionTypes::StringToCipher(db.GetStorageManager().GetCipher());
-	if (cipher == EncryptionTypes::UNKNOWN) {
-		throw InternalException("Unknown cipher type %s", db.GetStorageManager().GetCipher());
-	}
+
 	// FIXME
 	auto encryption_state = db.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(
-	  cipher,  derived_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	    db.GetStorageManager().GetCipher(), derived_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 	if (!DecryptCanary(main_header, encryption_state, derived_key)) {
 		throw IOException("Wrong encryption key used to open the database file");
 	}
@@ -867,8 +858,8 @@ void SingleFileBlockManager::ReadBlock(data_ptr_t internal_buffer, uint64_t bloc
 	uint64_t delta = GetBlockHeaderSize() - Storage::DEFAULT_BLOCK_HEADER_SIZE;
 
 	if (options.encryption_options.encryption_enabled && !skip_block_header) {
-		EncryptionEngine::DecryptBlock(db, options.encryption_options.derived_key_id, internal_buffer,
-		                               block_size, delta);
+		EncryptionEngine::DecryptBlock(db, options.encryption_options.derived_key_id, internal_buffer, block_size,
+		                               delta);
 	}
 
 	CheckChecksum(internal_buffer, delta, skip_block_header);
@@ -883,8 +874,8 @@ void SingleFileBlockManager::ReadBlock(Block &block, bool skip_block_header) con
 	uint64_t delta = GetBlockHeaderSize() - Storage::DEFAULT_BLOCK_HEADER_SIZE;
 
 	if (options.encryption_options.encryption_enabled && !skip_block_header) {
-		EncryptionEngine::DecryptBlock(db, options.encryption_options.derived_key_id,
-		                               block.InternalBuffer(), block.Size(), delta);
+		EncryptionEngine::DecryptBlock(db, options.encryption_options.derived_key_id, block.InternalBuffer(),
+		                               block.Size(), delta);
 	}
 
 	CheckChecksum(block, location, delta, skip_block_header);

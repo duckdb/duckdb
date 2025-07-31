@@ -145,8 +145,8 @@ public:
 			// TODO get the actual cipher! // FIXME
 
 			//! initialize the decryption
-			auto encryption_state = database.GetEncryptionUtil()->CreateEncryptionState(EncryptionTypes::UNKNOWN,
-			    derived_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+			auto encryption_state = database.GetEncryptionUtil()->CreateEncryptionState(
+			    EncryptionTypes::UNKNOWN, derived_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 			encryption_state->InitializeDecryption(nonce.data(), nonce.size(), derived_key,
 			                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 

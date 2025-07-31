@@ -155,15 +155,9 @@ public:
 		auto &db = wal.GetDatabase();
 		auto &keys = EncryptionKeyManager::Get(db.GetDatabase());
 
-		// TODO this should not happen here
-		auto cipher = EncryptionTypes::StringToCipher(db.GetStorageManager().GetCipher());
-		if (cipher == EncryptionTypes::UNKNOWN) {
-			throw InternalException("Unknown cipher type %s", db.GetStorageManager().GetCipher());
-		}
-
-		// FIXME
 		auto encryption_state = db.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(
-		   EncryptionTypes::GCM, keys.GetKey(encryption_key_id), MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+		    db.GetStorageManager().GetCipher(), keys.GetKey(encryption_key_id),
+		    MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 
 		// temp buffer
 		const idx_t ciphertext_size = size + sizeof(uint64_t);

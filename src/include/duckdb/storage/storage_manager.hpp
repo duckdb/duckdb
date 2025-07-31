@@ -17,7 +17,6 @@
 #include "duckdb/common/enums/checkpoint_type.hpp"
 #include "duckdb/storage/storage_options.hpp"
 
-
 namespace duckdb {
 class BlockManager;
 class Catalog;
@@ -125,11 +124,14 @@ public:
 	bool CompressionIsEnabled() const {
 		return storage_options.compress_in_memory == CompressInMemory::COMPRESS;
 	}
-	// TODO this should probably be ein ENUM
-	string GetCipher() const {
-		return storage_options.encryption_cipher;
+	EncryptionTypes::CipherType GetCipher() const {
+		// TODO: the type of this thing should probably change
+		auto cipher = EncryptionTypes::StringToCipher(storage_options.encryption_cipher);
+		if (cipher == EncryptionTypes::UNKNOWN) {
+			throw InternalException("Unknown cipher type %s", storage_options.encryption_cipher);
+		}
+		return cipher;
 	}
-
 
 protected:
 	virtual void LoadDatabase(QueryContext context) = 0;

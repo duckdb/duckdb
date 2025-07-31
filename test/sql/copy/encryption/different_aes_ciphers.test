@@ -12,4 +12,14 @@ Binder Error: Not a valid key. A key cannot be empty
 statement error
 ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER 'random');
 ----
-Binder Error: "random" is not a valid cipher. Only AES GCM is supported.
+Binder Error: "random" is not a valid cipher. Try 'gcm', 'ctr', or 'cbc'.
+
+statement error
+ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '');
+----
+Binder Error: "" is not a valid cipher. Try 'gcm', 'ctr', or 'cbc'.
+
+statement error
+ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER 42);
+----
+Binder Error: "42" is not a valid cipher. Try 'gcm', 'ctr', or 'cbc'.

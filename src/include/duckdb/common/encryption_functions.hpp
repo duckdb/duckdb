@@ -2,7 +2,6 @@
 
 #include "duckdb/common/helper.hpp"
 
-
 namespace duckdb {
 
 class DatabaseInstance;
@@ -63,7 +62,5 @@ public:
 
 	static void DecryptTemporaryBuffer(DatabaseInstance &db, data_ptr_t buffer, idx_t buffer_size, data_ptr_t metadata);
 };
-
-
 
 } // namespace duckdb

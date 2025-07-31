@@ -58,18 +58,11 @@ void EncryptionEngine::AddTempKeyToCache(DatabaseInstance &db) {
 
 void EncryptionEngine::EncryptBlock(AttachedDatabase &attached_db, const string &key_id, FileBuffer &block,
                                     FileBuffer &temp_buffer_manager, uint64_t delta) {
-	auto& db = attached_db.GetDatabase();
+	auto &db = attached_db.GetDatabase();
 	data_ptr_t block_offset_internal = temp_buffer_manager.InternalBuffer();
-	auto encrypt_key = GetKeyFromCache(db , key_id);
-
-	// TODO this should not happen here
-	auto cipher = EncryptionTypes::StringToCipher(attached_db.GetStorageManager().GetCipher());
-	if (cipher == EncryptionTypes::UNKNOWN) {
-		throw InternalException("Unknown cipher type %s", attached_db.GetStorageManager().GetCipher());
-	}
-
-	auto encryption_state =
-	    db.GetEncryptionUtil()->CreateEncryptionState(cipher,  encrypt_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	auto encrypt_key = GetKeyFromCache(db, key_id);
+	auto encryption_state = db.GetEncryptionUtil()->CreateEncryptionState(
+	    attached_db.GetStorageManager().GetCipher(), encrypt_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 
 	EncryptionTag tag;
 	EncryptionNonce nonce;
@@ -101,18 +94,11 @@ void EncryptionEngine::EncryptBlock(AttachedDatabase &attached_db, const string 
 void EncryptionEngine::DecryptBlock(AttachedDatabase &attached_db, const string &key_id, data_ptr_t internal_buffer,
                                     uint64_t block_size, uint64_t delta) {
 	//! initialize encryption state
-	auto& db = attached_db.GetDatabase();
-
-
-	// TODO this should not happen here
-	auto cipher = EncryptionTypes::StringToCipher(attached_db.GetStorageManager().GetCipher());
-	if (cipher == EncryptionTypes::UNKNOWN) {
-		throw InternalException("Unknown cipher type %s", attached_db.GetStorageManager().GetCipher());
-	}
+	auto &db = attached_db.GetDatabase();
 
 	auto decrypt_key = GetKeyFromCache(db, key_id);
-	auto encryption_state =
-	    db.GetEncryptionUtil()->CreateEncryptionState(cipher, decrypt_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	auto encryption_state = db.GetEncryptionUtil()->CreateEncryptionState(
+	    attached_db.GetStorageManager().GetCipher(), decrypt_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 
 	//! load the stored nonce and tag
 	EncryptionTag tag;
@@ -148,7 +134,8 @@ void EncryptionEngine::EncryptTemporaryBuffer(DatabaseInstance &db, data_ptr_t b
 
 	auto encryption_util = db.GetEncryptionUtil();
 	// we hard-code GCM here for now, it's the safest and we don't know what is configured here
-	auto encryption_state = encryption_util->CreateEncryptionState(EncryptionTypes::GCM, temp_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	auto encryption_state = encryption_util->CreateEncryptionState(EncryptionTypes::GCM, temp_key,
+	                                                               MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 
 	// zero-out the metadata buffer
 	memset(metadata, 0, DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE);
@@ -181,7 +168,7 @@ void EncryptionEngine::EncryptTemporaryBuffer(DatabaseInstance &db, data_ptr_t b
 }
 
 static void DecryptBuffer(EncryptionState &encryption_state, const_data_ptr_t temp_key, data_ptr_t buffer,
-                                     idx_t buffer_size, data_ptr_t metadata) {
+                          idx_t buffer_size, data_ptr_t metadata) {
 	//! load the stored nonce and tag
 	EncryptionTag tag;
 	EncryptionNonce nonce;
@@ -207,7 +194,8 @@ void EncryptionEngine::DecryptTemporaryBuffer(DatabaseInstance &db, data_ptr_t b
 	//! initialize encryption state
 	auto encryption_util = db.GetEncryptionUtil();
 	auto temp_key = GetKeyFromCache(db, "temp_key");
-	auto encryption_state = encryption_util->CreateEncryptionState(EncryptionTypes::GCM, temp_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	auto encryption_state = encryption_util->CreateEncryptionState(EncryptionTypes::GCM, temp_key,
+	                                                               MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 
 	DecryptBuffer(*encryption_state, temp_key, buffer, buffer_size, metadata);
 }
