@@ -216,6 +216,13 @@ string_t VarintIntermediate::Negate(Vector &result_vector) const {
 	return target;
 }
 
+void VarintIntermediate::NegateInPlace() {
+	is_negative = !is_negative;
+	for (size_t i = 0; i < size; i++) {
+		data[i] = ~data[i]; // flip each byte of the pointer
+	}
+}
+
 string_t VarintIntermediate::Add(Vector &result_vector, const VarintIntermediate &lhs, const VarintIntermediate &rhs) {
 	const bool same_sign = lhs.is_negative == rhs.is_negative;
 	const uint32_t actual_size = lhs.size - lhs.GetStartDataPos();
@@ -225,6 +232,10 @@ string_t VarintIntermediate::Add(Vector &result_vector, const VarintIntermediate
 		result_size = actual_size < actual_rhs_size ? actual_rhs_size + 1 : actual_size + 1;
 	}
 	bool is_target_absolute_bigger = true;
+	if (result_size == 0) {
+		result_size++;
+	}
+	result_size += Varint::VARINT_HEADER_SIZE;
 	if (lhs.is_negative != rhs.is_negative) {
 		auto is_absolute_bigger = lhs.IsAbsoluteBigger(rhs);
 		if (is_absolute_bigger == EQUAL) {
@@ -239,10 +250,6 @@ string_t VarintIntermediate::Add(Vector &result_vector, const VarintIntermediate
 			is_target_absolute_bigger = false;
 		}
 	}
-	if (result_size == 0) {
-		result_size++;
-	}
-	result_size += Varint::VARINT_HEADER_SIZE;
 
 	auto target = StringVector::EmptyString(result_vector, result_size);
 	auto target_data = target.GetDataWriteable();

@@ -323,6 +323,18 @@ void VarintAdd(DataChunk &args, ExpressionState &state, Vector &result) {
 	                                                      });
 }
 
+void VarintSubtract(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &allocator = state.GetAllocator();
+	ArenaAllocator arena(allocator);
+	BinaryExecutor::Execute<varint_t, varint_t, string_t>(args.data[0], args.data[1], result, args.size(),
+	                                                      [&](varint_t a, varint_t b) {
+		                                                      const VarintIntermediate lhs(a);
+		                                                      VarintIntermediate rhs(b);
+		                                                      rhs.NegateInPlace();
+		                                                      return VarintIntermediate::Add(result, lhs, rhs);
+	                                                      });
+}
+
 void VarintNegate(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &allocator = state.GetAllocator();
 	ArenaAllocator arena(allocator);
@@ -699,6 +711,10 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &left_type, const
 	}
 
 	switch (left_type.id()) {
+	case LogicalTypeId::VARINT: {
+		ScalarFunction function("-", {left_type, right_type}, left_type, VarintSubtract);
+		return function;
+	}
 	case LogicalTypeId::DATE:
 		if (right_type.id() == LogicalTypeId::DATE) {
 			ScalarFunction function("-", {left_type, right_type}, LogicalType::BIGINT,
@@ -777,6 +793,7 @@ ScalarFunctionSet OperatorSubtractFun::GetFunctions() {
 		subtract.AddFunction(SubtractFunction::GetFunction(type, type));
 	}
 	subtract.AddFunction(SubtractFunction::GetFunction(LogicalType::VARINT));
+	subtract.AddFunction(SubtractFunction::GetFunction(LogicalType::VARINT, LogicalType::VARINT));
 	// we can subtract dates from each other
 	subtract.AddFunction(SubtractFunction::GetFunction(LogicalType::DATE, LogicalType::DATE));
 	// we can subtract integers from dates

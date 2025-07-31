@@ -73,6 +73,7 @@ struct VarintIntermediate {
 	static string_t Add(Vector &result, const VarintIntermediate &lhs, const VarintIntermediate &rhs);
 	//! Negates a value, e.g., -x
 	string_t Negate(Vector &result_vector) const;
+	void NegateInPlace();
 	//! Exports to a varint, either arena allocated
 	varint_t ToVarint(ArenaAllocator &allocator);
 };
