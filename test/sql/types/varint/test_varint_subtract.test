@@ -1,0 +1,11 @@
+# name: test/sql/types/varint/test_varint_subtract.test
+# description: Test varint implicit cast
+# group: [varint]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT -(1::VARINT)
+----
+-1

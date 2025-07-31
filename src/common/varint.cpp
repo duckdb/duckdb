@@ -204,6 +204,18 @@ void VarintAddition(data_ptr_t result, int64_t result_start, int64_t result_end,
 	}
 }
 
+string_t VarintIntermediate::Negate(Vector &result_vector) const {
+	auto target = StringVector::EmptyString(result_vector, size + Varint::VARINT_HEADER_SIZE);
+	auto ptr = target.GetDataWriteable();
+	// we set the header with a flip on the signal
+	Varint::SetHeader(ptr, size, !is_negative);
+	// we just need to flip all data b
+	for (idx_t i = 0; i < size; ++i) {
+		ptr[i + Varint::VARINT_HEADER_SIZE] = static_cast<char>(~data[i]);
+	}
+	return target;
+}
+
 string_t VarintIntermediate::Add(Vector &result_vector, const VarintIntermediate &lhs, const VarintIntermediate &rhs) {
 	const bool same_sign = lhs.is_negative == rhs.is_negative;
 	const uint32_t actual_size = lhs.size - lhs.GetStartDataPos();
