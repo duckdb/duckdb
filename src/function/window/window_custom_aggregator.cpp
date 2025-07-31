@@ -110,7 +110,7 @@ void WindowCustomAggregator::Finalize(ExecutionContext &context, WindowAggregato
 	filter_mask.Pack(filter_packed, filter_mask.Capacity());
 
 	gcsink.partition_input =
-	    make_uniq<WindowPartitionInput>(gcsink.context, inputs, count, child_idx, all_valids, filter_packed, stats);
+	    make_uniq<WindowPartitionInput>(context, inputs, count, child_idx, all_valids, filter_packed, stats);
 
 	if (aggr.function.window_init) {
 		auto &gcstate = *gcsink.gcstate;

@@ -114,6 +114,7 @@
 #include "duckdb/function/table/arrow/enum/arrow_type_info_type.hpp"
 #include "duckdb/function/table/arrow/enum/arrow_variable_size_type.hpp"
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/function/window/window_merge_sort_tree.hpp"
 #include "duckdb/logging/logging.hpp"
 #include "duckdb/main/appender.hpp"
 #include "duckdb/main/capi/capi_internal.hpp"
@@ -4882,6 +4883,27 @@ const char* EnumUtil::ToChars<WindowExcludeMode>(WindowExcludeMode value) {
 template<>
 WindowExcludeMode EnumUtil::FromString<WindowExcludeMode>(const char *value) {
 	return static_cast<WindowExcludeMode>(StringUtil::StringToEnum(GetWindowExcludeModeValues(), 4, "WindowExcludeMode", value));
+}
+
+const StringUtil::EnumStringLiteral *GetWindowMergeSortStageValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(WindowMergeSortStage::INIT), "INIT" },
+		{ static_cast<uint32_t>(WindowMergeSortStage::COMBINE), "COMBINE" },
+		{ static_cast<uint32_t>(WindowMergeSortStage::FINALIZE), "FINALIZE" },
+		{ static_cast<uint32_t>(WindowMergeSortStage::SORTED), "SORTED" },
+		{ static_cast<uint32_t>(WindowMergeSortStage::FINISHED), "FINISHED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<WindowMergeSortStage>(WindowMergeSortStage value) {
+	return StringUtil::EnumToString(GetWindowMergeSortStageValues(), 5, "WindowMergeSortStage", static_cast<uint32_t>(value));
+}
+
+template<>
+WindowMergeSortStage EnumUtil::FromString<WindowMergeSortStage>(const char *value) {
+	return static_cast<WindowMergeSortStage>(StringUtil::StringToEnum(GetWindowMergeSortStageValues(), 5, "WindowMergeSortStage", value));
 }
 
 }
