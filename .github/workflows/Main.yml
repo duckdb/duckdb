@@ -331,7 +331,7 @@ jobs:
         sleep 60
 
         python3 scripts/get_test_list.py --file-contains 'require httpfs' --list '"*"' > test.list
-        python3 scripts/run_tests_one_by_one.py ./build/release/test/unittest '-f test.list'n
+        python3 scripts/run_tests_one_by_one.py ./build/release/test/unittest '-f test.list'
         python3 scripts/run_tests_one_by_one.py ./build/release/test/unittest '[secret]'
 
  # TODO: Bring back BLOCK_VERIFICATION: 1, and consider bringing back fts
@@ -379,7 +379,7 @@ jobs:
       if: (success() || failure()) && steps.build.conclusion == 'success'
       shell: bash
       run: |
-        ./build/relassert/test/unittest --test-config test/configs/force_storage.json
+        ./build/release/test/unittest --test-config test/configs/force_storage.json
 
     - name: test/configs/force_storage_restart.json
       if: (success() || failure()) && steps.build.conclusion == 'success'
@@ -391,7 +391,7 @@ jobs:
       if: (success() || failure()) && steps.build.conclusion == 'success'
       shell: bash
       run: |
-       ./build/relassert/test/unittest --test-config test/configs/latest_storage.json
+        ./build/release/test/unittest --test-config test/configs/latest_storage.json
 
     - name: test/configs/prefetch_all_parquet_files.json
       if: (success() || failure()) && steps.build.conclusion == 'success'
