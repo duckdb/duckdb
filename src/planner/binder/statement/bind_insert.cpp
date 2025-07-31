@@ -26,6 +26,7 @@
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/parser/tableref/emptytableref.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
 
 namespace duckdb {
@@ -275,6 +276,7 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertStatement &stmt, 
 	auto storage_info = table.GetStorageInfo(context);
 	auto &columns = table.GetColumns();
 	// set up the columns on which to join
+	vector<string> distinct_on_columns;
 	if (on_conflict_info.indexed_columns.empty()) {
 		// When omitting the conflict target, we derive the join columns from the primary key/unique constraints
 		// traverse the primary key/unique constraints
@@ -290,13 +292,15 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertStatement &stmt, 
 			vector<unique_ptr<ParsedExpression>> and_children;
 			auto &indexed_columns = index.column_set;
 			for (auto &column : columns.Physical()) {
-				if (indexed_columns.count(column.Physical().index)) {
-					auto lhs = make_uniq<ColumnRefExpression>(column.Name(), table_name);
-					auto rhs = make_uniq<ColumnRefExpression>(column.Name(), "excluded");
-					auto new_condition =
-					    make_uniq<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, std::move(lhs), std::move(rhs));
-					and_children.push_back(std::move(new_condition));
+				if (!indexed_columns.count(column.Physical().index)) {
+					continue;
 				}
+				auto lhs = make_uniq<ColumnRefExpression>(column.Name(), table_name);
+				auto rhs = make_uniq<ColumnRefExpression>(column.Name(), "excluded");
+				auto new_condition =
+				    make_uniq<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, std::move(lhs), std::move(rhs));
+				and_children.push_back(std::move(new_condition));
+				distinct_on_columns.push_back(column.Name());
 			}
 			if (and_children.empty()) {
 				continue;
@@ -372,6 +376,7 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertStatement &stmt, 
 			throw BinderException("The specified columns as conflict target are not referenced by a UNIQUE/PRIMARY KEY "
 			                      "CONSTRAINT or INDEX");
 		}
+		distinct_on_columns = on_conflict_info.indexed_columns;
 		merge_into->using_columns = std::move(on_conflict_info.indexed_columns);
 	}
 
@@ -392,11 +397,15 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertStatement &stmt, 
 		ExpandDefaultInValuesList(stmt, table, values_list, named_column_map);
 	}
 	// set up the data source
-	// FIXME: include a DISTINCT ON (unique_columns)
-	auto source = make_uniq<SubqueryRef>(std::move(stmt.select_statement), "excluded");
+	unique_ptr<TableRef> source;
+	if (stmt.select_statement) {
+		source = make_uniq<SubqueryRef>(std::move(stmt.select_statement), "excluded");
+	} else {
+		source = make_uniq<EmptyTableRef>();
+	}
 	if (stmt.column_order == InsertColumnOrder::INSERT_BY_POSITION) {
 		// if we are inserting by position add the columns of the target table as an alias to the source
-		if (!stmt.columns.empty()) {
+		if (!stmt.columns.empty() || stmt.default_values) {
 			// we are not emitting all columns - set the column set as the set of aliases
 			source->column_name_alias = stmt.columns;
 
@@ -434,6 +443,19 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertStatement &stmt, 
 			source->column_name_alias.push_back(column.Name());
 		}
 	}
+	// push DISTINCT ON(unique_columns)
+	auto distinct_stmt = make_uniq<SelectStatement>();
+	auto select_node = make_uniq<SelectNode>();
+	auto distinct = make_uniq<DistinctModifier>();
+	for (auto &col : distinct_on_columns) {
+		distinct->distinct_on_targets.push_back(make_uniq<ColumnRefExpression>(col));
+	}
+	select_node->modifiers.push_back(std::move(distinct));
+	select_node->select_list.push_back(make_uniq<StarExpression>());
+	select_node->from_table = std::move(source);
+	distinct_stmt->node = std::move(select_node);
+	source = make_uniq<SubqueryRef>(std::move(distinct_stmt), "excluded");
+
 	merge_into->source = std::move(source);
 
 	if (on_conflict_info.action_type == OnConflictAction::REPLACE) {
@@ -446,7 +468,6 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertStatement &stmt, 
 	auto insert_action = make_uniq<MergeIntoAction>();
 	insert_action->action_type = MergeActionType::MERGE_INSERT;
 	insert_action->column_order = stmt.column_order;
-	insert_action->default_values = stmt.default_values;
 
 	merge_into->actions[MergeActionCondition::WHEN_NOT_MATCHED_BY_TARGET].push_back(std::move(insert_action));
 

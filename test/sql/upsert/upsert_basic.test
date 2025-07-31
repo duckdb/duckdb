@@ -104,13 +104,13 @@ select * from tbl;
 # only the last one is used
 statement ok
 insert into tbl VALUES
-	(3,1,5),
+	(3,3,10),
 	(3,3,10)
 ON CONFLICT (i) DO UPDATE SET
 	k = excluded.k;
 
 query III
-select * from tbl;
+select * from tbl order by all
 ----
 1	10	1
 2	20	1
