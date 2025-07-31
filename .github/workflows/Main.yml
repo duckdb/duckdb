@@ -115,7 +115,7 @@ jobs:
  no-string-inline:
     name: No String Inline / Destroy Unpinned Blocks
     runs-on: ubuntu-24.04
-    needs: linux-release-configs
+    needs: linux-configs
     env:
       GEN: ninja
       CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
@@ -151,7 +151,7 @@ jobs:
  vector-sizes:
     name: Vector Sizes
     runs-on: ubuntu-22.04
-    needs: linux-release-configs
+    needs: linux-configs
     env:
       CC: gcc-10
       CXX: g++-10
@@ -195,7 +195,7 @@ jobs:
     name: Valgrind
     if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-24.04
-    needs: linux-release-configs
+    needs: linux-configs
     env:
       CC: clang
       CXX: clang++
@@ -230,7 +230,7 @@ jobs:
       run: valgrind ./build/relassert/test/unittest test/sql/tpch/tpch_sf001.test_slow
  threadsan:
     name: Thread Sanitizer
-    needs: linux-release-configs
+    needs: linux-configs
     runs-on: ubuntu-24.04
     env:
       CC: clang
@@ -273,7 +273,7 @@ jobs:
 
  linux-httpfs:
     name: Linux HTTPFS
-    needs: linux-release-configs
+    needs: linux-configs
     runs-on: ubuntu-22.04
     env:
       CORE_EXTENSIONS: "json;parquet;tpch;tpcds;httpfs"
@@ -336,7 +336,7 @@ jobs:
 
  # TODO: Bring back BLOCK_VERIFICATION: 1, and consider bringing back fts
  # TODO: DEBUG_STACKTRACE: 1 + reldebug ?
- linux-release-configs:
+ linux-configs:
     name: Tests a release build with different configurations
     runs-on: ubuntu-24.04
     env:
@@ -375,11 +375,23 @@ jobs:
       run: |
         ./build/release/test/unittest --test-config test/configs/encryption.json
 
+    - name: test/configs/force_storage.json
+      if: (success() || failure()) && steps.build.conclusion == 'success'
+      shell: bash
+      run: |
+        ./build/relassert/test/unittest --test-config test/configs/force_storage.json
+
     - name: test/configs/force_storage_restart.json
       if: (success() || failure()) && steps.build.conclusion == 'success'
       shell: bash
       run: |
         ./build/release/test/unittest --test-config test/configs/force_storage_restart.json
+
+    - name: test/configs/latest_storage.json
+      if: (success() || failure()) && steps.build.conclusion == 'success'
+      shell: bash
+      run: |
+       ./build/relassert/test/unittest --test-config test/configs/latest_storage.json
 
     - name: test/configs/prefetch_all_parquet_files.json
       if: (success() || failure()) && steps.build.conclusion == 'success'
@@ -440,54 +452,3 @@ jobs:
       shell: bash
       run: |
         ./build/release/test/unittest --verify-vector nested_shuffle --skip-compiled
-
- linux-debug-configs:
-   name: Tests relassert with different configurations
-   runs-on: ubuntu-24.04
-   env:
-     BASE_BRANCH: ${{ github.base_ref || 'main' }}
-
-   steps:
-     - uses: actions/checkout@v3
-       with:
-         fetch-depth: 0
-
-     - uses: actions/setup-python@v5
-       with:
-         python-version: '3.12'
-
-     - name: Install Ninja
-       shell: bash
-       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-
-     - name: Setup Ccache
-       uses: hendrikmuhs/ccache-action@main
-       with:
-         key: ${{ github.job }}
-         save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
-
-     - name: Build
-       id: build
-       shell: bash
-       env:
-         CORE_EXTENSIONS: "json;parquet;icu;tpch;tpcds"
-         GEN: ninja
-       run: make debug
-
-     - name: test/configs/force_storage.json
-       if: (success() || failure()) && steps.build.conclusion == 'success'
-       shell: bash
-       run: |
-         ./build/relassert/test/unittest --test-config test/configs/force_storage.json
-
-     - name: test/configs/latest_storage.json
-       if: (success() || failure()) && steps.build.conclusion == 'success'
-       shell: bash
-       run: |
-         ./build/relassert/test/unittest --test-config test/configs/latest_storage.json
-
-     - name: test/configs/enable_verification.json
-       if: (success() || failure()) && steps.build.conclusion == 'success'
-       shell: bash
-       run: |
-         ./build/relassert/test/unittest --test-config test/configs/enable_verification.json
