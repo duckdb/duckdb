@@ -1031,6 +1031,7 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"pg_pages_per_task", "postgres_scanner"},
     {"pg_use_binary_copy", "postgres_scanner"},
     {"pg_use_ctid_scan", "postgres_scanner"},
+    {"pg_use_text_protocol", "postgres_scanner"},
     {"prefetch_all_parquet_files", "parquet"},
     {"s3_access_key_id", "httpfs"},
     {"s3_endpoint", "httpfs"},
