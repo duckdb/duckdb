@@ -22,6 +22,9 @@ struct varint_t {
 	varint_t() : data() {
 	}
 
+	explicit varint_t(const string_t &data) : data(data) {
+	}
+
 	varint_t(const varint_t &rhs) = default;
 	varint_t(varint_t &&other) = default;
 	varint_t &operator=(const varint_t &rhs) = default;
@@ -30,7 +33,7 @@ struct varint_t {
 	void Print() const;
 };
 
-enum AbsoluteNumberComparison: uint8_t {
+enum AbsoluteNumberComparison : uint8_t {
 	// If number is equal
 	EQUAL = 0,
 	// If compared number is greater

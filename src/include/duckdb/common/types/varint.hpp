@@ -35,13 +35,13 @@ public:
 	DUCKDB_API static constexpr uint8_t DIGIT_BITS = DIGIT_BYTES * 8;
 	//! Verifies if a Varint is valid. i.e., if it has 3 header bytes. The header correctly represents the number of
 	//! data bytes, and the data bytes has no leading zero bytes.
-	DUCKDB_API static void Verify(const string_t &input);
+	DUCKDB_API static void Verify(const varint_t &input);
 
 	//! Sets the header of a varint (i.e., char* blob), depending on the number of bytes that varint needs and if it's a
 	//! negative number
 	DUCKDB_API static void SetHeader(char *blob, uint64_t number_of_bytes, bool is_negative);
 	//! Initializes and returns a blob with value 0, allocated in Vector& result
-	DUCKDB_API static string_t InitializeVarintZero(Vector &result);
+	DUCKDB_API static varint_t InitializeVarintZero(Vector &result);
 	DUCKDB_API static string InitializeVarintZero();
 
 	//! Switch Case of To Varint Convertion
@@ -64,7 +64,7 @@ public:
 	//! Function to convert VARINT blob to a VARCHAR
 	DUCKDB_API static string VarIntToVarchar(const varint_t &blob);
 	//! Function to convert Varchar to VARINT blob
-	DUCKDB_API static string VarcharToVarInt(const varint_t &value);
+	DUCKDB_API static string VarcharToVarInt(const string_t &value);
 	//! ----------------------------------- Double Cast ----------------------------------- //
 	DUCKDB_API static bool VarintToDouble(const varint_t &blob, double &result, bool &strict);
 	template <class T>
@@ -100,7 +100,7 @@ public:
 //! ----------------------------------- (u)Integral Cast ----------------------------------- //
 struct IntCastToVarInt {
 	template <class SRC>
-	static inline string_t Operation(SRC input, Vector &result) {
+	static inline varint_t Operation(SRC input, Vector &result) {
 		return IntToVarInt(result, input);
 	}
 };
@@ -108,7 +108,7 @@ struct IntCastToVarInt {
 //! ----------------------------------- (u)HugeInt Cast ----------------------------------- //
 struct HugeintCastToVarInt {
 	template <class SRC>
-	static inline string_t Operation(SRC input, Vector &result) {
+	static inline varint_t Operation(SRC input, Vector &result) {
 		throw InternalException("Unsupported type for cast to VARINT");
 	}
 };
@@ -121,15 +121,15 @@ struct TryCastToVarInt {
 };
 
 template <>
-DUCKDB_API bool TryCastToVarInt::Operation(double double_value, string_t &result_value, Vector &result,
+DUCKDB_API bool TryCastToVarInt::Operation(double double_value, varint_t &result_value, Vector &result,
                                            CastParameters &parameters);
 
 template <>
-DUCKDB_API bool TryCastToVarInt::Operation(float float_value, string_t &result_value, Vector &result,
+DUCKDB_API bool TryCastToVarInt::Operation(float float_value, varint_t &result_value, Vector &result,
                                            CastParameters &parameters);
 
 template <>
-DUCKDB_API bool TryCastToVarInt::Operation(varint_t input_value, string_t &result_value, Vector &result,
+DUCKDB_API bool TryCastToVarInt::Operation(string_t input_value, varint_t &result_value, Vector &result,
                                            CastParameters &parameters);
 
 struct VarIntCastToVarchar {

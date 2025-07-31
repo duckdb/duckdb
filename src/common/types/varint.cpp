@@ -7,15 +7,15 @@
 
 namespace duckdb {
 
-void Varint::Verify(const string_t &input) {
+void Varint::Verify(const varint_t &input) {
 #ifdef DEBUG
 	// Size must be >= 4
-	idx_t varint_bytes = input.GetSize();
+	idx_t varint_bytes = input.data.GetSize();
 	if (varint_bytes < 4) {
 		throw InternalException("Varint number of bytes is invalid, current number of bytes is %d", varint_bytes);
 	}
 	// Bytes in header must quantify the number of data bytes
-	auto varint_ptr = input.GetData();
+	auto varint_ptr = input.data.GetData();
 	bool is_negative = (varint_ptr[0] & 0x80) == 0;
 	uint32_t number_of_bytes = 0;
 	char mask = 0x7F;
@@ -63,14 +63,15 @@ void Varint::SetHeader(char *blob, uint64_t number_of_bytes, bool is_negative) {
 }
 
 // Creates a blob representing the value 0
-string_t Varint::InitializeVarintZero(Vector &result) {
+varint_t Varint::InitializeVarintZero(Vector &result) {
 	uint32_t blob_size = 1 + VARINT_HEADER_SIZE;
 	auto blob = StringVector::EmptyString(result, blob_size);
 	auto writable_blob = blob.GetDataWriteable();
 	SetHeader(writable_blob, 1, false);
 	writable_blob[3] = 0;
 	blob.Finalize();
-	return blob;
+	const varint_t result_varint(blob);
+	return result_varint;
 }
 
 string Varint::InitializeVarintZero() {
@@ -245,17 +246,17 @@ string Varint::VarIntToVarchar(const varint_t &blob) {
 	return decimal_string;
 }
 
-string Varint::VarcharToVarInt(const varint_t &value) {
+string Varint::VarcharToVarInt(const string_t &value) {
 	idx_t start_pos, end_pos;
 	bool is_negative, is_zero;
-	if (!VarcharFormatting(value.data, start_pos, end_pos, is_negative, is_zero)) {
-		throw ConversionException("Could not convert string \'%s\' to Varint", value.data.GetString());
+	if (!VarcharFormatting(value, start_pos, end_pos, is_negative, is_zero)) {
+		throw ConversionException("Could not convert string \'%s\' to Varint", value.GetString());
 	}
 	if (is_zero) {
 		// Return Value 0
 		return InitializeVarintZero();
 	}
-	auto int_value_char = value.data.GetData();
+	auto int_value_char = value.GetData();
 	idx_t actual_size = end_pos - start_pos;
 
 	// we initalize result with space for our header

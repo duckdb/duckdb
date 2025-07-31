@@ -48,32 +48,31 @@ AbsoluteNumberComparison VarintIntermediate::IsAbsoluteBigger(const VarintInterm
 	idx_t rhs_actual_start_pos = rhs.GetStartDataPos();
 	idx_t rhs_actual_size = rhs.size - rhs_actual_start_pos;
 
-		// we have opposing signs, gotta do a bunch of checks to figure out who is the biggest
-		// check sizes
-		if (actual_size > rhs_actual_size) {
-			return GREATER;
-		}
-		if (actual_size < rhs_actual_size) {
-			return SMALLER;
-		} else {
-			// they have the same size then
-			idx_t target_idx = actual_start_pos;
-			idx_t source_idx = rhs_actual_start_pos;
-			while (target_idx < size) {
-				auto data_byte = GetAbsoluteByte(static_cast<int64_t>(target_idx));
-				auto rhs_byte = rhs.GetAbsoluteByte(static_cast<int64_t>(source_idx));
-				if (data_byte > rhs_byte) {
-					return GREATER;
-				} else if (data_byte < rhs_byte) {
-					return SMALLER;
-				}
-				target_idx++;
-				source_idx++;
+	// we have opposing signs, gotta do a bunch of checks to figure out who is the biggest
+	// check sizes
+	if (actual_size > rhs_actual_size) {
+		return GREATER;
+	}
+	if (actual_size < rhs_actual_size) {
+		return SMALLER;
+	} else {
+		// they have the same size then
+		idx_t target_idx = actual_start_pos;
+		idx_t source_idx = rhs_actual_start_pos;
+		while (target_idx < size) {
+			auto data_byte = GetAbsoluteByte(static_cast<int64_t>(target_idx));
+			auto rhs_byte = rhs.GetAbsoluteByte(static_cast<int64_t>(source_idx));
+			if (data_byte > rhs_byte) {
+				return GREATER;
+			} else if (data_byte < rhs_byte) {
+				return SMALLER;
 			}
+			target_idx++;
+			source_idx++;
 		}
+	}
 	// If we got here, the values are equal.
 	return EQUAL;
-
 }
 
 bool VarintIntermediate::IsMSBSet() const {
