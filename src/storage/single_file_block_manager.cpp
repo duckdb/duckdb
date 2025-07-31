@@ -329,9 +329,6 @@ void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header, s
 	data_t derived_key[MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH];
 	EncryptionKeyManager::DeriveKey(user_key, salt, derived_key);
 
-	// TODO this should not happen here
-
-	// FIXME
 	auto encryption_state = db.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(
 	    db.GetStorageManager().GetCipher(), derived_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 	if (!DecryptCanary(main_header, encryption_state, derived_key)) {
@@ -461,8 +458,7 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 	}
 
 	if (main_header.IsEncrypted()) {
-		// TODO if there is no cipher in the config, use the one from the existing config
-		// TODO if a cipher was provided, check if it is the same than in the config!
+
 		if (options.encryption_options.encryption_enabled) {
 			//! Encryption is set
 			//! Check if the given key upon attach is correct
@@ -473,6 +469,17 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 		} else {
 			// if encrypted, but no encryption key given
 			throw CatalogException("Cannot open encrypted database \"%s\" without a key", path);
+		}
+
+		// if there is no cipher in the config, use the one from the existing config
+		// if a cipher was provided, check if it is the same than in the config
+		auto cipher = static_cast<EncryptionTypes::CipherType>(
+		    main_header.GetEncryptionMetadata()[2]); // third byte in the encryption metadata is the cipher used
+		if (options.encryption_options.cipher != cipher) {
+			throw CatalogException("Cannot open encrypted database \"%s\" with a different cipher (%s) than the one "
+			                       "used to create it (%s)",
+			                       path, EncryptionTypes::CipherToString(options.encryption_options.cipher),
+			                       EncryptionTypes::CipherToString(cipher));
 		}
 	}
 

@@ -81,7 +81,7 @@ void EncryptionEngine::EncryptBlock(AttachedDatabase &attached_db, const string 
 	auto aes_res = encryption_state->Process(checksum_offset, size, encryption_checksum_offset, size);
 
 	if (aes_res != size) {
-		throw IOException("Encryption failure: in- and output size differ");
+		throw IOException("Block encryption failure: in- and output size differ (%llu/%llu)", size, aes_res);
 	}
 
 	//! Finalize and extract the tag
@@ -117,7 +117,7 @@ void EncryptionEngine::DecryptBlock(AttachedDatabase &attached_db, const string 
 	auto aes_res = encryption_state->Process(checksum_offset, size, checksum_offset, size);
 
 	if (aes_res != block_size + Storage::DEFAULT_BLOCK_HEADER_SIZE) {
-		throw IOException("Encryption failure: in- and output size differ");
+		throw IOException("Block decryption failure: in- and output size differ (%llu/%llu)", size, aes_res);
 	}
 
 	//! check the tag
@@ -154,7 +154,8 @@ void EncryptionEngine::EncryptTemporaryBuffer(DatabaseInstance &db, data_ptr_t b
 	auto aes_res = encryption_state->Process(buffer, buffer_size, buffer, buffer_size);
 
 	if (aes_res != buffer_size) {
-		throw IOException("Encryption failure: in- and output size differ");
+		throw IOException("Temporary buffer encryption failure: in- and output size differ (%llu/%llu)", buffer_size,
+		                  aes_res);
 	}
 
 	//! Finalize and extract the tag
@@ -182,7 +183,7 @@ static void DecryptBuffer(EncryptionState &encryption_state, const_data_ptr_t te
 	auto aes_res = encryption_state.Process(buffer, buffer_size, buffer, buffer_size);
 
 	if (aes_res != buffer_size) {
-		throw IOException("Encryption failure: in- and output size differ");
+		throw IOException("Buffer decryption failure: in- and output size differ (%llu/%llu)", buffer_size, aes_res);
 	}
 
 	//! check the tag
