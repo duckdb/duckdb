@@ -142,11 +142,9 @@ public:
 			auto &catalog = state_p.db.GetCatalog().Cast<DuckCatalog>();
 			auto derived_key = keys.GetKey(catalog.GetEncryptionKeyId());
 
-			// TODO get the actual cipher! // FIXME
-
 			//! initialize the decryption
 			auto encryption_state = database.GetEncryptionUtil()->CreateEncryptionState(
-			    EncryptionTypes::UNKNOWN, derived_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+			    state_p.db.GetStorageManager().GetCipher(), derived_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 			encryption_state->InitializeDecryption(nonce.data(), nonce.size(), derived_key,
 			                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 

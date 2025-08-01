@@ -9,55 +9,20 @@
 #pragma once
 
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 
 class EncryptionTypes {
 
 public:
-	enum CipherType : uint8_t { UNKNOWN = 0, GCM = 1, CTR = 2 };
+	enum CipherType : uint8_t { INVALID = 0, GCM = 1, CTR = 2, CBC = 3 };
 	enum KeyDerivationFunction : uint8_t { DEFAULT = 0, SHA256 = 1, PBKDF2 = 2 };
 
-	static string CipherToString(CipherType cipher_p) {
-		switch (cipher_p) {
-		case GCM:
-			return "gcm";
-		case CTR:
-			return "ctr";
-		default:
-			return "unknown";
-		}
-	}
-
-	static CipherType StringToCipher(const string &encryption_cipher) {
-		if (encryption_cipher == "gcm") {
-			return CipherType::GCM;
-		} else if (encryption_cipher == "ctr") {
-			return CipherType::CTR;
-		}
-		return CipherType::UNKNOWN;
-	}
-
-	static string KDFToString(KeyDerivationFunction kdf_p) {
-		switch (kdf_p) {
-		case SHA256:
-			return "sha256";
-		case PBKDF2:
-			return "pbkdf2";
-		default:
-			return "default";
-		}
-	}
-
-	static KeyDerivationFunction StringToKDF(const string &key_derivation_function) {
-		if (key_derivation_function == "sha256") {
-			return KeyDerivationFunction::SHA256;
-		} else if (key_derivation_function == "pbkdf2") {
-			return KeyDerivationFunction::PBKDF2;
-		} else {
-			return KeyDerivationFunction::DEFAULT;
-		}
-	}
+	static string CipherToString(CipherType cipher_p);
+	static CipherType StringToCipher(const string &encryption_cipher_p);
+	static string KDFToString(KeyDerivationFunction kdf_p);
+	static KeyDerivationFunction StringToKDF(const string &key_derivation_function_p);
 };
 
 class EncryptionState {

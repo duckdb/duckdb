@@ -255,6 +255,17 @@ const mbedtls_cipher_info_t *MbedTlsWrapper::AESStateMBEDTLS::GetCipher(size_t k
 		    default:
 			    throw runtime_error("Invalid AES key length");
 		    }
+	case duckdb::EncryptionTypes::CipherType::CBC:
+		switch (key_len) {
+		case 16:
+			return mbedtls_cipher_info_from_type(MBEDTLS_CIPHER_AES_128_CTR);
+		case 24:
+			return mbedtls_cipher_info_from_type(MBEDTLS_CIPHER_AES_192_CTR);
+		case 32:
+			return mbedtls_cipher_info_from_type(MBEDTLS_CIPHER_AES_256_CTR);
+		default:
+			throw runtime_error("Invalid AES key length");
+		}
 		default:
 				throw duckdb::InternalException("Invalid Encryption/Decryption Cipher: %s", duckdb::EncryptionTypes::CipherToString(cipher));
 	}
@@ -332,13 +343,28 @@ void MbedTlsWrapper::AESStateMBEDTLS::InitializeDecryption(duckdb::const_data_pt
 
 size_t MbedTlsWrapper::AESStateMBEDTLS::Process(duckdb::const_data_ptr_t in, duckdb::idx_t in_len, duckdb::data_ptr_t out,
                                                    duckdb::idx_t out_len) {
-	size_t result;
-	if (mbedtls_cipher_update(context.get(), reinterpret_cast<const unsigned char *>(in), in_len, out,
-	                      &result)) {
+
+	// GCM works in-place, CTR and CBC don't
+	auto use_out_copy = in == out && cipher != duckdb::EncryptionTypes::CipherType::GCM;
+
+	auto out_ptr = out;
+	std::unique_ptr<duckdb::data_t[]> out_copy;
+	if (use_out_copy) {
+		out_copy.reset(new duckdb::data_t[out_len]);
+		out_ptr = out_copy.get();
+	}
+
+	size_t out_len_res = duckdb::NumericCast<size_t>(out_len);
+	if (mbedtls_cipher_update(context.get(), reinterpret_cast<const unsigned char *>(in), in_len, out_ptr,
+	                      &out_len_res)) {
 			throw runtime_error("Encryption or Decryption failed at Process");
 		};
 
-	return result;
+	if (use_out_copy) {
+		memcpy(out, out_ptr, out_len_res);
+	}
+
+	return out_len_res;
 }
 
 void MbedTlsWrapper::AESStateMBEDTLS::FinalizeGCM(duckdb::data_ptr_t tag, duckdb::idx_t tag_len){

@@ -127,10 +127,13 @@ public:
 	EncryptionTypes::CipherType GetCipher() const {
 		// TODO: the type of this thing should probably change
 		auto cipher = EncryptionTypes::StringToCipher(storage_options.encryption_cipher);
-		if (cipher == EncryptionTypes::UNKNOWN) {
-			throw InternalException("Unknown cipher type %s", storage_options.encryption_cipher);
+		if (cipher == EncryptionTypes::INVALID) {
+			throw InternalException("Invalid encryption cipher type %s", storage_options.encryption_cipher);
 		}
 		return cipher;
+	}
+	bool IsEncrypted() const {
+		return storage_options.encryption;
 	}
 
 protected:

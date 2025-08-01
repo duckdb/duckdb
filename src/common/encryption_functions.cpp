@@ -49,7 +49,8 @@ void EncryptionEngine::AddTempKeyToCache(DatabaseInstance &db) {
 	const auto length = MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH;
 	data_t temp_key[length];
 
-	auto encryption_state = db.GetEncryptionUtil()->CreateEncryptionState(EncryptionTypes::UNKNOWN, temp_key, length);
+	auto encryption_state = db.GetEncryptionUtil()->CreateEncryptionState(
+	    /* only for random generator */ EncryptionTypes::INVALID, temp_key, length);
 	encryption_state->GenerateRandomData(temp_key, length);
 
 	string key_id = "temp_key";

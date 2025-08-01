@@ -41,8 +41,8 @@ void StorageOptions::Initialize(const unordered_map<string, Value> &options) {
 		} else if (entry.first == "encryption_cipher") {
 			encryption_cipher = StringUtil::Lower(entry.second.ToString());
 			auto parsed_cipher = EncryptionTypes::StringToCipher(encryption_cipher);
-			if (parsed_cipher == EncryptionTypes::CipherType::UNKNOWN) {
-				throw BinderException("\"%s\" is not a valid cipher. Try 'gcm' or 'ctr'.", encryption_cipher);
+			if (parsed_cipher == EncryptionTypes::CipherType::INVALID) {
+				throw BinderException("\"%s\" is not a valid cipher. Try 'GCM', 'CTR', or 'CBC'.", encryption_cipher);
 			}
 		} else if (entry.first == "row_group_size") {
 			row_group_size = entry.second.GetValue<uint64_t>();
