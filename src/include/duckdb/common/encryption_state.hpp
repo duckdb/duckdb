@@ -18,6 +18,7 @@ class EncryptionTypes {
 public:
 	enum CipherType : uint8_t { INVALID = 0, GCM = 1, CTR = 2, CBC = 3 };
 	enum KeyDerivationFunction : uint8_t { DEFAULT = 0, SHA256 = 1, PBKDF2 = 2 };
+	enum Mode { ENCRYPT, DECRYPT };
 
 	static string CipherToString(CipherType cipher_p);
 	static CipherType StringToCipher(const string &encryption_cipher_p);

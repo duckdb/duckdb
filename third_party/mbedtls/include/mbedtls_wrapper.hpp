@@ -19,7 +19,6 @@ typedef struct mbedtls_cipher_info_t mbedtls_cipher_info_t;
 
 namespace duckdb_mbedtls {
 
-enum Mode { ENCRYPT, DECRYPT };
 
 
 class MbedTlsWrapper {
@@ -87,7 +86,7 @@ class AESStateMBEDTLS : public duckdb::EncryptionState {
 		DUCKDB_API void InitializeInternal(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len, duckdb::const_data_ptr_t aad, duckdb::idx_t aad_len);
 
 	private:
-		Mode mode;
+		duckdb::EncryptionTypes::Mode mode;
 		duckdb::EncryptionTypes::CipherType cipher;
 		duckdb::unique_ptr<mbedtls_cipher_context_t> context;
 	};

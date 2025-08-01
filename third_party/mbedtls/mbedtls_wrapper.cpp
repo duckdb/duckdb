@@ -322,7 +322,7 @@ void MbedTlsWrapper::AESStateMBEDTLS::InitializeInternal(duckdb::const_data_ptr_
 
 
 void MbedTlsWrapper::AESStateMBEDTLS::InitializeEncryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len, duckdb::const_data_ptr_t key, duckdb::idx_t key_len, duckdb::const_data_ptr_t aad, duckdb::idx_t aad_len) {
-	mode = ENCRYPT;
+	mode = duckdb::EncryptionTypes::ENCRYPT;
 
 	if (mbedtls_cipher_setkey(context.get(), key, key_len * 8, MBEDTLS_ENCRYPT)) {
 		throw runtime_error("Failed to set AES key for encryption");
@@ -332,7 +332,7 @@ void MbedTlsWrapper::AESStateMBEDTLS::InitializeEncryption(duckdb::const_data_pt
 }
 
 void MbedTlsWrapper::AESStateMBEDTLS::InitializeDecryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len, duckdb::const_data_ptr_t key, duckdb::idx_t key_len, duckdb::const_data_ptr_t aad, duckdb::idx_t aad_len) {
-	mode = DECRYPT;
+	mode = duckdb::EncryptionTypes::DECRYPT;
 
 	if (mbedtls_cipher_setkey(context.get(), key, key_len * 8, MBEDTLS_DECRYPT)) {
 		throw runtime_error("Failed to set AES key for encryption");
@@ -371,14 +371,14 @@ void MbedTlsWrapper::AESStateMBEDTLS::FinalizeGCM(duckdb::data_ptr_t tag, duckdb
 
 	switch (mode) {
 
-	case ENCRYPT: {
+	case duckdb::EncryptionTypes::ENCRYPT: {
 		if (mbedtls_cipher_write_tag(context.get(), tag, tag_len)) {
 			throw runtime_error("Writing tag failed");
 		}
 		break;
 	}
 
-	case DECRYPT: {
+	case duckdb::EncryptionTypes::DECRYPT: {
 		if (mbedtls_cipher_check_tag(context.get(), tag, tag_len)) {
 			throw duckdb::InvalidInputException(
 			    "Computed AES tag differs from read AES tag, are you using the right key?");
