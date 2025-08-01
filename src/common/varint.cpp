@@ -144,6 +144,27 @@ idx_t VarintIntermediate::Trim(data_ptr_t data, uint32_t &size, bool is_negative
 void VarintIntermediate::Trim() {
 	Trim(data, size, is_negative);
 }
+
+bool VarintIntermediate::OverOrUnderflow(data_ptr_t data, idx_t size, bool is_negative) {
+	if (size <= Varint::MAX_DATA_SIZE) {
+		return false;
+	}
+	// variable that stores a fully unset byte can safely be ignored
+	uint8_t byte_to_compare = is_negative ? 0xFF : 0x00;
+	// we will basically check if any byte has any set bit up to Varint::MAX_DATA_SIZE, if so, that's an under/overflow
+	idx_t data_pos = 0;
+	for (idx_t i = size; i >= Varint::MAX_DATA_SIZE; ++i) {
+		if (data[data_pos++] != byte_to_compare) {
+			return true;
+		}
+	}
+	return false;
+}
+
+bool VarintIntermediate::OverOrUnderflow() const {
+	return OverOrUnderflow(data, size, is_negative);
+}
+
 varint_t VarintIntermediate::ToVarint(ArenaAllocator &allocator) {
 	// This must be trimmed before transforming
 	Trim();
@@ -158,20 +179,20 @@ varint_t VarintIntermediate::ToVarint(ArenaAllocator &allocator) {
 	return result;
 }
 
-void VarintAddition(data_ptr_t result, int64_t result_start, int64_t result_end, bool is_target_absolute_bigger,
+void VarintAddition(data_ptr_t result, int64_t result_end, bool is_target_absolute_bigger,
                     const VarintIntermediate &lhs, const VarintIntermediate &rhs) {
 	bool is_result_negative = is_target_absolute_bigger ? lhs.is_negative : rhs.is_negative;
 
 	int64_t i_target = lhs.size - 1;   // last byte index in target
 	int64_t i_source = rhs.size - 1;   // last byte index in source
-	int64_t i_result = result_end - 1; // last byte index in source
+	int64_t i_result = result_end - 1; // last byte index in result
 
 	// Carry for addition
 	uint16_t carry = 0;
 	uint16_t borrow = 0;
 	// Add bytes from right to left
-	while (i_result >= result_start) {
-		// If the numbers are negative we bit flip them
+	while (i_result >= 0) {
+		// If the numbers are negative, we bit flip them
 		uint8_t target_byte = lhs.GetAbsoluteByte(i_target);
 		uint8_t source_byte = rhs.GetAbsoluteByte(i_source);
 		// Add bytes and carry
@@ -198,7 +219,7 @@ void VarintAddition(data_ptr_t result, int64_t result_start, int64_t result_end,
 
 	if (is_result_negative != lhs.is_negative) {
 		// If we are flipping the sign we must be sure that we are flipping all extra bits from our target
-		for (int64_t i = result_start; i < result_end - result_start - rhs.size; ++i) {
+		for (int64_t i = 0; i < result_end - rhs.size; ++i) {
 			result[i] = is_result_negative ? 0xFF : 0x00;
 		}
 	}
@@ -252,11 +273,18 @@ string_t VarintIntermediate::Add(Vector &result_vector, const VarintIntermediate
 	}
 
 	auto target = StringVector::EmptyString(result_vector, result_size);
+	auto result_size_data = result_size - Varint::VARINT_HEADER_SIZE;
+
 	auto target_data = target.GetDataWriteable();
-	VarintAddition(reinterpret_cast<data_ptr_t>(target_data), Varint::VARINT_HEADER_SIZE, result_size,
+	VarintAddition(reinterpret_cast<data_ptr_t>(target_data + Varint::VARINT_HEADER_SIZE), result_size_data,
 	               is_target_absolute_bigger, lhs, rhs);
 	bool is_result_negative = is_target_absolute_bigger ? lhs.is_negative : rhs.is_negative;
-	auto result_size_data = result_size - Varint::VARINT_HEADER_SIZE;
+	if (OverOrUnderflow(reinterpret_cast<data_ptr_t>(target_data + Varint::VARINT_HEADER_SIZE), result_size_data,
+	                    is_result_negative)) {
+		// We must throw an error, usually we should print the numbers, but I have a feeling that it won't be possible
+		// here.
+		throw OutOfRangeException("Overflow in Varint Operation. A Varint can hold max 8388608 data bytes.");
+	}
 	Trim(reinterpret_cast<data_ptr_t>(target_data + Varint::VARINT_HEADER_SIZE), result_size_data, is_result_negative);
 	Varint::SetHeader(target_data, result_size_data, is_result_negative);
 	target.SetSizeAndFinalize(result_size_data + Varint::VARINT_HEADER_SIZE);
@@ -285,9 +313,14 @@ void VarintIntermediate::AddInPlace(ArenaAllocator &allocator, const VarintInter
 	}
 
 	bool is_result_negative = is_target_absolute_bigger ? is_negative : rhs.is_negative;
-	VarintAddition(data, 0, size, is_target_absolute_bigger, *this, rhs);
+	VarintAddition(data, size, is_target_absolute_bigger, *this, rhs);
 	if (is_result_negative != is_negative) {
 		is_negative = is_result_negative;
+	}
+	if (OverOrUnderflow()) {
+		// We must throw an error, usually we should print the numbers, but I have a feeling that it won't be possible
+		// here.
+		throw OutOfRangeException("Overflow in Varint Operation. A Varint can hold max 8388608 data bytes.");
 	}
 }
 

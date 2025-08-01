@@ -56,7 +56,7 @@ struct VarintIntermediate {
 	AbsoluteNumberComparison IsAbsoluteBigger(const VarintIntermediate &rhs) const;
 	//! Get the absolute value of a byte
 	uint8_t GetAbsoluteByte(int64_t index) const;
-	//! If most significant bit of the first byte is set.
+	//! If the most significant bit of the first byte is set.
 	bool IsMSBSet() const;
 	//! Initializes our varint to 0 and 1 byte
 	void Initialize(ArenaAllocator &allocator);
@@ -76,6 +76,9 @@ struct VarintIntermediate {
 	void NegateInPlace();
 	//! Exports to a varint, either arena allocated
 	varint_t ToVarint(ArenaAllocator &allocator);
+	//! Check if an over/underflow has occurred
+	static bool OverOrUnderflow(data_ptr_t data, idx_t size, bool is_negative);
+	bool OverOrUnderflow() const;
 };
 
 } // namespace duckdb
