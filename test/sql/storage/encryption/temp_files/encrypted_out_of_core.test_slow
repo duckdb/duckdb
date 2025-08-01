@@ -2,7 +2,7 @@
 # description: Encrypted large joins in persistent databases have a leftover temporary directory.
 # group: [temp_files]
 
-foreach cipher CTR CBC
+foreach cipher GCM CTR CBC
 
 
 
