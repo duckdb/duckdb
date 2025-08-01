@@ -306,7 +306,7 @@ static inline bool RequiresHigherBitWidth(bitpacking_width_t bitwidth, uint32_t 
 
 template <DictionaryAppendState APPEND_STATE>
 static inline bool AddLookup(DictFSSTCompressionState &state, idx_t lookup, const bool recalculate_indices_space,
-                             bool must_fail) {
+                             bool fail_on_no_space) {
 	D_ASSERT(lookup != DConstants::INVALID_INDEX);
 
 	//! This string exists in the dictionary
@@ -338,7 +338,7 @@ static inline bool AddLookup(DictFSSTCompressionState &state, idx_t lookup, cons
 		available_space -= FSST_SYMBOL_TABLE_SIZE;
 	}
 	if (required_space > available_space) {
-		if (must_fail) {
+		if (fail_on_no_space) {
 			throw FatalException("AddLookup in DictFSST failed: required: %d, available: %d, indices: %d, bitpacking: "
 			                     "%b, dict offset: %d, str length: %d",
 			                     required_space, available_space, new_dictionary_indices_space, get_bitpacking_size,
@@ -357,7 +357,7 @@ static inline bool AddLookup(DictFSSTCompressionState &state, idx_t lookup, cons
 
 template <DictionaryAppendState APPEND_STATE>
 static inline bool AddToDictionary(DictFSSTCompressionState &state, const string_t &str,
-                                   const bool recalculate_indices_space, bool must_fail) {
+                                   const bool recalculate_indices_space, bool fail_on_no_space) {
 	uint32_t str_len = UnsafeNumericCast<uint32_t>(str.GetSize());
 	if (APPEND_STATE == DictionaryAppendState::ENCODED) {
 		//! We delay encoding of new entries.
@@ -421,7 +421,7 @@ static inline bool AddToDictionary(DictFSSTCompressionState &state, const string
 		available_space -= FSST_SYMBOL_TABLE_SIZE;
 	}
 	if (required_space > available_space) {
-		if (must_fail) {
+		if (fail_on_no_space) {
 			throw FatalException("AddToDictionary in DictFSST failed: required: %d, available: %d, dict offset + "
 			                     "str_len: %d, new str length: %d, new dict indices: %d",
 			                     required_space, available_space, state.dictionary_offset + str_len,
@@ -476,7 +476,7 @@ static inline bool AddToDictionary(DictFSSTCompressionState &state, const string
 
 bool DictFSSTCompressionState::CompressInternal(UnifiedVectorFormat &vector_format, const string_t &str, bool is_null,
                                                 EncodedInput &encoded_input, const idx_t i, idx_t count,
-                                                bool must_fail) {
+                                                bool fail_on_no_space) {
 	auto strings = UnifiedVectorFormat::GetData<string_t>(vector_format);
 	idx_t lookup = DConstants::INVALID_INDEX;
 
@@ -499,20 +499,20 @@ bool DictFSSTCompressionState::CompressInternal(UnifiedVectorFormat &vector_form
 	case DictionaryAppendState::REGULAR: {
 		if (append_state == DictionaryAppendState::REGULAR) {
 			if (lookup != DConstants::INVALID_INDEX) {
-				return AddLookup<DictionaryAppendState::REGULAR>(*this, lookup, recalculate_indices_space, must_fail);
+				return AddLookup<DictionaryAppendState::REGULAR>(*this, lookup, recalculate_indices_space, fail_on_no_space);
 			} else {
 				//! This string does not exist in the dictionary, add it
 				return AddToDictionary<DictionaryAppendState::REGULAR>(*this, str, recalculate_indices_space,
-				                                                       must_fail);
+				                                                       fail_on_no_space);
 			}
 		} else {
 			if (lookup != DConstants::INVALID_INDEX) {
 				return AddLookup<DictionaryAppendState::NOT_ENCODED>(*this, lookup, recalculate_indices_space,
-				                                                     must_fail);
+				                                                     fail_on_no_space);
 			} else {
 				//! This string does not exist in the dictionary, add it
 				return AddToDictionary<DictionaryAppendState::NOT_ENCODED>(*this, str, recalculate_indices_space,
-				                                                           must_fail);
+				                                                           fail_on_no_space);
 			}
 		}
 	}
@@ -523,10 +523,10 @@ bool DictFSSTCompressionState::CompressInternal(UnifiedVectorFormat &vector_form
 
 		bool fits;
 		if (lookup != DConstants::INVALID_INDEX) {
-			fits = AddLookup<DictionaryAppendState::ENCODED>(*this, lookup, recalculate_indices_space, must_fail);
+			fits = AddLookup<DictionaryAppendState::ENCODED>(*this, lookup, recalculate_indices_space, fail_on_no_space);
 		} else {
 			//! Not in the dictionary, add it
-			fits = AddToDictionary<DictionaryAppendState::ENCODED>(*this, str, recalculate_indices_space, must_fail);
+			fits = AddToDictionary<DictionaryAppendState::ENCODED>(*this, str, recalculate_indices_space, fail_on_no_space);
 		}
 		if (fits) {
 			return fits;
@@ -541,10 +541,10 @@ bool DictFSSTCompressionState::CompressInternal(UnifiedVectorFormat &vector_form
 		// we flush these and try again to see if the size went down enough
 		FlushEncodingBuffer();
 		if (lookup != DConstants::INVALID_INDEX) {
-			return AddLookup<DictionaryAppendState::ENCODED>(*this, lookup, recalculate_indices_space, must_fail);
+			return AddLookup<DictionaryAppendState::ENCODED>(*this, lookup, recalculate_indices_space, fail_on_no_space);
 		} else {
 			//! Not in the dictionary, add it
-			return AddToDictionary<DictionaryAppendState::ENCODED>(*this, str, recalculate_indices_space, must_fail);
+			return AddToDictionary<DictionaryAppendState::ENCODED>(*this, str, recalculate_indices_space, fail_on_no_space);
 		}
 	}
 	case DictionaryAppendState::ENCODED_ALL_UNIQUE: {
@@ -640,7 +640,7 @@ bool DictFSSTCompressionState::CompressInternal(UnifiedVectorFormat &vector_form
 #endif
 		auto &string = encoded_input.data[i - encoded_input.offset];
 		return AddToDictionary<DictionaryAppendState::ENCODED_ALL_UNIQUE>(*this, string, recalculate_indices_space,
-		                                                                  must_fail);
+		                                                                  fail_on_no_space);
 	}
 	};
 	throw InternalException("Unreachable");
