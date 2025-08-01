@@ -499,7 +499,8 @@ bool DictFSSTCompressionState::CompressInternal(UnifiedVectorFormat &vector_form
 	case DictionaryAppendState::REGULAR: {
 		if (append_state == DictionaryAppendState::REGULAR) {
 			if (lookup != DConstants::INVALID_INDEX) {
-				return AddLookup<DictionaryAppendState::REGULAR>(*this, lookup, recalculate_indices_space, fail_on_no_space);
+				return AddLookup<DictionaryAppendState::REGULAR>(*this, lookup, recalculate_indices_space,
+				                                                 fail_on_no_space);
 			} else {
 				//! This string does not exist in the dictionary, add it
 				return AddToDictionary<DictionaryAppendState::REGULAR>(*this, str, recalculate_indices_space,
@@ -523,10 +524,12 @@ bool DictFSSTCompressionState::CompressInternal(UnifiedVectorFormat &vector_form
 
 		bool fits;
 		if (lookup != DConstants::INVALID_INDEX) {
-			fits = AddLookup<DictionaryAppendState::ENCODED>(*this, lookup, recalculate_indices_space, fail_on_no_space);
+			fits =
+			    AddLookup<DictionaryAppendState::ENCODED>(*this, lookup, recalculate_indices_space, fail_on_no_space);
 		} else {
 			//! Not in the dictionary, add it
-			fits = AddToDictionary<DictionaryAppendState::ENCODED>(*this, str, recalculate_indices_space, fail_on_no_space);
+			fits = AddToDictionary<DictionaryAppendState::ENCODED>(*this, str, recalculate_indices_space,
+			                                                       fail_on_no_space);
 		}
 		if (fits) {
 			return fits;
@@ -541,10 +544,12 @@ bool DictFSSTCompressionState::CompressInternal(UnifiedVectorFormat &vector_form
 		// we flush these and try again to see if the size went down enough
 		FlushEncodingBuffer();
 		if (lookup != DConstants::INVALID_INDEX) {
-			return AddLookup<DictionaryAppendState::ENCODED>(*this, lookup, recalculate_indices_space, fail_on_no_space);
+			return AddLookup<DictionaryAppendState::ENCODED>(*this, lookup, recalculate_indices_space,
+			                                                 fail_on_no_space);
 		} else {
 			//! Not in the dictionary, add it
-			return AddToDictionary<DictionaryAppendState::ENCODED>(*this, str, recalculate_indices_space, fail_on_no_space);
+			return AddToDictionary<DictionaryAppendState::ENCODED>(*this, str, recalculate_indices_space,
+			                                                       fail_on_no_space);
 		}
 	}
 	case DictionaryAppendState::ENCODED_ALL_UNIQUE: {
