@@ -12,6 +12,7 @@
 #include "duckdb/common/file_open_flags.hpp"
 #include "duckdb/common/open_file_info.hpp"
 #include "duckdb/common/shared_ptr.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/storage/external_file_cache.hpp"
 
@@ -113,6 +114,7 @@ public:
 public:
 	DUCKDB_API static CachingFileSystem Get(ClientContext &context);
 
+	DUCKDB_API unique_ptr<CachingFileHandle> OpenFile(const OpenFileInfo &path, FileOpenFlags flags);
 	DUCKDB_API unique_ptr<CachingFileHandle> OpenFile(QueryContext context, const OpenFileInfo &path,
 	                                                  FileOpenFlags flags);
 
