@@ -337,8 +337,10 @@ jobs:
         python3 scripts/run_tests_one_by_one.py ./build/release/test/unittest '-f test.list'
         python3 scripts/run_tests_one_by_one.py ./build/release/test/unittest '[secret]'
 
+ # TODO: Bring back BLOCK_VERIFICATION: 1, and consider bringing back fts
+ # TODO: DEBUG_STACKTRACE: 1 + reldebug ?
  linux-configs:
-    name: Tests with different configurations
+    name: Tests a release build with different configurations
     runs-on: ubuntu-24.04
     env:
       BASE_BRANCH: ${{ github.base_ref || 'main' }}
@@ -365,8 +367,6 @@ jobs:
     - name: Build
       id: build
       shell: bash
-      # Bring back BLOCK_VERIFICATION: 1, and consider bringing back fts
-      # DEBUG_STACKTRACE: 1 + reldebug ?
       env:
         CORE_EXTENSIONS: "json;parquet;icu;tpch;tpcds"
         GEN: ninja
@@ -396,6 +396,11 @@ jobs:
       run: |
         ./build/release/test/unittest --test-config test/configs/latest_storage.json
 
+    - name: test/configs/enable_verification.json
+      if: (success() || failure()) && steps.build.conclusion == 'success'
+      shell: bash
+      run: |
+        ./build/release/test/unittest --test-config test/configs/enable_verification.json
     - name: test/configs/prefetch_all_parquet_files.json
       if: (success() || failure()) && steps.build.conclusion == 'success'
       shell: bash
