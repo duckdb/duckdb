@@ -72,14 +72,6 @@ jobs:
       git_ref: ${{ inputs.git_ref }}
       skip_tests: ${{ inputs.skip_tests }}
 
-  R:
-    uses: ./.github/workflows/R.yml
-    secrets: inherit
-    with:
-      override_git_describe: ${{ inputs.override_git_describe }}
-      git_ref: ${{ inputs.git_ref }}
-      skip_tests: ${{ inputs.skip_tests }}
-
   static-libraries:
     uses: ./.github/workflows/BundleStaticLibs.yml
     secrets: inherit
