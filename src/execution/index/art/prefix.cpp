@@ -48,10 +48,9 @@ uint8_t Prefix::GetByte(const ART &art, const Node &node, const uint8_t pos) {
 	return prefix.data[pos];
 }
 
-Prefix Prefix::NewInternal(ART &art, Node &node, const data_ptr_t data, const uint8_t count, const idx_t offset,
-                           const NType type) {
-	node = Node::GetAllocator(art, type).New();
-	node.SetMetadata(static_cast<uint8_t>(type));
+Prefix Prefix::NewInternal(ART &art, Node &node, const data_ptr_t data, const uint8_t count, const idx_t offset) {
+	node = Node::GetAllocator(art, PREFIX).New();
+	node.SetMetadata(static_cast<uint8_t>(PREFIX));
 
 	Prefix prefix(art, node, true);
 	prefix.data[Count(art)] = count;
@@ -59,6 +58,7 @@ Prefix Prefix::NewInternal(ART &art, Node &node, const data_ptr_t data, const ui
 		D_ASSERT(count);
 		memcpy(prefix.data, data + offset, count);
 	}
+	prefix.ptr->Clear();
 	return prefix;
 }
 
@@ -68,7 +68,7 @@ void Prefix::New(ART &art, reference<Node> &ref, const ARTKey &key, const idx_t 
 	while (count) {
 		auto min = MinValue(UnsafeNumericCast<idx_t>(Count(art)), count);
 		auto this_count = UnsafeNumericCast<uint8_t>(min);
-		auto prefix = NewInternal(art, ref, key.data, this_count, offset + depth, PREFIX);
+		auto prefix = NewInternal(art, ref, key.data, this_count, offset + depth);
 
 		ref = *prefix.ptr;
 		offset += this_count;
@@ -114,7 +114,7 @@ void Prefix::Concat(ART &art, Node &parent, uint8_t byte, const GateStatus old_s
 	}
 
 	if (parent.GetType() != PREFIX) {
-		auto prefix = NewInternal(art, parent, &byte, 1, 0, PREFIX);
+		auto prefix = NewInternal(art, parent, &byte, 1, 0);
 		if (child.GetType() == PREFIX) {
 			prefix.Append(art, child);
 		} else {
@@ -216,7 +216,7 @@ GateStatus Prefix::Split(ART &art, reference<Node> &node, Node &child, const uin
 		// Create a new prefix and
 		// 1. copy the remaining bytes of this prefix.
 		// 2. append remaining prefix nodes.
-		auto new_prefix = NewInternal(art, child, nullptr, 0, 0, PREFIX);
+		auto new_prefix = NewInternal(art, child, nullptr, 0, 0);
 		new_prefix.data[Count(art)] = prefix.data[Count(art)] - pos - 1;
 		memcpy(new_prefix.data, prefix.data + pos + 1, new_prefix.data[Count(art)]);
 
@@ -321,7 +321,7 @@ Prefix Prefix::Append(ART &art, const uint8_t byte) {
 		return *this;
 	}
 
-	auto prefix = NewInternal(art, *ptr, nullptr, 0, 0, PREFIX);
+	auto prefix = NewInternal(art, *ptr, nullptr, 0, 0);
 	return prefix.Append(art, byte);
 }
 
@@ -364,14 +364,14 @@ void Prefix::ConcatGate(ART &art, Node &parent, uint8_t byte, const Node &child)
 
 	} else if (child.GetType() == PREFIX) {
 		// At least one more row ID in this gate.
-		auto prefix = NewInternal(art, new_prefix, &byte, 1, 0, PREFIX);
+		auto prefix = NewInternal(art, new_prefix, &byte, 1, 0);
 		prefix.ptr->Clear();
 		prefix.Append(art, child);
 		new_prefix.SetGateStatus(GateStatus::GATE_SET);
 
 	} else {
 		// At least one more row ID in this gate.
-		auto prefix = NewInternal(art, new_prefix, &byte, 1, 0, PREFIX);
+		auto prefix = NewInternal(art, new_prefix, &byte, 1, 0);
 		*prefix.ptr = child;
 		new_prefix.SetGateStatus(GateStatus::GATE_SET);
 	}
@@ -386,7 +386,7 @@ void Prefix::ConcatGate(ART &art, Node &parent, uint8_t byte, const Node &child)
 void Prefix::ConcatChildIsGate(ART &art, Node &parent, uint8_t byte, const Node &child) {
 	// Create a new prefix and point it to the gate.
 	if (parent.GetType() != PREFIX) {
-		auto prefix = NewInternal(art, parent, &byte, 1, 0, PREFIX);
+		auto prefix = NewInternal(art, parent, &byte, 1, 0);
 		*prefix.ptr = child;
 		return;
 	}
