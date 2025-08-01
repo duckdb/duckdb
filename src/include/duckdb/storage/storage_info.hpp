@@ -33,7 +33,7 @@ struct FileHandle;
 //! The configurable block allocation size.
 #ifndef DUCKDB_BLOCK_HEADER_STORAGE_SIZE
 #define DUCKDB_BLOCK_HEADER_STORAGE_SIZE     DEFAULT_BLOCK_HEADER_STORAGE_SIZE
-#define DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE 28ULL
+#define DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE 32ULL
 #endif
 
 using block_id_t = int64_t;

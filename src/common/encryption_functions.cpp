@@ -50,7 +50,7 @@ void EncryptionEngine::AddTempKeyToCache(DatabaseInstance &db) {
 	data_t temp_key[length];
 
 	auto encryption_state = db.GetEncryptionUtil()->CreateEncryptionState(
-	    /* only for random generator */ EncryptionTypes::INVALID, temp_key, length);
+	    /* only for random generator */ EncryptionTypes::GCM, temp_key, length);
 	encryption_state->GenerateRandomData(temp_key, length);
 
 	string key_id = "temp_key";
