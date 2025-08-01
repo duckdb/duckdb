@@ -47,6 +47,7 @@ enum AbsoluteNumberComparison : uint8_t {
 struct VarintIntermediate {
 	VarintIntermediate() : is_negative(false), size(0), data(nullptr) {};
 	explicit VarintIntermediate(const varint_t &value);
+	VarintIntermediate(uint8_t *value, idx_t size);
 	void Print() const;
 	//! Information on the header
 	bool is_negative;

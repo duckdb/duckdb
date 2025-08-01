@@ -5,7 +5,70 @@
 using namespace duckdb;
 using namespace std;
 
+void PrintBits(const char value) {
+	for (int i = 7; i >= 0; --i) {
+		std::cout << ((value >> i) & 1);
+	}
+}
+
 TEST_CASE("Test Varint Overflow and Underflow", "[api]") {
+	// Lets generate the max possible varint
+	duckdb::vector<uint8_t> data;
+	idx_t total_data_size = Varint::VARINT_HEADER_SIZE + Varint::MAX_DATA_SIZE;
+	data.resize(total_data_size);
+	// Let's set our header
+	Varint::SetHeader(reinterpret_cast<char *>(data.data()), Varint::MAX_DATA_SIZE, false);
+	// Let's verify our header is properly set
+	for (idx_t i = 0; i < Varint::VARINT_HEADER_SIZE; i++) {
+		// All bits must be set in our header
+		REQUIRE(data[i] == 0xFF);
+	}
+
+	// Set all our other bits
+	for (idx_t i = Varint::VARINT_HEADER_SIZE; i < total_data_size; i++) {
+		data[i] = 0xFF;
+	}
+
+	duckdb::vector<uint8_t> value_one;
+	idx_t value_one_data_size = Varint::VARINT_HEADER_SIZE + 1;
+	value_one.resize(value_one_data_size);
+	// Let's set our header
+	Varint::SetHeader(reinterpret_cast<char *>(value_one.data()), 1, false);
+	// Set all our other bits
+	value_one[Varint::VARINT_HEADER_SIZE] = 1;
+
+	Vector result(LogicalType::VARINT);
+
+	{
+		VarintIntermediate lhs(data.data(), total_data_size);
+		VarintIntermediate rhs(value_one.data(), value_one_data_size);
+		REQUIRE_THROWS(VarintIntermediate::Add(result, lhs, rhs));
+	}
+
+	// Now let's try the underflow
+	Varint::SetHeader(reinterpret_cast<char *>(data.data()), Varint::MAX_DATA_SIZE, true);
+	// Let's verify our header is properly set
+	for (idx_t i = 0; i < Varint::VARINT_HEADER_SIZE; i++) {
+		// All bits must be set in our header
+		REQUIRE(data[i] == 0x00);
+	}
+	// Set all our other bits
+	for (idx_t i = Varint::VARINT_HEADER_SIZE; i < total_data_size; i++) {
+		data[i] = 0x00;
+	}
+
+	duckdb::vector<uint8_t> value_minus_one;
+	value_minus_one.resize(value_one_data_size);
+	// Let's set our header
+	Varint::SetHeader(reinterpret_cast<char *>(value_minus_one.data()), 1, true);
+	// Set our one bit
+	value_minus_one[Varint::VARINT_HEADER_SIZE] = 1;
+	value_minus_one[Varint::VARINT_HEADER_SIZE] = ~value_one[Varint::VARINT_HEADER_SIZE];
+	{
+		VarintIntermediate lhs(data.data(), total_data_size);
+		VarintIntermediate rhs(value_minus_one.data(), value_one_data_size);
+		REQUIRE_THROWS(VarintIntermediate::Add(result, lhs, rhs));
+	}
 }
 
 TEST_CASE("Test Varint::FromByteArray", "[api]") {

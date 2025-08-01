@@ -24,8 +24,8 @@ using twodigit_t = uint64_t;
 class Varint {
 public:
 	//! This is the maximum number of bytes a VARINT can have on it's data size
-	//! i.e., 2^(8*3-1).
-	DUCKDB_API static constexpr uint32_t MAX_DATA_SIZE = 8388608;
+	//! i.e., 2^(8*3-1) - 1.
+	DUCKDB_API static constexpr uint32_t MAX_DATA_SIZE = 8388607;
 	//! Header size of a Varint is always 3 bytes.
 	DUCKDB_API static constexpr uint8_t VARINT_HEADER_SIZE = 3;
 	//! Max(e such that 10**e fits in a digit_t)

@@ -46,6 +46,12 @@ VarintIntermediate::VarintIntermediate(const varint_t &value) {
 	size = static_cast<uint32_t>(value.data.GetSize()) - Varint::VARINT_HEADER_SIZE;
 }
 
+VarintIntermediate::VarintIntermediate(uint8_t *value, idx_t ptr_size) {
+	is_negative = (value[0] & 0x80) == 0;
+	data = value + Varint::VARINT_HEADER_SIZE;
+	size = static_cast<uint32_t>(ptr_size) - Varint::VARINT_HEADER_SIZE;
+}
+
 uint8_t VarintIntermediate::GetAbsoluteByte(int64_t index) const {
 	if (index < 0) {
 		// byte-extension
