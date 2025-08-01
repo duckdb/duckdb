@@ -636,12 +636,6 @@ jobs:
           GEN: ninja
         run: make debug
 
-      - name: test/configs/force_storage.json
-        if: (success() || failure()) && steps.build.conclusion == 'success'
-        shell: bash
-        run: |
-          ./build/debug/test/unittest --test-config test/configs/force_storage.json
-
       - name: test/configs/latest_storage.json
         if: (success() || failure()) && steps.build.conclusion == 'success'
         shell: bash

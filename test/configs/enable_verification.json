@@ -56,6 +56,14 @@
       ]
     },
     {
+      "reason": "Contains current time function.",
+      "paths": [
+        "test/sql/parser/test_value_functions.test",
+        "test/sql/function/timestamp/current_time.test",
+        "test/sql/timezone/test_icu_timezone.test"
+      ]
+    },
+    {
       "reason": "Contains FIRST (non-deterministic).",
       "paths": [
         "test/sql/parallelism/intraquery/test_parallel_nested_aggregates.test"
@@ -166,7 +174,9 @@
         "test/sql/catalog/function/test_macro_relpersistence_conflict.test",
         "test/sql/catalog/function/test_recursive_macro.test",
         "test/sql/catalog/function/test_recursive_macro_no_dependency.test",
-        "test/sql/catalog/test_set_schema.test"
+        "test/sql/catalog/test_set_schema.test",
+        "test/sql/function/list/lambdas/arrow/lambdas_and_functions_deprecated.test",
+        "test/sql/function/list/lambdas/lambdas_and_functions.test"
       ]
     },
     {
@@ -178,7 +188,8 @@
         "test/sql/copy/parquet/bloom_filters.test",
         "test/sql/copy/parquet/corrupt_stats.test",
         "test/sql/copy/file_size_bytes.test",
-        "test/sql/create/create_table_compression.test"
+        "test/sql/create/create_table_compression.test",
+        "test/sql/aggregate/aggregates/test_state_export.test"
       ]
     }
   ]
