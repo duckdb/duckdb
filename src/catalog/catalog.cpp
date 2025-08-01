@@ -39,6 +39,7 @@
 #include "duckdb/function/built_in_functions.hpp"
 #include "duckdb/catalog/similar_catalog_entry.hpp"
 #include "duckdb/storage/database_size.hpp"
+#include "duckdb/main/settings.hpp"
 #include <algorithm>
 
 namespace duckdb {
@@ -649,9 +650,7 @@ CatalogException Catalog::CreateMissingEntryException(CatalogEntryRetriever &ret
                                                       const reference_set_t<SchemaCatalogEntry> &schemas) {
 	auto &context = retriever.GetContext();
 	auto entries = SimilarEntriesInSchemas(context, lookup_info, schemas);
-
-	auto &config = DBConfig::GetConfig(context);
-	auto max_schema_count = config.GetSetting<CatalogErrorMaxSchemasSetting>(context);
+	auto max_schema_count = DBConfig::GetSetting<CatalogErrorMaxSchemasSetting>(context);
 
 	reference_set_t<SchemaCatalogEntry> unseen_schemas;
 	auto &db_manager = DatabaseManager::Get(context);

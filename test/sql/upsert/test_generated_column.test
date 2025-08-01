@@ -20,7 +20,7 @@ statement ok
 INSERT INTO t1 VALUES ('a', 1) ON CONFLICT(a) DO UPDATE SET b = excluded.b;
 
 query III
-select * from t1;
+SELECT * FROM t1;
 ----
 a	a	1
 
@@ -43,6 +43,6 @@ statement ok
 INSERT INTO t2 VALUES (1, 'a') ON CONFLICT(a) DO UPDATE SET b = excluded.b;
 
 query III
-select * from t1;
+SELECT * FROM t1;
 ----
 a	a	1

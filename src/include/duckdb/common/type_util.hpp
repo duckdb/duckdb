@@ -17,6 +17,7 @@
 #include "duckdb/common/types/double_na_equal.hpp"
 
 namespace duckdb {
+struct varint_t;
 
 //! Returns the PhysicalType for the given type
 template <class T>
@@ -67,7 +68,8 @@ PhysicalType GetTypeId() {
 		return PhysicalType::FLOAT;
 	} else if (std::is_same<T, double>() || std::is_same<T, double_na_equal>()) {
 		return PhysicalType::DOUBLE;
-	} else if (std::is_same<T, const char *>() || std::is_same<T, char *>() || std::is_same<T, string_t>()) {
+	} else if (std::is_same<T, const char *>() || std::is_same<T, char *>() || std::is_same<T, string_t>() ||
+	           std::is_same<T, varint_t>()) {
 		return PhysicalType::VARCHAR;
 	} else if (std::is_same<T, interval_t>()) {
 		return PhysicalType::INTERVAL;

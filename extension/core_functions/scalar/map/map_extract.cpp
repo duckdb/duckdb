@@ -6,51 +6,11 @@
 
 namespace duckdb {
 
-template <bool EXTRACT_VALUE>
-static unique_ptr<FunctionData> MapExtractBind(ClientContext &, ScalarFunction &bound_function,
-                                               vector<unique_ptr<Expression>> &arguments) {
-	if (arguments.size() != 2) {
-		throw BinderException("MAP_EXTRACT must have exactly two arguments");
-	}
-
-	const auto &map_type = arguments[0]->return_type;
-	const auto &input_type = arguments[1]->return_type;
-
-	if (map_type.id() == LogicalTypeId::SQLNULL) {
-		bound_function.return_type = EXTRACT_VALUE ? LogicalTypeId::SQLNULL : LogicalType::LIST(LogicalTypeId::SQLNULL);
-		return make_uniq<VariableReturnBindData>(bound_function.return_type);
-	}
-
-	if (map_type.id() != LogicalTypeId::MAP) {
-		throw BinderException("'%s' can only operate on MAPs", bound_function.name);
-	}
-	auto &value_type = MapType::ValueType(map_type);
-
-	//! Here we have to construct the List Type that will be returned
-	bound_function.return_type = EXTRACT_VALUE ? value_type : LogicalType::LIST(value_type);
-	const auto &key_type = MapType::KeyType(map_type);
-	if (key_type.id() != LogicalTypeId::SQLNULL && input_type.id() != LogicalTypeId::SQLNULL) {
-		bound_function.arguments[1] = MapType::KeyType(map_type);
-	}
-	return make_uniq<VariableReturnBindData>(bound_function.return_type);
-}
-
 static void MapExtractValueFunc(DataChunk &args, ExpressionState &state, Vector &result) {
 	const auto count = args.size();
 
 	auto &map_vec = args.data[0];
 	auto &arg_vec = args.data[1];
-
-	const auto map_is_null = map_vec.GetType().id() == LogicalTypeId::SQLNULL;
-	const auto arg_is_null = arg_vec.GetType().id() == LogicalTypeId::SQLNULL;
-
-	if (map_is_null || arg_is_null) {
-		// Short-circuit if either the map or the arg is NULL
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(result, true);
-		result.Verify(count);
-		return;
-	}
 
 	auto &key_vec = MapVector::GetKeys(map_vec);
 	auto &val_vec = MapVector::GetValues(map_vec);
@@ -100,18 +60,6 @@ static void MapExtractListFunc(DataChunk &args, ExpressionState &state, Vector &
 	auto &map_vec = args.data[0];
 	auto &arg_vec = args.data[1];
 
-	const auto map_is_null = map_vec.GetType().id() == LogicalTypeId::SQLNULL;
-	const auto arg_is_null = arg_vec.GetType().id() == LogicalTypeId::SQLNULL;
-
-	if (map_is_null || arg_is_null) {
-		// Short-circuit if either the map or the arg is NULL
-		ListVector::SetListSize(result, 0);
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::GetData<list_entry_t>(result)[0] = {0, 0};
-		result.Verify(count);
-		return;
-	}
-
 	auto &key_vec = MapVector::GetKeys(map_vec);
 	auto &val_vec = MapVector::GetValues(map_vec);
 
@@ -144,7 +92,7 @@ static void MapExtractListFunc(DataChunk &args, ExpressionState &state, Vector &
 
 		const auto pos_idx = pos_format.sel->get_index(row_idx);
 		if (!pos_format.validity.RowIsValid(pos_idx)) {
-			// We didnt find the key in the map, so return emptyl ist
+			// We didnt find the key in the map, so return empty list
 			out_list.offset = offset;
 			out_list.length = 0;
 			continue;
@@ -166,17 +114,20 @@ static void MapExtractListFunc(DataChunk &args, ExpressionState &state, Vector &
 }
 
 ScalarFunction MapExtractValueFun::GetFunction() {
-	ScalarFunction fun({LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY, MapExtractValueFunc,
-	                   MapExtractBind<true>);
-	fun.varargs = LogicalType::ANY;
+	auto key_type = LogicalType::TEMPLATE("K");
+	auto val_type = LogicalType::TEMPLATE("V");
+
+	ScalarFunction fun({LogicalType::MAP(key_type, val_type), key_type}, val_type, MapExtractValueFunc);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return fun;
 }
 
 ScalarFunction MapExtractFun::GetFunction() {
-	ScalarFunction fun({LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY, MapExtractListFunc,
-	                   MapExtractBind<false>);
-	fun.varargs = LogicalType::ANY;
+	auto key_type = LogicalType::TEMPLATE("K");
+	auto val_type = LogicalType::TEMPLATE("V");
+
+	ScalarFunction fun({LogicalType::MAP(key_type, val_type), key_type}, LogicalType::LIST(val_type),
+	                   MapExtractListFunc);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return fun;
 }

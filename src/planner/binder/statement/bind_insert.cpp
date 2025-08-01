@@ -498,8 +498,6 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertStatement &stmt, 
 	// move over extra properties
 	merge_into->cte_map = std::move(stmt.cte_map);
 	merge_into->returning_list = std::move(stmt.returning_list);
-
-	// Printer::PrintF("%s", merge_into->ToString());
 	return merge_into;
 }
 
@@ -581,8 +579,8 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	} else {
 		root = make_uniq<LogicalDummyScan>(GenerateTableIndex());
 	}
-	insert->AddChild(std::move(root));
 
+	insert->AddChild(std::move(root));
 	if (!stmt.returning_list.empty()) {
 		insert->return_chunk = true;
 		auto insert_table_index = GenerateTableIndex();
