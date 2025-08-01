@@ -152,7 +152,7 @@ void MetaTransaction::Rollback() {
 			auto &transaction = entry->second.get();
 			transaction_manager.RollbackTransaction(transaction);
 		} catch (std::exception &ex) {
-			error = ErrorData(ex);
+			error.Merge(ErrorData(ex));
 		}
 	}
 	if (error.HasError()) {
