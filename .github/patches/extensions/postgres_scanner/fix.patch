@@ -257,7 +257,7 @@ index 5ce5b36..22ed8b4 100644
  
  //===--------------------------------------------------------------------===//
 diff --git a/src/storage/postgres_insert.cpp b/src/storage/postgres_insert.cpp
-index dd616df..0ead9b0 100644
+index dd616df..ef9ad76 100644
 --- a/src/storage/postgres_insert.cpp
 +++ b/src/storage/postgres_insert.cpp
 @@ -14,14 +14,14 @@
@@ -278,6 +278,15 @@ index dd616df..0ead9b0 100644
 +    : PhysicalOperator(physical_plan, PhysicalOperatorType::EXTENSION, op.types, 1), table(nullptr), schema(&schema),
        info(std::move(info)) {
  }
+ 
+@@ -214,7 +214,7 @@ PhysicalOperator &PostgresCatalog::PlanInsert(ClientContext &context, PhysicalPl
+ 	if (op.return_chunk) {
+ 		throw BinderException("RETURNING clause not yet supported for insertion into Postgres table");
+ 	}
+-	if (op.action_type != OnConflictAction::THROW) {
++	if (op.on_conflict_info.action_type != OnConflictAction::THROW) {
+ 		throw BinderException("ON CONFLICT clause not yet supported for insertion into Postgres table");
+ 	}
  
 diff --git a/src/storage/postgres_update.cpp b/src/storage/postgres_update.cpp
 index 8fa4d69..dd24447 100644
