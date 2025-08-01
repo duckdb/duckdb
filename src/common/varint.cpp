@@ -172,7 +172,7 @@ bool VarintIntermediate::OverOrUnderflow(data_ptr_t data, idx_t size, bool is_ne
 	uint8_t byte_to_compare = is_negative ? 0xFF : 0x00;
 	// we will basically check if any byte has any set bit up to Varint::MAX_DATA_SIZE, if so, that's an under/overflow
 	idx_t data_pos = 0;
-	for (idx_t i = size; i >= Varint::MAX_DATA_SIZE; ++i) {
+	for (idx_t i = size; i > Varint::MAX_DATA_SIZE; i--) {
 		if (data[data_pos++] != byte_to_compare) {
 			return true;
 		}
@@ -263,6 +263,20 @@ void VarintIntermediate::NegateInPlace() {
 	}
 }
 
+string ProduceOverUnderFlowError(bool is_result_negative, idx_t actual_start, idx_t data_size) {
+	// We must throw an error, usually we should print the numbers, but I have a feeling that it won't be possible
+	// here.
+	std::ostringstream error;
+	if (is_result_negative) {
+		error << "Underflow ";
+	} else {
+		error << "Overflow ";
+	}
+	error << "in Varint Operation. A Varint can hold max " << Varint::MAX_DATA_SIZE
+	      << " data bytes. Current varint has " << data_size - actual_start << " bytes.";
+	return error.str();
+}
+
 string_t VarintIntermediate::Add(Vector &result_vector, const VarintIntermediate &lhs, const VarintIntermediate &rhs) {
 	const bool same_sign = lhs.is_negative == rhs.is_negative;
 	const uint32_t actual_size = lhs.size - lhs.GetStartDataPos();
@@ -300,9 +314,9 @@ string_t VarintIntermediate::Add(Vector &result_vector, const VarintIntermediate
 	bool is_result_negative = is_target_absolute_bigger ? lhs.is_negative : rhs.is_negative;
 	if (OverOrUnderflow(reinterpret_cast<data_ptr_t>(target_data + Varint::VARINT_HEADER_SIZE), result_size_data,
 	                    is_result_negative)) {
-		// We must throw an error, usually we should print the numbers, but I have a feeling that it won't be possible
-		// here.
-		throw OutOfRangeException("Overflow in Varint Operation. A Varint can hold max 8388608 data bytes.");
+		auto actual_start = GetStartDataPos(reinterpret_cast<data_ptr_t>(target_data + Varint::VARINT_HEADER_SIZE),
+		                                    result_size_data, is_result_negative);
+		throw OutOfRangeException(ProduceOverUnderFlowError(is_result_negative, actual_start, result_size_data));
 	}
 	Trim(reinterpret_cast<data_ptr_t>(target_data + Varint::VARINT_HEADER_SIZE), result_size_data, is_result_negative);
 	Varint::SetHeader(target_data, result_size_data, is_result_negative);
@@ -339,7 +353,7 @@ void VarintIntermediate::AddInPlace(ArenaAllocator &allocator, const VarintInter
 	if (OverOrUnderflow()) {
 		// We must throw an error, usually we should print the numbers, but I have a feeling that it won't be possible
 		// here.
-		throw OutOfRangeException("Overflow in Varint Operation. A Varint can hold max 8388608 data bytes.");
+		throw OutOfRangeException(ProduceOverUnderFlowError(is_result_negative, GetStartDataPos(), size));
 	}
 }
 
