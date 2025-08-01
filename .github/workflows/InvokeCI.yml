@@ -98,7 +98,6 @@ jobs:
       - windows
       - python
       - pyodide
-      - R
       - static-libraries
     outputs:
       is-success: ${{ steps.set-output.outputs.success }}
@@ -112,7 +111,6 @@ jobs:
                 "${{ needs.windows.result }}" == "success" && \
                 "${{ needs.python.result }}" == "success" && \
                 "${{ needs.pyodide.result }}" == "success" && \
-                "${{ needs.R.result }}" == "success" && \
                 "${{ needs.static-libraries.result }}" == "success" ]]; then
             echo "success=true" >> $GITHUB_OUTPUT
           else
