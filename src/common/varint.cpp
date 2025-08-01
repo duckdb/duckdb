@@ -19,6 +19,19 @@ void varint_t::Print() const {
 	std::cout << '\n';
 }
 
+bool varint_t::IsZero() const {
+	D_ASSERT(data.GetSize() > 3);
+	const bool is_negative = (data.GetData()[0] & 0x80) == 0;
+	const char zero_character = is_negative ? static_cast<char>(0xFF) : 0x00;
+	auto ptr = data.GetData();
+	for (idx_t i = Varint::VARINT_HEADER_SIZE; i < data.GetSize(); ++i) {
+		if (ptr[i] != zero_character) {
+			return false;
+		}
+	}
+	return true;
+}
+
 void VarintIntermediate::Print() const {
 	for (idx_t i = 0; i < size; ++i) {
 		PrintBits(static_cast<char>(data[i]));

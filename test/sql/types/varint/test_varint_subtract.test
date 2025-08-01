@@ -13,7 +13,7 @@ SELECT -(1::VARINT)
 query I
 SELECT -(0::VARINT)
 ----
--0
+0
 
 query I
 SELECT -(-0::VARINT)

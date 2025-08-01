@@ -5,6 +5,9 @@
 using namespace duckdb;
 using namespace std;
 
+TEST_CASE("Test Varint Overflow and Underflow", "[api]") {
+}
+
 TEST_CASE("Test Varint::FromByteArray", "[api]") {
 	{ // 0
 		uint8_t data[] {0};

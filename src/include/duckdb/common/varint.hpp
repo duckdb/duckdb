@@ -29,6 +29,8 @@ struct varint_t {
 	varint_t(varint_t &&other) = default;
 	varint_t &operator=(const varint_t &rhs) = default;
 	varint_t &operator=(varint_t &&rhs) = default;
+	//! If our varint is a zero
+	bool IsZero() const;
 
 	void Print() const;
 };
