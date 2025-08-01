@@ -299,6 +299,8 @@ void WindowDistinctAggregatorLocalState::Finalize(ExecutionContext &context, Win
 
 void WindowDistinctAggregatorLocalState::ExecuteTask(ExecutionContext &context,
                                                      WindowDistinctAggregatorGlobalState &gdstate) {
+	PostIncrement<atomic<idx_t>> on_done(gdstate.tasks_completed);
+
 	switch (stage) {
 	case WindowDistinctSortStage::COMBINE: {
 		auto &local_sink = *gdstate.local_sinks[block_idx];
@@ -326,8 +328,6 @@ void WindowDistinctAggregatorLocalState::ExecuteTask(ExecutionContext &context,
 	default:
 		break;
 	}
-
-	++gdstate.tasks_completed;
 }
 
 bool WindowDistinctAggregatorGlobalState::TryPrepareNextStage(WindowDistinctAggregatorLocalState &lstate) {

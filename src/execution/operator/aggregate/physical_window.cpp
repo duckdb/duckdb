@@ -211,12 +211,12 @@ public:
 	    : local_group(context, *gstate.global_partition) {
 	}
 
-	void Sink(DataChunk &input_chunk) {
-		local_group.Sink(input_chunk);
+	void Sink(ExecutionContext &context, DataChunk &input_chunk) {
+		local_group.Sink(context, input_chunk);
 	}
 
-	void Combine() {
-		local_group.Combine();
+	void Combine(ExecutionContext &context) {
+		local_group.Combine(context);
 	}
 
 	HashedSortLocalSinkState local_group;
@@ -304,14 +304,14 @@ WindowGlobalSinkState::WindowGlobalSinkState(const PhysicalWindow &op, ClientCon
 SinkResultType PhysicalWindow::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 	auto &lstate = input.local_state.Cast<WindowLocalSinkState>();
 
-	lstate.Sink(chunk);
+	lstate.Sink(context, chunk);
 
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
 SinkCombineResultType PhysicalWindow::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
 	auto &lstate = input.local_state.Cast<WindowLocalSinkState>();
-	lstate.Combine();
+	lstate.Combine(context);
 
 	return SinkCombineResultType::FINISHED;
 }
