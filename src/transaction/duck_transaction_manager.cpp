@@ -335,8 +335,14 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		options.action = CheckpointAction::ALWAYS_CHECKPOINT;
 		options.type = checkpoint_decision.type;
 		auto &storage_manager = db.GetStorageManager();
-		storage_manager.CreateCheckpoint(context, options);
+
+		try {
+			storage_manager.CreateCheckpoint(context, options);
+		} catch (std::exception &ex) {
+			error.Merge(ErrorData(ex));
+		}
 	}
+
 	return error;
 }
 
