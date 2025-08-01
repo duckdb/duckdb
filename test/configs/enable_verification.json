@@ -1,7 +1,6 @@
 {
-  "description": "Run on persistent databases as storage with row verification enabled.",
-  "initial_db": "{TEST_DIR}/{BASE_TEST_NAME}__test__config__verify_fetch_row.db",
-  "on_init": "PRAGMA verify_fetch_row;",
+  "description": "Run with verification enabled.",
+  "on_init": "PRAGMA enable_verification;",
   "skip_compiled": "true",
   "skip_tests": [
     {
@@ -44,7 +43,9 @@
         "test/sql/attach/reattach_schema.test",
         "test/sql/attach/attach_sequence.test",
         "test/sql/export/export_database.test",
-        "test/sql/copy_database/copy_database_different_types.test"
+        "test/sql/copy_database/copy_database_different_types.test",
+        "test/sql/catalog/test_temporary.test",
+        "test/sql/catalog/sequence/test_duckdb_sequences.test"
       ]
     },
     {
@@ -63,72 +64,15 @@
       ]
     },
     {
-      "reason": "FIXME: Unexpected Parser Error",
-      "paths": [
-        "test/issues/general/test_16524.test",
-        "test/sql/collate/test_collate_between.test",
-        "test/sql/catalog/comment_on_dependencies.test",
-        "test/sql/catalog/comment_on_column.test",
-        "test/sql/catalog/comment_on.test",
-        "test/sql/catalog/comment_on_extended.test",
-        "test/sql/catalog/comment_on_pg_description.test",
-        "test/sql/pragma/test_show_tables.test",
-        "test/sql/alter/test_alter_if_exists.test",
-        "test/sql/index/create_index_options.test"
-      ]
-    },
-    {
       "reason": "Contains FIRST (non-deterministic).",
       "paths": [
         "test/sql/parallelism/intraquery/test_parallel_nested_aggregates.test"
       ]
     },
     {
-      "reason": "FIXME: Unexpected parsed statement verifier failure.",
-      "paths": [
-        "test/sql/types/decimal/large_decimal_constants.test",
-        "test/sql/types/uhugeint/test_uhugeint_conversion.test",
-        "test/sql/types/hugeint/test_hugeint_conversion.test"
-      ]
-    },
-    {
-      "reason": "Contains explicit use of the memory catalog.",
-      "paths": [
-        "test/sql/show_select/test_describe_all.test",
-        "test/sql/catalog/function/attached_macro.test",
-        "test/sql/catalog/test_temporary.test",
-        "test/sql/pragma/test_show_tables_temp_views.test",
-        "test/sql/pg_catalog/system_functions.test",
-        "test/sql/pg_catalog/sqlalchemy.test",
-        "test/sql/attach/attach_table_info.test",
-        "test/sql/attach/attach_defaults.test",
-        "test/sql/attach/attach_did_you_mean.test",
-        "test/sql/attach/attach_default_table.test",
-        "test/sql/attach/attach_show_all_tables.test",
-        "test/sql/attach/attach_issue7711.test",
-        "test/sql/attach/attach_issue_7660.test",
-        "test/sql/attach/show_databases.test",
-        "test/sql/attach/attach_views.test",
-        "test/sql/copy_database/copy_table_with_sequence.test"
-      ]
-    },
-    {
       "reason": "Non-deterministic query (subqueries return multiple rows).",
       "paths": [
         "test/sql/subquery/scalar/test_issue_6136.test"
-      ]
-    },
-    {
-      "reason": "FIXME: Unexpected catalog duplicate/missing entry error.",
-      "paths": [
-        "test/sql/catalog/test_set_search_path.test",
-        "test/sql/catalog/function/test_macro_issue_13104.test",
-        "test/sql/catalog/function/test_macro_relpersistence_conflict.test",
-        "test/sql/catalog/function/test_recursive_macro.test",
-        "test/sql/catalog/function/test_recursive_macro_no_dependency.test",
-        "test/sql/catalog/test_set_schema.test",
-        "test/sql/function/list/lambdas/arrow/lambdas_and_functions_deprecated.test",
-        "test/sql/function/list/lambdas/lambdas_and_functions.test"
       ]
     },
     {
@@ -146,21 +90,106 @@
         "test/sql/copy/csv/rejects/test_mixed.test",
         "test/sql/copy/csv/rejects/test_multiple_errors_same_line.test",
         "test/sql/copy/csv/rejects/csv_incorrect_columns_amount_rejects.test",
-        "test/sql/copy/csv/test_non_unicode_header.test"
+        "test/sql/copy/csv/test_non_unicode_header.test",
+        "test/sql/logging/test_logging_function.test",
+        "test/sql/logging/logging_types.test",
+        "test/sql/logging/logging.test",
+        "test/sql/logging/file_system_logging.test"
       ]
     },
     {
-      "reason": "FIXME: Misc. unexpected failures (query succeeds, wrong result).",
+      "reason": "Unoptimized statement differs from original result (cross product, conversion, overflow, statistics).",
       "paths": [
+        "test/fuzzer/pedro/strptime_null_argument.test",
+        "test/fuzzer/pedro/force_no_cross_product.test",
+        "test/fuzzer/sqlsmith/bitstring_agg_overflow.test",
+        "test/fuzzer/duckfuzz/semi_join_has_correct_left_right_relations.test",
+        "test/issues/rigger/overflow_filter_pushdown.test",
+        "test/sql/optimizer/test_in_rewrite_rule.test",
+        "test/sql/aggregate/aggregates/test_bitstring_agg.test",
+        "test/sql/storage/compression/rle/rle_constant.test",
+        "test/sql/copy/parquet/parquet_filename_filter.test",
+        "test/sql/copy/parquet/union_by_name_hive_partitioning.test",
+        "test/sql/copy/parquet/parquet_hive.test"
+      ]
+    },
+    {
+      "reason": "Prepared statement differs from original result (statistics, pg_prepared_statements).",
+      "paths": [
+        "test/optimizer/statistics/statistics_numeric.test",
+        "test/fuzzer/pedro/vacuum_table_with_generated_column.test",
+        "test/sql/types/struct/struct_stats.test",
+        "test/sql/types/list/list_stats.test",
+        "test/sql/types/nested/array/array_statistics.test",
+        "test/sql/vacuum/test_analyze.test",
+        "test/sql/function/generic/test_stats.test",
+        "test/sql/storage/distinct_statistics_storage.test",
+        "test/sql/pg_catalog/pg_prepared_statements.test",
+        "test/sql/alter/add_col/test_add_col_stats.test",
+        "test/sql/table_function/duckdb_prepared_statements.test"
+      ]
+    },
+    {
+      "reason": "Deserialized statement differs from original result.",
+      "paths": [
+        "test/sql/function/list/lambdas/arrow/test_deprecated_lambda.test"
+      ]
+    },
+    {
+      "reason": "Time-out without optimizer.",
+      "paths": [
+        "test/optimizer/joins/no_duplicate_elimination_join.test",
+        "test/sql/optimizer/plan/test_filter_pushdown_large.test",
+        "test/sql/limit/test_limit0.test"
+      ]
+    },
+    {
+      "reason": "FIXME: Unexpected Parser Error",
+      "paths": [
+        "test/issues/general/test_16524.test",
+        "test/sql/collate/test_collate_between.test",
+        "test/sql/catalog/comment_on_dependencies.test",
+        "test/sql/catalog/comment_on_column.test",
+        "test/sql/catalog/comment_on.test",
+        "test/sql/catalog/comment_on_extended.test",
+        "test/sql/catalog/comment_on_pg_description.test",
+        "test/sql/pragma/test_show_tables.test",
+        "test/sql/alter/test_alter_if_exists.test",
+        "test/sql/index/create_index_options.test"
+      ]
+    },
+    {
+      "reason": "FIXME: Unexpected parsed statement verifier failure.",
+      "paths": [
+        "test/sql/types/decimal/large_decimal_constants.test",
+        "test/sql/types/uhugeint/test_uhugeint_conversion.test",
+        "test/sql/types/hugeint/test_hugeint_conversion.test"
+      ]
+    },
+    {
+      "reason": "FIXME: Unexpected catalog duplicate/missing entry error.",
+      "paths": [
+        "test/sql/catalog/test_set_search_path.test",
+        "test/sql/catalog/function/test_macro_issue_13104.test",
+        "test/sql/catalog/function/test_macro_relpersistence_conflict.test",
+        "test/sql/catalog/function/test_recursive_macro.test",
+        "test/sql/catalog/function/test_recursive_macro_no_dependency.test",
+        "test/sql/catalog/test_set_schema.test",
+        "test/sql/function/list/lambdas/arrow/lambdas_and_functions_deprecated.test",
+        "test/sql/function/list/lambdas/lambdas_and_functions.test"
+      ]
+    },
+    {
+      "reason": "FIXME: Misc. unexpected failures (including internal exception).",
+      "paths": [
+        "test/sql/storage/types/struct/nested_struct_storage.test",
         "test/sql/storage/compression/test_using_compression.test",
+        "test/sql/pg_catalog/system_functions.test",
+        "test/sql/copy/parquet/bloom_filters.test",
+        "test/sql/copy/parquet/corrupt_stats.test",
+        "test/sql/copy/file_size_bytes.test",
         "test/sql/create/create_table_compression.test",
         "test/sql/aggregate/aggregates/test_state_export.test"
-      ]
-    },
-    {
-      "reason": "Emits different vector type (FLAT).",
-      "paths": [
-        "test/sql/storage/compression/rle/rle_constant.test"
       ]
     }
   ]

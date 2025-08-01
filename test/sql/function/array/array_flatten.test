@@ -2,9 +2,6 @@
 # description: Test array flatten function
 # group: [array]
 
-statement ok
-PRAGMA enable_verification
-
 statement error
 select flatten(['a', 'b', 'c']::varchar[3]);
 ----
