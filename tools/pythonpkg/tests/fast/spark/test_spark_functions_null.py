@@ -112,3 +112,8 @@ class TestsSparkFunctionsNull(object):
             Row(a=1, b=None, r1=True, r2=False),
             Row(a=None, b=2, r1=False, r2=True),
         ]
+
+    def test_equal_null(self, spark):
+        df = spark.createDataFrame([(1, 1), (None, 2), (None, None)], ("a", "b"))
+        res = df.select(F.equal_null("a", F.col("b")).alias("r")).collect()
+        assert res == [Row(r=True), Row(r=False), Row(r=True)]
