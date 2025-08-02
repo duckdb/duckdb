@@ -22,7 +22,10 @@ statement ok
 PRAGMA force_bitpacking_mode='constant'
 
 statement ok
-CREATE TABLE test_bitpacked AS SELECT (i//119000::INT64)::INT64 AS i FROM range(0, 120000000) tbl(i);
+set variable dataset_size = 120_000_000;
+
+statement ok
+CREATE TABLE test_bitpacked AS SELECT (i//119000::INT64)::INT64 AS i FROM range(getvariable('dataset_size')) tbl(i);
 
 statement ok
 checkpoint
@@ -31,7 +34,7 @@ statement ok
 PRAGMA force_compression='uncompressed'
 
 statement ok
-CREATE TABLE test_uncompressed AS SELECT i::INT64 FROM range(0, 120000000) tbl(i);
+CREATE TABLE test_uncompressed AS SELECT i::INT64 FROM range(getvariable('dataset_size')) tbl(i);
 
 statement ok
 checkpoint
@@ -44,14 +47,42 @@ query I
 SELECT compression FROM pragma_storage_info('test_uncompressed') WHERE segment_type != 'VALIDITY' AND compression != 'Uncompressed';
 ----
 
-query II
-select (uncompressed::FLOAT / bitpacked::FLOAT) > 700, (uncompressed::FLOAT / bitpacked::FLOAT) < 1000 FROM (
-    select
-        (select count(distinct block_id) from pragma_storage_info('test_bitpacked') where segment_type not in('VARCHAR', 'VALIDITY')) as bitpacked,
-        (select count(distinct block_id) from pragma_storage_info('test_uncompressed') where segment_type not in('VARCHAR', 'VALIDITY')) as uncompressed
-)
+statement ok
+CREATE TYPE test_result AS UNION (
+    ok BOOL,
+    err STRUCT(
+        uncompressed HUGEINT,
+        compressed HUGEINT,
+        allowed_minimum_ratio INT,
+        allowed_maximum_ratio INT,
+        actual_ratio FLOAT
+    )
+);
+
+statement ok
+set variable min_ratio = 900;
+set variable max_ratio = 1000;
+
+query I
+SELECT
+    CASE 
+        WHEN (uncompressed::FLOAT / compressed::FLOAT) > getvariable('min_ratio') AND (uncompressed::FLOAT / compressed::FLOAT) < getvariable('max_ratio')
+            THEN True::test_result
+        ELSE {
+            'uncompressed': uncompressed,
+            'compressed': compressed,
+            'allowed_minimum_ratio': getvariable('min_ratio'),
+            'allowed_maximum_ratio': getvariable('max_ratio'),
+            'actual_ratio': uncompressed::FLOAT / compressed::FLOAT
+        }::test_result
+    END
+FROM (
+    SELECT
+        (SELECT sum(segment_size) FROM pragma_storage_info('test_bitpacked') WHERE segment_type NOT IN ('VARCHAR', 'VALIDITY')) AS compressed,
+        (SELECT sum(segment_size) FROM pragma_storage_info('test_uncompressed') WHERE segment_type NOT IN ('VARCHAR', 'VALIDITY')) AS uncompressed
+) AS blocks_tbl;
 ----
-True	True
+true
 
 statement ok
 drop table test_bitpacked;
@@ -70,7 +101,7 @@ statement ok
 PRAGMA force_bitpacking_mode='constant_delta'
 
 statement ok
-CREATE TABLE test_bitpacked AS SELECT i::INT64 AS i FROM range(0, 120000000) tbl(i);
+CREATE TABLE test_bitpacked AS SELECT i::INT64 AS i FROM range(0, getvariable('dataset_size')) tbl(i);
 
 statement ok
 checkpoint
@@ -79,7 +110,7 @@ statement ok
 PRAGMA force_compression='uncompressed'
 
 statement ok
-CREATE TABLE test_uncompressed AS SELECT i::INT64 AS i FROM range(0, 120000000) tbl(i);
+CREATE TABLE test_uncompressed AS SELECT i::INT64 AS i FROM range(0, getvariable('dataset_size')) tbl(i);
 
 statement ok
 checkpoint
@@ -95,14 +126,30 @@ SELECT compression FROM pragma_storage_info('test_uncompressed') WHERE segment_t
 statement ok
 checkpoint
 
-query II
-select (uncompressed::FLOAT / bitpacked::FLOAT) > 600, (uncompressed::FLOAT / bitpacked::FLOAT) < 800 FROM (
-    select
-        (select count(distinct block_id) from pragma_storage_info('test_bitpacked') where segment_type not in('VARCHAR', 'VALIDITY')) as bitpacked,
-        (select count(distinct block_id) from pragma_storage_info('test_uncompressed') where segment_type not in('VARCHAR', 'VALIDITY')) as uncompressed
-)
+statement ok
+set variable min_ratio = 800;
+set variable max_ratio = 850;
+
+query I
+SELECT
+    CASE 
+        WHEN (uncompressed::FLOAT / compressed::FLOAT) > getvariable('min_ratio') AND (uncompressed::FLOAT / compressed::FLOAT) < getvariable('max_ratio')
+            THEN True::test_result
+        ELSE {
+            'uncompressed': uncompressed,
+            'compressed': compressed,
+            'allowed_minimum_ratio': getvariable('min_ratio'),
+            'allowed_maximum_ratio': getvariable('max_ratio'),
+            'actual_ratio': uncompressed::FLOAT / compressed::FLOAT
+        }::test_result
+    END
+FROM (
+    SELECT
+        (SELECT sum(segment_size) FROM pragma_storage_info('test_bitpacked') WHERE segment_type NOT IN ('VARCHAR', 'VALIDITY')) AS compressed,
+        (SELECT sum(segment_size) FROM pragma_storage_info('test_uncompressed') WHERE segment_type NOT IN ('VARCHAR', 'VALIDITY')) AS uncompressed
+) AS blocks_tbl;
 ----
-True	True
+true
 
 statement ok
 drop table test_bitpacked;
@@ -121,7 +168,7 @@ statement ok
 PRAGMA force_bitpacking_mode='delta_for'
 
 statement ok
-CREATE TABLE test_bitpacked AS SELECT i//2::INT64 AS i FROM range(0, 120000000) tbl(i);
+CREATE TABLE test_bitpacked AS SELECT i//2::INT64 AS i FROM range(getvariable('dataset_size')) tbl(i);
 
 statement ok
 checkpoint
@@ -130,7 +177,7 @@ statement ok
 PRAGMA force_compression='uncompressed'
 
 statement ok
-CREATE TABLE test_uncompressed AS SELECT i AS i FROM range(0, 120000000) tbl(i);
+CREATE TABLE test_uncompressed AS SELECT i AS i FROM range(getvariable('dataset_size')) tbl(i);
 
 statement ok
 checkpoint
@@ -146,14 +193,30 @@ SELECT compression FROM pragma_storage_info('test_uncompressed') WHERE segment_t
 statement ok
 checkpoint
 
-query II
-select (uncompressed::FLOAT / bitpacked::FLOAT) > 50, (uncompressed::FLOAT / bitpacked::FLOAT) < 60 FROM (
-    select
-        (select count(distinct block_id) from pragma_storage_info('test_bitpacked') where segment_type not in('VARCHAR', 'VALIDITY')) as bitpacked,
-        (select count(distinct block_id) from pragma_storage_info('test_uncompressed') where segment_type not in('VARCHAR', 'VALIDITY')) as uncompressed
-)
+statement ok
+set variable min_ratio = 50;
+set variable max_ratio = 60;
+
+query I
+SELECT
+    CASE 
+        WHEN (uncompressed::FLOAT / compressed::FLOAT) > getvariable('min_ratio') AND (uncompressed::FLOAT / compressed::FLOAT) < getvariable('max_ratio')
+            THEN True::test_result
+        ELSE {
+            'uncompressed': uncompressed,
+            'compressed': compressed,
+            'allowed_minimum_ratio': getvariable('min_ratio'),
+            'allowed_maximum_ratio': getvariable('max_ratio'),
+            'actual_ratio': uncompressed::FLOAT / compressed::FLOAT
+        }::test_result
+    END
+FROM (
+    SELECT
+        (SELECT sum(segment_size) FROM pragma_storage_info('test_bitpacked') WHERE segment_type NOT IN ('VARCHAR', 'VALIDITY')) AS compressed,
+        (SELECT sum(segment_size) FROM pragma_storage_info('test_uncompressed') WHERE segment_type NOT IN ('VARCHAR', 'VALIDITY')) AS uncompressed
+) AS blocks_tbl;
 ----
-True	True
+true
 
 statement ok
 drop table test_bitpacked;
@@ -172,7 +235,7 @@ statement ok
 PRAGMA force_bitpacking_mode='for'
 
 statement ok
-CREATE TABLE test_bitpacked AS SELECT i%2::INT64 AS i FROM range(0, 120000000) tbl(i);
+CREATE TABLE test_bitpacked AS SELECT i%2::INT64 AS i FROM range(getvariable('dataset_size')) tbl(i);
 
 statement ok
 checkpoint
@@ -181,7 +244,7 @@ statement ok
 PRAGMA force_compression='uncompressed'
 
 statement ok
-CREATE TABLE test_uncompressed AS SELECT i::INT64 AS i FROM range(0, 120000000) tbl(i);
+CREATE TABLE test_uncompressed AS SELECT i::INT64 AS i FROM range(getvariable('dataset_size')) tbl(i);
 
 statement ok
 checkpoint
@@ -197,14 +260,30 @@ SELECT compression FROM pragma_storage_info('test_uncompressed') WHERE segment_t
 statement ok
 checkpoint
 
-query II
-select (uncompressed::FLOAT / bitpacked::FLOAT) > 50, (uncompressed::FLOAT / bitpacked::FLOAT) < 60 FROM (
-    select
-        (select count(distinct block_id) from pragma_storage_info('test_bitpacked') where segment_type not in('VARCHAR', 'VALIDITY')) as bitpacked,
-        (select count(distinct block_id) from pragma_storage_info('test_uncompressed') where segment_type not in('VARCHAR', 'VALIDITY')) as uncompressed
-)
+statement ok
+set variable min_ratio = 50;
+set variable max_ratio = 60;
+
+query I
+SELECT
+    CASE 
+        WHEN (uncompressed::FLOAT / compressed::FLOAT) > getvariable('min_ratio') AND (uncompressed::FLOAT / compressed::FLOAT) < getvariable('max_ratio')
+            THEN True::test_result
+        ELSE {
+            'uncompressed': uncompressed,
+            'compressed': compressed,
+            'allowed_minimum_ratio': getvariable('min_ratio'),
+            'allowed_maximum_ratio': getvariable('max_ratio'),
+            'actual_ratio': uncompressed::FLOAT / compressed::FLOAT
+        }::test_result
+    END
+FROM (
+    SELECT
+        (SELECT sum(segment_size) FROM pragma_storage_info('test_bitpacked') WHERE segment_type NOT IN ('VARCHAR', 'VALIDITY')) AS compressed,
+        (SELECT sum(segment_size) FROM pragma_storage_info('test_uncompressed') WHERE segment_type NOT IN ('VARCHAR', 'VALIDITY')) AS uncompressed
+) AS blocks_tbl;
 ----
-True	True
+true
 
 statement ok
 drop table test_bitpacked;
@@ -235,14 +314,29 @@ statement ok
 checkpoint
 
 # assert compression ratio >2 wich should be achieved for even the smallest types for this data
-query II
-select (uncompressed::FLOAT / bitpacked::FLOAT) > 2, CAST(1 as ${type}) FROM (
-    select
-        (select count(distinct block_id) from pragma_storage_info('test_bitpacked') where segment_type not in('VARCHAR', 'VALIDITY')) as bitpacked,
-        (select count(distinct block_id) from pragma_storage_info('test_uncompressed') where segment_type not in('VARCHAR', 'VALIDITY')) as uncompressed
-)
+statement ok
+set variable min_ratio = 2;
+
+query I
+SELECT
+    CASE 
+        WHEN (uncompressed::FLOAT / compressed::FLOAT) > getvariable('min_ratio')
+            THEN True::test_result
+        ELSE {
+            'uncompressed': uncompressed,
+            'compressed': compressed,
+            'allowed_minimum_ratio': getvariable('min_ratio'),
+            'allowed_maximum_ratio': -1,
+            'actual_ratio': uncompressed::FLOAT / compressed::FLOAT
+        }::test_result
+    END
+FROM (
+    SELECT
+        (SELECT sum(segment_size) FROM pragma_storage_info('test_bitpacked') WHERE segment_type NOT IN ('VARCHAR', 'VALIDITY')) AS compressed,
+        (SELECT sum(segment_size) FROM pragma_storage_info('test_uncompressed') WHERE segment_type NOT IN ('VARCHAR', 'VALIDITY')) AS uncompressed
+) AS blocks_tbl;
 ----
-1	1
+true
 
 statement ok
 drop table test_bitpacked
