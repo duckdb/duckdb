@@ -1,0 +1,235 @@
+# name: test/optimizer/date_trunc_simplification.test
+# description: test DATE_TRUNC() constant simplifications
+# group: [optimizer]
+
+statement ok
+CREATE TABLE test(d TIMESTAMP);
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+statement ok
+INSERT INTO test VALUES ('2025-01-06 03:01:00'), ('2025-01-10 05:10:06');
+
+#
+# check correctness of simple optimizations
+#
+
+query I
+select * from test where date_trunc('day', d) < '2025-01-08';
+----
+2025-01-06 03:01:00
+
+query I
+select * from test where date_trunc('day', d) <= '2025-01-06';
+----
+2025-01-06 03:01:00
+
+query I
+select * from test where date_trunc('day', d) > '2025-01-08';
+----
+2025-01-10 05:10:06
+
+query I
+select * from test where date_trunc('day', d) >= '2025-01-10';
+----
+2025-01-10 05:10:06
+
+query I
+select * from test where date_trunc('day', d) = '2025-01-06';
+----
+2025-01-06 03:01:00
+
+query I
+select * from test where date_trunc('day', d) != '2025-01-10';
+----
+2025-01-06 03:01:00
+
+#
+# ensure date_trunc() is taken out of the result for all possible operators
+#
+
+query II
+explain analyze select * from test where date_trunc('day', d) < '2025-01-08';
+----
+analyzed_plan	<REGEX>:.*Filters:[ \t\n│]*d<'2025.*$
+
+query II
+explain analyze select * from test where date_trunc('day', d) <= '2025-01-08';
+----
+analyzed_plan	<REGEX>:.*Filters:[ \t\n│]*d<='2025.*$
+
+query II
+explain analyze select * from test where date_trunc('day', d) > '2025-01-08';
+----
+analyzed_plan	<REGEX>:.*Filters:[ \t\n│]*d>='2025.*$
+
+query II
+explain analyze select * from test where date_trunc('day', d) >= '2025-01-08';
+----
+analyzed_plan	<REGEX>:.*Filters:[ \t\n│]*d>='2025.*$
+
+query II
+explain analyze select * from test where date_trunc('day', d) = '2025-01-08';
+----
+analyzed_plan	<REGEX>:.*Filters:[ \t\n│]*d>='2025.*AND.*d<'2025.*$
+
+query II
+explain analyze select * from test where date_trunc('day', d) != '2025-01-08';
+----
+analyzed_plan	<REGEX>:.*FILTER[ \t\n│─]*\(\(d >= '2025.*OR.*\(d <[ \t\n│─]*'2025.*$
+
+#
+# check correctness of simple optimizations, column on rhs
+#
+
+query I
+select * from test where '2025-01-08' > date_trunc('day', d);
+----
+2025-01-06 03:01:00
+
+query I
+select * from test where '2025-01-06' >= date_trunc('day', d);
+----
+2025-01-06 03:01:00
+
+query I
+select * from test where '2025-01-08' < date_trunc('day', d);
+----
+2025-01-10 05:10:06
+
+query I
+select * from test where '2025-01-10' <= date_trunc('day', d);
+----
+2025-01-10 05:10:06
+
+query I
+select * from test where '2025-01-06' = date_trunc('day', d);
+----
+2025-01-06 03:01:00
+
+query I
+select * from test where '2025-01-10' != date_trunc('day', d);
+----
+2025-01-06 03:01:00
+
+#
+# check correctness of optimizations with different input types
+#
+
+statement ok
+CREATE TABLE test2(d DATE);
+
+statement ok
+INSERT INTO test2 VALUES ('2025-01-06'), ('2025-01-10');
+
+query I
+select * from test2 where date_trunc('day', d) < '2025-01-08';
+----
+2025-01-06
+
+query I
+select * from test2 where date_trunc('day', d) <= '2025-01-06';
+----
+2025-01-06
+
+query I
+select * from test2 where date_trunc('day', d) > '2025-01-08';
+----
+2025-01-10
+
+query I
+select * from test2 where date_trunc('day', d) >= '2025-01-10';
+----
+2025-01-10
+
+query I
+select * from test2 where date_trunc('day', d) = '2025-01-06';
+----
+2025-01-06
+
+query I
+select * from test2 where date_trunc('day', d) != '2025-01-10';
+----
+2025-01-06
+
+#
+# check edge cases
+#
+
+query I
+select * from test where date_trunc('day', d) < '2025-01-06';
+----
+
+query I
+select * from test where date_trunc('day', d) < '2025-01-07';
+----
+2025-01-06 03:01:00
+
+query I
+select * from test where date_trunc('day', d) <= '2025-01-06';
+----
+2025-01-06 03:01:00
+
+query I
+select * from test where date_trunc('day', d) <= '2025-01-07';
+----
+2025-01-06 03:01:00
+
+query I
+select * from test where date_trunc('day', d) > '2025-01-10';
+----
+
+query I
+select * from test where date_trunc('day', d) > '2025-01-09';
+----
+2025-01-10 05:10:06
+
+query I
+select * from test where date_trunc('day', d) >= '2025-01-10';
+----
+2025-01-10 05:10:06
+
+query I
+select * from test where date_trunc('day', d) >= '2025-01-11';
+----
+
+query I
+select * from test where date_trunc('hour', d) < '2025-01-06 03:00:00';
+----
+
+query I
+select * from test where date_trunc('hour', d) < '2025-01-06 04:00:00';
+----
+2025-01-06 03:01:00
+
+query I
+select * from test where date_trunc('hour', d) <= '2025-01-06 03:00:00';
+----
+2025-01-06 03:01:00
+
+query I
+select * from test where date_trunc('hour', d) <= '2025-01-06 04:00:00';
+----
+2025-01-06 03:01:00
+
+query I
+select * from test where date_trunc('minute', d) > '2025-01-10 05:10:00';
+----
+
+query I
+select * from test where date_trunc('minute', d) > '2025-01-10 05:09:00';
+----
+2025-01-10 05:10:06
+
+query I
+select * from test where date_trunc('minute', d) >= '2025-01-10 05:10:00';
+----
+2025-01-10 05:10:06
+
+query I
+select * from test where date_trunc('minute', d) >= '2025-01-10 05:11:00';
+----
