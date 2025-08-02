@@ -1040,6 +1040,30 @@ template <>
 DUCKDB_API bool TryCastToUUID::Operation(string_t input, hugeint_t &result, Vector &result_vector,
                                          CastParameters &parameters);
 
+struct CastFromUUIDToBlob {
+	template <class SRC>
+	static inline string_t Operation(SRC input, Vector &result) {
+		throw duckdb::NotImplementedException("Cast from uuid to blob could not be performed!");
+	}
+};
+template <>
+duckdb::string_t CastFromUUIDToBlob::Operation(duckdb::hugeint_t input, Vector &vector);
+
+struct TryCastBlobToUUID {
+	template <class SRC, class DST>
+	static inline bool Operation(SRC input, DST &result, Vector &result_vector, CastParameters &parameters) {
+		throw InternalException("Unsupported type for try cast blob to uuid");
+	}
+	template <class SRC, class DST>
+	static inline bool Operation(SRC input, DST &result, bool strict) {
+		throw InternalException("Unsupported type for try cast blob to uuid");
+	}
+};
+template <>
+bool TryCastBlobToUUID::Operation(string_t input, hugeint_t &result, Vector &result_vector, CastParameters &parameters);
+template <>
+bool TryCastBlobToUUID::Operation(string_t input, hugeint_t &result, bool strict);
+
 //===--------------------------------------------------------------------===//
 // Pointers
 //===--------------------------------------------------------------------===//
