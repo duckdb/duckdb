@@ -21,6 +21,10 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 
+#include "duckdb/planner/expression/bound_window_expression.hpp"
+#include "duckdb/planner/operator/logical_window.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
+
 namespace duckdb {
 
 enum class TableFunctionBindType { STANDARD_TABLE_FUNCTION, TABLE_IN_OUT_FUNCTION, TABLE_PARAMETER_FUNCTION };
@@ -191,12 +195,14 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
                                                               vector<string> input_table_names) {
 	auto function_name = GetAlias(ref);
 	auto &column_name_alias = ref.column_name_alias;
-
 	auto bind_index = GenerateTableIndex();
 	// perform the binding
 	unique_ptr<FunctionData> bind_data;
 	vector<LogicalType> return_types;
 	vector<string> return_names;
+	auto constexpr ordinality_name = "ordinality";
+	string ordinality_column_name = ordinality_name;
+	idx_t ordinality_column_id;
 	if (table_function.bind || table_function.bind_replace || table_function.bind_operator) {
 		TableFunctionBindInput bind_input(parameters, named_parameters, input_table_types, input_table_names,
 		                                  table_function.function_info.get(), this, table_function, ref);
@@ -236,6 +242,27 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 			                      table_function.name);
 		}
 		bind_data = table_function.bind(context, bind_input, return_types, return_names);
+		if (ref.with_ordinality == OrdinalityType::WITH_ORDINALITY) {
+			// check if column name 'ordinality' already exists and if so, replace it iteratively until free name is
+			// found
+			case_insensitive_set_t ci_return_names;
+			idx_t ordinality_name_suffix = 0;
+			for (auto &n : return_names) {
+				ci_return_names.insert(n);
+			}
+			for (auto &n : column_name_alias) {
+				ci_return_names.insert(n);
+			}
+			while (ci_return_names.find(ordinality_column_name) != ci_return_names.end()) {
+				ordinality_column_name = ordinality_name + to_string(ordinality_name_suffix++);
+			}
+			if (!correlated_columns.empty()) {
+				return_types.emplace_back(LogicalType::BIGINT);
+				return_names.emplace_back(ordinality_column_name);
+				D_ASSERT(return_names.size() == return_types.size());
+				ordinality_column_id = return_types.size() - 1;
+			}
+		}
 	} else {
 		throw InvalidInputException("Cannot call function \"%s\" directly - it has no bind function",
 		                            table_function.name);
@@ -270,11 +297,55 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 	get->named_parameters = named_parameters;
 	get->input_table_types = input_table_types;
 	get->input_table_names = input_table_names;
+	if (ref.with_ordinality == OrdinalityType::WITH_ORDINALITY && !correlated_columns.empty()) {
+		get->ordinality_idx = ordinality_column_id;
+	}
 	if (table_function.in_out_function) {
 		for (idx_t i = 0; i < return_types.size(); i++) {
 			get->AddColumnId(i);
 		}
 	}
+
+	if (ref.with_ordinality == OrdinalityType::WITH_ORDINALITY && correlated_columns.empty()) {
+		auto window_index = GenerateTableIndex();
+		auto window = make_uniq<duckdb::LogicalWindow>(window_index);
+		auto row_number =
+		    make_uniq<BoundWindowExpression>(ExpressionType::WINDOW_ROW_NUMBER, LogicalType::BIGINT, nullptr, nullptr);
+		row_number->start = WindowBoundary::UNBOUNDED_PRECEDING;
+		row_number->end = WindowBoundary::CURRENT_ROW_ROWS;
+		if (return_names.size() < column_name_alias.size()) {
+			row_number->alias = column_name_alias[return_names.size()];
+		} else {
+			row_number->alias = ordinality_column_name;
+		}
+		window->expressions.push_back(std::move(row_number));
+		for (idx_t i = 0; i < return_types.size(); i++) {
+			get->AddColumnId(i);
+		}
+		window->children.push_back(std::move(get));
+
+		vector<unique_ptr<Expression>> select_list;
+		for (idx_t i = 0; i < return_types.size(); i++) {
+			auto expression = make_uniq<BoundColumnRefExpression>(return_types[i], ColumnBinding(bind_index, i));
+			select_list.push_back(std::move(expression));
+		}
+		select_list.push_back(make_uniq<BoundColumnRefExpression>(LogicalType::BIGINT, ColumnBinding(window_index, 0)));
+
+		auto projection_index = GenerateTableIndex();
+		auto projection = make_uniq<LogicalProjection>(projection_index, std::move(select_list));
+
+		projection->children.push_back(std::move(window));
+		if (return_names.size() < column_name_alias.size()) {
+			return_names.push_back(column_name_alias[return_names.size()]);
+		} else {
+			return_names.push_back(ordinality_column_name);
+		}
+
+		return_types.push_back(LogicalType::BIGINT);
+		bind_context.AddGenericBinding(projection_index, function_name, return_names, return_types);
+		return std::move(projection);
+	}
+
 	// now add the table function to the bind context so its columns can be bound
 	bind_context.AddTableFunction(bind_index, function_name, return_names, return_types, get->GetMutableColumnIds(),
 	                              get->GetTable().get(), std::move(virtual_columns));
