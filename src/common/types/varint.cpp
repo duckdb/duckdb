@@ -196,6 +196,10 @@ string Varint::VarIntToVarchar(const varint_t &blob) {
 	string decimal_string;
 	vector<uint8_t> byte_array;
 	bool is_negative;
+	if (blob.IsZero()) {
+		// zero is a bit of a special case because of 0 and -0
+		return "0";
+	}
 	GetByteArray(byte_array, is_negative, blob.data);
 	vector<digit_t> digits;
 	// Rounding byte_array to digit_bytes multiple size, so that we can process every digit_bytes bytes

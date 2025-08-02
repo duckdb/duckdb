@@ -29,6 +29,8 @@ struct varint_t {
 	varint_t(varint_t &&other) = default;
 	varint_t &operator=(const varint_t &rhs) = default;
 	varint_t &operator=(varint_t &&rhs) = default;
+	//! If our varint is a zero
+	bool IsZero() const;
 
 	void Print() const;
 };
@@ -45,6 +47,7 @@ enum AbsoluteNumberComparison : uint8_t {
 struct VarintIntermediate {
 	VarintIntermediate() : is_negative(false), size(0), data(nullptr) {};
 	explicit VarintIntermediate(const varint_t &value);
+	VarintIntermediate(uint8_t *value, idx_t size);
 	void Print() const;
 	//! Information on the header
 	bool is_negative;
@@ -56,7 +59,7 @@ struct VarintIntermediate {
 	AbsoluteNumberComparison IsAbsoluteBigger(const VarintIntermediate &rhs) const;
 	//! Get the absolute value of a byte
 	uint8_t GetAbsoluteByte(int64_t index) const;
-	//! If most significant bit of the first byte is set.
+	//! If the most significant bit of the first byte is set.
 	bool IsMSBSet() const;
 	//! Initializes our varint to 0 and 1 byte
 	void Initialize(ArenaAllocator &allocator);
@@ -71,8 +74,14 @@ struct VarintIntermediate {
 	void AddInPlace(ArenaAllocator &allocator, const VarintIntermediate &rhs);
 	//! Adds two VarintIntermediates and returns a string_t result, equivalent of a +
 	static string_t Add(Vector &result, const VarintIntermediate &lhs, const VarintIntermediate &rhs);
+	//! Negates a value, e.g., -x
+	string_t Negate(Vector &result_vector) const;
+	void NegateInPlace();
 	//! Exports to a varint, either arena allocated
 	varint_t ToVarint(ArenaAllocator &allocator);
+	//! Check if an over/underflow has occurred
+	static bool OverOrUnderflow(data_ptr_t data, idx_t size, bool is_negative);
+	bool OverOrUnderflow() const;
 };
 
 } // namespace duckdb
