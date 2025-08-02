@@ -772,20 +772,20 @@ static unique_ptr<GlobalTableFunctionState> ParquetMetaDataInit(ClientContext &c
 
 	switch (TYPE) {
 	case ParquetMetadataOperatorType::SCHEMA:
-		result->LoadSchemaData(context, bind_data.return_types, bind_data.file_list->GetFirstFile());
+		result->LoadSchemaData(context, bind_data.return_types, bind_data.file_list->PeekFirstFile());
 		break;
 	case ParquetMetadataOperatorType::META_DATA:
-		result->LoadRowGroupMetadata(context, bind_data.return_types, bind_data.file_list->GetFirstFile());
+		result->LoadRowGroupMetadata(context, bind_data.return_types, bind_data.file_list->PeekFirstFile());
 		break;
 	case ParquetMetadataOperatorType::KEY_VALUE_META_DATA:
-		result->LoadKeyValueMetaData(context, bind_data.return_types, bind_data.file_list->GetFirstFile());
+		result->LoadKeyValueMetaData(context, bind_data.return_types, bind_data.file_list->PeekFirstFile());
 		break;
 	case ParquetMetadataOperatorType::FILE_META_DATA:
-		result->LoadFileMetaData(context, bind_data.return_types, bind_data.file_list->GetFirstFile());
+		result->LoadFileMetaData(context, bind_data.return_types, bind_data.file_list->PeekFirstFile());
 		break;
 	case ParquetMetadataOperatorType::BLOOM_PROBE: {
 		auto &bloom_probe_bind_data = input.bind_data->Cast<ParquetBloomProbeBindData>();
-		result->ExecuteBloomProbe(context, bind_data.return_types, bind_data.file_list->GetFirstFile(),
+		result->ExecuteBloomProbe(context, bind_data.return_types, bind_data.file_list->PeekFirstFile(),
 		                          bloom_probe_bind_data.probe_column_name, bloom_probe_bind_data.probe_constant);
 		break;
 	}

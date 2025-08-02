@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/multi_file/multi_file_options.hpp"
+#include "duckdb/common/multi_file/multi_file_data.hpp"
 #include "duckdb/common/extra_operator_info.hpp"
 #include "duckdb/common/open_file_info.hpp"
 
@@ -84,7 +85,11 @@ public:
 	bool Scan(MultiFileListScanData &iterator, OpenFileInfo &result_file);
 
 	//! Returns the first file or an empty string if GetTotalFileCount() == 0
-	OpenFileInfo GetFirstFile();
+	virtual OpenFileInfo GetFirstFile();
+	//! Returns an initial file used for metadata sampling, may differ from first file in expanded file list
+	virtual OpenFileInfo PeekFirstFile();
+	//! Returns a list with the first file
+	virtual unique_ptr<MultiFileList> GetFirstFileList(idx_t max_files = 1);
 	//! Syntactic sugar for GetExpandResult() == FileExpandResult::NO_FILES
 	bool IsEmpty();
 
@@ -92,7 +97,8 @@ public:
 public:
 	virtual unique_ptr<MultiFileList> ComplexFilterPushdown(ClientContext &context, const MultiFileOptions &options,
 	                                                        MultiFilePushdownInfo &info,
-	                                                        vector<unique_ptr<Expression>> &filters);
+	                                                        vector<unique_ptr<Expression>> &filters,
+	                                                        vector<HivePartitioningIndex> &hive_partitioning_indexes);
 	virtual unique_ptr<MultiFileList> DynamicFilterPushdown(ClientContext &context, const MultiFileOptions &options,
 	                                                        const vector<string> &names,
 	                                                        const vector<LogicalType> &types,
@@ -102,6 +108,7 @@ public:
 	virtual vector<OpenFileInfo> GetAllFiles() = 0;
 	virtual FileExpandResult GetExpandResult() = 0;
 	virtual idx_t GetTotalFileCount() = 0;
+	virtual void Clear() {};
 
 	virtual unique_ptr<NodeStatistics> GetCardinality(ClientContext &context);
 	virtual unique_ptr<MultiFileList> Copy();
@@ -109,6 +116,8 @@ public:
 protected:
 	//! Get the i-th expanded file
 	virtual OpenFileInfo GetFile(idx_t i) = 0;
+	//! Get the i-th sampled file used for metadata in binding
+	virtual OpenFileInfo PeekFile(idx_t i);
 
 protected:
 	//! The unexpanded input paths
@@ -138,7 +147,8 @@ public:
 	//! Copy `paths` to `filtered_files` and apply the filters
 	unique_ptr<MultiFileList> ComplexFilterPushdown(ClientContext &context, const MultiFileOptions &options,
 	                                                MultiFilePushdownInfo &info,
-	                                                vector<unique_ptr<Expression>> &filters) override;
+	                                                vector<unique_ptr<Expression>> &filters,
+	                                                vector<HivePartitioningIndex> &hive_partitioning_indexes) override;
 	unique_ptr<MultiFileList> DynamicFilterPushdown(ClientContext &context, const MultiFileOptions &options,
 	                                                const vector<string> &names, const vector<LogicalType> &types,
 	                                                const vector<column_t> &column_ids,
@@ -161,36 +171,54 @@ public:
 	//! Calls ExpandAll, then prunes the expanded_files using the hive/filename filters
 	unique_ptr<MultiFileList> ComplexFilterPushdown(ClientContext &context, const MultiFileOptions &options,
 	                                                MultiFilePushdownInfo &info,
-	                                                vector<unique_ptr<Expression>> &filters) override;
+	                                                vector<unique_ptr<Expression>> &filters,
+	                                                vector<HivePartitioningIndex> &hive_partitioning_indexes) override;
 	unique_ptr<MultiFileList> DynamicFilterPushdown(ClientContext &context, const MultiFileOptions &options,
 	                                                const vector<string> &names, const vector<LogicalType> &types,
 	                                                const vector<column_t> &column_ids,
 	                                                TableFilterSet &filters) const override;
 
 	//! Main MultiFileList API
+	unique_ptr<MultiFileList> GetFirstFileList(idx_t max_files = 1) override;
 	vector<OpenFileInfo> GetAllFiles() override;
 	FileExpandResult GetExpandResult() override;
 	idx_t GetTotalFileCount() override;
+	void Clear() override;
 
 protected:
 	//! Main MultiFileList API
 	OpenFileInfo GetFile(idx_t i) override;
+	OpenFileInfo PeekFile(idx_t i) override;
+	OpenFileInfo PeekFirstFile() override;
 
 	//! Get the i-th expanded file
-	OpenFileInfo GetFileInternal(idx_t i);
+	OpenFileInfo GetFileInternal(idx_t i, bool first_files);
 	//! Grabs the next path and expands it into Expanded paths: returns false if no more files to expand
-	bool ExpandNextPath();
+	bool ExpandNextPath(idx_t max_files = std::numeric_limits<idx_t>::max(), bool first_files = false,
+	                    optional_ptr<HiveFilterParams> hive_filter_params = nullptr);
 	//! Grabs the next path and expands it into Expanded paths: returns false if no more files to expand
-	bool ExpandPathInternal(idx_t &current_path, vector<OpenFileInfo> &result) const;
+	bool ExpandPathInternal(idx_t &current_path, vector<OpenFileInfo> &result,
+	                        idx_t max_files = std::numeric_limits<idx_t>::max(),
+	                        optional_ptr<HiveFilterParams> hive_filter_params = nullptr) const;
 	//! Whether all files have been expanded
 	bool IsFullyExpanded() const;
+	//! Clear the expanded files
+	void ClearInternal();
+	//! Clear the peeked files
+	void ClearPeek();
+	//! Clear the first expanded files
+	void ClearPeekInternal();
 
 	//! The ClientContext for globbing
 	ClientContext &context;
 	//! The current path to expand
 	idx_t current_path;
+	//! The current path to expand for the first files
+	idx_t first_files_current_path;
 	//! The expanded files
 	vector<OpenFileInfo> expanded_files;
+	//! The first expanded files used during binding
+	vector<OpenFileInfo> first_expanded_files;
 
 	mutable mutex lock;
 };

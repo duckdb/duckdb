@@ -99,6 +99,16 @@ public:
 		bool bound_on_first_file = true;
 		if (result->multi_file_reader->Bind(result->file_options, *result->file_list, result->types, result->names,
 		                                    result->reader_bind)) {
+			// TODO: find earliest place to do this check
+			if (result->file_options.union_by_name) {
+				// union_by_name requires reading all files eagerly
+				result->file_options.hive_lazy_listing = false;
+			}
+			// Clear earlier files used for peeking at hive partitioning, eagerly read them all
+			// if (!result->file_options.hive_lazy_listing) {
+			// 	result->file_list->Clear();
+			// 	result->file_list->GetAllFiles();
+			// }
 			result->multi_file_reader->BindOptions(result->file_options, *result->file_list, result->types,
 			                                       result->names, result->reader_bind);
 			bound_on_first_file = false;
@@ -707,8 +717,37 @@ public:
 		auto &data = bind_data_p->Cast<MultiFileBindData>();
 
 		MultiFilePushdownInfo info(get);
-		auto new_list =
-		    data.multi_file_reader->ComplexFilterPushdown(context, *data.file_list, data.file_options, info, filters);
+		// TODO: Might remove, left behind for review only
+		// HACK: If Hive partitioning indexes get cleared, remove the columns in it from data.columns and other data.*
+		// related fields. This might not be feasible given the number of column-related fields in binding, so might
+		// remove.
+		vector<HivePartitioningIndex> hive_partitioning_indexes = data.reader_bind.hive_partitioning_indexes;
+		// vector<HivePartitioningIndex> old_hive_partitioning_indexes = data.reader_bind.hive_partitioning_indexes;
+		auto new_list = data.multi_file_reader->ComplexFilterPushdown(context, *data.file_list, data.file_options, info,
+		                                                              filters, hive_partitioning_indexes);
+
+		// if (hive_partitioning_indexes.size() != old_hive_partitioning_indexes.size()) {
+		// 	auto new_columns = vector<MultiFileColumnDefinition>();
+		// 	auto new_column_ids = vector<column_t>();
+		// 	for (idx_t i = 0; i < data.columns.size(); i++) {
+		// 		// Find the HivePartitioningIndex that has the same column_index as the current column
+		// 		auto hive_partitioning_index =
+		// 		    std::find_if(old_hive_partitioning_indexes.begin(), old_hive_partitioning_indexes.end(),
+		// 		                 [i](const HivePartitioningIndex &hive_partitioning_index) {
+		// 			                 return hive_partitioning_index.index == i;
+		// 		                 });
+		// 		if (hive_partitioning_index == old_hive_partitioning_indexes.end()) {
+		// 			// Only add non-Hive columns
+		// 			new_columns.push_back(data.columns[i]);
+		// 			if (i < data.column_ids.size()) {
+		// 				new_column_ids.push_back(data.column_ids[i]);
+		// 			}
+		// 		}
+		// 	}
+		// 	data.columns = std::move(new_columns);
+		// 	data.column_ids = std::move(new_column_ids);
+		// }
+		// data.reader_bind.hive_partitioning_indexes = std::move(hive_partitioning_indexes);
 
 		if (new_list) {
 			data.file_list = std::move(new_list);
@@ -721,7 +760,15 @@ public:
 		auto &bind_data = bind_data_p->Cast<MultiFileBindData>();
 
 		vector<Value> file_path;
-		for (const auto &file : bind_data.file_list->Files()) {
+		unique_ptr<MultiFileList> mlist;
+		MultiFileList *list;
+		if (bind_data.file_options.hive_lazy_listing) {
+			mlist = bind_data.file_list->GetFirstFileList();
+			list = mlist.get();
+		} else {
+			list = bind_data.file_list.get();
+		}
+		for (const auto &file : list->Files()) {
 			file_path.emplace_back(file.path);
 		}
 

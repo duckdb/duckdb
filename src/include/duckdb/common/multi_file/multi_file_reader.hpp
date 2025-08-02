@@ -75,7 +75,8 @@ public:
 	DUCKDB_API virtual unique_ptr<MultiFileList> ComplexFilterPushdown(ClientContext &context, MultiFileList &files,
 	                                                                   const MultiFileOptions &options,
 	                                                                   MultiFilePushdownInfo &info,
-	                                                                   vector<unique_ptr<Expression>> &filters);
+	                                                                   vector<unique_ptr<Expression>> &filters,
+	                                                                   vector<HivePartitioningIndex> &hive_partitioning_indexes);
 	DUCKDB_API virtual unique_ptr<MultiFileList>
 	DynamicFilterPushdown(ClientContext &context, const MultiFileList &files, const MultiFileOptions &options,
 	                      const vector<string> &names, const vector<LogicalType> &types,
