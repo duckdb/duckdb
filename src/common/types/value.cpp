@@ -1488,6 +1488,11 @@ DUCKDB_API string_t Value::GetValueUnsafe() const {
 }
 
 template <>
+DUCKDB_API varint_t Value::GetValueUnsafe() const {
+	return varint_t(StringValue::Get(*this));
+}
+
+template <>
 float Value::GetValueUnsafe() const {
 	D_ASSERT(type_.InternalType() == PhysicalType::FLOAT);
 	return value_.float_;

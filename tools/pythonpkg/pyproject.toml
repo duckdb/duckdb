@@ -73,4 +73,4 @@ before-test = 'python scripts/optional_requirements.py --exclude polars --exclud
 # See https://github.com/duckdb/duckdb-pyodide/issues/7 for context
 
 [tool.pyodide.build]
-default_cross_build_env_url = "https://github.com/pyodide/pyodide/releases/download/0.28.0a3/xbuildenv-0.28.0a3.tar.bz2"
+default_cross_build_env_url = "https://github.com/pyodide/pyodide/releases/download/0.28.0/xbuildenv-0.28.0.tar.bz2"

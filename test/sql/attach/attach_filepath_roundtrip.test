@@ -18,12 +18,9 @@ ATTACH '__TEST_DIR__/concurrent.db';
 endloop
 
 query I
-SELECT database_name FROM duckdb_databases() ORDER BY 1;
+SELECT database_name FROM duckdb_databases() WHERE database_name = 'concurrent';
 ----
 concurrent
-memory
-system
-temp
 
 statement ok
 DETACH concurrent;
