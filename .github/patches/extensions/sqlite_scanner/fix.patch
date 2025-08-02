@@ -242,3 +242,22 @@ index b550549..6c071d7 100644
  }
  
  //===--------------------------------------------------------------------===//
+diff --git a/test/sql/storage/attach_on_conflict.test b/test/sql/storage/attach_on_conflict.test
+index 6f7e678..7c13892 100644
+--- a/test/sql/storage/attach_on_conflict.test
++++ b/test/sql/storage/attach_on_conflict.test
+@@ -21,7 +21,7 @@ UNIQUE constraint failed
+ statement error
+ INSERT OR IGNORE INTO s.tbl VALUES (1)
+ ----
+-ON CONFLICT clause not yet supported for insertion into SQLite table
++does not support
+ 
+ # INSERT OR IGNORE in a table without primary key constraints
+ statement ok
+@@ -30,4 +30,4 @@ CREATE TABLE s.tbl2(i INTEGER)
+ statement error
+ INSERT OR REPLACE INTO s.tbl2 VALUES (1)
+ ----
+-There are no UNIQUE/PRIMARY KEY Indexes
++no UNIQUE/PRIMARY KEY constraints
