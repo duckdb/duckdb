@@ -10,7 +10,6 @@
 
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/common/types/value.hpp"
-#include "duckdb/common/named_parameter_map.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 
 namespace duckdb {

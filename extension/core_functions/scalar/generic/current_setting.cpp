@@ -5,6 +5,8 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
+
 namespace duckdb {
 
 namespace {
