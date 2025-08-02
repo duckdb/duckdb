@@ -41,7 +41,7 @@ unique_ptr<BoundMergeIntoAction> Binder::BindMergeAction(LogicalMergeInto &merge
 	auto result = make_uniq<BoundMergeIntoAction>();
 	result->action_type = action.action_type;
 	if (action.condition) {
-		ProjectionBinder proj_binder(*this, context, proj_index, expressions);
+		ProjectionBinder proj_binder(*this, context, proj_index, expressions, "WHERE clause");
 		proj_binder.target_type = LogicalType::BOOLEAN;
 		auto cond = proj_binder.Bind(action.condition);
 		result->condition = std::move(cond);
@@ -135,7 +135,7 @@ unique_ptr<BoundMergeIntoAction> Binder::BindMergeAction(LogicalMergeInto &merge
 	case MergeActionType::MERGE_ERROR: {
 		// bind the error message (if any)
 		for (auto &expr : action.expressions) {
-			ProjectionBinder proj_binder(*this, context, proj_index, expressions);
+			ProjectionBinder proj_binder(*this, context, proj_index, expressions, "Error Message");
 			proj_binder.target_type = LogicalType::VARCHAR;
 			auto error_msg = proj_binder.Bind(expr);
 			result->expressions.push_back(std::move(error_msg));

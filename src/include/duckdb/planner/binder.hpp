@@ -58,6 +58,7 @@ class BoundAtClause;
 
 struct CreateInfo;
 struct BoundCreateTableInfo;
+struct BoundOnConflictInfo;
 struct CommonTableExpressionInfo;
 struct BoundParameterMap;
 struct BoundPragmaInfo;
@@ -206,9 +207,6 @@ public:
 	                   TableCatalogEntry &table, vector<PhysicalIndex> &columns,
 	                   vector<unique_ptr<Expression>> &update_expressions,
 	                   vector<unique_ptr<Expression>> &projection_expressions);
-	void BindDoUpdateSetExpressions(const string &table_alias, LogicalInsert &insert, UpdateSetInfo &set_info,
-	                                TableCatalogEntry &table, TableStorageInfo &storage_info);
-	void BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &table, InsertStatement &stmt);
 
 	void BindVacuumTable(LogicalVacuum &vacuum, unique_ptr<LogicalOperator> &root);
 
@@ -468,12 +466,17 @@ private:
 	                          vector<LogicalIndex> &named_column_map, vector<LogicalType> &expected_types,
 	                          IndexVector<idx_t, PhysicalIndex> &column_index_map);
 	void TryReplaceDefaultExpression(unique_ptr<ParsedExpression> &expr, const ColumnDefinition &column);
+	void ExpandDefaultInValuesList(InsertStatement &stmt, TableCatalogEntry &table,
+	                               optional_ptr<ExpressionListRef> values_list,
+	                               const vector<LogicalIndex> &named_column_map);
 	unique_ptr<BoundMergeIntoAction> BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table,
 	                                                 LogicalGet &get, idx_t proj_index,
 	                                                 vector<unique_ptr<Expression>> &expressions,
 	                                                 unique_ptr<LogicalOperator> &root, MergeIntoAction &action,
 	                                                 const vector<BindingAlias> &source_aliases,
 	                                                 const vector<string> &source_names);
+
+	unique_ptr<MergeIntoStatement> GenerateMergeInto(InsertStatement &stmt, TableCatalogEntry &table);
 
 private:
 	Binder(ClientContext &context, shared_ptr<Binder> parent, BinderType binder_type);

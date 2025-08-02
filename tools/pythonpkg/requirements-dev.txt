@@ -13,7 +13,7 @@ urllib3
 fsspec
 pyarrow>=8.0
 torch
-polars
+polars<=1.31
 tensorflow
 cxxheaderparser
 pcpp
