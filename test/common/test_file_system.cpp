@@ -172,7 +172,7 @@ TEST_CASE("Test file operations", "[file_system]") {
 	// now open the file for reading
 	REQUIRE_NOTHROW(handle = fs->OpenFile(fname, FileFlags::FILE_FLAGS_READ));
 	// read the 10 integers back
-	REQUIRE_NOTHROW(handle->Read((void *)test_data, sizeof(int64_t) * INTEGER_COUNT, 0));
+	REQUIRE_NOTHROW(handle->Read(QueryContext(), (void *)test_data, sizeof(int64_t) * INTEGER_COUNT, 0));
 	// check the values of the integers
 	for (int i = 0; i < 10; i++) {
 		REQUIRE(test_data[i] == i);

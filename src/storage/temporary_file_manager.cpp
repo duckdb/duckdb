@@ -210,7 +210,8 @@ TemporaryFileIndex TemporaryFileHandle::TryGetBlockIndex(idx_t block_header_size
 	return TemporaryFileIndex(identifier, block_index, block_header_size);
 }
 
-unique_ptr<FileBuffer> TemporaryFileHandle::ReadTemporaryBuffer(const TemporaryFileIndex &index_in_file,
+unique_ptr<FileBuffer> TemporaryFileHandle::ReadTemporaryBuffer(QueryContext context,
+                                                                const TemporaryFileIndex &index_in_file,
                                                                 unique_ptr<FileBuffer> reusable_buffer) const {
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	auto block_index = index_in_file.block_index.GetIndex();
@@ -237,13 +238,13 @@ unique_ptr<FileBuffer> TemporaryFileHandle::ReadTemporaryBuffer(const TemporaryF
 	if (IsEncrypted()) {
 		uint8_t encryption_metadata[DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE];
 		//! Read nonce and tag.
-		handle->Read(encryption_metadata, DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE, read_position);
+		handle->Read(context, encryption_metadata, DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE, read_position);
 		//! Read the encrypted compressed buffer.
-		handle->Read(read_buffer, read_size, read_position + DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE);
+		handle->Read(context, read_buffer, read_size, read_position + DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE);
 		//! Decrypt the compressed buffer.
 		EncryptionEngine::DecryptTemporaryBuffer(db, read_buffer, read_size, encryption_metadata);
 	} else {
-		handle->Read(read_buffer, read_size, read_position);
+		handle->Read(context, read_buffer, read_size, read_position);
 	}
 
 	if (is_uncompressed) {
@@ -643,7 +644,7 @@ bool TemporaryFileManager::IsEncrypted() const {
 	return db.config.options.temp_file_encryption;
 }
 
-unique_ptr<FileBuffer> TemporaryFileManager::ReadTemporaryBuffer(block_id_t id,
+unique_ptr<FileBuffer> TemporaryFileManager::ReadTemporaryBuffer(QueryContext context, block_id_t id,
                                                                  unique_ptr<FileBuffer> reusable_buffer) {
 	TemporaryFileIndex index;
 	optional_ptr<TemporaryFileHandle> handle;
@@ -654,7 +655,7 @@ unique_ptr<FileBuffer> TemporaryFileManager::ReadTemporaryBuffer(block_id_t id,
 	}
 
 	// before the reusable buffer is given,
-	auto buffer = handle->ReadTemporaryBuffer(index, std::move(reusable_buffer));
+	auto buffer = handle->ReadTemporaryBuffer(context, index, std::move(reusable_buffer));
 	{
 		// remove the block (and potentially erase the temp file)
 		TemporaryFileManagerLock lock(manager_lock);

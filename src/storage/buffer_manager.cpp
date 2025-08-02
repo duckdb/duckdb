@@ -114,7 +114,7 @@ void BufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block_id, Fil
 	throw NotImplementedException("This type of BufferManager does not support 'WriteTemporaryBuffer");
 }
 
-unique_ptr<FileBuffer> BufferManager::ReadTemporaryBuffer(MemoryTag tag, BlockHandle &block,
+unique_ptr<FileBuffer> BufferManager::ReadTemporaryBuffer(QueryContext context, MemoryTag tag, BlockHandle &block,
                                                           unique_ptr<FileBuffer> buffer) {
 	throw NotImplementedException("This type of BufferManager does not support 'ReadTemporaryBuffer");
 }

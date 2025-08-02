@@ -534,14 +534,15 @@ void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block
 	buffer.Write(QueryContext(), *handle, offset);
 }
 
-unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(MemoryTag tag, BlockHandle &block,
+unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(QueryContext context, MemoryTag tag,
+                                                                  BlockHandle &block,
                                                                   unique_ptr<FileBuffer> reusable_buffer) {
 	D_ASSERT(!temporary_directory.path.empty());
 	D_ASSERT(temporary_directory.handle.get());
 	auto id = block.BlockId();
 	if (temporary_directory.handle->GetTempFile().HasTemporaryBuffer(id)) {
 		// This is a block that was offloaded to a regular .tmp file, the file contains blocks of a fixed size
-		return temporary_directory.handle->GetTempFile().ReadTemporaryBuffer(id, std::move(reusable_buffer));
+		return temporary_directory.handle->GetTempFile().ReadTemporaryBuffer(context, id, std::move(reusable_buffer));
 	}
 
 	// This block contains data of variable size so we need to open it and read it to get its size.
@@ -550,8 +551,8 @@ unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(MemoryTag tag,
 	auto path = GetTemporaryPath(id);
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ);
-	handle->Read(&block_size, sizeof(idx_t), 0);
-	handle->Read(&block_header_size, sizeof(idx_t), sizeof(idx_t));
+	handle->Read(context, &block_size, sizeof(idx_t), 0);
+	handle->Read(context, &block_header_size, sizeof(idx_t), sizeof(idx_t));
 
 	idx_t offset = sizeof(idx_t) * 2;
 
@@ -562,15 +563,15 @@ unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(MemoryTag tag,
 		// encrypted
 		//! Read nonce and tag from file.
 		uint8_t encryption_metadata[DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE];
-		handle->Read(encryption_metadata, DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE, offset);
+		handle->Read(context, encryption_metadata, DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE, offset);
 
 		//! Read and decrypt the buffer.
-		buffer->Read(*handle, offset + DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE);
+		buffer->Read(context, *handle, offset + DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE);
 		EncryptionEngine::DecryptTemporaryBuffer(GetDatabase(), buffer->InternalBuffer(), buffer->AllocSize(),
 		                                         encryption_metadata);
 	} else {
 		// unencrypted: read the data directly
-		buffer->Read(*handle, offset);
+		buffer->Read(context, *handle, offset);
 	}
 
 	handle.reset();

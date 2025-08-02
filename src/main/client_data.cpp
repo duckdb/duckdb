@@ -155,9 +155,9 @@ public:
 	void WriteTemporaryBuffer(MemoryTag tag, block_id_t block_id, FileBuffer &buffer) override {
 		return buffer_manager.WriteTemporaryBuffer(tag, block_id, buffer);
 	}
-	unique_ptr<FileBuffer> ReadTemporaryBuffer(MemoryTag tag, BlockHandle &block,
+	unique_ptr<FileBuffer> ReadTemporaryBuffer(QueryContext context, MemoryTag tag, BlockHandle &block,
 	                                           unique_ptr<FileBuffer> buffer) override {
-		return buffer_manager.ReadTemporaryBuffer(tag, block, std::move(buffer));
+		return buffer_manager.ReadTemporaryBuffer(context, tag, block, std::move(buffer));
 	}
 	void DeleteTemporaryFile(BlockHandle &block) override {
 		return buffer_manager.DeleteTemporaryFile(block);

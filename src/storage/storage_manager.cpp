@@ -287,7 +287,7 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 		// We'll construct the SingleFileBlockManager with the default block allocation size,
 		// and later adjust it when reading the file header.
 		auto sf_block_manager = make_uniq<SingleFileBlockManager>(db, path, options);
-		sf_block_manager->LoadExistingDatabase();
+		sf_block_manager->LoadExistingDatabase(context);
 		block_manager = std::move(sf_block_manager);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager, row_group_size);
 
