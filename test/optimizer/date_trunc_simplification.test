@@ -2,8 +2,6 @@
 # description: test DATE_TRUNC() constant simplifications
 # group: [optimizer]
 
-require icu
-
 statement ok
 create table test(d TIMESTAMP);
 
@@ -50,6 +48,16 @@ select * from test where date_trunc('day', d) != '2025-01-10';
 ----
 2025-01-06 03:01:00
 
+query I
+select * from test where date_trunc('day', d) is not distinct from '2025-01-06';
+----
+2025-01-06 03:01:00
+
+query I
+select * from test where date_trunc('day', d) is distinct from '2025-01-10';
+----
+2025-01-06 03:01:00
+
 #
 # ensure date_trunc() is taken out of the result for all possible operators
 #
@@ -84,6 +92,16 @@ explain analyze select * from test where date_trunc('day', d) != '2025-01-08';
 ----
 analyzed_plan	<REGEX>:.*FILTER[ \t\n│─]*\(\(d >= '2025.*OR.*\(d <[ \t\n│─]*'2025.*$
 
+query II
+explain analyze select * from test where date_trunc('day', d) is not distinct from '2025-01-08';
+----
+analyzed_plan	<REGEX>:.*Filters:[ \t\n│]*d>='2025.*AND.*d<'2025.*$
+
+query II
+explain analyze select * from test where date_trunc('day', d) is distinct from '2025-01-08';
+----
+analyzed_plan	<REGEX>:.*Filters:[ \t\n│─]*\(\(d >= '2025.*OR.*\(d <[ \t\n│─]*'2025.*$
+
 #
 # check correctness of simple optimizations, column on rhs
 #
@@ -115,6 +133,16 @@ select * from test where '2025-01-06' = date_trunc('day', d);
 
 query I
 select * from test where '2025-01-10' != date_trunc('day', d);
+----
+2025-01-06 03:01:00
+
+query I
+select * from test where '2025-01-06' is not distinct from date_trunc('day', d);
+----
+2025-01-06 03:01:00
+
+query I
+select * from test where '2025-01-10' is distinct from date_trunc('day', d);
 ----
 2025-01-06 03:01:00
 
@@ -155,6 +183,16 @@ select * from test2 where date_trunc('day', d) = '2025-01-06';
 
 query I
 select * from test2 where date_trunc('day', d) != '2025-01-10';
+----
+2025-01-06
+
+query I
+select * from test2 where date_trunc('day', d) is not distinct from '2025-01-06';
+----
+2025-01-06
+
+query I
+select * from test2 where date_trunc('day', d) is distinct from '2025-01-10';
 ----
 2025-01-06
 
@@ -236,3 +274,39 @@ query I
 select * from test where date_trunc('minute', d) >= '2025-01-10 05:11:00';
 ----
 
+#
+# check when there's a NULL in the table or on the RHS
+#
+
+statement ok
+create table test3(d TIMESTAMP);
+
+statement ok
+insert into test3 values ('2025-01-06 03:01:00'), ('2025-01-10 05:10:06'), (NULL);
+
+query I
+select * from test3 where date_trunc('hour', d) = NULL;
+----
+
+query I
+select * from test3 where date_trunc('hour', d) >= NULL;
+----
+
+query I
+select * from test3 where date_trunc('hour', d) <= NULL;
+----
+
+query I
+select * from test3 where date_trunc('hour', d) <> NULL;
+----
+
+query I
+select * from test3 where date_trunc('hour', d) IS DISTINCT FROM NULL;
+----
+2025-01-06 03:01:00
+2025-01-10 05:10:06
+
+query I
+select * from test3 where date_trunc('hour', d) IS NOT DISTINCT FROM NULL;
+----
+NULL
