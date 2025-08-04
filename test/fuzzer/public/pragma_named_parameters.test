@@ -1,5 +1,5 @@
-# name: test/fuzzer/public/insert_returning.test
-# description: Test INSERT OR REPLACE with DEFAULT VALUES
+# name: test/fuzzer/public/pragma_named_parameters.test
+# description: Test pragma with named parameter that should throw normal exception
 # group: [public]
 
 statement ok
