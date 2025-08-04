@@ -372,6 +372,7 @@ unique_ptr<Expression> Binder::PlanSubquery(BoundSubqueryExpression &expr, uniqu
 	} else {
 		result_expression = PlanCorrelatedSubquery(*this, expr, root, std::move(plan));
 	}
+	IncreaseDepth();
 	// finally, we recursively plan the nested subqueries (if there are any)
 	if (sub_binder->has_unplanned_dependent_joins) {
 		RecursiveDependentJoinPlanner plan(*this);
