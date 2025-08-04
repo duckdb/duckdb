@@ -575,12 +575,8 @@ void UpdateSegment::RollbackUpdate(UpdateInfo &info) {
 // Cleanup Update
 //===--------------------------------------------------------------------===//
 void UpdateSegment::CleanupUpdateInternal(const StorageLockKey &lock, UpdateInfo &info) {
-	if (!info.HasPrev()) {
-		return;
-	}
-	auto prev = info.prev;
-	{
-		auto pin = prev.Pin();
+	if (info.HasPrev()) {
+		auto pin = info.prev.Pin();
 		auto &prev_info = UpdateInfo::Get(pin);
 		prev_info.next = info.next;
 	}
@@ -588,7 +584,7 @@ void UpdateSegment::CleanupUpdateInternal(const StorageLockKey &lock, UpdateInfo
 		auto next = info.next;
 		auto next_pin = next.Pin();
 		auto &next_info = UpdateInfo::Get(next_pin);
-		next_info.prev = prev;
+		next_info.prev = info.prev;
 	}
 }
 
