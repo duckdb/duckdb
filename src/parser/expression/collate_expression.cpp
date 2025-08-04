@@ -17,7 +17,7 @@ CollateExpression::CollateExpression() : ParsedExpression(ExpressionType::COLLAT
 }
 
 string CollateExpression::ToString() const {
-	return StringUtil::Format("%s COLLATE %s", child->ToString(), SQLIdentifier(collation));
+	return StringUtil::Format("(%s COLLATE %s)", child->ToString(), SQLIdentifier(collation));
 }
 
 bool CollateExpression::Equal(const CollateExpression &a, const CollateExpression &b) {
