@@ -106,13 +106,6 @@
       ]
     },
     {
-      "reason": "FIXME: Misc. unexpected failures (query succeeds, wrong result).",
-      "paths": [
-        "test/sql/storage/compression/test_using_compression.test",
-        "test/sql/create/create_table_compression.test"
-      ]
-    },
-    {
       "reason": "Emits different vector type (FLAT).",
       "paths": [
         "test/sql/storage/compression/rle/rle_constant.test"
