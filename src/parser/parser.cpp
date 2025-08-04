@@ -166,26 +166,31 @@ end:
 }
 
 vector<string> SplitQueryStringIntoStatements(const string &query) {
-	// Break sql string down into sql statements using the tokenizer
-	vector<string> query_statements;
+	vector<string> statements;
 	auto tokens = Parser::Tokenize(query);
-	idx_t next_statement_start = 0;
-	for (idx_t i = 1; i < tokens.size(); ++i) {
-		auto &t_prev = tokens[i - 1];
-		auto &t = tokens[i];
-		if (t_prev.type == SimplifiedTokenType::SIMPLIFIED_TOKEN_OPERATOR) {
-			// LCOV_EXCL_START
-			for (idx_t c = t_prev.start; c <= t.start; ++c) {
-				if (query.c_str()[c] == ';') {
-					query_statements.emplace_back(query.substr(next_statement_start, t.start - next_statement_start));
-					next_statement_start = tokens[i].start;
-				}
-			}
-			// LCOV_EXCL_STOP
+
+	idx_t current_statement_start = 0;
+	for (const auto &token : tokens) {
+		if (token.type == SimplifiedTokenType::SIMPLIFIED_TOKEN_OPERATOR &&
+			query.substr(token.start, 1) == ";") {
+
+			idx_t statement_end = token.start + 1;
+			idx_t statement_length = statement_end - current_statement_start;
+
+			statements.push_back(query.substr(current_statement_start, statement_length));
+			current_statement_start = statement_end;
 		}
 	}
-	query_statements.emplace_back(query.substr(next_statement_start, query.size() - next_statement_start));
-	return query_statements;
+
+	if (current_statement_start < query.length()) {
+		string remainder = query.substr(current_statement_start);
+		StringUtil::Trim(remainder);
+		if (!remainder.empty()) {
+			statements.push_back(remainder);
+		}
+	}
+
+	return statements;
 }
 
 void Parser::ParseQuery(const string &query) {
