@@ -1,4 +1,4 @@
-# name: test/sql/types/test_typeof.test
+# name: test/sql/types/test_user_type_errors_18452.test
 # group: [types]
 
 statement ok
