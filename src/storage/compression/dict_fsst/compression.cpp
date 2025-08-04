@@ -422,7 +422,7 @@ static inline bool AddToDictionary(DictFSSTCompressionState &state, const string
 		if (str.IsInlined()) {
 			state.dictionary_encoding_buffer.push_back(str);
 		} else {
-			state.dictionary_encoding_buffer.push_back(state.uncompressed_dictionary_copy.AddString(str));
+			state.dictionary_encoding_buffer.push_back(state.uncompressed_dictionary_copy.AddBlob(str));
 		}
 		if (!state.to_encode_string_sum) {
 			//! As specified in fsst.h
