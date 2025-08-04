@@ -575,7 +575,9 @@ void UpdateSegment::RollbackUpdate(UpdateInfo &info) {
 // Cleanup Update
 //===--------------------------------------------------------------------===//
 void UpdateSegment::CleanupUpdateInternal(const StorageLockKey &lock, UpdateInfo &info) {
-	D_ASSERT(info.HasPrev());
+	if (!info.HasPrev()) {
+		return;
+	}
 	auto prev = info.prev;
 	{
 		auto pin = prev.Pin();
