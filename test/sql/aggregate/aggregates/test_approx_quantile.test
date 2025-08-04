@@ -245,6 +245,9 @@ statement ok
 PRAGMA disable_verify_external;
 
 statement ok
+PRAGMA disable_verify_fetch_row;
+
+statement ok
 SELECT reservoir_quantile(r, 0.9)  from quantile
 
 statement ok

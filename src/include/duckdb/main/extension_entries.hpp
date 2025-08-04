@@ -1031,6 +1031,7 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"pg_pages_per_task", "postgres_scanner"},
     {"pg_use_binary_copy", "postgres_scanner"},
     {"pg_use_ctid_scan", "postgres_scanner"},
+    {"pg_use_text_protocol", "postgres_scanner"},
     {"prefetch_all_parquet_files", "parquet"},
     {"s3_access_key_id", "httpfs"},
     {"s3_endpoint", "httpfs"},
@@ -1052,6 +1053,7 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"ui_polling_interval", "ui"},
     {"ui_remote_url", "ui"},
     {"unsafe_enable_version_guessing", "iceberg"},
+    {"variant_legacy_encoding", "parquet"},
 }; // END_OF_EXTENSION_SETTINGS
 
 static constexpr ExtensionEntry EXTENSION_SECRET_TYPES[] = {
