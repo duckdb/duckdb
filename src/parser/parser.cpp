@@ -165,32 +165,18 @@ end:
 	return ReplaceUnicodeSpaces(query_str, new_query, unicode_spaces);
 }
 
-vector<string> SplitQueryStringIntoStatements(const string &query) {
-	vector<string> statements;
-	auto tokens = Parser::Tokenize(query);
-
-	idx_t current_statement_start = 0;
-	for (const auto &token : tokens) {
-		if (token.type == SimplifiedTokenType::SIMPLIFIED_TOKEN_OPERATOR &&
-			query.substr(token.start, 1) == ";") {
-
-			idx_t statement_end = token.start + 1;
-			idx_t statement_length = statement_end - current_statement_start;
-
-			statements.push_back(query.substr(current_statement_start, statement_length));
-			current_statement_start = statement_end;
+vector<string> SplitQueries(const string &input_query) {
+	vector<string> queries;
+	auto split_queries = StringUtil::Split(input_query, ";");
+	for (auto &query : split_queries) {
+		StringUtil::Trim(query);
+		if (query.empty()) {
+			continue;
 		}
+		query.append(";");
+		queries.push_back(query);
 	}
-
-	if (current_statement_start < query.length()) {
-		string remainder = query.substr(current_statement_start);
-		StringUtil::Trim(remainder);
-		if (!remainder.empty()) {
-			statements.push_back(remainder);
-		}
-	}
-
-	return statements;
+	return queries;
 }
 
 void Parser::ParseQuery(const string &query) {
@@ -241,9 +227,9 @@ void Parser::ParseQuery(const string &query) {
 			throw ParserException::SyntaxError(query, parser_error, parser_error_location);
 		} else {
 			// split sql string into statements and re-parse using extension
-			auto query_statements = SplitQueryStringIntoStatements(query);
+			auto queries = SplitQueries(query);
 			idx_t stmt_loc = 0;
-			for (auto const &query_statement : query_statements) {
+			for (auto const &query_statement : queries) {
 				ErrorData another_parser_error;
 				// Creating a new scope to allow extensions to use PostgresParser, which is not reentrant
 				{
