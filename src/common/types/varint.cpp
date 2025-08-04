@@ -18,6 +18,13 @@ void Varint::Verify(const varint_t &input) {
 	auto varint_ptr = input.data.GetData();
 	bool is_negative = (varint_ptr[0] & 0x80) == 0;
 	uint32_t number_of_bytes = 0;
+	if (varint_bytes == 4 && is_negative) {
+		// There is only one invalid value, which is -0
+		if (varint_ptr[3] == static_cast<char>(0xFF)) {
+			throw InternalException("Varint value -0 is not allowed in the Varint specification.");
+		}
+	}
+
 	char mask = 0x7F;
 	if (is_negative) {
 		number_of_bytes |= static_cast<uint32_t>(~varint_ptr[0] & mask) << 16 & 0xFF0000;
@@ -196,10 +203,6 @@ string Varint::VarIntToVarchar(const varint_t &blob) {
 	string decimal_string;
 	vector<uint8_t> byte_array;
 	bool is_negative;
-	if (blob.IsZero()) {
-		// zero is a bit of a special case because of 0 and -0
-		return "0";
-	}
 	GetByteArray(byte_array, is_negative, blob.data);
 	vector<digit_t> digits;
 	// Rounding byte_array to digit_bytes multiple size, so that we can process every digit_bytes bytes

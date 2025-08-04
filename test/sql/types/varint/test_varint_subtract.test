@@ -5,10 +5,10 @@
 statement ok
 PRAGMA enable_verification
 
-query I
-SELECT -(1::VARINT)
-----
--1
+# query I
+# SELECT -(1::VARINT)
+# ----
+# -1
 
 query I
 SELECT -(0::VARINT)

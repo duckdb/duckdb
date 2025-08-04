@@ -19,19 +19,6 @@ void varint_t::Print() const {
 	std::cout << '\n';
 }
 
-bool varint_t::IsZero() const {
-	D_ASSERT(data.GetSize() > 3);
-	const bool is_negative = (data.GetData()[0] & 0x80) == 0;
-	const char zero_character = is_negative ? static_cast<char>(0xFF) : 0x00;
-	auto ptr = data.GetData();
-	for (idx_t i = Varint::VARINT_HEADER_SIZE; i < data.GetSize(); ++i) {
-		if (ptr[i] != zero_character) {
-			return false;
-		}
-	}
-	return true;
-}
-
 void VarintIntermediate::Print() const {
 	for (idx_t i = 0; i < size; ++i) {
 		PrintBits(static_cast<char>(data[i]));
@@ -245,18 +232,33 @@ void VarintAddition(data_ptr_t result, int64_t result_end, bool is_target_absolu
 }
 
 string_t VarintIntermediate::Negate(Vector &result_vector) const {
+
 	auto target = StringVector::EmptyString(result_vector, size + Varint::VARINT_HEADER_SIZE);
 	auto ptr = target.GetDataWriteable();
-	// we set the header with a flip on the signal
-	Varint::SetHeader(ptr, size, !is_negative);
-	// we just need to flip all data b
-	for (idx_t i = 0; i < size; ++i) {
-		ptr[i + Varint::VARINT_HEADER_SIZE] = static_cast<char>(~data[i]);
+
+	if (!is_negative && size == 1 && data[0] == 0x00) {
+		// If we have a zero, we just do a copy
+		Varint::SetHeader(ptr, size, is_negative);
+		for (idx_t i = 0; i < size; ++i) {
+			ptr[i + Varint::VARINT_HEADER_SIZE] = static_cast<char>(data[i]);
+		}
+	} else {
+		// Otherwise, we set the header with a flip on the signal
+		Varint::SetHeader(ptr, size, !is_negative);
+		for (idx_t i = 0; i < size; ++i) {
+			// And flip all the data bits
+			ptr[i + Varint::VARINT_HEADER_SIZE] = static_cast<char>(~data[i]);
+		}
 	}
+
 	return target;
 }
 
 void VarintIntermediate::NegateInPlace() {
+	if (!is_negative && size == 1 && data[0] == 0x00) {
+		// this is a zero, there is no negation
+		return;
+	}
 	is_negative = !is_negative;
 	for (size_t i = 0; i < size; i++) {
 		data[i] = ~data[i]; // flip each byte of the pointer
