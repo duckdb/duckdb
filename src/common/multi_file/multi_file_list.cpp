@@ -155,10 +155,9 @@ bool MultiFileList::Scan(MultiFileListScanData &iterator, OpenFileInfo &result_f
 	return true;
 }
 
-unique_ptr<MultiFileList>
-MultiFileList::ComplexFilterPushdown(ClientContext &context, const MultiFileOptions &options,
-                                     MultiFilePushdownInfo &info, vector<unique_ptr<Expression>> &filters,
-                                     vector<HivePartitioningIndex> &hive_partitioning_indexes) {
+unique_ptr<MultiFileList> MultiFileList::ComplexFilterPushdown(ClientContext &context, const MultiFileOptions &options,
+                                                               MultiFilePushdownInfo &info,
+                                                               vector<unique_ptr<Expression>> &filters) {
 	// By default the filter pushdown into a multifilelist does nothing
 	return nullptr;
 }
@@ -215,10 +214,10 @@ SimpleMultiFileList::SimpleMultiFileList(vector<OpenFileInfo> paths_p)
     : MultiFileList(std::move(paths_p), FileGlobOptions::ALLOW_EMPTY) {
 }
 
-unique_ptr<MultiFileList>
-SimpleMultiFileList::ComplexFilterPushdown(ClientContext &context_p, const MultiFileOptions &options,
-                                           MultiFilePushdownInfo &info, vector<unique_ptr<Expression>> &filters,
-                                           vector<HivePartitioningIndex> &hive_partitioning_indexes) {
+unique_ptr<MultiFileList> SimpleMultiFileList::ComplexFilterPushdown(ClientContext &context_p,
+                                                                     const MultiFileOptions &options,
+                                                                     MultiFilePushdownInfo &info,
+                                                                     vector<unique_ptr<Expression>> &filters) {
 	if (!options.hive_partitioning && !options.filename) {
 		return nullptr;
 	}
@@ -285,10 +284,10 @@ GlobMultiFileList::GlobMultiFileList(ClientContext &context_p, vector<OpenFileIn
     : MultiFileList(std::move(paths_p), options), context(context_p), current_path(0), first_files_current_path(0) {
 }
 
-unique_ptr<MultiFileList>
-GlobMultiFileList::ComplexFilterPushdown(ClientContext &context_p, const MultiFileOptions &options,
-                                         MultiFilePushdownInfo &info, vector<unique_ptr<Expression>> &filters,
-                                         vector<HivePartitioningIndex> &hive_partitioning_indexes) {
+unique_ptr<MultiFileList> GlobMultiFileList::ComplexFilterPushdown(ClientContext &context_p,
+                                                                   const MultiFileOptions &options,
+                                                                   MultiFilePushdownInfo &info,
+                                                                   vector<unique_ptr<Expression>> &filters) {
 	lock_guard<mutex> lck(lock);
 
 	if (!options.hive_partitioning && !options.filename) {
@@ -299,9 +298,27 @@ GlobMultiFileList::ComplexFilterPushdown(ClientContext &context_p, const MultiFi
 
 	// Expand all
 	if (options.hive_lazy_listing) {
+		bool filters_empty = filters.empty();
 		HiveFilterParams hive_filter_params(context, filters, options, info);
 		while (ExpandNextPath(std::numeric_limits<idx_t>::max(), false, &hive_filter_params)) {
 		}
+		auto res = make_uniq<SimpleMultiFileList>(expanded_files);
+		// Check Hive partitioning
+		MultiFileOptions options_copy = options;
+		options_copy.hive_lazy_listing = false;
+		options_copy.AutoDetectHivePartitioning(*res, context_p);
+		if (filters_empty) {
+			if (options_copy.hive_partitioning) {
+				throw Exception(ExceptionType::OPTIMIZER, "hive_lazy_listing true but no Hive filters",
+				                {{"hive_error", "lazy"}});
+			}
+		} else {
+			if (!options_copy.hive_partitioning) {
+				throw Exception(ExceptionType::OPTIMIZER, "hive_lazy_listing true but invalid Hive partitioning",
+				                {{"hive_error", "lazy"}});
+			}
+		}
+		return res;
 	} else {
 		auto res = PushdownInternal(context, options, info, filters, expanded_files);
 		if (!res) {
@@ -309,23 +326,7 @@ GlobMultiFileList::ComplexFilterPushdown(ClientContext &context_p, const MultiFi
 		}
 	}
 
-	auto res = make_uniq<SimpleMultiFileList>(expanded_files);
-
-	// TODO: Left behind for review purposes, will likely remove
-	// Hive type validation on remaining files if lazy listing is enabled
-	// if (options.hive_lazy_listing) {
-	// 	MultiFileOptions options_copy = options;
-	// 	options_copy.hive_lazy_listing = false;
-	// 	options_copy.AutoDetectHivePartitioning(*res, context);
-	// 	// If the final list is not entirely hive partitioned, clear the hive partitioning columns
-	// 	if (!options_copy.hive_partitioning) {
-	// 		hive_partitioning_indexes.clear();
-	// 	}
-	// }
-
-	return make_uniq<SimpleMultiFileList>(expanded_files);
-
-	// return nullptr;
+	return make_uniq<SimpleMultiFileList>(std::move(expanded_files));
 }
 
 unique_ptr<MultiFileList>

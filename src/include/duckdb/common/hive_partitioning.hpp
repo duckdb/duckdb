@@ -145,4 +145,33 @@ protected:
 	vector<HivePartitionKey> keys;
 };
 
+struct HiveClientContextState : public ClientContextState {
+	bool CanRequestRebind() override {
+		return true;
+	}
+
+	// Add callbacks for other query states, set hive_lazy_listing as needed
+	void QueryBegin(ClientContext &context) override {
+		hive_lazy_listing = true;
+	}
+
+	RebindQueryInfo OnPlanningError(ClientContext &context, SQLStatement &statement, ErrorData &error) override {
+		// If the error was caused by lazy listing, we attempt a rebind with hive lazy listing false
+		if (hive_lazy_listing && error.Type() == ExceptionType::OPTIMIZER) {
+			auto &info = error.ExtraInfo();
+			auto hive_error_it = info.find("hive_error");
+			if (hive_error_it != info.end()) {
+				auto hive_error = hive_error_it->second;
+				if (hive_error == "lazy") {
+					hive_lazy_listing = false;
+					return RebindQueryInfo::ATTEMPT_TO_REBIND;
+				}
+			}
+		}
+		return RebindQueryInfo::DO_NOT_REBIND;
+	}
+
+	bool hive_lazy_listing = true;
+};
+
 } // namespace duckdb

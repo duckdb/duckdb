@@ -97,8 +97,7 @@ public:
 public:
 	virtual unique_ptr<MultiFileList> ComplexFilterPushdown(ClientContext &context, const MultiFileOptions &options,
 	                                                        MultiFilePushdownInfo &info,
-	                                                        vector<unique_ptr<Expression>> &filters,
-	                                                        vector<HivePartitioningIndex> &hive_partitioning_indexes);
+	                                                        vector<unique_ptr<Expression>> &filters);
 	virtual unique_ptr<MultiFileList> DynamicFilterPushdown(ClientContext &context, const MultiFileOptions &options,
 	                                                        const vector<string> &names,
 	                                                        const vector<LogicalType> &types,
@@ -147,8 +146,7 @@ public:
 	//! Copy `paths` to `filtered_files` and apply the filters
 	unique_ptr<MultiFileList> ComplexFilterPushdown(ClientContext &context, const MultiFileOptions &options,
 	                                                MultiFilePushdownInfo &info,
-	                                                vector<unique_ptr<Expression>> &filters,
-	                                                vector<HivePartitioningIndex> &hive_partitioning_indexes) override;
+	                                                vector<unique_ptr<Expression>> &filters) override;
 	unique_ptr<MultiFileList> DynamicFilterPushdown(ClientContext &context, const MultiFileOptions &options,
 	                                                const vector<string> &names, const vector<LogicalType> &types,
 	                                                const vector<column_t> &column_ids,
@@ -171,8 +169,7 @@ public:
 	//! Calls ExpandAll, then prunes the expanded_files using the hive/filename filters
 	unique_ptr<MultiFileList> ComplexFilterPushdown(ClientContext &context, const MultiFileOptions &options,
 	                                                MultiFilePushdownInfo &info,
-	                                                vector<unique_ptr<Expression>> &filters,
-	                                                vector<HivePartitioningIndex> &hive_partitioning_indexes) override;
+	                                                vector<unique_ptr<Expression>> &filters) override;
 	unique_ptr<MultiFileList> DynamicFilterPushdown(ClientContext &context, const MultiFileOptions &options,
 	                                                const vector<string> &names, const vector<LogicalType> &types,
 	                                                const vector<column_t> &column_ids,
