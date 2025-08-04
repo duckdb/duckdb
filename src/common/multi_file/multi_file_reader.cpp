@@ -790,7 +790,7 @@ void MultiFileOptions::AutoDetectHivePartitioning(MultiFileList &files, ClientCo
 		hive_partitioning = true;
 		auto_detect_hive_partitioning = false;
 	}
-	if (union_by_name) {
+	if (union_by_name || !context.config.enable_optimizer) {
 		hive_lazy_listing = false;
 	}
 

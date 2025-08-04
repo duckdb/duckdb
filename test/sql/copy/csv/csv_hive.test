@@ -32,13 +32,13 @@ select id, value, part, date from read_csv_auto('data/csv/hive-partitioning/diff
 
 # If the key names don't add up, we throw
 statement error
-select * from read_csv_auto('data/csv/hive-partitioning/mismatching_names/*/*/test.csv', HIVE_PARTITIONING=1, HIVE_LAZY_LISTING=0)
+select * from read_csv_auto('data/csv/hive-partitioning/mismatching_names/*/*/test.csv', HIVE_PARTITIONING=1)
 ----
 Hive partition mismatch
 
 # If the key names don't add up, we throw
 statement error
-select * from read_csv_auto('data/csv/hive-partitioning/mismatching_count/*/*/test.csv', HIVE_PARTITIONING=1, HIVE_LAZY_LISTING=0)
+select * from read_csv_auto('data/csv/hive-partitioning/mismatching_count/*/*/test.csv', HIVE_PARTITIONING=1)
 ----
 Hive partition mismatch
 

@@ -307,6 +307,12 @@ unique_ptr<MultiFileList> GlobMultiFileList::ComplexFilterPushdown(ClientContext
 		MultiFileOptions options_copy = options;
 		options_copy.hive_lazy_listing = false;
 		options_copy.AutoDetectHivePartitioning(*res, context_p);
+		// Hive partitioning was detected in early peek at files, but turns out not to be the case
+		if (options.hive_partitioning && !options_copy.hive_partitioning) {
+			throw Exception(ExceptionType::OPTIMIZER,
+			                "hive_lazy_listing true, part of data is Hive partitioned, but part of it is not",
+			                {{"hive_error", "lazy"}});
+		}
 		if (filters_empty) {
 			if (options_copy.hive_partitioning) {
 				throw Exception(ExceptionType::OPTIMIZER, "hive_lazy_listing true but no Hive filters",

@@ -96,12 +96,12 @@ select alias(columns(*)) from read_csv_auto(['__TEST_DIR__/csv_partition_2/**', 
 a	b
 
 statement error
-select alias(columns(*)) from read_csv_auto(['__TEST_DIR__/csv_partition_2/**', '__TEST_DIR__/bad_file.csv'], HIVE_PARTITIONING=1, HIVE_LAZY_LISTING=0, names=['a','b','c','d']) LIMIT 1;
+select alias(columns(*)) from read_csv_auto(['__TEST_DIR__/csv_partition_2/**', '__TEST_DIR__/bad_file.csv'], HIVE_PARTITIONING=1, names=['a','b','c','d']) LIMIT 1;
 ----
 Binder Error: Hive partition mismatch
 
 query II
-select alias(columns(*)) from read_csv_auto(['__TEST_DIR__/csv_partition_2/**', '__TEST_DIR__/bad_file.csv'], names=['a','b','c','d'], HIVE_LAZY_LISTING=0) LIMIT 1;
+select alias(columns(*)) from read_csv_auto(['__TEST_DIR__/csv_partition_2/**', '__TEST_DIR__/bad_file.csv'], names=['a','b','c','d']) LIMIT 1;
 ----
 a	b
 
@@ -192,12 +192,12 @@ select alias(columns(*)) from read_parquet(['__TEST_DIR__/parquet_partition_2/**
 c	d
 
 statement error
-select alias(columns(*)) from read_parquet(['__TEST_DIR__/parquet_partition_2/**', '__TEST_DIR__/t.parquet'], HIVE_PARTITIONING=1, HIVE_LAZY_LISTING=0) LIMIT 1;
+select alias(columns(*)) from read_parquet(['__TEST_DIR__/parquet_partition_2/**', '__TEST_DIR__/t.parquet'], HIVE_PARTITIONING=1) LIMIT 1;
 ----
 Binder Error: Hive partition mismatch
 
 query II
-select alias(columns(*)) from read_parquet(['__TEST_DIR__/parquet_partition_2/**', '__TEST_DIR__/t.parquet'], HIVE_LAZY_LISTING=0) LIMIT 1;
+select alias(columns(*)) from read_parquet(['__TEST_DIR__/parquet_partition_2/**', '__TEST_DIR__/t.parquet']) LIMIT 1;
 ----
 c	d
 
