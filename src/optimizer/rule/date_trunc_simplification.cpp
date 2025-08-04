@@ -232,7 +232,7 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 				// Return 'column IS NULL'.
 				auto op = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, LogicalType::BOOLEAN);
 				op->children.push_back(column_part.Copy());
-				return op;
+				return std::move(op);
 			} else {
 				if (!is_truncated) {
 					return make_uniq<BoundConstantExpression>(Value::BOOLEAN(false));
@@ -283,7 +283,7 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 				auto op =
 				    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
 				op->children.push_back(column_part.Copy());
-				return op;
+				return std::move(op);
 			} else {
 				if (!is_truncated) {
 					return make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
@@ -385,13 +385,13 @@ unique_ptr<Expression> DateTruncSimplificationRule::CreateTrunc(const BoundConst
 	if (trunc->IsFoldable()) {
 		Value result;
 		if (!ExpressionExecutor::TryEvaluateScalar(rewriter.context, *trunc, result)) {
-			return trunc;
+			return std::move(trunc);
 		}
 
 		return make_uniq<BoundConstantExpression>(result);
 	}
 
-	return trunc;
+	return std::move(trunc);
 }
 
 unique_ptr<Expression> DateTruncSimplificationRule::CreateTruncAdd(const BoundConstantExpression &date_part,
@@ -435,13 +435,13 @@ unique_ptr<Expression> DateTruncSimplificationRule::CreateTruncAdd(const BoundCo
 	if (trunc->IsFoldable()) {
 		Value result;
 		if (!ExpressionExecutor::TryEvaluateScalar(rewriter.context, *trunc, result)) {
-			return trunc;
+			return std::move(trunc);
 		}
 
 		return make_uniq<BoundConstantExpression>(result);
 	}
 
-	return trunc;
+	return std::move(trunc);
 }
 
 bool DateTruncSimplificationRule::DateIsTruncated(const BoundConstantExpression &date_part,
