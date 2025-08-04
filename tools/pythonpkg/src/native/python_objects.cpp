@@ -684,7 +684,7 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type,
 		return import_cache.uuid.UUID()(UUID::ToString(uuid_value));
 	}
 	case LogicalTypeId::VARINT: {
-		auto varint_value = val.GetValueUnsafe<string_t>();
+		auto varint_value = val.GetValueUnsafe<varint_t>();
 		return py::str(Varint::VarIntToVarchar(varint_value));
 	}
 	case LogicalTypeId::INTERVAL: {

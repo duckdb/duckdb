@@ -2,6 +2,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/logging/log_manager.hpp"
 
 namespace duckdb {
 
@@ -28,7 +29,7 @@ ThreadContext::ThreadContext(ClientContext &context) : profiler(context) {
 			log_context.transaction_id = query_id;
 		}
 	}
-	logger = context.db->GetLogManager().CreateLogger(log_context, true);
+	logger = LogManager::Get(context).CreateLogger(log_context, true);
 }
 
 ThreadContext::~ThreadContext() {

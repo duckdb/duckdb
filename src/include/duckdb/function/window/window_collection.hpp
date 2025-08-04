@@ -143,4 +143,146 @@ public:
 	DataChunk chunk;
 };
 
+class WindowCollectionChunkScanner {
+public:
+	WindowCollectionChunkScanner(ColumnDataCollection &collection, const vector<column_t> &scan_ids,
+	                             const idx_t begin_idx)
+	    : collection(collection), curr_idx(0) {
+		collection.InitializeScan(state, scan_ids);
+		collection.InitializeScanChunk(state, chunk);
+
+		Seek(begin_idx);
+	}
+
+	void Seek(idx_t begin_idx) {
+		idx_t chunk_idx;
+		idx_t seg_idx;
+		idx_t row_idx;
+		for (; curr_idx > begin_idx; --curr_idx) {
+			collection.PrevScanIndex(state, chunk_idx, seg_idx, row_idx);
+		}
+		for (; curr_idx < begin_idx; ++curr_idx) {
+			collection.NextScanIndex(state, chunk_idx, seg_idx, row_idx);
+		}
+	}
+
+	bool Scan() {
+		const auto result = collection.Scan(state, chunk);
+		++curr_idx;
+		return result;
+	}
+
+	idx_t Scanned() const {
+		return state.next_row_index;
+	}
+
+	//! Return a struct type for comparing keys
+	LogicalType PrefixStructType(column_t end, column_t begin = 0);
+	//! Reference the chunk into a struct vector matching the keys
+	static void ReferenceStructColumns(DataChunk &chunk, Vector &vec, column_t end, column_t begin = 0);
+
+	ColumnDataCollection &collection;
+	ColumnDataScanState state;
+	DataChunk chunk;
+	idx_t curr_idx;
+};
+
+template <typename OP>
+static void WindowDeltaScanner(ColumnDataCollection &collection, idx_t block_begin, idx_t block_end,
+                               const vector<column_t> &scan_cols, const idx_t key_count, OP operation) {
+
+	//	Stop if there is no work to do
+	if (!collection.Count()) {
+		return;
+	}
+
+	//	Start back one to get the overlap
+	idx_t block_curr = block_begin ? block_begin - 1 : 0;
+
+	//	Scan the sort columns
+	WindowCollectionChunkScanner scanner(collection, scan_cols, block_curr);
+	auto &scanned = scanner.chunk;
+
+	//	Shifted buffer for the next values
+	DataChunk next;
+	collection.InitializeScanChunk(scanner.state, next);
+
+	//	Delay buffer for the previous row
+	DataChunk delayed;
+	collection.InitializeScanChunk(scanner.state, delayed);
+
+	//	Only compare the key arguments.
+	const auto key_type = scanner.PrefixStructType(key_count);
+	Vector compare_curr(key_type);
+	Vector compare_prev(key_type);
+
+	bool boundary_compare = (block_begin > 0);
+	idx_t row_idx = 1;
+	if (!scanner.Scan()) {
+		return;
+	}
+
+	//	Process chunks offset by 1
+	SelectionVector next_sel(1, STANDARD_VECTOR_SIZE);
+	SelectionVector distinct(STANDARD_VECTOR_SIZE);
+	SelectionVector matching(STANDARD_VECTOR_SIZE);
+
+	// In order to reuse the verbose `distinct from` logic for both the main vector comparisons
+	// and single element boundary comparisons, we alternate between single element compares
+	// and count-1 compares.
+	while (block_curr < block_end) {
+		//	Compare the current to the previous;
+		DataChunk *curr = nullptr;
+		DataChunk *prev = nullptr;
+
+		idx_t count = 0;
+		if (boundary_compare) {
+			//	Save the last row of the scanned chunk
+			count = 1;
+			sel_t last = UnsafeNumericCast<sel_t>(scanned.size() - 1);
+			SelectionVector sel(&last);
+			delayed.Reset();
+			scanned.Copy(delayed, sel, count);
+			prev = &delayed;
+
+			// Try to read the next chunk
+			++block_curr;
+			row_idx = scanner.Scanned();
+			if (block_curr >= block_end || !scanner.Scan()) {
+				break;
+			}
+			curr = &scanned;
+		} else {
+			//	Compare the [1..size) values with the [0..size-1) values
+			count = scanned.size() - 1;
+			if (!count) {
+				//	1 row scanned, so just skip the rest of the loop.
+				boundary_compare = true;
+				continue;
+			}
+			prev = &scanned;
+
+			// Slice the current back one into the previous
+			next.Slice(scanned, next_sel, count);
+			curr = &next;
+		}
+
+		//	Reference the comparison prefix as a struct to simplify the compares.
+		scanner.ReferenceStructColumns(*prev, compare_prev, key_count);
+		scanner.ReferenceStructColumns(*curr, compare_curr, key_count);
+
+		const auto ndistinct =
+		    VectorOperations::DistinctFrom(compare_curr, compare_prev, nullptr, count, &distinct, &matching);
+
+		//	If n is 0, neither SV has been filled in?
+		auto match_sel = ndistinct ? &matching : FlatVector::IncrementalSelectionVector();
+
+		operation(row_idx, *prev, *curr, ndistinct, distinct, *match_sel);
+
+		//	Transition between comparison ranges.
+		boundary_compare = !boundary_compare;
+		row_idx += count;
+	}
+}
+
 } // namespace duckdb

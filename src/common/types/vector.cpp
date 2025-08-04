@@ -711,8 +711,8 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		return Value::BLOB(const_data_ptr_cast(str.GetData()), str.GetSize());
 	}
 	case LogicalTypeId::VARINT: {
-		auto str = reinterpret_cast<string_t *>(data)[index];
-		return Value::VARINT(const_data_ptr_cast(str.GetData()), str.GetSize());
+		auto str = reinterpret_cast<varint_t *>(data)[index];
+		return Value::VARINT(const_data_ptr_cast(str.data.GetData()), str.data.GetSize());
 	}
 	case LogicalTypeId::AGGREGATE_STATE: {
 		auto str = reinterpret_cast<string_t *>(data)[index];
@@ -1614,7 +1614,7 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 			for (idx_t i = 0; i < count; i++) {
 				auto oidx = sel->get_index(i);
 				if (validity.RowIsValid(oidx)) {
-					Varint::Verify(strings[oidx]);
+					Varint::Verify(static_cast<varint_t>(strings[oidx]));
 				}
 			}
 		} break;

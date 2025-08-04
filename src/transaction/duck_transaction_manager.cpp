@@ -14,6 +14,7 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -112,8 +113,7 @@ DuckTransactionManager::CanCheckpoint(DuckTransaction &transaction, unique_ptr<S
 	if (!transaction.AutomaticCheckpoint(db, undo_properties)) {
 		return CheckpointDecision("no reason to automatically checkpoint");
 	}
-	auto &config = DBConfig::GetConfig(db.GetDatabase());
-	if (config.options.debug_skip_checkpoint_on_commit) {
+	if (DBConfig::GetSetting<DebugSkipCheckpointOnCommitSetting>(db.GetDatabase())) {
 		return CheckpointDecision("checkpointing on commit disabled through configuration");
 	}
 	// try to lock the checkpoint lock

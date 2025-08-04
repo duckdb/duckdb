@@ -1,6 +1,7 @@
 #include "core_functions/aggregate/distributive_functions.hpp"
 #include "core_functions/aggregate/sum_helpers.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/varint.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
@@ -211,6 +212,63 @@ unique_ptr<FunctionData> BindDecimalSum(ClientContext &context, AggregateFunctio
 	return nullptr;
 }
 
+struct VarintState {
+	bool is_set;
+	VarintIntermediate value;
+};
+
+struct VarintOperation {
+	template <class STATE>
+	static void Initialize(STATE &state) {
+		state.is_set = false;
+	}
+
+	template <class INPUT_TYPE, class STATE, class OP>
+	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input,
+	                              idx_t count) {
+		for (idx_t i = 0; i < count; i++) {
+			Operation<INPUT_TYPE, STATE, OP>(state, input, unary_input);
+		}
+	}
+
+	template <class INPUT_TYPE, class STATE, class OP>
+	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input) {
+		if (!state.is_set) {
+			state.is_set = true;
+			state.value.Initialize(unary_input.input.allocator);
+		}
+		VarintIntermediate rhs(input);
+		state.value.AddInPlace(unary_input.input.allocator, rhs);
+	}
+
+	template <class STATE, class OP>
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &input) {
+		if (!source.is_set) {
+			return;
+		}
+		if (!target.is_set) {
+			target.value = source.value;
+			target.is_set = true;
+			return;
+		}
+		target.value.AddInPlace(input.allocator, source.value);
+		target.is_set = true;
+	}
+
+	template <class TARGET_TYPE, class STATE>
+	static void Finalize(STATE &state, TARGET_TYPE &target, AggregateFinalizeData &finalize_data) {
+		if (!state.is_set) {
+			finalize_data.ReturnNull();
+		} else {
+			target = state.value.ToVarint(finalize_data.input.allocator);
+		}
+	}
+
+	static bool IgnoreNull() {
+		return true;
+	}
+};
+
 } // namespace
 
 AggregateFunctionSet SumFun::GetFunctions() {
@@ -226,6 +284,8 @@ AggregateFunctionSet SumFun::GetFunctions() {
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT128));
 	sum.AddFunction(AggregateFunction::UnaryAggregate<SumState<double>, double, double, NumericSumOperation>(
 	    LogicalType::DOUBLE, LogicalType::DOUBLE));
+	sum.AddFunction(AggregateFunction::UnaryAggregate<VarintState, varint_t, varint_t, VarintOperation>(
+	    LogicalType::VARINT, LogicalType::VARINT));
 	return sum;
 }
 
