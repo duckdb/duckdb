@@ -62,8 +62,6 @@ jobs:
       fail-fast: false
       matrix:
         version:
-          - '1.6'
-          - '1.7'
           - '1.10'
           - '1'
         os:
@@ -72,9 +70,6 @@ jobs:
           - x64
         isRelease:
           - ${{ github.ref == 'refs/heads/main' }}
-        exclude:
-          - isRelease: false
-            version: '1.6'
     steps:
       - uses: actions/checkout@v4
         with:
