@@ -111,11 +111,11 @@ PhysicalType LogicalType::GetInternalType() {
 			                        width, DecimalType::MaxWidth());
 		}
 	}
+	case LogicalTypeId::VARINT:
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::CHAR:
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::BIT:
-	case LogicalTypeId::VARINT:
 		return PhysicalType::VARCHAR;
 	case LogicalTypeId::INTERVAL:
 		return PhysicalType::INTERVAL;

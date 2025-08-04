@@ -89,6 +89,8 @@ void WindowMergeSortTreeLocalState::Sink(ExecutionContext &context, DataChunk &c
 }
 
 void WindowMergeSortTreeLocalState::ExecuteSortTask(ExecutionContext &context) {
+	PostIncrement<atomic<idx_t>> on_completed(window_tree.tasks_completed);
+
 	switch (build_stage) {
 	case WindowMergeSortStage::COMBINE: {
 		auto &local_sink = *window_tree.local_sinks[build_task];
@@ -115,8 +117,6 @@ void WindowMergeSortTreeLocalState::ExecuteSortTask(ExecutionContext &context) {
 	default:
 		break;
 	}
-
-	++window_tree.tasks_completed;
 }
 
 idx_t WindowMergeSortTree::MeasurePayloadBlocks() {

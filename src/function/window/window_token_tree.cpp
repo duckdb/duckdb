@@ -14,120 +14,36 @@ public:
 };
 
 void WindowTokenTreeLocalState::BuildLeaves() {
-	auto &collection = *token_tree.sorted;
-	if (!collection.Count()) {
-		return;
-	}
-
 	// Find our chunk range
+	auto &collection = *token_tree.sorted;
 	const auto block_begin = (build_task * collection.ChunkCount()) / token_tree.total_tasks;
 	const auto block_end = ((build_task + 1) * collection.ChunkCount()) / token_tree.total_tasks;
 
-	//	Start back one to get the overlap
-	idx_t block_curr = block_begin ? block_begin - 1 : 0;
-
-	//	Scan the sort columns
-	WindowCollectionChunkScanner scanner(collection, token_tree.key_cols, block_curr);
-	auto &scanned = scanner.chunk;
-
-	//	Shifted buffer for the next values
-	DataChunk next;
-	collection.InitializeScanChunk(scanner.state, next);
-
-	//	Delay buffer for the previous row
-	DataChunk delayed;
-	collection.InitializeScanChunk(scanner.state, delayed);
-
-	//	Only compare the sort arguments.
-	const auto compare_count = token_tree.key_cols.size();
-	const auto compare_type = scanner.PrefixStructType(compare_count);
-	Vector compare_curr(compare_type);
-	Vector compare_prev(compare_type);
-
 	auto &deltas = token_tree.deltas;
-	bool boundary_compare = false;
-	idx_t row_idx = 1;
 	if (!block_begin) {
 		// First block, so set up initial delta
 		deltas[0] = 0;
-	} else {
-		// Move to the to end of the previous block
-		// so we can record the comparison result for the first row
-		boundary_compare = true;
-	}
-	if (!scanner.Scan()) {
-		return;
 	}
 
-	//	Process chunks offset by 1
-	SelectionVector next_sel(1, STANDARD_VECTOR_SIZE);
-	SelectionVector distinct(STANDARD_VECTOR_SIZE);
-	SelectionVector matching(STANDARD_VECTOR_SIZE);
+	const auto &scan_cols = token_tree.key_cols;
+	const auto key_count = scan_cols.size();
+	WindowDeltaScanner(collection, block_begin, block_end, scan_cols, key_count,
+	                   [&](const idx_t row_idx, DataChunk &prev, DataChunk &curr, const idx_t ndistinct,
+	                       SelectionVector &distinct, const SelectionVector &matching) {
+		                   //	Same as previous - token delta is 0
+		                   const auto count = MinValue<idx_t>(prev.size(), curr.size());
+		                   const auto nmatch = count - ndistinct;
+		                   for (idx_t j = 0; j < nmatch; ++j) {
+			                   auto scan_idx = matching.get_index(j);
+			                   deltas[scan_idx + row_idx] = 0;
+		                   }
 
-	while (block_curr < block_end) {
-		//	Compare the current to the previous;
-		DataChunk *curr = nullptr;
-		DataChunk *prev = nullptr;
-
-		idx_t prev_count = 0;
-		if (boundary_compare) {
-			//	Save the last row of the scanned chunk
-			prev_count = 1;
-			sel_t last = UnsafeNumericCast<sel_t>(scanned.size() - 1);
-			SelectionVector sel(&last);
-			delayed.Reset();
-			scanned.Copy(delayed, sel, prev_count);
-			prev = &delayed;
-
-			// Try to read the next chunk
-			++block_curr;
-			row_idx = scanner.Scanned();
-			if (block_curr >= block_end || !scanner.Scan()) {
-				break;
-			}
-			curr = &scanned;
-		} else {
-			//	Compare the [1..size) values with the [0..size-1) values
-			prev_count = scanned.size() - 1;
-			if (!prev_count) {
-				//	1 row scanned, so just skip the rest of the loop.
-				boundary_compare = true;
-				continue;
-			}
-			prev = &scanned;
-
-			// Slice the current back one into the previous
-			next.Slice(scanned, next_sel, prev_count);
-			curr = &next;
-		}
-
-		//	Reference the comparison prefix as a struct to simplify the compares.
-		scanner.ReferenceStructColumns(*prev, compare_prev, compare_count);
-		scanner.ReferenceStructColumns(*curr, compare_curr, compare_count);
-
-		const auto n =
-		    VectorOperations::DistinctFrom(compare_curr, compare_prev, nullptr, prev_count, &distinct, &matching);
-
-		//	If n is 0, neither SV has been filled in?
-		const auto remaining = prev_count - n;
-		auto match_sel = n ? &matching : FlatVector::IncrementalSelectionVector();
-
-		//	Same as previous - token delta is 0
-		for (idx_t j = 0; j < remaining; ++j) {
-			auto scan_idx = match_sel->get_index(j);
-			deltas[scan_idx + row_idx] = 0;
-		}
-
-		//	Different value - token delta is 1
-		for (idx_t j = 0; j < n; ++j) {
-			auto scan_idx = distinct.get_index(j);
-			deltas[scan_idx + row_idx] = 1;
-		}
-
-		//	Transition between comparison ranges.
-		boundary_compare = !boundary_compare;
-		row_idx += prev_count;
-	}
+		                   //	Different value - token delta is 1
+		                   for (idx_t j = 0; j < ndistinct; ++j) {
+			                   auto scan_idx = distinct.get_index(j);
+			                   deltas[scan_idx + row_idx] = 1;
+		                   }
+	                   });
 }
 
 idx_t WindowTokenTree::MeasurePayloadBlocks() {
