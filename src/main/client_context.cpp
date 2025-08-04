@@ -648,6 +648,21 @@ vector<unique_ptr<SQLStatement>> ClientContext::ParseStatements(const string &qu
 }
 
 vector<unique_ptr<SQLStatement>> ClientContext::ParseStatementsInternal(ClientContextLock &lock, const string &query) {
+	auto &config = DBConfig::GetConfig(*db);
+	if (config.parser_override) {
+		try {
+			auto statements = config.parser_override->Parse(query);
+			if (!statements.empty()) {
+				PragmaHandler handler(*this);
+				handler.HandlePragmaStatements(lock, statements);
+				return statements;
+			}
+		} catch (const duckdb::Exception &e) {
+			if (config.parser_override->option == ParserOverrideOptions::THROW_ON_ERROR) {
+				throw;
+			}
+		}
+	}
 	try {
 		Parser parser(GetParserOptions());
 		parser.ParseQuery(query);

@@ -681,6 +681,55 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 void CheckPEGParserFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 }
 
+struct PEGParserFunctionData : public TableFunctionData {
+	explicit PEGParserFunctionData(ParserOverrideOptions option_p)
+		: option(option_p) {
+	}
+
+	ParserOverrideOptions option;
+};
+
+struct PEGParserData : public GlobalTableFunctionState {
+	PEGParserData() = default;
+};
+
+
+
+void PEGParserFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &config = DBConfig::GetConfig(context);
+
+	auto &bind_data = data_p.bind_data->Cast<PEGParserFunctionData>();
+
+	// Install the parser override
+	if (!config.parser_override) { // Only install if no other override is present
+		config.parser_override = make_uniq<PEGParserOverride>(bind_data.option);
+	}
+}
+
+static duckdb::unique_ptr<FunctionData> PEGParserBind(ClientContext &context, TableFunctionBindInput &input,
+                                                      vector<LogicalType> &return_types, vector<string> &names) {
+	if (input.inputs[0].IsNull()) {
+		throw BinderException("sql_auto_complete first parameter cannot be NULL");
+	}
+	names.emplace_back("success");
+	return_types.emplace_back(LogicalType::BOOLEAN);
+	string option_input = StringUtil::Lower(StringValue::Get(input.inputs[0]));
+	ParserOverrideOptions option;
+	if (option_input == "throw_on_error") {
+		option = ParserOverrideOptions::THROW_ON_ERROR;
+	} else if (option_input == "throw_and_continue_on_error") {
+		option = ParserOverrideOptions::LOG_AND_CONTINUE_ON_ERROR;
+		// TODO(dtenwolde) Make this option use the logger
+		throw NotImplementedException("This option has not been implemented yet.");
+	} else if (option_input == "continue_on_error") {
+		option = ParserOverrideOptions::CONTINUE_ON_ERROR;
+	} else {
+		throw InvalidInputException("Unrecognized option");
+	}
+
+	return make_uniq<PEGParserFunctionData>(option);
+}
+
 static void LoadInternal(ExtensionLoader &loader) {
 	TableFunction auto_complete_fun("sql_auto_complete", {LogicalType::VARCHAR}, SQLAutoCompleteFunction,
 	                                SQLAutoCompleteBind, SQLAutoCompleteInit);
@@ -689,6 +738,12 @@ static void LoadInternal(ExtensionLoader &loader) {
 	TableFunction check_peg_parser_fun("check_peg_parser", {LogicalType::VARCHAR}, CheckPEGParserFunction,
 	                                   CheckPEGParserBind, nullptr);
 	loader.RegisterFunction(check_peg_parser_fun);
+<<<<<<< HEAD
+=======
+
+	TableFunction peg_parser_fun("peg_parser", {LogicalType::VARCHAR}, PEGParserFunction, PEGParserBind, nullptr);
+	loader.RegisterFunction(peg_parser_fun);
+>>>>>>> 292f5c864f (Add options to parseroverride)
 }
 
 void AutocompleteExtension::Load(ExtensionLoader &loader) {
