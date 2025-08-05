@@ -49,7 +49,7 @@ optional_ptr<Transaction> MetaTransaction::TryGetTransaction(AttachedDatabase &d
 	if (entry == transactions.end()) {
 		return nullptr;
 	} else {
-		return &entry->second.get();
+		return &entry->second.transaction;
 	}
 }
 
@@ -63,12 +63,12 @@ Transaction &MetaTransaction::GetTransaction(AttachedDatabase &db) {
 		VerifyAllTransactionsUnique(db, all_transactions);
 #endif
 		all_transactions.push_back(db);
-		transactions.insert(make_pair(reference<AttachedDatabase>(db), reference<Transaction>(new_transaction)));
+		transactions.insert(make_pair(reference<AttachedDatabase>(db), TransactionReference(new_transaction)));
 
 		return new_transaction;
 	} else {
-		D_ASSERT(entry->second.get().active_query == active_query);
-		return entry->second;
+		D_ASSERT(entry->second.transaction.active_query == active_query);
+		return entry->second.transaction;
 	}
 }
 
@@ -124,17 +124,24 @@ ErrorData MetaTransaction::Commit() {
 #endif
 
 		auto &transaction_manager = db.GetTransactionManager();
-		auto &transaction = entry->second.get();
+		auto &transaction_ref = entry->second;
+		if (transaction_ref.state != TransactionState::UNCOMMITTED) {
+			continue;
+		}
+		auto &transaction = transaction_ref.transaction;
 		try {
 			if (!error.HasError()) {
 				// Commit the transaction.
 				error = transaction_manager.CommitTransaction(context, transaction);
+				transaction_ref.state = error.HasError() ? TransactionState::ROLLED_BACK : TransactionState::COMMITTED;
 			} else {
 				// Rollback due to previous error.
 				transaction_manager.RollbackTransaction(transaction);
+				transaction_ref.state = TransactionState::ROLLED_BACK;
 			}
 		} catch (std::exception &ex) {
 			error.Merge(ErrorData(ex));
+			transaction_ref.state = TransactionState::ROLLED_BACK;
 		}
 	}
 	return error;
@@ -148,12 +155,17 @@ void MetaTransaction::Rollback() {
 		auto &transaction_manager = db.GetTransactionManager();
 		auto entry = transactions.find(db);
 		D_ASSERT(entry != transactions.end());
+		auto &transaction_ref = entry->second;
+		if (transaction_ref.state != TransactionState::UNCOMMITTED) {
+			continue;
+		}
 		try {
-			auto &transaction = entry->second.get();
+			auto &transaction = transaction_ref.transaction;
 			transaction_manager.RollbackTransaction(transaction);
 		} catch (std::exception &ex) {
 			error.Merge(ErrorData(ex));
 		}
+		transaction_ref.state = TransactionState::ROLLED_BACK;
 	}
 	if (error.HasError()) {
 		error.Throw();
@@ -167,7 +179,7 @@ idx_t MetaTransaction::GetActiveQuery() {
 void MetaTransaction::SetActiveQuery(transaction_t query_number) {
 	active_query = query_number;
 	for (auto &entry : transactions) {
-		entry.second.get().active_query = query_number;
+		entry.second.transaction.active_query = query_number;
 	}
 }
 
