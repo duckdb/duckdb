@@ -367,6 +367,13 @@ idx_t FailureSummary::GetSummaryCounter() {
 }
 
 bool FailureSummary::SkipLoggingSameError(const string &file_name) {
+	return Instance().SkipLoggingSameErrorInternal(file_name);
+}
+
+bool FailureSummary::SkipLoggingSameErrorInternal(const string &file_name) {
+	if (file_name.empty()) {
+		return false;
+	}
 	lock_guard<mutex> lock(failures_lock);
 	if (reported_files.count(file_name) > 0) {
 		return true;

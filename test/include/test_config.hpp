@@ -70,12 +70,15 @@ class FailureSummary {
 public:
 	FailureSummary();
 
-	static FailureSummary &Instance();
 	static void Log(string message);
 	static string GetFailureSummary();
 	static idx_t GetSummaryCounter();
-	bool SkipLoggingSameError(const string &file_name);
-
+	static bool SkipLoggingSameError(const string &file_name);
+	
+	private:
+	static FailureSummary &Instance();
+	bool SkipLoggingSameErrorInternal(const string &file_name);
+	
 private:
 	mutex failures_lock;
 	atomic<idx_t> failures_summary_counter;
