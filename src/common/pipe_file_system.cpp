@@ -3,8 +3,12 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
+
+class QueryContext;
+
 class PipeFile : public FileHandle {
 public:
 	explicit PipeFile(unique_ptr<FileHandle> child_handle_p)

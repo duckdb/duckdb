@@ -3,6 +3,7 @@
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/storage/magic_bytes.hpp"
 #include "duckdb/function/replacement_scan.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
