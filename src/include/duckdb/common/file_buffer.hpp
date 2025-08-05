@@ -10,7 +10,6 @@
 
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/enums/debug_initialize.hpp"
-#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
