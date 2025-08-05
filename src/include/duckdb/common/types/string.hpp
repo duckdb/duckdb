@@ -13,444 +13,188 @@
 
 namespace duckdb {
 
-namespace detail {
-class StringBase {
-protected:
-	StringBase() : size(0), ptr(nullptr) {
-		inlined[0] = '\0'; // Initialize inlined storage
-	}
-
-	idx_t GetSize() const;
-	void SetSize(idx_t size);
-	bool IsOwning() const;
-	void SetOwning(bool owning);
-	bool IsInlined() const {
-		return size <= INLINE_MAX_SIZE;
-	}
-
-	char *GetStorage() {
-		if (IsInlined()) {
-			return static_cast<char *>(inlined);
-		} else {
-			return ptr;
-		}
-	}
-
-private:
-	static constexpr auto REFERENCE_FLAG = (1ULL << (sizeof(idx_t) * 8 - 1));
-	static constexpr auto INLINE_MAX_SIZE = sizeof(char *) - 1; // Reserve space for null terminator
-	idx_t size; // size is the size of the string, excluding the null terminator.
-	union {
-		char *ptr;
-		char inlined[INLINE_MAX_SIZE];
-	};
-};
-
-inline idx_t StringBase::GetSize() const {
-	return (size & ~REFERENCE_FLAG);
-}
-
-inline bool StringBase::IsOwning() const {
-	return (size & REFERENCE_FLAG) == 0;
-}
-
-inline void StringBase::SetSize(idx_t size_p) {
-	D_ASSERT(size_p < NumericLimits<idx_t>::Maximum());
-	const auto reference_flag = size & REFERENCE_FLAG;
-	size = size_p;
-	size |= reference_flag; // Preserve the reference flag
-}
-
-inline void StringBase::SetOwning(bool owning) {
-	if (owning) {
-		size &= ~REFERENCE_FLAG; // Clear the reference flag
-	} else {
-		size |= REFERENCE_FLAG; // Set the reference flag
-	}
-}
-
-} // namespace detail
-
-class Str : public detail::StringBase {
-
-	Str(const std::string &str) // NOLINT: allow implicit conversion
-	    : detail::StringBase() {
-
-		SetSize(str.size());
-		SetOwning(true);
-		auto data = GetData();
-	}
-};
-
-static void Foo() {
-	Str x;
-}
-
-class Str {
+class String {
 public:
-	Str(const std::string &str) { // NOLINT: allow implicit conversion
-		AssignOwned(str.data(), str.size());
+	// Constructors (create an owning String)
+	String() : len(0), buf {0} {
 	}
 
-	Str(const char *str) {
-		AssignOwned(str, strlen(str));
+	String(const std::string &str) { // NOLINT allowimplicit conversion
+		AssignOwning(str.data(), str.size());
 	}
 
-	Str() {
-		len = 0;
-		is_owning = true;
-		inlined[0] = '\0'; // Initialize inlined storage
-	}
-
-	//
-	// // Copy constructor always makes an owning copy of the data.
-	// Str(const Str &other) {
-	// 	AssignOwned(other.data(), other.size());
-	// }
-	//
-	// // Copy assignment
-	// Str &operator=(const Str &other) {
-	// 	if (this != &other) {
-	// 		if (!IsInlined() && !is_owning) {
-	// 			delete[] ptr;
-	// 		}
-	// 		AssignOwned(other.data(), other.size());
-	// 	}
-	// 	return *this;
-	// }
-
-	// Not implicitly copyable. Use Copy() method instead.
-	Str(const Str &other) = delete;
-	Str &operator=(const Str &other) = delete;
-
-	static Str Copy(const char *data, size_t length) {
-		Str result;
-		result.AssignOwned(data, length);
-		return result;
-	}
-
-	static Str Copy(const char *data) {
-		return Copy(data, strlen(data));
-	}
-	static Str Copy(const string &str) {
-		return Copy(str.data(), str.size());
-	}
-	Str Copy() const {
-		return Copy(data(), size());
-	};
-
-	static Str Reference(const char *data, size_t length) {
-		Str result;
-		result.len = length;
-		if (result.IsInlined()) {
-			result.is_owning = true;
-			if (!result.empty()) {
-				D_ASSERT(data != nullptr);
-				memcpy(result.inlined, data, length);
-			}
-			result.inlined[length] = '\0'; // Null-terminate the inlined storage
-		} else {
-			result.is_owning = false;
-			result.ptr = const_cast<char *>(data); // Non-owning reference
+	String(const char *str, const size_t size) {
+		if (str == nullptr) {
+			AssignOwning(str, 0);
 		}
-	}
-	static Str Reference(const char *data) {
-		return Reference(data, strlen(data));
-	}
-	static Str Reference(const string &str) {
-		return Reference(str.data(), str.size());
-	}
-	Str Reference() const {
-		return Reference(data(), size());
+		AssignOwning(str, size);
 	}
 
-	static void foo() {
-		auto x = Str::Copy("foo");
-
-		auto y = x.Reference();
+	String(const char *str) // NOLINT allowimplicit conversion
+	    : String(str, str ? strlen(str) : 0) {
 	}
 
-	// Move constructor
-	Str(Str &&other) noexcept {
-		if (other.IsInlined()) {
-			is_owning = true;
-			len = other.len;
-			memcpy(inlined, other.inlined, other.len + 1);
-			return;
-		}
+public:
+	// Copying is not allowed, use move semantics instead or explicitly create a new String instance.
+	String(const String &other) = delete;
+	String &operator=(const String &other) = delete;
 
-		if (!other.is_owning) {
-			is_owning = false;
-			len = other.len;
-			ptr = other.ptr;
-			return;
-		}
-
-		// Other is owning!, steal its data!
-		is_owning = true;
-		len = other.len;
-		ptr = other.ptr;
-		other.is_owning = false; // Prevent double deletion
-		other.len = 0;           // Prevent double deletion
-		return;
+	// Move Constructor
+	String(String &&other) noexcept {
+		AssignOwning(other.data(), other.size());
+		other.Release();
 	}
 
-	// Move assignment
-	Str &operator=(Str &&other) noexcept {
+	// Move Assignment
+	String &operator=(String &&other) noexcept {
 		if (this != &other) {
-			if (is_owning && !IsInlined()) {
-				delete[] ptr;
-			}
-
-			if (other.IsInlined()) {
-				is_owning = true;
-				len = other.len;
-				memcpy(inlined, other.inlined, other.len + 1);
-			} else if (!other.is_owning) {
-				is_owning = false;
-				len = other.len;
-				ptr = other.ptr;
-			} else {
-				is_owning = true;
-				len = other.len;
-				ptr = other.ptr;
-				other.is_owning = false; // Prevent double deletion
-				other.len = 0;           // Prevent double deletion
-			}
+			Destroy();
+			AssignOwning(other.data(), other.size());
+			other.Release();
 		}
 		return *this;
 	}
 
 	// Destructor
-	~Str() {
-		if (is_owning && !IsInlined()) {
-			delete[] ptr;
-		}
-	}
-
-	char *data() {
-		return len > INLINE_MAX_SIZE ? ptr : inlined;
-	}
-	const char *data() const {
-		return len > INLINE_MAX_SIZE ? ptr : inlined;
-	}
-	size_t size() const {
-		return len;
-	}
-	bool empty() const {
-		return len == 0;
-	}
-
-private:
-	bool IsInlined() const {
-		return len <= INLINE_MAX_SIZE;
-	}
-
-	void AssignOwned(const char *data, size_t length) {
-		D_ASSERT(length <= NumericLimits<uint32_t>::Maximum());
-
-		len = length;
-		is_owning = true;
-		if (IsInlined()) {
-			memcpy(inlined, data, len);
-			inlined[len] = '\0';
-		} else {
-			ptr = new char[len + 1];
-			memcpy(ptr, data, len);
-			ptr[len] = '\0';
-		}
-	}
-
-	static constexpr auto INLINE_MAX_SIZE = sizeof(char *) - 1; // Reserve space for null terminator
-	union {
-		char *ptr;
-		char inlined[INLINE_MAX_SIZE];
-	};
-
-	uint32_t len; // len, excluding the null terminator
-	bool is_owning;
-};
-
-class String {
-public:
-	// Owning constructors
-	String(std::string str) // NOLINT: allow implicit conversion
-	    : size(str.size()), is_owned(true) {
-		if (size == 0) {
-			data = nullptr;
-			return;
-		}
-
-		char *owned_ptr = new char[size + 1];
-		memcpy(owned_ptr, str.data(), size);
-		owned_ptr[size] = '\0';
-		data = owned_ptr;
-	}
-
-	String(const char *ptr, const size_t len) : size(len), is_owned(true) {
-		if (size == 0 || !ptr) {
-			data = nullptr;
-			return;
-		}
-
-		char *owned_ptr = new char[size + 1];
-		memcpy(owned_ptr, ptr, size);
-		owned_ptr[size] = '\0';
-		data = owned_ptr;
-	}
-
-	String(const char *ptr) // NOLINT: allow implicit conversion
-	    : String(ptr, ptr ? strlen(ptr) : 0) {
-	}
-
-public:
-	String(const String &) = delete;
-	String &operator=(const String &) = delete;
-
-	String(String &&other) noexcept : data(other.data), size(other.size), is_owned(other.is_owned) {
-		other.data = nullptr;
-		other.size = 0;
-		other.is_owned = false;
-	}
-
-	String &operator=(String &&other) noexcept {
-		if (this != &other) {
-			if (is_owned && data) {
-				delete[] data;
-			}
-			data = other.data;
-			size = other.size;
-			is_owned = other.is_owned;
-
-			other.data = nullptr;
-			other.size = 0;
-			other.is_owned = false;
-		}
-		return *this;
-	}
-
 	~String() {
-		if (is_owned && data) {
-			delete[] data;
-		}
+		Destroy();
 	}
 
 public:
-	// Non-owning!
-	static String Reference(const char *ptr, const size_t len) {
-		String str;
-		str.data = ptr;
-		str.size = len;
-		return str;
-	}
-
-	static String Reference(const char *ptr) {
-		return Reference(ptr, strlen(ptr));
-	}
-
-	String Reference() const {
-		return Reference(data, size);
-	}
-
-	String Copy() const {
-		if (data && size > 0) {
-			return String(data, size);
-		}
-		return String();
-	}
-
-	String Clone() {
-		return Reference();
-	}
-
-public:
+	// Operators
 	bool operator==(const String &other) const {
-		const idx_t this_size = GetSize();
-		const idx_t other_size = other.GetSize();
+		const idx_t this_size = size();
+		const idx_t other_size = other.size();
 
 		if (this_size != other_size) {
 			return false;
 		}
 
-		const char *this_data = GetData();
-		const char *other_data = other.GetData();
+		const auto min_size = MinValue<idx_t>(this_size, other_size);
+		const char *this_data = data();
+		const char *other_data = other.data();
 
-		if (memcmp(this_data, other_data, this_size) == 0) {
-			return true;
-		}
+		auto memcmp_res = memcmp(this_data, other_data, min_size);
+		return memcmp_res == 0;
+	}
 
-		for (idx_t i = 0; i < this_size; i++) {
-			if (this_data[i] != other_data[i]) {
-				return false;
-			}
-		}
-		return true;
+	bool operator>(const String &other) const {
+		const auto this_size = size();
+		const auto other_size = other.size();
+		const auto min_size = MinValue<idx_t>(this_size, other_size);
+
+		auto memcmp_res = memcmp(data(), other.data(), min_size);
+		return memcmp_res > 0 || (memcmp_res == 0 && this_size > other_size);
 	}
 
 	bool operator!=(const String &other) const {
 		return !(*this == other);
 	}
-
-	bool operator<=(const String &other) const {
-		return *this < other || *this == other;
+	bool operator<(const String &other) const {
+		return other > *this;
 	}
-
 	bool operator>=(const String &other) const {
 		return !(*this < other);
 	}
-
-	bool operator<(const String &other) const {
-		const char *this_data = GetData();
-		const char *other_data = other.GetData();
-		const idx_t this_size = GetSize();
-		const idx_t other_size = other.GetSize();
-
-		const idx_t length = MinValue<idx_t>(this_size, other_size);
-
-		for (idx_t i = 0; i < length; i++) {
-			if (memcmp(this_data, other_data, length) < 0) {
-				return true;
-			}
-			if (memcmp(this_data, other_data, length) > 0) {
-				return false;
-			}
-		}
-		return this_size < other_size;
-	}
-
-	bool operator>(const String &other) const {
-		return !(*this <= other);
-	}
-
-public:
-	idx_t GetSize() const {
-		return size;
-	}
-
-	const char *GetData() const {
-		return data;
+	bool operator<=(const String &other) const {
+		return !(*this > other);
 	}
 
 	char operator[](const idx_t pos) const {
-		D_ASSERT(pos < size);
-		return data[pos];
+		D_ASSERT(pos < size());
+
+		if (IsInline()) {
+			return buf[pos];
+		}
+		return ptr[pos];
 	}
 
-	bool IsOwned() const {
-		return is_owned;
+public:
+	// STL-like interface
+	// NOLINTBEGIN - mimic std::string interface
+	size_t size() const {
+		return len & ~NON_OWN_BIT;
 	}
-
 	bool empty() const {
-		return size == 0;
+		return len == 0;
 	}
-
+	const char *data() const {
+		return IsInline() ? buf : ptr;
+	}
+	const char *begin() const {
+		return data();
+	}
+	const char *end() const {
+		return data() + size();
+	}
 	const char *c_str() const {
-		return GetData();
+		return data();
+	}
+	// NOLINTEND
+
+	// Helper methods
+	bool IsOwning() const {
+		return (len & NON_OWN_BIT) == 0;
+	}
+	bool IsInline() const {
+		return len <= INLINE_MAX;
+	}
+	static bool CanBeInlined(size_t size) {
+		return size <= INLINE_MAX;
 	}
 
-	// FIXME: This doesn't work now
+	// Creates a new String instance with its own copy of the data
+	static String Copy(const char *data, size_t size) {
+		String result;
+		result.AssignOwning(data, size);
+		return result;
+	}
+
+	static String Copy(const String &other) {
+		return Copy(other.data(), other.size());
+	}
+	static String Copy(const char *data) {
+		return Copy(data, data ? strlen(data) : 0);
+	}
+	static String Copy(const std::string &str) {
+		return Copy(str.data(), str.size());
+	}
+	String Copy() const {
+		return Copy(data(), size());
+	}
+
+	// Creates a new String instance that references the data without owning it
+	// If the size is small enough, it will inline the data; which WILL be owning
+	static String Reference(const char *data, size_t size) {
+		String result;
+		// If we reference, and we can inline it, we make owning anyway
+		if (size <= INLINE_MAX) {
+			result.AssignOwning(data, size);
+		} else {
+			result.ptr = const_cast<char *>(data); // NOLINT allow const cast
+			result.len = size | NON_OWN_BIT;       // Set the non-owning bit
+		}
+		return result;
+	}
+
+	static String Reference(const String &other) {
+		return Reference(other.data(), other.size());
+	}
+	static String Reference(const char *data) {
+		return Reference(data, data ? strlen(data) : 0);
+	}
+	static String Reference(const std::string &str) {
+		return Reference(str.data(), str.size());
+	}
+	String Reference() const {
+		return Reference(data(), size());
+	}
+
 	string ToStdString() const {
-		return string(data, size);
+		if (IsInline()) {
+			return string(buf, size());
+		}
+		return string(ptr, size());
 	}
 
 public:
@@ -462,56 +206,65 @@ public:
 	}
 
 	String Lower() const {
-		const auto str_data = GetData();
-		const auto str_size = GetSize();
+		const auto str_data = data();
+		const auto str_size = size();
 
 		std::string lowercase_str;
 		lowercase_str.reserve(str_size);
 		for (idx_t i = 0; i < str_size; ++i) {
 			lowercase_str.push_back(CharacterToLower(str_data[i]));
 		}
-		return String(std::move(lowercase_str));
-	}
-
-	struct ConstIterator;
-
-	ConstIterator begin() const;
-
-	ConstIterator end() const;
-
-private:
-	String() : data(nullptr), size(0) {
+		return String(lowercase_str);
 	}
 
 private:
-	// mutable string owned_data;
-	const char *data;
-	idx_t size;
+	static constexpr auto INLINE_CAP = sizeof(char *);
+	static constexpr auto INLINE_MAX = INLINE_CAP - 1;
+	static constexpr auto NON_OWN_BIT = 1UL << (sizeof(size_t) * 8 - 1);
+	static constexpr auto LENGTH_MAX = (1UL << (sizeof(size_t) * 8 - 1)) - 1;
 
-	bool is_owned = false;
+	void AssignOwning(const char *new_data, size_t new_size) {
+		len = new_size;
+
+		if (len == 0) {
+			buf[len] = '\0'; // Null-terminate the inline buffer
+			return;
+		}
+
+		D_ASSERT(new_data != nullptr);
+
+		if (len <= INLINE_MAX) {
+			memcpy(buf, new_data, len);
+			buf[len] = '\0'; // Null-terminate the inline buffer
+			return;
+		}
+
+		auto new_ptr = new char[len + 1]; // +1 for null-termination
+		memcpy(new_ptr, new_data, len);
+		new_ptr[len] = '\0';
+
+		ptr = new_ptr;
+	}
+
+	void Destroy() {
+		if (IsOwning() && !IsInline()) {
+			delete[] ptr;
+		}
+	}
+
+	void Release() {
+		// Set the non-owning bit
+		if (IsOwning() && !IsInline()) {
+			len |= NON_OWN_BIT;
+		}
+	}
+
+private:
+	size_t len;
+	union {
+		const char *ptr;
+		char buf[INLINE_CAP];
+	};
 };
 
-struct String::ConstIterator {
-	const char *ptr;
-
-	explicit ConstIterator(const char *ptr_p) : ptr(ptr_p) {
-	}
-
-	const char &operator*() const {
-		return *ptr;
-	}
-
-	ConstIterator &operator++() {
-		ptr++;
-		return *this;
-	}
-};
-
-inline String::ConstIterator String::begin() const {
-	return ConstIterator(data);
-}
-
-inline String::ConstIterator String::end() const {
-	return ConstIterator(data + size);
-}
 } // namespace duckdb

@@ -459,7 +459,8 @@ void DBConfig::CheckLock(const String &name) {
 		return;
 	}
 	// not allowed!
-	throw InvalidInputException("Cannot change configuration option \"%s\" - the configuration has been locked", name);
+	throw InvalidInputException("Cannot change configuration option \"%s\" - the configuration has been locked",
+	                            name.ToStdString());
 }
 
 idx_t DBConfig::GetSystemMaxThreads(FileSystem &fs) {

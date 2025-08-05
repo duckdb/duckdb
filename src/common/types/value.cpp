@@ -162,7 +162,7 @@ Value::Value(string val) : type_(LogicalType::VARCHAR), is_null(false) {
 }
 
 Value::Value(String val) : type_(LogicalType::VARCHAR), is_null(false) {
-	if (!Value::StringIsValid(val.c_str(), val.GetSize())) {
+	if (!Value::StringIsValid(val.c_str(), val.size())) {
 		throw ErrorManager::InvalidUnicodeError(val, "value construction");
 	}
 	value_info_ = make_shared_ptr<StringValueInfo>(val.ToStdString());

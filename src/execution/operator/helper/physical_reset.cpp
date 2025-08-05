@@ -55,7 +55,7 @@ SourceResultType PhysicalReset::GetData(ExecutionContext &context, DataChunk &ch
 	switch (variable_scope) {
 	case SetScope::GLOBAL: {
 		if (!option->set_global) {
-			throw CatalogException("option \"%s\" cannot be reset globally", name);
+			throw CatalogException("option \"%s\" cannot be reset globally", name.ToStdString());
 		}
 		auto &db = DatabaseInstance::GetDatabase(context.client);
 		config.ResetOption(&db, *option);
@@ -63,7 +63,7 @@ SourceResultType PhysicalReset::GetData(ExecutionContext &context, DataChunk &ch
 	}
 	case SetScope::SESSION:
 		if (!option->reset_local) {
-			throw CatalogException("option \"%s\" cannot be reset locally", name);
+			throw CatalogException("option \"%s\" cannot be reset locally", name.ToStdString());
 		}
 		option->reset_local(context.client);
 		break;
