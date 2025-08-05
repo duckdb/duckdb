@@ -2,8 +2,6 @@
 # description: Test purging the eviction queue
 # group: [storage]
 
-require noforcestorage
-
 require 64bit
 
 # attach files

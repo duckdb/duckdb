@@ -1,3 +1,102 @@
+diff --git a/src/spatial/geometry/geometry_type.hpp b/src/spatial/geometry/geometry_type.hpp
+index dd2217f..a1acdd8 100644
+--- a/src/spatial/geometry/geometry_type.hpp
++++ b/src/spatial/geometry/geometry_type.hpp
+@@ -5,7 +5,7 @@
+ #include "spatial/geometry/bbox.hpp"
+ #include "spatial/geometry/geometry_properties.hpp"
+ #include "spatial/util/cursor.hpp"
+-
++#include "duckdb/common/type_util.hpp"
+ #include <spatial/util/math.hpp>
+ 
+ namespace duckdb {
+@@ -148,6 +148,12 @@ public:
+ 	}
+ };
+ 
++
++template <>
++inline PhysicalType GetTypeId<geometry_t>() {
++	return PhysicalType::VARCHAR;
++}
++
+ static_assert(sizeof(geometry_t) == sizeof(string_t), "geometry_t should be the same size as string_t");
+ 
+ } // namespace duckdb
+\ No newline at end of file
+diff --git a/src/spatial/index/rtree/rtree_index.cpp b/src/spatial/index/rtree/rtree_index.cpp
+index 8589edb..da1d595 100644
+--- a/src/spatial/index/rtree/rtree_index.cpp
++++ b/src/spatial/index/rtree/rtree_index.cpp
+@@ -231,7 +231,7 @@ void RTreeIndex::Delete(IndexLock &lock, DataChunk &input, Vector &rowid_vec) {
+ 	}
+ }
+ 
+-IndexStorageInfo RTreeIndex::GetStorageInfo(const case_insensitive_map_t<Value> &options, const bool to_wal) {
++IndexStorageInfo RTreeIndex::SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) {
+ 
+ 	IndexStorageInfo info;
+ 	info.name = name;
+@@ -240,17 +240,30 @@ IndexStorageInfo RTreeIndex::GetStorageInfo(const case_insensitive_map_t<Value>
+ 	auto &leaf_allocator = tree->GetLeafAllocator();
+ 	auto &node_allocator = tree->GetNodeAllocator();
+ 
+-	if (!to_wal) {
+-		// use the partial block manager to serialize all allocator data
+-		auto &block_manager = table_io_manager.GetIndexBlockManager();
+-		PartialBlockManager partial_block_manager(block_manager, PartialBlockType::FULL_CHECKPOINT);
+-		leaf_allocator.SerializeBuffers(partial_block_manager);
+-		node_allocator.SerializeBuffers(partial_block_manager);
+-		partial_block_manager.FlushPartialBlocks();
+-	} else {
+-		info.buffers.push_back(leaf_allocator.InitSerializationToWAL());
+-		info.buffers.push_back(node_allocator.InitSerializationToWAL());
+-	}
++	// Use the partial block manager to serialize allocator data.
++	auto &block_manager = table_io_manager.GetIndexBlockManager();
++	PartialBlockManager partial_block_manager(context, block_manager, PartialBlockType::FULL_CHECKPOINT);
++	leaf_allocator.SerializeBuffers(partial_block_manager);
++	node_allocator.SerializeBuffers(partial_block_manager);
++	partial_block_manager.FlushPartialBlocks();
++
++	info.allocator_infos.push_back(leaf_allocator.GetInfo());
++	info.allocator_infos.push_back(node_allocator.GetInfo());
++
++	return info;
++}
++
++IndexStorageInfo RTreeIndex::SerializeToWAL(const case_insensitive_map_t<Value> &options) {
++
++	IndexStorageInfo info;
++	info.name = name;
++	info.root = tree->GetRoot().pointer.Get();
++
++	auto &leaf_allocator = tree->GetLeafAllocator();
++	auto &node_allocator = tree->GetNodeAllocator();
++
++	info.buffers.push_back(leaf_allocator.InitSerializationToWAL());
++	info.buffers.push_back(node_allocator.InitSerializationToWAL());
+ 
+ 	info.allocator_infos.push_back(leaf_allocator.GetInfo());
+ 	info.allocator_infos.push_back(node_allocator.GetInfo());
+diff --git a/src/spatial/index/rtree/rtree_index.hpp b/src/spatial/index/rtree/rtree_index.hpp
+index 5e1ae9c..c861953 100644
+--- a/src/spatial/index/rtree/rtree_index.hpp
++++ b/src/spatial/index/rtree/rtree_index.hpp
+@@ -47,7 +47,11 @@ public:
+ 	//! Insert a chunk of entries into the index
+ 	ErrorData Insert(IndexLock &lock, DataChunk &data, Vector &row_ids) override;
+ 
+-	IndexStorageInfo GetStorageInfo(const case_insensitive_map_t<Value> &options, const bool get_buffers) override;
++	//! Serializes RTree memory to disk and returns the index storage information.
++	IndexStorageInfo SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) override;
++	//! Serializes RTree memory to the WAL and returns the index storage information.
++	IndexStorageInfo SerializeToWAL(const case_insensitive_map_t<Value> &options) override;
++
+ 	idx_t GetInMemorySize(IndexLock &state) override;
+ 
+ 	//! Merge another index into this index. The lock obtained from InitializeLock must be held, and the other
 diff --git a/src/spatial/index/rtree/rtree_index_create_physical.cpp b/src/spatial/index/rtree/rtree_index_create_physical.cpp
 index e27fb02..dc6f5c2 100644
 --- a/src/spatial/index/rtree/rtree_index_create_physical.cpp
@@ -30,8 +129,27 @@ index 68a181d..b7f1368 100644
  	                         unique_ptr<CreateIndexInfo> info, vector<unique_ptr<Expression>> unbound_expressions,
  	                         idx_t estimated_cardinality);
  
+diff --git a/src/spatial/index/rtree/rtree_index_plan_scan.cpp b/src/spatial/index/rtree/rtree_index_plan_scan.cpp
+index e35132c..768c966 100644
+--- a/src/spatial/index/rtree/rtree_index_plan_scan.cpp
++++ b/src/spatial/index/rtree/rtree_index_plan_scan.cpp
+@@ -177,7 +177,13 @@ public:
+ 		                                            "ST_Within",    "ST_Contains",        "ST_Overlaps", "ST_Covers",
+ 		                                            "ST_CoveredBy", "ST_ContainsProperly"};
+ 
+-		table_info.GetIndexes().BindAndScan<RTreeIndex>(context, table_info, [&](RTreeIndex &index_entry) {
++		table_info.BindIndexes(context, RTreeIndex::TYPE_NAME);
++		table_info.GetIndexes().Scan([&](Index &index) {
++			if (!index.IsBound() || RTreeIndex::TYPE_NAME != index.GetIndexType()) {
++				return false;
++			}
++			auto &index_entry = index.Cast<RTreeIndex>();
++
+ 			// Create the bind data for this index given the bounding box
+ 			bool rewrite_possible = true;
+ 			auto index_expr = index_entry.unbound_expressions[0]->Copy();
 diff --git a/src/spatial/index/rtree/rtree_index_pragmas.cpp b/src/spatial/index/rtree/rtree_index_pragmas.cpp
-index 4aa428e..523622e 100644
+index 4aa428e..6005491 100644
 --- a/src/spatial/index/rtree/rtree_index_pragmas.cpp
 +++ b/src/spatial/index/rtree/rtree_index_pragmas.cpp
 @@ -9,7 +9,7 @@
@@ -43,7 +161,42 @@ index 4aa428e..523622e 100644
  #include "duckdb/optimizer/matcher/expression_matcher.hpp"
  #include "duckdb/planner/expression_iterator.hpp"
  #include "duckdb/planner/operator/logical_get.hpp"
-@@ -229,17 +229,17 @@ static void RTreeIndexDumpExecute(ClientContext &context, TableFunctionInput &da
+@@ -76,9 +76,14 @@ static void RTreeIndexInfoExecute(ClientContext &context, TableFunctionInput &da
+ 		RTreeIndex *rtree_index = nullptr;
+ 
+ 		auto &table_info = *storage.GetDataTableInfo();
+-		table_info.GetIndexes().BindAndScan<RTreeIndex>(context, table_info, [&](RTreeIndex &index) {
+-			if (index.name == index_entry.name) {
+-				rtree_index = &index;
++		table_info.BindIndexes(context, RTreeIndex::TYPE_NAME);
++		table_info.GetIndexes().Scan([&](Index &index) {
++			if (!index.IsBound() || RTreeIndex::TYPE_NAME != index.GetIndexType()) {
++				return false;
++			}
++			auto &rtree = index.Cast<RTreeIndex>();
++			if (rtree.name == index_entry.name) {
++				rtree_index = &rtree;
+ 				return true;
+ 			}
+ 			return false;
+@@ -115,9 +120,14 @@ static optional_ptr<RTreeIndex> TryGetIndex(ClientContext &context, const string
+ 	RTreeIndex *rtree_index = nullptr;
+ 
+ 	auto &table_info = *storage.GetDataTableInfo();
+-	table_info.GetIndexes().BindAndScan<RTreeIndex>(context, table_info, [&](RTreeIndex &index) {
++	table_info.BindIndexes(context, RTreeIndex::TYPE_NAME);
++	table_info.GetIndexes().Scan([&](Index &index) {
++		if (!index.IsBound() || RTreeIndex::TYPE_NAME != index.GetIndexType()) {
++			return false;
++		}
++		auto &rtree = index.Cast<RTreeIndex>();
+ 		if (index_entry.name == index_name) {
+-			rtree_index = &index;
++			rtree_index = &rtree;
+ 			return true;
+ 		}
+ 		return false;
+@@ -229,17 +239,17 @@ static void RTreeIndexDumpExecute(ClientContext &context, TableFunctionInput &da
  //-------------------------------------------------------------------------
  // Register
  //-------------------------------------------------------------------------
@@ -66,7 +219,7 @@ index 4aa428e..523622e 100644
  } // namespace duckdb
 \ No newline at end of file
 diff --git a/src/spatial/index/rtree/rtree_index_scan.cpp b/src/spatial/index/rtree/rtree_index_scan.cpp
-index adf0135..e020576 100644
+index adf0135..74dca64 100644
 --- a/src/spatial/index/rtree/rtree_index_scan.cpp
 +++ b/src/spatial/index/rtree/rtree_index_scan.cpp
 @@ -12,7 +12,7 @@
@@ -78,7 +231,22 @@ index adf0135..e020576 100644
  #include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
  #include "duckdb/storage/data_table.hpp"
  
-@@ -252,8 +252,8 @@ TableFunction RTreeIndexScanFunction::GetFunction() {
+@@ -212,8 +212,12 @@ static unique_ptr<FunctionData> RTreeScanDeserialize(Deserializer &deserializer,
+ 	auto &table_info = *catalog_entry.GetStorage().GetDataTableInfo();
+ 
+ 	unique_ptr<RTreeIndexScanBindData> result = nullptr;
+-
+-	table_info.GetIndexes().BindAndScan<RTreeIndex>(context, table_info, [&](RTreeIndex &index_entry) {
++	table_info.BindIndexes(context, RTreeIndex::TYPE_NAME);
++	table_info.GetIndexes().Scan([&](Index &index) {
++		if (!index.IsBound() || RTreeIndex::TYPE_NAME != index.GetIndexType()) {
++			return false;
++		}
++		auto &index_entry = index.Cast<RTreeIndex>();
+ 		if (index_entry.GetIndexName() == index_name) {
+ 			result = make_uniq<RTreeIndexScanBindData>(duck_table, index_entry, bbox);
+ 			return true;
+@@ -252,8 +256,8 @@ TableFunction RTreeIndexScanFunction::GetFunction() {
  //-------------------------------------------------------------------------
  // Register
  //-------------------------------------------------------------------------
@@ -112,7 +280,7 @@ index 532ba4f..808f7ca 100644
  } // namespace duckdb
 \ No newline at end of file
 diff --git a/src/spatial/modules/gdal/gdal_module.cpp b/src/spatial/modules/gdal/gdal_module.cpp
-index c3c7c7c..b1509dc 100644
+index c3c7c7c..99eaadb 100644
 --- a/src/spatial/modules/gdal/gdal_module.cpp
 +++ b/src/spatial/modules/gdal/gdal_module.cpp
 @@ -12,7 +12,7 @@
@@ -124,6 +292,46 @@ index c3c7c7c..b1509dc 100644
  #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
  #include "duckdb/common/types/uuid.hpp"
  #include "duckdb/function/copy_function.hpp"
+@@ -291,7 +291,7 @@ public:
+ 		}
+ 
+ 		pstatbuf->st_size = static_cast<off_t>(fs.GetFileSize(*file));
+-		pstatbuf->st_mtime = fs.GetLastModifiedTime(*file);
++		pstatbuf->st_mtime = Timestamp::ToTimeT(fs.GetLastModifiedTime(*file));
+ 
+ 		auto type = file->GetType();
+ 		switch (type) {
+@@ -524,7 +524,7 @@ struct ST_Read : ArrowTableFunction {
+ 		// before they are renamed
+ 		vector<string> all_names = {};
+ 		vector<LogicalType> all_types = {};
+-		ArrowTableType arrow_table = {};
++		ArrowTableSchema arrow_table = {};
+ 
+ 		bool has_approximate_feature_count = false;
+ 		idx_t approximate_feature_count = 0;
+@@ -723,7 +723,7 @@ struct ST_Read : ArrowTableFunction {
+ 			if (duckdb_type.id() == LogicalTypeId::BLOB && attribute.metadata != nullptr &&
+ 			    strncmp(attribute.metadata, ogc_flag, sizeof(ogc_flag)) == 0) {
+ 				// This is a WKB geometry blob
+-				result->arrow_table.AddColumn(col_idx, std::move(arrow_type));
++				result->arrow_table.AddColumn(col_idx, std::move(arrow_type), column_name);
+ 
+ 				if (result->keep_wkb) {
+ 					return_types.emplace_back(GeoTypes::WKB_BLOB());
+@@ -739,10 +739,10 @@ struct ST_Read : ArrowTableFunction {
+ 				auto dictionary_type = ArrowType::GetArrowLogicalType(DBConfig::GetConfig(context), attribute);
+ 				return_types.emplace_back(dictionary_type->GetDuckType());
+ 				arrow_type->SetDictionary(std::move(dictionary_type));
+-				result->arrow_table.AddColumn(col_idx, std::move(arrow_type));
++				result->arrow_table.AddColumn(col_idx, std::move(arrow_type), column_name);
+ 			} else {
+ 				return_types.emplace_back(arrow_type->GetDuckType());
+-				result->arrow_table.AddColumn(col_idx, std::move(arrow_type));
++				result->arrow_table.AddColumn(col_idx, std::move(arrow_type), column_name);
+ 			}
+ 
+ 			// keep these around for projection/filter pushdown later
 @@ -1086,7 +1086,7 @@ struct ST_Read : ArrowTableFunction {
  	//------------------------------------------------------------------------------------------------------------------
  	// Register
@@ -226,8 +434,9 @@ index c3c7c7c..b1509dc 100644
 +	ST_Write::Register(loader);
  }
  
- } // namespace duckdb
+-} // namespace duckdb
 \ No newline at end of file
++} // namespace duckdb
 diff --git a/src/spatial/modules/gdal/gdal_module.hpp b/src/spatial/modules/gdal/gdal_module.hpp
 index 8485d52..0a1af37 100644
 --- a/src/spatial/modules/gdal/gdal_module.hpp
@@ -1154,7 +1363,7 @@ index a3d57a8..db50a43 100644
  
  } // namespace duckdb
 diff --git a/src/spatial/modules/main/spatial_functions_scalar.cpp b/src/spatial/modules/main/spatial_functions_scalar.cpp
-index a4ff26e..5f3ba89 100644
+index a4ff26e..a4e18ff 100644
 --- a/src/spatial/modules/main/spatial_functions_scalar.cpp
 +++ b/src/spatial/modules/main/spatial_functions_scalar.cpp
 @@ -14,6 +14,7 @@
@@ -1740,6 +1949,15 @@ index a4ff26e..5f3ba89 100644
  				func.AddVariant([](ScalarFunctionVariantBuilder &variant) {
  					variant.AddParameter("geom", GeoTypes::GEOMETRY());
  					variant.SetReturnType(LogicalType::INTEGER);
+@@ -6490,7 +6491,7 @@ struct ST_NPoints {
+ 	static void ExecuteGeometry(DataChunk &args, ExpressionState &state, Vector &result) {
+ 		auto &lstate = LocalState::ResetAndGet(state);
+ 
+-		UnaryExecutor::Execute<string_t, int32_t>(args.data[0], result, args.size(), [&](const string_t &blob) {
++		UnaryExecutor::Execute<string_t, uint32_t>(args.data[0], result, args.size(), [&](const string_t &blob) {
+ 			sgl::geometry geom;
+ 			lstate.Deserialize(blob, geom);
+ 			return sgl::ops::vertex_count(&geom);
 @@ -6510,10 +6511,10 @@ struct ST_NPoints {
  	//------------------------------------------------------------------------------------------------------------------
  	// Register
@@ -2369,7 +2587,7 @@ index 36b96d0..0e80217 100644
  } // namespace duckdb
 \ No newline at end of file
 diff --git a/src/spatial/operators/spatial_join_physical.cpp b/src/spatial/operators/spatial_join_physical.cpp
-index 3038ed8..fd14eee 100644
+index 3038ed8..b94d067 100644
 --- a/src/spatial/operators/spatial_join_physical.cpp
 +++ b/src/spatial/operators/spatial_join_physical.cpp
 @@ -325,10 +325,10 @@ private:
@@ -2385,6 +2603,22 @@ index 3038ed8..fd14eee 100644
        condition(std::move(condition_p)) {
  
  	children.emplace_back(left);
+@@ -414,7 +414,7 @@ PhysicalSpatialJoin::PhysicalSpatialJoin(LogicalOperator &op, PhysicalOperator &
+ 	// Initialize the layout
+ 	// TODO: Align?
+ 	layout = make_shared_ptr<TupleDataLayout>();
+-	layout->Initialize(std::move(layout_types), false);
++	layout->Initialize(std::move(layout_types), TupleDataValidityType::CAN_HAVE_NULL_VALUES);
+ 
+ 	// For right/outer joins, this is where the build side match column goes
+ 	if (PropagatesBuildSide(join_type)) {
+@@ -1083,4 +1083,4 @@ ProgressData PhysicalSpatialJoin::GetProgress(ClientContext &context, GlobalSour
+ 	return res;
+ }
+ 
+-} // namespace duckdb
+\ No newline at end of file
++} // namespace duckdb
 diff --git a/src/spatial/operators/spatial_join_physical.hpp b/src/spatial/operators/spatial_join_physical.hpp
 index ed50670..5f51a7b 100644
 --- a/src/spatial/operators/spatial_join_physical.hpp

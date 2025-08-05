@@ -1,8 +1,8 @@
 #include "linenoise.hpp"
 #include "linenoise.h"
 #include "highlighting.hpp"
-#include <sstream>
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/common/string.hpp"
 
 #if defined(_WIN32) || defined(__WIN32__) || defined(WIN32)
 // disable highlighting on windows (for now?)
@@ -103,7 +103,7 @@ static tokenType convertToken(duckdb::SimplifiedTokenType token_type) {
 	}
 }
 
-vector<highlightToken> GetParseTokens(char *buf, size_t len) {
+static vector<highlightToken> GetParseTokens(char *buf, size_t len) {
 	string sql(buf, len);
 	auto parseTokens = duckdb::Parser::Tokenize(sql);
 
@@ -130,7 +130,7 @@ vector<highlightToken> GetParseTokens(char *buf, size_t len) {
 	return tokens;
 }
 
-vector<highlightToken> GetDotCommandTokens(char *buf, size_t len) {
+static vector<highlightToken> GetDotCommandTokens(char *buf, size_t len) {
 	vector<highlightToken> tokens;
 
 	// identifier token for the dot command itself
@@ -206,7 +206,7 @@ vector<highlightToken> Highlighting::Tokenize(char *buf, size_t len, bool is_dot
 
 string Highlighting::HighlightText(char *buf, size_t len, size_t start_pos, size_t end_pos,
                                    const vector<highlightToken> &tokens) {
-	std::stringstream ss;
+	duckdb::stringstream ss;
 	size_t prev_pos = 0;
 	for (size_t i = 0; i < tokens.size(); i++) {
 		size_t next = i + 1 < tokens.size() ? tokens[i + 1].start : len;

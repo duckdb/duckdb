@@ -29,7 +29,7 @@ void AlpFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, 
 
 	AlpScanState<T> scan_state(segment);
 	scan_state.Skip(segment, UnsafeNumericCast<idx_t>(row_id));
-	auto result_data = FlatVector::GetData<EXACT_TYPE>(result);
+	auto result_data = FlatVector::GetDataUnsafe<EXACT_TYPE>(result);
 	result_data[result_idx] = (EXACT_TYPE)0;
 
 	if (scan_state.VectorFinished() && scan_state.total_value_count < scan_state.count) {

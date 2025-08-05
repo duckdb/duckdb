@@ -1,3 +1,11 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/main/extension/extension_loader.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
 #pragma once
 
 #include "duckdb/common/constants.hpp"
@@ -6,6 +14,7 @@
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/main/extension_install_info.hpp"
+#include "duckdb/main/extension_manager.hpp"
 
 namespace duckdb {
 
@@ -21,6 +30,7 @@ class ExtensionLoader {
 	friend class ExtensionHelper;
 
 public:
+	explicit ExtensionLoader(ExtensionActiveLoad &load_info);
 	ExtensionLoader(DatabaseInstance &db, const string &extension_name);
 
 	//! Returns the DatabaseInstance associated with this extension loader
@@ -94,6 +104,7 @@ private:
 	DatabaseInstance &db;
 	string extension_name;
 	string extension_description;
+	optional_ptr<ExtensionInfo> extension_info;
 };
 
 } // namespace duckdb

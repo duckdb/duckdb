@@ -5,12 +5,13 @@
 #include "test_helpers.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
+#include "test_config.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test in-memory database scanning from tables", "[memoryleak]") {
-	if (!TestMemoryLeaks()) {
+	if (!TestConfiguration::TestMemoryLeaks()) {
 		return;
 	}
 	DuckDB db;
@@ -23,7 +24,7 @@ TEST_CASE("Test in-memory database scanning from tables", "[memoryleak]") {
 }
 
 TEST_CASE("Rollback create table", "[memoryleak]") {
-	if (!TestMemoryLeaks()) {
+	if (!TestConfiguration::TestMemoryLeaks()) {
 		return;
 	}
 	DBConfig config;
@@ -38,7 +39,7 @@ TEST_CASE("Rollback create table", "[memoryleak]") {
 }
 
 TEST_CASE("DB temporary table insertion", "[memoryleak]") {
-	if (!TestMemoryLeaks()) {
+	if (!TestConfiguration::TestMemoryLeaks()) {
 		return;
 	}
 	auto db_path = TestCreatePath("memory_leak_temp_table.db");

@@ -18,9 +18,10 @@ namespace duckdb_base_std {
 	using ::std::unique_ptr;
 	using ::std::shared_ptr;
 	using ::std::make_shared;
+	using ::std::stringstream;
 } // namespace duckdb_base_std
 #endif
-// optional support for printing stacktraces on a crash -- using the backtrace support in DuckDB 
+// optional support for printing stacktraces on a crash -- using the backtrace support in DuckDB
 #ifdef DUCKDB_DEBUG_STACKTRACE
 #include "duckdb/common/exception.hpp"
 #define CATCH_STACKTRACE(X) duckdb::Exception::FormatStackTrace(X).c_str()
@@ -3012,6 +3013,7 @@ namespace Catch {
         virtual void registerTranslator( const IExceptionTranslator* translator ) = 0;
         virtual void registerTagAlias( std::string const& alias, std::string const& tag, SourceLineInfo const& lineInfo ) = 0;
         virtual void registerStartupException() noexcept = 0;
+        virtual void clearTests() = 0;
         virtual IMutableEnumValuesRegistry& getMutableEnumValuesRegistry() = 0;
     };
 
@@ -9120,7 +9122,8 @@ namespace detail {
 
     template<typename T>
     inline auto convertInto( std::string const &source, T& target ) -> ParserResult {
-        std::stringstream ss;
+        duckdb_base_std::stringstream ss;
+	ss.imbue(std::locale::classic());
         ss << source;
         ss >> target;
         if( ss.fail() )
@@ -11693,7 +11696,8 @@ namespace Floating {
 #endif
 
     std::string WithinUlpsMatcher::describe() const {
-        std::stringstream ret;
+        duckdb_base_std::stringstream ret;
+	ret.imbue(std::locale::classic());
 
         ret << "is within " << m_ulps << " ULPs of ";
 
@@ -12219,7 +12223,8 @@ namespace Catch {
     }
 
     std::string TempFile::getContents() {
-        std::stringstream sstr;
+        duckdb_base_std::stringstream sstr;
+	sstr.imbue(std::locale::classic());
         char buffer[100] = {};
         std::rewind(m_file);
         while (std::fgets(buffer, sizeof(buffer), m_file)) {
@@ -12381,6 +12386,7 @@ namespace Catch {
         virtual ~TestRegistry() = default;
 
         virtual void registerTest( TestCase const& testCase );
+        virtual void clearTests();
 
         std::vector<TestCase> const& getAllTests() const override;
         std::vector<TestCase> const& getAllTestsSorted( IConfig const& config ) const override;
@@ -12562,6 +12568,9 @@ namespace Catch {
             }
             void registerTest( TestCase const& testInfo ) override {
                 m_testCaseRegistry.registerTest( testInfo );
+            }
+            void clearTests() override {
+                m_testCaseRegistry.clearTests();
             }
             void registerTranslator( const IExceptionTranslator* translator ) override {
                 m_exceptionTranslatorRegistry.registerTranslator( translator );
@@ -14444,6 +14453,10 @@ namespace Catch {
             return registerTest( testCase.withName( rss.str() ) );
         }
         m_functions.push_back( testCase );
+    }
+
+    void TestRegistry::clearTests() {
+        m_functions.clear();
     }
 
     std::vector<TestCase> const& TestRegistry::getAllTests() const {
@@ -18126,4 +18139,3 @@ using Catch::Detail::Approx;
 // end catch_reenable_warnings.h
 // end catch.hpp
 #endif // TWOBLUECUBES_SINGLE_INCLUDE_CATCH_HPP_INCLUDED
-

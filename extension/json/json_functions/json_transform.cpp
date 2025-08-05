@@ -915,6 +915,7 @@ bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &resul
 	case LogicalTypeId::DATE:
 	case LogicalTypeId::INTERVAL:
 	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_NS:
 	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
@@ -1054,7 +1055,7 @@ void JSONFunctions::RegisterJSONTransformCastFunctions(CastFunctionSet &casts) {
 			target_type = type;
 		}
 		// Going from JSON to another type has the same cost as going from VARCHAR to that type
-		const auto json_to_target_cost = casts.ImplicitCastCost(LogicalType::VARCHAR, target_type);
+		const auto json_to_target_cost = casts.ImplicitCastCost(nullptr, LogicalType::VARCHAR, target_type);
 		casts.RegisterCastFunction(LogicalType::JSON(), target_type, JSONToAnyCastBind, json_to_target_cost);
 	}
 }

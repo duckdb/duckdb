@@ -53,11 +53,11 @@ public:
 	void UnexpectedStatement(bool expect_ok, MaterializedQueryResult &result);
 	void ExpectedErrorMismatch(const string &expected_error, MaterializedQueryResult &result);
 	void InternalException(MaterializedQueryResult &result);
-	static void LoadDatabaseFail(const string &dbpath, const string &message);
+	static void LoadDatabaseFail(const string &file_name, const string &dbpath, const string &message);
 
 	static void AppendFailure(const string &log_message);
 	static void LogFailure(const string &log_message);
-	// static string GetFailureSummary();
+	static void LogFailureAnnotation(const string header);
 
 private:
 	lock_guard<mutex> log_lock;

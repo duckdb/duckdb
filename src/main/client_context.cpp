@@ -44,6 +44,8 @@
 #include "duckdb/transaction/transaction_context.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/logging/log_type.hpp"
+#include "duckdb/logging/log_manager.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -488,6 +490,7 @@ void ClientContext::CheckIfPreparedStatementIsExecutable(PreparedStatementData &
 	if (ValidChecker::IsInvalidated(ActiveTransaction()) && statement.properties.requires_valid_transaction) {
 		throw ErrorManager::InvalidatedTransaction(*this);
 	}
+
 	auto &meta_transaction = MetaTransaction::Get(*this);
 	auto &manager = DatabaseManager::Get(*this);
 	for (auto &it : statement.properties.modified_databases) {
@@ -1141,6 +1144,7 @@ void ClientContext::RunFunctionInTransactionInternal(ClientContextLock &lock, co
 	    ValidChecker::IsInvalidated(ActiveTransaction())) {
 		throw TransactionException(ErrorManager::FormatException(*this, ErrorType::INVALIDATED_TRANSACTION));
 	}
+
 	// check if we are on AutoCommit. In this case we should start a transaction
 	bool require_new_transaction = transaction.IsAutoCommit() && !transaction.HasActiveTransaction();
 	if (require_new_transaction) {
@@ -1347,7 +1351,7 @@ SettingLookupResult ClientContext::TryGetCurrentSetting(const std::string &key, 
 	// first check the built-in settings
 	auto &db_config = DBConfig::GetConfig(*this);
 	auto option = db_config.GetOptionByName(key);
-	if (option) {
+	if (option && option->get_setting) {
 		result = option->get_setting(*this);
 		return SettingLookupResult(SettingScope::LOCAL);
 	}
@@ -1368,8 +1372,8 @@ SettingLookupResult ClientContext::TryGetCurrentSetting(const std::string &key, 
 ParserOptions ClientContext::GetParserOptions() const {
 	auto &client_config = ClientConfig::GetConfig(*this);
 	ParserOptions options;
-	options.preserve_identifier_case = client_config.preserve_identifier_case;
-	options.integer_division = client_config.integer_division;
+	options.preserve_identifier_case = DBConfig::GetSetting<PreserveIdentifierCaseSetting>(*this);
+	options.integer_division = DBConfig::GetSetting<IntegerDivisionSetting>(*this);
 	options.max_expression_depth = client_config.max_expression_depth;
 	options.extensions = &DBConfig::GetConfig(*this).parser_extensions;
 	return options;
@@ -1382,12 +1386,20 @@ ClientProperties ClientContext::GetClientProperties() {
 	if (TryGetCurrentSetting("TimeZone", result)) {
 		timezone = result.ToString();
 	}
+	ArrowOffsetSize arrow_offset_size = ArrowOffsetSize::REGULAR;
+	if (DBConfig::GetSetting<ArrowLargeBufferSizeSetting>(*this)) {
+		arrow_offset_size = ArrowOffsetSize::LARGE;
+	}
+	bool arrow_use_list_view = DBConfig::GetSetting<ArrowOutputListViewSetting>(*this);
+	bool arrow_lossless_conversion = DBConfig::GetSetting<ArrowLosslessConversionSetting>(*this);
+	bool arrow_use_string_view = DBConfig::GetSetting<ProduceArrowStringViewSetting>(*this);
+	auto arrow_format_version = DBConfig::GetSetting<ArrowOutputVersionSetting>(*this);
 	return {timezone,
-	        db->config.options.arrow_offset_size,
-	        db->config.options.arrow_use_list_view,
-	        db->config.options.produce_arrow_string_views,
-	        db->config.options.arrow_lossless_conversion,
-	        db->config.options.arrow_output_version,
+	        arrow_offset_size,
+	        arrow_use_list_view,
+	        arrow_use_string_view,
+	        arrow_lossless_conversion,
+	        arrow_format_version,
 	        this};
 }
 

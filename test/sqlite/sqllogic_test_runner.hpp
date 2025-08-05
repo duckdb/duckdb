@@ -11,6 +11,7 @@
 #include "duckdb.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "sqllogic_command.hpp"
+#include "test_config.hpp"
 
 namespace duckdb {
 
@@ -47,6 +48,7 @@ public:
 	SQLLogicTestRunner(string dbpath);
 	~SQLLogicTestRunner();
 
+	string file_name;
 	string dbpath;
 	vector<string> loaded_databases;
 	duckdb::unique_ptr<DuckDB> db;
@@ -67,6 +69,8 @@ public:
 	bool skip_reload = false;
 	unordered_map<string, string> environment_variables;
 	string local_extension_repo;
+	TestConfiguration::ExtensionAutoLoadingMode autoloading_mode;
+	bool autoinstall_is_checked;
 
 	// If these error msgs occur in a test, the test will abort but still count as passed
 	unordered_set<string> ignore_error_messages = {"HTTP", "Unable to connect"};
@@ -93,6 +97,7 @@ public:
 	string ReplaceLoopIterator(string text, string loop_iterator_name, string replacement);
 	string LoopReplacement(string text, const vector<LoopDefinition> &loops);
 	bool ForEachTokenReplace(const string &parameter, vector<string> &result);
+	static ExtensionLoadResult LoadExtension(DuckDB &db, const std::string &extension);
 
 private:
 	RequireResult CheckRequire(SQLLogicParser &parser, const vector<string> &params);

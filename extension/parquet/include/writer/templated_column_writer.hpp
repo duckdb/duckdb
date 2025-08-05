@@ -20,8 +20,9 @@ namespace duckdb {
 template <class SRC, class TGT, class OP = ParquetCastOperator, bool ALL_VALID>
 static void TemplatedWritePlain(Vector &col, ColumnWriterStatistics *stats, const idx_t chunk_start,
                                 const idx_t chunk_end, const ValidityMask &mask, WriteStream &ser) {
-	static constexpr bool COPY_DIRECTLY_FROM_VECTOR =
-	    ALL_VALID && std::is_same<SRC, TGT>::value && std::is_arithmetic<TGT>::value;
+	static constexpr bool COPY_DIRECTLY_FROM_VECTOR = ALL_VALID && std::is_same<SRC, TGT>::value &&
+	                                                  std::is_arithmetic<TGT>::value &&
+	                                                  std::is_same<OP, ParquetCastOperator>::value;
 
 	const auto *const ptr = FlatVector::GetData<SRC>(col);
 
@@ -284,15 +285,19 @@ public:
 		auto &state = state_p.Cast<StandardColumnWriterState<SRC, TGT, OP>>();
 		D_ASSERT(state.encoding == duckdb_parquet::Encoding::RLE_DICTIONARY);
 
-		state.bloom_filter =
-		    make_uniq<ParquetBloomFilter>(state.dictionary.GetSize(), writer.BloomFilterFalsePositiveRatio());
+		if (writer.EnableBloomFilters()) {
+			state.bloom_filter =
+			    make_uniq<ParquetBloomFilter>(state.dictionary.GetSize(), writer.BloomFilterFalsePositiveRatio());
+		}
 
 		state.dictionary.IterateValues([&](const SRC &src_value, const TGT &tgt_value) {
 			// update the statistics
 			OP::template HandleStats<SRC, TGT>(stats, tgt_value);
-			// update the bloom filter
-			auto hash = OP::template XXHash64<SRC, TGT>(tgt_value);
-			state.bloom_filter->FilterInsert(hash);
+			if (state.bloom_filter) {
+				// update the bloom filter
+				auto hash = OP::template XXHash64<SRC, TGT>(tgt_value);
+				state.bloom_filter->FilterInsert(hash);
+			}
 		});
 
 		// flush the dictionary page and add it to the to-be-written pages

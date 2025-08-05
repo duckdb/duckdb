@@ -29,7 +29,10 @@ SELECT * FROM tbl_a WHERE a_id = 2
 2	y
 
 statement ok
-USE memory
+ATTACH '__TEST_DIR__/other_attach_index.db'
+
+statement ok
+USE other_attach_index
 
 statement ok
 DETACH attach_index_db

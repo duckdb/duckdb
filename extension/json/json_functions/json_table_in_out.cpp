@@ -138,7 +138,7 @@ struct JSONTableInOutLocalState : LocalTableFunctionState {
 	yyjson_alc *alc;
 
 	string path;
-	size_t len;
+	idx_t len;
 	yyjson_doc *doc;
 	bool initialized;
 
@@ -155,7 +155,7 @@ template <class T>
 struct JSONTableInOutResultVector {
 	explicit JSONTableInOutResultVector(DataChunk &output, const optional_idx &output_column_index)
 	    : enabled(output_column_index.IsValid()), vector(output.data[enabled ? output_column_index.GetIndex() : 0]),
-	      data(FlatVector::GetData<T>(vector)), validity(FlatVector::Validity(vector)) {
+	      data(enabled ? FlatVector::GetData<T>(vector) : nullptr), validity(FlatVector::Validity(vector)) {
 	}
 	const bool enabled;
 	Vector &vector;

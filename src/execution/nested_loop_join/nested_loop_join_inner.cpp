@@ -156,6 +156,9 @@ idx_t NestedLoopJoinComparisonSwitch(Vector &left, Vector &right, idx_t left_siz
 	case ExpressionType::COMPARE_DISTINCT_FROM:
 		return NestedLoopJoinTypeSwitch<NLTYPE, DistinctFrom>(left, right, left_size, right_size, lpos, rpos, lvector,
 		                                                      rvector, current_match_count);
+	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+		return NestedLoopJoinTypeSwitch<NLTYPE, NotDistinctFrom>(left, right, left_size, right_size, lpos, rpos,
+		                                                         lvector, rvector, current_match_count);
 	default:
 		throw NotImplementedException("Unimplemented comparison type for join!");
 	}

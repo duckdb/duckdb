@@ -1,5 +1,7 @@
 #include "duckdb/function/cast/cast_function_set.hpp"
 
+#include "duckdb/main/settings.hpp"
+
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/types/type_map.hpp"
 #include "duckdb/function/cast_rules.hpp"
@@ -161,7 +163,8 @@ private:
 	type_id_map_t<type_map_t<type_id_map_t<type_map_t<MapCastNode>>>> casts;
 };
 
-int64_t CastFunctionSet::ImplicitCastCost(const LogicalType &source, const LogicalType &target) {
+int64_t CastFunctionSet::ImplicitCastCost(optional_ptr<ClientContext> context, const LogicalType &source,
+                                          const LogicalType &target) {
 	// check if a cast has been registered
 	if (map_info) {
 		auto entry = map_info->GetEntry(source, target);
@@ -171,15 +174,26 @@ int64_t CastFunctionSet::ImplicitCastCost(const LogicalType &source, const Logic
 	}
 	// if not, fallback to the default implicit cast rules
 	auto score = CastRules::ImplicitCast(source, target);
-	if (score < 0 && config && config->options.old_implicit_casting) {
-		if (source.id() != LogicalTypeId::BLOB && target.id() == LogicalTypeId::VARCHAR) {
+	if (score < 0 && source.id() != LogicalTypeId::BLOB && target.id() == LogicalTypeId::VARCHAR) {
+		bool old_implicit_casting = false;
+		if (context) {
+			old_implicit_casting = DBConfig::GetSetting<OldImplicitCastingSetting>(*context);
+		} else if (config) {
+			old_implicit_casting = DBConfig::GetSetting<OldImplicitCastingSetting>(*config);
+		}
+		if (old_implicit_casting) {
 			score = 149;
 		}
 	}
 	return score;
 }
 
-BoundCastInfo MapCastFunction(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
+int64_t CastFunctionSet::ImplicitCastCost(ClientContext &context, const LogicalType &source,
+                                          const LogicalType &target) {
+	return CastFunctionSet::Get(context).ImplicitCastCost(&context, source, target);
+}
+
+static BoundCastInfo MapCastFunction(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
 	D_ASSERT(input.info);
 	auto &map_info = input.info->Cast<MapCastInfo>();
 	auto entry = map_info.GetEntry(source, target);

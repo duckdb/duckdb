@@ -192,7 +192,7 @@ public:
 
 	duckdb::pyarrow::Table ToArrowTableInternal(idx_t batch_size, bool to_polars);
 
-	PolarsDataFrame ToPolars(idx_t batch_size);
+	PolarsDataFrame ToPolars(idx_t batch_size, bool lazy);
 
 	py::object ToArrowCapsule(const py::object &requested_schema = py::none());
 

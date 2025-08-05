@@ -14,6 +14,7 @@
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/common/windows_util.hpp"
 #include "duckdb/common/operator/multiply.hpp"
+#include "duckdb/logging/log_manager.hpp"
 
 #include <cstdint>
 #include <cstdio>
@@ -427,7 +428,7 @@ int64_t FileSystem::GetFileSize(FileHandle &handle) {
 	throw NotImplementedException("%s: GetFileSize is not implemented!", GetName());
 }
 
-time_t FileSystem::GetLastModifiedTime(FileHandle &handle) {
+timestamp_t FileSystem::GetLastModifiedTime(FileHandle &handle) {
 	throw NotImplementedException("%s: GetLastModifiedTime is not implemented!", GetName());
 }
 
@@ -703,7 +704,12 @@ void FileHandle::Read(void *buffer, idx_t nr_bytes, idx_t location) {
 	file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
 }
 
-void FileHandle::Write(optional_ptr<ClientContext> context, void *buffer, idx_t nr_bytes, idx_t location) {
+void FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) {
+	// FIXME: Add profiling.
+	file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
+}
+
+void FileHandle::Write(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) {
 	// FIXME: Add profiling.
 	file_system.Write(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
 }

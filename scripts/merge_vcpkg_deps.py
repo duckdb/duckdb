@@ -12,16 +12,17 @@ import sys
 dependencies_str = []
 dependencies_dict = []
 merged_overlay_ports = []
+merged_overlay_triplets = []
 
 
-def prefix_overlay_ports(overlay_ports, path_to_vcpkg_json):
-    def prefix_overlay_port(overlay_port):
+def prefix_overlay_ports_or_triples(overlay_dir, path_to_vcpkg_json):
+    def prefix_overlay_port_or_triplet(overlay_port_or_triplet):
         vcpkg_prefix_path = path_to_vcpkg_json[0 : path_to_vcpkg_json.find("/vcpkg.json")]
         if len(vcpkg_prefix_path) == 0:
-            return overlay_port
-        return vcpkg_prefix_path + '/' + overlay_port
+            return overlay_port_or_triplet
+        return vcpkg_prefix_path + '/' + overlay_port_or_triplet
 
-    return map(prefix_overlay_port, overlay_ports)
+    return map(prefix_overlay_port_or_triplet, overlay_dir)
 
 
 for file in sys.argv[1:]:
@@ -39,7 +40,11 @@ for file in sys.argv[1:]:
 
     if 'vcpkg-configuration' in data:
         if 'overlay-ports' in data['vcpkg-configuration']:
-            merged_overlay_ports += prefix_overlay_ports(data['vcpkg-configuration']['overlay-ports'], file)
+            merged_overlay_ports += prefix_overlay_ports_or_triples(data['vcpkg-configuration']['overlay-ports'], file)
+        if 'overlay-triplets' in data['vcpkg-configuration']:
+            merged_overlay_triplets += prefix_overlay_ports_or_triples(
+                data['vcpkg-configuration']['overlay-triplets'], file
+            )
 
 final_deduplicated_deps = list()
 dedup_set = set()
@@ -63,12 +68,15 @@ data = {
     "overrides": [{"name": "openssl", "version": "3.0.8"}],
 }
 
-if merged_overlay_ports:
-    data['vcpkg-configuration'] = {'overlay-ports': merged_overlay_ports}
-else:
-    data['vcpkg-configuration'] = {}
+data['vcpkg-configuration'] = {}
 
-REGISTRY_BASELINE = '0f9bf648ba1ee29291890a1ca9a49a80bba017eb'
+if merged_overlay_ports:
+    data['vcpkg-configuration']['overlay-ports'] = merged_overlay_ports
+
+if merged_overlay_triplets:
+    data['vcpkg-configuration']['overlay-triplets'] = merged_overlay_triplets
+
+REGISTRY_BASELINE = '869bddccca976e0abe25894356e7f49e77765169'
 # NOTE: use 'scripts/list_vcpkg_registry_packages.py --baseline <baseline>' to generate the list of packages
 data['vcpkg-configuration']['registries'] = [
     {

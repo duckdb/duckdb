@@ -100,7 +100,7 @@ public:
 	//! Whether this thread has finished the work it has been assigned
 	bool TaskFinished() const;
 	//! Do the work this thread has been assigned
-	void ExecuteTask(SortedRunMergerGlobalState &gstate, DataChunk &chunk);
+	void ExecuteTask(SortedRunMergerGlobalState &gstate, optional_ptr<DataChunk> chunk);
 
 private:
 	//! Computes upper partition boundaries using K-way Merge Path
@@ -126,6 +126,11 @@ private:
 	void ScanPartition(SortedRunMergerGlobalState &gstate, DataChunk &chunk);
 	template <SortKeyType SORT_KEY_TYPE>
 	void TemplatedScanPartition(SortedRunMergerGlobalState &gstate, DataChunk &chunk);
+
+	//! Materialize the merge
+	void MaterializePartition(SortedRunMergerGlobalState &gstate);
+	template <SortKeyType SORT_KEY_TYPE>
+	unique_ptr<SortedRun> TemplatedMaterializePartition(SortedRunMergerGlobalState &gstate);
 
 public:
 	//! Types for templating
@@ -275,6 +280,9 @@ public:
 
 	mutex destroy_lock;
 	idx_t destroy_partition_idx;
+
+	mutex materialized_partition_lock;
+	vector<unique_ptr<SortedRun>> materialized_partitions;
 };
 
 //===--------------------------------------------------------------------===//
@@ -300,11 +308,7 @@ SortedRunMergerLocalState::SortedRunMergerLocalState(SortedRunMergerGlobalState 
 			                              EnumUtil::ToString(iterator_state_type));
 		}
 	}
-	const auto sort_key_logical_type =
-	    sort_key_type == SortKeyType::NO_PAYLOAD_FIXED_8 || sort_key_type == SortKeyType::PAYLOAD_FIXED_16
-	        ? LogicalType::BIGINT
-	        : LogicalType::BLOB;
-	key.Initialize(gstate.context, {sort_key_logical_type});
+	key.Initialize(gstate.context, {gstate.merger.key_layout->GetTypes()[0]});
 	decoded_key.Initialize(gstate.context, {gstate.merger.decode_sort_key.return_type});
 }
 
@@ -324,7 +328,7 @@ bool SortedRunMergerLocalState::TaskFinished() const {
 	}
 }
 
-void SortedRunMergerLocalState::ExecuteTask(SortedRunMergerGlobalState &gstate, DataChunk &chunk) {
+void SortedRunMergerLocalState::ExecuteTask(SortedRunMergerGlobalState &gstate, optional_ptr<DataChunk> chunk) {
 	D_ASSERT(task != SortedRunMergerTask::FINISHED);
 	switch (task) {
 	case SortedRunMergerTask::COMPUTE_BOUNDARIES:
@@ -340,8 +344,12 @@ void SortedRunMergerLocalState::ExecuteTask(SortedRunMergerGlobalState &gstate, 
 		task = SortedRunMergerTask::SCAN_PARTITION;
 		break;
 	case SortedRunMergerTask::SCAN_PARTITION:
-		ScanPartition(gstate, chunk);
-		if (chunk.size() == 0) {
+		if (chunk) {
+			ScanPartition(gstate, *chunk);
+		} else {
+			MaterializePartition(gstate);
+		}
+		if (!chunk || chunk->size() == 0) {
 			gstate.DestroyScannedData();
 			gstate.partitions[partition_idx.GetIndex()]->scanned = true;
 			gstate.total_scanned += merged_partition_count;
@@ -677,10 +685,9 @@ void SortedRunMergerLocalState::ScanPartition(SortedRunMergerGlobalState &gstate
 	}
 }
 
-template <class SORT_KEY>
-void GetKeyAndPayload(SORT_KEY *const merged_partition_keys, const idx_t count, DataChunk &key,
-                      data_ptr_t *const payload_ptrs) {
-	using PHYSICAL_TYPE = typename SORT_KEY::PHYSICAL_TYPE;
+template <class SORT_KEY, class PHYSICAL_TYPE>
+void TemplatedGetKeyAndPayload(SORT_KEY *const merged_partition_keys, const idx_t count, DataChunk &key,
+                               data_ptr_t *const payload_ptrs) {
 	const auto key_data = FlatVector::GetData<PHYSICAL_TYPE>(key.data[0]);
 	for (idx_t i = 0; i < count; i++) {
 		auto &merged_partition_key = merged_partition_keys[i];
@@ -690,6 +697,20 @@ void GetKeyAndPayload(SORT_KEY *const merged_partition_keys, const idx_t count, 
 		}
 	}
 	key.SetCardinality(count);
+}
+
+template <class SORT_KEY>
+void GetKeyAndPayload(SORT_KEY *const merged_partition_keys, const idx_t count, DataChunk &key,
+                      data_ptr_t *const payload_ptrs) {
+	const auto type_id = key.data[0].GetType().id();
+	switch (type_id) {
+	case LogicalTypeId::BLOB:
+		return TemplatedGetKeyAndPayload<SORT_KEY, string_t>(merged_partition_keys, count, key, payload_ptrs);
+	case LogicalTypeId::BIGINT:
+		return TemplatedGetKeyAndPayload<SORT_KEY, int64_t>(merged_partition_keys, count, key, payload_ptrs);
+	default:
+		throw NotImplementedException("GetKeyAndPayload for %s", EnumUtil::ToString(type_id));
+	}
 }
 
 template <SortKeyType SORT_KEY_TYPE>
@@ -754,6 +775,104 @@ void SortedRunMergerLocalState::TemplatedScanPartition(SortedRunMergerGlobalStat
 	chunk.SetCardinality(count);
 }
 
+void SortedRunMergerLocalState::MaterializePartition(SortedRunMergerGlobalState &gstate) {
+	unique_ptr<SortedRun> sorted_run;
+	switch (sort_key_type) {
+	case SortKeyType::NO_PAYLOAD_FIXED_8:
+		sorted_run = TemplatedMaterializePartition<SortKeyType::NO_PAYLOAD_FIXED_8>(gstate);
+		break;
+	case SortKeyType::NO_PAYLOAD_FIXED_16:
+		sorted_run = TemplatedMaterializePartition<SortKeyType::NO_PAYLOAD_FIXED_16>(gstate);
+		break;
+	case SortKeyType::NO_PAYLOAD_FIXED_24:
+		sorted_run = TemplatedMaterializePartition<SortKeyType::NO_PAYLOAD_FIXED_24>(gstate);
+		break;
+	case SortKeyType::NO_PAYLOAD_FIXED_32:
+		sorted_run = TemplatedMaterializePartition<SortKeyType::NO_PAYLOAD_FIXED_32>(gstate);
+		break;
+	case SortKeyType::NO_PAYLOAD_VARIABLE_32:
+		sorted_run = TemplatedMaterializePartition<SortKeyType::NO_PAYLOAD_VARIABLE_32>(gstate);
+		break;
+	case SortKeyType::PAYLOAD_FIXED_16:
+		sorted_run = TemplatedMaterializePartition<SortKeyType::PAYLOAD_FIXED_16>(gstate);
+		break;
+	case SortKeyType::PAYLOAD_FIXED_24:
+		sorted_run = TemplatedMaterializePartition<SortKeyType::PAYLOAD_FIXED_24>(gstate);
+		break;
+	case SortKeyType::PAYLOAD_FIXED_32:
+		sorted_run = TemplatedMaterializePartition<SortKeyType::PAYLOAD_FIXED_32>(gstate);
+		break;
+	case SortKeyType::PAYLOAD_VARIABLE_32:
+		sorted_run = TemplatedMaterializePartition<SortKeyType::PAYLOAD_VARIABLE_32>(gstate);
+		break;
+	default:
+		throw NotImplementedException("SortedRunMergerLocalState::MaterializePartition for %s",
+		                              EnumUtil::ToString(sort_key_type));
+	}
+
+	// Add to global state
+	lock_guard<mutex> guard(gstate.materialized_partition_lock);
+	gstate.materialized_partitions.resize(partition_idx.GetIndex());
+	gstate.materialized_partitions[partition_idx.GetIndex()] = std::move(sorted_run);
+}
+
+template <SortKeyType SORT_KEY_TYPE>
+unique_ptr<SortedRun> SortedRunMergerLocalState::TemplatedMaterializePartition(SortedRunMergerGlobalState &gstate) {
+	using SORT_KEY = SortKey<SORT_KEY_TYPE>;
+	const auto merged_partition_keys = reinterpret_cast<SORT_KEY *>(merged_partition.get()) + merged_partition_index;
+
+	TupleDataChunkState key_data_input;
+	const auto key_locations = FlatVector::GetData<data_ptr_t>(key_data_input.row_locations);
+	const auto key_heap_locations = FlatVector::GetData<data_ptr_t>(key_data_input.heap_locations);
+	const auto key_heap_sizes = FlatVector::GetData<idx_t>(key_data_input.heap_sizes);
+
+	TupleDataChunkState payload_data_input;
+	const auto payload_locations = FlatVector::GetData<data_ptr_t>(payload_data_input.row_locations);
+
+	auto sorted_run = gstate.merger.sorted_runs[0]->CreateRunForMaterialization();
+
+	while (merged_partition_index < merged_partition_count) {
+		const auto count = MinValue<idx_t>(merged_partition_count - merged_partition_index, STANDARD_VECTOR_SIZE);
+		for (idx_t i = 0; i < count + count; i++) {
+			auto &key = merged_partition_keys[merged_partition_index + i];
+			key_locations[i] = data_ptr_cast(&key);
+			if (!SORT_KEY::CONSTANT_SIZE) {
+				key_heap_locations[i] = key.GetData();
+				key_heap_sizes[i] = key.GetHeapSize();
+			}
+			if (SORT_KEY::HAS_PAYLOAD) {
+				payload_locations[i] = key.GetPayload();
+			}
+		}
+
+		sorted_run->key_append_state.chunk_state.heap_sizes.Reference(key_data_input.heap_sizes);
+		sorted_run->key_data->Build(sorted_run->key_append_state.pin_state, sorted_run->key_append_state.chunk_state, 0,
+		                            count);
+		sorted_run->key_data->CopyRows(sorted_run->key_append_state.chunk_state, key_data_input,
+		                               *FlatVector::IncrementalSelectionVector(), count);
+
+		if (SORT_KEY::HAS_PAYLOAD) {
+			if (!sorted_run->payload_data->GetLayout().AllConstant()) {
+				sorted_run->payload_data->FindHeapPointers(payload_data_input, count);
+			}
+			sorted_run->payload_append_state.chunk_state.heap_sizes.Reference(key_data_input.heap_sizes);
+			sorted_run->payload_data->Build(sorted_run->payload_append_state.pin_state,
+			                                sorted_run->payload_append_state.chunk_state, 0, count);
+			sorted_run->payload_data->CopyRows(sorted_run->payload_append_state.chunk_state, payload_data_input,
+			                                   *FlatVector::IncrementalSelectionVector(), count);
+		}
+
+		merged_partition_index += count;
+	}
+
+	sorted_run->key_data->FinalizePinState(sorted_run->key_append_state.pin_state);
+	if (sorted_run->payload_data) {
+		sorted_run->payload_data->FinalizePinState(sorted_run->payload_append_state.pin_state);
+	}
+
+	return sorted_run;
+}
+
 //===--------------------------------------------------------------------===//
 // Sorted Run Merger
 //===--------------------------------------------------------------------===//
@@ -782,7 +901,7 @@ SourceResultType SortedRunMerger::GetData(ExecutionContext &, DataChunk &chunk, 
 
 	while (chunk.size() == 0) {
 		if (!lstate.TaskFinished() || gstate.AssignTask(lstate)) {
-			lstate.ExecuteTask(gstate, chunk);
+			lstate.ExecuteTask(gstate, &chunk);
 		} else {
 			break;
 		}
@@ -805,6 +924,46 @@ ProgressData SortedRunMerger::GetProgress(ClientContext &, GlobalSourceState &gs
 	res.total = static_cast<double>(total_count);
 	res.invalid = false;
 	return res;
+}
+
+//===--------------------------------------------------------------------===//
+// Non-Standard Interface
+//===--------------------------------------------------------------------===//
+SourceResultType SortedRunMerger::MaterializeMerge(ExecutionContext &, OperatorSourceInput &input) const {
+	auto &gstate = input.global_state.Cast<SortedRunMergerGlobalState>();
+	auto &lstate = input.local_state.Cast<SortedRunMergerLocalState>();
+
+	while (true) {
+		if (!lstate.TaskFinished() || gstate.AssignTask(lstate)) {
+			lstate.ExecuteTask(gstate, nullptr);
+		} else {
+			break;
+		}
+	}
+
+	if (gstate.total_scanned == total_count) {
+		// This signals that the data has been fully materialized
+		return SourceResultType::FINISHED;
+	}
+	// This signals that no more tasks are left, but that the data has not yet been fully materialized
+	return SourceResultType::HAVE_MORE_OUTPUT;
+}
+
+unique_ptr<SortedRun> SortedRunMerger::GetMaterialized(GlobalSourceState &global_state) {
+	auto &gstate = global_state.Cast<SortedRunMergerGlobalState>();
+	if (gstate.materialized_partitions.empty()) {
+		D_ASSERT(total_count == 0);
+		return nullptr;
+	}
+	auto &target = *gstate.materialized_partitions[0];
+	for (idx_t i = 1; i < gstate.materialized_partitions.size(); i++) {
+		auto &source = *gstate.materialized_partitions[i];
+		target.key_data->Combine(*source.key_data);
+		if (target.payload_data) {
+			target.payload_data->Combine(*source.payload_data);
+		}
+	}
+	return std::move(gstate.materialized_partitions[0]);
 }
 
 } // namespace duckdb

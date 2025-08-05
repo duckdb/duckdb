@@ -67,9 +67,10 @@ ListSortBindData::~ListSortBindData() {
 }
 
 // create the key_chunk and the payload_chunk and sink them into the local_sort_state
-void SinkDataChunk(const Sort &sort, ExecutionContext &context, OperatorSinkInput &sink_input, Vector *child_vector,
-                   SelectionVector &sel, idx_t offset_lists_indices, vector<LogicalType> &types, Vector &payload_vector,
-                   bool &data_to_sort, Vector &lists_indices) {
+static void SinkDataChunk(const Sort &sort, ExecutionContext &context, OperatorSinkInput &sink_input,
+                          Vector *child_vector, SelectionVector &sel, idx_t offset_lists_indices,
+                          vector<LogicalType> &types, Vector &payload_vector, bool &data_to_sort,
+                          Vector &lists_indices) {
 
 	// slice the child vector
 	Vector slice(*child_vector, sel, offset_lists_indices);
@@ -299,8 +300,8 @@ static unique_ptr<FunctionData> ListGradeUpBind(ClientContext &context, ScalarFu
 		null_order = GetOrder<OrderByNullType>(context, *arguments[2]);
 	}
 	auto &config = DBConfig::GetConfig(context);
-	order = config.ResolveOrder(order);
-	null_order = config.ResolveNullOrder(order, null_order);
+	order = config.ResolveOrder(context, order);
+	null_order = config.ResolveNullOrder(context, order, null_order);
 
 	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
 
@@ -325,8 +326,8 @@ static unique_ptr<FunctionData> ListNormalSortBind(ClientContext &context, Scala
 		null_order = GetOrder<OrderByNullType>(context, *arguments[2]);
 	}
 	auto &config = DBConfig::GetConfig(context);
-	order = config.ResolveOrder(order);
-	null_order = config.ResolveNullOrder(order, null_order);
+	order = config.ResolveOrder(context, order);
+	null_order = config.ResolveNullOrder(context, order, null_order);
 	return ListSortBind(context, bound_function, arguments, order, null_order);
 }
 
@@ -339,7 +340,7 @@ static unique_ptr<FunctionData> ListReverseSortBind(ClientContext &context, Scal
 		null_order = GetOrder<OrderByNullType>(context, *arguments[1]);
 	}
 	auto &config = DBConfig::GetConfig(context);
-	order = config.ResolveOrder(order);
+	order = config.ResolveOrder(context, order);
 	switch (order) {
 	case OrderType::ASCENDING:
 		order = OrderType::DESCENDING;
@@ -350,7 +351,7 @@ static unique_ptr<FunctionData> ListReverseSortBind(ClientContext &context, Scal
 	default:
 		throw InternalException("Unexpected order type in list reverse sort");
 	}
-	null_order = config.ResolveNullOrder(order, null_order);
+	null_order = config.ResolveNullOrder(context, order, null_order);
 	return ListSortBind(context, bound_function, arguments, order, null_order);
 }
 

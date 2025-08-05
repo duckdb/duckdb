@@ -106,6 +106,13 @@
         "id": 207,
         "name": "duplicate_eliminated_columns",
         "type": "vector<unique_ptr<ParsedExpression>>"
+      },
+      {
+        "id": 208,
+        "name": "is_implicit",
+        "type": "bool",
+        "default": "true",
+        "version": "v1.4.0"
       }
     ]
   },
@@ -251,6 +258,16 @@
         "id": 202,
         "name": "show_type",
         "type": "ShowType"
+      },
+      {
+        "id": 203,
+        "name": "catalog_name",
+        "type": "string"
+      },
+      {
+        "id": 204,
+        "name": "schema_name",
+        "type": "string"
       }
     ]
   },

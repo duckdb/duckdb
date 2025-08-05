@@ -13,7 +13,8 @@ namespace duckdb {
 //--------------------------------------------------------------------------------------------------
 // if the source can be implicitly cast to a member of the target union, the cast is valid
 
-unique_ptr<BoundCastData> BindToUnionCast(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
+static unique_ptr<BoundCastData> BindToUnionCast(BindCastInput &input, const LogicalType &source,
+                                                 const LogicalType &target) {
 	D_ASSERT(target.id() == LogicalTypeId::UNION);
 
 	vector<UnionBoundCastData> candidates;
@@ -21,7 +22,7 @@ unique_ptr<BoundCastData> BindToUnionCast(BindCastInput &input, const LogicalTyp
 	for (idx_t member_idx = 0; member_idx < UnionType::GetMemberCount(target); member_idx++) {
 		auto member_type = UnionType::GetMemberType(target, member_idx);
 		auto member_name = UnionType::GetMemberName(target, member_idx);
-		auto member_cast_cost = input.function_set.ImplicitCastCost(source, member_type);
+		auto member_cast_cost = input.function_set.ImplicitCastCost(nullptr, source, member_type);
 		if (member_cast_cost != -1) {
 			auto member_cast_info = input.GetCastFunction(source, member_type);
 			candidates.emplace_back(member_idx, member_name, member_type, member_cast_cost,
@@ -77,7 +78,7 @@ unique_ptr<BoundCastData> BindToUnionCast(BindCastInput &input, const LogicalTyp
 	return make_uniq<UnionBoundCastData>(std::move(selected_cast));
 }
 
-unique_ptr<FunctionLocalState> InitToUnionLocalState(CastLocalStateParameters &parameters) {
+static unique_ptr<FunctionLocalState> InitToUnionLocalState(CastLocalStateParameters &parameters) {
 	auto &cast_data = parameters.cast_data->Cast<UnionBoundCastData>();
 	if (!cast_data.member_cast_info.init_local_state) {
 		return nullptr;
@@ -152,8 +153,8 @@ public:
 	}
 };
 
-unique_ptr<BoundCastData> BindUnionToUnionCast(BindCastInput &input, const LogicalType &source,
-                                               const LogicalType &target) {
+static unique_ptr<BoundCastData> BindUnionToUnionCast(BindCastInput &input, const LogicalType &source,
+                                                      const LogicalType &target) {
 	D_ASSERT(source.id() == LogicalTypeId::UNION);
 	D_ASSERT(target.id() == LogicalTypeId::UNION);
 
@@ -191,7 +192,7 @@ unique_ptr<BoundCastData> BindUnionToUnionCast(BindCastInput &input, const Logic
 	return make_uniq<UnionUnionBoundCastData>(tag_map, std::move(member_casts), target);
 }
 
-unique_ptr<FunctionLocalState> InitUnionToUnionLocalState(CastLocalStateParameters &parameters) {
+static unique_ptr<FunctionLocalState> InitUnionToUnionLocalState(CastLocalStateParameters &parameters) {
 	auto &cast_data = parameters.cast_data->Cast<UnionUnionBoundCastData>();
 	auto result = make_uniq<StructCastLocalState>();
 

@@ -150,6 +150,7 @@ public:
 	    : memory_manager(context, minimum_memory_per_thread), table(table), insert_count(0),
 	      optimistically_written(false), minimum_memory_per_thread(minimum_memory_per_thread) {
 		row_group_size = table.GetStorage().GetRowGroupSize();
+		table.GetStorage().BindIndexes(context);
 	}
 
 	BatchMemoryManager memory_manager;
@@ -225,7 +226,7 @@ public:
 
 		// Merge the collections.
 		if (!l_state.optimistic_writer) {
-			l_state.optimistic_writer = make_uniq<OptimisticDataWriter>(g_state.table.GetStorage());
+			l_state.optimistic_writer = make_uniq<OptimisticDataWriter>(context, g_state.table.GetStorage());
 		}
 		auto result_collection_index = g_state.MergeCollections(context, merge_collections, *l_state.optimistic_writer);
 		merge_collections.clear();
@@ -526,7 +527,7 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, DataChunk &i
 		// no collection yet: create a new one
 		lstate.CreateNewCollection(context.client, table, insert_types);
 		if (!lstate.optimistic_writer) {
-			lstate.optimistic_writer = make_uniq<OptimisticDataWriter>(table.GetStorage());
+			lstate.optimistic_writer = make_uniq<OptimisticDataWriter>(context.client, table.GetStorage());
 		}
 	}
 
@@ -636,7 +637,7 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 		// now that we have created all of the mergers, perform the actual merging
 		vector<PhysicalIndex> final_collections;
 		final_collections.reserve(mergers.size());
-		auto writer = make_uniq<OptimisticDataWriter>(data_table);
+		auto writer = make_uniq<OptimisticDataWriter>(context, data_table);
 		for (auto &merger : mergers) {
 			final_collections.push_back(merger->Flush(*writer));
 		}

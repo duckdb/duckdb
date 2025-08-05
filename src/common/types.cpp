@@ -7,11 +7,7 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/extra_type_info.hpp"
-#include "duckdb/common/limits.hpp"
 #include "duckdb/common/numeric_utils.hpp"
-#include "duckdb/common/operator/comparison_operators.hpp"
-#include "duckdb/common/serializer/deserializer.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/types/decimal.hpp"
@@ -20,7 +16,6 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/uhugeint.hpp"
-#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/function/cast_rules.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -30,6 +25,7 @@
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/main/settings.hpp"
 
 #include <cmath>
 
@@ -78,6 +74,7 @@ PhysicalType LogicalType::GetInternalType() {
 		return PhysicalType::UINT32;
 	case LogicalTypeId::BIGINT:
 	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_NS:
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::TIMESTAMP_NS:
@@ -114,11 +111,11 @@ PhysicalType LogicalType::GetInternalType() {
 			                        width, DecimalType::MaxWidth());
 		}
 	}
+	case LogicalTypeId::VARINT:
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::CHAR:
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::BIT:
-	case LogicalTypeId::VARINT:
 		return PhysicalType::VARCHAR;
 	case LogicalTypeId::INTERVAL:
 		return PhysicalType::INTERVAL;
@@ -155,6 +152,7 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::UNKNOWN:
 	case LogicalTypeId::STRING_LITERAL:
 	case LogicalTypeId::INTEGER_LITERAL:
+	case LogicalTypeId::TEMPLATE:
 		return PhysicalType::INVALID;
 	case LogicalTypeId::USER:
 		return PhysicalType::UNKNOWN;
@@ -195,6 +193,7 @@ constexpr const LogicalTypeId LogicalType::TIMESTAMP_NS;
 constexpr const LogicalTypeId LogicalType::TIMESTAMP_S;
 
 constexpr const LogicalTypeId LogicalType::TIME;
+constexpr const LogicalTypeId LogicalType::TIME_NS;
 
 constexpr const LogicalTypeId LogicalType::TIME_TZ;
 constexpr const LogicalTypeId LogicalType::TIMESTAMP_TZ;
@@ -517,6 +516,12 @@ string LogicalType::ToString() const {
 	case LogicalTypeId::SQLNULL: {
 		return "\"NULL\"";
 	}
+	case LogicalTypeId::TEMPLATE: {
+		if (!type_info_) {
+			return "T";
+		}
+		return TemplateType::GetName(*this);
+	}
 	default:
 		return EnumUtil::ToString(id_);
 	}
@@ -738,6 +743,7 @@ bool LogicalType::IsComplete() const {
 		case LogicalTypeId::INVALID:
 		case LogicalTypeId::UNKNOWN:
 		case LogicalTypeId::ANY:
+		case LogicalTypeId::TEMPLATE:
 			return true; // These are incomplete by default
 		case LogicalTypeId::LIST:
 		case LogicalTypeId::MAP:
@@ -782,6 +788,10 @@ bool LogicalType::IsComplete() const {
 			return false; // Nested types are checked by TypeVisitor recursion
 		}
 	});
+}
+
+bool LogicalType::IsTemplated() const {
+	return TypeVisitor::Contains(*this, LogicalTypeId::TEMPLATE);
 }
 
 bool LogicalType::SupportsRegularUpdate() const {
@@ -1227,7 +1237,7 @@ struct ForceGetTypeOperation {
 
 bool LogicalType::TryGetMaxLogicalType(ClientContext &context, const LogicalType &left, const LogicalType &right,
                                        LogicalType &result) {
-	if (DBConfig::GetConfig(context).options.old_implicit_casting) {
+	if (DBConfig::GetSetting<OldImplicitCastingSetting>(context)) {
 		result = LogicalType::ForceMaxLogicalType(left, right);
 		return true;
 	}
@@ -1240,6 +1250,7 @@ static idx_t GetLogicalTypeScore(const LogicalType &type) {
 	case LogicalTypeId::SQLNULL:
 	case LogicalTypeId::UNKNOWN:
 	case LogicalTypeId::ANY:
+	case LogicalTypeId::TEMPLATE:
 	case LogicalTypeId::STRING_LITERAL:
 	case LogicalTypeId::INTEGER_LITERAL:
 		return 0;
@@ -1276,19 +1287,21 @@ static idx_t GetLogicalTypeScore(const LogicalType &type) {
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIME_TZ:
 		return 50;
-	case LogicalTypeId::DATE:
+	case LogicalTypeId::TIME_NS:
 		return 51;
-	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::DATE:
 		return 52;
-	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_SEC:
 		return 53;
+	case LogicalTypeId::TIMESTAMP_MS:
+		return 54;
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
-		return 54;
-	case LogicalTypeId::TIMESTAMP_NS:
 		return 55;
-	case LogicalTypeId::INTERVAL:
+	case LogicalTypeId::TIMESTAMP_NS:
 		return 56;
+	case LogicalTypeId::INTERVAL:
+		return 58;
 	// text/character strings
 	case LogicalTypeId::CHAR:
 		return 75;
@@ -1415,11 +1428,20 @@ bool ApproxEqual(double ldecimal, double rdecimal) {
 //===--------------------------------------------------------------------===//
 // Extra Type Info
 //===--------------------------------------------------------------------===//
+LogicalType LogicalType::Copy() const {
+	LogicalType copy = *this;
+	if (type_info_ && type_info_->type != ExtraTypeInfoType::ENUM_TYPE_INFO) {
+		// We copy (i.e., create new) type info, unless the type is an ENUM, otherwise we have to copy the whole dict
+		copy.type_info_ = type_info_->Copy();
+	}
+	return copy;
+}
 
 LogicalType LogicalType::DeepCopy() const {
 	LogicalType copy = *this;
-	if (type_info_) {
-		copy.type_info_ = type_info_->Copy();
+	if (type_info_ && type_info_->type != ExtraTypeInfoType::ENUM_TYPE_INFO) {
+		// We copy (i.e., create new) type info, unless the type is an ENUM, otherwise we have to copy the whole dict
+		copy.type_info_ = type_info_->DeepCopy();
 	}
 	return copy;
 }
@@ -1924,6 +1946,22 @@ LogicalType LogicalType::INTEGER_LITERAL(const Value &constant) { // NOLINT
 	}
 	auto type_info = make_shared_ptr<IntegerLiteralTypeInfo>(constant);
 	return LogicalType(LogicalTypeId::INTEGER_LITERAL, std::move(type_info));
+}
+
+//===--------------------------------------------------------------------===//
+// Template Type
+//===--------------------------------------------------------------------===//
+LogicalType LogicalType::TEMPLATE(const string &name) {
+	D_ASSERT(!name.empty());
+	auto type_info = make_shared_ptr<TemplateTypeInfo>(name);
+	return LogicalType(LogicalTypeId::TEMPLATE, std::move(type_info));
+}
+
+const string &TemplateType::GetName(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::TEMPLATE);
+	auto info = type.AuxInfo();
+	D_ASSERT(info->type == ExtraTypeInfoType::TEMPLATE_TYPE_INFO);
+	return info->Cast<TemplateTypeInfo>().name;
 }
 
 //===--------------------------------------------------------------------===//

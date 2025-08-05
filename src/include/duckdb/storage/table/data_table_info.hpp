@@ -23,9 +23,9 @@ struct DataTableInfo {
 public:
 	DataTableInfo(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_manager_p, string schema, string table);
 
-	//! Initialize any unknown indexes whose types might now be present after an extension load, optionally throwing an
-	//! exception if an index can't be initialized
-	void InitializeIndexes(ClientContext &context, const char *index_type = nullptr);
+	//! Bind unknown indexes throwing an exception if binding fails.
+	//! Only binds the specified index type, or all, if nullptr.
+	void BindIndexes(ClientContext &context, const char *index_type = nullptr);
 
 	//! Whether or not the table is temporary
 	bool IsTemporary() const;
