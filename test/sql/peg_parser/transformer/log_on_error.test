@@ -32,3 +32,13 @@ statement error
 call peg_parser(on_error='continue', enable_logging=doesnotexist);
 ----
 Invalid Input Error: Failed to cast value: Could not convert string 'doesnotexist' to BOOL
+
+restart
+
+PRAGMA enable_logging;
+
+statement ok
+call peg_parser(on_error='throw', enable_logging=true);
+
+statement ok
+select * from foo;

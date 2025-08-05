@@ -42,12 +42,14 @@ public:
 	ClientContext &context;
 
 	bool LoggingEnabled() {
-		return options->enable_logging();
+		return options->enable_logging;
 	}
 
 	bool ThrowOnError() {
 		return options->error == OnParserOverrideError::THROW_ON_ERROR;
 	}
+
+	void LogQuery(const string &query, const std::exception &e);
 };
 
 } // namespace duckdb
