@@ -163,14 +163,15 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	result.types = {LogicalType::BOOLEAN};
 	result.names = {"Success"};
 
+	// bind copy options
+	BindCopyOptions(*stmt.info);
+
 	// lookup the format in the catalog
 	auto &copy_function =
 	    Catalog::GetEntry<CopyFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, stmt.info->format);
 	if (!copy_function.function.copy_to_bind && !copy_function.function.plan) {
 		throw NotImplementedException("COPY TO is not supported for FORMAT \"%s\"", stmt.info->format);
 	}
-	// bind copy options
-	BindCopyOptions(*stmt.info);
 
 	// gather a list of all the tables
 	string catalog = stmt.database.empty() ? INVALID_CATALOG : stmt.database;
