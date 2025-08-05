@@ -300,7 +300,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 
 	// resolve the type of teh database we are opening
 	auto &fs = FileSystem::GetFileSystem(*this);
-	DBPathAndType::ResolveDatabaseType(QueryContext(), fs, config.options.database_path, config.options.database_type);
+	DBPathAndType::ResolveDatabaseType(fs, config.options.database_path, config.options.database_type);
 
 	// initialize the system catalog
 	db_manager->InitializeSystemCatalog();

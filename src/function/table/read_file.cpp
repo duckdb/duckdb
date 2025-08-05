@@ -175,7 +175,7 @@ static void ReadFileExecute(ClientContext &context, TableFunctionInput &input, D
 							// Remote file: caching read
 							data_ptr_t read_ptr;
 							actually_read = NumericCast<idx_t>(bytes_to_read);
-							auto buffer_handle = file_handle->Read(QueryContext(context), read_ptr, actually_read);
+							auto buffer_handle = file_handle->Read(read_ptr, actually_read);
 							memcpy(content_string_ptr, read_ptr, actually_read);
 						} else {
 							// Local file: non-caching read

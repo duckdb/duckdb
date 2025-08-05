@@ -1,6 +1,5 @@
 #include "duckdb/execution/operator/csv_scanner/encode/csv_encoder.hpp"
 
-#include "../../../../../test/sqlite/sqllogic_command.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/function/encoding_function.hpp"

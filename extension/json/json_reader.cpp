@@ -108,7 +108,7 @@ void JSONFileHandle::ReadAtPosition(char *pointer, idx_t size, idx_t position,
 	}
 }
 
-bool JSONFileHandle::Read(QueryContext context, char *pointer, idx_t &read_size, idx_t requested_size) {
+bool JSONFileHandle::Read(char *pointer, idx_t &read_size, idx_t requested_size) {
 	D_ASSERT(requested_size != 0);
 	if (last_read_requested) {
 		return false;
@@ -119,7 +119,7 @@ bool JSONFileHandle::Read(QueryContext context, char *pointer, idx_t &read_size,
 		read_size += ReadFromCache(pointer, requested_size, read_position);
 	}
 
-	auto temp_read_size = ReadInternal(context, pointer, requested_size);
+	auto temp_read_size = ReadInternal(pointer, requested_size);
 	if (IsPipe() && temp_read_size != 0) { // Cache the buffer
 		cached_buffers.emplace_back(allocator.Allocate(temp_read_size));
 		memcpy(cached_buffers.back().get(), pointer, temp_read_size);
@@ -135,11 +135,11 @@ bool JSONFileHandle::Read(QueryContext context, char *pointer, idx_t &read_size,
 	return true;
 }
 
-idx_t JSONFileHandle::ReadInternal(QueryContext context, char *pointer, const idx_t requested_size) {
+idx_t JSONFileHandle::ReadInternal(char *pointer, const idx_t requested_size) {
 	// Deal with reading from pipes
 	idx_t total_read_size = 0;
 	while (total_read_size < requested_size) {
-		auto read_size = file_handle->Read(context, pointer + total_read_size, requested_size - total_read_size);
+		auto read_size = file_handle->Read(pointer + total_read_size, requested_size - total_read_size);
 		if (read_size == 0) {
 			break;
 		}
@@ -681,7 +681,7 @@ void JSONReader::AutoDetect(Allocator &allocator, idx_t buffer_capacity) {
 	auto read_buffer = allocator.Allocate(buffer_capacity);
 	idx_t read_size = 0;
 	auto buffer_ptr = char_ptr_cast(read_buffer.get());
-	if (!file_handle->Read(QueryContext(context), buffer_ptr, read_size, buffer_capacity - YYJSON_PADDING_SIZE)) {
+	if (!file_handle->Read(buffer_ptr, read_size, buffer_capacity - YYJSON_PADDING_SIZE)) {
 		// could not read anything
 		return;
 	}
@@ -1080,7 +1080,7 @@ bool JSONReader::ReadNextBufferNoSeek(JSONReaderScanState &scan_state) {
 	}
 	scan_state.buffer_index = GetBufferIndex();
 	PrepareForReadInternal(scan_state);
-	if (!file_handle.Read(QueryContext(context), scan_state.buffer_ptr + read_offset, read_size, request_size)) {
+	if (!file_handle.Read(scan_state.buffer_ptr + read_offset, read_size, request_size)) {
 		return false; // Couldn't read anything
 	}
 	scan_state.is_last = read_size == 0;

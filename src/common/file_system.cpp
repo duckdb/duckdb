@@ -18,8 +18,6 @@
 
 #include <cstdint>
 #include <cstdio>
-
-#include "../../test/sqlite/sqllogic_command.hpp"
 #include "duckdb/logging/file_system_logger.hpp"
 
 #ifndef _WIN32
@@ -688,6 +686,10 @@ FileHandle::FileHandle(FileSystem &file_system, string path_p, FileOpenFlags fla
 }
 
 FileHandle::~FileHandle() {
+}
+
+int64_t FileHandle::Read(void *buffer, idx_t nr_bytes) {
+	return file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes));
 }
 
 int64_t FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes) {

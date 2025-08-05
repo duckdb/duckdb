@@ -116,7 +116,7 @@ BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, c
 	return TryInsertFileRange(result, buffer, nr_bytes, location, new_file_range);
 }
 
-BufferHandle CachingFileHandle::Read(QueryContext context, data_ptr_t &buffer, idx_t &nr_bytes) {
+BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, idx_t &nr_bytes) {
 	BufferHandle result;
 
 	// If we can't seek, we can't use the cache for these calls,

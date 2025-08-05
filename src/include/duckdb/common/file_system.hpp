@@ -63,6 +63,7 @@ public:
 
 	// Read at [nr_bytes] bytes into [buffer], and return the bytes actually read.
 	// File offset will be changed, which advances for number of bytes read.
+	DUCKDB_API int64_t Read(void *buffer, idx_t nr_bytes);
 	DUCKDB_API int64_t Read(QueryContext context, void *buffer, idx_t nr_bytes);
 	DUCKDB_API int64_t Write(void *buffer, idx_t nr_bytes);
 	// Read at [nr_bytes] bytes into [buffer].

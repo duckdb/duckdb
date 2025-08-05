@@ -1,6 +1,5 @@
 #include "duckdb/main/database_path_and_type.hpp"
 
-#include "../../test/sqlite/sqllogic_command.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/storage/magic_bytes.hpp"
 #include "duckdb/function/replacement_scan.hpp"
@@ -39,7 +38,7 @@ void DBPathAndType::CheckMagicBytes(QueryContext context, FileSystem &fs, string
 	}
 }
 
-void DBPathAndType::ResolveDatabaseType(QueryContext context, FileSystem &fs, string &path, string &db_type) {
+void DBPathAndType::ResolveDatabaseType(FileSystem &fs, string &path, string &db_type) {
 	if (!db_type.empty()) {
 		// database type specified explicitly - no need to check
 		return;
@@ -51,7 +50,7 @@ void DBPathAndType::ResolveDatabaseType(QueryContext context, FileSystem &fs, st
 		return;
 	}
 	// check database type by reading the magic bytes of a file
-	DBPathAndType::CheckMagicBytes(context, fs, path, db_type);
+	DBPathAndType::CheckMagicBytes(QueryContext(), fs, path, db_type);
 }
 
 } // namespace duckdb
