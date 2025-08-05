@@ -520,6 +520,10 @@ typedef struct {
 	void *(*duckdb_scalar_function_bind_get_extra_info)(duckdb_bind_info info);
 	idx_t (*duckdb_scalar_function_bind_get_argument_count)(duckdb_bind_info info);
 	duckdb_expression (*duckdb_scalar_function_bind_get_argument)(duckdb_bind_info info, idx_t index);
+	// New functions around table function binding
+
+	void (*duckdb_table_function_get_client_context)(duckdb_bind_info info, duckdb_client_context *out_context);
+
 	// New string functions that are added
 
 	char *(*duckdb_value_to_string)(duckdb_value value);
@@ -987,6 +991,7 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_scalar_function_bind_get_extra_info = duckdb_scalar_function_bind_get_extra_info;
 	result.duckdb_scalar_function_bind_get_argument_count = duckdb_scalar_function_bind_get_argument_count;
 	result.duckdb_scalar_function_bind_get_argument = duckdb_scalar_function_bind_get_argument;
+	result.duckdb_table_function_get_client_context = duckdb_table_function_get_client_context;
 	result.duckdb_value_to_string = duckdb_value_to_string;
 	result.duckdb_create_map_value = duckdb_create_map_value;
 	result.duckdb_create_union_value = duckdb_create_union_value;
