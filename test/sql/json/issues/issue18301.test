@@ -25,9 +25,9 @@ SELECT * FROM read_json('data/json/18301/*.json',
     filename=true
 );
 
-query II
-SELECT filename, info->>'$.outcome.by' as outcome_by
+query I
+SELECT info->>'$.outcome.by' as outcome_by
 FROM cricket_staging
 WHERE info->>'$.city' = 'Colombo';
 ----
-data/json/18301/1675504.json	{"runs":175,"wickets":null,"innings":1}
+{"runs":175,"wickets":null,"innings":1}
