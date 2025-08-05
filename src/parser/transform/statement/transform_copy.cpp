@@ -11,47 +11,6 @@
 
 namespace duckdb {
 
-void Transformer::ParseGenericOptionListEntry(case_insensitive_map_t<vector<Value>> &result_options, string &name,
-                                              duckdb_libpgquery::PGNode *arg) {
-	// otherwise
-	if (result_options.find(name) != result_options.end()) {
-		throw ParserException("Unexpected duplicate option \"%s\"", name);
-	}
-	if (!arg) {
-		result_options[name] = vector<Value>();
-		return;
-	}
-	switch (arg->type) {
-	case duckdb_libpgquery::T_PGList: {
-		auto column_list = PGPointerCast<duckdb_libpgquery::PGList>(arg);
-		for (auto c = column_list->head; c != nullptr; c = lnext(c)) {
-			auto target = PGPointerCast<duckdb_libpgquery::PGResTarget>(c->data.ptr_value);
-			result_options[name].push_back(Value(target->name));
-		}
-		break;
-	}
-	case duckdb_libpgquery::T_PGAStar:
-		result_options[name].push_back(Value("*"));
-		break;
-	case duckdb_libpgquery::T_PGFuncCall: {
-		auto func_call = PGPointerCast<duckdb_libpgquery::PGFuncCall>(arg);
-		auto func_expr = TransformFuncCall(*func_call);
-
-		Value value;
-		if (!Transformer::ConstructConstantFromExpression(*func_expr, value)) {
-			throw ParserException("Unsupported expression in option list: %s", func_expr->ToString());
-		}
-		result_options[name].push_back(std::move(value));
-		break;
-	}
-	default: {
-		auto val = PGPointerCast<duckdb_libpgquery::PGValue>(arg);
-		result_options[name].push_back(TransformValue(*val)->value);
-		break;
-	}
-	}
-}
-
 void Transformer::TransformCopyOptions(CopyInfo &info, optional_ptr<duckdb_libpgquery::PGList> options) {
 	if (!options) {
 		return;
