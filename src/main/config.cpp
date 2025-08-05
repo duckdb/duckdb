@@ -244,7 +244,7 @@ optional_ptr<const ConfigurationOption> DBConfig::GetOptionByName(const String &
 	}
 	for (idx_t index = 0; setting_aliases[index].alias; index++) {
 		D_ASSERT(StringUtil::Lower(internal_options[index].name) == string(internal_options[index].name));
-		if (setting_aliases[index].alias == lname) {
+		if (setting_aliases[index].alias == lname.c_str()) {
 			return GetOptionByIndex(setting_aliases[index].option_index);
 		}
 	}
@@ -335,9 +335,9 @@ void DBConfig::ResetOption(const String &name) {
 	}
 }
 
-void DBConfig::ResetGenericOption(const string &name) {
+void DBConfig::ResetGenericOption(const String &name) {
 	lock_guard<mutex> l(config_lock);
-	options.set_variables.erase(name);
+	options.set_variables.erase(name.ToStdString());
 }
 
 LogicalType DBConfig::ParseLogicalType(const string &type) {
