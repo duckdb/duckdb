@@ -115,31 +115,32 @@ ErrorData MetaTransaction::Commit() {
 		if (entry == transactions.end()) {
 			throw InternalException("Could not find transaction corresponding to database in MetaTransaction");
 		}
+
 #ifdef DEBUG
 		auto already_committed = committed_tx.insert(db).second == false;
 		if (already_committed) {
 			throw InternalException("All databases inside all_transactions should be unique, invariant broken!");
 		}
 #endif
+
 		auto &transaction_manager = db.GetTransactionManager();
 		auto &transaction_ref = entry->second;
 		if (transaction_ref.state != TransactionState::UNCOMMITTED) {
 			continue;
 		}
+		auto &transaction = transaction_ref.transaction;
 		try {
 			if (!error.HasError()) {
-				// commit
-				error = transaction_manager.CommitTransaction(context, transaction_ref.transaction);
+				// Commit the transaction.
+				error = transaction_manager.CommitTransaction(context, transaction);
 				transaction_ref.state = error.HasError() ? TransactionState::ROLLED_BACK : TransactionState::COMMITTED;
 			} else {
-				// we have encountered an error previously - roll back subsequent entries
-				transaction_manager.RollbackTransaction(transaction_ref.transaction);
+				// Rollback due to previous error.
+				transaction_manager.RollbackTransaction(transaction);
 				transaction_ref.state = TransactionState::ROLLED_BACK;
 			}
 		} catch (std::exception &ex) {
-			if (!error.HasError()) {
-				error = ErrorData(ex);
-			}
+			error.Merge(ErrorData(ex));
 			transaction_ref.state = TransactionState::ROLLED_BACK;
 		}
 	}
@@ -147,7 +148,8 @@ ErrorData MetaTransaction::Commit() {
 }
 
 void MetaTransaction::Rollback() {
-	// rollback transactions in reverse order
+	// Rollback all transactions in reverse order.
+	ErrorData error;
 	for (idx_t i = all_transactions.size(); i > 0; i--) {
 		auto &db = all_transactions[i - 1].get();
 		auto &transaction_manager = db.GetTransactionManager();
@@ -158,10 +160,15 @@ void MetaTransaction::Rollback() {
 			continue;
 		}
 		try {
-			transaction_manager.RollbackTransaction(transaction_ref.transaction);
+			auto &transaction = transaction_ref.transaction;
+			transaction_manager.RollbackTransaction(transaction);
 		} catch (std::exception &ex) {
+			error.Merge(ErrorData(ex));
 		}
 		transaction_ref.state = TransactionState::ROLLED_BACK;
+	}
+	if (error.HasError()) {
+		error.Throw();
 	}
 }
 

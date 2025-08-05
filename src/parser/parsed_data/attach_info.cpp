@@ -24,7 +24,7 @@ string AttachInfo::ToString() const {
 	} else if (on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
 		result += " OR REPLACE";
 	}
-	result += " DATABASE";
+	result += " DATABASE ";
 	result += KeywordHelper::WriteQuoted(path, '\'');
 	if (!name.empty()) {
 		result += " AS " + KeywordHelper::WriteOptionallyQuoted(name);
