@@ -6118,6 +6118,27 @@ function duckdb_bind_get_extra_info(info)
 end
 
 """
+    duckdb_table_function_get_client_context(info, out_context)
+
+Retrieves the client context of the bind info of a table function.
+
+# Arguments
+- `info`: `duckdb_bind_info` The bind info object of the table function.
+- `out_context`: `Ref{duckdb_client_context}` The client context of the bind info. Must be destroyed with `duckdb_destroy_client_context`.
+
+Returns: `Nothing`
+"""
+function duckdb_table_function_get_client_context(info, out_context)
+    return ccall(
+        (:duckdb_scalar_function_get_client_context, libduckdb),
+        Cvoid,
+        (duckdb_bind_info, Ref{duckdb_client_context}),
+        info,
+        out_context
+    )
+end
+
+"""
     duckdb_bind_add_result_column(info, name, _type)
 
 Adds a result column to the output of the table function.
