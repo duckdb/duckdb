@@ -514,7 +514,7 @@ BoundCastInfo DefaultCasts::StringCastSwitch(BindCastInput &input, const Logical
 		                         input, LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR), target),
 		                     InitMapCastLocalState);
 	case LogicalTypeId::VARINT:
-		return BoundCastInfo(&VectorCastHelpers::TryCastStringLoop<string_t, string_t, TryCastToVarInt>);
+		return BoundCastInfo(&VectorCastHelpers::TryCastStringLoop<string_t, varint_t, TryCastToVarInt>);
 	default:
 		return VectorStringCastNumericSwitch(input, source, target);
 	}

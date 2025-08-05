@@ -11,10 +11,10 @@ create table t as select concat('1', repeat('0', i))::varint as a from range(0,1
 query I
 select sum(a) from t
 ----
-1.111111111111111e+99
+1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111
 
 query I
-select sum(a) from t where a < 10000000::DOUBLE
+select sum(a) from t where a < 10000000
 ----
 1111111
 

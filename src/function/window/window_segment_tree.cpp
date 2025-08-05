@@ -131,23 +131,23 @@ public:
 	vector<RightEntry> right_stack;
 };
 
-class WindowSegmentTreeState : public WindowAggregatorLocalState {
+class WindowSegmentTreeLocalState : public WindowAggregatorLocalState {
 public:
-	WindowSegmentTreeState() {
+	WindowSegmentTreeLocalState() {
 	}
 
-	void Finalize(WindowAggregatorGlobalState &gastate, CollectionPtr collection) override;
-	void Evaluate(const WindowSegmentTreeGlobalState &gsink, const DataChunk &bounds, Vector &result, idx_t count,
-	              idx_t row_idx);
+	void Finalize(ExecutionContext &context, WindowAggregatorGlobalState &gastate, CollectionPtr collection) override;
+	void Evaluate(ExecutionContext &context, const WindowSegmentTreeGlobalState &gsink, const DataChunk &bounds,
+	              Vector &result, idx_t count, idx_t row_idx);
 	//! The left (default) segment tree part
 	unique_ptr<WindowSegmentTreePart> part;
 	//! The right segment tree part (for EXCLUDE)
 	unique_ptr<WindowSegmentTreePart> right_part;
 };
 
-void WindowSegmentTree::Finalize(WindowAggregatorState &gsink, WindowAggregatorState &lstate, CollectionPtr collection,
-                                 const FrameStats &stats) {
-	WindowAggregator::Finalize(gsink, lstate, collection, stats);
+void WindowSegmentTree::Finalize(ExecutionContext &context, WindowAggregatorState &gsink, WindowAggregatorState &lstate,
+                                 CollectionPtr collection, const FrameStats &stats) {
+	WindowAggregator::Finalize(context, gsink, lstate, collection, stats);
 
 	auto &gasink = gsink.Cast<WindowSegmentTreeGlobalState>();
 	++gasink.finalized;
@@ -188,7 +188,7 @@ unique_ptr<WindowAggregatorState> WindowSegmentTree::GetGlobalState(ClientContex
 }
 
 unique_ptr<WindowAggregatorState> WindowSegmentTree::GetLocalState(const WindowAggregatorState &gstate) const {
-	return make_uniq<WindowSegmentTreeState>();
+	return make_uniq<WindowSegmentTreeLocalState>();
 }
 
 void WindowSegmentTreePart::FlushStates(bool combining) {
@@ -335,8 +335,9 @@ WindowSegmentTreeGlobalState::WindowSegmentTreeGlobalState(ClientContext &contex
 	}
 }
 
-void WindowSegmentTreeState::Finalize(WindowAggregatorGlobalState &gastate, CollectionPtr collection) {
-	WindowAggregatorLocalState::Finalize(gastate, collection);
+void WindowSegmentTreeLocalState::Finalize(ExecutionContext &context, WindowAggregatorGlobalState &gastate,
+                                           CollectionPtr collection) {
+	WindowAggregatorLocalState::Finalize(context, gastate, collection);
 
 	//	Single part for constructing the tree
 	auto &gstate = gastate.Cast<WindowSegmentTreeGlobalState>();
@@ -390,15 +391,16 @@ void WindowSegmentTreeState::Finalize(WindowAggregatorGlobalState &gastate, Coll
 	}
 }
 
-void WindowSegmentTree::Evaluate(const WindowAggregatorState &gsink, WindowAggregatorState &lstate,
-                                 const DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx) const {
+void WindowSegmentTree::Evaluate(ExecutionContext &context, const WindowAggregatorState &gsink,
+                                 WindowAggregatorState &lstate, const DataChunk &bounds, Vector &result, idx_t count,
+                                 idx_t row_idx) const {
 	const auto &gtstate = gsink.Cast<WindowSegmentTreeGlobalState>();
-	auto &ltstate = lstate.Cast<WindowSegmentTreeState>();
-	ltstate.Evaluate(gtstate, bounds, result, count, row_idx);
+	auto &ltstate = lstate.Cast<WindowSegmentTreeLocalState>();
+	ltstate.Evaluate(context, gtstate, bounds, result, count, row_idx);
 }
 
-void WindowSegmentTreeState::Evaluate(const WindowSegmentTreeGlobalState &gtstate, const DataChunk &bounds,
-                                      Vector &result, idx_t count, idx_t row_idx) {
+void WindowSegmentTreeLocalState::Evaluate(ExecutionContext &context, const WindowSegmentTreeGlobalState &gtstate,
+                                           const DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx) {
 	auto window_begin = FlatVector::GetData<const idx_t>(bounds.data[FRAME_BEGIN]);
 	auto window_end = FlatVector::GetData<const idx_t>(bounds.data[FRAME_END]);
 	auto peer_begin = FlatVector::GetData<const idx_t>(bounds.data[PEER_BEGIN]);

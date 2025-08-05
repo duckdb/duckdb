@@ -23,6 +23,7 @@ static const TestConfigOption test_config_options[] = {
     {"comment", "Extra free form comment line", LogicalType::VARCHAR, nullptr},
     {"initial_db", "Initial database path", LogicalType::VARCHAR, nullptr},
     {"max_threads", "Max threads to use during tests", LogicalType::BIGINT, nullptr},
+    {"block_size", "Block Alloction Size; must be a power of 2", LogicalType::BIGINT, nullptr},
     {"checkpoint_wal_size", "Size in bytes after which to trigger automatic checkpointing", LogicalType::BIGINT,
      nullptr},
     {"checkpoint_on_shutdown", "Whether or not to checkpoint on database shutdown", LogicalType::BOOLEAN, nullptr},
@@ -31,11 +32,15 @@ static const TestConfigOption test_config_options[] = {
     {"test_memory_leaks", "Run memory leak tests", LogicalType::BOOLEAN, nullptr},
     {"verify_vector", "Run vector verification for a specific vector type", LogicalType::VARCHAR, nullptr},
     {"debug_initialize", "Initialize buffers with all 0 or all 1", LogicalType::VARCHAR, nullptr},
+    {"autoloading", "Loading strategy for extensions not bundled in", LogicalType::VARCHAR, nullptr},
     {"init_script", "Script to execute on init", LogicalType::VARCHAR, TestConfiguration::ParseConnectScript},
     {"on_init", "SQL statements to execute on init", LogicalType::VARCHAR, nullptr},
     {"on_load", "SQL statements to execute on explicit load", LogicalType::VARCHAR, nullptr},
     {"on_new_connection", "SQL statements to execute on connection", LogicalType::VARCHAR, nullptr},
-    {"skip_tests", "Tests to be skipped", LogicalType::LIST(LogicalType::VARCHAR), nullptr},
+    {"skip_tests", "Tests to be skipped",
+     LogicalType::LIST(
+         LogicalType::STRUCT({{"reason", LogicalType::VARCHAR}, {"paths", LogicalType::LIST(LogicalType::VARCHAR)}})),
+     nullptr},
     {"skip_compiled", "Skip compiled tests", LogicalType::BOOLEAN, nullptr},
     {"skip_error_messages", "Skip compiled tests", LogicalType::LIST(LogicalType::VARCHAR), nullptr},
     {"statically_loaded_extensions", "Extensions to be loaded (from the statically available one)",
@@ -92,7 +97,7 @@ bool TestConfiguration::ParseArgument(const string &arg, idx_t argc, char **argv
 		return true;
 	}
 	if (arg == "--force-storage") {
-		ParseOption("initial_db", Value("{TEST_DIR}/{BASE_TEST_NAME}/memory.db"));
+		ParseOption("initial_db", Value("{TEST_DIR}/{BASE_TEST_NAME}__test__config__force_storage.db"));
 		return true;
 	}
 	if (arg == "--force-reload") {
@@ -168,8 +173,20 @@ void TestConfiguration::ParseOption(const string &name, const Value &value) {
 	}
 }
 
-bool TestConfiguration::ShouldSkipTest(const string &test) {
-	return tests_to_be_skipped.count(test);
+TestConfiguration::ExtensionAutoLoadingMode TestConfiguration::GetExtensionAutoLoadingMode() {
+	string res = StringUtil::Lower(GetOptionOrDefault("autoloading", string("default")));
+	if (res == "none" || res == "default") {
+		return TestConfiguration::ExtensionAutoLoadingMode::NONE;
+	} else if (res == "available") {
+		return TestConfiguration::ExtensionAutoLoadingMode::AVAILABLE;
+	} else if (res == "all") {
+		return TestConfiguration::ExtensionAutoLoadingMode::ALL;
+	}
+	throw std::runtime_error("Unknown autoloading mode");
+}
+
+bool TestConfiguration::ShouldSkipTest(const string &test_name) {
+	return tests_to_be_skipped.count(test_name);
 }
 
 string TestConfiguration::OnInitCommand() {
@@ -249,10 +266,13 @@ void TestConfiguration::LoadConfig(const string &config_path) {
 	// Convert to unordered_set<string> the list of tests to be skipped
 	auto entry = options.find("skip_tests");
 	if (entry != options.end()) {
-		vector<Value> skip_list = ListValue::GetChildren(entry->second);
-
-		for (auto x : skip_list) {
-			tests_to_be_skipped.insert(x.GetValue<string>());
+		auto skip_list_entry = ListValue::GetChildren(entry->second);
+		for (const auto &value : skip_list_entry) {
+			auto children = StructValue::GetChildren(value);
+			auto skip_list = ListValue::GetChildren(children[1]);
+			for (const auto &skipped_test : skip_list) {
+				tests_to_be_skipped.insert(skipped_test.GetValue<string>());
+			}
 		}
 	}
 }
@@ -285,6 +305,10 @@ string TestConfiguration::GetInitialDBPath() {
 
 optional_idx TestConfiguration::GetMaxThreads() {
 	return GetOptionOrDefault<optional_idx, idx_t>("max_threads", optional_idx());
+}
+
+optional_idx TestConfiguration::GetBlockAllocSize() {
+	return GetOptionOrDefault<optional_idx, idx_t>("block_size", DEFAULT_BLOCK_ALLOC_SIZE);
 }
 
 idx_t TestConfiguration::GetCheckpointWALSize() {

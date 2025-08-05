@@ -69,8 +69,3 @@ SET pivot_filter_threshold TO DEFAULT
 
 statement ok
 RESET SESSION pivot_filter_threshold
-
-statement error
-RESET GLOBAL pivot_filter_threshold
-----
-cannot be reset globally

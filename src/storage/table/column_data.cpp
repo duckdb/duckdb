@@ -77,6 +77,29 @@ bool ColumnData::HasChanges(idx_t start_row, idx_t end_row) const {
 	return false;
 }
 
+bool ColumnData::HasChanges() const {
+	auto l = data.Lock();
+	auto &nodes = data.ReferenceLoadedSegments(l);
+	for (idx_t segment_idx = 0; segment_idx < nodes.size(); segment_idx++) {
+		auto segment = nodes[segment_idx].node.get();
+		if (segment->segment_type == ColumnSegmentType::TRANSIENT) {
+			// transient segment: always need to write to disk
+			return true;
+		}
+		// persistent segment; check if there were any updates or deletions in this segment
+		idx_t start_row_idx = segment->start - start;
+		idx_t end_row_idx = start_row_idx + segment->count;
+		if (HasChanges(start_row_idx, end_row_idx)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+bool ColumnData::HasAnyChanges() const {
+	return HasChanges();
+}
+
 void ColumnData::ClearUpdates() {
 	lock_guard<mutex> update_guard(update_lock);
 	updates.reset();
@@ -542,13 +565,18 @@ void ColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, 
 	FetchUpdateRow(transaction, row_id, result, result_idx);
 }
 
+idx_t ColumnData::FetchUpdateData(row_t *row_ids, Vector &base_vector) {
+	ColumnScanState state;
+	auto fetch_count = ColumnData::Fetch(state, row_ids[0], base_vector);
+	base_vector.Flatten(fetch_count);
+	return fetch_count;
+}
+
 void ColumnData::Update(TransactionData transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
                         idx_t update_count) {
 	Vector base_vector(type);
-	ColumnScanState state;
-	auto fetch_count = Fetch(state, row_ids[0], base_vector);
+	FetchUpdateData(row_ids, base_vector);
 
-	base_vector.Flatten(fetch_count);
 	UpdateInternal(transaction, column_index, update_vector, row_ids, update_count, base_vector);
 }
 

@@ -79,8 +79,11 @@ static void testRunner() {
 		// Parse the test dir automatically
 		TestChangeDirectory(test_working_dir);
 	}
-
-	runner.ExecuteFile(name);
+	try {
+		runner.ExecuteFile(name);
+	} catch (...) {
+		// This is to allow cleanup to be executed, failure is already logged
+	}
 
 	if (AUTO_SWITCH_TEST_DIR) {
 		TestChangeDirectory(prev_directory);

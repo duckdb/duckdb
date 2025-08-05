@@ -20,8 +20,9 @@ namespace duckdb {
 template <class SRC, class TGT, class OP = ParquetCastOperator, bool ALL_VALID>
 static void TemplatedWritePlain(Vector &col, ColumnWriterStatistics *stats, const idx_t chunk_start,
                                 const idx_t chunk_end, const ValidityMask &mask, WriteStream &ser) {
-	static constexpr bool COPY_DIRECTLY_FROM_VECTOR =
-	    ALL_VALID && std::is_same<SRC, TGT>::value && std::is_arithmetic<TGT>::value;
+	static constexpr bool COPY_DIRECTLY_FROM_VECTOR = ALL_VALID && std::is_same<SRC, TGT>::value &&
+	                                                  std::is_arithmetic<TGT>::value &&
+	                                                  std::is_same<OP, ParquetCastOperator>::value;
 
 	const auto *const ptr = FlatVector::GetData<SRC>(col);
 

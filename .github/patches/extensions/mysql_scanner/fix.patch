@@ -146,6 +146,47 @@ index a239dfb..46df8b7 100644
  #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
  #include "mysql_scanner.hpp"
  #include "mysql_result.hpp"
+diff --git a/src/mysql_storage.cpp b/src/mysql_storage.cpp
+index 7ee6fe6..fde8d08 100644
+--- a/src/mysql_storage.cpp
++++ b/src/mysql_storage.cpp
+@@ -7,19 +7,17 @@
+ 
+ namespace duckdb {
+ 
+-static unique_ptr<Catalog> MySQLAttach(StorageExtensionInfo *storage_info, ClientContext &context, AttachedDatabase &db,
+-                                       const string &name, AttachInfo &info, AccessMode access_mode) {
++static unique_ptr<Catalog> MySQLAttach(optional_ptr<StorageExtensionInfo> storage_info, ClientContext &context, AttachedDatabase &db,
++                                       const string &name, AttachInfo &info, AttachOptions &attach_options) {
+ 	auto &config = DBConfig::GetConfig(context);
+ 	if (!config.options.enable_external_access) {
+ 		throw PermissionException("Attaching MySQL databases is disabled through configuration");
+ 	}
+ 	// check if we have a secret provided
+ 	string secret_name;
+-	for (auto &entry : info.options) {
++	for (auto &entry : attach_options.options) {
+ 		auto lower_name = StringUtil::Lower(entry.first);
+-		if (lower_name == "type" || lower_name == "read_only") {
+-			// already handled
+-		} else if (lower_name == "secret") {
++		if (lower_name == "secret") {
+ 			secret_name = entry.second.ToString();
+ 		} else {
+ 			throw BinderException("Unrecognized option for MySQL attach: %s", entry.first);
+@@ -28,10 +26,10 @@ static unique_ptr<Catalog> MySQLAttach(StorageExtensionInfo *storage_info, Clien
+ 
+ 	string attach_path = info.path;
+ 	auto connection_string = MySQLCatalog::GetConnectionString(context, attach_path, secret_name);
+-	return make_uniq<MySQLCatalog>(db, std::move(connection_string), std::move(attach_path), access_mode);
++	return make_uniq<MySQLCatalog>(db, std::move(connection_string), std::move(attach_path), attach_options.access_mode);
+ }
+ 
+-static unique_ptr<TransactionManager> MySQLCreateTransactionManager(StorageExtensionInfo *storage_info,
++static unique_ptr<TransactionManager> MySQLCreateTransactionManager(optional_ptr<StorageExtensionInfo> storage_info,
+                                                                     AttachedDatabase &db, Catalog &catalog) {
+ 	auto &mysql_catalog = catalog.Cast<MySQLCatalog>();
+ 	return make_uniq<MySQLTransactionManager>(db, mysql_catalog);
 diff --git a/src/storage/mysql_execute_query.cpp b/src/storage/mysql_execute_query.cpp
 index 8bf9426..aaeb3c7 100644
 --- a/src/storage/mysql_execute_query.cpp
@@ -177,7 +218,7 @@ index 587cdf2..ce95653 100644
  
  //===--------------------------------------------------------------------===//
 diff --git a/src/storage/mysql_insert.cpp b/src/storage/mysql_insert.cpp
-index 121d85a..0d84183 100644
+index 121d85a..395111b 100644
 --- a/src/storage/mysql_insert.cpp
 +++ b/src/storage/mysql_insert.cpp
 @@ -14,14 +14,14 @@
@@ -198,4 +239,13 @@ index 121d85a..0d84183 100644
 +    : PhysicalOperator(physical_plan, PhysicalOperatorType::EXTENSION, op.types, 1), table(nullptr), schema(&schema),
        info(std::move(info)) {
  }
+ 
+@@ -307,7 +307,7 @@ PhysicalOperator &MySQLCatalog::PlanInsert(ClientContext &context, PhysicalPlanG
+ 	if (op.return_chunk) {
+ 		throw BinderException("RETURNING clause not yet supported for insertion into MySQL table");
+ 	}
+-	if (op.action_type != OnConflictAction::THROW) {
++	if (op.on_conflict_info.action_type != OnConflictAction::THROW) {
+ 		throw BinderException("ON CONFLICT clause not yet supported for insertion into MySQL table");
+ 	}
  

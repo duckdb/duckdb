@@ -48,6 +48,8 @@
 #include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/common/multi_file/multi_file_function.hpp"
 #include "duckdb/common/primitive_dictionary.hpp"
+#include "duckdb/logging/log_manager.hpp"
+#include "duckdb/main/settings.hpp"
 #include "parquet_multi_file_info.hpp"
 
 namespace duckdb {
@@ -405,7 +407,7 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 		}
 	}
 	if (row_group_size_bytes_set) {
-		if (DBConfig::GetConfig(context).options.preserve_insertion_order) {
+		if (DBConfig::GetSetting<PreserveInsertionOrderSetting>(context)) {
 			throw BinderException("ROW_GROUP_SIZE_BYTES does not work while preserving insertion order. Use \"SET "
 			                      "preserve_insertion_order=false;\" to disable preserving insertion order.");
 		}
@@ -930,7 +932,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	auto &config = DBConfig::GetConfig(db_instance);
 	config.replacement_scans.emplace_back(ParquetScanReplacement);
 	config.AddExtensionOption("binary_as_string", "In Parquet files, interpret binary data as a string.",
-	                          LogicalType::BOOLEAN);
+	                          LogicalType::BOOLEAN, Value(false));
 	config.AddExtensionOption("disable_parquet_prefetching", "Disable the prefetching mechanism in Parquet",
 	                          LogicalType::BOOLEAN, Value(false));
 	config.AddExtensionOption("prefetch_all_parquet_files",
@@ -943,6 +945,9 @@ static void LoadInternal(ExtensionLoader &loader) {
 	    "enable_geoparquet_conversion",
 	    "Attempt to decode/encode geometry data in/as GeoParquet files if the spatial extension is present.",
 	    LogicalType::BOOLEAN, Value::BOOLEAN(true));
+	config.AddExtensionOption("variant_legacy_encoding",
+	                          "Enables the Parquet reader to identify a Variant structurally.", LogicalType::BOOLEAN,
+	                          Value::BOOLEAN(false));
 }
 
 void ParquetExtension::Load(ExtensionLoader &loader) {

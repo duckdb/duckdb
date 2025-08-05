@@ -16,8 +16,9 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 class WindowAggregateExecutorGlobalState : public WindowExecutorGlobalState {
 public:
-	WindowAggregateExecutorGlobalState(const WindowAggregateExecutor &executor, const idx_t payload_count,
-	                                   const ValidityMask &partition_mask, const ValidityMask &order_mask);
+	WindowAggregateExecutorGlobalState(ClientContext &client, const WindowAggregateExecutor &executor,
+	                                   const idx_t payload_count, const ValidityMask &partition_mask,
+	                                   const ValidityMask &order_mask);
 
 	// aggregate global state
 	unique_ptr<WindowAggregatorState> gsink;
@@ -48,19 +49,19 @@ static BoundWindowExpression &SimplifyWindowedAggregate(BoundWindowExpression &w
 	return wexpr;
 }
 
-WindowAggregateExecutor::WindowAggregateExecutor(BoundWindowExpression &wexpr, ClientContext &context,
+WindowAggregateExecutor::WindowAggregateExecutor(BoundWindowExpression &wexpr, ClientContext &client,
                                                  WindowSharedExpressions &shared, WindowAggregationMode mode)
-    : WindowExecutor(SimplifyWindowedAggregate(wexpr, context), context, shared), mode(mode) {
+    : WindowExecutor(SimplifyWindowedAggregate(wexpr, client), shared), mode(mode) {
 
 	// Force naive for SEPARATE mode or for (currently!) unsupported functionality
-	if (!ClientConfig::GetConfig(context).enable_optimizer || mode == WindowAggregationMode::SEPARATE) {
+	if (!ClientConfig::GetConfig(client).enable_optimizer || mode == WindowAggregationMode::SEPARATE) {
 		aggregator = make_uniq<WindowNaiveAggregator>(*this, shared);
 	} else if (WindowDistinctAggregator::CanAggregate(wexpr)) {
 		// build a merge sort tree
 		// see https://dl.acm.org/doi/pdf/10.1145/3514221.3526184
-		aggregator = make_uniq<WindowDistinctAggregator>(wexpr, shared, context);
+		aggregator = make_uniq<WindowDistinctAggregator>(wexpr, shared, client);
 	} else if (WindowConstantAggregator::CanAggregate(wexpr)) {
-		aggregator = make_uniq<WindowConstantAggregator>(wexpr, shared, context);
+		aggregator = make_uniq<WindowConstantAggregator>(wexpr, shared, client);
 	} else if (WindowCustomAggregator::CanAggregate(wexpr, mode)) {
 		aggregator = make_uniq<WindowCustomAggregator>(wexpr, shared);
 	} else if (WindowSegmentTree::CanAggregate(wexpr)) {
@@ -80,25 +81,28 @@ WindowAggregateExecutor::WindowAggregateExecutor(BoundWindowExpression &wexpr, C
 	}
 }
 
-WindowAggregateExecutorGlobalState::WindowAggregateExecutorGlobalState(const WindowAggregateExecutor &executor,
+WindowAggregateExecutorGlobalState::WindowAggregateExecutorGlobalState(ClientContext &client,
+                                                                       const WindowAggregateExecutor &executor,
                                                                        const idx_t group_count,
                                                                        const ValidityMask &partition_mask,
                                                                        const ValidityMask &order_mask)
-    : WindowExecutorGlobalState(executor, group_count, partition_mask, order_mask),
+    : WindowExecutorGlobalState(client, executor, group_count, partition_mask, order_mask),
       filter_ref(executor.filter_ref.get()) {
-	gsink = executor.aggregator->GetGlobalState(executor.context, group_count, partition_mask);
+	gsink = executor.aggregator->GetGlobalState(client, group_count, partition_mask);
 }
 
-unique_ptr<WindowExecutorGlobalState> WindowAggregateExecutor::GetGlobalState(const idx_t payload_count,
+unique_ptr<WindowExecutorGlobalState> WindowAggregateExecutor::GetGlobalState(ClientContext &client,
+                                                                              const idx_t payload_count,
                                                                               const ValidityMask &partition_mask,
                                                                               const ValidityMask &order_mask) const {
-	return make_uniq<WindowAggregateExecutorGlobalState>(*this, payload_count, partition_mask, order_mask);
+	return make_uniq<WindowAggregateExecutorGlobalState>(client, *this, payload_count, partition_mask, order_mask);
 }
 
-class WindowAggregateExecutorLocalState : public WindowExecutorBoundsState {
+class WindowAggregateExecutorLocalState : public WindowExecutorBoundsLocalState {
 public:
-	WindowAggregateExecutorLocalState(const WindowExecutorGlobalState &gstate, const WindowAggregator &aggregator)
-	    : WindowExecutorBoundsState(gstate), filter_executor(gstate.executor.context) {
+	WindowAggregateExecutorLocalState(ExecutionContext &context, const WindowExecutorGlobalState &gstate,
+	                                  const WindowAggregator &aggregator)
+	    : WindowExecutorBoundsLocalState(context, gstate), filter_executor(gstate.client) {
 
 		auto &gastate = gstate.Cast<WindowAggregateExecutorGlobalState>();
 		aggregator_state = aggregator.GetLocalState(*gastate.gsink);
@@ -121,12 +125,13 @@ public:
 };
 
 unique_ptr<WindowExecutorLocalState>
-WindowAggregateExecutor::GetLocalState(const WindowExecutorGlobalState &gstate) const {
-	return make_uniq<WindowAggregateExecutorLocalState>(gstate, *aggregator);
+WindowAggregateExecutor::GetLocalState(ExecutionContext &context, const WindowExecutorGlobalState &gstate) const {
+	return make_uniq<WindowAggregateExecutorLocalState>(context, gstate, *aggregator);
 }
 
-void WindowAggregateExecutor::Sink(DataChunk &sink_chunk, DataChunk &coll_chunk, const idx_t input_idx,
-                                   WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate) const {
+void WindowAggregateExecutor::Sink(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk,
+                                   const idx_t input_idx, WindowExecutorGlobalState &gstate,
+                                   WindowExecutorLocalState &lstate) const {
 	auto &gastate = gstate.Cast<WindowAggregateExecutorGlobalState>();
 	auto &lastate = lstate.Cast<WindowAggregateExecutorLocalState>();
 	auto &filter_sel = lastate.filter_sel;
@@ -142,9 +147,9 @@ void WindowAggregateExecutor::Sink(DataChunk &sink_chunk, DataChunk &coll_chunk,
 	D_ASSERT(aggregator);
 	auto &gestate = *gastate.gsink;
 	auto &lestate = *lastate.aggregator_state;
-	aggregator->Sink(gestate, lestate, sink_chunk, coll_chunk, input_idx, filtering, filtered);
+	aggregator->Sink(context, gestate, lestate, sink_chunk, coll_chunk, input_idx, filtering, filtered);
 
-	WindowExecutor::Sink(sink_chunk, coll_chunk, input_idx, gstate, lstate);
+	WindowExecutor::Sink(context, sink_chunk, coll_chunk, input_idx, gstate, lstate);
 }
 
 static void ApplyWindowStats(const WindowBoundary &boundary, FrameDelta &delta, BaseStatistics *base, bool is_start) {
@@ -210,9 +215,9 @@ static void ApplyWindowStats(const WindowBoundary &boundary, FrameDelta &delta, 
 	}
 }
 
-void WindowAggregateExecutor::Finalize(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
-                                       CollectionPtr collection) const {
-	WindowExecutor::Finalize(gstate, lstate, collection);
+void WindowAggregateExecutor::Finalize(ExecutionContext &context, WindowExecutorGlobalState &gstate,
+                                       WindowExecutorLocalState &lstate, CollectionPtr collection) const {
+	WindowExecutor::Finalize(context, gstate, lstate, collection);
 
 	auto &gastate = gstate.Cast<WindowAggregateExecutorGlobalState>();
 	auto &gsink = gastate.gsink;
@@ -234,12 +239,12 @@ void WindowAggregateExecutor::Finalize(WindowExecutorGlobalState &gstate, Window
 	ApplyWindowStats(wexpr.end, stats[1], base, false);
 
 	auto &lastate = lstate.Cast<WindowAggregateExecutorLocalState>();
-	aggregator->Finalize(*gsink, *lastate.aggregator_state, collection, stats);
+	aggregator->Finalize(context, *gsink, *lastate.aggregator_state, collection, stats);
 }
 
-void WindowAggregateExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
-                                               DataChunk &eval_chunk, Vector &result, idx_t count,
-                                               idx_t row_idx) const {
+void WindowAggregateExecutor::EvaluateInternal(ExecutionContext &context, WindowExecutorGlobalState &gstate,
+                                               WindowExecutorLocalState &lstate, DataChunk &eval_chunk, Vector &result,
+                                               idx_t count, idx_t row_idx) const {
 	auto &gastate = gstate.Cast<WindowAggregateExecutorGlobalState>();
 	auto &lastate = lstate.Cast<WindowAggregateExecutorLocalState>();
 	auto &gsink = gastate.gsink;
@@ -247,7 +252,7 @@ void WindowAggregateExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate
 
 	auto &agg_state = *lastate.aggregator_state;
 
-	aggregator->Evaluate(*gsink, agg_state, lastate.bounds, result, count, row_idx);
+	aggregator->Evaluate(context, *gsink, agg_state, lastate.bounds, result, count, row_idx);
 }
 
 } // namespace duckdb

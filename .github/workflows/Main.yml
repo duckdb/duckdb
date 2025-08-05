@@ -45,7 +45,7 @@ jobs:
         run: echo "Event name is ${{ github.event_name }}"
       
  linux-debug:
-    name: Linux DEBUG + sanitizers
+    name: Linux Debug
     # This tests release build while enabling slow verifiers (masked by #ifdef DEBUG) and sanitizers
     needs: check-draft
     runs-on: ubuntu-22.04
@@ -351,11 +351,11 @@ jobs:
         GEN: ninja
       run: make
 
-    - name: test/configs/encrypted_db.json
+    - name: test/configs/encryption.json
       if: (success() || failure()) && steps.build.conclusion == 'success'
       shell: bash
       run: |
-        ./build/release/test/unittest --test-config test/configs/encrypted_db.json
+        ./build/release/test/unittest --test-config test/configs/encryption.json
 
     - name: test/configs/force_storage.json
       if: (success() || failure()) && steps.build.conclusion == 'success'
@@ -386,6 +386,18 @@ jobs:
       shell: bash
       run: |
         ./build/release/test/unittest --test-config test/configs/no_local_filesystem.json
+
+    - name: test/configs/block_size_16kB.json
+      if: (success() || failure()) && steps.build.conclusion == 'success'
+      shell: bash
+      run: |
+        ./build/release/test/unittest --test-config test/configs/block_size_16kB.json
+
+    - name: test/configs/latest_storage_block_size_16kB.json
+      if: (success() || failure()) && steps.build.conclusion == 'success'
+      shell: bash
+      run: |
+        ./build/release/test/unittest --test-config test/configs/latest_storage_block_size_16kB.json
 
     - name: Test dictionary_expression
       if: (success() || failure()) && steps.build.conclusion == 'success'

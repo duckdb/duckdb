@@ -12,7 +12,7 @@ PRAGMA temp_directory='__TEST_DIR__/window_spooling'
 
 # Force paging
 statement ok
-PRAGMA memory_limit='50MB'
+PRAGMA memory_limit='100MB'
 
 # Limit threads to improve stability
 statement ok
