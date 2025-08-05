@@ -1,0 +1,38 @@
+# name: test/sql/types/struct/create_type_struct.test
+# description: Test create struct list with schema
+# group: [struct]
+
+# Original issue: https://github.com/duckdb/duckdb/issues/18040
+
+statement ok
+CREATE SCHEMA app;
+
+statement ok
+CREATE TYPE app.item AS STRUCT (
+    id uuid,
+    code UINTEGER
+);
+
+statement ok
+CREATE TYPE app.product as STRUCT (
+  id uuid,
+  items app.item[]
+);
+
+statement ok
+CREATE SCHEMA app2;
+
+statement ok
+SET SEARCH_PATH TO app2;
+
+statement ok
+CREATE TYPE app2.item AS STRUCT (
+    id uuid,
+    code UINTEGER
+);
+
+statement ok
+CREATE TYPE app2.product as STRUCT (
+  id uuid,
+  items item[]
+);
