@@ -8,10 +8,8 @@
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/statement_type.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/printer.hpp"
 #include "duckdb/common/named_parameter_map.hpp"
 
 namespace duckdb {
