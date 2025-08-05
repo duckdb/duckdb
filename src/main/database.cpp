@@ -463,6 +463,7 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	}
 	config.replacement_scans = std::move(new_config.replacement_scans);
 	config.parser_extensions = std::move(new_config.parser_extensions);
+	config.keyword_manager = std::move(new_config.keyword_manager);
 	config.error_manager = std::move(new_config.error_manager);
 	if (!config.error_manager) {
 		config.error_manager = make_uniq<ErrorManager>();

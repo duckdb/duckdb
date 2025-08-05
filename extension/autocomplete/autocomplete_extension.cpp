@@ -678,6 +678,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	TableFunction check_peg_parser_fun("check_peg_parser", {LogicalType::VARCHAR}, CheckPEGParserFunction,
 	                                   CheckPEGParserBind, nullptr);
 	loader.RegisterFunction(check_peg_parser_fun);
+	AutocompleteExtension::RegisterKeywords(loader);
 }
 
 void AutocompleteExtension::Load(ExtensionLoader &loader) {
