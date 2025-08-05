@@ -607,6 +607,7 @@ static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_m
 	case LogicalTypeId::UNKNOWN:
 	case LogicalTypeId::ANY:
 	case LogicalTypeId::USER:
+	case LogicalTypeId::TEMPLATE:
 	case LogicalTypeId::CHAR:
 	case LogicalTypeId::STRING_LITERAL:
 	case LogicalTypeId::INTEGER_LITERAL:
