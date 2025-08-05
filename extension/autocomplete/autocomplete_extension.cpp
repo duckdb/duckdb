@@ -703,7 +703,7 @@ void PEGParserFunction(ClientContext &context, TableFunctionInput &data_p, DataC
 	if (config.parser_override) {
 		throw BinderException("Cannot install PEGParser: a parser override is already active.");
 	}
-	config.parser_override = make_uniq<PEGParserOverride>(bind_data.options->Copy());
+	config.parser_override = make_uniq<PEGParserOverride>(bind_data.options->Copy(), context);
 }
 
 static duckdb::unique_ptr<FunctionData> PEGParserBind(ClientContext &context, TableFunctionBindInput &input,

@@ -28,7 +28,7 @@ public:
 //! The ParserOverride is an extension point that allows installing a custom parser
 class ParserOverride {
 public:
-	explicit ParserOverride(unique_ptr<ParserOverrideOptions> options_p) : options(std::move(options_p)) {
+	explicit ParserOverride(unique_ptr<ParserOverrideOptions> options_p, ClientContext &context_p) : options(std::move(options_p)), context(context_p) {
 	};
 	virtual ~ParserOverride() = default;
 
@@ -39,6 +39,7 @@ public:
 	//! If it encounters a syntax error within a structure it *does* recognize, it should throw an exception.
 	virtual vector<unique_ptr<SQLStatement>> Parse(const string &query) = 0;
 	unique_ptr<ParserOverrideOptions> options;
+	ClientContext &context;
 
 	bool LoggingEnabled() {
 		return options->enable_logging();
