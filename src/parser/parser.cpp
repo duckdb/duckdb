@@ -206,8 +206,9 @@ void Parser::ParseQuery(const string &query) {
 		try {
 			statements = options.parser_override->Parse(query);
 		} catch (const std::exception &e) {
-			if (options.parser_override->option == ParserOverrideOptions::CONTINUE_ON_ERROR) {
+			if (options.parser_override->options->error == OnParserOverrideError::CONTINUE_ON_ERROR) {
 				// Set the flag to true to fall back to the default parser.
+				// TODO(dtenwolde) do something with the logger here
 				use_default_parser = true;
 			} else {
 				// Re-throw the exception for THROW_ON_ERROR.

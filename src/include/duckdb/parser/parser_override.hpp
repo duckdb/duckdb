@@ -7,17 +7,28 @@ namespace duckdb {
 class SQLStatement;
 class ClientContext;
 
-enum class ParserOverrideOptions {
+enum class OnParserOverrideError {
 	THROW_ON_ERROR,
-	CONTINUE_ON_ERROR,
-	LOG_AND_CONTINUE_ON_ERROR
+	CONTINUE_ON_ERROR
+};
+
+class ParserOverrideOptions {
+public:
+	ParserOverrideOptions(OnParserOverrideError error_p, bool enable_logging_p) : error(error_p), enable_logging(enable_logging_p) {
+	}
+
+	OnParserOverrideError error;
+	bool enable_logging;
+
+	unique_ptr<ParserOverrideOptions> Copy() {
+		return make_uniq<ParserOverrideOptions>(error, enable_logging);
+	}
 };
 
 //! The ParserOverride is an extension point that allows installing a custom parser
 class ParserOverride {
 public:
-	explicit ParserOverride(ParserOverrideOptions option_p) {
-		option = option_p;
+	explicit ParserOverride(unique_ptr<ParserOverrideOptions> options_p) : options(std::move(options_p)) {
 	};
 	virtual ~ParserOverride() = default;
 
@@ -27,7 +38,7 @@ public:
 	//! it should return an empty vector, allowing the system to fall back to the default parser.
 	//! If it encounters a syntax error within a structure it *does* recognize, it should throw an exception.
 	virtual vector<unique_ptr<SQLStatement>> Parse(const string &query) = 0;
-	ParserOverrideOptions option = ParserOverrideOptions::THROW_ON_ERROR;
+	unique_ptr<ParserOverrideOptions> options;
 };
 
 } // namespace duckdb

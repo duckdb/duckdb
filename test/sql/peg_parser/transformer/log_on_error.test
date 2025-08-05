@@ -1,0 +1,34 @@
+# name: test/sql/peg_parser/transformer/use_statement.test
+# description:
+# group: [transformer]
+
+require autocomplete
+
+load __TEST_DIR__/test_peg_parser.db
+
+statement ok
+call peg_parser(on_error='throw', enable_logging=true);
+
+restart
+
+statement ok
+call peg_parser(on_error='continue', enable_logging=true);
+
+restart
+
+statement error
+call peg_parser(on_error='doesnotexist', enable_logging=true);
+----
+Invalid Input Error: Invalid option specified for "on_error", use either "throw" or "continue"
+
+restart
+
+statement ok
+call peg_parser(on_error='continue', enable_logging=false);
+
+restart
+
+statement error
+call peg_parser(on_error='continue', enable_logging=doesnotexist);
+----
+Invalid Input Error: Failed to cast value: Could not convert string 'doesnotexist' to BOOL

@@ -682,11 +682,11 @@ void CheckPEGParserFunction(ClientContext &context, TableFunctionInput &data_p, 
 }
 
 struct PEGParserFunctionData : public TableFunctionData {
-	explicit PEGParserFunctionData(ParserOverrideOptions option_p)
-		: option(option_p) {
+	explicit PEGParserFunctionData(unique_ptr<ParserOverrideOptions> options_p)
+		: options(std::move(options_p)) {
 	}
 
-	ParserOverrideOptions option;
+	unique_ptr<ParserOverrideOptions> options;
 };
 
 struct PEGParserData : public GlobalTableFunctionState {
@@ -700,34 +700,36 @@ void PEGParserFunction(ClientContext &context, TableFunctionInput &data_p, DataC
 
 	auto &bind_data = data_p.bind_data->Cast<PEGParserFunctionData>();
 
-	// Install the parser override
-	if (!config.parser_override) { // Only install if no other override is present
-		config.parser_override = make_uniq<PEGParserOverride>(bind_data.option);
+	if (config.parser_override) {
+		throw BinderException("Cannot install PEGParser: a parser override is already active.");
 	}
+	config.parser_override = make_uniq<PEGParserOverride>(bind_data.options->Copy());
 }
 
 static duckdb::unique_ptr<FunctionData> PEGParserBind(ClientContext &context, TableFunctionBindInput &input,
                                                       vector<LogicalType> &return_types, vector<string> &names) {
-	if (input.inputs[0].IsNull()) {
-		throw BinderException("sql_auto_complete first parameter cannot be NULL");
+	OnParserOverrideError error_option = OnParserOverrideError::THROW_ON_ERROR;
+	if (input.named_parameters.find("on_error") != input.named_parameters.end()) {
+		auto on_error = input.named_parameters.at("on_error").GetValue<string>();
+		if (StringUtil::Lower(on_error) == "throw") {
+			error_option = OnParserOverrideError::THROW_ON_ERROR;
+		} else if (StringUtil::Lower(on_error) == "continue") {
+			error_option = OnParserOverrideError::CONTINUE_ON_ERROR;
+		} else {
+			throw InvalidInputException("Invalid option specified for \"on_error\", use either \"throw\" or \"continue\"");
+		}
 	}
-	names.emplace_back("success");
-	return_types.emplace_back(LogicalType::BOOLEAN);
-	string option_input = StringUtil::Lower(StringValue::Get(input.inputs[0]));
-	ParserOverrideOptions option;
-	if (option_input == "throw_on_error") {
-		option = ParserOverrideOptions::THROW_ON_ERROR;
-	} else if (option_input == "throw_and_continue_on_error") {
-		option = ParserOverrideOptions::LOG_AND_CONTINUE_ON_ERROR;
-		// TODO(dtenwolde) Make this option use the logger
-		throw NotImplementedException("This option has not been implemented yet.");
-	} else if (option_input == "continue_on_error") {
-		option = ParserOverrideOptions::CONTINUE_ON_ERROR;
-	} else {
-		throw InvalidInputException("Unrecognized option");
+	bool enable_logging = false;
+	if (input.named_parameters.find("enable_logging") != input.named_parameters.end()) {
+		enable_logging = input.named_parameters.at("enable_logging").GetValue<bool>();
 	}
 
-	return make_uniq<PEGParserFunctionData>(option);
+	auto options = make_uniq<ParserOverrideOptions>(error_option, enable_logging);
+
+	names.emplace_back("success");
+	return_types.emplace_back(LogicalType::BOOLEAN);
+
+	return make_uniq<PEGParserFunctionData>(std::move(options));
 }
 
 static void LoadInternal(ExtensionLoader &loader) {
@@ -741,7 +743,9 @@ static void LoadInternal(ExtensionLoader &loader) {
 <<<<<<< HEAD
 =======
 
-	TableFunction peg_parser_fun("peg_parser", {LogicalType::VARCHAR}, PEGParserFunction, PEGParserBind, nullptr);
+	TableFunction peg_parser_fun("peg_parser", {}, PEGParserFunction, PEGParserBind, nullptr);
+	peg_parser_fun.named_parameters["on_error"] = LogicalType::VARCHAR; // Behaviour on error ("throw" or "continue")
+	peg_parser_fun.named_parameters["enable_logging"] = LogicalType::BOOLEAN;
 	loader.RegisterFunction(peg_parser_fun);
 >>>>>>> 292f5c864f (Add options to parseroverride)
 }

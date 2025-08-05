@@ -6,7 +6,7 @@
 namespace duckdb {
 struct MatcherToken;
 
-PEGParserOverride::PEGParserOverride(ParserOverrideOptions option) : ParserOverride(option) {
+PEGParserOverride::PEGParserOverride(unique_ptr<ParserOverrideOptions> options) : ParserOverride(std::move(options)) {
 	factory = make_uniq<PEGTransformerFactory>();
 }
 
