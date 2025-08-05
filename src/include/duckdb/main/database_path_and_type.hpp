@@ -13,6 +13,8 @@
 
 namespace duckdb {
 
+class QueryContext;
+
 struct DBPathAndType {
 	//! Parse database extension type and rest of path from combined form (type:path)
 	static void ExtractExtensionPrefix(string &path, string &db_type);
