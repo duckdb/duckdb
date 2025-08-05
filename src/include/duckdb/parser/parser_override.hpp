@@ -17,12 +17,12 @@ public:
 	ParserOverrideOptions(OnParserOverrideError error_p, bool enable_logging_p) : error(error_p), enable_logging(enable_logging_p) {
 	}
 
-	OnParserOverrideError error;
-	bool enable_logging;
-
 	unique_ptr<ParserOverrideOptions> Copy() {
 		return make_uniq<ParserOverrideOptions>(error, enable_logging);
 	}
+
+	OnParserOverrideError error;
+	bool enable_logging;
 };
 
 //! The ParserOverride is an extension point that allows installing a custom parser
@@ -39,6 +39,14 @@ public:
 	//! If it encounters a syntax error within a structure it *does* recognize, it should throw an exception.
 	virtual vector<unique_ptr<SQLStatement>> Parse(const string &query) = 0;
 	unique_ptr<ParserOverrideOptions> options;
+
+	bool LoggingEnabled() {
+		return options->enable_logging();
+	}
+
+	bool ThrowOnError() {
+		return options->error == OnParserOverrideError::THROW_ON_ERROR;
+	}
 };
 
 } // namespace duckdb
