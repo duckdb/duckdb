@@ -326,13 +326,15 @@ void VarintAdd(DataChunk &args, ExpressionState &state, Vector &result) {
 void VarintSubtract(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &allocator = state.GetAllocator();
 	ArenaAllocator arena(allocator);
-	BinaryExecutor::Execute<varint_t, varint_t, string_t>(args.data[0], args.data[1], result, args.size(),
-	                                                      [&](varint_t a, varint_t b) {
-		                                                      const VarintIntermediate lhs(a);
-		                                                      VarintIntermediate rhs(b);
-		                                                      rhs.NegateInPlace();
-		                                                      return VarintIntermediate::Add(result, lhs, rhs);
-	                                                      });
+	BinaryExecutor::Execute<varint_t, varint_t, string_t>(
+	    args.data[0], args.data[1], result, args.size(), [&](varint_t a, varint_t b) {
+		    const VarintIntermediate lhs(a);
+		    VarintIntermediate rhs(b);
+		    rhs.NegateInPlace();
+		    auto result_value = VarintIntermediate::Add(result, lhs, rhs);
+		    rhs.NegateInPlace();
+		    return result_value;
+	    });
 }
 
 void VarintNegate(DataChunk &args, ExpressionState &state, Vector &result) {
