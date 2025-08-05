@@ -22,13 +22,21 @@ CachingFileSystem CachingFileSystem::Get(ClientContext &context) {
 }
 
 unique_ptr<CachingFileHandle> CachingFileSystem::OpenFile(const OpenFileInfo &path, FileOpenFlags flags) {
-	return make_uniq<CachingFileHandle>(*this, path, flags, external_file_cache.GetOrCreateCachedFile(path.path));
+	return make_uniq<CachingFileHandle>(QueryContext(), *this, path, flags,
+	                                    external_file_cache.GetOrCreateCachedFile(path.path));
 }
 
-CachingFileHandle::CachingFileHandle(CachingFileSystem &caching_file_system_p, const OpenFileInfo &path_p,
-                                     FileOpenFlags flags_p, CachedFile &cached_file_p)
-    : caching_file_system(caching_file_system_p), external_file_cache(caching_file_system.external_file_cache),
-      path(path_p), flags(flags_p), validate(true), cached_file(cached_file_p), position(0) {
+unique_ptr<CachingFileHandle> CachingFileSystem::OpenFile(QueryContext context, const OpenFileInfo &path,
+                                                          FileOpenFlags flags) {
+	return make_uniq<CachingFileHandle>(context, *this, path, flags,
+	                                    external_file_cache.GetOrCreateCachedFile(path.path));
+}
+
+CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &caching_file_system_p,
+                                     const OpenFileInfo &path_p, FileOpenFlags flags_p, CachedFile &cached_file_p)
+    : context(context), caching_file_system(caching_file_system_p),
+      external_file_cache(caching_file_system.external_file_cache), path(path_p), flags(flags_p), validate(true),
+      cached_file(cached_file_p), position(0) {
 	if (path.extended_info) {
 		const auto &open_options = path.extended_info->options;
 		const auto validate_entry = open_options.find("validate_external_file_cache");
@@ -71,8 +79,7 @@ FileHandle &CachingFileHandle::GetFileHandle() {
 	return *file_handle;
 }
 
-BufferHandle CachingFileHandle::Read(QueryContext context, data_ptr_t &buffer, const idx_t nr_bytes,
-                                     const idx_t location) {
+BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, const idx_t location) {
 	BufferHandle result;
 	if (!external_file_cache.IsEnabled()) {
 		result = external_file_cache.GetBufferManager().Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
@@ -96,12 +103,11 @@ BufferHandle CachingFileHandle::Read(QueryContext context, data_ptr_t &buffer, c
 	// Interleave reading and copying from cached buffers
 	if (OnDiskFile()) {
 		// On-disk file: prefer interleaving reading and copying from cached buffers
-		ReadAndCopyInterleaved(context, overlapping_ranges, new_file_range, buffer, nr_bytes, location, true);
+		ReadAndCopyInterleaved(overlapping_ranges, new_file_range, buffer, nr_bytes, location, true);
 	} else {
 		// Remote file: prefer interleaving reading and copying from cached buffers only if reduces number of real reads
-		if (ReadAndCopyInterleaved(context, overlapping_ranges, new_file_range, buffer, nr_bytes, location, false) <=
-		    1) {
-			ReadAndCopyInterleaved(context, overlapping_ranges, new_file_range, buffer, nr_bytes, location, true);
+		if (ReadAndCopyInterleaved(overlapping_ranges, new_file_range, buffer, nr_bytes, location, false) <= 1) {
+			ReadAndCopyInterleaved(overlapping_ranges, new_file_range, buffer, nr_bytes, location, true);
 		} else {
 			GetFileHandle().Read(context, buffer, nr_bytes, location);
 		}
@@ -333,8 +339,7 @@ BufferHandle CachingFileHandle::TryInsertFileRange(BufferHandle &pin, data_ptr_t
 	return std::move(pin);
 }
 
-idx_t CachingFileHandle::ReadAndCopyInterleaved(QueryContext context,
-                                                const vector<shared_ptr<CachedFileRange>> &overlapping_ranges,
+idx_t CachingFileHandle::ReadAndCopyInterleaved(const vector<shared_ptr<CachedFileRange>> &overlapping_ranges,
                                                 const shared_ptr<CachedFileRange> &new_file_range, data_ptr_t buffer,
                                                 const idx_t nr_bytes, const idx_t location, const bool actually_read) {
 	idx_t non_cached_read_count = 0;

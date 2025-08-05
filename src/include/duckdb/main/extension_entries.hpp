@@ -150,10 +150,13 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"delta_scan", "delta", CatalogType::TABLE_FUNCTION_ENTRY},
     {"drop_fts_index", "fts", CatalogType::PRAGMA_FUNCTION_ENTRY},
     {"dsdgen", "tpcds", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"ducklake_add_data_files", "ducklake", CatalogType::TABLE_FUNCTION_ENTRY},
     {"ducklake_cleanup_old_files", "ducklake", CatalogType::TABLE_FUNCTION_ENTRY},
     {"ducklake_expire_snapshots", "ducklake", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"ducklake_flush_inlined_data", "ducklake", CatalogType::TABLE_FUNCTION_ENTRY},
     {"ducklake_list_files", "ducklake", CatalogType::TABLE_FUNCTION_ENTRY},
     {"ducklake_merge_adjacent_files", "ducklake", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"ducklake_options", "ducklake", CatalogType::TABLE_FUNCTION_ENTRY},
     {"ducklake_set_option", "ducklake", CatalogType::TABLE_FUNCTION_ENTRY},
     {"ducklake_snapshots", "ducklake", CatalogType::TABLE_FUNCTION_ENTRY},
     {"ducklake_table_changes", "ducklake", CatalogType::TABLE_MACRO_ENTRY},
@@ -1028,6 +1031,7 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"pg_pages_per_task", "postgres_scanner"},
     {"pg_use_binary_copy", "postgres_scanner"},
     {"pg_use_ctid_scan", "postgres_scanner"},
+    {"pg_use_text_protocol", "postgres_scanner"},
     {"prefetch_all_parquet_files", "parquet"},
     {"s3_access_key_id", "httpfs"},
     {"s3_endpoint", "httpfs"},
@@ -1049,18 +1053,13 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"ui_polling_interval", "ui"},
     {"ui_remote_url", "ui"},
     {"unsafe_enable_version_guessing", "iceberg"},
+    {"variant_legacy_encoding", "parquet"},
 }; // END_OF_EXTENSION_SETTINGS
 
 static constexpr ExtensionEntry EXTENSION_SECRET_TYPES[] = {
-    {"aws", "httpfs"},
-    {"azure", "azure"},
-    {"gcs", "httpfs"},
-    {"huggingface", "httpfs"},
-    {"iceberg", "iceberg"},
-    {"mysql", "mysql_scanner"},
-    {"postgres", "postgres_scanner"},
-    {"r2", "httpfs"},
-    {"s3", "httpfs"},
+    {"aws", "httpfs"},         {"azure", "azure"},     {"ducklake", "ducklake"},   {"gcs", "httpfs"},
+    {"huggingface", "httpfs"}, {"iceberg", "iceberg"}, {"mysql", "mysql_scanner"}, {"postgres", "postgres_scanner"},
+    {"r2", "httpfs"},          {"s3", "httpfs"},
 }; // END_OF_EXTENSION_SECRET_TYPES
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py

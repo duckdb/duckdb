@@ -22,7 +22,7 @@ public:
 	//! From std::exception
 	DUCKDB_API ErrorData(const std::exception &ex); // NOLINT: allow implicit construction from exception
 	//! From a raw string and exception type
-	DUCKDB_API explicit ErrorData(ExceptionType type, const string &raw_message);
+	DUCKDB_API ErrorData(ExceptionType type, const string &raw_message);
 	//! From a raw string
 	DUCKDB_API explicit ErrorData(const string &raw_message);
 
@@ -38,6 +38,7 @@ public:
 	DUCKDB_API const string &RawMessage() const {
 		return raw_message;
 	}
+	DUCKDB_API void Merge(const ErrorData &other);
 	DUCKDB_API bool operator==(const ErrorData &other) const;
 
 	//! Returns true, if this error data contains an exception, else false.

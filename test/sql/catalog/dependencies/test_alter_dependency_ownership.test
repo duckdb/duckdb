@@ -4,7 +4,6 @@
 
 require skip_reload
 
-
 ##TEST: If the table is dropped, then the sequence is also droppped
 statement ok
 CREATE SEQUENCE sequence1;

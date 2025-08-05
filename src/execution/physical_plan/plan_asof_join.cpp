@@ -13,6 +13,7 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -274,9 +275,10 @@ PhysicalOperator &PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparisonJoin &op)
 	}
 	D_ASSERT(asof_idx < op.conditions.size());
 
-	auto &config = ClientConfig::GetConfig(context);
-	if (!config.force_asof_iejoin) {
-		if (op.children[0]->has_estimated_cardinality && lhs_cardinality < config.asof_loop_join_threshold) {
+	bool force_asof_join = DBConfig::GetSetting<DebugAsofIejoinSetting>(context);
+	if (!force_asof_join) {
+		idx_t asof_join_threshold = DBConfig::GetSetting<AsofLoopJoinThresholdSetting>(context);
+		if (op.children[0]->has_estimated_cardinality && lhs_cardinality < asof_join_threshold) {
 			auto result = PlanAsOfLoopJoin(op, left, right);
 			if (result) {
 				return *result;

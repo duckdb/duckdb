@@ -43,6 +43,8 @@ RowGroup::RowGroup(RowGroupCollection &collection_p, RowGroupPointer pointer)
 	}
 	this->deletes_pointers = std::move(pointer.deletes_pointers);
 	this->deletes_is_loaded = false;
+	this->has_metadata_blocks = pointer.has_metadata_blocks;
+	this->extra_metadata_blocks = std::move(pointer.extra_metadata_blocks);
 
 	Verify();
 }
@@ -66,8 +68,13 @@ RowGroup::RowGroup(RowGroupCollection &collection_p, PersistentRowGroupData &dat
 void RowGroup::MoveToCollection(RowGroupCollection &collection_p, idx_t new_start) {
 	this->collection = collection_p;
 	this->start = new_start;
-	for (auto &column : GetColumns()) {
-		column->SetStart(new_start);
+	for (idx_t c = 0; c < columns.size(); c++) {
+		if (is_loaded && !is_loaded[c]) {
+			// we only need to set the column start position if it is already loaded
+			// if it is not loaded - we will set the correct start position upon loading
+			continue;
+		}
+		columns[c]->SetStart(new_start);
 	}
 	if (!HasUnloadedDeletes()) {
 		auto vinfo = GetVersionInfo();
@@ -1007,6 +1014,15 @@ bool RowGroup::HasUnloadedDeletes() const {
 }
 
 vector<MetaBlockPointer> RowGroup::GetColumnPointers() {
+	if (has_metadata_blocks) {
+		// we have the column metadata from the file itself - no need to deserialize metadata to fetch it
+		// read if from "column_pointers" and "extra_metadata_blocks"
+		auto result = column_pointers;
+		for (auto &block_pointer : extra_metadata_blocks) {
+			result.emplace_back(block_pointer, 0);
+		}
+		return result;
+	}
 	vector<MetaBlockPointer> result;
 	if (column_pointers.empty()) {
 		// no pointers
@@ -1032,6 +1048,13 @@ vector<MetaBlockPointer> RowGroup::GetColumnPointers() {
 }
 
 RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
+	if (!column_pointers.empty() && !HasChanges()) {
+		// we have existing metadata and the row group has not been changed
+		// re-use previous metadata
+		RowGroupWriteData result;
+		result.existing_pointers = GetColumnPointers();
+		return result;
+	}
 	auto &compression_types = writer.GetCompressionTypes();
 	if (columns.size() != compression_types.size()) {
 		throw InternalException("RowGroup::WriteToDisk - mismatch in column count vs compression types");
@@ -1053,15 +1076,30 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
                                      TableStatistics &global_stats) {
 	RowGroupPointer row_group_pointer;
 
-	auto lock = global_stats.GetLock();
-	for (idx_t column_idx = 0; column_idx < GetColumnCount(); column_idx++) {
-		global_stats.GetStats(*lock, column_idx).Statistics().Merge(write_data.statistics[column_idx]);
-	}
-
+	auto metadata_manager = writer.GetMetadataManager();
 	// construct the row group pointer and write the column meta data to disk
-	D_ASSERT(write_data.states.size() == columns.size());
 	row_group_pointer.row_start = start;
 	row_group_pointer.tuple_count = count;
+	if (!write_data.existing_pointers.empty()) {
+		// we are re-using the previous metadata
+		row_group_pointer.data_pointers = column_pointers;
+		row_group_pointer.has_metadata_blocks = has_metadata_blocks;
+		row_group_pointer.extra_metadata_blocks = extra_metadata_blocks;
+		row_group_pointer.deletes_pointers = deletes_pointers;
+		metadata_manager->ClearModifiedBlocks(write_data.existing_pointers);
+		metadata_manager->ClearModifiedBlocks(deletes_pointers);
+		return row_group_pointer;
+	}
+	D_ASSERT(write_data.states.size() == columns.size());
+	{
+		auto lock = global_stats.GetLock();
+		for (idx_t column_idx = 0; column_idx < GetColumnCount(); column_idx++) {
+			global_stats.GetStats(*lock, column_idx).Statistics().Merge(write_data.statistics[column_idx]);
+		}
+	}
+	vector<MetaBlockPointer> column_metadata;
+	unordered_set<idx_t> metadata_blocks;
+	writer.StartWritingColumns(column_metadata);
 	for (auto &state : write_data.states) {
 		// get the current position of the table data writer
 		auto &data_writer = writer.GetPayloadWriter();
@@ -1069,6 +1107,7 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 
 		// store the stats and the data pointers in the row group pointers
 		row_group_pointer.data_pointers.push_back(pointer);
+		metadata_blocks.insert(pointer.block_pointer);
 
 		// Write pointers to the column segments.
 		//
@@ -1080,7 +1119,18 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 		persistent_data.Serialize(serializer);
 		serializer.End();
 	}
-	auto metadata_manager = writer.GetMetadataManager();
+	writer.FinishWritingColumns();
+
+	row_group_pointer.has_metadata_blocks = true;
+	for (auto &column_pointer : column_metadata) {
+		auto entry = metadata_blocks.find(column_pointer.block_pointer);
+		if (entry != metadata_blocks.end()) {
+			// this metadata block is already stored in "data_pointers" - no need to duplicate it
+			continue;
+		}
+		// this metadata block is not stored - add it to the extra metadata blocks
+		row_group_pointer.extra_metadata_blocks.push_back(column_pointer.block_pointer);
+	}
 	if (metadata_manager) {
 		row_group_pointer.deletes_pointers = CheckpointDeletes(*metadata_manager);
 	}
@@ -1147,6 +1197,10 @@ void RowGroup::Serialize(RowGroupPointer &pointer, Serializer &serializer) {
 	serializer.WriteProperty(101, "tuple_count", pointer.tuple_count);
 	serializer.WriteProperty(102, "data_pointers", pointer.data_pointers);
 	serializer.WriteProperty(103, "delete_pointers", pointer.deletes_pointers);
+	if (serializer.ShouldSerialize(6)) {
+		serializer.WriteProperty(104, "has_metadata_blocks", pointer.has_metadata_blocks);
+		serializer.WritePropertyWithDefault(105, "extra_metadata_blocks", pointer.extra_metadata_blocks);
+	}
 }
 
 RowGroupPointer RowGroup::Deserialize(Deserializer &deserializer) {
@@ -1155,6 +1209,8 @@ RowGroupPointer RowGroup::Deserialize(Deserializer &deserializer) {
 	result.tuple_count = deserializer.ReadProperty<uint64_t>(101, "tuple_count");
 	result.data_pointers = deserializer.ReadProperty<vector<MetaBlockPointer>>(102, "data_pointers");
 	result.deletes_pointers = deserializer.ReadProperty<vector<MetaBlockPointer>>(103, "delete_pointers");
+	result.has_metadata_blocks = deserializer.ReadPropertyWithExplicitDefault<bool>(104, "has_metadata_blocks", false);
+	result.extra_metadata_blocks = deserializer.ReadPropertyWithDefault<vector<idx_t>>(105, "extra_metadata_blocks");
 	return result;
 }
 

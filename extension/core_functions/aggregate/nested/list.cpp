@@ -182,14 +182,6 @@ void ListCombineFunction(Vector &states_vector, Vector &combined, AggregateInput
 
 unique_ptr<FunctionData> ListBindFunction(ClientContext &context, AggregateFunction &function,
                                           vector<unique_ptr<Expression>> &arguments) {
-	D_ASSERT(arguments.size() == 1);
-	D_ASSERT(function.arguments.size() == 1);
-
-	if (arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
-		function.arguments[0] = LogicalTypeId::UNKNOWN;
-		function.return_type = LogicalType::SQLNULL;
-		return nullptr;
-	}
 
 	function.return_type = LogicalType::LIST(arguments[0]->return_type);
 	return make_uniq<ListBindData>(function.return_type);
@@ -198,10 +190,10 @@ unique_ptr<FunctionData> ListBindFunction(ClientContext &context, AggregateFunct
 } // namespace
 
 AggregateFunction ListFun::GetFunction() {
-	auto func =
-	    AggregateFunction({LogicalType::ANY}, LogicalTypeId::LIST, AggregateFunction::StateSize<ListAggState>,
-	                      AggregateFunction::StateInitialize<ListAggState, ListFunction>, ListUpdateFunction,
-	                      ListCombineFunction, ListFinalize, nullptr, ListBindFunction, nullptr, nullptr, nullptr);
+	auto func = AggregateFunction(
+	    {LogicalType::TEMPLATE("T")}, LogicalType::LIST(LogicalType::TEMPLATE("T")),
+	    AggregateFunction::StateSize<ListAggState>, AggregateFunction::StateInitialize<ListAggState, ListFunction>,
+	    ListUpdateFunction, ListCombineFunction, ListFinalize, nullptr, ListBindFunction, nullptr, nullptr, nullptr);
 
 	return func;
 }

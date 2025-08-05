@@ -1,4 +1,5 @@
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/varint.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/interpolate.hpp"
 #include "duckdb/common/operator/multiply.hpp"
@@ -311,6 +312,17 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &type) {
 	}
 }
 
+void VarintAdd(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &allocator = state.GetAllocator();
+	ArenaAllocator arena(allocator);
+	BinaryExecutor::Execute<varint_t, varint_t, string_t>(args.data[0], args.data[1], result, args.size(),
+	                                                      [&](varint_t a, varint_t b) {
+		                                                      const VarintIntermediate lhs(a);
+		                                                      const VarintIntermediate rhs(b);
+		                                                      return VarintIntermediate::Add(result, lhs, rhs);
+	                                                      });
+}
+
 ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const LogicalType &right_type) {
 	if (left_type.IsNumeric() && left_type.id() == right_type.id()) {
 		if (left_type.id() == LogicalTypeId::DECIMAL) {
@@ -336,6 +348,14 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const Logi
 	}
 
 	switch (left_type.id()) {
+	case LogicalTypeId::VARINT:
+		if (right_type.id() == LogicalTypeId::VARINT) {
+			ScalarFunction function("+", {left_type, right_type}, LogicalType::VARINT, VarintAdd);
+			BaseScalarFunction::SetReturnsError(function);
+			return function;
+		}
+		break;
+
 	case LogicalTypeId::DATE:
 		if (right_type.id() == LogicalTypeId::INTEGER) {
 			ScalarFunction function("+", {left_type, right_type}, LogicalType::DATE,
@@ -476,6 +496,9 @@ ScalarFunctionSet OperatorAddFun::GetFunctions() {
 
 	// we can add lists together
 	add.AddFunction(ListConcatFun::GetFunction());
+
+	// we can add varints together
+	add.AddFunction(AddFunction::GetFunction(LogicalType::VARINT, LogicalType::VARINT));
 
 	return add;
 }

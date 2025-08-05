@@ -14,7 +14,7 @@ SortedRun::SortedRun(ClientContext &context_p, shared_ptr<TupleDataLayout> key_l
     : context(context_p),
       key_data(make_uniq<TupleDataCollection>(BufferManager::GetBufferManager(context), std::move(key_layout))),
       payload_data(
-          payload_layout->ColumnCount() != 0
+          payload_layout && payload_layout->ColumnCount() != 0
               ? make_uniq<TupleDataCollection>(BufferManager::GetBufferManager(context), std::move(payload_layout))
               : nullptr),
       is_index_sort(is_index_sort_p), finalized(false) {
@@ -22,6 +22,15 @@ SortedRun::SortedRun(ClientContext &context_p, shared_ptr<TupleDataLayout> key_l
 	if (payload_data) {
 		payload_data->InitializeAppend(payload_append_state, TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
 	}
+}
+
+unique_ptr<SortedRun> SortedRun::CreateRunForMaterialization() const {
+	auto res = make_uniq<SortedRun>(context, key_data->GetLayoutPtr(),
+	                                payload_data ? payload_data->GetLayoutPtr() : nullptr, is_index_sort);
+	res->key_append_state.pin_state.properties = TupleDataPinProperties::UNPIN_AFTER_DONE;
+	res->payload_append_state.pin_state.properties = TupleDataPinProperties::UNPIN_AFTER_DONE;
+	res->finalized = true;
+	return res;
 }
 
 SortedRun::~SortedRun() {
