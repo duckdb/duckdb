@@ -74,11 +74,11 @@ public:
 	static string GetFailureSummary();
 	static idx_t GetSummaryCounter();
 	static bool SkipLoggingSameError(const string &file_name);
-	
-	private:
+
+private:
 	static FailureSummary &Instance();
 	bool SkipLoggingSameErrorInternal(const string &file_name);
-	
+
 private:
 	mutex failures_lock;
 	atomic<idx_t> failures_summary_counter;

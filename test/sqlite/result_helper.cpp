@@ -8,6 +8,7 @@
 #include "sqllogic_test_runner.hpp"
 #include "termcolor.hpp"
 #include "test_helpers.hpp"
+#include "test_config.hpp"
 
 #include <thread>
 
@@ -29,7 +30,7 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 			runner.finished_processing_file = true;
 			return true;
 		}
-		if (!FailureSummary::Instance().SkipLoggingSameError(context.error_file)) {
+		if (!FailureSummary::SkipLoggingSameError(context.error_file)) {
 			logger.UnexpectedFailure(result);
 		}
 		return false;
@@ -296,7 +297,7 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
 					// `./build/debug/test/unittest --on-init "SET max_memory='400kb';"
 					// test/fuzzer/pedro/concurrent_catalog_usage.test`
 					if (!SkipErrorMessage(result.GetError()) &&
-					    !FailureSummary::Instance().SkipLoggingSameError(statement.file_name)) {
+					    !FailureSummary::SkipLoggingSameError(statement.file_name)) {
 						logger.ExpectedErrorMismatch(statement.expected_error, result);
 						return false;
 					}
@@ -315,7 +316,7 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
 			runner.finished_processing_file = true;
 			return true;
 		}
-		if (!FailureSummary::Instance().SkipLoggingSameError(statement.file_name)) {
+		if (!FailureSummary::SkipLoggingSameError(statement.file_name)) {
 			logger.UnexpectedStatement(expected_result == ExpectedResult::RESULT_SUCCESS, result);
 		}
 		return false;
