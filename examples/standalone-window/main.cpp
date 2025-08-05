@@ -1,5 +1,4 @@
 #include "duckdb.hpp"
-#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/execution/operator/aggregate/physical_window.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
@@ -7,7 +6,6 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
-#endif
 
 using namespace duckdb;
 
