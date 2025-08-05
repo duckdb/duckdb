@@ -608,6 +608,11 @@ typedef struct {
 	void (*duckdb_table_function_get_client_context)(duckdb_bind_info info, duckdb_client_context *out_context);
 #endif
 
+// New functions around table function binding
+#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+	void (*duckdb_table_function_get_client_context)(duckdb_bind_info info, duckdb_client_context *out_context);
+#endif
+
 // New string functions that are added
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
 	char *(*duckdb_value_to_string)(duckdb_value value);
@@ -1099,6 +1104,9 @@ typedef struct {
 #define duckdb_scalar_function_get_client_context      duckdb_ext_api.duckdb_scalar_function_get_client_context
 #define duckdb_scalar_function_bind_get_argument_count duckdb_ext_api.duckdb_scalar_function_bind_get_argument_count
 #define duckdb_scalar_function_bind_get_argument       duckdb_ext_api.duckdb_scalar_function_bind_get_argument
+
+// Version unstable_new_table_function_functions
+#define duckdb_table_function_get_client_context  duckdb_ext_api.duckdb_table_function_get_client_context
 
 // Version unstable_new_table_function_functions
 #define duckdb_table_function_get_client_context  duckdb_ext_api.duckdb_table_function_get_client_context
