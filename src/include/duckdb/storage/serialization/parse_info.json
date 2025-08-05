@@ -412,7 +412,8 @@
       {
         "id": 202,
         "name": "options",
-        "type": "unordered_map<string, Value>"
+        "type": "unordered_map<string, Value>",
+        "property": "bound_options"
       },
       {
         "id": 203,
