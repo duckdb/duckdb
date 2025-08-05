@@ -11,8 +11,9 @@ unique_ptr<AttachInfo> AttachInfo::Copy() const {
 	auto result = make_uniq<AttachInfo>();
 	result->name = name;
 	result->path = path;
-	for (auto &entry : options) {
-		result->options[entry.first] = entry.second->Copy();
+	result->options = options;
+	for (auto &entry : parsed_options) {
+		result->parsed_options[entry.first] = entry.second->Copy();
 	}
 	result->on_conflict = on_conflict;
 	return result;
@@ -31,10 +32,13 @@ string AttachInfo::ToString() const {
 	if (!name.empty()) {
 		result += " AS " + KeywordHelper::WriteOptionallyQuoted(name);
 	}
-	if (!options.empty()) {
+	if (!parsed_options.empty() || !options.empty()) {
 		vector<string> stringified;
-		for (auto &opt : options) {
+		for (auto &opt : parsed_options) {
 			stringified.push_back(StringUtil::Format("%s %s", opt.first, opt.second->ToString()));
+		}
+		for (auto &opt : options) {
+			stringified.push_back(StringUtil::Format("%s %s", opt.first, opt.second.ToSQLString()));
 		}
 		result += " (" + StringUtil::Join(stringified, ", ") + ")";
 	}

@@ -22,7 +22,7 @@ unique_ptr<AttachStatement> Transformer::TransformAttach(duckdb_libpgquery::PGAt
 			} else {
 				expr = make_uniq<ConstantExpression>(Value::BOOLEAN(true));
 			}
-			info->options[StringUtil::Lower(def_elem->defname)] = std::move(expr);
+			info->parsed_options[StringUtil::Lower(def_elem->defname)] = std::move(expr);
 		}
 	}
 	result->info = std::move(info);
