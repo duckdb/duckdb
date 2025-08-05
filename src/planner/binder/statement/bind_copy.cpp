@@ -396,7 +396,43 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 	return result;
 }
 
+void Binder::BindCopyOptions(CopyInfo &info) {
+	TableFunctionBinder option_binder(*this, context, "Copy", "Copy options");
+	unordered_map<string, Value> kv_options;
+	for (auto &entry : info.parsed_options) {
+		vector<Value> inputs;
+		if (entry.second) {
+			auto bound_expr = option_binder.Bind(entry.second);
+			auto val = ExpressionExecutor::EvaluateScalar(context, *bound_expr);
+			if (val.IsNull()) {
+				throw BinderException("NULL is not supported as a valid option for COPY option \"" + entry.first +
+				                      "\"");
+			}
+			if (val.type().id() == LogicalTypeId::STRUCT && StructType::IsUnnamed(val.type())) {
+				// unpack unnamed structs into a list of options
+				inputs = StructValue::GetChildren(val);
+			} else {
+				inputs.push_back(std::move(val));
+			}
+		}
+		if (StringUtil::Lower(entry.first) == "format") {
+			// format specifier: interpret this option
+			if (inputs.size() != 1 || inputs[0].type().id() != LogicalTypeId::VARCHAR) {
+				throw ParserException("Unsupported parameter type for FORMAT: expected e.g. FORMAT 'csv', 'parquet'");
+			}
+			info.format = StringUtil::Lower(inputs[0].ToString());
+			info.is_format_auto_detected = false;
+			continue;
+		}
+		info.options[entry.first] = std::move(inputs);
+	}
+	info.parsed_options.clear();
+}
+
 BoundStatement Binder::Bind(CopyStatement &stmt, CopyToType copy_to_type) {
+	// bind the copy options
+	BindCopyOptions(*stmt.info);
+
 	if (!stmt.info->is_from && !stmt.info->select_statement) {
 		// copy table into file without a query
 		// generate SELECT * FROM table;

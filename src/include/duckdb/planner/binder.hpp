@@ -66,6 +66,7 @@ struct BoundLimitNode;
 struct EntryLookupInfo;
 struct PivotColumnEntry;
 struct UnpivotEntry;
+struct CopyInfo;
 
 template <class T, class INDEX_TYPE>
 class IndexVector;
@@ -402,6 +403,7 @@ private:
 
 	BoundStatement BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type);
 	BoundStatement BindCopyFrom(CopyStatement &stmt);
+	void BindCopyOptions(CopyInfo &info);
 
 	void PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, BoundQueryNode &result);
 	void BindModifiers(BoundQueryNode &result, idx_t table_index, const vector<string> &names,

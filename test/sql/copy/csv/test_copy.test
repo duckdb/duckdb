@@ -121,17 +121,16 @@ COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (SEP 1);
 ----
 "sep" expects a string argument!
 
-# multiple format options/1, last one wins
+# multiple format options
 statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (FORMAT 'csv', FORMAT 'some_other_copy_function');
 ----
-Catalog Error: Copy Function with name some_other_copy_function does not exist
+duplicate option
 
-# multiple format options/2, last one wins
-query I
+statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (FORMAT 'some_other_copy_function', FORMAT 'csv');
 ----
-5000
+duplicate option
 
 # number as escape string
 statement error
