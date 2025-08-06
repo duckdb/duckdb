@@ -17,8 +17,7 @@ namespace duckdb {
 
 StatementVerifier::StatementVerifier(VerificationType type, string name, unique_ptr<SQLStatement> statement_p,
                                      optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters_p)
-    : type(type), name(std::move(name)),
-      statement(unique_ptr_cast<SQLStatement, SelectStatement>(std::move(statement_p))),
+    : type(type), name(std::move(name)), statement(std::move(statement_p)),
       select_statement(statement->type == StatementType::SELECT_STATEMENT ? &statement->Cast<SelectStatement>()
                                                                           : nullptr),
       parameters(parameters_p),
