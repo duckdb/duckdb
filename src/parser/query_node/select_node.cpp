@@ -106,7 +106,10 @@ string SelectNode::ToString() const {
 		}
 		result += ")";
 	}
-	return result + ResultModifiersToString();
+
+	result += ResultModifiersToString();
+	return result;
+	// return result + ResultModifiersToString();
 }
 
 bool SelectNode::Equals(const QueryNode *other_p) const {
