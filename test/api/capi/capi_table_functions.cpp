@@ -313,9 +313,9 @@ TEST_CASE("Table function client context return") {
 	result = tester.Query("SELECT * FROM my_connection_id_function(3)");
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE(result->Fetch<int64_t>(0, 0) == first_conn_id);
-	REQUIRE(result->Fetch<int64_t>(0, 1) == 42);
-	REQUIRE(result->Fetch<int64_t>(1, 0) == first_conn_id);
+	REQUIRE(result->Fetch<int64_t>(0, 1) == first_conn_id);
+	REQUIRE(result->Fetch<int64_t>(0, 2) == first_conn_id);
+	REQUIRE(result->Fetch<int64_t>(1, 0) == 42);
 	REQUIRE(result->Fetch<int64_t>(1, 1) == 42);
-	REQUIRE(result->Fetch<int64_t>(2, 0) == first_conn_id);
-	REQUIRE(result->Fetch<int64_t>(2, 1) == 42);
+	REQUIRE(result->Fetch<int64_t>(1, 2) == 42);
 }
