@@ -38,14 +38,14 @@ void CSVEncoderBuffer::Reset() {
 	actual_encoded_buffer_size = 0;
 }
 
-CSVEncoder::CSVEncoder(ClientContext &context, const string &encoding_name_to_find, idx_t buffer_size)
-    : pass_on_byte(0) {
-	auto &config = DBConfig::GetConfig(context);
+CSVEncoder::CSVEncoder(ClientContext &context_p, const string &encoding_name_to_find, idx_t buffer_size)
+    : context(context_p), pass_on_byte(0) {
+	auto &config = DBConfig::GetConfig(context_p);
 	encoding_name = StringUtil::Lower(encoding_name_to_find);
 	auto function = config.GetEncodeFunction(encoding_name_to_find);
 	if (!function) {
 		// Maybe we can try to auto-load from our encodings extension, if this somehow fails, we just error.
-		if (Catalog::TryAutoLoad(context, "encodings")) {
+		if (Catalog::TryAutoLoad(context_p, "encodings")) {
 			// If it successfully loaded, we can try to get our function again
 			function = config.GetEncodeFunction(encoding_name_to_find);
 		}
@@ -55,7 +55,7 @@ CSVEncoder::CSVEncoder(ClientContext &context, const string &encoding_name_to_fi
 		auto loaded_encodings = config.GetLoadedEncodedFunctions();
 		std::ostringstream error;
 		error << "The CSV Reader does not support the encoding: \"" << encoding_name_to_find << "\"\n";
-		if (!context.db->ExtensionIsLoaded("encodings")) {
+		if (!context_p.db->ExtensionIsLoaded("encodings")) {
 			error << "It is possible that the encoding exists in the encodings extension. You can try \"INSTALL "
 			         "encodings; LOAD encodings\""
 			      << "\n";
@@ -79,8 +79,7 @@ CSVEncoder::CSVEncoder(ClientContext &context, const string &encoding_name_to_fi
 	encoding_function = function;
 }
 
-idx_t CSVEncoder::Encode(QueryContext context, FileHandle &file_handle_input, char *output_buffer,
-                         const idx_t decoded_buffer_size) {
+idx_t CSVEncoder::Encode(FileHandle &file_handle_input, char *output_buffer, const idx_t decoded_buffer_size) {
 	idx_t output_buffer_pos = 0;
 	// Check if we have some left-overs. These can either be
 	// 1. missing decoded bytes

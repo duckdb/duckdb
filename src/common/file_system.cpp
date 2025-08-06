@@ -62,6 +62,7 @@ constexpr FileOpenFlags FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS;
 constexpr FileOpenFlags FileFlags::FILE_FLAGS_PARALLEL_ACCESS;
 constexpr FileOpenFlags FileFlags::FILE_FLAGS_EXCLUSIVE_CREATE;
 constexpr FileOpenFlags FileFlags::FILE_FLAGS_NULL_IF_EXISTS;
+constexpr FileOpenFlags FileFlags::FILE_FLAGS_MULTI_CLIENT_ACCESS;
 
 void FileOpenFlags::Verify() {
 #ifdef DEBUG
@@ -741,6 +742,20 @@ FileCompressionType FileHandle::GetFileCompressionType() {
 
 bool FileHandle::IsPipe() {
 	return file_system.IsPipe(path);
+}
+
+string FileHandle::ReadLine() {
+	string result;
+	char buffer[1];
+	while (true) {
+		auto tuples_read = UnsafeNumericCast<idx_t>(Read(buffer, 1));
+		if (tuples_read == 0 || buffer[0] == '\n') {
+			return result;
+		}
+		if (buffer[0] != '\r') {
+			result += buffer[0];
+		}
+	}
 }
 
 string FileHandle::ReadLine(QueryContext context) {

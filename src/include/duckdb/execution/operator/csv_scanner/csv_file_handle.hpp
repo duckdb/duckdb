@@ -13,6 +13,8 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/execution/operator/csv_scanner/encode/csv_encoder.hpp"
+#include "duckdb/main/client_context.hpp"
+
 namespace duckdb {
 class Allocator;
 class FileSystem;
@@ -36,9 +38,9 @@ public:
 
 	bool FinishedReading() const;
 
-	idx_t Read(QueryContext context, void *buffer, idx_t nr_bytes);
+	idx_t Read(void *buffer, idx_t nr_bytes);
 
-	string ReadLine(QueryContext context);
+	string ReadLine();
 
 	string GetFilePath();
 
@@ -51,6 +53,7 @@ public:
 	double GetProgress() const;
 
 private:
+	QueryContext context;
 	unique_ptr<FileHandle> file_handle;
 	CSVEncoder encoder;
 	const OpenFileInfo file;
