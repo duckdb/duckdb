@@ -170,6 +170,8 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 			throw InvalidInputException("Cannot use NULL as argument for \"%s\"", key);
 		}
 		options.hive_lazy_listing = BooleanValue::Get(val);
+		options.hive_partitioning = true;
+		options.auto_detect_hive_partitioning = false;
 	} else if (loption == "hive_types_autocast" || loption == "hive_type_autocast") {
 		if (val.IsNull()) {
 			throw InvalidInputException("Cannot use NULL as argument for \"%s\"", key);
