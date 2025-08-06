@@ -496,8 +496,8 @@ void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block
 
 	// Append to a few grouped files.
 	if (buffer.AllocSize() == GetBlockAllocSize()) {
-		evicted_data_per_tag[uint8_t(tag)] += GetBlockAllocSize();
-		temporary_directory.handle->GetTempFile().WriteTemporaryBuffer(block_id, buffer);
+		idx_t eviction_size = temporary_directory.handle->GetTempFile().WriteTemporaryBuffer(block_id, buffer);
+		evicted_data_per_tag[uint8_t(tag)] += eviction_size;
 		return;
 	}
 
@@ -597,8 +597,8 @@ void StandardBufferManager::DeleteTemporaryFile(BlockHandle &block) {
 
 	// check if we should delete the file from the shared pool of files, or from the general file system
 	if (temporary_directory.handle->GetTempFile().HasTemporaryBuffer(id)) {
-		evicted_data_per_tag[uint8_t(block.GetMemoryTag())] -= GetBlockAllocSize();
-		temporary_directory.handle->GetTempFile().DeleteTemporaryBuffer(id);
+		idx_t eviction_size = temporary_directory.handle->GetTempFile().DeleteTemporaryBuffer(id);
+		evicted_data_per_tag[uint8_t(block.GetMemoryTag())] -= eviction_size;
 		return;
 	}
 
