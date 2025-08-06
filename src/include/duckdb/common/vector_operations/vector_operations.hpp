@@ -11,8 +11,6 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/vector.hpp"
 
-#include <functional>
-
 namespace duckdb {
 class CastFunctionSet;
 struct GetCastFunctionInput;
@@ -143,14 +141,31 @@ struct VectorOperations {
 	//===--------------------------------------------------------------------===//
 	// Nested Comparisons
 	//===--------------------------------------------------------------------===//
-	// true := A != B with nulls being equal
+	// true := A != B with nulls producing NULL
 	static idx_t NestedNotEquals(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel, idx_t count,
 	                             optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel,
 	                             optional_ptr<ValidityMask> null_mask = nullptr);
-	// true := A == B with nulls being equal
+	// true := A == B with nulls producing NULL
 	static idx_t NestedEquals(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel, idx_t count,
 	                          optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel,
 	                          optional_ptr<ValidityMask> null_mask = nullptr);
+	// true := A > B with nulls producing NULL
+	static idx_t NestedGreaterThan(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel, idx_t count,
+	                               optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel,
+	                               optional_ptr<ValidityMask> null_mask = nullptr);
+	// true := A < B with nulls producing NULL
+	static idx_t NestedLessThan(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel, idx_t count,
+	                            optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel,
+	                            optional_ptr<ValidityMask> null_mask = nullptr);
+	// true := A >= B with nulls producing NULL
+	static idx_t NestedGreaterThanEquals(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel,
+	                                     idx_t count, optional_ptr<SelectionVector> true_sel,
+	                                     optional_ptr<SelectionVector> false_sel,
+	                                     optional_ptr<ValidityMask> null_mask = nullptr);
+	// true := A <= B with nulls producing NULL
+	static idx_t NestedLessThanEquals(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel, idx_t count,
+	                                  optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel,
+	                                  optional_ptr<ValidityMask> null_mask = nullptr);
 
 	//===--------------------------------------------------------------------===//
 	// Hash functions

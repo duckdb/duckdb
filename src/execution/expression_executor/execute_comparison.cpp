@@ -5,8 +5,6 @@
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 
-#include <algorithm>
-
 namespace duckdb {
 
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundComparisonExpression &expr,
@@ -177,7 +175,7 @@ idx_t NestedSelector::Select<duckdb::LessThan>(Vector &left, Vector &right, opti
                                                idx_t count, optional_ptr<SelectionVector> true_sel,
                                                optional_ptr<SelectionVector> false_sel,
                                                optional_ptr<ValidityMask> null_mask) {
-	return VectorOperations::DistinctLessThan(left, right, sel, count, true_sel, false_sel, null_mask);
+	return VectorOperations::NestedLessThan(left, right, sel, count, true_sel, false_sel, null_mask);
 }
 
 template <>
@@ -186,7 +184,7 @@ idx_t NestedSelector::Select<duckdb::LessThanEquals>(Vector &left, Vector &right
                                                      optional_ptr<SelectionVector> true_sel,
                                                      optional_ptr<SelectionVector> false_sel,
                                                      optional_ptr<ValidityMask> null_mask) {
-	return VectorOperations::DistinctLessThanEquals(left, right, sel, count, true_sel, false_sel, null_mask);
+	return VectorOperations::NestedLessThanEquals(left, right, sel, count, true_sel, false_sel, null_mask);
 }
 
 template <>
@@ -194,7 +192,7 @@ idx_t NestedSelector::Select<duckdb::GreaterThan>(Vector &left, Vector &right, o
                                                   idx_t count, optional_ptr<SelectionVector> true_sel,
                                                   optional_ptr<SelectionVector> false_sel,
                                                   optional_ptr<ValidityMask> null_mask) {
-	return VectorOperations::DistinctGreaterThan(left, right, sel, count, true_sel, false_sel, null_mask);
+	return VectorOperations::NestedGreaterThan(left, right, sel, count, true_sel, false_sel, null_mask);
 }
 
 template <>
@@ -203,7 +201,7 @@ idx_t NestedSelector::Select<duckdb::GreaterThanEquals>(Vector &left, Vector &ri
                                                         optional_ptr<SelectionVector> true_sel,
                                                         optional_ptr<SelectionVector> false_sel,
                                                         optional_ptr<ValidityMask> null_mask) {
-	return VectorOperations::DistinctGreaterThanEquals(left, right, sel, count, true_sel, false_sel, null_mask);
+	return VectorOperations::NestedGreaterThanEquals(left, right, sel, count, true_sel, false_sel, null_mask);
 }
 
 static inline idx_t SelectNotNull(Vector &left, Vector &right, const idx_t count, const SelectionVector &sel,

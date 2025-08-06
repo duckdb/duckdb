@@ -286,27 +286,22 @@ void UpdateNullMask(Vector &vec, const SelectionVector &sel, idx_t count, Validi
 }
 
 // Special ops for (in)equality testing of nested data structures (which use ternary logic)
-struct NestedEqualTo {
+template <typename OP>
+struct NestedComparator {
 	template <class T>
 	static inline bool Operation(const T &left, const T &right, bool left_null, bool right_null) {
 		if (left_null || right_null) {
 			return false;
 		}
 		//	NULLS are handled separately
-		return Equals::Operation(left, right);
+		return OP::Operation(left, right);
 	}
 };
 
-struct NestedNotEqualTo {
-	template <class T>
-	static inline bool Operation(const T &left, const T &right, bool left_null, bool right_null) {
-		if (left_null || right_null) {
-			return false;
-		}
-		//	NULLS are handled separately
-		return NotEquals::Operation(left, right);
-	}
-};
+using NestedEqualTo = NestedComparator<Equals>;
+using NestedNotEqualTo = NestedComparator<NotEquals>;
+using NestedGreaterThan = NestedComparator<GreaterThan>;
+using NestedGreaterEquals = NestedComparator<GreaterThanEquals>;
 
 template <typename OP>
 struct DistinctOpTraits {
@@ -320,6 +315,16 @@ struct DistinctOpTraits<NestedEqualTo> {
 
 template <>
 struct DistinctOpTraits<NestedNotEqualTo> {
+	static constexpr bool reports_nulls = true;
+};
+
+template <>
+struct DistinctOpTraits<duckdb::NestedGreaterThan> {
+	static constexpr bool reports_nulls = true;
+};
+
+template <>
+struct DistinctOpTraits<duckdb::NestedGreaterEquals> {
 	static constexpr bool reports_nulls = true;
 };
 
@@ -538,6 +543,48 @@ idx_t PositionComparator::Final<duckdb::DistinctGreaterThanNullsFirst>(Vector &l
                                                                        optional_ptr<ValidityMask> null_mask) {
 	// DistinctLessThan has NULLs last
 	return VectorOperations::DistinctLessThan(right, left, &sel, count, true_sel, false_sel, null_mask);
+}
+
+// NestedGreaterThan is definite for strict inequalities, possible for equality
+template <>
+idx_t PositionComparator::Possible<duckdb::NestedGreaterThan>(Vector &left, Vector &right, const SelectionVector &sel,
+                                                              idx_t count, SelectionVector &true_sel,
+                                                              optional_ptr<SelectionVector> false_sel,
+                                                              optional_ptr<ValidityMask> null_mask) {
+	return VectorOperations::NestedEquals(left, right, &sel, count, true_sel, false_sel, null_mask);
+}
+
+template <>
+idx_t PositionComparator::Final<duckdb::NestedGreaterThan>(Vector &left, Vector &right, const SelectionVector &sel,
+                                                           idx_t count, optional_ptr<SelectionVector> true_sel,
+                                                           optional_ptr<SelectionVector> false_sel,
+                                                           optional_ptr<ValidityMask> null_mask) {
+	return VectorOperations::NestedGreaterThan(left, right, &sel, count, true_sel, false_sel, null_mask);
+}
+
+// NestedGreaterEquals is definite for strict inequality, possible for equality, and  the last column must pass
+template <>
+idx_t PositionComparator::Definite<duckdb::NestedGreaterEquals>(Vector &left, Vector &right, const SelectionVector &sel,
+                                                                idx_t count, optional_ptr<SelectionVector> true_sel,
+                                                                SelectionVector &false_sel,
+                                                                optional_ptr<ValidityMask> null_mask) {
+	return VectorOperations::NestedGreaterThan(left, right, &sel, count, true_sel, false_sel, null_mask);
+}
+
+template <>
+idx_t PositionComparator::Possible<duckdb::NestedGreaterEquals>(Vector &left, Vector &right, const SelectionVector &sel,
+                                                                idx_t count, SelectionVector &true_sel,
+                                                                optional_ptr<SelectionVector> false_sel,
+                                                                optional_ptr<ValidityMask> null_mask) {
+	return VectorOperations::NestedEquals(left, right, &sel, count, true_sel, false_sel, null_mask);
+}
+
+template <>
+idx_t PositionComparator::Final<duckdb::NestedGreaterEquals>(Vector &left, Vector &right, const SelectionVector &sel,
+                                                             idx_t count, optional_ptr<SelectionVector> true_sel,
+                                                             optional_ptr<SelectionVector> false_sel,
+                                                             optional_ptr<ValidityMask> null_mask) {
+	return VectorOperations::NestedGreaterThanEquals(left, right, &sel, count, true_sel, false_sel, null_mask);
 }
 
 using StructEntries = vector<unique_ptr<Vector>>;
@@ -1260,11 +1307,47 @@ idx_t VectorOperations::NestedNotEquals(Vector &left, Vector &right, optional_pt
                                         optional_ptr<SelectionVector> false_sel, optional_ptr<ValidityMask> null_mask) {
 	return TemplatedDistinctSelectOperation<NestedNotEqualTo>(left, right, sel, count, true_sel, false_sel, null_mask);
 }
+
 // true := A == B with nulls producing NULL, inputs selected
 idx_t VectorOperations::NestedEquals(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel, idx_t count,
                                      optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel,
                                      optional_ptr<ValidityMask> null_mask) {
 	return TemplatedDistinctSelectOperation<NestedEqualTo>(left, right, sel, count, true_sel, false_sel, null_mask);
+}
+
+// true := A > B with nulls producing NULL, inputs selected
+idx_t VectorOperations::NestedGreaterThan(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel,
+                                          idx_t count, optional_ptr<SelectionVector> true_sel,
+                                          optional_ptr<SelectionVector> false_sel,
+                                          optional_ptr<ValidityMask> null_mask) {
+	return TemplatedDistinctSelectOperation<duckdb::NestedGreaterThan>(left, right, sel, count, true_sel, false_sel,
+	                                                                   null_mask);
+}
+
+// true := A < B with nulls producing NULL, inputs selected
+idx_t VectorOperations::NestedLessThan(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel,
+                                       idx_t count, optional_ptr<SelectionVector> true_sel,
+                                       optional_ptr<SelectionVector> false_sel, optional_ptr<ValidityMask> null_mask) {
+	return TemplatedDistinctSelectOperation<duckdb::NestedGreaterThan>(right, left, sel, count, false_sel, true_sel,
+	                                                                   null_mask);
+}
+
+// true := A >= B with nulls producing NULL, inputs selected
+idx_t VectorOperations::NestedGreaterThanEquals(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel,
+                                                idx_t count, optional_ptr<SelectionVector> true_sel,
+                                                optional_ptr<SelectionVector> false_sel,
+                                                optional_ptr<ValidityMask> null_mask) {
+	return TemplatedDistinctSelectOperation<duckdb::NestedGreaterEquals>(left, right, sel, count, true_sel, false_sel,
+	                                                                     null_mask);
+}
+
+// true := A <= B with nulls producing NULL, inputs selected
+idx_t VectorOperations::NestedLessThanEquals(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel,
+                                             idx_t count, optional_ptr<SelectionVector> true_sel,
+                                             optional_ptr<SelectionVector> false_sel,
+                                             optional_ptr<ValidityMask> null_mask) {
+	return TemplatedDistinctSelectOperation<duckdb::NestedGreaterEquals>(right, left, sel, count, false_sel, true_sel,
+	                                                                     null_mask);
 }
 
 } // namespace duckdb
