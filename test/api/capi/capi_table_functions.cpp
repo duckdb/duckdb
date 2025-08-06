@@ -264,6 +264,7 @@ void my_bind_connection_id(duckdb_bind_info info) {
 	duckdb_client_context context;
 	duckdb_table_function_get_client_context(info, &context);
 	auto connection_id = duckdb_client_context_get_connection_id(context);
+	duckdb_destroy_client_context(&context);
 
 	bind_data->rows_requested = rows_requested;
 	bind_data->connection_id = connection_id;
@@ -285,7 +286,10 @@ void my_function_connection_id(duckdb_function_info info, duckdb_data_chunk outp
 	auto ptr = (int64_t *)duckdb_vector_get_data(duckdb_data_chunk_get_vector(output, 0));
 	auto ptr2 = (int64_t *)duckdb_vector_get_data(duckdb_data_chunk_get_vector(output, 1));
 	idx_t i;
-	for (i = 0; i < bind_data->rows_requested; i++) {
+	for (i = 0; i < STANDARD_VECTOR_SIZE; i++) {
+		if (init_data->pos >= bind_data->rows_requested) {
+			break;
+		}
 		ptr[i] = bind_data->connection_id;
 		ptr2[i] = 42;
 		init_data->pos++;

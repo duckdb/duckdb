@@ -1101,7 +1101,7 @@ typedef struct {
 #define duckdb_scalar_function_bind_get_argument       duckdb_ext_api.duckdb_scalar_function_bind_get_argument
 
 // Version unstable_new_table_function_functions
-#define duckdb_table_function_get_client_context      duckdb_ext_api.duckdb_table_function_get_client_context
+#define duckdb_table_function_get_client_context duckdb_ext_api.duckdb_table_function_get_client_context
 
 // Version unstable_new_string_functions
 #define duckdb_value_to_string duckdb_ext_api.duckdb_value_to_string

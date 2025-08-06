@@ -377,7 +377,6 @@ void duckdb_table_function_get_client_context(duckdb_bind_info info, duckdb_clie
 	*out_context = reinterpret_cast<duckdb_client_context>(wrapper);
 }
 
-
 void duckdb_bind_add_result_column(duckdb_bind_info info, const char *name, duckdb_logical_type type) {
 	if (!info || !name || !type) {
 		return;
