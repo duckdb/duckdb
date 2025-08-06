@@ -35,6 +35,10 @@ public:
 	idx_t GroupRowsAvailable() override;
 	uint64_t TotalCompressedSize() override;
 	void RegisterPrefetch(ThriftFileTransport &transport, bool allow_merge) override;
+
+protected:
+	idx_t metadata_reader_idx;
+	idx_t value_reader_idx;
 };
 
 } // namespace duckdb
