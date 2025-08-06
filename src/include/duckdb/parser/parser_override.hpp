@@ -49,7 +49,8 @@ public:
 		return options->error == OnParserOverrideError::THROW_ON_ERROR;
 	}
 
-	void LogQuery(const string &query, const std::exception &e);
+	void LogQuery(const string &message);
+	void LogError(const string &message, const std::exception &e);
 };
 
 } // namespace duckdb

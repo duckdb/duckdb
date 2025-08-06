@@ -651,6 +651,9 @@ vector<unique_ptr<SQLStatement>> ClientContext::ParseStatementsInternal(ClientCo
 	auto &config = DBConfig::GetConfig(*db);
 	if (config.parser_override) {
 		try {
+			if (config.parser_override->LoggingEnabled()) {
+				config.parser_override->LogQuery(query);
+			}
 			auto statements = config.parser_override->Parse(query);
 			if (!statements.empty()) {
 				PragmaHandler handler(*this);
@@ -658,6 +661,9 @@ vector<unique_ptr<SQLStatement>> ClientContext::ParseStatementsInternal(ClientCo
 				return statements;
 			}
 		} catch (const duckdb::Exception &e) {
+			if (config.parser_override->LoggingEnabled()) {
+				config.parser_override->LogError(query, e);
+			}
 			if (config.parser_override->ThrowOnError()) {
 				throw;
 			}

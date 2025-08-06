@@ -18,6 +18,8 @@
 #include "duckdb/catalog/catalog_entry/pragma_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
+#include "transformer/peg_transformer.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -723,6 +725,12 @@ static duckdb::unique_ptr<FunctionData> PEGParserBind(ClientContext &context, Ta
 	if (input.named_parameters.find("enable_logging") != input.named_parameters.end()) {
 		enable_logging = input.named_parameters.at("enable_logging").GetValue<bool>();
 	}
+	if (enable_logging) {
+		auto result = ClientConfig::GetSettingValue<EnableLogging>(context);
+		if (!result.GetValue<bool>()) {
+			throw InvalidInputException("Please execute \"PRAGMA enable_logging\" first.");
+		}
+	}
 
 	auto options = make_uniq<ParserOverrideOptions>(error_option, enable_logging);
 
@@ -740,14 +748,11 @@ static void LoadInternal(ExtensionLoader &loader) {
 	TableFunction check_peg_parser_fun("check_peg_parser", {LogicalType::VARCHAR}, CheckPEGParserFunction,
 	                                   CheckPEGParserBind, nullptr);
 	loader.RegisterFunction(check_peg_parser_fun);
-<<<<<<< HEAD
-=======
 
 	TableFunction peg_parser_fun("peg_parser", {}, PEGParserFunction, PEGParserBind, nullptr);
 	peg_parser_fun.named_parameters["on_error"] = LogicalType::VARCHAR; // Behaviour on error ("throw" or "continue")
 	peg_parser_fun.named_parameters["enable_logging"] = LogicalType::BOOLEAN;
 	loader.RegisterFunction(peg_parser_fun);
->>>>>>> 292f5c864f (Add options to parseroverride)
 }
 
 void AutocompleteExtension::Load(ExtensionLoader &loader) {

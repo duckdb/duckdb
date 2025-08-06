@@ -204,13 +204,15 @@ void Parser::ParseQuery(const string &query) {
 	bool use_default_parser = !options.parser_override;
 	if (options.parser_override) {
 		try {
+			if (options.parser_override->LoggingEnabled()) {
+				options.parser_override->LogQuery(query);
+			}
 			statements = options.parser_override->Parse(query);
 		} catch (const std::exception &e) {
+			if (options.parser_override->LoggingEnabled()) {
+				options.parser_override->LogError(query, e);
+			}
 			if (options.parser_override->ThrowOnError()) {
-				if (options.parser_override->LoggingEnabled()) {
-					Printer::Print("Logging");
-					options.parser_override->LogQuery(query, e);
-				}
 				throw;
 			}
 			use_default_parser = true;
