@@ -144,6 +144,73 @@
       ]
     },
     {
+      "reason": "Runs longer than 10s on a release build.",
+      "paths": [
+        "test/sql/limit/test_limit0.test",
+        "test/sql/sample/reservoir_testing_percentage.test"
+      ]
+    },
+    {
+      "reason": "Runs longer than 1s on a release build.",
+      "paths": [
+        "test/sql/copy/csv/test_15211.test",
+        "test/sql/types/decimal/test_decimal_from_string.test",
+        "test/issues/general/test_15483.test",
+        "test/sql/storage/compression/dict_fsst/dict_fsst_test.test",
+        "test/sql/window/test_thread_count.test",
+        "test/sql/storage/lazy_load/lazy_load_limit.test",
+        "test/sql/types/nested/map/test_map_concat.test",
+        "test/sql/storage/partial_blocks/many_columns_drop_table.test",
+        "test/sql/function/timestamp/test_now_prepared.test",
+        "test/sql/copy/csv/csv_line_too_long.test",
+        "test/sql/cte/recursive_cte_key_variant.test",
+        "test/sql/error/test_try_expression.test",
+        "test/sql/function/generic/least_greatest_types.test",
+        "test/sql/storage/partial_blocks/many_columns_strings.test",
+        "test/sql/storage/partial_blocks/many_columns_storage.test",
+        "test/sql/storage/partial_blocks/many_columns_validity.test",
+        "test/sql/copy/parquet/parquet_hive2.test",
+        "test/extension/install_extension.test",
+        "test/sql/storage/partial_blocks/many_columns_rle.test",
+        "test/sql/storage/test_store_integers.test",
+        "test/sql/window/test_window_range.test",
+        "test/sql/window/test_window_groups.test",
+        "test/sql/copy/partitioned/hive_partitioned_auto_detect.test",
+        "test/sql/copy/csv/code_cov/csv_disk_reload.test",
+        "test/sql/window/test_window_constant_aggregate.test"
+      ]
+    },
+    {
+      "reason": "Runs longer than 0.5s on a release build.",
+      "paths": [
+        "test/sql/pg_catalog/sqlalchemy.test",
+        "test/sql/copy/csv/test_non_unicode_header.test",
+        "test/sql/copy/csv/auto/test_describe_order.test",
+        "test/sql/storage/compression/bitpacking/bitpacking_constant_delta.test",
+        "test/sql/secrets/create_secret_persistence_no_client_context.test",
+        "test/sql/copy/csv/null_padding_big.test",
+        "test/sql/copy/csv/test_sniff_csv.test",
+        "test/sql/extensions/allowed_directories_install.test",
+        "test/sql/sample/bernoulli_sampling.test",
+        "test/sql/copy/csv/test_copy.test",
+        "test/sql/copy/csv/test_thijs_unquoted_file.test",
+        "test/sql/function/date/test_date_part.test",
+        "test/sql/copy/parquet/test_parallel_many_row_groups.test",
+        "test/sql/copy/parquet/parquet_stats.test",
+        "test/optimizer/pushdown/filter_cannot_pushdown.test",
+        "test/sql/copy/csv/test_comment_option.test",
+        "test/sql/sample/same_seed_same_sample.test",
+        "test/sql/copy/parquet/parquet_write_codecs.test",
+        "test/sql/function/list/aggregates/incorrect.test",
+        "test/sql/copy/csv/csv_hive.test",
+        "test/sql/types/struct/struct_comparison.test",
+        "test/sql/types/list/list_comparison.test",
+        "test/sql/aggregate/distinct/grouped/identical_inputs.test",
+        "test/sql/window/test_empty_frames.test",
+        "test/sql/index/art/nodes/test_art_node_256.test"
+      ]
+    },
+    {
       "reason": "FIXME: Unexpected Parser Error",
       "paths": [
         "test/issues/general/test_16524.test",
