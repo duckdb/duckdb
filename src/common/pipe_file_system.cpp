@@ -7,8 +7,6 @@
 
 namespace duckdb {
 
-class QueryContext;
-
 class PipeFile : public FileHandle {
 public:
 	explicit PipeFile(unique_ptr<FileHandle> child_handle_p)

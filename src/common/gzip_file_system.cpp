@@ -11,8 +11,6 @@
 
 namespace duckdb {
 
-class QueryContext;
-
 /*
 
   0      2 bytes  magic header  0x1f, 0x8b (\037 \213)

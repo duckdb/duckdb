@@ -12,6 +12,7 @@
 
 namespace duckdb {
 class FileSystem;
+class QueryContext;
 
 enum class DataFileType : uint8_t {
 	FILE_DOES_NOT_EXIST, // file does not exist
