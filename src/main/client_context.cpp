@@ -824,8 +824,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 		statement = statement->Copy();
 	}
 #endif
-	// check if we are on AutoCommit. In this case we should start a transaction.
-	if (statement && config.AnyVerification()) {
+	if (statement && config.query_verification_enabled) {
 		// query verification is enabled
 		// create a copy of the statement, and use the copy
 		// this way we verify that the copy correctly copies all properties

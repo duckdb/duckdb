@@ -17,6 +17,7 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
                                          OperatorSourceInput &input) const {
 	// parse the options
 	auto &config = DBConfig::GetConfig(context.client);
+	// construct the options
 	AttachOptions options(info->options, config.options.access_mode);
 
 	// get the name and path of the database

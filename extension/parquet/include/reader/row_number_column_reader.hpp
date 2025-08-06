@@ -8,9 +8,7 @@
 
 #pragma once
 
-#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/limits.hpp"
-#endif
 #include "column_reader.hpp"
 #include "reader/templated_column_reader.hpp"
 
