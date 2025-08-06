@@ -311,7 +311,6 @@ ORDER BY x.col1, y.col1 NULLS LAST;
 ----
 [0]	[0]
 [1]	[1]
-[NULL]	[NULL]
 
 query II
 SELECT x.col1, y.col1 FROM tbl_l_null x JOIN tbl_l_null y
@@ -330,7 +329,6 @@ ORDER BY x.col1;
 ----
 [0]	[0]
 [1]	[1]
-[NULL]	[NULL]
 
 # duckdb-r issue 8
 

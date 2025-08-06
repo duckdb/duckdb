@@ -24,4 +24,4 @@ SELECT tbl.a, tbl.b,
 	tbl.a IS NOT DISTINCT FROM tbl.b, tbl.a IS DISTINCT FROM tbl.b
 FROM list_int tbl
 ----
-[1]	[NULL]	1	1	0	1	0	0	0	1
+[1]	[NULL]	1	1	NULL	NULL	0	0	0	1

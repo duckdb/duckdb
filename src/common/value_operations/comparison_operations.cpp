@@ -2,7 +2,6 @@
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
-#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 
 namespace duckdb {
 
