@@ -160,8 +160,8 @@ ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &quer
 
 		if (explain_failed) { // LCOV_EXCL_START
 			const auto &explain_error = explain_statement_verifier->materialized_result->error;
-			return ErrorData(
-			    StringUtil::Format("Query succeeded but EXPLAIN failed with: %s", explain_error.Message()));
+			return ErrorData(explain_error.Type(), StringUtil::Format("Query succeeded but EXPLAIN failed with: %s",
+			                                                          explain_error.RawMessage()));
 		} // LCOV_EXCL_STOP
 
 #ifdef DUCKDB_VERIFY_BOX_RENDERER
