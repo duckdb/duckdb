@@ -211,6 +211,33 @@
       ]
     },
     {
+      "reason": "Runs longer than 0.4s on a release build.",
+      "paths": [
+        "test/sql/aggregate/aggregates/test_any_value.test",
+        "test/sql/aggregate/aggregates/test_last.test",
+        "test/sql/aggregate/distinct/ungrouped/test_distinct_ungrouped.test",
+        "test/sql/pg_catalog/pg_type.test",
+        "test/sql/index/art/storage/test_art_duckdb_versions.test",
+        "test/sql/optimizer/expression/test_move_constants.test",
+        "test/sql/function/list/aggregates/null_or_empty.test",
+        "test/sql/function/list/list_zip.test",
+        "test/sql/function/list/list_concat.test",
+        "test/sql/function/timestamp/test_date_part.test",
+        "test/sql/window/test_window_distinct.test",
+        "test/sql/copy/csv/glob/read_csv_glob.test",
+        "test/sql/copy/csv/afl/test_afl_null_padding.test",
+        "test/sql/copy/csv/test_comment_midline.test",
+        "test/sql/copy/csv/test_null_padding_union.test",
+        "test/sql/copy/parquet/test_parquet_gzip.test",
+        "test/sql/copy/partitioned/skip_partition_column_writes.test",
+        "test/sql/types/struct/struct_distinct.test",
+        "test/sql/types/enum/test_enum_to_numbers.test",
+        "test/sql/storage/compression/dict_fsst/test_dict_fsst_with_smaller_block_size.test",
+        "test/sql/storage/compression/bitpacking/bitpacking_filter_pushdown.test",
+        "test/issues/monetdb/analytics10.test"
+      ]
+    },
+    {
       "reason": "FIXME: Unexpected Parser Error",
       "paths": [
         "test/issues/general/test_16524.test",
