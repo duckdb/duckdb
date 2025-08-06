@@ -174,8 +174,6 @@ struct DBConfigOptions {
 	bool allow_unsigned_extensions = false;
 	//! Whether community extensions should be loaded
 	bool allow_community_extensions = true;
-	//! Start transactions immediately in all attached databases - instead of lazily when a database is referenced
-	bool immediate_transaction_mode = false;
 	//! Debug setting - how to initialize  blocks in the storage layer when allocating
 	DebugInitialize debug_initialize = DebugInitialize::NO_INITIALIZE;
 	//! The set of user-provided options

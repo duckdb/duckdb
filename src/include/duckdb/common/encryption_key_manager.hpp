@@ -12,10 +12,7 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/types.hpp"
-
-#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/storage/object_cache.hpp"
-#endif
 
 namespace duckdb {
 

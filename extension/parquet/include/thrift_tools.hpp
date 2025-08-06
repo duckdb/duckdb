@@ -13,11 +13,9 @@
 #include "thrift/transport/TBufferTransports.h"
 
 #include "duckdb.hpp"
-#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/storage/caching_file_system.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/allocator.hpp"
-#endif
 
 namespace duckdb {
 

@@ -497,7 +497,7 @@ TemporaryFileManager::~TemporaryFileManager() {
 TemporaryFileManager::TemporaryFileManagerLock::TemporaryFileManagerLock(mutex &mutex) : lock(mutex) {
 }
 
-void TemporaryFileManager::WriteTemporaryBuffer(block_id_t block_id, FileBuffer &buffer) {
+idx_t TemporaryFileManager::WriteTemporaryBuffer(block_id_t block_id, FileBuffer &buffer) {
 	// We group DEFAULT_BLOCK_ALLOC_SIZE blocks into the same file.
 	D_ASSERT(buffer.AllocSize() == BufferManager::GetBufferManager(db).GetBlockAllocSize());
 
@@ -540,6 +540,7 @@ void TemporaryFileManager::WriteTemporaryBuffer(block_id_t block_id, FileBuffer 
 	handle->WriteTemporaryBuffer(buffer, index.block_index.GetIndex(), compressed_buffer);
 
 	compression_adaptivity.Update(compression_result.level, time_before_ns);
+	return static_cast<idx_t>(compression_result.size);
 }
 
 TemporaryFileManager::CompressionResult
@@ -664,11 +665,12 @@ unique_ptr<FileBuffer> TemporaryFileManager::ReadTemporaryBuffer(QueryContext co
 	return buffer;
 }
 
-void TemporaryFileManager::DeleteTemporaryBuffer(block_id_t id) {
+idx_t TemporaryFileManager::DeleteTemporaryBuffer(block_id_t id) {
 	TemporaryFileManagerLock lock(manager_lock);
 	auto index = GetTempBlockIndex(lock, id);
 	auto handle = GetFileHandle(lock, index.identifier);
 	EraseUsedBlock(lock, id, *handle, index);
+	return static_cast<idx_t>(index.identifier.size);
 }
 
 vector<TemporaryFileInformation> TemporaryFileManager::GetTemporaryFiles() {

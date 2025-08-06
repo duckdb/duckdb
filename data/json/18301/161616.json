@@ -1,0 +1,19 @@
+{
+  "info": {
+    "balls_per_over": 6,
+    "city": "London",
+    "dates": ["2025-07-15"],
+    "event": {
+      "name": "Australia Men tour of England",
+      "match_number": 2
+    },
+    "outcome": {
+      "winner": "Australia",
+      "by": {
+        "wickets": 5
+      }
+    },
+    "overs": 50,
+    "player_of_match": ["G Maxwell"]
+  }
+}
