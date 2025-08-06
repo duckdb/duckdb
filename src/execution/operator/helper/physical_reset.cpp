@@ -33,7 +33,7 @@ SourceResultType PhysicalReset::GetData(ExecutionContext &context, DataChunk &ch
 		// check if this is an extra extension variable
 		auto entry = config.extension_parameters.find(name.ToStdString());
 		if (entry == config.extension_parameters.end()) {
-			auto extension_name = Catalog::AutoloadExtensionByConfigName(context.client, name.ToStdString());
+			auto extension_name = Catalog::AutoloadExtensionByConfigName(context.client, name);
 			entry = config.extension_parameters.find(name.ToStdString());
 			if (entry == config.extension_parameters.end()) {
 				throw InvalidInputException("Extension parameter %s was not found after autoloading",

@@ -244,7 +244,7 @@ optional_ptr<const ConfigurationOption> DBConfig::GetOptionByName(const String &
 	}
 	for (idx_t index = 0; setting_aliases[index].alias; index++) {
 		D_ASSERT(StringUtil::Lower(internal_options[index].name) == string(internal_options[index].name));
-		if (setting_aliases[index].alias == lname.c_str()) {
+		if (setting_aliases[index].alias == lname.ToStdString()) {
 			return GetOptionByIndex(setting_aliases[index].option_index);
 		}
 	}
