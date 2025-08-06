@@ -135,7 +135,7 @@
       ]
     },
     {
-      "reason": "FIXME: Unexpected parsed statement verifier failure.",
+      "reason": "Round-trip of literals changes type, e.g., DOUBLE -> DECIMAL.",
       "paths": [
         "test/sql/types/decimal/large_decimal_constants.test",
         "test/sql/types/uhugeint/test_uhugeint_conversion.test",
