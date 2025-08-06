@@ -615,7 +615,6 @@ static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_m
 	case LogicalTypeId::VALIDITY:
 	case LogicalTypeId::TABLE:
 	case LogicalTypeId::LAMBDA:
-	case LogicalTypeId::TEMPLATE:
 		throw InternalException("Unsupported type arrived at JSON create function");
 	}
 }
