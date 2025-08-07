@@ -853,7 +853,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			command->values = parser.ExtractExpectedResult();
 
 			// figure out the sort style/connection style
-			string sort_style = test_config.GetDefaultSortStyle();
+			string sort_style = "none";
 			if (token.parameters.size() > 1) {
 				if (!TestConfiguration::TryParseSortStyle(token.parameters[1], command->sort_style)) {
 					// if this is not a known sort style, we use this as the connection name

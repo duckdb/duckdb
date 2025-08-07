@@ -212,8 +212,12 @@ string TestConfiguration::OnCleanupCommand() {
 	return GetOptionOrDefault("on_cleanup", string());
 }
 
-string TestConfiguration::GetDefaultSortStyle() {
-	return GetOptionOrDefault<string>("sort_style", "none");
+SortStyle TestConfiguration::GetDefaultSortStyle() {
+	SortStyle default_sort_style_enum = SortStyle::NO_SORT;
+	if (!TryParseSortStyle(GetOptionOrDefault<string>("sort_style", "none"), default_sort_style_enum)) {
+		throw std::runtime_error("eek: unknown sort style in TestConfig");
+	}
+	return default_sort_style_enum;
 }
 
 vector<string> TestConfiguration::ExtensionToBeLoadedOnLoad() {

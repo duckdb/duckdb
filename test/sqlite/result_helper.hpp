@@ -37,7 +37,8 @@ public:
 	bool MatchesRegex(SQLLogicTestLogger &logger, string lvalue_str, string rvalue_str);
 	bool CompareValues(SQLLogicTestLogger &logger, MaterializedQueryResult &result, string lvalue_str,
 	                   string rvalue_str, idx_t current_row, idx_t current_column, vector<string> &values,
-	                   idx_t expected_column_count, bool row_wise, vector<string> &result_values);
+	                   idx_t expected_column_count, bool row_wise, vector<string> &result_values,
+	                   bool print_error = true);
 	bool SkipErrorMessage(const string &message);
 
 	vector<string> LoadResultFromFile(string fname, vector<string> names, idx_t &expected_column_count, string &error);

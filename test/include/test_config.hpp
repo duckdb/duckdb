@@ -53,7 +53,7 @@ public:
 	string OnLoadCommand();
 	string OnConnectionCommand();
 	string OnCleanupCommand();
-	string GetDefaultSortStyle();
+	SortStyle GetDefaultSortStyle();
 	vector<string> ExtensionToBeLoadedOnLoad();
 	vector<string> ErrorMessagesToBeSkipped();
 	string GetStorageVersion();

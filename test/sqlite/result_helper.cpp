@@ -200,24 +200,37 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 			comparison_values = std::move(expected_values);
 			row_wise = false;
 		}
-		SortQueryResult(sort_style, comparison_values, query.expected_column_count);
-		idx_t current_row = 0, current_column = 0;
-		for (idx_t i = 0; i < total_value_count && i < comparison_values.size(); i++) {
-			bool success = CompareValues(logger, result,
-			                             result_values_string[current_row * expected_column_count + current_column],
-			                             comparison_values[i], current_row, current_column, comparison_values,
-			                             expected_column_count, row_wise, result_values_string);
-			if (!success) {
-				return false;
-			}
-			// we do this just to increment the assertion counter
-			string success_log = StringUtil::Format("CheckQueryResult: %s:%d", query.file_name, query.query_line);
-			REQUIRE(success_log.c_str());
+		auto &test_config = TestConfiguration::Get();
+		auto default_sort_style = test_config.GetDefaultSortStyle();
+		idx_t check_it_count = column_count_mismatch || default_sort_style == SortStyle::NO_SORT ? 1 : 2;
+		for (idx_t check_it = 0; check_it < check_it_count; check_it++) {
+			bool final_iteration = check_it + 1 == check_it_count;
+			idx_t current_row = 0, current_column = 0;
+			bool success = true;
+			for (idx_t i = 0; i < total_value_count && i < comparison_values.size(); i++) {
+				success = CompareValues(logger, result,
+				                        result_values_string[current_row * expected_column_count + current_column],
+				                        comparison_values[i], current_row, current_column, comparison_values,
+				                        expected_column_count, row_wise, result_values_string, final_iteration);
+				if (!success) {
+					break;
+				}
+				// we do this just to increment the assertion counter
+				string success_log = StringUtil::Format("CheckQueryResult: %s:%d", query.file_name, query.query_line);
+				REQUIRE(success_log.c_str());
 
-			current_column++;
-			if (current_column == expected_column_count) {
-				current_row++;
-				current_column = 0;
+				current_column++;
+				if (current_column == expected_column_count) {
+					current_row++;
+					current_column = 0;
+				}
+			}
+			if (!success) {
+				if (final_iteration) {
+					return false;
+				}
+				SortQueryResult(default_sort_style, result_values_string, column_count);
+				SortQueryResult(default_sort_style, comparison_values, query.expected_column_count);
 			}
 		}
 		if (column_count_mismatch) {
@@ -452,7 +465,8 @@ bool TestResultHelper::ResultIsFile(string result) {
 
 bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, MaterializedQueryResult &result, string lvalue_str,
                                      string rvalue_str, idx_t current_row, idx_t current_column, vector<string> &values,
-                                     idx_t expected_column_count, bool row_wise, vector<string> &result_values) {
+                                     idx_t expected_column_count, bool row_wise, vector<string> &result_values,
+                                     bool print_error) {
 	Value lvalue, rvalue;
 	bool error = false;
 	// simple first test: compare string value directly
@@ -516,18 +530,20 @@ bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, MaterializedQue
 		error = true;
 	}
 	if (error) {
-		std::ostringstream oss;
-		logger.PrintErrorHeader("Wrong result in query!");
-		logger.PrintLineSep();
-		logger.PrintSQL();
-		logger.PrintLineSep();
-		oss << termcolor::red << termcolor::bold << "Mismatch on row " << current_row + 1 << ", column "
-		    << result.ColumnName(current_column) << "(index " << current_column + 1 << ")" << std::endl
-		    << termcolor::reset;
-		oss << lvalue_str << " <> " << rvalue_str << std::endl;
-		logger.LogFailure(oss.str());
-		logger.PrintLineSep();
-		logger.PrintResultError(result_values, values, expected_column_count, row_wise);
+		if (print_error) {
+			std::ostringstream oss;
+			logger.PrintErrorHeader("Wrong result in query!");
+			logger.PrintLineSep();
+			logger.PrintSQL();
+			logger.PrintLineSep();
+			oss << termcolor::red << termcolor::bold << "Mismatch on row " << current_row + 1 << ", column "
+			    << result.ColumnName(current_column) << "(index " << current_column + 1 << ")" << std::endl
+			    << termcolor::reset;
+			oss << lvalue_str << " <> " << rvalue_str << std::endl;
+			logger.LogFailure(oss.str());
+			logger.PrintLineSep();
+			logger.PrintResultError(result_values, values, expected_column_count, row_wise);
+		}
 		return false;
 	}
 	return true;
