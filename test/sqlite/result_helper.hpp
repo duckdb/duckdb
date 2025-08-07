@@ -32,6 +32,7 @@ public:
 
 	static bool ResultIsHash(const string &result);
 	static bool ResultIsFile(string result);
+	void SortQueryResult(SortStyle sort_style, vector<string> &result, idx_t ncols);
 
 	bool MatchesRegex(SQLLogicTestLogger &logger, string lvalue_str, string rvalue_str);
 	bool CompareValues(SQLLogicTestLogger &logger, MaterializedQueryResult &result, string lvalue_str,

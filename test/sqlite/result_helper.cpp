@@ -13,6 +13,51 @@
 
 namespace duckdb {
 
+void TestResultHelper::SortQueryResult(SortStyle sort_style, vector<string> &result, idx_t ncols) {
+	if (sort_style == SortStyle::NO_SORT) {
+		return;
+	}
+	if (sort_style == SortStyle::VALUE_SORT) {
+		// sort values independently
+		std::sort(result.begin(), result.end());
+		return;
+	}
+	if (result.size() % ncols != 0) {
+		// row-sort failed: result is not row-wise aligned, bail
+		FAIL(StringUtil::Format("Failed to sort query result - result is not aligned. Found %d rows with %d columns",
+		                        result.size(), ncols));
+		return;
+	}
+	// row-oriented sorting
+	idx_t nrows = result.size() / ncols;
+	vector<vector<string>> rows;
+	rows.reserve(nrows);
+	for (idx_t row_idx = 0; row_idx < nrows; row_idx++) {
+		vector<string> row;
+		row.reserve(ncols);
+		for (idx_t col_idx = 0; col_idx < ncols; col_idx++) {
+			row.push_back(std::move(result[row_idx * ncols + col_idx]));
+		}
+		rows.push_back(std::move(row));
+	}
+	// sort the individual rows
+	std::sort(rows.begin(), rows.end(), [](const vector<string> &a, const vector<string> &b) {
+		for (idx_t col_idx = 0; col_idx < a.size(); col_idx++) {
+			if (a[col_idx] != b[col_idx]) {
+				return a[col_idx] < b[col_idx];
+			}
+		}
+		return false;
+	});
+
+	// now reconstruct the values from the rows
+	for (idx_t row_idx = 0; row_idx < nrows; row_idx++) {
+		for (idx_t col_idx = 0; col_idx < ncols; col_idx++) {
+			result[row_idx * ncols + col_idx] = std::move(rows[row_idx][col_idx]);
+		}
+	}
+}
+
 bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &context,
                                         duckdb::unique_ptr<MaterializedQueryResult> owned_result) {
 	auto &result = *owned_result;
@@ -50,41 +95,7 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 		logger.OutputResult(result, result_values_string);
 	}
 
-	// perform any required query sorts
-	if (sort_style == SortStyle::ROW_SORT) {
-		// row-oriented sorting
-		idx_t ncols = result.ColumnCount();
-		idx_t nrows = total_value_count / ncols;
-		vector<vector<string>> rows;
-		rows.reserve(nrows);
-		for (idx_t row_idx = 0; row_idx < nrows; row_idx++) {
-			vector<string> row;
-			row.reserve(ncols);
-			for (idx_t col_idx = 0; col_idx < ncols; col_idx++) {
-				row.push_back(std::move(result_values_string[row_idx * ncols + col_idx]));
-			}
-			rows.push_back(std::move(row));
-		}
-		// sort the individual rows
-		std::sort(rows.begin(), rows.end(), [](const vector<string> &a, const vector<string> &b) {
-			for (idx_t col_idx = 0; col_idx < a.size(); col_idx++) {
-				if (a[col_idx] != b[col_idx]) {
-					return a[col_idx] < b[col_idx];
-				}
-			}
-			return false;
-		});
-
-		// now reconstruct the values from the rows
-		for (idx_t row_idx = 0; row_idx < nrows; row_idx++) {
-			for (idx_t col_idx = 0; col_idx < ncols; col_idx++) {
-				result_values_string[row_idx * ncols + col_idx] = std::move(rows[row_idx][col_idx]);
-			}
-		}
-	} else if (sort_style == SortStyle::VALUE_SORT) {
-		// sort values independently
-		std::sort(result_values_string.begin(), result_values_string.end());
-	}
+	SortQueryResult(sort_style, result_values_string, column_count);
 
 	vector<string> comparison_values;
 	if (values.size() == 1 && ResultIsFile(values[0])) {
@@ -170,7 +181,8 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 		}
 
 		if (row_wise) {
-			idx_t current_row = 0;
+			// if the result is row-wise, turn it into a set of values by splitting it
+			vector<string> expected_values;
 			for (idx_t i = 0; i < total_value_count && i < comparison_values.size(); i++) {
 				// split based on tab character
 				auto splits = StringUtil::Split(comparison_values[i], "\t");
@@ -181,39 +193,31 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 					logger.SplitMismatch(i + 1, expected_column_count, splits.size());
 					return false;
 				}
-				for (idx_t c = 0; c < splits.size(); c++) {
-					bool success = CompareValues(
-					    logger, result, result_values_string[current_row * expected_column_count + c], splits[c],
-					    current_row, c, comparison_values, expected_column_count, row_wise, result_values_string);
-					if (!success) {
-						return false;
-					}
-					// we do this just to increment the assertion counter
-					string success_log =
-					    StringUtil::Format("CheckQueryResult: %s:%d", query.file_name, query.query_line);
-					REQUIRE(success_log.c_str());
+				for (auto &split : splits) {
+					expected_values.push_back(std::move(split));
 				}
-				current_row++;
 			}
-		} else {
-			idx_t current_row = 0, current_column = 0;
-			for (idx_t i = 0; i < total_value_count && i < comparison_values.size(); i++) {
-				bool success = CompareValues(logger, result,
-				                             result_values_string[current_row * expected_column_count + current_column],
-				                             comparison_values[i], current_row, current_column, comparison_values,
-				                             expected_column_count, row_wise, result_values_string);
-				if (!success) {
-					return false;
-				}
-				// we do this just to increment the assertion counter
-				string success_log = StringUtil::Format("CheckQueryResult: %s:%d", query.file_name, query.query_line);
-				REQUIRE(success_log.c_str());
+			comparison_values = std::move(expected_values);
+			row_wise = false;
+		}
+		SortQueryResult(sort_style, comparison_values, query.expected_column_count);
+		idx_t current_row = 0, current_column = 0;
+		for (idx_t i = 0; i < total_value_count && i < comparison_values.size(); i++) {
+			bool success = CompareValues(logger, result,
+			                             result_values_string[current_row * expected_column_count + current_column],
+			                             comparison_values[i], current_row, current_column, comparison_values,
+			                             expected_column_count, row_wise, result_values_string);
+			if (!success) {
+				return false;
+			}
+			// we do this just to increment the assertion counter
+			string success_log = StringUtil::Format("CheckQueryResult: %s:%d", query.file_name, query.query_line);
+			REQUIRE(success_log.c_str());
 
-				current_column++;
-				if (current_column == expected_column_count) {
-					current_row++;
-					current_column = 0;
-				}
+			current_column++;
+			if (current_column == expected_column_count) {
+				current_row++;
+				current_column = 0;
 			}
 		}
 		if (column_count_mismatch) {
