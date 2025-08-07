@@ -380,7 +380,9 @@ MatchFunction RowMatcher::GetStructMatchFunction(const LogicalType &type, const 
 		if (type.id() == LogicalTypeId::UNION) {
 			result.function = GenericNestedMatch<NO_MATCH_SEL, Equals>;
 		} else {
-			result.function = StructMatchEquality<NO_MATCH_SEL, Equals>;
+			//	Structs always have to use NDF because Equals can still return
+			//	NULLs when there are internal NULLs
+			result.function = GenericNestedMatch<NO_MATCH_SEL, NotDistinctFrom>;
 		}
 		break;
 	case ExpressionType::COMPARE_NOTEQUAL:
