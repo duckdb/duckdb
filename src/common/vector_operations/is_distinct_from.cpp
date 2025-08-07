@@ -723,6 +723,97 @@ idx_t DistinctSelectStruct(Vector &left, Vector &right, idx_t count, const Selec
 	return match_count;
 }
 
+template <class OP>
+idx_t DistinctSelectUnion(Vector &left, Vector &right, idx_t count, const SelectionVector &sel,
+                          OptionalSelection &true_opt, OptionalSelection &false_opt,
+                          optional_ptr<ValidityMask> null_mask) {
+	if (count == 0) {
+		return 0;
+	}
+
+	// Avoid allocating in the 99% of the cases where we don't need to.
+	StructEntries lsliced, rsliced;
+	auto &lchildren = StructVector::GetEntries(left);
+	auto &rchildren = StructVector::GetEntries(right);
+	D_ASSERT(lchildren.size() == rchildren.size());
+
+	const auto vcount = count;
+	SelectionVector slice_sel(count);
+
+	SelectionVector true_sel(count);
+	SelectionVector false_sel(count);
+
+	ValidityMask child_validity;
+	ValidityMask *child_mask = nullptr;
+	if (null_mask) {
+		child_mask = &child_validity;
+		child_mask->Reset(null_mask->Capacity());
+	}
+
+	//	The first column of a UNION STRUCT is the "tag" column, which says which column is valid.
+	//	We start by splitting the rows into those with matching tags and non-matching tags.
+	idx_t col_no = 0;
+
+	Vector ltags(*lchildren[col_no]);
+	ltags.Flatten(vcount);
+
+	Vector rtags(*rchildren[col_no]);
+	rtags.Flatten(vcount);
+
+	//	Find matching tags
+	SelectionVector tag_sel(count);
+	auto tag_count = VectorOperations::NotDistinctFrom(ltags, rtags, nullptr, count, &tag_sel, slice_sel);
+	const auto tag_data = FlatVector::GetData<uint8_t>(ltags);
+
+	//	Handle mismatched tags with the OP in the column loop  to get the correct NULL semantics
+	auto sliced = count - tag_count;
+
+	idx_t match_count = 0;
+	for (; col_no < lchildren.size(); ++col_no) {
+		// Find the rows that match this tag. These are disjoint.
+		if (col_no) {
+			const auto tag_no = col_no - 1;
+			sliced = 0;
+			for (idx_t i = 0; i < tag_count; ++i) {
+				const auto idx = tag_sel.get_index(i);
+				if (tag_no == tag_data[idx]) {
+					slice_sel.set_index(sliced++, idx);
+				}
+			}
+		}
+		if (!sliced) {
+			continue;
+		}
+
+		// Slice the children to maintain density
+		Vector lchild(*lchildren[col_no]);
+		lchild.Flatten(vcount);
+		lchild.Slice(slice_sel, sliced);
+
+		Vector rchild(*rchildren[col_no]);
+		rchild.Flatten(vcount);
+		rchild.Slice(slice_sel, sliced);
+
+		// Since the columns are independent, we can just use Final for the comparison
+		auto true_count =
+		    PositionComparator::Final<OP>(lchild, rchild, slice_sel, sliced, &true_sel, &false_sel, child_mask);
+		auto false_count = sliced - true_count;
+
+		// Extract any NULLs we found
+		ExtractNestedMask(slice_sel, sliced, sel, child_mask, null_mask);
+
+		// Extract the definite matches into the true result
+		ExtractNestedSelection(false_count ? true_sel : slice_sel, true_count, sel, true_opt);
+
+		// Extract the definite failures into the false result
+		ExtractNestedSelection(true_count ? false_sel : slice_sel, false_count, sel, false_opt);
+
+		match_count += true_count;
+	}
+
+	return match_count;
+}
+
 static void PositionListCursor(SelectionVector &cursor, UnifiedVectorFormat &vdata, const idx_t pos,
                                const SelectionVector &slice_sel, const idx_t count) {
 	const auto data = UnifiedVectorFormat::GetData<list_entry_t>(vdata);
@@ -1034,22 +1125,28 @@ idx_t DistinctSelectNested(Vector &left, Vector &right, optional_ptr<const Selec
 	auto unknown = DistinctSelectNotNull<OP>(l_not_null, r_not_null, count, match_count, *sel, maybe_vec, true_opt,
 	                                         false_opt, null_mask);
 
+	auto nested_func = DistinctSelectList<OP>;
 	switch (left.GetType().InternalType()) {
 	case PhysicalType::LIST:
-		match_count +=
-		    DistinctSelectList<OP>(l_not_null, r_not_null, unknown, maybe_vec, true_opt, false_opt, null_mask);
+		nested_func = DistinctSelectList<OP>;
 		break;
 	case PhysicalType::STRUCT:
-		match_count +=
-		    DistinctSelectStruct<OP>(l_not_null, r_not_null, unknown, maybe_vec, true_opt, false_opt, null_mask);
+		//	UNIONs use STRUCTs for physical representation, but the columns are independent,
+		//	so we have to process them differently
+		if (left.GetType().id() == LogicalTypeId::UNION) {
+			nested_func = DistinctSelectUnion<OP>;
+		} else {
+			nested_func = DistinctSelectStruct<OP>;
+		}
 		break;
 	case PhysicalType::ARRAY:
-		match_count +=
-		    DistinctSelectArray<OP>(l_not_null, r_not_null, unknown, maybe_vec, true_opt, false_opt, null_mask);
+		nested_func = DistinctSelectArray<OP>;
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for DISTINCT");
 	}
+
+	match_count += nested_func(l_not_null, r_not_null, unknown, maybe_vec, true_opt, false_opt, null_mask);
 
 	// Copy the buffered selections to the output selections
 	if (true_sel) {

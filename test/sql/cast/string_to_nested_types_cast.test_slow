@@ -46,7 +46,7 @@ SELECT '[nothappy]'::MOOD[]
 ----
 
 query III
-SELECT CAST(LIST(date)::VARCHAR AS DATE[]) a, a::VARCHAR::DATE[] b, a == b FROM test_all_types();
+SELECT CAST(LIST(date)::VARCHAR AS DATE[]) a, a::VARCHAR::DATE[] b, a IS NOT DISTINCT FROM b FROM test_all_types();
 ----
 ['5877642-06-25 (BC)', 5881580-07-10, NULL]	['5877642-06-25 (BC)', 5881580-07-10, NULL]	true
 

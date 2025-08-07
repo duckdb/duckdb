@@ -32,25 +32,24 @@ query III
 SELECT i, pk, fk FROM intlistdim, intlists WHERE pk = fk ORDER BY i
 ----
 1	[1]	[1]
-2	[NULL]	[NULL]
 3	[]	[]
 5	[9, 10, 11]	[9, 10, 11]
 
 query III
 SELECT i, pk, fk FROM intlistdim LEFT OUTER JOIN intlists ON intlistdim.pk=intlists.fk ORDER BY i
 ----
+NULL	[NULL]	NULL
 NULL	NULL	NULL
 1	[1]	[1]
-2	[NULL]	[NULL]
 3	[]	[]
 5	[9, 10, 11]	[9, 10, 11]
 
 query III
 SELECT i, pk, fk FROM intlists RIGHT OUTER JOIN intlistdim ON intlistdim.pk=intlists.fk ORDER BY i
 ----
+NULL	[NULL]	NULL
 NULL	NULL	NULL
 1	[1]	[1]
-2	[NULL]	[NULL]
 3	[]	[]
 5	[9, 10, 11]	[9, 10, 11]
 
@@ -59,8 +58,9 @@ SELECT i, pk, fk FROM intlistdim FULL OUTER JOIN intlists ON intlistdim.pk=intli
 ----
 NULL	NULL	NULL
 NULL	NULL	[13]
+NULL	[NULL]	NULL
 1	[1]	[1]
-2	[NULL]	[NULL]
+2	NULL	[NULL]
 3	[]	[]
 4	NULL	[2, 3]
 5	[9, 10, 11]	[9, 10, 11]
@@ -89,25 +89,24 @@ query III
 SELECT i, pk, fk FROM strlistdim, strlists WHERE pk = fk ORDER BY i
 ----
 1	[a]	[a]
-2	[NULL]	[NULL]
 3	[]	[]
 5	[i, j, k]	[i, j, k]
 
 query III
 SELECT i, pk, fk FROM strlistdim LEFT OUTER JOIN strlists ON strlistdim.pk=strlists.fk ORDER BY i
 ----
+NULL	[NULL]	NULL
 NULL	NULL	NULL
 1	[a]	[a]
-2	[NULL]	[NULL]
 3	[]	[]
 5	[i, j, k]	[i, j, k]
 
 query III
 SELECT i, pk, fk FROM strlists RIGHT OUTER JOIN strlistdim ON strlistdim.pk=strlists.fk ORDER BY i
 ----
+NULL	[NULL]	NULL
 NULL	NULL	NULL
 1	[a]	[a]
-2	[NULL]	[NULL]
 3	[]	[]
 5	[i, j, k]	[i, j, k]
 
@@ -116,8 +115,9 @@ SELECT i, pk, fk FROM strlistdim FULL OUTER JOIN strlists ON strlistdim.pk=strli
 ----
 NULL	NULL	NULL
 NULL	NULL	[Somateria mollissima]
+NULL	[NULL]	NULL
 1	[a]	[a]
-2	[NULL]	[NULL]
+2	NULL	[NULL]
 3	[]	[]
 4	NULL	[Branta Canadensis, c]
 5	[i, j, k]	[i, j, k]
@@ -146,25 +146,24 @@ query III
 SELECT i, pk, fk FROM structdim, structs WHERE pk = fk ORDER BY i
 ----
 1	{'x': 1, 'y': a}	{'x': 1, 'y': a}
-2	{'x': NULL, 'y': NULL}	{'x': NULL, 'y': NULL}
 3	{'x': 0, 'y': ''}	{'x': 0, 'y': ''}
 5	{'x': 9, 'y': i}	{'x': 9, 'y': i}
 
 query III
 SELECT i, pk, fk FROM structdim LEFT OUTER JOIN structs ON structdim.pk=structs.fk ORDER BY i
 ----
+NULL	{'x': NULL, 'y': NULL}	NULL
 NULL	NULL	NULL
 1	{'x': 1, 'y': a}	{'x': 1, 'y': a}
-2	{'x': NULL, 'y': NULL}	{'x': NULL, 'y': NULL}
 3	{'x': 0, 'y': ''}	{'x': 0, 'y': ''}
 5	{'x': 9, 'y': i}	{'x': 9, 'y': i}
 
 query III
 SELECT i, pk, fk FROM structs RIGHT OUTER JOIN structdim ON structdim.pk=structs.fk ORDER BY i
 ----
+NULL	{'x': NULL, 'y': NULL}	NULL
 NULL	NULL	NULL
 1	{'x': 1, 'y': a}	{'x': 1, 'y': a}
-2	{'x': NULL, 'y': NULL}	{'x': NULL, 'y': NULL}
 3	{'x': 0, 'y': ''}	{'x': 0, 'y': ''}
 5	{'x': 9, 'y': i}	{'x': 9, 'y': i}
 
@@ -173,8 +172,9 @@ SELECT i, pk, fk FROM structdim FULL OUTER JOIN structs ON structdim.pk=structs.
 ----
 NULL	NULL	NULL
 NULL	NULL	{'x': 13, 'y': Somateria mollissima}
+NULL	{'x': NULL, 'y': NULL}	NULL
 1	{'x': 1, 'y': a}	{'x': 1, 'y': a}
-2	{'x': NULL, 'y': NULL}	{'x': NULL, 'y': NULL}
+2	NULL	{'x': NULL, 'y': NULL}
 3	{'x': 0, 'y': ''}	{'x': 0, 'y': ''}
 4	NULL	{'x': 2, 'y': c}
 5	{'x': 9, 'y': i}	{'x': 9, 'y': i}
@@ -206,7 +206,6 @@ WHERE pk = fk
 ORDER BY i
 ----
 1	{'x': [1], 'y': [a]}	{'x': [1], 'y': [a]}
-2	{'x': [NULL], 'y': [NULL]}	{'x': [NULL], 'y': [NULL]}
 3	{'x': [], 'y': []}	{'x': [], 'y': []}
 4	{'x': [2, 3], 'y': [Branta Canadensis, c]}	{'x': [2, 3], 'y': [Branta Canadensis, c]}
 
@@ -218,8 +217,8 @@ ON struct_lint_lstr_dim.pk = struct_lint_lstr.fk
 ORDER BY i
 ----
 NULL	NULL	NULL
+NULL	{'x': [NULL], 'y': [NULL]}	NULL
 1	{'x': [1], 'y': [a]}	{'x': [1], 'y': [a]}
-2	{'x': [NULL], 'y': [NULL]}	{'x': [NULL], 'y': [NULL]}
 3	{'x': [], 'y': []}	{'x': [], 'y': []}
 4	{'x': [2, 3], 'y': [Branta Canadensis, c]}	{'x': [2, 3], 'y': [Branta Canadensis, c]}
 
@@ -231,8 +230,8 @@ ON struct_lint_lstr_dim.pk = struct_lint_lstr.fk
 ORDER BY i
 ----
 NULL	NULL	NULL
+NULL	{'x': [NULL], 'y': [NULL]}	NULL
 1	{'x': [1], 'y': [a]}	{'x': [1], 'y': [a]}
-2	{'x': [NULL], 'y': [NULL]}	{'x': [NULL], 'y': [NULL]}
 3	{'x': [], 'y': []}	{'x': [], 'y': []}
 4	{'x': [2, 3], 'y': [Branta Canadensis, c]}	{'x': [2, 3], 'y': [Branta Canadensis, c]}
 
@@ -245,8 +244,9 @@ ORDER BY ALL
 ----
 NULL	NULL	NULL
 NULL	NULL	{'x': [13], 'y': [Somateria mollissima]}
+NULL	{'x': [NULL], 'y': [NULL]}	NULL
 1	{'x': [1], 'y': [a]}	{'x': [1], 'y': [a]}
-2	{'x': [NULL], 'y': [NULL]}	{'x': [NULL], 'y': [NULL]}
+2	NULL	{'x': [NULL], 'y': [NULL]}
 3	{'x': [], 'y': []}	{'x': [], 'y': []}
 4	{'x': [2, 3], 'y': [Branta Canadensis, c]}	{'x': [2, 3], 'y': [Branta Canadensis, c]}
 5	NULL	{'x': [9, 10, 11], 'y': [i, j, k]}
@@ -278,7 +278,6 @@ WHERE fk = pk
 ORDER BY i
 ----
 1	{'x': [{'l4': [51], 'i4': 41}], 'y': [a]}	{'x': [{'l4': [51], 'i4': 41}], 'y': [a]}
-2	{'x': [NULL], 'y': [NULL]}	{'x': [NULL], 'y': [NULL]}
 3	{'x': [], 'y': []}	{'x': [], 'y': []}
 4	{'x': [{'l4': [52, 53], 'i4': 42}, {'l4': [54, 55], 'i4': 43}], 'y': [Branta Canadensis, c]}	{'x': [{'l4': [52, 53], 'i4': 42}, {'l4': [54, 55], 'i4': 43}], 'y': [Branta Canadensis, c]}
 
@@ -289,9 +288,9 @@ LEFT OUTER JOIN r2l3r4l5i4i2l3v
 ON r2l3r4l5i4i2l3v_dim.pk = r2l3r4l5i4i2l3v.fk
 ORDER BY i
 ----
+NULL	{'x': [NULL], 'y': [NULL]}	NULL
 NULL	NULL	NULL
 1	{'x': [{'l4': [51], 'i4': 41}], 'y': [a]}	{'x': [{'l4': [51], 'i4': 41}], 'y': [a]}
-2	{'x': [NULL], 'y': [NULL]}	{'x': [NULL], 'y': [NULL]}
 3	{'x': [], 'y': []}	{'x': [], 'y': []}
 4	{'x': [{'l4': [52, 53], 'i4': 42}, {'l4': [54, 55], 'i4': 43}], 'y': [Branta Canadensis, c]}	{'x': [{'l4': [52, 53], 'i4': 42}, {'l4': [54, 55], 'i4': 43}], 'y': [Branta Canadensis, c]}
 
@@ -304,7 +303,7 @@ ORDER BY i
 ----
 NULL	NULL	{'x': [{'l4': [62], 'i4': 47}], 'y': [Somateria mollissima]}
 1	{'x': [{'l4': [51], 'i4': 41}], 'y': [a]}	{'x': [{'l4': [51], 'i4': 41}], 'y': [a]}
-2	{'x': [NULL], 'y': [NULL]}	{'x': [NULL], 'y': [NULL]}
+2	NULL	{'x': [NULL], 'y': [NULL]}
 3	{'x': [], 'y': []}	{'x': [], 'y': []}
 4	{'x': [{'l4': [52, 53], 'i4': 42}, {'l4': [54, 55], 'i4': 43}], 'y': [Branta Canadensis, c]}	{'x': [{'l4': [52, 53], 'i4': 42}, {'l4': [54, 55], 'i4': 43}], 'y': [Branta Canadensis, c]}
 5	NULL	{'x': [{'l4': [56], 'i4': 44}, {'l4': [57, 58], 'i4': 45}, {'l4': [59, 60, 61], 'i4': 46}], 'y': [i, j, k]}
@@ -318,8 +317,9 @@ ORDER BY ALL
 ----
 NULL	NULL	NULL
 NULL	NULL	{'x': [{'l4': [62], 'i4': 47}], 'y': [Somateria mollissima]}
+NULL	{'x': [NULL], 'y': [NULL]}	NULL
 1	{'x': [{'l4': [51], 'i4': 41}], 'y': [a]}	{'x': [{'l4': [51], 'i4': 41}], 'y': [a]}
-2	{'x': [NULL], 'y': [NULL]}	{'x': [NULL], 'y': [NULL]}
+2	NULL	{'x': [NULL], 'y': [NULL]}
 3	{'x': [], 'y': []}	{'x': [], 'y': []}
 4	{'x': [{'l4': [52, 53], 'i4': 42}, {'l4': [54, 55], 'i4': 43}], 'y': [Branta Canadensis, c]}	{'x': [{'l4': [52, 53], 'i4': 42}, {'l4': [54, 55], 'i4': 43}], 'y': [Branta Canadensis, c]}
 5	NULL	{'x': [{'l4': [56], 'i4': 44}, {'l4': [57, 58], 'i4': 45}, {'l4': [59, 60, 61], 'i4': 46}], 'y': [i, j, k]}
@@ -361,7 +361,7 @@ FROM longlists_dim, longlists
 WHERE fk = pk
 ORDER BY 1, 2, 3
 ----
-15 values hashing to 9cf60d50bdcdf90da73b0fbdc873da5b
+12 values hashing to 08f406f54f3e23db38de7b47ff8904fb
 
 query III
 SELECT i, pk, fk
@@ -370,7 +370,7 @@ LEFT OUTER JOIN longlists
 ON longlists.fk = longlists_dim.pk
 ORDER BY 1, 2, 3
 ----
-21 values hashing to 4220e1d4299da1bd2d8baa63e2714a05
+21 values hashing to af637438ac6b5c3562650f2fa1d0cb8e
 
 query III
 SELECT i, pk, fk
@@ -379,7 +379,7 @@ RIGHT OUTER JOIN longlists
 ON longlists.fk = longlists_dim.pk
 ORDER BY 1, 2, 3
 ----
-18 values hashing to 2cb5cda12f183cadc7ff1ac7fb599eed
+18 values hashing to fd9ad46eb7b9475bdaa5d8ad58c056d3
 
 query III
 SELECT i, pk, fk
@@ -388,7 +388,7 @@ FULL OUTER JOIN longlists
 ON longlists.fk = longlists_dim.pk
 ORDER BY 1, 2, 3
 ----
-24 values hashing to 6df3ff46363f2676f8a97128fc0e7e34
+27 values hashing to 23339ca722b88334e4d091ef4bbca73a
 
 # Multiple key matches
 query II
