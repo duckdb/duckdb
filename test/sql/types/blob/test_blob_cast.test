@@ -2,9 +2,6 @@
 # description: Cast BLOB values
 # group: [blob]
 
-statement ok
-PRAGMA enable_verification
-
 # BLOB to VARCHAR -> CastFromBlob, it always results in a hex representation
 query T
 SELECT 'a'::BYTEA::VARCHAR

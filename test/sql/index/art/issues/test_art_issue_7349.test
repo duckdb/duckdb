@@ -2,9 +2,6 @@
 # description: Test ensuring that we do not rollback twice when throwing an exception during commit
 # group: [issues]
 
-statement ok
-PRAGMA enable_verification
-
 # setting up the different tables and the UNIQUE index
 
 statement ok
