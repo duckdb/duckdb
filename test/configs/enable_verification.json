@@ -144,6 +144,12 @@
       ]
     },
     {
+      "reason": "CI is getting stuck.",
+      "paths": [
+        "test/common/test_cast_struct.test"
+      ]
+    },
+    {
       "reason": "Runs longer than 10s on a release build.",
       "paths": [
         "test/sql/limit/test_limit0.test",
