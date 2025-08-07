@@ -39,7 +39,7 @@
                 }
             ],
             "comment": {
-                "description": "Closes the result and de-allocates all memory allocated for that connection.\n\n",
+                "description": "Closes the result and de-allocates all memory allocated for that result.\n\n",
                 "param_comments": {
                     "result": "The result to destroy."
                 }
@@ -126,6 +126,23 @@
                     "col": "The column index."
                 },
                 "return_value": "The logical column type of the specified column."
+            }
+        },
+        {
+            "name": "duckdb_result_get_arrow_options",
+            "return_type": "duckdb_arrow_options",
+            "params": [
+                {
+                    "type": "duckdb_result *",
+                    "name": "result"
+                }
+            ],
+           "comment": {
+                "description": "Returns the arrow options associated with the given result. These options are definitions of how the arrow arrays/schema should be produced.\n",
+                "param_comments": {
+                    "result": "The result object to fetch arrow options from."
+                },
+                "return_value": "The arrow options associated with the given result. This must be destroyed with `duckdb_destroy_arrow_options`."
             }
         },
         {

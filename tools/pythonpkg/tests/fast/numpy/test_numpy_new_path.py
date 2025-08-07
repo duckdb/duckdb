@@ -1,5 +1,5 @@
-""" The support for scaning over numpy arrays reuses many codes for pandas.
-    Therefore, we only test the new codes and exec paths.
+"""The support for scaning over numpy arrays reuses many codes for pandas.
+Therefore, we only test the new codes and exec paths.
 """
 
 import numpy as np

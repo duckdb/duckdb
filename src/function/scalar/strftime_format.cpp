@@ -13,7 +13,7 @@
 
 namespace duckdb {
 
-idx_t StrfTimepecifierSize(StrTimeSpecifier specifier) {
+static idx_t StrfTimepecifierSize(StrTimeSpecifier specifier) {
 	switch (specifier) {
 	case StrTimeSpecifier::ABBREVIATED_WEEKDAY_NAME:
 	case StrTimeSpecifier::ABBREVIATED_MONTH_NAME:
@@ -48,7 +48,7 @@ idx_t StrfTimepecifierSize(StrTimeSpecifier specifier) {
 	}
 }
 
-void StrfTimeSplitOffset(int offset, int &hh, int &mm, int &ss) {
+static void StrfTimeSplitOffset(int offset, int &hh, int &mm, int &ss) {
 	hh = offset / Interval::SECS_PER_HOUR;
 	offset = offset % Interval::SECS_PER_HOUR;
 
@@ -921,11 +921,13 @@ bool StrpTimeFormat::Parse(const char *data, size_t size, ParseResult &result, b
 		if (numeric_width[i] > 0) {
 			// numeric specifier: parse a number
 			uint64_t number = 0;
+			int digits = 0;
 			size_t start_pos = pos;
 			size_t end_pos = start_pos + UnsafeNumericCast<size_t>(numeric_width[i]);
 			while (pos < size && pos < end_pos && StringUtil::CharacterIsDigit(data[pos])) {
 				number = number * 10 + UnsafeNumericCast<uint64_t>(data[pos]) - '0';
 				pos++;
+				++digits;
 			}
 			if (pos == start_pos) {
 				// expected a number here
@@ -1033,7 +1035,6 @@ bool StrpTimeFormat::Parse(const char *data, size_t size, ParseResult &result, b
 					error_message = "Incompatible ISO year offset specified";
 					error_position = start_pos;
 					return false;
-					break;
 				}
 				if (number > 9999) {
 					// %G only supports numbers between [0..9999]
@@ -1084,16 +1085,25 @@ bool StrpTimeFormat::Parse(const char *data, size_t size, ParseResult &result, b
 				result_data[5] = UnsafeNumericCast<int32_t>(number);
 				break;
 			case StrTimeSpecifier::NANOSECOND_PADDED:
+				for (; digits < numeric_width[i]; ++digits) {
+					number *= 10;
+				}
 				D_ASSERT(number < Interval::NANOS_PER_SEC); // enforced by the length of the number
 				// nanoseconds
 				result_data[6] = UnsafeNumericCast<int32_t>(number);
 				break;
 			case StrTimeSpecifier::MICROSECOND_PADDED:
+				for (; digits < numeric_width[i]; ++digits) {
+					number *= 10;
+				}
 				D_ASSERT(number < Interval::MICROS_PER_SEC); // enforced by the length of the number
 				// nanoseconds
 				result_data[6] = UnsafeNumericCast<int32_t>(number * Interval::NANOS_PER_MICRO);
 				break;
 			case StrTimeSpecifier::MILLISECOND_PADDED:
+				for (; digits < numeric_width[i]; ++digits) {
+					number *= 10;
+				}
 				D_ASSERT(number < Interval::MSECS_PER_SEC); // enforced by the length of the number
 				// nanoseconds
 				result_data[6] = UnsafeNumericCast<int32_t>(number * Interval::NANOS_PER_MSEC);
@@ -1138,15 +1148,17 @@ bool StrpTimeFormat::Parse(const char *data, size_t size, ParseResult &result, b
 				weekday = number;
 				break;
 			case StrTimeSpecifier::WEEK_NUMBER_ISO:
-				// y/m/d overrides G/V/u but does not conflict
 				switch (offset_specifier) {
+				case StrTimeSpecifier::YEAR_WITHOUT_CENTURY_PADDED:
+				case StrTimeSpecifier::YEAR_WITHOUT_CENTURY:
+				case StrTimeSpecifier::YEAR_DECIMAL:
+					error_message = "ISO week offsets are incompatible with non-ISO year specifiers. Use '%G' instead";
+					error_position = start_pos;
+					return false;
 				case StrTimeSpecifier::DAY_OF_MONTH_PADDED:
 				case StrTimeSpecifier::DAY_OF_MONTH:
 				case StrTimeSpecifier::MONTH_DECIMAL_PADDED:
 				case StrTimeSpecifier::MONTH_DECIMAL:
-				case StrTimeSpecifier::YEAR_WITHOUT_CENTURY_PADDED:
-				case StrTimeSpecifier::YEAR_WITHOUT_CENTURY:
-				case StrTimeSpecifier::YEAR_DECIMAL:
 					// Just validate, don't use
 					break;
 				case StrTimeSpecifier::WEEKDAY_DECIMAL:

@@ -10,10 +10,7 @@
 
 #include "parquet_types.h"
 #include "duckdb/common/encryption_state.hpp"
-
-#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/storage/object_cache.hpp"
-#endif
 
 namespace duckdb {
 
@@ -41,8 +38,9 @@ private:
 
 class ParquetEncryptionConfig {
 public:
-	explicit ParquetEncryptionConfig(ClientContext &context);
+	explicit ParquetEncryptionConfig();
 	ParquetEncryptionConfig(ClientContext &context, const Value &arg);
+	ParquetEncryptionConfig(string footer_key);
 
 public:
 	static shared_ptr<ParquetEncryptionConfig> Create(ClientContext &context, const Value &arg);
@@ -53,8 +51,7 @@ public:
 	static shared_ptr<ParquetEncryptionConfig> Deserialize(Deserializer &deserializer);
 
 private:
-	ClientContext &context;
-	//! Name of the key used for the footer
+	//! The encryption key used for the footer
 	string footer_key;
 	//! Mapping from column name to key name
 	unordered_map<string, string> column_keys;

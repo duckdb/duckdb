@@ -18,6 +18,8 @@ static int64_t TargetTypeCost(const LogicalType &type) {
 		return 104;
 	case LogicalTypeId::DECIMAL:
 		return 105;
+	case LogicalTypeId::VARINT:
+		return 106;
 	case LogicalTypeId::TIMESTAMP_NS:
 		return 119;
 	case LogicalTypeId::TIMESTAMP:
@@ -38,6 +40,9 @@ static int64_t TargetTypeCost(const LogicalType &type) {
 		return 160;
 	case LogicalTypeId::ANY:
 		return int64_t(AnyType::GetCastScore(type));
+	case LogicalTypeId::TEMPLATE:
+		// we can cast anything to a template type, but prefer to cast to anything else!
+		return 1000000;
 	default:
 		return 110;
 	}
@@ -52,6 +57,7 @@ static int64_t ImplicitCastTinyint(const LogicalType &to) {
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::DECIMAL:
+	case LogicalTypeId::VARINT:
 		return TargetTypeCost(to);
 	default:
 		return -1;
@@ -66,6 +72,7 @@ static int64_t ImplicitCastSmallint(const LogicalType &to) {
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::DECIMAL:
+	case LogicalTypeId::VARINT:
 		return TargetTypeCost(to);
 	default:
 		return -1;
@@ -79,6 +86,7 @@ static int64_t ImplicitCastInteger(const LogicalType &to) {
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::DECIMAL:
+	case LogicalTypeId::VARINT:
 		return TargetTypeCost(to);
 	default:
 		return -1;
@@ -91,6 +99,7 @@ static int64_t ImplicitCastBigint(const LogicalType &to) {
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::HUGEINT:
 	case LogicalTypeId::DECIMAL:
+	case LogicalTypeId::VARINT:
 		return TargetTypeCost(to);
 	default:
 		return -1;
@@ -110,6 +119,7 @@ static int64_t ImplicitCastUTinyint(const LogicalType &to) {
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::DECIMAL:
+	case LogicalTypeId::VARINT:
 		return TargetTypeCost(to);
 	default:
 		return -1;
@@ -127,6 +137,7 @@ static int64_t ImplicitCastUSmallint(const LogicalType &to) {
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::DECIMAL:
+	case LogicalTypeId::VARINT:
 		return TargetTypeCost(to);
 	default:
 		return -1;
@@ -143,6 +154,7 @@ static int64_t ImplicitCastUInteger(const LogicalType &to) {
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::DECIMAL:
+	case LogicalTypeId::VARINT:
 		return TargetTypeCost(to);
 	default:
 		return -1;
@@ -156,6 +168,7 @@ static int64_t ImplicitCastUBigint(const LogicalType &to) {
 	case LogicalTypeId::UHUGEINT:
 	case LogicalTypeId::HUGEINT:
 	case LogicalTypeId::DECIMAL:
+	case LogicalTypeId::VARINT:
 		return TargetTypeCost(to);
 	default:
 		return -1;
@@ -164,6 +177,7 @@ static int64_t ImplicitCastUBigint(const LogicalType &to) {
 
 static int64_t ImplicitCastFloat(const LogicalType &to) {
 	switch (to.id()) {
+	case LogicalTypeId::VARINT:
 	case LogicalTypeId::DOUBLE:
 		return TargetTypeCost(to);
 	default:
@@ -173,6 +187,9 @@ static int64_t ImplicitCastFloat(const LogicalType &to) {
 
 static int64_t ImplicitCastDouble(const LogicalType &to) {
 	switch (to.id()) {
+
+	case LogicalTypeId::VARINT:
+		return TargetTypeCost(to);
 	default:
 		return -1;
 	}
@@ -193,6 +210,7 @@ static int64_t ImplicitCastHugeint(const LogicalType &to) {
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::DECIMAL:
+	case LogicalTypeId::VARINT:
 		return TargetTypeCost(to);
 	default:
 		return -1;
@@ -204,6 +222,7 @@ static int64_t ImplicitCastUhugeint(const LogicalType &to) {
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::DECIMAL:
+	case LogicalTypeId::VARINT:
 		return TargetTypeCost(to);
 	default:
 		return -1;
@@ -333,7 +352,11 @@ bool LogicalTypeIsValid(const LogicalType &type) {
 }
 
 int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) {
-	if (from.id() == LogicalTypeId::SQLNULL || to.id() == LogicalTypeId::ANY) {
+	if (from.id() == LogicalTypeId::SQLNULL && to.id() == LogicalTypeId::TEMPLATE) {
+		// Prefer the TEMPLATE type for NULL casts, as it is the most generic
+		return 5;
+	}
+	if (from.id() == LogicalTypeId::SQLNULL || to.id() == LogicalTypeId::ANY || to.id() == LogicalTypeId::TEMPLATE) {
 		// NULL expression can be cast to anything
 		return TargetTypeCost(to);
 	}

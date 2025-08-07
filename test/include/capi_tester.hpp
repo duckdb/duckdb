@@ -211,6 +211,8 @@ duckdb_date CAPIResult::Fetch(idx_t col, idx_t row);
 template <>
 duckdb_time CAPIResult::Fetch(idx_t col, idx_t row);
 template <>
+duckdb_time_ns CAPIResult::Fetch(idx_t col, idx_t row);
+template <>
 duckdb_timestamp CAPIResult::Fetch(idx_t col, idx_t row);
 template <>
 duckdb_timestamp_s CAPIResult::Fetch(idx_t col, idx_t row);
@@ -259,10 +261,12 @@ public:
 		if (duckdb_open(path, &database) != DuckDBSuccess) {
 			return false;
 		}
-		if (duckdb_connect(database, &connection) != DuckDBSuccess) {
-			return false;
-		}
-		return true;
+		return duckdb_connect(database, &connection) == DuckDBSuccess;
+	}
+
+	bool ChangeConnection() {
+		duckdb_disconnect(&connection);
+		return duckdb_connect(database, &connection) == DuckDBSuccess;
 	}
 
 	duckdb::unique_ptr<CAPIResult> Query(string query) {

@@ -5,6 +5,7 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/function/scalar/struct_functions.hpp"
 
 namespace duckdb {
 
@@ -13,14 +14,14 @@ StructFilter::StructFilter(idx_t child_idx_p, string child_name_p, unique_ptr<Ta
       child_filter(std::move(child_filter_p)) {
 }
 
-FilterPropagateResult StructFilter::CheckStatistics(BaseStatistics &stats) {
+FilterPropagateResult StructFilter::CheckStatistics(BaseStatistics &stats) const {
 	D_ASSERT(stats.GetType().id() == LogicalTypeId::STRUCT);
 	// Check the child statistics
 	auto &child_stats = StructStats::GetChildStats(stats, child_idx);
 	return child_filter->CheckStatistics(child_stats);
 }
 
-string StructFilter::ToString(const string &column_name) {
+string StructFilter::ToString(const string &column_name) const {
 	if (!child_name.empty()) {
 		return child_filter->ToString(column_name + "." + child_name);
 	}
@@ -48,7 +49,7 @@ unique_ptr<Expression> StructFilter::ToExpression(const Expression &column) cons
 	arguments.push_back(column.Copy());
 	arguments.push_back(make_uniq<BoundConstantExpression>(Value::BIGINT(NumericCast<int64_t>(child_idx + 1))));
 	auto child = make_uniq<BoundFunctionExpression>(child_type, GetExtractAtFunction(), std::move(arguments),
-	                                                GetBindData(child_idx));
+	                                                StructExtractAtFun::GetBindData(child_idx));
 	return child_filter->ToExpression(*child);
 }
 } // namespace duckdb

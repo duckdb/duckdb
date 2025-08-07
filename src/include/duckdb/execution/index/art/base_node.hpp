@@ -31,19 +31,23 @@ private:
 	Node children[CAPACITY];
 
 public:
-	//! Get a new BaseNode and initialize it.
-	static BaseNode &New(ART &art, Node &node) {
+	//! Get a new BaseNode handle and initialize the base node.
+	static NodeHandle<BaseNode> New(ART &art, Node &node) {
 		node = Node::GetAllocator(art, TYPE).New();
 		node.SetMetadata(static_cast<uint8_t>(TYPE));
 
-		auto &n = Node::Ref<BaseNode>(art, node, TYPE);
+		NodeHandle<BaseNode> handle(art, node);
+		auto &n = handle.Get();
+
 		n.count = 0;
-		return n;
+		return handle;
 	}
 
-	//! Free the node and its children.
+	//! Free the children of the node.
 	static void Free(ART &art, Node &node) {
-		auto &n = Node::Ref<BaseNode>(art, node, TYPE);
+		NodeHandle<BaseNode> handle(art, node);
+		auto &n = handle.Get();
+
 		for (uint8_t i = 0; i < n.count; i++) {
 			Node::Free(art, n.children[i]);
 		}
@@ -87,6 +91,24 @@ public:
 		return nullptr;
 	}
 
+	//! Extracts the bytes and their respective children.
+	//! The return value is valid as long as the arena is valid.
+	//! The node must be freed after calling into this function.
+	NodeChildren ExtractChildren(ArenaAllocator &arena) {
+		auto mem_bytes = arena.AllocateAligned(sizeof(uint8_t) * count);
+		array_ptr<uint8_t> bytes(mem_bytes, count);
+		auto mem_children = arena.AllocateAligned(sizeof(Node) * count);
+		array_ptr<Node> children_ptr(reinterpret_cast<Node *>(mem_children), count);
+
+		for (uint8_t i = 0; i < count; i++) {
+			bytes[i] = key[i];
+			children_ptr[i] = children[i];
+		}
+
+		count = 0;
+		return NodeChildren(bytes, children_ptr);
+	}
+
 public:
 	template <class F>
 	static void Iterator(BaseNode<CAPACITY, TYPE> &n, F &&lambda) {
@@ -97,7 +119,7 @@ public:
 
 private:
 	static void InsertChildInternal(BaseNode &n, const uint8_t byte, const Node child);
-	static BaseNode &DeleteChildInternal(ART &art, Node &node, const uint8_t byte);
+	static NodeHandle<BaseNode> DeleteChildInternal(ART &art, Node &node, const uint8_t byte);
 };
 
 //! Node4 holds up to four children sorted by their key byte.

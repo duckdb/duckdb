@@ -8,9 +8,7 @@
 
 #pragma once
 
-#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/limits.hpp"
-#endif
 #include "column_reader.hpp"
 #include "reader/templated_column_reader.hpp"
 
@@ -26,6 +24,9 @@ public:
 
 public:
 	idx_t Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result) override;
+	void Filter(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out,
+	            const TableFilter &filter, TableFilterState &filter_state, SelectionVector &sel,
+	            idx_t &approved_tuple_count, bool is_first_filter) override;
 
 	void InitializeRead(idx_t row_group_idx_p, const vector<ColumnChunk> &columns, TProtocol &protocol_p) override;
 

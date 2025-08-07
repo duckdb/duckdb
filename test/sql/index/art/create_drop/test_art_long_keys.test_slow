@@ -1,0 +1,49 @@
+# name: test/sql/index/art/create_drop/test_art_long_keys.test_slow
+# description: Test ART creation very long BLOBs.
+# group: [create_drop]
+
+# Try creating an index with identical long keys.
+statement ok
+CREATE TABLE long_strings (id BLOB);
+
+statement ok
+INSERT INTO long_strings SELECT repeat('k', 1000000);
+
+statement ok
+INSERT INTO long_strings SELECT range::VARCHAR::BLOB FROM range(100000);
+
+statement ok
+INSERT INTO long_strings SELECT repeat('k', 1000000);
+
+statement ok
+INSERT INTO long_strings SELECT range::VARCHAR::BLOB || 'other' FROM range(100000);
+
+statement ok
+INSERT INTO long_strings SELECT repeat('k', 1000000);
+
+statement error
+CREATE INDEX idx ON long_strings(id);
+----
+<REGEX>:Invalid Input Error.*exceeds the maximum size.*
+
+# Now we try medium-sized keys.
+statement ok
+CREATE TABLE medium_strings (id BLOB);
+
+statement ok
+INSERT INTO medium_strings SELECT repeat('k', 122879);
+
+statement ok
+INSERT INTO medium_strings SELECT range::VARCHAR::BLOB FROM range(100000);
+
+statement ok
+INSERT INTO medium_strings SELECT repeat('k', 122879);
+
+statement ok
+INSERT INTO medium_strings SELECT range::VARCHAR::BLOB || 'other' FROM range(100000);
+
+statement ok
+INSERT INTO medium_strings SELECT repeat('k', 122879);
+
+statement ok
+CREATE INDEX idx ON medium_strings(id);

@@ -10,6 +10,7 @@
 
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/types/vector.hpp"
 
 namespace duckdb {
 
@@ -22,7 +23,6 @@ class TupleDataLayout;
 class RowDataCollection;
 struct SelectionVector;
 class StringHeap;
-class Vector;
 struct UnifiedVectorFormat;
 
 // The NestedValidity class help to set/get the validity from inside nested vectors
@@ -46,6 +46,7 @@ struct RowOperationsState {
 	}
 
 	ArenaAllocator &allocator;
+	unique_ptr<Vector> addresses; // Re-usable vector for row_aggregate.cpp
 };
 
 // RowOperations contains a set of operations that operate on data using a RowLayout
@@ -82,18 +83,6 @@ struct RowOperations {
 	static void Gather(Vector &rows, const SelectionVector &row_sel, Vector &col, const SelectionVector &col_sel,
 	                   const idx_t count, const RowLayout &layout, const idx_t col_no, const idx_t build_size = 0,
 	                   data_ptr_t heap_ptr = nullptr);
-
-	//===--------------------------------------------------------------------===//
-	// Comparison Operators
-	//===--------------------------------------------------------------------===//
-	//! Compare a block of key data against the row values to produce an updated selection that matches
-	//! and a second (optional) selection of non-matching values.
-	//! Returns the number of matches remaining in the selection.
-	using Predicates = vector<ExpressionType>;
-
-	static idx_t Match(DataChunk &columns, UnifiedVectorFormat col_data[], const TupleDataLayout &layout, Vector &rows,
-	                   const Predicates &predicates, SelectionVector &sel, idx_t count, SelectionVector *no_match,
-	                   idx_t &no_match_count);
 
 	//===--------------------------------------------------------------------===//
 	// Heap Operators

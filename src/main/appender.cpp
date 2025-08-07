@@ -65,7 +65,8 @@ Appender::Appender(Connection &con, const string &database_name, const string &s
 
 	description = con.TableInfo(database_name, schema_name, table_name);
 	if (!description) {
-		throw CatalogException(StringUtil::Format("Table \"%s.%s\" could not be found", schema_name, table_name));
+		throw CatalogException(
+		    StringUtil::Format("Table \"%s.%s.%s\" could not be found", database_name, schema_name, table_name));
 	}
 	if (description->readonly) {
 		throw InvalidInputException("Cannot append to a readonly database.");

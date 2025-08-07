@@ -9,11 +9,13 @@
 #pragma once
 
 #include "duckdb/common/mutex.hpp"
-#include "duckdb/common/perfect_map_set.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/vector_cache.hpp"
 
 namespace duckdb {
+
+struct TupleDataChunkPart;
 
 enum class TupleDataPinProperties : uint8_t {
 	INVALID,
@@ -27,9 +29,64 @@ enum class TupleDataPinProperties : uint8_t {
 	ALREADY_PINNED
 };
 
+//! Instead of an unordered_map from uint32 -> BufferHandle, we have a vector.
+//! The lookup speed is OK since these maps should be very small.
+//! The benefit of this is that we aren't doing any other heap allocations than the one vector.
+//! For unordered_map, we would get a heap allocation for every inserted entry.
+class buffer_handle_map_t {
+	using iterator = unsafe_vector<pair<uint32_t, BufferHandle>>::iterator;
+
+public:
+	buffer_handle_map_t() {
+	}
+
+public:
+	pair<iterator, bool> emplace(const uint32_t &id, BufferHandle &&handle) {
+		D_ASSERT(find(id) == end()); // Should have been checked by the caller
+		handles.emplace_back(id, std::move(handle));
+		return make_pair(--end(), true);
+	}
+
+	iterator erase(const iterator &it) {
+		return handles.erase(it);
+	}
+
+	iterator find(const uint32_t &id) {
+		auto it = handles.begin();
+		for (; it != handles.end(); it++) {
+			if (it->first == id) {
+				break;
+			}
+		}
+		return it;
+	}
+
+	iterator begin() {
+		return handles.begin();
+	}
+
+	iterator end() {
+		return handles.end();
+	}
+
+	void clear() {
+		handles.clear();
+	}
+
+	void acquire_handles(vector<BufferHandle> &pins) {
+		for (auto &handle : handles) {
+			pins.emplace_back(std::move(handle.second));
+		}
+		handles.clear();
+	}
+
+private:
+	unsafe_vector<pair<uint32_t, BufferHandle>> handles;
+};
+
 struct TupleDataPinState {
-	perfect_map_t<BufferHandle> row_handles;
-	perfect_map_t<BufferHandle> heap_handles;
+	buffer_handle_map_t row_handles;
+	buffer_handle_map_t heap_handles;
 	TupleDataPinProperties properties = TupleDataPinProperties::INVALID;
 };
 
@@ -62,8 +119,13 @@ struct TupleDataChunkState {
 	Vector heap_locations = Vector(LogicalType::POINTER);
 	Vector heap_sizes = Vector(LogicalType::UBIGINT);
 
+	SelectionVector utility = SelectionVector(STANDARD_VECTOR_SIZE);
+
 	vector<unique_ptr<Vector>> cached_cast_vectors;
 	vector<unique_ptr<VectorCache>> cached_cast_vector_cache;
+
+	//! Cached vector (for InitializeChunkState)
+	unsafe_vector<reference<TupleDataChunkPart>> parts;
 };
 
 struct TupleDataAppendState {

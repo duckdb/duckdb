@@ -19,6 +19,7 @@ namespace duckdb {
 
 class TupleDataAllocator;
 class TupleDataLayout;
+struct TupleDataSegment;
 
 struct TupleDataChunkPart {
 public:
@@ -29,8 +30,8 @@ public:
 	TupleDataChunkPart &operator=(const TupleDataChunkPart &) = delete;
 
 	//! Enable move constructors
-	TupleDataChunkPart(TupleDataChunkPart &&other) noexcept;
-	TupleDataChunkPart &operator=(TupleDataChunkPart &&) noexcept;
+	TupleDataChunkPart(TupleDataChunkPart &&other) noexcept = default;
+	TupleDataChunkPart &operator=(TupleDataChunkPart &&) noexcept = default;
 
 public:
 	//! Mark heap as empty
@@ -45,7 +46,7 @@ public:
 	uint32_t heap_block_offset;
 	data_ptr_t base_heap_ptr;
 	//! Total heap size for this chunk part
-	uint32_t total_heap_size;
+	idx_t total_heap_size;
 	//! Tuple count for this chunk part
 	uint32_t count;
 	//! Lock for recomputing heap pointers (owned by TupleDataChunk)
@@ -53,7 +54,61 @@ public:
 
 private:
 	//! Marker for empty heaps
-	static constexpr const uint32_t INVALID_INDEX = (uint32_t)-1;
+	static constexpr uint32_t INVALID_INDEX = static_cast<uint32_t>(-1);
+};
+
+class ContinuousIdSet {
+public:
+	ContinuousIdSet() : min_id(INVALID_INDEX), max_id(INVALID_INDEX) {
+	}
+
+public:
+	void Insert(const uint32_t &block_id) {
+		if (Empty()) {
+			min_id = block_id;
+			max_id = block_id;
+		} else {
+			min_id = MinValue(min_id, block_id);
+			max_id = MaxValue(max_id, block_id);
+		}
+	}
+
+	bool Contains(const uint32_t &block_id) const {
+		if (Empty()) {
+			return false;
+		}
+		return block_id >= min_id && block_id <= max_id;
+	}
+
+	bool Empty() const {
+		return min_id == INVALID_INDEX;
+	}
+
+	uint32_t Start() const {
+		D_ASSERT(!Empty());
+		return min_id;
+	}
+
+	uint32_t End() const {
+		D_ASSERT(!Empty());
+		return max_id + 1;
+	}
+
+	uint32_t Size() const {
+		D_ASSERT(!Empty());
+		return End() - Start();
+	}
+
+	void DecrementMax() {
+		D_ASSERT(!Empty());
+		D_ASSERT(Size() > 1);
+		max_id--;
+	}
+
+private:
+	static constexpr uint32_t INVALID_INDEX = static_cast<uint32_t>(-1);
+	uint32_t min_id;
+	uint32_t max_id;
 };
 
 struct TupleDataChunk {
@@ -69,19 +124,20 @@ public:
 	TupleDataChunk &operator=(TupleDataChunk &&) noexcept;
 
 	//! Add a part to this chunk
-	void AddPart(TupleDataChunkPart &&part, const TupleDataLayout &layout);
+	TupleDataChunkPart &AddPart(TupleDataSegment &segment, TupleDataChunkPart &&part);
 	//! Tries to merge the last chunk part into the second-to-last one
-	void MergeLastChunkPart(const TupleDataLayout &layout);
+	void MergeLastChunkPart(TupleDataSegment &segment);
 	//! Verify counts of the parts in this chunk
-	void Verify() const;
+	void Verify(const TupleDataSegment &segment) const;
 
 public:
 	//! The parts of this chunk
-	unsafe_vector<TupleDataChunkPart> parts;
+	ContinuousIdSet part_ids;
+
 	//! The row block ids referenced by the chunk
-	perfect_set_t row_block_ids;
+	ContinuousIdSet row_block_ids;
 	//! The heap block ids referenced by the chunk
-	perfect_set_t heap_block_ids;
+	ContinuousIdSet heap_block_ids;
 	//! Tuple count for this chunk
 	idx_t count;
 	//! Lock for recomputing heap pointers
@@ -89,19 +145,15 @@ public:
 };
 
 struct TupleDataSegment {
+	friend struct TupleDataChunkPart;
+	friend struct TupleDataChunk;
+
 public:
 	explicit TupleDataSegment(shared_ptr<TupleDataAllocator> allocator);
 
 	~TupleDataSegment();
 
-	//! Disable copy constructors
-	TupleDataSegment(const TupleDataSegment &other) = delete;
-	TupleDataSegment &operator=(const TupleDataSegment &) = delete;
-
-	//! Enable move constructors
-	TupleDataSegment(TupleDataSegment &&other) noexcept;
-	TupleDataSegment &operator=(TupleDataSegment &&) noexcept;
-
+public:
 	//! The number of chunks in this segment
 	idx_t ChunkCount() const;
 	//! The size (in bytes) of this segment
@@ -115,10 +167,13 @@ public:
 	void VerifyEverythingPinned() const;
 
 public:
-	//! The allocator for this segment
+	//! The allocator and layout for this segment
 	shared_ptr<TupleDataAllocator> allocator;
+	const TupleDataLayout &layout;
 	//! The chunks of this segment
 	unsafe_vector<TupleDataChunk> chunks;
+	//! The chunk parts of this segment
+	unsafe_vector<TupleDataChunkPart> chunk_parts;
 	//! The tuple count of this segment
 	idx_t count;
 	//! The data size of this segment

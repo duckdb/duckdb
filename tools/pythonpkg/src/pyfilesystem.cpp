@@ -128,7 +128,7 @@ bool PythonFilesystem::Exists(const string &filename, const char *func_name) con
 
 	return py::bool_(filesystem.attr(func_name)(filename));
 }
-vector<string> PythonFilesystem::Glob(const string &path, FileOpener *opener) {
+vector<OpenFileInfo> PythonFilesystem::Glob(const string &path, FileOpener *opener) {
 	PythonGILWrapper gil;
 
 	if (path.empty()) {
@@ -136,10 +136,11 @@ vector<string> PythonFilesystem::Glob(const string &path, FileOpener *opener) {
 	}
 	auto returner = py::list(filesystem.attr("glob")(path));
 
-	vector<string> results;
+	vector<OpenFileInfo> results;
 	auto unstrip_protocol = filesystem.attr("unstrip_protocol");
 	for (auto item : returner) {
-		results.push_back(py::str(unstrip_protocol(py::str(item))));
+		string file_path = py::str(unstrip_protocol(py::str(item)));
+		results.emplace_back(file_path);
 	}
 	return results;
 }
@@ -186,14 +187,14 @@ void PythonFilesystem::RemoveFile(const string &filename, optional_ptr<FileOpene
 	auto remove = filesystem.attr("rm");
 	remove(py::str(filename));
 }
-time_t PythonFilesystem::GetLastModifiedTime(FileHandle &handle) {
+timestamp_t PythonFilesystem::GetLastModifiedTime(FileHandle &handle) {
 	D_ASSERT(!py::gil_check());
 	// TODO: this value should be cached on the PythonFileHandle
 	PythonGILWrapper gil;
 
 	auto last_mod = filesystem.attr("modified")(handle.path);
 
-	return py::int_(last_mod.attr("timestamp")());
+	return Timestamp::FromEpochSeconds(py::int_(last_mod.attr("timestamp")()));
 }
 void PythonFilesystem::FileSync(FileHandle &handle) {
 	D_ASSERT(!py::gil_check());

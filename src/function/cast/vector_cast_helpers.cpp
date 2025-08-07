@@ -25,7 +25,7 @@ static bool IsNull(const char *buf, idx_t pos, idx_t end_pos) {
 	if (pos + 4 != end_pos) {
 		return false;
 	}
-	return StringUtil::CIEquals(string(buf + pos, buf + pos + 4), "null");
+	return StringUtil::CIEquals(buf + pos, 4, "null", 4);
 }
 
 inline static void SkipWhitespace(StringCastInputState &input_state) {
@@ -124,7 +124,8 @@ static string_t HandleString(Vector &vec, const char *buf, idx_t start, idx_t en
 	bool escaped = false;
 
 	bool quoted = false;
-	char quote_char;
+	// Satisfy GCC warning about uninitialized variable
+	char quote_char = '\0';
 	stack<char> scopes;
 	for (idx_t i = 0; i < length; i++) {
 		auto current_char = buf[start + i];

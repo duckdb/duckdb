@@ -2,8 +2,6 @@
 # description: Test ATTACH with a quoted database name
 # group: [attach]
 
-require noforcestorage
-
 statement ok
 ATTACH ':memory:' as "my""db";
 
@@ -23,7 +21,10 @@ SELECT * FROM tbl
 42
 
 statement ok
-USE memory
+ATTACH '__TEST_DIR__/attach_quoated_base.db'
+
+statement ok
+USE attach_quoated_base
 
 statement ok
 CREATE SCHEMA "my""db"."my""schema"

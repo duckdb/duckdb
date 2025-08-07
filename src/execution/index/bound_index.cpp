@@ -80,15 +80,25 @@ bool BoundIndex::MergeIndexes(BoundIndex &other_index) {
 }
 
 string BoundIndex::VerifyAndToString(const bool only_verify) {
-	IndexLock state;
-	InitializeLock(state);
-	return VerifyAndToString(state, only_verify);
+	IndexLock l;
+	InitializeLock(l);
+	return VerifyAndToString(l, only_verify);
 }
 
 void BoundIndex::VerifyAllocations() {
-	IndexLock state;
-	InitializeLock(state);
-	return VerifyAllocations(state);
+	IndexLock l;
+	InitializeLock(l);
+	return VerifyAllocations(l);
+}
+
+void BoundIndex::VerifyBuffers(IndexLock &l) {
+	throw NotImplementedException("this implementation of VerifyBuffers does not exist");
+}
+
+void BoundIndex::VerifyBuffers() {
+	IndexLock l;
+	InitializeLock(l);
+	return VerifyBuffers(l);
 }
 
 void BoundIndex::Vacuum() {
@@ -107,14 +117,13 @@ void BoundIndex::ExecuteExpressions(DataChunk &input, DataChunk &result) {
 	executor.Execute(input, result);
 }
 
-unique_ptr<Expression> BoundIndex::BindExpression(unique_ptr<Expression> expr) {
-	if (expr->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-		auto &bound_colref = expr->Cast<BoundColumnRefExpression>();
-		return make_uniq<BoundReferenceExpression>(expr->return_type, column_ids[bound_colref.binding.column_index]);
-	}
-	ExpressionIterator::EnumerateChildren(
-	    *expr, [this](unique_ptr<Expression> &expr) { expr = BindExpression(std::move(expr)); });
-	return expr;
+unique_ptr<Expression> BoundIndex::BindExpression(unique_ptr<Expression> root_expr) {
+	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
+	    root_expr, [&](BoundColumnRefExpression &bound_colref, unique_ptr<Expression> &expr) {
+		    expr =
+		        make_uniq<BoundReferenceExpression>(expr->return_type, column_ids[bound_colref.binding.column_index]);
+	    });
+	return root_expr;
 }
 
 bool BoundIndex::IndexIsUpdated(const vector<PhysicalIndex> &column_ids_p) const {
@@ -126,8 +135,12 @@ bool BoundIndex::IndexIsUpdated(const vector<PhysicalIndex> &column_ids_p) const
 	return false;
 }
 
-IndexStorageInfo BoundIndex::GetStorageInfo(const case_insensitive_map_t<Value> &options, const bool to_wal) {
-	throw NotImplementedException("The implementation of this index serialization does not exist.");
+IndexStorageInfo BoundIndex::SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) {
+	throw NotImplementedException("The implementation of this index disk serialization does not exist.");
+}
+
+IndexStorageInfo BoundIndex::SerializeToWAL(const case_insensitive_map_t<Value> &options) {
+	throw NotImplementedException("The implementation of this index WAL serialization does not exist.");
 }
 
 string BoundIndex::AppendRowError(DataChunk &input, idx_t index) {
@@ -139,6 +152,33 @@ string BoundIndex::AppendRowError(DataChunk &input, idx_t index) {
 		error += input.GetValue(c, index).ToString();
 	}
 	return error;
+}
+
+void BoundIndex::ApplyBufferedAppends(ColumnDataCollection &buffered_appends) {
+	IndexAppendInfo index_append_info(IndexAppendMode::INSERT_DUPLICATES, nullptr);
+
+	ColumnDataScanState state;
+	buffered_appends.InitializeScan(state);
+
+	DataChunk scan_chunk;
+	buffered_appends.InitializeScanChunk(scan_chunk);
+
+	auto append_types = scan_chunk.GetTypes();
+	append_types.pop_back();
+	DataChunk append_chunk;
+	append_chunk.InitializeEmpty(append_types);
+
+	while (buffered_appends.Scan(state, scan_chunk)) {
+		for (idx_t i = 0; i < append_chunk.ColumnCount(); i++) {
+			append_chunk.data[i].Reference(scan_chunk.data[i]);
+		}
+		append_chunk.SetCardinality(scan_chunk.size());
+
+		auto error = Append(append_chunk, scan_chunk.data.back(), index_append_info);
+		if (error.HasError()) {
+			throw InternalException("error while applying buffered appends: " + error.Message());
+		}
+	}
 }
 
 } // namespace duckdb

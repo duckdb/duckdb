@@ -73,14 +73,15 @@ idx_t StandardColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &sta
 	return scan_count;
 }
 
-idx_t StandardColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count) {
-	auto scan_count = ColumnData::ScanCount(state, result, count);
-	validity.ScanCount(state.child_states[0], result, count);
+idx_t StandardColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset) {
+	auto scan_count = ColumnData::ScanCount(state, result, count, result_offset);
+	validity.ScanCount(state.child_states[0], result, count, result_offset);
 	return scan_count;
 }
 
 void StandardColumnData::Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-                                SelectionVector &sel, idx_t &count, const TableFilter &filter) {
+                                SelectionVector &sel, idx_t &count, const TableFilter &filter,
+                                TableFilterState &filter_state) {
 	// check if we can do a specialized select
 	// the compression functions need to support this
 	auto compression = GetCompressionFunction();
@@ -93,11 +94,11 @@ void StandardColumnData::Filter(TransactionData transaction, idx_t vector_index,
 	bool verify_fetch_row = state.scan_options && state.scan_options->force_fetch_row;
 	if (!has_filter || !validity_has_filter || !scan_entire_vector || verify_fetch_row) {
 		// we are not scanning an entire vector - this can have several causes (updates, etc)
-		ColumnData::Filter(transaction, vector_index, state, result, sel, count, filter);
+		ColumnData::Filter(transaction, vector_index, state, result, sel, count, filter, filter_state);
 		return;
 	}
-	FilterVector(state, result, target_count, sel, count, filter);
-	validity.FilterVector(state.child_states[0], result, target_count, sel, count, filter);
+	FilterVector(state, result, target_count, sel, count, filter, filter_state);
+	validity.FilterVector(state.child_states[0], result, target_count, sel, count, filter, filter_state);
 }
 
 void StandardColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
@@ -153,8 +154,15 @@ idx_t StandardColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &re
 
 void StandardColumnData::Update(TransactionData transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
                                 idx_t update_count) {
-	ColumnData::Update(transaction, column_index, update_vector, row_ids, update_count);
-	validity.Update(transaction, column_index, update_vector, row_ids, update_count);
+	Vector base_vector(type);
+	auto standard_fetch = FetchUpdateData(row_ids, base_vector);
+	auto validity_fetch = validity.FetchUpdateData(row_ids, base_vector);
+	if (standard_fetch != validity_fetch) {
+		throw InternalException("Unaligned fetch in validity and main column data for update");
+	}
+
+	UpdateInternal(transaction, column_index, update_vector, row_ids, update_count, base_vector);
+	validity.UpdateInternal(transaction, column_index, update_vector, row_ids, update_count, base_vector);
 }
 
 void StandardColumnData::UpdateColumn(TransactionData transaction, const vector<column_t> &column_path,
@@ -251,7 +259,7 @@ unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(RowGroup &row_g
 	checkpoint_states.emplace_back(checkpoint_state);
 	checkpoint_states.emplace_back(validity_state);
 
-	ColumnDataCheckpointer checkpointer(checkpoint_states, GetDatabase(), row_group, checkpoint_info);
+	ColumnDataCheckpointer checkpointer(checkpoint_states, GetStorageManager(), row_group, checkpoint_info);
 	checkpointer.Checkpoint();
 	checkpointer.FinalizeCheckpoint();
 
@@ -268,6 +276,10 @@ void StandardColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState 
 
 bool StandardColumnData::IsPersistent() {
 	return ColumnData::IsPersistent() && validity.IsPersistent();
+}
+
+bool StandardColumnData::HasAnyChanges() const {
+	return ColumnData::HasAnyChanges() || validity.HasAnyChanges();
 }
 
 PersistentColumnData StandardColumnData::Serialize() {

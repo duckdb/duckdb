@@ -60,13 +60,9 @@ GeoParquetColumnMetadataWriter::GeoParquetColumnMetadataWriter(ClientContext &co
 	auto &catalog = Catalog::GetSystemCatalog(context);
 
 	// These functions are required to extract the geometry type, ZM flag and bounding box from a WKB blob
-	auto &type_func_set =
-	    catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, "st_geometrytype")
-	        .Cast<ScalarFunctionCatalogEntry>();
-	auto &flag_func_set = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, "st_zmflag")
-	                          .Cast<ScalarFunctionCatalogEntry>();
-	auto &bbox_func_set = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, "st_extent")
-	                          .Cast<ScalarFunctionCatalogEntry>();
+	auto &type_func_set = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "st_geometrytype");
+	auto &flag_func_set = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "st_zmflag");
+	auto &bbox_func_set = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "st_extent");
 
 	auto wkb_type = LogicalType(LogicalTypeId::BLOB);
 	wkb_type.SetAlias("WKB_BLOB");
@@ -100,7 +96,7 @@ GeoParquetColumnMetadataWriter::GeoParquetColumnMetadataWriter(ClientContext &co
 	// Initialize the input and result chunks
 	// The input chunk should be empty, as we always reference the input vector
 	input_chunk.InitializeEmpty({wkb_type});
-	result_chunk.Initialize(context, {type_type, flag_type, bbox_type});
+	result_chunk.Initialize(BufferAllocator::Get(context), {type_type, flag_type, bbox_type});
 }
 
 void GeoParquetColumnMetadataWriter::Update(GeoParquetColumnMetadata &meta, Vector &vector, idx_t count) {
@@ -247,6 +243,18 @@ unique_ptr<GeoParquetFileMetadata> GeoParquetFileMetadata::TryRead(const duckdb_
 					const auto encoding_str = yyjson_get_str(encoding_val);
 					if (strcmp(encoding_str, "WKB") == 0) {
 						column.geometry_encoding = GeoParquetColumnEncoding::WKB;
+					} else if (strcmp(encoding_str, "point") == 0) {
+						column.geometry_encoding = GeoParquetColumnEncoding::POINT;
+					} else if (strcmp(encoding_str, "linestring") == 0) {
+						column.geometry_encoding = GeoParquetColumnEncoding::LINESTRING;
+					} else if (strcmp(encoding_str, "polygon") == 0) {
+						column.geometry_encoding = GeoParquetColumnEncoding::POLYGON;
+					} else if (strcmp(encoding_str, "multipoint") == 0) {
+						column.geometry_encoding = GeoParquetColumnEncoding::MULTIPOINT;
+					} else if (strcmp(encoding_str, "multilinestring") == 0) {
+						column.geometry_encoding = GeoParquetColumnEncoding::MULTILINESTRING;
+					} else if (strcmp(encoding_str, "multipolygon") == 0) {
+						column.geometry_encoding = GeoParquetColumnEncoding::MULTIPOLYGON;
 					} else {
 						throw InvalidInputException("Geoparquet column '%s' has an unsupported encoding", column_name);
 					}
@@ -404,8 +412,7 @@ unique_ptr<ColumnReader> GeoParquetFileMetadata::CreateColumnReader(ParquetReade
 	    column.geometry_encoding == GeoParquetColumnEncoding::WKB) {
 		// Look for a conversion function in the catalog
 		auto &conversion_func_set =
-		    catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, "st_geomfromwkb")
-		        .Cast<ScalarFunctionCatalogEntry>();
+		    catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "st_geomfromwkb");
 		auto conversion_func = conversion_func_set.functions.GetFunctionByArguments(context, {LogicalType::BLOB});
 
 		// Create a bound function call expression
@@ -418,7 +425,7 @@ unique_ptr<ColumnReader> GeoParquetFileMetadata::CreateColumnReader(ParquetReade
 		auto child_reader = ColumnReader::CreateReader(reader, schema.children[0]);
 
 		// Create an expression reader that applies the conversion function to the child reader
-		return make_uniq<ExpressionColumnReader>(context, std::move(child_reader), std::move(expr));
+		return make_uniq<ExpressionColumnReader>(context, std::move(child_reader), std::move(expr), schema);
 	}
 
 	// Otherwise, unrecognized encoding

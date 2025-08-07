@@ -1,11 +1,35 @@
 #include "duckdb/storage/metadata/metadata_manager.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/storage/buffer/block_handle.hpp"
-#include "duckdb/common/serializer/write_stream.hpp"
+
 #include "duckdb/common/serializer/read_stream.hpp"
+#include "duckdb/common/serializer/write_stream.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/storage/buffer/block_handle.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/database_size.hpp"
 
 namespace duckdb {
+
+MetadataBlock::MetadataBlock() : block_id(INVALID_BLOCK), dirty(false) {
+}
+
+MetadataBlock::MetadataBlock(MetadataBlock &&other) noexcept : dirty(false) {
+	std::swap(block, other.block);
+	std::swap(block_id, other.block_id);
+	std::swap(free_blocks, other.free_blocks);
+	auto dirty_val = dirty.load();
+	dirty = other.dirty.load();
+	other.dirty = dirty_val;
+}
+
+MetadataBlock &MetadataBlock::operator=(MetadataBlock &&other) noexcept {
+	std::swap(block, other.block);
+	std::swap(block_id, other.block_id);
+	std::swap(free_blocks, other.free_blocks);
+	auto dirty_val = dirty.load();
+	dirty = other.dirty.load();
+	other.dirty = dirty_val;
+	return *this;
+}
 
 MetadataManager::MetadataManager(BlockManager &block_manager, BufferManager &buffer_manager)
     : block_manager(block_manager), buffer_manager(buffer_manager) {
@@ -35,6 +59,8 @@ MetadataHandle MetadataManager::AllocateHandle() {
 	MetadataPointer pointer;
 	pointer.block_index = UnsafeNumericCast<idx_t>(free_block);
 	auto &block = blocks[free_block];
+	// the block is now dirty
+	block.dirty = true;
 	if (block.block->BlockId() < MAXIMUM_BLOCK) {
 		// this block is a disk-backed block, yet we are planning to write to it
 		// we need to convert it into a transient block before we can write to it
@@ -53,6 +79,13 @@ MetadataHandle MetadataManager::AllocateHandle() {
 MetadataHandle MetadataManager::Pin(const MetadataPointer &pointer) {
 	D_ASSERT(pointer.index < METADATA_BLOCK_COUNT);
 	auto &block = blocks[UnsafeNumericCast<int64_t>(pointer.block_index)];
+#ifdef DEBUG
+	for (auto &free_block : block.free_blocks) {
+		if (free_block == pointer.index) {
+			throw InternalException("Pinning block %d.%d but it is marked as a free block", block.block_id, free_block);
+		}
+	}
+#endif
 
 	MetadataHandle handle;
 	handle.pointer.block_index = pointer.block_index;
@@ -66,12 +99,13 @@ void MetadataManager::ConvertToTransient(MetadataBlock &metadata_block) {
 	auto old_buffer = buffer_manager.Pin(metadata_block.block);
 
 	// allocate a new transient block to replace it
-	auto new_buffer = buffer_manager.Allocate(MemoryTag::METADATA, block_manager.GetBlockSize(), false);
+	auto new_buffer = buffer_manager.Allocate(MemoryTag::METADATA, &block_manager, false);
 	auto new_block = new_buffer.GetBlockHandle();
 
 	// copy the data to the transient block
 	memcpy(new_buffer.Ptr(), old_buffer.Ptr(), block_manager.GetBlockSize());
 	metadata_block.block = std::move(new_block);
+	metadata_block.dirty = true;
 
 	// unregister the old block
 	block_manager.UnregisterBlock(metadata_block.block_id);
@@ -81,12 +115,13 @@ block_id_t MetadataManager::AllocateNewBlock() {
 	auto new_block_id = GetNextBlockId();
 
 	MetadataBlock new_block;
-	auto handle = buffer_manager.Allocate(MemoryTag::METADATA, block_manager.GetBlockSize(), false);
+	auto handle = buffer_manager.Allocate(MemoryTag::METADATA, &block_manager, false);
 	new_block.block = handle.GetBlockHandle();
 	new_block.block_id = new_block_id;
 	for (idx_t i = 0; i < METADATA_BLOCK_COUNT; i++) {
 		new_block.free_blocks.push_back(NumericCast<uint8_t>(METADATA_BLOCK_COUNT - i - 1));
 	}
+	new_block.dirty = true;
 	// zero-initialize the handle
 	memset(handle.Ptr(), 0, block_manager.GetBlockSize());
 	AddBlock(std::move(new_block));
@@ -106,6 +141,9 @@ void MetadataManager::AddBlock(MetadataBlock new_block, bool if_exists) {
 void MetadataManager::AddAndRegisterBlock(MetadataBlock block) {
 	if (block.block) {
 		throw InternalException("Calling AddAndRegisterBlock on block that already exists");
+	}
+	if (block.block_id >= MAXIMUM_BLOCK) {
+		throw InternalException("AddAndRegisterBlock called with a transient block id");
 	}
 	block.block = block_manager.RegisterBlock(block.block_id);
 	AddBlock(std::move(block), true);
@@ -143,7 +181,7 @@ MetadataPointer MetadataManager::RegisterDiskPointer(MetaBlockPointer pointer) {
 	auto block_id = pointer.GetBlockId();
 	MetadataBlock block;
 	block.block_id = block_id;
-	AddAndRegisterBlock(block);
+	AddAndRegisterBlock(std::move(block));
 	return FromDiskPointer(pointer);
 }
 
@@ -174,23 +212,32 @@ idx_t MetadataManager::BlockCount() {
 }
 
 void MetadataManager::Flush() {
-	const idx_t total_metadata_size = GetMetadataBlockSize() * MetadataManager::METADATA_BLOCK_COUNT;
+	// Write the blocks of the metadata manager to disk.
+	const idx_t total_metadata_size = GetMetadataBlockSize() * METADATA_BLOCK_COUNT;
 
-	// write the blocks of the metadata manager to disk
 	for (auto &kv : blocks) {
 		auto &block = kv.second;
+		if (!block.dirty) {
+			if (block.block->BlockId() >= MAXIMUM_BLOCK) {
+				throw InternalException("Transient blocks must always be marked as dirty");
+			}
+			continue;
+		}
 		auto handle = buffer_manager.Pin(block.block);
-		// there are a few bytes left-over at the end of the block, zero-initialize them
+		// zero-initialize the few leftover bytes
 		memset(handle.Ptr() + total_metadata_size, 0, block_manager.GetBlockSize() - total_metadata_size);
 		D_ASSERT(kv.first == block.block_id);
 		if (block.block->BlockId() >= MAXIMUM_BLOCK) {
-			// temporary block - convert to persistent
-			block.block = block_manager.ConvertToPersistent(kv.first, std::move(block.block), std::move(handle));
+			// Convert the temporary block to a persistent block.
+			block.block =
+			    block_manager.ConvertToPersistent(QueryContext(), kv.first, std::move(block.block), std::move(handle));
 		} else {
-			// already a persistent block - only need to write it
+			// Already a persistent block, so we only need to write it.
 			D_ASSERT(block.block->BlockId() == block.block_id);
-			block_manager.Write(handle.GetFileBuffer(), block.block_id);
+			block_manager.Write(QueryContext(), handle.GetFileBuffer(), block.block_id);
 		}
+		// the block is no longer dirty
+		block.dirty = false;
 	}
 }
 
@@ -296,8 +343,6 @@ void MetadataManager::ClearModifiedBlocks(const vector<MetaBlockPointer> &pointe
 			throw InternalException("ClearModifiedBlocks - Block id %llu not found in modified_blocks", block_id);
 		}
 		auto &modified_list = entry->second;
-		// verify the block has been modified
-		D_ASSERT(modified_list && (1ULL << block_index));
 		// unset the bit
 		modified_list &= ~(1ULL << block_index);
 	}

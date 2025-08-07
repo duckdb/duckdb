@@ -18,17 +18,19 @@ namespace duckdb {
 struct ArrayValueFun {
 	static constexpr const char *Name = "array_value";
 	static constexpr const char *Parameters = "any,...";
-	static constexpr const char *Description = "Create an ARRAY containing the argument values.";
-	static constexpr const char *Example = "array_value(4, 5, 6)";
+	static constexpr const char *Description = "Creates an `ARRAY` containing the argument values.";
+	static constexpr const char *Example = "array_value(1.0::FLOAT, 2.0::FLOAT, 3.0::FLOAT)";
+	static constexpr const char *Categories = "array";
 
 	static ScalarFunction GetFunction();
 };
 
 struct ArrayCrossProductFun {
 	static constexpr const char *Name = "array_cross_product";
-	static constexpr const char *Parameters = "array, array";
-	static constexpr const char *Description = "Compute the cross product of two arrays of size 3. The array elements can not be NULL.";
-	static constexpr const char *Example = "array_cross_product([1, 2, 3], [1, 2, 3])";
+	static constexpr const char *Parameters = "array,array";
+	static constexpr const char *Description = "Computes the cross product of two arrays of size 3. The array elements can not be `NULL`.";
+	static constexpr const char *Example = "array_cross_product(array_value(1.0::FLOAT, 2.0::FLOAT, 3.0::FLOAT), array_value(2.0::FLOAT, 3.0::FLOAT, 4.0::FLOAT))";
+	static constexpr const char *Categories = "array";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -36,8 +38,9 @@ struct ArrayCrossProductFun {
 struct ArrayCosineSimilarityFun {
 	static constexpr const char *Name = "array_cosine_similarity";
 	static constexpr const char *Parameters = "array1,array2";
-	static constexpr const char *Description = "Compute the cosine similarity between two arrays of the same size. The array elements can not be NULL. The arrays can have any size as long as the size is the same for both arguments.";
-	static constexpr const char *Example = "array_cosine_similarity([1, 2, 3], [1, 2, 3])";
+	static constexpr const char *Description = "Computes the cosine similarity between two arrays of the same size. The array elements can not be `NULL`. The arrays can have any size as long as the size is the same for both arguments.";
+	static constexpr const char *Example = "array_cosine_similarity(array_value(1.0::FLOAT, 2.0::FLOAT, 3.0::FLOAT), array_value(2.0::FLOAT, 3.0::FLOAT, 4.0::FLOAT))";
+	static constexpr const char *Categories = "array";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -45,8 +48,9 @@ struct ArrayCosineSimilarityFun {
 struct ArrayCosineDistanceFun {
 	static constexpr const char *Name = "array_cosine_distance";
 	static constexpr const char *Parameters = "array1,array2";
-	static constexpr const char *Description = "Compute the cosine distance between two arrays of the same size. The array elements can not be NULL. The arrays can have any size as long as the size is the same for both arguments.";
-	static constexpr const char *Example = "array_cosine_distance([1, 2, 3], [1, 2, 3])";
+	static constexpr const char *Description = "Computes the cosine distance between two arrays of the same size. The array elements can not be `NULL`. The arrays can have any size as long as the size is the same for both arguments.";
+	static constexpr const char *Example = "array_cosine_distance(array_value(1.0::FLOAT, 2.0::FLOAT, 3.0::FLOAT), array_value(2.0::FLOAT, 3.0::FLOAT, 4.0::FLOAT))";
+	static constexpr const char *Categories = "array";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -54,8 +58,9 @@ struct ArrayCosineDistanceFun {
 struct ArrayDistanceFun {
 	static constexpr const char *Name = "array_distance";
 	static constexpr const char *Parameters = "array1,array2";
-	static constexpr const char *Description = "Compute the distance between two arrays of the same size. The array elements can not be NULL. The arrays can have any size as long as the size is the same for both arguments.";
-	static constexpr const char *Example = "array_distance([1, 2, 3], [1, 2, 3])";
+	static constexpr const char *Description = "Computes the distance between two arrays of the same size. The array elements can not be `NULL`. The arrays can have any size as long as the size is the same for both arguments.";
+	static constexpr const char *Example = "array_distance(array_value(1.0::FLOAT, 2.0::FLOAT, 3.0::FLOAT), array_value(2.0::FLOAT, 3.0::FLOAT, 4.0::FLOAT))";
+	static constexpr const char *Categories = "array";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -63,8 +68,9 @@ struct ArrayDistanceFun {
 struct ArrayInnerProductFun {
 	static constexpr const char *Name = "array_inner_product";
 	static constexpr const char *Parameters = "array1,array2";
-	static constexpr const char *Description = "Compute the inner product between two arrays of the same size. The array elements can not be NULL. The arrays can have any size as long as the size is the same for both arguments.";
-	static constexpr const char *Example = "array_inner_product([1, 2, 3], [1, 2, 3])";
+	static constexpr const char *Description = "Computes the inner product between two arrays of the same size. The array elements can not be `NULL`. The arrays can have any size as long as the size is the same for both arguments.";
+	static constexpr const char *Example = "array_inner_product(array_value(1.0::FLOAT, 2.0::FLOAT, 3.0::FLOAT), array_value(2.0::FLOAT, 3.0::FLOAT, 4.0::FLOAT))";
+	static constexpr const char *Categories = "array";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -78,8 +84,9 @@ struct ArrayDotProductFun {
 struct ArrayNegativeInnerProductFun {
 	static constexpr const char *Name = "array_negative_inner_product";
 	static constexpr const char *Parameters = "array1,array2";
-	static constexpr const char *Description = "Compute the negative inner product between two arrays of the same size. The array elements can not be NULL. The arrays can have any size as long as the size is the same for both arguments.";
-	static constexpr const char *Example = "array_negative_inner_product([1, 2, 3], [1, 2, 3])";
+	static constexpr const char *Description = "Computes the negative inner product between two arrays of the same size. The array elements can not be `NULL`. The arrays can have any size as long as the size is the same for both arguments.";
+	static constexpr const char *Example = "array_negative_inner_product(array_value(1.0::FLOAT, 2.0::FLOAT, 3.0::FLOAT), array_value(2.0::FLOAT, 3.0::FLOAT, 4.0::FLOAT))";
+	static constexpr const char *Categories = "array";
 
 	static ScalarFunctionSet GetFunctions();
 };

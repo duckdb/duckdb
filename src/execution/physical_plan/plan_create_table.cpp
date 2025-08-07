@@ -15,37 +15,36 @@
 
 namespace duckdb {
 
-unique_ptr<PhysicalOperator> DuckCatalog::PlanCreateTableAs(ClientContext &context, LogicalCreateTable &op,
-                                                            unique_ptr<PhysicalOperator> plan) {
-	bool parallel_streaming_insert = !PhysicalPlanGenerator::PreserveInsertionOrder(context, *plan);
-	bool use_batch_index = PhysicalPlanGenerator::UseBatchIndex(context, *plan);
+PhysicalOperator &DuckCatalog::PlanCreateTableAs(ClientContext &context, PhysicalPlanGenerator &planner,
+                                                 LogicalCreateTable &op, PhysicalOperator &plan) {
+	bool parallel_streaming_insert = !PhysicalPlanGenerator::PreserveInsertionOrder(context, plan);
+	bool use_batch_index = PhysicalPlanGenerator::UseBatchIndex(context, plan);
 	auto num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
-	unique_ptr<PhysicalOperator> create;
 	if (!parallel_streaming_insert && use_batch_index) {
-		create = make_uniq<PhysicalBatchInsert>(op, op.schema, std::move(op.info), 0U);
-
-	} else {
-		create = make_uniq<PhysicalInsert>(op, op.schema, std::move(op.info), 0U,
-		                                   parallel_streaming_insert && num_threads > 1);
+		auto &insert = planner.Make<PhysicalBatchInsert>(op, op.schema, std::move(op.info), 0U);
+		D_ASSERT(op.children.size() == 1);
+		insert.children.push_back(plan);
+		return insert;
 	}
 
+	auto parallel = parallel_streaming_insert && num_threads > 1;
+	auto &insert = planner.Make<PhysicalInsert>(op, op.schema, std::move(op.info), 0U, parallel);
 	D_ASSERT(op.children.size() == 1);
-	create->children.push_back(std::move(plan));
-	return create;
+	insert.children.push_back(plan);
+	return insert;
 }
 
-unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateTable &op) {
+PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreateTable &op) {
 	const auto &create_info = op.info->base->Cast<CreateTableInfo>();
 	auto &catalog = op.info->schema.catalog;
-	auto existing_entry = catalog.GetEntry<TableCatalogEntry>(context, create_info.schema, create_info.table,
-	                                                          OnEntryNotFound::RETURN_NULL);
+	auto existing_entry = catalog.GetEntry(context, CatalogType::TABLE_ENTRY, create_info.schema, create_info.table,
+	                                       OnEntryNotFound::RETURN_NULL);
 	bool replace = op.info->Base().on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT;
 	if ((!existing_entry || replace) && !op.children.empty()) {
-		auto plan = CreatePlan(*op.children[0]);
-		return op.schema.catalog.PlanCreateTableAs(context, op, std::move(plan));
-	} else {
-		return make_uniq<PhysicalCreateTable>(op, op.schema, std::move(op.info), op.estimated_cardinality);
+		auto &plan = CreatePlan(*op.children[0]);
+		return op.schema.catalog.PlanCreateTableAs(context, *this, op, plan);
 	}
+	return Make<PhysicalCreateTable>(op, op.schema, std::move(op.info), op.estimated_cardinality);
 }
 
 } // namespace duckdb

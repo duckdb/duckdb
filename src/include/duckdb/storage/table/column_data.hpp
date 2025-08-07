@@ -102,6 +102,11 @@ public:
 	//! Whether or not the column has any updates
 	bool HasUpdates() const;
 	bool HasChanges(idx_t start_row, idx_t end_row) const;
+	//! Whether or not the column has changes at this level
+	bool HasChanges() const;
+
+	//! Whether or not the column has ANY changes, including in child columns
+	virtual bool HasAnyChanges() const;
 	//! Whether or not we can scan an entire vector
 	virtual ScanVectorType GetVectorScanType(ColumnScanState &state, idx_t scan_count, Vector &result);
 
@@ -120,11 +125,11 @@ public:
 	                            idx_t scan_count);
 
 	virtual void ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_group, idx_t count, Vector &result);
-	virtual idx_t ScanCount(ColumnScanState &state, Vector &result, idx_t count);
+	virtual idx_t ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset = 0);
 
 	//! Select
 	virtual void Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-	                    SelectionVector &sel, idx_t &count, const TableFilter &filter);
+	                    SelectionVector &sel, idx_t &count, const TableFilter &filter, TableFilterState &filter_state);
 	virtual void Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
 	                    SelectionVector &sel, idx_t count);
 	virtual void SelectCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, SelectionVector &sel,
@@ -196,7 +201,8 @@ protected:
 
 	void BeginScanVectorInternal(ColumnScanState &state);
 	//! Scans a base vector from the column
-	idx_t ScanVector(ColumnScanState &state, Vector &result, idx_t remaining, ScanVectorType scan_type);
+	idx_t ScanVector(ColumnScanState &state, Vector &result, idx_t remaining, ScanVectorType scan_type,
+	                 idx_t result_offset = 0);
 	//! Scans a vector from the column merged with any potential updates
 	idx_t ScanVector(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
 	                 idx_t target_scan, ScanVectorType scan_type, ScanVectorMode mode);
@@ -205,7 +211,7 @@ protected:
 	void SelectVector(ColumnScanState &state, Vector &result, idx_t target_count, const SelectionVector &sel,
 	                  idx_t sel_count);
 	void FilterVector(ColumnScanState &state, Vector &result, idx_t target_count, SelectionVector &sel,
-	                  idx_t &sel_count, const TableFilter &filter);
+	                  idx_t &sel_count, const TableFilter &filter, TableFilterState &filter_state);
 
 	void ClearUpdates();
 	void FetchUpdates(TransactionData transaction, idx_t vector_index, Vector &result, idx_t scan_count,
@@ -213,6 +219,7 @@ protected:
 	void FetchUpdateRow(TransactionData transaction, row_t row_id, Vector &result, idx_t result_idx);
 	void UpdateInternal(TransactionData transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
 	                    idx_t update_count, Vector &base_vector);
+	idx_t FetchUpdateData(row_t *row_ids, Vector &base_vector);
 
 	idx_t GetVectorCount(idx_t vector_index) const;
 
@@ -231,7 +238,7 @@ protected:
 	//! The stats of the root segment
 	unique_ptr<SegmentStatistics> stats;
 	//! Total transient allocation size
-	idx_t allocation_size;
+	atomic<idx_t> allocation_size;
 
 private:
 	//! The parent column (if any)

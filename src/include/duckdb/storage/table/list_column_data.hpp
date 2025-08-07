@@ -36,7 +36,7 @@ public:
 	           idx_t scan_count) override;
 	idx_t ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
 	                    idx_t scan_count) override;
-	idx_t ScanCount(ColumnScanState &state, Vector &result, idx_t count) override;
+	idx_t ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset = 0) override;
 
 	void Skip(ColumnScanState &state, idx_t count = STANDARD_VECTOR_SIZE) override;
 
@@ -59,6 +59,7 @@ public:
 	unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, ColumnCheckpointInfo &info) override;
 
 	bool IsPersistent() override;
+	bool HasAnyChanges() const override;
 	PersistentColumnData Serialize() override;
 	void InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats) override;
 

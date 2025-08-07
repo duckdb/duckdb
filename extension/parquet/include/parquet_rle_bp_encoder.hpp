@@ -101,7 +101,9 @@ private:
 	idx_t rle_count;
 
 	//! BP stuff
-	static constexpr idx_t BP_BLOCK_SIZE = BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
+	static constexpr idx_t BP_BLOCK_SIZE = 256;
+	static_assert(BP_BLOCK_SIZE % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE == 0,
+	              "BP_BLOCK_SIZE must be divisible by BITPACKING_ALGORITHM_GROUP_SIZE");
 	uint32_t bp_block[BP_BLOCK_SIZE] = {0};
 	uint32_t bp_block_packed[BP_BLOCK_SIZE] = {0};
 	idx_t bp_block_count;
@@ -140,6 +142,9 @@ private:
 	}
 
 	void WriteCurrentBlockBP(WriteStream &writer) {
+		if (bp_block_count == 0) {
+			return;
+		}
 		ParquetDecodeUtils::VarintEncode(BP_BLOCK_SIZE / 8 << 1 | 1, writer); // (... | 1) signals BP run
 		ParquetDecodeUtils::BitPackAligned(bp_block, data_ptr_cast(bp_block_packed), BP_BLOCK_SIZE, bit_width);
 		writer.WriteData(data_ptr_cast(bp_block_packed), BP_BLOCK_SIZE * bit_width / 8);

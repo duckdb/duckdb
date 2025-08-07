@@ -358,7 +358,9 @@ struct ArrowBool8 {
 		auto source_ptr = reinterpret_cast<bool *>(format.data);
 		auto result_ptr = reinterpret_cast<int8_t *>(FlatVector::GetData(result));
 		for (idx_t i = 0; i < count; i++) {
-			result_ptr[i] = static_cast<int8_t>(source_ptr[i]);
+			if (format.validity.RowIsValid(i)) {
+				result_ptr[i] = static_cast<int8_t>(source_ptr[i]);
+			}
 		}
 	}
 };
@@ -380,7 +382,7 @@ void ArrowTypeExtensionSet::Initialize(const DBConfig &config) {
 
 	// Types that are 1:n
 	config.RegisterArrowExtension({"arrow.json", &ArrowJson::PopulateSchema, &ArrowJson::GetType,
-	                               make_shared_ptr<ArrowTypeExtensionData>(LogicalType::VARCHAR)});
+	                               make_shared_ptr<ArrowTypeExtensionData>(LogicalType::JSON())});
 
 	config.RegisterArrowExtension({"DuckDB", "bit", &ArrowBit::PopulateSchema, &ArrowBit::GetType,
 	                               make_shared_ptr<ArrowTypeExtensionData>(LogicalType::BIT), nullptr, nullptr});

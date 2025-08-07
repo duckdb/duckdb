@@ -1,0 +1,28 @@
+# name: test/sql/index/art/constraints/test_art_upsert_duplicate.test
+# description: Test an UPSERT with a duplicate in the VALUES list.
+# group: [constraints]
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+CREATE TABLE hero (
+        name VARCHAR NOT NULL,
+        secret_name VARCHAR NOT NULL,
+        age INTEGER,
+        PRIMARY KEY (name));
+
+statement ok
+CREATE INDEX ix_hero_age ON hero (age);
+
+statement ok
+INSERT INTO hero (name, secret_name, age)
+VALUES
+	('Captain North America', 'Esteban Rogelios', 93),
+	('Rusty-Man', 'Tommy Sharp', 48),
+	('Tarantula', 'Natalia Roman-on', 32),
+	('Spider-Boy', 'Pedro Parqueador', 17),
+	('Captain North America', 'Esteban Rogelios', 93)
+ON CONFLICT (name) DO UPDATE
+SET	secret_name = EXCLUDED.secret_name,
+	age = EXCLUDED.age;

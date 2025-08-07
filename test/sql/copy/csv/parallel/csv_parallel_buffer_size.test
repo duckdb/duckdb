@@ -75,6 +75,6 @@ SELECT sum(a) FROM read_csv('data/csv/test/new_line_string.csv',  COLUMNS=STRUCT
 111
 
 query I
-SELECT sum(a) FROM read_csv('data/csv/test/new_line_string.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER', d := 'VARCHAR'), quote ='"', escape ='"', comment = '', auto_detect='true', delim = '|', buffer_size=100, new_line = '\r\n')
+SELECT sum(a) FROM read_csv('data/csv/test/new_line_string.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER', d := 'VARCHAR'), quote ='"', escape ='"', comment = '', auto_detect='true', delim = '|', buffer_size=100, new_line = '\r\n', strict_mode = false)
 ----
 111

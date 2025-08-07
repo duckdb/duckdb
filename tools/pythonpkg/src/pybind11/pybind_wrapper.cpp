@@ -36,4 +36,9 @@ bool is_dict_like(handle obj) {
 	return isinstance(obj, mapping);
 }
 
+// NOLINTNEXTLINE(readability-identifier-naming)
+std::string to_string(const object &obj) {
+	return std::string(py::str(obj));
+}
+
 } // namespace pybind11

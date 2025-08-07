@@ -29,25 +29,27 @@ struct ValidityMask;
 class Vector;
 
 struct TryCast {
+	static ConversionException UnimplementedErrorMessage(PhysicalType source, PhysicalType target,
+	                                                     optional_ptr<CastParameters> parameters);
+	static string UnimplementedCastMessage(const LogicalType &source, const LogicalType &target);
+
 	template <class SRC, class DST>
 	static inline bool Operation(SRC input, DST &result, bool strict = false) {
-		throw NotImplementedException("Unimplemented type for cast (%s -> %s)", GetTypeId<SRC>(), GetTypeId<DST>());
+		throw UnimplementedErrorMessage(GetTypeId<SRC>(), GetTypeId<DST>(), nullptr);
 	}
 };
 
 struct TryCastErrorMessage {
 	template <class SRC, class DST>
 	static inline bool Operation(SRC input, DST &result, CastParameters &parameters) {
-		throw NotImplementedException(parameters.query_location, "Unimplemented type for cast (%s -> %s)",
-		                              GetTypeId<SRC>(), GetTypeId<DST>());
+		throw TryCast::UnimplementedErrorMessage(GetTypeId<SRC>(), GetTypeId<DST>(), parameters);
 	}
 };
 
 struct TryCastErrorMessageCommaSeparated {
 	template <class SRC, class DST>
 	static inline bool Operation(SRC input, DST &result, CastParameters &parameters) {
-		throw NotImplementedException(parameters.query_location, "Unimplemented type for cast (%s -> %s)",
-		                              GetTypeId<SRC>(), GetTypeId<DST>());
+		throw TryCast::UnimplementedErrorMessage(GetTypeId<SRC>(), GetTypeId<DST>(), parameters);
 	}
 };
 
@@ -80,14 +82,8 @@ struct Cast {
 struct HandleCastError {
 	static void AssignError(const string &error_message, CastParameters &parameters);
 	static void AssignError(const string &error_message, string *error_message_ptr,
-	                        optional_idx error_location = optional_idx()) {
-		if (!error_message_ptr) {
-			throw ConversionException(error_location, error_message);
-		}
-		if (error_message_ptr->empty()) {
-			*error_message_ptr = error_message;
-		}
-	}
+	                        optional_ptr<const Expression> cast_source = nullptr,
+	                        optional_idx error_location = optional_idx());
 };
 
 //===--------------------------------------------------------------------===//
@@ -596,6 +592,16 @@ template <>
 DUCKDB_API bool TryCast::Operation(dtime_t input, dtime_tz_t &result, bool strict);
 
 //===--------------------------------------------------------------------===//
+// Time (ns) Casts
+//===--------------------------------------------------------------------===//
+template <>
+DUCKDB_API bool TryCast::Operation(dtime_t input, dtime_ns_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(dtime_ns_t input, dtime_ns_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(dtime_ns_t input, dtime_t &result, bool strict);
+
+//===--------------------------------------------------------------------===//
 // Time With Time Zone Casts (Offset)
 //===--------------------------------------------------------------------===//
 template <>
@@ -655,6 +661,15 @@ template <>
 DUCKDB_API bool TryCast::Operation(string_t input, dtime_t &result, bool strict);
 template <>
 dtime_t Cast::Operation(string_t input);
+//===--------------------------------------------------------------------===//
+// String -> Time_NS Casts
+//===--------------------------------------------------------------------===//
+template <>
+DUCKDB_API bool TryCastErrorMessage::Operation(string_t input, dtime_ns_t &result, CastParameters &parameters);
+template <>
+DUCKDB_API bool TryCast::Operation(string_t input, dtime_ns_t &result, bool strict);
+template <>
+dtime_ns_t Cast::Operation(string_t input);
 //===--------------------------------------------------------------------===//
 // String -> TimeTZ Casts
 //===--------------------------------------------------------------------===//
@@ -720,6 +735,33 @@ template <>
 DUCKDB_API bool TryCastToTimestampMS::Operation(date_t input, timestamp_t &result, bool strict);
 template <>
 DUCKDB_API bool TryCastToTimestampSec::Operation(date_t input, timestamp_t &result, bool strict);
+
+//===--------------------------------------------------------------------===//
+// string -> Non-Standard Time types
+//===--------------------------------------------------------------------===//
+struct TryCastToTimeNS {
+	template <class SRC, class DST>
+	static inline bool Operation(SRC input, DST &result, bool strict = false) {
+		throw InternalException("Unsupported type for try cast to time (ns)");
+	}
+};
+
+template <>
+DUCKDB_API bool TryCastToTimeNS::Operation(string_t input, dtime_ns_t &result, bool strict);
+
+//===--------------------------------------------------------------------===//
+// Non-Standard Time -> string/time types
+//===--------------------------------------------------------------------===//
+
+struct CastFromTimeNS {
+	template <class SRC>
+	static inline string_t Operation(SRC input, Vector &result) {
+		throw duckdb::NotImplementedException("Cast to string could not be performed!");
+	}
+};
+
+template <>
+duckdb::string_t CastFromTimeNS::Operation(duckdb::dtime_ns_t input, Vector &result);
 
 //===--------------------------------------------------------------------===//
 // Non-Standard Timestamps -> string/timestamp types
@@ -807,6 +849,12 @@ struct CastTimestampNsToTime {
 		throw duckdb::NotImplementedException("Cast to TIME could not be performed!");
 	}
 };
+struct CastTimestampNsToTimeNs {
+	template <class SRC, class DST>
+	static inline DST Operation(SRC input) {
+		throw duckdb::NotImplementedException("Cast to TIME_NS could not be performed!");
+	}
+};
 struct CastTimestampNsToUs {
 	template <class SRC, class DST>
 	static inline DST Operation(SRC input) {
@@ -865,6 +913,8 @@ template <>
 duckdb::date_t CastTimestampNsToDate::Operation(duckdb::timestamp_t input);
 template <>
 duckdb::dtime_t CastTimestampNsToTime::Operation(duckdb::timestamp_t input);
+template <>
+duckdb::dtime_ns_t CastTimestampNsToTimeNs::Operation(duckdb::timestamp_ns_t input);
 template <>
 duckdb::timestamp_t CastTimestampNsToUs::Operation(duckdb::timestamp_t input);
 template <>

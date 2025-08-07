@@ -11,9 +11,10 @@ ScannerResult::ScannerResult(CSVStates &states_p, CSVStateMachine &state_machine
 
 BaseScanner::BaseScanner(shared_ptr<CSVBufferManager> buffer_manager_p, shared_ptr<CSVStateMachine> state_machine_p,
                          shared_ptr<CSVErrorHandler> error_handler_p, bool sniffing_p,
-                         shared_ptr<CSVFileScan> csv_file_scan_p, CSVIterator iterator_p)
+                         shared_ptr<CSVFileScan> csv_file_scan_p, const CSVIterator &iterator_p)
     : csv_file_scan(std::move(csv_file_scan_p)), sniffing(sniffing_p), error_handler(std::move(error_handler_p)),
-      state_machine(std::move(state_machine_p)), buffer_manager(std::move(buffer_manager_p)), iterator(iterator_p) {
+      state_machine(std::move(state_machine_p)), states(), buffer_manager(std::move(buffer_manager_p)),
+      iterator(iterator_p) {
 	D_ASSERT(buffer_manager);
 	D_ASSERT(state_machine);
 	// Initialize current buffer handle
@@ -23,6 +24,17 @@ BaseScanner::BaseScanner(shared_ptr<CSVBufferManager> buffer_manager_p, shared_p
 	} else {
 		buffer_handle_ptr = cur_buffer_handle->Ptr();
 	}
+}
+
+string BaseScanner::RemoveSeparator(const char *value_ptr, const idx_t size, char thousands_separator) {
+	string result;
+	result.reserve(size);
+	for (idx_t i = 0; i < size; i++) {
+		if (value_ptr[i] != thousands_separator) {
+			result.push_back(value_ptr[i]);
+		}
+	}
+	return result;
 }
 
 bool BaseScanner::FinishedFile() const {

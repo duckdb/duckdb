@@ -63,7 +63,7 @@ exists(
 )
 order by bt.id
 ----
-physical_plan	<REGEX>:.*HASH_JOIN.*DELIM_SCAN.*SEQ_SCAN.*SEQ_SCAN.*
+physical_plan	<REGEX>:.*HASH_JOIN.*DELIM_SCAN.*SEQ_SCAN.*
 
 
 

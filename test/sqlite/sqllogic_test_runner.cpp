@@ -10,6 +10,7 @@
 #include "sqllogic_parser.hpp"
 #include "test_helpers.hpp"
 #include "sqllogic_test_logger.hpp"
+#include "duckdb/common/random_engine.hpp"
 
 #ifdef DUCKDB_OUT_OF_TREE
 #include DUCKDB_EXTENSION_HEADER
@@ -22,12 +23,39 @@ SQLLogicTestRunner::SQLLogicTestRunner(string dbpath) : dbpath(std::move(dbpath)
 	config->options.allow_unredacted_secrets = true;
 	config->options.load_extensions = false;
 
+	auto &test_config = TestConfiguration::Get();
+	autoloading_mode = test_config.GetExtensionAutoLoadingMode();
+
+	config->options.autoload_known_extensions = false;
+	config->options.autoinstall_known_extensions = false;
+	config->options.allow_unsigned_extensions = true;
+	local_extension_repo = "";
+	autoinstall_is_checked = false;
+
+	switch (autoloading_mode) {
+	case TestConfiguration::ExtensionAutoLoadingMode::NONE: {
+		break;
+	}
+	case TestConfiguration::ExtensionAutoLoadingMode::AVAILABLE: {
+		autoinstall_is_checked = true;
+		config->options.autoload_known_extensions = true;
+		break;
+	}
+	case TestConfiguration::ExtensionAutoLoadingMode::ALL: {
+		autoinstall_is_checked = false;
+		config->options.autoload_known_extensions = true;
+		config->options.autoinstall_known_extensions = true;
+		break;
+	}
+	}
+
 	auto env_var = std::getenv("LOCAL_EXTENSION_REPO");
-	if (!env_var) {
-		config->options.autoload_known_extensions = false;
-	} else {
+	if (env_var) {
 		local_extension_repo = env_var;
 		config->options.autoload_known_extensions = true;
+		config->options.autoinstall_known_extensions = true;
+	} else if (config->options.autoload_known_extensions) {
+		local_extension_repo = string(DUCKDB_BUILD_DIRECTORY) + "/repository";
 	}
 }
 
@@ -84,6 +112,15 @@ void SQLLogicTestRunner::EndLoop() {
 	}
 }
 
+ExtensionLoadResult SQLLogicTestRunner::LoadExtension(DuckDB &db, const std::string &extension) {
+	Connection con(db);
+	auto result = con.Query("LOAD " + extension);
+	if (!result->HasError()) {
+		return ExtensionLoadResult::LOADED_EXTENSION;
+	}
+	return ExtensionHelper::LoadExtension(db, extension);
+}
+
 void SQLLogicTestRunner::LoadDatabase(string dbpath, bool load_extensions) {
 	loaded_databases.push_back(dbpath);
 
@@ -96,10 +133,14 @@ void SQLLogicTestRunner::LoadDatabase(string dbpath, bool load_extensions) {
 	try {
 		db = make_uniq<DuckDB>(dbpath, config.get());
 		// always load core functions
-		ExtensionHelper::LoadExtension(*db, "core_functions");
+
+		auto &test_config = TestConfiguration::Get();
+		for (auto ext : test_config.ExtensionToBeLoadedOnLoad()) {
+			SQLLogicTestRunner::LoadExtension(*db, ext);
+		}
 	} catch (std::exception &ex) {
 		ErrorData err(ex);
-		SQLLogicTestLogger::LoadDatabaseFail(dbpath, err.Message());
+		SQLLogicTestLogger::LoadDatabaseFail(file_name, dbpath, err.Message());
 		FAIL();
 	}
 	Reconnect();
@@ -107,7 +148,7 @@ void SQLLogicTestRunner::LoadDatabase(string dbpath, bool load_extensions) {
 	// load any previously loaded extensions again
 	if (load_extensions) {
 		for (auto &extension : extensions) {
-			ExtensionHelper::LoadExtension(*db, extension);
+			SQLLogicTestRunner::LoadExtension(*db, extension);
 		}
 	}
 }
@@ -130,6 +171,16 @@ void SQLLogicTestRunner::Reconnect() {
 	// Set the local extension repo for autoinstalling extensions
 	if (!local_extension_repo.empty()) {
 		auto res1 = con->Query("SET autoinstall_extension_repository='" + local_extension_repo + "'");
+	}
+
+	auto &test_config = TestConfiguration::Get();
+	auto init_cmd = test_config.OnInitCommand() + test_config.OnConnectionCommand();
+	if (!init_cmd.empty()) {
+		test_config.ProcessPath(init_cmd, file_name);
+		auto res = con->Query(ReplaceKeywords(init_cmd));
+		if (res->HasError()) {
+			FAIL("Startup queries provided via on_init failed: " + res->GetError());
+		}
 	}
 }
 
@@ -236,6 +287,7 @@ bool SQLLogicTestRunner::ForEachTokenReplace(const string &parameter, vector<str
 		result.push_back("bitpacking");
 		result.push_back("dictionary");
 		result.push_back("fsst");
+		result.push_back("dict_fsst");
 		result.push_back("alp");
 		result.push_back("alprd");
 		collection = true;
@@ -384,7 +436,7 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 	}
 
 	if (param == "noforcestorage") {
-		if (TestForceStorage()) {
+		if (TestConfiguration::TestForceStorage()) {
 			return RequireResult::MISSING;
 		}
 		return RequireResult::PRESENT;
@@ -490,8 +542,11 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 #endif
 	}
 
-	if (param == "no_block_verification") {
-#ifdef DUCKDB_BLOCK_VERIFICATION
+	if (param == "no_latest_storage") {
+#ifdef DUCKDB_LATEST_STORAGE
+		return RequireResult::MISSING;
+#elif defined(DUCKDB_ALTERNATIVE_VERIFY)
+		//! ALTERNATIVE_VERIFY also forces latest storage
 		return RequireResult::MISSING;
 #else
 		return RequireResult::PRESENT;
@@ -499,13 +554,12 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 	}
 
 	if (param == "no_vector_verification") {
-#ifdef DUCKDB_VERIFY_VECTOR
-		return RequireResult::MISSING;
-#else
+		auto &test_config = TestConfiguration::Get();
+		if (test_config.GetVectorVerification() != DebugVectorVerification::NONE) {
+			return RequireResult::MISSING;
+		}
 		return RequireResult::PRESENT;
-#endif
 	}
-
 	if (param == "no_extension_autoloading") {
 		if (params.size() < 2) {
 			parser.Fail("require no_extension_autoloading needs an explanation string");
@@ -524,6 +578,12 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 		}
 		return RequireResult::PRESENT;
 	}
+	if (param == "allow_unsigned_extensions") {
+		if (config->options.allow_unsigned_extensions) {
+			return RequireResult::PRESENT;
+		}
+		return RequireResult::MISSING;
+	}
 
 	bool excluded_from_autoloading = true;
 	for (const auto &ext : AUTOLOADABLE_EXTENSIONS) {
@@ -533,8 +593,10 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 		}
 	}
 
+	bool perform_install = false;
+	bool perform_load = false;
 	if (!config->options.autoload_known_extensions) {
-		auto result = ExtensionHelper::LoadExtension(*db, param);
+		auto result = SQLLogicTestRunner::LoadExtension(*db, param);
 		if (result == ExtensionLoadResult::LOADED_EXTENSION) {
 			// add the extension to the list of loaded extensions
 			extensions.insert(param);
@@ -545,7 +607,27 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 			return RequireResult::MISSING;
 		}
 	} else if (excluded_from_autoloading) {
-		return RequireResult::MISSING;
+		if (autoloading_mode == TestConfiguration::ExtensionAutoLoadingMode::NONE) {
+			// This is needed to still support LOCAL_EXTENSION_REPO
+			return RequireResult::MISSING;
+		}
+		perform_install = true;
+		perform_load = true;
+	} else if (autoloading_mode != TestConfiguration::ExtensionAutoLoadingMode::NONE && autoinstall_is_checked) {
+		perform_install = true;
+	}
+	if (perform_install) {
+		auto res = con->Query("INSTALL " + param + " FROM '" + local_extension_repo + "';");
+		if (res->HasError()) {
+			return RequireResult::MISSING;
+		}
+	}
+	if (perform_load) {
+		auto res = con->Query("LOAD " + param + ";");
+		if (res->HasError()) {
+			return RequireResult::MISSING;
+		}
+		extensions.insert(param);
 	}
 	return RequireResult::PRESENT;
 }
@@ -606,6 +688,13 @@ bool TryParseConditions(SQLLogicParser &parser, const string &condition_text, ve
 }
 
 void SQLLogicTestRunner::ExecuteFile(string script) {
+	auto &test_config = TestConfiguration::Get();
+	if (test_config.ShouldSkipTest(script)) {
+		SKIP_TEST("config skip_tests");
+		return;
+	}
+
+	file_name = script;
 	SQLLogicParser parser;
 	idx_t skip_level = 0;
 
@@ -621,6 +710,11 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 	if (!dbpath.empty()) {
 		// delete the target database file, if it exists
 		DeleteDatabase(dbpath);
+	}
+
+	ignore_error_messages.clear();
+	for (auto ignore : test_config.ErrorMessagesToBeSkipped()) {
+		ignore_error_messages.insert(ignore);
 	}
 
 	// initialize the database with the default dbpath
@@ -850,8 +944,34 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 					string_set->insert(current_string);
 					string_set->erase("");
 				}
+			} else if (token.parameters[0] == "seed") {
+				if (token.parameters.size() != 2) {
+					parser.Fail("set seed requires a single seed value");
+				}
+				Value seed(token.parameters[1]);
+				if (!seed.DefaultTryCastAs(LogicalType::DOUBLE)) {
+					parser.Fail("set seed requires a floating point parameter");
+				}
+				auto res = con->Query("SELECT SETSEED(" + seed.ToString() + ")");
+				if (res->HasError()) {
+					parser.Fail("Failed to set seed: %s", res->GetError());
+				}
+				skip_reload = true;
 			} else {
 				parser.Fail("unrecognized set parameter: %s", token.parameters[0]);
+			}
+		} else if (token.type == SQLLogicTokenType::SQLLOGIC_RESET) {
+			if (token.parameters.size() != 2) {
+				parser.Fail("Expected reset [type] [name] (e.g reset label my_label)");
+			}
+			auto &reset_type = token.parameters[0];
+			auto &reset_item = token.parameters[1];
+			if (StringUtil::CIEquals("label", reset_type)) {
+				auto reset_label_command = make_uniq<ResetLabel>(*this);
+				reset_label_command->query_label = reset_item;
+				ExecuteCommand(std::move(reset_label_command));
+			} else {
+				parser.Fail("unrecognized reset parameter: %s", reset_type);
 			}
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_LOOP ||
 		           token.type == SQLLogicTokenType::SQLLOGIC_CONCURRENT_LOOP) {
@@ -911,7 +1031,15 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			}
 
 			auto env_var = token.parameters[0];
-			auto env_actual = std::getenv(env_var.c_str());
+			const char *env_actual = std::getenv(env_var.c_str());
+			string default_local_repo = string(DUCKDB_BUILD_DIRECTORY) + "/repository";
+			if (env_actual == nullptr && env_var == "LOCAL_EXTENSION_REPO" &&
+			    config->options.autoload_known_extensions) {
+				// Overriding LOCAL_EXTENSION_REPO here is a hacky
+				// More proper solution is wrapping std::getenv in a duckdb::test_getenv, and having a way to inject env
+				// variables
+				env_actual = default_local_repo.c_str();
+			}
 			if (env_actual == nullptr) {
 				// Environment variable was not found, this test should not be run
 				SKIP_TEST("require-env " + token.parameters[0]);
@@ -934,14 +1062,38 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			environment_variables[env_var] = env_actual;
 
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_LOAD) {
-			bool readonly = token.parameters.size() > 1 && token.parameters[1] == "readonly";
+			auto &test_config = TestConfiguration::Get();
+			if (test_config.OnLoadCommand() == "skip") {
+				SKIP_TEST("config on_load skip");
+				return;
+			}
+			bool is_read_only = false;
+			if (token.parameters.size() > 1) {
+				auto param = token.parameters[1];
+				if (StringUtil::CIEquals("readonly", param)) {
+					is_read_only = true;
+				} else if (StringUtil::CIEquals("readwrite", param)) {
+					is_read_only = false;
+				} else {
+					parser.Fail(StringUtil::Format(
+					    "parameter to 'load' is invalid, received '%s', accepted options are 'readonly' and 'readwrite",
+					    param));
+				}
+			}
+
+			string version;
+			if (token.parameters.size() > 2) {
+				version = token.parameters[2];
+			}
+
 			string load_db_path;
 			if (!token.parameters.empty()) {
 				load_db_path = ReplaceKeywords(token.parameters[0]);
 			} else {
 				load_db_path = string();
 			}
-			auto command = make_uniq<LoadCommand>(*this, load_db_path, readonly);
+
+			auto command = make_uniq<LoadCommand>(*this, load_db_path, is_read_only, version);
 			ExecuteCommand(std::move(command));
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_RESTART) {
 			bool load_extensions = !(token.parameters.size() == 1 && token.parameters[0] == "no_extension_load");

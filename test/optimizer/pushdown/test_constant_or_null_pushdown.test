@@ -1,0 +1,25 @@
+# name: test/optimizer/pushdown/test_constant_or_null_pushdown.test
+# description: Test Table OR Filter Push Down
+# group: [pushdown]
+
+statement ok
+create table t1 (ts_stop TIMESTAMPTZ);
+
+statement ok
+insert into t1 values (NULL), (NULL);
+
+query II
+explain select count(*) from t1 where constant_or_null(true, COALESCE(ts_stop, '9999-09-09 07:09:09+00'::TIMESTAMPTZ), '2025-06-23 10:32:02.216+00'::TIMESTAMPTZ);
+----
+physical_plan	<REGEX>:.*constant_or_null.*
+
+statement ok
+create table t2 as select range%2 a, range b from range(100);
+
+statement ok
+insert into t2 values (NULL, NULL), (NULL, NULL), (NULL, NULL);
+
+query II
+explain select * from t2 where constant_or_null(true, a);
+----
+physical_plan	<REGEX>:.*a IS NOT NULL.*

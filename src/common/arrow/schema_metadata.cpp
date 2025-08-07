@@ -31,7 +31,15 @@ ArrowSchemaMetadata::ArrowSchemaMetadata(const char *metadata) {
 			schema_metadata_map[key] = value;
 		}
 	}
-	extension_metadata_map = StringUtil::ParseJSONMap(schema_metadata_map[ARROW_METADATA_KEY]);
+	// We ignore errors of the metadata parsing if the extension is different from arrow.opaque
+	const bool ignore_errors =
+	    schema_metadata_map[ARROW_EXTENSION_NAME] != ArrowExtensionMetadata::ARROW_EXTENSION_NON_CANONICAL;
+	extension_metadata_map = StringUtil::ParseJSONMap(schema_metadata_map[ARROW_METADATA_KEY], ignore_errors);
+}
+
+ArrowSchemaMetadata::ArrowSchemaMetadata() {
+	// Always initialize out metadata map
+	extension_metadata_map = make_uniq<ComplexJSON>();
 }
 
 void ArrowSchemaMetadata::AddOption(const string &key, const string &value) {
@@ -58,9 +66,9 @@ ArrowSchemaMetadata ArrowSchemaMetadata::NonCanonicalType(const string &type_nam
 	ArrowSchemaMetadata metadata;
 	metadata.AddOption(ARROW_EXTENSION_NAME, ArrowExtensionMetadata::ARROW_EXTENSION_NON_CANONICAL);
 	// We have to set the metadata key with type_name and vendor_name.
-	metadata.extension_metadata_map["vendor_name"] = vendor_name;
-	metadata.extension_metadata_map["type_name"] = type_name;
-	metadata.AddOption(ARROW_METADATA_KEY, StringUtil::ToJSONMap(metadata.extension_metadata_map));
+	metadata.extension_metadata_map->AddObjectEntry("vendor_name", make_uniq<ComplexJSON>(vendor_name));
+	metadata.extension_metadata_map->AddObjectEntry("type_name", make_uniq<ComplexJSON>(type_name));
+	metadata.AddOption(ARROW_METADATA_KEY, StringUtil::ToComplexJSONMap(*metadata.extension_metadata_map));
 	return metadata;
 }
 
@@ -70,8 +78,8 @@ bool ArrowSchemaMetadata::HasExtension() const {
 }
 
 ArrowExtensionMetadata ArrowSchemaMetadata::GetExtensionInfo(string format) {
-	return {schema_metadata_map[ARROW_EXTENSION_NAME], extension_metadata_map["vendor_name"],
-	        extension_metadata_map["type_name"], std::move(format)};
+	return {schema_metadata_map[ARROW_EXTENSION_NAME], extension_metadata_map->GetValue("vendor_name"),
+	        extension_metadata_map->GetValue("type_name"), std::move(format)};
 }
 
 unsafe_unique_array<char> ArrowSchemaMetadata::SerializeMetadata() const {

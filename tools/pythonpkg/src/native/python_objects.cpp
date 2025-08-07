@@ -360,6 +360,10 @@ PyDate::PyDate(py::handle &ele) {
 	day = PyDateTime::GetDays(ele);
 }
 
+date_t PyDate::ToDate() {
+	return Date::FromDate(year, month, day);
+}
+
 Value PyDate::ToDuckValue() {
 	auto value = Value::DATE(year, month, day);
 	return value;
@@ -680,7 +684,7 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type,
 		return import_cache.uuid.UUID()(UUID::ToString(uuid_value));
 	}
 	case LogicalTypeId::VARINT: {
-		auto varint_value = val.GetValueUnsafe<string_t>();
+		auto varint_value = val.GetValueUnsafe<varint_t>();
 		return py::str(Varint::VarIntToVarchar(varint_value));
 	}
 	case LogicalTypeId::INTERVAL: {

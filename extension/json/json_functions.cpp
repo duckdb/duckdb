@@ -14,7 +14,7 @@ namespace duckdb {
 
 using JSONPathType = JSONCommon::JSONPathType;
 
-static JSONPathType CheckPath(const Value &path_val, string &path, size_t &len) {
+JSONPathType JSONReadFunctionData::CheckPath(const Value &path_val, string &path, idx_t &len) {
 	if (path_val.IsNull()) {
 		throw BinderException("JSON path cannot be NULL");
 	}
@@ -60,7 +60,7 @@ unique_ptr<FunctionData> JSONReadFunctionData::Bind(ClientContext &context, Scal
 	D_ASSERT(bound_function.arguments.size() == 2);
 	bool constant = false;
 	string path;
-	size_t len = 0;
+	idx_t len = 0;
 	JSONPathType path_type = JSONPathType::REGULAR;
 	if (arguments[1]->IsFoldable()) {
 		const auto path_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
@@ -80,7 +80,7 @@ unique_ptr<FunctionData> JSONReadFunctionData::Bind(ClientContext &context, Scal
 	return make_uniq<JSONReadFunctionData>(constant, std::move(path), len, path_type);
 }
 
-JSONReadManyFunctionData::JSONReadManyFunctionData(vector<string> paths_p, vector<size_t> lens_p)
+JSONReadManyFunctionData::JSONReadManyFunctionData(vector<string> paths_p, vector<idx_t> lens_p)
     : paths(std::move(paths_p)), lens(std::move(lens_p)) {
 	for (const auto &path : paths) {
 		ptrs.push_back(path.c_str());
@@ -107,13 +107,13 @@ unique_ptr<FunctionData> JSONReadManyFunctionData::Bind(ClientContext &context, 
 	}
 
 	vector<string> paths;
-	vector<size_t> lens;
+	vector<idx_t> lens;
 	auto paths_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
 
 	for (auto &path_val : ListValue::GetChildren(paths_val)) {
 		paths.emplace_back("");
 		lens.push_back(0);
-		if (CheckPath(path_val, paths.back(), lens.back()) == JSONPathType::WILDCARD) {
+		if (JSONReadFunctionData::CheckPath(path_val, paths.back(), lens.back()) == JSONPathType::WILDCARD) {
 			throw BinderException("Cannot have wildcards in JSON path when supplying multiple paths");
 		}
 	}
@@ -121,7 +121,8 @@ unique_ptr<FunctionData> JSONReadManyFunctionData::Bind(ClientContext &context, 
 	return make_uniq<JSONReadManyFunctionData>(std::move(paths), std::move(lens));
 }
 
-JSONFunctionLocalState::JSONFunctionLocalState(Allocator &allocator) : json_allocator(allocator) {
+JSONFunctionLocalState::JSONFunctionLocalState(Allocator &allocator)
+    : json_allocator(make_shared_ptr<JSONAllocator>(allocator)) {
 }
 
 JSONFunctionLocalState::JSONFunctionLocalState(ClientContext &context)
@@ -140,7 +141,7 @@ unique_ptr<FunctionLocalState> JSONFunctionLocalState::InitCastLocalState(CastLo
 
 JSONFunctionLocalState &JSONFunctionLocalState::ResetAndGet(ExpressionState &state) {
 	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<JSONFunctionLocalState>();
-	lstate.json_allocator.Reset();
+	lstate.json_allocator->Reset();
 	return lstate;
 }
 
@@ -200,6 +201,12 @@ vector<TableFunctionSet> JSONFunctions::GetTableFunctions() {
 	functions.push_back(GetReadNDJSONFunction());
 	functions.push_back(GetReadJSONAutoFunction());
 	functions.push_back(GetReadNDJSONAutoFunction());
+
+	// Table in-out
+	functions.push_back(GetJSONEachFunction());
+	functions.push_back(GetJSONTreeFunction());
+
+	// Serialized plan
 	functions.push_back(GetExecuteJsonSerializedSqlFunction());
 
 	return functions;
@@ -226,8 +233,8 @@ unique_ptr<TableRef> JSONFunctions::ReadJSONReplacement(ClientContext &context, 
 
 static bool CastVarcharToJSON(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto &lstate = parameters.local_state->Cast<JSONFunctionLocalState>();
-	lstate.json_allocator.Reset();
-	auto alc = lstate.json_allocator.GetYYAlc();
+	lstate.json_allocator->Reset();
+	auto alc = lstate.json_allocator->GetYYAlc();
 
 	bool success = true;
 	UnaryExecutor::ExecuteWithNulls<string_t, string_t>(
@@ -257,13 +264,13 @@ void JSONFunctions::RegisterSimpleCastFunctions(CastFunctionSet &casts) {
 	casts.RegisterCastFunction(LogicalType::JSON(), LogicalType::VARCHAR, DefaultCasts::ReinterpretCast, 1);
 
 	// VARCHAR to JSON requires a parse so it's not free. Let's make it 1 more than a cast to STRUCT
-	auto varchar_to_json_cost = casts.ImplicitCastCost(LogicalType::SQLNULL, LogicalTypeId::STRUCT) + 1;
+	auto varchar_to_json_cost = casts.ImplicitCastCost(nullptr, LogicalType::SQLNULL, LogicalTypeId::STRUCT) + 1;
 	BoundCastInfo varchar_to_json_info(CastVarcharToJSON, nullptr, JSONFunctionLocalState::InitCastLocalState);
 	casts.RegisterCastFunction(LogicalType::VARCHAR, LogicalType::JSON(), std::move(varchar_to_json_info),
 	                           varchar_to_json_cost);
 
 	// Register NULL to JSON with a different cost than NULL to VARCHAR so the binder can disambiguate functions
-	auto null_to_json_cost = casts.ImplicitCastCost(LogicalType::SQLNULL, LogicalTypeId::VARCHAR) + 1;
+	auto null_to_json_cost = casts.ImplicitCastCost(nullptr, LogicalType::SQLNULL, LogicalTypeId::VARCHAR) + 1;
 	casts.RegisterCastFunction(LogicalType::SQLNULL, LogicalType::JSON(), DefaultCasts::TryVectorNullCast,
 	                           null_to_json_cost);
 }

@@ -9,12 +9,12 @@
 
 namespace duckdb {
 
-PhysicalCTE::PhysicalCTE(string ctename, idx_t table_index, vector<LogicalType> types, unique_ptr<PhysicalOperator> top,
-                         unique_ptr<PhysicalOperator> bottom, idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::CTE, std::move(types), estimated_cardinality), table_index(table_index),
-      ctename(std::move(ctename)) {
-	children.push_back(std::move(top));
-	children.push_back(std::move(bottom));
+PhysicalCTE::PhysicalCTE(PhysicalPlan &physical_plan, string ctename, idx_t table_index, vector<LogicalType> types,
+                         PhysicalOperator &top, PhysicalOperator &bottom, idx_t estimated_cardinality)
+    : PhysicalOperator(physical_plan, PhysicalOperatorType::CTE, std::move(types), estimated_cardinality),
+      table_index(table_index), ctename(std::move(ctename)) {
+	children.push_back(top);
+	children.push_back(bottom);
 }
 
 PhysicalCTE::~PhysicalCTE() {
@@ -89,23 +89,24 @@ void PhysicalCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline)
 	auto &state = meta_pipeline.GetState();
 
 	auto &child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, *this);
-	child_meta_pipeline.Build(*children[0]);
+	child_meta_pipeline.Build(children[0]);
 
 	for (auto &cte_scan : cte_scans) {
 		state.cte_dependencies.insert(make_pair(cte_scan, reference<Pipeline>(*child_meta_pipeline.GetBasePipeline())));
 	}
 
-	children[1]->BuildPipelines(current, meta_pipeline);
+	children[1].get().BuildPipelines(current, meta_pipeline);
 }
 
 vector<const_reference<PhysicalOperator>> PhysicalCTE::GetSources() const {
-	return children[1]->GetSources();
+	return children[1].get().GetSources();
 }
 
 InsertionOrderPreservingMap<string> PhysicalCTE::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
 	result["CTE Name"] = ctename;
 	result["Table Index"] = StringUtil::Format("%llu", table_index);
+	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;
 }
 

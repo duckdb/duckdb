@@ -5,10 +5,14 @@ pyarrow.dataset.Scanner
 pyarrow.dataset.Dataset
 pyarrow.Table
 pyarrow.RecordBatchReader
+pyarrow.ipc.MessageReader
 
 import pandas
 
 pandas.DataFrame
+pandas.Categorical
+pandas.CategoricalDtype
+pandas.Series
 pandas.NaT
 pandas.NA
 pandas.isnull
@@ -55,7 +59,6 @@ ipywidgets.FloatProgress
 
 import numpy
 
-numpy.core.multiarray
 numpy.ma.masked
 numpy.ma.masked_array
 numpy.ndarray
@@ -119,3 +122,7 @@ import collections.abc
 
 collections.abc.Iterable
 collections.abc.Mapping
+
+import duckdb.polars_io
+
+duckdb.polars_io.duckdb_source

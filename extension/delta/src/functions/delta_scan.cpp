@@ -234,8 +234,8 @@ void DeltaSnapshot::InitializeFiles() {
 	initialized = true;
 }
 
-unique_ptr<MultiFileList> DeltaSnapshot::ComplexFilterPushdown(ClientContext &context,
-                                                               const MultiFileReaderOptions &options, LogicalGet &get,
+unique_ptr<MultiFileList> DeltaSnapshot::ComplexFilterPushdown(ClientContext &context, const MultiFileOptions &options,
+                                                               LogicalGet &get,
                                                                vector<unique_ptr<Expression>> &filters) {
 	FilterCombiner combiner(context);
 	for (const auto &filter : filters) {
@@ -286,9 +286,8 @@ unique_ptr<MultiFileReader> DeltaMultiFileReader::CreateInstance() {
 	return std::move(make_uniq<DeltaMultiFileReader>());
 }
 
-bool DeltaMultiFileReader::Bind(MultiFileReaderOptions &options, MultiFileList &files,
-                                vector<LogicalType> &return_types, vector<string> &names,
-                                MultiFileReaderBindData &bind_data) {
+bool DeltaMultiFileReader::Bind(MultiFileOptions &options, MultiFileList &files, vector<LogicalType> &return_types,
+                                vector<string> &names, MultiFileReaderBindData &bind_data) {
 	auto &delta_snapshot = dynamic_cast<DeltaSnapshot &>(files);
 
 	delta_snapshot.Bind(return_types, names);
@@ -307,7 +306,7 @@ bool DeltaMultiFileReader::Bind(MultiFileReaderOptions &options, MultiFileList &
 	return true;
 };
 
-void DeltaMultiFileReader::BindOptions(MultiFileReaderOptions &options, MultiFileList &files,
+void DeltaMultiFileReader::BindOptions(MultiFileOptions &options, MultiFileList &files,
                                        vector<LogicalType> &return_types, vector<string> &names,
                                        MultiFileReaderBindData &bind_data) {
 
@@ -327,16 +326,15 @@ void DeltaMultiFileReader::BindOptions(MultiFileReaderOptions &options, MultiFil
 	}
 }
 
-void DeltaMultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options,
-                                        const MultiFileReaderBindData &options, const string &filename,
-                                        const vector<string> &local_names, const vector<LogicalType> &global_types,
-                                        const vector<string> &global_names, const vector<column_t> &global_column_ids,
-                                        MultiFileReaderData &reader_data, ClientContext &context,
-                                        optional_ptr<MultiFileReaderGlobalState> global_state) {
+void DeltaMultiFileReader::FinalizeBind(const MultiFileOptions &file_options, const MultiFileReaderBindData &options,
+                                        const string &filename, const vector<string> &local_names,
+                                        const vector<LogicalType> &global_types, const vector<string> &global_names,
+                                        const vector<column_t> &global_column_ids, MultiFileReaderData &reader_data,
+                                        ClientContext &context, optional_ptr<MultiFileReaderGlobalState> global_state) {
 	MultiFileReader::FinalizeBind(file_options, options, filename, local_names, global_types, global_names,
 	                              global_column_ids, reader_data, context, global_state);
 
-	// Handle custom delta option set in MultiFileReaderOptions::custom_options
+	// Handle custom delta option set in MultiFileOptions::custom_options
 	auto file_number_opt = file_options.custom_options.find("delta_file_number");
 	if (file_number_opt != file_options.custom_options.end()) {
 		if (file_number_opt->second.GetValue<bool>()) {
@@ -418,7 +416,7 @@ void DeltaMultiFileReaderGlobalState::SetColumnIdx(const string &column, idx_t i
 }
 
 unique_ptr<MultiFileReaderGlobalState> DeltaMultiFileReader::InitializeGlobalState(
-    duckdb::ClientContext &context, const duckdb::MultiFileReaderOptions &file_options,
+    duckdb::ClientContext &context, const duckdb::MultiFileOptions &file_options,
     const duckdb::MultiFileReaderBindData &bind_data, const duckdb::MultiFileList &file_list,
     const vector<duckdb::LogicalType> &global_types, const vector<std::string> &global_names,
     const vector<duckdb::column_t> &global_column_ids) {
@@ -569,7 +567,7 @@ void DeltaMultiFileReader::FinalizeChunk(ClientContext &context, const MultiFile
 	}
 };
 
-bool DeltaMultiFileReader::ParseOption(const string &key, const Value &val, MultiFileReaderOptions &options,
+bool DeltaMultiFileReader::ParseOption(const string &key, const Value &val, MultiFileOptions &options,
                                        ClientContext &context) {
 	auto loption = StringUtil::Lower(key);
 

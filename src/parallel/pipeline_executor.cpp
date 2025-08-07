@@ -34,7 +34,7 @@ PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_
 		auto &current_operator = pipeline.operators[i].get();
 
 		auto chunk = make_uniq<DataChunk>();
-		chunk->Initialize(Allocator::Get(context.client), prev_operator.GetTypes());
+		chunk->Initialize(BufferAllocator::Get(context.client), prev_operator.GetTypes());
 		intermediate_chunks.push_back(std::move(chunk));
 
 		auto op_state = current_operator.GetOperatorState(context);
@@ -527,9 +527,12 @@ SourceResultType PipelineExecutor::FetchFromSource(DataChunk &result) {
 	OperatorSourceInput source_input = {*pipeline.source_state, *local_source_state, interrupt_state};
 	auto res = GetData(result, source_input);
 
-	// Ensures Sinks only return empty results when Blocking or Finished
+	// Ensures sources only return empty results when Blocking or Finished
 	D_ASSERT(res != SourceResultType::BLOCKED || result.size() == 0);
-
+	if (res == SourceResultType::FINISHED) {
+		// final call into the source - finish source execution
+		context.thread.profiler.FinishSource(*pipeline.source_state, *local_source_state);
+	}
 	EndOperator(*pipeline.source, &result);
 
 	return res;
@@ -537,7 +540,7 @@ SourceResultType PipelineExecutor::FetchFromSource(DataChunk &result) {
 
 void PipelineExecutor::InitializeChunk(DataChunk &chunk) {
 	auto &last_op = pipeline.operators.empty() ? *pipeline.source : pipeline.operators.back().get();
-	chunk.Initialize(Allocator::DefaultAllocator(), last_op.GetTypes());
+	chunk.Initialize(BufferAllocator::Get(context.client), last_op.GetTypes());
 }
 
 void PipelineExecutor::StartOperator(PhysicalOperator &op) {

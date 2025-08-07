@@ -4,10 +4,12 @@
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/planner/expression/list.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
 ExpressionExecutor::ExpressionExecutor(ClientContext &context) : context(&context) {
+	debug_vector_verification = DBConfig::GetSetting<DebugVerifyVectorSetting>(context);
 }
 
 ExpressionExecutor::ExpressionExecutor(ClientContext &context, const Expression *expression)
@@ -62,6 +64,11 @@ void ExpressionExecutor::AddExpression(const Expression &expr) {
 	states.push_back(std::move(state));
 }
 
+void ExpressionExecutor::ClearExpressions() {
+	states.clear();
+	expressions.clear();
+}
+
 void ExpressionExecutor::Initialize(const Expression &expression, ExpressionExecutorState &state) {
 	state.executor = this;
 	state.root_state = InitializeState(expression, state);
@@ -85,9 +92,22 @@ void ExpressionExecutor::ExecuteExpression(DataChunk &input, Vector &result) {
 }
 
 idx_t ExpressionExecutor::SelectExpression(DataChunk &input, SelectionVector &sel) {
+	return SelectExpression(input, sel, nullptr, input.size());
+}
+
+idx_t ExpressionExecutor::SelectExpression(DataChunk &input, SelectionVector &result_sel,
+                                           optional_ptr<SelectionVector> current_sel, idx_t current_count) {
+	return SelectExpression(input, result_sel, nullptr, current_sel, current_count);
+}
+
+idx_t ExpressionExecutor::SelectExpression(DataChunk &input, optional_ptr<SelectionVector> true_sel,
+                                           optional_ptr<SelectionVector> false_sel,
+                                           optional_ptr<SelectionVector> current_sel, idx_t current_count) {
 	D_ASSERT(expressions.size() == 1);
+	D_ASSERT(current_count <= input.size());
 	SetChunk(&input);
-	idx_t selected_tuples = Select(*expressions[0], states[0]->root_state.get(), nullptr, input.size(), &sel, nullptr);
+	idx_t selected_tuples = Select(*expressions[0], states[0]->root_state.get(), current_sel.get(), current_count,
+	                               true_sel.get(), false_sel.get());
 	return selected_tuples;
 }
 
@@ -134,9 +154,9 @@ void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t co
 	if (expr.verification_stats) {
 		expr.verification_stats->Verify(vector, count);
 	}
-#ifdef DUCKDB_VERIFY_DICTIONARY_EXPRESSION
-	Vector::DebugTransformToDictionary(vector, count);
-#endif
+	if (debug_vector_verification == DebugVectorVerification::DICTIONARY_EXPRESSION) {
+		Vector::DebugTransformToDictionary(vector, count);
+	}
 }
 
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const Expression &expr,

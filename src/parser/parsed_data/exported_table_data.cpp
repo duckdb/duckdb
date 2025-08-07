@@ -1,5 +1,6 @@
 #include "duckdb/parser/parsed_data/exported_table_data.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -14,9 +15,8 @@ ExportedTableInfo::ExportedTableInfo(ClientContext &context, ExportedTableData t
 }
 
 TableCatalogEntry &ExportedTableInfo::GetEntry(ClientContext &context, const ExportedTableData &table_data) {
-	return Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, table_data.database_name, table_data.schema_name,
-	                         table_data.table_name)
-	    .Cast<TableCatalogEntry>();
+	return Catalog::GetEntry<TableCatalogEntry>(context, table_data.database_name, table_data.schema_name,
+	                                            table_data.table_name);
 }
 
 } // namespace duckdb

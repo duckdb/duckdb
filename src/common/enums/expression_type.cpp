@@ -15,6 +15,8 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "IS_NULL";
 	case ExpressionType::OPERATOR_IS_NOT_NULL:
 		return "IS_NOT_NULL";
+	case ExpressionType::OPERATOR_UNPACK:
+		return "UNPACK";
 	case ExpressionType::COMPARE_EQUAL:
 		return "EQUAL";
 	case ExpressionType::COMPARE_NOTEQUAL:
@@ -77,6 +79,8 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "LAG";
 	case ExpressionType::WINDOW_NTILE:
 		return "NTILE";
+	case ExpressionType::WINDOW_FILL:
+		return "FILL";
 	case ExpressionType::FUNCTION:
 		return "FUNCTION";
 	case ExpressionType::CASE_EXPR:

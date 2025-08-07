@@ -1,11 +1,9 @@
 #include "parquet_timestamp.hpp"
 
 #include "duckdb.hpp"
-#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
-#endif
 
 namespace duckdb {
 
@@ -115,7 +113,7 @@ static T ParquetWrapTime(const T &raw, const T day) {
 	return modulus + (modulus < 0) * day;
 }
 
-dtime_t ParquetIntToTimeMs(const int32_t &raw_millis) {
+dtime_t ParquetMsIntToTime(const int32_t &raw_millis) {
 	return Time::FromTimeMs(raw_millis);
 }
 
@@ -123,8 +121,20 @@ dtime_t ParquetIntToTime(const int64_t &raw_micros) {
 	return dtime_t(raw_micros);
 }
 
-dtime_t ParquetIntToTimeNs(const int64_t &raw_nanos) {
+dtime_t ParquetNsIntToTime(const int64_t &raw_nanos) {
 	return Time::FromTimeNs(raw_nanos);
+}
+
+dtime_ns_t ParquetMsIntToTimeNs(const int32_t &raw_millis) {
+	return dtime_ns_t(Interval::NANOS_PER_MSEC * raw_millis);
+}
+
+dtime_ns_t ParquetUsIntToTimeNs(const int64_t &raw_micros) {
+	return dtime_ns_t(raw_micros * Interval::NANOS_PER_MICRO);
+}
+
+dtime_ns_t ParquetIntToTimeNs(const int64_t &raw_nanos) {
+	return dtime_ns_t(raw_nanos);
 }
 
 dtime_tz_t ParquetIntToTimeMsTZ(const int32_t &raw_millis) {

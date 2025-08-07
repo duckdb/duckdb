@@ -12,13 +12,11 @@
 
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "unicode/calendar.h"
+#include "tz_calendar.hpp"
 
 namespace duckdb {
 
 struct ICUDateFunc {
-	using CalendarPtr = duckdb::unique_ptr<icu::Calendar>;
-
 	struct BindData : public FunctionData {
 		explicit BindData(ClientContext &context);
 		BindData(const string &tz_setting, const string &cal_setting);
@@ -49,8 +47,10 @@ struct ICUDateFunc {
 	static duckdb::unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
 	                                             vector<duckdb::unique_ptr<Expression>> &arguments);
 
-	//! Sets the time zone for the calendar.
-	static void SetTimeZone(icu::Calendar *calendar, const string_t &tz_id);
+	//! Tries to set the time zone for the calendar and returns false if it is not valid.
+	static bool TrySetTimeZone(icu::Calendar *calendar, const string_t &tz_id);
+	//! Sets the time zone for the calendar. Throws if it is not valid
+	static void SetTimeZone(icu::Calendar *calendar, const string_t &tz_id, string *error_message = nullptr);
 	//! Gets the timestamp from the calendar, throwing if it is not in range.
 	static bool TryGetTime(icu::Calendar *calendar, uint64_t micros, timestamp_t &result);
 	//! Gets the timestamp from the calendar, throwing if it is not in range.
@@ -64,11 +64,11 @@ struct ICUDateFunc {
 	//! Subtracts the field of the given date from the calendar
 	static int32_t SubtractField(icu::Calendar *calendar, UCalendarDateFields field, timestamp_t end_date);
 	//! Adds the timestamp and the interval using the calendar
-	static timestamp_t Add(icu::Calendar *calendar, timestamp_t timestamp, interval_t interval);
+	static timestamp_t Add(TZCalendar &calendar, timestamp_t timestamp, interval_t interval);
 	//! Subtracts the interval from the timestamp using the calendar
-	static timestamp_t Sub(icu::Calendar *calendar, timestamp_t timestamp, interval_t interval);
+	static timestamp_t Sub(TZCalendar &calendar, timestamp_t timestamp, interval_t interval);
 	//! Subtracts the latter timestamp from the former timestamp using the calendar
-	static interval_t Sub(icu::Calendar *calendar, timestamp_t end_date, timestamp_t start_date);
+	static interval_t Sub(TZCalendar &calendar, timestamp_t end_date, timestamp_t start_date);
 	//! Pulls out the bin values from the timestamp assuming it is an instant,
 	//! constructs an ICU timestamp, and then converts that back to a DuckDB instant
 	//! Adding offset doesn't really work around DST because the bin values are ambiguous

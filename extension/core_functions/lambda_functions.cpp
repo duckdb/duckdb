@@ -181,9 +181,9 @@ LambdaFunctions::GetMutableColumnInfo(vector<LambdaFunctions::ColumnInfo> &data)
 	return inconstant_info;
 }
 
-void ExecuteExpression(const idx_t elem_cnt, const LambdaFunctions::ColumnInfo &column_info,
-                       const vector<LambdaFunctions::ColumnInfo> &column_infos, const Vector &index_vector,
-                       LambdaExecuteInfo &info) {
+static void ExecuteExpression(const idx_t elem_cnt, const LambdaFunctions::ColumnInfo &column_info,
+                              const vector<LambdaFunctions::ColumnInfo> &column_infos, const Vector &index_vector,
+                              LambdaExecuteInfo &info) {
 
 	info.input_chunk.SetCardinality(elem_cnt);
 	info.lambda_chunk.SetCardinality(elem_cnt);
@@ -223,23 +223,13 @@ void ExecuteExpression(const idx_t elem_cnt, const LambdaFunctions::ColumnInfo &
 // ListLambdaBindData
 //===--------------------------------------------------------------------===//
 
-unique_ptr<FunctionData> ListLambdaBindData::Copy() const {
-	auto lambda_expr_copy = lambda_expr ? lambda_expr->Copy() : nullptr;
-	return make_uniq<ListLambdaBindData>(return_type, std::move(lambda_expr_copy), has_index);
-}
-
-bool ListLambdaBindData::Equals(const FunctionData &other_p) const {
-	auto &other = other_p.Cast<ListLambdaBindData>();
-	return Expression::Equals(lambda_expr, other.lambda_expr) && return_type == other.return_type &&
-	       has_index == other.has_index;
-}
-
 void ListLambdaBindData::Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
                                    const ScalarFunction &) {
 	auto &bind_data = bind_data_p->Cast<ListLambdaBindData>();
 	serializer.WriteProperty(100, "return_type", bind_data.return_type);
 	serializer.WritePropertyWithDefault(101, "lambda_expr", bind_data.lambda_expr, unique_ptr<Expression>());
 	serializer.WriteProperty(102, "has_index", bind_data.has_index);
+	serializer.WritePropertyWithDefault<bool>(103, "has_initial", bind_data.has_initial, false);
 }
 
 unique_ptr<FunctionData> ListLambdaBindData::Deserialize(Deserializer &deserializer, ScalarFunction &) {
@@ -247,17 +237,33 @@ unique_ptr<FunctionData> ListLambdaBindData::Deserialize(Deserializer &deseriali
 	auto lambda_expr = deserializer.ReadPropertyWithExplicitDefault<unique_ptr<Expression>>(101, "lambda_expr",
 	                                                                                        unique_ptr<Expression>());
 	auto has_index = deserializer.ReadProperty<bool>(102, "has_index");
-	return make_uniq<ListLambdaBindData>(return_type, std::move(lambda_expr), has_index);
+	auto has_initial = deserializer.ReadPropertyWithExplicitDefault<bool>(103, "has_initial", false);
+	return make_uniq<ListLambdaBindData>(return_type, std::move(lambda_expr), has_index, has_initial);
 }
 
 //===--------------------------------------------------------------------===//
 // LambdaFunctions
 //===--------------------------------------------------------------------===//
+LogicalType LambdaFunctions::DetermineListChildType(const LogicalType &child_type) {
+	if (child_type.id() != LogicalTypeId::SQLNULL && child_type.id() != LogicalTypeId::UNKNOWN) {
+		if (child_type.id() == LogicalTypeId::ARRAY) {
+			return ArrayType::GetChildType(child_type);
+		} else if (child_type.id() == LogicalTypeId::LIST) {
+			return ListType::GetChildType(child_type);
+		}
+		throw InternalException("The first argument must be a list or array type");
+	}
 
-LogicalType LambdaFunctions::BindBinaryLambda(const idx_t parameter_idx, const LogicalType &list_child_type) {
+	return child_type;
+}
+
+LogicalType LambdaFunctions::BindBinaryChildren(const vector<LogicalType> &function_child_types,
+                                                const idx_t parameter_idx) {
+	auto list_type = DetermineListChildType(function_child_types[0]);
+
 	switch (parameter_idx) {
 	case 0:
-		return list_child_type;
+		return list_type;
 	case 1:
 		return LogicalType::BIGINT;
 	default:
@@ -265,21 +271,8 @@ LogicalType LambdaFunctions::BindBinaryLambda(const idx_t parameter_idx, const L
 	}
 }
 
-LogicalType LambdaFunctions::BindTernaryLambda(const idx_t parameter_idx, const LogicalType &list_child_type) {
-	switch (parameter_idx) {
-	case 0:
-		return list_child_type;
-	case 1:
-		return list_child_type;
-	case 2:
-		return LogicalType::BIGINT;
-	default:
-		throw BinderException("This lambda function only supports up to three lambda parameters!");
-	}
-}
-
 template <class FUNCTION_FUNCTOR>
-void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &result) {
+static void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &result) {
 
 	bool result_is_null = false;
 	LambdaFunctions::LambdaInfo info(args, state, result, result_is_null);

@@ -1,7 +1,100 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-import ctypes
 import os
+import re
+
+########################################################################
+# START VERSIONING LOGIC
+#
+# Keep this at the top of this file, before setuptools_scm is imported.
+#
+########################################################################
+
+# MAIN_BRANCH_VERSIONING default should be 'True' for main branch and feature branches
+# MAIN_BRANCH_VERSIONING default should be 'False' for release branches
+# MAIN_BRANCH_VERSIONING default value needs to keep in sync between:
+# - CMakeLists.txt
+# - scripts/amalgamation.py
+# - scripts/package_build.py
+# - tools/pythonpkg/setup.py
+MAIN_BRANCH_VERSIONING = True
+if os.getenv('MAIN_BRANCH_VERSIONING') == "0":
+    MAIN_BRANCH_VERSIONING = False
+if os.getenv('MAIN_BRANCH_VERSIONING') == "1":
+    MAIN_BRANCH_VERSIONING = True
+
+VERSION_RE = re.compile(r"^(?P<major>[0-9]+)\.(?P<minor>[0-9]+)\.(?P<patch>[0-9]+)$")
+
+
+def bump_version(base_version: str, distance: int, dirty: bool = False):
+    """Bump the version if needed."""
+    # Validate the base version (this should never include anything else than X.Y.Z)
+    base_version_match = VERSION_RE.match(base_version)
+    if not base_version_match:
+        raise ValueError(f"Incorrect version format: {base_version} (expected X.Y.Z)")
+
+    major, minor, patch = map(int, base_version_match.groups())
+
+    # Make sure distance is set correctly
+    distance = int(distance or 0)
+
+    # If we're exactly on a tag (distance = 0, dirty=False)
+    if distance == 0 and not dirty:
+        return f"{major}.{minor}.{patch}"
+
+    # Otherwise we're at a distance and / or dirty, and need to bump
+    if MAIN_BRANCH_VERSIONING:
+        return f"{major}.{minor+1}.0.dev{distance}"
+    return f"{major}.{minor}.{patch+1}.dev{distance}"
+
+
+# Here we handle getting versions from env vars. We only support a single way of
+# manually overriding the version, which is through OVERRIDE_GIT_DESCRIBE. If
+# SETUPTOOLS_SCM_PRETEND_VERSION* is set we unset it.
+SCM_PRETEND_ENV_VAR = "SETUPTOOLS_SCM_PRETEND_VERSION_FOR_DUCKDB"
+OVERRIDE_GIT_DESCRIBE_ENV_VAR = "OVERRIDE_GIT_DESCRIBE"
+OVERRIDE = os.getenv(OVERRIDE_GIT_DESCRIBE_ENV_VAR)
+
+if OVERRIDE:
+    # OVERRIDE_GIT_DESCRIBE_ENV_VAR is set, we'll put it in SCM_PRETEND_ENV_VAR_FOR_DUCKDB
+    print(f"[setup.py] Found {OVERRIDE_GIT_DESCRIBE_ENV_VAR}={OVERRIDE}")
+    DESCRIBE_RE = re.compile(
+        r"""
+        ^v(?P<tag>\d+\.\d+\.\d+)        # vX.Y.Z
+        (?:-(?P<distance>\d+))?         # optional -N
+        (?:-g(?P<hash>[0-9a-fA-F]+))?   # optional -g<sha>
+        $""",
+        re.VERBOSE,
+    )
+    match = DESCRIBE_RE.match(OVERRIDE)
+    if not match:
+        raise ValueError(f"Invalid {OVERRIDE_GIT_DESCRIBE_ENV_VAR}: {OVERRIDE}")
+
+    tag = match["tag"]
+    distance = match["distance"]
+    commit = match["hash"] and match["hash"].lower()
+
+    # If we get an override we do need to bump
+    pep440 = bump_version(tag, int(distance or 0))
+    if commit:
+        pep440 += f"+g{commit}"
+
+    os.environ[SCM_PRETEND_ENV_VAR] = pep440
+    print(f"[setup.py] Injected {SCM_PRETEND_ENV_VAR}={pep440}")
+elif SCM_PRETEND_ENV_VAR in os.environ:
+    # SCM_PRETEND_ENV_VAR is already set, but we don't allow that
+    print(f"[setup.py] WARNING: We do not support {SCM_PRETEND_ENV_VAR}! Removing.")
+    del os.environ[SCM_PRETEND_ENV_VAR]
+
+
+if "SETUPTOOLS_SCM_PRETEND_VERSION" in os.environ:
+    print(f"[setup.py] WARNING: We do not support SETUPTOOLS_SCM_PRETEND_VERSION! Removing.")
+    del os.environ["SETUPTOOLS_SCM_PRETEND_VERSION"]
+########################################################################
+# END VERSIONING LOGIC
+########################################################################
+
+import ctypes
 import platform
 import sys
 import traceback
@@ -115,7 +208,7 @@ class build_ext(CompilerLauncherMixin, _build_ext):
 
 lib_name = 'duckdb'
 
-extensions = ['core_functions', 'parquet', 'icu', 'tpch', 'json']
+extensions = ['core_functions', 'parquet', 'icu', 'json']
 
 is_android = hasattr(sys, 'getandroidapilevel')
 is_pyodide = 'PYODIDE' in os.environ
@@ -159,7 +252,16 @@ os.chdir(os.path.dirname(os.path.realpath(__file__)))
 
 if os.name == 'nt':
     # windows:
-    toolchain_args = ['/wd4244', '/wd4267', '/wd4200', '/wd26451', '/wd26495', '/D_CRT_SECURE_NO_WARNINGS', '/utf-8']
+    toolchain_args = [
+        '/wd4244',
+        '/wd4267',
+        '/wd4200',
+        '/wd26451',
+        '/wd26495',
+        '/D_CRT_SECURE_NO_WARNINGS',
+        '/D_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR',
+        '/utf-8',
+    ]
 else:
     # macos/linux
     toolchain_args = ['-std=c++11', '-g0']
@@ -377,31 +479,18 @@ spark_packages = [
 packages.extend(spark_packages)
 
 setup(
-    name=lib_name,
-    description='DuckDB in-process database',
-    keywords='DuckDB Database SQL OLAP',
-    url="https://www.duckdb.org",
-    long_description='See here for an introduction: https://duckdb.org/docs/api/python/overview',
-    license='MIT',
+    name="duckdb",  # Needed to make SETUPTOOLS_SCM_PRETEND_VERSION_FOR_DUCKDB work
     data_files=data_files,
     # NOTE: might need to be find_packages() ?
     packages=packages,
     include_package_data=True,
-    python_requires='>=3.7.0',
-    tests_require=['google-cloud-storage', 'mypy', 'pytest'],
-    classifiers=[
-        'Topic :: Database :: Database Engines/Servers',
-        'Intended Audience :: Developers',
-        'License :: OSI Approved :: MIT License',
-    ],
+    long_description="See here for an introduction: https://duckdb.org/docs/stable/clients/python/overview",
     ext_modules=[libduckdb],
-    maintainer="Hannes Muehleisen",
-    maintainer_email="hannes@cwi.nl",
-    cmdclass={"build_ext": build_ext},
-    project_urls={
-        "Documentation": "https://duckdb.org/docs/api/python/overview",
-        "Source": "https://github.com/duckdb/duckdb/blob/main/tools/pythonpkg",
-        "Issues": "https://github.com/duckdb/duckdb/issues",
-        "Changelog": "https://github.com/duckdb/duckdb/releases",
+    use_scm_version={
+        "version_scheme": lambda v: bump_version(str(v.tag), v.distance, v.dirty),
+        "root": "../..",
+        "fallback_version": "0.0.0",
+        "local_scheme": "no-local-version",
     },
+    cmdclass={"build_ext": build_ext},
 )

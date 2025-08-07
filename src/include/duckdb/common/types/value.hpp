@@ -18,6 +18,7 @@
 #include "duckdb/common/types/datetime.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/shared_ptr.hpp"
+#include "duckdb/common/insertion_order_preserving_map.hpp"
 
 namespace duckdb {
 
@@ -127,6 +128,7 @@ public:
 	DUCKDB_API static Value DATE(int32_t year, int32_t month, int32_t day);
 	//! Create a time Value from a specified time
 	DUCKDB_API static Value TIME(dtime_t time);
+	DUCKDB_API static Value TIME_NS(dtime_ns_t time);
 	DUCKDB_API static Value TIMETZ(dtime_tz_t time);
 	//! Create a time Value from a specified time
 	DUCKDB_API static Value TIME(int32_t hour, int32_t min, int32_t sec, int32_t micros);
@@ -176,7 +178,7 @@ public:
 	DUCKDB_API static Value MAP(const LogicalType &key_type, const LogicalType &value_type, vector<Value> keys,
 	                            vector<Value> values);
 	//! Create a map value from a set of key-value pairs
-	DUCKDB_API static Value MAP(const unordered_map<string, string> &kv_pairs);
+	DUCKDB_API static Value MAP(const InsertionOrderPreservingMap<string> &kv_pairs);
 
 	//! Create a union value from a selected value and a tag from a set of alternatives.
 	DUCKDB_API static Value UNION(child_list_t<LogicalType> members, uint8_t tag, Value value);
@@ -208,9 +210,6 @@ public:
 	// type of the value. Only use this if you know what you are doing.
 	template <class T>
 	T GetValueUnsafe() const;
-	//! Returns a reference to the internal value. This can only be used for primitive types.
-	template <class T>
-	T &GetReferenceUnsafe();
 
 	//! Return a copy of this value
 	Value Copy() const {
@@ -329,6 +328,7 @@ private:
 		uint64_t hash;
 		date_t date;
 		dtime_t time;
+		dtime_ns_t time_ns;
 		dtime_tz_t timetz;
 		timestamp_t timestamp;
 		timestamp_sec_t timestamp_s;
@@ -493,6 +493,8 @@ Value DUCKDB_API Value::CreateValue(date_t value);
 template <>
 Value DUCKDB_API Value::CreateValue(dtime_t value);
 template <>
+Value DUCKDB_API Value::CreateValue(dtime_ns_t value);
+template <>
 Value DUCKDB_API Value::CreateValue(dtime_tz_t value);
 template <>
 Value DUCKDB_API Value::CreateValue(timestamp_t value);
@@ -552,6 +554,8 @@ DUCKDB_API date_t Value::GetValue() const;
 template <>
 DUCKDB_API dtime_t Value::GetValue() const;
 template <>
+DUCKDB_API dtime_ns_t Value::GetValue() const;
+template <>
 DUCKDB_API dtime_tz_t Value::GetValue() const;
 template <>
 DUCKDB_API timestamp_t Value::GetValue() const;
@@ -602,6 +606,8 @@ template <>
 DUCKDB_API date_t Value::GetValueUnsafe() const;
 template <>
 DUCKDB_API dtime_t Value::GetValueUnsafe() const;
+template <>
+DUCKDB_API dtime_ns_t Value::GetValueUnsafe() const;
 template <>
 DUCKDB_API dtime_tz_t Value::GetValueUnsafe() const;
 template <>

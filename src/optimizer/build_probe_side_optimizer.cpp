@@ -3,6 +3,7 @@
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/types/row/tuple_data_layout.hpp"
+#include "duckdb/execution/ht_entry.hpp"
 #include "duckdb/planner/operator/logical_any_join.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
@@ -12,6 +13,7 @@
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/operator/logical_cross_product.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -112,7 +114,7 @@ double BuildProbeSideOptimizer::GetBuildSize(vector<LogicalType> types, const id
 	// Row width in the hash table
 	types.push_back(LogicalType::HASH);
 	auto tuple_layout = TupleDataLayout();
-	tuple_layout.Initialize(types);
+	tuple_layout.Initialize(types, TupleDataValidityType::CAN_HAVE_NULL_VALUES);
 	auto row_width = tuple_layout.GetRowWidth();
 
 	for (const auto &type : types) {
@@ -137,9 +139,9 @@ double BuildProbeSideOptimizer::GetBuildSize(vector<LogicalType> types, const id
 		});
 	}
 
-	// There is also a cost of NextPowerOfTwo(count * 2) * sizeof(data_ptr_t) per tuple in the hash table
-	// This is a not a smooth cost function, so instead we do the average, which is ~3 * sizeof(data_ptr_t)
-	row_width += 3 * sizeof(data_ptr_t);
+	// There is also a cost of NextPowerOfTwo(count * 2) * sizeof(ht_entry_t) per tuple in the hash table
+	// This is a not a smooth cost function, so instead we do the average, which is ~3 * sizeof(ht_entry_t)
+	row_width += 3 * sizeof(ht_entry_t);
 
 	return static_cast<double>(row_width * cardinality);
 }
@@ -228,8 +230,9 @@ void BuildProbeSideOptimizer::VisitOperator(LogicalOperator &op) {
 			// if the conditions have no equality, do not flip the children.
 			// There is no physical join operator (yet) that can do an inequality right_semi/anti join.
 			idx_t has_range = 0;
+			bool prefer_range_joins = DBConfig::GetSetting<PreferRangeJoinsSetting>(context);
 			if (op.type == LogicalOperatorType::LOGICAL_ANY_JOIN ||
-			    (op.Cast<LogicalComparisonJoin>().HasEquality(has_range) && !context.config.prefer_range_joins)) {
+			    (op.Cast<LogicalComparisonJoin>().HasEquality(has_range) && !prefer_range_joins)) {
 				TryFlipJoinChildren(join);
 			}
 			break;

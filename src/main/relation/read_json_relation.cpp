@@ -1,6 +1,6 @@
 #include "duckdb/main/relation/read_json_relation.hpp"
 #include "duckdb/parser/column_definition.hpp"
-#include "duckdb/common/multi_file_reader.hpp"
+#include "duckdb/common/multi_file/multi_file_reader.hpp"
 
 namespace duckdb {
 

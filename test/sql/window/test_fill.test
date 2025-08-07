@@ -1,0 +1,432 @@
+# name: test/sql/window/test_fill.test
+# description: Test Fill function
+# group: [window]
+
+#
+# Error checks
+#
+
+# Only one ordering allowed
+statement error
+select fill(i) over (order by i, 10-i) from range(3) tbl(i);
+----
+FILL functions must have only one ORDER BY expression
+
+# Streaming not supported because the interpolation values might be too far away.
+statement error
+select fill(i) over () from range(3) tbl(i);
+----
+FILL functions must have only one ORDER BY expression
+
+# Argument must be numeric
+statement error
+select fill(i::VARCHAR) over (order by i) from range(3) tbl(i);
+----
+FILL argument must support subtraction
+
+# Ordering must be numeric
+statement error
+select fill(i) over (order by i::VARCHAR) from range(3) tbl(i);
+----
+FILL ordering must support subtraction
+
+#
+# Simple interpolation coverage tests
+#
+
+foreach ordertype tinyint smallint integer bigint hugeint float double utinyint usmallint uinteger ubigint uhugeint
+
+foreach filltype tinyint smallint integer bigint hugeint float double utinyint usmallint uinteger ubigint uhugeint
+
+loop nulled 0 3
+
+# Between, before and after
+query II
+select 
+	i,
+	fill(if(i = ${nulled}, NULL, i)::${filltype}) over(order by i::${ordertype}) as f
+from range(3) tbl(i)
+qualify i is distinct from f
+----
+
+endloop
+
+# Single values
+query II
+select 
+	i,
+	fill(if(i > 0, NULL, i)::${filltype}) over(order by i::${ordertype}) as f
+from range(3) tbl(i)
+qualify f is distinct from 0
+----
+
+# No values in partition
+query II
+select 
+	i,
+	fill(if(i < 4, NULL, i)::${filltype}) over(partition by i // 2 order by i::${ordertype}) f
+from range(8) tbl(i)
+order by i
+----
+0	NULL
+1	NULL
+2	NULL
+3	NULL
+4	4
+5	5
+6	6
+7	7
+
+# Outside valid sort values
+query II
+select 
+	i,
+	fill(if(i = 2, NULL, i)::${filltype}) over(order by if(i < 4, NULL, i)::${ordertype}) f
+from range(8) tbl(i)
+qualify i is distinct from f
+order by i
+----
+2	NULL
+
+foreach sense asc desc
+
+foreach nulls first last
+
+# NULL sort key coverage
+query II
+select 
+	i,
+	fill(i::${filltype}) over(order by i::${ordertype} ${sense} nulls ${nulls}) f
+from (
+	from range(3) r(i)
+	union all
+	select NULL as i
+) tbl(i)
+qualify i is distinct from f
+order by i
+----
+
+endloop
+
+endloop
+
+endloop
+
+endloop
+
+foreach ordertype smallint integer bigint hugeint float double usmallint uinteger ubigint uhugeint
+
+foreach filltype smallint integer bigint hugeint float double usmallint uinteger ubigint uhugeint
+
+# Previous in another chunk
+query II
+select 
+	i,
+	fill(if(i = 2048, NULL, i)::${filltype}) over(order by i::${ordertype}) f
+from range(2060) tbl(i)
+qualify i <> f
+----
+
+endloop
+
+endloop
+
+#
+# Temporal coverage
+#
+
+foreach ordertype date timestamp timestamptz
+
+foreach filltype date timestamp timestamptz
+
+loop nulled 1 4
+
+# Before, Between and After  values
+query II
+select 
+	i,
+	fill(if(day(i) = ${nulled}, NULL, i)::${filltype}) over(order by i::${ordertype}) f
+from range('2025-01-01'::DATE, '2025-01-04'::DATE, INTERVAL 1 DAY) tbl(i)
+qualify f <> i
+----
+
+endloop
+
+foreach sense asc desc
+
+foreach nulls first last
+
+# NULL sort key coverage
+query II
+select 
+	i,
+	fill(i::${filltype}) over(order by i::${ordertype} ${sense} nulls ${nulls}) f
+from (
+	from range('2025-01-01'::DATE, '2025-01-04'::DATE, INTERVAL 1 DAY) r(i)
+	union all
+	select NULL as i
+) tbl(i)
+qualify i is distinct from f
+order by i
+----
+
+endloop
+
+endloop
+
+# Single values
+query II
+select 
+	i,
+	fill(if(day(i) > 1, NULL, i)::${filltype}) over(order by i::${ordertype}) f
+from range('2025-01-01'::DATE, '2025-01-04'::DATE, INTERVAL 1 DAY) tbl(i)
+qualify f <> '2025-01-01'::DATE
+----
+
+# No values in partition
+query II
+select 
+	i,
+	fill(if(day(i) < 5, NULL, i)::${filltype}) over(partition by (day(i) - 1) // 2 order by i::${ordertype}) f
+from range('2025-01-01'::DATE, '2025-01-09'::DATE, INTERVAL 1 DAY) tbl(i)
+qualify f is NULL
+order by i
+----
+2025-01-01 00:00:00	NULL
+2025-01-02 00:00:00	NULL
+2025-01-03 00:00:00	NULL
+2025-01-04 00:00:00	NULL
+
+# Outside valid sort values
+query II
+select 
+	i,
+	fill(if(day(i) = 3, NULL, i)::${filltype}) over(order by if(day(i) < 5, NULL, i)::${ordertype}) f
+from range('2025-01-01'::DATE, '2025-01-09'::DATE, INTERVAL 1 DAY) tbl(i)
+qualify i is distinct from f
+order by i
+----
+2025-01-03 00:00:00	NULL
+
+# Previous in another chunk
+query II
+select 
+	i,
+	fill(if(i = '2015-01-01'::DATE + 2048, NULL, i)::${filltype}) over(order by i::${ordertype}) f
+from range('2025-01-01'::DATE, '2020-08-22'::DATE, INTERVAL 1 DAY) tbl(i)
+qualify i <> f
+----
+
+endloop
+
+endloop
+
+# Time
+
+loop nulled 1 4
+
+# Before, Between and After values
+query II
+select 
+	i::TIME t,
+	fill(if(minute(i) = ${nulled}, NULL, i)::TIME) over(order by i::TIME) f
+from range('2025-01-01'::TIMESTAMP, '2025-01-01 00:03'::TIMESTAMP, INTERVAL 1 MINUTE) tbl(i)
+qualify f <> t
+----
+
+endloop
+
+foreach sense asc desc
+
+foreach nulls first last
+
+# NULL sort key coverage
+query II
+select 
+	i::TIME t,
+	fill(t) over(order by t ${sense} nulls ${nulls}) f
+from (
+	from range('2025-01-01'::TIMESTAMP, '2025-01-01 00:03'::TIMESTAMP, INTERVAL 1 MINUTE) r(i)
+	union all
+	select NULL as i
+) tbl(i)
+qualify t is distinct from f
+order by t
+----
+
+endloop
+
+endloop
+
+# Single values
+query II
+select 
+	i::TIME t,
+	fill(if(minute(i) > 0, NULL, i)::TIME) over(order by i::TIME) f
+from range('2025-01-01'::TIMESTAMP, '2025-01-01 00:03'::TIMESTAMP, INTERVAL 1 MINUTE) tbl(i)
+qualify f <> '00:00:00'::TIME
+----
+
+# No values in partition
+query II
+select 
+	i::TIME t,
+	fill(if(minute(i) < 4, NULL, i)::TIME) over(partition by minute(i) // 2 order by i::TIME) f
+from range('2025-01-01'::TIMESTAMP, '2025-01-01 00:09'::TIMESTAMP, INTERVAL 1 MINUTE) tbl(i)
+qualify f is not NULL
+order by t
+----
+00:04:00	00:04:00
+00:05:00	00:05:00
+00:06:00	00:06:00
+00:07:00	00:07:00
+00:08:00	00:08:00
+
+# Outside valid sort values
+query II
+select 
+	i::TIME t,
+	fill(if(minute(i) = 3, NULL, i)::TIME) over(order by if(minute(i) < 4, NULL, i)::TIME) f
+from range('2025-01-01'::TIMESTAMP, '2025-01-01 00:09'::TIMESTAMP, INTERVAL 1 MINUTE) tbl(i)
+qualify t is distinct from f
+order by t
+----
+00:03:00	NULL
+
+# Previous in another chunk
+query II
+select 
+	i::TIME t,
+	fill(if(i = '2015-01-01'::TIMESTAMP + INTERVAL 2048 SECOND, NULL, i)::TIME) over(order by i::TIME) f
+from range('2025-01-01'::TIMESTAMP, '2025-01-01 00:34:20'::TIMESTAMP, INTERVAL 1 SECOND) tbl(i)
+qualify t <> f
+----
+
+#
+# Extrapolation failures
+#
+
+# Signed
+query II
+with source as (
+	select 
+		i, 
+		if(i = -129, NULL, i)::TINYINT as missing
+	from range(-129, -120) tbl(i)
+)
+select
+	i,
+	fill(missing) over (order by i) as filled
+from source
+qualify filled is distinct from i
+----
+-129	NULL
+
+query II
+with source as (
+	select 
+		i, 
+		if(i = 128, NULL, i)::TINYINT as missing
+	from range(120, 129) tbl(i)
+)
+select
+	i,
+	fill(missing) over (order by i) as filled
+from source
+qualify filled is distinct from i
+----
+128	NULL
+
+# Unsigned
+query II
+with source as (
+	select 
+		i, 
+		if(i = -1, NULL, i)::UTINYINT as missing
+	from range(-1, 10) tbl(i)
+)
+select
+	i,
+	fill(missing) over (order by i) as filled
+from source
+qualify filled is distinct from i
+----
+-1	NULL
+
+query II
+with source as (
+	select 
+		i, 
+		if(i = 256, NULL, i)::UTINYINT as missing
+	from range(250, 257) tbl(i)
+)
+select
+	i,
+	fill(missing) over (order by i) as filled
+from source
+qualify filled is distinct from i
+----
+256	NULL
+
+#
+# Unusable values
+#
+# If we use an unsuable value, the interpolation will produce strange values
+
+# Infinity/NaN
+
+foreach ordertype float double
+
+foreach unusable 'infinity' '-infinity' 'NaN'
+
+loop nullable 0 5
+
+query II
+select 
+	i,
+	fill(if(i = ${nullable}, NULL, i)) over(order by i) f
+from (
+	from range(5) r(i)
+	union all
+	select ${unusable}::${ordertype} as i
+) tbl(i)
+qualify i is distinct from f
+order by i
+----
+
+endloop
+
+endloop
+
+endloop
+
+# Temporal infinities
+
+foreach ordertype date timestamp
+
+foreach filltype date timestamp
+
+foreach unusable 'infinity' '-infinity'
+
+loop nulled 1 4
+
+query II
+select 
+	i,
+	fill(if(day(i) = ${nulled}, NULL, i)::${filltype}) over(order by i::${ordertype}) f
+from (
+	from range('2025-01-01'::DATE, '2025-01-05'::DATE, INTERVAL 1 DAY) r(i)
+	union all
+	select ${unusable}::${ordertype} as i
+) tbl(i)
+qualify f is NULL
+order by i
+----
+
+endloop
+
+endloop
+
+endloop
+
+endloop

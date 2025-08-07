@@ -4,22 +4,11 @@
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/uhugeint.hpp"
-#include "duckdb/common/fast_mem.hpp"
 
 #include <functional>
 #include <cmath>
 
 namespace duckdb {
-
-template <>
-hash_t Hash(uint64_t val) {
-	return MurmurHash64(val);
-}
-
-template <>
-hash_t Hash(int64_t val) {
-	return MurmurHash64((uint64_t)val);
-}
 
 template <>
 hash_t Hash(hugeint_t val) {
@@ -76,6 +65,43 @@ hash_t Hash(const char *str) {
 	return Hash(str, strlen(str));
 }
 
+template <bool AT_LEAST_8_BYTES = false>
+hash_t HashBytes(const_data_ptr_t ptr, const idx_t len) noexcept {
+	// This seed slightly improves bit distribution, taken from here:
+	// https://github.com/martinus/robin-hood-hashing/blob/3.11.5/LICENSE
+	// MIT License Copyright (c) 2018-2021 Martin Ankerl
+	hash_t h = 0xe17a1465U ^ (len * 0xc6a4a7935bd1e995U);
+
+	// Hash/combine in blocks of 8 bytes
+	const auto remainder = len & 7U;
+	for (const auto end = ptr + len - remainder; ptr != end; ptr += 8U) {
+		h ^= Load<hash_t>(ptr);
+		h *= 0xd6e8feb86659fd93U;
+	}
+
+	if (remainder != 0) {
+		if (AT_LEAST_8_BYTES) {
+			D_ASSERT(len >= 8);
+			// Load remaining (<8) bytes (with a Load instead of a memcpy)
+			const auto inv_rem = 8U - remainder;
+			const auto hr = Load<hash_t>(ptr - inv_rem) >> (inv_rem * 8U);
+
+			h ^= hr;
+			h *= 0xd6e8feb86659fd93U;
+		} else {
+			// Load remaining (<8) bytes (with a memcpy)
+			hash_t hr = 0;
+			memcpy(&hr, ptr, remainder);
+
+			h ^= hr;
+			h *= 0xd6e8feb86659fd93U;
+		}
+	}
+
+	// Finalize
+	return Hash(h);
+}
+
 template <>
 hash_t Hash(string_t val) {
 	// If the string is inlined, we can do a branchless hash
@@ -86,62 +112,36 @@ hash_t Hash(string_t val) {
 		hash_t h = 0xe17a1465U ^ (val.GetSize() * 0xc6a4a7935bd1e995U);
 
 		// Hash/combine the first 8-byte block
-		const bool not_an_empty_string = !val.Empty();
-		h ^= Load<hash_t>(const_data_ptr_cast(val.GetPrefix()));
-		h *= 0xd6e8feb86659fd93U * not_an_empty_string + (1 - not_an_empty_string);
+		if (!val.Empty()) {
+			h ^= Load<hash_t>(const_data_ptr_cast(val.GetPrefix()));
+			h *= 0xd6e8feb86659fd93U;
+		}
 
 		// Load remaining 4 bytes
-		hash_t hr = 0;
-		memcpy(&hr, const_data_ptr_cast(val.GetPrefix()) + sizeof(hash_t), 4U);
+		if (val.GetSize() > sizeof(hash_t)) {
+			hash_t hr = 0;
+			memcpy(&hr, const_data_ptr_cast(val.GetPrefix()) + sizeof(hash_t), 4U);
 
-		// Process the remainder the same an 8-byte block
-		// This operation is a NOP if the string is <= 8 bytes
-		const bool not_a_nop = val.GetSize() > sizeof(hash_t);
-		h ^= hr;
-		h *= 0xd6e8feb86659fd93U * not_a_nop + (1 - not_a_nop);
+			h ^= hr;
+			h *= 0xd6e8feb86659fd93U;
+		}
 
 		// Finalize
 		h = Hash(h);
 
 		// This is just an optimization. It should not change the result
 		// This property is important for verification (e.g., DUCKDB_DEBUG_NO_INLINE)
-		// We achieved this with the NOP trick above (and in HashBytes)
 		D_ASSERT(h == Hash(val.GetData(), val.GetSize()));
 
 		return h;
 	}
-	return Hash(val.GetData(), val.GetSize());
+	// Required for DUCKDB_DEBUG_NO_INLINE
+	return HashBytes<string_t::INLINE_LENGTH >= sizeof(hash_t)>(const_data_ptr_cast(val.GetData()), val.GetSize());
 }
 
 template <>
 hash_t Hash(char *val) {
 	return Hash<const char *>(val);
-}
-
-hash_t HashBytes(const_data_ptr_t ptr, const idx_t len) noexcept {
-	// This seed slightly improves bit distribution, taken from here:
-	// https://github.com/martinus/robin-hood-hashing/blob/3.11.5/LICENSE
-	// MIT License Copyright (c) 2018-2021 Martin Ankerl
-	hash_t h = 0xe17a1465U ^ (len * 0xc6a4a7935bd1e995U);
-
-	// Hash/combine in blocks of 8 bytes
-	for (const auto end = ptr + len - (len & 7U); ptr != end; ptr += 8U) {
-		h ^= Load<hash_t>(ptr);
-		h *= 0xd6e8feb86659fd93U;
-	}
-
-	// Load remaining (<8) bytes
-	hash_t hr = 0;
-	memcpy(&hr, ptr, len & 7U);
-
-	// Process the remainder same as an 8-byte block
-	// This operation is a NOP if the number of remaining bytes is 0
-	const bool not_a_nop = len & 7U;
-	h ^= hr;
-	h *= 0xd6e8feb86659fd93U * not_a_nop + (1 - not_a_nop);
-
-	// Finalize
-	return Hash(h);
 }
 
 hash_t Hash(const char *val, size_t size) {

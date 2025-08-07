@@ -14,21 +14,19 @@
 
 namespace duckdb {
 
-PhysicalBatchInsert::PhysicalBatchInsert(vector<LogicalType> types_p, TableCatalogEntry &table,
-                                         physical_index_vector_t<idx_t> column_index_map_p,
-                                         vector<unique_ptr<Expression>> bound_defaults_p,
+PhysicalBatchInsert::PhysicalBatchInsert(PhysicalPlan &physical_plan, vector<LogicalType> types_p,
+                                         TableCatalogEntry &table,
                                          vector<unique_ptr<BoundConstraint>> bound_constraints_p,
                                          idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::BATCH_INSERT, std::move(types_p), estimated_cardinality),
-      column_index_map(std::move(column_index_map_p)), insert_table(&table), insert_types(table.GetTypes()),
-      bound_defaults(std::move(bound_defaults_p)), bound_constraints(std::move(bound_constraints_p)) {
+    : PhysicalOperator(physical_plan, PhysicalOperatorType::BATCH_INSERT, std::move(types_p), estimated_cardinality),
+      insert_table(&table), insert_types(table.GetTypes()), bound_constraints(std::move(bound_constraints_p)) {
 }
 
-PhysicalBatchInsert::PhysicalBatchInsert(LogicalOperator &op, SchemaCatalogEntry &schema,
+PhysicalBatchInsert::PhysicalBatchInsert(PhysicalPlan &physical_plan, LogicalOperator &op, SchemaCatalogEntry &schema,
                                          unique_ptr<BoundCreateTableInfo> info_p, idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::BATCH_CREATE_TABLE_AS, op.types, estimated_cardinality),
+    : PhysicalOperator(physical_plan, PhysicalOperatorType::BATCH_CREATE_TABLE_AS, op.types, estimated_cardinality),
       insert_table(nullptr), schema(&schema), info(std::move(info_p)) {
-	PhysicalInsert::GetInsertInfo(*info, insert_types, bound_defaults);
+	PhysicalInsert::GetInsertInfo(*info, insert_types);
 }
 
 //===--------------------------------------------------------------------===//
@@ -152,6 +150,7 @@ public:
 	    : memory_manager(context, minimum_memory_per_thread), table(table), insert_count(0),
 	      optimistically_written(false), minimum_memory_per_thread(minimum_memory_per_thread) {
 		row_group_size = table.GetStorage().GetRowGroupSize();
+		table.GetStorage().BindIndexes(context);
 	}
 
 	BatchMemoryManager memory_manager;
@@ -182,15 +181,11 @@ public:
 
 class BatchInsertLocalState : public LocalSinkState {
 public:
-	BatchInsertLocalState(ClientContext &context, const vector<LogicalType> &types,
-	                      const vector<unique_ptr<Expression>> &bound_defaults)
-	    : default_executor(context, bound_defaults), collection_index(DConstants::INVALID_INDEX) {
-		insert_chunk.Initialize(Allocator::Get(context), types);
+	BatchInsertLocalState(ClientContext &context, const vector<LogicalType> &types)
+	    : collection_index(DConstants::INVALID_INDEX) {
 	}
 
-	DataChunk insert_chunk;
-	ExpressionExecutor default_executor;
-	idx_t current_index;
+	idx_t current_index = 0;
 	TableAppendState current_append_state;
 	PhysicalIndex collection_index;
 	unique_ptr<OptimisticDataWriter> optimistic_writer;
@@ -231,7 +226,7 @@ public:
 
 		// Merge the collections.
 		if (!l_state.optimistic_writer) {
-			l_state.optimistic_writer = make_uniq<OptimisticDataWriter>(g_state.table.GetStorage());
+			l_state.optimistic_writer = make_uniq<OptimisticDataWriter>(context, g_state.table.GetStorage());
 		}
 		auto result_collection_index = g_state.MergeCollections(context, merge_collections, *l_state.optimistic_writer);
 		merge_collections.clear();
@@ -433,7 +428,7 @@ unique_ptr<GlobalSinkState> PhysicalBatchInsert::GetGlobalSinkState(ClientContex
 }
 
 unique_ptr<LocalSinkState> PhysicalBatchInsert::GetLocalSinkState(ExecutionContext &context) const {
-	return make_uniq<BatchInsertLocalState>(context.client, insert_types, bound_defaults);
+	return make_uniq<BatchInsertLocalState>(context.client, insert_types);
 }
 
 //===--------------------------------------------------------------------===//
@@ -498,13 +493,14 @@ SinkNextBatchType PhysicalBatchInsert::NextBatch(ExecutionContext &context, Oper
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
-SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
+SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, DataChunk &insert_chunk,
+                                         OperatorSinkInput &input) const {
 	auto &gstate = input.global_state.Cast<BatchInsertGlobalState>();
 	auto &lstate = input.local_state.Cast<BatchInsertLocalState>();
 	auto &memory_manager = gstate.memory_manager;
 
 	auto &table = gstate.table;
-	PhysicalInsert::ResolveDefaults(table, chunk, column_index_map, lstate.default_executor, lstate.insert_chunk);
+	insert_chunk.Flatten();
 
 	auto batch_index = lstate.partition_info.batch_index.GetIndex();
 	// check if we should process this batch
@@ -531,7 +527,7 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, DataChunk &c
 		// no collection yet: create a new one
 		lstate.CreateNewCollection(context.client, table, insert_types);
 		if (!lstate.optimistic_writer) {
-			lstate.optimistic_writer = make_uniq<OptimisticDataWriter>(table.GetStorage());
+			lstate.optimistic_writer = make_uniq<OptimisticDataWriter>(context.client, table.GetStorage());
 		}
 	}
 
@@ -542,11 +538,15 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, DataChunk &c
 	if (!lstate.constraint_state) {
 		lstate.constraint_state = table.GetStorage().InitializeConstraintState(table, bound_constraints);
 	}
+
 	auto &storage = table.GetStorage();
-	storage.VerifyAppendConstraints(*lstate.constraint_state, context.client, lstate.insert_chunk, nullptr, nullptr);
+	auto &local_storage = LocalStorage::Get(context.client, storage.db);
+	auto local_table_storage = local_storage.GetStorage(table.GetStorage());
+	storage.VerifyAppendConstraints(*lstate.constraint_state, context.client, insert_chunk, local_table_storage,
+	                                nullptr);
 
 	auto &collection = table.GetStorage().GetOptimisticCollection(context.client, lstate.collection_index);
-	auto new_row_group = collection.Append(lstate.insert_chunk, lstate.current_append_state);
+	auto new_row_group = collection.Append(insert_chunk, lstate.current_append_state);
 	if (new_row_group) {
 		// we have already written to disk - flush the next row group as well
 		lstate.optimistic_writer->WriteNewRowGroup(collection);
@@ -637,7 +637,7 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 		// now that we have created all of the mergers, perform the actual merging
 		vector<PhysicalIndex> final_collections;
 		final_collections.reserve(mergers.size());
-		auto writer = make_uniq<OptimisticDataWriter>(data_table);
+		auto writer = make_uniq<OptimisticDataWriter>(context, data_table);
 		for (auto &merger : mergers) {
 			final_collections.push_back(merger->Flush(*writer));
 		}
@@ -651,6 +651,7 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 
 		auto &optimistic_writer = data_table.GetOptimisticWriter(context);
 		optimistic_writer.Merge(*writer);
+		optimistic_writer.FinalFlush();
 		memory_manager.FinalCheck();
 		return SinkFinalizeType::READY;
 	}

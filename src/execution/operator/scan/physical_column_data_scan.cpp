@@ -8,16 +8,18 @@
 
 namespace duckdb {
 
-PhysicalColumnDataScan::PhysicalColumnDataScan(vector<LogicalType> types, PhysicalOperatorType op_type,
-                                               idx_t estimated_cardinality,
+PhysicalColumnDataScan::PhysicalColumnDataScan(PhysicalPlan &physical_plan, vector<LogicalType> types,
+                                               PhysicalOperatorType op_type, idx_t estimated_cardinality,
                                                optionally_owned_ptr<ColumnDataCollection> collection_p)
-    : PhysicalOperator(op_type, std::move(types), estimated_cardinality), collection(std::move(collection_p)),
-      cte_index(DConstants::INVALID_INDEX) {
+    : PhysicalOperator(physical_plan, op_type, std::move(types), estimated_cardinality),
+      collection(std::move(collection_p)), cte_index(DConstants::INVALID_INDEX) {
 }
 
-PhysicalColumnDataScan::PhysicalColumnDataScan(vector<LogicalType> types, PhysicalOperatorType op_type,
-                                               idx_t estimated_cardinality, idx_t cte_index)
-    : PhysicalOperator(op_type, std::move(types), estimated_cardinality), collection(nullptr), cte_index(cte_index) {
+PhysicalColumnDataScan::PhysicalColumnDataScan(PhysicalPlan &physical_plan, vector<LogicalType> types,
+                                               PhysicalOperatorType op_type, idx_t estimated_cardinality,
+                                               idx_t cte_index)
+    : PhysicalOperator(physical_plan, op_type, std::move(types), estimated_cardinality), collection(nullptr),
+      cte_index(cte_index) {
 }
 
 class PhysicalColumnDataGlobalScanState : public GlobalSourceState {
@@ -78,7 +80,7 @@ void PhysicalColumnDataScan::BuildPipelines(Pipeline &current, MetaPipeline &met
 		         delim_sink->type == PhysicalOperatorType::RIGHT_DELIM_JOIN);
 		auto &delim_join = delim_sink->Cast<PhysicalDelimJoin>();
 		current.AddDependency(delim_dependency);
-		state.SetPipelineSource(current, delim_join.distinct->Cast<PhysicalOperator>());
+		state.SetPipelineSource(current, delim_join.distinct.Cast<PhysicalOperator>());
 		return;
 	}
 	case PhysicalOperatorType::CTE_SCAN: {
@@ -95,6 +97,7 @@ void PhysicalColumnDataScan::BuildPipelines(Pipeline &current, MetaPipeline &met
 		state.SetPipelineSource(current, *this);
 		return;
 	}
+	case PhysicalOperatorType::RECURSIVE_RECURRING_CTE_SCAN:
 	case PhysicalOperatorType::RECURSIVE_CTE_SCAN:
 		if (!meta_pipeline.HasRecursiveCTE()) {
 			throw InternalException("Recursive CTE scan found without recursive CTE node");
@@ -115,6 +118,7 @@ InsertionOrderPreservingMap<string> PhysicalColumnDataScan::ParamsToString() con
 			result["Delim Index"] = StringUtil::Format("%llu", delim_index.GetIndex());
 		}
 		break;
+	case PhysicalOperatorType::RECURSIVE_RECURRING_CTE_SCAN:
 	case PhysicalOperatorType::CTE_SCAN:
 	case PhysicalOperatorType::RECURSIVE_CTE_SCAN: {
 		result["CTE Index"] = StringUtil::Format("%llu", cte_index);

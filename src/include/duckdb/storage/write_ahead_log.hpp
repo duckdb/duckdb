@@ -69,6 +69,9 @@ public:
 
 	void WriteVersion();
 
+	//! Determines if WAL should be encrypted
+	bool IsEncrypted() const;
+
 	virtual void WriteCreateTable(const TableCatalogEntry &entry);
 	void WriteDropTable(const TableCatalogEntry &entry);
 

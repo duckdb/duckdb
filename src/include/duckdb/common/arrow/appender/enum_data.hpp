@@ -1,7 +1,16 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/common/arrow/appender/enum_data.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
 #pragma once
 
 #include "duckdb/common/arrow/appender/append_data.hpp"
 #include "duckdb/common/arrow/appender/scalar_data.hpp"
+#include "duckdb/common/arrow/arrow_appender.hpp"
 
 namespace duckdb {
 
@@ -26,7 +35,7 @@ struct ArrowEnumData : public ArrowScalarBaseData<TGT> {
 		auto &main_buffer = append_data.GetMainBuffer();
 		auto &aux_buffer = append_data.GetAuxBuffer();
 		// resize the validity mask and set up the validity buffer for iteration
-		ResizeValidity(append_data.GetValidityBuffer(), append_data.row_count + size);
+		ArrowAppendData::ResizeValidity(append_data.GetValidityBuffer(), append_data.row_count + size);
 
 		// resize the offset buffer - the offset buffer holds the offsets into the child array
 		main_buffer.resize(main_buffer.size() + sizeof(int32_t) * (size + 1));

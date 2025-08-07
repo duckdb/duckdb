@@ -2,8 +2,6 @@
 # description: Verify internal schemas are not duplicated in the main schema when reading older databases
 # group: [bc]
 
-require skip_reload
-
 # The database is written with a vector size of 2048.
 require vector_size 2048
 

@@ -1,0 +1,59 @@
+# name: test/sql/storage/external_file_cache/external_file_cache_parquet_tpcds.test_slow
+# description: Test TPC-DS SF1 with Parquet (forced external file cache)
+# group: [external_file_cache]
+
+require tpcds
+
+require parquet
+
+# for now, caching is only triggered when prefetching (mainly used for remote files), so let's force it
+statement ok
+set prefetch_all_parquet_files=true;
+
+# generate TPC-H in a schema and export to Parquet before dropping the schema again
+statement ok
+CREATE SCHEMA tpcds;
+
+statement ok
+CALL dsdgen(sf=1, schema='tpcds');
+
+foreach tpcds_tbl call_center household_demographics store_returns catalog_page income_band store_sales catalog_returns inventory time_dim catalog_sales item warehouse customer promotion web_page customer_address reason web_returns customer_demographics ship_mode web_sales date_dim store web_site
+
+statement ok
+COPY tpcds.${tpcds_tbl} TO '__TEST_DIR__/efc_${tpcds_tbl}.parquet';
+
+endloop
+
+statement ok
+DROP SCHEMA tpcds CASCADE;
+
+# we require that the last modified time is more than 10 seconds in the past
+# otherwise, we run into problems with file systems with low time resolution for last modified time
+sleep 11 seconds
+
+# load the schema as views
+foreach tpcds_tbl call_center household_demographics store_returns catalog_page income_band store_sales catalog_returns inventory time_dim catalog_sales item warehouse customer promotion web_page customer_address reason web_returns customer_demographics ship_mode web_sales date_dim store web_site
+
+statement ok
+CREATE VIEW ${tpcds_tbl} AS FROM read_parquet('__TEST_DIR__/efc_${tpcds_tbl}.parquet');
+
+endloop
+
+# run the benchmark
+loop i 1 9
+
+query I
+PRAGMA tpcds(${i})
+----
+<FILE>:extension/tpcds/dsdgen/answers/sf1/0${i}.csv
+
+endloop
+
+loop i 10 100
+
+query I
+PRAGMA tpcds(${i})
+----
+<FILE>:extension/tpcds/dsdgen/answers/sf1/${i}.csv
+
+endloop

@@ -2,8 +2,6 @@
 # description: Issue #7567 - Setting the current schema should not change the current database
 # group: [attach]
 
-require noforcestorage
-
 statement ok
 attach ':memory:' as test;
 

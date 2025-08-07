@@ -67,7 +67,7 @@ public:
 	inline static uhugeint_t Multiply(uhugeint_t lhs, uhugeint_t rhs) {
 		uhugeint_t result;
 		if (!TryMultiply(lhs, rhs, result)) {
-			throw OutOfRangeException("Overflow in UHUGEINT multiplication!: %s + %s", lhs.ToString(), rhs.ToString());
+			throw OutOfRangeException("Overflow in UHUGEINT multiplication: %s * %s", lhs.ToString(), rhs.ToString());
 		}
 		return result;
 	}
@@ -78,7 +78,7 @@ public:
 	inline static uhugeint_t Divide(uhugeint_t lhs, uhugeint_t rhs) {
 		// division between two same-size unsigned integers can only go wrong with division by zero
 		if (rhs == 0) {
-			throw OutOfRangeException("Division of UHUGEINT by zero!");
+			throw OutOfRangeException("Division of UHUGEINT by zero: %s / %s", lhs.ToString(), rhs.ToString());
 		}
 		return Divide<false>(lhs, rhs);
 	}
@@ -86,7 +86,7 @@ public:
 	template <bool CHECK_OVERFLOW = true>
 	inline static uhugeint_t Modulo(uhugeint_t lhs, uhugeint_t rhs) {
 		if (rhs == 0) {
-			throw OutOfRangeException("Modulo of UHUGEINT by zero!");
+			throw OutOfRangeException("Modulo of UHUGEINT by zero: %s %% %s", lhs.ToString(), rhs.ToString());
 		}
 		return Modulo<false>(lhs, rhs);
 	}
@@ -106,7 +106,7 @@ public:
 	template <bool CHECK_OVERFLOW = true>
 	inline static uhugeint_t Subtract(uhugeint_t lhs, uhugeint_t rhs) {
 		if (!TrySubtractInPlace(lhs, rhs)) {
-			throw OutOfRangeException("Underflow in HUGEINT addition: %s - %s", lhs.ToString(), rhs.ToString());
+			throw OutOfRangeException("Underflow in HUGEINT subtraction: %s - %s", lhs.ToString(), rhs.ToString());
 		}
 		return lhs;
 	}
@@ -118,49 +118,46 @@ public:
 	static hugeint_t Abs(hugeint_t n);
 
 	// comparison operators
-	// note that everywhere here we intentionally use bitwise ops
-	// this is because they seem to be consistently much faster (benchmarked on a Macbook Pro)
 	static bool Equals(uhugeint_t lhs, uhugeint_t rhs) {
-		int lower_equals = lhs.lower == rhs.lower;
-		int upper_equals = lhs.upper == rhs.upper;
-		return lower_equals & upper_equals;
+		bool lower_equals = lhs.lower == rhs.lower;
+		bool upper_equals = lhs.upper == rhs.upper;
+		return lower_equals && upper_equals;
 	}
 
 	static bool NotEquals(uhugeint_t lhs, uhugeint_t rhs) {
-		int lower_not_equals = lhs.lower != rhs.lower;
-		int upper_not_equals = lhs.upper != rhs.upper;
-		return lower_not_equals | upper_not_equals;
+		return !Equals(lhs, rhs);
 	}
 
 	static bool GreaterThan(uhugeint_t lhs, uhugeint_t rhs) {
-		int upper_bigger = lhs.upper > rhs.upper;
-		int upper_equal = lhs.upper == rhs.upper;
-		int lower_bigger = lhs.lower > rhs.lower;
-		return upper_bigger | (upper_equal & lower_bigger);
+		bool upper_bigger = lhs.upper > rhs.upper;
+		bool upper_equal = lhs.upper == rhs.upper;
+		bool lower_bigger = lhs.lower > rhs.lower;
+		return upper_bigger || (upper_equal && lower_bigger);
 	}
 
 	static bool GreaterThanEquals(uhugeint_t lhs, uhugeint_t rhs) {
-		int upper_bigger = lhs.upper > rhs.upper;
-		int upper_equal = lhs.upper == rhs.upper;
-		int lower_bigger_equals = lhs.lower >= rhs.lower;
-		return upper_bigger | (upper_equal & lower_bigger_equals);
+		bool upper_bigger = lhs.upper > rhs.upper;
+		bool upper_equal = lhs.upper == rhs.upper;
+		bool lower_bigger_equals = lhs.lower >= rhs.lower;
+		return upper_bigger || (upper_equal && lower_bigger_equals);
 	}
 
 	static bool LessThan(uhugeint_t lhs, uhugeint_t rhs) {
-		int upper_smaller = lhs.upper < rhs.upper;
-		int upper_equal = lhs.upper == rhs.upper;
-		int lower_smaller = lhs.lower < rhs.lower;
-		return upper_smaller | (upper_equal & lower_smaller);
+		bool upper_smaller = lhs.upper < rhs.upper;
+		bool upper_equal = lhs.upper == rhs.upper;
+		bool lower_smaller = lhs.lower < rhs.lower;
+		return upper_smaller || (upper_equal && lower_smaller);
 	}
 
 	static bool LessThanEquals(uhugeint_t lhs, uhugeint_t rhs) {
-		int upper_smaller = lhs.upper < rhs.upper;
-		int upper_equal = lhs.upper == rhs.upper;
-		int lower_smaller_equals = lhs.lower <= rhs.lower;
-		return upper_smaller | (upper_equal & lower_smaller_equals);
+		bool upper_smaller = lhs.upper < rhs.upper;
+		bool upper_equal = lhs.upper == rhs.upper;
+		bool lower_smaller_equals = lhs.lower <= rhs.lower;
+		return upper_smaller || (upper_equal && lower_smaller_equals);
 	}
 
-	static const uhugeint_t POWERS_OF_TEN[40];
+	static constexpr uint8_t CACHED_POWERS_OF_TEN = 39;
+	static const uhugeint_t POWERS_OF_TEN[CACHED_POWERS_OF_TEN];
 };
 
 template <>

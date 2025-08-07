@@ -5,5 +5,5 @@
 query I
 SELECT concat_ws('.', list_reverse(string_split('1.2..3', '.')));
 ----
-[3, , 2, 1]
+[3, '', 2, 1]
 

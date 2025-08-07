@@ -34,10 +34,10 @@ public:
 	           idx_t target_count) override;
 	idx_t ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
 	                    idx_t target_count) override;
-	idx_t ScanCount(ColumnScanState &state, Vector &result, idx_t count) override;
+	idx_t ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset) override;
 
 	void Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-	            SelectionVector &sel, idx_t &count, const TableFilter &filter) override;
+	            SelectionVector &sel, idx_t &count, const TableFilter &filter, TableFilterState &filter_state) override;
 	void Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
 	            SelectionVector &sel, idx_t sel_count) override;
 
@@ -65,6 +65,7 @@ public:
 	                          vector<duckdb::ColumnSegmentInfo> &result) override;
 
 	bool IsPersistent() override;
+	bool HasAnyChanges() const override;
 	PersistentColumnData Serialize() override;
 	void InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats) override;
 

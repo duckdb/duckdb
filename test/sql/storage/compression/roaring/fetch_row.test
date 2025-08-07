@@ -3,11 +3,8 @@
 
 require block_size 262144
 
-statement ok
-SET storage_compatibility_version='v1.2.0'
-
 # load the DB from disk
-load __TEST_DIR__/test_roaring_compression_fetch_row.db
+load __TEST_DIR__/test_roaring_compression_fetch_row.db readwrite v1.2.0
 
 statement ok
 CREATE TABLE test (
@@ -30,9 +27,6 @@ query I
 SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VALIDITY' and compression != 'Roaring';
 ----
 
-statement ok
-pragma verify_fetch_row;
-
 query I
 select count(*) from test WHERE a IS NOT NULL;
 ----
@@ -42,9 +36,6 @@ query III
 select sum(a), min(a), max(a) from test;
 ----
 534800	1337	1337
-
-statement ok
-pragma disable_verify_fetch_row;
 
 statement ok
 delete from test;
@@ -62,9 +53,6 @@ query I
 SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VALIDITY' and compression != 'Roaring';
 ----
 
-statement ok
-pragma verify_fetch_row;
-
 query I
 select count(*) from test WHERE a IS NOT NULL;
 ----
@@ -74,9 +62,6 @@ query III
 select sum(a), min(a), max(a) from test;
 ----
 2591106	1337	1337
-
-statement ok
-pragma disable_verify_fetch_row;
 
 statement ok
 delete from test;
@@ -94,9 +79,6 @@ query I
 SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VALIDITY' and compression != 'Roaring';
 ----
 
-statement ok
-pragma verify_fetch_row;
-
 query I
 select count(*) from test WHERE a IS NOT NULL;
 ----
@@ -106,9 +88,6 @@ query III
 select sum(a), min(a), max(a) from test;
 ----
 4457558	1337	1337
-
-statement ok
-pragma disable_verify_fetch_row;
 
 statement ok
 delete from test;

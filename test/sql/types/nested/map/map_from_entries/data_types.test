@@ -255,7 +255,7 @@ create table interval_key as select MAP_FROM_ENTRIES(ARRAY[(('2022-01-02 01:00:0
 query I
 select * from interval_key;
 ----
-{1 day 01:00:00=x, 366 days 01:00:00=y}
+{'1 day 01:00:00'=x, '366 days 01:00:00'=y}
 
 query I
 select col[('2022-01-02 01:00:00'::TIMESTAMP - '2022-01-01'::TIMESTAMP)] from interval_key;
@@ -275,7 +275,7 @@ create table time_key as select MAP_FROM_ENTRIES(ARRAY[('12:30:00'::TIME, 'x'), 
 query I
 select * from time_key;
 ----
-{12:30:00=x, 00:30:00=y}
+{'12:30:00'=x, '00:30:00'=y}
 
 query I
 select col['12:30:00'::TIME] from time_key;
@@ -295,7 +295,7 @@ create table timestamp_key as select MAP_FROM_ENTRIES(ARRAY[('1992-09-20 11:30:0
 query I
 select * from timestamp_key;
 ----
-{1992-09-20 11:30:00=x, 1992-10-20 11:30:00=y}
+{'1992-09-20 11:30:00'=x, '1992-10-20 11:30:00'=y}
 
 query I
 select col['1992-09-20 11:30:00'::TIMESTAMP] from timestamp_key;

@@ -2,65 +2,68 @@
 # description: Test foreign key constraint
 # group: [foreignkey]
 
-require skip_reload
-
 statement ok
-CREATE TEMPORARY TABLE album(artistid INTEGER, albumname TEXT, albumcover TEXT, UNIQUE (artistid, albumname));
+CREATE TEMPORARY TABLE album (artistid INTEGER, albumname TEXT, albumcover TEXT, UNIQUE (artistid, albumname));
 
 statement ok
 INSERT INTO album VALUES (1, 'A', 'A_cover'), (2, 'B', 'B_cover'), (3, 'C', 'C_cover'), (4, 'D', 'D_cover');
 
 statement ok
-CREATE TEMPORARY TABLE song(songid INTEGER, songartist INTEGER, songalbum TEXT, songname TEXT, FOREIGN KEY(songartist, songalbum) REFERENCES album(artistid, albumname));
+CREATE TEMPORARY TABLE song (songid INTEGER, songartist INTEGER, songalbum TEXT, songname TEXT,
+FOREIGN KEY (songartist, songalbum) REFERENCES album (artistid, albumname));
 
-# Any row that is inserted into the table with the foreign key must exist in the table with the primary key (constraint)
+# Any row we insert into the foreign key table must exist in primary key table.
 statement error
 INSERT INTO song VALUES (11, 1, 'A', 'A_song'), (12, 2, 'E', 'B_song'), (13, 3, 'C', 'C_song');
 ----
+<REGEX>:Constraint Error.*Violates foreign key constraint.*
 
 statement error
 INSERT INTO song VALUES (11, 1, 'A', 'A_song'), (12, 5, 'D', 'B_song'), (13, 3, 'C', 'C_song');
 ----
+<REGEX>:Constraint Error.*Violates foreign key constraint.*
 
 statement ok
 INSERT INTO song VALUES (11, 1, 'A', 'A_song'), (12, 2, 'B', 'B_song'), (13, 3, 'C', 'C_song');
 
-# Any row that is deleted from the table with the primary key must not exist in the table with the foreign key (constraint)
+# Any row we delete from the primary key table must not exist in the foreign key table.
 statement error
-DELETE FROM album WHERE albumname='C';
+DELETE FROM album WHERE albumname = 'C';
 ----
+<REGEX>:Constraint Error.*Violates foreign key constraint.*
 
 statement ok
-DELETE FROM album WHERE albumname='D';
+DELETE FROM album WHERE albumname = 'D';
 
 query ITT
-SELECT * FROM album;
+SELECT * FROM album ORDER BY ALL;
 ----
 1	A	A_cover
 2	B	B_cover
 3	C	C_cover
 
-# Any row that is updated from the table has foreign key must exist in the table with the primary key (constraint)
+# Any row we update in the foreign key table must exist in the primary key table.
 statement error
-UPDATE song SET songartist=5, songalbum='A' WHERE songname='B_song';
+UPDATE song SET songartist = 5, songalbum = 'A' WHERE songname = 'B_song';
 ----
+<REGEX>:Constraint Error.*Violates foreign key constraint.*
 
 statement ok
-UPDATE song SET songartist=1, songalbum='A' WHERE songname='B_song';
+UPDATE song SET songartist = 1, songalbum = 'A' WHERE songname = 'B_song';
 
 query ITT
-SELECT * FROM album;
+SELECT * FROM album ORDER BY ALL;
 ----
 1	A	A_cover
 2	B	B_cover
 3	C	C_cover
 
 query IITT
-SELECT * FROM song;
+SELECT * FROM song ORDER BY ALL;
 ----
 11	1	A	A_song
-13	3	C	C_song
 12	1	A	B_song
+13	3	C	C_song
 
 # Any row that is updated from the table with primary key must not exist in the table has foreign key (constraint)
 statement error

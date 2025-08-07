@@ -65,6 +65,8 @@ unique_ptr<ParsedExpression> Transformer::TransformExpression(duckdb_libpgquery:
 		return TransformInterval(PGCast<duckdb_libpgquery::PGIntervalConstant>(node));
 	case duckdb_libpgquery::T_PGLambdaFunction:
 		return TransformLambda(PGCast<duckdb_libpgquery::PGLambdaFunction>(node));
+	case duckdb_libpgquery::T_PGSingleArrowFunction:
+		return TransformSingleArrow(PGCast<duckdb_libpgquery::PGSingleArrowFunction>(node));
 	case duckdb_libpgquery::T_PGAIndirection:
 		return TransformArrayAccess(PGCast<duckdb_libpgquery::PGAIndirection>(node));
 	case duckdb_libpgquery::T_PGPositionalReference:
@@ -77,7 +79,6 @@ unique_ptr<ParsedExpression> Transformer::TransformExpression(duckdb_libpgquery:
 		return TransformBooleanTest(PGCast<duckdb_libpgquery::PGBooleanTest>(node));
 	case duckdb_libpgquery::T_PGMultiAssignRef:
 		return TransformMultiAssignRef(PGCast<duckdb_libpgquery::PGMultiAssignRef>(node));
-
 	default:
 		throw NotImplementedException("Expression type %s (%d)", NodetypeToString(node.type), (int)node.type);
 	}

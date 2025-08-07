@@ -2,9 +2,9 @@
 # description: Issue #4644: Incomplete checkpoints issue
 # group: [pedro]
 
-load __TEST_DIR__/incomplete_checkpoint.db
-
 require skip_reload
+
+load __TEST_DIR__/incomplete_checkpoint.db
 
 statement ok
 PRAGMA wal_autocheckpoint='1TB';

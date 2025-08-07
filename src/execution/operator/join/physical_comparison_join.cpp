@@ -4,10 +4,10 @@
 
 namespace duckdb {
 
-PhysicalComparisonJoin::PhysicalComparisonJoin(LogicalOperator &op, PhysicalOperatorType type,
-                                               vector<JoinCondition> conditions_p, JoinType join_type,
-                                               idx_t estimated_cardinality)
-    : PhysicalJoin(op, type, join_type, estimated_cardinality), conditions(std::move(conditions_p)) {
+PhysicalComparisonJoin::PhysicalComparisonJoin(PhysicalPlan &physical_plan, LogicalOperator &op,
+                                               PhysicalOperatorType type, vector<JoinCondition> conditions_p,
+                                               JoinType join_type, idx_t estimated_cardinality)
+    : PhysicalJoin(physical_plan, op, type, join_type, estimated_cardinality), conditions(std::move(conditions_p)) {
 	ReorderConditions(conditions);
 }
 
@@ -82,7 +82,6 @@ void PhysicalComparisonJoin::ConstructEmptyJoinResult(JoinType join_type, bool h
 		result.Reference(input);
 	} else if (join_type == JoinType::MARK) {
 		// MARK join with empty hash table
-		D_ASSERT(join_type == JoinType::MARK);
 		D_ASSERT(result.ColumnCount() == input.ColumnCount() + 1);
 		auto &result_vector = result.data.back();
 		D_ASSERT(result_vector.GetType() == LogicalType::BOOLEAN);

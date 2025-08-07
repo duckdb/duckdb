@@ -56,6 +56,9 @@ vector<bool> ParseColumnList(const Value &value, vector<string> &names, const st
 		}
 		throw BinderException("\"%s\" expects a column list or * as parameter", loption);
 	}
+	if (value.IsNull()) {
+		throw BinderException("\"%s\" expects a column list or * as parameter, it can't be a NULL value", loption);
+	}
 	auto &children = ListValue::GetChildren(value);
 	// accept '*' as single argument
 	if (children.size() == 1 && children[0].type().id() == LogicalTypeId::VARCHAR &&

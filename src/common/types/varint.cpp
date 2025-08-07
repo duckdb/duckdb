@@ -1,3 +1,4 @@
+#include "duckdb/common/varint.hpp"
 #include "duckdb/common/types/varint.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/numeric_utils.hpp"
@@ -6,17 +7,24 @@
 
 namespace duckdb {
 
-void Varint::Verify(const string_t &input) {
+void Varint::Verify(const varint_t &input) {
 #ifdef DEBUG
 	// Size must be >= 4
-	idx_t varint_bytes = input.GetSize();
+	idx_t varint_bytes = input.data.GetSize();
 	if (varint_bytes < 4) {
 		throw InternalException("Varint number of bytes is invalid, current number of bytes is %d", varint_bytes);
 	}
 	// Bytes in header must quantify the number of data bytes
-	auto varint_ptr = input.GetData();
+	auto varint_ptr = input.data.GetData();
 	bool is_negative = (varint_ptr[0] & 0x80) == 0;
 	uint32_t number_of_bytes = 0;
+	if (varint_bytes == 4 && is_negative) {
+		// There is only one invalid value, which is -0
+		if (varint_ptr[3] == static_cast<char>(0xFF)) {
+			throw InternalException("Varint value -0 is not allowed in the Varint specification.");
+		}
+	}
+
 	char mask = 0x7F;
 	if (is_negative) {
 		number_of_bytes |= static_cast<uint32_t>(~varint_ptr[0] & mask) << 16 & 0xFF0000;
@@ -62,14 +70,15 @@ void Varint::SetHeader(char *blob, uint64_t number_of_bytes, bool is_negative) {
 }
 
 // Creates a blob representing the value 0
-string_t Varint::InitializeVarintZero(Vector &result) {
+varint_t Varint::InitializeVarintZero(Vector &result) {
 	uint32_t blob_size = 1 + VARINT_HEADER_SIZE;
 	auto blob = StringVector::EmptyString(result, blob_size);
 	auto writable_blob = blob.GetDataWriteable();
 	SetHeader(writable_blob, 1, false);
 	writable_blob[3] = 0;
 	blob.Finalize();
-	return blob;
+	const varint_t result_varint(blob);
+	return result_varint;
 }
 
 string Varint::InitializeVarintZero() {
@@ -190,11 +199,11 @@ string Varint::FromByteArray(uint8_t *data, idx_t size, bool is_negative) {
 }
 
 // Following CPython and Knuth (TAOCP, Volume 2 (3rd edn), section 4.4, Method 1b).
-string Varint::VarIntToVarchar(const string_t &blob) {
+string Varint::VarIntToVarchar(const varint_t &blob) {
 	string decimal_string;
 	vector<uint8_t> byte_array;
 	bool is_negative;
-	GetByteArray(byte_array, is_negative, blob);
+	GetByteArray(byte_array, is_negative, blob.data);
 	vector<digit_t> digits;
 	// Rounding byte_array to digit_bytes multiple size, so that we can process every digit_bytes bytes
 	// at a time without if check in the for loop
@@ -308,18 +317,18 @@ string Varint::VarcharToVarInt(const string_t &value) {
 	return result;
 }
 
-bool Varint::VarintToDouble(const string_t &blob, double &result, bool &strict) {
+bool Varint::VarintToDouble(const varint_t &blob, double &result, bool &strict) {
 	result = 0;
 
-	if (blob.GetSize() < 4) {
+	if (blob.data.GetSize() < 4) {
 		throw InvalidInputException("Invalid blob size.");
 	}
-	auto blob_ptr = blob.GetData();
+	auto blob_ptr = blob.data.GetData();
 
 	// Determine if the number is negative
 	bool is_negative = (blob_ptr[0] & 0x80) == 0;
 	idx_t byte_pos = 0;
-	for (idx_t i = blob.GetSize() - 1; i > 2; i--) {
+	for (idx_t i = blob.data.GetSize() - 1; i > 2; i--) {
 		if (is_negative) {
 			result += static_cast<uint8_t>(~blob_ptr[i]) * pow(256, static_cast<double>(byte_pos));
 		} else {

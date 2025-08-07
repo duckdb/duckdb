@@ -20,6 +20,7 @@ struct StructExtractFun {
 	static constexpr const char *Parameters = "struct,'entry'";
 	static constexpr const char *Description = "Extract the named entry from the STRUCT.";
 	static constexpr const char *Example = "struct_extract({'i': 3, 'v2': 3, 'v3': 0}, 'i')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -29,8 +30,10 @@ struct StructExtractAtFun {
 	static constexpr const char *Parameters = "struct,'entry'";
 	static constexpr const char *Description = "Extract the entry from the STRUCT by position (starts at 1!).";
 	static constexpr const char *Example = "struct_extract_at({'i': 3, 'v2': 3, 'v3': 0}, 2)";
+	static constexpr const char *Categories = "";
 
-	static ScalarFunctionSet GetFunctions();
+	static ScalarFunction GetFunction();
+	static unique_ptr<FunctionData> GetBindData(idx_t index);
 };
 
 struct StructPackFun {
@@ -38,6 +41,7 @@ struct StructPackFun {
 	static constexpr const char *Parameters = "name:=any,...";
 	static constexpr const char *Description = "Create a STRUCT containing the argument values. The entry name will be the bound variable name.";
 	static constexpr const char *Example = "struct_pack(i := 4, s := 'string')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -47,6 +51,17 @@ struct RowFun {
 	static constexpr const char *Parameters = "any,...";
 	static constexpr const char *Description = "Create an unnamed STRUCT (tuple) containing the argument values.";
 	static constexpr const char *Example = "row(i, i % 4, i / 4)";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
+struct RemapStructFun {
+	static constexpr const char *Name = "remap_struct";
+	static constexpr const char *Parameters = "input,target_type,mapping,defaults";
+	static constexpr const char *Description = "Map a struct to another struct type, potentially re-ordering, renaming and casting members and filling in defaults for missing values";
+	static constexpr const char *Example = "remap_struct({'i': 1, 'j': 2}, NULL::ROW(v1 INT, v2 INT, v3 INT), {'v1': 'j', 'v3': 'i'}, {'v2': NULL::INTEGER})";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -56,8 +71,41 @@ struct StructConcatFun {
 	static constexpr const char *Parameters = "struct,struct,...";
 	static constexpr const char *Description = "Merge the multiple STRUCTs into a single STRUCT.";
 	static constexpr const char *Example = "struct_concat(struct_pack(i := 4), struct_pack(s := 'string'))";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
+};
+
+struct StructContainsFun {
+	static constexpr const char *Name = "struct_contains";
+	static constexpr const char *Parameters = "struct,'entry'";
+	static constexpr const char *Description = "Check if an unnamed STRUCT contains the value.";
+	static constexpr const char *Example = "struct_contains(ROW(3, 3, 0), 3)";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
+struct StructHasFun {
+	using ALIAS = StructContainsFun;
+
+	static constexpr const char *Name = "struct_has";
+};
+
+struct StructPositionFun {
+	static constexpr const char *Name = "struct_position";
+	static constexpr const char *Parameters = "struct,'entry'";
+	static constexpr const char *Description = "Get the position of the entry in an unnamed STRUCT, starting at 1.";
+	static constexpr const char *Example = "struct_position(ROW(3, 3, 0), 3)";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
+struct StructIndexofFun {
+	using ALIAS = StructPositionFun;
+
+	static constexpr const char *Name = "struct_indexof";
 };
 
 } // namespace duckdb

@@ -181,7 +181,7 @@
                     {"name": "month"},
                     {"name": "day"}
                 ],
-                "description": "The date for the given parts",
+                "description": "The date for the given parts.",
                 "example": "make_date(1992, 9, 20)"
             },
             {
@@ -209,10 +209,17 @@
         "type": "scalar_function_set"
     },
     {
+        "name": "make_timestamp_ms",
+        "parameters": "nanos",
+        "description": "The timestamp for the given microseconds since the epoch",
+        "example": "make_timestamp_ms(1732117793000000)",
+        "type": "scalar_function_set"
+    },
+    {
         "name": "make_timestamp_ns",
         "parameters": "nanos",
         "description": "The timestamp for the given nanoseconds since epoch",
-        "example": "make_timestamp(1732117793000000000)",
+        "example": "make_timestamp_ns(1732117793000000000)",
         "type": "scalar_function_set"
     },
     {
@@ -266,7 +273,7 @@
         "name": "nanosecond",
         "parameters": "tsns",
         "description": "Extract the nanosecond component from a date or timestamp",
-        "example": "nanosecond(timestamp_ns '2021-08-03 11:59:44.123456789') => 44123456789",
+        "example": "nanosecond(timestamp_ns '2021-08-03 11:59:44.123456789')",
         "type": "scalar_function_set"
     },
     {
@@ -325,7 +332,7 @@
         "name": "timetz_byte_comparable",
         "parameters": "time_tz",
         "description": "Converts a TIME WITH TIME ZONE to an integer sort key",
-        "example": "timetz_byte_comparable('18:18:16.21-07:00'::TIME_TZ)",
+        "example": "timetz_byte_comparable('18:18:16.21-07:00'::TIMETZ)",
         "type": "scalar_function"
     },
     {
@@ -333,21 +340,21 @@
         "parameters": "integer",
         "description": "Construct a century interval",
         "example": "to_centuries(5)",
-        "type": "scalar_function"
+        "type": "scalar_function_set"
     },
     {
         "name": "to_days",
         "parameters": "integer",
         "description": "Construct a day interval",
         "example": "to_days(5)",
-        "type": "scalar_function"
+        "type": "scalar_function_set"
     },
     {
         "name": "to_decades",
         "parameters": "integer",
         "description": "Construct a decade interval",
         "example": "to_decades(5)",
-        "type": "scalar_function"
+        "type": "scalar_function_set"
     },
     {
         "name": "to_hours",
@@ -368,7 +375,7 @@
         "parameters": "integer",
         "description": "Construct a millenium interval",
         "example": "to_millennia(1)",
-        "type": "scalar_function"
+        "type": "scalar_function_set"
     },
     {
         "name": "to_milliseconds",
@@ -389,14 +396,14 @@
         "parameters": "integer",
         "description": "Construct a month interval",
         "example": "to_months(5)",
-        "type": "scalar_function"
+        "type": "scalar_function_set"
     },
     {
         "name": "to_quarters",
         "parameters": "integer",
         "description": "Construct a quarter interval",
         "example": "to_quarters(5)",
-        "type": "scalar_function"
+        "type": "scalar_function_set"
     },
     {
         "name": "to_seconds",
@@ -417,14 +424,14 @@
         "parameters": "integer",
         "description": "Construct a week interval",
         "example": "to_weeks(5)",
-        "type": "scalar_function"
+        "type": "scalar_function_set"
     },
     {
         "name": "to_years",
         "parameters": "integer",
         "description": "Construct a year interval",
         "example": "to_years(5)",
-        "type": "scalar_function"
+        "type": "scalar_function_set"
     },
     {
         "name": "week",

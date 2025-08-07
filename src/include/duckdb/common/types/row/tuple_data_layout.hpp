@@ -8,13 +8,15 @@
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
-#include "duckdb/common/types/row/row_layout.hpp"
+#include "duckdb/common/enums/tuple_data_layout_enums.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
 #include "duckdb/execution/operator/aggregate/aggregate_object.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/bound_result_modifier.hpp"
 
 namespace duckdb {
+
+enum class SortKeyType : uint8_t;
 
 class TupleDataLayout {
 public:
@@ -28,11 +30,15 @@ public:
 
 public:
 	//! Initializes the TupleDataLayout with the specified types and aggregates to an empty TupleDataLayout
-	void Initialize(vector<LogicalType> types_p, Aggregates aggregates_p, bool align = true, bool heap_offset = true);
+	void Initialize(vector<LogicalType> types_p, Aggregates aggregates_p, TupleDataValidityType validity_type,
+	                TupleDataNestednessType nestedness_type = TupleDataNestednessType::TOP_LEVEL_LAYOUT);
 	//! Initializes the TupleDataLayout with the specified types to an empty TupleDataLayout
-	void Initialize(vector<LogicalType> types, bool align = true, bool heap_offset = true);
+	void Initialize(vector<LogicalType> types, TupleDataValidityType validity_type,
+	                TupleDataNestednessType nestedness_type = TupleDataNestednessType::TOP_LEVEL_LAYOUT);
 	//! Initializes the TupleDataLayout with the specified aggregates to an empty TupleDataLayout
-	void Initialize(Aggregates aggregates_p, bool align = true, bool heap_offset = true);
+	void Initialize(Aggregates aggregates_p);
+	//! Initializes a TupleDataLayout with the specified ORDER BY to an empty TupleDataLayout
+	void Initialize(const vector<BoundOrderByNode> &orders, const LogicalType &type, bool has_payload);
 
 	//! Returns the number of data columns
 	inline idx_t ColumnCount() const {
@@ -53,6 +59,12 @@ public:
 	const inline Aggregates &GetAggregates() const {
 		return aggregates;
 	}
+	//! Gets the sort key type of this layout (if applicable)
+	inline SortKeyType GetSortKeyType() const {
+		return sort_key_type;
+	}
+	//! Returns whether this is a sort key layout (in implementation file to avoid including here)
+	bool IsSortKeyLayout() const;
 	//! Returns a map from column id to the struct TupleDataLayout
 	const inline TupleDataLayout &GetStructLayout(idx_t col_idx) const {
 		D_ASSERT(struct_layouts->find(col_idx) != struct_layouts->end());
@@ -78,6 +90,15 @@ public:
 	inline idx_t GetAggrWidth() const {
 		return aggr_width;
 	}
+	//! Returns the total width required for sorting
+	inline idx_t GetSortWidth() const {
+		D_ASSERT(IsSortKeyLayout());
+		return sort_width;
+	}
+	inline const vector<idx_t> &GetSortSkippableBytes() const {
+		D_ASSERT(IsSortKeyLayout());
+		return sort_skippable_bytes;
+	}
 	//! Returns the column offsets into each row
 	inline const vector<idx_t> &GetOffsets() const {
 		return offsets;
@@ -85,6 +106,9 @@ public:
 	//! Returns whether all columns in this layout are constant size
 	inline bool AllConstant() const {
 		return all_constant;
+	}
+	inline const vector<idx_t> &GetVariableColumns() const {
+		return variable_columns;
 	}
 	//! Gets offset to where heap size is stored
 	inline idx_t GetHeapSizeOffset() const {
@@ -98,12 +122,18 @@ public:
 	inline const vector<idx_t> &GetAggregateDestructorIndices() const {
 		return aggr_destructor_idxs;
 	}
+	//! Returns whether none of the columns have NULLs
+	inline bool AllValid() const {
+		return validity_type == TupleDataValidityType::CANNOT_HAVE_NULL_VALUES;
+	}
 
 private:
 	//! The types of the data columns
 	vector<LogicalType> types;
 	//! The aggregate functions
 	Aggregates aggregates;
+	//! The sort key type associated with orders
+	SortKeyType sort_key_type;
 	//! Structs are a recursive TupleDataLayout
 	unique_ptr<unordered_map<idx_t, TupleDataLayout>> struct_layouts;
 	//! The width of the validity header
@@ -112,16 +142,24 @@ private:
 	idx_t data_width;
 	//! The width of the aggregate state portion
 	idx_t aggr_width;
+	//! The width of the sort key
+	idx_t sort_width;
+	//! Bytes that are skippable during sorting
+	vector<idx_t> sort_skippable_bytes;
 	//! The width of the entire row
 	idx_t row_width;
 	//! The offsets to the columns and aggregate data in each row
 	vector<idx_t> offsets;
 	//! Whether all columns in this layout are constant size
 	bool all_constant;
+	//! Indices of the variable columns
+	vector<idx_t> variable_columns;
 	//! Offset to the heap size of every row
 	idx_t heap_size_offset;
 	//! Indices of aggregate functions that have a destructor
 	vector<idx_t> aggr_destructor_idxs;
+	//! Whether none of the columns have NULLs
+	TupleDataValidityType validity_type;
 };
 
 } // namespace duckdb

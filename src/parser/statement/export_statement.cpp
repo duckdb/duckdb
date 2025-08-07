@@ -24,10 +24,8 @@ string ExportStatement::ToString() const {
 	}
 	auto &path = info->file_path;
 	D_ASSERT(info->is_from == false);
-	auto &options = info->options;
-	auto &format = info->format;
 	result += StringUtil::Format(" '%s'", path);
-	result += CopyInfo::CopyOptionsToString(format, options);
+	result += info->CopyOptionsToString();
 	result += ";";
 	return result;
 }

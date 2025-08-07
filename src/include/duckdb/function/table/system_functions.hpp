@@ -47,6 +47,10 @@ struct DuckDBSchemasFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct DuckDBApproxDatabaseCountFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct DuckDBColumnsFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
@@ -75,6 +79,10 @@ struct DuckDBExtensionsFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct DuckDBPreparedStatementsFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct DuckDBFunctionsFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
@@ -96,6 +104,10 @@ struct DuckDBIndexesFun {
 };
 
 struct DuckDBMemoryFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct DuckDBExternalFileCacheFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
@@ -156,7 +168,7 @@ struct TestType {
 
 struct TestAllTypesFun {
 	static void RegisterFunction(BuiltinFunctions &set);
-	static vector<TestType> GetTestTypes(bool large_enum = false);
+	static vector<TestType> GetTestTypes(bool large_enum = false, bool large_varint = false);
 };
 
 struct TestVectorTypesFun {

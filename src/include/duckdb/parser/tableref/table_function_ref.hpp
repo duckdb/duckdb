@@ -12,6 +12,7 @@
 #include "duckdb/parser/tableref.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/common/enums/ordinality_request_type.hpp"
 
 namespace duckdb {
 //! Represents a Table producing function
@@ -26,6 +27,9 @@ public:
 
 	// if the function takes a subquery as argument its in here
 	unique_ptr<SelectStatement> subquery;
+
+	//! Whether or not WITH ORDINALITY has been invoked
+	OrdinalityType with_ordinality = OrdinalityType::WITHOUT_ORDINALITY;
 
 public:
 	string ToString() const override;

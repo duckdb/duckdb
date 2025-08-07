@@ -31,6 +31,9 @@ typedef uint32_t sel_t;
 //! Type used for transaction timestamps
 typedef idx_t transaction_t;
 
+//! Type used to identify connections
+typedef idx_t connection_t;
+
 //! Type used for column identifiers
 typedef idx_t column_t;
 //! Type used for storage (column) identifiers

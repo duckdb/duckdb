@@ -2,6 +2,8 @@
 # description: Base tests for the autoloading mechanism for extensions
 # group: [extension]
 
+require httpfs
+
 # This test assumes icu and json to be available in the LOCAL_EXTENSION_REPO and NOT linked into duckdb statically
 # -> this should be the case for our autoloading tests where we have the local_extension_repo variable set
 require-env LOCAL_EXTENSION_REPO
@@ -59,13 +61,13 @@ statement error
 SET s3_region='eu-west-1';
 ----
 Extension Autoloading Error: An error occurred while trying to automatically install the required extension 'httpfs':
-Failed to copy local extension
+Failed to install local extension
 
 statement error
 select * from read_json_auto('data/json/example_n.ndjson');
 ----
 Extension Autoloading Error: An error occurred while trying to automatically install the required extension 'json':
-Failed to copy local extension
+Failed to install local extension
 
 # Now override with non-existent remote repo
 statement ok

@@ -38,7 +38,7 @@ statement ok
 set memory_limit='100mb'
 
 statement ok
-COPY lineitem from '__TEST_DIR__/lineitem.json' (ARRAY)
+COPY lineitem FROM '__TEST_DIR__/lineitem.json' (ARRAY)
 
 # 500mb should be enough for the rest
 statement ok
@@ -48,6 +48,13 @@ query I
 PRAGMA tpch(1)
 ----
 <FILE>:extension/tpch/dbgen/answers/sf0.1/q01.csv
+
+# also test gzipped
+statement ok
+COPY lineitem TO '__TEST_DIR__/lineitem.json.gz'
+
+statement ok
+FROM '__TEST_DIR__/lineitem.json.gz'
 
 statement ok
 rollback

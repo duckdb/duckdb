@@ -1,0 +1,66 @@
+# name: test/sql/transactions/conflict_drop_then_delete.test
+# description: Conflict: drop a table, then delete from a table in another transaction
+# group: [transactions]
+
+load __TEST_DIR__/conflict_drop_then_delete.db
+
+statement ok
+create or replace table original_table as from range(10) select 1 as col
+
+statement ok
+SET immediate_transaction_mode=true
+
+# drop a table, then delete from that table in another transaction
+statement ok con1
+BEGIN
+
+statement ok con2
+BEGIN
+
+statement ok con1
+create table new_incremental as
+  from range(10000)
+  select 42 as col
+
+statement ok con2
+drop table original_table
+
+statement ok con2
+COMMIT
+
+statement ok con1
+delete from original_table where rowid % 2 = 0
+
+statement error con1
+COMMIT
+----
+another transaction has dropped this table
+
+statement ok
+create or replace table original_table as from range(10) select 1 as col
+
+# do the same - but now reverse: delete from the table, then drop
+statement ok con1
+BEGIN
+
+statement ok con2
+BEGIN
+
+statement ok con1
+delete from original_table where rowid % 2 = 0
+
+statement ok con1
+create table new_incremental as
+  from range(10000)
+  select 42 as col
+
+statement ok con2
+drop table original_table
+
+statement ok con2
+COMMIT
+
+statement error con1
+COMMIT
+----
+another transaction has dropped this table

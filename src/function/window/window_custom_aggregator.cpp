@@ -1,5 +1,6 @@
 #include "duckdb/function/window/window_custom_aggregator.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
+#include "duckdb/common/enums/window_aggregation_mode.hpp"
 
 namespace duckdb {
 
@@ -30,10 +31,10 @@ WindowCustomAggregator::WindowCustomAggregator(const BoundWindowExpression &wexp
 WindowCustomAggregator::~WindowCustomAggregator() {
 }
 
-class WindowCustomAggregatorState : public WindowAggregatorLocalState {
+class WindowCustomAggregatorLocalState : public WindowAggregatorLocalState {
 public:
-	WindowCustomAggregatorState(const AggregateObject &aggr, const WindowExcludeMode exclude_mode);
-	~WindowCustomAggregatorState() override;
+	WindowCustomAggregatorLocalState(const AggregateObject &aggr, const WindowExcludeMode exclude_mode);
+	~WindowCustomAggregatorLocalState() override;
 
 public:
 	//! The aggregate function
@@ -51,8 +52,7 @@ public:
 	explicit WindowCustomAggregatorGlobalState(ClientContext &context, const WindowCustomAggregator &aggregator,
 	                                           idx_t group_count)
 	    : WindowAggregatorGlobalState(context, aggregator, group_count), context(context) {
-
-		gcstate = make_uniq<WindowCustomAggregatorState>(aggr, aggregator.exclude_mode);
+		gcstate = make_uniq<WindowCustomAggregatorLocalState>(aggr, aggregator.exclude_mode);
 	}
 
 	//! Buffer manager for paging custom accelerator data
@@ -60,13 +60,13 @@ public:
 	//! Traditional packed filter mask for API
 	ValidityMask filter_packed;
 	//! Data pointer that contains a single local state, used for global custom window execution state
-	unique_ptr<WindowCustomAggregatorState> gcstate;
+	unique_ptr<WindowCustomAggregatorLocalState> gcstate;
 	//! Partition description for custom window APIs
 	unique_ptr<WindowPartitionInput> partition_input;
 };
 
-WindowCustomAggregatorState::WindowCustomAggregatorState(const AggregateObject &aggr,
-                                                         const WindowExcludeMode exclude_mode)
+WindowCustomAggregatorLocalState::WindowCustomAggregatorLocalState(const AggregateObject &aggr,
+                                                                   const WindowExcludeMode exclude_mode)
     : aggr(aggr), state(aggr.function.state_size(aggr.function)),
       statef(Value::POINTER(CastPointerToValue(state.data()))), frames(3, {0, 0}) {
 	// if we have a frame-by-frame method, share the single state
@@ -75,7 +75,7 @@ WindowCustomAggregatorState::WindowCustomAggregatorState(const AggregateObject &
 	InitSubFrames(frames, exclude_mode);
 }
 
-WindowCustomAggregatorState::~WindowCustomAggregatorState() {
+WindowCustomAggregatorLocalState::~WindowCustomAggregatorLocalState() {
 	if (aggr.function.destructor) {
 		AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
 		aggr.function.destructor(statef, aggr_input_data, 1);
@@ -87,8 +87,9 @@ unique_ptr<WindowAggregatorState> WindowCustomAggregator::GetGlobalState(ClientC
 	return make_uniq<WindowCustomAggregatorGlobalState>(context, *this, group_count);
 }
 
-void WindowCustomAggregator::Finalize(WindowAggregatorState &gstate, WindowAggregatorState &lstate,
-                                      CollectionPtr collection, const FrameStats &stats) {
+void WindowCustomAggregator::Finalize(ExecutionContext &context, WindowAggregatorState &gstate,
+                                      WindowAggregatorState &lstate, CollectionPtr collection,
+                                      const FrameStats &stats) {
 	//	Single threaded Finalize for now
 	auto &gcsink = gstate.Cast<WindowCustomAggregatorGlobalState>();
 	lock_guard<mutex> gestate_guard(gcsink.lock);
@@ -96,7 +97,7 @@ void WindowCustomAggregator::Finalize(WindowAggregatorState &gstate, WindowAggre
 		return;
 	}
 
-	WindowAggregator::Finalize(gstate, lstate, collection, stats);
+	WindowAggregator::Finalize(context, gstate, lstate, collection, stats);
 
 	auto inputs = collection->inputs.get();
 	const auto count = collection->size();
@@ -109,7 +110,7 @@ void WindowCustomAggregator::Finalize(WindowAggregatorState &gstate, WindowAggre
 	filter_mask.Pack(filter_packed, filter_mask.Capacity());
 
 	gcsink.partition_input =
-	    make_uniq<WindowPartitionInput>(gcsink.context, inputs, count, child_idx, all_valids, filter_packed, stats);
+	    make_uniq<WindowPartitionInput>(context, inputs, count, child_idx, all_valids, filter_packed, stats);
 
 	if (aggr.function.window_init) {
 		auto &gcstate = *gcsink.gcstate;
@@ -122,12 +123,13 @@ void WindowCustomAggregator::Finalize(WindowAggregatorState &gstate, WindowAggre
 }
 
 unique_ptr<WindowAggregatorState> WindowCustomAggregator::GetLocalState(const WindowAggregatorState &gstate) const {
-	return make_uniq<WindowCustomAggregatorState>(aggr, exclude_mode);
+	return make_uniq<WindowCustomAggregatorLocalState>(aggr, exclude_mode);
 }
 
-void WindowCustomAggregator::Evaluate(const WindowAggregatorState &gsink, WindowAggregatorState &lstate,
-                                      const DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx) const {
-	auto &lcstate = lstate.Cast<WindowCustomAggregatorState>();
+void WindowCustomAggregator::Evaluate(ExecutionContext &context, const WindowAggregatorState &gsink,
+                                      WindowAggregatorState &lstate, const DataChunk &bounds, Vector &result,
+                                      idx_t count, idx_t row_idx) const {
+	auto &lcstate = lstate.Cast<WindowCustomAggregatorLocalState>();
 	auto &frames = lcstate.frames;
 	const_data_ptr_t gstate_p = nullptr;
 	auto &gcsink = gsink.Cast<WindowCustomAggregatorGlobalState>();

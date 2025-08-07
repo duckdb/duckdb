@@ -10,13 +10,14 @@
 
 namespace duckdb {
 
-PhysicalBlockwiseNLJoin::PhysicalBlockwiseNLJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
-                                                 unique_ptr<PhysicalOperator> right, unique_ptr<Expression> condition,
-                                                 JoinType join_type, idx_t estimated_cardinality)
-    : PhysicalJoin(op, PhysicalOperatorType::BLOCKWISE_NL_JOIN, join_type, estimated_cardinality),
+PhysicalBlockwiseNLJoin::PhysicalBlockwiseNLJoin(PhysicalPlan &physical_plan, LogicalOperator &op,
+                                                 PhysicalOperator &left, PhysicalOperator &right,
+                                                 unique_ptr<Expression> condition, JoinType join_type,
+                                                 idx_t estimated_cardinality)
+    : PhysicalJoin(physical_plan, op, PhysicalOperatorType::BLOCKWISE_NL_JOIN, join_type, estimated_cardinality),
       condition(std::move(condition)) {
-	children.push_back(std::move(left));
-	children.push_back(std::move(right));
+	children.push_back(left);
+	children.push_back(right);
 	// MARK and SINGLE joins not handled
 	D_ASSERT(join_type != JoinType::MARK);
 	D_ASSERT(join_type != JoinType::SINGLE);
@@ -34,7 +35,7 @@ public:
 class BlockwiseNLJoinGlobalState : public GlobalSinkState {
 public:
 	explicit BlockwiseNLJoinGlobalState(ClientContext &context, const PhysicalBlockwiseNLJoin &op)
-	    : right_chunks(context, op.children[1]->GetTypes()), right_outer(PropagatesBuildSide(op.join_type)) {
+	    : right_chunks(context, op.children[1].get().GetTypes()), right_outer(PropagatesBuildSide(op.join_type)) {
 	}
 
 	mutex lock;
@@ -108,10 +109,10 @@ unique_ptr<OperatorState> PhysicalBlockwiseNLJoin::GetOperatorState(ExecutionCon
 	auto result = make_uniq<BlockwiseNLJoinState>(context, gstate.right_chunks, *this);
 	if (join_type == JoinType::SEMI || join_type == JoinType::ANTI) {
 		vector<LogicalType> intermediate_types;
-		for (auto &type : children[0]->types) {
+		for (auto &type : children[0].get().GetTypes()) {
 			intermediate_types.emplace_back(type);
 		}
-		for (auto &type : children[1]->types) {
+		for (auto &type : children[1].get().GetTypes()) {
 			intermediate_types.emplace_back(type);
 		}
 		result->intermediate_chunk.Initialize(Allocator::DefaultAllocator(), intermediate_types);

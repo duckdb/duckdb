@@ -13,7 +13,7 @@ CSVBoundary::CSVBoundary(idx_t buffer_idx_p, idx_t buffer_pos_p, idx_t boundary_
 CSVBoundary::CSVBoundary() : buffer_idx(0), buffer_pos(0), boundary_idx(0), end_pos(NumericLimits<idx_t>::Maximum()) {
 }
 
-CSVIterator::CSVIterator() : is_set(false) {
+CSVIterator::CSVIterator() : buffer_size(0), is_set(false) {
 }
 
 void CSVBoundary::Print() const {
@@ -40,6 +40,11 @@ idx_t CSVIterator::BytesPerThread(const CSVReaderOptions &reader_options) {
 	if (bytes_per_thread < max_row_size) {
 		// If we are setting up the buffer size directly, we must make sure each thread will read the full buffer.
 		return max_row_size;
+	}
+	if (bytes_per_thread == 0) {
+		// Bytes per thread can never be zero, but it might happen if max_row_size = 0
+		// Not sure why a human being would do that...
+		return 1;
 	}
 	return bytes_per_thread;
 }

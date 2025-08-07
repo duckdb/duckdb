@@ -3,7 +3,6 @@
 #include "duckdb/common/enums/output_type.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/function/function_set.hpp"
-#include "duckdb/logging/http_logger.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/query_profiler.hpp"
@@ -12,6 +11,8 @@
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/common/encryption_functions.hpp"
+#include "duckdb/logging/log_manager.hpp"
 
 #include <cctype>
 
@@ -116,6 +117,35 @@ static void PragmaDisableCheckpointOnShutdown(ClientContext &context, const Func
 	DBConfig::GetConfig(context).options.checkpoint_on_shutdown = false;
 }
 
+static void PragmaEnableLogging(ClientContext &context, const FunctionParameters &parameters) {
+	if (parameters.values.empty()) {
+		context.db->GetLogManager().SetEnableLogging(true);
+		return;
+	}
+
+	if (parameters.values.size() != 1) {
+		throw InvalidInputException("PragmaEnableLogging: expected 0 or 1 parameter");
+	}
+
+	vector<string> types;
+
+	if (parameters.values[0].type() == LogicalType::VARCHAR) {
+		types.push_back(parameters.values[0].GetValue<string>());
+	} else if (parameters.values[0].type() == LogicalType::LIST(LogicalType::VARCHAR)) {
+		for (const auto &child : ListValue::GetChildren(parameters.values[0])) {
+			types.push_back(child.GetValue<string>());
+		}
+	} else {
+		throw InvalidInputException("Unexpected type for PragmaEnableLogging");
+	}
+
+	context.db->GetLogManager().SetEnableStructuredLoggers(types);
+}
+
+static void PragmaDisableLogging(ClientContext &context, const FunctionParameters &parameters) {
+	context.db->GetLogManager().SetEnableLogging(false);
+}
+
 static void PragmaEnableOptimizer(ClientContext &context, const FunctionParameters &parameters) {
 	ClientConfig::GetConfig(context).enable_optimizer = true;
 }
@@ -147,6 +177,9 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_object_cache", PragmaEnableObjectCache));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_object_cache", PragmaDisableObjectCache));
+
+	set.AddFunction(PragmaFunction::PragmaCall("enable_logging", PragmaEnableLogging, {}, LogicalType::VARCHAR));
+	set.AddFunction(PragmaFunction::PragmaStatement("disable_logging", PragmaDisableLogging));
 
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_optimizer", PragmaEnableOptimizer));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_optimizer", PragmaDisableOptimizer));

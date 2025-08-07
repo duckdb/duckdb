@@ -14,8 +14,8 @@ namespace duckdb {
 
 class BooleanColumnWriter : public PrimitiveColumnWriter {
 public:
-	BooleanColumnWriter(ParquetWriter &writer, idx_t schema_idx, vector<string> schema_path_p, idx_t max_repeat,
-	                    idx_t max_define, bool can_have_nulls);
+	BooleanColumnWriter(ParquetWriter &writer, const ParquetColumnSchema &column_schema, vector<string> schema_path_p,
+	                    bool can_have_nulls);
 	~BooleanColumnWriter() override = default;
 
 public:

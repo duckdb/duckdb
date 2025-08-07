@@ -22,7 +22,7 @@ string JoinRef::ToString() const {
 		result += EnumUtil::ToString(type) + " JOIN ";
 		break;
 	case JoinRefType::CROSS:
-		result += ", ";
+		result += is_implicit ? ", " : "CROSS JOIN ";
 		break;
 	case JoinRefType::POSITIONAL:
 		result += "POSITIONAL JOIN ";
@@ -43,7 +43,7 @@ string JoinRef::ToString() const {
 			if (i > 0) {
 				result += ", ";
 			}
-			result += using_columns[i];
+			result += KeywordHelper::WriteOptionallyQuoted(using_columns[i]);
 		}
 		result += ")";
 	}
@@ -82,6 +82,7 @@ unique_ptr<TableRef> JoinRef::Copy() {
 	for (auto &col : duplicate_eliminated_columns) {
 		copy->duplicate_eliminated_columns.emplace_back(col->Copy());
 	}
+	copy->is_implicit = is_implicit;
 	return std::move(copy);
 }
 

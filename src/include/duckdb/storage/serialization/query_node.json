@@ -143,6 +143,11 @@
         "id": 204,
         "name": "aliases",
         "type": "vector<string>"
+      },
+      {
+        "id": 205,
+        "name": "key_targets",
+        "type": "vector<ParsedExpression*>"
       }
     ]
   },
@@ -171,6 +176,12 @@
         "id": 203,
         "name": "aliases",
         "type": "vector<string>"
+      },
+      {
+        "id": 204,
+        "name": "materialized",
+        "type": "CTEMaterialize",
+        "default": "CTEMaterialize::CTE_MATERIALIZE_DEFAULT"
       }
     ]
   }

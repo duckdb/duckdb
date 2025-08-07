@@ -142,6 +142,9 @@ private:
 	unique_ptr<SQLStatement> TransformDrop(duckdb_libpgquery::PGDropStmt &stmt);
 	//! Transform a Postgres duckdb_libpgquery::T_PGInsertStmt node into a InsertStatement
 	unique_ptr<InsertStatement> TransformInsert(duckdb_libpgquery::PGInsertStmt &stmt);
+	InsertColumnOrder TransformColumnOrder(duckdb_libpgquery::PGInsertColumnOrder insert_column_order);
+
+	vector<string> TransformInsertColumns(duckdb_libpgquery::PGList &cols);
 
 	//! Transform a Postgres duckdb_libpgquery::T_PGOnConflictClause node into a OnConflictInfo
 	unique_ptr<OnConflictInfo> TransformOnConflictClause(duckdb_libpgquery::PGOnConflictClause *node,
@@ -191,6 +194,9 @@ private:
 	static bool TransformPivotInList(unique_ptr<ParsedExpression> &expr, PivotColumnEntry &entry,
 	                                 bool root_entry = true);
 
+	unique_ptr<SQLStatement> TransformMergeInto(duckdb_libpgquery::PGMergeIntoStmt &stmt);
+	unique_ptr<MergeIntoAction> TransformMergeIntoAction(duckdb_libpgquery::PGMatchAction &action);
+
 	//===--------------------------------------------------------------------===//
 	// SetStatement Transform
 	//===--------------------------------------------------------------------===//
@@ -235,8 +241,10 @@ private:
 	unique_ptr<ParsedExpression> TransformFuncCall(duckdb_libpgquery::PGFuncCall &root);
 	//! Transform a Postgres boolean expression into an Expression
 	unique_ptr<ParsedExpression> TransformInterval(duckdb_libpgquery::PGIntervalConstant &root);
-	//! Transform a Postgres lambda node [e.g. (x, y) -> x + y] into a lambda expression
+	//! Transform a LAMBDA node (e.g., lambda x, y: x + y) into a lambda expression.
 	unique_ptr<ParsedExpression> TransformLambda(duckdb_libpgquery::PGLambdaFunction &node);
+	//! Transform a single arrow operator (e.g., (x, y) -> x + y) into a lambda expression.
+	unique_ptr<ParsedExpression> TransformSingleArrow(duckdb_libpgquery::PGSingleArrowFunction &node);
 	//! Transform a Postgres array access node (e.g. x[1] or x[1:3])
 	unique_ptr<ParsedExpression> TransformArrayAccess(duckdb_libpgquery::PGAIndirection &node);
 	//! Transform a positional reference (e.g. #1)
@@ -320,6 +328,9 @@ private:
 	//! Transform a VALUES list into a set of expressions
 	unique_ptr<TableRef> TransformValuesList(duckdb_libpgquery::PGList *list);
 
+	//! Transform using clause
+	vector<string> TransformUsingClause(duckdb_libpgquery::PGList &usingClause);
+
 	//! Transform a range var into a (schema) qualified name
 	QualifiedName TransformQualifiedName(duckdb_libpgquery::PGRangeVar &root);
 
@@ -365,8 +376,7 @@ private:
 
 	unique_ptr<MacroFunction> TransformMacroFunction(duckdb_libpgquery::PGFunctionDefinition &function);
 
-	void ParseGenericOptionListEntry(case_insensitive_map_t<vector<Value>> &result_options, string &name,
-	                                 duckdb_libpgquery::PGNode *arg);
+	vector<string> TransformNameList(duckdb_libpgquery::PGList &list);
 
 public:
 	static void SetQueryLocation(ParsedExpression &expr, int query_location);

@@ -3,7 +3,7 @@ import pytest
 import pandas as pd
 import duckdb
 
-pa = pytest.importorskip("pyarrow", '14.0.0', reason="Needs pyarrow >= 14")
+pa = pytest.importorskip("pyarrow", '21.0.0', reason="Needs pyarrow >= 21")
 pc = pytest.importorskip("pyarrow.compute")
 
 

@@ -33,8 +33,8 @@ private:
 	validity_t mask[CAPACITY / sizeof(validity_t)];
 
 public:
-	//! Get a new Node256Leaf and initialize it.
-	static Node256Leaf &New(ART &art, Node &node);
+	//! Get a new Node256Leaf handle and initialize the leaf.
+	static NodeHandle<Node256Leaf> New(ART &art, Node &node);
 
 	//! Insert a byte.
 	static void InsertByte(ART &art, Node &node, const uint8_t byte);
@@ -43,11 +43,17 @@ public:
 
 	//! Returns true, if the byte exists, else false.
 	bool HasByte(uint8_t &byte);
+
+	//! Returns a pointer to the bytes in the leaf.
+	//! The pointer data is valid as long as the arena is valid.
+	array_ptr<uint8_t> GetBytes(ArenaAllocator &arena);
+
 	//! Get the first byte greater or equal to the byte.
+	//! Returns true, if such a byte exists, else false.
 	bool GetNextByte(uint8_t &byte);
 
 private:
-	static Node256Leaf &GrowNode15Leaf(ART &art, Node &node256_leaf, Node &node15_leaf);
+	static void GrowNode15Leaf(ART &art, Node &node256_leaf, Node &node15_leaf);
 };
 
 } // namespace duckdb

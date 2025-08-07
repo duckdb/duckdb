@@ -43,6 +43,15 @@ FROM trades t ASOF JOIN prices p
 ----
 2020-01-01 00:00:03	1	42
 
+# NLJ does not support IS NOT DISTINCT FROM
+query II
+EXPLAIN
+SELECT t.*, p.price
+FROM trades t ASOF JOIN prices p 
+  ON t.symbol IS NOT DISTINCT FROM p.symbol AND t.when >= p.when;
+----
+physical_plan	<!REGEX>:.*NESTED_LOOP_JOIN.*
+
 # Ignore non-join conditions 
 query II
 SELECT p.ts, e.value

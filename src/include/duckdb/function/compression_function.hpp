@@ -16,6 +16,7 @@
 #include "duckdb/function/function.hpp"
 #include "duckdb/storage/data_pointer.hpp"
 #include "duckdb/storage/storage_info.hpp"
+#include "duckdb/storage/block_manager.hpp"
 
 namespace duckdb {
 class DatabaseInstance;
@@ -24,6 +25,7 @@ struct ColumnDataCheckpointData;
 class ColumnSegment;
 class SegmentStatistics;
 class TableFilter;
+struct TableFilterState;
 struct ColumnSegmentState;
 
 struct ColumnFetchState;
@@ -33,21 +35,30 @@ struct SegmentScanState;
 
 class CompressionInfo {
 public:
-	explicit CompressionInfo(const idx_t block_size) : block_size(block_size) {
+	explicit CompressionInfo(BlockManager &block_manager) : block_manager(block_manager) {
 	}
 
 public:
 	//! The size below which the segment is compacted on flushing.
 	idx_t GetCompactionFlushLimit() const {
-		return block_size / 5 * 4;
+		return block_manager.GetBlockSize() / 5 * 4;
 	}
 	//! The block size for blocks using this compression.
 	idx_t GetBlockSize() const {
-		return block_size;
+		return block_manager.GetBlockSize();
+	}
+
+	//! The block header size for blocks using this compression.
+	idx_t GetBlockHeaderSize() const {
+		return block_manager.GetBlockHeaderSize();
+	}
+
+	BlockManager &GetBlockManager() const {
+		return block_manager;
 	}
 
 private:
-	idx_t block_size;
+	BlockManager &block_manager;
 };
 
 struct AnalyzeState {
@@ -175,7 +186,8 @@ typedef void (*compression_select_t)(ColumnSegment &segment, ColumnScanState &st
                                      const SelectionVector &sel, idx_t sel_count);
 //! Function prototype used for applying a filter to a vector while scanning that vector
 typedef void (*compression_filter_t)(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
-                                     SelectionVector &sel, idx_t &sel_count, const TableFilter &filter);
+                                     SelectionVector &sel, idx_t &sel_count, const TableFilter &filter,
+                                     TableFilterState &filter_state);
 //! Function prototype used for reading a single value
 typedef void (*compression_fetch_row_t)(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
                                         idx_t result_idx);

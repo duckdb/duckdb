@@ -6,8 +6,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/catalog/dependency_list.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
-
-#include <sstream>
+#include "duckdb/original/std/sstream.hpp"
 
 namespace duckdb {
 
@@ -27,11 +26,11 @@ optional_ptr<CatalogEntry> SchemaCatalogEntry::CreateIndex(ClientContext &contex
 	return CreateIndex(GetCatalogTransaction(context), info, table);
 }
 
-SimilarCatalogEntry SchemaCatalogEntry::GetSimilarEntry(CatalogTransaction transaction, CatalogType type,
-                                                        const string &name) {
+SimilarCatalogEntry SchemaCatalogEntry::GetSimilarEntry(CatalogTransaction transaction,
+                                                        const EntryLookupInfo &lookup_info) {
 	SimilarCatalogEntry result;
-	Scan(transaction.GetContext(), type, [&](CatalogEntry &entry) {
-		auto entry_score = StringUtil::SimilarityRating(entry.name, name);
+	Scan(transaction.GetContext(), lookup_info.GetCatalogType(), [&](CatalogEntry &entry) {
+		auto entry_score = StringUtil::SimilarityRating(entry.name, lookup_info.GetEntryName());
 		if (entry_score > result.score) {
 			result.score = entry_score;
 			result.name = entry.name;
@@ -40,12 +39,18 @@ SimilarCatalogEntry SchemaCatalogEntry::GetSimilarEntry(CatalogTransaction trans
 	return result;
 }
 
+optional_ptr<CatalogEntry> SchemaCatalogEntry::GetEntry(CatalogTransaction transaction, CatalogType type,
+                                                        const string &name) {
+	EntryLookupInfo lookup_info(type, name);
+	return LookupEntry(transaction, lookup_info);
+}
+
 //! This should not be used, it's only implemented to not put the burden of implementing it on every derived class of
 //! SchemaCatalogEntry
-CatalogSet::EntryLookup SchemaCatalogEntry::GetEntryDetailed(CatalogTransaction transaction, CatalogType type,
-                                                             const string &name) {
+CatalogSet::EntryLookup SchemaCatalogEntry::LookupEntryDetailed(CatalogTransaction transaction,
+                                                                const EntryLookupInfo &lookup_info) {
 	CatalogSet::EntryLookup result;
-	result.result = GetEntry(transaction, type, name);
+	result.result = LookupEntry(transaction, lookup_info);
 	if (!result.result) {
 		result.reason = CatalogSet::EntryLookup::FailureReason::DELETED;
 	} else {

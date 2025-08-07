@@ -47,7 +47,7 @@ Could not convert string
 statement error
 SELECT ARRAY[ARRAY[1], ARRAY['hello']]
 ----
-explicit cast is required
+Binder Error: Cannot deduce template type
 
 # array casts
 query I
@@ -77,7 +77,7 @@ SELECT ARRAY[[1, 2], [3, 4]]::BIGINT[]
 query I
 SELECT ARRAY[[1, 2], [3, 4]]::VARCHAR[]
 ----
-[[1, 2], [3, 4]]
+['[1, 2]', '[3, 4]']
 
 # double unnest
 statement error

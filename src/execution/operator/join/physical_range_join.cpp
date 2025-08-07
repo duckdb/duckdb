@@ -7,6 +7,7 @@
 #include "duckdb/common/sort/sort.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -60,12 +61,10 @@ void PhysicalRangeJoin::LocalSortedTable::Sink(DataChunk &input, GlobalSortState
 
 PhysicalRangeJoin::GlobalSortedTable::GlobalSortedTable(ClientContext &context, const vector<BoundOrderByNode> &orders,
                                                         RowLayout &payload_layout, const PhysicalOperator &op_p)
-    : op(op_p), global_sort_state(BufferManager::GetBufferManager(context), orders, payload_layout), has_null(0),
-      count(0), memory_per_thread(0) {
+    : op(op_p), global_sort_state(context, orders, payload_layout), has_null(0), count(0), memory_per_thread(0) {
 
 	// Set external (can be forced with the PRAGMA)
-	auto &config = ClientConfig::GetConfig(context);
-	global_sort_state.external = config.force_external;
+	global_sort_state.external = ClientConfig::GetConfig(context).force_external;
 	memory_per_thread = PhysicalRangeJoin::GetMaxThreadMemory(context);
 }
 
@@ -101,6 +100,10 @@ public:
 		event->FinishTask();
 
 		return TaskExecutionResult::TASK_FINISHED;
+	}
+
+	string TaskType() const override {
+		return "RangeJoinMergeTask";
 	}
 
 private:
@@ -162,14 +165,17 @@ void PhysicalRangeJoin::GlobalSortedTable::Finalize(Pipeline &pipeline, Event &e
 	}
 }
 
-PhysicalRangeJoin::PhysicalRangeJoin(LogicalComparisonJoin &op, PhysicalOperatorType type,
-                                     unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right,
-                                     vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality)
-    : PhysicalComparisonJoin(op, type, std::move(cond), join_type, estimated_cardinality) {
+PhysicalRangeJoin::PhysicalRangeJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op, PhysicalOperatorType type,
+                                     PhysicalOperator &left, PhysicalOperator &right, vector<JoinCondition> cond,
+                                     JoinType join_type, idx_t estimated_cardinality,
+                                     unique_ptr<JoinFilterPushdownInfo> pushdown_info)
+    : PhysicalComparisonJoin(physical_plan, op, type, std::move(cond), join_type, estimated_cardinality) {
+	filter_pushdown = std::move(pushdown_info);
 	// Reorder the conditions so that ranges are at the front.
 	// TODO: use stats to improve the choice?
 	// TODO: Prefer fixed length types?
 	if (conditions.size() > 1) {
+		unordered_map<idx_t, idx_t> cond_idx;
 		vector<JoinCondition> conditions_p(conditions.size());
 		std::swap(conditions_p, conditions);
 		idx_t range_position = 0;
@@ -181,21 +187,30 @@ PhysicalRangeJoin::PhysicalRangeJoin(LogicalComparisonJoin &op, PhysicalOperator
 			case ExpressionType::COMPARE_GREATERTHAN:
 			case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 				conditions[range_position++] = std::move(conditions_p[i]);
+				cond_idx[i] = range_position - 1;
 				break;
 			default:
 				conditions[--other_position] = std::move(conditions_p[i]);
+				cond_idx[i] = other_position;
 				break;
+			}
+		}
+		if (filter_pushdown) {
+			for (auto &idx : filter_pushdown->join_condition) {
+				if (cond_idx.find(idx) != cond_idx.end()) {
+					idx = cond_idx[idx];
+				}
 			}
 		}
 	}
 
-	children.push_back(std::move(left));
-	children.push_back(std::move(right));
+	children.push_back(left);
+	children.push_back(right);
 
 	//	Fill out the left projection map.
 	left_projection_map = op.left_projection_map;
 	if (left_projection_map.empty()) {
-		const auto left_count = children[0]->types.size();
+		const auto left_count = children[0].get().GetTypes().size();
 		left_projection_map.reserve(left_count);
 		for (column_t i = 0; i < left_count; ++i) {
 			left_projection_map.emplace_back(i);
@@ -204,7 +219,7 @@ PhysicalRangeJoin::PhysicalRangeJoin(LogicalComparisonJoin &op, PhysicalOperator
 	//	Fill out the right projection map.
 	right_projection_map = op.right_projection_map;
 	if (right_projection_map.empty()) {
-		const auto right_count = children[1]->types.size();
+		const auto right_count = children[1].get().GetTypes().size();
 		right_projection_map.reserve(right_count);
 		for (column_t i = 0; i < right_count; ++i) {
 			right_projection_map.emplace_back(i);
@@ -212,8 +227,8 @@ PhysicalRangeJoin::PhysicalRangeJoin(LogicalComparisonJoin &op, PhysicalOperator
 	}
 
 	//	Construct the unprojected type layout from the children's types
-	unprojected_types = children[0]->GetTypes();
-	auto &types = children[1]->GetTypes();
+	unprojected_types = children[0].get().GetTypes();
+	auto &types = children[1].get().GetTypes();
 	unprojected_types.insert(unprojected_types.end(), types.begin(), types.end());
 }
 
@@ -314,7 +329,7 @@ void PhysicalRangeJoin::ProjectResult(DataChunk &chunk, DataChunk &result) const
 	for (idx_t i = 0; i < left_projected; ++i) {
 		result.data[i].Reference(chunk.data[left_projection_map[i]]);
 	}
-	const auto left_width = children[0]->types.size();
+	const auto left_width = children[0].get().GetTypes().size();
 	for (idx_t i = 0; i < right_projection_map.size(); ++i) {
 		result.data[left_projected + i].Reference(chunk.data[left_width + right_projection_map[i]]);
 	}

@@ -185,6 +185,7 @@ public:
 	int32_t day;
 
 public:
+	date_t ToDate();
 	Value ToDuckValue();
 };
 

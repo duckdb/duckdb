@@ -7,9 +7,10 @@
 
 namespace duckdb {
 
-PhysicalVacuum::PhysicalVacuum(unique_ptr<VacuumInfo> info_p, optional_ptr<TableCatalogEntry> table,
-                               unordered_map<idx_t, idx_t> column_id_map, idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::VACUUM, {LogicalType::BOOLEAN}, estimated_cardinality),
+PhysicalVacuum::PhysicalVacuum(PhysicalPlan &physical_plan, unique_ptr<VacuumInfo> info_p,
+                               optional_ptr<TableCatalogEntry> table, unordered_map<idx_t, idx_t> column_id_map,
+                               idx_t estimated_cardinality)
+    : PhysicalOperator(physical_plan, PhysicalOperatorType::VACUUM, {LogicalType::BOOLEAN}, estimated_cardinality),
       info(std::move(info_p)), table(table), column_id_map(std::move(column_id_map)) {
 }
 
@@ -93,6 +94,9 @@ SinkFinalizeType PhysicalVacuum::Finalize(Pipeline &pipeline, Event &event, Clie
 	auto tbl = table;
 	for (idx_t col_idx = 0; col_idx < sink.column_distinct_stats.size(); col_idx++) {
 		tbl->GetStorage().SetDistinct(column_id_map.at(col_idx), std::move(sink.column_distinct_stats[col_idx]));
+	}
+	if (tbl) {
+		tbl->GetStorage().VacuumIndexes();
 	}
 
 	return SinkFinalizeType::READY;

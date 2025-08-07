@@ -15,10 +15,22 @@
 
 namespace duckdb {
 
-// FIXME: use a local state for each thread to increase performance?
+namespace {
+
+struct ListAggregatesLocalState : public FunctionLocalState {
+	explicit ListAggregatesLocalState(Allocator &allocator) : arena_allocator(allocator) {
+	}
+
+	ArenaAllocator arena_allocator;
+};
+
+unique_ptr<FunctionLocalState> ListAggregatesInitLocalState(ExpressionState &state, const BoundFunctionExpression &expr,
+                                                            FunctionData *bind_data) {
+	return make_uniq<ListAggregatesLocalState>(BufferAllocator::Get(state.GetContext()));
+}
 // FIXME: benchmark the use of simple_update against using update (if applicable)
 
-static unique_ptr<FunctionData> ListAggregatesBindFailure(ScalarFunction &bound_function) {
+unique_ptr<FunctionData> ListAggregatesBindFailure(ScalarFunction &bound_function) {
 	bound_function.arguments[0] = LogicalType::SQLNULL;
 	bound_function.return_type = LogicalType::SQLNULL;
 	return make_uniq<VariableReturnBindData>(LogicalType::SQLNULL);
@@ -189,7 +201,7 @@ struct UniqueFunctor {
 };
 
 template <class FUNCTION_FUNCTOR, bool IS_AGGR = false>
-static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto count = args.size();
 	Vector &lists = args.data[0];
 
@@ -207,7 +219,8 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = func_expr.bind_info->Cast<ListAggregatesBindData>();
 	auto &aggr = info.aggr_expr->Cast<BoundAggregateExpression>();
-	ArenaAllocator allocator(Allocator::DefaultAllocator());
+	auto &allocator = ExecuteFunctionState::GetFunctionState(state)->Cast<ListAggregatesLocalState>().arena_allocator;
+	allocator.Reset();
 	AggregateInputData aggr_input_data(aggr.bind_info.get(), allocator);
 
 	D_ASSERT(aggr.function.update);
@@ -358,23 +371,23 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 	}
 }
 
-static void ListAggregateFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+void ListAggregateFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() >= 2);
 	ListAggregatesFunction<AggregateFunctor, true>(args, state, result);
 }
 
-static void ListDistinctFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+void ListDistinctFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 1);
 	ListAggregatesFunction<DistinctFunctor>(args, state, result);
 }
 
-static void ListUniqueFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+void ListUniqueFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 1);
 	ListAggregatesFunction<UniqueFunctor>(args, state, result);
 }
 
 template <bool IS_AGGR = false>
-static unique_ptr<FunctionData>
+unique_ptr<FunctionData>
 ListAggregatesBindFunction(ClientContext &context, ScalarFunction &bound_function, const LogicalType &list_child_type,
                            AggregateFunction &aggr_function, vector<unique_ptr<Expression>> &arguments) {
 
@@ -408,8 +421,8 @@ ListAggregatesBindFunction(ClientContext &context, ScalarFunction &bound_functio
 }
 
 template <bool IS_AGGR = false>
-static unique_ptr<FunctionData> ListAggregatesBind(ClientContext &context, ScalarFunction &bound_function,
-                                                   vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> ListAggregatesBind(ClientContext &context, ScalarFunction &bound_function,
+                                            vector<unique_ptr<Expression>> &arguments) {
 
 	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
 
@@ -478,8 +491,8 @@ static unique_ptr<FunctionData> ListAggregatesBind(ClientContext &context, Scala
 	return ListAggregatesBindFunction<IS_AGGR>(context, bound_function, child_type, aggr_function, arguments);
 }
 
-static unique_ptr<FunctionData> ListAggregateBind(ClientContext &context, ScalarFunction &bound_function,
-                                                  vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> ListAggregateBind(ClientContext &context, ScalarFunction &bound_function,
+                                           vector<unique_ptr<Expression>> &arguments) {
 
 	// the list column and the name of the aggregate function
 	D_ASSERT(bound_function.arguments.size() >= 2);
@@ -488,31 +501,12 @@ static unique_ptr<FunctionData> ListAggregateBind(ClientContext &context, Scalar
 	return ListAggregatesBind<true>(context, bound_function, arguments);
 }
 
-static unique_ptr<FunctionData> ListDistinctBind(ClientContext &context, ScalarFunction &bound_function,
-                                                 vector<unique_ptr<Expression>> &arguments) {
-
-	D_ASSERT(bound_function.arguments.size() == 1);
-	D_ASSERT(arguments.size() == 1);
-
-	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
-	bound_function.return_type = arguments[0]->return_type;
-
-	return ListAggregatesBind<>(context, bound_function, arguments);
-}
-
-static unique_ptr<FunctionData> ListUniqueBind(ClientContext &context, ScalarFunction &bound_function,
-                                               vector<unique_ptr<Expression>> &arguments) {
-
-	D_ASSERT(bound_function.arguments.size() == 1);
-	D_ASSERT(arguments.size() == 1);
-	bound_function.return_type = LogicalType::UBIGINT;
-
-	return ListAggregatesBind<>(context, bound_function, arguments);
-}
+} // namespace
 
 ScalarFunction ListAggregateFun::GetFunction() {
-	auto result = ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::VARCHAR}, LogicalType::ANY,
-	                             ListAggregateFunction, ListAggregateBind);
+	auto result =
+	    ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::VARCHAR}, LogicalType::ANY,
+	                   ListAggregateFunction, ListAggregateBind, nullptr, nullptr, ListAggregatesInitLocalState);
 	BaseScalarFunction::SetReturnsError(result);
 	result.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	result.varargs = LogicalType::ANY;
@@ -522,13 +516,14 @@ ScalarFunction ListAggregateFun::GetFunction() {
 }
 
 ScalarFunction ListDistinctFun::GetFunction() {
-	return ScalarFunction({LogicalType::LIST(LogicalType::ANY)}, LogicalType::LIST(LogicalType::ANY),
-	                      ListDistinctFunction, ListDistinctBind);
+	return ScalarFunction({LogicalType::LIST(LogicalType::TEMPLATE("T"))},
+	                      LogicalType::LIST(LogicalType::TEMPLATE("T")), ListDistinctFunction,
+	                      ListAggregatesBind<false>, nullptr, nullptr, ListAggregatesInitLocalState);
 }
 
 ScalarFunction ListUniqueFun::GetFunction() {
 	return ScalarFunction({LogicalType::LIST(LogicalType::ANY)}, LogicalType::UBIGINT, ListUniqueFunction,
-	                      ListUniqueBind);
+	                      ListAggregatesBind<false>, nullptr, nullptr, ListAggregatesInitLocalState);
 }
 
 } // namespace duckdb

@@ -83,6 +83,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "DELETE";
 	case PhysicalOperatorType::UPDATE:
 		return "UPDATE";
+	case PhysicalOperatorType::MERGE_INTO:
+		return "MERGE_INTO";
 	case PhysicalOperatorType::EMPTY_RESULT:
 		return "EMPTY_RESULT";
 	case PhysicalOperatorType::CREATE_TABLE:
@@ -103,10 +105,14 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "VACUUM";
 	case PhysicalOperatorType::RECURSIVE_CTE:
 		return "REC_CTE";
+	case PhysicalOperatorType::RECURSIVE_KEY_CTE:
+		return "REC_KEY_CTE";
 	case PhysicalOperatorType::CTE:
 		return "CTE";
 	case PhysicalOperatorType::RECURSIVE_CTE_SCAN:
 		return "REC_CTE_SCAN";
+	case PhysicalOperatorType::RECURSIVE_RECURRING_CTE_SCAN:
+		return "REC_REC_CTE_SCAN";
 	case PhysicalOperatorType::CTE_SCAN:
 		return "CTE_SCAN";
 	case PhysicalOperatorType::EXPRESSION_SCAN:

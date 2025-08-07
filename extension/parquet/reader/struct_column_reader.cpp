@@ -36,6 +36,10 @@ idx_t StructColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_
 		throw InternalException("StructColumnReader cannot have pending skips");
 	}
 
+	// If the child reader values are all valid, "define_out" may not be initialized at all
+	// So, we just initialize them to all be valid beforehand
+	std::fill_n(define_out, num_values, MaxDefine());
+
 	optional_idx read_count;
 	for (idx_t i = 0; i < child_readers.size(); i++) {
 		auto &child = child_readers[i];
@@ -114,12 +118,21 @@ static bool TypeHasExactRowCount(const LogicalType &type) {
 }
 
 idx_t StructColumnReader::GroupRowsAvailable() {
-	for (idx_t i = 0; i < child_readers.size(); i++) {
-		if (TypeHasExactRowCount(child_readers[i]->Type())) {
-			return child_readers[i]->GroupRowsAvailable();
+	for (auto &child : child_readers) {
+		if (!child) {
+			continue;
+		}
+		if (TypeHasExactRowCount(child->Type())) {
+			return child->GroupRowsAvailable();
 		}
 	}
-	return child_readers[0]->GroupRowsAvailable();
+	for (auto &child : child_readers) {
+		if (!child) {
+			continue;
+		}
+		return child->GroupRowsAvailable();
+	}
+	throw InternalException("No projected columns in struct?");
 }
 
 } // namespace duckdb

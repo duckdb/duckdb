@@ -4,14 +4,15 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/parallel/thread_context.hpp"
-#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 
 namespace duckdb {
 
-PhysicalStreamingWindow::PhysicalStreamingWindow(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
+PhysicalStreamingWindow::PhysicalStreamingWindow(PhysicalPlan &physical_plan, vector<LogicalType> types,
+                                                 vector<unique_ptr<Expression>> select_list,
                                                  idx_t estimated_cardinality, PhysicalOperatorType type)
-    : PhysicalOperator(type, std::move(types), estimated_cardinality), select_list(std::move(select_list)) {
+    : PhysicalOperator(physical_plan, type, std::move(types), estimated_cardinality),
+      select_list(std::move(select_list)) {
 }
 
 class StreamingWindowGlobalState : public GlobalOperatorState {
@@ -109,7 +110,7 @@ public:
 
 	struct LeadLagState {
 		//	Fixed size
-		static constexpr idx_t MAX_BUFFER = 2048U;
+		static constexpr int64_t MAX_BUFFER = 2048;
 
 		static bool ComputeOffset(ClientContext &context, BoundWindowExpression &wexpr, int64_t &offset) {
 			offset = 1;
@@ -132,7 +133,7 @@ public:
 			if (wexpr.GetExpressionType() == ExpressionType::WINDOW_LEAD) {
 				offset = -offset;
 			}
-			return idx_t(std::abs(offset)) < MAX_BUFFER;
+			return std::abs(offset) < MAX_BUFFER;
 		}
 
 		static bool ComputeDefault(ClientContext &context, BoundWindowExpression &wexpr, Value &result) {
@@ -413,6 +414,7 @@ void StreamingWindowState::AggregateState::Execute(ExecutionContext &context, Da
 
 	// Compute the arguments
 	auto &arg_chunk = aggr_state.arg_chunk;
+	arg_chunk.Reset();
 	executor.Execute(input, arg_chunk);
 	arg_chunk.Flatten();
 
@@ -486,7 +488,7 @@ void PhysicalStreamingWindow::ExecuteFunctions(ExecutionContext &context, DataCh
 
 	// Compute window functions
 	const idx_t count = output.size();
-	const column_t input_width = children[0]->GetTypes().size();
+	const column_t input_width = children[0].get().GetTypes().size();
 	for (column_t expr_idx = 0; expr_idx < select_list.size(); expr_idx++) {
 		column_t col_idx = input_width + expr_idx;
 		auto &expr = *select_list[expr_idx];

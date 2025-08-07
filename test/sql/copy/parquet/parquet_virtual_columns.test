@@ -4,6 +4,26 @@
 
 require parquet
 
+# file_index
+query I
+SELECT file_index FROM 'data/parquet-testing/glob/t1.parquet'
+----
+0
+
+query III
+SELECT file_index, i, j FROM read_parquet(['data/parquet-testing/glob/t1.parquet', 'data/parquet-testing/glob/t2.parquet', 'data/parquet-testing/glob2/t1.parquet'])
+----
+0	1	a
+1	2	b
+2	3	c
+
+query III
+SELECT file_index, i, j
+FROM read_parquet(['data/parquet-testing/glob/t1.parquet', 'data/parquet-testing/glob/t2.parquet', 'data/parquet-testing/glob2/t1.parquet'])
+WHERE file_index=1
+----
+1	2	b
+
 # Filename without the filename option
 statement ok
 select filename from 'data/parquet-testing/glob/t1.parquet'

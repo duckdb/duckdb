@@ -123,9 +123,14 @@ COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (SEP 1);
 
 # multiple format options
 statement error
-COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (FORMAT 'csv', FORMAT 'json');
+COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (FORMAT 'csv', FORMAT 'some_other_copy_function');
 ----
-Copy Function with name "json" is not in the catalog, but it exists in the json extension.
+duplicate option
+
+statement error
+COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (FORMAT 'some_other_copy_function', FORMAT 'csv');
+----
+duplicate option
 
 # number as escape string
 statement error

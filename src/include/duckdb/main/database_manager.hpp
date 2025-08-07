@@ -43,11 +43,12 @@ public:
 
 	//! Initializes the system catalog of the attached SYSTEM_DATABASE.
 	void InitializeSystemCatalog();
+	//! Finalize starting up the system
+	void FinalizeStartup();
 	//! Get an attached database by its name
 	optional_ptr<AttachedDatabase> GetDatabase(ClientContext &context, const string &name);
 	//! Attach a new database
-	optional_ptr<AttachedDatabase> AttachDatabase(ClientContext &context, const AttachInfo &info,
-	                                              const AttachOptions &options);
+	optional_ptr<AttachedDatabase> AttachDatabase(ClientContext &context, AttachInfo &info, AttachOptions &options);
 	//! Detach an existing database
 	void DetachDatabase(ClientContext &context, const string &name, OnEntryNotFound if_not_found);
 	//! Returns a reference to the system catalog
@@ -67,7 +68,15 @@ public:
 	void GetDatabaseType(ClientContext &context, AttachInfo &info, const DBConfig &config, AttachOptions &options);
 	//! Scans the catalog set and adds each committed database entry, and each database entry of the current
 	//! transaction, to a vector holding AttachedDatabase references
-	vector<reference<AttachedDatabase>> GetDatabases(ClientContext &context);
+	vector<reference<AttachedDatabase>> GetDatabases(ClientContext &context,
+	                                                 const optional_idx max_db_count = optional_idx());
+	//! Scans the catalog set and returns each committed database entry
+	vector<reference<AttachedDatabase>> GetDatabases();
+	//! Returns the approximate count of attached databases.
+	idx_t ApproxDatabaseCount() {
+		lock_guard<mutex> path_lock(db_paths_lock);
+		return db_paths_to_name.size();
+	}
 	//! Removes all databases from the catalog set. This is necessary for the database instance's destructor,
 	//! as the database manager has to be alive when destroying the catalog set objects.
 	void ResetDatabases(unique_ptr<TaskScheduler> &scheduler);
@@ -77,6 +86,12 @@ public:
 	}
 	transaction_t ActiveQueryNumber() const {
 		return current_query_number;
+	}
+	transaction_t GetNewTransactionNumber() {
+		return current_transaction_id++;
+	}
+	transaction_t ActiveTransactionNumber() const {
+		return current_transaction_id;
 	}
 	idx_t NextOid() {
 		return next_oid++;
@@ -88,8 +103,6 @@ public:
 	vector<string> GetAttachedDatabasePaths();
 
 private:
-	//! Returns a database with a specified path
-	optional_ptr<AttachedDatabase> GetDatabaseFromPath(ClientContext &context, const string &path);
 	void CheckPathConflict(ClientContext &context, const string &path);
 
 private:
@@ -101,6 +114,8 @@ private:
 	atomic<idx_t> next_oid;
 	//! The current query number
 	atomic<transaction_t> current_query_number;
+	//! The current transaction number
+	atomic<transaction_t> current_transaction_id;
 	//! The current default database
 	string default_database;
 
@@ -109,7 +124,7 @@ private:
 	//! A set containing all attached database path
 	//! This allows to attach many databases efficiently, and to avoid attaching the
 	//! same file path twice
-	case_insensitive_set_t db_paths;
+	case_insensitive_map_t<string> db_paths_to_name;
 };
 
 } // namespace duckdb

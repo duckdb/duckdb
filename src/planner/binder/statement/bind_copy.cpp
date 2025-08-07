@@ -19,8 +19,10 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/planner/expression_binder/table_function_binder.hpp"
+#include "duckdb/common/algorithm.hpp"
 
-#include <algorithm>
+#include "duckdb/main/extension_entries.hpp"
 
 namespace duckdb {
 
@@ -28,10 +30,34 @@ static bool GetBooleanArg(ClientContext &context, const vector<Value> &arg) {
 	return arg.empty() || arg[0].CastAs(context, LogicalType::BOOLEAN).GetValue<bool>();
 }
 
+void IsFormatExtensionKnown(const string &format) {
+	for (auto &file_postfixes : EXTENSION_FILE_POSTFIXES) {
+		if (format == file_postfixes.name + 1) {
+			// It's a match, we must throw
+			throw CatalogException(
+			    "Copy Function with name \"%s\" is not in the catalog, but it exists in the %s extension.", format,
+			    file_postfixes.extension);
+		}
+	}
+}
+
 BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) {
+	// Let's first bind our format
+	auto on_entry_do =
+	    stmt.info->is_format_auto_detected ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
+	CatalogEntryRetriever entry_retriever {context};
+	auto &catalog = Catalog::GetSystemCatalog(context);
+	auto entry = catalog.GetEntry(entry_retriever, DEFAULT_SCHEMA,
+	                              {CatalogType::COPY_FUNCTION_ENTRY, stmt.info->format}, on_entry_do);
+
+	if (!entry) {
+		IsFormatExtensionKnown(stmt.info->format);
+		// If we did not find an entry, we default to a CSV
+		entry = catalog.GetEntry(entry_retriever, DEFAULT_SCHEMA, {CatalogType::COPY_FUNCTION_ENTRY, "csv"},
+		                         OnEntryNotFound::THROW_EXCEPTION);
+	}
 	// lookup the format in the catalog
-	auto &copy_function =
-	    Catalog::GetEntry<CopyFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, stmt.info->format);
+	auto &copy_function = entry->Cast<CopyFunctionCatalogEntry>();
 	if (copy_function.function.plan) {
 		// plan rewrite COPY TO
 		return copy_function.function.plan(*this, stmt);
@@ -56,6 +82,9 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 	bool seen_overwrite_mode = false;
 	bool seen_filepattern = false;
 	bool write_partition_columns = false;
+	bool write_empty_file = true;
+	bool hive_file_pattern = true;
+	PreserveOrderType preserve_order = PreserveOrderType::AUTOMATIC;
 	CopyFunctionReturnType return_type = CopyFunctionReturnType::CHANGED_ROWS;
 
 	CopyFunctionBindInput bind_input(*stmt.info);
@@ -121,8 +150,22 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 			if (GetBooleanArg(context, option.second)) {
 				return_type = CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST;
 			}
+		} else if (loption == "preserve_order") {
+			if (GetBooleanArg(context, option.second)) {
+				preserve_order = PreserveOrderType::PRESERVE_ORDER;
+			} else {
+				preserve_order = PreserveOrderType::DONT_PRESERVE_ORDER;
+			}
+		} else if (loption == "return_stats") {
+			if (GetBooleanArg(context, option.second)) {
+				return_type = CopyFunctionReturnType::WRITTEN_FILE_STATISTICS;
+			}
 		} else if (loption == "write_partition_columns") {
 			write_partition_columns = GetBooleanArg(context, option.second);
+		} else if (loption == "write_empty_file") {
+			write_empty_file = GetBooleanArg(context, option.second);
+		} else if (loption == "hive_file_pattern") {
+			hive_file_pattern = GetBooleanArg(context, option.second);
 		} else {
 			stmt.info->options[option.first] = option.second;
 		}
@@ -222,6 +265,18 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 			    "Can't combine file rotation (e.g., ROW_GROUPS_PER_FILE) and PARTITION_BY for COPY");
 		}
 	}
+	if (!write_empty_file) {
+		if (per_thread_output) {
+			throw NotImplementedException("Can't combine WRITE_EMPTY_FILE false with PER_THREAD_OUTPUT");
+		}
+		if (!partition_cols.empty()) {
+			throw NotImplementedException("Can't combine WRITE_EMPTY_FILE false with PARTITION_BY");
+		}
+	}
+	if (return_type == CopyFunctionReturnType::WRITTEN_FILE_STATISTICS &&
+	    !copy_function.function.copy_to_get_written_statistics) {
+		throw NotImplementedException("RETURN_STATS is not supported for the \"%s\" copy format", stmt.info->format);
+	}
 
 	// now create the copy information
 	auto copy = make_uniq<LogicalCopyToFile>(copy_function.function, std::move(function_data), std::move(stmt.info));
@@ -238,7 +293,10 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 	copy->partition_output = !partition_cols.empty();
 	copy->write_partition_columns = write_partition_columns;
 	copy->partition_columns = std::move(partition_cols);
+	copy->write_empty_file = write_empty_file;
 	copy->return_type = return_type;
+	copy->preserve_order = preserve_order;
+	copy->hive_file_pattern = hive_file_pattern;
 
 	copy->names = unique_column_names;
 	copy->expected_types = select_node.types;
@@ -251,6 +309,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 		properties.return_type = StatementReturnType::CHANGED_ROWS;
 		break;
 	case CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST:
+	case CopyFunctionReturnType::WRITTEN_FILE_STATISTICS:
 		properties.return_type = StatementReturnType::QUERY_RESULT;
 		break;
 	default:
@@ -289,7 +348,19 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 
 	// lookup the format in the catalog
 	auto &catalog = Catalog::GetSystemCatalog(context);
-	auto &copy_function = catalog.GetEntry<CopyFunctionCatalogEntry>(context, DEFAULT_SCHEMA, stmt.info->format);
+	auto on_entry_do =
+	    stmt.info->is_format_auto_detected ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
+	CatalogEntryRetriever entry_retriever {context};
+	auto entry = catalog.GetEntry(entry_retriever, DEFAULT_SCHEMA,
+	                              {CatalogType::COPY_FUNCTION_ENTRY, stmt.info->format}, on_entry_do);
+	if (!entry) {
+		IsFormatExtensionKnown(stmt.info->format);
+		// If we did not find an entry, we default to a CSV
+		entry = catalog.GetEntry(entry_retriever, DEFAULT_SCHEMA, {CatalogType::COPY_FUNCTION_ENTRY, "csv"},
+		                         OnEntryNotFound::THROW_EXCEPTION);
+	}
+	// lookup the format in the catalog
+	auto &copy_function = entry->Cast<CopyFunctionCatalogEntry>();
 	if (!copy_function.function.copy_from_bind) {
 		throw NotImplementedException("COPY FROM is not supported for FORMAT \"%s\"", stmt.info->format);
 	}
@@ -312,9 +383,9 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 			expected_names.push_back(col.Name());
 		}
 	}
-
+	CopyFromFunctionBindInput input(*stmt.info, copy_function.function.copy_from_function);
 	auto function_data =
-	    copy_function.function.copy_from_bind(context, *stmt.info, expected_names, bound_insert.expected_types);
+	    copy_function.function.copy_from_bind(context, input, expected_names, bound_insert.expected_types);
 	auto get = make_uniq<LogicalGet>(GenerateTableIndex(), copy_function.function.copy_from_function,
 	                                 std::move(function_data), bound_insert.expected_types, expected_names);
 	for (idx_t i = 0; i < bound_insert.expected_types.size(); i++) {
@@ -325,7 +396,56 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 	return result;
 }
 
+vector<Value> BindCopyOption(ClientContext &context, TableFunctionBinder &option_binder, const string &name,
+                             unique_ptr<ParsedExpression> &expr) {
+	vector<Value> result;
+	if (!expr) {
+		return result;
+	}
+	if (expr->type == ExpressionType::STAR) {
+		auto &star = expr->Cast<StarExpression>();
+		// for compatibility with previous copy implementation - turn a raw * into a * string literal
+		if (star.relation_name.empty() && star.exclude_list.empty() && star.replace_list.empty() &&
+		    star.rename_list.empty() && !star.expr && !star.columns) {
+			result.push_back("*");
+			return result;
+		}
+	}
+	auto bound_expr = option_binder.Bind(expr);
+	auto val = ExpressionExecutor::EvaluateScalar(context, *bound_expr);
+	if (val.IsNull()) {
+		throw BinderException("NULL is not supported as a valid option for COPY option \"" + name + "\"");
+	}
+	if (val.type().id() == LogicalTypeId::STRUCT && StructType::IsUnnamed(val.type())) {
+		// unpack unnamed structs into a list of options
+		return StructValue::GetChildren(val);
+	}
+	result.push_back(std::move(val));
+	return result;
+}
+
+void Binder::BindCopyOptions(CopyInfo &info) {
+	TableFunctionBinder option_binder(*this, context, "Copy", "Copy options");
+	for (auto &entry : info.parsed_options) {
+		auto inputs = BindCopyOption(context, option_binder, entry.first, entry.second);
+		if (StringUtil::Lower(entry.first) == "format") {
+			// format specifier: interpret this option
+			if (inputs.size() != 1 || inputs[0].type().id() != LogicalTypeId::VARCHAR) {
+				throw ParserException("Unsupported parameter type for FORMAT: expected e.g. FORMAT 'csv', 'parquet'");
+			}
+			info.format = StringUtil::Lower(inputs[0].ToString());
+			info.is_format_auto_detected = false;
+			continue;
+		}
+		info.options[entry.first] = std::move(inputs);
+	}
+	info.parsed_options.clear();
+}
+
 BoundStatement Binder::Bind(CopyStatement &stmt, CopyToType copy_to_type) {
+	// bind the copy options
+	BindCopyOptions(*stmt.info);
+
 	if (!stmt.info->is_from && !stmt.info->select_statement) {
 		// copy table into file without a query
 		// generate SELECT * FROM table;

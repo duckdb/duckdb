@@ -16,7 +16,7 @@
     {
         "name": "median",
         "parameters": "x",
-        "description": "Returns the middle value of the set. NULL values are ignored. For even value counts, quantitative values are averaged and ordinal values return the lower value.",
+        "description": "Returns the middle value of the set. NULL values are ignored. For even value counts, interpolate-able types (numeric, date/time) return the average of the two middle values. Non-interpolate-able types (everything else) return the lower of the two middle values.",
         "example": "median(x)",
         "type": "aggregate_function_set"
     },
@@ -46,7 +46,7 @@
         "name": "reservoir_quantile",
         "parameters": "x,quantile,sample_size",
         "description": "Gives the approximate quantile using reservoir sampling, the sample size is optional and uses 8192 as a default size.",
-        "example": "reservoir_quantile(A,0.5,1024)",
+        "example": "reservoir_quantile(A, 0.5, 1024)",
         "type": "aggregate_function_set"
     },
     {

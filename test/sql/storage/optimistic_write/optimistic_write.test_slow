@@ -2,14 +2,12 @@
 # description: Test large appends within individual transactions
 # group: [optimistic_write]
 
-require noforcestorage
-
 foreach skip_checkpoint true false
 
 load __TEST_DIR__/optimistic_write_${skip_checkpoint}.db
 
 statement ok
-SET debug_skip_checkpoint_on_commit=${skip_checkpoint}
+SET debug_skip_checkpoint_on_commit = ${skip_checkpoint}
 
 statement ok
 PRAGMA disable_checkpoint_on_shutdown
@@ -18,7 +16,7 @@ statement ok
 CREATE OR REPLACE TABLE test (a INTEGER);
 
 statement ok
-INSERT INTO test SELECT * FROM range(1000000)
+INSERT INTO test SELECT * FROM range(1_000_000)
 
 query I
 SELECT SUM(a) FROM test
@@ -33,7 +31,7 @@ SELECT SUM(a) FROM test
 499999500000
 
 statement ok
-INSERT INTO test SELECT * FROM range(1000000)
+INSERT INTO test SELECT * FROM range(1_000_000)
 
 query I
 SELECT SUM(a) FROM test
@@ -42,60 +40,60 @@ SELECT SUM(a) FROM test
 
 endloop
 
-# for smaller block sizes (16KB) the total blocks alternate between a few values in the loop,
-# therefore, we need to compare to a range of total block counts
-statement ok
-CREATE TABLE total_blocks_tbl AS SELECT total_blocks FROM pragma_database_size();
+# For smaller block sizes (16KB) the total blocks alternate between a few values in the loop.
 
-# verify in a loop that the size of the system does not increase in case of rollbacks
-loop i 0 10
+statement ok
+CREATE TABLE total_blocks_tbl (total_blocks UBIGINT);
+
+loop i 0 20
 
 statement ok
 BEGIN TRANSACTION;
 
 statement ok
-INSERT INTO test SELECT * FROM range(1000000);
+INSERT INTO test SELECT * FROM range(1_000_000);
 
 statement ok
-INSERT INTO test SELECT * FROM range(1000000);
+INSERT INTO test SELECT * FROM range(1_000_000);
 
 statement ok
 ROLLBACK;
 
-# ensure that the total blocks don't exceed the total blocks after the first iteration
-# by more than 1.2
-
-query I
-SELECT CASE WHEN ${i} = 0 THEN True
-	WHEN current.total_blocks <= total_blocks_tbl.total_blocks * 1.2 THEN True
-	ELSE False END
-FROM pragma_database_size() AS current, total_blocks_tbl;
-----
-1
-
-# adjust total_blocks_tbl once to the count after the first iteration
+# Track the block count of each iteration.
 
 statement ok
-UPDATE total_blocks_tbl SET total_blocks = (
-	SELECT CASE WHEN ${i} = 0 THEN (SELECT current.total_blocks FROM pragma_database_size() AS current)
-		ELSE (total_blocks) END);
+INSERT INTO total_blocks_tbl SELECT current.total_blocks FROM pragma_database_size() AS current
 
 statement ok
 CHECKPOINT;
 
 endloop
 
+# Ensure that the blocks don't grow between iterations.
+
+query I
+WITH tbl(w) AS (
+	SELECT struct_pack(
+		total_blocks := total_blocks,
+		sum := SUM (total_blocks) OVER (ROWS BETWEEN 0 PRECEDING AND 1 FOLLOWING)
+	 ) AS w
+	FROM total_blocks_tbl
+	LIMIT 19)
+SELECT list_filter(LIST(w), lambda x: x.total_blocks * 2.5 < x.sum) FROM tbl;
+----
+[]
+
+# Ensure that the blocks don't grow 'quietly' between iterations.
+
+query I
+WITH tbl(l) AS (
+	SELECT LIST(total_blocks) AS l FROM total_blocks_tbl)
+SELECT list_sum(l) < (list_count(l) * l[3] + 2 * l[3]) FROM tbl;
+----
+true
+
 statement ok
 INSERT INTO test VALUES (42);
 
 statement ok
 CHECKPOINT;
-
-# ensure that the total blocks don't exceed the total blocks after the first iteration
-# by more than 1.2
-
-query I
-SELECT current.total_blocks <= total_blocks_tbl.total_blocks * 1.4
-FROM pragma_database_size() AS current, total_blocks_tbl;
-----
-1

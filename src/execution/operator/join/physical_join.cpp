@@ -6,9 +6,9 @@
 
 namespace duckdb {
 
-PhysicalJoin::PhysicalJoin(LogicalOperator &op, PhysicalOperatorType type, JoinType join_type,
-                           idx_t estimated_cardinality)
-    : CachingPhysicalOperator(type, op.types, estimated_cardinality), join_type(join_type) {
+PhysicalJoin::PhysicalJoin(PhysicalPlan &physical_plan, LogicalOperator &op, PhysicalOperatorType type,
+                           JoinType join_type, idx_t estimated_cardinality)
+    : CachingPhysicalOperator(physical_plan, type, op.types, estimated_cardinality), join_type(join_type) {
 }
 
 bool PhysicalJoin::EmptyResultIfRHSIsEmpty() const {
@@ -47,8 +47,8 @@ void PhysicalJoin::BuildJoinPipelines(Pipeline &current, MetaPipeline &meta_pipe
 	if (build_rhs) {
 		// on the RHS (build side), we construct a child MetaPipeline with this operator as its sink
 		auto &child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, op, MetaPipelineType::JOIN_BUILD);
-		child_meta_pipeline.Build(*op.children[1]);
-		if (op.children[1]->CanSaturateThreads(current.GetClientContext())) {
+		child_meta_pipeline.Build(op.children[1]);
+		if (op.children[1].get().CanSaturateThreads(current.GetClientContext())) {
 			// if the build side can saturate all available threads,
 			// we don't just make the LHS pipeline depend on the RHS, but recursively all LHS children too.
 			// this prevents breadth-first plan evaluation
@@ -58,7 +58,7 @@ void PhysicalJoin::BuildJoinPipelines(Pipeline &current, MetaPipeline &meta_pipe
 	}
 
 	// continue building the current pipeline on the LHS (probe side)
-	op.children[0]->BuildPipelines(current, meta_pipeline);
+	op.children[0].get().BuildPipelines(current, meta_pipeline);
 
 	if (last_child_ptr) {
 		// the pointer was set, set up the dependencies
@@ -87,7 +87,7 @@ void PhysicalJoin::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline
 }
 
 vector<const_reference<PhysicalOperator>> PhysicalJoin::GetSources() const {
-	auto result = children[0]->GetSources();
+	auto result = children[0].get().GetSources();
 	if (IsSource()) {
 		result.push_back(*this);
 	}

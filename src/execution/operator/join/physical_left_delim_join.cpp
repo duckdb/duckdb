@@ -9,24 +9,27 @@
 
 namespace duckdb {
 
-PhysicalLeftDelimJoin::PhysicalLeftDelimJoin(vector<LogicalType> types, unique_ptr<PhysicalOperator> original_join,
-                                             vector<const_reference<PhysicalOperator>> delim_scans,
+PhysicalLeftDelimJoin::PhysicalLeftDelimJoin(PhysicalPlan &physical_plan, PhysicalPlanGenerator &planner,
+                                             vector<LogicalType> types, PhysicalOperator &original_join,
+                                             PhysicalOperator &distinct,
+                                             const vector<const_reference<PhysicalOperator>> &delim_scans,
                                              idx_t estimated_cardinality, optional_idx delim_idx)
-    : PhysicalDelimJoin(PhysicalOperatorType::LEFT_DELIM_JOIN, std::move(types), std::move(original_join),
-                        std::move(delim_scans), estimated_cardinality, delim_idx) {
-	D_ASSERT(join->children.size() == 2);
+    : PhysicalDelimJoin(physical_plan, PhysicalOperatorType::LEFT_DELIM_JOIN, std::move(types), original_join, distinct,
+                        delim_scans, estimated_cardinality, delim_idx) {
+	D_ASSERT(join.children.size() == 2);
 	// now for the original join
 	// we take its left child, this is the side that we will duplicate eliminate
-	children.push_back(std::move(join->children[0]));
+	children.push_back(join.children[0]);
 
 	// we replace it with a PhysicalColumnDataScan, that scans the ColumnDataCollection that we keep cached
 	// the actual chunk collection to scan will be created in the LeftDelimJoinGlobalState
-	auto cached_chunk_scan = make_uniq<PhysicalColumnDataScan>(
-	    children[0]->GetTypes(), PhysicalOperatorType::COLUMN_DATA_SCAN, estimated_cardinality, nullptr);
+	auto &cached_scan = planner.Make<PhysicalColumnDataScan>(
+	    children[0].get().GetTypes(), PhysicalOperatorType::COLUMN_DATA_SCAN, estimated_cardinality, nullptr);
 	if (delim_idx.IsValid()) {
-		cached_chunk_scan->cte_index = delim_idx.GetIndex();
+		auto &cast_cached_scan = cached_scan.Cast<PhysicalColumnDataScan>();
+		cast_cached_scan.cte_index = delim_idx.GetIndex();
 	}
-	join->children[0] = std::move(cached_chunk_scan);
+	join.children[0] = cached_scan;
 }
 
 //===--------------------------------------------------------------------===//
@@ -35,11 +38,11 @@ PhysicalLeftDelimJoin::PhysicalLeftDelimJoin(vector<LogicalType> types, unique_p
 class LeftDelimJoinGlobalState : public GlobalSinkState {
 public:
 	explicit LeftDelimJoinGlobalState(ClientContext &context, const PhysicalLeftDelimJoin &delim_join)
-	    : lhs_data(context, delim_join.children[0]->GetTypes()) {
+	    : lhs_data(context, delim_join.children[0].get().GetTypes()) {
 		D_ASSERT(!delim_join.delim_scans.empty());
 		// set up the delim join chunk to scan in the original join
-		auto &cached_chunk_scan = delim_join.join->children[0]->Cast<PhysicalColumnDataScan>();
-		cached_chunk_scan.collection = &lhs_data;
+		auto &cast_cached_scan = delim_join.join.children[0].get().Cast<PhysicalColumnDataScan>();
+		cast_cached_scan.collection = &lhs_data;
 	}
 
 	ColumnDataCollection lhs_data;
@@ -54,7 +57,7 @@ public:
 class LeftDelimJoinLocalState : public LocalSinkState {
 public:
 	explicit LeftDelimJoinLocalState(ClientContext &context, const PhysicalLeftDelimJoin &delim_join)
-	    : lhs_data(context, delim_join.children[0]->GetTypes()) {
+	    : lhs_data(context, delim_join.children[0].get().GetTypes()) {
 		lhs_data.InitializeAppend(append_state);
 	}
 
@@ -69,16 +72,16 @@ public:
 
 unique_ptr<GlobalSinkState> PhysicalLeftDelimJoin::GetGlobalSinkState(ClientContext &context) const {
 	auto state = make_uniq<LeftDelimJoinGlobalState>(context, *this);
-	distinct->sink_state = distinct->GetGlobalSinkState(context);
+	distinct.sink_state = distinct.GetGlobalSinkState(context);
 	if (delim_scans.size() > 1) {
-		PhysicalHashAggregate::SetMultiScan(*distinct->sink_state);
+		PhysicalHashAggregate::SetMultiScan(*distinct.sink_state);
 	}
 	return std::move(state);
 }
 
 unique_ptr<LocalSinkState> PhysicalLeftDelimJoin::GetLocalSinkState(ExecutionContext &context) const {
 	auto state = make_uniq<LeftDelimJoinLocalState>(context.client, *this);
-	state->distinct_state = distinct->GetLocalSinkState(context);
+	state->distinct_state = distinct.GetLocalSinkState(context);
 	return std::move(state);
 }
 
@@ -86,8 +89,8 @@ SinkResultType PhysicalLeftDelimJoin::Sink(ExecutionContext &context, DataChunk 
                                            OperatorSinkInput &input) const {
 	auto &lstate = input.local_state.Cast<LeftDelimJoinLocalState>();
 	lstate.lhs_data.Append(lstate.append_state, chunk);
-	OperatorSinkInput distinct_sink_input {*distinct->sink_state, *lstate.distinct_state, input.interrupt_state};
-	distinct->Sink(context, chunk, distinct_sink_input);
+	OperatorSinkInput distinct_sink_input {*distinct.sink_state, *lstate.distinct_state, input.interrupt_state};
+	distinct.Sink(context, chunk, distinct_sink_input);
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
@@ -96,24 +99,22 @@ SinkCombineResultType PhysicalLeftDelimJoin::Combine(ExecutionContext &context, 
 	auto &gstate = input.global_state.Cast<LeftDelimJoinGlobalState>();
 	gstate.Merge(lstate.lhs_data);
 
-	OperatorSinkCombineInput distinct_combine_input {*distinct->sink_state, *lstate.distinct_state,
+	OperatorSinkCombineInput distinct_combine_input {*distinct.sink_state, *lstate.distinct_state,
 	                                                 input.interrupt_state};
-	distinct->Combine(context, distinct_combine_input);
+	distinct.Combine(context, distinct_combine_input);
 
 	return SinkCombineResultType::FINISHED;
 }
 
 void PhysicalLeftDelimJoin::PrepareFinalize(ClientContext &context, GlobalSinkState &sink_state) const {
-	distinct->PrepareFinalize(context, *distinct->sink_state);
+	distinct.PrepareFinalize(context, *distinct.sink_state);
 }
 
 SinkFinalizeType PhysicalLeftDelimJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &client,
                                                  OperatorSinkFinalizeInput &input) const {
-	// finalize the distinct HT
-	D_ASSERT(distinct);
-
-	OperatorSinkFinalizeInput finalize_input {*distinct->sink_state, input.interrupt_state};
-	distinct->Finalize(pipeline, event, client, finalize_input);
+	// Finalize the distinct hash table.
+	OperatorSinkFinalizeInput finalize_input {*distinct.sink_state, input.interrupt_state};
+	distinct.Finalize(pipeline, event, client, finalize_input);
 	return SinkFinalizeType::READY;
 }
 
@@ -125,7 +126,7 @@ void PhysicalLeftDelimJoin::BuildPipelines(Pipeline &current, MetaPipeline &meta
 	sink_state.reset();
 
 	auto &child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, *this);
-	child_meta_pipeline.Build(*children[0]);
+	child_meta_pipeline.Build(children[0]);
 
 	D_ASSERT(type == PhysicalOperatorType::LEFT_DELIM_JOIN);
 	// recurse into the actual join
@@ -137,7 +138,7 @@ void PhysicalLeftDelimJoin::BuildPipelines(Pipeline &current, MetaPipeline &meta
 		state.delim_join_dependencies.insert(
 		    make_pair(delim_scan, reference<Pipeline>(*child_meta_pipeline.GetBasePipeline())));
 	}
-	join->BuildPipelines(current, meta_pipeline);
+	join.BuildPipelines(current, meta_pipeline);
 }
 
 } // namespace duckdb

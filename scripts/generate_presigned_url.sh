@@ -3,6 +3,15 @@
 
 set -e
 
+DUCKDB_PATH=duckdb
+if test -f build/release/duckdb; then
+  DUCKDB_PATH=build/release/duckdb
+elif test -f build/reldebug/duckdb; then
+  DUCKDB_PATH=build/reldebug/duckdb
+elif test -f build/debug/duckdb; then
+  DUCKDB_PATH=build/debug/duckdb
+fi
+
 mkdir -p data/parquet-testing/presigned
 
 generate_large_parquet_query=$(cat <<EOF
@@ -12,10 +21,10 @@ COPY lineitem TO 'data/parquet-testing/presigned/presigned-url-lineitem.parquet'
 
 EOF
 )
-build/release/duckdb -c "$generate_large_parquet_query"
+$DUCKDB_PATH -c "$generate_large_parquet_query"
 
 mkdir -p data/attach_test/
 
 # Generate Storage Version
-build/release/duckdb  data/attach_test/attach.db < test/sql/storage_version/generate_storage_version.sql
-build/release/duckdb  data/attach_test/lineitem_sf1.db -c "CALL dbgen(sf=1)"
+$DUCKDB_PATH  data/attach_test/attach.db < test/sql/storage_version/generate_storage_version.sql
+$DUCKDB_PATH  data/attach_test/lineitem_sf1.db -c "CALL dbgen(sf=1)"

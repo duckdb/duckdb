@@ -19,10 +19,12 @@ public:
 	FunctionEntry(CatalogType type, Catalog &catalog, SchemaCatalogEntry &schema, CreateFunctionInfo &info)
 	    : StandardEntry(type, schema, catalog, info.name) {
 		descriptions = std::move(info.descriptions);
+		alias_of = std::move(info.alias_of);
 		this->dependencies = info.dependencies;
 		this->internal = info.internal;
 	}
 
+	string alias_of;
 	vector<FunctionDescription> descriptions;
 };
 } // namespace duckdb

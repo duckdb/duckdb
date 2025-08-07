@@ -1,3 +1,11 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/common/arrow/appender/list_view_data.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
 #pragma once
 
 #include "duckdb/common/arrow/appender/append_data.hpp"
@@ -22,7 +30,7 @@ public:
 		input.ToUnifiedFormat(input_size, format);
 		idx_t size = to - from;
 		vector<sel_t> child_indices;
-		AppendValidity(append_data, format, from, to);
+		append_data.AppendValidity(format, from, to);
 		AppendListMetadata(append_data, format, from, to, child_indices);
 
 		// append the child vector of the list
