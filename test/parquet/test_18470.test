@@ -4,6 +4,8 @@
 
 require parquet
 
+require notwindows
+
 set seed 0.42
 
 statement ok
