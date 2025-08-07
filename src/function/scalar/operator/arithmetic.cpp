@@ -323,6 +323,29 @@ void VarintAdd(DataChunk &args, ExpressionState &state, Vector &result) {
 	                                                      });
 }
 
+void VarintSubtract(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &allocator = state.GetAllocator();
+	ArenaAllocator arena(allocator);
+	BinaryExecutor::Execute<varint_t, varint_t, string_t>(
+	    args.data[0], args.data[1], result, args.size(), [&](varint_t a, varint_t b) {
+		    const VarintIntermediate lhs(a);
+		    VarintIntermediate rhs(b);
+		    rhs.NegateInPlace();
+		    auto result_value = VarintIntermediate::Add(result, lhs, rhs);
+		    rhs.NegateInPlace();
+		    return result_value;
+	    });
+}
+
+void VarintNegate(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &allocator = state.GetAllocator();
+	ArenaAllocator arena(allocator);
+	UnaryExecutor::Execute<varint_t, string_t>(args.data[0], result, args.size(), [&](varint_t a) {
+		const VarintIntermediate lhs(a);
+		return lhs.Negate(result);
+	});
+}
+
 ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const LogicalType &right_type) {
 	if (left_type.IsNumeric() && left_type.id() == right_type.id()) {
 		if (left_type.id() == LogicalTypeId::DECIMAL) {
@@ -652,6 +675,9 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &type) {
 	} else if (type.id() == LogicalTypeId::DECIMAL) {
 		ScalarFunction func("-", {type}, type, nullptr, DecimalNegateBind, nullptr, NegateBindStatistics);
 		return func;
+	} else if (type.id() == LogicalTypeId::VARINT) {
+		ScalarFunction func("+", {type}, LogicalType::VARINT, VarintNegate);
+		return func;
 	} else {
 		D_ASSERT(type.IsNumeric());
 		ScalarFunction func("-", {type}, type, ScalarFunction::GetScalarUnaryFunction<NegateOperator>(type), nullptr,
@@ -687,6 +713,10 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &left_type, const
 	}
 
 	switch (left_type.id()) {
+	case LogicalTypeId::VARINT: {
+		ScalarFunction function("-", {left_type, right_type}, left_type, VarintSubtract);
+		return function;
+	}
 	case LogicalTypeId::DATE:
 		if (right_type.id() == LogicalTypeId::DATE) {
 			ScalarFunction function("-", {left_type, right_type}, LogicalType::BIGINT,
@@ -764,6 +794,8 @@ ScalarFunctionSet OperatorSubtractFun::GetFunctions() {
 		// binary subtract function "a - b", subtracts b from a
 		subtract.AddFunction(SubtractFunction::GetFunction(type, type));
 	}
+	subtract.AddFunction(SubtractFunction::GetFunction(LogicalType::VARINT));
+	subtract.AddFunction(SubtractFunction::GetFunction(LogicalType::VARINT, LogicalType::VARINT));
 	// we can subtract dates from each other
 	subtract.AddFunction(SubtractFunction::GetFunction(LogicalType::DATE, LogicalType::DATE));
 	// we can subtract integers from dates
