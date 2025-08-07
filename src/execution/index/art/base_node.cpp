@@ -95,7 +95,10 @@ void Node4::DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte, 
 	}
 
 	auto old_status = node.GetGateStatus();
-	Node::FreeTree(art, node);
+	// Delete the actual node and temporarily pretend the node is a LEAF_INLINED.
+	// That way, in Prefix::Concat, we can safely free the subtree of the prefix.
+	Node::FreeNode(art, node);
+	node.SetMetadata(static_cast<uint8_t>(NType::LEAF_INLINED));
 	Prefix::Concat(art, prefix, remainder, old_status, child, status);
 }
 

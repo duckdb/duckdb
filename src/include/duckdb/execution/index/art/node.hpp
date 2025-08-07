@@ -52,7 +52,7 @@ public:
 public:
 	//! Get a new pointer to a node and initialize it.
 	static void New(ART &art, Node &node, const NType type);
-	//!
+	//! Free the node.
 	static void FreeNode(ART &art, Node &node);
 	//! Free the node and its children.
 	static void FreeTree(ART &art, Node &node);

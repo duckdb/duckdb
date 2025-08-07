@@ -72,10 +72,6 @@ IndexPointer FixedSizeAllocator::New() {
 	auto &buffer = buffers.find(buffer_id)->second;
 	auto offset = buffer->GetOffset(bitmask_count, available_segments_per_buffer);
 
-	if (buffer_id == 0 && offset == 1 && segment_size == 16) {
-		D_ASSERT(1);
-	}
-
 	total_segment_count++;
 	buffer->segment_count++;
 
@@ -91,10 +87,6 @@ IndexPointer FixedSizeAllocator::New() {
 void FixedSizeAllocator::Free(const IndexPointer ptr) {
 	auto buffer_id = ptr.GetBufferId();
 	auto offset = ptr.GetOffset();
-
-	if (buffer_id == 0 && offset == 1 && segment_size == 16) {
-		D_ASSERT(1);
-	}
 
 	auto buffer_it = buffers.find(buffer_id);
 	D_ASSERT(buffer_it != buffers.end());

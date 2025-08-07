@@ -151,7 +151,7 @@ void Leaf::DeprecatedFree(ART &art, Node &node) {
 	Node next;
 	while (node.HasMetadata()) {
 		next = Node::Ref<Leaf>(art, node, LEAF).ptr;
-		Node::GetAllocator(art, LEAF).Free(node);
+		Node::FreeNode(art, node);
 		node = next;
 	}
 	node.Clear();

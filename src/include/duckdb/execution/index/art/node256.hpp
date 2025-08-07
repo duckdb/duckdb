@@ -46,9 +46,7 @@ public:
 public:
 	template <class F, class NODE>
 	static void Iterator(NODE &n, F &&lambda) {
-		if (!n.count) {
-			return;
-		}
+		D_ASSERT(n.count);
 		for (idx_t i = 0; i < CAPACITY; i++) {
 			if (n.children[i].HasMetadata()) {
 				lambda(n.children[i]);

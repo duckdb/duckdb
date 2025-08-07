@@ -51,9 +51,7 @@ public:
 public:
 	template <class F, class NODE>
 	static void Iterator(NODE &n, F &&lambda) {
-		if (!n.count) {
-			return;
-		}
+		D_ASSERT(n.count);
 		for (idx_t i = 0; i < Node256::CAPACITY; i++) {
 			if (n.child_index[i] != EMPTY_MARKER) {
 				lambda(n.children[n.child_index[i]]);

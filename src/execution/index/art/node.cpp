@@ -49,6 +49,7 @@ void Node::New(ART &art, Node &node, NType type) {
 }
 
 void Node::FreeNode(ART &art, Node &node) {
+	D_ASSERT(node.HasMetadata());
 	GetAllocator(art, node.GetType()).Free(node);
 	node.Clear();
 }

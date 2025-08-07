@@ -93,8 +93,10 @@ void Prefix::Concat(ART &art, Node &parent, uint8_t byte, const GateStatus old_s
 	}
 
 	if (status == GateStatus::GATE_SET && child.GetType() == NType::LEAF_INLINED) {
+		// Inside gates, inlined leaves are not prefixed.
+		// We free the prefix and move the row ID up.
 		auto row_id = child.GetRowId();
-		Node::FreeNode(art, parent); // TODO: not sure if this should be FreeTree
+		Node::FreeTree(art, parent);
 		Leaf::New(parent, row_id);
 		return;
 	}

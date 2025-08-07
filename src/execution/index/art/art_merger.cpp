@@ -300,8 +300,7 @@ void ARTMerger::MergePrefixes(NodeEntry &entry) {
 		// Free the right prefix, but keep the reference to its child alive.
 		// Then, iterate on the left and right (reduced) child.
 		auto r_child = *r_prefix.ptr;
-		r_prefix.ptr->Clear();
-		Node::GetAllocator(art, NType::PREFIX).Free(entry.right);
+		Node::FreeNode(art, entry.right);
 		entry.right = r_child;
 
 		auto depth = entry.depth + l_prefix.data[count];
