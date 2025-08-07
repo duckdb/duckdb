@@ -34,6 +34,7 @@ static const TestConfigOption test_config_options[] = {
     {"debug_initialize", "Initialize buffers with all 0 or all 1", LogicalType::VARCHAR, nullptr},
     {"autoloading", "Loading strategy for extensions not bundled in", LogicalType::VARCHAR, nullptr},
     {"init_script", "Script to execute on init", LogicalType::VARCHAR, TestConfiguration::ParseConnectScript},
+    {"on_cleanup", "SQL statements to execute on test end", LogicalType::VARCHAR, nullptr},
     {"on_init", "SQL statements to execute on init", LogicalType::VARCHAR, nullptr},
     {"on_load", "SQL statements to execute on explicit load", LogicalType::VARCHAR, nullptr},
     {"on_new_connection", "SQL statements to execute on connection", LogicalType::VARCHAR, nullptr},
@@ -203,6 +204,10 @@ string TestConfiguration::OnLoadCommand() {
 
 string TestConfiguration::OnConnectionCommand() {
 	return GetOptionOrDefault("on_new_connection", string());
+}
+
+string TestConfiguration::OnCleanupCommand() {
+	return GetOptionOrDefault("on_cleanup", string());
 }
 
 vector<string> TestConfiguration::ExtensionToBeLoadedOnLoad() {
