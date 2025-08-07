@@ -170,11 +170,11 @@ public:
 	}
 
 	//===--------------------------------------------------------------------===//
-	// Varint
+	// Bignum
 	//===--------------------------------------------------------------------===//
 public:
 	template <class T>
-	static uint8_t GetVarintSize(T val) {
+	static uint8_t GetBignumSize(T val) {
 		uint8_t res = 0;
 		do {
 			val >>= 7;
@@ -184,7 +184,7 @@ public:
 	}
 
 	template <class T>
-	static void VarintEncode(T val, WriteStream &ser) {
+	static void BignumEncode(T val, WriteStream &ser) {
 		do {
 			uint8_t byte = val & 127;
 			val >>= 7;
@@ -196,7 +196,7 @@ public:
 	}
 
 	template <class T, bool CHECKED = true>
-	static T VarintDecode(ByteBuffer &buf) {
+	static T BignumDecode(ByteBuffer &buf) {
 		T result = 0;
 		uint8_t shift = 0;
 		while (true) {
@@ -212,7 +212,7 @@ public:
 			}
 			shift += 7;
 			if (shift > sizeof(T) * 8) {
-				throw std::runtime_error("Varint-decoding found too large number");
+				throw std::runtime_error("Bignum-decoding found too large number");
 			}
 		}
 		return result;

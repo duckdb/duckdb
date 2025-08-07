@@ -47,18 +47,18 @@ private:
 		// <block size in values> <number of miniblocks in a block> <total value count> <first value>
 
 		// the block size is a multiple of 128; it is stored as a ULEB128 int
-		ParquetDecodeUtils::VarintEncode(BLOCK_SIZE_IN_VALUES, writer);
+		ParquetDecodeUtils::BignumEncode(BLOCK_SIZE_IN_VALUES, writer);
 		// the miniblock count per block is a divisor of the block size such that their quotient,
 		// the number of values in a miniblock, is a multiple of 32
 		static_assert(BLOCK_SIZE_IN_VALUES % NUMBER_OF_MINIBLOCKS_IN_A_BLOCK == 0 &&
 		                  NUMBER_OF_VALUES_IN_A_MINIBLOCK % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE == 0,
 		              "invalid block sizes for DELTA_BINARY_PACKED");
 		// it is stored as a ULEB128 int
-		ParquetDecodeUtils::VarintEncode(NUMBER_OF_MINIBLOCKS_IN_A_BLOCK, writer);
+		ParquetDecodeUtils::BignumEncode(NUMBER_OF_MINIBLOCKS_IN_A_BLOCK, writer);
 		// the total value count is stored as a ULEB128 int
-		ParquetDecodeUtils::VarintEncode(total_value_count, writer);
+		ParquetDecodeUtils::BignumEncode(total_value_count, writer);
 		// the first value is stored as a zigzag ULEB128 int
-		ParquetDecodeUtils::VarintEncode(ParquetDecodeUtils::IntToZigzag(first_value), writer);
+		ParquetDecodeUtils::BignumEncode(ParquetDecodeUtils::IntToZigzag(first_value), writer);
 
 		// initialize
 		if (total_value_count != 0) {
@@ -139,7 +139,7 @@ private:
 		// <min delta> <list of bitwidths of miniblocks> <miniblocks>
 
 		// the min delta is a zigzag ULEB128 int (we compute a minimum as we need positive integers for bit packing)
-		ParquetDecodeUtils::VarintEncode(ParquetDecodeUtils::IntToZigzag(min_delta), writer);
+		ParquetDecodeUtils::BignumEncode(ParquetDecodeUtils::IntToZigzag(min_delta), writer);
 		// the bitwidth of each block is stored as a byte
 		writer.WriteData(list_of_bitwidths_of_miniblocks, NUMBER_OF_MINIBLOCKS_IN_A_BLOCK);
 		// each miniblock is a list of bit packed ints according to the bit width stored at the beginning of the block

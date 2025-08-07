@@ -189,7 +189,7 @@ const duckdb_cast_mode = DUCKDB_CAST_MODE_
     DUCKDB_TYPE_TIMESTAMP_TZ = 31
     DUCKDB_TYPE_ARRAY = 33
     DUCKDB_TYPE_ANY = 34
-    DUCKDB_TYPE_VARINT = 35
+    DUCKDB_TYPE_BIGNUM = 35
     DUCKDB_TYPE_SQLNULL = 36
     DUCKDB_TYPE_STRING_LITERAL = 37
     DUCKDB_TYPE_INTEGER_LITERAL = 38
@@ -319,7 +319,7 @@ struct duckdb_query_progress_type
     total_rows_to_process::UInt64
 end
 
-struct duckdb_varint
+struct duckdb_bignum
     data::Ptr{UInt8}
     size::idx_t
     is_negative::Bool

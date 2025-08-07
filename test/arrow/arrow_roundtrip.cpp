@@ -86,7 +86,7 @@ TEST_CASE("Test arrow roundtrip", "[arrow]") {
 	// FIXME: there seems to be a bug in the enum arrow reader in this test when run with vsize=2
 	return;
 #endif
-	TestArrowRoundtrip("SELECT * EXCLUDE(bit,time_tz, varint) REPLACE "
+	TestArrowRoundtrip("SELECT * EXCLUDE(bit,time_tz, bignum) REPLACE "
 	                   "(interval (1) seconds AS interval, hugeint::DOUBLE as hugeint, uhugeint::DOUBLE as uhugeint) "
 	                   "FROM test_all_types()",
 	                   false, true);
@@ -110,10 +110,10 @@ TEST_CASE("Test Arrow Extension Types", "[arrow][.]") {
 	// TIME_TZ
 	TestArrowRoundtrip("SELECT '02:30:00+04'::TIMETZ str FROM range(5) tbl(i)", false, true);
 
-	// VARINT
-	TestArrowRoundtrip("SELECT 85070591730234614260976917445211069672::VARINT str FROM range(5) tbl(i)", false, true);
+	// BIGNUM
+	TestArrowRoundtrip("SELECT 85070591730234614260976917445211069672::BIGNUM str FROM range(5) tbl(i)", false, true);
 
-	TestArrowRoundtrip("SELECT 85070591730234614260976917445211069672::VARINT str FROM range(5) tbl(i)", true, true);
+	TestArrowRoundtrip("SELECT 85070591730234614260976917445211069672::BIGNUM str FROM range(5) tbl(i)", true, true);
 }
 
 TEST_CASE("Test Arrow Extension Types - JSON", "[arrow][.]") {
