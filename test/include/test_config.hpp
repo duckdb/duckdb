@@ -50,6 +50,7 @@ public:
 	string OnInitCommand();
 	string OnLoadCommand();
 	string OnConnectionCommand();
+	string OnCleanupCommand();
 	vector<string> ExtensionToBeLoadedOnLoad();
 	vector<string> ErrorMessagesToBeSkipped();
 	string GetStorageVersion();
