@@ -140,13 +140,9 @@
       "paths": [
         "test/optimizer/joins/no_duplicate_elimination_join.test",
         "test/sql/optimizer/plan/test_filter_pushdown_large.test",
-        "test/sql/limit/test_limit0.test"
-      ]
-    },
-    {
-      "reason": "CI is getting stuck.",
-      "paths": [
-        "test/common/test_cast_struct.test"
+        "test/sql/limit/test_limit0.test",
+        "test/optimizer/joins/tpcds_nofail.test",
+        "test/optimizer/join_dependent_filter.test"
       ]
     },
     {
@@ -289,7 +285,8 @@
         "test/sql/copy/parquet/corrupt_stats.test",
         "test/sql/copy/file_size_bytes.test",
         "test/sql/create/create_table_compression.test",
-        "test/sql/aggregate/aggregates/test_state_export.test"
+        "test/sql/aggregate/aggregates/test_state_export.test",
+        "test/fuzzer/duckfuzz/null_arguments.test"
       ]
     }
   ]
