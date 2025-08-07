@@ -608,6 +608,11 @@ typedef struct {
 	char *(*duckdb_value_to_string)(duckdb_value value);
 #endif
 
+// New functions around table function binding
+#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+	void (*duckdb_table_function_get_client_context)(duckdb_bind_info info, duckdb_client_context *out_context);
+#endif
+
 // New value functions that are added
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
 	duckdb_value (*duckdb_create_map_value)(duckdb_logical_type map_type, duckdb_value *keys, duckdb_value *values,
@@ -1097,6 +1102,9 @@ typedef struct {
 
 // Version unstable_new_string_functions
 #define duckdb_value_to_string duckdb_ext_api.duckdb_value_to_string
+
+// Version unstable_new_table_function_functions
+#define duckdb_table_function_get_client_context duckdb_ext_api.duckdb_table_function_get_client_context
 
 // Version unstable_new_value_functions
 #define duckdb_create_time_ns     duckdb_ext_api.duckdb_create_time_ns

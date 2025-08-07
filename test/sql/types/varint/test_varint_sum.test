@@ -273,3 +273,36 @@ query I
 select '1'::varint + '-2'::varint
 ----
 -1
+
+statement error
+select varint + '-1'::varint from test_all_types(use_large_varint = true) limit 1
+----
+Out of Range Error: Underflow in Varint Operation. A Varint can hold max 8388607 data bytes. Current varint has 8388608 bytes.
+
+statement error
+select varint + '1'::varint from test_all_types(use_large_varint = true) limit 1 offset 1
+----
+Out of Range Error: Overflow in Varint Operation. A Varint can hold max 8388607 data bytes. Current varint has 8388608 bytes.
+
+
+statement ok
+create table varint_underflow as select varint from test_all_types(use_large_varint = true) limit 1
+
+statement ok
+insert into varint_underflow values (-1);
+
+statement error
+select sum(varint) from varint_underflow
+----
+Out of Range Error: Underflow in Varint Operation. A Varint can hold max 8388607 data bytes. Current varint has 8388608 bytes.
+
+statement ok
+create table varint_overflow as select varint from test_all_types(use_large_varint = true) limit 1 offset 1
+
+statement ok
+insert into varint_overflow values (1);
+
+statement error
+select sum(varint) from varint_overflow
+----
+Out of Range Error: Overflow in Varint Operation. A Varint can hold max 8388607 data bytes. Current varint has 8388608 bytes.
