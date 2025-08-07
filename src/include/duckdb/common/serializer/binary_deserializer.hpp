@@ -101,20 +101,20 @@ private:
 	}
 
 	template <class T>
-	T BignumDecode() {
+	T VarIntDecode() {
 		// FIXME: maybe we should pass a source to EncodingUtil instead
 		uint8_t buffer[16] = {};
-		idx_t bignum_size;
-		for (bignum_size = 0; bignum_size < 16; bignum_size++) {
-			ReadData(buffer + bignum_size, 1);
-			if (!(buffer[bignum_size] & 0x80)) {
-				bignum_size++;
+		idx_t varint_size;
+		for (varint_size = 0; varint_size < 16; varint_size++) {
+			ReadData(buffer + varint_size, 1);
+			if (!(buffer[varint_size] & 0x80)) {
+				varint_size++;
 				break;
 			}
 		}
 		T value;
 		auto read_size = EncodingUtil::DecodeLEB128<T>(buffer, value);
-		D_ASSERT(read_size == bignum_size);
+		D_ASSERT(read_size == varint_size);
 		(void)read_size;
 		return value;
 	}
