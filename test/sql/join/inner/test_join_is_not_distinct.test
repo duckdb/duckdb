@@ -256,7 +256,6 @@ ORDER BY x.col1.x, y.col1.x NULLS LAST;
 ----
 {'x': 0}	{'x': 0}
 {'x': 1}	{'x': 1}
-{'x': NULL}	{'x': NULL}
 
 query II
 SELECT x.col1, y.col1 FROM tbl_s_null x JOIN tbl_s_null y
@@ -284,7 +283,6 @@ ORDER BY x.col1;
 ----
 {'x': 0}	{'x': 0}
 {'x': 1}	{'x': 1}
-{'x': NULL}	{'x': NULL}
 
 # same but with lists
 

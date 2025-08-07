@@ -293,7 +293,6 @@ ORDER BY x.col1;
 ----
 {'x': 0}	{'x': 0}
 {'x': 1}	{'x': 1}
-{'x': NULL}	{'x': NULL}
 
 # same but with lists
 
