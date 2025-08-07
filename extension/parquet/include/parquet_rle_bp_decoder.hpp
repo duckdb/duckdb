@@ -122,7 +122,7 @@ private:
 			}
 			bitpack_pos = 0;
 		}
-		auto indicator_value = ParquetDecodeUtils::BignumDecode<uint32_t, CHECKED>(buffer_);
+		auto indicator_value = ParquetDecodeUtils::VarintDecode<uint32_t, CHECKED>(buffer_);
 
 		// lsb indicates if it is a literal run or repeated run
 		bool is_literal = indicator_value & 1;

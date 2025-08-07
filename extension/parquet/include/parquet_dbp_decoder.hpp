@@ -17,11 +17,11 @@ public:
 	DbpDecoder(const data_ptr_t buffer, const uint32_t buffer_len)
 	    : buffer_(buffer, buffer_len),
 	      //<block size in values> <number of miniblocks in a block> <total value count> <first value>
-	      block_size_in_values(ParquetDecodeUtils::BignumDecode<uint64_t>(buffer_)),
-	      number_of_miniblocks_per_block(ParquetDecodeUtils::BignumDecode<uint64_t>(buffer_)),
+	      block_size_in_values(ParquetDecodeUtils::VarintDecode<uint64_t>(buffer_)),
+	      number_of_miniblocks_per_block(ParquetDecodeUtils::VarintDecode<uint64_t>(buffer_)),
 	      number_of_values_in_a_miniblock(block_size_in_values / number_of_miniblocks_per_block),
-	      total_value_count(ParquetDecodeUtils::BignumDecode<uint64_t>(buffer_)),
-	      previous_value(ParquetDecodeUtils::ZigzagToInt(ParquetDecodeUtils::BignumDecode<uint64_t>(buffer_))),
+	      total_value_count(ParquetDecodeUtils::VarintDecode<uint64_t>(buffer_)),
+	      previous_value(ParquetDecodeUtils::ZigzagToInt(ParquetDecodeUtils::VarintDecode<uint64_t>(buffer_))),
 	      // init state to something sane
 	      is_first_value(true), read_values(0), min_delta(NumericLimits<int64_t>::Maximum()),
 	      miniblock_index(number_of_miniblocks_per_block - 1), list_of_bitwidths_of_miniblocks(nullptr),
@@ -115,7 +115,7 @@ private:
 				miniblock_offset = 0;
 				if (++miniblock_index == number_of_miniblocks_per_block) {
 					// <min delta> <list of bitwidths of miniblocks> <miniblocks>
-					min_delta = ParquetDecodeUtils::ZigzagToInt(ParquetDecodeUtils::BignumDecode<uint64_t>(buffer_));
+					min_delta = ParquetDecodeUtils::ZigzagToInt(ParquetDecodeUtils::VarintDecode<uint64_t>(buffer_));
 					buffer_.available(number_of_miniblocks_per_block);
 					list_of_bitwidths_of_miniblocks = buffer_.ptr;
 					buffer_.unsafe_inc(number_of_miniblocks_per_block);

@@ -118,7 +118,7 @@ private:
 	}
 
 	void WriteCurrentBlockRLE(WriteStream &writer) {
-		ParquetDecodeUtils::BignumEncode(rle_count << 1 | 0, writer); // (... | 0) signals RLE run
+		ParquetDecodeUtils::VarintEncode(rle_count << 1 | 0, writer); // (... | 0) signals RLE run
 		D_ASSERT(rle_value >> (byte_width * 8) == 0);
 		switch (byte_width) {
 		case 1:
@@ -145,7 +145,7 @@ private:
 		if (bp_block_count == 0) {
 			return;
 		}
-		ParquetDecodeUtils::BignumEncode(BP_BLOCK_SIZE / 8 << 1 | 1, writer); // (... | 1) signals BP run
+		ParquetDecodeUtils::VarintEncode(BP_BLOCK_SIZE / 8 << 1 | 1, writer); // (... | 1) signals BP run
 		ParquetDecodeUtils::BitPackAligned(bp_block, data_ptr_cast(bp_block_packed), BP_BLOCK_SIZE, bit_width);
 		writer.WriteData(data_ptr_cast(bp_block_packed), BP_BLOCK_SIZE * bit_width / 8);
 		bp_block_count = 0;
