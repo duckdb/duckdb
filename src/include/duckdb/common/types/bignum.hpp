@@ -65,9 +65,9 @@ public:
 	//! Function to create a BIGNUM blob from a byte array containing the absolute value, plus an is_negative bool
 	DUCKDB_API static string FromByteArray(uint8_t *data, idx_t size, bool is_negative);
 	//! Function to convert BIGNUM blob to a VARCHAR
-	DUCKDB_API static string VarIntToVarchar(const bignum_t &blob);
+	DUCKDB_API static string BignumToVarchar(const bignum_t &blob);
 	//! Function to convert Varchar to BIGNUM blob
-	DUCKDB_API static string VarcharToVarInt(const string_t &value);
+	DUCKDB_API static string VarcharToBignum(const string_t &value);
 	//! ----------------------------------- Double Cast ----------------------------------- //
 	DUCKDB_API static bool BignumToDouble(const bignum_t &blob, double &result, bool &strict);
 	template <class T>
@@ -101,22 +101,22 @@ public:
 };
 
 //! ----------------------------------- (u)Integral Cast ----------------------------------- //
-struct IntCastToVarInt {
+struct IntCastToBignum {
 	template <class SRC>
 	static inline bignum_t Operation(SRC input, Vector &result) {
-		return IntToVarInt(result, input);
+		return IntToBignum(result, input);
 	}
 };
 
 //! ----------------------------------- (u)HugeInt Cast ----------------------------------- //
-struct HugeintCastToVarInt {
+struct HugeintCastToBignum {
 	template <class SRC>
 	static inline bignum_t Operation(SRC input, Vector &result) {
 		throw InternalException("Unsupported type for cast to BIGNUM");
 	}
 };
 
-struct TryCastToVarInt {
+struct TryCastToBignum {
 	template <class SRC, class DST>
 	static inline bool Operation(SRC input, DST &result, Vector &result_vector, CastParameters &parameters) {
 		throw InternalException("Unsupported type for try cast to BIGNUM");
@@ -124,21 +124,21 @@ struct TryCastToVarInt {
 };
 
 template <>
-DUCKDB_API bool TryCastToVarInt::Operation(double double_value, bignum_t &result_value, Vector &result,
+DUCKDB_API bool TryCastToBignum::Operation(double double_value, bignum_t &result_value, Vector &result,
                                            CastParameters &parameters);
 
 template <>
-DUCKDB_API bool TryCastToVarInt::Operation(float float_value, bignum_t &result_value, Vector &result,
+DUCKDB_API bool TryCastToBignum::Operation(float float_value, bignum_t &result_value, Vector &result,
                                            CastParameters &parameters);
 
 template <>
-DUCKDB_API bool TryCastToVarInt::Operation(string_t input_value, bignum_t &result_value, Vector &result,
+DUCKDB_API bool TryCastToBignum::Operation(string_t input_value, bignum_t &result_value, Vector &result,
                                            CastParameters &parameters);
 
-struct VarIntCastToVarchar {
+struct BignumCastToVarchar {
 	template <class SRC>
 	DUCKDB_API static inline string_t Operation(SRC input, Vector &result) {
-		return StringVector::AddStringOrBlob(result, Bignum::VarIntToVarchar(input));
+		return StringVector::AddStringOrBlob(result, Bignum::BignumToVarchar(input));
 	}
 };
 

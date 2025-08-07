@@ -101,7 +101,7 @@ private:
 	}
 
 	template <class T>
-	T VarIntDecode() {
+	T BignumDecode() {
 		// FIXME: maybe we should pass a source to EncodingUtil instead
 		uint8_t buffer[16] = {};
 		idx_t bignum_size;

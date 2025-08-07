@@ -8,7 +8,7 @@
 namespace duckdb {
 
 template <class T>
-static bignum_t IntToVarInt(Vector &result, T int_value) {
+static bignum_t IntToBignum(Vector &result, T int_value) {
 	// Determine if the number is negative
 	bool is_negative = int_value < 0;
 	// Determine the number of data bytes
@@ -49,7 +49,7 @@ static bignum_t IntToVarInt(Vector &result, T int_value) {
 }
 
 template <>
-bignum_t HugeintCastToVarInt::Operation(uhugeint_t int_value, Vector &result) {
+bignum_t HugeintCastToBignum::Operation(uhugeint_t int_value, Vector &result) {
 	uint32_t data_byte_size;
 	if (int_value.upper != NumericLimits<uint64_t>::Maximum()) {
 		data_byte_size =
@@ -91,7 +91,7 @@ bignum_t HugeintCastToVarInt::Operation(uhugeint_t int_value, Vector &result) {
 }
 
 template <>
-bignum_t HugeintCastToVarInt::Operation(hugeint_t int_value, Vector &result) {
+bignum_t HugeintCastToBignum::Operation(hugeint_t int_value, Vector &result) {
 	// Determine if the number is negative
 	bool is_negative = int_value.upper >> 63 & 1;
 	if (is_negative) {
@@ -165,9 +165,9 @@ bignum_t HugeintCastToVarInt::Operation(hugeint_t int_value, Vector &result) {
 
 // Varchar to Bignum
 template <>
-bool TryCastToVarInt::Operation(string_t input_value, bignum_t &result_value, Vector &result,
+bool TryCastToBignum::Operation(string_t input_value, bignum_t &result_value, Vector &result,
                                 CastParameters &parameters) {
-	auto blob_string = Bignum::VarcharToVarInt(input_value);
+	auto blob_string = Bignum::VarcharToBignum(input_value);
 
 	uint32_t blob_size = static_cast<uint32_t>(blob_string.size());
 	result_value = bignum_t(StringVector::EmptyString(result, blob_size));
@@ -182,7 +182,7 @@ bool TryCastToVarInt::Operation(string_t input_value, bignum_t &result_value, Ve
 }
 
 template <class T>
-static bool DoubleToVarInt(T double_value, bignum_t &result_value, Vector &result) {
+static bool DoubleToBignum(T double_value, bignum_t &result_value, Vector &result) {
 	// Check if we can cast it
 	if (!std::isfinite(double_value)) {
 		// We can't cast inf -inf nan
@@ -225,44 +225,44 @@ static bool DoubleToVarInt(T double_value, bignum_t &result_value, Vector &resul
 }
 
 template <>
-bool TryCastToVarInt::Operation(double double_value, bignum_t &result_value, Vector &result,
+bool TryCastToBignum::Operation(double double_value, bignum_t &result_value, Vector &result,
                                 CastParameters &parameters) {
-	return DoubleToVarInt(double_value, result_value, result);
+	return DoubleToBignum(double_value, result_value, result);
 }
 
 template <>
-bool TryCastToVarInt::Operation(float double_value, bignum_t &result_value, Vector &result,
+bool TryCastToBignum::Operation(float double_value, bignum_t &result_value, Vector &result,
                                 CastParameters &parameters) {
-	return DoubleToVarInt(double_value, result_value, result);
+	return DoubleToBignum(double_value, result_value, result);
 }
 
 BoundCastInfo Bignum::NumericToBignumCastSwitch(const LogicalType &source) {
 	// now switch on the result type
 	switch (source.id()) {
 	case LogicalTypeId::TINYINT:
-		return BoundCastInfo(&VectorCastHelpers::StringCast<int8_t, IntCastToVarInt, bignum_t>);
+		return BoundCastInfo(&VectorCastHelpers::StringCast<int8_t, IntCastToBignum, bignum_t>);
 	case LogicalTypeId::UTINYINT:
-		return BoundCastInfo(&VectorCastHelpers::StringCast<uint8_t, IntCastToVarInt, bignum_t>);
+		return BoundCastInfo(&VectorCastHelpers::StringCast<uint8_t, IntCastToBignum, bignum_t>);
 	case LogicalTypeId::SMALLINT:
-		return BoundCastInfo(&VectorCastHelpers::StringCast<int16_t, IntCastToVarInt, bignum_t>);
+		return BoundCastInfo(&VectorCastHelpers::StringCast<int16_t, IntCastToBignum, bignum_t>);
 	case LogicalTypeId::USMALLINT:
-		return BoundCastInfo(&VectorCastHelpers::StringCast<uint16_t, IntCastToVarInt, bignum_t>);
+		return BoundCastInfo(&VectorCastHelpers::StringCast<uint16_t, IntCastToBignum, bignum_t>);
 	case LogicalTypeId::INTEGER:
-		return BoundCastInfo(&VectorCastHelpers::StringCast<int32_t, IntCastToVarInt, bignum_t>);
+		return BoundCastInfo(&VectorCastHelpers::StringCast<int32_t, IntCastToBignum, bignum_t>);
 	case LogicalTypeId::UINTEGER:
-		return BoundCastInfo(&VectorCastHelpers::StringCast<uint32_t, IntCastToVarInt, bignum_t>);
+		return BoundCastInfo(&VectorCastHelpers::StringCast<uint32_t, IntCastToBignum, bignum_t>);
 	case LogicalTypeId::BIGINT:
-		return BoundCastInfo(&VectorCastHelpers::StringCast<int64_t, IntCastToVarInt, bignum_t>);
+		return BoundCastInfo(&VectorCastHelpers::StringCast<int64_t, IntCastToBignum, bignum_t>);
 	case LogicalTypeId::UBIGINT:
-		return BoundCastInfo(&VectorCastHelpers::StringCast<uint64_t, IntCastToVarInt, bignum_t>);
+		return BoundCastInfo(&VectorCastHelpers::StringCast<uint64_t, IntCastToBignum, bignum_t>);
 	case LogicalTypeId::UHUGEINT:
-		return BoundCastInfo(&VectorCastHelpers::StringCast<uhugeint_t, HugeintCastToVarInt, bignum_t>);
+		return BoundCastInfo(&VectorCastHelpers::StringCast<uhugeint_t, HugeintCastToBignum, bignum_t>);
 	case LogicalTypeId::FLOAT:
-		return BoundCastInfo(&VectorCastHelpers::TryCastStringLoop<float, bignum_t, TryCastToVarInt>);
+		return BoundCastInfo(&VectorCastHelpers::TryCastStringLoop<float, bignum_t, TryCastToBignum>);
 	case LogicalTypeId::DOUBLE:
-		return BoundCastInfo(&VectorCastHelpers::TryCastStringLoop<double, bignum_t, TryCastToVarInt>);
+		return BoundCastInfo(&VectorCastHelpers::TryCastStringLoop<double, bignum_t, TryCastToBignum>);
 	case LogicalTypeId::HUGEINT:
-		return BoundCastInfo(&VectorCastHelpers::StringCast<hugeint_t, HugeintCastToVarInt, bignum_t>);
+		return BoundCastInfo(&VectorCastHelpers::StringCast<hugeint_t, HugeintCastToBignum, bignum_t>);
 	case LogicalTypeId::DECIMAL:
 	default:
 		return DefaultCasts::TryVectorNullCast;
@@ -304,7 +304,7 @@ BoundCastInfo DefaultCasts::BignumCastSwitch(BindCastInput &input, const Logical
 		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<bignum_t, uhugeint_t, BignumToIntCast>);
 
 	case LogicalTypeId::VARCHAR:
-		return BoundCastInfo(&VectorCastHelpers::StringCast<bignum_t, VarIntCastToVarchar>);
+		return BoundCastInfo(&VectorCastHelpers::StringCast<bignum_t, BignumCastToVarchar>);
 	case LogicalTypeId::DOUBLE:
 		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<bignum_t, double, BignumToDoubleCast>);
 	default:

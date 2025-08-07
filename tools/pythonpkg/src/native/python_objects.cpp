@@ -685,7 +685,7 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type,
 	}
 	case LogicalTypeId::BIGNUM: {
 		auto bignum_value = val.GetValueUnsafe<bignum_t>();
-		return py::str(Bignum::VarIntToVarchar(bignum_value));
+		return py::str(Bignum::BignumToVarchar(bignum_value));
 	}
 	case LogicalTypeId::INTERVAL: {
 		auto interval_value = val.GetValueUnsafe<interval_t>();

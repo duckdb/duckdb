@@ -199,7 +199,7 @@ string Bignum::FromByteArray(uint8_t *data, idx_t size, bool is_negative) {
 }
 
 // Following CPython and Knuth (TAOCP, Volume 2 (3rd edn), section 4.4, Method 1b).
-string Bignum::VarIntToVarchar(const bignum_t &blob) {
+string Bignum::BignumToVarchar(const bignum_t &blob) {
 	string decimal_string;
 	vector<uint8_t> byte_array;
 	bool is_negative;
@@ -253,7 +253,7 @@ string Bignum::VarIntToVarchar(const bignum_t &blob) {
 	return decimal_string;
 }
 
-string Bignum::VarcharToVarInt(const string_t &value) {
+string Bignum::VarcharToBignum(const string_t &value) {
 	idx_t start_pos, end_pos;
 	bool is_negative, is_zero;
 	if (!VarcharFormatting(value, start_pos, end_pos, is_negative, is_zero)) {
@@ -342,7 +342,7 @@ bool Bignum::BignumToDouble(const bignum_t &blob, double &result, bool &strict) 
 	}
 	if (!std::isfinite(result)) {
 		// We throw an error
-		throw ConversionException("Could not convert bignum '%s' to Double", VarIntToVarchar(blob));
+		throw ConversionException("Could not convert bignum '%s' to Double", BignumToVarchar(blob));
 	}
 	return true;
 }
