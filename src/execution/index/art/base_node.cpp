@@ -43,7 +43,7 @@ NodeHandle<BaseNode<CAPACITY, TYPE>> BaseNode<CAPACITY, TYPE>::DeleteChildIntern
 	}
 
 	// Free the child and decrease the count.
-	Node::Free(art, n.children[child_pos]);
+	Node::FreeTree(art, n.children[child_pos]);
 	n.count--;
 
 	// Possibly move children backwards.
@@ -95,7 +95,7 @@ void Node4::DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte, 
 	}
 
 	auto old_status = node.GetGateStatus();
-	Node::Free(art, node);
+	Node::FreeTree(art, node);
 	Prefix::Concat(art, prefix, remainder, old_status, child, status);
 }
 
@@ -113,9 +113,8 @@ void Node4::ShrinkNode16(ART &art, Node &node4, Node &node16) {
 			n4.key[i] = n16.key[i];
 			n4.children[i] = n16.children[i];
 		}
-		n16.count = 0;
 	}
-	Node::Free(art, node16);
+	Node::FreeNode(art, node16);
 }
 
 //===--------------------------------------------------------------------===//
@@ -165,9 +164,8 @@ void Node16::GrowNode4(ART &art, Node &node16, Node &node4) {
 			n16.key[i] = n4.key[i];
 			n16.children[i] = n4.children[i];
 		}
-		n4.count = 0;
 	}
-	Node::Free(art, node4);
+	Node::FreeNode(art, node4);
 }
 
 void Node16::ShrinkNode48(ART &art, Node &node16, Node &node48) {
@@ -187,9 +185,8 @@ void Node16::ShrinkNode48(ART &art, Node &node16, Node &node48) {
 				n16.count++;
 			}
 		}
-		n48.count = 0;
 	}
-	Node::Free(art, node48);
+	Node::FreeNode(art, node48);
 }
 
 } // namespace duckdb

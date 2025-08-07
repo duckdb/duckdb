@@ -40,8 +40,6 @@ private:
 public:
 	//! Get a new Node48 and initialize it.
 	static Node48 &New(ART &art, Node &node);
-	//! Free the node and its children.
-	static void Free(ART &art, Node &node);
 
 	//! Insert a child at byte.
 	static void InsertChild(ART &art, Node &node, const uint8_t byte, const Node child);
@@ -53,6 +51,9 @@ public:
 public:
 	template <class F, class NODE>
 	static void Iterator(NODE &n, F &&lambda) {
+		if (!n.count) {
+			return;
+		}
 		for (idx_t i = 0; i < Node256::CAPACITY; i++) {
 			if (n.child_index[i] != EMPTY_MARKER) {
 				lambda(n.children[n.child_index[i]]);
@@ -97,7 +98,6 @@ public:
 			}
 		}
 
-		count = 0;
 		return NodeChildren(bytes, children_ptr);
 	}
 

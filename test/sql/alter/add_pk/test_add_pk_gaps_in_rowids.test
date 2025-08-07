@@ -2,8 +2,11 @@
 # description: Test adding a PRIMARY KEY to a table with gaps in its row IDs.
 # group: [add_pk]
 
+# statement ok
+# PRAGMA enable_verification
+
 statement ok
-PRAGMA enable_verification
+SET threads = 1;
 
 statement ok
 CREATE TABLE integers(i integer)

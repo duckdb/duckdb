@@ -76,20 +76,6 @@ void Prefix::New(ART &art, reference<Node> &ref, const ARTKey &key, const idx_t 
 	}
 }
 
-void Prefix::Free(ART &art, Node &node) {
-	Node next;
-
-	while (node.HasMetadata() && node.GetType() == PREFIX) {
-		Prefix prefix(art, node, true);
-		next = *prefix.ptr;
-		Node::GetAllocator(art, PREFIX).Free(node);
-		node = next;
-	}
-
-	Node::Free(art, node);
-	node.Clear();
-}
-
 void Prefix::Concat(ART &art, Node &parent, uint8_t byte, const GateStatus old_status, const Node &child,
                     const GateStatus status) {
 	D_ASSERT(!parent.IsAnyLeaf());
@@ -108,7 +94,7 @@ void Prefix::Concat(ART &art, Node &parent, uint8_t byte, const GateStatus old_s
 
 	if (status == GateStatus::GATE_SET && child.GetType() == NType::LEAF_INLINED) {
 		auto row_id = child.GetRowId();
-		Free(art, parent);
+		Node::FreeNode(art, parent); // TODO: not sure if this should be FreeTree
 		Leaf::New(parent, row_id);
 		return;
 	}
@@ -173,8 +159,7 @@ void Prefix::Reduce(ART &art, Node &node, const idx_t pos) {
 	Prefix prefix(art, node);
 	if (pos == idx_t(prefix.data[Count(art)] - 1)) {
 		auto next = *prefix.ptr;
-		prefix.ptr->Clear();
-		Node::Free(art, node);
+		Node::FreeNode(art, node);
 		node = next;
 		return;
 	}
@@ -243,8 +228,7 @@ GateStatus Prefix::Split(ART &art, reference<Node> &node, Node &child, const uin
 	// No bytes left before the split, free this node.
 	if (pos == 0) {
 		auto old_status = node.get().GetGateStatus();
-		prefix.ptr->Clear();
-		Node::Free(art, node);
+		Node::FreeNode(art, node);
 		return old_status;
 	}
 
@@ -305,8 +289,7 @@ void Prefix::TransformToDeprecated(ART &art, Node &node, unsafe_unique_ptr<Fixed
 		}
 
 		*new_prefix.ptr = *prefix.ptr;
-		prefix.ptr->Clear();
-		Node::Free(art, current_node);
+		Node::FreeNode(art, current_node);
 		current_node = *new_prefix.ptr;
 	}
 
@@ -341,7 +324,7 @@ void Prefix::Append(ART &art, Node other) {
 		}
 
 		*prefix.ptr = *other_prefix.ptr;
-		Node::GetAllocator(art, PREFIX).Free(other);
+		Node::FreeNode(art, other);
 		other = *prefix.ptr;
 	}
 }
