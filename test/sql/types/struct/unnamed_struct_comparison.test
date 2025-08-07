@@ -7,7 +7,7 @@ pragma enable_verification
 
 
 query I
-select a<>b from VALUES ((NULL, 1, NULL), (5, 6, 7)) t(a, b);
+select a IS DISTINCT FROM b from VALUES ((NULL, 1, NULL), (5, 6, 7)) t(a, b);
 ----
 true
 
@@ -15,7 +15,7 @@ true
 query I
 select a<>b is null from VALUES ((NULL, 1, NULL), (5, 6, 7)) t(a, b);
 ----
-false
+true
 
 
 query I
@@ -23,13 +23,13 @@ select 1 from values (struct_pack(k := NULL)) t(a) where 1 <> a.k;
 ----
 
 query I
-select [NULL, 6] <> [6, 5];
+select [NULL, 6] IS DISTINCT FROM [6, 5];
 ----
 true
 
 
 query I
-select 1 from VALUES ([NULL, 6], [5, 6])  t(a, b) where a<>b;
+select 1 from VALUES ([NULL, 6], [5, 6])  t(a, b) where a IS DISTINCT FROM b;
 ----
 1
 
@@ -49,7 +49,7 @@ select 1 from VALUES ((NULL, 1, NULL), (5, 6, 7))  t(a, b) where  a<>b;
 query I
 select 1 from VALUES ((NULL, 1, NULL), (5, 6, 7))  t(a, b) where a<>b is null;
 ----
-
+1
 
 query I
 select a<>b is null from VALUES ((NULL, 1, NULL), (5, 6, 7)) t(a, b) where NULL;
@@ -62,7 +62,9 @@ select 1 from VALUES ((NULL, 1, NULL), (5, 6, 7), (NULL, 2), (4, 5)) t(a, b, c, 
 1
 
 query II
-select a<>b, c<>d from VALUES ((NULL, 1, NULL), (5, 6, 7), (NULL, 2), (4, 5)) t(a, b, c, d) where a<>b and c<>d;
+select a<>b, c<>d 
+from VALUES ((NULL, 1, NULL), (5, 6, 7), (NULL, 2), (4, 5)) t(a, b, c, d) 
+where a<>b and c<>d;
 ----
-true	true
+NULL	NULL
 

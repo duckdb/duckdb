@@ -94,7 +94,7 @@ select [
 	$$(NuLl)$$,
 	$$("NULLz")$$,
 	$$("NULL")$$
-] a, a::VARCHAR::STRUCT(a VARCHAR)[] b, a == b
+] a, a::VARCHAR::STRUCT(a VARCHAR)[] b, a IS NOT DISTINCT FROM b
 ----
 [(test), (NULL), ('null'), ('nUlL'), (NULL), (NULLz), ('NULL')]	[{'a': test}, {'a': NULL}, {'a': 'null'}, {'a': 'nUlL'}, {'a': NULL}, {'a': NULLz}, {'a': 'NULL'}]	true
 
