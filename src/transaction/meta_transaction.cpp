@@ -115,34 +115,48 @@ ErrorData MetaTransaction::Commit() {
 		if (entry == transactions.end()) {
 			throw InternalException("Could not find transaction corresponding to database in MetaTransaction");
 		}
+
 #ifdef DEBUG
 		auto already_committed = committed_tx.insert(db).second == false;
 		if (already_committed) {
 			throw InternalException("All databases inside all_transactions should be unique, invariant broken!");
 		}
 #endif
+
 		auto &transaction_manager = db.GetTransactionManager();
 		auto &transaction = entry->second.get();
-		if (!error.HasError()) {
-			// commit
-			error = transaction_manager.CommitTransaction(context, transaction);
-		} else {
-			// we have encountered an error previously - roll back subsequent entries
-			transaction_manager.RollbackTransaction(transaction);
+		try {
+			if (!error.HasError()) {
+				// Commit the transaction.
+				error = transaction_manager.CommitTransaction(context, transaction);
+			} else {
+				// Rollback due to previous error.
+				transaction_manager.RollbackTransaction(transaction);
+			}
+		} catch (std::exception &ex) {
+			error.Merge(ErrorData(ex));
 		}
 	}
 	return error;
 }
 
 void MetaTransaction::Rollback() {
-	// rollback transactions in reverse order
+	// Rollback all transactions in reverse order.
+	ErrorData error;
 	for (idx_t i = all_transactions.size(); i > 0; i--) {
 		auto &db = all_transactions[i - 1].get();
 		auto &transaction_manager = db.GetTransactionManager();
 		auto entry = transactions.find(db);
 		D_ASSERT(entry != transactions.end());
-		auto &transaction = entry->second.get();
-		transaction_manager.RollbackTransaction(transaction);
+		try {
+			auto &transaction = entry->second.get();
+			transaction_manager.RollbackTransaction(transaction);
+		} catch (std::exception &ex) {
+			error.Merge(ErrorData(ex));
+		}
+	}
+	if (error.HasError()) {
+		error.Throw();
 	}
 }
 
