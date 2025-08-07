@@ -4759,6 +4759,7 @@ const StringUtil::EnumStringLiteral *GetVerificationTypeValues() {
 		{ static_cast<uint32_t>(VerificationType::NO_OPERATOR_CACHING), "NO_OPERATOR_CACHING" },
 		{ static_cast<uint32_t>(VerificationType::PREPARED), "PREPARED" },
 		{ static_cast<uint32_t>(VerificationType::EXTERNAL), "EXTERNAL" },
+		{ static_cast<uint32_t>(VerificationType::EXPLAIN), "EXPLAIN" },
 		{ static_cast<uint32_t>(VerificationType::FETCH_ROW_AS_SCAN), "FETCH_ROW_AS_SCAN" },
 		{ static_cast<uint32_t>(VerificationType::INVALID), "INVALID" }
 	};
@@ -4767,12 +4768,12 @@ const StringUtil::EnumStringLiteral *GetVerificationTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<VerificationType>(VerificationType value) {
-	return StringUtil::EnumToString(GetVerificationTypeValues(), 10, "VerificationType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetVerificationTypeValues(), 11, "VerificationType", static_cast<uint32_t>(value));
 }
 
 template<>
 VerificationType EnumUtil::FromString<VerificationType>(const char *value) {
-	return static_cast<VerificationType>(StringUtil::StringToEnum(GetVerificationTypeValues(), 10, "VerificationType", value));
+	return static_cast<VerificationType>(StringUtil::StringToEnum(GetVerificationTypeValues(), 11, "VerificationType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetVerifyExistenceTypeValues() {
