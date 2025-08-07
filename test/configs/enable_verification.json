@@ -149,7 +149,9 @@
       "reason": "Runs longer than 10s on a release build.",
       "paths": [
         "test/sql/limit/test_limit0.test",
-        "test/sql/sample/reservoir_testing_percentage.test"
+        "test/sql/sample/reservoir_testing_percentage.test",
+        "test/sql/parallelism/intraquery/depth_first_evaluation_union_and_join.test",
+        "test/sql/window/test_constant_orderby.test"
       ]
     },
     {
@@ -179,7 +181,10 @@
         "test/sql/window/test_window_groups.test",
         "test/sql/copy/partitioned/hive_partitioned_auto_detect.test",
         "test/sql/copy/csv/code_cov/csv_disk_reload.test",
-        "test/sql/window/test_window_constant_aggregate.test"
+        "test/sql/window/test_window_constant_aggregate.test",
+        "test/sql/tpcds/tpcds_sf0.test",
+        "test/sql/copy/csv/test_glob_reorder_lineitem.test",
+        "test/sql/tpch/dbgen_error.test"
       ]
     },
     {
@@ -209,7 +214,12 @@
         "test/sql/types/list/list_comparison.test",
         "test/sql/aggregate/distinct/grouped/identical_inputs.test",
         "test/sql/window/test_empty_frames.test",
-        "test/sql/index/art/nodes/test_art_node_256.test"
+        "test/sql/index/art/nodes/test_art_node_256.test",
+        "test/sql/optimizer/plan/test_filter_pushdown_materialized_cte.test",
+        "test/sql/function/timestamp/test_icu_datediff.test",
+        "test/sql/function/timestamp/test_icu_datepart.test",
+        "test/sql/function/timestamp/test_icu_datesub.test",
+        "test/sql/copy/csv/test_csv_timestamp_tz.test"
       ]
     },
     {
@@ -236,7 +246,9 @@
         "test/sql/types/enum/test_enum_to_numbers.test",
         "test/sql/storage/compression/dict_fsst/test_dict_fsst_with_smaller_block_size.test",
         "test/sql/storage/compression/bitpacking/bitpacking_filter_pushdown.test",
-        "test/issues/monetdb/analytics10.test"
+        "test/issues/monetdb/analytics10.test",
+        "test/sql/types/enum/test_5983.test",
+        "test/sql/json/scalar/test_json_transform.test"
       ]
     },
     {
