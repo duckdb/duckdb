@@ -148,41 +148,36 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 		});
 	}
 
-	idx_t deleted_count = table.Delete(*l_state.delete_state, context.client, row_ids, chunk.size());
+	auto deleted_count = table.Delete(*l_state.delete_state, context.client, row_ids, chunk.size());
 	g_state.deleted_count += deleted_count;
 
 	// Append the return_chunk to the return collection.
 	if (return_chunk) {
-		// sine rows can be duplicated, get the chunk indexes for new row_id values
-		std::map<row_t, idx_t> new_row_ids_deleted;
-
-		auto flatten_ids = FlatVector::GetData<row_t>(row_ids);
+		// Rows can be duplicated, so we get the chunk indexes for new row id values.
+		map<row_t, idx_t> new_row_ids_deleted;
+		auto flat_ids = FlatVector::GetData<row_t>(row_ids);
 		for (idx_t i = 0; i < chunk.size(); i++) {
-			auto row_id = flatten_ids[i];
-			// if the row has not been deleted previously
+			// If the row has not been deleted previously
 			// and is not a duplicate within the current chunk,
-			// then add it to new_rows_to_delete
-			if (g_state.deleted_row_ids.find(row_id) == g_state.deleted_row_ids.end() &&
-			    new_row_ids_deleted.find(row_id) == new_row_ids_deleted.end()) {
+			// then we add it to new_row_ids_deleted.
+			auto row_id = flat_ids[i];
+			auto already_deleted = g_state.deleted_row_ids.find(row_id) != g_state.deleted_row_ids.end();
+			auto newly_deleted = new_row_ids_deleted.find(row_id) != new_row_ids_deleted.end();
+			if (!already_deleted && !newly_deleted) {
 				new_row_ids_deleted[row_id] = i;
+				g_state.deleted_row_ids.insert(row_id);
 			}
 		}
 
 		D_ASSERT(new_row_ids_deleted.size() == deleted_count);
 		if (deleted_count < l_state.delete_chunk.size()) {
-			auto types = l_state.delete_chunk.GetTypes();
-			SelectionVector d_sel(0, deleted_count);
+			SelectionVector delete_sel(0, deleted_count);
 			idx_t chunk_index = 0;
-			for (auto &row_id_2_chunk_index : new_row_ids_deleted) {
-				d_sel.set_index(chunk_index, row_id_2_chunk_index.second);
-				chunk_index += 1;
+			for (auto &row_id_to_chunk_index : new_row_ids_deleted) {
+				delete_sel.set_index(chunk_index, row_id_to_chunk_index.second);
+				chunk_index++;
 			}
-			l_state.delete_chunk.Slice(d_sel, deleted_count);
-		}
-
-		// add all newly deleted row ids
-		for (auto &row_id_2_chunk_index : new_row_ids_deleted) {
-			g_state.deleted_row_ids.insert(row_id_2_chunk_index.first);
+			l_state.delete_chunk.Slice(delete_sel, deleted_count);
 		}
 		g_state.return_collection.Append(l_state.delete_chunk);
 	}
