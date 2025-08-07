@@ -1,6 +1,9 @@
 #include "capi_tester.hpp"
 
 bool NO_FAIL(duckdb::CAPIResult &result) {
+	if (result.HasError()) {
+		fprintf(stderr, "Query failed with message: %s\n", result.ErrorMessage());
+	}
 	return result.success;
 }
 

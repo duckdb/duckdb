@@ -149,7 +149,7 @@ public:
 	struct ProbeState : SharedState {
 		ProbeState();
 
-		Vector ht_offsets_v;
+		Vector ht_offsets_and_salts_v;
 		Vector hashes_dense_v;
 		SelectionVector non_empty_sel;
 	};

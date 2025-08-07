@@ -18,6 +18,13 @@ void Varint::Verify(const varint_t &input) {
 	auto varint_ptr = input.data.GetData();
 	bool is_negative = (varint_ptr[0] & 0x80) == 0;
 	uint32_t number_of_bytes = 0;
+	if (varint_bytes == 4 && is_negative) {
+		// There is only one invalid value, which is -0
+		if (varint_ptr[3] == static_cast<char>(0xFF)) {
+			throw InternalException("Varint value -0 is not allowed in the Varint specification.");
+		}
+	}
+
 	char mask = 0x7F;
 	if (is_negative) {
 		number_of_bytes |= static_cast<uint32_t>(~varint_ptr[0] & mask) << 16 & 0xFF0000;
