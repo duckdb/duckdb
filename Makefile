@@ -294,6 +294,9 @@ endif
 ifeq (${MAIN_BRANCH_VERSIONING}, 1)
         CMAKE_VARS:=${CMAKE_VARS} -DMAIN_BRANCH_VERSIONING=1
 endif
+ifeq (${STANDALONE_DEBUG}, 1)
+        CMAKE_VARS:=${CMAKE_VARS} -DSTANDALONE_DEBUG=1
+endif
 
 # Optional overrides
 ifneq (${STANDARD_VECTOR_SIZE}, )
