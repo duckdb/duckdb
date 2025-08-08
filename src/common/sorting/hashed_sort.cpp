@@ -16,6 +16,30 @@ HashedSortGroup::HashedSortGroup(ClientContext &context, const Orders &orders, c
 	sort_global = sort->GetGlobalSinkState(context);
 }
 
+bool HashedSortGroup::Materialize(ExecutionContext &context, InterruptState &interrupt,
+                                  optional_ptr<HashedSortCallback> callback, bool as_rows) {
+	auto &sort_global = *sort_source;
+	auto sort_local = sort->GetLocalSourceState(context, sort_global);
+	OperatorSourceInput input {sort_global, *sort_local, interrupt};
+	if (as_rows) {
+		sort->MaterializeSortedRun(context, input);
+	} else {
+		sort->MaterializeColumnData(context, input);
+	}
+	if (++tasks_completed == tasks_scheduled) {
+		if (as_rows) {
+			rows = sort->GetSortedRun(sort_global);
+		} else {
+			columns = sort->GetColumnData(input);
+		}
+		if (callback) {
+			callback->OnSortedGroup(*this);
+		}
+		return true;
+	}
+	return false;
+}
+
 //===--------------------------------------------------------------------===//
 // HashedSortGlobalSinkState
 //===--------------------------------------------------------------------===//
@@ -209,6 +233,15 @@ void HashedSortGlobalSinkState::Finalize(ClientContext &context, InterruptState 
 		OperatorSinkFinalizeInput finalize {*hash_group->sort_global, interrupt_state};
 		hash_group->sort->Finalize(context, finalize);
 	}
+}
+
+void HashedSortGlobalSinkState::SyncPartitioning(const HashedSortGlobalSinkState &other) {
+	const auto new_bits = other.grouping_data ? other.grouping_data->GetRadixBits() : 0;
+	const auto old_bits = grouping_data ? grouping_data->GetRadixBits() : 0;
+	if (new_bits != old_bits) {
+		grouping_data = CreatePartition(new_bits);
+	}
+	fixed_bits = true;
 }
 
 bool HashedSortGlobalSinkState::HasMergeTasks() const {
@@ -405,8 +438,7 @@ void HashedSortLocalSinkState::Combine(ExecutionContext &context) {
 class HashedSortMaterializeTask : public ExecutorTask {
 public:
 	HashedSortMaterializeTask(Pipeline &pipeline, shared_ptr<Event> event, const PhysicalOperator &op,
-	                          HashedSortGroup &hash_group, idx_t tasks_scheduled,
-	                          optional_ptr<HashedSortCallback> callback);
+	                          HashedSortGroup &hash_group, optional_ptr<HashedSortCallback> callback, bool as_rows);
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override;
 
@@ -417,29 +449,21 @@ public:
 private:
 	Pipeline &pipeline;
 	HashedSortGroup &hash_group;
-	const idx_t tasks_scheduled;
+	const bool as_rows;
 	optional_ptr<HashedSortCallback> callback;
 };
 
 HashedSortMaterializeTask::HashedSortMaterializeTask(Pipeline &pipeline, shared_ptr<Event> event,
                                                      const PhysicalOperator &op, HashedSortGroup &hash_group,
-                                                     idx_t tasks_scheduled, optional_ptr<HashedSortCallback> callback)
+                                                     optional_ptr<HashedSortCallback> callback, bool as_rows)
     : ExecutorTask(pipeline.GetClientContext(), std::move(event), op), pipeline(pipeline), hash_group(hash_group),
-      tasks_scheduled(tasks_scheduled), callback(callback) {
+      as_rows(as_rows), callback(callback) {
 }
 
 TaskExecutionResult HashedSortMaterializeTask::ExecuteTask(TaskExecutionMode mode) {
-	ExecutionContext execution(pipeline.GetClientContext(), *thread_context, &pipeline);
-	auto &sort = *hash_group.sort;
-	auto &sort_global = *hash_group.sort_source;
-	auto sort_local = sort.GetLocalSourceState(execution, sort_global);
+	ExecutionContext context(pipeline.GetClientContext(), *thread_context, &pipeline);
 	InterruptState interrupt((weak_ptr<Task>(shared_from_this())));
-	OperatorSourceInput input {sort_global, *sort_local, interrupt};
-	sort.MaterializeColumnData(execution, input);
-	if (++hash_group.tasks_completed == tasks_scheduled && callback) {
-		hash_group.sorted = sort.GetColumnData(input);
-		callback->OnSortedGroup(hash_group);
-	}
+	hash_group.Materialize(context, interrupt, callback, as_rows);
 
 	event->FinishTask();
 	return TaskExecutionResult::TASK_FINISHED;
@@ -449,8 +473,9 @@ TaskExecutionResult HashedSortMaterializeTask::ExecuteTask(TaskExecutionMode mod
 // HashedSortMaterializeEvent
 //===--------------------------------------------------------------------===//
 HashedSortMaterializeEvent::HashedSortMaterializeEvent(HashedSortGlobalSinkState &gstate, Pipeline &pipeline,
-                                                       const PhysicalOperator &op, HashedSortCallback *callback)
-    : BasePipelineEvent(pipeline), gstate(gstate), op(op), callback(callback) {
+                                                       const PhysicalOperator &op,
+                                                       optional_ptr<HashedSortCallback> callback, bool as_rows)
+    : BasePipelineEvent(pipeline), gstate(gstate), op(op), callback(callback), as_rows(as_rows) {
 }
 
 void HashedSortMaterializeEvent::Schedule() {
@@ -468,10 +493,10 @@ void HashedSortMaterializeEvent::Schedule() {
 		auto &sort = *hash_group->sort;
 		auto &global_sink = *hash_group->sort_global;
 		hash_group->sort_source = sort.GetGlobalSourceState(client, global_sink);
-		const auto tasks_scheduled = MinValue<idx_t>(num_threads, hash_group->sort_source->MaxThreads());
-		for (idx_t t = 0; t < tasks_scheduled; ++t) {
+		hash_group->tasks_scheduled = MinValue<idx_t>(num_threads, hash_group->sort_source->MaxThreads());
+		for (idx_t t = 0; t < hash_group->tasks_scheduled; ++t) {
 			merge_tasks.emplace_back(make_uniq<HashedSortMaterializeTask>(*pipeline, shared_from_this(), op,
-			                                                              *hash_group, tasks_scheduled, callback));
+			                                                              *hash_group, callback, as_rows));
 		}
 	}
 

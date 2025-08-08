@@ -14,6 +14,14 @@
 
 namespace duckdb {
 
+class HashedSortGroup;
+
+class HashedSortCallback {
+public:
+	virtual ~HashedSortCallback() = default;
+	virtual void OnSortedGroup(HashedSortGroup &hash_group) = 0;
+};
+
 // Formerly PartitionGlobalHashGroup
 class HashedSortGroup {
 public:
@@ -23,6 +31,9 @@ public:
 
 	HashedSortGroup(ClientContext &context, const Orders &orders, const Types &input_types, idx_t group_idx);
 
+	bool Materialize(ExecutionContext &context, InterruptState &interrupt, optional_ptr<HashedSortCallback> callback,
+	                 bool as_rows = false);
+
 	const idx_t group_idx;
 
 	//	Sink
@@ -30,9 +41,13 @@ public:
 	unique_ptr<GlobalSinkState> sort_global;
 
 	//	Source
+	idx_t tasks_scheduled = 0;
 	atomic<idx_t> tasks_completed;
 	unique_ptr<GlobalSourceState> sort_source;
-	unique_ptr<ColumnDataCollection> sorted;
+
+	//	Materialized
+	unique_ptr<ColumnDataCollection> columns;
+	unique_ptr<SortedRun> rows;
 };
 
 // Formerly PartitionGlobalSinkState
@@ -60,6 +75,7 @@ public:
 	void UpdateLocalPartition(GroupingPartition &local_partition, GroupingAppend &partition_append);
 	void CombineLocalPartition(GroupingPartition &local_partition, GroupingAppend &local_append);
 	void Finalize(ClientContext &context, InterruptState &interrupt_state);
+	void SyncPartitioning(const HashedSortGlobalSinkState &other);
 
 	//! System and query state
 	ClientContext &context;
@@ -139,21 +155,16 @@ public:
 	ColumnDataAppendState unsorted_append;
 };
 
-class HashedSortCallback {
-public:
-	virtual ~HashedSortCallback() = default;
-	virtual void OnSortedGroup(HashedSortGroup &hash_group) = 0;
-};
-
 // Formerly PartitionMergeEvent
 class HashedSortMaterializeEvent : public BasePipelineEvent {
 public:
 	HashedSortMaterializeEvent(HashedSortGlobalSinkState &gstate, Pipeline &pipeline, const PhysicalOperator &op,
-	                           HashedSortCallback *callback);
+	                           optional_ptr<HashedSortCallback> callback, bool as_rows = false);
 
 	HashedSortGlobalSinkState &gstate;
 	const PhysicalOperator &op;
 	optional_ptr<HashedSortCallback> callback;
+	const bool as_rows;
 
 public:
 	void Schedule() override;

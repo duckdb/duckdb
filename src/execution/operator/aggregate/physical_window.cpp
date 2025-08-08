@@ -486,7 +486,7 @@ WindowHashGroup::WindowHashGroup(WindowGlobalSinkState &gsink, const idx_t hash_
 	auto &gpart = *gsink.global_partition;
 	layout.Initialize(gpart.payload_types, TupleDataValidityType::CAN_HAVE_NULL_VALUES);
 	if (hash_bin < gpart.hash_groups.size() && gpart.hash_groups[hash_bin]) {
-		count = gpart.hash_groups[hash_bin]->sorted->Count();
+		count = gpart.hash_groups[hash_bin]->columns->Count();
 	} else if (gpart.unsorted && !hash_bin) {
 		count = gpart.count;
 	} else {
@@ -521,7 +521,7 @@ WindowHashGroup::WindowHashGroup(WindowGlobalSinkState &gsink, const idx_t hash_
 		// Overwrite the collections with the sorted data
 		D_ASSERT(gpart.hash_groups[hash_bin].get());
 		hash_group = std::move(gpart.hash_groups[hash_bin]);
-		rows = std::move(hash_group->sorted);
+		rows = std::move(hash_group->columns);
 		ComputeMasks(partition_mask, order_masks);
 	}
 
