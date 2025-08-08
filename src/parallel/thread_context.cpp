@@ -21,14 +21,6 @@ ThreadContext::ThreadContext(ClientContext &context) : profiler(context) {
 	}
 
 	log_context.thread_id = TaskScheduler::GetEstimatedCPUId();
-	if (context.transaction.HasActiveTransaction()) {
-		auto query_id = context.transaction.GetActiveQuery();
-		if (query_id == DConstants::INVALID_INDEX) {
-			log_context.transaction_id = optional_idx();
-		} else {
-			log_context.transaction_id = query_id;
-		}
-	}
 	logger = LogManager::Get(context).CreateLogger(log_context, true);
 }
 
