@@ -135,6 +135,27 @@ duckdb_query_progress_type duckdb_query_progress(duckdb_connection connection) {
 	return query_progress_type;
 }
 
+void duckdb_set_progress_callback(duckdb_connection connection, duckdb_progress_callback_t callback) {
+	if (!connection) {
+		return;
+	}
+
+	Connection *conn = reinterpret_cast<Connection *>(connection);
+
+	if (!callback) {
+		conn->context->progress_callback = nullptr;
+		return;
+	}
+
+	conn->context->progress_callback = ([callback](duckdb::QueryProgress progress) {
+		duckdb_query_progress_type query_progress_type;
+		query_progress_type.percentage = progress.GetPercentage();
+		query_progress_type.rows_processed = progress.GetRowsProcesseed();
+		query_progress_type.total_rows_to_process = progress.GetTotalRowsToProcess();
+		callback(query_progress_type);
+	});
+}
+
 void duckdb_disconnect(duckdb_connection *connection) {
 	if (connection && *connection) {
 		Connection *conn = reinterpret_cast<Connection *>(*connection);

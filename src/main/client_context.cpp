@@ -599,6 +599,11 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
 			active_query->progress_bar->Update(is_finished);
 			query_progress = active_query->progress_bar->GetDetailedQueryProgress();
 		}
+
+		if (progress_callback) {
+			progress_callback(query_progress);
+		}
+
 		return query_result;
 	} catch (std::exception &ex) {
 		auto error = ErrorData(ex);
