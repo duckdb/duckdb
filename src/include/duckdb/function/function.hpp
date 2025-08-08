@@ -34,6 +34,8 @@ class TableFunctionSet;
 class TableFunction;
 class SimpleFunction;
 
+class BaseFileReaderOptions;
+
 struct PragmaInfo;
 
 //! The default null handling is NULL in, NULL out
@@ -88,6 +90,10 @@ struct TableFunctionData : public FunctionData {
 
 	DUCKDB_API unique_ptr<FunctionData> Copy() const override;
 	DUCKDB_API bool Equals(const FunctionData &other) const override;
+
+	DUCKDB_API virtual shared_ptr<BaseFileReaderOptions> GetFileReaderOptions() {
+		return nullptr;
+	};
 };
 
 struct FunctionParameters {

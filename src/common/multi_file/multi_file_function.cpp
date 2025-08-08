@@ -29,6 +29,9 @@ shared_ptr<BaseFileReader> MultiFileReaderInterface::CreateReader(ClientContext 
 void MultiFileReaderInterface::GetBindInfo(const TableFunctionData &bind_data, BindInfo &info) {
 }
 
+void MultiFileReaderInterface::ResetCardinality(MultiFileBindData &multi_file_data) {
+}
+
 void MultiFileReaderInterface::GetVirtualColumns(ClientContext &context, MultiFileBindData &bind_data,
                                                  virtual_column_map_t &result) {
 }

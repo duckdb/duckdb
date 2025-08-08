@@ -180,6 +180,8 @@ public:
 	                           const LogicalType &type, MultiFileLocalIndex local_index,
 	                           optional_ptr<MultiFileColumnDefinition> &global_column_reference);
 
+	void UpdateCardinalityEstimate(ClientContext &context, MultiFileBindData &bind_data, MultiFileList &files);
+
 	DUCKDB_API virtual unique_ptr<MultiFileReader> Copy() const;
 
 protected:
