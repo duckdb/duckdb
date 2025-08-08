@@ -187,7 +187,7 @@ void DatabaseManager::GetDatabaseType(ClientContext &context, AttachInfo &info, 
 		CheckPathConflict(context, info.path);
 
 		auto &fs = FileSystem::GetFileSystem(context);
-		DBPathAndType::CheckMagicBytes(fs, info.path, options.db_type);
+		DBPathAndType::CheckMagicBytes(QueryContext(context), fs, info.path, options.db_type);
 	}
 
 	if (options.db_type.empty()) {

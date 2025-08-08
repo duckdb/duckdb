@@ -124,7 +124,7 @@ BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, idx_t &nr_bytes) {
 	if (!external_file_cache.IsEnabled() || !CanSeek()) {
 		result = external_file_cache.GetBufferManager().Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
 		buffer = result.Ptr();
-		nr_bytes = NumericCast<idx_t>(GetFileHandle().Read(buffer, nr_bytes));
+		nr_bytes = NumericCast<idx_t>(GetFileHandle().Read(context, buffer, nr_bytes));
 		position += NumericCast<idx_t>(nr_bytes);
 		return result;
 	}
@@ -142,7 +142,7 @@ BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, idx_t &nr_bytes) {
 	buffer = result.Ptr();
 
 	GetFileHandle().Seek(position);
-	nr_bytes = NumericCast<idx_t>(GetFileHandle().Read(buffer, nr_bytes));
+	nr_bytes = NumericCast<idx_t>(GetFileHandle().Read(context, buffer, nr_bytes));
 	auto new_file_range = make_shared_ptr<CachedFileRange>(result.GetBlockHandle(), nr_bytes, position, version_tag);
 
 	result = TryInsertFileRange(result, buffer, nr_bytes, position, new_file_range);

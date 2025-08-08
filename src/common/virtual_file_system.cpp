@@ -2,6 +2,7 @@
 #include "duckdb/common/gzip_file_system.hpp"
 #include "duckdb/common/pipe_file_system.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
@@ -49,7 +50,7 @@ unique_ptr<FileHandle> VirtualFileSystem::OpenFileExtended(const OpenFileInfo &f
 			throw NotImplementedException(
 			    "Attempting to open a compressed file, but the compression type is not supported");
 		}
-		file_handle = entry->second->OpenCompressedFile(std::move(file_handle), flags.OpenForWriting());
+		file_handle = entry->second->OpenCompressedFile(QueryContext(), std::move(file_handle), flags.OpenForWriting());
 	}
 	return file_handle;
 }

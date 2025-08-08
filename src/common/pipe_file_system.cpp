@@ -3,8 +3,10 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
+
 class PipeFile : public FileHandle {
 public:
 	explicit PipeFile(unique_ptr<FileHandle> child_handle_p)
@@ -16,15 +18,15 @@ public:
 	unique_ptr<FileHandle> child_handle;
 
 public:
-	int64_t ReadChunk(void *buffer, int64_t nr_bytes);
+	int64_t ReadChunk(QueryContext context, void *buffer, int64_t nr_bytes);
 	int64_t WriteChunk(void *buffer, int64_t nr_bytes);
 
 	void Close() override {
 	}
 };
 
-int64_t PipeFile::ReadChunk(void *buffer, int64_t nr_bytes) {
-	return child_handle->Read(buffer, UnsafeNumericCast<idx_t>(nr_bytes));
+int64_t PipeFile::ReadChunk(QueryContext context, void *buffer, int64_t nr_bytes) {
+	return child_handle->Read(context, buffer, UnsafeNumericCast<idx_t>(nr_bytes));
 }
 int64_t PipeFile::WriteChunk(void *buffer, int64_t nr_bytes) {
 	return child_handle->Write(buffer, UnsafeNumericCast<idx_t>(nr_bytes));
@@ -36,7 +38,7 @@ void PipeFileSystem::Reset(FileHandle &handle) {
 
 int64_t PipeFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	auto &pipe = handle.Cast<PipeFile>();
-	return pipe.ReadChunk(buffer, nr_bytes);
+	return pipe.ReadChunk(QueryContext(), buffer, nr_bytes);
 }
 
 int64_t PipeFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {

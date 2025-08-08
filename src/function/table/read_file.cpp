@@ -180,7 +180,7 @@ static void ReadFileExecute(ClientContext &context, TableFunctionInput &input, D
 						} else {
 							// Local file: non-caching read
 							actually_read = NumericCast<idx_t>(file_handle->GetFileHandle().Read(
-							    content_string_ptr, UnsafeNumericCast<idx_t>(bytes_to_read)));
+							    QueryContext(context), content_string_ptr, UnsafeNumericCast<idx_t>(bytes_to_read)));
 						}
 
 						if (actually_read == 0) {
