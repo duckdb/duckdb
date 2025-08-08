@@ -126,6 +126,9 @@ static void PragmaDisableOptimizer(ClientContext &context, const FunctionParamet
 void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	RegisterEnableProfiling(set);
 
+	// NOTE: use of Pragma functions is discouraged. Instead, opt for adding a regular table function to be invoked with CALL.
+	//       see for example the "enable_logging" function
+
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_profile", PragmaDisableProfiling));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_profiling", PragmaDisableProfiling));
 

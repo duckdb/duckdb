@@ -238,13 +238,13 @@ string CSVWriter::AddEscapes(char to_be_escaped, char escape, const string &val)
 	return new_val;
 }
 
-bool CSVWriter::RequiresQuotes(const char *str, idx_t len, vector<string> &null_str,
-                               unsafe_unique_array<bool> &requires_quotes) {
+bool CSVWriter::RequiresQuotes(const char *str, idx_t len, const string &null_str,
+                               const unsafe_unique_array<bool> &requires_quotes) {
 	// check if the string is equal to the null string
-	if (len == null_str[0].size() && memcmp(str, null_str[0].c_str(), len) == 0) {
+	if (len == null_str.size() && memcmp(str, null_str.c_str(), len) == 0) {
 		return true;
 	}
-	auto str_data = reinterpret_cast<const_data_ptr_t>(str);
+	auto str_data = const_data_ptr_cast(str);
 	for (idx_t i = 0; i < len; i++) {
 		if (requires_quotes[str_data[i]]) {
 			// this byte requires quotes - write a quoted string
@@ -258,13 +258,13 @@ bool CSVWriter::RequiresQuotes(const char *str, idx_t len, vector<string> &null_
 
 void CSVWriter::WriteQuotedString(WriteStream &writer, const char *str, idx_t len, idx_t col_idx,
                                   CSVReaderOptions &options, CSVWriterOptions &writer_options) {
-	WriteQuotedString(writer, str, len, options.force_quote[col_idx], options.null_str, writer_options.requires_quotes,
+	WriteQuotedString(writer, str, len, options.force_quote[col_idx], options.null_str[0], writer_options.requires_quotes,
 	                  options.dialect_options.state_machine_options.quote.GetValue(),
 	                  options.dialect_options.state_machine_options.escape.GetValue());
 }
 
 void CSVWriter::WriteQuotedString(WriteStream &writer, const char *str, idx_t len, bool force_quote,
-                                  vector<string> &null_str, unsafe_unique_array<bool> &requires_quotes, char quote,
+                                  const string &null_str, const unsafe_unique_array<bool> &requires_quotes, char quote,
                                   char escape) {
 	if (!force_quote) {
 		// force quote is disabled: check if we need to add quotes anyway
