@@ -137,6 +137,11 @@ vector<OpenFileInfo> VirtualFileSystem::Glob(const string &path, FileOpener *ope
 	return FindFileSystem(path).Glob(path, opener);
 }
 
+vector<OpenFileInfo> VirtualFileSystem::GlobHive(const string &path, FileOpener *opener, idx_t max_files,
+                                                 optional_ptr<HiveFilterParams> hive_params) {
+	return FindFileSystem(path).GlobHive(path, opener, max_files, hive_params);
+}
+
 void VirtualFileSystem::RegisterSubSystem(unique_ptr<FileSystem> fs) {
 	sub_systems.push_back(std::move(fs));
 }
