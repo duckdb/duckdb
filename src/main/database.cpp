@@ -44,6 +44,7 @@ DBConfig::DBConfig() {
 	encoding_functions->Initialize(*this);
 	arrow_extensions = make_uniq<ArrowTypeExtensionSet>();
 	arrow_extensions->Initialize(*this);
+	keyword_manager = make_uniq<ParserKeywordManager>();
 	cast_functions = make_uniq<CastFunctionSet>(*this);
 	collation_bindings = make_uniq<CollationBinding>();
 	index_types = make_uniq<IndexTypeSet>();
@@ -462,6 +463,9 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	}
 	config.replacement_scans = std::move(new_config.replacement_scans);
 	config.parser_extensions = std::move(new_config.parser_extensions);
+	if (new_config.keyword_manager) {
+		config.keyword_manager = std::move(new_config.keyword_manager);
+	}
 	config.error_manager = std::move(new_config.error_manager);
 	if (!config.error_manager) {
 		config.error_manager = make_uniq<ErrorManager>();

@@ -37,6 +37,7 @@
 #include "duckdb/function/encoding_function.hpp"
 #include "duckdb/main/setting_info.hpp"
 #include "duckdb/logging/log_manager.hpp"
+#include "duckdb/parser/parser_keyword_manager.hpp"
 
 namespace duckdb {
 
@@ -251,6 +252,8 @@ public:
 	DBConfigOptions options;
 	//! Extensions made to the parser
 	vector<ParserExtension> parser_extensions;
+	//! Keywords used by the parser
+	unique_ptr<ParserKeywordManager> keyword_manager;
 	//! Extensions made to the optimizer
 	vector<OptimizerExtension> optimizer_extensions;
 	//! Error manager
