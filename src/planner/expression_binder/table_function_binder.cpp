@@ -57,6 +57,14 @@ BindResult TableFunctionBinder::BindColumnReference(unique_ptr<ParsedExpression>
 		                      result_name);
 	}
 
+	auto result = BindCorrelatedColumns(expr_ptr, ErrorData("error"));
+	if (!result.HasError()) {
+		auto &bound_expr = expr_ptr->Cast<BoundExpression>();
+		ExtractCorrelatedExpressions(binder, *bound_expr.expr);
+		result.expression = std::move(bound_expr.expr);
+		return result;
+	}
+
 	return BindResult(make_uniq<BoundConstantExpression>(Value(result_name)));
 }
 
