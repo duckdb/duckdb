@@ -67,7 +67,7 @@ static LogicalType GetJSONType(StructNames &const_struct_names, const LogicalTyp
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::UUID:
-	case LogicalTypeId::VARINT:
+	case LogicalTypeId::BIGNUM:
 	case LogicalTypeId::DECIMAL:
 		return type;
 	case LogicalTypeId::LIST:
@@ -585,7 +585,7 @@ static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_m
 		TemplatedCreateValues<string_t, string_t>(doc, vals, string_vector, count);
 		break;
 	}
-	case LogicalTypeId::VARINT: {
+	case LogicalTypeId::BIGNUM: {
 		Vector string_vector(LogicalTypeId::VARCHAR, count);
 		VectorOperations::DefaultCast(value_v, string_vector, count);
 		CreateRawValues(doc, vals, string_vector, count);

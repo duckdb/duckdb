@@ -15,7 +15,7 @@
 #include "duckdb/common/types/sel_cache.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/types/value_map.hpp"
-#include "duckdb/common/types/varint.hpp"
+#include "duckdb/common/types/bignum.hpp"
 #include "duckdb/common/types/vector_cache.hpp"
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -710,9 +710,9 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		auto str = reinterpret_cast<string_t *>(data)[index];
 		return Value::BLOB(const_data_ptr_cast(str.GetData()), str.GetSize());
 	}
-	case LogicalTypeId::VARINT: {
-		auto str = reinterpret_cast<varint_t *>(data)[index];
-		return Value::VARINT(const_data_ptr_cast(str.data.GetData()), str.data.GetSize());
+	case LogicalTypeId::BIGNUM: {
+		auto str = reinterpret_cast<bignum_t *>(data)[index];
+		return Value::BIGNUM(const_data_ptr_cast(str.data.GetData()), str.data.GetSize());
 	}
 	case LogicalTypeId::AGGREGATE_STATE: {
 		auto str = reinterpret_cast<string_t *>(data)[index];
@@ -1606,7 +1606,7 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 		}
 	}
 
-	if (type.id() == LogicalTypeId::VARINT) {
+	if (type.id() == LogicalTypeId::BIGNUM) {
 		switch (vtype) {
 		case VectorType::FLAT_VECTOR: {
 			auto &validity = FlatVector::Validity(*vector);
@@ -1614,7 +1614,7 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 			for (idx_t i = 0; i < count; i++) {
 				auto oidx = sel->get_index(i);
 				if (validity.RowIsValid(oidx)) {
-					Varint::Verify(static_cast<varint_t>(strings[oidx]));
+					Bignum::Verify(static_cast<bignum_t>(strings[oidx]));
 				}
 			}
 		} break;

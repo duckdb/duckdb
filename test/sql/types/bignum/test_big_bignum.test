@@ -1,0 +1,20 @@
+# name: test/sql/types/bignum/test_big_bignum.test
+# description: Test queries over big bignums
+# group: [bignum]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table t as select concat('1', repeat('0', i))::bignum as a from range(0,100) tbl(i)
+
+query I
+select sum(a) from t
+----
+1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111
+
+query I
+select sum(a) from t where a < 10000000
+----
+1111111
+

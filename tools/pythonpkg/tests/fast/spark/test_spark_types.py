@@ -63,7 +63,7 @@ class TestTypes(object):
             	struct_of_fixed_array,
             	fixed_array_of_int_list,
                 list_of_fixed_int_array,
-                varint
+                bignum
 			) from test_all_types()
 		"""
         )

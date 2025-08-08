@@ -316,16 +316,16 @@ struct ArrowBit {
 	}
 };
 
-struct ArrowVarint {
+struct ArrowBignum {
 	static unique_ptr<ArrowType> GetType(const ArrowSchema &schema, const ArrowSchemaMetadata &schema_metadata) {
 		const auto format = string(schema.format);
 		if (format == "z") {
-			return make_uniq<ArrowType>(LogicalType::VARINT, make_uniq<ArrowStringInfo>(ArrowVariableSizeType::NORMAL));
+			return make_uniq<ArrowType>(LogicalType::BIGNUM, make_uniq<ArrowStringInfo>(ArrowVariableSizeType::NORMAL));
 		} else if (format == "Z") {
-			return make_uniq<ArrowType>(LogicalType::VARINT,
+			return make_uniq<ArrowType>(LogicalType::BIGNUM,
 			                            make_uniq<ArrowStringInfo>(ArrowVariableSizeType::SUPER_SIZE));
 		}
-		throw InvalidInputException("Arrow extension type \"%s\" not supported for Varint", format.c_str());
+		throw InvalidInputException("Arrow extension type \"%s\" not supported for Bignum", format.c_str());
 	}
 
 	static void PopulateSchema(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &schema, const LogicalType &type,
@@ -387,7 +387,7 @@ void ArrowTypeExtensionSet::Initialize(const DBConfig &config) {
 	config.RegisterArrowExtension({"DuckDB", "bit", &ArrowBit::PopulateSchema, &ArrowBit::GetType,
 	                               make_shared_ptr<ArrowTypeExtensionData>(LogicalType::BIT), nullptr, nullptr});
 
-	config.RegisterArrowExtension({"DuckDB", "varint", &ArrowVarint::PopulateSchema, &ArrowVarint::GetType,
-	                               make_shared_ptr<ArrowTypeExtensionData>(LogicalType::VARINT), nullptr, nullptr});
+	config.RegisterArrowExtension({"DuckDB", "bignum", &ArrowBignum::PopulateSchema, &ArrowBignum::GetType,
+	                               make_shared_ptr<ArrowTypeExtensionData>(LogicalType::BIGNUM), nullptr, nullptr});
 }
 } // namespace duckdb

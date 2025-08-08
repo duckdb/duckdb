@@ -1,7 +1,7 @@
 #include "core_functions/aggregate/distributive_functions.hpp"
 #include "core_functions/aggregate/sum_helpers.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/varint.hpp"
+#include "duckdb/common/bignum.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
@@ -212,12 +212,12 @@ unique_ptr<FunctionData> BindDecimalSum(ClientContext &context, AggregateFunctio
 	return nullptr;
 }
 
-struct VarintState {
+struct BignumState {
 	bool is_set;
-	VarintIntermediate value;
+	BignumIntermediate value;
 };
 
-struct VarintOperation {
+struct BignumOperation {
 	template <class STATE>
 	static void Initialize(STATE &state) {
 		state.is_set = false;
@@ -237,7 +237,7 @@ struct VarintOperation {
 			state.is_set = true;
 			state.value.Initialize(unary_input.input.allocator);
 		}
-		VarintIntermediate rhs(input);
+		BignumIntermediate rhs(input);
 		state.value.AddInPlace(unary_input.input.allocator, rhs);
 	}
 
@@ -260,7 +260,7 @@ struct VarintOperation {
 		if (!state.is_set) {
 			finalize_data.ReturnNull();
 		} else {
-			target = state.value.ToVarint(finalize_data.input.allocator);
+			target = state.value.ToBignum(finalize_data.input.allocator);
 		}
 	}
 
@@ -284,8 +284,8 @@ AggregateFunctionSet SumFun::GetFunctions() {
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT128));
 	sum.AddFunction(AggregateFunction::UnaryAggregate<SumState<double>, double, double, NumericSumOperation>(
 	    LogicalType::DOUBLE, LogicalType::DOUBLE));
-	sum.AddFunction(AggregateFunction::UnaryAggregate<VarintState, varint_t, varint_t, VarintOperation>(
-	    LogicalType::VARINT, LogicalType::VARINT));
+	sum.AddFunction(AggregateFunction::UnaryAggregate<BignumState, bignum_t, bignum_t, BignumOperation>(
+	    LogicalType::BIGNUM, LogicalType::BIGNUM));
 	return sum;
 }
 

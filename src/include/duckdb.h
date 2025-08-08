@@ -132,8 +132,8 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_TIMESTAMP_TZ = 31,
 	// enum type, only useful as logical type
 	DUCKDB_TYPE_ANY = 34,
-	// duckdb_varint
-	DUCKDB_TYPE_VARINT = 35,
+	// duckdb_bignum
+	DUCKDB_TYPE_BIGNUM = 35,
 	// enum type, only useful as logical type
 	DUCKDB_TYPE_SQLNULL = 36,
 	// enum type, only useful as logical type
@@ -455,14 +455,14 @@ typedef struct {
 	idx_t size;
 } duckdb_bit;
 
-//! VARINTs are composed of a byte pointer, a size, and an `is_negative` bool.
+//! BIGNUMs are composed of a byte pointer, a size, and an `is_negative` bool.
 //! The absolute value of the number is stored in `data` in little endian format.
 //! You must free `data` with `duckdb_free`.
 typedef struct {
 	uint8_t *data;
 	idx_t size;
 	bool is_negative;
-} duckdb_varint;
+} duckdb_bignum;
 
 //! A query result consists of a pointer to its internal data.
 //! Must be freed with 'duckdb_destroy_result'.
@@ -2264,12 +2264,12 @@ Creates a value from a uhugeint
 DUCKDB_C_API duckdb_value duckdb_create_uhugeint(duckdb_uhugeint input);
 
 /*!
-Creates a VARINT value from a duckdb_varint
+Creates a BIGNUM value from a duckdb_bignum
 
-* @param input The duckdb_varint value
+* @param input The duckdb_bignum value
 * @return The value. This must be destroyed with `duckdb_destroy_value`.
 */
-DUCKDB_C_API duckdb_value duckdb_create_varint(duckdb_varint input);
+DUCKDB_C_API duckdb_value duckdb_create_bignum(duckdb_bignum input);
 
 /*!
 Creates a DECIMAL value from a duckdb_decimal
@@ -2490,13 +2490,13 @@ Returns the uhugeint value of the given value.
 DUCKDB_C_API duckdb_uhugeint duckdb_get_uhugeint(duckdb_value val);
 
 /*!
-Returns the duckdb_varint value of the given value.
+Returns the duckdb_bignum value of the given value.
 The `data` field must be destroyed with `duckdb_free`.
 
-* @param val A duckdb_value containing a VARINT
-* @return A duckdb_varint. The `data` field must be destroyed with `duckdb_free`.
+* @param val A duckdb_value containing a BIGNUM
+* @return A duckdb_bignum. The `data` field must be destroyed with `duckdb_free`.
 */
-DUCKDB_C_API duckdb_varint duckdb_get_varint(duckdb_value val);
+DUCKDB_C_API duckdb_bignum duckdb_get_bignum(duckdb_value val);
 
 /*!
 Returns the duckdb_decimal value of the given value.

@@ -23,7 +23,7 @@
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/main/error_manager.hpp"
-#include "duckdb/common/types/varint.hpp"
+#include "duckdb/common/types/bignum.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 
@@ -276,8 +276,8 @@ Value Value::MinimumValue(const LogicalType &type) {
 	}
 	case LogicalTypeId::ENUM:
 		return Value::ENUM(0, type);
-	case LogicalTypeId::VARINT:
-		return Value::VARINT(Varint::VarcharToVarInt(
+	case LogicalTypeId::BIGNUM:
+		return Value::BIGNUM(Bignum::VarcharToBignum(
 		    "-179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540"
 		    "4589535143824642343213268894641827684675467035375169860499105765512820762454900903893289440758685084551339"
 		    "42304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368"));
@@ -368,8 +368,8 @@ Value Value::MaximumValue(const LogicalType &type) {
 		auto enum_size = EnumType::GetSize(type);
 		return Value::ENUM(enum_size - (enum_size ? 1 : 0), type);
 	}
-	case LogicalTypeId::VARINT:
-		return Value::VARINT(Varint::VarcharToVarInt(
+	case LogicalTypeId::BIGNUM:
+		return Value::BIGNUM(Bignum::VarcharToBignum(
 		    "1797693134862315708145274237317043567980705675258449965989174768031572607800285387605895586327668781715404"
 		    "5895351438246423432132688946418276846754670353751698604991057655128207624549009038932894407586850845513394"
 		    "2304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368"));
@@ -891,12 +891,12 @@ Value Value::BLOB(const_data_ptr_t data, idx_t len) {
 	return result;
 }
 
-Value Value::VARINT(const_data_ptr_t data, idx_t len) {
-	return VARINT(string(const_char_ptr_cast(data), len));
+Value Value::BIGNUM(const_data_ptr_t data, idx_t len) {
+	return BIGNUM(string(const_char_ptr_cast(data), len));
 }
 
-Value Value::VARINT(const string &data) {
-	Value result(LogicalType::VARINT);
+Value Value::BIGNUM(const string &data) {
+	Value result(LogicalType::BIGNUM);
 	result.is_null = false;
 	result.value_info_ = make_shared_ptr<StringValueInfo>(data);
 	return result;
@@ -1488,8 +1488,8 @@ DUCKDB_API string_t Value::GetValueUnsafe() const {
 }
 
 template <>
-DUCKDB_API varint_t Value::GetValueUnsafe() const {
-	return varint_t(StringValue::Get(*this));
+DUCKDB_API bignum_t Value::GetValueUnsafe() const {
+	return bignum_t(StringValue::Get(*this));
 }
 
 template <>

@@ -199,7 +199,7 @@ typedef struct {
 	duckdb_value (*duckdb_create_timestamp)(duckdb_timestamp input);
 	duckdb_value (*duckdb_create_interval)(duckdb_interval input);
 	duckdb_value (*duckdb_create_blob)(const uint8_t *data, idx_t length);
-	duckdb_value (*duckdb_create_varint)(duckdb_varint input);
+	duckdb_value (*duckdb_create_bignum)(duckdb_bignum input);
 	duckdb_value (*duckdb_create_decimal)(duckdb_decimal input);
 	duckdb_value (*duckdb_create_bit)(duckdb_bit input);
 	duckdb_value (*duckdb_create_uuid)(duckdb_uhugeint input);
@@ -223,7 +223,7 @@ typedef struct {
 	duckdb_interval (*duckdb_get_interval)(duckdb_value val);
 	duckdb_logical_type (*duckdb_get_value_type)(duckdb_value val);
 	duckdb_blob (*duckdb_get_blob)(duckdb_value val);
-	duckdb_varint (*duckdb_get_varint)(duckdb_value val);
+	duckdb_bignum (*duckdb_get_bignum)(duckdb_value val);
 	duckdb_decimal (*duckdb_get_decimal)(duckdb_value val);
 	duckdb_bit (*duckdb_get_bit)(duckdb_value val);
 	duckdb_uhugeint (*duckdb_get_uuid)(duckdb_value val);
@@ -751,7 +751,7 @@ typedef struct {
 #define duckdb_create_int64                            duckdb_ext_api.duckdb_create_int64
 #define duckdb_create_hugeint                          duckdb_ext_api.duckdb_create_hugeint
 #define duckdb_create_uhugeint                         duckdb_ext_api.duckdb_create_uhugeint
-#define duckdb_create_varint                           duckdb_ext_api.duckdb_create_varint
+#define duckdb_create_bignum                           duckdb_ext_api.duckdb_create_bignum
 #define duckdb_create_decimal                          duckdb_ext_api.duckdb_create_decimal
 #define duckdb_create_float                            duckdb_ext_api.duckdb_create_float
 #define duckdb_create_double                           duckdb_ext_api.duckdb_create_double
@@ -778,7 +778,7 @@ typedef struct {
 #define duckdb_get_uint64                              duckdb_ext_api.duckdb_get_uint64
 #define duckdb_get_hugeint                             duckdb_ext_api.duckdb_get_hugeint
 #define duckdb_get_uhugeint                            duckdb_ext_api.duckdb_get_uhugeint
-#define duckdb_get_varint                              duckdb_ext_api.duckdb_get_varint
+#define duckdb_get_bignum                              duckdb_ext_api.duckdb_get_bignum
 #define duckdb_get_decimal                             duckdb_ext_api.duckdb_get_decimal
 #define duckdb_get_float                               duckdb_ext_api.duckdb_get_float
 #define duckdb_get_double                              duckdb_ext_api.duckdb_get_double
