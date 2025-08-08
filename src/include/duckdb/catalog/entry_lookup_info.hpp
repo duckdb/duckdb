@@ -36,6 +36,7 @@ private:
 	CatalogType catalog_type;
 	const string &name;
 	optional_ptr<BoundAtClause> at_clause;
+	bool throw_on_unsupported_at_clause = true;
 	QueryErrorContext error_context;
 };
 
