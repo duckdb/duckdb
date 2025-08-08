@@ -193,6 +193,10 @@ int64_t CastFunctionSet::ImplicitCastCost(ClientContext &context, const LogicalT
 	return CastFunctionSet::Get(context).ImplicitCastCost(&context, source, target);
 }
 
+int64_t CastFunctionSet::ImplicitCastCost(DatabaseInstance &db, const LogicalType &source, const LogicalType &target) {
+	return CastFunctionSet::Get(db).ImplicitCastCost(nullptr, source, target);
+}
+
 static BoundCastInfo MapCastFunction(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
 	D_ASSERT(input.info);
 	auto &map_info = input.info->Cast<MapCastInfo>();
