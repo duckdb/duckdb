@@ -13,6 +13,8 @@
 // start catch.hpp
 
 #include <memory>
+#include <sstream>
+
 #ifndef DUCKDB_BASE_STD
 namespace duckdb_base_std {
 	using ::std::unique_ptr;
