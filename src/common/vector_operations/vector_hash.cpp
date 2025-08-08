@@ -464,19 +464,38 @@ void CombineHashTypeSwitch(Vector &hashes, Vector &input, const SelectionVector 
 } // namespace
 
 void VectorOperations::Hash(Vector &input, Vector &result, idx_t count) {
-	HashTypeSwitch<false>(input, result, nullptr, count);
+	if (input.GetVectorType() == VectorType::DICTIONARY_VECTOR && DictionaryVector::CanPrecomputeHashes(input)) {
+		result = DictionaryVector::GetPrecomputedHashes(input, DictionaryVector::SelVector(input), count);
+	} else {
+		HashTypeSwitch<false>(input, result, nullptr, count);
+	}
 }
 
 void VectorOperations::Hash(Vector &input, Vector &result, const SelectionVector &sel, idx_t count) {
-	HashTypeSwitch<true>(input, result, &sel, count);
+	if (input.GetVectorType() == VectorType::DICTIONARY_VECTOR && DictionaryVector::CanPrecomputeHashes(input)) {
+		result = DictionaryVector::GetPrecomputedHashes(
+		    input, SelectionVector(DictionaryVector::SelVector(input).Slice(sel, count)), count);
+	} else {
+		HashTypeSwitch<true>(input, result, &sel, count);
+	}
 }
 
 void VectorOperations::CombineHash(Vector &hashes, Vector &input, idx_t count) {
-	CombineHashTypeSwitch<false>(hashes, input, nullptr, count);
+	if (input.GetVectorType() == VectorType::DICTIONARY_VECTOR && DictionaryVector::CanPrecomputeHashes(input)) {
+		auto input_hashes = DictionaryVector::GetPrecomputedHashes(input, DictionaryVector::SelVector(input), count);
+
+	} else {
+		CombineHashTypeSwitch<false>(hashes, input, nullptr, count);
+	}
 }
 
 void VectorOperations::CombineHash(Vector &hashes, Vector &input, const SelectionVector &rsel, idx_t count) {
-	CombineHashTypeSwitch<true>(hashes, input, &rsel, count);
+	if (input.GetVectorType() == VectorType::DICTIONARY_VECTOR && DictionaryVector::CanPrecomputeHashes(input)) {
+		auto input_hashes = DictionaryVector::GetPrecomputedHashes(input, DictionaryVector::SelVector(input), count);
+
+	} else {
+		CombineHashTypeSwitch<true>(hashes, input, &rsel, count);
+	}
 }
 
 } // namespace duckdb

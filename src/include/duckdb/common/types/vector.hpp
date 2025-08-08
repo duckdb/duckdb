@@ -280,6 +280,9 @@ protected:
 	//! The buffer holding auxiliary data of the vector
 	//! e.g. a string vector uses this to store strings
 	buffer_ptr<VectorBuffer> auxiliary;
+	//! The buffer holding precomputed hashes of the data in the vector
+	//! used for caching hashes of string dictionaries
+	buffer_ptr<VectorBuffer> hashes;
 };
 
 //! The DictionaryBuffer holds a selection vector
@@ -390,6 +393,14 @@ struct DictionaryVector {
 		VerifyDictionary(vector);
 		vector.buffer->Cast<DictionaryBuffer>().SetDictionaryId(std::move(new_id));
 	}
+	static inline bool CanPrecomputeHashes(const Vector &vector) {
+		VerifyDictionary(vector);
+		if (vector.GetType().InternalType() != PhysicalType::VARCHAR) {
+			return false;
+		}
+		return DictionarySize(vector).IsValid();
+	}
+	static inline Vector GetPrecomputedHashes(Vector &vector, const SelectionVector &sel, const idx_t &count);
 };
 
 struct FlatVector {

@@ -1889,6 +1889,22 @@ void Vector::DebugShuffleNestedVector(Vector &vector, idx_t count) {
 }
 
 //===--------------------------------------------------------------------===//
+// DictionaryVector
+//===--------------------------------------------------------------------===//
+Vector DictionaryVector::GetPrecomputedHashes(Vector &vector, const SelectionVector &sel, const idx_t &count) {
+	VerifyDictionary(vector);
+	D_ASSERT(CanPrecomputeHashes(vector));
+	auto &dictionary = Child(vector);
+	if (!dictionary.hashes) {
+		const auto dictionary_count = DictionarySize(dictionary).GetIndex();
+		Vector dictionary_hashes(LogicalType::HASH, dictionary_count);
+		VectorOperations::Hash(dictionary, dictionary_hashes, dictionary_count);
+		dictionary.hashes = make_buffer<VectorChildBuffer>(std::move(dictionary_hashes));
+	}
+	return Vector(dictionary.hashes->Cast<VectorChildBuffer>().data, sel, count);
+}
+
+//===--------------------------------------------------------------------===//
 // FlatVector
 //===--------------------------------------------------------------------===//
 void FlatVector::SetNull(Vector &vector, idx_t idx, bool is_null) {
