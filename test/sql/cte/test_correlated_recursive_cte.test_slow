@@ -190,8 +190,8 @@ WITH RECURSIVE collatz(x, t, steps) AS
    WHERE  t <> _corr)
 )
 SELECT * FROM collatz WHERE t = _corr
-ORDER BY x
-) t2;
+) t2
+ORDER BY x;
 ----
 1	1	0
 2	1	1

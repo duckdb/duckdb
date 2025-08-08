@@ -157,7 +157,7 @@ idx_t BuildProbeSideOptimizer::ChildHasJoins(LogicalOperator &op) {
 	return ChildHasJoins(*op.children[0]);
 }
 
-void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op) const {
+bool BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op) const {
 	auto &left_child = *op.children[0];
 	auto &right_child = *op.children[1];
 	const auto lhs_cardinality = left_child.has_estimated_cardinality ? left_child.estimated_cardinality
@@ -209,6 +209,7 @@ void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op) const {
 	if (swap) {
 		FlipChildren(op);
 	}
+	return swap;
 }
 
 void BuildProbeSideOptimizer::VisitOperator(LogicalOperator &op) {
@@ -217,8 +218,7 @@ void BuildProbeSideOptimizer::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
 		auto &join = op.Cast<LogicalComparisonJoin>();
 		if (HasInverseJoinType(join.join_type)) {
-			FlipChildren(join);
-			join.delim_flipped = true;
+			join.delim_flipped = TryFlipJoinChildren(join);
 		}
 		break;
 	}

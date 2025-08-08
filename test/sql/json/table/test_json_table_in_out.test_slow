@@ -481,7 +481,7 @@ statement ok
 INSERT INTO t1(x) VALUES('{"a":{"b":{"c":"hello",},},}');
 
 query I
-SELECT fullkey FROM t1, json_tree(x);
+SELECT fullkey FROM t1, json_tree(x) order by json_tree.rowid;
 ----
 $
 $.a
@@ -731,7 +731,7 @@ create table json_table as
     select '{"my_array":[{"my_key":42},{"my_key":9001}]}' as my_json;
 
 query II
-select fullkey, path from json_table, json_tree(json_table.my_json);
+select fullkey, path from json_table, json_tree(json_table.my_json) order by json_tree.rowid;
 ----
 $	$
 $.my_array	$

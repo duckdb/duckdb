@@ -547,10 +547,10 @@ index c010292..0a73510 100644
 -#error DUCKDB_EXTENSION_MAIN not defined
 -#endif
 diff --git a/test/sql/hnsw/hnsw_lateral_join.test b/test/sql/hnsw/hnsw_lateral_join.test
-index 0362f3c..521264f 100644
+index 0362f3c..f0f9c28 100644
 --- a/test/sql/hnsw/hnsw_lateral_join.test
 +++ b/test/sql/hnsw/hnsw_lateral_join.test
-@@ -58,13 +58,13 @@ statement ok
+@@ -58,18 +58,18 @@ statement ok
  INSERT INTO a VALUES (NULL, 3);
  
  query IIIIII rowsort a_has_null
@@ -566,10 +566,12 @@ index 0362f3c..521264f 100644
  
  # Test with a grouping function
  query II rowsort
-@@ -72,4 +72,4 @@ select a_id, list(b_str) from a, lateral (select *, a_id as id_dup from b order
+-select a_id, list(b_str) from a, lateral (select *, a_id as id_dup from b order by array_distance(a.a_vec, b.b_vec) limit 2) GROUP BY a_id;
++select a_id, list(b_str order by b_str) from a, lateral (select *, a_id as id_dup from b order by array_distance(a.a_vec, b.b_vec) limit 2) GROUP BY a_id;
  ----
  1	[a, b]
- 2	[b, a]
+-2	[b, a]
 -3	[a, b]
 \ No newline at end of file
++2	[a, b]
 +3	[a, b]
