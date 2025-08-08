@@ -380,9 +380,7 @@ MatchFunction RowMatcher::GetStructMatchFunction(const LogicalType &type, const 
 		if (type.id() == LogicalTypeId::UNION) {
 			result.function = GenericNestedMatch<NO_MATCH_SEL, Equals>;
 		} else {
-			//	Structs always have to use NDF because Equals can still return
-			//	NULLs when there are internal NULLs
-			result.function = GenericNestedMatch<NO_MATCH_SEL, NotDistinctFrom>;
+			result.function = StructMatchEquality<NO_MATCH_SEL, Equals>;
 		}
 		break;
 	case ExpressionType::COMPARE_NOTEQUAL:
@@ -392,7 +390,11 @@ MatchFunction RowMatcher::GetStructMatchFunction(const LogicalType &type, const 
 		result.function = GenericNestedMatch<NO_MATCH_SEL, DistinctFrom>;
 		return result;
 	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
-		result.function = StructMatchEquality<NO_MATCH_SEL, NotDistinctFrom>;
+		if (type.id() == LogicalTypeId::UNION) {
+			result.function = GenericNestedMatch<NO_MATCH_SEL, NotDistinctFrom>;
+		} else {
+			result.function = StructMatchEquality<NO_MATCH_SEL, NotDistinctFrom>;
+		}
 		break;
 	case ExpressionType::COMPARE_GREATERTHAN:
 		result.function = GenericNestedMatch<NO_MATCH_SEL, GreaterThan>;
