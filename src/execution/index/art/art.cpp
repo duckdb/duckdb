@@ -1075,7 +1075,8 @@ void ART::TransformToDeprecated() {
 IndexStorageInfo ART::GetStorageInfo(const case_insensitive_map_t<Value> &options, const bool to_wal) {
 	// If the storage format uses deprecated leaf storage,
 	// then we need to transform all nested leaves before serialization.
-	// mutex with scan
+	// mutex with index_scan
+	valid = false;
 	lock_guard<mutex> l(lock);
 	auto v1_0_0_option = options.find("v1_0_0_storage");
 	bool v1_0_0_storage = v1_0_0_option == options.end() || v1_0_0_option->second != Value(false);
@@ -1116,6 +1117,7 @@ IndexStorageInfo ART::GetStorageInfo(const case_insensitive_map_t<Value> &option
 	for (idx_t i = 0; i < allocator_count; i++) {
 		info.allocator_infos.push_back((*allocators)[i]->GetInfo());
 	}
+	valid = true;
 	return info;
 }
 

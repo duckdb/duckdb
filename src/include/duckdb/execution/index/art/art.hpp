@@ -66,6 +66,8 @@ public:
 	bool verify_max_key_len;
 	//! The number of bytes fitting in the prefix.
 	uint8_t prefix_count;
+	//! Invalid during checkpoint
+	bool valid = true;
 
 public:
 	//! Try to initialize a scan on the ART with the given expression and filter.

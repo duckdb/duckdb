@@ -515,6 +515,10 @@ vector<unique_ptr<Expression>> ExtractFilterExpressions(const ColumnDefinition &
 
 bool TryScanIndex(ART &art, const ColumnList &column_list, TableFunctionInitInput &input, TableFilterSet &filter_set,
                   idx_t max_count, unsafe_vector<row_t> &row_ids) {
+	if (!art.valid) {
+		return false;
+	}
+
 	// FIXME: No support for index scans on compound ARTs.
 	// See note above on multi-filter support.
 	if (art.unbound_expressions.size() > 1) {

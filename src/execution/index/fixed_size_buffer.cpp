@@ -89,11 +89,19 @@ void FixedSizeBuffer::Serialize(PartialBlockManager &partial_block_manager, cons
 
 	// Adjust the allocation size.
 	D_ASSERT(segment_count != 0);
+	idx_t presize = allocation_size;
 	SetAllocationSize(available_segments, segment_size, bitmask_offset);
 
 	// the buffer is in memory, so we copied it onto a new buffer when pinning
 	D_ASSERT(InMemory());
 	if (OnDisk()) {
+		// update the block
+		if (presize >= allocation_size) {
+			dirty = false;
+			printf("avoid buffer[%llu] realloc\n", block_pointer.block_id);
+			block_manager.Write(buffer_handle.GetFileBuffer(), block_pointer.block_id);
+			return;
+		}
 		block_manager.MarkBlockAsModified(block_pointer.block_id);
 	}
 
@@ -121,6 +129,7 @@ void FixedSizeBuffer::Serialize(PartialBlockManager &partial_block_manager, cons
 	}
 
 	// resetting this buffer
+	printf("buffer[%llu] for [%llu] bytes\n", block_pointer.block_id, allocation_size);
 	buffer_handle.Destroy();
 
 	// register the partial block
