@@ -47,12 +47,7 @@ public:
 	//! Get a new list of prefix nodes. The node reference holds the child of the last prefix node.
 	static void New(ART &art, reference<Node> &ref, const ARTKey &key, const idx_t depth, idx_t count);
 
-	//! Free the prefix and its child.
-	static void Free(ART &art, Node &node);
-
-	//! Concatenates parent -> byte -> child. Special-handling, if
-	//! 1. the byte was in a gate node.
-	//! 2. the byte was in PREFIX_INLINED.
+	//! Concatenates parent -> byte -> child.
 	static void Concat(ART &art, Node &parent, uint8_t byte, const GateStatus old_status, const Node &child,
 	                   const GateStatus status);
 

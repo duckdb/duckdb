@@ -35,8 +35,6 @@ private:
 public:
 	//! Get a new Node256 and initialize it.
 	static Node256 &New(ART &art, Node &node);
-	//! Free the node and its children.
-	static void Free(ART &art, Node &node);
 
 	//! Insert a child at byte.
 	static void InsertChild(ART &art, Node &node, const uint8_t byte, const Node child);
@@ -48,6 +46,7 @@ public:
 public:
 	template <class F, class NODE>
 	static void Iterator(NODE &n, F &&lambda) {
+		D_ASSERT(n.count);
 		for (idx_t i = 0; i < CAPACITY; i++) {
 			if (n.children[i].HasMetadata()) {
 				lambda(n.children[i]);
@@ -92,7 +91,6 @@ public:
 			}
 		}
 
-		count = 0;
 		return NodeChildren(bytes, children_ptr);
 	}
 

@@ -17,15 +17,6 @@ Node256 &Node256::New(ART &art, Node &node) {
 	return n256;
 }
 
-void Node256::Free(ART &art, Node &node) {
-	auto &n256 = Node::Ref<Node256>(art, node, NODE_256);
-	if (!n256.count) {
-		return;
-	}
-
-	Iterator(n256, [&](Node &child) { Node::Free(art, child); });
-}
-
 void Node256::InsertChild(ART &art, Node &node, const uint8_t byte, const Node child) {
 	auto &n256 = Node::Ref<Node256>(art, node, NODE_256);
 	n256.count++;
@@ -36,7 +27,7 @@ void Node256::DeleteChild(ART &art, Node &node, const uint8_t byte) {
 	auto &n256 = Node::Ref<Node256>(art, node, NODE_256);
 
 	// Free the child and decrease the count.
-	Node::Free(art, n256.children[byte]);
+	Node::FreeTree(art, n256.children[byte]);
 	n256.count--;
 
 	// Shrink to Node48.
@@ -70,8 +61,7 @@ Node256 &Node256::GrowNode48(ART &art, Node &node256, Node &node48) {
 		}
 	}
 
-	n48.count = 0;
-	Node::Free(art, node48);
+	Node::FreeNode(art, node48);
 	return n256;
 }
 

@@ -43,16 +43,6 @@ public:
 		return handle;
 	}
 
-	//! Free the children of the node.
-	static void Free(ART &art, Node &node) {
-		NodeHandle<BaseNode> handle(art, node);
-		auto &n = handle.Get();
-
-		for (uint8_t i = 0; i < n.count; i++) {
-			Node::Free(art, n.children[i]);
-		}
-	}
-
 	//! Replace the child at byte.
 	static void ReplaceChild(BaseNode &n, const uint8_t byte, const Node child) {
 		D_ASSERT(n.count != 0);
@@ -105,7 +95,6 @@ public:
 			children_ptr[i] = children[i];
 		}
 
-		count = 0;
 		return NodeChildren(bytes, children_ptr);
 	}
 
