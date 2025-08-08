@@ -10,6 +10,7 @@
 
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/types/string.hpp"
 
 namespace duckdb {
 
@@ -81,6 +82,22 @@ public:
 	T *Make(ARGS &&... args) {
 		auto mem = AllocateAligned(sizeof(T));
 		return new (mem) T(std::forward<ARGS>(args)...);
+	}
+
+	String MakeString(const char *data, const idx_t len) {
+		if (String::CanBeInlined(len)) {
+			// If the string can be inlined, we can just use the inline buffer
+			return String(data, len);
+		}
+
+		const auto mem = AllocateAligned(sizeof(char) * len);
+		memcpy(mem, data, len);
+
+		return String::Reference(reinterpret_cast<char *>(mem), len);
+	}
+
+	String MakeString(const std::string &data) {
+		return MakeString(data.c_str(), data.size());
 	}
 
 private:
