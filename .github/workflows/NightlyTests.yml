@@ -636,11 +636,11 @@ jobs:
           GEN: ninja
         run: make debug
 
-      - name: test/configs/enable_verification.json
+      - name: test/configs/enable_verification_for_debug.json
         if: (success() || failure()) && steps.build.conclusion == 'success'
         shell: bash
         run: |
-          ./build/debug/test/unittest --test-config test/configs/enable_verification.json
+          ./build/debug/test/unittest --test-config test/configs/enable_verification_for_debug.json
 
   linux-wasm-experimental:
     name: WebAssembly duckdb-wasm builds
