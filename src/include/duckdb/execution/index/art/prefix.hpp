@@ -40,7 +40,6 @@ public:
 	static inline uint8_t Count(const ART &art) {
 		return art.prefix_count;
 	}
-	static optional_idx GetMismatchWithKey(ART &art, const Node &node, const ARTKey &key, idx_t &depth);
 	static uint8_t GetByte(const ART &art, const Node &node, const uint8_t pos);
 
 public:
@@ -50,13 +49,6 @@ public:
 	//! Concatenates parent -> byte -> child.
 	static void Concat(ART &art, Node &parent, uint8_t byte, const GateStatus old_status, const Node &child,
 	                   const GateStatus status);
-
-	//! Traverse a prefix and a key until
-	//! 1. a non-prefix node.
-	//! 2. a mismatching byte.
-	//! Early-out, if the next prefix is a gate node.
-	static optional_idx Traverse(ART &art, reference<const Node> &node, const ARTKey &key, idx_t &depth);
-	static optional_idx TraverseMutable(ART &art, reference<Node> &node, const ARTKey &key, idx_t &depth);
 
 	//! Removes up to pos bytes from the prefix.
 	//! Shifts all subsequent bytes by pos. Frees empty nodes.

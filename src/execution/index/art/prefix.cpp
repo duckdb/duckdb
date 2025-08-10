@@ -31,17 +31,6 @@ Prefix::Prefix(unsafe_unique_ptr<FixedSizeAllocator> &allocator, const Node ptr_
 	in_memory = true;
 }
 
-optional_idx Prefix::GetMismatchWithKey(ART &art, const Node &node, const ARTKey &key, idx_t &depth) {
-	Prefix prefix(art, node);
-	for (idx_t i = 0; i < prefix.data[Prefix::Count(art)]; i++) {
-		if (prefix.data[i] != key[depth]) {
-			return i;
-		}
-		depth++;
-	}
-	return optional_idx::Invalid();
-}
-
 uint8_t Prefix::GetByte(const ART &art, const Node &node, const uint8_t pos) {
 	D_ASSERT(node.GetType() == PREFIX);
 	Prefix prefix(art, node);
@@ -80,12 +69,14 @@ void Prefix::Concat(ART &art, Node &parent, uint8_t byte, const GateStatus old_s
                     const GateStatus status) {
 	D_ASSERT(!parent.IsAnyLeaf());
 	D_ASSERT(child.HasMetadata());
+	// If the parent is the node itself, we overwrite.
 
 	if (old_status == GateStatus::GATE_SET) {
 		// Concat Node4.
 		D_ASSERT(status == GateStatus::GATE_SET);
 		return ConcatGate(art, parent, byte, child);
 	}
+
 	if (child.GetGateStatus() == GateStatus::GATE_SET) {
 		// Concat Node4.
 		D_ASSERT(status == GateStatus::GATE_NOT_SET);
@@ -127,39 +118,6 @@ void Prefix::Concat(ART &art, Node &parent, uint8_t byte, const GateStatus old_s
 	} else {
 		*tail.ptr = child;
 	}
-}
-
-template <class NODE>
-optional_idx TraverseInternal(ART &art, reference<NODE> &node, const ARTKey &key, idx_t &depth,
-                              const bool is_mutable = false) {
-	D_ASSERT(node.get().HasMetadata());
-	D_ASSERT(node.get().GetType() == NType::PREFIX);
-
-	while (node.get().GetType() == NType::PREFIX) {
-		auto pos = Prefix::GetMismatchWithKey(art, node, key, depth);
-		if (pos.IsValid()) {
-			return pos;
-		}
-
-		Prefix prefix(art, node, is_mutable);
-		node = *prefix.ptr;
-		if (node.get().GetGateStatus() == GateStatus::GATE_SET) {
-			break;
-		}
-	}
-
-	// We return an invalid index, if (and only if) the next node is:
-	// 1. not a prefix, or
-	// 2. a gate.
-	return optional_idx::Invalid();
-}
-
-optional_idx Prefix::Traverse(ART &art, reference<const Node> &node, const ARTKey &key, idx_t &depth) {
-	return TraverseInternal<const Node>(art, node, key, depth);
-}
-
-optional_idx Prefix::TraverseMutable(ART &art, reference<Node> &node, const ARTKey &key, idx_t &depth) {
-	return TraverseInternal<Node>(art, node, key, depth, true);
 }
 
 void Prefix::Reduce(ART &art, Node &node, const idx_t pos) {
@@ -356,14 +314,18 @@ void Prefix::ConcatGate(ART &art, Node &parent, uint8_t byte, const Node &child)
 		Leaf::New(new_prefix, child.GetRowId());
 
 	} else if (child.GetType() == PREFIX) {
-		// At least one more row ID in this gate.
+		// At least one more row ID in this gate and the child is a prefix.
+		// We create a new prefix of length one containing the remaining byte.
+		// Then, we append the child prefix.
 		auto prefix = NewInternal(art, new_prefix, &byte, 1, 0);
 		prefix.ptr->Clear();
 		prefix.Append(art, child);
 		new_prefix.SetGateStatus(GateStatus::GATE_SET);
 
 	} else {
-		// At least one more row ID in this gate.
+		// At least one more row ID in this gate and the child is not a prefix.
+		// We create a new prefix of length one containing the remaining byte.
+		// then, we append the child.
 		auto prefix = NewInternal(art, new_prefix, &byte, 1, 0);
 		*prefix.ptr = child;
 		new_prefix.SetGateStatus(GateStatus::GATE_SET);
