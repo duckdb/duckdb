@@ -94,9 +94,17 @@ void Prefix::Concat(ART &art, Node &parent, uint8_t byte, const GateStatus old_s
 
 	if (status == GateStatus::GATE_SET && child.GetType() == NType::LEAF_INLINED) {
 		// Inside gates, inlined leaves are not prefixed.
-		// We free the prefix and move the row ID up.
 		auto row_id = child.GetRowId();
-		Node::FreeTree(art, parent);
+		// We free the prefix (chain) until we reach the deleted Node4.
+		// Then, we move the row ID up.
+		auto current = parent;
+		while (current.HasMetadata()) {
+			D_ASSERT(current.GetType() == NType::PREFIX);
+			Prefix prefix(art, current, true);
+			auto next = *prefix.ptr;
+			Node::FreeNode(art, current);
+			current = next;
+		}
 		Leaf::New(parent, row_id);
 		return;
 	}
