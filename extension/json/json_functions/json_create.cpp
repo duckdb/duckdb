@@ -793,7 +793,7 @@ BoundCastInfo AnyToJSONCastBind(BindCastInput &input, const LogicalType &source,
 	return BoundCastInfo(AnyToJSONCast, std::move(cast_data), JSONFunctionLocalState::InitCastLocalState);
 }
 
-void JSONFunctions::RegisterJSONCreateCastFunctions(CastFunctionSet &casts) {
+void JSONFunctions::RegisterJSONCreateCastFunctions(ExtensionLoader &loader) {
 	// Anything can be cast to JSON
 	for (const auto &type : LogicalType::AllTypes()) {
 		LogicalType source_type;
@@ -820,9 +820,9 @@ void JSONFunctions::RegisterJSONCreateCastFunctions(CastFunctionSet &casts) {
 			source_type = type;
 		}
 		// We prefer going to JSON over going to VARCHAR if a function can do either
-		const auto source_to_json_cost =
-		    MaxValue<int64_t>(casts.ImplicitCastCost(nullptr, source_type, LogicalType::VARCHAR) - 1, 0);
-		casts.RegisterCastFunction(source_type, LogicalType::JSON(), AnyToJSONCastBind, source_to_json_cost);
+		const auto source_to_json_cost = MaxValue<int64_t>(
+		    CastFunctionSet::ImplicitCastCost(loader.GetDatabaseInstance(), source_type, LogicalType::VARCHAR) - 1, 0);
+		loader.RegisterCastFunction(source_type, LogicalType::JSON(), AnyToJSONCastBind, source_to_json_cost);
 	}
 }
 
