@@ -445,9 +445,9 @@ CSVError CSVError::SniffingError(const CSVReaderOptions &options, const string &
 	// 2. What's the error
 	error << "It was not possible to automatically detect the CSV Parsing ";
 	if (type_detection) {
-		error << "Types" << '\n';
+		error << "types" << '\n';
 	} else {
-		error << "Dialect" << '\n';
+		error << "dialect" << '\n';
 	}
 
 	// 2. What was the search space?
