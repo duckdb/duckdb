@@ -3933,6 +3933,14 @@ Retrieves the extra info of the function as set in `duckdb_table_function_set_ex
 DUCKDB_C_API void *duckdb_bind_get_extra_info(duckdb_bind_info info);
 
 /*!
+Retrieves the client context of the bind info of a table function.
+
+* @param info The bind info object of the table function.
+* @param out_context The client context of the bind info. Must be destroyed with `duckdb_destroy_client_context`.
+*/
+DUCKDB_C_API void duckdb_table_function_get_client_context(duckdb_bind_info info, duckdb_client_context *out_context);
+
+/*!
 Adds a result column to the output of the table function.
 
 * @param info The table function's bind info.

@@ -33,6 +33,12 @@ VarintIntermediate::VarintIntermediate(const varint_t &value) {
 	size = static_cast<uint32_t>(value.data.GetSize()) - Varint::VARINT_HEADER_SIZE;
 }
 
+VarintIntermediate::VarintIntermediate(uint8_t *value, idx_t ptr_size) {
+	is_negative = (value[0] & 0x80) == 0;
+	data = value + Varint::VARINT_HEADER_SIZE;
+	size = static_cast<uint32_t>(ptr_size) - Varint::VARINT_HEADER_SIZE;
+}
+
 uint8_t VarintIntermediate::GetAbsoluteByte(int64_t index) const {
 	if (index < 0) {
 		// byte-extension
@@ -144,6 +150,27 @@ idx_t VarintIntermediate::Trim(data_ptr_t data, uint32_t &size, bool is_negative
 void VarintIntermediate::Trim() {
 	Trim(data, size, is_negative);
 }
+
+bool VarintIntermediate::OverOrUnderflow(data_ptr_t data, idx_t size, bool is_negative) {
+	if (size <= Varint::MAX_DATA_SIZE) {
+		return false;
+	}
+	// variable that stores a fully unset byte can safely be ignored
+	uint8_t byte_to_compare = is_negative ? 0xFF : 0x00;
+	// we will basically check if any byte has any set bit up to Varint::MAX_DATA_SIZE, if so, that's an under/overflow
+	idx_t data_pos = 0;
+	for (idx_t i = size; i > Varint::MAX_DATA_SIZE; i--) {
+		if (data[data_pos++] != byte_to_compare) {
+			return true;
+		}
+	}
+	return false;
+}
+
+bool VarintIntermediate::OverOrUnderflow() const {
+	return OverOrUnderflow(data, size, is_negative);
+}
+
 varint_t VarintIntermediate::ToVarint(ArenaAllocator &allocator) {
 	// This must be trimmed before transforming
 	Trim();
@@ -158,20 +185,20 @@ varint_t VarintIntermediate::ToVarint(ArenaAllocator &allocator) {
 	return result;
 }
 
-void VarintAddition(data_ptr_t result, int64_t result_start, int64_t result_end, bool is_target_absolute_bigger,
+void VarintAddition(data_ptr_t result, int64_t result_end, bool is_target_absolute_bigger,
                     const VarintIntermediate &lhs, const VarintIntermediate &rhs) {
 	bool is_result_negative = is_target_absolute_bigger ? lhs.is_negative : rhs.is_negative;
 
 	int64_t i_target = lhs.size - 1;   // last byte index in target
 	int64_t i_source = rhs.size - 1;   // last byte index in source
-	int64_t i_result = result_end - 1; // last byte index in source
+	int64_t i_result = result_end - 1; // last byte index in result
 
 	// Carry for addition
 	uint16_t carry = 0;
 	uint16_t borrow = 0;
 	// Add bytes from right to left
-	while (i_result >= result_start) {
-		// If the numbers are negative we bit flip them
+	while (i_result >= 0) {
+		// If the numbers are negative, we bit flip them
 		uint8_t target_byte = lhs.GetAbsoluteByte(i_target);
 		uint8_t source_byte = rhs.GetAbsoluteByte(i_source);
 		// Add bytes and carry
@@ -198,10 +225,58 @@ void VarintAddition(data_ptr_t result, int64_t result_start, int64_t result_end,
 
 	if (is_result_negative != lhs.is_negative) {
 		// If we are flipping the sign we must be sure that we are flipping all extra bits from our target
-		for (int64_t i = result_start; i < result_end - result_start - rhs.size; ++i) {
+		for (int64_t i = 0; i < result_end - rhs.size; ++i) {
 			result[i] = is_result_negative ? 0xFF : 0x00;
 		}
 	}
+}
+
+string_t VarintIntermediate::Negate(Vector &result_vector) const {
+
+	auto target = StringVector::EmptyString(result_vector, size + Varint::VARINT_HEADER_SIZE);
+	auto ptr = target.GetDataWriteable();
+
+	if (!is_negative && size == 1 && data[0] == 0x00) {
+		// If we have a zero, we just do a copy
+		Varint::SetHeader(ptr, size, is_negative);
+		for (idx_t i = 0; i < size; ++i) {
+			ptr[i + Varint::VARINT_HEADER_SIZE] = static_cast<char>(data[i]);
+		}
+	} else {
+		// Otherwise, we set the header with a flip on the signal
+		Varint::SetHeader(ptr, size, !is_negative);
+		for (idx_t i = 0; i < size; ++i) {
+			// And flip all the data bits
+			ptr[i + Varint::VARINT_HEADER_SIZE] = static_cast<char>(~data[i]);
+		}
+	}
+
+	return target;
+}
+
+void VarintIntermediate::NegateInPlace() {
+	if (!is_negative && size == 1 && data[0] == 0x00) {
+		// this is a zero, there is no negation
+		return;
+	}
+	is_negative = !is_negative;
+	for (size_t i = 0; i < size; i++) {
+		data[i] = ~data[i]; // flip each byte of the pointer
+	}
+}
+
+string ProduceOverUnderFlowError(bool is_result_negative, idx_t actual_start, idx_t data_size) {
+	// We must throw an error, usually we should print the numbers, but I have a feeling that it won't be possible
+	// here.
+	std::ostringstream error;
+	if (is_result_negative) {
+		error << "Underflow ";
+	} else {
+		error << "Overflow ";
+	}
+	error << "in Varint Operation. A Varint can hold max " << Varint::MAX_DATA_SIZE
+	      << " data bytes. Current varint has " << data_size - actual_start << " bytes.";
+	return error.str();
 }
 
 string_t VarintIntermediate::Add(Vector &result_vector, const VarintIntermediate &lhs, const VarintIntermediate &rhs) {
@@ -213,6 +288,10 @@ string_t VarintIntermediate::Add(Vector &result_vector, const VarintIntermediate
 		result_size = actual_size < actual_rhs_size ? actual_rhs_size + 1 : actual_size + 1;
 	}
 	bool is_target_absolute_bigger = true;
+	if (result_size == 0) {
+		result_size++;
+	}
+	result_size += Varint::VARINT_HEADER_SIZE;
 	if (lhs.is_negative != rhs.is_negative) {
 		auto is_absolute_bigger = lhs.IsAbsoluteBigger(rhs);
 		if (is_absolute_bigger == EQUAL) {
@@ -227,17 +306,20 @@ string_t VarintIntermediate::Add(Vector &result_vector, const VarintIntermediate
 			is_target_absolute_bigger = false;
 		}
 	}
-	if (result_size == 0) {
-		result_size++;
-	}
-	result_size += Varint::VARINT_HEADER_SIZE;
 
 	auto target = StringVector::EmptyString(result_vector, result_size);
+	auto result_size_data = result_size - Varint::VARINT_HEADER_SIZE;
+
 	auto target_data = target.GetDataWriteable();
-	VarintAddition(reinterpret_cast<data_ptr_t>(target_data), Varint::VARINT_HEADER_SIZE, result_size,
+	VarintAddition(reinterpret_cast<data_ptr_t>(target_data + Varint::VARINT_HEADER_SIZE), result_size_data,
 	               is_target_absolute_bigger, lhs, rhs);
 	bool is_result_negative = is_target_absolute_bigger ? lhs.is_negative : rhs.is_negative;
-	auto result_size_data = result_size - Varint::VARINT_HEADER_SIZE;
+	if (OverOrUnderflow(reinterpret_cast<data_ptr_t>(target_data + Varint::VARINT_HEADER_SIZE), result_size_data,
+	                    is_result_negative)) {
+		auto actual_start = GetStartDataPos(reinterpret_cast<data_ptr_t>(target_data + Varint::VARINT_HEADER_SIZE),
+		                                    result_size_data, is_result_negative);
+		throw OutOfRangeException(ProduceOverUnderFlowError(is_result_negative, actual_start, result_size_data));
+	}
 	Trim(reinterpret_cast<data_ptr_t>(target_data + Varint::VARINT_HEADER_SIZE), result_size_data, is_result_negative);
 	Varint::SetHeader(target_data, result_size_data, is_result_negative);
 	target.SetSizeAndFinalize(result_size_data + Varint::VARINT_HEADER_SIZE);
@@ -266,9 +348,14 @@ void VarintIntermediate::AddInPlace(ArenaAllocator &allocator, const VarintInter
 	}
 
 	bool is_result_negative = is_target_absolute_bigger ? is_negative : rhs.is_negative;
-	VarintAddition(data, 0, size, is_target_absolute_bigger, *this, rhs);
+	VarintAddition(data, size, is_target_absolute_bigger, *this, rhs);
 	if (is_result_negative != is_negative) {
 		is_negative = is_result_negative;
+	}
+	if (OverOrUnderflow()) {
+		// We must throw an error, usually we should print the numbers, but I have a feeling that it won't be possible
+		// here.
+		throw OutOfRangeException(ProduceOverUnderFlowError(is_result_negative, GetStartDataPos(), size));
 	}
 }
 

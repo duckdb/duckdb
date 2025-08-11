@@ -15,6 +15,9 @@
 
 #include "duckdb/original/std/memory.hpp"
 #include "duckdb/common/string.hpp"
+#include <exception>
+#include <stdexcept>
+
 
 /*
  * Configuration
@@ -285,6 +288,7 @@ using socket_t = int;
 
 #include <iostream>
 #include <sstream>
+
 
 // Disabled OpenSSL version check for CI
 //#if OPENSSL_VERSION_NUMBER < 0x1010100fL
