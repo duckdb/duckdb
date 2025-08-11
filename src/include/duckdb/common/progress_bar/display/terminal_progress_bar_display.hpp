@@ -11,12 +11,27 @@
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/progress_bar/progress_bar_display.hpp"
 #include "duckdb/common/unicode_bar.hpp"
+#include "duckdb/common/progress_bar/unscented_kalman_filter.hpp"
+#include <chrono>
 
 namespace duckdb {
 
 class TerminalProgressBarDisplay : public ProgressBarDisplay {
+private:
+	UnscentedKalmanFilter ukf;
+	std::chrono::steady_clock::time_point start_time;
+	bool udf_initialized;
+
+	double GetElapsedDuration() {
+		auto now = std::chrono::steady_clock::now();
+		return std::chrono::duration<double>(now - start_time).count();
+	}
+
 public:
-	TerminalProgressBarDisplay() = default;
+	TerminalProgressBarDisplay() : udf_initialized(false) {
+		start_time = std::chrono::steady_clock::now();
+	}
+
 	~TerminalProgressBarDisplay() override = default;
 
 public:
@@ -39,11 +54,11 @@ private:
 	const char *PROGRESS_START = "[";
 	const char *PROGRESS_END = "]";
 #endif
-	static constexpr const idx_t PROGRESS_BAR_WIDTH = 60;
+	static constexpr const idx_t PROGRESS_BAR_WIDTH = 43;
 
 private:
 	static int32_t NormalizePercentage(double percentage);
-	void PrintProgressInternal(int32_t percentage);
+	void PrintProgressInternal(int32_t percentage, double estimated_remaining_seconds);
 };
 
 } // namespace duckdb

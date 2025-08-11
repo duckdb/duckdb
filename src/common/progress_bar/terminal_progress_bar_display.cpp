@@ -14,7 +14,18 @@ int32_t TerminalProgressBarDisplay::NormalizePercentage(double percentage) {
 	return int32_t(percentage);
 }
 
-void TerminalProgressBarDisplay::PrintProgressInternal(int32_t percentage) {
+static std::string format_eta(double seconds) {
+	// Round to nearest whole second
+	uint64_t total_seconds = static_cast<uint64_t>(std::round(seconds));
+
+	uint64_t hours = total_seconds / 3600;
+	uint32_t minutes = (total_seconds % 3600) / 60;
+	uint32_t secs = total_seconds % 60;
+
+	return StringUtil::Format("%lu:%02d:%02d", hours, minutes, secs) + " remaining";
+}
+
+void TerminalProgressBarDisplay::PrintProgressInternal(int32_t percentage, double est_remaining) {
 	string result;
 	// we divide the number of blocks by the percentage
 	// 0%   = 0
@@ -32,6 +43,9 @@ void TerminalProgressBarDisplay::PrintProgressInternal(int32_t percentage) {
 		result += " ";
 	}
 	result += to_string(percentage) + "%";
+	result += " ";
+	result += " (";
+	result += format_eta(est_remaining) + ")";
 	result += " ";
 	result += PROGRESS_START;
 	idx_t i;
@@ -57,17 +71,28 @@ void TerminalProgressBarDisplay::PrintProgressInternal(int32_t percentage) {
 }
 
 void TerminalProgressBarDisplay::Update(double percentage) {
+	double current_time = GetElapsedDuration();
+	if (!udf_initialized) {
+		ukf.initialize(percentage / 100.0, current_time);
+		udf_initialized = true;
+	} else {
+		ukf.predict(current_time);
+		ukf.update(percentage / 100.0);
+	}
+
+	double estimated_seconds_remaining = ukf.getEstimatedRemainingSeconds();
+
 	auto percentage_int = NormalizePercentage(percentage);
 	if (percentage_int == rendered_percentage) {
 		return;
 	}
-	PrintProgressInternal(percentage_int);
+	PrintProgressInternal(percentage_int, estimated_seconds_remaining);
 	Printer::Flush(OutputStream::STREAM_STDOUT);
 	rendered_percentage = percentage_int;
 }
 
 void TerminalProgressBarDisplay::Finish() {
-	PrintProgressInternal(100);
+	PrintProgressInternal(100, 0.0);
 	Printer::RawPrint(OutputStream::STREAM_STDOUT, "\n");
 	Printer::Flush(OutputStream::STREAM_STDOUT);
 }
