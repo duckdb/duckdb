@@ -223,7 +223,7 @@ enum class LogicalTypeId : uint8_t {
 	BIT = 36,
 	STRING_LITERAL = 37, /* string literals, used for constant strings - only exists while binding */
 	INTEGER_LITERAL = 38,/* integer literals, used for constant integers - only exists while binding */
-	VARINT = 39,
+	BIGNUM = 39,
 	UHUGEINT = 49,
 	HUGEINT = 50,
 	POINTER = 51,
@@ -405,7 +405,7 @@ public:
 	static constexpr const LogicalTypeId ANY = LogicalTypeId::ANY;
 	static constexpr const LogicalTypeId BLOB = LogicalTypeId::BLOB;
 	static constexpr const LogicalTypeId BIT = LogicalTypeId::BIT;
-	static constexpr const LogicalTypeId VARINT = LogicalTypeId::VARINT;
+	static constexpr const LogicalTypeId BIGNUM = LogicalTypeId::BIGNUM;
 
 	static constexpr const LogicalTypeId INTERVAL = LogicalTypeId::INTERVAL;
 	static constexpr const LogicalTypeId HUGEINT = LogicalTypeId::HUGEINT;
