@@ -281,7 +281,7 @@ void TextTreeRenderer::RenderBoxContent(RenderTree &root, std::ostream &ss, idx_
 				if (render_y + 1 == extra_height && render_text.empty()) {
 					auto entry = node->extra_text.find(RenderTreeNode::CARDINALITY);
 					if (entry != node->extra_text.end()) {
-						render_text = FormatNumber(entry->second) + " rows";
+						render_text = FormatNumber(entry->second) + " row" + (entry->second == "1" ? "" : "s");
 					}
 				}
 				if (render_y == extra_height && render_text.empty()) {
@@ -292,14 +292,16 @@ void TextTreeRenderer::RenderBoxContent(RenderTree &root, std::ostream &ss, idx_
 						// we only render estimated cardinality if there is no real cardinality
 						auto entry = node->extra_text.find(RenderTreeNode::ESTIMATED_CARDINALITY);
 						if (entry != node->extra_text.end()) {
-							render_text = "~" + FormatNumber(entry->second) + " rows";
+							render_text =
+							    "~" + FormatNumber(entry->second) + " row" + (entry->second == "1" ? "" : "s");
 						}
 					}
 					if (node->extra_text.find(RenderTreeNode::CARDINALITY) == node->extra_text.end()) {
 						// we only render estimated cardinality if there is no real cardinality
 						auto entry = node->extra_text.find(RenderTreeNode::ESTIMATED_CARDINALITY);
 						if (entry != node->extra_text.end()) {
-							render_text = "~" + FormatNumber(entry->second) + " rows";
+							render_text =
+							    "~" + FormatNumber(entry->second) + " row" + (entry->second == "1" ? "" : "s");
 						}
 					}
 				}
