@@ -443,7 +443,7 @@ CSVError CSVError::SniffingError(const CSVReaderOptions &options, const string &
 	// 1. Which file
 	error << "Error when sniffing file \"" << options.file_path << "\"." << '\n';
 	// 2. What's the error
-	error << "It was not possible to automatically detect the CSV Parsing ";
+	error << "It was not possible to automatically detect the CSV parsing ";
 	if (type_detection) {
 		error << "types" << '\n';
 	} else {
