@@ -27,6 +27,7 @@ static void EnableLogging(ClientContext &context, TableFunctionInput &data, Data
 
 	if (bind_data.inputs.empty()) {
 		context.db->GetLogManager().SetEnableLogging(true);
+		context.db->GetLogManager().SetLogMode(LogMode::LEVEL_ONLY);
 		return;
 	}
 
@@ -75,6 +76,9 @@ static unique_ptr<FunctionData> BindEnableLogging(ClientContext &context, TableF
 
 static void DisableLogging(ClientContext &context, TableFunctionInput &data, DataChunk &output) {
 	context.db->GetLogManager().SetEnableLogging(false);
+	// TODO: clean this sht up
+	context.db->GetLogManager().SetLogMode(LogMode::LEVEL_ONLY);
+	context.db->GetLogManager().SetLogLevel(LogConfig::DEFAULT_LOG_LEVEL);
 }
 
 static unique_ptr<FunctionData> BindDisableLogging(ClientContext &context, TableFunctionBindInput &input,

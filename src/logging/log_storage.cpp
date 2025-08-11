@@ -261,12 +261,14 @@ void BufferingLogStorage::UpdateConfigInternal(DatabaseInstance &db, case_insens
 		if (StringUtil::Lower(it.first) == "buffer_size") {
 			buffer_limit = it.second.GetValue<uint64_t>();
 			ResetAllBuffers();
-			// TODO: might require flushing
-		} if (StringUtil::Lower(it.first) == "normalize") {
+		} else if (StringUtil::Lower(it.first) == "only_flush_on_full_buffer") {
+			// This is a debug option used during testing. It disables the manual
+			only_flush_on_full_buffer = it.second.GetValue<bool>();
+		} else if (StringUtil::Lower(it.first) == "normalize") {
 			throw InternalException("'normalize' setting should be handled in child class");
+		} else {
+			throw InvalidInputException("Unrecognized log storage config option: '%s'", it.first);
 		}
-
-		throw InvalidInputException("Unrecognized log storage config option: '%s'", it.first);
 	}
 }
 
@@ -508,19 +510,18 @@ BufferingLogStorage::BufferingLogStorage(DatabaseInstance &db_p, idx_t buffer_si
 }
 
 void BufferingLogStorage::ResetLogBuffers() {
-	max_buffer_size = STANDARD_VECTOR_SIZE; // TODO: this is weird
 	if (normalize_contexts) {
 		buffers[LoggingTargetTable::LOG_ENTRIES] = make_uniq<DataChunk>();
 		buffers[LoggingTargetTable::LOG_CONTEXTS] = make_uniq<DataChunk>();
 		buffers[LoggingTargetTable::LOG_ENTRIES]->Initialize(Allocator::DefaultAllocator(), GetSchema(LoggingTargetTable::LOG_ENTRIES),
-								   max_buffer_size);
+								   buffer_limit);
 		buffers[LoggingTargetTable::LOG_CONTEXTS]->Initialize(Allocator::DefaultAllocator(), GetSchema(LoggingTargetTable::LOG_CONTEXTS),
-								   max_buffer_size);
+								   buffer_limit);
 
 	} else {
 		buffers[LoggingTargetTable::ALL_LOGS] = make_uniq<DataChunk>();
 		buffers[LoggingTargetTable::ALL_LOGS]->Initialize(Allocator::DefaultAllocator(), GetSchema(LoggingTargetTable::ALL_LOGS),
-								   max_buffer_size);
+								   buffer_limit);
 	}
 }
 
@@ -534,14 +535,14 @@ InMemoryLogStorageScanState::~InMemoryLogStorageScanState() {
 }
 
 InMemoryLogStorage::InMemoryLogStorage(DatabaseInstance &db_p) : BufferingLogStorage(db_p, STANDARD_VECTOR_SIZE, true) {
-	buffers[LoggingTargetTable::LOG_ENTRIES] = make_uniq<ColumnDataCollection>(db_p.GetBufferManager(), GetSchema(LoggingTargetTable::LOG_ENTRIES));
-	buffers[LoggingTargetTable::LOG_CONTEXTS] = make_uniq<ColumnDataCollection>(db_p.GetBufferManager(), GetSchema(LoggingTargetTable::LOG_CONTEXTS));
+	log_storage_buffers[LoggingTargetTable::LOG_ENTRIES] = make_uniq<ColumnDataCollection>(db_p.GetBufferManager(), GetSchema(LoggingTargetTable::LOG_ENTRIES));
+	log_storage_buffers[LoggingTargetTable::LOG_CONTEXTS] = make_uniq<ColumnDataCollection>(db_p.GetBufferManager(), GetSchema(LoggingTargetTable::LOG_CONTEXTS));
 }
 
 void InMemoryLogStorage::ResetAllBuffers() {
 	BufferingLogStorage::ResetAllBuffers();
 
-	for (const auto &buffer: buffers) {
+	for (const auto &buffer: log_storage_buffers) {
 		buffer.second->Reset();
 	}
 }
@@ -604,6 +605,18 @@ void BufferingLogStorage::WriteLogEntry(timestamp_t timestamp, LogLevel level, c
 
 	auto size = log_entries_buffer->size();
 
+	if (size + 1 > buffer_limit) {
+		if (normalize_contexts) {
+			FlushInternal(LoggingTargetTable::LOG_ENTRIES);
+			// TODO: this is now required to guarantee every log_entry has a valid context, otherwise we would only be able to read log entries after context is flushed
+			FlushInternal(LoggingTargetTable::LOG_CONTEXTS);
+		} else {
+			FlushInternal(LoggingTargetTable::ALL_LOGS);
+		}
+
+		size = log_entries_buffer->size();
+	}
+
 	idx_t col = 0;
 
 	if (normalize_contexts) {
@@ -627,10 +640,6 @@ void BufferingLogStorage::WriteLogEntry(timestamp_t timestamp, LogLevel level, c
 	message_data[size] = StringVector::AddString(log_entries_buffer->data[col++], log_message);
 
 	log_entries_buffer->SetCardinality(size + 1);
-
-	if (size + 1 >= max_buffer_size) {
-		FlushInternal(LoggingTargetTable::LOG_ENTRIES);
-	}
 }
 
 void BufferingLogStorage::WriteLogEntries(DataChunk &chunk, const RegisteredLoggingContext &context) {
@@ -639,12 +648,16 @@ void BufferingLogStorage::WriteLogEntries(DataChunk &chunk, const RegisteredLogg
 
 void BufferingLogStorage::FlushAll() {
 	unique_lock<mutex> lck(lock);
-	FlushAllInternal();
+	if (!only_flush_on_full_buffer) {
+		FlushAllInternal();
+	}
 }
 
 void BufferingLogStorage::Flush(LoggingTargetTable table) {
 	unique_lock<mutex> lck(lock);
-	FlushInternal(table);
+	if (!only_flush_on_full_buffer) {
+		FlushInternal(table);
+	}
 }
 
 void BufferingLogStorage::Truncate() {
@@ -654,7 +667,7 @@ void BufferingLogStorage::Truncate() {
 
 void InMemoryLogStorage::FlushChunk(LoggingTargetTable table, DataChunk &chunk) {
 	D_ASSERT(table == LoggingTargetTable::LOG_ENTRIES || table == LoggingTargetTable::LOG_CONTEXTS);
-	buffers[table]->Append(chunk);
+	log_storage_buffers[table]->Append(chunk);
 }
 
 void BufferingLogStorage::FlushAllInternal() {
@@ -685,11 +698,12 @@ void BufferingLogStorage::WriteLoggingContext(const RegisteredLoggingContext &co
 	idx_t col = 0;
 
 	auto &log_contexts_buffer = buffers[LoggingTargetTable::LOG_CONTEXTS];
-	WriteLoggingContextsToChunk(*log_contexts_buffer, context, col);
 
-	if (log_contexts_buffer->size() >= max_buffer_size) {
-		FlushChunk(LoggingTargetTable::LOG_CONTEXTS, *log_contexts_buffer);
+	if (log_contexts_buffer->size() + 1 > buffer_limit) {
+		FlushInternal(LoggingTargetTable::LOG_CONTEXTS);
 	}
+
+	WriteLoggingContextsToChunk(*log_contexts_buffer, context, col);
 }
 
 bool InMemoryLogStorage::CanScan(LoggingTargetTable table) {

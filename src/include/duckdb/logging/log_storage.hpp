@@ -145,9 +145,10 @@ private:
 	// Configuration for buffering
 	idx_t buffer_limit = 0;
 
-	unordered_map<LoggingTargetTable, unique_ptr<DataChunk>> buffers;
+	// Debug option for testing buffering behaviour
+	bool only_flush_on_full_buffer = false;
 
-	idx_t max_buffer_size;
+	unordered_map<LoggingTargetTable, unique_ptr<DataChunk>> buffers;
 
 };
 // Abstract base class for loggers that write out log entries as CSV-parsable strings
@@ -263,14 +264,14 @@ protected:
 
 private:
 	ColumnDataCollection &GetBuffer(LoggingTargetTable table) const {
-		auto res = buffers.find(table);
-		if (res == buffers.end()) {
+		auto res = log_storage_buffers.find(table);
+		if (res == log_storage_buffers.end()) {
 			throw InternalException("Failed to find table");
 		}
 		return *res->second;
 	}
 
-	unordered_map<LoggingTargetTable, unique_ptr<ColumnDataCollection>> buffers;
+	unordered_map<LoggingTargetTable, unique_ptr<ColumnDataCollection>> log_storage_buffers;
 };
 
 } // namespace duckdb
