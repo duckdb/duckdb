@@ -196,7 +196,7 @@ index 440db80..e076502 100644
  
  //===--------------------------------------------------------------------===//
 diff --git a/src/storage/sqlite_insert.cpp b/src/storage/sqlite_insert.cpp
-index 9cd4786..fbca2ac 100644
+index 9cd4786..0339e6b 100644
 --- a/src/storage/sqlite_insert.cpp
 +++ b/src/storage/sqlite_insert.cpp
 @@ -13,14 +13,14 @@
@@ -218,6 +218,15 @@ index 9cd4786..fbca2ac 100644
        info(std::move(info)) {
  }
  
+@@ -184,7 +184,7 @@ PhysicalOperator &SQLiteCatalog::PlanInsert(ClientContext &context, PhysicalPlan
+ 	if (op.return_chunk) {
+ 		throw BinderException("RETURNING clause not yet supported for insertion into SQLite table");
+ 	}
+-	if (op.action_type != OnConflictAction::THROW) {
++	if (op.on_conflict_info.action_type != OnConflictAction::THROW) {
+ 		throw BinderException("ON CONFLICT clause not yet supported for insertion into SQLite table");
+ 	}
+ 
 diff --git a/src/storage/sqlite_update.cpp b/src/storage/sqlite_update.cpp
 index b550549..6c071d7 100644
 --- a/src/storage/sqlite_update.cpp
@@ -233,3 +242,22 @@ index b550549..6c071d7 100644
  }
  
  //===--------------------------------------------------------------------===//
+diff --git a/test/sql/storage/attach_on_conflict.test b/test/sql/storage/attach_on_conflict.test
+index 6f7e678..7c13892 100644
+--- a/test/sql/storage/attach_on_conflict.test
++++ b/test/sql/storage/attach_on_conflict.test
+@@ -21,7 +21,7 @@ UNIQUE constraint failed
+ statement error
+ INSERT OR IGNORE INTO s.tbl VALUES (1)
+ ----
+-ON CONFLICT clause not yet supported for insertion into SQLite table
++does not support
+ 
+ # INSERT OR IGNORE in a table without primary key constraints
+ statement ok
+@@ -30,4 +30,4 @@ CREATE TABLE s.tbl2(i INTEGER)
+ statement error
+ INSERT OR REPLACE INTO s.tbl2 VALUES (1)
+ ----
+-There are no UNIQUE/PRIMARY KEY Indexes
++no UNIQUE/PRIMARY KEY constraints

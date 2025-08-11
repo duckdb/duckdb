@@ -684,7 +684,7 @@ void ART::Erase(Node &node, reference<const ARTKey> key, idx_t depth, reference<
 	//	This is the root node, which can be a leaf with possible prefix nodes.
 	if (next.get().GetType() == NType::LEAF_INLINED) {
 		if (next.get().GetRowId() == row_id.get().GetRowId()) {
-			Node::Free(*this, node);
+			Node::FreeTree(*this, node);
 		}
 		return;
 	}
@@ -1264,7 +1264,7 @@ void ART::Vacuum(IndexLock &state) {
 			break;
 		}
 		default:
-			throw InternalException("invalid node type for Vacuum: %s", EnumUtil::ToString(type));
+			throw InternalException("invalid node type for Vacuum: %d", type);
 		}
 
 		const auto idx = Node::GetAllocatorIdx(type);
@@ -1303,14 +1303,14 @@ void ART::InitializeMerge(Node &node, unsafe_vector<idx_t> &upper_bounds) {
 	auto handler = [&upper_bounds](Node &node) {
 		const auto type = node.GetType();
 		if (node.GetType() == NType::LEAF_INLINED) {
-			return ARTHandlingResult::CONTINUE;
+			return ARTHandlingResult::NONE;
 		}
 		if (type == NType::LEAF) {
 			throw InternalException("deprecated ART storage in InitializeMerge");
 		}
 		const auto idx = Node::GetAllocatorIdx(type);
 		node.IncreaseBufferId(upper_bounds[idx]);
-		return ARTHandlingResult::CONTINUE;
+		return ARTHandlingResult::NONE;
 	};
 
 	ARTScanner<ARTScanHandling::POP, Node> scanner(*this, handler, node);

@@ -567,7 +567,7 @@ void ColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, 
 
 idx_t ColumnData::FetchUpdateData(row_t *row_ids, Vector &base_vector) {
 	ColumnScanState state;
-	auto fetch_count = Fetch(state, row_ids[0], base_vector);
+	auto fetch_count = ColumnData::Fetch(state, row_ids[0], base_vector);
 	base_vector.Flatten(fetch_count);
 	return fetch_count;
 }

@@ -148,11 +148,11 @@ SELECT * FROM read_json_auto('data/json/with_list.json', maximum_depth=1)
 query II
 SELECT * FROM read_json_auto('data/json/with_list.json', maximum_depth=2)
 ----
-1	['"O"', '"Brother,"', '"Where"', '"Art"', '"Thou?"']
-2	['"Home"', '"for"', '"the"', '"Holidays"']
-3	['"The"', '"Firm"']
-4	['"Broadcast"', '"News"']
-5	['"Raising"', '"Arizona"']
+1	["O", "Brother,", "Where", "Art", "Thou?"]
+2	["Home", "for", "the", "Holidays"]
+3	["The", "Firm"]
+4	["Broadcast", "News"]
+5	["Raising", "Arizona"]
 
 # at level 3 it's fully detected, and we get BIGINT and VARCHAR[]
 query II

@@ -12,6 +12,9 @@ unique_ptr<AttachInfo> AttachInfo::Copy() const {
 	result->name = name;
 	result->path = path;
 	result->options = options;
+	for (auto &entry : parsed_options) {
+		result->parsed_options[entry.first] = entry.second->Copy();
+	}
 	result->on_conflict = on_conflict;
 	return result;
 }
@@ -24,13 +27,16 @@ string AttachInfo::ToString() const {
 	} else if (on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
 		result += " OR REPLACE";
 	}
-	result += " DATABASE";
+	result += " DATABASE ";
 	result += KeywordHelper::WriteQuoted(path, '\'');
 	if (!name.empty()) {
 		result += " AS " + KeywordHelper::WriteOptionallyQuoted(name);
 	}
-	if (!options.empty()) {
+	if (!parsed_options.empty() || !options.empty()) {
 		vector<string> stringified;
+		for (auto &opt : parsed_options) {
+			stringified.push_back(StringUtil::Format("%s %s", opt.first, opt.second->ToString()));
+		}
 		for (auto &opt : options) {
 			stringified.push_back(StringUtil::Format("%s %s", opt.first, opt.second.ToSQLString()));
 		}

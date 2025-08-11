@@ -122,11 +122,17 @@ void TupleDataCollection::DestroyChunks(const idx_t chunk_idx_begin, const idx_t
 	}
 
 	if (!layout.AllConstant()) {
+		if (chunk_begin.heap_block_ids.Empty()) {
+			return;
+		}
 		const auto heap_block_begin = chunk_begin.heap_block_ids.Start();
 		if (chunk_idx_end == ChunkCount()) {
 			segment.allocator->DestroyHeapBlocks(heap_block_begin, segment.allocator->HeapBlockCount());
 		} else {
 			auto &chunk_end = segment.chunks[chunk_idx_end];
+			if (chunk_end.heap_block_ids.Empty()) {
+				return;
+			}
 			const auto heap_block_end = chunk_end.heap_block_ids.Start();
 			segment.allocator->DestroyHeapBlocks(heap_block_begin, heap_block_end);
 		}

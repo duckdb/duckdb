@@ -5,7 +5,7 @@ statement ok
 PRAGMA enable_verification;
 
 statement ok
-CREATE OR REPLACE TABLE tbl(
+CREATE TABLE tbl(
 	i INT PRIMARY KEY,
 	j INT UNIQUE,
 	k INT
@@ -24,12 +24,12 @@ SELECT i, j, k FROM tbl ORDER BY ALL;
 ----
 1	10	1
 2	20	1
-4	5	1
+4	30	2
 
 query III
 SELECT i, j, k FROM tbl WHERE i = 4;
 ----
-4	5	1
+4	30	2
 
 # Update the on-conflict column again.
 statement ok
@@ -104,10 +104,24 @@ select * from tbl;
 # only the last one is used
 statement ok
 insert into tbl VALUES
-	(3,1,5),
+	(3,3,10),
 	(3,3,10)
 ON CONFLICT (i) DO UPDATE SET
 	k = excluded.k;
+
+query III
+select * from tbl order by all
+----
+1	10	1
+2	20	1
+3	30	10
+4	2	3
+
+# condition is not matched - no updates have happened
+query I
+insert into tbl VALUES (3,5,1) ON CONFLICT (i) DO UPDATE SET k = 1 WHERE k < 5;
+----
+0
 
 query III
 select * from tbl;
@@ -117,15 +131,11 @@ select * from tbl;
 3	30	10
 4	2	3
 
-# Throw an error if the condition is not met by all found conflicts
-statement error
-insert into tbl VALUES (3,5,1) ON CONFLICT (i) WHERE k < 5 DO UPDATE SET k = 1;
-----
-Constraint Error: Duplicate key "i: 3" violates primary key constraint
-
 # When the condition is met, the DO is performed
-statement ok
-insert into tbl VALUES (3,5,1) ON CONFLICT (i) WHERE k >= 5 DO UPDATE SET k = 1;
+query I
+insert into tbl VALUES (3,5,1) ON CONFLICT (i) DO UPDATE SET k = 1 WHERE k >= 5;
+----
+1
 
 # 'k' in row_id:3 is updated to 1
 query III

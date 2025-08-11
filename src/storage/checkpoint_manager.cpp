@@ -32,6 +32,7 @@
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -130,7 +131,6 @@ static catalog_entry_vector_t GetCatalogEntries(vector<reference<SchemaCatalogEn
 }
 
 void SingleFileCheckpointWriter::CreateCheckpoint() {
-	auto &config = DBConfig::Get(db);
 	auto &storage_manager = db.GetStorageManager().Cast<SingleFileStorageManager>();
 	if (storage_manager.InMemory()) {
 		return;
@@ -202,8 +202,8 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 		wal->WriteCheckpoint(meta_block);
 		wal->Flush();
 	}
-
-	if (config.options.checkpoint_abort == CheckpointAbort::DEBUG_ABORT_BEFORE_HEADER) {
+	auto debug_checkpoint_abort = DBConfig::GetSetting<DebugCheckpointAbortSetting>(db.GetDatabase());
+	if (debug_checkpoint_abort == CheckpointAbort::DEBUG_ABORT_BEFORE_HEADER) {
 		throw FatalException("Checkpoint aborted before header write because of PRAGMA checkpoint_abort flag");
 	}
 
@@ -242,7 +242,7 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	block_manager.VerifyBlocks(verify_block_usage_count);
 #endif
 
-	if (config.options.checkpoint_abort == CheckpointAbort::DEBUG_ABORT_BEFORE_TRUNCATE) {
+	if (debug_checkpoint_abort == CheckpointAbort::DEBUG_ABORT_BEFORE_TRUNCATE) {
 		throw FatalException("Checkpoint aborted before truncate because of PRAGMA checkpoint_abort flag");
 	}
 

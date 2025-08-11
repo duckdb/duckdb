@@ -147,6 +147,12 @@
         "id": 201,
         "name": "column_name_alias",
         "type": "vector<string>"
+      },
+      {
+        "id": 202,
+        "name": "with_ordinality",
+        "type": "OrdinalityType",
+        "default": "OrdinalityType::WITHOUT_ORDINALITY"
       }
     ]
   },

@@ -610,6 +610,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 
 			// recurse into left children
 			plan->children[0] = DecorrelateIndependent(binder, std::move(plan->children[0]));
+			// Similar to the LOGICAL_COMPARISON_JOIN
+			delim_offset += plan->children[0]->GetColumnBindings().size();
 			return plan;
 		}
 		// both sides have correlation

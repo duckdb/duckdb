@@ -5,8 +5,6 @@
 #include "parquet_crypto.hpp"
 #include "parquet_timestamp.hpp"
 #include "resizable_buffer.hpp"
-
-#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
@@ -19,7 +17,6 @@
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/common/types/blob.hpp"
-#endif
 
 namespace duckdb {
 
@@ -344,10 +341,10 @@ public:
 ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file_name_p, vector<LogicalType> types_p,
                              vector<string> names_p, CompressionCodec::type codec, ChildFieldIDs field_ids_p,
                              const vector<pair<string, string>> &kv_metadata,
-                             shared_ptr<ParquetEncryptionConfig> encryption_config_p, idx_t dictionary_size_limit_p,
-                             idx_t string_dictionary_page_size_limit_p, bool enable_bloom_filters_p,
-                             double bloom_filter_false_positive_ratio_p, int64_t compression_level_p,
-                             bool debug_use_openssl_p, ParquetVersion parquet_version)
+                             shared_ptr<ParquetEncryptionConfig> encryption_config_p,
+                             optional_idx dictionary_size_limit_p, idx_t string_dictionary_page_size_limit_p,
+                             bool enable_bloom_filters_p, double bloom_filter_false_positive_ratio_p,
+                             int64_t compression_level_p, bool debug_use_openssl_p, ParquetVersion parquet_version)
     : context(context), file_name(std::move(file_name_p)), sql_types(std::move(types_p)),
       column_names(std::move(names_p)), codec(codec), field_ids(std::move(field_ids_p)),
       encryption_config(std::move(encryption_config_p)), dictionary_size_limit(dictionary_size_limit_p),
@@ -545,6 +542,15 @@ void ParquetWriter::FlushRowGroup(PreparedRowGroup &prepared) {
 
 	row_group.total_compressed_size = NumericCast<int64_t>(writer->GetTotalWritten()) - row_group.file_offset;
 	row_group.__isset.total_compressed_size = true;
+
+	if (encryption_config) {
+		auto row_group_ordinal = num_row_groups.load();
+		if (row_group_ordinal > std::numeric_limits<int16_t>::max()) {
+			throw InvalidInputException("RowGroup ordinal exceeds 32767 when encryption enabled");
+		}
+		row_group.ordinal = NumericCast<int16_t>(row_group_ordinal);
+		row_group.__isset.ordinal = true;
+	}
 
 	// append the row group to the file metadata
 	file_meta_data.row_groups.push_back(row_group);

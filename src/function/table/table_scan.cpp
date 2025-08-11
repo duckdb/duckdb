@@ -25,7 +25,7 @@
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/common/types/value_map.hpp"
-
+#include "duckdb/main/settings.hpp"
 #include <list>
 
 namespace duckdb {
@@ -565,9 +565,8 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 		return DuckTableScanInitGlobal(context, input, storage, bind_data);
 	}
 
-	auto &db_config = DBConfig::GetConfig(context);
-	auto scan_percentage = db_config.GetSetting<IndexScanPercentageSetting>(context);
-	auto scan_max_count = db_config.GetSetting<IndexScanMaxCountSetting>(context);
+	auto scan_percentage = DBConfig::GetSetting<IndexScanPercentageSetting>(context);
+	auto scan_max_count = DBConfig::GetSetting<IndexScanMaxCountSetting>(context);
 
 	auto total_rows = storage.GetTotalRows();
 	auto total_rows_from_percentage = LossyNumericCast<idx_t>(double(total_rows) * scan_percentage);
@@ -577,7 +576,13 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 	bool index_scan = false;
 	set<row_t> row_ids;
 
-	info->GetIndexes().BindAndScan<ART>(context, *info, [&](ART &art) {
+	info->BindIndexes(context, ART::TYPE_NAME);
+	info->GetIndexes().Scan([&](Index &index) {
+		if (index.GetIndexType() != ART::TYPE_NAME) {
+			return false;
+		}
+		D_ASSERT(index.IsBound());
+		auto &art = index.Cast<ART>();
 		index_scan = TryScanIndex(art, column_list, input, filter_set, max_count, row_ids);
 		return index_scan;
 	});

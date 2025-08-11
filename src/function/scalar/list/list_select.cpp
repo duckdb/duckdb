@@ -148,39 +148,19 @@ void ListSelectFunction(DataChunk &args, ExpressionState &state, Vector &result)
 	result.SetVectorType(args.AllConstant() ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR);
 }
 
-unique_ptr<FunctionData> ListSelectBind(ClientContext &context, ScalarFunction &bound_function,
-                                        vector<unique_ptr<Expression>> &arguments) {
-	D_ASSERT(bound_function.arguments.size() == 2);
-
-	// If the first argument is an array, cast it to a list
-	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
-
-	LogicalType child_type;
-	if (arguments[0]->return_type == LogicalTypeId::UNKNOWN || arguments[1]->return_type == LogicalTypeId::UNKNOWN) {
-		bound_function.arguments[0] = LogicalTypeId::UNKNOWN;
-		bound_function.return_type = LogicalType::SQLNULL;
-		return make_uniq<VariableReturnBindData>(bound_function.return_type);
-	}
-
-	D_ASSERT(LogicalTypeId::LIST == arguments[0]->return_type.id() ||
-	         LogicalTypeId::SQLNULL == arguments[0]->return_type.id());
-
-	bound_function.return_type = arguments[0]->return_type;
-	return make_uniq<VariableReturnBindData>(bound_function.return_type);
-}
-
 } // namespace
+
 ScalarFunction ListWhereFun::GetFunction() {
-	auto fun = ScalarFunction({LogicalType::LIST(LogicalTypeId::ANY), LogicalType::LIST(LogicalType::BOOLEAN)},
-	                          LogicalType::LIST(LogicalTypeId::ANY), ListSelectFunction<SetSelectionVectorWhere>,
-	                          ListSelectBind);
+	auto fun =
+	    ScalarFunction({LogicalType::LIST(LogicalType::TEMPLATE("T")), LogicalType::LIST(LogicalType::BOOLEAN)},
+	                   LogicalType::LIST(LogicalType::TEMPLATE("T")), ListSelectFunction<SetSelectionVectorWhere>);
 	return fun;
 }
 
 ScalarFunction ListSelectFun::GetFunction() {
-	auto fun = ScalarFunction({LogicalType::LIST(LogicalTypeId::ANY), LogicalType::LIST(LogicalType::BIGINT)},
-	                          LogicalType::LIST(LogicalTypeId::ANY), ListSelectFunction<SetSelectionVectorSelect>,
-	                          ListSelectBind);
+	auto fun =
+	    ScalarFunction({LogicalType::LIST(LogicalType::TEMPLATE("T")), LogicalType::LIST(LogicalType::BIGINT)},
+	                   LogicalType::LIST(LogicalType::TEMPLATE("T")), ListSelectFunction<SetSelectionVectorSelect>);
 	return fun;
 }
 
