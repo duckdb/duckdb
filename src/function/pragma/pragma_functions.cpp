@@ -12,6 +12,7 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/common/encryption_functions.hpp"
+#include "duckdb/logging/log_manager.hpp"
 
 #include <cctype>
 

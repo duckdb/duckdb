@@ -129,7 +129,7 @@ public:
 	//! Write a temporary file buffer.
 	virtual void WriteTemporaryBuffer(MemoryTag tag, block_id_t block_id, FileBuffer &buffer);
 	//! Read a temporary buffer.
-	virtual unique_ptr<FileBuffer> ReadTemporaryBuffer(MemoryTag tag, BlockHandle &block,
+	virtual unique_ptr<FileBuffer> ReadTemporaryBuffer(QueryContext context, MemoryTag tag, BlockHandle &block,
 	                                                   unique_ptr<FileBuffer> buffer);
 	//! Delete the temporary file containing the block.
 	virtual void DeleteTemporaryFile(BlockHandle &block);

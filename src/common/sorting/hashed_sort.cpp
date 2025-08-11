@@ -219,8 +219,7 @@ bool HashedSortGlobalSinkState::HasMergeTasks() const {
 // HashedSortLocalSinkState
 //===--------------------------------------------------------------------===//
 HashedSortLocalSinkState::HashedSortLocalSinkState(ExecutionContext &context, HashedSortGlobalSinkState &gstate)
-    : gstate(gstate), context(context), allocator(Allocator::Get(context.client)), hash_exec(context.client),
-      sort_exec(context.client) {
+    : gstate(gstate), allocator(Allocator::Get(context.client)), hash_exec(context.client), sort_exec(context.client) {
 
 	vector<LogicalType> group_types;
 	for (idx_t prt_idx = 0; prt_idx < gstate.partitions.size(); prt_idx++) {
@@ -274,7 +273,7 @@ void HashedSortLocalSinkState::Hash(DataChunk &input_chunk, Vector &hash_vector)
 	}
 }
 
-void HashedSortLocalSinkState::Sink(DataChunk &input_chunk) {
+void HashedSortLocalSinkState::Sink(ExecutionContext &context, DataChunk &input_chunk) {
 	gstate.count += input_chunk.size();
 
 	// Window::Sink:
@@ -327,7 +326,7 @@ void HashedSortLocalSinkState::Sink(DataChunk &input_chunk) {
 	local_grouping->Append(*grouping_append, payload_chunk);
 }
 
-void HashedSortLocalSinkState::Combine() {
+void HashedSortLocalSinkState::Combine(ExecutionContext &context) {
 	// Window::Combine:
 	// Sort::Sink then Sort::Combine (per hash partition)
 	// Sort::Combine

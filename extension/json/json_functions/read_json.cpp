@@ -162,15 +162,16 @@ void JSONScan::AutoDetect(ClientContext &context, MultiFileBindData &bind_data, 
 	AutoDetectState auto_detect_state(context, bind_data, files, date_format_map);
 	const auto num_threads = NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
 	const auto files_per_task = (file_count + num_threads - 1) / num_threads;
-	const auto num_tasks = file_count / files_per_task;
+	const auto num_tasks = (file_count + files_per_task - 1) / files_per_task;
 	vector<JSONStructureNode> task_nodes(num_tasks);
 
 	// Same idea as in union_by_name.hpp
 	TaskExecutor executor(context);
 	for (idx_t task_idx = 0; task_idx < num_tasks; task_idx++) {
 		const auto file_idx_start = task_idx * files_per_task;
-		auto task = make_uniq<JSONSchemaTask>(executor, auto_detect_state, task_nodes[task_idx], file_idx_start,
-		                                      file_idx_start + files_per_task);
+		const auto file_idx_end = MinValue(file_idx_start + files_per_task, file_count);
+		auto task =
+		    make_uniq<JSONSchemaTask>(executor, auto_detect_state, task_nodes[task_idx], file_idx_start, file_idx_end);
 		executor.ScheduleTask(std::move(task));
 	}
 	executor.WorkOnTasks();

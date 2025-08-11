@@ -34,7 +34,7 @@ optional_idx FunctionBinder::BindVarArgsFunctionCost(const SimpleFunction &func,
 			// arguments match: do nothing
 			continue;
 		}
-		int64_t cast_cost = CastFunctionSet::Get(context).ImplicitCastCost(arguments[i], arg_type);
+		int64_t cast_cost = CastFunctionSet::ImplicitCastCost(context, arguments[i], arg_type);
 		if (cast_cost >= 0) {
 			// we can implicitly cast, add the cost to the total cost
 			cost += idx_t(cast_cost);
@@ -62,7 +62,7 @@ optional_idx FunctionBinder::BindFunctionCost(const SimpleFunction &func, const 
 			has_parameter = true;
 			continue;
 		}
-		int64_t cast_cost = CastFunctionSet::Get(context).ImplicitCastCost(arguments[i], func.arguments[i]);
+		int64_t cast_cost = CastFunctionSet::ImplicitCastCost(context, arguments[i], func.arguments[i]);
 		if (cast_cost >= 0) {
 			// we can implicitly cast, add the cost to the total cost
 			cost += idx_t(cast_cost);

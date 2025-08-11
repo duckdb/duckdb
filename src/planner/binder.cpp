@@ -29,36 +29,31 @@
 namespace duckdb {
 
 Binder &Binder::GetRootBinder() {
-	reference<Binder> root = *this;
-	while (root.get().parent) {
-		root = *root.get().parent;
-	}
-	return root.get();
+	return root_binder;
 }
 
 idx_t Binder::GetBinderDepth() const {
-	const_reference<Binder> root = *this;
-	idx_t depth = 1;
-	while (root.get().parent) {
-		depth++;
-		root = *root.get().parent;
-	}
 	return depth;
 }
 
-shared_ptr<Binder> Binder::CreateBinder(ClientContext &context, optional_ptr<Binder> parent, BinderType binder_type) {
-	auto depth = parent ? parent->GetBinderDepth() : 0;
+void Binder::IncreaseDepth() {
+	depth++;
 	if (depth > context.config.max_expression_depth) {
 		throw BinderException("Max expression depth limit of %lld exceeded. Use \"SET max_expression_depth TO x\" to "
 		                      "increase the maximum expression depth.",
 		                      context.config.max_expression_depth);
 	}
+}
+
+shared_ptr<Binder> Binder::CreateBinder(ClientContext &context, optional_ptr<Binder> parent, BinderType binder_type) {
 	return shared_ptr<Binder>(new Binder(context, parent ? parent->shared_from_this() : nullptr, binder_type));
 }
 
 Binder::Binder(ClientContext &context, shared_ptr<Binder> parent_p, BinderType binder_type)
     : context(context), bind_context(*this), parent(std::move(parent_p)), bound_tables(0), binder_type(binder_type),
-      entry_retriever(context) {
+      entry_retriever(context), root_binder(parent ? parent->GetRootBinder() : *this),
+      depth(parent ? parent->GetBinderDepth() : 1) {
+	IncreaseDepth();
 	if (parent) {
 		entry_retriever.Inherit(parent->entry_retriever);
 

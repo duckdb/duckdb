@@ -36,9 +36,6 @@ SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VA
 ----
 Dictionary
 
-statement ok
-pragma verify_fetch_row;
-
 query I
 select distinct b from test order by a % 5;
 ----

@@ -3,12 +3,10 @@
 #include "mbedtls_wrapper.hpp"
 #include "thrift_tools.hpp"
 
-#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/storage/arena_allocator.hpp"
-#endif
 
 namespace duckdb {
 

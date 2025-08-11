@@ -4,12 +4,22 @@
 
 name: Extensions (all platforms)
 on:
+  workflow_call:
+    inputs:
+      override_git_describe:
+        type: string
+      git_ref:
+        type: string
+      skip_tests:
+        type: string
+      run_all:
+        type: string
   workflow_dispatch:
     inputs:
       override_git_describe:
         description: 'Version tag to override git describe. Use to produce binaries'
         type: string
-      override_duckdb_version:
+      git_ref:
         description: 'Set to override the DuckDB version, leave empty for current commit'
         type: string
         required: false
@@ -24,6 +34,10 @@ on:
         type: boolean
         required: false
         default: false
+      run_all:
+        type: string
+        required: false
+        default: 'true'
   push:
     branches-ignore:
       - 'main'
@@ -75,14 +89,14 @@ jobs:
       rust_based_extensions_config: ${{ steps.set-rust-based-extensions.outputs.extension_config }}
       rust_based_extensions_exclude_archs: ${{ steps.set-rust-based-extensions.outputs.exclude_archs }}
     env:
-      # NOTE: on PRs we exclude some archs to speed things up TODO: improve further on this?
-      BASE_EXCLUDE_ARCHS: ${{ github.event_name == 'pull_request' && 'wasm_eh;wasm_threads;windows_amd64_mingw;osx_amd64;linux_arm64;linux_amd64_musl;' || '' }}
+      # NOTE: on PRs we exclude some archs to speed things up
+      BASE_EXCLUDE_ARCHS: ${{ (github.event_name == 'pull_request' || inputs.run_all != 'true') && 'wasm_eh;wasm_threads;windows_amd64_mingw;osx_amd64;linux_arm64;linux_amd64_musl;' || '' }}
       EXTRA_EXCLUDE_ARCHS: ${{ inputs.extra_exclude_archs }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ inputs.override_duckdb_version }}
+          ref: ${{ inputs.git_ref }}
 
       - id: set-main-extensions
         name: Configure main extensions
@@ -126,7 +140,7 @@ jobs:
       exclude_archs: ${{ needs.load-extension-configs.outputs.main_extensions_exclude_archs }}
       extension_config: ${{ needs.load-extension-configs.outputs.main_extensions_config }}
       override_tag: ${{ inputs.override_git_describe }}
-      duckdb_ref: ${{ inputs.override_duckdb_version }}
+      duckdb_ref: ${{ inputs.git_ref }}
       skip_tests: ${{ inputs.skip_tests && true || false }}
 
   # Build the extensions from .github/config/rust_based_extensions.cmake
@@ -141,7 +155,7 @@ jobs:
       extension_config: ${{ needs.load-extension-configs.outputs.rust_based_extensions_config }}
       extra_toolchains: 'rust'
       override_tag: ${{ inputs.override_git_describe }}
-      duckdb_ref: ${{ inputs.override_duckdb_version }}
+      duckdb_ref: ${{ inputs.git_ref }}
       skip_tests: ${{ inputs.skip_tests && true || false }}
 
   # Merge all extensions into a single, versioned repository
@@ -228,7 +242,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ inputs.override_duckdb_version }}
+          ref: ${{ inputs.git_ref }}
 
       - name: Setup Build Environment
         run: |
@@ -283,7 +297,7 @@ jobs:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
-          ref: ${{ inputs.override_duckdb_version }}
+          ref: ${{ inputs.git_ref }}
 
       - uses: actions/setup-python@v5
         with:

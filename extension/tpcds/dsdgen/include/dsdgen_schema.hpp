@@ -2,8 +2,6 @@
 #pragma once
 
 #include "duckdb.hpp"
-
-#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/parser/column_definition.hpp"
@@ -14,7 +12,6 @@
 #include "duckdb/parser/constraints/not_null_constraint.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/planner/binder.hpp"
-#endif
 
 namespace tpcds {
 

@@ -8,10 +8,7 @@
 #include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/common/arrow/nanoarrow/nanoarrow.hpp"
 
-#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/main/connection.hpp"
-#endif
-
 #include "duckdb/common/adbc/options.h"
 #include "duckdb/common/adbc/single_batch_array_stream.hpp"
 #include "duckdb/function/table/arrow.hpp"

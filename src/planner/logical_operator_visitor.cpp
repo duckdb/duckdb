@@ -132,11 +132,11 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 	}
 	case LogicalOperatorType::LOGICAL_INSERT: {
 		auto &insert = op.Cast<LogicalInsert>();
-		if (insert.on_conflict_condition) {
-			callback(&insert.on_conflict_condition);
+		if (insert.on_conflict_info.on_conflict_condition) {
+			callback(&insert.on_conflict_info.on_conflict_condition);
 		}
-		if (insert.do_update_condition) {
-			callback(&insert.do_update_condition);
+		if (insert.on_conflict_info.do_update_condition) {
+			callback(&insert.on_conflict_info.do_update_condition);
 		}
 		break;
 	}

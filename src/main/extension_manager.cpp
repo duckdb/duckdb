@@ -2,6 +2,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/planner/extension_callback.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/logging/log_manager.hpp"
 
 namespace duckdb {
 

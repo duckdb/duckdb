@@ -25,6 +25,7 @@
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/main/settings.hpp"
 
 #include <cmath>
 
@@ -110,11 +111,11 @@ PhysicalType LogicalType::GetInternalType() {
 			                        width, DecimalType::MaxWidth());
 		}
 	}
+	case LogicalTypeId::BIGNUM:
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::CHAR:
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::BIT:
-	case LogicalTypeId::VARINT:
 		return PhysicalType::VARCHAR;
 	case LogicalTypeId::INTERVAL:
 		return PhysicalType::INTERVAL;
@@ -204,7 +205,7 @@ constexpr const LogicalTypeId LogicalType::VARCHAR;
 
 constexpr const LogicalTypeId LogicalType::BLOB;
 constexpr const LogicalTypeId LogicalType::BIT;
-constexpr const LogicalTypeId LogicalType::VARINT;
+constexpr const LogicalTypeId LogicalType::BIGNUM;
 
 constexpr const LogicalTypeId LogicalType::INTERVAL;
 constexpr const LogicalTypeId LogicalType::ROW_TYPE;
@@ -242,7 +243,7 @@ const vector<LogicalType> LogicalType::AllTypes() {
 	    LogicalType::BOOLEAN,  LogicalType::TINYINT,      LogicalType::SMALLINT,  LogicalType::INTEGER,
 	    LogicalType::BIGINT,   LogicalType::DATE,         LogicalType::TIMESTAMP, LogicalType::DOUBLE,
 	    LogicalType::FLOAT,    LogicalType::VARCHAR,      LogicalType::BLOB,      LogicalType::BIT,
-	    LogicalType::VARINT,   LogicalType::INTERVAL,     LogicalType::HUGEINT,   LogicalTypeId::DECIMAL,
+	    LogicalType::BIGNUM,   LogicalType::INTERVAL,     LogicalType::HUGEINT,   LogicalTypeId::DECIMAL,
 	    LogicalType::UTINYINT, LogicalType::USMALLINT,    LogicalType::UINTEGER,  LogicalType::UBIGINT,
 	    LogicalType::UHUGEINT, LogicalType::TIME,         LogicalTypeId::LIST,    LogicalTypeId::STRUCT,
 	    LogicalType::TIME_TZ,  LogicalType::TIMESTAMP_TZ, LogicalTypeId::MAP,     LogicalTypeId::UNION,
@@ -1236,7 +1237,7 @@ struct ForceGetTypeOperation {
 
 bool LogicalType::TryGetMaxLogicalType(ClientContext &context, const LogicalType &left, const LogicalType &right,
                                        LogicalType &result) {
-	if (DBConfig::GetConfig(context).options.old_implicit_casting) {
+	if (DBConfig::GetSetting<OldImplicitCastingSetting>(context)) {
 		result = LogicalType::ForceMaxLogicalType(left, right);
 		return true;
 	}
@@ -1315,7 +1316,7 @@ static idx_t GetLogicalTypeScore(const LogicalType &type) {
 		return 101;
 	case LogicalTypeId::UUID:
 		return 102;
-	case LogicalTypeId::VARINT:
+	case LogicalTypeId::BIGNUM:
 		return 103;
 	// nested types
 	case LogicalTypeId::STRUCT:

@@ -220,6 +220,7 @@ void LogicalGet::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(210, "projected_input", projected_input);
 	serializer.WritePropertyWithDefault(211, "column_indexes", column_ids);
 	serializer.WritePropertyWithDefault(212, "extra_info", extra_info, ExtraOperatorInfo {});
+	serializer.WritePropertyWithDefault<optional_idx>(213, "ordinality_idx", ordinality_idx);
 }
 
 unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) {
@@ -248,6 +249,8 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 	}
 	deserializer.ReadProperty(210, "projected_input", result->projected_input);
 	deserializer.ReadPropertyWithDefault(211, "column_indexes", result->column_ids);
+	result->extra_info = deserializer.ReadPropertyWithExplicitDefault<ExtraOperatorInfo>(212, "extra_info", {});
+	deserializer.ReadPropertyWithDefault<optional_idx>(213, "ordinality_idx", result->ordinality_idx);
 	if (!legacy_column_ids.empty()) {
 		if (!result->column_ids.empty()) {
 			throw SerializationException(
@@ -257,7 +260,6 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 			result->column_ids.emplace_back(col_id);
 		}
 	}
-	result->extra_info = deserializer.ReadPropertyWithExplicitDefault<ExtraOperatorInfo>(212, "extra_info", {});
 	auto &context = deserializer.Get<ClientContext &>();
 	virtual_column_map_t virtual_columns;
 	if (!has_serialize) {
@@ -272,10 +274,13 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 			throw InternalException("Table function \"%s\" has neither bind nor (de)serialize", function.name);
 		}
 		bind_data = function.bind(context, input, bind_return_types, bind_names);
+		if (result->ordinality_idx.IsValid()) {
+			auto ordinality_pos = bind_return_types.begin() + NumericCast<int64_t>(result->ordinality_idx.GetIndex());
+			bind_return_types.emplace(ordinality_pos, LogicalType::BIGINT);
+		}
 		if (function.get_virtual_columns) {
 			virtual_columns = function.get_virtual_columns(context, bind_data.get());
 		}
-
 		for (auto &col_id : result->column_ids) {
 			if (col_id.IsVirtualColumn()) {
 				auto idx = col_id.GetPrimaryIndex();

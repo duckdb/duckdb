@@ -1,0 +1,14 @@
+# name: test/sql/types/bignum/test_int_varchar_bignum_compatibility.test_slow
+# description: Test INT Varchar produces same blobs
+# group: [bignum]
+
+# We skip this test since it tests a full integer range, only meant for local - release execution
+mode skip
+
+statement ok
+PRAGMA enable_verification
+
+query I
+select distinct i::varchar::bignum = i::bignum from range(0, 2147483646) t(i);
+----
+true

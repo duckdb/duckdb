@@ -13,6 +13,7 @@
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/operator/logical_cross_product.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -229,8 +230,9 @@ void BuildProbeSideOptimizer::VisitOperator(LogicalOperator &op) {
 			// if the conditions have no equality, do not flip the children.
 			// There is no physical join operator (yet) that can do an inequality right_semi/anti join.
 			idx_t has_range = 0;
+			bool prefer_range_joins = DBConfig::GetSetting<PreferRangeJoinsSetting>(context);
 			if (op.type == LogicalOperatorType::LOGICAL_ANY_JOIN ||
-			    (op.Cast<LogicalComparisonJoin>().HasEquality(has_range) && !context.config.prefer_range_joins)) {
+			    (op.Cast<LogicalComparisonJoin>().HasEquality(has_range) && !prefer_range_joins)) {
 				TryFlipJoinChildren(join);
 			}
 			break;

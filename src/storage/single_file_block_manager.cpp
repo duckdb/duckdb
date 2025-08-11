@@ -15,6 +15,7 @@
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/metadata/metadata_writer.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/main/settings.hpp"
 #include "mbedtls_wrapper.hpp"
 
 #include <algorithm>
@@ -120,12 +121,12 @@ void MainHeader::Write(WriteStream &ser) {
 	}
 }
 
-void MainHeader::CheckMagicBytes(FileHandle &handle) {
+void MainHeader::CheckMagicBytes(QueryContext context, FileHandle &handle) {
 	data_t magic_bytes[MAGIC_BYTE_SIZE];
 	if (handle.GetFileSize() < MainHeader::MAGIC_BYTE_SIZE + MainHeader::MAGIC_BYTE_OFFSET) {
 		throw IOException("The file \"%s\" exists, but it is not a valid DuckDB database file!", handle.path);
 	}
-	handle.Read(magic_bytes, MainHeader::MAGIC_BYTE_SIZE, MainHeader::MAGIC_BYTE_OFFSET);
+	handle.Read(context, magic_bytes, MainHeader::MAGIC_BYTE_SIZE, MainHeader::MAGIC_BYTE_OFFSET);
 	if (memcmp(magic_bytes, MainHeader::MAGIC_BYTES, MainHeader::MAGIC_BYTE_SIZE) != 0) {
 		throw IOException("The file \"%s\" exists, but it is not a valid DuckDB database file!", handle.path);
 	}
@@ -427,7 +428,7 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	max_block = 0;
 }
 
-void SingleFileBlockManager::LoadExistingDatabase() {
+void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
 	auto flags = GetFileFlags(false);
 
 	// open the RDBMS handle
@@ -438,9 +439,9 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 		throw IOException("Cannot open database \"%s\" in read-only mode: database does not exist", path);
 	}
 
-	MainHeader::CheckMagicBytes(*handle);
+	MainHeader::CheckMagicBytes(context, *handle);
 	// otherwise, we check the metadata of the file
-	ReadAndChecksum(header_buffer, 0, true);
+	ReadAndChecksum(context, header_buffer, 0, true);
 
 	uint64_t delta = 0;
 	if (GetBlockHeaderSize() > DEFAULT_BLOCK_HEADER_STORAGE_SIZE) {
@@ -472,11 +473,11 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 
 	// read the database headers from disk
 	DatabaseHeader h1;
-	ReadAndChecksum(header_buffer, Storage::FILE_HEADER_SIZE);
+	ReadAndChecksum(context, header_buffer, Storage::FILE_HEADER_SIZE);
 	h1 = DeserializeDatabaseHeader(main_header, header_buffer.buffer);
 
 	DatabaseHeader h2;
-	ReadAndChecksum(header_buffer, Storage::FILE_HEADER_SIZE * 2ULL);
+	ReadAndChecksum(context, header_buffer, Storage::FILE_HEADER_SIZE * 2ULL);
 	h2 = DeserializeDatabaseHeader(main_header, header_buffer.buffer);
 
 	// check the header with the highest iteration count
@@ -538,9 +539,10 @@ void SingleFileBlockManager::CheckChecksum(FileBuffer &block, uint64_t location,
 	}
 }
 
-void SingleFileBlockManager::ReadAndChecksum(FileBuffer &block, uint64_t location, bool skip_block_header) const {
+void SingleFileBlockManager::ReadAndChecksum(QueryContext context, FileBuffer &block, uint64_t location,
+                                             bool skip_block_header) const {
 	// read the buffer from disk
-	block.Read(*handle, location);
+	block.Read(context, *handle, location);
 
 	//! calculate delta header bytes (if any)
 	uint64_t delta = GetBlockHeaderSize() - Storage::DEFAULT_BLOCK_HEADER_SIZE;
@@ -860,7 +862,7 @@ void SingleFileBlockManager::ReadBlock(data_ptr_t internal_buffer, uint64_t bloc
 void SingleFileBlockManager::ReadBlock(Block &block, bool skip_block_header) const {
 	// read the buffer from disk
 	auto location = GetBlockLocation(block.id);
-	block.Read(*handle, location);
+	block.Read(QueryContext(), *handle, location);
 
 	//! calculate delta header bytes (if any)
 	uint64_t delta = GetBlockHeaderSize() - Storage::DEFAULT_BLOCK_HEADER_SIZE;
@@ -876,7 +878,7 @@ void SingleFileBlockManager::ReadBlock(Block &block, bool skip_block_header) con
 void SingleFileBlockManager::Read(Block &block) {
 	D_ASSERT(block.id >= 0);
 	D_ASSERT(std::find(free_list.begin(), free_list.end(), block.id) == free_list.end());
-	ReadAndChecksum(block, GetBlockLocation(block.id));
+	ReadAndChecksum(QueryContext(), block, GetBlockLocation(block.id));
 }
 
 void SingleFileBlockManager::ReadBlocks(FileBuffer &buffer, block_id_t start_block, idx_t block_count) {
@@ -885,7 +887,7 @@ void SingleFileBlockManager::ReadBlocks(FileBuffer &buffer, block_id_t start_blo
 
 	// read the buffer from disk
 	auto location = GetBlockLocation(start_block);
-	buffer.Read(*handle, location);
+	buffer.Read(QueryContext(), *handle, location);
 
 	// for each of the blocks - verify the checksum
 	auto ptr = buffer.InternalBuffer();
@@ -1018,8 +1020,8 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 	header.block_count = NumericCast<idx_t>(max_block);
 	header.serialization_compatibility = options.storage_version.GetIndex();
 
-	auto &config = DBConfig::Get(db);
-	if (config.options.checkpoint_abort == CheckpointAbort::DEBUG_ABORT_AFTER_FREE_LIST_WRITE) {
+	auto debug_checkpoint_abort = DBConfig::GetSetting<DebugCheckpointAbortSetting>(db.GetDatabase());
+	if (debug_checkpoint_abort == CheckpointAbort::DEBUG_ABORT_AFTER_FREE_LIST_WRITE) {
 		throw FatalException("Checkpoint aborted after free list write because of PRAGMA checkpoint_abort flag");
 	}
 

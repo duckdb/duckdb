@@ -43,6 +43,7 @@
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/common/extension_type_info.hpp"
 #include "duckdb/common/type_visitor.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -155,8 +156,7 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 	auto &dependencies = base.dependencies;
 	auto &catalog = Catalog::GetCatalog(context, base.catalog);
 
-	auto &db_config = DBConfig::GetConfig(context);
-	bool should_create_dependencies = db_config.GetSetting<EnableViewDependenciesSetting>(context);
+	bool should_create_dependencies = DBConfig::GetSetting<EnableViewDependenciesSetting>(context);
 	if (should_create_dependencies) {
 		view_binder->SetCatalogLookupCallback([&dependencies, &catalog](CatalogEntry &entry) {
 			if (&catalog != &entry.ParentCatalog()) {
@@ -186,7 +186,6 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 
 	auto &dependencies = base.dependencies;
 	auto &catalog = Catalog::GetCatalog(context, info.catalog);
-	auto &db_config = DBConfig::GetConfig(context);
 	// try to bind each of the included functions
 	unordered_set<idx_t> positional_parameters;
 	for (auto &function : base.macros) {
@@ -230,7 +229,7 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 		BoundSelectNode sel_node;
 		BoundGroupInformation group_info;
 		SelectBinder binder(*this, context, sel_node, group_info);
-		bool should_create_dependencies = db_config.GetSetting<EnableMacroDependenciesSetting>(context);
+		bool should_create_dependencies = DBConfig::GetSetting<EnableMacroDependenciesSetting>(context);
 
 		if (should_create_dependencies) {
 			binder.SetCatalogLookupCallback([&dependencies, &catalog](CatalogEntry &entry) {

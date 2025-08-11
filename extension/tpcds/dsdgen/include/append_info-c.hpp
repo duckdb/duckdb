@@ -3,14 +3,12 @@
 #include "duckdb/main/appender.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/client_context.hpp"
-#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/parser/constraints/not_null_constraint.hpp"
 #include "duckdb/catalog/catalog.hpp"
-#endif
 
 #include <memory>
 #include <cassert>

@@ -47,12 +47,14 @@ jobs:
             other_deps: "'pydantic<2'"
             perform_tests: true
             flags: "-fexceptions"
-          - python: "3.11"
-            pyodide-build: "0.25.1"
-            node: "18"
-            other_deps: "'pydantic<2'"
-            perform_tests: true
-            flags: "-fexceptions"
+          # FIXME: This fails on build wasm wheel step in NightlyTests and InvokeCI
+          #        It cannot find env variables from Makefile.envs
+          # - python: "3.11"
+          #   pyodide-build: "0.25.1"
+          #   node: "18"
+          #   other_deps: "'pydantic<2'"
+          #   perform_tests: true
+          #   flags: "-fexceptions"
           - python: "3.12"
             pyodide-build: "0.26.1"
             node: "20"

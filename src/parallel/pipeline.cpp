@@ -12,6 +12,7 @@
 #include "duckdb/parallel/pipeline_event.hpp"
 #include "duckdb/parallel/pipeline_executor.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -134,7 +135,6 @@ bool Pipeline::ScheduleParallel(shared_ptr<Event> &event) {
 }
 
 bool Pipeline::IsOrderDependent() const {
-	auto &config = DBConfig::GetConfig(executor.context);
 	if (source) {
 		auto source_order = source->SourceOrder();
 		if (source_order == OrderPreservationType::FIXED_ORDER) {
@@ -153,7 +153,7 @@ bool Pipeline::IsOrderDependent() const {
 			return true;
 		}
 	}
-	if (!config.options.preserve_insertion_order) {
+	if (!DBConfig::GetSetting<PreserveInsertionOrderSetting>(executor.context)) {
 		return false;
 	}
 	if (sink && sink->SinkOrderDependent()) {

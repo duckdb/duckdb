@@ -40,10 +40,10 @@ public:
 //	Base class for non-aggregate functions that use peer boundaries
 class WindowPeerLocalState : public WindowExecutorBoundsLocalState {
 public:
-	explicit WindowPeerLocalState(const WindowPeerGlobalState &gpstate)
-	    : WindowExecutorBoundsLocalState(gpstate), gpstate(gpstate) {
+	WindowPeerLocalState(ExecutionContext &context, const WindowPeerGlobalState &gpstate)
+	    : WindowExecutorBoundsLocalState(context, gpstate), gpstate(gpstate) {
 		if (gpstate.token_tree) {
-			local_tree = gpstate.token_tree->GetLocalState();
+			local_tree = gpstate.token_tree->GetLocalState(context);
 		}
 	}
 
@@ -51,7 +51,7 @@ public:
 	void Sink(ExecutionContext &context, WindowExecutorGlobalState &gstate, DataChunk &sink_chunk,
 	          DataChunk &coll_chunk, idx_t input_idx) override;
 	//! Finish the sinking and prepare to scan
-	void Finalize(WindowExecutorGlobalState &gstate, CollectionPtr collection) override;
+	void Finalize(ExecutionContext &context, WindowExecutorGlobalState &gstate, CollectionPtr collection) override;
 
 	void NextRank(idx_t partition_begin, idx_t peer_begin, idx_t row_idx);
 
@@ -71,16 +71,17 @@ void WindowPeerLocalState::Sink(ExecutionContext &context, WindowExecutorGlobalS
 
 	if (local_tree) {
 		auto &local_tokens = local_tree->Cast<WindowMergeSortTreeLocalState>();
-		local_tokens.SinkChunk(sink_chunk, input_idx, nullptr, 0);
+		local_tokens.Sink(context, sink_chunk, input_idx, nullptr, 0);
 	}
 }
 
-void WindowPeerLocalState::Finalize(WindowExecutorGlobalState &gstate, CollectionPtr collection) {
-	WindowExecutorBoundsLocalState::Finalize(gstate, collection);
+void WindowPeerLocalState::Finalize(ExecutionContext &context, WindowExecutorGlobalState &gstate,
+                                    CollectionPtr collection) {
+	WindowExecutorBoundsLocalState::Finalize(context, gstate, collection);
 
 	if (local_tree) {
 		auto &local_tokens = local_tree->Cast<WindowMergeSortTreeLocalState>();
-		local_tokens.Sort();
+		local_tokens.Finalize(context);
 		local_tokens.window_tree.Build();
 	}
 }
@@ -116,8 +117,9 @@ unique_ptr<WindowExecutorGlobalState> WindowPeerExecutor::GetGlobalState(ClientC
 	return make_uniq<WindowPeerGlobalState>(client, *this, payload_count, partition_mask, order_mask);
 }
 
-unique_ptr<WindowExecutorLocalState> WindowPeerExecutor::GetLocalState(const WindowExecutorGlobalState &gstate) const {
-	return make_uniq<WindowPeerLocalState>(gstate.Cast<WindowPeerGlobalState>());
+unique_ptr<WindowExecutorLocalState> WindowPeerExecutor::GetLocalState(ExecutionContext &context,
+                                                                       const WindowExecutorGlobalState &gstate) const {
+	return make_uniq<WindowPeerLocalState>(context, gstate.Cast<WindowPeerGlobalState>());
 }
 
 //===--------------------------------------------------------------------===//

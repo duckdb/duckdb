@@ -3,14 +3,17 @@
 # group: [general]
 
 statement ok
-select
-    category,
-    array_agg(distinct name) filter(where id != 5)            as a_list,
-    array_agg(name)          filter(where id != 5)            as b_list,
-    array_agg({'id': id, 'name': name, 'catetory': category}) as c_list
-from (
-    select 1 as id, '大熊猫' as name, '熊' as category union all
-    select 2 as id, '大熊猫' as name, '猫' as category union all
-    select 3 as id, '小熊猫' as name, '猫' as category
-) t
-group by category;
+WITH cte(category, a_list, b_list, c_list) AS (
+	SELECT
+		category,
+		array_agg(DISTINCT name) FILTER(WHERE id != 5)            AS a_list,
+		array_agg(name)          FILTER(WHERE id != 5)            AS b_list,
+		array_agg({'id': id, 'name': name, 'catetory': category}) AS c_list
+	FROM (
+		SELECT 1 AS id, '大熊猫' AS name, '熊' AS category UNION ALL
+		SELECT 2 AS id, '大熊猫' AS name, '猫' AS category UNION ALL
+		SELECT 3 AS id, '小熊猫' AS name, '猫' AS category
+	) t
+	GROUP BY category)
+SELECT category, list_sort(a_list), list_sort(b_list), list_sort(c_list)
+FROM cte ORDER BY ALL

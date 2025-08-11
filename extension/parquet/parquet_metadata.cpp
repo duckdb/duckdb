@@ -4,13 +4,11 @@
 
 #include <sstream>
 
-#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/main/config.hpp"
-#endif
 
 namespace duckdb {
 

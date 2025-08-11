@@ -29,6 +29,7 @@
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/table_filter_state.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
+#include "duckdb/logging/log_manager.hpp"
 
 #include <cassert>
 #include <chrono>
@@ -47,8 +48,8 @@ using duckdb_parquet::SchemaElement;
 using duckdb_parquet::Statistics;
 using duckdb_parquet::Type;
 
-static unique_ptr<duckdb_apache::thrift::protocol::TProtocol> CreateThriftFileProtocol(CachingFileHandle &file_handle,
-                                                                                       bool prefetch_mode) {
+static unique_ptr<duckdb_apache::thrift::protocol::TProtocol>
+CreateThriftFileProtocol(QueryContext context, CachingFileHandle &file_handle, bool prefetch_mode) {
 	auto transport = duckdb_base_std::make_shared<ThriftFileTransport>(file_handle, prefetch_mode);
 	return make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
 }
@@ -91,7 +92,7 @@ static shared_ptr<ParquetFileMetadataCache>
 LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &file_handle,
              const shared_ptr<const ParquetEncryptionConfig> &encryption_config, const EncryptionUtil &encryption_util,
              optional_idx footer_size) {
-	auto file_proto = CreateThriftFileProtocol(file_handle, false);
+	auto file_proto = CreateThriftFileProtocol(QueryContext(context), file_handle, false);
 	auto &transport = reinterpret_cast<ThriftFileTransport &>(*file_proto->getTransport());
 	auto file_size = transport.GetSize();
 	if (file_size < 12) {
@@ -517,22 +518,35 @@ static bool IsVariantType(const SchemaElement &root, const vector<ParquetColumnS
 	if (children.size() < 2) {
 		return false;
 	}
-	auto &metadata = children[0];
-	auto &value = children[1];
+	auto &child0 = children[0];
+	auto &child1 = children[1];
 
-	//! Verify names
-	if (metadata.name != "metadata") {
+	ParquetColumnSchema const *metadata;
+	ParquetColumnSchema const *value;
+
+	if (child0.name == "metadata" && child1.name == "value") {
+		metadata = &child0;
+		value = &child1;
+	} else if (child1.name == "metadata" && child0.name == "value") {
+		metadata = &child1;
+		value = &child0;
+	} else {
 		return false;
 	}
-	if (value.name != "value") {
+
+	//! Verify names
+	if (metadata->name != "metadata") {
+		return false;
+	}
+	if (value->name != "value") {
 		return false;
 	}
 
 	//! Verify types
-	if (metadata.parquet_type != duckdb_parquet::Type::BYTE_ARRAY) {
+	if (metadata->parquet_type != duckdb_parquet::Type::BYTE_ARRAY) {
 		return false;
 	}
-	if (value.parquet_type != duckdb_parquet::Type::BYTE_ARRAY) {
+	if (value->parquet_type != duckdb_parquet::Type::BYTE_ARRAY) {
 		return false;
 	}
 	if (children.size() == 3) {
@@ -779,7 +793,8 @@ ParquetOptions::ParquetOptions(ClientContext &context) {
 	Value lookup_value;
 	if (context.TryGetCurrentSetting("binary_as_string", lookup_value)) {
 		binary_as_string = lookup_value.GetValue<bool>();
-	} else if (context.TryGetCurrentSetting("variant_legacy_encoding", lookup_value)) {
+	}
+	if (context.TryGetCurrentSetting("variant_legacy_encoding", lookup_value)) {
 		variant_legacy_encoding = lookup_value.GetValue<bool>();
 	}
 }
@@ -808,7 +823,7 @@ ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, Parq
                              shared_ptr<ParquetFileMetadataCache> metadata_p)
     : BaseFileReader(std::move(file_p)), fs(CachingFileSystem::Get(context_p)),
       allocator(BufferAllocator::Get(context_p)), parquet_options(std::move(parquet_options_p)) {
-	file_handle = fs.OpenFile(file, FileFlags::FILE_FLAGS_READ);
+	file_handle = fs.OpenFile(QueryContext(context_p), file, FileFlags::FILE_FLAGS_READ);
 	if (!file_handle->CanSeek()) {
 		throw NotImplementedException(
 		    "Reading parquet files from a FIFO stream is not supported and cannot be efficiently supported since "
@@ -1205,7 +1220,7 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 			state.prefetch_mode = false;
 		}
 
-		state.file_handle = fs.OpenFile(file, flags);
+		state.file_handle = fs.OpenFile(QueryContext(context), file, flags);
 	}
 	state.adaptive_filter.reset();
 	state.scan_filters.clear();
@@ -1216,7 +1231,7 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 		}
 	}
 
-	state.thrift_file_proto = CreateThriftFileProtocol(*state.file_handle, state.prefetch_mode);
+	state.thrift_file_proto = CreateThriftFileProtocol(QueryContext(context), *state.file_handle, state.prefetch_mode);
 	state.root_reader = CreateReader(context);
 	state.define_buf.resize(allocator, STANDARD_VECTOR_SIZE);
 	state.repeat_buf.resize(allocator, STANDARD_VECTOR_SIZE);

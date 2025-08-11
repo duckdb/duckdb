@@ -1,0 +1,33 @@
+# name: test/sql/json/issues/issue18301.test
+# description: Test issue 18301 - DuckDB JSON Schema Inconsistency - V 1.3.2
+# group: [issues]
+
+require json
+
+statement ok
+pragma enable_verification
+
+statement ok
+SET threads = 2;
+
+statement ok
+CREATE OR REPLACE TABLE cricket_staging AS
+SELECT * FROM read_json('data/json/18301/*.json', filename=true)
+WHERE 1=0;
+
+statement ok
+TRUNCATE cricket_staging;
+
+statement ok
+INSERT INTO cricket_staging
+SELECT * FROM read_json('data/json/18301/*.json',
+    union_by_name=true,
+    filename=true
+);
+
+query I
+SELECT info->>'$.outcome.by' as outcome_by
+FROM cricket_staging
+WHERE info->>'$.city' = 'Colombo';
+----
+{"runs":175,"wickets":null,"innings":1}

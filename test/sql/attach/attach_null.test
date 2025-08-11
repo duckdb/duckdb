@@ -1,0 +1,11 @@
+# name: test/sql/attach/attach_null.test
+# description: Tests NULL as an attach option
+# group: [attach]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+ATTACH '__TEST_DIR__/test_new_compression.db' AS db1 (TYPE NULL);
+----
+NULL is not supported

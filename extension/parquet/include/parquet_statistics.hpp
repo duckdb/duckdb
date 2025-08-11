@@ -9,9 +9,7 @@
 #pragma once
 
 #include "duckdb.hpp"
-#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/storage/statistics/base_statistics.hpp"
-#endif
 #include "parquet_types.h"
 #include "resizable_buffer.hpp"
 

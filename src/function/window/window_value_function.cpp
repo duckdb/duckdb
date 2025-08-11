@@ -56,12 +56,12 @@ public:
 //! A class representing the state of the first_value, last_value and nth_value functions
 class WindowValueLocalState : public WindowExecutorBoundsLocalState {
 public:
-	explicit WindowValueLocalState(const WindowValueGlobalState &gvstate)
-	    : WindowExecutorBoundsLocalState(gvstate), gvstate(gvstate) {
+	WindowValueLocalState(ExecutionContext &context, const WindowValueGlobalState &gvstate)
+	    : WindowExecutorBoundsLocalState(context, gvstate), gvstate(gvstate) {
 		WindowAggregatorLocalState::InitSubFrames(frames, gvstate.executor.wexpr.exclude_clause);
 
 		if (gvstate.value_tree) {
-			local_value = gvstate.value_tree->GetLocalState();
+			local_value = gvstate.value_tree->GetLocalState(context);
 			if (gvstate.executor.IgnoreNulls()) {
 				sort_nulls.Initialize();
 			}
@@ -72,7 +72,7 @@ public:
 	void Sink(ExecutionContext &context, WindowExecutorGlobalState &gstate, DataChunk &sink_chunk,
 	          DataChunk &coll_chunk, idx_t input_idx) override;
 	//! Finish the sinking and prepare to scan
-	void Finalize(WindowExecutorGlobalState &gstate, CollectionPtr collection) override;
+	void Finalize(ExecutionContext &context, WindowExecutorGlobalState &gstate, CollectionPtr collection) override;
 
 	//! The corresponding global value state
 	const WindowValueGlobalState &gvstate;
@@ -114,16 +114,17 @@ void WindowValueLocalState::Sink(ExecutionContext &context, WindowExecutorGlobal
 		}
 
 		auto &value_state = local_value->Cast<WindowIndexTreeLocalState>();
-		value_state.SinkChunk(sink_chunk, input_idx, filter_sel, filtered);
+		value_state.Sink(context, sink_chunk, input_idx, filter_sel, filtered);
 	}
 }
 
-void WindowValueLocalState::Finalize(WindowExecutorGlobalState &gstate, CollectionPtr collection) {
-	WindowExecutorBoundsLocalState::Finalize(gstate, collection);
+void WindowValueLocalState::Finalize(ExecutionContext &context, WindowExecutorGlobalState &gstate,
+                                     CollectionPtr collection) {
+	WindowExecutorBoundsLocalState::Finalize(context, gstate, collection);
 
 	if (local_value) {
 		auto &value_state = local_value->Cast<WindowIndexTreeLocalState>();
-		value_state.Sort();
+		value_state.Finalize(context);
 		value_state.index_tree.Build();
 	}
 
@@ -171,9 +172,10 @@ void WindowValueExecutor::Finalize(ExecutionContext &context, WindowExecutorGlob
 	WindowExecutor::Finalize(context, gstate, lstate, collection);
 }
 
-unique_ptr<WindowExecutorLocalState> WindowValueExecutor::GetLocalState(const WindowExecutorGlobalState &gstate) const {
+unique_ptr<WindowExecutorLocalState> WindowValueExecutor::GetLocalState(ExecutionContext &context,
+                                                                        const WindowExecutorGlobalState &gstate) const {
 	const auto &gvstate = gstate.Cast<WindowValueGlobalState>();
-	return make_uniq<WindowValueLocalState>(gvstate);
+	return make_uniq<WindowValueLocalState>(context, gvstate);
 }
 
 //===--------------------------------------------------------------------===//
@@ -234,9 +236,10 @@ public:
 //===--------------------------------------------------------------------===//
 class WindowLeadLagLocalState : public WindowValueLocalState {
 public:
-	explicit WindowLeadLagLocalState(const WindowLeadLagGlobalState &gstate) : WindowValueLocalState(gstate) {
+	explicit WindowLeadLagLocalState(ExecutionContext &context, const WindowLeadLagGlobalState &gstate)
+	    : WindowValueLocalState(context, gstate) {
 		if (gstate.row_tree) {
-			local_row = gstate.row_tree->GetLocalState();
+			local_row = gstate.row_tree->GetLocalState(context);
 		}
 	}
 
@@ -244,7 +247,7 @@ public:
 	void Sink(ExecutionContext &context, WindowExecutorGlobalState &gstate, DataChunk &sink_chunk,
 	          DataChunk &coll_chunk, idx_t input_idx) override;
 	//! Finish the sinking and prepare to scan
-	void Finalize(WindowExecutorGlobalState &gstate, CollectionPtr collection) override;
+	void Finalize(ExecutionContext &context, WindowExecutorGlobalState &gstate, CollectionPtr collection) override;
 
 	//! The optional sorting state for the secondary sort row mapping
 	unique_ptr<WindowAggregatorState> local_row;
@@ -259,16 +262,17 @@ void WindowLeadLagLocalState::Sink(ExecutionContext &context, WindowExecutorGlob
 		optional_ptr<SelectionVector> filter_sel;
 
 		auto &row_state = local_row->Cast<WindowMergeSortTreeLocalState>();
-		row_state.SinkChunk(sink_chunk, input_idx, filter_sel, filtered);
+		row_state.Sink(context, sink_chunk, input_idx, filter_sel, filtered);
 	}
 }
 
-void WindowLeadLagLocalState::Finalize(WindowExecutorGlobalState &gstate, CollectionPtr collection) {
-	WindowValueLocalState::Finalize(gstate, collection);
+void WindowLeadLagLocalState::Finalize(ExecutionContext &context, WindowExecutorGlobalState &gstate,
+                                       CollectionPtr collection) {
+	WindowValueLocalState::Finalize(context, gstate, collection);
 
 	if (local_row) {
 		auto &row_state = local_row->Cast<WindowMergeSortTreeLocalState>();
-		row_state.Sort();
+		row_state.Finalize(context);
 		row_state.window_tree.Build();
 	}
 }
@@ -288,9 +292,9 @@ unique_ptr<WindowExecutorGlobalState> WindowLeadLagExecutor::GetGlobalState(Clie
 }
 
 unique_ptr<WindowExecutorLocalState>
-WindowLeadLagExecutor::GetLocalState(const WindowExecutorGlobalState &gstate) const {
+WindowLeadLagExecutor::GetLocalState(ExecutionContext &context, const WindowExecutorGlobalState &gstate) const {
 	const auto &glstate = gstate.Cast<WindowLeadLagGlobalState>();
-	return make_uniq<WindowLeadLagLocalState>(glstate);
+	return make_uniq<WindowLeadLagLocalState>(context, glstate);
 }
 
 void WindowLeadLagExecutor::EvaluateInternal(ExecutionContext &context, WindowExecutorGlobalState &gstate,
@@ -887,18 +891,20 @@ public:
 
 class WindowFillLocalState : public WindowLeadLagLocalState {
 public:
-	explicit WindowFillLocalState(const WindowLeadLagGlobalState &gvstate) : WindowLeadLagLocalState(gvstate) {
+	WindowFillLocalState(ExecutionContext &context, const WindowLeadLagGlobalState &gvstate)
+	    : WindowLeadLagLocalState(context, gvstate) {
 	}
 
 	//! Finish the sinking and prepare to scan
-	void Finalize(WindowExecutorGlobalState &gstate, CollectionPtr collection) override;
+	void Finalize(ExecutionContext &context, WindowExecutorGlobalState &gstate, CollectionPtr collection) override;
 
 	//! Cursor for the secondary sort values
 	unique_ptr<WindowCursor> order_cursor;
 };
 
-void WindowFillLocalState::Finalize(WindowExecutorGlobalState &gstate, CollectionPtr collection) {
-	WindowLeadLagLocalState::Finalize(gstate, collection);
+void WindowFillLocalState::Finalize(ExecutionContext &context, WindowExecutorGlobalState &gstate,
+                                    CollectionPtr collection) {
+	WindowLeadLagLocalState::Finalize(context, gstate, collection);
 
 	// Prepare to scan
 	auto &gfstate = gvstate.Cast<WindowFillGlobalState>();
@@ -914,9 +920,10 @@ unique_ptr<WindowExecutorGlobalState> WindowFillExecutor::GetGlobalState(ClientC
 	return make_uniq<WindowFillGlobalState>(client, *this, payload_count, partition_mask, order_mask);
 }
 
-unique_ptr<WindowExecutorLocalState> WindowFillExecutor::GetLocalState(const WindowExecutorGlobalState &gstate) const {
+unique_ptr<WindowExecutorLocalState> WindowFillExecutor::GetLocalState(ExecutionContext &context,
+                                                                       const WindowExecutorGlobalState &gstate) const {
 	const auto &gfstate = gstate.Cast<WindowFillGlobalState>();
-	return make_uniq<WindowFillLocalState>(gfstate);
+	return make_uniq<WindowFillLocalState>(context, gfstate);
 }
 
 void WindowFillExecutor::EvaluateInternal(ExecutionContext &context, WindowExecutorGlobalState &gstate,

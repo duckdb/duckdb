@@ -1,0 +1,25 @@
+# name: test/sql/generated_columns/virtual/update_index.test
+# description: Tests updates on a table with virtual columns and indexes
+# group: [virtual]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE tbl_comp (
+	a INT,
+	gen AS (2 * a),
+	b INT,
+	c VARCHAR,
+	PRIMARY KEY(c));
+
+statement ok
+INSERT INTO tbl_comp VALUES (1, 1, 'hello');
+
+statement ok
+UPDATE tbl_comp SET c='world'
+
+query IIII
+FROM tbl_comp
+----
+1	2	1	world

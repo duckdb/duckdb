@@ -5,6 +5,7 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/logging/log_manager.hpp"
 #include "duckdb/main/database.hpp"
 
 namespace duckdb {

@@ -9,6 +9,7 @@
 #include "duckdb/common/types/constraint_conflict_info.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/constraints/list.hpp"
@@ -37,8 +38,8 @@ DataTableInfo::DataTableInfo(AttachedDatabase &db, shared_ptr<TableIOManager> ta
     : db(db), table_io_manager(std::move(table_io_manager_p)), schema(std::move(schema)), table(std::move(table)) {
 }
 
-void DataTableInfo::InitializeIndexes(ClientContext &context, const char *index_type) {
-	indexes.InitializeIndexes(context, *this, index_type);
+void DataTableInfo::BindIndexes(ClientContext &context, const char *index_type) {
+	indexes.Bind(context, *this, index_type);
 }
 
 bool DataTableInfo::IsTemporary() const {
@@ -98,7 +99,8 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 		column_definitions.emplace_back(column_def.Copy());
 	}
 
-	info->InitializeIndexes(context);
+	// Bind all indexes.
+	info->BindIndexes(context);
 
 	// first check if there are any indexes that exist that point to the removed column
 	info->indexes.Scan([&](Index &index) {
@@ -145,7 +147,9 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, BoundConstraint 
 	for (const auto &index_info : parent.info->index_storage_infos) {
 		info->index_storage_infos.push_back(IndexStorageInfo(index_info.name));
 	}
-	info->InitializeIndexes(context);
+
+	// Bind all indexes.
+	info->BindIndexes(context);
 
 	auto &local_storage = LocalStorage::Get(context, db);
 	lock_guard<mutex> parent_lock(parent.append_lock);
@@ -171,7 +175,8 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 		column_definitions.emplace_back(column_def.Copy());
 	}
 
-	info->InitializeIndexes(context);
+	// Bind all indexes.
+	info->BindIndexes(context);
 
 	// first check if there are any indexes that exist that point to the changed column
 	info->indexes.Scan([&](Index &index) {
@@ -312,8 +317,8 @@ shared_ptr<DataTableInfo> &DataTable::GetDataTableInfo() {
 	return info;
 }
 
-void DataTable::InitializeIndexes(ClientContext &context) {
-	info->InitializeIndexes(context);
+void DataTable::BindIndexes(ClientContext &context) {
+	info->BindIndexes(context);
 }
 
 bool DataTable::HasIndexes() const {
@@ -678,13 +683,15 @@ void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<LocalT
                                     optional_ptr<ConflictManager> manager) {
 	// Verify the constraint without a conflict manager.
 	if (!manager) {
-		return indexes.ScanBound<ART>([&](ART &art) {
-			if (!art.IsUnique()) {
+		return indexes.Scan([&](Index &index) {
+			if (!index.IsUnique() || index.GetIndexType() != ART::TYPE_NAME) {
 				return false;
 			}
-
+			D_ASSERT(index.IsBound());
+			auto &art = index.Cast<ART>();
 			if (storage) {
 				auto delete_index = storage->delete_indexes.Find(art.GetIndexName());
+				D_ASSERT(!delete_index || delete_index->IsBound());
 				IndexAppendInfo index_append_info(IndexAppendMode::DEFAULT, delete_index);
 				art.VerifyAppend(chunk, index_append_info, nullptr);
 			} else {
@@ -699,16 +706,18 @@ void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<LocalT
 	auto &conflict_info = manager->GetConflictInfo();
 
 	// Find all indexes matching the conflict target.
-	indexes.ScanBound<ART>([&](ART &art) {
-		if (!art.IsUnique()) {
+	indexes.Scan([&](Index &index) {
+		if (!index.IsUnique() || index.GetIndexType() != ART::TYPE_NAME) {
 			return false;
 		}
-		if (!conflict_info.ConflictTargetMatches(art)) {
+		if (!conflict_info.ConflictTargetMatches(index)) {
 			return false;
 		}
-
+		D_ASSERT(index.IsBound());
+		auto &art = index.Cast<ART>();
 		if (storage) {
 			auto delete_index = storage->delete_indexes.Find(art.GetIndexName());
+			D_ASSERT(!delete_index || delete_index->IsBound());
 			manager->AddIndex(art, delete_index);
 		} else {
 			manager->AddIndex(art, nullptr);
@@ -728,16 +737,18 @@ void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<LocalT
 
 	// Scan the other indexes and throw, if there are any conflicts.
 	manager->SetMode(ConflictManagerMode::THROW);
-	indexes.ScanBound<ART>([&](ART &art) {
-		if (!art.IsUnique()) {
+	indexes.Scan([&](Index &index) {
+		if (!index.IsUnique() || index.GetIndexType() != ART::TYPE_NAME) {
 			return false;
 		}
-		if (manager->IndexMatches(art)) {
+		if (manager->IndexMatches(index.Cast<BoundIndex>())) {
 			return false;
 		}
-
+		D_ASSERT(index.IsBound());
+		auto &art = index.Cast<ART>();
 		if (storage) {
 			auto delete_index = storage->delete_indexes.Find(art.GetIndexName());
+			D_ASSERT(!delete_index || delete_index->IsBound());
 			IndexAppendInfo index_append_info(IndexAppendMode::DEFAULT, delete_index);
 			art.VerifyAppend(chunk, index_append_info, *manager);
 		} else {
@@ -1133,7 +1144,7 @@ void DataTable::RevertAppend(DuckTransaction &transaction, idx_t start_row, idx_
 				row_data[i] = NumericCast<row_t>(current_row_base + i);
 			}
 			info->indexes.Scan([&](Index &index) {
-				// We cant add to unbound indexes anyways, so there is no need to revert them
+				// We cannot add to unbound indexes, so there is no need to revert them.
 				if (index.IsBound()) {
 					index.Cast<BoundIndex>().Delete(chunk, row_identifiers);
 				}
@@ -1162,35 +1173,39 @@ void DataTable::RevertAppend(DuckTransaction &transaction, idx_t start_row, idx_
 //===--------------------------------------------------------------------===//
 ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<TableIndexList> delete_indexes,
                                      DataChunk &chunk, row_t row_start, const IndexAppendMode index_append_mode) {
-	ErrorData error;
 	if (indexes.Empty()) {
-		return error;
+		return ErrorData();
 	}
 
-	// first generate the vector of row identifiers
+	// Generate the vector of row identifiers.
 	Vector row_ids(LogicalType::ROW_TYPE);
 	VectorOperations::GenerateSequence(row_ids, chunk.size(), row_start, 1);
 
-	vector<BoundIndex *> already_appended;
+	vector<reference<BoundIndex>> already_appended;
 	bool append_failed = false;
-	// now append the entries to the indices
-	indexes.Scan([&](Index &index_to_append) {
-		if (!index_to_append.IsBound()) {
-			throw InternalException("unbound index in DataTable::AppendToIndexes");
+
+	// Append the entries to the indexes.
+	ErrorData error;
+	indexes.Scan([&](Index &index) {
+		if (!index.IsBound()) {
+			auto &unbound_index = index.Cast<UnboundIndex>();
+			unbound_index.BufferChunk(chunk, row_ids);
+			return false;
 		}
-		auto &index = index_to_append.Cast<BoundIndex>();
+
+		auto &bound_index = index.Cast<BoundIndex>();
 
 		// Find the matching delete index.
 		optional_ptr<BoundIndex> delete_index;
-		if (index.IsUnique()) {
+		if (bound_index.IsUnique()) {
 			if (delete_indexes) {
-				delete_index = delete_indexes->Find(index.name);
+				delete_index = delete_indexes->Find(bound_index.name);
 			}
 		}
 
 		try {
 			IndexAppendInfo index_append_info(index_append_mode, delete_index);
-			error = index.Append(chunk, row_ids, index_append_info);
+			error = bound_index.Append(chunk, row_ids, index_append_info);
 		} catch (std::exception &ex) {
 			error = ErrorData(ex);
 		}
@@ -1199,15 +1214,15 @@ ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<Table
 			append_failed = true;
 			return true;
 		}
-		already_appended.push_back(&index);
+
+		already_appended.push_back(bound_index);
 		return false;
 	});
 
 	if (append_failed) {
-		// constraint violation!
-		// remove any appended entries from previous indexes (if any)
-		for (auto *index : already_appended) {
-			index->Delete(chunk, row_ids);
+		// Constraint violation: remove any appended entries from previous indexes (if any).
+		for (auto index : already_appended) {
+			index.get().Delete(chunk, row_ids);
 		}
 	}
 	return error;
@@ -1296,8 +1311,8 @@ void DataTable::VerifyDeleteConstraints(optional_ptr<LocalTableStorage> storage,
 
 unique_ptr<TableDeleteState> DataTable::InitializeDelete(TableCatalogEntry &table, ClientContext &context,
                                                          const vector<unique_ptr<BoundConstraint>> &bound_constraints) {
-	// initialize indexes (if any)
-	info->InitializeIndexes(context);
+	// Bind all indexes.
+	info->BindIndexes(context);
 
 	auto binder = Binder::CreateBinder(context);
 	vector<LogicalType> types;
@@ -1461,9 +1476,8 @@ void DataTable::VerifyUpdateConstraints(ConstraintState &state, ClientContext &c
 
 unique_ptr<TableUpdateState> DataTable::InitializeUpdate(TableCatalogEntry &table, ClientContext &context,
                                                          const vector<unique_ptr<BoundConstraint>> &bound_constraints) {
-	// check that there are no unknown indexes
-	info->InitializeIndexes(context);
-
+	// Bind all indexes.
+	info->BindIndexes(context);
 	auto result = make_uniq<TableUpdateState>();
 	result->constraint_state = InitializeConstraintState(table, bound_constraints);
 	return result;

@@ -6,6 +6,8 @@
 #include "duckdb/execution/ht_entry.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/main/settings.hpp"
+#include "duckdb/logging/log_manager.hpp"
 
 namespace duckdb {
 
@@ -19,7 +21,7 @@ JoinHashTable::SharedState::SharedState()
 }
 
 JoinHashTable::ProbeState::ProbeState()
-    : SharedState(), ht_offsets_v(LogicalType::UBIGINT), hashes_dense_v(LogicalType::HASH),
+    : SharedState(), ht_offsets_and_salts_v(LogicalType::UBIGINT), hashes_dense_v(LogicalType::HASH),
       non_empty_sel(STANDARD_VECTOR_SIZE) {
 }
 
@@ -109,8 +111,7 @@ JoinHashTable::JoinHashTable(ClientContext &context_p, const PhysicalOperator &o
 	memset(dead_end.get(), 0, layout_ptr->GetRowWidth());
 
 	if (join_type == JoinType::SINGLE) {
-		auto &config = ClientConfig::GetConfig(context);
-		single_join_error_on_multiple_rows = config.scalar_subquery_error_on_multiple_rows;
+		single_join_error_on_multiple_rows = DBConfig::GetSetting<ScalarSubqueryErrorOnMultipleRowsSetting>(context);
 	}
 
 	InitializePartitionMasks();
@@ -168,18 +169,21 @@ static void AddPointerToCompare(JoinHashTable::ProbeState &state, const ht_entry
                                 idx_t row_ht_offset, idx_t &keys_to_compare_count, const idx_t &row_index) {
 
 	const auto row_ptr_insert_to = FlatVector::GetData<data_ptr_t>(pointers_result_v);
-	const auto ht_offsets = FlatVector::GetData<idx_t>(state.ht_offsets_v);
+	const auto ht_offsets_and_salts = FlatVector::GetData<idx_t>(state.ht_offsets_and_salts_v);
 
 	state.keys_to_compare_sel.set_index(keys_to_compare_count, row_index);
 	row_ptr_insert_to[row_index] = entry.GetPointer();
-	ht_offsets[row_index] = row_ht_offset;
+
+	// If the key does not match, we have to continue linear probing, we need to store the ht_offset and the salt
+	// for this element based on the row_index. We can't get the offset from the hash as we already might have
+	// some linear probing steps when arriving here.
+	ht_offsets_and_salts[row_index] = row_ht_offset | entry.GetSaltWithNulls();
 	keys_to_compare_count += 1;
 }
 
 template <bool USE_SALTS, bool HAS_SEL>
 static idx_t ProbeForPointersInternal(JoinHashTable::ProbeState &state, JoinHashTable &ht, ht_entry_t *entries,
-                                      Vector &hashes_v, Vector &pointers_result_v, const SelectionVector *row_sel,
-                                      idx_t &count) {
+                                      Vector &pointers_result_v, const SelectionVector *row_sel, idx_t &count) {
 
 	auto hashes_dense = FlatVector::GetData<hash_t>(state.hashes_dense_v);
 
@@ -187,11 +191,11 @@ static idx_t ProbeForPointersInternal(JoinHashTable::ProbeState &state, JoinHash
 
 	for (idx_t i = 0; i < count; i++) {
 
-		auto row_hash = hashes_dense[i]; // hashes has been flattened before -> always access dense
+		auto row_hash = hashes_dense[i]; // hashes have been flattened before -> always access dense
 		auto row_ht_offset = row_hash & ht.bitmask;
 
 		if (USE_SALTS) {
-			// increment the ht_offset of the entry as long as next entry is occupied and salt does not match
+			// increment the ht_offset of the entry as long as the next entry is occupied and salt does not match
 			while (true) {
 				const ht_entry_t entry = entries[row_ht_offset];
 				const bool occupied = entry.IsOccupied();
@@ -211,7 +215,7 @@ static idx_t ProbeForPointersInternal(JoinHashTable::ProbeState &state, JoinHash
 					break;
 				}
 
-				// full and salt does not match -> continue probing
+				// full and salt do not match -> continue probing
 				IncrementAndWrap(row_ht_offset, ht.bitmask);
 			}
 		} else {
@@ -235,14 +239,12 @@ static idx_t ProbeForPointersInternal(JoinHashTable::ProbeState &state, JoinHash
 ///	   -> match, add to compare sel and increase found count
 template <bool USE_SALTS>
 static idx_t ProbeForPointers(JoinHashTable::ProbeState &state, JoinHashTable &ht, ht_entry_t *entries,
-                              Vector &hashes_v, Vector &pointers_result_v, const SelectionVector *row_sel, idx_t count,
+                              Vector &pointers_result_v, const SelectionVector *row_sel, idx_t count,
                               const bool has_row_sel) {
 	if (has_row_sel) {
-		return ProbeForPointersInternal<USE_SALTS, true>(state, ht, entries, hashes_v, pointers_result_v, row_sel,
-		                                                 count);
+		return ProbeForPointersInternal<USE_SALTS, true>(state, ht, entries, pointers_result_v, row_sel, count);
 	} else {
-		return ProbeForPointersInternal<USE_SALTS, false>(state, ht, entries, hashes_v, pointers_result_v, row_sel,
-		                                                  count);
+		return ProbeForPointersInternal<USE_SALTS, false>(state, ht, entries, pointers_result_v, row_sel, count);
 	}
 }
 
@@ -254,14 +256,10 @@ static void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &key_sta
                                    ht_entry_t *entries, Vector &pointers_result_v, SelectionVector &match_sel,
                                    bool has_row_sel) {
 
-	// in case of a hash collision, we need this information to correctly retrieve the salt of this hash
-	bool uses_unified = false;
-	UnifiedVectorFormat hashes_unified_v;
-
 	// densify hashes: If there is no sel, flatten the hashes, else densify via UnifiedVectorFormat
 	if (has_row_sel) {
+		UnifiedVectorFormat hashes_unified_v;
 		hashes_v.ToUnifiedFormat(count, hashes_unified_v);
-		uses_unified = true;
 
 		auto hashes_unified = UnifiedVectorFormat::GetData<hash_t>(hashes_unified_v);
 		auto hashes_dense = FlatVector::GetData<idx_t>(state.hashes_dense_v);
@@ -282,8 +280,8 @@ static void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &key_sta
 	idx_t elements_to_probe_count = count;
 
 	do {
-		const idx_t keys_to_compare_count = ProbeForPointers<USE_SALTS>(state, ht, entries, hashes_v, pointers_result_v,
-		                                                                row_sel, elements_to_probe_count, has_row_sel);
+		const idx_t keys_to_compare_count = ProbeForPointers<USE_SALTS>(state, ht, entries, pointers_result_v, row_sel,
+		                                                                elements_to_probe_count, has_row_sel);
 
 		// if there are no keys to compare, we are done
 		if (keys_to_compare_count == 0) {
@@ -305,37 +303,21 @@ static void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &key_sta
 			match_count++;
 		}
 
-		// Linear probing for collisions: Move to the next entry in the HT
-		auto hashes_unified = uses_unified ? UnifiedVectorFormat::GetData<hash_t>(hashes_unified_v) : nullptr;
-		auto hashes_dense = FlatVector::GetData<hash_t>(state.hashes_dense_v);
-		auto ht_offsets = FlatVector::GetData<idx_t>(state.ht_offsets_v);
+		const auto ht_offsets_and_salts = FlatVector::GetData<idx_t>(state.ht_offsets_and_salts_v);
+		const auto hashes_dense = FlatVector::GetData<hash_t>(state.hashes_dense_v);
 
+		// For all the non-matches, increment the offset to continue probing but keep the salt intact
 		for (idx_t i = 0; i < keys_no_match_count; i++) {
 			const auto row_index = state.keys_no_match_sel.get_index(i);
-			// The ProbeForPointers function calculates the ht_offset from the hash; therefore, we have to write the
-			// new offset into the hashes_v; otherwise the next iteration will start at the old position. This might
-			// seem as an overhead but assures that the first call of ProbeForPointers is optimized as conceding
-			// calls are unlikely (Max 1-(65535/65536)^VectorSize = 3.1%)
-			auto ht_offset = ht_offsets[row_index];
-			IncrementAndWrap(ht_offset, ht.bitmask);
-
-			// Get original hash from unified vector format to extract the salt if hashes_dense was populated that way
-			hash_t hash;
-			if (hashes_unified) {
-				const auto uvf_index = hashes_unified_v.sel->get_index(row_index);
-				hash = hashes_unified[uvf_index];
-			} else {
-				hash = hashes_dense[row_index];
-			}
-
-			const auto offset_and_salt = ht_offset | (hash & ht_entry_t::SALT_MASK);
-
-			hashes_dense[i] = offset_and_salt; // populate dense again
+			auto ht_offset_and_salt = ht_offsets_and_salts[row_index];
+			IncrementAndWrap(ht_offset_and_salt, ht.bitmask | ht_entry_t::SALT_MASK);
+			hashes_dense[i] = ht_offset_and_salt; // populate dense again
 		}
 
 		// in the next interation, we have a selection vector with the keys that do not match
 		row_sel = &state.keys_no_match_sel;
 		has_row_sel = true;
+
 		elements_to_probe_count = keys_no_match_count;
 
 	} while (DUCKDB_UNLIKELY(keys_no_match_count > 0));
@@ -745,6 +727,11 @@ void JoinHashTable::InsertHashes(Vector &hashes_v, const idx_t count, TupleDataC
 void JoinHashTable::AllocatePointerTable() {
 	capacity = PointerTableCapacity(Count());
 	D_ASSERT(IsPowerOfTwo(capacity));
+
+	constexpr uint64_t MAX_HASHTABLE_CAPACITY = (1ULL << 48) - 1;
+	if (capacity >= MAX_HASHTABLE_CAPACITY) {
+		throw InternalException("Hashtable capacity exceeds 48-bit limit (2^48 - 1)");
+	}
 
 	if (hash_map.get()) {
 		// There is already a hash map

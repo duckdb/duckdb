@@ -22,7 +22,7 @@ static unique_ptr<BoundCastData> BindToUnionCast(BindCastInput &input, const Log
 	for (idx_t member_idx = 0; member_idx < UnionType::GetMemberCount(target); member_idx++) {
 		auto member_type = UnionType::GetMemberType(target, member_idx);
 		auto member_name = UnionType::GetMemberName(target, member_idx);
-		auto member_cast_cost = input.function_set.ImplicitCastCost(source, member_type);
+		auto member_cast_cost = input.function_set.ImplicitCastCost(nullptr, source, member_type);
 		if (member_cast_cost != -1) {
 			auto member_cast_info = input.GetCastFunction(source, member_type);
 			candidates.emplace_back(member_idx, member_name, member_type, member_cast_cost,

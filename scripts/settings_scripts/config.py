@@ -29,7 +29,6 @@ class Setting:
         self,
         name: str,
         description: str,
-        return_type: str,
         sql_type: str,
         scope: str,
         internal_setting: str,
@@ -37,23 +36,20 @@ class Setting:
         custom_implementation,
         struct_name: str,
         aliases: List[str],
+        default_scope: str,
+        default_value: str,
     ):
         self.name = self._get_valid_name(name)
         self.description = description
         self.sql_type = self._get_sql_type(sql_type)
-        if return_type == '':
-            self.return_type = self._get_setting_type(sql_type)
-            self.is_enum = False
-        else:
-            if sql_type != 'VARCHAR':
-                raise ValueError(
-                    f'Setting {self.name} - could not set return type to {return_type} - enum types require the setting type to be VARCHAR'
-                )
-            self.return_type = return_type
-            self.is_enum = True
+        self.return_type = self._get_setting_type(sql_type)
+        self.is_enum = sql_type.startswith('ENUM')
         self.internal_setting = internal_setting
-        self.scope = self._get_valid_scope(scope)
+        self.scope = self._get_valid_scope(scope) if scope is not None else None
         self.on_set, self.on_reset = self._get_on_callbacks(on_callbacks)
+        self.is_generic_setting = self.scope is None
+        if self.is_enum and self.is_generic_setting:
+            self.on_set = True
         custom_callbacks = ['set', 'reset', 'get']
         if type(custom_implementation) is bool:
             self.all_custom = custom_implementation
@@ -68,6 +64,8 @@ class Setting:
             self.custom_implementation = custom_implementation
         self.aliases = self._get_aliases(aliases)
         self.struct_name = self._get_struct_name() if len(struct_name) == 0 else struct_name
+        self.default_scope = self._get_valid_default_scope(default_scope) if default_scope is not None else None
+        self.default_value = default_value
 
     # define all comparisons to be based on the setting's name attribute
     def __eq__(self, other) -> bool:
@@ -98,8 +96,18 @@ class Setting:
             return scope
         return INVALID_SCOPE_VALUE
 
+    def _get_valid_default_scope(self, scope: str) -> str:
+        scope = scope.upper()
+        if scope == 'GLOBAL':
+            return scope
+        elif scope == 'LOCAL':
+            return 'SESSION'
+        raise Exception(f"Invalid default scope value {scope}")
+
     # validate and return the correct type format
     def _get_sql_type(self, sql_type) -> str:
+        if sql_type.startswith('ENUM'):
+            return 'VARCHAR'
         if sql_type.endswith('[]'):
             # recurse into child-element
             sub_type = self._get_sql_type(sql_type[:-2])
@@ -110,6 +118,8 @@ class Setting:
 
     # validate and return the cpp input type
     def _get_setting_type(self, type) -> str:
+        if type.startswith('ENUM'):
+            return type[len('ENUM<') : -1]
         if type.endswith('[]'):
             subtype = self._get_setting_type(type[:-2])
             return "vector<" + subtype + ">"
@@ -148,14 +158,14 @@ SettingsList: List[Setting] = []
 def find_start_end_indexes(source_code, start_marker, end_marker, file_path):
     start_matches = list(re.finditer(start_marker, source_code))
     if len(start_matches) == 0:
-        raise ValueError(f"Couldn't find start marker in {file_path}")
+        raise ValueError(f"Couldn't find start marker {start_marker} in {file_path}")
     elif len(start_matches) > 1:
         raise ValueError(f"Start marker found more than once in {file_path}")
     start_index = start_matches[0].end()
 
     end_matches = list(re.finditer(end_marker, source_code[start_index:]))
     if len(end_matches) == 0:
-        raise ValueError(f"Couldn't find end marker in {file_path}")
+        raise ValueError(f"Couldn't find end marker {end_marker} in {file_path}")
     elif len(end_matches) > 1:
         raise ValueError(f"End marker found more than once in {file_path}")
     end_index = start_index + end_matches[0].start()

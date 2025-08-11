@@ -853,23 +853,18 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			command->values = parser.ExtractExpectedResult();
 
 			// figure out the sort style/connection style
-			command->sort_style = SortStyle::NO_SORT;
+			string sort_style = "none";
 			if (token.parameters.size() > 1) {
-				auto &sort_style = token.parameters[1];
-				if (sort_style == "nosort") {
-					/* Do no sorting */
-					command->sort_style = SortStyle::NO_SORT;
-				} else if (sort_style == "rowsort" || sort_style == "sort") {
-					/* Row-oriented sorting */
-					command->sort_style = SortStyle::ROW_SORT;
-				} else if (sort_style == "valuesort") {
-					/* Sort all values independently */
-					command->sort_style = SortStyle::VALUE_SORT;
-				} else {
+				if (!TestConfiguration::TryParseSortStyle(token.parameters[1], command->sort_style)) {
 					// if this is not a known sort style, we use this as the connection name
 					// this is a bit dirty, but well
-					command->connection_name = sort_style;
+					command->connection_name = token.parameters[1];
+				} else {
+					sort_style = token.parameters[1];
 				}
+			}
+			if (!TestConfiguration::TryParseSortStyle(sort_style, command->sort_style)) {
+				throw std::runtime_error("eek invalid sort style set, this should not happen");
 			}
 
 			// check the label of the query

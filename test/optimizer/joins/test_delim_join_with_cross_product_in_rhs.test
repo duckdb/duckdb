@@ -1,0 +1,15 @@
+# name: test/optimizer/joins/test_delim_join_with_cross_product_in_rhs.test
+# description: Verify that a delim join with a correlated column in the RHS of a cross product (on the RHS of the delim GET) is properly bound
+# group: [joins]
+
+statement ok
+CREATE TABLE t1(c0 DOUBLE, c1 INT8);
+
+statement ok
+CREATE TABLE t3(c0 VARCHAR);
+
+statement ok
+INSERT INTO t1(c1) VALUES (1);
+
+statement ok
+SELECT * FROM t3, t1 INNER JOIN ( SELECT t3.c0 ) as subQuery1 ON ( t1.c0 > (t3.c0::DOUBLE) );

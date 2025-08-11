@@ -286,71 +286,6 @@ Value AllowedPathsSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
-// Arrow Large Buffer Size
-//===----------------------------------------------------------------------===//
-void ArrowLargeBufferSizeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	auto export_large_buffers_arrow = input.GetValue<bool>();
-	config.options.arrow_offset_size = export_large_buffers_arrow ? ArrowOffsetSize::LARGE : ArrowOffsetSize::REGULAR;
-}
-
-Value ArrowLargeBufferSizeSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	bool export_large_buffers_arrow = config.options.arrow_offset_size == ArrowOffsetSize::LARGE;
-	return Value::BOOLEAN(export_large_buffers_arrow);
-}
-
-//===----------------------------------------------------------------------===//
-// Arrow Output Format Version
-//===----------------------------------------------------------------------===//
-void ArrowOutputVersionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	auto arrow_version = input.ToString();
-	if (arrow_version == "1.0") {
-		config.options.arrow_output_version = V1_0;
-	} else if (arrow_version == "1.1") {
-		config.options.arrow_output_version = V1_1;
-	} else if (arrow_version == "1.2") {
-		config.options.arrow_output_version = V1_2;
-	} else if (arrow_version == "1.3") {
-		config.options.arrow_output_version = V1_3;
-	} else if (arrow_version == "1.4") {
-		config.options.arrow_output_version = V1_4;
-	} else if (arrow_version == "1.5") {
-		config.options.arrow_output_version = V1_5;
-	} else {
-		throw NotImplementedException("Unrecognized parameter for option arrow_output_version, expected either "
-		                              "\'1.0\', \'1.1\', \'1.2\', \'1.3\', \'1.4\', \'1.5\'");
-	}
-}
-
-Value ArrowOutputVersionSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	string arrow_version;
-	switch (config.options.arrow_output_version) {
-	case V1_0:
-		arrow_version = "1.0";
-		break;
-	case V1_1:
-		arrow_version = "1.1";
-		break;
-	case V1_2:
-		arrow_version = "1.2";
-		break;
-	case V1_3:
-		arrow_version = "1.3";
-		break;
-	case V1_4:
-		arrow_version = "1.4";
-		break;
-	case V1_5:
-		arrow_version = "1.5";
-		break;
-	default:
-		throw InternalException("Unrecognized arrow output version");
-	}
-	return Value(arrow_version);
-}
-
-//===----------------------------------------------------------------------===//
 // Checkpoint Threshold
 //===----------------------------------------------------------------------===//
 void CheckpointThresholdSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -495,48 +430,27 @@ Value DefaultBlockSizeSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Default Collation
 //===----------------------------------------------------------------------===//
-void DefaultCollationSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	auto parameter = StringUtil::Lower(input.ToString());
-	config.options.collation = parameter;
-}
-
-void DefaultCollationSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.collation = DBConfig().options.collation;
-}
-
-void DefaultCollationSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto parameter = input.ToString();
-	// bind the collation to verify that it exists
-	ExpressionBinder::TestCollation(context, parameter);
-	auto &config = DBConfig::GetConfig(context);
-	config.options.collation = parameter;
-}
-
-void DefaultCollationSetting::ResetLocal(ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	config.options.collation = DBConfig().options.collation;
-}
-
-Value DefaultCollationSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value(config.options.collation);
+void DefaultCollationSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (info.context) {
+		ExpressionBinder::TestCollation(*info.context, input.ToString());
+	}
 }
 
 //===----------------------------------------------------------------------===//
 // Default Null Order
 //===----------------------------------------------------------------------===//
-void DefaultNullOrderSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void DefaultNullOrderSetting::OnSet(SettingCallbackInfo &, Value &input) {
 	auto parameter = StringUtil::Lower(input.ToString());
 
 	if (parameter == "nulls_first" || parameter == "nulls first" || parameter == "null first" || parameter == "first") {
-		config.options.default_null_order = DefaultOrderByNullType::NULLS_FIRST;
+		input = Value("NULLS_FIRST");
 	} else if (parameter == "nulls_last" || parameter == "nulls last" || parameter == "null last" ||
 	           parameter == "last") {
-		config.options.default_null_order = DefaultOrderByNullType::NULLS_LAST;
+		input = Value("NULLS_LAST");
 	} else if (parameter == "nulls_first_on_asc_last_on_desc" || parameter == "sqlite" || parameter == "mysql") {
-		config.options.default_null_order = DefaultOrderByNullType::NULLS_FIRST_ON_ASC_LAST_ON_DESC;
+		input = Value("NULLS_FIRST_ON_ASC_LAST_ON_DESC");
 	} else if (parameter == "nulls_last_on_asc_first_on_desc" || parameter == "postgres") {
-		config.options.default_null_order = DefaultOrderByNullType::NULLS_LAST_ON_ASC_FIRST_ON_DESC;
+		input = Value("NULLS_LAST_ON_ASC_FIRST_ON_DESC");
 	} else {
 		throw ParserException("Unrecognized parameter for option NULL_ORDER \"%s\", expected either NULLS FIRST, NULLS "
 		                      "LAST, SQLite, MySQL or Postgres",
@@ -547,27 +461,15 @@ void DefaultNullOrderSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, 
 //===----------------------------------------------------------------------===//
 // Default Order
 //===----------------------------------------------------------------------===//
-void DefaultOrderSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void DefaultOrderSetting::OnSet(SettingCallbackInfo &, Value &input) {
 	auto parameter = StringUtil::Lower(input.ToString());
 	if (parameter == "ascending" || parameter == "asc") {
-		config.options.default_order_type = OrderType::ASCENDING;
+		input = Value("ASC");
 	} else if (parameter == "descending" || parameter == "desc") {
-		config.options.default_order_type = OrderType::DESCENDING;
+		input = Value("DESC");
 	} else {
 		throw InvalidInputException("Unrecognized parameter for option DEFAULT_ORDER \"%s\". Expected ASC or DESC.",
 		                            parameter);
-	}
-}
-
-Value DefaultOrderSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	switch (config.options.default_order_type) {
-	case OrderType::ASCENDING:
-		return "asc";
-	case OrderType::DESCENDING:
-		return "desc";
-	default:
-		throw InternalException("Unknown order type setting");
 	}
 }
 
@@ -880,19 +782,6 @@ void DisabledLogTypes::ResetGlobal(DatabaseInstance *db_p, DBConfig &config) {
 }
 
 //===----------------------------------------------------------------------===//
-// Enable Object Cache
-//===----------------------------------------------------------------------===//
-void EnableObjectCacheSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-}
-
-void EnableObjectCacheSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-}
-
-Value EnableObjectCacheSetting::GetSetting(const ClientContext &context) {
-	return Value();
-}
-
-//===----------------------------------------------------------------------===//
 // Enable Profiling
 //===----------------------------------------------------------------------===//
 void EnableProfilingSetting::SetLocal(ClientContext &context, const Value &input) {
@@ -1157,12 +1046,11 @@ Value HTTPLoggingOutputSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Index Scan Percentage
 //===----------------------------------------------------------------------===//
-bool IndexScanPercentageSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void IndexScanPercentageSetting::OnSet(SettingCallbackInfo &, Value &input) {
 	auto index_scan_percentage = input.GetValue<double>();
 	if (index_scan_percentage < 0 || index_scan_percentage > 1.0) {
 		throw InvalidInputException("the index scan percentage must be within [0, 1]");
 	}
-	return true;
 }
 
 //===----------------------------------------------------------------------===//

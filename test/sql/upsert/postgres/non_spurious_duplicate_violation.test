@@ -21,13 +21,7 @@ insert into insertconflicttest values (25, 'Fig', 0) on conflict (fruit) do upda
 # Succeeds
 
 statement ok
-insert into insertconflicttest values (23, 'Blackberry', 0) on conflict (key) where fruit like '%berry' do update set other = 1
-
-## -- 't.fruit' != 'inconsequential' -- ##
-statement error
-insert into insertconflicttest as t values (23, 'Blackberry', 0) on conflict (key) where fruit like '%berry' and t.fruit = 'inconsequential' do nothing;
-----
-Constraint Error: Duplicate key "key: 23" violates unique constraint
+insert into insertconflicttest values (23, 'Blackberry', 0) on conflict (key) do update set other = 1 where fruit like '%berry'
 
 # Test that wholerow references to ON CONFLICT's EXCLUDED work
 

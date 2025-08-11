@@ -1,0 +1,61 @@
+# name: test/sql/index/art/storage/test_art_wal_replay_with_buffer_concurrent.test
+# description: Test replaying the WAL and buffering outstanding appends in a concurrent loop.
+# group: [storage]
+
+load __TEST_DIR__/test_art_wal_buffer_concurrent.db
+
+statement ok
+SET wal_autocheckpoint = '1TB';
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown;
+
+statement ok
+CREATE TABLE tbl (u_2 UNION("string" VARCHAR, "bool" BOOLEAN))
+
+statement ok
+CREATE UNIQUE INDEX idx_1 ON tbl ((u_2.string));
+
+statement ok
+CREATE UNIQUE INDEX idx_2 ON tbl ((u_2.string));
+
+statement ok
+CREATE UNIQUE INDEX idx_3 ON tbl ((u_2.string));
+
+statement ok
+CREATE UNIQUE INDEX idx_4 ON tbl ((u_2.string));
+
+statement ok
+CREATE UNIQUE INDEX idx_5 ON tbl ((u_2.string));
+
+statement ok
+INSERT INTO tbl VALUES ('helloo');
+
+restart
+
+concurrentloop threadid 0 10
+
+statement ok
+INSERT INTO tbl VALUES ('hellooo_${threadid}');
+
+endloop
+
+statement ok
+CHECKPOINT;
+
+restart
+
+query I
+SELECT * FROM tbl ORDER BY ALL;
+----
+helloo
+hellooo_0
+hellooo_1
+hellooo_2
+hellooo_3
+hellooo_4
+hellooo_5
+hellooo_6
+hellooo_7
+hellooo_8
+hellooo_9

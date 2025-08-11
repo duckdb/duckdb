@@ -12,7 +12,6 @@
 #include "duckdb/main/capi/extension_api.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/extension.hpp"
-#include "duckdb/main/settings.hpp"
 #include "duckdb/main/valid_checker.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/main/extension_manager.hpp"

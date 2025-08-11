@@ -148,12 +148,20 @@ ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &quer
 		auto original_named_param_map = statement_copy_for_explain->named_param_map;
 		auto explain_stmt = make_uniq<ExplainStatement>(std::move(statement_copy_for_explain));
 		explain_stmt->named_param_map = original_named_param_map;
-		try {
-			RunStatementInternal(lock, explain_q, std::move(explain_stmt), false, parameters, false);
-		} catch (std::exception &ex) { // LCOV_EXCL_START
-			ErrorData error(ex);
-			interrupted = false;
-			return ErrorData("EXPLAIN failed but query did not (" + error.RawMessage() + ")");
+
+		auto explain_statement_verifier =
+		    StatementVerifier::Create(VerificationType::EXPLAIN, *explain_stmt, parameters);
+		const auto explain_failed = explain_statement_verifier->Run(
+		    *this, explain_q,
+		    [&](const string &q, unique_ptr<SQLStatement> s,
+		        optional_ptr<case_insensitive_map_t<BoundParameterData>> params) {
+			    return RunStatementInternal(lock, q, std::move(s), false, params, false);
+		    });
+
+		if (explain_failed) { // LCOV_EXCL_START
+			const auto &explain_error = explain_statement_verifier->materialized_result->error;
+			return ErrorData(explain_error.Type(), StringUtil::Format("Query succeeded but EXPLAIN failed with: %s",
+			                                                          explain_error.RawMessage()));
 		} // LCOV_EXCL_STOP
 
 #ifdef DUCKDB_VERIFY_BOX_RENDERER

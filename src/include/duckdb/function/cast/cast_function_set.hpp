@@ -52,7 +52,12 @@ public:
 	                                         GetCastFunctionInput &input);
 	//! Returns the implicit cast cost of casting from source -> target
 	//! -1 means an implicit cast is not possible
-	DUCKDB_API int64_t ImplicitCastCost(const LogicalType &source, const LogicalType &target);
+	DUCKDB_API int64_t ImplicitCastCost(optional_ptr<ClientContext> context, const LogicalType &source,
+	                                    const LogicalType &target);
+	DUCKDB_API static int64_t ImplicitCastCost(ClientContext &context, const LogicalType &source,
+	                                           const LogicalType &target);
+	DUCKDB_API static int64_t ImplicitCastCost(DatabaseInstance &db, const LogicalType &source,
+	                                           const LogicalType &target);
 	//! Register a new cast function from source to target
 	DUCKDB_API void RegisterCastFunction(const LogicalType &source, const LogicalType &target, BoundCastInfo function,
 	                                     int64_t implicit_cast_cost = -1);

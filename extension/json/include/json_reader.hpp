@@ -46,7 +46,7 @@ public:
 
 struct JSONFileHandle {
 public:
-	JSONFileHandle(unique_ptr<FileHandle> file_handle, Allocator &allocator);
+	JSONFileHandle(QueryContext context, unique_ptr<FileHandle> file_handle, Allocator &allocator);
 
 	bool IsOpen() const;
 	void Close();
@@ -74,6 +74,8 @@ private:
 	idx_t ReadFromCache(char *&pointer, idx_t &size, atomic<idx_t> &position);
 
 private:
+	QueryContext context;
+
 	//! The JSON file handle
 	unique_ptr<FileHandle> file_handle;
 	Allocator &allocator;

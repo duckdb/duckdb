@@ -729,7 +729,7 @@ static inline char* EmitCopy(char* op, size_t offset, size_t len) {
 bool GetUncompressedLength(const char* start, size_t n, size_t* result) {
   uint32_t v = 0;
   const char* limit = start + n;
-  if (Varint::Parse32WithLimit(start, limit, &v) != NULL) {
+  if (Bignum::Parse32WithLimit(start, limit, &v) != NULL) {
     *result = v;
     return true;
   } else {
@@ -1806,8 +1806,8 @@ size_t Compress(Source* reader, Sink* writer, CompressionOptions options) {
   size_t written = 0;
   size_t N = reader->Available();
   const size_t uncompressed_size = N;
-  char ulength[Varint::kMax32];
-  char* p = Varint::Encode32(ulength, N);
+  char ulength[Bignum::kMax32];
+  char* p = Bignum::Encode32(ulength, N);
   writer->Append(ulength, p - ulength);
   written += (p - ulength);
 
@@ -3058,7 +3058,7 @@ static inline char* EmitCopy(char* op, size_t offset, size_t len) {
 bool GetUncompressedLength(const char* start, size_t n, size_t* result) {
   uint32 v = 0;
   const char* limit = start + n;
-  if (Varint::Parse32WithLimit(start, limit, &v) != NULL) {
+  if (Bignum::Parse32WithLimit(start, limit, &v) != NULL) {
     *result = v;
     return true;
   } else {
@@ -3626,8 +3626,8 @@ size_t Compress(Source* reader, Sink* writer) {
   size_t written = 0;
   size_t N = reader->Available();
   const size_t uncompressed_size = N;
-  char ulength[Varint::kMax32];
-  char* p = Varint::Encode32(ulength, N);
+  char ulength[Bignum::kMax32];
+  char* p = Bignum::Encode32(ulength, N);
   writer->Append(ulength, p-ulength);
   written += (p - ulength);
 

@@ -14,11 +14,12 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
 LateMaterialization::LateMaterialization(Optimizer &optimizer) : optimizer(optimizer) {
-	max_row_count = ClientConfig::GetConfig(optimizer.context).late_materialization_max_rows;
+	max_row_count = DBConfig::GetSetting<LateMaterializationMaxRowsSetting>(optimizer.context);
 }
 
 vector<idx_t> LateMaterialization::GetOrInsertRowIds(LogicalGet &get) {
@@ -411,8 +412,7 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 }
 
 bool LateMaterialization::OptimizeLargeLimit(LogicalLimit &limit, idx_t limit_val, bool has_offset) {
-	auto &config = DBConfig::GetConfig(optimizer.context);
-	if (!has_offset && !config.options.preserve_insertion_order) {
+	if (!has_offset && !DBConfig::GetSetting<PreserveInsertionOrderSetting>(optimizer.context)) {
 		// we avoid optimizing large limits if preserve insertion order is false
 		// since the limit is executed in parallel anyway
 		return false;

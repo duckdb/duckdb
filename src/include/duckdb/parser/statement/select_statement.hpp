@@ -8,12 +8,12 @@
 
 #pragma once
 
+#include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/parser/tableref.hpp"
 
 namespace duckdb {
 
-class QueryNode;
 class Serializer;
 class Deserializer;
 

@@ -18,7 +18,7 @@ class ColumnAliasBinder;
 class ProjectionBinder : public ExpressionBinder {
 public:
 	ProjectionBinder(Binder &binder, ClientContext &context, idx_t proj_index,
-	                 vector<unique_ptr<Expression>> &proj_expressions);
+	                 vector<unique_ptr<Expression>> &proj_expressions, string clause);
 
 protected:
 	BindResult BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth,
@@ -31,6 +31,7 @@ protected:
 private:
 	idx_t proj_index;
 	vector<unique_ptr<Expression>> &proj_expressions;
+	string clause;
 };
 
 } // namespace duckdb

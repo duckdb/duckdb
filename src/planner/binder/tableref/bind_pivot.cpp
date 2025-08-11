@@ -21,6 +21,7 @@
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/main/query_result.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -542,11 +543,10 @@ unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<Parsed
 			pivots.insert(val);
 		}
 	}
-	auto &client_config = ClientConfig::GetConfig(context);
-	auto pivot_limit = client_config.pivot_limit;
+	auto pivot_limit = DBConfig::GetSetting<PivotLimitSetting>(context);
 	if (total_pivots >= pivot_limit) {
 		throw BinderException(ref, "Pivot column limit of %llu exceeded. Use SET pivot_limit=X to increase the limit.",
-		                      client_config.pivot_limit);
+		                      pivot_limit);
 	}
 
 	// construct the required pivot values recursively
@@ -565,7 +565,8 @@ unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<Parsed
 	// -> filtered aggregates are faster when there are FEW pivot values
 	// -> LIST is faster when there are MANY pivot values
 	// we switch dynamically based on the number of pivots to compute
-	if (pivot_values.size() <= client_config.pivot_filter_threshold) {
+	auto pivot_filter_threshold = DBConfig::GetSetting<PivotFilterThresholdSetting>(context);
+	if (pivot_values.size() <= pivot_filter_threshold) {
 		// use a set of filtered aggregates
 		pivot_node =
 		    PivotFilteredAggregate(context, ref, std::move(all_columns), handled_columns, std::move(pivot_values));

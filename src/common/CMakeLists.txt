@@ -66,6 +66,7 @@ add_library_unity(
   render_tree.cpp
   tree_renderer.cpp
   types.cpp
+  bignum.cpp
   virtual_file_system.cpp
   windows_util.cpp)
 set(ALL_OBJECT_FILES

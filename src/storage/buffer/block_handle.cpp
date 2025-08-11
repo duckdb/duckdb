@@ -1,6 +1,7 @@
 #include "duckdb/storage/buffer/block_handle.hpp"
 
 #include "duckdb/common/file_buffer.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/block.hpp"
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
@@ -150,7 +151,8 @@ BufferHandle BlockHandle::Load(unique_ptr<FileBuffer> reusable_buffer) {
 		buffer = std::move(block);
 	} else {
 		if (MustWriteToTemporaryFile()) {
-			buffer = block_manager.buffer_manager.ReadTemporaryBuffer(tag, *this, std::move(reusable_buffer));
+			buffer = block_manager.buffer_manager.ReadTemporaryBuffer(QueryContext(), tag, *this,
+			                                                          std::move(reusable_buffer));
 		} else {
 			return BufferHandle(); // Destroyed upon unpin/evict, so there is no temp buffer to read
 		}

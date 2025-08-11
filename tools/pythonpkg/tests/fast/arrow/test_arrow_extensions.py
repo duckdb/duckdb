@@ -204,15 +204,15 @@ class TestCanonicalExtensionTypes(object):
             (datetime.time(2, 30, tzinfo=datetime.timezone(datetime.timedelta(seconds=14400))),)
         ]
 
-    def test_varint(self):
+    def test_bignum(self):
         con = duckdb.connect()
-        res_varint = con.execute(
-            "SELECT '179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368'::varint a FROM range(1) tbl(i)"
+        res_bignum = con.execute(
+            "SELECT '179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368'::bignum a FROM range(1) tbl(i)"
         ).arrow()
-        assert res_varint.column("a").type.type_name == 'varint'
-        assert res_varint.column("a").type.vendor_name == "DuckDB"
+        assert res_bignum.column("a").type.type_name == 'bignum'
+        assert res_bignum.column("a").type.vendor_name == "DuckDB"
 
-        assert con.execute("FROM res_varint").fetchall() == [
+        assert con.execute("FROM res_bignum").fetchall() == [
             (
                 '179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368',
             )
@@ -322,21 +322,21 @@ class TestCanonicalExtensionTypes(object):
         assert pa.types.is_binary(tbl.schema[0].type)
 
         field = pa.field(
-            "varint_value",
+            "bignum_value",
             pa.binary(),
             metadata={
                 "ARROW:extension:name": "arrow.opaque",
-                "ARROW:extension:metadata": '{"vendor_name":"DuckDB","type_name":"varint","key": {"complex": "value"}}',
+                "ARROW:extension:metadata": '{"vendor_name":"DuckDB","type_name":"bignum","key": {"complex": "value"}}',
             },
         )
         schema = pa.schema([field])
-        varint_table = pa.table(
+        bignum_table = pa.table(
             [pa.array([], pa.binary())],
             schema=schema,
         )
-        assert duckdb_cursor.sql("""DESCRIBE FROM varint_table;""").fetchone() == (
-            'varint_value',
-            'VARINT',
+        assert duckdb_cursor.sql("""DESCRIBE FROM bignum_table;""").fetchone() == (
+            'bignum_value',
+            'BIGNUM',
             'YES',
             None,
             None,

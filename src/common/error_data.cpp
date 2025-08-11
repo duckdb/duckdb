@@ -91,6 +91,17 @@ const ExceptionType &ErrorData::Type() const {
 	return this->type;
 }
 
+void ErrorData::Merge(const ErrorData &other) {
+	if (!other.HasError()) {
+		return;
+	}
+	if (!HasError()) {
+		*this = other;
+		return;
+	}
+	final_message += "\n\n" + other.Message();
+}
+
 bool ErrorData::operator==(const ErrorData &other) const {
 	if (initialized != other.initialized) {
 		return false;

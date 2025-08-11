@@ -4,7 +4,7 @@
  *
  *****************************************************************************/
 AttachStmt:
-				ATTACH opt_database Sconst opt_database_alias copy_options
+				ATTACH opt_database Sconst opt_database_alias opt_attach_options
 				{
 					PGAttachStmt *n = makeNode(PGAttachStmt);
 					n->path = $3;
@@ -13,7 +13,7 @@ AttachStmt:
 					n->onconflict = PG_ERROR_ON_CONFLICT;
 					$$ = (PGNode *)n;
 				}
-				| ATTACH IF_P NOT EXISTS opt_database Sconst opt_database_alias copy_options
+				| ATTACH IF_P NOT EXISTS opt_database Sconst opt_database_alias opt_attach_options
 				{
 					PGAttachStmt *n = makeNode(PGAttachStmt);
 					n->path = $6;
@@ -22,7 +22,7 @@ AttachStmt:
 					n->onconflict = PG_IGNORE_ON_CONFLICT;
 					$$ = (PGNode *)n;
 				}
-				| ATTACH OR REPLACE opt_database Sconst opt_database_alias copy_options
+				| ATTACH OR REPLACE opt_database Sconst opt_database_alias opt_attach_options
 				{
 					PGAttachStmt *n = makeNode(PGAttachStmt);
 					n->path = $5;
@@ -72,3 +72,37 @@ ident_list:
 			ident_name								{ $$ = list_make1($1); }
 			| ident_list ',' ident_name				{ $$ = lappend($1, $3); }
 		;
+
+generic_opt_arg:
+			a_expr			{ $$ = (PGNode *) $1; }
+			| /* EMPTY */	{ $$ = NULL; }
+		;
+
+generic_opt_elem:
+			ColLabel generic_opt_arg
+				{
+					$$ = makeDefElem($1, $2, @1);
+				}
+		;
+
+generic_opt_list:
+			generic_opt_elem
+				{
+					$$ = list_make1($1);
+				}
+			| generic_opt_list ',' generic_opt_elem
+				{
+					$$ = lappend($1, $3);
+				}
+		;
+
+opt_attach_options:
+	'(' generic_opt_list ')'
+		{
+			$$ = $2;
+		}
+	| /* EMPTY */
+		{
+			$$ = NULL;
+		}
+	;

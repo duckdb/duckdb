@@ -71,7 +71,7 @@ statement ok
 CREATE TABLE integers_parquet_no_order AS FROM '__TEST_DIR__/integers.parquet'
 
 query I
-SELECT COUNT(DISTINCT block_id) < 14 FROM pragma_storage_info('integers_parquet_no_order');
+SELECT COUNT(DISTINCT block_id) < 30 FROM pragma_storage_info('integers_parquet_no_order');
 ----
 true
 

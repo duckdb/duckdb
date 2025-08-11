@@ -89,6 +89,25 @@ static void testRunner() {
 		TestChangeDirectory(prev_directory);
 	}
 
+	auto on_cleanup = test_config.OnCleanupCommand();
+	if (!on_cleanup.empty()) {
+		// perform clean-up if any is defined
+		try {
+			if (!runner.con) {
+				runner.Reconnect();
+			}
+			auto res = runner.con->Query(on_cleanup);
+			if (res->HasError()) {
+				res->GetErrorObject().Throw();
+			}
+		} catch (std::exception &ex) {
+			string cleanup_failure = "Error while running clean-up routine:\n";
+			ErrorData error(ex);
+			cleanup_failure += error.Message();
+			FAIL(cleanup_failure);
+		}
+	}
+
 	// clear test directory after running tests
 	ClearTestDirectory();
 }

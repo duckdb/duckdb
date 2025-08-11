@@ -109,7 +109,6 @@ public:
 
 	//! Global state
 	HashedSortGlobalSinkState &gstate;
-	ExecutionContext &context;
 	Allocator &allocator;
 
 	//! Shared expression evaluation
@@ -123,9 +122,9 @@ public:
 	//! Compute the hash values
 	void Hash(DataChunk &input_chunk, Vector &hash_vector);
 	//! Sink an input chunk
-	void Sink(DataChunk &input_chunk);
+	void Sink(ExecutionContext &context, DataChunk &input_chunk);
 	//! Merge the state into the global state.
-	void Combine();
+	void Combine(ExecutionContext &context);
 
 	// OVER(PARTITION BY...) (hash grouping)
 	GroupingPartition local_grouping;

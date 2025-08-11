@@ -44,6 +44,8 @@
 #include "duckdb/transaction/transaction_context.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/logging/log_type.hpp"
+#include "duckdb/logging/log_manager.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -822,8 +824,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 		statement = statement->Copy();
 	}
 #endif
-	// check if we are on AutoCommit. In this case we should start a transaction.
-	if (statement && config.AnyVerification()) {
+	if (statement && config.query_verification_enabled) {
 		// query verification is enabled
 		// create a copy of the statement, and use the copy
 		// this way we verify that the copy correctly copies all properties
@@ -985,6 +986,12 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, bool allow_str
 		} else {
 			current_result = ExecutePendingQueryInternal(*lock, *pending_query);
 		}
+		if (current_result->HasError()) {
+			// Reset the interrupted flag, this was set by the task that found the error
+			// Next statements should not be bothered by that interruption
+			interrupted = false;
+			return current_result;
+		}
 		// now append the result to the list of results
 		if (!last_result || !last_had_result) {
 			// first result of the query
@@ -1001,12 +1008,6 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, bool allow_str
 			last_result = last_result->next.get();
 		}
 		D_ASSERT(last_result);
-		if (last_result->HasError()) {
-			// Reset the interrupted flag, this was set by the task that found the error
-			// Next statements should not be bothered by that interruption
-			interrupted = false;
-			break;
-		}
 	}
 	return result;
 }
@@ -1349,7 +1350,7 @@ SettingLookupResult ClientContext::TryGetCurrentSetting(const std::string &key, 
 	// first check the built-in settings
 	auto &db_config = DBConfig::GetConfig(*this);
 	auto option = db_config.GetOptionByName(key);
-	if (option) {
+	if (option && option->get_setting) {
 		result = option->get_setting(*this);
 		return SettingLookupResult(SettingScope::LOCAL);
 	}
@@ -1370,8 +1371,8 @@ SettingLookupResult ClientContext::TryGetCurrentSetting(const std::string &key, 
 ParserOptions ClientContext::GetParserOptions() const {
 	auto &client_config = ClientConfig::GetConfig(*this);
 	ParserOptions options;
-	options.preserve_identifier_case = client_config.preserve_identifier_case;
-	options.integer_division = client_config.integer_division;
+	options.preserve_identifier_case = DBConfig::GetSetting<PreserveIdentifierCaseSetting>(*this);
+	options.integer_division = DBConfig::GetSetting<IntegerDivisionSetting>(*this);
 	options.max_expression_depth = client_config.max_expression_depth;
 	options.extensions = &DBConfig::GetConfig(*this).parser_extensions;
 	return options;
@@ -1384,12 +1385,20 @@ ClientProperties ClientContext::GetClientProperties() {
 	if (TryGetCurrentSetting("TimeZone", result)) {
 		timezone = result.ToString();
 	}
+	ArrowOffsetSize arrow_offset_size = ArrowOffsetSize::REGULAR;
+	if (DBConfig::GetSetting<ArrowLargeBufferSizeSetting>(*this)) {
+		arrow_offset_size = ArrowOffsetSize::LARGE;
+	}
+	bool arrow_use_list_view = DBConfig::GetSetting<ArrowOutputListViewSetting>(*this);
+	bool arrow_lossless_conversion = DBConfig::GetSetting<ArrowLosslessConversionSetting>(*this);
+	bool arrow_use_string_view = DBConfig::GetSetting<ProduceArrowStringViewSetting>(*this);
+	auto arrow_format_version = DBConfig::GetSetting<ArrowOutputVersionSetting>(*this);
 	return {timezone,
-	        db->config.options.arrow_offset_size,
-	        db->config.options.arrow_use_list_view,
-	        db->config.options.produce_arrow_string_views,
-	        db->config.options.arrow_lossless_conversion,
-	        db->config.options.arrow_output_version,
+	        arrow_offset_size,
+	        arrow_use_list_view,
+	        arrow_use_string_view,
+	        arrow_lossless_conversion,
+	        arrow_format_version,
 	        this};
 }
 

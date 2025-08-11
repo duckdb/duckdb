@@ -144,7 +144,7 @@ void ARTMerger::MergeLeaves(NodeEntry &entry) {
 	for (idx_t i = 0; i < bytes.size(); i++) {
 		Node::InsertChild(art, entry.left, bytes[i]);
 	}
-	Node::Free(art, entry.right);
+	Node::FreeNode(art, entry.right);
 }
 
 NodeChildren ARTMerger::ExtractChildren(Node &node) {
@@ -177,7 +177,7 @@ void ARTMerger::MergeNodes(NodeEntry &entry) {
 	auto children = ExtractChildren(entry.right);
 	// As long as the arena is valid,
 	// the copied-out nodes (and their references) are valid.
-	Node::Free(art, entry.right);
+	Node::FreeNode(art, entry.right);
 
 	// First, we iterate and insert children.
 	// This might grow the node, so we need to do it prior to Emplace.
@@ -300,8 +300,7 @@ void ARTMerger::MergePrefixes(NodeEntry &entry) {
 		// Free the right prefix, but keep the reference to its child alive.
 		// Then, iterate on the left and right (reduced) child.
 		auto r_child = *r_prefix.ptr;
-		r_prefix.ptr->Clear();
-		Node::Free(art, entry.right);
+		Node::FreeNode(art, entry.right);
 		entry.right = r_child;
 
 		auto depth = entry.depth + l_prefix.data[count];

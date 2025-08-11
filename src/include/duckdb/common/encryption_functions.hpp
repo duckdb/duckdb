@@ -4,10 +4,7 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/encryption_key_manager.hpp"
-
-#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/storage/object_cache.hpp"
-#endif
 
 namespace duckdb {
 

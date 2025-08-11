@@ -1,0 +1,34 @@
+# name: test/parquet/test_18470.test
+# description: Test issue #18470 - Internal Error when querying multiple Parquet files that have mixed data type for same column
+# group: [parquet]
+
+require parquet
+
+require notwindows
+
+set seed 0.42
+
+statement ok
+COPY (
+    SELECT
+        (random() * 65535)::UINT16 as column1,
+        'text_value_' || row_number() OVER () as column2
+    FROM generate_series(1, 100)
+) TO '__TEST_DIR__/20250101.parquet' (FORMAT PARQUET);
+
+statement ok
+COPY (
+    SELECT
+        (random() * 65535)::UINT64 as column1,
+        'text_value_' || row_number() OVER () as column2
+    FROM generate_series(1, 100)
+) TO '__TEST_DIR__/20250102.parquet' (FORMAT PARQUET);
+
+query III
+SELECT filename = '__TEST_DIR__/20250101.parquet', *
+FROM read_parquet('__TEST_DIR__/2025010*.parquet')
+WHERE filename >= '__TEST_DIR__/20250101.parquet'
+AND column1 = 72
+LIMIT 10;
+----
+true	72	text_value_66

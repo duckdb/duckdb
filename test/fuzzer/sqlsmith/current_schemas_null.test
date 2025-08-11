@@ -24,3 +24,4 @@ NULL
 statement error
 SELECT current_schemas(ref_0.bool) AS c4 FROM booleans AS ref_0;
 ----
+<REGEX>:Not implemented Error.*current_schemas requires a constant input.*

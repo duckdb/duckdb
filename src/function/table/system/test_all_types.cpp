@@ -8,6 +8,8 @@
 #include <cmath>
 #include <limits>
 
+#include "duckdb/common/types/bignum.hpp"
+
 namespace duckdb {
 
 struct TestAllTypesData : public GlobalTableFunctionState {
@@ -18,7 +20,7 @@ struct TestAllTypesData : public GlobalTableFunctionState {
 	idx_t offset;
 };
 
-vector<TestType> TestAllTypesFun::GetTestTypes(bool use_large_enum) {
+vector<TestType> TestAllTypesFun::GetTestTypes(bool use_large_enum, bool use_large_bignum) {
 	vector<TestType> result;
 	// scalar types/numerics
 	result.emplace_back(LogicalType::BOOLEAN, "bool");
@@ -32,7 +34,24 @@ vector<TestType> TestAllTypesFun::GetTestTypes(bool use_large_enum) {
 	result.emplace_back(LogicalType::USMALLINT, "usmallint");
 	result.emplace_back(LogicalType::UINTEGER, "uint");
 	result.emplace_back(LogicalType::UBIGINT, "ubigint");
-	result.emplace_back(LogicalType::VARINT, "varint");
+	if (use_large_bignum) {
+		string data;
+		idx_t total_data_size = Bignum::BIGNUM_HEADER_SIZE + Bignum::MAX_DATA_SIZE;
+		data.resize(total_data_size);
+		// Let's set our header
+		Bignum::SetHeader(&data[0], Bignum::MAX_DATA_SIZE, false);
+		// Set all our other bits
+		memset(&data[Bignum::BIGNUM_HEADER_SIZE], 0xFF, Bignum::MAX_DATA_SIZE);
+		auto max = Value::BIGNUM(data);
+		// Let's set our header
+		Bignum::SetHeader(&data[0], Bignum::MAX_DATA_SIZE, true);
+		// Set all our other bits
+		memset(&data[Bignum::BIGNUM_HEADER_SIZE], 0x00, Bignum::MAX_DATA_SIZE);
+		auto min = Value::BIGNUM(data);
+		result.emplace_back(LogicalType::BIGNUM, "bignum", min, max);
+	} else {
+		result.emplace_back(LogicalType::BIGNUM, "bignum");
+	}
 	result.emplace_back(LogicalType::DATE, "date");
 	result.emplace_back(LogicalType::TIME, "time");
 	result.emplace_back(LogicalType::TIMESTAMP, "timestamp");
@@ -298,11 +317,16 @@ static unique_ptr<FunctionData> TestAllTypesBind(ClientContext &context, TableFu
                                                  vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_uniq<TestAllTypesBindData>();
 	bool use_large_enum = false;
+	bool use_large_bignum = false;
 	auto entry = input.named_parameters.find("use_large_enum");
 	if (entry != input.named_parameters.end()) {
 		use_large_enum = BooleanValue::Get(entry->second);
 	}
-	result->test_types = TestAllTypesFun::GetTestTypes(use_large_enum);
+	entry = input.named_parameters.find("use_large_bignum");
+	if (entry != input.named_parameters.end()) {
+		use_large_bignum = BooleanValue::Get(entry->second);
+	}
+	result->test_types = TestAllTypesFun::GetTestTypes(use_large_enum, use_large_bignum);
 	for (auto &test_type : result->test_types) {
 		return_types.push_back(test_type.type);
 		names.push_back(test_type.name);
@@ -346,6 +370,7 @@ void TestAllTypesFunction(ClientContext &context, TableFunctionInput &data_p, Da
 void TestAllTypesFun::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction test_all_types("test_all_types", {}, TestAllTypesFunction, TestAllTypesBind, TestAllTypesInit);
 	test_all_types.named_parameters["use_large_enum"] = LogicalType::BOOLEAN;
+	test_all_types.named_parameters["use_large_bignum"] = LogicalType::BOOLEAN;
 	set.AddFunction(test_all_types);
 }
 

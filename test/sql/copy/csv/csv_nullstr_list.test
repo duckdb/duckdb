@@ -138,7 +138,7 @@ COPY data FROM 'data/csv/null/multiple_nulls.csv' (nullstr  ['','none','null'], 
 statement error
 COPY data FROM 'data/csv/null/multiple_nulls.csv' (nullstr NULL, HEADER 1);
 ----
-syntax error at or near "NULL"
+NULL is not supported
 
 statement error
 COPY data FROM 'data/csv/null/multiple_nulls.csv' (nullstr [NULL], HEADER 1);

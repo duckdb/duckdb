@@ -2,12 +2,10 @@
 
 #include "dsdgen.hpp"
 
-#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
-#endif
 
 namespace duckdb {
 
