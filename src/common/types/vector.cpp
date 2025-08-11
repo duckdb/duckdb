@@ -95,7 +95,8 @@ Vector::Vector(const Value &value) : type(value.type()) {
 
 Vector::Vector(Vector &&other) noexcept
     : vector_type(other.vector_type), type(std::move(other.type)), data(other.data),
-      validity(std::move(other.validity)), buffer(std::move(other.buffer)), auxiliary(std::move(other.auxiliary)) {
+      validity(std::move(other.validity)), buffer(std::move(other.buffer)), auxiliary(std::move(other.auxiliary)),
+      hashes(std::move(other.hashes)) {
 }
 
 void Vector::Reference(const Value &value) {
@@ -168,6 +169,7 @@ void Vector::Reinterpret(const Vector &other) {
 		auxiliary = make_shared_ptr<VectorChildBuffer>(std::move(new_vector));
 	} else {
 		AssignSharedPointer(auxiliary, other.auxiliary);
+		AssignSharedPointer(hashes, other.hashes);
 	}
 	data = other.data;
 	validity = other.validity;
@@ -272,6 +274,7 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 	vector_type = VectorType::DICTIONARY_VECTOR;
 	buffer = std::move(dict_buffer);
 	auxiliary = std::move(child_ref);
+	hashes.reset();
 }
 
 void Vector::Dictionary(idx_t dictionary_size, const SelectionVector &sel, idx_t count) {
@@ -281,7 +284,12 @@ void Vector::Dictionary(idx_t dictionary_size, const SelectionVector &sel, idx_t
 	}
 }
 
-void Vector::Dictionary(const Vector &dict, idx_t dictionary_size, const SelectionVector &sel, idx_t count) {
+void Vector::Dictionary(Vector &dict, idx_t dictionary_size, const SelectionVector &sel, idx_t count) {
+	if (dict.GetType().InternalType() == PhysicalType::VARCHAR && !dict.hashes) {
+		// Create an empty hash vector for this dictionary, potentially to be used for caching hashes later
+		Vector dictionary_hashes(LogicalType::HASH, false, false, 0);
+		dict.hashes = make_buffer<VectorChildBuffer>(std::move(dictionary_hashes));
+	}
 	Reference(dict);
 	Dictionary(dictionary_size, sel, count);
 }
@@ -1891,17 +1899,17 @@ void Vector::DebugShuffleNestedVector(Vector &vector, idx_t count) {
 //===--------------------------------------------------------------------===//
 // DictionaryVector
 //===--------------------------------------------------------------------===//
-Vector DictionaryVector::GetPrecomputedHashes(Vector &vector, const SelectionVector &sel, const idx_t &count) {
-	VerifyDictionary(vector);
-	D_ASSERT(CanPrecomputeHashes(vector));
-	auto &dictionary = Child(vector);
-	if (!dictionary.hashes) {
-		const auto dictionary_count = DictionarySize(dictionary).GetIndex();
-		Vector dictionary_hashes(LogicalType::HASH, dictionary_count);
+void DictionaryVector::GetCachedHashes(Vector &input, Vector &hashes) {
+	D_ASSERT(CanCacheHashes(input));
+	auto &dictionary = Child(input);
+	auto &dictionary_hashes = dictionary.hashes->Cast<VectorChildBuffer>().data;
+	if (!dictionary_hashes.data) {
+		const auto dictionary_count = DictionarySize(input).GetIndex();
+		dictionary_hashes.Initialize(false, dictionary_count);
 		VectorOperations::Hash(dictionary, dictionary_hashes, dictionary_count);
-		dictionary.hashes = make_buffer<VectorChildBuffer>(std::move(dictionary_hashes));
 	}
-	return Vector(dictionary.hashes->Cast<VectorChildBuffer>().data, sel, count);
+	// Can pass bogus count here because dictionary hashes = flat, and we just reference the same sel
+	hashes.Slice(dictionary.hashes->Cast<VectorChildBuffer>().data, SelVector(input), 0);
 }
 
 //===--------------------------------------------------------------------===//

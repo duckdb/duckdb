@@ -169,7 +169,7 @@ public:
 	//! Turn this vector into a dictionary vector
 	DUCKDB_API void Dictionary(idx_t dictionary_size, const SelectionVector &sel, idx_t count);
 	//! Creates a reference to a dictionary of the other vector
-	DUCKDB_API void Dictionary(const Vector &dict, idx_t dictionary_size, const SelectionVector &sel, idx_t count);
+	DUCKDB_API void Dictionary(Vector &dict, idx_t dictionary_size, const SelectionVector &sel, idx_t count);
 
 	//! Creates the data of this vector with the specified type. Any data that
 	//! is currently in the vector is destroyed.
@@ -393,14 +393,10 @@ struct DictionaryVector {
 		VerifyDictionary(vector);
 		vector.buffer->Cast<DictionaryBuffer>().SetDictionaryId(std::move(new_id));
 	}
-	static inline bool CanPrecomputeHashes(const Vector &vector) {
-		VerifyDictionary(vector);
-		if (vector.GetType().InternalType() != PhysicalType::VARCHAR) {
-			return false;
-		}
-		return DictionarySize(vector).IsValid();
+	static inline bool CanCacheHashes(const Vector &vector) {
+		return DictionarySize(vector).IsValid() && vector.GetType().InternalType() == PhysicalType::VARCHAR;
 	}
-	static inline Vector GetPrecomputedHashes(Vector &vector, const SelectionVector &sel, const idx_t &count);
+	static void GetCachedHashes(Vector &input, Vector &hashes);
 };
 
 struct FlatVector {
