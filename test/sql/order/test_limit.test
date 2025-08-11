@@ -87,6 +87,9 @@ CREATE SEQUENCE seq START 3;
 statement ok
 PRAGMA disable_verification;
 
+statement ok
+PRAGMA disable_verify_fetch_row;
+
 query I
 SELECT * FROM integers LIMIT nextval('seq');
 ----

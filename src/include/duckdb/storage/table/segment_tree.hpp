@@ -38,7 +38,7 @@ public:
 
 	//! Locks the segment tree. All methods to the segment tree either lock the segment tree, or take an already
 	//! obtained lock.
-	SegmentLock Lock() {
+	SegmentLock Lock() const {
 		return SegmentLock(node_lock);
 	}
 
@@ -76,12 +76,15 @@ public:
 		auto l = Lock();
 		return ReferenceSegments(l);
 	}
+	const vector<SegmentNode<T>> &ReferenceLoadedSegments(SegmentLock &l) const {
+		return nodes;
+	}
 
 	idx_t GetSegmentCount() {
 		auto l = Lock();
 		return GetSegmentCount(l);
 	}
-	idx_t GetSegmentCount(SegmentLock &l) {
+	idx_t GetSegmentCount(SegmentLock &l) const {
 		return nodes.size();
 	}
 	//! Gets a pointer to the nth segment. Negative numbers start from the back.
@@ -252,6 +255,10 @@ public:
 		return SegmentIterationHelper(*this);
 	}
 
+	SegmentIterationHelper Segments(SegmentLock &l) {
+		return SegmentIterationHelper(*this, l);
+	}
+
 	void Reinitialize() {
 		if (nodes.empty()) {
 			return;
@@ -274,37 +281,42 @@ protected:
 		return nullptr;
 	}
 
+	T *GetRootSegmentInternal() const {
+		return nodes.empty() ? nullptr : nodes[0].node.get();
+	}
+
 private:
 	//! The nodes in the tree, can be binary searched
 	vector<SegmentNode<T>> nodes;
 	//! Lock to access or modify the nodes
-	mutex node_lock;
+	mutable mutex node_lock;
 
 private:
-	T *GetRootSegmentInternal() {
-		return nodes.empty() ? nullptr : nodes[0].node.get();
-	}
-
 	class SegmentIterationHelper {
 	public:
 		explicit SegmentIterationHelper(SegmentTree &tree) : tree(tree) {
 		}
+		SegmentIterationHelper(SegmentTree &tree, SegmentLock &l) : tree(tree), lock(l) {
+		}
 
 	private:
 		SegmentTree &tree;
+		optional_ptr<SegmentLock> lock;
 
 	private:
 		class SegmentIterator {
 		public:
-			SegmentIterator(SegmentTree &tree_p, T *current_p) : tree(tree_p), current(current_p) {
+			SegmentIterator(SegmentTree &tree_p, T *current_p, optional_ptr<SegmentLock> lock)
+			    : tree(tree_p), current(current_p), lock(lock) {
 			}
 
 			SegmentTree &tree;
 			T *current;
+			optional_ptr<SegmentLock> lock;
 
 		public:
 			void Next() {
-				current = tree.GetNextSegment(current);
+				current = lock ? tree.GetNextSegment(*lock, current) : tree.GetNextSegment(current);
 			}
 
 			SegmentIterator &operator++() {
@@ -322,10 +334,11 @@ private:
 
 	public:
 		SegmentIterator begin() { // NOLINT: match stl API
-			return SegmentIterator(tree, tree.GetRootSegment());
+			auto root = lock ? tree.GetRootSegment(*lock) : tree.GetRootSegment();
+			return SegmentIterator(tree, root, lock);
 		}
 		SegmentIterator end() { // NOLINT: match stl API
-			return SegmentIterator(tree, nullptr);
+			return SegmentIterator(tree, nullptr, lock);
 		}
 	};
 

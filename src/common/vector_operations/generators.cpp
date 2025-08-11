@@ -11,7 +11,7 @@
 namespace duckdb {
 
 template <class T>
-void TemplatedGenerateSequence(Vector &result, idx_t count, int64_t start, int64_t increment) {
+static void TemplatedGenerateSequence(Vector &result, idx_t count, int64_t start, int64_t increment) {
 	D_ASSERT(result.GetType().IsNumeric());
 	if (start > NumericLimits<T>::Maximum() || increment > NumericLimits<T>::Maximum()) {
 		throw InternalException("Sequence start or increment out of type range");

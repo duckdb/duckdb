@@ -161,7 +161,9 @@ bool DuckTransaction::ChangesMade() {
 }
 
 UndoBufferProperties DuckTransaction::GetUndoProperties() {
-	return undo_buffer.GetProperties();
+	auto properties = undo_buffer.GetProperties();
+	properties.estimated_size += storage->EstimatedSize();
+	return properties;
 }
 
 bool DuckTransaction::AutomaticCheckpoint(AttachedDatabase &db, const UndoBufferProperties &properties) {
@@ -176,7 +178,7 @@ bool DuckTransaction::AutomaticCheckpoint(AttachedDatabase &db, const UndoBuffer
 		return false;
 	}
 	auto &storage_manager = db.GetStorageManager();
-	return storage_manager.AutomaticCheckpoint(storage->EstimatedSize() + properties.estimated_size);
+	return storage_manager.AutomaticCheckpoint(properties.estimated_size);
 }
 
 bool DuckTransaction::ShouldWriteToWAL(AttachedDatabase &db) {

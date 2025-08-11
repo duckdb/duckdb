@@ -5,8 +5,10 @@
 
 namespace duckdb {
 
+namespace {
 template <class T>
-static void CopyToStorageLoop(UnifiedVectorFormat &vdata, idx_t count, data_ptr_t target) {
+
+void CopyToStorageLoop(UnifiedVectorFormat &vdata, idx_t count, data_ptr_t target) {
 	auto ldata = UnifiedVectorFormat::GetData<T>(vdata);
 	auto result_data = (T *)target;
 	for (idx_t i = 0; i < count; i++) {
@@ -18,6 +20,17 @@ static void CopyToStorageLoop(UnifiedVectorFormat &vdata, idx_t count, data_ptr_
 		}
 	}
 }
+
+template <class T>
+void ReadFromStorageLoop(data_ptr_t source, idx_t count, Vector &result) {
+	auto ldata = (T *)source;
+	auto result_data = FlatVector::GetData<T>(result);
+	for (idx_t i = 0; i < count; i++) {
+		result_data[i] = ldata[i];
+	}
+}
+
+} // namespace
 
 void VectorOperations::WriteToStorage(Vector &source, idx_t count, data_ptr_t target) {
 	if (count == 0) {
@@ -69,15 +82,6 @@ void VectorOperations::WriteToStorage(Vector &source, idx_t count, data_ptr_t ta
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for WriteToStorage");
-	}
-}
-
-template <class T>
-static void ReadFromStorageLoop(data_ptr_t source, idx_t count, Vector &result) {
-	auto ldata = (T *)source;
-	auto result_data = FlatVector::GetData<T>(result);
-	for (idx_t i = 0; i < count; i++) {
-		result_data[i] = ldata[i];
 	}
 }
 

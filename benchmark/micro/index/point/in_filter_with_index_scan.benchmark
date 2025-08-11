@@ -9,18 +9,15 @@ require tpch
 
 load
 CALL dbgen(sf=1);
+SET index_scan_percentage = 1.0;
 CREATE TABLE random_orders AS (
-	(SELECT o_orderkey FROM orders
-	OFFSET 100
-	LIMIT 3)
+	(SELECT o_orderkey FROM orders OFFSET 100 LIMIT 3)
 	UNION
 	(SELECT o_orderkey FROM orders
-	OFFSET (SELECT COUNT(*) FROM orders) / 2
-	LIMIT 3)
+	OFFSET (SELECT COUNT(*) FROM orders) / 2 LIMIT 3)
 	UNION
 	(SELECT o_orderkey FROM orders
-	OFFSET (SELECT COUNT(*) FROM orders) / 2 + 100000
-	LIMIT 3));
+	OFFSET (SELECT COUNT(*) FROM orders) / 2 + 100000 LIMIT 3));
 CREATE TABLE orders_shuffled AS FROM orders ORDER BY random();
 ALTER TABLE orders_shuffled ADD PRIMARY KEY (o_orderkey);
 

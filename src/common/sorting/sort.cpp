@@ -4,6 +4,7 @@
 #include "duckdb/common/sorting/sort_key.hpp"
 #include "duckdb/common/sorting/sorted_run.hpp"
 #include "duckdb/common/sorting/sorted_run_merger.hpp"
+#include "duckdb/common/types/batched_data_collection.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
 #include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/function/function_binder.hpp"
@@ -109,7 +110,7 @@ Sort::Sort(ClientContext &context, const vector<BoundOrderByNode> &orders, const
 			input_projection_map.push_back(input_col_idx);
 		}
 	}
-	payload_layout->Initialize(payload_types, false);
+	payload_layout->Initialize(payload_types, TupleDataValidityType::CAN_HAVE_NULL_VALUES);
 
 	// Sort the output projection columns so we're gathering the columns in order
 	std::sort(output_projection_columns.begin(), output_projection_columns.end(),
@@ -383,6 +384,9 @@ public:
 	//! Sorted run merger and associated global state
 	SortedRunMerger merger;
 	unique_ptr<GlobalSourceState> merger_global_state;
+
+	//! Materialized column data (optional)
+	unique_ptr<BatchedDataCollection> column_data;
 };
 
 class SortLocalSourceState : public LocalSourceState {
@@ -430,6 +434,80 @@ OperatorPartitionData Sort::GetPartitionData(ExecutionContext &context, DataChun
 	auto &lstate = lstate_p.Cast<SortLocalSourceState>();
 	return gstate.merger.GetPartitionData(context, chunk, *gstate.merger_global_state, *lstate.merger_local_state,
 	                                      partition_info);
+}
+
+//===--------------------------------------------------------------------===//
+// Non-Standard Interface
+//===--------------------------------------------------------------------===//
+SourceResultType Sort::MaterializeColumnData(ExecutionContext &context, OperatorSourceInput &input) const {
+	auto &gstate = input.global_state.Cast<SortGlobalSourceState>();
+
+	// Derive output types
+	vector<LogicalType> types;
+	types.resize(output_projection_columns.size());
+	for (auto &opc : output_projection_columns) {
+		const auto &type = opc.is_payload ? payload_layout->GetTypes()[opc.layout_col_idx]
+		                                  : StructType::GetChildType(decode_sort_key->return_type, opc.layout_col_idx);
+		types[opc.output_col_idx] = type;
+	}
+
+	// Initialize scan chunk
+	DataChunk chunk;
+	chunk.Initialize(context.client, types);
+
+	// Initialize local output collection
+	auto local_column_data = make_uniq<BatchedDataCollection>(context.client, types, true);
+
+	while (true) {
+		// Check for interrupts since this could be a long-running task
+		if (context.client.interrupted.load(std::memory_order_relaxed)) {
+			throw InterruptException();
+		}
+		// Scan a chunk
+		chunk.Reset();
+		GetData(context, chunk, input);
+		if (chunk.size() == 0) {
+			break;
+		}
+		// Append to the output collection
+		const auto batch_index =
+		    GetPartitionData(context, chunk, input.global_state, input.local_state, OperatorPartitionInfo())
+		        .batch_index;
+		local_column_data->Append(chunk, batch_index);
+	}
+
+	// Merge into global output collection
+	auto guard = gstate.Lock();
+	if (!gstate.column_data) {
+		gstate.column_data = std::move(local_column_data);
+	} else {
+		gstate.column_data->Merge(*local_column_data);
+	}
+
+	// Return type indicates whether materialization is done
+	const auto progress_data = GetProgress(context.client, input.global_state);
+	return progress_data.done == progress_data.total ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
+}
+
+unique_ptr<ColumnDataCollection> Sort::GetColumnData(OperatorSourceInput &input) const {
+	auto &gstate = input.global_state.Cast<SortGlobalSourceState>();
+	auto guard = gstate.Lock();
+	return gstate.column_data->FetchCollection();
+}
+
+SourceResultType Sort::MaterializeSortedRun(ExecutionContext &context, OperatorSourceInput &input) const {
+	auto &gstate = input.global_state.Cast<SortGlobalSourceState>();
+	if (gstate.merger.total_count == 0) {
+		return SourceResultType::FINISHED;
+	}
+	auto &lstate = input.local_state.Cast<SortLocalSourceState>();
+	OperatorSourceInput merger_input {*gstate.merger_global_state, *lstate.merger_local_state, input.interrupt_state};
+	return gstate.merger.MaterializeMerge(context, merger_input);
+}
+
+unique_ptr<SortedRun> Sort::GetSortedRun(GlobalSourceState &global_state) {
+	auto &gstate = global_state.Cast<SortGlobalSourceState>();
+	return gstate.merger.GetMaterialized(gstate);
 }
 
 } // namespace duckdb

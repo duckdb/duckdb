@@ -79,11 +79,33 @@ static void testRunner() {
 		// Parse the test dir automatically
 		TestChangeDirectory(test_working_dir);
 	}
-
-	runner.ExecuteFile(name);
+	try {
+		runner.ExecuteFile(name);
+	} catch (...) {
+		// This is to allow cleanup to be executed, failure is already logged
+	}
 
 	if (AUTO_SWITCH_TEST_DIR) {
 		TestChangeDirectory(prev_directory);
+	}
+
+	auto on_cleanup = test_config.OnCleanupCommand();
+	if (!on_cleanup.empty()) {
+		// perform clean-up if any is defined
+		try {
+			if (!runner.con) {
+				runner.Reconnect();
+			}
+			auto res = runner.con->Query(on_cleanup);
+			if (res->HasError()) {
+				res->GetErrorObject().Throw();
+			}
+		} catch (std::exception &ex) {
+			string cleanup_failure = "Error while running clean-up routine:\n";
+			ErrorData error(ex);
+			cleanup_failure += error.Message();
+			FAIL(cleanup_failure);
+		}
 	}
 
 	// clear test directory after running tests

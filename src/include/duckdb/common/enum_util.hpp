@@ -64,7 +64,11 @@ enum class AlterViewType : uint8_t;
 
 enum class AppenderType : uint8_t;
 
+enum class ArrowArrayPhysicalType : uint8_t;
+
 enum class ArrowDateTimeType : uint8_t;
+
+enum class ArrowFormatVersion : uint8_t;
 
 enum class ArrowOffsetSize : uint8_t;
 
@@ -202,6 +206,8 @@ enum class HTTPStatusCode : uint16_t;
 
 enum class IndexAppendMode : uint8_t;
 
+enum class IndexBindState : uint8_t;
+
 enum class IndexConstraintType : uint8_t;
 
 enum class InsertColumnOrder : uint8_t;
@@ -275,6 +281,8 @@ enum class OrderByNullType : uint8_t;
 enum class OrderPreservationType : uint8_t;
 
 enum class OrderType : uint8_t;
+
+enum class OrdinalityType : uint8_t;
 
 enum class OutputStream : uint8_t;
 
@@ -402,7 +410,11 @@ enum class TransactionModifierType : uint8_t;
 
 enum class TransactionType : uint8_t;
 
+enum class TupleDataNestednessType : uint8_t;
+
 enum class TupleDataPinProperties : uint8_t;
+
+enum class TupleDataValidityType : uint8_t;
 
 enum class UndoFlags : uint32_t;
 
@@ -425,6 +437,8 @@ enum class WindowAggregationMode : uint32_t;
 enum class WindowBoundary : uint8_t;
 
 enum class WindowExcludeMode : uint8_t;
+
+enum class WindowMergeSortStage : uint8_t;
 
 
 template<>
@@ -476,7 +490,13 @@ template<>
 const char* EnumUtil::ToChars<AppenderType>(AppenderType value);
 
 template<>
+const char* EnumUtil::ToChars<ArrowArrayPhysicalType>(ArrowArrayPhysicalType value);
+
+template<>
 const char* EnumUtil::ToChars<ArrowDateTimeType>(ArrowDateTimeType value);
+
+template<>
+const char* EnumUtil::ToChars<ArrowFormatVersion>(ArrowFormatVersion value);
 
 template<>
 const char* EnumUtil::ToChars<ArrowOffsetSize>(ArrowOffsetSize value);
@@ -683,6 +703,9 @@ template<>
 const char* EnumUtil::ToChars<IndexAppendMode>(IndexAppendMode value);
 
 template<>
+const char* EnumUtil::ToChars<IndexBindState>(IndexBindState value);
+
+template<>
 const char* EnumUtil::ToChars<IndexConstraintType>(IndexConstraintType value);
 
 template<>
@@ -792,6 +815,9 @@ const char* EnumUtil::ToChars<OrderPreservationType>(OrderPreservationType value
 
 template<>
 const char* EnumUtil::ToChars<OrderType>(OrderType value);
+
+template<>
+const char* EnumUtil::ToChars<OrdinalityType>(OrdinalityType value);
 
 template<>
 const char* EnumUtil::ToChars<OutputStream>(OutputStream value);
@@ -983,7 +1009,13 @@ template<>
 const char* EnumUtil::ToChars<TransactionType>(TransactionType value);
 
 template<>
+const char* EnumUtil::ToChars<TupleDataNestednessType>(TupleDataNestednessType value);
+
+template<>
 const char* EnumUtil::ToChars<TupleDataPinProperties>(TupleDataPinProperties value);
+
+template<>
+const char* EnumUtil::ToChars<TupleDataValidityType>(TupleDataValidityType value);
 
 template<>
 const char* EnumUtil::ToChars<UndoFlags>(UndoFlags value);
@@ -1017,6 +1049,9 @@ const char* EnumUtil::ToChars<WindowBoundary>(WindowBoundary value);
 
 template<>
 const char* EnumUtil::ToChars<WindowExcludeMode>(WindowExcludeMode value);
+
+template<>
+const char* EnumUtil::ToChars<WindowMergeSortStage>(WindowMergeSortStage value);
 
 
 template<>
@@ -1068,7 +1103,13 @@ template<>
 AppenderType EnumUtil::FromString<AppenderType>(const char *value);
 
 template<>
+ArrowArrayPhysicalType EnumUtil::FromString<ArrowArrayPhysicalType>(const char *value);
+
+template<>
 ArrowDateTimeType EnumUtil::FromString<ArrowDateTimeType>(const char *value);
+
+template<>
+ArrowFormatVersion EnumUtil::FromString<ArrowFormatVersion>(const char *value);
 
 template<>
 ArrowOffsetSize EnumUtil::FromString<ArrowOffsetSize>(const char *value);
@@ -1275,6 +1316,9 @@ template<>
 IndexAppendMode EnumUtil::FromString<IndexAppendMode>(const char *value);
 
 template<>
+IndexBindState EnumUtil::FromString<IndexBindState>(const char *value);
+
+template<>
 IndexConstraintType EnumUtil::FromString<IndexConstraintType>(const char *value);
 
 template<>
@@ -1384,6 +1428,9 @@ OrderPreservationType EnumUtil::FromString<OrderPreservationType>(const char *va
 
 template<>
 OrderType EnumUtil::FromString<OrderType>(const char *value);
+
+template<>
+OrdinalityType EnumUtil::FromString<OrdinalityType>(const char *value);
 
 template<>
 OutputStream EnumUtil::FromString<OutputStream>(const char *value);
@@ -1575,7 +1622,13 @@ template<>
 TransactionType EnumUtil::FromString<TransactionType>(const char *value);
 
 template<>
+TupleDataNestednessType EnumUtil::FromString<TupleDataNestednessType>(const char *value);
+
+template<>
 TupleDataPinProperties EnumUtil::FromString<TupleDataPinProperties>(const char *value);
+
+template<>
+TupleDataValidityType EnumUtil::FromString<TupleDataValidityType>(const char *value);
 
 template<>
 UndoFlags EnumUtil::FromString<UndoFlags>(const char *value);
@@ -1609,6 +1662,9 @@ WindowBoundary EnumUtil::FromString<WindowBoundary>(const char *value);
 
 template<>
 WindowExcludeMode EnumUtil::FromString<WindowExcludeMode>(const char *value);
+
+template<>
+WindowMergeSortStage EnumUtil::FromString<WindowMergeSortStage>(const char *value);
 
 
 }

@@ -1,0 +1,26 @@
+{
+  "info": {
+    "balls_per_over": 6,
+    "city": "Colombo",
+    "dates": [
+      "2025-11-10",
+      "2025-11-11",
+      "2025-11-12",
+      "2025-11-13"
+    ],
+    "event": {
+      "name": "Bangladesh Men tour of Sri Lanka (Test Series)",
+      "match_number": 1
+    },
+    "outcome": {
+      "winner": "Sri Lanka",
+      "by": {
+        "innings": 1,
+        "runs": 175
+      }
+    },
+    "player_of_match": [
+      "D Karunaratne"
+    ]
+  }
+}
