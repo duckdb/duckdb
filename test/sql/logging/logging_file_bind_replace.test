@@ -6,11 +6,11 @@ require noforcestorage
 
 # Enable FileSystem logging to single csv file  
 statement ok
-CALL enable_logging(['FileSystem'], storage='file', storage_config={'path': '__TEST_DIR__/logging_file_bind_replace_log.csv'});
+CALL enable_logging(['QueryLog'], storage='file', storage_config={'path': '__TEST_DIR__/logging_file_bind_replace_log.csv', 'normalize': false});
 
 # Read some data to trigger FileSystem log
 statement ok
-FROM "data/csv/big_number.csv"
+SELECT 1 as a
 
 statement ok
 FROM duckdb_logs_parsed('FileSystem');
@@ -22,23 +22,22 @@ query IIIIII nosort describe_duckdb_logs
 DESCRIBE FROM duckdb_logs;
 ----
 
-query IIII
-SELECT scope, fs, path, op FROM duckdb_logs_parsed('FileSystem') WHERE op='OPEN' and path='data/csv/big_number.csv';
+query I
+SELECT message FROM duckdb_logs_parsed('QueryLog') WHERE starts_with(message, 'SELECT 1');
 ----
-CONNECTION	LocalFileSystem	data/csv/big_number.csv	OPEN
+SELECT 1 as a
 
 statement ok
 pragma truncate_duckdb_logs;
 
 # Enable FileSystem logging to double csv file  
 statement ok
-CALL enable_logging(['FileSystem'], storage='file', storage_config={'entries_path': '__TEST_DIR__/logging_file_bind_replace_entries.csv', 'contexts_path': '__TEST_DIR__/logging_file_bind_replace_contexts.csv'});
+CALL enable_logging(['QueryLog'], storage='file', storage_config={'path': '__TEST_DIR__/logging_file_bind_replace_normalized/', 'normalize': true});
 
-# Read some data to trigger FileSystem log
+# Trigger log
 statement ok
-FROM "data/csv/big_number.csv"
+SELECT 1 as b
 
-# We can't currently scan this, because it would cause an infinite loop of log writing 
 statement ok
 FROM duckdb_logs
 
@@ -49,21 +48,20 @@ query IIIIII nosort describe_duckdb_logs
 DESCRIBE FROM duckdb_logs
 ----
 
-query IIII
-SELECT scope, fs, path, op FROM duckdb_logs_parsed('FileSystem') WHERE op='OPEN' AND path='data/csv/big_number.csv';
+query I
+SELECT message FROM duckdb_logs_parsed('QueryLog') WHERE starts_with(message, 'SELECT 1');
 ----
-CONNECTION	LocalFileSystem	data/csv/big_number.csv	OPEN
+SELECT 1 as b
 
 statement ok
 pragma truncate_duckdb_logs;
 
 # Now rerun with the in-memory storage to ensure everything matches up
 statement ok
-CALL enable_logging(['FileSystem'], storage='memory');
+CALL enable_logging(['QueryLog'], storage='memory');
 
-# Read some data to trigger FileSystem log
 statement ok
-FROM "data/csv/big_number.csv"
+SELECT 1 as c
 
 statement ok
 CALL disable_logging();
@@ -72,10 +70,10 @@ query IIIIII nosort describe_duckdb_logs
 DESCRIBE FROM duckdb_logs
 ----
 
-query IIII
-SELECT scope, fs, path, op FROM duckdb_logs_parsed('FileSystem') WHERE op='OPEN';
+query I
+SELECT message FROM duckdb_logs_parsed('QueryLog') WHERE starts_with(message, 'SELECT 1');
 ----
-CONNECTION	LocalFileSystem	data/csv/big_number.csv	OPEN
+SELECT 1 as c
 
 statement ok
 pragma truncate_duckdb_logs;
@@ -85,9 +83,8 @@ pragma truncate_duckdb_logs;
 statement ok
 CALL enable_logging(level='trace', storage='memory');
 
-# Read some data to trigger FileSystem log
 statement ok
-FROM "data/csv/big_number.csv"
+SELECT 1 as d
 
 statement ok
 CALL disable_logging();
@@ -96,7 +93,7 @@ query IIIIII nosort describe_duckdb_logs
 DESCRIBE FROM duckdb_logs
 ----
 
-query IIII
-SELECT scope, fs, path, op FROM duckdb_logs_parsed('FileSystem') WHERE op='OPEN';
+query I
+SELECT message FROM duckdb_logs_parsed('QueryLog') WHERE starts_with(message, 'SELECT 1');
 ----
-CONNECTION	LocalFileSystem	data/csv/big_number.csv	OPEN
+SELECT 1 as d

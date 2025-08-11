@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/logging/logger.hpp"
+#include "duckdb/logging/log_storage.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 
@@ -47,7 +48,7 @@ public:
 
 	//! Get a shared_ptr to the log storage (For example, to scan it)
 	DUCKDB_API shared_ptr<LogStorage> GetLogStorage();
-	DUCKDB_API bool CanScan();
+	DUCKDB_API bool CanScan(LoggingTargetTable table);
 
 	DUCKDB_API void SetEnableLogging(bool enable);
 	DUCKDB_API void SetLogMode(LogMode mode);

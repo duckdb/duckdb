@@ -11,8 +11,8 @@ namespace duckdb {
 
 struct DuckDBLogData : public GlobalTableFunctionState {
 	explicit DuckDBLogData(shared_ptr<LogStorage> log_storage_p) : log_storage(std::move(log_storage_p)) {
-		scan_state = log_storage->CreateScanEntriesState();
-		log_storage->InitializeScanEntries(*scan_state);
+		scan_state = log_storage->CreateScanState(LoggingTargetTable::LOG_ENTRIES);
+		log_storage->InitializeScan(*scan_state);
 	}
 	DuckDBLogData() : log_storage(nullptr) {
 	}
@@ -43,7 +43,7 @@ static unique_ptr<FunctionData> DuckDBLogBind(ClientContext &context, TableFunct
 }
 
 unique_ptr<GlobalTableFunctionState> DuckDBLogInit(ClientContext &context, TableFunctionInitInput &input) {
-	if (LogManager::Get(context).CanScan()) {
+	if (LogManager::Get(context).CanScan(LoggingTargetTable::LOG_ENTRIES)) {
 		return make_uniq<DuckDBLogData>(LogManager::Get(context).GetLogStorage());
 	}
 	return make_uniq<DuckDBLogData>();
@@ -52,7 +52,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBLogInit(ClientContext &context, Table
 void DuckDBLogFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &data = data_p.global_state->Cast<DuckDBLogData>();
 	if (data.log_storage) {
-		data.log_storage->ScanEntries(*data.scan_state, output);
+		data.log_storage->Scan(*data.scan_state, output);
 	}
 }
 
@@ -60,7 +60,7 @@ unique_ptr<TableRef> DuckDBLogBindReplace(ClientContext &context, TableFunctionB
 	auto log_storage = LogManager::Get(context).GetLogStorage();
 
 	// Attempt to let the storage BindReplace the scan function
-	return log_storage->BindReplaceEntries(context, input);
+	return log_storage->BindReplace(context, input, LoggingTargetTable::LOG_ENTRIES);
 }
 
 void DuckDBLogFun::RegisterFunction(BuiltinFunctions &set) {

@@ -49,7 +49,7 @@ shared_ptr<Logger> LogManager::GlobalLoggerReference() {
 
 void LogManager::Flush() {
 	unique_lock<mutex> lck(lock);
-	log_storage->Flush();
+	log_storage->FlushAll();
 }
 
 shared_ptr<LogStorage> LogManager::GetLogStorage() {
@@ -57,9 +57,9 @@ shared_ptr<LogStorage> LogManager::GetLogStorage() {
 	return log_storage;
 }
 
-bool LogManager::CanScan() {
+bool LogManager::CanScan(LoggingTargetTable table) {
 	unique_lock<mutex> lck(lock);
-	return log_storage->CanScan();
+	return log_storage->CanScan(table);
 }
 
 LogManager::LogManager(DatabaseInstance &db, LogConfig config_p) : config(std::move(config_p)) {
@@ -141,7 +141,7 @@ void LogManager::SetLogStorage(DatabaseInstance &db, const string &storage_name)
 	}
 
 	// Flush the old storage, we are going to replace it.
-	log_storage->Flush();
+	log_storage->FlushAll();
 
 	if (storage_name_to_lower == LogConfig::IN_MEMORY_STORAGE_NAME) {
 		log_storage = make_shared_ptr<InMemoryLogStorage>(db);
