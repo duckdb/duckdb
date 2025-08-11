@@ -59,13 +59,38 @@ void DuckDBLogFunction(ClientContext &context, TableFunctionInput &data_p, DataC
 unique_ptr<TableRef> DuckDBLogBindReplace(ClientContext &context, TableFunctionBindInput &input) {
 	auto log_storage = LogManager::Get(context).GetLogStorage();
 
-	// Attempt to let the storage BindReplace the scan function
-	return log_storage->BindReplace(context, input, LoggingTargetTable::LOG_ENTRIES);
+	bool join_contexts = false;
+	auto join_contexts_setting = input.named_parameters.find("join_contexts");
+	if (join_contexts_setting != input.named_parameters.end()) {
+		join_contexts = join_contexts_setting->second.GetValue<bool>();
+	}
+
+	// Without join contexts we simply scan the LOG_ENTRIES tables
+	if (!join_contexts) {
+		auto res = log_storage->BindReplace(context, input, LoggingTargetTable::LOG_ENTRIES);
+		return res;
+	}
+
+	// If the storage can bind replace for LoggingTargetTable::ALL_LOGS, we use that since that will be most efficient
+	auto all_log_scan = log_storage->BindReplace(context, input, LoggingTargetTable::ALL_LOGS);
+	if (all_log_scan) {
+		return all_log_scan;
+	}
+
+	// We cannot scan ALL_LOGS but join_contexts was requested: we need to inject the join between LOG_ENTRIES and LOG_CONTEXTS
+	string sub_query_string = "SELECT l.context_id, scope, connection_id, transaction_id, query_id, thread_id, timestamp, type, log_level, message"
+						   " FROM (SELECT row_number() OVER () AS rowid, * FROM duckdb_logs()) as l JOIN duckdb_log_contexts() as c ON l.context_id=c.context_id order by timestamp, l.rowid;";
+	Parser parser(context.GetParserOptions());
+	parser.ParseQuery(sub_query_string);
+	auto select_stmt = unique_ptr_cast<SQLStatement, SelectStatement>(std::move(parser.statements[0]));
+
+	return duckdb::make_uniq<SubqueryRef>(std::move(select_stmt));
 }
 
 void DuckDBLogFun::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction logs_fun("duckdb_logs", {}, DuckDBLogFunction, DuckDBLogBind, DuckDBLogInit);
 	logs_fun.bind_replace = DuckDBLogBindReplace;
+	logs_fun.named_parameters["join_contexts"] = LogicalType::BOOLEAN;
 	set.AddFunction(logs_fun);
 }
 

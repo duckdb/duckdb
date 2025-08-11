@@ -173,7 +173,7 @@ protected:
 	//! Resets all buffers and state
 	void ResetAllBuffers() override;
 
-	static void SetWriterConfigs(CSVWriter &Writer, vector<string> column_names);
+	static void SetWriterConfigs(CSVWriter &Writer, vector<string> column_names, bool newline_on_flush);
 
 	unordered_map<LoggingTargetTable, unique_ptr<DataChunk>> cast_buffers;
 	//! Todo make private and access through methods?

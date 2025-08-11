@@ -1,0 +1,22 @@
+# name: test/sql/logging/logging_buffer_size.test
+# description: 
+# group: [logging]
+
+require noforcestorage
+
+# By default we flush the logger automatically at certain sensible moments (most importantly, on Query End)
+# for this test we want to disable automatic flushing to test the buffer size param
+statement ok
+SET duckdb_logger_auto_flushing = false
+
+# Enable FileSystem logging to single csv file  
+statement ok
+CALL enable_logging('QueryLog', buffer_size=0);
+
+statement ok
+SELECT 1 as a;
+
+# mode output_result
+# 
+# statement ok
+# FROM duckdb_logs where type='QueryLog';

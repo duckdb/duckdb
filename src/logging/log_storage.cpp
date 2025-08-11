@@ -143,7 +143,7 @@ bool BufferingLogStorage::IsEnabledInternal(LoggingTargetTable table) {
 }
 
 void CSVLogStorage::ExecuteCast(LoggingTargetTable table, DataChunk &chunk) {
- 	// TODO: reset after, not before? replace with assert?
+ 	// Reset the cast buffer before use
 	cast_buffers[table]->Reset();
 
 	bool success = true;
@@ -229,13 +229,14 @@ void CSVLogStorage::ResetCastChunk() {
 	InitializeCastChunk(LoggingTargetTable::ALL_LOGS);
 }
 
-void CSVLogStorage::SetWriterConfigs(CSVWriter &writer, vector<string> column_names) {
+void CSVLogStorage::SetWriterConfigs(CSVWriter &writer, vector<string> column_names, bool newline_on_flush) {
 	writer.options.dialect_options.state_machine_options.escape = '\"';
 	writer.options.dialect_options.state_machine_options.quote = '\"';
 	writer.options.dialect_options.state_machine_options.delimiter = CSVOption<string>("\t");
 	writer.options.name_list = column_names;
 
 	writer.options.force_quote = vector<bool>(column_names.size(), false);
+	writer.writer_options.add_newline_on_flush = newline_on_flush;
 }
 
 void CSVLogStorage::FlushChunk(LoggingTargetTable table, DataChunk &chunk) {
@@ -259,12 +260,13 @@ void BufferingLogStorage::UpdateConfigInternal(DatabaseInstance &db, case_insens
 	for (const auto &it : config) {
 		if (StringUtil::Lower(it.first) == "buffer_size") {
 			buffer_limit = it.second.GetValue<uint64_t>();
+			ResetAllBuffers();
 			// TODO: might require flushing
 		} if (StringUtil::Lower(it.first) == "normalize") {
 			throw InternalException("'normalize' setting should be handled in child class");
-		} else {
-			throw InvalidInputException("Unrecognized log storage config option: '%s'", it.first);
 		}
+
+		throw InvalidInputException("Unrecognized log storage config option: '%s'", it.first);
 	}
 }
 
@@ -275,7 +277,7 @@ StdOutLogStorage::StdOutLogStorage(DatabaseInstance &db) : CSVLogStorage(db, fal
 	// Initialize writer and streams
 	stdout_stream = make_uniq<MemoryStream>();
 	writers[target_table] = make_uniq<CSVWriter>(*stdout_stream, GetColumnNames(target_table), false);
-	SetWriterConfigs(*writers[target_table], GetColumnNames(target_table));
+	SetWriterConfigs(*writers[target_table], GetColumnNames(target_table), true);
 }
 
 StdOutLogStorage::~StdOutLogStorage() {
@@ -307,7 +309,7 @@ void FileLogStorage::InitializeFile(DatabaseInstance &db, LoggingTargetTable tab
 	writers[table] = make_uniq<CSVWriter>(*file_writer, column_names, false);
 	auto csv_writer = writers[table].get();
 
-	SetWriterConfigs(*csv_writer, column_names);
+	SetWriterConfigs(*csv_writer, column_names, false);
 
 	bool should_write_header = file_writer->handle->GetFileSize() == 0;
 
@@ -463,56 +465,39 @@ unique_ptr<TableRef> FileLogStorage::BindReplaceInternal(ClientContext &context,
 
 unique_ptr<TableRef> FileLogStorage::BindReplace(ClientContext &context, TableFunctionBindInput &input, LoggingTargetTable table) {
 	lock_guard<mutex> lck(lock);
-	string columns;
-	string select;
-	string path;
+
+	// We only allow scanning enabled tables
+	if (!IsEnabledInternal(table)) {
+		return nullptr;
+	}
 
 	// We start by flushing the table to ensure we scan the latest version
-	if (IsEnabledInternal(table)) {
-		FlushInternal(table);
+	FlushInternal(table);
+
+	if (normalize_contexts && table == LoggingTargetTable::ALL_LOGS) {
+		throw InvalidConfigurationException("Can not scan ALL_LOGS table when logs are normalized");
+	}
+	if (!normalize_contexts && table != LoggingTargetTable::ALL_LOGS) {
+		throw InvalidConfigurationException("Can only scan ALL_LOGS table when logs are normalized");
 	}
 
-	if (!normalize_contexts) {
-		FlushInternal(LoggingTargetTable::ALL_LOGS);
-	}
+	string select = "SELECT *";
+	string path = file_paths[table];
 
-	// TODO: disallow scanning normalized when denormalized and change view into function
+	string columns;
 	if (table == LoggingTargetTable::LOG_ENTRIES) {
-		if (normalize_contexts) {
-			path = file_paths[table];
-			// Simply scan the entries file
-			select = "SELECT *";
-			columns = "'context_id': 'UBIGINT', 'timestamp': 'TIMESTAMP', 'type': 'VARCHAR', 'log_level': 'VARCHAR' , "
-					  "'message': 'VARCHAR'";
-		} else {
-			path = file_paths[LoggingTargetTable::ALL_LOGS];
-			// Scan the entries file, project only the entries columns
-			select = "SELECT context_id, timestamp, type, log_level, message";
-			columns = "'context_id': 'UBIGINT', 'scope': 'VARCHAR', 'connection_id': 'UBIGINT', 'transaction_id': "
-				  "'UBIGINT', 'query_id': 'UBIGINT', 'thread_id': 'UBIGINT', 'timestamp': 'TIMESTAMP', 'type': "
-				  "'VARCHAR', 'log_level': 'VARCHAR' , 'message': 'VARCHAR'";
-		}
+		columns = "'context_id': 'UBIGINT', 'timestamp': 'TIMESTAMP', 'type': 'VARCHAR', 'log_level': 'VARCHAR' , "
+				  "'message': 'VARCHAR'";
 	} else if (table == LoggingTargetTable::LOG_CONTEXTS) {
-		if (normalize_contexts) {
-			// Simply scan the contexts file
-			path = file_paths[table];
-			select = "SELECT *";
-			columns = "'context_id': 'UBIGINT', 'scope': 'VARCHAR', 'connection_id': 'UBIGINT', 'transaction_id': "
-							 "'UBIGINT', 'query_id': 'UBIGINT', 'thread_id': 'UBIGINT'";
-		} else {
-			// Scan the entries file, but
-			path = file_paths[LoggingTargetTable::ALL_LOGS];
-			select  = "SELECT DISTINCT context_id as context_id, scope, connection_id, transaction_id, query_id, thread_id";
-			columns = "'context_id': 'UBIGINT', 'scope': 'VARCHAR', 'connection_id': 'UBIGINT', 'transaction_id': "
-				  "'UBIGINT', 'query_id': 'UBIGINT', 'thread_id': 'UBIGINT', 'timestamp': 'TIMESTAMP', 'type': "
-				  "'VARCHAR', 'log_level': 'VARCHAR' , 'message': 'VARCHAR'";
-		}
+		columns = "'context_id': 'UBIGINT', 'scope': 'VARCHAR', 'connection_id': 'UBIGINT', 'transaction_id': "
+						 "'UBIGINT', 'query_id': 'UBIGINT', 'thread_id': 'UBIGINT'";
 	} else if (table == LoggingTargetTable::ALL_LOGS) {
-		path = file_paths[table];
-		select = "SELECT context_id, timestamp, type, log_level, message";
+		select = "SELECT context_id, scope, connection_id, transaction_id, query_id, thread_id, timestamp, type, log_level, message ";
 		columns = "'context_id': 'UBIGINT', 'scope': 'VARCHAR', 'connection_id': 'UBIGINT', 'transaction_id': "
 				  "'UBIGINT', 'query_id': 'UBIGINT', 'thread_id': 'UBIGINT', 'timestamp': 'TIMESTAMP', 'type': "
 				  "'VARCHAR', 'log_level': 'VARCHAR' , 'message': 'VARCHAR'";
+	} else {
+		throw InternalException("Invalid logging target table");
 	}
 
 	return BindReplaceInternal(context, input, path, select, columns);

@@ -163,6 +163,11 @@ void CSVWriter::FlushInternal(CSVWriterState &local_state) {
 	written_anything = true;
 	bytes_written += local_state.stream->GetPosition();
 	write_stream.WriteData((data_ptr_t)local_state.stream->GetData(), local_state.stream->GetPosition());
+
+	if (writer_options.add_newline_on_flush) {
+		write_stream.WriteData((data_ptr_t)writer_options.newline.c_str(), writer_options.newline.size());
+	}
+
 	local_state.stream->Rewind();
 }
 

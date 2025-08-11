@@ -24,6 +24,8 @@ struct CSVWriterOptions {
 	idx_t flush_size = 4096ULL * 8ULL;
 	//! For each byte whether the CSV file requires quotes when containing the byte
 	unsafe_unique_array<bool> requires_quotes;
+	//! Add a newline on flushing, useful when writing out to stdout
+	bool add_newline_on_flush = false;
 };
 
 struct CSVWriterState {
