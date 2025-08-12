@@ -12,13 +12,16 @@ static string TransformNewLine(string new_line) {
 	;
 }
 
-CSVWriterState::CSVWriterState() : flush_size(MemoryStream::DEFAULT_INITIAL_CAPACITY), stream(make_uniq<MemoryStream>()) {
+CSVWriterState::CSVWriterState()
+    : flush_size(MemoryStream::DEFAULT_INITIAL_CAPACITY), stream(make_uniq<MemoryStream>()) {
 }
 
-CSVWriterState::CSVWriterState(ClientContext &context, idx_t flush_size_p) : flush_size(flush_size_p), stream(make_uniq<MemoryStream>(Allocator::Get(context))) {
+CSVWriterState::CSVWriterState(ClientContext &context, idx_t flush_size_p)
+    : flush_size(flush_size_p), stream(make_uniq<MemoryStream>(Allocator::Get(context))) {
 }
 
-CSVWriterState::CSVWriterState(DatabaseInstance &db, idx_t flush_size_p) : flush_size(flush_size_p), stream(make_uniq<MemoryStream>(BufferAllocator::Get(db), flush_size)) {
+CSVWriterState::CSVWriterState(DatabaseInstance &db, idx_t flush_size_p)
+    : flush_size(flush_size_p), stream(make_uniq<MemoryStream>(BufferAllocator::Get(db), flush_size)) {
 }
 
 CSVWriterState::~CSVWriterState() {

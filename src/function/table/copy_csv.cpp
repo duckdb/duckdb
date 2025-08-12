@@ -327,7 +327,8 @@ CopyFunctionExecutionMode WriteCSVExecutionMode(bool preserve_insertion_order, b
 // Prepare Batch
 //===--------------------------------------------------------------------===//
 struct WriteCSVBatchData : public PreparedBatchData {
-	explicit WriteCSVBatchData(ClientContext &context, const idx_t flush_size) : writer_local_state(make_uniq<CSVWriterState>(context, flush_size)) {
+	explicit WriteCSVBatchData(ClientContext &context, const idx_t flush_size)
+	    : writer_local_state(make_uniq<CSVWriterState>(context, flush_size)) {
 		writer_local_state->require_manual_flush = true;
 	}
 
