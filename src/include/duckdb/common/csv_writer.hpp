@@ -15,6 +15,14 @@
 namespace duckdb {
 class MemoryStream;
 
+enum class CSVNewLineMode {
+	//! Newlines are written before writing out a new csv line. Ensures we don't write an empty line at the end of
+	//! a csv file. Uses CSVWriterState::written_anything to keep track of when to insert newlines
+	WRITE_BEFORE = 0,
+	//! Newlines are written after every line. This is cleanest in stdout, where lines are expected to end with a newline
+	WRITE_AFTER = 1
+};
+
 struct CSVWriterOptions {
 	CSVWriterOptions(const string &delim, const char &quote, const string &write_newline);
 
@@ -24,8 +32,8 @@ struct CSVWriterOptions {
 	idx_t flush_size = 4096ULL * 8ULL;
 	//! For each byte whether the CSV file requires quotes when containing the byte
 	unsafe_unique_array<bool> requires_quotes;
-	//! Add a newline on flushing, useful when writing out to stdout
-	bool add_newline_on_flush = false;
+	//! How to write newlines
+	CSVNewLineMode newline_writing_mode = CSVNewLineMode::WRITE_AFTER;
 };
 
 struct CSVWriterState {
@@ -92,8 +100,13 @@ public:
 	bool WrittenAnything() {
 		return written_anything;
 	}
-	void SetWrittenAnything(bool val) { // TODO: locking
-		written_anything = val;
+	void SetWrittenAnything(bool val) {
+		if (shared) {
+			lock_guard<mutex> guard(lock);
+			written_anything = val;
+		} else {
+			written_anything = val;
+		}
 	}
 
 	CSVReaderOptions options;

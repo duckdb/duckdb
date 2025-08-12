@@ -160,13 +160,13 @@ void CSVWriter::Close() {
 }
 
 void CSVWriter::FlushInternal(CSVWriterState &local_state) {
+	if (local_state.stream->GetPosition() == 0) {
+		return;
+	}
+
 	written_anything = true;
 	bytes_written += local_state.stream->GetPosition();
 	write_stream.WriteData((data_ptr_t)local_state.stream->GetData(), local_state.stream->GetPosition());
-
-	if (writer_options.add_newline_on_flush) {
-		write_stream.WriteData((data_ptr_t)writer_options.newline.c_str(), writer_options.newline.size());
-	}
 
 	local_state.stream->Rewind();
 }
@@ -318,7 +318,7 @@ void CSVWriter::WriteChunk(DataChunk &input, MemoryStream &writer, CSVReaderOpti
 	for (idx_t row_idx = 0; row_idx < input.size(); row_idx++) {
 		if (row_idx == 0 && !written_anything) {
 			written_anything = true;
-		} else {
+		} else if (writer_options.newline_writing_mode == CSVNewLineMode::WRITE_BEFORE) {
 			writer.WriteData(const_data_ptr_cast(writer_options.newline.c_str()), writer_options.newline.size());
 		}
 		// write values
@@ -342,6 +342,9 @@ void CSVWriter::WriteChunk(DataChunk &input, MemoryStream &writer, CSVReaderOpti
 
 			WriteQuotedString(writer, str_data[row_idx].GetData(), str_data[row_idx].GetSize(), col_idx, options,
 			                  writer_options);
+		}
+		if (writer_options.newline_writing_mode == CSVNewLineMode::WRITE_AFTER) {
+			writer.WriteData(const_data_ptr_cast(writer_options.newline.c_str()), writer_options.newline.size());
 		}
 	}
 }

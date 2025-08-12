@@ -229,14 +229,13 @@ void CSVLogStorage::ResetCastChunk() {
 	InitializeCastChunk(LoggingTargetTable::ALL_LOGS);
 }
 
-void CSVLogStorage::SetWriterConfigs(CSVWriter &writer, vector<string> column_names, bool newline_on_flush) {
+void CSVLogStorage::SetWriterConfigs(CSVWriter &writer, vector<string> column_names) {
 	writer.options.dialect_options.state_machine_options.escape = '\"';
 	writer.options.dialect_options.state_machine_options.quote = '\"';
 	writer.options.dialect_options.state_machine_options.delimiter = CSVOption<string>("\t");
 	writer.options.name_list = column_names;
 
 	writer.options.force_quote = vector<bool>(column_names.size(), false);
-	writer.writer_options.add_newline_on_flush = newline_on_flush;
 }
 
 void CSVLogStorage::FlushChunk(LoggingTargetTable table, DataChunk &chunk) {
@@ -279,7 +278,8 @@ StdOutLogStorage::StdOutLogStorage(DatabaseInstance &db) : CSVLogStorage(db, fal
 	// Initialize writer and streams
 	stdout_stream = make_uniq<MemoryStream>();
 	writers[target_table] = make_uniq<CSVWriter>(*stdout_stream, GetColumnNames(target_table), false);
-	SetWriterConfigs(*writers[target_table], GetColumnNames(target_table), true);
+	SetWriterConfigs(*writers[target_table], GetColumnNames(target_table));
+	writers[target_table]->writer_options.newline_writing_mode = CSVNewLineMode::WRITE_AFTER;
 }
 
 StdOutLogStorage::~StdOutLogStorage() {
@@ -311,7 +311,7 @@ void FileLogStorage::InitializeFile(DatabaseInstance &db, LoggingTargetTable tab
 	writers[table] = make_uniq<CSVWriter>(*file_writer, column_names, false);
 	auto csv_writer = writers[table].get();
 
-	SetWriterConfigs(*csv_writer, column_names, false);
+	SetWriterConfigs(*csv_writer, column_names);
 
 	bool should_write_header = file_writer->handle->GetFileSize() == 0;
 
