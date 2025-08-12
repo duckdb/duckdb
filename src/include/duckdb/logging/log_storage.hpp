@@ -202,9 +202,9 @@ protected:
 	//! Configure a CSV writer by initializing its settings with the `writer_options` and `reader_options` settings
 	void SetWriterConfigs(CSVWriter &Writer, vector<string> column_names);
 	//! Allows child classes to manipulate options
-	CSVWriterOptions& GetCSVWriterOptions();
+	CSVWriterOptions &GetCSVWriterOptions();
 	//! Allows child classes to manipulate options
-	CSVReaderOptions& GetCSVReaderOptions();
+	CSVReaderOptions &GetCSVReaderOptions();
 
 private:
 	//! Perform the cast (does not reset input chunk!)
@@ -219,7 +219,8 @@ private:
 	//! The writers to be registered by child classes
 	unordered_map<LoggingTargetTable, unique_ptr<CSVWriter>> writers;
 
-	//! CSV Options to initialize the CSVWriters with. TODO: cleanup, this is now a little bit of a mixed bag of settings
+	//! CSV Options to initialize the CSVWriters with. TODO: cleanup, this is now a little bit of a mixed bag of
+	//! settings
 	unique_ptr<CSVWriterOptions> writer_options;
 	unique_ptr<CSVReaderOptions> reader_options;
 };
