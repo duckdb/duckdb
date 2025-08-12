@@ -25,4 +25,15 @@ def test_logging_custom_delim(shell):
     result = test.run()
     result.check_stdout("QueryLog,INFO,SELECT 1 as a;\n┌───────┐")
 
+# By default stdoutlogging has buffer size of 1, but we can increase it if we want. We use `only_flush_on_full_buffer` to ensure we can test this
+def test_logging_buffering(shell):
+    test = (
+        ShellTest(shell)
+        .statement("CALL enable_logging('QueryLog', storage='stdout', storage_buffer_size=1000, storage_config={'only_flush_on_full_buffer': true})")
+        .statement('SELECT 1 as a')
+        .statement('SELECT 2 as b')
+    )
+    result = test.run()
+    result.check_not_exist("QueryLog")
+
 # fmt: on

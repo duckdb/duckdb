@@ -174,7 +174,7 @@ private:
 //! logging.
 class CSVLogStorage : public BufferingLogStorage {
 public:
-	explicit CSVLogStorage(DatabaseInstance &db, bool normalize);
+	explicit CSVLogStorage(DatabaseInstance &db, bool normalize, idx_t buffer_size);
 	~CSVLogStorage() override;
 
 protected:

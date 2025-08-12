@@ -102,8 +102,8 @@ unique_ptr<TableRef> LogStorage::BindReplace(ClientContext &context, TableFuncti
 CSVLogStorage::~CSVLogStorage() {
 }
 
-CSVLogStorage::CSVLogStorage(DatabaseInstance &db, bool normalize)
-    : BufferingLogStorage(db, STANDARD_VECTOR_SIZE, normalize) {
+CSVLogStorage::CSVLogStorage(DatabaseInstance &db, bool normalize, idx_t buffer_size)
+    : BufferingLogStorage(db, buffer_size, normalize) {
 	reader_options = make_uniq<CSVReaderOptions>();
 	writer_options = make_uniq<CSVWriterOptions>(*reader_options);
 
@@ -257,7 +257,7 @@ void StdOutLogStorage::StdOutWriteStream::WriteData(const_data_ptr_t buffer, idx
 	std::cout.flush();
 }
 
-StdOutLogStorage::StdOutLogStorage(DatabaseInstance &db) : CSVLogStorage(db, false) {
+StdOutLogStorage::StdOutLogStorage(DatabaseInstance &db) : CSVLogStorage(db, false, 1) {
 	// StdOutLogStorage is denormalized only
 	auto target_table = LoggingTargetTable::ALL_LOGS;
 
@@ -275,7 +275,7 @@ StdOutLogStorage::StdOutLogStorage(DatabaseInstance &db) : CSVLogStorage(db, fal
 StdOutLogStorage::~StdOutLogStorage() {
 }
 
-FileLogStorage::FileLogStorage(DatabaseInstance &db_p) : CSVLogStorage(db_p, true), db(db_p) {
+FileLogStorage::FileLogStorage(DatabaseInstance &db_p) : CSVLogStorage(db_p, true, STANDARD_VECTOR_SIZE), db(db_p) {
 	tables[LoggingTargetTable::ALL_LOGS] = TableWriter();
 	tables[LoggingTargetTable::LOG_CONTEXTS] = TableWriter();
 	tables[LoggingTargetTable::LOG_ENTRIES] = TableWriter();
@@ -623,19 +623,8 @@ void BufferingLogStorage::WriteLogEntry(timestamp_t timestamp, LogLevel level, c
 	    normalize_contexts ? buffers[LoggingTargetTable::LOG_ENTRIES] : buffers[LoggingTargetTable::ALL_LOGS];
 
 	auto size = log_entries_buffer->size();
-
-	if (size + 1 > buffer_limit) {
-		if (normalize_contexts) {
-			if (flush_contexts_on_next_entry_flush) {
-				FlushInternal(LoggingTargetTable::LOG_CONTEXTS);
-				flush_contexts_on_next_entry_flush = false;
-			}
-			FlushInternal(LoggingTargetTable::LOG_ENTRIES);
-		} else {
-			FlushInternal(LoggingTargetTable::ALL_LOGS);
-		}
-
-		size = log_entries_buffer->size();
+	if (size >= buffer_limit) {
+		throw InternalException("Log buffer limit exceeded: code should have flushed before");
 	}
 
 	if (registered_contexts.find(context.context_id) == registered_contexts.end()) {
@@ -667,6 +656,20 @@ void BufferingLogStorage::WriteLogEntry(timestamp_t timestamp, LogLevel level, c
 	message_data[size] = StringVector::AddString(log_entries_buffer->data[col++], log_message);
 
 	log_entries_buffer->SetCardinality(size + 1);
+
+	if (size + 1 >= buffer_limit) {
+		if (normalize_contexts) {
+			// Flush all entries
+			FlushInternal(LoggingTargetTable::LOG_ENTRIES);
+			// Flush contexts if required
+			if (flush_contexts_on_next_entry_flush) {
+				FlushInternal(LoggingTargetTable::LOG_CONTEXTS);
+				flush_contexts_on_next_entry_flush = false;
+			}
+		} else {
+			FlushInternal(LoggingTargetTable::ALL_LOGS);
+		}
+	}
 }
 
 void BufferingLogStorage::WriteLogEntries(DataChunk &chunk, const RegisteredLoggingContext &context) {

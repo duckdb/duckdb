@@ -42,7 +42,7 @@ CALL enable_logging('', level='trace', storage='memory', storage_config={'buffer
 
 # Buffers aaaaalmost full
 statement ok
-SELECT write_log('hello from the connection log scope', level := 'error', scope := 'connection') from range(0,3000);
+SELECT write_log('hello from the connection log scope', level := 'error', scope := 'connection') from range(0,2999);
 
 query I
 SELECT count(*) FROM duckdb_logs()
@@ -59,9 +59,8 @@ SELECT count(*) FROM duckdb_logs() where type=''
 ----
 3000
 
-# Note that there is 1 log contexts: these did not overflow the log contexts buffer, but they need to be written out whenever
-# the first log entry containing a context_id is flushed (i.e. on adding the 3rd log entry)
+# Note that there are 2 logging contexts now, since we wrote the log entries across 2 queries with each their own logging context
 query I
 SELECT count(*) FROM duckdb_log_contexts()
 ----
-1
+2
