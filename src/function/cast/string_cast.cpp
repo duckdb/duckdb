@@ -5,7 +5,7 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/function/cast/bound_cast_data.hpp"
-#include "duckdb/common/types/varint.hpp"
+#include "duckdb/common/types/bignum.hpp"
 
 namespace duckdb {
 
@@ -513,8 +513,8 @@ BoundCastInfo DefaultCasts::StringCastSwitch(BindCastInput &input, const Logical
 		                     MapBoundCastData::BindMapToMapCast(
 		                         input, LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR), target),
 		                     InitMapCastLocalState);
-	case LogicalTypeId::VARINT:
-		return BoundCastInfo(&VectorCastHelpers::TryCastStringLoop<string_t, varint_t, TryCastToVarInt>);
+	case LogicalTypeId::BIGNUM:
+		return BoundCastInfo(&VectorCastHelpers::TryCastStringLoop<string_t, bignum_t, TryCastToBignum>);
 	default:
 		return VectorStringCastNumericSwitch(input, source, target);
 	}
