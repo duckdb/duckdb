@@ -105,7 +105,7 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 	// Initialize Parse Chunk
 	parse_chunk.Initialize(buffer_allocator, logical_types, result_size);
 	for (auto &col : parse_chunk.data) {
-		vector_ptr.push_back(FlatVector::GetData<string_t>(col));
+		vector_ptr.push_back(FlatVector::GetData(col));
 		validity_mask.push_back(&FlatVector::Validity(col));
 	}
 
@@ -504,8 +504,9 @@ void StringValueResult::Reset() {
 	}
 	// We keep a reference to the buffer from our current iteration if it already exists
 	shared_ptr<CSVBufferHandle> cur_buffer;
-	if (buffer_handles.find(iterator.GetBufferIdx()) != buffer_handles.end()) {
-		cur_buffer = buffer_handles[iterator.GetBufferIdx()];
+	auto handle_iter = buffer_handles.find(iterator.GetBufferIdx());
+	if (handle_iter != buffer_handles.end()) {
+		cur_buffer = handle_iter->second;
 	}
 	buffer_handles.clear();
 	idx_t actual_size = 0;
@@ -1373,7 +1374,7 @@ void StringValueScanner::ProcessOverBufferValue() {
 			result.escaped = true;
 		}
 		if (states.IsComment()) {
-			result.comment = true;
+			result.SetComment(result, j);
 		}
 		if (states.IsInvalid()) {
 			result.InvalidState(result);
@@ -1435,7 +1436,7 @@ void StringValueScanner::ProcessOverBufferValue() {
 			result.SetQuoted(result, j);
 		}
 		if (states.IsComment()) {
-			result.comment = true;
+			result.SetComment(result, j);
 		}
 		if (states.IsEscaped() && result.state_machine.dialect_options.state_machine_options.escape != '\0') {
 			result.escaped = true;

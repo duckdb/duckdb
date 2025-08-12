@@ -18,7 +18,7 @@ namespace duckdb {
 struct ListSelectFun {
 	static constexpr const char *Name = "list_select";
 	static constexpr const char *Parameters = "value_list,index_list";
-	static constexpr const char *Description = "Returns a list based on the elements selected by the index_list.";
+	static constexpr const char *Description = "Returns a list based on the elements selected by the `index_list`.";
 	static constexpr const char *Example = "list_select([10, 20, 30, 40], [1, 4])";
 	static constexpr const char *Categories = "list";
 
@@ -34,7 +34,7 @@ struct ArraySelectFun {
 struct ListWhereFun {
 	static constexpr const char *Name = "list_where";
 	static constexpr const char *Parameters = "value_list,mask_list";
-	static constexpr const char *Description = "Returns a list with the BOOLEANs in mask_list applied as a mask to the value_list.";
+	static constexpr const char *Description = "Returns a list with the `BOOLEAN`s in `mask_list` applied as a mask to the `value_list`.";
 	static constexpr const char *Example = "list_where([10, 20, 30, 40], [true, false, false, true])";
 	static constexpr const char *Categories = "list";
 
@@ -78,7 +78,7 @@ struct ArrayHasFun {
 struct ListPositionFun {
 	static constexpr const char *Name = "list_position";
 	static constexpr const char *Parameters = "list,element";
-	static constexpr const char *Description = "Returns the index of the element if the list contains the element. If the element is not found, it returns NULL.";
+	static constexpr const char *Description = "Returns the index of the `element` if the `list` contains the `element`. If the `element` is not found, it returns `NULL`.";
 	static constexpr const char *Example = "list_position([1, 2, NULL], 2)";
 	static constexpr const char *Categories = "list";
 
@@ -105,9 +105,9 @@ struct ArrayIndexofFun {
 
 struct ListZipFun {
 	static constexpr const char *Name = "list_zip";
-	static constexpr const char *Parameters = "list1,list2,...";
-	static constexpr const char *Description = "Zips k LISTs to a new LIST whose length will be that of the longest list. Its elements are structs of k elements from each list list_1, …, list_k, missing elements are replaced with NULL. If truncate is set, all lists are truncated to the smallest list length.";
-	static constexpr const char *Example = "list_zip([1, 2], [3, 4], [5, 6])";
+	static constexpr const char *Parameters = "list_1,...,truncate";
+	static constexpr const char *Description = "Zips n `LIST`s to a new `LIST` whose length will be that of the longest list. Its elements are structs of n elements from each list `list_1`, …, `list_n`, missing elements are replaced with `NULL`. If `truncate` is set, all lists are truncated to the smallest list length.";
+	static constexpr const char *Example = "list_zip([1, 2], [3, 4], [5, 6])\002list_zip([1, 2], [3, 4], [5, 6, 7])\002list_zip([1, 2], [3, 4], [5, 6, 7], true)";
 	static constexpr const char *Categories = "list";
 
 	static ScalarFunction GetFunction();
@@ -122,7 +122,7 @@ struct ArrayZipFun {
 struct ListExtractFun {
 	static constexpr const char *Name = "list_extract";
 	static constexpr const char *Parameters = "list,index";
-	static constexpr const char *Description = "Extract the indexth (1-based) value from the list.";
+	static constexpr const char *Description = "Extract the `index`th (1-based) value from the list.";
 	static constexpr const char *Example = "list_extract([4, 5, 6], 3)";
 	static constexpr const char *Categories = "list";
 
@@ -138,7 +138,7 @@ struct ListElementFun {
 struct ListResizeFun {
 	static constexpr const char *Name = "list_resize";
 	static constexpr const char *Parameters = "list,size[,value]";
-	static constexpr const char *Description = "Resizes the list to contain size elements. Initializes new elements with value or NULL if value is not set.";
+	static constexpr const char *Description = "Resizes the `list` to contain `size` elements. Initializes new elements with `value` or `NULL` if `value` is not set.";
 	static constexpr const char *Example = "list_resize([1, 2, 3], 5, 0)";
 	static constexpr const char *Categories = "list";
 

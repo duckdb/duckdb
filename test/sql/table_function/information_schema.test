@@ -2,8 +2,6 @@
 # description: Test information_schema functions
 # group: [table_function]
 
-require noforcestorage
-
 statement ok
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA;
 
@@ -92,34 +90,74 @@ CREATE TABLE scheme.dept (dept_id INT PRIMARY KEY, dept_name VARCHAR(100) NOT NU
 statement ok
 CREATE TABLE scheme.emp (emp_id INT PRIMARY KEY, first_name VARCHAR(100) NOT NULL, last_name VARCHAR(100) NOT NULL, ssn INT NOT NULL UNIQUE, salary DECIMAL(10, 2) NOT NULL CHECK (salary > 0), dept_id INT REFERENCES scheme.dept(dept_id))
 
-query IIIIIII
-SELECT table_catalog, table_schema, table_name, column_name, constraint_catalog, constraint_schema, constraint_name FROM information_schema.constraint_column_usage WHERE table_schema = 'scheme' AND table_name = 'emp' ORDER BY column_name ASC
+query IIIII
+SELECT table_schema, table_name, column_name, constraint_schema, constraint_name
+FROM information_schema.constraint_column_usage
+WHERE table_schema = 'scheme' AND table_name = 'emp'
+ORDER BY column_name ASC;
 ----
-memory	scheme	emp	dept_id	memory	scheme	emp_dept_id_dept_id_fkey
-memory	scheme	emp	emp_id	memory	scheme	emp_emp_id_pkey
-memory	scheme	emp	salary	memory	scheme	emp_salary_check
-memory	scheme	emp	ssn	memory	scheme	emp_ssn_key
+scheme	emp	dept_id	scheme	emp_dept_id_dept_id_fkey
+scheme	emp	emp_id	scheme	emp_emp_id_pkey
+scheme	emp	salary	scheme	emp_salary_check
+scheme	emp	ssn	scheme	emp_ssn_key
 
-query IIIIII
-SELECT table_catalog, table_schema, table_name, constraint_catalog, constraint_schema, constraint_name FROM information_schema.constraint_table_usage WHERE table_schema = 'scheme' AND table_name = 'emp' ORDER BY constraint_name ASC
+query I
+SELECT DISTINCT(table_catalog) = current_database()
+FROM information_schema.constraint_column_usage
+WHERE table_schema = 'scheme' AND table_name = 'emp'
+ORDER BY column_name ASC;
 ----
-memory	scheme	emp	memory	scheme	emp_dept_id_dept_id_fkey
-memory	scheme	emp	memory	scheme	emp_emp_id_pkey
-memory	scheme	emp	memory	scheme	emp_salary_check
-memory	scheme	emp	memory	scheme	emp_ssn_key
+True
+
+query I
+SELECT DISTINCT(constraint_catalog) = current_database()
+FROM information_schema.constraint_column_usage
+WHERE table_schema = 'scheme' AND table_name = 'emp'
+ORDER BY column_name ASC;
+----
+True
 
 query IIII
-SELECT constraint_catalog, constraint_schema, constraint_name, check_clause FROM information_schema.check_constraints WHERE constraint_schema = 'scheme' AND check_clause LIKE 'CHECK%'
+SELECT table_schema, table_name, constraint_schema, constraint_name
+FROM information_schema.constraint_table_usage
+WHERE table_schema = 'scheme' AND table_name = 'emp'
+ORDER BY constraint_name ASC
 ----
-memory	scheme	emp_salary_check	CHECK((salary > 0))
+scheme	emp	scheme	emp_dept_id_dept_id_fkey
+scheme	emp	scheme	emp_emp_id_pkey
+scheme	emp	scheme	emp_salary_check
+scheme	emp	scheme	emp_ssn_key
+
+query III
+SELECT constraint_schema, constraint_name, check_clause
+FROM information_schema.check_constraints
+WHERE constraint_schema = 'scheme' AND check_clause LIKE 'CHECK%'
+----
+scheme	emp_salary_check	CHECK((salary > 0))
+
+query I
+SELECT DISTINCT(constraint_catalog) = current_database()
+FROM information_schema.check_constraints
+WHERE constraint_schema = 'scheme' AND check_clause LIKE 'CHECK%'
+----
+True
 
 statement ok
 CREATE OR REPLACE VIEW scheme.emp_dept_view AS SELECT emp.*, dept.dept_name FROM scheme.emp JOIN scheme.dept ON emp.dept_id = dept.dept_id;
 
-query IIIIIIIIII
-SELECT table_catalog, table_schema, table_name, SUBSTR (view_definition, 1, 32) AS view_definition_substr, check_option, is_updatable, is_insertable_into, is_trigger_updatable, is_trigger_deletable, is_trigger_insertable_into FROM information_schema.views WHERE table_schema = 'scheme' AND table_name = 'emp_dept_view';
+query IIIIIIIII
+SELECT table_schema, table_name, SUBSTR (view_definition, 1, 32) AS view_definition_substr, check_option, is_updatable, is_insertable_into, is_trigger_updatable, is_trigger_deletable, is_trigger_insertable_into
+FROM information_schema.views
+WHERE table_schema = 'scheme' AND table_name = 'emp_dept_view';
 ----
-memory	scheme	emp_dept_view	CREATE VIEW scheme.emp_dept_view	NONE	NO	NO	NO	NO	NO
+scheme	emp_dept_view	CREATE VIEW scheme.emp_dept_view	NONE	NO	NO	NO	NO	NO
+
+query I
+SELECT DISTINCT(table_catalog) = current_database()
+FROM information_schema.views
+WHERE table_schema = 'scheme' AND table_name = 'emp_dept_view';
+----
+True
 
 statement ok
 DROP SCHEMA scheme CASCADE;

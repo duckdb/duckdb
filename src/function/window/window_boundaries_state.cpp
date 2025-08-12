@@ -391,8 +391,12 @@ WindowBoundsSet WindowBoundariesState::GetWindowBounds(const BoundWindowExpressi
 	case ExpressionType::WINDOW_FILL:
 		result.insert(FRAME_BEGIN);
 		result.insert(FRAME_END);
-		result.insert(VALID_BEGIN);
-		result.insert(VALID_END);
+		if (wexpr.arg_orders.empty()) {
+			//	FILL uses the validity ranges to quickly eliminate indexes that can't be interpolated.
+			//	This only works for non-secondary orderings
+			result.insert(VALID_BEGIN);
+			result.insert(VALID_END);
+		}
 		break;
 	case ExpressionType::WINDOW_FIRST_VALUE:
 	case ExpressionType::WINDOW_LAST_VALUE:

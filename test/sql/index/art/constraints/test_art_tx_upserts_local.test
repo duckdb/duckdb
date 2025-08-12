@@ -40,7 +40,7 @@ statement ok con1
 BEGIN;
 
 statement ok con1
-INSERT OR REPLACE INTO tbl_local VALUES (1, ['val1 payload']), (1, ['val2 payload']);
+INSERT OR REPLACE INTO tbl_local VALUES (1, ['val2 payload']), (1, ['val2 payload']);
 
 statement ok con1
 COMMIT;

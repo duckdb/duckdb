@@ -22,7 +22,8 @@ public:
 
 public:
 	//! Regular Table Scan
-	PhysicalPositionalScan(vector<LogicalType> types, PhysicalOperator &left, PhysicalOperator &right);
+	PhysicalPositionalScan(PhysicalPlan &physical_plan, vector<LogicalType> types, PhysicalOperator &left,
+	                       PhysicalOperator &right);
 
 	//! The child table functions
 	vector<reference<PhysicalOperator>> child_tables;

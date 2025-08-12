@@ -173,4 +173,23 @@ optional_idx DuckCatalog::GetCatalogVersion(ClientContext &context) {
 	return transaction_manager.GetCatalogVersion(*transaction.transaction);
 }
 
+//===--------------------------------------------------------------------===//
+// Encryption
+//===--------------------------------------------------------------------===//
+void DuckCatalog::SetEncryptionKeyId(const string &key_id) {
+	encryption_key_id = key_id;
+}
+
+string &DuckCatalog::GetEncryptionKeyId() {
+	return encryption_key_id;
+}
+
+void DuckCatalog::SetIsEncrypted() {
+	is_encrypted = true;
+}
+
+bool DuckCatalog::GetIsEncrypted() {
+	return is_encrypted;
+}
+
 } // namespace duckdb

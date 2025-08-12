@@ -4,8 +4,6 @@
 
 require noforcestorage  
 
-mode skip
-
 query IIIIIIIIII
 from duckdb_logs
 ----

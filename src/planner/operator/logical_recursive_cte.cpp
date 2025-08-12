@@ -4,6 +4,14 @@
 
 namespace duckdb {
 
+InsertionOrderPreservingMap<string> LogicalRecursiveCTE::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
+	result["CTE Name"] = ctename;
+	result["Table Index"] = StringUtil::Format("%llu", table_index);
+	SetParamsEstimatedCardinality(result);
+	return result;
+}
+
 vector<idx_t> LogicalRecursiveCTE::GetTableIndex() const {
 	return vector<idx_t> {table_index};
 }

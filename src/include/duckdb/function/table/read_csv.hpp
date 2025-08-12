@@ -47,7 +47,8 @@ struct WriteCSVData : public BaseCSVData {
 			options.dialect_options.state_machine_options.escape = options.dialect_options.state_machine_options.quote;
 		}
 	}
-
+	//! The size of the CSV file (in bytes) that we buffer before we flush it to disk
+	idx_t flush_size = 4096ULL * 8ULL;
 	//! Expressions used to convert the input into strings
 	vector<unique_ptr<Expression>> cast_expressions;
 };

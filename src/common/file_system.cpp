@@ -14,6 +14,7 @@
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/common/windows_util.hpp"
 #include "duckdb/common/operator/multiply.hpp"
+#include "duckdb/logging/log_manager.hpp"
 
 #include <cstdint>
 #include <cstdio>
@@ -407,11 +408,6 @@ void FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t 
 	throw NotImplementedException("%s: Read (with location) is not implemented!", GetName());
 }
 
-bool FileSystem::Trim(FileHandle &handle, idx_t offset_bytes, idx_t length_bytes) {
-	// This is not a required method. Derived FileSystems may optionally override/implement.
-	return false;
-}
-
 void FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
 	throw NotImplementedException("%s: Write (with location) is not implemented!", GetName());
 }
@@ -424,11 +420,16 @@ int64_t FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	throw NotImplementedException("%s: Write is not implemented!", GetName());
 }
 
+bool FileSystem::Trim(FileHandle &handle, idx_t offset_bytes, idx_t length_bytes) {
+	// This is not a required method. Derived FileSystems may optionally override/implement.
+	return false;
+}
+
 int64_t FileSystem::GetFileSize(FileHandle &handle) {
 	throw NotImplementedException("%s: GetFileSize is not implemented!", GetName());
 }
 
-time_t FileSystem::GetLastModifiedTime(FileHandle &handle) {
+timestamp_t FileSystem::GetLastModifiedTime(FileHandle &handle) {
 	throw NotImplementedException("%s: GetLastModifiedTime is not implemented!", GetName());
 }
 
@@ -704,7 +705,13 @@ void FileHandle::Read(void *buffer, idx_t nr_bytes, idx_t location) {
 	file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
 }
 
-void FileHandle::Write(void *buffer, idx_t nr_bytes, idx_t location) {
+void FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) {
+	// FIXME: Add profiling.
+	file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
+}
+
+void FileHandle::Write(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) {
+	// FIXME: Add profiling.
 	file_system.Write(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
 }
 

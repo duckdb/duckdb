@@ -9,13 +9,13 @@
 
 namespace duckdb {
 
-PhysicalTableScan::PhysicalTableScan(vector<LogicalType> types, TableFunction function_p,
+PhysicalTableScan::PhysicalTableScan(PhysicalPlan &physical_plan, vector<LogicalType> types, TableFunction function_p,
                                      unique_ptr<FunctionData> bind_data_p, vector<LogicalType> returned_types_p,
                                      vector<ColumnIndex> column_ids_p, vector<idx_t> projection_ids_p,
                                      vector<string> names_p, unique_ptr<TableFilterSet> table_filters_p,
                                      idx_t estimated_cardinality, ExtraOperatorInfo extra_info,
                                      vector<Value> parameters_p, virtual_column_map_t virtual_columns_p)
-    : PhysicalOperator(PhysicalOperatorType::TABLE_SCAN, std::move(types), estimated_cardinality),
+    : PhysicalOperator(physical_plan, PhysicalOperatorType::TABLE_SCAN, std::move(types), estimated_cardinality),
       function(std::move(function_p)), bind_data(std::move(bind_data_p)), returned_types(std::move(returned_types_p)),
       column_ids(std::move(column_ids_p)), projection_ids(std::move(projection_ids_p)), names(std::move(names_p)),
       table_filters(std::move(table_filters_p)), extra_info(std::move(extra_info)), parameters(std::move(parameters_p)),
@@ -32,7 +32,7 @@ public:
 		if (op.function.init_global) {
 			auto filters = table_filters ? *table_filters : GetTableFilters(op);
 			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.projection_ids, filters,
-			                             op.extra_info.sample_options);
+			                             op.extra_info.sample_options, &op);
 
 			global_state = op.function.init_global(context, input);
 			if (global_state) {
@@ -47,7 +47,7 @@ public:
 			for (auto &param : op.parameters) {
 				input_types.push_back(param.type());
 			}
-			input_chunk.Initialize(context, input_types);
+			input_chunk.Initialize(BufferAllocator::Get(context), input_types);
 			for (idx_t c = 0; c < op.parameters.size(); c++) {
 				input_chunk.data[c].Reference(op.parameters[c]);
 			}
@@ -76,7 +76,7 @@ public:
 	                          const PhysicalTableScan &op) {
 		if (op.function.init_local) {
 			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.projection_ids,
-			                             gstate.GetTableFilters(op), op.extra_info.sample_options);
+			                             gstate.GetTableFilters(op), op.extra_info.sample_options, &op);
 			local_state = op.function.init_local(context, input, gstate.global_state.get());
 		}
 	}
@@ -110,6 +110,7 @@ SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk
 		function.in_out_function_final(context, data, chunk);
 	}
 	switch (function.in_out_function(context, data, g_state.input_chunk, chunk)) {
+
 	case OperatorResultType::BLOCKED: {
 		auto guard = g_state.Lock();
 		return g_state.BlockSource(guard, input.interrupt_state);

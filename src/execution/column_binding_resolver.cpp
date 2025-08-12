@@ -26,13 +26,6 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		for (auto &cond : comp_join.conditions) {
 			VisitExpression(&cond.left);
 		}
-		// resolve any single-side predicates
-		// for now, only ASOF supports this, and we are guaranteed that all right side predicates
-		// have been pushed into a filter.
-		if (comp_join.predicate) {
-			D_ASSERT(op.type == LogicalOperatorType::LOGICAL_ASOF_JOIN);
-			VisitExpression(&comp_join.predicate);
-		}
 		// visit the duplicate eliminated columns on the LHS, if any
 		for (auto &expr : comp_join.duplicate_eliminated_columns) {
 			VisitExpression(&expr);
@@ -45,6 +38,12 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		// finally update the bindings with the result bindings of the join
 		bindings = op.GetColumnBindings();
 		types = op.types;
+		// resolve any mixed predicates
+		// for now, only ASOF supports this.
+		if (comp_join.predicate) {
+			D_ASSERT(op.type == LogicalOperatorType::LOGICAL_ASOF_JOIN);
+			VisitExpression(&comp_join.predicate);
+		}
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
@@ -113,21 +112,22 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		//! We want to execute the normal path, but also add a dummy 'excluded' binding if there is a
 		// ON CONFLICT DO UPDATE clause
 		auto &insert_op = op.Cast<LogicalInsert>();
-		if (insert_op.action_type != OnConflictAction::THROW) {
+		if (insert_op.on_conflict_info.action_type != OnConflictAction::THROW) {
 			// Get the bindings from the children
 			VisitOperatorChildren(op);
 			auto column_count = insert_op.table.GetColumns().PhysicalColumnCount();
-			auto dummy_bindings = LogicalOperator::GenerateColumnBindings(insert_op.excluded_table_index, column_count);
+			auto dummy_bindings =
+			    LogicalOperator::GenerateColumnBindings(insert_op.on_conflict_info.excluded_table_index, column_count);
 			// Now insert our dummy bindings at the start of the bindings,
 			// so the first 'column_count' indices of the chunk are reserved for our 'excluded' columns
 			bindings.insert(bindings.begin(), dummy_bindings.begin(), dummy_bindings.end());
 			// TODO: fill types in too (clearing skips type checks)
 			types.clear();
-			if (insert_op.on_conflict_condition) {
-				VisitExpression(&insert_op.on_conflict_condition);
+			if (insert_op.on_conflict_info.on_conflict_condition) {
+				VisitExpression(&insert_op.on_conflict_info.on_conflict_condition);
 			}
-			if (insert_op.do_update_condition) {
-				VisitExpression(&insert_op.do_update_condition);
+			if (insert_op.on_conflict_info.do_update_condition) {
+				VisitExpression(&insert_op.on_conflict_info.do_update_condition);
 			}
 			VisitOperatorExpressions(op);
 			bindings = op.GetColumnBindings();

@@ -3,9 +3,10 @@
 #include "duckdb.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/logging/logger.hpp"
-#include "duckdb/main/extension_util.hpp"
+#include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/logging/log_storage.hpp"
+#include "duckdb/logging/log_manager.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -167,7 +168,8 @@ TEST_CASE("Test thread context logger", "[logging][.]") {
 
 	duckdb::TableFunction tf("test_thread_logger", {}, TestLoggingFunction, TestLoggingBind, nullptr,
 	                         TestLoggingInitLocal);
-	ExtensionUtil::RegisterFunction(*db.instance, tf);
+	ExtensionLoader loader(*db.instance, "log_test_extension");
+	loader.RegisterFunction(tf);
 
 	REQUIRE_NO_FAIL(con.Query("set enable_logging=true;"));
 

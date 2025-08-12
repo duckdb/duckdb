@@ -6,7 +6,6 @@
 
 #include "duckdb/common/uhugeint.hpp"
 #include "utf8proc_wrapper.hpp"
-#include "duckdb/common/operator/numeric_binary_operators.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/types/date.hpp"
@@ -24,7 +23,7 @@
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/main/error_manager.hpp"
-#include "duckdb/common/types/varint.hpp"
+#include "duckdb/common/types/bignum.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 
@@ -222,6 +221,8 @@ Value Value::MinimumValue(const LogicalType &type) {
 		return Value::DATE(Date::FromDate(Date::DATE_MIN_YEAR, Date::DATE_MIN_MONTH, Date::DATE_MIN_DAY));
 	case LogicalTypeId::TIME:
 		return Value::TIME(dtime_t(0));
+	case LogicalTypeId::TIME_NS:
+		return Value::TIME_NS(dtime_ns_t(0));
 	case LogicalTypeId::TIMESTAMP: {
 		const auto date = Date::FromDate(Timestamp::MIN_YEAR, Timestamp::MIN_MONTH, Timestamp::MIN_DAY);
 		return Value::TIMESTAMP(date, dtime_t(0));
@@ -275,8 +276,8 @@ Value Value::MinimumValue(const LogicalType &type) {
 	}
 	case LogicalTypeId::ENUM:
 		return Value::ENUM(0, type);
-	case LogicalTypeId::VARINT:
-		return Value::VARINT(Varint::VarcharToVarInt(
+	case LogicalTypeId::BIGNUM:
+		return Value::BIGNUM(Bignum::VarcharToBignum(
 		    "-179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540"
 		    "4589535143824642343213268894641827684675467035375169860499105765512820762454900903893289440758685084551339"
 		    "42304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368"));
@@ -317,6 +318,9 @@ Value Value::MaximumValue(const LogicalType &type) {
 	case LogicalTypeId::TIME:
 		//	24:00:00 according to PG
 		return Value::TIME(dtime_t(Interval::MICROS_PER_DAY));
+	case LogicalTypeId::TIME_NS:
+		//	24:00:00 according to PG
+		return Value::TIME_NS(dtime_ns_t(Interval::NANOS_PER_DAY));
 	case LogicalTypeId::TIMESTAMP:
 		return Value::TIMESTAMP(timestamp_t(NumericLimits<int64_t>::Maximum() - 1));
 	case LogicalTypeId::TIMESTAMP_SEC: {
@@ -364,8 +368,8 @@ Value Value::MaximumValue(const LogicalType &type) {
 		auto enum_size = EnumType::GetSize(type);
 		return Value::ENUM(enum_size - (enum_size ? 1 : 0), type);
 	}
-	case LogicalTypeId::VARINT:
-		return Value::VARINT(Varint::VarcharToVarInt(
+	case LogicalTypeId::BIGNUM:
+		return Value::BIGNUM(Bignum::VarcharToBignum(
 		    "1797693134862315708145274237317043567980705675258449965989174768031572607800285387605895586327668781715404"
 		    "5895351438246423432132688946418276846754670353751698604991057655128207624549009038932894407586850845513394"
 		    "2304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368"));
@@ -658,6 +662,13 @@ Value Value::TIME(dtime_t value) {
 	return result;
 }
 
+Value Value::TIME_NS(dtime_ns_t value) {
+	Value result(LogicalType::TIME_NS);
+	result.value_.time_ns = value;
+	result.is_null = false;
+	return result;
+}
+
 Value Value::TIMETZ(dtime_tz_t value) {
 	Value result(LogicalType::TIME_TZ);
 	result.value_.timetz = value;
@@ -880,12 +891,12 @@ Value Value::BLOB(const_data_ptr_t data, idx_t len) {
 	return result;
 }
 
-Value Value::VARINT(const_data_ptr_t data, idx_t len) {
-	return VARINT(string(const_char_ptr_cast(data), len));
+Value Value::BIGNUM(const_data_ptr_t data, idx_t len) {
+	return BIGNUM(string(const_char_ptr_cast(data), len));
 }
 
-Value Value::VARINT(const string &data) {
-	Value result(LogicalType::VARINT);
+Value Value::BIGNUM(const string &data) {
+	Value result(LogicalType::BIGNUM);
 	result.is_null = false;
 	result.value_info_ = make_shared_ptr<StringValueInfo>(data);
 	return result;
@@ -1021,6 +1032,11 @@ Value Value::CreateValue(dtime_t value) {
 }
 
 template <>
+Value Value::CreateValue(dtime_ns_t value) {
+	return Value::TIME_NS(value);
+}
+
+template <>
 Value Value::CreateValue(dtime_tz_t value) {
 	return Value::TIMETZ(value);
 }
@@ -1113,6 +1129,8 @@ T Value::GetValueInternal() const {
 		return Cast::Operation<date_t, T>(value_.date);
 	case LogicalTypeId::TIME:
 		return Cast::Operation<dtime_t, T>(value_.time);
+	case LogicalTypeId::TIME_NS:
+		return Cast::Operation<dtime_ns_t, T>(value_.time_ns);
 	case LogicalTypeId::TIME_TZ:
 		return Cast::Operation<dtime_tz_t, T>(value_.timetz);
 	case LogicalTypeId::TIMESTAMP:
@@ -1247,6 +1265,11 @@ dtime_t Value::GetValue() const {
 }
 
 template <>
+dtime_ns_t Value::GetValue() const {
+	return GetValueInternal<dtime_ns_t>();
+}
+
+template <>
 timestamp_t Value::GetValue() const {
 	return GetValueInternal<timestamp_t>();
 }
@@ -1336,6 +1359,8 @@ Value Value::Numeric(const LogicalType &type, int64_t value) {
 		return Value::DATE(date_t(NumericCast<int32_t>(value)));
 	case LogicalTypeId::TIME:
 		return Value::TIME(dtime_t(value));
+	case LogicalTypeId::TIME_NS:
+		return Value::TIME_NS(dtime_ns_t(value));
 	case LogicalTypeId::TIMESTAMP:
 		return Value::TIMESTAMP(timestamp_t(value));
 	case LogicalTypeId::TIMESTAMP_SEC:
@@ -1463,6 +1488,11 @@ DUCKDB_API string_t Value::GetValueUnsafe() const {
 }
 
 template <>
+DUCKDB_API bignum_t Value::GetValueUnsafe() const {
+	return bignum_t(StringValue::Get(*this));
+}
+
+template <>
 float Value::GetValueUnsafe() const {
 	D_ASSERT(type_.InternalType() == PhysicalType::FLOAT);
 	return value_.float_;
@@ -1484,6 +1514,12 @@ template <>
 dtime_t Value::GetValueUnsafe() const {
 	D_ASSERT(type_.InternalType() == PhysicalType::INT64);
 	return value_.time;
+}
+
+template <>
+dtime_ns_t Value::GetValueUnsafe() const {
+	D_ASSERT(type_.InternalType() == PhysicalType::INT64);
+	return value_.time_ns;
 }
 
 template <>

@@ -39,8 +39,8 @@ struct CSVWriterOptions {
 };
 
 struct CSVWriterState {
-	CSVWriterState(ClientContext &context);
-	CSVWriterState(DatabaseInstance &db);
+	CSVWriterState(ClientContext &context, idx_t flush_size);
+	CSVWriterState(DatabaseInstance &db, idx_t flush_size);
 	CSVWriterState();
 	~CSVWriterState();
 
@@ -49,6 +49,7 @@ struct CSVWriterState {
 		written_anything = false;
 	}
 
+	idx_t flush_size;
 	unique_ptr<MemoryStream> stream;
 	bool written_anything = false;
 
@@ -89,8 +90,8 @@ public:
 	//! Closes the writer, optionally writes a postfix
 	void Close();
 
-	unique_ptr<CSVWriterState> InitializeLocalWriteState(ClientContext &context);
-	unique_ptr<CSVWriterState> InitializeLocalWriteState(DatabaseInstance &db);
+	unique_ptr<CSVWriterState> InitializeLocalWriteState(ClientContext &context, idx_t flush_size);
+	unique_ptr<CSVWriterState> InitializeLocalWriteState(DatabaseInstance &db, idx_t flush_size);
 
 	vector<unique_ptr<Expression>> string_casts;
 

@@ -57,9 +57,10 @@ with cte as materialized (Select i as j from a) select * from cte where j = (wit
 42
 
 # refer to same-named CTE in a subquery expression
-statement error
+query I
 with cte as MATERIALIZED (Select i as j from a) select * from cte where j = (with cte as MATERIALIZED (select max(j) as j from cte) select j from cte);
 ----
+42
 
 # self-refer to non-existent cte
 statement error

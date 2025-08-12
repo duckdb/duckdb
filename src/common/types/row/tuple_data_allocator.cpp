@@ -410,8 +410,11 @@ static inline void VerifyStrings(const TupleDataLayout &layout, const LogicalTyp
 	ValidityBytes::GetEntryIndex(col_idx, entry_idx, idx_in_entry);
 	for (idx_t i = 0; i < count; i++) {
 		const auto &row_location = row_locations[offset + i] + base_col_offset;
-		ValidityBytes row_mask(row_location, layout.ColumnCount());
-		if (row_mask.RowIsValid(row_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry)) {
+		const auto valid =
+		    layout.AllValid() ||
+		    ValidityBytes::RowIsValid(
+		        ValidityBytes(row_location, layout.ColumnCount()).GetValidityEntryUnsafe(entry_idx), idx_in_entry);
+		if (valid) {
 			auto recomputed_string = Load<string_t>(row_location + col_offset);
 			recomputed_string.Verify();
 		}
@@ -485,6 +488,9 @@ void TupleDataAllocator::RecomputeHeapPointers(Vector &old_heap_ptrs, const Sele
 	const auto new_heap_locations = UnifiedVectorFormat::GetData<data_ptr_t>(new_heap_data);
 	const auto new_heap_sel = *new_heap_data.sel;
 
+	const auto all_valid = layout.AllValid();
+	const auto column_count = layout.ColumnCount();
+
 	for (const auto &col_idx : layout.GetVariableColumns()) {
 		const auto &col_offset = layout.GetOffsets()[col_idx];
 
@@ -499,8 +505,11 @@ void TupleDataAllocator::RecomputeHeapPointers(Vector &old_heap_ptrs, const Sele
 			for (idx_t i = 0; i < count; i++) {
 				const auto idx = offset + i;
 				const auto &row_location = row_locations[idx] + base_col_offset;
-				ValidityBytes row_mask(row_location, layout.ColumnCount());
-				if (!row_mask.RowIsValid(row_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry)) {
+				const auto valid =
+				    all_valid ||
+				    ValidityBytes::RowIsValid(
+				        ValidityBytes(row_location, column_count).GetValidityEntryUnsafe(entry_idx), idx_in_entry);
+				if (!valid) {
 					continue;
 				}
 
@@ -524,8 +533,11 @@ void TupleDataAllocator::RecomputeHeapPointers(Vector &old_heap_ptrs, const Sele
 			for (idx_t i = 0; i < count; i++) {
 				const auto idx = offset + i;
 				const auto &row_location = row_locations[idx] + base_col_offset;
-				ValidityBytes row_mask(row_location, layout.ColumnCount());
-				if (!row_mask.RowIsValid(row_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry)) {
+				const auto valid =
+				    all_valid ||
+				    ValidityBytes::RowIsValid(
+				        ValidityBytes(row_location, column_count).GetValidityEntryUnsafe(entry_idx), idx_in_entry);
+				if (!valid) {
 					continue;
 				}
 
@@ -559,7 +571,9 @@ void TupleDataAllocator::FindHeapPointers(TupleDataChunkState &chunk_state, Sele
 	D_ASSERT(!layout.AllConstant());
 	const auto row_locations = FlatVector::GetData<data_ptr_t>(chunk_state.row_locations);
 	const auto heap_locations = FlatVector::GetData<data_ptr_t>(chunk_state.heap_locations);
-	const auto heap_sizes = FlatVector::GetData<idx_t>(chunk_state.heap_sizes);
+
+	const auto all_valid = layout.AllValid();
+	const auto column_count = layout.ColumnCount();
 
 	for (const auto &col_idx : layout.GetVariableColumns()) {
 		if (not_found_count == 0) {
@@ -579,13 +593,16 @@ void TupleDataAllocator::FindHeapPointers(TupleDataChunkState &chunk_state, Sele
 			for (idx_t i = 0; i < not_found_count; i++) {
 				const auto idx = not_found.get_index(i);
 				const auto &row_location = row_locations[idx] + base_col_offset;
-				D_ASSERT(heap_sizes[idx] != 0);
+				D_ASSERT(FlatVector::GetData<idx_t>(chunk_state.heap_sizes)[idx] != 0);
 
 				// We always serialize a NullValue<string_t>, which isn't inlined if this build flag is enabled
 				// So we need to grab the pointer from here even if the string is NULL
 #ifndef DUCKDB_DEBUG_NO_INLINE
-				ValidityBytes row_mask(row_location, layout.ColumnCount());
-				if (row_mask.RowIsValid(row_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry)) {
+				const auto valid =
+				    all_valid ||
+				    ValidityBytes::RowIsValid(
+				        ValidityBytes(row_location, column_count).GetValidityEntryUnsafe(entry_idx), idx_in_entry);
+				if (valid) {
 #endif
 					const auto string_location = row_location + col_offset;
 					if (Load<uint32_t>(string_location) > string_t::INLINE_LENGTH) {
@@ -606,10 +623,13 @@ void TupleDataAllocator::FindHeapPointers(TupleDataChunkState &chunk_state, Sele
 			for (idx_t i = 0; i < not_found_count; i++) {
 				const auto idx = not_found.get_index(i);
 				const auto &row_location = row_locations[idx] + base_col_offset;
-				D_ASSERT(heap_sizes[idx] != 0);
+				D_ASSERT(FlatVector::GetData<idx_t>(chunk_state.heap_sizes)[idx] != 0);
 
-				ValidityBytes row_mask(row_location, layout.ColumnCount());
-				if (row_mask.RowIsValid(row_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry)) {
+				const auto valid =
+				    all_valid ||
+				    ValidityBytes::RowIsValid(
+				        ValidityBytes(row_location, column_count).GetValidityEntryUnsafe(entry_idx), idx_in_entry);
+				if (valid) {
 					const auto &list_ptr_location = row_location + col_offset;
 					heap_locations[idx] = Load<data_ptr_t>(list_ptr_location);
 					continue;

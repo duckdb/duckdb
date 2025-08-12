@@ -20,6 +20,7 @@ struct CopyFunctionFileStatistics;
 class Binder;
 class ColumnDataCollection;
 class ExecutionContext;
+class PhysicalOperatorLogger;
 
 struct LocalFunctionData {
 	virtual ~LocalFunctionData() = default;
@@ -75,6 +76,14 @@ struct CopyFunctionBindInput {
 	string file_extension;
 };
 
+struct CopyFromFunctionBindInput {
+	explicit CopyFromFunctionBindInput(const CopyInfo &info_p, TableFunction &tf_p) : info(info_p), tf(tf_p) {
+	}
+
+	const CopyInfo &info;
+	TableFunction &tf;
+};
+
 struct CopyToSelectInput {
 	ClientContext &context;
 	case_insensitive_map_t<vector<Value>> &options;
@@ -101,7 +110,7 @@ typedef void (*copy_to_serialize_t)(Serializer &serializer, const FunctionData &
 
 typedef unique_ptr<FunctionData> (*copy_to_deserialize_t)(Deserializer &deserializer, CopyFunction &function);
 
-typedef unique_ptr<FunctionData> (*copy_from_bind_t)(ClientContext &context, CopyInfo &info,
+typedef unique_ptr<FunctionData> (*copy_from_bind_t)(ClientContext &context, CopyFromFunctionBindInput &info,
                                                      vector<string> &expected_names,
                                                      vector<LogicalType> &expected_types);
 typedef CopyFunctionExecutionMode (*copy_to_execution_mode_t)(bool preserve_insertion_order, bool supports_batch_index);
@@ -122,6 +131,8 @@ typedef void (*copy_to_get_written_statistics_t)(ClientContext &context, Functio
                                                  GlobalFunctionData &gstate, CopyFunctionFileStatistics &statistics);
 
 typedef vector<unique_ptr<Expression>> (*copy_to_select_t)(CopyToSelectInput &input);
+
+typedef void (*copy_to_initialize_operator_t)(GlobalFunctionData &gstate, const PhysicalOperator &op);
 
 enum class CopyFunctionReturnType : uint8_t {
 	CHANGED_ROWS = 0,
@@ -145,9 +156,9 @@ public:
 	    : Function(name), plan(nullptr), copy_to_select(nullptr), copy_to_bind(nullptr),
 	      copy_to_initialize_local(nullptr), copy_to_initialize_global(nullptr),
 	      copy_to_get_written_statistics(nullptr), copy_to_sink(nullptr), copy_to_combine(nullptr),
-	      copy_to_finalize(nullptr), execution_mode(nullptr), prepare_batch(nullptr), flush_batch(nullptr),
-	      desired_batch_size(nullptr), rotate_files(nullptr), rotate_next_file(nullptr), serialize(nullptr),
-	      deserialize(nullptr), copy_from_bind(nullptr) {
+	      copy_to_finalize(nullptr), execution_mode(nullptr), initialize_operator(nullptr), prepare_batch(nullptr),
+	      flush_batch(nullptr), desired_batch_size(nullptr), rotate_files(nullptr), rotate_next_file(nullptr),
+	      serialize(nullptr), deserialize(nullptr), copy_from_bind(nullptr) {
 	}
 
 	//! Plan rewrite copy function
@@ -162,6 +173,7 @@ public:
 	copy_to_combine_t copy_to_combine;
 	copy_to_finalize_t copy_to_finalize;
 	copy_to_execution_mode_t execution_mode;
+	copy_to_initialize_operator_t initialize_operator;
 
 	copy_prepare_batch_t prepare_batch;
 	copy_flush_batch_t flush_batch;

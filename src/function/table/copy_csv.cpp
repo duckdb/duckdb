@@ -213,8 +213,8 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyFunctio
 //===--------------------------------------------------------------------===//
 struct LocalWriteCSVData : public LocalFunctionData {
 public:
-	LocalWriteCSVData(ClientContext &context, vector<unique_ptr<Expression>> &expressions)
-	    : executor(context, expressions), writer_local_state(context) {
+	LocalWriteCSVData(ClientContext &context, vector<unique_ptr<Expression>> &expressions, const idx_t &flush_size)
+	    : executor(context, expressions), writer_local_state(context, flush_size) {
 	}
 
 public:
@@ -241,7 +241,7 @@ struct GlobalWriteCSVData : public GlobalFunctionData {
 
 static unique_ptr<LocalFunctionData> WriteCSVInitializeLocal(ExecutionContext &context, FunctionData &bind_data) {
 	auto &csv_data = bind_data.Cast<WriteCSVData>();
-	auto local_data = make_uniq<LocalWriteCSVData>(context.client, csv_data.cast_expressions);
+	auto local_data = make_uniq<LocalWriteCSVData>(context.client, csv_data.cast_expressions, csv_data.flush_size);
 
 	// create the chunk with VARCHAR types
 	vector<LogicalType> types;
@@ -327,7 +327,7 @@ CopyFunctionExecutionMode WriteCSVExecutionMode(bool preserve_insertion_order, b
 // Prepare Batch
 //===--------------------------------------------------------------------===//
 struct WriteCSVBatchData : public PreparedBatchData {
-	explicit WriteCSVBatchData(ClientContext &context) : writer_local_state(make_uniq<CSVWriterState>(context)) {
+	explicit WriteCSVBatchData(ClientContext &context, const idx_t flush_size) : writer_local_state(make_uniq<CSVWriterState>(context, flush_size)) {
 		writer_local_state->require_manual_flush = true;
 	}
 
@@ -352,7 +352,8 @@ unique_ptr<PreparedBatchData> WriteCSVPrepareBatch(ClientContext &context, Funct
 	auto &global_state = gstate.Cast<GlobalWriteCSVData>();
 
 	// write CSV chunks to the batch data
-	auto batch = make_uniq<WriteCSVBatchData>(context);
+	bool written_anything = false;
+	auto batch = make_uniq<WriteCSVBatchData>(context, NextPowerOfTwo(collection->SizeInBytes()));
 	for (auto &chunk : collection->Chunks()) {
 		WriteCSVChunkInternal(global_state.writer, *batch->writer_local_state, cast_chunk, chunk, executor);
 	}

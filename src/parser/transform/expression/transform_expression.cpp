@@ -79,7 +79,6 @@ unique_ptr<ParsedExpression> Transformer::TransformExpression(duckdb_libpgquery:
 		return TransformBooleanTest(PGCast<duckdb_libpgquery::PGBooleanTest>(node));
 	case duckdb_libpgquery::T_PGMultiAssignRef:
 		return TransformMultiAssignRef(PGCast<duckdb_libpgquery::PGMultiAssignRef>(node));
-
 	default:
 		throw NotImplementedException("Expression type %s (%d)", NodetypeToString(node.type), (int)node.type);
 	}

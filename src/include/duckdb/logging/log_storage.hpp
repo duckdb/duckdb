@@ -14,6 +14,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/serializer/write_stream.hpp"
+#include "duckdb/common/serializer/buffered_file_writer.hpp"
 
 #include "duckdb/common/types/column/column_data_scan_states.hpp"
 #include "duckdb/parallel/thread_context.hpp"

@@ -10,6 +10,7 @@
 
 namespace duckdb {
 
+namespace {
 struct SortKeyBindData : public FunctionData {
 	vector<OrderModifiers> modifiers;
 
@@ -81,6 +82,8 @@ struct SortKeyVectorData {
 	SortKeyVectorData(Vector &input, idx_t size, OrderModifiers modifiers) : vec(input) {
 		if (size != 0) {
 			input.ToUnifiedFormat(size, format);
+		} else {
+			format.physical_type = input.GetType().InternalType();
 		}
 		this->size = size;
 
@@ -383,7 +386,7 @@ void GetSortKeyLengthList(SortKeyVectorData &vector_data, SortKeyChunk chunk, So
 	}
 }
 
-static void GetSortKeyLengthRecursive(SortKeyVectorData &vector_data, SortKeyChunk chunk, SortKeyLengthInfo &result) {
+void GetSortKeyLengthRecursive(SortKeyVectorData &vector_data, SortKeyChunk chunk, SortKeyLengthInfo &result) {
 	auto physical_type = vector_data.GetPhysicalType();
 	// handle variable lengths
 	switch (physical_type) {
@@ -450,7 +453,7 @@ static void GetSortKeyLengthRecursive(SortKeyVectorData &vector_data, SortKeyChu
 	}
 }
 
-static void GetSortKeyLength(SortKeyVectorData &vector_data, SortKeyLengthInfo &result, SortKeyChunk chunk) {
+void GetSortKeyLength(SortKeyVectorData &vector_data, SortKeyLengthInfo &result, SortKeyChunk chunk) {
 	// top-level method
 	auto physical_type = vector_data.GetPhysicalType();
 	if (TypeIsConstantSize(physical_type)) {
@@ -462,7 +465,7 @@ static void GetSortKeyLength(SortKeyVectorData &vector_data, SortKeyLengthInfo &
 	GetSortKeyLengthRecursive(vector_data, chunk, result);
 }
 
-static void GetSortKeyLength(SortKeyVectorData &vector_data, SortKeyLengthInfo &result) {
+void GetSortKeyLength(SortKeyVectorData &vector_data, SortKeyLengthInfo &result) {
 	GetSortKeyLength(vector_data, result, SortKeyChunk(0, vector_data.size));
 }
 
@@ -597,7 +600,7 @@ void ConstructSortKeyList(SortKeyVectorData &vector_data, SortKeyChunk chunk, So
 	}
 }
 
-static void ConstructSortKeyRecursive(SortKeyVectorData &vector_data, SortKeyChunk chunk, SortKeyConstructInfo &info) {
+void ConstructSortKeyRecursive(SortKeyVectorData &vector_data, SortKeyChunk chunk, SortKeyConstructInfo &info) {
 	switch (vector_data.GetPhysicalType()) {
 	case PhysicalType::BOOL:
 		TemplatedConstructSortKey<SortKeyConstantOperator<bool>>(vector_data, chunk, info);
@@ -662,11 +665,11 @@ static void ConstructSortKeyRecursive(SortKeyVectorData &vector_data, SortKeyChu
 	}
 }
 
-static void ConstructSortKey(SortKeyVectorData &vector_data, SortKeyConstructInfo &info) {
+void ConstructSortKey(SortKeyVectorData &vector_data, SortKeyConstructInfo &info) {
 	ConstructSortKeyRecursive(vector_data, SortKeyChunk(0, vector_data.size), info);
 }
 
-static void PrepareSortData(Vector &result, idx_t size, SortKeyLengthInfo &key_lengths, data_ptr_t *data_pointers) {
+void PrepareSortData(Vector &result, idx_t size, SortKeyLengthInfo &key_lengths, data_ptr_t *data_pointers) {
 	switch (result.GetType().id()) {
 	case LogicalTypeId::BLOB: {
 		auto result_data = FlatVector::GetData<string_t>(result);
@@ -693,7 +696,7 @@ static void PrepareSortData(Vector &result, idx_t size, SortKeyLengthInfo &key_l
 	}
 }
 
-static void FinalizeSortData(Vector &result, idx_t size) {
+void FinalizeSortData(Vector &result, idx_t size) {
 	switch (result.GetType().id()) {
 	case LogicalTypeId::BLOB: {
 		auto result_data = FlatVector::GetData<string_t>(result);
@@ -715,8 +718,8 @@ static void FinalizeSortData(Vector &result, idx_t size) {
 	}
 }
 
-static void CreateSortKeyInternal(vector<unique_ptr<SortKeyVectorData>> &sort_key_data,
-                                  const vector<OrderModifiers> &modifiers, Vector &result, idx_t row_count) {
+void CreateSortKeyInternal(vector<unique_ptr<SortKeyVectorData>> &sort_key_data,
+                           const vector<OrderModifiers> &modifiers, Vector &result, idx_t row_count) {
 	// two phases
 	// a) get the length of the final sorted key
 	// b) allocate the sorted key and construct
@@ -738,6 +741,8 @@ static void CreateSortKeyInternal(vector<unique_ptr<SortKeyVectorData>> &sort_ke
 	}
 	FinalizeSortData(result, row_count);
 }
+
+} // namespace
 
 void CreateSortKeyHelpers::CreateSortKey(Vector &input, idx_t input_count, OrderModifiers order_modifier,
                                          Vector &result) {
@@ -791,6 +796,8 @@ static void CreateSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 //===--------------------------------------------------------------------===//
 // Decode Sort Key
 //===--------------------------------------------------------------------===//
+namespace {
+
 unique_ptr<FunctionData> DecodeSortKeyBind(ClientContext &context, ScalarFunction &bound_function,
                                            vector<unique_ptr<Expression>> &arguments) {
 	if ((arguments.size() - 1) % 2 != 0) {
@@ -1146,6 +1153,8 @@ void DecodeSortKeyRecursive(DecodeSortKeyData decode_data[], DecodeSortKeyVector
 		throw NotImplementedException("Unsupported type %s in DecodeSortKey", result.GetType());
 	}
 }
+
+} // namespace
 
 void CreateSortKeyHelpers::DecodeSortKey(string_t sort_key, Vector &result, idx_t result_idx,
                                          OrderModifiers modifiers) {

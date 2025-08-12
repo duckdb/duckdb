@@ -4,12 +4,12 @@
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/planner/expression/list.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
 ExpressionExecutor::ExpressionExecutor(ClientContext &context) : context(&context) {
-	auto &config = DBConfig::GetConfig(context);
-	debug_vector_verification = config.options.debug_verify_vector;
+	debug_vector_verification = DBConfig::GetSetting<DebugVerifyVectorSetting>(context);
 }
 
 ExpressionExecutor::ExpressionExecutor(ClientContext &context, const Expression *expression)
@@ -97,11 +97,17 @@ idx_t ExpressionExecutor::SelectExpression(DataChunk &input, SelectionVector &se
 
 idx_t ExpressionExecutor::SelectExpression(DataChunk &input, SelectionVector &result_sel,
                                            optional_ptr<SelectionVector> current_sel, idx_t current_count) {
+	return SelectExpression(input, result_sel, nullptr, current_sel, current_count);
+}
+
+idx_t ExpressionExecutor::SelectExpression(DataChunk &input, optional_ptr<SelectionVector> true_sel,
+                                           optional_ptr<SelectionVector> false_sel,
+                                           optional_ptr<SelectionVector> current_sel, idx_t current_count) {
 	D_ASSERT(expressions.size() == 1);
 	D_ASSERT(current_count <= input.size());
 	SetChunk(&input);
-	idx_t selected_tuples =
-	    Select(*expressions[0], states[0]->root_state.get(), current_sel.get(), current_count, &result_sel, nullptr);
+	idx_t selected_tuples = Select(*expressions[0], states[0]->root_state.get(), current_sel.get(), current_count,
+	                               true_sel.get(), false_sel.get());
 	return selected_tuples;
 }
 

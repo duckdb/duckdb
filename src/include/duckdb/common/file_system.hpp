@@ -27,12 +27,14 @@
 #undef RemoveDirectory
 
 namespace duckdb {
+
 class AttachedDatabase;
-class ClientContext;
 class DatabaseInstance;
 class FileOpener;
 class FileSystem;
 class Logger;
+class ClientContext;
+class QueryContext;
 
 enum class FileType {
 	//! Regular file
@@ -66,7 +68,8 @@ public:
 	// Read at [nr_bytes] bytes into [buffer].
 	// File offset will not be changed.
 	DUCKDB_API void Read(void *buffer, idx_t nr_bytes, idx_t location);
-	DUCKDB_API void Write(void *buffer, idx_t nr_bytes, idx_t location);
+	DUCKDB_API void Read(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location);
+	DUCKDB_API void Write(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location);
 	DUCKDB_API void Seek(idx_t location);
 	DUCKDB_API void Reset();
 	DUCKDB_API idx_t SeekPosition();
@@ -147,7 +150,7 @@ public:
 	//! Returns the file size of a file handle, returns -1 on error
 	DUCKDB_API virtual int64_t GetFileSize(FileHandle &handle);
 	//! Returns the file last modified time of a file handle, returns timespec with zero on all attributes on error
-	DUCKDB_API virtual time_t GetLastModifiedTime(FileHandle &handle);
+	DUCKDB_API virtual timestamp_t GetLastModifiedTime(FileHandle &handle);
 	//! Returns a tag that uniquely identifies the version of the file,
 	//! used for checking cache invalidation for CachingFileSystem httpfs files
 	DUCKDB_API virtual string GetVersionTag(FileHandle &handle);

@@ -40,6 +40,8 @@ add_library_unity(
   compressed_file_system.cpp
   constants.cpp
   checksum.cpp
+  encryption_functions.cpp
+  encryption_key_manager.cpp
   encryption_state.cpp
   exception.cpp
   exception_format_value.cpp
@@ -65,6 +67,7 @@ add_library_unity(
   render_tree.cpp
   tree_renderer.cpp
   types.cpp
+  bignum.cpp
   virtual_file_system.cpp
   windows_util.cpp)
 set(ALL_OBJECT_FILES

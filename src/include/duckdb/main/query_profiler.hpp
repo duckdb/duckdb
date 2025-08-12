@@ -146,7 +146,9 @@ public:
 
 	DUCKDB_API static QueryProfiler &Get(ClientContext &context);
 
-	DUCKDB_API void StartQuery(string query, bool is_explain_analyze = false, bool start_at_optimizer = false);
+	DUCKDB_API void Start(const string &query);
+	DUCKDB_API void Reset();
+	DUCKDB_API void StartQuery(const string &query, bool is_explain_analyze = false, bool start_at_optimizer = false);
 	DUCKDB_API void EndQuery();
 
 	DUCKDB_API void StartExplainAnalyze();

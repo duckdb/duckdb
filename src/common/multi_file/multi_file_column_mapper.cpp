@@ -18,11 +18,10 @@ MultiFileColumnMapper::MultiFileColumnMapper(ClientContext &context, MultiFileRe
                                              const vector<MultiFileColumnDefinition> &global_columns,
                                              const vector<ColumnIndex> &global_column_ids,
                                              optional_ptr<TableFilterSet> filters, MultiFileList &multi_file_list,
-                                             const MultiFileReaderBindData &bind_data,
                                              const virtual_column_map_t &virtual_columns)
     : context(context), multi_file_reader(multi_file_reader), multi_file_list(multi_file_list),
       reader_data(reader_data), global_columns(global_columns), global_column_ids(global_column_ids),
-      global_filters(filters), bind_data(bind_data), virtual_columns(virtual_columns) {
+      global_filters(filters), virtual_columns(virtual_columns) {
 }
 
 struct MultiFileIndexMapping {
@@ -743,10 +742,10 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByMapper(const Col
 	return result;
 }
 
-ResultColumnMapping MultiFileColumnMapper::CreateColumnMapping() {
+ResultColumnMapping MultiFileColumnMapper::CreateColumnMapping(MultiFileColumnMappingMode mapping_mode) {
 	auto &reader = *reader_data.reader;
 	auto &local_columns = reader.GetColumns();
-	switch (bind_data.mapping) {
+	switch (mapping_mode) {
 	case MultiFileColumnMappingMode::BY_NAME: {
 		// we have expected types: create a map of name -> (local) column id
 		NameMapper name_map(*this, local_columns);
@@ -1031,14 +1030,9 @@ static unique_ptr<TableFilter> TryCastTableFilter(const TableFilter &global_filt
 	}
 }
 
-void SetIndexToZero(Expression &expr) {
-	if (expr.type == ExpressionType::BOUND_REF) {
-		auto &ref = expr.Cast<BoundReferenceExpression>();
-		ref.index = 0;
-		return;
-	}
-
-	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { SetIndexToZero(child); });
+void SetIndexToZero(unique_ptr<Expression> &root_expr) {
+	ExpressionIterator::VisitExpressionMutable<BoundReferenceExpression>(
+	    root_expr, [&](BoundReferenceExpression &ref, unique_ptr<Expression> &expr) { ref.index = 0; });
 }
 
 bool CanPropagateCast(const MultiFileIndexMapping &mapping, const LogicalType &local_type,
@@ -1097,19 +1091,20 @@ unique_ptr<TableFilterSet> MultiFileColumnMapper::CreateFilters(map<idx_t, refer
 
 			// add the expression to the expression map - we are now evaluating this inside the reader directly
 			// we need to set the index of the references inside the expression to 0
-			SetIndexToZero(*reader_data.expressions[local_id]);
-			reader.expression_map[filter_idx] = std::move(reader_data.expressions[local_id]);
+			auto &expr = reader_data.expressions[global_index];
+			SetIndexToZero(expr);
+			reader.expression_map[filter_idx] = std::move(expr);
 
 			// reset the expression - since we are evaluating it in the reader we can just reference it
-			reader_data.expressions[local_id] = make_uniq<BoundReferenceExpression>(global_type, local_id);
+			expr = make_uniq<BoundReferenceExpression>(global_type, local_id);
 		}
 	}
 	return result;
 }
 
-ReaderInitializeType MultiFileColumnMapper::CreateMapping() {
+ReaderInitializeType MultiFileColumnMapper::CreateMapping(MultiFileColumnMappingMode mapping_mode) {
 	// copy global columns and inject any different defaults
-	auto result = CreateColumnMapping();
+	auto result = CreateColumnMapping(mapping_mode);
 	//! Evaluate the filters against the column(s) that are constant for this file (not present in the local schema)
 	//! If any of these fail, the file can be skipped entirely
 	map<idx_t, reference<TableFilter>> remaining_filters;

@@ -155,8 +155,8 @@ private:
 			int64_t verification_data[NUMBER_OF_VALUES_IN_A_MINIBLOCK];
 			ByteBuffer byte_buffer(data_ptr_cast(data_packed), write_size);
 			bitpacking_width_t bitpack_pos = 0;
-			ParquetDecodeUtils::BitUnpack(byte_buffer, bitpack_pos, verification_data, NUMBER_OF_VALUES_IN_A_MINIBLOCK,
-			                              width);
+			ParquetDecodeUtils::BitUnpack(byte_buffer, bitpack_pos, reinterpret_cast<uint64_t *>(verification_data),
+			                              NUMBER_OF_VALUES_IN_A_MINIBLOCK, width);
 			for (idx_t i = 0; i < NUMBER_OF_VALUES_IN_A_MINIBLOCK; i++) {
 				D_ASSERT(src[i] == verification_data[i]);
 			}

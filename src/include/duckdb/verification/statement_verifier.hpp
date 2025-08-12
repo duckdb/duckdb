@@ -23,6 +23,7 @@ enum class VerificationType : uint8_t {
 	NO_OPERATOR_CACHING,
 	PREPARED,
 	EXTERNAL,
+	EXPLAIN,
 	FETCH_ROW_AS_SCAN,
 
 	INVALID
@@ -38,6 +39,7 @@ public:
 	                                            optional_ptr<case_insensitive_map_t<BoundParameterData>> values);
 	virtual ~StatementVerifier() noexcept;
 
+public:
 	//! Check whether expressions in this verifier and the other verifier match
 	void CheckExpressions(const StatementVerifier &other) const;
 	//! Check whether expressions within this verifier match
@@ -52,13 +54,6 @@ public:
 	string CompareResults(const StatementVerifier &other);
 
 public:
-	const VerificationType type;
-	const string name;
-	unique_ptr<SelectStatement> statement;
-	optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters;
-	const vector<unique_ptr<ParsedExpression>> &select_list;
-	unique_ptr<MaterializedQueryResult> materialized_result;
-
 	virtual bool RequireEquality() const {
 		return true;
 	}
@@ -78,6 +73,18 @@ public:
 	virtual bool ForceFetchRow() const {
 		return false;
 	}
+
+public:
+	const VerificationType type;
+	const string name;
+	unique_ptr<SQLStatement> statement;
+	optional_ptr<SelectStatement> select_statement;
+	optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters;
+	const vector<unique_ptr<ParsedExpression>> &select_list;
+	unique_ptr<MaterializedQueryResult> materialized_result;
+
+private:
+	const vector<unique_ptr<ParsedExpression>> empty_select_list = {};
 };
 
 } // namespace duckdb

@@ -12,13 +12,13 @@ static string TransformNewLine(string new_line) {
 	;
 }
 
-CSVWriterState::CSVWriterState() : stream(make_uniq<MemoryStream>()) {
+CSVWriterState::CSVWriterState() : flush_size(MemoryStream::DEFAULT_INITIAL_CAPACITY), stream(make_uniq<MemoryStream>()) {
 }
 
-CSVWriterState::CSVWriterState(ClientContext &context) : stream(make_uniq<MemoryStream>(Allocator::Get(context))) {
+CSVWriterState::CSVWriterState(ClientContext &context, idx_t flush_size_p) : flush_size(flush_size_p), stream(make_uniq<MemoryStream>(Allocator::Get(context))) {
 }
 
-CSVWriterState::CSVWriterState(DatabaseInstance &db) : stream(make_uniq<MemoryStream>(Allocator::Get(db))) {
+CSVWriterState::CSVWriterState(DatabaseInstance &db, idx_t flush_size_p) : flush_size(flush_size_p), stream(make_uniq<MemoryStream>(BufferAllocator::Get(db), flush_size)) {
 }
 
 CSVWriterState::~CSVWriterState() {
@@ -92,7 +92,7 @@ void CSVWriter::Initialize(bool force) {
 void CSVWriter::WriteChunk(DataChunk &input, CSVWriterState &local_state) {
 	WriteChunk(input, *local_state.stream, options, written_anything, writer_options);
 
-	if (!local_state.require_manual_flush && local_state.stream->GetPosition() >= writer_options.flush_size) {
+	if (!local_state.require_manual_flush && local_state.stream->GetPosition() >= local_state.flush_size) {
 		Flush(local_state);
 	}
 }
@@ -184,14 +184,14 @@ void CSVWriter::ResetInternal(optional_ptr<CSVWriterState> local_state) {
 	bytes_written = 0;
 }
 
-unique_ptr<CSVWriterState> CSVWriter::InitializeLocalWriteState(ClientContext &context) {
-	auto res = make_uniq<CSVWriterState>(context);
+unique_ptr<CSVWriterState> CSVWriter::InitializeLocalWriteState(ClientContext &context, idx_t flush_size) {
+	auto res = make_uniq<CSVWriterState>(context, flush_size);
 	res->stream = make_uniq<MemoryStream>();
 	return res;
 }
 
-unique_ptr<CSVWriterState> CSVWriter::InitializeLocalWriteState(DatabaseInstance &db) {
-	auto res = make_uniq<CSVWriterState>();
+unique_ptr<CSVWriterState> CSVWriter::InitializeLocalWriteState(DatabaseInstance &db, idx_t flush_size) {
+	auto res = make_uniq<CSVWriterState>(db, flush_size);
 	res->stream = make_uniq<MemoryStream>();
 	return res;
 }

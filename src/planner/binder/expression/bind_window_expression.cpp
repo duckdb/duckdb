@@ -1,17 +1,16 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/function/function_binder.hpp"
-#include "duckdb/function/scalar_function.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
-#include "duckdb/planner/expression_binder/select_binder.hpp"
+#include "duckdb/planner/expression_binder/base_select_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 
 namespace duckdb {
@@ -107,6 +106,10 @@ static bool IsRangeType(const LogicalType &type) {
 	default:
 		return false;
 	}
+}
+
+static bool IsFillType(const LogicalType &type) {
+	return type.IsNumeric() || (type.IsTemporal() && type.id() != LogicalTypeId::TIME_TZ);
 }
 
 static LogicalType BindRangeExpression(ClientContext &context, const string &name, unique_ptr<ParsedExpression> &expr,
@@ -318,13 +321,13 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	LogicalType start_type = LogicalType::BIGINT;
 	if (window.start == WindowBoundary::EXPR_PRECEDING_RANGE) {
 		D_ASSERT(window.orders.size() == 1);
-		range_sense = config.ResolveOrder(window.orders[0].type);
+		range_sense = config.ResolveOrder(context, window.orders[0].type);
 		const auto range_name = (range_sense == OrderType::ASCENDING) ? "-" : "+";
 		start_type = BindRangeExpression(context, range_name, window.start_expr, window.orders[0].expression);
 
 	} else if (window.start == WindowBoundary::EXPR_FOLLOWING_RANGE) {
 		D_ASSERT(window.orders.size() == 1);
-		range_sense = config.ResolveOrder(window.orders[0].type);
+		range_sense = config.ResolveOrder(context, window.orders[0].type);
 		const auto range_name = (range_sense == OrderType::ASCENDING) ? "+" : "-";
 		start_type = BindRangeExpression(context, range_name, window.start_expr, window.orders[0].expression);
 	}
@@ -332,13 +335,13 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	LogicalType end_type = LogicalType::BIGINT;
 	if (window.end == WindowBoundary::EXPR_PRECEDING_RANGE) {
 		D_ASSERT(window.orders.size() == 1);
-		range_sense = config.ResolveOrder(window.orders[0].type);
+		range_sense = config.ResolveOrder(context, window.orders[0].type);
 		const auto range_name = (range_sense == OrderType::ASCENDING) ? "-" : "+";
 		end_type = BindRangeExpression(context, range_name, window.end_expr, window.orders[0].expression);
 
 	} else if (window.end == WindowBoundary::EXPR_FOLLOWING_RANGE) {
 		D_ASSERT(window.orders.size() == 1);
-		range_sense = config.ResolveOrder(window.orders[0].type);
+		range_sense = config.ResolveOrder(context, window.orders[0].type);
 		const auto range_name = (range_sense == OrderType::ASCENDING) ? "+" : "-";
 		end_type = BindRangeExpression(context, range_name, window.end_expr, window.orders[0].expression);
 	}
@@ -365,22 +368,26 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	}
 
 	for (auto &order : window.orders) {
-		auto type = config.ResolveOrder(order.type);
-		auto null_order = config.ResolveNullOrder(type, order.null_order);
+		auto type = config.ResolveOrder(context, order.type);
+		auto null_order = config.ResolveNullOrder(context, type, order.null_order);
 		auto expression = GetExpression(order.expression);
 		result->orders.emplace_back(type, null_order, std::move(expression));
 	}
 
 	// Argument orders are just like arguments, not frames
 	for (auto &order : window.arg_orders) {
-		auto type = config.ResolveOrder(order.type);
-		auto null_order = config.ResolveNullOrder(type, order.null_order);
+		auto type = config.ResolveOrder(context, order.type);
+		auto null_order = config.ResolveNullOrder(context, type, order.null_order);
 		auto expression = GetExpression(order.expression);
 		result->arg_orders.emplace_back(type, null_order, std::move(expression));
 	}
 
-	//	Check FILL orderings support subtraction
+	//	Check FILL arguments support subtraction
 	if (window.GetExpressionType() == ExpressionType::WINDOW_FILL) {
+		D_ASSERT(!result->children.empty());
+		if (!IsFillType(result->children[0]->return_type)) {
+			throw BinderException(error_context, "FILL argument must support subtraction");
+		}
 		LogicalType order_type;
 		if (window.arg_orders.empty()) {
 			D_ASSERT(!result->orders.empty());
@@ -388,8 +395,8 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		} else {
 			order_type = result->arg_orders[0].expression->return_type;
 		}
-		if (!order_type.IsNumeric() && (!order_type.IsTemporal() || order_type.id() == LogicalTypeId::TIME_TZ)) {
-			throw BinderException(error_context, "FILL orderings must support subtraction");
+		if (!IsFillType(order_type)) {
+			throw BinderException(error_context, "FILL ordering must support subtraction");
 		}
 	}
 
