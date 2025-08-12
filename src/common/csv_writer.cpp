@@ -29,8 +29,7 @@ CSVWriterState::~CSVWriterState() {
 }
 
 CSVWriterOptions::CSVWriterOptions(const string &delim, const char &quote, const string &write_newline) {
-	requires_quotes = make_unsafe_uniq_array<bool>(256);
-	memset(requires_quotes.get(), 0, sizeof(bool) * 256);
+	requires_quotes = vector<bool>(256, false);
 	requires_quotes['\n'] = true;
 	requires_quotes['\r'] = true;
 	requires_quotes[NumericCast<idx_t>(delim[0])] = true;
@@ -39,6 +38,9 @@ CSVWriterOptions::CSVWriterOptions(const string &delim, const char &quote, const
 	if (!write_newline.empty()) {
 		newline = TransformNewLine(write_newline);
 	}
+}
+
+CSVWriterOptions::CSVWriterOptions(CSVReaderOptions &options) : CSVWriterOptions(options.dialect_options.state_machine_options.delimiter.GetValue(), options.dialect_options.state_machine_options.quote.GetValue(), options.write_newline){
 }
 
 CSVWriter::CSVWriter(WriteStream &stream, vector<string> name_list, bool shared)
@@ -244,7 +246,7 @@ string CSVWriter::AddEscapes(char to_be_escaped, char escape, const string &val)
 }
 
 bool CSVWriter::RequiresQuotes(const char *str, idx_t len, const string &null_str,
-                               const unsafe_unique_array<bool> &requires_quotes) {
+                               const vector<bool> &requires_quotes) {
 	// check if the string is equal to the null string
 	if (len == null_str.size() && memcmp(str, null_str.c_str(), len) == 0) {
 		return true;
@@ -269,7 +271,7 @@ void CSVWriter::WriteQuotedString(WriteStream &writer, const char *str, idx_t le
 }
 
 void CSVWriter::WriteQuotedString(WriteStream &writer, const char *str, idx_t len, bool force_quote,
-                                  const string &null_str, const unsafe_unique_array<bool> &requires_quotes, char quote,
+                                  const string &null_str, const vector<bool> &requires_quotes, char quote,
                                   char escape) {
 	if (!force_quote) {
 		// force quote is disabled: check if we need to add quotes anyway

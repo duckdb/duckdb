@@ -27,6 +27,8 @@ struct LogStorageConfig;
 class CSVWriter;
 struct CSVWriterState;
 class BufferedFileWriter;
+struct CSVWriterOptions;
+struct CSVReaderOptions;
 
 //! Logging storage can store entries normalized or denormalized. This enum describes what a single table/file/etc
 //! contains
@@ -182,6 +184,8 @@ protected:
 	void FlushChunk(LoggingTargetTable table, DataChunk &chunk) final;
 	//! Resets all buffers and state
 	void ResetAllBuffers() override;
+	//! Implements CSVLogStorage specific config handling
+	void UpdateConfigInternal(DatabaseInstance &db, case_insensitive_map_t<Value> &config) override;
 
 	/// Interface to child classes
 
@@ -195,9 +199,12 @@ protected:
 	void RegisterWriter(LoggingTargetTable table, unique_ptr<CSVWriter> writer);
 	//! Returns the writer for a table
 	CSVWriter &GetWriter(LoggingTargetTable table);
-
-	//! Configure a CSV writer
-	static void SetWriterConfigs(CSVWriter &Writer, vector<string> column_names);
+	//! Configure a CSV writer by initializing its settings with the `writer_options` and `reader_options` settings
+	void SetWriterConfigs(CSVWriter &Writer, vector<string> column_names);
+	//! Allows child classes to manipulate options
+	CSVWriterOptions& GetCSVWriterOptions();
+	//! Allows child classes to manipulate options
+	CSVReaderOptions& GetCSVReaderOptions();
 
 private:
 	//! Perform the cast (does not reset input chunk!)
@@ -211,6 +218,10 @@ private:
 	unordered_map<LoggingTargetTable, unique_ptr<DataChunk>> cast_buffers;
 	//! The writers to be registered by child classes
 	unordered_map<LoggingTargetTable, unique_ptr<CSVWriter>> writers;
+
+	//! CSV Options to initialize the CSVWriters with. TODO: cleanup, this is now a little bit of a mixed bag of settings
+	unique_ptr<CSVWriterOptions> writer_options;
+	unique_ptr<CSVReaderOptions> reader_options;
 };
 
 //! Implements a stdout-based log storage using log lines written in CSV format to allow for easy parsing of the log

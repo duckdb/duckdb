@@ -185,3 +185,21 @@ statement error
 CALL enable_logging(['QueryLog'], storage='file', storage_config={'path': '__TEST_DIR__/logging_csv_log.csv', 'normalize': true});
 ----
 ' while normalize is true. Normalize will make DuckDB write multiple log files to more efficiently store log entries. Please specify a directory path instead of a csv file path, or set normalize to false.
+
+statement ok
+CALL truncate_duckdb_logs();
+
+statement ok
+CALL disable_logging();
+
+# Test switching CSV delimiters
+statement ok
+CALL enable_logging(['QueryLog'], storage='file', storage_config={'path': '__TEST_DIR__/logging_csv_log_delim.csv', 'delim': ';'});
+
+statement ok
+SELECT 1;
+
+query I
+SELECT message FROM read_csv('__TEST_DIR__/logging_csv_log_delim.csv', delim=';');
+----
+SELECT 1

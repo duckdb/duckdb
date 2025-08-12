@@ -104,6 +104,13 @@ CSVLogStorage::~CSVLogStorage() {
 
 CSVLogStorage::CSVLogStorage(DatabaseInstance &db, bool normalize)
     : BufferingLogStorage(db, STANDARD_VECTOR_SIZE, normalize) {
+	reader_options = make_uniq<CSVReaderOptions>();
+	writer_options = make_uniq<CSVWriterOptions>(*reader_options);
+
+	reader_options->dialect_options.state_machine_options.escape = '\"';
+	reader_options->dialect_options.state_machine_options.quote = '\"';
+	reader_options->dialect_options.state_machine_options.delimiter = CSVOption<string>("\t");
+
 	ResetCastChunk();
 }
 
@@ -144,6 +151,34 @@ void CSVLogStorage::ResetAllBuffers() {
 	ResetCastChunk();
 }
 
+void CSVLogStorage::UpdateConfigInternal(DatabaseInstance &db, case_insensitive_map_t<Value> &config) {
+	auto config_copy = config;
+
+	bool changed_writer_settings = false;
+
+	vector<string> to_remove;
+	for (const auto &it : config_copy) {
+		auto key = StringUtil::Lower(it.first);
+		if (key == "delim") {
+			changed_writer_settings = true;
+			reader_options->dialect_options.state_machine_options.delimiter = CSVOption<string>(it.second.ToString());
+			to_remove.push_back(it.first);
+		}
+	}
+
+	if (changed_writer_settings) {
+		for (auto &writer : writers) {
+			SetWriterConfigs(*writer.second, GetColumnNames(writer.first));
+		}
+	}
+
+	for (const auto &it : to_remove) {
+		config_copy.erase(it);
+	}
+
+	return BufferingLogStorage::UpdateConfigInternal(db, config_copy);
+}
+
 void CSVLogStorage::RegisterWriter(LoggingTargetTable table, unique_ptr<CSVWriter> writer) {
 	writers[table] = std::move(writer);
 }
@@ -167,12 +202,20 @@ void CSVLogStorage::ResetCastChunk() {
 }
 
 void CSVLogStorage::SetWriterConfigs(CSVWriter &writer, vector<string> column_names) {
-	writer.options.dialect_options.state_machine_options.escape = '\"';
-	writer.options.dialect_options.state_machine_options.quote = '\"';
-	writer.options.dialect_options.state_machine_options.delimiter = CSVOption<string>("\t");
-	writer.options.name_list = column_names;
+	writer.options = *reader_options;
+	writer.writer_options = *writer_options;
 
+	// Update the config with the column names since that is different per schema
+	writer.options.name_list = column_names;
 	writer.options.force_quote = vector<bool>(column_names.size(), false);
+}
+
+CSVReaderOptions &CSVLogStorage::GetCSVReaderOptions() {
+	return *reader_options;
+}
+
+CSVWriterOptions &CSVLogStorage::GetCSVWriterOptions() {
+	return *writer_options;
 }
 
 void CSVLogStorage::FlushChunk(LoggingTargetTable table, DataChunk &chunk) {
@@ -218,10 +261,13 @@ StdOutLogStorage::StdOutLogStorage(DatabaseInstance &db) : CSVLogStorage(db, fal
 	// StdOutLogStorage is denormalized only
 	auto target_table = LoggingTargetTable::ALL_LOGS;
 
+	// Set storage specific defaults
+	GetCSVWriterOptions().newline_writing_mode = CSVNewLineMode::WRITE_AFTER;
+	GetCSVReaderOptions().dialect_options.state_machine_options.delimiter = CSVOption<string>("\t");
+
 	// Create and configure writer
 	auto writer = make_uniq<CSVWriter>(stdout_stream, GetColumnNames(target_table), false);
 	SetWriterConfigs(*writer, GetColumnNames(target_table));
-	writer->writer_options.newline_writing_mode = CSVNewLineMode::WRITE_AFTER;
 
 	RegisterWriter(target_table, std::move(writer));
 }
@@ -230,10 +276,13 @@ StdOutLogStorage::~StdOutLogStorage() {
 }
 
 FileLogStorage::FileLogStorage(DatabaseInstance &db_p) : CSVLogStorage(db_p, true), db(db_p) {
-
 	tables[LoggingTargetTable::ALL_LOGS] = TableWriter();
 	tables[LoggingTargetTable::LOG_CONTEXTS] = TableWriter();
 	tables[LoggingTargetTable::LOG_ENTRIES] = TableWriter();
+
+	// Set storage specific defaults
+	GetCSVWriterOptions().newline_writing_mode = CSVNewLineMode::WRITE_BEFORE;
+	GetCSVReaderOptions().dialect_options.state_machine_options.delimiter = CSVOption<string>(",");
 }
 
 FileLogStorage::~FileLogStorage() {

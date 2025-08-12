@@ -26,13 +26,14 @@ enum class CSVNewLineMode {
 
 struct CSVWriterOptions {
 	CSVWriterOptions(const string &delim, const char &quote, const string &write_newline);
+	CSVWriterOptions(CSVReaderOptions &options);
 
 	//! The newline string to write
 	string newline = "\n";
 	//! The size of the CSV file (in bytes) that we buffer before we flush it to disk
 	idx_t flush_size = 4096ULL * 8ULL;
 	//! For each byte whether the CSV file requires quotes when containing the byte
-	unsafe_unique_array<bool> requires_quotes;
+	vector<bool> requires_quotes;
 	//! How to write newlines
 	CSVNewLineMode newline_writing_mode = CSVNewLineMode::WRITE_BEFORE;
 };
@@ -139,9 +140,9 @@ public:
 	static void WriteQuoteOrEscape(WriteStream &writer, char quote_or_escape);
 	static string AddEscapes(char to_be_escaped, char escape, const string &val);
 	static bool RequiresQuotes(const char *str, idx_t len, const string &null_str,
-	                           const unsafe_unique_array<bool> &requires_quotes);
+	                           const vector<bool> &requires_quotes);
 	static void WriteQuotedString(WriteStream &writer, const char *str, idx_t len, bool force_quote,
-	                              const string &null_str, const unsafe_unique_array<bool> &requires_quotes, char quote,
+	                              const string &null_str, const vector<bool> &requires_quotes, char quote,
 	                              char escape);
 	static void WriteQuotedString(WriteStream &writer, const char *str, idx_t len, idx_t col_idx,
 	                              CSVReaderOptions &options, CSVWriterOptions &writer_options);
