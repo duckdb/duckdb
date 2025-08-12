@@ -238,13 +238,13 @@ optional_ptr<const ConfigurationOption> DBConfig::GetOptionByName(const String &
 	auto lname = name.Lower();
 	for (idx_t index = 0; internal_options[index].name; index++) {
 		D_ASSERT(StringUtil::Lower(internal_options[index].name) == string(internal_options[index].name));
-		if (internal_options[index].name == lname.ToStdString()) {
+		if (internal_options[index].name == lname) {
 			return internal_options + index;
 		}
 	}
 	for (idx_t index = 0; setting_aliases[index].alias; index++) {
 		D_ASSERT(StringUtil::Lower(internal_options[index].name) == string(internal_options[index].name));
-		if (setting_aliases[index].alias == lname.ToStdString()) {
+		if (setting_aliases[index].alias == lname) {
 			return GetOptionByIndex(setting_aliases[index].option_index);
 		}
 	}

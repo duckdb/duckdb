@@ -8,30 +8,45 @@
 
 #pragma once
 
+#include <string>
+#include <cstring>
+
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/assert.hpp"
 
 namespace duckdb {
 
 class String {
+	/*
+	    String either can own its data (with automatic cleanup) or hold a non-owning reference.
+	    * Move only semantics, no copying allowed.
+	    * Small Strings (≤7 bytes) are stored inline to avoid heap allocation.
+	    * 32-bit length limit with overflow protection.
+
+	    To create an owning String, use the constructors.
+	    To create a non-owning String, use the Reference methods.
+	 */
+
 public:
 	// Constructors (create an owning String)
 	String() : len(0), buf {0} {
 	}
 
 	String(const std::string &str) { // NOLINT allowimplicit conversion
-		AssignOwning(str.data(), str.size());
+		AssignOwning(str.data(), SafeStrlen(str));
 	}
 
-	String(const char *str, const size_t size) {
+	String(const char *str, const uint32_t size) {
 		if (str == nullptr) {
 			AssignOwning(str, 0);
+			return;
 		}
 		AssignOwning(str, size);
 	}
 
 	String(const char *str) // NOLINT allowimplicit conversion
-	    : String(str, str ? strlen(str) : 0) {
+	    : String(str, str ? SafeStrlen(str) : 0) {
 	}
 
 public:
@@ -63,19 +78,34 @@ public:
 public:
 	// Operators
 	bool operator==(const String &other) const {
-		const idx_t this_size = size();
-		const idx_t other_size = other.size();
+		if (this == &other) {
+			return true; // points to the same instance
+		}
 
-		if (this_size != other_size) {
+		if (size() != other.size()) {
 			return false;
 		}
 
-		const auto min_size = MinValue<idx_t>(this_size, other_size);
-		const char *this_data = data();
-		const char *other_data = other.data();
+		return memcmp(data(), other.data(), size()) == 0;
+	}
 
-		auto memcmp_res = memcmp(this_data, other_data, min_size);
-		return memcmp_res == 0;
+	bool operator==(const std::string &other) const {
+		if (SafeStrlen(other) != size()) {
+			return false;
+		}
+		return memcmp(data(), other.data(), size()) == 0;
+	}
+
+	bool operator==(const char *other) const {
+		if (!other || SafeStrlen(other) != size()) {
+			return false;
+		}
+
+		if (this->data() == other) {
+			return true; // points to the same instance
+		}
+
+		return memcmp(data(), other, size()) == 0;
 	}
 
 	bool operator>(const String &other) const {
@@ -112,7 +142,7 @@ public:
 public:
 	// STL-like interface
 	// NOLINTBEGIN - mimic std::string interface
-	size_t size() const {
+	uint32_t size() const {
 		return len & ~NON_OWN_BIT;
 	}
 	bool empty() const {
@@ -136,15 +166,21 @@ public:
 	bool IsOwning() const {
 		return (len & NON_OWN_BIT) == 0;
 	}
+
 	bool IsInline() const {
 		return len <= INLINE_MAX;
 	}
-	static bool CanBeInlined(size_t size) {
+
+	static bool CanBeInlined(uint32_t size) {
 		return size <= INLINE_MAX;
 	}
 
 	// Creates a new String instance with its own copy of the data
-	static String Copy(const char *data, size_t size) {
+	static String Copy(const char *data, uint32_t size) {
+		if (data == nullptr) {
+			return String(); // Return an empty String
+		}
+
 		String result;
 		result.AssignOwning(data, size);
 		return result;
@@ -154,18 +190,22 @@ public:
 		return Copy(other.data(), other.size());
 	}
 	static String Copy(const char *data) {
-		return Copy(data, data ? strlen(data) : 0);
+		return Copy(data, data ? SafeStrlen(data) : 0);
 	}
 	static String Copy(const std::string &str) {
-		return Copy(str.data(), str.size());
+		return Copy(str.data(), SafeStrlen(str));
 	}
 	String Copy() const {
-		return Copy(data(), size());
+		return String::Copy(data(), size());
 	}
 
 	// Creates a new String instance that references the data without owning it
 	// If the size is small enough, it will inline the data; which WILL be owning
-	static String Reference(const char *data, size_t size) {
+	static String Reference(const char *data, uint32_t size) {
+		if (data == nullptr) {
+			return String(); // Return an empty String
+		}
+
 		String result;
 		// If we reference, and we can inline it, we make owning anyway
 		if (size <= INLINE_MAX) {
@@ -181,20 +221,36 @@ public:
 		return Reference(other.data(), other.size());
 	}
 	static String Reference(const char *data) {
-		return Reference(data, data ? strlen(data) : 0);
+		return Reference(data, data ? SafeStrlen(data) : 0);
 	}
 	static String Reference(const std::string &str) {
-		return Reference(str.data(), str.size());
+		return Reference(str.data(), SafeStrlen(str));
 	}
 	String Reference() const {
-		return Reference(data(), size());
+		return String::Reference(data(), size());
 	}
 
-	string ToStdString() const {
+	std::string ToStdString() const {
 		if (IsInline()) {
-			return string(buf, size());
+			return std::string(buf, size());
 		}
-		return string(ptr, size());
+		return std::string(ptr, size());
+	}
+
+	static uint32_t SafeStrlen(const char *data) {
+		if (!data) {
+			return 0;
+		}
+
+		const auto len = strlen(data);
+		D_ASSERT(len < NumericLimits<uint32_t>::Maximum());
+		return static_cast<uint32_t>(len);
+	}
+
+	static uint32_t SafeStrlen(const std::string &data) {
+		const auto len = data.size();
+		D_ASSERT(len < NumericLimits<uint32_t>::Maximum());
+		return static_cast<uint32_t>(len);
 	}
 
 public:
@@ -220,10 +276,10 @@ public:
 private:
 	static constexpr auto INLINE_CAP = sizeof(char *);
 	static constexpr auto INLINE_MAX = INLINE_CAP - 1;
-	static constexpr auto NON_OWN_BIT = 1UL << (sizeof(size_t) * 8 - 1);
-	static constexpr auto LENGTH_MAX = (1UL << (sizeof(size_t) * 8 - 1)) - 1;
+	static constexpr auto NON_OWN_BIT = 1UL << (sizeof(uint32_t) * 8 - 1);
+	static constexpr auto LENGTH_MAX = (1UL << (sizeof(uint32_t) * 8 - 1)) - 1;
 
-	void AssignOwning(const char *new_data, size_t new_size) {
+	void AssignOwning(const char *new_data, uint32_t new_size) {
 		len = new_size;
 
 		if (len == 0) {
@@ -260,11 +316,19 @@ private:
 	}
 
 private:
-	size_t len;
-	union {
+	uint32_t len; // The first bit indicates ownership (0 = owning, 1 = non-owning)
+	union {       // If length is less than or equal to INLINE_MAX, then it is inlined here
 		const char *ptr;
 		char buf[INLINE_CAP];
 	};
 };
+
+inline bool operator==(const std::string &lhs, const String &rhs) {
+	return rhs == lhs;
+}
+
+inline bool operator==(const char *lhs, const String &rhs) {
+	return rhs == lhs;
+}
 
 } // namespace duckdb

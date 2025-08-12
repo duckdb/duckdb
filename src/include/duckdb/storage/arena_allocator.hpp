@@ -84,16 +84,19 @@ public:
 		return new (mem) T(std::forward<ARGS>(args)...);
 	}
 
-	String MakeString(const char *data, const idx_t len) {
-		if (String::CanBeInlined(len)) {
-			// If the string can be inlined, we can just use the inline buffer
-			return String(data, len);
+	String MakeString(const char *data, const size_t len) {
+		data_ptr_t mem = nullptr;
+
+		D_ASSERT(len < NumericLimits<uint32_t>::Maximum());
+		const auto size = static_cast<uint32_t>(len);
+		if (!String::CanBeInlined(size)) {
+			// If the string can't be inlined, we allocate it on the arena allocator
+			mem = AllocateAligned(sizeof(char) * size + 1); // +1 for null terminator
+			memcpy(mem, data, size);
+			mem[size] = '\0';
 		}
 
-		const auto mem = AllocateAligned(sizeof(char) * len);
-		memcpy(mem, data, len);
-
-		return String::Reference(reinterpret_cast<char *>(mem), len);
+		return String::Reference(mem ? reinterpret_cast<char *>(mem) : data, size);
 	}
 
 	String MakeString(const std::string &data) {
