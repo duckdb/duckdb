@@ -55,13 +55,13 @@ SELECT write_log('hello from the connection log scope', level := 'error', scope 
 
 # Buffer has expl.. been flushed
 query I
-SELECT count(*) FROM duckdb_logs()
+SELECT count(*) FROM duckdb_logs() where type=''
 ----
 3000
 
-# Note that there 2 log contexts: these did not overflow the log contexts buffer, but they need to be written out whenever
-# the first log entry containing a context_id is flushed 
+# Note that there is 1 log contexts: these did not overflow the log contexts buffer, but they need to be written out whenever
+# the first log entry containing a context_id is flushed (i.e. on adding the 3rd log entry)
 query I
 SELECT count(*) FROM duckdb_log_contexts()
 ----
-2
+1

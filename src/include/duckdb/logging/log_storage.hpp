@@ -150,6 +150,10 @@ private:
 
 	unordered_map<LoggingTargetTable, unique_ptr<DataChunk>> buffers;
 
+	// This flag is set whenever a new context_is written to the entry buffer. It means that the next flush of
+	// LoggingTargetTable::LOG_ENTRIES also requires a flush of LoggingTargetTable::LOG_CONTEXTS
+	bool flush_contexts_on_next_entry_flush = false;
+
 };
 // Abstract base class for loggers that write out log entries as CSV-parsable strings
 //

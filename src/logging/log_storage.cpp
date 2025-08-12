@@ -596,25 +596,28 @@ void BufferingLogStorage::WriteLogEntry(timestamp_t timestamp, LogLevel level, c
                                         const string &log_message, const RegisteredLoggingContext &context) {
 	unique_lock<mutex> lck(lock);
 
-	if (registered_contexts.find(context.context_id) == registered_contexts.end()) {
-		WriteLoggingContext(context);
-	}
-
-	// TODO: ugly
 	auto &log_entries_buffer = normalize_contexts ? buffers[LoggingTargetTable::LOG_ENTRIES] : buffers[LoggingTargetTable::ALL_LOGS];
 
 	auto size = log_entries_buffer->size();
 
 	if (size + 1 > buffer_limit) {
 		if (normalize_contexts) {
+			if (flush_contexts_on_next_entry_flush) {
+				FlushInternal(LoggingTargetTable::LOG_CONTEXTS);
+				flush_contexts_on_next_entry_flush = false;
+			}
 			FlushInternal(LoggingTargetTable::LOG_ENTRIES);
-			// TODO: this is now required to guarantee every log_entry has a valid context, otherwise we would only be able to read log entries after context is flushed
-			FlushInternal(LoggingTargetTable::LOG_CONTEXTS);
 		} else {
 			FlushInternal(LoggingTargetTable::ALL_LOGS);
 		}
 
 		size = log_entries_buffer->size();
+	}
+
+	if (registered_contexts.find(context.context_id) == registered_contexts.end()) {
+		WriteLoggingContext(context);
+		// New context_id: we should flush both contexts and entries next time LOG_ENTRIES gets flushed
+		flush_contexts_on_next_entry_flush = true;
 	}
 
 	idx_t col = 0;
