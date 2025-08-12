@@ -152,7 +152,6 @@ void LogManager::SetDisabledLogTypes(optional_ptr<unordered_set<string>> disable
 	global_logger->UpdateConfig(config);
 }
 
-
 void LogManager::SetLogStorage(DatabaseInstance &db, const string &storage_name) {
 	unique_lock<mutex> lck(lock);
 	SetLogStorageInternal(db, storage_name);

@@ -263,8 +263,8 @@ bool CSVWriter::RequiresQuotes(const char *str, idx_t len, const string &null_st
 
 void CSVWriter::WriteQuotedString(WriteStream &writer, const char *str, idx_t len, idx_t col_idx,
                                   CSVReaderOptions &options, CSVWriterOptions &writer_options) {
-	WriteQuotedString(writer, str, len, options.force_quote[col_idx], options.null_str[0], writer_options.requires_quotes,
-	                  options.dialect_options.state_machine_options.quote.GetValue(),
+	WriteQuotedString(writer, str, len, options.force_quote[col_idx], options.null_str[0],
+	                  writer_options.requires_quotes, options.dialect_options.state_machine_options.quote.GetValue(),
 	                  options.dialect_options.state_machine_options.escape.GetValue());
 }
 

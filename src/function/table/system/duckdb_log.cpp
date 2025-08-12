@@ -77,9 +77,12 @@ unique_ptr<TableRef> DuckDBLogBindReplace(ClientContext &context, TableFunctionB
 		return all_log_scan;
 	}
 
-	// We cannot scan ALL_LOGS but join_contexts was requested: we need to inject the join between LOG_ENTRIES and LOG_CONTEXTS
-	string sub_query_string = "SELECT l.context_id, scope, connection_id, transaction_id, query_id, thread_id, timestamp, type, log_level, message"
-						   " FROM (SELECT row_number() OVER () AS rowid, * FROM duckdb_logs()) as l JOIN duckdb_log_contexts() as c ON l.context_id=c.context_id order by timestamp, l.rowid;";
+	// We cannot scan ALL_LOGS but join_contexts was requested: we need to inject the join between LOG_ENTRIES and
+	// LOG_CONTEXTS
+	string sub_query_string = "SELECT l.context_id, scope, connection_id, transaction_id, query_id, thread_id, "
+	                          "timestamp, type, log_level, message"
+	                          " FROM (SELECT row_number() OVER () AS rowid, * FROM duckdb_logs()) as l JOIN "
+	                          "duckdb_log_contexts() as c ON l.context_id=c.context_id order by timestamp, l.rowid;";
 	Parser parser(context.GetParserOptions());
 	parser.ParseQuery(sub_query_string);
 	auto select_stmt = unique_ptr_cast<SQLStatement, SelectStatement>(std::move(parser.statements[0]));

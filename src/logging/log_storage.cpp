@@ -24,33 +24,33 @@ vector<LogicalType> LogStorage::GetSchema(LoggingTargetTable table) {
 	switch (table) {
 	case LoggingTargetTable::ALL_LOGS:
 		return {
-			LogicalType::UBIGINT,   // context_id
-			LogicalType::VARCHAR,   // scope
-			LogicalType::UBIGINT,   // connection_id
-			LogicalType::UBIGINT,   // transaction_id
-			LogicalType::UBIGINT,   // query_id
-			LogicalType::UBIGINT,   // thread
-			LogicalType::TIMESTAMP, // timestamp
-			LogicalType::VARCHAR,   // log_type
-			LogicalType::VARCHAR,   // level
-			LogicalType::VARCHAR,   // message
-			};
+		    LogicalType::UBIGINT,   // context_id
+		    LogicalType::VARCHAR,   // scope
+		    LogicalType::UBIGINT,   // connection_id
+		    LogicalType::UBIGINT,   // transaction_id
+		    LogicalType::UBIGINT,   // query_id
+		    LogicalType::UBIGINT,   // thread
+		    LogicalType::TIMESTAMP, // timestamp
+		    LogicalType::VARCHAR,   // log_type
+		    LogicalType::VARCHAR,   // level
+		    LogicalType::VARCHAR,   // message
+		};
 	case LoggingTargetTable::LOG_ENTRIES:
 		return {
-		LogicalType::UBIGINT,   // context_id
-		LogicalType::TIMESTAMP, // timestamp
-		LogicalType::VARCHAR,   // log_type
-		LogicalType::VARCHAR,   // level
-		LogicalType::VARCHAR,   // message
+		    LogicalType::UBIGINT,   // context_id
+		    LogicalType::TIMESTAMP, // timestamp
+		    LogicalType::VARCHAR,   // log_type
+		    LogicalType::VARCHAR,   // level
+		    LogicalType::VARCHAR,   // message
 		};
 	case LoggingTargetTable::LOG_CONTEXTS:
 		return {
-			LogicalType::UBIGINT,   // context_id
-			LogicalType::VARCHAR,   // scope
-			LogicalType::UBIGINT,   // connection_id
-			LogicalType::UBIGINT,   // transaction_id
-			LogicalType::UBIGINT,   // query_id
-			LogicalType::UBIGINT,   // thread
+		    LogicalType::UBIGINT, // context_id
+		    LogicalType::VARCHAR, // scope
+		    LogicalType::UBIGINT, // connection_id
+		    LogicalType::UBIGINT, // transaction_id
+		    LogicalType::UBIGINT, // query_id
+		    LogicalType::UBIGINT, // thread
 		};
 	default:
 		throw NotImplementedException("Unknown logging target table");
@@ -61,32 +61,14 @@ vector<string> LogStorage::GetColumnNames(LoggingTargetTable table) {
 	switch (table) {
 	case LoggingTargetTable::ALL_LOGS:
 		return {
-			"context_id",
-			"scope",
-			"connection_id",
-			"transaction_id",
-			"query_id",
-			"thread_id",
-			"timestamp",
-			"type",
-			"log_level",
-			"message",
+		    "context_id", "scope",     "connection_id", "transaction_id", "query_id",
+		    "thread_id",  "timestamp", "type",          "log_level",      "message",
 		};
 	case LoggingTargetTable::LOG_ENTRIES:
-		return {
-			"context_id",
-			"timestamp",
-			"type",
-			"log_level",
-			"message"};
+		return {"context_id", "timestamp", "type", "log_level", "message"};
 	case LoggingTargetTable::LOG_CONTEXTS:
 		return {
-			"context_id",
-			"scope",
-			"connection_id",
-			"transaction_id",
-			"query_id",
-			"thread_id",
+		    "context_id", "scope", "connection_id", "transaction_id", "query_id", "thread_id",
 		};
 	default:
 		throw NotImplementedException("Unknown logging target table");
@@ -112,7 +94,8 @@ void LogStorage::UpdateConfig(DatabaseInstance &db, case_insensitive_map_t<Value
 	}
 }
 
-unique_ptr<TableRef> LogStorage::BindReplace(ClientContext &context, TableFunctionBindInput &input, LoggingTargetTable table) {
+unique_ptr<TableRef> LogStorage::BindReplace(ClientContext &context, TableFunctionBindInput &input,
+                                             LoggingTargetTable table) {
 	return nullptr;
 }
 
@@ -120,7 +103,7 @@ CSVLogStorage::~CSVLogStorage() {
 }
 
 CSVLogStorage::CSVLogStorage(DatabaseInstance &db, bool normalize)
-: BufferingLogStorage(db, STANDARD_VECTOR_SIZE, normalize) {
+    : BufferingLogStorage(db, STANDARD_VECTOR_SIZE, normalize) {
 	ResetCastChunk();
 }
 
@@ -139,11 +122,11 @@ bool BufferingLogStorage::IsEnabledInternal(LoggingTargetTable table) {
 		return table == LoggingTargetTable::LOG_CONTEXTS || table == LoggingTargetTable::LOG_ENTRIES;
 	}
 
-	return  table == LoggingTargetTable::ALL_LOGS;
+	return table == LoggingTargetTable::ALL_LOGS;
 }
 
 void CSVLogStorage::ExecuteCast(LoggingTargetTable table, DataChunk &chunk) {
- 	// Reset the cast buffer before use
+	// Reset the cast buffer before use
 	cast_buffers[table]->Reset();
 
 	auto &cast_buffer = *cast_buffers[table];
@@ -220,7 +203,8 @@ void BufferingLogStorage::UpdateConfigInternal(DatabaseInstance &db, case_insens
 		} else if (StringUtil::Lower(it.first) == "normalize") {
 			throw InternalException("'normalize' setting should be handled in child class");
 		} else {
-			throw InvalidInputException("Unrecognized log storage config option for storage: '%s': '%s'", GetStorageName(), it.first);
+			throw InvalidInputException("Unrecognized log storage config option for storage: '%s': '%s'",
+			                            GetStorageName(), it.first);
 		}
 	}
 }
@@ -245,8 +229,7 @@ StdOutLogStorage::StdOutLogStorage(DatabaseInstance &db) : CSVLogStorage(db, fal
 StdOutLogStorage::~StdOutLogStorage() {
 }
 
-FileLogStorage::FileLogStorage(DatabaseInstance &db_p)
-    : CSVLogStorage(db_p, true), db(db_p) {
+FileLogStorage::FileLogStorage(DatabaseInstance &db_p) : CSVLogStorage(db_p, true), db(db_p) {
 
 	tables[LoggingTargetTable::ALL_LOGS] = TableWriter();
 	tables[LoggingTargetTable::LOG_CONTEXTS] = TableWriter();
@@ -322,12 +305,12 @@ void FileLogStorage::Truncate() {
 	}
 }
 
-void FileLogStorage::BeforeFlush(LoggingTargetTable table, DataChunk&) {
+void FileLogStorage::BeforeFlush(LoggingTargetTable table, DataChunk &) {
 	// Lazily initialize the files
 	Initialize(table);
 }
 
-void FileLogStorage::AfterFlush(LoggingTargetTable table, DataChunk&) {
+void FileLogStorage::AfterFlush(LoggingTargetTable table, DataChunk &) {
 	tables[table].file_writer->Sync();
 }
 
@@ -387,12 +370,17 @@ void FileLogStorage::UpdateConfigInternal(DatabaseInstance &db, case_insensitive
 	}
 
 	if (StringUtil::EndsWith(new_path, ".csv") && normalize_contexts_new_value) {
-		throw InvalidConfigurationException("Can not set path to '%s' while normalize is true. Normalize will make DuckDB write multiple log files to more efficiently store log entries. Please specify a directory path instead of a csv file path, or set normalize to false.", new_path);
+		throw InvalidConfigurationException(
+		    "Can not set path to '%s' while normalize is true. Normalize will make DuckDB write multiple log files to "
+		    "more efficiently store log entries. Please specify a directory path instead of a csv file path, or set "
+		    "normalize to false.",
+		    new_path);
 	}
 
 	// If any writer is initialized, we flush first:
 	// - when switching between normalized and denormalized, this is necessary since we are changing the buffer schema
-	// - when simply changing the path, it avoids writing log entries written before this change to end up in the new file
+	// - when simply changing the path, it avoids writing log entries written before this change to end up in the new
+	// file
 	bool initialized = false;
 	for (auto &it : tables) {
 		initialized |= it.second.initialized;
@@ -438,7 +426,8 @@ unique_ptr<TableRef> FileLogStorage::BindReplaceInternal(ClientContext &context,
 	return duckdb::make_uniq<SubqueryRef>(std::move(select_stmt));
 }
 
-unique_ptr<TableRef> FileLogStorage::BindReplace(ClientContext &context, TableFunctionBindInput &input, LoggingTargetTable table) {
+unique_ptr<TableRef> FileLogStorage::BindReplace(ClientContext &context, TableFunctionBindInput &input,
+                                                 LoggingTargetTable table) {
 	lock_guard<mutex> lck(lock);
 
 	// We only allow scanning enabled tables
@@ -462,15 +451,16 @@ unique_ptr<TableRef> FileLogStorage::BindReplace(ClientContext &context, TableFu
 	string columns;
 	if (table == LoggingTargetTable::LOG_ENTRIES) {
 		columns = "'context_id': 'UBIGINT', 'timestamp': 'TIMESTAMP', 'type': 'VARCHAR', 'log_level': 'VARCHAR' , "
-				  "'message': 'VARCHAR'";
+		          "'message': 'VARCHAR'";
 	} else if (table == LoggingTargetTable::LOG_CONTEXTS) {
 		columns = "'context_id': 'UBIGINT', 'scope': 'VARCHAR', 'connection_id': 'UBIGINT', 'transaction_id': "
-						 "'UBIGINT', 'query_id': 'UBIGINT', 'thread_id': 'UBIGINT'";
+		          "'UBIGINT', 'query_id': 'UBIGINT', 'thread_id': 'UBIGINT'";
 	} else if (table == LoggingTargetTable::ALL_LOGS) {
-		select = "SELECT context_id, scope, connection_id, transaction_id, query_id, thread_id, timestamp, type, log_level, message ";
+		select = "SELECT context_id, scope, connection_id, transaction_id, query_id, thread_id, timestamp, type, "
+		         "log_level, message ";
 		columns = "'context_id': 'UBIGINT', 'scope': 'VARCHAR', 'connection_id': 'UBIGINT', 'transaction_id': "
-				  "'UBIGINT', 'query_id': 'UBIGINT', 'thread_id': 'UBIGINT', 'timestamp': 'TIMESTAMP', 'type': "
-				  "'VARCHAR', 'log_level': 'VARCHAR' , 'message': 'VARCHAR'";
+		          "'UBIGINT', 'query_id': 'UBIGINT', 'thread_id': 'UBIGINT', 'timestamp': 'TIMESTAMP', 'type': "
+		          "'VARCHAR', 'log_level': 'VARCHAR' , 'message': 'VARCHAR'";
 	} else {
 		throw InternalException("Invalid logging target table");
 	}
@@ -478,7 +468,8 @@ unique_ptr<TableRef> FileLogStorage::BindReplace(ClientContext &context, TableFu
 	return BindReplaceInternal(context, input, path, select, columns);
 }
 
-BufferingLogStorage::BufferingLogStorage(DatabaseInstance &db_p, idx_t buffer_size, bool normalize) : normalize_contexts(normalize), buffer_limit(buffer_size) {
+BufferingLogStorage::BufferingLogStorage(DatabaseInstance &db_p, idx_t buffer_size, bool normalize)
+    : normalize_contexts(normalize), buffer_limit(buffer_size) {
 	ResetLogBuffers();
 }
 
@@ -486,15 +477,15 @@ void BufferingLogStorage::ResetLogBuffers() {
 	if (normalize_contexts) {
 		buffers[LoggingTargetTable::LOG_ENTRIES] = make_uniq<DataChunk>();
 		buffers[LoggingTargetTable::LOG_CONTEXTS] = make_uniq<DataChunk>();
-		buffers[LoggingTargetTable::LOG_ENTRIES]->Initialize(Allocator::DefaultAllocator(), GetSchema(LoggingTargetTable::LOG_ENTRIES),
-								   buffer_limit);
-		buffers[LoggingTargetTable::LOG_CONTEXTS]->Initialize(Allocator::DefaultAllocator(), GetSchema(LoggingTargetTable::LOG_CONTEXTS),
-								   buffer_limit);
+		buffers[LoggingTargetTable::LOG_ENTRIES]->Initialize(Allocator::DefaultAllocator(),
+		                                                     GetSchema(LoggingTargetTable::LOG_ENTRIES), buffer_limit);
+		buffers[LoggingTargetTable::LOG_CONTEXTS]->Initialize(
+		    Allocator::DefaultAllocator(), GetSchema(LoggingTargetTable::LOG_CONTEXTS), buffer_limit);
 
 	} else {
 		buffers[LoggingTargetTable::ALL_LOGS] = make_uniq<DataChunk>();
-		buffers[LoggingTargetTable::ALL_LOGS]->Initialize(Allocator::DefaultAllocator(), GetSchema(LoggingTargetTable::ALL_LOGS),
-								   buffer_limit);
+		buffers[LoggingTargetTable::ALL_LOGS]->Initialize(Allocator::DefaultAllocator(),
+		                                                  GetSchema(LoggingTargetTable::ALL_LOGS), buffer_limit);
 	}
 }
 
@@ -502,20 +493,22 @@ void BufferingLogStorage::ResetAllBuffers() {
 	ResetLogBuffers();
 }
 
-InMemoryLogStorageScanState::InMemoryLogStorageScanState(LoggingTargetTable table) : LogStorageScanState(table){
+InMemoryLogStorageScanState::InMemoryLogStorageScanState(LoggingTargetTable table) : LogStorageScanState(table) {
 }
 InMemoryLogStorageScanState::~InMemoryLogStorageScanState() {
 }
 
 InMemoryLogStorage::InMemoryLogStorage(DatabaseInstance &db_p) : BufferingLogStorage(db_p, STANDARD_VECTOR_SIZE, true) {
-	log_storage_buffers[LoggingTargetTable::LOG_ENTRIES] = make_uniq<ColumnDataCollection>(db_p.GetBufferManager(), GetSchema(LoggingTargetTable::LOG_ENTRIES));
-	log_storage_buffers[LoggingTargetTable::LOG_CONTEXTS] = make_uniq<ColumnDataCollection>(db_p.GetBufferManager(), GetSchema(LoggingTargetTable::LOG_CONTEXTS));
+	log_storage_buffers[LoggingTargetTable::LOG_ENTRIES] =
+	    make_uniq<ColumnDataCollection>(db_p.GetBufferManager(), GetSchema(LoggingTargetTable::LOG_ENTRIES));
+	log_storage_buffers[LoggingTargetTable::LOG_CONTEXTS] =
+	    make_uniq<ColumnDataCollection>(db_p.GetBufferManager(), GetSchema(LoggingTargetTable::LOG_CONTEXTS));
 }
 
 void InMemoryLogStorage::ResetAllBuffers() {
 	BufferingLogStorage::ResetAllBuffers();
 
-	for (const auto &buffer: log_storage_buffers) {
+	for (const auto &buffer : log_storage_buffers) {
 		buffer.second->Reset();
 	}
 }
@@ -577,7 +570,8 @@ void BufferingLogStorage::WriteLogEntry(timestamp_t timestamp, LogLevel level, c
                                         const string &log_message, const RegisteredLoggingContext &context) {
 	unique_lock<mutex> lck(lock);
 
-	auto &log_entries_buffer = normalize_contexts ? buffers[LoggingTargetTable::LOG_ENTRIES] : buffers[LoggingTargetTable::ALL_LOGS];
+	auto &log_entries_buffer =
+	    normalize_contexts ? buffers[LoggingTargetTable::LOG_ENTRIES] : buffers[LoggingTargetTable::ALL_LOGS];
 
 	auto size = log_entries_buffer->size();
 
@@ -708,7 +702,8 @@ bool InMemoryLogStorage::Scan(LogStorageScanState &state, DataChunk &result) con
 void InMemoryLogStorage::InitializeScan(LogStorageScanState &state) const {
 	unique_lock<mutex> lck(lock);
 	auto &in_mem_scan_state = state.Cast<InMemoryLogStorageScanState>();
-	 GetBuffer(in_mem_scan_state.table).InitializeScan(in_mem_scan_state.scan_state, ColumnDataScanProperties::DISALLOW_ZERO_COPY);
+	GetBuffer(in_mem_scan_state.table)
+	    .InitializeScan(in_mem_scan_state.scan_state, ColumnDataScanProperties::DISALLOW_ZERO_COPY);
 }
 
 } // namespace duckdb

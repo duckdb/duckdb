@@ -28,17 +28,17 @@ class CSVWriter;
 struct CSVWriterState;
 class BufferedFileWriter;
 
-//! Logging storage can store entries normalized or denormalized. This enum describes what a single table/file/etc contains
+//! Logging storage can store entries normalized or denormalized. This enum describes what a single table/file/etc
+//! contains
 enum class LoggingTargetTable {
-	ALL_LOGS,        // Denormalized: log entries consisting of both the full log entry and the context
-	LOG_ENTRIES,     // Normalized: contains only the log entries and a context_id
-	LOG_CONTEXTS,    // Normalized: contains only the log contexts
+	ALL_LOGS,     // Denormalized: log entries consisting of both the full log entry and the context
+	LOG_ENTRIES,  // Normalized: contains only the log entries and a context_id
+	LOG_CONTEXTS, // Normalized: contains only the log contexts
 };
 
 class LogStorageScanState {
 public:
 	LogStorageScanState(LoggingTargetTable table_p) : table(table_p) {
-
 	}
 	virtual ~LogStorageScanState() = default;
 
@@ -87,14 +87,15 @@ public:
 	DUCKDB_API virtual void InitializeScan(LogStorageScanState &state) const;
 
 	// Reading interface 2: using bind_replace
-	DUCKDB_API virtual unique_ptr<TableRef> BindReplace(ClientContext &context, TableFunctionBindInput &input, LoggingTargetTable table);
+	DUCKDB_API virtual unique_ptr<TableRef> BindReplace(ClientContext &context, TableFunctionBindInput &input,
+	                                                    LoggingTargetTable table);
 
 	//! CONFIGURATION
 	DUCKDB_API virtual void UpdateConfig(DatabaseInstance &db, case_insensitive_map_t<Value> &config);
 };
 
-//! The buffering Log storage implements a buffering mechanism around the Base LogStorage class. It implements some general
-//! features that most log storages will need.
+//! The buffering Log storage implements a buffering mechanism around the Base LogStorage class. It implements some
+//! general features that most log storages will need.
 class BufferingLogStorage : public LogStorage {
 public:
 	explicit BufferingLogStorage(DatabaseInstance &db_p, idx_t buffer_size, bool normalize);
@@ -126,7 +127,8 @@ protected:
 	//! This method is called in a chained way down the class hierarchy. This allows each class to interpret its own
 	//! part of the config. Unhandled config values that are left over will result in an error
 	virtual void UpdateConfigInternal(DatabaseInstance &db, case_insensitive_map_t<Value> &config);
-	//! ResetAllBuffers will clear all buffered data. To be overridden by child classes to ensure their buffers are flushed too
+	//! ResetAllBuffers will clear all buffered data. To be overridden by child classes to ensure their buffers are
+	//! flushed too
 	virtual void ResetAllBuffers();
 
 	/// Helper methods
@@ -138,9 +140,11 @@ protected:
 	//! Whether a specific table is available in the log storage
 	bool IsEnabledInternal(LoggingTargetTable table);
 
-	//! lock to be used by this class and child classes to ensure thread safety TODO: maybe remove and delegate thread-safety to LogManager?
+	//! lock to be used by this class and child classes to ensure thread safety TODO: maybe remove and delegate
+	//! thread-safety to LogManager?
 	mutable mutex lock;
-	//! Switches between using false = use LoggingTargetTable::ALL_LOGS, true = use LoggingTargetTable::LOG_ENTIRES + LoggingTargetTable::CONTEXTS
+	//! Switches between using false = use LoggingTargetTable::ALL_LOGS, true = use LoggingTargetTable::LOG_ENTIRES +
+	//! LoggingTargetTable::CONTEXTS
 	bool normalize_contexts = true;
 
 private:
@@ -160,7 +164,6 @@ private:
 	//! This flag is set whenever a new context_is written to the entry buffer. It means that the next flush of
 	//! LoggingTargetTable::LOG_ENTRIES also requires a flush of LoggingTargetTable::LOG_CONTEXTS
 	bool flush_contexts_on_next_entry_flush = false;
-
 };
 
 //! The CSVLogStorage implements an additional layer on the BufferingLogStorage which will handle converting the log
@@ -210,8 +213,8 @@ private:
 	unordered_map<LoggingTargetTable, unique_ptr<CSVWriter>> writers;
 };
 
-//! Implements a stdout-based log storage using log lines written in CSV format to allow for easy parsing of the log messages
-//! Note that this only supports denormalized logging since there is only 1 practical output stream.
+//! Implements a stdout-based log storage using log lines written in CSV format to allow for easy parsing of the log
+//! messages Note that this only supports denormalized logging since there is only 1 practical output stream.
 class StdOutLogStorage : public CSVLogStorage {
 public:
 	explicit StdOutLogStorage(DatabaseInstance &db);
@@ -260,7 +263,6 @@ protected:
 	void AfterFlush(LoggingTargetTable table, DataChunk &chunk) override;
 
 private:
-
 	//! Intialize the csv file for `table`
 	void InitializeFile(DatabaseInstance &db, LoggingTargetTable table);
 	//! Initialize the filewriter to be passed to the CSVWriter

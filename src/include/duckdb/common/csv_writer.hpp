@@ -19,7 +19,8 @@ enum class CSVNewLineMode {
 	//! Newlines are written before writing out a new csv line. Ensures we don't write an empty line at the end of
 	//! a csv file. Uses CSVWriterState::written_anything to keep track of when to insert newlines
 	WRITE_BEFORE = 0,
-	//! Newlines are written after every line. This is cleanest in stdout, where lines are expected to end with a newline
+	//! Newlines are written after every line. This is cleanest in stdout, where lines are expected to end with a
+	//! newline
 	WRITE_AFTER = 1
 };
 
