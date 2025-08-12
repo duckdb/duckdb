@@ -4,15 +4,27 @@
 
 require noforcestorage
 
-mode skip
-
 # Enable FileSystem logging to single csv file  
 statement ok
-CALL enable_logging(['FileSystem'], storage='file', storage_config={'path': '__TEST_DIR__/logging_csv_log.csv'});
+CALL enable_logging(['FileSystem'], storage='file', storage_config={'path': '__TEST_DIR__/logging_csv_log.csv', 'normalize': false});
 
 # Read some data to trigger FileSystem log
 statement ok
 FROM "data/csv/big_number.csv"
+
+query IIIIII
+DESCRIBE FROM '__TEST_DIR__/logging_csv_log.csv';
+----
+context_id	BIGINT	YES	NULL	NULL	NULL
+scope	VARCHAR	YES	NULL	NULL	NULL
+connection_id	BIGINT	YES	NULL	NULL	NULL
+transaction_id	BIGINT	YES	NULL	NULL	NULL
+query_id	BIGINT	YES	NULL	NULL	NULL
+thread_id	VARCHAR	YES	NULL	NULL	NULL
+timestamp	TIMESTAMP	YES	NULL	NULL	NULL
+type	VARCHAR	YES	NULL	NULL	NULL
+log_level	VARCHAR	YES	NULL	NULL	NULL
+message	VARCHAR	YES	NULL	NULL	NULL
 
 # Ensure we can reparse the structured log message from the csv
 query III
@@ -28,26 +40,12 @@ CONNECTION	data/csv/big_number.csv	READ
 CONNECTION	data/csv/big_number.csv	READ
 CONNECTION	data/csv/big_number.csv	CLOSE
 
-query IIIIII
-DESCRIBE FROM '__TEST_DIR__/logging_csv_log.csv';
-----
-context_id	BIGINT	YES	NULL	NULL	NULL
-scope	VARCHAR	YES	NULL	NULL	NULL
-connection_id	BIGINT	YES	NULL	NULL	NULL
-transaction_id	BIGINT	YES	NULL	NULL	NULL
-query_id	BIGINT	YES	NULL	NULL	NULL
-thread	VARCHAR	YES	NULL	NULL	NULL
-timestamp	TIMESTAMP	YES	NULL	NULL	NULL
-log_type	VARCHAR	YES	NULL	NULL	NULL
-level	VARCHAR	YES	NULL	NULL	NULL
-message	VARCHAR	YES	NULL	NULL	NULL
-
 statement ok
 CALL disable_logging()
 
 # Truncating the logs will clear the csv log file
 statement ok
-pragma truncate_duckdb_logs;
+CALL truncate_duckdb_logs();
 
 query I
 select count(*) FROM "__TEST_DIR__/logging_csv_log.csv";
@@ -56,7 +54,7 @@ select count(*) FROM "__TEST_DIR__/logging_csv_log.csv";
 
 # Enable FileSystem logging to normalized files  
 statement ok
-CALL enable_logging(['FileSystem'], storage='file', storage_config={'entries_path': '__TEST_DIR__/logging_csv_log_entries.csv', 'contexts_path': '__TEST_DIR__/logging_csv_log_contexts.csv'});
+CALL enable_logging(['FileSystem'], storage='file', storage_config={'path': '__TEST_DIR__/logging_csv_logs_normalized', 'normalize': true});
 
 # Read some data to trigger FileSystem log
 statement ok
@@ -68,7 +66,7 @@ SELECT
 	context_id is not null, 
 	path: parse_duckdb_log_message('FileSystem', message)['path'],
 	op: parse_duckdb_log_message('FileSystem', message)['op'],
-FROM "__TEST_DIR__/logging_csv_log_entries.csv"
+FROM "__TEST_DIR__/logging_csv_logs_normalized/duckdb_log_entries.csv"
 WHERE path = 'data/csv/big_number.csv';
 ----
 1	data/csv/big_number.csv	OPEN
@@ -80,46 +78,46 @@ WHERE path = 'data/csv/big_number.csv';
 # TODO: is this correct?
 query I
 SELECT scope
-FROM "__TEST_DIR__/logging_csv_log_contexts.csv";
+FROM "__TEST_DIR__/logging_csv_logs_normalized/duckdb_log_contexts.csv";
 ----
 CONNECTION
 CONNECTION
 
 # Check schema
 query IIIIII
-DESCRIBE FROM '__TEST_DIR__/logging_csv_log_entries.csv';
+DESCRIBE FROM '__TEST_DIR__/logging_csv_logs_normalized/duckdb_log_entries.csv';
 ----
 context_id	BIGINT	YES	NULL	NULL	NULL
 timestamp	TIMESTAMP	YES	NULL	NULL	NULL
-log_type	VARCHAR	YES	NULL	NULL	NULL
-level	VARCHAR	YES	NULL	NULL	NULL
+type	VARCHAR	YES	NULL	NULL	NULL
+log_level	VARCHAR	YES	NULL	NULL	NULL
 message	VARCHAR	YES	NULL	NULL	NULL
 
 # Check schema
 query IIIIII
-DESCRIBE FROM '__TEST_DIR__/logging_csv_log_contexts.csv';
+DESCRIBE FROM '__TEST_DIR__/logging_csv_logs_normalized/duckdb_log_contexts.csv';
 ----
 context_id	BIGINT	YES	NULL	NULL	NULL
 scope	VARCHAR	YES	NULL	NULL	NULL
 connection_id	BIGINT	YES	NULL	NULL	NULL
 transaction_id	BIGINT	YES	NULL	NULL	NULL
 query_id	BIGINT	YES	NULL	NULL	NULL
-thread	VARCHAR	YES	NULL	NULL	NULL
+thread_id	VARCHAR	YES	NULL	NULL	NULL
 
 statement ok
 CALL disable_logging();
 
 # Truncating the logs will clear both csv files
 statement ok
-pragma truncate_duckdb_logs;
+CALL truncate_duckdb_logs();
 
 query I
-select count(*) FROM "__TEST_DIR__/logging_csv_log_contexts.csv";
+select count(*) FROM "__TEST_DIR__/logging_csv_logs_normalized/duckdb_log_contexts.csv";
 ----
 0
 
 query I
-select count(*) FROM "__TEST_DIR__/logging_csv_log_entries.csv";
+select count(*) FROM "__TEST_DIR__/logging_csv_logs_normalized/duckdb_log_entries.csv";
 ----
 0
 
@@ -129,7 +127,7 @@ CALL enable_logging(['FileSystem'], storage='stdout');
 # TODO: we can't nicely test logging to stdout without polluting test runner output
 
 statement ok
-pragma truncate_duckdb_logs;
+CALL truncate_duckdb_logs();
 
 statement ok
 CALL disable_logging();
@@ -148,19 +146,17 @@ CALL disable_logging();
 statement error
 CALL enable_logging(['FileSystem'], storage='stdout', storage_config={'bla': 'bla'});
 ----
-Invalid Input Error: Unrecognized log storage config option: 'bla'
+Invalid Input Error: Unrecognized log storage config option for storage: 'StdOutLogStorage': 'bla'
 
 statement error
 CALL enable_logging(['FileSystem'], storage='stdout', storage_config={'path': './file.csv'});
 ----
-Invalid Input Error: Unrecognized log storage config option: 'path'
+Invalid Input Error: Unrecognized log storage config option for storage: 'StdOutLogStorage': 'path'
 
 # Switching between normalized and denormalized logs will throw if the log is non-empty
 
 statement ok
-pragma truncate_duckdb_logs
-
-mode unskip
+CALL truncate_duckdb_logs()
 
 statement ok
 CALL enable_logging(['QueryLog'], storage='file', storage_config={'path': '__TEST_DIR__/logging_csv_log.csv'});
@@ -169,7 +165,7 @@ statement ok
 SELECT 1;
 
 statement ok
-pragma truncate_duckdb_logs
+CALL truncate_duckdb_logs()
 
 # statement error
 # CALL enable_logging(['QueryLog'], storage='file', storage_config={'entries_path': '__TEST_DIR__/logging_csv_log_entries.csv', 'contexts_path': '__TEST_DIR__/logging_csv_log_contexts.csv'});
@@ -178,3 +174,14 @@ pragma truncate_duckdb_logs
 
 statement ok
 explain FROM duckdb_logs
+
+# This is not allowed
+statement error
+CALL enable_logging(['QueryLog'], storage='file', storage_config={'path': '__TEST_DIR__/logging_csv_log.csv', 'normalize': true});
+----
+Invalid Configuration Error: Can not set path to '
+
+statement error
+CALL enable_logging(['QueryLog'], storage='file', storage_config={'path': '__TEST_DIR__/logging_csv_log.csv', 'normalize': true});
+----
+' while normalize is true. Normalize will make DuckDB write multiple log files to more efficiently store log entries. Please specify a directory path instead of a csv file path, or set normalize to false.

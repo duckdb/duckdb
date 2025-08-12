@@ -62,6 +62,8 @@ public:
 	}
 	DUCKDB_API virtual ~LogStorage() = default;
 
+	virtual const string GetStorageName() = 0;
+
 	static vector<LogicalType> GetSchema(LoggingTargetTable table);
 	static vector<string> GetColumnNames(LoggingTargetTable table);
 
@@ -162,7 +164,6 @@ public:
 	explicit CSVLogStorage(DatabaseInstance &db, bool normalize);
 	~CSVLogStorage() override;
 
-
 protected:
 	//! Implement the BufferingLogStorage interface
 	void FlushChunk(LoggingTargetTable table, DataChunk &chunk) final;
@@ -199,6 +200,10 @@ public:
 	explicit StdOutLogStorage(DatabaseInstance &db);
 	~StdOutLogStorage() override;
 
+	const string GetStorageName() override {
+		return "StdOutLogStorage";
+	}
+
 protected:
 	void OnFlush(LoggingTargetTable table, DataChunk &chunk) override;
 	//! TODO: implement StdoutStream instead
@@ -209,6 +214,10 @@ class FileLogStorage : public CSVLogStorage {
 public:
 	explicit FileLogStorage(DatabaseInstance &db);
 	~FileLogStorage() override;
+
+	const string GetStorageName() override {
+		return "FileLogStorage";
+	}
 
 	void Truncate() override;
 
@@ -254,6 +263,10 @@ class InMemoryLogStorage : public BufferingLogStorage {
 public:
 	explicit InMemoryLogStorage(DatabaseInstance &db);
 	~InMemoryLogStorage() override;
+
+	const string GetStorageName() override {
+		return "InMemoryLogStorage";
+	}
 
 	//! LogStorage API: READING
 	bool CanScan(LoggingTargetTable table) override;

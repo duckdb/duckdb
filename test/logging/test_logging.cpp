@@ -189,9 +189,11 @@ public:
 	void WriteLogEntries(DataChunk &chunk, const RegisteredLoggingContext &context) override {};
 	void Flush(LoggingTargetTable table) override {};
 	void FlushAll() override {};
-
 	bool IsEnabled(LoggingTargetTable table) override {
 		return table == LoggingTargetTable::ALL_LOGS;
+	}
+	const string GetStorageName() override {
+		return "MyLogStorage";
 	}
 
 	unordered_set<string> log_store;

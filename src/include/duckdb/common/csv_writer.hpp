@@ -33,7 +33,7 @@ struct CSVWriterOptions {
 	//! For each byte whether the CSV file requires quotes when containing the byte
 	unsafe_unique_array<bool> requires_quotes;
 	//! How to write newlines
-	CSVNewLineMode newline_writing_mode = CSVNewLineMode::WRITE_AFTER;
+	CSVNewLineMode newline_writing_mode = CSVNewLineMode::WRITE_BEFORE;
 };
 
 struct CSVWriterState {

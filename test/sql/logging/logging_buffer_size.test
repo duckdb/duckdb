@@ -34,7 +34,7 @@ statement ok
 CALL disable_logging()
 
 statement ok
-pragma truncate_duckdb_logs
+CALL truncate_duckdb_logs()
 
 # Change logging to manualog log type
 statement ok

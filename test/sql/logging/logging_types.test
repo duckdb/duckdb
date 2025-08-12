@@ -24,7 +24,7 @@ FileSystem	TRACE	CONNECTION	LocalFileSystem	par.csv	READ	0	4
 FileSystem	TRACE	CONNECTION	LocalFileSystem	par.csv	CLOSE	NULL	NULL
 
 statement ok
-pragma truncate_duckdb_logs
+CALL truncate_duckdb_logs()
 
 statement ok
 CALL enable_logging('QueryLog');

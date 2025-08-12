@@ -266,7 +266,7 @@ void BufferingLogStorage::UpdateConfigInternal(DatabaseInstance &db, case_insens
 		} else if (StringUtil::Lower(it.first) == "normalize") {
 			throw InternalException("'normalize' setting should be handled in child class");
 		} else {
-			throw InvalidInputException("Unrecognized log storage config option: '%s'", it.first);
+			throw InvalidInputException("Unrecognized log storage config option for storage: '%s': '%s'", GetStorageName(), it.first);
 		}
 	}
 }
@@ -404,17 +404,29 @@ void FileLogStorage::UpdateConfigInternal(DatabaseInstance &db, case_insensitive
 
 	string new_path;
 	bool normalize_contexts_new_value = normalize_contexts;
+	bool normalize_set_explicitly = false;
 
 	vector<string> to_remove;
 	for (const auto &it : config_copy) {
-		if (StringUtil::Lower(it.first) == "path") {
-			new_path = it.second.ToString();
+		auto key = StringUtil::Lower(it.first);
+		if (key == "path") {
+			auto path_value = it.second.ToString();
+			//! We implicitly set normalize to false when a path ending in .csv is specified
+			if (!normalize_set_explicitly && StringUtil::EndsWith(path_value, ".csv")) {
+				normalize_contexts_new_value = false;
+			}
+			new_path = path_value;
 			to_remove.push_back(it.first);
 		}
-		if (StringUtil::Lower(it.first) == "normalize") {
+		if (key == "normalize") {
+			normalize_set_explicitly = true;
 			normalize_contexts_new_value = it.second.GetValue<bool>();
 			to_remove.push_back(it.first);
 		}
+	}
+
+	if (StringUtil::EndsWith(new_path, ".csv") && normalize_contexts_new_value) {
+		throw InvalidConfigurationException("Can not set path to '%s' while normalize is true. Normalize will make DuckDB write multiple log files to more efficiently store log entries. Please specify a directory path instead of a csv file path, or set normalize to false.", new_path);
 	}
 
 	// If any writer is initialized, we flush first:

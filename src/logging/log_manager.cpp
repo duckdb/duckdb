@@ -102,6 +102,18 @@ void LogManager::FlushCachedLogEntries(DataChunk &chunk, const RegisteredLogging
 	throw NotImplementedException("FlushCachedLogEntries");
 }
 
+void LogManager::SetConfig(DatabaseInstance &db, LogConfig config_p) {
+	unique_lock<mutex> lck(lock);
+
+	// We need extra handling for switching storage
+	SetLogStorageInternal(db, config_p.storage);
+
+	// Apply the remainder of the config
+	config = std::move(config_p);
+
+	global_logger->UpdateConfig(config);
+}
+
 void LogManager::SetEnableLogging(bool enable) {
 	unique_lock<mutex> lck(lock);
 	config.enabled = enable;
@@ -120,20 +132,33 @@ void LogManager::SetLogLevel(LogLevel level) {
 	global_logger->UpdateConfig(config);
 }
 
-void LogManager::SetEnabledLogTypes(unordered_set<string> &enabled_log_types) {
+void LogManager::SetEnabledLogTypes(optional_ptr<unordered_set<string>> enabled_log_types) {
 	unique_lock<mutex> lck(lock);
-	config.enabled_log_types = enabled_log_types;
+	if (enabled_log_types) {
+		config.enabled_log_types = *enabled_log_types;
+	} else {
+		config.enabled_log_types = {};
+	}
 	global_logger->UpdateConfig(config);
 }
 
-void LogManager::SetDisabledLogTypes(unordered_set<string> &disabled_log_types) {
+void LogManager::SetDisabledLogTypes(optional_ptr<unordered_set<string>> disabled_log_types) {
 	unique_lock<mutex> lck(lock);
-	config.disabled_log_types = disabled_log_types;
+	if (disabled_log_types) {
+		config.disabled_log_types = *disabled_log_types;
+	} else {
+		config.disabled_log_types = {};
+	}
 	global_logger->UpdateConfig(config);
 }
+
 
 void LogManager::SetLogStorage(DatabaseInstance &db, const string &storage_name) {
 	unique_lock<mutex> lck(lock);
+	SetLogStorageInternal(db, storage_name);
+}
+
+void LogManager::SetLogStorageInternal(DatabaseInstance &db, const string &storage_name) {
 	auto storage_name_to_lower = StringUtil::Lower(storage_name);
 
 	if (config.storage == storage_name_to_lower) {

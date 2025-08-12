@@ -36,7 +36,7 @@ CONNECTION	FileSystem	TRACE	{"fs":"LocalFileSystem","test.csv","op":"READ","byte
 CONNECTION	FileSystem	TRACE	{"fs":"LocalFileSystem","test.csv","op":"CLOSE"}
 
 statement ok
-pragma truncate_duckdb_logs;
+CALL truncate_duckdb_logs();
 
 require httpfs
 
