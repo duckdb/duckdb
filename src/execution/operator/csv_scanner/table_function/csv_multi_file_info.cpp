@@ -8,6 +8,10 @@
 
 namespace duckdb {
 
+FileGlobOptions CSVMultiFileInfo::InitializeFileGlobOptions(ClientContext &context) {
+	return FileGlobOptions::DISALLOW_EMPTY;
+}
+
 unique_ptr<MultiFileReaderInterface>
 CSVMultiFileInfo::InitializeInterface(ClientContext &context, MultiFileReader &reader, MultiFileList &file_list) {
 	return make_uniq<CSVMultiFileInfo>();

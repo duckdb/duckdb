@@ -55,6 +55,9 @@ struct MultiFileReaderInterface {
 	virtual unique_ptr<NodeStatistics> GetCardinality(const MultiFileBindData &bind_data, idx_t file_count) = 0;
 	virtual void GetVirtualColumns(ClientContext &context, MultiFileBindData &bind_data, virtual_column_map_t &result);
 	virtual unique_ptr<MultiFileReaderInterface> Copy();
+
+protected:
+	FileGlobOptions GLOB_OPTIONS = FileGlobOptions::DISALLOW_EMPTY;
 };
 
 template <class OP>
@@ -160,7 +163,8 @@ public:
 	static unique_ptr<FunctionData> MultiFileBind(ClientContext &context, TableFunctionBindInput &input,
 	                                              vector<LogicalType> &return_types, vector<string> &names) {
 		auto multi_file_reader = MultiFileReader::Create(input.table_function);
-		auto file_list = multi_file_reader->CreateFileList(context, input.inputs[0]);
+		auto file_list =
+		    multi_file_reader->CreateFileList(context, input.inputs[0], OP::InitializeFileGlobOptions(context));
 
 		auto interface = OP::InitializeInterface(context, *multi_file_reader, *file_list);
 

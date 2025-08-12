@@ -4,6 +4,10 @@
 
 namespace duckdb {
 
+FileGlobOptions JSONMultiFileInfo::InitializeFileGlobOptions(ClientContext &context) {
+	return FileGlobOptions::DISALLOW_EMPTY;
+}
+
 unique_ptr<MultiFileReaderInterface>
 JSONMultiFileInfo::InitializeInterface(ClientContext &context, MultiFileReader &reader, MultiFileList &file_list) {
 	return make_uniq<JSONMultiFileInfo>();
