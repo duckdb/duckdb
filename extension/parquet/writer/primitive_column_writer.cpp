@@ -69,7 +69,11 @@ void PrimitiveColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterStat
 			}
 			if (validity.RowIsValid(vector_index)) {
 				page_info.estimated_page_size += GetRowSize(vector, vector_index, state);
-				if (vector_can_span_multiple_pages && page_info.estimated_page_size >= MAX_UNCOMPRESSED_PAGE_SIZE) {
+				if (page_info.estimated_page_size >= MAX_UNCOMPRESSED_PAGE_SIZE) {
+					if (!vector_can_span_multiple_pages && i != 0) {
+						// Vector is not allowed to span multiple pages, and we already started writing it
+						continue;
+					}
 					PageInformation new_info;
 					new_info.offset = page_info.offset + page_info.row_count;
 					state.page_info.push_back(new_info);
