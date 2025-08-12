@@ -232,8 +232,7 @@ void ExtensionLoader::RegisterCastFunction(const LogicalType &source, const Logi
 }
 
 void ExtensionLoader::RegisterKeyword(const string &keyword, const KeywordCategory &category) const {
-	auto &config = DBConfig::GetConfig(db);
-	config.keyword_manager->RegisterKeyword(keyword, category);
+	db.GetKeywordManager().RegisterKeyword(keyword, category);
 }
 
 } // namespace duckdb

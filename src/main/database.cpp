@@ -44,7 +44,6 @@ DBConfig::DBConfig() {
 	encoding_functions->Initialize(*this);
 	arrow_extensions = make_uniq<ArrowTypeExtensionSet>();
 	arrow_extensions->Initialize(*this);
-	keyword_manager = make_uniq<ParserKeywordManager>();
 	cast_functions = make_uniq<CastFunctionSet>(*this);
 	collation_bindings = make_uniq<CollationBinding>();
 	index_types = make_uniq<IndexTypeSet>();
@@ -89,6 +88,8 @@ DatabaseInstance::~DatabaseInstance() {
 	external_file_cache.reset();
 
 	buffer_manager.reset();
+
+	keyword_manager.reset();
 
 	// flush allocations and disable the background thread
 	if (Allocator::SupportsFlush()) {
@@ -296,6 +297,8 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	connection_manager = make_uniq<ConnectionManager>();
 	extension_manager = make_uniq<ExtensionManager>(*this);
 
+	keyword_manager = make_uniq<ParserKeywordManager>();
+
 	// initialize the secret manager
 	config.secret_manager->Initialize(*this);
 
@@ -463,9 +466,6 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	}
 	config.replacement_scans = std::move(new_config.replacement_scans);
 	config.parser_extensions = std::move(new_config.parser_extensions);
-	if (new_config.keyword_manager) {
-		config.keyword_manager = std::move(new_config.keyword_manager);
-	}
 	config.error_manager = std::move(new_config.error_manager);
 	if (!config.error_manager) {
 		config.error_manager = make_uniq<ErrorManager>();
@@ -532,6 +532,10 @@ const duckdb_ext_api_v1 DatabaseInstance::GetExtensionAPIV1() {
 
 LogManager &DatabaseInstance::GetLogManager() const {
 	return *log_manager;
+}
+
+ParserKeywordManager &DatabaseInstance::GetKeywordManager() const {
+	return *keyword_manager;
 }
 
 ValidChecker &ValidChecker::Get(DatabaseInstance &db) {

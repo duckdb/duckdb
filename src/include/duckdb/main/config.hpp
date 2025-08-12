@@ -254,8 +254,6 @@ public:
 	DBConfigOptions options;
 	//! Extensions made to the parser
 	vector<ParserExtension> parser_extensions;
-	//! Keywords used by the parser
-	unique_ptr<ParserKeywordManager> keyword_manager;
 	//! Extensions made to the optimizer
 	vector<OptimizerExtension> optimizer_extensions;
 	//! Error manager
