@@ -13,6 +13,7 @@
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/serializer/write_stream.hpp"
 
 #include "duckdb/common/types/column/column_data_scan_states.hpp"
 #include "duckdb/parallel/thread_context.hpp"
@@ -29,8 +30,8 @@ class BufferedFileWriter;
 
 //! Logging storage can store entries normalized or denormalized. This enum describes what a single table/file/etc contains
 enum class LoggingTargetTable {
-	ALL_LOGS,			// Denormalized: log entries consisting of both the full log entry and the context
-	LOG_ENTRIES,		// Normalized: contains only the log entries and a context_id
+	ALL_LOGS,        // Denormalized: log entries consisting of both the full log entry and the context
+	LOG_ENTRIES,     // Normalized: contains only the log entries and a context_id
 	LOG_CONTEXTS,    // Normalized: contains only the log contexts
 };
 
@@ -67,16 +68,13 @@ public:
 	static vector<LogicalType> GetSchema(LoggingTargetTable table);
 	static vector<string> GetColumnNames(LoggingTargetTable table);
 
-
 	//! WRITING
 	DUCKDB_API virtual void WriteLogEntry(timestamp_t timestamp, LogLevel level, const string &log_type,
 	                                      const string &log_message, const RegisteredLoggingContext &context) = 0;
 	DUCKDB_API virtual void WriteLogEntries(DataChunk &chunk, const RegisteredLoggingContext &context) = 0;
 	DUCKDB_API virtual void FlushAll() = 0;
 	DUCKDB_API virtual void Flush(LoggingTargetTable table) = 0;
-
 	DUCKDB_API virtual void Truncate();
-
 	DUCKDB_API virtual bool IsEnabled(LoggingTargetTable table) = 0;
 
 	//! READING (OPTIONAL)
@@ -95,106 +93,125 @@ public:
 	DUCKDB_API virtual void UpdateConfig(DatabaseInstance &db, case_insensitive_map_t<Value> &config);
 };
 
-//! The buffering Log storage implements a buffering mechanism around the Base LogStorage class. It simplifies the
-//! implementation of LogStorage
+//! The buffering Log storage implements a buffering mechanism around the Base LogStorage class. It implements some general
+//! features that most log storages will need.
 class BufferingLogStorage : public LogStorage {
 public:
 	explicit BufferingLogStorage(DatabaseInstance &db_p, idx_t buffer_size, bool normalize);
 	~BufferingLogStorage() override;
 
-	//! The BufferingLogStorage implements the core Log Writing functions: all log entries will be ingested through this
+	/// (Partially) Implements  LogStorage API
+
+	//! Write out the entry to the buffers
 	void WriteLogEntry(timestamp_t timestamp, LogLevel level, const string &log_type, const string &log_message,
 	                   const RegisteredLoggingContext &context) final;
+	//! Write out the chunk to the buffers
 	void WriteLogEntries(DataChunk &chunk, const RegisteredLoggingContext &context) final;
+	//! Flushes buffers for all tables
 	void FlushAll() final;
+	//! Flushes buffer for a specific table
 	void Flush(LoggingTargetTable table) final;
-
+	//! Truncates log storage: both buffers and persistent storage (if applicable)
 	void Truncate() override;
-
+	//! Apply a new log storage configuration
 	void UpdateConfig(DatabaseInstance &db, case_insensitive_map_t<Value> &config) override;
-
+	//! Returns whether the table is enabled for this storage
 	bool IsEnabled(LoggingTargetTable table) override;
 
 protected:
-	//! To be implemented by inheriting classes: the BufferedLogStorage will call this method once a buffer is full
+	/// Interface to child classes
+
+	//! Invoked whenever buffers are full to flush to storage
 	virtual void FlushChunk(LoggingTargetTable table, DataChunk &chunk) = 0;
-
-	//! TODO: rename to make this more clear?
+	//! This method is called in a chained way down the class hierarchy. This allows each class to interpret its own
+	//! part of the config. Unhandled config values that are left over will result in an error
 	virtual void UpdateConfigInternal(DatabaseInstance &db, case_insensitive_map_t<Value> &config);
-
-	virtual bool IsEnabledInternal(LoggingTargetTable table);
-
-protected:
-	void FlushAllInternal();
-	void FlushInternal(LoggingTargetTable table);
-	void WriteLoggingContext(const RegisteredLoggingContext &context);
-
-	//! ResetAllBuffers will clear all unflushed data
+	//! ResetAllBuffers will clear all buffered data. To be overridden by child classes to ensure their buffers are flushed too
 	virtual void ResetAllBuffers();
 
-protected:
-	mutable mutex lock;
+	/// Helper methods
 
-	// TODO: move to private
+	//! Flushes all tables
+	void FlushAllInternal();
+	//! Flushes one of the tables
+	void FlushInternal(LoggingTargetTable table);
+	//! Whether a specific table is available in the log storage
+	bool IsEnabledInternal(LoggingTargetTable table);
+
+	//! lock to be used by this class and child classes to ensure thread safety TODO: maybe remove and delegate thread-safety to LogManager?
+	mutable mutex lock;
+	//! Switches between using false = use LoggingTargetTable::ALL_LOGS, true = use LoggingTargetTable::LOG_ENTIRES + LoggingTargetTable::CONTEXTS
 	bool normalize_contexts = true;
 
 private:
 	//! Resets the log buffers
 	void ResetLogBuffers();
+	//! Write out a logging context
+	void WriteLoggingContext(const RegisteredLoggingContext &context);
 
+	//! The currently registered RegisteredLoggingContext's
 	unordered_set<idx_t> registered_contexts;
-
-	// Configuration for buffering
+	//! Configuration for buffering
 	idx_t buffer_limit = 0;
-
-	// Debug option for testing buffering behaviour
+	//! Debug option for testing buffering behaviour
 	bool only_flush_on_full_buffer = false;
-
+	//! The buffers used for each table
 	unordered_map<LoggingTargetTable, unique_ptr<DataChunk>> buffers;
-
-	// This flag is set whenever a new context_is written to the entry buffer. It means that the next flush of
-	// LoggingTargetTable::LOG_ENTRIES also requires a flush of LoggingTargetTable::LOG_CONTEXTS
+	//! This flag is set whenever a new context_is written to the entry buffer. It means that the next flush of
+	//! LoggingTargetTable::LOG_ENTRIES also requires a flush of LoggingTargetTable::LOG_CONTEXTS
 	bool flush_contexts_on_next_entry_flush = false;
 
 };
-// Abstract base class for loggers that write out log entries as CSV-parsable strings
-//
+
+//! The CSVLogStorage implements an additional layer on the BufferingLogStorage which will handle converting the log
+//! entries and contexts to CSV lines. It provides functionality to write log data in CSV format with automatic type
+//! casting and configuration of CSV writers. This class serves as a base for both file-based and stdout-based CSV
+//! logging.
 class CSVLogStorage : public BufferingLogStorage {
 public:
 	explicit CSVLogStorage(DatabaseInstance &db, bool normalize);
 	~CSVLogStorage() override;
 
 protected:
-	//! Implement the BufferingLogStorage interface
+	/// Implement the BufferingLogStorage interface
+
+	//! Flushes the Chunk to the CSV writers
 	void FlushChunk(LoggingTargetTable table, DataChunk &chunk) final;
-
-protected:
-	//! Hooks to be implemented on flushing
-	virtual void BeforeFlush(LoggingTargetTable table, DataChunk &chunk) {
-	};
-	virtual void OnFlush(LoggingTargetTable table, DataChunk &chunk) {
-	};
-
-
 	//! Resets all buffers and state
 	void ResetAllBuffers() override;
 
+	/// Interface to child classes
+
+	//! Hooks for child class to run code pre-flush
+	virtual void BeforeFlush(LoggingTargetTable table, DataChunk &chunk) {};
+	virtual void AfterFlush(LoggingTargetTable table, DataChunk &chunk) {};
+
+	/// Helper functions
+
+	//! To be called by child classed to register the CSV writers used to write to.
+	void RegisterWriter(LoggingTargetTable table, unique_ptr<CSVWriter> writer);
+	//! Returns the writer for a table
+	CSVWriter &GetWriter(LoggingTargetTable table);
+
+	//! Configure a CSV writer
 	static void SetWriterConfigs(CSVWriter &Writer, vector<string> column_names);
 
-	unordered_map<LoggingTargetTable, unique_ptr<DataChunk>> cast_buffers;
-	//! Todo make private and access through methods?
-	unordered_map<LoggingTargetTable, unique_ptr<CSVWriter>> writers;
-
 private:
+	//! Perform the cast (does not reset input chunk!)
 	void ExecuteCast(LoggingTargetTable table, DataChunk &chunk);
-	// Reset the Cast chunks
+	//! Reset the Cast chunks
 	void ResetCastChunk();
-
+	//! Initialize the cast chunks
 	void InitializeCastChunk(LoggingTargetTable table);
 
-	unordered_set<idx_t> registered_contexts;
+	//! The cast buffers used to cast from the original types to the VARCHAR types ready to write to CSV format
+	unordered_map<LoggingTargetTable, unique_ptr<DataChunk>> cast_buffers;
+	//! The writers to be registered by child classes
+	unordered_map<LoggingTargetTable, unique_ptr<CSVWriter>> writers;
 };
 
+//! Implements a stdout-based log storage using log lines written in CSV format to allow for easy parsing of the log messages
+//! Note that this only supports denormalized logging since there is only 1 practical output stream.
 class StdOutLogStorage : public CSVLogStorage {
 public:
 	explicit StdOutLogStorage(DatabaseInstance &db);
@@ -204,12 +221,17 @@ public:
 		return "StdOutLogStorage";
 	}
 
-protected:
-	void OnFlush(LoggingTargetTable table, DataChunk &chunk) override;
-	//! TODO: implement StdoutStream instead
-	unique_ptr<MemoryStream> stdout_stream;
+private:
+	class StdOutWriteStream : public WriteStream {
+		void WriteData(const_data_ptr_t buffer, idx_t write_size) override;
+	};
+
+	StdOutWriteStream stdout_stream;
 };
 
+//! FileLogStorage implements a file-based logging system in CSV format.
+//! It implements CSVLogStorage to provide persistent log storage in CSV files. The FileLogStorage can operate in
+//! normalized (separate files for entries and contexts) or denormalized mode (single file)
 class FileLogStorage : public CSVLogStorage {
 public:
 	explicit FileLogStorage(DatabaseInstance &db);
@@ -219,38 +241,60 @@ public:
 		return "FileLogStorage";
 	}
 
-	void Truncate() override;
+	/// Implement LogStorage interface
 
-	unique_ptr<TableRef> BindReplace(ClientContext &context, TableFunctionBindInput &input, LoggingTargetTable table) override;
+	//! Truncates the csv files
+	void Truncate() override;
+	//! Bind replace function to scan the different tables
+	unique_ptr<TableRef> BindReplace(ClientContext &context, TableFunctionBindInput &input,
+	                                 LoggingTargetTable table) override;
 
 protected:
-	void InitializeFile(DatabaseInstance &db, LoggingTargetTable table);
-	static unique_ptr<BufferedFileWriter> InitializeFileWriter(DatabaseInstance &db, const string &path);
+	/// Implement CSVLogStorage interface
 
+	//! Handles the config related to the FileLogStorage
 	void UpdateConfigInternal(DatabaseInstance &db, case_insensitive_map_t<Value> &config) override;
-
+	//! Lazily initializes the CSV files before first flush
 	void BeforeFlush(LoggingTargetTable table, DataChunk &chunk) override;
-	void OnFlush(LoggingTargetTable table, DataChunk &chunk) override;
+	//! Calls `Sync` on the FileWriters to ensure a LogStorage Flush is flushed to disk immediately
+	void AfterFlush(LoggingTargetTable table, DataChunk &chunk) override;
 
+private:
+
+	//! Intialize the csv file for `table`
+	void InitializeFile(DatabaseInstance &db, LoggingTargetTable table);
+	//! Initialize the filewriter to be passed to the CSVWriter
+	static unique_ptr<BufferedFileWriter> InitializeFileWriter(DatabaseInstance &db, const string &path);
+	//! Ensures the table is initialized, used in lazy initialization. If already initialized this will NOP
 	void Initialize(LoggingTargetTable table);
-
+	//! Internal helper function to handle the BindReplace generation
 	unique_ptr<TableRef> BindReplaceInternal(ClientContext &context, TableFunctionBindInput &input, const string &path,
 	                                         const string &select_clause, const string &csv_columns);
 
+	//! DB reference to get the DB filesystem
 	DatabaseInstance &db;
 
-	//! Passed as WriteStreams to the CSVWriter in the base class
-	unordered_map<LoggingTargetTable, unique_ptr<BufferedFileWriter>> file_writers;
-	unordered_map<LoggingTargetTable, bool> initialized_writers;
-	unordered_map<LoggingTargetTable, string> file_paths;
+	//! Writer for a table
+	struct TableWriter {
+		//! Passed as WriteStreams to the CSVWriter in the base class
+		unique_ptr<BufferedFileWriter> file_writer;
+		//! Path to initialize the file_writer from
+		string path;
+		//! Whether the file_writer has been (lazily) initialized
+		bool initialized = false;
+	};
 
-	//!
+	//! The table info per table
+	unordered_map<LoggingTargetTable, TableWriter> tables;
+
+	//! Base path to generate the file paths from
 	string base_path;
 
 private:
 	void SetPaths(const string &base_path);
 };
 
+//! State for scanning the in memory buffers
 class InMemoryLogStorageScanState : public LogStorageScanState {
 public:
 	InMemoryLogStorageScanState(LoggingTargetTable table);
@@ -259,6 +303,8 @@ public:
 	ColumnDataScanState scan_state;
 };
 
+//! The InMemoryLogStorage implements a log storage that is backed by ColumnDataCollection's. It only support normalized
+//! mode and support a basic single-threaded scan. TODO: improve?
 class InMemoryLogStorage : public BufferingLogStorage {
 public:
 	explicit InMemoryLogStorage(DatabaseInstance &db);
@@ -268,25 +314,23 @@ public:
 		return "InMemoryLogStorage";
 	}
 
-	//! LogStorage API: READING
+	//! Implement LogStorage Single-threaded scan interface
 	bool CanScan(LoggingTargetTable table) override;
-
 	unique_ptr<LogStorageScanState> CreateScanState(LoggingTargetTable table) const override;
 	bool Scan(LogStorageScanState &state, DataChunk &result) const override;
 	void InitializeScan(LogStorageScanState &state) const override;
 
 protected:
+	/// Implement BufferingLogStorage interface
+
+	//! Flushes a chunk to the corresponding ColumnDataCollection
 	void FlushChunk(LoggingTargetTable table, DataChunk &chunk) override;
+	//! Resets the all ColumnDataCollection's
 	void ResetAllBuffers() override;
 
 private:
-	ColumnDataCollection &GetBuffer(LoggingTargetTable table) const {
-		auto res = log_storage_buffers.find(table);
-		if (res == log_storage_buffers.end()) {
-			throw InternalException("Failed to find table");
-		}
-		return *res->second;
-	}
+	//! Helper function to get the buffer
+	ColumnDataCollection &GetBuffer(LoggingTargetTable table) const;
 
 	unordered_map<LoggingTargetTable, unique_ptr<ColumnDataCollection>> log_storage_buffers;
 };

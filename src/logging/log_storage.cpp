@@ -146,67 +146,14 @@ void CSVLogStorage::ExecuteCast(LoggingTargetTable table, DataChunk &chunk) {
  	// Reset the cast buffer before use
 	cast_buffers[table]->Reset();
 
-	bool success = true;
-
-	CastParameters cast_params;
-
 	auto &cast_buffer = *cast_buffers[table];
-
 	idx_t count = chunk.size();
 
-	if (table == LoggingTargetTable::LOG_ENTRIES) {
-		// context_id: LogicalType::UBIGINT
-		success &= VectorCastHelpers::StringCast<idx_t, duckdb::StringCast>(chunk.data[0], cast_buffer.data[0], count, cast_params);
-		// timestamp: LogicalType::TIMESTAMP
-		success &= VectorCastHelpers::StringCast<timestamp_t, duckdb::StringCast>(chunk.data[1], cast_buffer.data[1], count, cast_params);
-		// log_type: LogicalType::VARCHAR  (no cast)
-		cast_buffer.data[2].Reference(chunk.data[2]);
-		// level: LogicalType::VARCHAR  (no cast)
-		cast_buffer.data[3].Reference(chunk.data[3]);
-		// message: LogicalType::VARCHAR  (no cast)
-		cast_buffer.data[4].Reference(chunk.data[4]);
-	} else if (table == LoggingTargetTable::LOG_CONTEXTS) {
-		// -- Cast Log Contexts
-		// context_id: LogicalType::UBIGINT
-		success &= VectorCastHelpers::StringCast<idx_t, duckdb::StringCast>(chunk.data[0], cast_buffer.data[0], count, cast_params);
-		// scope: LogicalType::VARCHAR (no cast)
-		cast_buffer.data[1].Reference(chunk.data[1]);
-		// connection_id: LogicalType::UBIGINT
-		success &= VectorCastHelpers::StringCast<idx_t, duckdb::StringCast>(chunk.data[2], cast_buffer.data[2], count, cast_params);
-		// transaction_id: LogicalType::UBIGINT
-		success &= VectorCastHelpers::StringCast<idx_t, duckdb::StringCast>(chunk.data[3], cast_buffer.data[3], count, cast_params);
-		// query_id: LogicalType::UBIGINT
-		success &= VectorCastHelpers::StringCast<idx_t, duckdb::StringCast>(chunk.data[4], cast_buffer.data[4], count, cast_params);
-		// thread: LogicalType::UBIGINT
-		success &= VectorCastHelpers::StringCast<idx_t, duckdb::StringCast>(chunk.data[5], cast_buffer.data[5], count, cast_params);
-	} else if (table == LoggingTargetTable::ALL_LOGS) {
-		// context_id: LogicalType::UBIGINT
-		success &= VectorCastHelpers::StringCast<idx_t, duckdb::StringCast>(chunk.data[0], cast_buffer.data[0], count, cast_params);
-		// scope: LogicalType::VARCHAR (no cast)
-		cast_buffer.data[1].Reference(chunk.data[1]);
-		// connection_id: LogicalType::UBIGINT
-		success &= VectorCastHelpers::StringCast<idx_t, duckdb::StringCast>(chunk.data[2], cast_buffer.data[2], count, cast_params);
-		// transaction_id: LogicalType::UBIGINT
-		success &= VectorCastHelpers::StringCast<idx_t, duckdb::StringCast>(chunk.data[3], cast_buffer.data[3], count, cast_params);
-		// query_id: LogicalType::UBIGINT
-		success &= VectorCastHelpers::StringCast<idx_t, duckdb::StringCast>(chunk.data[4], cast_buffer.data[4], count, cast_params);
-		// thread: LogicalType::UBIGINT
-		success &= VectorCastHelpers::StringCast<idx_t, duckdb::StringCast>(chunk.data[5], cast_buffer.data[5], count, cast_params);
-		// timestamp: LogicalType::TIMESTAMP
-		success &= VectorCastHelpers::StringCast<timestamp_t, duckdb::StringCast>(chunk.data[6], cast_buffer.data[6], count, cast_params);
-		// log_type: LogicalType::VARCHAR  (no cast)
-		cast_buffer.data[7].Reference(chunk.data[7]);
-		// level: LogicalType::VARCHAR  (no cast)
-		cast_buffer.data[8].Reference(chunk.data[8]);
-		// message: LogicalType::VARCHAR  (no cast)
-		cast_buffer.data[9].Reference(chunk.data[9]);
+	// Do default casts
+	for (idx_t i = 0; i < chunk.data.size(); i++) {
+		VectorOperations::DefaultCast(chunk.data[i], cast_buffer.data[i], count, false);
 	}
-
 	cast_buffer.SetCardinality(count);
-
-	if (!success) {
-		throw InvalidInputException("Failed to cast log entries");
-	}
 }
 
 void CSVLogStorage::ResetAllBuffers() {
@@ -214,6 +161,13 @@ void CSVLogStorage::ResetAllBuffers() {
 	ResetCastChunk();
 }
 
+void CSVLogStorage::RegisterWriter(LoggingTargetTable table, unique_ptr<CSVWriter> writer) {
+	writers[table] = std::move(writer);
+}
+
+CSVWriter &CSVLogStorage::GetWriter(LoggingTargetTable table) {
+	return *writers[table];
+}
 
 void CSVLogStorage::InitializeCastChunk(LoggingTargetTable table) {
 	cast_buffers[table] = make_uniq<DataChunk>();
@@ -248,8 +202,8 @@ void CSVLogStorage::FlushChunk(LoggingTargetTable table, DataChunk &chunk) {
 	writers[table]->WriteChunk(*cast_buffers[table]);
 	writers[table]->Flush();
 
-	// Call child class to implement any post flushing behaviour (e.g. calling sync or writing out buffer to stdout)
-	OnFlush(table, chunk);
+	// Call child class to implement any post flushing behaviour (e.g. calling sync)
+	AfterFlush(table, chunk);
 
 	// Reset the cast buffer
 	cast_buffers[table]->Reset();
@@ -271,48 +225,48 @@ void BufferingLogStorage::UpdateConfigInternal(DatabaseInstance &db, case_insens
 	}
 }
 
+void StdOutLogStorage::StdOutWriteStream::WriteData(const_data_ptr_t buffer, idx_t write_size) {
+	std::cout.write(const_char_ptr_cast(buffer), NumericCast<int64_t>(write_size));
+	std::cout.flush();
+}
+
 StdOutLogStorage::StdOutLogStorage(DatabaseInstance &db) : CSVLogStorage(db, false) {
 	// StdOutLogStorage is denormalized only
 	auto target_table = LoggingTargetTable::ALL_LOGS;
 
-	// Initialize writer and streams
-	stdout_stream = make_uniq<MemoryStream>();
-	writers[target_table] = make_uniq<CSVWriter>(*stdout_stream, GetColumnNames(target_table), false);
-	SetWriterConfigs(*writers[target_table], GetColumnNames(target_table));
-	writers[target_table]->writer_options.newline_writing_mode = CSVNewLineMode::WRITE_AFTER;
+	// Create and configure writer
+	auto writer = make_uniq<CSVWriter>(stdout_stream, GetColumnNames(target_table), false);
+	SetWriterConfigs(*writer, GetColumnNames(target_table));
+	writer->writer_options.newline_writing_mode = CSVNewLineMode::WRITE_AFTER;
+
+	RegisterWriter(target_table, std::move(writer));
 }
 
 StdOutLogStorage::~StdOutLogStorage() {
 }
 
-void StdOutLogStorage::OnFlush(LoggingTargetTable table, DataChunk &chunk) {
-	D_ASSERT(table == LoggingTargetTable::ALL_LOGS);
-	auto &stream = stdout_stream;
-	std::cout.write(const_char_ptr_cast(stream->GetData()),
-	                NumericCast<int64_t>(stream->GetPosition()));
-	std::cout.flush();
-	stream->Rewind();
-}
-
 FileLogStorage::FileLogStorage(DatabaseInstance &db_p)
     : CSVLogStorage(db_p, true), db(db_p) {
+
+	tables[LoggingTargetTable::ALL_LOGS] = TableWriter();
+	tables[LoggingTargetTable::LOG_CONTEXTS] = TableWriter();
+	tables[LoggingTargetTable::LOG_ENTRIES] = TableWriter();
 }
 
 FileLogStorage::~FileLogStorage() {
 }
 
 void FileLogStorage::InitializeFile(DatabaseInstance &db, LoggingTargetTable table) {
-	//! Create file writer
-	file_writers[table] = InitializeFileWriter(db, file_paths[table]);
-	auto file_writer = file_writers[table].get();
+	auto &table_writer = tables[table];
+	table_writer.file_writer = InitializeFileWriter(db, table_writer.path);
+	auto file_writer = table_writer.file_writer.get();
 
-	//! Create CSV writer that writes to file
+	// Create CSV writer that writes to file
 	auto column_names = GetColumnNames(table);
-	writers[table] = make_uniq<CSVWriter>(*file_writer, column_names, false);
-	auto csv_writer = writers[table].get();
 
+	// Configure writer
+	auto csv_writer = make_uniq<CSVWriter>(*file_writer, column_names, false);
 	SetWriterConfigs(*csv_writer, column_names);
-
 	bool should_write_header = file_writer->handle->GetFileSize() == 0;
 
 	// We write the header only if the file was empty: when appending to the file we don't
@@ -323,6 +277,8 @@ void FileLogStorage::InitializeFile(DatabaseInstance &db, LoggingTargetTable tab
 
 	// Needed to ensure we correctly start with a newline
 	csv_writer->SetWrittenAnything(true);
+
+	RegisterWriter(table, std::move(csv_writer));
 
 	// Ensures that the file is fully initialized when this function returns
 	file_writer->Sync();
@@ -354,13 +310,15 @@ void FileLogStorage::Truncate() {
 	// Reset buffers
 	ResetAllBuffers();
 
-	for (const auto &writer : file_writers) {
+	for (const auto &it : tables) {
+		auto &file_writer = it.second.file_writer;
+		if (!file_writer) {
+			continue;
+		}
 		// Truncate the file writer
-		writer.second->Truncate(0);
+		file_writer->Truncate(0);
 		// Re-initialize the corresponding CSVWriter
-		writers[writer.first]->Initialize(true);
-		// TODO: why is this done?
-		writer.second->Sync();
+		GetWriter(it.first).Initialize(true);
 	}
 }
 
@@ -369,13 +327,14 @@ void FileLogStorage::BeforeFlush(LoggingTargetTable table, DataChunk&) {
 	Initialize(table);
 }
 
-void FileLogStorage::OnFlush(LoggingTargetTable table, DataChunk&) {
-	file_writers[table]->Sync();
+void FileLogStorage::AfterFlush(LoggingTargetTable table, DataChunk&) {
+	tables[table].file_writer->Sync();
 }
 
 void FileLogStorage::Initialize(LoggingTargetTable table) {
-	if (!initialized_writers[table]) {
-		if (file_paths.find(table) == file_paths.end()) {
+	auto &table_writer = tables[table];
+	if (!table_writer.initialized) {
+		if (table_writer.path.empty()) {
 			throw InvalidConfigurationException("Failed to initialize file log storage table, path wasn't set");
 		}
 
@@ -384,17 +343,19 @@ void FileLogStorage::Initialize(LoggingTargetTable table) {
 }
 
 void FileLogStorage::SetPaths(const string &base_path) {
-	file_paths.clear();
+	for (auto &it : tables) {
+		it.second.path.clear();
+	}
 
 	LocalFileSystem fs;
 	if (normalize_contexts) {
-		file_paths[LoggingTargetTable::LOG_CONTEXTS] = fs.JoinPath(base_path, "duckdb_log_contexts.csv");
-		file_paths[LoggingTargetTable::LOG_ENTRIES] = fs.JoinPath(base_path, "duckdb_log_entries.csv");
+		tables[LoggingTargetTable::LOG_CONTEXTS].path = fs.JoinPath(base_path, "duckdb_log_contexts.csv");
+		tables[LoggingTargetTable::LOG_ENTRIES].path = fs.JoinPath(base_path, "duckdb_log_entries.csv");
 	} else {
 		if (StringUtil::EndsWith(base_path, ".csv")) {
-			file_paths[LoggingTargetTable::ALL_LOGS] = base_path;
+			tables[LoggingTargetTable::ALL_LOGS].path = base_path;
 		} else {
-			file_paths[LoggingTargetTable::LOG_ENTRIES] = fs.JoinPath(base_path, "duckdb_log_entries.csv");
+			tables[LoggingTargetTable::LOG_ENTRIES].path = fs.JoinPath(base_path, "duckdb_log_entries.csv");
 		}
 	}
 }
@@ -433,8 +394,8 @@ void FileLogStorage::UpdateConfigInternal(DatabaseInstance &db, case_insensitive
 	// - when switching between normalized and denormalized, this is necessary since we are changing the buffer schema
 	// - when simply changing the path, it avoids writing log entries written before this change to end up in the new file
 	bool initialized = false;
-	for (auto &it : initialized_writers) {
-		initialized |= it.second;
+	for (auto &it : tables) {
+		initialized |= it.second.initialized;
 	}
 	if (initialized) {
 		FlushAllInternal();
@@ -496,7 +457,7 @@ unique_ptr<TableRef> FileLogStorage::BindReplace(ClientContext &context, TableFu
 	}
 
 	string select = "SELECT *";
-	string path = file_paths[table];
+	string path = tables[table].path;
 
 	string columns;
 	if (table == LoggingTargetTable::LOG_ENTRIES) {
@@ -557,6 +518,14 @@ void InMemoryLogStorage::ResetAllBuffers() {
 	for (const auto &buffer: log_storage_buffers) {
 		buffer.second->Reset();
 	}
+}
+
+ColumnDataCollection &InMemoryLogStorage::GetBuffer(LoggingTargetTable table) const {
+	auto res = log_storage_buffers.find(table);
+	if (res == log_storage_buffers.end()) {
+		throw InternalException("Failed to find table");
+	}
+	return *res->second;
 }
 
 InMemoryLogStorage::~InMemoryLogStorage() {
