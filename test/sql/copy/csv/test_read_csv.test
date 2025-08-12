@@ -5,6 +5,11 @@
 statement ok
 PRAGMA enable_verification
 
+query II
+select delimiter, quote FROM sniff_csv('data/csv/stats_3_muta_10_21.csv')
+----
+,	"
+
 query III
 FROM read_csv('data/csv/comments/comment_skip.csv', comment = '#', delim = ',', skip=1, auto_detect = false, header = 1, columns = {'x':'varchar','y':'varchar','z':'varchar'})
 ----
