@@ -2550,7 +2550,7 @@ const StringUtil::EnumStringLiteral *GetLogicalTypeIdValues() {
 		{ static_cast<uint32_t>(LogicalTypeId::BIT), "BIT" },
 		{ static_cast<uint32_t>(LogicalTypeId::STRING_LITERAL), "STRING_LITERAL" },
 		{ static_cast<uint32_t>(LogicalTypeId::INTEGER_LITERAL), "INTEGER_LITERAL" },
-		{ static_cast<uint32_t>(LogicalTypeId::VARINT), "VARINT" },
+		{ static_cast<uint32_t>(LogicalTypeId::BIGNUM), "BIGNUM" },
 		{ static_cast<uint32_t>(LogicalTypeId::UHUGEINT), "UHUGEINT" },
 		{ static_cast<uint32_t>(LogicalTypeId::HUGEINT), "HUGEINT" },
 		{ static_cast<uint32_t>(LogicalTypeId::POINTER), "POINTER" },

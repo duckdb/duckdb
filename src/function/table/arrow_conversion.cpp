@@ -841,7 +841,7 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 		break;
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::BIT:
-	case LogicalTypeId::VARINT:
+	case LogicalTypeId::BIGNUM:
 	case LogicalTypeId::VARCHAR: {
 		auto &string_info = arrow_type.GetTypeInfo<ArrowStringInfo>();
 		auto size_type = string_info.GetSizeType();
