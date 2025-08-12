@@ -18,4 +18,4 @@ SELECT * from read_csv_auto('data/csv/escape.csv', header = 0)
 statement error
 SELECT * from read_csv_auto('data/csv/no_opt.csv', delim = ';')
 ----
-It was not possible to automatically detect the CSV Parsing dialect
+It was not possible to automatically detect the CSV parsing dialect

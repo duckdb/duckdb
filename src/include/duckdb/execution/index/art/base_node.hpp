@@ -39,7 +39,14 @@ public:
 		NodeHandle<BaseNode> handle(art, node);
 		auto &n = handle.Get();
 
+		// Reset the node (count).
 		n.count = 0;
+		// Zero-initialize the node.
+		for (uint8_t i = 0; i < CAPACITY; i++) {
+			n.key[i] = 0;
+			n.children[i].Clear();
+		}
+
 		return handle;
 	}
 
