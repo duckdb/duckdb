@@ -10,7 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
-#include "serializer/memory_stream.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
 
 namespace duckdb {
 class MemoryStream;
