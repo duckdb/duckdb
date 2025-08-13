@@ -20,7 +20,7 @@ void Node256::DeleteChild(ART &art, Node &node, const uint8_t byte) {
 		Node::FreeTree(art, n.children[byte]);
 		n.count--;
 
-		if (n.count >= SHRINK_THRESHOLD) {
+		if (n.count > SHRINK_THRESHOLD) {
 			return;
 		}
 	}

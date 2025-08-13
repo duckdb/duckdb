@@ -4736,6 +4736,8 @@ static void verify_uninitialized(void) {
 static void main_init(ShellState *data) {
 	data->normalMode = data->cMode = data->mode = RenderMode::DUCKBOX;
 	data->max_rows = 40;
+	data->thousand_separator = ',';
+	data->decimal_separator = '.';
 	data->colSeparator = SEP_Column;
 	data->rowSeparator = SEP_Row;
 	data->showHeader = true;

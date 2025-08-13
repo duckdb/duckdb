@@ -109,6 +109,7 @@ public:
 
 private:
 	static void GrowNode7Leaf(ART &art, Node &node15_leaf, Node &node7_leaf);
+	//! We shrink at <= Node48::SHRINK_THRESHOLD.
 	static void ShrinkNode256Leaf(ART &art, Node &node15_leaf, Node &node256_leaf);
 };
 
