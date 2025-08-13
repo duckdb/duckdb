@@ -55,6 +55,26 @@ public:
 			return count;
 		}
 
+		inline idx_t BlockCount() const {
+			return sorted->key_data->ChunkCount();
+		}
+
+		inline idx_t BlockStart(idx_t i) const {
+			return MinValue<idx_t>(i * STANDARD_VECTOR_SIZE, count);
+		}
+
+		inline idx_t BlockEnd(idx_t i) const {
+			return BlockStart(i + 1) - 1;
+		}
+
+		inline idx_t BlockSize(idx_t i) const {
+			return i < BlockCount() ? MinValue<idx_t>(STANDARD_VECTOR_SIZE, count - BlockStart(i)) : 0;
+		}
+
+		inline SortKeyType GetSortKeyType() const {
+			return sorted->key_data->GetLayout().GetSortKeyType();
+		}
+
 		void IntializeMatches();
 
 		//! Combine local states
@@ -102,7 +122,7 @@ public:
 public:
 	// Gather the result values and slice the payload columns to those values.
 	// Returns a buffer handle to the pinned heap block (if any)
-	static void SliceSortedPayload(DataChunk &payload, ExternalBlockIteratorState &state, const idx_t block_idx,
+	static void SliceSortedPayload(DataChunk &payload, GlobalSortedTable &table, const idx_t block_idx,
 	                               const SelectionVector &result, const idx_t result_count, const idx_t left_cols = 0);
 	// Apply a tail condition to the current selection
 	static idx_t SelectJoinTail(const ExpressionType &condition, Vector &left, Vector &right,

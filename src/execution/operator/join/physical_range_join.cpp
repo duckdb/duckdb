@@ -377,7 +377,7 @@ void GatherSortedTablePayload(DataChunk &chunk, TupleDataCollection &tuples, Ext
 	chunk.Split(payload, left_cols);
 }
 #if 0
-BufferHandle PhysicalRangeJoin::SliceSortedPayload(DataChunk &chunk, TupleDataCollection &tuples, const idx_t chunk_idx,
+BufferHandle PhysicalRangeJoin::SliceSortedPayload(DataChunk &chunk, GlobalSortedTable &table, const idx_t chunk_idx,
                                                    const SelectionVector &result, const idx_t result_count,
                                                    const idx_t left_cols) {
 

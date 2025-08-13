@@ -596,8 +596,7 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 			for (idx_t c = 0; c < state.lhs_payload.ColumnCount(); ++c) {
 				chunk.data[c].Slice(state.lhs_payload.data[c], left_info.result, result_count);
 			}
-			SliceSortedPayload(chunk, right_info.state, right_info.block_idx, right_info.result, result_count,
-			                   left_cols);
+			SliceSortedPayload(chunk, rhs_table, right_info.block_idx, right_info.result, result_count, left_cols);
 			chunk.SetCardinality(result_count);
 
 			auto sel = FlatVector::IncrementalSelectionVector();

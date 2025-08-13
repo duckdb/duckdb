@@ -2,6 +2,7 @@
 
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
+#include "duckdb/common/sorting/sort_key.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/event.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
@@ -10,7 +11,7 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 
 #include <utility>
-#if 0
+
 namespace duckdb {
 
 PhysicalIEJoin::PhysicalIEJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op, PhysicalOperator &left,
@@ -143,7 +144,7 @@ unique_ptr<GlobalSinkState> PhysicalIEJoin::GetGlobalSinkState(ClientContext &co
 
 unique_ptr<LocalSinkState> PhysicalIEJoin::GetLocalSinkState(ExecutionContext &context) const {
 	auto &ie_sink = sink_state->Cast<IEJoinGlobalState>();
-	return make_uniq<IEJoinLocalState>(context.client, *this, ie_sink);
+	return make_uniq<IEJoinLocalState>(context, *this, ie_sink);
 }
 
 void IEJoinGlobalState::Sink(ExecutionContext &context, DataChunk &input, IEJoinLocalState &lstate) {
@@ -231,18 +232,45 @@ OperatorResultType PhysicalIEJoin::ExecuteInternal(ExecutionContext &context, Da
 struct IEJoinUnion {
 	using SortedTable = PhysicalRangeJoin::GlobalSortedTable;
 
-	static idx_t AppendKey(SortedTable &table, ExpressionExecutor &executor, SortedTable &marked, int64_t increment,
-	                       int64_t base, const idx_t block_idx);
-
-	static void Sort(SortedTable &table) {
-		auto &global_sort_state = table.global_sort_state;
-		global_sort_state.PrepareMergePhase();
-		while (global_sort_state.sorted_blocks.size() > 1) {
-			global_sort_state.InitializeMergeRound();
-			MergeSorter merge_sorter(global_sort_state, global_sort_state.buffer_manager);
-			merge_sorter.PerformInMergeRound();
-			global_sort_state.CompleteMergeRound(true);
+	//	Comparison utilities
+	static bool IsStrictComparison(ExpressionType comparison) {
+		switch (comparison) {
+		case ExpressionType::COMPARE_LESSTHAN:
+		case ExpressionType::COMPARE_GREATERTHAN:
+			return true;
+		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+			return false;
+		default:
+			throw InternalException("Unimplemented comparison type for IEJoin!");
 		}
+	}
+
+	template <typename T>
+	static inline bool Compare(const T &lhs, const T &rhs, const bool strict) {
+		const bool less_than = lhs < rhs;
+		if (!less_than && !strict) {
+			return !(rhs < lhs);
+		}
+		return less_than;
+	}
+
+	template <SortKeyType SORT_KEY_TYPE>
+	static bool TemplatedCompareKeys(ExternalBlockIteratorState &state1, const idx_t pos1,
+	                                 ExternalBlockIteratorState &state2, const idx_t pos2, bool strict);
+
+	static bool CompareKeys(ExternalBlockIteratorState &state1, const idx_t pos1, ExternalBlockIteratorState &state2,
+	                        const idx_t pos2, bool strict, const SortKeyType &sort_key_type);
+
+	static bool CompareBounds(SortedTable &t1, const idx_t b1, SortedTable &t2, const idx_t b2, bool strict);
+
+	static idx_t AppendKey(ExecutionContext &context, InterruptState &interrupt, SortedTable &table,
+	                       ExpressionExecutor &executor, SortedTable &marked, int64_t increment, int64_t rid,
+	                       const idx_t chunk_idx);
+
+	static void Sort(ExecutionContext &context, InterruptState &interrupt, SortedTable &table) {
+		table.Finalize(context.client, interrupt);
+		table.Materialize(context, interrupt);
 	}
 
 	template <typename T, typename VECTOR_TYPE = T>
@@ -250,11 +278,15 @@ struct IEJoinUnion {
 		vector<T> result;
 		result.reserve(table.count);
 
-		auto &collection = *table.materialized;
+		auto &collection = *table.sorted->payload_data;
+		TupleDataScanState scanner;
+		collection.InitializeScan(scanner);
+
 		vector<column_t> scan_ids(1, col_idx);
-		ColumnDataScanState state;
-		DataChunk payload;
+		TupleDataScanState state;
 		collection.InitializeScan(state, scan_ids);
+
+		DataChunk payload;
 		collection.InitializeScanChunk(state, payload);
 
 		while (collection.Scan(state, payload)) {
@@ -268,11 +300,40 @@ struct IEJoinUnion {
 		return result;
 	}
 
-	IEJoinUnion(ClientContext &context, const PhysicalIEJoin &op, SortedTable &t1, const idx_t b1, SortedTable &t2,
+	class UnionIterator {
+	public:
+		explicit UnionIterator(SortedTable &table, bool strict)
+		    : state(*table.sorted->key_data, table.sorted->payload_data.get()), strict(strict) {
+		}
+
+		inline idx_t GetIndex() const {
+			return index;
+		}
+
+		inline void SetIndex(idx_t i) {
+			index = i;
+		}
+
+		UnionIterator &operator++() {
+			++index;
+			return *this;
+		}
+
+		ExternalBlockIteratorState state;
+		idx_t index = 0;
+		const bool strict;
+	};
+
+	IEJoinUnion(ExecutionContext &context, const PhysicalIEJoin &op, SortedTable &t1, const idx_t b1, SortedTable &t2,
 	            const idx_t b2);
 
 	idx_t SearchL1(idx_t pos);
+
+	template <SortKeyType SORT_KEY_TYPE>
 	bool NextRow();
+
+	using next_row_t = bool (duckdb::IEJoinUnion::*)();
+	next_row_t next_row_func;
 
 	//! Inverted loop
 	idx_t JoinComplexBlocks(SelectionVector &lsel, SelectionVector &rsel);
@@ -301,43 +362,51 @@ struct IEJoinUnion {
 	idx_t n;
 	idx_t i;
 	idx_t j;
-	unique_ptr<SBIterator> op1;
-	unique_ptr<SBIterator> off1;
-	unique_ptr<SBIterator> op2;
-	unique_ptr<SBIterator> off2;
+	unique_ptr<UnionIterator> op1;
+	unique_ptr<UnionIterator> off1;
+	unique_ptr<UnionIterator> op2;
+	unique_ptr<UnionIterator> off2;
 	int64_t lrid;
 };
 
-idx_t IEJoinUnion::AppendKey(SortedTable &table, ExpressionExecutor &executor, SortedTable &marked, int64_t increment,
-                             int64_t base, const idx_t block_idx) {
-	LocalSortedTable local_sort_state;
-	local_sort_state.Initialize(marked.global_sort_state, marked.global_sort_state.buffer_manager);
+idx_t IEJoinUnion::AppendKey(ExecutionContext &context, InterruptState &interrupt, SortedTable &table,
+                             ExpressionExecutor &executor, SortedTable &marked, int64_t increment, int64_t rid,
+                             const idx_t chunk_idx) {
 
 	// Reading
 	const auto valid = table.count - table.has_null;
-	auto &gstate = table.global_sort_state;
-	PayloadScanner scanner(gstate, block_idx);
-	auto table_idx = block_idx * gstate.block_capacity;
+	auto &source = *table.sorted->payload_data;
+	TupleDataScanState scanner;
+	source.InitializeScan(scanner);
 
 	DataChunk scanned;
-	scanned.Initialize(Allocator::DefaultAllocator(), scanner.GetPayloadTypes());
+	source.InitializeScanChunk(scanner, scanned);
+
+	// TODO: Random access into TupleDataCollection (NextScanIndex is private...)
+	idx_t table_idx = 0;
+	for (idx_t i = 0; i < chunk_idx; ++i) {
+		source.Scan(scanner, scanned);
+		table_idx += scanned.size();
+	}
 
 	// Writing
-	auto types = local_sort_state.sort_layout->logical_types;
-	const idx_t payload_idx = types.size();
-
-	const auto &payload_types = local_sort_state.payload_layout->GetTypes();
-	types.insert(types.end(), payload_types.begin(), payload_types.end());
-	const idx_t rid_idx = types.size() - 1;
+	auto &sort = *marked.sort;
+	auto local_sort_state = sort.GetLocalSinkState(context);
+	vector<LogicalType> types;
+	for (const auto &expr : executor.expressions) {
+		types.emplace_back(expr->return_type);
+	}
+	const idx_t rid_idx = types.size();
+	types.emplace_back(LogicalType::BIGINT);
 
 	DataChunk keys;
 	DataChunk payload;
 	keys.Initialize(Allocator::DefaultAllocator(), types);
 
+	OperatorSinkInput sink {*marked.global_sink, *local_sort_state, interrupt};
 	idx_t inserted = 0;
-	for (auto rid = base; table_idx < valid;) {
-		scanned.Reset();
-		scanner.Scan(scanned);
+	while (table_idx < valid) {
+		source.Scan(scanner, scanned);
 
 		// NULLs are at the end, so stop when we reach them
 		auto scan_count = scanned.size();
@@ -362,22 +431,70 @@ idx_t IEJoinUnion::AppendKey(SortedTable &table, ExpressionExecutor &executor, S
 		rid += increment * UnsafeNumericCast<int64_t>(scan_count);
 
 		// Sort on the sort columns (which will no longer be needed)
-		keys.Split(payload, payload_idx);
-		local_sort_state.SinkChunk(keys, payload);
+		sort.Sink(context, keys, sink);
 		inserted += scan_count;
-		keys.Fuse(payload);
-
-		// Flush when we have enough data
-		if (local_sort_state.SizeInBytes() >= marked.memory_per_thread) {
-			local_sort_state.Sort(marked.global_sort_state, true);
-		}
 	}
-	marked.Combine(context, local_sort_state);
+	OperatorSinkCombineInput combine {*marked.global_sink, *local_sort_state, interrupt};
+	sort.Combine(context, combine);
 
 	return inserted;
 }
 
-IEJoinUnion::IEJoinUnion(ClientContext &context, const PhysicalIEJoin &op, SortedTable &t1, const idx_t b1,
+//	TODO: Function pointers?
+template <SortKeyType SORT_KEY_TYPE>
+bool IEJoinUnion::TemplatedCompareKeys(ExternalBlockIteratorState &state1, const idx_t pos1,
+                                       ExternalBlockIteratorState &state2, const idx_t pos2, bool strict) {
+	using SORT_KEY = SortKey<SORT_KEY_TYPE>;
+	using BLOCKS_ITERATOR = block_iterator_t<ExternalBlockIteratorState, SORT_KEY>;
+
+	BLOCKS_ITERATOR bounds1(state1, pos1);
+	BLOCKS_ITERATOR bounds2(state2, pos2);
+
+	return Compare(*bounds1, *bounds2, strict);
+}
+
+bool IEJoinUnion::CompareKeys(ExternalBlockIteratorState &state1, const idx_t pos1, ExternalBlockIteratorState &state2,
+                              const idx_t pos2, bool strict, const SortKeyType &sort_key_type) {
+
+	switch (sort_key_type) {
+	case SortKeyType::NO_PAYLOAD_FIXED_8:
+		return TemplatedCompareKeys<SortKeyType::NO_PAYLOAD_FIXED_8>(state1, pos1, state2, pos2, strict);
+	case SortKeyType::NO_PAYLOAD_FIXED_16:
+		return TemplatedCompareKeys<SortKeyType::NO_PAYLOAD_FIXED_16>(state1, pos1, state2, pos2, strict);
+	case SortKeyType::NO_PAYLOAD_FIXED_24:
+		return TemplatedCompareKeys<SortKeyType::NO_PAYLOAD_FIXED_24>(state1, pos1, state2, pos2, strict);
+	case SortKeyType::NO_PAYLOAD_FIXED_32:
+		return TemplatedCompareKeys<SortKeyType::NO_PAYLOAD_FIXED_32>(state1, pos1, state2, pos2, strict);
+	case SortKeyType::NO_PAYLOAD_VARIABLE_32:
+		return TemplatedCompareKeys<SortKeyType::NO_PAYLOAD_VARIABLE_32>(state1, pos1, state2, pos2, strict);
+	case SortKeyType::PAYLOAD_FIXED_16:
+		return TemplatedCompareKeys<SortKeyType::PAYLOAD_FIXED_16>(state1, pos1, state2, pos2, strict);
+	case SortKeyType::PAYLOAD_FIXED_24:
+		return TemplatedCompareKeys<SortKeyType::PAYLOAD_FIXED_24>(state1, pos1, state2, pos2, strict);
+	case SortKeyType::PAYLOAD_FIXED_32:
+		return TemplatedCompareKeys<SortKeyType::PAYLOAD_FIXED_32>(state1, pos1, state2, pos2, strict);
+	case SortKeyType::PAYLOAD_VARIABLE_32:
+		return TemplatedCompareKeys<SortKeyType::PAYLOAD_VARIABLE_32>(state1, pos1, state2, pos2, strict);
+	default:
+		throw NotImplementedException("IEJoinUnion::CompareKeys for %s", EnumUtil::ToString(sort_key_type));
+	}
+}
+
+bool IEJoinUnion::CompareBounds(SortedTable &t1, const idx_t b1, SortedTable &t2, const idx_t b2, bool strict) {
+	auto &keys1 = *t1.sorted->key_data;
+	ExternalBlockIteratorState state1(keys1, nullptr);
+	const idx_t pos1 = t1.BlockStart(b1);
+
+	auto &keys2 = *t2.sorted->key_data;
+	ExternalBlockIteratorState state2(keys2, nullptr);
+	const idx_t pos2 = t2.BlockEnd(b2);
+
+	const auto sort_key_type = t1.GetSortKeyType();
+	D_ASSERT(sort_key_type == t2.GetSortKeyType());
+	return CompareKeys(state1, pos1, state2, pos2, strict, sort_key_type);
+}
+
+IEJoinUnion::IEJoinUnion(ExecutionContext &context, const PhysicalIEJoin &op, SortedTable &t1, const idx_t b1,
                          SortedTable &t2, const idx_t b2)
     : n(0), i(0) {
 	// input : query Q with 2 join predicates t1.X op1 t2.X' and t1.Y op2 t2.Y', tables T, T' of sizes m and n resp.
@@ -385,19 +502,16 @@ IEJoinUnion::IEJoinUnion(ClientContext &context, const PhysicalIEJoin &op, Sorte
 	// Note that T/T' are already sorted on X/X' and contain the payload data
 	// We only join the two block numbers and use the sizes of the blocks as the counts
 
+	InterruptState interrupt;
+
 	// 0. Filter out tables with no overlap
-	if (!t1.BlockSize(b1) || !t2.BlockSize(b2)) {
+	if (t1.sorted->key_data->ChunkCount() >= b1 || t2.sorted->key_data->ChunkCount() >= b2) {
 		return;
 	}
 
-	const auto &cmp1 = op.conditions[0].comparison;
-	SBIterator bounds1(t1.global_sort_state, cmp1);
-	SBIterator bounds2(t2.global_sort_state, cmp1);
-
 	// t1.X[0] op1 t2.X'[-1]
-	bounds1.SetIndex(bounds1.block_capacity * b1);
-	bounds2.SetIndex(bounds2.block_capacity * b2 + t2.BlockSize(b2) - 1);
-	if (!bounds1.Compare(bounds2)) {
+	const auto strict1 = IsStrictComparison(op.conditions[0].comparison);
+	if (!CompareBounds(t1, b1, t2, b2, strict1)) {
 		return;
 	}
 
@@ -414,8 +528,6 @@ IEJoinUnion::IEJoinUnion(ClientContext &context, const PhysicalIEJoin &op, Sorte
 	vector<LogicalType> types;
 	types.emplace_back(order2.expression->return_type);
 	types.emplace_back(LogicalType::BIGINT);
-	RowLayout payload_layout;
-	payload_layout.Initialize(types);
 
 	// Sort on the first expression
 	auto ref = make_uniq<BoundReferenceExpression>(order1.expression->return_type, 0U);
@@ -437,37 +549,37 @@ IEJoinUnion::IEJoinUnion(ClientContext &context, const PhysicalIEJoin &op, Sorte
 	// Using this OrderType, if i < j then value[i] (from left table) and value[j] (from right table) match
 	// the condition (t1.time <= t2.time or t1.time < t2.time), then from_left will force them into the correct order.
 	auto from_left = make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
-	orders.emplace_back(SBIterator::ComparisonValue(cmp1) == 0 ? OrderType::DESCENDING : OrderType::ASCENDING,
-	                    OrderByNullType::ORDER_DEFAULT, std::move(from_left));
+	orders.emplace_back(!strict1 ? OrderType::DESCENDING : OrderType::ASCENDING, OrderByNullType::ORDER_DEFAULT,
+	                    std::move(from_left));
 
-	l1 = make_uniq<SortedTable>(context, orders, payload_layout, op);
+	l1 = make_uniq<SortedTable>(context.client, orders, types, op);
 
 	// LHS has positive rids
-	ExpressionExecutor l_executor(context);
+	ExpressionExecutor l_executor(context.client);
 	l_executor.AddExpression(*order1.expression);
 	// add const column true
 	auto left_const = make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
 	l_executor.AddExpression(*left_const);
 	l_executor.AddExpression(*order2.expression);
-	AppendKey(t1, l_executor, *l1, 1, 1, b1);
+	AppendKey(context, interrupt, t1, l_executor, *l1, 1, 1, b1);
 
 	// RHS has negative rids
-	ExpressionExecutor r_executor(context);
+	ExpressionExecutor r_executor(context.client);
 	r_executor.AddExpression(*op.rhs_orders[0].expression);
 	// add const column flase
 	auto right_const = make_uniq<BoundConstantExpression>(Value::BOOLEAN(false));
 	r_executor.AddExpression(*right_const);
 	r_executor.AddExpression(*op.rhs_orders[1].expression);
-	AppendKey(t2, r_executor, *l1, -1, -1, b2);
+	AppendKey(context, interrupt, t2, r_executor, *l1, -1, -1, b2);
 
-	if (l1->global_sort_state.sorted_blocks.empty()) {
+	if (!l1->Count()) {
 		return;
 	}
 
-	Sort(*l1);
+	Sort(context, interrupt, *l1);
 
-	op1 = make_uniq<SBIterator>(l1->global_sort_state, cmp1);
-	off1 = make_uniq<SBIterator>(l1->global_sort_state, cmp1);
+	op1 = make_uniq<UnionIterator>(*l1, strict1);
+	off1 = make_uniq<UnionIterator>(*l1, strict1);
 
 	// We don't actually need the L1 column, just its sort key, which is in the sort blocks
 	li = ExtractColumn<int64_t>(*l1, types.size() - 1);
@@ -479,22 +591,21 @@ IEJoinUnion::IEJoinUnion(ClientContext &context, const PhysicalIEJoin &op, Sorte
 	// For this we just need a two-column table of Y, P
 	types.clear();
 	types.emplace_back(LogicalType::BIGINT);
-	payload_layout.Initialize(types);
 
 	// Sort on the first expression
 	orders.clear();
 	ref = make_uniq<BoundReferenceExpression>(order2.expression->return_type, 0U);
 	orders.emplace_back(order2.type, order2.null_order, std::move(ref));
 
-	ExpressionExecutor executor(context);
+	ExpressionExecutor executor(context.client);
 	executor.AddExpression(*orders[0].expression);
 
-	l2 = make_uniq<SortedTable>(context, orders, payload_layout, op);
+	l2 = make_uniq<SortedTable>(context.client, orders, types, op);
 	for (idx_t base = 0, block_idx = 0; block_idx < l1->BlockCount(); ++block_idx) {
-		base += AppendKey(*l1, executor, *l2, 1, NumericCast<int64_t>(base), block_idx);
+		base += AppendKey(context, interrupt, *l1, executor, *l2, 1, NumericCast<int64_t>(base), block_idx);
 	}
 
-	Sort(*l2);
+	Sort(context, interrupt, *l2);
 
 	// We don't actually need the L2 column, just its sort key, which is in the sort blocks
 
@@ -512,15 +623,57 @@ IEJoinUnion::IEJoinUnion(ClientContext &context, const PhysicalIEJoin &op, Sorte
 	bloom_filter.Initialize(bloom_array.data(), bloom_count);
 
 	// 11. for(i←1 to n) do
-	const auto &cmp2 = op.conditions[1].comparison;
-	op2 = make_uniq<SBIterator>(l2->global_sort_state, cmp2);
-	off2 = make_uniq<SBIterator>(l2->global_sort_state, cmp2);
+	const auto strict2 = IsStrictComparison(op.conditions[1].comparison);
+	op2 = make_uniq<UnionIterator>(*l2, strict2);
+	off2 = make_uniq<UnionIterator>(*l2, strict2);
 	i = 0;
 	j = 0;
-	(void)NextRow();
+
+	const auto sort_key_type = l2->GetSortKeyType();
+	switch (sort_key_type) {
+	case SortKeyType::NO_PAYLOAD_FIXED_8:
+		next_row_func = &IEJoinUnion::NextRow<SortKeyType::NO_PAYLOAD_FIXED_8>;
+		break;
+	case SortKeyType::NO_PAYLOAD_FIXED_16:
+		next_row_func = &IEJoinUnion::NextRow<SortKeyType::NO_PAYLOAD_FIXED_16>;
+		break;
+	case SortKeyType::NO_PAYLOAD_FIXED_24:
+		next_row_func = &IEJoinUnion::NextRow<SortKeyType::NO_PAYLOAD_FIXED_24>;
+		break;
+	case SortKeyType::NO_PAYLOAD_FIXED_32:
+		next_row_func = &IEJoinUnion::NextRow<SortKeyType::NO_PAYLOAD_FIXED_32>;
+		break;
+	case SortKeyType::NO_PAYLOAD_VARIABLE_32:
+		next_row_func = &IEJoinUnion::NextRow<SortKeyType::NO_PAYLOAD_VARIABLE_32>;
+		break;
+	case SortKeyType::PAYLOAD_FIXED_16:
+		next_row_func = &IEJoinUnion::NextRow<SortKeyType::PAYLOAD_FIXED_16>;
+		break;
+	case SortKeyType::PAYLOAD_FIXED_24:
+		next_row_func = &IEJoinUnion::NextRow<SortKeyType::PAYLOAD_FIXED_24>;
+		break;
+	case SortKeyType::PAYLOAD_FIXED_32:
+		next_row_func = &IEJoinUnion::NextRow<SortKeyType::PAYLOAD_FIXED_32>;
+		break;
+	case SortKeyType::PAYLOAD_VARIABLE_32:
+		next_row_func = &IEJoinUnion::NextRow<SortKeyType::PAYLOAD_VARIABLE_32>;
+		break;
+	default:
+		throw NotImplementedException("IEJoinUnion for %s", EnumUtil::ToString(sort_key_type));
+	}
+
+	(this->*next_row_func)();
 }
 
+template <SortKeyType SORT_KEY_TYPE>
 bool IEJoinUnion::NextRow() {
+	using SORT_KEY = SortKey<SORT_KEY_TYPE>;
+	using BLOCKS_ITERATOR = block_iterator_t<ExternalBlockIteratorState, SORT_KEY>;
+
+	BLOCKS_ITERATOR off2_itr(off2->state);
+	BLOCKS_ITERATOR op2_itr(op2->state);
+	const auto strict = off2->strict;
+
 	for (; i < n; ++i) {
 		// 12. pos ← P[i]
 		auto pos = p[i];
@@ -532,7 +685,7 @@ bool IEJoinUnion::NextRow() {
 		// 16. B[pos] ← 1
 		op2->SetIndex(i);
 		for (; off2->GetIndex() < n; ++(*off2)) {
-			if (!off2->Compare(*op2)) {
+			if (!Compare(off2_itr[off2->GetIndex()], op2_itr[op2->GetIndex()], strict)) {
 				break;
 			}
 			const auto p2 = p[off2->GetIndex()];
@@ -638,7 +791,7 @@ idx_t IEJoinUnion::JoinComplexBlocks(SelectionVector &lsel, SelectionVector &rse
 		}
 		++i;
 
-		if (!NextRow()) {
+		if (!(this->*next_row_func)()) {
 			break;
 		}
 	}
@@ -738,9 +891,8 @@ void PhysicalIEJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &re
 		// found matches: extract them
 
 		chunk.Reset();
-		SliceSortedPayload(chunk, left_table.global_sort_state, state.left_block_index, lsel, result_count, 0);
-		SliceSortedPayload(chunk, right_table.global_sort_state, state.right_block_index, rsel, result_count,
-		                   left_cols);
+		SliceSortedPayload(chunk, left_table, state.left_block_index, lsel, result_count, 0);
+		SliceSortedPayload(chunk, right_table, state.right_block_index, rsel, result_count, left_cols);
 		chunk.SetCardinality(result_count);
 
 		auto sel = FlatVector::IncrementalSelectionVector();
@@ -850,7 +1002,7 @@ public:
 		return sink_state.tables[0]->BlockCount() * sink_state.tables[1]->BlockCount();
 	}
 
-	void GetNextPair(ClientContext &client, IEJoinLocalSourceState &lstate) {
+	void GetNextPair(ExecutionContext &context, IEJoinLocalSourceState &lstate) {
 		auto &left_table = *gsink.tables[0];
 		auto &right_table = *gsink.tables[1];
 
@@ -870,7 +1022,7 @@ public:
 			lstate.right_block_index = b2;
 			lstate.right_base = right_bases[b2];
 
-			lstate.joiner = make_uniq<IEJoinUnion>(client, op, left_table, b1, right_table, b2);
+			lstate.joiner = make_uniq<IEJoinUnion>(context, op, left_table, b1, right_table, b2);
 			return;
 		}
 
@@ -881,7 +1033,7 @@ public:
 
 		// Spin wait for regular blocks to finish(!)
 		while (completed < pair_count) {
-			TaskScheduler::GetScheduler(client).YieldThread();
+			TaskScheduler::GetScheduler(context.client).YieldThread();
 		}
 
 		// Left outer blocks
@@ -915,10 +1067,10 @@ public:
 		}
 	}
 
-	void PairCompleted(ClientContext &client, IEJoinLocalSourceState &lstate) {
+	void PairCompleted(ExecutionContext &context, IEJoinLocalSourceState &lstate) {
 		lstate.joiner.reset();
 		++completed;
-		GetNextPair(client, lstate);
+		GetNextPair(context, lstate);
 	}
 
 	ProgressData GetProgress() const {
@@ -990,7 +1142,7 @@ SourceResultType PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &r
 	ie_gstate.Initialize();
 
 	if (!ie_lstate.joiner && !ie_lstate.left_matches && !ie_lstate.right_matches) {
-		ie_gstate.GetNextPair(context.client, ie_lstate);
+		ie_gstate.GetNextPair(context, ie_lstate);
 	}
 
 	// Process INNER results
@@ -1001,7 +1153,7 @@ SourceResultType PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &r
 			return SourceResultType::HAVE_MORE_OUTPUT;
 		}
 
-		ie_gstate.PairCompleted(context.client, ie_lstate);
+		ie_gstate.PairCompleted(context, ie_lstate);
 	}
 
 	// Process LEFT OUTER results
@@ -1009,13 +1161,12 @@ SourceResultType PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &r
 	while (ie_lstate.left_matches) {
 		const idx_t count = ie_lstate.SelectOuterRows(ie_lstate.left_matches);
 		if (!count) {
-			ie_gstate.GetNextPair(context.client, ie_lstate);
+			ie_gstate.GetNextPair(context, ie_lstate);
 			continue;
 		}
 		auto &chunk = ie_lstate.unprojected;
 		chunk.Reset();
-		SliceSortedPayload(chunk, ie_sink.tables[0]->global_sort_state, ie_lstate.left_block_index, ie_lstate.true_sel,
-		                   count);
+		SliceSortedPayload(chunk, *ie_sink.tables[0], ie_lstate.left_block_index, ie_lstate.true_sel, count);
 
 		// Fill in NULLs to the right
 		for (auto col_idx = left_cols; col_idx < chunk.ColumnCount(); ++col_idx) {
@@ -1034,14 +1185,14 @@ SourceResultType PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &r
 	while (ie_lstate.right_matches) {
 		const idx_t count = ie_lstate.SelectOuterRows(ie_lstate.right_matches);
 		if (!count) {
-			ie_gstate.GetNextPair(context.client, ie_lstate);
+			ie_gstate.GetNextPair(context, ie_lstate);
 			continue;
 		}
 
 		auto &chunk = ie_lstate.unprojected;
 		chunk.Reset();
-		SliceSortedPayload(chunk, ie_sink.tables[1]->global_sort_state, ie_lstate.right_block_index, ie_lstate.true_sel,
-		                   count, left_cols);
+		SliceSortedPayload(chunk, *ie_sink.tables[1], ie_lstate.right_block_index, ie_lstate.true_sel, count,
+		                   left_cols);
 
 		// Fill in NULLs to the left
 		for (idx_t col_idx = 0; col_idx < left_cols; ++col_idx) {
@@ -1087,4 +1238,3 @@ void PhysicalIEJoin::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeli
 }
 
 } // namespace duckdb
-#endif
