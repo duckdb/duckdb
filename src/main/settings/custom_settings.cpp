@@ -1169,12 +1169,11 @@ Value MaxTempDirectorySizeSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Ordered Aggregate Threshold
 //===----------------------------------------------------------------------===//
-bool OrderedAggregateThresholdSetting::OnLocalSet(ClientContext &context, const Value &input) {
+void OrderedAggregateThresholdSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 	const auto param = input.GetValue<uint64_t>();
 	if (param <= 0) {
 		throw ParserException("Invalid option for PRAGMA ordered_aggregate_threshold, value must be positive");
 	}
-	return true;
 }
 
 //===----------------------------------------------------------------------===//

@@ -496,26 +496,6 @@ Value MaxExpressionDepthSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
-// Ordered Aggregate Threshold
-//===----------------------------------------------------------------------===//
-void OrderedAggregateThresholdSetting::SetLocal(ClientContext &context, const Value &input) {
-	if (!OnLocalSet(context, input)) {
-		return;
-	}
-	auto &config = ClientConfig::GetConfig(context);
-	config.ordered_aggregate_threshold = input.GetValue<idx_t>();
-}
-
-void OrderedAggregateThresholdSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).ordered_aggregate_threshold = ClientConfig().ordered_aggregate_threshold;
-}
-
-Value OrderedAggregateThresholdSetting::GetSetting(const ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	return Value::UBIGINT(config.ordered_aggregate_threshold);
-}
-
-//===----------------------------------------------------------------------===//
 // Perfect Ht Threshold
 //===----------------------------------------------------------------------===//
 void PerfectHtThresholdSetting::ResetLocal(ClientContext &context) {

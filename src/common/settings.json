@@ -689,7 +689,8 @@
         "name": "ordered_aggregate_threshold",
         "description": "The number of rows to accumulate before sorting, used for tuning",
         "type": "UBIGINT",
-        "scope": "local",
+        "default_scope": "local",
+        "default_value": "262144",
         "on_callbacks": [
             "set"
         ]
