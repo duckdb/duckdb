@@ -27,6 +27,8 @@ public:
 
 	static void EnumerateExpression(unique_ptr<Expression> &expr,
 	                                const std::function<void(Expression &child)> &callback);
+	static void EnumerateExpression(unique_ptr<Expression> &expr,
+	                                const std::function<void(unique_ptr<Expression> &child)> &callback);
 
 	static void VisitExpressionClass(const Expression &expr, ExpressionClass expr_class,
 	                                 const std::function<void(const Expression &child)> &callback);
