@@ -73,14 +73,14 @@ void TerminalProgressBarDisplay::PrintProgressInternal(int32_t percentage, doubl
 void TerminalProgressBarDisplay::Update(double percentage) {
 	double current_time = GetElapsedDuration();
 	if (!udf_initialized) {
-		ukf.initialize(percentage / 100.0, current_time);
+		ukf.Initialize(percentage / 100.0, current_time);
 		udf_initialized = true;
 	} else {
-		ukf.predict(current_time);
-		ukf.update(percentage / 100.0);
+		ukf.Predict(current_time);
+		ukf.Update(percentage / 100.0);
 	}
 
-	double estimated_seconds_remaining = ukf.getEstimatedRemainingSeconds();
+	double estimated_seconds_remaining = ukf.GetEstimatedRemainingSeconds();
 
 	auto percentage_int = NormalizePercentage(percentage);
 	if (percentage_int == rendered_percentage) {

@@ -37,23 +37,23 @@ private:
 	bool initialized;
 
 	// Helper functions
-	std::vector<std::vector<double>> matrixSqrt(const std::vector<std::vector<double>> &mat);
-	std::vector<std::vector<double>> generateSigmaPoints();
-	std::vector<double> stateTransition(const std::vector<double> &state, double dt);
-	std::vector<double> measurementFunction(const std::vector<double> &state);
+	std::vector<std::vector<double>> MatrixSqrt(const std::vector<std::vector<double>> &mat);
+	std::vector<std::vector<double>> GenerateSigmaPoints();
+	std::vector<double> StateTransition(const std::vector<double> &state, double dt);
+	std::vector<double> MeasurementFunction(const std::vector<double> &state);
 
 public:
 	UnscentedKalmanFilter();
 
-	void initialize(double initial_progress, double current_time);
-	void predict(double current_time);
-	void update(double measured_progress);
+	void Initialize(double initial_progress, double current_time);
+	void Predict(double current_time);
+	void Update(double measured_progress);
 
-	double getProgress() const;
-	double getVelocity() const;
-	double getEstimatedRemainingSeconds() const;
-	double getProgressVariance() const;
-	double getVelocityVariance() const;
+	double GetProgress() const;
+	double GetVelocity() const;
+	double GetEstimatedRemainingSeconds() const;
+	double GetProgressVariance() const;
+	double GetVelocityVariance() const;
 };
 
 } // namespace duckdb

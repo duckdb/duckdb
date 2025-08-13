@@ -31,7 +31,7 @@ UnscentedKalmanFilter::UnscentedKalmanFilter()
 	R[0][0] = 1e-4; // measurement noise for progress
 }
 
-void UnscentedKalmanFilter::initialize(double initial_progress, double current_time) {
+void UnscentedKalmanFilter::Initialize(double initial_progress, double current_time) {
 	x[0] = initial_progress;
 	x[1] = 0.01; // initial velocity guess
 	last_time = current_time;
@@ -39,7 +39,7 @@ void UnscentedKalmanFilter::initialize(double initial_progress, double current_t
 }
 
 // Matrix operations
-std::vector<std::vector<double>> UnscentedKalmanFilter::matrixSqrt(const std::vector<std::vector<double>> &mat) {
+std::vector<std::vector<double>> UnscentedKalmanFilter::MatrixSqrt(const std::vector<std::vector<double>> &mat) {
 	size_t n = mat.size();
 	std::vector<std::vector<double>> L(n, std::vector<double>(n, 0.0));
 
@@ -65,7 +65,7 @@ std::vector<std::vector<double>> UnscentedKalmanFilter::matrixSqrt(const std::ve
 }
 
 // Generate sigma points
-std::vector<std::vector<double>> UnscentedKalmanFilter::generateSigmaPoints() {
+std::vector<std::vector<double>> UnscentedKalmanFilter::GenerateSigmaPoints() {
 	std::vector<std::vector<double>> sigma_points(SIGMA_POINTS, std::vector<double>(STATE_DIM));
 
 	// Calculate sqrt((n + lambda) * P)
@@ -77,7 +77,7 @@ std::vector<std::vector<double>> UnscentedKalmanFilter::generateSigmaPoints() {
 		}
 	}
 
-	auto sqrt_P = matrixSqrt(scaled_P);
+	auto sqrt_P = MatrixSqrt(scaled_P);
 
 	// First sigma point is the mean
 	sigma_points[0] = x;
@@ -94,7 +94,7 @@ std::vector<std::vector<double>> UnscentedKalmanFilter::generateSigmaPoints() {
 }
 
 // State transition function
-std::vector<double> UnscentedKalmanFilter::stateTransition(const std::vector<double> &state, double dt) {
+std::vector<double> UnscentedKalmanFilter::StateTransition(const std::vector<double> &state, double dt) {
 	std::vector<double> new_state(STATE_DIM);
 	new_state[0] = state[0] + state[1] * dt; // progress += velocity * dt
 	new_state[1] = state[1];                 // velocity remains constant
@@ -106,11 +106,11 @@ std::vector<double> UnscentedKalmanFilter::stateTransition(const std::vector<dou
 }
 
 // Measurement function (identity for progress)
-std::vector<double> UnscentedKalmanFilter::measurementFunction(const std::vector<double> &state) {
+std::vector<double> UnscentedKalmanFilter::MeasurementFunction(const std::vector<double> &state) {
 	return {state[0]};
 }
 
-void UnscentedKalmanFilter::predict(double current_time) {
+void UnscentedKalmanFilter::Predict(double current_time) {
 	if (!initialized) {
 		return;
 	}
@@ -123,12 +123,12 @@ void UnscentedKalmanFilter::predict(double current_time) {
 	}
 
 	// Generate sigma points
-	auto sigma_points = generateSigmaPoints();
+	auto sigma_points = GenerateSigmaPoints();
 
 	// Propagate sigma points through state transition
 	std::vector<std::vector<double>> sigma_points_pred(SIGMA_POINTS, std::vector<double>(STATE_DIM));
 	for (size_t i = 0; i < SIGMA_POINTS; i++) {
-		sigma_points_pred[i] = stateTransition(sigma_points[i], dt);
+		sigma_points_pred[i] = StateTransition(sigma_points[i], dt);
 	}
 
 	// Predict state mean
@@ -160,18 +160,18 @@ void UnscentedKalmanFilter::predict(double current_time) {
 	}
 }
 
-void UnscentedKalmanFilter::update(double measured_progress) {
+void UnscentedKalmanFilter::Update(double measured_progress) {
 	if (!initialized) {
 		return;
 	}
 
 	// Generate sigma points
-	auto sigma_points = generateSigmaPoints();
+	auto sigma_points = GenerateSigmaPoints();
 
 	// Transform sigma points through measurement function
 	std::vector<std::vector<double>> Z_sigma(SIGMA_POINTS, std::vector<double>(OBS_DIM));
 	for (size_t i = 0; i < SIGMA_POINTS; i++) {
-		Z_sigma[i] = measurementFunction(sigma_points[i]);
+		Z_sigma[i] = MeasurementFunction(sigma_points[i]);
 	}
 
 	// Predict measurement mean
@@ -233,15 +233,15 @@ void UnscentedKalmanFilter::update(double measured_progress) {
 	x[0] = std::max(0.0, std::min(1.0, x[0]));
 }
 
-double UnscentedKalmanFilter::getProgress() const {
+double UnscentedKalmanFilter::GetProgress() const {
 	return x[0];
 }
 
-double UnscentedKalmanFilter::getVelocity() const {
+double UnscentedKalmanFilter::GetVelocity() const {
 	return x[1];
 }
 
-double UnscentedKalmanFilter::getEstimatedRemainingSeconds() const {
+double UnscentedKalmanFilter::GetEstimatedRemainingSeconds() const {
 	if (!initialized || x[1] <= 0) {
 		return -1.0;
 	}
@@ -249,11 +249,11 @@ double UnscentedKalmanFilter::getEstimatedRemainingSeconds() const {
 	return remaining_progress / x[1];
 }
 
-double UnscentedKalmanFilter::getProgressVariance() const {
+double UnscentedKalmanFilter::GetProgressVariance() const {
 	return P[0][0];
 }
 
-double UnscentedKalmanFilter::getVelocityVariance() const {
+double UnscentedKalmanFilter::GetVelocityVariance() const {
 	return P[1][1];
 }
 
