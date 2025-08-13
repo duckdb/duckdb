@@ -15,6 +15,11 @@ int32_t TerminalProgressBarDisplay::NormalizePercentage(double percentage) {
 }
 
 static std::string format_eta(double seconds) {
+	if (seconds < 0) {
+		// We may not have a valid prediction.
+		return "unknown remaining";
+	}
+
 	// Round to nearest whole second
 	uint64_t total_seconds = static_cast<uint64_t>(std::round(seconds));
 
