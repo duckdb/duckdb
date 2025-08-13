@@ -126,7 +126,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(HTTPProxySetting),
     DUCKDB_GLOBAL(HTTPProxyPasswordSetting),
     DUCKDB_GLOBAL(HTTPProxyUsernameSetting),
-    DUCKDB_LOCAL(IEEEFloatingPointOpsSetting),
+    DUCKDB_SETTING(IeeeFloatingPointOpsSetting),
     DUCKDB_SETTING(ImmediateTransactionModeSetting),
     DUCKDB_SETTING(IndexScanMaxCountSetting),
     DUCKDB_SETTING_CALLBACK(IndexScanPercentageSetting),

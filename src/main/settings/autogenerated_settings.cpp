@@ -463,23 +463,6 @@ Value HTTPProxyUsernameSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
-// I E E E Floating Point Ops
-//===----------------------------------------------------------------------===//
-void IEEEFloatingPointOpsSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto &config = ClientConfig::GetConfig(context);
-	config.ieee_floating_point_ops = input.GetValue<bool>();
-}
-
-void IEEEFloatingPointOpsSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).ieee_floating_point_ops = ClientConfig().ieee_floating_point_ops;
-}
-
-Value IEEEFloatingPointOpsSetting::GetSetting(const ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	return Value::BOOLEAN(config.ieee_floating_point_ops);
-}
-
-//===----------------------------------------------------------------------===//
 // Lock Configuration
 //===----------------------------------------------------------------------===//
 void LockConfigurationSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {

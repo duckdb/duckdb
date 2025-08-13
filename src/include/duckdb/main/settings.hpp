@@ -752,15 +752,14 @@ struct HTTPProxyUsernameSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct IEEEFloatingPointOpsSetting {
+struct IeeeFloatingPointOpsSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "ieee_floating_point_ops";
 	static constexpr const char *Description =
 	    "Use IEE754-compliant floating point operations (returning NAN instead of errors/NULL).";
 	static constexpr const char *InputType = "BOOLEAN";
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "true";
+	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
 
 struct ImmediateTransactionModeSetting {
