@@ -3,6 +3,9 @@
 #include "duckdb/catalog/catalog_entry/collate_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/logging/log_manager.hpp"
+#include "duckdb/logging/logging.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
