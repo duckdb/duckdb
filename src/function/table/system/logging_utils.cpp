@@ -113,7 +113,7 @@ static unique_ptr<FunctionData> BindDisableLogging(ClientContext &context, Table
 	return_types.emplace_back(LogicalType::BOOLEAN);
 	names.emplace_back("Success");
 
-	return make_uniq<EnableLoggingBindData>();
+	return std::move(make_uniq<EnableLoggingBindData>());
 }
 
 static unique_ptr<FunctionData> BindTruncateLogs(ClientContext &context, TableFunctionBindInput &input,

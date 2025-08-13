@@ -26,7 +26,7 @@ enum class CSVNewLineMode {
 
 struct CSVWriterOptions {
 	CSVWriterOptions(const string &delim, const char &quote, const string &write_newline);
-	CSVWriterOptions(CSVReaderOptions &options);
+	explicit CSVWriterOptions(CSVReaderOptions &options);
 
 	//! The newline string to write
 	string newline = "\n";

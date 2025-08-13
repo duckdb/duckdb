@@ -206,8 +206,8 @@ void CSVLogStorage::SetWriterConfigs(CSVWriter &writer, vector<string> column_na
 	writer.writer_options = *writer_options;
 
 	// Update the config with the column names since that is different per schema
-	writer.options.name_list = column_names;
-	writer.options.force_quote = vector<bool>(column_names.size(), false);
+	writer.options.name_list = std::move(column_names);
+	writer.options.force_quote = vector<bool>(writer.options.name_list.size(), false);
 }
 
 CSVReaderOptions &CSVLogStorage::GetCSVReaderOptions() {

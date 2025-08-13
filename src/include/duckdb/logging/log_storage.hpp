@@ -41,7 +41,7 @@ enum class LoggingTargetTable {
 
 class LogStorageScanState {
 public:
-	LogStorageScanState(LoggingTargetTable table_p) : table(table_p) {
+	explicit LogStorageScanState(LoggingTargetTable table_p) : table(table_p) {
 	}
 	virtual ~LogStorageScanState() = default;
 
@@ -312,7 +312,7 @@ private:
 //! State for scanning the in memory buffers
 class InMemoryLogStorageScanState : public LogStorageScanState {
 public:
-	InMemoryLogStorageScanState(LoggingTargetTable table);
+	explicit InMemoryLogStorageScanState(LoggingTargetTable table);
 	~InMemoryLogStorageScanState() override;
 
 	ColumnDataScanState scan_state;
