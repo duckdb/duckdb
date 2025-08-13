@@ -95,16 +95,16 @@ logging_storage	memory
 statement ok
 CALL enable_logging(['QueryLog', 'FileSystem']);
 
+# Use sorted list to avoid indeterministic result
 query II
-FROM log_settings;
+SELECT name, list_sort(split(value, ',')) FROM log_settings;
 ----
-disabled_log_types	(empty)
-enable_logging	1
-enabled_log_types	QueryLog,FileSystem
-logging_level	TRACE
-logging_mode	ENABLE_SELECTED
-logging_storage	memory
-
+disabled_log_types	['']
+enable_logging	[1]
+enabled_log_types	[FileSystem, QueryLog]
+logging_level	[TRACE]
+logging_mode	[ENABLE_SELECTED]
+logging_storage	[memory]
 
 #### 
 # Configuring a different log storage, using the config param to pass arbitrary (extensible!) options
