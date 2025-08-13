@@ -1002,9 +1002,9 @@ struct PerfectHtThresholdSetting {
 	static constexpr const char *Name = "perfect_ht_threshold";
 	static constexpr const char *Description = "Threshold in bytes for when to use a perfect hash table";
 	static constexpr const char *InputType = "UBIGINT";
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "12";
+	static constexpr SetScope DefaultScope = SetScope::SESSION;
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct PinThreadsSetting {

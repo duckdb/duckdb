@@ -720,10 +720,10 @@
         "name": "perfect_ht_threshold",
         "description": "Threshold in bytes for when to use a perfect hash table",
         "type": "UBIGINT",
-        "scope": "local",
-        "custom_implementation": [
-            "set",
-            "get"
+        "default_scope": "local",
+        "default_value": "12",
+        "on_callbacks": [
+            "set"
         ]
     },
     {

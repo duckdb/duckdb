@@ -496,13 +496,6 @@ Value MaxExpressionDepthSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
-// Perfect Ht Threshold
-//===----------------------------------------------------------------------===//
-void PerfectHtThresholdSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).perfect_ht_threshold = ClientConfig().perfect_ht_threshold;
-}
-
-//===----------------------------------------------------------------------===//
 // Pin Threads
 //===----------------------------------------------------------------------===//
 void PinThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {

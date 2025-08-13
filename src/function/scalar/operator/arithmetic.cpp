@@ -1,4 +1,4 @@
-#include <duckdb/main/settings.hpp>
+#include "duckdb/main/settings.hpp"
 
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/bignum.hpp"
