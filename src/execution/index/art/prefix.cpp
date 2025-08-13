@@ -65,59 +65,35 @@ void Prefix::New(ART &art, reference<Node> &ref, const ARTKey &key, const idx_t 
 	}
 }
 
-void Prefix::Concat(ART &art, Node &parent, uint8_t byte, const GateStatus old_status, const Node &child,
-                    const GateStatus status) {
+void Prefix::Concat(ART &art, Node &parent, Node &node4, const Node child, uint8_t byte,
+                    const GateStatus node4_status) {
+	// We have four situations from which we enter here:
+	// 1: PREFIX (parent) - Node4 (prev_node4) - PREFIX (child) - INLINED_LEAF, or
+	// 2: PREFIX (parent) - Node4 (prev_node4) - INLINED_LEAF (child), or
+	// 3: Node (parent) - Node4 (prev_node4) - PREFIX (child) - INLINED_LEAF, or
+	// 4: Node (parent) - Node4 (prev_node4) - INLINED_LEAF (child).
+
 	D_ASSERT(!parent.IsAnyLeaf());
 	D_ASSERT(child.HasMetadata());
-	// If the parent is the node itself, we overwrite.
 
-	if (old_status == GateStatus::GATE_SET) {
-		// Concat Node4.
-		D_ASSERT(status == GateStatus::GATE_SET);
-		return ConcatGate(art, parent, byte, child);
+	// The Node4 was a gate.
+	if (node4_status == GateStatus::GATE_SET) {
+		D_ASSERT(parent.GetGateStatus() == GateStatus::GATE_NOT_SET);
+		D_ASSERT(child.GetGateStatus() == GateStatus::GATE_NOT_SET);
+		ConcatNode4WasGate(art, node4, child, byte);
+		return;
 	}
 
+	// The child is a gate.
 	if (child.GetGateStatus() == GateStatus::GATE_SET) {
-		// Concat Node4.
-		D_ASSERT(status == GateStatus::GATE_NOT_SET);
-		return ConcatChildIsGate(art, parent, byte, child);
-	}
-
-	if (status == GateStatus::GATE_SET && child.GetType() == NType::LEAF_INLINED) {
-		// Inside gates, inlined leaves are not prefixed.
-		auto row_id = child.GetRowId();
-		// We free the prefix (chain) until we reach the deleted Node4.
-		// Then, we move the row ID up.
-		auto current = parent;
-		while (current.HasMetadata()) {
-			D_ASSERT(current.GetType() == NType::PREFIX);
-			Prefix prefix(art, current, true);
-			auto next = *prefix.ptr;
-			Node::FreeNode(art, current);
-			current = next;
-		}
-		Leaf::New(parent, row_id);
+		D_ASSERT(node4_status == GateStatus::GATE_NOT_SET);
+		ConcatChildIsGate(art, parent, node4, child, byte);
 		return;
 	}
 
-	if (parent.GetType() != PREFIX) {
-		auto prefix = NewInternal(art, parent, &byte, 1, 0);
-		if (child.GetType() == PREFIX) {
-			prefix.Append(art, child);
-		} else {
-			*prefix.ptr = child;
-		}
-		return;
-	}
-
-	auto tail = GetTail(art, parent);
-	tail = tail.Append(art, byte);
-
-	if (child.GetType() == PREFIX) {
-		tail.Append(art, child);
-	} else {
-		*tail.ptr = child;
-	}
+	auto inside_gate = parent.GetGateStatus() == GateStatus::GATE_SET;
+	ConcatInternal(art, parent, node4, child, byte, inside_gate);
+	return;
 }
 
 void Prefix::Reduce(ART &art, Node &node, const idx_t pos) {
@@ -305,47 +281,106 @@ Prefix Prefix::GetTail(ART &art, const Node &node) {
 	return prefix;
 }
 
-void Prefix::ConcatGate(ART &art, Node &parent, uint8_t byte, const Node &child) {
-	D_ASSERT(child.HasMetadata());
-	Node new_prefix = Node();
-
-	// Inside gates, inlined row IDs are not prefixed.
+void Prefix::ConcatInternal(ART &art, Node &parent, Node &node4, const Node child, uint8_t byte,
+                            const bool inside_gate) {
 	if (child.GetType() == NType::LEAF_INLINED) {
-		Leaf::New(new_prefix, child.GetRowId());
+		if (inside_gate) {
+			if (parent.GetType() == NType::PREFIX) {
+				// The parent only contained the Node4, so we can now inline 'all the way up',
+				// and the gate is no longer nested.
+				while (parent.GetType() == NType::PREFIX) {
+					Prefix prefix(art, parent, true);
+					auto temp = *prefix.ptr;
+					Node::FreeNode(art, parent);
+					parent = temp;
+				}
+				parent = child;
+				return;
+			}
+			// The parent is any node inside the gate.
+			// Inside gates, inlined row IDs are not prefixed,
+			// so we directly inline into the previous Node4.
+			node4 = child;
+			return;
+		}
 
-	} else if (child.GetType() == PREFIX) {
+		// Not inside a gate.
+		if (parent.GetType() == NType::PREFIX) {
+			// Append the byte to the prefix, and then inline the child.
+			auto tail = GetTail(art, parent);
+			tail = tail.Append(art, byte);
+			*tail.ptr = child;
+			return;
+		}
+
+		auto prefix = NewInternal(art, node4, &byte, 1, 0);
+		*prefix.ptr = child;
+		return;
+	}
+
+	// The child is not inlined.
+	if (parent.GetType() == NType::PREFIX) {
+		// Append the byte to the prefix.
+		auto tail = GetTail(art, parent);
+		tail = tail.Append(art, byte);
+
+		// Append the child to the prefix.
+		if (child.GetType() == NType::PREFIX) {
+			tail.Append(art, child);
+			return;
+		}
+		*tail.ptr = child;
+		return;
+	}
+
+	// The child is not inlined, and the parent is not a prefix.
+	auto prefix = NewInternal(art, node4, &byte, 1, 0);
+	if (child.GetType() == NType::PREFIX) {
+		prefix.Append(art, child);
+		return;
+	}
+	*prefix.ptr = child;
+}
+
+void Prefix::ConcatNode4WasGate(ART &art, Node &node4, const Node child, uint8_t byte) {
+	D_ASSERT(child.HasMetadata());
+
+	if (child.GetType() == NType::LEAF_INLINED) {
+		// Inside gates, inlined row IDs are not prefixed.
+		// The child is inlined, so we inline into the previous Node4.
+		// There is no longer a nested leaf.
+		node4 = child;
+		return;
+	}
+
+	if (child.GetType() == PREFIX) {
 		// At least one more row ID in this gate and the child is a prefix.
 		// We create a new prefix of length one containing the remaining byte.
 		// Then, we append the child prefix.
-		auto prefix = NewInternal(art, new_prefix, &byte, 1, 0);
+		auto prefix = NewInternal(art, node4, &byte, 1, 0);
 		prefix.ptr->Clear();
 		prefix.Append(art, child);
-		new_prefix.SetGateStatus(GateStatus::GATE_SET);
-
-	} else {
-		// At least one more row ID in this gate and the child is not a prefix.
-		// We create a new prefix of length one containing the remaining byte.
-		// then, we append the child.
-		auto prefix = NewInternal(art, new_prefix, &byte, 1, 0);
-		*prefix.ptr = child;
-		new_prefix.SetGateStatus(GateStatus::GATE_SET);
-	}
-
-	if (parent.GetType() != PREFIX) {
-		parent = new_prefix;
+		node4.SetGateStatus(GateStatus::GATE_SET);
 		return;
 	}
-	*GetTail(art, parent).ptr = new_prefix;
+	// At least one more row ID in this gate and the child is not a prefix.
+	// We create a new prefix of length one containing the remaining byte.
+	// then, we append the child.
+	auto prefix = NewInternal(art, node4, &byte, 1, 0);
+	*prefix.ptr = child;
+	node4.SetGateStatus(GateStatus::GATE_SET);
 }
 
-void Prefix::ConcatChildIsGate(ART &art, Node &parent, uint8_t byte, const Node &child) {
-	// Create a new prefix and point it to the gate.
+void Prefix::ConcatChildIsGate(ART &art, Node &parent, Node &node4, const Node child, uint8_t byte) {
 	if (parent.GetType() != PREFIX) {
-		auto prefix = NewInternal(art, parent, &byte, 1, 0);
+		// Create a new prefix at the former position of the Node4,
+		// and point it to the gate.
+		auto prefix = NewInternal(art, node4, &byte, 1, 0);
 		*prefix.ptr = child;
 		return;
 	}
 
+	// The parent is a prefix (chain), so we need to append the byte to its tail.
 	auto tail = GetTail(art, parent);
 	tail = tail.Append(art, byte);
 	*tail.ptr = child;

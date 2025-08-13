@@ -46,9 +46,9 @@ public:
 	//! Get a new list of prefix nodes. The node reference holds the child of the last prefix node.
 	static void New(ART &art, reference<Node> &ref, const ARTKey &key, const idx_t depth, idx_t count);
 
-	//! Concatenates parent -> byte -> child.
-	static void Concat(ART &art, Node &parent, uint8_t byte, const GateStatus old_status, const Node &child,
-	                   const GateStatus status);
+	//! Concatenates parent -> prev_node4 -> child.
+	static void Concat(ART &art, Node &parent, Node &node4, const Node child, uint8_t byte,
+	                   const GateStatus node4_status);
 
 	//! Removes up to pos bytes from the prefix.
 	//! Shifts all subsequent bytes by pos. Frees empty nodes.
@@ -71,8 +71,11 @@ private:
 
 	static Prefix GetTail(ART &art, const Node &node);
 
-	static void ConcatGate(ART &art, Node &parent, uint8_t byte, const Node &child);
-	static void ConcatChildIsGate(ART &art, Node &parent, uint8_t byte, const Node &child);
+	static void ConcatInternal(ART &art, Node &parent, Node &node4, const Node child, uint8_t byte,
+	                           const bool inside_gate);
+	static void ConcatNode4WasGate(ART &art, Node &node4, const Node child, uint8_t byte);
+	static void ConcatChildIsGate(ART &art, Node &parent, Node &node4, const Node child, uint8_t byte);
+	static void ConcatOutsideGate(ART &art, Node &parent, Node &node4, const Node child, uint8_t byte);
 
 	Prefix Append(ART &art, const uint8_t byte);
 	void Append(ART &art, Node other);
