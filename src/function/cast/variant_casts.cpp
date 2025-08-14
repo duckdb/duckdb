@@ -1,5 +1,10 @@
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/common/types/variant.hpp"
+#include "duckdb/function/scalar/variant_utils.hpp"
+#include "duckdb/common/serializer/varint.hpp"
+
+#include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/exception/conversion_exception.hpp"
 
 namespace duckdb {
 
@@ -56,7 +61,7 @@ struct VariantBooleanConversion {
 	static bool Convert(const VariantLogicalType type_id, uint32_t byte_offset, const_data_ptr_t value, bool &ret,
 	                    const EmptyConversionPayload &payload, string &error) {
 		if (type_id != VariantLogicalType::BOOL_FALSE && type_id != VariantLogicalType::BOOL_TRUE) {
-			error = StringUtil::Format("Can't convert from VARIANT(%s)", VariantLogicalTypeToString(type_id));
+			error = StringUtil::Format("Can't convert from VARIANT(%s)", EnumUtil::ToString(type_id));
 			return false;
 		}
 		ret = type_id == VariantLogicalType::BOOL_TRUE;
@@ -71,7 +76,7 @@ struct VariantDirectConversion {
 	static bool Convert(const VariantLogicalType type_id, uint32_t byte_offset, const_data_ptr_t value, T &ret,
 	                    const EmptyConversionPayload &payload, string &error) {
 		if (type_id != TYPE_ID) {
-			error = StringUtil::Format("Can't convert from VARIANT(%s)", VariantLogicalTypeToString(type_id));
+			error = StringUtil::Format("Can't convert from VARIANT(%s)", EnumUtil::ToString(type_id));
 			return false;
 		}
 		ret = Load<T>(value + byte_offset);
@@ -81,7 +86,7 @@ struct VariantDirectConversion {
 	static bool Convert(const VariantLogicalType type_id, uint32_t byte_offset, const_data_ptr_t value, T &ret,
 	                    const StringConversionPayload &payload, string &error) {
 		if (type_id != TYPE_ID) {
-			error = StringUtil::Format("Can't convert from VARIANT(%s)", VariantLogicalTypeToString(type_id));
+			error = StringUtil::Format("Can't convert from VARIANT(%s)", EnumUtil::ToString(type_id));
 			return false;
 		}
 		auto ptr = value + byte_offset;
@@ -99,7 +104,7 @@ struct VariantDecimalConversion {
 	static bool Convert(const VariantLogicalType type_id, uint32_t byte_offset, const_data_ptr_t value, T &ret,
 	                    const DecimalConversionPayload &payload, string &error) {
 		if (type_id != TYPE_ID) {
-			error = StringUtil::Format("Can't convert from VARIANT(%s)", VariantLogicalTypeToString(type_id));
+			error = StringUtil::Format("Can't convert from VARIANT(%s)", EnumUtil::ToString(type_id));
 			return false;
 		}
 		auto ptr = value + byte_offset;
@@ -127,7 +132,7 @@ static bool CastVariantToPrimitive(FromVariantConversionData &conversion_data, V
 
 	auto &type_id_format = UnifiedVariantVector::GetValuesTypeId(variant);
 	auto &byte_offset_format = UnifiedVariantVector::GetValuesByteOffset(variant);
-	auto &value_format = UnifiedVariantVector::GetValue(variant);
+	auto &value_format = UnifiedVariantVector::GetData(variant);
 
 	auto type_id_data = type_id_format.GetData<uint8_t>(type_id_format);
 	auto byte_offset_data = byte_offset_format.GetData<uint32_t>(byte_offset_format);
@@ -147,14 +152,13 @@ static bool CastVariantToPrimitive(FromVariantConversionData &conversion_data, V
 		auto byte_offset = byte_offset_data[byte_offset_index];
 		auto value_blob_data = const_data_ptr_cast(value_data[blob_index].GetData());
 		if (type_id == VariantLogicalType::OBJECT || type_id == VariantLogicalType::ARRAY) {
-			conversion_data.error =
-			    StringUtil::Format("Can't convert VARIANT(%s)", VariantLogicalTypeToString(type_id));
+			conversion_data.error = StringUtil::Format("Can't convert VARIANT(%s)", EnumUtil::ToString(type_id));
 			return false;
 		}
 		if (!OP::Convert(type_id, byte_offset, value_blob_data, result_data[i + offset], payload,
 		                 conversion_data.error)) {
 			auto value =
-			    VariantConversion::ConvertVariantToValue(conversion_data.unified_format, row_index, value_indices[i]);
+			    VariantUtils::ConvertVariantToValue(conversion_data.unified_format, row_index, value_indices[i]);
 			result.SetValue(i + offset, value.DefaultCastAs(target_type, true));
 		}
 	}
@@ -270,7 +274,7 @@ static bool ConvertVariantToStruct(FromVariantConversionData &conversion_data, V
 
 		//! Then find the relevant child of the OBJECTs we're converting
 		//! FIXME: there is nothing preventing an OBJECT from containing the same key twice I believe ?
-		PathComponent component;
+		VariantPathComponent component;
 		component.payload.key = string_t(child_name.c_str(), child_name.size());
 		component.lookup_mode = VariantChildLookupMode::BY_KEY;
 		if (!VariantUtils::FindChildValues(conversion_data.unified_format, component, row, new_value_indices,
@@ -310,7 +314,7 @@ static bool CastVariant(FromVariantConversionData &conversion_data, Vector &resu
 				//! Get the index into 'values'
 				uint32_t value_index = value_indices[i];
 				auto value =
-				    VariantConversion::ConvertVariantToValue(conversion_data.unified_format, row_index, value_index);
+				    VariantUtils::ConvertVariantToValue(conversion_data.unified_format, row_index, value_index);
 				result.SetValue(i + offset, value.DefaultCastAs(target_type, true));
 			}
 			return true;
@@ -327,7 +331,7 @@ static bool CastVariant(FromVariantConversionData &conversion_data, Vector &resu
 				//! Get the index into 'values'
 				uint32_t value_index = value_indices[i];
 				auto value =
-				    VariantConversion::ConvertVariantToValue(conversion_data.unified_format, row_index, value_index);
+				    VariantUtils::ConvertVariantToValue(conversion_data.unified_format, row_index, value_index);
 				result.SetValue(i + offset, value.DefaultCastAs(target_type, true));
 			}
 			return true;
@@ -445,9 +449,9 @@ static bool CastVariant(FromVariantConversionData &conversion_data, Vector &resu
 			return CastVariantToPrimitive<VariantDirectConversion<string_t, VariantLogicalType::BITSTRING>>(
 			    conversion_data, result, value_indices, offset, count, row, string_payload);
 		}
-		case LogicalTypeId::VARINT: {
+		case LogicalTypeId::BIGNUM: {
 			StringConversionPayload string_payload(result);
-			return CastVariantToPrimitive<VariantDirectConversion<string_t, VariantLogicalType::VARINT>>(
+			return CastVariantToPrimitive<VariantDirectConversion<string_t, VariantLogicalType::BIGNUM>>(
 			    conversion_data, result, value_indices, offset, count, row, string_payload);
 		}
 		default:
@@ -458,8 +462,8 @@ static bool CastVariant(FromVariantConversionData &conversion_data, Vector &resu
 	return true;
 }
 
-bool VariantFunctions::CastFromVARIANT(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-	D_ASSERT(source.GetType() == CreateVariantType());
+static bool CastFromVARIANT(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+	D_ASSERT(source.GetType().id() == LogicalTypeId::VARIANT);
 	FromVariantConversionData conversion_data;
 	Vector::RecursiveToUnifiedFormat(source, count, conversion_data.unified_format);
 	auto &allocator = Allocator::DefaultAllocator();

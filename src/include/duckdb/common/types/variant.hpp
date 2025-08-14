@@ -53,7 +53,7 @@ enum class VariantLogicalType : uint8_t {
 	INTERVAL = 28,
 	OBJECT = 29,
 	ARRAY = 30,
-	VARINT = 31,
+	BIGNUM = 31,
 	BITSTRING = 32
 };
 
