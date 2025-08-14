@@ -153,7 +153,6 @@ CSVSchema CSVSchemaDiscovery::SchemaDiscovery(ClientContext &context, shared_ptr
 			} else if (i < options.sql_type_list.size()) {
 				continue;
 			}
-			D_ASSERT(return_types[i].id() == LogicalTypeId::BOOLEAN);
 			// we default to varchar if all files are empty or only have a header after all the sniffing
 			return_types[i] = LogicalType::VARCHAR;
 		}
