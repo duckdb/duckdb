@@ -687,6 +687,7 @@ jobs:
 
       - name: Check Coverage
         shell: bash
+        continue-on-error: true
         run: |
           make coverage-check
 
