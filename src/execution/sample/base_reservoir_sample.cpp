@@ -55,7 +55,7 @@ void BaseReservoirSampling::SetNextEntry() {
 	//! since all our weights are 1 (uniform sampling), we can just determine the amount of elements to skip
 	min_weight_threshold = t_w;
 	min_weighted_entry_index = min_key.second;
-	next_index_to_sample = MaxValue<idx_t>(1, idx_t(round(x_w)));
+	next_index_to_sample = idx_t(ceil(x_w));
 	num_entries_to_skip_b4_next_sample = 0;
 }
 
