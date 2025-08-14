@@ -71,7 +71,7 @@ public:
 				break;
 			}
 			default:
-				throw InternalException("invalid node type for ART ARTScanner: %s", EnumUtil::ToString(type));
+				throw InternalException("invalid node type for ART ARTScanner: %d", type);
 			}
 		}
 	}
@@ -80,9 +80,11 @@ private:
 	template <class FUNC>
 	void Emplace(FUNC &&handler, NODE &node) {
 		if (HANDLING == ARTScanHandling::EMPLACE) {
-			if (handler(node) == ARTHandlingResult::SKIP) {
+			auto result = handler(node);
+			if (result == ARTHandlingResult::SKIP) {
 				return;
 			}
+			D_ASSERT(result == ARTHandlingResult::CONTINUE);
 		}
 		s.emplace(node);
 	}

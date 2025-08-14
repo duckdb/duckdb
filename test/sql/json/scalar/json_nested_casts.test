@@ -35,7 +35,7 @@ Conversion Error
 query I
 select cast(['[1, 2]', '[3, 4]'] as json[]);
 ----
-['[1, 2]', '[3, 4]']
+[[1, 2], [3, 4]]
 
 # struct with varchar to json
 query I
@@ -419,3 +419,35 @@ statement error
 select ('duck' || chr(0))::JSON
 ----
 Conversion Error
+
+# some varchar -> json[] and json[] -> varchar tests
+# this is needed because our varchar -> varchar[] (and vice versa) escape quotes or add them
+# this tests the special-case implementation for these casts
+
+# issue 17647
+query I
+select '[{"some_key":"some_v}alue"}]'::json[];
+----
+[{"some_key":"some_v}alue"}]
+
+# internal issue 5498
+query I
+with cte1 as (select 'a' as a),
+cte2 as (select array_agg(cte1::json) as value from cte1)
+select value::json[] from cte2;
+----
+[{"a":"a"}]
+
+# larger test
+query II
+with cte1 as (
+    select array_agg({duck:42}::json) json_list_value
+    from range(5_000)
+), cte2 as (
+    select '[' || string_agg('{"duck":42}', ', ') || ']' string_value
+    from range(5_000)
+)
+select json_list_value::varchar = string_value, json_list_value = string_value::json[]
+from cte1, cte2
+----
+true	true

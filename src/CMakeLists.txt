@@ -60,6 +60,9 @@ endfunction()
 if(AMALGAMATION_BUILD)
 
   add_library(duckdb SHARED "${PROJECT_SOURCE_DIR}/src/amalgamation/duckdb.cpp")
+  set_target_properties(
+    duckdb PROPERTIES VERSION ${DUCKDB_VERSION_NUMBER}
+                      SOVERSION ${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION})
   target_link_libraries(duckdb ${DUCKDB_SYSTEM_LIBS})
   link_threads(duckdb PUBLIC)
   link_extension_libraries(duckdb PRIVATE)
@@ -110,6 +113,9 @@ else()
       duckdb_zstd)
 
   add_library(duckdb SHARED ${ALL_OBJECT_FILES})
+  set_target_properties(
+    duckdb PROPERTIES VERSION ${DUCKDB_VERSION_NUMBER}
+                      SOVERSION ${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION})
 
   if(WIN32 AND NOT MINGW)
     ensure_variable_is_number(DUCKDB_MAJOR_VERSION RC_MAJOR_VERSION)
