@@ -33,8 +33,7 @@ public:
 	// Constructor
 	HivePartitioning(ClientContext &context, vector<unique_ptr<Expression>> &filters, const MultiFileOptions &options,
 	                 MultiFilePushdownInfo &info)
-	    : context(context), filters(filters), info(info), have_preserved_filter(filters.size(), false),
-	      consumed(false) {
+	    : context(context), filters(filters), info(info), have_preserved_filter(filters.size(), true), consumed(false) {
 		filter_info = GetFilterInfo(info, options);
 	}
 

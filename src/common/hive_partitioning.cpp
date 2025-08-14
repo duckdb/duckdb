@@ -208,10 +208,8 @@ bool HivePartitioning::ApplyFiltersToFile(OpenFileInfo &file, bool is_deepest_di
 		if (!filter_copy->IsScalar() || !filter_copy->IsFoldable() ||
 		    !ExpressionExecutor::TryEvaluateScalar(context, *filter_copy, result_value)) {
 			// can not be evaluated only with the filename/hive columns added, we can not prune this filter
-			if (is_deepest_directory && !have_preserved_filter[j]) {
-				have_preserved_filter[j] = true;
-			}
 		} else {
+			have_preserved_filter[j] = false;
 			if (result_value.IsNull() || !result_value.GetValue<bool>()) {
 				// filter evaluates to false
 				should_prune_file = true;
