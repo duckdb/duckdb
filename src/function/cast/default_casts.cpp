@@ -152,6 +152,8 @@ BoundCastInfo DefaultCasts::GetDefaultCastFunction(BindCastInput &input, const L
 		return ListCastSwitch(input, source, target);
 	case LogicalTypeId::UNION:
 		return UnionCastSwitch(input, source, target);
+	case LogicalTypeId::VARIANT:
+		return VariantCastSwitch(input, source, target);
 	case LogicalTypeId::ENUM:
 		return EnumCastSwitch(input, source, target);
 	case LogicalTypeId::ARRAY:
