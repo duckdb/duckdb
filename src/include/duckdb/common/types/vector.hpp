@@ -602,6 +602,25 @@ private:
 	static T &GetEntryInternal(T &vector);
 };
 
+struct VariantVector {
+	//! Gets a reference to the 'keys' list (dictionary) of a Variant
+	DUCKDB_API static Vector &GetKeys(Vector &vec);
+	//! Gets a reference to the 'children' list of a Variant
+	DUCKDB_API static Vector &GetChildren(Vector &vec);
+	//! Gets a reference to the 'key_id' inside the 'children' list of a Variant
+	DUCKDB_API static Vector &GetChildrenKeyId(Vector &vec);
+	//! Gets a reference to the 'value_id' inside the 'children' list of a Variant
+	DUCKDB_API static Vector &GetChildrenValueId(Vector &vec);
+	//! Gets a reference to the 'values' list of a Variant
+	DUCKDB_API static Vector &GetValues(Vector &vec);
+	//! Gets a reference to the 'type_id' inside the 'values' list of a Variant
+	DUCKDB_API static Vector &GetValuesTypeId(Vector &vec);
+	//! Gets a reference to the 'byte_offset' inside the 'values' list of a Variant
+	DUCKDB_API static Vector &GetValuesByteOffset(Vector &vec);
+	//! Gets a reference to the binary blob 'value', which encodes the data of the row
+	DUCKDB_API static Vector &GetValue(Vector &vec);
+};
+
 enum class UnionInvalidReason : uint8_t {
 	VALID,
 	TAG_OUT_OF_RANGE,

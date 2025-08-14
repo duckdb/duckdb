@@ -2791,4 +2791,43 @@ idx_t ArrayVector::GetTotalSize(const Vector &vector) {
 	return vector.auxiliary->Cast<VectorArrayBuffer>().GetChildSize();
 }
 
+//===--------------------------------------------------------------------===//
+// VariantVector
+//===--------------------------------------------------------------------===//
+Vector &VariantVector::GetKeys(Vector &vec) {
+	return *StructVector::GetEntries(vec)[0];
+}
+
+Vector &VariantVector::GetChildren(Vector &vec) {
+	return *StructVector::GetEntries(vec)[1];
+}
+
+Vector &VariantVector::GetChildrenKeyId(Vector &vec) {
+	auto &children = ListVector::GetEntry(GetChildren(vec));
+	return *StructVector::GetEntries(children)[0];
+}
+
+Vector &VariantVector::GetChildrenValueId(Vector &vec) {
+	auto &children = ListVector::GetEntry(GetChildren(vec));
+	return *StructVector::GetEntries(children)[1];
+}
+
+Vector &VariantVector::GetValues(Vector &vec) {
+	return *StructVector::GetEntries(vec)[2];
+}
+
+Vector &VariantVector::GetValuesTypeId(Vector &vec) {
+	auto &values = ListVector::GetEntry(GetValues(vec));
+	return *StructVector::GetEntries(values)[0];
+}
+
+Vector &VariantVector::GetValuesByteOffset(Vector &vec) {
+	auto &values = ListVector::GetEntry(GetValues(vec));
+	return *StructVector::GetEntries(values)[1];
+}
+
+Vector &VariantVector::GetValue(Vector &vec) {
+	return *StructVector::GetEntries(vec)[3];
+}
+
 } // namespace duckdb
