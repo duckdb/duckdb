@@ -19,11 +19,21 @@ struct VariantExtractFun {
 	static constexpr const char *Name = "variant_extract";
 	static constexpr const char *Parameters = "input_variant,path";
 	static constexpr const char *Description = "Returns a subset of the `input_variant` using the `path`.";
-	static constexpr const char *Example = "variant_extract({'a': 42, 'b': [1,2,3])::VARIANT, 'b[0]'";
+	static constexpr const char *Example = "variant_extract({'a': 42, 'b': [1,2,3])::VARIANT, 'b[0]')";
 	static constexpr const char *Categories = "variant";
 
 	static ScalarFunction GetFunction();
 	static unique_ptr<FunctionData> GetBindData(const string &constant_path_p);
+};
+
+struct VariantTypeofFun {
+	static constexpr const char *Name = "variant_typeof";
+	static constexpr const char *Parameters = "input_variant";
+	static constexpr const char *Description = "Returns the internal type of the `input_variant`.";
+	static constexpr const char *Example = "variant_typeof({'a': 42, 'b': [1,2,3])::VARIANT)";
+	static constexpr const char *Categories = "variant";
+
+	static ScalarFunction GetFunction();
 };
 
 } // namespace duckdb

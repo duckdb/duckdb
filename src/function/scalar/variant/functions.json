@@ -3,7 +3,7 @@
 		"name": "variant_extract",
 		"parameters": "input_variant,path",
 		"description": "Returns a subset of the `input_variant` using the `path`.",
-		"example": "variant_extract({'a': 42, 'b': [1,2,3])::VARIANT, 'b[0]'",
+		"example": "variant_extract({'a': 42, 'b': [1,2,3])::VARIANT, 'b[0]')",
 		"categories": [
 			"variant"
 		],
@@ -11,5 +11,15 @@
 		"extra_functions": [
 			"static unique_ptr<FunctionData> GetBindData(const string &constant_path_p);"
 		]
+	},
+	{
+		"name": "variant_typeof",
+		"parameters": "input_variant",
+		"description": "Returns the internal type of the `input_variant`.",
+		"example": "variant_typeof({'a': 42, 'b': [1,2,3])::VARIANT)",
+		"categories": [
+			"variant"
+		],
+		"type": "scalar_function"
 	}
 ]

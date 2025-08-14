@@ -56,7 +56,7 @@ vector<VariantPathComponent> ParsePath(const string &path) {
 			while (i < path.size() && path[i] != '.' && path[i] != '[') {
 				i++;
 			}
-			auto key = string_t(path.c_str() + start, i - start);
+			auto key = string_t(path.c_str() + start, NumericCast<uint32_t>(i - start));
 			VariantPathComponent comp;
 			comp.lookup_mode = VariantChildLookupMode::BY_KEY;
 			comp.payload.key = std::move(key);
@@ -73,7 +73,7 @@ vector<VariantPathComponent> ParsePath(const string &path) {
 			if (i == start || i >= path.size() || path[i] != ']') {
 				throw BinderException("Invalid index in path: %s", path);
 			}
-			uint32_t index = std::stoul(path.substr(start, i - start));
+			uint32_t index = NumericCast<uint32_t>(std::stoul(path.substr(start, i - start)));
 			i++; // skip ']'
 			VariantPathComponent comp;
 			comp.lookup_mode = VariantChildLookupMode::BY_INDEX;
@@ -99,8 +99,8 @@ bool BindData::Equals(const FunctionData &other) const {
 	return bind_data.constant_path == constant_path;
 }
 
-static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
-                                     vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> VariantExtractBind(ClientContext &context, ScalarFunction &bound_function,
+                                                   vector<unique_ptr<Expression>> &arguments) {
 	if (arguments.size() != 2) {
 		throw BinderException("'variant_extract' expects two arguments, VARIANT column and VARCHAR path");
 	}
@@ -118,7 +118,7 @@ static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bou
 
 //! FIXME: it could make sense to allow a third argument: 'default'
 //! This can currently be achieved with COALESCE(TRY(<extract method>), 'default')
-static void Func(DataChunk &input, ExpressionState &state, Vector &result) {
+static void VariantExtractFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	auto count = input.size();
 
 	D_ASSERT(input.ColumnCount() == 2);
@@ -138,8 +138,6 @@ static void Func(DataChunk &input, ExpressionState &state, Vector &result) {
 	Vector::RecursiveToUnifiedFormat(variant, count, source_format);
 
 	//! Path either contains array indices or object keys
-	auto &validity = FlatVector::Validity(result);
-
 	auto owned_value_indices = allocator.Allocate(sizeof(uint32_t) * count * 2);
 	auto value_indices = reinterpret_cast<uint32_t *>(owned_value_indices.get());
 	auto new_value_indices = &value_indices[count];
@@ -223,7 +221,8 @@ static void Func(DataChunk &input, ExpressionState &state, Vector &result) {
 
 ScalarFunction VariantExtractFun::GetFunction() {
 	auto variant_type = LogicalType::VARIANT();
-	return ScalarFunction("variant_extract", {variant_type, LogicalType::VARCHAR}, variant_type, Func, Bind);
+	return ScalarFunction("variant_extract", {variant_type, LogicalType::VARCHAR}, variant_type, VariantExtractFunction,
+	                      VariantExtractBind);
 }
 
 } // namespace duckdb
