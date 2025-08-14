@@ -1326,6 +1326,7 @@ static idx_t GetLogicalTypeScore(const LogicalType &type) {
 		return 126;
 	case LogicalTypeId::MAP:
 		return 127;
+	case LogicalTypeId::VARIANT:
 	case LogicalTypeId::UNION:
 	case LogicalTypeId::TABLE:
 		return 150;
@@ -1962,6 +1963,27 @@ const string &TemplateType::GetName(const LogicalType &type) {
 	auto info = type.AuxInfo();
 	D_ASSERT(info->type == ExtraTypeInfoType::TEMPLATE_TYPE_INFO);
 	return info->Cast<TemplateTypeInfo>().name;
+}
+
+//===--------------------------------------------------------------------===//
+// Variant Type
+//===--------------------------------------------------------------------===//
+
+LogicalType LogicalType::VARIANT() {
+	child_list_t<LogicalType> children;
+	//! keys
+	children.emplace_back("keys", LogicalType::LIST(LogicalTypeId::VARCHAR));
+	//! children
+	children.emplace_back("children", LogicalType::LIST(LogicalType::STRUCT(
+	                                      {{"key_id", LogicalType::UINTEGER}, {"value_id", LogicalType::UINTEGER}})));
+	//! values
+	children.emplace_back("children", LogicalType::LIST(LogicalType::STRUCT({{"type_id", LogicalType::UTINYINT},
+	                                                                         {"byte_offset", LogicalType::UINTEGER}})));
+	//! data
+	children.emplace_back("data", LogicalType::BLOB);
+
+	auto info = make_shared_ptr<StructTypeInfo>(std::move(children));
+	return LogicalType(LogicalTypeId::VARIANT, std::move(info));
 }
 
 //===--------------------------------------------------------------------===//
