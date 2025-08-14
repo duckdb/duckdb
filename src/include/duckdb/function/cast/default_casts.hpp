@@ -168,6 +168,7 @@ private:
 	static BoundCastInfo TimestampSecCastSwitch(BindCastInput &input, const LogicalType &source,
 	                                            const LogicalType &target);
 	static BoundCastInfo UnionCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target);
+	static BoundCastInfo VariantCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target);
 	static BoundCastInfo UUIDCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target);
 	static BoundCastInfo BignumCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target);
 	static BoundCastInfo ImplicitToUnionCast(BindCastInput &input, const LogicalType &source,
