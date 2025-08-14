@@ -157,15 +157,21 @@ static bool CastVariantToPrimitive(FromVariantConversionData &conversion_data, V
 		auto type_id = static_cast<VariantLogicalType>(type_id_data[type_id_index]);
 		auto byte_offset = byte_offset_data[byte_offset_index];
 		auto value_blob_data = const_data_ptr_cast(value_data[blob_index].GetData());
-		if (type_id == VariantLogicalType::OBJECT || type_id == VariantLogicalType::ARRAY) {
-			conversion_data.error = StringUtil::Format("Can't convert VARIANT(%s)", EnumUtil::ToString(type_id));
-			return false;
+		bool converted = false;
+		if (type_id != VariantLogicalType::OBJECT && type_id != VariantLogicalType::ARRAY) {
+			if (OP::Convert(type_id, byte_offset, value_blob_data, result_data[i + offset], payload,
+			                conversion_data.error)) {
+				converted = true;
+			}
 		}
-		if (!OP::Convert(type_id, byte_offset, value_blob_data, result_data[i + offset], payload,
-		                 conversion_data.error)) {
+		if (!converted) {
 			auto value =
 			    VariantUtils::ConvertVariantToValue(conversion_data.unified_format, row_index, value_indices[i]);
 			result.SetValue(i + offset, value.DefaultCastAs(target_type, true));
+			converted = true;
+		}
+		if (!converted) {
+			return false;
 		}
 	}
 	return true;

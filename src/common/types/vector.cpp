@@ -753,10 +753,12 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		}
 	}
 	case LogicalTypeId::VARIANT: {
-		RecursiveUnifiedVectorFormat format;
-		//! FIXME: how are we supposed to take a value if we don't know the size?
-		RecursiveToUnifiedFormat(const_cast<Vector &>(*vector), STANDARD_VECTOR_SIZE, format);
-		return VariantUtils::ConvertVariantToValue(format, index_p, 0);
+		duckdb::vector<Value> children;
+		children.emplace_back(VariantVector::GetKeys(*vector).GetValue(index_p));
+		children.emplace_back(VariantVector::GetChildren(*vector).GetValue(index_p));
+		children.emplace_back(VariantVector::GetValues(*vector).GetValue(index_p));
+		children.emplace_back(VariantVector::GetData(*vector).GetValue(index_p));
+		return Value::VARIANT(children);
 	}
 	case LogicalTypeId::STRUCT: {
 		// we can derive the value schema from the vector schema
@@ -2805,12 +2807,22 @@ idx_t ArrayVector::GetTotalSize(const Vector &vector) {
 Vector &VariantVector::GetKeys(Vector &vec) {
 	return *StructVector::GetEntries(vec)[0];
 }
+Vector &VariantVector::GetKeys(const Vector &vec) {
+	return *StructVector::GetEntries(vec)[0];
+}
 
 Vector &VariantVector::GetChildren(Vector &vec) {
 	return *StructVector::GetEntries(vec)[1];
 }
+Vector &VariantVector::GetChildren(const Vector &vec) {
+	return *StructVector::GetEntries(vec)[1];
+}
 
 Vector &VariantVector::GetChildrenKeyId(Vector &vec) {
+	auto &children = ListVector::GetEntry(GetChildren(vec));
+	return *StructVector::GetEntries(children)[0];
+}
+Vector &VariantVector::GetChildrenKeyId(const Vector &vec) {
 	auto &children = ListVector::GetEntry(GetChildren(vec));
 	return *StructVector::GetEntries(children)[0];
 }
@@ -2819,12 +2831,23 @@ Vector &VariantVector::GetChildrenValueId(Vector &vec) {
 	auto &children = ListVector::GetEntry(GetChildren(vec));
 	return *StructVector::GetEntries(children)[1];
 }
+Vector &VariantVector::GetChildrenValueId(const Vector &vec) {
+	auto &children = ListVector::GetEntry(GetChildren(vec));
+	return *StructVector::GetEntries(children)[1];
+}
 
 Vector &VariantVector::GetValues(Vector &vec) {
 	return *StructVector::GetEntries(vec)[2];
 }
+Vector &VariantVector::GetValues(const Vector &vec) {
+	return *StructVector::GetEntries(vec)[2];
+}
 
 Vector &VariantVector::GetValuesTypeId(Vector &vec) {
+	auto &values = ListVector::GetEntry(GetValues(vec));
+	return *StructVector::GetEntries(values)[0];
+}
+Vector &VariantVector::GetValuesTypeId(const Vector &vec) {
 	auto &values = ListVector::GetEntry(GetValues(vec));
 	return *StructVector::GetEntries(values)[0];
 }
@@ -2833,8 +2856,15 @@ Vector &VariantVector::GetValuesByteOffset(Vector &vec) {
 	auto &values = ListVector::GetEntry(GetValues(vec));
 	return *StructVector::GetEntries(values)[1];
 }
+Vector &VariantVector::GetValuesByteOffset(const Vector &vec) {
+	auto &values = ListVector::GetEntry(GetValues(vec));
+	return *StructVector::GetEntries(values)[1];
+}
 
 Vector &VariantVector::GetData(Vector &vec) {
+	return *StructVector::GetEntries(vec)[3];
+}
+Vector &VariantVector::GetData(const Vector &vec) {
 	return *StructVector::GetEntries(vec)[3];
 }
 
