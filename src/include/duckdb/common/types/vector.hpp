@@ -75,6 +75,27 @@ struct RecursiveUnifiedVectorFormat {
 	LogicalType logical_type;
 };
 
+struct UnifiedVariantVector {
+	//! The 'keys' list (dictionary)
+	DUCKDB_API static UnifiedVectorFormat &GetKeys(RecursiveUnifiedVectorFormat &vec);
+	//! The 'keys' list entry
+	DUCKDB_API static UnifiedVectorFormat &GetKeysEntry(RecursiveUnifiedVectorFormat &vec);
+	//! The 'children' list
+	DUCKDB_API static UnifiedVectorFormat &GetChildren(RecursiveUnifiedVectorFormat &vec);
+	//! The 'key_id' inside the 'children' list
+	DUCKDB_API static UnifiedVectorFormat &GetChildrenKeyId(RecursiveUnifiedVectorFormat &vec);
+	//! The 'value_id' inside the 'children' list
+	DUCKDB_API static UnifiedVectorFormat &GetChildrenValueId(RecursiveUnifiedVectorFormat &vec);
+	//! The 'values' list
+	DUCKDB_API static UnifiedVectorFormat &GetValues(RecursiveUnifiedVectorFormat &vec);
+	//! The 'type_id' inside the 'values' list
+	DUCKDB_API static UnifiedVectorFormat &GetValuesTypeId(RecursiveUnifiedVectorFormat &vec);
+	//! The 'byte_offset' inside the 'values' list
+	DUCKDB_API static UnifiedVectorFormat &GetValuesByteOffset(RecursiveUnifiedVectorFormat &vec);
+	//! The binary blob 'data' encoding the Variant for the row
+	DUCKDB_API static UnifiedVectorFormat &GetData(RecursiveUnifiedVectorFormat &vec);
+};
+
 //! This is a helper data structure. It contains all fields necessary to resize a vector.
 struct ResizeInfo {
 	ResizeInfo(Vector &vec, data_ptr_t data, optional_ptr<VectorBuffer> buffer, const idx_t multiplier)
@@ -618,7 +639,7 @@ struct VariantVector {
 	//! Gets a reference to the 'byte_offset' inside the 'values' list of a Variant
 	DUCKDB_API static Vector &GetValuesByteOffset(Vector &vec);
 	//! Gets a reference to the binary blob 'value', which encodes the data of the row
-	DUCKDB_API static Vector &GetValue(Vector &vec);
+	DUCKDB_API static Vector &GetData(Vector &vec);
 };
 
 enum class UnionInvalidReason : uint8_t {

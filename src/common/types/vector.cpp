@@ -2826,8 +2826,46 @@ Vector &VariantVector::GetValuesByteOffset(Vector &vec) {
 	return *StructVector::GetEntries(values)[1];
 }
 
-Vector &VariantVector::GetValue(Vector &vec) {
+Vector &VariantVector::GetData(Vector &vec) {
 	return *StructVector::GetEntries(vec)[3];
+}
+
+UnifiedVectorFormat &UnifiedVariantVector::GetKeys(RecursiveUnifiedVectorFormat &vec) {
+	return vec.children[0].unified;
+}
+
+UnifiedVectorFormat &UnifiedVariantVector::GetKeysEntry(RecursiveUnifiedVectorFormat &vec) {
+	return vec.children[0].children[0].unified;
+}
+
+UnifiedVectorFormat &UnifiedVariantVector::GetChildren(RecursiveUnifiedVectorFormat &vec) {
+	return vec.children[1].unified;
+}
+
+UnifiedVectorFormat &UnifiedVariantVector::GetChildrenKeyId(RecursiveUnifiedVectorFormat &vec) {
+	return vec.children[1].children[0].children[0].unified;
+}
+
+UnifiedVectorFormat &UnifiedVariantVector::GetChildrenValueId(RecursiveUnifiedVectorFormat &vec) {
+	return vec.children[1].children[0].children[1].unified;
+}
+
+UnifiedVectorFormat &UnifiedVariantVector::GetValues(RecursiveUnifiedVectorFormat &vec) {
+	return vec.children[2].unified;
+}
+
+UnifiedVectorFormat &UnifiedVariantVector::GetValuesTypeId(RecursiveUnifiedVectorFormat &vec) {
+	auto &values = vec.children[2];
+	return values.children[0].children[0].unified;
+}
+
+UnifiedVectorFormat &UnifiedVariantVector::GetValuesByteOffset(RecursiveUnifiedVectorFormat &vec) {
+	auto &values = vec.children[2];
+	return values.children[0].children[1].unified;
+}
+
+UnifiedVectorFormat &UnifiedVariantVector::GetData(RecursiveUnifiedVectorFormat &vec) {
+	return vec.children[3].unified;
 }
 
 } // namespace duckdb
