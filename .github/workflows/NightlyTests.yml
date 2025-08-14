@@ -691,13 +691,13 @@ jobs:
           make coverage-check
 
       - name: Create Archive
-        if: always()
+        if: ${{ success() || failure() }}
         shell: bash
         run: |
           zip -r coverage.zip coverage_html
 
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: ${{ success() || failure() }}
         with:
           name: coverage
           path: coverage.zip
