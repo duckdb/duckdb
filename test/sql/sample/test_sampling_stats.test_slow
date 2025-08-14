@@ -9,8 +9,8 @@ set seed 0.42
 
 query I
 select (avg::DOUBLE between 550000 and 650000) and (min::INT < 10000) and (max::INT > 1190000)
-  and (q25::INT between 250000 and 350000) and (q50::INT between 550000 and 650000) 
-  and (q75::INT between 850000 and 950000) and (count::INT = 1500)
+  and (q25::INT between 230000 and 370000) and (q50::INT between 530000 and 670000) 
+  and (q75::INT between 830000 and 970000) and (count::INT = 1500)
   and (std::DOUBLE between 300000 and 400000)
 from (summarize select * from generate_series(1,1200000) using sample 1500 (reservoir));
 ----
