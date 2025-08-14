@@ -1,4 +1,5 @@
 add_subdirectory(union)
+add_subdirectory(variant)
 
 add_library_unity(
   duckdb_func_cast
@@ -21,7 +22,6 @@ add_library_unity(
   uuid_casts.cpp
   bignum_casts.cpp
   nested_to_varchar_cast.cpp
-  variant_casts.cpp
   vector_cast_helpers.cpp)
 
 set(ALL_OBJECT_FILES

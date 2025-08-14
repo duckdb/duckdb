@@ -173,6 +173,8 @@ private:
 	static BoundCastInfo BignumCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target);
 	static BoundCastInfo ImplicitToUnionCast(BindCastInput &input, const LogicalType &source,
 	                                         const LogicalType &target);
+	static BoundCastInfo ImplicitToVariantCast(BindCastInput &input, const LogicalType &source,
+	                                           const LogicalType &target);
 };
 
 } // namespace duckdb
