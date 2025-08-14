@@ -16,6 +16,7 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/types/value_map.hpp"
 #include "duckdb/common/types/bignum.hpp"
+#include "duckdb/function/scalar/variant_utils.hpp"
 #include "duckdb/common/types/vector_cache.hpp"
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -750,6 +751,12 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		} else {
 			return Value(vector->GetType());
 		}
+	}
+	case LogicalTypeId::VARIANT: {
+		RecursiveUnifiedVectorFormat format;
+		//! FIXME: how are we supposed to take a value if we don't know the size?
+		RecursiveToUnifiedFormat(const_cast<Vector &>(*vector), STANDARD_VECTOR_SIZE, format);
+		return VariantUtils::ConvertVariantToValue(format, index_p, 0);
 	}
 	case LogicalTypeId::STRUCT: {
 		// we can derive the value schema from the vector schema
@@ -2366,7 +2373,8 @@ void MapVector::EvalMapInvalidReason(MapInvalidReason reason) {
 // StructVector
 //===--------------------------------------------------------------------===//
 vector<unique_ptr<Vector>> &StructVector::GetEntries(Vector &vector) {
-	D_ASSERT(vector.GetType().id() == LogicalTypeId::STRUCT || vector.GetType().id() == LogicalTypeId::UNION);
+	D_ASSERT(vector.GetType().id() == LogicalTypeId::STRUCT || vector.GetType().id() == LogicalTypeId::UNION ||
+	         vector.GetType().id() == LogicalTypeId::VARIANT);
 
 	if (vector.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		auto &child = DictionaryVector::Child(vector);

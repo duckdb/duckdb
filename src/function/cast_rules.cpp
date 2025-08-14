@@ -306,6 +306,7 @@ bool LogicalTypeIsValid(const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::STRUCT:
 	case LogicalTypeId::UNION:
+	case LogicalTypeId::VARIANT:
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::ARRAY:

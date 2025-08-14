@@ -100,6 +100,7 @@ public:
 			return true;
 		case LogicalTypeId::DECIMAL:
 		case LogicalTypeId::UNION:
+		case LogicalTypeId::VARIANT:
 		case LogicalTypeId::MAP:
 			if (!type.AuxInfo()) {
 				return true;

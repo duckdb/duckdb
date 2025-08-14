@@ -120,6 +120,7 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::INTERVAL:
 		return PhysicalType::INTERVAL;
 	case LogicalTypeId::UNION:
+	case LogicalTypeId::VARIANT:
 	case LogicalTypeId::STRUCT:
 		return PhysicalType::STRUCT;
 	case LogicalTypeId::LIST:
@@ -753,6 +754,7 @@ bool LogicalType::IsComplete() const {
 			break;
 		case LogicalTypeId::STRUCT:
 		case LogicalTypeId::UNION:
+		case LogicalTypeId::VARIANT:
 			if (!type.AuxInfo() || type.AuxInfo()->type != ExtraTypeInfoType::STRUCT_TYPE_INFO) {
 				return true; // Missing or incorrect type info
 			}
@@ -1594,7 +1596,8 @@ const string AggregateStateType::GetTypeName(const LogicalType &type) {
 // Struct Type
 //===--------------------------------------------------------------------===//
 const child_list_t<LogicalType> &StructType::GetChildTypes(const LogicalType &type) {
-	D_ASSERT(type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::UNION);
+	D_ASSERT(type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::UNION ||
+	         type.id() == LogicalTypeId::VARIANT);
 
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
