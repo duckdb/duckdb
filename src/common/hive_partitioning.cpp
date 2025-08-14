@@ -22,11 +22,11 @@ struct PartitioningColumnValue {
 };
 
 static unordered_map<column_t, PartitioningColumnValue>
-GetKnownColumnValues(const string &filename, const HivePartitioningFilterInfo &filter_info) {
+GetKnownColumnValues(const string &filename, const HivePartitioningFilterInfo &filter_info, bool is_file) {
 	unordered_map<column_t, PartitioningColumnValue> result;
 
 	auto &column_map = filter_info.column_map;
-	if (filter_info.filename_enabled) {
+	if (filter_info.filename_enabled && is_file) {
 		auto lookup_column_id = column_map.find("filename");
 		if (lookup_column_id != column_map.end()) {
 			result.insert(make_pair(lookup_column_id->second, PartitioningColumnValue(filename)));
@@ -192,7 +192,11 @@ bool HivePartitioning::ApplyFiltersToFile(OpenFileInfo &file, bool is_deepest_di
 	}
 	auto table_index = info.table_index;
 	bool should_prune_file = false;
-	auto known_values = GetKnownColumnValues(file.path, filter_info);
+	bool is_file = false;
+	if (file.extended_info) {
+		is_file = !FileSystem::IsDirectory(file);
+	}
+	auto known_values = GetKnownColumnValues(file.path, filter_info, is_file);
 
 	for (idx_t j = 0; j < filters.size(); j++) {
 		auto &filter = filters[j];
