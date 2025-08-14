@@ -507,7 +507,6 @@ BoundCastInfo DefaultCasts::VariantCastSwitch(BindCastInput &input, const Logica
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::FLOAT:
-	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::BIT:
 	case LogicalTypeId::BIGNUM:
@@ -529,6 +528,12 @@ BoundCastInfo DefaultCasts::VariantCastSwitch(BindCastInput &input, const Logica
 	case LogicalTypeId::UUID:
 	case LogicalTypeId::ARRAY:
 		return BoundCastInfo(CastFromVARIANT);
+	case LogicalTypeId::VARCHAR: {
+		if (target.IsJSONType()) {
+			return BoundCastInfo(VariantCasts::CastVARIANTToJSON);
+		}
+		return BoundCastInfo(CastFromVARIANT);
+	}
 	default:
 		return TryVectorNullCast;
 	}

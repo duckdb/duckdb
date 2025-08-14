@@ -986,6 +986,9 @@ BoundCastInfo DefaultCasts::ImplicitToVariantCast(BindCastInput &input, const Lo
                                                   const LogicalType &target) {
 
 	D_ASSERT(target.id() == LogicalTypeId::VARIANT);
+	if (source.IsJSONType()) {
+		return BoundCastInfo(VariantCasts::CastJSONToVARIANT);
+	}
 	return BoundCastInfo(CastToVARIANT);
 }
 

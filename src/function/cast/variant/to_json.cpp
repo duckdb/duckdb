@@ -258,7 +258,7 @@ yyjson_mut_val *ConvertVariant(yyjson_mut_doc *doc, RecursiveUnifiedVectorFormat
 	return nullptr;
 }
 
-static bool CastVARIANTToJSON(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+bool VariantCasts::CastVARIANTToJSON(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	RecursiveUnifiedVectorFormat source_format;
 	Vector::RecursiveToUnifiedFormat(source, count, source_format);
 

@@ -272,7 +272,7 @@ static optional_idx ConvertJSON(yyjson_val *val, Vector &result, VariantConversi
 	return index;
 }
 
-static bool CastJSONToVARIANT(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+bool VariantCasts::CastJSONToVARIANT(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	UnifiedVectorFormat source_format;
 	source.ToUnifiedFormat(count, source_format);
 	auto source_data = source_format.GetData<string_t>(source_format);

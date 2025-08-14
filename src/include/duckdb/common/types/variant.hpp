@@ -1,6 +1,7 @@
 #pragma once
 
 #include "duckdb/common/typedefs.hpp"
+#include "duckdb/function/cast/default_casts.hpp"
 
 namespace duckdb {
 
@@ -55,6 +56,11 @@ enum class VariantLogicalType : uint8_t {
 	ARRAY = 30,
 	BIGNUM = 31,
 	BITSTRING = 32
+};
+
+struct VariantCasts {
+	static bool CastJSONToVARIANT(Vector &source, Vector &result, idx_t count, CastParameters &parameters);
+	static bool CastVARIANTToJSON(Vector &source, Vector &result, idx_t count, CastParameters &parameters);
 };
 
 } // namespace duckdb
