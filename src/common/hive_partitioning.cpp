@@ -98,17 +98,24 @@ std::map<string, string> HivePartitioning::Parse(const string &filename) {
 	bool candidate_partition = true;
 	std::map<string, string> result;
 	for (idx_t c = 0; c < filename.size(); c++) {
+		bool is_last_character = c == filename.size() - 1;
+
 		if (filename[c] == '?' || filename[c] == '\n') {
 			// get parameter or newline - not a partition
 			candidate_partition = false;
 		}
-		if (filename[c] == '\\' || filename[c] == '/' || c == filename.size() - 1) {
+		if (filename[c] == '\\' || filename[c] == '/') {
 			// separator
 			if (candidate_partition && equality_sign > partition_start) {
 				// we found a partition with an equality sign
 				string key = filename.substr(partition_start, equality_sign - partition_start);
-				string value =
-				    filename.substr(equality_sign + 1, c - equality_sign - 1 + (c == filename.size() - 1 ? 1 : 0));
+				string value;
+				if (c - equality_sign <= 1) {
+					// equality sign has no value to its right
+					value = "";
+				} else {
+					value = filename.substr(equality_sign + 1, c - equality_sign - 1);
+				}
 				result.insert(make_pair(std::move(key), std::move(value)));
 			}
 			partition_start = c + 1;
@@ -119,6 +126,20 @@ std::map<string, string> HivePartitioning::Parse(const string &filename) {
 				candidate_partition = false;
 			}
 			equality_sign = c;
+			if (candidate_partition && is_last_character) {
+				// last character is an equal sign means a key with no value
+				string key = filename.substr(partition_start, equality_sign - partition_start);
+				string value = "";
+				result.insert(make_pair(std::move(key), std::move(value)));
+			}
+		} else if (is_last_character) {
+			// final character could be the last character of a partition
+			if (candidate_partition && equality_sign > partition_start) {
+				// we found a partition with an equality sign
+				string key = filename.substr(partition_start, equality_sign - partition_start);
+				string value = filename.substr(equality_sign + 1, c - equality_sign);
+				result.insert(make_pair(std::move(key), std::move(value)));
+			}
 		}
 	}
 	return result;
