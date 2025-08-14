@@ -237,6 +237,13 @@ void CSVMultiFileInfo::FinalizeBindData(MultiFileBindData &multi_file_data) {
 			}
 		}
 	}
+	for (auto &type : multi_file_data.types) {
+		if (type.id() == LogicalTypeId::SQLNULL) {
+			// If after performing all the type detection of all files,
+			// we can't tell the type of column, we default to the highest type, a VARCHAR.
+			type = LogicalType::VARCHAR;
+		}
+	}
 	csv_data.Finalize();
 }
 
