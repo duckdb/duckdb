@@ -1314,7 +1314,7 @@ static bool IsSymbolicLink(const string &path) {
 
 void LocalFileSystem::RecursiveGlobDirectories(const vector<string> &splits, idx_t i, const string &path,
                                                vector<OpenFileInfo> &result, FileOpener *opener, idx_t max_files,
-                                               optional_ptr<HivePartitioning> hive_partitioning) {
+                                               optional_ptr<HivePartitioningExecutor> hive_partitioning_executor) {
 	bool is_last_chunk = i + 1 == splits.size();
 	bool is_deepest_directory = i + 2 >= splits.size();
 
@@ -1330,16 +1330,17 @@ void LocalFileSystem::RecursiveGlobDirectories(const vector<string> &splits, idx
 		}
 		bool is_directory = FileSystem::IsDirectory(info);
 		if (is_directory) {
-			if (hive_partitioning && hive_partitioning->ApplyFiltersToFile(info, is_deepest_directory)) {
+			if (hive_partitioning_executor &&
+			    hive_partitioning_executor->ApplyFiltersToFile(info, is_deepest_directory)) {
 				return;
 			}
 			if (!is_last_chunk) {
-				ProcessSplit(splits, i + 1, info.path, result, opener, max_files, hive_partitioning);
+				ProcessSplit(splits, i + 1, info.path, result, opener, max_files, hive_partitioning_executor);
 			}
 			if (result.size() >= max_files) {
 				return;
 			}
-			RecursiveGlobDirectories(splits, i, info.path, result, opener, max_files, hive_partitioning);
+			RecursiveGlobDirectories(splits, i, info.path, result, opener, max_files, hive_partitioning_executor);
 		} else {
 			if (is_last_chunk) {
 				result.push_back(std::move(info));
@@ -1350,7 +1351,7 @@ void LocalFileSystem::RecursiveGlobDirectories(const vector<string> &splits, idx
 
 void LocalFileSystem::GlobFilesInternal(const vector<string> &splits, idx_t i, const string &path, const string &glob,
                                         vector<OpenFileInfo> &result, FileOpener *opener, idx_t max_files,
-                                        optional_ptr<HivePartitioning> hive_partitioning) {
+                                        optional_ptr<HivePartitioningExecutor> hive_partitioning_executor) {
 	bool is_last_chunk = i + 1 == splits.size();
 	bool is_deepest_directory = i + 2 >= splits.size();
 	ListFiles(path, [&](OpenFileInfo &info) {
@@ -1366,11 +1367,12 @@ void LocalFileSystem::GlobFilesInternal(const vector<string> &splits, idx_t i, c
 				info.path = JoinPath(path, info.path);
 			}
 			if (is_directory) {
-				if (hive_partitioning && hive_partitioning->ApplyFiltersToFile(info, is_deepest_directory)) {
+				if (hive_partitioning_executor &&
+				    hive_partitioning_executor->ApplyFiltersToFile(info, is_deepest_directory)) {
 					return;
 				}
 				if (!is_last_chunk) {
-					ProcessSplit(splits, i + 1, info.path, result, opener, max_files, hive_partitioning);
+					ProcessSplit(splits, i + 1, info.path, result, opener, max_files, hive_partitioning_executor);
 				}
 			} else {
 				if (is_last_chunk) {
@@ -1448,7 +1450,7 @@ vector<OpenFileInfo> LocalFileSystem::Glob(const string &path, FileOpener *opene
 
 void LocalFileSystem::ProcessSplit(const vector<string> &splits, idx_t i, const string &path,
                                    vector<OpenFileInfo> &result, FileOpener *opener, idx_t max_files,
-                                   optional_ptr<HivePartitioning> hive_partitioning) {
+                                   optional_ptr<HivePartitioningExecutor> hive_partitioning_executor) {
 	if (result.size() >= max_files) {
 		return;
 	}
@@ -1462,24 +1464,24 @@ void LocalFileSystem::ProcessSplit(const vector<string> &splits, idx_t i, const 
 				result.push_back(filename);
 			}
 		} else {
-			if (hive_partitioning) {
+			if (hive_partitioning_executor) {
 				auto info = OpenFileInfo(filename);
 				bool is_deepest_directory = i + 2 >= splits.size();
-				if (hive_partitioning->ApplyFiltersToFile(info, is_deepest_directory)) {
+				if (hive_partitioning_executor->ApplyFiltersToFile(info, is_deepest_directory)) {
 					return;
 				}
 			}
-			ProcessSplit(splits, i + 1, filename, result, opener, max_files, hive_partitioning);
+			ProcessSplit(splits, i + 1, filename, result, opener, max_files, hive_partitioning_executor);
 		}
 	} else {
 		auto glob_path = path.empty() ? "." : path;
 		if (IsCrawl(splits[i])) {
 			if (!is_last_chunk) {
-				ProcessSplit(splits, i + 1, glob_path, result, opener, max_files, hive_partitioning);
+				ProcessSplit(splits, i + 1, glob_path, result, opener, max_files, hive_partitioning_executor);
 			}
-			RecursiveGlobDirectories(splits, i, glob_path, result, opener, max_files, hive_partitioning);
+			RecursiveGlobDirectories(splits, i, glob_path, result, opener, max_files, hive_partitioning_executor);
 		} else {
-			GlobFilesInternal(splits, i, glob_path, splits[i], result, opener, max_files, hive_partitioning);
+			GlobFilesInternal(splits, i, glob_path, splits[i], result, opener, max_files, hive_partitioning_executor);
 		}
 	}
 }
@@ -1571,10 +1573,10 @@ vector<OpenFileInfo> LocalFileSystem::GlobHive(const string &path, FileOpener *o
 	if (start_index >= splits.size()) {
 		return result;
 	}
-	unique_ptr<HivePartitioning> hive_partitioning;
+	unique_ptr<HivePartitioningExecutor> hive_partitioning_executor;
 	if (hive_params) {
-		hive_partitioning = make_uniq<HivePartitioning>(hive_params->context, hive_params->filters,
-		                                                hive_params->options, hive_params->info);
+		hive_partitioning_executor = make_uniq<HivePartitioningExecutor>(hive_params->context, hive_params->filters,
+		                                                                 hive_params->options, hive_params->info);
 	}
 
 	if (previous_directories.empty()) {
@@ -1582,11 +1584,11 @@ vector<OpenFileInfo> LocalFileSystem::GlobHive(const string &path, FileOpener *o
 	}
 
 	for (auto &prev_directory : previous_directories) {
-		ProcessSplit(splits, start_index, prev_directory.path, result, opener, max_files, hive_partitioning);
+		ProcessSplit(splits, start_index, prev_directory.path, result, opener, max_files, hive_partitioning_executor);
 	}
 
-	if (hive_partitioning) {
-		hive_partitioning->Finalize();
+	if (hive_partitioning_executor) {
+		hive_partitioning_executor->Finalize();
 	}
 
 	if (result.empty()) {

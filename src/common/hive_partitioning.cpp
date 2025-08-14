@@ -185,7 +185,7 @@ HivePartitioningFilterInfo HivePartitioning::GetFilterInfo(const MultiFilePushdo
 
 // TODO: this can still be improved by removing the parts of filter expressions that are true for all remaining files.
 //		 currently, only expressions that cannot be evaluated during pushdown are removed.
-bool HivePartitioning::ApplyFiltersToFile(OpenFileInfo &file, bool is_deepest_directory) {
+bool HivePartitioningExecutor::ApplyFiltersToFile(OpenFileInfo &file, bool is_deepest_directory) {
 	if (consumed) {
 		// TODO: throw an error, shouldn't try applying filters after finalizing
 		return false;
@@ -229,21 +229,23 @@ bool HivePartitioning::ApplyFiltersToFile(OpenFileInfo &file, bool is_deepest_di
 	return should_prune_file;
 }
 
-void HivePartitioning::Finalize(idx_t filtered_files, idx_t total_files) {
+vector<OpenFileInfo> HivePartitioningExecutor::Finalize(idx_t total_files) {
 	info.extra_info.total_files = total_files;
-	info.extra_info.filtered_files = filtered_files;
-	Finalize();
+	info.extra_info.filtered_files = pruned_files.size();
+	auto pruned_files = Finalize();
+	return std::move(pruned_files);
 }
 
-void HivePartitioning::Finalize() {
+vector<OpenFileInfo> HivePartitioningExecutor::Finalize() {
 	D_ASSERT(filters.size() >= pruned_filters.size());
 	for (idx_t i = 0; i < have_preserved_filter.size(); i++) {
 		if (have_preserved_filter[i]) {
 			pruned_filters.emplace_back(filters[i]->Copy());
 		}
 	}
-	filters = std::move(pruned_filters);
 	consumed = true;
+	filters = std::move(pruned_filters);
+	return std::move(pruned_files);
 }
 
 void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<OpenFileInfo> &files,
@@ -255,13 +257,13 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<Ope
 	if ((!filter_info.filename_enabled && !filter_info.hive_enabled) || filters.empty()) {
 		return;
 	}
-	HivePartitioning hive_partitioning(context, filters, options, info);
+	HivePartitioningExecutor hive_partitioning_executor(context, filters, options, info);
 
 	for (idx_t i = 0; i < files.size(); i++) {
-		hive_partitioning.ApplyFiltersToFile(files[i], true);
+		hive_partitioning_executor.ApplyFiltersToFile(files[i], true);
 	}
-	hive_partitioning.Finalize(hive_partitioning.pruned_files.size(), files.size());
-	files = std::move(hive_partitioning.pruned_files);
+	auto pruned_files = hive_partitioning_executor.Finalize(files.size());
+	files = std::move(pruned_files);
 }
 
 void HivePartitionedColumnData::InitializeKeys() {

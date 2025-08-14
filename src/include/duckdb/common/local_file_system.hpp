@@ -115,13 +115,13 @@ private:
 
 	vector<OpenFileInfo> FetchFileWithoutGlob(const string &path, FileOpener *opener, bool absolute_path);
 	void ProcessSplit(const vector<string> &splits, idx_t i, const string &path, vector<OpenFileInfo> &result,
-	                  FileOpener *opener, idx_t max_files, optional_ptr<HivePartitioning> hive_partitioning);
+	                  FileOpener *opener, idx_t max_files, optional_ptr<HivePartitioningExecutor> hive_partitioning);
 	void RecursiveGlobDirectories(const vector<string> &splits, idx_t i, const string &path,
 	                              vector<OpenFileInfo> &result, FileOpener *opener, idx_t max_files,
-	                              optional_ptr<HivePartitioning> hive_partitioning);
+	                              optional_ptr<HivePartitioningExecutor> hive_partitioning);
 	void GlobFilesInternal(const vector<string> &splits, idx_t i, const string &path, const string &glob,
 	                       vector<OpenFileInfo> &result, FileOpener *opener, idx_t max_files,
-	                       optional_ptr<HivePartitioning> hive_partitioning);
+	                       optional_ptr<HivePartitioningExecutor> hive_partitioning);
 };
 
 } // namespace duckdb
