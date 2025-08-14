@@ -302,6 +302,10 @@ static int64_t ImplicitCastBignum(const LogicalType &to) {
 	}
 }
 
+static int64_t ImplicitCastVariant(const LogicalType &to) {
+	return TargetTypeCost(to);
+}
+
 bool LogicalTypeIsValid(const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::STRUCT:
@@ -601,6 +605,8 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		return ImplicitCastTimestamp(to);
 	case LogicalTypeId::BIGNUM:
 		return ImplicitCastBignum(to);
+	case LogicalTypeId::VARIANT:
+		return ImplicitCastVariant(to);
 	default:
 		return -1;
 	}

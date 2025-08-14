@@ -911,7 +911,7 @@ static LogicalType DecimalSizeCheck(const LogicalType &left, const LogicalType &
 	uint8_t other_scale;
 	bool success = left.GetDecimalProperties(other_width, other_scale);
 	if (!success) {
-		throw InternalException("Type provided to DecimalSizeCheck was not a numeric type");
+		return right;
 	}
 	D_ASSERT(other_scale == 0);
 	const auto effective_width = width - scale;
@@ -974,6 +974,8 @@ LogicalType LogicalType::NormalizeType(const LogicalType &type) {
 
 template <class OP>
 static bool CombineUnequalTypes(const LogicalType &left, const LogicalType &right, LogicalType &result) {
+	D_ASSERT(right.id() != left.id());
+
 	// left and right are not equal
 	// NULL/unknown (parameter) types always take the other type
 	LogicalTypeId other_types[] = {LogicalTypeId::SQLNULL, LogicalTypeId::UNKNOWN};

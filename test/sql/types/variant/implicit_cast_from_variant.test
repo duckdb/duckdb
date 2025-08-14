@@ -7,20 +7,17 @@ select ['test', 'hello', 'world'][1::VARIANT::INTEGER]
 ----
 test
 
-# FIXME: this wont autocast?
-## VARIANT(INT32) -> BIGINT
-#query I
-#select ['test', 'hello', 'world'][1::VARIANT]
-#----
-#test
+# VARIANT(INT32) -> BIGINT
+query I
+select ['test', 'hello', 'world'][1::VARIANT]
+----
+test
 
-
-# FIXME: this wont autocast?
-## VARIANT(INT64) -> BIGINT
-#query I
-#select ['test', 'hello', 'world'][1::BIGINT::VARIANT]
-#----
-#test
+# VARIANT(INT64) -> BIGINT
+query I
+select ['test', 'hello', 'world'][1::BIGINT::VARIANT]
+----
+test
 
 # VARIANT(VARCHAR) -> BOOL
 query I
