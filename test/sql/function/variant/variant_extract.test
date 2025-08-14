@@ -1,0 +1,39 @@
+# name: test/sql/function/variant/variant_extract.test
+# group: [variant]
+
+query I
+select variant_extract({'a': 1234}::VARIANT, 'a')::VARCHAR;
+----
+1234
+
+statement ok
+create table struct_cast_tbl3(a VARIANT);
+
+statement ok
+insert into struct_cast_tbl3 select {'a': [
+	{
+		'b': 'hello',
+		'c': NULL,
+		'a': '1970/03/15'::DATE
+	},
+	{
+		'b': NULL,
+		'c': True,
+		'a': '2020/11/03'::DATE
+	}
+]}::VARIANT;
+
+statement ok
+insert into struct_cast_tbl3 select {'a': [
+	{
+		'b': 'this is a long string',
+		'c': False,
+		'a': '1953/9/16'::DATE
+	}
+]}::VARIANT;
+
+query I
+select variant_extract(a, 'a[0].c') from struct_cast_tbl3;
+----
+NULL
+false

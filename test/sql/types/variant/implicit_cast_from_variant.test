@@ -1,0 +1,180 @@
+# name: test/sql/types/variant/implicit_cast_from_variant.test
+# group: [variant]
+
+# VARIANT(INT32) -> INTEGER
+query I
+select ['test', 'hello', 'world'][1::VARIANT::INTEGER]
+----
+test
+
+# FIXME: this wont autocast?
+## VARIANT(INT32) -> BIGINT
+#query I
+#select ['test', 'hello', 'world'][1::VARIANT]
+#----
+#test
+
+
+# FIXME: this wont autocast?
+## VARIANT(INT64) -> BIGINT
+#query I
+#select ['test', 'hello', 'world'][1::BIGINT::VARIANT]
+#----
+#test
+
+# VARIANT(VARCHAR) -> BOOL
+query I
+select 'true'::VARIANT::BOOL;
+----
+true
+
+# VARIANT(OBJECT('a': VARCHAR)) -> STRUCT(a BOOLEAN)
+query I
+select {'a': 'true'}::VARIANT::STRUCT(a BOOLEAN);
+----
+{'a': true}
+
+# VARIANT(OBJECT('a': VARCHAR)) -> STRUCT(a BOOLEAN)
+statement error
+select {'a': 'lalala'}::VARIANT::STRUCT(a BOOLEAN);
+----
+Invalid Input Error: Failed to cast value: Could not convert string 'lalala' to BOOL
+
+# VARIANT(OBJECT('a': VARCHAR)) -> STRUCT(a BOOLEAN)
+statement error
+select {'b': 42, 'a': 'lalala', 'c': {'a': 'test'}}::VARIANT::STRUCT(a BOOLEAN);
+----
+Invalid Input Error: Failed to cast value: Could not convert string 'lalala' to BOOL
+
+# VARIANT(OBJECT('a': VARCHAR)) -> STRUCT(a BOOLEAN)
+statement error
+select {'b': 42, 'a': 'lalala', 'c': {'a': 'test'}}::VARIANT::STRUCT(a BOOLEAN);
+----
+Invalid Input Error: Failed to cast value: Could not convert string 'lalala' to BOOL
+
+# VARIANT(TIMESTAMP_MICROS) -> TIMESTAMP
+query I
+select '2019/03/21'::TIMESTAMP::VARIANT::TIMESTAMP;
+----
+2019-03-21 00:00:00
+
+# Direct conversion
+query I
+select '0.123456789'::DECIMAL(10,9)::VARIANT::DECIMAL(10,9)
+----
+0.123456789
+
+# Fallback conversion using Value
+query I
+select '0.123456789'::DECIMAL(10,9)::VARIANT::DECIMAL(10,8)
+----
+0.12345679
+
+# Direct conversion from VARIANT(BLOB) -> BLOB
+query I
+select 'thisisalongblob\x00withnullbytes'::BLOB::VARIANT::BLOB;
+----
+thisisalongblob\x00withnullbytes
+
+# Fallback conversion from VARIANT(BLOB) -> VARCHAR
+query I
+select 'thisisalongblob\x00withnullbytes'::BLOB::VARIANT::VARCHAR;
+----
+thisisalongblob\x00withnullbytes
+
+# Added a fallback for nested types as well
+query I
+select {'a': '[1, 2, 3, 4]'}::VARIANT::STRUCT(a INTEGER[])
+----
+{'a': [1, 2, 3, 4]}
+
+# Added a fallback for nested types as well
+query I
+select {'a': ['1', '2', '3', '4']}::VARIANT::STRUCT(a INTEGER[])
+----
+{'a': [1, 2, 3, 4]}
+
+statement ok
+create table struct_cast_tbl(a STRUCT(a VARCHAR));
+
+statement ok
+insert into struct_cast_tbl select {'a': '[1, 2, 3, 4]'};
+
+statement ok
+insert into struct_cast_tbl select {'a': '[8, 7, 6]'};
+
+statement ok
+insert into struct_cast_tbl select {'a': '[]'};
+
+statement ok
+insert into struct_cast_tbl select {'a': '[10, 6, 4, 8, 9, 10, 12]'};
+
+# Added a fallback for nested types as well
+query I
+select a::VARIANT::STRUCT(a INTEGER[]) from struct_cast_tbl;
+----
+{'a': [1, 2, 3, 4]}
+{'a': [8, 7, 6]}
+{'a': []}
+{'a': [10, 6, 4, 8, 9, 10, 12]}
+
+statement ok
+create table struct_cast_tbl2(a STRUCT(a INTEGER[]));
+
+statement ok
+insert into struct_cast_tbl2 select {'a': [1, 2, 3, 4]};
+
+statement ok
+insert into struct_cast_tbl2 select {'a': [8, 7, 6]};
+
+statement ok
+insert into struct_cast_tbl2 select {'a': []};
+
+statement ok
+insert into struct_cast_tbl2 select {'a': [10, 6, 4, 8, 9, 10, 12]};
+
+# Added a fallback for nested types as well
+query I
+select a::VARIANT::STRUCT(a INTEGER[]) from struct_cast_tbl2;
+----
+{'a': [1, 2, 3, 4]}
+{'a': [8, 7, 6]}
+{'a': []}
+{'a': [10, 6, 4, 8, 9, 10, 12]}
+
+statement ok
+create table struct_cast_tbl3(a STRUCT(a STRUCT(b VARCHAR, c BOOL, a DATE)[]));
+
+statement ok
+insert into struct_cast_tbl3 select {'a': [
+	{
+		'b': 'hello',
+		'c': NULL,
+		'a': '1970/03/15'::DATE
+	},
+	{
+		'b': NULL,
+		'c': True,
+		'a': '2020/11/03'::DATE
+	}
+]};
+
+statement ok
+insert into struct_cast_tbl3 select {'a': [
+]};
+
+statement ok
+insert into struct_cast_tbl3 select {'a': [
+	{
+		'b': 'this is a long string',
+		'c': False,
+		'a': '1953/9/16'::DATE
+	}
+]};
+
+query I
+select a::VARIANT::STRUCT(a STRUCT(a VARCHAR, b VARCHAR)[]) from struct_cast_tbl3;
+----
+{'a': [{'a': 1970-03-15, 'b': hello}, {'a': 2020-11-03, 'b': 'NULL'}]}
+{'a': []}
+{'a': [{'a': 1953-09-16, 'b': this is a long string}]}
