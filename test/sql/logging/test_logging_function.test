@@ -4,12 +4,12 @@
 
 require noforcestorage
 
-query IIIIIIIII
+query IIIIIIIIII
 from duckdb_logs
 ----
 
 statement ok
-pragma enable_logging;
+ CALL enable_logging();
 
 statement ok
 set logging_level='info';
@@ -37,17 +37,17 @@ statement ok
 from duckdb_logs
 
 query IIII
-SELECT * EXCLUDE (timestamp, connection_id, transaction_id, query_id, thread_id) FROM duckdb_logs where starts_with(message, 'hello from the') order by query_id
+SELECT * EXCLUDE (context_id, timestamp, connection_id, transaction_id, query_id, thread_id) FROM duckdb_logs where starts_with(message, 'hello from the') order by query_id
 ----
-client_context_type	INFO	hello from the connection log scope	CONNECTION
-client_context_type	INFO	hello from the connection log scope	CONNECTION
-client_context_type	INFO	hello from the connection log scope	CONNECTION
-opener_type	INFO	hello from the file_opener log scope	CONNECTION
-opener_type	INFO	hello from the file_opener log scope	CONNECTION
-opener_type	INFO	hello from the file_opener log scope	CONNECTION
-global_type	INFO	hello from the global log scope	DATABASE
-global_type	INFO	hello from the global log scope	DATABASE
-global_type	INFO	hello from the global log scope	DATABASE
+CONNECTION	client_context_type	INFO	hello from the connection log scope
+CONNECTION	client_context_type	INFO	hello from the connection log scope
+CONNECTION	client_context_type	INFO	hello from the connection log scope
+CONNECTION	opener_type	INFO	hello from the file_opener log scope
+CONNECTION	opener_type	INFO	hello from the file_opener log scope
+CONNECTION	opener_type	INFO	hello from the file_opener log scope
+DATABASE	global_type	INFO	hello from the global log scope
+DATABASE	global_type	INFO	hello from the global log scope
+DATABASE	global_type	INFO	hello from the global log scope
 
 query IIII
 SELECT

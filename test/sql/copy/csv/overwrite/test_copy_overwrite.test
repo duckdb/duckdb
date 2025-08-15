@@ -73,7 +73,8 @@ COPY (SELECT i FROM range(1) tbl(i) UNION ALL SELECT concat('hello', i)::INT i F
 ----
 Could not convert string 'hello0' to INT32
 
+# File is overwritten
 query I
 SELECT * FROM '__TEST_DIR__/overwrite.csv';
 ----
-0
+
