@@ -581,6 +581,12 @@ bool FileSystem::HasGlob(const string &str) {
 	return false;
 }
 
+vector<OpenFileInfo> FileSystem::GlobHive(const string &path, FileOpener *opener, idx_t max_files,
+                                          optional_ptr<HiveFilterParams> hive_params) {
+	// Override this method to implement partial lazy loading and hive filtering optimization
+	return Glob(path, opener);
+}
+
 vector<OpenFileInfo> FileSystem::Glob(const string &path, FileOpener *opener) {
 	throw NotImplementedException("%s: Glob is not implemented!", GetName());
 }
@@ -622,8 +628,10 @@ static string LookupExtensionForPattern(const string &pattern) {
 	return "";
 }
 
-vector<OpenFileInfo> FileSystem::GlobFiles(const string &pattern, ClientContext &context, FileGlobOptions options) {
-	auto result = Glob(pattern);
+vector<OpenFileInfo> FileSystem::GlobFiles(const string &pattern, ClientContext &context, FileGlobOptions options,
+                                           idx_t max_files, optional_ptr<HiveFilterParams> hive_params) {
+	vector<OpenFileInfo> result;
+	result = GlobHive(pattern, nullptr, max_files, hive_params);
 	if (result.empty()) {
 		string required_extension = LookupExtensionForPattern(pattern);
 		if (!required_extension.empty() && !context.db->ExtensionIsLoaded(required_extension)) {
@@ -644,9 +652,9 @@ vector<OpenFileInfo> FileSystem::GlobFiles(const string &pattern, ClientContext 
 				throw InternalException("Extension load \"%s\" did not throw but somehow the extension was not loaded",
 				                        required_extension);
 			}
-			return GlobFiles(pattern, context, options);
+			return GlobFiles(pattern, context, options, max_files, hive_params);
 		}
-		if (options == FileGlobOptions::DISALLOW_EMPTY) {
+		if (options == FileGlobOptions::DISALLOW_EMPTY && !hive_params) {
 			throw IOException("No files found that match the pattern \"%s\"", pattern);
 		}
 	}
