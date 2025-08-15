@@ -257,7 +257,7 @@ public:
 			    BitpackingPrimitives::MinimumBitWidth<T, false>(static_cast<T>(min_max_delta_diff));
 			auto regular_required_bitwidth = BitpackingPrimitives::MinimumBitWidth(min_max_diff);
 
-			if (delta_required_bitwidth < regular_required_bitwidth && mode != BitpackingMode::FOR) {
+			if ((!can_do_for || delta_required_bitwidth < regular_required_bitwidth) && mode != BitpackingMode::FOR) {
 				SubtractFrameOfReference(delta_buffer, minimum_delta);
 
 				OP::WriteDeltaFor(reinterpret_cast<T *>(delta_buffer), compression_buffer_validity,
