@@ -380,6 +380,11 @@ void PrimitiveColumnWriter::WriteDictionary(PrimitiveColumnWriterState &state, u
 	PageWriteInformation write_info;
 	// set up the header
 	auto &hdr = write_info.page_header;
+	// now that we have finished writing the data we know the uncompressed size
+	if (temp_writer->GetPosition() > idx_t(NumericLimits<int32_t>::Maximum())) {
+		throw InternalException("Parquet writer: %d uncompressed dictionary page size out of range for type integer",
+		                        temp_writer->GetPosition());
+	}
 	hdr.uncompressed_page_size = UnsafeNumericCast<int32_t>(temp_writer->GetPosition());
 	hdr.type = PageType::DICTIONARY_PAGE;
 	hdr.__isset.dictionary_page_header = true;
