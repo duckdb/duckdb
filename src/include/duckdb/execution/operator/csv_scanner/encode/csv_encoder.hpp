@@ -11,6 +11,7 @@
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/function/encoding_function.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
@@ -54,6 +55,8 @@ public:
 	string encoding_name;
 
 private:
+	QueryContext context;
+
 	//! The actual encoded buffer
 	CSVEncoderBuffer encoded_buffer;
 	//! Potential remaining bytes

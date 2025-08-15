@@ -98,7 +98,7 @@ void Leaf::TransformToNested(ART &art, Node &node) {
 	}
 
 	root.SetGateStatus(GateStatus::GATE_SET);
-	Node::Free(art, node);
+	DeprecatedFree(art, node);
 	node = root;
 }
 
@@ -116,7 +116,7 @@ void Leaf::TransformToDeprecated(ART &art, Node &node) {
 	it.FindMinimum(node);
 	ARTKey empty_key = ARTKey();
 	it.Scan(empty_key, NumericLimits<row_t>().Maximum(), row_ids, false);
-	Node::Free(art, node);
+	Node::FreeTree(art, node);
 	D_ASSERT(row_ids.size() > 1);
 
 	// Create the deprecated leaves.
@@ -148,11 +148,10 @@ void Leaf::TransformToDeprecated(ART &art, Node &node) {
 
 void Leaf::DeprecatedFree(ART &art, Node &node) {
 	D_ASSERT(node.GetType() == LEAF);
-
 	Node next;
 	while (node.HasMetadata()) {
 		next = Node::Ref<Leaf>(art, node, LEAF).ptr;
-		Node::GetAllocator(art, LEAF).Free(node);
+		Node::FreeNode(art, node);
 		node = next;
 	}
 	node.Clear();

@@ -1382,10 +1382,10 @@ int Linenoise::Edit() {
 			RefreshLine();
 			break;
 		case CTRL_A: /* Ctrl+a, go to the start of the line */
-			EditMoveHome();
+			EditMoveStartOfLine();
 			break;
 		case CTRL_E: /* ctrl+e, go to the end of the line */
-			EditMoveEnd();
+			EditMoveEndOfLine();
 			break;
 		case CTRL_L: /* ctrl+l, clear screen */
 			linenoiseClearScreen();

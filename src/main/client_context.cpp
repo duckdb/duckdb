@@ -824,8 +824,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 		statement = statement->Copy();
 	}
 #endif
-	// check if we are on AutoCommit. In this case we should start a transaction.
-	if (statement && config.AnyVerification()) {
+	if (statement && config.query_verification_enabled) {
 		// query verification is enabled
 		// create a copy of the statement, and use the copy
 		// this way we verify that the copy correctly copies all properties
@@ -987,6 +986,12 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, bool allow_str
 		} else {
 			current_result = ExecutePendingQueryInternal(*lock, *pending_query);
 		}
+		if (current_result->HasError()) {
+			// Reset the interrupted flag, this was set by the task that found the error
+			// Next statements should not be bothered by that interruption
+			interrupted = false;
+			return current_result;
+		}
 		// now append the result to the list of results
 		if (!last_result || !last_had_result) {
 			// first result of the query
@@ -1003,12 +1008,6 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, bool allow_str
 			last_result = last_result->next.get();
 		}
 		D_ASSERT(last_result);
-		if (last_result->HasError()) {
-			// Reset the interrupted flag, this was set by the task that found the error
-			// Next statements should not be bothered by that interruption
-			interrupted = false;
-			break;
-		}
 	}
 	return result;
 }

@@ -25,4 +25,14 @@ struct StructInsertFun {
 	static ScalarFunction GetFunction();
 };
 
+struct StructUpdateFun {
+	static constexpr const char *Name = "struct_update";
+	static constexpr const char *Parameters = "struct,any";
+	static constexpr const char *Description = "Changes field(s)/value(s) to an existing STRUCT with the argument values. The entry name(s) will be the bound variable name(s)";
+	static constexpr const char *Example = "struct_update({'a': 1}, a := 2)";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
 } // namespace duckdb

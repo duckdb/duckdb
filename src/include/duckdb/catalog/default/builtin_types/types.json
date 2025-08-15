@@ -229,9 +229,9 @@
         "description": "binary value"
     },
     {
-        "id": "VARINT",
+        "id": "BIGNUM",
         "names": [
-            "varint"
+            "bignum"
         ],
         "description": "Integers with variable size."
     },

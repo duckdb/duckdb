@@ -1,0 +1,15 @@
+# name: benchmark/micro/aggregate/group_two_string_dictionaries.benchmark
+# description: Group by two string dictionary columns (test string dictionary hash cache)
+# group: [aggregate]
+
+name Group by two string dictionary columns
+group aggregate
+storage persistent
+
+load
+create or replace table test as
+select format('{:a>256}', cast(range % 100 as varchar)) a256, a256 b256,
+from range(10_000_000);
+
+run
+select a256, b256 from test group by all;

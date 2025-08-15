@@ -1,5 +1,5 @@
 #include "duckdb/common/enum_util.hpp"
-#include "duckdb/common/varint.hpp"
+#include "duckdb/common/bignum.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/interpolate.hpp"
 #include "duckdb/common/operator/multiply.hpp"
@@ -312,15 +312,38 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &type) {
 	}
 }
 
-void VarintAdd(DataChunk &args, ExpressionState &state, Vector &result) {
+void BignumAdd(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &allocator = state.GetAllocator();
 	ArenaAllocator arena(allocator);
-	BinaryExecutor::Execute<varint_t, varint_t, string_t>(args.data[0], args.data[1], result, args.size(),
-	                                                      [&](varint_t a, varint_t b) {
-		                                                      const VarintIntermediate lhs(a);
-		                                                      const VarintIntermediate rhs(b);
-		                                                      return VarintIntermediate::Add(result, lhs, rhs);
+	BinaryExecutor::Execute<bignum_t, bignum_t, string_t>(args.data[0], args.data[1], result, args.size(),
+	                                                      [&](bignum_t a, bignum_t b) {
+		                                                      const BignumIntermediate lhs(a);
+		                                                      const BignumIntermediate rhs(b);
+		                                                      return BignumIntermediate::Add(result, lhs, rhs);
 	                                                      });
+}
+
+void BignumSubtract(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &allocator = state.GetAllocator();
+	ArenaAllocator arena(allocator);
+	BinaryExecutor::Execute<bignum_t, bignum_t, string_t>(
+	    args.data[0], args.data[1], result, args.size(), [&](bignum_t a, bignum_t b) {
+		    const BignumIntermediate lhs(a);
+		    BignumIntermediate rhs(b);
+		    rhs.NegateInPlace();
+		    auto result_value = BignumIntermediate::Add(result, lhs, rhs);
+		    rhs.NegateInPlace();
+		    return result_value;
+	    });
+}
+
+void BignumNegate(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &allocator = state.GetAllocator();
+	ArenaAllocator arena(allocator);
+	UnaryExecutor::Execute<bignum_t, string_t>(args.data[0], result, args.size(), [&](bignum_t a) {
+		const BignumIntermediate lhs(a);
+		return lhs.Negate(result);
+	});
 }
 
 ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const LogicalType &right_type) {
@@ -348,9 +371,9 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const Logi
 	}
 
 	switch (left_type.id()) {
-	case LogicalTypeId::VARINT:
-		if (right_type.id() == LogicalTypeId::VARINT) {
-			ScalarFunction function("+", {left_type, right_type}, LogicalType::VARINT, VarintAdd);
+	case LogicalTypeId::BIGNUM:
+		if (right_type.id() == LogicalTypeId::BIGNUM) {
+			ScalarFunction function("+", {left_type, right_type}, LogicalType::BIGNUM, BignumAdd);
 			BaseScalarFunction::SetReturnsError(function);
 			return function;
 		}
@@ -497,8 +520,8 @@ ScalarFunctionSet OperatorAddFun::GetFunctions() {
 	// we can add lists together
 	add.AddFunction(ListConcatFun::GetFunction());
 
-	// we can add varints together
-	add.AddFunction(AddFunction::GetFunction(LogicalType::VARINT, LogicalType::VARINT));
+	// we can add bignums together
+	add.AddFunction(AddFunction::GetFunction(LogicalType::BIGNUM, LogicalType::BIGNUM));
 
 	return add;
 }
@@ -652,6 +675,9 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &type) {
 	} else if (type.id() == LogicalTypeId::DECIMAL) {
 		ScalarFunction func("-", {type}, type, nullptr, DecimalNegateBind, nullptr, NegateBindStatistics);
 		return func;
+	} else if (type.id() == LogicalTypeId::BIGNUM) {
+		ScalarFunction func("+", {type}, LogicalType::BIGNUM, BignumNegate);
+		return func;
 	} else {
 		D_ASSERT(type.IsNumeric());
 		ScalarFunction func("-", {type}, type, ScalarFunction::GetScalarUnaryFunction<NegateOperator>(type), nullptr,
@@ -687,6 +713,10 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &left_type, const
 	}
 
 	switch (left_type.id()) {
+	case LogicalTypeId::BIGNUM: {
+		ScalarFunction function("-", {left_type, right_type}, left_type, BignumSubtract);
+		return function;
+	}
 	case LogicalTypeId::DATE:
 		if (right_type.id() == LogicalTypeId::DATE) {
 			ScalarFunction function("-", {left_type, right_type}, LogicalType::BIGINT,
@@ -764,6 +794,8 @@ ScalarFunctionSet OperatorSubtractFun::GetFunctions() {
 		// binary subtract function "a - b", subtracts b from a
 		subtract.AddFunction(SubtractFunction::GetFunction(type, type));
 	}
+	subtract.AddFunction(SubtractFunction::GetFunction(LogicalType::BIGNUM));
+	subtract.AddFunction(SubtractFunction::GetFunction(LogicalType::BIGNUM, LogicalType::BIGNUM));
 	// we can subtract dates from each other
 	subtract.AddFunction(SubtractFunction::GetFunction(LogicalType::DATE, LogicalType::DATE));
 	// we can subtract integers from dates

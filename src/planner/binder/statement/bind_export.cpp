@@ -163,6 +163,9 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	result.types = {LogicalType::BOOLEAN};
 	result.names = {"Success"};
 
+	// bind copy options
+	BindCopyOptions(*stmt.info);
+
 	// lookup the format in the catalog
 	auto &copy_function =
 	    Catalog::GetEntry<CopyFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, stmt.info->format);

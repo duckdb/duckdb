@@ -126,26 +126,11 @@ public:
 	static ClientConfig &GetConfig(ClientContext &context);
 	static const ClientConfig &GetConfig(const ClientContext &context);
 
-	bool AnyVerification() {
-		return query_verification_enabled || verify_external || verify_serializer || verify_fetch_row;
-	}
+	bool AnyVerification() const;
 
-	void SetUserVariable(const string &name, Value value) {
-		user_variables[name] = std::move(value);
-	}
-
-	bool GetUserVariable(const string &name, Value &result) {
-		auto entry = user_variables.find(name);
-		if (entry == user_variables.end()) {
-			return false;
-		}
-		result = entry->second;
-		return true;
-	}
-
-	void ResetUserVariable(const string &name) {
-		user_variables.erase(name);
-	}
+	void SetUserVariable(const string &name, Value value);
+	bool GetUserVariable(const string &name, Value &result);
+	void ResetUserVariable(const string &name);
 
 	template <class OP>
 	static typename OP::RETURN_TYPE GetSetting(const ClientContext &context) {

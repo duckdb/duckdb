@@ -65,7 +65,7 @@ public:
 	void CreateNewDatabase(QueryContext context);
 	//! Loads an existing database. We pass the provided block allocation size as a parameter
 	//! to detect inconsistencies with the file header.
-	void LoadExistingDatabase();
+	void LoadExistingDatabase(QueryContext context);
 
 	//! Creates a new Block using the specified block_id and returns a pointer
 	unique_ptr<Block> ConvertBlock(block_id_t block_id, FileBuffer &source_buffer) override;
@@ -124,7 +124,8 @@ private:
 	void CheckChecksum(FileBuffer &block, uint64_t location, uint64_t delta, bool skip_block_header = false) const;
 	void CheckChecksum(data_ptr_t start_ptr, uint64_t delta, bool skip_block_header = false) const;
 
-	void ReadAndChecksum(FileBuffer &handle, uint64_t location, bool skip_block_header = false) const;
+	void ReadAndChecksum(QueryContext context, FileBuffer &handle, uint64_t location,
+	                     bool skip_block_header = false) const;
 	void ChecksumAndWrite(QueryContext context, FileBuffer &handle, uint64_t location,
 	                      bool skip_block_header = false) const;
 
