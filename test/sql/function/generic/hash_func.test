@@ -2,6 +2,9 @@
 # description: Test HASH function
 # group: [generic]
 
+# tests our regular hash function, HASH_ZERO makes all hashes equal to 0
+require no_hash_zero
+
 statement ok
 PRAGMA enable_verification
 
