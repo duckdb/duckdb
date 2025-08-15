@@ -197,6 +197,8 @@ scalar_function_t GetStringDecompressFunctionSwitch(const LogicalType &input_typ
 		return GetStringDecompressFunction<uint64_t>(input_type);
 	case LogicalTypeId::UHUGEINT:
 		return GetStringDecompressFunction<uhugeint_t>(input_type);
+	case LogicalTypeId::HUGEINT:
+		return GetStringCompressFunction<hugeint_t>(input_type);
 	default:
 		throw InternalException("Unexpected type in GetStringDecompressFunctionSwitch");
 	}
@@ -229,7 +231,10 @@ unique_ptr<FunctionData> CMStringDecompressDeserialize(Deserializer &deserialize
 
 ScalarFunctionSet GetStringDecompressFunctionSet() {
 	ScalarFunctionSet set(StringDecompressFunctionName());
-	for (const auto &input_type : CMUtils::StringTypes()) {
+	auto string_types = CMUtils::StringTypes();
+	// For backwards compatibility, see internal issue 5306
+	string_types.push_back(LogicalType::HUGEINT);
+	for (const auto &input_type : string_types) {
 		set.AddFunction(CMStringDecompressFun::GetFunction(input_type));
 	}
 	return set;
