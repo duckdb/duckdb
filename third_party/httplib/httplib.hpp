@@ -2582,7 +2582,7 @@ inline std::string trim_double_quotes_copy(const std::string &s) {
 
 inline void split(const char *b, const char *e, char d,
                   std::function<void(const char *, const char *)> fn) {
-  return split(b, e, d, std::numeric_limits<size_t>::max(), fn);
+  return split(b, e, d, static_cast<size_t>((std::numeric_limits<size_t>::max)()), fn);
 }
 
 inline void split(const char *b, const char *e, char d, size_t m,
