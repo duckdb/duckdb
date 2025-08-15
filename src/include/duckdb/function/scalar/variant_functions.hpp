@@ -23,7 +23,6 @@ struct VariantExtractFun {
 	static constexpr const char *Categories = "variant";
 
 	static ScalarFunction GetFunction();
-	static unique_ptr<FunctionData> GetBindData(const string &constant_path_p);
 };
 
 struct VariantTypeofFun {

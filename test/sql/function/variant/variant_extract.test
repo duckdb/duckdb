@@ -1,6 +1,8 @@
 # name: test/sql/function/variant/variant_extract.test
 # group: [variant]
 
+require json
+
 query I
 select variant_extract({'a': 1234}::VARIANT, 'a')::VARCHAR;
 ----
@@ -37,3 +39,10 @@ select variant_extract(a, 'a[0].c') from struct_cast_tbl3;
 ----
 NULL
 false
+
+# Using shorthand notation
+
+query I
+select ('{"a": 42, "b": [true, "test", true]}'::JSON::VARIANT).b[1];
+----
+test

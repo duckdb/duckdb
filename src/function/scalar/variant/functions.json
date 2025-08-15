@@ -7,10 +7,7 @@
 		"categories": [
 			"variant"
 		],
-		"type": "scalar_function",
-		"extra_functions": [
-			"static unique_ptr<FunctionData> GetBindData(const string &constant_path_p);"
-		]
+		"type": "scalar_function"
 	},
 	{
 		"name": "variant_typeof",
