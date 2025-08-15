@@ -119,7 +119,9 @@ static bool ConvertJSONArray(yyjson_val *arr, Vector &result, VariantConversionS
 	uint32_t count = NumericCast<uint32_t>(iter.max);
 	auto start_child_index = state.children_count + state.row_children_count;
 	VarintEncode(count, state.stream);
-	VarintEncode(state.row_children_count, state.stream);
+	if (count) {
+		VarintEncode(state.row_children_count, state.stream);
+	}
 
 	//! Reserve these indices for the array
 	state.row_children_count += count;
@@ -164,7 +166,9 @@ static bool ConvertJSONObject(yyjson_val *obj, Vector &result, VariantConversion
 	auto start_child_index = state.children_count + state.row_children_count;
 
 	VarintEncode(count, state.stream);
-	VarintEncode(state.row_children_count, state.stream);
+	if (count) {
+		VarintEncode(state.row_children_count, state.stream);
+	}
 
 	//! Reserve these indices for the object
 	state.row_children_count += count;
