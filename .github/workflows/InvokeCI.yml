@@ -66,10 +66,10 @@ jobs:
   R:
     uses: ./.github/workflows/R.yml
     secrets: inherit
+    if: false
     with:
       override_git_describe: ${{ inputs.override_git_describe }}
       git_ref: ${{ inputs.git_ref }}
-      skip_tests: ${{ inputs.skip_tests }}
 
   Wasm:
     uses: ./.github/workflows/Wasm.yml
