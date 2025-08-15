@@ -15,6 +15,26 @@ using namespace duckdb_yyjson; // NOLINT
 
 namespace duckdb {
 
+namespace {
+
+struct ConvertedJSONHolder {
+public:
+	~ConvertedJSONHolder() {
+		if (doc) {
+			yyjson_mut_doc_free(doc);
+		}
+		if (stringified_json) {
+			free(stringified_json);
+		}
+	}
+
+public:
+	yyjson_mut_doc *doc = nullptr;
+	char *stringified_json = nullptr;
+};
+
+} // namespace
+
 //! ------------ Variant -> JSON ------------
 
 yyjson_mut_val *ConvertVariant(yyjson_mut_doc *doc, RecursiveUnifiedVectorFormat &source, idx_t row, idx_t values_idx) {
@@ -262,26 +282,28 @@ bool VariantCasts::CastVARIANTToJSON(Vector &source, Vector &result, idx_t count
 	RecursiveUnifiedVectorFormat source_format;
 	Vector::RecursiveToUnifiedFormat(source, count, source_format);
 
+	ConvertedJSONHolder json_holder;
+
 	auto result_data = FlatVector::GetData<string_t>(result);
-	auto doc = yyjson_mut_doc_new(nullptr);
+	json_holder.doc = yyjson_mut_doc_new(nullptr);
 	for (idx_t i = 0; i < count; i++) {
 
-		auto json_val = ConvertVariant(doc, source_format, i, 0);
+		auto json_val = ConvertVariant(json_holder.doc, source_format, i, 0);
 		if (!json_val) {
 			return false;
 		}
 
-		//! TODO: make this safe (add a destructor to hold this heap-allocated memory)
 		size_t len;
-		auto json_data = yyjson_mut_val_write_opts(json_val, YYJSON_WRITE_ALLOW_INF_AND_NAN, nullptr, &len, nullptr);
-		if (!json_data) {
+		json_holder.stringified_json =
+		    yyjson_mut_val_write_opts(json_val, YYJSON_WRITE_ALLOW_INF_AND_NAN, nullptr, &len, nullptr);
+		if (!json_holder.stringified_json) {
 			throw InvalidInputException("Could not serialize the JSON to string, yyjson failed");
 		}
-		string_t res(json_data, NumericCast<uint32_t>(len));
+		string_t res(json_holder.stringified_json, NumericCast<uint32_t>(len));
 		result_data[i] = StringVector::AddString(result, res);
-		free(json_data);
+		free(json_holder.stringified_json);
+		json_holder.stringified_json = nullptr;
 	}
-	yyjson_mut_doc_free(doc);
 
 	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
