@@ -153,7 +153,6 @@ CSVSchema CSVSchemaDiscovery::SchemaDiscovery(ClientContext &context, shared_ptr
 			} else if (i < options.sql_type_list.size()) {
 				continue;
 			}
-			D_ASSERT(return_types[i].id() == LogicalTypeId::BOOLEAN);
 			// we default to varchar if all files are empty or only have a header after all the sniffing
 			return_types[i] = LogicalType::VARCHAR;
 		}
@@ -235,6 +234,13 @@ void CSVMultiFileInfo::FinalizeBindData(MultiFileBindData &multi_file_data) {
 			} else {
 				options.force_not_null.push_back(false);
 			}
+		}
+	}
+	for (auto &type : multi_file_data.types) {
+		if (type.id() == LogicalTypeId::SQLNULL) {
+			// If after performing all the type detection of all files,
+			// we can't tell the type of column, we default to the highest type, a VARCHAR.
+			type = LogicalType::VARCHAR;
 		}
 	}
 	csv_data.Finalize();
