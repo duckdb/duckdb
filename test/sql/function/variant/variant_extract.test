@@ -46,3 +46,19 @@ query I
 select ('{"a": 42, "b": [true, "test", true]}'::JSON::VARIANT).b[1];
 ----
 test
+
+query I
+select ('{"a": 42, "b": [true, "test", true]}'::JSON::VARIANT)['b'][1];
+----
+test
+
+# When the argument is a string, it's taken as an object field, not an array index
+statement error
+select ('{"a": 42, "b": [true, "test", true]}'::JSON::VARIANT)['b']['1'];
+----
+Invalid Input Error: 'OBJECT' was expected, found 'ARRAY', can't convert VARIANT
+
+query I
+select ('{"a": 42, "b": [true, "test", true]}'::JSON::VARIANT)['b[1]'];
+----
+test

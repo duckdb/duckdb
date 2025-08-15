@@ -134,7 +134,7 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 			auto &i_exp = BoundExpression::GetExpression(*op.children[1]);
 			if (i_exp->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
 				auto &const_exp = i_exp->Cast<BoundConstantExpression>();
-				if (!const_exp.value.IsNull()) {
+				if (!const_exp.value.IsNull() && const_exp.return_type != LogicalType::VARCHAR) {
 					const_exp.value = StringUtil::Format("[%s]", const_exp.value.ToString());
 					const_exp.return_type = LogicalType::VARCHAR;
 				}
