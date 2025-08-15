@@ -197,6 +197,8 @@ scalar_function_t GetStringDecompressFunctionSwitch(const LogicalType &input_typ
 		return GetStringDecompressFunction<uint64_t>(input_type);
 	case LogicalTypeId::UHUGEINT:
 		return GetStringDecompressFunction<uhugeint_t>(input_type);
+	case LogicalTypeId::HUGEINT:
+		return GetStringCompressFunction<hugeint_t>(input_type);
 	default:
 		throw InternalException("Unexpected type in GetStringDecompressFunctionSwitch");
 	}
