@@ -1,0 +1,35 @@
+# name: test/sql/sample/test_sampling_stats.test_slow
+# description: Test SAMPLE keyword
+# group: [sample]
+
+statement ok
+PRAGMA enable_verification;
+
+set seed 0.42
+
+query I
+select (avg::DOUBLE between 550000 and 650000) and (min::INT < 10000) and (max::INT > 1190000)
+  and (q25::INT between 230000 and 370000) and (q50::INT between 530000 and 670000) 
+  and (q75::INT between 830000 and 970000) and (count::INT = 1500)
+  and (std::DOUBLE between 300000 and 400000)
+from (summarize select * from generate_series(1,1200000) using sample 1500 (reservoir));
+----
+true
+
+query I
+select (avg::DOUBLE between 580000 and 620000) and (min::INT < 1000) and (max::INT > 1199000)
+  and (q25::INT between 280000 and 320000) and (q50::INT between 580000 and 620000) 
+  and (q75::INT between 880000 and 920000) and (count::INT = 100000)
+  and (std::DOUBLE between 320000 and 370000)
+from (summarize select * from generate_series(1,1200000) using sample 100000 (reservoir));
+----
+true
+
+query I
+select (avg::DOUBLE between 580000 and 620000) and (min::INT < 1000) and (max::INT > 1199000)
+  and (q25::INT between 280000 and 320000) and (q50::INT between 580000 and 620000) 
+  and (q75::INT between 880000 and 920000) and (count::INT = 400000)
+  and (std::DOUBLE between 320000 and 370000)
+from (summarize select * from generate_series(1,1200000) using sample 400000 (reservoir));
+----
+true
