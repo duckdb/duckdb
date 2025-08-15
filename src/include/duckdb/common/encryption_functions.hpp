@@ -2,7 +2,6 @@
 
 #include "duckdb/common/helper.hpp"
 
-
 namespace duckdb {
 
 class DatabaseInstance;
