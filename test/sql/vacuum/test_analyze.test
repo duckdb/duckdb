@@ -7,6 +7,8 @@ require vector_size 1024
 
 require skip_reload
 
+require no_hash_zero
+
 # Distinct statistics sampling is different for different vector sizes.
 require no_vector_verification
 

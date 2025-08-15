@@ -560,6 +560,15 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 		}
 		return RequireResult::PRESENT;
 	}
+
+	if (param == "no_hash_zero") {
+#ifdef DUCKDB_HASH_ZERO
+		return RequireResult::MISSING;
+#else
+		return RequireResult::PRESENT;
+#endif
+	}
+
 	if (param == "no_extension_autoloading") {
 		if (params.size() < 2) {
 			parser.Fail("require no_extension_autoloading needs an explanation string");
@@ -578,6 +587,7 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 		}
 		return RequireResult::PRESENT;
 	}
+
 	if (param == "allow_unsigned_extensions") {
 		if (config->options.allow_unsigned_extensions) {
 			return RequireResult::PRESENT;

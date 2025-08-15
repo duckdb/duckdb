@@ -2,6 +2,9 @@
 # description: No mark to semi conversion if the mark join index is projected
 # group: [pushdown]
 
+# this test takes way too long when all hashes are 0
+require no_hash_zero
+
 statement ok
 CREATE OR REPLACE TABLE BaseData AS (
     SELECT
