@@ -157,7 +157,11 @@ bool VariantUtils::CollectNestedData(RecursiveUnifiedVectorFormat &variant, Vari
 
 		auto ptr = blob_data + byte_offset;
 		child_data[i].child_count = VarintDecode<uint32_t>(ptr);
-		child_data[i].children_idx = VarintDecode<uint32_t>(ptr);
+		if (child_data[i].child_count) {
+			child_data[i].children_idx = VarintDecode<uint32_t>(ptr);
+		} else {
+			child_data[i].children_idx = 0;
+		}
 	}
 	return true;
 }
