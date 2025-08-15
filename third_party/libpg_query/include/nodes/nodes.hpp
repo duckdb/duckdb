@@ -484,6 +484,7 @@ typedef enum PGNodeTag {
 	T_PGInferClause,
 	T_PGOnConflictClause,
 	T_PGCommonTableExpr,
+	T_PGUsingKeyClause,
 	T_PGRoleSpec,
 	T_PGTriggerTransition,
 	T_PGPartitionElem,

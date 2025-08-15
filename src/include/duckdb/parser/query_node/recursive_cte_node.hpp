@@ -32,6 +32,8 @@ public:
 	vector<string> aliases;
 	//! targets for key variants
 	vector<unique_ptr<ParsedExpression>> key_targets;
+	//! payload aggregates for the recursive CTE node
+	vector<unique_ptr<ParsedExpression>> payload_aggregates;
 
 	const vector<unique_ptr<ParsedExpression>> &GetSelectList() const override {
 		return left->GetSelectList();

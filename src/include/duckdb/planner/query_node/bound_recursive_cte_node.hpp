@@ -32,6 +32,8 @@ public:
 	unique_ptr<BoundQueryNode> right;
 	//! Target columns for the recursive key variant
 	vector<unique_ptr<Expression>> key_targets;
+	//! Payload aggregates for the recursive CTE node
+	vector<unique_ptr<Expression>> payload_aggregates;
 
 	//! Index used by the set operation
 	idx_t setop_index;

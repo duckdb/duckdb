@@ -463,7 +463,7 @@ common_table_expr:  name opt_name_list opt_on_key AS opt_materialized '(' Prepar
 				PGCommonTableExpr *n = makeNode(PGCommonTableExpr);
 				n->ctename = $1;
 				n->aliascolnames = $2;
-				n->recursive_keys = $3;
+				n->usingKeyClause = (PGUsingKeyClause *) $3;
 				n->ctematerialized = $5;
 				n->ctequery = $7;
 				n->location = @1;
@@ -472,8 +472,25 @@ common_table_expr:  name opt_name_list opt_on_key AS opt_materialized '(' Prepar
 		;
 
 opt_on_key:
-		USING KEY '(' column_ref_list_opt_comma ')' 				{ $$ = $4; }
-		| /*EMPTY*/												{ $$ = list_make1(NIL); }
+		USING KEY '(' column_ref_list_opt_comma ')'
+			{
+				PGUsingKeyClause* n = makeNode(PGUsingKeyClause);
+				n->key_targets = $4;
+				$$ = (PGNode *) n;
+			}
+		| USING KEY '(' column_ref_list_opt_comma ';' function_list ')'
+			{
+				PGUsingKeyClause* n = makeNode(PGUsingKeyClause);
+				n->key_targets = $4;
+				n->payload_aggregates = $6;
+				$$ = (PGNode *) n;
+			}
+		| /*EMPTY*/												{ $$ = NULL; }
+		;
+
+function_list:
+		func_application								{ $$ = list_make1($1); }
+		| function_list ',' func_application			{ $$ = lappend($1, $3); }
 		;
 
 column_ref_list_opt_comma:

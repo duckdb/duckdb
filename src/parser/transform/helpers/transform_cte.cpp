@@ -16,6 +16,10 @@ unique_ptr<CommonTableExpressionInfo> CommonTableExpressionInfo::Copy() {
 		result->key_targets.push_back(key->Copy());
 	}
 
+	for (auto &agg : result->payload_aggregates) {
+		result->payload_aggregates.push_back(agg->Copy());
+	}
+
 	result->materialized = materialized;
 	return result;
 }
@@ -48,10 +52,17 @@ void Transformer::TransformCTE(duckdb_libpgquery::PGWithClause &de_with_clause, 
 		auto info = make_uniq<CommonTableExpressionInfo>();
 
 		auto &cte = *PGPointerCast<duckdb_libpgquery::PGCommonTableExpr>(cte_ele->data.ptr_value);
-		if (cte.recursive_keys) {
-			auto key_target = PGPointerCast<duckdb_libpgquery::PGNode>(cte.recursive_keys->head->data.ptr_value);
+		if (cte.usingKeyClause && cte.usingKeyClause->key_targets) {
+			auto key_target = PGPointerCast<duckdb_libpgquery::PGNode>(cte.usingKeyClause->key_targets->head->data.ptr_value);
 			if (key_target) {
-				TransformExpressionList(*cte.recursive_keys, info->key_targets);
+				TransformExpressionList(*cte.usingKeyClause->key_targets, info->key_targets);
+			}
+		}
+
+		if (cte.usingKeyClause && cte.usingKeyClause->payload_aggregates) {
+			auto payload_aggregate = PGPointerCast<duckdb_libpgquery::PGNode>(cte.usingKeyClause->payload_aggregates->head->data.ptr_value);
+			if (payload_aggregate) {
+				TransformExpressionList(*cte.usingKeyClause->payload_aggregates, info->payload_aggregates);
 			}
 		}
 
@@ -133,6 +144,9 @@ unique_ptr<SelectStatement> Transformer::TransformRecursiveCTE(duckdb_libpgquery
 		result.aliases = info.aliases;
 		for (auto &key : info.key_targets) {
 			result.key_targets.emplace_back(key->Copy());
+		}
+		for (auto &agg : info.payload_aggregates) {
+			result.payload_aggregates.emplace_back(agg->Copy());
 		}
 		break;
 	}

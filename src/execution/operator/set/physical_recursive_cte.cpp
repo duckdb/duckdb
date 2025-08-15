@@ -37,8 +37,9 @@ public:
 
 		vector<BoundAggregateExpression *> payload_aggregates_ptr;
 		for (idx_t i = 0; i < op.payload_aggregates.size(); i++) {
-			auto &dat = op.payload_aggregates[i];
-			payload_aggregates_ptr.push_back(dat.get());
+			D_ASSERT(op.payload_aggregates[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
+			auto &dat = op.payload_aggregates[i]->Cast<BoundAggregateExpression>();
+			payload_aggregates_ptr.push_back(&dat);
 		}
 
 		ht = make_uniq<GroupedAggregateHashTable>(context, BufferAllocator::Get(context), op.distinct_types,

@@ -54,6 +54,10 @@ unique_ptr<QueryNode> RecursiveCTENode::Copy() const {
 		result->key_targets.push_back(key->Copy());
 	}
 
+	for (auto &agg : payload_aggregates) {
+		result->payload_aggregates.push_back(agg->Copy());
+	}
+
 	this->CopyProperties(*result);
 	return std::move(result);
 }

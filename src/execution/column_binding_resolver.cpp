@@ -153,6 +153,9 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		for (auto &expr : rec.key_targets) {
 			VisitExpression(&expr);
 		}
+		for (auto &expr : rec.payload_aggregates) {
+			VisitExpression(&expr);
+		}
 		return;
 	}
 	default:

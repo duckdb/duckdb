@@ -3,6 +3,7 @@
 #include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/operator/logical_cteref.hpp"
 #include "duckdb/planner/operator/logical_recursive_cte.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
@@ -37,7 +38,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 
 	vector<LogicalType> payload_types, distinct_types;
 	vector<idx_t> payload_idx, distinct_idx;
-	vector<unique_ptr<BoundAggregateExpression>> payload_aggregates;
+	vector<unique_ptr<Expression>> payload_aggregates;
 
 	// create a group for each target, these are the columns that should be grouped
 	unordered_map<idx_t, idx_t> group_by_references;
@@ -46,6 +47,23 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 		D_ASSERT(target->type == ExpressionType::BOUND_REF);
 		auto &bound_ref = target->Cast<BoundReferenceExpression>();
 		group_by_references[bound_ref.index] = i;
+	}
+
+	// Create a mapping of column indices to their corresponding payload aggregate indices.
+	// This is used to identify which columns are involved in aggregate computations.
+	unordered_map<idx_t, idx_t> aggregate_references;
+	for (idx_t i = 0; i < op.payload_aggregates.size(); i++) {
+		// Ensure that the payload aggregate is of the expected type.
+		D_ASSERT(op.payload_aggregates[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
+		auto &agg = op.payload_aggregates[i]->Cast<BoundAggregateExpression>();
+
+		// Verify that the aggregate has exactly one child and that the child is a BOUND_REF expression.
+		D_ASSERT(agg.children.size() == 1);
+		D_ASSERT(agg.children[0]->type == ExpressionType::BOUND_REF);
+
+		// Cast the child to a BoundReferenceExpression and map its index to the aggregate index.
+		auto &bound_ref = agg.children[0]->Cast<BoundReferenceExpression>();
+		aggregate_references[bound_ref.index] = i;
 	}
 
 	/*
@@ -62,21 +80,25 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 			distinct_idx.emplace_back(i);
 			distinct_types.push_back(logical_type);
 		} else {
-			// Column is not in the key clause, so we need to create an aggregate
-			auto bound = make_uniq<BoundReferenceExpression>(logical_type, 0U);
+			auto agg_entry = aggregate_references.find(i);
+			if (agg_entry != aggregate_references.end()) {
+				payload_aggregates.push_back(std::move(op.payload_aggregates[agg_entry->second]));
+			} else {
+				// BTODO: do this in binder
+				// Column is not in the key clause, so we need to create an aggregate
+				auto bound = make_uniq<BoundReferenceExpression>(logical_type, 0U);
+				FunctionBinder function_binder(context);
 
-			vector<unique_ptr<Expression>> first_children;
-			first_children.push_back(std::move(bound));
-
-			FunctionBinder function_binder(context);
-			auto first_aggregate =
-			    function_binder.BindAggregateFunction(LastFunctionGetter::GetFunction(logical_type),
-			                                          std::move(first_children), nullptr, AggregateType::NON_DISTINCT);
-			first_aggregate->order_bys = nullptr;
-
+				vector<unique_ptr<Expression>> first_children;
+				first_children.push_back(std::move(bound));
+				auto first_aggregate =
+					function_binder.BindAggregateFunction(LastFunctionGetter::GetFunction(logical_type),
+														std::move(first_children), nullptr, AggregateType::NON_DISTINCT);
+				first_aggregate->order_bys = nullptr;
+				payload_aggregates.push_back(std::move(first_aggregate));
+			}
 			payload_types.push_back(logical_type);
 			payload_idx.emplace_back(i);
-			payload_aggregates.push_back(std::move(first_aggregate));
 		}
 	}
 

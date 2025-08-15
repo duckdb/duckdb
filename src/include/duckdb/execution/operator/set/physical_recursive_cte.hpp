@@ -44,7 +44,7 @@ public:
 	// Contains the payload and key indices
 	vector<idx_t> payload_idx, distinct_idx;
 	// Contains the aggregates for the payload
-	vector<unique_ptr<BoundAggregateExpression>> payload_aggregates;
+	vector<unique_ptr<Expression>> payload_aggregates;
 
 public:
 	// Source interface

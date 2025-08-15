@@ -34,6 +34,7 @@ public:
 	// Flag if recurring table is referenced, if not we do not copy ht into ColumnDataCollection
 	bool ref_recurring;
 	vector<unique_ptr<Expression>> key_targets;
+	vector<unique_ptr<Expression>> payload_aggregates;
 
 public:
 	InsertionOrderPreservingMap<string> ParamsToString() const override;
