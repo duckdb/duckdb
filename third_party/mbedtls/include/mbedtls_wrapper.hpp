@@ -75,7 +75,7 @@ class AESStateMBEDTLS : public duckdb::EncryptionState {
 
 		DUCKDB_API size_t Process(duckdb::const_data_ptr_t in, duckdb::idx_t in_len, duckdb::data_ptr_t out,
 		                          duckdb::idx_t out_len) override;
-		DUCKDB_API void Finalize(duckdb::data_ptr_t out, duckdb::idx_t out_len, duckdb::data_ptr_t tag, duckdb::idx_t tag_len) override;
+		DUCKDB_API size_t Finalize(duckdb::data_ptr_t out, duckdb::idx_t out_len, duckdb::data_ptr_t tag, duckdb::idx_t tag_len) override;
 
 		DUCKDB_API static void GenerateRandomDataStatic(duckdb::data_ptr_t data, duckdb::idx_t len);
 		DUCKDB_API void GenerateRandomData(duckdb::data_ptr_t data, duckdb::idx_t len) override;

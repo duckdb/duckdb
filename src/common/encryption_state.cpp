@@ -21,7 +21,7 @@ size_t EncryptionState::Process(const_data_ptr_t, idx_t, data_ptr_t, idx_t) {
 	throw NotImplementedException("EncryptionState Abstract Class is called");
 }
 
-void EncryptionState::Finalize(data_ptr_t, idx_t, data_ptr_t, idx_t) {
+size_t EncryptionState::Finalize(data_ptr_t, idx_t, data_ptr_t, idx_t) {
 	throw NotImplementedException("EncryptionState Abstract Class is called");
 }
 

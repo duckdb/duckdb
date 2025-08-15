@@ -72,7 +72,7 @@ index c9ae0a7..cf9997a 100644
  
  unique_ptr<BaseSecret> CreateBearerTokenFunctions::CreateSecretFunctionInternal(ClientContext &context,
 diff --git a/extension/httpfs/crypto.cpp b/extension/httpfs/crypto.cpp
-index 3a89ca5..b155b93 100644
+index 3a89ca5..eaf6d2c 100644
 --- a/extension/httpfs/crypto.cpp
 +++ b/extension/httpfs/crypto.cpp
 @@ -10,9 +10,10 @@
@@ -81,7 +81,7 @@ index 3a89ca5..b155b93 100644
  
 -AESStateSSL::AESStateSSL(const std::string *key) : context(EVP_CIPHER_CTX_new()) {
 +
-+AESStateSSL::AESStateSSL(duckdb::EncryptionTypes::CipherType cipher_p, const std::string *key) : EncryptionState(cipher_p), cipher(cipher_p), context(EVP_CIPHER_CTX_new()) {
++AESStateSSL::AESStateSSL(duckdb::EncryptionTypes::CipherType cipher_p, const std::string *key) : EncryptionState(cipher_p), context(EVP_CIPHER_CTX_new()), cipher(cipher_p) {
  	if (!(context)) {
 -		throw InternalException("AES GCM failed with initializing context");
 +		throw InternalException("Failed with initializing context");
@@ -219,21 +219,16 @@ index 3a89ca5..b155b93 100644
  		// Set expected tag value
  		if (!EVP_CIPHER_CTX_ctrl(context, EVP_CTRL_GCM_SET_TAG, tag_len, tag)) {
  			throw InternalException("Finalizing tag failed");
-@@ -136,31 +163,29 @@ size_t AESStateSSL::FinalizeGCM(data_ptr_t out, idx_t out_len, data_ptr_t tag, i
- 	}
- }
+@@ -138,14 +165,14 @@ size_t AESStateSSL::FinalizeGCM(data_ptr_t out, idx_t out_len, data_ptr_t tag, i
  
--size_t AESStateSSL::Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, idx_t tag_len) {
-+void AESStateSSL::Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, idx_t tag_len) {
+ size_t AESStateSSL::Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, idx_t tag_len) {
  
 -	if (cipher == GCM) {
--		return FinalizeGCM(out, out_len, tag, tag_len);
 +	if (cipher == EncryptionTypes::GCM) {
-+		FinalizeGCM(out, out_len, tag, tag_len);
-+		return;
+ 		return FinalizeGCM(out, out_len, tag, tag_len);
  	}
  
--	auto text_len = out_len;
+ 	auto text_len = out_len;
  	switch (mode) {
  
 -	case ENCRYPT: {
@@ -241,24 +236,23 @@ index 3a89ca5..b155b93 100644
  		if (1 != EVP_EncryptFinal_ex(context, data_ptr_cast(out) + out_len, reinterpret_cast<int *>(&out_len))) {
  			throw InternalException("EncryptFinal failed");
  		}
--
--		return text_len += out_len;
-+		return;
+@@ -153,7 +180,7 @@ size_t AESStateSSL::Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, idx_
+ 		return text_len += out_len;
  	}
  
 -	case DECRYPT: {
 +	case EncryptionTypes::DECRYPT: {
  		// EVP_DecryptFinal() will return an error code if final block is not correctly formatted.
  		int ret = EVP_DecryptFinal_ex(context, data_ptr_cast(out) + out_len, reinterpret_cast<int *>(&out_len));
--		text_len += out_len;
+ 		text_len += out_len;
+@@ -169,7 +196,6 @@ size_t AESStateSSL::Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, idx_
+ 		throw InternalException("Unhandled encryption mode %d", static_cast<int>(mode));
+ 	}
+ }
+-
+ } // namespace duckdb
  
- 		if (ret > 0) {
- 			// success
--			return text_len;
-+			return;
- 		}
- 
- 		throw InvalidInputException("Computed AES tag differs from read AES tag, are you using the right key?");
+ extern "C" {
 diff --git a/extension/httpfs/httpfs.cpp b/extension/httpfs/httpfs.cpp
 index 20f85a6..50b7ae9 100644
 --- a/extension/httpfs/httpfs.cpp
@@ -430,7 +424,7 @@ index 54b7566..bd3bc4a 100644
  protected:
  	//! Internal function to create bearer token
 diff --git a/extension/httpfs/include/crypto.hpp b/extension/httpfs/include/crypto.hpp
-index f819356..5ef1f1d 100644
+index f819356..d3d9fa6 100644
 --- a/extension/httpfs/include/crypto.hpp
 +++ b/extension/httpfs/include/crypto.hpp
 @@ -25,23 +25,23 @@ void hex256(hash_bytes &in, hash_str &out);
@@ -447,8 +441,7 @@ index f819356..5ef1f1d 100644
 +	void InitializeEncryption(const_data_ptr_t iv, idx_t iv_len, const_data_ptr_t key, idx_t key_len, const_data_ptr_t aad, idx_t aad_len) override;
 +	void InitializeDecryption(const_data_ptr_t iv, idx_t iv_len, const_data_ptr_t key, idx_t key_len, const_data_ptr_t aad, idx_t aad_len) override;
  	size_t Process(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len) override;
--	size_t Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, idx_t tag_len) override;
-+	void Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, idx_t tag_len) override;
+ 	size_t Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, idx_t tag_len) override;
  	void GenerateRandomData(data_ptr_t data, idx_t len) override;
  
 -	const EVP_CIPHER *GetCipher(const string &key);

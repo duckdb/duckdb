@@ -137,8 +137,8 @@ public:
 
 		// Finalize the last encrypted data
 		data_t tag[ParquetCrypto::TAG_BYTES];
-		aes->Finalize(aes_buffer, 0, tag, ParquetCrypto::TAG_BYTES);
-		trans.write(aes_buffer, ParquetCrypto::TAG_BYTES);
+		auto write_size = aes->Finalize(aes_buffer, 0, tag, ParquetCrypto::TAG_BYTES);
+		trans.write(aes_buffer, write_size);
 		// Write tag for verification
 		trans.write(tag, ParquetCrypto::TAG_BYTES);
 
