@@ -40,6 +40,7 @@ public:
 	                   idx_t expected_column_count, bool row_wise, vector<string> &result_values,
 	                   bool print_error = true);
 	bool SkipErrorMessage(const string &message);
+	bool SkipLoggingSameError(const string &file_name);
 
 	vector<string> LoadResultFromFile(string fname, vector<string> names, idx_t &expected_column_count, string &error);
 };
