@@ -37,7 +37,8 @@ public:
 
 //! ------------ Variant -> JSON ------------
 
-yyjson_mut_val *ConvertVariant(yyjson_mut_doc *doc, RecursiveUnifiedVectorFormat &source, idx_t row, idx_t values_idx) {
+yyjson_mut_val *ConvertVariant(yyjson_mut_doc *doc, RecursiveUnifiedVectorFormat &source, idx_t row,
+                               uint32_t values_idx) {
 	//! values
 	auto &values = UnifiedVariantVector::GetValues(source);
 	auto values_data = values.GetData<list_entry_t>(values);
@@ -229,6 +230,10 @@ yyjson_mut_val *ConvertVariant(yyjson_mut_doc *doc, RecursiveUnifiedVectorFormat
 		for (idx_t i = 0; i < count; i++) {
 			auto index = value_ids.sel->get_index(children_list_entry.offset + child_index_start + i);
 			auto child_index = value_ids_data[index];
+#ifdef DEBUG
+			auto key_id_index = key_ids.sel->get_index(children_list_entry.offset + child_index_start + i);
+			D_ASSERT(!key_ids.validity.RowIsValid(key_id_index));
+#endif
 			auto val = ConvertVariant(doc, source, row, child_index);
 			if (!val) {
 				return nullptr;
@@ -253,6 +258,7 @@ yyjson_mut_val *ConvertVariant(yyjson_mut_doc *doc, RecursiveUnifiedVectorFormat
 				return nullptr;
 			}
 			auto key_ids_index = key_ids.sel->get_index(children_list_entry.offset + child_index_start + i);
+			D_ASSERT(key_ids.validity.RowIsValid(key_ids_index));
 			auto child_key_id = key_ids_data[key_ids_index];
 			auto &key = keys_entry_data[keys_entry.sel->get_index(keys_list_entry.offset + child_key_id)];
 			yyjson_mut_obj_put(obj, yyjson_mut_strncpy(doc, key.GetData(), key.GetSize()), val);

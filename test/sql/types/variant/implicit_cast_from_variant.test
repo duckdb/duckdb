@@ -1,6 +1,9 @@
 # name: test/sql/types/variant/implicit_cast_from_variant.test
 # group: [variant]
 
+# 'dictionary_expression' breaks the internal linkage of the VARIANT type.
+require no_vector_verification
+
 # VARIANT(INT32) -> INTEGER
 query I
 select ['test', 'hello', 'world'][1::VARIANT::INTEGER]
