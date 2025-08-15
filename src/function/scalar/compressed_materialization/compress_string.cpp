@@ -229,7 +229,10 @@ unique_ptr<FunctionData> CMStringDecompressDeserialize(Deserializer &deserialize
 
 ScalarFunctionSet GetStringDecompressFunctionSet() {
 	ScalarFunctionSet set(StringDecompressFunctionName());
-	for (const auto &input_type : CMUtils::StringTypes()) {
+	auto string_types = CMUtils::StringTypes();
+	// For backwards compatibility, see internal issue 5306
+	string_types.push_back(LogicalType::HUGEINT);
+	for (const auto &input_type : string_types) {
 		set.AddFunction(CMStringDecompressFun::GetFunction(input_type));
 	}
 	return set;
