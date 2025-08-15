@@ -21,6 +21,7 @@
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/parser/query_error_context.hpp"
 #include "duckdb/catalog/entry_lookup_info.hpp"
+#include "duckdb/common/types/string.hpp"
 
 #include <functional>
 
@@ -376,7 +377,7 @@ public:
 	static CatalogException UnrecognizedConfigurationError(ClientContext &context, const string &name);
 
 	//! Autoload the extension required for `configuration_name` or throw a CatalogException
-	static string AutoloadExtensionByConfigName(ClientContext &context, const string &configuration_name);
+	static String AutoloadExtensionByConfigName(ClientContext &context, const String &configuration_name);
 	//! Autoload the extension required for `function_name` or throw a CatalogException
 	static bool AutoLoadExtensionByCatalogEntry(DatabaseInstance &db, CatalogType type, const string &entry_name);
 	DUCKDB_API static bool TryAutoLoad(ClientContext &context, const string &extension_name) noexcept;

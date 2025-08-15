@@ -21,8 +21,8 @@ bool ClientConfig::GetUserVariable(const string &name, Value &result) {
 	return true;
 }
 
-void ClientConfig::ResetUserVariable(const string &name) {
-	user_variables.erase(name);
+void ClientConfig::ResetUserVariable(const String &name) {
+	user_variables.erase(name.ToStdString());
 }
 
 void ClientConfig::SetDefaultStreamingBufferSize() {

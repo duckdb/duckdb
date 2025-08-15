@@ -13,6 +13,7 @@
 #include "duckdb/common/map.hpp"
 
 namespace duckdb {
+class String;
 class ClientContext;
 class DatabaseInstance;
 class TransactionException;
@@ -52,7 +53,8 @@ public:
 		return Get(context).FormatException(error_type, params...);
 	}
 
-	DUCKDB_API static InvalidInputException InvalidUnicodeError(const string &input, const string &context);
+	DUCKDB_API static InvalidInputException InvalidUnicodeError(const String &input, const string &context);
+
 	DUCKDB_API static FatalException InvalidatedDatabase(ClientContext &context, const string &invalidated_msg);
 	DUCKDB_API static TransactionException InvalidatedTransaction(ClientContext &context);
 

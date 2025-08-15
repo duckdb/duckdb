@@ -15,6 +15,8 @@
 
 namespace duckdb {
 
+class String;
+
 // Helper class to support custom overloading
 // Escaping " and quoting the value with "
 class SQLIdentifier {
@@ -51,6 +53,7 @@ struct ExceptionFormatValue {
 	DUCKDB_API ExceptionFormatValue(int64_t int_val);    // NOLINT
 	DUCKDB_API ExceptionFormatValue(idx_t uint_val);     // NOLINT
 	DUCKDB_API ExceptionFormatValue(string str_val);     // NOLINT
+	DUCKDB_API ExceptionFormatValue(String str_val);     // NOLINT
 	DUCKDB_API ExceptionFormatValue(hugeint_t hg_val);   // NOLINT
 	DUCKDB_API ExceptionFormatValue(uhugeint_t uhg_val); // NOLINT
 
@@ -82,6 +85,8 @@ template <>
 DUCKDB_API ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(double value);
 template <>
 DUCKDB_API ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(string value);
+template <>
+DUCKDB_API ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(String value);
 template <>
 DUCKDB_API ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const char *value);
 template <>
