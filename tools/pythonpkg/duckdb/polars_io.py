@@ -123,8 +123,6 @@ def _pl_tree_to_sql(tree: dict) -> str:
         raise NotImplementedError(f"Unsupported function type: {func_dict}")
 
     if node_type == "Scalar":
-        print(subtree)
-
         # Detect format: old style (dtype/value) or new style (direct type key)
         if "dtype" in subtree and "value" in subtree:
             dtype = str(subtree["dtype"])
