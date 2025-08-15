@@ -1,3 +1,5 @@
+#include "duckdb/main/settings.hpp"
+
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/bignum.hpp"
 #include "duckdb/common/operator/add.hpp"
@@ -1093,8 +1095,7 @@ scalar_function_t GetBinaryFunctionIgnoreZero(PhysicalType type) {
 template <class OP>
 unique_ptr<FunctionData> BindBinaryFloatingPoint(ClientContext &context, ScalarFunction &bound_function,
                                                  vector<unique_ptr<Expression>> &arguments) {
-	auto &config = ClientConfig::GetConfig(context);
-	if (config.ieee_floating_point_ops) {
+	if (DBConfig::GetSetting<IeeeFloatingPointOpsSetting>(context)) {
 		bound_function.function = GetScalarBinaryFunction<OP>(bound_function.return_type.InternalType());
 	} else {
 		bound_function.function = GetBinaryFunctionIgnoreZero<OP>(bound_function.return_type.InternalType());
