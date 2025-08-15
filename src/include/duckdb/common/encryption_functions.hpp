@@ -9,33 +9,21 @@ class AttachedDatabase;
 class FileBuffer;
 
 struct EncryptionTag {
-	EncryptionTag() = default;
-
-	data_ptr_t data() {
-		return tag;
-	}
-
-	idx_t size() const {
-		return MainHeader::AES_TAG_LEN;
-	}
+	EncryptionTag();
+	data_ptr_t data();
+	idx_t size() const;
 
 private:
-	data_t tag[MainHeader::AES_TAG_LEN];
+	unique_ptr<data_t[]> tag;
 };
 
 struct EncryptionNonce {
-	EncryptionNonce() = default;
-
-	data_ptr_t data() {
-		return nonce;
-	}
-
-	idx_t size() const {
-		return MainHeader::AES_NONCE_LEN;
-	}
+	EncryptionNonce();
+	data_ptr_t data();
+	idx_t size() const;
 
 private:
-	data_t nonce[MainHeader::AES_NONCE_LEN];
+	unique_ptr<data_t[]> nonce;
 };
 
 class EncryptionEngine {

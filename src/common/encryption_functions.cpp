@@ -4,8 +4,31 @@
 #include "duckdb/main/attached_database.hpp"
 #include "mbedtls_wrapper.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb {
+
+EncryptionTag::EncryptionTag() : tag(new data_t[MainHeader::AES_TAG_LEN]) {
+}
+
+data_ptr_t EncryptionTag::data() {
+	return tag.get();
+}
+
+idx_t EncryptionTag::size() const {
+	return MainHeader::AES_TAG_LEN;
+}
+
+EncryptionNonce::EncryptionNonce() : nonce(new data_t[MainHeader::AES_NONCE_LEN]) {
+}
+
+data_ptr_t EncryptionNonce::data() {
+	return nonce.get();
+}
+
+idx_t EncryptionNonce::size() const {
+	return MainHeader::AES_NONCE_LEN;
+}
 
 EncryptionEngine::EncryptionEngine() {
 }
