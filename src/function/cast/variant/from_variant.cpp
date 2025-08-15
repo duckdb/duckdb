@@ -6,9 +6,9 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
 
-namespace {
+namespace duckdb {
 
-using namespace duckdb;
+namespace {
 
 struct FromVariantConversionData {
 	//! The input Variant column
@@ -42,8 +42,6 @@ public:
 };
 
 } // namespace
-
-namespace duckdb {
 
 //===--------------------------------------------------------------------===//
 // VARIANT -> ANY
@@ -482,7 +480,7 @@ static bool CastFromVARIANT(Vector &source, Vector &result, idx_t count, CastPar
 
 	auto owned_value_indices = allocator.Allocate(sizeof(uint32_t) * count);
 	auto value_indices = reinterpret_cast<uint32_t *>(owned_value_indices.get());
-	::bzero(value_indices, sizeof(uint32_t) * count);
+	memset(value_indices, 0, sizeof(uint32_t) * count);
 
 	auto success = CastVariant(conversion_data, result, value_indices, 0, count, optional_idx());
 	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {

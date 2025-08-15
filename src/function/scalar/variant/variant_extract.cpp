@@ -56,11 +56,10 @@ vector<VariantPathComponent> ParsePath(const string &path) {
 			while (i < path.size() && path[i] != '.' && path[i] != '[') {
 				i++;
 			}
-			auto key = string_t(path.c_str() + start, NumericCast<uint32_t>(i - start));
 			VariantPathComponent comp;
 			comp.lookup_mode = VariantChildLookupMode::BY_KEY;
-			comp.payload.key = std::move(key);
-			components.push_back(std::move(comp));
+			comp.payload.key = string_t(path.c_str() + start, NumericCast<uint32_t>(i - start));
+			components.push_back(comp);
 			state = PathParsingState::BASE;
 			break;
 		}
@@ -78,7 +77,7 @@ vector<VariantPathComponent> ParsePath(const string &path) {
 			VariantPathComponent comp;
 			comp.lookup_mode = VariantChildLookupMode::BY_INDEX;
 			comp.payload.index = index;
-			components.push_back(std::move(comp));
+			components.push_back(comp);
 			state = PathParsingState::BASE;
 			break;
 		}
@@ -141,7 +140,7 @@ static void VariantExtractFunction(DataChunk &input, ExpressionState &state, Vec
 	auto owned_value_indices = allocator.Allocate(sizeof(uint32_t) * count * 2);
 	auto value_indices = reinterpret_cast<uint32_t *>(owned_value_indices.get());
 	auto new_value_indices = &value_indices[count];
-	::bzero(value_indices, sizeof(uint32_t) * count * 2);
+	memset(value_indices, 0, sizeof(uint32_t) * count * 2);
 
 	auto owned_nested_data = allocator.Allocate(sizeof(VariantNestedData) * count);
 	auto nested_data = reinterpret_cast<VariantNestedData *>(owned_nested_data.get());

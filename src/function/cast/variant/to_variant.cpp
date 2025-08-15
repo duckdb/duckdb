@@ -9,9 +9,9 @@
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/string_map_set.hpp"
 
-namespace {
+namespace duckdb {
 
-using namespace duckdb;
+namespace {
 
 struct OffsetData {
 	static uint32_t *GetChildren(DataChunk &offsets) {
@@ -40,7 +40,7 @@ public:
 			vec.Resize(dictionary_capacity, new_capacity);
 			dictionary_capacity = new_capacity;
 		}
-		vec_data[dict_count] = StringVector::AddStringOrBlob(vec, std::move(str));
+		vec_data[dict_count] = StringVector::AddStringOrBlob(vec, str);
 		dictionary.emplace(vec_data[dict_count], dict_count);
 	}
 
@@ -119,8 +119,6 @@ public:
 };
 
 } // namespace
-
-namespace duckdb {
 
 //===--------------------------------------------------------------------===//
 // ANY -> VARIANT
@@ -546,7 +544,7 @@ static bool ConvertStructToVariant(Vector &source, VariantVectorData &result, Da
 		for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
 			auto &struct_child = struct_children[child_idx];
 			string_t struct_child_str(struct_child.first.c_str(), NumericCast<uint32_t>(struct_child.first.size()));
-			dictionary_indices[child_idx] = dictionary.Find(std::move(struct_child_str));
+			dictionary_indices[child_idx] = dictionary.Find(struct_child_str);
 		}
 	}
 
@@ -943,7 +941,7 @@ static bool CastToVARIANT(Vector &source, Vector &result, idx_t count, CastParam
 			auto &children = StructType::GetChildTypes(type);
 			for (auto &child : children) {
 				string_t child_name_str(child.first.c_str(), NumericCast<uint32_t>(child.first.size()));
-				dictionary.AddString(keys_entry, std::move(child_name_str));
+				dictionary.AddString(keys_entry, child_name_str);
 			}
 		} else if (type.id() == LogicalTypeId::MAP) {
 			dictionary.AddString(keys_entry, string_t("key", 3));

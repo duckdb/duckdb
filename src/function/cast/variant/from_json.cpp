@@ -43,6 +43,7 @@ public:
 public:
 	uint32_t AddString(Vector &vec, string_t str) {
 		auto it = dictionary.find(str);
+		auto local_it = key_ids.find(str);
 
 		uint32_t dict_index;
 		if (it == dictionary.end()) {
@@ -54,12 +55,11 @@ public:
 				vec.Resize(dictionary_capacity, new_capacity);
 				dictionary_capacity = new_capacity;
 			}
-			vec_data[dict_count] = StringVector::AddStringOrBlob(vec, std::move(str));
+			vec_data[dict_count] = StringVector::AddStringOrBlob(vec, str);
 			it = dictionary.emplace(vec_data[dict_count], dict_count).first;
 		}
 		dict_index = it->second;
 
-		auto local_it = key_ids.find(str);
 		if (local_it == key_ids.end()) {
 			auto vec_data = FlatVector::GetData<string_t>(vec);
 			local_it = key_ids.emplace(vec_data[dict_index], NumericCast<uint32_t>(key_ids.size())).first;
