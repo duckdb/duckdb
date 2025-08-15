@@ -93,9 +93,9 @@ SELECT struct_update(col, i:=col.i+1) FROM tbl;
 query I
 SELECT struct_update(col, i:='i='||col.i) FROM tbl;
 ----
-{'i': i=0}
-{'i': i=1}
-{'i': i=2}
+{'i': 'i=0'}
+{'i': 'i=1'}
+{'i': 'i=2'}
 
 # Test inserting NULL as the default value.
 query I

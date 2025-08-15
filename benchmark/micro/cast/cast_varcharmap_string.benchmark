@@ -15,4 +15,4 @@ run
 SELECT MIN(CAST(m AS VARCHAR)) FROM maps;
 
 result I
-{simple=red, needs space='  needs quotes  ', 'has,comma'='no,escape needed', 'null'=NULL, has:colon='null', quoted='contains\'quote'}
+{simple=red, needs space='  needs quotes  ', 'has,comma'='no,escape needed', 'null'=NULL, 'has:colon'='null', quoted='contains\'quote'}
