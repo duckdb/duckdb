@@ -24,13 +24,13 @@
 #include "duckdb/main/external_dependencies.hpp"
 #include "duckdb/main/pending_query_result.hpp"
 #include "duckdb/main/prepared_statement.hpp"
-#include "duckdb/main/settings.hpp"
 #include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/main/table_description.hpp"
 #include "duckdb/planner/expression/bound_parameter_data.hpp"
 #include "duckdb/transaction/transaction_context.hpp"
 
 namespace duckdb {
+
 class Appender;
 class Catalog;
 class CatalogSearchPath;
@@ -190,7 +190,7 @@ public:
 	                                                 bool requires_valid_transaction = true);
 
 	//! Equivalent to CURRENT_SETTING(key) SQL function.
-	DUCKDB_API SettingLookupResult TryGetCurrentSetting(const std::string &key, Value &result) const;
+	DUCKDB_API SettingLookupResult TryGetCurrentSetting(const string &key, Value &result) const;
 
 	//! Returns the parser options for this client context
 	DUCKDB_API ParserOptions GetParserOptions() const;
@@ -323,6 +323,27 @@ public:
 
 private:
 	lock_guard<mutex> client_guard;
+};
+
+//! The QueryContext wraps an optional client context.
+//! It makes query-related information available to operations.
+class QueryContext {
+public:
+	QueryContext() : context(nullptr) {
+	}
+	QueryContext(optional_ptr<ClientContext> context) : context(context) { // NOLINT: allow implicit construction
+	}
+
+public:
+	bool Valid() const {
+		return context != nullptr;
+	}
+	optional_ptr<ClientContext> GetClientContext() const {
+		return context;
+	}
+
+private:
+	optional_ptr<ClientContext> context;
 };
 
 } // namespace duckdb

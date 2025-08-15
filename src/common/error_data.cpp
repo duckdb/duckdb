@@ -70,7 +70,7 @@ string ErrorData::ConstructFinalMessage() const {
 		auto entry = extra_info.find("stack_trace_pointers");
 		if (entry != extra_info.end()) {
 			auto stack_trace = StackTrace::ResolveStacktraceSymbols(entry->second);
-			error += "\n\n" + stack_trace;
+			error += "\n\nStack Trace:\n" + stack_trace;
 		}
 	}
 	return error;
@@ -89,6 +89,17 @@ void ErrorData::Throw(const string &prepended_message) const {
 const ExceptionType &ErrorData::Type() const {
 	D_ASSERT(initialized);
 	return this->type;
+}
+
+void ErrorData::Merge(const ErrorData &other) {
+	if (!other.HasError()) {
+		return;
+	}
+	if (!HasError()) {
+		*this = other;
+		return;
+	}
+	final_message += "\n\n" + other.Message();
 }
 
 bool ErrorData::operator==(const ErrorData &other) const {

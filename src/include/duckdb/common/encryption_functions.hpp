@@ -4,12 +4,39 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/encryption_key_manager.hpp"
-
-#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/storage/object_cache.hpp"
-#endif
 
 namespace duckdb {
+
+struct EncryptionTag {
+	EncryptionTag() = default;
+
+	data_ptr_t data() {
+		return tag;
+	}
+
+	idx_t size() const {
+		return MainHeader::AES_TAG_LEN;
+	}
+
+private:
+	data_t tag[MainHeader::AES_TAG_LEN];
+};
+
+struct EncryptionNonce {
+	EncryptionNonce() = default;
+
+	data_ptr_t data() {
+		return nonce;
+	}
+
+	idx_t size() const {
+		return MainHeader::AES_NONCE_LEN;
+	}
+
+private:
+	data_t nonce[MainHeader::AES_NONCE_LEN];
+};
 
 class EncryptionEngine {
 
@@ -30,6 +57,11 @@ public:
 	                         FileBuffer &temp_buffer_manager, uint64_t delta);
 	static void DecryptBlock(DatabaseInstance &db, const string &key_id, data_ptr_t internal_buffer,
 	                         uint64_t block_size, uint64_t delta);
+
+	static void EncryptTemporaryBuffer(DatabaseInstance &db, data_ptr_t buffer, idx_t buffer_size, data_ptr_t metadata);
+	static void DecryptBuffer(EncryptionState &encryption_state, const_data_ptr_t temp_key, data_ptr_t buffer,
+	                          idx_t buffer_size, data_ptr_t metadata);
+	static void DecryptTemporaryBuffer(DatabaseInstance &db, data_ptr_t buffer, idx_t buffer_size, data_ptr_t metadata);
 };
 
 class EncryptionTypes {

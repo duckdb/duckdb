@@ -1,0 +1,8 @@
+# name: test/sql/json/issues/internal_issue5288.test
+# description: Test internal issue 5288 - zstd compression cannot be configured for JSON fields
+# group: [issues]
+
+require json
+
+statement ok
+create table foo2 (bar JSON using compression 'zstd');

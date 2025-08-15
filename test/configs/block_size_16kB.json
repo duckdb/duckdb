@@ -1,0 +1,5 @@
+{
+  "description": "Run with a default block size of 16kB (smallest possible).",
+  "block_size": "16384",
+  "skip_compiled": "true"
+}

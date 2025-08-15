@@ -26,7 +26,7 @@ select row_number() over (range between unbounded preceding and unbounded preced
 
 # ORDER BY is now implemented for window functions!
 query I
-select LIST(salary ORDER BY enroll_date) OVER (PARTITION BY depname) FROM empsalary
+select LIST(salary ORDER BY enroll_date, salary) OVER (PARTITION BY depname) FROM empsalary
 ORDER BY ALL DESC
 ----
 [6000, 5200, 5200, 4200, 4500]

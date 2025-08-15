@@ -57,7 +57,6 @@ public:
 
 	static void AppendFailure(const string &log_message);
 	static void LogFailure(const string &log_message);
-	// static string GetFailureSummary();
 
 private:
 	lock_guard<mutex> log_lock;

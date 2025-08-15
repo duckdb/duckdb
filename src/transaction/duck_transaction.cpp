@@ -146,6 +146,7 @@ void DuckTransaction::PushSequenceUsage(SequenceCatalogEntry &sequence, const Se
 }
 
 void DuckTransaction::ModifyTable(DataTable &tbl) {
+	lock_guard<mutex> guard(modified_tables_lock);
 	auto table_ref = reference<DataTable>(tbl);
 	auto entry = modified_tables.find(table_ref);
 	if (entry != modified_tables.end()) {
@@ -160,7 +161,9 @@ bool DuckTransaction::ChangesMade() {
 }
 
 UndoBufferProperties DuckTransaction::GetUndoProperties() {
-	return undo_buffer.GetProperties();
+	auto properties = undo_buffer.GetProperties();
+	properties.estimated_size += storage->EstimatedSize();
+	return properties;
 }
 
 bool DuckTransaction::AutomaticCheckpoint(AttachedDatabase &db, const UndoBufferProperties &properties) {
@@ -175,7 +178,7 @@ bool DuckTransaction::AutomaticCheckpoint(AttachedDatabase &db, const UndoBuffer
 		return false;
 	}
 	auto &storage_manager = db.GetStorageManager();
-	return storage_manager.AutomaticCheckpoint(storage->EstimatedSize() + properties.estimated_size);
+	return storage_manager.AutomaticCheckpoint(properties.estimated_size);
 }
 
 bool DuckTransaction::ShouldWriteToWAL(AttachedDatabase &db) {

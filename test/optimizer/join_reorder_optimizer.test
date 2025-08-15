@@ -3,31 +3,31 @@
 # group: [optimizer]
 
 statement ok
-CREATE TABLE t1(c1 int, c2 int, c3 int, c4 int)
+CREATE TABLE t1(c1 int, c2 int, c3 int, c4 int);
 
 statement ok
-INSERT INTO t1 VALUES (1, 1, 1, 1)
+INSERT INTO t1 VALUES (1, 1, 1, 1);
 
 statement ok
-INSERT INTO t1 VALUES (1, 1, 1, 1)
+INSERT INTO t1 VALUES (1, 1, 1, 1);
 
 statement ok
-CREATE TABLE t2 AS SELECT * FROM t1
+CREATE TABLE t2 AS SELECT * FROM t1;
 
 statement ok
-INSERT INTO t2 VALUES (1, 1, 1, 1)
+INSERT INTO t2 VALUES (1, 1, 1, 1);
 
 statement ok
-CREATE TABLE t3 AS SELECT * FROM t2
+CREATE TABLE t3 AS SELECT * FROM t2;
 
 statement ok
-INSERT INTO t2 VALUES (1, 1, 1, 1)
+INSERT INTO t2 VALUES (1, 1, 1, 1);
 
 statement ok
-CREATE TABLE t4 AS SELECT * FROM t3
+CREATE TABLE t4 AS SELECT * FROM t3;
 
 statement ok
-INSERT INTO t2 VALUES (1, 1, 1, 1)
+INSERT INTO t2 VALUES (1, 1, 1, 1);
 
 statement ok
 PRAGMA debug_force_no_cross_product=true

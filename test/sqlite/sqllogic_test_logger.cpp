@@ -131,7 +131,13 @@ void SQLLogicTestLogger::PrintErrorHeader(const string &file_name, idx_t query_l
 	if (!file_name.empty()) {
 		oss << termcolor::bold << "(" << file_name << ":" << query_line << ")!" << termcolor::reset;
 	}
-	LogFailure(oss.str() + "\n");
+	string failure_header = oss.str() + "\n";
+	const char *ci = std::getenv("CI");
+	// check the value is "true" otherwise you'll see the prefix in local run outputs
+	if (ci && string(ci) == "true") {
+		failure_header = "\n::error::" + failure_header;
+	}
+	LogFailure(failure_header);
 }
 
 void SQLLogicTestLogger::PrintErrorHeader(const string &description) {

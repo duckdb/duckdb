@@ -106,21 +106,52 @@ duckdb::string_t StringCast::Operation(date_t input, Vector &vector) {
 	return result;
 }
 
-template <>
-duckdb::string_t StringCast::Operation(dtime_t input, Vector &vector) {
+template <bool HAS_NANOS>
+duckdb::string_t StringAsTime(dtime_t input, Vector &vector) {
+	int32_t picos = 0;
+	if (HAS_NANOS) {
+		picos = UnsafeNumericCast<int32_t>(input.micros % 1000);
+		picos *= 1000;
+		input.micros /= 1000;
+	}
 	int32_t time[4];
 	Time::Convert(input, time[0], time[1], time[2], time[3]);
 
 	char micro_buffer[10] = {};
-	idx_t length = TimeToStringCast::Length(time, micro_buffer);
+	char nano_buffer[6] = {};
+	idx_t time_length = TimeToStringCast::Length(time, micro_buffer);
+	idx_t nano_length = 0;
+	if (picos) {
+		//	If there are ps, we need all the µs
+		if (!time[3]) {
+			TimeToStringCast::FormatMicros(time[3], micro_buffer);
+		}
+		time_length = 15;
+		nano_length = 6;
+		nano_length -= NumericCast<idx_t>(TimeToStringCast::FormatMicros(picos, nano_buffer));
+	}
+	const idx_t length = time_length + nano_length;
 
 	string_t result = StringVector::EmptyString(vector, length);
 	auto data = result.GetDataWriteable();
 
-	TimeToStringCast::Format(data, length, time, micro_buffer);
+	TimeToStringCast::Format(data, time_length, time, micro_buffer);
+	data += time_length;
+	memcpy(data, nano_buffer, nano_length);
+	D_ASSERT(data + nano_length <= result.GetDataWriteable() + length);
 
 	result.Finalize();
 	return result;
+}
+
+template <>
+duckdb::string_t StringCast::Operation(dtime_t input, Vector &vector) {
+	return StringAsTime<false>(input, vector);
+}
+
+template <>
+duckdb::string_t StringCast::Operation(dtime_ns_t input, Vector &vector) {
+	return StringAsTime<true>(input, vector);
 }
 
 template <bool HAS_NANOS>
@@ -159,6 +190,9 @@ duckdb::string_t StringFromTimestamp(timestamp_t input, Vector &vector) {
 	idx_t nano_length = 0;
 	if (picos) {
 		//	If there are ps, we need all the µs
+		if (!time[3]) {
+			TimeToStringCast::FormatMicros(time[3], micro_buffer);
+		}
 		time_length = 15;
 		nano_length = 6;
 		nano_length -= NumericCast<idx_t>(TimeToStringCast::FormatMicros(picos, nano_buffer));

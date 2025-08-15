@@ -89,7 +89,7 @@ PartitionGlobalSinkState::PartitionGlobalSinkState(ClientContext &context,
 	GenerateOrderings(partitions, orders, partition_bys, order_bys, partition_stats);
 
 	memory_per_thread = PhysicalOperator::GetMaxThreadMemory(context);
-	external = ClientConfig::GetConfig(context).GetSetting<DebugForceExternalSetting>(context);
+	external = ClientConfig::GetConfig(context).force_external;
 
 	const auto thread_pages = PreviousPowerOfTwo(memory_per_thread / (4 * buffer_manager.GetBlockAllocSize()));
 	while (max_bits < 10 && (thread_pages >> max_bits) > 1) {
@@ -100,13 +100,13 @@ PartitionGlobalSinkState::PartitionGlobalSinkState(ClientContext &context,
 	if (!orders.empty()) {
 		if (partitions.empty()) {
 			//	Sort early into a dedicated hash group if we only sort.
-			grouping_types_ptr->Initialize(payload_types);
+			grouping_types_ptr->Initialize(payload_types, TupleDataValidityType::CAN_HAVE_NULL_VALUES);
 			auto new_group = make_uniq<PartitionGlobalHashGroup>(context, partitions, orders, payload_types, external);
 			hash_groups.emplace_back(std::move(new_group));
 		} else {
 			auto types = payload_types;
 			types.push_back(LogicalType::HASH);
-			grouping_types_ptr->Initialize(types);
+			grouping_types_ptr->Initialize(types, TupleDataValidityType::CAN_HAVE_NULL_VALUES);
 			ResizeGroupingData(estimated_cardinality);
 		}
 	}

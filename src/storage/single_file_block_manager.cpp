@@ -1,5 +1,6 @@
 #include "duckdb/storage/single_file_block_manager.hpp"
 
+#include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/checksum.hpp"
 #include "duckdb/common/encryption_functions.hpp"
@@ -14,8 +15,8 @@
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/metadata/metadata_writer.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/main/settings.hpp"
 #include "mbedtls_wrapper.hpp"
-#include "duckdb/catalog/duck_catalog.hpp"
 
 #include <algorithm>
 #include <cstring>
@@ -120,12 +121,12 @@ void MainHeader::Write(WriteStream &ser) {
 	}
 }
 
-void MainHeader::CheckMagicBytes(FileHandle &handle) {
+void MainHeader::CheckMagicBytes(QueryContext context, FileHandle &handle) {
 	data_t magic_bytes[MAGIC_BYTE_SIZE];
 	if (handle.GetFileSize() < MainHeader::MAGIC_BYTE_SIZE + MainHeader::MAGIC_BYTE_OFFSET) {
 		throw IOException("The file \"%s\" exists, but it is not a valid DuckDB database file!", handle.path);
 	}
-	handle.Read(magic_bytes, MainHeader::MAGIC_BYTE_SIZE, MainHeader::MAGIC_BYTE_OFFSET);
+	handle.Read(context, magic_bytes, MainHeader::MAGIC_BYTE_SIZE, MainHeader::MAGIC_BYTE_OFFSET);
 	if (memcmp(magic_bytes, MainHeader::MAGIC_BYTES, MainHeader::MAGIC_BYTE_SIZE) != 0) {
 		throw IOException("The file \"%s\" exists, but it is not a valid DuckDB database file!", handle.path);
 	}
@@ -260,6 +261,7 @@ FileOpenFlags SingleFileBlockManager::GetFileFlags(bool create_new) const {
 	}
 	// database files can be read from in parallel
 	result |= FileFlags::FILE_FLAGS_PARALLEL_ACCESS;
+	result |= FileFlags::FILE_FLAGS_MULTI_CLIENT_ACCESS;
 	return result;
 }
 
@@ -345,7 +347,7 @@ void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header) {
 	return CheckAndAddEncryptionKey(main_header, *options.encryption_options.user_key);
 }
 
-void SingleFileBlockManager::CreateNewDatabase(optional_ptr<ClientContext> context) {
+void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	auto flags = GetFileFlags(true);
 
 	// open the RDBMS handle
@@ -427,7 +429,7 @@ void SingleFileBlockManager::CreateNewDatabase(optional_ptr<ClientContext> conte
 	max_block = 0;
 }
 
-void SingleFileBlockManager::LoadExistingDatabase() {
+void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
 	auto flags = GetFileFlags(false);
 
 	// open the RDBMS handle
@@ -438,9 +440,9 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 		throw IOException("Cannot open database \"%s\" in read-only mode: database does not exist", path);
 	}
 
-	MainHeader::CheckMagicBytes(*handle);
+	MainHeader::CheckMagicBytes(context, *handle);
 	// otherwise, we check the metadata of the file
-	ReadAndChecksum(header_buffer, 0, true);
+	ReadAndChecksum(context, header_buffer, 0, true);
 
 	uint64_t delta = 0;
 	if (GetBlockHeaderSize() > DEFAULT_BLOCK_HEADER_STORAGE_SIZE) {
@@ -472,11 +474,11 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 
 	// read the database headers from disk
 	DatabaseHeader h1;
-	ReadAndChecksum(header_buffer, Storage::FILE_HEADER_SIZE);
+	ReadAndChecksum(context, header_buffer, Storage::FILE_HEADER_SIZE);
 	h1 = DeserializeDatabaseHeader(main_header, header_buffer.buffer);
 
 	DatabaseHeader h2;
-	ReadAndChecksum(header_buffer, Storage::FILE_HEADER_SIZE * 2ULL);
+	ReadAndChecksum(context, header_buffer, Storage::FILE_HEADER_SIZE * 2ULL);
 	h2 = DeserializeDatabaseHeader(main_header, header_buffer.buffer);
 
 	// check the header with the highest iteration count
@@ -538,9 +540,10 @@ void SingleFileBlockManager::CheckChecksum(FileBuffer &block, uint64_t location,
 	}
 }
 
-void SingleFileBlockManager::ReadAndChecksum(FileBuffer &block, uint64_t location, bool skip_block_header) const {
+void SingleFileBlockManager::ReadAndChecksum(QueryContext context, FileBuffer &block, uint64_t location,
+                                             bool skip_block_header) const {
 	// read the buffer from disk
-	block.Read(*handle, location);
+	block.Read(context, *handle, location);
 
 	//! calculate delta header bytes (if any)
 	uint64_t delta = GetBlockHeaderSize() - Storage::DEFAULT_BLOCK_HEADER_SIZE;
@@ -553,7 +556,7 @@ void SingleFileBlockManager::ReadAndChecksum(FileBuffer &block, uint64_t locatio
 	CheckChecksum(block, location, delta, skip_block_header);
 }
 
-void SingleFileBlockManager::ChecksumAndWrite(optional_ptr<ClientContext> context, FileBuffer &block, uint64_t location,
+void SingleFileBlockManager::ChecksumAndWrite(QueryContext context, FileBuffer &block, uint64_t location,
                                               bool skip_block_header) const {
 	auto delta = GetBlockHeaderSize() - Storage::DEFAULT_BLOCK_HEADER_SIZE;
 	uint64_t checksum;
@@ -825,10 +828,12 @@ bool SingleFileBlockManager::IsRemote() {
 
 unique_ptr<Block> SingleFileBlockManager::ConvertBlock(block_id_t block_id, FileBuffer &source_buffer) {
 	D_ASSERT(source_buffer.AllocSize() == GetBlockAllocSize());
-	return make_uniq<Block>(source_buffer, block_id);
+	// FIXME; maybe we should pass the block header size explicitly
+	return make_uniq<Block>(source_buffer, block_id, GetBlockHeaderSize());
 }
 
 unique_ptr<Block> SingleFileBlockManager::CreateBlock(block_id_t block_id, FileBuffer *source_buffer) {
+	// FIXME; maybe we should pass the block header size explicitly
 	unique_ptr<Block> result;
 	if (source_buffer) {
 		result = ConvertBlock(block_id, *source_buffer);
@@ -858,7 +863,7 @@ void SingleFileBlockManager::ReadBlock(data_ptr_t internal_buffer, uint64_t bloc
 void SingleFileBlockManager::ReadBlock(Block &block, bool skip_block_header) const {
 	// read the buffer from disk
 	auto location = GetBlockLocation(block.id);
-	block.Read(*handle, location);
+	block.Read(QueryContext(), *handle, location);
 
 	//! calculate delta header bytes (if any)
 	uint64_t delta = GetBlockHeaderSize() - Storage::DEFAULT_BLOCK_HEADER_SIZE;
@@ -874,7 +879,7 @@ void SingleFileBlockManager::ReadBlock(Block &block, bool skip_block_header) con
 void SingleFileBlockManager::Read(Block &block) {
 	D_ASSERT(block.id >= 0);
 	D_ASSERT(std::find(free_list.begin(), free_list.end(), block.id) == free_list.end());
-	ReadAndChecksum(block, GetBlockLocation(block.id));
+	ReadAndChecksum(QueryContext(), block, GetBlockLocation(block.id));
 }
 
 void SingleFileBlockManager::ReadBlocks(FileBuffer &buffer, block_id_t start_block, idx_t block_count) {
@@ -883,7 +888,7 @@ void SingleFileBlockManager::ReadBlocks(FileBuffer &buffer, block_id_t start_blo
 
 	// read the buffer from disk
 	auto location = GetBlockLocation(start_block);
-	buffer.Read(*handle, location);
+	buffer.Read(QueryContext(), *handle, location);
 
 	// for each of the blocks - verify the checksum
 	auto ptr = buffer.InternalBuffer();
@@ -894,8 +899,12 @@ void SingleFileBlockManager::ReadBlocks(FileBuffer &buffer, block_id_t start_blo
 }
 
 void SingleFileBlockManager::Write(FileBuffer &buffer, block_id_t block_id) {
+	Write(QueryContext(), buffer, block_id);
+}
+
+void SingleFileBlockManager::Write(QueryContext context, FileBuffer &buffer, block_id_t block_id) {
 	D_ASSERT(block_id >= 0);
-	ChecksumAndWrite(nullptr, buffer, BLOCK_START + NumericCast<idx_t>(block_id) * GetBlockAllocSize());
+	ChecksumAndWrite(context, buffer, BLOCK_START + NumericCast<idx_t>(block_id) * GetBlockAllocSize());
 }
 
 void SingleFileBlockManager::Truncate() {
@@ -965,7 +974,7 @@ protected:
 	}
 };
 
-void SingleFileBlockManager::WriteHeader(optional_ptr<ClientContext> context, DatabaseHeader header) {
+void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader header) {
 	auto free_list_blocks = GetFreeListBlocks();
 
 	// now handle the free list
@@ -1012,8 +1021,8 @@ void SingleFileBlockManager::WriteHeader(optional_ptr<ClientContext> context, Da
 	header.block_count = NumericCast<idx_t>(max_block);
 	header.serialization_compatibility = options.storage_version.GetIndex();
 
-	auto &config = DBConfig::Get(db);
-	if (config.options.checkpoint_abort == CheckpointAbort::DEBUG_ABORT_AFTER_FREE_LIST_WRITE) {
+	auto debug_checkpoint_abort = DBConfig::GetSetting<DebugCheckpointAbortSetting>(db.GetDatabase());
+	if (debug_checkpoint_abort == CheckpointAbort::DEBUG_ABORT_AFTER_FREE_LIST_WRITE) {
 		throw FatalException("Checkpoint aborted after free list write because of PRAGMA checkpoint_abort flag");
 	}
 
@@ -1038,8 +1047,8 @@ void SingleFileBlockManager::WriteHeader(optional_ptr<ClientContext> context, Da
 	memcpy(header_buffer.buffer, serializer.GetData(), serializer.GetPosition());
 	// now write the header to the file, active_header determines whether we write to h1 or h2
 	// note that if active_header is h1 we write to h2, and vice versa
-	ChecksumAndWrite(context, header_buffer,
-	                 active_header == 1 ? Storage::FILE_HEADER_SIZE : Storage::FILE_HEADER_SIZE * 2);
+	auto location = active_header == 1 ? Storage::FILE_HEADER_SIZE : Storage::FILE_HEADER_SIZE * 2;
+	ChecksumAndWrite(context, header_buffer, location);
 	// switch active header to the other header
 	active_header = 1 - active_header;
 	//! Ensure the header write ends up on disk

@@ -103,6 +103,10 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Copy() const {
 	return shared_ptr<ExtraTypeInfo>(new ExtraTypeInfo(*this));
 }
 
+shared_ptr<ExtraTypeInfo> ExtraTypeInfo::DeepCopy() const {
+	return Copy();
+}
+
 bool ExtraTypeInfo::Equals(ExtraTypeInfo *other_p) const {
 	if (type == ExtraTypeInfoType::INVALID_TYPE_INFO || type == ExtraTypeInfoType::STRING_TYPE_INFO ||
 	    type == ExtraTypeInfoType::GENERIC_TYPE_INFO) {
@@ -202,6 +206,10 @@ shared_ptr<ExtraTypeInfo> ListTypeInfo::Copy() const {
 	return make_shared_ptr<ListTypeInfo>(*this);
 }
 
+shared_ptr<ExtraTypeInfo> ListTypeInfo::DeepCopy() const {
+	return make_shared_ptr<ListTypeInfo>(child_type.DeepCopy());
+}
+
 //===--------------------------------------------------------------------===//
 // Struct Type Info
 //===--------------------------------------------------------------------===//
@@ -219,6 +227,14 @@ bool StructTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
 
 shared_ptr<ExtraTypeInfo> StructTypeInfo::Copy() const {
 	return make_shared_ptr<StructTypeInfo>(*this);
+}
+
+shared_ptr<ExtraTypeInfo> StructTypeInfo::DeepCopy() const {
+	child_list_t<LogicalType> copied_child_types;
+	for (const auto &child_type : child_types) {
+		copied_child_types.emplace_back(child_type.first, child_type.second.DeepCopy());
+	}
+	return make_shared_ptr<StructTypeInfo>(std::move(copied_child_types));
 }
 
 //===--------------------------------------------------------------------===//
@@ -423,6 +439,10 @@ shared_ptr<ExtraTypeInfo> ArrayTypeInfo::Copy() const {
 	return make_shared_ptr<ArrayTypeInfo>(*this);
 }
 
+shared_ptr<ExtraTypeInfo> ArrayTypeInfo::DeepCopy() const {
+	return make_shared_ptr<ArrayTypeInfo>(child_type.DeepCopy(), size);
+}
+
 //===--------------------------------------------------------------------===//
 // Any Type Info
 //===--------------------------------------------------------------------===//
@@ -440,6 +460,10 @@ bool AnyTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
 
 shared_ptr<ExtraTypeInfo> AnyTypeInfo::Copy() const {
 	return make_shared_ptr<AnyTypeInfo>(*this);
+}
+
+shared_ptr<ExtraTypeInfo> AnyTypeInfo::DeepCopy() const {
+	return make_shared_ptr<AnyTypeInfo>(target_type.DeepCopy(), cast_score);
 }
 
 //===--------------------------------------------------------------------===//
@@ -462,6 +486,25 @@ bool IntegerLiteralTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
 
 shared_ptr<ExtraTypeInfo> IntegerLiteralTypeInfo::Copy() const {
 	return make_shared_ptr<IntegerLiteralTypeInfo>(*this);
+}
+
+//===--------------------------------------------------------------------===//
+// Template Type Info
+//===--------------------------------------------------------------------===//
+TemplateTypeInfo::TemplateTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::TEMPLATE_TYPE_INFO) {
+}
+
+TemplateTypeInfo::TemplateTypeInfo(string name_p)
+    : ExtraTypeInfo(ExtraTypeInfoType::TEMPLATE_TYPE_INFO), name(std::move(name_p)) {
+}
+
+bool TemplateTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
+	auto &other = other_p->Cast<TemplateTypeInfo>();
+	return name == other.name;
+}
+
+shared_ptr<ExtraTypeInfo> TemplateTypeInfo::Copy() const {
+	return make_shared_ptr<TemplateTypeInfo>(*this);
 }
 
 } // namespace duckdb

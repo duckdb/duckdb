@@ -79,6 +79,10 @@ public:
 		return ExtractSalt(value);
 	}
 
+	inline hash_t GetSaltWithNulls() const {
+		return value & SALT_MASK;
+	}
+
 	inline void SetSalt(const hash_t &salt) {
 		// Shouldn't be occupied when we set this
 		D_ASSERT(!IsOccupied());

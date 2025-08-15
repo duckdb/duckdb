@@ -1,0 +1,3 @@
+# name: test/optimizer/joins/test_tpcds_pushdown.test
+# group: [joins]
+

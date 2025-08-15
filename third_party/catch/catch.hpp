@@ -13,6 +13,8 @@
 // start catch.hpp
 
 #include <memory>
+#include <sstream>
+
 #ifndef DUCKDB_BASE_STD
 namespace duckdb_base_std {
 	using ::std::unique_ptr;
@@ -21,7 +23,7 @@ namespace duckdb_base_std {
 	using ::std::stringstream;
 } // namespace duckdb_base_std
 #endif
-// optional support for printing stacktraces on a crash -- using the backtrace support in DuckDB 
+// optional support for printing stacktraces on a crash -- using the backtrace support in DuckDB
 #ifdef DUCKDB_DEBUG_STACKTRACE
 #include "duckdb/common/exception.hpp"
 #define CATCH_STACKTRACE(X) duckdb::Exception::FormatStackTrace(X).c_str()
@@ -18139,4 +18141,3 @@ using Catch::Detail::Approx;
 // end catch_reenable_warnings.h
 // end catch.hpp
 #endif // TWOBLUECUBES_SINGLE_INCLUDE_CATCH_HPP_INCLUDED
-

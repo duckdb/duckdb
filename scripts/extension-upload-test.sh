@@ -29,7 +29,7 @@ else
   CMAKE_ROOT=".."
 fi
 
-cmake -DCMAKE_BUILD_TYPE=${CMAKE_CONFIG} ${FORCE_32_BIT_FLAG} -DTEST_REMOTE_INSTALL="${EXTENSION_LIST}" ${CMAKE_ROOT}
+cmake -DCMAKE_BUILD_TYPE=${CMAKE_CONFIG} ${FORCE_32_BIT_FLAG} -DEXTENSION_TESTS_ONLY=1 -DDUCKDB_EXTENSION_CONFIGS=".github/config/in_tree_extensions.cmake;.github/config/out_of_tree_extensions.cmake" ${CMAKE_ROOT}
 cmake --build . --config ${CMAKE_CONFIG}
 cd ..
 
@@ -60,5 +60,5 @@ done
 # Only run tests for non-local, we have tested in enough other ways
 if [ "$1" != "local" ]
 then
-  ${unittest_path}
+  ${unittest_path} --autoloading all --skip-compiled
 fi

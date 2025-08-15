@@ -7,10 +7,10 @@
 
 namespace duckdb {
 
-CSVFileHandle::CSVFileHandle(ClientContext &context, unique_ptr<FileHandle> file_handle_p, const OpenFileInfo &file_p,
+CSVFileHandle::CSVFileHandle(ClientContext &context_p, unique_ptr<FileHandle> file_handle_p, const OpenFileInfo &file_p,
                              const CSVReaderOptions &options)
-    : compression_type(options.compression), file_handle(std::move(file_handle_p)),
-      encoder(context, options.encoding, options.buffer_size_option.GetValue()), file(file_p) {
+    : compression_type(options.compression), context(context_p), file_handle(std::move(file_handle_p)),
+      encoder(context_p, options.encoding, options.buffer_size_option.GetValue()), file(file_p) {
 	can_seek = file_handle->CanSeek();
 	on_disk_file = file_handle->OnDiskFile();
 	file_size = file_handle->GetFileSize();
@@ -80,7 +80,7 @@ idx_t CSVFileHandle::Read(void *buffer, idx_t nr_bytes) {
 	// if this is a plain file source OR we can seek we are not caching anything
 	idx_t bytes_read = 0;
 	if (encoder.encoding_name == "utf-8") {
-		bytes_read = static_cast<idx_t>(file_handle->Read(buffer, nr_bytes));
+		bytes_read = static_cast<idx_t>(file_handle->Read(context, buffer, nr_bytes));
 	} else {
 		bytes_read = encoder.Encode(*file_handle, static_cast<char *>(buffer), nr_bytes);
 	}

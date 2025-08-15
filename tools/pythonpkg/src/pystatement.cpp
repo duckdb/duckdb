@@ -92,6 +92,12 @@ py::list DuckDBPyStatement::ExpectedResultType() const {
 		possibilities.append(StatementReturnType::NOTHING);
 		break;
 	}
+	case StatementType::MERGE_INTO_STATEMENT: {
+		possibilities.append(StatementReturnType::CHANGED_ROWS);
+		possibilities.append(StatementReturnType::QUERY_RESULT);
+		possibilities.append(StatementReturnType::NOTHING);
+		break;
+	}
 	default: {
 		throw InternalException("Unrecognized StatementType in ExpectedResultType: %s",
 		                        StatementTypeToString(statement->type));

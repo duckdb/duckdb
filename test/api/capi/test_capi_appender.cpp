@@ -724,8 +724,9 @@ TEST_CASE("Test append duckdb_value values in C API", "[capi]") {
 	             "lt30 timetz,"
 	             "lt31 timestamptz,"
 	             // lt34 any - not a valid type in SQL
-	             "lt35 varint," // no duckdb_create_varint (yet)
-	             "lt36 integer" // for sqlnull
+	             "lt35 bignum,"  // no duckdb_create_bignum (yet)
+	             "lt36 integer," // for sqlnull
+	             "lt37 time_ns,"
 	             ")");
 	duckdb_appender appender;
 
@@ -940,14 +941,19 @@ TEST_CASE("Test append duckdb_value values in C API", "[capi]") {
 	REQUIRE(duckdb_append_value(appender, timestamp_tz_value) == DuckDBSuccess);
 	duckdb_destroy_value(&timestamp_tz_value);
 
-	// no duckdb_create_varint (yet)
-	auto null_varint_value = duckdb_create_null_value();
-	REQUIRE(duckdb_append_value(appender, null_varint_value) == DuckDBSuccess);
-	duckdb_destroy_value(&null_varint_value);
+	// no duckdb_create_bignum (yet)
+	auto null_bignum_value = duckdb_create_null_value();
+	REQUIRE(duckdb_append_value(appender, null_bignum_value) == DuckDBSuccess);
+	duckdb_destroy_value(&null_bignum_value);
 
 	auto null_value = duckdb_create_null_value();
 	REQUIRE(duckdb_append_value(appender, null_value) == DuckDBSuccess);
 	duckdb_destroy_value(&null_value);
+
+	duckdb_time_ns time_ns {86400123456789};
+	auto time_ns_value = duckdb_create_time_ns(time_ns);
+	REQUIRE(duckdb_append_value(appender, time_ns_value) == DuckDBSuccess);
+	duckdb_destroy_value(&time_ns_value);
 
 	REQUIRE(duckdb_appender_end_row(appender) == DuckDBSuccess);
 
@@ -1029,9 +1035,12 @@ TEST_CASE("Test append duckdb_value values in C API", "[capi]") {
 	REQUIRE(reinterpret_cast<duckdb_time_tz *>(chunk->GetData(31))[0].bits == time_tz.bits);
 	REQUIRE(reinterpret_cast<duckdb_timestamp *>(chunk->GetData(32))[0].micros == timestamp_tz.micros);
 
-	REQUIRE(duckdb_validity_row_is_valid(chunk->GetValidity(33), 0) == false); // no duckdb_create_varint (yet)
+	REQUIRE(duckdb_validity_row_is_valid(chunk->GetValidity(33), 0) == false); // no duckdb_create_bignum (yet)
 
 	REQUIRE(duckdb_validity_row_is_valid(chunk->GetValidity(34), 0) == false); // sqlnull
+
+	REQUIRE(reinterpret_cast<duckdb_time_ns *>(chunk->GetData(35))[0].nanos == time_ns.nanos);
+
 	tester.Cleanup();
 }
 

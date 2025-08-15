@@ -3,12 +3,10 @@
 #include "mbedtls_wrapper.hpp"
 #include "thrift_tools.hpp"
 
-#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/storage/arena_allocator.hpp"
-#endif
 
 namespace duckdb {
 
@@ -377,7 +375,7 @@ bool ParquetCrypto::ValidKey(const std::string &key) {
 	}
 }
 
-string Base64Decode(const string &key) {
+static string Base64Decode(const string &key) {
 	auto result_size = Blob::FromBase64Size(key);
 	auto output = duckdb::unique_ptr<unsigned char[]>(new unsigned char[result_size]);
 	Blob::FromBase64(key, output.get(), result_size);

@@ -84,7 +84,6 @@ profile = args.profile
 assertions = args.no_assertions
 time_execution = args.time_execution
 timeout = args.timeout
-tests_per_invocation = args.tests_per_invocation
 
 summarize_failures = args.summarize_failures
 if summarize_failures is None:
@@ -315,4 +314,5 @@ if summarize_failures and len(error_container):
     for i, error in enumerate(error_container.get_errors(), start=1):
         print(f"\n{i}:", error["test"], "\n")
         print(error["stderr"])
+
 exit(1)

@@ -16,6 +16,13 @@
         "description": "time of day (no time zone)"
     },
     {
+        "id": "TIME_NS",
+        "names": [
+            "time_ns"
+        ],
+        "description": "time of day (nanosecond precision)"
+    },
+    {
         "id": "DATE",
         "names": [
             "date"
@@ -222,9 +229,9 @@
         "description": "binary value"
     },
     {
-        "id": "VARINT",
+        "id": "BIGNUM",
         "names": [
-            "varint"
+            "bignum"
         ],
         "description": "Integers with variable size."
     },

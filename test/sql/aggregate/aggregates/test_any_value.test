@@ -217,10 +217,12 @@ DROP TABLE five_complex
 
 # Window Function
 query I
-SELECT ANY_VALUE(i) OVER () AS a FROM generate_series(1, 5) t(i);
+SELECT ANY_VALUE(i) OVER (PARTITION BY i) AS a 
+FROM generate_series(1, 5) t(i)
+ORDER BY ALL
 ----
 1
-1
-1
-1
-1
+2
+3
+4
+5

@@ -56,17 +56,16 @@ vector<Value> Transformer::TransformTypeModifiers(duckdb_libpgquery::PGTypeName 
 	vector<Value> type_mods;
 	if (type_name.typmods) {
 		for (auto node = type_name.typmods->head; node; node = node->next) {
-			if (type_mods.size() > 9) {
-				const auto &name =
-				    *PGPointerCast<duckdb_libpgquery::PGValue>(type_name.names->tail->data.ptr_value)->val.str;
-				throw ParserException("'%s': a maximum of 9 type modifiers is allowed", name);
-			}
 			const auto &const_val = *PGPointerCast<duckdb_libpgquery::PGAConst>(node->data.ptr_value);
 			if (const_val.type != duckdb_libpgquery::T_PGAConst) {
 				throw ParserException("Expected a constant as type modifier");
 			}
 			const auto const_expr = TransformValue(const_val.val);
 			type_mods.push_back(std::move(const_expr->value));
+		}
+		if (type_mods.size() > 9) {
+			const auto name = PGPointerCast<duckdb_libpgquery::PGValue>(type_name.names->tail->data.ptr_value)->val.str;
+			throw ParserException("'%s': a maximum of 9 type modifiers is allowed", name);
 		}
 	}
 	return type_mods;

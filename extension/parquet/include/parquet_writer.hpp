@@ -10,6 +10,7 @@
 
 #include "duckdb.hpp"
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/mutex.hpp"
@@ -81,9 +82,10 @@ public:
 	ParquetWriter(ClientContext &context, FileSystem &fs, string file_name, vector<LogicalType> types,
 	              vector<string> names, duckdb_parquet::CompressionCodec::type codec, ChildFieldIDs field_ids,
 	              const vector<pair<string, string>> &kv_metadata,
-	              shared_ptr<ParquetEncryptionConfig> encryption_config, idx_t dictionary_size_limit,
-	              idx_t string_dictionary_page_size_limit, double bloom_filter_false_positive_ratio,
-	              int64_t compression_level, bool debug_use_openssl, ParquetVersion parquet_version);
+	              shared_ptr<ParquetEncryptionConfig> encryption_config, optional_idx dictionary_size_limit,
+	              idx_t string_dictionary_page_size_limit, bool enable_bloom_filters,
+	              double bloom_filter_false_positive_ratio, int64_t compression_level, bool debug_use_openssl,
+	              ParquetVersion parquet_version);
 	~ParquetWriter();
 
 public:
@@ -116,11 +118,14 @@ public:
 	idx_t FileSize() {
 		return total_written;
 	}
-	idx_t DictionarySizeLimit() const {
+	optional_idx DictionarySizeLimit() const {
 		return dictionary_size_limit;
 	}
 	idx_t StringDictionaryPageSizeLimit() const {
 		return string_dictionary_page_size_limit;
+	}
+	double EnableBloomFilters() const {
+		return enable_bloom_filters;
 	}
 	double BloomFilterFalsePositiveRatio() const {
 		return bloom_filter_false_positive_ratio;
@@ -162,8 +167,9 @@ private:
 	duckdb_parquet::CompressionCodec::type codec;
 	ChildFieldIDs field_ids;
 	shared_ptr<ParquetEncryptionConfig> encryption_config;
-	idx_t dictionary_size_limit;
+	optional_idx dictionary_size_limit;
 	idx_t string_dictionary_page_size_limit;
+	bool enable_bloom_filters;
 	double bloom_filter_false_positive_ratio;
 	int64_t compression_level;
 	bool debug_use_openssl;

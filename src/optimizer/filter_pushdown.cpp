@@ -160,6 +160,9 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownJoin(unique_ptr<LogicalOpera
 
 	unique_ptr<LogicalOperator> result;
 	switch (join.join_type) {
+	case JoinType::OUTER:
+		result = PushdownOuterJoin(std::move(op), left_bindings, right_bindings);
+		break;
 	case JoinType::INNER:
 		//	AsOf joins can't push anything into the RHS, so treat it as a left join
 		if (op->type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {

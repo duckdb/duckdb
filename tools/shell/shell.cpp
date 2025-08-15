@@ -4708,7 +4708,7 @@ static const char zOptions[] =
 static void usage(int showDetail) {
 	utf8_printf(stderr,
 	            "Usage: %s [OPTIONS] FILENAME [SQL]\n"
-	            "FILENAME is the name of an DuckDB database. A new database is created\n"
+	            "FILENAME is the name of a DuckDB database. A new database is created\n"
 	            "if the file does not previously exist.\n",
 	            program_name);
 	if (showDetail) {
@@ -4736,6 +4736,8 @@ static void verify_uninitialized(void) {
 static void main_init(ShellState *data) {
 	data->normalMode = data->cMode = data->mode = RenderMode::DUCKBOX;
 	data->max_rows = 40;
+	data->thousand_separator = ',';
+	data->decimal_separator = '.';
 	data->colSeparator = SEP_Column;
 	data->rowSeparator = SEP_Row;
 	data->showHeader = true;

@@ -3092,17 +3092,17 @@ function duckdb_create_uhugeint(input)
 end
 
 """
-    duckdb_create_varint(input)
+    duckdb_create_bignum(input)
 
-Creates a VARINT value from a duckdb_varint
+Creates a BIGNUM value from a duckdb_bignum
 
 # Arguments
-- `input`: `duckdb_varint` The duckdb_varint value
+- `input`: `duckdb_bignum` The duckdb_bignum value
 
 Returns: `duckdb_value` The value. This must be destroyed with `duckdb_destroy_value`.
 """
-function duckdb_create_varint(input)
-    return ccall((:duckdb_create_varint, libduckdb), duckdb_value, (duckdb_varint,), input)
+function duckdb_create_bignum(input)
+    return ccall((:duckdb_create_bignum, libduckdb), duckdb_value, (duckdb_bignum,), input)
 end
 
 """
@@ -3472,18 +3472,18 @@ function duckdb_get_uhugeint(val)
 end
 
 """
-    duckdb_get_varint(val)
+    duckdb_get_bignum(val)
 
-Returns the duckdb_varint value of the given value.
+Returns the duckdb_bignum value of the given value.
 The `data` field must be destroyed with `duckdb_free`.
 
 # Arguments
-- `val`: `duckdb_value` A duckdb_value containing a VARINT
+- `val`: `duckdb_value` A duckdb_value containing a BIGNUM
 
-Returns: `duckdb_varint` A duckdb_varint. The `data` field must be destroyed with `duckdb_free`.
+Returns: `duckdb_bignum` A duckdb_bignum. The `data` field must be destroyed with `duckdb_free`.
 """
-function duckdb_get_varint(val)
-    return ccall((:duckdb_get_varint, libduckdb), duckdb_varint, (duckdb_value,), val)
+function duckdb_get_bignum(val)
+    return ccall((:duckdb_get_bignum, libduckdb), duckdb_bignum, (duckdb_value,), val)
 end
 
 """
@@ -6115,6 +6115,27 @@ Returns: `Ptr{Cvoid}` The extra info
 """
 function duckdb_bind_get_extra_info(info)
     return ccall((:duckdb_bind_get_extra_info, libduckdb), Ptr{Cvoid}, (duckdb_bind_info,), info)
+end
+
+"""
+    duckdb_table_function_get_client_context(info, out_context)
+
+Retrieves the client context of the bind info of a table function.
+
+# Arguments
+- `info`: `duckdb_bind_info` The bind info object of the table function.
+- `out_context`: `Ref{duckdb_client_context}` The client context of the bind info. Must be destroyed with `duckdb_destroy_client_context`.
+
+Returns: `Nothing`
+"""
+function duckdb_table_function_get_client_context(info, out_context)
+    return ccall(
+        (:duckdb_scalar_function_get_client_context, libduckdb),
+        Cvoid,
+        (duckdb_bind_info, Ref{duckdb_client_context}),
+        info,
+        out_context
+    )
 end
 
 """
