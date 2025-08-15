@@ -8,6 +8,8 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database_manager.hpp"
 
+#include "duckdb/common/exception/parser_exception.hpp"
+
 namespace duckdb {
 
 CatalogSearchEntry::CatalogSearchEntry(string catalog_p, string schema_p)

@@ -1,9 +1,6 @@
 #include "duckdb/parser/tableref/column_data_ref.hpp"
 #include "duckdb/common/string_util.hpp"
 
-#include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/serializer/deserializer.hpp"
-
 namespace duckdb {
 
 string ColumnDataRef::ToString() const {
