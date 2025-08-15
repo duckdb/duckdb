@@ -67,7 +67,9 @@ public:
 	//! Shorthand for ParsePaths + CreateFileList
 	DUCKDB_API shared_ptr<MultiFileList> CreateFileList(ClientContext &context, const Value &input,
 	                                                    FileGlobOptions options = FileGlobOptions::DISALLOW_EMPTY);
-
+	//! Hook that allows the MultiFileReader to manipulate default options before any option parsing is done
+	DUCKDB_API virtual void SetDefaultOptions(ClientContext &context, MultiFileOptions &file_options,
+	                                          MultiFileList &files);
 	//! Parse the named parameters of a multi-file reader
 	DUCKDB_API virtual bool ParseOption(const string &key, const Value &val, MultiFileOptions &options,
 	                                    ClientContext &context);
