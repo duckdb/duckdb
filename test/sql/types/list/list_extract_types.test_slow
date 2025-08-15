@@ -14,9 +14,9 @@ statement ok
 CREATE TABLE a AS SELECT LIST_EXTRACT(["${colname}"], 1) col FROM all_types;
 
 query I
-SELECT COUNT(*) FROM a JOIN all_types ON (a.col=all_types."${colname}");
+SELECT COUNT(*) FROM a JOIN all_types ON (a.col IS NOT DISTINCT FROM all_types."${colname}");
 ----
-2
+3
 
 statement ok
 DROP TABLE a;

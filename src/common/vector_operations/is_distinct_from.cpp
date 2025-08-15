@@ -285,6 +285,49 @@ void UpdateNullMask(Vector &vec, const SelectionVector &sel, idx_t count, Validi
 	}
 }
 
+// Special ops for (in)equality testing of nested data structures (which use ternary logic)
+template <typename OP>
+struct NestedComparator {
+	template <class T>
+	static inline bool Operation(const T &left, const T &right, bool left_null, bool right_null) {
+		if (left_null || right_null) {
+			return false;
+		}
+		//	NULLS are handled separately
+		return OP::Operation(left, right);
+	}
+};
+
+using NestedEqualTo = NestedComparator<Equals>;
+using NestedNotEqualTo = NestedComparator<NotEquals>;
+using NestedGreaterThan = NestedComparator<GreaterThan>;
+using NestedGreaterEquals = NestedComparator<GreaterThanEquals>;
+
+template <typename OP>
+struct DistinctOpTraits {
+	static constexpr bool reports_nulls = false;
+};
+
+template <>
+struct DistinctOpTraits<NestedEqualTo> {
+	static constexpr bool reports_nulls = true;
+};
+
+template <>
+struct DistinctOpTraits<NestedNotEqualTo> {
+	static constexpr bool reports_nulls = true;
+};
+
+template <>
+struct DistinctOpTraits<duckdb::NestedGreaterThan> {
+	static constexpr bool reports_nulls = true;
+};
+
+template <>
+struct DistinctOpTraits<duckdb::NestedGreaterEquals> {
+	static constexpr bool reports_nulls = true;
+};
+
 template <class LEFT_TYPE, class RIGHT_TYPE, class OP>
 idx_t DistinctSelect(Vector &left, Vector &right, const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
                      SelectionVector *false_sel, optional_ptr<ValidityMask> null_mask) {
@@ -292,8 +335,7 @@ idx_t DistinctSelect(Vector &left, Vector &right, const SelectionVector *sel, id
 		sel = FlatVector::IncrementalSelectionVector();
 	}
 
-	// TODO: Push this down?
-	if (null_mask) {
+	if (DistinctOpTraits<OP>::reports_nulls && null_mask) {
 		UpdateNullMask(left, *sel, count, *null_mask);
 		UpdateNullMask(right, *sel, count, *null_mask);
 	}
@@ -391,7 +433,7 @@ struct PositionComparator {
 	static idx_t Possible(Vector &left, Vector &right, const SelectionVector &sel, idx_t count,
 	                      SelectionVector &true_sel, optional_ptr<SelectionVector> false_sel,
 	                      optional_ptr<ValidityMask> null_mask) {
-		return VectorOperations::NestedEquals(left, right, &sel, count, &true_sel, false_sel, null_mask);
+		return VectorOperations::NotDistinctFrom(left, right, &sel, count, &true_sel, false_sel);
 	}
 
 	// Select the matching rows for the final position.
@@ -426,7 +468,7 @@ idx_t PositionComparator::Final<duckdb::NotDistinctFrom>(Vector &left, Vector &r
                                                          idx_t count, optional_ptr<SelectionVector> true_sel,
                                                          optional_ptr<SelectionVector> false_sel,
                                                          optional_ptr<ValidityMask> null_mask) {
-	return VectorOperations::NestedEquals(left, right, &sel, count, true_sel, false_sel, null_mask);
+	return VectorOperations::NotDistinctFrom(left, right, &sel, count, true_sel, false_sel);
 }
 
 // DistinctFrom must check everything that matched
@@ -443,7 +485,46 @@ idx_t PositionComparator::Final<duckdb::DistinctFrom>(Vector &left, Vector &righ
                                                       idx_t count, optional_ptr<SelectionVector> true_sel,
                                                       optional_ptr<SelectionVector> false_sel,
                                                       optional_ptr<ValidityMask> null_mask) {
+	return VectorOperations::DistinctFrom(left, right, &sel, count, true_sel, false_sel);
+}
+
+// NestedNotEqualTo must check everything that matched
+template <>
+idx_t PositionComparator::Possible<NestedNotEqualTo>(Vector &left, Vector &right, const SelectionVector &sel,
+                                                     idx_t count, SelectionVector &true_sel,
+                                                     optional_ptr<SelectionVector> false_sel,
+                                                     optional_ptr<ValidityMask> null_mask) {
+	return count;
+}
+
+template <>
+idx_t PositionComparator::Final<NestedNotEqualTo>(Vector &left, Vector &right, const SelectionVector &sel, idx_t count,
+                                                  optional_ptr<SelectionVector> true_sel,
+                                                  optional_ptr<SelectionVector> false_sel,
+                                                  optional_ptr<ValidityMask> null_mask) {
 	return VectorOperations::NestedNotEquals(left, right, &sel, count, true_sel, false_sel, null_mask);
+}
+
+// NestedEqualTo must always check every column
+template <>
+idx_t PositionComparator::Definite<NestedEqualTo>(Vector &left, Vector &right, const SelectionVector &sel, idx_t count,
+                                                  optional_ptr<SelectionVector> true_sel, SelectionVector &false_sel,
+                                                  optional_ptr<ValidityMask> null_mask) {
+	return 0;
+}
+template <>
+idx_t PositionComparator::Possible<NestedEqualTo>(Vector &left, Vector &right, const SelectionVector &sel, idx_t count,
+                                                  SelectionVector &true_sel, optional_ptr<SelectionVector> false_sel,
+                                                  optional_ptr<ValidityMask> null_mask) {
+	return VectorOperations::NestedEquals(left, right, &sel, count, true_sel, false_sel, null_mask);
+}
+
+template <>
+idx_t PositionComparator::Final<NestedEqualTo>(Vector &left, Vector &right, const SelectionVector &sel, idx_t count,
+                                               optional_ptr<SelectionVector> true_sel,
+                                               optional_ptr<SelectionVector> false_sel,
+                                               optional_ptr<ValidityMask> null_mask) {
+	return VectorOperations::NestedEquals(left, right, &sel, count, true_sel, false_sel, null_mask);
 }
 
 template <>
@@ -462,6 +543,48 @@ idx_t PositionComparator::Final<duckdb::DistinctGreaterThanNullsFirst>(Vector &l
                                                                        optional_ptr<ValidityMask> null_mask) {
 	// DistinctLessThan has NULLs last
 	return VectorOperations::DistinctLessThan(right, left, &sel, count, true_sel, false_sel, null_mask);
+}
+
+// NestedGreaterThan is definite for strict inequalities, possible for equality
+template <>
+idx_t PositionComparator::Possible<duckdb::NestedGreaterThan>(Vector &left, Vector &right, const SelectionVector &sel,
+                                                              idx_t count, SelectionVector &true_sel,
+                                                              optional_ptr<SelectionVector> false_sel,
+                                                              optional_ptr<ValidityMask> null_mask) {
+	return VectorOperations::NestedEquals(left, right, &sel, count, true_sel, false_sel, null_mask);
+}
+
+template <>
+idx_t PositionComparator::Final<duckdb::NestedGreaterThan>(Vector &left, Vector &right, const SelectionVector &sel,
+                                                           idx_t count, optional_ptr<SelectionVector> true_sel,
+                                                           optional_ptr<SelectionVector> false_sel,
+                                                           optional_ptr<ValidityMask> null_mask) {
+	return VectorOperations::NestedGreaterThan(left, right, &sel, count, true_sel, false_sel, null_mask);
+}
+
+// NestedGreaterEquals is definite for strict inequality, possible for equality, and  the last column must pass
+template <>
+idx_t PositionComparator::Definite<duckdb::NestedGreaterEquals>(Vector &left, Vector &right, const SelectionVector &sel,
+                                                                idx_t count, optional_ptr<SelectionVector> true_sel,
+                                                                SelectionVector &false_sel,
+                                                                optional_ptr<ValidityMask> null_mask) {
+	return VectorOperations::NestedGreaterThan(left, right, &sel, count, true_sel, false_sel, null_mask);
+}
+
+template <>
+idx_t PositionComparator::Possible<duckdb::NestedGreaterEquals>(Vector &left, Vector &right, const SelectionVector &sel,
+                                                                idx_t count, SelectionVector &true_sel,
+                                                                optional_ptr<SelectionVector> false_sel,
+                                                                optional_ptr<ValidityMask> null_mask) {
+	return VectorOperations::NestedEquals(left, right, &sel, count, true_sel, false_sel, null_mask);
+}
+
+template <>
+idx_t PositionComparator::Final<duckdb::NestedGreaterEquals>(Vector &left, Vector &right, const SelectionVector &sel,
+                                                             idx_t count, optional_ptr<SelectionVector> true_sel,
+                                                             optional_ptr<SelectionVector> false_sel,
+                                                             optional_ptr<ValidityMask> null_mask) {
+	return VectorOperations::NestedGreaterThanEquals(left, right, &sel, count, true_sel, false_sel, null_mask);
 }
 
 using StructEntries = vector<unique_ptr<Vector>>;
@@ -597,6 +720,97 @@ idx_t DistinctSelectStruct(Vector &left, Vector &right, idx_t count, const Selec
 			match_count += true_count;
 		}
 	}
+	return match_count;
+}
+
+template <class OP>
+idx_t DistinctSelectUnion(Vector &left, Vector &right, idx_t count, const SelectionVector &sel,
+                          OptionalSelection &true_opt, OptionalSelection &false_opt,
+                          optional_ptr<ValidityMask> null_mask) {
+	if (count == 0) {
+		return 0;
+	}
+
+	// Avoid allocating in the 99% of the cases where we don't need to.
+	StructEntries lsliced, rsliced;
+	auto &lchildren = StructVector::GetEntries(left);
+	auto &rchildren = StructVector::GetEntries(right);
+	D_ASSERT(lchildren.size() == rchildren.size());
+
+	const auto vcount = count;
+	SelectionVector slice_sel(count);
+
+	SelectionVector true_sel(count);
+	SelectionVector false_sel(count);
+
+	ValidityMask child_validity;
+	ValidityMask *child_mask = nullptr;
+	if (null_mask) {
+		child_mask = &child_validity;
+		child_mask->Reset(null_mask->Capacity());
+	}
+
+	//	The first column of a UNION STRUCT is the "tag" column, which says which column is valid.
+	//	We start by splitting the rows into those with matching tags and non-matching tags.
+	idx_t col_no = 0;
+
+	Vector ltags(*lchildren[col_no]);
+	ltags.Flatten(vcount);
+
+	Vector rtags(*rchildren[col_no]);
+	rtags.Flatten(vcount);
+
+	//	Find matching tags
+	SelectionVector tag_sel(count);
+	auto tag_count = VectorOperations::NotDistinctFrom(ltags, rtags, nullptr, count, &tag_sel, slice_sel);
+	const auto tag_data = FlatVector::GetData<uint8_t>(ltags);
+
+	//	Handle mismatched tags with the OP in the column loop  to get the correct NULL semantics
+	auto sliced = count - tag_count;
+
+	idx_t match_count = 0;
+	for (; col_no < lchildren.size(); ++col_no) {
+		// Find the rows that match this tag. These are disjoint.
+		if (col_no) {
+			const auto tag_no = col_no - 1;
+			sliced = 0;
+			for (idx_t i = 0; i < tag_count; ++i) {
+				const auto idx = tag_sel.get_index(i);
+				if (tag_no == tag_data[idx]) {
+					slice_sel.set_index(sliced++, idx);
+				}
+			}
+		}
+		if (!sliced) {
+			continue;
+		}
+
+		// Slice the children to maintain density
+		Vector lchild(*lchildren[col_no]);
+		lchild.Flatten(vcount);
+		lchild.Slice(slice_sel, sliced);
+
+		Vector rchild(*rchildren[col_no]);
+		rchild.Flatten(vcount);
+		rchild.Slice(slice_sel, sliced);
+
+		// Since the columns are independent, we can just use Final for the comparison
+		auto true_count =
+		    PositionComparator::Final<OP>(lchild, rchild, slice_sel, sliced, &true_sel, &false_sel, child_mask);
+		auto false_count = sliced - true_count;
+
+		// Extract any NULLs we found
+		ExtractNestedMask(slice_sel, sliced, sel, child_mask, null_mask);
+
+		// Extract the definite matches into the true result
+		ExtractNestedSelection(false_count ? true_sel : slice_sel, true_count, sel, true_opt);
+
+		// Extract the definite failures into the false result
+		ExtractNestedSelection(true_count ? false_sel : slice_sel, false_count, sel, false_opt);
+
+		match_count += true_count;
+	}
+
 	return match_count;
 }
 
@@ -911,22 +1125,28 @@ idx_t DistinctSelectNested(Vector &left, Vector &right, optional_ptr<const Selec
 	auto unknown = DistinctSelectNotNull<OP>(l_not_null, r_not_null, count, match_count, *sel, maybe_vec, true_opt,
 	                                         false_opt, null_mask);
 
+	auto nested_func = DistinctSelectList<OP>;
 	switch (left.GetType().InternalType()) {
 	case PhysicalType::LIST:
-		match_count +=
-		    DistinctSelectList<OP>(l_not_null, r_not_null, unknown, maybe_vec, true_opt, false_opt, null_mask);
+		nested_func = DistinctSelectList<OP>;
 		break;
 	case PhysicalType::STRUCT:
-		match_count +=
-		    DistinctSelectStruct<OP>(l_not_null, r_not_null, unknown, maybe_vec, true_opt, false_opt, null_mask);
+		//	UNIONs use STRUCTs for physical representation, but the columns are independent,
+		//	so we have to process them differently
+		if (left.GetType().id() == LogicalTypeId::UNION) {
+			nested_func = DistinctSelectUnion<OP>;
+		} else {
+			nested_func = DistinctSelectStruct<OP>;
+		}
 		break;
 	case PhysicalType::ARRAY:
-		match_count +=
-		    DistinctSelectArray<OP>(l_not_null, r_not_null, unknown, maybe_vec, true_opt, false_opt, null_mask);
+		nested_func = DistinctSelectArray<OP>;
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for DISTINCT");
 	}
+
+	match_count += nested_func(l_not_null, r_not_null, unknown, maybe_vec, true_opt, false_opt, null_mask);
 
 	// Copy the buffered selections to the output selections
 	if (true_sel) {
@@ -1178,19 +1398,53 @@ idx_t VectorOperations::DistinctLessThanEquals(Vector &left, Vector &right, opti
 	                                                                             true_sel, null_mask);
 }
 
-// true := A != B with nulls being equal, inputs selected
+// true := A != B with nulls producing NULL, inputs selected
 idx_t VectorOperations::NestedNotEquals(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel,
                                         idx_t count, optional_ptr<SelectionVector> true_sel,
                                         optional_ptr<SelectionVector> false_sel, optional_ptr<ValidityMask> null_mask) {
-	return TemplatedDistinctSelectOperation<duckdb::DistinctFrom>(left, right, sel, count, true_sel, false_sel,
-	                                                              null_mask);
+	return TemplatedDistinctSelectOperation<NestedNotEqualTo>(left, right, sel, count, true_sel, false_sel, null_mask);
 }
-// true := A == B with nulls being equal, inputs selected
+
+// true := A == B with nulls producing NULL, inputs selected
 idx_t VectorOperations::NestedEquals(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel, idx_t count,
                                      optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel,
                                      optional_ptr<ValidityMask> null_mask) {
-	return count - TemplatedDistinctSelectOperation<duckdb::DistinctFrom>(left, right, sel, count, false_sel, true_sel,
-	                                                                      null_mask);
+	return TemplatedDistinctSelectOperation<NestedEqualTo>(left, right, sel, count, true_sel, false_sel, null_mask);
+}
+
+// true := A > B with nulls producing NULL, inputs selected
+idx_t VectorOperations::NestedGreaterThan(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel,
+                                          idx_t count, optional_ptr<SelectionVector> true_sel,
+                                          optional_ptr<SelectionVector> false_sel,
+                                          optional_ptr<ValidityMask> null_mask) {
+	return TemplatedDistinctSelectOperation<duckdb::NestedGreaterThan>(left, right, sel, count, true_sel, false_sel,
+	                                                                   null_mask);
+}
+
+// true := A < B with nulls producing NULL, inputs selected
+idx_t VectorOperations::NestedLessThan(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel,
+                                       idx_t count, optional_ptr<SelectionVector> true_sel,
+                                       optional_ptr<SelectionVector> false_sel, optional_ptr<ValidityMask> null_mask) {
+	return TemplatedDistinctSelectOperation<duckdb::NestedGreaterThan>(right, left, sel, count, false_sel, true_sel,
+	                                                                   null_mask);
+}
+
+// true := A >= B with nulls producing NULL, inputs selected
+idx_t VectorOperations::NestedGreaterThanEquals(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel,
+                                                idx_t count, optional_ptr<SelectionVector> true_sel,
+                                                optional_ptr<SelectionVector> false_sel,
+                                                optional_ptr<ValidityMask> null_mask) {
+	return TemplatedDistinctSelectOperation<duckdb::NestedGreaterEquals>(left, right, sel, count, true_sel, false_sel,
+	                                                                     null_mask);
+}
+
+// true := A <= B with nulls producing NULL, inputs selected
+idx_t VectorOperations::NestedLessThanEquals(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel,
+                                             idx_t count, optional_ptr<SelectionVector> true_sel,
+                                             optional_ptr<SelectionVector> false_sel,
+                                             optional_ptr<ValidityMask> null_mask) {
+	return TemplatedDistinctSelectOperation<duckdb::NestedGreaterEquals>(right, left, sel, count, false_sel, true_sel,
+	                                                                     null_mask);
 }
 
 } // namespace duckdb

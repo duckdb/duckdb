@@ -126,6 +126,8 @@ public:
 	inline bool AllValid() const {
 		return validity_type == TupleDataValidityType::CANNOT_HAVE_NULL_VALUES;
 	}
+	//! Returns whether any of the columns are nested (they can compare NULL even if there are no explicit NULLs)
+	bool HasNestedTypes() const;
 
 private:
 	//! The types of the data columns

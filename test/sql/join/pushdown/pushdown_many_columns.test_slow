@@ -26,7 +26,7 @@ CREATE TABLE all_types AS FROM test_all_types();
 foreach col <all_types_columns>
 
 query I
-SELECT COUNT(*) FROM all_types WHERE "${col}"=(SELECT MIN("${col}") FROM all_types)
+SELECT COUNT(*) FROM all_types WHERE "${col}" IS NOT DISTINCT FROM (SELECT MIN("${col}") FROM all_types)
 ----
 1
 

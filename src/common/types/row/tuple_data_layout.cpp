@@ -228,4 +228,13 @@ bool TupleDataLayout::IsSortKeyLayout() const {
 	return sort_key_type != SortKeyType::INVALID;
 }
 
+bool TupleDataLayout::HasNestedTypes() const {
+	for (const auto &type : types) {
+		if (type.IsNested()) {
+			return true;
+		}
+	}
+	return false;
+}
+
 } // namespace duckdb

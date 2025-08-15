@@ -66,8 +66,9 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context_p, A
 	Resize(initial_capacity);
 
 	// Predicates
-	const auto expr_type =
-	    layout_ptr->AllValid() ? ExpressionType::COMPARE_EQUAL : ExpressionType::COMPARE_NOT_DISTINCT_FROM;
+	const auto expr_type = (layout_ptr->AllValid() && !layout_ptr->HasNestedTypes())
+	                           ? ExpressionType::COMPARE_EQUAL
+	                           : ExpressionType::COMPARE_NOT_DISTINCT_FROM;
 	predicates.resize(layout_ptr->ColumnCount() - 1, expr_type);
 	row_matcher.Initialize(true, *layout_ptr, predicates);
 }
