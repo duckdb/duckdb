@@ -360,6 +360,10 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		// NULL expression can be cast to anything
 		return TargetTypeCost(to);
 	}
+	if (from.id() == LogicalTypeId::ANY && to.IsTemplated()) {
+		// This can happen when changing a function from using ANY to using TEMPLATE.
+		return TargetTypeCost(to);
+	}
 	if (from.id() == LogicalTypeId::UNKNOWN) {
 		// parameter expression can be cast to anything for no cost
 		return 0;
