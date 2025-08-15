@@ -41,7 +41,7 @@ public:
 	}
 
 	//! Returns true, if the byte exists, else false.
-	bool HasByte(uint8_t &byte) const {
+	bool HasByte(const uint8_t byte) const {
 		for (uint8_t i = 0; i < count; i++) {
 			if (key[i] == byte) {
 				return true;

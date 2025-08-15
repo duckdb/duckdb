@@ -76,9 +76,9 @@ void Node4::InsertChild(ART &art, Node &node, const uint8_t byte, const Node chi
 	Node16::InsertChild(art, node, byte, child);
 }
 
-void Node4::DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte, const GateStatus status) {
+void Node4::DeleteChild(ART &art, Node &node, Node &parent, const uint8_t byte, const GateStatus status) {
 	Node child;
-	uint8_t remainder;
+	uint8_t remaining_byte;
 
 	{
 		auto handle = DeleteChildInternal(art, node, byte);
@@ -90,12 +90,12 @@ void Node4::DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte, 
 
 		// Compress one-way nodes.
 		child = n.children[0];
-		remainder = n.key[0];
+		remaining_byte = n.key[0];
 	}
 
-	auto old_status = node.GetGateStatus();
+	auto prev_node4_status = node.GetGateStatus();
 	Node::FreeNode(art, node);
-	Prefix::Concat(art, prefix, remainder, old_status, child, status);
+	Prefix::Concat(art, parent, node, child, remaining_byte, prev_node4_status);
 }
 
 void Node4::ShrinkNode16(ART &art, Node &node4, Node &node16) {
