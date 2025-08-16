@@ -1,6 +1,7 @@
 #include "duckdb/common/progress_bar/display/terminal_progress_bar_display.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/to_string.hpp"
+#include <thread>
 
 namespace duckdb {
 
@@ -42,6 +43,16 @@ static std::string format_eta(double seconds, bool elapsed = false) {
 }
 
 void TerminalProgressBarDisplay::PrintProgressInternal(int32_t percentage, double seconds, bool finished) {
+	if (!run_periodic_updates && !finished) {
+		run_periodic_updates = true;
+
+		// Since the progress reports may not come at a regular interval,
+		// we start a thread that will periodically update the display,
+		// with the new estimated completion time, but we're doing this
+		// here since we only want periodic updates if the progress bar is
+		// being displayed.
+		periodic_update_thread = std::thread([this]() { PeriodicUpdate(); });
+	}
 	string result;
 	// we divide the number of blocks by the percentage
 	// 0%   = 0
@@ -86,6 +97,8 @@ void TerminalProgressBarDisplay::PrintProgressInternal(int32_t percentage, doubl
 }
 
 void TerminalProgressBarDisplay::Update(double percentage) {
+	std::lock_guard<std::mutex> lock(mtx);
+
 	const double current_time = GetElapsedDuration();
 	// Filters go from 0 to 1, percentage is from 0-100
 	const double filter_percentage = percentage / 100.0;
@@ -105,10 +118,50 @@ void TerminalProgressBarDisplay::Update(double percentage) {
 		PrintProgressInternal(percentage_int, estimated_seconds_remaining);
 		Printer::Flush(OutputStream::STREAM_STDOUT);
 		last_update_time = current_time;
+		last_percentage = percentage;
 	}
 }
 
+void TerminalProgressBarDisplay::PeriodicUpdate() {
+	std::unique_lock<std::mutex> lock(mtx);
+	while (true) {
+		const double current_time = GetElapsedDuration();
+
+		// Only advance the time, but not the progress.
+		ukf.Predict(current_time);
+		double estimated_seconds_remaining = ukf.GetEstimatedRemainingSeconds();
+
+		if (last_percentage < 100) {
+			auto percentage_int = NormalizePercentage(last_percentage);
+			PrintProgressInternal(percentage_int, estimated_seconds_remaining);
+			Printer::Flush(OutputStream::STREAM_STDOUT);
+		}
+
+		// Wait for an interval then do an update.
+		if (cv.wait_for(lock, std::chrono::seconds(1), [this] { return !run_periodic_updates; })) {
+			break;
+		}
+	}
+}
+
+void TerminalProgressBarDisplay::StopPeriodicUpdates() {
+	if (run_periodic_updates) {
+		{
+			std::lock_guard<std::mutex> lock(mtx);
+			run_periodic_updates = false;
+		}
+		cv.notify_one();
+		if (periodic_update_thread.joinable()) {
+			periodic_update_thread.join();
+		}
+	}
+	run_periodic_updates = false;
+}
+
 void TerminalProgressBarDisplay::Finish() {
+	StopPeriodicUpdates();
+
+	std::lock_guard<std::mutex> lock(mtx);
 	PrintProgressInternal(100, GetElapsedDuration(), true);
 	Printer::RawPrint(OutputStream::STREAM_STDOUT, "\n");
 	Printer::Flush(OutputStream::STREAM_STDOUT);

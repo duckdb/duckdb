@@ -13,6 +13,7 @@
 #include "duckdb/common/unicode_bar.hpp"
 #include "duckdb/common/progress_bar/unscented_kalman_filter.hpp"
 #include <chrono>
+#include <thread>
 
 namespace duckdb {
 
@@ -21,25 +22,36 @@ private:
 	UnscentedKalmanFilter ukf;
 	std::chrono::steady_clock::time_point start_time;
 	bool udf_initialized;
+	bool run_periodic_updates;
+	double last_percentage;
+	double last_update_time;
 
 	double GetElapsedDuration() {
 		auto now = std::chrono::steady_clock::now();
 		return std::chrono::duration<double>(now - start_time).count();
 	}
+	void StopPeriodicUpdates();
 
 public:
-	TerminalProgressBarDisplay() : udf_initialized(false) {
+	TerminalProgressBarDisplay()
+	    : udf_initialized(false), run_periodic_updates(false), last_percentage(0.0), last_update_time(0.0) {
 		start_time = std::chrono::steady_clock::now();
 	}
 
-	~TerminalProgressBarDisplay() override = default;
+	~TerminalProgressBarDisplay() override {
+		StopPeriodicUpdates();
+	}
 
 public:
 	void Update(double percentage) override;
 	void Finish() override;
 
 private:
-	double last_update_time = 0.0;
+	std::mutex mtx;
+	std::thread periodic_update_thread;
+	std::condition_variable cv;
+	void PeriodicUpdate();
+
 	static constexpr const idx_t PARTIAL_BLOCK_COUNT = UnicodeBar::PartialBlocksCount();
 #ifndef DUCKDB_ASCII_TREE_RENDERER
 	const char *PROGRESS_EMPTY = " ";                                  // NOLINT
