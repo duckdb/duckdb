@@ -472,9 +472,18 @@ common_table_expr:  name opt_name_list opt_on_key AS opt_materialized '(' Prepar
 		;
 
 opt_on_key:
-		USING KEY '(' column_ref_list_opt_comma ')' 				{ $$ = $4; }
-		| /*EMPTY*/												{ $$ = list_make1(NIL); }
-		;
+        /* no extra keyword */
+        USING KEY '(' column_ref_list_opt_comma ')'                 { $$ = $4; }
+      | /* MIN */
+        USING KEY '(' column_ref_list_opt_comma ')' MIN             { $$ = lcons(makeInteger(1), $4); } /* 1 = MIN */
+      | /* MAX */
+        USING KEY '(' column_ref_list_opt_comma ')' MAX             { $$ = lcons(makeInteger(2), $4); } /* 2 = MAX */
+      | /* completely absent */
+        /*EMPTY*/                                                   { $$ = list_make1(NIL); }
+      ;
+
+
+
 
 column_ref_list_opt_comma:
 		column_ref_list	 						{ $$ = $1; }

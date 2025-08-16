@@ -33,6 +33,10 @@ public:
 	//! targets for key variants
 	vector<unique_ptr<ParsedExpression>> key_targets;
 
+	// Aggregation mode for USING KEY clause
+	bool use_min_key = false;
+	bool use_max_key = false;
+
 	const vector<unique_ptr<ParsedExpression>> &GetSelectList() const override {
 		return left->GetSelectList();
 	}
