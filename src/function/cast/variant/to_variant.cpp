@@ -33,13 +33,13 @@ public:
 		if (it != dictionary.end()) {
 			return;
 		}
-		auto vec_data = FlatVector::GetData<string_t>(vec);
 		auto dict_count = NumericCast<uint32_t>(dictionary.size());
 		if (dict_count >= dictionary_capacity) {
 			auto new_capacity = NextPowerOfTwo(dictionary_capacity + 1);
 			vec.Resize(dictionary_capacity, new_capacity);
 			dictionary_capacity = new_capacity;
 		}
+		auto vec_data = FlatVector::GetData<string_t>(vec);
 		vec_data[dict_count] = StringVector::AddStringOrBlob(vec, str);
 		dictionary.emplace(vec_data[dict_count], dict_count);
 	}
@@ -429,7 +429,7 @@ static bool ConvertArrayToVariant(Vector &source, VariantVectorData &result, Dat
 	auto &source_validity = source_format.validity;
 
 	auto array_type_size = ArrayType::GetSize(source.GetType());
-	auto list_size = ArrayVector::GetTotalSize(source);
+	auto list_size = count * array_type_size;
 
 	ContainerSelectionVectors sel(list_size);
 	for (idx_t i = 0; i < count; i++) {
