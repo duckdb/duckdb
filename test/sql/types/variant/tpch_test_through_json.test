@@ -1,0 +1,20 @@
+# name: test/sql/types/variant/tpch_test_through_json.test
+# group: [variant]
+
+# 'dictionary_expression' breaks the internal linkage of the VARIANT type.
+require no_vector_verification
+
+require json
+
+require tpch
+
+statement ok
+call dbgen(sf=0.01);
+
+query I nosort res
+select lineitem::json from lineitem limit 2;
+----
+
+query I nosort res
+select lineitem::json::variant::JSON from lineitem limit 2;
+----

@@ -1,0 +1,67 @@
+# name: test/sql/function/variant/variant_extract.test
+# group: [variant]
+
+# 'dictionary_expression' breaks the internal linkage of the VARIANT type.
+require no_vector_verification
+
+require json
+
+query I
+select variant_extract({'a': 1234}::VARIANT, 'a')::VARCHAR;
+----
+1234
+
+statement ok
+create table struct_cast_tbl3(a VARIANT);
+
+statement ok
+insert into struct_cast_tbl3 select {'a': [
+	{
+		'b': 'hello',
+		'c': NULL,
+		'a': '1970/03/15'::DATE
+	},
+	{
+		'b': NULL,
+		'c': True,
+		'a': '2020/11/03'::DATE
+	}
+]}::VARIANT;
+
+statement ok
+insert into struct_cast_tbl3 select {'a': [
+	{
+		'b': 'this is a long string',
+		'c': False,
+		'a': '1953/9/16'::DATE
+	}
+]}::VARIANT;
+
+query I
+select variant_extract(a, 'a[0].c') from struct_cast_tbl3;
+----
+NULL
+false
+
+# Using shorthand notation
+
+query I
+select ('{"a": 42, "b": [true, "test", true]}'::JSON::VARIANT).b[1];
+----
+test
+
+query I
+select ('{"a": 42, "b": [true, "test", true]}'::JSON::VARIANT)['b'][1];
+----
+test
+
+# When the argument is a string, it's taken as an object field, not an array index
+statement error
+select ('{"a": 42, "b": [true, "test", true]}'::JSON::VARIANT)['b']['1'];
+----
+Invalid Input Error: 'OBJECT' was expected, found 'ARRAY', can't convert VARIANT
+
+query I
+select ('{"a": 42, "b": [true, "test", true]}'::JSON::VARIANT)['b[1]'];
+----
+test

@@ -94,6 +94,10 @@ BoundCastInfo DefaultCasts::GetDefaultCastFunction(BindCastInput &input, const L
 		return ImplicitToUnionCast(input, source, target);
 	}
 
+	if (source.id() != LogicalTypeId::VARIANT && target.id() == LogicalTypeId::VARIANT) {
+		return ImplicitToVariantCast(input, source, target);
+	}
+
 	// else, switch on source type
 	switch (source.id()) {
 	case LogicalTypeId::BOOLEAN:
@@ -152,6 +156,8 @@ BoundCastInfo DefaultCasts::GetDefaultCastFunction(BindCastInput &input, const L
 		return ListCastSwitch(input, source, target);
 	case LogicalTypeId::UNION:
 		return UnionCastSwitch(input, source, target);
+	case LogicalTypeId::VARIANT:
+		return VariantCastSwitch(input, source, target);
 	case LogicalTypeId::ENUM:
 		return EnumCastSwitch(input, source, target);
 	case LogicalTypeId::ARRAY:
