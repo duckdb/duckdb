@@ -105,7 +105,7 @@ static void BindSchema(ClientContext &context, vector<LogicalType> &return_types
 #endif
 
 		res.default_expression = make_uniq<ConstantExpression>(column.default_value);
-		reader_bind.schema.emplace_back(std::move(res));
+		reader_bind.schema.emplace_back(res);
 	}
 	ParseFileRowNumberOption(reader_bind, options, return_types, names);
 	if (options.file_row_number) {
@@ -113,7 +113,7 @@ static void BindSchema(ClientContext &context, vector<LogicalType> &return_types
 		res.identifier = Value::INTEGER(MultiFileReader::ORDINAL_FIELD_ID);
 		schema_col_names.push_back(res.name);
 		schema_col_types.push_back(res.type);
-		reader_bind.schema.emplace_back(std::move(res));
+		reader_bind.schema.emplace_back(res);
 	}
 
 	if (match_by_field_id) {
