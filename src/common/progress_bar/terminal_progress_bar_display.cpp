@@ -76,13 +76,15 @@ void TerminalProgressBarDisplay::PrintProgressInternal(int32_t percentage, doubl
 }
 
 void TerminalProgressBarDisplay::Update(double percentage) {
-	double current_time = GetElapsedDuration();
+	const double current_time = GetElapsedDuration();
+	// Filters go from 0 to 1, percentage is from 0-100
+	const double filter_percentage = percentage / 100.0;
 	if (!udf_initialized) {
-		ukf.Initialize(percentage / 100.0, current_time);
+		ukf.Initialize(filter_percentage, current_time);
 		udf_initialized = true;
 	} else {
 		ukf.Predict(current_time);
-		ukf.Update(percentage / 100.0);
+		ukf.Update(filter_percentage);
 	}
 
 	double estimated_seconds_remaining = ukf.GetEstimatedRemainingSeconds();
