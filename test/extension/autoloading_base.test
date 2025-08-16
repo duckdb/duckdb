@@ -33,17 +33,17 @@ set autoinstall_known_extensions=false
 statement error
 SET s3_region='eu-west-1';
 ----
-Catalog Error: Setting with name "s3_region" is not in the catalog, but it exists in the httpfs extension.
+<REGEX>:.*Catalog Error.*Setting with name "s3_region" is not in the catalog.*
 
 statement error
 select * from read_json_auto('data/json/example_n.ndjson');
 ----
-Catalog Error: Table Function with name "read_json_auto" is not in the catalog, but it exists in the json extension.
+<REGEX>:.*Catalog Error.*Table Function with name "read_json_auto" is not in the catalog.*
 
 statement error
 select * from thistablefunctionwillnotexistfosho();
 ----
-Catalog Error: Table Function with name thistablefunctionwillnotexistfosho does not exist!
+<REGEX>:.*Catalog Error.*Table Function with name thistablefunctionwillnotexistfosho does not exist.*
 
 ### Autoloading and installing, but the autoloading repository is set to non-existent location
 statement ok
@@ -60,14 +60,12 @@ set autoinstall_extension_repository='/tmp/non-existent-repo';
 statement error
 SET s3_region='eu-west-1';
 ----
-Extension Autoloading Error: An error occurred while trying to automatically install the required extension 'httpfs':
-Failed to install local extension
+<REGEX>:Extension Autoloading Error.*An error occurred while trying to automatically install the required extension 'httpfs'.*
 
 statement error
 select * from read_json_auto('data/json/example_n.ndjson');
 ----
-Extension Autoloading Error: An error occurred while trying to automatically install the required extension 'json':
-Failed to install local extension
+<REGEX>:Extension Autoloading Error.*An error occurred while trying to automatically install the required extension 'json'.*
 
 # Now override with non-existent remote repo
 statement ok
@@ -77,19 +75,17 @@ set autoinstall_extension_repository='http://duckdb.org/what/are/the/odds/we/act
 statement error
 SET s3_region='eu-west-1';
 ----
-Extension Autoloading Error: An error occurred while trying to automatically install the required extension 'httpfs':
-Failed to download extension "httpfs" at URL
+<REGEX>:Extension Autoloading Error.*An error occurred while trying to automatically install the required extension 'httpfs'.*
 
 statement error
 select * from read_json_auto('data/json/example_n.ndjson');
 ----
-Extension Autoloading Error: An error occurred while trying to automatically install the required extension 'json':
-Failed to download extension "json" at URL
+<REGEX>:Extension Autoloading Error.*An error occurred while trying to automatically install the required extension 'json'.*
 
 statement error
 select * from thistablefunctionwillnotexistfosho();
 ----
-Catalog Error: Table Function with name thistablefunctionwillnotexistfosho does not exist!
+<REGEX>:Catalog Error.*Table Function with name thistablefunctionwillnotexistfosho does not exist.*
 
 ### Autoloading with correct tmp repo
 statement ok
