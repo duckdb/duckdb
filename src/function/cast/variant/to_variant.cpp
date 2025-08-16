@@ -867,9 +867,6 @@ static void InitializeVariants(DataChunk &offsets, Vector &result, SelectionVect
 	auto &keys = VariantVector::GetKeys(result);
 	auto keys_data = ListVector::GetData(keys);
 
-	auto &keys_entry = ListVector::GetEntry(keys);
-	auto keys_entry_data = FlatVector::GetData<string_t>(keys_entry);
-
 	auto &children = VariantVector::GetChildren(result);
 	auto children_data = ListVector::GetData(children);
 

@@ -48,13 +48,13 @@ public:
 		uint32_t dict_index;
 		if (it == dictionary.end()) {
 			//! Key does not exist in the global dictionary yet
-			auto vec_data = FlatVector::GetData<string_t>(vec);
 			auto dict_count = NumericCast<uint32_t>(dictionary.size());
 			if (dict_count >= dictionary_capacity) {
 				auto new_capacity = NextPowerOfTwo(dictionary_capacity + 1);
 				vec.Resize(dictionary_capacity, new_capacity);
 				dictionary_capacity = new_capacity;
 			}
+			auto vec_data = FlatVector::GetData<string_t>(vec);
 			vec_data[dict_count] = StringVector::AddStringOrBlob(vec, str);
 			it = dictionary.emplace(vec_data[dict_count], dict_count).first;
 		}
@@ -179,8 +179,6 @@ static bool ConvertJSONObject(yyjson_val *obj, Vector &result, VariantConversion
 	ListVector::Reserve(values, state.value_count + state.row_value_count + count);
 	ListVector::Reserve(children, state.children_count + state.row_children_count);
 
-	auto key_ids_data = FlatVector::GetData<uint32_t>(key_ids);
-	auto value_ids_data = FlatVector::GetData<uint32_t>(value_ids);
 	//! Iterate over all the children in the Object
 	yyjson_val *key, *val;
 	while ((key = yyjson_obj_iter_next(&iter))) {
@@ -193,6 +191,9 @@ static bool ConvertJSONObject(yyjson_val *obj, Vector &result, VariantConversion
 		if (!res.IsValid()) {
 			return false;
 		}
+
+		auto key_ids_data = FlatVector::GetData<uint32_t>(key_ids);
+		auto value_ids_data = FlatVector::GetData<uint32_t>(value_ids);
 
 		auto str = string_t(key_string, key_string_len);
 		auto key_id = state.AddString(keys_entry, str);
@@ -207,13 +208,18 @@ static bool ConvertJSONObject(yyjson_val *obj, Vector &result, VariantConversion
 }
 
 static optional_idx ConvertJSON(yyjson_val *val, Vector &result, VariantConversionState &state) {
+	auto &values = VariantVector::GetValues(result);
+
+	auto index = state.value_count + state.row_value_count++;
+	if (index >= ListVector::GetListCapacity(values)) {
+		ListVector::Reserve(values, NextPowerOfTwo(index + 1));
+	}
+
 	auto &type_ids = VariantVector::GetValuesTypeId(result);
 	auto &byte_offsets = VariantVector::GetValuesByteOffset(result);
 
 	auto type_ids_data = FlatVector::GetData<uint8_t>(type_ids);
 	auto byte_offsets_data = FlatVector::GetData<uint32_t>(byte_offsets);
-
-	auto index = state.value_count + state.row_value_count++;
 	byte_offsets_data[index] = NumericCast<uint32_t>(state.stream.GetPosition());
 
 	if (unsafe_yyjson_is_null(val)) {
