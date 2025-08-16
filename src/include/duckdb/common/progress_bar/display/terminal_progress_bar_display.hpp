@@ -39,7 +39,7 @@ public:
 	void Finish() override;
 
 private:
-	int32_t rendered_percentage = -1;
+	double last_update_time = 0.0;
 	static constexpr const idx_t PARTIAL_BLOCK_COUNT = UnicodeBar::PartialBlocksCount();
 #ifndef DUCKDB_ASCII_TREE_RENDERER
 	const char *PROGRESS_EMPTY = " ";                                  // NOLINT
@@ -54,11 +54,11 @@ private:
 	const char *PROGRESS_START = "[";
 	const char *PROGRESS_END = "]";
 #endif
-	static constexpr const idx_t PROGRESS_BAR_WIDTH = 43;
+	static constexpr const idx_t PROGRESS_BAR_WIDTH = 38;
 
 private:
 	static int32_t NormalizePercentage(double percentage);
-	void PrintProgressInternal(int32_t percentage, double estimated_remaining_seconds);
+	void PrintProgressInternal(int32_t percentage, double estimated_remaining_seconds, bool is_finished = false);
 };
 
 } // namespace duckdb

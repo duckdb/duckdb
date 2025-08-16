@@ -14,23 +14,34 @@ int32_t TerminalProgressBarDisplay::NormalizePercentage(double percentage) {
 	return int32_t(percentage);
 }
 
-static std::string format_eta(double seconds) {
+static std::string format_eta(double seconds, bool elapsed = false) {
+	// Desired formats:
+	//   00:00:00.00 remaining
+	//   unknown     remaining
+	//   00:00:00.00 elapsed
+	const char *suffix = elapsed ? " elapsed)  " : " remaining)";
+
 	if (seconds < 0) {
-		// We may not have a valid prediction.
-		return "unknown remaining";
+		// Invalid or unknown ETA
+		return StringUtil::Format("(%11s%s", "unknown", suffix);
 	}
 
-	// Round to nearest whole second
-	uint64_t total_seconds = static_cast<uint64_t>(std::round(seconds));
+	// Round to nearest centisecond as integer
+	auto total_centiseconds = static_cast<uint64_t>(std::llround(seconds * 100.0));
 
+	// Split into seconds and centiseconds
+	uint64_t total_seconds = total_centiseconds / 100;
+	uint32_t centiseconds = static_cast<uint32_t>(total_centiseconds % 100);
+
+	// Break down total_seconds
 	uint64_t hours = total_seconds / 3600;
-	uint32_t minutes = (total_seconds % 3600) / 60;
-	uint32_t secs = total_seconds % 60;
+	uint32_t minutes = static_cast<uint32_t>((total_seconds % 3600) / 60);
+	uint32_t secs = static_cast<uint32_t>(total_seconds % 60);
 
-	return StringUtil::Format("%lu:%02d:%02d", hours, minutes, secs) + " remaining";
+	return StringUtil::Format("(%02llu:%02u:%02u.%02llu%s", hours, minutes, secs, centiseconds, suffix);
 }
 
-void TerminalProgressBarDisplay::PrintProgressInternal(int32_t percentage, double est_remaining) {
+void TerminalProgressBarDisplay::PrintProgressInternal(int32_t percentage, double seconds, bool finished) {
 	string result;
 	// we divide the number of blocks by the percentage
 	// 0%   = 0
@@ -49,8 +60,7 @@ void TerminalProgressBarDisplay::PrintProgressInternal(int32_t percentage, doubl
 	}
 	result += to_string(percentage) + "%";
 	result += " ";
-	result += " (";
-	result += format_eta(est_remaining) + ")";
+	result += format_eta(seconds, finished);
 	result += " ";
 	result += PROGRESS_START;
 	idx_t i;
@@ -89,17 +99,17 @@ void TerminalProgressBarDisplay::Update(double percentage) {
 
 	double estimated_seconds_remaining = ukf.GetEstimatedRemainingSeconds();
 
-	auto percentage_int = NormalizePercentage(percentage);
-	if (percentage_int == rendered_percentage) {
-		return;
+	// Update the status at most once every 100ms
+	if (current_time - last_update_time >= 0.1) {
+		auto percentage_int = NormalizePercentage(percentage);
+		PrintProgressInternal(percentage_int, estimated_seconds_remaining);
+		Printer::Flush(OutputStream::STREAM_STDOUT);
+		last_update_time = current_time;
 	}
-	PrintProgressInternal(percentage_int, estimated_seconds_remaining);
-	Printer::Flush(OutputStream::STREAM_STDOUT);
-	rendered_percentage = percentage_int;
 }
 
 void TerminalProgressBarDisplay::Finish() {
-	PrintProgressInternal(100, 0.0);
+	PrintProgressInternal(100, GetElapsedDuration(), true);
 	Printer::RawPrint(OutputStream::STREAM_STDOUT, "\n");
 	Printer::Flush(OutputStream::STREAM_STDOUT);
 }
