@@ -27,7 +27,7 @@ struct OffsetData {
 
 struct StringDictionary {
 public:
-	void AddString(Vector &vec, string_t str) {
+	void AddString(Vector &list, string_t str) {
 		auto it = dictionary.find(str);
 
 		if (it != dictionary.end()) {
@@ -36,11 +36,12 @@ public:
 		auto dict_count = NumericCast<uint32_t>(dictionary.size());
 		if (dict_count >= dictionary_capacity) {
 			auto new_capacity = NextPowerOfTwo(dictionary_capacity + 1);
-			vec.Resize(dictionary_capacity, new_capacity);
+			ListVector::Reserve(list, new_capacity);
 			dictionary_capacity = new_capacity;
 		}
-		auto vec_data = FlatVector::GetData<string_t>(vec);
-		vec_data[dict_count] = StringVector::AddStringOrBlob(vec, str);
+		auto &list_entry = ListVector::GetEntry(list);
+		auto vec_data = FlatVector::GetData<string_t>(list_entry);
+		vec_data[dict_count] = StringVector::AddStringOrBlob(list_entry, str);
 		dictionary.emplace(vec_data[dict_count], dict_count);
 	}
 
@@ -866,6 +867,9 @@ static void InitializeVariants(DataChunk &offsets, Vector &result, SelectionVect
 	auto &keys = VariantVector::GetKeys(result);
 	auto keys_data = ListVector::GetData(keys);
 
+	auto &keys_entry = ListVector::GetEntry(keys);
+	auto keys_entry_data = FlatVector::GetData<string_t>(keys_entry);
+
 	auto &children = VariantVector::GetChildren(result);
 	auto children_data = ListVector::GetData(children);
 
@@ -932,23 +936,25 @@ static bool CastToVARIANT(Vector &source, Vector &result, idx_t count, CastParam
 	                   {LogicalType::UINTEGER, LogicalType::UINTEGER, LogicalType::UINTEGER, LogicalType::UINTEGER},
 	                   count);
 	offsets.SetCardinality(count);
+	auto &keys = VariantVector::GetKeys(result);
 
 	//! Initialize the dictionary
 	StringDictionary dictionary;
-	auto &keys_entry = ListVector::GetEntry(VariantVector::GetKeys(result));
-	TypeVisitor::Contains(source.GetType(), [&dictionary, &keys_entry](const LogicalType &type) {
-		if (type.id() == LogicalTypeId::STRUCT) {
-			auto &children = StructType::GetChildTypes(type);
-			for (auto &child : children) {
-				string_t child_name_str(child.first.c_str(), NumericCast<uint32_t>(child.first.size()));
-				dictionary.AddString(keys_entry, child_name_str);
+	{
+		TypeVisitor::Contains(source.GetType(), [&dictionary, &keys](const LogicalType &type) {
+			if (type.id() == LogicalTypeId::STRUCT) {
+				auto &children = StructType::GetChildTypes(type);
+				for (auto &child : children) {
+					string_t child_name_str(child.first.c_str(), NumericCast<uint32_t>(child.first.size()));
+					dictionary.AddString(keys, child_name_str);
+				}
+			} else if (type.id() == LogicalTypeId::MAP) {
+				dictionary.AddString(keys, string_t("key", 3));
+				dictionary.AddString(keys, string_t("value", 5));
 			}
-		} else if (type.id() == LogicalTypeId::MAP) {
-			dictionary.AddString(keys_entry, string_t("key", 3));
-			dictionary.AddString(keys_entry, string_t("value", 5));
-		}
-		return false;
-	});
+			return false;
+		});
+	}
 	SelectionVector keys_selvec;
 
 	{
@@ -969,6 +975,7 @@ static bool CastToVARIANT(Vector &source, Vector &result, idx_t count, CastParam
 		ConvertToVariant<true>(source, result_data, offsets, count, nullptr, keys_selvec, dictionary, nullptr);
 	}
 
+	auto &keys_entry = ListVector::GetEntry(keys);
 	VariantUtils::SortVariantKeys(keys_entry, dictionary.Size(), keys_selvec, keys_selvec_size);
 
 	keys_entry.Slice(keys_selvec, keys_selvec_size);
