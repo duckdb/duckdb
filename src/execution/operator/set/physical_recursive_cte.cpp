@@ -43,6 +43,11 @@ public:
 
 		ht = make_uniq<GroupedAggregateHashTable>(context, BufferAllocator::Get(context), op.distinct_types,
 		                                          op.payload_types, payload_aggregates_ptr);
+
+		// MODIFICATION: Use the actual flags from the operator instead of hardcoded value
+		// use_aggregation = op.use_min_key || op.use_max_key;
+		use_aggregation = op.use_min_key;
+		is_min_aggregation = op.use_min_key;
 	}
 
 	unique_ptr<GroupedAggregateHashTable> ht;
@@ -54,6 +59,14 @@ public:
 	bool finished_scan = false;
 	SelectionVector new_groups;
 	AggregateHTScanState ht_scan_state;
+	// MODIFICATION
+	// MODIFICATION: Replace the hardcoded boolean with actual state
+	bool has_converged = false;
+	bool use_aggregation = false;  // Whether to use MIN/MAX aggregation
+	bool is_min_aggregation = false;  // true for MIN, false for MAX
+
+	// END
+
 };
 
 unique_ptr<GlobalSinkState> PhysicalRecursiveCTE::GetGlobalSinkState(ClientContext &context) const {
@@ -96,9 +109,11 @@ SinkResultType PhysicalRecursiveCTE::Sink(ExecutionContext &context, DataChunk &
 			idx_t match_count = ProbeHT(chunk, gstate);
 			if (match_count > 0) {
 				gstate.intermediate_table.Append(chunk);
+
 			}
 		} else {
 			gstate.intermediate_table.Append(chunk);
+
 		}
 	} else {
 		// Split incoming DataChunk into payload and keys
@@ -110,10 +125,71 @@ SinkResultType PhysicalRecursiveCTE::Sink(ExecutionContext &context, DataChunk &
 			payload_rows.Initialize(Allocator::DefaultAllocator(), payload_types);
 		}
 		PopulateChunk(payload_rows, chunk, payload_idx, true);
+		//MODIFICATION
+		// Use FindOrCreateGroups to detect new groups and get addresses
+			// OLD IMPLEMENTATION OF ITERATION
+			// idx_t new_group_count = 0;
+			// if (gstate.min_function) {
+			// 	Vector addresses(LogicalType::POINTER);
+			// 	new_group_count = gstate.ht->FindOrCreateGroups(distinct_rows, addresses, gstate.new_groups);
+			//
+			// }
+		idx_t new_group_count = 0;
+		bool has_updates = false;
 
+		if (gstate.use_aggregation) {
+			Vector addresses(LogicalType::POINTER);
+			new_group_count = gstate.ht->FindOrCreateGroups(distinct_rows, addresses, gstate.new_groups);
+			printf("Debug: new_group_count = %llu\n", new_group_count);
+			has_updates = new_group_count > 0;
+		}
+
+		//END
 		// Add the chunk to the hash table and append it to the intermediate table
 		gstate.ht->AddChunk(distinct_rows, payload_rows, AggregateType::NON_DISTINCT);
-		gstate.intermediate_table.Append(chunk);
+
+
+		// MODIFICATION
+		// I COMMENTED THIS TO MODIFY THE INTERMIDATE TABLE WITH ONLY NEW VALUES
+		if (gstate.use_aggregation) {
+			// Check if new entries were added to the hash table
+			// OLD IMPLEMENTATION
+			// if (gstate.min_function && new_group_count > 0) {
+			// 	gstate.has_converged = false;
+			// }
+			printf("DEBUG: has_updated is set to %d", has_updates);
+			// Only append rows that were actually inserted or updated in the hash table
+			if (has_updates) {
+				// Create a filtered chunk containing only the rows that caused updates
+				DataChunk filtered_chunk;
+				filtered_chunk.Initialize(Allocator::DefaultAllocator(), chunk.GetTypes());
+				filtered_chunk.Slice(chunk, gstate.new_groups, new_group_count);
+				printf("DEBUG: filtered_chunk content:\n");
+				for (idx_t col = 0; col < filtered_chunk.ColumnCount(); col++) {
+					printf("Column %llu: ", (unsigned long long)col);
+					auto &vec = filtered_chunk.data[col];
+					for (idx_t row = 0; row < filtered_chunk.size(); row++) {
+						if (row > 0) {
+							printf(", ");
+						}
+						auto v = vec.GetValue(row);             // fetch Value at [row]
+						printf("%s", v.ToString().c_str());     // print as string (handles NULLs)
+					}
+					printf("\n");
+				}
+
+				gstate.intermediate_table.Append(filtered_chunk);
+			}
+		}
+		else {
+			gstate.intermediate_table.Append(chunk);
+
+		}
+
+
+
+		// END
+
 	}
 
 	return SinkResultType::NEED_MORE_INPUT;
@@ -134,7 +210,10 @@ SourceResultType PhysicalRecursiveCTE::GetData(ExecutionContext &context, DataCh
 		}
 		gstate.finished_scan = false;
 		gstate.initialized = true;
+
+
 	}
+
 	while (chunk.size() == 0) {
 		if (!gstate.finished_scan) {
 			if (!using_key) {
@@ -147,6 +226,27 @@ SourceResultType PhysicalRecursiveCTE::GetData(ExecutionContext &context, DataCh
 				break;
 			}
 		} else {
+			//MODIFICATION
+			// Check for convergence before proceeding with recursion
+			// if (gstate.min_function && gstate.has_converged) {
+			// 	// We've converged, terminate early
+			// 	gstate.finished_scan = true;
+			// 	if (using_key) {
+			// 		// Extract final results from hash table
+			// 		DataChunk payload_rows;
+			// 		DataChunk distinct_rows;
+			// 		distinct_rows.Initialize(Allocator::DefaultAllocator(), distinct_types);
+			// 		if (!payload_types.empty()) {
+			// 			payload_rows.Initialize(Allocator::DefaultAllocator(), payload_types);
+			// 		}
+			//
+			// 		gstate.ht->Scan(gstate.ht_scan_state, distinct_rows, payload_rows);
+			// 		PopulateChunk(chunk, distinct_rows, distinct_idx, false);
+			// 		PopulateChunk(chunk, payload_rows, payload_idx, false);
+			// 	}
+			// 	break;
+			// }
+			//END
 			// we have run out of chunks
 			// now we need to recurse
 			// we set up the working table as the data we gathered in this iteration of the recursion
@@ -181,14 +281,25 @@ SourceResultType PhysicalRecursiveCTE::GetData(ExecutionContext &context, DataCh
 
 			working_table->Reset();
 			working_table->Combine(gstate.intermediate_table);
+
+			//MODIFICATION
+
+			// Set convergence flag to true before recursion
+			// It will be reset to false in Sink() if new data is added
+			// gstate.has_converged = true;
+
+			//END
+
 			// and we clear the intermediate table
 			gstate.finished_scan = false;
 			gstate.intermediate_table.Reset();
 			// now we need to re-execute all of the pipelines that depend on the recursion
 			ExecuteRecursivePipelines(context);
 
+
 			// check if we obtained any results
 			// if not, we are done
+
 			if (gstate.intermediate_table.Count() == 0) {
 				gstate.finished_scan = true;
 				if (using_key) {

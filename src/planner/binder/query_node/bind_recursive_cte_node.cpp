@@ -63,6 +63,9 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 		D_ASSERT(bound_expr->type == ExpressionType::BOUND_COLUMN_REF);
 		result->key_targets.push_back(std::move(bound_expr));
 	}
+	// MISSING: Transfer the aggregation flags from parser to bound node
+	result->use_min_key = statement.use_min_key;
+	result->use_max_key = statement.use_max_key;
 
 	// now both sides have been bound we can resolve types
 	if (result->left->types.size() != result->right->types.size()) {

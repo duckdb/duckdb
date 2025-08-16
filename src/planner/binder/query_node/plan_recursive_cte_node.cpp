@@ -44,6 +44,10 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundRecursiveCTENode &node) {
 	    make_uniq<LogicalRecursiveCTE>(node.ctename, node.setop_index, node.types.size(), node.union_all,
 	                                   std::move(node.key_targets), std::move(left_node), std::move(right_node));
 	root->ref_recurring = ref_recurring;
+	// MODIFICATION: Transfer the aggregation flags to the logical operator
+	root->use_min_key = node.use_min_key;
+	root->use_max_key = node.use_max_key;
+
 	return VisitQueryNode(node, std::move(root));
 }
 

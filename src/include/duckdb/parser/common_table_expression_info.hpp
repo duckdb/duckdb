@@ -21,6 +21,9 @@ struct CommonTableExpressionInfo {
 	unique_ptr<SelectStatement> query;
 	CTEMaterialize materialized = CTEMaterialize::CTE_MATERIALIZE_DEFAULT;
 
+	bool use_min_key = false;
+	bool use_max_key = false;
+
 	void Serialize(Serializer &serializer) const;
 	static unique_ptr<CommonTableExpressionInfo> Deserialize(Deserializer &deserializer);
 	unique_ptr<CommonTableExpressionInfo> Copy();

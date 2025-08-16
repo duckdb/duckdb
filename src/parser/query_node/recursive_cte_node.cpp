@@ -32,6 +32,14 @@ bool RecursiveCTENode::Equals(const QueryNode *other_p) const {
 	if (!ParsedExpression::ListEquals(key_targets, other.key_targets)) {
 		return false;
 	}
+	// Compare the new aggregation mode flags
+	if (other.use_min_key != use_min_key) {
+		return false;
+	}
+	if (other.use_max_key != use_max_key) {
+		return false;
+	}
+
 
 	if (!left->Equals(other.left.get())) {
 		return false;
@@ -53,6 +61,9 @@ unique_ptr<QueryNode> RecursiveCTENode::Copy() const {
 	for (auto &key : key_targets) {
 		result->key_targets.push_back(key->Copy());
 	}
+	// Copy the new aggregation mode flags
+	result->use_min_key = use_min_key;
+	result->use_max_key = use_max_key;
 
 	this->CopyProperties(*result);
 	return std::move(result);

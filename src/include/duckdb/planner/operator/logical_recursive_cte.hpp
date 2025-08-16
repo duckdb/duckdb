@@ -33,6 +33,9 @@ public:
 	bool union_all;
 	// Flag if recurring table is referenced, if not we do not copy ht into ColumnDataCollection
 	bool ref_recurring;
+	bool use_min_key = false;
+	bool use_max_key = false;
+
 	vector<unique_ptr<Expression>> key_targets;
 
 public:

@@ -37,6 +37,10 @@ public:
 	// Additionally required for using-key recursive CTE to normal CTE.
 	//===--------------------------------------------------------------------===//
 	bool using_key = false;
+
+	bool use_min_key = false;
+	bool use_max_key = false;
+	bool has_min_max_aggregates = false;  // Whether to use MIN/MAX aggregation
 	// Contains the result of the key variant
 	shared_ptr<ColumnDataCollection> recurring_table;
 	// Contains the types of the payload and key columns.

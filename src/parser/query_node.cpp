@@ -25,7 +25,11 @@ CommonTableExpressionMap CommonTableExpressionMap::Copy() const {
 		}
 		kv_info->query = unique_ptr_cast<SQLStatement, SelectStatement>(kv.second->query->Copy());
 		kv_info->materialized = kv.second->materialized;
+		// Copy the new aggregation mode flags
+		kv_info->use_min_key = kv.second->use_min_key;
+		kv_info->use_max_key = kv.second->use_max_key;
 		res.map[kv.first] = std::move(kv_info);
+
 	}
 
 	return res;
@@ -65,6 +69,16 @@ string CommonTableExpressionMap::ToString() const {
 			}
 			result += ")";
 		}
+		// if (!cte.key_targets.empty()) {
+		// 	result += " USING KEY (";
+		// 	for (idx_t k = 0; k < cte.key_targets.size(); k++) {
+		// 		if (k > 0) {
+		// 			result += ", ";
+		// 		}
+		// 		result += cte.key_targets[k]->ToString();
+		// 	}
+		// 	result += ") ";
+		// }
 		if (!cte.key_targets.empty()) {
 			result += " USING KEY (";
 			for (idx_t k = 0; k < cte.key_targets.size(); k++) {
@@ -73,8 +87,16 @@ string CommonTableExpressionMap::ToString() const {
 				}
 				result += cte.key_targets[k]->ToString();
 			}
-			result += ") ";
+			result += ")";
+			// Add MINKEY or MAXKEY keyword if specified
+			if (cte.use_min_key) {
+				result += " MINKEY";
+			} else if (cte.use_max_key) {
+				result += " MAXKEY";
+			}
+			result += " ";
 		}
+
 		if (kv.second->materialized == CTEMaterialize::CTE_MATERIALIZE_ALWAYS) {
 			result += " AS MATERIALIZED (";
 		} else if (kv.second->materialized == CTEMaterialize::CTE_MATERIALIZE_NEVER) {

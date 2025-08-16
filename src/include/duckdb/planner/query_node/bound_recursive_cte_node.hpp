@@ -33,6 +33,10 @@ public:
 	//! Target columns for the recursive key variant
 	vector<unique_ptr<Expression>> key_targets;
 
+	// MODIFICATION: Add the aggregation mode flags
+	bool use_min_key = false;
+	bool use_max_key = false;
+
 	//! Index used by the set operation
 	idx_t setop_index;
 	//! The binder used by the left side of the set operation

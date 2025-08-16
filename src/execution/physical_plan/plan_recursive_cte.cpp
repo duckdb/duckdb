@@ -39,6 +39,9 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 	vector<idx_t> payload_idx, distinct_idx;
 	vector<unique_ptr<BoundAggregateExpression>> payload_aggregates;
 
+	// Track whether we actually used MIN/MAX aggregates
+	bool has_min_max_aggregates = false;
+
 	// create a group for each target, these are the columns that should be grouped
 	unordered_map<idx_t, idx_t> group_by_references;
 	for (idx_t i = 0; i < op.key_targets.size(); i++) {
@@ -47,6 +50,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 		auto &bound_ref = target->Cast<BoundReferenceExpression>();
 		group_by_references[bound_ref.index] = i;
 	}
+
 
 	/*
 	 * iterate over all types
@@ -69,14 +73,48 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 			first_children.push_back(std::move(bound));
 
 			FunctionBinder function_binder(context);
-			auto first_aggregate =
-			    function_binder.BindAggregateFunction(LastFunctionGetter::GetFunction(logical_type),
-			                                          std::move(first_children), nullptr, AggregateType::NON_DISTINCT);
-			first_aggregate->order_bys = nullptr;
+			// // auto first_aggregate =
+			// //     function_binder.BindAggregateFunction(MinFunction::GetFunction(),
+			// //                                           std::move(first_children), nullptr, AggregateType::NON_DISTINCT);
+			// auto first_aggregate =
+			// 			function_binder.BindAggregateFunction(LastFunctionGetter::GetFunction(logical_type),
+			// 		  std::move(first_children), nullptr, AggregateType::NON_DISTINCT);
+			// first_aggregate->order_bys = nullptr;
+			//
+			// payload_types.push_back(logical_type);
+			// payload_idx.emplace_back(i);
+			// payload_aggregates.push_back(std::move(first_aggregate));
+			// MODIFICATION: Choose aggregate function based on MINKEY/MAXKEY flags
+			printf("DEBUG: TransformCTE - Set use_min_key=%d, use_max_key=%d\n",
+			       op.use_min_key, op.use_max_key);
+
+			unique_ptr<BoundAggregateExpression> aggregate;
+			if (op.use_min_key) {
+				// Use MIN aggregate for MINKEY
+				aggregate = function_binder.BindAggregateFunction(MinFunction::GetFunction(),
+										std::move(first_children), nullptr, AggregateType::NON_DISTINCT);
+				has_min_max_aggregates = true;  // Track that we used MIN/MAX
+
+			} else if (op.use_max_key) {
+				// Use MAX aggregate for MAXKEY
+				printf("DEBUG: Entering max_key condition");
+				aggregate = function_binder.BindAggregateFunction(MaxFunction::GetFunction(),
+										std::move(first_children), nullptr, AggregateType::NON_DISTINCT);
+				// has_min_max_aggregates = true;  // Track that we used MIN/MAX
+
+			} else {
+				// Default: use LAST aggregate
+				aggregate = function_binder.BindAggregateFunction(LastFunctionGetter::GetFunction(logical_type),
+										std::move(first_children), nullptr, AggregateType::NON_DISTINCT);
+
+			}
+			aggregate->order_bys = nullptr;
 
 			payload_types.push_back(logical_type);
 			payload_idx.emplace_back(i);
-			payload_aggregates.push_back(std::move(first_aggregate));
+			payload_aggregates.push_back(std::move(aggregate));
+
+
 		}
 	}
 
@@ -97,6 +135,13 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 	cast_cte.ref_recurring = op.ref_recurring;
 	cast_cte.working_table = working_table;
 	cast_cte.recurring_table = recurring_table;
+
+	// MODIFICATION: Pass the aggregation mode flags to the physical operator
+	cast_cte.use_min_key = op.use_min_key;
+	cast_cte.use_max_key = op.use_max_key;
+	// Set use_aggregation based on whether we actually used MIN/MAX aggregates
+	cast_cte.has_min_max_aggregates = has_min_max_aggregates;
+
 	return cte;
 }
 

@@ -36,6 +36,7 @@ public:
 	unique_ptr<Expression> filter;
 	//! The order by expression for this aggregate - if any
 	unique_ptr<BoundOrderModifier> order_bys;
+	int distinct;
 
 public:
 	bool IsDistinct() const {

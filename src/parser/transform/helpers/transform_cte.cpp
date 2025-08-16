@@ -17,6 +17,11 @@ unique_ptr<CommonTableExpressionInfo> CommonTableExpressionInfo::Copy() {
 	}
 
 	result->materialized = materialized;
+
+	// Copy the new aggregation mode flags
+	result->use_min_key = use_min_key;
+	result->use_max_key = use_max_key;
+
 	return result;
 }
 
@@ -48,9 +53,37 @@ void Transformer::TransformCTE(duckdb_libpgquery::PGWithClause &de_with_clause, 
 		if (cte.recursive_keys) {
 			auto key_target = PGPointerCast<duckdb_libpgquery::PGNode>(cte.recursive_keys->head->data.ptr_value);
 			if (key_target) {
-				TransformExpressionList(*cte.recursive_keys, info->key_targets);
+				// Check if the first element is an integer (MINKEY/MAXKEY indicator)
+				if (key_target->type == duckdb_libpgquery::T_PGInteger) {
+					// Extract the mode indicator - cast the node to PGValue to access the integer value
+					auto mode_val_node = PGCast<duckdb_libpgquery::PGValue>(*key_target);
+					int mode_val = mode_val_node.val.ival;
+					if (mode_val == 1) {
+						info->use_min_key = true;
+					} else if (mode_val == 2) {
+						info->use_max_key = true;
+					}
+
+					// Create a temporary list without the first element (mode indicator)
+					if (cte.recursive_keys->length > 1) {
+						duckdb_libpgquery::PGList temp_list;
+						temp_list.head = cte.recursive_keys->head->next; // Skip first element
+						temp_list.length = cte.recursive_keys->length - 1;
+						temp_list.tail = cte.recursive_keys->tail;
+						TransformExpressionList(temp_list, info->key_targets);
+					}
+				} else {
+					// No mode indicator, transform all elements normally
+					TransformExpressionList(*cte.recursive_keys, info->key_targets);
+				}
 			}
 		}
+
+
+
+
+
+
 
 		if (cte.aliascolnames) {
 			for (auto node = cte.aliascolnames->head; node != nullptr; node = node->next) {
@@ -131,6 +164,11 @@ unique_ptr<SelectStatement> Transformer::TransformRecursiveCTE(duckdb_libpgquery
 		for (auto &key : info.key_targets) {
 			result.key_targets.emplace_back(key->Copy());
 		}
+
+		// Transfer the aggregation mode flags
+		result.use_min_key = info.use_min_key;
+		result.use_max_key = info.use_max_key;
+
 		break;
 	}
 	case duckdb_libpgquery::PG_SETOP_EXCEPT:
