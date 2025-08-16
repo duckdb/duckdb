@@ -13,26 +13,36 @@
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "utf8proc_wrapper.hpp"
+#include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/common/arrow/schema_metadata.hpp"
 
 namespace duckdb {
 
-void ArrowTableFunction::PopulateArrowTableType(DBConfig &config, ArrowTableType &arrow_table,
-                                                const ArrowSchemaWrapper &schema_p, vector<string> &names,
-                                                vector<LogicalType> &return_types) {
-	for (idx_t col_idx = 0; col_idx < static_cast<idx_t>(schema_p.arrow_schema.n_children); col_idx++) {
-		auto &schema = *schema_p.arrow_schema.children[col_idx];
+void ArrowTableFunction::PopulateArrowTableSchema(DBConfig &config, ArrowTableSchema &arrow_table,
+                                                  const ArrowSchema &arrow_schema) {
+	vector<string> names;
+	// We first gather the column names and deduplicate them
+	for (idx_t col_idx = 0; col_idx < static_cast<idx_t>(arrow_schema.n_children); col_idx++) {
+		const auto &schema = *arrow_schema.children[col_idx];
 		if (!schema.release) {
 			throw InvalidInputException("arrow_scan: released schema passed");
 		}
-		auto arrow_type = ArrowType::GetArrowLogicalType(config, schema);
-		return_types.emplace_back(arrow_type->GetDuckType(true));
-		arrow_table.AddColumn(col_idx, std::move(arrow_type));
 		auto name = string(schema.name);
 		if (name.empty()) {
 			name = string("v") + to_string(col_idx);
 		}
 		names.push_back(name);
+	}
+	QueryResult::DeduplicateColumns(names);
+
+	// We do a second iteration to figure out the arrow types and already set their deduplicated names
+	for (idx_t col_idx = 0; col_idx < static_cast<idx_t>(arrow_schema.n_children); col_idx++) {
+		auto &schema = *arrow_schema.children[col_idx];
+		if (!schema.release) {
+			throw InvalidInputException("arrow_scan: released schema passed");
+		}
+		auto arrow_type = ArrowType::GetArrowLogicalType(config, schema);
+		arrow_table.AddColumn(col_idx, std::move(arrow_type), names[col_idx]);
 	}
 }
 
@@ -68,8 +78,9 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &contex
 
 	auto &data = *res;
 	stream_factory_get_schema(reinterpret_cast<ArrowArrayStream *>(stream_factory_ptr), data.schema_root.arrow_schema);
-	PopulateArrowTableType(DBConfig::GetConfig(context), res->arrow_table, data.schema_root, names, return_types);
-	QueryResult::DeduplicateColumns(names);
+	PopulateArrowTableSchema(DBConfig::GetConfig(context), res->arrow_table, data.schema_root.arrow_schema);
+	names = res->arrow_table.GetNames();
+	return_types = res->arrow_table.GetTypes();
 	res->all_types = return_types;
 	if (return_types.empty()) {
 		throw InvalidInputException("Provided table/dataframe must have at least one column");
@@ -213,8 +224,9 @@ OperatorPartitionData ArrowTableFunction::ArrowGetPartitionData(ClientContext &c
 	return OperatorPartitionData(state.batch_index);
 }
 
-bool ArrowTableFunction::ArrowPushdownType(const LogicalType &type) {
-	switch (type.id()) {
+static bool CanPushdown(const ArrowType &type) {
+	auto duck_type = type.GetDuckType();
+	switch (duck_type.id()) {
 	case LogicalTypeId::BOOLEAN:
 	case LogicalTypeId::TINYINT:
 	case LogicalTypeId::SMALLINT:
@@ -234,10 +246,12 @@ bool ArrowTableFunction::ArrowPushdownType(const LogicalType &type) {
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::VARCHAR:
-	case LogicalTypeId::BLOB:
 		return true;
+	case LogicalTypeId::BLOB:
+		// PyArrow doesn't support binary view filters yet
+		return type.GetTypeInfo<ArrowStringInfo>().GetSizeType() != ArrowVariableSizeType::VIEW;
 	case LogicalTypeId::DECIMAL: {
-		switch (type.InternalType()) {
+		switch (duck_type.InternalType()) {
 		case PhysicalType::INT16:
 		case PhysicalType::INT32:
 		case PhysicalType::INT64:
@@ -249,9 +263,9 @@ bool ArrowTableFunction::ArrowPushdownType(const LogicalType &type) {
 		}
 	}
 	case LogicalTypeId::STRUCT: {
-		auto struct_types = StructType::GetChildTypes(type);
-		for (auto &struct_type : struct_types) {
-			if (!ArrowPushdownType(struct_type.second)) {
+		const auto &struct_info = type.GetTypeInfo<ArrowStructInfo>();
+		for (idx_t i = 0; i < struct_info.ChildCount(); i++) {
+			if (!CanPushdown(struct_info.GetChild(i))) {
 				return false;
 			}
 		}
@@ -260,6 +274,12 @@ bool ArrowTableFunction::ArrowPushdownType(const LogicalType &type) {
 	default:
 		return false;
 	}
+}
+bool ArrowTableFunction::ArrowPushdownType(const FunctionData &bind_data, idx_t col_idx) {
+	auto &arrow_bind_data = bind_data.Cast<ArrowScanFunctionData>();
+	const auto &column_info = arrow_bind_data.arrow_table.GetColumns();
+	auto column_type = column_info.at(col_idx);
+	return CanPushdown(*column_type);
 }
 
 void ArrowTableFunction::RegisterFunction(BuiltinFunctions &set) {

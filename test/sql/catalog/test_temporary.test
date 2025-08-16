@@ -2,8 +2,6 @@
 # description: Test temporary catalog entry creation
 # group: [catalog]
 
-require noforcestorage
-
 # basic temp table creation works
 statement ok
 CREATE TEMPORARY TABLE integers(i INTEGER) ON COMMIT PRESERVE ROWS
@@ -158,4 +156,3 @@ SELECT i from integers3
 statement error con2
 INSERT INTO integers VALUES (42)
 ----
-

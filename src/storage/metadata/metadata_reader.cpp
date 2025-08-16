@@ -7,7 +7,6 @@ MetadataReader::MetadataReader(MetadataManager &manager, MetaBlockPointer pointe
     : manager(manager), type(type), next_pointer(FromDiskPointer(pointer)), has_next_block(true),
       read_pointers(read_pointers_p), index(0), offset(0), next_offset(pointer.offset), capacity(0) {
 	if (read_pointers) {
-		D_ASSERT(read_pointers->empty());
 		read_pointers->push_back(pointer);
 	}
 }
@@ -47,7 +46,23 @@ void MetadataReader::ReadData(data_ptr_t buffer, idx_t read_size) {
 }
 
 MetaBlockPointer MetadataReader::GetMetaBlockPointer() {
+	if (capacity == 0) {
+		throw InternalException("GetMetaBlockPointer called but there is no active pointer");
+	}
 	return manager.GetDiskPointer(block.pointer, UnsafeNumericCast<uint32_t>(offset));
+}
+
+vector<MetaBlockPointer> MetadataReader::GetRemainingBlocks(MetaBlockPointer last_block) {
+	vector<MetaBlockPointer> result;
+	while (has_next_block) {
+		auto next_block_pointer = manager.GetDiskPointer(next_pointer, UnsafeNumericCast<uint32_t>(next_offset));
+		if (last_block.IsValid() && next_block_pointer.block_pointer == last_block.block_pointer) {
+			break;
+		}
+		result.push_back(next_block_pointer);
+		ReadNextBlock();
+	}
+	return result;
 }
 
 void MetadataReader::ReadNextBlock() {

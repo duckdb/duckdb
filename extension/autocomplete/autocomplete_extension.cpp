@@ -11,11 +11,13 @@
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
-#include "duckdb/parser/parser.hpp"
 #include "matcher.hpp"
 #include "duckdb/catalog/default/builtin_types/types.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "tokenizer.hpp"
+#include "duckdb/catalog/catalog_entry/pragma_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -58,7 +60,7 @@ static vector<AutoCompleteSuggestion> ComputeSuggestions(vector<AutoCompleteCand
 
 		D_ASSERT(BASE_SCORE - bonus >= 0);
 		auto score = idx_t(BASE_SCORE - bonus);
-		if (prefix.size() == 0) {
+		if (prefix.empty()) {
 		} else if (prefix.size() < str.size()) {
 			score += StringUtil::SimilarityScore(str.substr(0, prefix.size()), prefix);
 		} else {
@@ -220,6 +222,49 @@ static bool KnownExtension(const string &fname) {
 	return false;
 }
 
+static vector<AutoCompleteCandidate> SuggestPragmaName(ClientContext &context) {
+	vector<AutoCompleteCandidate> suggestions;
+	auto all_pragmas = Catalog::GetAllEntries(context, CatalogType::PRAGMA_FUNCTION_ENTRY);
+	for (const auto &pragma : all_pragmas) {
+		AutoCompleteCandidate candidate(pragma.get().name, 0);
+		suggestions.push_back(std::move(candidate));
+	}
+	return suggestions;
+}
+
+static vector<AutoCompleteCandidate> SuggestSettingName(ClientContext &context) {
+	auto &db_config = DBConfig::GetConfig(context);
+	const auto &options = db_config.GetOptions();
+	vector<AutoCompleteCandidate> suggestions;
+	for (const auto &option : options) {
+		AutoCompleteCandidate candidate(option.name, 0);
+		suggestions.push_back(std::move(candidate));
+	}
+	return suggestions;
+}
+
+static vector<AutoCompleteCandidate> SuggestScalarFunctionName(ClientContext &context) {
+	vector<AutoCompleteCandidate> suggestions;
+	auto scalar_functions = Catalog::GetAllEntries(context, CatalogType::SCALAR_FUNCTION_ENTRY);
+	for (const auto &scalar_function : scalar_functions) {
+		AutoCompleteCandidate candidate(scalar_function.get().name, 0);
+		suggestions.push_back(std::move(candidate));
+	}
+
+	return suggestions;
+}
+
+static vector<AutoCompleteCandidate> SuggestTableFunctionName(ClientContext &context) {
+	vector<AutoCompleteCandidate> suggestions;
+	auto table_functions = Catalog::GetAllEntries(context, CatalogType::TABLE_FUNCTION_ENTRY);
+	for (const auto &table_function : table_functions) {
+		AutoCompleteCandidate candidate(table_function.get().name, 0);
+		suggestions.push_back(std::move(candidate));
+	}
+
+	return suggestions;
+}
+
 static vector<AutoCompleteCandidate> SuggestFileName(ClientContext &context, string &prefix, idx_t &last_pos) {
 	vector<AutoCompleteCandidate> result;
 	auto &config = DBConfig::GetConfig(context);
@@ -267,6 +312,7 @@ class AutoCompleteTokenizer : public BaseTokenizer {
 public:
 	AutoCompleteTokenizer(const string &sql, MatchState &state)
 	    : BaseTokenizer(sql, state.tokens), suggestions(state.suggestions) {
+		last_pos = 0;
 	}
 
 	void OnLastToken(TokenizeState state, string last_word_p, idx_t last_pos_p) override {
@@ -282,13 +328,160 @@ public:
 	idx_t last_pos;
 };
 
+struct UnicodeSpace {
+	UnicodeSpace(idx_t pos, idx_t bytes) : pos(pos), bytes(bytes) {
+	}
+
+	idx_t pos;
+	idx_t bytes;
+};
+
+bool ReplaceUnicodeSpaces(const string &query, string &new_query, const vector<UnicodeSpace> &unicode_spaces) {
+	if (unicode_spaces.empty()) {
+		// no unicode spaces found
+		return false;
+	}
+	idx_t prev = 0;
+	for (auto &usp : unicode_spaces) {
+		new_query += query.substr(prev, usp.pos - prev);
+		new_query += " ";
+		prev = usp.pos + usp.bytes;
+	}
+	new_query += query.substr(prev, query.size() - prev);
+	return true;
+}
+
+bool IsValidDollarQuotedStringTagFirstChar(const unsigned char &c) {
+	// the first character can be between A-Z, a-z, or \200 - \377
+	return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c >= 0x80;
+}
+
+bool IsValidDollarQuotedStringTagSubsequentChar(const unsigned char &c) {
+	// subsequent characters can also be between 0-9
+	return IsValidDollarQuotedStringTagFirstChar(c) || (c >= '0' && c <= '9');
+}
+
+// This function strips unicode space characters from the query and replaces them with regular spaces
+// It returns true if any unicode space characters were found and stripped
+// See here for a list of unicode space characters - https://jkorpela.fi/chars/spaces.html
+bool StripUnicodeSpaces(const string &query_str, string &new_query) {
+	const idx_t NBSP_LEN = 2;
+	const idx_t USP_LEN = 3;
+	idx_t pos = 0;
+	unsigned char quote;
+	string_t dollar_quote_tag;
+	vector<UnicodeSpace> unicode_spaces;
+	auto query = const_uchar_ptr_cast(query_str.c_str());
+	auto qsize = query_str.size();
+
+regular:
+	for (; pos + 2 < qsize; pos++) {
+		if (query[pos] == 0xC2) {
+			if (query[pos + 1] == 0xA0) {
+				// U+00A0 - C2A0
+				unicode_spaces.emplace_back(pos, NBSP_LEN);
+			}
+		}
+		if (query[pos] == 0xE2) {
+			if (query[pos + 1] == 0x80) {
+				if (query[pos + 2] >= 0x80 && query[pos + 2] <= 0x8B) {
+					// U+2000 to U+200B
+					// E28080 - E2808B
+					unicode_spaces.emplace_back(pos, USP_LEN);
+				} else if (query[pos + 2] == 0xAF) {
+					// U+202F - E280AF
+					unicode_spaces.emplace_back(pos, USP_LEN);
+				}
+			} else if (query[pos + 1] == 0x81) {
+				if (query[pos + 2] == 0x9F) {
+					// U+205F - E2819f
+					unicode_spaces.emplace_back(pos, USP_LEN);
+				} else if (query[pos + 2] == 0xA0) {
+					// U+2060 - E281A0
+					unicode_spaces.emplace_back(pos, USP_LEN);
+				}
+			}
+		} else if (query[pos] == 0xE3) {
+			if (query[pos + 1] == 0x80 && query[pos + 2] == 0x80) {
+				// U+3000 - E38080
+				unicode_spaces.emplace_back(pos, USP_LEN);
+			}
+		} else if (query[pos] == 0xEF) {
+			if (query[pos + 1] == 0xBB && query[pos + 2] == 0xBF) {
+				// U+FEFF - EFBBBF
+				unicode_spaces.emplace_back(pos, USP_LEN);
+			}
+		} else if (query[pos] == '"' || query[pos] == '\'') {
+			quote = query[pos];
+			pos++;
+			goto in_quotes;
+		} else if (query[pos] == '$' &&
+		           (query[pos + 1] == '$' || IsValidDollarQuotedStringTagFirstChar(query[pos + 1]))) {
+			// (optionally tagged) dollar-quoted string
+			auto start = &query[++pos];
+			for (; pos + 2 < qsize; pos++) {
+				if (query[pos] == '$') {
+					// end of tag
+					dollar_quote_tag =
+					    string_t(const_char_ptr_cast(start), NumericCast<uint32_t, int64_t>(&query[pos] - start));
+					goto in_dollar_quotes;
+				}
+
+				if (!IsValidDollarQuotedStringTagSubsequentChar(query[pos])) {
+					// invalid char in dollar-quoted string, continue as normal
+					goto regular;
+				}
+			}
+			goto end;
+		} else if (query[pos] == '-' && query[pos + 1] == '-') {
+			goto in_comment;
+		}
+	}
+	goto end;
+in_quotes:
+	for (; pos + 1 < qsize; pos++) {
+		if (query[pos] == quote) {
+			if (query[pos + 1] == quote) {
+				// escaped quote
+				pos++;
+				continue;
+			}
+			pos++;
+			goto regular;
+		}
+	}
+	goto end;
+in_dollar_quotes:
+	for (; pos + 2 < qsize; pos++) {
+		if (query[pos] == '$' &&
+		    qsize - (pos + 1) >= dollar_quote_tag.GetSize() + 1 && // found '$' and enough space left
+		    query[pos + dollar_quote_tag.GetSize() + 1] == '$' &&  // ending '$' at the right spot
+		    memcmp(&query[pos + 1], dollar_quote_tag.GetData(), dollar_quote_tag.GetSize()) == 0) { // tags match
+			pos += dollar_quote_tag.GetSize() + 1;
+			goto regular;
+		}
+	}
+	goto end;
+in_comment:
+	for (; pos < qsize; pos++) {
+		if (query[pos] == '\n' || query[pos] == '\r') {
+			goto regular;
+		}
+	}
+	goto end;
+end:
+	return ReplaceUnicodeSpaces(query_str, new_query, unicode_spaces);
+}
+
 static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(ClientContext &context, const string &sql) {
 	// tokenize the input
 	vector<MatcherToken> tokens;
 	vector<MatcherSuggestion> suggestions;
 	MatchState state(tokens, suggestions);
-
-	AutoCompleteTokenizer tokenizer(sql, state);
+	vector<UnicodeSpace> unicode_spaces;
+	string clean_sql;
+	const string &sql_ref = StripUnicodeSpaces(sql, clean_sql) ? clean_sql : sql;
+	AutoCompleteTokenizer tokenizer(sql_ref, state);
 	auto allow_complete = tokenizer.TokenizeInput();
 	if (!allow_complete) {
 		return make_uniq<SQLAutoCompleteFunctionData>(vector<AutoCompleteSuggestion>());
@@ -335,10 +528,16 @@ static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(Clien
 			new_suggestions = SuggestFileName(context, tokenizer.last_word, suggestion_pos);
 			break;
 		case SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME:
+			new_suggestions = SuggestScalarFunctionName(context);
+			break;
 		case SuggestionState::SUGGEST_TABLE_FUNCTION_NAME:
+			new_suggestions = SuggestTableFunctionName(context);
+			break;
 		case SuggestionState::SUGGEST_PRAGMA_NAME:
+			new_suggestions = SuggestPragmaName(context);
+			break;
 		case SuggestionState::SUGGEST_SETTING_NAME:
-			// TODO:
+			new_suggestions = SuggestSettingName(context);
 			break;
 		default:
 			throw InternalException("Unrecognized suggestion state");
@@ -423,10 +622,12 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 	names.emplace_back("success");
 	return_types.emplace_back(LogicalType::BOOLEAN);
 
-	auto sql = StringValue::Get(input.inputs[0]);
+	const auto sql = StringValue::Get(input.inputs[0]);
 
 	vector<MatcherToken> root_tokens;
-	ParserTokenizer tokenizer(sql, root_tokens);
+	string clean_sql;
+	const string &sql_ref = StripUnicodeSpaces(sql, clean_sql) ? clean_sql : sql;
+	ParserTokenizer tokenizer(sql_ref, root_tokens);
 
 	auto allow_complete = tokenizer.TokenizeInput();
 	if (!allow_complete) {

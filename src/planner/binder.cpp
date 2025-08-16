@@ -29,36 +29,31 @@
 namespace duckdb {
 
 Binder &Binder::GetRootBinder() {
-	reference<Binder> root = *this;
-	while (root.get().parent) {
-		root = *root.get().parent;
-	}
-	return root.get();
+	return root_binder;
 }
 
 idx_t Binder::GetBinderDepth() const {
-	const_reference<Binder> root = *this;
-	idx_t depth = 1;
-	while (root.get().parent) {
-		depth++;
-		root = *root.get().parent;
-	}
 	return depth;
 }
 
-shared_ptr<Binder> Binder::CreateBinder(ClientContext &context, optional_ptr<Binder> parent, BinderType binder_type) {
-	auto depth = parent ? parent->GetBinderDepth() : 0;
+void Binder::IncreaseDepth() {
+	depth++;
 	if (depth > context.config.max_expression_depth) {
 		throw BinderException("Max expression depth limit of %lld exceeded. Use \"SET max_expression_depth TO x\" to "
 		                      "increase the maximum expression depth.",
 		                      context.config.max_expression_depth);
 	}
+}
+
+shared_ptr<Binder> Binder::CreateBinder(ClientContext &context, optional_ptr<Binder> parent, BinderType binder_type) {
 	return shared_ptr<Binder>(new Binder(context, parent ? parent->shared_from_this() : nullptr, binder_type));
 }
 
 Binder::Binder(ClientContext &context, shared_ptr<Binder> parent_p, BinderType binder_type)
     : context(context), bind_context(*this), parent(std::move(parent_p)), bound_tables(0), binder_type(binder_type),
-      entry_retriever(context) {
+      entry_retriever(context), root_binder(parent ? parent->GetRootBinder() : *this),
+      depth(parent ? parent->GetBinderDepth() : 1) {
+	IncreaseDepth();
 	if (parent) {
 		entry_retriever.Inherit(parent->entry_retriever);
 
@@ -195,6 +190,8 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 		return Bind(statement.Cast<CopyDatabaseStatement>());
 	case StatementType::UPDATE_EXTENSIONS_STATEMENT:
 		return Bind(statement.Cast<UpdateExtensionsStatement>());
+	case StatementType::MERGE_INTO_STATEMENT:
+		return BindWithCTE(statement.Cast<MergeIntoStatement>());
 	default: // LCOV_EXCL_START
 		throw NotImplementedException("Unimplemented statement type \"%s\" for Bind",
 		                              StatementTypeToString(statement.type));
@@ -289,6 +286,9 @@ unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
 		break;
 	case TableReferenceType::DELIM_GET:
 		result = Bind(ref.Cast<DelimGetRef>());
+		break;
+	case TableReferenceType::BOUND_TABLE_REF:
+		result = Bind(ref.Cast<BoundRefWrapper>());
 		break;
 	case TableReferenceType::CTE:
 	case TableReferenceType::INVALID:
@@ -526,28 +526,26 @@ case_insensitive_map_t<unique_ptr<TableRef>> &Binder::GetReplacementScans() {
 }
 
 // FIXME: this is extremely naive
-void VerifyNotExcluded(ParsedExpression &expr) {
-	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {
-		auto &column_ref = expr.Cast<ColumnRefExpression>();
-		if (!column_ref.IsQualified()) {
-			return;
-		}
-		auto &table_name = column_ref.GetTableName();
-		if (table_name == "excluded") {
-			throw NotImplementedException("'excluded' qualified columns are not supported in the RETURNING clause yet");
-		}
-		return;
-	}
-	ParsedExpressionIterator::EnumerateChildren(
-	    expr, [&](const ParsedExpression &child) { VerifyNotExcluded((ParsedExpression &)child); });
+void VerifyNotExcluded(const ParsedExpression &root_expr) {
+	ParsedExpressionIterator::VisitExpression<ColumnRefExpression>(
+	    root_expr, [&](const ColumnRefExpression &column_ref) {
+		    if (!column_ref.IsQualified()) {
+			    return;
+		    }
+		    auto &table_name = column_ref.GetTableName();
+		    if (table_name == "excluded") {
+			    throw NotImplementedException(
+			        "'excluded' qualified columns are not supported in the RETURNING clause yet");
+		    }
+	    });
 }
 
 BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> returning_list, TableCatalogEntry &table,
                                      const string &alias, idx_t update_table_index,
-                                     unique_ptr<LogicalOperator> child_operator, BoundStatement result) {
+                                     unique_ptr<LogicalOperator> child_operator, virtual_column_map_t virtual_columns) {
 
 	vector<LogicalType> types;
-	vector<std::string> names;
+	vector<string> names;
 
 	auto binder = Binder::CreateBinder(context);
 
@@ -562,12 +560,14 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 		column_count++;
 	}
 
-	binder->bind_context.AddBaseTable(update_table_index, alias, names, types, bound_columns, table, false);
+	binder->bind_context.AddBaseTable(update_table_index, alias, names, types, bound_columns, table,
+	                                  std::move(virtual_columns));
 	ReturningBinder returning_binder(*binder, context);
 
 	vector<unique_ptr<Expression>> projection_expressions;
 	LogicalType result_type;
 	vector<unique_ptr<ParsedExpression>> new_returning_list;
+	BoundStatement result;
 	binder->ExpandStarExpressions(returning_list, new_returning_list);
 	for (auto &returning_expr : new_returning_list) {
 		VerifyNotExcluded(*returning_expr);

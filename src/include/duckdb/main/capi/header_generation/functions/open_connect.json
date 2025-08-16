@@ -228,6 +228,27 @@
             }
         },
         {
+            "name": "duckdb_connection_get_arrow_options",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_connection",
+                    "name": "connection"
+                },
+                {
+                    "type": "duckdb_arrow_options *",
+                    "name": "out_arrow_options"
+                }
+            ],
+            "comment": {
+                "description": "Retrieves the arrow options of the connection.\n\n",
+                "param_comments": {
+                    "connection": "The connection.",
+                    "duckdb_arrow_options": "The arrow options of the connection. Must be destroyed with `duckdb_destroy_arrow_options`."
+                }
+            }
+        },
+        {
             "name": "duckdb_client_context_get_connection_id",
             "return_type": "idx_t",
             "params": [
@@ -257,6 +278,22 @@
                 "description": "Destroys the client context and deallocates its memory.\n\n",
                 "param_comments": {
                     "context": "The client context to destroy."
+                }
+            }
+        },
+         {
+            "name": "duckdb_destroy_arrow_options",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_arrow_options *",
+                    "name": "arrow_options"
+                }
+            ],
+            "comment": {
+                "description": "Destroys the arrow options and deallocates its memory.\n\n",
+                "param_comments": {
+                    "arrow_options": "The arrow options to destroy."
                 }
             }
         },

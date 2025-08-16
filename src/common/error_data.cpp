@@ -65,6 +65,13 @@ string ErrorData::ConstructFinalMessage() const {
 		error += "\nThis error signals an assertion failure within DuckDB. This usually occurs due to "
 		         "unexpected conditions or errors in the program's logic.\nFor more information, see "
 		         "https://duckdb.org/docs/stable/dev/internal_errors";
+
+		// Ensure that we print the stack trace for internal exceptions.
+		auto entry = extra_info.find("stack_trace_pointers");
+		if (entry != extra_info.end()) {
+			auto stack_trace = StackTrace::ResolveStacktraceSymbols(entry->second);
+			error += "\n\nStack Trace:\n" + stack_trace;
+		}
 	}
 	return error;
 }
@@ -82,6 +89,17 @@ void ErrorData::Throw(const string &prepended_message) const {
 const ExceptionType &ErrorData::Type() const {
 	D_ASSERT(initialized);
 	return this->type;
+}
+
+void ErrorData::Merge(const ErrorData &other) {
+	if (!other.HasError()) {
+		return;
+	}
+	if (!HasError()) {
+		*this = other;
+		return;
+	}
+	final_message += "\n\n" + other.Message();
 }
 
 bool ErrorData::operator==(const ErrorData &other) const {

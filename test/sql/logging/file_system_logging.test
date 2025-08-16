@@ -49,7 +49,7 @@ FROM 'https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv'
 query IIII
 SELECT scope, type, log_level, regexp_replace(message, '\"path\":.*test.csv"', '"test.csv"')
 FROM duckdb_logs
-WHERE type = 'FileSystem'
+WHERE type = 'FileSystem' AND message NOT LIKE '%duckdb_extension%'
 ORDER BY timestamp
 ----
 CONNECTION	FileSystem	TRACE	{"fs":"HTTPFileSystem","path":"https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv","op":"OPEN"}

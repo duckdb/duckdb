@@ -39,6 +39,7 @@
 #include "duckdb/function/built_in_functions.hpp"
 #include "duckdb/catalog/similar_catalog_entry.hpp"
 #include "duckdb/storage/database_size.hpp"
+#include "duckdb/main/settings.hpp"
 #include <algorithm>
 
 namespace duckdb {
@@ -534,14 +535,14 @@ bool Catalog::TryAutoLoad(ClientContext &context, const string &original_name) n
 	return false;
 }
 
-void Catalog::AutoloadExtensionByConfigName(ClientContext &context, const string &configuration_name) {
+string Catalog::AutoloadExtensionByConfigName(ClientContext &context, const string &configuration_name) {
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
 	auto &dbconfig = DBConfig::GetConfig(context);
 	if (dbconfig.options.autoload_known_extensions) {
 		auto extension_name = ExtensionHelper::FindExtensionInEntries(configuration_name, EXTENSION_SETTINGS);
 		if (ExtensionHelper::CanAutoloadExtension(extension_name)) {
 			ExtensionHelper::AutoLoadExtension(context, extension_name);
-			return;
+			return extension_name;
 		}
 	}
 #endif
@@ -649,19 +650,18 @@ CatalogException Catalog::CreateMissingEntryException(CatalogEntryRetriever &ret
                                                       const reference_set_t<SchemaCatalogEntry> &schemas) {
 	auto &context = retriever.GetContext();
 	auto entries = SimilarEntriesInSchemas(context, lookup_info, schemas);
+	auto max_schema_count = DBConfig::GetSetting<CatalogErrorMaxSchemasSetting>(context);
 
 	reference_set_t<SchemaCatalogEntry> unseen_schemas;
 	auto &db_manager = DatabaseManager::Get(context);
-	auto databases = db_manager.GetDatabases(context);
-	auto &config = DBConfig::GetConfig(context);
+	auto databases = db_manager.GetDatabases(context, max_schema_count);
 
-	auto max_schema_count = config.GetSetting<CatalogErrorMaxSchemasSetting>(context);
 	for (auto database : databases) {
 		if (unseen_schemas.size() >= max_schema_count) {
 			break;
 		}
 		auto &catalog = database.get().GetCatalog();
-		auto current_schemas = catalog.GetAllSchemas(context);
+		auto current_schemas = catalog.GetSchemas(context);
 		for (auto &current_schema : current_schemas) {
 			if (unseen_schemas.size() >= max_schema_count) {
 				break;
@@ -669,7 +669,8 @@ CatalogException Catalog::CreateMissingEntryException(CatalogEntryRetriever &ret
 			unseen_schemas.insert(current_schema.get());
 		}
 	}
-	// check if the entry exists in any extension
+
+	// Check if the entry exists in any extension.
 	string extension_name;
 	auto type = lookup_info.GetCatalogType();
 	auto &entry_name = lookup_info.GetEntryName();
@@ -732,6 +733,7 @@ CatalogException Catalog::CreateMissingEntryException(CatalogEntryRetriever &ret
 	static constexpr const double UNSEEN_PENALTY = 0.2;
 	auto unseen_entries = SimilarEntriesInSchemas(context, lookup_info, unseen_schemas);
 	set<string> suggestions;
+
 	if (!unseen_entries.empty() && (unseen_entries[0].score == 1.0 || unseen_entries[0].score - UNSEEN_PENALTY >
 	                                                                      (entries.empty() ? 0.0 : entries[0].score))) {
 		// the closest matching entry requires qualification as it is not in the default search path
@@ -1134,6 +1136,16 @@ vector<reference<SchemaCatalogEntry>> Catalog::GetAllSchemas(ClientContext &cont
 		     return false;
 	     });
 
+	return result;
+}
+
+vector<reference<CatalogEntry>> Catalog::GetAllEntries(ClientContext &context, CatalogType catalog_type) {
+	vector<reference<CatalogEntry>> result;
+	auto schemas = GetAllSchemas(context);
+	for (const auto &schema_ref : schemas) {
+		auto &schema = schema_ref.get();
+		schema.Scan(context, catalog_type, [&](CatalogEntry &entry) { result.push_back(entry); });
+	}
 	return result;
 }
 

@@ -3,6 +3,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/optimizer/join_order/join_node.hpp"
 #include "duckdb/optimizer/join_order/query_graph_manager.hpp"
+#include "duckdb/main/settings.hpp"
 
 #include <cmath>
 
@@ -60,7 +61,7 @@ static vector<unordered_set<idx_t>> GetAllNeighborSets(vector<idx_t> neighbors) 
 	// drive by test to make sure we have an accurate amount of
 	// subsets, and that each neighbor is in a correct amount
 	// of those subsets.
-	D_ASSERT(ret.size() == std::pow(2, neighbors.size()) - 1);
+	D_ASSERT(ret.size() == static_cast<size_t>(std::pow(2, neighbors.size())) - 1);
 	for (auto &n : neighbors) {
 		idx_t count = 0;
 		for (auto &set : ret) {
@@ -68,7 +69,7 @@ static vector<unordered_set<idx_t>> GetAllNeighborSets(vector<idx_t> neighbors) 
 				count += 1;
 			}
 		}
-		D_ASSERT(count == std::pow(2, neighbors.size() - 1));
+		D_ASSERT(count == static_cast<size_t>(std::pow(2, neighbors.size() - 1)));
 	}
 #endif
 	return ret;
@@ -470,7 +471,7 @@ void PlanEnumerator::InitLeafPlans() {
 // Moerkotte and Thomas Neumannn, see that paper for additional info/documentation bonus slides:
 // https://db.in.tum.de/teaching/ws1415/queryopt/chapter3.pdf?lang=de
 void PlanEnumerator::SolveJoinOrder() {
-	bool force_no_cross_product = query_graph_manager.context.config.force_no_cross_product;
+	bool force_no_cross_product = DBConfig::GetSetting<DebugForceNoCrossProductSetting>(query_graph_manager.context);
 	// first try to solve the join order exactly
 	if (query_graph_manager.relation_manager.NumRelations() >= THRESHOLD_TO_SWAP_TO_APPROXIMATE) {
 		SolveJoinOrderApproximately();

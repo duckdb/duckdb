@@ -84,9 +84,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 			// payload_types.push_back(logical_type);
 			// payload_idx.emplace_back(i);
 			// payload_aggregates.push_back(std::move(first_aggregate));
-			// MODIFICATION: Choose aggregate function based on MINKEY/MAXKEY flags
-			printf("DEBUG: TransformCTE - Set use_min_key=%d, use_max_key=%d\n",
-			       op.use_min_key, op.use_max_key);
+			// MODIFICATION: Choose aggregate function based on MIN/MAX flags
 
 			unique_ptr<BoundAggregateExpression> aggregate;
 			if (op.use_min_key) {
@@ -97,7 +95,6 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 
 			} else if (op.use_max_key) {
 				// Use MAX aggregate for MAXKEY
-				printf("DEBUG: Entering max_key condition");
 				aggregate = function_binder.BindAggregateFunction(MaxFunction::GetFunction(),
 										std::move(first_children), nullptr, AggregateType::NON_DISTINCT);
 				// has_min_max_aggregates = true;  // Track that we used MIN/MAX

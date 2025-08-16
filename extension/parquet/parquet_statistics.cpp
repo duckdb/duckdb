@@ -8,15 +8,12 @@
 #include "reader/string_column_reader.hpp"
 #include "reader/struct_column_reader.hpp"
 #include "zstd/common/xxhash.hpp"
-
-#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "reader/uuid_column_reader.hpp"
-#endif
 
 namespace duckdb {
 
@@ -214,6 +211,25 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 			return Value::TIME(dtime_t(val));
 		}
 	}
+	case LogicalTypeId::TIME_NS: {
+		int64_t val;
+		if (stats.size() == sizeof(int32_t)) {
+			val = Load<int32_t>(stats_data);
+		} else if (stats.size() == sizeof(int64_t)) {
+			val = Load<int64_t>(stats_data);
+		} else {
+			throw InvalidInputException("Incorrect stats size for type TIME");
+		}
+		switch (schema_ele.type_info) {
+		case ParquetExtraTypeInfo::UNIT_MS:
+			return Value::TIME_NS(ParquetMsIntToTimeNs(val));
+		case ParquetExtraTypeInfo::UNIT_NS:
+			return Value::TIME_NS(ParquetIntToTimeNs(val));
+		case ParquetExtraTypeInfo::UNIT_MICROS:
+		default:
+			return Value::TIME_NS(dtime_ns_t(val));
+		}
+	}
 	case LogicalTypeId::TIME_TZ: {
 		int64_t val;
 		if (stats.size() == sizeof(int32_t)) {
@@ -331,6 +347,9 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 			row_group_stats->Set(StatsInfo::CAN_HAVE_NULL_AND_VALID_VALUES);
 		}
 		return row_group_stats;
+	} else if (schema.schema_type == ParquetColumnSchemaType::VARIANT) {
+		//! FIXME: there are situations where VARIANT columns can have stats
+		return nullptr;
 	}
 
 	// Otherwise, its a standard column with stats
@@ -383,8 +402,6 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 		} else if (parquet_stats.__isset.min) {
 			StringColumnReader::VerifyString(parquet_stats.min.c_str(), parquet_stats.min.size(), true);
 			StringStats::Update(string_stats, parquet_stats.min);
-		} else {
-			return nullptr;
 		}
 		if (parquet_stats.__isset.max_value) {
 			StringColumnReader::VerifyString(parquet_stats.max_value.c_str(), parquet_stats.max_value.size(), true);
@@ -392,8 +409,6 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 		} else if (parquet_stats.__isset.max) {
 			StringColumnReader::VerifyString(parquet_stats.max.c_str(), parquet_stats.max.size(), true);
 			StringStats::Update(string_stats, parquet_stats.max);
-		} else {
-			return nullptr;
 		}
 		StringStats::SetContainsUnicode(string_stats);
 		StringStats::ResetMaxStringLength(string_stats);
@@ -410,6 +425,9 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 		row_group_stats->Set(StatsInfo::CAN_HAVE_NULL_AND_VALID_VALUES);
 		if (parquet_stats.__isset.null_count && parquet_stats.null_count == 0) {
 			row_group_stats->Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
+		}
+		if (parquet_stats.__isset.null_count && parquet_stats.null_count == column_chunk.meta_data.num_values) {
+			row_group_stats->Set(StatsInfo::CANNOT_HAVE_VALID_VALUES);
 		}
 	}
 	return row_group_stats;
@@ -443,7 +461,7 @@ static bool HasFilterConstants(const TableFilter &duckdb_filter) {
 }
 
 template <class T>
-uint64_t ValueXH64FixedWidth(const Value &constant) {
+static uint64_t ValueXH64FixedWidth(const Value &constant) {
 	T val = constant.GetValue<T>();
 	return duckdb_zstd::XXH64(&val, sizeof(val), 0);
 }

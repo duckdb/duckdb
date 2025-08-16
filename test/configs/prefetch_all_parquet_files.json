@@ -1,0 +1,17 @@
+{
+  "description": "Run with prefetching all parquet files.",
+  "on_init": "SET prefetch_all_parquet_files=true;",
+  "statically_loaded_extensions": [
+    "core_functions",
+    "parquet"
+  ],
+  "skip_compiled": "true",
+  "skip_tests": [
+    {
+      "reason": "TODO",
+      "paths": [
+        "test/sql/copy/csv/zstd_crash.test"
+      ]
+    }
+  ]
+}

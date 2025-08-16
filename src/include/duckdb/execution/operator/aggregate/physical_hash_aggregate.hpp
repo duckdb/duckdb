@@ -24,7 +24,8 @@ class PhysicalHashAggregate;
 struct HashAggregateGroupingData {
 public:
 	HashAggregateGroupingData(GroupingSet &grouping_set_p, const GroupedAggregateData &grouped_aggregate_data,
-	                          unique_ptr<DistinctAggregateCollectionInfo> &info);
+	                          unique_ptr<DistinctAggregateCollectionInfo> &info, TupleDataValidityType group_validity,
+	                          TupleDataValidityType distinct_validity);
 
 public:
 	RadixPartitionedHashTable table_data;
@@ -70,7 +71,8 @@ public:
 	PhysicalHashAggregate(PhysicalPlan &physical_plan, ClientContext &context, vector<LogicalType> types,
 	                      vector<unique_ptr<Expression>> expressions, vector<unique_ptr<Expression>> groups,
 	                      vector<GroupingSet> grouping_sets, vector<unsafe_vector<idx_t>> grouping_functions,
-	                      idx_t estimated_cardinality);
+	                      idx_t estimated_cardinality, TupleDataValidityType group_validity,
+	                      TupleDataValidityType distinct_validity);
 
 	//! The grouping sets
 	GroupedAggregateData grouped_aggregate_data;
@@ -82,7 +84,7 @@ public:
 	//! A recreation of the input chunk, with nulls for everything that isnt a group
 	vector<LogicalType> input_group_types;
 
-	// Filters given to Sink and friends
+	//! Filters given to Sink and friends
 	unsafe_vector<idx_t> non_distinct_filter;
 	unsafe_vector<idx_t> distinct_filter;
 

@@ -1,8 +1,6 @@
 #include "dbgen/dbgen.hpp"
 #include "dbgen/dbgen_gunk.hpp"
 #include "tpch_constants.hpp"
-
-#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/parser/column_definition.hpp"
@@ -13,7 +11,6 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
-#endif
 #endif
 
 #define DECLARER /* EXTERN references get defined here */
@@ -503,6 +500,9 @@ public:
 		for (size_t i = PART; i <= REGION; i++) {
 			if (parameters.tables[i]) {
 				auto &tbl_catalog = *parameters.tables[i];
+				if (!tbl_catalog.IsDuckTable()) {
+					throw InvalidInputException("dbgen is only supported for DuckDB database files");
+				}
 				append_info[i].appender = make_uniq<InternalAppender>(context, tbl_catalog, flush_count);
 			}
 		}

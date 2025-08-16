@@ -1,0 +1,175 @@
+# name: test/sql/function/list/list_value_arrays.test
+# description: Test the list_value function with ARRAYS
+# group: [list]
+
+statement ok
+pragma enable_verification
+
+query I
+SELECT list_value([3, 2, 1]::INTEGER[3], [4, 5, 6]::INTEGER[3]);
+----
+[[3, 2, 1], [4, 5, 6]]
+
+query I
+SELECT list_value(['a', 'b', 'c']::VARCHAR[3], ['d', 'e', 'f']::VARCHAR[3]);
+----
+[[a, b, c], [d, e, f]]
+
+query I
+SELECT list_value([DATE '2022-01-01', DATE '2022-01-02']::DATE[2], [DATE '2022-01-03', DATE '2022-01-04']::DATE[2]);
+----
+[[2022-01-01, 2022-01-02], [2022-01-03, 2022-01-04]]
+
+# different types
+query I
+SELECT list_value([1, 2]::INTEGER[2], [1.5, 2.5]::DOUBLE[2]);
+----
+[[1.0, 2.0], [1.5, 2.5]]
+
+query I
+SELECT list_value([1, 2]::INTEGER[2], [3, 4]::DOUBLE[2], [5, 6]::INTEGER[2]);
+----
+[[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]
+
+query I
+SELECT list_value([1.5, 2.5]::DOUBLE[2], [3, 4]::INTEGER[2], [5, 6]::INTEGER[2]);
+----
+[[1.5, 2.5], [3.0, 4.0], [5.0, 6.0]]
+
+query I
+SELECT list_value([1, 2]::INTEGER[2], [3, 4]::INTEGER[2], [5.6, 7.8]::DOUBLE[2]);
+----
+[[1.0, 2.0], [3.0, 4.0], [5.6, 7.8]]
+
+# ----------------------------------------------------------------------------------------
+# nulls
+# ----------------------------------------------------------------------------------------
+query I
+SELECT list_value([1, 2, 3]::INTEGER[3], NULL::INTEGER[3], [4, 5, 6]::INTEGER[3]);
+----
+[[1, 2, 3], NULL, [4, 5, 6]]
+
+query I
+SELECT list_value([1, NULL, 3]::INTEGER[3], [3, 2, 1]::INTEGER[3]);
+----
+[[1, NULL, 3], [3, 2, 1]]
+
+query I
+SELECT list_value(['a', 'b', 'c']::VARCHAR[3], ['d', 'e', 'f']::VARCHAR[3], NULL::VARCHAR[3]);
+----
+[[a, b, c], [d, e, f], NULL]
+
+query I
+SELECT list_value(['a', NULL, 'c']::VARCHAR[3], ['d', 'e', 'f']::VARCHAR[3]);
+----
+[[a, NULL, c], [d, e, f]]
+
+# ----------------------------------------------------------------------------------------
+# nested
+# ----------------------------------------------------------------------------------------
+query I
+SELECT list_value([ROW(1, 'a'), ROW(2, 'b')]::ROW(i INTEGER, s VARCHAR)[], [ROW(3, 'c'), ROW(4, 'd')]::ROW(i INTEGER, s VARCHAR)[]);
+----
+[[{'i': 1, 's': a}, {'i': 2, 's': b}], [{'i': 3, 's': c}, {'i': 4, 's': d}]]
+
+query I
+SELECT list_value([[1, 2], [3, 4]]::INTEGER[][], [[5, 6], [7, 8]]::INTEGER[][]);
+----
+[[[1, 2], [3, 4]], [[5, 6], [7, 8]]]
+
+query I
+SELECT list_contains(list_value([1, 2]::INTEGER[2], [3, 4]::INTEGER[2]), [1, 2]::INTEGER[2]);
+----
+true
+
+query I
+SELECT list_contains(list_value([1, 2]::INTEGER[2], [3, 4]::INTEGER[2]), [5, 6]::INTEGER[2]);
+----
+false
+
+# ----------------------------------------------------------------------------------------
+# tables
+# ----------------------------------------------------------------------------------------
+statement ok
+CREATE TABLE array_table (a INTEGER[3], b INTEGER[3], c INTEGER[3]);
+
+statement ok
+INSERT INTO array_table VALUES ([1, 2, 3], [4, 5, 6], [7, 8, 9]);
+
+statement ok
+INSERT INTO array_table VALUES ([10, 11, 12], NULL, [13, 14, 15]);
+
+statement ok
+INSERT INTO array_table VALUES ([NULL, NULL, 16], NULL, [17, 18, 19]);
+
+query I
+SELECT list_value(a, b, c) FROM array_table;
+----
+[[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+[[10, 11, 12], NULL, [13, 14, 15]]
+[[NULL, NULL, 16], NULL, [17, 18, 19]]
+
+statement ok
+drop table array_table;
+
+statement ok
+CREATE TABLE array_table (a STRING[3], b STRING[3], c STRING[3]);
+
+statement ok
+INSERT INTO array_table VALUES (['a', 'b', 'c'], ['d', 'e', 'f'], ['g', 'h', 'i']);
+
+statement ok
+INSERT INTO array_table VALUES (['j', 'k', 'l'], NULL, ['m', 'n', 'o']);
+
+statement ok
+INSERT INTO array_table VALUES ([NULL, NULL, 'p'], NULL, ['q', 'r', 's']);
+
+query I
+SELECT list_value(a, b, c) FROM array_table;
+----
+[[a, b, c], [d, e, f], [g, h, i]]
+[[j, k, l], NULL, [m, n, o]]
+[[NULL, NULL, p], NULL, [q, r, s]]
+
+statement ok
+drop table array_table;
+
+# nested table
+statement ok
+CREATE TABLE nested_array_table (a INTEGER[2][2], b INTEGER[2][2], c INTEGER[2][2]);
+
+statement ok
+INSERT INTO nested_array_table VALUES ([[1, 2], [3, 4]], [[5, 6], [7, 8]], [NULL, [11, 12]]);
+
+statement ok
+INSERT INTO nested_array_table VALUES ([[13, 14], [15, 16]], NULL, [[17, 18], [19, 20]]);
+
+statement ok
+INSERT INTO nested_array_table VALUES ([[21, NULL], [23, 24]], [[25, 26], [27, 28]], NULL);
+
+query I
+SELECT list_value(a, b, c) FROM nested_array_table;
+----
+[[[1, 2], [3, 4]], [[5, 6], [7, 8]], [NULL, [11, 12]]]
+[[[13, 14], [15, 16]], NULL, [[17, 18], [19, 20]]]
+[[[21, NULL], [23, 24]], [[25, 26], [27, 28]], NULL]
+
+# ----------------------------------------------------------------------------------------
+# errors
+# ----------------------------------------------------------------------------------------
+
+statement error
+SELECT list_value([1, 2]::INTEGER[2], [3, 4, 5]::INTEGER[3], [6]::INTEGER[1]);
+----
+Invalid Input Error: Failed to cast value: Cannot cast array of size 2 to array of size 3
+
+statement ok
+CREATE TABLE mixed_array_table (a INTEGER[2], b VARCHAR[2], c DOUBLE[2]);
+
+statement ok
+INSERT INTO mixed_array_table VALUES ([1, 2], ['a', 'b'], [1.5, 2.5]);
+
+statement error
+SELECT list_value(a, b, c) FROM mixed_array_table;
+----
+Binder Error: Cannot deduce template type

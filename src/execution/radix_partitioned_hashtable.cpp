@@ -13,8 +13,9 @@
 
 namespace duckdb {
 
-RadixPartitionedHashTable::RadixPartitionedHashTable(GroupingSet &grouping_set_p, const GroupedAggregateData &op_p)
-    : grouping_set(grouping_set_p), op(op_p) {
+RadixPartitionedHashTable::RadixPartitionedHashTable(GroupingSet &grouping_set_p, const GroupedAggregateData &op_p,
+                                                     TupleDataValidityType group_validity_p)
+    : grouping_set(grouping_set_p), op(op_p), group_validity(group_validity_p) {
 	auto groups_count = op.GroupCount();
 	for (idx_t i = 0; i < groups_count; i++) {
 		if (grouping_set.find(i) == grouping_set.end()) {
@@ -36,8 +37,7 @@ RadixPartitionedHashTable::RadixPartitionedHashTable(GroupingSet &grouping_set_p
 
 	auto layout = make_shared_ptr<TupleDataLayout>();
 	auto aggregate_objects = AggregateObject::CreateAggregateObjects(op.bindings);
-	const auto align = !aggregate_objects.empty();
-	layout->Initialize(std::move(group_types_copy), std::move(aggregate_objects), align);
+	layout->Initialize(std::move(group_types_copy), std::move(aggregate_objects), group_validity);
 	layout_ptr = std::move(layout);
 }
 
@@ -71,7 +71,7 @@ const TupleDataLayout &RadixPartitionedHashTable::GetLayout() const {
 unique_ptr<GroupedAggregateHashTable> RadixPartitionedHashTable::CreateHT(ClientContext &context, const idx_t capacity,
                                                                           const idx_t radix_bits) const {
 	return make_uniq<GroupedAggregateHashTable>(context, BufferAllocator::Get(context), group_types, op.payload_types,
-	                                            op.bindings, capacity, radix_bits);
+	                                            op.bindings, capacity, radix_bits, group_validity);
 }
 
 //===--------------------------------------------------------------------===//
@@ -147,7 +147,7 @@ public:
 	//! If we have this many or less threads, we grow the HT, otherwise we abandon
 	static constexpr idx_t GROW_STRATEGY_THREAD_THRESHOLD = 2;
 	//! If we fill this many blocks per partition, we trigger a repartition
-	static constexpr double BLOCK_FILL_FACTOR = 1.8;
+	static constexpr double BLOCK_FILL_FACTOR = 0.5;
 	//! By how many bits to repartition if a repartition is triggered
 	static constexpr idx_t REPARTITION_RADIX_BITS = 2;
 };

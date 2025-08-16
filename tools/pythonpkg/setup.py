@@ -35,6 +35,9 @@ def bump_version(base_version: str, distance: int, dirty: bool = False):
 
     major, minor, patch = map(int, base_version_match.groups())
 
+    # Make sure distance is set correctly
+    distance = int(distance or 0)
+
     # If we're exactly on a tag (distance = 0, dirty=False)
     if distance == 0 and not dirty:
         return f"{major}.{minor}.{patch}"
@@ -249,7 +252,16 @@ os.chdir(os.path.dirname(os.path.realpath(__file__)))
 
 if os.name == 'nt':
     # windows:
-    toolchain_args = ['/wd4244', '/wd4267', '/wd4200', '/wd26451', '/wd26495', '/D_CRT_SECURE_NO_WARNINGS', '/utf-8']
+    toolchain_args = [
+        '/wd4244',
+        '/wd4267',
+        '/wd4200',
+        '/wd26451',
+        '/wd26495',
+        '/D_CRT_SECURE_NO_WARNINGS',
+        '/D_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR',
+        '/utf-8',
+    ]
 else:
     # macos/linux
     toolchain_args = ['-std=c++11', '-g0']

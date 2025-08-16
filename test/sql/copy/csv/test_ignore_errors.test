@@ -14,7 +14,7 @@ COPY integers FROM 'data/csv/test/error_too_little.csv' (HEADER, IGNORE_ERRORS, 
 statement error
 COPY integers FROM 'data/csv/test/error_too_little.csv' (HEADER, NULL_PADDING FALSE)
 ----
-It was not possible to automatically detect the CSV Parsing dialect
+It was not possible to automatically detect the CSV parsing dialect
 
 # not enough columns provided
 query II
@@ -56,7 +56,7 @@ COPY integers FROM 'data/csv/test/error_too_little_single.csv' (HEADER, IGNORE_E
 statement error
 COPY integers FROM 'data/csv/test/error_too_little_single.csv' (HEADER, NULL_PADDING 0)
 ----
-It was not possible to automatically detect the CSV Parsing dialect
+It was not possible to automatically detect the CSV parsing dialect
 
 # not enough columns provided, single value
 query II
@@ -73,7 +73,7 @@ COPY integers FROM 'data/csv/test/error_too_many.csv' (HEADER, IGNORE_ERRORS, SA
 statement error
 COPY integers FROM 'data/csv/test/error_too_many.csv' (HEADER)
 ----
-It was not possible to automatically detect the CSV Parsing dialect
+It was not possible to automatically detect the CSV parsing dialect
 
 # too many columns provided
 query II
@@ -136,7 +136,7 @@ FROM read_csv('data/csv/titanic.csv', ignore_errors=1) limit 10
 statement error
 SELECT * FROM read_csv('data/csv/test_ignore_errors.csv', columns = {'Order ref ID': 'VARCHAR'}, delim = ',',  ignore_errors=true);
 ----
-It was not possible to automatically detect the CSV Parsing dialect/types
+It was not possible to automatically detect the CSV parsing dialect
 
 query IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 SELECT * FROM read_csv('data/csv/test_ignore_errors.csv', types = {'Order ref ID': 'VARCHAR'}, ignore_errors=true);

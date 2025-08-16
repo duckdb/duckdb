@@ -14,6 +14,7 @@
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/common/windows_util.hpp"
 #include "duckdb/common/operator/multiply.hpp"
+#include "duckdb/logging/log_manager.hpp"
 
 #include <cstdint>
 #include <cstdio>
@@ -61,6 +62,7 @@ constexpr FileOpenFlags FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS;
 constexpr FileOpenFlags FileFlags::FILE_FLAGS_PARALLEL_ACCESS;
 constexpr FileOpenFlags FileFlags::FILE_FLAGS_EXCLUSIVE_CREATE;
 constexpr FileOpenFlags FileFlags::FILE_FLAGS_NULL_IF_EXISTS;
+constexpr FileOpenFlags FileFlags::FILE_FLAGS_MULTI_CLIENT_ACCESS;
 
 void FileOpenFlags::Verify() {
 #ifdef DEBUG
@@ -427,7 +429,7 @@ int64_t FileSystem::GetFileSize(FileHandle &handle) {
 	throw NotImplementedException("%s: GetFileSize is not implemented!", GetName());
 }
 
-time_t FileSystem::GetLastModifiedTime(FileHandle &handle) {
+timestamp_t FileSystem::GetLastModifiedTime(FileHandle &handle) {
 	throw NotImplementedException("%s: GetLastModifiedTime is not implemented!", GetName());
 }
 
@@ -671,7 +673,7 @@ bool FileSystem::IsManuallySet() {
 	return false;
 }
 
-unique_ptr<FileHandle> FileSystem::OpenCompressedFile(unique_ptr<FileHandle> handle, bool write) {
+unique_ptr<FileHandle> FileSystem::OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle, bool write) {
 	throw NotImplementedException("%s: OpenCompressedFile is not implemented!", GetName());
 }
 
@@ -691,6 +693,11 @@ int64_t FileHandle::Read(void *buffer, idx_t nr_bytes) {
 	return file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes));
 }
 
+int64_t FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes) {
+	// FIXME: Add profiling.
+	return file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes));
+}
+
 bool FileHandle::Trim(idx_t offset_bytes, idx_t length_bytes) {
 	return file_system.Trim(*this, offset_bytes, length_bytes);
 }
@@ -703,7 +710,12 @@ void FileHandle::Read(void *buffer, idx_t nr_bytes, idx_t location) {
 	file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
 }
 
-void FileHandle::Write(optional_ptr<ClientContext> context, void *buffer, idx_t nr_bytes, idx_t location) {
+void FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) {
+	// FIXME: Add profiling.
+	file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
+}
+
+void FileHandle::Write(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) {
 	// FIXME: Add profiling.
 	file_system.Write(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
 }
@@ -737,6 +749,20 @@ string FileHandle::ReadLine() {
 	char buffer[1];
 	while (true) {
 		auto tuples_read = UnsafeNumericCast<idx_t>(Read(buffer, 1));
+		if (tuples_read == 0 || buffer[0] == '\n') {
+			return result;
+		}
+		if (buffer[0] != '\r') {
+			result += buffer[0];
+		}
+	}
+}
+
+string FileHandle::ReadLine(QueryContext context) {
+	string result;
+	char buffer[1];
+	while (true) {
+		auto tuples_read = UnsafeNumericCast<idx_t>(Read(context, buffer, 1));
 		if (tuples_read == 0 || buffer[0] == '\n') {
 			return result;
 		}

@@ -25,7 +25,7 @@ unique_ptr<CreateInfo> CreateSequenceInfo::Copy() const {
 }
 
 string CreateSequenceInfo::ToString() const {
-	std::stringstream ss;
+	duckdb::stringstream ss;
 	ss << "CREATE";
 	if (on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
 		ss << " OR REPLACE";

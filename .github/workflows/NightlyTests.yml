@@ -12,7 +12,7 @@ on:
       - '!.github/workflows/NightlyTests.yml'
       - '!.github/patches/duckdb-wasm/**'
   pull_request:
-    types: [opened, reopened, ready_for_review]
+    types: [opened, reopened, ready_for_review, converted_to_draft]
     paths-ignore:
       - '**'
       - '!.github/workflows/NightlyTests.yml'
@@ -29,8 +29,17 @@ env:
   BASE_BRANCH: ${{ github.base_ref || (endsWith(github.ref, '_feature') && 'feature' || 'main') }}
 
 jobs:
+  check-draft:
+    # We run all other jobs on PRs only if they are not draft PR
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Preliminary checks on CI 
+        run: echo "Event name is ${{ github.event_name }}"
+
   linux-memory-leaks:
      name: Linux Memory Leaks
+     needs: check-draft
      runs-on: ubuntu-24.04
      env:
        GEN: ninja
@@ -247,37 +256,6 @@ jobs:
       run: |
           python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --no-exit --timeout 1200
 
-  linux-compile-32:
-    name: Linux (32 Bit)
-    runs-on: ubuntu-latest
-    container: quay.io/pypa/manylinux2_28_x86_64
-    if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature' }}
-    needs: linux-memory-leaks
-    env:
-      CC: /usr/bin/gcc
-      CXX: /usr/bin/g++
-
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - uses: ./.github/actions/manylinux_2014_setup
-        with:
-          ninja-build: 1
-          ccache: 1
-          glibc32: 1
-
-      - name: Build
-        shell: bash
-        run: |
-          mkdir -p build/release
-          (cd build/release && cmake -G "Ninja" -DSTATIC_LIBCPP=1 -DCORE_EXTENSIONS='icu;parquet;fts;json' -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
-
-      - name: Test
-        shell: bash
-        run: build/release/test/unittest
-
   linux-tarball:
      name: Python 3 Tarball
      runs-on: ubuntu-22.04
@@ -319,6 +297,7 @@ jobs:
 
   python-sqllogic:
      name: Python SQLLogicTest Library (Linux)
+     needs: check-draft
      runs-on: ubuntu-22.04
      env:
         GEN: ninja
@@ -571,7 +550,7 @@ jobs:
        run: |
          python scripts/regression/test_runner.py --old unsafe/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/imdb.csv --verbose --threads 2
 
-  block-sizes:
+  vector-sizes:
     name: Block Sizes
     runs-on: ubuntu-24.04
     needs: linux-memory-leaks
@@ -594,29 +573,23 @@ jobs:
           key: ${{ github.job }}
           save: ${{ env.CCACHE_SAVE }}
 
-      - name: Build with standard vector size
-        shell: bash
-        run: BLOCK_ALLOC_SIZE=16384 make relassert
-
-      - name: Fast and storage tests
-        shell: bash
-        run: |
-          python3 scripts/run_tests_one_by_one.py ./build/relassert/test/unittest --no-exit --time_execution
-          python3 scripts/run_tests_one_by_one.py ./build/relassert/test/unittest "test/sql/storage/*" --no-exit --time_execution
-
       - name: Build with vector size of 512
         shell: bash
-        run: rm -rf ./build && rm -rf ./duckdb_unittest_tempdir && make clean && BLOCK_ALLOC_SIZE=16384 STANDARD_VECTOR_SIZE=512 make relassert
+        run: STANDARD_VECTOR_SIZE=512 make relassert
 
-      - name: Fast and storage tests
+      - name: Fast and storage tests with default and small block size
         shell: bash
         run: |
-          python3 scripts/run_tests_one_by_one.py ./build/relassert/test/unittest --no-exit --time_execution
-          python3 scripts/run_tests_one_by_one.py ./build/relassert/test/unittest "test/sql/storage/*" --no-exit --time_execution
+          ./build/relassert/test/unittest
+          ./build/relassert/test/unittest "test/sql/storage/*"
+          ./build/relassert/test/unittest --test-config test/configs/block_size_16kB.json
+          ./build/relassert/test/unittest "test/sql/storage/*" --test-config test/configs/block_size_16kB.json
 
   linux-wasm-experimental:
     name: WebAssembly duckdb-wasm builds
+    # disable in NightlyTests
     if: false
+    needs: check-draft
     runs-on: ubuntu-22.04
     steps:
     - uses: mymindstorm/setup-emsdk@v12
@@ -692,8 +665,6 @@ jobs:
     name: Code Coverage
     runs-on: ubuntu-22.04
     needs: linux-memory-leaks
-    strategy:
-      fail-fast: false
     env:
       GEN: ninja
     steps:
@@ -716,22 +687,24 @@ jobs:
 
       - name: Check Coverage
         shell: bash
+        continue-on-error: true
         run: |
           make coverage-check
 
       - name: Create Archive
-        if: always()
+        if: ${{ success() || failure() }}
         shell: bash
         run: |
           zip -r coverage.zip coverage_html
 
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: ${{ success() || failure() }}
         with:
           name: coverage
           path: coverage.zip
           if-no-files-found: error
 
   pyodide:
+    needs: check-draft
     uses: ./.github/workflows/Pyodide.yml
     secrets: inherit

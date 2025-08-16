@@ -1030,14 +1030,9 @@ static unique_ptr<TableFilter> TryCastTableFilter(const TableFilter &global_filt
 	}
 }
 
-void SetIndexToZero(Expression &expr) {
-	if (expr.type == ExpressionType::BOUND_REF) {
-		auto &ref = expr.Cast<BoundReferenceExpression>();
-		ref.index = 0;
-		return;
-	}
-
-	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { SetIndexToZero(child); });
+void SetIndexToZero(unique_ptr<Expression> &root_expr) {
+	ExpressionIterator::VisitExpressionMutable<BoundReferenceExpression>(
+	    root_expr, [&](BoundReferenceExpression &ref, unique_ptr<Expression> &expr) { ref.index = 0; });
 }
 
 bool CanPropagateCast(const MultiFileIndexMapping &mapping, const LogicalType &local_type,
@@ -1096,11 +1091,12 @@ unique_ptr<TableFilterSet> MultiFileColumnMapper::CreateFilters(map<idx_t, refer
 
 			// add the expression to the expression map - we are now evaluating this inside the reader directly
 			// we need to set the index of the references inside the expression to 0
-			SetIndexToZero(*reader_data.expressions[local_id]);
-			reader.expression_map[filter_idx] = std::move(reader_data.expressions[local_id]);
+			auto &expr = reader_data.expressions[global_index];
+			SetIndexToZero(expr);
+			reader.expression_map[filter_idx] = std::move(expr);
 
 			// reset the expression - since we are evaluating it in the reader we can just reference it
-			reader_data.expressions[local_id] = make_uniq<BoundReferenceExpression>(global_type, local_id);
+			expr = make_uniq<BoundReferenceExpression>(global_type, local_id);
 		}
 	}
 	return result;

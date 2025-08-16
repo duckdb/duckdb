@@ -140,7 +140,6 @@ SinkResultType PhysicalRecursiveCTE::Sink(ExecutionContext &context, DataChunk &
 		if (gstate.use_aggregation) {
 			Vector addresses(LogicalType::POINTER);
 			new_group_count = gstate.ht->FindOrCreateGroups(distinct_rows, addresses, gstate.new_groups);
-			printf("Debug: new_group_count = %llu\n", new_group_count);
 			has_updates = new_group_count > 0;
 		}
 
@@ -157,26 +156,12 @@ SinkResultType PhysicalRecursiveCTE::Sink(ExecutionContext &context, DataChunk &
 			// if (gstate.min_function && new_group_count > 0) {
 			// 	gstate.has_converged = false;
 			// }
-			printf("DEBUG: has_updated is set to %d", has_updates);
 			// Only append rows that were actually inserted or updated in the hash table
 			if (has_updates) {
 				// Create a filtered chunk containing only the rows that caused updates
 				DataChunk filtered_chunk;
 				filtered_chunk.Initialize(Allocator::DefaultAllocator(), chunk.GetTypes());
 				filtered_chunk.Slice(chunk, gstate.new_groups, new_group_count);
-				printf("DEBUG: filtered_chunk content:\n");
-				for (idx_t col = 0; col < filtered_chunk.ColumnCount(); col++) {
-					printf("Column %llu: ", (unsigned long long)col);
-					auto &vec = filtered_chunk.data[col];
-					for (idx_t row = 0; row < filtered_chunk.size(); row++) {
-						if (row > 0) {
-							printf(", ");
-						}
-						auto v = vec.GetValue(row);             // fetch Value at [row]
-						printf("%s", v.ToString().c_str());     // print as string (handles NULLs)
-					}
-					printf("\n");
-				}
 
 				gstate.intermediate_table.Append(filtered_chunk);
 			}

@@ -39,6 +39,8 @@ static void ReleaseDuckDBArrowSchema(ArrowSchema *schema) {
 	}
 	schema->release = nullptr;
 	auto holder = static_cast<DuckDBArrowSchemaHolder *>(schema->private_data);
+	schema->private_data = nullptr;
+
 	delete holder;
 }
 
@@ -173,7 +175,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		if (options.arrow_lossless_conversion) {
 			SetArrowExtension(root_holder, child, type, context);
 		} else {
-			if (options.produce_arrow_string_view && options.arrow_output_version >= 14) {
+			if (options.produce_arrow_string_view && options.arrow_output_version >= ArrowFormatVersion::V1_4) {
 				// List views are only introduced in arrow format v1.4
 				child.format = "vu";
 			} else {
@@ -187,7 +189,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		break;
 	}
 	case LogicalTypeId::VARCHAR:
-		if (options.produce_arrow_string_view && options.arrow_output_version >= 14) {
+		if (options.produce_arrow_string_view && options.arrow_output_version >= ArrowFormatVersion::V1_4) {
 			// List views are only introduced in arrow format v1.4
 			child.format = "vu";
 		} else {
@@ -235,7 +237,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		break;
 	case LogicalTypeId::DECIMAL: {
 		uint8_t width, scale, bit_width;
-		if (options.arrow_output_version <= 14) {
+		if (options.arrow_output_version <= ArrowFormatVersion::V1_4) {
 			// Before version 1.4 all decimals were int128
 			bit_width = 128;
 		} else {
@@ -266,7 +268,10 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		break;
 	}
 	case LogicalTypeId::BLOB:
-		if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
+		if (options.arrow_output_version >= ArrowFormatVersion::V1_4) {
+			// Views are only introduced in arrow format v1.4
+			child.format = "vz";
+		} else if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
 			child.format = "Z";
 		} else {
 			child.format = "z";
@@ -276,7 +281,10 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		if (options.arrow_lossless_conversion) {
 			SetArrowExtension(root_holder, child, type, context);
 		} else {
-			if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
+			if (options.arrow_output_version >= ArrowFormatVersion::V1_4) {
+				// Views are only introduced in arrow format v1.4
+				child.format = "vz";
+			} else if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
 				child.format = "Z";
 			} else {
 				child.format = "z";
@@ -286,7 +294,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		break;
 	}
 	case LogicalTypeId::LIST: {
-		if (options.arrow_use_list_view && options.arrow_output_version >= 14) {
+		if (options.arrow_use_list_view && options.arrow_output_version >= ArrowFormatVersion::V1_4) {
 			// List views are only introduced in arrow format v1.4
 			if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
 				child.format = "+vL";

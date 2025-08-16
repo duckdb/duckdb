@@ -2,6 +2,9 @@
 # description: Very complex recursive CTE with several corner cases
 # group: [cte]
 
+statement ok
+PRAGMA enable_verification;
+
 query IIIIIIIII
 SELECT "input".*,
        "result".*
@@ -19,7 +22,7 @@ FROM   (SELECT i FROM generate_series(2,3) AS _(i)) AS "input"("n"),
                     )
                       UNION ALL
                     (WITH
-                       "fib.assignment.1"(".iteration", ".mark", ".thread.this", ".label.parent", "k", "n") AS NOT MATERIALIZED (
+                       "fib.assignment.1"(".iteration", ".mark", ".thread.this", ".label.parent", "k", "n") AS (
                          SELECT "input".".iteration",
                                 "input".".mark",
                                 "input".".thread.this",
@@ -29,13 +32,13 @@ FROM   (SELECT i FROM generate_series(2,3) AS _(i)) AS "input"("n"),
                          FROM   "loop" AS "input"
                          WHERE  "input".".label.this" IS NOT DISTINCT FROM 'fib'
                        ),
-                       "fib.call.1.prepare"(".iteration", ".mark", ".thread.this", ".label.this", ".thread.parent", ".label.parent", "argument.0") AS NOT MATERIALIZED (
+                       "fib.call.1.prepare"(".iteration", ".mark", ".thread.this", ".label.this", ".thread.parent", ".label.parent", "argument.0") AS (
                          SELECT "input".".iteration",
                                 "input".".mark",
                                 (SELECT COALESCE(MAX("loop".".thread.this"), 0)
                                  FROM   "loop"
                                  WHERE  ("loop".".label.parent" IS NOT DISTINCT FROM "input".".label.parent" OR
-                                         "loop".".label.this" IS NOT DISTINCT FROM 'fib.call.1')) + ROW_NUMBER() OVER () AS ".thread.this",
+                                         "loop".".label.this" IS NOT DISTINCT FROM 'fib.call.1')) + ROW_NUMBER() OVER (ORDER BY "fork"."n" DESC) AS ".thread.this",
                                 'fib.call.1' AS ".label.this",
                                 "input".".thread.this" AS ".thread.parent",
                                 "input".".label.parent",
@@ -44,7 +47,7 @@ FROM   (SELECT i FROM generate_series(2,3) AS _(i)) AS "input"("n"),
                          LATERAL (SELECT "input"."fib.n" - i FROM generate_series(1,2) AS _(i)) AS "fork"("n")
                          WHERE  "input".".label.this" IS NOT DISTINCT FROM 'fib.mark.1'
                        ),
-                       "fib.wait.1.decide"(".iteration", ".mark", ".thread.this", ".label.parent", ".done", "n") AS NOT MATERIALIZED (
+                       "fib.wait.1.decide"(".iteration", ".mark", ".thread.this", ".label.parent", ".done", "n") AS (
                          SELECT "input".".iteration",
                                 MIN("input".".mark") OVER (
                                   PARTITION BY "input".".iteration",
