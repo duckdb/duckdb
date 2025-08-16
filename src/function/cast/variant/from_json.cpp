@@ -70,7 +70,9 @@ public:
 			//! Reinitialize the selection vector
 			auto new_capacity = !sel_vec_capacity ? STANDARD_VECTOR_SIZE : NextPowerOfTwo(sel_vec_capacity + 1);
 			auto new_selection_data = make_shared_ptr<SelectionData>(new_capacity);
-			memcpy(new_selection_data->owned_data.get(), sel_vec.data(), sizeof(sel_t) * sel_vec_capacity);
+			if (sel_vec.data() && sel_vec_capacity) {
+				memcpy(new_selection_data->owned_data.get(), sel_vec.data(), sizeof(sel_t) * sel_vec_capacity);
+			}
 			sel_vec.Initialize(std::move(new_selection_data));
 			sel_vec_capacity = new_capacity;
 		}
