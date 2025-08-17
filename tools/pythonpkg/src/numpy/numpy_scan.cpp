@@ -340,8 +340,20 @@ void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
 		// Get the data pointer and the validity mask of the result vector
 		auto tgt_ptr = FlatVector::GetData<string_t>(out);
 		auto &out_mask = FlatVector::Validity(out);
-		unique_ptr<PythonGILWrapper> gil;
+		
+		// Get GIL before we call python
+		PythonGILWrapper gil;
 		auto &import_cache = *DuckDBPyConnection::ImportCache();
+		py::handle na_singleton, naT_singleton;
+
+		// Load pandas NA and NaT for identity checks
+		if (import_cache.pandas.NA(true)) {
+			na_singleton = import_cache.pandas.NA();
+		}
+
+		if (import_cache.pandas.NaT(true)) {
+			naT_singleton = import_cache.pandas.NaT();
+		}
 
 		// Loop over every row of the arrays contents
 		auto stride = numpy_col.stride;
@@ -355,33 +367,23 @@ void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
 					out_mask.SetInvalid(row);
 					continue;
 				}
-				if (import_cache.pandas.NaT(false)) {
-					// If pandas is imported, check if this is pandas.NaT
-					py::handle value(val);
-					if (value.is(import_cache.pandas.NaT())) {
-						out_mask.SetInvalid(row);
-						continue;
-					}
+				
+				// Check if this is pandas.NaT
+				if (naT_singleton && py::handle(val).is(naT_singleton)) {
+					out_mask.SetInvalid(row);
+					continue;
 				}
-				if (import_cache.pandas.NA(false)) {
-					// If pandas is imported, check if this is pandas.NA
-					py::handle value(val);
-					if (value.is(import_cache.pandas.NA())) {
-						out_mask.SetInvalid(row);
-						continue;
-					}
+				// Check if this is pandas.NA
+				if (na_singleton && py::handle(val).is(na_singleton)) {
+					out_mask.SetInvalid(row);
+					continue;
 				}
 				if (py::isinstance<py::float_>(val) && std::isnan(PyFloat_AsDouble(val))) {
 					out_mask.SetInvalid(row);
 					continue;
 				}
-				if (!py::isinstance<py::str>(val)) {
-					if (!gil) {
-						gil = make_uniq<PythonGILWrapper>();
-					}
-					bind_data.object_str_val.Push(std::move(py::str(val)));
-					val = reinterpret_cast<PyObject *>(bind_data.object_str_val.LastAddedObject().ptr());
-				}
+				bind_data.object_str_val.Push(std::move(py::str(val)));
+				val = reinterpret_cast<PyObject *>(bind_data.object_str_val.LastAddedObject().ptr());
 			}
 			// Python 3 string representation:
 			// https://github.com/python/cpython/blob/3a8fdb28794b2f19f6c8464378fb8b46bce1f5f4/Include/cpython/unicodeobject.h#L79
