@@ -24,8 +24,8 @@ static std::string format_eta(double seconds, bool elapsed = false) {
 	//   00:00:00.00 elapsed
 	const char *suffix = elapsed ? " elapsed)  " : " remaining)";
 
-	if (seconds < 0) {
-		// Invalid or unknown ETA
+	if (seconds < 0 || seconds > 3600 * 99) {
+		// Invalid or unknown ETA, or if its longer than 99 hours.
 		return StringUtil::Format("(%11s%s", "unknown", suffix);
 	}
 
