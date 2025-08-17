@@ -4033,37 +4033,71 @@ MetadataResult ShellState::DisplayEntries(const char **azArg, idx_t nArg, char t
 	int ii;
 	string s;
 	OpenDB(0);
-	//    rc = sqlite3_prepare_v2(db, "PRAGMA database_list", -1, &pStmt, 0);
-	//    if( rc ){
-	//      sqlite3_finalize(pStmt);
-	//      return shellDatabaseError(db);
-	//    }
 
 	if (nArg > 2) {
 		return MetadataResult::PRINT_USAGE;
 	}
-	//    for(ii=0; sqlite3_step(pStmt)==SQLITE_ROW; ii++){
-	//      const char *zDbName = (const char*)sqlite3_column_text(pStmt, 1);
-	//      if( zDbName==0 ) continue;
-	//      if( s.z && s.z[0] ) appendText(&s, " UNION ALL ", 0);
-	appendText(s, "SELECT name FROM ", 0);
-	//      appendText(&s, zDbName, '"');
-	appendText(s, "sqlite_schema ", 0);
+
+	// Parse the filter pattern to check for schema qualification
+	string filter_pattern = nArg > 1 ? azArg[1] : "%";
+	string schema_filter = "";
+	string table_filter = filter_pattern;
+	
+	// Check if the filter is schema-qualified (e.g., "schema.table" or "schema.%")
+	size_t dot_pos = filter_pattern.find('.');
+	if (dot_pos != string::npos) {
+		schema_filter = filter_pattern.substr(0, dot_pos);
+		table_filter = filter_pattern.substr(dot_pos + 1);
+		// Handle the case where table_filter is empty (e.g., "schema.")
+		if (table_filter.empty()) {
+			table_filter = "%";
+		}
+	}
+
+	// Use DuckDB's system tables instead of SQLite's sqlite_schema
 	if (type == 't') {
-		appendText(s,
-		           " WHERE type IN ('table','view')"
-		           "   AND name NOT LIKE 'sqlite_%'"
-		           "   AND name LIKE ?1",
-		           0);
+		// For tables, we need to handle schema disambiguation
+		appendText(s, "WITH all_objects AS (", 0);
+		appendText(s, "  SELECT schema_name, table_name as name FROM duckdb_tables", 0);
+		if (!schema_filter.empty()) {
+			appendText(s, "  WHERE schema_name LIKE ?1", 0);
+		}
+		appendText(s, "  UNION ALL", 0);
+		appendText(s, "  SELECT schema_name, view_name as name FROM duckdb_views", 0);
+		if (!schema_filter.empty()) {
+			appendText(s, "  WHERE schema_name LIKE ?1", 0);
+		}
+		appendText(s, "),", 0);
+		appendText(s, "name_counts AS (", 0);
+		appendText(s, "  SELECT name, COUNT(*) as count FROM all_objects", 0);
+		appendText(s, "  GROUP BY name", 0);
+		appendText(s, "),", 0);
+		appendText(s, "disambiguated AS (", 0);
+		appendText(s, "  SELECT", 0);
+		appendText(s, "    CASE", 0);
+		appendText(s, "      WHEN nc.count > 1 THEN ao.schema_name || '.' || ao.name", 0);
+		appendText(s, "      ELSE ao.name", 0);
+		appendText(s, "    END as display_name", 0);
+		appendText(s, "  FROM all_objects ao", 0);
+		appendText(s, "  JOIN name_counts nc ON ao.name = nc.name", 0);
+		if (!schema_filter.empty()) {
+			appendText(s, "  WHERE ao.name LIKE ?2", 0);
+		} else {
+			appendText(s, "  WHERE ao.name LIKE ?1", 0);
+		}
+		appendText(s, ")", 0);
+		appendText(s, "SELECT DISTINCT display_name FROM disambiguated ORDER BY display_name", 0);
 	} else {
+		// For indexes, use the original SQLite approach
+		appendText(s, "SELECT name FROM ", 0);
+		appendText(s, "sqlite_schema ", 0);
 		appendText(s,
 		           " WHERE type='index'"
 		           "   AND tbl_name LIKE ?1",
 		           0);
+		appendText(s, " ORDER BY 1", 0);
 	}
-	//    }
-	//    rc = sqlite3_finalize(pStmt);
-	appendText(s, " ORDER BY 1", 0);
+
 	int rc = sqlite3_prepare_v2(db, s.c_str(), -1, &pStmt, 0);
 	if (rc) {
 		return MetadataResult::FAIL;
@@ -4073,11 +4107,24 @@ MetadataResult ShellState::DisplayEntries(const char **azArg, idx_t nArg, char t
 	** as an array of nul-terminated strings in azResult[].  */
 	nRow = nAlloc = 0;
 	azResult = nullptr;
-	if (nArg > 1) {
-		sqlite3_bind_text(pStmt, 1, azArg[1], -1, SQLITE_TRANSIENT);
+	
+	if (type == 't') {
+		// Bind parameters for the new DuckDB query
+		if (!schema_filter.empty()) {
+			sqlite3_bind_text(pStmt, 1, schema_filter.c_str(), -1, SQLITE_TRANSIENT);
+			sqlite3_bind_text(pStmt, 2, table_filter.c_str(), -1, SQLITE_TRANSIENT);
+		} else {
+			sqlite3_bind_text(pStmt, 1, filter_pattern.c_str(), -1, SQLITE_TRANSIENT);
+		}
 	} else {
-		sqlite3_bind_text(pStmt, 1, "%", -1, SQLITE_STATIC);
+		// Original binding for indexes
+		if (nArg > 1) {
+			sqlite3_bind_text(pStmt, 1, azArg[1], -1, SQLITE_TRANSIENT);
+		} else {
+			sqlite3_bind_text(pStmt, 1, "%", -1, SQLITE_STATIC);
+		}
 	}
+	
 	while (sqlite3_step(pStmt) == SQLITE_ROW) {
 		if (nRow >= nAlloc) {
 			char **azNew;

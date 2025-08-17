@@ -422,6 +422,56 @@ def test_tables_pattern(shell):
     result = test.run()
     result.check_stdout("asda  csda")
 
+def test_tables_schema_disambiguation(shell):
+    test = (
+        ShellTest(shell)
+        .statement("CREATE SCHEMA a;")
+        .statement("CREATE SCHEMA b;")
+        .statement("CREATE TABLE a.foobar(name VARCHAR);")
+        .statement("CREATE TABLE b.foobar(name VARCHAR);")
+        .statement(".tables")
+    )
+    result = test.run()
+    result.check_stdout("a.foobar  b.foobar")
+
+def test_tables_schema_filtering(shell):
+    test = (
+        ShellTest(shell)
+        .statement("CREATE SCHEMA a;")
+        .statement("CREATE SCHEMA b;")
+        .statement("CREATE TABLE a.foobar(name VARCHAR);")
+        .statement("CREATE TABLE b.foobar(name VARCHAR);")
+        .statement("CREATE TABLE a.unique_table(x INTEGER);")
+        .statement("CREATE TABLE b.other_table(y INTEGER);")
+        .statement(".tables a.%")
+    )
+    result = test.run()
+    result.check_stdout("foobar        unique_table")
+
+def test_tables_backward_compatibility(shell):
+    test = (
+        ShellTest(shell)
+        .statement("CREATE TABLE main_table(i INTEGER);")
+        .statement("CREATE TABLE unique_table(x INTEGER);")
+        .statement(".tables")
+    )
+    result = test.run()
+    result.check_stdout("main_table    unique_table")
+
+def test_tables_with_views(shell):
+    test = (
+        ShellTest(shell)
+        .statement("CREATE SCHEMA a;")
+        .statement("CREATE SCHEMA b;")
+        .statement("CREATE TABLE a.foobar(name VARCHAR);")
+        .statement("CREATE TABLE b.foobar(name VARCHAR);")
+        .statement("CREATE VIEW a.test_view AS SELECT 1 AS x;")
+        .statement("CREATE VIEW b.test_view AS SELECT 2 AS y;")
+        .statement(".tables")
+    )
+    result = test.run()
+    result.check_stdout("a.foobar     a.test_view  b.foobar     b.test_view")
+
 def test_indexes(shell):
     test = (
         ShellTest(shell)
