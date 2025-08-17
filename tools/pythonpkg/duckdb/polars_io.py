@@ -140,24 +140,9 @@ def _pl_tree_to_sql(tree: dict) -> str:
 
         # Datetime with microseconds since epoch
         if dtype.startswith("{'Datetime'") or dtype == "Datetime":
-            micros, unit, tzinfo = value['Datetime']
-            # Convert to seconds
-            if unit == "Microseconds":
-                timestamp = micros / 1_000_000
-            elif unit == "Milliseconds":
-                timestamp = micros / 1_000
-            elif unit == "Nanoseconds":
-                timestamp = micros / 1_000_000_000
-            else:
-                raise ValueError(f"Unsupported datetime unit: {unit}")
-
-            # Determine timezone
-            tz = datetime.UTC
-            if isinstance(tzinfo, dict) and tzinfo.get('inner') and tzinfo['inner'] != 'UTC':
-                tz = datetime.timezone(datetime.timedelta(0))  # fallback — can map real zones here if needed
-
-            dt_timestamp = datetime.datetime.fromtimestamp(timestamp, tz=tz)
-            return f"'{dt_timestamp}'::TIMESTAMP"
+            micros = value['Datetime'][0]
+            dt_timestamp = datetime.datetime.fromtimestamp(micros / 1_000_000, tz=datetime.UTC)
+            return f"'{str(dt_timestamp)}'::TIMESTAMP"
 
         # Match simple numeric/boolean types
         if dtype in ("Int8", "Int16", "Int32", "Int64",
