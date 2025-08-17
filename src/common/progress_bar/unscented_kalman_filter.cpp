@@ -33,7 +33,7 @@ UnscentedKalmanFilter::UnscentedKalmanFilter()
 
 void UnscentedKalmanFilter::Initialize(double initial_progress, double current_time) {
 	x[0] = initial_progress;
-	x[1] = 0.01; // initial velocity guess
+	x[1] = current_time == 0 ? 0.01 : initial_progress / current_time; // initial velocity guess
 	last_time = current_time;
 	initialized = true;
 }
