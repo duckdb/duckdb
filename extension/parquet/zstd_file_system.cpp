@@ -13,7 +13,7 @@ struct ZstdStreamWrapper : public StreamWrapper {
 	bool writing = false;
 
 public:
-	void Initialize(CompressedFile &file, bool write) override;
+	void Initialize(QueryContext context, CompressedFile &file, bool write) override;
 	bool Read(StreamData &stream_data) override;
 	void Write(CompressedFile &file, StreamData &stream_data, data_ptr_t buffer, int64_t nr_bytes) override;
 
@@ -32,7 +32,7 @@ ZstdStreamWrapper::~ZstdStreamWrapper() {
 	}
 }
 
-void ZstdStreamWrapper::Initialize(CompressedFile &file, bool write) {
+void ZstdStreamWrapper::Initialize(QueryContext context, CompressedFile &file, bool write) {
 	Close();
 	this->file = &file;
 	this->writing = write;
@@ -156,9 +156,9 @@ void ZstdStreamWrapper::Close() {
 
 class ZStdFile : public CompressedFile {
 public:
-	ZStdFile(unique_ptr<FileHandle> child_handle_p, const string &path, bool write)
+	ZStdFile(QueryContext context, unique_ptr<FileHandle> child_handle_p, const string &path, bool write)
 	    : CompressedFile(zstd_fs, std::move(child_handle_p), path) {
-		Initialize(write);
+		Initialize(context, write);
 	}
 
 	FileCompressionType GetFileCompressionType() override {
@@ -168,9 +168,10 @@ public:
 	ZStdFileSystem zstd_fs;
 };
 
-unique_ptr<FileHandle> ZStdFileSystem::OpenCompressedFile(unique_ptr<FileHandle> handle, bool write) {
+unique_ptr<FileHandle> ZStdFileSystem::OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle,
+                                                          bool write) {
 	auto path = handle->path;
-	return make_uniq<ZStdFile>(std::move(handle), path, write);
+	return make_uniq<ZStdFile>(context, std::move(handle), path, write);
 }
 
 unique_ptr<StreamWrapper> ZStdFileSystem::CreateStream() {

@@ -238,7 +238,7 @@ static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
 
 	try {
 		auto cmdline_file = fs.OpenFile(StringUtil::Format("/proc/%d/cmdline", pid), FileFlags::FILE_FLAGS_READ);
-		auto cmdline = cmdline_file->ReadLine();
+		auto cmdline = cmdline_file->ReadLine(QueryContext());
 		process_name = basename(const_cast<char *>(cmdline.c_str())); // NOLINT: old C API does not take const
 	} catch (std::exception &) {
 		// ignore
@@ -258,7 +258,7 @@ static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
 	// try to find out who created that process
 	try {
 		auto loginuid_file = fs.OpenFile(StringUtil::Format("/proc/%d/loginuid", pid), FileFlags::FILE_FLAGS_READ);
-		auto uid = std::stoi(loginuid_file->ReadLine());
+		auto uid = std::stoi(loginuid_file->ReadLine(QueryContext()));
 		auto pw = getpwuid(uid);
 		if (pw) {
 			process_owner = pw->pw_name;
