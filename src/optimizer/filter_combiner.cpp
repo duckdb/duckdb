@@ -1,5 +1,6 @@
 #include "duckdb/optimizer/filter_combiner.hpp"
 
+#include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/expression.hpp"
@@ -707,24 +708,34 @@ FilterResult FilterCombiner::AddBoundComparisonFilter(Expression &expr) {
 		}
 		return ret;
 	} else {
-		// comparison between two non-scalars
-		// only handle comparisons for now
-		if (expr.GetExpressionType() != ExpressionType::COMPARE_EQUAL) {
-			return FilterResult::UNSUPPORTED;
-		}
 		// get the LHS and RHS nodes
 		auto &left_node = GetNode(*comparison.left);
 		auto &right_node = GetNode(*comparison.right);
 		if (left_node.Equals(right_node)) {
 			return FilterResult::UNSUPPORTED;
 		}
+
 		// get the equivalence sets of the LHS and RHS
+		bool equivalence_set_equal = false;
 		auto left_equivalence_set = GetEquivalenceSet(left_node);
 		auto right_equivalence_set = GetEquivalenceSet(right_node);
 		if (left_equivalence_set == right_equivalence_set) {
-			// this equality filter already exists, prune it
+			equivalence_set_equal = true;
+		}
+
+		// comparison between two non-scalars
+		// only handle comparisons for now
+		if (expr.GetExpressionType() != ExpressionType::COMPARE_EQUAL) {
+			// if non equal comparison has equal equivalence set, then it is unsatisfiable
+			return equivalence_set_equal ? FilterResult::UNSATISFIABLE : FilterResult::UNSUPPORTED;
+		}
+
+		if (equivalence_set_equal) {
+			// comparison between two nodes in the same equivalence set
+			// this is a no-op, we can ignore it
 			return FilterResult::SUCCESS;
 		}
+
 		// add the right bucket into the left bucket
 		D_ASSERT(equivalence_map.find(left_equivalence_set) != equivalence_map.end());
 		D_ASSERT(equivalence_map.find(right_equivalence_set) != equivalence_map.end());
@@ -744,6 +755,29 @@ FilterResult FilterCombiner::AddBoundComparisonFilter(Expression &expr) {
 		auto &right_constant_bucket = constant_values.find(right_equivalence_set)->second;
 		for (auto &right_constant : right_constant_bucket) {
 			if (AddConstantComparison(left_constant_bucket, right_constant) == FilterResult::UNSATISFIABLE) {
+				return FilterResult::UNSATISFIABLE;
+			}
+		}
+
+		for (auto &filter : remaining_filters) {
+			// check if the filter has the same equivalence set of both sides
+			if (filter->GetExpressionClass() != ExpressionClass::BOUND_COMPARISON) {
+				continue;
+			}
+			auto &comparison = filter->Cast<BoundComparisonExpression>();
+			if (comparison.left->IsScalar() || comparison.right->IsScalar()) {
+				// skip scalar comparisons
+				continue;
+			}
+			auto &left_node = GetNode(*comparison.left);
+			auto &right_node = GetNode(*comparison.right);
+			if (left_node.Equals(right_node)) {
+				// skip self-comparisons
+				continue;
+			}
+			auto left_equivalence_set = GetEquivalenceSet(left_node);
+			auto right_equivalence_set = GetEquivalenceSet(right_node);
+			if (left_equivalence_set == right_equivalence_set) {
 				return FilterResult::UNSATISFIABLE;
 			}
 		}
@@ -907,8 +941,14 @@ FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &com
 	idx_t left_equivalence_set = GetEquivalenceSet(left_node);
 	idx_t right_equivalence_set = GetEquivalenceSet(right_node);
 	if (left_equivalence_set == right_equivalence_set) {
+		if (comparison.GetExpressionType() == ExpressionType::COMPARE_GREATERTHAN ||
+		    comparison.GetExpressionType() == ExpressionType::COMPARE_LESSTHAN) {
+			// non equal comparison has equal equivalence set, then it is unsatisfiable
+			// e.g., j > i AND i < j is unsatisfiable
+			return FilterResult::UNSATISFIABLE;
+		}
 		// this equality filter already exists, prune it
-		return FilterResult::SUCCESS;
+		return FilterResult::UNSUPPORTED;
 	}
 
 	vector<ExpressionValueInformation> &left_constants = constant_values.find(left_equivalence_set)->second;
