@@ -28,7 +28,7 @@ UnscentedKalmanFilter::UnscentedKalmanFilter()
 	Q[0][0] = 1e-6; // process noise for progress
 	Q[1][1] = 1e-4; // process noise for velocity
 
-	R[0][0] = 1e-4; // measurement noise for progress
+	R[0][0] = 0.05; // measurement noise for progress
 }
 
 void UnscentedKalmanFilter::Initialize(double initial_progress, double current_time) {

@@ -5,6 +5,8 @@
 
 namespace duckdb {
 
+#define UPDATE_INTERVAL_MS 100
+
 int32_t TerminalProgressBarDisplay::NormalizePercentage(double percentage) {
 	if (percentage > 100) {
 		return 100;
@@ -98,22 +100,22 @@ void TerminalProgressBarDisplay::PrintProgressInternal(int32_t percentage, doubl
 
 void TerminalProgressBarDisplay::Update(double percentage) {
 	std::lock_guard<std::mutex> lock(mtx);
-
 	const double current_time = GetElapsedDuration();
-	// Filters go from 0 to 1, percentage is from 0-100
-	const double filter_percentage = percentage / 100.0;
-	if (!udf_initialized) {
-		ukf.Initialize(filter_percentage, current_time);
-		udf_initialized = true;
-	} else {
-		ukf.Predict(current_time);
-		ukf.Update(filter_percentage);
-	}
 
-	double estimated_seconds_remaining = ukf.GetEstimatedRemainingSeconds();
+	if (current_time - last_update_time >= UPDATE_INTERVAL_MS / 1000.0) {
+		// Filters go from 0 to 1, percentage is from 0-100
+		const double filter_percentage = percentage / 100.0;
+		if (!udf_initialized) {
+			ukf.Initialize(filter_percentage, current_time);
+			udf_initialized = true;
+		} else {
+			ukf.Predict(current_time);
+			if (percentage != last_percentage) {
+				ukf.Update(filter_percentage);
+			}
+		}
 
-	// Update the status at most once every 100ms
-	if (current_time - last_update_time >= 0.1) {
+		double estimated_seconds_remaining = ukf.GetEstimatedRemainingSeconds();
 		auto percentage_int = NormalizePercentage(percentage);
 		PrintProgressInternal(percentage_int, estimated_seconds_remaining);
 		Printer::Flush(OutputStream::STREAM_STDOUT);
@@ -138,7 +140,8 @@ void TerminalProgressBarDisplay::PeriodicUpdate() {
 		}
 
 		// Wait for an interval then do an update.
-		if (cv.wait_for(lock, std::chrono::seconds(1), [this] { return !run_periodic_updates; })) {
+		if (cv.wait_for(lock, std::chrono::milliseconds(UPDATE_INTERVAL_MS),
+		                [this] { return !run_periodic_updates; })) {
 			break;
 		}
 	}
