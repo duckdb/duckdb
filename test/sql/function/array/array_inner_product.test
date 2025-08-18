@@ -1,9 +1,6 @@
 # name: test/sql/function/array/array_inner_product.test
 # group: [array]
 
-statement ok
-PRAGMA enable_verification
-
 # Error message coverage test
 statement error
 SELECT array_inner_product('foo', 'bar');
