@@ -59,6 +59,7 @@ public:
 	virtual idx_t GetMetaBlock() = 0;
 	//! Read the content of the block from disk
 	virtual void Read(QueryContext context, Block &block) = 0;
+
 	//! Read the content of the block from disk
 	virtual void ReadBlocks(FileBuffer &buffer, block_id_t start_block, idx_t block_count) = 0;
 	//! Writes the block to disk.

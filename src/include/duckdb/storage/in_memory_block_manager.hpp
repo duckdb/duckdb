@@ -51,6 +51,7 @@ public:
 	idx_t GetMetaBlock() override {
 		throw InternalException("Cannot perform IO in in-memory database - GetMetaBlock!");
 	}
+
 	void Read(QueryContext context, Block &block) override {
 		throw InternalException("Cannot perform IO in in-memory database - Read!");
 	}
