@@ -117,6 +117,17 @@ static LogicalType BindColumn(PandasBindColumn &column_p, PandasColumnBindData &
 void Pandas::Bind(const ClientContext &context, py::handle df_p, vector<PandasColumnBindData> &bind_columns,
                   vector<LogicalType> &return_types, vector<string> &names) {
 
+	PythonGILWrapper gil;
+	auto &cache = *DuckDBPyConnection::ImportCache();
+	
+	py::object pandas_na, pandas_nat;
+	if (cache.pandas.NA(true)) {
+		pandas_na = py::reinterpret_borrow<py::object>(cache.pandas.NA());
+	}
+	if (cache.pandas.NaT(true)) {
+		pandas_nat = py::reinterpret_borrow<py::object>(cache.pandas.NaT());
+	}
+
 	PandasDataFrameBind df(df_p);
 	idx_t column_count = py::len(df.names);
 	if (column_count == 0 || py::len(df.types) == 0 || column_count != py::len(df.types)) {
@@ -128,6 +139,9 @@ void Pandas::Bind(const ClientContext &context, py::handle df_p, vector<PandasCo
 	// loop over every column
 	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
 		PandasColumnBindData bind_data;
+
+		bind_data.pandas_na  = pandas_na;
+		bind_data.pandas_nat = pandas_nat;
 
 		names.emplace_back(py::str(df.names[col_idx]));
 		auto column = df[col_idx];

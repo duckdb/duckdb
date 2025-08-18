@@ -343,17 +343,10 @@ void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
 
 		// Get GIL before we call python
 		PythonGILWrapper gil;
-		auto &import_cache = *DuckDBPyConnection::ImportCache();
-		py::handle na_singleton, naT_singleton;
 
-		// Load pandas NA and NaT for identity checks
-		if (import_cache.pandas.NA(true)) {
-			na_singleton = import_cache.pandas.NA();
-		}
-
-		if (import_cache.pandas.NaT(true)) {
-			naT_singleton = import_cache.pandas.NaT();
-		}
+		// Reference the pandas.na and pandas.naT
+		py::handle na_singleton = bind_data.pandas_na;
+		py::handle nat_singleton = bind_data.pandas_nat;
 
 		// Loop over every row of the arrays contents
 		auto stride = numpy_col.stride;
@@ -369,7 +362,7 @@ void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
 				}
 
 				// Check if this is pandas.NaT
-				if (naT_singleton && py::handle(val).is(naT_singleton)) {
+				if (nat_singleton && py::handle(val).is(nat_singleton)) {
 					out_mask.SetInvalid(row);
 					continue;
 				}
