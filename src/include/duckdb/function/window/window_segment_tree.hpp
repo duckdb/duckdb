@@ -22,10 +22,11 @@ public:
 	                                                 const ValidityMask &partition_mask) const override;
 	unique_ptr<WindowAggregatorState> GetLocalState(const WindowAggregatorState &gstate) const override;
 	void Finalize(ExecutionContext &context, WindowAggregatorState &gstate, WindowAggregatorState &lstate,
-	              CollectionPtr collection, const FrameStats &stats) override;
+	              CollectionPtr collection, const FrameStats &stats, InterruptState &interrupt) override;
 
 	void Evaluate(ExecutionContext &context, const WindowAggregatorState &gstate, WindowAggregatorState &lstate,
-	              const DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx) const override;
+	              const DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx,
+	              InterruptState &interrupt) const override;
 };
 
 } // namespace duckdb
