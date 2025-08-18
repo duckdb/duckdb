@@ -488,42 +488,6 @@ vector<unique_ptr<Expression>> ExtractFilterExpressions(const ColumnDefinition &
 	return expressions;
 }
 
-// Recursively updates column bindings in an index expression to match the current input projection,
-// even if they are the child of a function or cast
-void UpdateIndexExprColumnBindings(unique_ptr<Expression> &expr, const vector<column_t> &input_column_ids,
-						  		   const vector<column_t> &indexed_columns) {
-	if (!expr) { return; }
-
-	switch (expr->GetExpressionClass()) {
-		case ExpressionClass::BOUND_COLUMN_REF: {
-			auto &bound_column_ref_expr = expr->Cast<BoundColumnRefExpression>();
-
-			for (idx_t i=0; i < input_column_ids.size(); ++i) {
-				if (input_column_ids[i] == indexed_columns[0]) {
-					bound_column_ref_expr.binding.column_index = i;
-					break;
-				}
-			}
-			break;
-		}
-		case ExpressionClass::BOUND_FUNCTION: {
-			auto &func_expr = expr->Cast<BoundFunctionExpression>();
-			for (auto &child : func_expr.children) {
-				UpdateIndexExprColumnBindings(child, input_column_ids, indexed_columns);
-			}
-			break;
-		}
-		// TODO: never end up here, TableScanInitGlobal called without filters in input
-		// case ExpressionClass::BOUND_CAST: {
-		// 	auto &cast_expr = expr->Cast<BoundCastExpression>();
-		// 	UpdateIndexExprColumnBindings(cast_expr.child, input_column_ids, indexed_columns);
-		// 	break;
-		// }
-		default:
-			break;
-	}
-}
-
 bool TryScanIndex(ART &art, const ColumnList &column_list, TableFunctionInitInput &input, TableFilterSet &filter_set,
                   idx_t max_count, unsafe_vector<row_t> &row_ids) {
 	// FIXME: No support for index scans on compound ARTs.
@@ -540,8 +504,32 @@ bool TryScanIndex(ART &art, const ColumnList &column_list, TableFunctionInitInpu
 		return false;
 	}
 
-	// Resolve bound column references in the index_expr against the current input
-	UpdateIndexExprColumnBindings(index_expr, input.column_ids, indexed_columns);
+	// Resolve bound column references in the index_expr against the current input projection
+	column_t index_column = indexed_columns[0];
+	column_t updated_index_column = -1;
+
+	// Find the indexed column amongst the input columns
+	for (idx_t i = 0; i < input.column_ids.size(); ++i) {
+		if (input.column_ids[i] == indexed_columns[0]) {
+			updated_index_column = i;
+			break;
+		}
+	}
+
+	// If found, update the bound column ref within index_expr
+	if (updated_index_column >= 0) {
+		ExpressionIterator::EnumerateExpression(index_expr, [&](Expression &expr) {
+			if (expr.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF)
+				return;
+
+			auto &bound_column_ref_expr = expr.Cast<BoundColumnRefExpression>();
+
+			// If the bound column references the index column, use updated_index_column
+			if (bound_column_ref_expr.binding.column_index == index_column) {
+				bound_column_ref_expr.binding.column_index = updated_index_column;
+			}
+		});
+	}
 
 	// Get ART column.
 	auto &col = column_list.GetColumn(LogicalIndex(indexed_columns[0]));
