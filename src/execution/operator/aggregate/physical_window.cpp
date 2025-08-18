@@ -10,6 +10,7 @@
 #include "duckdb/function/window/window_shared_expressions.hpp"
 #include "duckdb/function/window/window_value_function.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -210,12 +211,12 @@ public:
 	    : local_group(context, *gstate.global_partition) {
 	}
 
-	void Sink(DataChunk &input_chunk) {
-		local_group.Sink(input_chunk);
+	void Sink(ExecutionContext &context, DataChunk &input_chunk) {
+		local_group.Sink(context, input_chunk);
 	}
 
-	void Combine() {
-		local_group.Combine();
+	void Combine(ExecutionContext &context) {
+		local_group.Combine(context);
 	}
 
 	HashedSortLocalSinkState local_group;
@@ -284,7 +285,7 @@ WindowGlobalSinkState::WindowGlobalSinkState(const PhysicalWindow &op, ClientCon
 	D_ASSERT(op.select_list[op.order_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 	auto &wexpr = op.select_list[op.order_idx]->Cast<BoundWindowExpression>();
 
-	const auto mode = DBConfig::GetConfig(client).options.window_mode;
+	const auto mode = DBConfig::GetSetting<DebugWindowModeSetting>(client);
 	for (idx_t expr_idx = 0; expr_idx < op.select_list.size(); ++expr_idx) {
 		D_ASSERT(op.select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 		auto &wexpr = op.select_list[expr_idx]->Cast<BoundWindowExpression>();
@@ -303,14 +304,14 @@ WindowGlobalSinkState::WindowGlobalSinkState(const PhysicalWindow &op, ClientCon
 SinkResultType PhysicalWindow::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 	auto &lstate = input.local_state.Cast<WindowLocalSinkState>();
 
-	lstate.Sink(chunk);
+	lstate.Sink(context, chunk);
 
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
 SinkCombineResultType PhysicalWindow::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
 	auto &lstate = input.local_state.Cast<WindowLocalSinkState>();
-	lstate.Combine();
+	lstate.Combine(context);
 
 	return SinkCombineResultType::FINISHED;
 }
@@ -559,27 +560,15 @@ void WindowHashGroup::UpdateScanner(ScannerPtr &scanner, idx_t begin_idx) const 
 void WindowHashGroup::ComputeMasks(ValidityMask &partition_mask, OrderMasks &order_masks) {
 	D_ASSERT(count > 0);
 
-	//	Collection scanning
-	auto &collection = *rows;
-	WindowCollectionChunkScanner scanner(collection, gsink.global_partition->sort_ids, 0);
-	auto &scanned = scanner.chunk;
-
-	//	Shifted buffer for the next values
-	DataChunk next;
-	collection.InitializeScanChunk(scanner.state, next);
-
-	//	Delay buffer for the previous row
-	DataChunk delayed;
-	delayed.Initialize(collection.GetAllocator(), scanned.GetTypes(), 1);
-
 	//	Set up the partition compare structs
 	auto &partitions = gsink.global_partition->partitions;
-	auto partition_type = scanner.PrefixStructType(partitions.size());
-	Vector partition_curr(partition_type);
-	Vector partition_prev(partition_type);
 	partition_mask.SetValidUnsafe(0);
+	const auto key_count = partitions.size();
 
 	//	Set up the order data structures
+	auto &collection = *rows;
+	auto &scan_cols = gsink.global_partition->sort_ids;
+	WindowCollectionChunkScanner scanner(collection, scan_cols, 0);
 	unordered_map<idx_t, DataChunk> prefixes;
 	for (auto &order_mask : order_masks) {
 		order_mask.second.SetValidUnsafe(0);
@@ -591,105 +580,53 @@ void WindowHashGroup::ComputeMasks(ValidityMask &partition_mask, OrderMasks &ord
 		keys.Initialize(collection.GetAllocator(), types);
 	}
 
-	//	Read the first chunk
-	if (!scanner.Scan()) {
-		return;
-	}
+	//	TODO: Parallelise on mask entry boundaries
+	const idx_t block_begin = 0;
+	const auto block_end = collection.ChunkCount();
+	WindowDeltaScanner(collection, block_begin, block_end, scan_cols, key_count,
+	                   [&](const idx_t row_idx, DataChunk &prev, DataChunk &curr, const idx_t ndistinct,
+	                       SelectionVector &distinct, const SelectionVector &matching) {
+		                   //	Process the partition boundaries
+		                   for (idx_t i = 0; i < ndistinct; ++i) {
+			                   const idx_t curr_index = row_idx + distinct.get_index(i);
+			                   partition_mask.SetValidUnsafe(curr_index);
+			                   for (auto &order_mask : order_masks) {
+				                   order_mask.second.SetValidUnsafe(curr_index);
+			                   }
+		                   }
 
-	//	Process chunks offset by 1
-	SelectionVector next_sel(1, STANDARD_VECTOR_SIZE);
-	SelectionVector distinct(STANDARD_VECTOR_SIZE);
-	SelectionVector matching(STANDARD_VECTOR_SIZE);
+		                   //	Process the peers with each partition
+		                   const auto count = MinValue<idx_t>(prev.size(), curr.size());
+		                   const auto nmatch = count - ndistinct;
+		                   if (!nmatch) {
+			                   return;
+		                   }
 
-	// In order to reuse the verbose `distinct from` logic for both the main vector comparisons
-	// and single element boundary comparisons, we alternate between single element compares
-	// and count-1 compares. We have already processed row 0, so we start with row 1/non-boundary.
-	bool boundary_compare = false;
-	for (idx_t row_idx = 1; row_idx < count;) {
-		//	Compare the current to the previous;
-		DataChunk *curr = nullptr;
-		DataChunk *prev = nullptr;
-
-		idx_t prev_count = 0;
-		if (boundary_compare) {
-			//	Save the last row of the scanned chunk
-			prev_count = 1;
-			sel_t last = UnsafeNumericCast<sel_t>(scanned.size() - 1);
-			SelectionVector sel(&last);
-			delayed.Reset();
-			scanned.Copy(delayed, sel, prev_count);
-			prev = &delayed;
-
-			// Try to read the next chunk
-			if (!scanner.Scan()) {
-				break;
-			}
-			curr = &scanned;
-		} else {
-			//	Compare the [1..size) values with the [0..size-1) values
-			prev_count = scanned.size() - 1;
-			if (!prev_count) {
-				//	1 row scanned, so just skip the rest of the loop.
-				boundary_compare = true;
-				continue;
-			}
-			prev = &scanned;
-
-			// Slice the current back one into the previous
-			next.Slice(scanned, next_sel, prev_count);
-			curr = &next;
-		}
-
-		//	Reference the partition prefix as a struct to simplify the compares.
-		scanner.ReferenceStructColumns(*prev, partition_prev, partitions.size());
-		scanner.ReferenceStructColumns(*curr, partition_curr, partitions.size());
-
-		//	Compare the partition subset first because if that differs, then so does the full ordering
-		const auto n =
-		    VectorOperations::DistinctFrom(partition_curr, partition_prev, nullptr, prev_count, &distinct, &matching);
-		//	Process the partition boundaries
-		for (idx_t i = 0; i < n; ++i) {
-			const idx_t curr_index = row_idx + distinct.get_index(i);
-			partition_mask.SetValidUnsafe(curr_index);
-			for (auto &order_mask : order_masks) {
-				order_mask.second.SetValidUnsafe(curr_index);
-			}
-		}
-
-		//	Process the peers with each partition
-		const auto remaining = prev_count - n;
-		if (remaining) {
-			//	If n is 0, neither SV has been filled in?
-			auto sub_sel = n ? &matching : FlatVector::IncrementalSelectionVector();
-			for (auto &order_mask : order_masks) {
-				// If there are no order columns, then all the partition elements are peers and we are done
-				if (partitions.size() == order_mask.first) {
-					continue;
-				}
-				auto &prefix = prefixes[order_mask.first];
-				prefix.Reset();
-				auto &order_prev = prefix.data[0];
-				auto &order_curr = prefix.data[1];
-				scanner.ReferenceStructColumns(*prev, order_prev, order_mask.first, partitions.size());
-				scanner.ReferenceStructColumns(*curr, order_curr, order_mask.first, partitions.size());
-				if (n) {
-					prefix.Slice(*sub_sel, remaining);
-				} else {
-					prefix.SetCardinality(remaining);
-				}
-				const auto m =
-				    VectorOperations::DistinctFrom(order_curr, order_prev, nullptr, remaining, &distinct, nullptr);
-				for (idx_t i = 0; i < m; ++i) {
-					const idx_t curr_index = row_idx + sub_sel->get_index(distinct.get_index(i));
-					order_mask.second.SetValidUnsafe(curr_index);
-				}
-			}
-		}
-
-		//	Transition between comparison ranges.
-		row_idx += prev_count;
-		boundary_compare = !boundary_compare;
-	}
+		                   for (auto &order_mask : order_masks) {
+			                   // If there are no order columns, then all the partition elements are peers and we are
+			                   // done
+			                   if (partitions.size() == order_mask.first) {
+				                   continue;
+			                   }
+			                   auto &prefix = prefixes[order_mask.first];
+			                   prefix.Reset();
+			                   auto &order_prev = prefix.data[0];
+			                   auto &order_curr = prefix.data[1];
+			                   scanner.ReferenceStructColumns(prev, order_prev, order_mask.first, partitions.size());
+			                   scanner.ReferenceStructColumns(curr, order_curr, order_mask.first, partitions.size());
+			                   if (ndistinct) {
+				                   prefix.Slice(matching, nmatch);
+			                   } else {
+				                   prefix.SetCardinality(nmatch);
+			                   }
+			                   const auto m = VectorOperations::DistinctFrom(order_curr, order_prev, nullptr, nmatch,
+			                                                                 &distinct, nullptr);
+			                   for (idx_t i = 0; i < m; ++i) {
+				                   const idx_t curr_index = row_idx + matching.get_index(distinct.get_index(i));
+				                   order_mask.second.SetValidUnsafe(curr_index);
+			                   }
+		                   }
+	                   });
 }
 
 // Per-thread scan state
@@ -789,7 +726,7 @@ void WindowLocalSourceState::Sink(ExecutionContext &context) {
 	auto &local_states = window_hash_group->thread_states.at(task->thread_idx);
 	if (local_states.empty()) {
 		for (idx_t w = 0; w < executors.size(); ++w) {
-			local_states.emplace_back(executors[w]->GetLocalState(*gestates[w]));
+			local_states.emplace_back(executors[w]->GetLocalState(context, *gestates[w]));
 		}
 	}
 

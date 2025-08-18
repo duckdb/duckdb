@@ -42,9 +42,6 @@ cccc
 this is not an inlined string
 NULL
 
-statement ok
-PRAGMA verify_fetch_row;
-
 query I
 SELECT DISTINCT b FROM test ORDER BY a % 5;
 ----

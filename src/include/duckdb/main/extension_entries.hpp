@@ -700,6 +700,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"string_agg", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"strpos", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"struct_insert", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"struct_update", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"sum", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"sum_no_overflow", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"sumkahan", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
@@ -1031,6 +1032,7 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"pg_pages_per_task", "postgres_scanner"},
     {"pg_use_binary_copy", "postgres_scanner"},
     {"pg_use_ctid_scan", "postgres_scanner"},
+    {"pg_use_text_protocol", "postgres_scanner"},
     {"prefetch_all_parquet_files", "parquet"},
     {"s3_access_key_id", "httpfs"},
     {"s3_endpoint", "httpfs"},
@@ -1052,6 +1054,7 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"ui_polling_interval", "ui"},
     {"ui_remote_url", "ui"},
     {"unsafe_enable_version_guessing", "iceberg"},
+    {"variant_legacy_encoding", "parquet"},
 }; // END_OF_EXTENSION_SETTINGS
 
 static constexpr ExtensionEntry EXTENSION_SECRET_TYPES[] = {

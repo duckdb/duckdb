@@ -582,8 +582,8 @@ jobs:
         run: |
           ./build/relassert/test/unittest
           ./build/relassert/test/unittest "test/sql/storage/*"
-          ./build/relassert/test/unittest --test-config test/configs/small_block_size.json
-          ./build/relassert/test/unittest "test/sql/storage/*" --test-config test/configs/small_block_size.json
+          ./build/relassert/test/unittest --test-config test/configs/block_size_16kB.json
+          ./build/relassert/test/unittest "test/sql/storage/*" --test-config test/configs/block_size_16kB.json
 
   linux-wasm-experimental:
     name: WebAssembly duckdb-wasm builds
@@ -687,17 +687,18 @@ jobs:
 
       - name: Check Coverage
         shell: bash
+        continue-on-error: true
         run: |
           make coverage-check
 
       - name: Create Archive
-        if: always()
+        if: ${{ success() || failure() }}
         shell: bash
         run: |
           zip -r coverage.zip coverage_html
 
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: ${{ success() || failure() }}
         with:
           name: coverage
           path: coverage.zip

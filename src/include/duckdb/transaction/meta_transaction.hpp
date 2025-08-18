@@ -22,6 +22,17 @@ class AttachedDatabase;
 class ClientContext;
 class Transaction;
 
+enum class TransactionState { UNCOMMITTED, COMMITTED, ROLLED_BACK };
+
+struct TransactionReference {
+	explicit TransactionReference(Transaction &transaction_p)
+	    : state(TransactionState::UNCOMMITTED), transaction(transaction_p) {
+	}
+
+	TransactionState state;
+	Transaction &transaction;
+};
+
 //! The MetaTransaction manages multiple transactions for different attached databases
 class MetaTransaction {
 public:
@@ -68,7 +79,7 @@ private:
 	//! Lock to prevent all_transactions and transactions from getting out of sync
 	mutex lock;
 	//! The set of active transactions for each database
-	reference_map_t<AttachedDatabase, reference<Transaction>> transactions;
+	reference_map_t<AttachedDatabase, TransactionReference> transactions;
 	//! The set of transactions in order of when they were started
 	vector<reference<AttachedDatabase>> all_transactions;
 	//! The database we are modifying - we can only modify one database per transaction

@@ -145,11 +145,10 @@ struct VectorCastHelpers {
 		return TemplatedTryCastLoop<SRC, DST, VectorTryCastStringOperator<OP>>(source, result, count, parameters);
 	}
 
-	template <class SRC, class OP>
+	template <class SRC, class OP, class RES = string_t>
 	static bool StringCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 		D_ASSERT(result.GetType().InternalType() == PhysicalType::VARCHAR);
-		UnaryExecutor::GenericExecute<SRC, string_t, VectorStringCastOperator<OP>>(source, result, count,
-		                                                                           (void *)&result);
+		UnaryExecutor::GenericExecute<SRC, RES, VectorStringCastOperator<OP>>(source, result, count, (void *)&result);
 		return true;
 	}
 

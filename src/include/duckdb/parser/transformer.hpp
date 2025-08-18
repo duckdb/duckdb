@@ -376,8 +376,6 @@ private:
 
 	unique_ptr<MacroFunction> TransformMacroFunction(duckdb_libpgquery::PGFunctionDefinition &function);
 
-	void ParseGenericOptionListEntry(case_insensitive_map_t<vector<Value>> &result_options, string &name,
-	                                 duckdb_libpgquery::PGNode *arg);
 	vector<string> TransformNameList(duckdb_libpgquery::PGList &list);
 
 public:

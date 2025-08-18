@@ -320,12 +320,18 @@ static vector<VariantValue> ConvertBinaryEncoding(Vector &metadata, Vector &valu
 	UnifiedVectorFormat metadata_format;
 	metadata.ToUnifiedFormat(length, metadata_format);
 	auto metadata_data = metadata_format.GetData<string_t>(metadata_format);
+	auto metadata_validity = metadata_format.validity;
 
 	vector<VariantValue> ret(length);
 	if (IS_REQUIRED) {
-		D_ASSERT(validity.CountValid(length) == length);
 		for (idx_t i = 0; i < length; i++) {
 			auto index = value_format.sel->get_index(i + offset);
+
+			// Variant itself is NULL
+			if (!validity.RowIsValid(index) && !metadata_validity.RowIsValid(metadata_format.sel->get_index(i))) {
+				ret[i] = VariantValue(Value());
+				continue;
+			}
 
 			D_ASSERT(validity.RowIsValid(index));
 			auto &metadata_value = metadata_data[metadata_format.sel->get_index(i)];

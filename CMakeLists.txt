@@ -168,6 +168,8 @@ option(
   FORCE_SANITIZER
   "Forces building with sanitizers even if the Python and R modules are enabled."
   FALSE)
+option(STANDALONE_DEBUG "add clang compile option -fstandalone-debug" FALSE)
+
 if((BUILD_PYTHON)
    AND (ENABLE_SANITIZER OR ENABLE_UBSAN)
    AND ("${CMAKE_BUILD_TYPE}" STREQUAL "Debug"))
@@ -376,6 +378,8 @@ if (NOT DEFINED GIT_COMMIT_HASH)
   string(REGEX REPLACE "v[0-9]+\.[0-9]+\.[0-9]+\-[0-9]+\-g([a-f0-9]+)" "\\1" GIT_COMMIT_HASH "${GIT_DESCRIBE}")
 endif()
 
+set(DUCKDB_VERSION_NUMBER "${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION}.${DUCKDB_PATCH_VERSION}")
+
 string(LENGTH "${GIT_COMMIT_HASH}" LENGTH_GIT_COMMIT_HASH)
 if (NOT ${LENGTH_GIT_COMMIT_HASH} EQUAL 10)
    message(STATUS "GIT_COMMIT_HASH has length ${LENGTH_GIT_COMMIT_HASH} different than the expected 10")
@@ -570,6 +574,13 @@ if(FORCE_ASSERT)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_FORCE_ASSERT")
 endif()
 
+if(STANDALONE_DEBUG)
+  if (NOT CMAKE_BUILD_TYPE STREQUAL "Debug" OR NOT "${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang$")
+    message(FATAL_ERROR "Only clang compiler supports -fstandalone-debug")
+  endif()
+  add_compile_options(-fstandalone-debug)
+endif()
+
 function(is_number input_string return_var)
     if("${input_string}" MATCHES "^[0-9]+$")
         set(${return_var} TRUE PARENT_SCOPE)
@@ -664,7 +675,6 @@ if(OS_NAME STREQUAL "windows")
     message(FATAL_ERROR "The jemalloc extension is not supported on Windows")
   endif()
 endif()
-
 
 include_directories(src/include)
 include_directories(third_party/fsst)

@@ -455,7 +455,7 @@ unique_ptr<FunctionData> BindDecimalArgMinMax(ClientContext &context, AggregateF
 			break;
 		}
 
-		auto cast_cost = CastFunctionSet::Get(context).ImplicitCastCost(by_type, by_types[i]);
+		auto cast_cost = CastFunctionSet::ImplicitCastCost(context, by_type, by_types[i]);
 		if (cast_cost < 0) {
 			continue;
 		}

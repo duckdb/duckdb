@@ -351,11 +351,11 @@ jobs:
         GEN: ninja
       run: make
 
-    - name: test/configs/encrypted_db.json
+    - name: test/configs/encryption.json
       if: (success() || failure()) && steps.build.conclusion == 'success'
       shell: bash
       run: |
-        ./build/release/test/unittest --test-config test/configs/encrypted_db.json
+        ./build/release/test/unittest --test-config test/configs/encryption.json
 
     - name: test/configs/force_storage.json
       if: (success() || failure()) && steps.build.conclusion == 'success'
@@ -387,11 +387,11 @@ jobs:
       run: |
         ./build/release/test/unittest --test-config test/configs/no_local_filesystem.json
 
-    - name: test/configs/small_block_size.json
+    - name: test/configs/block_size_16kB.json
       if: (success() || failure()) && steps.build.conclusion == 'success'
       shell: bash
       run: |
-        ./build/release/test/unittest --test-config test/configs/small_block_size.json
+        ./build/release/test/unittest --test-config test/configs/block_size_16kB.json
 
     - name: test/configs/latest_storage_block_size_16kB.json
       if: (success() || failure()) && steps.build.conclusion == 'success'

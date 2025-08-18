@@ -68,6 +68,8 @@ enum class ArrowArrayPhysicalType : uint8_t;
 
 enum class ArrowDateTimeType : uint8_t;
 
+enum class ArrowFormatVersion : uint8_t;
+
 enum class ArrowOffsetSize : uint8_t;
 
 enum class ArrowTypeInfoType : uint8_t;
@@ -280,6 +282,8 @@ enum class OrderPreservationType : uint8_t;
 
 enum class OrderType : uint8_t;
 
+enum class OrdinalityType : uint8_t;
+
 enum class OutputStream : uint8_t;
 
 enum class ParseInfoType : uint8_t;
@@ -434,6 +438,8 @@ enum class WindowBoundary : uint8_t;
 
 enum class WindowExcludeMode : uint8_t;
 
+enum class WindowMergeSortStage : uint8_t;
+
 
 template<>
 const char* EnumUtil::ToChars<ARTConflictType>(ARTConflictType value);
@@ -488,6 +494,9 @@ const char* EnumUtil::ToChars<ArrowArrayPhysicalType>(ArrowArrayPhysicalType val
 
 template<>
 const char* EnumUtil::ToChars<ArrowDateTimeType>(ArrowDateTimeType value);
+
+template<>
+const char* EnumUtil::ToChars<ArrowFormatVersion>(ArrowFormatVersion value);
 
 template<>
 const char* EnumUtil::ToChars<ArrowOffsetSize>(ArrowOffsetSize value);
@@ -808,6 +817,9 @@ template<>
 const char* EnumUtil::ToChars<OrderType>(OrderType value);
 
 template<>
+const char* EnumUtil::ToChars<OrdinalityType>(OrdinalityType value);
+
+template<>
 const char* EnumUtil::ToChars<OutputStream>(OutputStream value);
 
 template<>
@@ -1038,6 +1050,9 @@ const char* EnumUtil::ToChars<WindowBoundary>(WindowBoundary value);
 template<>
 const char* EnumUtil::ToChars<WindowExcludeMode>(WindowExcludeMode value);
 
+template<>
+const char* EnumUtil::ToChars<WindowMergeSortStage>(WindowMergeSortStage value);
+
 
 template<>
 ARTConflictType EnumUtil::FromString<ARTConflictType>(const char *value);
@@ -1092,6 +1107,9 @@ ArrowArrayPhysicalType EnumUtil::FromString<ArrowArrayPhysicalType>(const char *
 
 template<>
 ArrowDateTimeType EnumUtil::FromString<ArrowDateTimeType>(const char *value);
+
+template<>
+ArrowFormatVersion EnumUtil::FromString<ArrowFormatVersion>(const char *value);
 
 template<>
 ArrowOffsetSize EnumUtil::FromString<ArrowOffsetSize>(const char *value);
@@ -1412,6 +1430,9 @@ template<>
 OrderType EnumUtil::FromString<OrderType>(const char *value);
 
 template<>
+OrdinalityType EnumUtil::FromString<OrdinalityType>(const char *value);
+
+template<>
 OutputStream EnumUtil::FromString<OutputStream>(const char *value);
 
 template<>
@@ -1641,6 +1662,9 @@ WindowBoundary EnumUtil::FromString<WindowBoundary>(const char *value);
 
 template<>
 WindowExcludeMode EnumUtil::FromString<WindowExcludeMode>(const char *value);
+
+template<>
+WindowMergeSortStage EnumUtil::FromString<WindowMergeSortStage>(const char *value);
 
 
 }
