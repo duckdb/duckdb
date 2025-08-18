@@ -1,5 +1,6 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/parser/expression/default_expression.hpp"
+#include "duckdb/parser/expression/measure_definition_expression.hpp"
 #include "duckdb/parser/transformer.hpp"
 
 namespace duckdb {
@@ -8,6 +9,9 @@ unique_ptr<ParsedExpression> Transformer::TransformResTarget(duckdb_libpgquery::
 	auto expr = TransformExpression(root.val);
 	if (!expr) {
 		return nullptr;
+	}
+	if (root.is_measure_target) {
+		expr = make_uniq<MeasureDefinitionExpression>(std::move(expr));
 	}
 	if (root.name) {
 		expr->SetAlias(root.name);

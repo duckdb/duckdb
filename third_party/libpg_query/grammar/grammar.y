@@ -2,6 +2,7 @@
 {{{ GRAMMAR_HEADER }}}
 %}
 #line 5 "third_party/libpg_query/grammar/grammar.y"
+%define parse.trace
 %pure-parser
 %expect 0
 %name-prefix="base_yy"
@@ -9,6 +10,10 @@
 
 %parse-param {core_yyscan_t yyscanner}
 %lex-param   {core_yyscan_t yyscanner}
+
+%code {
+	int static_initializer_trick = []() { yydebug = 1; return 0; }();
+}
 
 %union
 {

@@ -390,7 +390,9 @@ typedef struct PGResTarget {
 	PGList *indirection; /* subscripts, field names, and '*', or NIL */
 	PGNode *val;         /* the value expression to compute or assign */
 	int location;        /* token location, or -1 if unknown */
+	bool is_measure_target = false;     /* whether this is a measure target */
 } PGResTarget;
+
 
 /*
  * PGMultiAssignRef - element of a row source expression for UPDATE

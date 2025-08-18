@@ -2114,6 +2114,15 @@ void Value::SerializeInternal(Serializer &serializer, bool serialize_type) const
 	case PhysicalType::ARRAY:
 		SerializeChildren(serializer, ArrayValue::GetChildren(*this), type_);
 		break;
+	case PhysicalType::INVALID:
+		if (type_.id() == LogicalTypeId::MEASURE_TYPE) {
+			if (!IsNull()) {
+				throw InvalidInputException("MEASURE_TYPE value cannot be serialized unless it is NULL");
+			}
+			// Measure values can be serialized if they are NULL, though there is no physical representation.
+			break;
+		}
+		[[fallthrough]]; // fall through for other INVALID types
 	default:
 		throw NotImplementedException("Unimplemented type for Serialize");
 	}
@@ -2127,7 +2136,10 @@ void Value::Serialize(Serializer &serializer) const {
 Value Value::Deserialize(Deserializer &deserializer) {
 	auto type = deserializer.ReadPropertyWithExplicitDefault<LogicalType>(100, "type", LogicalTypeId::INVALID);
 	if (type.InternalType() == PhysicalType::INVALID) {
-		type = deserializer.Get<const LogicalType &>();
+		// For MEASURE_TYPE, we already have the type from the property, don't try to get it from context
+		if (type.id() != LogicalTypeId::MEASURE_TYPE) {
+			type = deserializer.Get<const LogicalType &>();
+		}
 	}
 	auto is_null = deserializer.ReadProperty<bool>(101, "is_null");
 	Value new_value = Value(type);
@@ -2217,6 +2229,9 @@ Value Value::Deserialize(Deserializer &deserializer) {
 		deserializer.Unset<LogicalType>();
 	} break;
 	default:
+		if (type.id() == LogicalTypeId::MEASURE_TYPE) {
+			throw InvalidInputException("MEASURE_TYPE value cannot be deserialized unless it is NULL");
+		}
 		throw NotImplementedException("Unimplemented type for Deserialize");
 	}
 	return new_value;

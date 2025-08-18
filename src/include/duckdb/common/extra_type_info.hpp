@@ -28,7 +28,8 @@ enum class ExtraTypeInfoType : uint8_t {
 	ARRAY_TYPE_INFO = 9,
 	ANY_TYPE_INFO = 10,
 	INTEGER_LITERAL_TYPE_INFO = 11,
-	TEMPLATE_TYPE_INFO = 12
+	TEMPLATE_TYPE_INFO = 12,
+	MEASURE_TYPE_INFO = 13,
 };
 
 struct ExtraTypeInfo {
@@ -119,6 +120,31 @@ protected:
 
 private:
 	ListTypeInfo();
+};
+
+struct MeasureTypeInfo : public ExtraTypeInfo {
+	explicit MeasureTypeInfo(LogicalType measure_output_type_p, std::string alias, unique_ptr<Expression> bound_measure_expression);
+
+	LogicalType measure_output_type;
+	std::string measure_alias;
+	unique_ptr<Expression> bound_measure_expression;
+
+public:
+	void Serialize(Serializer &serializer) const override;
+	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);
+	shared_ptr<ExtraTypeInfo> Copy() const override;
+	shared_ptr<ExtraTypeInfo> DeepCopy() const override;
+
+	// Static helper methods for accessing measure type information
+	static const LogicalType &MeasureOutputType(const LogicalType &type);
+	static const std::string &MeasureAlias(const LogicalType &type);
+	static const unique_ptr<Expression> &BoundMeasureExpression(const LogicalType &type);
+
+protected:
+	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
+
+private:
+	MeasureTypeInfo();
 };
 
 struct StructTypeInfo : public ExtraTypeInfo {

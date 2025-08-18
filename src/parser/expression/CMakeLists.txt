@@ -13,6 +13,7 @@ add_library_unity(
   function_expression.cpp
   lambda_expression.cpp
   lambdaref_expression.cpp
+  measure_definition_expression.cpp
   operator_expression.cpp
   parameter_expression.cpp
   positional_reference_expression.cpp

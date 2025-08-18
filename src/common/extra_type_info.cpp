@@ -6,6 +6,7 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/string_map_set.hpp"
+#include "duckdb/common/exception.hpp"
 
 namespace duckdb {
 
@@ -505,6 +506,67 @@ bool TemplateTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
 
 shared_ptr<ExtraTypeInfo> TemplateTypeInfo::Copy() const {
 	return make_shared_ptr<TemplateTypeInfo>(*this);
+}
+
+//===--------------------------------------------------------------------===//
+// Measure Type Info
+//===--------------------------------------------------------------------===//
+MeasureTypeInfo::MeasureTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::MEASURE_TYPE_INFO) {
+}
+
+MeasureTypeInfo::MeasureTypeInfo(LogicalType measure_output_type_p, std::string alias,
+                                 unique_ptr<Expression> bound_measure_expression)
+    : ExtraTypeInfo(ExtraTypeInfoType::MEASURE_TYPE_INFO), measure_output_type(std::move(measure_output_type_p)),
+      measure_alias(std::move(alias)), bound_measure_expression(std::move(bound_measure_expression)) {
+}
+
+bool MeasureTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
+	auto &other = other_p->Cast<MeasureTypeInfo>();
+	if (measure_output_type != other.measure_output_type || measure_alias != other.measure_alias) {
+		return false;
+	}
+	// Compare bound_measure_expression
+	if (bound_measure_expression == nullptr && other.bound_measure_expression == nullptr) {
+		return true;
+	}
+	if (bound_measure_expression == nullptr || other.bound_measure_expression == nullptr) {
+		return false;
+	}
+	return bound_measure_expression->Equals(*other.bound_measure_expression);
+}
+
+shared_ptr<ExtraTypeInfo> MeasureTypeInfo::Copy() const {
+	return make_shared_ptr<MeasureTypeInfo>(measure_output_type, measure_alias,
+	                                        bound_measure_expression ? bound_measure_expression->Copy() : nullptr);
+}
+
+shared_ptr<ExtraTypeInfo> MeasureTypeInfo::DeepCopy() const {
+	return make_shared_ptr<MeasureTypeInfo>(measure_output_type.DeepCopy(), measure_alias,
+	                                        bound_measure_expression ? bound_measure_expression->Copy() : nullptr);
+}
+
+const LogicalType &MeasureTypeInfo::MeasureOutputType(const LogicalType &type) {
+	if (!type.AuxInfo()) {
+		throw InternalException("MeasureTypeInfo::MeasureOutputType called on type without AuxInfo");
+	}
+	auto &info = type.AuxInfo()->Cast<MeasureTypeInfo>();
+	return info.measure_output_type;
+}
+
+const std::string &MeasureTypeInfo::MeasureAlias(const LogicalType &type) {
+	if (!type.AuxInfo()) {
+		throw InternalException("MeasureTypeInfo::MeasureAlias called on type without AuxInfo");
+	}
+	auto &info = type.AuxInfo()->Cast<MeasureTypeInfo>();
+	return info.measure_alias;
+}
+
+const unique_ptr<Expression> &MeasureTypeInfo::BoundMeasureExpression(const LogicalType &type) {
+	if (!type.AuxInfo()) {
+		throw InternalException("MeasureTypeInfo::BoundMeasureExpression called on type without AuxInfo");
+	}
+	auto &info = type.AuxInfo()->Cast<MeasureTypeInfo>();
+	return info.bound_measure_expression;
 }
 
 } // namespace duckdb

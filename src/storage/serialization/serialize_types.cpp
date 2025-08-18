@@ -59,6 +59,9 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(Deserializer &deserializer)
 	case ExtraTypeInfoType::TEMPLATE_TYPE_INFO:
 		result = TemplateTypeInfo::Deserialize(deserializer);
 		break;
+	case ExtraTypeInfoType::MEASURE_TYPE_INFO:
+		result = MeasureTypeInfo::Deserialize(deserializer);
+		break;
 	case ExtraTypeInfoType::USER_TYPE_INFO:
 		result = UserTypeInfo::Deserialize(deserializer);
 		break;
@@ -74,14 +77,16 @@ void AggregateStateTypeInfo::Serialize(Serializer &serializer) const {
 	ExtraTypeInfo::Serialize(serializer);
 	serializer.WritePropertyWithDefault<string>(200, "function_name", state_type.function_name);
 	serializer.WriteProperty<LogicalType>(201, "return_type", state_type.return_type);
-	serializer.WritePropertyWithDefault<vector<LogicalType>>(202, "bound_argument_types", state_type.bound_argument_types);
+	serializer.WritePropertyWithDefault<vector<LogicalType>>(202, "bound_argument_types",
+	                                                         state_type.bound_argument_types);
 }
 
 shared_ptr<ExtraTypeInfo> AggregateStateTypeInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::shared_ptr<AggregateStateTypeInfo>(new AggregateStateTypeInfo());
 	deserializer.ReadPropertyWithDefault<string>(200, "function_name", result->state_type.function_name);
 	deserializer.ReadProperty<LogicalType>(201, "return_type", result->state_type.return_type);
-	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(202, "bound_argument_types", result->state_type.bound_argument_types);
+	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(202, "bound_argument_types",
+	                                                          result->state_type.bound_argument_types);
 	return std::move(result);
 }
 
@@ -126,13 +131,15 @@ shared_ptr<ExtraTypeInfo> DecimalTypeInfo::Deserialize(Deserializer &deserialize
 
 void ExtensionTypeInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<LogicalTypeModifier>>(100, "modifiers", modifiers);
-	serializer.WritePropertyWithDefault<unordered_map<string, Value>>(101, "properties", properties, unordered_map<string, Value>());
+	serializer.WritePropertyWithDefault<unordered_map<string, Value>>(101, "properties", properties,
+	                                                                  unordered_map<string, Value>());
 }
 
 unique_ptr<ExtensionTypeInfo> ExtensionTypeInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<ExtensionTypeInfo>(new ExtensionTypeInfo());
 	deserializer.ReadPropertyWithDefault<vector<LogicalTypeModifier>>(100, "modifiers", result->modifiers);
-	deserializer.ReadPropertyWithExplicitDefault<unordered_map<string, Value>>(101, "properties", result->properties, unordered_map<string, Value>());
+	deserializer.ReadPropertyWithExplicitDefault<unordered_map<string, Value>>(101, "properties", result->properties,
+	                                                                           unordered_map<string, Value>());
 	return result;
 }
 
@@ -200,6 +207,23 @@ void TemplateTypeInfo::Serialize(Serializer &serializer) const {
 shared_ptr<ExtraTypeInfo> TemplateTypeInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::shared_ptr<TemplateTypeInfo>(new TemplateTypeInfo());
 	deserializer.ReadPropertyWithDefault<string>(200, "name", result->name);
+	return std::move(result);
+}
+
+void MeasureTypeInfo::Serialize(Serializer &serializer) const {
+	ExtraTypeInfo::Serialize(serializer);
+	serializer.WriteProperty<LogicalType>(200, "measure_output_type", measure_output_type);
+	serializer.WritePropertyWithDefault<string>(201, "measure_alias", measure_alias);
+	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(202, "bound_measure_expression",
+	                                                            bound_measure_expression);
+}
+
+shared_ptr<ExtraTypeInfo> MeasureTypeInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::shared_ptr<MeasureTypeInfo>(new MeasureTypeInfo());
+	deserializer.ReadProperty<LogicalType>(200, "measure_output_type", result->measure_output_type);
+	deserializer.ReadPropertyWithDefault<string>(201, "measure_alias", result->measure_alias);
+	deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(202, "bound_measure_expression",
+	                                                             result->bound_measure_expression);
 	return std::move(result);
 }
 

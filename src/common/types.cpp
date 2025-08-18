@@ -158,6 +158,8 @@ PhysicalType LogicalType::GetInternalType() {
 		return PhysicalType::UNKNOWN;
 	case LogicalTypeId::AGGREGATE_STATE:
 		return PhysicalType::VARCHAR;
+	case LogicalTypeId::MEASURE_TYPE:
+		return PhysicalType::INVALID;
 	default:
 		throw InternalException("Invalid LogicalType %s", ToString());
 	}
@@ -512,6 +514,9 @@ string LogicalType::ToString() const {
 	}
 	case LogicalTypeId::AGGREGATE_STATE: {
 		return AggregateStateType::GetTypeName(*this);
+	}
+	case LogicalTypeId::MEASURE_TYPE: {
+		return MeasureType::GetName(*this);
 	}
 	case LogicalTypeId::SQLNULL: {
 		return "\"NULL\"";
@@ -1335,6 +1340,7 @@ static idx_t GetLogicalTypeScore(const LogicalType &type) {
 	case LogicalTypeId::POINTER:
 	case LogicalTypeId::VALIDITY:
 	case LogicalTypeId::USER:
+	case LogicalTypeId::MEASURE_TYPE:
 		break;
 	}
 	return 1000;
@@ -1567,6 +1573,24 @@ LogicalType LogicalType::LIST(const LogicalType &child) {
 }
 
 //===--------------------------------------------------------------------===//
+// Measure Type
+//===--------------------------------------------------------------------===//
+const string MeasureType::GetName(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::MEASURE_TYPE);
+	if (!type.AuxInfo()) {
+		return "MEASURE: UNKNOWN";
+	}
+	auto &measure_info = type.AuxInfo()->Cast<MeasureTypeInfo>();
+	auto &output_type = measure_info.measure_output_type;
+	auto &alias = measure_info.measure_alias;
+	if (alias.empty()) {
+		return "MEASURE: " + output_type.ToString();
+	} else {
+		return "MEASURE " + KeywordHelper::WriteQuoted(alias, '\'') + ": " + output_type.ToString();
+	}
+}
+
+//===--------------------------------------------------------------------===//
 // Aggregate State Type
 //===--------------------------------------------------------------------===//
 const aggregate_state_t &AggregateStateType::GetStateType(const LogicalType &type) {
@@ -1636,6 +1660,13 @@ bool StructType::IsUnnamed(const LogicalType &type) {
 LogicalType LogicalType::STRUCT(child_list_t<LogicalType> children) {
 	auto info = make_shared_ptr<StructTypeInfo>(std::move(children));
 	return LogicalType(LogicalTypeId::STRUCT, std::move(info));
+}
+
+LogicalType LogicalType::MEASURE_TYPE(const LogicalType &measure_output_type, std::string alias,
+                                      unique_ptr<Expression> bound_measure_expression) {
+	auto info =
+	    make_shared_ptr<MeasureTypeInfo>(measure_output_type, std::move(alias), std::move(bound_measure_expression));
+	return LogicalType(LogicalTypeId::MEASURE_TYPE, std::move(info));
 }
 
 LogicalType LogicalType::AGGREGATE_STATE(aggregate_state_t state_type) { // NOLINT

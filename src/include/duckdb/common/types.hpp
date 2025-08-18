@@ -10,8 +10,10 @@
 
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/helper.hpp"
+#include <algorithm>
 
 
 namespace duckdb {
@@ -238,12 +240,14 @@ enum class LogicalTypeId : uint8_t {
 	AGGREGATE_STATE = 105,
 	LAMBDA = 106,
 	UNION = 107,
-	ARRAY = 108
+	ARRAY = 108,
+	MEASURE_TYPE = 109,
 };
 
 struct ExtraTypeInfo;
 struct ExtensionTypeInfo;
 
+// Forward declaration
 struct aggregate_state_t; // NOLINT: mimic std casing
 
 struct LogicalType {
@@ -426,6 +430,7 @@ public:
 	DUCKDB_API static LogicalType AGGREGATE_STATE(aggregate_state_t state_type); // NOLINT
 	DUCKDB_API static LogicalType MAP(const LogicalType &child);                 // NOLINT
 	DUCKDB_API static LogicalType MAP(LogicalType key, LogicalType value);       // NOLINT
+	DUCKDB_API static LogicalType MEASURE_TYPE(const LogicalType &measure_output_type, std::string alias, unique_ptr<Expression> bound_measure_expression); // NOLINT
 	DUCKDB_API static LogicalType UNION(child_list_t<LogicalType> members);      // NOLINT
 	DUCKDB_API static LogicalType ARRAY(const LogicalType &child, optional_idx index);   // NOLINT
 	DUCKDB_API static LogicalType ENUM(Vector &ordered_data, idx_t size); // NOLINT
@@ -520,6 +525,10 @@ struct ArrayType {
 struct AggregateStateType {
 	DUCKDB_API static const string GetTypeName(const LogicalType &type);
 	DUCKDB_API static const aggregate_state_t &GetStateType(const LogicalType &type);
+};
+
+struct MeasureType {
+	DUCKDB_API static const string GetName(const LogicalType &type);
 };
 
 struct AnyType {

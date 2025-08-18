@@ -102,6 +102,8 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, 
 		return BindPositionalReference(expr, depth, root_expression);
 	case ExpressionClass::STAR:
 		return BindResult(BinderException::Unsupported(expr_ref, "STAR expression is not supported here"));
+	case ExpressionClass::MEASURE_DEFINITION:
+		return BindExpression(expr_ref.Cast<MeasureDefinitionExpression>(), depth);
 	default:
 		throw NotImplementedException("Unimplemented expression class");
 	}

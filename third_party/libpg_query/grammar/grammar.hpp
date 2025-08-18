@@ -53,6 +53,8 @@
 #include "parser/parser.hpp"
 #include "utils/datetime.hpp"
 
+#define YYDEBUG 1
+
 namespace duckdb_libpgquery {
 #define DEFAULT_SCHEMA "main"
 

@@ -31,6 +31,7 @@
 #include "duckdb/optimizer/sampling_pushdown.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/optimizer/sum_rewriter.hpp"
+#include "duckdb/optimizer/measure_agg_rewriter.hpp"
 #include "duckdb/optimizer/topn_optimizer.hpp"
 #include "duckdb/optimizer/unnest_rewriter.hpp"
 #include "duckdb/optimizer/late_materialization.hpp"
@@ -116,6 +117,12 @@ void Optimizer::RunBuiltInOptimizers() {
 	default:
 		break;
 	}
+	// Rewrites MEASURE expressions into traditional SQL.
+	RunOptimizer(OptimizerType::MEASURE_AGG_REWRITER, [&]() {
+		MeasureAggRewriter measure_rewriter(*this);
+		measure_rewriter.RewriteMeasures(plan);
+	});
+
 	// first we perform expression rewrites using the ExpressionRewriter
 	// this does not change the logical plan structure, but only simplifies the expression trees
 	RunOptimizer(OptimizerType::EXPRESSION_REWRITER, [&]() { rewriter.VisitOperator(*plan); });
