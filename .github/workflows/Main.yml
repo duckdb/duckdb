@@ -112,7 +112,6 @@ jobs:
     - name: Test
       shell: bash
       run: make allunit
-
  no-string-inline:
     name: No String Inline / Destroy Unpinned Blocks
     runs-on: ubuntu-24.04
@@ -149,7 +148,6 @@ jobs:
       - name: Test
         shell: bash
         run: build/relassert/test/unittest
-
  vector-sizes:
     name: Vector Sizes
     runs-on: ubuntu-22.04
@@ -230,7 +228,6 @@ jobs:
     - name: Test
       shell: bash
       run: valgrind ./build/relassert/test/unittest test/sql/tpch/tpch_sf001.test_slow
-
  threadsan:
     name: Thread Sanitizer
     needs: linux-configs
@@ -425,6 +422,12 @@ jobs:
       shell: bash
       run: |
         ./build/release/test/unittest --test-config test/configs/latest_storage_block_size_16kB.json
+
+    - name: test/configs/enable_verification.json
+      if: (success() || failure()) && steps.build.conclusion == 'success'
+      shell: bash
+      run: |
+        ./build/release/test/unittest --test-config test/configs/enable_verification.json
 
     - name: Test dictionary_expression
       if: (success() || failure()) && steps.build.conclusion == 'success'
