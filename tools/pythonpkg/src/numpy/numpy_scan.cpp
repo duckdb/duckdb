@@ -340,7 +340,7 @@ void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
 		// Get the data pointer and the validity mask of the result vector
 		auto tgt_ptr = FlatVector::GetData<string_t>(out);
 		auto &out_mask = FlatVector::Validity(out);
-		
+
 		// Get GIL before we call python
 		PythonGILWrapper gil;
 		auto &import_cache = *DuckDBPyConnection::ImportCache();
@@ -367,7 +367,7 @@ void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
 					out_mask.SetInvalid(row);
 					continue;
 				}
-				
+
 				// Check if this is pandas.NaT
 				if (naT_singleton && py::handle(val).is(naT_singleton)) {
 					out_mask.SetInvalid(row);
