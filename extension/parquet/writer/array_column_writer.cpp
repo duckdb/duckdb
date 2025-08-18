@@ -9,7 +9,8 @@ void ArrayColumnWriter::Analyze(ColumnWriterState &state_p, ColumnWriterState *p
 	child_writer->Analyze(*state.child_state, &state_p, array_child, array_size * count);
 }
 
-void ArrayColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count) {
+void ArrayColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count,
+                                bool vector_can_span_multiple_pages) {
 	auto &state = state_p.Cast<ListColumnWriterState>();
 
 	auto array_size = ArrayType::GetSize(vector.GetType());
@@ -66,7 +67,9 @@ void ArrayColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *p
 	state.parent_index += vcount;
 
 	auto &array_child = ArrayVector::GetEntry(vector);
-	child_writer->Prepare(*state.child_state, &state_p, array_child, count * array_size);
+	// The elements of a single array should not span multiple Parquet pages
+	// So, we force the entire vector to fit on a single page by setting "vector_can_span_multiple_pages=false"
+	child_writer->Prepare(*state.child_state, &state_p, array_child, count * array_size, false);
 }
 
 void ArrayColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t count) {
