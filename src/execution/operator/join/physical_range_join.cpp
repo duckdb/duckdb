@@ -367,69 +367,79 @@ void PhysicalRangeJoin::ProjectResult(DataChunk &chunk, DataChunk &result) const
 }
 
 template <SortKeyType SORT_KEY_TYPE>
-void GatherSortedTablePayload(DataChunk &chunk, TupleDataCollection &tuples, ExternalBlockIteratorState &state,
-                              const SelectionVector &result, const idx_t result_count, const idx_t left_cols) {
+static void TemplatedSliceSortedPayload(DataChunk &chunk, TupleDataCollection &payload,
+                                        ExternalBlockIteratorState &state, TupleDataChunkState &chunk_state,
+                                        const idx_t chunk_idx, SelectionVector &result, const idx_t result_count,
+                                        const idx_t left_cols) {
 	using SORT_KEY = SortKey<SORT_KEY_TYPE>;
 	using BLOCK_ITERATOR = block_iterator_t<ExternalBlockIteratorState, SORT_KEY>;
-	BLOCK_ITERATOR itr(state);
+	BLOCK_ITERATOR itr(state, chunk_idx, 0);
 
-	DataChunk payload;
-	chunk.Split(payload, left_cols);
+	const auto payload_ptrs = FlatVector::GetData<data_ptr_t>(chunk_state.row_locations);
+	for (idx_t i = 0; i < result_count; ++i) {
+		const auto idx = result.get_index(i);
+		payload_ptrs[i] = itr[idx].GetPayload();
+	}
+	TupleDataCollection::ResetCachedCastVectors(chunk_state, chunk_state.column_ids);
+
+	for (idx_t i = 0; i < chunk_state.column_ids.size(); ++i) {
+		const auto layout_col_idx = chunk_state.column_ids[i];
+		const auto col_idx = layout_col_idx + left_cols;
+		payload.Gather(chunk_state.row_locations, *FlatVector::IncrementalSelectionVector(), result_count,
+		               layout_col_idx, chunk.data[col_idx], *FlatVector::IncrementalSelectionVector(),
+		               chunk_state.cached_cast_vectors[layout_col_idx]);
+	}
 }
-#if 0
-BufferHandle PhysicalRangeJoin::SliceSortedPayload(DataChunk &chunk, GlobalSortedTable &table, const idx_t chunk_idx,
-                                                   const SelectionVector &result, const idx_t result_count,
-                                                   const idx_t left_cols) {
 
-	// There should only be one sorted block if they have been sorted
-	D_ASSERT(state.sorted_blocks.size() == 1);
-	SBScanState read_state(state.buffer_manager, state);
-	read_state.sb = state.sorted_blocks[0].get();
-	auto &sorted_data = *read_state.sb->payload_data;
+void PhysicalRangeJoin::SliceSortedPayload(DataChunk &chunk, GlobalSortedTable &table,
+                                           ExternalBlockIteratorState &state, TupleDataChunkState &chunk_state,
+                                           const idx_t chunk_idx, SelectionVector &result, const idx_t result_count,
+                                           const idx_t left_cols) {
 
-	read_state.SetIndices(block_idx, 0);
-	read_state.PinData(sorted_data);
-	const auto data_ptr = read_state.DataPtr(sorted_data);
-	data_ptr_t heap_ptr = nullptr;
+	auto &payload = *table.sorted->payload_data;
+	const auto sort_key_type = table.GetSortKeyType();
 
-	// Set up a batch of pointers to scan data from
-	Vector addresses(LogicalType::POINTER, result_count);
-	auto data_pointers = FlatVector::GetData<data_ptr_t>(addresses);
-
-	// Set up the data pointers for the values that are actually referenced
-	const idx_t &row_width = sorted_data.layout.GetRowWidth();
-
-	auto prev_idx = result.get_index(0);
-	SelectionVector gsel(result_count);
-	idx_t addr_count = 0;
-	gsel.set_index(0, addr_count);
-	data_pointers[addr_count] = data_ptr + prev_idx * row_width;
-	for (idx_t i = 1; i < result_count; ++i) {
-		const auto row_idx = result.get_index(i);
-		if (row_idx != prev_idx) {
-			data_pointers[++addr_count] = data_ptr + row_idx * row_width;
-			prev_idx = row_idx;
-		}
-		gsel.set_index(i, addr_count);
+	switch (sort_key_type) {
+	case SortKeyType::NO_PAYLOAD_FIXED_8:
+		TemplatedSliceSortedPayload<SortKeyType::NO_PAYLOAD_FIXED_8>(chunk, payload, state, chunk_state, chunk_idx,
+		                                                             result, result_count, left_cols);
+		break;
+	case SortKeyType::NO_PAYLOAD_FIXED_16:
+		TemplatedSliceSortedPayload<SortKeyType::NO_PAYLOAD_FIXED_16>(chunk, payload, state, chunk_state, chunk_idx,
+		                                                              result, result_count, left_cols);
+		break;
+	case SortKeyType::NO_PAYLOAD_FIXED_24:
+		TemplatedSliceSortedPayload<SortKeyType::NO_PAYLOAD_FIXED_24>(chunk, payload, state, chunk_state, chunk_idx,
+		                                                              result, result_count, left_cols);
+		break;
+	case SortKeyType::NO_PAYLOAD_FIXED_32:
+		TemplatedSliceSortedPayload<SortKeyType::NO_PAYLOAD_FIXED_32>(chunk, payload, state, chunk_state, chunk_idx,
+		                                                              result, result_count, left_cols);
+		break;
+	case SortKeyType::NO_PAYLOAD_VARIABLE_32:
+		TemplatedSliceSortedPayload<SortKeyType::NO_PAYLOAD_VARIABLE_32>(chunk, payload, state, chunk_state, chunk_idx,
+		                                                                 result, result_count, left_cols);
+		break;
+	case SortKeyType::PAYLOAD_FIXED_16:
+		TemplatedSliceSortedPayload<SortKeyType::PAYLOAD_FIXED_16>(chunk, payload, state, chunk_state, chunk_idx,
+		                                                           result, result_count, left_cols);
+		break;
+	case SortKeyType::PAYLOAD_FIXED_24:
+		TemplatedSliceSortedPayload<SortKeyType::PAYLOAD_FIXED_24>(chunk, payload, state, chunk_state, chunk_idx,
+		                                                           result, result_count, left_cols);
+		break;
+	case SortKeyType::PAYLOAD_FIXED_32:
+		TemplatedSliceSortedPayload<SortKeyType::PAYLOAD_FIXED_32>(chunk, payload, state, chunk_state, chunk_idx,
+		                                                           result, result_count, left_cols);
+		break;
+	case SortKeyType::PAYLOAD_VARIABLE_32:
+		TemplatedSliceSortedPayload<SortKeyType::PAYLOAD_VARIABLE_32>(chunk, payload, state, chunk_state, chunk_idx,
+		                                                              result, result_count, left_cols);
+		break;
+	default:
+		throw NotImplementedException("MergeJoinSimpleBlocks for %s", EnumUtil::ToString(sort_key_type));
 	}
-	++addr_count;
-
-	// Unswizzle the offsets back to pointers (if needed)
-	if (!sorted_data.layout.AllConstant() && state.external) {
-		heap_ptr = read_state.payload_heap_handle.Ptr();
-	}
-
-	// Deserialize the payload data
-	auto sel = FlatVector::IncrementalSelectionVector();
-	for (idx_t col_no = 0; col_no < sorted_data.layout.ColumnCount(); col_no++) {
-		auto &col = chunk.data[left_cols + col_no];
-		RowOperations::Gather(addresses, *sel, col, *sel, addr_count, sorted_data.layout, col_no, 0, heap_ptr);
-		col.Slice(gsel, result_count);
-	}
-
-	return std::move(read_state.payload_heap_handle);
 }
-#endif
 
 idx_t PhysicalRangeJoin::SelectJoinTail(const ExpressionType &condition, Vector &left, Vector &right,
                                         const SelectionVector *sel, idx_t count, SelectionVector *true_sel) {

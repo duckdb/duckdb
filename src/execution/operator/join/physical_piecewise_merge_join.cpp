@@ -206,12 +206,11 @@ public:
 
 		auto &gsink = op.sink_state->Cast<MergeJoinGlobalState>();
 		auto &rhs_table = *gsink.table;
-		auto &rhs_keys = *rhs_table.sorted->key_data;
-		auto &rhs_payload = *rhs_table.sorted->payload_data;
-		rhs_state = make_uniq<ExternalBlockIteratorState>(rhs_keys, rhs_payload);
+		rhs_iterator = rhs_table.CreateIteratorState();
+		rhs_table.InitializePayloadState(rhs_chunk_state);
 
 		//	Since we have now materialized the payload, the keys will not have payloads?
-		sort_key_type = rhs_keys.GetLayout().GetSortKeyType();
+		sort_key_type = rhs_table.GetSortKeyType();
 	}
 
 	ClientContext &client;
@@ -232,12 +231,13 @@ public:
 	// Complex scans
 	bool first_fetch;
 	bool finished;
-	unique_ptr<ExternalBlockIteratorState> lhs_state;
-	unique_ptr<ExternalBlockIteratorState> rhs_state;
+	unique_ptr<ExternalBlockIteratorState> lhs_iterator;
+	unique_ptr<ExternalBlockIteratorState> rhs_iterator;
 	idx_t right_position;
 	idx_t right_chunk_index;
 	idx_t right_base;
 	idx_t prev_left_index;
+	TupleDataChunkState rhs_chunk_state;
 
 	// Secondary predicate shared data
 	SelectionVector sel;
@@ -270,8 +270,7 @@ public:
 		lhs_keys.Reset();
 		lhs_local_table->executor.Execute(lhs_payload, lhs_keys);
 
-		auto &lhs_key_data = *lhs_table.sorted->key_data;
-		lhs_state = make_uniq<ExternalBlockIteratorState>(lhs_key_data, lhs_payload_data);
+		lhs_iterator = lhs_table.CreateIteratorState();
 	}
 };
 
@@ -310,26 +309,22 @@ bool MergeJoinBefore(const T &lhs, const T &rhs, const bool strict) {
 template <SortKeyType SORT_KEY_TYPE>
 static idx_t TemplatedMergeJoinSimpleBlocks(PiecewiseMergeJoinState &lstate, MergeJoinGlobalState &gstate,
                                             bool *found_match, const bool strict) {
-	auto &lhs_table = *lstate.lhs_global_table;
-	auto &lhs_keys = *lhs_table.sorted->key_data;
-	const auto &layout = lhs_keys.GetLayout();
-	D_ASSERT(SORT_KEY_TYPE == layout.GetSortKeyType());
 	using SORT_KEY = SortKey<SORT_KEY_TYPE>;
-	using LHS_ITERATOR = block_iterator_t<InMemoryBlockIteratorState, SORT_KEY>;
-	using RHS_ITERATOR = block_iterator_t<ExternalBlockIteratorState, SORT_KEY>;
+	using BLOCK_ITERATOR = block_iterator_t<ExternalBlockIteratorState, SORT_KEY>;
 
 	//	We only need the keys because we are extracting the row numbers
-	InMemoryBlockIteratorState lhs_state(lhs_keys);
-	const auto lhs_not_null = lstate.lhs_global_table->count - lstate.lhs_global_table->has_null;
+	auto &lhs_table = *lstate.lhs_global_table;
+	D_ASSERT(SORT_KEY_TYPE == lhs_table.GetSortKeyType());
+	auto &lhs_iterator = *lstate.lhs_iterator;
+	const auto lhs_not_null = lhs_table.count - lhs_table.has_null;
 
 	auto &rhs_table = *gstate.table;
-	auto &rhs_keys = *rhs_table.sorted->key_data;
-	ExternalBlockIteratorState rhs_state(rhs_keys, nullptr);
-	const auto rhs_not_null = lstate.lhs_global_table->count - lstate.lhs_global_table->has_null;
+	auto &rhs_iterator = *lstate.rhs_iterator;
+	const auto rhs_not_null = rhs_table.count - rhs_table.has_null;
 
 	idx_t l_entry_idx = 0;
-	LHS_ITERATOR lhs_itr(lhs_state);
-	RHS_ITERATOR rhs_itr(rhs_state);
+	BLOCK_ITERATOR lhs_itr(lhs_iterator);
+	BLOCK_ITERATOR rhs_itr(rhs_iterator);
 	for (idx_t r_idx = 0; r_idx < rhs_not_null; r_idx += STANDARD_VECTOR_SIZE) {
 		// we only care about the BIGGEST value in the RHS
 		// because we want to figure out if the LHS values are less than [or equal] to ANY value
@@ -572,11 +567,11 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 
 		auto &lhs_table = *state.lhs_global_table;
 		const auto lhs_not_null = SortedChunkNotNull(0, lhs_table.count, lhs_table.has_null);
-		ChunkMergeInfo left_info(*state.lhs_state, 0, state.left_position, lhs_not_null);
+		ChunkMergeInfo left_info(*state.lhs_iterator, 0, state.left_position, lhs_not_null);
 
 		auto &rhs_table = *gstate.table;
 		const auto rhs_not_null = SortedChunkNotNull(state.right_chunk_index, rhs_table.count, rhs_table.has_null);
-		ChunkMergeInfo right_info(*state.rhs_state, state.right_chunk_index, state.right_position, rhs_not_null);
+		ChunkMergeInfo right_info(*state.rhs_iterator, state.right_chunk_index, state.right_position, rhs_not_null);
 
 		idx_t result_count = MergeJoinComplexBlocks(state.sort_key_type, left_info, right_info,
 		                                            conditions[0].comparison, state.prev_left_index);
@@ -596,7 +591,8 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 			for (idx_t c = 0; c < state.lhs_payload.ColumnCount(); ++c) {
 				chunk.data[c].Slice(state.lhs_payload.data[c], left_info.result, result_count);
 			}
-			SliceSortedPayload(chunk, rhs_table, right_info.block_idx, right_info.result, result_count, left_cols);
+			SliceSortedPayload(chunk, rhs_table, *state.rhs_iterator, state.rhs_chunk_state, right_info.block_idx,
+			                   right_info.result, result_count, left_cols);
 			chunk.SetCardinality(result_count);
 
 			auto sel = FlatVector::IncrementalSelectionVector();

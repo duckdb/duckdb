@@ -825,6 +825,16 @@ public:
 
 		left_keys.Initialize(allocator, left_types);
 		right_keys.Initialize(allocator, right_types);
+
+		auto &ie_sink = op.sink_state->Cast<IEJoinGlobalState>();
+		auto &left_table = *ie_sink.tables[0];
+		auto &right_table = *ie_sink.tables[1];
+
+		left_iterator = left_table.CreateIteratorState();
+		right_iterator = right_table.CreateIteratorState();
+
+		left_table.InitializePayloadState(left_chunk_state);
+		right_table.InitializePayloadState(right_chunk_state);
 	}
 
 	idx_t SelectOuterRows(bool *matches) {
@@ -849,9 +859,13 @@ public:
 
 	idx_t left_base;
 	idx_t left_block_index;
+	unique_ptr<ExternalBlockIteratorState> left_iterator;
+	TupleDataChunkState left_chunk_state;
 
 	idx_t right_base;
 	idx_t right_block_index;
+	unique_ptr<ExternalBlockIteratorState> right_iterator;
+	TupleDataChunkState right_chunk_state;
 
 	// Trailing predicates
 	SelectionVector true_sel;
@@ -879,9 +893,9 @@ void PhysicalIEJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &re
 
 	const auto left_cols = children[0].get().GetTypes().size();
 	auto &chunk = state.unprojected;
+	SelectionVector lsel(STANDARD_VECTOR_SIZE);
+	SelectionVector rsel(STANDARD_VECTOR_SIZE);
 	do {
-		SelectionVector lsel(STANDARD_VECTOR_SIZE);
-		SelectionVector rsel(STANDARD_VECTOR_SIZE);
 		auto result_count = state.joiner->JoinComplexBlocks(lsel, rsel);
 		if (result_count == 0) {
 			// exhausted this pair
@@ -891,8 +905,10 @@ void PhysicalIEJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &re
 		// found matches: extract them
 
 		chunk.Reset();
-		SliceSortedPayload(chunk, left_table, state.left_block_index, lsel, result_count, 0);
-		SliceSortedPayload(chunk, right_table, state.right_block_index, rsel, result_count, left_cols);
+		SliceSortedPayload(chunk, left_table, *state.left_iterator, state.left_chunk_state, state.left_block_index,
+		                   lsel, result_count, 0);
+		SliceSortedPayload(chunk, right_table, *state.right_iterator, state.right_chunk_state, state.right_block_index,
+		                   rsel, result_count, left_cols);
 		chunk.SetCardinality(result_count);
 
 		auto sel = FlatVector::IncrementalSelectionVector();
@@ -1166,7 +1182,8 @@ SourceResultType PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &r
 		}
 		auto &chunk = ie_lstate.unprojected;
 		chunk.Reset();
-		SliceSortedPayload(chunk, *ie_sink.tables[0], ie_lstate.left_block_index, ie_lstate.true_sel, count);
+		SliceSortedPayload(chunk, *ie_sink.tables[0], *ie_lstate.left_iterator, ie_lstate.left_chunk_state,
+		                   ie_lstate.left_block_index, ie_lstate.true_sel, count, 0);
 
 		// Fill in NULLs to the right
 		for (auto col_idx = left_cols; col_idx < chunk.ColumnCount(); ++col_idx) {
@@ -1191,8 +1208,8 @@ SourceResultType PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &r
 
 		auto &chunk = ie_lstate.unprojected;
 		chunk.Reset();
-		SliceSortedPayload(chunk, *ie_sink.tables[1], ie_lstate.right_block_index, ie_lstate.true_sel, count,
-		                   left_cols);
+		SliceSortedPayload(chunk, *ie_sink.tables[1], *ie_lstate.right_iterator, ie_lstate.right_chunk_state,
+		                   ie_lstate.right_block_index, ie_lstate.true_sel, count, left_cols);
 
 		// Fill in NULLs to the left
 		for (idx_t col_idx = 0; col_idx < left_cols; ++col_idx) {

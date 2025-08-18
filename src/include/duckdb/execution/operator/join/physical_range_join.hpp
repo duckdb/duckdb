@@ -86,6 +86,15 @@ public:
 		//! Single-threaded materialisation.
 		void Materialize(ExecutionContext &context, InterruptState &interrupt);
 
+		//! Create an iteration state
+		unique_ptr<ExternalBlockIteratorState> CreateIteratorState() {
+			return make_uniq<ExternalBlockIteratorState>(*sorted->key_data, sorted->payload_data.get());
+		}
+		//! Initialize a payload scanning state
+		void InitializePayloadState(TupleDataChunkState &state) {
+			sorted->payload_data->InitializeChunkState(state);
+		}
+
 		//! The hosting operator
 		const PhysicalRangeJoin &op;
 		//! The sort description
@@ -122,8 +131,9 @@ public:
 public:
 	// Gather the result values and slice the payload columns to those values.
 	// Returns a buffer handle to the pinned heap block (if any)
-	static void SliceSortedPayload(DataChunk &payload, GlobalSortedTable &table, const idx_t block_idx,
-	                               const SelectionVector &result, const idx_t result_count, const idx_t left_cols = 0);
+	static void SliceSortedPayload(DataChunk &chunk, GlobalSortedTable &table, ExternalBlockIteratorState &state,
+	                               TupleDataChunkState &chunk_state, const idx_t chunk_idx, SelectionVector &result,
+	                               const idx_t result_count, const idx_t left_cols = 0);
 	// Apply a tail condition to the current selection
 	static idx_t SelectJoinTail(const ExpressionType &condition, Vector &left, Vector &right,
 	                            const SelectionVector *sel, idx_t count, SelectionVector *true_sel);
