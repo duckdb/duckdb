@@ -1,0 +1,25 @@
+# name: test/sql/optimizer/test_measure_agg_rewriter.test
+# description: Test that MEASURE_AGG is evaluated well.
+# group: [optimizer]
+
+statement ok
+CREATE TABLE Customers(custName VARCHAR, custAge INTEGER);
+
+statement ok
+INSERT INTO Customers VALUES ('Alice', 23), ('Bob', 41), ('Celia', 17);
+
+statement ok
+CREATE TABLE Orders(prodName VARCHAR, custName VARCHAR, orderDate DATE, revenue INTEGER, cost INTEGER);
+
+statement ok
+INSERT INTO Orders VALUES 
+  ('Happy', 'Alice', '2023-11-28', 6, 4),
+  ('Acme', 'Bob', '2023-11-27', 5, 2),
+  ('Happy', 'Alice', '2024-11-28', 7, 4),
+  ('Whizz', 'Celia', '2023-11-25', 3, 1),
+  ('Happy', 'Bob', '2022-11-27', 4, 1);
+
+query I
+SELECT MEASURE_AGG(m) FROM (SELECT MEASURE m:1 FROM Orders);
+----
+1

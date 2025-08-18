@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/extra_type_info.hpp"
 
 namespace duckdb {
 
@@ -66,6 +67,14 @@ inline LogicalType TypeVisitor::VisitReplace(const LogicalType &type, F &&func) 
 		const auto &key = MapType::KeyType(type);
 		const auto &value = MapType::ValueType(type);
 		return func(LogicalType::MAP(VisitReplace(key, func), VisitReplace(value, func)));
+	}
+	case LogicalTypeId::MEASURE_TYPE: {
+		if (!type.AuxInfo()) {
+			return func(type);
+		}
+		const auto &measure_output_type = MeasureTypeInfo::MeasureOutputType(type);
+		const auto &bound_measure_expression = MeasureTypeInfo::BoundMeasureExpression(type);
+		return func(LogicalType::MEASURE_TYPE(VisitReplace(measure_output_type, func), MeasureTypeInfo::MeasureAlias(type), bound_measure_expression ? bound_measure_expression->Copy() : nullptr));
 	}
 	default:
 		return func(type);

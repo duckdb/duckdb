@@ -48,5 +48,12 @@
         "description": "Returns the maximum value present in arg.",
         "example": "max(A)",
         "type": "aggregate_function_set"
+    },
+    {
+        "name": "measure_agg",
+        "parameters": "x",
+        "description": "Returns a constant value of 1 for any measure type input.",
+        "example": "measure_agg(m)",
+        "type": "aggregate_function"
     }
 ]

@@ -10,6 +10,7 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/main/extension_entries.hpp"
 
+
 namespace duckdb {
 
 FunctionData::~FunctionData() {

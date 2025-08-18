@@ -59,6 +59,9 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(Deserializer &deserializer)
 	case ExtraTypeInfoType::TEMPLATE_TYPE_INFO:
 		result = TemplateTypeInfo::Deserialize(deserializer);
 		break;
+	case ExtraTypeInfoType::MEASURE_TYPE_INFO:
+		result = MeasureTypeInfo::Deserialize(deserializer);
+		break;
 	case ExtraTypeInfoType::USER_TYPE_INFO:
 		result = UserTypeInfo::Deserialize(deserializer);
 		break;
@@ -200,6 +203,21 @@ void TemplateTypeInfo::Serialize(Serializer &serializer) const {
 shared_ptr<ExtraTypeInfo> TemplateTypeInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::shared_ptr<TemplateTypeInfo>(new TemplateTypeInfo());
 	deserializer.ReadPropertyWithDefault<string>(200, "name", result->name);
+	return std::move(result);
+}
+
+void MeasureTypeInfo::Serialize(Serializer &serializer) const {
+	ExtraTypeInfo::Serialize(serializer);
+	serializer.WriteProperty<LogicalType>(200, "measure_output_type", measure_output_type);
+	serializer.WritePropertyWithDefault<string>(201, "measure_alias", measure_alias);
+	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(202, "bound_measure_expression", bound_measure_expression);
+}
+
+shared_ptr<ExtraTypeInfo> MeasureTypeInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::shared_ptr<MeasureTypeInfo>(new MeasureTypeInfo());
+	deserializer.ReadProperty<LogicalType>(200, "measure_output_type", result->measure_output_type);
+	deserializer.ReadPropertyWithDefault<string>(201, "measure_alias", result->measure_alias);
+	deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(202, "bound_measure_expression", result->bound_measure_expression);
 	return std::move(result);
 }
 

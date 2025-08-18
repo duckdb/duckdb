@@ -1,0 +1,18 @@
+# name: test/sql/aggregate/aggregates/select_measure.test
+# description: Tests creating measure columns in SELECT
+# group: [aggregates]
+
+query I
+SELECT MEASURE_AGG(m) FROM (SELECT MEASURE m:1);
+----
+1
+
+query I
+SELECT MEASURE_AGG(m) FROM (SELECT MEASURE m:1.0);
+----
+1.0
+
+query I
+SELECT MEASURE_AGG(m) FROM (SELECT MEASURE m:'hello');
+----
+'hello'

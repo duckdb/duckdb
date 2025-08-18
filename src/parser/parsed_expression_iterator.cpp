@@ -145,6 +145,13 @@ void ParsedExpressionIterator::EnumerateChildren(
 		}
 		break;
 	}
+	case ExpressionClass::MEASURE_DEFINITION: {
+		auto &measure_expr = expr.Cast<MeasureDefinitionExpression>();
+		if (measure_expr.measure_expression) {
+			callback(measure_expr.measure_expression);
+		}
+		break;
+	}
 	case ExpressionClass::BOUND_EXPRESSION:
 	case ExpressionClass::COLUMN_REF:
 	case ExpressionClass::LAMBDA_REF:
