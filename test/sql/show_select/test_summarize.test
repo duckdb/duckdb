@@ -2,9 +2,6 @@
 # description: Test summarize command
 # group: [show_select]
 
-# summarize uses approx_count_distinct, which relies on a proper hash function
-require no_hash_zero
-
 statement ok
 PRAGMA enable_verification
 

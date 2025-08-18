@@ -1,9 +1,6 @@
 # name: test/sql/types/nested/array/array_summarize.test
 # group: [array]
 
-# summarize uses approx_count_distinct, which relies on a proper hash function
-require no_hash_zero
-
 statement ok
 PRAGMA enable_verification
 

@@ -2,11 +2,9 @@
 # description: CSV limit copy
 # group: [csv]
 
-# this test takes way too long when all hashes are 0
-require no_hash_zero
-
 statement ok
 PRAGMA enable_verification
+
 
 statement ok
 CREATE TABLE integers AS FROM range(1000000) t(i);

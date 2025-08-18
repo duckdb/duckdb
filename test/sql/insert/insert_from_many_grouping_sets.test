@@ -2,9 +2,6 @@
 # description: Test parallel insert from many groups
 # group: [insert]
 
-# this test takes way too long when all hashes are 0
-require no_hash_zero
-
 statement ok
 CREATE TABLE integers AS SELECT i, i%2 as j FROM generate_series(0,999999,1) tbl(i);
 

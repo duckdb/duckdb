@@ -194,7 +194,7 @@ jobs:
 
      - name: Test
        shell: bash
-       run: build/relassert/test/unittest --skip-compiled
+       run: build/relassert/test/unittest --test-config test/configs/hash_zero.json
 
  vector-sizes:
     name: Vector Sizes

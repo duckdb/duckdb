@@ -2,9 +2,6 @@
 # description: Extract timestamp function
 # group: [timestamp]
 
-# approx_count_distinct is used in this test, which relies on a proper hash function
-require no_hash_zero
-
 statement ok
 PRAGMA enable_verification
 

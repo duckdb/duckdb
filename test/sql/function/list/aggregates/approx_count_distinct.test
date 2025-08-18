@@ -2,9 +2,6 @@
 # description: Test the list_approx_count_distinct aggregate function
 # group: [aggregates]
 
-# approx_count_distinct relies on a proper hash function
-require no_hash_zero
-
 statement ok
 CREATE TABLE list_ints (l INTEGER[]);
 
