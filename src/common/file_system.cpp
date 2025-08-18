@@ -18,7 +18,6 @@
 
 #include <cstdint>
 #include <cstdio>
-#include "duckdb/logging/file_system_logger.hpp"
 
 #ifndef _WIN32
 #include <dirent.h>
@@ -694,6 +693,10 @@ int64_t FileHandle::Read(void *buffer, idx_t nr_bytes) {
 }
 
 int64_t FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes) {
+	if (context.GetClientContext() == nullptr) {
+		throw InternalException("Client context is NULL");
+	}
+
 	// FIXME: Add profiling.
 	return file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes));
 }
@@ -711,6 +714,10 @@ void FileHandle::Read(void *buffer, idx_t nr_bytes, idx_t location) {
 }
 
 void FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) {
+	if (context.GetClientContext() == nullptr) {
+		throw InternalException("Client context is NULL");
+	}
+
 	// FIXME: Add profiling.
 	file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
 }
