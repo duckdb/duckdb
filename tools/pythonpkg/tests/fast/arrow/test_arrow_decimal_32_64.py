@@ -31,7 +31,7 @@ class TestArrowDecimalTypes(object):
         ]
 
         # Test write
-        arrow_table = duckdb_cursor.execute("FROM decimal_32").arrow()
+        arrow_table = duckdb_cursor.execute("FROM decimal_32").fetch_arrow_table()
 
         assert arrow_table.equals(decimal_32)
 
@@ -62,5 +62,5 @@ class TestArrowDecimalTypes(object):
         ).fetchall() == [(2,)]
 
         # Test write
-        arrow_table = duckdb_cursor.execute("FROM decimal_64").arrow()
+        arrow_table = duckdb_cursor.execute("FROM decimal_64").fetch_arrow_table()
         assert arrow_table.equals(decimal_64)

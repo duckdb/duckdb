@@ -204,7 +204,7 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	      py::arg("rows_per_batch") = 1000000, py::kw_only(), py::arg("lazy") = false);
 	m.def("fetch_arrow_table", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()",
 	      py::arg("rows_per_batch") = 1000000);
-	m.def("arrow", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()",
+	m.def("arrow", &DuckDBPyConnection::FetchRecordBatchReader, "Fetch an Arrow RecordBatchReader following execute()",
 	      py::arg("rows_per_batch") = 1000000);
 	m.def("fetch_record_batch", &DuckDBPyConnection::FetchRecordBatchReader,
 	      "Fetch an Arrow RecordBatchReader following execute()", py::arg("rows_per_batch") = 1000000);

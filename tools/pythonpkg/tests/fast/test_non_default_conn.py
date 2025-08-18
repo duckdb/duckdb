@@ -60,7 +60,7 @@ class TestNonDefaultConn(object):
         test_arrow = pa.Table.from_pandas(test_df)
         rel = duckdb_cursor.from_arrow(test_arrow)
         assert rel.query('t_2', 'select count(*) from t inner join t_2 on (a = i)').fetchall()[0] == (1,)
-        rel = duckdb.arrow(test_arrow, connection=duckdb_cursor)
+        rel = duckdb.fetch_arrow_table(test_arrow, connection=duckdb_cursor)
         assert rel.query('t_2', 'select count(*) from t inner join t_2 on (a = i)').fetchall()[0] == (1,)
 
     def test_filter_df(self, duckdb_cursor):
