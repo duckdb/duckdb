@@ -107,10 +107,10 @@ SinkResultType PhysicalRecursiveCTE::Sink(ExecutionContext &context, DataChunk &
 		distinct_rows.Initialize(Allocator::DefaultAllocator(), distinct_types);
 		PopulateChunk(distinct_rows, chunk, distinct_idx, true);
 		DataChunk payload_rows;
-		if (!payload_types.empty()) {
-			payload_rows.Initialize(Allocator::DefaultAllocator(), payload_types);
+		if (!aggregate_types.empty()) {
+			payload_rows.Initialize(Allocator::DefaultAllocator(), aggregate_types);
 		}
-		PopulateChunk(payload_rows, chunk, payload_idx, true);
+		PopulateChunk(payload_rows, chunk, aggregate_idx, true);
 
 		// Add the chunk to the hash table and append it to the intermediate table
 		gstate.ht->AddChunk(distinct_rows, payload_rows, AggregateType::NON_DISTINCT);

@@ -40,9 +40,9 @@ public:
 	// Contains the result of the key variant
 	shared_ptr<ColumnDataCollection> recurring_table;
 	// Contains the types of the payload and key columns.
-	vector<LogicalType> payload_types, distinct_types;
+	vector<LogicalType> payload_types, distinct_types, aggregate_types;
 	// Contains the payload and key indices
-	vector<idx_t> payload_idx, distinct_idx;
+	vector<idx_t> payload_idx, distinct_idx, aggregate_idx;
 	// Contains the aggregates for the payload
 	vector<unique_ptr<Expression>> payload_aggregates;
 

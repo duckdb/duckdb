@@ -72,30 +72,32 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 	for (auto &expr : statement.payload_aggregates) {
 		D_ASSERT(expr->type == ExpressionType::FUNCTION);
 		auto &func_expr = expr->Cast<FunctionExpression>();
-		D_ASSERT(func_expr.children.size() == 1);
-		auto bound_expr = expression_binder.Bind(func_expr.children[0]);
-
-		if(bound_expr->type != ExpressionType::BOUND_COLUMN_REF) {
-			throw BinderException("Payload aggregate must be a column reference");
-		}
 
 		// Look up the aggregate function in the catalog
 		auto &func = Catalog::GetSystemCatalog(context).GetEntry<AggregateFunctionCatalogEntry>(context, DEFAULT_SCHEMA,
 																								func_expr.function_name);
+		vector<LogicalType> agg_types;
+		vector<unique_ptr<Expression>> bound_children;
+		// Bind the children of the aggregate function and check if they are valid column references
+		for (auto& child : func_expr.children) {
+			auto bound_child = expression_binder.Bind(child);
+			if (bound_child->type != ExpressionType::BOUND_COLUMN_REF) {
+				// BTODO: Better error message
+				throw BinderException("Payload aggregate must be a column reference");
+			}
+			agg_types.push_back(bound_child->return_type);
+			bound_children.push_back(std::move(bound_child));
+		}
 
 		// Find the best matching aggregate function
 		auto best_function_idx = function_binder.BindFunction(func.name, func.functions,
-		                                                      {bound_expr->return_type}, error);
+		                                                      agg_types, error);
 		if (!best_function_idx.IsValid()) {
 			throw BinderException("No matching aggregate function\n%s", error.Message());
 		}
 		// Found a matching function, bind it as an aggregate
 		auto best_function = func.functions.GetFunctionByOffset(best_function_idx.GetIndex());
-
-		// BTODO: this should be easier
-		vector<unique_ptr<Expression>> children;
-		children.push_back(std::move(bound_expr));
-		auto aggregate = function_binder.BindAggregateFunction(std::move(best_function), std::move(children),
+		auto aggregate = function_binder.BindAggregateFunction(std::move(best_function), std::move(bound_children),
 		                                                       nullptr, AggregateType::NON_DISTINCT);
 		result->payload_aggregates.push_back(std::move(aggregate));
 	}

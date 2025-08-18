@@ -36,8 +36,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 		return cte;
 	}
 
-	vector<LogicalType> payload_types, distinct_types;
-	vector<idx_t> payload_idx, distinct_idx;
+	vector<LogicalType> payload_types, distinct_types, aggregate_types;
+	vector<idx_t> payload_idx, distinct_idx, aggregate_idx;
 	vector<unique_ptr<Expression>> payload_aggregates;
 
 	// create a group for each target, these are the columns that should be grouped
@@ -56,11 +56,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 		// Ensure that the payload aggregate is of the expected type.
 		D_ASSERT(op.payload_aggregates[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 		auto &agg = op.payload_aggregates[i]->Cast<BoundAggregateExpression>();
-
-		// Verify that the aggregate has exactly one child and that the child is a BOUND_REF expression.
-		D_ASSERT(agg.children.size() == 1);
-		D_ASSERT(agg.children[0]->type == ExpressionType::BOUND_REF);
-
+		// BTODO: we have to check if the first argument of the aggregate always is the column we stand
 		// Cast the child to a BoundReferenceExpression and map its index to the aggregate index.
 		auto &bound_ref = agg.children[0]->Cast<BoundReferenceExpression>();
 		aggregate_references[bound_ref.index] = i;
@@ -80,9 +76,23 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 			distinct_idx.emplace_back(i);
 			distinct_types.push_back(logical_type);
 		} else {
+			// Column is not in the key clause, so we check if we have a user defined aggregate for it
 			auto agg_entry = aggregate_references.find(i);
 			if (agg_entry != aggregate_references.end()) {
+				auto& agg = op.payload_aggregates[agg_entry->second]->Cast<BoundAggregateExpression>();
+				for (auto& child : agg.children) {
+					if (child->type != ExpressionType::BOUND_REF) {
+						throw BinderException("Payload aggregate must be a column reference");
+					}
+					auto& bound_ref = child->Cast<BoundReferenceExpression>();
+					// Add the index of the column to the aggregate_idx and aggregate_types
+					// to populate the internal DataChunk
+					aggregate_idx.push_back(bound_ref.index);
+					aggregate_types.push_back(bound_ref.return_type);
+				}
 				payload_aggregates.push_back(std::move(op.payload_aggregates[agg_entry->second]));
+				// add the logical type of the aggregate to the payload types
+				payload_types.push_back(agg.return_type);
 			} else {
 				// BTODO: do this in binder
 				// Column is not in the key clause, so we need to create an aggregate
@@ -96,8 +106,11 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 														std::move(first_children), nullptr, AggregateType::NON_DISTINCT);
 				first_aggregate->order_bys = nullptr;
 				payload_aggregates.push_back(std::move(first_aggregate));
+				aggregate_idx.push_back(i);
+				// input type is the same as output type
+				aggregate_types.push_back(logical_type);
+				payload_types.push_back(logical_type);
 			}
-			payload_types.push_back(logical_type);
 			payload_idx.emplace_back(i);
 		}
 	}
@@ -116,6 +129,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 	cast_cte.distinct_types = distinct_types;
 	cast_cte.payload_idx = payload_idx;
 	cast_cte.payload_types = payload_types;
+	cast_cte.aggregate_idx = aggregate_idx;
+	cast_cte.aggregate_types = aggregate_types;
 	cast_cte.ref_recurring = op.ref_recurring;
 	cast_cte.working_table = working_table;
 	cast_cte.recurring_table = recurring_table;
