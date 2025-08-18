@@ -19,6 +19,22 @@ namespace {
 
 //! ------------ JSON -> Variant ------------
 
+struct ReadJSONHolder {
+public:
+	~ReadJSONHolder() {
+		if (doc) {
+			yyjson_doc_free(doc);
+		}
+	}
+	void Reset() {
+		yyjson_doc_free(doc);
+		doc = nullptr;
+	}
+
+public:
+	yyjson_doc *doc = nullptr;
+};
+
 struct VariantConversionState {
 public:
 	explicit VariantConversionState() {
@@ -308,13 +324,15 @@ bool VariantCasts::CastJSONToVARIANT(Vector &source, Vector &result, idx_t count
 	auto &value = VariantVector::GetData(result);
 	auto value_data = FlatVector::GetData<string_t>(value);
 
+	ReadJSONHolder json_holder;
+
 	ListVector::Reserve(values, state.value_count + state.row_value_count + count);
 	for (idx_t i = 0; i < count; i++) {
 		auto source_index = source_format.sel->get_index(i);
 		auto &val = source_data[source_index];
 
-		auto *doc = yyjson_read(val.GetData(), val.GetSize(), 0);
-		auto *root = yyjson_doc_get_root(doc);
+		json_holder.doc = yyjson_read(val.GetData(), val.GetSize(), 0);
+		auto *root = yyjson_doc_get_root(json_holder.doc);
 
 		//! keys
 		auto &keys_list_entry = keys_data[i];
@@ -350,6 +368,7 @@ bool VariantCasts::CastJSONToVARIANT(Vector &source, Vector &result, idx_t count
 		auto stream_data = state.stream.GetData();
 		value_data[i] = StringVector::AddStringOrBlob(value, reinterpret_cast<const char *>(stream_data), size);
 		state.Reset();
+		json_holder.Reset();
 	}
 
 	auto &dictionary = ListVector::GetEntry(keys);
