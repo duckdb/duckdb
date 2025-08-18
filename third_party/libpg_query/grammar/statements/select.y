@@ -4023,6 +4023,15 @@ target_el:	a_expr AS ColLabelOrString
 					$$->val = (PGNode *)$1;
 					$$->location = @1;
 				}
+            | MEASURE ColId SINGLE_COLON a_expr
+				{
+					$$ = makeNode(PGResTarget);
+					$$->name = $2;
+					$$->indirection = NIL;
+					$$->val = (PGNode *)$4;
+					$$->location = @2;
+					$$->is_measure_target = true;
+				}
             | ColId SINGLE_COLON a_expr
 				{
 					$$ = makeNode(PGResTarget);

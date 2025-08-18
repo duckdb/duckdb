@@ -78,6 +78,9 @@ unique_ptr<ParsedExpression> ParsedExpression::Deserialize(Deserializer &deseria
 	case ExpressionClass::WINDOW:
 		result = WindowExpression::Deserialize(deserializer);
 		break;
+	case ExpressionClass::MEASURE_DEFINITION:
+		result = MeasureDefinitionExpression::Deserialize(deserializer);
+		break;
 	default:
 		throw SerializationException("Unsupported type for deserialization of ParsedExpression!");
 	}

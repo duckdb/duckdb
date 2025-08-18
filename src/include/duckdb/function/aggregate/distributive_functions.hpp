@@ -12,6 +12,7 @@
 #pragma once
 
 #include "duckdb/function/function_set.hpp"
+#include "duckdb/function/built_in_functions.hpp"
 
 namespace duckdb {
 
@@ -90,5 +91,16 @@ struct MaxFun {
 
 	static AggregateFunctionSet GetFunctions();
 };
+
+struct MeasureAggFun {
+	static constexpr const char *Name = "measure_agg";
+	static constexpr const char *Parameters = "m";
+	static constexpr const char *Description = "Evaluates the measure in the current context.";
+	static constexpr const char *Example = "measure_agg(W)";
+	static constexpr const char *Categories = "";
+
+	static AggregateFunctionSet GetFunctions();
+};
+
 
 } // namespace duckdb

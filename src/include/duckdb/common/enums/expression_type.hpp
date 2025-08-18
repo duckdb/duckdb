@@ -77,6 +77,7 @@ enum class ExpressionType : uint8_t {
 	VALUE_VECTOR = 80,
 	VALUE_SCALAR = 81,
 	VALUE_DEFAULT = 82,
+	VALUE_MEASURE_DEFINITION = 83,
 
 	// -----------------------------
 	// Aggregates
@@ -180,6 +181,7 @@ enum class ExpressionClass : uint8_t {
 	POSITIONAL_REFERENCE = 18,
 	BETWEEN = 19,
 	LAMBDA_REF = 20,
+	MEASURE_DEFINITION = 21,
 	//===--------------------------------------------------------------------===//
 	// Bound Expressions
 	//===--------------------------------------------------------------------===//
