@@ -73,15 +73,21 @@ PhysicalRangeJoin::GlobalSortedTable::GlobalSortedTable(ClientContext &client,
 	// Set up the sort. We will materialize keys ourselves, so just set up references.
 	vector<BoundOrderByNode> orders;
 	vector<LogicalType> input_types;
-	vector<idx_t> projection_map;
 	D_ASSERT(order_bys.size() == 1);
 	for (const auto &order_by : order_bys) {
 		auto order = order_by.Copy();
 		const auto type = order.expression->return_type;
+		input_types.emplace_back(type);
 		order.expression = make_uniq<BoundReferenceExpression>(type, orders.size());
 		orders.emplace_back(std::move(order));
 	}
-	input_types.insert(input_types.end(), payload_types.begin(), payload_types.end());
+
+	vector<idx_t> projection_map;
+	for (const auto &type : payload_types) {
+		projection_map.emplace_back(input_types.size());
+		input_types.emplace_back(type);
+	}
+
 	sort = make_uniq<Sort>(client, orders, input_types, projection_map);
 
 	global_sink = sort->GetGlobalSinkState(client);
@@ -172,7 +178,7 @@ public:
 		auto &global_sink = *table.global_sink;
 		table.global_source = sort.GetGlobalSourceState(client, global_sink);
 		const auto tasks_scheduled = MinValue<idx_t>(num_threads, table.global_source->MaxThreads());
-		for (idx_t tnum = 0; tnum < num_threads; tnum++) {
+		for (idx_t tnum = 0; tnum < tasks_scheduled; ++tnum) {
 			tasks.push_back(
 			    make_uniq<RangeJoinMaterializeTask>(*pipeline, shared_from_this(), client, table, tasks_scheduled));
 		}
