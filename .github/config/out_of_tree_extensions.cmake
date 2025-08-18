@@ -16,3 +16,18 @@
 #  VCPKG_TARGET_TRIPLET=arm64-osx
 
 include("${EXTENSION_CONFIG_BASE_DIR}/avro.cmake")
+include("${EXTENSION_CONFIG_BASE_DIR}/aws.cmake")
+include("${EXTENSION_CONFIG_BASE_DIR}/azure.cmake")
+include("${EXTENSION_CONFIG_BASE_DIR}/ducklake.cmake")
+include("${EXTENSION_CONFIG_BASE_DIR}/encodings.cmake")
+include("${EXTENSION_CONFIG_BASE_DIR}/excel.cmake")
+include("${EXTENSION_CONFIG_BASE_DIR}/fts.cmake")
+include("${EXTENSION_CONFIG_BASE_DIR}/httpfs.cmake")
+include("${EXTENSION_CONFIG_BASE_DIR}/iceberg.cmake")
+include("${EXTENSION_CONFIG_BASE_DIR}/inet.cmake")
+include("${EXTENSION_CONFIG_BASE_DIR}/mysql_scanner.cmake")
+include("${EXTENSION_CONFIG_BASE_DIR}/postgres_scanner.cmake")
+include("${EXTENSION_CONFIG_BASE_DIR}/spatial.cmake")
+include("${EXTENSION_CONFIG_BASE_DIR}/sqlite_scanner.cmake")
+include("${EXTENSION_CONFIG_BASE_DIR}/sqlsmith.cmake")
+include("${EXTENSION_CONFIG_BASE_DIR}/vss.cmake")
