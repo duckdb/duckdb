@@ -659,7 +659,7 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 
 			LogicalType result_type;
 			if (is_variant) {
-				result_type = LogicalType::JSON();
+				result_type = LogicalType::VARIANT();
 			} else {
 				result_type = LogicalType::STRUCT(std::move(struct_types));
 			}
