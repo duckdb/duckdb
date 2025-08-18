@@ -2,9 +2,6 @@
 # description: Test map queries triggering various error messages
 # group: [map]
 
-statement ok
-PRAGMA enable_verification;
-
 statement error
 SELECT MAP(list_value(NULL, NULL, NULL, NULL, NULL), list_value(10, 9, 10, 11, 13))
 ----
