@@ -59,22 +59,7 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 	// So, get the expression type if it was ordered such that the constant was actually on the right hand side.
 	ExpressionType rhs_comparison_type = comparison_type;
 	if (!col_is_lhs) {
-		switch (comparison_type) {
-		case ExpressionType::COMPARE_LESSTHAN:
-			rhs_comparison_type = ExpressionType::COMPARE_GREATERTHAN;
-			break;
-		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-			rhs_comparison_type = ExpressionType::COMPARE_GREATERTHANOREQUALTO;
-			break;
-		case ExpressionType::COMPARE_GREATERTHAN:
-			rhs_comparison_type = ExpressionType::COMPARE_LESSTHAN;
-			break;
-		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-			rhs_comparison_type = ExpressionType::COMPARE_LESSTHANOREQUALTO;
-			break;
-		default:
-			break;
-		}
+		rhs_comparison_type = FlipComparisonExpression(comparison_type);
 	}
 
 	// Check whether trunc(date_part, constant_rhs) = constant_rhs.
