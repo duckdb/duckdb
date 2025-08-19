@@ -3,13 +3,13 @@
 # group: [optimizer]
 
 statement ok
-create table test(d TIMESTAMP);
-
-statement ok
 PRAGMA enable_verification;
 
 statement ok
 PRAGMA explain_output = OPTIMIZED_ONLY;
+
+statement ok
+create table test(d TIMESTAMP);
 
 statement ok
 insert into test values ('2025-01-06 03:01:00'), ('2025-01-10 05:10:06');
