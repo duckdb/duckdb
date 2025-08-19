@@ -310,3 +310,12 @@ query I
 select * from test3 where date_trunc('hour', d) IS NOT DISTINCT FROM NULL;
 ----
 NULL
+
+#
+# check that the optimization only applies if the LHS is just a column
+#
+
+query I
+select * from test where date_trunc('day', date_add(d, INTERVAL 1 day)) >= '2025-01-12';
+----
+

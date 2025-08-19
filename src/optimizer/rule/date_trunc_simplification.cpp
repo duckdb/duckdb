@@ -44,6 +44,11 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 	auto comparison_type = expr.GetExpressionType();
 
 	auto &date_part = bindings[2].get().Cast<BoundConstantExpression>();
+	// We must have only a column on the LHS.
+	if (bindings[3].get().GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+		return nullptr;
+	}
+
 	auto &column_part = bindings[3].get().Cast<BoundColumnRefExpression>();
 	auto &rhs = bindings[4].get().Cast<BoundConstantExpression>();
 
