@@ -13,7 +13,7 @@ namespace duckdb {
 
 void MacroFunction::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<MacroType>(100, "type", type);
-	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(101, "parameters", parameters);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(101, "parameters", GetPositionalParametersForSerialization(serializer));
 	serializer.WritePropertyWithDefault<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(102, "default_parameters", default_parameters);
 }
 
@@ -34,6 +34,7 @@ unique_ptr<MacroFunction> MacroFunction::Deserialize(Deserializer &deserializer)
 	}
 	result->parameters = std::move(parameters);
 	result->default_parameters = std::move(default_parameters);
+	result->FinalizeDeserialization();
 	return result;
 }
 
