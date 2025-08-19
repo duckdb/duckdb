@@ -39,6 +39,18 @@ namespace duckdb {
 //                                                    column >= date_trunc(part, date_add(const_rhs, INTERVAL 1 part))
 //    - but if date_trunc(const_rhs) != const_rhs, then this is always satisfied
 //
+//   date_trunc(part, column) IS NOT DISTINCT FROM const_rhs  --> (column >= date_trunc(part, const_rhs) AND
+//                                                                 column < date_trunc(part,
+//                                                                     date_add(const_rhs, INTERVAL 1 part)) AND
+//                                                                 column IS NOT NULL)
+//    - but if const_rhs is NULL, then this is just 'column IS NULL'
+//
+//   date_trunc(part, column) IS DISTINCT FROM const_rhs  -->  (column < date_trunc(part, const_rhs) OR
+//                                                              column >= date_trunc(part,
+//                                                                  date_add(const_rhs, INTERVAL 1 part)) OR
+//                                                              column IS NULL)
+//    - but if const_rhs is NULL, then this is just 'column IS NOT NULL'
+//
 class DateTruncSimplificationRule : public Rule {
 public:
 	explicit DateTruncSimplificationRule(ExpressionRewriter &rewriter);
