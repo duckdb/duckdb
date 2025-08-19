@@ -24,6 +24,8 @@ struct PandasColumnBindData {
 	string internal_categorical_type;
 	//! Hold ownership of objects created during scanning
 	PythonObjectContainer object_str_val;
+	py::object pandas_na;
+	py::object pandas_nat;
 };
 
 struct Pandas {
