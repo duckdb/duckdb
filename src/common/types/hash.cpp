@@ -10,6 +10,15 @@
 
 namespace duckdb {
 
+#ifdef DUCKDB_HASH_ZERO
+hash_t Hash(const char *val, size_t size) {
+	return 0;
+}
+
+hash_t Hash(uint8_t *val, size_t size) {
+	return 0;
+}
+#else
 template <>
 hash_t Hash(hugeint_t val) {
 	return MurmurHash64(val.lower) ^ MurmurHash64(static_cast<uint64_t>(val.upper));
@@ -151,5 +160,6 @@ hash_t Hash(const char *val, size_t size) {
 hash_t Hash(uint8_t *val, size_t size) {
 	return HashBytes(const_data_ptr_cast(val), size);
 }
+#endif
 
 } // namespace duckdb
