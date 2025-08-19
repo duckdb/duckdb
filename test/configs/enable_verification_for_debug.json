@@ -106,6 +106,7 @@
         "test/fuzzer/sqlsmith/bitstring_agg_overflow.test",
         "test/issues/rigger/overflow_filter_pushdown.test",
         "test/sql/aggregate/aggregates/test_bitstring_agg.test",
+        "test/sql/catalog/function/test_table_macro_complex.test",
         "test/sql/copy/parquet/parquet_filename_filter.test",
         "test/sql/copy/parquet/parquet_hive.test",
         "test/sql/copy/parquet/union_by_name_hive_partitioning.test",
@@ -118,6 +119,7 @@
       "paths": [
         "test/fuzzer/pedro/vacuum_table_with_generated_column.test",
         "test/optimizer/statistics/statistics_numeric.test",
+        "test/parquet/parquet_stats_function.test",
         "test/sql/alter/add_col/test_add_col_stats.test",
         "test/sql/function/generic/test_stats.test",
         "test/sql/pg_catalog/pg_prepared_statements.test",
@@ -707,11 +709,16 @@
       "reason": "FIXME: Misc. unexpected failures (including internal exception).",
       "paths": [
         "test/fuzzer/duckfuzz/null_arguments.test",
+        "test/issues/internal/test_5457.test",
+        "test/parquet/variant/variant_nanos_tz.test",
+        "test/parquet/variant/variant_nested_with_nulls.test",
         "test/sql/aggregate/aggregates/test_state_export.test",
         "test/sql/copy/file_size_bytes.test",
         "test/sql/copy/parquet/bloom_filters.test",
         "test/sql/copy/parquet/corrupt_stats.test",
+        "test/sql/copy/parquet/parquet_1618_struct_strings.test",
         "test/sql/create/create_table_compression.test",
+        "test/sql/optimizer/test_rowid_pushdown_plan.test",
         "test/sql/pg_catalog/system_functions.test",
         "test/sql/storage/compression/test_using_compression.test",
         "test/sql/storage/types/struct/nested_struct_storage.test"
