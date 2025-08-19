@@ -30,6 +30,15 @@ UnscentedKalmanFilter::UnscentedKalmanFilter()
 	R[0][0] = 0.05; // measurement noise for progress
 }
 
+void UnscentedKalmanFilter::Update(double progress, double time) {
+	if (!initialized) {
+		Initialize(progress, time);
+		return;
+	}
+	Predict(time);
+	UpdateInternal(progress);
+}
+
 void UnscentedKalmanFilter::Initialize(double initial_progress, double current_time) {
 	x[0] = initial_progress;
 	x[1] = current_time == 0 ? 0.01 : initial_progress / current_time; // initial velocity guess
@@ -110,9 +119,7 @@ vector<double> UnscentedKalmanFilter::MeasurementFunction(const vector<double> &
 }
 
 void UnscentedKalmanFilter::Predict(double current_time) {
-	if (!initialized) {
-		return;
-	}
+	D_ASSERT(initialized);
 
 	double dt = current_time - last_time;
 	last_time = current_time;
@@ -159,11 +166,8 @@ void UnscentedKalmanFilter::Predict(double current_time) {
 	}
 }
 
-void UnscentedKalmanFilter::Update(double measured_progress) {
-	if (!initialized) {
-		return;
-	}
-
+void UnscentedKalmanFilter::UpdateInternal(double measured_progress) {
+	D_ASSERT(initialized);
 	// Generate sigma points
 	auto sigma_points = GenerateSigmaPoints();
 

@@ -45,13 +45,17 @@ private:
 public:
 	UnscentedKalmanFilter();
 
+	void Update(double progress, double time);
+
+	double GetEstimatedRemainingSeconds() const;
+
+private:
 	void Initialize(double initial_progress, double current_time);
 	void Predict(double current_time);
-	void Update(double measured_progress);
+	void UpdateInternal(double measured_progress);
 
 	double GetProgress() const;
 	double GetVelocity() const;
-	double GetEstimatedRemainingSeconds() const;
 	double GetProgressVariance() const;
 	double GetVelocityVariance() const;
 };
