@@ -126,6 +126,8 @@ class QueryResult:
         if not error:
             self._column_count = len(self.types)
             self._row_count = len(result)
+            if self._row_count > 0:
+                assert self._column_count == len(self._result[0])
 
     def get_value(self, column, row):
         return self._result[row][column]
@@ -156,7 +158,7 @@ class QueryResult:
 
         # If the result has an error, log it
         if self.has_error():
-            logger.unexpected_failure(self)
+            logger.unexpected_failure()
             if runner.skip_error_message(self.get_error()):
                 runner.finished_processing_file = True
                 return
@@ -349,7 +351,7 @@ class SQLLogicConnectionPool:
         self.cursors = {}
         self.connection = con
 
-    def initialize_connection(self, context: "SQLLogicContext", con):
+    def initialize_connection(self, context: "SQLLogicContext", con: duckdb.DuckDBPyConnection):
         runner = context.runner
         if runner.test.is_sqlite_test():
             con.execute("SET integer_division=true")
@@ -780,7 +782,7 @@ class SQLLogicContext:
         assert key in self.keywords
         self.keywords.pop(key)
 
-    def fail(self, message):
+    def fail(self, message: str):
         self.error = FailException(self.current_statement, message)
         raise self.error
 
@@ -845,24 +847,30 @@ class SQLLogicContext:
             if 'pivot' in sql_query and len(statements) != 1:
                 self.skiptest("Can not deal properly with a PIVOT statement")
 
-            def is_query_result(sql_query, statement) -> bool:
-                if duckdb.ExpectedResultType.QUERY_RESULT not in statement.expected_result_type:
+            def returns_changed_rows(sql_query, statement) -> bool:
+                if duckdb.ExpectedResultType.CHANGED_ROWS not in statement.expected_result_type:
                     return False
                 if statement.type in [
                     duckdb.StatementType.DELETE,
                     duckdb.StatementType.UPDATE,
                     duckdb.StatementType.INSERT,
                 ]:
-                    if 'returning' not in sql_query.lower():
+                    if 'returning' in sql_query.lower():
                         return False
                     return True
                 if statement.type in [duckdb.StatementType.COPY]:
-                    if 'return_files' not in sql_query.lower():
+                    if 'return_files' in sql_query.lower():
+                        return False
+                    if 'return_stats' in sql_query.lower():
                         return False
                     return True
                 return len(statement.expected_result_type) == 1
 
-            if is_query_result(sql_query, statement):
+            if returns_changed_rows(sql_query, statement):
+                conn.execute(sql_query)
+                result = conn.fetchall()
+                query_result = QueryResult(result, [duckdb.typing.BIGINT])
+            elif duckdb.ExpectedResultType.QUERY_RESULT in statement.expected_result_type:
                 original_rel = conn.query(sql_query)
                 if original_rel is None:
                     query_result = QueryResult([(0,)], ['BIGINT'])
@@ -884,10 +892,6 @@ class SQLLogicContext:
                         self.fail(f"Could not select from the ValueRelation: {str(e)}")
                     result = stringified_rel.fetchall()
                     query_result = QueryResult(result, original_types)
-            elif duckdb.ExpectedResultType.CHANGED_ROWS in statement.expected_result_type:
-                conn.execute(sql_query)
-                result = conn.fetchall()
-                query_result = QueryResult(result, [duckdb.typing.BIGINT])
             else:
                 conn.execute(sql_query)
                 result = conn.fetchall()

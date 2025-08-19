@@ -47,9 +47,10 @@ BufferedFileWriter &WriteAheadLog::Initialize() {
 	}
 	lock_guard<mutex> lock(wal_lock);
 	if (!writer) {
-		writer = make_uniq<BufferedFileWriter>(FileSystem::Get(database), wal_path,
-		                                       FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE |
-		                                           FileFlags::FILE_FLAGS_APPEND);
+		writer =
+		    make_uniq<BufferedFileWriter>(FileSystem::Get(database), wal_path,
+		                                  FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE |
+		                                      FileFlags::FILE_FLAGS_APPEND | FileFlags::FILE_FLAGS_MULTI_CLIENT_ACCESS);
 		if (init_state == WALInitState::UNINITIALIZED_REQUIRES_TRUNCATE) {
 			writer->Truncate(wal_size);
 		}

@@ -74,8 +74,8 @@ LogicalTypeId LogicalTypeIdFromC(const duckdb_type type) {
 		return LogicalTypeId::TIMESTAMP_TZ;
 	case DUCKDB_TYPE_ANY:
 		return LogicalTypeId::ANY;
-	case DUCKDB_TYPE_VARINT:
-		return LogicalTypeId::VARINT;
+	case DUCKDB_TYPE_BIGNUM:
+		return LogicalTypeId::BIGNUM;
 	case DUCKDB_TYPE_SQLNULL:
 		return LogicalTypeId::SQLNULL;
 	case DUCKDB_TYPE_STRING_LITERAL:
@@ -140,8 +140,8 @@ duckdb_type LogicalTypeIdToC(const LogicalTypeId type) {
 		return DUCKDB_TYPE_BLOB;
 	case LogicalTypeId::BIT:
 		return DUCKDB_TYPE_BIT;
-	case LogicalTypeId::VARINT:
-		return DUCKDB_TYPE_VARINT;
+	case LogicalTypeId::BIGNUM:
+		return DUCKDB_TYPE_BIGNUM;
 	case LogicalTypeId::INTERVAL:
 		return DUCKDB_TYPE_INTERVAL;
 	case LogicalTypeId::DECIMAL:

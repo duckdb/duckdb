@@ -518,22 +518,35 @@ static bool IsVariantType(const SchemaElement &root, const vector<ParquetColumnS
 	if (children.size() < 2) {
 		return false;
 	}
-	auto &metadata = children[0];
-	auto &value = children[1];
+	auto &child0 = children[0];
+	auto &child1 = children[1];
 
-	//! Verify names
-	if (metadata.name != "metadata") {
+	ParquetColumnSchema const *metadata;
+	ParquetColumnSchema const *value;
+
+	if (child0.name == "metadata" && child1.name == "value") {
+		metadata = &child0;
+		value = &child1;
+	} else if (child1.name == "metadata" && child0.name == "value") {
+		metadata = &child1;
+		value = &child0;
+	} else {
 		return false;
 	}
-	if (value.name != "value") {
+
+	//! Verify names
+	if (metadata->name != "metadata") {
+		return false;
+	}
+	if (value->name != "value") {
 		return false;
 	}
 
 	//! Verify types
-	if (metadata.parquet_type != duckdb_parquet::Type::BYTE_ARRAY) {
+	if (metadata->parquet_type != duckdb_parquet::Type::BYTE_ARRAY) {
 		return false;
 	}
-	if (value.parquet_type != duckdb_parquet::Type::BYTE_ARRAY) {
+	if (value->parquet_type != duckdb_parquet::Type::BYTE_ARRAY) {
 		return false;
 	}
 	if (children.size() == 3) {

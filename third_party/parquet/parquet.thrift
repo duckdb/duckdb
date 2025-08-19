@@ -575,7 +575,7 @@ enum Encoding {
    */
   PLAIN = 0;
 
-  /** Group VarInt encoding for INT32/INT64.
+  /** Group Bignum encoding for INT32/INT64.
    * This encoding is deprecated. It was never used
    */
   //  GROUP_VAR_INT = 1;
