@@ -23,7 +23,7 @@ class TestArrowTimestamps(object):
             pa.array([datetime.datetime.now()], pa.timestamp('s')),
         )
         arrow_table = pa.Table.from_arrays([data[0], data[1], data[2], data[3]], ['a', 'b', 'c', 'd'])
-        rel = duckdb.from_arrow(arrow_table).arrow()
+        rel = duckdb.from_arrow(arrow_table).fetch_arrow_table()
         assert rel['a'] == arrow_table['a']
         assert rel['b'] == arrow_table['b']
         assert rel['c'] == arrow_table['c']
@@ -39,7 +39,7 @@ class TestArrowTimestamps(object):
             pa.array([None], pa.timestamp('s')),
         )
         arrow_table = pa.Table.from_arrays([data[0], data[1], data[2], data[3]], ['a', 'b', 'c', 'd'])
-        rel = duckdb.from_arrow(arrow_table).arrow()
+        rel = duckdb.from_arrow(arrow_table).fetch_arrow_table()
         assert rel['a'] == arrow_table['a']
         assert rel['b'] == arrow_table['b']
         assert rel['c'] == arrow_table['c']
@@ -54,7 +54,7 @@ class TestArrowTimestamps(object):
             pa.array([9223372036854775807], pa.timestamp('us')),
         )
         arrow_table = pa.Table.from_arrays([data[0], data[1], data[2]], ['a', 'b', 'c'])
-        arrow_from_duck = duckdb.from_arrow(arrow_table).arrow()
+        arrow_from_duck = duckdb.from_arrow(arrow_table).fetch_arrow_table()
         assert arrow_from_duck['a'] == arrow_table['a']
         assert arrow_from_duck['b'] == arrow_table['b']
         assert arrow_from_duck['c'] == arrow_table['c']

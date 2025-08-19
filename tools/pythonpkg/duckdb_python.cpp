@@ -427,17 +427,17 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    "Fetch a result as Arrow table following execute()", py::arg("rows_per_batch") = 1000000, py::kw_only(),
 	    py::arg("connection") = py::none());
 	m.def(
-	    "arrow",
-	    [](idx_t rows_per_batch, shared_ptr<DuckDBPyConnection> conn = nullptr) {
+	    "fetch_record_batch",
+	    [](const idx_t rows_per_batch, shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
 		    }
-		    return conn->FetchArrow(rows_per_batch);
+		    return conn->FetchRecordBatchReader(rows_per_batch);
 	    },
-	    "Fetch a result as Arrow table following execute()", py::arg("rows_per_batch") = 1000000, py::kw_only(),
+	    "Fetch an Arrow RecordBatchReader following execute()", py::arg("rows_per_batch") = 1000000, py::kw_only(),
 	    py::arg("connection") = py::none());
 	m.def(
-	    "fetch_record_batch",
+	    "arrow",
 	    [](const idx_t rows_per_batch, shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
