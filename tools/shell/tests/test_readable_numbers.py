@@ -122,3 +122,30 @@ def test_readable_numbers_columns(shell):
     )
     result = test.run()
     result.check_not_exist('(123.46 million)')
+
+def test_readable_numbers_row_count(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".large_number_rendering footer")
+        .statement("select r from range(1230000) t(r);")
+    )
+    result = test.run()
+    result.check_stdout('1.23 million rows')
+
+def test_readable_numbers_row_count_wide(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".large_number_rendering footer")
+        .statement("select r, r, r, r, r, r, r from range(1230000) t(r);")
+    )
+    result = test.run()
+    result.check_stdout('1.23 million rows')
+
+def test_readable_numbers_row_count_wide_single_col(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".large_number_rendering footer")
+        .statement("select concat(r, r, r, r, r, r, r) c from range(1230000) t(r);")
+    )
+    result = test.run()
+    result.check_stdout('1.23 million rows')
