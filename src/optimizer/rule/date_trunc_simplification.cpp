@@ -67,61 +67,138 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 
 	switch (rhs_comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
+	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+		// We handle two very similar optimizations here:
+		//
 		// date_trunc(part, column) = constant_rhs  -->  column >= date_trunc(part, constant_rhs) AND
 		//                                               column < date_trunc(part, date_add(constant_rhs,
 		//                                                                                  INTERVAL 1 part))
 		//    or, if date_trunc(part, constant_rhs) <> constant_rhs, this is unsatisfiable
+		//
+		// ----
+		//
+		// date_trunc(part, column) IS NOT DISTINCT FROM constant_rhs
+		//
+		//   Here we have two cases: when constant_rhs is NULL, this simplifies to:
+		//
+		// column IS NULL
+		//
+		//   Otherwise, the expression becomes:
+		//
+		// (column >= date_trunc(part, constant_rhs) AND
+		//  column < date_trunc(part, date_add(constant_rhs, INTERVAL 1 part)) AND
+		//  column IS NOT NULL)
+		//
 		{
-			if (!is_truncated) {
-				return make_uniq<BoundConstantExpression>(Value::BOOLEAN(false));
+			// First check if we can just return `column IS NULL`.
+			if (rhs_comparison_type == ExpressionType::COMPARE_NOT_DISTINCT_FROM && rhs.value.IsNull()) {
+				auto op = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, LogicalType::BOOLEAN);
+				op->children.push_back(column_part.Copy());
+				return std::move(op);
+			} else {
+				if (!is_truncated) {
+					return make_uniq<BoundConstantExpression>(Value::BOOLEAN(false));
+				}
+
+				auto trunc = CreateTrunc(date_part, rhs, column_part.return_type);
+				if (!trunc) {
+					return nullptr;
+				}
+
+				auto trunc_add = CreateTruncAdd(date_part, rhs, column_part.return_type);
+				if (!trunc_add) {
+					return nullptr;
+				}
+
+				auto gteq = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
+				                                                 column_part.Copy(), std::move(trunc));
+				auto lt = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_LESSTHAN, column_part.Copy(),
+				                                               std::move(trunc_add));
+
+				// For IS NOT DISTINCT FROM, we also have to add the extra NULL term.
+				if (rhs_comparison_type == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+					auto comp = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(gteq),
+					                                                  std::move(lt));
+
+					auto isnotnull =
+					    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
+					isnotnull->children.push_back(column_part.Copy());
+
+					return make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(comp),
+					                                             std::move(isnotnull));
+				} else {
+					return make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(gteq),
+					                                             std::move(lt));
+				}
 			}
-
-			auto trunc = CreateTrunc(date_part, rhs, column_part.return_type);
-			if (!trunc) {
-				return nullptr;
-			}
-
-			auto trunc_add = CreateTruncAdd(date_part, rhs, column_part.return_type);
-			if (!trunc_add) {
-				return nullptr;
-			}
-
-			auto gteq = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
-			                                                 column_part.Copy(), std::move(trunc));
-			auto lt = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_LESSTHAN, column_part.Copy(),
-			                                               std::move(trunc_add));
-
-			return make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(gteq),
-			                                             std::move(lt));
 		}
 
 	case ExpressionType::COMPARE_NOTEQUAL:
+	case ExpressionType::COMPARE_DISTINCT_FROM:
+		// We handle two very similar optimizations here:
+		//
 		// date_trunc(part, column) <> constant_rhs  -->  column < date_trunc(part, constant_rhs) OR
 		//                                                column >= date_trunc(part, date_add(constant_rhs,
 		//                                                                                    INTERVAL 1 part))
 		//   or, if date_trunc(part, constant_rhs) <> constant_rhs, this is always true
+		//
+		// ----
+		//
+		// date_trunc(part, column) IS DISTINCT FROM constant_rhs
+		//
+		//   Here we have two cases: when constant_rhs is NULL, this simplifies to:
+		//
+		// column IS NOT NULL
+		//
+		//   Otherwise, the expression becomes:
+		//
+		// (column < date_trunc(part, constant_rhs) OR
+		//  column >= date_trunc(part, date_add(constant_rhs, INTERVAL 1 part)) OR
+		//  column IS NULL)
+		//
 		{
-			if (!is_truncated) {
-				return make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
+			if (rhs_comparison_type == ExpressionType::COMPARE_DISTINCT_FROM && rhs.value.IsNull()) {
+				// Return 'column IS NOT NULL'.
+				auto op =
+				    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
+				op->children.push_back(column_part.Copy());
+				return std::move(op);
+			} else {
+				if (!is_truncated) {
+					return make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
+				}
+
+				auto trunc = CreateTrunc(date_part, rhs, column_part.return_type);
+				if (!trunc) {
+					return nullptr;
+				}
+
+				auto trunc_add = CreateTruncAdd(date_part, rhs, column_part.return_type);
+				if (!trunc_add) {
+					return nullptr;
+				}
+
+				auto lt = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_LESSTHAN, column_part.Copy(),
+				                                               std::move(trunc));
+				auto gteq = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
+				                                                 column_part.Copy(), std::move(trunc_add));
+
+				// If this is a DISTINCT FROM, we need to add the 'column IS NULL' term.
+				if (rhs_comparison_type == ExpressionType::COMPARE_DISTINCT_FROM) {
+					auto comp = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR, std::move(gteq),
+					                                                  std::move(lt));
+
+					auto isnull =
+					    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, LogicalType::BOOLEAN);
+					isnull->children.push_back(column_part.Copy());
+
+					return make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR, std::move(comp),
+					                                             std::move(isnull));
+				} else {
+					return make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR, std::move(gteq),
+					                                             std::move(lt));
+				}
 			}
-
-			auto trunc = CreateTrunc(date_part, rhs, column_part.return_type);
-			if (!trunc) {
-				return nullptr;
-			}
-
-			auto trunc_add = CreateTruncAdd(date_part, rhs, column_part.return_type);
-			if (!trunc_add) {
-				return nullptr;
-			}
-
-			auto lt = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_LESSTHAN, column_part.Copy(),
-			                                               std::move(trunc));
-			auto gteq = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
-			                                                 column_part.Copy(), std::move(trunc_add));
-
-			return make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR, std::move(gteq),
-			                                             std::move(lt));
 		}
 		return nullptr;
 
@@ -202,107 +279,6 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 
 			changes_made = true;
 			return nullptr;
-		}
-
-	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
-		// date_trunc(part, column) IS NOT DISTINCT FROM constant_rhs
-		//
-		//   Here we have two cases: when constant_rhs is NULL, this simplifies to:
-		//
-		// column IS NULL
-		//
-		//   Otherwise, the expression becomes:
-		//
-		// (column >= date_trunc(part, constant_rhs) AND
-		//  column < date_trunc(part, date_add(constant_rhs, INTERVAL 1 part)) AND
-		//  column IS NOT NULL)
-		//
-		{
-			if (rhs.value.IsNull()) {
-				// Return 'column IS NULL'.
-				auto op = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, LogicalType::BOOLEAN);
-				op->children.push_back(column_part.Copy());
-				return std::move(op);
-			} else {
-				if (!is_truncated) {
-					return make_uniq<BoundConstantExpression>(Value::BOOLEAN(false));
-				}
-
-				auto trunc = CreateTrunc(date_part, rhs, column_part.return_type);
-				if (!trunc) {
-					return nullptr;
-				}
-
-				auto trunc_add = CreateTruncAdd(date_part, rhs, column_part.return_type);
-				if (!trunc_add) {
-					return nullptr;
-				}
-
-				auto gteq = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
-				                                                 column_part.Copy(), std::move(trunc));
-				auto lt = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_LESSTHAN, column_part.Copy(),
-				                                               std::move(trunc_add));
-				auto comp = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(gteq),
-				                                                  std::move(lt));
-
-				auto isnotnull =
-				    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
-				isnotnull->children.push_back(column_part.Copy());
-
-				return make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(comp),
-				                                             std::move(isnotnull));
-			}
-		}
-
-	case ExpressionType::COMPARE_DISTINCT_FROM:
-		// date_trunc(part, column) IS DISTINCT FROM constant_rhs
-		//
-		//   Here we have two cases: when constant_rhs is NULL, this simplifies to:
-		//
-		// column IS NOT NULL
-		//
-		//   Otherwise, the expression becomes:
-		//
-		// (column < date_trunc(part, constant_rhs) OR
-		//  column >= date_trunc(part, date_add(constant_rhs, INTERVAL 1 part)) OR
-		//  column IS NULL)
-		//
-		{
-			if (rhs.value.IsNull()) {
-				// Return 'column IS NOT NULL'.
-				auto op =
-				    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
-				op->children.push_back(column_part.Copy());
-				return std::move(op);
-			} else {
-				if (!is_truncated) {
-					return make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
-				}
-
-				auto trunc = CreateTrunc(date_part, rhs, column_part.return_type);
-				if (!trunc) {
-					return nullptr;
-				}
-
-				auto trunc_add = CreateTruncAdd(date_part, rhs, column_part.return_type);
-				if (!trunc_add) {
-					return nullptr;
-				}
-
-				auto lt = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_LESSTHAN, column_part.Copy(),
-				                                               std::move(trunc));
-				auto gteq = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
-				                                                 column_part.Copy(), std::move(trunc_add));
-				auto comp = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR, std::move(gteq),
-				                                                  std::move(lt));
-
-				auto isnull =
-				    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, LogicalType::BOOLEAN);
-				isnull->children.push_back(column_part.Copy());
-
-				return make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR, std::move(comp),
-				                                             std::move(isnull));
-			}
 		}
 
 	default:
