@@ -22,12 +22,28 @@ query IIIIII
 describe from parquet_scan('data/parquet-testing/variant_unshredded_nested_nulls.parquet')
 ----
 id	BIGINT	YES	NULL	NULL	NULL
-v	JSON	YES	NULL	NULL	NULL
-array_of_variants	JSON[]	YES	NULL	NULL	NULL
-struct_of_variants	STRUCT(v JSON)	YES	NULL	NULL	NULL
-map_of_variants	MAP(VARCHAR, JSON)	YES	NULL	NULL	NULL
-array_of_struct_of_variants	STRUCT(v JSON)[]	YES	NULL	NULL	NULL
-struct_of_array_of_variants	STRUCT(v JSON[])	YES	NULL	NULL	NULL
+v	VARIANT	YES	NULL	NULL	NULL
+array_of_variants	VARIANT[]	YES	NULL	NULL	NULL
+struct_of_variants	STRUCT(v VARIANT)	YES	NULL	NULL	NULL
+map_of_variants	MAP(VARCHAR, VARIANT)	YES	NULL	NULL	NULL
+array_of_struct_of_variants	STRUCT(v VARIANT)[]	YES	NULL	NULL	NULL
+struct_of_array_of_variants	STRUCT(v VARIANT[])	YES	NULL	NULL	NULL
+
+# FIXME: RemapStruct is not supported for VARIANT, I don't think it can be, since the schema is part of the data
+# But we don't *need* RemapStruct, because VARIANT can be anything for each row
+query I
+select struct_of_variants from parquet_scan('data/parquet-testing/variant_unshredded_nested_nulls.parquet') order by id limit 10;
+----
+{'v': {'key': 0}}
+{'v': {'key': 0}}
+{'v': {'key': 1}}
+{'v': {'key': 1}}
+{'v': {'key': 2}}
+{'v': {'key': 3}}
+{'v': {'key': 4}}
+{'v': {'key': 5}}
+{'v': {'key': 6}}
+{'v': {'key': 7}}
 
 query IIIIIII
 select * from parquet_scan('data/parquet-testing/variant_unshredded_nested_nulls.parquet') order by id limit 10;

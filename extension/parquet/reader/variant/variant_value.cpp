@@ -318,7 +318,7 @@ static void ConvertValue(const VariantValue &value, VariantVectorData &result, i
 
 			for (idx_t i = 0; i < children.size(); i++) {
 				//! children
-				result.key_id_data[children_offset + start_of_children + i] = offsets.keys[row];
+				result.key_id_validity.SetInvalid(children_offset + start_of_children + i);
 				result.value_id_data[children_offset + start_of_children + i] = offsets.values[row];
 
 				auto &child_value = children[i];
@@ -560,31 +560,55 @@ void VariantValue::ToVARIANT(vector<VariantValue> &input, Vector &result) {
 	auto count = input.size();
 
 	//! Keep track of all the offsets for each row.
-	VariantConversionOffsets offsets;
-	offsets.keys.resize(count);
-	offsets.children.resize(count);
-	offsets.values.resize(count);
-	offsets.data.resize(count);
+	VariantConversionOffsets analyze_offsets;
+	analyze_offsets.keys.resize(count);
+	analyze_offsets.children.resize(count);
+	analyze_offsets.values.resize(count);
+	analyze_offsets.data.resize(count);
 
 	for (idx_t i = 0; i < count; i++) {
 		auto &value = input[i];
-		AnalyzeValue(value, i, offsets);
+		if (value.IsNull()) {
+			continue;
+		}
+		AnalyzeValue(value, i, analyze_offsets);
 	}
 
 	SelectionVector keys_selvec;
 	idx_t keys_selvec_size;
-	InitializeVariants(offsets, result, keys_selvec, keys_selvec_size);
+	InitializeVariants(analyze_offsets, result, keys_selvec, keys_selvec_size);
 	StringDictionary dictionary;
 
 	//! Reset the offsets
-	memset(offsets.keys.data(), 0, sizeof(uint32_t) * count);
-	memset(offsets.children.data(), 0, sizeof(uint32_t) * count);
-	memset(offsets.values.data(), 0, sizeof(uint32_t) * count);
-	memset(offsets.data.data(), 0, sizeof(uint32_t) * count);
+	VariantConversionOffsets conversion_offsets;
+	conversion_offsets.keys.resize(count);
+	conversion_offsets.children.resize(count);
+	conversion_offsets.values.resize(count);
+	conversion_offsets.data.resize(count);
+
 	VariantVectorData variant_data(result);
 	for (idx_t i = 0; i < count; i++) {
 		auto &value = input[i];
-		ConvertValue(value, variant_data, i, offsets, keys_selvec, dictionary);
+		if (value.IsNull()) {
+			FlatVector::SetNull(result, i, true);
+			continue;
+		}
+		ConvertValue(value, variant_data, i, conversion_offsets, keys_selvec, dictionary);
+	}
+
+#ifdef DEBUG
+	for (idx_t i = 0; i < count; i++) {
+		D_ASSERT(conversion_offsets.keys[i] == analyze_offsets.keys[i]);
+		D_ASSERT(conversion_offsets.children[i] == analyze_offsets.children[i]);
+		D_ASSERT(conversion_offsets.values[i] == analyze_offsets.values[i]);
+		D_ASSERT(conversion_offsets.data[i] == analyze_offsets.data[i]);
+	}
+#endif
+
+	//! Finalize the 'data' column of the VARIANT
+	for (idx_t i = 0; i < count; i++) {
+		auto &data = variant_data.blob_data[i];
+		data.SetSizeAndFinalize(conversion_offsets.data[i]);
 	}
 
 	auto &keys = VariantVector::GetKeys(result);
