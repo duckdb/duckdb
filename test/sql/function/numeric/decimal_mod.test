@@ -2,9 +2,6 @@
 # description: Test decimal modulo
 # group: [numeric]
 
-statement ok
-PRAGMA enable_verification
-
 query II
 SELECT 10 % 2.4, -10 % 2.4
 ----
