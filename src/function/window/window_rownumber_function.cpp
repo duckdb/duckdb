@@ -55,10 +55,10 @@ public:
 	}
 
 	//! Accumulate the secondary sort values
-	void Sink(ExecutionContext &context, WindowExecutorGlobalState &gstate, DataChunk &sink_chunk,
-	          DataChunk &coll_chunk, idx_t input_idx, InterruptState &interrupt) override;
+	void Sink(ExecutionContext &context, GlobalSinkState &gstate, DataChunk &sink_chunk, DataChunk &coll_chunk,
+	          idx_t input_idx, InterruptState &interrupt) override;
 	//! Finish the sinking and prepare to scan
-	void Finalize(ExecutionContext &context, WindowExecutorGlobalState &gstate, CollectionPtr collection,
+	void Finalize(ExecutionContext &context, GlobalSinkState &gstate, CollectionPtr collection,
 	              InterruptState &interrupt) override;
 
 	//! The corresponding global peer state
@@ -67,9 +67,8 @@ public:
 	unique_ptr<WindowAggregatorState> local_tree;
 };
 
-void WindowRowNumberLocalState::Sink(ExecutionContext &context, WindowExecutorGlobalState &gstate,
-                                     DataChunk &sink_chunk, DataChunk &coll_chunk, idx_t input_idx,
-                                     InterruptState &interrupt) {
+void WindowRowNumberLocalState::Sink(ExecutionContext &context, GlobalSinkState &gstate, DataChunk &sink_chunk,
+                                     DataChunk &coll_chunk, idx_t input_idx, InterruptState &interrupt) {
 	WindowExecutorBoundsLocalState::Sink(context, gstate, sink_chunk, coll_chunk, input_idx, interrupt);
 
 	if (local_tree) {
@@ -78,8 +77,8 @@ void WindowRowNumberLocalState::Sink(ExecutionContext &context, WindowExecutorGl
 	}
 }
 
-void WindowRowNumberLocalState::Finalize(ExecutionContext &context, WindowExecutorGlobalState &gstate,
-                                         CollectionPtr collection, InterruptState &interrupt) {
+void WindowRowNumberLocalState::Finalize(ExecutionContext &context, GlobalSinkState &gstate, CollectionPtr collection,
+                                         InterruptState &interrupt) {
 	WindowExecutorBoundsLocalState::Finalize(context, gstate, collection, interrupt);
 
 	if (local_tree) {
@@ -100,20 +99,19 @@ WindowRowNumberExecutor::WindowRowNumberExecutor(BoundWindowExpression &wexpr, W
 	}
 }
 
-unique_ptr<WindowExecutorGlobalState> WindowRowNumberExecutor::GetGlobalState(ClientContext &client,
-                                                                              const idx_t payload_count,
-                                                                              const ValidityMask &partition_mask,
-                                                                              const ValidityMask &order_mask) const {
+unique_ptr<GlobalSinkState> WindowRowNumberExecutor::GetGlobalState(ClientContext &client, const idx_t payload_count,
+                                                                    const ValidityMask &partition_mask,
+                                                                    const ValidityMask &order_mask) const {
 	return make_uniq<WindowRowNumberGlobalState>(client, *this, payload_count, partition_mask, order_mask);
 }
 
-unique_ptr<WindowExecutorLocalState>
-WindowRowNumberExecutor::GetLocalState(ExecutionContext &context, const WindowExecutorGlobalState &gstate) const {
+unique_ptr<LocalSinkState> WindowRowNumberExecutor::GetLocalState(ExecutionContext &context,
+                                                                  const GlobalSinkState &gstate) const {
 	return make_uniq<WindowRowNumberLocalState>(context, gstate.Cast<WindowRowNumberGlobalState>());
 }
 
-void WindowRowNumberExecutor::EvaluateInternal(ExecutionContext &context, WindowExecutorGlobalState &gstate,
-                                               WindowExecutorLocalState &lstate, DataChunk &eval_chunk, Vector &result,
+void WindowRowNumberExecutor::EvaluateInternal(ExecutionContext &context, GlobalSinkState &gstate,
+                                               LocalSinkState &lstate, DataChunk &eval_chunk, Vector &result,
                                                idx_t count, idx_t row_idx, InterruptState &interrupt) const {
 	auto &grstate = gstate.Cast<WindowRowNumberGlobalState>();
 	auto &lrstate = lstate.Cast<WindowRowNumberLocalState>();
@@ -151,9 +149,9 @@ WindowNtileExecutor::WindowNtileExecutor(BoundWindowExpression &wexpr, WindowSha
 	ntile_idx = shared.RegisterEvaluate(wexpr.children[0]);
 }
 
-void WindowNtileExecutor::EvaluateInternal(ExecutionContext &context, WindowExecutorGlobalState &gstate,
-                                           WindowExecutorLocalState &lstate, DataChunk &eval_chunk, Vector &result,
-                                           idx_t count, idx_t row_idx, InterruptState &interrupt) const {
+void WindowNtileExecutor::EvaluateInternal(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
+                                           DataChunk &eval_chunk, Vector &result, idx_t count, idx_t row_idx,
+                                           InterruptState &interrupt) const {
 	auto &grstate = gstate.Cast<WindowRowNumberGlobalState>();
 	auto &lrstate = lstate.Cast<WindowRowNumberLocalState>();
 	auto partition_begin = FlatVector::GetData<const idx_t>(lrstate.bounds.data[PARTITION_BEGIN]);

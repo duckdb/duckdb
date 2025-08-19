@@ -40,9 +40,9 @@ class WindowHashGroup {
 public:
 	using HashGroupPtr = unique_ptr<HashedSortGroup>;
 	using OrderMasks = HashedSortGroup::OrderMasks;
-	using ExecutorGlobalStatePtr = unique_ptr<WindowExecutorGlobalState>;
+	using ExecutorGlobalStatePtr = unique_ptr<GlobalSinkState>;
 	using ExecutorGlobalStates = vector<ExecutorGlobalStatePtr>;
-	using ExecutorLocalStatePtr = unique_ptr<WindowExecutorLocalState>;
+	using ExecutorLocalStatePtr = unique_ptr<LocalSinkState>;
 	using ExecutorLocalStates = vector<ExecutorLocalStatePtr>;
 	using ThreadLocalStates = vector<ExecutorLocalStates>;
 	using Task = WindowSourceTask;

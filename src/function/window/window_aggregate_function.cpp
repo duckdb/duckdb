@@ -91,18 +91,18 @@ WindowAggregateExecutorGlobalState::WindowAggregateExecutorGlobalState(ClientCon
 	gsink = executor.aggregator->GetGlobalState(client, group_count, partition_mask);
 }
 
-unique_ptr<WindowExecutorGlobalState> WindowAggregateExecutor::GetGlobalState(ClientContext &client,
-                                                                              const idx_t payload_count,
-                                                                              const ValidityMask &partition_mask,
-                                                                              const ValidityMask &order_mask) const {
+unique_ptr<GlobalSinkState> WindowAggregateExecutor::GetGlobalState(ClientContext &client, const idx_t payload_count,
+                                                                    const ValidityMask &partition_mask,
+                                                                    const ValidityMask &order_mask) const {
 	return make_uniq<WindowAggregateExecutorGlobalState>(client, *this, payload_count, partition_mask, order_mask);
 }
 
 class WindowAggregateExecutorLocalState : public WindowExecutorBoundsLocalState {
 public:
-	WindowAggregateExecutorLocalState(ExecutionContext &context, const WindowExecutorGlobalState &gstate,
+	WindowAggregateExecutorLocalState(ExecutionContext &context, const GlobalSinkState &gstate,
 	                                  const WindowAggregator &aggregator)
-	    : WindowExecutorBoundsLocalState(context, gstate), filter_executor(gstate.client) {
+	    : WindowExecutorBoundsLocalState(context, gstate.Cast<WindowAggregateExecutorGlobalState>()),
+	      filter_executor(context.client) {
 
 		auto &gastate = gstate.Cast<WindowAggregateExecutorGlobalState>();
 		aggregator_state = aggregator.GetLocalState(*gastate.gsink);
@@ -124,14 +124,14 @@ public:
 	SelectionVector filter_sel;
 };
 
-unique_ptr<WindowExecutorLocalState>
-WindowAggregateExecutor::GetLocalState(ExecutionContext &context, const WindowExecutorGlobalState &gstate) const {
+unique_ptr<LocalSinkState> WindowAggregateExecutor::GetLocalState(ExecutionContext &context,
+                                                                  const GlobalSinkState &gstate) const {
 	return make_uniq<WindowAggregateExecutorLocalState>(context, gstate, *aggregator);
 }
 
 void WindowAggregateExecutor::Sink(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk,
-                                   const idx_t input_idx, WindowExecutorGlobalState &gstate,
-                                   WindowExecutorLocalState &lstate, InterruptState &interrupt) const {
+                                   const idx_t input_idx, GlobalSinkState &gstate, LocalSinkState &lstate,
+                                   InterruptState &interrupt) const {
 	auto &gastate = gstate.Cast<WindowAggregateExecutorGlobalState>();
 	auto &lastate = lstate.Cast<WindowAggregateExecutorLocalState>();
 	auto &filter_sel = lastate.filter_sel;
@@ -215,9 +215,8 @@ static void ApplyWindowStats(const WindowBoundary &boundary, FrameDelta &delta, 
 	}
 }
 
-void WindowAggregateExecutor::Finalize(ExecutionContext &context, WindowExecutorGlobalState &gstate,
-                                       WindowExecutorLocalState &lstate, CollectionPtr collection,
-                                       InterruptState &interrupt) const {
+void WindowAggregateExecutor::Finalize(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
+                                       CollectionPtr collection, InterruptState &interrupt) const {
 	WindowExecutor::Finalize(context, gstate, lstate, collection, interrupt);
 
 	auto &gastate = gstate.Cast<WindowAggregateExecutorGlobalState>();
@@ -243,8 +242,8 @@ void WindowAggregateExecutor::Finalize(ExecutionContext &context, WindowExecutor
 	aggregator->Finalize(context, *gsink, *lastate.aggregator_state, collection, stats, interrupt);
 }
 
-void WindowAggregateExecutor::EvaluateInternal(ExecutionContext &context, WindowExecutorGlobalState &gstate,
-                                               WindowExecutorLocalState &lstate, DataChunk &eval_chunk, Vector &result,
+void WindowAggregateExecutor::EvaluateInternal(ExecutionContext &context, GlobalSinkState &gstate,
+                                               LocalSinkState &lstate, DataChunk &eval_chunk, Vector &result,
                                                idx_t count, idx_t row_idx, InterruptState &interrupt) const {
 	auto &gastate = gstate.Cast<WindowAggregateExecutorGlobalState>();
 	auto &lastate = lstate.Cast<WindowAggregateExecutorLocalState>();

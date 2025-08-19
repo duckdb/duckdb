@@ -14,7 +14,7 @@ WindowExecutorBoundsLocalState::WindowExecutorBoundsLocalState(ExecutionContext 
     : WindowExecutorLocalState(context, gstate), partition_mask(gstate.partition_mask), order_mask(gstate.order_mask),
       state(gstate.executor.wexpr, gstate.payload_count) {
 	vector<LogicalType> bounds_types(8, LogicalType(LogicalTypeId::UBIGINT));
-	bounds.Initialize(Allocator::Get(gstate.client), bounds_types);
+	bounds.Initialize(Allocator::Get(context.client), bounds_types);
 }
 
 void WindowExecutorBoundsLocalState::UpdateBounds(WindowExecutorGlobalState &gstate, idx_t row_idx,
@@ -48,10 +48,10 @@ bool WindowExecutor::IgnoreNulls() const {
 }
 
 void WindowExecutor::Evaluate(ExecutionContext &context, idx_t row_idx, DataChunk &eval_chunk, Vector &result,
-                              WindowExecutorLocalState &lstate, WindowExecutorGlobalState &gstate,
-                              InterruptState &interrupt) const {
+                              LocalSinkState &lstate, GlobalSinkState &gstate, InterruptState &interrupt) const {
+	auto &gbstate = gstate.Cast<WindowExecutorGlobalState>();
 	auto &lbstate = lstate.Cast<WindowExecutorBoundsLocalState>();
-	lbstate.UpdateBounds(gstate, row_idx, eval_chunk, lstate.range_cursor);
+	lbstate.UpdateBounds(gbstate, row_idx, eval_chunk, lbstate.range_cursor);
 
 	const auto count = eval_chunk.size();
 	EvaluateInternal(context, gstate, lstate, eval_chunk, result, count, row_idx, interrupt);
@@ -72,39 +72,41 @@ WindowExecutorGlobalState::WindowExecutorGlobalState(ClientContext &client, cons
 WindowExecutorLocalState::WindowExecutorLocalState(ExecutionContext &context, const WindowExecutorGlobalState &gstate) {
 }
 
-void WindowExecutorLocalState::Sink(ExecutionContext &context, WindowExecutorGlobalState &gstate, DataChunk &sink_chunk,
+void WindowExecutorLocalState::Sink(ExecutionContext &context, GlobalSinkState &gstate, DataChunk &sink_chunk,
                                     DataChunk &coll_chunk, idx_t input_idx, InterruptState &interrupt) {
 }
 
-void WindowExecutorLocalState::Finalize(ExecutionContext &context, WindowExecutorGlobalState &gstate,
-                                        CollectionPtr collection, InterruptState &interrupt) {
-	const auto range_idx = gstate.executor.range_idx;
+void WindowExecutorLocalState::Finalize(ExecutionContext &context, GlobalSinkState &gstate, CollectionPtr collection,
+                                        InterruptState &interrupt) {
+	auto &gbstate = gstate.Cast<WindowExecutorGlobalState>();
+	const auto range_idx = gbstate.executor.range_idx;
 	if (range_idx != DConstants::INVALID_INDEX) {
 		range_cursor = make_uniq<WindowCursor>(*collection, range_idx);
 	}
 }
 
-unique_ptr<WindowExecutorGlobalState> WindowExecutor::GetGlobalState(ClientContext &client, const idx_t payload_count,
-                                                                     const ValidityMask &partition_mask,
-                                                                     const ValidityMask &order_mask) const {
+unique_ptr<GlobalSinkState> WindowExecutor::GetGlobalState(ClientContext &client, const idx_t payload_count,
+                                                           const ValidityMask &partition_mask,
+                                                           const ValidityMask &order_mask) const {
 	return make_uniq<WindowExecutorGlobalState>(client, *this, payload_count, partition_mask, order_mask);
 }
 
-unique_ptr<WindowExecutorLocalState> WindowExecutor::GetLocalState(ExecutionContext &context,
-                                                                   const WindowExecutorGlobalState &gstate) const {
-	return make_uniq<WindowExecutorBoundsLocalState>(context, gstate);
+unique_ptr<LocalSinkState> WindowExecutor::GetLocalState(ExecutionContext &context,
+                                                         const GlobalSinkState &gstate) const {
+	return make_uniq<WindowExecutorBoundsLocalState>(context, gstate.Cast<WindowExecutorGlobalState>());
 }
 
 void WindowExecutor::Sink(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk,
-                          const idx_t input_idx, WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
+                          const idx_t input_idx, GlobalSinkState &gstate, LocalSinkState &lstate,
                           InterruptState &interrupt) const {
-	lstate.Sink(context, gstate, sink_chunk, coll_chunk, input_idx, interrupt);
+	auto &lbstate = lstate.Cast<WindowExecutorBoundsLocalState>();
+	lbstate.Sink(context, gstate, sink_chunk, coll_chunk, input_idx, interrupt);
 }
 
-void WindowExecutor::Finalize(ExecutionContext &context, WindowExecutorGlobalState &gstate,
-                              WindowExecutorLocalState &lstate, CollectionPtr collection,
-                              InterruptState &interrupt) const {
-	lstate.Finalize(context, gstate, collection, interrupt);
+void WindowExecutor::Finalize(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
+                              CollectionPtr collection, InterruptState &interrupt) const {
+	auto &lbstate = lstate.Cast<WindowExecutorBoundsLocalState>();
+	lbstate.Finalize(context, gstate, collection, interrupt);
 }
 
 } // namespace duckdb
