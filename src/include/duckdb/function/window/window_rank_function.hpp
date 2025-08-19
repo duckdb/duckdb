@@ -30,9 +30,8 @@ public:
 	WindowRankExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared);
 
 protected:
-	void EvaluateInternal(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
-	                      DataChunk &eval_chunk, Vector &result, idx_t count, idx_t row_idx,
-	                      InterruptState &interrupt) const override;
+	void EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result, idx_t count, idx_t row_idx,
+	                      OperatorSinkInput &sink) const override;
 };
 
 class WindowDenseRankExecutor : public WindowPeerExecutor {
@@ -40,9 +39,8 @@ public:
 	WindowDenseRankExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared);
 
 protected:
-	void EvaluateInternal(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
-	                      DataChunk &eval_chunk, Vector &result, idx_t count, idx_t row_idx,
-	                      InterruptState &interrupt) const override;
+	void EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result, idx_t count, idx_t row_idx,
+	                      OperatorSinkInput &sink) const override;
 };
 
 class WindowPercentRankExecutor : public WindowPeerExecutor {
@@ -50,9 +48,8 @@ public:
 	WindowPercentRankExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared);
 
 protected:
-	void EvaluateInternal(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
-	                      DataChunk &eval_chunk, Vector &result, idx_t count, idx_t row_idx,
-	                      InterruptState &interrupt) const override;
+	void EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result, idx_t count, idx_t row_idx,
+	                      OperatorSinkInput &sink) const override;
 };
 
 class WindowCumeDistExecutor : public WindowPeerExecutor {
@@ -60,9 +57,8 @@ public:
 	WindowCumeDistExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared);
 
 protected:
-	void EvaluateInternal(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
-	                      DataChunk &eval_chunk, Vector &result, idx_t count, idx_t row_idx,
-	                      InterruptState &interrupt) const override;
+	void EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result, idx_t count, idx_t row_idx,
+	                      OperatorSinkInput &sink) const override;
 };
 
 } // namespace duckdb

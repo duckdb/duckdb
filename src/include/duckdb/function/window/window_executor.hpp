@@ -15,7 +15,6 @@
 namespace duckdb {
 
 class WindowCollection;
-class InterruptState;
 
 struct WindowSharedExpressions;
 
@@ -43,10 +42,9 @@ public:
 
 	WindowExecutorLocalState(ExecutionContext &context, const WindowExecutorGlobalState &gstate);
 
-	virtual void Sink(ExecutionContext &context, GlobalSinkState &gstate, DataChunk &sink_chunk, DataChunk &coll_chunk,
-	                  idx_t input_idx, InterruptState &interrupt);
-	virtual void Finalize(ExecutionContext &context, GlobalSinkState &gstate, CollectionPtr collection,
-	                      InterruptState &interrupt);
+	virtual void Sink(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk, idx_t input_idx,
+	                  OperatorSinkInput &sink);
+	virtual void Finalize(ExecutionContext &context, CollectionPtr collection, OperatorSinkInput &sink);
 
 	//! The state used for reading the range collection
 	unique_ptr<WindowCursor> range_cursor;
@@ -84,13 +82,12 @@ public:
 	virtual unique_ptr<LocalSinkState> GetLocalState(ExecutionContext &context, const GlobalSinkState &gstate) const;
 
 	virtual void Sink(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk, const idx_t input_idx,
-	                  GlobalSinkState &gstate, LocalSinkState &lstate, InterruptState &interrupt) const;
+	                  OperatorSinkInput &sink) const;
 
-	virtual void Finalize(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
-	                      CollectionPtr collection, InterruptState &interrupt) const;
+	virtual void Finalize(ExecutionContext &context, CollectionPtr collection, OperatorSinkInput &sink) const;
 
 	void Evaluate(ExecutionContext &context, idx_t row_idx, DataChunk &eval_chunk, Vector &result,
-	              LocalSinkState &lstate, GlobalSinkState &gstate, InterruptState &interrupt) const;
+	              OperatorSinkInput &sink) const;
 
 	// The function
 	const BoundWindowExpression &wexpr;
@@ -104,9 +101,8 @@ public:
 	column_t range_idx = DConstants::INVALID_INDEX;
 
 protected:
-	virtual void EvaluateInternal(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
-	                              DataChunk &eval_chunk, Vector &result, idx_t count, idx_t row_idx,
-	                              InterruptState &interrupt) const = 0;
+	virtual void EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result, idx_t count,
+	                              idx_t row_idx, OperatorSinkInput &sink) const = 0;
 };
 
 } // namespace duckdb

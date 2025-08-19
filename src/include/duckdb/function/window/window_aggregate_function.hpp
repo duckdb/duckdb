@@ -20,9 +20,8 @@ public:
 	                        WindowAggregationMode mode);
 
 	void Sink(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk, const idx_t input_idx,
-	          GlobalSinkState &gstate, LocalSinkState &lstate, InterruptState &interrupt) const override;
-	void Finalize(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate, CollectionPtr collection,
-	              InterruptState &interrupt) const override;
+	          OperatorSinkInput &sink) const override;
+	void Finalize(ExecutionContext &context, CollectionPtr collection, OperatorSinkInput &sink) const override;
 
 	unique_ptr<GlobalSinkState> GetGlobalState(ClientContext &client, const idx_t payload_count,
 	                                           const ValidityMask &partition_mask,
@@ -38,9 +37,8 @@ public:
 	unique_ptr<Expression> filter_ref;
 
 protected:
-	void EvaluateInternal(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
-	                      DataChunk &eval_chunk, Vector &result, idx_t count, idx_t row_idx,
-	                      InterruptState &interrupt) const override;
+	void EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result, idx_t count, idx_t row_idx,
+	                      OperatorSinkInput &sink) const override;
 };
 
 } // namespace duckdb

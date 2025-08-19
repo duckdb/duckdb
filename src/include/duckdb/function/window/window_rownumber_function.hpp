@@ -27,9 +27,8 @@ public:
 	vector<column_t> arg_order_idx;
 
 protected:
-	void EvaluateInternal(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
-	                      DataChunk &eval_chunk, Vector &result, idx_t count, idx_t row_idx,
-	                      InterruptState &interrupt) const override;
+	void EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result, idx_t count, idx_t row_idx,
+	                      OperatorSinkInput &sink) const override;
 };
 
 // NTILE is just scaled ROW_NUMBER
@@ -38,9 +37,8 @@ public:
 	WindowNtileExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared);
 
 protected:
-	void EvaluateInternal(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
-	                      DataChunk &eval_chunk, Vector &result, idx_t count, idx_t row_idx,
-	                      InterruptState &interrupt) const override;
+	void EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result, idx_t count, idx_t row_idx,
+	                      OperatorSinkInput &sink) const override;
 };
 
 } // namespace duckdb
