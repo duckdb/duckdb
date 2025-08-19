@@ -43,7 +43,7 @@ private:
 	void CleanupDelete(DeleteInfo &info);
 	void CleanupUpdate(UpdateInfo &info);
 
-	void Flush();
+	void Flush(QueryContext context);
 };
 
 } // namespace duckdb

@@ -256,7 +256,7 @@ void ArrayColumnData::FetchRow(TransactionData transaction, ColumnFetchState &st
 
 	// We need to fetch between [row_id * array_size, (row_id + 1) * array_size)
 	auto child_state = make_uniq<ColumnScanState>();
-	child_state->Initialize(child_type, nullptr);
+	child_state->Initialize(state.context, child_type, nullptr);
 
 	const auto child_offset = start + (UnsafeNumericCast<idx_t>(row_id) - start) * array_size;
 

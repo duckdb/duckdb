@@ -103,11 +103,12 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_dt, 
 LocalTableStorage::~LocalTableStorage() {
 }
 
-void LocalTableStorage::InitializeScan(CollectionScanState &state, optional_ptr<TableFilterSet> table_filters) {
+void LocalTableStorage::InitializeScan(QueryContext context, CollectionScanState &state,
+                                       optional_ptr<TableFilterSet> table_filters) {
 	if (row_groups->GetTotalRows() == 0) {
 		throw InternalException("No rows in LocalTableStorage row group for scan");
 	}
-	row_groups->InitializeScan(state, state.GetColumnIds(), table_filters.get());
+	row_groups->InitializeScan(context, state, state.GetColumnIds(), table_filters.get());
 }
 
 idx_t LocalTableStorage::EstimatedSize() {
@@ -365,7 +366,7 @@ void LocalStorage::InitializeScan(DataTable &table, CollectionScanState &state,
 	if (storage == nullptr || storage->row_groups->GetTotalRows() == 0) {
 		return;
 	}
-	storage->InitializeScan(state, table_filters);
+	storage->InitializeScan(QueryContext(context), state, table_filters);
 }
 
 void LocalStorage::Scan(CollectionScanState &state, const vector<StorageIndex> &, DataChunk &result) {
@@ -498,7 +499,7 @@ idx_t LocalStorage::Delete(DataTable &table, Vector &row_ids, idx_t count) {
 
 	// delete from unique indices (if any)
 	if (!storage->append_indexes.Empty()) {
-		storage->row_groups->RemoveFromIndexes(storage->append_indexes, row_ids, count);
+		storage->row_groups->RemoveFromIndexes(context, storage->append_indexes, row_ids, count);
 	}
 
 	auto ids = FlatVector::GetData<row_t>(row_ids);

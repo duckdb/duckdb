@@ -68,8 +68,8 @@ void UncompressedCompressState::CreateEmptySegment(idx_t row_start) {
 	auto &db = checkpoint_data.GetDatabase();
 	auto &type = checkpoint_data.GetType();
 
-	auto compressed_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start, info.GetBlockSize(),
-	                                                                info.GetBlockManager());
+	auto compressed_segment = ColumnSegment::CreateTransientSegment(context, db, function, type, row_start,
+	                                                                info.GetBlockSize(), info.GetBlockManager());
 	if (type.InternalType() == PhysicalType::VARCHAR) {
 		auto &state = compressed_segment->GetSegmentState()->Cast<UncompressedStringSegmentState>();
 		auto &storage_manager = checkpoint_data.GetStorageManager();
@@ -146,7 +146,7 @@ struct FixedSizeScanState : public SegmentScanState {
 unique_ptr<SegmentScanState> FixedSizeInitScan(ColumnSegment &segment) {
 	auto result = make_uniq<FixedSizeScanState>();
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
-	result->handle = buffer_manager.Pin(segment.block);
+	result->handle = buffer_manager.Pin(segment.context, segment.block);
 	return std::move(result);
 }
 

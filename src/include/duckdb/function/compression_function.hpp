@@ -17,6 +17,7 @@
 #include "duckdb/storage/data_pointer.hpp"
 #include "duckdb/storage/storage_info.hpp"
 #include "duckdb/storage/block_manager.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 class DatabaseInstance;
@@ -27,7 +28,6 @@ class SegmentStatistics;
 class TableFilter;
 struct TableFilterState;
 struct ColumnSegmentState;
-
 struct ColumnFetchState;
 struct ColumnScanState;
 struct PrefetchState;
@@ -96,6 +96,7 @@ struct CompressionState {
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 
+	QueryContext context;
 	CompressionInfo info;
 };
 

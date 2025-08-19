@@ -87,7 +87,7 @@ void CleanupState::CleanupDelete(DeleteInfo &info) {
 	Flush();
 }
 
-void CleanupState::Flush() {
+void CleanupState::Flush(QueryContext context) {
 	if (count == 0) {
 		return;
 	}
@@ -97,7 +97,7 @@ void CleanupState::Flush() {
 
 	// delete the tuples from all the indexes
 	try {
-		current_table->RemoveFromIndexes(row_identifiers, count);
+		current_table->RemoveFromIndexes(context, row_identifiers, count);
 	} catch (...) { // NOLINT: ignore errors here
 	}
 

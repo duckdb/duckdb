@@ -150,8 +150,8 @@ struct RLECompressState : public CompressionState {
 		auto &db = checkpoint_data.GetDatabase();
 		auto &type = checkpoint_data.GetType();
 
-		auto column_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start, info.GetBlockSize(),
-		                                                            info.GetBlockManager());
+		auto column_segment = ColumnSegment::CreateTransientSegment(context, db, function, type, row_start,
+		                                                            info.GetBlockSize(), info.GetBlockManager());
 		current_segment = std::move(column_segment);
 
 		auto &buffer_manager = BufferManager::GetBufferManager(db);

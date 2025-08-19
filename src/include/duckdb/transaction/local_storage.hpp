@@ -65,7 +65,8 @@ public:
 	bool is_dropped = false;
 
 public:
-	void InitializeScan(CollectionScanState &state, optional_ptr<TableFilterSet> table_filters = nullptr);
+	void InitializeScan(QueryContext context, CollectionScanState &state,
+	                    optional_ptr<TableFilterSet> table_filters = nullptr);
 	//! Write a new row group to disk (if possible)
 	void WriteNewRowGroup();
 	void FlushBlocks();

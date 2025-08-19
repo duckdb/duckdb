@@ -192,7 +192,7 @@ public:
 	//! Remove the chunk with the specified set of row identifiers from all indexes of the table
 	void RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, Vector &row_identifiers);
 	//! Remove the row identifiers from all the indexes of the table
-	void RemoveFromIndexes(Vector &row_identifiers, idx_t count);
+	void RemoveFromIndexes(QueryContext context, Vector &row_identifiers, idx_t count);
 
 	void SetAsMainTable() {
 		this->version = DataTableVersion::MAIN_TABLE;

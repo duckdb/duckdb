@@ -1,0 +1,293 @@
+diff --git a/src/include/duckdb/function/compression_function.hpp b/src/include/duckdb/function/compression_function.hpp
+index b924ccba2b..70d65067f7 100644
+--- a/src/include/duckdb/function/compression_function.hpp
++++ b/src/include/duckdb/function/compression_function.hpp
+@@ -17,6 +17,7 @@
+ #include "duckdb/storage/data_pointer.hpp"
+ #include "duckdb/storage/storage_info.hpp"
+ #include "duckdb/storage/block_manager.hpp"
++#include "duckdb/main/client_context.hpp"
+ 
+ namespace duckdb {
+ class DatabaseInstance;
+@@ -27,7 +28,6 @@ class SegmentStatistics;
+ class TableFilter;
+ struct TableFilterState;
+ struct ColumnSegmentState;
+-
+ struct ColumnFetchState;
+ struct ColumnScanState;
+ struct PrefetchState;
+@@ -96,6 +96,7 @@ struct CompressionState {
+ 		return reinterpret_cast<const TARGET &>(*this);
+ 	}
+ 
++	QueryContext context;
+ 	CompressionInfo info;
+ };
+ 
+diff --git a/src/include/duckdb/storage/compression/alp/alp_compress.hpp b/src/include/duckdb/storage/compression/alp/alp_compress.hpp
+index e08b8b5bb1..86cdd03350 100644
+--- a/src/include/duckdb/storage/compression/alp/alp_compress.hpp
++++ b/src/include/duckdb/storage/compression/alp/alp_compress.hpp
+@@ -93,7 +93,7 @@ public:
+ 		auto &db = checkpoint_data.GetDatabase();
+ 		auto &type = checkpoint_data.GetType();
+ 
+-		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start,
++		auto compressed_segment = ColumnSegment::CreateTransientSegment(context, db, function, type, row_start,
+ 		                                                                info.GetBlockSize(), info.GetBlockManager());
+ 		current_segment = std::move(compressed_segment);
+ 
+diff --git a/src/include/duckdb/storage/compression/alprd/alprd_compress.hpp b/src/include/duckdb/storage/compression/alprd/alprd_compress.hpp
+index 86559d6045..f7a8d03e3b 100644
+--- a/src/include/duckdb/storage/compression/alprd/alprd_compress.hpp
++++ b/src/include/duckdb/storage/compression/alprd/alprd_compress.hpp
+@@ -103,7 +103,7 @@ public:
+ 		auto &db = checkpoint_data.GetDatabase();
+ 		auto &type = checkpoint_data.GetType();
+ 
+-		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start,
++		auto compressed_segment = ColumnSegment::CreateTransientSegment(context, db, function, type, row_start,
+ 		                                                                info.GetBlockSize(), info.GetBlockManager());
+ 		current_segment = std::move(compressed_segment);
+ 
+diff --git a/src/include/duckdb/storage/compression/empty_validity.hpp b/src/include/duckdb/storage/compression/empty_validity.hpp
+index 1118f77f24..5fe2ec8172 100644
+--- a/src/include/duckdb/storage/compression/empty_validity.hpp
++++ b/src/include/duckdb/storage/compression/empty_validity.hpp
+@@ -61,7 +61,7 @@ public:
+ 		auto row_start = checkpoint_data.GetRowGroup().start;
+ 
+ 		auto &info = state.info;
+-		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, *state.function, type, row_start,
++		auto compressed_segment = ColumnSegment::CreateTransientSegment(state.context, db, *state.function, type, row_start,
+ 		                                                                info.GetBlockSize(), info.GetBlockManager());
+ 		compressed_segment->count = state.count;
+ 		if (state.non_nulls != state.count) {
+diff --git a/src/include/duckdb/storage/data_pointer.hpp b/src/include/duckdb/storage/data_pointer.hpp
+index 0ae44d7f3b..fc5975d50d 100644
+--- a/src/include/duckdb/storage/data_pointer.hpp
++++ b/src/include/duckdb/storage/data_pointer.hpp
+@@ -9,6 +9,7 @@
+ #pragma once
+ 
+ #include "duckdb/common/common.hpp"
++#include "duckdb/main/client_context.hpp"
+ #include "duckdb/storage/statistics/base_statistics.hpp"
+ #include "duckdb/storage/storage_info.hpp"
+ #include "duckdb/storage/block.hpp"
+@@ -39,6 +40,7 @@ struct ColumnSegmentState {
+ 	}
+ 
+ public:
++	QueryContext context;
+ 	vector<block_id_t> blocks;
+ };
+ 
+diff --git a/src/include/duckdb/storage/table/column_segment.hpp b/src/include/duckdb/storage/table/column_segment.hpp
+index 61b2c0d4ff..70a9e4550c 100644
+--- a/src/include/duckdb/storage/table/column_segment.hpp
++++ b/src/include/duckdb/storage/table/column_segment.hpp
+@@ -18,6 +18,7 @@
+ #include "duckdb/storage/statistics/segment_statistics.hpp"
+ #include "duckdb/storage/storage_lock.hpp"
+ #include "duckdb/storage/table/segment_base.hpp"
++#include "duckdb/main/client_context.hpp"
+ 
+ namespace duckdb {
+ 
+@@ -29,7 +30,6 @@ class DatabaseInstance;
+ class TableFilter;
+ class Transaction;
+ class UpdateSegment;
+-
+ struct ColumnAppendState;
+ struct ColumnFetchState;
+ struct ColumnScanState;
+@@ -42,7 +42,7 @@ enum class ColumnSegmentType : uint8_t { TRANSIENT, PERSISTENT };
+ class ColumnSegment : public SegmentBase<ColumnSegment> {
+ public:
+ 	//! Construct a column segment.
+-	ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block, const LogicalType &type,
++	ColumnSegment(QueryContext context, DatabaseInstance &db, shared_ptr<BlockHandle> block, const LogicalType &type,
+ 	              const ColumnSegmentType segment_type, const idx_t start, const idx_t count,
+ 	              CompressionFunction &function_p, BaseStatistics statistics, const block_id_t block_id_p,
+ 	              const idx_t offset, const idx_t segment_size_p,
+@@ -58,7 +58,7 @@ public:
+ 	                                                         idx_t start, idx_t count, CompressionType compression_type,
+ 	                                                         BaseStatistics statistics,
+ 	                                                         unique_ptr<ColumnSegmentState> segment_state);
+-	static unique_ptr<ColumnSegment> CreateTransientSegment(DatabaseInstance &db, CompressionFunction &function,
++	static unique_ptr<ColumnSegment> CreateTransientSegment(QueryContext context, DatabaseInstance &db, CompressionFunction &function,
+ 	                                                        const LogicalType &type, const idx_t start,
+ 	                                                        const idx_t segment_size, BlockManager &block_manager);
+ 
+@@ -143,6 +143,7 @@ private:
+ 	void ScanPartial(ColumnScanState &state, idx_t scan_count, Vector &result, idx_t result_offset);
+ 
+ public:
++	QueryContext context;
+ 	//! The database instance
+ 	DatabaseInstance &db;
+ 	//! The type stored in the column
+diff --git a/src/storage/compression/bitpacking.cpp b/src/storage/compression/bitpacking.cpp
+index fd30ef1956..02b722edf7 100644
+--- a/src/storage/compression/bitpacking.cpp
++++ b/src/storage/compression/bitpacking.cpp
+@@ -498,7 +498,7 @@ public:
+ 		auto &db = checkpoint_data.GetDatabase();
+ 		auto &type = checkpoint_data.GetType();
+ 
+-		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start,
++		auto compressed_segment = ColumnSegment::CreateTransientSegment(context, db, function, type, row_start,
+ 		                                                                info.GetBlockSize(), info.GetBlockManager());
+ 		current_segment = std::move(compressed_segment);
+ 
+diff --git a/src/storage/compression/dict_fsst/compression.cpp b/src/storage/compression/dict_fsst/compression.cpp
+index 580a5cfc5e..66e68bce09 100644
+--- a/src/storage/compression/dict_fsst/compression.cpp
++++ b/src/storage/compression/dict_fsst/compression.cpp
+@@ -232,7 +232,7 @@ void DictFSSTCompressionState::CreateEmptySegment(idx_t row_start) {
+ 	auto &db = checkpoint_data.GetDatabase();
+ 	auto &type = checkpoint_data.GetType();
+ 
+-	auto compressed_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start, info.GetBlockSize(),
++	auto compressed_segment = ColumnSegment::CreateTransientSegment(context, db, function, type, row_start, info.GetBlockSize(),
+ 	                                                                info.GetBlockManager());
+ 	current_segment = std::move(compressed_segment);
+ 
+diff --git a/src/storage/compression/dictionary/compression.cpp b/src/storage/compression/dictionary/compression.cpp
+index 48b02a42a7..d9fe41f0ff 100644
+--- a/src/storage/compression/dictionary/compression.cpp
++++ b/src/storage/compression/dictionary/compression.cpp
+@@ -14,7 +14,7 @@ void DictionaryCompressionCompressState::CreateEmptySegment(idx_t row_start) {
+ 	auto &db = checkpoint_data.GetDatabase();
+ 	auto &type = checkpoint_data.GetType();
+ 
+-	auto compressed_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start, info.GetBlockSize(),
++	auto compressed_segment = ColumnSegment::CreateTransientSegment(context, db, function, type, row_start, info.GetBlockSize(),
+ 	                                                                info.GetBlockManager());
+ 	current_segment = std::move(compressed_segment);
+ 
+diff --git a/src/storage/compression/fixed_size_uncompressed.cpp b/src/storage/compression/fixed_size_uncompressed.cpp
+index afd335daba..d3715d3fa6 100644
+--- a/src/storage/compression/fixed_size_uncompressed.cpp
++++ b/src/storage/compression/fixed_size_uncompressed.cpp
+@@ -68,7 +68,7 @@ void UncompressedCompressState::CreateEmptySegment(idx_t row_start) {
+ 	auto &db = checkpoint_data.GetDatabase();
+ 	auto &type = checkpoint_data.GetType();
+ 
+-	auto compressed_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start, info.GetBlockSize(),
++	auto compressed_segment = ColumnSegment::CreateTransientSegment(context, db, function, type, row_start, info.GetBlockSize(),
+ 	                                                                info.GetBlockManager());
+ 	if (type.InternalType() == PhysicalType::VARCHAR) {
+ 		auto &state = compressed_segment->GetSegmentState()->Cast<UncompressedStringSegmentState>();
+diff --git a/src/storage/compression/fsst.cpp b/src/storage/compression/fsst.cpp
+index cbb3b3ac71..1a3cbf9dc2 100644
+--- a/src/storage/compression/fsst.cpp
++++ b/src/storage/compression/fsst.cpp
+@@ -245,7 +245,7 @@ public:
+ 		auto &db = checkpoint_data.GetDatabase();
+ 		auto &type = checkpoint_data.GetType();
+ 
+-		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start,
++		auto compressed_segment = ColumnSegment::CreateTransientSegment(context, db, function, type, row_start,
+ 		                                                                info.GetBlockSize(), info.GetBlockManager());
+ 		current_segment = std::move(compressed_segment);
+ 		Reset();
+diff --git a/src/storage/compression/rle.cpp b/src/storage/compression/rle.cpp
+index 57ebaf1fa4..a6a2fbe565 100644
+--- a/src/storage/compression/rle.cpp
++++ b/src/storage/compression/rle.cpp
+@@ -150,7 +150,7 @@ struct RLECompressState : public CompressionState {
+ 		auto &db = checkpoint_data.GetDatabase();
+ 		auto &type = checkpoint_data.GetType();
+ 
+-		auto column_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start, info.GetBlockSize(),
++		auto column_segment = ColumnSegment::CreateTransientSegment(context, db, function, type, row_start, info.GetBlockSize(),
+ 		                                                            info.GetBlockManager());
+ 		current_segment = std::move(column_segment);
+ 
+diff --git a/src/storage/compression/roaring/compress.cpp b/src/storage/compression/roaring/compress.cpp
+index fc2ba3625a..61885da448 100644
+--- a/src/storage/compression/roaring/compress.cpp
++++ b/src/storage/compression/roaring/compress.cpp
+@@ -282,7 +282,7 @@ void RoaringCompressState::CreateEmptySegment(idx_t row_start) {
+ 	auto &db = checkpoint_data.GetDatabase();
+ 	auto &type = checkpoint_data.GetType();
+ 
+-	auto compressed_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start, info.GetBlockSize(),
++	auto compressed_segment = ColumnSegment::CreateTransientSegment(context, db, function, type, row_start, info.GetBlockSize(),
+ 	                                                                info.GetBlockManager());
+ 	current_segment = std::move(compressed_segment);
+ 
+diff --git a/src/storage/compression/zstd.cpp b/src/storage/compression/zstd.cpp
+index ac0d5ef246..2ac1ea1623 100644
+--- a/src/storage/compression/zstd.cpp
++++ b/src/storage/compression/zstd.cpp
+@@ -524,7 +524,7 @@ public:
+ 	void CreateEmptySegment(idx_t row_start) {
+ 		auto &db = checkpoint_data.GetDatabase();
+ 		auto &type = checkpoint_data.GetType();
+-		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start,
++		auto compressed_segment = ColumnSegment::CreateTransientSegment(context, db, function, type, row_start,
+ 		                                                                info.GetBlockSize(), info.GetBlockManager());
+ 		segment = std::move(compressed_segment);
+ 
+diff --git a/src/storage/table/column_data.cpp b/src/storage/table/column_data.cpp
+index 082f42f615..eedd9981f0 100644
+--- a/src/storage/table/column_data.cpp
++++ b/src/storage/table/column_data.cpp
+@@ -610,7 +610,7 @@ void ColumnData::AppendTransientSegment(SegmentLock &l, idx_t start_row) {
+ 	auto function = config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, type.InternalType());
+ 
+ 	auto new_segment =
+-	    ColumnSegment::CreateTransientSegment(db, *function, type, start_row, segment_size, block_manager);
++	    ColumnSegment::CreateTransientSegment(QueryContext(), db, *function, type, start_row, segment_size, block_manager);
+ 	AppendSegment(l, std::move(new_segment));
+ }
+ 
+diff --git a/src/storage/table/column_segment.cpp b/src/storage/table/column_segment.cpp
+index 347463fbe5..a7131fee59 100644
+--- a/src/storage/table/column_segment.cpp
++++ b/src/storage/table/column_segment.cpp
+@@ -41,11 +41,11 @@ unique_ptr<ColumnSegment> ColumnSegment::CreatePersistentSegment(DatabaseInstanc
+ 	}
+ 
+ 	auto segment_size = block_manager.GetBlockSize();
+-	return make_uniq<ColumnSegment>(db, std::move(block), type, ColumnSegmentType::PERSISTENT, start, count, *function,
++	return make_uniq<ColumnSegment>(segment_state->context, db, std::move(block), type, ColumnSegmentType::PERSISTENT, start, count, *function,
+ 	                                std::move(statistics), block_id, offset, segment_size, std::move(segment_state));
+ }
+ 
+-unique_ptr<ColumnSegment> ColumnSegment::CreateTransientSegment(DatabaseInstance &db, CompressionFunction &function,
++unique_ptr<ColumnSegment> ColumnSegment::CreateTransientSegment(QueryContext context, DatabaseInstance &db, CompressionFunction &function,
+                                                                 const LogicalType &type, const idx_t start,
+                                                                 const idx_t segment_size, BlockManager &block_manager) {
+ 
+@@ -61,13 +61,13 @@ unique_ptr<ColumnSegment> ColumnSegment::CreateTransientSegment(DatabaseInstance
+ //===--------------------------------------------------------------------===//
+ // Construct/Destruct
+ //===--------------------------------------------------------------------===//
+-ColumnSegment::ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block_p, const LogicalType &type,
++ColumnSegment::ColumnSegment(QueryContext context, DatabaseInstance &db, shared_ptr<BlockHandle> block_p, const LogicalType &type,
+                              const ColumnSegmentType segment_type, const idx_t start, const idx_t count,
+                              CompressionFunction &function_p, BaseStatistics statistics, const block_id_t block_id_p,
+                              const idx_t offset, const idx_t segment_size_p,
+                              const unique_ptr<ColumnSegmentState> segment_state_p)
+ 
+-    : SegmentBase<ColumnSegment>(start, count), db(db), type(type), type_size(GetTypeIdSize(type.InternalType())),
++    : SegmentBase<ColumnSegment>(start, count), context(context), db(db), type(type), type_size(GetTypeIdSize(type.InternalType())),
+       segment_type(segment_type), stats(std::move(statistics)), block(std::move(block_p)), function(function_p),
+       block_id(block_id_p), offset(offset), segment_size(segment_size_p) {
+ 
+@@ -81,7 +81,7 @@ ColumnSegment::ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block
+ 
+ ColumnSegment::ColumnSegment(ColumnSegment &other, const idx_t start)
+ 
+-    : SegmentBase<ColumnSegment>(start, other.count.load()), db(other.db), type(std::move(other.type)),
++    : context(other.context), SegmentBase<ColumnSegment>(start, other.count.load()), db(other.db), type(std::move(other.type)),
+       type_size(other.type_size), segment_type(other.segment_type), stats(std::move(other.stats)),
+       block(std::move(other.block)), function(other.function), block_id(other.block_id), offset(other.offset),
+       segment_size(other.segment_size), segment_state(std::move(other.segment_state)) {
