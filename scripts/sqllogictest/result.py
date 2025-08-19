@@ -337,7 +337,12 @@ class QueryResult:
                 logger.wrong_result_hash(expected_hash_value, hash_value)
 
                 if expected_result:
-                    logger.print_result_error(result_values_string, duck_db_convert_result(expected_result, runner.original_sqlite_test), expected_result.column_count, False)
+                    logger.print_result_error(
+                        result_values_string,
+                        duck_db_convert_result(expected_result, runner.original_sqlite_test),
+                        expected_result.column_count,
+                        False,
+                    )
                 context.fail("")
 
             assert not hash_compare_error
