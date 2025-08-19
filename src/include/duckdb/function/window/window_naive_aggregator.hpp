@@ -21,9 +21,8 @@ public:
 	~WindowNaiveAggregator() override;
 
 	unique_ptr<LocalSinkState> GetLocalState(ExecutionContext &context, const GlobalSinkState &gstate) const override;
-	void Evaluate(ExecutionContext &context, const GlobalSinkState &gsink, LocalSinkState &lstate,
-	              const DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx,
-	              InterruptState &interrupt) const override;
+	void Evaluate(ExecutionContext &context, const DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx,
+	              OperatorSinkInput &sink) const override;
 
 	//! The parent executor
 	const WindowAggregateExecutor &executor;

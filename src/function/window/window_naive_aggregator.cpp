@@ -365,12 +365,11 @@ unique_ptr<LocalSinkState> WindowNaiveAggregator::GetLocalState(ExecutionContext
 	return make_uniq<WindowNaiveLocalState>(context, *this);
 }
 
-void WindowNaiveAggregator::Evaluate(ExecutionContext &context, const GlobalSinkState &gsink, LocalSinkState &lstate,
-                                     const DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx,
-                                     InterruptState &interrupt) const {
-	const auto &gnstate = gsink.Cast<WindowAggregatorGlobalState>();
-	auto &lnstate = lstate.Cast<WindowNaiveLocalState>();
-	lnstate.Evaluate(context, gnstate, bounds, result, count, row_idx, interrupt);
+void WindowNaiveAggregator::Evaluate(ExecutionContext &context, const DataChunk &bounds, Vector &result, idx_t count,
+                                     idx_t row_idx, OperatorSinkInput &sink) const {
+	const auto &gnstate = sink.global_state.Cast<WindowAggregatorGlobalState>();
+	auto &lnstate = sink.local_state.Cast<WindowNaiveLocalState>();
+	lnstate.Evaluate(context, gnstate, bounds, result, count, row_idx, sink.interrupt_state);
 }
 
 } // namespace duckdb

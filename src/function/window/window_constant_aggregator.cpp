@@ -207,11 +207,10 @@ unique_ptr<GlobalSinkState> WindowConstantAggregator::GetGlobalState(ClientConte
 	return make_uniq<WindowConstantAggregatorGlobalState>(context, *this, group_count, partition_mask);
 }
 
-void WindowConstantAggregator::Sink(ExecutionContext &context, GlobalSinkState &gsink, LocalSinkState &lstate,
-                                    DataChunk &sink_chunk, DataChunk &coll_chunk, idx_t input_idx,
-                                    optional_ptr<SelectionVector> filter_sel, idx_t filtered,
-                                    InterruptState &interrupt) {
-	auto &lastate = lstate.Cast<WindowConstantAggregatorLocalState>();
+void WindowConstantAggregator::Sink(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk,
+                                    idx_t input_idx, optional_ptr<SelectionVector> filter_sel, idx_t filtered,
+                                    OperatorSinkInput &sink) {
+	auto &lastate = sink.local_state.Cast<WindowConstantAggregatorLocalState>();
 
 	lastate.Sink(context, sink_chunk, coll_chunk, input_idx, filter_sel, filtered);
 }
@@ -300,10 +299,10 @@ void WindowConstantAggregatorLocalState::Sink(ExecutionContext &context, DataChu
 	}
 }
 
-void WindowConstantAggregator::Finalize(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
-                                        CollectionPtr collection, const FrameStats &stats, InterruptState &interrupt) {
-	auto &gastate = gstate.Cast<WindowConstantAggregatorGlobalState>();
-	auto &lastate = lstate.Cast<WindowConstantAggregatorLocalState>();
+void WindowConstantAggregator::Finalize(ExecutionContext &context, CollectionPtr collection, const FrameStats &stats,
+                                        OperatorSinkInput &sink) {
+	auto &gastate = sink.global_state.Cast<WindowConstantAggregatorGlobalState>();
+	auto &lastate = sink.local_state.Cast<WindowConstantAggregatorLocalState>();
 
 	//	Single-threaded combine
 	lock_guard<mutex> finalize_guard(gastate.lock);
@@ -320,16 +319,15 @@ unique_ptr<LocalSinkState> WindowConstantAggregator::GetLocalState(ExecutionCont
 	return make_uniq<WindowConstantAggregatorLocalState>(context, gstate.Cast<WindowConstantAggregatorGlobalState>());
 }
 
-void WindowConstantAggregator::Evaluate(ExecutionContext &context, const GlobalSinkState &gsink, LocalSinkState &lstate,
-                                        const DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx,
-                                        InterruptState &interrupt) const {
-	auto &gasink = gsink.Cast<WindowConstantAggregatorGlobalState>();
+void WindowConstantAggregator::Evaluate(ExecutionContext &context, const DataChunk &bounds, Vector &result, idx_t count,
+                                        idx_t row_idx, OperatorSinkInput &sink) const {
+	auto &gasink = sink.global_state.Cast<WindowConstantAggregatorGlobalState>();
 	const auto &partition_offsets = gasink.partition_offsets;
 	const auto &results = *gasink.results;
 
 	auto begins = FlatVector::GetData<const idx_t>(bounds.data[FRAME_BEGIN]);
 	//	Chunk up the constants and copy them one at a time
-	auto &lcstate = lstate.Cast<WindowConstantAggregatorLocalState>();
+	auto &lcstate = sink.local_state.Cast<WindowConstantAggregatorLocalState>();
 	idx_t matched = 0;
 	idx_t target_offset = 0;
 	for (idx_t i = 0; i < count; ++i) {

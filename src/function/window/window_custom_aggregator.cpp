@@ -92,16 +92,16 @@ unique_ptr<GlobalSinkState> WindowCustomAggregator::GetGlobalState(ClientContext
 	return make_uniq<WindowCustomAggregatorGlobalState>(context, *this, group_count);
 }
 
-void WindowCustomAggregator::Finalize(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
-                                      CollectionPtr collection, const FrameStats &stats, InterruptState &interrupt) {
+void WindowCustomAggregator::Finalize(ExecutionContext &context, CollectionPtr collection, const FrameStats &stats,
+                                      OperatorSinkInput &sink) {
 	//	Single threaded Finalize for now
-	auto &gcsink = gstate.Cast<WindowCustomAggregatorGlobalState>();
+	auto &gcsink = sink.global_state.Cast<WindowCustomAggregatorGlobalState>();
 	lock_guard<mutex> gestate_guard(gcsink.lock);
 	if (gcsink.finalized) {
 		return;
 	}
 
-	WindowAggregator::Finalize(context, gstate, lstate, collection, stats, interrupt);
+	WindowAggregator::Finalize(context, collection, stats, sink);
 
 	gcsink.collection = collection;
 	auto inputs = collection->inputs.get();
@@ -113,11 +113,12 @@ void WindowCustomAggregator::Finalize(ExecutionContext &context, GlobalSinkState
 	auto &filter_mask = gcsink.filter_mask;
 	auto &filter_packed = gcsink.filter_packed;
 	filter_mask.Pack(filter_packed, filter_mask.Capacity());
-	gcsink.glstate = GetLocalState(context, gstate);
+	gcsink.glstate = GetLocalState(context, gcsink);
 
 	if (aggr.function.window_init) {
 		auto &gcstate = gcsink.glstate->Cast<WindowCustomAggregatorLocalState>();
-		WindowPartitionInput partition(context, inputs, count, child_idx, all_valids, filter_packed, stats, interrupt);
+		WindowPartitionInput partition(context, inputs, count, child_idx, all_valids, filter_packed, stats,
+		                               sink.interrupt_state);
 
 		AggregateInputData aggr_input_data(aggr.GetFunctionData(), gcstate.allocator);
 		aggr.function.window_init(aggr_input_data, partition, gcstate.state.data());
@@ -131,13 +132,12 @@ unique_ptr<LocalSinkState> WindowCustomAggregator::GetLocalState(ExecutionContex
 	return make_uniq<WindowCustomAggregatorLocalState>(context, aggr, exclude_mode);
 }
 
-void WindowCustomAggregator::Evaluate(ExecutionContext &context, const GlobalSinkState &gsink, LocalSinkState &lstate,
-                                      const DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx,
-                                      InterruptState &interrupt) const {
-	auto &lcstate = lstate.Cast<WindowCustomAggregatorLocalState>();
+void WindowCustomAggregator::Evaluate(ExecutionContext &context, const DataChunk &bounds, Vector &result, idx_t count,
+                                      idx_t row_idx, OperatorSinkInput &sink) const {
+	auto &lcstate = sink.local_state.Cast<WindowCustomAggregatorLocalState>();
 	auto &frames = lcstate.frames;
 	const_data_ptr_t gstate_p = nullptr;
-	auto &gcsink = gsink.Cast<WindowCustomAggregatorGlobalState>();
+	auto &gcsink = sink.global_state.Cast<WindowCustomAggregatorGlobalState>();
 	if (gcsink.glstate) {
 		auto &gcstate = gcsink.glstate->Cast<WindowCustomAggregatorLocalState>();
 		gstate_p = gcstate.state.data();
@@ -149,7 +149,7 @@ void WindowCustomAggregator::Evaluate(ExecutionContext &context, const GlobalSin
 	auto &filter_packed = gcsink.filter_packed;
 	auto &stats = gcsink.stats;
 	WindowPartitionInput partition(context, inputs, collection->size(), child_idx, all_valids, filter_packed, stats,
-	                               interrupt);
+	                               sink.interrupt_state);
 	EvaluateSubFrames(bounds, exclude_mode, count, row_idx, frames, [&](idx_t i) {
 		// Extract the range
 		AggregateInputData aggr_input_data(aggr.GetFunctionData(), lcstate.allocator);

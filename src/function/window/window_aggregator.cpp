@@ -54,11 +54,10 @@ void WindowAggregatorLocalState::Sink(ExecutionContext &context, WindowAggregato
                                       DataChunk &sink_chunk, DataChunk &coll_chunk, idx_t input_idx) {
 }
 
-void WindowAggregator::Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
-                            DataChunk &sink_chunk, DataChunk &coll_chunk, idx_t input_idx,
-                            optional_ptr<SelectionVector> filter_sel, idx_t filtered, InterruptState &interrupt) {
-	auto &gastate = gstate.Cast<WindowAggregatorGlobalState>();
-	auto &lastate = lstate.Cast<WindowAggregatorLocalState>();
+void WindowAggregator::Sink(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk, idx_t input_idx,
+                            optional_ptr<SelectionVector> filter_sel, idx_t filtered, OperatorSinkInput &sink) {
+	auto &gastate = sink.global_state.Cast<WindowAggregatorGlobalState>();
+	auto &lastate = sink.local_state.Cast<WindowAggregatorLocalState>();
 	lastate.Sink(context, gastate, sink_chunk, coll_chunk, input_idx);
 	if (filter_sel) {
 		auto &filter_mask = gastate.filter_mask;
@@ -93,10 +92,10 @@ void WindowAggregatorLocalState::Finalize(ExecutionContext &context, WindowAggre
 	}
 }
 
-void WindowAggregator::Finalize(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
-                                CollectionPtr collection, const FrameStats &stats, InterruptState &interrupt) {
-	auto &gasink = gstate.Cast<WindowAggregatorGlobalState>();
-	auto &lastate = lstate.Cast<WindowAggregatorLocalState>();
+void WindowAggregator::Finalize(ExecutionContext &context, CollectionPtr collection, const FrameStats &stats,
+                                OperatorSinkInput &sink) {
+	auto &gasink = sink.global_state.Cast<WindowAggregatorGlobalState>();
+	auto &lastate = sink.local_state.Cast<WindowAggregatorLocalState>();
 	lastate.Finalize(context, gasink, collection);
 }
 

@@ -21,12 +21,11 @@ public:
 	unique_ptr<GlobalSinkState> GetGlobalState(ClientContext &context, idx_t group_count,
 	                                           const ValidityMask &partition_mask) const override;
 	unique_ptr<LocalSinkState> GetLocalState(ExecutionContext &context, const GlobalSinkState &gstate) const override;
-	void Finalize(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate, CollectionPtr collection,
-	              const FrameStats &stats, InterruptState &interrupt) override;
+	void Finalize(ExecutionContext &context, CollectionPtr collection, const FrameStats &stats,
+	              OperatorSinkInput &sink) override;
 
-	void Evaluate(ExecutionContext &context, const GlobalSinkState &gstate, LocalSinkState &lstate,
-	              const DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx,
-	              InterruptState &interrupt) const override;
+	void Evaluate(ExecutionContext &context, const DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx,
+	              OperatorSinkInput &sink) const override;
 };
 
 } // namespace duckdb

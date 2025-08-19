@@ -144,10 +144,8 @@ void WindowAggregateExecutor::Sink(ExecutionContext &context, DataChunk &sink_ch
 	}
 
 	D_ASSERT(aggregator);
-	auto &gestate = *gastate.gsink;
-	auto &lestate = *lastate.aggregator_state;
-	aggregator->Sink(context, gestate, lestate, sink_chunk, coll_chunk, input_idx, filtering, filtered,
-	                 sink.interrupt_state);
+	OperatorSinkInput asink {*gastate.gsink, *lastate.aggregator_state, sink.interrupt_state};
+	aggregator->Sink(context, sink_chunk, coll_chunk, input_idx, filtering, filtered, asink);
 
 	WindowExecutor::Sink(context, sink_chunk, coll_chunk, input_idx, sink);
 }
@@ -239,7 +237,8 @@ void WindowAggregateExecutor::Finalize(ExecutionContext &context, CollectionPtr 
 	ApplyWindowStats(wexpr.end, stats[1], base, false);
 
 	auto &lastate = sink.local_state.Cast<WindowAggregateExecutorLocalState>();
-	aggregator->Finalize(context, *gsink, *lastate.aggregator_state, collection, stats, sink.interrupt_state);
+	OperatorSinkInput asink {*gsink, *lastate.aggregator_state, sink.interrupt_state};
+	aggregator->Finalize(context, collection, stats, asink);
 }
 
 void WindowAggregateExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result,
@@ -249,9 +248,8 @@ void WindowAggregateExecutor::EvaluateInternal(ExecutionContext &context, DataCh
 	auto &gsink = gastate.gsink;
 	D_ASSERT(aggregator);
 
-	auto &agg_state = *lastate.aggregator_state;
-
-	aggregator->Evaluate(context, *gsink, agg_state, lastate.bounds, result, count, row_idx, sink.interrupt_state);
+	OperatorSinkInput asink {*gsink, *lastate.aggregator_state, sink.interrupt_state};
+	aggregator->Evaluate(context, lastate.bounds, result, count, row_idx, asink);
 }
 
 } // namespace duckdb

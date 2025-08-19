@@ -247,14 +247,13 @@ unique_ptr<GlobalSinkState> WindowDistinctAggregator::GetGlobalState(ClientConte
 	return make_uniq<WindowDistinctAggregatorGlobalState>(context, *this, group_count);
 }
 
-void WindowDistinctAggregator::Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
-                                    DataChunk &sink_chunk, DataChunk &coll_chunk, idx_t input_idx,
-                                    optional_ptr<SelectionVector> filter_sel, idx_t filtered,
-                                    InterruptState &interrupt) {
-	WindowAggregator::Sink(context, gstate, lstate, sink_chunk, coll_chunk, input_idx, filter_sel, filtered, interrupt);
+void WindowDistinctAggregator::Sink(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk,
+                                    idx_t input_idx, optional_ptr<SelectionVector> filter_sel, idx_t filtered,
+                                    OperatorSinkInput &sink) {
+	WindowAggregator::Sink(context, sink_chunk, coll_chunk, input_idx, filter_sel, filtered, sink);
 
-	auto &ldstate = lstate.Cast<WindowDistinctAggregatorLocalState>();
-	ldstate.Sink(context, sink_chunk, coll_chunk, input_idx, filter_sel, filtered, interrupt);
+	auto &ldstate = sink.local_state.Cast<WindowDistinctAggregatorLocalState>();
+	ldstate.Sink(context, sink_chunk, coll_chunk, input_idx, filter_sel, filtered, sink.interrupt_state);
 }
 
 void WindowDistinctAggregatorLocalState::Sink(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk,
@@ -389,10 +388,10 @@ bool WindowDistinctAggregatorGlobalState::TryPrepareNextStage(WindowDistinctAggr
 	return true;
 }
 
-void WindowDistinctAggregator::Finalize(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
-                                        CollectionPtr collection, const FrameStats &stats, InterruptState &interrupt) {
-	auto &gdsink = gstate.Cast<WindowDistinctAggregatorGlobalState>();
-	auto &ldstate = lstate.Cast<WindowDistinctAggregatorLocalState>();
+void WindowDistinctAggregator::Finalize(ExecutionContext &context, CollectionPtr collection, const FrameStats &stats,
+                                        OperatorSinkInput &sink) {
+	auto &gdsink = sink.global_state.Cast<WindowDistinctAggregatorGlobalState>();
+	auto &ldstate = sink.local_state.Cast<WindowDistinctAggregatorLocalState>();
 	ldstate.Finalize(context, gdsink, collection);
 
 	// Sort, merge and build the tree in parallel
@@ -699,12 +698,11 @@ unique_ptr<LocalSinkState> WindowDistinctAggregator::GetLocalState(ExecutionCont
 	return make_uniq<WindowDistinctAggregatorLocalState>(context, gdstate);
 }
 
-void WindowDistinctAggregator::Evaluate(ExecutionContext &context, const GlobalSinkState &gsink, LocalSinkState &lstate,
-                                        const DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx,
-                                        InterruptState &interrupt) const {
+void WindowDistinctAggregator::Evaluate(ExecutionContext &context, const DataChunk &bounds, Vector &result, idx_t count,
+                                        idx_t row_idx, OperatorSinkInput &sink) const {
 
-	const auto &gdstate = gsink.Cast<WindowDistinctAggregatorGlobalState>();
-	auto &ldstate = lstate.Cast<WindowDistinctAggregatorLocalState>();
+	const auto &gdstate = sink.global_state.Cast<WindowDistinctAggregatorGlobalState>();
+	auto &ldstate = sink.local_state.Cast<WindowDistinctAggregatorLocalState>();
 	ldstate.Evaluate(context, gdstate, bounds, result, count, row_idx);
 }
 

@@ -145,11 +145,11 @@ public:
 	unique_ptr<WindowSegmentTreePart> right_part;
 };
 
-void WindowSegmentTree::Finalize(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
-                                 CollectionPtr collection, const FrameStats &stats, InterruptState &interrupt) {
-	WindowAggregator::Finalize(context, gstate, lstate, collection, stats, interrupt);
+void WindowSegmentTree::Finalize(ExecutionContext &context, CollectionPtr collection, const FrameStats &stats,
+                                 OperatorSinkInput &sink) {
+	WindowAggregator::Finalize(context, collection, stats, sink);
 
-	auto &gasink = gstate.Cast<WindowSegmentTreeGlobalState>();
+	auto &gasink = sink.global_state.Cast<WindowSegmentTreeGlobalState>();
 	++gasink.finalized;
 }
 
@@ -392,11 +392,10 @@ void WindowSegmentTreeLocalState::Finalize(ExecutionContext &context, WindowAggr
 	}
 }
 
-void WindowSegmentTree::Evaluate(ExecutionContext &context, const GlobalSinkState &gstate, LocalSinkState &lstate,
-                                 const DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx,
-                                 InterruptState &interrupt) const {
-	const auto &gtstate = gstate.Cast<WindowSegmentTreeGlobalState>();
-	auto &ltstate = lstate.Cast<WindowSegmentTreeLocalState>();
+void WindowSegmentTree::Evaluate(ExecutionContext &context, const DataChunk &bounds, Vector &result, idx_t count,
+                                 idx_t row_idx, OperatorSinkInput &sink) const {
+	const auto &gtstate = sink.global_state.Cast<WindowSegmentTreeGlobalState>();
+	auto &ltstate = sink.local_state.Cast<WindowSegmentTreeLocalState>();
 	ltstate.Evaluate(context, gtstate, bounds, result, count, row_idx);
 }
 
