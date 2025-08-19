@@ -22,7 +22,7 @@ class String {
 	    String either can own its data (with automatic cleanup) or hold a non-owning reference.
 	    * Move only semantics, no copying allowed.
 	    * Small Strings (≤7 bytes) are stored inline to avoid heap allocation.
-	    * 32-bit length limit with overflow protection.
+	    * 31-bit length limit with overflow protection.
 
 	    To create an owning String, use the constructors.
 	    To create a non-owning String, use the Reference methods.
@@ -34,19 +34,15 @@ public:
 	}
 
 	String(const std::string &str) { // NOLINT allowimplicit conversion
-		AssignOwning(str.data(), SafeStrlen(str));
+		AssignOwning(str.data(), SafeStrLen(str));
 	}
 
 	String(const char *str, const uint32_t size) {
-		if (str == nullptr) {
-			AssignOwning(str, 0);
-			return;
-		}
 		AssignOwning(str, size);
 	}
 
 	String(const char *str) // NOLINT allowimplicit conversion
-	    : String(str, str ? SafeStrlen(str) : 0) {
+	    : String(str, str ? SafeStrLen(str) : 0) {
 	}
 
 public:
@@ -56,16 +52,14 @@ public:
 
 	// Move Constructor
 	String(String &&other) noexcept {
-		AssignOwning(other.data(), other.size());
-		other.Release();
+		TransferOwnership(other);
 	}
 
 	// Move Assignment
 	String &operator=(String &&other) noexcept {
 		if (this != &other) {
 			Destroy();
-			AssignOwning(other.data(), other.size());
-			other.Release();
+			TransferOwnership(other);
 		}
 		return *this;
 	}
@@ -90,14 +84,14 @@ public:
 	}
 
 	bool operator==(const std::string &other) const {
-		if (SafeStrlen(other) != size()) {
+		if (SafeStrLen(other) != size()) {
 			return false;
 		}
 		return memcmp(data(), other.data(), size()) == 0;
 	}
 
 	bool operator==(const char *other) const {
-		if (!other || SafeStrlen(other) != size()) {
+		if (!other || SafeStrLen(other) != size()) {
 			return false;
 		}
 
@@ -133,7 +127,7 @@ public:
 	char operator[](const idx_t pos) const {
 		D_ASSERT(pos < size());
 
-		if (IsInline()) {
+		if (IsInlined()) {
 			return buf[pos];
 		}
 		return ptr[pos];
@@ -143,13 +137,13 @@ public:
 	// STL-like interface
 	// NOLINTBEGIN - mimic std::string interface
 	uint32_t size() const {
-		return len & ~NON_OWN_BIT;
+		return len & ~NON_OWNING_BIT;
 	}
 	bool empty() const {
 		return len == 0;
 	}
 	const char *data() const {
-		return IsInline() ? buf : ptr;
+		return IsInlined() ? buf : ptr;
 	}
 	const char *begin() const {
 		return data();
@@ -164,10 +158,10 @@ public:
 
 	// Helper methods
 	bool IsOwning() const {
-		return (len & NON_OWN_BIT) == 0;
+		return (len & NON_OWNING_BIT) == 0;
 	}
 
-	bool IsInline() const {
+	bool IsInlined() const {
 		return len <= INLINE_MAX;
 	}
 
@@ -190,10 +184,10 @@ public:
 		return Copy(other.data(), other.size());
 	}
 	static String Copy(const char *data) {
-		return Copy(data, data ? SafeStrlen(data) : 0);
+		return Copy(data, data ? SafeStrLen(data) : 0);
 	}
 	static String Copy(const std::string &str) {
-		return Copy(str.data(), SafeStrlen(str));
+		return Copy(str.data(), SafeStrLen(str));
 	}
 	String Copy() const {
 		return String::Copy(data(), size());
@@ -212,7 +206,7 @@ public:
 			result.AssignOwning(data, size);
 		} else {
 			result.ptr = const_cast<char *>(data); // NOLINT allow const cast
-			result.len = size | NON_OWN_BIT;       // Set the non-owning bit
+			result.len = size | NON_OWNING_BIT;    // Set the non-owning bit
 		}
 		return result;
 	}
@@ -221,23 +215,23 @@ public:
 		return Reference(other.data(), other.size());
 	}
 	static String Reference(const char *data) {
-		return Reference(data, data ? SafeStrlen(data) : 0);
+		return Reference(data, data ? SafeStrLen(data) : 0);
 	}
 	static String Reference(const std::string &str) {
-		return Reference(str.data(), SafeStrlen(str));
+		return Reference(str.data(), SafeStrLen(str));
 	}
 	String Reference() const {
 		return String::Reference(data(), size());
 	}
 
 	std::string ToStdString() const {
-		if (IsInline()) {
+		if (IsInlined()) {
 			return std::string(buf, size());
 		}
 		return std::string(ptr, size());
 	}
 
-	static uint32_t SafeStrlen(const char *data) {
+	static uint32_t SafeStrLen(const char *data) {
 		if (!data) {
 			return 0;
 		}
@@ -247,7 +241,7 @@ public:
 		return static_cast<uint32_t>(len);
 	}
 
-	static uint32_t SafeStrlen(const std::string &data) {
+	static uint32_t SafeStrLen(const std::string &data) {
 		const auto len = data.size();
 		D_ASSERT(len < NumericLimits<uint32_t>::Maximum());
 		return static_cast<uint32_t>(len);
@@ -276,18 +270,16 @@ public:
 private:
 	static constexpr auto INLINE_CAP = sizeof(char *);
 	static constexpr auto INLINE_MAX = INLINE_CAP - 1;
-	static constexpr auto NON_OWN_BIT = 1UL << (sizeof(uint32_t) * 8 - 1);
+	static constexpr auto NON_OWNING_BIT = 1UL << (sizeof(uint32_t) * 8 - 1);
 	static constexpr auto LENGTH_MAX = (1UL << (sizeof(uint32_t) * 8 - 1)) - 1;
 
 	void AssignOwning(const char *new_data, uint32_t new_size) {
-		len = new_size;
+		len = new_data ? new_size : 0;
 
 		if (len == 0) {
 			buf[len] = '\0'; // Null-terminate the inline buffer
 			return;
 		}
-
-		D_ASSERT(new_data != nullptr);
 
 		if (len <= INLINE_MAX) {
 			memcpy(buf, new_data, len);
@@ -303,16 +295,28 @@ private:
 	}
 
 	void Destroy() {
-		if (IsOwning() && !IsInline()) {
+		if (IsOwning() && !IsInlined()) {
 			delete[] ptr;
 		}
 	}
 
-	void Release() {
+	// Releases the ownership of the String, without deleting the data, e.g., when transferring ownership
+	void ReleaseOwning() {
 		// Set the non-owning bit
-		if (IsOwning() && !IsInline()) {
-			len |= NON_OWN_BIT;
+		if (IsOwning() && !IsInlined()) {
+			len |= NON_OWNING_BIT;
 		}
+	}
+
+	void TransferOwnership(String &other) {
+		len = other.len;
+		if (IsInlined()) {
+			AssignOwning(other.data(), other.size());
+		} else {
+			ptr = other.ptr;
+			len = other.len;
+		}
+		other.ReleaseOwning();
 	}
 
 private:
