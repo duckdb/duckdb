@@ -50,6 +50,7 @@ class TupleDataCollection {
 public:
 	//! Constructs a TupleDataCollection with the specified layout
 	TupleDataCollection(BufferManager &buffer_manager, shared_ptr<TupleDataLayout> layout_ptr);
+	TupleDataCollection(ClientContext &context, shared_ptr<TupleDataLayout> layout_ptr);
 
 	~TupleDataCollection();
 

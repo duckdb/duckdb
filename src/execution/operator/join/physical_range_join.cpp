@@ -197,7 +197,7 @@ void PhysicalRangeJoin::GlobalSortedTable::Materialize(ExecutionContext &context
 	global_source = sort->GetGlobalSourceState(context.client, *global_sink);
 	auto local_source = sort->GetLocalSourceState(context, *global_source);
 	OperatorSourceInput source {*global_source, *local_source, interrupt};
-	sort->MaterializeColumnData(context, source);
+	sort->MaterializeSortedRun(context, source);
 	sorted = sort->GetSortedRun(*global_source);
 }
 

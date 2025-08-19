@@ -18,6 +18,10 @@ TupleDataCollection::TupleDataCollection(BufferManager &buffer_manager, shared_p
 	Initialize();
 }
 
+TupleDataCollection::TupleDataCollection(ClientContext &context, shared_ptr<TupleDataLayout> layout_ptr)
+    : TupleDataCollection(BufferManager::GetBufferManager(context), std::move(layout_ptr)) {
+}
+
 TupleDataCollection::~TupleDataCollection() {
 }
 

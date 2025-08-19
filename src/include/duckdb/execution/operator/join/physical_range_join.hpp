@@ -11,6 +11,7 @@
 #include "duckdb/common/types/row/block_iterator.hpp"
 #include "duckdb/execution/operator/join/physical_comparison_join.hpp"
 #include "duckdb/common/sorting/sort.hpp"
+#include "duckdb/common/sorting/sorted_run.hpp"
 
 namespace duckdb {
 

@@ -1,6 +1,7 @@
 #include "duckdb/common/sorting/sorted_run.hpp"
 
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
+#include "duckdb/common/sorting/sort.hpp"
 #include "duckdb/common/sorting/sort_key.hpp"
 #include "duckdb/common/types/row/block_iterator.hpp"
 
@@ -9,14 +10,161 @@
 
 namespace duckdb {
 
-SortedRun::SortedRun(ClientContext &context_p, shared_ptr<TupleDataLayout> key_layout,
-                     shared_ptr<TupleDataLayout> payload_layout, bool is_index_sort_p)
-    : context(context_p),
-      key_data(make_uniq<TupleDataCollection>(BufferManager::GetBufferManager(context), std::move(key_layout))),
-      payload_data(
-          payload_layout && payload_layout->ColumnCount() != 0
-              ? make_uniq<TupleDataCollection>(BufferManager::GetBufferManager(context), std::move(payload_layout))
-              : nullptr),
+//===--------------------------------------------------------------------===//
+// SortedRunScanState
+//===--------------------------------------------------------------------===//
+SortedRunScanState::SortedRunScanState(ClientContext &context, const Sort &sort_p)
+    : sort(sort_p), key_executor(context, *sort.decode_sort_key) {
+	key.Initialize(context, {sort.key_layout->GetTypes()[0]});
+	decoded_key.Initialize(context, {sort.decode_sort_key->return_type});
+}
+
+void SortedRunScanState::Scan(const SortedRun &sorted_run, const Vector &sort_key_pointers, const idx_t &count,
+                              DataChunk &chunk) {
+	const auto sort_key_type = sort.key_layout->GetSortKeyType();
+	switch (sort_key_type) {
+	case SortKeyType::NO_PAYLOAD_FIXED_8:
+		return TemplatedScan<SortKeyType::NO_PAYLOAD_FIXED_8>(sorted_run, sort_key_pointers, count, chunk);
+	case SortKeyType::NO_PAYLOAD_FIXED_16:
+		return TemplatedScan<SortKeyType::NO_PAYLOAD_FIXED_16>(sorted_run, sort_key_pointers, count, chunk);
+	case SortKeyType::NO_PAYLOAD_FIXED_24:
+		return TemplatedScan<SortKeyType::NO_PAYLOAD_FIXED_24>(sorted_run, sort_key_pointers, count, chunk);
+	case SortKeyType::NO_PAYLOAD_FIXED_32:
+		return TemplatedScan<SortKeyType::NO_PAYLOAD_FIXED_32>(sorted_run, sort_key_pointers, count, chunk);
+	case SortKeyType::NO_PAYLOAD_VARIABLE_32:
+		return TemplatedScan<SortKeyType::NO_PAYLOAD_VARIABLE_32>(sorted_run, sort_key_pointers, count, chunk);
+	case SortKeyType::PAYLOAD_FIXED_16:
+		return TemplatedScan<SortKeyType::PAYLOAD_FIXED_16>(sorted_run, sort_key_pointers, count, chunk);
+	case SortKeyType::PAYLOAD_FIXED_24:
+		return TemplatedScan<SortKeyType::PAYLOAD_FIXED_24>(sorted_run, sort_key_pointers, count, chunk);
+	case SortKeyType::PAYLOAD_FIXED_32:
+		return TemplatedScan<SortKeyType::PAYLOAD_FIXED_32>(sorted_run, sort_key_pointers, count, chunk);
+	case SortKeyType::PAYLOAD_VARIABLE_32:
+		return TemplatedScan<SortKeyType::PAYLOAD_VARIABLE_32>(sorted_run, sort_key_pointers, count, chunk);
+	default:
+		throw NotImplementedException("SortedRunMergerLocalState::ScanPartition for %s",
+		                              EnumUtil::ToString(sort_key_type));
+	}
+}
+
+template <class SORT_KEY, class PHYSICAL_TYPE>
+void TemplatedGetKeyAndPayload(SORT_KEY *const *const sort_keys, const idx_t &count, DataChunk &key,
+                               data_ptr_t *const payload_ptrs) {
+	const auto key_data = FlatVector::GetData<PHYSICAL_TYPE>(key.data[0]);
+	for (idx_t i = 0; i < count; i++) {
+		auto &sort_key = *sort_keys[i];
+		sort_key.Deconstruct(key_data[i]);
+		if (SORT_KEY::HAS_PAYLOAD) {
+			payload_ptrs[i] = sort_key.GetPayload();
+		}
+	}
+	key.SetCardinality(count);
+}
+
+template <class SORT_KEY>
+void GetKeyAndPayload(SORT_KEY *const *const sort_keys, const idx_t &count, DataChunk &key,
+                      data_ptr_t *const payload_ptrs) {
+	const auto type_id = key.data[0].GetType().id();
+	switch (type_id) {
+	case LogicalTypeId::BLOB:
+		return TemplatedGetKeyAndPayload<SORT_KEY, string_t>(sort_keys, count, key, payload_ptrs);
+	case LogicalTypeId::BIGINT:
+		return TemplatedGetKeyAndPayload<SORT_KEY, int64_t>(sort_keys, count, key, payload_ptrs);
+	default:
+		throw NotImplementedException("GetKeyAndPayload for %s", EnumUtil::ToString(type_id));
+	}
+}
+
+template <class SORT_KEY>
+void TemplatedReconstructSortKey(SORT_KEY *const *const sort_keys, const idx_t &count) {
+	for (idx_t i = 0; i < count; i++) {
+		sort_keys[i]->ByteSwap();
+	}
+}
+
+template <class SORT_KEY>
+void ReconstructSortKey(SORT_KEY *const *const sort_keys, const idx_t &count, const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::BLOB:
+		return TemplatedReconstructSortKey<SORT_KEY>(sort_keys, count);
+	case LogicalTypeId::BIGINT:
+		break; // NOP
+	default:
+		throw NotImplementedException("ReconstructSortKey for %s", EnumUtil::ToString(type.id()));
+	}
+}
+
+template <SortKeyType SORT_KEY_TYPE>
+void SortedRunScanState::TemplatedScan(const SortedRun &sorted_run, const Vector &sort_key_pointers, const idx_t &count,
+                                       DataChunk &chunk) {
+	using SORT_KEY = SortKey<SORT_KEY_TYPE>;
+
+	const auto &output_projection_columns = sort.output_projection_columns;
+	idx_t opc_idx = 0;
+
+	const auto sort_keys = FlatVector::GetData<SORT_KEY *const>(sort_key_pointers);
+	const auto payload_ptrs = FlatVector::GetData<data_ptr_t>(payload_state.chunk_state.row_locations);
+	bool gathered_payload = false;
+
+	// Decode from key
+	if (!output_projection_columns[0].is_payload) {
+		key.Reset();
+		GetKeyAndPayload(sort_keys, count, key, payload_ptrs);
+
+		decoded_key.Reset();
+		key_executor.Execute(key, decoded_key);
+		ReconstructSortKey(sort_keys, count, key.data[0].GetType());
+
+		const auto &decoded_key_entries = StructVector::GetEntries(decoded_key.data[0]);
+		for (; opc_idx < output_projection_columns.size(); opc_idx++) {
+			const auto &opc = output_projection_columns[opc_idx];
+			if (opc.is_payload) {
+				break;
+			}
+			chunk.data[opc.output_col_idx].Reference(*decoded_key_entries[opc.layout_col_idx]);
+		}
+
+		gathered_payload = true;
+	}
+
+	// If there are no payload columns, we're done here
+	if (opc_idx != output_projection_columns.size()) {
+		if (!gathered_payload) {
+			// Gather row pointers from keys
+			for (idx_t i = 0; i < count; i++) {
+				payload_ptrs[i] = sort_keys[i]->GetPayload();
+			}
+		}
+
+		// Init scan state
+		auto &payload_data = *sorted_run.payload_data;
+		if (payload_state.pin_state.properties == TupleDataPinProperties::INVALID) {
+			payload_data.InitializeScan(payload_state, TupleDataPinProperties::ALREADY_PINNED);
+		}
+		TupleDataCollection::ResetCachedCastVectors(payload_state.chunk_state, payload_state.chunk_state.column_ids);
+
+		// Now gather from payload
+		for (; opc_idx < output_projection_columns.size(); opc_idx++) {
+			const auto &opc = output_projection_columns[opc_idx];
+			D_ASSERT(opc.is_payload);
+			payload_data.Gather(payload_state.chunk_state.row_locations, *FlatVector::IncrementalSelectionVector(),
+			                    count, opc.layout_col_idx, chunk.data[opc.output_col_idx],
+			                    *FlatVector::IncrementalSelectionVector(),
+			                    payload_state.chunk_state.cached_cast_vectors[opc.layout_col_idx]);
+		}
+	}
+
+	chunk.SetCardinality(count);
+}
+
+//===--------------------------------------------------------------------===//
+// SortedRun
+//===--------------------------------------------------------------------===//
+SortedRun::SortedRun(ClientContext &context_p, const Sort &sort_p, bool is_index_sort_p)
+    : context(context_p), sort(sort_p), key_data(make_uniq<TupleDataCollection>(context, sort.key_layout)),
+      payload_data(sort.payload_layout && sort.payload_layout->ColumnCount() != 0
+                       ? make_uniq<TupleDataCollection>(context, sort.payload_layout)
+                       : nullptr),
       is_index_sort(is_index_sort_p), finalized(false) {
 	key_data->InitializeAppend(key_append_state, TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
 	if (payload_data) {
@@ -25,8 +173,7 @@ SortedRun::SortedRun(ClientContext &context_p, shared_ptr<TupleDataLayout> key_l
 }
 
 unique_ptr<SortedRun> SortedRun::CreateRunForMaterialization() const {
-	auto res = make_uniq<SortedRun>(context, key_data->GetLayoutPtr(),
-	                                payload_data ? payload_data->GetLayoutPtr() : nullptr, is_index_sort);
+	auto res = make_uniq<SortedRun>(context, sort, is_index_sort);
 	res->key_append_state.pin_state.properties = TupleDataPinProperties::UNPIN_AFTER_DONE;
 	res->payload_append_state.pin_state.properties = TupleDataPinProperties::UNPIN_AFTER_DONE;
 	res->finalized = true;
