@@ -319,3 +319,77 @@ query I
 select * from test where date_trunc('day', date_add(d, INTERVAL 1 day)) >= '2025-01-12';
 ----
 
+#
+# check rewrites for any type of interval
+#
+
+query I
+select * from test where date_trunc('year', d) >= '2024-01-01';
+----
+2025-01-06 03:01:00
+2025-01-10 05:10:06
+
+query I
+select * from test where date_trunc('month', d) > '2025-01-01';
+----
+
+query I
+select * from test where date_trunc('day', d) >= '2025-01-06';
+----
+2025-01-06 03:01:00
+2025-01-10 05:10:06
+
+query I
+select * from test where date_trunc('decade', d) >= '2020-01-01';
+----
+2025-01-06 03:01:00
+2025-01-10 05:10:06
+
+query I
+select * from test where date_trunc('century', d) >= '2000-01-01';
+----
+2025-01-06 03:01:00
+2025-01-10 05:10:06
+
+query I
+select * from test where date_trunc('millennium', d) >= '2000-01-01';
+----
+2025-01-06 03:01:00
+2025-01-10 05:10:06
+
+query I
+select * from test where date_trunc('microsecond', d) >= '2025-01-08';
+----
+2025-01-10 05:10:06
+
+query I
+select * from test where date_trunc('millisecond', d) >= '2025-01-08';
+----
+2025-01-10 05:10:06
+
+query I
+select * from test where date_trunc('second', d) >= '2025-01-08';
+----
+2025-01-10 05:10:06
+
+query I
+select * from test where date_trunc('minute', d) > '2025-01-06 03:01:00'
+----
+2025-01-10 05:10:06
+
+query I
+select * from test where date_trunc('hour', d) >= '2025-01-06 03:00:00';
+----
+2025-01-06 03:01:00
+2025-01-10 05:10:06
+
+query I
+select * from test where date_trunc('week', d) >= '2025-01-01';
+----
+2025-01-06 03:01:00
+2025-01-10 05:10:06
+
+query I
+select * from test where date_trunc('quarter', d) >= '2025-04-01';
+----
+

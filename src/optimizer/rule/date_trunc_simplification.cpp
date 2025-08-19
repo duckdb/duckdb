@@ -290,7 +290,7 @@ string DateTruncSimplificationRule::DatePartToFunc(const DatePartSpecifier &date
 	switch (date_part) {
 	// These specifiers can be used as intervals.
 	case DatePartSpecifier::YEAR:
-		return "to_year";
+		return "to_years";
 	case DatePartSpecifier::MONTH:
 		return "to_months";
 	case DatePartSpecifier::DAY:
