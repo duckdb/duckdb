@@ -9,9 +9,6 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // WindowAggregator
 //===--------------------------------------------------------------------===//
-WindowAggregatorState::WindowAggregatorState() : allocator(Allocator::DefaultAllocator()) {
-}
-
 WindowAggregator::WindowAggregator(const BoundWindowExpression &wexpr)
     : wexpr(wexpr), aggr(wexpr), result_type(wexpr.return_type), state_size(aggr.function.state_size(aggr.function)),
       exclude_mode(wexpr.exclude_clause) {
@@ -31,16 +28,33 @@ WindowAggregator::WindowAggregator(const BoundWindowExpression &wexpr, WindowSha
 WindowAggregator::~WindowAggregator() {
 }
 
-unique_ptr<WindowAggregatorState> WindowAggregator::GetGlobalState(ClientContext &context, idx_t group_count,
-                                                                   const ValidityMask &) const {
+WindowAggregatorGlobalState::WindowAggregatorGlobalState(ClientContext &client, const WindowAggregator &aggregator_p,
+                                                         idx_t group_count)
+    : client(client), allocator(Allocator::DefaultAllocator()), aggregator(aggregator_p), aggr(aggregator.wexpr),
+      locals(0), finalized(0) {
+
+	if (aggr.filter) {
+		// 	Start with all invalid and set the ones that pass
+		filter_mask.Initialize(group_count, false);
+	} else {
+		filter_mask.InitializeEmpty(group_count);
+	}
+}
+
+unique_ptr<GlobalSinkState> WindowAggregator::GetGlobalState(ClientContext &context, idx_t group_count,
+                                                             const ValidityMask &) const {
 	return make_uniq<WindowAggregatorGlobalState>(context, *this, group_count);
+}
+
+WindowAggregatorLocalState::WindowAggregatorLocalState(ExecutionContext &context)
+    : allocator(Allocator::DefaultAllocator()) {
 }
 
 void WindowAggregatorLocalState::Sink(ExecutionContext &context, WindowAggregatorGlobalState &gastate,
                                       DataChunk &sink_chunk, DataChunk &coll_chunk, idx_t input_idx) {
 }
 
-void WindowAggregator::Sink(ExecutionContext &context, WindowAggregatorState &gstate, WindowAggregatorState &lstate,
+void WindowAggregator::Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
                             DataChunk &sink_chunk, DataChunk &coll_chunk, idx_t input_idx,
                             optional_ptr<SelectionVector> filter_sel, idx_t filtered, InterruptState &interrupt) {
 	auto &gastate = gstate.Cast<WindowAggregatorGlobalState>();
@@ -79,7 +93,7 @@ void WindowAggregatorLocalState::Finalize(ExecutionContext &context, WindowAggre
 	}
 }
 
-void WindowAggregator::Finalize(ExecutionContext &context, WindowAggregatorState &gstate, WindowAggregatorState &lstate,
+void WindowAggregator::Finalize(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
                                 CollectionPtr collection, const FrameStats &stats, InterruptState &interrupt) {
 	auto &gasink = gstate.Cast<WindowAggregatorGlobalState>();
 	auto &lastate = lstate.Cast<WindowAggregatorLocalState>();

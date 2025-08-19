@@ -21,7 +21,7 @@ public:
 	                                   const ValidityMask &order_mask);
 
 	// aggregate global state
-	unique_ptr<WindowAggregatorState> gsink;
+	unique_ptr<GlobalSinkState> gsink;
 
 	// the filter reference expression.
 	const Expression *filter_ref;
@@ -105,7 +105,7 @@ public:
 	      filter_executor(context.client) {
 
 		auto &gastate = gstate.Cast<WindowAggregateExecutorGlobalState>();
-		aggregator_state = aggregator.GetLocalState(*gastate.gsink);
+		aggregator_state = aggregator.GetLocalState(context, *gastate.gsink);
 
 		// evaluate the FILTER clause and stuff it into a large mask for compactness and reuse
 		auto filter_ref = gastate.filter_ref;
@@ -117,7 +117,7 @@ public:
 
 public:
 	// state of aggregator
-	unique_ptr<WindowAggregatorState> aggregator_state;
+	unique_ptr<LocalSinkState> aggregator_state;
 	//! Executor for any filter clause
 	ExpressionExecutor filter_executor;
 	//! Result of filtering

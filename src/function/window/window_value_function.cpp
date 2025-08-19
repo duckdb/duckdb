@@ -77,7 +77,7 @@ public:
 	//! The corresponding global value state
 	const WindowValueGlobalState &gvstate;
 	//! The optional sorting state for secondary sorts
-	unique_ptr<WindowAggregatorState> local_value;
+	unique_ptr<LocalSinkState> local_value;
 	//! Reusable selection vector for NULLs
 	SelectionVector sort_nulls;
 	//! The frame boundaries, used for EXCLUDE
@@ -248,7 +248,7 @@ public:
 	void Finalize(ExecutionContext &context, CollectionPtr collection, OperatorSinkInput &sink) override;
 
 	//! The optional sorting state for the secondary sort row mapping
-	unique_ptr<WindowAggregatorState> local_row;
+	unique_ptr<LocalSinkState> local_row;
 };
 
 void WindowLeadLagLocalState::Sink(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk,

@@ -180,7 +180,8 @@ optional_ptr<LocalSinkState> WindowDistinctAggregatorGlobalState::InitializeLoca
 
 class WindowDistinctAggregatorLocalState : public WindowAggregatorLocalState {
 public:
-	explicit WindowDistinctAggregatorLocalState(const WindowDistinctAggregatorGlobalState &aggregator);
+	WindowDistinctAggregatorLocalState(ExecutionContext &context,
+	                                   const WindowDistinctAggregatorGlobalState &aggregator);
 
 	~WindowDistinctAggregatorLocalState() override {
 		statef.Destroy();
@@ -230,10 +231,10 @@ protected:
 };
 
 WindowDistinctAggregatorLocalState::WindowDistinctAggregatorLocalState(
-    const WindowDistinctAggregatorGlobalState &gdstate)
-    : tree_allocator(gdstate.CreateTreeAllocator()), update_v(LogicalType::POINTER), source_v(LogicalType::POINTER),
-      target_v(LogicalType::POINTER), gdstate(gdstate), statef(gdstate.aggr), statep(LogicalType::POINTER),
-      statel(LogicalType::POINTER), flush_count(0) {
+    ExecutionContext &context, const WindowDistinctAggregatorGlobalState &gdstate)
+    : WindowAggregatorLocalState(context), tree_allocator(gdstate.CreateTreeAllocator()),
+      update_v(LogicalType::POINTER), source_v(LogicalType::POINTER), target_v(LogicalType::POINTER), gdstate(gdstate),
+      statef(gdstate.aggr), statep(LogicalType::POINTER), statel(LogicalType::POINTER), flush_count(0) {
 	InitSubFrames(frames, gdstate.aggregator.exclude_mode);
 
 	sort_chunk.Initialize(Allocator::DefaultAllocator(), gdstate.sort_types);
@@ -241,16 +242,16 @@ WindowDistinctAggregatorLocalState::WindowDistinctAggregatorLocalState(
 	gdstate.locals++;
 }
 
-unique_ptr<WindowAggregatorState> WindowDistinctAggregator::GetGlobalState(ClientContext &context, idx_t group_count,
-                                                                           const ValidityMask &partition_mask) const {
+unique_ptr<GlobalSinkState> WindowDistinctAggregator::GetGlobalState(ClientContext &context, idx_t group_count,
+                                                                     const ValidityMask &partition_mask) const {
 	return make_uniq<WindowDistinctAggregatorGlobalState>(context, *this, group_count);
 }
 
-void WindowDistinctAggregator::Sink(ExecutionContext &context, WindowAggregatorState &gsink,
-                                    WindowAggregatorState &lstate, DataChunk &sink_chunk, DataChunk &coll_chunk,
-                                    idx_t input_idx, optional_ptr<SelectionVector> filter_sel, idx_t filtered,
+void WindowDistinctAggregator::Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
+                                    DataChunk &sink_chunk, DataChunk &coll_chunk, idx_t input_idx,
+                                    optional_ptr<SelectionVector> filter_sel, idx_t filtered,
                                     InterruptState &interrupt) {
-	WindowAggregator::Sink(context, gsink, lstate, sink_chunk, coll_chunk, input_idx, filter_sel, filtered, interrupt);
+	WindowAggregator::Sink(context, gstate, lstate, sink_chunk, coll_chunk, input_idx, filter_sel, filtered, interrupt);
 
 	auto &ldstate = lstate.Cast<WindowDistinctAggregatorLocalState>();
 	ldstate.Sink(context, sink_chunk, coll_chunk, input_idx, filter_sel, filtered, interrupt);
@@ -388,10 +389,9 @@ bool WindowDistinctAggregatorGlobalState::TryPrepareNextStage(WindowDistinctAggr
 	return true;
 }
 
-void WindowDistinctAggregator::Finalize(ExecutionContext &context, WindowAggregatorState &gsink,
-                                        WindowAggregatorState &lstate, CollectionPtr collection,
-                                        const FrameStats &stats, InterruptState &interrupt) {
-	auto &gdsink = gsink.Cast<WindowDistinctAggregatorGlobalState>();
+void WindowDistinctAggregator::Finalize(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
+                                        CollectionPtr collection, const FrameStats &stats, InterruptState &interrupt) {
+	auto &gdsink = gstate.Cast<WindowDistinctAggregatorGlobalState>();
 	auto &ldstate = lstate.Cast<WindowDistinctAggregatorLocalState>();
 	ldstate.Finalize(context, gdsink, collection);
 
@@ -693,14 +693,15 @@ void WindowDistinctAggregatorLocalState::Evaluate(ExecutionContext &context,
 	statef.Destroy();
 }
 
-unique_ptr<WindowAggregatorState> WindowDistinctAggregator::GetLocalState(const WindowAggregatorState &gstate) const {
+unique_ptr<LocalSinkState> WindowDistinctAggregator::GetLocalState(ExecutionContext &context,
+                                                                   const GlobalSinkState &gstate) const {
 	auto &gdstate = gstate.Cast<const WindowDistinctAggregatorGlobalState>();
-	return make_uniq<WindowDistinctAggregatorLocalState>(gdstate);
+	return make_uniq<WindowDistinctAggregatorLocalState>(context, gdstate);
 }
 
-void WindowDistinctAggregator::Evaluate(ExecutionContext &context, const WindowAggregatorState &gsink,
-                                        WindowAggregatorState &lstate, const DataChunk &bounds, Vector &result,
-                                        idx_t count, idx_t row_idx, InterruptState &interrupt) const {
+void WindowDistinctAggregator::Evaluate(ExecutionContext &context, const GlobalSinkState &gsink, LocalSinkState &lstate,
+                                        const DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx,
+                                        InterruptState &interrupt) const {
 
 	const auto &gdstate = gsink.Cast<WindowDistinctAggregatorGlobalState>();
 	auto &ldstate = lstate.Cast<WindowDistinctAggregatorLocalState>();

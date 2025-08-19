@@ -62,7 +62,7 @@ public:
 	//! The corresponding global peer state
 	const WindowPeerGlobalState &gpstate;
 	//! The optional sorting state for secondary sorts
-	unique_ptr<WindowAggregatorState> local_tree;
+	unique_ptr<LocalSinkState> local_tree;
 };
 
 void WindowPeerLocalState::Sink(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk,
