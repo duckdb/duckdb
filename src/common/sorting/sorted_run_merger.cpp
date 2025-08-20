@@ -792,7 +792,7 @@ unique_ptr<SortedRun> SortedRunMergerLocalState::TemplatedMaterializePartition(S
 
 	while (merged_partition_index < merged_partition_count) {
 		const auto count = MinValue<idx_t>(merged_partition_count - merged_partition_index, STANDARD_VECTOR_SIZE);
-		for (idx_t i = 0; i < count + count; i++) {
+		for (idx_t i = 0; i < count; i++) {
 			auto &key = merged_partition_keys[merged_partition_index + i];
 			key_locations[i] = data_ptr_cast(&key);
 			if (!SORT_KEY::CONSTANT_SIZE) {
