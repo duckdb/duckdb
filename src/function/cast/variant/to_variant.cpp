@@ -978,14 +978,14 @@ static bool CastToVARIANT(Vector &source, Vector &result, idx_t count, CastParam
 	//! Finalize the 'keys'
 	auto keys_entry_data = FlatVector::GetData<string_t>(keys_entry);
 	for (idx_t i = 0; i < dictionary.Size(); i++) {
-		keys_entry_data[i].SetSizeAndFinalize(keys_entry_data[i].GetSize());
+		keys_entry_data[i].SetSizeAndFinalize(static_cast<uint32_t>(keys_entry_data[i].GetSize()));
 	}
 
 	//! Finalize the 'data'
 	auto &blob = VariantVector::GetData(result);
 	auto blob_data = FlatVector::GetData<string_t>(blob);
 	for (idx_t i = 0; i < count; i++) {
-		blob_data[i].SetSizeAndFinalize(blob_data[i].GetSize());
+		blob_data[i].SetSizeAndFinalize(static_cast<uint32_t>(blob_data[i].GetSize()));
 	}
 
 	keys_entry.Slice(keys_selvec, keys_selvec_size);

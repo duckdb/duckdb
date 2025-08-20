@@ -9,10 +9,8 @@ enum class VariantChildLookupMode : uint8_t { BY_KEY, BY_INDEX };
 
 struct VariantPathComponent {
 	VariantChildLookupMode lookup_mode;
-	union {
-		string_t key;
-		uint32_t index;
-	} payload;
+	string key;
+	uint32_t index;
 };
 
 struct VariantNestedData {

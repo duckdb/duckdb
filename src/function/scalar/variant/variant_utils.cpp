@@ -82,7 +82,7 @@ bool VariantUtils::FindChildValues(RecursiveUnifiedVectorFormat &source, const V
 
 		auto &nested_data_entry = nested_data[i];
 		if (component.lookup_mode == VariantChildLookupMode::BY_INDEX) {
-			auto child_idx = component.payload.index;
+			auto child_idx = component.index;
 			if (child_idx >= nested_data_entry.child_count) {
 				//! The list is too small to contain this index
 				return false;
@@ -101,7 +101,7 @@ bool VariantUtils::FindChildValues(RecursiveUnifiedVectorFormat &source, const V
 			auto key_id = key_ids_data[key_ids.sel->get_index(children_index)];
 			auto key_index = keys_entry.sel->get_index(keys_list_entry.offset + key_id);
 			auto &child_key = keys_entry_data[key_index];
-			if (child_key == component.payload.key) {
+			if (child_key == component.key) {
 				//! Found the key we're looking for
 				res[i] = value_id;
 				found_child = true;

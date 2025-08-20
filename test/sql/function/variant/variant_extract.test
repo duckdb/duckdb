@@ -34,8 +34,13 @@ insert into struct_cast_tbl3 select {'a': [
 	}
 ]}::VARIANT;
 
-query I
+statement error
 select variant_extract(a, 'a[0].c') from struct_cast_tbl3;
+----
+Invalid Input Error: OBJECT does not contain the key: a[0].c
+
+query I
+select variant_extract(a, 'a').variant_extract(0::UINTEGER).variant_extract('c') from struct_cast_tbl3;
 ----
 NULL
 false
@@ -58,7 +63,12 @@ select ('{"a": 42, "b": [true, "test", true]}'::JSON::VARIANT)['b']['1'];
 ----
 Invalid Input Error: 'OBJECT' was expected, found 'ARRAY', can't convert VARIANT
 
-query I
+statement error
 select ('{"a": 42, "b": [true, "test", true]}'::JSON::VARIANT)['b[1]'];
+----
+Invalid Input Error: OBJECT does not contain the key: b[1]
+
+query I
+select ('{"a": 42, "b": [true, "test", true]}'::JSON::VARIANT)['b'][1];
 ----
 test

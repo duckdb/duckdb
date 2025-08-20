@@ -285,7 +285,7 @@ static bool ConvertVariantToStruct(FromVariantConversionData &conversion_data, V
 		//! Then find the relevant child of the OBJECTs we're converting
 		//! FIXME: there is nothing preventing an OBJECT from containing the same key twice I believe ?
 		VariantPathComponent component;
-		component.payload.key = string_t(child_name.c_str(), NumericCast<uint32_t>(child_name.size()));
+		component.key = child_name;
 		component.lookup_mode = VariantChildLookupMode::BY_KEY;
 		if (!VariantUtils::FindChildValues(conversion_data.unified_format, component, row, new_value_indices,
 		                                   child_data, count)) {
