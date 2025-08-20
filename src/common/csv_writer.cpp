@@ -9,7 +9,6 @@ namespace duckdb {
 static string TransformNewLine(string new_line) {
 	new_line = StringUtil::Replace(new_line, "\\r", "\r");
 	return StringUtil::Replace(new_line, "\\n", "\n");
-	;
 }
 
 CSVWriterState::CSVWriterState()
@@ -25,7 +24,7 @@ CSVWriterState::CSVWriterState(DatabaseInstance &db, idx_t flush_size_p)
 }
 
 CSVWriterState::~CSVWriterState() {
-	if (stream) {
+	if (stream && !Exception::UncaughtException()) {
 		// Ensure we don't accidentally destroy unflushed data
 		D_ASSERT(stream->GetPosition() == 0);
 	}

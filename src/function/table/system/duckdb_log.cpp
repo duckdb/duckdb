@@ -59,14 +59,14 @@ void DuckDBLogFunction(ClientContext &context, TableFunctionInput &data_p, DataC
 unique_ptr<TableRef> DuckDBLogBindReplace(ClientContext &context, TableFunctionBindInput &input) {
 	auto log_storage = LogManager::Get(context).GetLogStorage();
 
-	bool join_contexts = false;
-	auto join_contexts_setting = input.named_parameters.find("join_contexts");
-	if (join_contexts_setting != input.named_parameters.end()) {
-		join_contexts = join_contexts_setting->second.GetValue<bool>();
+	bool denormalized_table = false;
+	auto denormalized_table_setting = input.named_parameters.find("denormalized_table");
+	if (denormalized_table_setting != input.named_parameters.end()) {
+		denormalized_table = denormalized_table_setting->second.GetValue<bool>();
 	}
 
 	// Without join contexts we simply scan the LOG_ENTRIES tables
-	if (!join_contexts) {
+	if (!denormalized_table) {
 		auto res = log_storage->BindReplace(context, input, LoggingTargetTable::LOG_ENTRIES);
 		return res;
 	}
@@ -77,7 +77,7 @@ unique_ptr<TableRef> DuckDBLogBindReplace(ClientContext &context, TableFunctionB
 		return all_log_scan;
 	}
 
-	// We cannot scan ALL_LOGS but join_contexts was requested: we need to inject the join between LOG_ENTRIES and
+	// We cannot scan ALL_LOGS but denormalized_table was requested: we need to inject the join between LOG_ENTRIES and
 	// LOG_CONTEXTS
 	string sub_query_string = "SELECT l.context_id, scope, connection_id, transaction_id, query_id, thread_id, "
 	                          "timestamp, type, log_level, message"
@@ -93,7 +93,7 @@ unique_ptr<TableRef> DuckDBLogBindReplace(ClientContext &context, TableFunctionB
 void DuckDBLogFun::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction logs_fun("duckdb_logs", {}, DuckDBLogFunction, DuckDBLogBind, DuckDBLogInit);
 	logs_fun.bind_replace = DuckDBLogBindReplace;
-	logs_fun.named_parameters["join_contexts"] = LogicalType::BOOLEAN;
+	logs_fun.named_parameters["denormalized_table"] = LogicalType::BOOLEAN;
 	set.AddFunction(logs_fun);
 }
 
