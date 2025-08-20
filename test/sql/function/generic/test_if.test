@@ -2,9 +2,6 @@
 # description: IF test
 # group: [generic]
 
-statement ok
-PRAGMA enable_verification
-
 query III
 SELECT IF(true, 1, 10), IF(false, 1, 10), IF(NULL, 1, 10)
 ----
