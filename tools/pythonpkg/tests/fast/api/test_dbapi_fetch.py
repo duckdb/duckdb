@@ -40,11 +40,11 @@ class TestDBApiFetch(object):
         arrow = pytest.importorskip("pyarrow")
         con = duckdb.connect()
         c = con.execute('SELECT 42::BIGINT AS a')
-        table = c.arrow()
+        table = c.fetch_arrow_table()
         df = table.to_pandas()
         pd.testing.assert_frame_equal(df, pd.DataFrame.from_dict({'a': [42]}))
-        assert c.arrow() is None
-        assert c.arrow() is None
+        assert c.fetch_arrow_table() is None
+        assert c.fetch_arrow_table() is None
 
     def test_multiple_close(self, duckdb_cursor):
         con = duckdb.connect()

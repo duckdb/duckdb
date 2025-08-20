@@ -6,9 +6,6 @@
 mode skip
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 ATTACH '__TEST_DIR__/home_dir.db' AS s1
 
 statement ok

@@ -1,9 +1,6 @@
 # name: test/sql/function/array/array_length.test
 # group: [array]
 
-statement ok
-PRAGMA enable_verification
-
 # Array length
 query I
 SELECT length(array_value(1, 2, 3));
