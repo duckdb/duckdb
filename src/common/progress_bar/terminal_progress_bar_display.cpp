@@ -122,10 +122,13 @@ void TerminalProgressBarDisplay::Update(double percentage) {
 	const double filter_percentage = percentage / 100.0;
 	ukf.Update(filter_percentage, current_time);
 
-	double estimated_seconds_remaining = ukf.GetEstimatedRemainingSeconds();
-	auto percentage_int = NormalizePercentage(percentage);
-	PrintProgressInternal(percentage_int, estimated_seconds_remaining);
-	Printer::Flush(OutputStream::STREAM_STDOUT);
+	if (current_time - last_update_time > 0.1 && percentage != 100.0) {
+		double estimated_seconds_remaining = ukf.GetEstimatedRemainingSeconds();
+		auto percentage_int = NormalizePercentage(percentage);
+		PrintProgressInternal(percentage_int, estimated_seconds_remaining);
+		Printer::Flush(OutputStream::STREAM_STDOUT);
+		last_update_time = current_time;
+	}
 }
 
 void TerminalProgressBarDisplay::Finish() {

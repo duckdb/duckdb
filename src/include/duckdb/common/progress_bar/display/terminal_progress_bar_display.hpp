@@ -21,6 +21,7 @@ class TerminalProgressBarDisplay : public ProgressBarDisplay {
 private:
 	UnscentedKalmanFilter ukf;
 	std::chrono::steady_clock::time_point start_time;
+	double last_update_time;
 
 	double GetElapsedDuration() {
 		auto now = std::chrono::steady_clock::now();
