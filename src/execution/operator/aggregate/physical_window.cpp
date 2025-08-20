@@ -649,7 +649,7 @@ public:
 	//! Assign the next task
 	bool TryAssignTask();
 	//! Execute a step in the current task
-	void ExecuteTask(ExecutionContext &context, DataChunk &chunk);
+	void ExecuteTask(ExecutionContext &context, DataChunk &chunk, InterruptState &interrupt);
 
 	//! The shared source state
 	WindowGlobalSourceState &gsource;
@@ -667,9 +667,9 @@ public:
 	DataChunk output_chunk;
 
 protected:
-	void Sink(ExecutionContext &context);
-	void Finalize(ExecutionContext &context);
-	void GetData(ExecutionContext &context, DataChunk &chunk);
+	void Sink(ExecutionContext &context, InterruptState &interrupt);
+	void Finalize(ExecutionContext &context, InterruptState &interrupt);
+	void GetData(ExecutionContext &context, DataChunk &chunk, InterruptState &interrupt);
 
 	//! Storage and evaluation for the fully materialised data
 	unique_ptr<WindowBuilder> builder;
@@ -711,7 +711,7 @@ WindowHashGroup::ExecutorGlobalStates &WindowHashGroup::Initialize(ClientContext
 	return gestates;
 }
 
-void WindowLocalSourceState::Sink(ExecutionContext &context) {
+void WindowLocalSourceState::Sink(ExecutionContext &context, InterruptState &interrupt) {
 	D_ASSERT(task);
 	D_ASSERT(task->stage == WindowGroupStage::SINK);
 
@@ -765,7 +765,7 @@ void WindowLocalSourceState::Sink(ExecutionContext &context) {
 		}
 
 		for (idx_t w = 0; w < executors.size(); ++w) {
-			executors[w]->Sink(context, sink_chunk, coll_chunk, input_idx, *gestates[w], *local_states[w]);
+			executors[w]->Sink(context, sink_chunk, coll_chunk, input_idx, *gestates[w], *local_states[w], interrupt);
 		}
 
 		window_hash_group->sunk += input_chunk.size();
@@ -773,7 +773,7 @@ void WindowLocalSourceState::Sink(ExecutionContext &context) {
 	scanner.reset();
 }
 
-void WindowLocalSourceState::Finalize(ExecutionContext &context) {
+void WindowLocalSourceState::Finalize(ExecutionContext &context, InterruptState &interrupt) {
 	D_ASSERT(task);
 	D_ASSERT(task->stage == WindowGroupStage::FINALIZE);
 
@@ -790,7 +790,7 @@ void WindowLocalSourceState::Finalize(ExecutionContext &context) {
 	auto &gestates = window_hash_group->gestates;
 	auto &local_states = window_hash_group->thread_states.at(task->thread_idx);
 	for (idx_t w = 0; w < executors.size(); ++w) {
-		executors[w]->Finalize(context, *gestates[w], *local_states[w], window_hash_group->collection);
+		executors[w]->Finalize(context, *gestates[w], *local_states[w], window_hash_group->collection, interrupt);
 	}
 
 	//	Mark this range as done
@@ -898,7 +898,7 @@ bool WindowLocalSourceState::TryAssignTask() {
 	return gsource.TryNextTask(task, task_local);
 }
 
-void WindowLocalSourceState::ExecuteTask(ExecutionContext &context, DataChunk &result) {
+void WindowLocalSourceState::ExecuteTask(ExecutionContext &context, DataChunk &result, InterruptState &interrupt) {
 	auto &gsink = gsource.gsink;
 
 	// Update the hash group
@@ -907,16 +907,16 @@ void WindowLocalSourceState::ExecuteTask(ExecutionContext &context, DataChunk &r
 	// Process the new state
 	switch (task->stage) {
 	case WindowGroupStage::SINK:
-		Sink(context);
+		Sink(context, interrupt);
 		D_ASSERT(TaskFinished());
 		break;
 	case WindowGroupStage::FINALIZE:
-		Finalize(context);
+		Finalize(context, interrupt);
 		D_ASSERT(TaskFinished());
 		break;
 	case WindowGroupStage::GETDATA:
 		D_ASSERT(!TaskFinished());
-		GetData(context, result);
+		GetData(context, result, interrupt);
 		break;
 	default:
 		throw InternalException("Invalid window source state.");
@@ -928,7 +928,7 @@ void WindowLocalSourceState::ExecuteTask(ExecutionContext &context, DataChunk &r
 	}
 }
 
-void WindowLocalSourceState::GetData(ExecutionContext &context, DataChunk &result) {
+void WindowLocalSourceState::GetData(ExecutionContext &context, DataChunk &result, InterruptState &interrupt) {
 	D_ASSERT(window_hash_group->GetStage() == WindowGroupStage::GETDATA);
 
 	window_hash_group->UpdateScanner(scanner, task->begin_idx);
@@ -953,7 +953,7 @@ void WindowLocalSourceState::GetData(ExecutionContext &context, DataChunk &resul
 			eval_chunk.Reset();
 			eval_exec.Execute(input_chunk, eval_chunk);
 		}
-		executor.Evaluate(context, position, eval_chunk, result, lstate, gstate);
+		executor.Evaluate(context, position, eval_chunk, result, lstate, gstate, interrupt);
 	}
 	output_chunk.SetCardinality(input_chunk);
 	output_chunk.Verify();
@@ -1036,14 +1036,14 @@ OperatorPartitionData PhysicalWindow::GetPartitionData(ExecutionContext &context
 }
 
 SourceResultType PhysicalWindow::GetData(ExecutionContext &context, DataChunk &chunk,
-                                         OperatorSourceInput &input) const {
-	auto &gsource = input.global_state.Cast<WindowGlobalSourceState>();
-	auto &lsource = input.local_state.Cast<WindowLocalSourceState>();
+                                         OperatorSourceInput &source) const {
+	auto &gsource = source.global_state.Cast<WindowGlobalSourceState>();
+	auto &lsource = source.local_state.Cast<WindowLocalSourceState>();
 
 	while (gsource.HasUnfinishedTasks() && chunk.size() == 0) {
 		if (!lsource.TaskFinished() || lsource.TryAssignTask()) {
 			try {
-				lsource.ExecuteTask(context, chunk);
+				lsource.ExecuteTask(context, chunk, source.interrupt_state);
 			} catch (...) {
 				gsource.stopped = true;
 				throw;
@@ -1057,7 +1057,7 @@ SourceResultType PhysicalWindow::GetData(ExecutionContext &context, DataChunk &c
 			} else {
 				// there are more tasks available, but we can't execute them yet
 				// block the source
-				return gsource.BlockSource(guard, input.interrupt_state);
+				return gsource.BlockSource(guard, source.interrupt_state);
 			}
 		}
 	}

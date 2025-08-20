@@ -42,7 +42,7 @@ void WindowAggregatorLocalState::Sink(ExecutionContext &context, WindowAggregato
 
 void WindowAggregator::Sink(ExecutionContext &context, WindowAggregatorState &gstate, WindowAggregatorState &lstate,
                             DataChunk &sink_chunk, DataChunk &coll_chunk, idx_t input_idx,
-                            optional_ptr<SelectionVector> filter_sel, idx_t filtered) {
+                            optional_ptr<SelectionVector> filter_sel, idx_t filtered, InterruptState &interrupt) {
 	auto &gastate = gstate.Cast<WindowAggregatorGlobalState>();
 	auto &lastate = lstate.Cast<WindowAggregatorLocalState>();
 	lastate.Sink(context, gastate, sink_chunk, coll_chunk, input_idx);
@@ -80,7 +80,7 @@ void WindowAggregatorLocalState::Finalize(ExecutionContext &context, WindowAggre
 }
 
 void WindowAggregator::Finalize(ExecutionContext &context, WindowAggregatorState &gstate, WindowAggregatorState &lstate,
-                                CollectionPtr collection, const FrameStats &stats) {
+                                CollectionPtr collection, const FrameStats &stats, InterruptState &interrupt) {
 	auto &gasink = gstate.Cast<WindowAggregatorGlobalState>();
 	auto &lastate = lstate.Cast<WindowAggregatorLocalState>();
 	lastate.Finalize(context, gasink, collection);

@@ -18,7 +18,7 @@ public:
 	WindowValueExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared);
 
 	void Finalize(ExecutionContext &context, WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
-	              CollectionPtr collection) const override;
+	              CollectionPtr collection, InterruptState &interrupt) const override;
 
 	unique_ptr<WindowExecutorGlobalState> GetGlobalState(ClientContext &client, const idx_t payload_count,
 	                                                     const ValidityMask &partition_mask,
@@ -51,7 +51,7 @@ public:
 protected:
 	void EvaluateInternal(ExecutionContext &context, WindowExecutorGlobalState &gstate,
 	                      WindowExecutorLocalState &lstate, DataChunk &eval_chunk, Vector &result, idx_t count,
-	                      idx_t row_idx) const override;
+	                      idx_t row_idx, InterruptState &interrupt) const override;
 };
 
 class WindowFirstValueExecutor : public WindowValueExecutor {
@@ -61,7 +61,7 @@ public:
 protected:
 	void EvaluateInternal(ExecutionContext &context, WindowExecutorGlobalState &gstate,
 	                      WindowExecutorLocalState &lstate, DataChunk &eval_chunk, Vector &result, idx_t count,
-	                      idx_t row_idx) const override;
+	                      idx_t row_idx, InterruptState &interrupt) const override;
 };
 
 class WindowLastValueExecutor : public WindowValueExecutor {
@@ -71,7 +71,7 @@ public:
 protected:
 	void EvaluateInternal(ExecutionContext &context, WindowExecutorGlobalState &gstate,
 	                      WindowExecutorLocalState &lstate, DataChunk &eval_chunk, Vector &result, idx_t count,
-	                      idx_t row_idx) const override;
+	                      idx_t row_idx, InterruptState &interrupt) const override;
 };
 
 class WindowNthValueExecutor : public WindowValueExecutor {
@@ -81,7 +81,7 @@ public:
 protected:
 	void EvaluateInternal(ExecutionContext &context, WindowExecutorGlobalState &gstate,
 	                      WindowExecutorLocalState &lstate, DataChunk &eval_chunk, Vector &result, idx_t count,
-	                      idx_t row_idx) const override;
+	                      idx_t row_idx, InterruptState &interrupt) const override;
 };
 
 class WindowFillExecutor : public WindowValueExecutor {
@@ -105,7 +105,7 @@ public:
 protected:
 	void EvaluateInternal(ExecutionContext &context, WindowExecutorGlobalState &gstate,
 	                      WindowExecutorLocalState &lstate, DataChunk &eval_chunk, Vector &result, idx_t count,
-	                      idx_t row_idx) const override;
+	                      idx_t row_idx, InterruptState &interrupt) const override;
 };
 
 } // namespace duckdb
