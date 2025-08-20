@@ -169,7 +169,7 @@ void LogManager::SetLogStorageInternal(DatabaseInstance &db, const string &stora
 		auto &fs = FileSystem::GetFileSystem(db);
 		bool local_filesystem_enabled = false;
 		auto local_filesystem_name = LocalFileSystem().GetName();
-		for (const auto& fs_name : fs.ListSubSystems()) {
+		for (const auto &fs_name : fs.ListSubSystems()) {
 			if (fs_name == local_filesystem_name) {
 				local_filesystem_enabled = true;
 			}

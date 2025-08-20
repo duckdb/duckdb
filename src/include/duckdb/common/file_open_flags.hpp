@@ -158,7 +158,7 @@ public:
 	    FileOpenFlags(FileOpenFlags::FILE_FLAGS_MULTI_CLIENT_ACCESS);
 	//! Disables logging to avoid infinite loops when using FileHandle-backed log storage
 	static constexpr FileOpenFlags FILE_FLAGS_DISABLE_LOGGING =
-		FileOpenFlags(FileOpenFlags::FILE_FLAGS_DISABLE_LOGGING);
+	    FileOpenFlags(FileOpenFlags::FILE_FLAGS_DISABLE_LOGGING);
 };
 
 } // namespace duckdb
