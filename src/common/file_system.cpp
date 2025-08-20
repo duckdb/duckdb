@@ -606,6 +606,10 @@ void FileSystem::SetDisabledFileSystems(const vector<string> &names) {
 	throw NotImplementedException("%s: Can't disable file systems on a non-virtual file system", GetName());
 }
 
+bool FileSystem::SubSystemIsDisabled(const string &name) {
+	throw NotImplementedException("%s: Non-virtual file system does not have subsystems", GetName());
+}
+
 vector<string> FileSystem::ListSubSystems() {
 	throw NotImplementedException("%s: Can't list sub systems on a non-virtual file system", GetName());
 }

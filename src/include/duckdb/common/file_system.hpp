@@ -279,6 +279,7 @@ public:
 	DUCKDB_API static bool IsRemoteFile(const string &path, string &extension);
 
 	DUCKDB_API virtual void SetDisabledFileSystems(const vector<string> &names);
+	DUCKDB_API virtual bool SubSystemIsDisabled(const string &name);
 
 	DUCKDB_API static bool IsDirectory(const OpenFileInfo &info);
 

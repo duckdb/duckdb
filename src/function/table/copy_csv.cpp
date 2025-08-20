@@ -353,7 +353,6 @@ unique_ptr<PreparedBatchData> WriteCSVPrepareBatch(ClientContext &context, Funct
 	auto &global_state = gstate.Cast<GlobalWriteCSVData>();
 
 	// write CSV chunks to the batch data
-	bool written_anything = false;
 	auto batch = make_uniq<WriteCSVBatchData>(context, NextPowerOfTwo(collection->SizeInBytes()));
 	for (auto &chunk : collection->Chunks()) {
 		WriteCSVChunkInternal(global_state.writer, *batch->writer_local_state, cast_chunk, chunk, executor);
