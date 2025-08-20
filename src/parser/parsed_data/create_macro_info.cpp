@@ -25,16 +25,9 @@ string CreateMacroInfo::ToString() const {
 		}
 		result += function->ToSQL();
 	}
+
 	// prefix with CREATE MACRO
-	string prefix = "CREATE MACRO ";
-	if (!catalog.empty()) {
-		prefix += KeywordHelper::WriteOptionallyQuoted(catalog);
-		prefix += ".";
-	}
-	if (!schema.empty()) {
-		prefix += KeywordHelper::WriteOptionallyQuoted(schema);
-		prefix += ".";
-	}
+	auto prefix = GetCreatePrefix("MACRO");
 	prefix += KeywordHelper::WriteOptionallyQuoted(name);
 	result = prefix + " " + result + ";";
 	return result;
