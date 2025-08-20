@@ -26,9 +26,9 @@ public:
 
 	//! Add a chunk to the local sort
 	void Sink(ExecutionContext &context, DataChunk &chunk, const idx_t row_idx,
-	          optional_ptr<SelectionVector> filter_sel, idx_t filtered);
+	          optional_ptr<SelectionVector> filter_sel, idx_t filtered, InterruptState &interrupt);
 	//! Sort the data
-	void Finalize(ExecutionContext &context);
+	void Finalize(ExecutionContext &context, InterruptState &interrupt);
 	//! Process sorted leaf data
 	virtual void BuildLeaves() = 0;
 
@@ -44,7 +44,7 @@ public:
 	idx_t build_task;
 
 private:
-	void ExecuteSortTask(ExecutionContext &context);
+	void ExecuteSortTask(ExecutionContext &context, InterruptState &interrupt);
 };
 
 class WindowMergeSortTree {

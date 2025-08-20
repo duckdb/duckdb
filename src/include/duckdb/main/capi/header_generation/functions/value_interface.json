@@ -245,18 +245,18 @@
             }
         },
         {
-            "name": "duckdb_create_varint",
+            "name": "duckdb_create_bignum",
             "return_type": "duckdb_value",
             "params": [
                 {
-                    "type": "duckdb_varint",
+                    "type": "duckdb_bignum",
                     "name": "input"
                 }
             ],
             "comment": {
-                "description": "Creates a VARINT value from a duckdb_varint\n\n",
+                "description": "Creates a BIGNUM value from a duckdb_bignum\n\n",
                 "param_comments": {
-                    "input": "The duckdb_varint value"
+                    "input": "The duckdb_bignum value"
                 },
                 "return_value": "The value. This must be destroyed with `duckdb_destroy_value`."
             }
@@ -726,8 +726,8 @@
             }
         },
         {
-            "name": "duckdb_get_varint",
-            "return_type": "duckdb_varint",
+            "name": "duckdb_get_bignum",
+            "return_type": "duckdb_bignum",
             "params": [
                 {
                     "type": "duckdb_value",
@@ -735,11 +735,11 @@
                 }
             ],
             "comment": {
-                "description": "Returns the duckdb_varint value of the given value.\nThe `data` field must be destroyed with `duckdb_free`.\n\n",
+                "description": "Returns the duckdb_bignum value of the given value.\nThe `data` field must be destroyed with `duckdb_free`.\n\n",
                 "param_comments": {
-                    "val": "A duckdb_value containing a VARINT"
+                    "val": "A duckdb_value containing a BIGNUM"
                 },
-                "return_value": "A duckdb_varint. The `data` field must be destroyed with `duckdb_free`."
+                "return_value": "A duckdb_bignum. The `data` field must be destroyed with `duckdb_free`."
             }
         },
         {

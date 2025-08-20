@@ -57,7 +57,8 @@ static idx_t GetConsecutiveChildList(Vector &list, Vector &result, idx_t offset,
 	return total_length;
 }
 
-void ListColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count) {
+void ListColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count,
+                               bool vector_can_span_multiple_pages) {
 	auto &state = state_p.Cast<ListColumnWriterState>();
 
 	auto list_data = FlatVector::GetData<list_entry_t>(vector);
@@ -111,7 +112,9 @@ void ListColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *pa
 	auto &list_child = ListVector::GetEntry(vector);
 	Vector child_list(list_child);
 	auto child_length = GetConsecutiveChildList(vector, child_list, 0, count);
-	child_writer->Prepare(*state.child_state, &state_p, child_list, child_length);
+	// The elements of a single list should not span multiple Parquet pages
+	// So, we force the entire vector to fit on a single page by setting "vector_can_span_multiple_pages=false"
+	child_writer->Prepare(*state.child_state, &state_p, child_list, child_length, false);
 }
 
 void ListColumnWriter::BeginWrite(ColumnWriterState &state_p) {

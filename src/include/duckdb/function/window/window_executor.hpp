@@ -14,6 +14,7 @@
 namespace duckdb {
 
 class WindowCollection;
+class InterruptState;
 
 struct WindowSharedExpressions;
 
@@ -60,8 +61,9 @@ public:
 	WindowExecutorLocalState(ExecutionContext &context, const WindowExecutorGlobalState &gstate);
 
 	virtual void Sink(ExecutionContext &context, WindowExecutorGlobalState &gstate, DataChunk &sink_chunk,
-	                  DataChunk &coll_chunk, idx_t input_idx);
-	virtual void Finalize(ExecutionContext &context, WindowExecutorGlobalState &gstate, CollectionPtr collection);
+	                  DataChunk &coll_chunk, idx_t input_idx, InterruptState &interrupt);
+	virtual void Finalize(ExecutionContext &context, WindowExecutorGlobalState &gstate, CollectionPtr collection,
+	                      InterruptState &interrupt);
 
 	//! The state used for reading the range collection
 	unique_ptr<WindowCursor> range_cursor;
@@ -100,13 +102,14 @@ public:
 	                                                           const WindowExecutorGlobalState &gstate) const;
 
 	virtual void Sink(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk, const idx_t input_idx,
-	                  WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate) const;
+	                  WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
+	                  InterruptState &interrupt) const;
 
 	virtual void Finalize(ExecutionContext &context, WindowExecutorGlobalState &gstate,
-	                      WindowExecutorLocalState &lstate, CollectionPtr collection) const;
+	                      WindowExecutorLocalState &lstate, CollectionPtr collection, InterruptState &interrupt) const;
 
 	void Evaluate(ExecutionContext &context, idx_t row_idx, DataChunk &eval_chunk, Vector &result,
-	              WindowExecutorLocalState &lstate, WindowExecutorGlobalState &gstate) const;
+	              WindowExecutorLocalState &lstate, WindowExecutorGlobalState &gstate, InterruptState &interrupt) const;
 
 	// The function
 	const BoundWindowExpression &wexpr;
@@ -122,7 +125,7 @@ public:
 protected:
 	virtual void EvaluateInternal(ExecutionContext &context, WindowExecutorGlobalState &gstate,
 	                              WindowExecutorLocalState &lstate, DataChunk &eval_chunk, Vector &result, idx_t count,
-	                              idx_t row_idx) const = 0;
+	                              idx_t row_idx, InterruptState &interrupt) const = 0;
 };
 
 } // namespace duckdb

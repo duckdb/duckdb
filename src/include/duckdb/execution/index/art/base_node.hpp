@@ -39,18 +39,15 @@ public:
 		NodeHandle<BaseNode> handle(art, node);
 		auto &n = handle.Get();
 
+		// Reset the node (count).
 		n.count = 0;
-		return handle;
-	}
-
-	//! Free the children of the node.
-	static void Free(ART &art, Node &node) {
-		NodeHandle<BaseNode> handle(art, node);
-		auto &n = handle.Get();
-
-		for (uint8_t i = 0; i < n.count; i++) {
-			Node::Free(art, n.children[i]);
+		// Zero-initialize the node.
+		for (uint8_t i = 0; i < CAPACITY; i++) {
+			n.key[i] = 0;
+			n.children[i].Clear();
 		}
+
+		return handle;
 	}
 
 	//! Replace the child at byte.
@@ -105,7 +102,6 @@ public:
 			children_ptr[i] = children[i];
 		}
 
-		count = 0;
 		return NodeChildren(bytes, children_ptr);
 	}
 
@@ -156,6 +152,7 @@ public:
 
 private:
 	static void GrowNode4(ART &art, Node &node16, Node &node4);
+	//! We shrink at < Node48::SHRINK_THRESHOLD.
 	static void ShrinkNode48(ART &art, Node &node16, Node &node48);
 };
 

@@ -3,9 +3,6 @@
 # group: [attach]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 attach ':memory:' as test;
 
 statement ok

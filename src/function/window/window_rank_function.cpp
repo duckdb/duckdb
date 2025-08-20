@@ -49,9 +49,10 @@ public:
 
 	//! Accumulate the secondary sort values
 	void Sink(ExecutionContext &context, WindowExecutorGlobalState &gstate, DataChunk &sink_chunk,
-	          DataChunk &coll_chunk, idx_t input_idx) override;
+	          DataChunk &coll_chunk, idx_t input_idx, InterruptState &interrupt) override;
 	//! Finish the sinking and prepare to scan
-	void Finalize(ExecutionContext &context, WindowExecutorGlobalState &gstate, CollectionPtr collection) override;
+	void Finalize(ExecutionContext &context, WindowExecutorGlobalState &gstate, CollectionPtr collection,
+	              InterruptState &interrupt) override;
 
 	void NextRank(idx_t partition_begin, idx_t peer_begin, idx_t row_idx);
 
@@ -66,22 +67,22 @@ public:
 };
 
 void WindowPeerLocalState::Sink(ExecutionContext &context, WindowExecutorGlobalState &gstate, DataChunk &sink_chunk,
-                                DataChunk &coll_chunk, idx_t input_idx) {
-	WindowExecutorBoundsLocalState::Sink(context, gstate, sink_chunk, coll_chunk, input_idx);
+                                DataChunk &coll_chunk, idx_t input_idx, InterruptState &interrupt) {
+	WindowExecutorBoundsLocalState::Sink(context, gstate, sink_chunk, coll_chunk, input_idx, interrupt);
 
 	if (local_tree) {
 		auto &local_tokens = local_tree->Cast<WindowMergeSortTreeLocalState>();
-		local_tokens.Sink(context, sink_chunk, input_idx, nullptr, 0);
+		local_tokens.Sink(context, sink_chunk, input_idx, nullptr, 0, interrupt);
 	}
 }
 
 void WindowPeerLocalState::Finalize(ExecutionContext &context, WindowExecutorGlobalState &gstate,
-                                    CollectionPtr collection) {
-	WindowExecutorBoundsLocalState::Finalize(context, gstate, collection);
+                                    CollectionPtr collection, InterruptState &interrupt) {
+	WindowExecutorBoundsLocalState::Finalize(context, gstate, collection, interrupt);
 
 	if (local_tree) {
 		auto &local_tokens = local_tree->Cast<WindowMergeSortTreeLocalState>();
-		local_tokens.Finalize(context);
+		local_tokens.Finalize(context, interrupt);
 		local_tokens.window_tree.Build();
 	}
 }
@@ -131,7 +132,7 @@ WindowRankExecutor::WindowRankExecutor(BoundWindowExpression &wexpr, WindowShare
 
 void WindowRankExecutor::EvaluateInternal(ExecutionContext &context, WindowExecutorGlobalState &gstate,
                                           WindowExecutorLocalState &lstate, DataChunk &eval_chunk, Vector &result,
-                                          idx_t count, idx_t row_idx) const {
+                                          idx_t count, idx_t row_idx, InterruptState &interrupt) const {
 	auto &gpeer = gstate.Cast<WindowPeerGlobalState>();
 	auto &lpeer = lstate.Cast<WindowPeerLocalState>();
 	auto rdata = FlatVector::GetData<int64_t>(result);
@@ -175,7 +176,7 @@ WindowDenseRankExecutor::WindowDenseRankExecutor(BoundWindowExpression &wexpr, W
 
 void WindowDenseRankExecutor::EvaluateInternal(ExecutionContext &context, WindowExecutorGlobalState &gstate,
                                                WindowExecutorLocalState &lstate, DataChunk &eval_chunk, Vector &result,
-                                               idx_t count, idx_t row_idx) const {
+                                               idx_t count, idx_t row_idx, InterruptState &interrupt) const {
 	auto &lpeer = lstate.Cast<WindowPeerLocalState>();
 
 	auto &order_mask = gstate.order_mask;
@@ -242,7 +243,8 @@ static inline double PercentRank(const idx_t begin, const idx_t end, const uint6
 
 void WindowPercentRankExecutor::EvaluateInternal(ExecutionContext &context, WindowExecutorGlobalState &gstate,
                                                  WindowExecutorLocalState &lstate, DataChunk &eval_chunk,
-                                                 Vector &result, idx_t count, idx_t row_idx) const {
+                                                 Vector &result, idx_t count, idx_t row_idx,
+                                                 InterruptState &interrupt) const {
 	auto &gpeer = gstate.Cast<WindowPeerGlobalState>();
 	auto &lpeer = lstate.Cast<WindowPeerLocalState>();
 	auto rdata = FlatVector::GetData<double>(result);
@@ -295,7 +297,7 @@ static inline double CumeDist(const idx_t begin, const idx_t end, const idx_t pe
 
 void WindowCumeDistExecutor::EvaluateInternal(ExecutionContext &context, WindowExecutorGlobalState &gstate,
                                               WindowExecutorLocalState &lstate, DataChunk &eval_chunk, Vector &result,
-                                              idx_t count, idx_t row_idx) const {
+                                              idx_t count, idx_t row_idx, InterruptState &interrupt) const {
 	auto &gpeer = gstate.Cast<WindowPeerGlobalState>();
 	auto &lpeer = lstate.Cast<WindowPeerLocalState>();
 	auto rdata = FlatVector::GetData<double>(result);

@@ -20,6 +20,9 @@ unique_ptr<CommonTableExpressionInfo> CommonTableExpressionInfo::Copy() {
 	return result;
 }
 
+CommonTableExpressionInfo::~CommonTableExpressionInfo() {
+}
+
 void Transformer::ExtractCTEsRecursive(CommonTableExpressionMap &cte_map) {
 	for (auto &cte_entry : stored_cte_map) {
 		for (auto &entry : cte_entry->map) {
