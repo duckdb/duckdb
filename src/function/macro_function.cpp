@@ -42,10 +42,10 @@ MacroFunction::BindMacroFunction(const vector<unique_ptr<MacroFunction>> &functi
                                  FunctionExpression &function_expr,
                                  vector<unique_ptr<ParsedExpression>> &positional_arguments,
                                  case_insensitive_map_t<unique_ptr<ParsedExpression>> &named_arguments) {
-	// separate positional and default arguments
+	// Separate positional and default arguments
 	for (auto &arg : function_expr.children) {
 		if (!arg->GetAlias().empty()) {
-			// default argument
+			// Default argument
 			if (named_arguments.find(arg->GetAlias()) != named_arguments.end()) {
 				return MacroBindResult(
 				    StringUtil::Format("Macro %s() has named argument repeated '%s'", name, arg->GetAlias()));
@@ -55,23 +55,58 @@ MacroFunction::BindMacroFunction(const vector<unique_ptr<MacroFunction>> &functi
 			return MacroBindResult(
 			    StringUtil::Format("Macro %s() has positional argument following named argument", name));
 		} else {
-			// positional argument
+			// Positional argument
 			positional_arguments.push_back(std::move(arg));
 		}
 	}
 
-	// check for each macro function if it matches the number of positional arguments
+	// Check for each macro function if it matches the number of positional arguments
 	optional_idx result_idx;
 	for (idx_t function_idx = 0; function_idx < functions.size(); function_idx++) {
 		auto &function = functions[function_idx];
-		if (positional_arguments.size() > function->parameters.size()) {
-			continue; // Can't be a match, and avoids out-of-bound below
+
+		// Check if we can exclude the match based on argument count (also avoids out-of-bounds below)
+		if (positional_arguments.size() > function->parameters.size() ||
+		    positional_arguments.size() + named_arguments.size() > function->parameters.size()) {
+			continue;
 		}
 
-		// Skip over positionals (needs loop once we implement typed macro overloads)
-		idx_t param_idx = positional_arguments.size();
+		// Also check if we can exclude the match based on the supplied named arguments
+		bool found_all_named_arguments = true;
+		for (auto &kv : named_arguments) {
+			bool found = false;
+			for (const auto &parameter : function->parameters) {
+				if (StringUtil::CIEquals(kv.first, parameter->Cast<ColumnRefExpression>().GetColumnName())) {
+					found = true;
+					break;
+				}
+			}
+			if (!found) {
+				found_all_named_arguments = false;
+				break;
+			}
+		}
+		if (!found_all_named_arguments) {
+			continue; // One of the supplied named arguments is not present in the macro definition
+		}
 
-		// Match named and fill in defaults
+		// Loop through arguments, positionals first, then named
+		idx_t param_idx = 0;
+
+		// Figure out if any positional arguments are duplicated in named arguments
+		bool duplicate = false;
+		for (; param_idx < positional_arguments.size(); param_idx++) {
+			const auto &param_name = function->parameters[param_idx]->Cast<ColumnRefExpression>().GetColumnName();
+			if (named_arguments.find(param_name) != named_arguments.end()) {
+				duplicate = true;
+				break;
+			}
+		}
+		if (duplicate) {
+			continue;
+		}
+
+		// Match remaining arguments with named/defaults
 		for (; param_idx < function->parameters.size(); param_idx++) {
 			const auto &param_name = function->parameters[param_idx]->Cast<ColumnRefExpression>().GetColumnName();
 			if (named_arguments.find(param_name) != named_arguments.end()) {
@@ -93,7 +128,7 @@ MacroFunction::BindMacroFunction(const vector<unique_ptr<MacroFunction>> &functi
 
 	if (!result_idx.IsValid()) {
 		// No matching function found
-		string error = StringUtil::Format("Macro %s() does not support the supplied arguments.\n", name);
+		auto error = StringUtil::Format("Macro %s() does not support the supplied arguments.\n", name);
 		error += "Candidate macros:";
 		for (auto &function : functions) {
 			error += "\n\t" + FormatMacroFunction(*function, name);
@@ -101,33 +136,22 @@ MacroFunction::BindMacroFunction(const vector<unique_ptr<MacroFunction>> &functi
 		return MacroBindResult(error);
 	}
 
-	// Found a matching function - check if all named arguments have a matching parameter
 	const auto macro_idx = result_idx.GetIndex();
 	const auto &macro_def = *functions[macro_idx];
-	for (auto &named_argument : named_arguments) {
-		bool found = false;
-		for (const auto &parameter : macro_def.parameters) {
-			if (StringUtil::CIEquals(named_argument.first, parameter->Cast<ColumnRefExpression>().GetColumnName())) {
-				found = true;
-				break;
-			}
-		}
-		if (!found) {
-			string error =
-			    StringUtil::Format("Macro %s() got an unexpected named argument '%s'\n", name, named_argument.first);
-			error += "\nMacro definition: " + FormatMacroFunction(macro_def, name);
-			return MacroBindResult(error);
-		}
-	}
 
-	// Add the default values for parameters that have defaults, that were not explicitly assigned to
-	for (auto it = macro_def.default_parameters.begin(); it != macro_def.default_parameters.end(); it++) {
-		auto &parameter_name = it->first;
-		auto &parameter_default = it->second;
-		if (!named_arguments.count(parameter_name)) {
-			// This parameter was not set yet, set it with the default value
-			named_arguments[parameter_name] = parameter_default->Copy();
+	// Skip over positionals (needs loop once we implement typed macro overloads)
+	idx_t param_idx = positional_arguments.size();
+
+	// Add the default values for parameters that have defaults, for which no argument was supplied
+	for (; param_idx < macro_def.parameters.size(); param_idx++) {
+		const auto &param_name = macro_def.parameters[param_idx]->Cast<ColumnRefExpression>().GetColumnName();
+		if (named_arguments.find(param_name) != named_arguments.end()) {
+			continue; // The user has supplied an argument for this parameter
 		}
+
+		const auto it = macro_def.default_parameters.find(param_name);
+		D_ASSERT(it != macro_def.default_parameters.end());
+		named_arguments[param_name] = it->second->Copy();
 	}
 
 	return MacroBindResult(macro_idx);
@@ -144,10 +168,10 @@ MacroFunction::CreateDummyBinding(const MacroFunction &macro_def, const string &
 		types.emplace_back(LogicalTypeId::UNKNOWN);
 		names.push_back(macro_def.parameters[i]->Cast<ColumnRefExpression>().GetColumnName());
 	}
-	for (auto &named_argument : named_arguments) {
+	for (auto &kv : named_arguments) {
 		types.emplace_back(LogicalTypeId::UNKNOWN);
-		names.push_back(named_argument.first);
-		positional_arguments.push_back(std::move(named_argument.second)); // push defaults into positionals
+		names.push_back(kv.first);
+		positional_arguments.push_back(std::move(kv.second)); // push defaults into positionals
 	}
 
 	auto res = make_uniq<DummyBinding>(types, names, name);
@@ -188,16 +212,31 @@ MacroFunction::GetPositionalParametersForSerialization(Serializer &serializer) c
 }
 
 void MacroFunction::FinalizeDeserialization() {
-	// TODO
+	// In older versions of DuckDB, parameters with defaults were not stored in "parameters", this adds them
+	for (auto &kv : default_parameters) {
+		bool found = false;
+		for (const auto &parameter : parameters) {
+			if (StringUtil::CIEquals(kv.first, parameter->Cast<ColumnRefExpression>().GetColumnName())) {
+				found = true;
+				break;
+			}
+		}
+		if (!found) {
+			parameters.push_back(make_uniq<ColumnRefExpression>(kv.first));
+		}
+	}
 }
 
 string MacroFunction::ToSQL() const {
 	vector<string> param_strings;
 	for (auto &param : parameters) {
-		param_strings.push_back(param->ToString());
-	}
-	for (auto &named_param : default_parameters) {
-		param_strings.push_back(StringUtil::Format("%s := %s", named_param.first, named_param.second->ToString()));
+		const auto &param_name = param->Cast<ColumnRefExpression>().GetColumnName();
+		auto it = default_parameters.find(param_name);
+		if (it == default_parameters.end()) {
+			param_strings.push_back(param_name);
+		} else {
+			param_strings.push_back(StringUtil::Format("%s := %s", it->first, it->second->ToString()));
+		}
 	}
 	return StringUtil::Format("(%s) AS ", StringUtil::Join(param_strings, ", "));
 }

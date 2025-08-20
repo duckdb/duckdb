@@ -1,0 +1,46 @@
+# name: test/sql/catalog/function/python_style_macro_parameters.test
+# description: Test Python-style macro parameters
+# group: [function]
+
+statement ok
+create or replace macro m(a := 'a', b := 'b') as a || b
+
+statement ok
+pragma enable_verification
+
+query I
+select m()
+----
+ab
+
+# we can supply arguments in any order as long as they are named
+query I
+select m(a := 'b', b := 'a')
+----
+ba
+
+query I
+select m('c')
+----
+cb
+
+query I
+select m('c', 'd')
+----
+cd
+
+query I
+select m('c', b := 'd')
+----
+cd
+
+# 'a' is already supplied as positional, so cannot be used as named
+statement error
+select m('c', a:= 'd')
+----
+does not support the supplied arguments
+
+statement error
+select m('c', 'd', b := 'e')
+----
+does not support the supplied arguments

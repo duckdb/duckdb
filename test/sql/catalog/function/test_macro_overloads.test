@@ -29,7 +29,7 @@ SELECT multi_add(),
 statement error
 SELECT multi_add(1, 1, 1, 1, 1, 1, 1, 1, 1, 1);
 ----
-does not support 10 parameters
+does not support the supplied arguments
 
 # named parameters
 statement ok
