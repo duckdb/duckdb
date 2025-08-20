@@ -864,6 +864,7 @@ class SQLLogicContext:
                     duckdb.StatementType.DELETE,
                     duckdb.StatementType.UPDATE,
                     duckdb.StatementType.INSERT,
+                    duckdb.StatementType.MERGE_INTO,
                 ]:
                     if 'returning' in sql_query.lower():
                         return False
