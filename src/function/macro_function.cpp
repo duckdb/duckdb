@@ -132,7 +132,7 @@ MacroFunction::BindMacroFunction(const vector<unique_ptr<MacroFunction>> &functi
 			error = StringUtil::Format("Macro %s() does not support the supplied arguments.\n", name);
 		} else {
 			// Multiple matching functions found
-			error = StringUtil::Format("Macro %s() has multiple overloads that match the supplied arguments.", name);
+			error = StringUtil::Format("Macro %s() has multiple overloads that match the supplied arguments. ", name);
 			error += "In order to select one, please supply all arguments by name.\n";
 		}
 		error += "Candidate macros:";
