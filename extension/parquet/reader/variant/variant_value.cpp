@@ -549,11 +549,6 @@ static void InitializeVariants(VariantConversionOffsets &offsets, Vector &result
 	ListVector::SetListSize(values, values_offset);
 
 	keys_selvec.Initialize(keys_offset);
-	//! NOTE: we initialize these to 0 because some rows will not set them, if the row is NULL
-	//! To simplify the implementation we just allocate 'dictionary.Size()' keys for each row
-	for (idx_t i = 0; i < keys_offset; i++) {
-		keys_selvec.set_index(i, 0);
-	}
 	selvec_size = keys_offset;
 }
 
@@ -562,10 +557,10 @@ void VariantValue::ToVARIANT(vector<VariantValue> &input, Vector &result) {
 
 	//! Keep track of all the offsets for each row.
 	VariantConversionOffsets analyze_offsets;
-	analyze_offsets.keys.resize(count);
-	analyze_offsets.children.resize(count);
-	analyze_offsets.values.resize(count);
-	analyze_offsets.data.resize(count);
+	analyze_offsets.keys.resize(count, 0);
+	analyze_offsets.children.resize(count, 0);
+	analyze_offsets.values.resize(count, 0);
+	analyze_offsets.data.resize(count, 0);
 
 	for (idx_t i = 0; i < count; i++) {
 		auto &value = input[i];
@@ -582,10 +577,10 @@ void VariantValue::ToVARIANT(vector<VariantValue> &input, Vector &result) {
 
 	//! Reset the offsets
 	VariantConversionOffsets conversion_offsets;
-	conversion_offsets.keys.resize(count);
-	conversion_offsets.children.resize(count);
-	conversion_offsets.values.resize(count);
-	conversion_offsets.data.resize(count);
+	conversion_offsets.keys.resize(count, 0);
+	conversion_offsets.children.resize(count, 0);
+	conversion_offsets.values.resize(count, 0);
+	conversion_offsets.data.resize(count, 0);
 
 	VariantVectorData variant_data(result);
 	for (idx_t i = 0; i < count; i++) {
