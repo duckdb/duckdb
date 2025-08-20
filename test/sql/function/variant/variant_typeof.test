@@ -1,9 +1,6 @@
 # name: test/sql/function/variant/variant_typeof.test
 # group: [variant]
 
-# 'dictionary_expression' breaks the internal linkage of the VARIANT type.
-require no_vector_verification
-
 query I
 select variant_typeof({'a': 42}::VARIANT);
 ----

@@ -82,7 +82,7 @@ yyjson_mut_val *ConvertVariant(yyjson_mut_doc *doc, RecursiveUnifiedVectorFormat
 	//! The blob data of the Variant, accessed by byte offset retrieved above ^
 	auto &value = UnifiedVariantVector::GetData(source);
 	auto value_data = value.GetData<string_t>(value);
-	auto &blob = value_data[row];
+	auto &blob = value_data[value.sel->get_index(row)];
 	auto blob_data = const_data_ptr_cast(blob.GetData());
 
 	auto ptr = const_data_ptr_cast(blob_data + byte_offset);

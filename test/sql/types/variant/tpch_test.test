@@ -1,9 +1,6 @@
 # name: test/sql/types/variant/tpch_test.test
 # group: [variant]
 
-# 'dictionary_expression' breaks the internal linkage of the VARIANT type.
-require no_vector_verification
-
 require tpch
 
 require json
