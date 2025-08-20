@@ -123,47 +123,61 @@ def _pl_tree_to_sql(tree: dict) -> str:
         raise NotImplementedError(f"Unsupported function type: {func_dict}")
 
     if node_type == "Scalar":
-        # Handle scalar values with typed representations
-        dtype = str(subtree["dtype"])
-        value = subtree["value"]
+        # Detect format: old style (dtype/value) or new style (direct type key)
+        if "dtype" in subtree and "value" in subtree:
+            dtype = str(subtree["dtype"])
+            value = subtree["value"]
+        else:
+            # New style: dtype is the single key in the dict
+            dtype = next(iter(subtree.keys()))
+            value = subtree
 
         # Decimal support
-        if dtype.startswith("{'Decimal'"):
+        if dtype.startswith("{'Decimal'") or dtype == "Decimal":
             decimal_value = value['Decimal']
             decimal_value = Decimal(decimal_value[0]) / Decimal(10 ** decimal_value[1])
             return str(decimal_value)
 
         # Datetime with microseconds since epoch
-        if dtype.startswith("{'Datetime'"):
+        if dtype.startswith("{'Datetime'") or dtype == "Datetime":
             micros = value['Datetime'][0]
             dt_timestamp = datetime.datetime.fromtimestamp(micros / 1_000_000, tz=datetime.UTC)
             return f"'{str(dt_timestamp)}'::TIMESTAMP"
 
-        # Match simple types
-        if dtype in ("Int8", "Int16", "Int32", "Int64", "UInt8", "UInt16", "UInt32", "UInt64", "Float32", "Float64", "Boolean"):
+        # Match simple numeric/boolean types
+        if dtype in ("Int8", "Int16", "Int32", "Int64",
+                     "UInt8", "UInt16", "UInt32", "UInt64",
+                     "Float32", "Float64", "Boolean"):
             return str(value[dtype])
 
+        # Time type
         if dtype == "Time":
-            # Convert nanoseconds to TIME
             nanoseconds = value["Time"]
             seconds = nanoseconds // 1_000_000_000
             microseconds = (nanoseconds % 1_000_000_000) // 1_000
-            dt_time = (datetime.datetime.min + datetime.timedelta(seconds=seconds, microseconds=microseconds)).time()
-            return f"'{str(dt_time)}'::TIME"
+            dt_time = (datetime.datetime.min + datetime.timedelta(
+                seconds=seconds, microseconds=microseconds
+            )).time()
+            return f"'{dt_time}'::TIME"
 
+        # Date type
         if dtype == "Date":
-            # Convert days since Unix epoch to SQL DATE
             days_since_epoch = value["Date"]
             date = datetime.date(1970, 1, 1) + datetime.timedelta(days=days_since_epoch)
-            return f"'{str(date)}'::DATE"
+            return f"'{date}'::DATE"
+
+        # Binary type
         if dtype == "Binary":
-            # Convert binary data to hex string for BLOB
             binary_data = bytes(value["Binary"])
             escaped = ''.join(f'\\x{b:02x}' for b in binary_data)
             return f"'{escaped}'::BLOB"
 
-        if dtype == "String":
-            return f"'{value['StringOwned']}'"
+        # String type
+        if dtype == "String" or dtype == "StringOwned":
+            # Some new formats may store directly under StringOwned
+            string_val = value.get("StringOwned", value.get("String", None))
+            return f"'{string_val}'"
+
 
         raise NotImplementedError(f"Unsupported scalar type {str(dtype)}, with value {value}")
 

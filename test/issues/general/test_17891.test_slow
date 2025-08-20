@@ -1,4 +1,4 @@
-# name: test/issues/general/test_17891.test
+# name: test/issues/general/test_17891.test_slow
 # description: Issue 17891: JOIN fails on string columns in 1.3.0 but works in 1.2.2
 # group: [general]
 

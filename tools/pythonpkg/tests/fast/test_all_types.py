@@ -553,16 +553,16 @@ class TestAllTypes(object):
 
         conn = duckdb.connect()
         if cur_type in replacement_values:
-            arrow_table = conn.execute("select " + replacement_values[cur_type]).arrow()
+            arrow_table = conn.execute("select " + replacement_values[cur_type]).fetch_arrow_table()
         else:
-            arrow_table = conn.execute(f'select "{cur_type}" from test_all_types()').arrow()
+            arrow_table = conn.execute(f'select "{cur_type}" from test_all_types()').fetch_arrow_table()
         if cur_type in enum_types:
-            round_trip_arrow_table = conn.execute("select * from arrow_table").arrow()
+            round_trip_arrow_table = conn.execute("select * from arrow_table").fetch_arrow_table()
             result_arrow = conn.execute("select * from arrow_table").fetchall()
             result_roundtrip = conn.execute("select * from round_trip_arrow_table").fetchall()
             assert recursive_equality(result_arrow, result_roundtrip)
         else:
-            round_trip_arrow_table = conn.execute("select * from arrow_table").arrow()
+            round_trip_arrow_table = conn.execute("select * from arrow_table").fetch_arrow_table()
             assert arrow_table.equals(round_trip_arrow_table, check_metadata=True)
 
     @pytest.mark.parametrize('cur_type', all_types)

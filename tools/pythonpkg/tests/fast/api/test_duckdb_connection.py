@@ -52,7 +52,7 @@ class TestDuckDBConnection(object):
     def test_arrow(self):
         pyarrow = pytest.importorskip("pyarrow")
         duckdb.execute("select [1,2,3]")
-        result = duckdb.arrow()
+        result = duckdb.fetch_arrow_table()
 
     def test_begin_commit(self):
         duckdb.begin()
@@ -299,7 +299,7 @@ class TestDuckDBConnection(object):
         assert duckdb_cursor.execute("select * from vw").fetchone() == (0,)
 
         # Create a registered object called 'vw'
-        arrow_result = duckdb_cursor.execute("select 42").arrow()
+        arrow_result = duckdb_cursor.execute("select 42").fetch_arrow_table()
         with pytest.raises(duckdb.CatalogException, match='View with name "vw" already exists'):
             duckdb_cursor.register('vw', arrow_result)
 
