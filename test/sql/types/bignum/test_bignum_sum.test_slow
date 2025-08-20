@@ -1,0 +1,36 @@
+# name: test/sql/types/bignum/test_bignum_sum.test_slow
+# description: Test TPC-H Bignum Sum
+# group: [bignum]
+
+mode skip
+
+require parquet
+
+query I
+select sum((case when hits.UserId%2=0 then -hits.UserId else hits.UserId end)::BIGNUM) AS res from '/Users/holanda/Desktop/hits.parquet';
+----
+401709002105338393903791
+
+query I
+select sum(res + res2 + res2 + res2) from (
+  select sum((case when hits.UserId%7=0 then -hits.UserId else hits.UserId end)::BIGNUM) AS res, sum((case when hits.UserId%7=0 then hits.UserId else -hits.UserId end)::BIGNUM) AS res2 from '/Users/holanda/Desktop/hits.parquet'
+  ), range(10000);
+----
+-3606109359585005662547309500000
+
+mode unskip
+
+require tpch
+
+statement ok
+CALL dbgen(sf=1)
+
+query I
+select sum(l_orderkey::bignum) as l_orderkey from lineitem
+----
+18005322964949
+
+query I
+select sum((select sum(l_orderkey::bignum) from lineitem)) from lineitem;
+----
+108053814257096413035

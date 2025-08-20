@@ -17,6 +17,7 @@
 namespace duckdb {
 
 class BufferManager;
+class InterruptState;
 
 //! A half-open range of frame boundary values _relative to the current row_
 //! This is why they are signed values.
@@ -35,19 +36,20 @@ using FrameStats = array<FrameDelta, 2>;
 //! but the row count will still be valid
 class ColumnDataCollection;
 struct WindowPartitionInput {
-	WindowPartitionInput(ExecutionContext &context, const ColumnDataCollection *inputs, idx_t count,
-	                     vector<column_t> &column_ids, vector<bool> &all_valid, const ValidityMask &filter_mask,
-	                     const FrameStats &stats)
+	WindowPartitionInput(ExecutionContext &context, const ColumnDataCollection *inputs, const idx_t count,
+	                     const vector<column_t> &column_ids, const vector<bool> &all_valid,
+	                     const ValidityMask &filter_mask, const FrameStats &stats, InterruptState &interrupt_state)
 	    : context(context), inputs(inputs), count(count), column_ids(column_ids), all_valid(all_valid),
-	      filter_mask(filter_mask), stats(stats) {
+	      filter_mask(filter_mask), stats(stats), interrupt_state(interrupt_state) {
 	}
 	ExecutionContext &context;
 	const ColumnDataCollection *inputs;
-	idx_t count;
-	vector<column_t> column_ids;
-	vector<bool> all_valid;
+	const idx_t count;
+	const vector<column_t> column_ids;
+	const vector<bool> &all_valid;
 	const ValidityMask &filter_mask;
 	const FrameStats stats;
+	InterruptState &interrupt_state;
 };
 
 //! The type used for sizing hashed aggregate function states

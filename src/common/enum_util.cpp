@@ -46,6 +46,7 @@
 #include "duckdb/common/enums/optimizer_type.hpp"
 #include "duckdb/common/enums/order_preservation_type.hpp"
 #include "duckdb/common/enums/order_type.hpp"
+#include "duckdb/common/enums/ordinality_request_type.hpp"
 #include "duckdb/common/enums/output_type.hpp"
 #include "duckdb/common/enums/pending_execution_result.hpp"
 #include "duckdb/common/enums/physical_operator_type.hpp"
@@ -191,19 +192,20 @@ const StringUtil::EnumStringLiteral *GetARTHandlingResultValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(ARTHandlingResult::CONTINUE), "CONTINUE" },
 		{ static_cast<uint32_t>(ARTHandlingResult::SKIP), "SKIP" },
-		{ static_cast<uint32_t>(ARTHandlingResult::YIELD), "YIELD" }
+		{ static_cast<uint32_t>(ARTHandlingResult::YIELD), "YIELD" },
+		{ static_cast<uint32_t>(ARTHandlingResult::NONE), "NONE" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<ARTHandlingResult>(ARTHandlingResult value) {
-	return StringUtil::EnumToString(GetARTHandlingResultValues(), 3, "ARTHandlingResult", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetARTHandlingResultValues(), 4, "ARTHandlingResult", static_cast<uint32_t>(value));
 }
 
 template<>
 ARTHandlingResult EnumUtil::FromString<ARTHandlingResult>(const char *value) {
-	return static_cast<ARTHandlingResult>(StringUtil::StringToEnum(GetARTHandlingResultValues(), 3, "ARTHandlingResult", value));
+	return static_cast<ARTHandlingResult>(StringUtil::StringToEnum(GetARTHandlingResultValues(), 4, "ARTHandlingResult", value));
 }
 
 const StringUtil::EnumStringLiteral *GetARTScanHandlingValues() {
@@ -2548,7 +2550,7 @@ const StringUtil::EnumStringLiteral *GetLogicalTypeIdValues() {
 		{ static_cast<uint32_t>(LogicalTypeId::BIT), "BIT" },
 		{ static_cast<uint32_t>(LogicalTypeId::STRING_LITERAL), "STRING_LITERAL" },
 		{ static_cast<uint32_t>(LogicalTypeId::INTEGER_LITERAL), "INTEGER_LITERAL" },
-		{ static_cast<uint32_t>(LogicalTypeId::VARINT), "VARINT" },
+		{ static_cast<uint32_t>(LogicalTypeId::BIGNUM), "BIGNUM" },
 		{ static_cast<uint32_t>(LogicalTypeId::UHUGEINT), "UHUGEINT" },
 		{ static_cast<uint32_t>(LogicalTypeId::HUGEINT), "HUGEINT" },
 		{ static_cast<uint32_t>(LogicalTypeId::POINTER), "POINTER" },
@@ -3099,6 +3101,24 @@ const char* EnumUtil::ToChars<OrderType>(OrderType value) {
 template<>
 OrderType EnumUtil::FromString<OrderType>(const char *value) {
 	return static_cast<OrderType>(StringUtil::StringToEnum(GetOrderTypeValues(), 7, "OrderType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetOrdinalityTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(OrdinalityType::WITHOUT_ORDINALITY), "WITHOUT_ORDINALITY" },
+		{ static_cast<uint32_t>(OrdinalityType::WITH_ORDINALITY), "WITH_ORDINALITY" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<OrdinalityType>(OrdinalityType value) {
+	return StringUtil::EnumToString(GetOrdinalityTypeValues(), 2, "OrdinalityType", static_cast<uint32_t>(value));
+}
+
+template<>
+OrdinalityType EnumUtil::FromString<OrdinalityType>(const char *value) {
+	return static_cast<OrdinalityType>(StringUtil::StringToEnum(GetOrdinalityTypeValues(), 2, "OrdinalityType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetOutputStreamValues() {
@@ -4740,6 +4760,7 @@ const StringUtil::EnumStringLiteral *GetVerificationTypeValues() {
 		{ static_cast<uint32_t>(VerificationType::NO_OPERATOR_CACHING), "NO_OPERATOR_CACHING" },
 		{ static_cast<uint32_t>(VerificationType::PREPARED), "PREPARED" },
 		{ static_cast<uint32_t>(VerificationType::EXTERNAL), "EXTERNAL" },
+		{ static_cast<uint32_t>(VerificationType::EXPLAIN), "EXPLAIN" },
 		{ static_cast<uint32_t>(VerificationType::FETCH_ROW_AS_SCAN), "FETCH_ROW_AS_SCAN" },
 		{ static_cast<uint32_t>(VerificationType::INVALID), "INVALID" }
 	};
@@ -4748,12 +4769,12 @@ const StringUtil::EnumStringLiteral *GetVerificationTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<VerificationType>(VerificationType value) {
-	return StringUtil::EnumToString(GetVerificationTypeValues(), 10, "VerificationType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetVerificationTypeValues(), 11, "VerificationType", static_cast<uint32_t>(value));
 }
 
 template<>
 VerificationType EnumUtil::FromString<VerificationType>(const char *value) {
-	return static_cast<VerificationType>(StringUtil::StringToEnum(GetVerificationTypeValues(), 10, "VerificationType", value));
+	return static_cast<VerificationType>(StringUtil::StringToEnum(GetVerificationTypeValues(), 11, "VerificationType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetVerifyExistenceTypeValues() {

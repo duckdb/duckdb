@@ -146,8 +146,8 @@ public:
 };
 
 void WindowSegmentTree::Finalize(ExecutionContext &context, WindowAggregatorState &gsink, WindowAggregatorState &lstate,
-                                 CollectionPtr collection, const FrameStats &stats) {
-	WindowAggregator::Finalize(context, gsink, lstate, collection, stats);
+                                 CollectionPtr collection, const FrameStats &stats, InterruptState &interrupt) {
+	WindowAggregator::Finalize(context, gsink, lstate, collection, stats, interrupt);
 
 	auto &gasink = gsink.Cast<WindowSegmentTreeGlobalState>();
 	++gasink.finalized;
@@ -393,7 +393,7 @@ void WindowSegmentTreeLocalState::Finalize(ExecutionContext &context, WindowAggr
 
 void WindowSegmentTree::Evaluate(ExecutionContext &context, const WindowAggregatorState &gsink,
                                  WindowAggregatorState &lstate, const DataChunk &bounds, Vector &result, idx_t count,
-                                 idx_t row_idx) const {
+                                 idx_t row_idx, InterruptState &interrupt) const {
 	const auto &gtstate = gsink.Cast<WindowSegmentTreeGlobalState>();
 	auto &ltstate = lstate.Cast<WindowSegmentTreeLocalState>();
 	ltstate.Evaluate(context, gtstate, bounds, result, count, row_idx);

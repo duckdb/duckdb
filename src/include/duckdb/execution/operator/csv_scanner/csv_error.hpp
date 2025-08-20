@@ -69,7 +69,7 @@ public:
 	                             const string &current_path);
 	//! Produces an error message for a dialect sniffing error.
 	static CSVError SniffingError(const CSVReaderOptions &options, const string &search_space, idx_t max_columns_found,
-	                              SetColumns &set_columns);
+	                              SetColumns &set_columns, bool type_detection);
 	//! Produces an error message for a header sniffing error.
 	static CSVError HeaderSniffingError(const CSVReaderOptions &options, const vector<HeaderValue> &best_header_row,
 	                                    idx_t column_count, const string &delimiter);

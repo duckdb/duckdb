@@ -21,7 +21,7 @@ PreparedStatementVerifier::Create(const SQLStatement &statement,
 }
 
 void PreparedStatementVerifier::Extract() {
-	auto &select = *statement;
+	auto &select = *select_statement;
 	// replace all the constants from the select statement and replace them with parameter expressions
 	ParsedExpressionIterator::EnumerateQueryNodeChildren(
 	    *select.node, [&](unique_ptr<ParsedExpression> &child) { ConvertConstants(child); });

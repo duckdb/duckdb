@@ -83,7 +83,7 @@ static constexpr const builtin_type_array BUILTIN_TYPES{{
 	{"union", LogicalTypeId::UNION},
 	{"bit", LogicalTypeId::BIT},
 	{"bitstring", LogicalTypeId::BIT},
-	{"varint", LogicalTypeId::VARINT},
+	{"bignum", LogicalTypeId::BIGNUM},
 	{"boolean", LogicalTypeId::BOOLEAN},
 	{"bool", LogicalTypeId::BOOLEAN},
 	{"logical", LogicalTypeId::BOOLEAN},

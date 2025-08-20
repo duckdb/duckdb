@@ -30,7 +30,7 @@ public:
 protected:
 	void EvaluateInternal(ExecutionContext &context, WindowExecutorGlobalState &gstate,
 	                      WindowExecutorLocalState &lstate, DataChunk &eval_chunk, Vector &result, idx_t count,
-	                      idx_t row_idx) const override;
+	                      idx_t row_idx, InterruptState &interrupt) const override;
 };
 
 // NTILE is just scaled ROW_NUMBER
@@ -41,7 +41,7 @@ public:
 protected:
 	void EvaluateInternal(ExecutionContext &context, WindowExecutorGlobalState &gstate,
 	                      WindowExecutorLocalState &lstate, DataChunk &eval_chunk, Vector &result, idx_t count,
-	                      idx_t row_idx) const override;
+	                      idx_t row_idx, InterruptState &interrupt) const override;
 };
 
 } // namespace duckdb
