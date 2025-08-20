@@ -216,11 +216,11 @@ Value VariantUtils::ConvertVariantToValue(RecursiveUnifiedVectorFormat &source, 
 	auto ptr = const_data_ptr_cast(blob_data + byte_offset);
 	switch (type_id) {
 	case VariantLogicalType::VARIANT_NULL:
-		return "NULL";
+		return Value(LogicalType::SQLNULL);
 	case VariantLogicalType::BOOL_TRUE:
-		return "true";
+		return Value::BOOLEAN(true);
 	case VariantLogicalType::BOOL_FALSE:
-		return "false";
+		return Value::BOOLEAN(false);
 	case VariantLogicalType::INT8:
 		return Value::TINYINT(Load<int8_t>(ptr));
 	case VariantLogicalType::INT16:
@@ -291,21 +291,20 @@ Value VariantUtils::ConvertVariantToValue(RecursiveUnifiedVectorFormat &source, 
 		return Value::TIMESTAMPTZ(Load<timestamp_tz_t>(ptr));
 	case VariantLogicalType::ARRAY: {
 		auto count = VarintDecode<uint32_t>(ptr);
-		vector<string> children;
+		vector<Value> array_items;
 		if (count) {
 			auto child_index_start = VarintDecode<uint32_t>(ptr);
 			for (idx_t i = 0; i < count; i++) {
 				auto index = value_ids.sel->get_index(children_list_entry.offset + child_index_start + i);
 				auto child_index = value_ids_data[index];
-				auto val = ConvertVariantToValue(source, row, child_index);
-				children.push_back(val.ToString());
+				array_items.emplace_back(ConvertVariantToValue(source, row, child_index));
 			}
 		}
-		return StringUtil::Format("[%s]", StringUtil::Join(children, ", "));
+		return Value::ARRAY(LogicalType::VARIANT(), std::move(array_items));
 	}
 	case VariantLogicalType::OBJECT: {
 		auto count = VarintDecode<uint32_t>(ptr);
-		vector<string> children;
+		child_list_t<Value> object_children;
 		if (count) {
 			auto child_index_start = VarintDecode<uint32_t>(ptr);
 			for (idx_t i = 0; i < count; i++) {
@@ -316,10 +315,11 @@ Value VariantUtils::ConvertVariantToValue(RecursiveUnifiedVectorFormat &source, 
 				auto key_ids_index = key_ids.sel->get_index(children_list_entry.offset + child_index_start + i);
 				auto child_key_id = key_ids_data[key_ids_index];
 				auto &key = keys_entry_data[keys_entry.sel->get_index(keys_list_entry.offset + child_key_id)];
-				children.push_back(StringUtil::Format("'%s': %s", key.GetString(), val.ToString()));
+
+				object_children.emplace_back(key.GetString(), std::move(val));
 			}
 		}
-		return StringUtil::Format("{%s}", StringUtil::Join(children, ", "));
+		return Value::STRUCT(std::move(object_children));
 	}
 	case VariantLogicalType::BITSTRING: {
 		auto string_length = VarintDecode<uint32_t>(ptr);

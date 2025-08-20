@@ -177,6 +177,6 @@ insert into struct_cast_tbl3 select {'a': [
 query I
 select a::VARIANT::STRUCT(a STRUCT(a VARCHAR, b VARCHAR)[]) from struct_cast_tbl3;
 ----
-{'a': [{'a': 1970-03-15, 'b': hello}, {'a': 2020-11-03, 'b': 'NULL'}]}
+{'a': [{'a': 1970-03-15, 'b': hello}, {'a': 2020-11-03, 'b': NULL}]}
 {'a': []}
 {'a': [{'a': 1953-09-16, 'b': this is a long string}]}
