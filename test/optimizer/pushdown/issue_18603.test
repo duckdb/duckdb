@@ -22,6 +22,21 @@ query III
 SELECT * FROM t0 INNER JOIN t1 ON (t0.c1 > t0.c0) AND (t1.c0 > t0.c0) AND (t0.c0 < 7) AND (t0.c1 = t0.c0);
 ----
 
+query II
+EXPLAIN SELECT * FROM t0 INNER JOIN t1 ON (t0.c1 > t0.c0) AND (t1.c0 > t0.c0) AND (t0.c0 < 7) AND (t0.c1 = t0.c0);
+----
+physical_plan	<REGEX>:.*EMPTY_RESULT.*
+
+query II
+EXPLAIN SELECT * FROM t0 INNER JOIN t1 ON (t0.c1 > t0.c0) AND (t1.c0 > t0.c0) AND (t0.c0 < 7) AND (t0.c1 = t0.c0);
+----
+physical_plan	<!REGEX>:.*c0 > c0.*
+
+query II
+EXPLAIN SELECT * FROM t0 INNER JOIN t1 ON (t0.c1 > t0.c0) AND (t1.c0 > t0.c0) AND (t0.c0 < 7) AND (t0.c1 = t0.c0);
+----
+physical_plan	<!REGEX>:.*c0 < 7.*
+
 query III
 SELECT * FROM t0 INNER JOIN t1 ON (t0.c1 = t0.c0) AND (t0.c1 > t0.c0) AND (t1.c0 > t0.c0) AND (t0.c0 < 7);
 ----
