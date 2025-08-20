@@ -278,9 +278,11 @@ unique_ptr<OperatorState> PhysicalPiecewiseMergeJoin::GetOperatorState(Execution
 	return make_uniq<PiecewiseMergeJoinState>(context.client, *this);
 }
 
-static inline idx_t SortedChunkNotNull(const idx_t chunk_idx, const idx_t count, const idx_t not_null) {
-	const auto base = chunk_idx * STANDARD_VECTOR_SIZE;
-	return MinValue(base + count, MaxValue(base, not_null)) - base;
+static inline idx_t SortedChunkNotNull(const idx_t chunk_idx, const idx_t count, const idx_t has_null) {
+	const auto chunk_begin = chunk_idx * STANDARD_VECTOR_SIZE;
+	const auto chunk_end = MinValue(chunk_begin + STANDARD_VECTOR_SIZE, count);
+	const auto not_null = count - has_null;
+	return MinValue(chunk_end, MaxValue(chunk_begin, not_null)) - chunk_begin;
 }
 
 static bool MergeJoinStrictComparison(ExpressionType comparison) {
@@ -566,7 +568,7 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 		}
 
 		auto &lhs_table = *state.lhs_global_table;
-		const auto lhs_not_null = SortedChunkNotNull(0, lhs_table.count, lhs_table.has_null);
+		const auto lhs_not_null = lhs_table.count - lhs_table.has_null;
 		ChunkMergeInfo left_info(*state.lhs_iterator, 0, state.left_position, lhs_not_null);
 
 		auto &rhs_table = *gstate.table;
