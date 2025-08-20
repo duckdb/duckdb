@@ -911,7 +911,7 @@ static LogicalType DecimalSizeCheck(const LogicalType &left, const LogicalType &
 	uint8_t other_scale;
 	bool success = left.GetDecimalProperties(other_width, other_scale);
 	if (!success) {
-		return right;
+		throw InternalException("Type provided to DecimalSizeCheck was not a numeric type");
 	}
 	D_ASSERT(other_scale == 0);
 	const auto effective_width = width - scale;
@@ -1012,7 +1012,12 @@ static bool CombineUnequalTypes(const LogicalType &left, const LogicalType &righ
 		// we can implicitly cast left to right, return right
 		//! Depending on the type, we might need to grow the `width` of the DECIMAL type
 		if (right.id() == LogicalTypeId::DECIMAL) {
-			result = DecimalSizeCheck(left, right);
+			if (left.id() == LogicalTypeId::VARIANT) {
+				//! Prefer VARIANT always
+				result = left;
+			} else {
+				result = DecimalSizeCheck(left, right);
+			}
 		} else {
 			result = right;
 		}
@@ -1022,7 +1027,12 @@ static bool CombineUnequalTypes(const LogicalType &left, const LogicalType &righ
 		// we can implicitly cast right to left, return left
 		//! Depending on the type, we might need to grow the `width` of the DECIMAL type
 		if (left.id() == LogicalTypeId::DECIMAL) {
-			result = DecimalSizeCheck(right, left);
+			if (right.id() == LogicalTypeId::VARIANT) {
+				//! Prefer VARIANT always
+				result = right;
+			} else {
+				result = DecimalSizeCheck(right, left);
+			}
 		} else {
 			result = left;
 		}
