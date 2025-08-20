@@ -61,7 +61,7 @@ MacroFunction::BindMacroFunction(const vector<unique_ptr<MacroFunction>> &functi
 	}
 
 	// Check for each macro function if it matches the number of positional arguments
-	optional_idx result_idx;
+	vector<idx_t> result_indices;
 	for (idx_t function_idx = 0; function_idx < functions.size(); function_idx++) {
 		auto &function = functions[function_idx];
 
@@ -121,14 +121,20 @@ MacroFunction::BindMacroFunction(const vector<unique_ptr<MacroFunction>> &functi
 
 		if (param_idx == function->parameters.size()) {
 			// Found a matching function
-			result_idx = function_idx;
-			break;
+			result_indices.push_back(function_idx);
 		}
 	}
 
-	if (!result_idx.IsValid()) {
-		// No matching function found
-		auto error = StringUtil::Format("Macro %s() does not support the supplied arguments.\n", name);
+	if (result_indices.size() != 1) {
+		string error;
+		if (result_indices.empty()) {
+			// No matching function found
+			error = StringUtil::Format("Macro %s() does not support the supplied arguments.\n", name);
+		} else {
+			// Multiple matching functions found
+			error = StringUtil::Format("Macro %s() has multiple overloads that match the supplied arguments.", name);
+			error += "In order to select one, please supply all arguments by name.\n";
+		}
 		error += "Candidate macros:";
 		for (auto &function : functions) {
 			error += "\n\t" + FormatMacroFunction(*function, name);
@@ -136,7 +142,7 @@ MacroFunction::BindMacroFunction(const vector<unique_ptr<MacroFunction>> &functi
 		return MacroBindResult(error);
 	}
 
-	const auto macro_idx = result_idx.GetIndex();
+	const auto &macro_idx = result_indices[0];
 	const auto &macro_def = *functions[macro_idx];
 
 	// Skip over positionals (needs loop once we implement typed macro overloads)
