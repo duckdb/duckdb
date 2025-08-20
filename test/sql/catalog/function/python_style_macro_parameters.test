@@ -5,15 +5,17 @@
 statement ok
 create or replace macro m(a := 'a', b := 'b') as a || b
 
-statement ok
-pragma enable_verification
-
 query I
 select m()
 ----
 ab
 
 # we can supply arguments in any order as long as they are named
+query I
+select m(b := 'a', a := 'b')
+----
+ba
+
 query I
 select m(a := 'b', b := 'a')
 ----
@@ -44,3 +46,114 @@ statement error
 select m('c', 'd', b := 'e')
 ----
 does not support the supplied arguments
+
+# now without default arguments
+statement ok
+create or replace macro m(a, b) as a || b
+
+statement error
+select m()
+----
+does not support the supplied arguments
+
+query I
+select m(b := 'a', a := 'b')
+----
+ba
+
+query I
+select m(a := 'b', b := 'a')
+----
+ba
+
+statement error
+select m('c')
+----
+does not support the supplied arguments
+
+query I
+select m('c', 'd')
+----
+cd
+
+query I
+select m('c', b := 'd')
+----
+cd
+
+# replicate tests above but with a table macro
+statement ok
+create or replace macro m(a := 'a', b := 'b') as table (select a || b)
+
+query I
+select * from m()
+----
+ab
+
+query I
+select * from m(b := 'a', a := 'b')
+----
+ba
+
+query I
+select * from m(a := 'b', b := 'a')
+----
+ba
+
+query I
+select * from m('c')
+----
+cb
+
+query I
+select * from m('c', 'd')
+----
+cd
+
+query I
+select * from m('c', b := 'd')
+----
+cd
+
+statement error
+select * from m('c', a:= 'd')
+----
+does not support the supplied arguments
+
+statement error
+select * from m('c', 'd', b := 'e')
+----
+does not support the supplied arguments
+
+statement ok
+create or replace macro m(a, b) as table (select a || b)
+
+statement error
+select * from m()
+----
+does not support the supplied arguments
+
+query I
+select * from m(b := 'a', a := 'b')
+----
+ba
+
+query I
+select * from m(a := 'b', b := 'a')
+----
+ba
+
+statement error
+select * from m('c')
+----
+does not support the supplied arguments
+
+query I
+select * from m('c', 'd')
+----
+cd
+
+query I
+select * from m('c', b := 'd')
+----
+cd

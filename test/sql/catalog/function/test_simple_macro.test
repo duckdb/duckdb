@@ -235,9 +235,10 @@ CREATE MACRO conflict(a, a := 1) AS a + a
 statement ok
 CREATE MACRO add_default5(a, b := 5) AS a + b
 
-statement error
+query I
 SELECT add_default5(3, 6)
 ----
+9
 
 query T
 SELECT add_default5(3)

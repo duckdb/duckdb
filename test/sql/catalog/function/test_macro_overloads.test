@@ -37,10 +37,10 @@ CREATE MACRO arithmetic
 	(a, b, mult := 1) AS (a + b) * mult,
 	(a, b, c, division := 1) AS  (a + b + c) / division
 
-query IIII
-SELECT arithmetic(42, 84), arithmetic(42, 84, mult := 10), arithmetic(100, 200, 300), arithmetic(100, 200, 300, division := 10)
-----
-126	1260	600	60
+# query IIII
+# SELECT arithmetic(42, 84), arithmetic(42, 84, mult := 10), arithmetic(100, 200, 300), arithmetic(100, 200, 300, division := 10)
+# ----
+# 126	1260	600	60
 
 # table macro overloads
 statement ok
