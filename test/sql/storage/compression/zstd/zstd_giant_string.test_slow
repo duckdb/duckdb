@@ -1,6 +1,8 @@
 # name: test/sql/storage/compression/zstd/zstd_giant_string.test_slow
 # group: [zstd]
 
+require ram 16gb
+
 statement ok
 ATTACH '__TEST_DIR__/zstd_giant_string.db' (STORAGE_VERSION 'v1.3.2');
 
