@@ -4042,7 +4042,7 @@ MetadataResult ShellState::DisplayEntries(const char **azArg, idx_t nArg, char t
 	string filter_pattern = nArg > 1 ? azArg[1] : "%";
 	string schema_filter = "";
 	string table_filter = filter_pattern;
-	
+
 	// Check if the filter is schema-qualified (e.g., "schema.table" or "schema.%")
 	size_t dot_pos = filter_pattern.find('.');
 	if (dot_pos != string::npos) {
@@ -4107,7 +4107,7 @@ MetadataResult ShellState::DisplayEntries(const char **azArg, idx_t nArg, char t
 	** as an array of nul-terminated strings in azResult[].  */
 	nRow = nAlloc = 0;
 	azResult = nullptr;
-	
+
 	if (type == 't') {
 		// Bind parameters for the new DuckDB query
 		if (!schema_filter.empty()) {
@@ -4124,7 +4124,7 @@ MetadataResult ShellState::DisplayEntries(const char **azArg, idx_t nArg, char t
 			sqlite3_bind_text(pStmt, 1, "%", -1, SQLITE_STATIC);
 		}
 	}
-	
+
 	while (sqlite3_step(pStmt) == SQLITE_ROW) {
 		if (nRow >= nAlloc) {
 			char **azNew;
