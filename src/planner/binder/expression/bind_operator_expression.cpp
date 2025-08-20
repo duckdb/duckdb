@@ -130,7 +130,6 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 			}
 		} else if (b_exp_type.id() == LogicalTypeId::VARIANT && op.children.size() == 2) {
 			function_name = "variant_extract";
-			// Make sure we only extract array elements, not fields, by adding the $[] syntax
 			auto &i_exp = BoundExpression::GetExpression(*op.children[1]);
 			if (i_exp->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
 				auto &const_exp = i_exp->Cast<BoundConstantExpression>();
