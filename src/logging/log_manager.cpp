@@ -5,6 +5,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/common/local_file_system.hpp"
 
 namespace duckdb {
 
@@ -162,6 +163,20 @@ void LogManager::SetLogStorageInternal(DatabaseInstance &db, const string &stora
 
 	if (config.storage == storage_name_to_lower) {
 		return;
+	}
+
+	if (storage_name_to_lower == LogConfig::FILE_STORAGE_NAME) {
+		auto &fs = FileSystem::GetFileSystem(db);
+		bool local_filesystem_enabled = false;
+		auto local_filesystem_name = LocalFileSystem().GetName();
+		for (const auto& fs_name : fs.ListSubSystems()) {
+			if (fs_name == local_filesystem_name) {
+				local_filesystem_enabled = true;
+			}
+		}
+		if (!local_filesystem_enabled) {
+			throw InvalidConfigurationException("Can not enable file logging with the LocalFileSystem disabled");
+		}
 	}
 
 	// Flush the old storage, we are going to replace it.
