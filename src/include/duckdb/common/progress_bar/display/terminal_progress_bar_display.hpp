@@ -21,10 +21,6 @@ class TerminalProgressBarDisplay : public ProgressBarDisplay {
 private:
 	UnscentedKalmanFilter ukf;
 	std::chrono::steady_clock::time_point start_time;
-	bool udf_initialized;
-	bool run_periodic_updates;
-	double last_percentage;
-	double last_update_time;
 
 	double GetElapsedDuration() {
 		auto now = std::chrono::steady_clock::now();
@@ -33,13 +29,11 @@ private:
 	void StopPeriodicUpdates();
 
 public:
-	TerminalProgressBarDisplay()
-	    : udf_initialized(false), run_periodic_updates(false), last_percentage(0.0), last_update_time(0.0) {
+	TerminalProgressBarDisplay() {
 		start_time = std::chrono::steady_clock::now();
 	}
 
 	~TerminalProgressBarDisplay() override {
-		StopPeriodicUpdates();
 	}
 
 public:

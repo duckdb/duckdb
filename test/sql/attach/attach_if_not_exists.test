@@ -3,9 +3,6 @@
 # group: [attach]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 ATTACH '__TEST_DIR__/attach_if_not_exists.db' AS db1
 
 # ATTACH IF NOT EXISTS
