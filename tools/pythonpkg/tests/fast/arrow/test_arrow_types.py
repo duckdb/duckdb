@@ -11,7 +11,7 @@ class TestArrowTypes(object):
         inputs = [pa.array([None, None, None], type=pa.null())]
         arrow_table = pa.Table.from_arrays(inputs, schema=schema)
         duckdb_cursor.register("testarrow", arrow_table)
-        rel = duckdb.from_arrow(arrow_table).arrow()
+        rel = duckdb.from_arrow(arrow_table).fetch_arrow_table()
         # We turn it to an array of int32 nulls
         schema = pa.schema([("data", pa.int32())])
         inputs = [pa.array([None, None, None], type=pa.null())]

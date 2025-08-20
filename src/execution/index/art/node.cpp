@@ -248,7 +248,7 @@ const unsafe_optional_ptr<Node> Node::GetNextChild(ART &art, uint8_t &byte) cons
 	return GetNextChildInternal(art, *this, byte);
 }
 
-bool Node::HasByte(ART &art, uint8_t &byte) const {
+bool Node::HasByte(ART &art, const uint8_t byte) const {
 	D_ASSERT(HasMetadata());
 
 	auto type = GetType();

@@ -16,7 +16,11 @@ def test_basic(shell):
 
 
 def test_range(shell):
-    test = ShellTest(shell).statement("select * from range(10000)")
+    test = (
+        ShellTest(shell)
+        .statement(".mode csv")
+        .statement("select * from range(10000)")
+    )
     result = test.run()
     result.check_stdout("9999")
 

@@ -126,6 +126,7 @@ public:
 
 private:
 	static void GrowNode16(ART &art, Node &node48, Node &node16);
+	//! We shrink at <= Node256::SHRINK_THRESHOLD.
 	static void ShrinkNode256(ART &art, Node &node48, Node &node256);
 };
 } // namespace duckdb

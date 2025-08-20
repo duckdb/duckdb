@@ -7,7 +7,7 @@ pyarrow = pytest.importorskip('pyarrow')
 
 def f(cur, i, data):
     cur.execute(f"create table t_{i} as select * from data")
-    return cur.execute(f"select * from t_{i}").arrow()
+    return cur.execute(f"select * from t_{i}").fetch_arrow_table()
 
 
 def test_6584():
