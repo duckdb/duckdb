@@ -336,4 +336,19 @@ Value VariantUtils::ConvertVariantToValue(RecursiveUnifiedVectorFormat &source, 
 	return nullptr;
 }
 
+bool VariantUtils::Verify(Vector &variant, const SelectionVector &sel_p, idx_t count) {
+	//! TODO: verify variant invariants (badum ts)
+	//! - keys - are not null
+	//! - children.value_id - all are within the 'values' list bounds
+	//! - children.key_id - are all null for array children, and never null for object children
+	//! - values.type_id - are all within the range of valid type ids (VariantLogicalType)
+	//! - values.byte_offset - are all within the 'data' bounds
+	//! - data - the values are sane
+
+	for (idx_t i = 0; i < count; i++) {
+	}
+
+	return true;
+}
+
 } // namespace duckdb

@@ -1579,6 +1579,16 @@ void Vector::VerifyUnion(Vector &vector_p, const SelectionVector &sel_p, idx_t c
 #endif // DEBUG
 }
 
+void Vector::VerifyVariant(Vector &vector_p, const SelectionVector &sel_p, idx_t count) {
+#ifdef DEBUG
+
+	D_ASSERT(vector_p.GetType().id() == LogicalTypeId::VARIANT);
+	if (!VariantUtils::Verify(vector_p, count, sel_p)) {
+		throw InternalException("Union not valid, reason: %s", EnumUtil::ToString(valid_check));
+	}
+#endif // DEBUG
+}
+
 void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count) {
 #ifdef DEBUG
 	if (count == 0) {
@@ -1759,6 +1769,9 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 		if (vector->GetType().id() == LogicalTypeId::UNION) {
 			// Pass in raw vector
 			VerifyUnion(vector_p, sel_p, count);
+		}
+		if (vector->GetType().id() == LogicalTypeId::VARIANT) {
+			VerifyVariant(vector_p, sel_p, count);
 		}
 	}
 
