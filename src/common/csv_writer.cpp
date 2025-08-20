@@ -52,9 +52,10 @@ CSVWriter::CSVWriter(WriteStream &stream, vector<string> name_list, bool shared)
     : writer_options(options.dialect_options.state_machine_options.delimiter.GetValue(),
                      options.dialect_options.state_machine_options.quote.GetValue(), options.write_newline),
       write_stream(stream), should_initialize(true), shared(shared) {
-	options.force_quote.resize(name_list.size(), false);
-	options.name_list = name_list;
-	options.force_quote.resize(name_list.size(), false);
+	auto size = name_list.size();
+	options.name_list = std::move(name_list);
+	options.force_quote.resize(size, false);
+	options.force_quote.resize(size, false);
 
 	if (!shared) {
 		global_write_state = make_uniq<CSVWriterState>();
