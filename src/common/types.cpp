@@ -1992,8 +1992,8 @@ LogicalType LogicalType::VARIANT() {
 	children.emplace_back("children", LogicalType::LIST(LogicalType::STRUCT(
 	                                      {{"key_id", LogicalType::UINTEGER}, {"value_id", LogicalType::UINTEGER}})));
 	//! values
-	children.emplace_back("children", LogicalType::LIST(LogicalType::STRUCT({{"type_id", LogicalType::UTINYINT},
-	                                                                         {"byte_offset", LogicalType::UINTEGER}})));
+	children.emplace_back("values", LogicalType::LIST(LogicalType::STRUCT(
+	                                    {{"type_id", LogicalType::UTINYINT}, {"byte_offset", LogicalType::UINTEGER}})));
 	//! data
 	children.emplace_back("data", LogicalType::BLOB);
 
