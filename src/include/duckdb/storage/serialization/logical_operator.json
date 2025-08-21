@@ -599,6 +599,16 @@
         "id": 206,
         "name": "payload_aggregates",
         "type": "vector<Expression*>"
+      },
+      {
+        "id": 207,
+        "name": "internal_types",
+        "type": "vector<LogicalType>"
+      },
+      {
+        "id": 208,
+        "name": "result_types",
+        "type": "vector<LogicalType>"
       }
     ]
   },
