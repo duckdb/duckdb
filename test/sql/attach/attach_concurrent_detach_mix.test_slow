@@ -1,0 +1,26 @@
+# name: test/sql/attach/attach_concurrent_detach_mix.test_slow
+# description: Concurrently attaching/detaching/using different databases
+# group: [attach]
+
+concurrentloop i 0 40
+
+loop k 0 10
+
+statement maybe
+ATTACH IF NOT EXISTS '__TEST_DIR__/attach_mix_${k}.db'
+----
+Unique file handle conflict
+
+statement maybe
+CREATE TABLE attach_mix_${k}_${i} AS SELECT * FROM range(${k} * ${i}) t(i)
+----
+no database
+
+statement maybe
+DETACH attach_mix_${k}
+----
+database not found
+
+endloop
+
+endloop
