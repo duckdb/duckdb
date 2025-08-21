@@ -18,15 +18,16 @@ CreateMacroInfo::CreateMacroInfo(CatalogType type, unique_ptr<MacroFunction> fun
 }
 
 string CreateMacroInfo::ToString() const {
-	auto result = GetCreatePrefix("MACRO");
-	result += QualifierToString(temporary ? "" : catalog, schema, name) + " ";
+	auto prefix = GetCreatePrefix("MACRO");
+	prefix += QualifierToString(temporary ? "" : catalog, schema, name) + " ";
+	string definitions;
 	for (auto &function : macros) {
-		if (!result.empty()) {
-			result += ", ";
+		if (!definitions.empty()) {
+			definitions += ", ";
 		}
-		result += function->ToSQL();
+		definitions += function->ToSQL();
 	}
-	return result + ";";
+	return prefix + definitions + ";";
 }
 
 unique_ptr<CreateInfo> CreateMacroInfo::Copy() const {
