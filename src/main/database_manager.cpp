@@ -13,8 +13,7 @@ namespace duckdb {
 
 DatabaseManager::DatabaseManager(DatabaseInstance &db)
     : next_oid(0), current_query_number(1), current_transaction_id(0) {
-	system = make_uniq<AttachedDatabase>(db);
-	databases = make_uniq<CatalogSet>(system->GetCatalog());
+	system = make_shared_ptr<AttachedDatabase>(db);
 }
 
 DatabaseManager::~DatabaseManager() {
@@ -32,18 +31,25 @@ void DatabaseManager::InitializeSystemCatalog() {
 void DatabaseManager::FinalizeStartup() {
 	auto dbs = GetDatabases();
 	for (auto &db : dbs) {
-		db.get().FinalizeLoad(nullptr);
+		db->FinalizeLoad(nullptr);
 	}
 }
 
 optional_ptr<AttachedDatabase> DatabaseManager::GetDatabase(ClientContext &context, const string &name) {
+	auto &meta_transaction = MetaTransaction::Get(context);
+	lock_guard<mutex> guard(databases_lock);
 	if (StringUtil::Lower(name) == TEMP_CATALOG) {
-		return context.client_data->temporary_objects.get();
+		return meta_transaction.UseDatabase(context.client_data->temporary_objects);
 	}
 	if (StringUtil::Lower(name) == SYSTEM_CATALOG) {
-		return system;
+		return meta_transaction.UseDatabase(system);
 	}
-	return reinterpret_cast<AttachedDatabase *>(databases->GetEntry(context, name).get());
+	auto entry = databases.find(name);
+	if (entry == databases.end()) {
+		// not found
+		return nullptr;
+	}
+	return meta_transaction.UseDatabase(entry->second);
 }
 
 optional_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &context, AttachInfo &info,
@@ -84,11 +90,13 @@ optional_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &co
 	if (info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
 		DetachDatabase(context, name, OnEntryNotFound::RETURN_NULL);
 	}
-	if (!databases->CreateEntry(context, name, std::move(attached_db), dependencies)) {
+	lock_guard<mutex> guard(databases_lock);
+	auto entry = databases.emplace(name, attached_db);
+	if (!entry.second) {
 		throw BinderException("Failed to attach database: database with name \"%s\" already exists", name);
 	}
-
-	return GetDatabase(context, name);
+	auto &meta_transaction = MetaTransaction::Get(context);
+	return meta_transaction.UseDatabase(attached_db);
 }
 
 void DatabaseManager::DetachDatabase(ClientContext &context, const string &name, OnEntryNotFound if_not_found) {
@@ -98,19 +106,21 @@ void DatabaseManager::DetachDatabase(ClientContext &context, const string &name,
 		                      name);
 	}
 
-	auto entry = databases->GetEntry(context, name);
-	if (!entry) {
-		if (if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
-			throw BinderException("Failed to detach database with name \"%s\": database not found", name);
+	shared_ptr<AttachedDatabase> attached_db;
+	{
+		lock_guard<mutex> guard(databases_lock);
+		auto entry = databases.find(name);
+		if (entry == databases.end()) {
+			if (if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
+				throw BinderException("Failed to detach database with name \"%s\": database not found", name);
+			}
+			return;
 		}
-		return;
+		attached_db = entry->second;
+		databases.erase(entry);
 	}
-	auto &db = entry->Cast<AttachedDatabase>();
-	db.OnDetach(context);
 
-	if (!databases->DropEntry(context, name, false, true)) {
-		throw InternalException("Failed to drop attached database");
-	}
+	attached_db->OnDetach(context);
 }
 
 void DatabaseManager::CheckPathConflict(ClientContext &context, const string &path) {
@@ -124,19 +134,6 @@ void DatabaseManager::CheckPathConflict(ClientContext &context, const string &pa
 		}
 	}
 	if (db_name.empty()) {
-		return;
-	}
-
-	// Check against the catalog set.
-	auto entry = GetDatabase(context, db_name);
-	if (!entry) {
-		return;
-	}
-	if (entry->IsSystem()) {
-		return;
-	}
-	auto &catalog = Catalog::GetCatalog(*entry);
-	if (catalog.InMemory()) {
 		return;
 	}
 	throw BinderException("Unique file handle conflict: Database \"%s\" is already attached with path \"%s\", ",
@@ -237,44 +234,46 @@ void DatabaseManager::SetDefaultDatabase(ClientContext &context, const string &n
 }
 // LCOV_EXCL_STOP
 
-vector<reference<AttachedDatabase>> DatabaseManager::GetDatabases(ClientContext &context,
+vector<shared_ptr<AttachedDatabase>> DatabaseManager::GetDatabases(ClientContext &context,
                                                                   const optional_idx max_db_count) {
-	vector<reference<AttachedDatabase>> result;
-	idx_t count = 2;
-	databases->ScanWithReturn(context, [&](CatalogEntry &entry) {
-		if (max_db_count.IsValid() && count >= max_db_count.GetIndex()) {
-			return false;
-		}
-		result.push_back(entry.Cast<AttachedDatabase>());
-		count++;
-		return true;
-	});
+	vector<shared_ptr<AttachedDatabase>> result;
 
+	lock_guard<mutex> guard(databases_lock);
+	idx_t count = 2;
+	for(auto &entry : databases) {
+		if (max_db_count.IsValid() && count >= max_db_count.GetIndex()) {
+			break;
+		}
+		result.push_back(entry.second);
+		count++;
+	}
 	if (!max_db_count.IsValid() || max_db_count.GetIndex() >= 1) {
-		result.push_back(*system);
+		result.push_back(system);
 	}
 	if (!max_db_count.IsValid() || max_db_count.GetIndex() >= 2) {
-		result.push_back(*context.client_data->temporary_objects);
+		result.push_back(context.client_data->temporary_objects);
 	}
 
 	return result;
 }
 
-vector<reference<AttachedDatabase>> DatabaseManager::GetDatabases() {
-	vector<reference<AttachedDatabase>> result;
-	databases->Scan([&](CatalogEntry &entry) { result.push_back(entry.Cast<AttachedDatabase>()); });
-	result.push_back(*system);
+vector<shared_ptr<AttachedDatabase>> DatabaseManager::GetDatabases() {
+	vector<shared_ptr<AttachedDatabase>> result;
+
+	lock_guard<mutex> guard(databases_lock);
+	for(auto &entry : databases) {
+		result.push_back(entry.second);
+	}
+	result.push_back(system);
 	return result;
 }
 
 void DatabaseManager::ResetDatabases(unique_ptr<TaskScheduler> &scheduler) {
-	vector<reference<AttachedDatabase>> result;
-	databases->Scan([&](CatalogEntry &entry) { result.push_back(entry.Cast<AttachedDatabase>()); });
-	for (auto &database : result) {
-		database.get().Close();
+	auto databases = GetDatabases();
+	for(auto &entry : databases) {
+		entry->Close();
+		entry.reset();
 	}
-	scheduler.reset();
-	databases.reset();
 }
 
 Catalog &DatabaseManager::GetSystemCatalog() {

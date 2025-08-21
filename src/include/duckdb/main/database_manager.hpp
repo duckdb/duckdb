@@ -68,10 +68,10 @@ public:
 	void GetDatabaseType(ClientContext &context, AttachInfo &info, const DBConfig &config, AttachOptions &options);
 	//! Scans the catalog set and adds each committed database entry, and each database entry of the current
 	//! transaction, to a vector holding AttachedDatabase references
-	vector<reference<AttachedDatabase>> GetDatabases(ClientContext &context,
+	vector<shared_ptr<AttachedDatabase>> GetDatabases(ClientContext &context,
 	                                                 const optional_idx max_db_count = optional_idx());
 	//! Scans the catalog set and returns each committed database entry
-	vector<reference<AttachedDatabase>> GetDatabases();
+	vector<shared_ptr<AttachedDatabase>> GetDatabases();
 	//! Removes all databases from the catalog set. This is necessary for the database instance's destructor,
 	//! as the database manager has to be alive when destroying the catalog set objects.
 	void ResetDatabases(unique_ptr<TaskScheduler> &scheduler);
@@ -102,9 +102,11 @@ private:
 
 private:
 	//! The system database is a special database that holds system entries (e.g. functions)
-	unique_ptr<AttachedDatabase> system;
+	shared_ptr<AttachedDatabase> system;
+	//! Lock for databases
+	mutex databases_lock;
 	//! The set of attached databases
-	unique_ptr<CatalogSet> databases;
+	case_insensitive_map_t<shared_ptr<AttachedDatabase>> databases;
 	//! The next object id handed out by the NextOid method
 	atomic<idx_t> next_oid;
 	//! The current query number

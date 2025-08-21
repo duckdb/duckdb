@@ -171,6 +171,15 @@ void MetaTransaction::SetActiveQuery(transaction_t query_number) {
 	}
 }
 
+AttachedDatabase &MetaTransaction::UseDatabase(shared_ptr<AttachedDatabase> &database) {
+	auto &db_ref = *database;
+	auto entry = referenced_databases.find(db_ref);
+	if (entry == referenced_databases.end()) {
+		referenced_databases.emplace(reference<AttachedDatabase>(db_ref), database);
+	}
+	return db_ref;
+}
+
 void MetaTransaction::ModifyDatabase(AttachedDatabase &db) {
 	if (db.IsSystem() || db.IsTemporary()) {
 		// we can always modify the system and temp databases

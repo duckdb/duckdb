@@ -89,7 +89,7 @@ bool CanRestart(Connection &conn) {
 	auto databases = db_manager.GetDatabases();
 	idx_t database_count = 0;
 	for (auto &db_ref : databases) {
-		auto &db = db_ref.get();
+		auto &db = *db_ref;
 		if (db.IsSystem()) {
 			continue;
 		}
