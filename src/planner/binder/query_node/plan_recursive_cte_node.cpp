@@ -21,8 +21,8 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundRecursiveCTENode &node) {
 	                                node.right_binder->has_unplanned_dependent_joins;
 
 	// for both the left and right sides, cast them to the same types
-	left_node = CastLogicalOperatorToTypes(node.left->types, node.types, std::move(left_node));
-	right_node = CastLogicalOperatorToTypes(node.right->types, node.types, std::move(right_node));
+	left_node = CastLogicalOperatorToTypes(node.left->types, node.internal_types, std::move(left_node));
+	right_node = CastLogicalOperatorToTypes(node.right->types, node.internal_types, std::move(right_node));
 
 	bool ref_recurring = node.right_binder->bind_context.cte_references["recurring." + node.ctename] &&
 	                     *node.right_binder->bind_context.cte_references["recurring." + node.ctename] != 0;
@@ -44,7 +44,11 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundRecursiveCTENode &node) {
 	    make_uniq<LogicalRecursiveCTE>(node.ctename, node.setop_index, node.types.size(), node.union_all,
 	                                   std::move(node.key_targets), std::move(left_node), std::move(right_node));
 	root->ref_recurring = ref_recurring;
+	root->user_aggregate = !node.payload_aggregates.empty();
 	root->payload_aggregates = std::move(node.payload_aggregates);
+	root->internal_types = std::move(node.internal_types);
+	// BTODO: only here until i know how to fix ResolveTypes()
+	root->result_types = node.return_types;
 	return VisitQueryNode(node, std::move(root));
 }
 

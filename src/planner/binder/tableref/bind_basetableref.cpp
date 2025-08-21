@@ -133,7 +133,9 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		bool circular_cte = false;
 		for (auto found_cte : found_ctes) {
 			auto &cte = found_cte.get();
-			auto ctebinding = bind_context.GetCTEBinding(ref.table_name);
+			// Check if we have a recurring scan, if so, we will also need the schema_name
+			auto cte_name = !ref.schema_name.empty() ? ref.schema_name + "." + ref.table_name : ref.table_name;
+			auto ctebinding = bind_context.GetCTEBinding(cte_name);
 			if (ctebinding) {
 				// There is a CTE binding in the BindContext.
 				// This can only be the case if there is a recursive CTE,

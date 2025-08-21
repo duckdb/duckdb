@@ -4,6 +4,7 @@
 #include "duckdb/parser/query_node/recursive_cte_node.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/query_node/bound_recursive_cte_node.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
@@ -31,6 +32,9 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 
 	// the result types of the CTE are the types of the LHS
 	result->types = result->left->types;
+	result->internal_types = result->left->types;
+	// BTODO: only here until i know how to fix ResolveTypes()
+	result->return_types = result->types;
 	// names are picked from the LHS, unless aliases are explicitly specified
 	result->names = result->left->names;
 	for (idx_t i = 0; i < statement.aliases.size() && i < result->names.size(); i++) {
@@ -39,25 +43,6 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 
 	// This allows the right side to reference the CTE recursively
 	bind_context.AddGenericBinding(result->setop_index, statement.ctename, result->names, result->types);
-
-	result->right_binder = Binder::CreateBinder(context, this);
-
-	// Add bindings of left side to temporary CTE bindings context
-	// If there is already a binding for the CTE, we need to remove it first
-	// as we are binding a CTE currently, we take precendence over the existing binding.
-	// This implements the CTE shadowing behavior.
-	result->right_binder->bind_context.RemoveCTEBinding(statement.ctename);
-	result->right_binder->bind_context.AddCTEBinding(result->setop_index, statement.ctename, result->names,
-	                                                 result->types, !statement.key_targets.empty());
-
-	result->right = result->right_binder->BindNode(*statement.right);
-	for (auto &c : result->left_binder->correlated_columns) {
-		result->right_binder->AddCorrelatedColumn(c);
-	}
-
-	// move the correlated expressions from the child binders to this binder
-	MoveCorrelatedExpressions(*result->left_binder);
-	MoveCorrelatedExpressions(*result->right_binder);
 
 	// bind specified keys to the referenced column
 	auto expression_binder = ExpressionBinder(*this, context);
@@ -76,22 +61,22 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 		// Look up the aggregate function in the catalog
 		auto &func = Catalog::GetSystemCatalog(context).GetEntry<AggregateFunctionCatalogEntry>(context, DEFAULT_SCHEMA,
 																								func_expr.function_name);
-		vector<LogicalType> agg_types;
+		vector<LogicalType> aggregation_input_types;
 		vector<unique_ptr<Expression>> bound_children;
 		// Bind the children of the aggregate function and check if they are valid column references
 		for (auto& child : func_expr.children) {
 			auto bound_child = expression_binder.Bind(child);
 			if (bound_child->type != ExpressionType::BOUND_COLUMN_REF) {
-				// BTODO: Better error message
-				throw BinderException("Payload aggregate must be a column reference");
+				throw BinderException(*bound_child, "Aggregate function argument must be a column reference");
 			}
-			agg_types.push_back(bound_child->return_type);
+			aggregation_input_types.push_back(bound_child->return_type);
 			bound_children.push_back(std::move(bound_child));
 		}
 
 		// Find the best matching aggregate function
 		auto best_function_idx = function_binder.BindFunction(func.name, func.functions,
-		                                                      agg_types, error);
+		                                                      std::move(aggregation_input_types),
+		                                                      error);
 		if (!best_function_idx.IsValid()) {
 			throw BinderException("No matching aggregate function\n%s", error.Message());
 		}
@@ -99,8 +84,34 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 		auto best_function = func.functions.GetFunctionByOffset(best_function_idx.GetIndex());
 		auto aggregate = function_binder.BindAggregateFunction(std::move(best_function), std::move(bound_children),
 		                                                       nullptr, AggregateType::NON_DISTINCT);
+
+		idx_t aggregate_idx = aggregate->children[0]->Cast<BoundColumnRefExpression>().binding.column_index;
+		// BTODO: only here until i know how to fix ResolveTypes()
+		result->return_types[aggregate_idx] = aggregate->return_type;
 		result->payload_aggregates.push_back(std::move(aggregate));
 	}
+	// BTODO: only here until i know how to fix ResolveTypes()
+	// We have finished binding all the aggregates. Now, we will update the types of the operator.
+	result->types = result->return_types;
+
+	result->right_binder = Binder::CreateBinder(context, this);
+
+	// Add bindings of left side to temporary CTE bindings context
+	// If there is already a binding for the CTE, we need to remove it first
+	// as we are binding a CTE currently, we take precendence over the existing binding.
+	// This implements the CTE shadowing behavior.
+	result->right_binder->bind_context.RemoveCTEBinding(statement.ctename);
+	result->right_binder->bind_context.AddCTEBinding(result->setop_index, statement.ctename, result->names,
+	                                                 result->internal_types, result->types, !statement.key_targets.empty());
+
+	result->right = result->right_binder->BindNode(*statement.right);
+	for (auto &c : result->left_binder->correlated_columns) {
+		result->right_binder->AddCorrelatedColumn(c);
+	}
+
+	// move the correlated expressions from the child binders to this binder
+	MoveCorrelatedExpressions(*result->left_binder);
+	MoveCorrelatedExpressions(*result->right_binder);
 
 	// now both sides have been bound we can resolve types
 	if (result->left->types.size() != result->right->types.size()) {

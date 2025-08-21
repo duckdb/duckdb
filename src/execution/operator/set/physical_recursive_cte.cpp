@@ -33,7 +33,7 @@ PhysicalRecursiveCTE::~PhysicalRecursiveCTE() {
 class RecursiveCTEState : public GlobalSinkState {
 public:
 	explicit RecursiveCTEState(ClientContext &context, const PhysicalRecursiveCTE &op)
-	    : intermediate_table(context, op.GetTypes()), new_groups(STANDARD_VECTOR_SIZE) {
+	    : intermediate_table(context, op.using_key ? op.internal_types : op.types), new_groups(STANDARD_VECTOR_SIZE) {
 
 		vector<BoundAggregateExpression *> payload_aggregates_ptr;
 		for (idx_t i = 0; i < op.payload_aggregates.size(); i++) {
@@ -43,7 +43,7 @@ public:
 		}
 
 		ht = make_uniq<GroupedAggregateHashTable>(context, BufferAllocator::Get(context), op.distinct_types,
-		                                          op.payload_types, payload_aggregates_ptr);
+		                                          op.aggr_output_types, payload_aggregates_ptr);
 	}
 
 	unique_ptr<GroupedAggregateHashTable> ht;
@@ -107,10 +107,10 @@ SinkResultType PhysicalRecursiveCTE::Sink(ExecutionContext &context, DataChunk &
 		distinct_rows.Initialize(Allocator::DefaultAllocator(), distinct_types);
 		PopulateChunk(distinct_rows, chunk, distinct_idx, true);
 		DataChunk payload_rows;
-		if (!aggregate_types.empty()) {
-			payload_rows.Initialize(Allocator::DefaultAllocator(), aggregate_types);
+		if (!aggr_input_types.empty()) {
+			payload_rows.Initialize(Allocator::DefaultAllocator(), aggr_input_types);
 		}
-		PopulateChunk(payload_rows, chunk, aggregate_idx, true);
+		PopulateChunk(payload_rows, chunk, aggr_input_idx, true);
 
 		// Add the chunk to the hash table and append it to the intermediate table
 		gstate.ht->AddChunk(distinct_rows, payload_rows, AggregateType::NON_DISTINCT);
@@ -166,15 +166,15 @@ SourceResultType PhysicalRecursiveCTE::GetData(ExecutionContext &context, DataCh
 				DataChunk payload_rows;
 				DataChunk distinct_rows;
 				distinct_rows.Initialize(Allocator::DefaultAllocator(), distinct_types);
-				if (!payload_types.empty()) {
-					payload_rows.Initialize(Allocator::DefaultAllocator(), payload_types);
+				if (!aggr_output_types.empty()) {
+					payload_rows.Initialize(Allocator::DefaultAllocator(), aggr_output_types);
 				}
-				result.Initialize(Allocator::DefaultAllocator(), chunk.GetTypes());
+				result.Initialize(Allocator::DefaultAllocator(), types);
 
 				while (gstate.ht->Scan(scan_state, distinct_rows, payload_rows)) {
 					// Populate the result DataChunk with the keys and the payload.
 					PopulateChunk(result, distinct_rows, distinct_idx, false);
-					PopulateChunk(result, payload_rows, payload_idx, false);
+					PopulateChunk(result, payload_rows, aggr_output_idx, false);
 					// Append the result to the recurring table.
 					recurring_table->Append(result);
 				}
@@ -198,13 +198,25 @@ SourceResultType PhysicalRecursiveCTE::GetData(ExecutionContext &context, DataCh
 					DataChunk payload_rows;
 					DataChunk distinct_rows;
 					distinct_rows.Initialize(Allocator::DefaultAllocator(), distinct_types);
-					if (!payload_types.empty()) {
-						payload_rows.Initialize(Allocator::DefaultAllocator(), payload_types);
+					if (!aggr_output_types.empty()) {
+						payload_rows.Initialize(Allocator::DefaultAllocator(), aggr_output_types);
 					}
-
-					gstate.ht->Scan(gstate.ht_scan_state, distinct_rows, payload_rows);
-					PopulateChunk(chunk, distinct_rows, distinct_idx, false);
-					PopulateChunk(chunk, payload_rows, payload_idx, false);
+					// Check if we use an external data source to read recursive CTE data.
+					if (children.size() == 3) {
+						recurring_table->Reset();
+						DataChunk result;
+						result.Initialize(Allocator::DefaultAllocator(), types);
+						// Scan the whole hash table and populate the recurring table with the results.
+						while(gstate.ht->Scan(gstate.ht_scan_state, distinct_rows, payload_rows)) {
+							PopulateChunk(result, distinct_rows, distinct_idx, false);
+							PopulateChunk(result, payload_rows, aggr_output_idx, false);
+							recurring_table->Append(result);
+						}
+					} else {
+						gstate.ht->Scan(gstate.ht_scan_state, distinct_rows, payload_rows);
+						PopulateChunk(chunk, distinct_rows, distinct_idx, false);
+						PopulateChunk(chunk, payload_rows, aggr_output_idx, false);
+					}
 				}
 				break;
 			}
@@ -283,17 +295,38 @@ void PhysicalRecursiveCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_
 	sink_state.reset();
 	recursive_meta_pipeline.reset();
 
-	auto &state = meta_pipeline.GetState();
-	state.SetPipelineSource(current, *this);
+	// If we have user-provided aggregations, the internal and output types will be different.
+	// Therefore, an additional scan is needed as a source. This scan depends on the recursive CTE.
+	if (children.size() == 3) {
+		children[2].get().BuildPipelines(current, meta_pipeline);
 
+		auto &recursive_meta = meta_pipeline.CreateChildMetaPipeline(current, *this);
+
+		auto &recursive_state = recursive_meta.GetState();
+
+		auto &recursive_meta_pipelines = recursive_meta.GetBasePipeline();
+		recursive_state.SetPipelineSource(*recursive_meta_pipelines, *this);
+
+		auto &initial_state_pipeline = recursive_meta.CreateChildMetaPipeline(*recursive_meta_pipelines, *this);
+		initial_state_pipeline.Build(children[0]);
+
+		BuildRecursivePipeline(recursive_state, current, recursive_meta);
+	} else {
+		auto &state = meta_pipeline.GetState();
+		state.SetPipelineSource(current, *this);
+
+		// the LHS of the recursive CTE is our initial state
+		auto &initial_state_pipeline = meta_pipeline.CreateChildMetaPipeline(current, *this);
+		initial_state_pipeline.Build(children[0]);
+
+		BuildRecursivePipeline(state, current, meta_pipeline);
+	}
+}
+
+void PhysicalRecursiveCTE::BuildRecursivePipeline(PipelineBuildState &state, Pipeline &current, MetaPipeline &meta_pipeline) {
 	auto &executor = meta_pipeline.GetExecutor();
 	executor.AddRecursiveCTE(*this);
 
-	// the LHS of the recursive CTE is our initial state
-	auto &initial_state_pipeline = meta_pipeline.CreateChildMetaPipeline(current, *this);
-	initial_state_pipeline.Build(children[0]);
-
-	// the RHS is the recursive pipeline
 	recursive_meta_pipeline = make_shared_ptr<MetaPipeline>(executor, state, this);
 	recursive_meta_pipeline->SetRecursiveCTE();
 	recursive_meta_pipeline->Build(children[1]);

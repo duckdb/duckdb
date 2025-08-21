@@ -17,15 +17,14 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 	D_ASSERT(op.children.size() == 2);
 
 	// Create the working_table that the PhysicalRecursiveCTE will use for evaluation.
-	auto working_table = make_shared_ptr<ColumnDataCollection>(context, op.types);
+	auto working_table = make_shared_ptr<ColumnDataCollection>(context, op.internal_types);
 
 	// Add the ColumnDataCollection to the context of this PhysicalPlanGenerator
 	recursive_cte_tables[op.table_index] = working_table;
 
 	auto &left = CreatePlan(*op.children[0]);
 
-	// If the logical operator has no key targets or all columns are referenced,
-	// then we create a normal recursive CTE operator.
+	// If the logical operator has no key targets, then we create a normal recursive CTE operator.
 	if (op.key_targets.empty()) {
 		auto &right = CreatePlan(*op.children[1]);
 		auto &cte = Make<PhysicalRecursiveCTE>(op.ctename, op.table_index, op.types, op.union_all, left, right,
@@ -56,7 +55,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 		// Ensure that the payload aggregate is of the expected type.
 		D_ASSERT(op.payload_aggregates[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 		auto &agg = op.payload_aggregates[i]->Cast<BoundAggregateExpression>();
-		// BTODO: we have to check if the first argument of the aggregate always is the column we stand
+
+		D_ASSERT(agg.children[0]->type == ExpressionType::BOUND_REF);
 		// Cast the child to a BoundReferenceExpression and map its index to the aggregate index.
 		auto &bound_ref = agg.children[0]->Cast<BoundReferenceExpression>();
 		aggregate_references[bound_ref.index] = i;
@@ -95,7 +95,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 				payload_types.push_back(agg.return_type);
 			} else {
 				// BTODO: do this in binder
-				// Column is not in the key clause, so we need to create an aggregate
+				// Column is not in the key clause, and there is no defined aggregate function, so we must create the last aggregate
 				auto bound = make_uniq<BoundReferenceExpression>(logical_type, 0U);
 				FunctionBinder function_binder(context);
 
@@ -123,14 +123,24 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 	auto &cte = Make<PhysicalRecursiveCTE>(op.ctename, op.table_index, op.types, op.union_all, left, right,
 	                                       op.estimated_cardinality);
 	auto &cast_cte = cte.Cast<PhysicalRecursiveCTE>();
+
+	if (op.user_aggregate) {
+		// If we have user-provided aggregations, the internal and output types will be different.
+		// Therefore, an additional scan is needed as a source. This scan depends on the recursive CTE.
+		auto &cached_scan = Make<PhysicalColumnDataScan>(
+		    op.types, PhysicalOperatorType::COLUMN_DATA_SCAN, op.estimated_cardinality, recurring_table.get());
+		cast_cte.children.push_back(cached_scan);
+	}
+
 	cast_cte.using_key = true;
 	cast_cte.payload_aggregates = std::move(payload_aggregates);
 	cast_cte.distinct_idx = distinct_idx;
 	cast_cte.distinct_types = distinct_types;
-	cast_cte.payload_idx = payload_idx;
-	cast_cte.payload_types = payload_types;
-	cast_cte.aggregate_idx = aggregate_idx;
-	cast_cte.aggregate_types = aggregate_types;
+	cast_cte.aggr_output_idx = payload_idx;
+	cast_cte.aggr_output_types = payload_types;
+	cast_cte.aggr_input_idx = aggregate_idx;
+	cast_cte.aggr_input_types = aggregate_types;
+	cast_cte.internal_types = op.internal_types;
 	cast_cte.ref_recurring = op.ref_recurring;
 	cast_cte.working_table = working_table;
 	cast_cte.recurring_table = recurring_table;

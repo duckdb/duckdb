@@ -34,6 +34,7 @@ public:
 	vector<unique_ptr<Expression>> key_targets;
 	//! Payload aggregates for the recursive CTE node
 	vector<unique_ptr<Expression>> payload_aggregates;
+	vector<LogicalType> internal_types, return_types;
 
 	//! Index used by the set operation
 	idx_t setop_index;

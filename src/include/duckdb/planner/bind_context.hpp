@@ -120,7 +120,7 @@ public:
 	//! Adds a base table with the given alias to the CTE BindContext.
 	//! We need this to correctly bind recursive CTEs with multiple references.
 	void AddCTEBinding(idx_t index, const string &alias, const vector<string> &names, const vector<LogicalType> &types,
-	                   bool using_key = false);
+	                   const vector<LogicalType> &recurring_types = {}, bool using_key = false);
 
 	void RemoveCTEBinding(const string &alias);
 
