@@ -17,6 +17,9 @@ namespace duckdb {
 namespace {
 
 struct OffsetData {
+	static uint32_t *GetKeys(DataChunk &offsets) {
+		return FlatVector::GetData<uint32_t>(offsets.data[0]);
+	}
 	static uint32_t *GetChildren(DataChunk &offsets) {
 		return FlatVector::GetData<uint32_t>(offsets.data[1]);
 	}
@@ -30,11 +33,11 @@ struct OffsetData {
 
 struct StringDictionary {
 public:
-	void AddString(Vector &list, string_t str) {
+	uint32_t AddString(Vector &list, string_t str) {
 		auto it = dictionary.find(str);
 
 		if (it != dictionary.end()) {
-			return;
+			return it->second;
 		}
 		auto dict_count = NumericCast<uint32_t>(dictionary.size());
 		if (dict_count >= dictionary_capacity) {
@@ -46,6 +49,7 @@ public:
 		auto vec_data = FlatVector::GetData<string_t>(list_entry);
 		vec_data[dict_count] = StringVector::AddStringOrBlob(list_entry, str);
 		dictionary.emplace(vec_data[dict_count], dict_count);
+		return dict_count;
 	}
 
 	idx_t Size() const {
@@ -68,7 +72,8 @@ public:
 struct VariantVectorData {
 public:
 	explicit VariantVectorData(Vector &variant)
-	    : key_id_validity(FlatVector::Validity(VariantVector::GetChildrenKeyId(variant))) {
+	    : key_id_validity(FlatVector::Validity(VariantVector::GetChildrenKeyId(variant))),
+	      keys(VariantVector::GetKeys(variant)) {
 		blob_data = FlatVector::GetData<string_t>(VariantVector::GetData(variant));
 		type_ids_data = FlatVector::GetData<uint8_t>(VariantVector::GetValuesTypeId(variant));
 		byte_offset_data = FlatVector::GetData<uint32_t>(VariantVector::GetValuesByteOffset(variant));
@@ -76,7 +81,7 @@ public:
 		value_id_data = FlatVector::GetData<uint32_t>(VariantVector::GetChildrenValueId(variant));
 		values_data = FlatVector::GetData<list_entry_t>(VariantVector::GetValues(variant));
 		children_data = FlatVector::GetData<list_entry_t>(VariantVector::GetChildren(variant));
-		keys_data = FlatVector::GetData<list_entry_t>(VariantVector::GetKeys(variant));
+		keys_data = FlatVector::GetData<list_entry_t>(keys);
 	}
 
 public:
@@ -96,6 +101,8 @@ public:
 	list_entry_t *values_data;
 	list_entry_t *children_data;
 	list_entry_t *keys_data;
+
+	Vector &keys;
 };
 
 struct EmptyConversionPayloadToVariant {};
@@ -530,6 +537,7 @@ template <bool WRITE_DATA, bool IGNORE_NULLS>
 static bool ConvertStructToVariant(Vector &source, VariantVectorData &result, DataChunk &offsets, idx_t count,
                                    SelectionVector *selvec, SelectionVector &keys_selvec, StringDictionary &dictionary,
                                    SelectionVector *value_ids_selvec) {
+	auto keys_offset_data = OffsetData::GetKeys(offsets);
 	auto values_offset_data = OffsetData::GetValues(offsets);
 	auto blob_offset_data = OffsetData::GetBlob(offsets);
 	auto children_offset_data = OffsetData::GetChildren(offsets);
@@ -548,7 +556,7 @@ static bool ConvertStructToVariant(Vector &source, VariantVectorData &result, Da
 		for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
 			auto &struct_child = struct_children[child_idx];
 			string_t struct_child_str(struct_child.first.c_str(), NumericCast<uint32_t>(struct_child.first.size()));
-			dictionary_indices[child_idx] = dictionary.Find(struct_child_str);
+			dictionary_indices[child_idx] = dictionary.AddString(result.keys, struct_child_str);
 		}
 	}
 
@@ -560,6 +568,7 @@ static bool ConvertStructToVariant(Vector &source, VariantVectorData &result, Da
 		auto &blob_offset = blob_offset_data[result_index];
 		auto &values_list_entry = result.values_data[result_index];
 		auto &children_list_entry = result.children_data[result_index];
+		auto &keys_list_entry = result.keys_data[result_index];
 
 		if (source_validity.RowIsValid(index)) {
 			WriteVariantMetadata<WRITE_DATA>(result, values_list_entry.offset, values_offset_data[result_index],
@@ -570,10 +579,10 @@ static bool ConvertStructToVariant(Vector &source, VariantVectorData &result, Da
 			//! children
 			if (WRITE_DATA) {
 				idx_t children_index = children_list_entry.offset + children_offset_data[result_index];
-				idx_t keys_offset = dictionary.Size() * result_index;
+				idx_t keys_offset = keys_list_entry.offset + keys_offset_data[result_index];
 				for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
 					result.key_id_data[children_index + child_idx] = dictionary_indices[child_idx];
-					keys_selvec.set_index(keys_offset + dictionary_indices[child_idx], dictionary_indices[child_idx]);
+					keys_selvec.set_index(keys_offset + child_idx, dictionary_indices[child_idx]);
 				}
 				//! Map from index of the child to the children.value_ids of the parent
 				//! NOTE: this maps to the first index, below we are forwarding this for each child Vector we process.
@@ -581,6 +590,7 @@ static bool ConvertStructToVariant(Vector &source, VariantVectorData &result, Da
 			}
 			sel.non_null_selection.set_index(sel.count, i);
 			sel.new_selection.set_index(sel.count, result_index);
+			keys_offset_data[result_index] += children.size();
 			children_offset_data[result_index] += children.size();
 			sel.count++;
 		} else if (!IGNORE_NULLS) {
@@ -946,10 +956,12 @@ static bool ConvertToVariant(Vector &source, VariantVectorData &result, DataChun
 }
 
 static void InitializeOffsets(DataChunk &offsets, idx_t count) {
+	auto keys = OffsetData::GetKeys(offsets);
 	auto children = OffsetData::GetChildren(offsets);
 	auto values = OffsetData::GetValues(offsets);
 	auto blob = OffsetData::GetBlob(offsets);
 	for (idx_t i = 0; i < count; i++) {
+		keys[i] = 0;
 		children[i] = 0;
 		values[i] = 0;
 		blob[i] = 0;
@@ -970,11 +982,11 @@ static void InitializeVariants(DataChunk &offsets, Vector &result, SelectionVect
 	auto &blob = VariantVector::GetData(result);
 	auto blob_data = FlatVector::GetData<string_t>(blob);
 
+	idx_t keys_offset = 0;
 	idx_t children_offset = 0;
 	idx_t values_offset = 0;
 
-	auto dictionary_size = dictionary.Size();
-
+	auto keys_sizes = OffsetData::GetKeys(offsets);
 	auto children_sizes = OffsetData::GetChildren(offsets);
 	auto values_sizes = OffsetData::GetValues(offsets);
 	auto blob_sizes = OffsetData::GetBlob(offsets);
@@ -984,8 +996,9 @@ static void InitializeVariants(DataChunk &offsets, Vector &result, SelectionVect
 		auto &values_entry = values_data[i];
 
 		//! keys
-		keys_entry.length = dictionary_size;
-		keys_entry.offset = dictionary_size * i;
+		keys_entry.length = keys_sizes[i];
+		keys_entry.offset = keys_offset;
+		keys_offset += keys_entry.length;
 
 		//! children
 		children_entry.length = children_sizes[i];
@@ -1000,25 +1013,19 @@ static void InitializeVariants(DataChunk &offsets, Vector &result, SelectionVect
 		//! value
 		blob_data[i] = StringVector::EmptyString(blob, blob_sizes[i]);
 	}
-	auto keys_list_size = dictionary_size * offsets.size();
 
 	//! Reserve for the children of the lists
-	ListVector::Reserve(keys, keys_list_size);
+	ListVector::Reserve(keys, keys_offset);
 	ListVector::Reserve(children, children_offset);
 	ListVector::Reserve(values, values_offset);
 
 	//! Set list sizes
-	ListVector::SetListSize(keys, keys_list_size);
+	ListVector::SetListSize(keys, keys_offset);
 	ListVector::SetListSize(children, children_offset);
 	ListVector::SetListSize(values, values_offset);
 
-	keys_selvec.Initialize(keys_list_size);
-	//! NOTE: we initialize these to 0 because some rows will not set them, if the row is NULL
-	//! To simplify the implementation we just allocate 'dictionary.Size()' keys for each row
-	for (idx_t i = 0; i < keys_list_size; i++) {
-		keys_selvec.set_index(i, 0);
-	}
-	selvec_size = keys_list_size;
+	keys_selvec.Initialize(keys_offset);
+	selvec_size = keys_offset;
 }
 
 static bool CastToVARIANT(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
@@ -1031,23 +1038,6 @@ static bool CastToVARIANT(Vector &source, Vector &result, idx_t count, CastParam
 
 	//! Initialize the dictionary
 	StringDictionary dictionary;
-	{
-		//! FIXME: this has a giant flaw, because it expects the input to never contain a VARIANT
-		//! when it *does* contain a VARIANT, we can't know those keys until we explore the data
-		TypeVisitor::Contains(source.GetType(), [&dictionary, &keys](const LogicalType &type) {
-			if (type.id() == LogicalTypeId::STRUCT) {
-				auto &children = StructType::GetChildTypes(type);
-				for (auto &child : children) {
-					string_t child_name_str(child.first.c_str(), NumericCast<uint32_t>(child.first.size()));
-					dictionary.AddString(keys, child_name_str);
-				}
-			} else if (type.id() == LogicalTypeId::MAP) {
-				dictionary.AddString(keys, string_t("key", 3));
-				dictionary.AddString(keys, string_t("value", 5));
-			}
-			return false;
-		});
-	}
 	SelectionVector keys_selvec;
 
 	{
