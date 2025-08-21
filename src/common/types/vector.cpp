@@ -1583,8 +1583,8 @@ void Vector::VerifyVariant(Vector &vector_p, const SelectionVector &sel_p, idx_t
 #ifdef DEBUG
 
 	D_ASSERT(vector_p.GetType().id() == LogicalTypeId::VARIANT);
-	if (!VariantUtils::Verify(vector_p, count, sel_p)) {
-		throw InternalException("Union not valid, reason: %s", EnumUtil::ToString(valid_check));
+	if (!VariantUtils::Verify(vector_p, sel_p, count)) {
+		throw InternalException("Variant not valid");
 	}
 #endif // DEBUG
 }

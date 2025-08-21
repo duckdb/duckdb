@@ -53,7 +53,8 @@ enum class VariantLogicalType : uint8_t {
 	OBJECT = 29,
 	ARRAY = 30,
 	BIGNUM = 31,
-	BITSTRING = 32
+	BITSTRING = 32,
+	ENUM_SIZE /* always kept as last item of the enum */
 };
 
 struct VariantCasts {

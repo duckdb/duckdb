@@ -345,7 +345,112 @@ bool VariantUtils::Verify(Vector &variant, const SelectionVector &sel_p, idx_t c
 	//! - values.byte_offset - are all within the 'data' bounds
 	//! - data - the values are sane
 
+	RecursiveUnifiedVectorFormat format;
+	Vector::RecursiveToUnifiedFormat(variant, count, format);
+
+	//! keys
+	auto &keys = UnifiedVariantVector::GetKeys(format);
+	auto keys_data = keys.GetData<list_entry_t>(keys);
+
+	//! keys_entry
+	auto &keys_entry = UnifiedVariantVector::GetKeysEntry(format);
+	auto keys_entry_data = keys_entry.GetData<string_t>(keys_entry);
+	D_ASSERT(keys_entry.validity.AllValid());
+
+	//! children
+	auto &children = UnifiedVariantVector::GetChildren(format);
+	auto children_data = children.GetData<list_entry_t>(children);
+
+	//! children.key_id
+	auto &key_id = UnifiedVariantVector::GetChildrenKeyId(format);
+	auto key_id_data = key_id.GetData<uint32_t>(key_id);
+
+	//! children.value_id
+	auto &value_id = UnifiedVariantVector::GetChildrenValueId(format);
+	auto value_id_data = value_id.GetData<uint32_t>(value_id);
+
+	//! values
+	auto &values = UnifiedVariantVector::GetValues(format);
+	auto values_data = values.GetData<list_entry_t>(values);
+
+	//! values.type_id
+	auto &type_id = UnifiedVariantVector::GetValuesTypeId(format);
+	auto type_id_data = type_id.GetData<uint8_t>(type_id);
+	D_ASSERT(type_id.validity.AllValid());
+
+	//! values.byte_offset
+	auto &byte_offset = UnifiedVariantVector::GetValuesByteOffset(format);
+	auto byte_offset_data = byte_offset.GetData<uint32_t>(byte_offset);
+	D_ASSERT(byte_offset.validity.AllValid());
+
+	//! data
+	auto &data = UnifiedVariantVector::GetData(format);
+	auto data_data = data.GetData<string_t>(data);
 	for (idx_t i = 0; i < count; i++) {
+		auto keys_list_entry = keys_data[sel_p.get_index(i)];
+		auto children_list_entry = children_data[sel_p.get_index(i)];
+		auto values_list_entry = values_data[sel_p.get_index(i)];
+		auto &blob = data_data[sel_p.get_index(i)];
+
+		//! verify keys
+		for (idx_t j = 0; j < keys_list_entry.length; j++) {
+			auto keys_index = keys_entry.sel->get_index(j + keys_list_entry.offset);
+			D_ASSERT(keys_entry.validity.RowIsValid(keys_index));
+			keys_entry_data[keys_index].Verify();
+		}
+		//! verify children
+		for (idx_t j = 0; j < children_list_entry.length; j++) {
+			auto key_id_index = key_id.sel->get_index(j + children_list_entry.offset);
+			if (key_id.validity.RowIsValid(key_id_index)) {
+				auto children_key_id = key_id_data[key_id_index];
+				D_ASSERT(children_key_id < keys_list_entry.length);
+			}
+
+			auto value_id_index = value_id.sel->get_index(j + children_list_entry.offset);
+			D_ASSERT(value_id.validity.RowIsValid(value_id_index));
+			auto children_value_id = value_id_data[value_id_index];
+			D_ASSERT(children_value_id < values_list_entry.length);
+		}
+
+		//! verify values
+		for (idx_t j = 0; j < values_list_entry.length; j++) {
+			auto type_id_index = type_id.sel->get_index(j + values_list_entry.offset);
+			D_ASSERT(type_id.validity.RowIsValid(type_id_index));
+			auto value_type_id = type_id_data[type_id_index];
+			D_ASSERT(value_type_id < static_cast<uint8_t>(VariantLogicalType::ENUM_SIZE));
+
+			auto byte_offset_index = byte_offset.sel->get_index(j + values_list_entry.offset);
+			D_ASSERT(byte_offset.validity.RowIsValid(byte_offset_index));
+			auto value_byte_offset = byte_offset_data[byte_offset_index];
+			D_ASSERT(value_byte_offset <= blob.GetSize());
+
+			auto blob_data = const_data_ptr_cast(blob.GetData()) + value_byte_offset;
+			switch (static_cast<VariantLogicalType>(value_type_id)) {
+			case VariantLogicalType::OBJECT:
+			case VariantLogicalType::ARRAY: {
+				auto length = VarintDecode<uint32_t>(blob_data);
+				if (!length) {
+					break;
+				}
+				auto children_start_index = VarintDecode<uint32_t>(blob_data);
+				D_ASSERT(children_start_index + length <= children_list_entry.length);
+
+				//! Verify the validity of array/object key_ids
+				for (idx_t child_idx = 0; child_idx < length; child_idx++) {
+					auto child_key_id_index =
+					    key_id.sel->get_index(children_list_entry.offset + children_start_index + child_idx);
+					if (value_type_id == static_cast<uint8_t>(VariantLogicalType::OBJECT)) {
+						D_ASSERT(key_id.validity.RowIsValid(child_key_id_index));
+					} else {
+						D_ASSERT(!key_id.validity.RowIsValid(child_key_id_index));
+					}
+				}
+				break;
+			}
+			default:
+				break;
+			}
+		}
 	}
 
 	return true;

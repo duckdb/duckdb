@@ -36,12 +36,12 @@ OBJECT(a, b)
 VARIANT_NULL
 
 statement error
-select variant_typeof(variant_extract(test, 'struct.a')) from all_types;
+select variant_typeof(variant_extract(test, 'struct').a) from all_types;
 ----
 Invalid Input Error: 'OBJECT' was expected, found 'VARIANT_NULL', can't convert VARIANT
 
 query I
-select variant_typeof(variant_extract(test, 'struct.a')) from all_types limit 2;
+select variant_typeof(variant_extract(test, 'struct').variant_extract('a')) from all_types limit 2;
 ----
 VARIANT_NULL
 INT32
@@ -61,6 +61,6 @@ ARRAY(3)
 VARIANT_NULL
 
 query III
-select variant_typeof(variant_extract(test, 'array_of_structs[0]')), variant_typeof(variant_extract(test, 'array_of_structs[1]')), variant_typeof(variant_extract(test, 'array_of_structs[2]')) from all_types offset 1 limit 1;
+select variant_typeof(variant_extract(test, 'array_of_structs')[0]), variant_typeof(variant_extract(test, 'array_of_structs')[1]), variant_typeof(variant_extract(test, 'array_of_structs')[2]) from all_types offset 1 limit 1;
 ----
 OBJECT(a, b)	OBJECT(a, b)	VARIANT_NULL
