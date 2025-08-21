@@ -2,21 +2,18 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
-#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/optimizer/matcher/expression_matcher.hpp"
 #include "duckdb/optimizer/expression_rewriter.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/function/function_binder.hpp"
-#include "duckdb/function/cast/default_casts.hpp"
 
 namespace duckdb {
 
@@ -339,8 +336,8 @@ unique_ptr<Expression> DateTruncSimplificationRule::CreateTrunc(const BoundConst
 	ErrorData error;
 
 	vector<unique_ptr<Expression>> args;
-	args.emplace_back(std::move(date_part.Copy()));
-	args.emplace_back(std::move(rhs.Copy()));
+	args.emplace_back(date_part.Copy());
+	args.emplace_back(rhs.Copy());
 	auto trunc = binder.BindScalarFunction(DEFAULT_SCHEMA, "date_trunc", std::move(args), error);
 
 	// Ensure that the RHS type matches the column type.
@@ -351,13 +348,13 @@ unique_ptr<Expression> DateTruncSimplificationRule::CreateTrunc(const BoundConst
 	if (trunc->IsFoldable()) {
 		Value result;
 		if (!ExpressionExecutor::TryEvaluateScalar(rewriter.context, *trunc, result)) {
-			return std::move(trunc);
+			return trunc;
 		}
 
 		return make_uniq<BoundConstantExpression>(result);
 	}
 
-	return std::move(trunc);
+	return trunc;
 }
 
 unique_ptr<Expression> DateTruncSimplificationRule::CreateTruncAdd(const BoundConstantExpression &date_part,
@@ -384,12 +381,12 @@ unique_ptr<Expression> DateTruncSimplificationRule::CreateTruncAdd(const BoundCo
 	}
 
 	vector<unique_ptr<Expression>> args2;
-	args2.emplace_back(std::move(rhs.Copy()));
+	args2.emplace_back(rhs.Copy());
 	args2.emplace_back(std::move(interval));
 	auto add = binder.BindScalarFunction(DEFAULT_SCHEMA, "+", std::move(args2), error);
 
 	vector<unique_ptr<Expression>> args3;
-	args3.emplace_back(std::move(date_part.Copy()));
+	args3.emplace_back(date_part.Copy());
 	args3.emplace_back(std::move(add));
 	auto trunc = binder.BindScalarFunction(DEFAULT_SCHEMA, "date_trunc", std::move(args3), error);
 
@@ -401,13 +398,13 @@ unique_ptr<Expression> DateTruncSimplificationRule::CreateTruncAdd(const BoundCo
 	if (trunc->IsFoldable()) {
 		Value result;
 		if (!ExpressionExecutor::TryEvaluateScalar(rewriter.context, *trunc, result)) {
-			return std::move(trunc);
+			return trunc;
 		}
 
 		return make_uniq<BoundConstantExpression>(result);
 	}
 
-	return std::move(trunc);
+	return trunc;
 }
 
 bool DateTruncSimplificationRule::DateIsTruncated(const BoundConstantExpression &date_part,
