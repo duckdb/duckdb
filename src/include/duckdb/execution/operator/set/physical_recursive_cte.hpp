@@ -81,7 +81,6 @@ private:
 
 	void ExecuteRecursivePipelines(ExecutionContext &context) const;
 
-	void BuildRecursivePipeline(PipelineBuildState &state, Pipeline &current, MetaPipeline &meta_pipeline);
 };
 
 } // namespace duckdb

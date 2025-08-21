@@ -201,22 +201,9 @@ SourceResultType PhysicalRecursiveCTE::GetData(ExecutionContext &context, DataCh
 					if (!aggr_output_types.empty()) {
 						payload_rows.Initialize(Allocator::DefaultAllocator(), aggr_output_types);
 					}
-					// Check if we use an external data source to read recursive CTE data.
-					if (children.size() == 3) {
-						recurring_table->Reset();
-						DataChunk result;
-						result.Initialize(Allocator::DefaultAllocator(), types);
-						// Scan the whole hash table and populate the recurring table with the results.
-						while(gstate.ht->Scan(gstate.ht_scan_state, distinct_rows, payload_rows)) {
-							PopulateChunk(result, distinct_rows, distinct_idx, false);
-							PopulateChunk(result, payload_rows, aggr_output_idx, false);
-							recurring_table->Append(result);
-						}
-					} else {
-						gstate.ht->Scan(gstate.ht_scan_state, distinct_rows, payload_rows);
-						PopulateChunk(chunk, distinct_rows, distinct_idx, false);
-						PopulateChunk(chunk, payload_rows, aggr_output_idx, false);
-					}
+					gstate.ht->Scan(gstate.ht_scan_state, distinct_rows, payload_rows);
+					PopulateChunk(chunk, distinct_rows, distinct_idx, false);
+					PopulateChunk(chunk, payload_rows, aggr_output_idx, false);
 				}
 				break;
 			}
@@ -295,35 +282,13 @@ void PhysicalRecursiveCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_
 	sink_state.reset();
 	recursive_meta_pipeline.reset();
 
-	// If we have user-provided aggregations, the internal and output types will be different.
-	// Therefore, an additional scan is needed as a source. This scan depends on the recursive CTE.
-	if (children.size() == 3) {
-		children[2].get().BuildPipelines(current, meta_pipeline);
+	auto &state = meta_pipeline.GetState();
+	state.SetPipelineSource(current, *this);
 
-		auto &recursive_meta = meta_pipeline.CreateChildMetaPipeline(current, *this);
+	// the LHS of the recursive CTE is our initial state
+	auto &initial_state_pipeline = meta_pipeline.CreateChildMetaPipeline(current, *this);
+	initial_state_pipeline.Build(children[0]);
 
-		auto &recursive_state = recursive_meta.GetState();
-
-		auto &recursive_meta_pipelines = recursive_meta.GetBasePipeline();
-		recursive_state.SetPipelineSource(*recursive_meta_pipelines, *this);
-
-		auto &initial_state_pipeline = recursive_meta.CreateChildMetaPipeline(*recursive_meta_pipelines, *this);
-		initial_state_pipeline.Build(children[0]);
-
-		BuildRecursivePipeline(recursive_state, current, recursive_meta);
-	} else {
-		auto &state = meta_pipeline.GetState();
-		state.SetPipelineSource(current, *this);
-
-		// the LHS of the recursive CTE is our initial state
-		auto &initial_state_pipeline = meta_pipeline.CreateChildMetaPipeline(current, *this);
-		initial_state_pipeline.Build(children[0]);
-
-		BuildRecursivePipeline(state, current, meta_pipeline);
-	}
-}
-
-void PhysicalRecursiveCTE::BuildRecursivePipeline(PipelineBuildState &state, Pipeline &current, MetaPipeline &meta_pipeline) {
 	auto &executor = meta_pipeline.GetExecutor();
 	executor.AddRecursiveCTE(*this);
 

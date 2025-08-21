@@ -124,14 +124,6 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 	                                       op.estimated_cardinality);
 	auto &cast_cte = cte.Cast<PhysicalRecursiveCTE>();
 
-	if (op.user_aggregate) {
-		// If we have user-provided aggregations, the internal and output types will be different.
-		// Therefore, an additional scan is needed as a source. This scan depends on the recursive CTE.
-		auto &cached_scan = Make<PhysicalColumnDataScan>(
-		    op.types, PhysicalOperatorType::COLUMN_DATA_SCAN, op.estimated_cardinality, recurring_table.get());
-		cast_cte.children.push_back(cached_scan);
-	}
-
 	cast_cte.using_key = true;
 	cast_cte.payload_aggregates = std::move(payload_aggregates);
 	cast_cte.distinct_idx = distinct_idx;
