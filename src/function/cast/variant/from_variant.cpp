@@ -484,8 +484,12 @@ static bool CastFromVARIANT(Vector &source, Vector &result, idx_t count, CastPar
 	Vector::RecursiveToUnifiedFormat(source, count, conversion_data.unified_format);
 	auto &allocator = Allocator::DefaultAllocator();
 
-	auto owned_value_indices = allocator.Allocate(sizeof(uint32_t) * count);
-	auto value_indices = reinterpret_cast<uint32_t *>(owned_value_indices.get());
+	uint32_t *value_indices = nullptr;
+	AllocatedData owned_value_indices;
+	if (count) {
+		owned_value_indices = allocator.Allocate(sizeof(uint32_t) * count);
+	}
+	value_indices = reinterpret_cast<uint32_t *>(owned_value_indices.get());
 	memset(value_indices, 0, sizeof(uint32_t) * count);
 
 	auto success = CastVariant(conversion_data, result, value_indices, 0, count, optional_idx());

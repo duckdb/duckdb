@@ -300,7 +300,7 @@ Value VariantUtils::ConvertVariantToValue(RecursiveUnifiedVectorFormat &source, 
 				array_items.emplace_back(ConvertVariantToValue(source, row, child_index));
 			}
 		}
-		return Value::ARRAY(LogicalType::VARIANT(), std::move(array_items));
+		return Value::LIST(LogicalType::VARIANT(), std::move(array_items));
 	}
 	case VariantLogicalType::OBJECT: {
 		auto count = VarintDecode<uint32_t>(ptr);
