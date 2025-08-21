@@ -1485,10 +1485,10 @@ string_t CastFromUUIDToBlob::Operation(hugeint_t input, Vector &vector) {
 	// UUID is 16 bytes (128 bits)
 	string_t result = StringVector::EmptyString(vector, 16);
 	auto data = result.GetDataWriteable();
-	
+
 	// Use the utility function from BaseUUID
 	BaseUUID::ToBlob(input, data_ptr_cast(data));
-	
+
 	result.Finalize();
 	return result;
 }
@@ -1505,18 +1505,19 @@ bool TryCastToUUID::Operation(string_t input, hugeint_t &result, Vector &result_
 // Cast Blob To UUID
 //===--------------------------------------------------------------------===//
 template <>
-bool TryCastBlobToUUID::Operation(string_t input, hugeint_t &result, Vector &result_vector, CastParameters &parameters) {
+bool TryCastBlobToUUID::Operation(string_t input, hugeint_t &result, Vector &result_vector,
+                                  CastParameters &parameters) {
 	// BLOB must be exactly 16 bytes for UUID
 	if (input.GetSize() != 16) {
 		HandleCastError::AssignError("BLOB must be exactly 16 bytes to convert to UUID", parameters);
 		return false;
 	}
-	
+
 	auto data = const_data_ptr_cast(input.GetData());
-	
+
 	// Use the utility function from BaseUUID
 	result = BaseUUID::FromBlob(data);
-	
+
 	return true;
 }
 
@@ -1526,12 +1527,12 @@ bool TryCastBlobToUUID::Operation(string_t input, hugeint_t &result, bool strict
 	if (input.GetSize() != 16) {
 		return false;
 	}
-	
+
 	auto data = const_data_ptr_cast(input.GetData());
-	
+
 	// Use the utility function from BaseUUID
 	result = BaseUUID::FromBlob(data);
-	
+
 	return true;
 }
 
