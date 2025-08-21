@@ -376,21 +376,30 @@ bool VariantUtils::Verify(Vector &variant, const SelectionVector &sel_p, idx_t c
 	//! values.type_id
 	auto &type_id = UnifiedVariantVector::GetValuesTypeId(format);
 	auto type_id_data = type_id.GetData<uint8_t>(type_id);
-	D_ASSERT(type_id.validity.AllValid());
 
 	//! values.byte_offset
 	auto &byte_offset = UnifiedVariantVector::GetValuesByteOffset(format);
 	auto byte_offset_data = byte_offset.GetData<uint32_t>(byte_offset);
-	D_ASSERT(byte_offset.validity.AllValid());
 
 	//! data
 	auto &data = UnifiedVariantVector::GetData(format);
 	auto data_data = data.GetData<string_t>(data);
+
 	for (idx_t i = 0; i < count; i++) {
-		auto keys_list_entry = keys_data[sel_p.get_index(i)];
-		auto children_list_entry = children_data[sel_p.get_index(i)];
-		auto values_list_entry = values_data[sel_p.get_index(i)];
-		auto &blob = data_data[sel_p.get_index(i)];
+		auto index = sel_p.get_index(i);
+
+		if (!format.unified.validity.RowIsValid(index)) {
+			continue;
+		}
+		D_ASSERT(keys.validity.RowIsValid(index));
+		D_ASSERT(children.validity.RowIsValid(index));
+		D_ASSERT(values.validity.RowIsValid(index));
+		D_ASSERT(data.validity.RowIsValid(index));
+
+		auto keys_list_entry = keys_data[index];
+		auto children_list_entry = children_data[index];
+		auto values_list_entry = values_data[index];
+		auto &blob = data_data[index];
 
 		//! verify keys
 		for (idx_t j = 0; j < keys_list_entry.length; j++) {
