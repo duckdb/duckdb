@@ -177,7 +177,7 @@ duckdb_extension_load(fts
 )
 
 ################# ENCODINGS
-if (NOT ${WASM_ENABLED} AND ${BUILD_COMPLETE_EXTENSION_SET})
+if (NOT MINGW AND NOT ${WASM_ENABLED} AND ${BUILD_COMPLETE_EXTENSION_SET})
 duckdb_extension_load(encodings
         LOAD_TESTS
         DONT_LINK
