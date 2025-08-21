@@ -1,6 +1,7 @@
 add_library_unity(
   test_sql_interquery_parallelism
   OBJECT
+  concurrent_attach_detach.cpp
   concurrent_checkpoint.cpp
   test_concurrentappend.cpp
   test_concurrentdelete.cpp
