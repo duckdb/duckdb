@@ -34,6 +34,17 @@ CREATE TABLE events AS (
 	) q
 );
 
+query II
+EXPLAIN
+SELECT COUNT(*) FROM (
+	SELECT r.id, s.id
+	FROM events r, events s
+	WHERE r.start <= s.end AND r.end >= s.start
+	  AND r.id <> s.id
+) q2;
+----
+physical_plan	<REGEX>:.*IE_JOIN.*
+
 query I
 SELECT COUNT(*) FROM (
 	SELECT r.id, s.id
