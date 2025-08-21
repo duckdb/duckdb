@@ -32,6 +32,14 @@ enum class AttachedDatabaseType {
 	TEMP_DATABASE,
 };
 
+struct StoredDatabasePath {
+	StoredDatabasePath(DatabaseManager &manager, string path, const string &name);
+	~StoredDatabasePath();
+
+	DatabaseManager &manager;
+	string path;
+};
+
 //! AttachOptions holds information about a database we plan to attach. These options are generalized, i.e.,
 //! they have to apply to any database file type (duckdb, sqlite, etc.).
 struct AttachOptions {
@@ -95,7 +103,11 @@ public:
 	static string ExtractDatabaseName(const string &dbpath, FileSystem &fs);
 
 private:
+	void InsertDatabasePath(const string &path);
+
+private:
 	DatabaseInstance &db;
+	unique_ptr<StoredDatabasePath> stored_database_path;
 	unique_ptr<StorageManager> storage;
 	unique_ptr<Catalog> catalog;
 	unique_ptr<TransactionManager> transaction_manager;

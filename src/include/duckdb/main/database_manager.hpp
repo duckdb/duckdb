@@ -58,7 +58,7 @@ public:
 	void SetDefaultDatabase(ClientContext &context, const string &new_value);
 
 	//! Inserts a path to name mapping to the database paths map
-	void InsertDatabasePath(ClientContext &context, const string &path, const string &name);
+	void InsertDatabasePath(const string &path, const string &name);
 	//! Erases a path from the database paths map
 	void EraseDatabasePath(const string &path);
 
@@ -69,7 +69,7 @@ public:
 	//! Scans the catalog set and adds each committed database entry, and each database entry of the current
 	//! transaction, to a vector holding AttachedDatabase references
 	vector<shared_ptr<AttachedDatabase>> GetDatabases(ClientContext &context,
-	                                                 const optional_idx max_db_count = optional_idx());
+	                                                  const optional_idx max_db_count = optional_idx());
 	//! Scans the catalog set and returns each committed database entry
 	vector<shared_ptr<AttachedDatabase>> GetDatabases();
 	//! Removes all databases from the catalog set. This is necessary for the database instance's destructor,
@@ -96,9 +96,6 @@ public:
 	}
 	//! Gets a list of all attached database paths
 	vector<string> GetAttachedDatabasePaths();
-
-private:
-	void CheckPathConflict(ClientContext &context, const string &path);
 
 private:
 	//! The system database is a special database that holds system entries (e.g. functions)

@@ -75,10 +75,6 @@ optional_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &co
 	auto &db = DatabaseInstance::GetDatabase(context);
 	auto attached_db = db.CreateAttachedDatabase(context, info, options);
 
-	if (options.db_type.empty()) {
-		InsertDatabasePath(context, info.path, attached_db->name);
-	}
-
 	const auto name = attached_db->GetName();
 	attached_db->oid = NextOid();
 	LogicalDependencyList dependencies;
@@ -96,7 +92,7 @@ optional_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &co
 		throw BinderException("Failed to attach database: database with name \"%s\" already exists", name);
 	}
 	auto &meta_transaction = MetaTransaction::Get(context);
-	return meta_transaction.UseDatabase(attached_db);
+	return meta_transaction.AttachDatabase(attached_db);
 }
 
 void DatabaseManager::DetachDatabase(ClientContext &context, const string &name, OnEntryNotFound if_not_found) {
@@ -116,38 +112,25 @@ void DatabaseManager::DetachDatabase(ClientContext &context, const string &name,
 			}
 			return;
 		}
-		attached_db = entry->second;
+		attached_db = std::move(entry->second);
 		databases.erase(entry);
 	}
 
 	attached_db->OnDetach(context);
 }
 
-void DatabaseManager::CheckPathConflict(ClientContext &context, const string &path) {
-	// Ensure that we did not already attach a database with the same path.
-	string db_name = "";
-	{
-		lock_guard<mutex> path_lock(db_paths_lock);
-		auto it = db_paths_to_name.find(path);
-		if (it != db_paths_to_name.end()) {
-			db_name = it->second;
-		}
-	}
-	if (db_name.empty()) {
-		return;
-	}
-	throw BinderException("Unique file handle conflict: Database \"%s\" is already attached with path \"%s\", ",
-	                      db_name, path);
-}
-
-void DatabaseManager::InsertDatabasePath(ClientContext &context, const string &path, const string &name) {
+void DatabaseManager::InsertDatabasePath(const string &path, const string &name) {
 	if (path.empty() || path == IN_MEMORY_PATH) {
 		return;
 	}
 
-	CheckPathConflict(context, path);
 	lock_guard<mutex> path_lock(db_paths_lock);
-	db_paths_to_name[path] = name;
+	auto entry = db_paths_to_name.emplace(path, name);
+	if (!entry.second) {
+		throw BinderException("Unique file handle conflict: Cannot attach \"%s\" - the database file \"%s\" is already "
+		                      "attached by database \"%s\"",
+		                      name, path, entry.first->second);
+	}
 }
 
 void DatabaseManager::EraseDatabasePath(const string &path) {
@@ -155,10 +138,7 @@ void DatabaseManager::EraseDatabasePath(const string &path) {
 		return;
 	}
 	lock_guard<mutex> path_lock(db_paths_lock);
-	auto path_it = db_paths_to_name.find(path);
-	if (path_it != db_paths_to_name.end()) {
-		db_paths_to_name.erase(path_it);
-	}
+	db_paths_to_name.erase(path);
 }
 
 vector<string> DatabaseManager::GetAttachedDatabasePaths() {
@@ -181,8 +161,6 @@ void DatabaseManager::GetDatabaseType(ClientContext &context, AttachInfo &info, 
 
 	// Try to extract the database type from the path.
 	if (options.db_type.empty()) {
-		CheckPathConflict(context, info.path);
-
 		auto &fs = FileSystem::GetFileSystem(context);
 		DBPathAndType::CheckMagicBytes(fs, info.path, options.db_type);
 	}
@@ -235,12 +213,12 @@ void DatabaseManager::SetDefaultDatabase(ClientContext &context, const string &n
 // LCOV_EXCL_STOP
 
 vector<shared_ptr<AttachedDatabase>> DatabaseManager::GetDatabases(ClientContext &context,
-                                                                  const optional_idx max_db_count) {
+                                                                   const optional_idx max_db_count) {
 	vector<shared_ptr<AttachedDatabase>> result;
 
 	lock_guard<mutex> guard(databases_lock);
 	idx_t count = 2;
-	for(auto &entry : databases) {
+	for (auto &entry : databases) {
 		if (max_db_count.IsValid() && count >= max_db_count.GetIndex()) {
 			break;
 		}
@@ -261,7 +239,7 @@ vector<shared_ptr<AttachedDatabase>> DatabaseManager::GetDatabases() {
 	vector<shared_ptr<AttachedDatabase>> result;
 
 	lock_guard<mutex> guard(databases_lock);
-	for(auto &entry : databases) {
+	for (auto &entry : databases) {
 		result.push_back(entry.second);
 	}
 	result.push_back(system);
@@ -270,7 +248,7 @@ vector<shared_ptr<AttachedDatabase>> DatabaseManager::GetDatabases() {
 
 void DatabaseManager::ResetDatabases(unique_ptr<TaskScheduler> &scheduler) {
 	auto databases = GetDatabases();
-	for(auto &entry : databases) {
+	for (auto &entry : databases) {
 		entry->Close();
 		entry.reset();
 	}
