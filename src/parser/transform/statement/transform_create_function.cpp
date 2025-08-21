@@ -37,7 +37,7 @@ unique_ptr<MacroFunction> Transformer::TransformMacroFunction(duckdb_libpgquery:
 			param_name = param->GetAlias();
 		}
 		if (!parameter_names.insert(param_name).second) {
-			throw ParserException("Duplicate parameter '%s' in function definition", param_name);
+			throw ParserException("Duplicate parameter '%s' in macro definition", param_name);
 		}
 
 		unique_ptr<ParsedExpression> default_value;

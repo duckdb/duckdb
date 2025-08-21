@@ -16,22 +16,21 @@ MacroFunction::MacroFunction(MacroType type) : type(type) {
 }
 
 string FormatMacroFunction(const MacroFunction &function, const string &name) {
-	string result;
-	result = name + "(";
+	auto result = name + "(";
+	;
 	string parameters;
 	for (auto &param : function.parameters) {
 		if (!parameters.empty()) {
 			parameters += ", ";
 		}
-		parameters += param->Cast<ColumnRefExpression>().GetColumnName();
-	}
-	for (auto &named_param : function.default_parameters) {
-		if (!parameters.empty()) {
-			parameters += ", ";
+		const auto &param_name = param->Cast<ColumnRefExpression>().GetColumnName();
+		parameters += param_name;
+
+		auto it = function.default_parameters.find(param_name);
+		if (it != function.default_parameters.end()) {
+			parameters += " := ";
+			parameters += it->second->ToString();
 		}
-		parameters += named_param.first;
-		parameters += " := ";
-		parameters += named_param.second->ToString();
 	}
 	result += parameters + ")";
 	return result;
