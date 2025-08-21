@@ -403,6 +403,22 @@ Value ExternalThreadsSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Inspect Range Filter
+//===----------------------------------------------------------------------===//
+void InspectRangeFilterSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.inspect_range_filter = input.GetValue<bool>();
+}
+
+void InspectRangeFilterSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).inspect_range_filter = ClientConfig().inspect_range_filter;
+}
+
+Value InspectRangeFilterSetting::GetSetting(const ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::BOOLEAN(config.inspect_range_filter);
+}
+
 // Home Directory
 //===----------------------------------------------------------------------===//
 void HomeDirectorySetting::ResetLocal(ClientContext &context) {
