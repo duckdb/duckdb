@@ -113,6 +113,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED})
             DONT_LINK
             GIT_URL https://github.com/duckdb/duckdb-postgres
             GIT_TAG c0411b950a0e80d232ba31f30bd484aebccca1b5
+            APPLY_PATCHES
             )
 endif()
 
