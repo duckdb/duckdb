@@ -53,7 +53,7 @@ public:
 	void Finalize(ExecutionContext &context, WindowAggregatorGlobalState &gastate, CollectionPtr collection) override;
 
 	void Evaluate(ExecutionContext &context, const WindowAggregatorGlobalState &gsink, const DataChunk &bounds,
-	              Vector &result, idx_t count, idx_t row_idx);
+	              Vector &result, idx_t count, idx_t row_idx, InterruptState &interrupt);
 
 protected:
 	//! Flush the accumulated intermediate states into the result states
@@ -220,7 +220,8 @@ bool WindowNaiveLocalState::KeyEqual(const idx_t &lidx, const idx_t &ridx) {
 }
 
 void WindowNaiveLocalState::Evaluate(ExecutionContext &context, const WindowAggregatorGlobalState &gsink,
-                                     const DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx) {
+                                     const DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx,
+                                     InterruptState &interrupt) {
 	const auto &aggr = gsink.aggr;
 	auto &filter_mask = gsink.filter_mask;
 	const auto types = cursor->chunk.GetTypes();
@@ -243,7 +244,6 @@ void WindowNaiveLocalState::Evaluate(ExecutionContext &context, const WindowAggr
 		if (arg_orderer) {
 			auto global_sink = sort->GetGlobalSinkState(context.client);
 			auto local_sink = sort->GetLocalSinkState(context);
-			InterruptState interrupt;
 			OperatorSinkInput sink {*global_sink, *local_sink, interrupt};
 
 			idx_t orderby_count = 0;
@@ -366,10 +366,10 @@ unique_ptr<WindowAggregatorState> WindowNaiveAggregator::GetLocalState(const Win
 
 void WindowNaiveAggregator::Evaluate(ExecutionContext &context, const WindowAggregatorState &gsink,
                                      WindowAggregatorState &lstate, const DataChunk &bounds, Vector &result,
-                                     idx_t count, idx_t row_idx) const {
+                                     idx_t count, idx_t row_idx, InterruptState &interrupt) const {
 	const auto &gnstate = gsink.Cast<WindowAggregatorGlobalState>();
 	auto &lnstate = lstate.Cast<WindowNaiveLocalState>();
-	lnstate.Evaluate(context, gnstate, bounds, result, count, row_idx);
+	lnstate.Evaluate(context, gnstate, bounds, result, count, row_idx, interrupt);
 }
 
 } // namespace duckdb

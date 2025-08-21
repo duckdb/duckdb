@@ -187,7 +187,7 @@ public:
 	}
 
 	void Sink(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk, idx_t input_idx,
-	          optional_ptr<SelectionVector> filter_sel, idx_t filtered);
+	          optional_ptr<SelectionVector> filter_sel, idx_t filtered, InterruptState &interrupt);
 	void Finalize(ExecutionContext &context, WindowAggregatorGlobalState &gastate, CollectionPtr collection) override;
 	void Sorted();
 	void ExecuteTask(ExecutionContext &context, WindowDistinctAggregatorGlobalState &gdstate);
@@ -248,16 +248,17 @@ unique_ptr<WindowAggregatorState> WindowDistinctAggregator::GetGlobalState(Clien
 
 void WindowDistinctAggregator::Sink(ExecutionContext &context, WindowAggregatorState &gsink,
                                     WindowAggregatorState &lstate, DataChunk &sink_chunk, DataChunk &coll_chunk,
-                                    idx_t input_idx, optional_ptr<SelectionVector> filter_sel, idx_t filtered) {
-	WindowAggregator::Sink(context, gsink, lstate, sink_chunk, coll_chunk, input_idx, filter_sel, filtered);
+                                    idx_t input_idx, optional_ptr<SelectionVector> filter_sel, idx_t filtered,
+                                    InterruptState &interrupt) {
+	WindowAggregator::Sink(context, gsink, lstate, sink_chunk, coll_chunk, input_idx, filter_sel, filtered, interrupt);
 
 	auto &ldstate = lstate.Cast<WindowDistinctAggregatorLocalState>();
-	ldstate.Sink(context, sink_chunk, coll_chunk, input_idx, filter_sel, filtered);
+	ldstate.Sink(context, sink_chunk, coll_chunk, input_idx, filter_sel, filtered, interrupt);
 }
 
 void WindowDistinctAggregatorLocalState::Sink(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk,
-                                              idx_t input_idx, optional_ptr<SelectionVector> filter_sel,
-                                              idx_t filtered) {
+                                              idx_t input_idx, optional_ptr<SelectionVector> filter_sel, idx_t filtered,
+                                              InterruptState &interrupt) {
 	//	3: 	for i ← 0 to in.size do
 	//	4: 		sorted[i] ← (in[i], i)
 	const auto count = sink_chunk.size();
@@ -283,8 +284,7 @@ void WindowDistinctAggregatorLocalState::Sink(ExecutionContext &context, DataChu
 		local_sink = gdstate.InitializeLocalSort(context);
 	}
 
-	InterruptState interrupt_state;
-	OperatorSinkInput sink {*gdstate.global_sink, *local_sink, interrupt_state};
+	OperatorSinkInput sink {*gdstate.global_sink, *local_sink, interrupt};
 	gdstate.sort->Sink(context, sort_chunk, sink);
 }
 
@@ -390,7 +390,7 @@ bool WindowDistinctAggregatorGlobalState::TryPrepareNextStage(WindowDistinctAggr
 
 void WindowDistinctAggregator::Finalize(ExecutionContext &context, WindowAggregatorState &gsink,
                                         WindowAggregatorState &lstate, CollectionPtr collection,
-                                        const FrameStats &stats) {
+                                        const FrameStats &stats, InterruptState &interrupt) {
 	auto &gdsink = gsink.Cast<WindowDistinctAggregatorGlobalState>();
 	auto &ldstate = lstate.Cast<WindowDistinctAggregatorLocalState>();
 	ldstate.Finalize(context, gdsink, collection);
@@ -700,7 +700,7 @@ unique_ptr<WindowAggregatorState> WindowDistinctAggregator::GetLocalState(const 
 
 void WindowDistinctAggregator::Evaluate(ExecutionContext &context, const WindowAggregatorState &gsink,
                                         WindowAggregatorState &lstate, const DataChunk &bounds, Vector &result,
-                                        idx_t count, idx_t row_idx) const {
+                                        idx_t count, idx_t row_idx, InterruptState &interrupt) const {
 
 	const auto &gdstate = gsink.Cast<WindowDistinctAggregatorGlobalState>();
 	auto &ldstate = lstate.Cast<WindowDistinctAggregatorLocalState>();
