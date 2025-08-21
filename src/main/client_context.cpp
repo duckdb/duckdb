@@ -642,13 +642,19 @@ vector<unique_ptr<SQLStatement>> ClientContext::ParseStatements(const string &qu
 }
 
 vector<unique_ptr<SQLStatement>> ClientContext::ParseStatementsInternal(ClientContextLock &lock, const string &query) {
-	Parser parser(GetParserOptions());
-	parser.ParseQuery(query);
+	try {
+		Parser parser(GetParserOptions());
+		parser.ParseQuery(query);
 
-	PragmaHandler handler(*this);
-	handler.HandlePragmaStatements(lock, parser.statements);
+		PragmaHandler handler(*this);
+		handler.HandlePragmaStatements(lock, parser.statements);
 
-	return std::move(parser.statements);
+		return std::move(parser.statements);
+	} catch (std::exception &ex) {
+		auto error = ErrorData(ex);
+		ProcessError(error, query);
+		error.Throw();
+	}
 }
 
 void ClientContext::HandlePragmaStatements(vector<unique_ptr<SQLStatement>> &statements) {
@@ -956,10 +962,11 @@ unique_ptr<QueryResult> ClientContext::Query(unique_ptr<SQLStatement> statement,
 unique_ptr<QueryResult> ClientContext::Query(const string &query, bool allow_stream_result) {
 	auto lock = LockContext();
 
-	ErrorData error;
 	vector<unique_ptr<SQLStatement>> statements;
-	if (!ParseStatements(*lock, query, statements, error)) {
-		return ErrorResult<MaterializedQueryResult>(std::move(error), query);
+	try {
+		statements = ParseStatements(*lock, query);
+	} catch (const std::exception &ex) {
+		return ErrorResult<MaterializedQueryResult>(ErrorData(ex), query);
 	}
 	if (statements.empty()) {
 		// no statements, return empty successful result
@@ -1012,17 +1019,10 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, bool allow_str
 	return result;
 }
 
-bool ClientContext::ParseStatements(ClientContextLock &lock, const string &query,
-                                    vector<unique_ptr<SQLStatement>> &result, ErrorData &error) {
-	try {
-		InitialCleanup(lock);
-		// parse the query and transform it into a set of statements
-		result = ParseStatementsInternal(lock, query);
-		return true;
-	} catch (std::exception &ex) {
-		error = ErrorData(ex);
-		return false;
-	}
+vector<unique_ptr<SQLStatement>> ClientContext::ParseStatements(ClientContextLock &lock, const string &query) {
+	InitialCleanup(lock);
+	// parse the query and transform it into a set of statements
+	return ParseStatementsInternal(lock, query);
 }
 
 unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const string &query, bool allow_stream_result) {
