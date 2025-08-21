@@ -42,6 +42,12 @@ void RollbackState::RollbackEntry(UndoFlags type, data_ptr_t data) {
 		info->segment->RollbackUpdate(*info);
 		break;
 	}
+	case UndoFlags::ATTACHED_DATABASE: {
+		auto db = Load<AttachedDatabase *>(data);
+		auto &db_manager = DatabaseManager::Get(db->GetDatabase());
+		db_manager.DetachInternal(db->name);
+		break;
+	}
 	case UndoFlags::SEQUENCE_VALUE:
 		break;
 	default: // LCOV_EXCL_START

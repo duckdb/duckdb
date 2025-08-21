@@ -155,16 +155,6 @@ void MetaTransaction::Rollback() {
 			error.Merge(ErrorData(ex));
 		}
 	}
-	// detach any databases that were attached by this transaction
-	for (auto &entry : attached_databases) {
-		try {
-			auto &db_manager = DatabaseManager::Get(context);
-			db_manager.DetachDatabase(context, entry->name, OnEntryNotFound::RETURN_NULL);
-			entry.reset();
-		} catch (std::exception &ex) {
-			error.Merge(ErrorData(ex));
-		}
-	}
 	if (error.HasError()) {
 		error.Throw();
 	}
@@ -188,11 +178,6 @@ AttachedDatabase &MetaTransaction::UseDatabase(shared_ptr<AttachedDatabase> &dat
 		referenced_databases.emplace(reference<AttachedDatabase>(db_ref), database);
 	}
 	return db_ref;
-}
-
-AttachedDatabase &MetaTransaction::AttachDatabase(shared_ptr<AttachedDatabase> &database) {
-	attached_databases.push_back(database);
-	return UseDatabase(database);
 }
 
 void MetaTransaction::ModifyDatabase(AttachedDatabase &db) {

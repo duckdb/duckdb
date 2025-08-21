@@ -8,6 +8,7 @@
 #include "duckdb/main/database_path_and_type.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 
 namespace duckdb {
 
@@ -92,7 +93,12 @@ optional_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &co
 		throw BinderException("Failed to attach database: database with name \"%s\" already exists", name);
 	}
 	auto &meta_transaction = MetaTransaction::Get(context);
-	return meta_transaction.AttachDatabase(attached_db);
+	auto &db_ref = meta_transaction.UseDatabase(attached_db);
+	;
+	auto &transaction = DuckTransaction::Get(context, *system);
+	auto &transaction_manager = DuckTransactionManager::Get(*system);
+	transaction_manager.PushAttach(transaction, db_ref);
+	return db_ref;
 }
 
 void DatabaseManager::DetachDatabase(ClientContext &context, const string &name, OnEntryNotFound if_not_found) {
@@ -102,21 +108,29 @@ void DatabaseManager::DetachDatabase(ClientContext &context, const string &name,
 		                      name);
 	}
 
+	auto attached_db = DetachInternal(name);
+	if (!attached_db) {
+		if (if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
+			throw BinderException("Failed to detach database with name \"%s\": database not found", name);
+		}
+		return;
+	}
+
+	attached_db->OnDetach(context);
+}
+
+shared_ptr<AttachedDatabase> DatabaseManager::DetachInternal(const string &name) {
 	shared_ptr<AttachedDatabase> attached_db;
 	{
 		lock_guard<mutex> guard(databases_lock);
 		auto entry = databases.find(name);
 		if (entry == databases.end()) {
-			if (if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
-				throw BinderException("Failed to detach database with name \"%s\": database not found", name);
-			}
-			return;
+			return nullptr;
 		}
 		attached_db = std::move(entry->second);
 		databases.erase(entry);
 	}
-
-	attached_db->OnDetach(context);
+	return attached_db;
 }
 
 void DatabaseManager::InsertDatabasePath(const string &path, const string &name) {
