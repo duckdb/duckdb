@@ -1,0 +1,131 @@
+# name: test/optimizer/support_cardinality_estimation_for_range.test
+# description: test for cardinality estimation for range
+# group: [optimizer]
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+#### Prepare ###
+# table data range: [1000000, 2000000)
+# distinct value count: 1000000
+# rows count: 4000000
+
+statement ok
+CREATE TABLE t1 AS SELECT range a FROM range(1000000, 2000000);
+
+statement ok
+INSERT INTO t1 SELECT * FROM t1;
+
+statement ok
+INSERT INTO t1 SELECT * FROM t1;
+
+
+#### 1. Test when inspect_range_filter = true ###
+
+statement ok
+SET inspect_range_filter = true;
+
+# equal comparison
+query II
+explain SELECT * FROM t1 WHERE a = 1100000;
+----
+logical_opt	<REGEX>:.*~1. rows.*
+
+
+# on border
+query II
+explain SELECT * FROM t1 WHERE a <= 1000000;
+----
+logical_opt	<REGEX>:.*~1. rows.*
+
+query II
+explain SELECT * FROM t1 WHERE a >= 1999999;
+----
+logical_opt	<REGEX>:.*~1. rows.*
+
+# smaller than minimum
+query II
+explain SELECT * FROM t1 WHERE a < 1000000;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# bigger than maxisum
+query II
+explain SELECT * FROM t1 WHERE a >= 2000000;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# range size 3%
+query II
+explain SELECT * FROM t1 WHERE a > 1001000 AND a < 1004000;
+----
+logical_opt	<REGEX>:.*~12,... rows.*
+
+
+#### 2. Test when inspect_range_filter = false ###
+
+statement ok
+SET inspect_range_filter = false;
+
+# equal comparison
+query II
+explain SELECT * FROM t1 WHERE a = 1100000;
+----
+logical_opt	<REGEX>:.*~1. rows.*
+
+
+# on border
+query II
+explain SELECT * FROM t1 WHERE a <= 1000000;
+----
+logical_opt	<REGEX>:.*~8..,... rows.*
+
+query II
+explain SELECT * FROM t1 WHERE a >= 1999999;
+----
+logical_opt	<REGEX>:.*~8..,... rows.*
+
+# smaller than minimum
+query II
+explain SELECT * FROM t1 WHERE a < 1000000;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# bigger than maxisum
+query II
+explain SELECT * FROM t1 WHERE a >= 2000000;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# range size 3%
+query II
+explain SELECT * FROM t1 WHERE a > 1001000 AND a < 1004000;
+----
+logical_opt	<REGEX>:.*~8..,... rows.*
+
+
+#### 3. Test cardinality estimation when join ###
+statement ok
+DROP TABLE IF EXISTS t1;
+
+statement ok
+CREATE TABLE t1 AS SELECT range id1, range a FROM range(1000000, 2000000);
+
+statement ok
+CREATE TABLE t2 AS SELECT range id2, range a FROM range(1000000, 1100000);
+
+statement ok
+SET inspect_range_filter = false;
+
+query II
+explain SELECT * FROM t1, t2 WHERE t1.id1 = t2.id2 and t1.a > 1001000 AND t1.a < 1004000 and t2.a > 1000000 and t2.a < 1100000 ;
+----
+logical_opt	<REGEX>:.*COMPARISON_JOIN.*id1 = id2.*
+
+statement ok
+SET inspect_range_filter = true;
+
+query II
+explain SELECT * FROM t1, t2 WHERE t1.id1 = t2.id2 and t1.a > 1001000 AND t1.a < 1004000 and t2.a > 1000000 and t2.a < 1100000 ;
+----
+logical_opt	<REGEX>:.*COMPARISON_JOIN.*id2 = id1.*
