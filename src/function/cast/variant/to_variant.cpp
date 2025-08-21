@@ -11,6 +11,9 @@
 
 namespace duckdb {
 
+//! TODO: all the conversion methods need an 'is_root' boolean
+//! to figure out if the 'result' validity should be set to NULL or a VARIANT_NULL should be added
+
 namespace {
 
 struct OffsetData {
@@ -326,9 +329,9 @@ public:
 };
 
 template <bool WRITE_DATA>
-static inline void WriteContainerChildren(VariantVectorData &result, uint64_t children_offset,
-                                          uint32_t &children_offset_data, const list_entry_t source_entry,
-                                          idx_t result_index, ContainerSelectionVectors &sel) {
+static inline void WriteArrayChildren(VariantVectorData &result, uint64_t children_offset,
+                                      uint32_t &children_offset_data, const list_entry_t source_entry,
+                                      idx_t result_index, ContainerSelectionVectors &sel) {
 	idx_t children_index = children_offset + children_offset_data;
 	for (idx_t child_idx = 0; child_idx < source_entry.length; child_idx++) {
 		//! Set up the selection vector for the child of the list vector
@@ -450,8 +453,8 @@ static bool ConvertArrayToVariant(Vector &source, VariantVectorData &result, Dat
 			                                 blob_offset, value_ids_selvec, i, VariantLogicalType::ARRAY);
 			WriteContainerData<WRITE_DATA>(result, result_index, blob_offset, source_entry.length,
 			                               children_offset_data[result_index]);
-			WriteContainerChildren<WRITE_DATA>(result, children_list_entry.offset, children_offset_data[result_index],
-			                                   source_entry, result_index, sel);
+			WriteArrayChildren<WRITE_DATA>(result, children_list_entry.offset, children_offset_data[result_index],
+			                               source_entry, result_index, sel);
 		} else if (!IGNORE_NULLS) {
 			HandleVariantNull<WRITE_DATA>(result, values_list_entry.offset, values_offset_data[result_index],
 			                              blob_offset, value_ids_selvec, i);
@@ -502,8 +505,8 @@ static bool ConvertListToVariant(Vector &source, VariantVectorData &result, Data
 			                                 blob_offset, value_ids_selvec, i, VariantLogicalType::ARRAY);
 			WriteContainerData<WRITE_DATA>(result, result_index, blob_offset, entry.length,
 			                               children_offset_data[result_index]);
-			WriteContainerChildren<WRITE_DATA>(result, children_list_entry.offset, children_offset_data[result_index],
-			                                   entry, result_index, sel);
+			WriteArrayChildren<WRITE_DATA>(result, children_list_entry.offset, children_offset_data[result_index],
+			                               entry, result_index, sel);
 		} else if (!IGNORE_NULLS) {
 			HandleVariantNull<WRITE_DATA>(result, values_list_entry.offset, values_offset_data[result_index],
 			                              blob_offset, value_ids_selvec, i);
@@ -668,6 +671,94 @@ static bool ConvertUnionToVariant(Vector &source, VariantVectorData &result, Dat
 	return true;
 }
 
+template <bool WRITE_DATA, bool IGNORE_NULLS>
+static bool ConvertVariantToVariant(Vector &source, VariantVectorData &result, DataChunk &offsets, idx_t count,
+                                    SelectionVector *selvec, SelectionVector &keys_selvec, StringDictionary &dictionary,
+                                    SelectionVector *value_ids_selvec) {
+
+	throw NotImplementedException("Can't convert nested type 'VARIANT'");
+
+	//! TODO: traverse the source VARIANT, copying it to the result VARIANT
+	auto blob_offset_data = OffsetData::GetBlob(offsets);
+	auto values_offset_data = OffsetData::GetValues(offsets);
+	auto children_offset_data = OffsetData::GetChildren(offsets);
+
+	RecursiveUnifiedVectorFormat source_format;
+	Vector::RecursiveToUnifiedFormat(source, count, source_format);
+
+	//! source keys
+	auto &source_keys = UnifiedVariantVector::GetKeys(source_format);
+	auto source_keys_data = source_keys.GetData<list_entry_t>(source_keys);
+
+	//! source children
+	auto &source_children = UnifiedVariantVector::GetChildren(source_format);
+	auto source_children_data = source_children.GetData<list_entry_t>(source_children);
+
+	//! source values
+	auto &source_values = UnifiedVariantVector::GetValues(source_format);
+	auto source_values_data = source_values.GetData<list_entry_t>(source_values);
+
+	//! source data
+	auto &source_data = UnifiedVariantVector::GetData(source_format);
+	auto source_data_data = source_data.GetData<string_t>(source_data);
+
+	//! source byte_offset
+	auto &source_byte_offset = UnifiedVariantVector::GetValuesByteOffset(source_format);
+	auto source_byte_offset_data = source_byte_offset.GetData<uint32_t>(source_byte_offset);
+
+	//! source type_id
+	auto &source_type_id = UnifiedVariantVector::GetValuesTypeId(source_format);
+	auto source_type_id_data = source_type_id.GetData<uint32_t>(source_type_id);
+
+	//! source key_id
+	auto &source_key_id = UnifiedVariantVector::GetChildrenKeyId(source_format);
+	auto source_key_id_data = source_key_id.GetData<uint32_t>(source_key_id);
+
+	//! source value_id
+	auto &source_value_id = UnifiedVariantVector::GetChildrenValueId(source_format);
+	auto source_value_id_data = source_value_id.GetData<uint32_t>(source_value_id);
+
+	//! There is no VARIANT <-> VARIANT cast, so this *has* to be nested inside a NestedType if we encounter it
+	//! D_ASSERT(!is_root);
+	auto &source_validity = source_format.unified.validity;
+
+	for (idx_t i = 0; i < count; i++) {
+		auto index = source_format.unified.sel->get_index(i);
+
+		auto result_index = selvec ? selvec->get_index(i) : i;
+
+		auto &values_offset = values_offset_data[result_index];
+		auto &blob_offset = blob_offset_data[result_index];
+		auto &values_list_entry = result.values_data[result_index];
+
+		if (!source_validity.RowIsValid(index)) {
+			if (!IGNORE_NULLS) {
+				HandleVariantNull<WRITE_DATA>(result, values_list_entry.offset, values_offset, blob_offset,
+				                              value_ids_selvec, i);
+			}
+			continue;
+		}
+		auto source_keys_list_entry = source_keys_data[index];
+		auto source_children_list_entry = source_children_data[index];
+		auto source_values_list_entry = source_values_data[index];
+		auto source_blob_data = source_data_data[index];
+
+		for (idx_t j = 0; j < source_values_list_entry.length; j++) {
+			auto source_type_id_index = source_type_id.sel->get_index(j + source_values_list_entry.offset);
+			auto source_type_id_value = static_cast<VariantLogicalType>(source_type_id_data[source_type_id_index]);
+
+			auto source_byte_offset_index = source_byte_offset.sel->get_index(j + source_values_list_entry.offset);
+			auto source_byte_offset_value = source_byte_offset_data[source_byte_offset_index];
+
+			//! TODO: copy all values to the result (adjusting their 'byte_offset')
+			//! copy all children (adjusting their 'key_id' and 'value_id')
+			//! write keys as normal (adding to dictionary etc..)
+			//! write data (adjusting the child_index for ARRAY/OBJECT, why is why we can't directly copy)
+		}
+	}
+	return true;
+}
+
 //! * @param source The Vector of arbitrary type to process
 //! * @param result The result Vector to write the variant data to
 //! * @param offsets The offsets to gather per row
@@ -700,6 +791,9 @@ static bool ConvertToVariant(Vector &source, VariantVectorData &result, DataChun
 		case LogicalTypeId::UNION:
 			return ConvertUnionToVariant<WRITE_DATA, IGNORE_NULLS>(source, result, offsets, count, selvec, keys_selvec,
 			                                                       dictionary, value_ids_selvec);
+		case LogicalTypeId::VARIANT:
+			return ConvertVariantToVariant<WRITE_DATA, IGNORE_NULLS>(source, result, offsets, count, selvec,
+			                                                         keys_selvec, dictionary, value_ids_selvec);
 		default:
 			throw NotImplementedException("Can't convert nested type '%s'", EnumUtil::ToString(logical_type));
 		};
@@ -938,6 +1032,8 @@ static bool CastToVARIANT(Vector &source, Vector &result, idx_t count, CastParam
 	//! Initialize the dictionary
 	StringDictionary dictionary;
 	{
+		//! FIXME: this has a giant flaw, because it expects the input to never contain a VARIANT
+		//! when it *does* contain a VARIANT, we can't know those keys until we explore the data
 		TypeVisitor::Contains(source.GetType(), [&dictionary, &keys](const LogicalType &type) {
 			if (type.id() == LogicalTypeId::STRUCT) {
 				auto &children = StructType::GetChildTypes(type);

@@ -145,6 +145,12 @@ static bool CastVariantToPrimitive(FromVariantConversionData &conversion_data, V
 	auto values_data = values_format.GetData<list_entry_t>(values_format);
 	for (idx_t i = 0; i < count; i++) {
 		auto row_index = row.IsValid() ? row.GetIndex() : i;
+
+		auto index = variant.unified.sel->get_index(row_index);
+		if (!variant.unified.validity.RowIsValid(index)) {
+			result.SetValue(i + offset, Value(target_type));
+			continue;
+		}
 		auto &values_list_entry = values_data[values_format.sel->get_index(row_index)];
 		auto blob_index = value_format.sel->get_index(row_index);
 

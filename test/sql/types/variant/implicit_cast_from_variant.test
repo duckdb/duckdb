@@ -192,4 +192,6 @@ select [
 	}
 ]
 ----
-[{'a': true, 'b': 42}, NULL, {'c': false}]
+[{'var': {'a': true, 'b': 42}}, NULL, {'var': {'c': false}}]
+
+# TODO: add a test with a union containing (among others) VARIANT, nulls at every level

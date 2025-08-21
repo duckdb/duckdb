@@ -76,3 +76,10 @@ select var::VARIANT::JSON from tbl;
 {"test":123,"hello":[1,2,3],"world":{"test":true}}
 {"test":123,"hello":[4,5,6],"world":{"test":true}}
 {"test":123,"hello":[],"world":{"test":true}}
+
+query I
+with base as (
+	from VALUES (1), (2), (3)
+)
+select * from base;
+----

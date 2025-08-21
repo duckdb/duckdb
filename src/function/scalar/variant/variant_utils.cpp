@@ -337,14 +337,6 @@ Value VariantUtils::ConvertVariantToValue(RecursiveUnifiedVectorFormat &source, 
 }
 
 bool VariantUtils::Verify(Vector &variant, const SelectionVector &sel_p, idx_t count) {
-	//! TODO: verify variant invariants (badum ts)
-	//! - keys - are not null
-	//! - children.value_id - all are within the 'values' list bounds
-	//! - children.key_id - are all null for array children, and never null for object children
-	//! - values.type_id - are all within the range of valid type ids (VariantLogicalType)
-	//! - values.byte_offset - are all within the 'data' bounds
-	//! - data - the values are sane
-
 	RecursiveUnifiedVectorFormat format;
 	Vector::RecursiveToUnifiedFormat(variant, count, format);
 
@@ -432,6 +424,11 @@ bool VariantUtils::Verify(Vector &variant, const SelectionVector &sel_p, idx_t c
 			D_ASSERT(byte_offset.validity.RowIsValid(byte_offset_index));
 			auto value_byte_offset = byte_offset_data[byte_offset_index];
 			D_ASSERT(value_byte_offset <= blob.GetSize());
+
+			if (j == 0) {
+				//! If the root value is NULL, the row itself should be NULL, not use VARIANT_NULL for the value
+				D_ASSERT(value_type_id != static_cast<uint8_t>(VariantLogicalType::VARIANT_NULL));
+			}
 
 			auto blob_data = const_data_ptr_cast(blob.GetData()) + value_byte_offset;
 			switch (static_cast<VariantLogicalType>(value_type_id)) {
