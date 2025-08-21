@@ -70,7 +70,6 @@ public:
 	static unsafe_optional_ptr<Node> GetChild(BaseNode &n, const uint8_t byte) {
 		for (uint8_t i = 0; i < n.count; i++) {
 			if (n.key[i] == byte) {
-				D_ASSERT(n.children[i].HasMetadata());
 				return &n.children[i];
 			}
 		}
