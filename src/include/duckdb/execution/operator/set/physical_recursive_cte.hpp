@@ -80,7 +80,6 @@ private:
 	idx_t ProbeHT(DataChunk &chunk, RecursiveCTEState &state) const;
 
 	void ExecuteRecursivePipelines(ExecutionContext &context) const;
-
 };
 
 } // namespace duckdb

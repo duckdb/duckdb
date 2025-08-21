@@ -169,7 +169,7 @@ SourceResultType PhysicalRecursiveCTE::GetData(ExecutionContext &context, DataCh
 				if (!aggr_output_types.empty()) {
 					payload_rows.Initialize(Allocator::DefaultAllocator(), aggr_output_types);
 				}
-				result.Initialize(Allocator::DefaultAllocator(), types);
+				result.Initialize(Allocator::DefaultAllocator(), chunk.GetTypes());
 
 				while (gstate.ht->Scan(scan_state, distinct_rows, payload_rows)) {
 					// Populate the result DataChunk with the keys and the payload.
@@ -285,13 +285,15 @@ void PhysicalRecursiveCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_
 	auto &state = meta_pipeline.GetState();
 	state.SetPipelineSource(current, *this);
 
+	auto &executor = meta_pipeline.GetExecutor();
+	executor.AddRecursiveCTE(*this);
+
+
 	// the LHS of the recursive CTE is our initial state
 	auto &initial_state_pipeline = meta_pipeline.CreateChildMetaPipeline(current, *this);
 	initial_state_pipeline.Build(children[0]);
 
-	auto &executor = meta_pipeline.GetExecutor();
-	executor.AddRecursiveCTE(*this);
-
+	// the RHS is the recursive pipeline
 	recursive_meta_pipeline = make_shared_ptr<MetaPipeline>(executor, state, this);
 	recursive_meta_pipeline->SetRecursiveCTE();
 	recursive_meta_pipeline->Build(children[1]);

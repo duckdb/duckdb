@@ -123,7 +123,6 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 	auto &cte = Make<PhysicalRecursiveCTE>(op.ctename, op.table_index, op.types, op.union_all, left, right,
 	                                       op.estimated_cardinality);
 	auto &cast_cte = cte.Cast<PhysicalRecursiveCTE>();
-
 	cast_cte.using_key = true;
 	cast_cte.payload_aggregates = std::move(payload_aggregates);
 	cast_cte.distinct_idx = distinct_idx;
