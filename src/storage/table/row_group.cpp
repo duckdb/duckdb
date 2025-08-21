@@ -72,7 +72,10 @@ void RowGroup::MoveToCollection(RowGroupCollection &collection_p, idx_t new_star
 		if (is_loaded && !is_loaded[c]) {
 			// we only need to set the column start position if it is already loaded
 			// if it is not loaded - we will set the correct start position upon loading
-			continue;
+			lock_guard<mutex> l(row_group_lock);
+			if (!is_loaded[c]) {
+				continue;
+			}
 		}
 		columns[c]->SetStart(new_start);
 	}
