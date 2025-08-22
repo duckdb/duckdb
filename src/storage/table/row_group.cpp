@@ -66,16 +66,14 @@ RowGroup::RowGroup(RowGroupCollection &collection_p, PersistentRowGroupData &dat
 }
 
 void RowGroup::MoveToCollection(RowGroupCollection &collection_p, idx_t new_start) {
+	lock_guard<mutex> l(row_group_lock);
 	this->collection = collection_p;
 	this->start = new_start;
 	for (idx_t c = 0; c < columns.size(); c++) {
 		if (is_loaded && !is_loaded[c]) {
 			// we only need to set the column start position if it is already loaded
 			// if it is not loaded - we will set the correct start position upon loading
-			lock_guard<mutex> l(row_group_lock);
-			if (!is_loaded[c]) {
-				continue;
-			}
+			continue;
 		}
 		columns[c]->SetStart(new_start);
 	}
