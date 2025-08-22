@@ -321,7 +321,7 @@ static inline void WriteArrayChildren(VariantVectorData &result, uint64_t childr
 
 template <bool WRITE_DATA>
 static inline void WriteVariantMetadata(VariantVectorData &result, idx_t result_index, uint32_t *values_offsets,
-                                        uint32_t blob_offset, SelectionVector *value_ids_selvec, idx_t i,
+                                        uint32_t blob_offset, optional_ptr<SelectionVector> value_ids_selvec, idx_t i,
                                         VariantLogicalType type_id) {
 
 	auto &values_offset_data = values_offsets[result_index];
@@ -341,7 +341,7 @@ static inline void WriteVariantMetadata(VariantVectorData &result, idx_t result_
 
 template <bool WRITE_DATA>
 static inline void HandleVariantNull(VariantVectorData &result, idx_t result_index, uint32_t *values_offsets,
-                                     uint32_t blob_offset, SelectionVector *value_ids_selvec, idx_t i,
+                                     uint32_t blob_offset, optional_ptr<SelectionVector> value_ids_selvec, idx_t i,
                                      const bool is_root) {
 	if (is_root) {
 		if (WRITE_DATA) {
@@ -358,8 +358,9 @@ static inline void HandleVariantNull(VariantVectorData &result, idx_t result_ind
 template <bool WRITE_DATA, bool IGNORE_NULLS, VariantLogicalType TYPE_ID, class T,
           class PAYLOAD_CLASS = EmptyConversionPayloadToVariant>
 static bool ConvertPrimitiveToVariant(Vector &source, VariantVectorData &result, DataChunk &offsets, idx_t count,
-                                      SelectionVector *selvec, SelectionVector *value_ids_selvec,
-                                      PAYLOAD_CLASS &payload, const bool is_root) {
+                                      optional_ptr<SelectionVector> selvec,
+                                      optional_ptr<SelectionVector> value_ids_selvec, PAYLOAD_CLASS &payload,
+                                      const bool is_root) {
 	auto blob_offset_data = OffsetData::GetBlob(offsets);
 	auto values_offset_data = OffsetData::GetValues(offsets);
 
@@ -402,15 +403,15 @@ static bool ConvertPrimitiveToVariant(Vector &source, VariantVectorData &result,
 //! fwd declare the ConvertToVariant function
 template <bool WRITE_DATA, bool IGNORE_NULLS = false>
 static bool ConvertToVariant(Vector &source, VariantVectorData &result, DataChunk &offsets, idx_t count,
-                             SelectionVector *selvec, SelectionVector &keys_selvec,
-                             OrderedOwningStringMap<uint32_t> &dictionary, SelectionVector *value_ids_selvec,
-                             const bool is_root);
+                             optional_ptr<SelectionVector> selvec, SelectionVector &keys_selvec,
+                             OrderedOwningStringMap<uint32_t> &dictionary,
+                             optional_ptr<SelectionVector> value_ids_selvec, const bool is_root);
 
 template <bool WRITE_DATA, bool IGNORE_NULLS>
 static bool ConvertArrayToVariant(Vector &source, VariantVectorData &result, DataChunk &offsets, idx_t count,
-                                  SelectionVector *selvec, SelectionVector &keys_selvec,
-                                  OrderedOwningStringMap<uint32_t> &dictionary, SelectionVector *value_ids_selvec,
-                                  const bool is_root) {
+                                  optional_ptr<SelectionVector> selvec, SelectionVector &keys_selvec,
+                                  OrderedOwningStringMap<uint32_t> &dictionary,
+                                  optional_ptr<SelectionVector> value_ids_selvec, const bool is_root) {
 	auto blob_offset_data = OffsetData::GetBlob(offsets);
 	auto values_offset_data = OffsetData::GetValues(offsets);
 	auto children_offset_data = OffsetData::GetChildren(offsets);
@@ -463,9 +464,9 @@ static bool ConvertArrayToVariant(Vector &source, VariantVectorData &result, Dat
 
 template <bool WRITE_DATA, bool IGNORE_NULLS>
 static bool ConvertListToVariant(Vector &source, VariantVectorData &result, DataChunk &offsets, idx_t count,
-                                 SelectionVector *selvec, SelectionVector &keys_selvec,
-                                 OrderedOwningStringMap<uint32_t> &dictionary, SelectionVector *value_ids_selvec,
-                                 const bool is_root) {
+                                 optional_ptr<SelectionVector> selvec, SelectionVector &keys_selvec,
+                                 OrderedOwningStringMap<uint32_t> &dictionary,
+                                 optional_ptr<SelectionVector> value_ids_selvec, const bool is_root) {
 	auto blob_offset_data = OffsetData::GetBlob(offsets);
 	auto values_offset_data = OffsetData::GetValues(offsets);
 	auto children_offset_data = OffsetData::GetChildren(offsets);
@@ -514,9 +515,9 @@ static bool ConvertListToVariant(Vector &source, VariantVectorData &result, Data
 
 template <bool WRITE_DATA, bool IGNORE_NULLS>
 static bool ConvertStructToVariant(Vector &source, VariantVectorData &result, DataChunk &offsets, idx_t count,
-                                   SelectionVector *selvec, SelectionVector &keys_selvec,
-                                   OrderedOwningStringMap<uint32_t> &dictionary, SelectionVector *value_ids_selvec,
-                                   const bool is_root) {
+                                   optional_ptr<SelectionVector> selvec, SelectionVector &keys_selvec,
+                                   OrderedOwningStringMap<uint32_t> &dictionary,
+                                   optional_ptr<SelectionVector> value_ids_selvec, const bool is_root) {
 	auto keys_offset_data = OffsetData::GetKeys(offsets);
 	auto values_offset_data = OffsetData::GetValues(offsets);
 	auto blob_offset_data = OffsetData::GetBlob(offsets);
@@ -610,9 +611,9 @@ static bool ConvertStructToVariant(Vector &source, VariantVectorData &result, Da
 
 template <bool WRITE_DATA, bool IGNORE_NULLS>
 static bool ConvertUnionToVariant(Vector &source, VariantVectorData &result, DataChunk &offsets, idx_t count,
-                                  SelectionVector *selvec, SelectionVector &keys_selvec,
-                                  OrderedOwningStringMap<uint32_t> &dictionary, SelectionVector *value_ids_selvec,
-                                  const bool is_root) {
+                                  optional_ptr<SelectionVector> selvec, SelectionVector &keys_selvec,
+                                  OrderedOwningStringMap<uint32_t> &dictionary,
+                                  optional_ptr<SelectionVector> value_ids_selvec, const bool is_root) {
 	auto &children = StructVector::GetEntries(source);
 
 	UnifiedVectorFormat source_format;
@@ -747,9 +748,9 @@ static uint32_t VariantTrivialPrimitiveSize(VariantLogicalType type) {
 
 template <bool WRITE_DATA, bool IGNORE_NULLS>
 static bool ConvertVariantToVariant(Vector &source, VariantVectorData &result, DataChunk &offsets, idx_t count,
-                                    SelectionVector *selvec, SelectionVector &keys_selvec,
-                                    OrderedOwningStringMap<uint32_t> &dictionary, SelectionVector *value_ids_selvec,
-                                    const bool is_root) {
+                                    optional_ptr<SelectionVector> selvec, SelectionVector &keys_selvec,
+                                    OrderedOwningStringMap<uint32_t> &dictionary,
+                                    optional_ptr<SelectionVector> value_ids_selvec, const bool is_root) {
 
 	auto keys_offset_data = OffsetData::GetKeys(offsets);
 	auto children_offset_data = OffsetData::GetChildren(offsets);
@@ -990,9 +991,9 @@ static bool ConvertVariantToVariant(Vector &source, VariantVectorData &result, D
 //! populate the parent's children
 template <bool WRITE_DATA, bool IGNORE_NULLS>
 static bool ConvertToVariant(Vector &source, VariantVectorData &result, DataChunk &offsets, idx_t count,
-                             SelectionVector *selvec, SelectionVector &keys_selvec,
-                             OrderedOwningStringMap<uint32_t> &dictionary, SelectionVector *value_ids_selvec,
-                             const bool is_root) {
+                             optional_ptr<SelectionVector> selvec, SelectionVector &keys_selvec,
+                             OrderedOwningStringMap<uint32_t> &dictionary,
+                             optional_ptr<SelectionVector> value_ids_selvec, const bool is_root) {
 	auto &type = source.GetType();
 
 	auto physical_type = type.InternalType();
