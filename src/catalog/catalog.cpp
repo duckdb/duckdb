@@ -883,13 +883,18 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, con
 	// Special case for tables: we do a second lookup searching for catalogs with default tables that also match this
 	// lookup
 	if (lookup_info.GetCatalogType() == CatalogType::TABLE_ENTRY && allow_default_table_lookup) {
-		auto default_table_lookup = TryLookupDefaultTable(retriever, lookup_info);
-
-		if (default_table_lookup.Found()) {
-			if (result.Found()) {
-				ThrowDefaultTableAmbiguityException(result, default_table_lookup, lookup_info.GetEntryName());
+		if (!result.Found()) {
+			result = TryLookupDefaultTable(retriever, lookup_info, false);
+			if (result.error.HasError()) {
+				error_data = std::move(result.error);
 			}
-			return default_table_lookup;
+		} else {
+			// Ambiguity lookup is slightly different to allow `FROM <table_name> AT <version>` to be considered
+			// ambiguous with a table in a catalog that supports timetravel
+			auto ambiguity_lookup = TryLookupDefaultTable(retriever, lookup_info, true);
+			if (ambiguity_lookup.Found()) {
+				ThrowDefaultTableAmbiguityException(result, ambiguity_lookup, lookup_info.GetEntryName());
+			}
 		}
 	}
 
@@ -916,8 +921,8 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, con
 	}
 }
 
-CatalogEntryLookup Catalog::TryLookupDefaultTable(CatalogEntryRetriever &retriever,
-                                                  const EntryLookupInfo &lookup_info) {
+CatalogEntryLookup Catalog::TryLookupDefaultTable(CatalogEntryRetriever &retriever, const EntryLookupInfo &lookup_info,
+                                                  bool allow_ignore_at_clause) {
 	auto catalog_by_name = GetCatalogEntry(retriever, lookup_info.GetEntryName());
 
 	if (catalog_by_name && catalog_by_name->HasDefaultTable()) {
@@ -926,8 +931,13 @@ CatalogEntryLookup Catalog::TryLookupDefaultTable(CatalogEntryRetriever &retriev
 
 		string table_schema = catalog_by_name->GetDefaultTableSchema();
 		string table_name = catalog_by_name->GetDefaultTable();
-		optional_ptr<BoundAtClause> at_clause =
-		    catalog_by_name->SupportsTimeTravel() ? lookup_info.GetAtClause() : nullptr;
+
+		optional_ptr<BoundAtClause> at_clause;
+		if (!catalog_by_name->SupportsTimeTravel() && allow_ignore_at_clause) {
+			at_clause = nullptr;
+		} else {
+			at_clause = lookup_info.GetAtClause();
+		}
 
 		EntryLookupInfo info = EntryLookupInfo(CatalogType::TABLE_ENTRY, table_name, at_clause, context);
 		return catalog_by_name->TryLookupEntryInternal(transaction, table_schema, info);
