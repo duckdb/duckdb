@@ -94,7 +94,9 @@ static void VariantTypeofFunction(DataChunk &input, ExpressionState &state, Vect
 
 ScalarFunction VariantTypeofFun::GetFunction() {
 	auto variant_type = LogicalType::VARIANT();
-	return ScalarFunction("variant_typeof", {variant_type}, LogicalType::VARCHAR, VariantTypeofFunction);
+	auto res = ScalarFunction("variant_typeof", {variant_type}, LogicalType::VARCHAR, VariantTypeofFunction);
+	res.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	return res;
 }
 
 } // namespace duckdb

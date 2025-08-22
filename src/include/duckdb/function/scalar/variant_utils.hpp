@@ -25,6 +25,8 @@ struct VariantUtils {
 	DUCKDB_API static bool CollectNestedData(RecursiveUnifiedVectorFormat &variant, VariantLogicalType expected_type,
 	                                         uint32_t *value_indices, idx_t count, optional_idx row,
 	                                         VariantNestedData *child_data, string &error);
+	DUCKDB_API static vector<uint8_t> ValueIsNull(RecursiveUnifiedVectorFormat &variant, uint32_t *value_indices,
+	                                              idx_t count, optional_idx row);
 	DUCKDB_API static Value ConvertVariantToValue(RecursiveUnifiedVectorFormat &source, idx_t row, idx_t values_idx);
 	DUCKDB_API static bool Verify(Vector &variant, const SelectionVector &sel_p, idx_t count);
 };

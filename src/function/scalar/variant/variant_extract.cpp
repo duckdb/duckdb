@@ -181,6 +181,13 @@ static void VariantExtractFunction(DataChunk &input, ExpressionState &state, Vec
 	result_byte_offset.Dictionary(VariantVector::GetValuesByteOffset(variant), values_list_size, new_sel,
 	                              values_list_size);
 
+	auto value_is_null = VariantUtils::ValueIsNull(source_format, output_indices, count, optional_idx());
+	for (idx_t i = 0; i < value_is_null.size(); i++) {
+		if (value_is_null[i]) {
+			FlatVector::SetNull(result, i, true);
+		}
+	}
+
 	if (input.AllConstant()) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}

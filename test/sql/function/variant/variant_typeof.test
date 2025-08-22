@@ -61,6 +61,6 @@ ARRAY(3)
 VARIANT_NULL
 
 query III
-select variant_typeof(variant_extract(test, 'array_of_structs')[0]), variant_typeof(variant_extract(test, 'array_of_structs')[1]), variant_typeof(variant_extract(test, 'array_of_structs')[2]) from all_types offset 1 limit 1;
+select variant_typeof(variant_extract(test, 'array_of_structs')[1]), variant_typeof(variant_extract(test, 'array_of_structs')[2]), variant_typeof(variant_extract(test, 'array_of_structs')[3]) from all_types offset 1 limit 1;
 ----
 OBJECT(a, b)	OBJECT(a, b)	VARIANT_NULL
