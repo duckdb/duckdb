@@ -352,11 +352,12 @@ template <bool WRITE_DATA>
 static inline void WriteVariantMetadata(VariantVectorData &result, idx_t result_index, uint32_t *values_offsets,
                                         uint32_t blob_offset, SelectionVector *value_ids_selvec, idx_t i,
                                         VariantLogicalType type_id) {
-	auto &values_list_entry = result.values_data[result_index];
-	auto values_offset = values_list_entry.offset;
 
 	auto &values_offset_data = values_offsets[result_index];
 	if (WRITE_DATA) {
+		auto &values_list_entry = result.values_data[result_index];
+		auto values_offset = values_list_entry.offset;
+
 		values_offset = values_list_entry.offset + values_offset_data;
 		result.type_ids_data[values_offset] = static_cast<uint8_t>(type_id);
 		result.byte_offset_data[values_offset] = blob_offset;
@@ -695,10 +696,10 @@ static bool ConvertVariantToVariant(Vector &source, VariantVectorData &result, D
 
 	throw NotImplementedException("Can't convert nested type 'VARIANT'");
 
-	//! TODO: traverse the source VARIANT, copying it to the result VARIANT
-	auto blob_offset_data = OffsetData::GetBlob(offsets);
-	auto values_offset_data = OffsetData::GetValues(offsets);
+	auto keys_offset_data = OffsetData::GetKeys(offsets);
 	auto children_offset_data = OffsetData::GetChildren(offsets);
+	auto values_offset_data = OffsetData::GetValues(offsets);
+	auto blob_offset_data = OffsetData::GetBlob(offsets);
 
 	RecursiveUnifiedVectorFormat source_format;
 	Vector::RecursiveToUnifiedFormat(source, count, source_format);
@@ -706,6 +707,10 @@ static bool ConvertVariantToVariant(Vector &source, VariantVectorData &result, D
 	//! source keys
 	auto &source_keys = UnifiedVariantVector::GetKeys(source_format);
 	auto source_keys_data = source_keys.GetData<list_entry_t>(source_keys);
+
+	//! source keys entry
+	auto &source_keys_entry = UnifiedVariantVector::GetKeysEntry(source_format);
+	auto source_keys_entry_data = source_keys_entry.GetData<string_t>(source_keys_entry);
 
 	//! source children
 	auto &source_children = UnifiedVariantVector::GetChildren(source_format);
@@ -735,18 +740,24 @@ static bool ConvertVariantToVariant(Vector &source, VariantVectorData &result, D
 	auto &source_value_id = UnifiedVariantVector::GetChildrenValueId(source_format);
 	auto source_value_id_data = source_value_id.GetData<uint32_t>(source_value_id);
 
-	//! There is no VARIANT <-> VARIANT cast, so this *has* to be nested inside a NestedType if we encounter it
-	//! D_ASSERT(!is_root);
 	auto &source_validity = source_format.unified.validity;
 
 	for (idx_t i = 0; i < count; i++) {
 		auto index = source_format.unified.sel->get_index(i);
-
 		auto result_index = selvec ? selvec->get_index(i) : i;
 
-		auto &blob_offset = blob_offset_data[result_index];
+		auto &keys_list_entry = result.keys_data[result_index];
+		auto &children_list_entry = result.children_data[result_index];
 		auto &values_list_entry = result.values_data[result_index];
+		auto &blob_data = data_ptr_cast(result.blob_data[result_index].GetDataWriteable());
 
+		auto &keys_offset = keys_offset_data[result_index];
+		auto &children_offset = children_offset_data[result_index];
+		auto &values_offset = values_offset_data[result_index];
+		auto &blob_offset = blob_offset_data[result_index];
+
+		idx_t keys_count = 0;
+		idx_t blob_size = 0;
 		if (!source_validity.RowIsValid(index)) {
 			if (!IGNORE_NULLS) {
 				HandleVariantNull<WRITE_DATA>(result, result_index, values_offset_data, blob_offset, value_ids_selvec,
@@ -757,7 +768,13 @@ static bool ConvertVariantToVariant(Vector &source, VariantVectorData &result, D
 		auto source_keys_list_entry = source_keys_data[index];
 		auto source_children_list_entry = source_children_data[index];
 		auto source_values_list_entry = source_values_data[index];
-		auto source_blob_data = source_data_data[index];
+		auto source_blob_data = const_data_ptr_cast(source_data_data[index].GetData());
+
+		D_ASSERT(source_values_list_entry.length);
+		if (value_ids_selvec) {
+			//! Write the value_id for the parent of this column
+			result.value_id_data[value_ids_selvec->get_index(i)] = values_offset;
+		}
 
 		for (idx_t j = 0; j < source_values_list_entry.length; j++) {
 			auto source_type_id_index = source_type_id.sel->get_index(j + source_values_list_entry.offset);
@@ -766,11 +783,175 @@ static bool ConvertVariantToVariant(Vector &source, VariantVectorData &result, D
 			auto source_byte_offset_index = source_byte_offset.sel->get_index(j + source_values_list_entry.offset);
 			auto source_byte_offset_value = source_byte_offset_data[source_byte_offset_index];
 
-			//! TODO: copy all values to the result (adjusting their 'byte_offset')
-			//! copy all children (adjusting their 'key_id' and 'value_id')
-			//! write keys as normal (adding to dictionary etc..)
-			//! write data (adjusting the child_index for ARRAY/OBJECT, why is why we can't directly copy)
+			//! NOTE: we have to deserialize these in both passes
+			//! because to figure out the size of the 'data' that is added by the VARIANT, we have to traverse the
+			//! VARIANT solely because the 'child_index' stored in the OBJECT/ARRAY data could require more bits
+			WriteVariantMetadata<WRITE_DATA>(result, result_index, values_offset_data, blob_offset + blob_size, nullptr,
+			                                 0, source_type_id_value);
+			switch (source_type_id_value) {
+			case VariantLogicalType::ARRAY:
+			case VariantLogicalType::OBJECT: {
+				auto container_blob_data = source_blob_data + source_byte_offset_value;
+				auto length = VarintDecode<uint32_t>(container_blob_data);
+				if (WRITE_DATA) {
+					VarintEncode(length, blob_data + blob_offset + blob_size);
+				}
+				blob_size += GetVarintSize(length);
+				if (length) {
+					auto child_index = VarintDecode<uint32_t>(container_blob_data);
+					auto new_child_index = child_index + children_offset;
+					if (WRITE_DATA) {
+					}
+					blob_size += GetVarintSize(new_child_index);
+				}
+				break;
+			}
+			case VariantLogicalType::VARIANT_NULL:
+			case VariantLogicalType::BOOL_FALSE:
+			case VariantLogicalType::BOOL_TRUE:
+				break;
+			case VariantLogicalType::DECIMAL: {
+				auto decimal_blob_data = source_blob_data + source_byte_offset_value;
+				auto width = static_cast<uint8_t>(VarintDecode<uint32_t>(decimal_blob_data));
+				auto scale = static_cast<uint8_t>(VarintDecode<uint32_t>(decimal_blob_data));
+				blob_size += GetVarintSize(width);
+				blob_size += GetVarintSize(scale);
+
+				if (width > DecimalWidth<int64_t>::max) {
+					blob_size += sizeof(hugeint_t);
+				} else if (width > DecimalWidth<int32_t>::max) {
+					blob_size += sizeof(int64_t);
+				} else if (width > DecimalWidth<int16_t>::max) {
+					blob_size += sizeof(int32_t);
+				} else {
+					blob_size += sizeof(int16_t);
+				}
+				break;
+			}
+			case VariantLogicalType::BITSTRING:
+			case VariantLogicalType::BIGNUM:
+			case VariantLogicalType::VARCHAR:
+			case VariantLogicalType::BLOB: {
+				auto str_blob_data = source_blob_data + source_byte_offset_value;
+				auto str_length = VarintDecode<uint32_t>(str_blob_data);
+				blob_size += GetVarintSize(str_length);
+				+str_length;
+				break;
+			}
+			case VariantLogicalType::INT8:
+				blob_size += sizeof(int8_t);
+				break;
+			case VariantLogicalType::INT16:
+				blob_size += sizeof(int16_t);
+				break;
+			case VariantLogicalType::INT32:
+				blob_size += sizeof(int32_t);
+				break;
+			case VariantLogicalType::INT64:
+				blob_size += sizeof(int64_t);
+				break;
+			case VariantLogicalType::INT128:
+				blob_size += sizeof(hugeint_t);
+				break;
+			case VariantLogicalType::UINT8:
+				blob_size += sizeof(uint8_t);
+				break;
+			case VariantLogicalType::UINT16:
+				blob_size += sizeof(uint16_t);
+				break;
+			case VariantLogicalType::UINT32:
+				blob_size += sizeof(uint32_t);
+				break;
+			case VariantLogicalType::UINT64:
+				blob_size += sizeof(uint64_t);
+				break;
+			case VariantLogicalType::UINT128:
+				blob_size += sizeof(uhugeint_t);
+				break;
+			case VariantLogicalType::FLOAT:
+				blob_size += sizeof(float);
+				break;
+			case VariantLogicalType::DOUBLE:
+				blob_size += sizeof(double);
+				break;
+			case VariantLogicalType::UUID:
+				blob_size += sizeof(hugeint_t);
+				break;
+			case VariantLogicalType::DATE:
+				blob_size += sizeof(int32_t);
+				break;
+			case VariantLogicalType::TIME_MICROS:
+				blob_size += sizeof(dtime_t);
+				break;
+			case VariantLogicalType::TIME_NANOS:
+				blob_size += sizeof(dtime_ns_t);
+				break;
+			case VariantLogicalType::TIMESTAMP_SEC:
+				blob_size += sizeof(timestamp_sec_t);
+				break;
+			case VariantLogicalType::TIMESTAMP_MILIS:
+				blob_size += sizeof(timestamp_ms_t);
+				break;
+			case VariantLogicalType::TIMESTAMP_MICROS:
+				blob_size += sizeof(timestamp_t);
+				break;
+			case VariantLogicalType::TIMESTAMP_NANOS:
+				blob_size += sizeof(timestamp_ns_t);
+				break;
+			case VariantLogicalType::TIME_MICROS_TZ:
+				blob_size += sizeof(dtime_tz_t);
+				break;
+			case VariantLogicalType::TIMESTAMP_MICROS_TZ:
+				blob_size += sizeof(timestamp_tz_t);
+				break;
+			case VariantLogicalType::INTERVAL:
+				blob_size += sizeof(interval_t);
+				break;
+			default:
+				throw InternalException("Unrecognized VariantLogicalType: %s",
+				                        EnumUtil::ToString(source_type_id_value));
+			}
 		}
+
+		//! Now write all children
+		for (idx_t j = 0; j < source_children_list_entry.length; j++) {
+
+			//! value_id
+			if (WRITE_DATA) {
+				auto source_value_id_index = source_value_id.sel->get_index(j + source_children_list_entry.offset);
+				auto source_value_id_value = source_value_id_data[source_value_id_index];
+				result.value_id_data[children_list_entry.offset + children_offset + j] =
+				    values_offset + source_value_id_value;
+			}
+
+			//! key_id
+			auto source_key_id_index = source_key_id.sel->get_index(j + source_children_list_entry.offset);
+			if (source_key_id.validity.RowIsValid(source_key_id_index)) {
+				if (WRITE_DATA) {
+					auto source_key_id_value = source_key_id_data[source_key_id_index];
+
+					//! Look up the existing key from 'source'
+					auto source_key_entry_index =
+					    source_keys_entry.sel->get_index(source_keys_list_entry.offset + source_key_id_value);
+					auto &source_key_value = source_keys_entry_data[source_key_entry_index];
+
+					//! Now write this key to the dictionary of the result
+					auto dict_index = dictionary.AddString(result.keys, source_key_value);
+					result.key_id_data[children_list_entry.offset + children_offset + j] =
+					    NumericCast<uint32_t>(keys_offset + keys_count);
+					keys_selvec.set_index(keys_list_entry.offset + keys_offset + keys_count, dict_index);
+				}
+				keys_count++;
+			} else {
+				if (WRITE_DATA) {
+					result.key_id_validity.SetInvalid(children_list_entry.offset + children_offset + j);
+				}
+			}
+		}
+
+		keys_offset += keys_count;
+		children_offset += source_children_list_entry.length;
+		blob_offset += blob_size;
 	}
 	return true;
 }
