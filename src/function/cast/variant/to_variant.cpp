@@ -661,6 +661,90 @@ static bool ConvertUnionToVariant(Vector &source, VariantVectorData &result, Dat
 	return true;
 }
 
+static bool VariantIsTrivialPrimitive(VariantLogicalType type) {
+	switch (type) {
+	case VariantLogicalType::INT8:
+	case VariantLogicalType::INT16:
+	case VariantLogicalType::INT32:
+	case VariantLogicalType::INT64:
+	case VariantLogicalType::INT128:
+	case VariantLogicalType::UINT8:
+	case VariantLogicalType::UINT16:
+	case VariantLogicalType::UINT32:
+	case VariantLogicalType::UINT64:
+	case VariantLogicalType::UINT128:
+	case VariantLogicalType::FLOAT:
+	case VariantLogicalType::DOUBLE:
+	case VariantLogicalType::UUID:
+	case VariantLogicalType::DATE:
+	case VariantLogicalType::TIME_MICROS:
+	case VariantLogicalType::TIME_NANOS:
+	case VariantLogicalType::TIMESTAMP_SEC:
+	case VariantLogicalType::TIMESTAMP_MILIS:
+	case VariantLogicalType::TIMESTAMP_MICROS:
+	case VariantLogicalType::TIMESTAMP_NANOS:
+	case VariantLogicalType::TIME_MICROS_TZ:
+	case VariantLogicalType::TIMESTAMP_MICROS_TZ:
+	case VariantLogicalType::INTERVAL:
+		return true;
+	default:
+		return false;
+	}
+}
+
+static uint32_t VariantTrivialPrimitiveSize(VariantLogicalType type) {
+	switch (type) {
+	case VariantLogicalType::INT8:
+		return sizeof(int8_t);
+	case VariantLogicalType::INT16:
+		return sizeof(int16_t);
+	case VariantLogicalType::INT32:
+		return sizeof(int32_t);
+	case VariantLogicalType::INT64:
+		return sizeof(int64_t);
+	case VariantLogicalType::INT128:
+		return sizeof(hugeint_t);
+	case VariantLogicalType::UINT8:
+		return sizeof(uint8_t);
+	case VariantLogicalType::UINT16:
+		return sizeof(uint16_t);
+	case VariantLogicalType::UINT32:
+		return sizeof(uint32_t);
+	case VariantLogicalType::UINT64:
+		return sizeof(uint64_t);
+	case VariantLogicalType::UINT128:
+		return sizeof(uhugeint_t);
+	case VariantLogicalType::FLOAT:
+		return sizeof(float);
+	case VariantLogicalType::DOUBLE:
+		return sizeof(double);
+	case VariantLogicalType::UUID:
+		return sizeof(hugeint_t);
+	case VariantLogicalType::DATE:
+		return sizeof(int32_t);
+	case VariantLogicalType::TIME_MICROS:
+		return sizeof(dtime_t);
+	case VariantLogicalType::TIME_NANOS:
+		return sizeof(dtime_ns_t);
+	case VariantLogicalType::TIMESTAMP_SEC:
+		return sizeof(timestamp_sec_t);
+	case VariantLogicalType::TIMESTAMP_MILIS:
+		return sizeof(timestamp_ms_t);
+	case VariantLogicalType::TIMESTAMP_MICROS:
+		return sizeof(timestamp_t);
+	case VariantLogicalType::TIMESTAMP_NANOS:
+		return sizeof(timestamp_ns_t);
+	case VariantLogicalType::TIME_MICROS_TZ:
+		return sizeof(dtime_tz_t);
+	case VariantLogicalType::TIMESTAMP_MICROS_TZ:
+		return sizeof(timestamp_tz_t);
+	case VariantLogicalType::INTERVAL:
+		return sizeof(interval_t);
+	default:
+		throw InternalException("VariantLogicalType '%s' is not a trivial primitive", EnumUtil::ToString(type));
+	}
+}
+
 template <bool WRITE_DATA, bool IGNORE_NULLS>
 static bool ConvertVariantToVariant(Vector &source, VariantVectorData &result, DataChunk &offsets, idx_t count,
                                     SelectionVector *selvec, SelectionVector &keys_selvec,
@@ -801,9 +885,9 @@ static bool ConvertVariantToVariant(Vector &source, VariantVectorData &result, D
 			//! VARIANT solely because the 'child_index' stored in the OBJECT/ARRAY data could require more bits
 			WriteVariantMetadata<WRITE_DATA>(result, result_index, values_offset_data, blob_offset + blob_size, nullptr,
 			                                 0, source_type_id_value);
-			switch (source_type_id_value) {
-			case VariantLogicalType::ARRAY:
-			case VariantLogicalType::OBJECT: {
+
+			if (source_type_id_value == VariantLogicalType::ARRAY ||
+			    source_type_id_value == VariantLogicalType::OBJECT) {
 				auto container_blob_data = source_blob_data + source_byte_offset_value;
 				auto length = VarintDecode<uint32_t>(container_blob_data);
 				if (WRITE_DATA) {
@@ -818,13 +902,11 @@ static bool ConvertVariantToVariant(Vector &source, VariantVectorData &result, D
 					}
 					blob_size += GetVarintSize(new_child_index);
 				}
-				break;
-			}
-			case VariantLogicalType::VARIANT_NULL:
-			case VariantLogicalType::BOOL_FALSE:
-			case VariantLogicalType::BOOL_TRUE:
-				break;
-			case VariantLogicalType::DECIMAL: {
+			} else if (source_type_id_value == VariantLogicalType::VARIANT_NULL ||
+			           source_type_id_value == VariantLogicalType::BOOL_FALSE ||
+			           source_type_id_value == VariantLogicalType::BOOL_TRUE) {
+				// no-op
+			} else if (source_type_id_value == VariantLogicalType::DECIMAL) {
 				auto decimal_blob_data = source_blob_data + source_byte_offset_value;
 				auto width = static_cast<uint8_t>(VarintDecode<uint32_t>(decimal_blob_data));
 				auto width_varint_size = GetVarintSize(width);
@@ -862,12 +944,10 @@ static bool ConvertVariantToVariant(Vector &source, VariantVectorData &result, D
 					}
 					blob_size += sizeof(int16_t);
 				}
-				break;
-			}
-			case VariantLogicalType::BITSTRING:
-			case VariantLogicalType::BIGNUM:
-			case VariantLogicalType::VARCHAR:
-			case VariantLogicalType::BLOB: {
+			} else if (source_type_id_value == VariantLogicalType::BITSTRING ||
+			           source_type_id_value == VariantLogicalType::BIGNUM ||
+			           source_type_id_value == VariantLogicalType::VARCHAR ||
+			           source_type_id_value == VariantLogicalType::BLOB) {
 				auto str_blob_data = source_blob_data + source_byte_offset_value;
 				auto str_length = VarintDecode<uint32_t>(str_blob_data);
 				auto str_length_varint_size = GetVarintSize(str_length);
@@ -880,170 +960,13 @@ static bool ConvertVariantToVariant(Vector &source, VariantVectorData &result, D
 					memcpy(blob_data + blob_offset + blob_size, str_blob_data, str_length);
 				}
 				blob_size += str_length;
-				break;
-			}
-			case VariantLogicalType::INT8:
+			} else if (VariantIsTrivialPrimitive(source_type_id_value)) {
+				auto size = VariantTrivialPrimitiveSize(source_type_id_value);
 				if (WRITE_DATA) {
-					memcpy(blob_data + blob_offset + blob_size, source_blob_data + source_byte_offset_value,
-					       sizeof(int8_t));
+					memcpy(blob_data + blob_offset + blob_size, source_blob_data + source_byte_offset_value, size);
 				}
-				blob_size += sizeof(int8_t);
-				break;
-			case VariantLogicalType::INT16:
-				if (WRITE_DATA) {
-					memcpy(blob_data + blob_offset + blob_size, source_blob_data + source_byte_offset_value,
-					       sizeof(int16_t));
-				}
-				blob_size += sizeof(int16_t);
-				break;
-			case VariantLogicalType::INT32:
-				if (WRITE_DATA) {
-					memcpy(blob_data + blob_offset + blob_size, source_blob_data + source_byte_offset_value,
-					       sizeof(int32_t));
-				}
-				blob_size += sizeof(int32_t);
-				break;
-			case VariantLogicalType::INT64:
-				if (WRITE_DATA) {
-					memcpy(blob_data + blob_offset + blob_size, source_blob_data + source_byte_offset_value,
-					       sizeof(int64_t));
-				}
-				blob_size += sizeof(int64_t);
-				break;
-			case VariantLogicalType::INT128:
-				if (WRITE_DATA) {
-					memcpy(blob_data + blob_offset + blob_size, source_blob_data + source_byte_offset_value,
-					       sizeof(hugeint_t));
-				}
-				blob_size += sizeof(hugeint_t);
-				break;
-			case VariantLogicalType::UINT8:
-				if (WRITE_DATA) {
-					memcpy(blob_data + blob_offset + blob_size, source_blob_data + source_byte_offset_value,
-					       sizeof(uint8_t));
-				}
-				blob_size += sizeof(uint8_t);
-				break;
-			case VariantLogicalType::UINT16:
-				if (WRITE_DATA) {
-					memcpy(blob_data + blob_offset + blob_size, source_blob_data + source_byte_offset_value,
-					       sizeof(uint16_t));
-				}
-				blob_size += sizeof(uint16_t);
-				break;
-			case VariantLogicalType::UINT32:
-				if (WRITE_DATA) {
-					memcpy(blob_data + blob_offset + blob_size, source_blob_data + source_byte_offset_value,
-					       sizeof(uint32_t));
-				}
-				blob_size += sizeof(uint32_t);
-				break;
-			case VariantLogicalType::UINT64:
-				if (WRITE_DATA) {
-					memcpy(blob_data + blob_offset + blob_size, source_blob_data + source_byte_offset_value,
-					       sizeof(uint64_t));
-				}
-				blob_size += sizeof(uint64_t);
-				break;
-			case VariantLogicalType::UINT128:
-				if (WRITE_DATA) {
-					memcpy(blob_data + blob_offset + blob_size, source_blob_data + source_byte_offset_value,
-					       sizeof(uhugeint_t));
-				}
-				blob_size += sizeof(uhugeint_t);
-				break;
-			case VariantLogicalType::FLOAT:
-				if (WRITE_DATA) {
-					memcpy(blob_data + blob_offset + blob_size, source_blob_data + source_byte_offset_value,
-					       sizeof(float));
-				}
-				blob_size += sizeof(float);
-				break;
-			case VariantLogicalType::DOUBLE:
-				if (WRITE_DATA) {
-					memcpy(blob_data + blob_offset + blob_size, source_blob_data + source_byte_offset_value,
-					       sizeof(double));
-				}
-				blob_size += sizeof(double);
-				break;
-			case VariantLogicalType::UUID:
-				if (WRITE_DATA) {
-					memcpy(blob_data + blob_offset + blob_size, source_blob_data + source_byte_offset_value,
-					       sizeof(hugeint_t));
-				}
-				blob_size += sizeof(hugeint_t);
-				break;
-			case VariantLogicalType::DATE:
-				if (WRITE_DATA) {
-					memcpy(blob_data + blob_offset + blob_size, source_blob_data + source_byte_offset_value,
-					       sizeof(int32_t));
-				}
-				blob_size += sizeof(int32_t);
-				break;
-			case VariantLogicalType::TIME_MICROS:
-				if (WRITE_DATA) {
-					memcpy(blob_data + blob_offset + blob_size, source_blob_data + source_byte_offset_value,
-					       sizeof(dtime_t));
-				}
-				blob_size += sizeof(dtime_t);
-				break;
-			case VariantLogicalType::TIME_NANOS:
-				if (WRITE_DATA) {
-					memcpy(blob_data + blob_offset + blob_size, source_blob_data + source_byte_offset_value,
-					       sizeof(dtime_ns_t));
-				}
-				blob_size += sizeof(dtime_ns_t);
-				break;
-			case VariantLogicalType::TIMESTAMP_SEC:
-				if (WRITE_DATA) {
-					memcpy(blob_data + blob_offset + blob_size, source_blob_data + source_byte_offset_value,
-					       sizeof(timestamp_sec_t));
-				}
-				blob_size += sizeof(timestamp_sec_t);
-				break;
-			case VariantLogicalType::TIMESTAMP_MILIS:
-				if (WRITE_DATA) {
-					memcpy(blob_data + blob_offset + blob_size, source_blob_data + source_byte_offset_value,
-					       sizeof(timestamp_ms_t));
-				}
-				blob_size += sizeof(timestamp_ms_t);
-				break;
-			case VariantLogicalType::TIMESTAMP_MICROS:
-				if (WRITE_DATA) {
-					memcpy(blob_data + blob_offset + blob_size, source_blob_data + source_byte_offset_value,
-					       sizeof(timestamp_t));
-				}
-				blob_size += sizeof(timestamp_t);
-				break;
-			case VariantLogicalType::TIMESTAMP_NANOS:
-				if (WRITE_DATA) {
-					memcpy(blob_data + blob_offset + blob_size, source_blob_data + source_byte_offset_value,
-					       sizeof(timestamp_ns_t));
-				}
-				blob_size += sizeof(timestamp_ns_t);
-				break;
-			case VariantLogicalType::TIME_MICROS_TZ:
-				if (WRITE_DATA) {
-					memcpy(blob_data + blob_offset + blob_size, source_blob_data + source_byte_offset_value,
-					       sizeof(dtime_tz_t));
-				}
-				blob_size += sizeof(dtime_tz_t);
-				break;
-			case VariantLogicalType::TIMESTAMP_MICROS_TZ:
-				if (WRITE_DATA) {
-					memcpy(blob_data + blob_offset + blob_size, source_blob_data + source_byte_offset_value,
-					       sizeof(timestamp_tz_t));
-				}
-				blob_size += sizeof(timestamp_tz_t);
-				break;
-			case VariantLogicalType::INTERVAL:
-				if (WRITE_DATA) {
-					memcpy(blob_data + blob_offset + blob_size, source_blob_data + source_byte_offset_value,
-					       sizeof(interval_t));
-				}
-				blob_size += sizeof(interval_t);
-				break;
-			default:
+				blob_size += size;
+			} else {
 				throw InternalException("Unrecognized VariantLogicalType: %s",
 				                        EnumUtil::ToString(source_type_id_value));
 			}
