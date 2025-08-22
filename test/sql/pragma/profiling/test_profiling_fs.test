@@ -33,10 +33,10 @@ statement ok
 PRAGMA custom_profiling_settings='{"TOTAL_BYTES_READ": "true"}';
 
 statement ok
-SET profiling_coverage='ALL';
+ATTACH '__TEST_DIR__/profile_fs.db';
 
 statement ok
-ATTACH '__TEST_DIR__/profile_fs.db';
+SELECT * FROM profile_fs.tbl;
 
 statement ok
 PRAGMA disable_profiling;

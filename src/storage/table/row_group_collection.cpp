@@ -871,7 +871,7 @@ public:
 
 		TableScanState scan_state;
 		scan_state.Initialize(column_ids);
-		scan_state.table_state.Initialize(types);
+		scan_state.table_state.Initialize(QueryContext(), types);
 		scan_state.table_state.max_row = idx_t(-1);
 		idx_t merged_groups = 0;
 		idx_t total_row_groups = vacuum_state.row_group_counts.size();
@@ -1280,7 +1280,8 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(ClientContext &cont
 	return result;
 }
 
-void RowGroupCollection::VerifyNewConstraint(DataTable &parent, const BoundConstraint &constraint) {
+void RowGroupCollection::VerifyNewConstraint(QueryContext context, DataTable &parent,
+                                             const BoundConstraint &constraint) {
 	if (total_rows == 0) {
 		return;
 	}
@@ -1302,7 +1303,7 @@ void RowGroupCollection::VerifyNewConstraint(DataTable &parent, const BoundConst
 	CreateIndexScanState state;
 	auto scan_type = TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED;
 	state.Initialize(column_ids, nullptr);
-	InitializeScan(state.table_state, column_ids, nullptr);
+	InitializeScan(context, state.table_state, column_ids, nullptr);
 
 	InitializeCreateIndexScan(state);
 

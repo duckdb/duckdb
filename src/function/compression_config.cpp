@@ -5,7 +5,7 @@
 
 namespace duckdb {
 
-typedef CompressionFunction (*get_compression_function_t)(PhysicalType type);
+typedef CompressionFunction (*get_compression_function_t)(QueryContext context, PhysicalType type);
 typedef bool (*compression_supports_type_t)(const PhysicalType physical_type);
 
 struct DefaultCompressionMethod {
@@ -57,7 +57,7 @@ static optional_ptr<CompressionFunction> LoadCompressionFunction(CompressionFunc
 				return nullptr;
 			}
 			// The type is supported. We create the function and insert it into the set of available functions.
-			auto function = method.get_function(physical_type);
+			auto function = method.get_function(QueryContext(), physical_type);
 			set.functions[type].insert(make_pair(physical_type, function));
 			return FindCompressionFunction(set, type, physical_type);
 		}

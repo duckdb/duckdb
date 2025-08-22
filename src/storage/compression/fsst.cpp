@@ -50,7 +50,7 @@ struct FSSTStorage {
 	static void Compress(CompressionState &state_p, Vector &scan_vector, idx_t count);
 	static void FinalizeCompress(CompressionState &state_p);
 
-	static unique_ptr<SegmentScanState> StringInitScan(ColumnSegment &segment);
+	static unique_ptr<SegmentScanState> StringInitScan(QueryContext context, ColumnSegment &segment);
 	template <bool ALLOW_FSST_VECTORS = false>
 	static void StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
 	                              idx_t result_offset);
@@ -245,7 +245,7 @@ public:
 		auto &db = checkpoint_data.GetDatabase();
 		auto &type = checkpoint_data.GetType();
 
-		auto compressed_segment = ColumnSegment::CreateTransientSegment(context, db, function, type, row_start,
+		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start,
 		                                                                info.GetBlockSize(), info.GetBlockManager());
 		current_segment = std::move(compressed_segment);
 		Reset();
@@ -569,7 +569,7 @@ struct FSSTScanState : public StringScanState {
 	}
 };
 
-unique_ptr<SegmentScanState> FSSTStorage::StringInitScan(ColumnSegment &segment) {
+unique_ptr<SegmentScanState> FSSTStorage::StringInitScan(QueryContext context, ColumnSegment &segment) {
 	auto block_size = segment.GetBlockManager().GetBlockSize();
 	auto string_block_limit = StringUncompressed::GetStringBlockLimit(block_size);
 	auto state = make_uniq<FSSTScanState>(string_block_limit);
@@ -778,7 +778,7 @@ void FSSTStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state
 //===--------------------------------------------------------------------===//
 // Get Function
 //===--------------------------------------------------------------------===//
-CompressionFunction FSSTFun::GetFunction(PhysicalType data_type) {
+CompressionFunction FSSTFun::GetFunction(QueryContext context, PhysicalType data_type) {
 	D_ASSERT(data_type == PhysicalType::VARCHAR);
 	return CompressionFunction(CompressionType::COMPRESSION_FSST, data_type, FSSTStorage::StringInitAnalyze,
 	                           FSSTStorage::StringAnalyze, FSSTStorage::StringFinalAnalyze,

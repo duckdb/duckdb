@@ -81,7 +81,7 @@ struct ZSTDStorage {
 	static void Compress(CompressionState &state_p, Vector &scan_vector, idx_t count);
 	static void FinalizeCompress(CompressionState &state_p);
 
-	static unique_ptr<SegmentScanState> StringInitScan(ColumnSegment &segment);
+	static unique_ptr<SegmentScanState> StringInitScan(QueryContext context, ColumnSegment &segment);
 	static void StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
 	                              idx_t result_offset);
 	static void StringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result);
@@ -524,7 +524,7 @@ public:
 	void CreateEmptySegment(idx_t row_start) {
 		auto &db = checkpoint_data.GetDatabase();
 		auto &type = checkpoint_data.GetType();
-		auto compressed_segment = ColumnSegment::CreateTransientSegment(context, db, function, type, row_start,
+		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start,
 		                                                                info.GetBlockSize(), info.GetBlockManager());
 		segment = std::move(compressed_segment);
 
@@ -962,7 +962,7 @@ public:
 	AllocatedData skip_buffer;
 };
 
-unique_ptr<SegmentScanState> ZSTDStorage::StringInitScan(ColumnSegment &segment) {
+unique_ptr<SegmentScanState> ZSTDStorage::StringInitScan(QueryContext context, ColumnSegment &segment) {
 	auto result = make_uniq<ZSTDScanState>(segment);
 	return std::move(result);
 }
@@ -1031,7 +1031,7 @@ void ZSTDStorage::CleanupState(ColumnSegment &segment) {
 //===--------------------------------------------------------------------===//
 // Get Function
 //===--------------------------------------------------------------------===//
-CompressionFunction ZSTDFun::GetFunction(PhysicalType data_type) {
+CompressionFunction ZSTDFun::GetFunction(QueryContext context, PhysicalType data_type) {
 	D_ASSERT(data_type == PhysicalType::VARCHAR);
 	auto zstd = CompressionFunction(
 	    CompressionType::COMPRESSION_ZSTD, data_type, ZSTDStorage::StringInitAnalyze, ZSTDStorage::StringAnalyze,

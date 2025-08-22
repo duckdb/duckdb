@@ -498,7 +498,7 @@ public:
 		auto &db = checkpoint_data.GetDatabase();
 		auto &type = checkpoint_data.GetType();
 
-		auto compressed_segment = ColumnSegment::CreateTransientSegment(context, db, function, type, row_start,
+		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start,
 		                                                                info.GetBlockSize(), info.GetBlockManager());
 		current_segment = std::move(compressed_segment);
 
@@ -779,7 +779,7 @@ public:
 };
 
 template <class T>
-unique_ptr<SegmentScanState> BitpackingInitScan(ColumnSegment &segment) {
+unique_ptr<SegmentScanState> BitpackingInitScan(QueryContext context, ColumnSegment &segment) {
 	auto result = make_uniq<BitpackingScanState<T>>(segment);
 	return std::move(result);
 }
@@ -987,7 +987,7 @@ CompressionFunction GetBitpackingFunction(PhysicalType data_type) {
 	return bitpacking;
 }
 
-CompressionFunction BitpackingFun::GetFunction(PhysicalType type) {
+CompressionFunction BitpackingFun::GetFunction(QueryContext context, PhysicalType type) {
 	switch (type) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:

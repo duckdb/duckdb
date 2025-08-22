@@ -499,7 +499,7 @@ idx_t LocalStorage::Delete(DataTable &table, Vector &row_ids, idx_t count) {
 
 	// delete from unique indices (if any)
 	if (!storage->append_indexes.Empty()) {
-		storage->row_groups->RemoveFromIndexes(context, storage->append_indexes, row_ids, count);
+		storage->row_groups->RemoveFromIndexes(QueryContext(context), storage->append_indexes, row_ids, count);
 	}
 
 	auto ids = FlatVector::GetData<row_t>(row_ids);
@@ -687,7 +687,7 @@ void LocalStorage::VerifyNewConstraint(DataTable &parent, const BoundConstraint 
 	if (!storage) {
 		return;
 	}
-	storage->row_groups->VerifyNewConstraint(parent, constraint);
+	storage->row_groups->VerifyNewConstraint(QueryContext(context), parent, constraint);
 }
 
 } // namespace duckdb

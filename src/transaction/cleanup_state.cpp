@@ -13,7 +13,7 @@
 
 namespace duckdb {
 
-CleanupState::CleanupState(transaction_t lowest_active_transaction)
+CleanupState::CleanupState(QueryContext context, transaction_t lowest_active_transaction)
     : lowest_active_transaction(lowest_active_transaction), current_table(nullptr), count(0) {
 }
 
@@ -87,7 +87,7 @@ void CleanupState::CleanupDelete(DeleteInfo &info) {
 	Flush();
 }
 
-void CleanupState::Flush(QueryContext context) {
+void CleanupState::Flush() {
 	if (count == 0) {
 		return;
 	}

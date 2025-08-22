@@ -42,7 +42,7 @@ enum class ColumnSegmentType : uint8_t { TRANSIENT, PERSISTENT };
 class ColumnSegment : public SegmentBase<ColumnSegment> {
 public:
 	//! Construct a column segment.
-	ColumnSegment(QueryContext context, DatabaseInstance &db, shared_ptr<BlockHandle> block, const LogicalType &type,
+	ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block, const LogicalType &type,
 	              const ColumnSegmentType segment_type, const idx_t start, const idx_t count,
 	              CompressionFunction &function_p, BaseStatistics statistics, const block_id_t block_id_p,
 	              const idx_t offset, const idx_t segment_size_p,
@@ -58,10 +58,9 @@ public:
 	                                                         idx_t start, idx_t count, CompressionType compression_type,
 	                                                         BaseStatistics statistics,
 	                                                         unique_ptr<ColumnSegmentState> segment_state);
-	static unique_ptr<ColumnSegment> CreateTransientSegment(QueryContext context, DatabaseInstance &db,
-	                                                        CompressionFunction &function, const LogicalType &type,
-	                                                        const idx_t start, const idx_t segment_size,
-	                                                        BlockManager &block_manager);
+	static unique_ptr<ColumnSegment> CreateTransientSegment(DatabaseInstance &db, CompressionFunction &function,
+	                                                        const LogicalType &type, const idx_t start,
+	                                                        const idx_t segment_size, BlockManager &block_manager);
 
 public:
 	void InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state);
@@ -144,7 +143,6 @@ private:
 	void ScanPartial(ColumnScanState &state, idx_t scan_count, Vector &result, idx_t result_offset);
 
 public:
-	QueryContext context;
 	//! The database instance
 	DatabaseInstance &db;
 	//! The type stored in the column

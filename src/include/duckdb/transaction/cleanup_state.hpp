@@ -21,7 +21,7 @@ struct UpdateInfo;
 
 class CleanupState {
 public:
-	explicit CleanupState(transaction_t lowest_active_transaction);
+	explicit CleanupState(QueryContext context, transaction_t lowest_active_transaction);
 	~CleanupState();
 
 	// all tables with indexes that possibly need a vacuum (after e.g. a delete)
@@ -31,6 +31,7 @@ public:
 	void CleanupEntry(UndoFlags type, data_ptr_t data);
 
 private:
+	QueryContext context;
 	//! Lowest active transaction
 	transaction_t lowest_active_transaction;
 	// data for index cleanup
@@ -43,7 +44,7 @@ private:
 	void CleanupDelete(DeleteInfo &info);
 	void CleanupUpdate(UpdateInfo &info);
 
-	void Flush(QueryContext context);
+	void Flush();
 };
 
 } // namespace duckdb

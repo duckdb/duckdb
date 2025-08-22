@@ -150,8 +150,8 @@ struct RLECompressState : public CompressionState {
 		auto &db = checkpoint_data.GetDatabase();
 		auto &type = checkpoint_data.GetType();
 
-		auto column_segment = ColumnSegment::CreateTransientSegment(context, db, function, type, row_start,
-		                                                            info.GetBlockSize(), info.GetBlockManager());
+		auto column_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start, info.GetBlockSize(),
+		                                                            info.GetBlockManager());
 		current_segment = std::move(column_segment);
 
 		auto &buffer_manager = BufferManager::GetBufferManager(db);
@@ -303,7 +303,7 @@ struct RLEScanState : public SegmentScanState {
 };
 
 template <class T>
-unique_ptr<SegmentScanState> RLEInitScan(ColumnSegment &segment) {
+unique_ptr<SegmentScanState> RLEInitScan(QueryContext context, ColumnSegment &segment) {
 	auto result = make_uniq<RLEScanState<T>>(segment);
 	return std::move(result);
 }
@@ -576,7 +576,7 @@ CompressionFunction GetRLEFunction(PhysicalType data_type) {
 	                           RLEFilter<T>);
 }
 
-CompressionFunction RLEFun::GetFunction(PhysicalType type) {
+CompressionFunction RLEFun::GetFunction(QueryContext context, PhysicalType type) {
 	switch (type) {
 	case PhysicalType::BOOL: {
 		auto function = GetRLEFunction<int8_t>(type);

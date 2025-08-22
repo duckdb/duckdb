@@ -188,6 +188,10 @@ public:
 
 	void VerifyNewConstraint(DataTable &parent, const BoundConstraint &constraint);
 
+	ClientContext &GetClientContext() const {
+		return context;
+	}
+
 private:
 	ClientContext &context;
 	DuckTransaction &transaction;
