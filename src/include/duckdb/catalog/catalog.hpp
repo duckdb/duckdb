@@ -407,7 +407,8 @@ private:
 
 	//! Looks for a Catalog with a DefaultTable that matches the lookup
 	static CatalogEntryLookup TryLookupDefaultTable(CatalogEntryRetriever &retriever,
-	                                                const EntryLookupInfo &lookup_info, bool allow_ignore_at_clause);
+	                                                const EntryLookupInfo &lookup_info,
+	                                                bool allow_ignore_at_clause = false);
 
 	//! Return an exception with did-you-mean suggestion.
 	static CatalogException CreateMissingEntryException(CatalogEntryRetriever &retriever,

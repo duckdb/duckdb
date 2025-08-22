@@ -889,8 +889,8 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, con
 				error_data = std::move(result.error);
 			}
 		} else {
-			// Ambiguity lookup is slightly different to allow `FROM <table_name> AT <version>` to be considered
-			// ambiguous with a table in a catalog that supports timetravel
+			// allow_ignore_at_clause set to true to ensure `FROM <table_name> AT <version>` is considered
+			// ambiguous with a default table lookup in a catalog that does not support time travel
 			auto ambiguity_lookup = TryLookupDefaultTable(retriever, lookup_info, true);
 			if (ambiguity_lookup.Found()) {
 				ThrowDefaultTableAmbiguityException(result, ambiguity_lookup, lookup_info.GetEntryName());
