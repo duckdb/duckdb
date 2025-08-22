@@ -11,8 +11,14 @@ ATTACH IF NOT EXISTS '__TEST_DIR__/attach_mix_${k}.db'
 ----
 Unique file handle conflict
 
+onlyif i<20
 statement maybe
 CREATE TABLE attach_mix_${k}.tbl${i} AS SELECT * FROM range(${k} * ${i}) t(i)
+----
+
+onlyif i>=20
+statement maybe
+SELECT COUNT(*) FROM attach_mix_${k}.tbl${i}
 ----
 
 statement maybe

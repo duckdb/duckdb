@@ -54,8 +54,8 @@ optional_ptr<AttachedDatabase> DatabaseManager::GetDatabase(ClientContext &conte
 	return meta_transaction.UseDatabase(entry->second);
 }
 
-optional_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &context, AttachInfo &info,
-                                                               AttachOptions &options) {
+shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &context, AttachInfo &info,
+                                                             AttachOptions &options) {
 	if (AttachedDatabase::NameIsReserved(info.name)) {
 		throw BinderException("Attached database name \"%s\" cannot be used because it is a reserved name", info.name);
 	}
@@ -76,15 +76,16 @@ optional_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &co
 	// now create the attached database
 	auto &db = DatabaseInstance::GetDatabase(context);
 	auto attached_db = db.CreateAttachedDatabase(context, info, options);
+	return attached_db;
+}
 
+optional_ptr<AttachedDatabase> DatabaseManager::FinalizeAttach(ClientContext &context, AttachInfo &info,
+                                                               shared_ptr<AttachedDatabase> attached_db) {
 	const auto name = attached_db->GetName();
 	attached_db->oid = NextOid();
-	LogicalDependencyList dependencies;
 	if (default_database.empty()) {
 		default_database = name;
 	}
-
-	// and add it to the databases catalog set
 	if (info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
 		DetachDatabase(context, name, OnEntryNotFound::RETURN_NULL);
 	}

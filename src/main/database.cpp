@@ -206,14 +206,13 @@ void DatabaseInstance::CreateMainDatabase() {
 	info.name = AttachedDatabase::ExtractDatabaseName(config.options.database_path, GetFileSystem());
 	info.path = config.options.database_path;
 
-	optional_ptr<AttachedDatabase> initial_database;
 	Connection con(*this);
 	con.BeginTransaction();
 	AttachOptions options(config.options);
-	initial_database = db_manager->AttachDatabase(*con.context, info, options);
-
+	auto initial_database = db_manager->AttachDatabase(*con.context, info, options);
 	initial_database->SetInitialDatabase();
 	initial_database->Initialize(*con.context);
+	db_manager->FinalizeAttach(*con.context, info, std::move(initial_database));
 	con.Commit();
 }
 

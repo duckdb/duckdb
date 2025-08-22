@@ -73,6 +73,8 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 		attached_db->GetCatalog().SetDefaultTable(options.default_table.schema, options.default_table.name);
 	}
 	attached_db->FinalizeLoad(context.client);
+
+	db_manager.FinalizeAttach(context.client, *info, std::move(attached_db));
 	return SourceResultType::FINISHED;
 }
 
