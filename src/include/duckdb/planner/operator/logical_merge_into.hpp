@@ -52,6 +52,8 @@ public:
 	optional_idx source_marker;
 	//! Bound constraints
 	vector<unique_ptr<BoundConstraint>> bound_constraints;
+	//! Whether or not to return the input data
+	bool return_chunk = false;
 
 	map<MergeActionCondition, vector<unique_ptr<BoundMergeIntoAction>>> actions;
 
@@ -60,6 +62,7 @@ public:
 	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
 
 	idx_t EstimateCardinality(ClientContext &context) override;
+	vector<idx_t> GetTableIndex() const override;
 
 protected:
 	vector<ColumnBinding> GetColumnBindings() override;

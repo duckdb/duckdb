@@ -28,6 +28,7 @@ public:
 	static constexpr idx_t FILE_FLAGS_PARALLEL_ACCESS = idx_t(1 << 8);
 	static constexpr idx_t FILE_FLAGS_EXCLUSIVE_CREATE = idx_t(1 << 9);
 	static constexpr idx_t FILE_FLAGS_NULL_IF_EXISTS = idx_t(1 << 10);
+	static constexpr idx_t FILE_FLAGS_MULTI_CLIENT_ACCESS = idx_t(1 << 11);
 
 public:
 	FileOpenFlags() = default;
@@ -107,6 +108,9 @@ public:
 	inline bool ReturnNullIfExists() const {
 		return flags & FILE_FLAGS_NULL_IF_EXISTS;
 	}
+	inline bool MultiClientAccess() const {
+		return flags & FILE_FLAGS_MULTI_CLIENT_ACCESS;
+	}
 	inline idx_t GetFlagsInternal() const {
 		return flags;
 	}
@@ -145,6 +149,9 @@ public:
 	    FileOpenFlags(FileOpenFlags::FILE_FLAGS_EXCLUSIVE_CREATE);
 	//!  Return NULL if the file exist instead of throwing an error
 	static constexpr FileOpenFlags FILE_FLAGS_NULL_IF_EXISTS = FileOpenFlags(FileOpenFlags::FILE_FLAGS_NULL_IF_EXISTS);
+	//! Multiple clients may access the file at the same time
+	static constexpr FileOpenFlags FILE_FLAGS_MULTI_CLIENT_ACCESS =
+	    FileOpenFlags(FileOpenFlags::FILE_FLAGS_MULTI_CLIENT_ACCESS);
 };
 
 } // namespace duckdb

@@ -11,14 +11,17 @@
 #include "duckdb/verification/unoptimized_statement_verifier.hpp"
 #include "duckdb/verification/no_operator_caching_verifier.hpp"
 #include "duckdb/verification/fetch_row_verifier.hpp"
+#include "duckdb/verification/explain_statement_verifier.hpp"
 
 namespace duckdb {
 
 StatementVerifier::StatementVerifier(VerificationType type, string name, unique_ptr<SQLStatement> statement_p,
                                      optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters_p)
-    : type(type), name(std::move(name)),
-      statement(unique_ptr_cast<SQLStatement, SelectStatement>(std::move(statement_p))), parameters(parameters_p),
-      select_list(statement->node->GetSelectList()) {
+    : type(type), name(std::move(name)), statement(std::move(statement_p)),
+      select_statement(statement->type == StatementType::SELECT_STATEMENT ? &statement->Cast<SelectStatement>()
+                                                                          : nullptr),
+      parameters(parameters_p),
+      select_list(select_statement ? select_statement->node->GetSelectList() : empty_select_list) {
 }
 
 StatementVerifier::StatementVerifier(unique_ptr<SQLStatement> statement_p,
@@ -47,6 +50,8 @@ StatementVerifier::Create(VerificationType type, const SQLStatement &statement_p
 		return PreparedStatementVerifier::Create(statement_p, parameters);
 	case VerificationType::EXTERNAL:
 		return ExternalStatementVerifier::Create(statement_p, parameters);
+	case VerificationType::EXPLAIN:
+		return ExplainStatementVerifier::Create(statement_p, parameters);
 	case VerificationType::FETCH_ROW_AS_SCAN:
 		return FetchRowVerifier::Create(statement_p, parameters);
 	case VerificationType::INVALID:
@@ -60,8 +65,8 @@ void StatementVerifier::CheckExpressions(const StatementVerifier &other) const {
 	D_ASSERT(type == VerificationType::ORIGINAL);
 
 	// Check equality
-	if (other.RequireEquality()) {
-		D_ASSERT(statement->Equals(*other.statement));
+	if (other.RequireEquality() && select_statement) {
+		D_ASSERT(select_statement->Equals(*other.select_statement));
 	}
 
 #ifdef DEBUG

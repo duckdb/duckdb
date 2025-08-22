@@ -16,7 +16,7 @@ namespace duckdb {
 
 enum class VerifyExistenceType : uint8_t { APPEND = 0, APPEND_FK = 1, DELETE_FK = 2 };
 enum class ARTConflictType : uint8_t { NO_CONFLICT = 0, CONSTRAINT = 1, TRANSACTION = 2 };
-enum class ARTHandlingResult : uint8_t { CONTINUE = 0, SKIP = 1, YIELD = 2 };
+enum class ARTHandlingResult : uint8_t { CONTINUE = 0, SKIP = 1, YIELD = 2, NONE = 3 };
 
 class ConflictManager;
 class ARTKey;
@@ -72,7 +72,7 @@ public:
 	unique_ptr<IndexScanState> TryInitializeScan(const Expression &expr, const Expression &filter_expr);
 	//! Perform a lookup on the ART, fetching up to max_count row IDs.
 	//! If all row IDs were fetched, it return true, else false.
-	bool Scan(IndexScanState &state, idx_t max_count, unsafe_vector<row_t> &row_ids);
+	bool Scan(IndexScanState &state, idx_t max_count, set<row_t> &row_ids);
 
 	//! Appends data to the locked index.
 	ErrorData Append(IndexLock &l, DataChunk &chunk, Vector &row_ids) override;
@@ -124,11 +124,11 @@ public:
 	void VerifyBuffers(IndexLock &l) override;
 
 private:
-	bool SearchEqual(ARTKey &key, idx_t max_count, unsafe_vector<row_t> &row_ids);
-	bool SearchGreater(ARTKey &key, bool equal, idx_t max_count, unsafe_vector<row_t> &row_ids);
-	bool SearchLess(ARTKey &upper_bound, bool equal, idx_t max_count, unsafe_vector<row_t> &row_ids);
+	bool SearchEqual(ARTKey &key, idx_t max_count, set<row_t> &row_ids);
+	bool SearchGreater(ARTKey &key, bool equal, idx_t max_count, set<row_t> &row_ids);
+	bool SearchLess(ARTKey &upper_bound, bool equal, idx_t max_count, set<row_t> &row_ids);
 	bool SearchCloseRange(ARTKey &lower_bound, ARTKey &upper_bound, bool left_equal, bool right_equal, idx_t max_count,
-	                      unsafe_vector<row_t> &row_ids);
+	                      set<row_t> &row_ids);
 
 	string GenerateErrorKeyName(DataChunk &input, idx_t row);
 	string GenerateConstraintErrorMessage(VerifyExistenceType verify_type, const string &key_name);
@@ -137,8 +137,6 @@ private:
 	void VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictManager &manager) override;
 	string GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index,
 	                                     DataChunk &input) override;
-
-	void Erase(Node &node, reference<const ARTKey> key, idx_t depth, reference<const ARTKey> row_id, GateStatus status);
 
 	bool ConstructInternal(const unsafe_vector<ARTKey> &keys, const unsafe_vector<ARTKey> &row_ids, Node &node,
 	                       ARTKeySection &section);

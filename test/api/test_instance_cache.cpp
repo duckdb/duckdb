@@ -39,12 +39,12 @@ TEST_CASE("Test parallel connection and destruction of connections with database
 }
 struct DelayingStorageExtension : StorageExtension {
 	DelayingStorageExtension() {
-		attach = [](StorageExtensionInfo *, ClientContext &, AttachedDatabase &db, const string &, AttachInfo &info,
-		            AccessMode) -> unique_ptr<Catalog> {
+		attach = [](optional_ptr<StorageExtensionInfo>, ClientContext &, AttachedDatabase &db, const string &,
+		            AttachInfo &info, AttachOptions &) -> unique_ptr<Catalog> {
 			std::this_thread::sleep_for(std::chrono::seconds(5));
 			return make_uniq_base<Catalog, DuckCatalog>(db);
 		};
-		create_transaction_manager = [](StorageExtensionInfo *, AttachedDatabase &db,
+		create_transaction_manager = [](optional_ptr<StorageExtensionInfo>, AttachedDatabase &db,
 		                                Catalog &) -> unique_ptr<TransactionManager> {
 			return make_uniq<DuckTransactionManager>(db);
 		};

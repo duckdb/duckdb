@@ -32,9 +32,11 @@ SourceResultType PhysicalReset::GetData(ExecutionContext &context, DataChunk &ch
 		// check if this is an extra extension variable
 		auto entry = config.extension_parameters.find(name);
 		if (entry == config.extension_parameters.end()) {
-			Catalog::AutoloadExtensionByConfigName(context.client, name);
+			auto extension_name = Catalog::AutoloadExtensionByConfigName(context.client, name);
 			entry = config.extension_parameters.find(name);
-			D_ASSERT(entry != config.extension_parameters.end());
+			if (entry == config.extension_parameters.end()) {
+				throw InvalidInputException("Extension parameter %s was not found after autoloading", name);
+			}
 		}
 		ResetExtensionVariable(context, config, entry->second);
 		return SourceResultType::FINISHED;
@@ -45,12 +47,28 @@ SourceResultType PhysicalReset::GetData(ExecutionContext &context, DataChunk &ch
 	if (variable_scope == SetScope::AUTOMATIC) {
 		if (option->set_local) {
 			variable_scope = SetScope::SESSION;
-		} else {
-			D_ASSERT(option->set_global);
+		} else if (option->set_global) {
 			variable_scope = SetScope::GLOBAL;
+		} else {
+			variable_scope = option->default_scope;
 		}
 	}
 
+	if (option->default_value) {
+		if (option->set_callback) {
+			SettingCallbackInfo info(context.client, variable_scope);
+			auto parameter_type = DBConfig::ParseLogicalType(option->parameter_type);
+			Value reset_val = Value(option->default_value).CastAs(context.client, parameter_type);
+			option->set_callback(info, reset_val);
+		}
+		if (variable_scope == SetScope::SESSION) {
+			auto &client_config = ClientConfig::GetConfig(context.client);
+			client_config.set_variables.erase(name);
+		} else {
+			config.ResetGenericOption(name);
+		}
+		return SourceResultType::FINISHED;
+	}
 	switch (variable_scope) {
 	case SetScope::GLOBAL: {
 		if (!option->set_global) {

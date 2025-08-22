@@ -35,7 +35,7 @@ struct ARTIndexScanState : public IndexScanState {
 	ExpressionType expressions[2];
 	bool checked = false;
 	//! All scanned row IDs.
-	unsafe_vector<row_t> row_ids;
+	set<row_t> row_ids;
 };
 
 //===--------------------------------------------------------------------===//
@@ -207,6 +207,8 @@ unique_ptr<IndexScanState> ART::TryInitializeScan(const Expression &expr, const 
 		high_comparison_type =
 		    between.upper_inclusive ? ExpressionType::COMPARE_LESSTHANOREQUALTO : ExpressionType::COMPARE_LESSTHAN;
 	}
+	// FIXME: add another if...else... to match rewritten BETWEEN,
+	// i.e., WHERE i BETWEEN 50 AND 1502 is rewritten to CONJUNCTION_AND.
 
 	// We cannot use an index scan.
 	if (equal_value.IsNull() && low_value.IsNull() && high_value.IsNull()) {
@@ -495,7 +497,7 @@ bool ART::Construct(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_ids,
 	}
 
 #ifdef DEBUG
-	unsafe_vector<row_t> row_ids_debug;
+	set<row_t> row_ids_debug;
 	Iterator it(*this);
 	it.FindMinimum(tree);
 	ARTKey empty_key = ARTKey();
@@ -552,7 +554,8 @@ ErrorData ART::Insert(IndexLock &l, DataChunk &chunk, Vector &row_ids, IndexAppe
 			if (keys[i].Empty()) {
 				continue;
 			}
-			Erase(tree, keys[i], 0, row_id_keys[i], tree.GetGateStatus());
+			D_ASSERT(tree.GetGateStatus() == GateStatus::GATE_NOT_SET);
+			ARTOperator::Delete(*this, tree, keys[i], row_id_keys[i]);
 		}
 	}
 
@@ -641,7 +644,8 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 		if (keys[i].Empty()) {
 			continue;
 		}
-		Erase(tree, keys[i], 0, row_id_keys[i], tree.GetGateStatus());
+		D_ASSERT(tree.GetGateStatus() == GateStatus::GATE_NOT_SET);
+		ARTOperator::Delete(*this, tree, keys[i], row_id_keys[i]);
 	}
 
 	if (!tree.HasMetadata()) {
@@ -662,106 +666,11 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 #endif
 }
 
-void ART::Erase(Node &node, reference<const ARTKey> key, idx_t depth, reference<const ARTKey> row_id,
-                GateStatus status) {
-	if (!node.HasMetadata()) {
-		return;
-	}
-
-	// Traverse the prefix.
-	reference<Node> next(node);
-	if (next.get().GetType() == NType::PREFIX) {
-		auto pos = Prefix::TraverseMutable(*this, next, key, depth);
-		if (pos.IsValid()) {
-			// Prefixes don't match: nothing to erase.
-			return;
-		}
-	}
-
-	//	Delete the row ID from the leaf.
-	//	This is the root node, which can be a leaf with possible prefix nodes.
-	if (next.get().GetType() == NType::LEAF_INLINED) {
-		if (next.get().GetRowId() == row_id.get().GetRowId()) {
-			Node::Free(*this, node);
-		}
-		return;
-	}
-
-	// Transform a deprecated leaf.
-	if (next.get().GetType() == NType::LEAF) {
-		D_ASSERT(status == GateStatus::GATE_NOT_SET);
-		Leaf::TransformToNested(*this, next);
-	}
-
-	// Enter a nested leaf.
-	if (status == GateStatus::GATE_NOT_SET && next.get().GetGateStatus() == GateStatus::GATE_SET) {
-		return Erase(next, row_id, 0, row_id, GateStatus::GATE_SET);
-	}
-
-	D_ASSERT(depth < key.get().len);
-	if (next.get().IsLeafNode()) {
-		auto byte = key.get()[depth];
-		if (next.get().HasByte(*this, byte)) {
-			Node::DeleteChild(*this, next, node, key.get()[depth], status, key.get());
-		}
-		return;
-	}
-
-	auto child = next.get().GetChildMutable(*this, key.get()[depth]);
-	if (!child) {
-		// No child at the byte: nothing to erase.
-		return;
-	}
-
-	// Transform a deprecated leaf.
-	if (child->GetType() == NType::LEAF) {
-		D_ASSERT(status == GateStatus::GATE_NOT_SET);
-		Leaf::TransformToNested(*this, *child);
-	}
-
-	// Enter a nested leaf.
-	if (status == GateStatus::GATE_NOT_SET && child->GetGateStatus() == GateStatus::GATE_SET) {
-		Erase(*child, row_id, 0, row_id, GateStatus::GATE_SET);
-		if (!child->HasMetadata()) {
-			Node::DeleteChild(*this, next, node, key.get()[depth], status, key.get());
-		} else {
-			next.get().ReplaceChild(*this, key.get()[depth], *child);
-		}
-		return;
-	}
-
-	auto temp_depth = depth + 1;
-	reference<Node> ref(*child);
-
-	if (ref.get().GetType() == NType::PREFIX) {
-		auto pos = Prefix::TraverseMutable(*this, ref, key, temp_depth);
-		if (pos.IsValid()) {
-			// Prefixes don't match: nothing to erase.
-			return;
-		}
-	}
-
-	if (ref.get().GetType() == NType::LEAF_INLINED) {
-		if (ref.get().GetRowId() == row_id.get().GetRowId()) {
-			Node::DeleteChild(*this, next, node, key.get()[depth], status, key.get());
-		}
-		return;
-	}
-
-	// Recurse.
-	Erase(*child, key, depth + 1, row_id, status);
-	if (!child->HasMetadata()) {
-		Node::DeleteChild(*this, next, node, key.get()[depth], status, key.get());
-	} else {
-		next.get().ReplaceChild(*this, key.get()[depth], *child);
-	}
-}
-
 //===--------------------------------------------------------------------===//
 // Point and range lookups
 //===--------------------------------------------------------------------===//
 
-bool ART::SearchEqual(ARTKey &key, idx_t max_count, unsafe_vector<row_t> &row_ids) {
+bool ART::SearchEqual(ARTKey &key, idx_t max_count, set<row_t> &row_ids) {
 	auto leaf = ARTOperator::Lookup(*this, tree, key, 0);
 	if (!leaf) {
 		return true;
@@ -773,7 +682,7 @@ bool ART::SearchEqual(ARTKey &key, idx_t max_count, unsafe_vector<row_t> &row_id
 	return it.Scan(empty_key, max_count, row_ids, false);
 }
 
-bool ART::SearchGreater(ARTKey &key, bool equal, idx_t max_count, unsafe_vector<row_t> &row_ids) {
+bool ART::SearchGreater(ARTKey &key, bool equal, idx_t max_count, set<row_t> &row_ids) {
 	if (!tree.HasMetadata()) {
 		return true;
 	}
@@ -791,7 +700,7 @@ bool ART::SearchGreater(ARTKey &key, bool equal, idx_t max_count, unsafe_vector<
 	return it.Scan(ARTKey(), max_count, row_ids, false);
 }
 
-bool ART::SearchLess(ARTKey &upper_bound, bool equal, idx_t max_count, unsafe_vector<row_t> &row_ids) {
+bool ART::SearchLess(ARTKey &upper_bound, bool equal, idx_t max_count, set<row_t> &row_ids) {
 	if (!tree.HasMetadata()) {
 		return true;
 	}
@@ -810,7 +719,7 @@ bool ART::SearchLess(ARTKey &upper_bound, bool equal, idx_t max_count, unsafe_ve
 }
 
 bool ART::SearchCloseRange(ARTKey &lower_bound, ARTKey &upper_bound, bool left_equal, bool right_equal, idx_t max_count,
-                           unsafe_vector<row_t> &row_ids) {
+                           set<row_t> &row_ids) {
 	// Find the first node that satisfies the left predicate.
 	Iterator it(*this);
 
@@ -823,7 +732,7 @@ bool ART::SearchCloseRange(ARTKey &lower_bound, ARTKey &upper_bound, bool left_e
 	return it.Scan(upper_bound, max_count, row_ids, right_equal);
 }
 
-bool ART::Scan(IndexScanState &state, const idx_t max_count, unsafe_vector<row_t> &row_ids) {
+bool ART::Scan(IndexScanState &state, const idx_t max_count, set<row_t> &row_ids) {
 	auto &scan_state = state.Cast<ARTIndexScanState>();
 	D_ASSERT(scan_state.values[0].type().InternalType() == types[0]);
 	ArenaAllocator arena_allocator(Allocator::Get(db));
@@ -962,27 +871,27 @@ void ART::VerifyLeaf(const Node &leaf, const ARTKey &key, optional_ptr<ART> dele
 	Iterator it(*this);
 	it.FindMinimum(leaf);
 	ARTKey empty_key = ARTKey();
-	unsafe_vector<row_t> row_ids;
+	set<row_t> row_ids;
 	auto success = it.Scan(empty_key, 2, row_ids, false);
 	if (!success || row_ids.size() != 2) {
 		throw InternalException("VerifyLeaf expects exactly two row IDs to be scanned");
 	}
 
-	if (!deleted_leaf) {
-		if (manager.AddHit(i, row_ids[0]) || manager.AddSecondHit(i, row_ids[1])) {
-			conflict_idx = i;
+	if (deleted_leaf) {
+		auto deleted_row_id = deleted_leaf->GetRowId();
+		for (const auto row_id : row_ids) {
+			if (deleted_row_id == row_id) {
+				return;
+			}
 		}
-		return;
 	}
 
-	auto deleted_row_id = deleted_leaf->GetRowId();
-	if (deleted_row_id == row_ids[0] || deleted_row_id == row_ids[1]) {
-		return;
-	}
-
-	if (manager.AddHit(i, row_ids[0]) || manager.AddSecondHit(i, row_ids[1])) {
+	auto row_id_it = row_ids.begin();
+	if (manager.AddHit(i, *row_id_it)) {
 		conflict_idx = i;
 	}
+	row_id_it++;
+	manager.AddSecondHit(i, *row_id_it);
 }
 
 void ART::VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictManager &manager) {
@@ -1262,7 +1171,7 @@ void ART::Vacuum(IndexLock &state) {
 			break;
 		}
 		default:
-			throw InternalException("invalid node type for Vacuum: %s", EnumUtil::ToString(type));
+			throw InternalException("invalid node type for Vacuum: %d", type);
 		}
 
 		const auto idx = Node::GetAllocatorIdx(type);
@@ -1301,14 +1210,14 @@ void ART::InitializeMerge(Node &node, unsafe_vector<idx_t> &upper_bounds) {
 	auto handler = [&upper_bounds](Node &node) {
 		const auto type = node.GetType();
 		if (node.GetType() == NType::LEAF_INLINED) {
-			return ARTHandlingResult::CONTINUE;
+			return ARTHandlingResult::NONE;
 		}
 		if (type == NType::LEAF) {
 			throw InternalException("deprecated ART storage in InitializeMerge");
 		}
 		const auto idx = Node::GetAllocatorIdx(type);
 		node.IncreaseBufferId(upper_bounds[idx]);
-		return ARTHandlingResult::CONTINUE;
+		return ARTHandlingResult::NONE;
 	};
 
 	ARTScanner<ARTScanHandling::POP, Node> scanner(*this, handler, node);

@@ -1,4 +1,5 @@
 # name: test/sql/catalog/function/attached_macro.test
+# description: Call a table function living in a different catalog.
 # group: [function]
 
 statement ok
@@ -9,15 +10,13 @@ CREATE MACRO checksum_macro.checksum(table_name) AS TABLE
     SELECT bit_xor(md5_number(COLUMNS(*)::VARCHAR))
     FROM query_table(table_name);
 
-# Use 'query_table' with a schema-qualified table name
+# Use 'query_table' with a schema-qualified table name.
 
 statement ok
-begin
+BEGIN
 
 statement ok
-CREATE TABLE tbl AS
-	SELECT
-		unnest([42, 43]) AS x;
+CREATE TABLE tbl AS SELECT UNNEST([42, 43]) AS x;
 
 statement ok
 USE checksum_macro;
@@ -28,21 +27,21 @@ SELECT * FROM checksum('memory.tbl');
 60609334165039584609948387465088153270
 
 statement ok
-abort
+ABORT
 
 # Call a table function that lives in a different catalog
 
 statement ok
-begin
+BEGIN
 
 statement ok
 USE memory;
 
 statement ok
-CREATE TABLE tbl AS SELECT unnest([42, 43]) AS x;
+CREATE TABLE tbl AS SELECT UNNEST([42, 43]) AS x;
 
 statement ok
 SELECT * FROM checksum_macro.checksum('tbl');
 
 statement ok
-abort
+ABORT

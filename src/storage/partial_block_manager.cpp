@@ -1,4 +1,6 @@
 #include "duckdb/storage/partial_block_manager.hpp"
+#include "duckdb/storage/table/in_memory_checkpoint.hpp"
+#include "duckdb/storage/table/column_checkpoint_state.hpp"
 
 namespace duckdb {
 
@@ -13,6 +15,10 @@ PartialBlock::PartialBlock(PartialBlockState state, BlockManager &block_manager,
 
 void PartialBlock::AddUninitializedRegion(idx_t start, idx_t end) {
 	uninitialized_regions.push_back({start, end});
+}
+
+void PartialBlock::AddSegmentToTail(ColumnData &data, ColumnSegment &segment, uint32_t offset_in_block) {
+	throw InternalException("PartialBlock::AddSegmentToTail not supported for this block type");
 }
 
 void PartialBlock::FlushInternal(const idx_t free_space_left) {
@@ -105,6 +111,14 @@ bool PartialBlockManager::GetPartialBlock(idx_t segment_size, unique_ptr<Partial
 	return true;
 }
 
+unique_ptr<PartialBlock> PartialBlockManager::CreatePartialBlock(ColumnData &column_data, ColumnSegment &segment,
+                                                                 PartialBlockState state, BlockManager &block_manager) {
+	if (partial_block_type == PartialBlockType::IN_MEMORY_CHECKPOINT) {
+		return make_uniq<InMemoryPartialBlock>(column_data, segment, state, block_manager);
+	}
+	return make_uniq<PartialBlockForCheckpoint>(column_data, segment, state, block_manager);
+}
+
 void PartialBlockManager::RegisterPartialBlock(PartialBlockAllocation allocation) {
 	auto &state = allocation.partial_block->state;
 	D_ASSERT(partial_block_type != PartialBlockType::FULL_CHECKPOINT || state.block_id >= 0);
@@ -120,6 +134,7 @@ void PartialBlockManager::RegisterPartialBlock(PartialBlockAllocation allocation
 		// check if the block is STILL partially filled after adding the segment_size
 		if (new_space_left >= block_manager.GetBlockSize() - max_partial_block_size) {
 			// the block is still partially filled: add it to the partially_filled_blocks list
+			D_ASSERT(allocation.partial_block->state.offset > 0);
 			partially_filled_blocks.insert(make_pair(new_space_left, std::move(allocation.partial_block)));
 		}
 	}

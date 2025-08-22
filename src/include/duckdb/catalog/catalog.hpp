@@ -44,6 +44,7 @@ struct MetadataBlockInfo;
 
 class AttachedDatabase;
 class ClientContext;
+class QueryContext;
 class Transaction;
 
 class AggregateFunctionCatalogEntry;
@@ -368,12 +369,14 @@ public:
 	                                                                   const string &catalog_name);
 	DUCKDB_API static vector<reference<SchemaCatalogEntry>> GetAllSchemas(ClientContext &context);
 
+	static vector<reference<CatalogEntry>> GetAllEntries(ClientContext &context, CatalogType catalog_type);
+
 	virtual void Verify();
 
 	static CatalogException UnrecognizedConfigurationError(ClientContext &context, const string &name);
 
 	//! Autoload the extension required for `configuration_name` or throw a CatalogException
-	static void AutoloadExtensionByConfigName(ClientContext &context, const string &configuration_name);
+	static string AutoloadExtensionByConfigName(ClientContext &context, const string &configuration_name);
 	//! Autoload the extension required for `function_name` or throw a CatalogException
 	static bool AutoLoadExtensionByCatalogEntry(DatabaseInstance &db, CatalogType type, const string &entry_name);
 	DUCKDB_API static bool TryAutoLoad(ClientContext &context, const string &extension_name) noexcept;

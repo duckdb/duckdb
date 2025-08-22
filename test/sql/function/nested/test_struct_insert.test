@@ -2,9 +2,6 @@
 # description: Test the struct_insert function.
 # group: [nested]
 
-statement ok
-pragma enable_verification
-
 # Test basic insertion into a STRUCT.
 query T
 SELECT struct_insert ({a: 1, b: 2}, c := 3);

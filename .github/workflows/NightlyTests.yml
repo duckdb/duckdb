@@ -34,7 +34,7 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
     steps:
-      - name: Preliminary checks on CI 
+      - name: Preliminary checks on CI
         run: echo "Event name is ${{ github.event_name }}"
 
   linux-memory-leaks:
@@ -550,13 +550,10 @@ jobs:
        run: |
          python scripts/regression/test_runner.py --old unsafe/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/imdb.csv --verbose --threads 2
 
-  block-sizes:
-    name: Block Sizes
+  vector-and-block-sizes:
+    name: Tests different vector and block sizes
     runs-on: ubuntu-24.04
     needs: linux-memory-leaks
-    env:
-      GEN: ninja
-      CORE_EXTENSIONS: "json;parquet"
 
     steps:
       - uses: actions/checkout@v3
@@ -573,25 +570,56 @@ jobs:
           key: ${{ github.job }}
           save: ${{ env.CCACHE_SAVE }}
 
-      - name: Build with standard vector size
+      - name: Build
+        id: build
         shell: bash
-        run: BLOCK_ALLOC_SIZE=16384 make relassert
+        env:
+          CORE_EXTENSIONS: "json;parquet;icu;tpch;tpcds"
+          GEN: ninja
+          STANDARD_VECTOR_SIZE: 512
+        run: make relassert
 
-      - name: Fast and storage tests
+      - name: Fast and storage tests with default and small block size
         shell: bash
         run: |
-          python3 scripts/run_tests_one_by_one.py ./build/relassert/test/unittest --no-exit --time_execution
-          python3 scripts/run_tests_one_by_one.py ./build/relassert/test/unittest "test/sql/storage/*" --no-exit --time_execution
+          ./build/relassert/test/unittest
+          ./build/relassert/test/unittest "test/sql/storage/*"
+          ./build/relassert/test/unittest --test-config test/configs/block_size_16kB.json
+          ./build/relassert/test/unittest "test/sql/storage/*" --test-config test/configs/block_size_16kB.json
 
-      - name: Build with vector size of 512
+  linux-debug-configs:
+    name: Tests different configurations with a debug build
+    runs-on: ubuntu-24.04
+    needs: linux-memory-leaks
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Install
         shell: bash
-        run: rm -rf ./build && rm -rf ./duckdb_unittest_tempdir && make clean && BLOCK_ALLOC_SIZE=16384 STANDARD_VECTOR_SIZE=512 make relassert
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
-      - name: Fast and storage tests
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+          save: ${{ env.CCACHE_SAVE }}
+
+      - name: Build
+        id: build
+        shell: bash
+        env:
+          CORE_EXTENSIONS: "json;parquet;icu;tpch;tpcds"
+          GEN: ninja
+        run: make debug
+
+      - name: test/configs/enable_verification_for_debug.json
+        if: (success() || failure()) && steps.build.conclusion == 'success'
         shell: bash
         run: |
-          python3 scripts/run_tests_one_by_one.py ./build/relassert/test/unittest --no-exit --time_execution
-          python3 scripts/run_tests_one_by_one.py ./build/relassert/test/unittest "test/sql/storage/*" --no-exit --time_execution
+          ./build/debug/test/unittest --test-config test/configs/enable_verification_for_debug.json
 
   linux-wasm-experimental:
     name: WebAssembly duckdb-wasm builds
@@ -695,17 +723,18 @@ jobs:
 
       - name: Check Coverage
         shell: bash
+        continue-on-error: true
         run: |
           make coverage-check
 
       - name: Create Archive
-        if: always()
+        if: ${{ success() || failure() }}
         shell: bash
         run: |
           zip -r coverage.zip coverage_html
 
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: ${{ success() || failure() }}
         with:
           name: coverage
           path: coverage.zip

@@ -24,7 +24,6 @@
 #include "duckdb/main/external_dependencies.hpp"
 #include "duckdb/main/pending_query_result.hpp"
 #include "duckdb/main/prepared_statement.hpp"
-#include "duckdb/main/settings.hpp"
 #include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/main/table_description.hpp"
 #include "duckdb/planner/expression/bound_parameter_data.hpp"
@@ -191,7 +190,7 @@ public:
 	                                                 bool requires_valid_transaction = true);
 
 	//! Equivalent to CURRENT_SETTING(key) SQL function.
-	DUCKDB_API SettingLookupResult TryGetCurrentSetting(const std::string &key, Value &result) const;
+	DUCKDB_API SettingLookupResult TryGetCurrentSetting(const string &key, Value &result) const;
 
 	//! Returns the parser options for this client context
 	DUCKDB_API ParserOptions GetParserOptions() const;
@@ -225,8 +224,7 @@ public:
 
 private:
 	//! Parse statements and resolve pragmas from a query
-	bool ParseStatements(ClientContextLock &lock, const string &query, vector<unique_ptr<SQLStatement>> &result,
-	                     ErrorData &error);
+	vector<unique_ptr<SQLStatement>> ParseStatements(ClientContextLock &lock, const string &query);
 	//! Issues a query to the database and returns a Pending Query Result
 	unique_ptr<PendingQueryResult> PendingQueryInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
 	                                                    const PendingQueryParameters &parameters, bool verify = true);

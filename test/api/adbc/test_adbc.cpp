@@ -99,7 +99,11 @@ public:
 				adbc_error.release(&adbc_error);
 				InitializeADBCError(&adbc_error);
 				REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
-				arrow_stream.release = nullptr;
+				// Release the input_data stream since we didn't transfer ownership
+				if (input_data.release) {
+					input_data.release(&input_data);
+				}
+				input_data.release = nullptr;
 				return;
 			}
 			REQUIRE(SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TEMPORARY,
@@ -112,8 +116,10 @@ public:
 		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, nullptr, nullptr, &adbc_error)));
 		// Release the statement
 		REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+		if (input_data.release) {
+			input_data.release(&input_data);
+		}
 		input_data.release = nullptr;
-		arrow_stream.release = nullptr;
 	}
 
 	AdbcError adbc_error;
@@ -140,7 +146,7 @@ TEST_CASE("ADBC - Test ingestion", "[adbc]") {
 	ADBCTestDatabase db;
 
 	// Create Arrow Result
-	auto input_data = db.QueryArrow("SELECT 42");
+	auto &input_data = db.QueryArrow("SELECT 42 as value");
 
 	// Create Table 'my_table' from the Arrow Result
 	db.CreateTable("my_table", input_data);
@@ -155,7 +161,7 @@ TEST_CASE("ADBC - Test ingestion - Temporary Table", "[adbc]") {
 	ADBCTestDatabase db;
 
 	// Create Arrow Result
-	auto input_data = db.QueryArrow("SELECT 42");
+	auto &input_data = db.QueryArrow("SELECT 42 as value");
 
 	// Create Table 'my_table' from the Arrow Result
 	db.CreateTable("my_table", input_data, "", true);
@@ -170,13 +176,15 @@ TEST_CASE("ADBC - Test ingestion - Temporary Table - Schema Set", "[adbc]") {
 	ADBCTestDatabase db;
 	db.Query("CREATE SCHEMA my_schema;");
 	// Create Arrow Result
-	auto input_data = db.QueryArrow("SELECT 42");
+	auto &input_data = db.QueryArrow("SELECT 42 as value");
 
-	// Since this is temporary and has a schema, it will fail in a internal code path
+	// Since this is temporary and has a schema, it will fail in an internal code path
 	db.CreateTable("my_table", input_data, "my_schema", true);
 
-	// we can then reuse the same input data to properly insert into a table with a schema
-	db.CreateTable("my_table", input_data, "my_schema");
+	// We released it in the error, hence we create it again
+	auto &input_data_2 = db.QueryArrow("SELECT 42 as value");
+
+	db.CreateTable("my_table", input_data_2, "my_schema");
 
 	// we can check it works
 	REQUIRE(db.QueryAndCheck("SELECT * FROM my_schema.my_table"));
@@ -187,19 +195,19 @@ TEST_CASE("ADBC - Test ingestion - Quoted Table and Schema", "[adbc]") {
 		return;
 	}
 	ADBCTestDatabase db;
-	db.Query("CREATE SCHEMA \"my schema\";");
+	db.Query("CREATE SCHEMA \"my_schema\";");
 	// Create Arrow Result
-	auto input_data = db.QueryArrow("SELECT 42");
+	auto &input_data = db.QueryArrow("SELECT 42 as value");
 
 	// Create table with name requiring quoting
-	db.CreateTable("my table", input_data, "my schema");
+	db.CreateTable("my_table", input_data, "my_schema");
 
 	// Validate that we can get its schema
 	AdbcError adbc_error;
 	InitializeADBCError(&adbc_error);
 
 	ArrowSchema arrow_schema;
-	REQUIRE(SUCCESS(AdbcConnectionGetTableSchema(&db.adbc_connection, nullptr, "my schema", "my table", &arrow_schema,
+	REQUIRE(SUCCESS(AdbcConnectionGetTableSchema(&db.adbc_connection, nullptr, "my_schema", "my_table", &arrow_schema,
 	                                             &adbc_error)));
 	REQUIRE((arrow_schema.n_children == 1));
 	arrow_schema.release(&arrow_schema);
@@ -212,7 +220,7 @@ TEST_CASE("ADBC - Test ingestion - Lineitem", "[adbc]") {
 	ADBCTestDatabase db;
 
 	// Create Arrow Result
-	auto input_data = db.QueryArrow("SELECT * FROM read_csv_auto(\'data/csv/lineitem-carriage.csv\')");
+	auto &input_data = db.QueryArrow("SELECT * FROM read_csv_auto(\'data/csv/lineitem-carriage.csv\')");
 
 	// Create Table 'my_table' from the Arrow Result
 	db.CreateTable("lineitem", input_data);
@@ -226,7 +234,7 @@ TEST_CASE("ADBC - Pivot", "[adbc]") {
 	}
 	ADBCTestDatabase db;
 
-	auto input_data = db.QueryArrow("SELECT * FROM read_csv_auto(\'data/csv/flights.csv\')");
+	auto &input_data = db.QueryArrow("SELECT * FROM read_csv_auto(\'data/csv/flights.csv\')");
 
 	db.CreateTable("flights", input_data);
 
@@ -310,7 +318,7 @@ TEST_CASE("ADBC - Statement reuse", "[adbc]") {
 	// Insert some data
 	// Create Arrow Result
 	ADBCTestDatabase db;
-	auto &input_data = db.QueryArrow("SELECT 42");
+	auto &input_data = db.QueryArrow("SELECT 42 as value");
 	string table_name = "my_table";
 
 	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
@@ -329,11 +337,11 @@ TEST_CASE("ADBC - Statement reuse", "[adbc]") {
 		arrow_stream.release(&arrow_stream);
 	}
 
-	input_data = db.QueryArrow("SELECT 42");
+	auto &input_data_2 = db.QueryArrow("SELECT 42 as value");
 
 	StatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE, ADBC_INGEST_OPTION_MODE_APPEND, &adbc_error);
 
-	REQUIRE(SUCCESS(StatementBindStream(&adbc_statement, &input_data, &adbc_error)));
+	REQUIRE(SUCCESS(StatementBindStream(&adbc_statement, &input_data_2, &adbc_error)));
 	REQUIRE(SUCCESS(StatementExecuteQuery(&adbc_statement, nullptr, nullptr, &adbc_error)));
 
 	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement, query.c_str(), &adbc_error)));
@@ -706,7 +714,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	ADBCTestDatabase db;
 
 	// Create Arrow Result
-	auto &input_data = db.QueryArrow("SELECT 42");
+	auto &input_data = db.QueryArrow("SELECT 42 as value");
 	string table_name = "test";
 	string query = "select count(*) from test";
 
@@ -762,7 +770,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	// Now lets insert with Auto-Commit Off
 	REQUIRE(SUCCESS(AdbcConnectionSetOption(&adbc_connection, ADBC_CONNECTION_OPTION_AUTOCOMMIT,
 	                                        ADBC_OPTION_VALUE_DISABLED, &adbc_error)));
-	input_data = db.QueryArrow("SELECT 42;");
+	auto &input_data_2 = db.QueryArrow("SELECT 42;");
 	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
 
@@ -772,7 +780,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	REQUIRE(SUCCESS(
 	    StatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE, ADBC_INGEST_OPTION_MODE_APPEND, &adbc_error)));
 
-	REQUIRE(SUCCESS(StatementBindStream(&adbc_statement, &input_data, &adbc_error)));
+	REQUIRE(SUCCESS(StatementBindStream(&adbc_statement, &input_data_2, &adbc_error)));
 
 	REQUIRE(SUCCESS(StatementExecuteQuery(&adbc_statement, nullptr, nullptr, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement_2, &adbc_error)));
@@ -809,7 +817,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	arrow_stream.release(&arrow_stream);
 
 	// Lets do a rollback
-	input_data = db.QueryArrow("SELECT 42;");
+	auto &input_data_3 = db.QueryArrow("SELECT 42;");
 	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
 
@@ -819,7 +827,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	REQUIRE(SUCCESS(
 	    StatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE, ADBC_INGEST_OPTION_MODE_APPEND, &adbc_error)));
 
-	REQUIRE(SUCCESS(StatementBindStream(&adbc_statement, &input_data, &adbc_error)));
+	REQUIRE(SUCCESS(StatementBindStream(&adbc_statement, &input_data_3, &adbc_error)));
 
 	REQUIRE(SUCCESS(StatementExecuteQuery(&adbc_statement, nullptr, nullptr, &adbc_error)));
 
@@ -859,7 +867,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	arrow_stream.release(&arrow_stream);
 
 	// Let's change the Auto commit config mid-transaction
-	input_data = db.QueryArrow("SELECT 42;");
+	auto &input_data_4 = db.QueryArrow("SELECT 42;");
 	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
 
@@ -868,7 +876,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	REQUIRE(SUCCESS(
 	    StatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE, ADBC_INGEST_OPTION_MODE_APPEND, &adbc_error)));
 
-	REQUIRE(SUCCESS(StatementBindStream(&adbc_statement, &input_data, &adbc_error)));
+	REQUIRE(SUCCESS(StatementBindStream(&adbc_statement, &input_data_4, &adbc_error)));
 
 	REQUIRE(SUCCESS(StatementExecuteQuery(&adbc_statement, nullptr, nullptr, &adbc_error)));
 
@@ -896,7 +904,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	arrow_array.release(&arrow_array);
 	arrow_stream.release(&arrow_stream);
 
-	input_data = db.QueryArrow("SELECT 42;");
+	auto &input_data_5 = db.QueryArrow("SELECT 42;");
 	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
 
@@ -905,7 +913,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	REQUIRE(SUCCESS(
 	    StatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE, ADBC_INGEST_OPTION_MODE_APPEND, &adbc_error)));
 
-	REQUIRE(SUCCESS(StatementBindStream(&adbc_statement, &input_data, &adbc_error)));
+	REQUIRE(SUCCESS(StatementBindStream(&adbc_statement, &input_data_5, &adbc_error)));
 
 	REQUIRE(SUCCESS(StatementExecuteQuery(&adbc_statement, nullptr, nullptr, &adbc_error)));
 
@@ -1099,21 +1107,19 @@ TEST_CASE("Test AdbcConnectionGetTableTypes", "[adbc]") {
 	ADBCTestDatabase db("AdbcConnectionGetTableTypes.db");
 
 	// Create Arrow Result
-	auto input_data = db.QueryArrow("SELECT 42");
+	auto &input_data = db.QueryArrow("SELECT 42 as value");
 	// Create Table 'my_table' from the Arrow Result
 	db.CreateTable("my_table", input_data);
 	ArrowArrayStream arrow_stream;
 	AdbcError adbc_error;
 	InitializeADBCError(&adbc_error);
 	AdbcConnectionGetTableTypes(&db.adbc_connection, &arrow_stream, &adbc_error);
-
 	db.CreateTable("result", arrow_stream);
-	auto path_db = db.path;
-	db.arrow_stream.release = nullptr;
 
 	auto res = db.Query("Select * from result");
 	REQUIRE((res->ColumnCount() == 1));
 	REQUIRE((res->GetValue(0, 0).ToString() == "BASE TABLE"));
+	adbc_error.release(&adbc_error);
 }
 
 TEST_CASE("Test Segfault Option Set", "[adbc]") {
@@ -1148,6 +1154,7 @@ TEST_CASE("Test Segfault Option Set", "[adbc]") {
 
 	REQUIRE(SUCCESS(AdbcConnectionRelease(&adbc_connection, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
+	adbc_error.release(&adbc_error);
 }
 
 TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
@@ -1159,7 +1166,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 	{
 		ADBCTestDatabase db("test_catalog_depth");
 		// Create Arrow Result
-		auto input_data = db.QueryArrow("SELECT 42");
+		auto &input_data = db.QueryArrow("SELECT 42 as value");
 		// Create Table 'my_table' from the Arrow Result
 		db.CreateTable("my_table", input_data);
 
@@ -1193,7 +1200,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 	{
 		ADBCTestDatabase db("ADBC_OBJECT_DEPTH_DB_SCHEMAS.db");
 		// Create Arrow Result
-		auto input_data = db.QueryArrow("SELECT 42");
+		auto &input_data = db.QueryArrow("SELECT 42 as value");
 		// Create Table 'my_table' from the Arrow Result
 		db.CreateTable("my_table", input_data);
 
@@ -1254,7 +1261,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 	{
 		ADBCTestDatabase db("test_table_depth");
 		// Create Arrow Result
-		auto input_data = db.QueryArrow("SELECT 42");
+		auto &input_data = db.QueryArrow("SELECT 42 as value");
 		// Create Table 'my_table' from the Arrow Result
 		db.CreateTable("my_table", input_data);
 		// Create View 'my_view'
@@ -1266,7 +1273,21 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_TABLES, nullptr, nullptr, nullptr, nullptr,
 		                         nullptr, &arrow_stream, &adbc_error);
 		db.CreateTable("result", arrow_stream);
-		auto res = db.Query("Select * from result order by catalog_name asc");
+		auto res = db.Query(R"(
+			SELECT
+				catalog_name,
+				list_sort(
+					list_transform(
+						catalog_db_schemas,
+						lambda catalog_db_schema: {
+							db_schema_name: catalog_db_schema.db_schema_name,
+							db_schema_tables: list_sort(catalog_db_schema.db_schema_tables),
+						}
+					)
+				)
+			FROM result
+			ORDER BY catalog_name ASC
+		)");
 		REQUIRE((res->ColumnCount() == 2));
 		REQUIRE((res->RowCount() == 3));
 		REQUIRE((res->GetValue(0, 0).ToString() == "system"));
@@ -1332,15 +1353,24 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		db.Query("Drop table result;");
 
 		// table_name
-		string select_catalog_db_schema = R"(
-			Select list_sort(catalog_db_schemas) as catalog_db_schemas
-			from result
-			where catalog_name == 'test_table_depth'
+		string select_catalog_db_schemas = R"(
+			SELECT
+				list_sort(
+					list_transform(
+						catalog_db_schemas,
+						lambda catalog_db_schema: {
+							db_schema_name: catalog_db_schema.db_schema_name,
+							db_schema_tables: list_sort(catalog_db_schema.db_schema_tables),
+						}
+					)
+				) as catalog_db_schemas
+			FROM result
+			WHERE catalog_name == 'test_table_depth'
         )";
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_TABLES, nullptr, nullptr, "bla", nullptr,
 		                         nullptr, &arrow_stream, &adbc_error);
 		db.CreateTable("result", arrow_stream);
-		res = db.Query(select_catalog_db_schema);
+		res = db.Query(select_catalog_db_schemas);
 		REQUIRE((res->ColumnCount() == 1));
 		REQUIRE((res->RowCount() == 1));
 		string expected = "[{'db_schema_name': main, 'db_schema_tables': NULL}]";
@@ -1353,7 +1383,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 			AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_TABLES, nullptr, nullptr, nullptr,
 			                         table_type.data(), nullptr, &arrow_stream, &adbc_error);
 			db.CreateTable("result", arrow_stream);
-			res = db.Query(select_catalog_db_schema);
+			res = db.Query(select_catalog_db_schemas);
 			REQUIRE((res->ColumnCount() == 1));
 			REQUIRE((res->RowCount() == 1));
 			REQUIRE(
@@ -1367,7 +1397,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 			AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_TABLES, nullptr, nullptr, nullptr,
 			                         table_type.data(), nullptr, &arrow_stream, &adbc_error);
 			db.CreateTable("result", arrow_stream);
-			res = db.Query(select_catalog_db_schema);
+			res = db.Query(select_catalog_db_schemas);
 			REQUIRE((res->ColumnCount() == 1));
 			REQUIRE((res->RowCount() == 1));
 			REQUIRE(
@@ -1381,7 +1411,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 			AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_TABLES, nullptr, nullptr, nullptr,
 			                         table_type.data(), nullptr, &arrow_stream, &adbc_error);
 			db.CreateTable("result", arrow_stream);
-			res = db.Query(select_catalog_db_schema);
+			res = db.Query(select_catalog_db_schemas);
 			REQUIRE((res->ColumnCount() == 1));
 			REQUIRE((res->RowCount() == 1));
 			string expected_result = R"([{
@@ -1407,7 +1437,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 			AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_TABLES, nullptr, nullptr, nullptr,
 			                         table_type.data(), nullptr, &arrow_stream, &adbc_error);
 			db.CreateTable("result", arrow_stream);
-			res = db.Query(select_catalog_db_schema);
+			res = db.Query(select_catalog_db_schemas);
 			REQUIRE((res->ColumnCount() == 1));
 			REQUIRE((res->RowCount() == 1));
 			string expected_result = R"([{
@@ -1431,7 +1461,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 	{
 		ADBCTestDatabase db("test_column_depth");
 		// Create Arrow Result
-		auto input_data = db.QueryArrow("SELECT 42");
+		auto &input_data = db.QueryArrow("SELECT 42 as value");
 		// Create Table 'my_table' from the Arrow Result
 		db.CreateTable("my_table", input_data);
 		// Create View 'my_view'
@@ -1443,7 +1473,21 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, nullptr, nullptr, nullptr,
 		                         nullptr, &arrow_stream, &adbc_error);
 		db.CreateTable("result", arrow_stream);
-		auto res = db.Query("Select * from result order by catalog_name asc");
+		auto res = db.Query(R"(
+			SELECT
+				catalog_name,
+				list_sort(
+					list_transform(
+						catalog_db_schemas,
+						lambda catalog_db_schema: {
+							db_schema_name: catalog_db_schema.db_schema_name,
+							db_schema_tables: list_sort(catalog_db_schema.db_schema_tables),
+						}
+					)
+				)
+			FROM result
+			ORDER BY catalog_name ASC
+		)");
 		REQUIRE((res->ColumnCount() == 2));
 		REQUIRE((res->RowCount() == 3));
 		REQUIRE((res->GetValue(0, 0).ToString() == "system"));
@@ -1468,7 +1512,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                         'table_type': BASE TABLE,
                         'table_columns': [
                             {
-                                'column_name': 42,
+                                'column_name': value,
                                 'ordinal_position': 1,
                                 'remarks': '',
                                 'xdbc_data_type': NULL,
@@ -1496,7 +1540,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                         'table_type': VIEW,
                         'table_columns': [
                             {
-                                'column_name': 42,
+                                'column_name': value,
                                 'ordinal_position': 1,
                                 'remarks': '',
                                 'xdbc_data_type': NULL,
@@ -1521,7 +1565,6 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                     }
                 ]
             })";
-		return; // Unclear why this fails randomly, to be investigated
 		string expected[3];
 		expected[0] =
 		    StringUtil::Replace(StringUtil::Replace(StringUtil::Replace(expected_1, "\n", ""), "\t", ""), " ", "");
@@ -1559,9 +1602,18 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 
 		// table_name
 		string select_catalog_db_schemas = R"(
-			Select list_sort(catalog_db_schemas) as catalog_db_schemas
-			from result
-			where catalog_name == 'test_column_depth'
+			SELECT
+				list_sort(
+					list_transform(
+						catalog_db_schemas,
+						lambda catalog_db_schema: {
+							db_schema_name: catalog_db_schema.db_schema_name,
+							db_schema_tables: list_sort(catalog_db_schema.db_schema_tables),
+						}
+					)
+				) as catalog_db_schemas
+			FROM result
+			WHERE catalog_name == 'test_column_depth'
         )";
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, nullptr, "bla", nullptr,
 		                         nullptr, &arrow_stream, &adbc_error);
@@ -1628,7 +1680,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                         'table_type': BASE TABLE,
                         'table_columns': [
                             {
-                                'column_name': 42,
+                                'column_name': value,
                                 'ordinal_position': 1,
                                 'remarks': '',
                                 'xdbc_data_type': NULL,
@@ -1677,7 +1729,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                         'table_type': VIEW,
                         'table_columns': [
                             {
-                                'column_name': 42,
+                                'column_name': value,
                                 'ordinal_position': 1,
                                 'remarks': '',
                                 'xdbc_data_type': NULL,
@@ -1712,10 +1764,8 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 	// 5. Test ADBC_OBJECT_DEPTH_ALL
 	{
 		ADBCTestDatabase db("test_all_depth");
-		// Create Arrow Result
-		auto input_data = db.QueryArrow("SELECT 42");
-		// Create Table 'my_table' from the Arrow Result
-		db.CreateTable("my_table", input_data);
+		// Create Table 'my_table' with primary key
+		db.Query("Create table my_table (a int, b int, primary key (a, b))");
 		// Create View 'my_view'
 		db.Query("Create view my_view as from my_table;");
 
@@ -1725,7 +1775,21 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_ALL, nullptr, nullptr, nullptr, nullptr,
 		                         nullptr, &arrow_stream, &adbc_error);
 		db.CreateTable("result", arrow_stream);
-		auto res = db.Query("Select * from result order by catalog_name asc");
+		auto res = db.Query(R"(
+			SELECT
+				catalog_name,
+				list_sort(
+					list_transform(
+						catalog_db_schemas,
+						lambda catalog_db_schema: {
+							db_schema_name: catalog_db_schema.db_schema_name,
+							db_schema_tables: list_sort(catalog_db_schema.db_schema_tables),
+						}
+					)
+				)
+			FROM result
+			ORDER BY catalog_name ASC
+		)");
 		REQUIRE((res->RowCount() == 3));
 		REQUIRE((res->GetValue(0, 0).ToString() == "system"));
 		REQUIRE((res->GetValue(0, 1).ToString() == "temp"));
@@ -1749,8 +1813,29 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                         'table_type': BASE TABLE,
                         'table_columns': [
                             {
-                                'column_name': 42,
+                                'column_name': a,
                                 'ordinal_position': 1,
+                                'remarks': '',
+                                'xdbc_data_type': NULL,
+                                'xdbc_type_name': NULL,
+                                'xdbc_column_size': NULL,
+                                'xdbc_decimal_digits': NULL,
+                                'xdbc_num_prec_radix': NULL,
+                                'xdbc_nullable': NULL,
+                                'xdbc_column_def': NULL,
+                                'xdbc_sql_data_type': NULL,
+                                'xdbc_datetime_sub': NULL,
+                                'xdbc_char_octet_length': NULL,
+                                'xdbc_is_nullable': NULL,
+                                'xdbc_scope_catalog': NULL,
+                                'xdbc_scope_schema': NULL,
+                                'xdbc_scope_table': NULL,
+                                'xdbc_is_autoincrement': NULL,
+                                'xdbc_is_generatedcolumn': NULL
+                            },
+                            {
+                                'column_name': b,
+                                'ordinal_position': 2,
                                 'remarks': '',
                                 'xdbc_data_type': NULL,
                                 'xdbc_type_name': NULL,
@@ -1770,15 +1855,43 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                                 'xdbc_is_generatedcolumn': NULL
                             }
                         ],
-                        'table_constraints': NULL
+                        'table_constraints': [
+                            {
+                                'constraint_name': my_table_a_b_pkey,
+                                'constraint_type': PRIMARY KEY,
+                                'constraint_column_names': [a, b],
+                                'constraint_column_usage': []
+                            }
+                        ]
                     },
                     {
                         'table_name': my_view,
                         'table_type': VIEW,
                         'table_columns': [
                             {
-                                'column_name': 42,
+                                'column_name': a,
                                 'ordinal_position': 1,
+                                'remarks': '',
+                                'xdbc_data_type': NULL,
+                                'xdbc_type_name': NULL,
+                                'xdbc_column_size': NULL,
+                                'xdbc_decimal_digits': NULL,
+                                'xdbc_num_prec_radix': NULL,
+                                'xdbc_nullable': NULL,
+                                'xdbc_column_def': NULL,
+                                'xdbc_sql_data_type': NULL,
+                                'xdbc_datetime_sub': NULL,
+                                'xdbc_char_octet_length': NULL,
+                                'xdbc_is_nullable': NULL,
+                                'xdbc_scope_catalog': NULL,
+                                'xdbc_scope_schema': NULL,
+                                'xdbc_scope_table': NULL,
+                                'xdbc_is_autoincrement': NULL,
+                                'xdbc_is_generatedcolumn': NULL
+                            },
+                            {
+                                'column_name': b,
+                                'ordinal_position': 2,
                                 'remarks': '',
                                 'xdbc_data_type': NULL,
                                 'xdbc_type_name': NULL,
@@ -1838,9 +1951,18 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 
 		// table_name
 		string select_catalog_db_schemas = R"(
-			Select list_sort(catalog_db_schemas) as catalog_db_schemas
-			from result
-			where catalog_name == 'test_all_depth'
+			SELECT
+				list_sort(
+					list_transform(
+						catalog_db_schemas,
+						lambda catalog_db_schema: {
+							db_schema_name: catalog_db_schema.db_schema_name,
+							db_schema_tables: list_sort(catalog_db_schema.db_schema_tables),
+						}
+					)
+				) as catalog_db_schemas
+			FROM result
+			WHERE catalog_name == 'test_all_depth'
         )";
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, nullptr, "bla", nullptr,
 		                         nullptr, &arrow_stream, &adbc_error);
@@ -1857,11 +1979,27 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		db.CreateTable("result", arrow_stream);
 		res = db.Query(select_catalog_db_schemas);
 		REQUIRE((res->RowCount() == 1));
-		expected = "[{'db_schema_name': main, "
-		           "'db_schema_tables': [{'table_name': my_table, 'table_type': BASE TABLE, "
-		           "'table_columns': NULL, 'table_constraints': NULL}, "
-		           "{'table_name': my_view, 'table_type': VIEW, "
-		           "'table_columns': NULL, 'table_constraints': NULL}]}]";
+		// clang-format off
+		expected = "["
+			"{"
+				"'db_schema_name': main, "
+				"'db_schema_tables': ["
+					"{"
+						"'table_name': my_table, "
+						"'table_type': BASE TABLE, "
+						"'table_columns': NULL, "
+						"'table_constraints': NULL"
+					"}, "
+					"{"
+						"'table_name': my_view, "
+						"'table_type': VIEW, "
+						"'table_columns': NULL, "
+						"'table_constraints': NULL"
+					"}"
+				"]"
+			"}"
+		"]";
+		// clang-format on
 		REQUIRE((res->GetValue(0, 0).ToString() == expected));
 		db.Query("Drop table result;");
 
@@ -1908,8 +2046,29 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                         'table_type': BASE TABLE,
                         'table_columns': [
                             {
-                                'column_name': 42,
+                                'column_name': a,
                                 'ordinal_position': 1,
+                                'remarks': '',
+                                'xdbc_data_type': NULL,
+                                'xdbc_type_name': NULL,
+                                'xdbc_column_size': NULL,
+                                'xdbc_decimal_digits': NULL,
+                                'xdbc_num_prec_radix': NULL,
+                                'xdbc_nullable': NULL,
+                                'xdbc_column_def': NULL,
+                                'xdbc_sql_data_type': NULL,
+                                'xdbc_datetime_sub': NULL,
+                                'xdbc_char_octet_length': NULL,
+                                'xdbc_is_nullable': NULL,
+                                'xdbc_scope_catalog': NULL,
+                                'xdbc_scope_schema': NULL,
+                                'xdbc_scope_table': NULL,
+                                'xdbc_is_autoincrement': NULL,
+                                'xdbc_is_generatedcolumn': NULL
+                            },
+                            {
+                                'column_name': b,
+                                'ordinal_position': 2,
                                 'remarks': '',
                                 'xdbc_data_type': NULL,
                                 'xdbc_type_name': NULL,
@@ -1929,7 +2088,14 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                                 'xdbc_is_generatedcolumn': NULL
                             }
                         ],
-                        'table_constraints': NULL
+                        'table_constraints': [
+                            {
+                                'constraint_name': my_table_a_b_pkey,
+                                'constraint_type': PRIMARY KEY,
+                                'constraint_column_names': [a, b],
+                                'constraint_column_usage': []
+                            }
+                        ]
                     }
                 ]
             }])";
@@ -1956,8 +2122,29 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                         'table_type': VIEW,
                         'table_columns': [
                             {
-                                'column_name': 42,
+                                'column_name': a,
                                 'ordinal_position': 1,
+                                'remarks': '',
+                                'xdbc_data_type': NULL,
+                                'xdbc_type_name': NULL,
+                                'xdbc_column_size': NULL,
+                                'xdbc_decimal_digits': NULL,
+                                'xdbc_num_prec_radix': NULL,
+                                'xdbc_nullable': NULL,
+                                'xdbc_column_def': NULL,
+                                'xdbc_sql_data_type': NULL,
+                                'xdbc_datetime_sub': NULL,
+                                'xdbc_char_octet_length': NULL,
+                                'xdbc_is_nullable': NULL,
+                                'xdbc_scope_catalog': NULL,
+                                'xdbc_scope_schema': NULL,
+                                'xdbc_scope_table': NULL,
+                                'xdbc_is_autoincrement': NULL,
+                                'xdbc_is_generatedcolumn': NULL
+                            },
+                            {
+                                'column_name': b,
+                                'ordinal_position': 2,
                                 'remarks': '',
                                 'xdbc_data_type': NULL,
                                 'xdbc_type_name': NULL,
@@ -1987,11 +2174,106 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 			db.Query("Drop table result;");
 		}
 	}
-	//  Now lets test some errors
+	// 6. Test constraints
+	//
+	// Available constraints: https://duckdb.org/docs/stable/sql/constraints.html
+	{
+		ADBCTestDatabase db("test_constraints");
+		// Create table 'foreign_table'
+		db.Query("CREATE TABLE foreign_table (id INTEGER PRIMARY KEY)");
+		// Create table 'my_table' with constraints
+		db.Query(R"(
+			CREATE TABLE my_table (
+				primary_key INTEGER PRIMARY KEY,
+				not_null INTEGER NOT NULL,
+				custom_check INTEGER CHECK (custom_check > 0),
+				unique_single INTEGER UNIQUE,
+				unique_multi1 INTEGER,
+				unique_multi2 INTEGER,
+				UNIQUE (unique_multi2, unique_multi1),
+				foreign_id INTEGER REFERENCES foreign_table(id)
+			)
+		)");
+
+		AdbcError adbc_error;
+		InitializeADBCError(&adbc_error);
+		ArrowArrayStream arrow_stream;
+		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, nullptr, "my_table", nullptr,
+		                         nullptr, &arrow_stream, &adbc_error);
+		db.CreateTable("result", arrow_stream);
+		string select_catalog_db_schemas = R"(
+			SELECT
+				list_sort(
+					list_transform(
+						catalog_db_schemas,
+						lambda catalog_db_schema: {
+							db_schema_tables: list_sort(
+								list_transform(
+									catalog_db_schema.db_schema_tables,
+									lambda db_schema_table: {
+										table_name: db_schema_table.table_name,
+										table_constraints: list_sort(db_schema_table.table_constraints)
+									}
+								)
+							)
+						}
+					)
+				) as catalog_db_schemas
+			FROM result
+			WHERE catalog_name == 'test_constraints'
+		)";
+		auto res = db.Query(select_catalog_db_schemas);
+		REQUIRE((res->RowCount() == 1));
+		// clang-format off
+		std::string expected = "["
+			"{"
+				"'db_schema_tables': ["
+					"{"
+						"'table_name': my_table, "
+						"'table_constraints': [{"
+							"'constraint_name': my_table_custom_check_check, "
+							"'constraint_type': CHECK, "
+							"'constraint_column_names': [custom_check], "
+							"'constraint_column_usage': []"
+						"}, {"
+							"'constraint_name': my_table_foreign_id_id_fkey, "
+							"'constraint_type': FOREIGN KEY, "
+							"'constraint_column_names': [foreign_id], "
+							"'constraint_column_usage': [{"
+								"'fk_catalog': test_constraints, "
+								"'fk_db_schema': main, "
+								"'fk_table': foreign_table, "
+								"'fk_column_name': id"
+							"}]"
+						"}, {"
+							"'constraint_name': my_table_primary_key_pkey, "
+							"'constraint_type': PRIMARY KEY, "
+							"'constraint_column_names': [primary_key], "
+							"'constraint_column_usage': []"
+						"}, {"
+							"'constraint_name': my_table_unique_multi2_unique_multi1_key, "
+							"'constraint_type': UNIQUE, "
+							"'constraint_column_names': [unique_multi2, unique_multi1], "
+							"'constraint_column_usage': []"
+						"}, {"
+							"'constraint_name': my_table_unique_single_key, "
+							"'constraint_type': UNIQUE, "
+							"'constraint_column_names': [unique_single], "
+							"'constraint_column_usage': []"
+						"}]"
+					"}"
+				"]"
+			"}"
+		"]";
+		// clang-format on
+		REQUIRE((res->GetValue(0, 0).ToString() == expected));
+		db.Query("DROP TABLE result;");
+	}
+	// Now lets test some errors
 	{
 		ADBCTestDatabase db("test_errors");
 		// Create Arrow Result
-		auto input_data = db.QueryArrow("SELECT 42");
+		auto &input_data = db.QueryArrow("SELECT 42 as value");
 		// Create Table 'my_table' from the Arrow Result
 		db.CreateTable("my_table", input_data);
 

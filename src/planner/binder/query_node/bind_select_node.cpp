@@ -165,8 +165,8 @@ void Binder::PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, B
 				if (star.exclude_list.empty() && star.replace_list.empty() && !star.expr) {
 					// ORDER BY ALL
 					// replace the order list with the all elements in the SELECT list
-					auto order_type = config.ResolveOrder(order.orders[0].type);
-					auto null_order = config.ResolveNullOrder(order_type, order.orders[0].null_order);
+					auto order_type = config.ResolveOrder(context, order.orders[0].type);
+					auto null_order = config.ResolveNullOrder(context, order_type, order.orders[0].null_order);
 					auto constant_expr = make_uniq<BoundConstantExpression>(Value("ALL"));
 					bound_order->orders.emplace_back(order_type, null_order, std::move(constant_expr));
 					bound_modifier = std::move(bound_order);
@@ -193,8 +193,8 @@ void Binder::PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, B
 				vector<unique_ptr<ParsedExpression>> sort_key_parameters;
 				for (auto &order_node : order.orders) {
 					sort_key_parameters.push_back(std::move(order_node.expression));
-					auto type = config.ResolveOrder(order_node.type);
-					auto null_order = config.ResolveNullOrder(type, order_node.null_order);
+					auto type = config.ResolveOrder(context, order_node.type);
+					auto null_order = config.ResolveNullOrder(context, type, order_node.null_order);
 					string sort_param = EnumUtil::ToString(type) + " " + EnumUtil::ToString(null_order);
 					sort_key_parameters.push_back(make_uniq<ConstantExpression>(Value(sort_param)));
 				}
@@ -207,8 +207,8 @@ void Binder::PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, B
 				vector<unique_ptr<ParsedExpression>> order_list;
 				order_binders[0].get().ExpandStarExpression(std::move(order_node.expression), order_list);
 
-				auto type = config.ResolveOrder(order_node.type);
-				auto null_order = config.ResolveNullOrder(type, order_node.null_order);
+				auto type = config.ResolveOrder(context, order_node.type);
+				auto null_order = config.ResolveNullOrder(context, type, order_node.null_order);
 				for (auto &order_expr : order_list) {
 					auto bound_expr = BindOrderExpression(order_binder, std::move(order_expr));
 					if (!bound_expr) {

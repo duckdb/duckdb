@@ -96,6 +96,8 @@ public:
 
 	bool HasExtension() const;
 
+	ArrowArrayPhysicalType GetPhysicalType() const;
+
 	//! The Arrow Type Extension data, if any
 	shared_ptr<ArrowTypeExtensionData> extension_data;
 
@@ -114,13 +116,17 @@ protected:
 
 using arrow_column_map_t = unordered_map<idx_t, shared_ptr<ArrowType>>;
 
-struct ArrowTableType {
+struct ArrowTableSchema {
 public:
-	void AddColumn(idx_t index, shared_ptr<ArrowType> type);
+	void AddColumn(idx_t index, shared_ptr<ArrowType> type, const string &name);
 	const arrow_column_map_t &GetColumns() const;
+	vector<LogicalType> &GetTypes();
+	vector<string> &GetNames();
 
 private:
 	arrow_column_map_t arrow_convert_data;
+	vector<LogicalType> types;
+	vector<string> column_names;
 };
 
 } // namespace duckdb

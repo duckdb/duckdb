@@ -443,6 +443,18 @@ duckdb_logical_type duckdb_column_logical_type(duckdb_result *result, idx_t col)
 	return reinterpret_cast<duckdb_logical_type>(new duckdb::LogicalType(result_data.result->types[col]));
 }
 
+duckdb_arrow_options duckdb_result_get_arrow_options(duckdb_result *result) {
+	if (!result) {
+		return nullptr;
+	}
+	auto &result_data = *(reinterpret_cast<duckdb::DuckDBResultData *>(result->internal_data));
+	if (!result_data.result) {
+		return nullptr;
+	}
+	auto arrow_options_wrapper = new duckdb::CClientArrowOptionsWrapper(result_data.result->client_properties);
+	return reinterpret_cast<duckdb_arrow_options>(arrow_options_wrapper);
+}
+
 idx_t duckdb_column_count(duckdb_result *result) {
 	if (!result) {
 		return 0;

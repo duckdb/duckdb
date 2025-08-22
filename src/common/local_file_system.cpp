@@ -10,6 +10,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/logging/file_system_logger.hpp"
+#include "duckdb/logging/log_manager.hpp"
 
 #include <cstdint>
 #include <cstdio>
@@ -237,7 +238,7 @@ static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
 
 	try {
 		auto cmdline_file = fs.OpenFile(StringUtil::Format("/proc/%d/cmdline", pid), FileFlags::FILE_FLAGS_READ);
-		auto cmdline = cmdline_file->ReadLine();
+		auto cmdline = cmdline_file->ReadLine(QueryContext());
 		process_name = basename(const_cast<char *>(cmdline.c_str())); // NOLINT: old C API does not take const
 	} catch (std::exception &) {
 		// ignore
@@ -257,7 +258,7 @@ static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
 	// try to find out who created that process
 	try {
 		auto loginuid_file = fs.OpenFile(StringUtil::Format("/proc/%d/loginuid", pid), FileFlags::FILE_FLAGS_READ);
-		auto uid = std::stoi(loginuid_file->ReadLine());
+		auto uid = std::stoi(loginuid_file->ReadLine(QueryContext()));
 		auto pw = getpwuid(uid);
 		if (pw) {
 			process_owner = pw->pw_name;
@@ -589,7 +590,7 @@ timestamp_t LocalFileSystem::GetLastModifiedTime(FileHandle &handle) {
 		throw IOException("Failed to get last modified time for file \"%s\": %s", {{"errno", std::to_string(errno)}},
 		                  handle.path, strerror(errno));
 	}
-	return Timestamp::FromTimeT(s.st_mtime);
+	return Timestamp::FromEpochSeconds(s.st_mtime);
 }
 
 FileType LocalFileSystem::GetFileType(FileHandle &handle) {
@@ -794,12 +795,18 @@ std::string LocalFileSystem::GetLastErrorAsString() {
 	if (errorMessageID == 0)
 		return std::string(); // No error message has been recorded
 
-	LPSTR messageBuffer = nullptr;
-	idx_t size =
-	    FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-	                   NULL, errorMessageID, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&messageBuffer, 0, NULL);
+	LPWSTR messageBuffer = nullptr;
+	idx_t size = FormatMessageW(
+	    FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL,
+	    errorMessageID, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPWSTR)&messageBuffer, 0, NULL);
 
-	std::string message(messageBuffer, size);
+	if (size == 0) {
+		return std::string();
+	}
+
+	// Convert wide string to UTF-8
+	std::wstring wideMessage(messageBuffer, size);
+	std::string message = WindowsUtil::UnicodeToUTF8(wideMessage.c_str());
 
 	// Free the buffer.
 	LocalFree(messageBuffer);

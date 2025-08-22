@@ -12,7 +12,7 @@ require notwindows
 statement error
 FROM sniff_csv('data/csv/real/lineitem_sample.csv', delim = ',');
 ----
-It was not possible to automatically detect the CSV Parsing dialect
+It was not possible to automatically detect the CSV parsing dialect
 
 # Test user giving options that are also sniffed
 

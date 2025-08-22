@@ -72,6 +72,11 @@ public:
 	                                                 const optional_idx max_db_count = optional_idx());
 	//! Scans the catalog set and returns each committed database entry
 	vector<reference<AttachedDatabase>> GetDatabases();
+	//! Returns the approximate count of attached databases.
+	idx_t ApproxDatabaseCount() {
+		lock_guard<mutex> path_lock(db_paths_lock);
+		return db_paths_to_name.size();
+	}
 	//! Removes all databases from the catalog set. This is necessary for the database instance's destructor,
 	//! as the database manager has to be alive when destroying the catalog set objects.
 	void ResetDatabases(unique_ptr<TaskScheduler> &scheduler);
@@ -98,8 +103,6 @@ public:
 	vector<string> GetAttachedDatabasePaths();
 
 private:
-	//! Returns a database with a specified path
-	optional_ptr<AttachedDatabase> GetDatabaseFromPath(ClientContext &context, const string &path);
 	void CheckPathConflict(ClientContext &context, const string &path);
 
 private:
@@ -121,7 +124,7 @@ private:
 	//! A set containing all attached database path
 	//! This allows to attach many databases efficiently, and to avoid attaching the
 	//! same file path twice
-	case_insensitive_set_t db_paths;
+	case_insensitive_map_t<string> db_paths_to_name;
 };
 
 } // namespace duckdb

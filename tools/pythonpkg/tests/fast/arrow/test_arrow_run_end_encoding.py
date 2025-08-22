@@ -3,7 +3,7 @@ import pytest
 import pandas as pd
 import duckdb
 
-pa = pytest.importorskip("pyarrow", '14.0.0', reason="Needs pyarrow >= 14")
+pa = pytest.importorskip("pyarrow", '21.0.0', reason="Needs pyarrow >= 21")
 pc = pytest.importorskip("pyarrow.compute")
 
 
@@ -61,7 +61,7 @@ class TestArrowREE(object):
                 size = 127
         query = query.format(run_length, value_type, size)
         rel = duckdb_cursor.sql(query)
-        array = rel.arrow()['ree']
+        array = rel.fetch_arrow_table()['ree']
         expected = rel.fetchall()
 
         encoded_array = pc.run_end_encode(array)
@@ -91,9 +91,9 @@ class TestArrowREE(object):
             ('TIMESTAMP', "'1992-03-22 01:02:03'", "'2022-11-07 08:43:04.123456'"),
             ('TIMESTAMP_MS', "'1992-03-22 01:02:03'", "'2022-11-07 08:43:04.123456'"),
             ('TIMESTAMP_NS', "'1992-03-22 01:02:03'", "'2022-11-07 08:43:04.123456'"),
-            # ('DECIMAL(4,2)', "'12.23'", "'99.99'"), REE not supported for decimal32
-            # ('DECIMAL(7,6)', "'1.234234'", "'0.000001'"), REE not supported for decimal32
-            # ('DECIMAL(14,7)', "'134523.234234'", "'999999.000001'"), REE not supported for decimal64
+            ('DECIMAL(4,2)', "'12.23'", "'99.99'"),
+            ('DECIMAL(7,6)', "'1.234234'", "'0.000001'"),
+            ('DECIMAL(14,7)', "'134523.234234'", "'999999.000001'"),
             ('DECIMAL(28,1)', "'12345678910111234123456789.1'", "'999999999999999999999999999.9'"),
             ('UUID', "'10acd298-15d7-417c-8b59-eabb5a2bacab'", "'eeccb8c5-9943-b2bb-bb5e-222f4e14b687'"),
             ('BIT', "'01010101010000'", "'01010100010101010101010101111111111'"),
@@ -133,7 +133,7 @@ class TestArrowREE(object):
         expected = duckdb_cursor.query("select {} from ree_tbl where {}".format(projection, filter)).fetchall()
 
         # Create an Arrow Table from the table
-        arrow_conversion = rel.arrow()
+        arrow_conversion = rel.fetch_arrow_table()
         arrays = {
             'ree': arrow_conversion['ree'],
             'a': arrow_conversion['a'],
@@ -162,7 +162,7 @@ class TestArrowREE(object):
     def test_arrow_ree_empty_table(self, duckdb_cursor):
         duckdb_cursor.query("create table tbl (ree integer)")
         rel = duckdb_cursor.table('tbl')
-        array = rel.arrow()['ree']
+        array = rel.fetch_arrow_table()['ree']
         expected = rel.fetchall()
 
         encoded_array = pc.run_end_encode(array)
@@ -199,7 +199,7 @@ class TestArrowREE(object):
         )
 
         # Fetch the result as an Arrow Table
-        result = duckdb_cursor.table('tbl').arrow()
+        result = duckdb_cursor.table('tbl').fetch_arrow_table()
 
         # Turn 'ree' into a run-end-encoded array and reconstruct a table from it
         arrays = {
@@ -232,7 +232,7 @@ class TestArrowREE(object):
         """.format(
                 projection
             )
-        ).arrow()
+        ).fetch_arrow_table()
 
         # Verify correctness by fetching from the original table and the constructed result
         expected = duckdb_cursor.query("select {} from tbl".format(projection)).fetchall()
@@ -258,7 +258,7 @@ class TestArrowREE(object):
             """
             select * from tbl
         """
-        ).arrow()
+        ).fetch_arrow_table()
 
         columns = unstructured.columns
         # Run-encode the first column ('ree')
@@ -282,7 +282,7 @@ class TestArrowREE(object):
         structured = pa.chunked_array(structured_chunks)
 
         arrow_tbl = pa.Table.from_arrays([structured], names=['ree'])
-        result = duckdb_cursor.query("select * from arrow_tbl").arrow()
+        result = duckdb_cursor.query("select * from arrow_tbl").fetch_arrow_table()
         assert arrow_tbl.to_pylist() == result.to_pylist()
 
     def test_arrow_ree_struct(self, duckdb_cursor):
@@ -303,7 +303,7 @@ class TestArrowREE(object):
             """
             select * from tbl
         """
-        ).arrow()
+        ).fetch_arrow_table()
 
         columns = unstructured.columns
         # Run-encode the first column ('ree')
@@ -318,7 +318,7 @@ class TestArrowREE(object):
         structured = pa.chunked_array(structured_chunks)
 
         arrow_tbl = pa.Table.from_arrays([structured], names=['ree'])
-        result = duckdb_cursor.query("select * from arrow_tbl").arrow()
+        result = duckdb_cursor.query("select * from arrow_tbl").fetch_arrow_table()
 
         expected = duckdb_cursor.query("select {'ree': ree, 'a': a, 'b': b, 'c': c} as s from tbl").fetchall()
         actual = duckdb_cursor.query("select * from result").fetchall()
@@ -347,7 +347,7 @@ class TestArrowREE(object):
             """
             select * from tbl
         """
-        ).arrow()
+        ).fetch_arrow_table()
 
         columns = unstructured.columns
         # Run-encode the first column ('ree')
@@ -369,7 +369,7 @@ class TestArrowREE(object):
 
         structured = pa.chunked_array(structured_chunks)
         arrow_tbl = pa.Table.from_arrays([structured], names=['ree'])
-        result = duckdb_cursor.query("select * from arrow_tbl").arrow()
+        result = duckdb_cursor.query("select * from arrow_tbl").fetch_arrow_table()
 
         # Recreate the same result set
         expected = []
@@ -405,7 +405,7 @@ class TestArrowREE(object):
             """
             select * from tbl
         """
-        ).arrow()
+        ).fetch_arrow_table()
 
         columns = unstructured.columns
         # Run-encode the first column ('ree')
@@ -432,7 +432,7 @@ class TestArrowREE(object):
 
         structured = pa.chunked_array(structured_chunks)
         arrow_tbl = pa.Table.from_arrays([structured], names=['ree'])
-        result = duckdb_cursor.query("select * from arrow_tbl").arrow()
+        result = duckdb_cursor.query("select * from arrow_tbl").fetch_arrow_table()
 
         # Verify that the resulting scan is the same as the input
         assert result.to_pylist() == arrow_tbl.to_pylist()
@@ -456,7 +456,7 @@ class TestArrowREE(object):
             """
             select * from tbl
         """
-        ).arrow()
+        ).fetch_arrow_table()
 
         columns = unstructured.columns
         # Run-encode the first column ('ree')
@@ -474,7 +474,7 @@ class TestArrowREE(object):
 
         structured = pa.chunked_array(structured_chunks)
         arrow_tbl = pa.Table.from_arrays([structured], names=['ree'])
-        result = duckdb_cursor.query("select * from arrow_tbl").arrow()
+        result = duckdb_cursor.query("select * from arrow_tbl").fetch_arrow_table()
 
         # Verify that the resulting scan is the same as the input
         assert result.to_pylist() == arrow_tbl.to_pylist()

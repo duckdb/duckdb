@@ -16,6 +16,7 @@
 namespace duckdb {
 
 struct FileHandle;
+class QueryContext;
 
 //! The standard row group size
 #define DEFAULT_ROW_GROUP_SIZE 122880ULL
@@ -26,10 +27,6 @@ struct FileHandle;
 
 //! The default block allocation size.
 #define DEFAULT_BLOCK_ALLOC_SIZE 262144ULL
-//! The configurable block allocation size.
-#ifndef DUCKDB_BLOCK_ALLOC_SIZE
-#define DUCKDB_BLOCK_ALLOC_SIZE DEFAULT_BLOCK_ALLOC_SIZE
-#endif
 //! The default block header size.
 #define DEFAULT_BLOCK_HEADER_STORAGE_SIZE 8ULL
 //! The default block header size.
@@ -110,7 +107,7 @@ struct MainHeader {
 	static constexpr uint64_t AES_IV_LEN = 16;
 	static constexpr uint64_t AES_TAG_LEN = 16;
 
-	static void CheckMagicBytes(FileHandle &handle);
+	static void CheckMagicBytes(QueryContext context, FileHandle &handle);
 
 	string LibraryGitDesc() {
 		return string(char_ptr_cast(library_git_desc), 0, MAX_VERSION_SIZE);
@@ -196,9 +193,6 @@ struct DatabaseHeader {
 #endif
 #if (DEFAULT_BLOCK_ALLOC_SIZE & (DEFAULT_BLOCK_ALLOC_SIZE - 1) != 0)
 #error The default block allocation size must be a power of two
-#endif
-#if (DUCKDB_BLOCK_ALLOC_SIZE & (DUCKDB_BLOCK_ALLOC_SIZE - 1) != 0)
-#error The duckdb block allocation size must be a power of two
 #endif
 
 } // namespace duckdb

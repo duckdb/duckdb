@@ -46,6 +46,7 @@ Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context),
 	rewriter.rules.push_back(make_uniq<CaseSimplificationRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<ConjunctionSimplificationRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<DatePartSimplificationRule>(rewriter));
+	rewriter.rules.push_back(make_uniq<DateTruncSimplificationRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<ComparisonSimplificationRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<InClauseSimplificationRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<EqualOrNullSimplification>(rewriter));
@@ -104,6 +105,7 @@ void Optimizer::RunBuiltInOptimizers() {
 	case LogicalOperatorType::LOGICAL_TRANSACTION:
 	case LogicalOperatorType::LOGICAL_PRAGMA:
 	case LogicalOperatorType::LOGICAL_SET:
+	case LogicalOperatorType::LOGICAL_ATTACH:
 	case LogicalOperatorType::LOGICAL_UPDATE_EXTENSIONS:
 	case LogicalOperatorType::LOGICAL_CREATE_SECRET:
 	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR:

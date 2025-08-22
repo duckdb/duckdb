@@ -46,7 +46,7 @@ void Node256Leaf::DeleteByte(ART &art, Node &node, const uint8_t byte) {
 	Node15Leaf::ShrinkNode256Leaf(art, node, node256);
 }
 
-bool Node256Leaf::HasByte(uint8_t &byte) {
+bool Node256Leaf::HasByte(const uint8_t byte) {
 	ValidityMask v_mask(&mask[0], Node256::CAPACITY);
 	return v_mask.RowIsValid(byte);
 }
@@ -92,9 +92,8 @@ void Node256Leaf::GrowNode15Leaf(ART &art, Node &node256_leaf, Node &node15_leaf
 		for (uint8_t i = 0; i < n15.count; i++) {
 			mask.SetValid(n15.key[i]);
 		}
-		n15.count = 0;
 	}
-	Node::Free(art, node15_leaf);
+	Node::FreeNode(art, node15_leaf);
 }
 
 } // namespace duckdb
