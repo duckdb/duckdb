@@ -84,7 +84,7 @@ with base as (
 			'NULL'
 		),
 		(
-			'{"a": [1,2,true, "hello"], "b": NULL}'
+			'{"b": [1,2,true, "hello"], "a": NULL}'
 		),
 		(
 			'true'
@@ -94,5 +94,5 @@ with base as (
 select a::VARIANT from base;
 ----
 NULL
-{"a": [1,2,true, "hello"], "b": NULL}
+{"b": [1,2,true, "hello"], "a": NULL}
 true

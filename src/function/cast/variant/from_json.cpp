@@ -37,7 +37,8 @@ public:
 
 struct VariantConversionState {
 public:
-	explicit VariantConversionState() {
+	explicit VariantConversionState(Vector &keys_entry)
+	    : dictionary(StringVector::GetStringBuffer(keys_entry).GetStringAllocator()) {
 	}
 
 public:
@@ -72,7 +73,7 @@ public:
 			}
 			auto vec_data = FlatVector::GetData<string_t>(vec);
 			vec_data[dict_count] = StringVector::AddStringOrBlob(vec, str);
-			it = dictionary.emplace(vec_data[dict_count], dict_count).first;
+			it = dictionary.emplace(std::make_pair(vec_data[dict_count], dict_count)).first;
 		}
 		dict_index = it->second;
 
@@ -105,7 +106,7 @@ public:
 	SelectionVector sel_vec;
 	idx_t sel_vec_capacity = 0;
 	//! Ensure uniqueness of the dictionary entries
-	string_map_t<uint32_t> dictionary;
+	OrderedOwningStringMap<uint32_t> dictionary;
 	idx_t dictionary_capacity = STANDARD_VECTOR_SIZE;
 
 public:
@@ -304,7 +305,6 @@ bool VariantCasts::CastJSONToVARIANT(Vector &source, Vector &result, idx_t count
 	UnifiedVectorFormat source_format;
 	source.ToUnifiedFormat(count, source_format);
 	auto source_data = source_format.GetData<string_t>(source_format);
-	VariantConversionState state;
 
 	//! keys
 	auto &keys = VariantVector::GetKeys(result);
@@ -325,6 +325,7 @@ bool VariantCasts::CastJSONToVARIANT(Vector &source, Vector &result, idx_t count
 	auto value_data = FlatVector::GetData<string_t>(value);
 
 	ReadJSONHolder json_holder;
+	VariantConversionState state(ListVector::GetEntry(keys));
 
 	ListVector::Reserve(values, state.value_count + state.row_value_count + count);
 	for (idx_t i = 0; i < count; i++) {
@@ -371,15 +372,13 @@ bool VariantCasts::CastJSONToVARIANT(Vector &source, Vector &result, idx_t count
 		json_holder.Reset();
 	}
 
-	auto &dictionary = ListVector::GetEntry(keys);
-	auto dictionary_size = state.dictionary.size();
-
 	auto &sel = state.sel_vec;
 	auto sel_size = state.keys_count;
 
-	VariantUtils::SortVariantKeys(dictionary, dictionary_size, sel, sel_size);
-	dictionary.Slice(state.sel_vec, state.keys_count);
-	dictionary.Flatten(state.keys_count);
+	VariantUtils::SortVariantKeys(result, state.dictionary, sel, sel_size);
+	auto &keys_entry = ListVector::GetEntry(keys);
+	keys_entry.Slice(state.sel_vec, state.keys_count);
+	keys_entry.Flatten(state.keys_count);
 
 	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);

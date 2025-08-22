@@ -12,9 +12,6 @@
 
 namespace duckdb {
 
-//! TODO: all the conversion methods need an 'is_root' boolean
-//! to figure out if the 'result' validity should be set to NULL or a VARIANT_NULL should be added
-
 namespace {
 
 struct OffsetData {
@@ -30,37 +27,6 @@ struct OffsetData {
 	static uint32_t *GetBlob(DataChunk &offsets) {
 		return FlatVector::GetData<uint32_t>(offsets.data[3]);
 	}
-};
-
-struct StringDictionary {
-public:
-	uint32_t AddString(Vector &list, string_t str) {
-		auto it = dictionary.find(str);
-
-		if (it != dictionary.end()) {
-			return it->second;
-		}
-		auto dict_count = NumericCast<uint32_t>(dictionary.size());
-		if (dict_count >= dictionary_capacity) {
-			auto new_capacity = NextPowerOfTwo(dictionary_capacity + 1);
-			ListVector::Reserve(list, new_capacity);
-			dictionary_capacity = new_capacity;
-		}
-		auto &list_entry = ListVector::GetEntry(list);
-		auto vec_data = FlatVector::GetData<string_t>(list_entry);
-		vec_data[dict_count] = StringVector::AddStringOrBlob(list_entry, str);
-		dictionary.emplace(vec_data[dict_count], dict_count);
-		return dict_count;
-	}
-
-	idx_t Size() const {
-		return dictionary.size();
-	}
-
-public:
-	//! Ensure uniqueness of the dictionary entries
-	string_map_t<uint32_t> dictionary;
-	idx_t dictionary_capacity = STANDARD_VECTOR_SIZE;
 };
 
 struct VariantVectorData {
@@ -431,13 +397,15 @@ static bool ConvertPrimitiveToVariant(Vector &source, VariantVectorData &result,
 //! fwd declare the ConvertToVariant function
 template <bool WRITE_DATA, bool IGNORE_NULLS = false>
 static bool ConvertToVariant(Vector &source, VariantVectorData &result, DataChunk &offsets, idx_t count,
-                             SelectionVector *selvec, SelectionVector &keys_selvec, StringDictionary &dictionary,
-                             SelectionVector *value_ids_selvec, const bool is_root);
+                             SelectionVector *selvec, SelectionVector &keys_selvec,
+                             OrderedOwningStringMap<uint32_t> &dictionary, SelectionVector *value_ids_selvec,
+                             const bool is_root);
 
 template <bool WRITE_DATA, bool IGNORE_NULLS>
 static bool ConvertArrayToVariant(Vector &source, VariantVectorData &result, DataChunk &offsets, idx_t count,
-                                  SelectionVector *selvec, SelectionVector &keys_selvec, StringDictionary &dictionary,
-                                  SelectionVector *value_ids_selvec, const bool is_root) {
+                                  SelectionVector *selvec, SelectionVector &keys_selvec,
+                                  OrderedOwningStringMap<uint32_t> &dictionary, SelectionVector *value_ids_selvec,
+                                  const bool is_root) {
 	auto blob_offset_data = OffsetData::GetBlob(offsets);
 	auto values_offset_data = OffsetData::GetValues(offsets);
 	auto children_offset_data = OffsetData::GetChildren(offsets);
@@ -490,8 +458,9 @@ static bool ConvertArrayToVariant(Vector &source, VariantVectorData &result, Dat
 
 template <bool WRITE_DATA, bool IGNORE_NULLS>
 static bool ConvertListToVariant(Vector &source, VariantVectorData &result, DataChunk &offsets, idx_t count,
-                                 SelectionVector *selvec, SelectionVector &keys_selvec, StringDictionary &dictionary,
-                                 SelectionVector *value_ids_selvec, const bool is_root) {
+                                 SelectionVector *selvec, SelectionVector &keys_selvec,
+                                 OrderedOwningStringMap<uint32_t> &dictionary, SelectionVector *value_ids_selvec,
+                                 const bool is_root) {
 	auto blob_offset_data = OffsetData::GetBlob(offsets);
 	auto values_offset_data = OffsetData::GetValues(offsets);
 	auto children_offset_data = OffsetData::GetChildren(offsets);
@@ -540,8 +509,9 @@ static bool ConvertListToVariant(Vector &source, VariantVectorData &result, Data
 
 template <bool WRITE_DATA, bool IGNORE_NULLS>
 static bool ConvertStructToVariant(Vector &source, VariantVectorData &result, DataChunk &offsets, idx_t count,
-                                   SelectionVector *selvec, SelectionVector &keys_selvec, StringDictionary &dictionary,
-                                   SelectionVector *value_ids_selvec, const bool is_root) {
+                                   SelectionVector *selvec, SelectionVector &keys_selvec,
+                                   OrderedOwningStringMap<uint32_t> &dictionary, SelectionVector *value_ids_selvec,
+                                   const bool is_root) {
 	auto keys_offset_data = OffsetData::GetKeys(offsets);
 	auto values_offset_data = OffsetData::GetValues(offsets);
 	auto blob_offset_data = OffsetData::GetBlob(offsets);
@@ -561,7 +531,9 @@ static bool ConvertStructToVariant(Vector &source, VariantVectorData &result, Da
 		for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
 			auto &struct_child = struct_children[child_idx];
 			string_t struct_child_str(struct_child.first.c_str(), NumericCast<uint32_t>(struct_child.first.size()));
-			dictionary_indices[child_idx] = dictionary.AddString(result.keys, struct_child_str);
+			auto dictionary_size = dictionary.size();
+			dictionary_indices[child_idx] =
+			    dictionary.emplace(std::make_pair(struct_child_str, dictionary_size)).first->second;
 		}
 	}
 
@@ -633,8 +605,9 @@ static bool ConvertStructToVariant(Vector &source, VariantVectorData &result, Da
 
 template <bool WRITE_DATA, bool IGNORE_NULLS>
 static bool ConvertUnionToVariant(Vector &source, VariantVectorData &result, DataChunk &offsets, idx_t count,
-                                  SelectionVector *selvec, SelectionVector &keys_selvec, StringDictionary &dictionary,
-                                  SelectionVector *value_ids_selvec, const bool is_root) {
+                                  SelectionVector *selvec, SelectionVector &keys_selvec,
+                                  OrderedOwningStringMap<uint32_t> &dictionary, SelectionVector *value_ids_selvec,
+                                  const bool is_root) {
 	auto &children = StructVector::GetEntries(source);
 
 	UnifiedVectorFormat source_format;
@@ -685,8 +658,9 @@ static bool ConvertUnionToVariant(Vector &source, VariantVectorData &result, Dat
 
 template <bool WRITE_DATA, bool IGNORE_NULLS>
 static bool ConvertVariantToVariant(Vector &source, VariantVectorData &result, DataChunk &offsets, idx_t count,
-                                    SelectionVector *selvec, SelectionVector &keys_selvec, StringDictionary &dictionary,
-                                    SelectionVector *value_ids_selvec, const bool is_root) {
+                                    SelectionVector *selvec, SelectionVector &keys_selvec,
+                                    OrderedOwningStringMap<uint32_t> &dictionary, SelectionVector *value_ids_selvec,
+                                    const bool is_root) {
 
 	auto keys_offset_data = OffsetData::GetKeys(offsets);
 	auto children_offset_data = OffsetData::GetChildren(offsets);
@@ -791,7 +765,9 @@ static bool ConvertVariantToVariant(Vector &source, VariantVectorData &result, D
 					auto &source_key_value = source_keys_entry_data[source_key_entry_index];
 
 					//! Now write this key to the dictionary of the result
-					auto dict_index = dictionary.AddString(result.keys, source_key_value);
+					auto dictionary_size = dictionary.size();
+					auto dict_index =
+					    dictionary.emplace(std::make_pair(source_key_value, dictionary_size)).first->second;
 					result.key_id_data[children_list_entry.offset + children_offset + j] =
 					    NumericCast<uint32_t>(keys_offset + keys_count);
 					keys_selvec.set_index(keys_list_entry.offset + keys_offset + keys_count, dict_index);
@@ -1083,8 +1059,9 @@ static bool ConvertVariantToVariant(Vector &source, VariantVectorData &result, D
 //! populate the parent's children
 template <bool WRITE_DATA, bool IGNORE_NULLS>
 static bool ConvertToVariant(Vector &source, VariantVectorData &result, DataChunk &offsets, idx_t count,
-                             SelectionVector *selvec, SelectionVector &keys_selvec, StringDictionary &dictionary,
-                             SelectionVector *value_ids_selvec, const bool is_root) {
+                             SelectionVector *selvec, SelectionVector &keys_selvec,
+                             OrderedOwningStringMap<uint32_t> &dictionary, SelectionVector *value_ids_selvec,
+                             const bool is_root) {
 	auto &type = source.GetType();
 
 	auto physical_type = type.InternalType();
@@ -1272,7 +1249,7 @@ static void InitializeOffsets(DataChunk &offsets, idx_t count) {
 }
 
 static void InitializeVariants(DataChunk &offsets, Vector &result, SelectionVector &keys_selvec, idx_t &selvec_size,
-                               StringDictionary &dictionary) {
+                               OrderedOwningStringMap<uint32_t> &dictionary) {
 	auto &keys = VariantVector::GetKeys(result);
 	auto keys_data = ListVector::GetData(keys);
 
@@ -1338,9 +1315,10 @@ static bool CastToVARIANT(Vector &source, Vector &result, idx_t count, CastParam
 	                   count);
 	offsets.SetCardinality(count);
 	auto &keys = VariantVector::GetKeys(result);
+	auto &keys_entry = ListVector::GetEntry(keys);
 
 	//! Initialize the dictionary
-	StringDictionary dictionary;
+	OrderedOwningStringMap<uint32_t> dictionary(StringVector::GetStringBuffer(keys_entry).GetStringAllocator());
 	SelectionVector keys_selvec;
 
 	{
@@ -1361,12 +1339,11 @@ static bool CastToVARIANT(Vector &source, Vector &result, idx_t count, CastParam
 		ConvertToVariant<true>(source, result_data, offsets, count, nullptr, keys_selvec, dictionary, nullptr, true);
 	}
 
-	auto &keys_entry = ListVector::GetEntry(keys);
-	VariantUtils::SortVariantKeys(keys_entry, dictionary.Size(), keys_selvec, keys_selvec_size);
+	VariantUtils::SortVariantKeys(result, dictionary, keys_selvec, keys_selvec_size);
 
 	//! Finalize the 'keys'
 	auto keys_entry_data = FlatVector::GetData<string_t>(keys_entry);
-	for (idx_t i = 0; i < dictionary.Size(); i++) {
+	for (idx_t i = 0; i < dictionary.size(); i++) {
 		keys_entry_data[i].SetSizeAndFinalize(static_cast<uint32_t>(keys_entry_data[i].GetSize()));
 	}
 

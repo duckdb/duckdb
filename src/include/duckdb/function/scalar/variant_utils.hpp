@@ -12,12 +12,13 @@
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/function/built_in_functions.hpp"
 #include "duckdb/common/types/variant.hpp"
+#include "duckdb/common/owning_string_map.hpp"
 
 namespace duckdb {
 
 struct VariantUtils {
-	DUCKDB_API static void SortVariantKeys(Vector &dictionary, idx_t dictionary_size, SelectionVector &sel,
-	                                       idx_t sel_size);
+	DUCKDB_API static void SortVariantKeys(Vector &variant, OrderedOwningStringMap<uint32_t> &dictionary,
+	                                       SelectionVector &sel, idx_t sel_size);
 	DUCKDB_API static bool FindChildValues(RecursiveUnifiedVectorFormat &source, const VariantPathComponent &component,
 	                                       optional_idx row, uint32_t *res, VariantNestedData *nested_data,
 	                                       idx_t count);
