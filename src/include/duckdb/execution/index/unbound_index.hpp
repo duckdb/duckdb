@@ -23,6 +23,8 @@ private:
 	IndexStorageInfo storage_info;
 	//! Buffer for WAL replay appends.
 	unique_ptr<ColumnDataCollection> buffered_appends;
+	//! Maps the column IDs in the buffered appends to the table columns.
+	vector<StorageIndex> mapped_column_ids;
 
 public:
 	UnboundIndex(unique_ptr<CreateInfo> create_info, IndexStorageInfo storage_info, TableIOManager &table_io_manager,
@@ -56,12 +58,15 @@ public:
 
 	void CommitDrop() override;
 
-	void BufferChunk(DataChunk &chunk, Vector &row_ids);
+	void BufferChunk(DataChunk &chunk, Vector &row_ids, const vector<StorageIndex> &columns);
 	bool HasBufferedAppends() const {
 		return buffered_appends != nullptr;
 	}
 	ColumnDataCollection &GetBufferedAppends() const {
 		return *buffered_appends;
+	}
+	const vector<StorageIndex> &GetMappedColumnIds() const {
+		return mapped_column_ids;
 	}
 };
 

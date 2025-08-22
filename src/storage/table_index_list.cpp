@@ -152,7 +152,8 @@ void TableIndexList::Bind(ClientContext &context, DataTableInfo &table_info, con
 		auto &unbound_index = index_entry->index->Cast<UnboundIndex>();
 		auto bound_idx = idx_binder.BindIndex(unbound_index);
 		if (unbound_index.HasBufferedAppends()) {
-			bound_idx->ApplyBufferedAppends(unbound_index.GetBufferedAppends());
+			bound_idx->ApplyBufferedAppends(column_types, unbound_index.GetBufferedAppends(),
+			                                unbound_index.GetMappedColumnIds());
 		}
 
 		// Commit the bound index to the index entry.

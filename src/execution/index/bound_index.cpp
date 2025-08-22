@@ -154,7 +154,8 @@ string BoundIndex::AppendRowError(DataChunk &input, idx_t index) {
 	return error;
 }
 
-void BoundIndex::ApplyBufferedAppends(ColumnDataCollection &buffered_appends) {
+void BoundIndex::ApplyBufferedAppends(const vector<LogicalType> &table_types, ColumnDataCollection &buffered_appends,
+                                      const vector<StorageIndex> &columns) {
 	IndexAppendInfo index_append_info(IndexAppendMode::INSERT_DUPLICATES, nullptr);
 
 	ColumnDataScanState state;
@@ -162,19 +163,17 @@ void BoundIndex::ApplyBufferedAppends(ColumnDataCollection &buffered_appends) {
 
 	DataChunk scan_chunk;
 	buffered_appends.InitializeScanChunk(scan_chunk);
-
-	auto append_types = scan_chunk.GetTypes();
-	append_types.pop_back();
-	DataChunk append_chunk;
-	append_chunk.InitializeEmpty(append_types);
+	DataChunk mock_chunk;
+	mock_chunk.InitializeEmpty(table_types);
 
 	while (buffered_appends.Scan(state, scan_chunk)) {
-		for (idx_t i = 0; i < append_chunk.ColumnCount(); i++) {
-			append_chunk.data[i].Reference(scan_chunk.data[i]);
+		for (idx_t i = 0; i < scan_chunk.ColumnCount() - 1; i++) {
+			auto col_id = columns[i].GetPrimaryIndex();
+			mock_chunk.data[col_id].Reference(scan_chunk.data[i]);
 		}
-		append_chunk.SetCardinality(scan_chunk.size());
+		mock_chunk.SetCardinality(scan_chunk.size());
 
-		auto error = Append(append_chunk, scan_chunk.data.back(), index_append_info);
+		auto error = Append(mock_chunk, scan_chunk.data.back(), index_append_info);
 		if (error.HasError()) {
 			throw InternalException("error while applying buffered appends: " + error.Message());
 		}

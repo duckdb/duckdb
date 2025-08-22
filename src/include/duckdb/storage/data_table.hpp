@@ -181,12 +181,18 @@ public:
 	//! Merge a row group collection directly into this table - appending it to the end of the table without copying
 	void MergeStorage(RowGroupCollection &data, TableIndexList &indexes, optional_ptr<StorageCommitState> commit_state);
 
-	//! Append a chunk with the row ids [row_start, ..., row_start + chunk.size()] to all indexes of the table.
-	//! Returns empty ErrorData, if the append was successful.
-	ErrorData AppendToIndexes(optional_ptr<TableIndexList> delete_indexes, DataChunk &chunk, row_t row_start,
-	                          const IndexAppendMode index_append_mode);
+	//! Appends a chunk with the row ids [row_start, ..., row_start + chunk.size()] to all indexes of the table.
+	//TODO: remove
+//	! The chunk can have two layouts:
+//	! 1. Only contains the necessary index key columns. In this case, mapped column IDs maps them to all columns of the table.
+//	! 2. Contains all columns of the table. In this case, mapped column IDs maps them to only the key columns.
+//	! Depending on whether an index is unbound or not, we pass
+//	! unbound: only the index key columns, or bound: all columns.
 	static ErrorData AppendToIndexes(TableIndexList &indexes, optional_ptr<TableIndexList> delete_indexes,
-	                                 DataChunk &chunk, row_t row_start, const IndexAppendMode index_append_mode);
+									 DataChunk &table_chunk, DataChunk &index_chunk, const vector<StorageIndex> &mapped_column_ids,
+									 row_t row_start, const IndexAppendMode index_append_mode);
+	ErrorData AppendToIndexes(optional_ptr<TableIndexList> delete_indexes, DataChunk &table_chunk, DataChunk &index_chunk,
+							  const vector<StorageIndex> &mapped_column_ids, row_t row_start, const IndexAppendMode index_append_mode);
 	//! Remove a chunk with the row ids [row_start, ..., row_start + chunk.size()] from all indexes of the table
 	void RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, row_t row_start);
 	//! Remove the chunk with the specified set of row identifiers from all indexes of the table
