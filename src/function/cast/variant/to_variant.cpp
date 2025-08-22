@@ -1342,14 +1342,7 @@ static bool CastToVARIANT(Vector &source, Vector &result, idx_t count, CastParam
 		ConvertToVariant<true>(source, result_data, offsets, count, nullptr, keys_selvec, dictionary, nullptr, true);
 	}
 
-	VariantUtils::SortVariantKeys(result, dictionary, keys_selvec, keys_selvec_size);
-
-	//! Finalize the 'keys'
-	auto keys_entry_data = FlatVector::GetData<string_t>(keys_entry);
-	for (idx_t i = 0; i < dictionary.size(); i++) {
-		keys_entry_data[i].SetSizeAndFinalize(static_cast<uint32_t>(keys_entry_data[i].GetSize()));
-	}
-
+	VariantUtils::FinalizeVariantKeys(result, dictionary, keys_selvec, keys_selvec_size);
 	//! Finalize the 'data'
 	auto &blob = VariantVector::GetData(result);
 	auto blob_data = FlatVector::GetData<string_t>(blob);

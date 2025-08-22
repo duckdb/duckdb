@@ -375,7 +375,13 @@ bool VariantCasts::CastJSONToVARIANT(Vector &source, Vector &result, idx_t count
 	auto &sel = state.sel_vec;
 	auto sel_size = state.keys_count;
 
-	VariantUtils::SortVariantKeys(result, state.dictionary, sel, sel_size);
+	VariantUtils::FinalizeVariantKeys(result, state.dictionary, sel, sel_size);
+
+	//! Finalize the 'data'
+	for (idx_t i = 0; i < count; i++) {
+		value_data[i].SetSizeAndFinalize(static_cast<uint32_t>(value_data[i].GetSize()));
+	}
+
 	auto &keys_entry = ListVector::GetEntry(keys);
 	keys_entry.Slice(state.sel_vec, state.keys_count);
 	keys_entry.Flatten(state.keys_count);

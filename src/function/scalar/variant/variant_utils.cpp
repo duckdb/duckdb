@@ -7,8 +7,8 @@
 
 namespace duckdb {
 
-void VariantUtils::SortVariantKeys(Vector &variant, OrderedOwningStringMap<uint32_t> &dictionary, SelectionVector &sel,
-                                   idx_t sel_size) {
+void VariantUtils::FinalizeVariantKeys(Vector &variant, OrderedOwningStringMap<uint32_t> &dictionary,
+                                       SelectionVector &sel, idx_t sel_size) {
 	auto &keys_entry = ListVector::GetEntry(VariantVector::GetKeys(variant));
 	auto keys_entry_data = FlatVector::GetData<string_t>(keys_entry);
 
@@ -23,6 +23,7 @@ void VariantUtils::SortVariantKeys(Vector &variant, OrderedOwningStringMap<uint3
 		}
 		unsorted_to_sorted[unsorted_idx] = i;
 		keys_entry_data[i] = it->first;
+		keys_entry_data[i].SetSizeAndFinalize(static_cast<uint32_t>(keys_entry_data[i].GetSize()));
 		it++;
 	}
 
