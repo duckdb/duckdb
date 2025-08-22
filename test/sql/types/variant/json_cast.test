@@ -79,7 +79,20 @@ select var::VARIANT::JSON from tbl;
 
 query I
 with base as (
-	from VALUES (1), (2), (3)
+	from (VALUES
+		(
+			'NULL'
+		),
+		(
+			'{"a": [1,2,true, "hello"], "b": NULL}'
+		),
+		(
+			'true'
+		)
+	) t(a)
 )
-select * from base;
+select a::VARIANT from base;
 ----
+NULL
+{"a": [1,2,true, "hello"], "b": NULL}
+true

@@ -378,20 +378,27 @@ bool VariantUtils::Verify(Vector &variant, const SelectionVector &sel_p, idx_t c
 	auto data_data = data.GetData<string_t>(data);
 
 	for (idx_t i = 0; i < count; i++) {
-		auto index = sel_p.get_index(i);
+		auto mapped_row = sel_p.get_index(i);
+		auto index = format.unified.sel->get_index(mapped_row);
 
 		if (!format.unified.validity.RowIsValid(index)) {
 			continue;
 		}
-		D_ASSERT(keys.validity.RowIsValid(index));
-		D_ASSERT(children.validity.RowIsValid(index));
-		D_ASSERT(values.validity.RowIsValid(index));
-		D_ASSERT(data.validity.RowIsValid(index));
 
-		auto keys_list_entry = keys_data[index];
-		auto children_list_entry = children_data[index];
-		auto values_list_entry = values_data[index];
-		auto &blob = data_data[index];
+		auto keys_index = keys.sel->get_index(mapped_row);
+		auto children_index = children.sel->get_index(mapped_row);
+		auto values_index = values.sel->get_index(mapped_row);
+		auto data_index = data.sel->get_index(mapped_row);
+
+		D_ASSERT(keys.validity.RowIsValid(keys_index));
+		D_ASSERT(children.validity.RowIsValid(children_index));
+		D_ASSERT(values.validity.RowIsValid(values_index));
+		D_ASSERT(data.validity.RowIsValid(data_index));
+
+		auto keys_list_entry = keys_data[keys_index];
+		auto children_list_entry = children_data[children_index];
+		auto values_list_entry = values_data[values_index];
+		auto &blob = data_data[data_index];
 
 		//! verify keys
 		for (idx_t j = 0; j < keys_list_entry.length; j++) {

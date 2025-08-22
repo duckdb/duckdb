@@ -1383,6 +1383,7 @@ static bool CastToVARIANT(Vector &source, Vector &result, idx_t count, CastParam
 	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
+	result.Verify(count);
 	return true;
 }
 
