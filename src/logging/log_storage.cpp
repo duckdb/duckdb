@@ -290,6 +290,11 @@ FileLogStorage::~FileLogStorage() {
 
 void FileLogStorage::InitializeFile(DatabaseInstance &db, LoggingTargetTable table) {
 	auto &table_writer = tables[table];
+
+	// reset the files writer, we may be re-initializing it here and otherwise we hold 2 handles to the same file
+	table_writer.file_writer.reset();
+
+	// (re)initialize the file writer
 	table_writer.file_writer = InitializeFileWriter(db, table_writer.path);
 	auto file_writer = table_writer.file_writer.get();
 
