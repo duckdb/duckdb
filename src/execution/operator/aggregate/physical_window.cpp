@@ -40,9 +40,9 @@ class WindowHashGroup {
 public:
 	using HashGroupPtr = unique_ptr<HashedSortGroup>;
 	using OrderMasks = HashedSortGroup::OrderMasks;
-	using ExecutorGlobalStatePtr = unique_ptr<WindowExecutorGlobalState>;
+	using ExecutorGlobalStatePtr = unique_ptr<GlobalSinkState>;
 	using ExecutorGlobalStates = vector<ExecutorGlobalStatePtr>;
-	using ExecutorLocalStatePtr = unique_ptr<WindowExecutorLocalState>;
+	using ExecutorLocalStatePtr = unique_ptr<LocalSinkState>;
 	using ExecutorLocalStates = vector<ExecutorLocalStatePtr>;
 	using ThreadLocalStates = vector<ExecutorLocalStates>;
 	using Task = WindowSourceTask;
@@ -765,7 +765,8 @@ void WindowLocalSourceState::Sink(ExecutionContext &context, InterruptState &int
 		}
 
 		for (idx_t w = 0; w < executors.size(); ++w) {
-			executors[w]->Sink(context, sink_chunk, coll_chunk, input_idx, *gestates[w], *local_states[w], interrupt);
+			OperatorSinkInput sink {*gestates[w], *local_states[w], interrupt};
+			executors[w]->Sink(context, sink_chunk, coll_chunk, input_idx, sink);
 		}
 
 		window_hash_group->sunk += input_chunk.size();
@@ -790,7 +791,8 @@ void WindowLocalSourceState::Finalize(ExecutionContext &context, InterruptState 
 	auto &gestates = window_hash_group->gestates;
 	auto &local_states = window_hash_group->thread_states.at(task->thread_idx);
 	for (idx_t w = 0; w < executors.size(); ++w) {
-		executors[w]->Finalize(context, *gestates[w], *local_states[w], window_hash_group->collection, interrupt);
+		OperatorSinkInput sink {*gestates[w], *local_states[w], interrupt};
+		executors[w]->Finalize(context, window_hash_group->collection, sink);
 	}
 
 	//	Mark this range as done
@@ -944,8 +946,6 @@ void WindowLocalSourceState::GetData(ExecutionContext &context, DataChunk &resul
 	output_chunk.Reset();
 	for (idx_t expr_idx = 0; expr_idx < executors.size(); ++expr_idx) {
 		auto &executor = *executors[expr_idx];
-		auto &gstate = *gestates[expr_idx];
-		auto &lstate = *local_states[expr_idx];
 		auto &result = output_chunk.data[expr_idx];
 		if (eval_chunk.data.empty()) {
 			eval_chunk.SetCardinality(input_chunk);
@@ -953,7 +953,8 @@ void WindowLocalSourceState::GetData(ExecutionContext &context, DataChunk &resul
 			eval_chunk.Reset();
 			eval_exec.Execute(input_chunk, eval_chunk);
 		}
-		executor.Evaluate(context, position, eval_chunk, result, lstate, gstate, interrupt);
+		OperatorSinkInput sink {*gestates[expr_idx], *local_states[expr_idx], interrupt};
+		executor.Evaluate(context, position, eval_chunk, result, sink);
 	}
 	output_chunk.SetCardinality(input_chunk);
 	output_chunk.Verify();
