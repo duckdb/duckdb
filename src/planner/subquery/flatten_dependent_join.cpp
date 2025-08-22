@@ -188,6 +188,10 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::Decorrelate(unique_ptr<Logica
 				    make_uniq<BoundColumnRefExpression>(child_type, plan_columns[child_idx]),
 				    op.child_targets[child_idx]);
 				compare_cond.comparison = op.comparison_type;
+
+				// push collations
+				ExpressionBinder::PushCollation(binder.context, compare_cond.left, compare_cond.left->return_type);
+				ExpressionBinder::PushCollation(binder.context, compare_cond.right, compare_cond.right->return_type);
 				op.conditions.push_back(std::move(compare_cond));
 			}
 		}
