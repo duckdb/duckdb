@@ -241,7 +241,7 @@ hugeint_t BaseUUID::FromBlob(const_data_ptr_t input) {
 
 void BaseUUID::ToBlob(hugeint_t input, data_ptr_t output) {
 	// Based on ParquetUUIDOperator::Operation from parquet extension
-	uint64_t high_bytes = input.upper ^ (int64_t(1) << 63);
+	uint64_t high_bytes = static_cast<uint64_t>(input.upper) ^ (uint64_t(1) << 63);
 	uint64_t low_bytes = input.lower;
 	for (idx_t i = 0; i < sizeof(uint64_t); i++) {
 		auto shift_count = (sizeof(uint64_t) - i - 1) * 8;
