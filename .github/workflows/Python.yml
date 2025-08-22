@@ -1,7 +1,11 @@
 name: Python
 on:
   push:
+    paths:
+      - tools/pythonpkg/**
   pull_request:
+    paths:
+      - tools/pythonpkg/**
 
 jobs:
   warn-and-fail:
