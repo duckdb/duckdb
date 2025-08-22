@@ -142,7 +142,7 @@ void DatabaseManager::CheckPathConflict(const string &path, const string &name) 
 
 	lock_guard<mutex> path_lock(db_paths_lock);
 	auto entry = db_paths_to_name.find(path);
-    if (entry != db_paths_to_name.end()) {
+	if (entry != db_paths_to_name.end()) {
 		throw BinderException("Unique file handle conflict: Cannot attach \"%s\" - the database file \"%s\" is already "
 		                      "attached by database \"%s\"",
 		                      name, path, entry->second);
@@ -192,7 +192,7 @@ void DatabaseManager::GetDatabaseType(ClientContext &context, AttachInfo &info, 
 	// Try to extract the database type from the path.
 	if (options.db_type.empty()) {
 		auto &fs = FileSystem::GetFileSystem(context);
-        CheckPathConflict(info.path, info.name);
+		CheckPathConflict(info.path, info.name);
 		DBPathAndType::CheckMagicBytes(fs, info.path, options.db_type);
 	}
 

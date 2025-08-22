@@ -63,8 +63,8 @@ public:
 	void InsertDatabasePath(const string &path, const string &name);
 	//! Erases a path from the database paths map
 	void EraseDatabasePath(const string &path);
-    //! Check if a path has a conflict
-    void CheckPathConflict(const string &path, const string &name);
+	//! Check if a path has a conflict
+	void CheckPathConflict(const string &path, const string &name);
 
 	//! Returns the database type. This might require checking the header of the file, in which case the file handle is
 	//! necessary. We can only grab the file handle, if it is not yet held, even for uncommitted changes. Thus, we have
