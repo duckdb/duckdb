@@ -4740,19 +4740,20 @@ const StringUtil::EnumStringLiteral *GetVariantLogicalTypeValues() {
 		{ static_cast<uint32_t>(VariantLogicalType::OBJECT), "OBJECT" },
 		{ static_cast<uint32_t>(VariantLogicalType::ARRAY), "ARRAY" },
 		{ static_cast<uint32_t>(VariantLogicalType::BIGNUM), "BIGNUM" },
-		{ static_cast<uint32_t>(VariantLogicalType::BITSTRING), "BITSTRING" }
+		{ static_cast<uint32_t>(VariantLogicalType::BITSTRING), "BITSTRING" },
+		{ static_cast<uint32_t>(VariantLogicalType::ENUM_SIZE), "ENUM_SIZE" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<VariantLogicalType>(VariantLogicalType value) {
-	return StringUtil::EnumToString(GetVariantLogicalTypeValues(), 33, "VariantLogicalType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetVariantLogicalTypeValues(), 34, "VariantLogicalType", static_cast<uint32_t>(value));
 }
 
 template<>
 VariantLogicalType EnumUtil::FromString<VariantLogicalType>(const char *value) {
-	return static_cast<VariantLogicalType>(StringUtil::StringToEnum(GetVariantLogicalTypeValues(), 33, "VariantLogicalType", value));
+	return static_cast<VariantLogicalType>(StringUtil::StringToEnum(GetVariantLogicalTypeValues(), 34, "VariantLogicalType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetVectorAuxiliaryDataTypeValues() {
