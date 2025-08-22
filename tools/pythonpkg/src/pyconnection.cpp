@@ -614,17 +614,17 @@ unique_ptr<QueryResult> DuckDBPyConnection::PrepareAndExecuteInternal(unique_ptr
 }
 
 vector<unique_ptr<SQLStatement>> DuckDBPyConnection::GetStatements(const py::object &query) {
-	vector<unique_ptr<SQLStatement>> result;
-	auto &connection = con.GetConnection();
-
 	shared_ptr<DuckDBPyStatement> statement_obj;
 	if (py::try_cast(query, statement_obj)) {
+		vector<unique_ptr<SQLStatement>> result;
 		result.push_back(statement_obj->GetStatement());
 		return result;
 	}
 	if (py::isinstance<py::str>(query)) {
+		auto &connection = con.GetConnection();
 		auto sql_query = std::string(py::str(query));
-		return connection.ExtractStatements(sql_query);
+		auto statements = connection.ExtractStatements(sql_query);
+		return std::move(statements);
 	}
 	throw InvalidInputException("Please provide either a DuckDBPyStatement or a string representing the query");
 }

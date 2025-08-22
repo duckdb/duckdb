@@ -1,4 +1,5 @@
 #include "duckdb/function/window/window_index_tree.hpp"
+#include "duckdb/function/window/window_collection.hpp"
 
 #include <utility>
 
@@ -14,7 +15,7 @@ WindowIndexTree::WindowIndexTree(ClientContext &context, const BoundOrderModifie
     : WindowIndexTree(context, order_bys.orders, sort_idx, count) {
 }
 
-unique_ptr<WindowAggregatorState> WindowIndexTree::GetLocalState(ExecutionContext &context) {
+unique_ptr<LocalSinkState> WindowIndexTree::GetLocalState(ExecutionContext &context) {
 	return make_uniq<WindowIndexTreeLocalState>(context, *this);
 }
 
