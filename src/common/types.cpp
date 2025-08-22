@@ -975,6 +975,14 @@ LogicalType LogicalType::NormalizeType(const LogicalType &type) {
 template <class OP>
 static bool CombineUnequalTypes(const LogicalType &left, const LogicalType &right, LogicalType &result) {
 	D_ASSERT(right.id() != left.id());
+	if (right.id() == LogicalTypeId::VARIANT) {
+		result = right;
+		return true;
+	}
+	if (left.id() == LogicalTypeId::VARIANT) {
+		result = left;
+		return true;
+	}
 
 	// left and right are not equal
 	// NULL/unknown (parameter) types always take the other type

@@ -195,3 +195,30 @@ select [
 [{'var': {'a': true, 'b': 42}}, NULL, {'var': {'c': false}}]
 
 # TODO: add a test with a union containing (among others) VARIANT, nulls at every level
+query I
+select [
+	42::UNION(a INTEGER, b BOOLEAN, c VARCHAR),
+	true::UNION(a INTEGER, b BOOLEAN, c VARCHAR),
+	'test'::UNION(a INTEGER, b BOOLEAN, c VARCHAR),
+]::VARIANT
+----
+[42, true, test]
+
+query I
+select [
+	42::UNION(a INTEGER, b BOOLEAN, c VARCHAR)::VARIANT,
+	true::UNION(a INTEGER, b BOOLEAN, c VARCHAR)::VARIANT,
+	'test'::UNION(a INTEGER, b BOOLEAN, c VARCHAR)::VARIANT,
+]::VARIANT
+----
+[42, true, test]
+
+query I
+select [
+	42::UNION(a INTEGER, b BOOLEAN, c VARIANT)::VARIANT,
+	{'a': 21, 'b': false}::VARIANT::UNION(a INTEGER, b BOOLEAN, c VARIANT)::VARIANT,
+	{'hello': 'world'},
+	'test'::VARIANT::UNION(a INTEGER, b BOOLEAN, c VARIANT)::VARIANT,
+]::VARIANT
+----
+[42, {'a': 21, 'b': false}, {'hello': world}, test]
