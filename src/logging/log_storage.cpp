@@ -400,6 +400,7 @@ void FileLogStorage::UpdateConfigInternal(DatabaseInstance &db, case_insensitive
 	string new_path;
 	bool normalize_contexts_new_value = normalize_contexts;
 	bool normalize_set_explicitly = false;
+	bool require_reinitializing_files = false;
 
 	vector<string> to_remove;
 	for (const auto &it : config_copy) {
@@ -412,11 +413,12 @@ void FileLogStorage::UpdateConfigInternal(DatabaseInstance &db, case_insensitive
 			}
 			new_path = path_value;
 			to_remove.push_back(it.first);
-		}
-		if (key == "normalize") {
+		} else if (key == "normalize") {
 			normalize_set_explicitly = true;
 			normalize_contexts_new_value = it.second.GetValue<bool>();
 			to_remove.push_back(it.first);
+		} else if (key == "delim") {
+			require_reinitializing_files = true;
 		}
 	}
 
@@ -440,12 +442,17 @@ void FileLogStorage::UpdateConfigInternal(DatabaseInstance &db, case_insensitive
 		FlushAllInternal();
 	}
 
-	bool normalize_contexts_changed = normalize_contexts != normalize_contexts_new_value;
+	require_reinitializing_files |= normalize_contexts != normalize_contexts_new_value;
 	normalize_contexts = normalize_contexts_new_value;
 
 	// Reset the buffers to ensure they have the correct schema
-	if (normalize_contexts_changed) {
+	if (require_reinitializing_files) {
 		ResetAllBuffers();
+
+		// Mark tables as uninitialized
+		for (auto &table : tables) {
+			table.second.initialized = false;
+		}
 	}
 
 	// Apply any path change

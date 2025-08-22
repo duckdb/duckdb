@@ -130,6 +130,7 @@ void CSVWriter::WriteRawString(const string &prefix, CSVWriterState &local_state
 void CSVWriter::WriteHeader() {
 	CSVWriterState state;
 	WriteHeader(*state.stream, options, writer_options);
+	state.written_anything = true;
 	Flush(state);
 }
 
@@ -160,9 +161,13 @@ void CSVWriter::Reset(optional_ptr<CSVWriterState> local_state) {
 void CSVWriter::Close() {
 	if (shared) {
 		lock_guard<mutex> flock(lock);
-		file_writer->Close();
+		if (file_writer) {
+			file_writer->Close();
+		}
 	} else {
-		file_writer->Close();
+		if (file_writer) {
+			file_writer->Close();
+		}
 	}
 }
 
@@ -179,7 +184,7 @@ void CSVWriter::FlushInternal(CSVWriterState &local_state) {
 
 	written_anything = true;
 	bytes_written += local_state.stream->GetPosition();
-	write_stream.WriteData((data_ptr_t)local_state.stream->GetData(), local_state.stream->GetPosition());
+	write_stream.WriteData(local_state.stream->GetData(), local_state.stream->GetPosition());
 
 	local_state.Reset();
 }
