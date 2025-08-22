@@ -42,7 +42,7 @@ ARTConflictType ARTBuilder::Build() {
 			// Inline the row ID.
 			if (row_id_count == 1) {
 				Leaf::New(ref, row_ids[entry.start].GetRowId());
-				return ARTConflictType::NO_CONFLICT;
+				continue;
 			}
 
 			// Loop and insert the row IDs.
@@ -53,7 +53,7 @@ ARTConflictType ARTBuilder::Build() {
 				                    IndexAppendMode::DEFAULT);
 			}
 			ref.get().SetGateStatus(GateStatus::GATE_SET);
-			return ARTConflictType::NO_CONFLICT;
+			continue;
 		}
 
 		// Create the prefix. Returns early, if the prefix_length is zero.
@@ -72,14 +72,15 @@ ARTConflictType ARTBuilder::Build() {
 		// Create a new node containing the children.
 		Node::New(art, ref, Node::GetNodeType(child_offsets.size()));
 		auto start_offset = child_offsets[0];
-		for (idx_t i = 1; i < child_offsets.size(); i++) {
-			auto next_offset = child_offsets[i];
+		for (idx_t i = 1; i <= child_offsets.size(); i++) {
 			auto child_byte = keys[start_offset].data[entry.depth];
 			// FIXME: Improve performance by either returning a reference to the child directly,
 			// FIXME: or by calling InsertChild after processing the child (at the end of the stack loop).
 			Node::InsertChild(art, ref, child_byte);
-			auto child = ref.get().Node::GetChildMutable(art, child_byte);
-			s.emplace(*child, start_offset, next_offset - 1, entry.depth + 1, child_byte);
+			auto child = ref.get().Node::GetChildMutable(art, child_byte, true);
+			auto end_offset = i != child_offsets.size() ? child_offsets[i] - 1 : entry.end;
+			s.emplace(*child, start_offset, end_offset, entry.depth + 1, child_byte);
+			start_offset = end_offset + 1;
 		}
 	}
 
