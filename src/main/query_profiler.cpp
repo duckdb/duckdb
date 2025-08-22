@@ -305,7 +305,9 @@ void QueryProfiler::EndQuery() {
 }
 
 void QueryProfiler::AddBytesRead(const idx_t nr_bytes) {
-	query_metrics.total_bytes_read += nr_bytes;
+	if (IsEnabled()) {
+		query_metrics.total_bytes_read += nr_bytes;
+	}
 }
 
 string QueryProfiler::ToString(ExplainFormat explain_format) const {
