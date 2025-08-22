@@ -24,6 +24,17 @@ select json('{"foo": null}').foo.bar
 ----
 NULL
 
+# also supports this syntax
+query T
+select json('{"foo": null}')['foo']
+----
+null
+
+query T
+select json('{"foo": null}')['foo']['bar']
+----
+NULL
+
 query T
 select json('null')
 ----
@@ -42,7 +53,7 @@ NULL
 
 # but we can using array extract syntax
 query T
-select json('{"my_field": {"my_nested_field": ["goose", "duck"]}}').my_field.my_nested_field[1]
+select json('{"my_field": {"my_nested_field": ["goose", "duck"]}}').my_field.my_nested_field[2]
 ----
 "duck"
 
@@ -54,7 +65,7 @@ NULL
 
 # but this will
 query T
-select ('{"my_field": {"my_nested_field": ["goose", "duck"]}}'::JSON).my_field.my_nested_field[1]
+select ('{"my_field": {"my_nested_field": ["goose", "duck"]}}'::JSON).my_field.my_nested_field[2]
 ----
 "duck"
 
@@ -72,22 +83,22 @@ select ('{"my_field": {"my_nested_field": ["goose", "duck"]}}'::JSON).my_field.m
 [
 
 query T
-select json('{"my_field": {"my_nested_field": ["goose", "duck"]}}').my_field.my_nested_field[1]
+select json('{"my_field": {"my_nested_field": ["goose", "duck"]}}').my_field.my_nested_field[2]
 ----
 "duck"
 
 query T
-select json('{"my_field": {"my_nested_field": ["goose", "duckduckduckduck"]}}').my_field.my_nested_field[1]
+select json('{"my_field": {"my_nested_field": ["goose", "duckduckduckduck"]}}').my_field.my_nested_field[2]
 ----
 "duckduckduckduck"
 
 query T
-select ('{"my_field": {"my_nested_field": ["goose", "duckduckduckduck"]}}'::JSON).my_field.my_nested_field[1]
+select ('{"my_field": {"my_nested_field": ["goose", "duckduckduckduck"]}}'::JSON).my_field.my_nested_field[2]
 ----
 "duckduckduckduck"
 
 query T
-select json('{"my_field": {"my_nested_field": ["goose", "duckduckduckduck"]}}').my_field.my_nested_field[1]
+select json('{"my_field": {"my_nested_field": ["goose", "duckduckduckduck"]}}').my_field.my_nested_field[2]
 ----
 "duckduckduckduck"
 
@@ -99,18 +110,18 @@ NULL
 
 # works!
 query T
-select json('[1, 2, 42]')[2]
+select json('[1, 2, 42]')[3]
 ----
 42
 
 query T
-select json('[1, 2, 42]')[2]::text
+select json('[1, 2, 42]')[3]::text
 ----
 42
 
 # chained
 query T
-select ('{"my_field": {"my_nested_field": ["goose", "duck"]}}'::JSON).my_field.my_nested_field[1]
+select ('{"my_field": {"my_nested_field": ["goose", "duck"]}}'::JSON).my_field.my_nested_field[2]
 ----
 "duck"
 
@@ -121,12 +132,12 @@ SELECT json('{"a":2,"c":[4,5,{"f":7}]}').c
 [4,5,{"f":7}]
 
 query T
-SELECT json('{"a":2,"c":[4,5,{"f":7}]}').c[2]
+SELECT json('{"a":2,"c":[4,5,{"f":7}]}').c[3]
 ----
 {"f":7}
 
 query T
-SELECT json('{"a":2,"c":[4,5,{"f":7}]}').c[2].f
+SELECT json('{"a":2,"c":[4,5,{"f":7}]}').c[3].f
 ----
 7
 
