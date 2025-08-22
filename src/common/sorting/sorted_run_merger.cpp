@@ -814,7 +814,7 @@ unique_ptr<SortedRun> SortedRunMergerLocalState::TemplatedMaterializePartition(S
 			if (!sorted_run->payload_data->GetLayout().AllConstant()) {
 				sorted_run->payload_data->FindHeapPointers(payload_data_input, count);
 			}
-			sorted_run->payload_append_state.chunk_state.heap_sizes.Reference(key_data_input.heap_sizes);
+			sorted_run->payload_append_state.chunk_state.heap_sizes.Reference(payload_data_input.heap_sizes);
 			sorted_run->payload_data->Build(sorted_run->payload_append_state.pin_state,
 			                                sorted_run->payload_append_state.chunk_state, 0, count);
 			sorted_run->payload_data->CopyRows(sorted_run->payload_append_state.chunk_state, payload_data_input,
