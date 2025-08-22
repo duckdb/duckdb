@@ -58,7 +58,7 @@ public:
 
 	void CommitDrop() override;
 
-	void BufferChunk(DataChunk &chunk, Vector &row_ids, const vector<StorageIndex> &columns);
+	void BufferChunk(DataChunk &chunk, Vector &row_ids, const vector<StorageIndex> &mapped_column_ids_p);
 	bool HasBufferedAppends() const {
 		return buffered_appends != nullptr;
 	}

@@ -170,7 +170,6 @@ ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGr
 
 	ErrorData error;
 	source.Scan(transaction, mapped_column_ids, [&](DataChunk &index_chunk) -> bool {
-		// The table chunk references only the indexed columns.
 		D_ASSERT(index_chunk.ColumnCount() == mapped_column_ids.size());
 		for (idx_t i = 0; i < mapped_column_ids.size(); i++) {
 			auto col_id = mapped_column_ids[i].GetPrimaryIndex();
@@ -181,7 +180,8 @@ ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGr
 		// Pass both the table and the index chunk.
 		// We need the table chunk for the bound indexes,
 		// and the index chunk for the unbound indexes (to buffer it).
-		error = DataTable::AppendToIndexes(index_list, delete_indexes, table_chunk, index_chunk, mapped_column_ids, start_row, index_append_mode);
+		error = DataTable::AppendToIndexes(index_list, delete_indexes, table_chunk, index_chunk, mapped_column_ids,
+		                                   start_row, index_append_mode);
 		if (error.HasError()) {
 			return false;
 		}
@@ -191,7 +191,8 @@ ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGr
 	return error;
 }
 
-void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppendState &append_state, bool append_to_table) {
+void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppendState &append_state,
+                                        bool append_to_table) {
 	// In this function, we might scan all table columns,
 	// as we might also append to the table itself (append_to_table).
 
@@ -206,32 +207,28 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 
 	if (append_to_table) {
 		// Appending to the table: we need to scan the entire chunk.
-		auto indexed_columns = index_list.GetRequiredColumns();
-		auto table_types = row_groups->GetTypes();
-		vector<LogicalType> index_types;
+		DataChunk index_chunk;
 		vector<StorageIndex> mapped_column_ids;
-		for (auto &col : indexed_columns) {
-			index_types.push_back(table_types[col]);
-			mapped_column_ids.emplace_back(col);
+		if (table.HasIndexes() && index_list.HasUnbound()) {
+			TableIndexList::InitializeIndexChunk(index_chunk, row_groups->GetTypes(), mapped_column_ids,
+			                                     *data_table_info);
 		}
 
-		DataChunk index_chunk;
-		index_chunk.InitializeEmpty(index_types);
-
 		row_groups->Scan(transaction, [&](DataChunk &table_chunk) -> bool {
-			// The index chunk references all indexed columns.
-			for (idx_t i = 0; i < mapped_column_ids.size(); i++) {
-				auto col_id = mapped_column_ids[i].GetPrimaryIndex();
-				index_chunk.data[i].Reference(table_chunk.data[col_id]);
-			}
-			index_chunk.SetCardinality(table_chunk);
+			if (table.HasIndexes()) {
+				if (index_list.HasUnbound()) {
+					// The index chunk references all indexed columns.
+					TableIndexList::ReferenceIndexChunk(table_chunk, index_chunk, mapped_column_ids);
+				}
 
-			// Pass both the table and the index chunk.
-			// We need the table chunk for the bound indexes,
-			// and the index chunk for the unbound indexes (to buffer it).
-			error = table.AppendToIndexes(delete_indexes, table_chunk, index_chunk, mapped_column_ids, append_state.current_row, index_append_mode);
-			if (error.HasError()) {
-				return false;
+				// Pass both the table and the index chunk.
+				// We need the table chunk for the bound indexes,
+				// and the index chunk for the unbound indexes (to buffer it).
+				error = table.AppendToIndexes(delete_indexes, table_chunk, index_chunk, mapped_column_ids,
+				                              append_state.current_row, index_append_mode);
+				if (error.HasError()) {
+					return false;
+				}
 			}
 
 			// Append to the base table.
@@ -459,36 +456,29 @@ void LocalTableStorage::AppendToDeleteIndexes(Vector &row_ids, DataChunk &delete
 	});
 }
 
-void LocalStorage::Append(LocalAppendState &state, DataChunk &table_chunk, const unordered_set<column_t> &indexed_columns) {
+void LocalStorage::Append(LocalAppendState &state, DataChunk &table_chunk, DataTableInfo &data_table_info) {
 	// Append to any unique indexes.
 	auto storage = state.storage;
 	auto offset = NumericCast<idx_t>(MAX_ROW_ID) + storage->row_groups->GetTotalRows();
 	idx_t base_id = offset + state.append_state.total_append_count;
 
-	// The input chunk contains all table columns.
-	// We need to only reference the index columns in the index chunk.
-	auto table_types = table_chunk.GetTypes();
-	vector<LogicalType> index_types;
-	vector<StorageIndex> mapped_column_ids;
-	for (auto &col : indexed_columns) {
-		index_types.push_back(table_types[col]);
-		mapped_column_ids.emplace_back(col);
-	}
+	if (!storage->append_indexes.Empty()) {
+		DataChunk index_chunk;
+		vector<StorageIndex> mapped_column_ids;
 
-	DataChunk index_chunk;
-	index_chunk.InitializeEmpty(index_types);
+		// Only initialize the index_chunk, if there are unbound indexes.
+		if (storage->append_indexes.HasUnbound() || storage->delete_indexes.HasUnbound()) {
+			TableIndexList::InitializeIndexChunk(index_chunk, table_chunk.GetTypes(), mapped_column_ids,
+			                                     data_table_info);
+			TableIndexList::ReferenceIndexChunk(table_chunk, index_chunk, mapped_column_ids);
+		}
 
-	// The index chunk references all indexed columns.
-	for (idx_t i = 0; i < mapped_column_ids.size(); i++) {
-		auto col_id = mapped_column_ids[i].GetPrimaryIndex();
-		index_chunk.data[i].Reference(table_chunk.data[col_id]);
-	}
-	index_chunk.SetCardinality(table_chunk);
-
-	auto error = DataTable::AppendToIndexes(storage->append_indexes, storage->delete_indexes, table_chunk, index_chunk, mapped_column_ids,
-	                                        NumericCast<row_t>(base_id), storage->index_append_mode);
-	if (error.HasError()) {
-		error.Throw();
+		auto error =
+		    DataTable::AppendToIndexes(storage->append_indexes, storage->delete_indexes, table_chunk, index_chunk,
+		                               mapped_column_ids, NumericCast<row_t>(base_id), storage->index_append_mode);
+		if (error.HasError()) {
+			error.Throw();
+		}
 	}
 
 	// Append the chunk to the local storage.
