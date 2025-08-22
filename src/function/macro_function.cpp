@@ -40,7 +40,7 @@ MacroBindResult
 MacroFunction::BindMacroFunction(const vector<unique_ptr<MacroFunction>> &functions, const string &name,
                                  FunctionExpression &function_expr,
                                  vector<unique_ptr<ParsedExpression>> &positional_arguments,
-                                 case_insensitive_map_t<unique_ptr<ParsedExpression>> &named_arguments) {
+                                 InsertionOrderPreservingMap<unique_ptr<ParsedExpression>> &named_arguments) {
 	// Separate positional and default arguments
 	for (auto &arg : function_expr.children) {
 		if (!arg->GetAlias().empty()) {
@@ -165,7 +165,7 @@ MacroFunction::BindMacroFunction(const vector<unique_ptr<MacroFunction>> &functi
 unique_ptr<DummyBinding>
 MacroFunction::CreateDummyBinding(const MacroFunction &macro_def, const string &name,
                                   vector<unique_ptr<ParsedExpression>> &positional_arguments,
-                                  case_insensitive_map_t<unique_ptr<ParsedExpression>> &named_arguments) {
+                                  InsertionOrderPreservingMap<unique_ptr<ParsedExpression>> &named_arguments) {
 	// create a MacroBinding to bind this macro's parameters to its arguments
 	vector<LogicalType> types;
 	vector<string> names;

@@ -40,7 +40,7 @@ public:
 	//! The positional parameters
 	vector<unique_ptr<ParsedExpression>> parameters;
 	//! The default parameters and their associated values
-	case_insensitive_map_t<unique_ptr<ParsedExpression>> default_parameters;
+	InsertionOrderPreservingMap<unique_ptr<ParsedExpression>> default_parameters;
 
 public:
 	virtual ~MacroFunction() {
@@ -53,14 +53,14 @@ public:
 	vector<unique_ptr<ParsedExpression>> GetPositionalParametersForSerialization(Serializer &serializer) const;
 	void FinalizeDeserialization();
 
-	static MacroBindResult BindMacroFunction(const vector<unique_ptr<MacroFunction>> &macro_functions,
-	                                         const string &name, FunctionExpression &function_expr,
-	                                         vector<unique_ptr<ParsedExpression>> &positional_arguments,
-	                                         case_insensitive_map_t<unique_ptr<ParsedExpression>> &named_arguments);
+	static MacroBindResult
+	BindMacroFunction(const vector<unique_ptr<MacroFunction>> &macro_functions, const string &name,
+	                  FunctionExpression &function_expr, vector<unique_ptr<ParsedExpression>> &positional_arguments,
+	                  InsertionOrderPreservingMap<unique_ptr<ParsedExpression>> &named_arguments);
 	static unique_ptr<DummyBinding>
 	CreateDummyBinding(const MacroFunction &macro_def, const string &name,
 	                   vector<unique_ptr<ParsedExpression>> &positional_arguments,
-	                   case_insensitive_map_t<unique_ptr<ParsedExpression>> &named_arguments);
+	                   InsertionOrderPreservingMap<unique_ptr<ParsedExpression>> &named_arguments);
 
 	virtual string ToSQL() const;
 

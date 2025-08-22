@@ -20,7 +20,7 @@
       {
         "id": 102,
         "name": "default_parameters",
-        "type": "case_insensitive_map_t<ParsedExpression*>"
+        "type": "InsertionOrderPreservingMap<ParsedExpression*>"
       }
     ],
     "finalize_deserialization": [

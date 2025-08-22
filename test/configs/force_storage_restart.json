@@ -24,12 +24,6 @@
         "test/sql/attach/attach_views.test",
         "test/sql/copy_database/copy_table_with_sequence.test"
       ]
-    },
-    {
-      "reason": "Needs latest storage version for consistency (can remove after v1.5.0).",
-      "paths": [
-        "test/sql/catalog/function/python_style_macro_parameters.test"
-      ]
     }
   ]
 }
