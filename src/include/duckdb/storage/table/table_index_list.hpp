@@ -100,7 +100,7 @@ private:
 	//! The index entries of the table.
 	vector<unique_ptr<IndexEntry>> index_entries;
 	//! Contains the number of unbound indexes.
-	idx_t unbound_count;
+	idx_t unbound_count = 0;
 };
 
 } // namespace duckdb
