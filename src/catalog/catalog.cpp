@@ -1119,7 +1119,7 @@ vector<reference<SchemaCatalogEntry>> Catalog::GetAllSchemas(ClientContext &cont
 
 	auto &db_manager = DatabaseManager::Get(context);
 	auto databases = db_manager.GetDatabases(context);
-	for (auto database : databases) {
+	for (auto &database : databases) {
 		auto &catalog = database->GetCatalog();
 		auto new_schemas = catalog.GetSchemas(context);
 		result.insert(result.end(), new_schemas.begin(), new_schemas.end());
