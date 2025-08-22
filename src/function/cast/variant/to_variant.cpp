@@ -721,8 +721,8 @@ static bool ConvertVariantToVariant(Vector &source, VariantVectorData &result, D
 		auto &values_offset = values_offset_data[result_index];
 		auto &blob_offset = blob_offset_data[result_index];
 
-		idx_t keys_count = 0;
-		idx_t blob_size = 0;
+		uint32_t keys_count = 0;
+		uint32_t blob_size = 0;
 		if (!source_validity.RowIsValid(index)) {
 			if (!IGNORE_NULLS) {
 				HandleVariantNull<WRITE_DATA>(result, result_index, values_offset_data, blob_offset, value_ids_selvec,
@@ -740,6 +740,9 @@ static bool ConvertVariantToVariant(Vector &source, VariantVectorData &result, D
 			//! Write the value_id for the parent of this column
 			result.value_id_data[value_ids_selvec->get_index(i)] = values_offset;
 		}
+
+		//! FIXME: we might want to add some checks to make sure the NumericLimits<uint32_t>::Maximum isn't exceeded,
+		//! but that's hard to test
 
 		//! First write all children
 		//! NOTE: this has to happen first because we use 'values_offset', which is increased when we write the values
