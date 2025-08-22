@@ -121,7 +121,7 @@ struct QueryMetrics {
 
 	//! The SQL string of the query
 	string query;
-	//! The timer used to time the xecution time of the entire query
+	//! The timer used to time the excution time of the entire query
 	Profiler latency;
 	//! The total bytes read by the file system
 	atomic<idx_t> total_bytes_read;
