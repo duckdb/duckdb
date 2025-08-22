@@ -64,6 +64,7 @@ Transaction &MetaTransaction::GetTransaction(AttachedDatabase &db) {
 #endif
 		all_transactions.push_back(db);
 		transactions.insert(make_pair(reference<AttachedDatabase>(db), reference<Transaction>(new_transaction)));
+		referenced_databases.insert(make_pair(reference<AttachedDatabase>(db), db.shared_from_this()));
 
 		return new_transaction;
 	} else {
@@ -169,6 +170,15 @@ void MetaTransaction::SetActiveQuery(transaction_t query_number) {
 	for (auto &entry : transactions) {
 		entry.second.get().active_query = query_number;
 	}
+}
+
+AttachedDatabase &MetaTransaction::UseDatabase(shared_ptr<AttachedDatabase> &database) {
+	auto &db_ref = *database;
+	auto entry = referenced_databases.find(db_ref);
+	if (entry == referenced_databases.end()) {
+		referenced_databases.emplace(reference<AttachedDatabase>(db_ref), database);
+	}
+	return db_ref;
 }
 
 void MetaTransaction::ModifyDatabase(AttachedDatabase &db) {

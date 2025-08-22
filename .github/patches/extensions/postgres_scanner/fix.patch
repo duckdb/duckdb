@@ -1,0 +1,26 @@
+diff --git a/src/postgres_extension.cpp b/src/postgres_extension.cpp
+index 5e54b69..aabaa5d 100644
+--- a/src/postgres_extension.cpp
++++ b/src/postgres_extension.cpp
+@@ -58,7 +58,7 @@ static void SetPostgresConnectionLimit(ClientContext &context, SetScope scope, V
+ 	}
+ 	auto databases = DatabaseManager::Get(context).GetDatabases(context);
+ 	for (auto &db_ref : databases) {
+-		auto &db = db_ref.get();
++		auto &db = *db_ref;
+ 		auto &catalog = db.GetCatalog();
+ 		if (catalog.GetCatalogType() != "postgres") {
+ 			continue;
+diff --git a/src/storage/postgres_clear_cache.cpp b/src/storage/postgres_clear_cache.cpp
+index 3e16e48..25c7ef6 100644
+--- a/src/storage/postgres_clear_cache.cpp
++++ b/src/storage/postgres_clear_cache.cpp
+@@ -24,7 +24,7 @@ static unique_ptr<FunctionData> ClearCacheBind(ClientContext &context, TableFunc
+ void PostgresClearCacheFunction::ClearPostgresCaches(ClientContext &context) {
+ 	auto databases = DatabaseManager::Get(context).GetDatabases(context);
+ 	for (auto &db_ref : databases) {
+-		auto &db = db_ref.get();
++		auto &db = *db_ref;
+ 		auto &catalog = db.GetCatalog();
+ 		if (catalog.GetCatalogType() != "postgres") {
+ 			continue;

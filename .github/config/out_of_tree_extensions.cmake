@@ -113,6 +113,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED})
             DONT_LINK
             GIT_URL https://github.com/duckdb/duckdb-postgres
             GIT_TAG c0411b950a0e80d232ba31f30bd484aebccca1b5
+            APPLY_PATCHES
             )
 endif()
 
@@ -146,6 +147,7 @@ duckdb_extension_load(sqlsmith
         DONT_LINK LOAD_TESTS
         GIT_URL https://github.com/duckdb/duckdb-sqlsmith
         GIT_TAG 3b1ad2bd7234c1143b4a819517873f4b465168d2
+        APPLY_PATCHES
         )
 
 ################# VSS
@@ -164,6 +166,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED} AND NOT ${MUSL_ENABLED})
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb-mysql
             GIT_TAG dc470684cc670d1a4185a1a408e5d4c61f5356e8
+            APPLY_PATCHES
             )
 endif()
 

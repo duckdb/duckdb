@@ -172,9 +172,9 @@ ConnectionManager &ConnectionManager::Get(ClientContext &context) {
 	return ConnectionManager::Get(DatabaseInstance::GetDatabase(context));
 }
 
-unique_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(ClientContext &context, AttachInfo &info,
+shared_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(ClientContext &context, AttachInfo &info,
                                                                       AttachOptions &options) {
-	unique_ptr<AttachedDatabase> attached_database;
+	shared_ptr<AttachedDatabase> attached_database;
 	auto &catalog = Catalog::GetSystemCatalog(*this);
 
 	if (!options.db_type.empty()) {
@@ -188,16 +188,16 @@ unique_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(ClientCont
 		if (entry->second->attach != nullptr && entry->second->create_transaction_manager != nullptr) {
 			// Use the storage extension to create the initial database.
 			attached_database =
-			    make_uniq<AttachedDatabase>(*this, catalog, *entry->second, context, info.name, info, options);
+			    make_shared_ptr<AttachedDatabase>(*this, catalog, *entry->second, context, info.name, info, options);
 			return attached_database;
 		}
 
-		attached_database = make_uniq<AttachedDatabase>(*this, catalog, info.name, info.path, options);
+		attached_database = make_shared_ptr<AttachedDatabase>(*this, catalog, info.name, info.path, options);
 		return attached_database;
 	}
 
 	// An empty db_type defaults to a duckdb database file.
-	attached_database = make_uniq<AttachedDatabase>(*this, catalog, info.name, info.path, options);
+	attached_database = make_shared_ptr<AttachedDatabase>(*this, catalog, info.name, info.path, options);
 	return attached_database;
 }
 
@@ -206,14 +206,13 @@ void DatabaseInstance::CreateMainDatabase() {
 	info.name = AttachedDatabase::ExtractDatabaseName(config.options.database_path, GetFileSystem());
 	info.path = config.options.database_path;
 
-	optional_ptr<AttachedDatabase> initial_database;
 	Connection con(*this);
 	con.BeginTransaction();
 	AttachOptions options(config.options);
-	initial_database = db_manager->AttachDatabase(*con.context, info, options);
-
+	auto initial_database = db_manager->AttachDatabase(*con.context, info, options);
 	initial_database->SetInitialDatabase();
 	initial_database->Initialize(*con.context);
+	db_manager->FinalizeAttach(*con.context, info, std::move(initial_database));
 	con.Commit();
 }
 
