@@ -81,6 +81,7 @@
 #include <assert.h>
 #include "duckdb_shell_wrapper.h"
 #include "duckdb/common/box_renderer.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 #include "sqlite3.h"
 typedef sqlite3_int64 i64;
 typedef sqlite3_uint64 u64;
@@ -4043,15 +4044,22 @@ MetadataResult ShellState::DisplayEntries(const char **azArg, idx_t nArg, char t
 	string schema_filter = "";
 	string table_filter = filter_pattern;
 
-	// Check if the filter is schema-qualified (e.g., "schema.table" or "schema.%")
-	size_t dot_pos = filter_pattern.find('.');
-	if (dot_pos != string::npos) {
-		schema_filter = filter_pattern.substr(0, dot_pos);
-		table_filter = filter_pattern.substr(dot_pos + 1);
-		// Handle the case where table_filter is empty (e.g., "schema.")
-		if (table_filter.empty()) {
-			table_filter = "%";
+	// Parse the filter pattern to check for schema qualification
+	try {
+		auto components = duckdb::QualifiedName::ParseComponents(filter_pattern);
+		if (components.size() >= 2) {
+			// e.g : "schema.table" or "schema.%"
+			schema_filter = components[0];
+			table_filter = components[1];
+			// e.g : "schema."
+			if (table_filter.empty()) {
+				table_filter = "%";
+			}
 		}
+	} catch (const duckdb::ParserException &) {
+		// If parsing fails, treat as a simple table pattern
+		schema_filter = "";
+		table_filter = filter_pattern;
 	}
 
 	// Use DuckDB's system tables instead of SQLite's sqlite_schema

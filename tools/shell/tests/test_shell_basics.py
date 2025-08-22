@@ -1122,4 +1122,15 @@ def test_shell_csv_file(shell):
     result = test.run()
     result.check_stdout("2008-08-10")
 
+def test_tables_invalid_pattern_handling(shell):
+    test = (
+        ShellTest(shell)
+        .statement("CREATE TABLE test_table(i INTEGER);")
+        .statement(".tables \"invalid\"pattern\"")
+    )
+    result = test.run()
+    # Should show usage message for invalid pattern
+    result.check_stderr("Usage: .tables ?TABLE?")
+
+
 # fmt: on
