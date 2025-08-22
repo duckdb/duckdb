@@ -21,26 +21,23 @@ public:
 	}
 
 public:
-	//! TODO // pass tree and row_count to this
-	// end is inclusive
+	//! Initialize the ART builder by passing a reference to the root node.
 	void Init(Node &node, const idx_t end) {
-		s.emplace(node, 0, end, 0, 0);
+		s.emplace(node, 0, end, 0);
 	}
-	//! TODO
+	//! Build the ART starting at the first entry in the stack.
 	ARTConflictType Build();
 
 private:
-	// TODO: also need other constructor with prev section?
 	struct NodeEntry {
 		NodeEntry() = delete;
-		NodeEntry(Node &node, const idx_t start, const idx_t end, const idx_t depth, const data_t key_byte)
-		    : node(node), start(start), end(end), depth(depth), key_byte(key_byte) {};
+		NodeEntry(Node &node, const idx_t start, const idx_t end, const idx_t depth)
+		    : node(node), start(start), end(end), depth(depth) {};
 
 		Node &node;
 		idx_t start;
 		idx_t end;
 		idx_t depth;
-		data_t key_byte;
 	};
 
 	//! The arena holds any temporary memory allocated during the Build phase.
@@ -53,8 +50,6 @@ private:
 	const unsafe_vector<ARTKey> &row_ids;
 	//! The stack. While merging, NodeEntry elements are pushed onto of the stack.
 	stack<NodeEntry> s;
-
-private:
 };
 
 } // namespace duckdb

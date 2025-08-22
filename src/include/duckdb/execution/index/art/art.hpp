@@ -93,7 +93,6 @@ public:
 	void CommitDrop(IndexLock &index_lock) override;
 
 	//! Build an ART from a vector of sorted keys and their row IDs.
-	// TODO: maybe remove this and use builder directly?
 	ARTConflictType Build(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_ids, const idx_t row_count);
 
 	//! Merge another ART into this ART. Both must be locked.

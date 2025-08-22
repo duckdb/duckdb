@@ -79,7 +79,7 @@ ARTConflictType ARTBuilder::Build() {
 			Node::InsertChild(art, ref, child_byte);
 			auto child = ref.get().Node::GetChildMutable(art, child_byte, true);
 			auto end_offset = i != child_offsets.size() ? child_offsets[i] - 1 : entry.end;
-			s.emplace(*child, start_offset, end_offset, entry.depth + 1, child_byte);
+			s.emplace(*child, start_offset, end_offset, entry.depth + 1);
 			start_offset = end_offset + 1;
 		}
 	}
