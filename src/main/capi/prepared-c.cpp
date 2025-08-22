@@ -167,6 +167,51 @@ duckdb_state duckdb_clear_bindings(duckdb_prepared_statement prepared_statement)
 	return DuckDBSuccess;
 }
 
+idx_t duckdb_prepared_statement_column_count(duckdb_prepared_statement prepared_statement) {
+	auto wrapper = reinterpret_cast<PreparedStatementWrapper *>(prepared_statement);
+	if (!wrapper || !wrapper->statement || wrapper->statement->HasError()) {
+		return 0;
+	}
+	return wrapper->statement->ColumnCount();
+}
+
+const char *duckdb_prepared_statement_column_name(duckdb_prepared_statement prepared_statement, idx_t col_idx) {
+	auto wrapper = reinterpret_cast<PreparedStatementWrapper *>(prepared_statement);
+	if (!wrapper || !wrapper->statement || wrapper->statement->HasError()) {
+		return nullptr;
+	}
+	auto &names = wrapper->statement->GetNames();
+	if (col_idx < 0 || col_idx >= names.size()) {
+		return nullptr;
+	}
+	return names[col_idx].c_str();
+}
+
+duckdb_logical_type duckdb_prepared_statement_column_logical_type(duckdb_prepared_statement prepared_statement,
+                                                                  idx_t col_idx) {
+	auto wrapper = reinterpret_cast<PreparedStatementWrapper *>(prepared_statement);
+	if (!wrapper || !wrapper->statement || wrapper->statement->HasError()) {
+		return nullptr;
+	}
+	auto types = wrapper->statement->GetTypes();
+	if (col_idx < 0 || col_idx >= types.size()) {
+		return nullptr;
+	}
+	return reinterpret_cast<duckdb_logical_type>(new LogicalType(types[col_idx]));
+}
+
+duckdb_type duckdb_prepared_statement_column_type(duckdb_prepared_statement prepared_statement, idx_t col_idx) {
+	auto logical_type = duckdb_prepared_statement_column_logical_type(prepared_statement, col_idx);
+	if (!logical_type) {
+		return DUCKDB_TYPE_INVALID;
+	}
+
+	auto type = duckdb_get_type_id(logical_type);
+	duckdb_destroy_logical_type(&logical_type);
+
+	return type;
+}
+
 duckdb_state duckdb_bind_value(duckdb_prepared_statement prepared_statement, idx_t param_idx, duckdb_value val) {
 	auto value = reinterpret_cast<Value *>(val);
 	auto wrapper = reinterpret_cast<PreparedStatementWrapper *>(prepared_statement);
