@@ -314,6 +314,8 @@ void FileLogStorage::InitializeFile(DatabaseInstance &db, LoggingTargetTable tab
 
 	// Ensures that the file is fully initialized when this function returns
 	file_writer->Sync();
+
+	table_writer.initialized = true;
 }
 
 unique_ptr<BufferedFileWriter> FileLogStorage::InitializeFileWriter(DatabaseInstance &db, const string &path) {

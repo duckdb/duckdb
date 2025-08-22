@@ -94,7 +94,7 @@ void CSVWriter::Initialize(bool force) {
 }
 
 void CSVWriter::WriteChunk(DataChunk &input, CSVWriterState &local_state) {
-	WriteChunk(input, *local_state.stream, options, written_anything, writer_options);
+	WriteChunk(input, *local_state.stream, options, local_state.written_anything, writer_options);
 
 	if (!local_state.require_manual_flush && local_state.stream->GetPosition() >= local_state.flush_size) {
 		Flush(local_state);
@@ -112,10 +112,10 @@ void CSVWriter::WriteRawString(const string &raw_string) {
 	if (shared) {
 		lock_guard<mutex> flock(lock);
 		bytes_written += raw_string.size();
-		write_stream.WriteData((data_ptr_t)raw_string.c_str(), raw_string.size());
+		write_stream.WriteData(const_data_ptr_cast(raw_string.c_str()), raw_string.size());
 	} else {
 		bytes_written += raw_string.size();
-		write_stream.WriteData((data_ptr_t)raw_string.c_str(), raw_string.size());
+		write_stream.WriteData(const_data_ptr_cast(raw_string.c_str()), raw_string.size());
 	}
 }
 
@@ -130,7 +130,6 @@ void CSVWriter::WriteRawString(const string &prefix, CSVWriterState &local_state
 void CSVWriter::WriteHeader() {
 	CSVWriterState state;
 	WriteHeader(*state.stream, options, writer_options);
-	state.written_anything = true;
 	Flush(state);
 }
 
@@ -168,15 +167,21 @@ void CSVWriter::Close() {
 }
 
 void CSVWriter::FlushInternal(CSVWriterState &local_state) {
-	if (local_state.stream->GetPosition() == 0) {
+	if (!local_state.written_anything) {
 		return;
+	}
+
+	if (!written_anything) {
+		written_anything = true;
+	} else if (writer_options.newline_writing_mode == CSVNewLineMode::WRITE_BEFORE) {
+		write_stream.WriteData(const_data_ptr_cast(writer_options.newline.c_str()), writer_options.newline.size());
 	}
 
 	written_anything = true;
 	bytes_written += local_state.stream->GetPosition();
 	write_stream.WriteData((data_ptr_t)local_state.stream->GetData(), local_state.stream->GetPosition());
 
-	local_state.stream->Rewind();
+	local_state.Reset();
 }
 
 void CSVWriter::ResetInternal(optional_ptr<CSVWriterState> local_state) {
