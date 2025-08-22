@@ -1654,9 +1654,13 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Values(const py::args &args) {
 	D_ASSERT(py::gil_check());
 	py::handle first_arg = args[0];
 	if (arg_count == 1 && py::isinstance<py::list>(first_arg)) {
+		// List -> Value -> ValueRelation (no issue, has context bounded)
 		vector<vector<Value>> values {DuckDBPyConnection::TransformPythonParamList(first_arg)};
 		return make_uniq<DuckDBPyRelation>(connection.Values(values));
 	} else {
+		// Tuples and everything else -> Expression -> ValueRelation (issue, has no context and later bumps into this
+		// error: duckdb.duckdb.InternalException: INTERNAL Error: TransactionContext::ActiveTransaction called without
+		// active transaction
 		vector<vector<unique_ptr<ParsedExpression>>> expressions;
 		if (py::isinstance<py::tuple>(first_arg)) {
 			expressions = ValueListsFromTuples(args);
