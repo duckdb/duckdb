@@ -496,7 +496,8 @@ void ClientContext::CheckIfPreparedStatementIsExecutable(PreparedStatementData &
 		auto &modified_database = it.first;
 		auto entry = manager.GetDatabase(*this, modified_database);
 		if (!entry) {
-			throw InternalException("Database \"%s\" not found", modified_database);
+			// database has been detached
+			throw InvalidInputException("Database \"%s\" not found", modified_database);
 		}
 		if (entry->IsReadOnly()) {
 			throw InvalidInputException(StringUtil::Format(

@@ -14,7 +14,6 @@ Unique file handle conflict
 statement maybe
 CREATE TABLE attach_mix_${k}.tbl${i} AS SELECT * FROM range(${k} * ${i}) t(i)
 ----
-no database
 
 statement maybe
 DETACH attach_mix_${k}
