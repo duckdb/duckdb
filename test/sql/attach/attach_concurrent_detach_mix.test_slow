@@ -18,7 +18,7 @@ CREATE TABLE attach_mix_${k}.tbl${i} AS SELECT * FROM range(${k} * ${i}) t(i)
 
 onlyif i>=20
 statement maybe
-SELECT COUNT(*) FROM attach_mix_${k}.tbl${i}
+SELECT COUNT(*) FROM attach_mix_${k}.tbl${k}
 ----
 
 statement maybe

@@ -64,6 +64,7 @@ Transaction &MetaTransaction::GetTransaction(AttachedDatabase &db) {
 #endif
 		all_transactions.push_back(db);
 		transactions.insert(make_pair(reference<AttachedDatabase>(db), reference<Transaction>(new_transaction)));
+		referenced_databases.insert(make_pair(reference<AttachedDatabase>(db), db.shared_from_this()));
 
 		return new_transaction;
 	} else {
