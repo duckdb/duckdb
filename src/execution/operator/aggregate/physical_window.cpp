@@ -170,6 +170,10 @@ public:
 	std::atomic<idx_t> completed;
 	//! The output ordering batch index this hash group starts at
 	idx_t batch_base;
+
+#if DEBUG
+	ValidityMask debug_mask;
+#endif
 };
 
 class WindowGlobalSinkState : public GlobalSinkState {
@@ -547,6 +551,11 @@ void WindowHashGroup::AllocateMasks() {
 		}
 		order_mask.Initialize(count);
 	}
+#if DEBUG
+	const auto entries = (count + ValidityMask::BITS_PER_VALUE - 1) / ValidityMask::BITS_PER_VALUE;
+	debug_mask.Initialize(entries);
+	debug_mask.SetAllInvalid(entries);
+#endif
 }
 
 void WindowHashGroup::ComputeMasks(const idx_t block_begin, const idx_t block_end) {
@@ -555,7 +564,17 @@ void WindowHashGroup::ComputeMasks(const idx_t block_begin, const idx_t block_en
 	//	Initialise our range
 	AllocateMasks();
 	const auto begin_entry = partition_mask.EntryCount(block_begin * STANDARD_VECTOR_SIZE);
-	const auto end_entry = partition_mask.EntryCount(block_end * STANDARD_VECTOR_SIZE);
+	const auto end_entry = partition_mask.EntryCount(MinValue<idx_t>(block_end * STANDARD_VECTOR_SIZE, count));
+#if DEBUG
+	//	Check for collisions
+	{
+		lock_guard<mutex> gestate_guard(lock);
+		for (idx_t i = begin_entry; i < end_entry; ++i) {
+			D_ASSERT(!debug_mask.RowIsValidUnsafe(i));
+			debug_mask.SetValidUnsafe(i);
+		}
+	}
+#endif
 	partition_mask.SetRangeInvalid(count, begin_entry, end_entry);
 	if (!block_begin) {
 		partition_mask.SetValidUnsafe(0);
@@ -590,7 +609,6 @@ void WindowHashGroup::ComputeMasks(const idx_t block_begin, const idx_t block_en
 		keys.Initialize(collection.GetAllocator(), types);
 	}
 
-	//	TODO: Parallelise on mask entry boundaries
 	WindowDeltaScanner(collection, block_begin, block_end, scan_cols, key_count,
 	                   [&](const idx_t row_idx, DataChunk &prev, DataChunk &curr, const idx_t ndistinct,
 	                       SelectionVector &distinct, const SelectionVector &matching) {
