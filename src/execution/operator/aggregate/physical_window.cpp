@@ -102,6 +102,9 @@ public:
 			// never block in GETDATA
 			return true;
 		}
+
+		//	Stop Linux whinging about control flow...
+		return true;
 	}
 
 	bool TryNextTask(Task &task) {
@@ -458,7 +461,14 @@ void WindowGlobalSourceState::CreateTaskList() {
 	const auto threads = NumericCast<idx_t>(ts.NumberOfThreads());
 
 	const auto &max_block = partition_blocks.front();
-	const auto per_thread = (max_block.first + threads - 1) / threads;
+
+	// To compute masks in parallel, we need to have the row count of the number of chunks per thread
+	// be a multiple of the mask entry size.  Usually, this is not a problem because
+	// STANDARD_VECTOR_SIZE >> ValidityMask::BITS_PER_VALUE, but if STANDARD_VECTOR_SIZE is say 2,
+	// we need to align the chunk count to the mask width.
+	const auto aligned_scale = MaxValue<idx_t>(ValidityMask::BITS_PER_VALUE / STANDARD_VECTOR_SIZE, 1);
+	const auto aligned_count = (max_block.first + aligned_scale - 1) / aligned_scale;
+	const auto per_thread = aligned_scale * ((aligned_count + threads - 1) / threads);
 	if (!per_thread) {
 		throw InternalException("No blocks per thread! %ld threads, %ld groups, %ld blocks, %ld hash group", threads,
 		                        partition_blocks.size(), max_block.first, max_block.second);
