@@ -10,6 +10,7 @@
 
 #include "duckdb/common/string.hpp"
 #include "duckdb/planner/binding_alias.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
 
 namespace duckdb {
 
