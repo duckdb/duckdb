@@ -50,8 +50,13 @@ bool ConvertToVariant(Vector &source, VariantVectorData &result, DataChunk &offs
 			throw NotImplementedException("Can't convert nested type '%s'", EnumUtil::ToString(logical_type));
 		};
 	} else {
-		return ConvertPrimitiveToVariant<WRITE_DATA, IGNORE_NULLS>(source, result, offsets, count, selvec, keys_selvec,
-		                                                           dictionary, value_ids_selvec, is_root);
+		if (type.IsJSONType()) {
+			return ConvertJSONToVariant<WRITE_DATA, IGNORE_NULLS>(source, result, offsets, count, selvec, keys_selvec,
+			                                                      dictionary, value_ids_selvec, is_root);
+		} else {
+			return ConvertPrimitiveToVariant<WRITE_DATA, IGNORE_NULLS>(
+			    source, result, offsets, count, selvec, keys_selvec, dictionary, value_ids_selvec, is_root);
+		}
 	}
 	return true;
 }
