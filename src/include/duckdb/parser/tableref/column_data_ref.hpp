@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/parser/tableref.hpp"
-#include "duckdb/common/optionally_owned_ptr.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 
 namespace duckdb {

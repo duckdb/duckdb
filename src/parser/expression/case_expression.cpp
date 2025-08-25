@@ -1,9 +1,5 @@
 #include "duckdb/parser/expression/case_expression.hpp"
-
 #include "duckdb/common/exception.hpp"
-
-#include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 

@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/enum_util.hpp"
-#include "duckdb/common/enums/index_constraint_type.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/parser/column_list.hpp"
 #include "duckdb/parser/constraint.hpp"
