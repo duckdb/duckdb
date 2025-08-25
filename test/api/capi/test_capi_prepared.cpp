@@ -349,7 +349,9 @@ TEST_CASE("Test duckdb_prepared_statement return value APIs", "[capi]") {
 	REQUIRE(duckdb_get_type_id(logical_type) == DUCKDB_TYPE_INVALID);
 	duckdb_destroy_logical_type(&logical_type);
 
-	col_name_str = duckdb_prepared_statement_column_name(stmt, 0);
+	auto col_name_ptr = duckdb_prepared_statement_column_name(stmt, 0);
+	col_name_str = col_name_ptr;
+	duckdb_free((void *)col_name_ptr);
 	REQUIRE(col_name_str == "unknown");
 	REQUIRE(duckdb_prepared_statement_column_name(stmt, 1) == nullptr);
 	REQUIRE(duckdb_prepared_statement_column_name(stmt, 5) == nullptr);
