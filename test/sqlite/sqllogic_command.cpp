@@ -143,10 +143,9 @@ void Command::RestartDatabase(ExecuteContext &context, Connection *&connection, 
 		// cannot restart in parallel
 		return;
 	}
-	vector<duckdb::unique_ptr<SQLStatement>> statements;
 	bool query_fail = false;
 	try {
-		statements = connection->context->ParseStatements(sql_query);
+		connection->context->ParseStatements(sql_query);
 	} catch (...) {
 		query_fail = true;
 	}

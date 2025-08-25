@@ -19,7 +19,7 @@ class TestArrowDate(object):
 
         data = (pa.array([1000 * 60 * 60 * 24], type=pa.date64()), pa.array([1], type=pa.date32()))
         arrow_table = pa.Table.from_arrays([data[0], data[1]], ['a', 'b'])
-        rel = duckdb.from_arrow(arrow_table).arrow()
+        rel = duckdb.from_arrow(arrow_table).fetch_arrow_table()
         assert rel['a'] == arrow_table['b']
         assert rel['b'] == arrow_table['b']
 
@@ -28,7 +28,7 @@ class TestArrowDate(object):
             return
         data = (pa.array([None], type=pa.date64()), pa.array([None], type=pa.date32()))
         arrow_table = pa.Table.from_arrays([data[0], data[1]], ['a', 'b'])
-        rel = duckdb.from_arrow(arrow_table).arrow()
+        rel = duckdb.from_arrow(arrow_table).fetch_arrow_table()
         assert rel['a'] == arrow_table['b']
         assert rel['b'] == arrow_table['b']
 
@@ -42,6 +42,6 @@ class TestArrowDate(object):
             pa.array([2147483647], type=pa.date32()),
         )
         arrow_table = pa.Table.from_arrays([data[0], data[1]], ['a', 'b'])
-        rel = duckdb.from_arrow(arrow_table).arrow()
+        rel = duckdb.from_arrow(arrow_table).fetch_arrow_table()
         assert rel['a'] == result['a']
         assert rel['b'] == result['b']

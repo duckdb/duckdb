@@ -31,7 +31,7 @@ def fetch_df(rel):
 
 
 def fetch_arrow(rel):
-    return rel.arrow()
+    return rel.fetch_arrow_table()
 
 
 def fetch_arrow_table(rel):

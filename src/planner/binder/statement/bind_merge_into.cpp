@@ -112,6 +112,8 @@ unique_ptr<BoundMergeIntoAction> Binder::BindMergeAction(LogicalMergeInto &merge
 			// expand source bindings
 			action.expressions = GenerateColumnReferences(*this, source_aliases, source_names);
 		}
+		CheckInsertColumnCountMismatch(expected_types.size(), action.expressions.size(), !action.insert_columns.empty(),
+		                               table.name);
 		// explicit expressions - plan them
 		for (idx_t i = 0; i < action.expressions.size(); i++) {
 			auto &column = table.GetColumns().GetColumn(named_column_map[i]);
@@ -125,6 +127,7 @@ unique_ptr<BoundMergeIntoAction> Binder::BindMergeAction(LogicalMergeInto &merge
 			PlanSubqueries(insert_expr, root);
 			insert_expressions.push_back(std::move(insert_expr));
 		}
+
 		for (auto &insert_expr : insert_expressions) {
 			result->expressions.push_back(make_uniq<BoundColumnRefExpression>(
 			    insert_expr->return_type, ColumnBinding(proj_index, expressions.size())));

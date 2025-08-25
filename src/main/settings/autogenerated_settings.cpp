@@ -463,23 +463,6 @@ Value HTTPProxyUsernameSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
-// I E E E Floating Point Ops
-//===----------------------------------------------------------------------===//
-void IEEEFloatingPointOpsSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto &config = ClientConfig::GetConfig(context);
-	config.ieee_floating_point_ops = input.GetValue<bool>();
-}
-
-void IEEEFloatingPointOpsSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).ieee_floating_point_ops = ClientConfig().ieee_floating_point_ops;
-}
-
-Value IEEEFloatingPointOpsSetting::GetSetting(const ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	return Value::BOOLEAN(config.ieee_floating_point_ops);
-}
-
-//===----------------------------------------------------------------------===//
 // Lock Configuration
 //===----------------------------------------------------------------------===//
 void LockConfigurationSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -510,33 +493,6 @@ void MaxExpressionDepthSetting::ResetLocal(ClientContext &context) {
 Value MaxExpressionDepthSetting::GetSetting(const ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	return Value::UBIGINT(config.max_expression_depth);
-}
-
-//===----------------------------------------------------------------------===//
-// Ordered Aggregate Threshold
-//===----------------------------------------------------------------------===//
-void OrderedAggregateThresholdSetting::SetLocal(ClientContext &context, const Value &input) {
-	if (!OnLocalSet(context, input)) {
-		return;
-	}
-	auto &config = ClientConfig::GetConfig(context);
-	config.ordered_aggregate_threshold = input.GetValue<idx_t>();
-}
-
-void OrderedAggregateThresholdSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).ordered_aggregate_threshold = ClientConfig().ordered_aggregate_threshold;
-}
-
-Value OrderedAggregateThresholdSetting::GetSetting(const ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	return Value::UBIGINT(config.ordered_aggregate_threshold);
-}
-
-//===----------------------------------------------------------------------===//
-// Perfect Ht Threshold
-//===----------------------------------------------------------------------===//
-void PerfectHtThresholdSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).perfect_ht_threshold = ClientConfig().perfect_ht_threshold;
 }
 
 //===----------------------------------------------------------------------===//

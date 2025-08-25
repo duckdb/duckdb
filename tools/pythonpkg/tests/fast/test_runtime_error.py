@@ -25,7 +25,7 @@ class TestRuntimeError(object):
         con = duckdb.connect()
         con.execute("create table tbl as select 'hello' i")
         with pytest.raises(duckdb.ConversionException):
-            con.execute("select i::int from tbl").arrow()
+            con.execute("select i::int from tbl").fetch_arrow_table()
 
     def test_register_error(self):
         con = duckdb.connect()
@@ -37,7 +37,7 @@ class TestRuntimeError(object):
         pytest.importorskip('pyarrow')
 
         con = duckdb.connect()
-        arrow_object = con.execute("select 1").arrow()
+        arrow_object = con.execute("select 1").fetch_arrow_table()
         arrow_relation = con.from_arrow(arrow_object)
         res = arrow_relation.execute()
         res.close()
@@ -48,7 +48,7 @@ class TestRuntimeError(object):
         pytest.importorskip('pyarrow')
 
         con = duckdb.connect()
-        arrow_object = con.execute("select 1").arrow()
+        arrow_object = con.execute("select 1").fetch_arrow_table()
         arrow_relation = con.from_arrow(arrow_object)
         res = arrow_relation.execute()
         res.close()

@@ -181,12 +181,15 @@ public:
 	//! Merge a row group collection directly into this table - appending it to the end of the table without copying
 	void MergeStorage(RowGroupCollection &data, TableIndexList &indexes, optional_ptr<StorageCommitState> commit_state);
 
-	//! Append a chunk with the row ids [row_start, ..., row_start + chunk.size()] to all indexes of the table.
-	//! Returns empty ErrorData, if the append was successful.
-	ErrorData AppendToIndexes(optional_ptr<TableIndexList> delete_indexes, DataChunk &chunk, row_t row_start,
-	                          const IndexAppendMode index_append_mode);
+	//! Appends a chunk with the row ids [row_start, ..., row_start + chunk.size()] to all indexes of the table.
+	//! If an index is bound, it appends table_chunk. Else, it buffers index_chunk.
 	static ErrorData AppendToIndexes(TableIndexList &indexes, optional_ptr<TableIndexList> delete_indexes,
-	                                 DataChunk &chunk, row_t row_start, const IndexAppendMode index_append_mode);
+	                                 DataChunk &table_chunk, DataChunk &index_chunk,
+	                                 const vector<StorageIndex> &mapped_column_ids, row_t row_start,
+	                                 const IndexAppendMode index_append_mode);
+	ErrorData AppendToIndexes(optional_ptr<TableIndexList> delete_indexes, DataChunk &table_chunk,
+	                          DataChunk &index_chunk, const vector<StorageIndex> &mapped_column_ids, row_t row_start,
+	                          const IndexAppendMode index_append_mode);
 	//! Remove a chunk with the row ids [row_start, ..., row_start + chunk.size()] from all indexes of the table
 	void RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, row_t row_start);
 	//! Remove the chunk with the specified set of row identifiers from all indexes of the table

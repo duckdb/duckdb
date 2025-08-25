@@ -66,6 +66,7 @@ RowGroup::RowGroup(RowGroupCollection &collection_p, PersistentRowGroupData &dat
 }
 
 void RowGroup::MoveToCollection(RowGroupCollection &collection_p, idx_t new_start) {
+	lock_guard<mutex> l(row_group_lock);
 	this->collection = collection_p;
 	this->start = new_start;
 	for (idx_t c = 0; c < columns.size(); c++) {

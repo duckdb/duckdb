@@ -204,10 +204,10 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	      py::arg("rows_per_batch") = 1000000, py::kw_only(), py::arg("lazy") = false);
 	m.def("fetch_arrow_table", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()",
 	      py::arg("rows_per_batch") = 1000000);
-	m.def("arrow", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()",
-	      py::arg("rows_per_batch") = 1000000);
 	m.def("fetch_record_batch", &DuckDBPyConnection::FetchRecordBatchReader,
 	      "Fetch an Arrow RecordBatchReader following execute()", py::arg("rows_per_batch") = 1000000);
+	m.def("arrow", &DuckDBPyConnection::FetchRecordBatchReader, "Fetch an Arrow RecordBatchReader following execute()",
+	      py::arg("rows_per_batch") = 1000000);
 	m.def("torch", &DuckDBPyConnection::FetchPyTorch, "Fetch a result as dict of PyTorch Tensors following execute()");
 	m.def("tf", &DuckDBPyConnection::FetchTF, "Fetch a result as dict of TensorFlow Tensors following execute()");
 	m.def("begin", &DuckDBPyConnection::Begin, "Start a new transaction");
@@ -614,17 +614,17 @@ unique_ptr<QueryResult> DuckDBPyConnection::PrepareAndExecuteInternal(unique_ptr
 }
 
 vector<unique_ptr<SQLStatement>> DuckDBPyConnection::GetStatements(const py::object &query) {
-	vector<unique_ptr<SQLStatement>> result;
-	auto &connection = con.GetConnection();
-
 	shared_ptr<DuckDBPyStatement> statement_obj;
 	if (py::try_cast(query, statement_obj)) {
+		vector<unique_ptr<SQLStatement>> result;
 		result.push_back(statement_obj->GetStatement());
 		return result;
 	}
 	if (py::isinstance<py::str>(query)) {
+		auto &connection = con.GetConnection();
 		auto sql_query = std::string(py::str(query));
-		return connection.ExtractStatements(sql_query);
+		auto statements = connection.ExtractStatements(sql_query);
+		return std::move(statements);
 	}
 	throw InvalidInputException("Please provide either a DuckDBPyStatement or a string representing the query");
 }
