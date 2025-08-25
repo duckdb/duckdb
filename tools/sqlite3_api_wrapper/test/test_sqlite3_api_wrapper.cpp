@@ -336,6 +336,16 @@ TEST_CASE("Test rollback of aborted transaction", "[sqlite3wrapper]") {
 	REQUIRE(db.Execute("START TRANSACTION"));
 }
 
+TEST_CASE("Test PIVOT", "[sqlite3wrapper]") {
+	SQLiteDBWrapper db;
+
+	// open an in-memory db
+	REQUIRE(db.Open(":memory:"));
+	REQUIRE(db.Execute("PIVOT (SELECT 'a' AS col) ON col using first(col);SELECT 42;"));
+	// Results are concatenated
+	REQUIRE(db.CheckColumn(0, {"a", "42"}));
+}
+
 TEST_CASE("Test sqlite3_complete", "[sqlite3wrapper]") {
 	REQUIRE(sqlite3_complete("SELECT $$ this is a dollar quoted string without a marker $$;") == 1);
 	REQUIRE(sqlite3_complete("SELECT $this$is a dollar quoted string$this$;") == 1);

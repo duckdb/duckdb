@@ -25,7 +25,7 @@ void PragmaHandler::HandlePragmaStatementsInternal(vector<unique_ptr<SQLStatemen
 		if (statements[i]->type == StatementType::MULTI_STATEMENT) {
 			auto &multi_statement = statements[i]->Cast<MultiStatement>();
 			for (auto &stmt : multi_statement.statements) {
-				statements.push_back(std::move(stmt));
+				new_statements.push_back(std::move(stmt));
 			}
 			continue;
 		}

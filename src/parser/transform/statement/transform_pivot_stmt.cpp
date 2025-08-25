@@ -125,6 +125,8 @@ unique_ptr<SQLStatement> Transformer::CreatePivotStatement(unique_ptr<SQLStateme
 		}
 		result->statements.push_back(GenerateCreateEnumStmt(std::move(pivot)));
 	}
+	result->stmt_location = statement->stmt_location;
+	result->stmt_length = statement->stmt_length;
 	result->statements.push_back(std::move(statement));
 	// FIXME: drop the types again!?
 	//	for(auto &pivot : pivot_entries) {
