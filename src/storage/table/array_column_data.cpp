@@ -332,12 +332,12 @@ void ArrayColumnData::InitializeColumn(PersistentColumnData &column_data, BaseSt
 	this->count = validity.count.load();
 }
 
-void ArrayColumnData::GetColumnSegmentInfo(idx_t row_group_index, vector<idx_t> col_path,
+void ArrayColumnData::GetColumnSegmentInfo(QueryContext context, idx_t row_group_index, vector<idx_t> col_path,
                                            vector<ColumnSegmentInfo> &result) {
 	col_path.push_back(0);
-	validity.GetColumnSegmentInfo(row_group_index, col_path, result);
+	validity.GetColumnSegmentInfo(context, row_group_index, col_path, result);
 	col_path.back() = 1;
-	child_column->GetColumnSegmentInfo(row_group_index, col_path, result);
+	child_column->GetColumnSegmentInfo(context, row_group_index, col_path, result);
 }
 
 void ArrayColumnData::Verify(RowGroup &parent) {

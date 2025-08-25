@@ -221,7 +221,8 @@ typedef void (*compression_cleanup_state_t)(ColumnSegment &segment);
 // GetSegmentInfo (optional)
 //===--------------------------------------------------------------------===//
 //! Function prototype for retrieving segment information straight from the column segment
-typedef InsertionOrderPreservingMap<string> (*compression_get_segment_info_t)(ColumnSegment &segment);
+typedef InsertionOrderPreservingMap<string> (*compression_get_segment_info_t)(QueryContext context,
+                                                                              ColumnSegment &segment);
 
 enum class CompressionValidity : uint8_t { REQUIRES_VALIDITY, NO_VALIDITY_REQUIRED };
 

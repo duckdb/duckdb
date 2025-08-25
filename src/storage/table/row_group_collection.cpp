@@ -1180,10 +1180,10 @@ vector<PartitionStatistics> RowGroupCollection::GetPartitionStats() const {
 //===--------------------------------------------------------------------===//
 // GetColumnSegmentInfo
 //===--------------------------------------------------------------------===//
-vector<ColumnSegmentInfo> RowGroupCollection::GetColumnSegmentInfo() {
+vector<ColumnSegmentInfo> RowGroupCollection::GetColumnSegmentInfo(QueryContext context) {
 	vector<ColumnSegmentInfo> result;
 	for (auto &row_group : row_groups->Segments()) {
-		row_group.GetColumnSegmentInfo(row_group.index, result);
+		row_group.GetColumnSegmentInfo(context, row_group.index, result);
 	}
 	return result;
 }

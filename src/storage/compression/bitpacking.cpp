@@ -626,9 +626,9 @@ static T DeltaDecode(T *data, T previous_value, const size_t size) {
 template <class T, class T_S = typename MakeSigned<T>::type>
 struct BitpackingScanState : public SegmentScanState {
 public:
-	explicit BitpackingScanState(ColumnSegment &segment) : current_segment(segment) {
+	explicit BitpackingScanState(QueryContext context, ColumnSegment &segment) : current_segment(segment) {
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
-		handle = buffer_manager.Pin(segment.block);
+		handle = buffer_manager.Pin(context, segment.block);
 		auto data_ptr = handle.Ptr();
 
 		// load offset to bitpacking widths pointer
@@ -780,7 +780,7 @@ public:
 
 template <class T>
 unique_ptr<SegmentScanState> BitpackingInitScan(QueryContext context, ColumnSegment &segment) {
-	auto result = make_uniq<BitpackingScanState<T>>(segment);
+	auto result = make_uniq<BitpackingScanState<T>>(context, segment);
 	return std::move(result);
 }
 
@@ -889,7 +889,7 @@ void BitpackingScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_c
 template <class T>
 void BitpackingFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
                         idx_t result_idx) {
-	BitpackingScanState<T> scan_state(segment);
+	BitpackingScanState<T> scan_state(state.context, segment);
 	scan_state.Skip(segment, NumericCast<idx_t>(row_id));
 
 	D_ASSERT(scan_state.current_group_offset < BITPACKING_METADATA_GROUP_SIZE);
@@ -953,10 +953,10 @@ void BitpackingSkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_c
 // GetSegmentInfo
 //===--------------------------------------------------------------------===//
 template <class T>
-InsertionOrderPreservingMap<string> BitpackingGetSegmentInfo(ColumnSegment &segment) {
+InsertionOrderPreservingMap<string> BitpackingGetSegmentInfo(QueryContext context, ColumnSegment &segment) {
 	map<BitpackingMode, idx_t> counts;
 	auto tuple_count = segment.count.load();
-	BitpackingScanState<T> scan_state(segment);
+	BitpackingScanState<T> scan_state(context, segment);
 	for (idx_t i = 0; i < tuple_count; i += BITPACKING_METADATA_GROUP_SIZE) {
 		if (i) {
 			scan_state.LoadNextGroup();
