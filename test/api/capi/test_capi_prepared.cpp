@@ -337,6 +337,8 @@ TEST_CASE("Test duckdb_prepared_statement return value APIs", "[capi]") {
 	duckdb_free((void *)column_name);
 	REQUIRE(col_name_str == "CAST($1 AS VARCHAR)");
 
+	duckdb_destroy_prepare(&stmt);
+
 	// Return columns contain ambiguous types
 	REQUIRE(duckdb_prepare(conn, "select $1::TEXT, $2::integer, $3, $4::BOOLEAN, $5::FLOAT, $6::DOUBLE", &stmt) ==
 	        DuckDBSuccess);
