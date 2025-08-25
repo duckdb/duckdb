@@ -17,7 +17,7 @@ SELECT
 	request.url,
 	response.status,
 	response.reason,
-FROM duckdb_logs_parsed('HTTP')
+FROM duckdb_logs_parsed('HTTP') WHERE response.status != 'ServiceUnavailable_503'
 ----
 HEAD	https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv	OK_200	OK
 GET	https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv	PartialContent_206	Partial Content

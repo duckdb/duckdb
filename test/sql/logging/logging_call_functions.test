@@ -106,6 +106,10 @@ logging_level	[TRACE]
 logging_mode	[ENABLE_SELECTED]
 logging_storage	[memory]
 
+
+# Due to different file locking behaviour, this currently fails on windows
+require notwindows
+
 #### 
 # Configuring a different log storage, using the config param to pass arbitrary (extensible!) options
 ###

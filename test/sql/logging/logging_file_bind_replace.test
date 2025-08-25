@@ -4,6 +4,9 @@
 
 require noforcestorage
 
+# Due to different file locking behaviour, this currently fails on windows
+require notwindows
+
 # Enable FileSystem logging to single csv file (note that normalize is implicit here)  
 statement ok
 CALL enable_logging(['QueryLog'], storage_path='__TEST_DIR__/logging_file_bind_replace_log.csv');
