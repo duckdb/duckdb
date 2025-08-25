@@ -24,7 +24,7 @@ bool ConvertStructToVariant(Vector &source, VariantVectorData &result, DataChunk
 
 	//! Look up all the dictionary indices for the struct keys
 	vector<uint32_t> dictionary_indices(children.size());
-	if (WRITE_DATA) {
+	if (WRITE_DATA && count) {
 		auto &struct_children = StructType::GetChildTypes(type);
 		for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
 			auto &struct_child = struct_children[child_idx];
