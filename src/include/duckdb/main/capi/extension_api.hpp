@@ -506,7 +506,7 @@ typedef struct {
 	duckdb_value (*duckdb_get_table_names)(duckdb_connection connection, const char *query, bool qualified);
 	void (*duckdb_connection_get_arrow_options)(duckdb_connection connection, duckdb_arrow_options *out_arrow_options);
 	void (*duckdb_destroy_arrow_options)(duckdb_arrow_options *arrow_options);
-	// API to get information about prepared statement
+	// API to get information about the results of a prepared statement
 
 	idx_t (*duckdb_prepared_statement_column_count)(duckdb_prepared_statement prepared_statement);
 	const char *(*duckdb_prepared_statement_column_name)(duckdb_prepared_statement prepared_statement, idx_t col_idx);

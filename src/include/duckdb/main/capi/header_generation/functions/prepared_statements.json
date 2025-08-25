@@ -183,7 +183,7 @@
                 }
             ],
             "comment": {
-                "description": "Returns the number of columns present in a the result of the prepared statement.\n\n",
+                "description": "Returns the number of columns present in a the result of the prepared statement. If any of the column types are invalid, the result will be 1.\n\n",
                 "param_comments": {
                     "prepared_statement": "The prepared statement."
                 },
@@ -204,7 +204,7 @@
                 }
             ],
             "comment": {
-                "description": "Returns the name of the specified column of the result of the prepared_statement.\n\nReturns `nullptr` if the column is out of range.\n\n",
+                "description": "Returns the name of the specified column of the result of the prepared_statement.\nThe returned string should be freed using `duckdb_free`.\n\nReturns `nullptr` if the column is out of range.\n\n",
                 "param_comments": {
                     "prepared_statement": "The prepared statement.",
                     "col_idx": "The column index."
@@ -226,7 +226,7 @@
                 }
             ],
             "comment": {
-                "description": "Returns the column type of the specified column of the result of the prepared_statement.\n\nReturns `DUCKDB_TYPE_INVALID` if the column is out of range.\n\n",
+                "description": "Returns the column type of the specified column of the result of the prepared_statement.\n\nReturns `DUCKDB_TYPE_INVALID` if the column is out of range.\nThe return type of this call should be destroyed with `duckdb_destroy_logical_type`.\n\n",
                 "param_comments": {
                     "prepared_statement": "The prepared statement to fetch the column type from.",
                     "col_idx": "The column index."

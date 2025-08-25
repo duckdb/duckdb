@@ -585,7 +585,7 @@ typedef struct {
 	void (*duckdb_destroy_arrow_options)(duckdb_arrow_options *arrow_options);
 #endif
 
-// API to get information about prepared statement
+// API to get information about the results of a prepared statement
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
 	idx_t (*duckdb_prepared_statement_column_count)(duckdb_prepared_statement prepared_statement);
 	const char *(*duckdb_prepared_statement_column_name)(duckdb_prepared_statement prepared_statement, idx_t col_idx);

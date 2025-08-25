@@ -309,7 +309,7 @@ TEST_CASE("Test prepared statements in C API", "[capi]") {
 	duckdb_destroy_prepare(&stmt);
 }
 
-TEST_CASE("Test duckdb_prepared_statement_column_type and duckdb_prepared_statement_column_logical_type", "[capi]") {
+TEST_CASE("Test duckdb_prepared_statement return value APIs", "[capi]") {
 	duckdb_database db;
 	duckdb_connection conn;
 	duckdb_prepared_statement stmt;
@@ -317,32 +317,42 @@ TEST_CASE("Test duckdb_prepared_statement_column_type and duckdb_prepared_statem
 	REQUIRE(duckdb_connect(db, &conn) == DuckDBSuccess);
 
 	// Unambiguous return column types
-	REQUIRE(duckdb_prepare(conn, "select $1::TEXT, $2::integer, $3::BOOLEAN, $4::FLOAT, $5::DOUBLE", &stmt) == DuckDBSuccess);
+	REQUIRE(duckdb_prepare(conn, "select $1::TEXT, $2::integer, $3::BOOLEAN, $4::FLOAT, $5::DOUBLE", &stmt) ==
+	        DuckDBSuccess);
 
 	REQUIRE(duckdb_prepared_statement_column_count(stmt) == 5);
-	REQUIRE(duckdb_prepared_statement_column_type(stmt, 0) == DUCKDB_TYPE_VARCHAR);
-	REQUIRE(duckdb_prepared_statement_column_type(stmt, 1) == DUCKDB_TYPE_INTEGER);
-	REQUIRE(duckdb_prepared_statement_column_type(stmt, 2) == DUCKDB_TYPE_BOOLEAN);
-	REQUIRE(duckdb_prepared_statement_column_type(stmt, 3) == DUCKDB_TYPE_FLOAT);
-	REQUIRE(duckdb_prepared_statement_column_type(stmt, 4) == DUCKDB_TYPE_DOUBLE);
+	auto expected_types = {DUCKDB_TYPE_VARCHAR, DUCKDB_TYPE_INTEGER, DUCKDB_TYPE_BOOLEAN, DUCKDB_TYPE_FLOAT,
+	                       DUCKDB_TYPE_DOUBLE};
 
-	auto logical_type = duckdb_prepared_statement_column_logical_type(stmt, 0);
-	REQUIRE(logical_type);
-	REQUIRE(duckdb_get_type_id(logical_type) == DUCKDB_TYPE_VARCHAR);
-	duckdb_destroy_logical_type(&logical_type);
+	for (idx_t i = 0; i < 5; i++) {
+		REQUIRE(duckdb_prepared_statement_column_type(stmt, i) == *next(expected_types.begin(), i));
+		auto logical_type = duckdb_prepared_statement_column_logical_type(stmt, i);
+		REQUIRE(logical_type);
+		REQUIRE(duckdb_get_type_id(logical_type) == *next(expected_types.begin(), i));
+		duckdb_destroy_logical_type(&logical_type);
+	}
 
-	// Ambiguous types
-	REQUIRE(duckdb_prepare(conn, "select $1::TEXT, $2::integer, $3, $4::BOOLEAN, $5::FLOAT, $6::DOUBLE", &stmt) == DuckDBSuccess);
+	auto column_name = duckdb_prepared_statement_column_name(stmt, 0);
+	std::string col_name_str = column_name;
+	duckdb_free((void *)column_name);
+	REQUIRE(col_name_str == "CAST($1 AS VARCHAR)");
+
+	// Return columns contain ambiguous types
+	REQUIRE(duckdb_prepare(conn, "select $1::TEXT, $2::integer, $3, $4::BOOLEAN, $5::FLOAT, $6::DOUBLE", &stmt) ==
+	        DuckDBSuccess);
 
 	REQUIRE(duckdb_prepared_statement_column_count(stmt) == 1);
 	REQUIRE(duckdb_prepared_statement_column_type(stmt, 0) == DUCKDB_TYPE_INVALID);
 
-
-	logical_type = duckdb_prepared_statement_column_logical_type(stmt, 0);
+	auto logical_type = duckdb_prepared_statement_column_logical_type(stmt, 0);
 	REQUIRE(logical_type);
 	REQUIRE(duckdb_get_type_id(logical_type) == DUCKDB_TYPE_INVALID);
 	duckdb_destroy_logical_type(&logical_type);
 
+	col_name_str = duckdb_prepared_statement_column_name(stmt, 0);
+	REQUIRE(col_name_str == "unknown");
+	REQUIRE(duckdb_prepared_statement_column_name(stmt, 1) == nullptr);
+	REQUIRE(duckdb_prepared_statement_column_name(stmt, 5) == nullptr);
 
 	duckdb_destroy_prepare(&stmt);
 	duckdb_disconnect(&conn);
@@ -589,7 +599,6 @@ TEST_CASE("Test STRING LITERAL parameter type", "[capi]") {
 	REQUIRE(duckdb_prepare(conn, "SELECT ?", &stmt) == DuckDBSuccess);
 	REQUIRE(duckdb_bind_varchar(stmt, 1, "a") == DuckDBSuccess);
 	REQUIRE(duckdb_param_type(stmt, 1) == DUCKDB_TYPE_STRING_LITERAL);
-
 	duckdb_destroy_prepare(&stmt);
 
 	duckdb_disconnect(&conn);
