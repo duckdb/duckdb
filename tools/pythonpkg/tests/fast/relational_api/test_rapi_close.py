@@ -26,7 +26,7 @@ class TestRAPICloseConnRel(object):
         with pytest.raises(duckdb.ConnectionException, match='Connection has already been closed'):
             rel.arg_min("", "")
         with pytest.raises(duckdb.ConnectionException, match='Connection has already been closed'):
-            rel.arrow()
+            rel.fetch_arrow_table()
         with pytest.raises(duckdb.ConnectionException, match='Connection has already been closed'):
             rel.avg("")
         with pytest.raises(duckdb.ConnectionException, match='Connection has already been closed'):

@@ -10,13 +10,13 @@ pd = pytest.importorskip("pandas")
 
 def compare_results(duckdb_cursor, query):
     true_answer = duckdb_cursor.query(query).fetchall()
-    produced_arrow = duckdb_cursor.query(query).arrow()
+    produced_arrow = duckdb_cursor.query(query).fetch_arrow_table()
     from_arrow = duckdb_cursor.from_arrow(produced_arrow).fetchall()
     assert true_answer == from_arrow
 
 
 def arrow_to_pandas(duckdb_cursor, query):
-    return duckdb_cursor.query(query).arrow().to_pandas()['a'].values.tolist()
+    return duckdb_cursor.query(query).fetch_arrow_table().to_pandas()['a'].values.tolist()
 
 
 def get_use_list_view_options():
@@ -30,17 +30,25 @@ def get_use_list_view_options():
 class TestArrowNested(object):
     def test_lists_basic(self, duckdb_cursor):
         # Test Constant List
-        query = duckdb_cursor.query("SELECT a from (select list_value(3,5,10) as a) as t").arrow()['a'].to_numpy()
+        query = (
+            duckdb_cursor.query("SELECT a from (select list_value(3,5,10) as a) as t")
+            .fetch_arrow_table()['a']
+            .to_numpy()
+        )
         assert query[0][0] == 3
         assert query[0][1] == 5
         assert query[0][2] == 10
 
         # Empty List
-        query = duckdb_cursor.query("SELECT a from (select list_value() as a) as t").arrow()['a'].to_numpy()
+        query = duckdb_cursor.query("SELECT a from (select list_value() as a) as t").fetch_arrow_table()['a'].to_numpy()
         assert len(query[0]) == 0
 
         # Test Constant List With Null
-        query = duckdb_cursor.query("SELECT a from (select list_value(3,NULL) as a) as t").arrow()['a'].to_numpy()
+        query = (
+            duckdb_cursor.query("SELECT a from (select list_value(3,NULL) as a) as t")
+            .fetch_arrow_table()['a']
+            .to_numpy()
+        )
         assert query[0][0] == 3
         assert np.isnan(query[0][1])
 

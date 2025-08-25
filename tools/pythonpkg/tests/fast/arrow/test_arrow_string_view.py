@@ -13,7 +13,7 @@ pytestmark = pytest.mark.skipif(
 def RoundTripStringView(query, array):
     con = duckdb.connect()
     con.execute("SET produce_arrow_string_view=True")
-    arrow_tbl = con.execute(query).arrow()
+    arrow_tbl = con.execute(query).fetch_arrow_table()
     # Assert that we spit the same as the defined array
     arrow_tbl[0].validate(full=True)
     assert arrow_tbl[0].combine_chunks().tolist() == array.tolist()
@@ -27,14 +27,14 @@ def RoundTripStringView(query, array):
 
     # Create a table using the schema and the array
     gt_table = pa.Table.from_arrays([array], schema=schema)
-    arrow_table = con.execute("select * from gt_table").arrow()
+    arrow_table = con.execute("select * from gt_table").fetch_arrow_table()
     assert arrow_tbl[0].combine_chunks().tolist() == array.tolist()
 
 
 def RoundTripDuckDBInternal(query):
     con = duckdb.connect()
     con.execute("SET produce_arrow_string_view=True")
-    arrow_tbl = con.execute(query).arrow()
+    arrow_tbl = con.execute(query).fetch_arrow_table()
     arrow_tbl.validate(full=True)
     res = con.execute(query).fetchall()
     from_arrow_res = con.execute("FROM arrow_tbl order by str").fetchall()

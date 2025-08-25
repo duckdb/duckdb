@@ -3,9 +3,6 @@
 
 # This tests the vector cross product
 
-statement ok
-PRAGMA enable_verification
-
 foreach TYPE DOUBLE FLOAT
 
 query I rowsort

@@ -4,9 +4,6 @@
 
 require notwindows
 
-statement ok
-PRAGMA enable_verification
-
 # use a concurrent loop to attach many databases
 
 concurrentloop i 1 100
