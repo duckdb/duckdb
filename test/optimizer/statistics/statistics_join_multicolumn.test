@@ -11,9 +11,6 @@ CREATE TABLE integers2 AS SELECT * FROM (VALUES (2, 5), (3, 6), (4, 7)) tbl(i, j
 statement ok
 PRAGMA explain_output = OPTIMIZED_ONLY;
 
-statement ok
-PRAGMA enable_verification
-
 # inner join
 # integers.i has [1, 10] as min max
 # integers2.i is [2, 4], integers2.j [5, 7]

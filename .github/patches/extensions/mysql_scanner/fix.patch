@@ -187,6 +187,19 @@ index 7ee6fe6..fde8d08 100644
                                                                      AttachedDatabase &db, Catalog &catalog) {
  	auto &mysql_catalog = catalog.Cast<MySQLCatalog>();
  	return make_uniq<MySQLTransactionManager>(db, mysql_catalog);
+diff --git a/src/storage/mysql_clear_cache.cpp b/src/storage/mysql_clear_cache.cpp
+index bf288c0..882c1c2 100644
+--- a/src/storage/mysql_clear_cache.cpp
++++ b/src/storage/mysql_clear_cache.cpp
+@@ -24,7 +24,7 @@ static unique_ptr<FunctionData> ClearCacheBind(ClientContext &context, TableFunc
+ static void ClearMySQLCaches(ClientContext &context) {
+ 	auto databases = DatabaseManager::Get(context).GetDatabases(context);
+ 	for (auto &db_ref : databases) {
+-		auto &db = db_ref.get();
++        auto &db = *db_ref;
+ 		auto &catalog = db.GetCatalog();
+ 		if (catalog.GetCatalogType() != "mysql") {
+ 			continue;
 diff --git a/src/storage/mysql_execute_query.cpp b/src/storage/mysql_execute_query.cpp
 index 8bf9426..aaeb3c7 100644
 --- a/src/storage/mysql_execute_query.cpp

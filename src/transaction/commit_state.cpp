@@ -182,6 +182,7 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 		info->version_number = commit_id;
 		break;
 	}
+	case UndoFlags::ATTACHED_DATABASE:
 	case UndoFlags::SEQUENCE_VALUE: {
 		break;
 	}
@@ -222,6 +223,7 @@ void CommitState::RevertCommit(UndoFlags type, data_ptr_t data) {
 		info->version_number = transaction_id;
 		break;
 	}
+	case UndoFlags::ATTACHED_DATABASE:
 	case UndoFlags::SEQUENCE_VALUE: {
 		break;
 	}

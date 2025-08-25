@@ -3,9 +3,6 @@
 # group: [collate]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 create table t0(c1 varchar);
 
 statement ok

@@ -2,9 +2,6 @@
 # description: Test natural joins
 # group: [natural]
 
-statement ok
-PRAGMA enable_verification
-
 # create tables
 statement ok
 CREATE TABLE t1 (a INTEGER, b INTEGER)

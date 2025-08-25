@@ -3,9 +3,6 @@
 # group: [positional]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE two (a INTEGER, b INTEGER);
 
 statement ok

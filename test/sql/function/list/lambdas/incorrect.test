@@ -5,9 +5,6 @@
 require no_extension_autoloading "EXPECTED: This tests is not compatible with JSON extension, that will otherwise be autoloaded"
 
 statement ok
-PRAGMA enable_verification;
-
-statement ok
 CREATE TABLE incorrect_test (i INTEGER);
 
 foreach func_name list_transform list_filter list_reduce

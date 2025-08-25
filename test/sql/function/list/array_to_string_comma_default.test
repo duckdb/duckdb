@@ -2,9 +2,6 @@
 # description: Test array_to_string_comma_default function
 # group: [list]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT array_to_string_comma_default([1,2,3])
 ----

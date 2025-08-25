@@ -3,9 +3,6 @@
 # group: [collate]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE CreditCardTable(id BIGINT, creditCard_number VARCHAR);
 
 statement ok

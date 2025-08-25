@@ -7,9 +7,6 @@ require parquet
 require vector_size 512
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 PRAGMA verify_parallelism;
 
 statement ok

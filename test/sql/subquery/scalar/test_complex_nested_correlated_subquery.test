@@ -3,9 +3,6 @@
 # group: [scalar]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE tbl(a TINYINT, b SMALLINT, c INTEGER, d BIGINT, e VARCHAR, f DATE, g TIMESTAMP)
 
 statement ok

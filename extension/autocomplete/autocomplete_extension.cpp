@@ -96,13 +96,13 @@ static vector<AutoCompleteSuggestion> ComputeSuggestions(vector<AutoCompleteCand
 	return results;
 }
 
-static vector<reference<AttachedDatabase>> GetAllCatalogs(ClientContext &context) {
-	vector<reference<AttachedDatabase>> result;
+static vector<shared_ptr<AttachedDatabase>> GetAllCatalogs(ClientContext &context) {
+	vector<shared_ptr<AttachedDatabase>> result;
 
 	auto &database_manager = DatabaseManager::Get(context);
 	auto databases = database_manager.GetDatabases(context);
 	for (auto &database : databases) {
-		result.push_back(database.get());
+		result.push_back(database);
 	}
 	return result;
 }
@@ -145,7 +145,7 @@ static vector<AutoCompleteCandidate> SuggestCatalogName(ClientContext &context) 
 	vector<AutoCompleteCandidate> suggestions;
 	auto all_entries = GetAllCatalogs(context);
 	for (auto &entry_ref : all_entries) {
-		auto &entry = entry_ref.get();
+		auto &entry = *entry_ref;
 		AutoCompleteCandidate candidate(entry.name, 0);
 		candidate.extra_char = '.';
 		suggestions.push_back(std::move(candidate));

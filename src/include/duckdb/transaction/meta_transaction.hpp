@@ -74,6 +74,7 @@ public:
 	const vector<reference<AttachedDatabase>> &OpenedTransactions() const {
 		return all_transactions;
 	}
+	AttachedDatabase &UseDatabase(shared_ptr<AttachedDatabase> &database);
 
 private:
 	//! Lock to prevent all_transactions and transactions from getting out of sync
@@ -86,6 +87,8 @@ private:
 	optional_ptr<AttachedDatabase> modified_database;
 	//! Whether or not the meta transaction is marked as read only
 	bool is_read_only;
+	//! The set of used / referenced databases
+	reference_map_t<AttachedDatabase, shared_ptr<AttachedDatabase>> referenced_databases;
 };
 
 } // namespace duckdb

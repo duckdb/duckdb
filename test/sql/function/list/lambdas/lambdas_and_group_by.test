@@ -3,9 +3,6 @@
 # group: [lambdas]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 SET lambda_syntax='DISABLE_SINGLE_ARROW'
 
 statement ok

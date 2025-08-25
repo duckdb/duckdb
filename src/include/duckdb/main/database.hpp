@@ -71,7 +71,7 @@ public:
 
 	DUCKDB_API shared_ptr<EncryptionUtil> GetEncryptionUtil() const;
 
-	unique_ptr<AttachedDatabase> CreateAttachedDatabase(ClientContext &context, AttachInfo &info,
+	shared_ptr<AttachedDatabase> CreateAttachedDatabase(ClientContext &context, AttachInfo &info,
 	                                                    AttachOptions &options);
 
 private:

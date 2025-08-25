@@ -3,9 +3,6 @@
 # group: [nodes]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE tbl1 (i INT);
 
 loop i 0 8

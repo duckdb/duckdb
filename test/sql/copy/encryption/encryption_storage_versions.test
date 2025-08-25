@@ -112,11 +112,13 @@ DETACH unencrypted_v_1_2_0
 statement error
 ATTACH '__TEST_DIR__/unencrypted_v_1_2_0.duckdb' AS unencrypted_v_1_2_0 (ENCRYPTION_KEY 'asdf');
 ----
+not encrypted
 
 # we cannot open this db with a lower (< v1.2.0) storage version
 statement error
 ATTACH '__TEST_DIR__/unencrypted_v_1_2_0.duckdb' AS unencrypted_v_1_2_0 (STORAGE_VERSION 'v1.0.0');
 ----
+The storage version of an existing database cannot be lowered
 
 statement ok
 ATTACH '__TEST_DIR__/unencrypted_v_1_2_0.duckdb' AS unencrypted_v_1_2_0;

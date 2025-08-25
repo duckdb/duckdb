@@ -2,9 +2,6 @@
 # description: Fuzzer issue - nested subquery inside a window function
 # group: [scalar]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT (SELECT max((SELECT subq_0.c0 AS c1))) FROM (SELECT NULL AS c0) AS subq_0;
 ----

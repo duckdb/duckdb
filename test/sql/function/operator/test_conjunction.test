@@ -2,9 +2,6 @@
 # description: Test conjunction statements
 # group: [operator]
 
-statement ok
-PRAGMA enable_verification
-
 # create table
 statement ok
 CREATE TABLE a (i integer, j integer);

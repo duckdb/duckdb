@@ -2,9 +2,6 @@
 # description: Test list_position function with nans
 # group: [list]
 
-statement ok
-PRAGMA enable_verification
-
 # list position with NaN
 query I
 SELECT list_position(['NaN'::DOUBLE], 'NaN'::DOUBLE)

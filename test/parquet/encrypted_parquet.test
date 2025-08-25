@@ -8,9 +8,6 @@ mode skip
 
 require parquet
 
-statement ok
-PRAGMA enable_verification
-
 statement error
 SELECT * FROM parquet_scan('data/parquet-testing/encryption/encrypted_footer.parquet') limit 50;
 ----

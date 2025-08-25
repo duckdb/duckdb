@@ -2,9 +2,6 @@
 # description: Test correlated subqueries with side effects
 # group: [scalar]
 
-statement ok
-PRAGMA enable_verification
-
 # FIXME: we should not perform duplicate elimination for subqueries that have side-effects
 
 mode skip

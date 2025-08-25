@@ -3,10 +3,6 @@
 # group: [pushdown]
 
 statement ok
-PRAGMA enable_verification
-
-
-statement ok
 CREATE TABLE integers AS SELECT a as a, a as b FROM generate_series(1, 5, 1) tbl(a)
 
 #### test OR filters with multiple columns in the root OR, e.g., a=1 OR b=2

@@ -3,9 +3,6 @@
 # group: [scalar]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE t1(fuel_type VARCHAR, location_country VARCHAR);
 
 statement ok

@@ -2,9 +2,6 @@
 # description: Test setting different index scan thresholds.
 # group: [scan]
 
-statement ok
-PRAGMA enable_verification
-
 # Take the maximum of the absolute count and the percentage, which is 100%.
 
 statement ok

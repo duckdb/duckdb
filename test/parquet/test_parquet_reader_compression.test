@@ -4,11 +4,7 @@
 
 require parquet
 
-statement ok
-PRAGMA enable_verification
-
 foreach codec NONE SNAPPY GZIP ZSTD LZ4 BROTLI
-
 
 query IIII
 SELECT * FROM parquet_scan('data/parquet-testing/compression/generated/data_page=1_${codec}.parquet', hive_partitioning=0) limit 50

@@ -2,9 +2,6 @@
 # description: Issue #7119/#7120: foreign key case insensitivity
 # group: [foreignkey]
 
-statement ok
-PRAGMA enable_verification
-
 # issue 7119
 statement ok
 create table a (a int not null, constraint pk_a primary key (A));

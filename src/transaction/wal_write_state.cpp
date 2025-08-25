@@ -281,6 +281,8 @@ void WALWriteState::CommitEntry(UndoFlags type, data_ptr_t data) {
 		}
 		break;
 	}
+	case UndoFlags::ATTACHED_DATABASE:
+		break;
 	case UndoFlags::SEQUENCE_VALUE: {
 		auto info = reinterpret_cast<SequenceValue *>(data);
 		log.WriteSequenceValue(*info);

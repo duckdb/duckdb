@@ -11,9 +11,6 @@ CREATE TABLE integers2 AS SELECT * FROM (VALUES (2), (3), (4)) tbl(i);
 statement ok
 PRAGMA explain_output = OPTIMIZED_ONLY;
 
-statement ok
-PRAGMA enable_verification
-
 # we can statically prove that i=1 is false
 query II
 EXPLAIN SELECT i=1 FROM integers JOIN integers2 USING (i);

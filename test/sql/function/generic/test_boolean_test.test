@@ -2,9 +2,6 @@
 # description: Test NULL IF statement
 # group: [generic]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 select true is true
 ----

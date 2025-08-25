@@ -265,6 +265,19 @@ index 2f50b6d3..20e0da35 100644
  #include "duckdb/parallel/thread_context.hpp"
  #include "duckdb/parser/tableref/table_function_ref.hpp"
  #include "duckdb/parser/expression/constant_expression.hpp"
+diff --git a/src/storage/irc_clear_cache.cpp b/src/storage/irc_clear_cache.cpp
+index 4e1da4d8..168929b4 100644
+--- a/src/storage/irc_clear_cache.cpp
++++ b/src/storage/irc_clear_cache.cpp
+@@ -23,7 +23,7 @@ static unique_ptr<FunctionData> ClearCacheBind(ClientContext &context, TableFunc
+ static void ClearIRCCaches(ClientContext &context) {
+ 	auto databases = DatabaseManager::Get(context).GetDatabases(context);
+ 	for (auto &db_ref : databases) {
+-		auto &db = db_ref.get();
++                auto &db = *db_ref;
+ 		auto &catalog = db.GetCatalog();
+ 		if (catalog.GetCatalogType() != "iceberg") {
+ 			continue;
 diff --git a/src/storage/irc_table_entry.cpp b/src/storage/irc_table_entry.cpp
 index f3a78161..e6066dea 100644
 --- a/src/storage/irc_table_entry.cpp
