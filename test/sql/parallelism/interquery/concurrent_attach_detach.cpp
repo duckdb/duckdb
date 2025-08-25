@@ -104,9 +104,13 @@ void createLookupTbl(Connection &conn, idx_t i) {
 void append(Connection &conn, idx_t i) {
 	lock_guard<mutex> lock(dbInfos[i].mu);
 	auto maxTblId = dbInfos[i].appendTableCount;
+
+	if (maxTblId == 0) {
+		return;
+	}
+
 	auto tblId = std::rand() % maxTblId;
 	auto tblStr = "append_tbl_" + to_string(tblId);
-
 	duckdb::Appender appender(conn, getDBName(i), DEFAULT_SCHEMA, tblStr);
 	appender.AppendRow(42, "fourty-two");
 	appender.Close();
