@@ -262,9 +262,10 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		}
 
 		// could not find an alternative: bind again to get the error
-		(void)entry_retriever.GetEntry(ref.catalog_name, ref.schema_name, table_lookup,
-		                               OnEntryNotFound::THROW_EXCEPTION);
-		throw InternalException("Catalog::GetEntry should have thrown an exception above");
+		// note: this will always throw when using DuckDB as a catalog, but a second look-up might succeed
+		// in catalogs that do not have transactional DDL
+		table_or_view =
+		    entry_retriever.GetEntry(ref.catalog_name, ref.schema_name, table_lookup, OnEntryNotFound::THROW_EXCEPTION);
 	}
 
 	switch (table_or_view->type) {
