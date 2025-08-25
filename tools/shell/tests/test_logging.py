@@ -3,9 +3,9 @@
 import pytest
 import subprocess
 import sys
+import os
 from typing import List
 from conftest import ShellTest
-
 
 def test_logging(shell):
     test = (
@@ -14,7 +14,10 @@ def test_logging(shell):
         .statement('SELECT 1 as a')
     )
     result = test.run()
-    result.check_stdout("QueryLog\tINFO\tSELECT 1 as a;\n┌───────┐")
+
+    newline = "\r\n" if os == "nt" else "\n"
+    result.check_stdout(f"QueryLog\tINFO\tSELECT 1 as a;{newline}┌───────┐")
+
 
 def test_logging_custom_delim(shell):
     test = (
@@ -23,7 +26,8 @@ def test_logging_custom_delim(shell):
         .statement('SELECT 1 as a')
     )
     result = test.run()
-    result.check_stdout("QueryLog,INFO,SELECT 1 as a;\n┌───────┐")
+    newline = "\r\n" if os == "nt" else "\n"
+    result.check_stdout(f"QueryLog,INFO,SELECT 1 as a;{newline}┌───────┐")
 
 # By default stdoutlogging has buffer size of 1, but we can increase it if we want. We use `only_flush_on_full_buffer` to ensure we can test this
 def test_logging_buffering(shell):
