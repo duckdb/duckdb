@@ -3,6 +3,7 @@
 #include "duckdb/common/types/cast_helpers.hpp"
 
 namespace duckdb {
+constexpr uint8_t Decimal::MAX_WIDTH_DECIMAL;
 
 template <class SIGNED>
 string TemplatedDecimalToString(SIGNED value, uint8_t width, uint8_t scale) {

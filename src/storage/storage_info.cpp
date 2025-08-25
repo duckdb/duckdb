@@ -4,6 +4,10 @@
 #include "duckdb/common/optional_idx.hpp"
 
 namespace duckdb {
+constexpr idx_t Storage::MAX_ROW_GROUP_SIZE;
+constexpr idx_t Storage::MAX_BLOCK_ALLOC_SIZE;
+constexpr idx_t Storage::MIN_BLOCK_ALLOC_SIZE;
+constexpr idx_t Storage::DEFAULT_BLOCK_HEADER_SIZE;
 
 const uint64_t VERSION_NUMBER = 64;
 const uint64_t VERSION_NUMBER_LOWER = 64;

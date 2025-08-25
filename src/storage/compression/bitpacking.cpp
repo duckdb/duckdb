@@ -19,6 +19,7 @@
 
 namespace duckdb {
 
+constexpr const idx_t BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
 static constexpr const idx_t BITPACKING_METADATA_GROUP_SIZE = STANDARD_VECTOR_SIZE > 512 ? STANDARD_VECTOR_SIZE : 2048;
 
 BitpackingMode BitpackingModeFromString(const string &str) {

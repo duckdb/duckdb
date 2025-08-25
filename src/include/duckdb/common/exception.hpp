@@ -102,7 +102,7 @@ public:
 	DUCKDB_API static ExceptionType StringToExceptionType(const string &type);
 
 	template <typename... ARGS>
-	static string ConstructMessage(const string &msg, ARGS... params) {
+	static string ConstructMessage(const string &msg, ARGS const &...params) {
 		const std::size_t num_args = sizeof...(ARGS);
 		if (num_args == 0) {
 			return msg;
@@ -131,8 +131,8 @@ public:
 	DUCKDB_API static string ConstructMessageRecursive(const string &msg, std::vector<ExceptionFormatValue> &values);
 
 	template <class T, typename... ARGS>
-	static string ConstructMessageRecursive(const string &msg, std::vector<ExceptionFormatValue> &values, T param,
-	                                        ARGS... params) {
+	static string ConstructMessageRecursive(const string &msg, std::vector<ExceptionFormatValue> &values,
+	                                        const T &param, ARGS const &...params) {
 		values.push_back(ExceptionFormatValue::CreateFormatValue<T>(param));
 		return ConstructMessageRecursive(msg, values, params...);
 	}
@@ -155,7 +155,7 @@ public:
 	DUCKDB_API explicit ConnectionException(const string &msg);
 
 	template <typename... ARGS>
-	explicit ConnectionException(const string &msg, ARGS... params)
+	explicit ConnectionException(const string &msg, ARGS const &...params)
 	    : ConnectionException(ConstructMessage(msg, params...)) {
 	}
 };
@@ -165,7 +165,7 @@ public:
 	DUCKDB_API explicit PermissionException(const string &msg);
 
 	template <typename... ARGS>
-	explicit PermissionException(const string &msg, ARGS... params)
+	explicit PermissionException(const string &msg, ARGS const &...params)
 	    : PermissionException(ConstructMessage(msg, params...)) {
 	}
 };
@@ -175,7 +175,7 @@ public:
 	DUCKDB_API explicit OutOfRangeException(const string &msg);
 
 	template <typename... ARGS>
-	explicit OutOfRangeException(const string &msg, ARGS... params)
+	explicit OutOfRangeException(const string &msg, ARGS const &...params)
 	    : OutOfRangeException(ConstructMessage(msg, params...)) {
 	}
 	DUCKDB_API OutOfRangeException(const int64_t value, const PhysicalType orig_type, const PhysicalType new_type);
@@ -189,7 +189,7 @@ public:
 	DUCKDB_API explicit OutOfMemoryException(const string &msg);
 
 	template <typename... ARGS>
-	explicit OutOfMemoryException(const string &msg, ARGS... params)
+	explicit OutOfMemoryException(const string &msg, ARGS const &...params)
 	    : OutOfMemoryException(ConstructMessage(msg, params...)) {
 	}
 
@@ -202,7 +202,8 @@ public:
 	DUCKDB_API explicit SyntaxException(const string &msg);
 
 	template <typename... ARGS>
-	explicit SyntaxException(const string &msg, ARGS... params) : SyntaxException(ConstructMessage(msg, params...)) {
+	explicit SyntaxException(const string &msg, ARGS const &...params)
+	    : SyntaxException(ConstructMessage(msg, params...)) {
 	}
 };
 
@@ -211,7 +212,7 @@ public:
 	DUCKDB_API explicit ConstraintException(const string &msg);
 
 	template <typename... ARGS>
-	explicit ConstraintException(const string &msg, ARGS... params)
+	explicit ConstraintException(const string &msg, ARGS const &...params)
 	    : ConstraintException(ConstructMessage(msg, params...)) {
 	}
 };
@@ -221,7 +222,7 @@ public:
 	DUCKDB_API explicit DependencyException(const string &msg);
 
 	template <typename... ARGS>
-	explicit DependencyException(const string &msg, ARGS... params)
+	explicit DependencyException(const string &msg, ARGS const &...params)
 	    : DependencyException(ConstructMessage(msg, params...)) {
 	}
 };
@@ -234,11 +235,11 @@ public:
 	}
 
 	template <typename... ARGS>
-	explicit IOException(const string &msg, ARGS... params) : IOException(ConstructMessage(msg, params...)) {
+	explicit IOException(const string &msg, ARGS const &...params) : IOException(ConstructMessage(msg, params...)) {
 	}
 
 	template <typename... ARGS>
-	explicit IOException(const string &msg, const unordered_map<string, string> &extra_info, ARGS... params)
+	explicit IOException(const string &msg, const unordered_map<string, string> &extra_info, ARGS const &...params)
 	    : IOException(ConstructMessage(msg, params...), extra_info) {
 	}
 };
@@ -248,7 +249,7 @@ public:
 	DUCKDB_API explicit MissingExtensionException(const string &msg);
 
 	template <typename... ARGS>
-	explicit MissingExtensionException(const string &msg, ARGS... params)
+	explicit MissingExtensionException(const string &msg, ARGS const &...params)
 	    : MissingExtensionException(ConstructMessage(msg, params...)) {
 	}
 };
@@ -258,7 +259,7 @@ public:
 	DUCKDB_API explicit NotImplementedException(const string &msg);
 
 	template <typename... ARGS>
-	explicit NotImplementedException(const string &msg, ARGS... params)
+	explicit NotImplementedException(const string &msg, ARGS const &...params)
 	    : NotImplementedException(ConstructMessage(msg, params...)) {
 	}
 };
@@ -273,7 +274,7 @@ public:
 	DUCKDB_API explicit SerializationException(const string &msg);
 
 	template <typename... ARGS>
-	explicit SerializationException(const string &msg, ARGS... params)
+	explicit SerializationException(const string &msg, ARGS const &...params)
 	    : SerializationException(ConstructMessage(msg, params...)) {
 	}
 };
@@ -283,7 +284,7 @@ public:
 	DUCKDB_API explicit SequenceException(const string &msg);
 
 	template <typename... ARGS>
-	explicit SequenceException(const string &msg, ARGS... params)
+	explicit SequenceException(const string &msg, ARGS const &...params)
 	    : SequenceException(ConstructMessage(msg, params...)) {
 	}
 };
@@ -298,13 +299,14 @@ public:
 	explicit FatalException(const string &msg) : FatalException(ExceptionType::FATAL, msg) {
 	}
 	template <typename... ARGS>
-	explicit FatalException(const string &msg, ARGS... params) : FatalException(ConstructMessage(msg, params...)) {
+	explicit FatalException(const string &msg, ARGS const &...params)
+	    : FatalException(ConstructMessage(msg, params...)) {
 	}
 
 protected:
 	DUCKDB_API explicit FatalException(ExceptionType type, const string &msg);
 	template <typename... ARGS>
-	explicit FatalException(ExceptionType type, const string &msg, ARGS... params)
+	explicit FatalException(ExceptionType type, const string &msg, ARGS const &...params)
 	    : FatalException(type, ConstructMessage(msg, params...)) {
 	}
 };
@@ -314,7 +316,7 @@ public:
 	DUCKDB_API explicit InternalException(const string &msg);
 
 	template <typename... ARGS>
-	explicit InternalException(const string &msg, ARGS... params)
+	explicit InternalException(const string &msg, ARGS const &...params)
 	    : InternalException(ConstructMessage(msg, params...)) {
 	}
 };
@@ -325,11 +327,11 @@ public:
 	DUCKDB_API explicit InvalidInputException(const string &msg, const unordered_map<string, string> &extra_info);
 
 	template <typename... ARGS>
-	explicit InvalidInputException(const string &msg, ARGS... params)
+	explicit InvalidInputException(const string &msg, ARGS const &...params)
 	    : InvalidInputException(ConstructMessage(msg, params...)) {
 	}
 	template <typename... ARGS>
-	explicit InvalidInputException(const Expression &expr, const string &msg, ARGS... params)
+	explicit InvalidInputException(const Expression &expr, const string &msg, ARGS const &...params)
 	    : InvalidInputException(ConstructMessage(msg, params...), Exception::InitializeExtraInfo(expr)) {
 	}
 };
@@ -339,7 +341,7 @@ public:
 	DUCKDB_API explicit ExecutorException(const string &msg);
 
 	template <typename... ARGS>
-	explicit ExecutorException(const string &msg, ARGS... params)
+	explicit ExecutorException(const string &msg, ARGS const &...params)
 	    : ExecutorException(ConstructMessage(msg, params...)) {
 	}
 };
@@ -351,11 +353,11 @@ public:
 	                                                  const unordered_map<string, string> &extra_info);
 
 	template <typename... ARGS>
-	explicit InvalidConfigurationException(const string &msg, ARGS... params)
+	explicit InvalidConfigurationException(const string &msg, ARGS const &...params)
 	    : InvalidConfigurationException(ConstructMessage(msg, params...)) {
 	}
 	template <typename... ARGS>
-	explicit InvalidConfigurationException(const Expression &expr, const string &msg, ARGS... params)
+	explicit InvalidConfigurationException(const Expression &expr, const string &msg, ARGS const &...params)
 	    : InvalidConfigurationException(ConstructMessage(msg, params...), Exception::InitializeExtraInfo(expr)) {
 	}
 };
@@ -381,7 +383,7 @@ public:
 	DUCKDB_API explicit ParameterNotAllowedException(const string &msg);
 
 	template <typename... ARGS>
-	explicit ParameterNotAllowedException(const string &msg, ARGS... params)
+	explicit ParameterNotAllowedException(const string &msg, ARGS const &...params)
 	    : ParameterNotAllowedException(ConstructMessage(msg, params...)) {
 	}
 };

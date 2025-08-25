@@ -7,6 +7,8 @@
 
 namespace duckdb {
 
+constexpr const idx_t ParsedExtensionMetaData::FOOTER_SIZE;
+
 Extension::~Extension() {
 }
 

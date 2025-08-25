@@ -35,6 +35,8 @@
 
 namespace duckdb {
 
+constexpr const idx_t Allocator::MAXIMUM_ALLOC_SIZE;
+
 AllocatedData::AllocatedData() : allocator(nullptr), pointer(nullptr), allocated_size(0) {
 }
 
