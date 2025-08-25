@@ -37,7 +37,8 @@ void execQuery(Connection &conn, const string &query) {
 
 struct DBInfo {
 	mutex mu;
-	idx_t count = 0;
+	idx_t lookupTableCount = 0;
+	idx_t appendTableCount = 0;
 };
 
 DBInfo dbInfos[dbCount];
@@ -78,7 +79,7 @@ DBPoolMgr dbPool;
 
 void lookup(Connection &conn, idx_t i) {
 	unique_lock<mutex> lock(dbInfos[i].mu);
-	auto maxTblId = dbInfos[i].count;
+	auto maxTblId = dbInfos[i].lookupTableCount;
 	lock.unlock();
 
 	if (maxTblId == 0) {
@@ -86,23 +87,43 @@ void lookup(Connection &conn, idx_t i) {
 	}
 
 	auto tblId = std::rand() % maxTblId;
-	string query = "SELECT i, s FROM " + getDBName(i) + ".tbl_" + to_string(tblId) + " WHERE i = 2049";
+	string query = "SELECT i, s FROM " + getDBName(i) + ".lookup_tbl_" + to_string(tblId) + " WHERE i = 2049";
 	execQuery(conn, query);
 }
 
 void createLookupTbl(Connection &conn, idx_t i) {
 	lock_guard<mutex> lock(dbInfos[i].mu);
-	auto tblId = dbInfos[i].count;
-	dbInfos[i].count++;
+	auto tblId = dbInfos[i].lookupTableCount;
+	dbInfos[i].lookupTableCount++;
 
-	string query = "CREATE TABLE " + getDBName(i) + ".tbl_" + to_string(tblId) +
+	string query = "CREATE TABLE " + getDBName(i) + ".lookup_tbl_" + to_string(tblId) +
 	               " AS SELECT range AS i, range::VARCHAR AS s FROM range(10000)";
+	execQuery(conn, query);
+}
+
+void append(Connection &conn, idx_t i) {
+	lock_guard<mutex> lock(dbInfos[i].mu);
+	auto maxTblId = dbInfos[i].appendTableCount;
+	auto tblId = std::rand() % maxTblId;
+	auto tblStr = "append_tbl_" + to_string(tblId);
+
+	duckdb::Appender appender(conn, getDBName(i), DEFAULT_SCHEMA, tblStr);
+	appender.AppendRow(42, "fourty-two");
+	appender.Close();
+}
+
+void createAppendTbl(Connection &conn, idx_t i) {
+	lock_guard<mutex> lock(dbInfos[i].mu);
+	auto tblId = dbInfos[i].appendTableCount;
+	dbInfos[i].appendTableCount++;
+
+	string query = "CREATE TABLE " + getDBName(i) + ".append_tbl_" + to_string(tblId) + " (i INTEGER, s VARCHAR)";
 	execQuery(conn, query);
 }
 
 void workUnit(std::unique_ptr<Connection> conn) {
 	for (int i = 0; i < iterationCount; i++) {
-		idx_t scenarioId = std::rand() % 2;
+		idx_t scenarioId = std::rand() % 4;
 		idx_t dbId = std::rand() % dbCount;
 
 		dbPool.addWorker(*conn, dbId);
@@ -113,6 +134,12 @@ void workUnit(std::unique_ptr<Connection> conn) {
 			break;
 		case 1:
 			createLookupTbl(*conn, dbId);
+			break;
+		case 2:
+			append(*conn, dbId);
+			break;
+		case 3:
+			createAppendTbl(*conn, dbId);
 			break;
 		default:
 			throw runtime_error("invalid scenario");
