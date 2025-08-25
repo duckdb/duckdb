@@ -90,9 +90,16 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 	}
 
 	vector<string> result_values_string;
-	DuckDBConvertResult(result, runner.original_sqlite_test, result_values_string);
-	if (runner.output_result_mode) {
-		logger.OutputResult(result, result_values_string);
+	try {
+		DuckDBConvertResult(result, runner.original_sqlite_test, result_values_string);
+		if (runner.output_result_mode) {
+			logger.OutputResult(result, result_values_string);
+		}
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		auto &original_error = error.Message();
+		logger.LogFailure(original_error);
+		return false;
 	}
 
 	SortQueryResult(sort_style, result_values_string, column_count);

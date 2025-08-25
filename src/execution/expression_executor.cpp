@@ -5,6 +5,8 @@
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/function/cast/cast_function_set.hpp"
+#include "duckdb/common/type_visitor.hpp"
 
 namespace duckdb {
 
@@ -156,6 +158,32 @@ void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t co
 	}
 	if (debug_vector_verification == DebugVectorVerification::DICTIONARY_EXPRESSION) {
 		Vector::DebugTransformToDictionary(vector, count);
+	}
+	if (debug_vector_verification == DebugVectorVerification::VARIANT_VECTOR) {
+		if (TypeVisitor::Contains(vector.GetType(), [](const LogicalType &type) {
+			    return type.IsJSONType() || type.id() == LogicalTypeId::VARIANT;
+		    })) {
+			//! JSON and VARIANT have shaky roundtripping (needs better support in 'from_variant.cpp')
+			return;
+		}
+
+		Vector intermediate(LogicalType::VARIANT(), true, false, count);
+
+		//! First cast to VARIANT
+		if (HasContext()) {
+			VectorOperations::Cast(GetContext(), vector, intermediate, count, true);
+		} else {
+			VectorOperations::DefaultCast(vector, intermediate, count, true);
+		}
+
+		Vector result(vector.GetType(), true, false, count);
+		//! Then cast back into the original type
+		if (HasContext()) {
+			VectorOperations::Cast(GetContext(), intermediate, result, count, true);
+		} else {
+			VectorOperations::DefaultCast(intermediate, result, count, true);
+		}
+		vector.Reference(result);
 	}
 }
 

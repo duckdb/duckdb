@@ -6,6 +6,7 @@
 #include "duckdb/function/scalar/generic_functions.hpp"
 #include "duckdb/function/scalar/list_functions.hpp"
 #include "duckdb/function/scalar/map_functions.hpp"
+#include "duckdb/function/scalar/variant_functions.hpp"
 #include "duckdb/function/scalar/operator_functions.hpp"
 #include "duckdb/function/scalar/sequence_functions.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
@@ -175,6 +176,8 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(TryStrpTimeFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(UcaseFun),
 	DUCKDB_SCALAR_FUNCTION(UpperFun),
+	DUCKDB_SCALAR_FUNCTION_SET(VariantExtractFun),
+	DUCKDB_SCALAR_FUNCTION(VariantTypeofFun),
 	DUCKDB_SCALAR_FUNCTION_SET(WriteLogFun),
 	DUCKDB_SCALAR_FUNCTION(ConcatOperatorFun),
 	DUCKDB_SCALAR_FUNCTION(LikeFun),

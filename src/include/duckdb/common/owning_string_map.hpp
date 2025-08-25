@@ -46,6 +46,13 @@ public:
 			return map.insert(make_pair(CopyString(entry.first), std::move(entry.second)));
 		}
 	}
+	std::pair<iterator, bool> emplace(value_type &&entry) { // NOLINT: match std style
+		auto it = find(entry.first);
+		if (it != end()) {
+			return std::make_pair(it, false);
+		}
+		return insert(std::move(entry));
+	}
 	size_type erase(const key_type &k) { // NOLINT: match std style
 		auto entry = map.find(k);
 		if (entry == map.end()) {
