@@ -474,3 +474,9 @@ jobs:
       shell: bash
       run: |
         ./build/release/test/unittest --verify-vector nested_shuffle --skip-compiled
+
+    - name: Test variant_vector
+      if: (success() || failure()) && steps.build.conclusion == 'success'
+      shell: bash
+      run: |
+        ./build/release/test/unittest --verify-vector variant_vector --skip-compiled
