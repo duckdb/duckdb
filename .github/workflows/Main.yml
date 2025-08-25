@@ -415,6 +415,13 @@ jobs:
       run: |
         ./build/release/test/unittest --test-config test/configs/verify_fetch_row.json
 
+    - name: test/configs/wal_verification.json
+      if: (success() || failure()) && steps.build.conclusion == 'success'
+      shell: bash
+      run: |
+        ./build/release/test/unittest --test-config test/configs/wal_verification.json
+
+
     - name: test/configs/prefetch_all_parquet_files.json
       if: (success() || failure()) && steps.build.conclusion == 'success'
       shell: bash
