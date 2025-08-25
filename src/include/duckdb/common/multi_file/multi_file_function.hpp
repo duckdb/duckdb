@@ -57,7 +57,13 @@ struct MultiFileReaderInterface {
 	virtual unique_ptr<MultiFileReaderInterface> Copy();
 };
 
-template <class OP>
+struct DefaultFileGlobOptions {
+	static FileGlobOptions GetFileGlobOptions() {
+		return FileGlobOptions::DISALLOW_EMPTY;
+	}
+};
+
+template <class OP, class OPTIONS = DefaultFileGlobOptions>
 class MultiFileFunction : public TableFunction {
 public:
 	explicit MultiFileFunction(string name_p)
@@ -160,7 +166,7 @@ public:
 	static unique_ptr<FunctionData> MultiFileBind(ClientContext &context, TableFunctionBindInput &input,
 	                                              vector<LogicalType> &return_types, vector<string> &names) {
 		auto multi_file_reader = MultiFileReader::Create(input.table_function);
-		auto file_list = multi_file_reader->CreateFileList(context, input.inputs[0]);
+		auto file_list = multi_file_reader->CreateFileList(context, input.inputs[0], OPTIONS::GetFileGlobOptions());
 
 		auto interface = OP::InitializeInterface(context, *multi_file_reader, *file_list);
 
