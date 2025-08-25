@@ -279,7 +279,7 @@ public:
 		for (idx_t i = begin_entry; i < MinValue(last_entry_index, end_entry); i++) {
 			validity_mask[i] = 0;
 		}
-		if (end_entry < last_entry_index) {
+		if (end_entry <= last_entry_index) {
 			return;
 		}
 		const auto last_entry_bits = count % BITS_PER_VALUE;

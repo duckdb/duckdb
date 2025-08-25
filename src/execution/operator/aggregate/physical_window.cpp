@@ -13,7 +13,7 @@
 #include "duckdb/main/settings.hpp"
 
 //#if DEBUG
-#define DEBUG_MASK 1
+#define DEBUG_MASK 0
 //#endif
 
 namespace duckdb {
