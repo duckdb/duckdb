@@ -63,6 +63,7 @@ public:
 	std::string GetName() const override;
 
 	void SetDisabledFileSystems(const vector<string> &names) override;
+	bool SubSystemIsDisabled(const string &name) override;
 
 	string PathSeparator(const string &path) override;
 
