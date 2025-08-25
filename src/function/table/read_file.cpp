@@ -15,11 +15,6 @@ namespace duckdb {
 //------------------------------------------------------------------------------
 
 template <class OP>
-FileGlobOptions DirectMultiFileInfo<OP>::InitializeFileGlobOptions(ClientContext &context) {
-	return FileGlobOptions::ALLOW_EMPTY;
-}
-
-template <class OP>
 unique_ptr<MultiFileReaderInterface> DirectMultiFileInfo<OP>::InitializeInterface(ClientContext &context,
                                                                                   MultiFileReader &reader,
                                                                                   MultiFileList &file_list) {
@@ -138,7 +133,7 @@ unique_ptr<NodeStatistics> DirectMultiFileInfo<OP>::GetCardinality(const MultiFi
 //------------------------------------------------------------------------------
 template <class OP>
 static TableFunction GetFunction() {
-	MultiFileFunction<DirectMultiFileInfo<OP>> table_function(OP::NAME);
+	MultiFileFunction<DirectMultiFileInfo<OP>, DirectFileGlobOptions> table_function(OP::NAME);
 	return table_function;
 }
 
