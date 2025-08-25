@@ -208,7 +208,7 @@ void RoaringFinalizeCompress(CompressionState &state_p) {
 	state.Finalize();
 }
 
-unique_ptr<SegmentScanState> RoaringInitScan(ColumnSegment &segment) {
+unique_ptr<SegmentScanState> RoaringInitScan(QueryContext context, ColumnSegment &segment) {
 	auto result = make_uniq<RoaringScanState>(segment);
 	return std::move(result);
 }
@@ -266,7 +266,7 @@ CompressionFunction GetCompressionFunction(PhysicalType data_type) {
 	                           roaring::RoaringSkip, roaring::RoaringInitSegment);
 }
 
-CompressionFunction RoaringCompressionFun::GetFunction(PhysicalType type) {
+CompressionFunction RoaringCompressionFun::GetFunction(QueryContext context, PhysicalType type) {
 	switch (type) {
 	case PhysicalType::BIT:
 		return GetCompressionFunction(type);

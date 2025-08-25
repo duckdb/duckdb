@@ -239,7 +239,7 @@ void DataTable::InitializeScan(ClientContext &context, DuckTransaction &transact
 	state.checkpoint_lock = transaction.SharedLockTable(*info);
 	auto &local_storage = LocalStorage::Get(transaction);
 	state.Initialize(column_ids, context, table_filters);
-	row_groups->InitializeScan(state.table_state, column_ids, table_filters);
+	row_groups->InitializeScan(QueryContext(context), state.table_state, column_ids, table_filters);
 	local_storage.InitializeScan(*this, state.local_state, table_filters);
 }
 
@@ -247,7 +247,7 @@ void DataTable::InitializeScanWithOffset(DuckTransaction &transaction, TableScan
                                          const vector<StorageIndex> &column_ids, idx_t start_row, idx_t end_row) {
 	state.checkpoint_lock = transaction.SharedLockTable(*info);
 	state.Initialize(column_ids);
-	row_groups->InitializeScanWithOffset(state.table_state, column_ids, start_row, end_row);
+	row_groups->InitializeScanWithOffset(transaction.context, state.table_state, column_ids, start_row, end_row);
 }
 
 idx_t DataTable::GetRowGroupSize() const {
@@ -675,7 +675,7 @@ void DataTable::VerifyNewConstraint(LocalStorage &local_storage, DataTable &pare
 		throw NotImplementedException("FIXME: ALTER COLUMN with such constraint is not supported yet");
 	}
 
-	parent.row_groups->VerifyNewConstraint(parent, constraint);
+	parent.row_groups->VerifyNewConstraint(QueryContext(local_storage.GetClientContext()), parent, constraint);
 	local_storage.VerifyNewConstraint(parent, constraint);
 }
 
@@ -1262,9 +1262,9 @@ void DataTable::RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, Vec
 	});
 }
 
-void DataTable::RemoveFromIndexes(Vector &row_identifiers, idx_t count) {
+void DataTable::RemoveFromIndexes(QueryContext context, Vector &row_identifiers, idx_t count) {
 	D_ASSERT(IsMainTable());
-	row_groups->RemoveFromIndexes(info->indexes, row_identifiers, count);
+	row_groups->RemoveFromIndexes(context, info->indexes, row_identifiers, count);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1634,9 +1634,9 @@ void DataTable::CommitDropTable() {
 //===--------------------------------------------------------------------===//
 // Column Segment Info
 //===--------------------------------------------------------------------===//
-vector<ColumnSegmentInfo> DataTable::GetColumnSegmentInfo() {
+vector<ColumnSegmentInfo> DataTable::GetColumnSegmentInfo(QueryContext context) {
 	auto lock = GetSharedCheckpointLock();
-	return row_groups->GetColumnSegmentInfo();
+	return row_groups->GetColumnSegmentInfo(context);
 }
 
 //===--------------------------------------------------------------------===//
