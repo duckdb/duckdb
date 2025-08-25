@@ -169,7 +169,7 @@ bool ConvertVariantToVariant(Vector &source, VariantVectorData &result, DataChun
 		auto source_blob_data = const_data_ptr_cast(source_data_data[index].GetData());
 
 		D_ASSERT(source_values_list_entry.length);
-		if (value_ids_selvec) {
+		if (WRITE_DATA && value_ids_selvec) {
 			//! Write the value_id for the parent of this column
 			result.value_id_data[value_ids_selvec->get_index(i)] = values_offset;
 		}

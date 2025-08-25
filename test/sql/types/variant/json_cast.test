@@ -96,3 +96,23 @@ select a::VARIANT from base;
 NULL
 {"b": [1,2,true, "hello"], "a": NULL}
 true
+
+query I
+with base as (
+	from (VALUES
+		(
+			'null'
+		),
+		(
+			'{"b": [1,2,true, "hello"], "a": null}'
+		),
+		(
+			'true'
+		)
+	) t(a)
+)
+select {'var': a::JSON}::VARIANT from base;
+----
+{'var': NULL}
+{'var': {'b': [1, 2, true, hello], 'a': NULL}}
+{'var': true}

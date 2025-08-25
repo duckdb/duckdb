@@ -1,5 +1,7 @@
 #pragma once
 
+#include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
 #include "duckdb/common/owning_string_map.hpp"
 #include "duckdb/common/optional_ptr.hpp"
