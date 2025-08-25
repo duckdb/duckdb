@@ -131,10 +131,6 @@ static void BindSchema(ClientContext &context, vector<LogicalType> &return_types
 	D_ASSERT(names.size() == return_types.size());
 }
 
-FileGlobOptions ParquetMultiFileInfo::InitializeFileGlobOptions(ClientContext &context) {
-	return FileGlobOptions::DISALLOW_EMPTY;
-}
-
 unique_ptr<MultiFileReaderInterface>
 ParquetMultiFileInfo::InitializeInterface(ClientContext &context, MultiFileReader &reader, MultiFileList &file_list) {
 	return make_uniq<ParquetMultiFileInfo>();

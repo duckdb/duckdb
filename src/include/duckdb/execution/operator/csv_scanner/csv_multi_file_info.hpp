@@ -32,7 +32,6 @@ struct CSVSchemaDiscovery {
 };
 
 struct CSVMultiFileInfo : public MultiFileReaderInterface {
-	static FileGlobOptions InitializeFileGlobOptions(ClientContext &context);
 	static unique_ptr<MultiFileReaderInterface> InitializeInterface(ClientContext &context, MultiFileReader &reader,
 	                                                                MultiFileList &file_list);
 
