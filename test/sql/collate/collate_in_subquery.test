@@ -1,0 +1,15 @@
+# name: test/sql/collate/collate_in_subquery.test
+# description: Test collations with IN
+# group: [collate]
+
+# uncorrelated
+query I
+select 'ABC' collate nocase in (select 'abc');
+----
+true
+
+# correlated
+query I
+select upper in (select lower) from (values ('ABC' COLLATE nocase, 'abc' COLLATE nocase)) t(upper, lower);
+----
+true

@@ -206,17 +206,8 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 		// positional parameters
 		for (auto &param_expr : function->parameters) {
 			auto param = param_expr->Cast<ColumnRefExpression>();
-			if (param.IsQualified()) {
-				throw BinderException("Invalid parameter name '%s': must be unqualified", param.ToString());
-			}
 			dummy_types.emplace_back(LogicalType::UNKNOWN);
 			dummy_names.push_back(param.GetColumnName());
-		}
-		// default parameters
-		for (auto &entry : function->default_parameters) {
-			auto &val = entry.second->Cast<ConstantExpression>();
-			dummy_types.push_back(val.value.type());
-			dummy_names.push_back(entry.first);
 		}
 		auto this_macro_binding = make_uniq<DummyBinding>(dummy_types, dummy_names, base.name);
 		macro_binding = this_macro_binding.get();

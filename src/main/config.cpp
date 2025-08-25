@@ -234,8 +234,8 @@ optional_ptr<const ConfigurationAlias> DBConfig::GetAliasByIndex(idx_t target_in
 	return setting_aliases + target_index;
 }
 
-optional_ptr<const ConfigurationOption> DBConfig::GetOptionByName(const string &name) {
-	auto lname = StringUtil::Lower(name);
+optional_ptr<const ConfigurationOption> DBConfig::GetOptionByName(const String &name) {
+	auto lname = name.Lower();
 	for (idx_t index = 0; internal_options[index].name; index++) {
 		D_ASSERT(StringUtil::Lower(internal_options[index].name) == string(internal_options[index].name));
 		if (internal_options[index].name == lname) {
@@ -321,23 +321,23 @@ void DBConfig::SetOption(const string &name, Value value) {
 	options.set_variables[name] = std::move(value);
 }
 
-void DBConfig::ResetOption(const string &name) {
+void DBConfig::ResetOption(const String &name) {
 	lock_guard<mutex> l(config_lock);
-	auto extension_option = extension_parameters.find(name);
+	auto extension_option = extension_parameters.find(name.ToStdString());
 	D_ASSERT(extension_option != extension_parameters.end());
 	auto &default_value = extension_option->second.default_value;
 	if (!default_value.IsNull()) {
 		// Default is not NULL, override the setting
-		options.set_variables[name] = default_value;
+		options.set_variables[name.ToStdString()] = default_value;
 	} else {
 		// Otherwise just remove it from the 'set_variables' map
-		options.set_variables.erase(name);
+		options.set_variables.erase(name.ToStdString());
 	}
 }
 
-void DBConfig::ResetGenericOption(const string &name) {
+void DBConfig::ResetGenericOption(const String &name) {
 	lock_guard<mutex> l(config_lock);
-	options.set_variables.erase(name);
+	options.set_variables.erase(name.ToStdString());
 }
 
 LogicalType DBConfig::ParseLogicalType(const string &type) {
@@ -494,18 +494,19 @@ void DBConfig::SetDefaultTempDirectory() {
 	}
 }
 
-void DBConfig::CheckLock(const string &name) {
+void DBConfig::CheckLock(const String &name) {
 	if (!options.lock_configuration) {
 		// not locked
 		return;
 	}
 	case_insensitive_set_t allowed_settings {"schema", "search_path"};
-	if (allowed_settings.find(name) != allowed_settings.end()) {
+	if (allowed_settings.find(name.ToStdString()) != allowed_settings.end()) {
 		// we are always allowed to change these settings
 		return;
 	}
 	// not allowed!
-	throw InvalidInputException("Cannot change configuration option \"%s\" - the configuration has been locked", name);
+	throw InvalidInputException("Cannot change configuration option \"%s\" - the configuration has been locked",
+	                            name.ToStdString());
 }
 
 idx_t DBConfig::GetSystemMaxThreads(FileSystem &fs) {
