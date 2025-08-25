@@ -20,15 +20,13 @@ public:
 	                        WindowAggregationMode mode);
 
 	void Sink(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk, const idx_t input_idx,
-	          WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate) const override;
-	void Finalize(ExecutionContext &context, WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
-	              CollectionPtr collection) const override;
+	          OperatorSinkInput &sink) const override;
+	void Finalize(ExecutionContext &context, CollectionPtr collection, OperatorSinkInput &sink) const override;
 
-	unique_ptr<WindowExecutorGlobalState> GetGlobalState(ClientContext &client, const idx_t payload_count,
-	                                                     const ValidityMask &partition_mask,
-	                                                     const ValidityMask &order_mask) const override;
-	unique_ptr<WindowExecutorLocalState> GetLocalState(ExecutionContext &context,
-	                                                   const WindowExecutorGlobalState &gstate) const override;
+	unique_ptr<GlobalSinkState> GetGlobalState(ClientContext &client, const idx_t payload_count,
+	                                           const ValidityMask &partition_mask,
+	                                           const ValidityMask &order_mask) const override;
+	unique_ptr<LocalSinkState> GetLocalState(ExecutionContext &context, const GlobalSinkState &gstate) const override;
 
 	const WindowAggregationMode mode;
 
@@ -39,9 +37,8 @@ public:
 	unique_ptr<Expression> filter_ref;
 
 protected:
-	void EvaluateInternal(ExecutionContext &context, WindowExecutorGlobalState &gstate,
-	                      WindowExecutorLocalState &lstate, DataChunk &eval_chunk, Vector &result, idx_t count,
-	                      idx_t row_idx) const override;
+	void EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result, idx_t count, idx_t row_idx,
+	                      OperatorSinkInput &sink) const override;
 };
 
 } // namespace duckdb

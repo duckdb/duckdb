@@ -67,10 +67,12 @@ public:
 	}
 
 	//! Get the child at byte.
-	static unsafe_optional_ptr<Node> GetChild(BaseNode &n, const uint8_t byte) {
+	static unsafe_optional_ptr<Node> GetChild(BaseNode &n, const uint8_t byte, const bool unsafe = false) {
 		for (uint8_t i = 0; i < n.count; i++) {
 			if (n.key[i] == byte) {
-				D_ASSERT(n.children[i].HasMetadata());
+				if (!unsafe && !n.children[i].HasMetadata()) {
+					throw InternalException("empty child i = %d for byte %d in BaseNode::GetChild", i, byte);
+				}
 				return &n.children[i];
 			}
 		}

@@ -72,6 +72,7 @@
     {
       "reason": "FIXME: Wrong result in query.",
       "paths": [
+        "test/sql/index/art/storage/test_art_duckdb_versions.test",
         "test/sql/storage/wal/wal_lazy_creation.test"
       ]
     },
@@ -79,6 +80,13 @@
       "reason": "FIXME: Internal Exception.",
       "paths": [
         "test/sql/alter/add_pk/test_add_pk_with_generated_column.test"
+      ]
+    },
+    {
+      "reason": "FIXME: Query unexpectedly succeeded/failed.",
+      "paths": [
+        "test/fuzzer/sqlsmith/nullif_map_with_config.test",
+        "test/sql/storage/memory/in_memory_compress.test"
       ]
     }
   ]

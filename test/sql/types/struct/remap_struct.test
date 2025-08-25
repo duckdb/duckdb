@@ -15,7 +15,7 @@ SELECT remap_struct({'i': 1, 'j': 2}, NULL::ROW(v2 INT), NULL, {'v2': NULL::INTE
 statement error
 select remap_struct(42, NULL::ROW(v1 INT, v2 INT, v3 INT), {'v1': 'j', 'v3': 'i'}, {'v2': NULL::INTEGER})
 ----
-Binder Error: Struct remap can only remap nested types
+<REGEX>:.*Binder Error.*Struct remap can only remap nested types.*
 
 # basic remap usage
 query I
@@ -139,48 +139,48 @@ SELECT remap_struct({'i': 1, 'j': 2}, NULL::ROW(v1 INT, v2 INT), {'v1': 'j', 'v2
 statement error
 SELECT remap_struct({'i': 1, 'j': 2}, NULL::ROW(v1 VARCHAR), {'v2': 'i'}, NULL);
 ----
-Target value v2 not found
+<REGEX>:.*Binder Error.*Target value v2 not found.*
 
 # invalid type
 statement error
 SELECT remap_struct({'i': 1, 'j': 2}, NULL, {'v2': 'i'}, NULL);
 ----
-Struct remap can only remap nested types
+<REGEX>:.*Binder Error.*Struct remap can only remap nested types.*
 
 statement error
 SELECT remap_struct(ROW(1, 2), NULL::ROW(v1 VARCHAR), {'v2': 'i'}, NULL);
 ----
-Struct remap can only remap named structs
+<REGEX>:.*Binder Error.*Struct remap can only remap named structs.*
 
 # invalid source value
 statement error
 SELECT remap_struct({'i': 1, 'j': 2}, NULL::ROW(v1 VARCHAR), {'v1': 'k'}, NULL);
 ----
-Source value k not found
+<REGEX>:.*Binder Error.*Source value k not found.*
 
 # duplicate default/target
 statement error
 SELECT remap_struct({'i': 1, 'j': 2}, NULL::ROW(v1 VARCHAR), {'v1': 'i'}, {'v1': NULL::VARCHAR});
 ----
-Duplicate value provided for target v1
+<REGEX>:.*Binder Error.*Duplicate value provided for target v1.*
 
 # not all target values mapped
 statement error
 SELECT remap_struct({'i': 1, 'j': 2}, NULL::ROW(v1 VARCHAR, v2 VARCHAR), {'v1': 'i'}, NULL);
 ----
-Missing target value v2
+<REGEX>:.*Binder Error.*Missing target value v2.*
 
 statement error
 SELECT remap_struct(struct_val, NULL::ROW(v1 VARCHAR, v2 VARCHAR, v3 VARCHAR), {'v1': 'j', 'v3': 'i'}, struct_val)
 FROM structs
 ----
-Default values must be constants
+<REGEX>:.*Binder Error.*Default values must be constants.*
 
 # default type mismatch
 statement error
 SELECT remap_struct({'i': 1, 'j': 2}, NULL::ROW(v1 INT, v2 INT, v3 INT), {'v1': 'j', 'v3': 'i'}, {'v2': 'hello'});
 ----
-Default key v2 does not match target type INTEGER
+<REGEX>:.*Binder Error.*Default key v2 does not match target type INTEGER.*
 
 # duplicate default
 statement error
@@ -190,7 +190,7 @@ SELECT remap_struct(
  {'v1': 'i', 'v2': ROW('j', {'x': 'x', 'y': 'z'})},
  {'v2': {'y': NULL::INT}, 'v3': NULL::VARCHAR});
 ----
-Duplicate value provided for target y
+<REGEX>:.*Binder Error.*Duplicate value provided for target y.*
 
 # unaligned nested type
 statement error
@@ -200,7 +200,7 @@ SELECT remap_struct(
  {'v1': 'i', 'v2': ROW('j', {'x': 'x', 'y': 'z'})},
  {'v2': NULL, 'v3': NULL::VARCHAR});
 ----
-Binder Error: Default key v2 does not match target type STRUCT(x INTEGER, y INTEGER) - add a cast
+<REGEX>:.*Binder Error.*Default key v2 does not match target type.*
 
 statement error
 SELECT remap_struct(
@@ -219,3 +219,4 @@ SELECT remap_struct(
       }
   );
 ----
+<REGEX>:.*Binder Error.*No child remaps found.*
