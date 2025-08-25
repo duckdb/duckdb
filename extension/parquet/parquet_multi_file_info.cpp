@@ -8,30 +8,6 @@
 
 namespace duckdb {
 
-struct ParquetReadBindData : public TableFunctionData {
-	// These come from the initial_reader, but need to be stored in case the initial_reader is removed by a filter
-	idx_t initial_file_cardinality;
-	idx_t initial_file_row_groups;
-	idx_t explicit_cardinality = 0; // can be set to inject exterior cardinality knowledge (e.g. from a data lake)
-	unique_ptr<ParquetFileReaderOptions> options;
-
-	ParquetOptions &GetParquetOptions() {
-		return options->options;
-	}
-	const ParquetOptions &GetParquetOptions() const {
-		return options->options;
-	}
-
-	unique_ptr<FunctionData> Copy() const override {
-		auto result = make_uniq<ParquetReadBindData>();
-		result->initial_file_cardinality = initial_file_cardinality;
-		result->initial_file_row_groups = initial_file_row_groups;
-		result->explicit_cardinality = explicit_cardinality;
-		result->options = make_uniq<ParquetFileReaderOptions>(options->options);
-		return std::move(result);
-	}
-};
-
 struct ParquetReadGlobalState : public GlobalTableFunctionState {
 	explicit ParquetReadGlobalState(optional_ptr<const PhysicalOperator> op_p)
 	    : row_group_index(0), batch_index(0), op(op_p) {
@@ -476,11 +452,13 @@ optional_idx ParquetMultiFileInfo::MaxThreads(const MultiFileBindData &bind_data
 
 void ParquetMultiFileInfo::FinalizeBindData(MultiFileBindData &multi_file_data) {
 	auto &bind_data = multi_file_data.bind_data->Cast<ParquetReadBindData>();
-	if (multi_file_data.initial_reader) {
-		auto &initial_reader = multi_file_data.initial_reader->Cast<ParquetReader>();
-		bind_data.initial_file_cardinality = initial_reader.NumRows();
-		bind_data.initial_file_row_groups = initial_reader.NumRowGroups();
-		bind_data.options->options = initial_reader.parquet_options;
+	shared_ptr<BaseFileReader> multi_file_reader =
+	    multi_file_data.filtered_reader ? multi_file_data.filtered_reader : multi_file_data.initial_reader;
+	if (multi_file_reader) {
+		auto &reader = multi_file_reader->Cast<ParquetReader>();
+		bind_data.initial_file_cardinality = reader.NumRows();
+		bind_data.initial_file_row_groups = reader.NumRowGroups();
+		bind_data.options->options = reader.parquet_options;
 	}
 }
 
@@ -491,6 +469,12 @@ unique_ptr<NodeStatistics> ParquetMultiFileInfo::GetCardinality(const MultiFileB
 		return make_uniq<NodeStatistics>(bind_data.explicit_cardinality);
 	}
 	return make_uniq<NodeStatistics>(MaxValue(bind_data.initial_file_cardinality, (idx_t)1) * file_count);
+}
+
+void ParquetMultiFileInfo::ResetCardinality(MultiFileBindData &multi_file_data) {
+	auto &bind_data = multi_file_data.bind_data->Cast<ParquetReadBindData>();
+	bind_data.initial_file_cardinality = 0;
+	bind_data.initial_file_row_groups = 0;
 }
 
 unique_ptr<BaseStatistics> ParquetReader::GetStatistics(ClientContext &context, const string &name) {
