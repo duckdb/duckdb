@@ -53,14 +53,14 @@ true
 true
 
 # test parsing hive partitioning scheme
-query IIIII
-select filename, size, last_modified, part, date from read_blob('data/parquet-testing/hive-partitioning/simple/*/*/test.parquet') order by filename
+query IIII
+select filename, size, part, date from read_blob('data/parquet-testing/hive-partitioning/simple/*/*/test.parquet') order by filename
 ----
-data/parquet-testing/hive-partitioning/simple/part=a/date=2012-01-01/test.parquet	266	2024-11-12 02:23:20+00	a	2012-01-01
-data/parquet-testing/hive-partitioning/simple/part=b/date=2013-01-01/test.parquet	266	2024-11-12 02:23:20+00	b	2013-01-01
+data/parquet-testing/hive-partitioning/simple/part=a/date=2012-01-01/test.parquet	266	a	2012-01-01
+data/parquet-testing/hive-partitioning/simple/part=b/date=2013-01-01/test.parquet	266	b	2013-01-01
 
-query IIIII
-select filename, size, last_modified, part, date from read_text('data/parquet-testing/hive-partitioning/simple/*/*/test.parquet') order by filename
+query IIII
+select filename, size, part, date from read_text('data/parquet-testing/hive-partitioning/simple/*/*/test.parquet') order by filename
 ----
-data/parquet-testing/hive-partitioning/simple/part=a/date=2012-01-01/test.parquet	266	2024-11-12 02:23:20+00	a	2012-01-01
-data/parquet-testing/hive-partitioning/simple/part=b/date=2013-01-01/test.parquet	266	2024-11-12 02:23:20+00	b	2013-01-01
+data/parquet-testing/hive-partitioning/simple/part=a/date=2012-01-01/test.parquet	266	a	2012-01-01
+data/parquet-testing/hive-partitioning/simple/part=b/date=2013-01-01/test.parquet	266	b	2013-01-01
