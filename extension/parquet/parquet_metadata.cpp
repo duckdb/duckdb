@@ -770,7 +770,8 @@ static unique_ptr<GlobalTableFunctionState> ParquetMetaDataInit(ClientContext &c
 
 	switch (TYPE) {
 	case ParquetMetadataOperatorType::SCHEMA:
-		result->LoadSchemaData(context, bind_data.return_types, bind_data.file_list->GetFirstFile());
+		// Peek first file to avoid eager loading of file list in the binder
+		result->LoadSchemaData(context, bind_data.return_types, bind_data.file_list->PeekFirstFile());
 		break;
 	case ParquetMetadataOperatorType::META_DATA:
 		result->LoadRowGroupMetadata(context, bind_data.return_types, bind_data.file_list->GetFirstFile());
