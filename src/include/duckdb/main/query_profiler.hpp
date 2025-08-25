@@ -115,7 +115,7 @@ private:
 
 //! Top level query metrics.
 struct QueryMetrics {
-	QueryMetrics() : total_bytes_read(0) {};
+	QueryMetrics() : total_bytes_read(0), total_bytes_written(0) {};
 
 	ProfilingInfo query_global_info;
 
@@ -125,6 +125,8 @@ struct QueryMetrics {
 	Profiler latency;
 	//! The total bytes read by the file system
 	atomic<idx_t> total_bytes_read;
+	//! The total bytes written by the file system
+	atomic<idx_t> total_bytes_written;
 };
 
 //! QueryProfiler collects the profiling metrics of a query.
@@ -154,6 +156,8 @@ public:
 
 	//! Adds nr_bytes bytes to the total bytes read.
 	DUCKDB_API void AddBytesRead(const idx_t nr_bytes);
+	//! Adds nr_bytes bytes to the total bytes written.
+	DUCKDB_API void AddBytesWritten(const idx_t nr_bytes);
 
 	DUCKDB_API void StartExplainAnalyze();
 
