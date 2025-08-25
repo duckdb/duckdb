@@ -486,6 +486,9 @@ private:
 
 	unique_ptr<MergeIntoStatement> GenerateMergeInto(InsertStatement &stmt, TableCatalogEntry &table);
 
+	static void CheckInsertColumnCountMismatch(idx_t expected_columns, idx_t result_columns, bool columns_provided,
+	                                           const string &tname);
+
 private:
 	Binder(ClientContext &context, shared_ptr<Binder> parent, BinderType binder_type);
 };

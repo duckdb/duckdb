@@ -133,7 +133,7 @@ hugeint_t BaseUUID::Convert(const std::array<uint8_t, 16> &bytes) {
 	result.upper |= ((int64_t)bytes[4] << 24);
 	result.upper |= ((int64_t)bytes[5] << 16);
 	result.upper |= ((int64_t)bytes[6] << 8);
-	result.upper |= bytes[7];
+	result.upper |= (int64_t)bytes[7];
 	result.lower = 0;
 	result.lower |= ((uint64_t)bytes[8] << 56);
 	result.lower |= ((uint64_t)bytes[9] << 48);
@@ -142,7 +142,7 @@ hugeint_t BaseUUID::Convert(const std::array<uint8_t, 16> &bytes) {
 	result.lower |= ((uint64_t)bytes[12] << 24);
 	result.lower |= ((uint64_t)bytes[13] << 16);
 	result.lower |= ((uint64_t)bytes[14] << 8);
-	result.lower |= bytes[15];
+	result.lower |= (uint64_t)bytes[15];
 	return result;
 }
 
@@ -220,6 +220,37 @@ hugeint_t UUIDv7::GenerateRandomUUID(RandomEngine &engine) {
 hugeint_t UUIDv7::GenerateRandomUUID() {
 	RandomEngine engine;
 	return GenerateRandomUUID(engine);
+}
+
+hugeint_t BaseUUID::FromBlob(const_data_ptr_t input) {
+	// Based on UUIDValueConversion::ReadParquetUUID from parquet extension
+	hugeint_t result;
+	result.lower = 0;
+	uint64_t unsigned_upper = 0;
+	for (idx_t i = 0; i < sizeof(uint64_t); i++) {
+		unsigned_upper <<= 8;
+		unsigned_upper += static_cast<uint64_t>(input[i]);
+	}
+	for (idx_t i = sizeof(uint64_t); i < sizeof(hugeint_t); i++) {
+		result.lower <<= 8;
+		result.lower += static_cast<uint64_t>(input[i]);
+	}
+	result.upper = static_cast<int64_t>(unsigned_upper ^ (uint64_t(1) << 63));
+	return result;
+}
+
+void BaseUUID::ToBlob(hugeint_t input, data_ptr_t output) {
+	// Based on ParquetUUIDOperator::Operation from parquet extension
+	uint64_t high_bytes = static_cast<uint64_t>(input.upper) ^ (uint64_t(1) << 63);
+	uint64_t low_bytes = input.lower;
+	for (idx_t i = 0; i < sizeof(uint64_t); i++) {
+		auto shift_count = (sizeof(uint64_t) - i - 1) * 8;
+		output[i] = static_cast<uint8_t>((high_bytes >> shift_count) & 0xFF);
+	}
+	for (idx_t i = 0; i < sizeof(uint64_t); i++) {
+		auto shift_count = (sizeof(uint64_t) - i - 1) * 8;
+		output[sizeof(uint64_t) + i] = static_cast<uint8_t>((low_bytes >> shift_count) & 0xFF);
+	}
 }
 
 } // namespace duckdb
