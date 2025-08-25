@@ -76,7 +76,10 @@ public:
 	}
 
 	template <class NODE>
-	static unsafe_optional_ptr<Node> GetChild(NODE &n, const uint8_t byte) {
+	static unsafe_optional_ptr<Node> GetChild(NODE &n, const uint8_t byte, const bool unsafe = false) {
+		if (unsafe) {
+			return &n.children[byte];
+		}
 		if (n.children[byte].HasMetadata()) {
 			return &n.children[byte];
 		}

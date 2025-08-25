@@ -46,7 +46,7 @@ select f(x:=a) from t;
 statement error
 create macro my_macro1(a, b := a) as a + b;
 ----
-Binder Error: table "0_macro_parametersmy_macro1" has duplicate column name "a"
+Duplicate parameter
 
 statement ok
 create table integers (a integer);

@@ -171,6 +171,11 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 			    make_uniq<BoundColumnRefExpression>(child_type, plan_columns[child_idx]),
 			    expr.child_targets[child_idx]);
 			cond.comparison = expr.comparison_type;
+
+			// push collations
+			ExpressionBinder::PushCollation(binder.context, cond.left, cond.left->return_type);
+			ExpressionBinder::PushCollation(binder.context, cond.right, cond.right->return_type);
+
 			join->conditions.push_back(std::move(cond));
 		}
 		root = std::move(join);

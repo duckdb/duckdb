@@ -1,5 +1,6 @@
 #include "duckdb/common/sorting/hashed_sort.hpp"
 #include "duckdb/common/radix_partitioning.hpp"
+#include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 
@@ -8,100 +9,92 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // HashedSortGroup
 //===--------------------------------------------------------------------===//
-HashedSortGroup::HashedSortGroup(ClientContext &context, const Orders &orders, const Types &input_types,
-                                 idx_t group_idx)
-    : group_idx(group_idx), tasks_completed(0) {
-	vector<idx_t> projection_map;
-	sort = make_uniq<Sort>(context, orders, input_types, projection_map);
-	sort_global = sort->GetGlobalSinkState(context);
+HashedSortGroup::HashedSortGroup(ClientContext &client, optional_ptr<Sort> sort, idx_t group_idx)
+    : group_idx(group_idx), sort(sort), tasks_completed(0) {
+	if (sort) {
+		sort_global = sort->GetGlobalSinkState(client);
+	}
 }
 
 //===--------------------------------------------------------------------===//
 // HashedSortGlobalSinkState
 //===--------------------------------------------------------------------===//
-void HashedSortGlobalSinkState::GenerateOrderings(Orders &partitions, Orders &orders,
-                                                  const vector<unique_ptr<Expression>> &partition_bys,
-                                                  const Orders &order_bys,
-                                                  const vector<unique_ptr<BaseStatistics>> &partition_stats) {
+// Formerly PartitionGlobalSinkState
+class HashedSortGlobalSinkState : public GlobalSinkState {
+public:
+	using HashGroupPtr = unique_ptr<HashedSortGroup>;
+	using Orders = vector<BoundOrderByNode>;
+	using Types = vector<LogicalType>;
 
-	// we sort by both 1) partition by expression list and 2) order by expressions
-	const auto partition_cols = partition_bys.size();
-	for (idx_t prt_idx = 0; prt_idx < partition_cols; prt_idx++) {
-		auto &pexpr = partition_bys[prt_idx];
+	using GroupingPartition = unique_ptr<RadixPartitionedTupleData>;
+	using GroupingAppend = unique_ptr<PartitionedTupleDataAppendState>;
 
-		if (partition_stats.empty() || !partition_stats[prt_idx]) {
-			orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, pexpr->Copy(), nullptr);
-		} else {
-			orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, pexpr->Copy(),
-			                    partition_stats[prt_idx]->ToUnique());
-		}
-		partitions.emplace_back(orders.back().Copy());
-	}
+	HashedSortGlobalSinkState(ClientContext &client, const HashedSort &hashed_sort);
 
-	for (const auto &order : order_bys) {
-		orders.emplace_back(order.Copy());
-	}
-}
+	bool HasMergeTasks() const;
 
-HashedSortGlobalSinkState::HashedSortGlobalSinkState(ClientContext &context,
-                                                     const vector<unique_ptr<Expression>> &partition_bys,
-                                                     const vector<BoundOrderByNode> &order_bys,
-                                                     const Types &input_types,
-                                                     const vector<unique_ptr<BaseStatistics>> &partition_stats,
-                                                     idx_t estimated_cardinality)
-    : context(context), buffer_manager(BufferManager::GetBufferManager(context)), allocator(Allocator::Get(context)),
-      fixed_bits(0), payload_types(input_types), max_bits(1), count(0) {
+	// OVER(PARTITION BY...) (hash grouping)
+	unique_ptr<RadixPartitionedTupleData> CreatePartition(idx_t new_bits) const;
+	void UpdateLocalPartition(GroupingPartition &local_partition, GroupingAppend &partition_append);
+	void CombineLocalPartition(GroupingPartition &local_partition, GroupingAppend &local_append);
+	void Finalize(ClientContext &context, InterruptState &interrupt_state);
 
-	GenerateOrderings(partitions, orders, partition_bys, order_bys, partition_stats);
+	//! System and query state
+	const HashedSort &hashed_sort;
+	BufferManager &buffer_manager;
+	Allocator &allocator;
+	mutex lock;
 
-	// The payload prefix is the same as the input schema
-	for (column_t i = 0; i < payload_types.size(); ++i) {
-		scan_ids.emplace_back(i);
-	}
+	// OVER(PARTITION BY...) (hash grouping)
+	GroupingPartition grouping_data;
+	//! Payload plus hash column
+	shared_ptr<TupleDataLayout> grouping_types_ptr;
+	//! The number of radix bits if this partition is being synced with another
+	idx_t fixed_bits;
 
-	//	We have to compute ordering expressions ourselves and materialise them.
-	//	To do this, we scan the orders and add generate extra payload columns that we can reference.
-	for (auto &order : orders) {
-		auto &expr = *order.expression;
-		if (expr.GetExpressionClass() == ExpressionClass::BOUND_REF) {
-			auto &ref = expr.Cast<BoundReferenceExpression>();
-			sort_ids.emplace_back(ref.index);
-			continue;
-		}
+	// OVER(...) (sorting)
+	vector<HashGroupPtr> hash_groups;
 
-		//	Real expression - replace with a ref and save the expression
-		auto saved = std::move(order.expression);
-		const auto type = saved->return_type;
-		const auto idx = payload_types.size();
-		order.expression = make_uniq<BoundReferenceExpression>(type, idx);
-		sort_ids.emplace_back(idx);
-		payload_types.emplace_back(type);
-		sort_exprs.emplace_back(std::move(saved));
-	}
+	// Threading
+	idx_t max_bits;
+	atomic<idx_t> count;
 
-	const auto memory_per_thread = PhysicalOperator::GetMaxThreadMemory(context);
+private:
+	void Rehash(idx_t cardinality);
+	void SyncLocalPartition(GroupingPartition &local_partition, GroupingAppend &local_append);
+};
+
+HashedSortGlobalSinkState::HashedSortGlobalSinkState(ClientContext &client, const HashedSort &hashed_sort)
+    : hashed_sort(hashed_sort), buffer_manager(BufferManager::GetBufferManager(client)),
+      allocator(Allocator::Get(client)), fixed_bits(0), max_bits(1), count(0) {
+
+	const auto memory_per_thread = PhysicalOperator::GetMaxThreadMemory(client);
 	const auto thread_pages = PreviousPowerOfTwo(memory_per_thread / (4 * buffer_manager.GetBlockAllocSize()));
 	while (max_bits < 8 && (thread_pages >> max_bits) > 1) {
 		++max_bits;
 	}
 
 	grouping_types_ptr = make_shared_ptr<TupleDataLayout>();
+	auto &partitions = hashed_sort.partitions;
+	auto &orders = hashed_sort.orders;
+	auto &payload_types = hashed_sort.payload_types;
 	if (!orders.empty()) {
 		if (partitions.empty()) {
 			//	Sort early into a dedicated hash group if we only sort.
 			grouping_types_ptr->Initialize(payload_types, TupleDataValidityType::CAN_HAVE_NULL_VALUES);
-			auto new_group = make_uniq<HashedSortGroup>(context, orders, payload_types, idx_t(0));
+			auto new_group = make_uniq<HashedSortGroup>(hashed_sort.client, *hashed_sort.sort, idx_t(0));
 			hash_groups.emplace_back(std::move(new_group));
 		} else {
 			auto types = payload_types;
 			types.push_back(LogicalType::HASH);
 			grouping_types_ptr->Initialize(types, TupleDataValidityType::CAN_HAVE_NULL_VALUES);
-			Rehash(estimated_cardinality);
+			Rehash(hashed_sort.estimated_cardinality);
 		}
 	}
 }
 
 unique_ptr<RadixPartitionedTupleData> HashedSortGlobalSinkState::CreatePartition(idx_t new_bits) const {
+	auto &payload_types = hashed_sort.payload_types;
 	const auto hash_col_idx = payload_types.size();
 	return make_uniq<RadixPartitionedTupleData>(buffer_manager, grouping_types_ptr, new_bits, hash_col_idx);
 }
@@ -135,7 +128,7 @@ void HashedSortGlobalSinkState::SyncLocalPartition(GroupingPartition &local_part
 	// If the local partition is now too small, flush it and reallocate
 	auto new_partition = CreatePartition(new_bits);
 	local_partition->FlushAppendState(*local_append);
-	local_partition->Repartition(context, *new_partition);
+	local_partition->Repartition(hashed_sort.client, *new_partition);
 
 	local_partition = std::move(new_partition);
 	local_append = make_uniq<PartitionedTupleDataAppendState>();
@@ -189,26 +182,35 @@ void HashedSortGlobalSinkState::CombineLocalPartition(GroupingPartition &local_p
 
 		auto &group_data = groups[group_idx];
 		if (group_data->Count()) {
-			hash_group = make_uniq<HashedSortGroup>(context, orders, payload_types, group_idx);
+			hash_group = make_uniq<HashedSortGroup>(hashed_sort.client, *hashed_sort.sort, group_idx);
 		}
 	}
 }
 
-void HashedSortGlobalSinkState::Finalize(ClientContext &context, InterruptState &interrupt_state) {
+SinkFinalizeType HashedSort::Finalize(ClientContext &client, OperatorSinkFinalizeInput &finalize) const {
+	auto &gsink = finalize.global_state.Cast<HashedSortGlobalSinkState>();
+
+	//	Did we get any data?
+	if (!gsink.count) {
+		return SinkFinalizeType::NO_OUTPUT_POSSIBLE;
+	}
+
 	// OVER()
-	if (unsorted) {
-		return;
+	if (!sort) {
+		return SinkFinalizeType::READY;
 	}
 
 	// OVER(...)
-	D_ASSERT(!hash_groups.empty());
-	for (auto &hash_group : hash_groups) {
+	D_ASSERT(!gsink.hash_groups.empty());
+	for (auto &hash_group : gsink.hash_groups) {
 		if (!hash_group) {
 			continue;
 		}
-		OperatorSinkFinalizeInput finalize {*hash_group->sort_global, interrupt_state};
-		hash_group->sort->Finalize(context, finalize);
+		OperatorSinkFinalizeInput hfinalize {*hash_group->sort_global, finalize.interrupt_state};
+		sort->Finalize(client, hfinalize);
 	}
+
+	return SinkFinalizeType::READY;
 }
 
 bool HashedSortGlobalSinkState::HasMergeTasks() const {
@@ -218,41 +220,79 @@ bool HashedSortGlobalSinkState::HasMergeTasks() const {
 //===--------------------------------------------------------------------===//
 // HashedSortLocalSinkState
 //===--------------------------------------------------------------------===//
-HashedSortLocalSinkState::HashedSortLocalSinkState(ExecutionContext &context, HashedSortGlobalSinkState &gstate)
-    : gstate(gstate), allocator(Allocator::Get(context.client)), hash_exec(context.client), sort_exec(context.client) {
+// Formerly PartitionLocalSinkState
+class HashedSortLocalSinkState : public LocalSinkState {
+public:
+	using LocalSortStatePtr = unique_ptr<LocalSinkState>;
+	using GroupingPartition = unique_ptr<RadixPartitionedTupleData>;
+	using GroupingAppend = unique_ptr<PartitionedTupleDataAppendState>;
+
+	HashedSortLocalSinkState(ExecutionContext &context, const HashedSort &hashed_sort);
+
+	//! Global state
+	const HashedSort &hashed_sort;
+	Allocator &allocator;
+
+	//! Shared expression evaluation
+	ExpressionExecutor hash_exec;
+	ExpressionExecutor sort_exec;
+	DataChunk group_chunk;
+	DataChunk sort_chunk;
+	DataChunk payload_chunk;
+
+	//! Compute the hash values
+	void Hash(DataChunk &input_chunk, Vector &hash_vector);
+	//! Merge the state into the global state.
+	void Combine(ExecutionContext &context);
+
+	// OVER(PARTITION BY...) (hash grouping)
+	GroupingPartition local_grouping;
+	GroupingAppend grouping_append;
+
+	// OVER(ORDER BY...) (only sorting)
+	LocalSortStatePtr sort_local;
+	InterruptState interrupt;
+
+	// OVER() (no sorting)
+	unique_ptr<ColumnDataCollection> unsorted;
+	ColumnDataAppendState unsorted_append;
+};
+
+HashedSortLocalSinkState::HashedSortLocalSinkState(ExecutionContext &context, const HashedSort &hashed_sort)
+    : hashed_sort(hashed_sort), allocator(Allocator::Get(context.client)), hash_exec(context.client),
+      sort_exec(context.client) {
 
 	vector<LogicalType> group_types;
-	for (idx_t prt_idx = 0; prt_idx < gstate.partitions.size(); prt_idx++) {
-		auto &pexpr = *gstate.partitions[prt_idx].expression.get();
+	for (idx_t prt_idx = 0; prt_idx < hashed_sort.partitions.size(); prt_idx++) {
+		auto &pexpr = *hashed_sort.partitions[prt_idx].expression.get();
 		group_types.push_back(pexpr.return_type);
 		hash_exec.AddExpression(pexpr);
 	}
-	sort_col_count = gstate.orders.size() + group_types.size();
 
 	vector<LogicalType> sort_types;
-	for (const auto &expr : gstate.sort_exprs) {
+	for (const auto &expr : hashed_sort.sort_exprs) {
 		sort_types.emplace_back(expr->return_type);
 		sort_exec.AddExpression(*expr);
 	}
 	sort_chunk.Initialize(context.client, sort_types);
 
-	if (sort_col_count) {
-		auto payload_types = gstate.payload_types;
+	if (hashed_sort.sort_col_count) {
+		auto payload_types = hashed_sort.payload_types;
 		if (!group_types.empty()) {
 			// OVER(PARTITION BY...)
 			group_chunk.Initialize(allocator, group_types);
 			payload_types.emplace_back(LogicalType::HASH);
 		} else {
 			// OVER(ORDER BY...)
-			for (idx_t ord_idx = 0; ord_idx < gstate.orders.size(); ord_idx++) {
-				auto &pexpr = *gstate.orders[ord_idx].expression.get();
+			for (idx_t ord_idx = 0; ord_idx < hashed_sort.orders.size(); ord_idx++) {
+				auto &pexpr = *hashed_sort.orders[ord_idx].expression.get();
 				group_types.push_back(pexpr.return_type);
 				hash_exec.AddExpression(pexpr);
 			}
 			group_chunk.Initialize(allocator, group_types);
 
 			//	Single partition
-			auto &sort = *gstate.hash_groups[0]->sort;
+			auto &sort = *hashed_sort.sort;
 			sort_local = sort.GetLocalSinkState(context);
 		}
 		// OVER(...)
@@ -273,7 +313,9 @@ void HashedSortLocalSinkState::Hash(DataChunk &input_chunk, Vector &hash_vector)
 	}
 }
 
-void HashedSortLocalSinkState::Sink(ExecutionContext &context, DataChunk &input_chunk) {
+SinkResultType HashedSort::Sink(ExecutionContext &context, DataChunk &input_chunk, OperatorSinkInput &sink) const {
+	auto &gstate = sink.global_state.Cast<HashedSortGlobalSinkState>();
+	auto &lstate = sink.local_state.Cast<HashedSortLocalSinkState>();
 	gstate.count += input_chunk.size();
 
 	// Window::Sink:
@@ -282,23 +324,26 @@ void HashedSortLocalSinkState::Sink(ExecutionContext &context, DataChunk &input_
 	// ColumnDataCollection::Append
 
 	// OVER()
-	if (sort_col_count == 0) {
-		if (!unsorted) {
-			unsorted = make_uniq<ColumnDataCollection>(context.client, gstate.payload_types);
-			unsorted->InitializeAppend(unsorted_append);
+	if (gstate.hashed_sort.sort_col_count == 0) {
+		if (!lstate.unsorted) {
+			lstate.unsorted = make_uniq<ColumnDataCollection>(context.client, payload_types);
+			lstate.unsorted->InitializeAppend(lstate.unsorted_append);
 		}
-		unsorted->Append(unsorted_append, input_chunk);
-		return;
+		lstate.unsorted->Append(lstate.unsorted_append, input_chunk);
+		return SinkResultType::NEED_MORE_INPUT;
 	}
 
 	//	Payload prefix is the input data
+	auto &payload_chunk = lstate.payload_chunk;
 	payload_chunk.Reset();
 	for (column_t i = 0; i < input_chunk.ColumnCount(); ++i) {
 		payload_chunk.data[i].Reference(input_chunk.data[i]);
 	}
 
 	//	Compute any sort columns that are not references and append them to the end of the payload
-	if (!gstate.sort_exprs.empty()) {
+	auto &sort_chunk = lstate.sort_chunk;
+	auto &sort_exec = lstate.sort_exec;
+	if (!sort_exprs.empty()) {
 		sort_chunk.Reset();
 		sort_exec.Execute(input_chunk, sort_chunk);
 		for (column_t i = 0; i < sort_chunk.ColumnCount(); ++i) {
@@ -308,66 +353,80 @@ void HashedSortLocalSinkState::Sink(ExecutionContext &context, DataChunk &input_
 	payload_chunk.SetCardinality(input_chunk);
 
 	//	OVER(ORDER BY...)
+	auto &sort_local = lstate.sort_local;
 	if (sort_local) {
 		auto &hash_group = *gstate.hash_groups[0];
-		OperatorSinkInput input {*hash_group.sort_global, *sort_local, interrupt};
-		hash_group.sort->Sink(context, payload_chunk, input);
-		return;
+		OperatorSinkInput input {*hash_group.sort_global, *sort_local, sink.interrupt_state};
+		sort->Sink(context, payload_chunk, input);
+		return SinkResultType::NEED_MORE_INPUT;
 	}
 
 	// OVER(PARTITION BY...)
 	auto &hash_vector = payload_chunk.data.back();
-	Hash(input_chunk, hash_vector);
+	lstate.Hash(input_chunk, hash_vector);
 	for (idx_t col_idx = 0; col_idx < input_chunk.ColumnCount(); ++col_idx) {
 		payload_chunk.data[col_idx].Reference(input_chunk.data[col_idx]);
 	}
 
+	auto &local_grouping = lstate.local_grouping;
+	auto &grouping_append = lstate.grouping_append;
 	gstate.UpdateLocalPartition(local_grouping, grouping_append);
 	local_grouping->Append(*grouping_append, payload_chunk);
+
+	return SinkResultType::NEED_MORE_INPUT;
 }
 
-void HashedSortLocalSinkState::Combine(ExecutionContext &context) {
+SinkCombineResultType HashedSort::Combine(ExecutionContext &context, OperatorSinkCombineInput &combine) const {
+	auto &gstate = combine.global_state.Cast<HashedSortGlobalSinkState>();
+	auto &lstate = combine.local_state.Cast<HashedSortLocalSinkState>();
+
 	// Window::Combine:
 	// Sort::Sink then Sort::Combine (per hash partition)
 	// Sort::Combine
 	// ColumnDataCollection::Combine
 
 	// OVER()
-	if (sort_col_count == 0) {
+	if (gstate.hashed_sort.sort_col_count == 0) {
 		// Only one partition again, so need a global lock.
 		lock_guard<mutex> glock(gstate.lock);
-		if (gstate.unsorted) {
-			if (unsorted) {
-				gstate.unsorted->Combine(*unsorted);
-				unsorted.reset();
+		auto &hash_groups = gstate.hash_groups;
+		if (!hash_groups.empty()) {
+			D_ASSERT(hash_groups.size() == 1);
+			auto &unsorted = *hash_groups[0]->sorted;
+			if (lstate.unsorted) {
+				unsorted.Combine(*lstate.unsorted);
+				lstate.unsorted.reset();
 			}
 		} else {
-			gstate.unsorted = std::move(unsorted);
+			auto new_group = make_uniq<HashedSortGroup>(context.client, sort, idx_t(0));
+			new_group->sorted = std::move(lstate.unsorted);
+			hash_groups.emplace_back(std::move(new_group));
 		}
-		return;
+		return SinkCombineResultType::FINISHED;
 	}
 
 	//	OVER(ORDER BY...)
-	if (sort_local) {
+	if (lstate.sort_local) {
 		auto &hash_group = *gstate.hash_groups[0];
-		auto &sort = *hash_group.sort;
-		OperatorSinkCombineInput input {*hash_group.sort_global, *sort_local, interrupt};
-		sort.Combine(context, input);
-		sort_local.reset();
-		return;
+		OperatorSinkCombineInput input {*hash_group.sort_global, *lstate.sort_local, combine.interrupt_state};
+		sort->Combine(context, input);
+		lstate.sort_local.reset();
+		return SinkCombineResultType::FINISHED;
 	}
 
 	// OVER(PARTITION BY...)
+	auto &local_grouping = lstate.local_grouping;
 	if (!local_grouping) {
-		return;
+		return SinkCombineResultType::FINISHED;
 	}
 
 	// Flush our data and lock the bit count
+	auto &grouping_append = lstate.grouping_append;
 	gstate.CombineLocalPartition(local_grouping, grouping_append);
 
 	//	Don't scan the hash column
 	vector<column_t> column_ids;
-	for (column_t i = 0; i < gstate.payload_types.size(); ++i) {
+	for (column_t i = 0; i < payload_types.size(); ++i) {
 		column_ids.emplace_back(i);
 	}
 
@@ -387,16 +446,17 @@ void HashedSortLocalSinkState::Combine(ExecutionContext &context) {
 		}
 
 		auto &hash_group = *gstate.hash_groups[hash_bin];
-		auto &sort = *hash_group.sort;
-		sort_local = sort.GetLocalSinkState(context);
-		OperatorSinkInput sink {*hash_group.sort_global, *sort_local, interrupt};
+		lstate.sort_local = sort->GetLocalSinkState(context);
+		OperatorSinkInput sink {*hash_group.sort_global, *lstate.sort_local, combine.interrupt_state};
 		while (partition.Scan(scan_state, chunk)) {
-			sort.Sink(context, chunk, sink);
+			sort->Sink(context, chunk, sink);
 		}
 
-		OperatorSinkCombineInput combine {*hash_group.sort_global, *sort_local, interrupt};
-		sort.Combine(context, combine);
+		OperatorSinkCombineInput lcombine {*hash_group.sort_global, *lstate.sort_local, combine.interrupt_state};
+		sort->Combine(context, lcombine);
 	}
+
+	return SinkCombineResultType::FINISHED;
 }
 
 //===--------------------------------------------------------------------===//
@@ -436,9 +496,11 @@ TaskExecutionResult HashedSortMaterializeTask::ExecuteTask(TaskExecutionMode mod
 	InterruptState interrupt((weak_ptr<Task>(shared_from_this())));
 	OperatorSourceInput input {sort_global, *sort_local, interrupt};
 	sort.MaterializeColumnData(execution, input);
-	if (++hash_group.tasks_completed == tasks_scheduled && callback) {
+	if (++hash_group.tasks_completed == tasks_scheduled) {
 		hash_group.sorted = sort.GetColumnData(input);
-		callback->OnSortedGroup(hash_group);
+		if (callback) {
+			callback->OnSortedGroup(hash_group);
+		}
 	}
 
 	event->FinishTask();
@@ -448,8 +510,23 @@ TaskExecutionResult HashedSortMaterializeTask::ExecuteTask(TaskExecutionMode mod
 //===--------------------------------------------------------------------===//
 // HashedSortMaterializeEvent
 //===--------------------------------------------------------------------===//
+// Formerly PartitionMergeEvent
+class HashedSortMaterializeEvent : public BasePipelineEvent {
+public:
+	HashedSortMaterializeEvent(HashedSortGlobalSinkState &gstate, Pipeline &pipeline, const PhysicalOperator &op,
+	                           optional_ptr<HashedSortCallback> callback);
+
+	HashedSortGlobalSinkState &gstate;
+	const PhysicalOperator &op;
+	optional_ptr<HashedSortCallback> callback;
+
+public:
+	void Schedule() override;
+};
+
 HashedSortMaterializeEvent::HashedSortMaterializeEvent(HashedSortGlobalSinkState &gstate, Pipeline &pipeline,
-                                                       const PhysicalOperator &op, HashedSortCallback *callback)
+                                                       const PhysicalOperator &op,
+                                                       optional_ptr<HashedSortCallback> callback)
     : BasePipelineEvent(pipeline), gstate(gstate), op(op), callback(callback) {
 }
 
@@ -459,13 +536,13 @@ void HashedSortMaterializeEvent::Schedule() {
 	// Schedule as many tasks per hash group as the sort will allow
 	auto &ts = TaskScheduler::GetScheduler(client);
 	const auto num_threads = NumericCast<idx_t>(ts.NumberOfThreads());
+	auto &sort = *gstate.hashed_sort.sort;
 
 	vector<shared_ptr<Task>> merge_tasks;
 	for (auto &hash_group : gstate.hash_groups) {
 		if (!hash_group) {
 			continue;
 		}
-		auto &sort = *hash_group->sort;
 		auto &global_sink = *hash_group->sort_global;
 		hash_group->sort_source = sort.GetGlobalSourceState(client, global_sink);
 		const auto tasks_scheduled = MinValue<idx_t>(num_threads, hash_group->sort_source->MaxThreads());
@@ -476,6 +553,109 @@ void HashedSortMaterializeEvent::Schedule() {
 	}
 
 	SetTasks(std::move(merge_tasks));
+}
+
+//===--------------------------------------------------------------------===//
+// HashedSort
+//===--------------------------------------------------------------------===//
+void HashedSort::GenerateOrderings(Orders &partitions, Orders &orders,
+                                   const vector<unique_ptr<Expression>> &partition_bys, const Orders &order_bys,
+                                   const vector<unique_ptr<BaseStatistics>> &partition_stats) {
+
+	// we sort by both 1) partition by expression list and 2) order by expressions
+	const auto partition_cols = partition_bys.size();
+	for (idx_t prt_idx = 0; prt_idx < partition_cols; prt_idx++) {
+		auto &pexpr = partition_bys[prt_idx];
+
+		if (partition_stats.empty() || !partition_stats[prt_idx]) {
+			orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, pexpr->Copy(), nullptr);
+		} else {
+			orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, pexpr->Copy(),
+			                    partition_stats[prt_idx]->ToUnique());
+		}
+		partitions.emplace_back(orders.back().Copy());
+	}
+
+	for (const auto &order : order_bys) {
+		orders.emplace_back(order.Copy());
+	}
+}
+
+HashedSort::HashedSort(ClientContext &client, const vector<unique_ptr<Expression>> &partition_bys,
+                       const vector<BoundOrderByNode> &order_bys, const Types &input_types,
+                       const vector<unique_ptr<BaseStatistics>> &partition_stats, idx_t estimated_cardinality,
+                       optional_ptr<HashedSortCallback> callback)
+    : client(client), estimated_cardinality(estimated_cardinality), payload_types(input_types), callback(callback) {
+	GenerateOrderings(partitions, orders, partition_bys, order_bys, partition_stats);
+
+	// The payload prefix is the same as the input schema
+	for (column_t i = 0; i < payload_types.size(); ++i) {
+		scan_ids.emplace_back(i);
+	}
+
+	//	We have to compute ordering expressions ourselves and materialise them.
+	//	To do this, we scan the orders and add generate extra payload columns that we can reference.
+	for (auto &order : orders) {
+		auto &expr = *order.expression;
+		if (expr.GetExpressionClass() == ExpressionClass::BOUND_REF) {
+			auto &ref = expr.Cast<BoundReferenceExpression>();
+			sort_ids.emplace_back(ref.index);
+			continue;
+		}
+
+		//	Real expression - replace with a ref and save the expression
+		auto saved = std::move(order.expression);
+		const auto type = saved->return_type;
+		const auto idx = payload_types.size();
+		order.expression = make_uniq<BoundReferenceExpression>(type, idx);
+		sort_ids.emplace_back(idx);
+		payload_types.emplace_back(type);
+		sort_exprs.emplace_back(std::move(saved));
+	}
+
+	sort_col_count = orders.size() + partitions.size();
+	if (sort_col_count) {
+		vector<idx_t> projection_map;
+		sort = make_uniq<Sort>(client, orders, payload_types, projection_map);
+	}
+}
+
+unique_ptr<GlobalSinkState> HashedSort::GetGlobalSinkState(ClientContext &client) const {
+	return make_uniq<HashedSortGlobalSinkState>(client, *this);
+}
+
+unique_ptr<LocalSinkState> HashedSort::GetLocalSinkState(ExecutionContext &context) const {
+	return make_uniq<HashedSortLocalSinkState>(context, *this);
+}
+
+vector<HashedSort::HashGroupPtr> &HashedSort::GetHashGroups(GlobalSinkState &gstate) const {
+	auto &gsink = gstate.Cast<HashedSortGlobalSinkState>();
+	return gsink.hash_groups;
+}
+
+SinkFinalizeType HashedSort::MaterializeHashGroups(Pipeline &pipeline, Event &event, const PhysicalOperator &op,
+                                                   OperatorSinkFinalizeInput &finalize) const {
+	auto &gsink = finalize.global_state.Cast<HashedSortGlobalSinkState>();
+
+	// OVER()
+	if (sort_col_count == 0) {
+		auto &hash_group = *gsink.hash_groups[0];
+		auto &unsorted = *hash_group.sorted;
+		if (!unsorted.Count()) {
+			return SinkFinalizeType::NO_OUTPUT_POSSIBLE;
+		}
+		if (callback) {
+			callback->OnSortedGroup(hash_group);
+		}
+		return SinkFinalizeType::READY;
+	}
+
+	// Schedule all the sorts for maximum thread utilisation
+	HashedSortMaterializeEvent fnord(gsink, pipeline, op, callback);
+	auto sort_event = make_shared_ptr<HashedSortMaterializeEvent>(gsink, pipeline, op, callback);
+	event.InsertEvent(std::move(sort_event));
+
+	return SinkFinalizeType::READY;
 }
 
 } // namespace duckdb
