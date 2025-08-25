@@ -4,26 +4,23 @@
 
 namespace duckdb {
 
-template <class OP>
-DirectFileReader<OP>::DirectFileReader(OpenFileInfo file_p) : BaseFileReader(std::move(file_p)), done(false) {
+DirectFileReader::DirectFileReader(OpenFileInfo file_p, LogicalType type)
+    : BaseFileReader(std::move(file_p)), type(type), done(false) {
 	columns.push_back(MultiFileColumnDefinition("filename", LogicalType::VARCHAR));
-	columns.push_back(MultiFileColumnDefinition("content", OP::TYPE()));
+	columns.push_back(MultiFileColumnDefinition("content", type));
 	columns.push_back(MultiFileColumnDefinition("size", LogicalType::BIGINT));
 	columns.push_back(MultiFileColumnDefinition("last_modified", LogicalType::TIMESTAMP_TZ));
 }
 
-template <class OP>
-DirectFileReader<OP>::~DirectFileReader() {
+DirectFileReader::~DirectFileReader() {
 }
 
-template <class OP>
-unique_ptr<BaseStatistics> DirectFileReader<OP>::GetStatistics(ClientContext &context, const string &name) {
+unique_ptr<BaseStatistics> DirectFileReader::GetStatistics(ClientContext &context, const string &name) {
 	return nullptr;
 }
 
-template <class OP>
-bool DirectFileReader<OP>::TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate,
-                                             LocalTableFunctionState &lstate) {
+bool DirectFileReader::TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate,
+                                         LocalTableFunctionState &lstate) {
 	auto &state = gstate.Cast<ReadFileGlobalState>();
 	return file_list_idx.GetIndex() < state.file_list->GetTotalFileCount() && !done;
 };
@@ -39,9 +36,16 @@ static void AssertMaxFileSize(const string &file_name, idx_t file_size) {
 	}
 }
 
-template <class OP>
-void DirectFileReader<OP>::Scan(ClientContext &context, GlobalTableFunctionState &global_state,
-                                LocalTableFunctionState &local_state, DataChunk &output) {
+static inline void VERIFY(const string &filename, const string_t &content) {
+	if (Utf8Proc::Analyze(content.GetData(), content.GetSize()) == UnicodeType::INVALID) {
+		throw InvalidInputException("read_text: could not read content of file '%s' as valid UTF-8 encoded text. You "
+		                            "may want to use read_blob instead.",
+		                            filename);
+	}
+}
+
+void DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionState &global_state,
+                            LocalTableFunctionState &local_state, DataChunk &output) {
 	auto &state = global_state.Cast<ReadFileGlobalState>();
 	if (done || file_list_idx.GetIndex() >= state.file_list->GetTotalFileCount()) {
 		return;
@@ -114,7 +118,9 @@ void DirectFileReader<OP>::Scan(ClientContext &context, GlobalTableFunctionState
 
 				content_string.Finalize();
 
-				OP::VERIFY(file.path, content_string);
+				if (type == LogicalType::VARCHAR) {
+					VERIFY(file.path, content_string);
+				}
 
 				FlatVector::GetData<string_t>(file_content_vector)[out_idx] = content_string;
 			} break;
@@ -159,8 +165,7 @@ void DirectFileReader<OP>::Scan(ClientContext &context, GlobalTableFunctionState
 	done = true;
 };
 
-template <class OP>
-void DirectFileReader<OP>::FinishFile(ClientContext &context, GlobalTableFunctionState &gstate) {
+void DirectFileReader::FinishFile(ClientContext &context, GlobalTableFunctionState &gstate) {
 	return;
 };
 

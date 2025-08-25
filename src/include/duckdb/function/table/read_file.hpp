@@ -38,9 +38,6 @@ struct ReadBlobOperation {
 	static inline LogicalType TYPE() {
 		return LogicalType::BLOB;
 	}
-
-	static inline void VERIFY(const string &, const string_t &) {
-	}
 };
 
 struct ReadTextOperation {
@@ -49,15 +46,6 @@ struct ReadTextOperation {
 
 	static inline LogicalType TYPE() {
 		return LogicalType::VARCHAR;
-	}
-
-	static inline void VERIFY(const string &filename, const string_t &content) {
-		if (Utf8Proc::Analyze(content.GetData(), content.GetSize()) == UnicodeType::INVALID) {
-			throw InvalidInputException(
-			    "read_text: could not read content of file '%s' as valid UTF-8 encoded text. You "
-			    "may want to use read_blob instead.",
-			    filename);
-		}
 	}
 };
 

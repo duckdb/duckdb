@@ -100,21 +100,21 @@ template <class OP>
 shared_ptr<BaseFileReader>
 DirectMultiFileInfo<OP>::CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
                                       BaseUnionData &union_data, const MultiFileBindData &bind_data_p) {
-	return make_shared_ptr<DirectFileReader<OP>>(union_data.file);
+	return make_shared_ptr<DirectFileReader>(union_data.file, OP::TYPE());
 };
 
 template <class OP>
 shared_ptr<BaseFileReader>
 DirectMultiFileInfo<OP>::CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
                                       const OpenFileInfo &file, idx_t file_idx, const MultiFileBindData &bind_data) {
-	return make_shared_ptr<DirectFileReader<OP>>(file);
+	return make_shared_ptr<DirectFileReader>(file, OP::TYPE());
 };
 
 template <class OP>
 shared_ptr<BaseFileReader> DirectMultiFileInfo<OP>::CreateReader(ClientContext &context, const OpenFileInfo &file,
                                                                  BaseFileReaderOptions &options_p,
                                                                  const MultiFileOptions &) {
-	return make_shared_ptr<DirectFileReader<OP>>(file);
+	return make_shared_ptr<DirectFileReader>(file, OP::TYPE());
 }
 
 template <class OP>

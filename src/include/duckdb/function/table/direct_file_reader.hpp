@@ -13,10 +13,9 @@
 
 namespace duckdb {
 
-template <class OP>
 class DirectFileReader : public BaseFileReader {
 public:
-	explicit DirectFileReader(OpenFileInfo file_p);
+	explicit DirectFileReader(OpenFileInfo file_p, LogicalType type);
 	~DirectFileReader() override;
 
 public:
@@ -34,6 +33,7 @@ public:
 
 private:
 	bool done;
+	LogicalType type;
 };
 
 } // namespace duckdb
