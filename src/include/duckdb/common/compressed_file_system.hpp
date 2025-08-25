@@ -71,7 +71,7 @@ public:
 
 public:
 	DUCKDB_API void Initialize(QueryContext context, bool write);
-	DUCKDB_API int64_t ReadData(QueryContext context, void *buffer, int64_t nr_bytes);
+	DUCKDB_API int64_t ReadData(void *buffer, int64_t nr_bytes);
 	DUCKDB_API int64_t WriteData(data_ptr_t buffer, int64_t nr_bytes);
 	DUCKDB_API void Close() override;
 
