@@ -76,6 +76,9 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::Decorrelate(unique_ptr<Logica
 				op.children[0] = DecorrelateIndependent(binder, std::move(op.children[0]));
 			}
 
+			// we are now done with the left side, mark it as uncorrelated
+			entry->second = false;
+
 			// rewrite
 			idx_t lateral_depth = 0;
 
