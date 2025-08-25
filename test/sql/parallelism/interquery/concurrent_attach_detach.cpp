@@ -25,7 +25,17 @@ string getDBName(idx_t i) {
 const idx_t dbCount = 10;
 const idx_t workerCount = 40;
 const idx_t iterationCount = 100;
-atomic<bool> success;
+
+std::vector<string> logging;
+mutex log_mutex;
+atomic<bool> success{true};
+
+void addLog(const string &msg) {
+	if (success) {
+		lock_guard<mutex> lock(log_mutex);
+		logging.push_back(msg);
+	}
+}
 
 void execQuery(Connection &conn, const string &query) {
 	auto result = conn.Query(query);
@@ -77,9 +87,9 @@ public:
 
 DBPoolMgr dbPool;
 
-void lookup(Connection &conn, idx_t i) {
-	unique_lock<mutex> lock(dbInfos[i].mu);
-	auto maxTblId = dbInfos[i].lookupTableCount;
+void lookup(Connection &conn, idx_t dbId, idx_t workerId) {
+	unique_lock<mutex> lock(dbInfos[dbId].mu);
+	auto maxTblId = dbInfos[dbId].lookupTableCount;
 	lock.unlock();
 
 	if (maxTblId == 0) {
@@ -87,23 +97,25 @@ void lookup(Connection &conn, idx_t i) {
 	}
 
 	auto tblId = std::rand() % maxTblId;
-	string query = "SELECT i, s FROM " + getDBName(i) + ".lookup_tbl_" + to_string(tblId) + " WHERE i = 2049";
+	string query = "SELECT i, s FROM " + getDBName(dbId) + ".lookup_tbl_" + to_string(tblId) + " WHERE i = 2049";
+	addLog("thread: " + to_string(workerId) + "; q: " + query);
 	execQuery(conn, query);
 }
 
-void createLookupTbl(Connection &conn, idx_t i) {
-	lock_guard<mutex> lock(dbInfos[i].mu);
-	auto tblId = dbInfos[i].lookupTableCount;
-	dbInfos[i].lookupTableCount++;
+void createLookupTbl(Connection &conn, idx_t dbId, idx_t workerId) {
+	lock_guard<mutex> lock(dbInfos[dbId].mu);
+	auto tblId = dbInfos[dbId].lookupTableCount;
+	dbInfos[dbId].lookupTableCount++;
 
-	string query = "CREATE TABLE " + getDBName(i) + ".lookup_tbl_" + to_string(tblId) +
+	string query = "CREATE TABLE " + getDBName(dbId) + ".lookup_tbl_" + to_string(tblId) +
 	               " AS SELECT range AS i, range::VARCHAR AS s FROM range(10000)";
+	addLog("thread: " + to_string(workerId) + "; q: " + query);
 	execQuery(conn, query);
 }
 
-void append(Connection &conn, idx_t i) {
-	lock_guard<mutex> lock(dbInfos[i].mu);
-	auto maxTblId = dbInfos[i].appendTableCount;
+void append(Connection &conn, idx_t dbId, idx_t workerId) {
+	lock_guard<mutex> lock(dbInfos[dbId].mu);
+	auto maxTblId = dbInfos[dbId].appendTableCount;
 
 	if (maxTblId == 0) {
 		return;
@@ -111,45 +123,64 @@ void append(Connection &conn, idx_t i) {
 
 	auto tblId = std::rand() % maxTblId;
 	auto tblStr = "append_tbl_" + to_string(tblId);
-	duckdb::Appender appender(conn, getDBName(i), DEFAULT_SCHEMA, tblStr);
-	appender.AppendRow(42, "fourty-two");
-	appender.Close();
+	addLog("thread: " + to_string(workerId) + "; apply AppendRow on db: " + getDBName(dbId) + "; table: " + tblStr);
+	try {
+		duckdb::Appender appender(conn, getDBName(dbId), DEFAULT_SCHEMA, tblStr);
+		appender.AppendRow(42, "fourty-two");
+		appender.Close();
+	} catch (const std::exception &e) {
+		addLog("Caught exception when using Appender: " + std::string(e.what()));
+		success = false;
+		throw;
+	} catch (...) {
+		addLog("Caught error when using Appender!");
+		success = false;
+		throw;
+	}
 }
 
-void createAppendTbl(Connection &conn, idx_t i) {
+void createAppendTbl(Connection &conn, idx_t i, idx_t workerId) {
 	lock_guard<mutex> lock(dbInfos[i].mu);
 	auto tblId = dbInfos[i].appendTableCount;
 	dbInfos[i].appendTableCount++;
 
 	string query = "CREATE TABLE " + getDBName(i) + ".append_tbl_" + to_string(tblId) + " (i INTEGER, s VARCHAR)";
+	addLog("thread: " + to_string(workerId) + "; q: " + query);
 	execQuery(conn, query);
 }
 
-void workUnit(std::unique_ptr<Connection> conn) {
+void workUnit(std::unique_ptr<Connection> conn, const idx_t &workerId) {
 	for (int i = 0; i < iterationCount; i++) {
-		idx_t scenarioId = std::rand() % 4;
-		idx_t dbId = std::rand() % dbCount;
-
-		dbPool.addWorker(*conn, dbId);
-
-		switch (scenarioId) {
-		case 0:
-			lookup(*conn, dbId);
+		if (!success) {
 			break;
-		case 1:
-			createLookupTbl(*conn, dbId);
-			break;
-		case 2:
-			append(*conn, dbId);
-			break;
-		case 3:
-			createAppendTbl(*conn, dbId);
-			break;
-		default:
-			throw runtime_error("invalid scenario");
 		}
+		try {
+			idx_t scenarioId = std::rand() % 4;
+			idx_t dbId = std::rand() % dbCount;
 
-		dbPool.removeWorker(*conn, dbId);
+			dbPool.addWorker(*conn, dbId);
+
+			switch (scenarioId) {
+			case 0:
+				lookup(*conn, dbId, workerId);
+				break;
+			case 1:
+				createLookupTbl(*conn, dbId, workerId);
+				break;
+			case 2:
+				append(*conn, dbId, workerId);
+				break;
+			case 3:
+				createAppendTbl(*conn, dbId, workerId);
+				break;
+			default:
+				throw runtime_error("invalid scenario");
+			}
+
+			dbPool.removeWorker(*conn, dbId);
+		} catch (...) {
+			break;
+		}
 	}
 }
 
@@ -168,13 +199,16 @@ TEST_CASE("Run a concurrent ATTACH/DETACH scenario", "[attach][.]") {
 	std::vector<thread> workers;
 	for (int i = 0; i < workerCount; i++) {
 		auto conn = make_uniq<Connection>(db);
-		workers.emplace_back(workUnit, std::move(conn));
+		workers.emplace_back(workUnit, std::move(conn), i);
 	}
 
 	for (auto &worker : workers) {
 		worker.join();
 	}
 	if (!success) {
+		for (auto msg : logging) {
+			Printer::Print(msg);
+		}
 		FAIL();
 	}
 }
