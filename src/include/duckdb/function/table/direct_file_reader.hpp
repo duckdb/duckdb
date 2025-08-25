@@ -15,7 +15,7 @@ namespace duckdb {
 
 class DirectFileReader : public BaseFileReader {
 public:
-	explicit DirectFileReader(OpenFileInfo file_p, LogicalType type);
+	explicit DirectFileReader(OpenFileInfo file_p, const LogicalType &type);
 	~DirectFileReader() override;
 
 public:
