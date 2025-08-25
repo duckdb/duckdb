@@ -56,13 +56,8 @@ public:
 		return buffer_manager.ReAllocate(handle, block_size);
 	}
 	BufferHandle Pin(shared_ptr<BlockHandle> &handle) override {
-		return Pin(QueryContext(), handle);
-	}
-
-	BufferHandle Pin(QueryContext context, shared_ptr<BlockHandle> &handle) override {
 		return buffer_manager.Pin(handle);
 	}
-
 	void Prefetch(vector<shared_ptr<BlockHandle>> &handles) override {
 		return buffer_manager.Prefetch(handles);
 	}

@@ -94,7 +94,7 @@ MetadataHandle MetadataManager::Pin(QueryContext context, const MetadataPointer 
 	MetadataHandle handle;
 	handle.pointer.block_index = pointer.block_index;
 	handle.pointer.index = pointer.index;
-	handle.handle = buffer_manager.Pin(context, block.block);
+	handle.handle = buffer_manager.Pin(block.block);
 	return handle;
 }
 
