@@ -1229,7 +1229,6 @@ void ClientContext::Append(ColumnDataCollection &collection, const string &query
                            const string &collection_name) {
 	// create the CTE for the appender
 	string alias = collection_name.empty() ? "appended_data" : collection_name;
-	;
 	auto column_data_ref = make_uniq<ColumnDataRef>(collection);
 	column_data_ref->alias = alias;
 	column_data_ref->expected_names = column_names;
