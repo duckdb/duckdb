@@ -5,6 +5,7 @@
 #include "duckdb/common/map.hpp"
 
 #include <string>
+#include <vector>
 #include <thread>
 
 using namespace duckdb;
@@ -45,9 +46,15 @@ void execQuery(Connection &conn, const string &query) {
 	}
 }
 
+struct TableInfo {
+	idx_t size = 0;
+	TableInfo(idx_t size) : size(size) {};
+};
+
 struct DBInfo {
 	mutex mu;
 	idx_t TableCount = 0;
+	std::vector<TableInfo> tables;
 };
 
 DBInfo dbInfos[dbCount];
@@ -87,12 +94,15 @@ public:
 DBPoolMgr dbPool;
 
 void createTbl(Connection &conn, idx_t dbId, idx_t workerId) {
+	idx_t nr_initial_rows = 10000;
+
 	lock_guard<mutex> lock(dbInfos[dbId].mu);
 	auto tblId = dbInfos[dbId].TableCount;
+	dbInfos[dbId].tables.emplace_back(TableInfo(nr_initial_rows));
 	dbInfos[dbId].TableCount++;
 
 	string query = "CREATE TABLE " + getDBName(dbId) + ".tbl_" + to_string(tblId) +
-	               " AS SELECT range AS i, range::VARCHAR AS s FROM range(10000)";
+	               " AS SELECT range AS i, range::VARCHAR AS s FROM range(" + to_string(nr_initial_rows) + ")";
 	addLog("thread: " + to_string(workerId) + "; q: " + query);
 	execQuery(conn, query);
 }
@@ -112,23 +122,24 @@ void lookup(Connection &conn, idx_t dbId, idx_t workerId) {
 	execQuery(conn, query);
 }
 
-void append(Connection &conn, idx_t dbId, idx_t workerId) {
+void append(Connection &conn, idx_t dbId, idx_t workerId, idx_t append_num_rows = STANDARD_VECTOR_SIZE) {
 	lock_guard<mutex> lock(dbInfos[dbId].mu);
-
-	// set appender
 	auto maxTblId = dbInfos[dbId].TableCount;
 	if (maxTblId == 0) {
 		return;
 	}
 	auto tblId = std::rand() % maxTblId;
-	auto tblStr = "tbl_" + to_string(tblId);
+	idx_t current_num_rows = dbInfos[dbId].tables[tblId].size;
+	dbInfos[dbId].tables[tblId].size += append_num_rows;
 
+	// set appender
+	auto tblStr = "tbl_" + to_string(tblId);
+	addLog("thread: " + to_string(workerId) + "; db: " + getDBName(dbId) + "; table: " + tblStr + "; append rows");
 	try {
 		duckdb::Appender appender(conn, getDBName(dbId), DEFAULT_SCHEMA, tblStr);
 
 		// fill up datachunk
 		DataChunk chunk;
-		idx_t num_rows = 42;
 		const duckdb::vector<LogicalType> types = {LogicalType::INTEGER, LogicalType::VARCHAR};
 		chunk.Initialize(*conn.context, types);
 
@@ -137,12 +148,12 @@ void append(Connection &conn, idx_t dbId, idx_t workerId) {
 		auto &col_varchar = chunk.data[1];
 		auto data_varchar = FlatVector::GetData<string_t>(col_varchar);
 
-		for (idx_t row_idx = 0; row_idx < num_rows; row_idx++) {
-			data_int[row_idx] = 100;
-			data_varchar[row_idx] = StringVector::AddString(col_varchar, "hello");
+		for (idx_t row_idx = 0; row_idx < append_num_rows; row_idx++) {
+			data_int[row_idx] = current_num_rows + row_idx;
+			data_varchar[row_idx] = StringVector::AddString(col_varchar, to_string(current_num_rows + row_idx));
 		}
 
-		chunk.SetCardinality(num_rows);
+		chunk.SetCardinality(append_num_rows);
 		appender.AppendDataChunk(chunk);
 		appender.Close();
 	} catch (const std::exception &e) {
