@@ -3484,7 +3484,7 @@ DUCKDB_C_API void duckdb_scalar_function_set_bind(duckdb_scalar_function scalar_
 /*!
 Sets the user-provided bind data in the bind object of the scalar function.
 The bind data object can be retrieved again during execution.
- In most case, you also need to set the copy-callback of your bind data via duckdb_scalar_function_set_bind_data_copy.
+In most case, you also need to set the copy-callback of your bind data via duckdb_scalar_function_set_bind_data_copy.
 
 * @param info The bind info of the scalar function.
 * @param bind_data The bind data object.
