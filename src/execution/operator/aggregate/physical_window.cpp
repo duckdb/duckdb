@@ -12,9 +12,9 @@
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/main/settings.hpp"
 
-//#if DEBUG
-#define DEBUG_MASK 0
-//#endif
+#if DUCKDB_ALTERNATIVE_VERIFY
+#define DEBUG_MASK 1
+#endif
 
 namespace duckdb {
 
