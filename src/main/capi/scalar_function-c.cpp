@@ -43,7 +43,7 @@ struct CScalarFunctionBindData : public FunctionData {
 			copy->delete_callback = delete_callback;
 			copy->copy_callback = copy_callback;
 		}
-		return copy;
+		return std::move(copy);
 	}
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = other_p.Cast<CScalarFunctionBindData>();
