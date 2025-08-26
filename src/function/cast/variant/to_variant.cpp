@@ -101,7 +101,8 @@ static bool CastToVARIANT(Vector &source, Vector &result, idx_t count, CastParam
 		VariantVectorData result_data(result);
 		//! First pass - collect sizes/offsets
 		InitializeOffsets(offsets, count);
-		ConvertToVariant<false>(source, result_data, offsets, count, nullptr, keys_selvec, dictionary, nullptr, true);
+		ConvertToVariant<false>(source, result_data, offsets, count, count, nullptr, nullptr, keys_selvec, dictionary,
+		                        nullptr, true);
 	}
 
 	//! This resizes the lists, invalidating the "GetData" results stored in VariantVectorData
@@ -112,7 +113,8 @@ static bool CastToVARIANT(Vector &source, Vector &result, idx_t count, CastParam
 		VariantVectorData result_data(result);
 		//! Second pass - actually construct the variants
 		InitializeOffsets(offsets, count);
-		ConvertToVariant<true>(source, result_data, offsets, count, nullptr, keys_selvec, dictionary, nullptr, true);
+		ConvertToVariant<true>(source, result_data, offsets, count, count, nullptr, nullptr, keys_selvec, dictionary,
+		                       nullptr, true);
 	}
 
 	VariantUtils::FinalizeVariantKeys(result, dictionary, keys_selvec, keys_selvec_size);

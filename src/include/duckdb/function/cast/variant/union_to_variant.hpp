@@ -7,22 +7,24 @@ namespace variant {
 
 template <bool WRITE_DATA, bool IGNORE_NULLS>
 bool ConvertUnionToVariant(Vector &source, VariantVectorData &result, DataChunk &offsets, idx_t count,
-                           optional_ptr<const SelectionVector> selvec, SelectionVector &keys_selvec,
+                           idx_t source_size, optional_ptr<const SelectionVector> selvec,
+                           optional_ptr<const SelectionVector> source_sel, SelectionVector &keys_selvec,
                            OrderedOwningStringMap<uint32_t> &dictionary,
                            optional_ptr<const SelectionVector> value_ids_selvec, const bool is_root) {
 	auto &children = StructVector::GetEntries(source);
 
 	UnifiedVectorFormat source_format;
 	vector<UnifiedVectorFormat> member_formats(children.size());
-	source.ToUnifiedFormat(count, source_format);
+	source.ToUnifiedFormat(source_size, source_format);
 	for (idx_t child_idx = 1; child_idx < children.size(); child_idx++) {
 		auto &child = *children[child_idx];
-		child.ToUnifiedFormat(count, member_formats[child_idx]);
+		child.ToUnifiedFormat(source_size, member_formats[child_idx]);
 
 		//! Convert all the children, ignore nulls, only write the non-null values
 		//! UNION will have exactly 1 non-null value for each row
-		if (!ConvertToVariant<WRITE_DATA, /*ignore_nulls = */ true>(child, result, offsets, count, selvec, keys_selvec,
-		                                                            dictionary, value_ids_selvec, is_root)) {
+		if (!ConvertToVariant<WRITE_DATA, /*ignore_nulls = */ true>(child, result, offsets, count, source_size, selvec,
+		                                                            source_sel, keys_selvec, dictionary,
+		                                                            value_ids_selvec, is_root)) {
 			return false;
 		}
 	}

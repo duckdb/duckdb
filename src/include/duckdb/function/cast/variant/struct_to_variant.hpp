@@ -7,7 +7,8 @@ namespace variant {
 
 template <bool WRITE_DATA, bool IGNORE_NULLS>
 bool ConvertStructToVariant(Vector &source, VariantVectorData &result, DataChunk &offsets, idx_t count,
-                            optional_ptr<const SelectionVector> selvec, SelectionVector &keys_selvec,
+                            idx_t source_size, optional_ptr<const SelectionVector> selvec,
+                            optional_ptr<const SelectionVector> source_sel, SelectionVector &keys_selvec,
                             OrderedOwningStringMap<uint32_t> &dictionary,
                             optional_ptr<const SelectionVector> value_ids_selvec, const bool is_root) {
 	auto keys_offset_data = OffsetData::GetKeys(offsets);
@@ -17,7 +18,7 @@ bool ConvertStructToVariant(Vector &source, VariantVectorData &result, DataChunk
 	auto &type = source.GetType();
 
 	UnifiedVectorFormat source_format;
-	source.ToUnifiedFormat(count, source_format);
+	source.ToUnifiedFormat(source_size, source_format);
 	auto &source_validity = source_format.validity;
 
 	auto &children = StructVector::GetEntries(source);
@@ -28,7 +29,7 @@ bool ConvertStructToVariant(Vector &source, VariantVectorData &result, DataChunk
 
 	ContainerSelectionVectors sel(count);
 	for (idx_t i = 0; i < count; i++) {
-		auto index = source_format.sel->get_index(i);
+		auto index = source_format.sel->get_index(source_sel ? source_sel->get_index(i) : i);
 		auto result_index = selvec ? selvec->get_index(i) : i;
 
 		auto &blob_offset = blob_offset_data[result_index];
@@ -84,13 +85,14 @@ bool ConvertStructToVariant(Vector &source, VariantVectorData &result, DataChunk
 			//! Some of the STRUCT rows are NULL entirely, we have to filter these rows out of the children
 			Vector new_child(child.GetType(), nullptr);
 			new_child.Dictionary(child, count, sel.non_null_selection, sel.count);
-			if (!ConvertToVariant<WRITE_DATA>(new_child, result, offsets, sel.count, &sel.new_selection, keys_selvec,
-			                                  dictionary, &sel.children_selection, false)) {
+			if (!ConvertToVariant<WRITE_DATA>(new_child, result, offsets, sel.count, source_size, &sel.new_selection,
+			                                  nullptr, keys_selvec, dictionary, &sel.children_selection, false)) {
 				return false;
 			}
 		} else {
-			if (!ConvertToVariant<WRITE_DATA>(child, result, offsets, sel.count, &sel.new_selection, keys_selvec,
-			                                  dictionary, &sel.children_selection, false)) {
+			if (!ConvertToVariant<WRITE_DATA>(child, result, offsets, sel.count, source_size, &sel.new_selection,
+			                                  &sel.non_null_selection, keys_selvec, dictionary, &sel.children_selection,
+			                                  false)) {
 				return false;
 			}
 		}

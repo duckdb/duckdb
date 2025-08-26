@@ -151,9 +151,9 @@ void HandleVariantNull(VariantVectorData &result, idx_t result_index, uint32_t *
 }
 
 template <bool WRITE_DATA, bool IGNORE_NULLS = false>
-bool ConvertToVariant(Vector &source, VariantVectorData &result, DataChunk &offsets, idx_t count,
-                      optional_ptr<const SelectionVector> selvec, SelectionVector &keys_selvec,
-                      OrderedOwningStringMap<uint32_t> &dictionary,
+bool ConvertToVariant(Vector &source, VariantVectorData &result, DataChunk &offsets, idx_t count, idx_t source_size,
+                      optional_ptr<const SelectionVector> selvec, optional_ptr<const SelectionVector> source_sel,
+                      SelectionVector &keys_selvec, OrderedOwningStringMap<uint32_t> &dictionary,
                       optional_ptr<const SelectionVector> value_ids_selvec, const bool is_root);
 
 } // namespace variant
