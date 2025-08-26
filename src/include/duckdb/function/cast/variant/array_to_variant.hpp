@@ -31,7 +31,7 @@ bool ConvertArrayToVariant(Vector &source, VariantVectorData &result, DataChunk 
 		auto &children_list_entry = result.children_data[result_index];
 
 		list_entry_t source_entry;
-		source_entry.offset = i * array_type_size;
+		source_entry.offset = index * array_type_size;
 		source_entry.length = array_type_size;
 
 		if (source_validity.RowIsValid(index)) {
@@ -58,7 +58,7 @@ bool ConvertArrayToVariant(Vector &source, VariantVectorData &result, DataChunk 
 		                                           &sel.children_selection, false);
 	} else {
 		//! All rows are valid, no need to slice the child
-		return ConvertToVariant<WRITE_DATA, false>(entry, result, offsets, sel.count, child_size, &sel.new_selection,
+		return ConvertToVariant<WRITE_DATA, false>(entry, result, offsets, sel.count, list_size, &sel.new_selection,
 		                                           &sel.non_null_selection, keys_selvec, dictionary,
 		                                           &sel.children_selection, false);
 	}

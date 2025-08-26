@@ -67,7 +67,7 @@ bool ConvertStructToVariant(Vector &source, VariantVectorData &result, DataChunk
 				//! NOTE: this maps to the first index, below we are forwarding this for each child Vector we process.
 				sel.children_selection.set_index(sel.count, children_index);
 			}
-			sel.non_null_selection.set_index(sel.count, i);
+			sel.non_null_selection.set_index(sel.count, source_sel ? source_sel->get_index(i) : i);
 			sel.new_selection.set_index(sel.count, result_index);
 			keys_offset_data[result_index] += children.size();
 			children_offset_data[result_index] += children.size();
