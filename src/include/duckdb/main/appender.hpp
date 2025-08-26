@@ -90,6 +90,8 @@ public:
 	}
 	DUCKDB_API void AppendDataChunk(DataChunk &value);
 
+	virtual void AppendDefault();
+	virtual void AppendDefault(DataChunk &chunk, idx_t col, idx_t row);
 	//! Appends a column to the active column list.
 	//! Immediately flushes all previous data.
 	virtual void AddColumn(const string &name);
@@ -133,8 +135,8 @@ public:
 	DUCKDB_API ~Appender() override;
 
 public:
-	void AppendDefault();
-	void AppendDefault(DataChunk &chunk, idx_t col, idx_t row);
+	void AppendDefault() override;
+	void AppendDefault(DataChunk &chunk, idx_t col, idx_t row) override;
 	void AddColumn(const string &name) override;
 	void ClearColumns() override;
 

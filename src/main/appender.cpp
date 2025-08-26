@@ -403,6 +403,14 @@ void BaseAppender::Flush() {
 	column = 0;
 }
 
+void BaseAppender::AppendDefault() {
+	throw NotImplementedException("AppendDefault is only supported when directly appending to a table");
+}
+
+void BaseAppender::AppendDefault(DataChunk &chunk, idx_t col, idx_t row) {
+	throw NotImplementedException("AppendDefault is only supported when directly appending to a table");
+}
+
 void BaseAppender::AddColumn(const string &name) {
 	throw NotImplementedException("AddColumn is only supported when directly appending to a table");
 }

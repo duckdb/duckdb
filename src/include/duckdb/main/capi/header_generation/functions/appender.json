@@ -73,6 +73,53 @@
             }
         },
         {
+            "name": "duckdb_appender_create_query",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_connection",
+                    "name": "connection"
+                },
+                {
+                    "type": "const char *",
+                    "name": "query"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "column_count"
+                },
+                {
+                    "type": "duckdb_logical_type *",
+                    "name": "types"
+                },
+                {
+                    "type": "const char *",
+                    "name": "table_name"
+                },
+                {
+                    "type": "const char **",
+                    "name": "column_names"
+                },
+                {
+                    "type": "duckdb_appender *",
+                    "name": "out_appender"
+                }
+            ],
+            "comment": {
+                "description": "Creates an appender object that executes the given query with any data appended to it.\n\nNote that the object must be destroyed with `duckdb_appender_destroy`.\n\n",
+                "param_comments": {
+                    "connection": "The connection context to create the appender in.",
+                    "query": "The query to execute, can be an INSERT, DELETE, UPDATE or MERGE INTO statement.",
+                    "column_count": "The number of columns to append.",
+                    "types": "The types of the columns to append.",
+                    "table_name": "(optionally) the table name used to refer to the appended data, defaults to \"appended_data\".",
+                    "column_names": "(optionally) the list of column names, defaults to \"col1\", \"col2\", ...",
+                    "out_appender": "The resulting appender object."
+                },
+                "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure."
+            }
+        },
+        {
             "name": "duckdb_appender_column_count",
             "return_type": "idx_t",
             "params": [

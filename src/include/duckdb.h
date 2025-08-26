@@ -4260,6 +4260,25 @@ DUCKDB_C_API duckdb_state duckdb_appender_create_ext(duckdb_connection connectio
                                                      duckdb_appender *out_appender);
 
 /*!
+Creates an appender object that executes the given query with any data appended to it.
+
+Note that the object must be destroyed with `duckdb_appender_destroy`.
+
+* @param connection The connection context to create the appender in.
+* @param query The query to execute, can be an INSERT, DELETE, UPDATE or MERGE INTO statement.
+* @param column_count The number of columns to append.
+* @param types The types of the columns to append.
+* @param table_name (optionally) the table name used to refer to the appended data, defaults to "appended_data".
+* @param column_names (optionally) the list of column names, defaults to "col1", "col2", ...
+* @param out_appender The resulting appender object.
+* @return `DuckDBSuccess` on success or `DuckDBError` on failure.
+*/
+DUCKDB_C_API duckdb_state duckdb_appender_create_query(duckdb_connection connection, const char *query,
+                                                       idx_t column_count, duckdb_logical_type *types,
+                                                       const char *table_name, const char **column_names,
+                                                       duckdb_appender *out_appender);
+
+/*!
 Returns the number of columns that belong to the appender.
 If there is no active column list, then this equals the table's physical columns.
 
