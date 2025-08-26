@@ -259,6 +259,9 @@ typedef uint32_t sel_t;
 //! bind data (if any), init data (if any), extra data for replacement scans (if any), etc.
 typedef void (*duckdb_delete_callback_t)(void *data);
 
+//! The callback to copy data, e.g., bind data (if any).
+typedef void *(*duckdb_copy_callback_t)(void *data);
+
 //! Used for threading, contains a task state.
 //! Must be destroyed with `duckdb_destroy_task_state`.
 typedef void *duckdb_task_state;
@@ -3480,7 +3483,8 @@ DUCKDB_C_API void duckdb_scalar_function_set_bind(duckdb_scalar_function scalar_
 
 /*!
 Sets the user-provided bind data in the bind object of the scalar function.
-This object can be retrieved again during execution.
+The bind data object can be retrieved again during execution.
+ In most case, you also need to set the copy-callback of your bind data via duckdb_scalar_function_set_bind_data_copy.
 
 * @param info The bind info of the scalar function.
 * @param bind_data The bind data object.
@@ -3488,6 +3492,14 @@ This object can be retrieved again during execution.
 */
 DUCKDB_C_API void duckdb_scalar_function_set_bind_data(duckdb_bind_info info, void *bind_data,
                                                        duckdb_delete_callback_t destroy);
+
+/*!
+Sets the copy-callback for the user-provided bind data in the bind object of the scalar function.
+
+* @param info The bind info of the scalar function.
+* @param copy The callback to copy the bind data (if any).
+*/
+DUCKDB_C_API void duckdb_scalar_function_set_bind_data_copy(duckdb_bind_info info, duckdb_copy_callback_t copy);
 
 /*!
 Report that an error has occurred while calling bind on a scalar function.
