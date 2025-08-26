@@ -114,18 +114,36 @@ void lookup(Connection &conn, idx_t dbId, idx_t workerId) {
 
 void append(Connection &conn, idx_t dbId, idx_t workerId) {
 	lock_guard<mutex> lock(dbInfos[dbId].mu);
-	auto maxTblId = dbInfos[dbId].TableCount;
 
+	// set appender
+	auto maxTblId = dbInfos[dbId].TableCount;
 	if (maxTblId == 0) {
 		return;
 	}
-
 	auto tblId = std::rand() % maxTblId;
 	auto tblStr = "tbl_" + to_string(tblId);
-	addLog("thread: " + to_string(workerId) + "; apply AppendRow on db: " + getDBName(dbId) + "; table: " + tblStr);
+
 	try {
 		duckdb::Appender appender(conn, getDBName(dbId), DEFAULT_SCHEMA, tblStr);
-		appender.AppendRow(42, "fourty-two");
+
+		// fill up datachunk
+		DataChunk chunk;
+		idx_t num_rows = 42;
+		const duckdb::vector<LogicalType> types = {LogicalType::INTEGER, LogicalType::VARCHAR};
+		chunk.Initialize(*conn.context, types);
+
+		auto &col_int = chunk.data[0];
+		auto data_int = FlatVector::GetData<int32_t>(col_int);
+		auto &col_varchar = chunk.data[1];
+		auto data_varchar = FlatVector::GetData<string_t>(col_varchar);
+
+		for (idx_t row_idx = 0; row_idx < num_rows; row_idx++) {
+			data_int[row_idx] = 100;
+			data_varchar[row_idx] = StringVector::AddString(col_varchar, "hello");
+		}
+
+		chunk.SetCardinality(num_rows);
+		appender.AppendDataChunk(chunk);
 		appender.Close();
 	} catch (const std::exception &e) {
 		addLog("Caught exception when using Appender: " + std::string(e.what()));
