@@ -95,10 +95,6 @@ static void PragmaForceCheckpoint(ClientContext &context, const FunctionParamete
 	DBConfig::GetConfig(context).options.force_checkpoint = true;
 }
 
-static void PragmaTruncateDuckDBLogs(ClientContext &context, const FunctionParameters &parameters) {
-	context.db->GetLogManager().TruncateLogStorage();
-}
-
 static void PragmaDisableForceParallelism(ClientContext &context, const FunctionParameters &parameters) {
 	ClientConfig::GetConfig(context).verify_parallelism = false;
 }
@@ -117,35 +113,6 @@ static void PragmaDisableCheckpointOnShutdown(ClientContext &context, const Func
 	DBConfig::GetConfig(context).options.checkpoint_on_shutdown = false;
 }
 
-static void PragmaEnableLogging(ClientContext &context, const FunctionParameters &parameters) {
-	if (parameters.values.empty()) {
-		context.db->GetLogManager().SetEnableLogging(true);
-		return;
-	}
-
-	if (parameters.values.size() != 1) {
-		throw InvalidInputException("PragmaEnableLogging: expected 0 or 1 parameter");
-	}
-
-	vector<string> types;
-
-	if (parameters.values[0].type() == LogicalType::VARCHAR) {
-		types.push_back(parameters.values[0].GetValue<string>());
-	} else if (parameters.values[0].type() == LogicalType::LIST(LogicalType::VARCHAR)) {
-		for (const auto &child : ListValue::GetChildren(parameters.values[0])) {
-			types.push_back(child.GetValue<string>());
-		}
-	} else {
-		throw InvalidInputException("Unexpected type for PragmaEnableLogging");
-	}
-
-	context.db->GetLogManager().SetEnableStructuredLoggers(types);
-}
-
-static void PragmaDisableLogging(ClientContext &context, const FunctionParameters &parameters) {
-	context.db->GetLogManager().SetEnableLogging(false);
-}
-
 static void PragmaEnableOptimizer(ClientContext &context, const FunctionParameters &parameters) {
 	ClientConfig::GetConfig(context).enable_optimizer = true;
 }
@@ -156,6 +123,10 @@ static void PragmaDisableOptimizer(ClientContext &context, const FunctionParamet
 
 void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	RegisterEnableProfiling(set);
+
+	// NOTE: use of Pragma functions is discouraged. Instead, opt for adding a regular table function to be invoked with
+	// CALL.
+	//       see for example the "enable_logging" function
 
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_profile", PragmaDisableProfiling));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_profiling", PragmaDisableProfiling));
@@ -178,15 +149,10 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_object_cache", PragmaEnableObjectCache));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_object_cache", PragmaDisableObjectCache));
 
-	set.AddFunction(PragmaFunction::PragmaCall("enable_logging", PragmaEnableLogging, {}, LogicalType::VARCHAR));
-	set.AddFunction(PragmaFunction::PragmaStatement("disable_logging", PragmaDisableLogging));
-
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_optimizer", PragmaEnableOptimizer));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_optimizer", PragmaDisableOptimizer));
 
 	set.AddFunction(PragmaFunction::PragmaStatement("force_checkpoint", PragmaForceCheckpoint));
-
-	set.AddFunction(PragmaFunction::PragmaStatement("truncate_duckdb_logs", PragmaTruncateDuckDBLogs));
 
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_progress_bar", PragmaEnableProgressBar));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_progress_bar", PragmaDisableProgressBar));
