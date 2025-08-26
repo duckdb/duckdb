@@ -23,17 +23,8 @@ bool ConvertStructToVariant(Vector &source, VariantVectorData &result, DataChunk
 	auto &children = StructVector::GetEntries(source);
 
 	//! Look up all the dictionary indices for the struct keys
-	vector<uint32_t> dictionary_indices(children.size());
-	if (WRITE_DATA && count) {
-		auto &struct_children = StructType::GetChildTypes(type);
-		for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
-			auto &struct_child = struct_children[child_idx];
-			string_t struct_child_str(struct_child.first.c_str(), NumericCast<uint32_t>(struct_child.first.size()));
-			auto dictionary_size = dictionary.size();
-			dictionary_indices[child_idx] =
-			    dictionary.emplace(std::make_pair(struct_child_str, dictionary_size)).first->second;
-		}
-	}
+	vector<uint32_t> dictionary_indices;
+	dictionary_indices.reserve(children.size());
 
 	ContainerSelectionVectors sel(count);
 	for (idx_t i = 0; i < count; i++) {
@@ -49,6 +40,18 @@ bool ConvertStructToVariant(Vector &source, VariantVectorData &result, DataChunk
 			                                 VariantLogicalType::OBJECT);
 			WriteContainerData<WRITE_DATA>(result, result_index, blob_offset, children.size(),
 			                               children_offset_data[result_index]);
+
+			if (WRITE_DATA && dictionary_indices.empty()) {
+				auto &struct_children = StructType::GetChildTypes(type);
+				for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
+					auto &struct_child = struct_children[child_idx];
+					string_t struct_child_str(struct_child.first.c_str(),
+					                          NumericCast<uint32_t>(struct_child.first.size()));
+					auto dictionary_size = dictionary.size();
+					dictionary_indices.push_back(
+					    dictionary.emplace(std::make_pair(struct_child_str, dictionary_size)).first->second);
+				}
+			}
 
 			//! children
 			if (WRITE_DATA) {
