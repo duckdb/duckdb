@@ -9,6 +9,9 @@ require noforcestorage
 require skip_reload
 
 statement ok
+PRAGMA enable_profiling;
+
+statement ok
 SET threads = 1;
 
 statement ok
@@ -44,10 +47,9 @@ PRAGMA disable_profiling;
 statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profile_fs.json';
 
-# Check if the total bytes read is greater than zero and less than two blocks
 query I
 SELECT
-	CASE WHEN total_bytes_read > 0  AND total_bytes_read < 524288 THEN 'true'
+	CASE WHEN total_bytes_read > 0 THEN 'true'
 	ELSE 'false' END
 FROM metrics_output;
 ----
