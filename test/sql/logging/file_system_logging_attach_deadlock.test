@@ -32,4 +32,4 @@ DETACH db;
 statement error
 SELECT * FROM duckdb_logs;
 ----
-could not allocate block
+Out of Memory Error
