@@ -46,8 +46,28 @@ bool ColumnDataRef::Equals(const TableRef &other_p) const {
 	return true;
 }
 
+optionally_owned_ptr<ColumnDataCollection> CopyCollection(optionally_owned_ptr<ColumnDataCollection> &collection) {
+	auto &unique = collection.get_owned_unique();
+	if (unique) {
+		// uniquely owned - need to copy over all the data and make a new collection
+		auto new_collection = make_uniq<ColumnDataCollection>(collection->GetAllocator(), collection->Types());
+		for (auto &chunk : collection->Chunks()) {
+			new_collection->Append(chunk);
+		}
+		return std::move(new_collection);
+	}
+	auto &shared = collection.get_owned_shared();
+	if (shared) {
+		// shared ptr - we can directly reference it
+		return shared;
+	}
+	// unowned collection - just return the raw reference
+	return collection.get();
+}
+
 unique_ptr<TableRef> ColumnDataRef::Copy() {
-	auto result = make_uniq<ColumnDataRef>(collection, expected_names);
+	auto copied_collection = CopyCollection(collection);
+	auto result = make_uniq<ColumnDataRef>(std::move(copied_collection), expected_names);
 	CopyProperties(*result);
 	return std::move(result);
 }
