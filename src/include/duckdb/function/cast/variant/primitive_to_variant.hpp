@@ -203,8 +203,8 @@ void GetValueSize(const uint32_t &val, uint32_t lengths[3], idx_t &lengths_size,
 template <bool WRITE_DATA, bool IGNORE_NULLS, VariantLogicalType TYPE_ID, class T,
           class PAYLOAD_CLASS = EmptyConversionPayloadToVariant>
 static bool ConvertPrimitiveTemplated(Vector &source, VariantVectorData &result, DataChunk &offsets, idx_t count,
-                                      optional_ptr<SelectionVector> selvec,
-                                      optional_ptr<SelectionVector> value_ids_selvec, PAYLOAD_CLASS &payload,
+                                      optional_ptr<const SelectionVector> selvec,
+                                      optional_ptr<const SelectionVector> value_ids_selvec, PAYLOAD_CLASS &payload,
                                       const bool is_root) {
 	auto blob_offset_data = OffsetData::GetBlob(offsets);
 	auto values_offset_data = OffsetData::GetValues(offsets);
@@ -247,9 +247,9 @@ static bool ConvertPrimitiveTemplated(Vector &source, VariantVectorData &result,
 
 template <bool WRITE_DATA, bool IGNORE_NULLS>
 bool ConvertPrimitiveToVariant(Vector &source, VariantVectorData &result, DataChunk &offsets, idx_t count,
-                               optional_ptr<SelectionVector> selvec, SelectionVector &keys_selvec,
+                               optional_ptr<const SelectionVector> selvec, SelectionVector &keys_selvec,
                                OrderedOwningStringMap<uint32_t> &dictionary,
-                               optional_ptr<SelectionVector> value_ids_selvec, const bool is_root) {
+                               optional_ptr<const SelectionVector> value_ids_selvec, const bool is_root) {
 	auto &type = source.GetType();
 	auto logical_type = type.id();
 	auto physical_type = type.InternalType();

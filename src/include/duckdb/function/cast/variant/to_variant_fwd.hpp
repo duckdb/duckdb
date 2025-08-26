@@ -120,7 +120,7 @@ void WriteArrayChildren(VariantVectorData &result, uint64_t children_offset, uin
 
 template <bool WRITE_DATA>
 void WriteVariantMetadata(VariantVectorData &result, idx_t result_index, uint32_t *values_offsets, uint32_t blob_offset,
-                          optional_ptr<SelectionVector> value_ids_selvec, idx_t i, VariantLogicalType type_id) {
+                          optional_ptr<const SelectionVector> value_ids_selvec, idx_t i, VariantLogicalType type_id) {
 
 	auto &values_offset_data = values_offsets[result_index];
 	if (WRITE_DATA) {
@@ -139,7 +139,7 @@ void WriteVariantMetadata(VariantVectorData &result, idx_t result_index, uint32_
 
 template <bool WRITE_DATA>
 void HandleVariantNull(VariantVectorData &result, idx_t result_index, uint32_t *values_offsets, uint32_t blob_offset,
-                       optional_ptr<SelectionVector> value_ids_selvec, idx_t i, const bool is_root) {
+                       optional_ptr<const SelectionVector> value_ids_selvec, idx_t i, const bool is_root) {
 	if (is_root) {
 		if (WRITE_DATA) {
 			FlatVector::SetNull(result.variant, result_index, true);
@@ -152,9 +152,9 @@ void HandleVariantNull(VariantVectorData &result, idx_t result_index, uint32_t *
 
 template <bool WRITE_DATA, bool IGNORE_NULLS = false>
 bool ConvertToVariant(Vector &source, VariantVectorData &result, DataChunk &offsets, idx_t count,
-                      optional_ptr<SelectionVector> selvec, SelectionVector &keys_selvec,
-                      OrderedOwningStringMap<uint32_t> &dictionary, optional_ptr<SelectionVector> value_ids_selvec,
-                      const bool is_root);
+                      optional_ptr<const SelectionVector> selvec, SelectionVector &keys_selvec,
+                      OrderedOwningStringMap<uint32_t> &dictionary,
+                      optional_ptr<const SelectionVector> value_ids_selvec, const bool is_root);
 
 } // namespace variant
 } // namespace duckdb

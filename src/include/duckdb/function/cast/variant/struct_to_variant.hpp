@@ -7,9 +7,9 @@ namespace variant {
 
 template <bool WRITE_DATA, bool IGNORE_NULLS>
 bool ConvertStructToVariant(Vector &source, VariantVectorData &result, DataChunk &offsets, idx_t count,
-                            optional_ptr<SelectionVector> selvec, SelectionVector &keys_selvec,
+                            optional_ptr<const SelectionVector> selvec, SelectionVector &keys_selvec,
                             OrderedOwningStringMap<uint32_t> &dictionary,
-                            optional_ptr<SelectionVector> value_ids_selvec, const bool is_root) {
+                            optional_ptr<const SelectionVector> value_ids_selvec, const bool is_root) {
 	auto keys_offset_data = OffsetData::GetKeys(offsets);
 	auto values_offset_data = OffsetData::GetValues(offsets);
 	auto blob_offset_data = OffsetData::GetBlob(offsets);

@@ -237,9 +237,9 @@ static bool ConvertJSON(yyjson_val *val, VariantVectorData &result, DataChunk &o
 
 template <bool WRITE_DATA, bool IGNORE_NULLS>
 bool ConvertJSONToVariant(Vector &source, VariantVectorData &result, DataChunk &offsets, idx_t count,
-                          optional_ptr<SelectionVector> selvec, SelectionVector &keys_selvec,
-                          OrderedOwningStringMap<uint32_t> &dictionary, optional_ptr<SelectionVector> value_ids_selvec,
-                          const bool is_root) {
+                          optional_ptr<const SelectionVector> selvec, SelectionVector &keys_selvec,
+                          OrderedOwningStringMap<uint32_t> &dictionary,
+                          optional_ptr<const SelectionVector> value_ids_selvec, const bool is_root) {
 	D_ASSERT(source.GetType().IsJSONType());
 
 	UnifiedVectorFormat source_format;
