@@ -585,7 +585,7 @@ void QueryAppender::FlushInternal(ColumnDataCollection &collection) {
 	if (!context_ref) {
 		throw InvalidInputException("Appender: Attempting to flush data to a closed connection");
 	}
-	context_ref->Append(collection, query);
+	context_ref->Append(collection, query, names, table_name);
 }
 
 //===--------------------------------------------------------------------===//

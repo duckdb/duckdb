@@ -1225,10 +1225,14 @@ CommonTableExpressionMap &GetCTEMap(SQLStatement &statement) {
 	}
 }
 
-void ClientContext::Append(ColumnDataCollection &collection, const string &query) {
+void ClientContext::Append(ColumnDataCollection &collection, const string &query, const vector<string> &column_names,
+                           const string &collection_name) {
 	// create the CTE for the appender
+	string alias = collection_name.empty() ? "appended_data" : collection_name;
+	;
 	auto column_data_ref = make_uniq<ColumnDataRef>(collection);
-	column_data_ref->alias = "appended_data";
+	column_data_ref->alias = alias;
+	column_data_ref->expected_names = column_names;
 	auto cte = make_uniq<SelectNode>();
 	cte->select_list.push_back(make_uniq<StarExpression>());
 	cte->from_table = std::move(column_data_ref);
@@ -1250,7 +1254,7 @@ void ClientContext::Append(ColumnDataCollection &collection, const string &query
 	cte_info->query = std::move(cte_select);
 	cte_info->materialized = CTEMaterialize::CTE_MATERIALIZE_NEVER;
 
-	cte_map.map.insert("appended_data", std::move(cte_info));
+	cte_map.map.insert(alias, std::move(cte_info));
 
 	// now we have the query - run it in a transaction
 	auto result = Query(std::move(parser.statements[0]), false);
@@ -1261,6 +1265,7 @@ void ClientContext::Append(ColumnDataCollection &collection, const string &query
 
 void ClientContext::Append(TableDescription &description, ColumnDataCollection &collection,
                            optional_ptr<const vector<LogicalIndex>> column_ids) {
+	string table_name = "__duckdb_internal_appended_data";
 	string query = "INSERT INTO ";
 	if (!description.database.empty()) {
 		query += StringUtil::Format("%s.", SQLIdentifier(description.database));
@@ -1281,8 +1286,10 @@ void ClientContext::Append(TableDescription &description, ColumnDataCollection &
 		}
 		query += ")";
 	}
-	query += " FROM appended_data";
-	Append(collection, query);
+	query += " FROM ";
+	query += table_name;
+	vector<string> column_names;
+	Append(collection, query, column_names, table_name);
 }
 
 void ClientContext::InternalTryBindRelation(Relation &relation, vector<ColumnDefinition> &result_columns) {
