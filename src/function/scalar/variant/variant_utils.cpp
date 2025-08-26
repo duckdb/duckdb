@@ -38,7 +38,7 @@ void VariantUtils::FinalizeVariantKeys(Vector &variant, OrderedOwningStringMap<u
 }
 
 bool VariantUtils::FindChildValues(RecursiveUnifiedVectorFormat &source, const VariantPathComponent &component,
-                                   optional_idx row, const SelectionVector &res, VariantNestedData *nested_data,
+                                   optional_idx row, SelectionVector &res, VariantNestedData *nested_data,
                                    idx_t count) {
 	//! children
 	auto &children = UnifiedVariantVector::GetChildren(source);

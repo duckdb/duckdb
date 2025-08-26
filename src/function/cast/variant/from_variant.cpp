@@ -133,6 +133,7 @@ static bool CastVariantToPrimitive(FromVariantConversionData &conversion_data, V
 	auto &target_type = result.GetType();
 
 	auto result_data = FlatVector::GetData<T>(result);
+	auto &result_validity = FlatVector::Validity(result);
 	auto &values_format = UnifiedVariantVector::GetValues(variant);
 
 	auto &type_id_format = UnifiedVariantVector::GetValuesTypeId(variant);
@@ -149,7 +150,10 @@ static bool CastVariantToPrimitive(FromVariantConversionData &conversion_data, V
 
 		auto index = variant.unified.sel->get_index(row_index);
 		if (!variant.unified.validity.RowIsValid(index)) {
-			result.SetValue(i + offset, Value(target_type));
+			result_validity.SetInvalid(offset + i);
+			continue;
+		}
+		if (!result_validity.RowIsValid(offset + i)) {
 			continue;
 		}
 		auto &values_list_entry = values_data[values_format.sel->get_index(row_index)];
@@ -245,7 +249,7 @@ static bool ConvertVariantToList(FromVariantConversionData &conversion_data, Vec
 		auto &child_data_entry = child_data[i];
 
 		if (child_data_entry.is_null) {
-			FlatVector::SetNull(result, i, true);
+			FlatVector::SetNull(result, offset + i, true);
 			continue;
 		}
 
@@ -258,6 +262,58 @@ static bool ConvertVariantToList(FromVariantConversionData &conversion_data, Vec
 		CastVariant(conversion_data, child, new_sel, entry.offset, child_data_entry.child_count, row_index);
 	}
 	ListVector::SetListSize(result, total_children);
+	return true;
+}
+
+static bool ConvertVariantToArray(FromVariantConversionData &conversion_data, Vector &result,
+                                  const SelectionVector &sel, idx_t offset, idx_t count, optional_idx row) {
+	auto &allocator = Allocator::DefaultAllocator();
+
+	AllocatedData owned_child_data;
+	VariantNestedData *child_data = nullptr;
+	if (count) {
+		owned_child_data = allocator.Allocate(sizeof(VariantNestedData) * count);
+		child_data = reinterpret_cast<VariantNestedData *>(owned_child_data.get());
+	}
+
+	if (!VariantUtils::CollectNestedData(conversion_data.unified_format, VariantLogicalType::ARRAY, sel, count, row,
+	                                     child_data, conversion_data.error)) {
+		return false;
+	}
+
+	const auto array_size = ArrayType::GetSize(result.GetType());
+	for (idx_t i = 0; i < count; i++) {
+		auto &child_data_entry = child_data[i];
+		if (child_data_entry.is_null) {
+			continue;
+		}
+		if (child_data_entry.child_count != array_size) {
+			conversion_data.error =
+			    StringUtil::Format("Array size '%d' was expected, found '%d', can't convert VARIANT", array_size,
+			                       child_data_entry.child_count);
+			return false;
+		}
+	}
+
+	SelectionVector new_sel;
+	new_sel.Initialize(array_size);
+
+	auto &child = ArrayVector::GetEntry(result);
+	idx_t total_offset = offset * array_size;
+	for (idx_t i = 0; i < count; i++) {
+		auto row_index = row.IsValid() ? row.GetIndex() : i;
+		auto &child_data_entry = child_data[i];
+
+		if (child_data_entry.is_null) {
+			FlatVector::SetNull(result, offset + i, true);
+			total_offset += array_size;
+			continue;
+		}
+
+		FindValues(conversion_data, row_index, new_sel, child_data_entry);
+		CastVariant(conversion_data, child, new_sel, total_offset, array_size, row_index);
+		total_offset += array_size;
+	}
 	return true;
 }
 
@@ -277,6 +333,12 @@ static bool ConvertVariantToStruct(FromVariantConversionData &conversion_data, V
 	if (!VariantUtils::CollectNestedData(conversion_data.unified_format, VariantLogicalType::OBJECT, sel, count, row,
 	                                     child_data, conversion_data.error)) {
 		return false;
+	}
+
+	for (idx_t i = 0; i < count; i++) {
+		if (child_data[i].is_null) {
+			FlatVector::SetNull(result, offset + i, true);
+		}
 	}
 
 	auto &children = StructVector::GetEntries(result);
@@ -336,6 +398,19 @@ static bool CastVariant(FromVariantConversionData &conversion_data, Vector &resu
 			return true;
 		}
 		case LogicalTypeId::ARRAY:
+			if (ConvertVariantToArray(conversion_data, result, sel, offset, count, row)) {
+				return true;
+			}
+			for (idx_t i = 0; i < count; i++) {
+				auto row_index = row.IsValid() ? row.GetIndex() : i;
+
+				//! Get the index into 'values'
+				uint32_t value_index = sel[i];
+				auto value =
+				    VariantUtils::ConvertVariantToValue(conversion_data.unified_format, row_index, value_index);
+				result.SetValue(i + offset, value.DefaultCastAs(target_type, true));
+			}
+			return true;
 		case LogicalTypeId::LIST:
 		case LogicalTypeId::MAP: {
 			if (ConvertVariantToList(conversion_data, result, sel, offset, count, row)) {
