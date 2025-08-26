@@ -77,6 +77,10 @@ MetadataHandle MetadataManager::AllocateHandle() {
 }
 
 MetadataHandle MetadataManager::Pin(const MetadataPointer &pointer) {
+	return Pin(QueryContext(), pointer);
+}
+
+MetadataHandle MetadataManager::Pin(QueryContext context, const MetadataPointer &pointer) {
 	D_ASSERT(pointer.index < METADATA_BLOCK_COUNT);
 	auto &block = blocks[UnsafeNumericCast<int64_t>(pointer.block_index)];
 #ifdef DEBUG

@@ -1,0 +1,122 @@
+diff --git a/test/sql/generated/file_skipping_dynamic.test b/test/sql/generated/file_skipping_dynamic.test
+index c8a147a..34b67f0 100644
+--- a/test/sql/generated/file_skipping_dynamic.test
++++ b/test/sql/generated/file_skipping_dynamic.test
+@@ -30,7 +30,7 @@ constant	[]	['value2=102', 'value3=1002']	5	1
+ 
+ # Clear logging storage
+ statement ok
+-pragma truncate_duckdb_logs;
++CALL truncate_duckdb_logs();
+ 
+ # Try other column
+ query IIII
+@@ -48,7 +48,7 @@ constant	[]	['value3=1002']	5	1
+ 
+ # Clear logging storage
+ statement ok
+-pragma truncate_duckdb_logs;
++CALL truncate_duckdb_logs();
+ 
+ ### Now we try dynamic pushdown
+ query IIII
+@@ -66,7 +66,7 @@ dynamic	[]	['value2=102']	5	1
+ 
+ # Clear logging storage
+ statement ok
+-pragma truncate_duckdb_logs;
++CALL truncate_duckdb_logs();
+ 
+ # Dynamic pushdown, other column
+ query IIII
+@@ -84,7 +84,7 @@ dynamic	[]	['value1=13']	5	1
+ 
+ # Clear logging storage
+ statement ok
+-pragma truncate_duckdb_logs;
++CALL truncate_duckdb_logs();
+ 
+ ### Try partition column
+ query IIII
+@@ -102,7 +102,7 @@ dynamic	[]	['part=2']	5	1
+ 
+ # Clear logging storage
+ statement ok
+-pragma truncate_duckdb_logs;
++CALL truncate_duckdb_logs();
+ 
+ # Now let's get funky: a dynamic join filter plus a constant filter
+ query IIII
+@@ -123,7 +123,7 @@ dynamic	['value1=13']	['value1=13', 'value2=103']	1	1
+ 
+ # Clear logging storage
+ statement ok
+-pragma truncate_duckdb_logs;
++CALL truncate_duckdb_logs();
+ 
+ # Slightly weird case here: pushing down an identical dynamic filter and constant filter will make it show up twice with the second doing nothing
+ query IIII
+@@ -144,7 +144,7 @@ dynamic	['value1=13']	['value1=13 AND value1=13 AND value1=13']	1	1
+ 
+ # Clear logging storage
+ statement ok
+-pragma truncate_duckdb_logs;
++CALL truncate_duckdb_logs();
+ 
+ # Now we control the output of the filtered files by changing the delta_scan_explain_files_filtered setting
+ statement ok
+diff --git a/test/sql/generated/file_skipping_params.test b/test/sql/generated/file_skipping_params.test
+index 9300cf5..84ca243 100644
+--- a/test/sql/generated/file_skipping_params.test
++++ b/test/sql/generated/file_skipping_params.test
+@@ -29,7 +29,7 @@ constant
+ dynamic
+ 
+ statement ok
+-pragma truncate_duckdb_logs;
++CALL truncate_duckdb_logs();
+ 
+ # delta_scan: constant only filters
+ query IIII
+@@ -45,7 +45,7 @@ SELECT filter_type FROM delta_filter_pushdown_log() ORDER BY filter_type
+ constant
+ 
+ statement ok
+-pragma truncate_duckdb_logs;
++CALL truncate_duckdb_logs();
+ 
+ # delta_scan: dynamic only filters
+ query IIII
+@@ -61,7 +61,7 @@ SELECT filter_type FROM delta_filter_pushdown_log() ORDER BY filter_type
+ dynamic
+ 
+ statement ok
+-pragma truncate_duckdb_logs;
++CALL truncate_duckdb_logs();
+ 
+ # delta_scan: no filters
+ query IIII
+@@ -76,7 +76,7 @@ SELECT filter_type FROM delta_filter_pushdown_log() ORDER BY filter_type
+ ----
+ 
+ statement ok
+-pragma truncate_duckdb_logs;
++CALL truncate_duckdb_logs();
+ 
+ # attach: default = all filters
+ statement ok
+@@ -96,7 +96,7 @@ constant
+ dynamic
+ 
+ statement ok
+-pragma truncate_duckdb_logs;
++CALL truncate_duckdb_logs();
+ 
+ # attach: pushdown mode can be configured
+ statement ok
+@@ -115,4 +115,4 @@ SELECT filter_type FROM delta_filter_pushdown_log() ORDER BY filter_type
+ dynamic
+ 
+ statement ok
+-pragma truncate_duckdb_logs;
++CALL truncate_duckdb_logs();

@@ -63,7 +63,12 @@ Connection *Command::CommandConnection(ExecuteContext &context) const {
 			if (!init_cmd.empty()) {
 				auto res = context.con->Query(init_cmd);
 				if (res->HasError()) {
-					FAIL("Startup queries provided via on_init failed: " + res->GetError());
+					string error_msg = "Startup queries provided via on_init failed: " + res->GetError();
+					if (context.is_parallel) {
+						throw std::runtime_error(error_msg);
+					} else {
+						FAIL(error_msg);
+					}
 				}
 			}
 
