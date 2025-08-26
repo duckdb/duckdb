@@ -169,7 +169,6 @@ TEST_CASE("Test using appender after table is altered", "[api]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i VARCHAR, j INTEGER)"));
 	// now appending fails
 	appender.BeginRow();
-	appender.Flush();
 	appender.Append<int32_t>(1);
 	appender.EndRow();
 	REQUIRE_THROWS(appender.Flush());
