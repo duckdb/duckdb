@@ -124,18 +124,16 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 			if (i_exp->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT &&
 			    !i_exp->Cast<BoundConstantExpression>().value.IsNull()) {
 				auto &const_exp = i_exp->Cast<BoundConstantExpression>();
-				if (const_exp.return_type.id() == LogicalTypeId::VARCHAR) {
+				if (const_exp.value.TryCastAs(context, LogicalType::UINTEGER)) {
+					// Array extraction: if the cast fails it's definitely out-of-bounds for a JSON array
+					auto index = UIntegerValue::Get(const_exp.value);
+					index -= index > 0; // Subtract 1 for SQL 1-based indexing (except when accessing from back)
+					const_exp.value = StringUtil::Format("$[%lld]", index);
+					const_exp.return_type = LogicalType::VARCHAR;
+				} else if (const_exp.return_type.id() == LogicalType::VARCHAR) {
 					// Field extraction
 					const_exp.value = StringUtil::Format("$.\"%s\"", const_exp.value.ToString());
 					const_exp.return_type = LogicalType::VARCHAR;
-				} else if (const_exp.return_type.IsIntegral()) {
-					// Array extraction: subtract 1 for SQL 1-based indexing
-					if (const_exp.value.TryCastAs(context, LogicalType::BIGINT) &&
-					    BigIntValue::Get(const_exp.value) > 0) { // Access from the back doesn't need subtraction
-						// If the cast fails that's OK, the extract will return NULL because the index is out-of-bounds
-						const_exp.value = StringUtil::Format("$[%lld]", BigIntValue::Get(const_exp.value) - 1);
-						const_exp.return_type = LogicalType::VARCHAR;
-					}
 				}
 			}
 		} else {
