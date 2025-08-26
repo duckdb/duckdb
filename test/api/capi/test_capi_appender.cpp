@@ -1224,6 +1224,8 @@ TEST_CASE("Test upserting using the C API", "[capi]") {
 
 	auto status = duckdb_appender_create_query(tester.connection, query.c_str(), column_count, types,
 	                                           "my_appended_data", column_names, &appender);
+	duckdb_destroy_logical_type(&types[0]);
+	duckdb_destroy_logical_type(&types[1]);
 	REQUIRE(status == DuckDBSuccess);
 	REQUIRE(duckdb_appender_error(appender) == nullptr);
 
