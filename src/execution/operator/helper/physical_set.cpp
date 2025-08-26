@@ -6,17 +6,17 @@
 
 namespace duckdb {
 
-void PhysicalSet::SetGenericVariable(ClientContext &context, const string &name, SetScope scope, Value target_value) {
+void PhysicalSet::SetGenericVariable(ClientContext &context, const String &name, SetScope scope, Value target_value) {
 	if (scope == SetScope::GLOBAL) {
 		auto &config = DBConfig::GetConfig(context);
 		config.SetOption(name, std::move(target_value));
 	} else {
 		auto &client_config = ClientConfig::GetConfig(context);
-		client_config.set_variables[name] = std::move(target_value);
+		client_config.set_variables[name.ToStdString()] = std::move(target_value);
 	}
 }
 
-void PhysicalSet::SetExtensionVariable(ClientContext &context, ExtensionOption &extension_option, const string &name,
+void PhysicalSet::SetExtensionVariable(ClientContext &context, ExtensionOption &extension_option, const String &name,
                                        SetScope scope, const Value &value) {
 	auto &target_type = extension_option.type;
 	Value target_value = value.CastAs(context, target_type);
@@ -36,10 +36,10 @@ SourceResultType PhysicalSet::GetData(ExecutionContext &context, DataChunk &chun
 	auto option = DBConfig::GetOptionByName(name);
 	if (!option) {
 		// check if this is an extra extension variable
-		auto entry = config.extension_parameters.find(name);
+		auto entry = config.extension_parameters.find(name.ToStdString());
 		if (entry == config.extension_parameters.end()) {
 			auto extension_name = Catalog::AutoloadExtensionByConfigName(context.client, name);
-			entry = config.extension_parameters.find(name);
+			entry = config.extension_parameters.find(name.ToStdString());
 			if (entry == config.extension_parameters.end()) {
 				throw InvalidInputException("Extension parameter %s was not found after autoloading", name);
 			}
