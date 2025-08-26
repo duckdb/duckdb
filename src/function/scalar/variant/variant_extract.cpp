@@ -110,27 +110,30 @@ static void VariantExtractFunction(DataChunk &input, ExpressionState &state, Vec
 	Vector::RecursiveToUnifiedFormat(variant, count, source_format);
 
 	//! Path either contains array indices or object keys
-	auto owned_value_indices = allocator.Allocate(sizeof(uint32_t) * count * 2);
-	auto value_indices = reinterpret_cast<uint32_t *>(owned_value_indices.get());
-	auto new_value_indices = &value_indices[count];
-	memset(value_indices, 0, sizeof(uint32_t) * count * 2);
+	SelectionVector value_index_sel;
+	value_index_sel.Initialize(count);
+	for (idx_t i = 0; i < count; i++) {
+		value_index_sel[i] = 0;
+	}
+
+	SelectionVector new_value_index_sel;
+	new_value_index_sel.Initialize(count);
 
 	auto owned_nested_data = allocator.Allocate(sizeof(VariantNestedData) * count);
 	auto nested_data = reinterpret_cast<VariantNestedData *>(owned_nested_data.get());
 
 	string error;
 	auto &component = info.component;
-	auto input_indices = value_indices;
-	auto output_indices = new_value_indices;
 
 	auto expected_type = component.lookup_mode == VariantChildLookupMode::BY_INDEX ? VariantLogicalType::ARRAY
 	                                                                               : VariantLogicalType::OBJECT;
-	if (!VariantUtils::CollectNestedData(source_format, expected_type, input_indices, count, optional_idx(),
+	if (!VariantUtils::CollectNestedData(source_format, expected_type, value_index_sel, count, optional_idx(),
 	                                     nested_data, error)) {
 		throw InvalidInputException(error);
 	}
 
-	if (!VariantUtils::FindChildValues(source_format, component, optional_idx(), output_indices, nested_data, count)) {
+	if (!VariantUtils::FindChildValues(source_format, component, optional_idx(), new_value_index_sel, nested_data,
+	                                   count)) {
 		switch (component.lookup_mode) {
 		case VariantChildLookupMode::BY_INDEX: {
 			throw InvalidInputException("ARRAY does not contain the index: %d", component.index);
@@ -172,7 +175,7 @@ static void VariantExtractFunction(DataChunk &input, ExpressionState &state, Vec
 	SelectionVector new_sel(0, values_list_size);
 	for (idx_t i = 0; i < count; i++) {
 		auto &list_entry = values_data[values.sel->get_index(i)];
-		new_sel.set_index(list_entry.offset, list_entry.offset + output_indices[i]);
+		new_sel.set_index(list_entry.offset, list_entry.offset + new_value_index_sel[i]);
 	}
 
 	auto &result_type_id = VariantVector::GetValuesTypeId(result);
@@ -181,7 +184,7 @@ static void VariantExtractFunction(DataChunk &input, ExpressionState &state, Vec
 	result_byte_offset.Dictionary(VariantVector::GetValuesByteOffset(variant), values_list_size, new_sel,
 	                              values_list_size);
 
-	auto value_is_null = VariantUtils::ValueIsNull(source_format, output_indices, count, optional_idx());
+	auto value_is_null = VariantUtils::ValueIsNull(source_format, new_value_index_sel, count, optional_idx());
 	for (idx_t i = 0; i < value_is_null.size(); i++) {
 		if (value_is_null[i]) {
 			FlatVector::SetNull(result, i, true);

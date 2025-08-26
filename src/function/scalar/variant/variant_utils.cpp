@@ -38,7 +38,8 @@ void VariantUtils::FinalizeVariantKeys(Vector &variant, OrderedOwningStringMap<u
 }
 
 bool VariantUtils::FindChildValues(RecursiveUnifiedVectorFormat &source, const VariantPathComponent &component,
-                                   optional_idx row, uint32_t *res, VariantNestedData *nested_data, idx_t count) {
+                                   optional_idx row, const SelectionVector &res, VariantNestedData *nested_data,
+                                   idx_t count) {
 	//! children
 	auto &children = UnifiedVariantVector::GetChildren(source);
 	auto children_data = children.GetData<list_entry_t>(children);
@@ -64,6 +65,9 @@ bool VariantUtils::FindChildValues(RecursiveUnifiedVectorFormat &source, const V
 		auto &children_list_entry = children_data[children.sel->get_index(row_index)];
 
 		auto &nested_data_entry = nested_data[i];
+		if (nested_data_entry.is_null) {
+			continue;
+		}
 		if (component.lookup_mode == VariantChildLookupMode::BY_INDEX) {
 			auto child_idx = component.index;
 			if (child_idx == 0) {
@@ -102,8 +106,8 @@ bool VariantUtils::FindChildValues(RecursiveUnifiedVectorFormat &source, const V
 	return true;
 }
 
-vector<uint8_t> VariantUtils::ValueIsNull(RecursiveUnifiedVectorFormat &variant, uint32_t *value_indices, idx_t count,
-                                          optional_idx row) {
+vector<uint8_t> VariantUtils::ValueIsNull(RecursiveUnifiedVectorFormat &variant, const SelectionVector &sel,
+                                          idx_t count, optional_idx row) {
 	auto &values_format = UnifiedVariantVector::GetValues(variant);
 	auto values_data = values_format.GetData<list_entry_t>(values_format);
 
@@ -121,7 +125,7 @@ vector<uint8_t> VariantUtils::ValueIsNull(RecursiveUnifiedVectorFormat &variant,
 		auto values_list_entry = values_data[values_index];
 
 		//! Get the index into 'values'
-		uint32_t value_index = value_indices[i];
+		uint32_t value_index = sel[i];
 		auto type_id = static_cast<VariantLogicalType>(
 		    type_id_data[type_id_format.sel->get_index(values_list_entry.offset + value_index)]);
 
@@ -135,7 +139,7 @@ vector<uint8_t> VariantUtils::ValueIsNull(RecursiveUnifiedVectorFormat &variant,
 }
 
 bool VariantUtils::CollectNestedData(RecursiveUnifiedVectorFormat &variant, VariantLogicalType expected_type,
-                                     uint32_t *value_indices, idx_t count, optional_idx row,
+                                     const SelectionVector &sel, idx_t count, optional_idx row,
                                      VariantNestedData *child_data, string &error) {
 	auto &values_format = UnifiedVariantVector::GetValues(variant);
 	auto values_data = values_format.GetData<list_entry_t>(values_format);
@@ -154,10 +158,10 @@ bool VariantUtils::CollectNestedData(RecursiveUnifiedVectorFormat &variant, Vari
 
 		auto index = variant.unified.sel->get_index(row_index);
 		if (!variant.unified.validity.RowIsValid(index)) {
-			error = StringUtil::Format("'%s' was expected, found 'VARIANT_NULL', can't convert VARIANT",
-			                           EnumUtil::ToString(expected_type));
-			return false;
+			child_data[i].is_null = true;
+			continue;
 		}
+		child_data[i].is_null = false;
 
 		//! values
 		auto values_index = values_format.sel->get_index(row_index);
@@ -165,12 +169,17 @@ bool VariantUtils::CollectNestedData(RecursiveUnifiedVectorFormat &variant, Vari
 		auto values_list_entry = values_data[values_index];
 
 		//! Get the index into 'values'
-		uint32_t value_index = value_indices[i];
+		uint32_t value_index = sel[i];
 
 		//! type_id + byte_offset
 		auto type_id = static_cast<VariantLogicalType>(
 		    type_id_data[type_id_format.sel->get_index(values_list_entry.offset + value_index)]);
 		auto byte_offset = byte_offset_data[byte_offset_format.sel->get_index(values_list_entry.offset + value_index)];
+
+		if (type_id == VariantLogicalType::VARIANT_NULL) {
+			child_data[i].is_null = true;
+			continue;
+		}
 
 		if (type_id != expected_type) {
 			error = StringUtil::Format("'%s' was expected, found '%s', can't convert VARIANT",
@@ -193,6 +202,11 @@ bool VariantUtils::CollectNestedData(RecursiveUnifiedVectorFormat &variant, Vari
 }
 
 Value VariantUtils::ConvertVariantToValue(RecursiveUnifiedVectorFormat &source, idx_t row, idx_t values_idx) {
+	auto index = source.unified.sel->get_index(row);
+	if (!source.unified.validity.RowIsValid(index)) {
+		return Value(LogicalTypeId::SQLNULL);
+	}
+
 	//! values
 	auto &values = UnifiedVariantVector::GetValues(source);
 	auto values_data = values.GetData<list_entry_t>(values);

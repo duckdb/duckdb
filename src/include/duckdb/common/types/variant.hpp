@@ -18,6 +18,8 @@ struct VariantNestedData {
 	uint32_t child_count;
 	//! Index of the first child
 	uint32_t children_idx;
+	//! Whether the row is null
+	bool is_null;
 };
 
 enum class VariantLogicalType : uint8_t {
