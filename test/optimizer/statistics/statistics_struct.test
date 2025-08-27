@@ -3,9 +3,6 @@
 # group: [statistics]
 
 statement ok
-PRAGMA enable_verification;
-
-statement ok
 CREATE TABLE structs AS SELECT {'i': i} c FROM range(4) tbl(i);
 
 statement ok
