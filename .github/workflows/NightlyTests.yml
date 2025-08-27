@@ -621,6 +621,12 @@ jobs:
         run: |
           ./build/debug/test/unittest --test-config test/configs/enable_verification_for_debug.json
 
+      - name: test/configs/variant_vector.json
+        if: (success() || failure()) && steps.build.conclusion == 'success'
+        shell: bash
+        run: |
+          ./build/debug/test/unittest --test-config test/configs/variant_vector.json
+
   linux-wasm-experimental:
     name: WebAssembly duckdb-wasm builds
     # disable in NightlyTests

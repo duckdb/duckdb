@@ -485,4 +485,4 @@ jobs:
       if: (success() || failure()) && steps.build.conclusion == 'success'
       shell: bash
       run: |
-        run: build/relassert/test/unittest --test-config test/configs/variant_vector.json
+        ./build/release/test/unittest --test-config test/configs/variant_vector.json
