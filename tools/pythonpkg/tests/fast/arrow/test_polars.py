@@ -107,9 +107,8 @@ class TestPolars(object):
         result = duckdb_conn.execute("SELECT 42 as bla")
 
         lazy_df = result.pl(lazy=True)
-        assert lazy_df.collect().to_dicts() == [
-            {'bla': 42}
-        ]
+        assert lazy_df.collect().to_dicts() == [{'bla': 42}]
+
     def test_polars_lazy(self, duckdb_cursor):
         con = duckdb.connect()
         con.execute("Create table names (a varchar, b integer)")

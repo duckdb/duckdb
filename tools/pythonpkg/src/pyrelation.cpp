@@ -66,7 +66,7 @@ DuckDBPyRelation::~DuckDBPyRelation() {
 	rel.reset();
 }
 
-DuckDBPyRelation::DuckDBPyRelation(unique_ptr<DuckDBPyResult> result_p) : rel(nullptr), result(std::move(result_p)) {
+DuckDBPyRelation::DuckDBPyRelation(shared_ptr<DuckDBPyResult> result_p) : rel(nullptr), result(std::move(result_p)) {
 	if (!result) {
 		throw InternalException("DuckDBPyRelation created without a result");
 	}
