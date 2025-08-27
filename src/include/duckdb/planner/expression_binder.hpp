@@ -85,6 +85,10 @@ public:
 	unique_ptr<Expression> Bind(unique_ptr<ParsedExpression> &expr, optional_ptr<LogicalType> result_type = nullptr,
 	                            bool root_expression = true);
 
+	ClientContext &GetContext() const {
+		return context;
+	}
+
 	//! Returns whether or not any columns have been bound by the expression binder
 	bool HasBoundColumns() {
 		return !bound_columns.empty();
@@ -202,7 +206,7 @@ protected:
 	virtual BindResult BindMacro(FunctionExpression &expr, ScalarMacroCatalogEntry &macro, idx_t depth,
 	                             unique_ptr<ParsedExpression> &expr_ptr);
 	void UnfoldMacroExpression(FunctionExpression &function, ScalarMacroCatalogEntry &macro_func,
-	                           unique_ptr<ParsedExpression> &expr);
+	                           unique_ptr<ParsedExpression> &expr, idx_t depth);
 
 	virtual string UnsupportedAggregateMessage();
 	virtual string UnsupportedUnnestMessage();

@@ -8,6 +8,7 @@
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 
 namespace duckdb {
@@ -17,7 +18,6 @@ MacroFunction::MacroFunction(MacroType type) : type(type) {
 
 string FormatMacroFunction(const MacroFunction &function, const string &name) {
 	auto result = name + "(";
-	;
 	string parameters;
 	for (auto &param : function.parameters) {
 		if (!parameters.empty()) {
@@ -36,19 +36,24 @@ string FormatMacroFunction(const MacroFunction &function, const string &name) {
 	return result;
 }
 
-MacroBindResult
-MacroFunction::BindMacroFunction(const vector<unique_ptr<MacroFunction>> &functions, const string &name,
-                                 FunctionExpression &function_expr,
-                                 vector<unique_ptr<ParsedExpression>> &positional_arguments,
-                                 InsertionOrderPreservingMap<unique_ptr<ParsedExpression>> &named_arguments) {
-	// Separate positional and default arguments
+MacroBindResult MacroFunction::BindMacroFunction(
+    ExpressionBinder &binder, const vector<unique_ptr<MacroFunction>> &functions, const string &name,
+    FunctionExpression &function_expr, vector<unique_ptr<ParsedExpression>> &positional_arguments,
+    InsertionOrderPreservingMap<unique_ptr<ParsedExpression>> &named_arguments, idx_t depth) {
+	// Find argument types and separate positional and default arguments
+	vector<LogicalType> positional_arg_types;
+	InsertionOrderPreservingMap<LogicalType> named_arg_types;
 	for (auto &arg : function_expr.children) {
+		auto arg_copy = arg->Copy();
+		const auto arg_bind_result = binder.BindExpression(arg_copy, depth + 1);
+		auto arg_type = arg_bind_result.HasError() ? LogicalType::UNKNOWN : arg_bind_result.expression->return_type;
 		if (!arg->GetAlias().empty()) {
 			// Default argument
 			if (named_arguments.find(arg->GetAlias()) != named_arguments.end()) {
 				return MacroBindResult(
 				    StringUtil::Format("Macro %s() has named argument repeated '%s'", name, arg->GetAlias()));
 			}
+			named_arg_types.insert(arg->GetAlias(), std::move(arg_type));
 			named_arguments[arg->GetAlias()] = std::move(arg);
 		} else if (!named_arguments.empty()) {
 			return MacroBindResult(
@@ -56,13 +61,19 @@ MacroFunction::BindMacroFunction(const vector<unique_ptr<MacroFunction>> &functi
 		} else {
 			// Positional argument
 			positional_arguments.push_back(std::move(arg));
+			positional_arg_types.push_back(std::move(arg_type));
 		}
 	}
 
 	// Check for each macro function if it matches the number of positional arguments
+	auto lowest_cost = NumericLimits<idx_t>::Maximum();
 	vector<idx_t> result_indices;
 	for (idx_t function_idx = 0; function_idx < functions.size(); function_idx++) {
 		auto &function = functions[function_idx];
+
+		// At some point we want to guarantee that this has the same size as "parameters", but for now we fill to match
+		auto parameter_types = function->types;
+		parameter_types.resize(function->parameters.size(), LogicalType::UNKNOWN);
 
 		// Check if we can exclude the match based on argument count (also avoids out-of-bounds below)
 		if (positional_arguments.size() > function->parameters.size() ||
@@ -71,7 +82,7 @@ MacroFunction::BindMacroFunction(const vector<unique_ptr<MacroFunction>> &functi
 		}
 
 		// Also check if we can exclude the match based on the supplied named arguments
-		bool found_all_named_arguments = true;
+		bool bail = false;
 		for (auto &kv : named_arguments) {
 			bool found = false;
 			for (const auto &parameter : function->parameters) {
@@ -81,45 +92,69 @@ MacroFunction::BindMacroFunction(const vector<unique_ptr<MacroFunction>> &functi
 				}
 			}
 			if (!found) {
-				found_all_named_arguments = false;
+				bail = true;
 				break;
 			}
 		}
-		if (!found_all_named_arguments) {
+		if (bail) {
 			continue; // One of the supplied named arguments is not present in the macro definition
 		}
 
-		// Loop through arguments, positionals first, then named
+		// Loop through arguments, positionals first, then named, summing up cost for best matching macro as we go
 		idx_t param_idx = 0;
+		idx_t macro_cost = 0;
 
-		// Figure out if any positional arguments are duplicated in named arguments
-		bool duplicate = false;
+		// Figure out best function fit, bail if any positional arguments are duplicated in named arguments
 		for (; param_idx < positional_arguments.size(); param_idx++) {
 			const auto &param_name = function->parameters[param_idx]->Cast<ColumnRefExpression>().GetColumnName();
 			if (named_arguments.find(param_name) != named_arguments.end()) {
-				duplicate = true;
+				bail = true;
 				break;
 			}
+			const auto &param_type = parameter_types[param_idx];
+			if (param_type != LogicalType::UNKNOWN) {
+				const auto cast_cost =
+				    CastFunctionSet::ImplicitCastCost(binder.GetContext(), positional_arg_types[param_idx], param_type);
+				if (cast_cost < 0) {
+					bail = true;
+					break;
+				}
+				macro_cost += NumericCast<idx_t>(cast_cost);
+			}
 		}
-		if (duplicate) {
-			continue;
+		if (bail) {
+			continue; // Couldn't find one of the supplied named arguments, or one of the casts is not possible
 		}
 
 		// Match remaining arguments with named/defaults
 		for (; param_idx < function->parameters.size(); param_idx++) {
 			const auto &param_name = function->parameters[param_idx]->Cast<ColumnRefExpression>().GetColumnName();
-			if (named_arguments.find(param_name) != named_arguments.end()) {
-				continue; // The user has supplied a named argument for this parameter
+			const auto arg_it = named_arguments.find(param_name);
+			const auto default_it = function->default_parameters.find(param_name);
+			if (arg_it == named_arguments.end() && default_it == function->default_parameters.end()) {
+				break; // The parameter has no argument (supplied/default)!
 			}
-			if (function->default_parameters.find(param_name) != function->default_parameters.end()) {
-				continue; // This parameter has a default argument
+			if (arg_it == named_arguments.end()) {
+				continue; // Using default, no cost
 			}
-			// The parameter has no argument!
-			break;
+
+			// Supplied arg, add cost
+			const auto &param_type = parameter_types[param_idx];
+			if (param_type != LogicalType::UNKNOWN) {
+				const auto cast_cost =
+				    CastFunctionSet::ImplicitCastCost(binder.GetContext(), named_arg_types[param_name], param_type);
+				if (cast_cost < 0) {
+					break; // No cast possible
+				}
+				macro_cost += NumericCast<idx_t>(cast_cost);
+			}
 		}
 
 		if (param_idx == function->parameters.size()) {
 			// Found a matching function
+			if (macro_cost < lowest_cost) {
+				result_indices.clear();
+			}
 			result_indices.push_back(function_idx);
 		}
 	}
@@ -132,7 +167,7 @@ MacroFunction::BindMacroFunction(const vector<unique_ptr<MacroFunction>> &functi
 		} else {
 			// Multiple matching functions found
 			error = StringUtil::Format("Macro %s() has multiple overloads that match the supplied arguments. ", name);
-			error += "In order to select one, please supply all arguments by name.\n";
+			error += "In order to select one, please supply all arguments by name, and/or add explicit type casts.\n";
 		}
 		error += "Candidate macros:";
 		for (auto &function : functions) {
@@ -144,7 +179,7 @@ MacroFunction::BindMacroFunction(const vector<unique_ptr<MacroFunction>> &functi
 	const auto &macro_idx = result_indices[0];
 	const auto &macro_def = *functions[macro_idx];
 
-	// Skip over positionals (needs loop once we implement typed macro overloads)
+	// Skip over positionals (TODO needs loop once we implement typed macro overloads, add CAST to proper type)
 	idx_t param_idx = positional_arguments.size();
 
 	// Add the default values for parameters that have defaults, for which no argument was supplied
@@ -192,6 +227,7 @@ void MacroFunction::CopyProperties(MacroFunction &other) const {
 	for (auto &kv : default_parameters) {
 		other.default_parameters[kv.first] = kv.second->Copy();
 	}
+	other.types = types;
 }
 
 vector<unique_ptr<ParsedExpression>>
@@ -230,18 +266,25 @@ void MacroFunction::FinalizeDeserialization() {
 			parameters.push_back(make_uniq<ColumnRefExpression>(kv.first));
 		}
 	}
+	// In older versions of DuckDB macros were always untyped
+	if (parameters.size() != types.size()) {
+		types.resize(parameters.size(), LogicalType::UNKNOWN);
+	}
 }
 
 string MacroFunction::ToSQL() const {
 	vector<string> param_strings;
-	for (auto &param : parameters) {
-		const auto &param_name = param->Cast<ColumnRefExpression>().GetColumnName();
-		auto it = default_parameters.find(param_name);
-		if (it == default_parameters.end()) {
-			param_strings.push_back(param_name);
-		} else {
-			param_strings.push_back(StringUtil::Format("%s := %s", it->first, it->second->ToString()));
+	for (idx_t param_idx = 0; param_idx < parameters.size(); param_idx++) {
+		const auto &param_name = parameters[param_idx]->Cast<ColumnRefExpression>().GetColumnName();
+		auto param_string = param_name;
+		if (types[param_idx] != LogicalType::UNKNOWN) {
+			param_string += " " + types[param_idx].ToString();
 		}
+		auto it = default_parameters.find(param_name);
+		if (it != default_parameters.end()) {
+			param_string += " := " + it->second->ToString();
+		}
+		param_strings.push_back(std::move(param_string));
 	}
 	return StringUtil::Format("(%s) AS ", StringUtil::Join(param_strings, ", "));
 }
