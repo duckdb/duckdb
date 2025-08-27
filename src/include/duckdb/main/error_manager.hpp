@@ -34,7 +34,7 @@ enum class ErrorType : uint16_t {
 class ErrorManager {
 public:
 	template <typename... ARGS>
-	string FormatException(ErrorType error_type, ARGS... params) {
+	string FormatException(ErrorType error_type, ARGS const &...params) {
 		vector<ExceptionFormatValue> values;
 		return FormatExceptionRecursive(error_type, values, params...);
 	}
@@ -43,13 +43,13 @@ public:
 
 	template <class T, typename... ARGS>
 	string FormatExceptionRecursive(ErrorType error_type, vector<ExceptionFormatValue> &values, T param,
-	                                ARGS... params) {
+	                                ARGS const &...params) {
 		values.push_back(ExceptionFormatValue::CreateFormatValue<T>(param));
 		return FormatExceptionRecursive(error_type, values, params...);
 	}
 
 	template <typename... ARGS>
-	static string FormatException(ClientContext &context, ErrorType error_type, ARGS... params) {
+	static string FormatException(ClientContext &context, ErrorType error_type, ARGS const &...params) {
 		return Get(context).FormatException(error_type, params...);
 	}
 
