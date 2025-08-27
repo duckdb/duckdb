@@ -529,22 +529,6 @@ Value SchedulerProcessPartialSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
-// Wal Encryption
-//===----------------------------------------------------------------------===//
-void WalEncryptionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.wal_encryption = input.GetValue<bool>();
-}
-
-void WalEncryptionSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.wal_encryption = DBConfig().options.wal_encryption;
-}
-
-Value WalEncryptionSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::BOOLEAN(config.options.wal_encryption);
-}
-
-//===----------------------------------------------------------------------===//
 // Zstd Min String Length
 //===----------------------------------------------------------------------===//
 void ZstdMinStringLengthSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
