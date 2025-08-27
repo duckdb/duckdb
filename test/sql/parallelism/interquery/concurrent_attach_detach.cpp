@@ -9,7 +9,6 @@
 #include <thread>
 
 using namespace duckdb;
-using namespace std;
 
 string test_dir_path;
 const string prefix = "db_";
@@ -38,12 +37,13 @@ void addLog(const string &msg) {
 	}
 }
 
-void execQuery(Connection &conn, const string &query) {
+unique_ptr<MaterializedQueryResult> execQuery(Connection &conn, const string &query) {
 	auto result = conn.Query(query);
 	if (result->HasError()) {
 		Printer::Print(result->GetError());
 		success = false;
 	}
+	return result;
 }
 
 struct TableInfo {
@@ -97,7 +97,7 @@ void createTbl(Connection &conn, idx_t dbId, idx_t workerId) {
 
 	lock_guard<mutex> lock(dbInfos[dbId].mu);
 	auto tblId = dbInfos[dbId].TableCount;
-	dbInfos[dbId].tables.emplace_back(TableInfo{nr_initial_rows});
+	dbInfos[dbId].tables.emplace_back(TableInfo {nr_initial_rows});
 	dbInfos[dbId].TableCount++;
 
 	string query = "CREATE TABLE " + getDBName(dbId) + ".tbl_" + to_string(tblId) +
@@ -109,16 +109,21 @@ void createTbl(Connection &conn, idx_t dbId, idx_t workerId) {
 void lookup(Connection &conn, idx_t dbId, idx_t workerId) {
 	unique_lock<mutex> lock(dbInfos[dbId].mu);
 	auto maxTblId = dbInfos[dbId].TableCount;
-	lock.unlock();
-
 	if (maxTblId == 0) {
 		return;
 	}
-
 	auto tblId = std::rand() % maxTblId;
-	string query = "SELECT i, s FROM " + getDBName(dbId) + ".tbl_" + to_string(tblId) + " WHERE i = 2049";
+	auto expectedMaxVal = dbInfos[dbId].tables[tblId].size - 1;
+
+	// run query
+	auto tableName = getDBName(dbId) + ".tbl_" + to_string(tblId);
+	string query = "SELECT i, s FROM " + tableName + " WHERE i = (select max(i) from " + tableName + ")";
 	addLog("thread: " + to_string(workerId) + "; q: " + query);
-	execQuery(conn, query);
+	auto result = execQuery(conn, query);
+	lock.unlock();
+
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(expectedMaxVal)}));
+	REQUIRE(CHECK_COLUMN(result, 1, {to_string(expectedMaxVal)}));
 }
 
 void append(Connection &conn, idx_t dbId, idx_t workerId, idx_t append_num_rows = STANDARD_VECTOR_SIZE) {
@@ -188,7 +193,7 @@ void workUnit(std::unique_ptr<Connection> conn, const idx_t &workerId) {
 				append(*conn, dbId, workerId);
 				break;
 			default:
-				throw runtime_error("invalid scenario");
+				throw std::runtime_error("invalid scenario");
 			}
 
 			dbPool.removeWorker(*conn, dbId);
@@ -209,7 +214,7 @@ TEST_CASE("Run a concurrent ATTACH/DETACH scenario", "[attach][.]") {
 	// execQuery(initConn, "SET default_block_size = '16384'");
 	// execQuery(initConn, "SET storage_compatibility_version = 'v1.3.2'");
 
-	std::vector<thread> workers;
+	std::vector<std::thread> workers;
 	for (int i = 0; i < workerCount; i++) {
 		auto conn = make_uniq<Connection>(db);
 		workers.emplace_back(workUnit, std::move(conn), i);
