@@ -55,8 +55,7 @@ public:
 	vector<unique_ptr<ParsedExpression>> GetPositionalParametersForSerialization(Serializer &serializer) const;
 	void FinalizeDeserialization();
 
-	static MacroBindResult BindMacroFunction(ExpressionBinder &binder,
-	                                         const vector<unique_ptr<MacroFunction>> &macro_functions,
+	static MacroBindResult BindMacroFunction(Binder &binder, const vector<unique_ptr<MacroFunction>> &macro_functions,
 	                                         const string &name, FunctionExpression &function_expr,
 	                                         vector<unique_ptr<ParsedExpression>> &positional_arguments,
 	                                         InsertionOrderPreservingMap<unique_ptr<ParsedExpression>> &named_arguments,

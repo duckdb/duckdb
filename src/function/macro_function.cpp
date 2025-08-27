@@ -8,6 +8,7 @@
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 
@@ -37,15 +38,18 @@ string FormatMacroFunction(const MacroFunction &function, const string &name) {
 }
 
 MacroBindResult MacroFunction::BindMacroFunction(
-    ExpressionBinder &binder, const vector<unique_ptr<MacroFunction>> &functions, const string &name,
+    Binder &binder, const vector<unique_ptr<MacroFunction>> &functions, const string &name,
     FunctionExpression &function_expr, vector<unique_ptr<ParsedExpression>> &positional_arguments,
     InsertionOrderPreservingMap<unique_ptr<ParsedExpression>> &named_arguments, idx_t depth) {
+
+	ExpressionBinder expr_binder(binder, binder.context);
+
 	// Find argument types and separate positional and default arguments
 	vector<LogicalType> positional_arg_types;
 	InsertionOrderPreservingMap<LogicalType> named_arg_types;
 	for (auto &arg : function_expr.children) {
 		auto arg_copy = arg->Copy();
-		const auto arg_bind_result = binder.BindExpression(arg_copy, depth + 1);
+		const auto arg_bind_result = expr_binder.BindExpression(arg_copy, depth + 1);
 		auto arg_type = arg_bind_result.HasError() ? LogicalType::UNKNOWN : arg_bind_result.expression->return_type;
 		if (!arg->GetAlias().empty()) {
 			// Default argument
@@ -114,7 +118,7 @@ MacroBindResult MacroFunction::BindMacroFunction(
 			const auto &param_type = parameter_types[param_idx];
 			if (param_type != LogicalType::UNKNOWN) {
 				const auto cast_cost =
-				    CastFunctionSet::ImplicitCastCost(binder.GetContext(), positional_arg_types[param_idx], param_type);
+				    CastFunctionSet::ImplicitCastCost(binder.context, positional_arg_types[param_idx], param_type);
 				if (cast_cost < 0) {
 					bail = true;
 					break;
@@ -142,7 +146,7 @@ MacroBindResult MacroFunction::BindMacroFunction(
 			const auto &param_type = parameter_types[param_idx];
 			if (param_type != LogicalType::UNKNOWN) {
 				const auto cast_cost =
-				    CastFunctionSet::ImplicitCastCost(binder.GetContext(), named_arg_types[param_name], param_type);
+				    CastFunctionSet::ImplicitCastCost(binder.context, named_arg_types[param_name], param_type);
 				if (cast_cost < 0) {
 					break; // No cast possible
 				}
@@ -150,9 +154,10 @@ MacroBindResult MacroFunction::BindMacroFunction(
 			}
 		}
 
-		if (param_idx == function->parameters.size()) {
+		if (param_idx == function->parameters.size() && macro_cost <= lowest_cost) {
 			// Found a matching function
 			if (macro_cost < lowest_cost) {
+				lowest_cost = macro_cost;
 				result_indices.clear();
 			}
 			result_indices.push_back(function_idx);
@@ -179,19 +184,40 @@ MacroBindResult MacroFunction::BindMacroFunction(
 	const auto &macro_idx = result_indices[0];
 	const auto &macro_def = *functions[macro_idx];
 
-	// Skip over positionals (TODO needs loop once we implement typed macro overloads, add CAST to proper type)
-	idx_t param_idx = positional_arguments.size();
+	// Cast positionals to proper types
+	auto parameter_types = macro_def.types;
+	parameter_types.resize(macro_def.parameters.size(), LogicalType::UNKNOWN);
+	idx_t param_idx = 0;
+	for (; param_idx < positional_arguments.size(); param_idx++) {
+		if (parameter_types[param_idx] != LogicalType::UNKNOWN) {
+			// This macro parameter is typed, add a cast
+			auto &positional_arg = positional_arguments[param_idx];
+			positional_arg = make_uniq<CastExpression>(parameter_types[param_idx], std::move(positional_arg));
+		}
+	}
 
 	// Add the default values for parameters that have defaults, for which no argument was supplied
 	for (; param_idx < macro_def.parameters.size(); param_idx++) {
 		const auto &param_name = macro_def.parameters[param_idx]->Cast<ColumnRefExpression>().GetColumnName();
-		if (named_arguments.find(param_name) != named_arguments.end()) {
-			continue; // The user has supplied an argument for this parameter
+		auto named_arg_it = named_arguments.find(param_name);
+		if (named_arg_it != named_arguments.end()) {
+			// The user has supplied an argument for this parameter
+			if (parameter_types[param_idx] != LogicalType::UNKNOWN) {
+				// This macro parameter is typed, add a cast
+				auto &named_arg = named_arg_it->second;
+				named_arg = make_uniq<CastExpression>(parameter_types[param_idx], std::move(named_arg));
+			}
+			continue;
 		}
 
-		const auto it = macro_def.default_parameters.find(param_name);
-		D_ASSERT(it != macro_def.default_parameters.end());
-		named_arguments[param_name] = it->second->Copy();
+		const auto default_it = macro_def.default_parameters.find(param_name);
+		D_ASSERT(default_it != macro_def.default_parameters.end());
+		auto &named_arg = named_arguments[param_name];
+		named_arg = default_it->second->Copy();
+		if (parameter_types[param_idx] != LogicalType::UNKNOWN) {
+			// This macro parameter is typed, add a cast
+			named_arg = make_uniq<CastExpression>(parameter_types[param_idx], std::move(named_arg));
+		}
 	}
 
 	return MacroBindResult(macro_idx);
@@ -202,14 +228,13 @@ MacroFunction::CreateDummyBinding(const MacroFunction &macro_def, const string &
                                   vector<unique_ptr<ParsedExpression>> &positional_arguments,
                                   InsertionOrderPreservingMap<unique_ptr<ParsedExpression>> &named_arguments) {
 	// create a MacroBinding to bind this macro's parameters to its arguments
-	vector<LogicalType> types;
+	vector<LogicalType> types = macro_def.types;
+	types.resize(macro_def.parameters.size(), LogicalType::UNKNOWN);
 	vector<string> names;
 	for (idx_t i = 0; i < positional_arguments.size(); i++) {
-		types.emplace_back(LogicalTypeId::UNKNOWN);
 		names.push_back(macro_def.parameters[i]->Cast<ColumnRefExpression>().GetColumnName());
 	}
 	for (auto &kv : named_arguments) {
-		types.emplace_back(LogicalTypeId::UNKNOWN);
 		names.push_back(kv.first);
 		positional_arguments.push_back(std::move(kv.second)); // push defaults into positionals
 	}

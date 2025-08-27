@@ -204,9 +204,9 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 		positional_parameters.insert(parameter_count);
 
 		// positional parameters
-		for (auto &param_expr : function->parameters) {
-			auto param = param_expr->Cast<ColumnRefExpression>();
-			dummy_types.emplace_back(LogicalType::UNKNOWN);
+		for (idx_t param_idx = 0; param_idx < function->parameters.size(); param_idx++) {
+			auto param = function->parameters[param_idx]->Cast<ColumnRefExpression>();
+			dummy_types.emplace_back(function->types.empty() ? LogicalType::UNKNOWN : function->types[param_idx]);
 			dummy_names.push_back(param.GetColumnName());
 		}
 		auto this_macro_binding = make_uniq<DummyBinding>(dummy_types, dummy_names, base.name);
