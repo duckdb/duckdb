@@ -101,7 +101,12 @@ void createTbl(Connection &conn, idx_t dbId, idx_t workerId) {
 	dbInfos[dbId].TableCount++;
 
 	string query = "CREATE TABLE " + getDBName(dbId) + ".tbl_" + to_string(tblId) +
-	               " AS SELECT range AS i, range::VARCHAR AS s FROM range(" + to_string(nr_initial_rows) + ")";
+	               " AS SELECT "
+	               "range::BIGINT AS i, "
+	               "range::VARCHAR AS s, "
+	               "epoch_ms(range) AS ts "
+	               "FROM range(" +
+	               to_string(nr_initial_rows) + ")";
 	addLog("thread: " + to_string(workerId) + "; q: " + query);
 	execQuery(conn, query);
 }
@@ -117,13 +122,14 @@ void lookup(Connection &conn, idx_t dbId, idx_t workerId) {
 
 	// run query
 	auto tableName = getDBName(dbId) + ".tbl_" + to_string(tblId);
-	string query = "SELECT i, s FROM " + tableName + " WHERE i = (select max(i) from " + tableName + ")";
+	string query = "SELECT i, s, ts FROM " + tableName + " WHERE i = (select max(i) from " + tableName + ")";
 	addLog("thread: " + to_string(workerId) + "; q: " + query);
 	auto result = execQuery(conn, query);
 	lock.unlock();
 
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(expectedMaxVal)}));
 	REQUIRE(CHECK_COLUMN(result, 1, {to_string(expectedMaxVal)}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value::TIMESTAMP(timestamp_t {static_cast<int64_t>(expectedMaxVal * 1000)})}));
 }
 
 void append(Connection &conn, idx_t dbId, idx_t workerId, idx_t append_num_rows = STANDARD_VECTOR_SIZE) {
@@ -144,17 +150,24 @@ void append(Connection &conn, idx_t dbId, idx_t workerId, idx_t append_num_rows 
 
 		// fill up datachunk
 		DataChunk chunk;
-		const duckdb::vector<LogicalType> types = {LogicalType::INTEGER, LogicalType::VARCHAR};
+		const duckdb::vector<LogicalType> types = {
+			LogicalType::BIGINT,
+			LogicalType::VARCHAR,
+			LogicalType::TIMESTAMP
+		};
 		chunk.Initialize(*conn.context, types);
 
 		auto &col_int = chunk.data[0];
-		auto data_int = FlatVector::GetData<int32_t>(col_int);
+		auto data_int = FlatVector::GetData<int64_t>(col_int);
 		auto &col_varchar = chunk.data[1];
 		auto data_varchar = FlatVector::GetData<string_t>(col_varchar);
+		auto &col_ts = chunk.data[2];
+		auto data_ts = FlatVector::GetData<timestamp_t>(col_ts);
 
 		for (idx_t row_idx = 0; row_idx < append_num_rows; row_idx++) {
 			data_int[row_idx] = current_num_rows + row_idx;
 			data_varchar[row_idx] = StringVector::AddString(col_varchar, to_string(current_num_rows + row_idx));
+			data_ts[row_idx] = timestamp_t {static_cast<int64_t>(1000 * (current_num_rows + row_idx))};
 		}
 
 		chunk.SetCardinality(append_num_rows);
