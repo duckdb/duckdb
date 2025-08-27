@@ -576,8 +576,17 @@ static bool CastFromVARIANT(Vector &source, Vector &result, idx_t count, CastPar
 	FromVariantConversionData conversion_data;
 	Vector::RecursiveToUnifiedFormat(source, count, conversion_data.unified_format);
 
-	auto success =
-	    CastVariant(conversion_data, result, *ConstantVector::ZeroSelectionVector(), 0, count, optional_idx());
+	reference<const SelectionVector> sel(*ConstantVector::ZeroSelectionVector());
+	SelectionVector zero_sel;
+	if (count >= STANDARD_VECTOR_SIZE) {
+		zero_sel.Initialize(count);
+		for (idx_t i = 0; i < count; i++) {
+			zero_sel[i] = 0;
+		}
+		sel = zero_sel;
+	}
+
+	auto success = CastVariant(conversion_data, result, sel, 0, count, optional_idx());
 	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
