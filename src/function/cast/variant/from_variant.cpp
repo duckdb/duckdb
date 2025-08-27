@@ -239,11 +239,14 @@ static bool ConvertVariantToList(FromVariantConversionData &conversion_data, Vec
 
 	SelectionVector new_sel;
 	new_sel.Initialize(max_children);
+	idx_t total_offset = 0;
+	if (offset) {
+		total_offset += ListVector::GetListSize(result);
+	}
 
-	ListVector::Reserve(result, total_children);
+	ListVector::Reserve(result, total_offset + total_children);
 	auto &child = ListVector::GetEntry(result);
 	auto list_data = ListVector::GetData(result);
-	idx_t total_offset = 0;
 	for (idx_t i = 0; i < count; i++) {
 		auto row_index = row.IsValid() ? row.GetIndex() : i;
 		auto &child_data_entry = child_data[i];
@@ -263,7 +266,7 @@ static bool ConvertVariantToList(FromVariantConversionData &conversion_data, Vec
 			return false;
 		}
 	}
-	ListVector::SetListSize(result, total_children);
+	ListVector::SetListSize(result, total_offset);
 	return true;
 }
 
