@@ -486,6 +486,15 @@ statement ok
 INSERT INTO flags VALUES('2023-02-10 20:18:13.432147','2023-02-13 15:22:40.650655','legacy','2/11');
 
 # INNER join
+query II
+EXPLAIN
+SELECT ota.*, flags.desc as flag
+FROM ota
+INNER JOIN flags ON ota.ts BETWEEN flags.start AND flags.end
+ORDER BY ts;
+----
+physical_plan	<REGEX>:.*IE_JOIN.*
+
 statement ok
 CREATE TABLE inner_join AS SELECT ota.*, flags.desc as flag
 FROM ota
@@ -498,6 +507,15 @@ SELECT COUNT(*), COUNT(ts), COUNT(flag) FROM inner_join
 87775	87775	87775
 
 # LEFT join
+query II
+EXPLAIN
+SELECT ota.*, flags.desc as flag
+FROM ota
+LEFT JOIN flags ON ota.ts BETWEEN flags.start AND flags.end
+ORDER BY ts;
+----
+physical_plan	<REGEX>:.*IE_JOIN.*
+
 statement ok
 CREATE TABLE left_join AS SELECT ota.*, flags.desc as flag
 FROM ota
@@ -510,6 +528,15 @@ SELECT COUNT(*), COUNT(ts), COUNT(flag) FROM left_join
 167137	167137	87775
 
 # RIGHT join
+query II
+EXPLAIN
+SELECT ota.*, flags.desc as flag
+FROM ota
+RIGHT JOIN flags ON ota.ts BETWEEN flags.start AND flags.end
+ORDER BY ts;
+----
+physical_plan	<REGEX>:.*IE_JOIN.*
+
 statement ok
 CREATE TABLE right_join AS SELECT ota.*, flags.desc as flag
 FROM ota
@@ -522,6 +549,15 @@ SELECT COUNT(*), COUNT(ts), COUNT(flag) FROM right_join
 87842	87775	87842
 
 # FULL OUTER join
+query II
+EXPLAIN
+SELECT ota.*, flags.desc as flag
+FROM ota
+FULL OUTER JOIN flags ON ota.ts BETWEEN flags.start AND flags.end
+ORDER BY ts;
+----
+physical_plan	<REGEX>:.*IE_JOIN.*
+
 statement ok
 CREATE TABLE full_outer_join AS SELECT ota.*, flags.desc as flag
 FROM ota

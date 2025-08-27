@@ -3,9 +3,6 @@
 # group: [attach]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 ATTACH '__TEST_DIR__/attach_database_size.db' AS db1
 
 query I

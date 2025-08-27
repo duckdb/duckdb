@@ -19,6 +19,8 @@
 
 namespace duckdb {
 
+enum class SortStyle : uint8_t { NO_SORT, ROW_SORT, VALUE_SORT };
+
 class TestConfiguration {
 public:
 	enum class ExtensionAutoLoadingMode { NONE = 0, AVAILABLE = 1, ALL = 2 };
@@ -50,6 +52,8 @@ public:
 	string OnInitCommand();
 	string OnLoadCommand();
 	string OnConnectionCommand();
+	string OnCleanupCommand();
+	SortStyle GetDefaultSortStyle();
 	vector<string> ExtensionToBeLoadedOnLoad();
 	vector<string> ErrorMessagesToBeSkipped();
 	string GetStorageVersion();
@@ -59,6 +63,8 @@ public:
 	static bool TestMemoryLeaks();
 
 	static void ParseConnectScript(const Value &input);
+	static void CheckSortStyle(const Value &input);
+	static bool TryParseSortStyle(const string &sort_style, SortStyle &result);
 
 private:
 	case_insensitive_map_t<Value> options;
@@ -78,14 +84,17 @@ public:
 	static void Log(string message);
 	static string GetFailureSummary();
 	static idx_t GetSummaryCounter();
+	static bool SkipLoggingSameError(const string &file_name);
 
 private:
 	static FailureSummary &Instance();
+	bool SkipLoggingSameErrorInternal(const string &file_name);
 
 private:
 	mutex failures_lock;
 	atomic<idx_t> failures_summary_counter;
 	vector<string> failures_summary;
+	set<string> reported_files;
 };
 
 } // namespace duckdb

@@ -69,8 +69,10 @@ public:
 
 	//! Reallocate an in-memory buffer that is pinned.
 	void ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size) final;
-
 	BufferHandle Pin(shared_ptr<BlockHandle> &handle) final;
+
+	BufferHandle Pin(QueryContext context, shared_ptr<BlockHandle> &handle);
+
 	void Prefetch(vector<shared_ptr<BlockHandle>> &handles) final;
 	void Unpin(shared_ptr<BlockHandle> &handle) final;
 
@@ -135,7 +137,7 @@ protected:
 	//! Write a temporary buffer to disk
 	void WriteTemporaryBuffer(MemoryTag tag, block_id_t block_id, FileBuffer &buffer) final;
 	//! Read a temporary buffer from disk
-	unique_ptr<FileBuffer> ReadTemporaryBuffer(MemoryTag tag, BlockHandle &block,
+	unique_ptr<FileBuffer> ReadTemporaryBuffer(QueryContext context, MemoryTag tag, BlockHandle &block,
 	                                           unique_ptr<FileBuffer> buffer = nullptr) final;
 	//! Get the path of the temporary buffer
 	string GetTemporaryPath(block_id_t id);

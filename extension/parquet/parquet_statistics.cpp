@@ -8,15 +8,12 @@
 #include "reader/string_column_reader.hpp"
 #include "reader/struct_column_reader.hpp"
 #include "zstd/common/xxhash.hpp"
-
-#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "reader/uuid_column_reader.hpp"
-#endif
 
 namespace duckdb {
 

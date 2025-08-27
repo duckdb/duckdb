@@ -3,24 +3,6 @@
 
 namespace duckdb {
 
-double BaseReservoirSampling::GetMinWeightFromTuplesSeen(idx_t rows_seen_total) {
-	// this function was obtained using https://mycurvefit.com. Inputting multiple x, y values into
-	// The
-	switch (rows_seen_total) {
-	case 0:
-		return 0;
-	case 1:
-		return 0.000161;
-	case 2:
-		return 0.530136;
-	case 3:
-		return 0.693454;
-	default: {
-		return (0.99 - 0.355 * std::exp(-0.07 * static_cast<double>(rows_seen_total)));
-	}
-	}
-}
-
 BaseReservoirSampling::BaseReservoirSampling(int64_t seed) : random(seed) {
 	next_index_to_sample = 0;
 	min_weight_threshold = 0;
@@ -73,7 +55,7 @@ void BaseReservoirSampling::SetNextEntry() {
 	//! since all our weights are 1 (uniform sampling), we can just determine the amount of elements to skip
 	min_weight_threshold = t_w;
 	min_weighted_entry_index = min_key.second;
-	next_index_to_sample = MaxValue<idx_t>(1, idx_t(round(x_w)));
+	next_index_to_sample = idx_t(ceil(x_w));
 	num_entries_to_skip_b4_next_sample = 0;
 }
 
@@ -118,15 +100,33 @@ void BaseReservoirSampling::UpdateMinWeightThreshold() {
 	min_weight_threshold = 1;
 }
 
+// Generate top k order statistics from n Uniform(0, 1) samples in O(k) time
+// This method leverages two key properties of order statistics from a Uniform(0, 1) distribution:
+// 1. The maximum of n independent Uniform(0, 1) samples, denoted as U(n), follows a Beta(n, 1) distribution.
+// 2. U(n-i) / U(n-i+1) ~ Beta(n-i, 1)
+// So we can use a recursive approach to generate the top k order statistics
+// (See: https://www.math.ntu.edu.tw/~hchen/teaching/LargeSample/notes/noteorder.pdf)
+static vector<double> GenerateTopKFromUniform(ReservoirRNG &random, idx_t n, idx_t k) {
+	vector<double> top_k_values(k);
+	double current_bound = 1.0;
+	for (idx_t i = 0; i < k; i++) {
+		// generate a sample from Beta(n - i, 1)
+		double beta = std::pow(random.NextRandom(), 1.0 / double(n - i));
+		current_bound *= beta;
+		top_k_values[i] = current_bound;
+	}
+	return top_k_values;
+}
+
 void BaseReservoirSampling::FillWeights(SelectionVector &sel, idx_t &sel_size) {
 	if (!reservoir_weights.empty()) {
 		return;
 	}
 	D_ASSERT(reservoir_weights.empty());
-	auto num_entries_seen_normalized = num_entries_seen_total / FIXED_SAMPLE_SIZE;
-	auto min_weight = GetMinWeightFromTuplesSeen(num_entries_seen_normalized);
+	auto weights = GenerateTopKFromUniform(random, num_entries_seen_total, sel_size);
+	std::shuffle(weights.begin(), weights.end(), random);
 	for (idx_t i = 0; i < sel_size; i++) {
-		auto weight = random.NextRandom(min_weight, 1);
+		auto weight = weights[i];
 		reservoir_weights.emplace(-weight, i);
 	}
 	D_ASSERT(reservoir_weights.size() <= sel_size);

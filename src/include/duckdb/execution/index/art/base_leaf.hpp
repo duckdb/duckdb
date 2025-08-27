@@ -41,7 +41,7 @@ public:
 	}
 
 	//! Returns true, if the byte exists, else false.
-	bool HasByte(uint8_t &byte) const {
+	bool HasByte(const uint8_t byte) const {
 		for (uint8_t i = 0; i < count; i++) {
 			if (key[i] == byte) {
 				return true;
@@ -109,6 +109,7 @@ public:
 
 private:
 	static void GrowNode7Leaf(ART &art, Node &node15_leaf, Node &node7_leaf);
+	//! We shrink at <= Node48::SHRINK_THRESHOLD.
 	static void ShrinkNode256Leaf(ART &art, Node &node15_leaf, Node &node256_leaf);
 };
 

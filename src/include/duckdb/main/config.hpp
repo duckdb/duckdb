@@ -175,8 +175,6 @@ struct DBConfigOptions {
 	bool allow_unsigned_extensions = false;
 	//! Whether community extensions should be loaded
 	bool allow_community_extensions = true;
-	//! Start transactions immediately in all attached databases - instead of lazily when a database is referenced
-	bool immediate_transaction_mode = false;
 	//! Debug setting - how to initialize  blocks in the storage layer when allocating
 	DebugInitialize debug_initialize = DebugInitialize::NO_INITIALIZE;
 	//! The set of user-provided options
@@ -297,18 +295,18 @@ public:
 	//! Fetcha n alias by index, or nullptr if out of range
 	DUCKDB_API static optional_ptr<const ConfigurationAlias> GetAliasByIndex(idx_t index);
 	//! Fetch an option by name. Returns a pointer to the option, or nullptr if none exists.
-	DUCKDB_API static optional_ptr<const ConfigurationOption> GetOptionByName(const string &name);
+	DUCKDB_API static optional_ptr<const ConfigurationOption> GetOptionByName(const String &name);
 	DUCKDB_API void SetOption(const ConfigurationOption &option, const Value &value);
 	DUCKDB_API void SetOption(optional_ptr<DatabaseInstance> db, const ConfigurationOption &option, const Value &value);
 	DUCKDB_API void SetOptionByName(const string &name, const Value &value);
 	DUCKDB_API void SetOptionsByName(const case_insensitive_map_t<Value> &values);
 	DUCKDB_API void ResetOption(optional_ptr<DatabaseInstance> db, const ConfigurationOption &option);
 	DUCKDB_API void SetOption(const string &name, Value value);
-	DUCKDB_API void ResetOption(const string &name);
-	DUCKDB_API void ResetGenericOption(const string &name);
+	DUCKDB_API void ResetOption(const String &name);
+	DUCKDB_API void ResetGenericOption(const String &name);
 	static LogicalType ParseLogicalType(const string &type);
 
-	DUCKDB_API void CheckLock(const string &name);
+	DUCKDB_API void CheckLock(const String &name);
 
 	DUCKDB_API static idx_t ParseMemoryLimit(const string &arg);
 

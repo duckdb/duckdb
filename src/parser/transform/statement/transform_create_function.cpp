@@ -20,29 +20,45 @@ unique_ptr<MacroFunction> Transformer::TransformMacroFunction(duckdb_libpgquery:
 	if (!def.params) {
 		return macro_func;
 	}
+
 	vector<unique_ptr<ParsedExpression>> parameters;
 	TransformExpressionList(*def.params, parameters);
+
+	case_insensitive_set_t parameter_names;
 	for (auto &param : parameters) {
+		string param_name;
+		if (param->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
+			const auto &colref = param->Cast<ColumnRefExpression>();
+			if (colref.IsQualified()) {
+				throw ParserException("Invalid parameter name '%s': must be unqualified", param->ToString());
+			}
+			param_name = colref.GetColumnName();
+		} else {
+			param_name = param->GetAlias();
+		}
+		if (!parameter_names.insert(param_name).second) {
+			throw ParserException("Duplicate parameter '%s' in macro definition", param_name);
+		}
+
+		unique_ptr<ParsedExpression> default_value;
 		Value const_param;
 		if (ConstructConstantFromExpression(*param, const_param)) {
-			// parameters with default value (must have an alias)
-			if (param->GetAlias().empty()) {
-				throw ParserException("Invalid parameter: '%s'", param->ToString());
-			}
-			if (macro_func->default_parameters.find(param->GetAlias()) != macro_func->default_parameters.end()) {
-				throw ParserException("Duplicate default parameter: '%s'", param->GetAlias());
-			}
-			auto constructed_constant = make_uniq<ConstantExpression>(std::move(const_param));
-			constructed_constant->SetAlias(param->GetAlias());
-			macro_func->default_parameters[param->GetAlias()] = std::move(constructed_constant);
+			// parameters with default value
+			param = make_uniq<ColumnRefExpression>(param_name);
+			default_value = make_uniq<ConstantExpression>(std::move(const_param));
+			default_value->SetAlias(param_name);
 		} else if (param->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 			// positional parameters
 			if (!macro_func->default_parameters.empty()) {
-				throw ParserException("Positional parameters cannot come after parameters with a default value!");
+				throw ParserException("Parameter without a default follows parameter with a default");
 			}
-			macro_func->parameters.push_back(std::move(param));
 		} else {
 			throw ParserException("Invalid parameter: '%s'", param->ToString());
+		}
+
+		macro_func->parameters.push_back(std::move(param));
+		if (default_value) {
+			macro_func->default_parameters[param_name] = std::move(default_value);
 		}
 	}
 	return macro_func;

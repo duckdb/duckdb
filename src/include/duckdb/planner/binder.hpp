@@ -66,6 +66,7 @@ struct BoundLimitNode;
 struct EntryLookupInfo;
 struct PivotColumnEntry;
 struct UnpivotEntry;
+struct CopyInfo;
 
 template <class T, class INDEX_TYPE>
 class IndexVector;
@@ -276,12 +277,18 @@ private:
 	idx_t unnamed_subquery_index = 1;
 	//! Statement properties
 	StatementProperties prop;
+	//! Root binder
+	Binder &root_binder;
+	//! Binder depth
+	idx_t depth;
 
 private:
 	//! Get the root binder (binder with no parent)
 	Binder &GetRootBinder();
 	//! Determine the depth of the binder
 	idx_t GetBinderDepth() const;
+	//! Increase the depth of the binder
+	void IncreaseDepth();
 	//! Bind the expressions of generated columns to check for errors
 	void BindGeneratedColumns(BoundCreateTableInfo &info);
 	//! Bind the default values of the columns of a table
@@ -402,6 +409,7 @@ private:
 
 	BoundStatement BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type);
 	BoundStatement BindCopyFrom(CopyStatement &stmt);
+	void BindCopyOptions(CopyInfo &info);
 
 	void PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, BoundQueryNode &result);
 	void BindModifiers(BoundQueryNode &result, idx_t table_index, const vector<string> &names,
@@ -477,6 +485,9 @@ private:
 	                                                 const vector<string> &source_names);
 
 	unique_ptr<MergeIntoStatement> GenerateMergeInto(InsertStatement &stmt, TableCatalogEntry &table);
+
+	static void CheckInsertColumnCountMismatch(idx_t expected_columns, idx_t result_columns, bool columns_provided,
+	                                           const string &tname);
 
 private:
 	Binder(ClientContext &context, shared_ptr<Binder> parent, BinderType binder_type);

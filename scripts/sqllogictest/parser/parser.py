@@ -416,7 +416,7 @@ class SQLLogicParser:
         sleep_unit = get_sleep_unit(header.parameters[1])
         if sleep_unit == SleepUnit.UNKNOWN:
             options = ['second', 'millisecond', 'microsecond', 'nanosecond']
-            raise self.fail(f"Unrecognized sleep mode - expected {create_formatted_list(options)}")
+            self.fail(f"Unrecognized sleep mode - expected {create_formatted_list(options)}")
         return Sleep(header, self.current_line + 1, sleep_duration, sleep_unit)
 
     def statement_unzip(self, header: Token) -> Optional[BaseStatement]:

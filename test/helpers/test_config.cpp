@@ -34,6 +34,7 @@ static const TestConfigOption test_config_options[] = {
     {"debug_initialize", "Initialize buffers with all 0 or all 1", LogicalType::VARCHAR, nullptr},
     {"autoloading", "Loading strategy for extensions not bundled in", LogicalType::VARCHAR, nullptr},
     {"init_script", "Script to execute on init", LogicalType::VARCHAR, TestConfiguration::ParseConnectScript},
+    {"on_cleanup", "SQL statements to execute on test end", LogicalType::VARCHAR, nullptr},
     {"on_init", "SQL statements to execute on init", LogicalType::VARCHAR, nullptr},
     {"on_load", "SQL statements to execute on explicit load", LogicalType::VARCHAR, nullptr},
     {"on_new_connection", "SQL statements to execute on connection", LogicalType::VARCHAR, nullptr},
@@ -43,6 +44,8 @@ static const TestConfigOption test_config_options[] = {
      nullptr},
     {"skip_compiled", "Skip compiled tests", LogicalType::BOOLEAN, nullptr},
     {"skip_error_messages", "Skip compiled tests", LogicalType::LIST(LogicalType::VARCHAR), nullptr},
+    {"sort_style", "Default sort style if none is configured in the test (none, rowsort, valuesort)",
+     LogicalType::VARCHAR, TestConfiguration::CheckSortStyle},
     {"statically_loaded_extensions", "Extensions to be loaded (from the statically available one)",
      LogicalType::LIST(LogicalType::VARCHAR), nullptr},
     {"storage_version", "Database storage version to use by default", LogicalType::VARCHAR, nullptr},
@@ -205,6 +208,18 @@ string TestConfiguration::OnConnectionCommand() {
 	return GetOptionOrDefault("on_new_connection", string());
 }
 
+string TestConfiguration::OnCleanupCommand() {
+	return GetOptionOrDefault("on_cleanup", string());
+}
+
+SortStyle TestConfiguration::GetDefaultSortStyle() {
+	SortStyle default_sort_style_enum = SortStyle::NO_SORT;
+	if (!TryParseSortStyle(GetOptionOrDefault<string>("sort_style", "none"), default_sort_style_enum)) {
+		throw std::runtime_error("eek: unknown sort style in TestConfig");
+	}
+	return default_sort_style_enum;
+}
+
 vector<string> TestConfiguration::ExtensionToBeLoadedOnLoad() {
 	vector<string> res;
 	auto entry = options.find("statically_loaded_extensions");
@@ -241,6 +256,30 @@ void TestConfiguration::ParseConnectScript(const Value &input) {
 
 	auto &test_config = TestConfiguration::Get();
 	test_config.ParseOption("on_init", Value(init_cmd));
+}
+
+void TestConfiguration::CheckSortStyle(const Value &input) {
+	SortStyle sort_style;
+	if (!TryParseSortStyle(input.ToString(), sort_style)) {
+		throw std::runtime_error(StringUtil::Format("Invalid parameter for sort style %s", input.ToString()));
+	}
+}
+
+bool TestConfiguration::TryParseSortStyle(const string &sort_style, SortStyle &result) {
+	if (sort_style == "nosort" || sort_style == "none") {
+		/* Do no sorting */
+		result = SortStyle::NO_SORT;
+	} else if (sort_style == "rowsort" || sort_style == "sort") {
+		/* Row-oriented sorting */
+		result = SortStyle::ROW_SORT;
+	} else if (sort_style == "valuesort") {
+		/* Sort all values independently */
+		result = SortStyle::VALUE_SORT;
+	} else {
+		// if this is not a known sort style
+		return false;
+	}
+	return true;
 }
 
 string TestConfiguration::ReadFileToString(const string &path) {
@@ -393,6 +432,22 @@ void FailureSummary::Log(string log_message) {
 idx_t FailureSummary::GetSummaryCounter() {
 	auto &summary = FailureSummary::Instance();
 	return ++summary.failures_summary_counter;
+}
+
+bool FailureSummary::SkipLoggingSameError(const string &file_name) {
+	return Instance().SkipLoggingSameErrorInternal(file_name);
+}
+
+bool FailureSummary::SkipLoggingSameErrorInternal(const string &file_name) {
+	if (file_name.empty()) {
+		return false;
+	}
+	lock_guard<mutex> lock(failures_lock);
+	if (reported_files.count(file_name) > 0) {
+		return true;
+	}
+	reported_files.insert(file_name);
+	return false;
 }
 
 } // namespace duckdb

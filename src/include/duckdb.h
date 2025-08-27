@@ -132,8 +132,8 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_TIMESTAMP_TZ = 31,
 	// enum type, only useful as logical type
 	DUCKDB_TYPE_ANY = 34,
-	// duckdb_varint
-	DUCKDB_TYPE_VARINT = 35,
+	// duckdb_bignum
+	DUCKDB_TYPE_BIGNUM = 35,
 	// enum type, only useful as logical type
 	DUCKDB_TYPE_SQLNULL = 36,
 	// enum type, only useful as logical type
@@ -258,6 +258,9 @@ typedef uint32_t sel_t;
 //! The callback to destroy data, e.g.,
 //! bind data (if any), init data (if any), extra data for replacement scans (if any), etc.
 typedef void (*duckdb_delete_callback_t)(void *data);
+
+//! The callback to copy data, e.g., bind data (if any).
+typedef void *(*duckdb_copy_callback_t)(void *data);
 
 //! Used for threading, contains a task state.
 //! Must be destroyed with `duckdb_destroy_task_state`.
@@ -455,14 +458,14 @@ typedef struct {
 	idx_t size;
 } duckdb_bit;
 
-//! VARINTs are composed of a byte pointer, a size, and an `is_negative` bool.
+//! BIGNUMs are composed of a byte pointer, a size, and an `is_negative` bool.
 //! The absolute value of the number is stored in `data` in little endian format.
 //! You must free `data` with `duckdb_free`.
 typedef struct {
 	uint8_t *data;
 	idx_t size;
 	bool is_negative;
-} duckdb_varint;
+} duckdb_bignum;
 
 //! A query result consists of a pointer to its internal data.
 //! Must be freed with 'duckdb_destroy_result'.
@@ -2264,12 +2267,12 @@ Creates a value from a uhugeint
 DUCKDB_C_API duckdb_value duckdb_create_uhugeint(duckdb_uhugeint input);
 
 /*!
-Creates a VARINT value from a duckdb_varint
+Creates a BIGNUM value from a duckdb_bignum
 
-* @param input The duckdb_varint value
+* @param input The duckdb_bignum value
 * @return The value. This must be destroyed with `duckdb_destroy_value`.
 */
-DUCKDB_C_API duckdb_value duckdb_create_varint(duckdb_varint input);
+DUCKDB_C_API duckdb_value duckdb_create_bignum(duckdb_bignum input);
 
 /*!
 Creates a DECIMAL value from a duckdb_decimal
@@ -2490,13 +2493,13 @@ Returns the uhugeint value of the given value.
 DUCKDB_C_API duckdb_uhugeint duckdb_get_uhugeint(duckdb_value val);
 
 /*!
-Returns the duckdb_varint value of the given value.
+Returns the duckdb_bignum value of the given value.
 The `data` field must be destroyed with `duckdb_free`.
 
-* @param val A duckdb_value containing a VARINT
-* @return A duckdb_varint. The `data` field must be destroyed with `duckdb_free`.
+* @param val A duckdb_value containing a BIGNUM
+* @return A duckdb_bignum. The `data` field must be destroyed with `duckdb_free`.
 */
-DUCKDB_C_API duckdb_varint duckdb_get_varint(duckdb_value val);
+DUCKDB_C_API duckdb_bignum duckdb_get_bignum(duckdb_value val);
 
 /*!
 Returns the duckdb_decimal value of the given value.
@@ -3480,7 +3483,8 @@ DUCKDB_C_API void duckdb_scalar_function_set_bind(duckdb_scalar_function scalar_
 
 /*!
 Sets the user-provided bind data in the bind object of the scalar function.
-This object can be retrieved again during execution.
+The bind data object can be retrieved again during execution.
+In most case, you also need to set the copy-callback of your bind data via duckdb_scalar_function_set_bind_data_copy.
 
 * @param info The bind info of the scalar function.
 * @param bind_data The bind data object.
@@ -3488,6 +3492,14 @@ This object can be retrieved again during execution.
 */
 DUCKDB_C_API void duckdb_scalar_function_set_bind_data(duckdb_bind_info info, void *bind_data,
                                                        duckdb_delete_callback_t destroy);
+
+/*!
+Sets the copy-callback for the user-provided bind data in the bind object of the scalar function.
+
+* @param info The bind info of the scalar function.
+* @param copy The callback to copy the bind data (if any).
+*/
+DUCKDB_C_API void duckdb_scalar_function_set_bind_data_copy(duckdb_bind_info info, duckdb_copy_callback_t copy);
 
 /*!
 Report that an error has occurred while calling bind on a scalar function.
@@ -3931,6 +3943,14 @@ Retrieves the extra info of the function as set in `duckdb_table_function_set_ex
 * @return The extra info
 */
 DUCKDB_C_API void *duckdb_bind_get_extra_info(duckdb_bind_info info);
+
+/*!
+Retrieves the client context of the bind info of a table function.
+
+* @param info The bind info object of the table function.
+* @param out_context The client context of the bind info. Must be destroyed with `duckdb_destroy_client_context`.
+*/
+DUCKDB_C_API void duckdb_table_function_get_client_context(duckdb_bind_info info, duckdb_client_context *out_context);
 
 /*!
 Adds a result column to the output of the table function.

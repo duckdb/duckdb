@@ -1,8 +1,6 @@
 #include "dbgen/dbgen.hpp"
 #include "dbgen/dbgen_gunk.hpp"
 #include "tpch_constants.hpp"
-
-#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/parser/column_definition.hpp"
@@ -13,7 +11,6 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
-#endif
 #endif
 
 #define DECLARER /* EXTERN references get defined here */

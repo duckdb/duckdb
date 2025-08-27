@@ -199,7 +199,7 @@ typedef struct {
 	duckdb_value (*duckdb_create_timestamp)(duckdb_timestamp input);
 	duckdb_value (*duckdb_create_interval)(duckdb_interval input);
 	duckdb_value (*duckdb_create_blob)(const uint8_t *data, idx_t length);
-	duckdb_value (*duckdb_create_varint)(duckdb_varint input);
+	duckdb_value (*duckdb_create_bignum)(duckdb_bignum input);
 	duckdb_value (*duckdb_create_decimal)(duckdb_decimal input);
 	duckdb_value (*duckdb_create_bit)(duckdb_bit input);
 	duckdb_value (*duckdb_create_uuid)(duckdb_uhugeint input);
@@ -223,7 +223,7 @@ typedef struct {
 	duckdb_interval (*duckdb_get_interval)(duckdb_value val);
 	duckdb_logical_type (*duckdb_get_value_type)(duckdb_value val);
 	duckdb_blob (*duckdb_get_blob)(duckdb_value val);
-	duckdb_varint (*duckdb_get_varint)(duckdb_value val);
+	duckdb_bignum (*duckdb_get_bignum)(duckdb_value val);
 	duckdb_decimal (*duckdb_get_decimal)(duckdb_value val);
 	duckdb_bit (*duckdb_get_bit)(duckdb_value val);
 	duckdb_uhugeint (*duckdb_get_uuid)(duckdb_value val);
@@ -601,11 +601,17 @@ typedef struct {
 	void *(*duckdb_scalar_function_bind_get_extra_info)(duckdb_bind_info info);
 	idx_t (*duckdb_scalar_function_bind_get_argument_count)(duckdb_bind_info info);
 	duckdb_expression (*duckdb_scalar_function_bind_get_argument)(duckdb_bind_info info, idx_t index);
+	void (*duckdb_scalar_function_set_bind_data_copy)(duckdb_bind_info info, duckdb_copy_callback_t copy);
 #endif
 
 // New string functions that are added
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
 	char *(*duckdb_value_to_string)(duckdb_value value);
+#endif
+
+// New functions around table function binding
+#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+	void (*duckdb_table_function_get_client_context)(duckdb_bind_info info, duckdb_client_context *out_context);
 #endif
 
 // New value functions that are added
@@ -746,7 +752,7 @@ typedef struct {
 #define duckdb_create_int64                            duckdb_ext_api.duckdb_create_int64
 #define duckdb_create_hugeint                          duckdb_ext_api.duckdb_create_hugeint
 #define duckdb_create_uhugeint                         duckdb_ext_api.duckdb_create_uhugeint
-#define duckdb_create_varint                           duckdb_ext_api.duckdb_create_varint
+#define duckdb_create_bignum                           duckdb_ext_api.duckdb_create_bignum
 #define duckdb_create_decimal                          duckdb_ext_api.duckdb_create_decimal
 #define duckdb_create_float                            duckdb_ext_api.duckdb_create_float
 #define duckdb_create_double                           duckdb_ext_api.duckdb_create_double
@@ -773,7 +779,7 @@ typedef struct {
 #define duckdb_get_uint64                              duckdb_ext_api.duckdb_get_uint64
 #define duckdb_get_hugeint                             duckdb_ext_api.duckdb_get_hugeint
 #define duckdb_get_uhugeint                            duckdb_ext_api.duckdb_get_uhugeint
-#define duckdb_get_varint                              duckdb_ext_api.duckdb_get_varint
+#define duckdb_get_bignum                              duckdb_ext_api.duckdb_get_bignum
 #define duckdb_get_decimal                             duckdb_ext_api.duckdb_get_decimal
 #define duckdb_get_float                               duckdb_ext_api.duckdb_get_float
 #define duckdb_get_double                              duckdb_ext_api.duckdb_get_double
@@ -1088,6 +1094,7 @@ typedef struct {
 // Version unstable_new_scalar_function_functions
 #define duckdb_scalar_function_set_bind                duckdb_ext_api.duckdb_scalar_function_set_bind
 #define duckdb_scalar_function_set_bind_data           duckdb_ext_api.duckdb_scalar_function_set_bind_data
+#define duckdb_scalar_function_set_bind_data_copy      duckdb_ext_api.duckdb_scalar_function_set_bind_data_copy
 #define duckdb_scalar_function_bind_set_error          duckdb_ext_api.duckdb_scalar_function_bind_set_error
 #define duckdb_scalar_function_bind_get_extra_info     duckdb_ext_api.duckdb_scalar_function_bind_get_extra_info
 #define duckdb_scalar_function_get_bind_data           duckdb_ext_api.duckdb_scalar_function_get_bind_data
@@ -1097,6 +1104,9 @@ typedef struct {
 
 // Version unstable_new_string_functions
 #define duckdb_value_to_string duckdb_ext_api.duckdb_value_to_string
+
+// Version unstable_new_table_function_functions
+#define duckdb_table_function_get_client_context duckdb_ext_api.duckdb_table_function_get_client_context
 
 // Version unstable_new_value_functions
 #define duckdb_create_time_ns     duckdb_ext_api.duckdb_create_time_ns

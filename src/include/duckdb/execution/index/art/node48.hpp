@@ -38,21 +38,45 @@ private:
 	Node children[CAPACITY];
 
 public:
-	//! Get a new Node48 and initialize it.
-	static Node48 &New(ART &art, Node &node);
-	//! Free the node and its children.
-	static void Free(ART &art, Node &node);
+	//! Get a new Node48 handle and initialize the Node48.
+	static NodeHandle<Node48> New(ART &art, Node &node) {
+		node = Node::GetAllocator(art, NODE_48).New();
+		node.SetMetadata(static_cast<uint8_t>(NODE_48));
+
+		NodeHandle<Node48> handle(art, node);
+		auto &n = handle.Get();
+
+		// Reset the node (count and child_index).
+		n.count = 0;
+		for (uint16_t i = 0; i < Node256::CAPACITY; i++) {
+			n.child_index[i] = EMPTY_MARKER;
+		}
+		// Zero-initialize the node.
+		for (uint8_t i = 0; i < CAPACITY; i++) {
+			n.children[i].Clear();
+		}
+
+		return handle;
+	}
 
 	//! Insert a child at byte.
 	static void InsertChild(ART &art, Node &node, const uint8_t byte, const Node child);
 	//! Delete the child at byte.
 	static void DeleteChild(ART &art, Node &node, const uint8_t byte);
 	//! Replace the child at byte.
-	void ReplaceChild(const uint8_t byte, const Node child);
+	void ReplaceChild(const uint8_t byte, const Node child) {
+		D_ASSERT(count >= SHRINK_THRESHOLD);
+		auto status = children[child_index[byte]].GetGateStatus();
+		children[child_index[byte]] = child;
+		if (status == GateStatus::GATE_SET && child.HasMetadata()) {
+			children[child_index[byte]].SetGateStatus(status);
+		}
+	}
 
 public:
 	template <class F, class NODE>
 	static void Iterator(NODE &n, F &&lambda) {
+		D_ASSERT(n.count);
 		for (idx_t i = 0; i < Node256::CAPACITY; i++) {
 			if (n.child_index[i] != EMPTY_MARKER) {
 				lambda(n.children[n.child_index[i]]);
@@ -61,8 +85,11 @@ public:
 	}
 
 	template <class NODE>
-	static unsafe_optional_ptr<Node> GetChild(NODE &n, const uint8_t byte) {
+	static unsafe_optional_ptr<Node> GetChild(NODE &n, const uint8_t byte, const bool unsafe = false) {
 		if (n.child_index[byte] != Node48::EMPTY_MARKER) {
+			if (!unsafe && !n.children[n.child_index[byte]].HasMetadata()) {
+				throw InternalException("empty child for byte %d in Node48::GetChild", byte);
+			}
 			return &n.children[n.child_index[byte]];
 		}
 		return nullptr;
@@ -97,12 +124,12 @@ public:
 			}
 		}
 
-		count = 0;
 		return NodeChildren(bytes, children_ptr);
 	}
 
 private:
-	static Node48 &GrowNode16(ART &art, Node &node48, Node &node16);
-	static Node48 &ShrinkNode256(ART &art, Node &node48, Node &node256);
+	static void GrowNode16(ART &art, Node &node48, Node &node16);
+	//! We shrink at <= Node256::SHRINK_THRESHOLD.
+	static void ShrinkNode256(ART &art, Node &node48, Node &node256);
 };
 } // namespace duckdb

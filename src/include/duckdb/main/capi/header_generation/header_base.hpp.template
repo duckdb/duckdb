@@ -126,8 +126,8 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_TIMESTAMP_TZ = 31,
 	// enum type, only useful as logical type
 	DUCKDB_TYPE_ANY = 34,
-	// duckdb_varint
-	DUCKDB_TYPE_VARINT = 35,
+	// duckdb_bignum
+	DUCKDB_TYPE_BIGNUM = 35,
 	// enum type, only useful as logical type
 	DUCKDB_TYPE_SQLNULL = 36,
 	// enum type, only useful as logical type
@@ -258,6 +258,9 @@ typedef uint32_t sel_t;
 //! The callback to destroy data, e.g.,
 //! bind data (if any), init data (if any), extra data for replacement scans (if any), etc.
 typedef void (*duckdb_delete_callback_t)(void *data);
+
+//! The callback to copy data, e.g., bind data (if any).
+typedef void *(*duckdb_copy_callback_t)(void *data);
 
 //! Used for threading, contains a task state.
 //! Must be destroyed with `duckdb_destroy_task_state`.
@@ -455,14 +458,14 @@ typedef struct {
 	idx_t size;
 } duckdb_bit;
 
-//! VARINTs are composed of a byte pointer, a size, and an `is_negative` bool.
+//! BIGNUMs are composed of a byte pointer, a size, and an `is_negative` bool.
 //! The absolute value of the number is stored in `data` in little endian format.
 //! You must free `data` with `duckdb_free`.
 typedef struct {
 	uint8_t *data;
 	idx_t size;
 	bool is_negative;
-} duckdb_varint;
+} duckdb_bignum;
 
 //! A query result consists of a pointer to its internal data.
 //! Must be freed with 'duckdb_destroy_result'.
