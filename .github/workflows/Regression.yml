@@ -338,7 +338,7 @@ jobs:
 
       - name: Install
         shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build && pip install tqdm
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build libcurl4-openssl-dev && pip install tqdm
 
       - name: Setup Ccache
         uses: hendrikmuhs/ccache-action@main
