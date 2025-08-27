@@ -2,9 +2,12 @@
 #include "duckdb/common/types/variant.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
 #include "duckdb/common/serializer/varint.hpp"
+#include "yyjson.hpp"
 
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
+
+using namespace duckdb_yyjson; // NOLINT
 
 namespace duckdb {
 
@@ -39,6 +42,22 @@ public:
 public:
 	idx_t width;
 	idx_t scale;
+};
+
+struct ConvertedJSONHolder {
+public:
+	~ConvertedJSONHolder() {
+		if (doc) {
+			yyjson_mut_doc_free(doc);
+		}
+		if (stringified_json) {
+			free(stringified_json);
+		}
+	}
+
+public:
+	yyjson_mut_doc *doc = nullptr;
+	char *stringified_json = nullptr;
 };
 
 } // namespace
@@ -374,6 +393,40 @@ static bool ConvertVariantToStruct(FromVariantConversionData &conversion_data, V
 	return true;
 }
 
+static bool CastVariantToJSON(FromVariantConversionData &conversion_data, Vector &result, const SelectionVector &sel,
+                              idx_t offset, idx_t count, optional_idx row) {
+	auto &error = conversion_data.error;
+
+	ConvertedJSONHolder json_holder;
+
+	auto result_data = FlatVector::GetData<string_t>(result);
+	json_holder.doc = yyjson_mut_doc_new(nullptr);
+	for (idx_t i = 0; i < count; i++) {
+		auto row_index = row.IsValid() ? row.GetIndex() : i;
+
+		auto json_val =
+		    VariantCasts::ConvertVariantToJSON(json_holder.doc, conversion_data.unified_format, row_index, sel[i]);
+		if (!json_val) {
+			error = StringUtil::Format("Failed to convert to JSON object");
+			return false;
+		}
+
+		size_t len;
+		json_holder.stringified_json =
+		    yyjson_mut_val_write_opts(json_val, YYJSON_WRITE_ALLOW_INF_AND_NAN, nullptr, &len, nullptr);
+		if (!json_holder.stringified_json) {
+			error = "Could not serialize the JSON to string, yyjson failed";
+			return false;
+		}
+		string_t res(json_holder.stringified_json, NumericCast<uint32_t>(len));
+		result_data[offset + i] = StringVector::AddString(result, res);
+		free(json_holder.stringified_json);
+		json_holder.stringified_json = nullptr;
+	}
+
+	return true;
+}
+
 //! * @param conversion_data The constant data relevant at all rows of the conversion
 //! * @param result The typed Vector to populate in this call
 //! * @param sel The selection of value indices to cast
@@ -487,6 +540,9 @@ static bool CastVariant(FromVariantConversionData &conversion_data, Vector &resu
 			    conversion_data, result, sel, offset, count, row, string_payload);
 		}
 		case LogicalTypeId::VARCHAR: {
+			if (target_type.IsJSONType()) {
+				return CastVariantToJSON(conversion_data, result, sel, offset, count, row);
+			}
 			StringConversionPayload string_payload(result);
 			return CastVariantToPrimitive<VariantDirectConversion<string_t, VariantLogicalType::VARCHAR>>(
 			    conversion_data, result, sel, offset, count, row, string_payload);
@@ -617,9 +673,6 @@ BoundCastInfo DefaultCasts::VariantCastSwitch(BindCastInput &input, const Logica
 	case LogicalTypeId::ARRAY:
 		return BoundCastInfo(CastFromVARIANT);
 	case LogicalTypeId::VARCHAR: {
-		if (target.IsJSONType()) {
-			return BoundCastInfo(VariantCasts::CastVARIANTToJSON);
-		}
 		return BoundCastInfo(CastFromVARIANT);
 	}
 	default:

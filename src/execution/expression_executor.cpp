@@ -160,7 +160,6 @@ void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t co
 		Vector::DebugTransformToDictionary(vector, count);
 	}
 	if (debug_vector_verification == DebugVectorVerification::VARIANT_VECTOR) {
-		//! UNION <-> VARIANT is not roundtrippable because we can't know on the return which value was originally there
 		if (TypeVisitor::Contains(vector.GetType(), [](const LogicalType &type) {
 			    if (type.IsJSONType() || type.id() == LogicalTypeId::VARIANT || type.id() == LogicalTypeId::UNION ||
 			        type.id() == LogicalTypeId::ENUM || type.id() == LogicalTypeId::AGGREGATE_STATE) {
@@ -171,7 +170,6 @@ void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t co
 			    }
 			    return false;
 		    })) {
-			//! JSON and VARIANT have shaky roundtripping (needs better support in 'from_variant.cpp')
 			return;
 		}
 

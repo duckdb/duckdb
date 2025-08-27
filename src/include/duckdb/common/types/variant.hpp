@@ -3,6 +3,11 @@
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 
+namespace duckdb_yyjson {
+struct yyjson_mut_doc;
+struct yyjson_mut_val;
+} // namespace duckdb_yyjson
+
 namespace duckdb {
 
 enum class VariantChildLookupMode : uint8_t { BY_KEY, BY_INDEX };
@@ -60,8 +65,9 @@ enum class VariantLogicalType : uint8_t {
 };
 
 struct VariantCasts {
-	static bool CastJSONToVARIANT(Vector &source, Vector &result, idx_t count, CastParameters &parameters);
-	static bool CastVARIANTToJSON(Vector &source, Vector &result, idx_t count, CastParameters &parameters);
+	static duckdb_yyjson::yyjson_mut_val *ConvertVariantToJSON(duckdb_yyjson::yyjson_mut_doc *doc,
+	                                                           RecursiveUnifiedVectorFormat &source, idx_t row,
+	                                                           uint32_t values_idx);
 };
 
 } // namespace duckdb

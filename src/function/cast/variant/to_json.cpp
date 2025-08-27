@@ -15,30 +15,15 @@ using namespace duckdb_yyjson; // NOLINT
 
 namespace duckdb {
 
-namespace {
-
-struct ConvertedJSONHolder {
-public:
-	~ConvertedJSONHolder() {
-		if (doc) {
-			yyjson_mut_doc_free(doc);
-		}
-		if (stringified_json) {
-			free(stringified_json);
-		}
-	}
-
-public:
-	yyjson_mut_doc *doc = nullptr;
-	char *stringified_json = nullptr;
-};
-
-} // namespace
-
 //! ------------ Variant -> JSON ------------
 
-yyjson_mut_val *ConvertVariant(yyjson_mut_doc *doc, RecursiveUnifiedVectorFormat &source, idx_t row,
-                               uint32_t values_idx) {
+yyjson_mut_val *VariantCasts::ConvertVariantToJSON(yyjson_mut_doc *doc, RecursiveUnifiedVectorFormat &source, idx_t row,
+                                                   uint32_t values_idx) {
+	auto index = source.unified.sel->get_index(row);
+	if (!source.unified.validity.RowIsValid(index)) {
+		return yyjson_mut_null(doc);
+	}
+
 	//! values
 	auto &values = UnifiedVariantVector::GetValues(source);
 	auto values_data = values.GetData<list_entry_t>(values);
@@ -70,9 +55,9 @@ yyjson_mut_val *ConvertVariant(yyjson_mut_doc *doc, RecursiveUnifiedVectorFormat
 	auto keys_entry_data = keys_entry.GetData<string_t>(keys_entry);
 
 	//! list entries
-	auto keys_list_entry = keys_data[keys.sel->get_index(row)];
-	auto children_list_entry = children_data[children.sel->get_index(row)];
-	auto values_list_entry = values_data[values.sel->get_index(row)];
+	auto keys_list_entry = keys_data[keys.sel->get_index(index)];
+	auto children_list_entry = children_data[children.sel->get_index(index)];
+	auto values_list_entry = values_data[values.sel->get_index(index)];
 
 	//! The 'values' data of the value we're currently converting
 	values_idx += values_list_entry.offset;
@@ -82,7 +67,7 @@ yyjson_mut_val *ConvertVariant(yyjson_mut_doc *doc, RecursiveUnifiedVectorFormat
 	//! The blob data of the Variant, accessed by byte offset retrieved above ^
 	auto &value = UnifiedVariantVector::GetData(source);
 	auto value_data = value.GetData<string_t>(value);
-	auto &blob = value_data[value.sel->get_index(row)];
+	auto &blob = value_data[value.sel->get_index(index)];
 	auto blob_data = const_data_ptr_cast(blob.GetData());
 
 	auto ptr = const_data_ptr_cast(blob_data + byte_offset);
@@ -234,7 +219,7 @@ yyjson_mut_val *ConvertVariant(yyjson_mut_doc *doc, RecursiveUnifiedVectorFormat
 			auto key_id_index = key_ids.sel->get_index(children_list_entry.offset + child_index_start + i);
 			D_ASSERT(!key_ids.validity.RowIsValid(key_id_index));
 #endif
-			auto val = ConvertVariant(doc, source, row, child_index);
+			auto val = ConvertVariantToJSON(doc, source, row, child_index);
 			if (!val) {
 				return nullptr;
 			}
@@ -253,7 +238,7 @@ yyjson_mut_val *ConvertVariant(yyjson_mut_doc *doc, RecursiveUnifiedVectorFormat
 		for (idx_t i = 0; i < count; i++) {
 			auto children_index = value_ids.sel->get_index(children_list_entry.offset + child_index_start + i);
 			auto child_value_idx = value_ids_data[children_index];
-			auto val = ConvertVariant(doc, source, row, child_value_idx);
+			auto val = ConvertVariantToJSON(doc, source, row, child_value_idx);
 			if (!val) {
 				return nullptr;
 			}
@@ -282,40 +267,6 @@ yyjson_mut_val *ConvertVariant(yyjson_mut_doc *doc, RecursiveUnifiedVectorFormat
 	}
 
 	return nullptr;
-}
-
-bool VariantCasts::CastVARIANTToJSON(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-	RecursiveUnifiedVectorFormat source_format;
-	Vector::RecursiveToUnifiedFormat(source, count, source_format);
-
-	ConvertedJSONHolder json_holder;
-
-	auto result_data = FlatVector::GetData<string_t>(result);
-	json_holder.doc = yyjson_mut_doc_new(nullptr);
-	for (idx_t i = 0; i < count; i++) {
-
-		auto json_val = ConvertVariant(json_holder.doc, source_format, i, 0);
-		if (!json_val) {
-			return false;
-		}
-
-		size_t len;
-		json_holder.stringified_json =
-		    yyjson_mut_val_write_opts(json_val, YYJSON_WRITE_ALLOW_INF_AND_NAN, nullptr, &len, nullptr);
-		if (!json_holder.stringified_json) {
-			throw InvalidInputException("Could not serialize the JSON to string, yyjson failed");
-		}
-		string_t res(json_holder.stringified_json, NumericCast<uint32_t>(len));
-		result_data[i] = StringVector::AddString(result, res);
-		free(json_holder.stringified_json);
-		json_holder.stringified_json = nullptr;
-	}
-
-	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
-
-	return true;
 }
 
 } // namespace duckdb
