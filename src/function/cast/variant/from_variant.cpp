@@ -221,7 +221,7 @@ static bool ConvertVariantToList(FromVariantConversionData &conversion_data, Vec
 	}
 
 	if (!VariantUtils::CollectNestedData(conversion_data.unified_format, VariantLogicalType::ARRAY, sel, count, row,
-	                                     child_data, FlatVector::Validity(result), conversion_data.error)) {
+	                                     offset, child_data, FlatVector::Validity(result), conversion_data.error)) {
 		return false;
 	}
 	idx_t total_children = 0;
@@ -282,7 +282,7 @@ static bool ConvertVariantToArray(FromVariantConversionData &conversion_data, Ve
 	}
 
 	if (!VariantUtils::CollectNestedData(conversion_data.unified_format, VariantLogicalType::ARRAY, sel, count, row,
-	                                     child_data, FlatVector::Validity(result), conversion_data.error)) {
+	                                     offset, child_data, FlatVector::Validity(result), conversion_data.error)) {
 		return false;
 	}
 
@@ -336,7 +336,7 @@ static bool ConvertVariantToStruct(FromVariantConversionData &conversion_data, V
 
 	//! First get all the Object data from the VARIANT
 	if (!VariantUtils::CollectNestedData(conversion_data.unified_format, VariantLogicalType::OBJECT, sel, count, row,
-	                                     child_data, FlatVector::Validity(result), conversion_data.error)) {
+	                                     offset, child_data, FlatVector::Validity(result), conversion_data.error)) {
 		return false;
 	}
 

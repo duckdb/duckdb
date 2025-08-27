@@ -127,7 +127,7 @@ static void VariantExtractFunction(DataChunk &input, ExpressionState &state, Vec
 
 	auto expected_type = component.lookup_mode == VariantChildLookupMode::BY_INDEX ? VariantLogicalType::ARRAY
 	                                                                               : VariantLogicalType::OBJECT;
-	if (!VariantUtils::CollectNestedData(source_format, expected_type, value_index_sel, count, optional_idx(),
+	if (!VariantUtils::CollectNestedData(source_format, expected_type, value_index_sel, count, optional_idx(), 0,
 	                                     nested_data, FlatVector::Validity(result), error)) {
 		throw InvalidInputException(error);
 	}

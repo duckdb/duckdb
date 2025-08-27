@@ -23,7 +23,7 @@ struct VariantUtils {
 	                                       optional_idx row, SelectionVector &res, VariantNestedData *nested_data,
 	                                       idx_t count);
 	DUCKDB_API static bool CollectNestedData(RecursiveUnifiedVectorFormat &variant, VariantLogicalType expected_type,
-	                                         const SelectionVector &sel, idx_t count, optional_idx row,
+	                                         const SelectionVector &sel, idx_t count, optional_idx row, idx_t offset,
 	                                         VariantNestedData *child_data, ValidityMask &validity, string &error);
 	DUCKDB_API static vector<uint8_t> ValueIsNull(RecursiveUnifiedVectorFormat &variant, const SelectionVector &sel,
 	                                              idx_t count, optional_idx row);

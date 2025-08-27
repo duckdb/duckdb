@@ -147,7 +147,7 @@ vector<uint8_t> VariantUtils::ValueIsNull(RecursiveUnifiedVectorFormat &variant,
 }
 
 bool VariantUtils::CollectNestedData(RecursiveUnifiedVectorFormat &variant, VariantLogicalType expected_type,
-                                     const SelectionVector &sel, idx_t count, optional_idx row,
+                                     const SelectionVector &sel, idx_t count, optional_idx row, idx_t offset,
                                      VariantNestedData *child_data, ValidityMask &validity, string &error) {
 	auto &values_format = UnifiedVariantVector::GetValues(variant);
 	auto values_data = values_format.GetData<list_entry_t>(values_format);
@@ -166,7 +166,7 @@ bool VariantUtils::CollectNestedData(RecursiveUnifiedVectorFormat &variant, Vari
 
 		auto index = variant.unified.sel->get_index(row_index);
 		//! NOTE: the validity is assumed to be from a FlatVector
-		if (!variant.unified.validity.RowIsValid(index) || !validity.RowIsValid(i)) {
+		if (!variant.unified.validity.RowIsValid(index) || !validity.RowIsValid(offset + i)) {
 			child_data[i].is_null = true;
 			continue;
 		}
