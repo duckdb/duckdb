@@ -667,7 +667,7 @@ vector<OpenFileInfo> FileSystem::GlobFiles(const string &pattern, ClientContext 
 				if (input.extension.empty()) {
 					throw InternalException("FALLBACK_GLOB requires an extension to be specified");
 				}
-				string new_pattern = pattern + "/**/*." + input.extension;
+				string new_pattern = JoinPath(JoinPath(pattern, "**"), "*." + input.extension);
 				return GlobFiles(new_pattern, context, FileGlobOptions::DISALLOW_EMPTY);
 			}
 		}
