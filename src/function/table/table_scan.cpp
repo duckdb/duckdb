@@ -520,8 +520,9 @@ bool TryScanIndex(ART &art, const ColumnList &column_list, TableFunctionInitInpu
 	// If found, update the bound column ref within index_expr
 	if (found_index_column_in_input) {
 		ExpressionIterator::EnumerateExpression(index_expr, [&](Expression &expr) {
-			if (expr.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF)
+			if (expr.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
 				return;
+			}
 
 			auto &bound_column_ref_expr = expr.Cast<BoundColumnRefExpression>();
 
