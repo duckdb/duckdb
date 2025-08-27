@@ -47,8 +47,7 @@ void execQuery(Connection &conn, const string &query) {
 }
 
 struct TableInfo {
-	idx_t size = 0;
-	TableInfo(idx_t size) : size(size) {};
+	idx_t size;
 };
 
 struct DBInfo {
@@ -98,7 +97,7 @@ void createTbl(Connection &conn, idx_t dbId, idx_t workerId) {
 
 	lock_guard<mutex> lock(dbInfos[dbId].mu);
 	auto tblId = dbInfos[dbId].TableCount;
-	dbInfos[dbId].tables.emplace_back(TableInfo(nr_initial_rows));
+	dbInfos[dbId].tables.emplace_back(TableInfo{nr_initial_rows});
 	dbInfos[dbId].TableCount++;
 
 	string query = "CREATE TABLE " + getDBName(dbId) + ".tbl_" + to_string(tblId) +
