@@ -102,6 +102,7 @@ void QueryProfiler::Reset() {
 	running = false;
 	query_metrics.query = "";
 	query_metrics.total_bytes_read = 0;
+	query_metrics.total_bytes_written = 0;
 }
 
 void QueryProfiler::StartQuery(const string &query, bool is_explain_analyze_p, bool start_at_optimizer) {
@@ -258,6 +259,9 @@ void QueryProfiler::EndQuery() {
 			if (info.Enabled(settings, MetricsType::TOTAL_BYTES_READ)) {
 				info.metrics[MetricsType::TOTAL_BYTES_READ] = Value::UBIGINT(query_metrics.total_bytes_read);
 			}
+			if (info.Enabled(settings, MetricsType::TOTAL_BYTES_WRITTEN)) {
+				info.metrics[MetricsType::TOTAL_BYTES_WRITTEN] = Value::UBIGINT(query_metrics.total_bytes_written);
+			}
 			if (info.Enabled(settings, MetricsType::ROWS_RETURNED)) {
 				info.metrics[MetricsType::ROWS_RETURNED] = child_info.metrics[MetricsType::OPERATOR_CARDINALITY];
 			}
@@ -307,6 +311,12 @@ void QueryProfiler::EndQuery() {
 void QueryProfiler::AddBytesRead(const idx_t nr_bytes) {
 	if (IsEnabled()) {
 		query_metrics.total_bytes_read += nr_bytes;
+	}
+}
+
+void QueryProfiler::AddBytesWritten(const idx_t nr_bytes) {
+	if (IsEnabled()) {
+		query_metrics.total_bytes_written += nr_bytes;
 	}
 }
 

@@ -479,6 +479,8 @@ jobs:
   vector-and-block-sizes:
     name: Tests different vector and block sizes
     runs-on: ubuntu-24.04
+    env:
+      LSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-leak-suppressions.txt
     needs: linux-memory-leaks
 
     steps:
@@ -516,6 +518,8 @@ jobs:
   linux-debug-configs:
     name: Tests different configurations with a debug build
     runs-on: ubuntu-24.04
+    env:
+      LSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-leak-suppressions.txt
     needs: linux-memory-leaks
 
     steps:

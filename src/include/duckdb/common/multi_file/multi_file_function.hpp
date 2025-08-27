@@ -162,7 +162,6 @@ public:
 	static unique_ptr<FunctionData> MultiFileBind(ClientContext &context, TableFunctionBindInput &input,
 	                                              vector<LogicalType> &return_types, vector<string> &names) {
 		auto interface = OP::CreateInterface(context);
-
 		auto multi_file_reader = MultiFileReader::Create(input.table_function);
 
 		auto glob_input = multi_file_reader->GetGlobInput(*interface);

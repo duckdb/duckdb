@@ -1,0 +1,24 @@
+# name: benchmark/micro/logger/logging_overhead/parquet_q1_with_default_logging.benchmark
+# description: Test overhead on query that writes lineitem sf1 to a duckdb database and runs Q1 on it
+# group: [logging_overhead]
+
+name Q1 (Parquet)
+group logger
+subgroup logging_overhead
+
+require parquet
+require tpch
+
+load
+CALL dbgen(sf=1, suffix='_normal');
+CALL enable_logging(storage_path='${BENCHMARK_DIR}/parquet_q1_with_logging')
+
+run
+COPY lineitem_normal TO '${BENCHMARK_DIR}/parquet_q1_with_logging.parquet';
+CREATE OR REPLACE VIEW lineitem AS SELECT * FROM read_parquet('${BENCHMARK_DIR}/parquet_q1_with_logging.parquet');
+PRAGMA tpch(1)
+
+cleanup
+CALL truncate_duckdb_logs()
+
+result extension/tpch/dbgen/answers/sf1/q01.csv
