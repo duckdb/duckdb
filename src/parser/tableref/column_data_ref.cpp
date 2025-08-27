@@ -6,6 +6,11 @@
 
 namespace duckdb {
 
+ColumnDataRef::ColumnDataRef(optionally_owned_ptr<ColumnDataCollection> collection_p, vector<string> expected_names)
+    : TableRef(TableReferenceType::COLUMN_DATA), expected_names(std::move(expected_names)),
+      collection(std::move(collection_p)) {
+}
+
 string ColumnDataRef::ToString() const {
 	auto result = collection->ToString();
 	return BaseToString(result, expected_names);

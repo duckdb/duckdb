@@ -21,10 +21,7 @@ public:
 
 public:
 	explicit ColumnDataRef(optionally_owned_ptr<ColumnDataCollection> collection_p,
-	                       vector<string> expected_names = vector<string>())
-	    : TableRef(TableReferenceType::COLUMN_DATA), expected_names(std::move(expected_names)),
-	      collection(*collection_p) {
-	}
+	                       vector<string> expected_names = vector<string>());
 
 public:
 	//! The set of expected names
