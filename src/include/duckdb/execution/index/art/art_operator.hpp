@@ -5,6 +5,7 @@
 //
 //
 //===----------------------------------------------------------------------===//
+
 #pragma once
 
 #include "duckdb/execution/index/art/art_key.hpp"
@@ -108,8 +109,9 @@ public:
 
 			const auto type = active_node.GetType();
 			switch (type) {
-			case NType::LEAF_INLINED:
+			case NType::LEAF_INLINED: {
 				return InsertIntoInlined(arena, art, active_node, key, row_id, depth, status, delete_art, append_mode);
+			}
 			case NType::LEAF: {
 				Leaf::TransformToNested(art, active_node);
 				continue;
@@ -157,6 +159,116 @@ public:
 			}
 		}
 		throw InternalException("node without metadata in ARTOperator::Insert");
+	}
+
+	//! Delete a key and its row ID.
+	//! Assumes that deletion starts at the root of the tree.
+	static void Delete(ART &art, Node &node, const ARTKey &key, const ARTKey &row_id) {
+		// If we need to compress a Node4 into a one-way node,
+		// then we need the previous prefix before the Node4.
+		Node empty;
+		reference<Node> greatgrandparent(empty);
+		reference<Node> grandparent(empty);
+		reference<Node> parent(node);
+		reference<Node> current(node);
+		reference<const ARTKey> current_key(key);
+
+		idx_t grandparent_depth = 0;
+		idx_t parent_depth = 0;
+		idx_t depth = 0;
+		auto status = GateStatus::GATE_NOT_SET;
+		auto passed_node = false;
+
+		while (current.get().HasMetadata()) {
+			// Enter gate.
+			if (status == GateStatus::GATE_NOT_SET && current.get().GetGateStatus() == GateStatus::GATE_SET) {
+				status = GateStatus::GATE_SET;
+				current_key = row_id;
+				depth = 0;
+				continue;
+			}
+
+			const auto type = current.get().GetType();
+			switch (type) {
+			case NType::LEAF_INLINED: {
+				if (current.get().GetRowId() != row_id.GetRowId()) {
+					return;
+				}
+				if (!passed_node && parent.get().GetType() == NType::PREFIX) {
+					// The tree contains exactly one element with a prefix.
+					Node::FreeTree(art, parent);
+					return;
+				}
+				if (parent.get().GetType() == NType::PREFIX) {
+					// We might have to compress:
+					// PREFIX (greatgrandparent) - Node4 (grandparent) - PREFIX - INLINED_LEAF.
+					Node::DeleteChild(art, grandparent, greatgrandparent, current_key.get()[grandparent_depth], status,
+					                  row_id);
+					return;
+				}
+				Node::DeleteChild(art, parent, grandparent, current_key.get()[parent_depth], status, row_id);
+				return;
+			}
+			case NType::LEAF: {
+				D_ASSERT(status == GateStatus::GATE_NOT_SET);
+				Leaf::TransformToNested(art, current);
+				break;
+			}
+			case NType::PREFIX: {
+				greatgrandparent = grandparent;
+				grandparent = parent;
+				parent = current;
+				grandparent_depth = parent_depth;
+				parent_depth = depth;
+
+				// Traverse a prefix chain until the next non-prefix node or gate.
+				while (current.get().GetType() == NType::PREFIX) {
+					Prefix prefix(art, current, true);
+					for (idx_t i = 0; i < prefix.data[Prefix::Count(art)]; i++) {
+						if (prefix.data[i] != current_key.get()[depth]) {
+							return;
+						}
+						depth++;
+					}
+					current = *prefix.ptr;
+					if (current.get().GetGateStatus() == GateStatus::GATE_SET) {
+						break;
+					}
+				}
+				break;
+			}
+			case NType::NODE_4:
+			case NType::NODE_16:
+			case NType::NODE_48:
+			case NType::NODE_256: {
+				passed_node = true;
+				greatgrandparent = grandparent;
+				grandparent = parent;
+				parent = current;
+				grandparent_depth = parent_depth;
+				parent_depth = depth;
+
+				auto child = current.get().GetChildMutable(art, current_key.get()[depth]);
+				if (!child) {
+					// No child at the byte: nothing to erase.
+					return;
+				}
+
+				current = *child;
+				depth++;
+				break;
+			}
+			case NType::NODE_7_LEAF:
+			case NType::NODE_15_LEAF:
+			case NType::NODE_256_LEAF: {
+				const auto byte = current_key.get()[depth];
+				if (current.get().HasByte(art, byte)) {
+					Node::DeleteChild(art, current, parent, byte, status, row_id);
+				}
+				return;
+			}
+			}
+		}
 	}
 
 private:

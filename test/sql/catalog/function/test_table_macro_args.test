@@ -154,6 +154,7 @@ as TABLE SELECT * FROM  cards_tbl WHERE val>=_val_min AND val<=_val_max AND name
 
 
 # positional parameter repeated
-# should give error but is parsed !!!
-statement ok
+statement error
 CREATE MACRO card_select_val(_val_min, _val_min) as TABLE SELECT * FROM cards_tbl WHERE val>=_val_min AND val<=_val_max;
+----
+Parser Error: Duplicate parameter

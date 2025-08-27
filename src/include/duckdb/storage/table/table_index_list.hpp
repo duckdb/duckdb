@@ -56,11 +56,26 @@ public:
 	//! Binds unbound indexes possibly present after loading an extension.
 	void Bind(ClientContext &context, DataTableInfo &table_info, const char *index_type = nullptr);
 	//! Returns true, if there are no index entries.
-	bool Empty();
+	bool Empty() {
+		lock_guard<mutex> lock(index_entries_lock);
+		return index_entries.empty();
+	}
 	//! Returns the number of index entries.
-	idx_t Count();
+	idx_t Count() {
+		lock_guard<mutex> lock(index_entries_lock);
+		return index_entries.size();
+	}
+	//! Returns true, if there are unbound indexes.
+	bool HasUnbound() {
+		lock_guard<mutex> lock(index_entries_lock);
+		return unbound_count != 0;
+	}
 	//! Overwrite this list with the other list.
-	void Move(TableIndexList &other);
+	void Move(TableIndexList &other) {
+		D_ASSERT(index_entries.empty());
+		index_entries = std::move(other.index_entries);
+	}
+	//! Returns true, if all indexes
 	//! Find the foreign key matching the keys.
 	optional_ptr<Index> FindForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, const ForeignKeyType fk_type);
 	//! Verify a foreign key constraint.
@@ -71,11 +86,21 @@ public:
 	//! Serialize all indexes of the table.
 	vector<IndexStorageInfo> SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options);
 
+public:
+	//! Initialize an index_chunk from a table.
+	static void InitializeIndexChunk(DataChunk &index_chunk, const vector<LogicalType> &table_types,
+	                                 vector<StorageIndex> &mapped_column_ids, DataTableInfo &data_table_info);
+	//! Reference the indexed columns of a table chunk.
+	static void ReferenceIndexChunk(DataChunk &table_chunk, DataChunk &index_chunk,
+	                                vector<StorageIndex> &mapped_column_ids);
+
 private:
 	//! A lock to prevent any concurrent changes to the index entries.
 	mutex index_entries_lock;
 	//! The index entries of the table.
 	vector<unique_ptr<IndexEntry>> index_entries;
+	//! Contains the number of unbound indexes.
+	idx_t unbound_count = 0;
 };
 
 } // namespace duckdb

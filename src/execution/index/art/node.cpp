@@ -198,19 +198,19 @@ void Node::DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte, c
 //===--------------------------------------------------------------------===//
 
 template <class NODE>
-unsafe_optional_ptr<Node> GetChildInternal(ART &art, NODE &node, const uint8_t byte) {
+static unsafe_optional_ptr<Node> GetChildInternal(ART &art, NODE &node, const uint8_t byte, const bool unsafe) {
 	D_ASSERT(node.HasMetadata());
 
 	auto type = node.GetType();
 	switch (type) {
 	case NType::NODE_4:
-		return Node4::GetChild(Node::Ref<Node4>(art, node, type), byte);
+		return Node4::GetChild(Node::Ref<Node4>(art, node, type), byte, unsafe);
 	case NType::NODE_16:
-		return Node16::GetChild(Node::Ref<Node16>(art, node, type), byte);
+		return Node16::GetChild(Node::Ref<Node16>(art, node, type), byte, unsafe);
 	case NType::NODE_48:
-		return Node48::GetChild(Node::Ref<Node48>(art, node, type), byte);
+		return Node48::GetChild(Node::Ref<Node48>(art, node, type), byte, unsafe);
 	case NType::NODE_256: {
-		return Node256::GetChild(Node::Ref<Node256>(art, node, type), byte);
+		return Node256::GetChild(Node::Ref<Node256>(art, node, type), byte, unsafe);
 	}
 	default:
 		throw InternalException("Invalid node type for GetChildInternal: %d.", type);
@@ -218,11 +218,11 @@ unsafe_optional_ptr<Node> GetChildInternal(ART &art, NODE &node, const uint8_t b
 }
 
 const unsafe_optional_ptr<Node> Node::GetChild(ART &art, const uint8_t byte) const {
-	return GetChildInternal(art, *this, byte);
+	return GetChildInternal(art, *this, byte, false);
 }
 
-unsafe_optional_ptr<Node> Node::GetChildMutable(ART &art, const uint8_t byte) const {
-	return GetChildInternal(art, *this, byte);
+unsafe_optional_ptr<Node> Node::GetChildMutable(ART &art, const uint8_t byte, const bool unsafe) const {
+	return GetChildInternal(art, *this, byte, unsafe);
 }
 
 template <class NODE>
@@ -248,7 +248,7 @@ const unsafe_optional_ptr<Node> Node::GetNextChild(ART &art, uint8_t &byte) cons
 	return GetNextChildInternal(art, *this, byte);
 }
 
-bool Node::HasByte(ART &art, uint8_t &byte) const {
+bool Node::HasByte(ART &art, const uint8_t byte) const {
 	D_ASSERT(HasMetadata());
 
 	auto type = GetType();

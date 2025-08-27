@@ -84,14 +84,17 @@ public:
 	static void Log(string message);
 	static string GetFailureSummary();
 	static idx_t GetSummaryCounter();
+	static bool SkipLoggingSameError(const string &file_name);
 
 private:
 	static FailureSummary &Instance();
+	bool SkipLoggingSameErrorInternal(const string &file_name);
 
 private:
 	mutex failures_lock;
 	atomic<idx_t> failures_summary_counter;
 	vector<string> failures_summary;
+	set<string> reported_files;
 };
 
 } // namespace duckdb

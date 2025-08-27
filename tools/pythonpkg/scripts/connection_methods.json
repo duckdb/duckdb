@@ -395,10 +395,7 @@
 		"return": "polars.DataFrame"
 	},
 	{
-		"name": [
-			"fetch_arrow_table",
-			"arrow"
-		],
+		"name": "fetch_arrow_table",
 		"function": "FetchArrow",
 		"docs": "Fetch a result as Arrow table following execute()",
 		"args": [
@@ -411,7 +408,11 @@
 		"return": "pyarrow.lib.Table"
 	},
 	{
-		"name": "fetch_record_batch",
+		"name": [
+			"fetch_record_batch",
+			"arrow"
+		],
+		
 		"function": "FetchRecordBatchReader",
 		"docs": "Fetch an Arrow RecordBatchReader following execute()",
 		"args": [

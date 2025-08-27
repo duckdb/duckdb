@@ -14,7 +14,7 @@ namespace duckdb {
 
 class PipeFileSystem : public FileSystem {
 public:
-	static unique_ptr<FileHandle> OpenPipe(unique_ptr<FileHandle> handle);
+	static unique_ptr<FileHandle> OpenPipe(QueryContext context, unique_ptr<FileHandle> handle);
 
 	int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
 	int64_t Write(FileHandle &handle, void *buffer, int64_t nr_bytes) override;

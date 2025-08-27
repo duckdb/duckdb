@@ -37,5 +37,6 @@ SKIPPED_TESTS = set(
         'test/sql/tpcds/tpcds_sf0.test',  # problems connected to auto installing tpcds from remote
         'test/sql/optimizer/plan/test_filter_pushdown_materialized_cte.test',  # problems connected to auto installing tpcds from remote
         'test/sql/explain/test_explain_analyze.test',  # unknown problem with changes in API
+        'test/sql/pragma/profiling/test_profiling_all.test',  # Because of logic related to enabling 'restart' statement capabilities, this will not measure the right statement
     ]
 )
