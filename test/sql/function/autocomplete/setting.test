@@ -4,6 +4,11 @@
 
 require autocomplete
 
+query II
+FROM sql_auto_complete('SET memory') limit 1;
+----
+memory_limit	7
+
 # main keywords
 query II
 FROM sql_auto_complete('set thr') LIMIT 1;
