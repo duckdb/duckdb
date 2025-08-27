@@ -391,47 +391,19 @@ static bool CastVariant(FromVariantConversionData &conversion_data, Vector &resu
 			if (ConvertVariantToStruct(conversion_data, result, sel, offset, count, row)) {
 				return true;
 			}
-
-			for (idx_t i = 0; i < count; i++) {
-				auto row_index = row.IsValid() ? row.GetIndex() : i;
-
-				//! Get the index into 'values'
-				uint32_t value_index = sel[i];
-				auto value =
-				    VariantUtils::ConvertVariantToValue(conversion_data.unified_format, row_index, value_index);
-				result.SetValue(i + offset, value.DefaultCastAs(target_type, true));
-			}
-			return true;
+			break;
 		}
 		case LogicalTypeId::ARRAY:
 			if (ConvertVariantToArray(conversion_data, result, sel, offset, count, row)) {
 				return true;
 			}
-			for (idx_t i = 0; i < count; i++) {
-				auto row_index = row.IsValid() ? row.GetIndex() : i;
-
-				//! Get the index into 'values'
-				uint32_t value_index = sel[i];
-				auto value =
-				    VariantUtils::ConvertVariantToValue(conversion_data.unified_format, row_index, value_index);
-				result.SetValue(i + offset, value.DefaultCastAs(target_type, true));
-			}
-			return true;
+			break;
 		case LogicalTypeId::LIST:
 		case LogicalTypeId::MAP: {
 			if (ConvertVariantToList(conversion_data, result, sel, offset, count, row)) {
 				return true;
 			}
-			for (idx_t i = 0; i < count; i++) {
-				auto row_index = row.IsValid() ? row.GetIndex() : i;
-
-				//! Get the index into 'values'
-				uint32_t value_index = sel[i];
-				auto value =
-				    VariantUtils::ConvertVariantToValue(conversion_data.unified_format, row_index, value_index);
-				result.SetValue(i + offset, value.DefaultCastAs(target_type, true));
-			}
-			return true;
+			break;
 		}
 		case LogicalTypeId::UNION: {
 			error = "Can't convert VARIANT";
@@ -442,6 +414,16 @@ static bool CastVariant(FromVariantConversionData &conversion_data, Vector &resu
 			return false;
 		}
 		};
+
+		for (idx_t i = 0; i < count; i++) {
+			auto row_index = row.IsValid() ? row.GetIndex() : i;
+
+			//! Get the index into 'values'
+			uint32_t value_index = sel[i];
+			auto value = VariantUtils::ConvertVariantToValue(conversion_data.unified_format, row_index, value_index);
+			result.SetValue(i + offset, value.DefaultCastAs(target_type, true));
+		}
+		return true;
 	} else {
 		EmptyConversionPayloadFromVariant empty_payload;
 		switch (target_type.id()) {
