@@ -7,7 +7,7 @@ require autocomplete
 query II
 FROM sql_auto_complete('SET memory') limit 1;
 ----
-memory_limit	7
+memory_limit	4
 
 # main keywords
 query II
