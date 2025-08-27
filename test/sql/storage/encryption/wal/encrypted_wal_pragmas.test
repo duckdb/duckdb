@@ -31,21 +31,17 @@ SELECT * FROM enc.test ORDER BY 1
 13	22
 
 statement ok
-SET wal_encryption = false;
-
-statement ok
 INSERT INTO enc.test VALUES (10, 'hello')
 
-# enable WAL encryption for the other tests
 statement ok
-SET wal_encryption = true;
+DETACH enc
 
-restart
-
-# WAL replay fails, because file is corrupted
-statement error
+# WAL replay succeeds
+statement ok
 ATTACH '__TEST_DIR__/encrypted_wal_restart.db' as enc (ENCRYPTION_KEY 'asdf');
-----
+
+statement ok
+DETACH enc
 
 # now set debug pragma at the start
 statement ok
@@ -111,12 +107,6 @@ SELECT * FROM enc.test ORDER BY 1
 11	22
 12	21
 13	22
-
-statement ok
-SET wal_encryption = false;
-
-statement ok
-SET wal_encryption = true;
 
 statement ok
 INSERT INTO enc.test VALUES (10, 'hello')
