@@ -181,13 +181,40 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 	base.names = query_node.names;
 }
 
+struct VectorOfLogicalTypeHash {
+	std::size_t operator()(const vector<LogicalType> &k) const {
+		auto hash = std::hash<size_t>()(k.size());
+		for (auto &type : k) {
+			hash = CombineHash(hash, type.Hash());
+		}
+		return hash;
+	}
+};
+
+struct VectorOfLogicalTypeEquality {
+	bool operator()(const vector<LogicalType> &a, const vector<LogicalType> &b) const {
+		if (a.size() != b.size()) {
+			return false;
+		}
+		for (idx_t i = 0; i < a.size(); i++) {
+			if (a[i] != b[i]) {
+				return false;
+			}
+		}
+		return true;
+	}
+};
+
+using vector_of_logical_type_set_t =
+    unordered_set<vector<LogicalType>, VectorOfLogicalTypeHash, VectorOfLogicalTypeEquality>;
+
 SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	auto &base = info.Cast<CreateMacroInfo>();
 
 	auto &dependencies = base.dependencies;
 	auto &catalog = Catalog::GetCatalog(context, info.catalog);
 	// try to bind each of the included functions
-	unordered_set<idx_t> positional_parameters;
+	vector_of_logical_type_set_t type_overloads;
 	for (auto &function : base.macros) {
 		auto &scalar_function = function->Cast<ScalarMacroFunction>();
 		if (scalar_function.expression->HasParameter()) {
@@ -195,20 +222,19 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 		}
 		vector<LogicalType> dummy_types;
 		vector<string> dummy_names;
-		auto parameter_count = function->parameters.size();
-		if (positional_parameters.find(parameter_count) != positional_parameters.end()) {
-			throw BinderException(
-			    "Ambiguity in macro overloads - macro \"%s\" has multiple definitions with %llu parameters", base.name,
-			    parameter_count);
-		}
-		positional_parameters.insert(parameter_count);
-
 		// positional parameters
 		for (idx_t param_idx = 0; param_idx < function->parameters.size(); param_idx++) {
 			auto param = function->parameters[param_idx]->Cast<ColumnRefExpression>();
 			dummy_types.emplace_back(function->types.empty() ? LogicalType::UNKNOWN : function->types[param_idx]);
 			dummy_names.push_back(param.GetColumnName());
 		}
+
+		if (!type_overloads.insert(dummy_types).second) {
+			throw BinderException(
+			    "Ambiguity in macro overloads - macro %s() has multiple definitions with the same parameters",
+			    base.name);
+		}
+
 		auto this_macro_binding = make_uniq<DummyBinding>(dummy_types, dummy_names, base.name);
 		macro_binding = this_macro_binding.get();
 

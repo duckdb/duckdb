@@ -1,0 +1,73 @@
+# name: test/sql/catalog/function/test_macro_type_overloads.test
+# description: Test macro TYPE overloads
+# group: [function]
+
+# create macro with type varchar
+statement ok
+create macro m(s varchar) as s || 'c';
+
+# this works
+query I
+select m('ab')
+----
+abc
+
+query I
+select m(s := 'ab')
+----
+abc
+
+# list cannot be implicitly cast to varchar, so this fails
+statement error
+select m([42])
+----
+does not support the supplied arguments
+
+statement error
+select m(s := [42])
+----
+does not support the supplied arguments
+
+# test the same behavior with an arg with a default
+statement ok
+create or replace macro m(s varchar := 'cc') as s || 'c'
+
+query I
+select m('ab')
+----
+abc
+
+query I
+select m(s := 'ab')
+----
+abc
+
+statement error
+select m([42])
+----
+does not support the supplied arguments
+
+statement error
+select m(s := [42])
+----
+does not support the supplied arguments
+
+statement ok
+create or replace macro m
+    (a tinyint) as a + 1,
+    (a smallint) as a + 2,
+    (a integer) as a + 3,
+    (a bigint) as a + 4,
+    (a hugeint) as a + 5,
+    (a) as a + 10
+
+query IIIIII
+select
+    m(0::tinyint),
+    m(0::smallint),
+    m(0::integer),
+    m(0::bigint),
+    m(0::hugeint),
+    m(0::double)
+----
+1	2	3	4	5	10

@@ -20,12 +20,16 @@ MacroFunction::MacroFunction(MacroType type) : type(type) {
 string FormatMacroFunction(const MacroFunction &function, const string &name) {
 	auto result = name + "(";
 	string parameters;
-	for (auto &param : function.parameters) {
+	for (idx_t param_idx = 0; param_idx < function.parameters.size(); param_idx++) {
 		if (!parameters.empty()) {
 			parameters += ", ";
 		}
-		const auto &param_name = param->Cast<ColumnRefExpression>().GetColumnName();
+		const auto &param_name = function.parameters[param_idx]->Cast<ColumnRefExpression>().GetColumnName();
 		parameters += param_name;
+
+		if (!function.types.empty() && function.types[param_idx] != LogicalType::UNKNOWN) {
+			parameters += " " + function.types[param_idx].ToString();
+		}
 
 		auto it = function.default_parameters.find(param_name);
 		if (it != function.default_parameters.end()) {
@@ -116,7 +120,9 @@ MacroBindResult MacroFunction::BindMacroFunction(
 				break;
 			}
 			const auto &param_type = parameter_types[param_idx];
-			if (param_type != LogicalType::UNKNOWN) {
+			if (param_type == LogicalType::UNKNOWN) {
+				macro_cost += 1000000;
+			} else if (param_type != LogicalType::UNKNOWN) {
 				const auto cast_cost =
 				    CastFunctionSet::ImplicitCastCost(binder.context, positional_arg_types[param_idx], param_type);
 				if (cast_cost < 0) {
@@ -144,7 +150,9 @@ MacroBindResult MacroFunction::BindMacroFunction(
 
 			// Supplied arg, add cost
 			const auto &param_type = parameter_types[param_idx];
-			if (param_type != LogicalType::UNKNOWN) {
+			if (param_type == LogicalType::UNKNOWN) {
+				macro_cost += 1000000;
+			} else if (param_type != LogicalType::UNKNOWN) {
 				const auto cast_cost =
 				    CastFunctionSet::ImplicitCastCost(binder.context, named_arg_types[param_name], param_type);
 				if (cast_cost < 0) {

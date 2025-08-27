@@ -86,7 +86,7 @@ CREATE MACRO ambiguous_macro
 	(a) AS a,
 	(a) AS a + 1
 ----
-has multiple definitions with 1 parameters
+Ambiguity in macro overloads
 
 # error in macro overload definition
 statement error
