@@ -1849,19 +1849,20 @@ FileExpandResult EnumUtil::FromString<FileExpandResult>(const char *value) {
 const StringUtil::EnumStringLiteral *GetFileGlobOptionsValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(FileGlobOptions::DISALLOW_EMPTY), "DISALLOW_EMPTY" },
-		{ static_cast<uint32_t>(FileGlobOptions::ALLOW_EMPTY), "ALLOW_EMPTY" }
+		{ static_cast<uint32_t>(FileGlobOptions::ALLOW_EMPTY), "ALLOW_EMPTY" },
+		{ static_cast<uint32_t>(FileGlobOptions::FALLBACK_GLOB), "FALLBACK_GLOB" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<FileGlobOptions>(FileGlobOptions value) {
-	return StringUtil::EnumToString(GetFileGlobOptionsValues(), 2, "FileGlobOptions", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetFileGlobOptionsValues(), 3, "FileGlobOptions", static_cast<uint32_t>(value));
 }
 
 template<>
 FileGlobOptions EnumUtil::FromString<FileGlobOptions>(const char *value) {
-	return static_cast<FileGlobOptions>(StringUtil::StringToEnum(GetFileGlobOptionsValues(), 2, "FileGlobOptions", value));
+	return static_cast<FileGlobOptions>(StringUtil::StringToEnum(GetFileGlobOptionsValues(), 3, "FileGlobOptions", value));
 }
 
 const StringUtil::EnumStringLiteral *GetFileLockTypeValues() {
