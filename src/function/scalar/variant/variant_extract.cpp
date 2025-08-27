@@ -128,7 +128,7 @@ static void VariantExtractFunction(DataChunk &input, ExpressionState &state, Vec
 	auto expected_type = component.lookup_mode == VariantChildLookupMode::BY_INDEX ? VariantLogicalType::ARRAY
 	                                                                               : VariantLogicalType::OBJECT;
 	if (!VariantUtils::CollectNestedData(source_format, expected_type, value_index_sel, count, optional_idx(),
-	                                     nested_data, error)) {
+	                                     nested_data, FlatVector::Validity(result), error)) {
 		throw InvalidInputException(error);
 	}
 
@@ -174,6 +174,9 @@ static void VariantExtractFunction(DataChunk &input, ExpressionState &state, Vec
 	//! Prepare the selection vector to remap index 0 of each row
 	SelectionVector new_sel(0, values_list_size);
 	for (idx_t i = 0; i < count; i++) {
+		if (nested_data[i].is_null) {
+			continue;
+		}
 		auto &list_entry = values_data[values.sel->get_index(i)];
 		new_sel.set_index(list_entry.offset, list_entry.offset + new_value_index_sel[i]);
 	}

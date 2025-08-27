@@ -221,7 +221,7 @@ static bool ConvertVariantToList(FromVariantConversionData &conversion_data, Vec
 	}
 
 	if (!VariantUtils::CollectNestedData(conversion_data.unified_format, VariantLogicalType::ARRAY, sel, count, row,
-	                                     child_data, conversion_data.error)) {
+	                                     child_data, FlatVector::Validity(result), conversion_data.error)) {
 		return false;
 	}
 	idx_t total_children = 0;
@@ -259,7 +259,9 @@ static bool ConvertVariantToList(FromVariantConversionData &conversion_data, Vec
 		total_offset += entry.length;
 
 		FindValues(conversion_data, row_index, new_sel, child_data_entry);
-		CastVariant(conversion_data, child, new_sel, entry.offset, child_data_entry.child_count, row_index);
+		if (!CastVariant(conversion_data, child, new_sel, entry.offset, child_data_entry.child_count, row_index)) {
+			return false;
+		}
 	}
 	ListVector::SetListSize(result, total_children);
 	return true;
@@ -277,7 +279,7 @@ static bool ConvertVariantToArray(FromVariantConversionData &conversion_data, Ve
 	}
 
 	if (!VariantUtils::CollectNestedData(conversion_data.unified_format, VariantLogicalType::ARRAY, sel, count, row,
-	                                     child_data, conversion_data.error)) {
+	                                     child_data, FlatVector::Validity(result), conversion_data.error)) {
 		return false;
 	}
 
@@ -331,7 +333,7 @@ static bool ConvertVariantToStruct(FromVariantConversionData &conversion_data, V
 
 	//! First get all the Object data from the VARIANT
 	if (!VariantUtils::CollectNestedData(conversion_data.unified_format, VariantLogicalType::OBJECT, sel, count, row,
-	                                     child_data, conversion_data.error)) {
+	                                     child_data, FlatVector::Validity(result), conversion_data.error)) {
 		return false;
 	}
 
@@ -371,8 +373,9 @@ static bool ConvertVariantToStruct(FromVariantConversionData &conversion_data, V
 
 //! * @param conversion_data The constant data relevant at all rows of the conversion
 //! * @param result The typed Vector to populate in this call
-//! * @param value_indices The array of `count` size, containing the (relative, without row offset applied) indices into
-//! `values` to convert
+//! * @param sel The selection of value indices to cast
+//! * @param offset The offset into the result where to write the converted values
+//! * @param count The amount of values we're converting
 //! * @param row The row of the Variant to pull data from, if 'IsValid()' is true
 static bool CastVariant(FromVariantConversionData &conversion_data, Vector &result, const SelectionVector &sel,
                         idx_t offset, idx_t count, optional_idx row) {

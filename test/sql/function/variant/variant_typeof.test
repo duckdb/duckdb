@@ -35,10 +35,12 @@ OBJECT(a, b)
 OBJECT(a, b)
 VARIANT_NULL
 
-statement error
+query I
 select variant_typeof(variant_extract(test, 'struct').a) from all_types;
 ----
-Invalid Input Error: 'OBJECT' was expected, found 'VARIANT_NULL', can't convert VARIANT
+VARIANT_NULL
+INT32
+VARIANT_NULL
 
 query I
 select variant_typeof(variant_extract(test, 'struct').variant_extract('a')) from all_types limit 2;

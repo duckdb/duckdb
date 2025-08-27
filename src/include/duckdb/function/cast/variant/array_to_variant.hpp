@@ -49,7 +49,6 @@ bool ConvertArrayToVariant(Vector &source, VariantVectorData &result, DataChunk 
 
 	//! Now write the child vector of the list
 	auto &entry = ArrayVector::GetEntry(source);
-	auto child_size = ArrayVector::GetTotalSize(source);
 	if (sel.count != list_size) {
 		Vector sliced_entry(entry.GetType(), nullptr);
 		sliced_entry.Dictionary(entry, list_size, sel.non_null_selection, sel.count);

@@ -43,6 +43,9 @@ bool ConvertStructToVariant(Vector &source, VariantVectorData &result, DataChunk
 			                               children_offset_data[result_index]);
 
 			if (WRITE_DATA && dictionary_indices.empty()) {
+				if (StructType::IsUnnamed(type)) {
+					throw ConversionException("Can't cast unnamed struct to VARIANT");
+				}
 				auto &struct_children = StructType::GetChildTypes(type);
 				for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
 					auto &struct_child = struct_children[child_idx];

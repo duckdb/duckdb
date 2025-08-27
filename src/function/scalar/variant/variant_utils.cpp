@@ -121,8 +121,14 @@ vector<uint8_t> VariantUtils::ValueIsNull(RecursiveUnifiedVectorFormat &variant,
 	for (idx_t i = 0; i < count; i++) {
 		auto row_index = row.IsValid() ? row.GetIndex() : i;
 
+		auto index = variant.unified.sel->get_index(row_index);
+		if (!variant.unified.validity.RowIsValid(index)) {
+			res.push_back(true);
+			continue;
+		}
+
 		//! values
-		auto values_index = values_format.sel->get_index(row_index);
+		auto values_index = values_format.sel->get_index(index);
 		D_ASSERT(values_format.validity.RowIsValid(values_index));
 		auto values_list_entry = values_data[values_index];
 
@@ -142,7 +148,7 @@ vector<uint8_t> VariantUtils::ValueIsNull(RecursiveUnifiedVectorFormat &variant,
 
 bool VariantUtils::CollectNestedData(RecursiveUnifiedVectorFormat &variant, VariantLogicalType expected_type,
                                      const SelectionVector &sel, idx_t count, optional_idx row,
-                                     VariantNestedData *child_data, string &error) {
+                                     VariantNestedData *child_data, ValidityMask &validity, string &error) {
 	auto &values_format = UnifiedVariantVector::GetValues(variant);
 	auto values_data = values_format.GetData<list_entry_t>(values_format);
 
@@ -159,7 +165,8 @@ bool VariantUtils::CollectNestedData(RecursiveUnifiedVectorFormat &variant, Vari
 		auto row_index = row.IsValid() ? row.GetIndex() : i;
 
 		auto index = variant.unified.sel->get_index(row_index);
-		if (!variant.unified.validity.RowIsValid(index)) {
+		//! NOTE: the validity is assumed to be from a FlatVector
+		if (!variant.unified.validity.RowIsValid(index) || !validity.RowIsValid(i)) {
 			child_data[i].is_null = true;
 			continue;
 		}
