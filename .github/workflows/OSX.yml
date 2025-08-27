@@ -163,7 +163,7 @@ jobs:
             zip -j notarize.zip build/release/duckdb build/release/src/libduckdb.dylib 
             export XCRUN_RESPONSE=$(xcrun notarytool submit --progress --apple-id "$APPLE_ID" --password "$PASSWORD" --team-id "$TEAM_ID" --wait -f json notarize.zip)
             rm notarize.zip
-            if [[ $(echo $XCRUN_RESPONSE | ./build/release/duckdb -csv -noheader -s "FROM read_json('/dev/stdin') SELECT status") != "Accepted" ]] ; then 
+            if [[ $(./build/release/duckdb -csv -noheader -c "SELECT (getenv('XCRUN_RESPONSE')::JSON).status") != "Accepted" ]] ; then 
               echo "Notarization failed!"
               echo $XCRUN_RESPONSE
               exit 1
