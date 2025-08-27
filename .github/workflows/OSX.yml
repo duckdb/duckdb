@@ -103,7 +103,7 @@ jobs:
     # Builds binaries for osx_arm64 and osx_amd64
     name: OSX Release
     runs-on: macos-14
-    needs: xcode-debug
+   # needs: xcode-debug
     env:
       EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
       ENABLE_EXTENSION_AUTOLOADING: 1
@@ -149,7 +149,7 @@ jobs:
           BUILD_CERTIFICATE_BASE64: ${{ secrets.OSX_CODESIGN_BUILD_CERTIFICATE_BASE64 }}
           P12_PASSWORD: ${{ secrets.OSX_CODESIGN_P12_PASSWORD }}
           KEYCHAIN_PASSWORD: ${{ secrets.OSX_CODESIGN_KEYCHAIN_PASSWORD }}
-          TEAM_ID: ${{ secrets.OSX_NOTARIZE_TEAM_ID }}
+          TEAM_ID : ${{ secrets.OSX_NOTARIZE_TEAM_ID }}
           APPLE_ID: ${{ secrets.OSX_NOTARIZE_APPLE_ID }}
           PASSWORD: ${{ secrets.OSX_NOTARIZE_PASSWORD }}
         run: |
@@ -163,7 +163,7 @@ jobs:
             zip -j notarize.zip build/release/duckdb build/release/src/libduckdb.dylib 
             export XCRUN_RESPONSE=$(xcrun notarytool submit --progress --apple-id "$APPLE_ID" --password "$PASSWORD" --team-id "$TEAM_ID" --wait -f json notarize.zip)
             rm notarize.zip
-            if [[ $(echo $XCRUN_RESPONSE | jq -r .status) != "Success" ]] ; then 
+            if [[ $(echo $XCRUN_RESPONSE | ./build/release/duckdb -csv -noheader -s "FROM read_json('/dev/stdin') SELECT status") != "Success" ]] ; then 
               echo "Notarization failed!"
               echo $XCRUN_RESPONSE
               exit 1
