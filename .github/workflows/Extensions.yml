@@ -103,7 +103,7 @@ jobs:
         env:
           IN_TREE_CONFIG_FILE: .github/config/in_tree_extensions.cmake
           OUT_OF_TREE_CONFIG_FILE: .github/config/out_of_tree_extensions.cmake
-          DEFAULT_EXCLUDE_ARCHS: ''
+          DEFAULT_EXCLUDE_ARCHS: 'wasm_mvp'
         run: |
           # Set config
           echo exclude_archs="$DEFAULT_EXCLUDE_ARCHS;$BASE_EXCLUDE_ARCHS;$EXTRA_EXCLUDE_ARCHS" >> $GITHUB_OUTPUT
