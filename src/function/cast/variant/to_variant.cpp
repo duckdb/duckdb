@@ -139,8 +139,6 @@ static bool CastToVARIANT(Vector &source, Vector &result, idx_t count, CastParam
 
 BoundCastInfo DefaultCasts::ImplicitToVariantCast(BindCastInput &input, const LogicalType &source,
                                                   const LogicalType &target) {
-
-	D_ASSERT(target.id() == LogicalTypeId::VARIANT);
 	return BoundCastInfo(variant::CastToVARIANT);
 }
 

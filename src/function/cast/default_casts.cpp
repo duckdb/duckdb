@@ -94,7 +94,7 @@ BoundCastInfo DefaultCasts::GetDefaultCastFunction(BindCastInput &input, const L
 		return ImplicitToUnionCast(input, source, target);
 	}
 
-	if (source.id() != LogicalTypeId::VARIANT && target.id() == LogicalTypeId::VARIANT) {
+	if (target.id() == LogicalTypeId::VARIANT) {
 		return ImplicitToVariantCast(input, source, target);
 	}
 

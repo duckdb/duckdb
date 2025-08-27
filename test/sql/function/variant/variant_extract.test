@@ -9,38 +9,36 @@ select variant_extract({'a': 1234}::VARIANT, 'a')::VARCHAR;
 1234
 
 statement ok
-create table struct_cast_tbl3(a VARIANT);
-
-statement ok
-insert into struct_cast_tbl3 select {'a': [
-	{
-		'b': 'hello',
-		'c': NULL,
-		'a': '1970/03/15'::DATE
-	},
-	{
-		'b': NULL,
-		'c': True,
-		'a': '2020/11/03'::DATE
-	}
-]}::VARIANT;
-
-statement ok
-insert into struct_cast_tbl3 select {'a': [
-	{
-		'b': 'this is a long string',
-		'c': False,
-		'a': '1953/9/16'::DATE
-	}
-]}::VARIANT;
+CREATE MACRO struct_cast_data() AS TABLE (
+	SELECT {'a': [
+		{
+			'b': 'hello',
+			'c': NULL,
+			'a': '1970/03/15'::DATE
+		},
+		{
+			'b': NULL,
+			'c': True,
+			'a': '2020/11/03'::DATE
+		}
+	]}::VARIANT AS a
+	UNION ALL
+	SELECT {'a': [
+		{
+			'b': 'this is a long string',
+			'c': False,
+			'a': '1953/9/16'::DATE
+		}
+	]}::VARIANT
+);
 
 statement error
-select variant_extract(a, 'a[1].c') from struct_cast_tbl3;
+select variant_extract(a, 'a[1].c') from struct_cast_data();
 ----
 Invalid Input Error: OBJECT does not contain the key: a[1].c
 
 query I
-select variant_extract(a, 'a').variant_extract(1::UINTEGER).variant_extract('c') from struct_cast_tbl3;
+select variant_extract(a, 'a').variant_extract(1::UINTEGER).variant_extract('c') from struct_cast_data();
 ----
 NULL
 false
