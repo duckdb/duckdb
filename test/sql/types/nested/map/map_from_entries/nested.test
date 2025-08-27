@@ -16,6 +16,7 @@ SELECT MAP_FROM_ENTRIES(ARRAY[([1,2], 2), ([3,4], 4)]);
 statement error
 SELECT MAP_FROM_ENTRIES(ARRAY[([1,2], 2), ([1,2], 4)]);
 ----
+<REGEX>:.*Invalid Input Error.*Map keys must be unique.*
 
 # STRUCT - correct
 query I
@@ -27,6 +28,7 @@ SELECT MAP_FROM_ENTRIES(ARRAY[({'a':5, 'b':7}, 2), ({'a':3, 'b':8}, 4)]);
 statement error
 SELECT MAP_FROM_ENTRIES(ARRAY[({'a':5, 'b':7}, 2), ({'a':5, 'b':7}, 4)]);
 ----
+<REGEX>:.*Invalid Input Error.*Map keys must be unique.*
 
 # MAP - correct
 query I
@@ -38,6 +40,7 @@ SELECT MAP_FROM_ENTRIES(ARRAY[(MAP([5,3,4], ['a', 'b', 'c']), 2), (MAP([4,3,5], 
 statement error
 SELECT MAP_FROM_ENTRIES(ARRAY[(MAP([5,3,4], ['a', 'b', 'c']), 2), (MAP([5,3,4], ['a', 'b', 'c']), 4)]);
 ----
+<REGEX>:.*Invalid Input Error.*Map keys must be unique.*
 
 # LIST(STRUCT) - correct
 query I
@@ -49,3 +52,4 @@ SELECT MAP_FROM_ENTRIES(ARRAY[([{'a':5, 'b':7}, {'a':5, 'b':7}], 2), ([{'a':5, '
 statement error
 SELECT MAP_FROM_ENTRIES(ARRAY[([{'a':5, 'b':7}, {'a':5, 'b':8}], 2), ([{'a':5, 'b':7}, {'a':5, 'b':8}], 4)]);
 ----
+<REGEX>:.*Invalid Input Error.*Map keys must be unique.*

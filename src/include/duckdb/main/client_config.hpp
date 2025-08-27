@@ -123,7 +123,7 @@ public:
 
 	void SetUserVariable(const string &name, Value value);
 	bool GetUserVariable(const string &name, Value &result);
-	void ResetUserVariable(const string &name);
+	void ResetUserVariable(const String &name);
 
 	template <class OP>
 	static typename OP::RETURN_TYPE GetSetting(const ClientContext &context) {
