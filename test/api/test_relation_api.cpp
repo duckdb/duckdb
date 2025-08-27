@@ -1062,19 +1062,29 @@ TEST_CASE("Test Relation Pending Query API", "[relation_api]") {
 }
 
 TEST_CASE("Test materialized relations", "[relation_api]") {
-	DuckDB db(nullptr);
-	Connection con(db);
-	con.EnableQueryVerification();
+	auto db_path = TestCreatePath("relational_api_materialized_view.db");
+	{
+		DuckDB db(db_path);
+		Connection con(db);
+		con.EnableQueryVerification();
 
-	REQUIRE_NO_FAIL(con.Query("create table tbl(a varchar);"));
+		REQUIRE_NO_FAIL(con.Query("create table tbl(a varchar);"));
 
-	auto result = con.Query("insert into tbl values ('test') returning *");
-	auto &materialized_result = result->Cast<MaterializedQueryResult>();
-	auto materialized_relation =
-	    make_shared_ptr<MaterializedRelation>(con.context, materialized_result.TakeCollection(), result->names, "vw");
-	materialized_relation->CreateView("vw");
-	materialized_relation.reset();
+		auto result = con.Query("insert into tbl values ('test') returning *");
+		auto &materialized_result = result->Cast<MaterializedQueryResult>();
+		auto materialized_relation = make_shared_ptr<MaterializedRelation>(
+		    con.context, materialized_result.TakeCollection(), result->names, "vw");
+		materialized_relation->CreateView("vw");
+		materialized_relation.reset();
 
-	result = con.Query("SELECT * FROM vw");
-	REQUIRE(CHECK_COLUMN(result, 0, {"test"}));
+		result = con.Query("SELECT * FROM vw");
+		REQUIRE(CHECK_COLUMN(result, 0, {"test"}));
+	}
+	// reset and query again
+	{
+		DuckDB db(db_path);
+		Connection con(db);
+		auto result = con.Query("SELECT * FROM vw");
+		REQUIRE(CHECK_COLUMN(result, 0, {"test"}));
+	}
 }
