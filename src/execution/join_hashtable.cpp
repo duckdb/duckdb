@@ -318,7 +318,6 @@ static void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &key_sta
 		// in the next interation, we have a selection vector with the keys that do not match
 		row_sel = &state.keys_no_match_sel;
 		has_row_sel = true;
-
 		elements_to_probe_count = keys_no_match_count;
 
 	} while (DUCKDB_UNLIKELY(keys_no_match_count > 0));
@@ -888,7 +887,6 @@ idx_t ScanStructure::ResolvePredicates(DataChunk &keys, SelectionVector &match_s
 		// the non-equality columns
 		return matcher->Match(keys, key_state.vector_data, match_sel, this->count, *ht.layout_ptr, pointers,
 		                      no_match_sel, no_match_count, ht.non_equality_predicate_columns);
-
 	} else {
 		// no match sel is the opposite of match sel
 		return this->count;
