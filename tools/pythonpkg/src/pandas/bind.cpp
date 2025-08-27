@@ -1,6 +1,7 @@
 #include "duckdb_python/pandas/pandas_bind.hpp"
 #include "duckdb_python/pandas/pandas_analyzer.hpp"
 #include "duckdb_python/pandas/column/pandas_numpy_column.hpp"
+#include "duckdb_python/pyconnection/pyconnection.hpp"
 
 namespace duckdb {
 
@@ -122,6 +123,14 @@ void Pandas::Bind(const ClientContext &context, py::handle df_p, vector<PandasCo
 	if (column_count == 0 || py::len(df.types) == 0 || column_count != py::len(df.types)) {
 		throw InvalidInputException("Need a DataFrame with at least one column");
 	}
+
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	auto pandas = import_cache.pandas();
+	if (!pandas) {
+		throw InvalidInputException("'pandas' is required for this operation, but it wasn't installed");
+	}
+	(void)import_cache.pandas.NA();
+	(void)import_cache.pandas.NaT();
 
 	return_types.reserve(column_count);
 	names.reserve(column_count);
