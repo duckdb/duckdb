@@ -132,6 +132,10 @@ bool BufferingLogStorage::IsEnabledInternal(LoggingTargetTable table) {
 	return table == LoggingTargetTable::ALL_LOGS;
 }
 
+idx_t BufferingLogStorage::GetBufferLimit() const {
+	return buffer_limit;
+}
+
 void CSVLogStorage::ExecuteCast(LoggingTargetTable table, DataChunk &chunk) {
 	// Reset the cast buffer before use
 	cast_buffers[table]->Reset();
@@ -192,9 +196,10 @@ void CSVLogStorage::InitializeCastChunk(LoggingTargetTable table) {
 
 	vector<LogicalType> types;
 	types.resize(GetSchema(table).size(), LogicalType::VARCHAR);
-
-	cast_buffers[table]->Initialize(Allocator::DefaultAllocator(), types);
+	idx_t buffer_size = MaxValue<idx_t>(GetBufferLimit(), 1);
+	cast_buffers[table]->Initialize(Allocator::DefaultAllocator(), types, buffer_size);
 }
+
 void CSVLogStorage::ResetCastChunk() {
 	InitializeCastChunk(LoggingTargetTable::LOG_ENTRIES);
 	InitializeCastChunk(LoggingTargetTable::LOG_CONTEXTS);
@@ -537,18 +542,19 @@ BufferingLogStorage::BufferingLogStorage(DatabaseInstance &db_p, idx_t buffer_si
 }
 
 void BufferingLogStorage::ResetLogBuffers() {
+	idx_t buffer_size = MaxValue<idx_t>(buffer_limit, 1);
 	if (normalize_contexts) {
 		buffers[LoggingTargetTable::LOG_ENTRIES] = make_uniq<DataChunk>();
 		buffers[LoggingTargetTable::LOG_CONTEXTS] = make_uniq<DataChunk>();
 		buffers[LoggingTargetTable::LOG_ENTRIES]->Initialize(Allocator::DefaultAllocator(),
-		                                                     GetSchema(LoggingTargetTable::LOG_ENTRIES), buffer_limit);
-		buffers[LoggingTargetTable::LOG_CONTEXTS]->Initialize(
-		    Allocator::DefaultAllocator(), GetSchema(LoggingTargetTable::LOG_CONTEXTS), buffer_limit);
+		                                                     GetSchema(LoggingTargetTable::LOG_ENTRIES), buffer_size);
+		buffers[LoggingTargetTable::LOG_CONTEXTS]->Initialize(Allocator::DefaultAllocator(),
+		                                                      GetSchema(LoggingTargetTable::LOG_CONTEXTS), buffer_size);
 
 	} else {
 		buffers[LoggingTargetTable::ALL_LOGS] = make_uniq<DataChunk>();
 		buffers[LoggingTargetTable::ALL_LOGS]->Initialize(Allocator::DefaultAllocator(),
-		                                                  GetSchema(LoggingTargetTable::ALL_LOGS), buffer_limit);
+		                                                  GetSchema(LoggingTargetTable::ALL_LOGS), buffer_size);
 	}
 }
 
@@ -563,9 +569,9 @@ InMemoryLogStorageScanState::~InMemoryLogStorageScanState() {
 
 InMemoryLogStorage::InMemoryLogStorage(DatabaseInstance &db_p) : BufferingLogStorage(db_p, STANDARD_VECTOR_SIZE, true) {
 	log_storage_buffers[LoggingTargetTable::LOG_ENTRIES] =
-	    make_uniq<ColumnDataCollection>(db_p.GetBufferManager(), GetSchema(LoggingTargetTable::LOG_ENTRIES));
+	    make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), GetSchema(LoggingTargetTable::LOG_ENTRIES));
 	log_storage_buffers[LoggingTargetTable::LOG_CONTEXTS] =
-	    make_uniq<ColumnDataCollection>(db_p.GetBufferManager(), GetSchema(LoggingTargetTable::LOG_CONTEXTS));
+	    make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), GetSchema(LoggingTargetTable::LOG_CONTEXTS));
 }
 
 void InMemoryLogStorage::ResetAllBuffers() {
@@ -637,7 +643,7 @@ void BufferingLogStorage::WriteLogEntry(timestamp_t timestamp, LogLevel level, c
 	    normalize_contexts ? buffers[LoggingTargetTable::LOG_ENTRIES] : buffers[LoggingTargetTable::ALL_LOGS];
 
 	auto size = log_entries_buffer->size();
-	if (size >= buffer_limit) {
+	if (size >= buffer_limit && buffer_limit != 0) {
 		throw InternalException("Log buffer limit exceeded: code should have flushed before");
 	}
 

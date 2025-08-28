@@ -661,7 +661,7 @@ CatalogException Catalog::CreateMissingEntryException(CatalogEntryRetriever &ret
 		if (unseen_schemas.size() >= max_schema_count) {
 			break;
 		}
-		auto &catalog = database.get().GetCatalog();
+		auto &catalog = database->GetCatalog();
 		auto current_schemas = catalog.GetSchemas(context);
 		for (auto &current_schema : current_schemas) {
 			if (unseen_schemas.size() >= max_schema_count) {
@@ -1134,8 +1134,8 @@ vector<reference<SchemaCatalogEntry>> Catalog::GetAllSchemas(ClientContext &cont
 
 	auto &db_manager = DatabaseManager::Get(context);
 	auto databases = db_manager.GetDatabases(context);
-	for (auto database : databases) {
-		auto &catalog = database.get().GetCatalog();
+	for (auto &database : databases) {
+		auto &catalog = database->GetCatalog();
 		auto new_schemas = catalog.GetSchemas(context);
 		result.insert(result.end(), new_schemas.begin(), new_schemas.end());
 	}

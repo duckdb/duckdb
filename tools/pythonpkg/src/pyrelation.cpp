@@ -66,7 +66,7 @@ DuckDBPyRelation::~DuckDBPyRelation() {
 	rel.reset();
 }
 
-DuckDBPyRelation::DuckDBPyRelation(unique_ptr<DuckDBPyResult> result_p) : rel(nullptr), result(std::move(result_p)) {
+DuckDBPyRelation::DuckDBPyRelation(shared_ptr<DuckDBPyResult> result_p) : rel(nullptr), result(std::move(result_p)) {
 	if (!result) {
 		throw InternalException("DuckDBPyRelation created without a result");
 	}
@@ -984,7 +984,14 @@ PolarsDataFrame DuckDBPyRelation::ToPolars(idx_t batch_size, bool lazy) {
 	ArrowSchema arrow_schema;
 	auto result_names = names;
 	QueryResult::DeduplicateColumns(result_names);
-	auto client_properties = rel->context->GetContext()->GetClientProperties();
+	ClientProperties client_properties;
+	if (rel) {
+		client_properties = rel->context->GetContext()->GetClientProperties();
+	} else if (result) {
+		client_properties = result->GetClientProperties();
+	} else {
+		throw InternalException("DuckDBPyRelation To Polars must have a valid relation or result");
+	}
 	ArrowConverter::ToArrowSchema(&arrow_schema, types, result_names, client_properties);
 	py::list batches;
 	// Now we create an empty arrow table

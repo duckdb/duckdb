@@ -143,6 +143,8 @@ protected:
 	//! Whether a specific table is available in the log storage
 	bool IsEnabledInternal(LoggingTargetTable table);
 
+	idx_t GetBufferLimit() const;
+
 	//! lock to be used by this class and child classes to ensure thread safety TODO: maybe remove and delegate
 	//! thread-safety to LogManager?
 	mutable mutex lock;

@@ -259,6 +259,9 @@ typedef uint32_t sel_t;
 //! bind data (if any), init data (if any), extra data for replacement scans (if any), etc.
 typedef void (*duckdb_delete_callback_t)(void *data);
 
+//! The callback to copy data, e.g., bind data (if any).
+typedef void *(*duckdb_copy_callback_t)(void *data);
+
 //! Used for threading, contains a task state.
 //! Must be destroyed with `duckdb_destroy_task_state`.
 typedef void *duckdb_task_state;
@@ -3480,7 +3483,8 @@ DUCKDB_C_API void duckdb_scalar_function_set_bind(duckdb_scalar_function scalar_
 
 /*!
 Sets the user-provided bind data in the bind object of the scalar function.
-This object can be retrieved again during execution.
+The bind data object can be retrieved again during execution.
+In most case, you also need to set the copy-callback of your bind data via duckdb_scalar_function_set_bind_data_copy.
 
 * @param info The bind info of the scalar function.
 * @param bind_data The bind data object.
@@ -3488,6 +3492,14 @@ This object can be retrieved again during execution.
 */
 DUCKDB_C_API void duckdb_scalar_function_set_bind_data(duckdb_bind_info info, void *bind_data,
                                                        duckdb_delete_callback_t destroy);
+
+/*!
+Sets the copy-callback for the user-provided bind data in the bind object of the scalar function.
+
+* @param info The bind info of the scalar function.
+* @param copy The callback to copy the bind data (if any).
+*/
+DUCKDB_C_API void duckdb_scalar_function_set_bind_data_copy(duckdb_bind_info info, duckdb_copy_callback_t copy);
 
 /*!
 Report that an error has occurred while calling bind on a scalar function.
@@ -4258,6 +4270,25 @@ Note that the object must be destroyed with `duckdb_appender_destroy`.
 DUCKDB_C_API duckdb_state duckdb_appender_create_ext(duckdb_connection connection, const char *catalog,
                                                      const char *schema, const char *table,
                                                      duckdb_appender *out_appender);
+
+/*!
+Creates an appender object that executes the given query with any data appended to it.
+
+Note that the object must be destroyed with `duckdb_appender_destroy`.
+
+* @param connection The connection context to create the appender in.
+* @param query The query to execute, can be an INSERT, DELETE, UPDATE or MERGE INTO statement.
+* @param column_count The number of columns to append.
+* @param types The types of the columns to append.
+* @param table_name (optionally) the table name used to refer to the appended data, defaults to "appended_data".
+* @param column_names (optionally) the list of column names, defaults to "col1", "col2", ...
+* @param out_appender The resulting appender object.
+* @return `DuckDBSuccess` on success or `DuckDBError` on failure.
+*/
+DUCKDB_C_API duckdb_state duckdb_appender_create_query(duckdb_connection connection, const char *query,
+                                                       idx_t column_count, duckdb_logical_type *types,
+                                                       const char *table_name, const char **column_names,
+                                                       duckdb_appender *out_appender);
 
 /*!
 Returns the number of columns that belong to the appender.
