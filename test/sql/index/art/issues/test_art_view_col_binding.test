@@ -1,0 +1,48 @@
+# name: test/sql/index/art/issues/test_art_view_col_binding.test
+# description: Test Index Scan push down against views with reordered projections (issue #17290)
+# group: [issues]
+
+statement ok
+create or replace table test as (
+    select
+        cast(unnest(range(1000)) as varchar) as x,
+        cast(unnest(range(2000,3000)) as varchar) as y,
+        cast(unnest(range(3000,4000)) as varchar) as z
+);
+
+# test simple permutation of initial table projection
+statement ok
+create index test_x on test(x);
+
+statement ok
+create view test_view as (select z, y, x from test);
+
+query II
+explain analyze select * from test_view where x = '525';
+----
+analyzed_plan	<REGEX>:.*Index Scan.*
+
+query III
+select z, y, x from test_view where x = '525';
+----
+3525	2525	525
+
+statement ok
+drop index test_x;
+
+# test columnref as a child of function
+statement ok
+create index test_upper_x on test(upper(x));
+
+query II
+explain analyze select * from test_view where upper(x) = '526';
+----
+analyzed_plan	<REGEX>:.*Index Scan.*
+
+query III
+select z, y, x from test_view where upper(x) = '526';
+----
+3526	2526	526
+
+statement ok
+drop index test_upper_x;
