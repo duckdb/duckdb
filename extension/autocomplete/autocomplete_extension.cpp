@@ -250,6 +250,10 @@ static vector<AutoCompleteCandidate> SuggestSettingName(ClientContext &context) 
 		AutoCompleteCandidate candidate(option_alias.alias, 0);
 		suggestions.push_back(std::move(candidate));
 	}
+	for (auto &entry : db_config.extension_parameters) {
+		AutoCompleteCandidate candidate(entry.first, 0);
+		suggestions.push_back(std::move(candidate));
+	}
 	return suggestions;
 }
 

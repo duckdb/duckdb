@@ -4,10 +4,17 @@
 
 require autocomplete
 
+require icu
+
 query II
 FROM sql_auto_complete('SET directory') LIMIT 1;
 ----
 home_directory	4
+
+query II
+from sql_auto_complete('SET timez') LIMIT 1;
+----
+TimeZone	4
 
 query II
 FROM sql_auto_complete('SET memory') LIMIT 1;
