@@ -23,5 +23,7 @@ INSERT INTO fk_integers VALUES (1), (2);
 
 restart
 
-statement ok
+statement error
 INSERT INTO fk_integers VALUES (3);
+----
+could not allocate
