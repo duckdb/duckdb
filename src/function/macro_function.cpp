@@ -122,7 +122,7 @@ MacroBindResult MacroFunction::BindMacroFunction(
 			const auto &param_type = parameter_types[param_idx];
 			if (param_type == LogicalType::UNKNOWN) {
 				macro_cost += 1000000;
-			} else if (param_type != LogicalType::UNKNOWN) {
+			} else {
 				const auto cast_cost =
 				    CastFunctionSet::ImplicitCastCost(binder.context, positional_arg_types[param_idx], param_type);
 				if (cast_cost < 0) {
@@ -152,7 +152,7 @@ MacroBindResult MacroFunction::BindMacroFunction(
 			const auto &param_type = parameter_types[param_idx];
 			if (param_type == LogicalType::UNKNOWN) {
 				macro_cost += 1000000;
-			} else if (param_type != LogicalType::UNKNOWN) {
+			} else {
 				const auto cast_cost =
 				    CastFunctionSet::ImplicitCastCost(binder.context, named_arg_types[param_name], param_type);
 				if (cast_cost < 0) {
@@ -177,15 +177,20 @@ MacroBindResult MacroFunction::BindMacroFunction(
 		if (result_indices.empty()) {
 			// No matching function found
 			error = StringUtil::Format("Macro %s() does not support the supplied arguments.\n", name);
+			error += "Candidate macros:";
+			for (auto &function : functions) {
+				error += "\n\t" + FormatMacroFunction(*function, name);
+			}
 		} else {
 			// Multiple matching functions found
-			error = StringUtil::Format("Macro %s() has multiple overloads that match the supplied arguments. ", name);
+			error = StringUtil::Format("Macro %s() has multiple overloads that match the supplied arguments.\n", name);
 			error += "In order to select one, please supply all arguments by name, and/or add explicit type casts.\n";
+			error += "Candidate macros:";
+			for (const auto &result_idx : result_indices) {
+				error += "\n\t" + FormatMacroFunction(*functions[result_idx], name);
+			}
 		}
-		error += "Candidate macros:";
-		for (auto &function : functions) {
-			error += "\n\t" + FormatMacroFunction(*function, name);
-		}
+
 		return MacroBindResult(error);
 	}
 

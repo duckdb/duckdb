@@ -265,7 +265,8 @@ struct MacroExtractor {
 		vector<Value> results;
 		auto &macro_entry = *entry.macros[offset];
 		for (idx_t i = 0; i < macro_entry.parameters.size(); i++) {
-			results.emplace_back(LogicalType::VARCHAR);
+			const auto has_type = !macro_entry.types.empty() && macro_entry.types[i] != LogicalType::UNKNOWN;
+			results.emplace_back(has_type ? macro_entry.types[i].ToString() : Value(LogicalType::VARCHAR));
 		}
 		return Value::LIST(LogicalType::VARCHAR, std::move(results));
 	}
@@ -327,7 +328,8 @@ struct TableMacroExtractor {
 		vector<Value> results;
 		auto &macro_entry = *entry.macros[offset];
 		for (idx_t i = 0; i < macro_entry.parameters.size(); i++) {
-			results.emplace_back(LogicalType::VARCHAR);
+			const auto has_type = !macro_entry.types.empty() && macro_entry.types[i] != LogicalType::UNKNOWN;
+			results.emplace_back(has_type ? macro_entry.types[i].ToString() : Value(LogicalType::VARCHAR));
 		}
 		return Value::LIST(LogicalType::VARCHAR, std::move(results));
 	}
