@@ -5,7 +5,12 @@
 require autocomplete
 
 query II
-FROM sql_auto_complete('SET memory') limit 1;
+FROM sql_auto_complete('SET directory') LIMIT 1;
+----
+home_directory	4
+
+query II
+FROM sql_auto_complete('SET memory') LIMIT 1;
 ----
 memory_limit	4
 
