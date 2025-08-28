@@ -47,29 +47,35 @@ SELECT '\x20\x00\xFF'::VARCHAR::BLOB::VARCHAR::BLOB
 statement error
 SELECT 1::BYTEA
 ----
+<REGEX>:.*Conversion Error.*Unimplemented type for cast.*
 
 statement error
 SELECT 1.0::BYTEA
 ----
+<REGEX>:.*Conversion Error.*Unimplemented type for cast.*
 
 # numeric -> bytea, not valid/implemented casts
 statement error
 SELECT 1::tinyint::BYTEA
 ----
+<REGEX>:.*Conversion Error.*Unimplemented type for cast.*
 
 statement error
 SELECT 1::smallint::BYTEA
 ----
+<REGEX>:.*Conversion Error.*Unimplemented type for cast.*
 
 statement error
 SELECT 1::integer::BYTEA
 ----
+<REGEX>:.*Conversion Error.*Unimplemented type for cast.*
 
 statement error
 SELECT 1::bigint::BYTEA
 ----
+<REGEX>:.*Conversion Error.*Unimplemented type for cast.*
 
 statement error
 SELECT 1::decimal::BYTEA
 ----
-
+<REGEX>:.*Conversion Error.*Unimplemented type for cast.*

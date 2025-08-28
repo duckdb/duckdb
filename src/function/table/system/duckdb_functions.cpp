@@ -258,9 +258,6 @@ struct MacroExtractor {
 			auto &colref = param->Cast<ColumnRefExpression>();
 			results.emplace_back(colref.GetColumnName());
 		}
-		for (auto &param_entry : macro_entry.default_parameters) {
-			results.emplace_back(param_entry.first);
-		}
 		return results;
 	}
 
@@ -328,9 +325,6 @@ struct TableMacroExtractor {
 			D_ASSERT(param->GetExpressionType() == ExpressionType::COLUMN_REF);
 			auto &colref = param->Cast<ColumnRefExpression>();
 			results.emplace_back(colref.GetColumnName());
-		}
-		for (auto &param_entry : macro_entry.default_parameters) {
-			results.emplace_back(param_entry.first);
 		}
 		return results;
 	}

@@ -70,7 +70,8 @@ struct MultiFilePushdownInfo {
 //! NOTE: subclasses are responsible for ensuring thread-safety
 class MultiFileList {
 public:
-	explicit MultiFileList(vector<OpenFileInfo> paths, FileGlobOptions options);
+	MultiFileList(vector<OpenFileInfo> paths, FileGlobOptions options);
+	MultiFileList(vector<OpenFileInfo> paths, FileGlobInput input);
 	virtual ~MultiFileList();
 
 	//! Returns the raw, unexpanded paths, pre-filter
@@ -119,7 +120,7 @@ protected:
 	//! The unexpanded input paths
 	const vector<OpenFileInfo> paths;
 	//! Whether paths can expand to 0 files
-	const FileGlobOptions glob_options;
+	const FileGlobInput glob_input;
 
 public:
 	template <class TARGET>
@@ -162,7 +163,7 @@ protected:
 //! MultiFileList that takes a list of paths and produces a list of files with all globs expanded
 class GlobMultiFileList : public MultiFileList {
 public:
-	GlobMultiFileList(ClientContext &context, vector<OpenFileInfo> paths, FileGlobOptions options);
+	GlobMultiFileList(ClientContext &context, vector<OpenFileInfo> paths, FileGlobInput glob_input);
 	//! Calls ExpandAll, then prunes the expanded_files using the hive/filename filters
 	unique_ptr<MultiFileList> ComplexFilterPushdown(ClientContext &context, const MultiFileOptions &options,
 	                                                MultiFilePushdownInfo &info,

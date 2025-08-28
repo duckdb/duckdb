@@ -66,6 +66,7 @@ RowGroup::RowGroup(RowGroupCollection &collection_p, PersistentRowGroupData &dat
 }
 
 void RowGroup::MoveToCollection(RowGroupCollection &collection_p, idx_t new_start) {
+	lock_guard<mutex> l(row_group_lock);
 	this->collection = collection_p;
 	this->start = new_start;
 	for (idx_t c = 0; c < columns.size(); c++) {
@@ -648,8 +649,12 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 						ColumnSegment::FilterSelection(sel, result_vector, vdata, filter.filter, table_filter_state,
 						                               approved_tuple_count, approved_tuple_count);
 
+					} else if (approved_tuple_count == 0) {
+						auto &col_data = GetColumn(column_idx);
+						col_data.Skip(state.column_scans[scan_idx]);
+						continue;
 					} else {
-						auto &col_data = GetColumn(filter.table_column_index);
+						auto &col_data = GetColumn(column_idx);
 						col_data.Filter(transaction, state.vector_index, state.column_scans[scan_idx], result_vector,
 						                sel, approved_tuple_count, filter.filter, table_filter_state);
 					}

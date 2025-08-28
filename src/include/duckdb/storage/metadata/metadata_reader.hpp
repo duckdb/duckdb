@@ -27,6 +27,8 @@ public:
 	//! Read content of size read_size into the buffer
 	void ReadData(data_ptr_t buffer, idx_t read_size) override;
 
+	void ReadData(QueryContext context, data_ptr_t buffer, idx_t read_size) override;
+
 	MetaBlockPointer GetMetaBlockPointer();
 
 	MetadataManager &GetMetadataManager() {
@@ -41,6 +43,8 @@ private:
 	data_ptr_t Ptr();
 
 	void ReadNextBlock();
+
+	void ReadNextBlock(QueryContext context);
 
 	MetadataPointer FromDiskPointer(MetaBlockPointer pointer);
 

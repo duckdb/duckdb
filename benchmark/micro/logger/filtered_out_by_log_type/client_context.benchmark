@@ -6,11 +6,7 @@ name Client Context
 group logger
 
 load
-set enable_logging=true;
-set logging_storage='memory';
-set logging_level='debug';
-set logging_mode='disable_selected';
-set disabled_log_types='duckdb.SomeName.SomeOtherName.BlaBla';
+CALL enable_logging('FileSystem');
 
 run
 SELECT write_log('hello world', level := 'warn', scope := 'connection', log_type := 'duckdb.SomeName.SomeOtherName.BlaBla' ) from range(0,10000000);

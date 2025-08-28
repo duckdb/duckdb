@@ -492,7 +492,7 @@ void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
 		Initialize(h2, GetOptionalBlockAllocSize());
 	}
 	AddStorageVersionTag();
-	LoadFreeList();
+	LoadFreeList(context);
 }
 
 void SingleFileBlockManager::CheckChecksum(data_ptr_t start_ptr, uint64_t delta, bool skip_block_header) const {
@@ -625,25 +625,25 @@ void SingleFileBlockManager::Initialize(const DatabaseHeader &header, const opti
 	SetBlockAllocSize(header.block_alloc_size);
 }
 
-void SingleFileBlockManager::LoadFreeList() {
+void SingleFileBlockManager::LoadFreeList(QueryContext context) {
 	MetaBlockPointer free_pointer(free_list_id, 0);
 	if (!free_pointer.IsValid()) {
 		// no free list
 		return;
 	}
 	MetadataReader reader(GetMetadataManager(), free_pointer, nullptr, BlockReaderType::REGISTER_BLOCKS);
-	auto free_list_count = reader.Read<uint64_t>();
+	auto free_list_count = reader.Read<uint64_t>(context);
 	free_list.clear();
 	for (idx_t i = 0; i < free_list_count; i++) {
-		auto block = reader.Read<block_id_t>();
+		auto block = reader.Read<block_id_t>(context);
 		free_list.insert(block);
 		newly_freed_list.insert(block);
 	}
-	auto multi_use_blocks_count = reader.Read<uint64_t>();
+	auto multi_use_blocks_count = reader.Read<uint64_t>(context);
 	multi_use_blocks.clear();
 	for (idx_t i = 0; i < multi_use_blocks_count; i++) {
-		auto block_id = reader.Read<block_id_t>();
-		auto usage_count = reader.Read<uint32_t>();
+		auto block_id = reader.Read<block_id_t>(context);
+		auto usage_count = reader.Read<uint32_t>(context);
 		multi_use_blocks[block_id] = usage_count;
 	}
 	GetMetadataManager().Read(reader);
@@ -876,10 +876,10 @@ void SingleFileBlockManager::ReadBlock(Block &block, bool skip_block_header) con
 	CheckChecksum(block, location, delta, skip_block_header);
 }
 
-void SingleFileBlockManager::Read(Block &block) {
+void SingleFileBlockManager::Read(QueryContext context, Block &block) {
 	D_ASSERT(block.id >= 0);
 	D_ASSERT(std::find(free_list.begin(), free_list.end(), block.id) == free_list.end());
-	ReadAndChecksum(QueryContext(), block, GetBlockLocation(block.id));
+	ReadAndChecksum(context, block, GetBlockLocation(block.id));
 }
 
 void SingleFileBlockManager::ReadBlocks(FileBuffer &buffer, block_id_t start_block, idx_t block_count) {

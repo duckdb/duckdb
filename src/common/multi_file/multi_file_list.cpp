@@ -126,8 +126,12 @@ const OpenFileInfo &MultiFileListIterationHelper::MultiFileListIterator::operato
 //===--------------------------------------------------------------------===//
 // MultiFileList
 //===--------------------------------------------------------------------===//
+MultiFileList::MultiFileList(vector<OpenFileInfo> paths, FileGlobInput glob_input_p)
+    : paths(std::move(paths)), glob_input(std::move(glob_input_p)) {
+}
+
 MultiFileList::MultiFileList(vector<OpenFileInfo> paths, FileGlobOptions options)
-    : paths(std::move(paths)), glob_options(options) {
+    : MultiFileList(std::move(paths), FileGlobInput(options)) {
 }
 
 MultiFileList::~MultiFileList() {
@@ -268,8 +272,9 @@ idx_t SimpleMultiFileList::GetTotalFileCount() {
 //===--------------------------------------------------------------------===//
 // GlobMultiFileList
 //===--------------------------------------------------------------------===//
-GlobMultiFileList::GlobMultiFileList(ClientContext &context_p, vector<OpenFileInfo> paths_p, FileGlobOptions options)
-    : MultiFileList(std::move(paths_p), options), context(context_p), current_path(0), peeked_current_path(0) {
+GlobMultiFileList::GlobMultiFileList(ClientContext &context_p, vector<OpenFileInfo> paths_p, FileGlobInput glob_input)
+    : MultiFileList(std::move(paths_p), std::move(glob_input)), context(context_p), current_path(0),
+      peeked_current_path(0) {
 }
 
 unique_ptr<MultiFileList> GlobMultiFileList::ComplexFilterPushdown(ClientContext &context_p,
@@ -395,7 +400,7 @@ bool GlobMultiFileList::ExpandPathInternal(idx_t &current_path, vector<OpenFileI
 	}
 
 	auto &fs = FileSystem::GetFileSystem(context);
-	auto glob_files = fs.GlobFiles(paths[current_path].path, context, glob_options, max_files, hive_filter_params);
+	auto glob_files = fs.GlobFiles(paths[current_path].path, context, glob_input, max_files, hive_filter_params);
 	std::sort(glob_files.begin(), glob_files.end());
 	result.insert(result.end(), glob_files.begin(), glob_files.end());
 

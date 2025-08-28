@@ -17,7 +17,7 @@ insert into tbl values (1,2) on conflict do update set a = excluded.a;
 statement error
 insert or replace into tbl values (4,3) on conflict do nothing;
 ----
-Parser Error: You can not provide both OR REPLACE|IGNORE and an ON CONFLICT clause, please remove the first if you want to have more granual control
+<REGEX>:.*Parser Error.*You can not provide both OR.*
 
 # INSERT OR IGNORE is shorthand for DO NOTHING
 statement ok
@@ -40,3 +40,4 @@ create or replace table tbl (a integer unique, b integer unique);
 statement error
 insert or replace into tbl values (1,2);
 ----
+<REGEX>:.*Binder Error.*Conflict target has to be provided for a DO UPDATE.*

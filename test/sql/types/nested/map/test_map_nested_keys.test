@@ -48,6 +48,7 @@ SELECT MAP(
 	]
 );
 ----
+<REGEX>:.*Invalid Input Error.*Map keys must be unique.*
 
 # Nested keys (list) not successful (nulls)
 statement error
@@ -60,6 +61,7 @@ SELECT MAP(
 	]
 );
 ----
+<REGEX>:.*Invalid Input Error.*Map keys can not be NULL.*
 
 # Nested keys (struct) successful
 query I
@@ -85,6 +87,7 @@ SELECT MAP(
 	]
 );
 ----
+<REGEX>:.*Invalid Input Error.*Map keys must be unique.*
 
 # Nested keys (struct) not successful (null)
 statement error
@@ -97,6 +100,7 @@ SELECT MAP(
 	]
 );
 ----
+<REGEX>:.*Invalid Input Error.*Map keys can not be NULL.*
 
 # Nested keys (map) successful
 query I
@@ -122,6 +126,7 @@ SELECT MAP(
 	]
 );
 ----
+<REGEX>:.*Invalid Input Error.*Map keys must be unique.*
 
 # Nested keys (map) not successful (null)
 statement error
@@ -134,3 +139,4 @@ SELECT MAP(
 	]
 );
 ----
+<REGEX>:.*Invalid Input Error.*Map keys can not be NULL.*

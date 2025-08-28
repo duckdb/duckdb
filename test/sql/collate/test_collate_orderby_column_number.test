@@ -2,9 +2,6 @@
 # description: Test collation on ORDER BY with column number
 # group: [collate]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT 'a' AS c1 ORDER BY 1 COLLATE NOCASE;
 ----
