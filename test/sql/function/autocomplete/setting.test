@@ -6,6 +6,8 @@ require autocomplete
 
 require icu
 
+require no_extension_autoloading "FIXME: ICU is not autoloaded on 'Set timez'"
+
 query II
 FROM sql_auto_complete('SET directory') LIMIT 1;
 ----
