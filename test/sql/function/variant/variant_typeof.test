@@ -84,8 +84,8 @@ VARIANT_NULL
 
 query III
 with all_types as (
-	select struct_pack(*COLUMNS(*))::VARIANT test from test_all_types()
+	select struct_pack(*COLUMNS(*))::VARIANT test from test_all_types() offset 1 limit 1
 )
-select variant_typeof(variant_extract(test, 'array_of_structs')[1]), variant_typeof(variant_extract(test, 'array_of_structs')[2]), variant_typeof(variant_extract(test, 'array_of_structs')[3]) from all_types offset 1 limit 1;
+select variant_typeof(variant_extract(test, 'array_of_structs')[1]), variant_typeof(variant_extract(test, 'array_of_structs')[2]), variant_typeof(variant_extract(test, 'array_of_structs')[3]) from all_types;
 ----
 OBJECT(a, b)	OBJECT(a, b)	VARIANT_NULL
