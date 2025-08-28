@@ -51,8 +51,7 @@ struct ReadTextOperation {
 
 template <class OP>
 struct DirectMultiFileInfo : MultiFileReaderInterface {
-	static unique_ptr<MultiFileReaderInterface> InitializeInterface(ClientContext &context, MultiFileReader &reader,
-	                                                                MultiFileList &file_list);
+	static unique_ptr<MultiFileReaderInterface> CreateInterface(ClientContext &context);
 	unique_ptr<BaseFileReaderOptions> InitializeOptions(ClientContext &context,
 	                                                    optional_ptr<TableFunctionInfo> info) override;
 	bool ParseCopyOption(ClientContext &context, const string &key, const vector<Value> &values,
@@ -78,12 +77,7 @@ struct DirectMultiFileInfo : MultiFileReaderInterface {
 	                                        BaseFileReaderOptions &options,
 	                                        const MultiFileOptions &file_options) override;
 	unique_ptr<NodeStatistics> GetCardinality(const MultiFileBindData &bind_data, idx_t file_count) override;
-};
-
-struct DirectFileGlobOptions {
-	static FileGlobOptions GetFileGlobOptions() {
-		return FileGlobOptions::ALLOW_EMPTY;
-	}
+	FileGlobInput GetGlobInput() override;
 };
 
 } // namespace duckdb
