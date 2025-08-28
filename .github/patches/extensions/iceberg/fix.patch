@@ -138,7 +138,7 @@ index d3ea52fb..fda85203 100644
  
  	return functions;
 diff --git a/src/iceberg_functions/iceberg_multi_file_reader.cpp b/src/iceberg_functions/iceberg_multi_file_reader.cpp
-index 10978072..a8b16460 100644
+index 10978072..a0ec3f31 100644
 --- a/src/iceberg_functions/iceberg_multi_file_reader.cpp
 +++ b/src/iceberg_functions/iceberg_multi_file_reader.cpp
 @@ -7,7 +7,6 @@
@@ -149,6 +149,15 @@ index 10978072..a8b16460 100644
  #include "duckdb/parallel/thread_context.hpp"
  #include "duckdb/parser/tableref/table_function_ref.hpp"
  #include "duckdb/parser/expression/constant_expression.hpp"
+@@ -532,7 +531,7 @@ unique_ptr<MultiFileReader> IcebergMultiFileReader::CreateInstance(const TableFu
+ }
+ 
+ shared_ptr<MultiFileList> IcebergMultiFileReader::CreateFileList(ClientContext &context, const vector<string> &paths,
+-                                                                 FileGlobOptions options) {
++                                                                 const FileGlobInput &input) {
+ 	if (paths.size() != 1) {
+ 		throw BinderException("'iceberg_scan' only supports single path as input");
+ 	}
 @@ -919,7 +918,15 @@ void IcebergMultiFileList::ScanDeleteFile(const IcebergManifestEntry &entry,
  	auto &instance = DatabaseInstance::GetDatabase(context);
  	//! FIXME: delete files could also be made without row_ids,
@@ -265,6 +274,19 @@ index 2f50b6d3..20e0da35 100644
  #include "duckdb/parallel/thread_context.hpp"
  #include "duckdb/parser/tableref/table_function_ref.hpp"
  #include "duckdb/parser/expression/constant_expression.hpp"
+diff --git a/src/include/iceberg_multi_file_reader.hpp b/src/include/iceberg_multi_file_reader.hpp
+index d962306b..3fe3a5a1 100644
+--- a/src/include/iceberg_multi_file_reader.hpp
++++ b/src/include/iceberg_multi_file_reader.hpp
+@@ -182,7 +182,7 @@ public:
+ 	static unique_ptr<MultiFileReader> CreateInstance(const TableFunction &table);
+ 	//! Return a IcebergSnapshot
+ 	shared_ptr<MultiFileList> CreateFileList(ClientContext &context, const vector<string> &paths,
+-	                                         FileGlobOptions options) override;
++	                                         const FileGlobInput &input) override;
+ 
+ 	//! Override the regular parquet bind using the MultiFileReader Bind. The bind from these are what DuckDB's file
+ 	//! readers will try read
 diff --git a/src/storage/irc_clear_cache.cpp b/src/storage/irc_clear_cache.cpp
 index 4e1da4d8..168929b4 100644
 --- a/src/storage/irc_clear_cache.cpp
@@ -308,3 +330,156 @@ index f3a78161..e6066dea 100644
  	auto iceberg_scan_function =
  	    iceberg_scan_function_set.functions.GetFunctionByArguments(context, {LogicalType::VARCHAR});
  	auto storage_location = PrepareIcebergScanFromEntry(context);
+diff --git a/test/sql/local/iceberg_scans/filtering_on_bounds.test b/test/sql/local/iceberg_scans/filtering_on_bounds.test
+index e9a862ee..3248e621 100644
+--- a/test/sql/local/iceberg_scans/filtering_on_bounds.test
++++ b/test/sql/local/iceberg_scans/filtering_on_bounds.test
+@@ -19,7 +19,7 @@ statement ok
+ create view my_datalake.default.filtering_on_bounds as select * from ICEBERG_SCAN('data/generated/iceberg/spark-local/default/filtering_on_bounds');
+ 
+ statement ok
+-pragma enable_logging=true;
++CALL enable_logging();
+ 
+ statement ok
+ set enable_logging=false;
+@@ -34,7 +34,7 @@ select count(*) from my_datalake.default.filtering_on_bounds;
+ 5000
+ 
+ statement ok
+-pragma truncate_duckdb_logs;
++CALL truncate_duckdb_logs();
+ 
+ query I
+ select count(*) from my_datalake.default.filtering_on_bounds where col1 > 500;
+@@ -56,7 +56,7 @@ ON logs.msg = meta.file_path;
+ 500
+ 
+ statement ok
+-pragma truncate_duckdb_logs;
++CALL truncate_duckdb_logs();
+ 
+ query I
+ select count(*) from my_datalake.default.filtering_on_bounds where col1 > 1500;
+@@ -77,7 +77,7 @@ ON logs.msg = meta.file_path;
+ 1500
+ 
+ statement ok
+-pragma truncate_duckdb_logs;
++CALL truncate_duckdb_logs();
+ 
+ query I
+ select count(*) from my_datalake.default.filtering_on_bounds where col1 >= 2300 and col1 < 3500;
+diff --git a/test/sql/local/iceberg_scans/filtering_on_partition_bounds.test b/test/sql/local/iceberg_scans/filtering_on_partition_bounds.test
+index ca105539..07ec4457 100644
+--- a/test/sql/local/iceberg_scans/filtering_on_partition_bounds.test
++++ b/test/sql/local/iceberg_scans/filtering_on_partition_bounds.test
+@@ -19,7 +19,7 @@ statement ok
+ create view my_datalake.default.filtering_on_partition_bounds as select * from ICEBERG_SCAN('data/generated/iceberg/spark-local/default/filtering_on_partition_bounds');
+ 
+ statement ok
+-pragma enable_logging=true;
++CALL enable_logging();
+ 
+ statement ok
+ set enable_logging=false;
+@@ -34,7 +34,7 @@ select count(*) from my_datalake.default.filtering_on_partition_bounds;
+ 5000
+ 
+ statement ok
+-pragma truncate_duckdb_logs;
++CALL truncate_duckdb_logs();
+ 
+ query I
+ select count(*) from my_datalake.default.filtering_on_partition_bounds where seq = 1
+@@ -56,7 +56,7 @@ ON logs.msg = meta.manifest_path;
+ 4000
+ 
+ statement ok
+-pragma truncate_duckdb_logs;
++CALL truncate_duckdb_logs();
+ 
+ query I
+ select count(*) from my_datalake.default.filtering_on_partition_bounds where seq > 1 and seq < 4;
+@@ -77,7 +77,7 @@ ON logs.msg = meta.manifest_path;
+ 3000
+ 
+ statement ok
+-pragma truncate_duckdb_logs;
++CALL truncate_duckdb_logs();
+ 
+ query I
+ select count(*) from my_datalake.default.filtering_on_partition_bounds where seq >= 2 and seq <= 3;
+diff --git a/test/sql/local/partitioning/year/year_timestamp.test b/test/sql/local/partitioning/year/year_timestamp.test
+index 8dccd449..e006226d 100644
+--- a/test/sql/local/partitioning/year/year_timestamp.test
++++ b/test/sql/local/partitioning/year/year_timestamp.test
+@@ -12,7 +12,7 @@ require httpfs
+ require-env DUCKDB_ICEBERG_HAVE_GENERATED_DATA
+ 
+ statement ok
+-pragma enable_logging=true;
++CALL enable_logging();
+ 
+ statement ok
+ set enable_logging=false;
+@@ -31,7 +31,7 @@ select * from ICEBERG_SCAN('data/generated/iceberg/spark-local/default/year_time
+ NULL	99999	null_event
+ 
+ statement ok
+-pragma truncate_duckdb_logs;
++CALL truncate_duckdb_logs();
+ 
+ query I
+ select user_id from ICEBERG_SCAN('data/generated/iceberg/spark-local/default/year_timestamp') 
+@@ -65,7 +65,7 @@ ON logs.msg = meta.manifest_path;
+ 5
+ 
+ statement ok
+-pragma truncate_duckdb_logs;
++CALL truncate_duckdb_logs();
+ 
+ query I
+ select user_id from ICEBERG_SCAN('data/generated/iceberg/spark-local/default/year_timestamp') 
+@@ -92,7 +92,7 @@ ON logs.msg = meta.manifest_path;
+ 1
+ 
+ statement ok
+-pragma truncate_duckdb_logs;
++CALL truncate_duckdb_logs();
+ 
+ # Test filtering by year
+ query I
+@@ -115,7 +115,7 @@ ON logs.msg = meta.manifest_path;
+ 2
+ 
+ statement ok
+-pragma truncate_duckdb_logs;
++CALL truncate_duckdb_logs();
+ 
+ query I
+ select user_id from ICEBERG_SCAN('data/generated/iceberg/spark-local/default/year_timestamp') 
+@@ -137,7 +137,7 @@ ON logs.msg = meta.manifest_path;
+ 2
+ 
+ statement ok
+-pragma truncate_duckdb_logs;
++CALL truncate_duckdb_logs();
+ 
+ query I
+ select user_id from ICEBERG_SCAN('data/generated/iceberg/spark-local/default/year_timestamp') 
+@@ -159,7 +159,7 @@ ON logs.msg = meta.manifest_path;
+ 2
+ 
+ statement ok
+-pragma truncate_duckdb_logs;
++CALL truncate_duckdb_logs();
+ 
+ # Test filtering by timestamp range
+ query I
+@@ -182,4 +182,4 @@ ON logs.msg = meta.manifest_path;
+ 2
+ 
+ statement ok
+-pragma truncate_duckdb_logs;
++CALL truncate_duckdb_logs();

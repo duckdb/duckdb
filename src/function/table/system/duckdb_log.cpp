@@ -28,7 +28,7 @@ static unique_ptr<FunctionData> DuckDBLogBind(ClientContext &context, TableFunct
 	return_types.emplace_back(LogicalType::UBIGINT);
 
 	names.emplace_back("timestamp");
-	return_types.emplace_back(LogicalType::TIMESTAMP);
+	return_types.emplace_back(LogicalType::TIMESTAMP_TZ);
 
 	names.emplace_back("type");
 	return_types.emplace_back(LogicalType::VARCHAR);

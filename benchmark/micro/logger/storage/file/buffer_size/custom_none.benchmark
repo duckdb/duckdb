@@ -1,0 +1,17 @@
+# name: benchmark/micro/logger/storage/file/buffer_size/custom_none.benchmark
+# description: benchmarking with buffering disabled
+# group: [buffer_size]
+
+name Client Context Memory Logger
+group logger
+
+# Note: we write a single log entry to trigger the lazy file initialization
+load
+CALL enable_logging(level='info', storage_path='${BENCHMARK_DIR}/logging_enabled_client_context', storage_config={'buffer_size':0});
+SELECT write_log('well hello hello hello hello hello hello world', level := 'info', scope := 'connection' );
+
+run
+SELECT write_log('well hello hello hello hello hello hello world', level := 'info', scope := 'connection' ) from range(0,20000);
+
+cleanup
+CALL truncate_duckdb_logs()
