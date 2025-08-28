@@ -200,6 +200,10 @@ static string PragmaDatabaseSize(ClientContext &context, const FunctionParameter
 	return "SELECT * FROM pragma_database_size();";
 }
 
+static string PragmaMemoryInfo(ClientContext &context, const FunctionParameters &parameters) {
+	return "SELECT * FROM pragma_memory_info();";
+}
+
 static string PragmaStorageInfo(ClientContext &context, const FunctionParameters &parameters) {
 	return StringUtil::Format("SELECT * FROM pragma_storage_info('%s');", parameters.values[0].ToString());
 }
@@ -226,6 +230,7 @@ void PragmaQueries::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(PragmaFunction::PragmaStatement("extension_versions", PragmaExtensionVersions));
 	set.AddFunction(PragmaFunction::PragmaStatement("platform", PragmaPlatform));
 	set.AddFunction(PragmaFunction::PragmaStatement("database_size", PragmaDatabaseSize));
+	set.AddFunction(PragmaFunction::PragmaStatement("memory_info", PragmaMemoryInfo));
 	set.AddFunction(PragmaFunction::PragmaStatement("functions", PragmaFunctionsQuery));
 	set.AddFunction(PragmaFunction::PragmaCall("import_database", PragmaImportDatabase, {LogicalType::VARCHAR}));
 	set.AddFunction(

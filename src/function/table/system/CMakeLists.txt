@@ -30,6 +30,7 @@ add_library_unity(
   logging_utils.cpp
   pragma_collations.cpp
   pragma_database_size.cpp
+  pragma_memory_info.cpp
   pragma_metadata_info.cpp
   pragma_storage_info.cpp
   pragma_table_info.cpp
