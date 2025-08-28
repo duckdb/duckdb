@@ -53,7 +53,7 @@ on:
       - '!.github/workflows/_extension_distribution.yml'
   merge_group:
   pull_request:
-    types: [opened, reopened, ready_for_review]
+    types: [opened, reopened, ready_for_review, converted_to_draft]
     paths-ignore:
       - '**.md'
       - 'tools/**'

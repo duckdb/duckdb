@@ -5,9 +5,6 @@
 statement ok
 set storage_compatibility_version='v0.10.2'
 
-statement ok
-PRAGMA enable_verification
-
 # create a table
 statement ok
 CREATE TABLE t1(i INTEGER)

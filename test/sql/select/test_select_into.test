@@ -12,3 +12,4 @@ INSERT INTO t VALUES ('foo'), ('bar'), ('baz');
 statement error
 SELECT * INTO t2 FROM t WHERE t LIKE 'b%';
 ----
+<REGEX>:.*Parser Error.*SELECT INTO not supported.*

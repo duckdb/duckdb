@@ -31,6 +31,7 @@ metrics = [
     "SYSTEM_PEAK_BUFFER_MEMORY",
     "SYSTEM_PEAK_TEMP_DIR_SIZE",
     "TOTAL_BYTES_READ",
+    "TOTAL_BYTES_WRITTEN",
 ]
 
 phase_timing_metrics = [

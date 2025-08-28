@@ -41,6 +41,10 @@ DuckDBPyResult::~DuckDBPyResult() {
 	}
 }
 
+ClientProperties DuckDBPyResult::GetClientProperties() {
+	return result->client_properties;
+}
+
 const vector<string> &DuckDBPyResult::GetNames() {
 	if (!result) {
 		throw InternalException("Calling GetNames without a result object");

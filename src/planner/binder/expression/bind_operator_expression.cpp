@@ -121,10 +121,18 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 			function_name = "json_extract";
 			// Make sure we only extract array elements, not fields, by adding the $[] syntax
 			auto &i_exp = BoundExpression::GetExpression(*op.children[1]);
-			if (i_exp->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+			if (i_exp->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT &&
+			    !i_exp->Cast<BoundConstantExpression>().value.IsNull()) {
 				auto &const_exp = i_exp->Cast<BoundConstantExpression>();
-				if (!const_exp.value.IsNull()) {
-					const_exp.value = StringUtil::Format("$[%s]", const_exp.value.ToString());
+				if (const_exp.value.TryCastAs(context, LogicalType::UINTEGER)) {
+					// Array extraction: if the cast fails it's definitely out-of-bounds for a JSON array
+					auto index = UIntegerValue::Get(const_exp.value);
+					index -= index > 0; // Subtract 1 for SQL 1-based indexing (except when accessing from back)
+					const_exp.value = StringUtil::Format("$[%lld]", index);
+					const_exp.return_type = LogicalType::VARCHAR;
+				} else if (const_exp.return_type.id() == LogicalType::VARCHAR) {
+					// Field extraction
+					const_exp.value = StringUtil::Format("$.\"%s\"", const_exp.value.ToString());
 					const_exp.return_type = LogicalType::VARCHAR;
 				}
 			}

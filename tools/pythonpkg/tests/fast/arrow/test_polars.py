@@ -101,6 +101,14 @@ class TestPolars(object):
         my_res = duckdb.query("select my_str from my_table where my_str != 'y'")
         assert my_res.fetchall() == [('x',)]
 
+    def test_polars_lazy_from_conn(self, duckdb_cursor):
+        duckdb_conn = duckdb.connect()
+
+        result = duckdb_conn.execute("SELECT 42 as bla")
+
+        lazy_df = result.pl(lazy=True)
+        assert lazy_df.collect().to_dicts() == [{'bla': 42}]
+
     def test_polars_lazy(self, duckdb_cursor):
         con = duckdb.connect()
         con.execute("Create table names (a varchar, b integer)")

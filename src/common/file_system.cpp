@@ -62,6 +62,7 @@ constexpr FileOpenFlags FileFlags::FILE_FLAGS_PARALLEL_ACCESS;
 constexpr FileOpenFlags FileFlags::FILE_FLAGS_EXCLUSIVE_CREATE;
 constexpr FileOpenFlags FileFlags::FILE_FLAGS_NULL_IF_EXISTS;
 constexpr FileOpenFlags FileFlags::FILE_FLAGS_MULTI_CLIENT_ACCESS;
+constexpr FileOpenFlags FileFlags::FILE_FLAGS_DISABLE_LOGGING;
 
 void FileOpenFlags::Verify() {
 #ifdef DEBUG
@@ -604,6 +605,10 @@ void FileSystem::SetDisabledFileSystems(const vector<string> &names) {
 	throw NotImplementedException("%s: Can't disable file systems on a non-virtual file system", GetName());
 }
 
+bool FileSystem::SubSystemIsDisabled(const string &name) {
+	throw NotImplementedException("%s: Non-virtual file system does not have subsystems", GetName());
+}
+
 vector<string> FileSystem::ListSubSystems() {
 	throw NotImplementedException("%s: Can't list sub systems on a non-virtual file system", GetName());
 }
@@ -721,7 +726,10 @@ void FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes, idx_t 
 }
 
 void FileHandle::Write(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) {
-	// FIXME: Add profiling.
+	if (context.GetClientContext() != nullptr) {
+		context.GetClientContext()->client_data->profiler->AddBytesWritten(nr_bytes);
+	}
+
 	file_system.Write(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
 }
 
@@ -798,11 +806,16 @@ FileType FileHandle::GetType() {
 }
 
 void FileHandle::TryAddLogger(FileOpener &opener) {
+	if (flags.DisableLogging()) {
+		return;
+	}
+
 	auto context = opener.TryGetClientContext();
 	if (context && Logger::Get(*context).ShouldLog(FileSystemLogType::NAME, FileSystemLogType::LEVEL)) {
 		logger = context->logger;
 		return;
 	}
+
 	auto database = opener.TryGetDatabase();
 	if (database && Logger::Get(*database).ShouldLog(FileSystemLogType::NAME, FileSystemLogType::LEVEL)) {
 		logger = database->GetLogManager().GlobalLoggerReference();

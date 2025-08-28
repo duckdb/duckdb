@@ -26,3 +26,4 @@ SELECT * FROM sqlite_master;
 statement error
 DROP VIEW sqlite_master
 ----
+<REGEX>:.*Catalog Error.*Cannot drop internal catalog entry.*

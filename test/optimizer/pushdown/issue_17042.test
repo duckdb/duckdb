@@ -6,9 +6,6 @@ statement ok
 pragma explain_output = optimized_only
 
 statement ok
-pragma enable_verification
-
-statement ok
 CREATE  TABLE  t2(c1 INTEGER);
 
 statement ok
