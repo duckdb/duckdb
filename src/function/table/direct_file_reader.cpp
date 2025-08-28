@@ -5,7 +5,7 @@
 namespace duckdb {
 
 DirectFileReader::DirectFileReader(OpenFileInfo file_p, const LogicalType &type)
-    : BaseFileReader(std::move(file_p)), type(type), done(false) {
+    : BaseFileReader(std::move(file_p)), done(false), type(type) {
 	columns.push_back(MultiFileColumnDefinition("filename", LogicalType::VARCHAR));
 	columns.push_back(MultiFileColumnDefinition("content", type));
 	columns.push_back(MultiFileColumnDefinition("size", LogicalType::BIGINT));

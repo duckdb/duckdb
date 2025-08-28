@@ -15,9 +15,7 @@ namespace duckdb {
 //------------------------------------------------------------------------------
 
 template <class OP>
-unique_ptr<MultiFileReaderInterface> DirectMultiFileInfo<OP>::InitializeInterface(ClientContext &context,
-                                                                                  MultiFileReader &reader,
-                                                                                  MultiFileList &file_list) {
+unique_ptr<MultiFileReaderInterface> DirectMultiFileInfo<OP>::CreateInterface(ClientContext &context) {
 	return make_uniq<DirectMultiFileInfo>();
 };
 
@@ -126,14 +124,19 @@ unique_ptr<NodeStatistics> DirectMultiFileInfo<OP>::GetCardinality(const MultiFi
 	result->has_estimated_cardinality = true;
 	result->estimated_cardinality = bind_data.file_list->GetTotalFileCount();
 	return result;
-};
+}
+
+template <class OP>
+FileGlobInput DirectMultiFileInfo<OP>::GetGlobInput() {
+	return FileGlobOptions::ALLOW_EMPTY;
+}
 
 //------------------------------------------------------------------------------
 // Register
 //------------------------------------------------------------------------------
 template <class OP>
 static TableFunction GetFunction() {
-	MultiFileFunction<DirectMultiFileInfo<OP>, DirectFileGlobOptions> table_function(OP::NAME);
+	MultiFileFunction<DirectMultiFileInfo<OP>> table_function(OP::NAME);
 	return table_function;
 }
 

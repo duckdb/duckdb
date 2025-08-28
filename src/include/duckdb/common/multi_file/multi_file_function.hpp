@@ -20,6 +20,7 @@ namespace duckdb {
 struct MultiFileReaderInterface {
 	virtual ~MultiFileReaderInterface();
 
+	virtual void InitializeInterface(ClientContext &context, MultiFileReader &reader, MultiFileList &file_list);
 	virtual unique_ptr<BaseFileReaderOptions> InitializeOptions(ClientContext &context,
 	                                                            optional_ptr<TableFunctionInfo> info) = 0;
 	virtual bool ParseCopyOption(ClientContext &context, const string &key, const vector<Value> &values,
@@ -55,15 +56,10 @@ struct MultiFileReaderInterface {
 	virtual unique_ptr<NodeStatistics> GetCardinality(const MultiFileBindData &bind_data, idx_t file_count) = 0;
 	virtual void GetVirtualColumns(ClientContext &context, MultiFileBindData &bind_data, virtual_column_map_t &result);
 	virtual unique_ptr<MultiFileReaderInterface> Copy();
+	virtual FileGlobInput GetGlobInput();
 };
 
-struct DefaultFileGlobOptions {
-	static FileGlobOptions GetFileGlobOptions() {
-		return FileGlobOptions::DISALLOW_EMPTY;
-	}
-};
-
-template <class OP, class OPTIONS = DefaultFileGlobOptions>
+template <class OP>
 class MultiFileFunction : public TableFunction {
 public:
 	explicit MultiFileFunction(string name_p)
@@ -165,10 +161,13 @@ public:
 
 	static unique_ptr<FunctionData> MultiFileBind(ClientContext &context, TableFunctionBindInput &input,
 	                                              vector<LogicalType> &return_types, vector<string> &names) {
+		auto interface = OP::CreateInterface(context);
 		auto multi_file_reader = MultiFileReader::Create(input.table_function);
-		auto file_list = multi_file_reader->CreateFileList(context, input.inputs[0], OPTIONS::GetFileGlobOptions());
 
-		auto interface = OP::InitializeInterface(context, *multi_file_reader, *file_list);
+		auto glob_input = multi_file_reader->GetGlobInput(*interface);
+		auto file_list = multi_file_reader->CreateFileList(context, input.inputs[0], glob_input);
+
+		interface->InitializeInterface(context, *multi_file_reader, *file_list);
 
 		MultiFileOptions file_options;
 
@@ -190,11 +189,13 @@ public:
 	static unique_ptr<FunctionData> MultiFileBindCopy(ClientContext &context, CopyFromFunctionBindInput &input,
 	                                                  vector<string> &expected_names,
 	                                                  vector<LogicalType> &expected_types) {
+		auto interface = OP::CreateInterface(context);
 		auto multi_file_reader = MultiFileReader::CreateDefault("COPY");
 		vector<string> paths = {input.info.file_path};
-		auto file_list = multi_file_reader->CreateFileList(context, paths);
+		auto glob_input = multi_file_reader->GetGlobInput(*interface);
+		auto file_list = multi_file_reader->CreateFileList(context, paths, glob_input);
 
-		auto interface = OP::InitializeInterface(context, *multi_file_reader, *file_list);
+		interface->InitializeInterface(context, *multi_file_reader, *file_list);
 
 		auto options = interface->InitializeOptions(context, nullptr);
 		MultiFileOptions file_options;
