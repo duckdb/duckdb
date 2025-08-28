@@ -212,6 +212,10 @@ void VirtualFileSystem::SetDisabledFileSystems(const vector<string> &names) {
 	disabled_file_systems = std::move(new_disabled_file_systems);
 }
 
+bool VirtualFileSystem::SubSystemIsDisabled(const string &name) {
+	return disabled_file_systems.find(name) != disabled_file_systems.end();
+}
+
 FileSystem &VirtualFileSystem::FindFileSystem(const string &path) {
 	auto &fs = FindFileSystemInternal(path);
 	if (!disabled_file_systems.empty() && disabled_file_systems.find(fs.GetName()) != disabled_file_systems.end()) {

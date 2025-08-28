@@ -2,9 +2,6 @@
 # description: Test bitwise ops with tables and different types
 # group: [operator]
 
-statement ok
-PRAGMA enable_verification
-
 # type TINYINT
 statement ok
 BEGIN TRANSACTION

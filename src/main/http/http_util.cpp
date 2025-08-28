@@ -227,7 +227,13 @@ unique_ptr<HTTPResponse> HTTPUtil::SendRequest(BaseRequest &request, unique_ptr<
 	}
 
 	std::function<unique_ptr<HTTPResponse>(void)> on_request([&]() {
-		auto response = client->Request(request);
+		unique_ptr<HTTPResponse> response;
+		try {
+			response = client->Request(request);
+		} catch (...) {
+			LogRequest(request, nullptr);
+			throw;
+		}
 		LogRequest(request, response ? response.get() : nullptr);
 		return response;
 	});

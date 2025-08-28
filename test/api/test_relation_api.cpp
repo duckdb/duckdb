@@ -3,6 +3,7 @@
 #include "duckdb/common/enums/joinref_type.hpp"
 #include "iostream"
 #include "test_helpers.hpp"
+#include "duckdb/main/relation/materialized_relation.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -1057,5 +1058,33 @@ TEST_CASE("Test Relation Pending Query API", "[relation_api]") {
 		// query the connection as normal after
 		result = con.Query("SELECT 42");
 		REQUIRE(CHECK_COLUMN(result, 0, {42}));
+	}
+}
+
+TEST_CASE("Test materialized relations", "[relation_api]") {
+	auto db_path = TestCreatePath("relational_api_materialized_view.db");
+	{
+		DuckDB db(db_path);
+		Connection con(db);
+		con.EnableQueryVerification();
+
+		REQUIRE_NO_FAIL(con.Query("create table tbl(a varchar);"));
+
+		auto result = con.Query("insert into tbl values ('test') returning *");
+		auto &materialized_result = result->Cast<MaterializedQueryResult>();
+		auto materialized_relation = make_shared_ptr<MaterializedRelation>(
+		    con.context, materialized_result.TakeCollection(), result->names, "vw");
+		materialized_relation->CreateView("vw");
+		materialized_relation.reset();
+
+		result = con.Query("SELECT * FROM vw");
+		REQUIRE(CHECK_COLUMN(result, 0, {"test"}));
+	}
+	// reset and query again
+	{
+		DuckDB db(db_path);
+		Connection con(db);
+		auto result = con.Query("SELECT * FROM vw");
+		REQUIRE(CHECK_COLUMN(result, 0, {"test"}));
 	}
 }
