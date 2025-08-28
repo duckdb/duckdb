@@ -267,7 +267,6 @@ TEST_CASE("Test prepared statements in C API", "[capi]") {
 	duckdb_bind_int32(stmt, 1, 2);
 	duckdb_bind_int32(stmt, 2, 1000);
 	status = duckdb_execute_prepared(stmt, &res);
-
 	REQUIRE(status == DuckDBSuccess);
 	REQUIRE(duckdb_value_int32(&res, 0, 0) == 1000000);
 	duckdb_destroy_result(&res);
