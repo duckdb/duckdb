@@ -173,7 +173,6 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(TempFileEncryptionSetting),
     DUCKDB_GLOBAL(ThreadsSetting),
     DUCKDB_GLOBAL(UsernameSetting),
-    DUCKDB_GLOBAL(WalEncryptionSetting),
     DUCKDB_GLOBAL(ZstdMinStringLengthSetting),
     FINAL_SETTING};
 

@@ -51,3 +51,16 @@ true
 true
 true
 true
+
+# test parsing hive partitioning scheme
+query IIII
+select parse_path(filename), size, part, date from read_blob('data/parquet-testing/hive-partitioning/simple/*/*/test.parquet') order by filename
+----
+[data, parquet-testing, hive-partitioning, simple, 'part=a', 'date=2012-01-01', test.parquet]	266	a	2012-01-01
+[data, parquet-testing, hive-partitioning, simple, 'part=b', 'date=2013-01-01', test.parquet]	266	b	2013-01-01
+
+query IIII
+select parse_path(filename), size, part, date from read_text('data/parquet-testing/hive-partitioning/simple/*/*/test.parquet') order by filename
+----
+[data, parquet-testing, hive-partitioning, simple, 'part=a', 'date=2012-01-01', test.parquet]	266	a	2012-01-01
+[data, parquet-testing, hive-partitioning, simple, 'part=b', 'date=2013-01-01', test.parquet]	266	b	2013-01-01

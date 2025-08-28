@@ -12,10 +12,6 @@
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/main/settings.hpp"
 
-#if DUCKDB_ALTERNATIVE_VERIFY
-#define DEBUG_MASK 1
-#endif
-
 namespace duckdb {
 
 //	Global sink state
@@ -174,10 +170,6 @@ public:
 	std::atomic<idx_t> completed;
 	//! The output ordering batch index this hash group starts at
 	idx_t batch_base;
-
-#if DEBUG_MASK
-	ValidityMask debug_mask;
-#endif
 };
 
 class WindowGlobalSinkState : public GlobalSinkState {
@@ -531,11 +523,6 @@ void WindowHashGroup::AllocateMasks() {
 		}
 		order_mask.Initialize(count);
 	}
-#if DEBUG_MASK
-	const auto entries = (count + ValidityMask::BITS_PER_VALUE - 1) / ValidityMask::BITS_PER_VALUE;
-	debug_mask.Initialize(entries);
-	debug_mask.SetAllInvalid(entries);
-#endif
 }
 
 void WindowHashGroup::ComputeMasks(const idx_t block_begin, const idx_t block_end) {
@@ -545,18 +532,14 @@ void WindowHashGroup::ComputeMasks(const idx_t block_begin, const idx_t block_en
 	AllocateMasks();
 	const auto begin_entry = partition_mask.EntryCount(block_begin * STANDARD_VECTOR_SIZE);
 	const auto end_entry = partition_mask.EntryCount(MinValue<idx_t>(block_end * STANDARD_VECTOR_SIZE, count));
-#if DEBUG_MASK
-	//	Check for collisions
-	{
-		lock_guard<mutex> gestate_guard(lock);
-		for (idx_t i = begin_entry; i < end_entry; ++i) {
-			if (debug_mask.RowIsValidUnsafe(i)) {
-				throw InternalException("ERROR - Window Mask entry already initialized %llu", i);
-			}
-			debug_mask.SetValidUnsafe(i);
-		}
+
+	//	If the data is unsorted, then the chunk sizes may be < STANDARD_VECTOR_SIZE,
+	//	and the entry range may be empty.
+	if (begin_entry >= end_entry) {
+		D_ASSERT(gsink.global_partition->sort_col_count == 0);
+		return;
 	}
-#endif
+
 	partition_mask.SetRangeInvalid(count, begin_entry, end_entry);
 	if (!block_begin) {
 		partition_mask.SetValidUnsafe(0);

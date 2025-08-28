@@ -429,8 +429,8 @@ void Timestamp::Convert(timestamp_ns_t input, date_t &out_date, dtime_t &out_tim
 
 timestamp_t Timestamp::GetCurrentTimestamp() {
 	auto now = system_clock::now();
-	auto epoch_ms = duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
-	return Timestamp::FromEpochMs(epoch_ms);
+	auto epoch_micros = duration_cast<microseconds>(now.time_since_epoch()).count();
+	return FromEpochMicroSeconds(epoch_micros);
 }
 
 timestamp_t Timestamp::FromEpochSecondsPossiblyInfinite(int64_t sec) {

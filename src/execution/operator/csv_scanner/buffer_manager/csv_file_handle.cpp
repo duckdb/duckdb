@@ -76,6 +76,14 @@ bool CSVFileHandle::FinishedReading() const {
 }
 
 idx_t CSVFileHandle::Read(void *buffer, idx_t nr_bytes) {
+	// We avoid reading past the original size of the file for uncompressed files in utf-8 encoding. This avoids reading
+	// the data that is written after opening the file. This can be useful, for example when reading a duckdb log file
+	// in csv format while logging is enabled
+	if (file_handle->GetFileCompressionType() == FileCompressionType::UNCOMPRESSED && file_handle->CanSeek() &&
+	    encoder.encoding_name == "utf-8") {
+		nr_bytes = MinValue<idx_t>(nr_bytes, file_size - file_handle->SeekPosition());
+	}
+
 	requested_bytes += nr_bytes;
 	// if this is a plain file source OR we can seek we are not caching anything
 	idx_t bytes_read = 0;

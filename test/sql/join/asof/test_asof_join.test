@@ -2,9 +2,6 @@
 # description: Test As-Of join useage
 # group: [asof]
 
-statement ok
-PRAGMA enable_verification
-
 # Use doubles for readable infinities
 statement ok
 CREATE TABLE events0 (begin DOUBLE, value INTEGER);

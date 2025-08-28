@@ -28,7 +28,7 @@ namespace duckdb {
 struct DuckDBPyRelation {
 public:
 	explicit DuckDBPyRelation(shared_ptr<Relation> rel);
-	explicit DuckDBPyRelation(unique_ptr<DuckDBPyResult> result);
+	explicit DuckDBPyRelation(shared_ptr<DuckDBPyResult> result);
 	~DuckDBPyRelation();
 
 public:
@@ -288,7 +288,7 @@ private:
 	shared_ptr<Relation> rel;
 	vector<LogicalType> types;
 	vector<string> names;
-	unique_ptr<DuckDBPyResult> result;
+	shared_ptr<DuckDBPyResult> result;
 	std::string rendered_result;
 };
 
