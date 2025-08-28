@@ -55,9 +55,9 @@ yyjson_mut_val *VariantCasts::ConvertVariantToJSON(yyjson_mut_doc *doc, Recursiv
 	auto keys_entry_data = keys_entry.GetData<string_t>(keys_entry);
 
 	//! list entries
-	auto keys_list_entry = keys_data[keys.sel->get_index(index)];
-	auto children_list_entry = children_data[children.sel->get_index(index)];
-	auto values_list_entry = values_data[values.sel->get_index(index)];
+	auto keys_list_entry = keys_data[keys.sel->get_index(row)];
+	auto children_list_entry = children_data[children.sel->get_index(row)];
+	auto values_list_entry = values_data[values.sel->get_index(row)];
 
 	//! The 'values' data of the value we're currently converting
 	values_idx += values_list_entry.offset;
@@ -67,7 +67,7 @@ yyjson_mut_val *VariantCasts::ConvertVariantToJSON(yyjson_mut_doc *doc, Recursiv
 	//! The blob data of the Variant, accessed by byte offset retrieved above ^
 	auto &value = UnifiedVariantVector::GetData(source);
 	auto value_data = value.GetData<string_t>(value);
-	auto &blob = value_data[value.sel->get_index(index)];
+	auto &blob = value_data[value.sel->get_index(row)];
 	auto blob_data = const_data_ptr_cast(blob.GetData());
 
 	auto ptr = const_data_ptr_cast(blob_data + byte_offset);

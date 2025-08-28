@@ -49,6 +49,12 @@ static void VariantTypeofFunction(DataChunk &input, ExpressionState &state, Vect
 
 	auto result_data = FlatVector::GetData<string_t>(result);
 	for (idx_t i = 0; i < count; i++) {
+		auto index = source_format.unified.sel->get_index(i);
+		if (!source_format.unified.validity.RowIsValid(index)) {
+			result_data[i] = StringVector::AddString(result, "VARIANT_NULL");
+			continue;
+		}
+
 		auto values_list_entry = values_data[values.sel->get_index(i)];
 		auto children_list_entry = children_data[children.sel->get_index(i)];
 		auto keys_list_entry = keys_data[keys.sel->get_index(i)];

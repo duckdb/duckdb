@@ -12,6 +12,7 @@
 #include "duckdb/common/string_map_set.hpp"
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/common/map.hpp"
 #include "duckdb/storage/arena_allocator.hpp"
 #include <cstring>
 

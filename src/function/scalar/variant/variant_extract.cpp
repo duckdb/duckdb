@@ -188,10 +188,11 @@ static void VariantExtractFunction(DataChunk &input, ExpressionState &state, Vec
 	                              values_list_size);
 
 	auto value_is_null = VariantUtils::ValueIsNull(source_format, new_value_index_sel, count, optional_idx());
-	for (idx_t i = 0; i < value_is_null.size(); i++) {
-		if (value_is_null[i]) {
-			FlatVector::SetNull(result, i, true);
-		}
+	if (!value_is_null.empty()) {
+		result.Flatten(count);
+	}
+	for (auto &i : value_is_null) {
+		FlatVector::SetNull(result, i, true);
 	}
 
 	if (input.AllConstant()) {

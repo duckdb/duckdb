@@ -108,27 +108,27 @@ bool VariantUtils::FindChildValues(RecursiveUnifiedVectorFormat &source, const V
 	return true;
 }
 
-vector<uint8_t> VariantUtils::ValueIsNull(RecursiveUnifiedVectorFormat &variant, const SelectionVector &sel,
-                                          idx_t count, optional_idx row) {
+vector<uint32_t> VariantUtils::ValueIsNull(RecursiveUnifiedVectorFormat &variant, const SelectionVector &sel,
+                                           idx_t count, optional_idx row) {
 	auto &values_format = UnifiedVariantVector::GetValues(variant);
 	auto values_data = values_format.GetData<list_entry_t>(values_format);
 
 	auto &type_id_format = UnifiedVariantVector::GetValuesTypeId(variant);
 	auto type_id_data = type_id_format.GetData<uint8_t>(type_id_format);
 
-	vector<uint8_t> res;
+	vector<uint32_t> res;
 	res.reserve(count);
 	for (idx_t i = 0; i < count; i++) {
 		auto row_index = row.IsValid() ? row.GetIndex() : i;
 
 		auto index = variant.unified.sel->get_index(row_index);
 		if (!variant.unified.validity.RowIsValid(index)) {
-			res.push_back(true);
+			res.push_back(static_cast<uint32_t>(i));
 			continue;
 		}
 
 		//! values
-		auto values_index = values_format.sel->get_index(index);
+		auto values_index = values_format.sel->get_index(i);
 		D_ASSERT(values_format.validity.RowIsValid(values_index));
 		auto values_list_entry = values_data[values_index];
 
@@ -138,9 +138,7 @@ vector<uint8_t> VariantUtils::ValueIsNull(RecursiveUnifiedVectorFormat &variant,
 		    type_id_data[type_id_format.sel->get_index(values_list_entry.offset + value_index)]);
 
 		if (type_id == VariantLogicalType::VARIANT_NULL) {
-			res.push_back(true);
-		} else {
-			res.push_back(false);
+			res.push_back(static_cast<uint32_t>(i));
 		}
 	}
 	return res;
