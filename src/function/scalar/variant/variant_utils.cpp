@@ -379,8 +379,6 @@ Value VariantUtils::ConvertVariantToValue(RecursiveUnifiedVectorFormat &source, 
 	default:
 		throw InternalException("VariantLogicalType(%d) not handled", static_cast<uint8_t>(type_id));
 	}
-
-	return nullptr;
 }
 
 bool VariantUtils::Verify(Vector &variant, const SelectionVector &sel_p, idx_t count) {
