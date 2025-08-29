@@ -379,7 +379,7 @@ bool WriteCSVRotateFiles(FunctionData &, const optional_idx &file_size_bytes) {
 
 bool WriteCSVRotateNextFile(GlobalFunctionData &gstate, FunctionData &, const optional_idx &file_size_bytes) {
 	auto &global_state = gstate.Cast<GlobalWriteCSVData>();
-	return global_state.FileSize() > file_size_bytes.GetIndex();
+	return file_size_bytes.IsValid() && global_state.FileSize() > file_size_bytes.GetIndex();
 }
 
 void CSVCopyFunction::RegisterFunction(BuiltinFunctions &set) {

@@ -83,6 +83,8 @@ protected:
 
 	optional_ptr<const LogType> LookupLogTypeInternal(const string &type);
 
+	void SetConfigInternal(LogConfig config);
+
 	mutex lock;
 	LogConfig config;
 

@@ -9,18 +9,22 @@ CREATE TABLE t (t TEXT);
 statement error
 SELECT * FROM t FOR UPDATE;
 ----
+<REGEX>:.*Parser Error.*SELECT locking clause is not supported.*
 
 # unsupported
 statement error
 SELECT * FROM t FOR NO KEY UPDATE;
 ----
+<REGEX>:.*Parser Error.*SELECT locking clause is not supported.*
 
 # unsupported
 statement error
 SELECT * FROM t FOR SHARE;
 ----
+<REGEX>:.*Parser Error.*SELECT locking clause is not supported.*
 
 # unsupported
 statement error
 SELECT * FROM t KEY SHARE;
 ----
+<REGEX>:.*Parser Error.*syntax error.*

@@ -888,12 +888,6 @@
         ]
     },
     {
-        "name": "wal_encryption",
-        "description": "Encrypt the WAL if the database is encrypted",
-        "type": "BOOLEAN",
-        "scope": "global"
-    },
-    {
         "name": "zstd_min_string_length",
         "description": "The (average) length at which to enable ZSTD compression, defaults to 4096",
         "type": "UBIGINT",

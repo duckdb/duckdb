@@ -274,7 +274,7 @@ if (ENABLE_EXTENSION_AUTOLOADING)
   add_definitions(-DDUCKDB_EXTENSION_AUTOLOAD_DEFAULT=1)
 endif()
 if (ENABLE_EXTENSION_AUTOINSTALL)
-  add_definitions(-DDUCKDB_EXTENSION_AUTOINSTALL_DEFAULT=${ENABLE_EXTENSION_AUTOINSTALL})
+  add_definitions(-DDUCKDB_EXTENSION_AUTOINSTALL_DEFAULT=1)
 endif()
 
 option(OSX_BUILD_UNIVERSAL "Build both architectures on OSX and create a single binary containing both." FALSE)
@@ -1357,7 +1357,7 @@ foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
 
   # Warning for trying to load vcpkg extensions without having VCPKG_BUILD SET
   if (EXISTS "${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_PATH}/vcpkg.json" AND NOT DEFINED VCPKG_BUILD)
-    message(WARNING "Extension '${EXT_NAME}' has a vcpkg.json, but build was not run with VCPKG. If build fails, check out VCPKG build instructions in 'duckdb/extension/README.md' or try manually installing the dependencies in ${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_PATH}vcpkg.json")
+    message(WARNING "Extension '${EXT_NAME}' has a vcpkg.json, but build was not run with VCPKG. If build fails, check out VCPKG build instructions in 'duckdb/extension/README.md' or try manually installing the dependencies in ${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_PATH}/vcpkg.json")
   endif()
 
   if (NOT "${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_EXT_VERSION}" STREQUAL "")
