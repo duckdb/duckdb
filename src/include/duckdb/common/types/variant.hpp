@@ -125,6 +125,10 @@ public:
 	}
 
 public:
+	bool RowIsValid(idx_t row) {
+		return variant.unified.validity.RowIsValid(variant.unified.sel->get_index(row));
+	}
+
 	const string_t &GetKey(idx_t row, idx_t index) {
 		auto list_entry = keys_data[keys.sel->get_index(row)];
 		return keys_entry_data[keys_entry.sel->get_index(list_entry.offset + index)];

@@ -130,8 +130,11 @@ static bool TemplatedBooleanOperation(const Value &left, const Value &right) {
 			Vector::RecursiveToUnifiedFormat(left_vec, 1, left_format);
 			Vector::RecursiveToUnifiedFormat(right_vec, 1, right_format);
 
-			auto left_value = VariantUtils::ConvertVariantToValue(left_format, 0, 0);
-			auto right_value = VariantUtils::ConvertVariantToValue(right_format, 0, 0);
+			UnifiedVariantVectorData left_variant_data(left_format);
+			UnifiedVariantVectorData right_variant_data(right_format);
+
+			auto left_value = VariantUtils::ConvertVariantToValue(left_variant_data, 0, 0);
+			auto right_value = VariantUtils::ConvertVariantToValue(right_variant_data, 0, 0);
 			return TemplatedBooleanOperation<OP>(left_value, right_value);
 		}
 		auto &left_children = StructValue::GetChildren(left);

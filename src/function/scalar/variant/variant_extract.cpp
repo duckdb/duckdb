@@ -96,8 +96,8 @@ static void VariantExtractFunction(DataChunk &input, ExpressionState &state, Vec
 	auto count = input.size();
 
 	D_ASSERT(input.ColumnCount() == 2);
-	auto &variant = input.data[0];
-	D_ASSERT(variant.GetType() == LogicalType::VARIANT());
+	auto &variant_vec = input.data[0];
+	D_ASSERT(variant_vec.GetType() == LogicalType::VARIANT());
 
 	auto &path = input.data[1];
 	D_ASSERT(path.GetVectorType() == VectorType::CONSTANT_VECTOR);
@@ -107,7 +107,9 @@ static void VariantExtractFunction(DataChunk &input, ExpressionState &state, Vec
 	auto &allocator = Allocator::DefaultAllocator();
 
 	RecursiveUnifiedVectorFormat source_format;
-	Vector::RecursiveToUnifiedFormat(variant, count, source_format);
+	Vector::RecursiveToUnifiedFormat(variant_vec, count, source_format);
+
+	UnifiedVariantVectorData variant(source_format);
 
 	//! Path either contains array indices or object keys
 	SelectionVector value_index_sel;
@@ -183,6 +185,7 @@ static void VariantExtractFunction(DataChunk &input, ExpressionState &state, Vec
 
 	auto &result_type_id = VariantVector::GetValuesTypeId(result);
 	auto &result_byte_offset = VariantVector::GetValuesByteOffset(result);
+
 	result_type_id.Dictionary(VariantVector::GetValuesTypeId(variant), values_list_size, new_sel, values_list_size);
 	result_byte_offset.Dictionary(VariantVector::GetValuesByteOffset(variant), values_list_size, new_sel,
 	                              values_list_size);

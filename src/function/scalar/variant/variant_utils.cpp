@@ -7,32 +7,12 @@
 
 namespace duckdb {
 
-bool VariantUtils::FindChildValues(RecursiveUnifiedVectorFormat &source, const VariantPathComponent &component,
+bool VariantUtils::FindChildValues(UnifiedVariantVectorData &variant, const VariantPathComponent &component,
                                    optional_idx row, SelectionVector &res, VariantNestedData *nested_data,
                                    idx_t count) {
-	//! children
-	auto &children = UnifiedVariantVector::GetChildren(source);
-	auto children_data = children.GetData<list_entry_t>(children);
-
-	//! value_ids
-	auto &value_ids = UnifiedVariantVector::GetChildrenValueId(source);
-	auto value_ids_data = value_ids.GetData<uint32_t>(value_ids);
-
-	//! key_ids
-	auto &key_ids = UnifiedVariantVector::GetChildrenKeyId(source);
-	auto key_ids_data = key_ids.GetData<uint32_t>(key_ids);
-
-	//! keys
-	auto &keys = UnifiedVariantVector::GetKeys(source);
-	auto keys_data = keys.GetData<list_entry_t>(keys);
-
-	//! entry of the keys list
-	auto &keys_entry = UnifiedVariantVector::GetKeysEntry(source);
-	auto keys_entry_data = keys_entry.GetData<string_t>(keys_entry);
 
 	for (idx_t i = 0; i < count; i++) {
 		auto row_index = row.IsValid() ? row.GetIndex() : i;
-		auto &children_list_entry = children_data[children.sel->get_index(row_index)];
 
 		auto &nested_data_entry = nested_data[i];
 		if (nested_data_entry.is_null) {
@@ -48,20 +28,16 @@ bool VariantUtils::FindChildValues(RecursiveUnifiedVectorFormat &source, const V
 				//! The list is too small to contain this index
 				return false;
 			}
-			auto children_index = children_list_entry.offset + nested_data_entry.children_idx + child_idx;
-			auto value_id = value_ids_data[value_ids.sel->get_index(children_index)];
-			res[i] = value_id;
+			auto value_id = variant.GetValueId(row_index, nested_data_entry.children_idx + child_idx);
+			res[i] = static_cast<uint8_t>(value_id);
 			continue;
 		}
-		auto &keys_list_entry = keys_data[keys.sel->get_index(row_index)];
 		bool found_child = false;
 		for (idx_t child_idx = 0; child_idx < nested_data_entry.child_count; child_idx++) {
-			auto children_index = children_list_entry.offset + nested_data_entry.children_idx + child_idx;
-			auto value_id = value_ids_data[value_ids.sel->get_index(children_index)];
+			auto value_id = variant.GetValueId(row_index, nested_data_entry.children_idx + child_idx);
+			auto key_id = variant.GetKeyId(row_index, nested_data_entry.children_idx + child_idx);
 
-			auto key_id = key_ids_data[key_ids.sel->get_index(children_index)];
-			auto key_index = keys_entry.sel->get_index(keys_list_entry.offset + key_id);
-			auto &child_key = keys_entry_data[key_index];
+			auto &child_key = variant.GetKey(row_index, key_id);
 			if (child_key == component.key) {
 				//! Found the key we're looking for
 				res[i] = value_id;
@@ -76,35 +52,20 @@ bool VariantUtils::FindChildValues(RecursiveUnifiedVectorFormat &source, const V
 	return true;
 }
 
-vector<uint32_t> VariantUtils::ValueIsNull(RecursiveUnifiedVectorFormat &variant, const SelectionVector &sel,
-                                           idx_t count, optional_idx row) {
-	auto &values_format = UnifiedVariantVector::GetValues(variant);
-	auto values_data = values_format.GetData<list_entry_t>(values_format);
-
-	auto &type_id_format = UnifiedVariantVector::GetValuesTypeId(variant);
-	auto type_id_data = type_id_format.GetData<uint8_t>(type_id_format);
-
+vector<uint32_t> VariantUtils::ValueIsNull(UnifiedVariantVectorData &variant, const SelectionVector &sel, idx_t count,
+                                           optional_idx row) {
 	vector<uint32_t> res;
 	res.reserve(count);
 	for (idx_t i = 0; i < count; i++) {
 		auto row_index = row.IsValid() ? row.GetIndex() : i;
 
-		auto index = variant.unified.sel->get_index(row_index);
-		if (!variant.unified.validity.RowIsValid(index)) {
+		if (!variant.RowIsValid(row_index)) {
 			res.push_back(static_cast<uint32_t>(i));
 			continue;
 		}
 
-		//! values
-		auto values_index = values_format.sel->get_index(i);
-		D_ASSERT(values_format.validity.RowIsValid(values_index));
-		auto values_list_entry = values_data[values_index];
-
 		//! Get the index into 'values'
-		uint32_t value_index = sel[i];
-		auto type_id = static_cast<VariantLogicalType>(
-		    type_id_data[type_id_format.sel->get_index(values_list_entry.offset + value_index)]);
-
+		auto type_id = variant.GetTypeId(row_index, sel[i]);
 		if (type_id == VariantLogicalType::VARIANT_NULL) {
 			res.push_back(static_cast<uint32_t>(i));
 		}
@@ -112,44 +73,22 @@ vector<uint32_t> VariantUtils::ValueIsNull(RecursiveUnifiedVectorFormat &variant
 	return res;
 }
 
-bool VariantUtils::CollectNestedData(RecursiveUnifiedVectorFormat &variant, VariantLogicalType expected_type,
+bool VariantUtils::CollectNestedData(UnifiedVariantVectorData &variant, VariantLogicalType expected_type,
                                      const SelectionVector &sel, idx_t count, optional_idx row, idx_t offset,
                                      VariantNestedData *child_data, ValidityMask &validity, string &error) {
-	auto &values_format = UnifiedVariantVector::GetValues(variant);
-	auto values_data = values_format.GetData<list_entry_t>(values_format);
-
-	auto &type_id_format = UnifiedVariantVector::GetValuesTypeId(variant);
-	auto type_id_data = type_id_format.GetData<uint8_t>(type_id_format);
-
-	auto &byte_offset_format = UnifiedVariantVector::GetValuesByteOffset(variant);
-	auto byte_offset_data = byte_offset_format.GetData<uint32_t>(byte_offset_format);
-
-	auto &value_format = UnifiedVariantVector::GetData(variant);
-	auto value_data = value_format.GetData<string_t>(value_format);
-
 	for (idx_t i = 0; i < count; i++) {
 		auto row_index = row.IsValid() ? row.GetIndex() : i;
 
-		auto index = variant.unified.sel->get_index(row_index);
 		//! NOTE: the validity is assumed to be from a FlatVector
-		if (!variant.unified.validity.RowIsValid(index) || !validity.RowIsValid(offset + i)) {
+		if (!variant.RowIsValid(row_index) || !validity.RowIsValid(offset + i)) {
 			child_data[i].is_null = true;
 			continue;
 		}
 		child_data[i].is_null = false;
 
-		//! values
-		auto values_index = values_format.sel->get_index(row_index);
-		D_ASSERT(values_format.validity.RowIsValid(values_index));
-		auto values_list_entry = values_data[values_index];
-
-		//! Get the index into 'values'
-		uint32_t value_index = sel[i];
-
 		//! type_id + byte_offset
-		auto type_id = static_cast<VariantLogicalType>(
-		    type_id_data[type_id_format.sel->get_index(values_list_entry.offset + value_index)]);
-		auto byte_offset = byte_offset_data[byte_offset_format.sel->get_index(values_list_entry.offset + value_index)];
+		auto type_id = variant.GetTypeId(row_index, sel[i]);
+		auto byte_offset = variant.GetByteOffset(row_index, sel[i]);
 
 		if (type_id == VariantLogicalType::VARIANT_NULL) {
 			child_data[i].is_null = true;
@@ -162,10 +101,9 @@ bool VariantUtils::CollectNestedData(RecursiveUnifiedVectorFormat &variant, Vari
 			return false;
 		}
 
-		auto blob_index = value_format.sel->get_index(row_index);
-		auto blob_data = const_data_ptr_cast(value_data[blob_index].GetData());
-
+		auto blob_data = const_data_ptr_cast(variant.GetData(row_index).GetData());
 		auto ptr = blob_data + byte_offset;
+
 		child_data[i].child_count = VarintDecode<uint32_t>(ptr);
 		if (child_data[i].child_count) {
 			child_data[i].children_idx = VarintDecode<uint32_t>(ptr);
@@ -176,57 +114,17 @@ bool VariantUtils::CollectNestedData(RecursiveUnifiedVectorFormat &variant, Vari
 	return true;
 }
 
-Value VariantUtils::ConvertVariantToValue(RecursiveUnifiedVectorFormat &source, idx_t row, idx_t values_idx) {
-	auto index = source.unified.sel->get_index(row);
-	if (!source.unified.validity.RowIsValid(index)) {
+Value VariantUtils::ConvertVariantToValue(UnifiedVariantVectorData &variant, idx_t row, idx_t values_idx) {
+	if (!variant.RowIsValid(row)) {
 		return Value(LogicalTypeId::SQLNULL);
 	}
 
-	//! values
-	auto &values = UnifiedVariantVector::GetValues(source);
-	auto values_data = values.GetData<list_entry_t>(values);
-
-	//! type_ids
-	auto &type_ids = UnifiedVariantVector::GetValuesTypeId(source);
-	auto type_ids_data = type_ids.GetData<uint8_t>(type_ids);
-
-	//! byte_offsets
-	auto &byte_offsets = UnifiedVariantVector::GetValuesByteOffset(source);
-	auto byte_offsets_data = byte_offsets.GetData<uint32_t>(byte_offsets);
-
-	//! children
-	auto &children = UnifiedVariantVector::GetChildren(source);
-	auto children_data = children.GetData<list_entry_t>(children);
-
-	//! value_ids
-	auto &value_ids = UnifiedVariantVector::GetChildrenValueId(source);
-	auto value_ids_data = value_ids.GetData<uint32_t>(value_ids);
-
-	//! key_ids
-	auto &key_ids = UnifiedVariantVector::GetChildrenKeyId(source);
-	auto key_ids_data = key_ids.GetData<uint32_t>(key_ids);
-
-	//! keys
-	auto &keys = UnifiedVariantVector::GetKeys(source);
-	auto keys_data = keys.GetData<list_entry_t>(keys);
-	auto &keys_entry = UnifiedVariantVector::GetKeysEntry(source);
-	auto keys_entry_data = keys_entry.GetData<string_t>(keys_entry);
-
-	//! list entries
-	auto keys_list_entry = keys_data[keys.sel->get_index(row)];
-	auto children_list_entry = children_data[children.sel->get_index(row)];
-	auto values_list_entry = values_data[values.sel->get_index(row)];
-
 	//! The 'values' data of the value we're currently converting
-	values_idx += values_list_entry.offset;
-	auto type_id = static_cast<VariantLogicalType>(type_ids_data[type_ids.sel->get_index(values_idx)]);
-	auto byte_offset = byte_offsets_data[byte_offsets.sel->get_index(values_idx)];
+	auto type_id = variant.GetTypeId(row, values_idx);
+	auto byte_offset = variant.GetByteOffset(row, values_idx);
 
 	//! The blob data of the Variant, accessed by byte offset retrieved above ^
-	auto &value = UnifiedVariantVector::GetData(source);
-	auto value_data = value.GetData<string_t>(value);
-	auto &blob = value_data[value.sel->get_index(row)];
-	auto blob_data = const_data_ptr_cast(blob.GetData());
+	auto blob_data = const_data_ptr_cast(variant.GetData(row).GetData());
 
 	auto ptr = const_data_ptr_cast(blob_data + byte_offset);
 	switch (type_id) {
@@ -310,9 +208,8 @@ Value VariantUtils::ConvertVariantToValue(RecursiveUnifiedVectorFormat &source, 
 		if (count) {
 			auto child_index_start = VarintDecode<uint32_t>(ptr);
 			for (idx_t i = 0; i < count; i++) {
-				auto index = value_ids.sel->get_index(children_list_entry.offset + child_index_start + i);
-				auto child_index = value_ids_data[index];
-				array_items.emplace_back(ConvertVariantToValue(source, row, child_index));
+				auto child_index = variant.GetValueId(row, child_index_start + i);
+				array_items.emplace_back(ConvertVariantToValue(variant, row, child_index));
 			}
 		}
 		return Value::LIST(LogicalType::VARIANT(), std::move(array_items));
@@ -323,13 +220,11 @@ Value VariantUtils::ConvertVariantToValue(RecursiveUnifiedVectorFormat &source, 
 		if (count) {
 			auto child_index_start = VarintDecode<uint32_t>(ptr);
 			for (idx_t i = 0; i < count; i++) {
-				auto children_index = value_ids.sel->get_index(children_list_entry.offset + child_index_start + i);
-				auto child_value_idx = value_ids_data[children_index];
-				auto val = ConvertVariantToValue(source, row, child_value_idx);
+				auto child_value_idx = variant.GetValueId(row, child_index_start + i);
+				auto val = ConvertVariantToValue(variant, row, child_value_idx);
 
-				auto key_ids_index = key_ids.sel->get_index(children_list_entry.offset + child_index_start + i);
-				auto child_key_id = key_ids_data[key_ids_index];
-				auto &key = keys_entry_data[keys_entry.sel->get_index(keys_list_entry.offset + child_key_id)];
+				auto child_key_id = variant.GetKeyId(row, child_index_start + i);
+				auto &key = variant.GetKey(row, child_key_id);
 
 				object_children.emplace_back(key.GetString(), std::move(val));
 			}
