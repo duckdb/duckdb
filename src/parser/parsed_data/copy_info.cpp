@@ -42,6 +42,9 @@ string CopyInfo::CopyOptionsToString() const {
 	}
 	for (auto &opt : parsed_options) {
 		auto &name = opt.first;
+		if (name == "__filename") {
+			continue;
+		}
 		auto &expr = opt.second;
 		string option_string = name;
 		if (expr) {
@@ -108,7 +111,14 @@ string CopyInfo::ToString() const {
 		}
 		result += " TO ";
 	}
-	result += StringUtil::Format(" %s", SQLString(file_path));
+	auto entry = parsed_options.find("__filename");
+	if (entry != parsed_options.end()) {
+		result += "(";
+		result += entry->second->ToString();
+		result += ")";
+	} else {
+		result += StringUtil::Format(" %s", SQLString(file_path));
+	}
 	result += CopyOptionsToString();
 	result += ";";
 	return result;
