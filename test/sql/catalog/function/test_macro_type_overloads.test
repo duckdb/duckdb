@@ -176,6 +176,20 @@ create or replace macro m(s cool_string) as s;
 statement ok
 select m('duck')
 
+# this fails on creation because we wan't implicitly cast
+statement error
+create or replace macro m(s varchar := 42) as s
+----
+cannot be implicitly cast
+
+# can fix with an explicit type cast
+statement ok
+create or replace macro m(s varchar := 42::varchar) as s
+
+# this can be explicitly cast so it succeeds
+statement ok
+create or replace macro m(i bigint := 42::integer) as i
+
 # replicate tests above with table macro
 statement ok
 create or replace macro m(s varchar) as table (select s || 'c')
@@ -314,3 +328,14 @@ create or replace macro m(s cool_string) as table (select s);
 
 statement ok
 from m('duck')
+
+statement error
+create or replace macro m(s varchar := 42) as table (select s)
+----
+cannot be implicitly cast
+
+statement ok
+create or replace macro m(s varchar := 42::varchar) as table (select s)
+
+statement ok
+create or replace macro m(i bigint := 42::integer) as table (select i)

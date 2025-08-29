@@ -186,44 +186,53 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 	base.names = query_node.names;
 }
 
-struct VectorOfLogicalTypeHash {
-	std::size_t operator()(const vector<LogicalType> &k) const {
-		auto hash = std::hash<size_t>()(k.size());
-		for (auto &type : k) {
-			hash = CombineHash(hash, type.Hash());
+SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
+	//! Set to identify exact matches in macro overloads
+	struct VectorOfLogicalTypeHash {
+		std::size_t operator()(const vector<LogicalType> &k) const {
+			auto hash = std::hash<size_t>()(k.size());
+			for (auto &type : k) {
+				hash = CombineHash(hash, type.Hash());
+			}
+			return hash;
 		}
-		return hash;
-	}
-};
+	};
 
-struct VectorOfLogicalTypeEquality {
-	bool operator()(const vector<LogicalType> &a, const vector<LogicalType> &b) const {
-		if (a.size() != b.size()) {
-			return false;
-		}
-		for (idx_t i = 0; i < a.size(); i++) {
-			if (a[i] != b[i]) {
+	struct VectorOfLogicalTypeEquality {
+		bool operator()(const vector<LogicalType> &a, const vector<LogicalType> &b) const {
+			if (a.size() != b.size()) {
 				return false;
 			}
+			for (idx_t i = 0; i < a.size(); i++) {
+				if (a[i] != b[i]) {
+					return false;
+				}
+			}
+			return true;
 		}
-		return true;
-	}
-};
+	};
 
-using vector_of_logical_type_set_t =
-    unordered_set<vector<LogicalType>, VectorOfLogicalTypeHash, VectorOfLogicalTypeEquality>;
+	using vector_of_logical_type_set_t =
+	    unordered_set<vector<LogicalType>, VectorOfLogicalTypeHash, VectorOfLogicalTypeEquality>;
 
-SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
+	// Bind the catalog/schema
 	SearchSchema(info);
 	auto &catalog = Catalog::GetCatalog(context, info.catalog);
-	auto &base = info.Cast<CreateMacroInfo>();
+
+	// Figure out if we can store typed macro parameters
+	auto &attached = catalog.GetAttached();
+	auto store_types = info.temporary || attached.IsTemporary();
+	if (attached.HasStorageManager()) {
+		auto &storage_manager = attached.GetStorageManager();
+		const auto since = SerializationCompatibility::FromString("v1.4.0").serialization_version;
+		store_types |= storage_manager.InMemory() || storage_manager.GetStorageVersion() >= since;
+	}
 
 	// try to bind each of the included functions
 	vector_of_logical_type_set_t type_overloads;
+	auto &base = info.Cast<CreateMacroInfo>();
 	for (auto &function : base.macros) {
-		if (!info.temporary && !catalog.IsTemporaryCatalog() && !catalog.IsSystemCatalog() &&
-		    catalog.GetAttached().GetStorageManager().GetStorageVersion() <
-		        SerializationCompatibility::FromString("v1.4.0").serialization_version) {
+		if (!store_types) {
 			for (const auto &type : function->types) {
 				if (type.id() != LogicalTypeId::UNKNOWN) {
 					string msg = "Typed macro parameters are only supported for storage versions v1.4.0 and higher.\n";
@@ -250,9 +259,21 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 		}
 
 		// Resolve any user type arguments
-		for (auto &type : function->types) {
+		for (idx_t param_idx = 0; param_idx < function->types.size(); param_idx++) {
+			auto &type = function->types[param_idx];
 			if (type.id() == LogicalTypeId::USER) {
 				type = TransformStringToLogicalType(type.ToString(), context);
+			}
+			const auto &param_name = function->parameters[param_idx]->Cast<ColumnRefExpression>().GetColumnName();
+			auto it = function->default_parameters.find(param_name);
+			if (it != function->default_parameters.end()) {
+				const auto &val_type = it->second->Cast<ConstantExpression>().value.type();
+				if (CastFunctionSet::ImplicitCastCost(context, val_type, type) < 0) {
+					auto msg =
+					    StringUtil::Format("Default value '%s' for parameter '%s' cannot be implicitly cast to '%s'.",
+					                       it->second->ToString(), param_name, type.ToString());
+					throw BinderException(msg + " Please add an explicit type cast.");
+				}
 			}
 		}
 

@@ -76,6 +76,7 @@ public:
 
 	Catalog &ParentCatalog() override;
 	const Catalog &ParentCatalog() const override;
+	bool HasStorageManager() const;
 	StorageManager &GetStorageManager();
 	Catalog &GetCatalog();
 	TransactionManager &GetTransactionManager();
