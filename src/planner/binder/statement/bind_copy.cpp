@@ -469,11 +469,8 @@ void Binder::BindCopyOptions(CopyInfo &info) {
 		}
 		info.options[entry.first] = std::move(inputs);
 	}
-	if (info.is_format_auto_detected) {
+	if (info.is_format_auto_detected && info.format.empty()) {
 		info.format = ExtractFormat(info.file_path);
-	}
-	if (info.format.empty()) {
-		info.format = "csv";
 	}
 	info.parsed_options.clear();
 }
