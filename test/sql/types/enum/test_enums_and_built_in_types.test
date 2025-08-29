@@ -10,6 +10,7 @@ PRAGMA enable_verification
 statement error
 CREATE TYPE "integer" AS ENUM ('1', '2', '3');
 ----
+<REGEX>:.*Catalog Error.*already exists.*
 
 restart
 
@@ -17,6 +18,7 @@ restart
 statement error
 SELECT 4::INTEGEE
 ----
+<REGEX>:.*Catalog Error.*does not exist.*
 
 restart
 
@@ -24,10 +26,12 @@ restart
 statement error
 DROP TYPE "INTEGER"
 ----
+<REGEX>:.*Catalog Error.*Cannot drop internal catalog entry.*
 
 statement error
 DROP TYPE "INTEGEE"
 ----
+<REGEX>:.*Catalog Error.*does not exist.*
 
 restart
 
@@ -35,3 +39,4 @@ restart
 statement error
 CREATE TYPE integer AS ENUM ('1', '2', '3');
 ----
+<REGEX>:.*Catalog Error.*already exists.*

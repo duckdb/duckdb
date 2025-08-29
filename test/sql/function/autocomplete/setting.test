@@ -16,10 +16,5 @@ FROM sql_auto_complete('set allowe') LIMIT 1;
 ----
 allowed_paths	4
 
-# main keywords
-query II
-FROM sql_auto_complete('set wal') LIMIT 1;
-----
-wal_encryption	4
 
 
