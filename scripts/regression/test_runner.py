@@ -39,6 +39,7 @@ parser.add_argument("--new", type=str, help="Path to the new runner.", required=
 parser.add_argument("--benchmarks", type=str, help="Path to the benchmark file.", required=True)
 parser.add_argument("--verbose", action="store_true", help="Enable verbose output.")
 parser.add_argument("--threads", type=int, help="Number of threads to use.")
+parser.add_argument("--memory_limit", type=str, help="Memory limit to use.")
 parser.add_argument("--nofail", action="store_true", help="Do not fail on regression.")
 parser.add_argument("--disable-timeout", action="store_true", help="Disable timeout.")
 parser.add_argument("--max-timeout", type=int, default=3600, help="Set maximum timeout in seconds (default: 3600).")
@@ -60,6 +61,7 @@ new_runner_path = args.new
 benchmark_file = args.benchmarks
 verbose = args.verbose
 threads = args.threads
+memory_limit = args.memory_limit
 no_regression_fail = args.nofail
 disable_timeout = args.disable_timeout
 max_timeout = args.max_timeout
