@@ -176,7 +176,7 @@ create or replace macro m(s cool_string) as s;
 statement ok
 select m('duck')
 
-# this fails on creation because we wan't implicitly cast
+# this fails on creation because we won't implicitly cast
 statement error
 create or replace macro m(s varchar := 42) as s
 ----
@@ -189,6 +189,12 @@ create or replace macro m(s varchar := 42::varchar) as s
 # this can be implicitly cast so it succeeds
 statement ok
 create or replace macro m(i bigint := 42::integer) as i
+
+# test that the supplied arg is cast to a bigint
+query I
+select typeof(m(42::integer))
+----
+BIGINT
 
 # replicate tests above with table macro
 statement ok
@@ -338,4 +344,9 @@ statement ok
 create or replace macro m(s varchar := 42::varchar) as table (select s)
 
 statement ok
-create or replace macro m(i bigint := 42::integer) as table (select i)
+create or replace macro m(i bigint := 42::integer) as table (select i as i)
+
+query I
+select typeof(i) from m(42::integer)
+----
+BIGINT
