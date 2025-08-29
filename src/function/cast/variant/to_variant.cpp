@@ -84,6 +84,38 @@ static void InitializeVariants(DataChunk &offsets, Vector &result, SelectionVect
 	selvec_size = keys_offset;
 }
 
+static void FinalizeVariantKeys(Vector &variant, OrderedOwningStringMap<uint32_t> &dictionary, SelectionVector &sel,
+                                idx_t sel_size) {
+	auto &keys = VariantVector::GetKeys(variant);
+	auto &keys_entry = ListVector::GetEntry(keys);
+	auto keys_entry_data = FlatVector::GetData<string_t>(keys_entry);
+
+	bool already_sorted = true;
+
+	vector<idx_t> unsorted_to_sorted(dictionary.size());
+	auto it = dictionary.begin();
+	for (idx_t i = 0; i < dictionary.size(); i++) {
+		auto unsorted_idx = it->second;
+		if (unsorted_idx != i) {
+			already_sorted = false;
+		}
+		unsorted_to_sorted[unsorted_idx] = i;
+		D_ASSERT(i < ListVector::GetListSize(keys));
+		keys_entry_data[i] = it->first;
+		keys_entry_data[i].SetSizeAndFinalize(static_cast<uint32_t>(keys_entry_data[i].GetSize()));
+		it++;
+	}
+
+	if (!already_sorted) {
+		//! Adjust the selection vector to point to the right dictionary index
+		for (idx_t i = 0; i < sel_size; i++) {
+			auto old_dictionary_index = sel.get_index(i);
+			auto new_dictionary_index = unsorted_to_sorted[old_dictionary_index];
+			sel.set_index(i, new_dictionary_index);
+		}
+	}
+}
+
 static bool CastToVARIANT(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	DataChunk offsets;
 	offsets.Initialize(Allocator::DefaultAllocator(),
@@ -117,7 +149,7 @@ static bool CastToVARIANT(Vector &source, Vector &result, idx_t count, CastParam
 		                       nullptr, true);
 	}
 
-	VariantUtils::FinalizeVariantKeys(result, dictionary, keys_selvec, keys_selvec_size);
+	FinalizeVariantKeys(result, dictionary, keys_selvec, keys_selvec_size);
 	//! Finalize the 'data'
 	auto &blob = VariantVector::GetData(result);
 	auto blob_data = FlatVector::GetData<string_t>(blob);
