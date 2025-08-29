@@ -17,11 +17,27 @@
 
 namespace duckdb {
 
+struct TerminalProgressBarDisplayedProgressInfo {
+	optional_idx percentage;
+	optional_idx estimated_seconds_remaining;
+
+	bool operator==(const TerminalProgressBarDisplayedProgressInfo &other) const {
+		return percentage == other.percentage && estimated_seconds_remaining == other.estimated_seconds_remaining;
+	}
+
+	bool operator!=(const TerminalProgressBarDisplayedProgressInfo &other) const {
+		return !(*this == other);
+	}
+};
+
 class TerminalProgressBarDisplay : public ProgressBarDisplay {
 private:
 	UnscentedKalmanFilter ukf;
 	std::chrono::steady_clock::time_point start_time;
-	double last_update_time;
+
+	// track the progress info that has been previously
+	// displayed to prevent redundant updates
+	struct TerminalProgressBarDisplayedProgressInfo displayed_progress_info;
 
 	double GetElapsedDuration() {
 		auto now = std::chrono::steady_clock::now();
@@ -32,6 +48,7 @@ private:
 public:
 	TerminalProgressBarDisplay() {
 		start_time = std::chrono::steady_clock::now();
+		displayed_progress_info = {optional_idx(), optional_idx()};
 	}
 
 	~TerminalProgressBarDisplay() override {
