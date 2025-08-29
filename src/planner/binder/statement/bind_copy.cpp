@@ -444,6 +444,18 @@ string ExtractFormat(const string &file_path) {
 
 void Binder::BindCopyOptions(CopyInfo &info) {
 	TableFunctionBinder option_binder(*this, context, "Copy", "Copy options");
+	if (info.file_path_expression) {
+		auto inputs = BindCopyOption(context, option_binder, "filename", info.file_path_expression);
+		if (inputs.size() != 1 || inputs[0].type().id() != LogicalTypeId::VARCHAR) {
+			throw InternalException("Unsupported parameter type for filename: expected e.g. TARGET 'file.parquet'");
+		}
+		if (!info.file_path.empty()) {
+			throw InternalException("Both a file path and a file path expression were provided for COPY - only one of "
+			                        "the two can be provided");
+		}
+		info.file_path = inputs[0].ToString();
+		info.file_path_expression.reset();
+	}
 	for (auto &entry : info.parsed_options) {
 		auto inputs = BindCopyOption(context, option_binder, entry.first, entry.second);
 		if (StringUtil::CIEquals(entry.first, "format")) {
@@ -455,23 +467,13 @@ void Binder::BindCopyOptions(CopyInfo &info) {
 			info.is_format_auto_detected = false;
 			continue;
 		}
-		if (StringUtil::CIEquals(entry.first, "__filename")) {
-			// target specifier: interpret this option
-			if (inputs.size() != 1 || inputs[0].type().id() != LogicalTypeId::VARCHAR) {
-				throw InternalException(
-				    "Unsupported parameter type for __filename: expected e.g. TARGET 'file.parquet'");
-			}
-			if (!info.file_path.empty()) {
-				throw InternalException(
-				    "Both a file path and a __filename were provided for COPY - only one of the two can be provided");
-			}
-			info.file_path = inputs[0].ToString();
-			continue;
-		}
 		info.options[entry.first] = std::move(inputs);
 	}
 	if (info.is_format_auto_detected) {
 		info.format = ExtractFormat(info.file_path);
+	}
+	if (info.format.empty()) {
+		info.format = "csv";
 	}
 	info.parsed_options.clear();
 }

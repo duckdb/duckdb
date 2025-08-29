@@ -39,8 +39,7 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(duckdb_libpgquery::PGCopySt
 	// get file_path and is_from
 	info.is_from = stmt.is_from;
 
-	auto filename_expr = TransformExpression(*stmt.filename);
-	info.parsed_options["__filename"] = std::move(filename_expr);
+	info.file_path_expression = TransformExpression(*stmt.filename);
 
 	// get select_list
 	if (stmt.attlist) {

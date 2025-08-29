@@ -13,6 +13,7 @@ unique_ptr<CopyInfo> CopyInfo::Copy() const {
 	result->schema = schema;
 	result->table = table;
 	result->select_list = select_list;
+	result->file_path_expression = file_path_expression ? file_path_expression->Copy() : nullptr;
 	result->file_path = file_path;
 	result->is_from = is_from;
 	result->format = format;
@@ -42,9 +43,6 @@ string CopyInfo::CopyOptionsToString() const {
 	}
 	for (auto &opt : parsed_options) {
 		auto &name = opt.first;
-		if (name == "__filename") {
-			continue;
-		}
 		auto &expr = opt.second;
 		string option_string = name;
 		if (expr) {
@@ -111,10 +109,9 @@ string CopyInfo::ToString() const {
 		}
 		result += " TO ";
 	}
-	auto entry = parsed_options.find("__filename");
-	if (entry != parsed_options.end()) {
+	if (file_path_expression) {
 		result += "(";
-		result += entry->second->ToString();
+		result += file_path_expression->ToString();
 		result += ")";
 	} else {
 		result += StringUtil::Format(" %s", SQLString(file_path));
