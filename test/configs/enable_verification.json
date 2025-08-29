@@ -56,6 +56,12 @@
       ]
     },
     {
+      "reason": "VARIANT Value internals aren't deterministic",
+      "paths": [
+        "test/sql/types/variant/implicit_cast_from_variant.test"
+      ]
+    },
+    {
       "reason": "Contains current time function.",
       "paths": [
         "test/sql/function/timestamp/current_time.test",
