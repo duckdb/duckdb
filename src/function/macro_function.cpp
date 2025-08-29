@@ -177,7 +177,7 @@ MacroBindResult MacroFunction::BindMacroFunction(
 		if (result_indices.empty()) {
 			// No matching function found
 			error = StringUtil::Format("Macro %s() does not support the supplied arguments.", name);
-			error += "You might need to add explicit type casts.\n";
+			error += " You might need to add explicit type casts.\n";
 			error += "Candidate macros:";
 			for (auto &function : functions) {
 				error += "\n\t" + FormatMacroFunction(*function, name);
