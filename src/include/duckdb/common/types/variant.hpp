@@ -2,6 +2,7 @@
 
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
+#include "duckdb/common/types/vector.hpp"
 
 namespace duckdb_yyjson {
 struct yyjson_mut_doc;
@@ -25,6 +26,44 @@ struct VariantNestedData {
 	uint32_t children_idx;
 	//! Whether the row is null
 	bool is_null;
+};
+
+struct VariantVectorData {
+public:
+	explicit VariantVectorData(Vector &variant)
+	    : variant(variant), key_id_validity(FlatVector::Validity(VariantVector::GetChildrenKeyId(variant))),
+	      keys(VariantVector::GetKeys(variant)) {
+		blob_data = FlatVector::GetData<string_t>(VariantVector::GetData(variant));
+		type_ids_data = FlatVector::GetData<uint8_t>(VariantVector::GetValuesTypeId(variant));
+		byte_offset_data = FlatVector::GetData<uint32_t>(VariantVector::GetValuesByteOffset(variant));
+		key_id_data = FlatVector::GetData<uint32_t>(VariantVector::GetChildrenKeyId(variant));
+		value_id_data = FlatVector::GetData<uint32_t>(VariantVector::GetChildrenValueId(variant));
+		values_data = FlatVector::GetData<list_entry_t>(VariantVector::GetValues(variant));
+		children_data = FlatVector::GetData<list_entry_t>(VariantVector::GetChildren(variant));
+		keys_data = FlatVector::GetData<list_entry_t>(keys);
+	}
+
+public:
+	Vector &variant;
+
+	//! value
+	string_t *blob_data;
+
+	//! values
+	uint8_t *type_ids_data;
+	uint32_t *byte_offset_data;
+
+	//! children
+	uint32_t *key_id_data;
+	uint32_t *value_id_data;
+	ValidityMask &key_id_validity;
+
+	//! values | children | keys
+	list_entry_t *values_data;
+	list_entry_t *children_data;
+	list_entry_t *keys_data;
+
+	Vector &keys;
 };
 
 enum class VariantLogicalType : uint8_t {
@@ -62,6 +101,77 @@ enum class VariantLogicalType : uint8_t {
 	BIGNUM = 31,
 	BITSTRING = 32,
 	ENUM_SIZE /* always kept as last item of the enum */
+};
+
+struct UnifiedVariantVectorData {
+public:
+	explicit UnifiedVariantVectorData(const RecursiveUnifiedVectorFormat &variant)
+	    : variant(variant), keys(UnifiedVariantVector::GetKeys(variant)),
+	      keys_entry(UnifiedVariantVector::GetKeysEntry(variant)), children(UnifiedVariantVector::GetChildren(variant)),
+	      key_id(UnifiedVariantVector::GetChildrenKeyId(variant)),
+	      value_id(UnifiedVariantVector::GetChildrenValueId(variant)), values(UnifiedVariantVector::GetValues(variant)),
+	      type_id(UnifiedVariantVector::GetValuesTypeId(variant)),
+	      byte_offset(UnifiedVariantVector::GetValuesByteOffset(variant)), data(UnifiedVariantVector::GetData(variant)),
+	      key_id_validity(key_id.validity) {
+		blob_data = data.GetData<string_t>();
+		type_id_data = type_id.GetData<uint8_t>();
+		byte_offset_data = byte_offset.GetData<uint32_t>();
+		key_id_data = key_id.GetData<uint32_t>();
+		value_id_data = value_id.GetData<uint32_t>();
+		values_data = values.GetData<list_entry_t>();
+		children_data = children.GetData<list_entry_t>();
+		keys_data = keys.GetData<list_entry_t>();
+		keys_entry_data = keys_entry.GetData<string_t>();
+	}
+
+public:
+	const string_t &GetKey(idx_t row, idx_t index) {
+		auto list_entry = keys_data[keys.sel->get_index(row)];
+		return keys_entry_data[keys_entry.sel->get_index(list_entry.offset + index)];
+	}
+	uint32_t GetKeyId(idx_t row, idx_t child_index) {
+		auto list_entry = children_data[children.sel->get_index(row)];
+		return key_id_data[key_id.sel->get_index(list_entry.offset + child_index)];
+	}
+	uint32_t GetValueId(idx_t row, idx_t child_index) {
+		auto list_entry = children_data[children.sel->get_index(row)];
+		return value_id_data[value_id.sel->get_index(list_entry.offset + child_index)];
+	}
+	VariantLogicalType GetTypeId(idx_t row, idx_t value_index) {
+		auto list_entry = values_data[values.sel->get_index(row)];
+		return static_cast<VariantLogicalType>(type_id_data[type_id.sel->get_index(list_entry.offset + value_index)]);
+	}
+	uint32_t GetByteOffset(idx_t row, idx_t value_index) {
+		auto list_entry = values_data[values.sel->get_index(row)];
+		return byte_offset_data[byte_offset.sel->get_index(list_entry.offset + value_index)];
+	}
+	const string_t &GetData(idx_t row) {
+		return blob_data[data.sel->get_index(row)];
+	}
+
+public:
+	const RecursiveUnifiedVectorFormat &variant;
+	const UnifiedVectorFormat &keys;
+	const UnifiedVectorFormat &keys_entry;
+	const UnifiedVectorFormat &children;
+	const UnifiedVectorFormat &key_id;
+	const UnifiedVectorFormat &value_id;
+	const UnifiedVectorFormat &values;
+	const UnifiedVectorFormat &type_id;
+	const UnifiedVectorFormat &byte_offset;
+	const UnifiedVectorFormat &data;
+
+	const list_entry_t *keys_data = nullptr;
+	const string_t *keys_entry_data = nullptr;
+	const list_entry_t *children_data = nullptr;
+	const uint32_t *key_id_data = nullptr;
+	const uint32_t *value_id_data = nullptr;
+	const list_entry_t *values_data = nullptr;
+	const uint8_t *type_id_data = nullptr;
+	const uint32_t *byte_offset_data = nullptr;
+	const string_t *blob_data = nullptr;
+
+	const ValidityMask &key_id_validity;
 };
 
 struct VariantCasts {

@@ -2881,41 +2881,41 @@ Vector &VariantVector::GetData(const Vector &vec) {
 	return *StructVector::GetEntries(vec)[3];
 }
 
-UnifiedVectorFormat &UnifiedVariantVector::GetKeys(RecursiveUnifiedVectorFormat &vec) {
+const UnifiedVectorFormat &UnifiedVariantVector::GetKeys(const RecursiveUnifiedVectorFormat &vec) {
 	return vec.children[0].unified;
 }
 
-UnifiedVectorFormat &UnifiedVariantVector::GetKeysEntry(RecursiveUnifiedVectorFormat &vec) {
+const UnifiedVectorFormat &UnifiedVariantVector::GetKeysEntry(const RecursiveUnifiedVectorFormat &vec) {
 	return vec.children[0].children[0].unified;
 }
 
-UnifiedVectorFormat &UnifiedVariantVector::GetChildren(RecursiveUnifiedVectorFormat &vec) {
+const UnifiedVectorFormat &UnifiedVariantVector::GetChildren(const RecursiveUnifiedVectorFormat &vec) {
 	return vec.children[1].unified;
 }
 
-UnifiedVectorFormat &UnifiedVariantVector::GetChildrenKeyId(RecursiveUnifiedVectorFormat &vec) {
+const UnifiedVectorFormat &UnifiedVariantVector::GetChildrenKeyId(const RecursiveUnifiedVectorFormat &vec) {
 	return vec.children[1].children[0].children[0].unified;
 }
 
-UnifiedVectorFormat &UnifiedVariantVector::GetChildrenValueId(RecursiveUnifiedVectorFormat &vec) {
+const UnifiedVectorFormat &UnifiedVariantVector::GetChildrenValueId(const RecursiveUnifiedVectorFormat &vec) {
 	return vec.children[1].children[0].children[1].unified;
 }
 
-UnifiedVectorFormat &UnifiedVariantVector::GetValues(RecursiveUnifiedVectorFormat &vec) {
+const UnifiedVectorFormat &UnifiedVariantVector::GetValues(const RecursiveUnifiedVectorFormat &vec) {
 	return vec.children[2].unified;
 }
 
-UnifiedVectorFormat &UnifiedVariantVector::GetValuesTypeId(RecursiveUnifiedVectorFormat &vec) {
+const UnifiedVectorFormat &UnifiedVariantVector::GetValuesTypeId(const RecursiveUnifiedVectorFormat &vec) {
 	auto &values = vec.children[2];
 	return values.children[0].children[0].unified;
 }
 
-UnifiedVectorFormat &UnifiedVariantVector::GetValuesByteOffset(RecursiveUnifiedVectorFormat &vec) {
+const UnifiedVectorFormat &UnifiedVariantVector::GetValuesByteOffset(const RecursiveUnifiedVectorFormat &vec) {
 	auto &values = vec.children[2];
 	return values.children[0].children[1].unified;
 }
 
-UnifiedVectorFormat &UnifiedVariantVector::GetData(RecursiveUnifiedVectorFormat &vec) {
+const UnifiedVectorFormat &UnifiedVariantVector::GetData(const RecursiveUnifiedVectorFormat &vec) {
 	return vec.children[3].unified;
 }
 

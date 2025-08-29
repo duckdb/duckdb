@@ -29,44 +29,6 @@ public:
 	}
 };
 
-struct VariantVectorData {
-public:
-	explicit VariantVectorData(Vector &variant)
-	    : variant(variant), key_id_validity(FlatVector::Validity(VariantVector::GetChildrenKeyId(variant))),
-	      keys(VariantVector::GetKeys(variant)) {
-		blob_data = FlatVector::GetData<string_t>(VariantVector::GetData(variant));
-		type_ids_data = FlatVector::GetData<uint8_t>(VariantVector::GetValuesTypeId(variant));
-		byte_offset_data = FlatVector::GetData<uint32_t>(VariantVector::GetValuesByteOffset(variant));
-		key_id_data = FlatVector::GetData<uint32_t>(VariantVector::GetChildrenKeyId(variant));
-		value_id_data = FlatVector::GetData<uint32_t>(VariantVector::GetChildrenValueId(variant));
-		values_data = FlatVector::GetData<list_entry_t>(VariantVector::GetValues(variant));
-		children_data = FlatVector::GetData<list_entry_t>(VariantVector::GetChildren(variant));
-		keys_data = FlatVector::GetData<list_entry_t>(keys);
-	}
-
-public:
-	Vector &variant;
-
-	//! value
-	string_t *blob_data;
-
-	//! values
-	uint8_t *type_ids_data;
-	uint32_t *byte_offset_data;
-
-	//! children
-	uint32_t *key_id_data;
-	uint32_t *value_id_data;
-	ValidityMask &key_id_validity;
-
-	//! values | children | keys
-	list_entry_t *values_data;
-	list_entry_t *children_data;
-	list_entry_t *keys_data;
-
-	Vector &keys;
-};
-
 template <bool WRITE_DATA>
 void WriteContainerData(VariantVectorData &result, idx_t result_index, uint32_t &blob_offset, idx_t length,
                         idx_t children_offset) {

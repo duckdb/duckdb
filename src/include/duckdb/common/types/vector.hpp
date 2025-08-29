@@ -59,8 +59,12 @@ struct UnifiedVectorFormat {
 	}
 	template <class T>
 	static inline const T *GetData(const UnifiedVectorFormat &format) {
-		format.VerifyVectorType<T>();
-		return GetDataUnsafe<T>(format);
+		return format.GetData<T>();
+	}
+	template <class T>
+	inline const T *GetData() const {
+		VerifyVectorType<T>();
+		return GetDataUnsafe<T>(*this);
 	}
 	template <class T>
 	static inline T *GetDataNoConst(UnifiedVectorFormat &format) {
@@ -77,23 +81,23 @@ struct RecursiveUnifiedVectorFormat {
 
 struct UnifiedVariantVector {
 	//! The 'keys' list (dictionary)
-	DUCKDB_API static UnifiedVectorFormat &GetKeys(RecursiveUnifiedVectorFormat &vec);
+	DUCKDB_API static const UnifiedVectorFormat &GetKeys(const RecursiveUnifiedVectorFormat &vec);
 	//! The 'keys' list entry
-	DUCKDB_API static UnifiedVectorFormat &GetKeysEntry(RecursiveUnifiedVectorFormat &vec);
+	DUCKDB_API static const UnifiedVectorFormat &GetKeysEntry(const RecursiveUnifiedVectorFormat &vec);
 	//! The 'children' list
-	DUCKDB_API static UnifiedVectorFormat &GetChildren(RecursiveUnifiedVectorFormat &vec);
+	DUCKDB_API static const UnifiedVectorFormat &GetChildren(const RecursiveUnifiedVectorFormat &vec);
 	//! The 'key_id' inside the 'children' list
-	DUCKDB_API static UnifiedVectorFormat &GetChildrenKeyId(RecursiveUnifiedVectorFormat &vec);
+	DUCKDB_API static const UnifiedVectorFormat &GetChildrenKeyId(const RecursiveUnifiedVectorFormat &vec);
 	//! The 'value_id' inside the 'children' list
-	DUCKDB_API static UnifiedVectorFormat &GetChildrenValueId(RecursiveUnifiedVectorFormat &vec);
+	DUCKDB_API static const UnifiedVectorFormat &GetChildrenValueId(const RecursiveUnifiedVectorFormat &vec);
 	//! The 'values' list
-	DUCKDB_API static UnifiedVectorFormat &GetValues(RecursiveUnifiedVectorFormat &vec);
+	DUCKDB_API static const UnifiedVectorFormat &GetValues(const RecursiveUnifiedVectorFormat &vec);
 	//! The 'type_id' inside the 'values' list
-	DUCKDB_API static UnifiedVectorFormat &GetValuesTypeId(RecursiveUnifiedVectorFormat &vec);
+	DUCKDB_API static const UnifiedVectorFormat &GetValuesTypeId(const RecursiveUnifiedVectorFormat &vec);
 	//! The 'byte_offset' inside the 'values' list
-	DUCKDB_API static UnifiedVectorFormat &GetValuesByteOffset(RecursiveUnifiedVectorFormat &vec);
+	DUCKDB_API static const UnifiedVectorFormat &GetValuesByteOffset(const RecursiveUnifiedVectorFormat &vec);
 	//! The binary blob 'data' encoding the Variant for the row
-	DUCKDB_API static UnifiedVectorFormat &GetData(RecursiveUnifiedVectorFormat &vec);
+	DUCKDB_API static const UnifiedVectorFormat &GetData(const RecursiveUnifiedVectorFormat &vec);
 };
 
 //! This is a helper data structure. It contains all fields necessary to resize a vector.
