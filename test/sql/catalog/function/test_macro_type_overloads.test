@@ -154,7 +154,7 @@ select m(0, 42)
 ----
 has multiple overloads
 
-# this resolves to the first ono because the first arg is int
+# this resolves to the first one because the first arg is int
 query I
 select m(0, 42::float)
 ----
@@ -186,7 +186,7 @@ cannot be implicitly cast
 statement ok
 create or replace macro m(s varchar := 42::varchar) as s
 
-# this can be explicitly cast so it succeeds
+# this can be implicitly cast so it succeeds
 statement ok
 create or replace macro m(i bigint := 42::integer) as i
 

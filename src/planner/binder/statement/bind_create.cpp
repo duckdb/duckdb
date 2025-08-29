@@ -261,6 +261,9 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 		// Resolve any user type arguments
 		for (idx_t param_idx = 0; param_idx < function->types.size(); param_idx++) {
 			auto &type = function->types[param_idx];
+			if (type.id() == LogicalTypeId::UNKNOWN) {
+				continue;
+			}
 			if (type.id() == LogicalTypeId::USER) {
 				type = TransformStringToLogicalType(type.ToString(), context);
 			}
