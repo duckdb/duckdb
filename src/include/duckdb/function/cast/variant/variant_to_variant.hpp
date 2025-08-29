@@ -90,7 +90,7 @@ static uint32_t VariantTrivialPrimitiveSize(VariantLogicalType type) {
 }
 
 template <bool WRITE_DATA, bool IGNORE_NULLS>
-bool ConvertVariantToVariant(Vector &source, VariantVectorData &result, DataChunk &offsets, idx_t count,
+bool ConvertVariantToVariant(Vector &source_vec, VariantVectorData &result, DataChunk &offsets, idx_t count,
                              idx_t source_size, optional_ptr<const SelectionVector> selvec,
                              optional_ptr<const SelectionVector> source_sel, SelectionVector &keys_selvec,
                              OrderedOwningStringMap<uint32_t> &dictionary,
@@ -102,48 +102,10 @@ bool ConvertVariantToVariant(Vector &source, VariantVectorData &result, DataChun
 	auto blob_offset_data = OffsetData::GetBlob(offsets);
 
 	RecursiveUnifiedVectorFormat source_format;
-	Vector::RecursiveToUnifiedFormat(source, source_size, source_format);
-
-	//! source keys
-	auto &source_keys = UnifiedVariantVector::GetKeys(source_format);
-	auto source_keys_data = source_keys.GetData<list_entry_t>(source_keys);
-
-	//! source keys entry
-	auto &source_keys_entry = UnifiedVariantVector::GetKeysEntry(source_format);
-	auto source_keys_entry_data = source_keys_entry.GetData<string_t>(source_keys_entry);
-
-	//! source children
-	auto &source_children = UnifiedVariantVector::GetChildren(source_format);
-	auto source_children_data = source_children.GetData<list_entry_t>(source_children);
-
-	//! source values
-	auto &source_values = UnifiedVariantVector::GetValues(source_format);
-	auto source_values_data = source_values.GetData<list_entry_t>(source_values);
-
-	//! source data
-	auto &source_data = UnifiedVariantVector::GetData(source_format);
-	auto source_data_data = source_data.GetData<string_t>(source_data);
-
-	//! source byte_offset
-	auto &source_byte_offset = UnifiedVariantVector::GetValuesByteOffset(source_format);
-	auto source_byte_offset_data = source_byte_offset.GetData<uint32_t>(source_byte_offset);
-
-	//! source type_id
-	auto &source_type_id = UnifiedVariantVector::GetValuesTypeId(source_format);
-	auto source_type_id_data = source_type_id.GetData<uint8_t>(source_type_id);
-
-	//! source key_id
-	auto &source_key_id = UnifiedVariantVector::GetChildrenKeyId(source_format);
-	auto source_key_id_data = source_key_id.GetData<uint32_t>(source_key_id);
-
-	//! source value_id
-	auto &source_value_id = UnifiedVariantVector::GetChildrenValueId(source_format);
-	auto source_value_id_data = source_value_id.GetData<uint32_t>(source_value_id);
-
-	auto &source_validity = source_format.unified.validity;
+	Vector::RecursiveToUnifiedFormat(source_vec, source_size, source_format);
+	UnifiedVariantVectorData source(source_format);
 
 	for (idx_t i = 0; i < count; i++) {
-		auto index = source_format.unified.sel->get_index(i);
 		auto result_index = selvec ? selvec->get_index(i) : i;
 
 		auto &keys_list_entry = result.keys_data[result_index];
@@ -157,19 +119,13 @@ bool ConvertVariantToVariant(Vector &source, VariantVectorData &result, DataChun
 
 		uint32_t keys_count = 0;
 		uint32_t blob_size = 0;
-		if (!source_validity.RowIsValid(index)) {
+		if (!source.RowIsValid(i)) {
 			if (!IGNORE_NULLS) {
 				HandleVariantNull<WRITE_DATA>(result, result_index, values_offset_data, blob_offset, value_ids_selvec,
 				                              i, is_root);
 			}
 			continue;
 		}
-		auto source_keys_list_entry = source_keys_data[index];
-		auto source_children_list_entry = source_children_data[index];
-		auto source_values_list_entry = source_values_data[index];
-		auto source_blob_data = const_data_ptr_cast(source_data_data[index].GetData());
-
-		D_ASSERT(source_values_list_entry.length);
 		if (WRITE_DATA && value_ids_selvec) {
 			//! Write the value_id for the parent of this column
 			result.value_id_data[value_ids_selvec->get_index(i)] = values_offset;
@@ -180,26 +136,21 @@ bool ConvertVariantToVariant(Vector &source, VariantVectorData &result, DataChun
 
 		//! First write all children
 		//! NOTE: this has to happen first because we use 'values_offset', which is increased when we write the values
+		auto source_children_list_entry = source.GetChildrenListEntry(i);
 		for (idx_t j = 0; j < source_children_list_entry.length; j++) {
-
 			//! value_id
 			if (WRITE_DATA) {
-				auto source_value_id_index = source_value_id.sel->get_index(j + source_children_list_entry.offset);
-				auto source_value_id_value = source_value_id_data[source_value_id_index];
+				auto source_value_index = source.GetValueId(i, j);
 				result.value_id_data[children_list_entry.offset + children_offset + j] =
-				    values_offset + source_value_id_value;
+				    values_offset + source_value_index;
 			}
 
 			//! key_id
-			auto source_key_id_index = source_key_id.sel->get_index(j + source_children_list_entry.offset);
-			if (source_key_id.validity.RowIsValid(source_key_id_index)) {
+			if (source.KeyIdIsValid(i, j)) {
 				if (WRITE_DATA) {
-					auto source_key_id_value = source_key_id_data[source_key_id_index];
-
 					//! Look up the existing key from 'source'
-					auto source_key_entry_index =
-					    source_keys_entry.sel->get_index(source_keys_list_entry.offset + source_key_id_value);
-					auto &source_key_value = source_keys_entry_data[source_key_entry_index];
+					auto source_key_index = source.GetKeyId(i, j);
+					auto &source_key_value = source.GetKey(i, source_key_index);
 
 					//! Now write this key to the dictionary of the result
 					auto dictionary_size = dictionary.size();
@@ -217,23 +168,22 @@ bool ConvertVariantToVariant(Vector &source, VariantVectorData &result, DataChun
 			}
 		}
 
-		//! Then write all values
-		for (idx_t j = 0; j < source_values_list_entry.length; j++) {
-			auto source_type_id_index = source_type_id.sel->get_index(j + source_values_list_entry.offset);
-			auto source_type_id_value = static_cast<VariantLogicalType>(source_type_id_data[source_type_id_index]);
+		auto source_blob_data = const_data_ptr_cast(source.GetData(i).GetData());
 
-			auto source_byte_offset_index = source_byte_offset.sel->get_index(j + source_values_list_entry.offset);
-			auto source_byte_offset_value = source_byte_offset_data[source_byte_offset_index];
+		//! Then write all values
+		auto source_values_list_entry = source.GetValuesListEntry(i);
+		for (idx_t j = 0; j < source_values_list_entry.length; j++) {
+			auto source_type_id = source.GetTypeId(i, j);
+			auto source_byte_offset = source.GetByteOffset(i, j);
 
 			//! NOTE: we have to deserialize these in both passes
 			//! because to figure out the size of the 'data' that is added by the VARIANT, we have to traverse the
 			//! VARIANT solely because the 'child_index' stored in the OBJECT/ARRAY data could require more bits
 			WriteVariantMetadata<WRITE_DATA>(result, result_index, values_offset_data, blob_offset + blob_size, nullptr,
-			                                 0, source_type_id_value);
+			                                 0, source_type_id);
 
-			if (source_type_id_value == VariantLogicalType::ARRAY ||
-			    source_type_id_value == VariantLogicalType::OBJECT) {
-				auto container_blob_data = source_blob_data + source_byte_offset_value;
+			if (source_type_id == VariantLogicalType::ARRAY || source_type_id == VariantLogicalType::OBJECT) {
+				auto container_blob_data = source_blob_data + source_byte_offset;
 				auto length = VarintDecode<uint32_t>(container_blob_data);
 				if (WRITE_DATA) {
 					VarintEncode(length, blob_data + blob_offset + blob_size);
@@ -247,12 +197,12 @@ bool ConvertVariantToVariant(Vector &source, VariantVectorData &result, DataChun
 					}
 					blob_size += GetVarintSize(new_child_index);
 				}
-			} else if (source_type_id_value == VariantLogicalType::VARIANT_NULL ||
-			           source_type_id_value == VariantLogicalType::BOOL_FALSE ||
-			           source_type_id_value == VariantLogicalType::BOOL_TRUE) {
+			} else if (source_type_id == VariantLogicalType::VARIANT_NULL ||
+			           source_type_id == VariantLogicalType::BOOL_FALSE ||
+			           source_type_id == VariantLogicalType::BOOL_TRUE) {
 				// no-op
-			} else if (source_type_id_value == VariantLogicalType::DECIMAL) {
-				auto decimal_blob_data = source_blob_data + source_byte_offset_value;
+			} else if (source_type_id == VariantLogicalType::DECIMAL) {
+				auto decimal_blob_data = source_blob_data + source_byte_offset;
 				auto width = static_cast<uint8_t>(VarintDecode<uint32_t>(decimal_blob_data));
 				auto width_varint_size = GetVarintSize(width);
 				if (WRITE_DATA) {
@@ -289,11 +239,10 @@ bool ConvertVariantToVariant(Vector &source, VariantVectorData &result, DataChun
 					}
 					blob_size += sizeof(int16_t);
 				}
-			} else if (source_type_id_value == VariantLogicalType::BITSTRING ||
-			           source_type_id_value == VariantLogicalType::BIGNUM ||
-			           source_type_id_value == VariantLogicalType::VARCHAR ||
-			           source_type_id_value == VariantLogicalType::BLOB) {
-				auto str_blob_data = source_blob_data + source_byte_offset_value;
+			} else if (source_type_id == VariantLogicalType::BITSTRING ||
+			           source_type_id == VariantLogicalType::BIGNUM || source_type_id == VariantLogicalType::VARCHAR ||
+			           source_type_id == VariantLogicalType::BLOB) {
+				auto str_blob_data = source_blob_data + source_byte_offset;
 				auto str_length = VarintDecode<uint32_t>(str_blob_data);
 				auto str_length_varint_size = GetVarintSize(str_length);
 				if (WRITE_DATA) {
@@ -305,15 +254,14 @@ bool ConvertVariantToVariant(Vector &source, VariantVectorData &result, DataChun
 					memcpy(blob_data + blob_offset + blob_size, str_blob_data, str_length);
 				}
 				blob_size += str_length;
-			} else if (VariantIsTrivialPrimitive(source_type_id_value)) {
-				auto size = VariantTrivialPrimitiveSize(source_type_id_value);
+			} else if (VariantIsTrivialPrimitive(source_type_id)) {
+				auto size = VariantTrivialPrimitiveSize(source_type_id);
 				if (WRITE_DATA) {
-					memcpy(blob_data + blob_offset + blob_size, source_blob_data + source_byte_offset_value, size);
+					memcpy(blob_data + blob_offset + blob_size, source_blob_data + source_byte_offset, size);
 				}
 				blob_size += size;
 			} else {
-				throw InternalException("Unrecognized VariantLogicalType: %s",
-				                        EnumUtil::ToString(source_type_id_value));
+				throw InternalException("Unrecognized VariantLogicalType: %s", EnumUtil::ToString(source_type_id));
 			}
 		}
 

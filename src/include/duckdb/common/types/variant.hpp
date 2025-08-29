@@ -128,17 +128,27 @@ public:
 	bool RowIsValid(idx_t row) {
 		return variant.unified.validity.RowIsValid(variant.unified.sel->get_index(row));
 	}
+	bool KeyIdIsValid(idx_t row, idx_t index) {
+		auto list_entry = GetChildrenListEntry(row);
+		return key_id_validity.RowIsValid(key_id.sel->get_index(list_entry.offset + index));
+	}
 
+	list_entry_t GetChildrenListEntry(idx_t row) {
+		return children_data[children.sel->get_index(row)];
+	}
+	list_entry_t GetValuesListEntry(idx_t row) {
+		return values_data[values.sel->get_index(row)];
+	}
 	const string_t &GetKey(idx_t row, idx_t index) {
 		auto list_entry = keys_data[keys.sel->get_index(row)];
 		return keys_entry_data[keys_entry.sel->get_index(list_entry.offset + index)];
 	}
 	uint32_t GetKeyId(idx_t row, idx_t child_index) {
-		auto list_entry = children_data[children.sel->get_index(row)];
+		auto list_entry = GetChildrenListEntry(row);
 		return key_id_data[key_id.sel->get_index(list_entry.offset + child_index)];
 	}
 	uint32_t GetValueId(idx_t row, idx_t child_index) {
-		auto list_entry = children_data[children.sel->get_index(row)];
+		auto list_entry = GetChildrenListEntry(row);
 		return value_id_data[value_id.sel->get_index(list_entry.offset + child_index)];
 	}
 	VariantLogicalType GetTypeId(idx_t row, idx_t value_index) {
