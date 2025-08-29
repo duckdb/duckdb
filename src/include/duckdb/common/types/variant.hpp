@@ -180,7 +180,7 @@ public:
 
 struct VariantCasts {
 	static duckdb_yyjson::yyjson_mut_val *ConvertVariantToJSON(duckdb_yyjson::yyjson_mut_doc *doc,
-	                                                           RecursiveUnifiedVectorFormat &source, idx_t row,
+	                                                           const RecursiveUnifiedVectorFormat &source, idx_t row,
 	                                                           uint32_t values_idx);
 };
 

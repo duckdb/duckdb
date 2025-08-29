@@ -129,13 +129,12 @@ static void VariantExtractFunction(DataChunk &input, ExpressionState &state, Vec
 
 	auto expected_type = component.lookup_mode == VariantChildLookupMode::BY_INDEX ? VariantLogicalType::ARRAY
 	                                                                               : VariantLogicalType::OBJECT;
-	if (!VariantUtils::CollectNestedData(source_format, expected_type, value_index_sel, count, optional_idx(), 0,
-	                                     nested_data, FlatVector::Validity(result), error)) {
+	if (!VariantUtils::CollectNestedData(variant, expected_type, value_index_sel, count, optional_idx(), 0, nested_data,
+	                                     FlatVector::Validity(result), error)) {
 		throw InvalidInputException(error);
 	}
 
-	if (!VariantUtils::FindChildValues(source_format, component, optional_idx(), new_value_index_sel, nested_data,
-	                                   count)) {
+	if (!VariantUtils::FindChildValues(variant, component, optional_idx(), new_value_index_sel, nested_data, count)) {
 		switch (component.lookup_mode) {
 		case VariantChildLookupMode::BY_INDEX: {
 			throw InvalidInputException("ARRAY does not contain the index: %d", component.index);
@@ -154,14 +153,14 @@ static void VariantExtractFunction(DataChunk &input, ExpressionState &state, Vec
 
 	auto &values = UnifiedVariantVector::GetValues(source_format);
 	auto values_data = values.GetData<list_entry_t>(values);
-	auto &raw_values = VariantVector::GetValues(variant);
+	auto &raw_values = VariantVector::GetValues(variant_vec);
 	auto values_list_size = ListVector::GetListSize(raw_values);
 
 	//! Create a new Variant that references the existing data of the input Variant
 	result.Initialize(false, count);
-	VariantVector::GetKeys(result).Reference(VariantVector::GetKeys(variant));
-	VariantVector::GetChildren(result).Reference(VariantVector::GetChildren(variant));
-	VariantVector::GetData(result).Reference(VariantVector::GetData(variant));
+	VariantVector::GetKeys(result).Reference(VariantVector::GetKeys(variant_vec));
+	VariantVector::GetChildren(result).Reference(VariantVector::GetChildren(variant_vec));
+	VariantVector::GetData(result).Reference(VariantVector::GetData(variant_vec));
 
 	//! Copy the existing 'values'
 	auto &result_values = VariantVector::GetValues(result);
@@ -186,11 +185,11 @@ static void VariantExtractFunction(DataChunk &input, ExpressionState &state, Vec
 	auto &result_type_id = VariantVector::GetValuesTypeId(result);
 	auto &result_byte_offset = VariantVector::GetValuesByteOffset(result);
 
-	result_type_id.Dictionary(VariantVector::GetValuesTypeId(variant), values_list_size, new_sel, values_list_size);
-	result_byte_offset.Dictionary(VariantVector::GetValuesByteOffset(variant), values_list_size, new_sel,
+	result_type_id.Dictionary(VariantVector::GetValuesTypeId(variant_vec), values_list_size, new_sel, values_list_size);
+	result_byte_offset.Dictionary(VariantVector::GetValuesByteOffset(variant_vec), values_list_size, new_sel,
 	                              values_list_size);
 
-	auto value_is_null = VariantUtils::ValueIsNull(source_format, new_value_index_sel, count, optional_idx());
+	auto value_is_null = VariantUtils::ValueIsNull(variant, new_value_index_sel, count, optional_idx());
 	if (!value_is_null.empty()) {
 		result.Flatten(count);
 	}

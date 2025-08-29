@@ -17,8 +17,8 @@ namespace duckdb {
 
 //! ------------ Variant -> JSON ------------
 
-yyjson_mut_val *VariantCasts::ConvertVariantToJSON(yyjson_mut_doc *doc, RecursiveUnifiedVectorFormat &source, idx_t row,
-                                                   uint32_t values_idx) {
+yyjson_mut_val *VariantCasts::ConvertVariantToJSON(yyjson_mut_doc *doc, const RecursiveUnifiedVectorFormat &source,
+                                                   idx_t row, uint32_t values_idx) {
 	auto index = source.unified.sel->get_index(row);
 	if (!source.unified.validity.RowIsValid(index)) {
 		return yyjson_mut_null(doc);
