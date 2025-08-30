@@ -509,6 +509,13 @@ typedef struct {
 	duckdb_value (*duckdb_get_table_names)(duckdb_connection connection, const char *query, bool qualified);
 	void (*duckdb_connection_get_arrow_options)(duckdb_connection connection, duckdb_arrow_options *out_arrow_options);
 	void (*duckdb_destroy_arrow_options)(duckdb_arrow_options *arrow_options);
+	// API to get information about the results of a prepared statement
+
+	idx_t (*duckdb_prepared_statement_column_count)(duckdb_prepared_statement prepared_statement);
+	const char *(*duckdb_prepared_statement_column_name)(duckdb_prepared_statement prepared_statement, idx_t col_idx);
+	duckdb_logical_type (*duckdb_prepared_statement_column_logical_type)(duckdb_prepared_statement prepared_statement,
+	                                                                     idx_t col_idx);
+	duckdb_type (*duckdb_prepared_statement_column_type)(duckdb_prepared_statement prepared_statement, idx_t col_idx);
 	// New query execution functions
 
 	duckdb_arrow_options (*duckdb_result_get_arrow_options)(duckdb_result *result);
@@ -986,6 +993,10 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_get_table_names = duckdb_get_table_names;
 	result.duckdb_connection_get_arrow_options = duckdb_connection_get_arrow_options;
 	result.duckdb_destroy_arrow_options = duckdb_destroy_arrow_options;
+	result.duckdb_prepared_statement_column_count = duckdb_prepared_statement_column_count;
+	result.duckdb_prepared_statement_column_name = duckdb_prepared_statement_column_name;
+	result.duckdb_prepared_statement_column_logical_type = duckdb_prepared_statement_column_logical_type;
+	result.duckdb_prepared_statement_column_type = duckdb_prepared_statement_column_type;
 	result.duckdb_result_get_arrow_options = duckdb_result_get_arrow_options;
 	result.duckdb_scalar_function_set_bind = duckdb_scalar_function_set_bind;
 	result.duckdb_scalar_function_bind_set_error = duckdb_scalar_function_bind_set_error;

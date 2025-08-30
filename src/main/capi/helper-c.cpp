@@ -92,6 +92,8 @@ duckdb_type LogicalTypeIdToC(const LogicalTypeId type) {
 	switch (type) {
 	case LogicalTypeId::INVALID:
 		return DUCKDB_TYPE_INVALID;
+	case LogicalTypeId::UNKNOWN:
+		return DUCKDB_TYPE_INVALID;
 	case LogicalTypeId::BOOLEAN:
 		return DUCKDB_TYPE_BOOLEAN;
 	case LogicalTypeId::TINYINT:
