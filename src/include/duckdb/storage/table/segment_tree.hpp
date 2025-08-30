@@ -223,7 +223,11 @@ public:
 			auto &entry = nodes[index];
 			D_ASSERT(entry.row_start == entry.node->start);
 			if (row_number < entry.row_start) {
-				upper = index - 1;
+				if (index > 0) {
+					upper = index - 1;
+				} else {
+					return false;
+				}
 			} else if (row_number >= entry.row_start + entry.node->count) {
 				lower = index + 1;
 			} else {
