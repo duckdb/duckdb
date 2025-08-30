@@ -755,12 +755,12 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 	case LogicalTypeId::STRUCT: {
 		// we can derive the value schema from the vector schema
 		auto &child_entries = StructVector::GetEntries(*vector);
-		child_list_t<Value> children;
+		duckdb::vector<Value> children;
 		for (idx_t child_idx = 0; child_idx < child_entries.size(); child_idx++) {
 			auto &struct_child = child_entries[child_idx];
-			children.push_back(make_pair(StructType::GetChildName(type, child_idx), struct_child->GetValue(index_p)));
+			children.push_back(struct_child->GetValue(index_p));
 		}
-		return Value::STRUCT(std::move(children));
+		return Value::STRUCT(type, std::move(children));
 	}
 	case LogicalTypeId::LIST: {
 		auto offlen = reinterpret_cast<list_entry_t *>(data)[index];
