@@ -549,7 +549,10 @@ idx_t DBConfig::GetSystemAvailableMemory(FileSystem &fs) {
 	// Check cgroup memory limit
 	auto cgroup_memory_limit = CGroups::GetMemoryLimit(fs);
 	if (cgroup_memory_limit.IsValid()) {
-		return cgroup_memory_limit.GetIndex();
+		auto cgroup_memory_limit_value = cgroup_memory_limit.GetIndex();
+		if (cgroup_memory_limit_value < NumericLimits<int64_t>::Maximum() - NumericLimits<int16_t>::Maximum()) {
+			return cgroup_memory_limit_value;
+		}
 	}
 #endif
 
