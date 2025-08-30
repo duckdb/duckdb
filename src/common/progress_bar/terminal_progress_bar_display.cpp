@@ -124,8 +124,14 @@ void TerminalProgressBarDisplay::Update(double percentage) {
 
 	double estimated_seconds_remaining = ukf.GetEstimatedRemainingSeconds();
 	auto percentage_int = NormalizePercentage(percentage);
-	PrintProgressInternal(percentage_int, estimated_seconds_remaining);
-	Printer::Flush(OutputStream::STREAM_STDOUT);
+
+	TerminalProgressBarDisplayedProgressInfo updated_progress_info = {percentage_int,
+	                                                                  (int32_t)estimated_seconds_remaining};
+	if (displayed_progress_info != updated_progress_info) {
+		PrintProgressInternal(percentage_int, estimated_seconds_remaining);
+		Printer::Flush(OutputStream::STREAM_STDOUT);
+		displayed_progress_info = updated_progress_info;
+	}
 }
 
 void TerminalProgressBarDisplay::Finish() {
