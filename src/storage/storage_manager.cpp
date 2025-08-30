@@ -39,12 +39,17 @@ void StorageOptions::Initialize(const unordered_map<string, Value> &options) {
 			block_header_size = DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE;
 			encryption = true;
 		} else if (entry.first == "encryption_cipher") {
-			throw BinderException("\"%s\" is not a valid cipher. Only AES GCM is supported.", entry.second.ToString());
+			encryption_cipher = StringUtil::Lower(entry.second.ToString());
+			auto parsed_cipher = EncryptionTypes::StringToCipher(encryption_cipher);
+			if (parsed_cipher == EncryptionTypes::CipherType::INVALID) {
+				throw BinderException("\"%s\" is not a valid cipher. Try 'GCM', 'CTR', or 'CBC'.", encryption_cipher);
+			}
 		} else if (entry.first == "row_group_size") {
 			row_group_size = entry.second.GetValue<uint64_t>();
 		} else if (entry.first == "storage_version") {
 			storage_version_user_provided = entry.second.ToString();
-			storage_version = SerializationCompatibility::FromString(entry.second.ToString()).serialization_version;
+			storage_version =
+			    SerializationCompatibility::FromString(storage_version_user_provided).serialization_version;
 		} else if (entry.first == "compress") {
 			if (entry.second.DefaultCastAs(LogicalType::BOOLEAN).GetValue<bool>()) {
 				compress_in_memory = CompressInMemory::COMPRESS;
