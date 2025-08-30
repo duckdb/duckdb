@@ -231,7 +231,9 @@ public:
 		const auto type = writer.GetType(SchemaIndex());
 
 		auto &state = state_p.Cast<StandardColumnWriterState<SRC, TGT, OP>>();
-		if (state.dictionary.GetSize() == 0 || state.dictionary.IsFull()) {
+		// Decide on dictionary encoding
+		if (state.dictionary.GetSize() == 0 || state.dictionary.IsFull() ||
+		    DictionarySizeMightExceeds(state.dictionary)) {
 			state.dictionary.Reset();
 			if (writer.GetParquetVersion() == ParquetVersion::V1) {
 				// Can't do the cool stuff for V1
@@ -318,6 +320,19 @@ public:
 	}
 
 private:
+	//! Write a value to the target data (if source is not string)
+	template <typename S = SRC, typename std::enable_if<!std::is_same<S, string_t>::value, int>::type = 0>
+	static bool DictionarySizeMightExceeds(const PrimitiveDictionary<SRC, TGT, OP> &) {
+		return false;
+	}
+
+	//! Write a value to the target data (if source is string)
+	template <typename S = SRC, typename std::enable_if<std::is_same<S, string_t>::value, int>::type = 0>
+	static bool DictionarySizeMightExceeds(const PrimitiveDictionary<SRC, TGT, OP> &dictionary) {
+		return dictionary.GetSize() * sizeof(uint32_t) + dictionary.GetTargetStreamSize() >
+		       idx_t(NumericLimits<int32_t>::Maximum());
+	}
+
 	template <bool ALL_VALID>
 	void WriteVectorInternal(WriteStream &temp_writer, ColumnWriterStatistics *stats,
 	                         ColumnWriterPageState *page_state_p, Vector &input_column, idx_t chunk_start,
