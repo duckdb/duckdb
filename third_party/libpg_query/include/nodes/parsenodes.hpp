@@ -1535,7 +1535,7 @@ typedef struct PGCopyStmt {
 								 * for all columns */
 	bool is_from;         /* TO or FROM */
 	bool is_program;      /* is 'filename' a program to popen? */
-	char *filename;       /* filename, or NULL for STDIN/STDOUT */
+	PGNode *filename;     /* filename */
 	PGList *options;      /* PGList of PGDefElem nodes */
 } PGCopyStmt;
 

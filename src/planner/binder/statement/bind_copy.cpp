@@ -424,11 +424,41 @@ vector<Value> BindCopyOption(ClientContext &context, TableFunctionBinder &option
 	return result;
 }
 
+string ExtractFormat(const string &file_path) {
+	auto format = StringUtil::Lower(file_path);
+	// We first remove extension suffixes
+	if (StringUtil::EndsWith(format, CompressionExtensionFromType(FileCompressionType::GZIP))) {
+		format = format.substr(0, format.size() - 3);
+	} else if (StringUtil::EndsWith(format, CompressionExtensionFromType(FileCompressionType::ZSTD))) {
+		format = format.substr(0, format.size() - 4);
+	}
+	// Now lets check for the last .
+	size_t dot_pos = format.rfind('.');
+	if (dot_pos == std::string::npos || dot_pos == format.length() - 1) {
+		// No format found
+		return "";
+	}
+	// We found something
+	return format.substr(dot_pos + 1);
+}
+
 void Binder::BindCopyOptions(CopyInfo &info) {
 	TableFunctionBinder option_binder(*this, context, "Copy", "Copy options");
+	if (info.file_path_expression) {
+		auto inputs = BindCopyOption(context, option_binder, "filename", info.file_path_expression);
+		if (inputs.size() != 1 || inputs[0].type().id() != LogicalTypeId::VARCHAR) {
+			throw InternalException("Unsupported parameter type for filename: expected e.g. TARGET 'file.parquet'");
+		}
+		if (!info.file_path.empty()) {
+			throw InternalException("Both a file path and a file path expression were provided for COPY - only one of "
+			                        "the two can be provided");
+		}
+		info.file_path = inputs[0].ToString();
+		info.file_path_expression.reset();
+	}
 	for (auto &entry : info.parsed_options) {
 		auto inputs = BindCopyOption(context, option_binder, entry.first, entry.second);
-		if (StringUtil::Lower(entry.first) == "format") {
+		if (StringUtil::CIEquals(entry.first, "format")) {
 			// format specifier: interpret this option
 			if (inputs.size() != 1 || inputs[0].type().id() != LogicalTypeId::VARCHAR) {
 				throw ParserException("Unsupported parameter type for FORMAT: expected e.g. FORMAT 'csv', 'parquet'");
@@ -438,6 +468,9 @@ void Binder::BindCopyOptions(CopyInfo &info) {
 			continue;
 		}
 		info.options[entry.first] = std::move(inputs);
+	}
+	if (info.is_format_auto_detected && info.format.empty()) {
+		info.format = ExtractFormat(info.file_path);
 	}
 	info.parsed_options.clear();
 }

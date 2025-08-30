@@ -668,7 +668,11 @@ vector<OpenFileInfo> FileSystem::GlobFiles(const string &pattern, ClientContext 
 					throw InternalException("FALLBACK_GLOB requires an extension to be specified");
 				}
 				string new_pattern = JoinPath(JoinPath(pattern, "**"), "*." + input.extension);
-				return GlobFiles(new_pattern, context, FileGlobOptions::DISALLOW_EMPTY);
+				result = GlobFiles(new_pattern, context, FileGlobOptions::ALLOW_EMPTY);
+				if (!result.empty()) {
+					// we found files by globbing the target as if it was a directory - return them
+					return result;
+				}
 			}
 		}
 		if (input.behavior == FileGlobOptions::FALLBACK_GLOB || input.behavior == FileGlobOptions::DISALLOW_EMPTY) {
