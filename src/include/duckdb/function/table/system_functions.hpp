@@ -43,6 +43,10 @@ struct PragmaDatabaseSize {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct PragmaMemoryInfo {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct DuckDBSchemasFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };

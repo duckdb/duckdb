@@ -1,0 +1,12 @@
+# name: test/sql/pragma/test_pragma_memory_info.test
+# description: Test PRAGMA memory_info
+# group: [pragma]
+
+statement ok
+PRAGMA memory_info;
+
+statement ok
+select * from pragma_memory_info();
+
+statement ok
+select buffer_pool_used_bytes, buffer_pool_max_bytes from pragma_memory_info();
