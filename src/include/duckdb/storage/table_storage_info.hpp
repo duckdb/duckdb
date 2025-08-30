@@ -33,6 +33,7 @@ struct ColumnSegmentInfo {
 	block_id_t block_id;
 	vector<block_id_t> additional_blocks;
 	idx_t block_offset;
+	idx_t segment_size;
 	string segment_info;
 };
 
