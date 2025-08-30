@@ -118,14 +118,14 @@ end
     res = DuckDB.execute(con, "CREATE TABLE timestamp1(timestamp TIMESTAMP , data INTEGER);")
     res = DuckDB.execute(
         con,
-        "INSERT INTO timestamp1 VALUES ('2021-09-27T11:30:00.000+01', 4), ('2021-09-28T12:30:00.000+01', 6), ('2021-09-29T13:30:00.000+01', 8);"
+        "INSERT INTO timestamp1 VALUES ('2021-09-27T10:30:00.000', 4), ('2021-09-28T11:30:00.000', 6), ('2021-09-29T12:30:00.000', 8);"
     )
     res = DuckDB.execute(con, "SELECT * FROM timestamp1 WHERE timestamp=?;", [DateTime(2021, 9, 27, 10, 30, 0)])
     df = DataFrame(res)
     @test isequal(df[1, "timestamp"], DateTime(2021, 9, 27, 10, 30, 0))
 
     # query with local datetime, display as UTC
-    res = DuckDB.execute(con, "SELECT * FROM timestamp1 WHERE timestamp='2021-09-27T11:30:00.000+01';")
+    res = DuckDB.execute(con, "SELECT * FROM timestamp1 WHERE timestamp='2021-09-27T10:30:00.000';")
     df = DataFrame(res)
     @test isequal(df[1, "timestamp"], DateTime(2021, 9, 27, 10, 30, 0))
 
