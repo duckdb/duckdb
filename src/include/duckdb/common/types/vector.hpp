@@ -75,6 +75,27 @@ struct RecursiveUnifiedVectorFormat {
 	LogicalType logical_type;
 };
 
+struct UnifiedVariantVector {
+	//! The 'keys' list (dictionary)
+	DUCKDB_API static UnifiedVectorFormat &GetKeys(RecursiveUnifiedVectorFormat &vec);
+	//! The 'keys' list entry
+	DUCKDB_API static UnifiedVectorFormat &GetKeysEntry(RecursiveUnifiedVectorFormat &vec);
+	//! The 'children' list
+	DUCKDB_API static UnifiedVectorFormat &GetChildren(RecursiveUnifiedVectorFormat &vec);
+	//! The 'key_id' inside the 'children' list
+	DUCKDB_API static UnifiedVectorFormat &GetChildrenKeyId(RecursiveUnifiedVectorFormat &vec);
+	//! The 'value_id' inside the 'children' list
+	DUCKDB_API static UnifiedVectorFormat &GetChildrenValueId(RecursiveUnifiedVectorFormat &vec);
+	//! The 'values' list
+	DUCKDB_API static UnifiedVectorFormat &GetValues(RecursiveUnifiedVectorFormat &vec);
+	//! The 'type_id' inside the 'values' list
+	DUCKDB_API static UnifiedVectorFormat &GetValuesTypeId(RecursiveUnifiedVectorFormat &vec);
+	//! The 'byte_offset' inside the 'values' list
+	DUCKDB_API static UnifiedVectorFormat &GetValuesByteOffset(RecursiveUnifiedVectorFormat &vec);
+	//! The binary blob 'data' encoding the Variant for the row
+	DUCKDB_API static UnifiedVectorFormat &GetData(RecursiveUnifiedVectorFormat &vec);
+};
+
 //! This is a helper data structure. It contains all fields necessary to resize a vector.
 struct ResizeInfo {
 	ResizeInfo(Vector &vec, data_ptr_t data, optional_ptr<VectorBuffer> buffer, const idx_t multiplier)
@@ -204,6 +225,7 @@ public:
 	//! Asserts that the CheckMapValidity returns MapInvalidReason::VALID
 	DUCKDB_API static void VerifyMap(Vector &map, const SelectionVector &sel, idx_t count);
 	DUCKDB_API static void VerifyUnion(Vector &map, const SelectionVector &sel, idx_t count);
+	DUCKDB_API static void VerifyVariant(Vector &map, const SelectionVector &sel, idx_t count);
 	DUCKDB_API static void Verify(Vector &vector, const SelectionVector &sel, idx_t count);
 	DUCKDB_API void UTFVerify(idx_t count);
 	DUCKDB_API void UTFVerify(const SelectionVector &sel, idx_t count);
@@ -600,6 +622,33 @@ struct ArrayVector {
 private:
 	template <class T>
 	static T &GetEntryInternal(T &vector);
+};
+
+struct VariantVector {
+	//! Gets a reference to the 'keys' list (dictionary) of a Variant
+	DUCKDB_API static Vector &GetKeys(Vector &vec);
+	DUCKDB_API static Vector &GetKeys(const Vector &vec);
+	//! Gets a reference to the 'children' list of a Variant
+	DUCKDB_API static Vector &GetChildren(Vector &vec);
+	DUCKDB_API static Vector &GetChildren(const Vector &vec);
+	//! Gets a reference to the 'key_id' inside the 'children' list of a Variant
+	DUCKDB_API static Vector &GetChildrenKeyId(Vector &vec);
+	DUCKDB_API static Vector &GetChildrenKeyId(const Vector &vec);
+	//! Gets a reference to the 'value_id' inside the 'children' list of a Variant
+	DUCKDB_API static Vector &GetChildrenValueId(Vector &vec);
+	DUCKDB_API static Vector &GetChildrenValueId(const Vector &vec);
+	//! Gets a reference to the 'values' list of a Variant
+	DUCKDB_API static Vector &GetValues(Vector &vec);
+	DUCKDB_API static Vector &GetValues(const Vector &vec);
+	//! Gets a reference to the 'type_id' inside the 'values' list of a Variant
+	DUCKDB_API static Vector &GetValuesTypeId(Vector &vec);
+	DUCKDB_API static Vector &GetValuesTypeId(const Vector &vec);
+	//! Gets a reference to the 'byte_offset' inside the 'values' list of a Variant
+	DUCKDB_API static Vector &GetValuesByteOffset(Vector &vec);
+	DUCKDB_API static Vector &GetValuesByteOffset(const Vector &vec);
+	//! Gets a reference to the binary blob 'value', which encodes the data of the row
+	DUCKDB_API static Vector &GetData(Vector &vec);
+	DUCKDB_API static Vector &GetData(const Vector &vec);
 };
 
 enum class UnionInvalidReason : uint8_t {
