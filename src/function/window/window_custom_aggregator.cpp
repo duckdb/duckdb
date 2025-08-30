@@ -12,7 +12,7 @@ bool WindowCustomAggregator::CanAggregate(const BoundWindowExpression &wexpr, Wi
 		return false;
 	}
 
-	if (!wexpr.aggregate->window) {
+	if (!wexpr.aggregate->CanWindow()) {
 		return false;
 	}
 

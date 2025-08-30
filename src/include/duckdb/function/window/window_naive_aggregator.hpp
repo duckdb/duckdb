@@ -24,6 +24,8 @@ public:
 	void Evaluate(ExecutionContext &context, const DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx,
 	              OperatorSinkInput &sink) const override;
 
+	static bool CanAggregate(const BoundWindowExpression &wexpr);
+
 	//! The parent executor
 	const WindowAggregateExecutor &executor;
 	//! The column indices of any ORDER BY argument expressions

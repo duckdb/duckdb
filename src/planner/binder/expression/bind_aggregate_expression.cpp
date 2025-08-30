@@ -264,6 +264,13 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 	// found a matching function!
 	auto bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
 
+	if (!bound_function.CanAggregate() && bound_function.CanWindow()) {
+		auto msg = StringUtil::Format("Function '%s' can only be used as a window function", bound_function.name);
+		error = BinderException(msg);
+		error.AddQueryLocation(aggr);
+		error.Throw();
+	}
+
 	// Bind any sort columns, unless the aggregate is order-insensitive
 	unique_ptr<BoundOrderModifier> order_bys;
 	if (!aggr.order_bys->orders.empty()) {

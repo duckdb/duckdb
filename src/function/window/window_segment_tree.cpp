@@ -15,6 +15,10 @@ bool WindowSegmentTree::CanAggregate(const BoundWindowExpression &wexpr) {
 		return false;
 	}
 
+	if (!wexpr.aggregate->CanAggregate()) {
+		return false;
+	}
+
 	return !wexpr.distinct && wexpr.arg_orders.empty();
 }
 

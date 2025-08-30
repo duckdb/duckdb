@@ -127,6 +127,12 @@ bool WindowConstantAggregator::CanAggregate(const BoundWindowExpression &wexpr) 
 	if (!wexpr.aggregate) {
 		return false;
 	}
+
+	// The function must be able to be used as an aggregate
+	if (!wexpr.aggregate->CanAggregate()) {
+		return false;
+	}
+
 	// window exclusion cannot be handled by constant aggregates
 	if (wexpr.exclude_clause != WindowExcludeMode::NO_OTHER) {
 		return false;
