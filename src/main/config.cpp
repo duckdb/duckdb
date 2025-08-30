@@ -192,6 +192,14 @@ vector<ConfigurationOption> DBConfig::GetOptions() {
 	return options;
 }
 
+vector<ConfigurationAlias> DBConfig::GetAliases() {
+	vector<ConfigurationAlias> aliases;
+	for (idx_t index = 0; index < GetAliasCount(); index++) {
+		aliases.push_back(setting_aliases[index]);
+	}
+	return aliases;
+}
+
 SettingCallbackInfo::SettingCallbackInfo(ClientContext &context_p, SetScope scope)
     : config(DBConfig::GetConfig(context_p)), db(context_p.db.get()), context(context_p), scope(scope) {
 }
