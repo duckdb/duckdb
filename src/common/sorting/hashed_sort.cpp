@@ -651,7 +651,6 @@ SinkFinalizeType HashedSort::MaterializeHashGroups(Pipeline &pipeline, Event &ev
 	}
 
 	// Schedule all the sorts for maximum thread utilisation
-	HashedSortMaterializeEvent fnord(gsink, pipeline, op, callback);
 	auto sort_event = make_shared_ptr<HashedSortMaterializeEvent>(gsink, pipeline, op, callback);
 	event.InsertEvent(std::move(sort_event));
 
