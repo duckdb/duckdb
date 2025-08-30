@@ -1,3 +1,5 @@
 %type <list> param_list
 %type <node> macro_definition table_macro_definition table_macro_definition_parens
 %type <list> macro_definition_list table_macro_list table_macro_list_internal
+%type <list> MacroParameterList
+%type <node> MacroParameter

@@ -202,7 +202,7 @@ protected:
 	virtual BindResult BindMacro(FunctionExpression &expr, ScalarMacroCatalogEntry &macro, idx_t depth,
 	                             unique_ptr<ParsedExpression> &expr_ptr);
 	void UnfoldMacroExpression(FunctionExpression &function, ScalarMacroCatalogEntry &macro_func,
-	                           unique_ptr<ParsedExpression> &expr);
+	                           unique_ptr<ParsedExpression> &expr, idx_t depth);
 
 	virtual string UnsupportedAggregateMessage();
 	virtual string UnsupportedUnnestMessage();

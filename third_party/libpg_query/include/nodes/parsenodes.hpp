@@ -2299,4 +2299,16 @@ typedef struct PGMatchAction {
 	bool defaultValues;                      /* DEFAULT VALUES */
 } PGMatchAction;
 
+/* ----------------------
+ *		Function Parameter
+ * ----------------------
+ */
+
+typedef struct PGFunctionParameter {
+	PGNodeTag type;
+	char *name;                   /* name of parameter */
+	PGTypeName *typeName;         /* type of parameter (optional) */
+	PGExpr *defaultValue;		  /* default value of parameter (optional) */
+} PGFunctionParameter;
+
 }

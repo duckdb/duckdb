@@ -21,46 +21,35 @@ unique_ptr<MacroFunction> Transformer::TransformMacroFunction(duckdb_libpgquery:
 		return macro_func;
 	}
 
-	vector<unique_ptr<ParsedExpression>> parameters;
-	TransformExpressionList(*def.params, parameters);
-
 	case_insensitive_set_t parameter_names;
-	for (auto &param : parameters) {
-		string param_name;
-		if (param->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
-			const auto &colref = param->Cast<ColumnRefExpression>();
-			if (colref.IsQualified()) {
-				throw ParserException("Invalid parameter name '%s': must be unqualified", param->ToString());
-			}
-			param_name = colref.GetColumnName();
-		} else {
-			param_name = param->GetAlias();
+	for (auto node = def.params->head; node != nullptr; node = node->next) {
+		auto target = PGPointerCast<duckdb_libpgquery::PGNode>(node->data.ptr_value);
+		if (target->type != duckdb_libpgquery::T_PGFunctionParameter) {
+			throw InternalException("TODO");
 		}
-		if (!parameter_names.insert(param_name).second) {
-			throw ParserException("Duplicate parameter '%s' in macro definition", param_name);
-		}
+		auto &param = PGCast<duckdb_libpgquery::PGFunctionParameter>(*target);
 
-		unique_ptr<ParsedExpression> default_value;
-		Value const_param;
-		if (ConstructConstantFromExpression(*param, const_param)) {
-			// parameters with default value
-			param = make_uniq<ColumnRefExpression>(param_name);
-			default_value = make_uniq<ConstantExpression>(std::move(const_param));
-			default_value->SetAlias(param_name);
-		} else if (param->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
-			// positional parameters
-			if (!macro_func->default_parameters.empty()) {
-				throw ParserException("Parameter without a default follows parameter with a default");
-			}
-		} else {
-			throw ParserException("Invalid parameter: '%s'", param->ToString());
+		// Transform parameter name/type
+		if (!parameter_names.insert(param.name).second) {
+			throw ParserException("Duplicate parameter '%s' in macro definition", param.name);
 		}
+		macro_func->parameters.emplace_back(make_uniq<ColumnRefExpression>(param.name));
+		macro_func->types.emplace_back(param.typeName ? TransformTypeName(*param.typeName) : LogicalType::UNKNOWN);
 
-		macro_func->parameters.push_back(std::move(param));
-		if (default_value) {
-			macro_func->default_parameters[param_name] = std::move(default_value);
+		// Transform parameter default value
+		if (param.defaultValue) {
+			auto default_expr = TransformExpression(PGPointerCast<duckdb_libpgquery::PGNode>(param.defaultValue));
+			Value default_value;
+			if (!ConstructConstantFromExpression(*default_expr, default_value)) {
+				throw ParserException("Invalid default value for parameter '%s': %s", param.name,
+				                      default_expr->ToString());
+			}
+			default_expr = make_uniq<ConstantExpression>(std::move(default_value));
+			default_expr->SetAlias(param.name);
+			macro_func->default_parameters[param.name] = std::move(default_expr);
 		}
 	}
+
 	return macro_func;
 }
 

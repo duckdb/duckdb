@@ -94,12 +94,12 @@ void ExpressionBinder::ReplaceMacroParameters(unique_ptr<ParsedExpression> &expr
 }
 
 void ExpressionBinder::UnfoldMacroExpression(FunctionExpression &function, ScalarMacroCatalogEntry &macro_func,
-                                             unique_ptr<ParsedExpression> &expr) {
+                                             unique_ptr<ParsedExpression> &expr, idx_t depth) {
 	// validate the arguments and separate positional and default arguments
 	vector<unique_ptr<ParsedExpression>> positional_arguments;
 	InsertionOrderPreservingMap<unique_ptr<ParsedExpression>> named_arguments;
-	auto bind_result = MacroFunction::BindMacroFunction(macro_func.macros, macro_func.name, function,
-	                                                    positional_arguments, named_arguments);
+	auto bind_result = MacroFunction::BindMacroFunction(binder, macro_func.macros, macro_func.name, function,
+	                                                    positional_arguments, named_arguments, depth);
 	if (!bind_result.error.empty()) {
 		throw BinderException(*expr, bind_result.error);
 	}
@@ -146,7 +146,7 @@ BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacro
 	auto stack_checker = StackCheck(*expr, 3);
 
 	// unfold the macro expression
-	UnfoldMacroExpression(function, macro_func, expr);
+	UnfoldMacroExpression(function, macro_func, expr, depth);
 
 	// bind the unfolded macro
 	return BindExpression(expr, depth);

@@ -194,6 +194,10 @@ void AttachedDatabase::FinalizeLoad(optional_ptr<ClientContext> context) {
 	catalog->FinalizeLoad(context);
 }
 
+bool AttachedDatabase::HasStorageManager() const {
+	return storage.get();
+}
+
 StorageManager &AttachedDatabase::GetStorageManager() {
 	if (!storage) {
 		throw InternalException("Internal system catalog does not have storage");

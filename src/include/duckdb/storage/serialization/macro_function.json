@@ -21,6 +21,13 @@
         "id": 102,
         "name": "default_parameters",
         "type": "InsertionOrderPreservingMap<ParsedExpression*>"
+      },
+      {
+        "id": 103,
+        "name": "types",
+        "type": "vector<LogicalType>",
+        "default": "vector<LogicalType>()",
+        "version": "v1.4.0"
       }
     ],
     "finalize_deserialization": [

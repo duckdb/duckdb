@@ -21,8 +21,9 @@ unique_ptr<QueryNode> Binder::BindTableMacro(FunctionExpression &function, Table
 	// validate the arguments and separate positional and default arguments
 	vector<unique_ptr<ParsedExpression>> positional_arguments;
 	InsertionOrderPreservingMap<unique_ptr<ParsedExpression>> named_arguments;
-	auto bind_result = MacroFunction::BindMacroFunction(macro_func.macros, macro_func.name, function,
-	                                                    positional_arguments, named_arguments);
+
+	auto bind_result = MacroFunction::BindMacroFunction(*this, macro_func.macros, macro_func.name, function,
+	                                                    positional_arguments, named_arguments, depth);
 	if (!bind_result.error.empty()) {
 		throw BinderException(function, bind_result.error);
 	}
