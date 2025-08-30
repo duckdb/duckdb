@@ -19,6 +19,7 @@ namespace duckdb {
 
 class Serializer;
 class Deserializer;
+class QueryContext;
 
 struct ColumnSegmentState {
 	virtual ~ColumnSegmentState() {
@@ -39,6 +40,7 @@ struct ColumnSegmentState {
 	}
 
 public:
+	QueryContext *context;
 	vector<block_id_t> blocks;
 };
 

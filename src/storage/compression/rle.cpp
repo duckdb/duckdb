@@ -303,7 +303,7 @@ struct RLEScanState : public SegmentScanState {
 };
 
 template <class T>
-unique_ptr<SegmentScanState> RLEInitScan(ColumnSegment &segment) {
+unique_ptr<SegmentScanState> RLEInitScan(QueryContext context, ColumnSegment &segment) {
 	auto result = make_uniq<RLEScanState<T>>(segment);
 	return std::move(result);
 }
@@ -576,7 +576,7 @@ CompressionFunction GetRLEFunction(PhysicalType data_type) {
 	                           RLEFilter<T>);
 }
 
-CompressionFunction RLEFun::GetFunction(PhysicalType type) {
+CompressionFunction RLEFun::GetFunction(QueryContext context, PhysicalType type) {
 	switch (type) {
 	case PhysicalType::BOOL: {
 		auto function = GetRLEFunction<int8_t>(type);

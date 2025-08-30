@@ -78,6 +78,7 @@ struct IndexScanState {
 typedef unordered_map<block_id_t, BufferHandle> buffer_handle_set_t;
 
 struct ColumnScanState {
+	QueryContext context;
 	//! The column segment that is currently being scanned
 	ColumnSegment *current = nullptr;
 	//! Column segment tree
@@ -105,9 +106,9 @@ struct ColumnScanState {
 	optional_ptr<TableScanOptions> scan_options;
 
 public:
-	void Initialize(const LogicalType &type, const vector<StorageIndex> &children,
+	void Initialize(QueryContext context_p, const LogicalType &type, const vector<StorageIndex> &children,
 	                optional_ptr<TableScanOptions> options);
-	void Initialize(const LogicalType &type, optional_ptr<TableScanOptions> options);
+	void Initialize(QueryContext context_p, const LogicalType &type, optional_ptr<TableScanOptions> options);
 	//! Move the scan state forward by "count" rows (including all child states)
 	void Next(idx_t count);
 	//! Move ONLY this state forward by "count" rows (i.e. not the child states)
@@ -115,6 +116,7 @@ public:
 };
 
 struct ColumnFetchState {
+	QueryContext context;
 	//! The set of pinned block handles for this set of fetches
 	buffer_handle_set_t handles;
 	//! Any child states of the fetch
@@ -202,7 +204,7 @@ public:
 	RandomEngine random;
 
 public:
-	void Initialize(const vector<LogicalType> &types);
+	void Initialize(QueryContext context, const vector<LogicalType> &types);
 	const vector<StorageIndex> &GetColumnIds();
 	ScanFilterInfo &GetFilterInfo();
 	ScanSamplingInfo &GetSamplingInfo();
