@@ -109,7 +109,7 @@ string CopyInfo::ToString() const {
 		}
 		result += " TO ";
 	}
-	if (file_path_expression) {
+	if (file_path_expression && file_path.empty()) {
 		result += "(";
 		result += file_path_expression->ToString();
 		result += ")";

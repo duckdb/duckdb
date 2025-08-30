@@ -40,6 +40,13 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(duckdb_libpgquery::PGCopySt
 	info.is_from = stmt.is_from;
 
 	info.file_path_expression = TransformExpression(*stmt.filename);
+	if (info.file_path_expression->type == ExpressionType::VALUE_CONSTANT) {
+		auto &constant_expr = info.file_path_expression->Cast<ConstantExpression>();
+		if (constant_expr.value.type().id() == LogicalTypeId::VARCHAR) {
+			info.file_path = StringValue::Get(constant_expr.value);
+			info.file_path_expression.reset();
+		}
+	}
 
 	// get select_list
 	if (stmt.attlist) {
