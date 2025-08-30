@@ -214,4 +214,5 @@ copy_file_name:
 			| IDENT '.' ColId						{ $$ = makeStringConst(psprintf("%s.%s", $1, $3), @1); }
 			| IDENT									{ $$ = makeStringConst($1, @1); }
 			| '(' a_expr ')'						{ $$ = $2; }
+			| param_expr							{ $$ = $1; }
 		;
