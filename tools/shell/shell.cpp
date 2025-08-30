@@ -2465,6 +2465,7 @@ static char **readline_completion(const char *zText, int iStart, int iEnd) {
 /*
 ** Linenoise completion callback
 */
+static int linenoise_open_flags = 0;
 static void linenoise_completion(const char *zLine, linenoiseCompletions *lc) {
 	idx_t nLine = ShellState::StringLength(zLine);
 	int copiedSuggestion = 0;
@@ -2508,7 +2509,7 @@ static void linenoise_completion(const char *zLine, linenoiseCompletions *lc) {
 	zSql = sqlite3_mprintf("CALL sql_auto_complete(%Q)", zLine);
 	sqlite3 *localDb = NULL;
 	if (!globalDb) {
-		sqlite3_open(":memory:", &localDb);
+		sqlite3_open_v2(":memory:", &localDb, linenoise_open_flags, 0);
 		sqlite3_prepare_v2(localDb, zSql, -1, &pStmt, 0);
 	} else {
 		sqlite3_prepare_v2(globalDb, zSql, -1, &pStmt, 0);
@@ -5213,6 +5214,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 #if HAVE_READLINE || HAVE_EDITLINE
 			rl_attempted_completion_function = readline_completion;
 #elif HAVE_LINENOISE
+			linenoise_open_flags = data.openFlags;
 			linenoiseSetCompletionCallback(linenoise_completion);
 #endif
 			data.in = 0;
