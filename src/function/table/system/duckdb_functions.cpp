@@ -17,6 +17,7 @@
 #include "duckdb/main/client_data.hpp"
 
 namespace duckdb {
+constexpr const char *AggregateFunctionCatalogEntry::Name;
 
 struct DuckDBFunctionsData : public GlobalTableFunctionState {
 	DuckDBFunctionsData() : offset(0), offset_in_entry(0) {
