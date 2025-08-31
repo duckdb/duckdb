@@ -17,7 +17,7 @@ namespace duckdb {
 //	Global sink state
 class WindowGlobalSinkState;
 
-enum WindowGroupStage : uint8_t { SINK, FINALIZE, GETDATA, DONE };
+enum WindowGroupStage : uint8_t { MASK, SINK, FINALIZE, GETDATA, DONE };
 
 struct WindowSourceTask {
 	WindowSourceTask() {
@@ -51,13 +51,14 @@ public:
 
 	WindowHashGroup(WindowGlobalSinkState &gsink, const idx_t hash_bin_p);
 
-	void ComputeMasks(ValidityMask &partition_mask, OrderMasks &order_masks);
+	void AllocateMasks();
+	void ComputeMasks(const idx_t begin_idx, const idx_t end_idx);
 
-	ExecutorGlobalStates &Initialize(ClientContext &client);
+	ExecutorGlobalStates &GetGlobalStates(ClientContext &client);
 
-	// The total number of tasks we will execute (SINK, FINALIZE, GETDATA per thread)
+	// The total number of tasks we will execute per thread
 	inline idx_t GetTaskCount() const {
-		return GetThreadCount() * 3;
+		return GetThreadCount() * (uint8_t(WindowGroupStage::DONE) - uint8_t(WindowGroupStage::MASK));
 	}
 	// The total number of threads we will use
 	inline idx_t GetThreadCount() const {
@@ -78,6 +79,12 @@ public:
 	bool TryPrepareNextStage() {
 		lock_guard<mutex> prepare_guard(lock);
 		switch (stage.load()) {
+		case WindowGroupStage::MASK:
+			if (masked == blocks) {
+				stage = WindowGroupStage::SINK;
+				return true;
+			}
+			return false;
 		case WindowGroupStage::SINK:
 			if (sunk == count) {
 				stage = WindowGroupStage::FINALIZE;
@@ -90,10 +97,14 @@ public:
 				return true;
 			}
 			return false;
-		default:
+		case WindowGroupStage::GETDATA:
+		case WindowGroupStage::DONE:
 			// never block in GETDATA
 			return true;
 		}
+
+		//	Stop Linux whinging about control flow...
+		return true;
 	}
 
 	bool TryNextTask(Task &task) {
@@ -149,6 +160,8 @@ public:
 	idx_t group_threads = 0;
 	//! The next task to process
 	idx_t next_task = 0;
+	//! Count of masked blocks
+	std::atomic<idx_t> masked;
 	//! Count of sunk rows
 	std::atomic<idx_t> sunk;
 	//! Count of finalized blocks
@@ -448,7 +461,14 @@ void WindowGlobalSourceState::CreateTaskList() {
 	const auto threads = NumericCast<idx_t>(ts.NumberOfThreads());
 
 	const auto &max_block = partition_blocks.front();
-	const auto per_thread = (max_block.first + threads - 1) / threads;
+
+	// To compute masks in parallel, we need to have the row count of the number of chunks per thread
+	// be a multiple of the mask entry size.  Usually, this is not a problem because
+	// STANDARD_VECTOR_SIZE >> ValidityMask::BITS_PER_VALUE, but if STANDARD_VECTOR_SIZE is say 2,
+	// we need to align the chunk count to the mask width.
+	const auto aligned_scale = MaxValue<idx_t>(ValidityMask::BITS_PER_VALUE / STANDARD_VECTOR_SIZE, 1);
+	const auto aligned_count = (max_block.first + aligned_scale - 1) / aligned_scale;
+	const auto per_thread = aligned_scale * ((aligned_count + threads - 1) / threads);
 	if (!per_thread) {
 		throw InternalException("No blocks per thread! %ld threads, %ld groups, %ld blocks, %ld hash group", threads,
 		                        partition_blocks.size(), max_block.first, max_block.second);
@@ -460,8 +480,8 @@ void WindowGlobalSourceState::CreateTaskList() {
 }
 
 WindowHashGroup::WindowHashGroup(WindowGlobalSinkState &gsink, const idx_t hash_bin_p)
-    : gsink(gsink), count(0), blocks(0), stage(WindowGroupStage::SINK), hash_bin(hash_bin_p), sunk(0), finalized(0),
-      completed(0), batch_base(0) {
+    : gsink(gsink), count(0), blocks(0), stage(WindowGroupStage::MASK), hash_bin(hash_bin_p), masked(0), sunk(0),
+      finalized(0), completed(0), batch_base(0) {
 	// There are three types of partitions:
 	// 1. No partition (no sorting)
 	// 2. One partition (sorting, but no hashing)
@@ -471,45 +491,12 @@ WindowHashGroup::WindowHashGroup(WindowGlobalSinkState &gsink, const idx_t hash_
 	auto &gpart = *gsink.global_partition;
 	auto &hash_groups = gpart.GetHashGroups(*gsink.hashed_sink);
 	layout.Initialize(gpart.payload_types, TupleDataValidityType::CAN_HAVE_NULL_VALUES);
-	if (hash_bin < hash_groups.size() && hash_groups[hash_bin]) {
-		count = hash_groups[hash_bin]->sorted->Count();
-	} else {
-		return;
-	}
 
-	//	Initialise masks to false
-	partition_mask.Initialize(count);
-	partition_mask.SetAllInvalid(count);
-
-	const auto &executors = gsink.executors;
-	for (auto &wexec : executors) {
-		auto &wexpr = wexec->wexpr;
-		auto &order_mask = order_masks[wexpr.partitions.size() + wexpr.orders.size()];
-		if (order_mask.IsMaskSet()) {
-			continue;
-		}
-		order_mask.Initialize(count);
-		order_mask.SetAllInvalid(count);
-	}
-
-	// Scan the sorted data into new Collections
-	if (!gpart.sort && !hash_bin) {
-		// Simple mask
-		partition_mask.SetValidUnsafe(0);
-		for (auto &order_mask : order_masks) {
-			order_mask.second.SetValidUnsafe(0);
-		}
-		//	No partition - take ownership of the accumulated data
-		rows = std::move(hash_groups[hash_bin]->sorted);
-	} else if (hash_bin < hash_groups.size()) {
-		// Overwrite the collections with the sorted data
-		D_ASSERT(hash_groups[hash_bin].get());
-		hash_group = std::move(hash_groups[hash_bin]);
-		rows = std::move(hash_group->sorted);
-		ComputeMasks(partition_mask, order_masks);
-	}
-
+	D_ASSERT(hash_groups[hash_bin].get());
+	hash_group = std::move(hash_groups[hash_bin]);
+	rows = std::move(hash_group->sorted);
 	if (rows) {
+		count = rows->Count();
 		blocks = rows->ChunkCount();
 	}
 
@@ -541,21 +528,68 @@ void WindowHashGroup::UpdateScanner(ScannerPtr &scanner, idx_t begin_idx) const 
 	}
 }
 
-void WindowHashGroup::ComputeMasks(ValidityMask &partition_mask, OrderMasks &order_masks) {
+void WindowHashGroup::AllocateMasks() {
+	//	Single-threaded building as this is mostly memory allocation
+	lock_guard<mutex> gestate_guard(lock);
+	if (partition_mask.IsMaskSet()) {
+		return;
+	}
+
+	//	Allocate masks inside the lock
+	partition_mask.Initialize(count);
+
+	const auto &executors = gsink.executors;
+	for (auto &wexec : executors) {
+		auto &wexpr = wexec->wexpr;
+		auto &order_mask = order_masks[wexpr.partitions.size() + wexpr.orders.size()];
+		if (order_mask.IsMaskSet()) {
+			continue;
+		}
+		order_mask.Initialize(count);
+	}
+}
+
+void WindowHashGroup::ComputeMasks(const idx_t block_begin, const idx_t block_end) {
 	D_ASSERT(count > 0);
+
+	//	Initialise our range
+	AllocateMasks();
+	const auto begin_entry = partition_mask.EntryCount(block_begin * STANDARD_VECTOR_SIZE);
+	const auto end_entry = partition_mask.EntryCount(MinValue<idx_t>(block_end * STANDARD_VECTOR_SIZE, count));
+
+	//	If the data is unsorted, then the chunk sizes may be < STANDARD_VECTOR_SIZE,
+	//	and the entry range may be empty.
+	if (begin_entry >= end_entry) {
+		D_ASSERT(gsink.global_partition->sort_col_count == 0);
+		return;
+	}
+
+	partition_mask.SetRangeInvalid(count, begin_entry, end_entry);
+	if (!block_begin) {
+		partition_mask.SetValidUnsafe(0);
+	}
+	for (auto &order_mask : order_masks) {
+		order_mask.second.SetRangeInvalid(count, begin_entry, end_entry);
+		if (!block_begin) {
+			order_mask.second.SetValidUnsafe(0);
+		}
+	}
+
+	//	If we are not sorting, then only the partition boundaries are needed.
+	if (!gsink.global_partition->sort) {
+		return;
+	}
 
 	//	Set up the partition compare structs
 	auto &partitions = gsink.global_partition->partitions;
-	partition_mask.SetValidUnsafe(0);
 	const auto key_count = partitions.size();
 
 	//	Set up the order data structures
 	auto &collection = *rows;
 	auto &scan_cols = gsink.global_partition->sort_ids;
-	WindowCollectionChunkScanner scanner(collection, scan_cols, 0);
+	WindowCollectionChunkScanner scanner(collection, scan_cols, block_begin);
 	unordered_map<idx_t, DataChunk> prefixes;
 	for (auto &order_mask : order_masks) {
-		order_mask.second.SetValidUnsafe(0);
 		D_ASSERT(order_mask.first >= partitions.size());
 		auto order_type = scanner.PrefixStructType(order_mask.first, partitions.size());
 		vector<LogicalType> types(2, order_type);
@@ -564,9 +598,6 @@ void WindowHashGroup::ComputeMasks(ValidityMask &partition_mask, OrderMasks &ord
 		keys.Initialize(collection.GetAllocator(), types);
 	}
 
-	//	TODO: Parallelise on mask entry boundaries
-	const idx_t block_begin = 0;
-	const auto block_end = collection.ChunkCount();
 	WindowDeltaScanner(collection, block_begin, block_end, scan_cols, key_count,
 	                   [&](const idx_t row_idx, DataChunk &prev, DataChunk &curr, const idx_t ndistinct,
 	                       SelectionVector &distinct, const SelectionVector &matching) {
@@ -651,8 +682,13 @@ public:
 	DataChunk output_chunk;
 
 protected:
+	//! Compute a mask range
+	void Mask(ExecutionContext &context, InterruptState &interrupt);
+	//! Sink tuples into function global states
 	void Sink(ExecutionContext &context, InterruptState &interrupt);
+	//! Post process function global state construction
 	void Finalize(ExecutionContext &context, InterruptState &interrupt);
+	//! Get a chunk by evaluating functions
 	void GetData(ExecutionContext &context, DataChunk &chunk, InterruptState &interrupt);
 
 	//! Storage and evaluation for the fully materialised data
@@ -677,7 +713,18 @@ idx_t WindowHashGroup::InitTasks(idx_t per_thread_p) {
 	return GetTaskCount();
 }
 
-WindowHashGroup::ExecutorGlobalStates &WindowHashGroup::Initialize(ClientContext &client) {
+void WindowLocalSourceState::Mask(ExecutionContext &context, InterruptState &interrupt) {
+	D_ASSERT(task);
+	D_ASSERT(task->stage == WindowGroupStage::MASK);
+
+	window_hash_group->ComputeMasks(task->begin_idx, task->end_idx);
+
+	//	Mark this range as done
+	window_hash_group->masked += (task->end_idx - task->begin_idx);
+	task->begin_idx = task->end_idx;
+}
+
+WindowHashGroup::ExecutorGlobalStates &WindowHashGroup::GetGlobalStates(ClientContext &client) {
 	//	Single-threaded building as this is mostly memory allocation
 	lock_guard<mutex> gestate_guard(lock);
 	const auto &executors = gsink.executors;
@@ -704,7 +751,7 @@ void WindowLocalSourceState::Sink(ExecutionContext &context, InterruptState &int
 
 	// Create the global state for each function
 	// These can be large so we defer building them until we are ready.
-	auto &gestates = window_hash_group->Initialize(context.client);
+	auto &gestates = window_hash_group->GetGlobalStates(context.client);
 
 	//	Set up the local states
 	auto &local_states = window_hash_group->thread_states.at(task->thread_idx);
@@ -891,6 +938,10 @@ void WindowLocalSourceState::ExecuteTask(ExecutionContext &context, DataChunk &r
 
 	// Process the new state
 	switch (task->stage) {
+	case WindowGroupStage::MASK:
+		Mask(context, interrupt);
+		D_ASSERT(TaskFinished());
+		break;
 	case WindowGroupStage::SINK:
 		Sink(context, interrupt);
 		D_ASSERT(TaskFinished());
@@ -903,7 +954,7 @@ void WindowLocalSourceState::ExecuteTask(ExecutionContext &context, DataChunk &r
 		D_ASSERT(!TaskFinished());
 		GetData(context, result, interrupt);
 		break;
-	default:
+	case WindowGroupStage::DONE:
 		throw InternalException("Invalid window source state.");
 	}
 
