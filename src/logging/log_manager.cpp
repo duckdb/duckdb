@@ -103,7 +103,7 @@ void LogManager::FlushCachedLogEntries(DataChunk &chunk, const RegisteredLogging
 	throw NotImplementedException("FlushCachedLogEntries");
 }
 
-void LogManager::SetConfig(DatabaseInstance &db, LogConfig config_p) {
+void LogManager::SetConfig(DatabaseInstance &db, const LogConfig &config_p) {
 	unique_lock<mutex> lck(lock);
 
 	// We need extra handling for switching storage
