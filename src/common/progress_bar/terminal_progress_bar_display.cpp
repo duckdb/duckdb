@@ -122,7 +122,7 @@ void TerminalProgressBarDisplay::Update(double percentage) {
 	const double filter_percentage = percentage / 100.0;
 	ukf.Update(filter_percentage, current_time);
 
-	double estimated_seconds_remaining = ukf.GetEstimatedRemainingSeconds();
+	double estimated_seconds_remaining = std::min(ukf.GetEstimatedRemainingSeconds(), 2147483647.0);
 	auto percentage_int = NormalizePercentage(percentage);
 
 	TerminalProgressBarDisplayedProgressInfo updated_progress_info = {percentage_int,
