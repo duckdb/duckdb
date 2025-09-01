@@ -569,13 +569,18 @@ BoundStatement Binder::Bind(CopyStatement &stmt, CopyToType copy_to_type) {
 					// types match
 					continue;
 				}
-				bool can_cast;
-				if (copy_option.type.IsNumeric()) {
-					can_cast = original_value.type().IsNumeric();
-				} else if (copy_option.type.id() == LogicalTypeId::BOOLEAN) {
-					can_cast = original_value.type().IsIntegral();
-				} else {
-					can_cast = CastFunctionSet::ImplicitCastCost(context, original_value.type(), copy_option.type) >= 0;
+				bool can_cast =
+				    CastFunctionSet::ImplicitCastCost(context, original_value.type(), copy_option.type) >= 0;
+				if (!can_cast) {
+					// for backwards compatibility - we are more lax on casting rules for copy options
+					if (copy_option.type.IsNumeric()) {
+						can_cast = original_value.type().IsNumeric();
+					} else if (copy_option.type.id() == LogicalTypeId::BOOLEAN) {
+						can_cast = original_value.type().IsIntegral();
+					}
+					if (original_value.type().id() == LogicalTypeId::VARCHAR) {
+						can_cast = true;
+					}
 				}
 
 				Value new_value;
