@@ -37,10 +37,12 @@ public:
 
 	//! The type
 	MacroType type;
-	//! The positional parameters
+	//! The parameters (ColumnRefExpression)
 	vector<unique_ptr<ParsedExpression>> parameters;
-	//! The default parameters and their associated values
+	//! The default values of the parameters
 	InsertionOrderPreservingMap<unique_ptr<ParsedExpression>> default_parameters;
+	//! The types of the parameters
+	vector<LogicalType> types;
 
 public:
 	virtual ~MacroFunction() {
@@ -53,10 +55,11 @@ public:
 	vector<unique_ptr<ParsedExpression>> GetPositionalParametersForSerialization(Serializer &serializer) const;
 	void FinalizeDeserialization();
 
-	static MacroBindResult
-	BindMacroFunction(const vector<unique_ptr<MacroFunction>> &macro_functions, const string &name,
-	                  FunctionExpression &function_expr, vector<unique_ptr<ParsedExpression>> &positional_arguments,
-	                  InsertionOrderPreservingMap<unique_ptr<ParsedExpression>> &named_arguments);
+	static MacroBindResult BindMacroFunction(Binder &binder, const vector<unique_ptr<MacroFunction>> &macro_functions,
+	                                         const string &name, FunctionExpression &function_expr,
+	                                         vector<unique_ptr<ParsedExpression>> &positional_arguments,
+	                                         InsertionOrderPreservingMap<unique_ptr<ParsedExpression>> &named_arguments,
+	                                         idx_t depth);
 	static unique_ptr<DummyBinding>
 	CreateDummyBinding(const MacroFunction &macro_def, const string &name,
 	                   vector<unique_ptr<ParsedExpression>> &positional_arguments,
