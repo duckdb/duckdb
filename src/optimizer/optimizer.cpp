@@ -169,7 +169,7 @@ void Optimizer::RunBuiltInOptimizers() {
 		plan = deliminator.Optimize(std::move(plan));
 	});
 
-		// try to inline CTEs instead of materialization
+	// try to inline CTEs instead of materialization
 	RunOptimizer(OptimizerType::CTE_INLINING, [&]() {
 		CTEInlining cte_inlining(*this);
 		plan = cte_inlining.Optimize(std::move(plan));
