@@ -202,17 +202,18 @@ void GetValueSize(const uint32_t &val, uint32_t lengths[3], idx_t &lengths_size,
 
 template <bool WRITE_DATA, bool IGNORE_NULLS, VariantLogicalType TYPE_ID, class T,
           class PAYLOAD_CLASS = EmptyConversionPayloadToVariant>
-static bool ConvertPrimitiveTemplated(ToVariantSourceData &source, VariantVectorData &result, DataChunk &offsets,
-                                      idx_t count, optional_ptr<const SelectionVector> selvec,
+static bool ConvertPrimitiveTemplated(ToVariantSourceData &source, ToVariantGlobalResultData &result, idx_t count,
+                                      optional_ptr<const SelectionVector> selvec,
                                       optional_ptr<const SelectionVector> values_index_selvec, PAYLOAD_CLASS &payload,
                                       const bool is_root) {
-	auto blob_offset_data = OffsetData::GetBlob(offsets);
-	auto values_offset_data = OffsetData::GetValues(offsets);
+	auto blob_offset_data = OffsetData::GetBlob(result.offsets);
+	auto values_offset_data = OffsetData::GetValues(result.offsets);
 
 	auto &source_format = source.source_format;
 	auto &source_validity = source_format.validity;
 	auto source_data = source_format.GetData<T>(source_format);
 
+	auto &variant = result.variant;
 	uint32_t lengths[3];
 	idx_t lengths_size = 0;
 	for (idx_t i = 0; i < count; i++) {
@@ -229,7 +230,7 @@ static bool ConvertPrimitiveTemplated(ToVariantSourceData &source, VariantVector
 			WriteVariantMetadata<WRITE_DATA>(result, result_index, values_offset_data, blob_offset, values_index_selvec,
 			                                 i, GetTypeId<T, TYPE_ID>(val));
 			if (WRITE_DATA) {
-				auto &blob_value = result.blob_data[result_index];
+				auto &blob_value = variant.blob_data[result_index];
 				auto blob_value_data = data_ptr_cast(blob_value.GetDataWriteable());
 				WriteData<T>(blob_value_data + blob_offset, val, lengths, payload);
 			}
@@ -246,9 +247,8 @@ static bool ConvertPrimitiveTemplated(ToVariantSourceData &source, VariantVector
 }
 
 template <bool WRITE_DATA, bool IGNORE_NULLS>
-bool ConvertPrimitiveToVariant(ToVariantSourceData &source, VariantVectorData &result, DataChunk &offsets, idx_t count,
-                               optional_ptr<const SelectionVector> selvec, SelectionVector &keys_selvec,
-                               OrderedOwningStringMap<uint32_t> &dictionary,
+bool ConvertPrimitiveToVariant(ToVariantSourceData &source, ToVariantGlobalResultData &result, idx_t count,
+                               optional_ptr<const SelectionVector> selvec,
                                optional_ptr<const SelectionVector> values_index_selvec, const bool is_root) {
 	auto &type = source.source.GetType();
 	auto logical_type = type.id();
@@ -258,77 +258,77 @@ bool ConvertPrimitiveToVariant(ToVariantSourceData &source, VariantVectorData &r
 	switch (type.id()) {
 	case LogicalTypeId::SQLNULL:
 		return ConvertPrimitiveTemplated<WRITE_DATA, IGNORE_NULLS, VariantLogicalType::VARIANT_NULL, int32_t>(
-		    source, result, offsets, count, selvec, values_index_selvec, empty_payload, is_root);
+		    source, result, count, selvec, values_index_selvec, empty_payload, is_root);
 	case LogicalTypeId::BOOLEAN:
 		return ConvertPrimitiveTemplated<WRITE_DATA, IGNORE_NULLS, VariantLogicalType::BOOL_TRUE, bool>(
-		    source, result, offsets, count, selvec, values_index_selvec, empty_payload, is_root);
+		    source, result, count, selvec, values_index_selvec, empty_payload, is_root);
 	case LogicalTypeId::TINYINT:
 		return ConvertPrimitiveTemplated<WRITE_DATA, IGNORE_NULLS, VariantLogicalType::INT8, int8_t>(
-		    source, result, offsets, count, selvec, values_index_selvec, empty_payload, is_root);
+		    source, result, count, selvec, values_index_selvec, empty_payload, is_root);
 	case LogicalTypeId::UTINYINT:
 		return ConvertPrimitiveTemplated<WRITE_DATA, IGNORE_NULLS, VariantLogicalType::UINT8, uint8_t>(
-		    source, result, offsets, count, selvec, values_index_selvec, empty_payload, is_root);
+		    source, result, count, selvec, values_index_selvec, empty_payload, is_root);
 	case LogicalTypeId::SMALLINT:
 		return ConvertPrimitiveTemplated<WRITE_DATA, IGNORE_NULLS, VariantLogicalType::INT16, int16_t>(
-		    source, result, offsets, count, selvec, values_index_selvec, empty_payload, is_root);
+		    source, result, count, selvec, values_index_selvec, empty_payload, is_root);
 	case LogicalTypeId::USMALLINT:
 		return ConvertPrimitiveTemplated<WRITE_DATA, IGNORE_NULLS, VariantLogicalType::UINT16, uint16_t>(
-		    source, result, offsets, count, selvec, values_index_selvec, empty_payload, is_root);
+		    source, result, count, selvec, values_index_selvec, empty_payload, is_root);
 	case LogicalTypeId::INTEGER:
 		return ConvertPrimitiveTemplated<WRITE_DATA, IGNORE_NULLS, VariantLogicalType::INT32, int32_t>(
-		    source, result, offsets, count, selvec, values_index_selvec, empty_payload, is_root);
+		    source, result, count, selvec, values_index_selvec, empty_payload, is_root);
 	case LogicalTypeId::UINTEGER:
 		return ConvertPrimitiveTemplated<WRITE_DATA, IGNORE_NULLS, VariantLogicalType::UINT32, uint32_t>(
-		    source, result, offsets, count, selvec, values_index_selvec, empty_payload, is_root);
+		    source, result, count, selvec, values_index_selvec, empty_payload, is_root);
 	case LogicalTypeId::BIGINT:
 		return ConvertPrimitiveTemplated<WRITE_DATA, IGNORE_NULLS, VariantLogicalType::INT64, int64_t>(
-		    source, result, offsets, count, selvec, values_index_selvec, empty_payload, is_root);
+		    source, result, count, selvec, values_index_selvec, empty_payload, is_root);
 	case LogicalTypeId::UBIGINT:
 		return ConvertPrimitiveTemplated<WRITE_DATA, IGNORE_NULLS, VariantLogicalType::UINT64, uint64_t>(
-		    source, result, offsets, count, selvec, values_index_selvec, empty_payload, is_root);
+		    source, result, count, selvec, values_index_selvec, empty_payload, is_root);
 	case LogicalTypeId::HUGEINT:
 		return ConvertPrimitiveTemplated<WRITE_DATA, IGNORE_NULLS, VariantLogicalType::INT128, hugeint_t>(
-		    source, result, offsets, count, selvec, values_index_selvec, empty_payload, is_root);
+		    source, result, count, selvec, values_index_selvec, empty_payload, is_root);
 	case LogicalTypeId::UHUGEINT:
 		return ConvertPrimitiveTemplated<WRITE_DATA, IGNORE_NULLS, VariantLogicalType::UINT128, uhugeint_t>(
-		    source, result, offsets, count, selvec, values_index_selvec, empty_payload, is_root);
+		    source, result, count, selvec, values_index_selvec, empty_payload, is_root);
 	case LogicalTypeId::DATE:
 		return ConvertPrimitiveTemplated<WRITE_DATA, IGNORE_NULLS, VariantLogicalType::DATE, date_t>(
-		    source, result, offsets, count, selvec, values_index_selvec, empty_payload, is_root);
+		    source, result, count, selvec, values_index_selvec, empty_payload, is_root);
 	case LogicalTypeId::TIME:
 		return ConvertPrimitiveTemplated<WRITE_DATA, IGNORE_NULLS, VariantLogicalType::TIME_MICROS, dtime_t>(
-		    source, result, offsets, count, selvec, values_index_selvec, empty_payload, is_root);
+		    source, result, count, selvec, values_index_selvec, empty_payload, is_root);
 	case LogicalTypeId::TIME_NS:
 		return ConvertPrimitiveTemplated<WRITE_DATA, IGNORE_NULLS, VariantLogicalType::TIME_NANOS, dtime_ns_t>(
-		    source, result, offsets, count, selvec, values_index_selvec, empty_payload, is_root);
+		    source, result, count, selvec, values_index_selvec, empty_payload, is_root);
 	case LogicalTypeId::TIMESTAMP:
 		return ConvertPrimitiveTemplated<WRITE_DATA, IGNORE_NULLS, VariantLogicalType::TIMESTAMP_MICROS, timestamp_t>(
-		    source, result, offsets, count, selvec, values_index_selvec, empty_payload, is_root);
+		    source, result, count, selvec, values_index_selvec, empty_payload, is_root);
 	case LogicalTypeId::TIMESTAMP_SEC:
 		return ConvertPrimitiveTemplated<WRITE_DATA, IGNORE_NULLS, VariantLogicalType::TIMESTAMP_SEC, timestamp_sec_t>(
-		    source, result, offsets, count, selvec, values_index_selvec, empty_payload, is_root);
+		    source, result, count, selvec, values_index_selvec, empty_payload, is_root);
 	case LogicalTypeId::TIMESTAMP_NS:
 		return ConvertPrimitiveTemplated<WRITE_DATA, IGNORE_NULLS, VariantLogicalType::TIMESTAMP_NANOS, timestamp_ns_t>(
-		    source, result, offsets, count, selvec, values_index_selvec, empty_payload, is_root);
+		    source, result, count, selvec, values_index_selvec, empty_payload, is_root);
 	case LogicalTypeId::TIMESTAMP_MS:
 		return ConvertPrimitiveTemplated<WRITE_DATA, IGNORE_NULLS, VariantLogicalType::TIMESTAMP_MILIS, timestamp_ms_t>(
-		    source, result, offsets, count, selvec, values_index_selvec, empty_payload, is_root);
+		    source, result, count, selvec, values_index_selvec, empty_payload, is_root);
 	case LogicalTypeId::TIME_TZ:
 		return ConvertPrimitiveTemplated<WRITE_DATA, IGNORE_NULLS, VariantLogicalType::TIME_MICROS_TZ, dtime_tz_t>(
-		    source, result, offsets, count, selvec, values_index_selvec, empty_payload, is_root);
+		    source, result, count, selvec, values_index_selvec, empty_payload, is_root);
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return ConvertPrimitiveTemplated<WRITE_DATA, IGNORE_NULLS, VariantLogicalType::TIMESTAMP_MICROS_TZ,
-		                                 timestamp_tz_t>(source, result, offsets, count, selvec, values_index_selvec,
+		                                 timestamp_tz_t>(source, result, count, selvec, values_index_selvec,
 		                                                 empty_payload, is_root);
 	case LogicalTypeId::UUID:
 		return ConvertPrimitiveTemplated<WRITE_DATA, IGNORE_NULLS, VariantLogicalType::UUID, hugeint_t>(
-		    source, result, offsets, count, selvec, values_index_selvec, empty_payload, is_root);
+		    source, result, count, selvec, values_index_selvec, empty_payload, is_root);
 	case LogicalTypeId::FLOAT:
 		return ConvertPrimitiveTemplated<WRITE_DATA, IGNORE_NULLS, VariantLogicalType::FLOAT, float>(
-		    source, result, offsets, count, selvec, values_index_selvec, empty_payload, is_root);
+		    source, result, count, selvec, values_index_selvec, empty_payload, is_root);
 	case LogicalTypeId::DOUBLE:
 		return ConvertPrimitiveTemplated<WRITE_DATA, IGNORE_NULLS, VariantLogicalType::DOUBLE, double>(
-		    source, result, offsets, count, selvec, values_index_selvec, empty_payload, is_root);
+		    source, result, count, selvec, values_index_selvec, empty_payload, is_root);
 	case LogicalTypeId::DECIMAL: {
 		uint8_t width;
 		uint8_t scale;
@@ -338,16 +338,16 @@ bool ConvertPrimitiveToVariant(ToVariantSourceData &source, VariantVectorData &r
 		switch (physical_type) {
 		case PhysicalType::INT16:
 			return ConvertPrimitiveTemplated<WRITE_DATA, IGNORE_NULLS, VariantLogicalType::DECIMAL, int16_t>(
-			    source, result, offsets, count, selvec, values_index_selvec, payload, is_root);
+			    source, result, count, selvec, values_index_selvec, payload, is_root);
 		case PhysicalType::INT32:
 			return ConvertPrimitiveTemplated<WRITE_DATA, IGNORE_NULLS, VariantLogicalType::DECIMAL, int32_t>(
-			    source, result, offsets, count, selvec, values_index_selvec, payload, is_root);
+			    source, result, count, selvec, values_index_selvec, payload, is_root);
 		case PhysicalType::INT64:
 			return ConvertPrimitiveTemplated<WRITE_DATA, IGNORE_NULLS, VariantLogicalType::DECIMAL, int64_t>(
-			    source, result, offsets, count, selvec, values_index_selvec, payload, is_root);
+			    source, result, count, selvec, values_index_selvec, payload, is_root);
 		case PhysicalType::INT128:
 			return ConvertPrimitiveTemplated<WRITE_DATA, IGNORE_NULLS, VariantLogicalType::DECIMAL, hugeint_t>(
-			    source, result, offsets, count, selvec, values_index_selvec, payload, is_root);
+			    source, result, count, selvec, values_index_selvec, payload, is_root);
 		default:
 			throw NotImplementedException("Can't convert DECIMAL value of physical type: %s",
 			                              EnumUtil::ToString(physical_type));
@@ -356,13 +356,13 @@ bool ConvertPrimitiveToVariant(ToVariantSourceData &source, VariantVectorData &r
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::CHAR:
 		return ConvertPrimitiveTemplated<WRITE_DATA, IGNORE_NULLS, VariantLogicalType::VARCHAR, string_t>(
-		    source, result, offsets, count, selvec, values_index_selvec, empty_payload, is_root);
+		    source, result, count, selvec, values_index_selvec, empty_payload, is_root);
 	case LogicalTypeId::BLOB:
 		return ConvertPrimitiveTemplated<WRITE_DATA, IGNORE_NULLS, VariantLogicalType::BLOB, string_t>(
-		    source, result, offsets, count, selvec, values_index_selvec, empty_payload, is_root);
+		    source, result, count, selvec, values_index_selvec, empty_payload, is_root);
 	case LogicalTypeId::INTERVAL:
 		return ConvertPrimitiveTemplated<WRITE_DATA, IGNORE_NULLS, VariantLogicalType::INTERVAL, interval_t>(
-		    source, result, offsets, count, selvec, values_index_selvec, empty_payload, is_root);
+		    source, result, count, selvec, values_index_selvec, empty_payload, is_root);
 	case LogicalTypeId::ENUM: {
 		auto &enum_values = EnumType::GetValuesInsertOrder(type);
 		auto dict_size = EnumType::GetSize(type);
@@ -371,13 +371,13 @@ bool ConvertPrimitiveToVariant(ToVariantSourceData &source, VariantVectorData &r
 		switch (physical_type) {
 		case PhysicalType::UINT8:
 			return ConvertPrimitiveTemplated<WRITE_DATA, IGNORE_NULLS, VariantLogicalType::VARCHAR, uint8_t>(
-			    source, result, offsets, count, selvec, values_index_selvec, payload, is_root);
+			    source, result, count, selvec, values_index_selvec, payload, is_root);
 		case PhysicalType::UINT16:
 			return ConvertPrimitiveTemplated<WRITE_DATA, IGNORE_NULLS, VariantLogicalType::VARCHAR, uint16_t>(
-			    source, result, offsets, count, selvec, values_index_selvec, payload, is_root);
+			    source, result, count, selvec, values_index_selvec, payload, is_root);
 		case PhysicalType::UINT32:
 			return ConvertPrimitiveTemplated<WRITE_DATA, IGNORE_NULLS, VariantLogicalType::VARCHAR, uint32_t>(
-			    source, result, offsets, count, selvec, values_index_selvec, payload, is_root);
+			    source, result, count, selvec, values_index_selvec, payload, is_root);
 		default:
 			throw NotImplementedException("ENUM conversion for PhysicalType (%s) not supported",
 			                              EnumUtil::ToString(physical_type));
@@ -385,10 +385,10 @@ bool ConvertPrimitiveToVariant(ToVariantSourceData &source, VariantVectorData &r
 	}
 	case LogicalTypeId::BIGNUM:
 		return ConvertPrimitiveTemplated<WRITE_DATA, IGNORE_NULLS, VariantLogicalType::BIGNUM, string_t>(
-		    source, result, offsets, count, selvec, values_index_selvec, empty_payload, is_root);
+		    source, result, count, selvec, values_index_selvec, empty_payload, is_root);
 	case LogicalTypeId::BIT:
 		return ConvertPrimitiveTemplated<WRITE_DATA, IGNORE_NULLS, VariantLogicalType::BITSTRING, string_t>(
-		    source, result, offsets, count, selvec, values_index_selvec, empty_payload, is_root);
+		    source, result, count, selvec, values_index_selvec, empty_payload, is_root);
 	default:
 		throw NotImplementedException("Invalid LogicalType (%s) for ConvertToVariant",
 		                              EnumUtil::ToString(logical_type));

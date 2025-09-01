@@ -6,9 +6,8 @@ namespace duckdb {
 namespace variant {
 
 template <bool WRITE_DATA, bool IGNORE_NULLS>
-bool ConvertUnionToVariant(ToVariantSourceData &source, VariantVectorData &result, DataChunk &offsets, idx_t count,
-                           optional_ptr<const SelectionVector> selvec, SelectionVector &keys_selvec,
-                           OrderedOwningStringMap<uint32_t> &dictionary,
+bool ConvertUnionToVariant(ToVariantSourceData &source, ToVariantGlobalResultData &result, idx_t count,
+                           optional_ptr<const SelectionVector> selvec,
                            optional_ptr<const SelectionVector> values_index_selvec, const bool is_root) {
 	auto &children = StructVector::GetEntries(source.source);
 
@@ -19,9 +18,8 @@ bool ConvertUnionToVariant(ToVariantSourceData &source, VariantVectorData &resul
 		//! Convert all the children, ignore nulls, only write the non-null values
 		//! UNION will have exactly 1 non-null value for each row
 		member_data.emplace_back(child, source.source_size, source.source_sel);
-		if (!ConvertToVariant<WRITE_DATA, /*ignore_nulls = */ true>(member_data.back(), result, offsets, count, selvec,
-		                                                            keys_selvec, dictionary, values_index_selvec,
-		                                                            is_root)) {
+		if (!ConvertToVariant<WRITE_DATA, /*ignore_nulls = */ true>(member_data.back(), result, count, selvec,
+		                                                            values_index_selvec, is_root)) {
 			return false;
 		}
 	}
@@ -32,8 +30,8 @@ bool ConvertUnionToVariant(ToVariantSourceData &source, VariantVectorData &resul
 
 	//! For some reason we can have nulls in members, so we need this check
 	//! So we are sure that we handled all nulls
-	auto values_offset_data = OffsetData::GetValues(offsets);
-	auto blob_offset_data = OffsetData::GetBlob(offsets);
+	auto values_offset_data = OffsetData::GetValues(result.offsets);
+	auto blob_offset_data = OffsetData::GetBlob(result.offsets);
 	for (idx_t i = 0; i < count; i++) {
 		bool is_null = true;
 		for (idx_t child_idx = 1; child_idx < children.size() && is_null; child_idx++) {

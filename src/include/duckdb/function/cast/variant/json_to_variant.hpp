@@ -39,26 +39,26 @@ public:
 } // namespace
 
 template <bool WRITE_DATA, bool IGNORE_NULLS>
-static bool ConvertJSON(yyjson_val *val, VariantVectorData &result, DataChunk &offsets, idx_t result_index,
-                        SelectionVector &keys_selvec, OrderedOwningStringMap<uint32_t> &dictionary, bool is_root);
+static bool ConvertJSON(yyjson_val *val, ToVariantGlobalResultData &result, idx_t result_index, bool is_root);
 
 template <bool WRITE_DATA, bool IGNORE_NULLS>
-static bool ConvertJSONArray(yyjson_val *arr, VariantVectorData &result, DataChunk &offsets, idx_t result_index,
-                             SelectionVector &keys_selvec, OrderedOwningStringMap<uint32_t> &dictionary, bool is_root) {
+static bool ConvertJSONArray(yyjson_val *arr, ToVariantGlobalResultData &result, idx_t result_index, bool is_root) {
 	yyjson_arr_iter iter;
 	yyjson_arr_iter_init(arr, &iter);
 
-	auto children_offset_data = OffsetData::GetChildren(offsets);
-	auto values_offset_data = OffsetData::GetValues(offsets);
-	auto blob_offset_data = OffsetData::GetBlob(offsets);
+	auto &variant = result.variant;
+
+	auto children_offset_data = OffsetData::GetChildren(result.offsets);
+	auto values_offset_data = OffsetData::GetValues(result.offsets);
+	auto blob_offset_data = OffsetData::GetBlob(result.offsets);
 
 	WriteVariantMetadata<WRITE_DATA>(result, result_index, values_offset_data, blob_offset_data[result_index], nullptr,
 	                                 0, VariantLogicalType::ARRAY);
 
-	auto &children_list_entry = result.children_data[result_index];
+	auto &children_list_entry = variant.children_data[result_index];
 	uint32_t count = NumericCast<uint32_t>(iter.max);
 	auto start_child_index = children_list_entry.offset + children_offset_data[result_index];
-	WriteContainerData<WRITE_DATA>(result, result_index, blob_offset_data[result_index], count,
+	WriteContainerData<WRITE_DATA>(result.variant, result_index, blob_offset_data[result_index], count,
 	                               children_offset_data[result_index]);
 
 	//! Reserve these indices for the array
@@ -70,11 +70,10 @@ static bool ConvertJSONArray(yyjson_val *arr, VariantVectorData &result, DataChu
 
 		if (WRITE_DATA) {
 			//! Set the child index
-			result.keys_index_validity.SetInvalid(start_child_index);
-			result.values_index_data[start_child_index++] = values_offset_data[result_index];
+			variant.keys_index_validity.SetInvalid(start_child_index);
+			variant.values_index_data[start_child_index++] = values_offset_data[result_index];
 		}
-		if (!ConvertJSON<WRITE_DATA, IGNORE_NULLS>(val, result, offsets, result_index, keys_selvec, dictionary,
-		                                           false)) {
+		if (!ConvertJSON<WRITE_DATA, IGNORE_NULLS>(val, result, result_index, false)) {
 			return false;
 		}
 	}
@@ -82,25 +81,24 @@ static bool ConvertJSONArray(yyjson_val *arr, VariantVectorData &result, DataChu
 }
 
 template <bool WRITE_DATA, bool IGNORE_NULLS>
-static bool ConvertJSONObject(yyjson_val *obj, VariantVectorData &result, DataChunk &offsets, idx_t result_index,
-                              SelectionVector &keys_selvec, OrderedOwningStringMap<uint32_t> &dictionary,
-                              bool is_root) {
+static bool ConvertJSONObject(yyjson_val *obj, ToVariantGlobalResultData &result, idx_t result_index, bool is_root) {
 	yyjson_obj_iter iter;
 	yyjson_obj_iter_init(obj, &iter);
 
-	auto keys_offset_data = OffsetData::GetKeys(offsets);
-	auto children_offset_data = OffsetData::GetChildren(offsets);
-	auto values_offset_data = OffsetData::GetValues(offsets);
-	auto blob_offset_data = OffsetData::GetBlob(offsets);
+	auto keys_offset_data = OffsetData::GetKeys(result.offsets);
+	auto children_offset_data = OffsetData::GetChildren(result.offsets);
+	auto values_offset_data = OffsetData::GetValues(result.offsets);
+	auto blob_offset_data = OffsetData::GetBlob(result.offsets);
 
 	WriteVariantMetadata<WRITE_DATA>(result, result_index, values_offset_data, blob_offset_data[result_index], nullptr,
 	                                 0, VariantLogicalType::OBJECT);
 
-	auto &children_list_entry = result.children_data[result_index];
-	auto &keys_list_entry = result.keys_data[result_index];
+	auto &variant = result.variant;
+	auto &children_list_entry = variant.children_data[result_index];
+	auto &keys_list_entry = variant.keys_data[result_index];
 	uint32_t count = NumericCast<uint32_t>(iter.max);
 	auto start_child_index = children_list_entry.offset + children_offset_data[result_index];
-	WriteContainerData<WRITE_DATA>(result, result_index, blob_offset_data[result_index], count,
+	WriteContainerData<WRITE_DATA>(result.variant, result_index, blob_offset_data[result_index], count,
 	                               children_offset_data[result_index]);
 
 	auto start_key_index = keys_offset_data[result_index];
@@ -117,19 +115,17 @@ static bool ConvertJSONObject(yyjson_val *obj, VariantVectorData &result, DataCh
 		if (WRITE_DATA) {
 			auto str = string_t(key_string, key_string_len);
 			auto keys_index = start_key_index++;
-			auto dictionary_size = dictionary.size();
-			auto dictionary_index = dictionary.emplace(std::make_pair(str, dictionary_size)).first->second;
+			auto dictionary_index = result.GetOrCreateIndex(str);
 
 			//! Set the keys_index
-			result.keys_index_data[start_child_index] = keys_index;
+			variant.keys_index_data[start_child_index] = keys_index;
 			//! Set the values_index
-			result.values_index_data[start_child_index++] = values_offset_data[result_index];
-			keys_selvec.set_index(keys_list_entry.offset + keys_index, dictionary_index);
+			variant.values_index_data[start_child_index++] = values_offset_data[result_index];
+			result.keys_selvec.set_index(keys_list_entry.offset + keys_index, dictionary_index);
 		}
 
 		val = yyjson_obj_iter_get_val(key);
-		if (!ConvertJSON<WRITE_DATA, IGNORE_NULLS>(val, result, offsets, result_index, keys_selvec, dictionary,
-		                                           false)) {
+		if (!ConvertJSON<WRITE_DATA, IGNORE_NULLS>(val, result, result_index, false)) {
 			return false;
 		}
 	}
@@ -137,14 +133,13 @@ static bool ConvertJSONObject(yyjson_val *obj, VariantVectorData &result, DataCh
 }
 
 template <bool WRITE_DATA>
-static bool ConvertJSONPrimitive(yyjson_val *val, VariantVectorData &result, DataChunk &offsets, idx_t result_index,
-                                 SelectionVector &keys_selvec, OrderedOwningStringMap<uint32_t> &dictionary,
-                                 bool is_root) {
+static bool ConvertJSONPrimitive(yyjson_val *val, ToVariantGlobalResultData &result, idx_t result_index, bool is_root) {
 	auto json_tag = unsafe_yyjson_get_tag(val);
 
-	auto values_offset_data = OffsetData::GetValues(offsets);
-	auto blob_offset_data = OffsetData::GetBlob(offsets);
-	auto blob_data = data_ptr_cast(result.blob_data[result_index].GetDataWriteable());
+	auto &variant = result.variant;
+	auto values_offset_data = OffsetData::GetValues(result.offsets);
+	auto blob_offset_data = OffsetData::GetBlob(result.offsets);
+	auto blob_data = data_ptr_cast(variant.blob_data[result_index].GetDataWriteable());
 
 	switch (json_tag) {
 	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NOESC:
@@ -210,10 +205,9 @@ static bool ConvertJSONPrimitive(yyjson_val *val, VariantVectorData &result, Dat
 }
 
 template <bool WRITE_DATA, bool IGNORE_NULLS>
-static bool ConvertJSON(yyjson_val *val, VariantVectorData &result, DataChunk &offsets, idx_t result_index,
-                        SelectionVector &keys_selvec, OrderedOwningStringMap<uint32_t> &dictionary, bool is_root) {
-	auto values_offset_data = OffsetData::GetValues(offsets);
-	auto blob_offset_data = OffsetData::GetBlob(offsets);
+static bool ConvertJSON(yyjson_val *val, ToVariantGlobalResultData &result, idx_t result_index, bool is_root) {
+	auto values_offset_data = OffsetData::GetValues(result.offsets);
+	auto blob_offset_data = OffsetData::GetBlob(result.offsets);
 
 	if (unsafe_yyjson_is_null(val)) {
 		if (!IGNORE_NULLS) {
@@ -225,29 +219,27 @@ static bool ConvertJSON(yyjson_val *val, VariantVectorData &result, DataChunk &o
 
 	auto json_tag = unsafe_yyjson_get_tag(val);
 	if (json_tag == (YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE)) {
-		return ConvertJSONArray<WRITE_DATA, IGNORE_NULLS>(val, result, offsets, result_index, keys_selvec, dictionary,
-		                                                  is_root);
+		return ConvertJSONArray<WRITE_DATA, IGNORE_NULLS>(val, result, result_index, is_root);
 	} else if (json_tag == (YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE)) {
-		return ConvertJSONObject<WRITE_DATA, IGNORE_NULLS>(val, result, offsets, result_index, keys_selvec, dictionary,
-		                                                   is_root);
+		return ConvertJSONObject<WRITE_DATA, IGNORE_NULLS>(val, result, result_index, is_root);
 	} else {
-		return ConvertJSONPrimitive<WRITE_DATA>(val, result, offsets, result_index, keys_selvec, dictionary, is_root);
+		return ConvertJSONPrimitive<WRITE_DATA>(val, result, result_index, is_root);
 	}
 }
 
 template <bool WRITE_DATA, bool IGNORE_NULLS>
-bool ConvertJSONToVariant(ToVariantSourceData &source, VariantVectorData &result, DataChunk &offsets, idx_t count,
-                          optional_ptr<const SelectionVector> selvec, SelectionVector &keys_selvec,
-                          OrderedOwningStringMap<uint32_t> &dictionary,
+bool ConvertJSONToVariant(ToVariantSourceData &source, ToVariantGlobalResultData &result, idx_t count,
+                          optional_ptr<const SelectionVector> selvec,
                           optional_ptr<const SelectionVector> values_index_selvec, const bool is_root) {
 	D_ASSERT(source.source.GetType().IsJSONType());
 
 	auto &source_format = source.source_format;
 	auto source_data = source_format.GetData<string_t>(source_format);
 
-	auto values_offset_data = OffsetData::GetValues(offsets);
-	auto blob_offset_data = OffsetData::GetBlob(offsets);
+	auto values_offset_data = OffsetData::GetValues(result.offsets);
+	auto blob_offset_data = OffsetData::GetBlob(result.offsets);
 
+	auto &variant = result.variant;
 	ReadJSONHolder json_holder;
 	for (idx_t i = 0; i < count; i++) {
 		auto source_index = source[i];
@@ -263,7 +255,7 @@ bool ConvertJSONToVariant(ToVariantSourceData &source, VariantVectorData &result
 
 		if (WRITE_DATA && values_index_selvec) {
 			//! Write the 'values_index' for the parent of this column
-			result.values_index_data[values_index_selvec->get_index(i)] = values_offset_data[result_index];
+			variant.values_index_data[values_index_selvec->get_index(i)] = values_offset_data[result_index];
 		}
 
 		auto &val = source_data[source_index];
@@ -279,8 +271,7 @@ bool ConvertJSONToVariant(ToVariantSourceData &source, VariantVectorData &result
 		}
 		auto *root = yyjson_doc_get_root(json_holder.doc);
 
-		if (!ConvertJSON<WRITE_DATA, IGNORE_NULLS>(root, result, offsets, result_index, keys_selvec, dictionary,
-		                                           is_root)) {
+		if (!ConvertJSON<WRITE_DATA, IGNORE_NULLS>(root, result, result_index, is_root)) {
 			return false;
 		}
 		json_holder.Reset();

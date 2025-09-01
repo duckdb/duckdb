@@ -6,14 +6,13 @@ namespace duckdb {
 namespace variant {
 
 template <bool WRITE_DATA, bool IGNORE_NULLS>
-bool ConvertStructToVariant(ToVariantSourceData &source, VariantVectorData &result, DataChunk &offsets, idx_t count,
-                            optional_ptr<const SelectionVector> selvec, SelectionVector &keys_selvec,
-                            OrderedOwningStringMap<uint32_t> &dictionary,
+bool ConvertStructToVariant(ToVariantSourceData &source, ToVariantGlobalResultData &result, idx_t count,
+                            optional_ptr<const SelectionVector> selvec,
                             optional_ptr<const SelectionVector> values_index_selvec, const bool is_root) {
-	auto keys_offset_data = OffsetData::GetKeys(offsets);
-	auto values_offset_data = OffsetData::GetValues(offsets);
-	auto blob_offset_data = OffsetData::GetBlob(offsets);
-	auto children_offset_data = OffsetData::GetChildren(offsets);
+	auto keys_offset_data = OffsetData::GetKeys(result.offsets);
+	auto values_offset_data = OffsetData::GetValues(result.offsets);
+	auto blob_offset_data = OffsetData::GetBlob(result.offsets);
+	auto children_offset_data = OffsetData::GetChildren(result.offsets);
 	auto &type = source.source.GetType();
 
 	auto &source_format = source.source_format;
@@ -25,19 +24,20 @@ bool ConvertStructToVariant(ToVariantSourceData &source, VariantVectorData &resu
 	vector<uint32_t> dictionary_indices;
 	dictionary_indices.reserve(children.size());
 
+	auto &variant = result.variant;
 	ContainerSelectionVectors sel(count);
 	for (idx_t i = 0; i < count; i++) {
 		auto index = source[i];
 		auto result_index = selvec ? selvec->get_index(i) : i;
 
 		auto &blob_offset = blob_offset_data[result_index];
-		auto &children_list_entry = result.children_data[result_index];
-		auto &keys_list_entry = result.keys_data[result_index];
+		auto &children_list_entry = variant.children_data[result_index];
+		auto &keys_list_entry = variant.keys_data[result_index];
 
 		if (source_validity.RowIsValid(index)) {
 			WriteVariantMetadata<WRITE_DATA>(result, result_index, values_offset_data, blob_offset, values_index_selvec,
 			                                 i, VariantLogicalType::OBJECT);
-			WriteContainerData<WRITE_DATA>(result, result_index, blob_offset, children.size(),
+			WriteContainerData<WRITE_DATA>(result.variant, result_index, blob_offset, children.size(),
 			                               children_offset_data[result_index]);
 
 			if (WRITE_DATA && dictionary_indices.empty()) {
@@ -49,11 +49,7 @@ bool ConvertStructToVariant(ToVariantSourceData &source, VariantVectorData &resu
 					auto &struct_child = struct_children[child_idx];
 					string_t struct_child_str(struct_child.first.c_str(),
 					                          NumericCast<uint32_t>(struct_child.first.size()));
-					auto dictionary_size = dictionary.size();
-					//! This will later be remapped to the sorted idx (see FinalizeVariantKeys)
-					auto unsorted_idx =
-					    dictionary.emplace(std::make_pair(struct_child_str, dictionary_size)).first->second;
-					dictionary_indices.push_back(unsorted_idx);
+					dictionary_indices.push_back(result.GetOrCreateIndex(struct_child_str));
 				}
 			}
 
@@ -62,9 +58,9 @@ bool ConvertStructToVariant(ToVariantSourceData &source, VariantVectorData &resu
 				idx_t children_index = children_list_entry.offset + children_offset_data[result_index];
 				idx_t keys_offset = keys_list_entry.offset + keys_offset_data[result_index];
 				for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
-					result.keys_index_data[children_index + child_idx] =
+					variant.keys_index_data[children_index + child_idx] =
 					    NumericCast<uint32_t>(keys_offset_data[result_index] + child_idx);
-					keys_selvec.set_index(keys_offset + child_idx, dictionary_indices[child_idx]);
+					result.keys_selvec.set_index(keys_offset + child_idx, dictionary_indices[child_idx]);
 				}
 				//! Map from index of the child to the children.values_index of the parent
 				//! NOTE: this maps to the first index, below we are forwarding this for each child Vector we process.
@@ -89,14 +85,14 @@ bool ConvertStructToVariant(ToVariantSourceData &source, VariantVectorData &resu
 			Vector new_child(child.GetType(), nullptr);
 			new_child.Dictionary(child, count, sel.non_null_selection, sel.count);
 			ToVariantSourceData child_source_data(new_child, source.source_size);
-			if (!ConvertToVariant<WRITE_DATA>(child_source_data, result, offsets, sel.count, &sel.new_selection,
-			                                  keys_selvec, dictionary, &sel.children_selection, false)) {
+			if (!ConvertToVariant<WRITE_DATA>(child_source_data, result, sel.count, &sel.new_selection,
+			                                  &sel.children_selection, false)) {
 				return false;
 			}
 		} else {
 			ToVariantSourceData child_source_data(child, source.source_size, sel.non_null_selection);
-			if (!ConvertToVariant<WRITE_DATA>(child_source_data, result, offsets, sel.count, &sel.new_selection,
-			                                  keys_selvec, dictionary, &sel.children_selection, false)) {
+			if (!ConvertToVariant<WRITE_DATA>(child_source_data, result, sel.count, &sel.new_selection,
+			                                  &sel.children_selection, false)) {
 				return false;
 			}
 		}

@@ -29,6 +29,33 @@ public:
 	}
 };
 
+struct ToVariantGlobalResultData {
+public:
+	ToVariantGlobalResultData(VariantVectorData &variant, DataChunk &offsets,
+	                          OrderedOwningStringMap<uint32_t> &dictionary, SelectionVector &keys_selvec)
+	    : variant(variant), offsets(offsets), dictionary(dictionary), keys_selvec(keys_selvec) {
+	}
+
+public:
+	uint32_t GetOrCreateIndex(const string_t &key) {
+		auto unsorted_idx = dictionary.size();
+		//! This will later be remapped to the sorted idx (see FinalizeVariantKeys in 'to_variant.cpp')
+		return dictionary.emplace(std::make_pair(key, unsorted_idx)).first->second;
+	}
+
+public:
+	VariantVectorData &variant;
+	DataChunk &offsets;
+	OrderedOwningStringMap<uint32_t> &dictionary;
+	SelectionVector &keys_selvec;
+};
+
+struct ToVariantMappingData {
+	idx_t count;
+	optional_ptr<const SelectionVector> selvec;
+	optional_ptr<const SelectionVector> value_index_selvec;
+};
+
 template <bool WRITE_DATA>
 void WriteContainerData(VariantVectorData &result, idx_t result_index, uint32_t &blob_offset, idx_t length,
                         idx_t children_offset) {
@@ -83,30 +110,33 @@ void WriteArrayChildren(VariantVectorData &result, uint64_t children_offset, uin
 }
 
 template <bool WRITE_DATA>
-void WriteVariantMetadata(VariantVectorData &result, idx_t result_index, uint32_t *values_offsets, uint32_t blob_offset,
-                          optional_ptr<const SelectionVector> value_index_selvec, idx_t i, VariantLogicalType type_id) {
+void WriteVariantMetadata(ToVariantGlobalResultData &result, idx_t result_index, uint32_t *values_offsets,
+                          uint32_t blob_offset, optional_ptr<const SelectionVector> value_index_selvec, idx_t i,
+                          VariantLogicalType type_id) {
 
 	auto &values_offset_data = values_offsets[result_index];
 	if (WRITE_DATA) {
-		auto &values_list_entry = result.values_data[result_index];
+		auto &variant = result.variant;
+		auto &values_list_entry = variant.values_data[result_index];
 		auto values_offset = values_list_entry.offset;
 
 		values_offset = values_list_entry.offset + values_offset_data;
-		result.type_ids_data[values_offset] = static_cast<uint8_t>(type_id);
-		result.byte_offset_data[values_offset] = blob_offset;
+		variant.type_ids_data[values_offset] = static_cast<uint8_t>(type_id);
+		variant.byte_offset_data[values_offset] = blob_offset;
 		if (value_index_selvec) {
-			result.values_index_data[value_index_selvec->get_index(i)] = values_offset_data;
+			variant.values_index_data[value_index_selvec->get_index(i)] = values_offset_data;
 		}
 	}
 	values_offset_data++;
 }
 
 template <bool WRITE_DATA>
-void HandleVariantNull(VariantVectorData &result, idx_t result_index, uint32_t *values_offsets, uint32_t blob_offset,
-                       optional_ptr<const SelectionVector> value_index_selvec, idx_t i, const bool is_root) {
+void HandleVariantNull(ToVariantGlobalResultData &result, idx_t result_index, uint32_t *values_offsets,
+                       uint32_t blob_offset, optional_ptr<const SelectionVector> value_index_selvec, idx_t i,
+                       const bool is_root) {
 	if (is_root) {
 		if (WRITE_DATA) {
-			FlatVector::SetNull(result.variant, result_index, true);
+			FlatVector::SetNull(result.variant.variant, result_index, true);
 		}
 		return;
 	}
@@ -143,24 +173,15 @@ public:
 	optional_ptr<const SelectionVector> source_sel = nullptr;
 };
 
-struct ToVariantGlobalResultData {
-	VariantVectorData &variant;
-	DataChunk &offsets;
-	OrderedOwningStringMap<uint32_t> &dictionary;
-	SelectionVector &keys_selvec;
-};
-
-struct ToVariantMappingData {
-	idx_t count;
-	optional_ptr<const SelectionVector> selvec;
-	optional_ptr<const SelectionVector> value_index_selvec;
-};
+// bool ConvertToVariant(ToVariantSourceData &source, VariantVectorData &result, DataChunk &offsets, idx_t count,
+//                      optional_ptr<const SelectionVector> selvec, SelectionVector &keys_selvec,
+//                      OrderedOwningStringMap<uint32_t> &dictionary,
+//                      optional_ptr<const SelectionVector> values_index_selvec, const bool is_root);
 
 template <bool WRITE_DATA, bool IGNORE_NULLS = false>
-bool ConvertToVariant(ToVariantSourceData &source, VariantVectorData &result, DataChunk &offsets, idx_t count,
-                      optional_ptr<const SelectionVector> selvec, SelectionVector &keys_selvec,
-                      OrderedOwningStringMap<uint32_t> &dictionary,
-                      optional_ptr<const SelectionVector> value_index_selvec, const bool is_root);
+bool ConvertToVariant(ToVariantSourceData &source, ToVariantGlobalResultData &result, idx_t count,
+                      optional_ptr<const SelectionVector> selvec,
+                      optional_ptr<const SelectionVector> values_index_selvec, const bool is_root);
 
 } // namespace variant
 } // namespace duckdb

@@ -90,20 +90,20 @@ static uint32_t VariantTrivialPrimitiveSize(VariantLogicalType type) {
 }
 
 template <bool WRITE_DATA, bool IGNORE_NULLS>
-bool ConvertVariantToVariant(ToVariantSourceData &source_data, VariantVectorData &result, DataChunk &offsets,
-                             idx_t count, optional_ptr<const SelectionVector> selvec, SelectionVector &keys_selvec,
-                             OrderedOwningStringMap<uint32_t> &dictionary,
+bool ConvertVariantToVariant(ToVariantSourceData &source_data, ToVariantGlobalResultData &result_data, idx_t count,
+                             optional_ptr<const SelectionVector> selvec,
                              optional_ptr<const SelectionVector> values_index_selvec, const bool is_root) {
 
-	auto keys_offset_data = OffsetData::GetKeys(offsets);
-	auto children_offset_data = OffsetData::GetChildren(offsets);
-	auto values_offset_data = OffsetData::GetValues(offsets);
-	auto blob_offset_data = OffsetData::GetBlob(offsets);
+	auto keys_offset_data = OffsetData::GetKeys(result_data.offsets);
+	auto children_offset_data = OffsetData::GetChildren(result_data.offsets);
+	auto values_offset_data = OffsetData::GetValues(result_data.offsets);
+	auto blob_offset_data = OffsetData::GetBlob(result_data.offsets);
 
 	RecursiveUnifiedVectorFormat source_format;
 	Vector::RecursiveToUnifiedFormat(source_data.source, source_data.source_size, source_format);
 	UnifiedVariantVectorData source(source_format);
 
+	auto &result = result_data.variant;
 	for (idx_t source_index = 0; source_index < count; source_index++) {
 		auto result_index = selvec ? selvec->get_index(source_index) : source_index;
 
@@ -120,7 +120,7 @@ bool ConvertVariantToVariant(ToVariantSourceData &source_data, VariantVectorData
 		uint32_t blob_size = 0;
 		if (!source.RowIsValid(source_index)) {
 			if (!IGNORE_NULLS) {
-				HandleVariantNull<WRITE_DATA>(result, result_index, values_offset_data, blob_offset,
+				HandleVariantNull<WRITE_DATA>(result_data, result_index, values_offset_data, blob_offset,
 				                              values_index_selvec, source_index, is_root);
 			}
 			continue;
@@ -153,12 +153,10 @@ bool ConvertVariantToVariant(ToVariantSourceData &source_data, VariantVectorData
 					auto &source_key_value = source.GetKey(source_index, source_key_index);
 
 					//! Now write this key to the dictionary of the result
-					auto dictionary_size = dictionary.size();
-					auto dict_index =
-					    dictionary.emplace(std::make_pair(source_key_value, dictionary_size)).first->second;
+					auto dict_index = result_data.GetOrCreateIndex(source_key_value);
 					result.keys_index_data[children_list_entry.offset + children_offset + source_children_index] =
 					    NumericCast<uint32_t>(keys_offset + keys_count);
-					keys_selvec.set_index(keys_list_entry.offset + keys_offset + keys_count, dict_index);
+					result_data.keys_selvec.set_index(keys_list_entry.offset + keys_offset + keys_count, dict_index);
 				}
 				keys_count++;
 			} else {
@@ -181,8 +179,8 @@ bool ConvertVariantToVariant(ToVariantSourceData &source_data, VariantVectorData
 			//! NOTE: we have to deserialize these in both passes
 			//! because to figure out the size of the 'data' that is added by the VARIANT, we have to traverse the
 			//! VARIANT solely because the 'child_index' stored in the OBJECT/ARRAY data could require more bits
-			WriteVariantMetadata<WRITE_DATA>(result, result_index, values_offset_data, blob_offset + blob_size, nullptr,
-			                                 0, source_type_id);
+			WriteVariantMetadata<WRITE_DATA>(result_data, result_index, values_offset_data, blob_offset + blob_size,
+			                                 nullptr, 0, source_type_id);
 
 			if (source_type_id == VariantLogicalType::ARRAY || source_type_id == VariantLogicalType::OBJECT) {
 				auto source_nested_data = VariantUtils::DecodeNestedData(source, source_index, source_value_index);
