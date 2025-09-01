@@ -544,11 +544,15 @@ BoundStatement Binder::Bind(CopyStatement &stmt, CopyToType copy_to_type) {
 			}
 			auto &copy_option = option_entry->second;
 			if (copy_option.type.id() != LogicalTypeId::ANY) {
-				if (copy_option.type.id() == LogicalTypeId::BOOLEAN && provided_entry.second.empty()) {
-					// boolean can be empty (e.g. "HEADER")
-					continue;
+				if (provided_entry.second.empty()) {
+					if (copy_option.type.id() == LogicalTypeId::BOOLEAN) {
+						// boolean can be empty (e.g. "HEADER")
+						continue;
+					}
+					throw InvalidInputException("Copy option %s requires an argument of type %s", provided_option,
+					                            copy_option.type.ToString());
 				}
-				if (provided_entry.second.size() != 1) {
+				if (provided_entry.second.size() > 1) {
 					throw InvalidInputException("Copy option %s did not expect a list as argument", provided_option);
 				}
 				auto &original_value = provided_entry.second[0];
