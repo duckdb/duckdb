@@ -1,6 +1,7 @@
 #pragma once
 
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/function/scalar/variant_utils.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/variant.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
