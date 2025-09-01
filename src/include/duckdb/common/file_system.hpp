@@ -22,6 +22,7 @@
 #include "duckdb/common/open_file_info.hpp"
 #include <functional>
 
+#undef max
 #undef CreateDirectory
 #undef MoveFile
 #undef RemoveDirectory
