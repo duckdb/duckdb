@@ -12,37 +12,11 @@
 
 namespace duckdb {
 
-// Formerly PartitionGlobalHashGroup
-class HashedSortGroup {
-public:
-	using Orders = vector<BoundOrderByNode>;
-	using Types = vector<LogicalType>;
-
-	HashedSortGroup(ClientContext &client, optional_ptr<Sort> sort, idx_t group_idx);
-
-	const idx_t group_idx;
-
-	//	Sink
-	optional_ptr<Sort> sort;
-	unique_ptr<GlobalSinkState> sort_global;
-
-	//	Source
-	atomic<idx_t> tasks_completed;
-	unique_ptr<GlobalSourceState> sort_source;
-	unique_ptr<ColumnDataCollection> sorted;
-};
-
-class HashedSortCallback {
-public:
-	virtual ~HashedSortCallback() = default;
-	virtual void OnSortedGroup(HashedSortGroup &hash_group) const = 0;
-};
-
 class HashedSort {
 public:
 	using Orders = vector<BoundOrderByNode>;
 	using Types = vector<LogicalType>;
-	using HashGroupPtr = unique_ptr<HashedSortGroup>;
+	using HashGroupPtr = unique_ptr<ColumnDataCollection>;
 
 	static void GenerateOrderings(Orders &partitions, Orders &orders,
 	                              const vector<unique_ptr<Expression>> &partition_bys, const Orders &order_bys,
@@ -50,8 +24,7 @@ public:
 
 	HashedSort(ClientContext &context, const vector<unique_ptr<Expression>> &partition_bys,
 	           const vector<BoundOrderByNode> &order_bys, const Types &payload_types,
-	           const vector<unique_ptr<BaseStatistics>> &partitions_stats, idx_t estimated_cardinality,
-	           optional_ptr<HashedSortCallback> callback);
+	           const vector<unique_ptr<BaseStatistics>> &partitions_stats, idx_t estimated_cardinality);
 
 public:
 	//===--------------------------------------------------------------------===//
@@ -65,11 +38,18 @@ public:
 
 public:
 	//===--------------------------------------------------------------------===//
+	// Source Interface
+	//===--------------------------------------------------------------------===//
+	unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context, GlobalSourceState &gstate) const;
+	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context, GlobalSinkState &sink) const;
+
+public:
+	//===--------------------------------------------------------------------===//
 	// Non-Standard Interface
 	//===--------------------------------------------------------------------===//
 	SinkFinalizeType MaterializeHashGroups(Pipeline &pipeline, Event &event, const PhysicalOperator &op,
 	                                       OperatorSinkFinalizeInput &finalize) const;
-	vector<HashGroupPtr> &GetHashGroups(GlobalSinkState &global_state) const;
+	vector<HashGroupPtr> &GetHashGroups(GlobalSourceState &global_state) const;
 
 public:
 	ClientContext &client;
@@ -89,8 +69,6 @@ public:
 	vector<unique_ptr<Expression>> sort_exprs;
 	//! Common sort description
 	unique_ptr<Sort> sort;
-	//! Sorting callback for completed groups
-	mutable optional_ptr<HashedSortCallback> callback;
 };
 
 } // namespace duckdb
