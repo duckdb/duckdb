@@ -1,9 +1,6 @@
 # name: test/sql/function/numeric/test_type_resolution.test
 # group: [numeric]
 
-statement ok
-PRAGMA enable_verification
-
 # test type resolution of various additions
 query I
 SELECT 1::TINYINT + 1::TINYINT

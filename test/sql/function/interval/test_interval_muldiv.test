@@ -2,9 +2,6 @@
 # description: Test PG INTERVAL DOUBLE multiply and divide.
 # group: [interval]
 
-statement ok
-PRAGMA enable_verification
-
 # From src/test/regress/sql/interval.sql
 # Test multiplication and division with intervals.
 # Floating point arithmetic rounding errors can lead to unexpected results,

@@ -26,6 +26,7 @@
 #include "duckdb/common/types/bignum.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/types/string.hpp"
 #include "duckdb/common/types/value_map.hpp"
 
 #include <utility>
@@ -158,6 +159,13 @@ Value::Value(string val) : type_(LogicalType::VARCHAR), is_null(false) {
 		throw ErrorManager::InvalidUnicodeError(val, "value construction");
 	}
 	value_info_ = make_shared_ptr<StringValueInfo>(std::move(val));
+}
+
+Value::Value(String val) : type_(LogicalType::VARCHAR), is_null(false) {
+	if (!Value::StringIsValid(val.c_str(), val.size())) {
+		throw ErrorManager::InvalidUnicodeError(val, "value construction");
+	}
+	value_info_ = make_shared_ptr<StringValueInfo>(val.ToStdString());
 }
 
 Value::~Value() {

@@ -40,6 +40,8 @@ public:
 	string format;
 	//! If the format is manually set (i.e., via the format parameter) or was discovered by inspecting the file path
 	bool is_format_auto_detected;
+	//! Expression to determine the file path (if any)
+	unique_ptr<ParsedExpression> file_path_expression;
 	//! The file path to copy to/from
 	string file_path;
 	//! Set of (key, value) options

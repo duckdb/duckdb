@@ -20,10 +20,11 @@ public:
 	WindowNaiveAggregator(const WindowAggregateExecutor &executor, WindowSharedExpressions &shared);
 	~WindowNaiveAggregator() override;
 
-	unique_ptr<WindowAggregatorState> GetLocalState(const WindowAggregatorState &gstate) const override;
-	void Evaluate(ExecutionContext &context, const WindowAggregatorState &gsink, WindowAggregatorState &lstate,
-	              const DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx,
-	              InterruptState &interrupt) const override;
+	unique_ptr<LocalSinkState> GetLocalState(ExecutionContext &context, const GlobalSinkState &gstate) const override;
+	void Evaluate(ExecutionContext &context, const DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx,
+	              OperatorSinkInput &sink) const override;
+
+	static bool CanAggregate(const BoundWindowExpression &wexpr);
 
 	//! The parent executor
 	const WindowAggregateExecutor &executor;

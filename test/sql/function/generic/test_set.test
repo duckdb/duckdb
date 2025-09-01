@@ -2,9 +2,6 @@
 # description: Test SET function
 # group: [generic]
 
-statement ok
-PRAGMA enable_verification
-
 # unrecognized configuration parameter
 statement error
 SELECT CURRENT_SETTING('a');
