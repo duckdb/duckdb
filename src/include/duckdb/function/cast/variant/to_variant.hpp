@@ -14,8 +14,10 @@ namespace variant {
 //! * @param source The Vector of arbitrary type to process
 //! * @param result The result Vector to write the variant data to
 //! * @param offsets The offsets to gather per row
-//! * @param count The size of the source vector
+//! * @param count The amount of values we're converting
+//! * @param source_size The size of the source vector
 //! * @param selvec The selection vector from i (< count) to the index in the result Vector
+//! * @param source_sel The selection vector from i (< count) to the index in the source Vector, if not null
 //! * @param keys_selvec The selection vector to populate with mapping from keys index -> dictionary index
 //! * @param dictionary The dictionary to populate with the (unique and sorted) keys
 //! * @param values_index_selvec The selection vector from i (< count) to the index in the children.values_index selvec,
