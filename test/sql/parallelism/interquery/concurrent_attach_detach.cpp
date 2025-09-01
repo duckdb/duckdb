@@ -93,13 +93,13 @@ public:
 
 DBPoolMgr db_pool;
 
-void createTbl(Connection &conn, idx_t db_id, idx_t workerId) {
+void createTbl(Connection &conn, idx_t db_id, idx_t worker_id) {
 	lock_guard<mutex> lock(db_infos[db_id].mu);
-	auto tblId = db_infos[db_id].table_count;
+	auto tbl_id = db_infos[db_id].table_count;
 	db_infos[db_id].tables.emplace_back(TableInfo {nr_initial_rows});
 	db_infos[db_id].table_count++;
 
-	string query = "CREATE TABLE " + getDBName(db_id) + ".tbl_" + to_string(tblId) +
+	string query = "CREATE TABLE " + getDBName(db_id) + ".tbl_" + to_string(tbl_id) +
 	               " AS SELECT "
 	               "range::BIGINT AS i, "
 	               "range::VARCHAR AS s, "
@@ -108,7 +108,7 @@ void createTbl(Connection &conn, idx_t db_id, idx_t workerId) {
 	               "{'key1': range::BIGINT, 'key2': range::VARCHAR} AS obj "
 	               "FROM range(" +
 	               to_string(nr_initial_rows) + ")";
-	addLog("thread: " + to_string(workerId) + "; q: " + query);
+	addLog("thread: " + to_string(worker_id) + "; q: " + query);
 	execQuery(conn, query);
 }
 
@@ -195,11 +195,9 @@ void append(Connection &conn, idx_t db_id, idx_t worker_id, idx_t append_num_row
 	} catch (const std::exception &e) {
 		addLog("Caught exception when using Appender: " + std::string(e.what()));
 		success = false;
-		throw;
 	} catch (...) {
 		addLog("Caught error when using Appender!");
 		success = false;
-		throw;
 	}
 }
 
@@ -209,26 +207,27 @@ void workUnit(std::unique_ptr<Connection> conn, const idx_t &worker_id) {
 			break;
 		}
 		try {
-			idx_t scenarioId = std::rand() % 3;
-			idx_t dbId = std::rand() % db_count;
+			idx_t scenario_id = std::rand() % 3;
+			idx_t db_id = std::rand() % db_count;
 
-			db_pool.addWorker(*conn, dbId);
+			db_pool.addWorker(*conn, db_id);
 
-			switch (scenarioId) {
+			switch (scenario_id) {
 			case 0:
-				createTbl(*conn, dbId, worker_id);
+				createTbl(*conn, db_id, worker_id);
 				break;
 			case 1:
-				lookup(*conn, dbId, worker_id);
+				lookup(*conn, db_id, worker_id);
 				break;
 			case 2:
-				append(*conn, dbId, worker_id);
+				append(*conn, db_id, worker_id);
 				break;
 			default:
-				throw std::runtime_error("invalid scenario");
+				addLog("invalid scenario: " + to_string(scenario_id));
+				success = false;
 			}
 
-			db_pool.removeWorker(*conn, dbId);
+			db_pool.removeWorker(*conn, db_id);
 		} catch (...) {
 			break;
 		}
@@ -239,10 +238,10 @@ TEST_CASE("Run a concurrent ATTACH/DETACH scenario", "[attach][.]") {
 	test_dir_path = TestDirectoryPath();
 
 	DuckDB db(nullptr);
-	Connection initConn(db);
+	Connection init_conn(db);
 
-	execQuery(initConn, "SET catalog_error_max_schemas = '0'");
-	execQuery(initConn, "SET threads = '1'");
+	execQuery(init_conn, "SET catalog_error_max_schemas = '0'");
+	execQuery(init_conn, "SET threads = '1'");
 	// execQuery(initConn, "SET default_block_size = '16384'");
 	// execQuery(initConn, "SET storage_compatibility_version = 'v1.3.2'");
 
