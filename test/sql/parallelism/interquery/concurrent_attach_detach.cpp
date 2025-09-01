@@ -143,7 +143,7 @@ void append(Connection &conn, idx_t db_id, idx_t worker_id, idx_t append_num_row
 		return;
 	}
 	auto tbl_id = std::rand() % max_tbl_id;
-	idx_t current_num_rows = db_infos[db_id].tables[tbl_id].size;
+	auto current_num_rows = db_infos[db_id].tables[tbl_id].size;
 	db_infos[db_id].tables[tbl_id].size += append_num_rows;
 
 	// set appender
@@ -175,10 +175,10 @@ void append(Connection &conn, idx_t db_id, idx_t worker_id, idx_t append_num_row
 		auto &col_struct = chunk.data[3];
 		auto &data_struct_entries = StructVector::GetEntries(col_struct);
 		auto &entry_int = data_struct_entries[0];
-		(*entry_int).SetVectorType(VectorType::FLAT_VECTOR);
+		entry_int->SetVectorType(VectorType::FLAT_VECTOR);
 		auto data_struct_int = FlatVector::GetData<int64_t>(*entry_int);
 		auto &entry_varchar = data_struct_entries[1];
-		(*entry_varchar).SetVectorType(VectorType::FLAT_VECTOR);
+		entry_varchar->SetVectorType(VectorType::FLAT_VECTOR);
 		auto data_struct_varchar = FlatVector::GetData<string_t>(*entry_varchar);
 
 		for (idx_t row_idx = 0; row_idx < append_num_rows; row_idx++) {
