@@ -207,8 +207,8 @@ public:
 		if (!wal.Initialized()) {
 			wal.Initialize();
 		}
-		// write a version marker if none has been written yet
-		wal.WriteVersion();
+		// Write a header, if none has been written yet.
+		wal.WriteHeader();
 		serializer.Begin();
 		serializer.WriteProperty(100, "wal_type", wal_type);
 	}
@@ -237,24 +237,38 @@ private:
 //===--------------------------------------------------------------------===//
 // Write Entries
 //===--------------------------------------------------------------------===//
-void WriteAheadLog::WriteVersion() {
+void WriteAheadLog::WriteHeader() {
 	D_ASSERT(writer);
 	if (writer->GetFileSize() > 0) {
-		// already written - no need to write a version marker
+		// Already written - no need to write a header.
 		return;
 	}
-	// write the version marker
-	// note that we explicitly do not checksum the version entry
+
+	// Write the header containing
+	// - the version marker,
+	// - the header_id of the matching database file, and
+	// - the checkpoint iteration of the matching database file.
+	// Note that we explicitly do not checksum the header, as it contains the version entry.
+
 	BinarySerializer serializer(*writer);
 	serializer.Begin();
 	serializer.WriteProperty(100, "wal_type", WALType::WAL_VERSION);
-	auto &catalog = GetDatabase().GetCatalog().Cast<DuckCatalog>();
-	auto encryption_key_id = catalog.GetEncryptionKeyId();
-	if (catalog.GetIsEncrypted()) {
-		serializer.WriteProperty(101, "version", idx_t(WAL_ENCRYPTED_VERSION_NUMBER));
-	} else {
-		serializer.WriteProperty(101, "version", idx_t(WAL_VERSION_NUMBER));
+
+	auto &catalog = database.GetCatalog().Cast<DuckCatalog>();
+	auto encryption_version_number =
+	    catalog.GetIsEncrypted() ? idx_t(WAL_ENCRYPTED_VERSION_NUMBER) : idx_t(WAL_VERSION_NUMBER);
+	serializer.WriteProperty(101, "version", encryption_version_number);
+
+	auto &single_file_block_manager = database.GetStorageManager().GetBlockManager().Cast<SingleFileBlockManager>();
+	auto file_version_number = single_file_block_manager.GetVersionNumber();
+	if (file_version_number > 66) {
+		auto header_id = single_file_block_manager.GetHeaderId();
+		serializer.WriteProperty(102, "header_id", header_id);
+		auto checkpoint_iteration = single_file_block_manager.GetCheckpointIteration();
+		serializer.WriteProperty(103, "checkpoint_iteration", checkpoint_iteration);
 	}
+
+	// TODO: also only read if correct storage version.
 	serializer.End();
 }
 

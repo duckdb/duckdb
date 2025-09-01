@@ -48,7 +48,7 @@ struct StorageManagerOptions {
 	optional_idx storage_version;
 	optional_idx version_number;
 	optional_idx block_header_size;
-
+	hugeint_t header_id;
 	EncryptionOptions encryption_options;
 };
 
@@ -115,6 +115,17 @@ public:
 	//! Whether or not the attached database is a remote file
 	bool IsRemote() override;
 
+	//! Return the checkpoint iteration of the file.
+	uint64_t GetCheckpointIteration() const {
+		return iteration_count;
+	}
+	//! Return the version number of the file.
+	uint64_t GetVersionNumber() const;
+	//! Return the header ID of the file.
+	hugeint_t GetHeaderId() const {
+		return options.header_id;
+	}
+
 private:
 	//! Loads the free list of the file.
 	void LoadFreeList(QueryContext context);
@@ -153,7 +164,6 @@ private:
 	void VerifyBlocks(const unordered_map<block_id_t, idx_t> &block_usage_count) override;
 
 	void AddStorageVersionTag();
-	uint64_t GetVersionNumber();
 
 private:
 	AttachedDatabase &db;
@@ -181,7 +191,7 @@ private:
 	block_id_t max_block;
 	//! The block id where the free list can be found
 	idx_t free_list_id;
-	//! The current header iteration count
+	//! The current header iteration count.
 	uint64_t iteration_count;
 	//! The storage manager options
 	StorageManagerOptions options;

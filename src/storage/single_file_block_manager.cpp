@@ -17,6 +17,7 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/main/settings.hpp"
 #include "mbedtls_wrapper.hpp"
+#include "duckdb/common/types/uuid.hpp"
 
 #include <algorithm>
 #include <cstring>
@@ -119,6 +120,8 @@ void MainHeader::Write(WriteStream &ser) {
 		SerializeSalt(ser, salt);
 		SerializeEncryptionMetadata(ser, encrypted_canary);
 	}
+
+	ser.Write<hugeint_t>(header_id);
 }
 
 void MainHeader::CheckMagicBytes(QueryContext context, FileHandle &handle) {
@@ -134,18 +137,21 @@ void MainHeader::CheckMagicBytes(QueryContext context, FileHandle &handle) {
 
 MainHeader MainHeader::Read(ReadStream &source) {
 	data_t magic_bytes[MAGIC_BYTE_SIZE];
+
 	MainHeader header;
 	source.ReadData(magic_bytes, MainHeader::MAGIC_BYTE_SIZE);
 	if (memcmp(magic_bytes, MainHeader::MAGIC_BYTES, MainHeader::MAGIC_BYTE_SIZE) != 0) {
 		throw IOException("The file is not a valid DuckDB database file!");
 	}
+
 	header.version_number = source.Read<uint64_t>();
-	// check the version number
+
+	// Check the version number to determine if we can read this file.
 	if (header.version_number < VERSION_NUMBER_LOWER || header.version_number > VERSION_NUMBER_UPPER) {
 		auto version = GetDuckDBVersion(header.version_number);
 		string version_text;
 		if (!version.empty()) {
-			// known version
+			// Known version.
 			version_text = "DuckDB version " + string(version);
 		} else {
 			version_text = string("an ") +
@@ -161,7 +167,8 @@ MainHeader MainHeader::Read(ReadStream &source) {
 		    "See the storage page for migration strategy and more information: https://duckdb.org/internals/storage",
 		    header.version_number, VERSION_NUMBER_LOWER, VERSION_NUMBER_UPPER, version_text);
 	}
-	// read the flags
+
+	// Read the flags.
 	for (idx_t i = 0; i < FLAG_COUNT; i++) {
 		header.flags[i] = source.Read<uint64_t>();
 	}
@@ -174,6 +181,10 @@ MainHeader MainHeader::Read(ReadStream &source) {
 		DeserializeEncryptionData(source, header.salt, MainHeader::SALT_LEN);
 		DeserializeEncryptionData(source, header.encrypted_canary, MainHeader::CANARY_BYTE_SIZE);
 	}
+
+	// Read the header ID.
+	header.header_id = header.version_number <= 66 ? 1 : source.Read<hugeint_t>();
+
 	return header;
 }
 
@@ -210,13 +221,10 @@ DatabaseHeader DatabaseHeader::Read(const MainHeader &main_header, ReadStream &s
 		                  "vector size of %llu bytes.",
 		                  STANDARD_VECTOR_SIZE, header.vector_size);
 	}
-	if (main_header.version_number == 64) {
-		// version number 64 does not have the serialization compatibility in the file - default to 1
-		header.serialization_compatibility = 1;
-	} else {
-		// read from the file
-		header.serialization_compatibility = source.Read<idx_t>();
-	}
+
+	// Default to 1 for version 64, else read from file.
+	header.serialization_compatibility = main_header.version_number == 64 ? 1 : source.Read<idx_t>();
+
 	return header;
 }
 
@@ -269,7 +277,7 @@ void SingleFileBlockManager::AddStorageVersionTag() {
 	db.tags["storage_version"] = GetStorageVersionName(options.storage_version.GetIndex());
 }
 
-uint64_t SingleFileBlockManager::GetVersionNumber() {
+uint64_t SingleFileBlockManager::GetVersionNumber() const {
 	uint64_t version_number = VERSION_NUMBER;
 	if (options.storage_version.GetIndex() >= 4) {
 		version_number = 65;
@@ -278,10 +286,13 @@ uint64_t SingleFileBlockManager::GetVersionNumber() {
 }
 
 MainHeader ConstructMainHeader(idx_t version_number) {
-	MainHeader main_header;
-	main_header.version_number = version_number;
-	memset(main_header.flags, 0, sizeof(uint64_t) * MainHeader::FLAG_COUNT);
-	return main_header;
+	MainHeader header;
+
+	header.version_number = version_number;
+	memset(header.flags, 0, sizeof(uint64_t) * MainHeader::FLAG_COUNT);
+	header.header_id = header.version_number <= 66 ? 1 : UUID::GenerateRandomUUID();
+
+	return header;
 }
 
 void SingleFileBlockManager::StoreEncryptedCanary(DatabaseInstance &db, MainHeader &main_header, const string &key_id) {
@@ -360,6 +371,7 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	AddStorageVersionTag();
 
 	MainHeader main_header = ConstructMainHeader(options.version_number.GetIndex());
+	options.header_id = main_header.header_id;
 	// Derive the encryption key and add it to cache
 	// Unused for plain databases
 	uint8_t salt[MainHeader::SALT_LEN];
@@ -450,6 +462,7 @@ void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
 	}
 
 	MainHeader main_header = DeserializeMainHeader(header_buffer.buffer - delta);
+	options.header_id = main_header.header_id;
 
 	if (!main_header.IsEncrypted() && options.encryption_options.encryption_enabled) {
 		throw CatalogException("A key is explicitly specified, but database \"%s\" is not encrypted", path);

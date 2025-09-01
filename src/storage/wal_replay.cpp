@@ -456,6 +456,25 @@ void WriteAheadLogDeserializer::ReplayEntry(WALType entry_type) {
 //===--------------------------------------------------------------------===//
 void WriteAheadLogDeserializer::ReplayVersion() {
 	state.wal_version = deserializer.ReadProperty<idx_t>(101, "version");
+
+	auto &single_file_block_manager = db.GetStorageManager().GetBlockManager().Cast<SingleFileBlockManager>();
+	auto file_version_number = single_file_block_manager.GetVersionNumber();
+	if (file_version_number > 66) {
+		auto expected_header_id = single_file_block_manager.GetHeaderId();
+		auto header_id = deserializer.ReadProperty<hugeint_t>(102, "header_id");
+		if (expected_header_id != header_id) {
+			throw SerializationException("WAL does not match database file. File ID: %d, WAL file id: %d",
+			                             expected_header_id, header_id);
+		}
+
+		auto expected_checkpoint_iteration = single_file_block_manager.GetCheckpointIteration();
+		auto checkpoint_iteration = deserializer.ReadProperty<uint64_t>(103, "checkpoint_iteration");
+		if (expected_checkpoint_iteration != checkpoint_iteration) {
+			throw SerializationException("WAL checkpoint iteration does not match database file. File checkpoint "
+			                             "iteration: %d, WAL checkpoint iteration: %d",
+			                             expected_checkpoint_iteration, checkpoint_iteration);
+		}
+	}
 }
 
 //===--------------------------------------------------------------------===//

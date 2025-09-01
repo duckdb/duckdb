@@ -75,34 +75,37 @@ string GetStorageVersionName(idx_t serialization_version);
 optional_idx GetSerializationVersion(const char *version_string);
 vector<string> GetSerializationCandidates();
 
-//! The MainHeader is the first header in the storage file. The MainHeader is typically written only once for a database
-//! file.
-struct MainHeader {
+//! The MainHeader is the first header in the storage file.
+//! It is written only once for a database file.
+class MainHeader {
+public:
 	static constexpr idx_t MAX_VERSION_SIZE = 32;
 	static constexpr idx_t MAGIC_BYTE_SIZE = 4;
 	static constexpr idx_t MAGIC_BYTE_OFFSET = Storage::DEFAULT_BLOCK_HEADER_SIZE;
 	static constexpr idx_t FLAG_COUNT = 4;
-	//! Indicates whether database is encrypted
-	static constexpr uint64_t ENCRYPTED_DATABASE_FLAG = 1;
-	//! Encryption key length
-	static constexpr uint64_t DEFAULT_ENCRYPTION_KEY_LENGTH = 32;
-	//! The magic bytes in front of the file should be "DUCK"
-	static const char MAGIC_BYTES[];
-	//! The canary should be "DUCKKEY"
-	static const char CANARY[];
-	//! The version of the database
-	uint64_t version_number;
-	//! The set of flags used by the database
-	uint64_t flags[FLAG_COUNT];
 
-	//! optional metadata for encryption
-	//! only used if encryption flag is set
+	//! Indicates whether database is encrypted or not.
+	static constexpr uint64_t ENCRYPTED_DATABASE_FLAG = 1;
+	//! The encryption key length.
+	static constexpr uint64_t DEFAULT_ENCRYPTION_KEY_LENGTH = 32;
+	//! The magic bytes in front of the file should be "DUCK".
+	static const char MAGIC_BYTES[];
+	//! The canary should be "DUCKKEY".
+	static const char CANARY[];
+
+	//! The (storage) version of the database.
+	uint64_t version_number;
+	//! The set of flags used by the database.
+	uint64_t flags[FLAG_COUNT];
+	//! The unique database file identifier.
+	hugeint_t header_id;
+
+	//! Optional metadata for encryption, if encryption flag is set.
 	static constexpr idx_t ENCRYPTION_METADATA_LEN = 8;
 	static constexpr idx_t SALT_LEN = 16;
-	//! The canary is  a known plaintext
-	//! this is used for early detection of a wrong key
+	//! The canary is a known plaintext for detecting wrong keys early.
 	static constexpr idx_t CANARY_BYTE_SIZE = 8;
-	//! Nonce, IV (nonce + counter) and tag length
+	//! Nonce, IV (nonce + counter) and tag length.
 	static constexpr uint64_t AES_NONCE_LEN = 12;
 	static constexpr uint64_t AES_IV_LEN = 16;
 	static constexpr uint64_t AES_TAG_LEN = 16;
@@ -114,6 +117,10 @@ struct MainHeader {
 	}
 	string LibraryGitHash() {
 		return string(char_ptr_cast(library_git_hash), 0, MAX_VERSION_SIZE);
+	}
+
+	hugeint_t GetHeaderId() const {
+		return header_id;
 	}
 
 	bool IsEncrypted() const {
