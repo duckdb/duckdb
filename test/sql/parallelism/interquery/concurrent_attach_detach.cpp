@@ -115,18 +115,21 @@ void createTbl(Connection &conn, idx_t db_id, idx_t worker_id) {
 void lookup(Connection &conn, idx_t db_id, idx_t worker_id) {
 	unique_lock<mutex> lock(db_infos[db_id].mu);
 	auto max_tbl_id = db_infos[db_id].table_count;
+
 	if (max_tbl_id == 0) {
+		lock.unlock();
 		return;
 	}
+
 	auto tbl_id = std::rand() % max_tbl_id;
 	auto expected_max_val = db_infos[db_id].tables[tbl_id].size - 1;
+	lock.unlock();
 
 	// run query
 	auto table_name = getDBName(db_id) + ".tbl_" + to_string(tbl_id);
-	string query = "SELECT i, s, ts, obj FROM " + table_name + " WHERE i = (select max(i) from " + table_name + ")";
+	string query = "SELECT i, s, ts, obj FROM " + table_name + " WHERE i = " + to_string(expected_max_val);
 	addLog("thread: " + to_string(worker_id) + "; q: " + query);
 	auto result = execQuery(conn, query);
-	lock.unlock();
 
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(expected_max_val)}));
 	REQUIRE(CHECK_COLUMN(result, 1, {to_string(expected_max_val)}));
