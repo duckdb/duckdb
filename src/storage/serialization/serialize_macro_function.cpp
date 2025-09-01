@@ -15,12 +15,16 @@ void MacroFunction::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<MacroType>(100, "type", type);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(101, "parameters", GetPositionalParametersForSerialization(serializer));
 	serializer.WritePropertyWithDefault<InsertionOrderPreservingMap<unique_ptr<ParsedExpression>>>(102, "default_parameters", default_parameters);
+	if (serializer.ShouldSerialize(6)) {
+		serializer.WritePropertyWithDefault<vector<LogicalType>>(103, "types", types, vector<LogicalType>());
+	}
 }
 
 unique_ptr<MacroFunction> MacroFunction::Deserialize(Deserializer &deserializer) {
 	auto type = deserializer.ReadProperty<MacroType>(100, "type");
 	auto parameters = deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(101, "parameters");
 	auto default_parameters = deserializer.ReadPropertyWithDefault<InsertionOrderPreservingMap<unique_ptr<ParsedExpression>>>(102, "default_parameters");
+	auto types = deserializer.ReadPropertyWithExplicitDefault<vector<LogicalType>>(103, "types", vector<LogicalType>());
 	unique_ptr<MacroFunction> result;
 	switch (type) {
 	case MacroType::SCALAR_MACRO:
@@ -34,6 +38,7 @@ unique_ptr<MacroFunction> MacroFunction::Deserialize(Deserializer &deserializer)
 	}
 	result->parameters = std::move(parameters);
 	result->default_parameters = std::move(default_parameters);
+	result->types = std::move(types);
 	result->FinalizeDeserialization();
 	return result;
 }

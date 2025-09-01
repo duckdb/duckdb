@@ -611,4 +611,9 @@ ColumnList Parser::ParseColumnList(const string &column_list, ParserOptions opti
 	return std::move(info.columns);
 }
 
+ColumnDefinition Parser::ParseColumnDefinition(const string &column_definition, ParserOptions options) {
+	auto column_list = ParseColumnList(column_definition, options);
+	return column_list.GetColumn(LogicalIndex(0)).Copy();
+}
+
 } // namespace duckdb
