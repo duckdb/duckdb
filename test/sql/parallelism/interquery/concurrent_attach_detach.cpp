@@ -132,7 +132,8 @@ void lookup(Connection &conn, idx_t db_id, idx_t worker_id) {
 	REQUIRE(CHECK_COLUMN(result, 1, {to_string(expected_max_val)}));
 	REQUIRE(CHECK_COLUMN(result, 2, {Value::TIMESTAMP(timestamp_t {static_cast<int64_t>(expected_max_val * 1000)})}));
 	REQUIRE(CHECK_COLUMN(
-	    result, 3, {Value::STRUCT({{"key1", Value::INTEGER(expected_max_val)}, {"key2", to_string(expected_max_val)}})}));
+	    result, 3,
+	    {Value::STRUCT({{"key1", Value::INTEGER(expected_max_val)}, {"key2", to_string(expected_max_val)}})}));
 }
 
 void append(Connection &conn, idx_t db_id, idx_t worker_id, idx_t append_num_rows = STANDARD_VECTOR_SIZE) {
