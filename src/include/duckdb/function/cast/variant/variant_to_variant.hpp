@@ -90,9 +90,8 @@ static uint32_t VariantTrivialPrimitiveSize(VariantLogicalType type) {
 }
 
 template <bool WRITE_DATA, bool IGNORE_NULLS>
-bool ConvertVariantToVariant(Vector &source_vec, VariantVectorData &result, DataChunk &offsets, idx_t count,
-                             idx_t source_size, optional_ptr<const SelectionVector> selvec,
-                             optional_ptr<const SelectionVector> source_sel, SelectionVector &keys_selvec,
+bool ConvertVariantToVariant(ToVariantSourceData &source_data, VariantVectorData &result, DataChunk &offsets,
+                             idx_t count, optional_ptr<const SelectionVector> selvec, SelectionVector &keys_selvec,
                              OrderedOwningStringMap<uint32_t> &dictionary,
                              optional_ptr<const SelectionVector> values_index_selvec, const bool is_root) {
 
@@ -102,7 +101,7 @@ bool ConvertVariantToVariant(Vector &source_vec, VariantVectorData &result, Data
 	auto blob_offset_data = OffsetData::GetBlob(offsets);
 
 	RecursiveUnifiedVectorFormat source_format;
-	Vector::RecursiveToUnifiedFormat(source_vec, source_size, source_format);
+	Vector::RecursiveToUnifiedFormat(source_data.source, source_data.source_size, source_format);
 	UnifiedVariantVectorData source(source_format);
 
 	for (idx_t source_index = 0; source_index < count; source_index++) {

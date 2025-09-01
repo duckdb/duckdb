@@ -6,25 +6,22 @@ namespace duckdb {
 namespace variant {
 
 template <bool WRITE_DATA, bool IGNORE_NULLS>
-bool ConvertUnionToVariant(Vector &source, VariantVectorData &result, DataChunk &offsets, idx_t count,
-                           idx_t source_size, optional_ptr<const SelectionVector> selvec,
-                           optional_ptr<const SelectionVector> source_sel, SelectionVector &keys_selvec,
+bool ConvertUnionToVariant(ToVariantSourceData &source, VariantVectorData &result, DataChunk &offsets, idx_t count,
+                           optional_ptr<const SelectionVector> selvec, SelectionVector &keys_selvec,
                            OrderedOwningStringMap<uint32_t> &dictionary,
                            optional_ptr<const SelectionVector> values_index_selvec, const bool is_root) {
-	auto &children = StructVector::GetEntries(source);
+	auto &children = StructVector::GetEntries(source.source);
 
-	UnifiedVectorFormat source_format;
-	vector<UnifiedVectorFormat> member_formats(children.size());
-	source.ToUnifiedFormat(source_size, source_format);
+	vector<ToVariantSourceData> member_data;
 	for (idx_t child_idx = 1; child_idx < children.size(); child_idx++) {
 		auto &child = *children[child_idx];
-		child.ToUnifiedFormat(source_size, member_formats[child_idx]);
 
 		//! Convert all the children, ignore nulls, only write the non-null values
 		//! UNION will have exactly 1 non-null value for each row
-		if (!ConvertToVariant<WRITE_DATA, /*ignore_nulls = */ true>(child, result, offsets, count, source_size, selvec,
-		                                                            source_sel, keys_selvec, dictionary,
-		                                                            values_index_selvec, is_root)) {
+		member_data.emplace_back(child, source.source_size, source.source_sel);
+		if (!ConvertToVariant<WRITE_DATA, /*ignore_nulls = */ true>(member_data.back(), result, offsets, count, selvec,
+		                                                            keys_selvec, dictionary, values_index_selvec,
+		                                                            is_root)) {
 			return false;
 		}
 	}
@@ -44,7 +41,7 @@ bool ConvertUnionToVariant(Vector &source, VariantVectorData &result, DataChunk 
 			if (child.GetType().id() == LogicalTypeId::SQLNULL) {
 				continue;
 			}
-			auto &member_format = member_formats[child_idx];
+			auto &member_format = member_data[child_idx - 1].source_format;
 			auto &member_validity = member_format.validity;
 			is_null = !member_validity.RowIsValid(member_format.sel->get_index(i));
 		}

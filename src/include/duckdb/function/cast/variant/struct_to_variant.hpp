@@ -6,22 +6,20 @@ namespace duckdb {
 namespace variant {
 
 template <bool WRITE_DATA, bool IGNORE_NULLS>
-bool ConvertStructToVariant(Vector &source, VariantVectorData &result, DataChunk &offsets, idx_t count,
-                            idx_t source_size, optional_ptr<const SelectionVector> selvec,
-                            optional_ptr<const SelectionVector> source_sel, SelectionVector &keys_selvec,
+bool ConvertStructToVariant(ToVariantSourceData &source, VariantVectorData &result, DataChunk &offsets, idx_t count,
+                            optional_ptr<const SelectionVector> selvec, SelectionVector &keys_selvec,
                             OrderedOwningStringMap<uint32_t> &dictionary,
                             optional_ptr<const SelectionVector> values_index_selvec, const bool is_root) {
 	auto keys_offset_data = OffsetData::GetKeys(offsets);
 	auto values_offset_data = OffsetData::GetValues(offsets);
 	auto blob_offset_data = OffsetData::GetBlob(offsets);
 	auto children_offset_data = OffsetData::GetChildren(offsets);
-	auto &type = source.GetType();
+	auto &type = source.source.GetType();
 
-	UnifiedVectorFormat source_format;
-	source.ToUnifiedFormat(source_size, source_format);
+	auto &source_format = source.source_format;
 	auto &source_validity = source_format.validity;
 
-	auto &children = StructVector::GetEntries(source);
+	auto &children = StructVector::GetEntries(source.source);
 
 	//! Look up all the dictionary indices for the struct keys
 	vector<uint32_t> dictionary_indices;
@@ -29,7 +27,7 @@ bool ConvertStructToVariant(Vector &source, VariantVectorData &result, DataChunk
 
 	ContainerSelectionVectors sel(count);
 	for (idx_t i = 0; i < count; i++) {
-		auto index = source_format.sel->get_index(source_sel ? source_sel->get_index(i) : i);
+		auto index = source[i];
 		auto result_index = selvec ? selvec->get_index(i) : i;
 
 		auto &blob_offset = blob_offset_data[result_index];
@@ -72,7 +70,7 @@ bool ConvertStructToVariant(Vector &source, VariantVectorData &result, DataChunk
 				//! NOTE: this maps to the first index, below we are forwarding this for each child Vector we process.
 				sel.children_selection.set_index(sel.count, children_index);
 			}
-			sel.non_null_selection.set_index(sel.count, source_sel ? source_sel->get_index(i) : i);
+			sel.non_null_selection.set_index(sel.count, source.GetMappedIndex(i));
 			sel.new_selection.set_index(sel.count, result_index);
 			keys_offset_data[result_index] += children.size();
 			children_offset_data[result_index] += children.size();
@@ -90,14 +88,15 @@ bool ConvertStructToVariant(Vector &source, VariantVectorData &result, DataChunk
 			//! Some of the STRUCT rows are NULL entirely, we have to filter these rows out of the children
 			Vector new_child(child.GetType(), nullptr);
 			new_child.Dictionary(child, count, sel.non_null_selection, sel.count);
-			if (!ConvertToVariant<WRITE_DATA>(new_child, result, offsets, sel.count, source_size, &sel.new_selection,
-			                                  nullptr, keys_selvec, dictionary, &sel.children_selection, false)) {
+			ToVariantSourceData child_source_data(new_child, source.source_size);
+			if (!ConvertToVariant<WRITE_DATA>(child_source_data, result, offsets, sel.count, &sel.new_selection,
+			                                  keys_selvec, dictionary, &sel.children_selection, false)) {
 				return false;
 			}
 		} else {
-			if (!ConvertToVariant<WRITE_DATA>(child, result, offsets, sel.count, source_size, &sel.new_selection,
-			                                  &sel.non_null_selection, keys_selvec, dictionary, &sel.children_selection,
-			                                  false)) {
+			ToVariantSourceData child_source_data(child, source.source_size, sel.non_null_selection);
+			if (!ConvertToVariant<WRITE_DATA>(child_source_data, result, offsets, sel.count, &sel.new_selection,
+			                                  keys_selvec, dictionary, &sel.children_selection, false)) {
 				return false;
 			}
 		}

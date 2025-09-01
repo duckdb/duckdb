@@ -236,14 +236,13 @@ static bool ConvertJSON(yyjson_val *val, VariantVectorData &result, DataChunk &o
 }
 
 template <bool WRITE_DATA, bool IGNORE_NULLS>
-bool ConvertJSONToVariant(Vector &source, VariantVectorData &result, DataChunk &offsets, idx_t count, idx_t source_size,
-                          optional_ptr<const SelectionVector> selvec, optional_ptr<const SelectionVector> source_sel,
-                          SelectionVector &keys_selvec, OrderedOwningStringMap<uint32_t> &dictionary,
+bool ConvertJSONToVariant(ToVariantSourceData &source, VariantVectorData &result, DataChunk &offsets, idx_t count,
+                          optional_ptr<const SelectionVector> selvec, SelectionVector &keys_selvec,
+                          OrderedOwningStringMap<uint32_t> &dictionary,
                           optional_ptr<const SelectionVector> values_index_selvec, const bool is_root) {
-	D_ASSERT(source.GetType().IsJSONType());
+	D_ASSERT(source.source.GetType().IsJSONType());
 
-	UnifiedVectorFormat source_format;
-	source.ToUnifiedFormat(source_size, source_format);
+	auto &source_format = source.source_format;
 	auto source_data = source_format.GetData<string_t>(source_format);
 
 	auto values_offset_data = OffsetData::GetValues(offsets);
@@ -251,7 +250,7 @@ bool ConvertJSONToVariant(Vector &source, VariantVectorData &result, DataChunk &
 
 	ReadJSONHolder json_holder;
 	for (idx_t i = 0; i < count; i++) {
-		auto source_index = source_format.sel->get_index(source_sel ? source_sel->get_index(i) : i);
+		auto source_index = source[i];
 		auto result_index = selvec ? selvec->get_index(i) : i;
 
 		if (!source_format.validity.RowIsValid(source_index)) {

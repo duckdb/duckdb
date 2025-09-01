@@ -114,10 +114,52 @@ void HandleVariantNull(VariantVectorData &result, idx_t result_index, uint32_t *
 	                                 VariantLogicalType::VARIANT_NULL);
 }
 
+struct ToVariantSourceData {
+public:
+	ToVariantSourceData(Vector &source, idx_t source_size) : source(source), source_size(source_size) {
+		source.ToUnifiedFormat(source_size, source_format);
+	}
+	ToVariantSourceData(Vector &source, idx_t source_size, const SelectionVector &sel)
+	    : source(source), source_size(source_size), source_sel(sel) {
+		source.ToUnifiedFormat(source_size, source_format);
+	}
+	ToVariantSourceData(Vector &source, idx_t source_size, optional_ptr<const SelectionVector> sel)
+	    : source(source), source_size(source_size), source_sel(sel) {
+		source.ToUnifiedFormat(source_size, source_format);
+	}
+
+public:
+	uint32_t operator[](idx_t i) const {
+		return static_cast<uint32_t>(source_format.sel->get_index(source_sel ? source_sel->get_index(i) : i));
+	}
+	uint32_t GetMappedIndex(idx_t i) {
+		return static_cast<uint32_t>(source_sel ? source_sel->get_index(i) : i);
+	}
+
+public:
+	Vector &source;
+	UnifiedVectorFormat source_format;
+	idx_t source_size;
+	optional_ptr<const SelectionVector> source_sel = nullptr;
+};
+
+struct ToVariantGlobalResultData {
+	VariantVectorData &variant;
+	DataChunk &offsets;
+	OrderedOwningStringMap<uint32_t> &dictionary;
+	SelectionVector &keys_selvec;
+};
+
+struct ToVariantMappingData {
+	idx_t count;
+	optional_ptr<const SelectionVector> selvec;
+	optional_ptr<const SelectionVector> value_index_selvec;
+};
+
 template <bool WRITE_DATA, bool IGNORE_NULLS = false>
-bool ConvertToVariant(Vector &source, VariantVectorData &result, DataChunk &offsets, idx_t count, idx_t source_size,
-                      optional_ptr<const SelectionVector> selvec, optional_ptr<const SelectionVector> source_sel,
-                      SelectionVector &keys_selvec, OrderedOwningStringMap<uint32_t> &dictionary,
+bool ConvertToVariant(ToVariantSourceData &source, VariantVectorData &result, DataChunk &offsets, idx_t count,
+                      optional_ptr<const SelectionVector> selvec, SelectionVector &keys_selvec,
+                      OrderedOwningStringMap<uint32_t> &dictionary,
                       optional_ptr<const SelectionVector> value_index_selvec, const bool is_root);
 
 } // namespace variant

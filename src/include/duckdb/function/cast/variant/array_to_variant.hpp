@@ -6,25 +6,23 @@ namespace duckdb {
 namespace variant {
 
 template <bool WRITE_DATA, bool IGNORE_NULLS>
-bool ConvertArrayToVariant(Vector &source, VariantVectorData &result, DataChunk &offsets, idx_t count,
-                           idx_t source_size, optional_ptr<const SelectionVector> selvec,
-                           optional_ptr<const SelectionVector> source_sel, SelectionVector &keys_selvec,
+bool ConvertArrayToVariant(ToVariantSourceData &source, VariantVectorData &result, DataChunk &offsets, idx_t count,
+                           optional_ptr<const SelectionVector> selvec, SelectionVector &keys_selvec,
                            OrderedOwningStringMap<uint32_t> &dictionary,
                            optional_ptr<const SelectionVector> value_index_selvec, const bool is_root) {
 	auto blob_offset_data = OffsetData::GetBlob(offsets);
 	auto values_offset_data = OffsetData::GetValues(offsets);
 	auto children_offset_data = OffsetData::GetChildren(offsets);
 
-	UnifiedVectorFormat source_format;
-	source.ToUnifiedFormat(source_size, source_format);
+	auto &source_format = source.source_format;
 	auto &source_validity = source_format.validity;
 
-	auto array_type_size = ArrayType::GetSize(source.GetType());
+	auto array_type_size = ArrayType::GetSize(source.source.GetType());
 	auto list_size = count * array_type_size;
 
 	ContainerSelectionVectors sel(list_size);
 	for (idx_t i = 0; i < count; i++) {
-		const auto index = source_format.sel->get_index(source_sel ? source_sel->get_index(i) : i);
+		const auto index = source[i];
 		const auto result_index = selvec ? selvec->get_index(i) : i;
 
 		auto &blob_offset = blob_offset_data[result_index];
@@ -48,18 +46,18 @@ bool ConvertArrayToVariant(Vector &source, VariantVectorData &result, DataChunk 
 	}
 
 	//! Now write the child vector of the list
-	auto &entry = ArrayVector::GetEntry(source);
+	auto &entry = ArrayVector::GetEntry(source.source);
 	if (sel.count != list_size) {
 		Vector sliced_entry(entry.GetType(), nullptr);
 		sliced_entry.Dictionary(entry, list_size, sel.non_null_selection, sel.count);
-		return ConvertToVariant<WRITE_DATA, false>(sliced_entry, result, offsets, sel.count, sel.count,
-		                                           &sel.new_selection, nullptr, keys_selvec, dictionary,
-		                                           &sel.children_selection, false);
+		ToVariantSourceData child_source_data(sliced_entry, sel.count);
+		return ConvertToVariant<WRITE_DATA, false>(child_source_data, result, offsets, sel.count, &sel.new_selection,
+		                                           keys_selvec, dictionary, &sel.children_selection, false);
 	} else {
 		//! All rows are valid, no need to slice the child
-		return ConvertToVariant<WRITE_DATA, false>(entry, result, offsets, sel.count, list_size, &sel.new_selection,
-		                                           &sel.non_null_selection, keys_selvec, dictionary,
-		                                           &sel.children_selection, false);
+		ToVariantSourceData child_source_data(entry, list_size, sel.non_null_selection);
+		return ConvertToVariant<WRITE_DATA, false>(child_source_data, result, offsets, sel.count, &sel.new_selection,
+		                                           keys_selvec, dictionary, &sel.children_selection, false);
 	}
 }
 
