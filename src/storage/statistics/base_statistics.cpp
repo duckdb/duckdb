@@ -403,7 +403,7 @@ string BaseStatistics::ToString() const {
 	return result;
 }
 
-void BaseStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t count, bool ignore_has_null) const {
+void BaseStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t count, const bool ignore_has_null) const {
 	D_ASSERT(vector.GetType() == this->type);
 	switch (GetStatsType()) {
 	case StatisticsType::NUMERIC_STATS:
