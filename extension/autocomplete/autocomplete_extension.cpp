@@ -44,9 +44,11 @@ static vector<AutoCompleteSuggestion> ComputeSuggestions(vector<AutoCompleteCand
 	case_insensitive_map_t<idx_t> matches;
 	bool prefix_is_lower = StringUtil::IsLower(prefix);
 	bool prefix_is_upper = StringUtil::IsUpper(prefix);
+	auto lower_prefix = StringUtil::Lower(prefix);
 	for (idx_t i = 0; i < available_suggestions.size(); i++) {
 		auto &suggestion = available_suggestions[i];
 		const int32_t BASE_SCORE = 10;
+		const int32_t SUBSTRING_PENALTY = 10;
 		auto str = suggestion.candidate;
 		if (suggestion.extra_char != '\0') {
 			str += suggestion.extra_char;
@@ -65,6 +67,9 @@ static vector<AutoCompleteSuggestion> ComputeSuggestions(vector<AutoCompleteCand
 			score += StringUtil::SimilarityScore(str.substr(0, prefix.size()), prefix);
 		} else {
 			score += StringUtil::SimilarityScore(str, prefix);
+		}
+		if (!StringUtil::Contains(StringUtil::Lower(str), lower_prefix)) {
+			score += SUBSTRING_PENALTY;
 		}
 		scores.emplace_back(str, score);
 	}
@@ -238,6 +243,15 @@ static vector<AutoCompleteCandidate> SuggestSettingName(ClientContext &context) 
 	vector<AutoCompleteCandidate> suggestions;
 	for (const auto &option : options) {
 		AutoCompleteCandidate candidate(option.name, 0);
+		suggestions.push_back(std::move(candidate));
+	}
+	const auto &option_aliases = db_config.GetAliases();
+	for (const auto &option_alias : option_aliases) {
+		AutoCompleteCandidate candidate(option_alias.alias, 0);
+		suggestions.push_back(std::move(candidate));
+	}
+	for (auto &entry : db_config.extension_parameters) {
+		AutoCompleteCandidate candidate(entry.first, 0);
 		suggestions.push_back(std::move(candidate));
 	}
 	return suggestions;
