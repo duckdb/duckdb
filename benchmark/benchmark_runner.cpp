@@ -208,6 +208,8 @@ void print_help() {
 	fprintf(stderr, "              --detailed-profile     Prints detailed query profile information\n");
 	fprintf(stderr, "              --threads=n            Sets the amount of threads to use during execution (default: "
 	                "hardware concurrency)\n");
+	fprintf(stderr, "              --memory_limit=n       Sets the memory limit to use during execution (default: 0.8 "
+	                "* system memory)\n");
 	fprintf(stderr, "              --out=[file]           Move benchmark output to file\n");
 	fprintf(stderr, "              --log=[file]           Move log output to file\n");
 	fprintf(stderr, "              --info                 Prints info about the benchmark\n");
@@ -282,6 +284,10 @@ void parse_arguments(const int arg_counter, char const *const *arg_values) {
 			// write info of benchmark
 			auto splits = StringUtil::Split(arg, '=');
 			instance.threads = Value(splits[1]).DefaultCastAs(LogicalType::UINTEGER).GetValue<uint32_t>();
+		} else if (StringUtil::StartsWith(arg, "--memory_limit=")) {
+			// write info of benchmark
+			auto splits = StringUtil::Split(arg, '=');
+			instance.memory_limit = splits[1];
 		} else if (arg == "--root-dir") {
 			// We've already handled this, skip it
 			arg_index++;

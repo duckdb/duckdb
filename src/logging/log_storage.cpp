@@ -518,7 +518,8 @@ unique_ptr<TableRef> FileLogStorage::BindReplace(ClientContext &context, TableFu
 
 	string columns;
 	if (table == LoggingTargetTable::LOG_ENTRIES) {
-		columns = "'context_id': 'UBIGINT', 'timestamp': 'TIMESTAMP', 'type': 'VARCHAR', 'log_level': 'VARCHAR' , "
+		columns = "'context_id': 'UBIGINT', 'timestamp': 'TIMESTAMP WITH TIME ZONE', 'type': 'VARCHAR', 'log_level': "
+		          "'VARCHAR' , "
 		          "'message': 'VARCHAR'";
 	} else if (table == LoggingTargetTable::LOG_CONTEXTS) {
 		columns = "'context_id': 'UBIGINT', 'scope': 'VARCHAR', 'connection_id': 'UBIGINT', 'transaction_id': "
@@ -527,7 +528,8 @@ unique_ptr<TableRef> FileLogStorage::BindReplace(ClientContext &context, TableFu
 		select = "SELECT context_id, scope, connection_id, transaction_id, query_id, thread_id, timestamp, type, "
 		         "log_level, message ";
 		columns = "'context_id': 'UBIGINT', 'scope': 'VARCHAR', 'connection_id': 'UBIGINT', 'transaction_id': "
-		          "'UBIGINT', 'query_id': 'UBIGINT', 'thread_id': 'UBIGINT', 'timestamp': 'TIMESTAMP', 'type': "
+		          "'UBIGINT', 'query_id': 'UBIGINT', 'thread_id': 'UBIGINT', 'timestamp': 'TIMESTAMP WITH TIME ZONE', "
+		          "'type': "
 		          "'VARCHAR', 'log_level': 'VARCHAR' , 'message': 'VARCHAR'";
 	} else {
 		throw InternalException("Invalid logging target table");
