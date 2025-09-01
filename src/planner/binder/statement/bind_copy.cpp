@@ -41,30 +41,31 @@ void IsFormatExtensionKnown(const string &format) {
 	}
 }
 
-case_insensitive_map_t<CopyOption> Binder::GetFullCopyOptionsList(const CopyFunction &function, bool is_from) {
+case_insensitive_map_t<CopyOption> Binder::GetFullCopyOptionsList(const CopyFunction &function, CopyOptionMode mode) {
 	case_insensitive_map_t<CopyOption> copy_options;
 	CopyOptionsInput input(copy_options);
 	function.copy_options(context, input);
 
 	// first erase all options that don't match this type
-	CopyOptionMode mode = is_from ? CopyOptionMode::READ_ONLY : CopyOptionMode::WRITE_ONLY;
-	vector<string> erased_options;
-	for (auto &entry : copy_options) {
-		if (entry.second.mode == CopyOptionMode::READ_WRITE) {
-			// used for both
-			continue;
+	if (mode != CopyOptionMode::READ_WRITE) {
+		vector<string> erased_options;
+		for (auto &entry : copy_options) {
+			if (entry.second.mode == CopyOptionMode::READ_WRITE) {
+				// used for both
+				continue;
+			}
+			if (entry.second.mode != mode) {
+				erased_options.push_back(entry.first);
+			}
 		}
-		if (entry.second.mode != mode) {
-			erased_options.push_back(entry.first);
+		for (auto &erased : erased_options) {
+			copy_options.erase(erased);
 		}
-	}
-	for (auto &erased : erased_options) {
-		copy_options.erase(erased);
 	}
 
 	// now we have a list of all options for this copy type
 	// add generic options
-	if (!is_from) {
+	if (mode != CopyOptionMode::READ_ONLY) {
 		copy_options["use_tmp_file"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::WRITE_ONLY);
 		copy_options["overwrite_or_ignore"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::WRITE_ONLY);
 		copy_options["overwrite"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::WRITE_ONLY);
@@ -526,7 +527,8 @@ BoundStatement Binder::Bind(CopyStatement &stmt, CopyToType copy_to_type) {
 
 	if (function.copy_options) {
 		// list all copy options - then bind them and offer alternatives
-		auto copy_options = GetFullCopyOptionsList(function, stmt.info->is_from);
+		auto copy_mode = stmt.info->is_from ? CopyOptionMode::READ_ONLY : CopyOptionMode::WRITE_ONLY;
+		auto copy_options = GetFullCopyOptionsList(function, CopyOptionMode::READ_WRITE);
 		for (auto &provided_entry : stmt.info->options) {
 			auto &provided_option = provided_entry.first;
 			auto option_entry = copy_options.find(provided_option);
@@ -543,24 +545,45 @@ BoundStatement Binder::Bind(CopyStatement &stmt, CopyToType copy_to_type) {
 				                              stmt.info->format, candidate_str);
 			}
 			auto &copy_option = option_entry->second;
+			// check if this matches the mode
+			if (copy_option.mode != CopyOptionMode::READ_WRITE && copy_option.mode != copy_mode) {
+				throw InvalidInputException("Option \"%s\" is not supported for %s - only for %s", provided_option,
+				                            stmt.info->is_from ? "reading" : "writing",
+				                            stmt.info->is_from ? "writing" : "reading");
+			}
 			if (copy_option.type.id() != LogicalTypeId::ANY) {
 				if (provided_entry.second.empty()) {
 					if (copy_option.type.id() == LogicalTypeId::BOOLEAN) {
 						// boolean can be empty (e.g. "HEADER")
 						continue;
 					}
-					throw InvalidInputException("Copy option %s requires an argument of type %s", provided_option,
+					throw InvalidInputException("Copy option \"%s\" requires an argument of type %s", provided_option,
 					                            copy_option.type.ToString());
 				}
 				if (provided_entry.second.size() > 1) {
-					throw InvalidInputException("Copy option %s did not expect a list as argument", provided_option);
+					throw InvalidInputException("Copy option \"%s\" did not expect a list as argument",
+					                            provided_option);
 				}
 				auto &original_value = provided_entry.second[0];
+				if (copy_option.type == original_value.type()) {
+					// types match
+					continue;
+				}
+				bool can_cast;
+				if (copy_option.type.IsNumeric()) {
+					can_cast = original_value.type().IsNumeric();
+				} else if (copy_option.type.id() == LogicalTypeId::BOOLEAN) {
+					can_cast = original_value.type().IsIntegral();
+				} else {
+					can_cast = CastFunctionSet::ImplicitCastCost(context, original_value.type(), copy_option.type) >= 0;
+				}
+
 				Value new_value;
-				if (!original_value.TryCastAs(context, copy_option.type, new_value, nullptr)) {
-					throw InvalidInputException(
-					    "Copy option %s expected an argument of type %s, but %s could not be cast as this type",
-					    provided_option, copy_option.type, original_value.ToString());
+				if (!can_cast || !original_value.TryCastAs(context, copy_option.type, new_value, nullptr)) {
+					throw InvalidInputException("Copy option \"%s\" expected an argument of type %s - the argument "
+					                            "\"%s\" of type %s could not be cast as this type",
+					                            provided_option, copy_option.type, original_value.ToString(),
+					                            original_value.type());
 				}
 				original_value = std::move(new_value);
 			}

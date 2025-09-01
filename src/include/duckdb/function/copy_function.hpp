@@ -12,6 +12,7 @@
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/parser/statement/copy_statement.hpp"
+#include "duckdb/common/enums/copy_option_mode.hpp"
 
 namespace duckdb {
 
@@ -90,8 +91,6 @@ struct CopyToSelectInput {
 	vector<unique_ptr<Expression>> select_list;
 	CopyToType copy_to_type;
 };
-
-enum class CopyOptionMode { WRITE_ONLY, READ_ONLY, READ_WRITE };
 
 struct CopyOption {
 	CopyOption();

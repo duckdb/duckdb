@@ -285,10 +285,11 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		}
 		options.erase("force_quote");
 	}
-	// for any options that are write-only
+	// for any options that are write-only, use them for writing but don't put them in the COPY statements we generate
+	// for reading
 	auto &function = copy_function.function;
 	if (function.copy_options) {
-		auto copy_options = GetFullCopyOptionsList(function, true);
+		auto copy_options = GetFullCopyOptionsList(function, CopyOptionMode::READ_ONLY);
 		vector<string> erased_options;
 		for (auto &entry : options) {
 			if (copy_options.find(entry.first) == copy_options.end()) {
