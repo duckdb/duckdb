@@ -100,7 +100,7 @@ bool ConvertVariantToVariant(ToVariantSourceData &source_data, ToVariantGlobalRe
 	auto blob_offset_data = OffsetData::GetBlob(result_data.offsets);
 
 	RecursiveUnifiedVectorFormat source_format;
-	Vector::RecursiveToUnifiedFormat(source_data.source, source_data.source_size, source_format);
+	Vector::RecursiveToUnifiedFormat(source_data.vec, source_data.source_size, source_format);
 	UnifiedVariantVectorData source(source_format);
 
 	auto &result = result_data.variant;

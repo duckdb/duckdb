@@ -46,14 +46,10 @@ public:
 public:
 	VariantVectorData &variant;
 	DataChunk &offsets;
+	//! The dictionary to populate with the (unique and sorted) keys
 	OrderedOwningStringMap<uint32_t> &dictionary;
+	//! The selection vector to populate with mapping from keys index -> dictionary index
 	SelectionVector &keys_selvec;
-};
-
-struct ToVariantMappingData {
-	idx_t count;
-	optional_ptr<const SelectionVector> selvec;
-	optional_ptr<const SelectionVector> value_index_selvec;
 };
 
 template <bool WRITE_DATA>
@@ -146,16 +142,16 @@ void HandleVariantNull(ToVariantGlobalResultData &result, idx_t result_index, ui
 
 struct ToVariantSourceData {
 public:
-	ToVariantSourceData(Vector &source, idx_t source_size) : source(source), source_size(source_size) {
-		source.ToUnifiedFormat(source_size, source_format);
+	ToVariantSourceData(Vector &source, idx_t source_size) : vec(source), source_size(source_size) {
+		vec.ToUnifiedFormat(source_size, source_format);
 	}
 	ToVariantSourceData(Vector &source, idx_t source_size, const SelectionVector &sel)
-	    : source(source), source_size(source_size), source_sel(sel) {
-		source.ToUnifiedFormat(source_size, source_format);
+	    : vec(source), source_size(source_size), source_sel(sel) {
+		vec.ToUnifiedFormat(source_size, source_format);
 	}
 	ToVariantSourceData(Vector &source, idx_t source_size, optional_ptr<const SelectionVector> sel)
-	    : source(source), source_size(source_size), source_sel(sel) {
-		source.ToUnifiedFormat(source_size, source_format);
+	    : vec(source), source_size(source_size), source_sel(sel) {
+		vec.ToUnifiedFormat(source_size, source_format);
 	}
 
 public:
@@ -167,16 +163,11 @@ public:
 	}
 
 public:
-	Vector &source;
+	Vector &vec;
 	UnifiedVectorFormat source_format;
 	idx_t source_size;
 	optional_ptr<const SelectionVector> source_sel = nullptr;
 };
-
-// bool ConvertToVariant(ToVariantSourceData &source, VariantVectorData &result, DataChunk &offsets, idx_t count,
-//                      optional_ptr<const SelectionVector> selvec, SelectionVector &keys_selvec,
-//                      OrderedOwningStringMap<uint32_t> &dictionary,
-//                      optional_ptr<const SelectionVector> values_index_selvec, const bool is_root);
 
 template <bool WRITE_DATA, bool IGNORE_NULLS = false>
 bool ConvertToVariant(ToVariantSourceData &source, ToVariantGlobalResultData &result, idx_t count,

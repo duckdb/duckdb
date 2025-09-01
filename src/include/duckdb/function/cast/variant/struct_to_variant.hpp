@@ -13,12 +13,12 @@ bool ConvertStructToVariant(ToVariantSourceData &source, ToVariantGlobalResultDa
 	auto values_offset_data = OffsetData::GetValues(result.offsets);
 	auto blob_offset_data = OffsetData::GetBlob(result.offsets);
 	auto children_offset_data = OffsetData::GetChildren(result.offsets);
-	auto &type = source.source.GetType();
+	auto &type = source.vec.GetType();
 
 	auto &source_format = source.source_format;
 	auto &source_validity = source_format.validity;
 
-	auto &children = StructVector::GetEntries(source.source);
+	auto &children = StructVector::GetEntries(source.vec);
 
 	//! Look up all the dictionary indices for the struct keys
 	vector<uint32_t> dictionary_indices;

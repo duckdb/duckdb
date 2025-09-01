@@ -13,11 +13,8 @@ namespace variant {
 
 //! * @param source The Vector of arbitrary type to process
 //! * @param result The result Vector to write the variant data to
-//! * @param offsets The offsets to gather per row
 //! * @param count The amount of values we're converting
 //! * @param selvec The selection vector from i (< count) to the index in the result Vector
-//! * @param keys_selvec The selection vector to populate with mapping from keys index -> dictionary index
-//! * @param dictionary The dictionary to populate with the (unique and sorted) keys
 //! * @param values_index_selvec The selection vector from i (< count) to the index in the children.values_index selvec,
 //! to populate the parent's children
 //! * @param is_root Whether we are writing to the root of the Variant, or a child value (in an OBJECT/ARRAY)
@@ -25,7 +22,7 @@ template <bool WRITE_DATA, bool IGNORE_NULLS>
 bool ConvertToVariant(ToVariantSourceData &source, ToVariantGlobalResultData &result, idx_t count,
                       optional_ptr<const SelectionVector> selvec,
                       optional_ptr<const SelectionVector> values_index_selvec, const bool is_root) {
-	auto &type = source.source.GetType();
+	auto &type = source.vec.GetType();
 
 	auto logical_type = type.id();
 	if (type.IsNested()) {

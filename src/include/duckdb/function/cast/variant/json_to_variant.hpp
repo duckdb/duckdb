@@ -231,7 +231,7 @@ template <bool WRITE_DATA, bool IGNORE_NULLS>
 bool ConvertJSONToVariant(ToVariantSourceData &source, ToVariantGlobalResultData &result, idx_t count,
                           optional_ptr<const SelectionVector> selvec,
                           optional_ptr<const SelectionVector> values_index_selvec, const bool is_root) {
-	D_ASSERT(source.source.GetType().IsJSONType());
+	D_ASSERT(source.vec.GetType().IsJSONType());
 
 	auto &source_format = source.source_format;
 	auto source_data = source_format.GetData<string_t>(source_format);

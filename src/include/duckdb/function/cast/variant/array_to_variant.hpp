@@ -16,7 +16,7 @@ bool ConvertArrayToVariant(ToVariantSourceData &source, ToVariantGlobalResultDat
 	auto &source_format = source.source_format;
 	auto &source_validity = source_format.validity;
 
-	auto array_type_size = ArrayType::GetSize(source.source.GetType());
+	auto array_type_size = ArrayType::GetSize(source.vec.GetType());
 	auto list_size = count * array_type_size;
 
 	auto &variant = result.variant;
@@ -47,7 +47,7 @@ bool ConvertArrayToVariant(ToVariantSourceData &source, ToVariantGlobalResultDat
 	}
 
 	//! Now write the child vector of the list
-	auto &entry = ArrayVector::GetEntry(source.source);
+	auto &entry = ArrayVector::GetEntry(source.vec);
 	if (sel.count != list_size) {
 		Vector sliced_entry(entry.GetType(), nullptr);
 		sliced_entry.Dictionary(entry, list_size, sel.non_null_selection, sel.count);

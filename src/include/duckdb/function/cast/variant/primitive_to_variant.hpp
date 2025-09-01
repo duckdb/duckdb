@@ -250,7 +250,7 @@ template <bool WRITE_DATA, bool IGNORE_NULLS>
 bool ConvertPrimitiveToVariant(ToVariantSourceData &source, ToVariantGlobalResultData &result, idx_t count,
                                optional_ptr<const SelectionVector> selvec,
                                optional_ptr<const SelectionVector> values_index_selvec, const bool is_root) {
-	auto &type = source.source.GetType();
+	auto &type = source.vec.GetType();
 	auto logical_type = type.id();
 	auto physical_type = type.InternalType();
 

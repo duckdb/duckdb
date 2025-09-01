@@ -9,7 +9,7 @@ template <bool WRITE_DATA, bool IGNORE_NULLS>
 bool ConvertUnionToVariant(ToVariantSourceData &source, ToVariantGlobalResultData &result, idx_t count,
                            optional_ptr<const SelectionVector> selvec,
                            optional_ptr<const SelectionVector> values_index_selvec, const bool is_root) {
-	auto &children = StructVector::GetEntries(source.source);
+	auto &children = StructVector::GetEntries(source.vec);
 
 	vector<ToVariantSourceData> member_data;
 	for (idx_t child_idx = 1; child_idx < children.size(); child_idx++) {

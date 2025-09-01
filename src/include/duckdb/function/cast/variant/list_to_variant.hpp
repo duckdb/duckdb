@@ -50,8 +50,8 @@ bool ConvertListToVariant(ToVariantSourceData &source, ToVariantGlobalResultData
 		}
 	}
 	//! Now write the child vector of the list (for all rows)
-	auto &entry = ListVector::GetEntry(source.source);
-	auto child_size = ListVector::GetListSize(source.source);
+	auto &entry = ListVector::GetEntry(source.vec);
+	auto child_size = ListVector::GetListSize(source.vec);
 	if (sel.count != list_size) {
 		Vector sliced_entry(entry.GetType(), nullptr);
 		sliced_entry.Dictionary(entry, list_size, sel.non_null_selection, sel.count);
