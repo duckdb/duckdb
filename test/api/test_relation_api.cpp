@@ -1063,17 +1063,15 @@ TEST_CASE("Test Relation Pending Query API", "[relation_api]") {
 	}
 }
 
+TEST_CASE("Construct ValueRelation with RelationContextWrapper and operate on it", "[relation_api][txn][wrapper]") {
+	DuckDB db;
+	Connection con(db);
+	con.EnableQueryVerification();
 
-TEST_CASE("Construct ValueRelation with RelationContextWrapper and operate on it",
-          "[relation_api][txn][wrapper]") {
-    DuckDB db;
-    Connection con(db);
-    con.EnableQueryVerification();
-
-    // Build expressions to force the "expressions" overload (not the constants path)
-    duckdb::vector<duckdb::vector<duckdb::unique_ptr<duckdb::ParsedExpression>>> expressions;
-    {
-        duckdb::vector<duckdb::unique_ptr<duckdb::ParsedExpression>> row;
+	// Build expressions to force the "expressions" overload (not the constants path)
+	duckdb::vector<duckdb::vector<duckdb::unique_ptr<duckdb::ParsedExpression>>> expressions;
+	{
+		duckdb::vector<duckdb::unique_ptr<duckdb::ParsedExpression>> row;
 
 		{
 			duckdb::ConstantExpression ce1(duckdb::Value::INTEGER(1));
@@ -1084,33 +1082,31 @@ TEST_CASE("Construct ValueRelation with RelationContextWrapper and operate on it
 			row.push_back(ce2.Copy());
 		}
 		expressions.push_back(std::move(row));
-    }
+	}
 
-    // Explicitly create a RelationContextWrapper from the client's context
-    auto rcw = duckdb::make_shared_ptr<duckdb::RelationContextWrapper>(con.context);
+	// Explicitly create a RelationContextWrapper from the client's context
+	auto rcw = duckdb::make_shared_ptr<duckdb::RelationContextWrapper>(con.context);
 
-    // Manually construct a ValueRelation using the RelationContextWrapper + expressions ctor
-    duckdb::shared_ptr<duckdb::Relation> rel;
-    REQUIRE_NOTHROW(rel = duckdb::make_shared_ptr<duckdb::ValueRelation>(
-        rcw, std::move(expressions), duckdb::vector<std::string>{}, "vr"
-    ));
+	// Manually construct a ValueRelation using the RelationContextWrapper + expressions ctor
+	duckdb::shared_ptr<duckdb::Relation> rel;
+	REQUIRE_NOTHROW(rel = duckdb::make_shared_ptr<duckdb::ValueRelation>(rcw, std::move(expressions),
+	                                                                     duckdb::vector<std::string> {}, "vr"));
 
-    // Base relation should execute (1 row, 2 columns)
-    duckdb::unique_ptr<QueryResult> result;
-    REQUIRE_NOTHROW(result = rel->Execute());
-    REQUIRE(CHECK_COLUMN(result, 0, {1}));
-    REQUIRE(CHECK_COLUMN(result, 1, {2}));
+	// Base relation should execute (1 row, 2 columns)
+	duckdb::unique_ptr<QueryResult> result;
+	REQUIRE_NOTHROW(result = rel->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	REQUIRE(CHECK_COLUMN(result, 1, {2}));
 
-    // Project on top — should bind & execute under a valid transaction
-    REQUIRE_NOTHROW(result = rel->Project("1+1, 2+2")->Execute());
-    REQUIRE(CHECK_COLUMN(result, 0, {2}));
-    REQUIRE(CHECK_COLUMN(result, 1, {4}));
+	// Project on top — should bind & execute under a valid transaction
+	REQUIRE_NOTHROW(result = rel->Project("1+1, 2+2")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {4}));
 
-    // Aggregate on top — also must bind & execute cleanly
-    REQUIRE_NOTHROW(result = rel->Aggregate("count(*)")->Execute());
-    REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	// Aggregate on top — also must bind & execute cleanly
+	REQUIRE_NOTHROW(result = rel->Aggregate("count(*)")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 }
-
 
 TEST_CASE("Test materialized relations", "[relation_api]") {
 	auto db_path = TestCreatePath("relational_api_materialized_view.db");
