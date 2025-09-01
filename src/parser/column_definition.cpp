@@ -4,7 +4,6 @@
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
 
-
 namespace duckdb {
 
 ColumnDefinition::ColumnDefinition(string name_p, LogicalType type_p)

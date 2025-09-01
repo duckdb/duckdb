@@ -17,7 +17,6 @@
 #include "duckdb/common/multi_file/union_by_name.hpp"
 #include <algorithm>
 
-
 namespace duckdb {
 
 constexpr column_t MultiFileReader::COLUMN_IDENTIFIER_FILENAME;

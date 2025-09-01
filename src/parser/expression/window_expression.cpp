@@ -2,7 +2,6 @@
 
 #include "duckdb/common/string_util.hpp"
 
-
 namespace duckdb {
 
 WindowExpression::WindowExpression(ExpressionType type) : ParsedExpression(type, ExpressionClass::WINDOW) {

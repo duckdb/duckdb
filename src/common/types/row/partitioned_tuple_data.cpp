@@ -5,7 +5,6 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
-
 namespace duckdb {
 
 PartitionedTupleData::PartitionedTupleData(PartitionedTupleDataType type_p, BufferManager &buffer_manager_p,

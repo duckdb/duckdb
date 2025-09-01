@@ -12,7 +12,6 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/parser/parsed_data/alter_info.hpp"
 
-
 namespace duckdb {
 class CatalogEntryRetriever;
 class ClientContext;

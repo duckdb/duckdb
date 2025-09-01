@@ -25,7 +25,6 @@
 
 #include "duckdb/main/extension_entries.hpp"
 
-
 namespace duckdb {
 
 static bool GetBooleanArg(ClientContext &context, const vector<Value> &arg) {

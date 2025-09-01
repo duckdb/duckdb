@@ -10,7 +10,6 @@
 
 #include "duckdb/parser/parsed_data/create_info.hpp"
 
-
 namespace duckdb {
 
 enum class SequenceInfo : uint8_t {

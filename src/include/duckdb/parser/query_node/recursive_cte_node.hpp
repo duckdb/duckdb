@@ -11,7 +11,6 @@
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/query_node.hpp"
 
-
 namespace duckdb {
 
 class RecursiveCTENode : public QueryNode {

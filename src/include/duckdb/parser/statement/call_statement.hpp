@@ -11,7 +11,6 @@
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/sql_statement.hpp"
 
-
 namespace duckdb {
 
 class CallStatement : public SQLStatement {
