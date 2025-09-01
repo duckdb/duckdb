@@ -45,7 +45,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 		auto &target = op.key_targets[i];
 		D_ASSERT(target->type == ExpressionType::BOUND_REF);
 		auto &bound_ref = target->Cast<BoundReferenceExpression>();
-		group_by_references[bound_ref.index] = i;
+		distinct_idx.emplace_back(i);
+		distinct_types.push_back(bound_ref.return_type);
 	}
 
 	// Create a mapping of column indices to their corresponding payload aggregate indices.
@@ -56,63 +57,25 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 		D_ASSERT(op.payload_aggregates[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 		auto &agg = op.payload_aggregates[i]->Cast<BoundAggregateExpression>();
 
+		for (auto& child : agg.children) {
+			if (child->type != ExpressionType::BOUND_REF) {
+				throw BinderException("Payload aggregate must be a column reference");
+			}
+			auto& bound_ref = child->Cast<BoundReferenceExpression>();
+			// Add the index of the column to the aggregate_idx and aggregate_types
+			// to populate the internal DataChunk
+			aggregate_idx.push_back(bound_ref.index);
+			aggregate_types.push_back(bound_ref.return_type);
+		}
+
 		D_ASSERT(agg.children[0]->type == ExpressionType::BOUND_REF);
 		// Cast the child to a BoundReferenceExpression and map its index to the aggregate index.
 		auto &bound_ref = agg.children[0]->Cast<BoundReferenceExpression>();
-		aggregate_references[bound_ref.index] = i;
-	}
 
-	/*
-	 * iterate over all types
-	 * 		Differentiate the occurrence of the column in the key clause.
-	 */
-	auto &types = left.GetTypes();
-	for (idx_t i = 0; i < types.size(); ++i) {
-		auto logical_type = types[i];
-		// Check if we can directly refer to a group, or if we need to push an aggregate with LAST
-		auto entry = group_by_references.find(i);
-		if (entry != group_by_references.end()) {
-			// Column has a key, note the column index to make a distinction on it
-			distinct_idx.emplace_back(i);
-			distinct_types.push_back(logical_type);
-		} else {
-			// Column is not in the key clause, so we check if we have a user defined aggregate for it
-			auto agg_entry = aggregate_references.find(i);
-			if (agg_entry != aggregate_references.end()) {
-				auto& agg = op.payload_aggregates[agg_entry->second]->Cast<BoundAggregateExpression>();
-				for (auto& child : agg.children) {
-					if (child->type != ExpressionType::BOUND_REF) {
-						throw BinderException("Payload aggregate must be a column reference");
-					}
-					auto& bound_ref = child->Cast<BoundReferenceExpression>();
-					// Add the index of the column to the aggregate_idx and aggregate_types
-					// to populate the internal DataChunk
-					aggregate_idx.push_back(bound_ref.index);
-					aggregate_types.push_back(bound_ref.return_type);
-				}
-				payload_aggregates.push_back(std::move(op.payload_aggregates[agg_entry->second]));
-				// add the logical type of the aggregate to the payload types
-				payload_types.push_back(agg.return_type);
-			} else {
-				// BTODO: do this in binder
-				// Column is not in the key clause, and there is no defined aggregate function, so we must create the last aggregate
-				auto bound = make_uniq<BoundReferenceExpression>(logical_type, 0U);
-				FunctionBinder function_binder(context);
-
-				vector<unique_ptr<Expression>> first_children;
-				first_children.push_back(std::move(bound));
-				auto first_aggregate =
-					function_binder.BindAggregateFunction(LastFunctionGetter::GetFunction(logical_type),
-														std::move(first_children), nullptr, AggregateType::NON_DISTINCT);
-				first_aggregate->order_bys = nullptr;
-				payload_aggregates.push_back(std::move(first_aggregate));
-				aggregate_idx.push_back(i);
-				// input type is the same as output type
-				aggregate_types.push_back(logical_type);
-				payload_types.push_back(logical_type);
-			}
-			payload_idx.emplace_back(i);
-		}
+		payload_aggregates.push_back(std::move(op.payload_aggregates[i]));
+		// add the logical type of the aggregate to the payload types
+		payload_types.push_back(agg.return_type);
+		payload_idx.emplace_back(bound_ref.index);
 	}
 
 	// If the key variant has been used, a recurring table will be created.

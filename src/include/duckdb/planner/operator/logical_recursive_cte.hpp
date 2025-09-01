@@ -31,7 +31,6 @@ public:
 	}
 
 	bool union_all;
-	bool user_aggregate = false;
 	// Flag if recurring table is referenced, if not we do not copy ht into ColumnDataCollection
 	bool ref_recurring;
 	vector<unique_ptr<Expression>> key_targets;
@@ -53,7 +52,7 @@ public:
 
 protected:
 	void ResolveTypes() override {
-		types = user_aggregate ? result_types : children[0]->types;
+		types = !payload_aggregates.empty() ? result_types : children[0]->types;
 	}
 };
 } // namespace duckdb

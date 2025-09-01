@@ -44,16 +44,22 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 	// This allows the right side to reference the CTE recursively
 	bind_context.AddGenericBinding(result->setop_index, statement.ctename, result->names, result->types);
 
-	// bind specified keys to the referenced column
+	// Set contains column indices that are already bound
+	unordered_set<idx_t> column_references;
+	// Bind specified keys to the referenced column
 	auto expression_binder = ExpressionBinder(*this, context);
 	for (unique_ptr<ParsedExpression> &expr : statement.key_targets) {
 		auto bound_expr = expression_binder.Bind(expr);
 		D_ASSERT(bound_expr->type == ExpressionType::BOUND_COLUMN_REF);
+		auto &bound_ref = bound_expr->Cast<BoundColumnRefExpression>();
+
+		column_references.insert(bound_ref.binding.column_index);
 		result->key_targets.push_back(std::move(bound_expr));
 	}
 
 	ErrorData error;
 	FunctionBinder function_binder(*this);
+	// Bind user-defined aggregates
 	for (auto &expr : statement.payload_aggregates) {
 		D_ASSERT(expr->type == ExpressionType::FUNCTION);
 		auto &func_expr = expr->Cast<FunctionExpression>();
@@ -89,7 +95,27 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 		// BTODO: only here until i know how to fix ResolveTypes()
 		result->return_types[aggregate_idx] = aggregate->return_type;
 		result->payload_aggregates.push_back(std::move(aggregate));
+		column_references.insert(aggregate_idx);
 	}
+
+	// Bind every column that is neither referenced as a key nor by an aggregate to a LAST aggregate
+	for (idx_t i = 0; i < result->left->types.size(); i++) {
+		if (column_references.find(i) == column_references.end()) {
+			// Create a new bound column reference for the missing columns
+			vector<unique_ptr<Expression>> first_children;
+			auto bound = make_uniq<BoundColumnRefExpression>(result->types[i], ColumnBinding(result->setop_index, i));
+			first_children.push_back(std::move(bound));
+
+			// Create a last aggregate for the newly bound column reference
+			auto first_aggregate =
+			    function_binder.BindAggregateFunction(LastFunctionGetter::GetFunction(result->types[i]),
+			                                          std::move(first_children), nullptr, AggregateType::NON_DISTINCT);
+
+			result->payload_aggregates.push_back(std::move(first_aggregate));
+		}
+	}
+
+
 	// BTODO: only here until i know how to fix ResolveTypes()
 	// We have finished binding all the aggregates. Now, we will update the types of the operator.
 	result->types = result->return_types;
@@ -98,7 +124,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 
 	// Add bindings of left side to temporary CTE bindings context
 	// If there is already a binding for the CTE, we need to remove it first
-	// as we are binding a CTE currently, we take precendence over the existing binding.
+	// as we are binding a CTE currently, we take precedence over the existing binding.
 	// This implements the CTE shadowing behavior.
 	result->right_binder->bind_context.RemoveCTEBinding(statement.ctename);
 	result->right_binder->bind_context.AddCTEBinding(result->setop_index, statement.ctename, result->names,

@@ -1,0 +1,61 @@
+# name: test/sql/cte/recursive_cte_key_aggregation.test
+# description: Recursive CTEs with USING KEY and aggregations
+# group: [cte]
+
+statement ok
+PRAGMA enable_verification;
+
+query II
+WITH RECURSIVE tbl(a, b) USING KEY (a ; max(b)) AS (
+	SELECT 1, 5
+		UNION
+	SELECT a, b - 1
+	FROM tbl
+	WHERE b > 0)
+TABLE tbl;
+----
+1	5
+
+query II
+WITH RECURSIVE tbl(a, b) USING KEY (a ; avg(b)) AS (
+	SELECT 1, 5
+	  UNION
+	SELECT a, b - 1
+	FROM tbl
+	WHERE b > 0)
+TABLE tbl;
+----
+1	2.5
+
+query III
+WITH RECURSIVE tbl(a, b, c) USING KEY (a ; avg(b), list(c)) AS (
+	SELECT 1, 5, NULL :: DOUBLE
+	  UNION
+	SELECT tbl.a, tbl.b - 1, rec.b
+	FROM tbl, recurring.tbl AS rec
+	WHERE tbl.b > 0)
+TABLE tbl;
+----
+1	2.5	[NULL, 5.0, 4.5, 4.0, 3.5, 3.0]
+
+statement ok
+CREATE TABLE knows(person1id INT, person2id INT);
+
+statement ok
+INSERT INTO  knows VALUES (1, 2), (2, 3), (1, 3);
+
+query IIII
+WITH RECURSIVE dvr(here, there, via, len) USING KEY (here, there ; arg_min(via, len), min(len)) AS (
+	SELECT n.person1id AS here, n.person2id AS there, n.person2id AS via, 1 AS len
+	FROM knows AS n
+		UNION
+	SELECT n.person1id AS here, dvr.there, dvr.here AS via, 1 + dvr.len AS len
+	FROM dvr
+	JOIN knows AS n ON
+	(n.person2id = dvr.here AND n.person1id <> dvr.there))
+TABLE dvr
+ORDER BY here, there;
+----
+1	2	2	1
+1	3	3	1
+2	3	3	1
