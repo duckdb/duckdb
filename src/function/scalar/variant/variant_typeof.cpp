@@ -23,8 +23,7 @@ static void VariantTypeofFunction(DataChunk &input, ExpressionState &state, Vect
 
 	auto result_data = FlatVector::GetData<string_t>(result);
 	for (idx_t i = 0; i < count; i++) {
-		auto index = source_format.unified.sel->get_index(i);
-		if (!source_format.unified.validity.RowIsValid(index)) {
+		if (!variant.RowIsValid(i)) {
 			result_data[i] = StringVector::AddString(result, "VARIANT_NULL");
 			continue;
 		}
