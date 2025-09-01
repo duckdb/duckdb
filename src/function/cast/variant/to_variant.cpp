@@ -116,6 +116,18 @@ static void FinalizeVariantKeys(Vector &variant, OrderedOwningStringMap<uint32_t
 	}
 }
 
+static bool GatherOffsetsAndSizes(ToVariantSourceData &source, ToVariantGlobalResultData &result, idx_t count) {
+	InitializeOffsets(result.offsets, count);
+	//! First pass - collect sizes/offsets
+	return ConvertToVariant<false>(source, result, count, nullptr, nullptr, true);
+}
+
+static bool WriteVariantResultData(ToVariantSourceData &source, ToVariantGlobalResultData &result, idx_t count) {
+	InitializeOffsets(result.offsets, count);
+	//! Second pass - actually construct the variants
+	return ConvertToVariant<true>(source, result, count, nullptr, nullptr, true);
+}
+
 static bool CastToVARIANT(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	DataChunk offsets;
 	offsets.Initialize(Allocator::DefaultAllocator(),
@@ -133,9 +145,9 @@ static bool CastToVARIANT(Vector &source, Vector &result, idx_t count, CastParam
 	{
 		VariantVectorData variant_data(result);
 		ToVariantGlobalResultData result_data(variant_data, offsets, dictionary, keys_selvec);
-		//! First pass - collect sizes/offsets
-		InitializeOffsets(result_data.offsets, count);
-		ConvertToVariant<false>(source_data, result_data, count, nullptr, nullptr, true);
+		if (!GatherOffsetsAndSizes(source_data, result_data, count)) {
+			return false;
+		}
 	}
 
 	//! This resizes the lists, invalidating the "GetData" results stored in VariantVectorData
@@ -145,9 +157,9 @@ static bool CastToVARIANT(Vector &source, Vector &result, idx_t count, CastParam
 	{
 		VariantVectorData variant_data(result);
 		ToVariantGlobalResultData result_data(variant_data, offsets, dictionary, keys_selvec);
-		//! Second pass - actually construct the variants
-		InitializeOffsets(result_data.offsets, count);
-		ConvertToVariant<true>(source_data, result_data, count, nullptr, nullptr, true);
+		if (!WriteVariantResultData(source_data, result_data, count)) {
+			return false;
+		}
 	}
 
 	FinalizeVariantKeys(result, dictionary, keys_selvec, keys_selvec_size);
