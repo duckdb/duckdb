@@ -85,6 +85,7 @@ unique_ptr<LogicalOperator> EmptyResultPullup::Optimize(unique_ptr<LogicalOperat
 			op = make_uniq<LogicalEmptyResult>(std::move(op));
 			break;
 		}
+		return op;
 	}
 	case LogicalOperatorType::LOGICAL_EXCEPT:
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
