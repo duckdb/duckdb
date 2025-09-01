@@ -8,16 +8,17 @@
 #include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
+#include "duckdb/common/types/uuid.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/metadata/metadata_writer.hpp"
+#include "duckdb/storage/storage_info.hpp"
 #include "duckdb/storage/storage_manager.hpp"
-#include "duckdb/main/settings.hpp"
 #include "mbedtls_wrapper.hpp"
-#include "duckdb/common/types/uuid.hpp"
 
 #include <algorithm>
 #include <cstring>
@@ -150,7 +151,7 @@ MainHeader MainHeader::Read(ReadStream &source) {
 
 	// Check the version number to determine if we can read this file.
 	if (header.version_number < VERSION_NUMBER_LOWER || header.version_number > VERSION_NUMBER_UPPER) {
-		auto version = GetDuckDBVersion(header.version_number);
+		auto version = GetDuckDBVersions(header.version_number);
 		string version_text;
 		if (!version.empty()) {
 			// Known version.
@@ -253,7 +254,6 @@ SingleFileBlockManager::SingleFileBlockManager(AttachedDatabase &db_p, const str
                                             Storage::FILE_HEADER_SIZE - options.block_header_size.GetIndex(),
                                             options.block_header_size.GetIndex()),
       iteration_count(0), options(options) {
-	D_ASSERT(1);
 }
 
 FileOpenFlags SingleFileBlockManager::GetFileFlags(bool create_new) const {
@@ -277,13 +277,20 @@ FileOpenFlags SingleFileBlockManager::GetFileFlags(bool create_new) const {
 }
 
 void SingleFileBlockManager::AddStorageVersionTag() {
-	db.tags["storage_version"] = GetStorageVersionName(options.storage_version.GetIndex());
+	db.tags["storage_version"] = GetStorageVersionName(options.storage_version.GetIndex(), true);
 }
 
 uint64_t SingleFileBlockManager::GetVersionNumber() const {
 	uint64_t version_number = VERSION_NUMBER;
-	if (options.storage_version.GetIndex() >= 4) {
-		version_number = 65;
+	auto storage_version = options.storage_version.GetIndex();
+	if (storage_version >= 4) {
+		// Look up the matching version number.
+		auto version_name = GetStorageVersionName(storage_version, false);
+		version_number = GetStorageVersion(version_name.c_str()).GetIndex();
+
+		// have serialization_version_info, want storage_version_info
+		//		for (idx_t i = 0; i < serialization)
+		//		version_number = 65;
 		//		version_number = VERSION_NUMBER_UPPER;
 	}
 	return version_number;

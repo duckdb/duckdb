@@ -69,9 +69,9 @@ struct Storage {
 extern const uint64_t VERSION_NUMBER;
 extern const uint64_t VERSION_NUMBER_LOWER;
 extern const uint64_t VERSION_NUMBER_UPPER;
-string GetDuckDBVersion(idx_t version_number);
+string GetDuckDBVersions(const idx_t version_number);
 optional_idx GetStorageVersion(const char *version_string);
-string GetStorageVersionName(idx_t serialization_version);
+string GetStorageVersionName(const idx_t serialization_version, const bool add_suffix);
 optional_idx GetSerializationVersion(const char *version_string);
 vector<string> GetSerializationCandidates();
 

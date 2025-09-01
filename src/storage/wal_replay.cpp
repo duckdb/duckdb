@@ -462,14 +462,14 @@ void WriteAheadLogDeserializer::ReplayVersion() {
 	if (file_version_number > 66) {
 		auto expected_header_id = single_file_block_manager.GetHeaderId();
 		auto header_id = deserializer.ReadProperty<hugeint_t>(102, "header_id");
-		if (expected_header_id != header_id) {
+		if (expected_header_id != header_id && !deserialize_only) {
 			throw SerializationException("WAL does not match database file. File ID: %d, WAL file id: %d",
 			                             expected_header_id, header_id);
 		}
 
 		auto expected_checkpoint_iteration = single_file_block_manager.GetCheckpointIteration();
 		auto checkpoint_iteration = deserializer.ReadProperty<uint64_t>(103, "checkpoint_iteration");
-		if (expected_checkpoint_iteration != checkpoint_iteration) {
+		if (expected_checkpoint_iteration != checkpoint_iteration && !deserialize_only) {
 			throw SerializationException("WAL checkpoint iteration does not match database file. File checkpoint "
 			                             "iteration: %d, WAL checkpoint iteration: %d",
 			                             expected_checkpoint_iteration, checkpoint_iteration);
