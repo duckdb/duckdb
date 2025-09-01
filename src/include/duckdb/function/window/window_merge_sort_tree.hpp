@@ -11,7 +11,6 @@
 #include "duckdb/execution/merge_sort_tree.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
 
-#include "duckdb/function/window/window_aggregator.hpp"
 #include "duckdb/common/sorting/sort.hpp"
 
 namespace duckdb {
@@ -20,15 +19,15 @@ enum class WindowMergeSortStage : uint8_t { INIT, COMBINE, FINALIZE, SORTED, FIN
 
 class WindowMergeSortTree;
 
-class WindowMergeSortTreeLocalState : public WindowAggregatorState {
+class WindowMergeSortTreeLocalState : public LocalSinkState {
 public:
 	WindowMergeSortTreeLocalState(ExecutionContext &context, WindowMergeSortTree &index_tree);
 
 	//! Add a chunk to the local sort
 	void Sink(ExecutionContext &context, DataChunk &chunk, const idx_t row_idx,
-	          optional_ptr<SelectionVector> filter_sel, idx_t filtered);
+	          optional_ptr<SelectionVector> filter_sel, idx_t filtered, InterruptState &interrupt);
 	//! Sort the data
-	void Finalize(ExecutionContext &context);
+	void Finalize(ExecutionContext &context, InterruptState &interrupt);
 	//! Process sorted leaf data
 	virtual void BuildLeaves() = 0;
 
@@ -44,7 +43,7 @@ public:
 	idx_t build_task;
 
 private:
-	void ExecuteSortTask(ExecutionContext &context);
+	void ExecuteSortTask(ExecutionContext &context, InterruptState &interrupt);
 };
 
 class WindowMergeSortTree {
@@ -56,7 +55,7 @@ public:
 	                    const vector<column_t> &order_idx, const idx_t count, bool unique = false);
 	virtual ~WindowMergeSortTree() = default;
 
-	virtual unique_ptr<WindowAggregatorState> GetLocalState(ExecutionContext &context) = 0;
+	virtual unique_ptr<LocalSinkState> GetLocalState(ExecutionContext &context) = 0;
 
 	//! Make a local sort for a thread
 	optional_ptr<LocalSinkState> InitializeLocalSort(ExecutionContext &context) const;

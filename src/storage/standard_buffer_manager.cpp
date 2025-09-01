@@ -334,6 +334,10 @@ void StandardBufferManager::Prefetch(vector<shared_ptr<BlockHandle>> &handles) {
 }
 
 BufferHandle StandardBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
+	return Pin(QueryContext(), handle);
+}
+
+BufferHandle StandardBufferManager::Pin(QueryContext context, shared_ptr<BlockHandle> &handle) {
 	// we need to be careful not to return the BufferHandle to this block while holding the BlockHandle's lock
 	// as exiting this function's scope may cause the destructor of the BufferHandle to be called while holding the lock
 	// the destructor calls Unpin, which grabs the BlockHandle's lock again, causing a deadlock
@@ -346,7 +350,7 @@ BufferHandle StandardBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 		// check if the block is already loaded
 		if (handle->GetState() == BlockState::BLOCK_LOADED) {
 			// the block is loaded, increment the reader count and set the BufferHandle
-			buf = handle->Load();
+			buf = handle->Load(context);
 		}
 		required_memory = handle->GetMemoryUsage();
 	}
@@ -366,11 +370,11 @@ BufferHandle StandardBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 		if (handle->GetState() == BlockState::BLOCK_LOADED) {
 			// the block is loaded, increment the reader count and return a pointer to the handle
 			reservation.Resize(0);
-			buf = handle->Load();
+			buf = handle->Load(context);
 		} else {
 			// now we can actually load the current block
 			D_ASSERT(handle->Readers() == 0);
-			buf = handle->Load(std::move(reusable_buffer));
+			buf = handle->Load(context, std::move(reusable_buffer));
 			if (!buf.IsValid()) {
 				reservation.Resize(0);
 				return buf; // Buffer was destroyed (e.g., due to DestroyBufferUpon::Eviction)

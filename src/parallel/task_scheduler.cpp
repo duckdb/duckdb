@@ -5,7 +5,6 @@
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
-
 #ifndef DUCKDB_NO_THREADS
 #include "concurrentqueue.h"
 #include "duckdb/common/thread.hpp"
@@ -41,16 +40,30 @@ typedef duckdb_moodycamel::ConcurrentQueue<shared_ptr<Task>> concurrent_queue_t;
 typedef duckdb_moodycamel::LightweightSemaphore lightweight_semaphore_t;
 
 struct ConcurrentQueue {
-	concurrent_queue_t q;
+	ConcurrentQueue() : tasks_in_queue(0) {
+	}
+
 	lightweight_semaphore_t semaphore;
 
 	void Enqueue(ProducerToken &token, shared_ptr<Task> task);
 	void EnqueueBulk(ProducerToken &token, vector<shared_ptr<Task>> &tasks);
 	bool DequeueFromProducer(ProducerToken &token, shared_ptr<Task> &task);
+	bool Dequeue(shared_ptr<Task> &task);
+	idx_t GetTasksInQueue() const;
+	idx_t GetApproxSize() const;
+	idx_t GetProducerCount() const;
+	idx_t GetTaskCountForProducer(ProducerToken &token) const;
+	concurrent_queue_t &GetQueue() {
+		return q;
+	}
+
+private:
+	concurrent_queue_t q;
+	atomic<idx_t> tasks_in_queue;
 };
 
 struct QueueProducerToken {
-	explicit QueueProducerToken(ConcurrentQueue &queue) : queue_token(queue.q) {
+	explicit QueueProducerToken(ConcurrentQueue &queue) : queue_token(queue.GetQueue()) {
 	}
 
 	duckdb_moodycamel::ProducerToken queue_token;
@@ -60,6 +73,7 @@ void ConcurrentQueue::Enqueue(ProducerToken &token, shared_ptr<Task> task) {
 	lock_guard<mutex> producer_lock(token.producer_lock);
 	task->token = token;
 	if (q.enqueue(token.token->queue_token, std::move(task))) {
+		++tasks_in_queue;
 		semaphore.signal();
 	} else {
 		throw InternalException("Could not schedule task!");
@@ -73,6 +87,7 @@ void ConcurrentQueue::EnqueueBulk(ProducerToken &token, vector<shared_ptr<Task>>
 		task->token = token;
 	}
 	if (q.enqueue_bulk(token.token->queue_token, std::make_move_iterator(tasks.begin()), tasks.size())) {
+		tasks_in_queue += tasks.size();
 		semaphore.signal(NumericCast<ssize_t>(tasks.size()));
 	} else {
 		throw InternalException("Could not schedule tasks!");
@@ -81,17 +96,49 @@ void ConcurrentQueue::EnqueueBulk(ProducerToken &token, vector<shared_ptr<Task>>
 
 bool ConcurrentQueue::DequeueFromProducer(ProducerToken &token, shared_ptr<Task> &task) {
 	lock_guard<mutex> producer_lock(token.producer_lock);
-	return q.try_dequeue_from_producer(token.token->queue_token, task);
+	if (!q.try_dequeue_from_producer(token.token->queue_token, task)) {
+		return false;
+	}
+	--tasks_in_queue;
+	return true;
+}
+
+bool ConcurrentQueue::Dequeue(shared_ptr<Task> &task) {
+	if (!q.try_dequeue(task)) {
+		return false;
+	}
+	--tasks_in_queue;
+	return true;
+}
+
+idx_t ConcurrentQueue::GetTasksInQueue() const {
+	return tasks_in_queue;
+}
+idx_t ConcurrentQueue::GetApproxSize() const {
+	return q.size_approx();
+}
+idx_t ConcurrentQueue::GetProducerCount() const {
+	return q.size_producers_approx();
+}
+
+idx_t ConcurrentQueue::GetTaskCountForProducer(ProducerToken &token) const {
+	lock_guard<mutex> producer_lock(token.producer_lock);
+	return q.size_producer_approx(token.token->queue_token);
 }
 
 #else
 struct ConcurrentQueue {
 	reference_map_t<QueueProducerToken, std::queue<shared_ptr<Task>>> q;
-	mutex qlock;
+	mutable mutex qlock;
 
 	void Enqueue(ProducerToken &token, shared_ptr<Task> task);
 	void EnqueueBulk(ProducerToken &token, vector<shared_ptr<Task>> &tasks);
 	bool DequeueFromProducer(ProducerToken &token, shared_ptr<Task> &task);
+	bool Dequeue(shared_ptr<Task> &task);
+	idx_t GetTasksInQueue() const;
+	idx_t GetApproxSize() const;
+	idx_t GetProducerCount() const;
+	idx_t GetTaskCountForProducer(ProducerToken &token) const;
 };
 
 void ConcurrentQueue::Enqueue(ProducerToken &token, shared_ptr<Task> task) {
@@ -121,6 +168,37 @@ bool ConcurrentQueue::DequeueFromProducer(ProducerToken &token, shared_ptr<Task>
 	it->second.pop();
 
 	return true;
+}
+
+bool ConcurrentQueue::Dequeue(shared_ptr<Task> &task) {
+	throw InternalException("Global dequeue not supported for no threads queue");
+}
+
+idx_t ConcurrentQueue::GetTasksInQueue() const {
+	lock_guard<mutex> lock(qlock);
+	idx_t task_count = 0;
+	for (auto &producer : q) {
+		task_count += producer.second.size();
+	}
+	return task_count;
+}
+
+idx_t ConcurrentQueue::GetApproxSize() const {
+	return GetTasksInQueue();
+}
+
+idx_t ConcurrentQueue::GetProducerCount() const {
+	lock_guard<mutex> lock(qlock);
+	return q.size();
+}
+
+idx_t ConcurrentQueue::GetTaskCountForProducer(ProducerToken &token) const {
+	lock_guard<mutex> lock(qlock);
+	const auto it = q.find(std::ref(*token.token));
+	if (it == q.end()) {
+		return 0;
+	}
+	return it->second.size();
 }
 
 struct QueueProducerToken {
@@ -217,7 +295,7 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 				}
 			}
 		}
-		if (queue->q.try_dequeue(task)) {
+		if (queue->Dequeue(task)) {
 			auto process_mode = config.options.scheduler_process_partial ? TaskExecutionMode::PROCESS_PARTIAL
 			                                                             : TaskExecutionMode::PROCESS_ALL;
 			auto execute_result = task->Execute(process_mode);
@@ -238,6 +316,9 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 				task.reset();
 				break;
 			}
+		} else if (queue->GetTasksInQueue() > 0) {
+			// failed to dequeue but there are still tasks remaining - signal again to retry
+			queue->semaphore.signal(1);
 		}
 	}
 	// this thread will exit, flush all of its outstanding allocations
@@ -256,7 +337,7 @@ idx_t TaskScheduler::ExecuteTasks(atomic<bool> *marker, idx_t max_tasks) {
 	// loop until the marker is set to false
 	while (*marker && completed_tasks < max_tasks) {
 		shared_ptr<Task> task;
-		if (!queue->q.try_dequeue(task)) {
+		if (!queue->Dequeue(task)) {
 			return completed_tasks;
 		}
 		auto execute_result = task->Execute(TaskExecutionMode::PROCESS_ALL);
@@ -286,7 +367,7 @@ void TaskScheduler::ExecuteTasks(idx_t max_tasks) {
 	shared_ptr<Task> task;
 	for (idx_t i = 0; i < max_tasks; i++) {
 		queue->semaphore.wait(TASK_TIMEOUT_USECS);
-		if (!queue->q.try_dequeue(task)) {
+		if (!queue->Dequeue(task)) {
 			return;
 		}
 		try {
@@ -323,36 +404,15 @@ int32_t TaskScheduler::NumberOfThreads() {
 }
 
 idx_t TaskScheduler::GetNumberOfTasks() const {
-#ifndef DUCKDB_NO_THREADS
-	return queue->q.size_approx();
-#else
-	idx_t task_count = 0;
-	for (auto &producer : queue->q) {
-		task_count += producer.second.size();
-	}
-	return task_count;
-#endif
+	return queue->GetTasksInQueue();
 }
 
 idx_t TaskScheduler::GetProducerCount() const {
-#ifndef DUCKDB_NO_THREADS
-	return queue->q.size_producers_approx();
-#else
-	return queue->q.size();
-#endif
+	return queue->GetProducerCount();
 }
 
 idx_t TaskScheduler::GetTaskCountForProducer(ProducerToken &token) const {
-#ifndef DUCKDB_NO_THREADS
-	lock_guard<mutex> producer_lock(token.producer_lock);
-	return queue->q.size_producer_approx(token.token->queue_token);
-#else
-	const auto it = queue->q.find(std::ref(*token.token));
-	if (it == queue->q.end()) {
-		return 0;
-	}
-	return it->second.size();
-#endif
+	return queue->GetTaskCountForProducer(token);
 }
 
 void TaskScheduler::SetThreads(idx_t total_threads, idx_t external_threads) {

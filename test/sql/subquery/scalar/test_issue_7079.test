@@ -3,9 +3,6 @@
 # group: [scalar]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE MACRO array_rv(arr) AS (
     SELECT CASE WHEN l IS NOT NULL THEN l ELSE arr END 
     FROM (

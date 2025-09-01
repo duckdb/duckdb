@@ -8,6 +8,7 @@
 #include "sqllogic_test_runner.hpp"
 #include "termcolor.hpp"
 #include "test_helpers.hpp"
+#include "test_config.hpp"
 
 #include <thread>
 
@@ -74,7 +75,9 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 			runner.finished_processing_file = true;
 			return true;
 		}
-		logger.UnexpectedFailure(result);
+		if (!FailureSummary::SkipLoggingSameError(context.error_file)) {
+			logger.UnexpectedFailure(result);
+		}
 		return false;
 	}
 	idx_t row_count = result.RowCount();
@@ -306,7 +309,12 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
 					success = MatchesRegex(logger, result.ToString(), statement.expected_error);
 				}
 				if (!success) {
-					if (!SkipErrorMessage(result.GetError())) {
+					// don't log the same test failure many times:
+					// e.g. log only the first failure in
+					// `./build/debug/test/unittest --on-init "SET max_memory='400kb';"
+					// test/fuzzer/pedro/concurrent_catalog_usage.test`
+					if (!SkipErrorMessage(result.GetError()) &&
+					    !FailureSummary::SkipLoggingSameError(statement.file_name)) {
 						logger.ExpectedErrorMismatch(statement.expected_error, result);
 						return false;
 					}
@@ -325,7 +333,9 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
 			runner.finished_processing_file = true;
 			return true;
 		}
-		logger.UnexpectedStatement(expected_result == ExpectedResult::RESULT_SUCCESS, result);
+		if (!FailureSummary::SkipLoggingSameError(statement.file_name)) {
+			logger.UnexpectedStatement(expected_result == ExpectedResult::RESULT_SUCCESS, result);
+		}
 		return false;
 	}
 	if (error) {

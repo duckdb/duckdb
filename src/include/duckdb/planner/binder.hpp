@@ -162,6 +162,7 @@ public:
 
 	void SetCatalogLookupCallback(catalog_entry_callback_t callback);
 	void BindCreateViewInfo(CreateViewInfo &base);
+	void SearchSchema(CreateInfo &info);
 	SchemaCatalogEntry &BindSchema(CreateInfo &info);
 	SchemaCatalogEntry &BindCreateFunctionInfo(CreateInfo &info);
 
@@ -485,6 +486,9 @@ private:
 	                                                 const vector<string> &source_names);
 
 	unique_ptr<MergeIntoStatement> GenerateMergeInto(InsertStatement &stmt, TableCatalogEntry &table);
+
+	static void CheckInsertColumnCountMismatch(idx_t expected_columns, idx_t result_columns, bool columns_provided,
+	                                           const string &tname);
 
 private:
 	Binder(ClientContext &context, shared_ptr<Binder> parent, BinderType binder_type);

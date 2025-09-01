@@ -92,8 +92,8 @@ public:
 	//! Drop the ART.
 	void CommitDrop(IndexLock &index_lock) override;
 
-	//! Construct an ART from a vector of sorted keys and their row IDs.
-	bool Construct(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_ids, const idx_t row_count);
+	//! Build an ART from a vector of sorted keys and their row IDs.
+	ARTConflictType Build(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_ids, const idx_t row_count);
 
 	//! Merge another ART into this ART. Both must be locked.
 	//! FIXME: Return ARTConflictType instead of a boolean.
@@ -137,11 +137,6 @@ private:
 	void VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictManager &manager) override;
 	string GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index,
 	                                     DataChunk &input) override;
-
-	void Erase(Node &node, reference<const ARTKey> key, idx_t depth, reference<const ARTKey> row_id, GateStatus status);
-
-	bool ConstructInternal(const unsafe_vector<ARTKey> &keys, const unsafe_vector<ARTKey> &row_ids, Node &node,
-	                       ARTKeySection &section);
 
 	void InitializeMergeUpperBounds(unsafe_vector<idx_t> &upper_bounds);
 	void InitializeMerge(Node &node, unsafe_vector<idx_t> &upper_bounds);

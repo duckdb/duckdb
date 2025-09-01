@@ -5,7 +5,7 @@
 require noforcestorage
 
 statement ok con1
-PRAGMA enable_logging;
+ CALL enable_logging();
 
 # We use these to offset the ids which don't start at 0 here due to internal queries/transactions that DuckDB performs
 statement ok con2

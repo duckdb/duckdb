@@ -163,27 +163,4 @@ idx_t ARTKey::GetMismatchPos(const ARTKey &other, const idx_t start) const {
 	return DConstants::INVALID_INDEX;
 }
 
-//===--------------------------------------------------------------------===//
-// ARTKeySection
-//===--------------------------------------------------------------------===//
-
-ARTKeySection::ARTKeySection(idx_t start, idx_t end, idx_t depth, data_t byte)
-    : start(start), end(end), depth(depth), key_byte(byte) {
-}
-
-ARTKeySection::ARTKeySection(idx_t start, idx_t end, const unsafe_vector<ARTKey> &keys, const ARTKeySection &section)
-    : start(start), end(end), depth(section.depth + 1), key_byte(keys[end].data[section.depth]) {
-}
-
-void ARTKeySection::GetChildSections(unsafe_vector<ARTKeySection> &sections, const unsafe_vector<ARTKey> &keys) {
-	auto child_idx = start;
-	for (idx_t i = start + 1; i <= end; i++) {
-		if (keys[i - 1].data[depth] != keys[i].data[depth]) {
-			sections.emplace_back(child_idx, i - 1, keys, *this);
-			child_idx = i;
-		}
-	}
-	sections.emplace_back(child_idx, end, keys, *this);
-}
-
 } // namespace duckdb

@@ -17,6 +17,7 @@
 namespace duckdb {
 
 class BufferManager;
+class InterruptState;
 
 //! A half-open range of frame boundary values _relative to the current row_
 //! This is why they are signed values.
@@ -35,19 +36,20 @@ using FrameStats = array<FrameDelta, 2>;
 //! but the row count will still be valid
 class ColumnDataCollection;
 struct WindowPartitionInput {
-	WindowPartitionInput(ExecutionContext &context, const ColumnDataCollection *inputs, idx_t count,
-	                     vector<column_t> &column_ids, vector<bool> &all_valid, const ValidityMask &filter_mask,
-	                     const FrameStats &stats)
+	WindowPartitionInput(ExecutionContext &context, const ColumnDataCollection *inputs, const idx_t count,
+	                     const vector<column_t> &column_ids, const vector<bool> &all_valid,
+	                     const ValidityMask &filter_mask, const FrameStats &stats, InterruptState &interrupt_state)
 	    : context(context), inputs(inputs), count(count), column_ids(column_ids), all_valid(all_valid),
-	      filter_mask(filter_mask), stats(stats) {
+	      filter_mask(filter_mask), stats(stats), interrupt_state(interrupt_state) {
 	}
 	ExecutionContext &context;
 	const ColumnDataCollection *inputs;
-	idx_t count;
-	vector<column_t> column_ids;
-	vector<bool> all_valid;
+	const idx_t count;
+	const vector<column_t> column_ids;
+	const vector<bool> &all_valid;
 	const ValidityMask &filter_mask;
 	const FrameStats stats;
+	InterruptState &interrupt_state;
 };
 
 //! The type used for sizing hashed aggregate function states
@@ -166,15 +168,31 @@ public:
 	                        FunctionNullHandling::DEFAULT_NULL_HANDLING, simple_update, bind, destructor, statistics,
 	                        window, serialize, deserialize) {
 	}
+
+	// Window constructor
+	AggregateFunction(const vector<LogicalType> &arguments, const LogicalType &return_type, aggregate_size_t state_size,
+	                  aggregate_initialize_t initialize, aggregate_wininit_t window_init, aggregate_window_t window,
+	                  bind_aggregate_function_t bind = nullptr, aggregate_destructor_t destructor = nullptr,
+	                  aggregate_statistics_t statistics = nullptr, aggregate_serialize_t serialize = nullptr,
+	                  aggregate_deserialize_t deserialize = nullptr)
+	    : BaseScalarFunction(name, arguments, return_type, FunctionStability::CONSISTENT,
+	                         LogicalType(LogicalTypeId::INVALID)),
+	      state_size(state_size), initialize(initialize), update(nullptr), combine(nullptr), finalize(nullptr),
+	      simple_update(nullptr), window(window), window_init(window_init), bind(bind), destructor(destructor),
+	      statistics(statistics), serialize(serialize), deserialize(deserialize),
+	      order_dependent(AggregateOrderDependent::ORDER_DEPENDENT),
+	      distinct_dependent(AggregateDistinctDependent::DISTINCT_DEPENDENT) {
+	}
+
 	//! The hashed aggregate state sizing function
 	aggregate_size_t state_size;
 	//! The hashed aggregate state initialization function
 	aggregate_initialize_t initialize;
-	//! The hashed aggregate update state function
+	//! The hashed aggregate update state function (may be null, if window is set)
 	aggregate_update_t update;
-	//! The hashed aggregate combine states function
+	//! The hashed aggregate combine states function (may be null, if window is set)
 	aggregate_combine_t combine;
-	//! The hashed aggregate finalization function
+	//! The hashed aggregate finalization function (may be null, if window is set)
 	aggregate_finalize_t finalize;
 	//! The simple aggregate update function (may be null)
 	aggregate_simple_update_t simple_update;
@@ -206,6 +224,13 @@ public:
 	}
 	bool operator!=(const AggregateFunction &rhs) const {
 		return !(*this == rhs);
+	}
+
+	bool CanAggregate() const {
+		return update || combine || finalize;
+	}
+	bool CanWindow() const {
+		return window;
 	}
 
 public:

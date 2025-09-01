@@ -87,7 +87,8 @@ public:
 	//! Return the meta block id
 	idx_t GetMetaBlock() override;
 	//! Read the content of the block from disk
-	void Read(Block &block) override;
+	void Read(QueryContext context, Block &block) override;
+
 	//! Read individual blocks
 	void ReadBlock(Block &block, bool skip_block_header = false) const;
 	void ReadBlock(data_ptr_t internal_buffer, uint64_t block_size, bool skip_block_header = false) const;
@@ -116,7 +117,8 @@ public:
 
 private:
 	//! Loads the free list of the file.
-	void LoadFreeList();
+	void LoadFreeList(QueryContext context);
+
 	//! Initializes the database header. We pass the provided block allocation size as a parameter
 	//!	to detect inconsistencies with the file header.
 	void Initialize(const DatabaseHeader &header, const optional_idx block_alloc_size);

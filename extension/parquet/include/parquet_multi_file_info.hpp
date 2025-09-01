@@ -24,8 +24,7 @@ public:
 };
 
 struct ParquetMultiFileInfo : MultiFileReaderInterface {
-	static unique_ptr<MultiFileReaderInterface> InitializeInterface(ClientContext &context, MultiFileReader &reader,
-	                                                                MultiFileList &file_list);
+	static unique_ptr<MultiFileReaderInterface> CreateInterface(ClientContext &context);
 
 	unique_ptr<BaseFileReaderOptions> InitializeOptions(ClientContext &context,
 	                                                    optional_ptr<TableFunctionInfo> info) override;
@@ -56,6 +55,7 @@ struct ParquetMultiFileInfo : MultiFileReaderInterface {
 	unique_ptr<NodeStatistics> GetCardinality(const MultiFileBindData &bind_data, idx_t file_count) override;
 	void GetVirtualColumns(ClientContext &context, MultiFileBindData &bind_data, virtual_column_map_t &result) override;
 	unique_ptr<MultiFileReaderInterface> Copy() override;
+	FileGlobInput GetGlobInput() override;
 };
 
 class ParquetScanFunction {

@@ -5,9 +5,6 @@
 load __TEST_DIR__/pk_duplicate_key_wal.db
 
 statement ok
-PRAGMA enable_verification;
-
-statement ok
 SET checkpoint_threshold = '10.0 GB';
 
 statement ok

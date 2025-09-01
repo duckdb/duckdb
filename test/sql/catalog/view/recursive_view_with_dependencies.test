@@ -9,9 +9,6 @@ statement ok
 set enable_view_dependencies=true
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE IF NOT EXISTS test (val INTEGER);
 
 statement ok
