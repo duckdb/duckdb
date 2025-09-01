@@ -5,7 +5,6 @@
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/transformer.hpp"
 
-
 namespace duckdb {
 
 unique_ptr<ParsedExpression> Transformer::TransformArrayAccess(duckdb_libpgquery::PGAIndirection &indirection_node) {

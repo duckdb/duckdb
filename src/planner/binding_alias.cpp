@@ -3,7 +3,6 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 
-
 namespace duckdb {
 
 BindingAlias::BindingAlias() {

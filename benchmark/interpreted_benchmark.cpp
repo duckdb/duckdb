@@ -13,7 +13,6 @@
 #include "duckdb/common/arrow/physical_arrow_collector.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 
-
 #include <fstream>
 #include <sstream>
 

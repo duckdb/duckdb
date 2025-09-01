@@ -6,7 +6,6 @@
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/transformer.hpp"
 
-
 namespace duckdb {
 
 unique_ptr<CommonTableExpressionInfo> CommonTableExpressionInfo::Copy() {

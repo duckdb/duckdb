@@ -12,7 +12,6 @@
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 
-
 namespace duckdb {
 
 enum class ExtraDropInfoType : uint8_t {

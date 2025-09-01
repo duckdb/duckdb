@@ -17,8 +17,6 @@
 
 #include "duckdb/planner/subquery/flatten_dependent_join.hpp"
 
-
-
 namespace duckdb {
 
 Planner::Planner(ClientContext &context) : binder(Binder::CreateBinder(context)), context(context) {
