@@ -32,39 +32,21 @@ void Transformer::TransformCopyOptions(CopyInfo &info, optional_ptr<duckdb_libpg
 	}
 }
 
-string ExtractFormat(const string &file_path) {
-	auto format = StringUtil::Lower(file_path);
-	// We first remove extension suffixes
-	if (StringUtil::EndsWith(format, CompressionExtensionFromType(FileCompressionType::GZIP))) {
-		format = format.substr(0, format.size() - 3);
-	} else if (StringUtil::EndsWith(format, CompressionExtensionFromType(FileCompressionType::ZSTD))) {
-		format = format.substr(0, format.size() - 4);
-	}
-	// Now lets check for the last .
-	size_t dot_pos = format.rfind('.');
-	if (dot_pos == std::string::npos || dot_pos == format.length() - 1) {
-		// No format found
-		return "";
-	}
-	// We found something
-	return format.substr(dot_pos + 1);
-}
-
 unique_ptr<CopyStatement> Transformer::TransformCopy(duckdb_libpgquery::PGCopyStmt &stmt) {
 	auto result = make_uniq<CopyStatement>();
 	auto &info = *result->info;
 
 	// get file_path and is_from
 	info.is_from = stmt.is_from;
-	if (!stmt.filename) {
-		// stdin/stdout
-		info.file_path = info.is_from ? "/dev/stdin" : "/dev/stdout";
-	} else {
-		// copy to a file
-		info.file_path = stmt.filename;
-	}
 
-	info.format = ExtractFormat(info.file_path);
+	info.file_path_expression = TransformExpression(*stmt.filename);
+	if (info.file_path_expression->type == ExpressionType::VALUE_CONSTANT) {
+		auto &constant_expr = info.file_path_expression->Cast<ConstantExpression>();
+		if (constant_expr.value.type().id() == LogicalTypeId::VARCHAR) {
+			info.file_path = StringValue::Get(constant_expr.value);
+			info.file_path_expression.reset();
+		}
+	}
 
 	// get select_list
 	if (stmt.attlist) {

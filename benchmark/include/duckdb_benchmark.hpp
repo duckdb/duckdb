@@ -28,6 +28,10 @@ struct DuckDBBenchmarkState : public BenchmarkState {
 	DuckDBBenchmarkState(string path) : db(path.empty() ? nullptr : path.c_str()), conn(db) {
 		auto &instance = BenchmarkRunner::GetInstance();
 		auto res = conn.Query("PRAGMA threads=" + to_string(instance.threads));
+		if (!instance.memory_limit.empty()) {
+			res = conn.Query("PRAGMA memory_limit='" + instance.memory_limit + "'");
+			D_ASSERT(!res->HasError());
+		}
 		D_ASSERT(!res->HasError());
 		string profiling_mode;
 		switch (instance.configuration.profile_info) {
