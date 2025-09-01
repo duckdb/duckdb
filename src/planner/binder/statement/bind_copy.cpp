@@ -41,26 +41,53 @@ void IsFormatExtensionKnown(const string &format) {
 	}
 }
 
-BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) {
-	// Let's first bind our format
-	auto on_entry_do =
-	    stmt.info->is_format_auto_detected ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
-	CatalogEntryRetriever entry_retriever {context};
-	auto &catalog = Catalog::GetSystemCatalog(context);
-	auto entry = catalog.GetEntry(entry_retriever, DEFAULT_SCHEMA,
-	                              {CatalogType::COPY_FUNCTION_ENTRY, stmt.info->format}, on_entry_do);
+case_insensitive_map_t<CopyOption> Binder::GetFullCopyOptionsList(const CopyFunction &function, bool is_from) {
+	case_insensitive_map_t<CopyOption> copy_options;
+	CopyOptionsInput input(copy_options);
+	function.copy_options(context, input);
 
-	if (!entry) {
-		IsFormatExtensionKnown(stmt.info->format);
-		// If we did not find an entry, we default to a CSV
-		entry = catalog.GetEntry(entry_retriever, DEFAULT_SCHEMA, {CatalogType::COPY_FUNCTION_ENTRY, "csv"},
-		                         OnEntryNotFound::THROW_EXCEPTION);
+	// first erase all options that don't match this type
+	CopyOptionMode mode = is_from ? CopyOptionMode::READ_ONLY : CopyOptionMode::WRITE_ONLY;
+	vector<string> erased_options;
+	for (auto &entry : copy_options) {
+		if (entry.second.mode == CopyOptionMode::READ_WRITE) {
+			// used for both
+			continue;
+		}
+		if (entry.second.mode != mode) {
+			erased_options.push_back(entry.first);
+		}
 	}
-	// lookup the format in the catalog
-	auto &copy_function = entry->Cast<CopyFunctionCatalogEntry>();
-	if (copy_function.function.plan) {
+	for (auto &erased : erased_options) {
+		copy_options.erase(erased);
+	}
+
+	// now we have a list of all options for this copy type
+	// add generic options
+	if (!is_from) {
+		copy_options["use_tmp_file"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::WRITE_ONLY);
+		copy_options["overwrite_or_ignore"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::WRITE_ONLY);
+		copy_options["overwrite"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::WRITE_ONLY);
+		copy_options["append"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::WRITE_ONLY);
+		copy_options["filename_pattern"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::WRITE_ONLY);
+		copy_options["file_extension"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::WRITE_ONLY);
+		copy_options["per_thread_output"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::WRITE_ONLY);
+		copy_options["file_size_bytes"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
+		copy_options["partition_by"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
+		copy_options["return_files"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::WRITE_ONLY);
+		copy_options["preserve_order"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::WRITE_ONLY);
+		copy_options["return_stats"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::WRITE_ONLY);
+		copy_options["write_partition_columns"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::WRITE_ONLY);
+		copy_options["write_empty_file"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::WRITE_ONLY);
+		copy_options["hive_file_pattern"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::WRITE_ONLY);
+	}
+	return copy_options;
+}
+
+BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &function, CopyToType copy_to_type) {
+	if (function.plan) {
 		// plan rewrite COPY TO
-		return copy_function.function.plan(*this, stmt);
+		return function.plan(*this, stmt);
 	}
 
 	auto &copy_info = *stmt.info;
@@ -68,7 +95,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 	auto node_copy = copy_info.select_statement->Copy();
 	auto select_node = Bind(*node_copy);
 
-	if (!copy_function.function.copy_to_bind) {
+	if (!function.copy_to_bind) {
 		throw NotImplementedException("COPY TO is not supported for FORMAT \"%s\"", stmt.info->format);
 	}
 
@@ -89,7 +116,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 
 	CopyFunctionBindInput bind_input(*stmt.info);
 
-	bind_input.file_extension = copy_function.function.extension;
+	bind_input.file_extension = function.extension;
 
 	auto original_options = stmt.info->options;
 	stmt.info->options.clear();
@@ -135,7 +162,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 			if (option.second.empty()) {
 				throw BinderException("FILE_SIZE_BYTES cannot be empty");
 			}
-			if (!copy_function.function.rotate_files) {
+			if (!function.rotate_files) {
 				throw NotImplementedException("FILE_SIZE_BYTES not implemented for FORMAT \"%s\"", stmt.info->format);
 			}
 			if (option.second[0].GetTypeMutable().id() == LogicalTypeId::VARCHAR) {
@@ -207,7 +234,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 	}
 
 	// Allow the copy function to intercept the select list and types and push a new projection on top of the plan
-	if (copy_function.function.copy_to_select) {
+	if (function.copy_to_select) {
 		auto bindings = select_node.plan->GetColumnBindings();
 
 		CopyToSelectInput input = {context, stmt.info->options, {}, copy_to_type};
@@ -221,7 +248,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 			input.select_list.push_back(make_uniq<BoundColumnRefExpression>(name, type, binding));
 		}
 
-		auto new_select_list = copy_function.function.copy_to_select(input);
+		auto new_select_list = function.copy_to_select(input);
 		if (!new_select_list.empty()) {
 
 			// We have a new select list, create a projection on top of the current plan
@@ -248,13 +275,12 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 	    LogicalCopyToFile::GetNamesWithoutPartitions(unique_column_names, partition_cols, write_partition_columns);
 	auto types_to_write =
 	    LogicalCopyToFile::GetTypesWithoutPartitions(select_node.types, partition_cols, write_partition_columns);
-	auto function_data = copy_function.function.copy_to_bind(context, bind_input, names_to_write, types_to_write);
+	auto function_data = function.copy_to_bind(context, bind_input, names_to_write, types_to_write);
 
-	const auto rotate =
-	    copy_function.function.rotate_files && copy_function.function.rotate_files(*function_data, file_size_bytes);
+	const auto rotate = function.rotate_files && function.rotate_files(*function_data, file_size_bytes);
 	if (rotate) {
-		if (!copy_function.function.rotate_next_file) {
-			throw InternalException("rotate_next_file not implemented for \"%s\"", copy_function.function.extension);
+		if (!function.rotate_next_file) {
+			throw InternalException("rotate_next_file not implemented for \"%s\"", function.extension);
 		}
 		if (user_set_use_tmp_file) {
 			throw NotImplementedException(
@@ -273,13 +299,12 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 			throw NotImplementedException("Can't combine WRITE_EMPTY_FILE false with PARTITION_BY");
 		}
 	}
-	if (return_type == CopyFunctionReturnType::WRITTEN_FILE_STATISTICS &&
-	    !copy_function.function.copy_to_get_written_statistics) {
+	if (return_type == CopyFunctionReturnType::WRITTEN_FILE_STATISTICS && !function.copy_to_get_written_statistics) {
 		throw NotImplementedException("RETURN_STATS is not supported for the \"%s\" copy format", stmt.info->format);
 	}
 
 	// now create the copy information
-	auto copy = make_uniq<LogicalCopyToFile>(copy_function.function, std::move(function_data), std::move(stmt.info));
+	auto copy = make_uniq<LogicalCopyToFile>(function, std::move(function_data), std::move(stmt.info));
 	copy->file_path = file_path;
 	copy->use_tmp_file = use_tmp_file;
 	copy->overwrite_mode = overwrite_mode;
@@ -324,7 +349,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 	return result;
 }
 
-BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
+BoundStatement Binder::BindCopyFrom(CopyStatement &stmt, const CopyFunction &function) {
 	BoundStatement result;
 	result.types = {LogicalType::BIGINT};
 	result.names = {"Count"};
@@ -346,24 +371,6 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 
 	auto &bound_insert = insert_statement.plan->Cast<LogicalInsert>();
 
-	// lookup the format in the catalog
-	auto &catalog = Catalog::GetSystemCatalog(context);
-	auto on_entry_do =
-	    stmt.info->is_format_auto_detected ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
-	CatalogEntryRetriever entry_retriever {context};
-	auto entry = catalog.GetEntry(entry_retriever, DEFAULT_SCHEMA,
-	                              {CatalogType::COPY_FUNCTION_ENTRY, stmt.info->format}, on_entry_do);
-	if (!entry) {
-		IsFormatExtensionKnown(stmt.info->format);
-		// If we did not find an entry, we default to a CSV
-		entry = catalog.GetEntry(entry_retriever, DEFAULT_SCHEMA, {CatalogType::COPY_FUNCTION_ENTRY, "csv"},
-		                         OnEntryNotFound::THROW_EXCEPTION);
-	}
-	// lookup the format in the catalog
-	auto &copy_function = entry->Cast<CopyFunctionCatalogEntry>();
-	if (!copy_function.function.copy_from_bind) {
-		throw NotImplementedException("COPY FROM is not supported for FORMAT \"%s\"", stmt.info->format);
-	}
 	// lookup the table to copy into
 	BindSchemaOrCatalog(stmt.info->catalog, stmt.info->schema);
 	auto &table =
@@ -383,11 +390,11 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 			expected_names.push_back(col.Name());
 		}
 	}
-	CopyFromFunctionBindInput input(*stmt.info, copy_function.function.copy_from_function);
-	auto function_data =
-	    copy_function.function.copy_from_bind(context, input, expected_names, bound_insert.expected_types);
-	auto get = make_uniq<LogicalGet>(GenerateTableIndex(), copy_function.function.copy_from_function,
-	                                 std::move(function_data), bound_insert.expected_types, expected_names);
+	auto copy_from_function = function.copy_from_function;
+	CopyFromFunctionBindInput input(*stmt.info, copy_from_function);
+	auto function_data = function.copy_from_bind(context, input, expected_names, bound_insert.expected_types);
+	auto get = make_uniq<LogicalGet>(GenerateTableIndex(), std::move(copy_from_function), std::move(function_data),
+	                                 bound_insert.expected_types, expected_names);
 	for (idx_t i = 0; i < bound_insert.expected_types.size(); i++) {
 		get->AddColumnId(i);
 	}
@@ -499,13 +506,70 @@ BoundStatement Binder::Bind(CopyStatement &stmt, CopyToType copy_to_type) {
 		stmt.info->select_statement = std::move(statement);
 	}
 
+	// Let's first bind our format
+	// lookup the format in the catalog
+	auto on_entry_do =
+	    stmt.info->is_format_auto_detected ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
+	CatalogEntryRetriever entry_retriever {context};
+	auto &catalog = Catalog::GetSystemCatalog(context);
+	auto entry = catalog.GetEntry(entry_retriever, DEFAULT_SCHEMA,
+	                              {CatalogType::COPY_FUNCTION_ENTRY, stmt.info->format}, on_entry_do);
+
+	if (!entry) {
+		IsFormatExtensionKnown(stmt.info->format);
+		// If we did not find an entry, we default to a CSV
+		entry = catalog.GetEntry(entry_retriever, DEFAULT_SCHEMA, {CatalogType::COPY_FUNCTION_ENTRY, "csv"},
+		                         OnEntryNotFound::THROW_EXCEPTION);
+	}
+	auto &copy_function = entry->Cast<CopyFunctionCatalogEntry>();
+	auto &function = copy_function.function;
+
+	if (function.copy_options) {
+		// list all copy options - then bind them and offer alternatives
+		auto copy_options = GetFullCopyOptionsList(function, stmt.info->is_from);
+		for (auto &provided_entry : stmt.info->options) {
+			auto &provided_option = provided_entry.first;
+			auto option_entry = copy_options.find(provided_option);
+			if (option_entry == copy_options.end()) {
+				// option not found - offer an alternative suggestion
+				vector<string> candidates;
+				for (auto &copy_entry : copy_options) {
+					candidates.push_back(copy_entry.first);
+				}
+				string candidate_str = StringUtil::CandidatesMessage(
+				    StringUtil::TopNJaroWinkler(candidates, provided_option), "Candidate options");
+
+				throw NotImplementedException("Unrecognized option \"%s\" for %s\n%s", provided_option,
+				                              stmt.info->format, candidate_str);
+			}
+			auto &copy_option = option_entry->second;
+			if (copy_option.type.id() != LogicalTypeId::ANY) {
+				if (copy_option.type.id() == LogicalTypeId::BOOLEAN && provided_entry.second.empty()) {
+					// boolean can be empty (e.g. "HEADER")
+					continue;
+				}
+				if (provided_entry.second.size() != 1) {
+					throw InvalidInputException("Copy option %s did not expect a list as argument", provided_option);
+				}
+				auto &original_value = provided_entry.second[0];
+				Value new_value;
+				if (!original_value.TryCastAs(context, copy_option.type, new_value, nullptr)) {
+					throw InvalidInputException(
+					    "Copy option %s expected an argument of type %s, but %s could not be cast as this type",
+					    provided_option, copy_option.type, original_value.ToString());
+				}
+				original_value = std::move(new_value);
+			}
+		}
+	}
+
 	auto &properties = GetStatementProperties();
 	properties.allow_stream_result = false;
 	properties.return_type = StatementReturnType::CHANGED_ROWS;
 	if (stmt.info->is_from) {
-		return BindCopyFrom(stmt);
+		return BindCopyFrom(stmt, function);
 	} else {
-		return BindCopyTo(stmt, copy_to_type);
+		return BindCopyTo(stmt, function, copy_to_type);
 	}
 }
 

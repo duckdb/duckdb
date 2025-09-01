@@ -67,6 +67,7 @@ struct EntryLookupInfo;
 struct PivotColumnEntry;
 struct UnpivotEntry;
 struct CopyInfo;
+struct CopyOption;
 
 template <class T, class INDEX_TYPE>
 class IndexVector;
@@ -407,9 +408,10 @@ private:
 	unique_ptr<LogicalOperator> CreatePlan(BoundPivotRef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundDelimGetRef &ref);
 
-	BoundStatement BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type);
-	BoundStatement BindCopyFrom(CopyStatement &stmt);
+	BoundStatement BindCopyTo(CopyStatement &stmt, const CopyFunction &function, CopyToType copy_to_type);
+	BoundStatement BindCopyFrom(CopyStatement &stmt, const CopyFunction &function);
 	void BindCopyOptions(CopyInfo &info);
+	case_insensitive_map_t<CopyOption> GetFullCopyOptionsList(const CopyFunction &function, bool is_from);
 
 	void PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, BoundQueryNode &result);
 	void BindModifiers(BoundQueryNode &result, idx_t table_index, const vector<string> &names,
