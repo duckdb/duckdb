@@ -373,7 +373,7 @@ void WindowNaiveAggregator::Evaluate(ExecutionContext &context, const DataChunk 
 }
 
 bool WindowNaiveAggregator::CanAggregate(const BoundWindowExpression &wexpr) {
-	if (wexpr.aggregate && !wexpr.aggregate->CanAggregate()) {
+	if (!wexpr.aggregate || !wexpr.aggregate->CanAggregate()) {
 		return false;
 	}
 	return true;
