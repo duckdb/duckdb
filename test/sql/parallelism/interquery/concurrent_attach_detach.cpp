@@ -25,6 +25,7 @@ string getDBName(idx_t i) {
 const idx_t db_count = 10;
 const idx_t worker_count = 40;
 const idx_t iteration_count = 100;
+const idx_t nr_initial_rows = 10000;
 
 std::vector<string> logging;
 mutex log_mutex;
@@ -93,8 +94,6 @@ public:
 DBPoolMgr db_pool;
 
 void createTbl(Connection &conn, idx_t db_id, idx_t workerId) {
-	idx_t nr_initial_rows = 10000;
-
 	lock_guard<mutex> lock(db_infos[db_id].mu);
 	auto tblId = db_infos[db_id].table_count;
 	db_infos[db_id].tables.emplace_back(TableInfo {nr_initial_rows});
