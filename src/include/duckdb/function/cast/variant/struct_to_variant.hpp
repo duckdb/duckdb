@@ -52,8 +52,10 @@ bool ConvertStructToVariant(Vector &source, VariantVectorData &result, DataChunk
 					string_t struct_child_str(struct_child.first.c_str(),
 					                          NumericCast<uint32_t>(struct_child.first.size()));
 					auto dictionary_size = dictionary.size();
-					dictionary_indices.push_back(
-					    dictionary.emplace(std::make_pair(struct_child_str, dictionary_size)).first->second);
+					//! This will later be remapped to the sorted idx (see FinalizeVariantKeys)
+					auto unsorted_idx =
+					    dictionary.emplace(std::make_pair(struct_child_str, dictionary_size)).first->second;
+					dictionary_indices.push_back(unsorted_idx);
 				}
 			}
 

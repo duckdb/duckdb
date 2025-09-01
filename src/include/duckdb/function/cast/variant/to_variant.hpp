@@ -17,7 +17,7 @@ namespace variant {
 //! * @param count The size of the source vector
 //! * @param selvec The selection vector from i (< count) to the index in the result Vector
 //! * @param keys_selvec The selection vector to populate with mapping from keys index -> dictionary index
-//! * @param dictionary The dictionary to look up the dictionary index from
+//! * @param dictionary The dictionary to populate with the (unique and sorted) keys
 //! * @param values_index_selvec The selection vector from i (< count) to the index in the children.values_index selvec,
 //! to populate the parent's children
 template <bool WRITE_DATA, bool IGNORE_NULLS>

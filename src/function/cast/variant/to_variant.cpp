@@ -92,26 +92,26 @@ static void FinalizeVariantKeys(Vector &variant, OrderedOwningStringMap<uint32_t
 
 	bool already_sorted = true;
 
-	vector<idx_t> unsorted_to_sorted(dictionary.size());
+	vector<uint32_t> unsorted_to_sorted(dictionary.size());
 	auto it = dictionary.begin();
-	for (idx_t i = 0; i < dictionary.size(); i++) {
+	for (uint32_t sorted_idx = 0; sorted_idx < dictionary.size(); sorted_idx++) {
 		auto unsorted_idx = it->second;
-		if (unsorted_idx != i) {
+		if (unsorted_idx != sorted_idx) {
 			already_sorted = false;
 		}
-		unsorted_to_sorted[unsorted_idx] = i;
-		D_ASSERT(i < ListVector::GetListSize(keys));
-		keys_entry_data[i] = it->first;
-		keys_entry_data[i].SetSizeAndFinalize(static_cast<uint32_t>(keys_entry_data[i].GetSize()));
+		unsorted_to_sorted[unsorted_idx] = sorted_idx;
+		D_ASSERT(sorted_idx < ListVector::GetListSize(keys));
+		keys_entry_data[sorted_idx] = it->first;
+		keys_entry_data[sorted_idx].SetSizeAndFinalize(static_cast<uint32_t>(keys_entry_data[sorted_idx].GetSize()));
 		it++;
 	}
 
 	if (!already_sorted) {
 		//! Adjust the selection vector to point to the right dictionary index
 		for (idx_t i = 0; i < sel_size; i++) {
-			auto old_dictionary_index = sel.get_index(i);
-			auto new_dictionary_index = unsorted_to_sorted[old_dictionary_index];
-			sel.set_index(i, new_dictionary_index);
+			auto &entry = sel[i];
+			auto sorted_idx = unsorted_to_sorted[entry];
+			entry = sorted_idx;
 		}
 	}
 }
