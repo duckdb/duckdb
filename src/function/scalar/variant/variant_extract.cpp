@@ -111,7 +111,7 @@ static void VariantExtractFunction(DataChunk &input, ExpressionState &state, Vec
 
 	UnifiedVariantVectorData variant(source_format);
 
-	//! Path either contains array indices or object keys
+	//! Extract always starts by looking at value_index 0
 	SelectionVector value_index_sel;
 	value_index_sel.Initialize(count);
 	for (idx_t i = 0; i < count; i++) {
@@ -124,16 +124,17 @@ static void VariantExtractFunction(DataChunk &input, ExpressionState &state, Vec
 	auto owned_nested_data = allocator.Allocate(sizeof(VariantNestedData) * count);
 	auto nested_data = reinterpret_cast<VariantNestedData *>(owned_nested_data.get());
 
-	string error;
 	auto &component = info.component;
-
 	auto expected_type = component.lookup_mode == VariantChildLookupMode::BY_INDEX ? VariantLogicalType::ARRAY
 	                                                                               : VariantLogicalType::OBJECT;
+	string error;
 	if (!VariantUtils::CollectNestedData(variant, expected_type, value_index_sel, count, optional_idx(), 0, nested_data,
 	                                     FlatVector::Validity(result), error)) {
+		//! value_index 0 is not a nested type, can't extract
 		throw InvalidInputException(error);
 	}
 
+	//! Look up the value_index of the child we're extracting
 	if (!VariantUtils::FindChildValues(variant, component, optional_idx(), new_value_index_sel, nested_data, count)) {
 		switch (component.lookup_mode) {
 		case VariantChildLookupMode::BY_INDEX: {
@@ -145,11 +146,9 @@ static void VariantExtractFunction(DataChunk &input, ExpressionState &state, Vec
 		}
 	}
 
-	//! We have these indices left, the simplest way we can finalize this is:
-	//! Leave the 'keys' alone, we'll just potentially have unused keys
-	//! Leave the 'children' alone, we'll have less children, but the child indices are still correct
-	//! We can also leave 'data' alone
-	//! We just need to remap index 0 of the 'values' list (for all rows)
+	//! We reference the input, creating a dictionary over the 'values' list entry to remap what value_index 0 points
+	//! to. This way we can perform a zero-copy extract on the variant column (when there are no nulls). The following
+	//! code looks complicated but is necessary to avoid modifying the 'input'
 
 	auto &values = UnifiedVariantVector::GetValues(source_format);
 	auto values_data = values.GetData<list_entry_t>(values);
@@ -162,7 +161,7 @@ static void VariantExtractFunction(DataChunk &input, ExpressionState &state, Vec
 	VariantVector::GetChildren(result).Reference(VariantVector::GetChildren(variant_vec));
 	VariantVector::GetData(result).Reference(VariantVector::GetData(variant_vec));
 
-	//! Copy the existing 'values'
+	//! Copy the existing 'values' list entry data
 	auto &result_values = VariantVector::GetValues(result);
 	result_values.Initialize(false, count);
 	ListVector::Reserve(result_values, values_list_size);
@@ -192,9 +191,9 @@ static void VariantExtractFunction(DataChunk &input, ExpressionState &state, Vec
 	auto value_is_null = VariantUtils::ValueIsNull(variant, new_value_index_sel, count, optional_idx());
 	if (!value_is_null.empty()) {
 		result.Flatten(count);
-	}
-	for (auto &i : value_is_null) {
-		FlatVector::SetNull(result, i, true);
+		for (auto &i : value_is_null) {
+			FlatVector::SetNull(result, i, true);
+		}
 	}
 
 	if (input.AllConstant()) {
