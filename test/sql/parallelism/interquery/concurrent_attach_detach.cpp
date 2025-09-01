@@ -22,9 +22,9 @@ string getDBName(idx_t i) {
 	return prefix + to_string(i);
 }
 
-const idx_t dbCount = 10;
-const idx_t workerCount = 40;
-const idx_t iterationCount = 100;
+const idx_t db_count = 10;
+const idx_t worker_count = 40;
+const idx_t iteration_count = 100;
 
 std::vector<string> logging;
 mutex log_mutex;
@@ -52,11 +52,11 @@ struct TableInfo {
 
 struct DBInfo {
 	mutex mu;
-	idx_t TableCount = 0;
+	idx_t table_count = 0;
 	std::vector<TableInfo> tables;
 };
 
-DBInfo dbInfos[dbCount];
+DBInfo db_infos[db_count];
 
 class DBPoolMgr {
 public:
@@ -90,17 +90,17 @@ public:
 	}
 };
 
-DBPoolMgr dbPool;
+DBPoolMgr db_pool;
 
-void createTbl(Connection &conn, idx_t dbId, idx_t workerId) {
+void createTbl(Connection &conn, idx_t db_id, idx_t workerId) {
 	idx_t nr_initial_rows = 10000;
 
-	lock_guard<mutex> lock(dbInfos[dbId].mu);
-	auto tblId = dbInfos[dbId].TableCount;
-	dbInfos[dbId].tables.emplace_back(TableInfo {nr_initial_rows});
-	dbInfos[dbId].TableCount++;
+	lock_guard<mutex> lock(db_infos[db_id].mu);
+	auto tblId = db_infos[db_id].table_count;
+	db_infos[db_id].tables.emplace_back(TableInfo {nr_initial_rows});
+	db_infos[db_id].table_count++;
 
-	string query = "CREATE TABLE " + getDBName(dbId) + ".tbl_" + to_string(tblId) +
+	string query = "CREATE TABLE " + getDBName(db_id) + ".tbl_" + to_string(tblId) +
 	               " AS SELECT "
 	               "range::BIGINT AS i, "
 	               "range::VARCHAR AS s, "
@@ -113,44 +113,44 @@ void createTbl(Connection &conn, idx_t dbId, idx_t workerId) {
 	execQuery(conn, query);
 }
 
-void lookup(Connection &conn, idx_t dbId, idx_t workerId) {
-	unique_lock<mutex> lock(dbInfos[dbId].mu);
-	auto maxTblId = dbInfos[dbId].TableCount;
-	if (maxTblId == 0) {
+void lookup(Connection &conn, idx_t db_id, idx_t worker_id) {
+	unique_lock<mutex> lock(db_infos[db_id].mu);
+	auto max_tbl_id = db_infos[db_id].table_count;
+	if (max_tbl_id == 0) {
 		return;
 	}
-	auto tblId = std::rand() % maxTblId;
-	auto expectedMaxVal = dbInfos[dbId].tables[tblId].size - 1;
+	auto tbl_id = std::rand() % max_tbl_id;
+	auto expected_max_val = db_infos[db_id].tables[tbl_id].size - 1;
 
 	// run query
-	auto tableName = getDBName(dbId) + ".tbl_" + to_string(tblId);
-	string query = "SELECT i, s, ts, obj FROM " + tableName + " WHERE i = (select max(i) from " + tableName + ")";
-	addLog("thread: " + to_string(workerId) + "; q: " + query);
+	auto table_name = getDBName(db_id) + ".tbl_" + to_string(tbl_id);
+	string query = "SELECT i, s, ts, obj FROM " + table_name + " WHERE i = (select max(i) from " + table_name + ")";
+	addLog("thread: " + to_string(worker_id) + "; q: " + query);
 	auto result = execQuery(conn, query);
 	lock.unlock();
 
-	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(expectedMaxVal)}));
-	REQUIRE(CHECK_COLUMN(result, 1, {to_string(expectedMaxVal)}));
-	REQUIRE(CHECK_COLUMN(result, 2, {Value::TIMESTAMP(timestamp_t {static_cast<int64_t>(expectedMaxVal * 1000)})}));
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(expected_max_val)}));
+	REQUIRE(CHECK_COLUMN(result, 1, {to_string(expected_max_val)}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value::TIMESTAMP(timestamp_t {static_cast<int64_t>(expected_max_val * 1000)})}));
 	REQUIRE(CHECK_COLUMN(
-	    result, 3, {Value::STRUCT({{"key1", Value::INTEGER(expectedMaxVal)}, {"key2", to_string(expectedMaxVal)}})}));
+	    result, 3, {Value::STRUCT({{"key1", Value::INTEGER(expected_max_val)}, {"key2", to_string(expected_max_val)}})}));
 }
 
-void append(Connection &conn, idx_t dbId, idx_t workerId, idx_t append_num_rows = STANDARD_VECTOR_SIZE) {
-	lock_guard<mutex> lock(dbInfos[dbId].mu);
-	auto maxTblId = dbInfos[dbId].TableCount;
-	if (maxTblId == 0) {
+void append(Connection &conn, idx_t db_id, idx_t worker_id, idx_t append_num_rows = STANDARD_VECTOR_SIZE) {
+	lock_guard<mutex> lock(db_infos[db_id].mu);
+	auto max_tbl_id = db_infos[db_id].table_count;
+	if (max_tbl_id == 0) {
 		return;
 	}
-	auto tblId = std::rand() % maxTblId;
-	idx_t current_num_rows = dbInfos[dbId].tables[tblId].size;
-	dbInfos[dbId].tables[tblId].size += append_num_rows;
+	auto tbl_id = std::rand() % max_tbl_id;
+	idx_t current_num_rows = db_infos[db_id].tables[tbl_id].size;
+	db_infos[db_id].tables[tbl_id].size += append_num_rows;
 
 	// set appender
-	auto tblStr = "tbl_" + to_string(tblId);
-	addLog("thread: " + to_string(workerId) + "; db: " + getDBName(dbId) + "; table: " + tblStr + "; append rows");
+	auto tbl_str = "tbl_" + to_string(tbl_id);
+	addLog("thread: " + to_string(worker_id) + "; db: " + getDBName(db_id) + "; table: " + tbl_str + "; append rows");
 	try {
-		duckdb::Appender appender(conn, getDBName(dbId), DEFAULT_SCHEMA, tblStr);
+		duckdb::Appender appender(conn, getDBName(db_id), DEFAULT_SCHEMA, tbl_str);
 		DataChunk chunk;
 
 		child_list_t<LogicalType> struct_children;
@@ -204,32 +204,32 @@ void append(Connection &conn, idx_t dbId, idx_t workerId, idx_t append_num_rows 
 	}
 }
 
-void workUnit(std::unique_ptr<Connection> conn, const idx_t &workerId) {
-	for (int i = 0; i < iterationCount; i++) {
+void workUnit(std::unique_ptr<Connection> conn, const idx_t &worker_id) {
+	for (int i = 0; i < iteration_count; i++) {
 		if (!success) {
 			break;
 		}
 		try {
 			idx_t scenarioId = std::rand() % 3;
-			idx_t dbId = std::rand() % dbCount;
+			idx_t dbId = std::rand() % db_count;
 
-			dbPool.addWorker(*conn, dbId);
+			db_pool.addWorker(*conn, dbId);
 
 			switch (scenarioId) {
 			case 0:
-				createTbl(*conn, dbId, workerId);
+				createTbl(*conn, dbId, worker_id);
 				break;
 			case 1:
-				lookup(*conn, dbId, workerId);
+				lookup(*conn, dbId, worker_id);
 				break;
 			case 2:
-				append(*conn, dbId, workerId);
+				append(*conn, dbId, worker_id);
 				break;
 			default:
 				throw std::runtime_error("invalid scenario");
 			}
 
-			dbPool.removeWorker(*conn, dbId);
+			db_pool.removeWorker(*conn, dbId);
 		} catch (...) {
 			break;
 		}
@@ -248,7 +248,7 @@ TEST_CASE("Run a concurrent ATTACH/DETACH scenario", "[attach][.]") {
 	// execQuery(initConn, "SET storage_compatibility_version = 'v1.3.2'");
 
 	std::vector<std::thread> workers;
-	for (int i = 0; i < workerCount; i++) {
+	for (int i = 0; i < worker_count; i++) {
 		auto conn = make_uniq<Connection>(db);
 		workers.emplace_back(workUnit, std::move(conn), i);
 	}
