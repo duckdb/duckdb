@@ -22,6 +22,7 @@ namespace variant {
 //! * @param dictionary The dictionary to populate with the (unique and sorted) keys
 //! * @param values_index_selvec The selection vector from i (< count) to the index in the children.values_index selvec,
 //! to populate the parent's children
+//! * @param is_root Whether we are writing to the root of the Variant, or a child value (in an OBJECT/ARRAY)
 template <bool WRITE_DATA, bool IGNORE_NULLS>
 bool ConvertToVariant(Vector &source, VariantVectorData &result, DataChunk &offsets, idx_t count, idx_t source_size,
                       optional_ptr<const SelectionVector> selvec, optional_ptr<const SelectionVector> source_sel,
