@@ -268,7 +268,6 @@ void WriteAheadLog::WriteHeader() {
 		serializer.WriteProperty(103, "checkpoint_iteration", checkpoint_iteration);
 	}
 
-	// TODO: also only read if correct storage version.
 	serializer.End();
 }
 

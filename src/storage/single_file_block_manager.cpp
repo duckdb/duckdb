@@ -121,7 +121,9 @@ void MainHeader::Write(WriteStream &ser) {
 		SerializeEncryptionMetadata(ser, encrypted_canary);
 	}
 
-	ser.Write<hugeint_t>(header_id);
+	if (version_number > 66) {
+		ser.Write<hugeint_t>(header_id);
+	}
 }
 
 void MainHeader::CheckMagicBytes(QueryContext context, FileHandle &handle) {
@@ -251,6 +253,7 @@ SingleFileBlockManager::SingleFileBlockManager(AttachedDatabase &db_p, const str
                                             Storage::FILE_HEADER_SIZE - options.block_header_size.GetIndex(),
                                             options.block_header_size.GetIndex()),
       iteration_count(0), options(options) {
+	D_ASSERT(1);
 }
 
 FileOpenFlags SingleFileBlockManager::GetFileFlags(bool create_new) const {
@@ -281,6 +284,7 @@ uint64_t SingleFileBlockManager::GetVersionNumber() const {
 	uint64_t version_number = VERSION_NUMBER;
 	if (options.storage_version.GetIndex() >= 4) {
 		version_number = 65;
+		//		version_number = VERSION_NUMBER_UPPER;
 	}
 	return version_number;
 }
