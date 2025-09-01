@@ -36,13 +36,13 @@ struct VariantDecimalData {
 struct VariantVectorData {
 public:
 	explicit VariantVectorData(Vector &variant)
-	    : variant(variant), key_id_validity(FlatVector::Validity(VariantVector::GetChildrenKeyId(variant))),
+	    : variant(variant), keys_index_validity(FlatVector::Validity(VariantVector::GetChildrenKeysIndex(variant))),
 	      keys(VariantVector::GetKeys(variant)) {
 		blob_data = FlatVector::GetData<string_t>(VariantVector::GetData(variant));
 		type_ids_data = FlatVector::GetData<uint8_t>(VariantVector::GetValuesTypeId(variant));
 		byte_offset_data = FlatVector::GetData<uint32_t>(VariantVector::GetValuesByteOffset(variant));
-		key_id_data = FlatVector::GetData<uint32_t>(VariantVector::GetChildrenKeyId(variant));
-		value_id_data = FlatVector::GetData<uint32_t>(VariantVector::GetChildrenValueId(variant));
+		keys_index_data = FlatVector::GetData<uint32_t>(VariantVector::GetChildrenKeysIndex(variant));
+		values_index_data = FlatVector::GetData<uint32_t>(VariantVector::GetChildrenValuesIndex(variant));
 		values_data = FlatVector::GetData<list_entry_t>(VariantVector::GetValues(variant));
 		children_data = FlatVector::GetData<list_entry_t>(VariantVector::GetChildren(variant));
 		keys_data = FlatVector::GetData<list_entry_t>(keys);
@@ -59,9 +59,9 @@ public:
 	uint32_t *byte_offset_data;
 
 	//! children
-	uint32_t *key_id_data;
-	uint32_t *value_id_data;
-	ValidityMask &key_id_validity;
+	uint32_t *keys_index_data;
+	uint32_t *values_index_data;
+	ValidityMask &keys_index_validity;
 
 	//! values | children | keys
 	list_entry_t *values_data;
@@ -113,16 +113,16 @@ public:
 	explicit UnifiedVariantVectorData(const RecursiveUnifiedVectorFormat &variant)
 	    : variant(variant), keys(UnifiedVariantVector::GetKeys(variant)),
 	      keys_entry(UnifiedVariantVector::GetKeysEntry(variant)), children(UnifiedVariantVector::GetChildren(variant)),
-	      key_id(UnifiedVariantVector::GetChildrenKeyId(variant)),
-	      value_id(UnifiedVariantVector::GetChildrenValueId(variant)), values(UnifiedVariantVector::GetValues(variant)),
-	      type_id(UnifiedVariantVector::GetValuesTypeId(variant)),
+	      keys_index(UnifiedVariantVector::GetChildrenKeysIndex(variant)),
+	      values_index(UnifiedVariantVector::GetChildrenValuesIndex(variant)),
+	      values(UnifiedVariantVector::GetValues(variant)), type_id(UnifiedVariantVector::GetValuesTypeId(variant)),
 	      byte_offset(UnifiedVariantVector::GetValuesByteOffset(variant)), data(UnifiedVariantVector::GetData(variant)),
-	      key_id_validity(key_id.validity) {
+	      keys_index_validity(keys_index.validity) {
 		blob_data = data.GetData<string_t>();
 		type_id_data = type_id.GetData<uint8_t>();
 		byte_offset_data = byte_offset.GetData<uint32_t>();
-		key_id_data = key_id.GetData<uint32_t>();
-		value_id_data = value_id.GetData<uint32_t>();
+		keys_index_data = keys_index.GetData<uint32_t>();
+		values_index_data = values_index.GetData<uint32_t>();
 		values_data = values.GetData<list_entry_t>();
 		children_data = children.GetData<list_entry_t>();
 		keys_data = keys.GetData<list_entry_t>();
@@ -133,9 +133,9 @@ public:
 	bool RowIsValid(idx_t row) const {
 		return variant.unified.validity.RowIsValid(variant.unified.sel->get_index(row));
 	}
-	bool KeyIdIsValid(idx_t row, idx_t index) const {
+	bool KeysIndexIsValid(idx_t row, idx_t index) const {
 		auto list_entry = GetChildrenListEntry(row);
-		return key_id_validity.RowIsValid(key_id.sel->get_index(list_entry.offset + index));
+		return keys_index_validity.RowIsValid(keys_index.sel->get_index(list_entry.offset + index));
 	}
 
 	list_entry_t GetChildrenListEntry(idx_t row) const {
@@ -148,13 +148,13 @@ public:
 		auto list_entry = keys_data[keys.sel->get_index(row)];
 		return keys_entry_data[keys_entry.sel->get_index(list_entry.offset + index)];
 	}
-	uint32_t GetKeyId(idx_t row, idx_t child_index) const {
+	uint32_t GetKeysIndex(idx_t row, idx_t child_index) const {
 		auto list_entry = GetChildrenListEntry(row);
-		return key_id_data[key_id.sel->get_index(list_entry.offset + child_index)];
+		return keys_index_data[keys_index.sel->get_index(list_entry.offset + child_index)];
 	}
-	uint32_t GetValueId(idx_t row, idx_t child_index) const {
+	uint32_t GetValuesIndex(idx_t row, idx_t child_index) const {
 		auto list_entry = GetChildrenListEntry(row);
-		return value_id_data[value_id.sel->get_index(list_entry.offset + child_index)];
+		return values_index_data[values_index.sel->get_index(list_entry.offset + child_index)];
 	}
 	VariantLogicalType GetTypeId(idx_t row, idx_t value_index) const {
 		auto list_entry = values_data[values.sel->get_index(row)];
@@ -173,8 +173,8 @@ public:
 	const UnifiedVectorFormat &keys;
 	const UnifiedVectorFormat &keys_entry;
 	const UnifiedVectorFormat &children;
-	const UnifiedVectorFormat &key_id;
-	const UnifiedVectorFormat &value_id;
+	const UnifiedVectorFormat &keys_index;
+	const UnifiedVectorFormat &values_index;
 	const UnifiedVectorFormat &values;
 	const UnifiedVectorFormat &type_id;
 	const UnifiedVectorFormat &byte_offset;
@@ -183,14 +183,14 @@ public:
 	const list_entry_t *keys_data = nullptr;
 	const string_t *keys_entry_data = nullptr;
 	const list_entry_t *children_data = nullptr;
-	const uint32_t *key_id_data = nullptr;
-	const uint32_t *value_id_data = nullptr;
+	const uint32_t *keys_index_data = nullptr;
+	const uint32_t *values_index_data = nullptr;
 	const list_entry_t *values_data = nullptr;
 	const uint8_t *type_id_data = nullptr;
 	const uint32_t *byte_offset_data = nullptr;
 	const string_t *blob_data = nullptr;
 
-	const ValidityMask &key_id_validity;
+	const ValidityMask &keys_index_validity;
 };
 
 struct VariantCasts {

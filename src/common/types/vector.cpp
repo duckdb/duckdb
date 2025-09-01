@@ -2831,20 +2831,20 @@ Vector &VariantVector::GetChildren(const Vector &vec) {
 	return *StructVector::GetEntries(vec)[1];
 }
 
-Vector &VariantVector::GetChildrenKeyId(Vector &vec) {
+Vector &VariantVector::GetChildrenKeysIndex(Vector &vec) {
 	auto &children = ListVector::GetEntry(GetChildren(vec));
 	return *StructVector::GetEntries(children)[0];
 }
-Vector &VariantVector::GetChildrenKeyId(const Vector &vec) {
+Vector &VariantVector::GetChildrenKeysIndex(const Vector &vec) {
 	auto &children = ListVector::GetEntry(GetChildren(vec));
 	return *StructVector::GetEntries(children)[0];
 }
 
-Vector &VariantVector::GetChildrenValueId(Vector &vec) {
+Vector &VariantVector::GetChildrenValuesIndex(Vector &vec) {
 	auto &children = ListVector::GetEntry(GetChildren(vec));
 	return *StructVector::GetEntries(children)[1];
 }
-Vector &VariantVector::GetChildrenValueId(const Vector &vec) {
+Vector &VariantVector::GetChildrenValuesIndex(const Vector &vec) {
 	auto &children = ListVector::GetEntry(GetChildren(vec));
 	return *StructVector::GetEntries(children)[1];
 }
@@ -2893,11 +2893,11 @@ const UnifiedVectorFormat &UnifiedVariantVector::GetChildren(const RecursiveUnif
 	return vec.children[1].unified;
 }
 
-const UnifiedVectorFormat &UnifiedVariantVector::GetChildrenKeyId(const RecursiveUnifiedVectorFormat &vec) {
+const UnifiedVectorFormat &UnifiedVariantVector::GetChildrenKeysIndex(const RecursiveUnifiedVectorFormat &vec) {
 	return vec.children[1].children[0].children[0].unified;
 }
 
-const UnifiedVectorFormat &UnifiedVariantVector::GetChildrenValueId(const RecursiveUnifiedVectorFormat &vec) {
+const UnifiedVectorFormat &UnifiedVariantVector::GetChildrenValuesIndex(const RecursiveUnifiedVectorFormat &vec) {
 	return vec.children[1].children[0].children[1].unified;
 }
 

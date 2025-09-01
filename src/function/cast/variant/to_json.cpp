@@ -40,13 +40,13 @@ yyjson_mut_val *VariantCasts::ConvertVariantToJSON(yyjson_mut_doc *doc, const Re
 	auto &children = UnifiedVariantVector::GetChildren(source);
 	auto children_data = children.GetData<list_entry_t>(children);
 
-	//! value_ids
-	auto &value_ids = UnifiedVariantVector::GetChildrenValueId(source);
-	auto value_ids_data = value_ids.GetData<uint32_t>(value_ids);
+	//! values_index
+	auto &values_index = UnifiedVariantVector::GetChildrenValuesIndex(source);
+	auto values_index_data = values_index.GetData<uint32_t>(values_index);
 
-	//! key_ids
-	auto &key_ids = UnifiedVariantVector::GetChildrenKeyId(source);
-	auto key_ids_data = key_ids.GetData<uint32_t>(key_ids);
+	//! keys_index
+	auto &keys_index = UnifiedVariantVector::GetChildrenKeysIndex(source);
+	auto keys_index_data = keys_index.GetData<uint32_t>(keys_index);
 
 	//! keys
 	auto &keys = UnifiedVariantVector::GetKeys(source);
@@ -213,11 +213,11 @@ yyjson_mut_val *VariantCasts::ConvertVariantToJSON(yyjson_mut_doc *doc, const Re
 		}
 		auto child_index_start = VarintDecode<uint32_t>(ptr);
 		for (idx_t i = 0; i < count; i++) {
-			auto index = value_ids.sel->get_index(children_list_entry.offset + child_index_start + i);
-			auto child_index = value_ids_data[index];
+			auto index = values_index.sel->get_index(children_list_entry.offset + child_index_start + i);
+			auto child_index = values_index_data[index];
 #ifdef DEBUG
-			auto key_id_index = key_ids.sel->get_index(children_list_entry.offset + child_index_start + i);
-			D_ASSERT(!key_ids.validity.RowIsValid(key_id_index));
+			auto key_id_index = keys_index.sel->get_index(children_list_entry.offset + child_index_start + i);
+			D_ASSERT(!keys_index.validity.RowIsValid(key_id_index));
 #endif
 			auto val = ConvertVariantToJSON(doc, source, row, child_index);
 			if (!val) {
@@ -236,15 +236,15 @@ yyjson_mut_val *VariantCasts::ConvertVariantToJSON(yyjson_mut_doc *doc, const Re
 		auto child_index_start = VarintDecode<uint32_t>(ptr);
 
 		for (idx_t i = 0; i < count; i++) {
-			auto children_index = value_ids.sel->get_index(children_list_entry.offset + child_index_start + i);
-			auto child_value_idx = value_ids_data[children_index];
+			auto children_index = values_index.sel->get_index(children_list_entry.offset + child_index_start + i);
+			auto child_value_idx = values_index_data[children_index];
 			auto val = ConvertVariantToJSON(doc, source, row, child_value_idx);
 			if (!val) {
 				return nullptr;
 			}
-			auto key_ids_index = key_ids.sel->get_index(children_list_entry.offset + child_index_start + i);
-			D_ASSERT(key_ids.validity.RowIsValid(key_ids_index));
-			auto child_key_id = key_ids_data[key_ids_index];
+			auto keys_index_index = keys_index.sel->get_index(children_list_entry.offset + child_index_start + i);
+			D_ASSERT(keys_index.validity.RowIsValid(keys_index_index));
+			auto child_key_id = keys_index_data[keys_index_index];
 			auto &key = keys_entry_data[keys_entry.sel->get_index(keys_list_entry.offset + child_key_id)];
 			yyjson_mut_obj_put(obj, yyjson_mut_strncpy(doc, key.GetData(), key.GetSize()), val);
 		}

@@ -18,13 +18,13 @@ namespace variant {
 //! * @param selvec The selection vector from i (< count) to the index in the result Vector
 //! * @param keys_selvec The selection vector to populate with mapping from keys index -> dictionary index
 //! * @param dictionary The dictionary to look up the dictionary index from
-//! * @param value_ids_selvec The selection vector from i (< count) to the index in the children.value_ids selvec, to
-//! populate the parent's children
+//! * @param values_index_selvec The selection vector from i (< count) to the index in the children.values_index selvec,
+//! to populate the parent's children
 template <bool WRITE_DATA, bool IGNORE_NULLS>
 bool ConvertToVariant(Vector &source, VariantVectorData &result, DataChunk &offsets, idx_t count, idx_t source_size,
                       optional_ptr<const SelectionVector> selvec, optional_ptr<const SelectionVector> source_sel,
                       SelectionVector &keys_selvec, OrderedOwningStringMap<uint32_t> &dictionary,
-                      optional_ptr<const SelectionVector> value_ids_selvec, const bool is_root) {
+                      optional_ptr<const SelectionVector> values_index_selvec, const bool is_root) {
 	auto &type = source.GetType();
 
 	auto logical_type = type.id();
@@ -33,36 +33,36 @@ bool ConvertToVariant(Vector &source, VariantVectorData &result, DataChunk &offs
 		case LogicalTypeId::MAP:
 		case LogicalTypeId::LIST:
 			return ConvertListToVariant<WRITE_DATA, IGNORE_NULLS>(source, result, offsets, count, source_size, selvec,
-			                                                      source_sel, keys_selvec, dictionary, value_ids_selvec,
-			                                                      is_root);
+			                                                      source_sel, keys_selvec, dictionary,
+			                                                      values_index_selvec, is_root);
 		case LogicalTypeId::ARRAY:
 			return ConvertArrayToVariant<WRITE_DATA, IGNORE_NULLS>(source, result, offsets, count, source_size, selvec,
 			                                                       source_sel, keys_selvec, dictionary,
-			                                                       value_ids_selvec, is_root);
+			                                                       values_index_selvec, is_root);
 		case LogicalTypeId::STRUCT:
 			return ConvertStructToVariant<WRITE_DATA, IGNORE_NULLS>(source, result, offsets, count, source_size, selvec,
 			                                                        source_sel, keys_selvec, dictionary,
-			                                                        value_ids_selvec, is_root);
+			                                                        values_index_selvec, is_root);
 		case LogicalTypeId::UNION:
 			return ConvertUnionToVariant<WRITE_DATA, IGNORE_NULLS>(source, result, offsets, count, source_size, selvec,
 			                                                       source_sel, keys_selvec, dictionary,
-			                                                       value_ids_selvec, is_root);
+			                                                       values_index_selvec, is_root);
 		case LogicalTypeId::VARIANT:
 			return ConvertVariantToVariant<WRITE_DATA, IGNORE_NULLS>(source, result, offsets, count, source_size,
 			                                                         selvec, source_sel, keys_selvec, dictionary,
-			                                                         value_ids_selvec, is_root);
+			                                                         values_index_selvec, is_root);
 		default:
 			throw NotImplementedException("Can't convert nested type '%s'", EnumUtil::ToString(logical_type));
 		};
 	} else {
 		if (type.IsJSONType()) {
 			return ConvertJSONToVariant<WRITE_DATA, IGNORE_NULLS>(source, result, offsets, count, source_size, selvec,
-			                                                      source_sel, keys_selvec, dictionary, value_ids_selvec,
-			                                                      is_root);
+			                                                      source_sel, keys_selvec, dictionary,
+			                                                      values_index_selvec, is_root);
 		} else {
 			return ConvertPrimitiveToVariant<WRITE_DATA, IGNORE_NULLS>(source, result, offsets, count, source_size,
 			                                                           selvec, source_sel, keys_selvec, dictionary,
-			                                                           value_ids_selvec, is_root);
+			                                                           values_index_selvec, is_root);
 		}
 	}
 	return true;

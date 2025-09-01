@@ -1997,8 +1997,9 @@ LogicalType LogicalType::VARIANT() {
 	//! keys
 	children.emplace_back("keys", LogicalType::LIST(LogicalTypeId::VARCHAR));
 	//! children
-	children.emplace_back("children", LogicalType::LIST(LogicalType::STRUCT(
-	                                      {{"key_id", LogicalType::UINTEGER}, {"value_id", LogicalType::UINTEGER}})));
+	children.emplace_back("children",
+	                      LogicalType::LIST(LogicalType::STRUCT(
+	                          {{"keys_index", LogicalType::UINTEGER}, {"values_index", LogicalType::UINTEGER}})));
 	//! values
 	children.emplace_back("values", LogicalType::LIST(LogicalType::STRUCT(
 	                                    {{"type_id", LogicalType::UTINYINT}, {"byte_offset", LogicalType::UINTEGER}})));

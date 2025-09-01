@@ -70,8 +70,8 @@ static bool ConvertJSONArray(yyjson_val *arr, VariantVectorData &result, DataChu
 
 		if (WRITE_DATA) {
 			//! Set the child index
-			result.key_id_validity.SetInvalid(start_child_index);
-			result.value_id_data[start_child_index++] = values_offset_data[result_index];
+			result.keys_index_validity.SetInvalid(start_child_index);
+			result.values_index_data[start_child_index++] = values_offset_data[result_index];
 		}
 		if (!ConvertJSON<WRITE_DATA, IGNORE_NULLS>(val, result, offsets, result_index, keys_selvec, dictionary,
 		                                           false)) {
@@ -116,15 +116,15 @@ static bool ConvertJSONObject(yyjson_val *obj, VariantVectorData &result, DataCh
 
 		if (WRITE_DATA) {
 			auto str = string_t(key_string, key_string_len);
-			auto key_id = start_key_index++;
+			auto keys_index = start_key_index++;
 			auto dictionary_size = dictionary.size();
 			auto dictionary_index = dictionary.emplace(std::make_pair(str, dictionary_size)).first->second;
 
-			//! Set the key_id
-			result.key_id_data[start_child_index] = key_id;
-			//! Set the value_id
-			result.value_id_data[start_child_index++] = values_offset_data[result_index];
-			keys_selvec.set_index(keys_list_entry.offset + key_id, dictionary_index);
+			//! Set the keys_index
+			result.keys_index_data[start_child_index] = keys_index;
+			//! Set the values_index
+			result.values_index_data[start_child_index++] = values_offset_data[result_index];
+			keys_selvec.set_index(keys_list_entry.offset + keys_index, dictionary_index);
 		}
 
 		val = yyjson_obj_iter_get_val(key);
@@ -239,7 +239,7 @@ template <bool WRITE_DATA, bool IGNORE_NULLS>
 bool ConvertJSONToVariant(Vector &source, VariantVectorData &result, DataChunk &offsets, idx_t count, idx_t source_size,
                           optional_ptr<const SelectionVector> selvec, optional_ptr<const SelectionVector> source_sel,
                           SelectionVector &keys_selvec, OrderedOwningStringMap<uint32_t> &dictionary,
-                          optional_ptr<const SelectionVector> value_ids_selvec, const bool is_root) {
+                          optional_ptr<const SelectionVector> values_index_selvec, const bool is_root) {
 	D_ASSERT(source.GetType().IsJSONType());
 
 	UnifiedVectorFormat source_format;
@@ -257,14 +257,14 @@ bool ConvertJSONToVariant(Vector &source, VariantVectorData &result, DataChunk &
 		if (!source_format.validity.RowIsValid(source_index)) {
 			if (!IGNORE_NULLS) {
 				HandleVariantNull<WRITE_DATA>(result, result_index, values_offset_data, blob_offset_data[result_index],
-				                              value_ids_selvec, i, is_root);
+				                              values_index_selvec, i, is_root);
 			}
 			continue;
 		}
 
-		if (WRITE_DATA && value_ids_selvec) {
-			//! Write the value_id for the parent of this column
-			result.value_id_data[value_ids_selvec->get_index(i)] = values_offset_data[result_index];
+		if (WRITE_DATA && values_index_selvec) {
+			//! Write the 'values_index' for the parent of this column
+			result.values_index_data[values_index_selvec->get_index(i)] = values_offset_data[result_index];
 		}
 
 		auto &val = source_data[source_index];
@@ -274,7 +274,7 @@ bool ConvertJSONToVariant(Vector &source, VariantVectorData &result, DataChunk &
 		if (!json_holder.doc) {
 			if (!IGNORE_NULLS) {
 				HandleVariantNull<WRITE_DATA>(result, result_index, values_offset_data, blob_offset_data[result_index],
-				                              value_ids_selvec, i, is_root);
+				                              values_index_selvec, i, is_root);
 			}
 			continue;
 		}

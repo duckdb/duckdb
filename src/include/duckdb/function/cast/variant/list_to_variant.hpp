@@ -9,7 +9,7 @@ template <bool WRITE_DATA, bool IGNORE_NULLS>
 bool ConvertListToVariant(Vector &source, VariantVectorData &result, DataChunk &offsets, idx_t count, idx_t source_size,
                           optional_ptr<const SelectionVector> selvec, optional_ptr<const SelectionVector> source_sel,
                           SelectionVector &keys_selvec, OrderedOwningStringMap<uint32_t> &dictionary,
-                          optional_ptr<const SelectionVector> value_ids_selvec, const bool is_root) {
+                          optional_ptr<const SelectionVector> values_index_selvec, const bool is_root) {
 	auto blob_offset_data = OffsetData::GetBlob(offsets);
 	auto values_offset_data = OffsetData::GetValues(offsets);
 	auto children_offset_data = OffsetData::GetChildren(offsets);
@@ -39,14 +39,14 @@ bool ConvertListToVariant(Vector &source, VariantVectorData &result, DataChunk &
 		auto &children_list_entry = result.children_data[result_index];
 		if (source_validity.RowIsValid(index)) {
 			auto &entry = source_data[index];
-			WriteVariantMetadata<WRITE_DATA>(result, result_index, values_offset_data, blob_offset, value_ids_selvec, i,
-			                                 VariantLogicalType::ARRAY);
+			WriteVariantMetadata<WRITE_DATA>(result, result_index, values_offset_data, blob_offset, values_index_selvec,
+			                                 i, VariantLogicalType::ARRAY);
 			WriteContainerData<WRITE_DATA>(result, result_index, blob_offset, entry.length,
 			                               children_offset_data[result_index]);
 			WriteArrayChildren<WRITE_DATA>(result, children_list_entry.offset, children_offset_data[result_index],
 			                               entry, result_index, sel);
 		} else if (!IGNORE_NULLS) {
-			HandleVariantNull<WRITE_DATA>(result, result_index, values_offset_data, blob_offset, value_ids_selvec, i,
+			HandleVariantNull<WRITE_DATA>(result, result_index, values_offset_data, blob_offset, values_index_selvec, i,
 			                              is_root);
 		}
 	}

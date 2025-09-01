@@ -10,7 +10,7 @@ bool ConvertStructToVariant(Vector &source, VariantVectorData &result, DataChunk
                             idx_t source_size, optional_ptr<const SelectionVector> selvec,
                             optional_ptr<const SelectionVector> source_sel, SelectionVector &keys_selvec,
                             OrderedOwningStringMap<uint32_t> &dictionary,
-                            optional_ptr<const SelectionVector> value_ids_selvec, const bool is_root) {
+                            optional_ptr<const SelectionVector> values_index_selvec, const bool is_root) {
 	auto keys_offset_data = OffsetData::GetKeys(offsets);
 	auto values_offset_data = OffsetData::GetValues(offsets);
 	auto blob_offset_data = OffsetData::GetBlob(offsets);
@@ -37,8 +37,8 @@ bool ConvertStructToVariant(Vector &source, VariantVectorData &result, DataChunk
 		auto &keys_list_entry = result.keys_data[result_index];
 
 		if (source_validity.RowIsValid(index)) {
-			WriteVariantMetadata<WRITE_DATA>(result, result_index, values_offset_data, blob_offset, value_ids_selvec, i,
-			                                 VariantLogicalType::OBJECT);
+			WriteVariantMetadata<WRITE_DATA>(result, result_index, values_offset_data, blob_offset, values_index_selvec,
+			                                 i, VariantLogicalType::OBJECT);
 			WriteContainerData<WRITE_DATA>(result, result_index, blob_offset, children.size(),
 			                               children_offset_data[result_index]);
 
@@ -62,11 +62,11 @@ bool ConvertStructToVariant(Vector &source, VariantVectorData &result, DataChunk
 				idx_t children_index = children_list_entry.offset + children_offset_data[result_index];
 				idx_t keys_offset = keys_list_entry.offset + keys_offset_data[result_index];
 				for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
-					result.key_id_data[children_index + child_idx] =
+					result.keys_index_data[children_index + child_idx] =
 					    NumericCast<uint32_t>(keys_offset_data[result_index] + child_idx);
 					keys_selvec.set_index(keys_offset + child_idx, dictionary_indices[child_idx]);
 				}
-				//! Map from index of the child to the children.value_ids of the parent
+				//! Map from index of the child to the children.values_index of the parent
 				//! NOTE: this maps to the first index, below we are forwarding this for each child Vector we process.
 				sel.children_selection.set_index(sel.count, children_index);
 			}
@@ -76,7 +76,7 @@ bool ConvertStructToVariant(Vector &source, VariantVectorData &result, DataChunk
 			children_offset_data[result_index] += children.size();
 			sel.count++;
 		} else if (!IGNORE_NULLS) {
-			HandleVariantNull<WRITE_DATA>(result, result_index, values_offset_data, blob_offset, value_ids_selvec, i,
+			HandleVariantNull<WRITE_DATA>(result, result_index, values_offset_data, blob_offset, values_index_selvec, i,
 			                              is_root);
 		}
 	}
@@ -100,7 +100,7 @@ bool ConvertStructToVariant(Vector &source, VariantVectorData &result, DataChunk
 			}
 		}
 		if (WRITE_DATA) {
-			//! Now forward the selection to point to the next index in the children.value_ids
+			//! Now forward the selection to point to the next index in the children.values_index
 			for (idx_t i = 0; i < sel.count; i++) {
 				sel.children_selection[i]++;
 			}

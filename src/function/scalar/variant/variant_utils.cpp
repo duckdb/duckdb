@@ -64,14 +64,14 @@ bool VariantUtils::FindChildValues(const UnifiedVariantVectorData &variant, cons
 				//! The list is too small to contain this index
 				return false;
 			}
-			auto value_id = variant.GetValueId(row_index, nested_data_entry.children_idx + child_idx);
+			auto value_id = variant.GetValuesIndex(row_index, nested_data_entry.children_idx + child_idx);
 			res[i] = static_cast<uint8_t>(value_id);
 			continue;
 		}
 		bool found_child = false;
 		for (idx_t child_idx = 0; child_idx < nested_data_entry.child_count; child_idx++) {
-			auto value_id = variant.GetValueId(row_index, nested_data_entry.children_idx + child_idx);
-			auto key_id = variant.GetKeyId(row_index, nested_data_entry.children_idx + child_idx);
+			auto value_id = variant.GetValuesIndex(row_index, nested_data_entry.children_idx + child_idx);
+			auto key_id = variant.GetKeysIndex(row_index, nested_data_entry.children_idx + child_idx);
 
 			auto &child_key = variant.GetKey(row_index, key_id);
 			if (child_key == component.key) {
@@ -230,7 +230,7 @@ Value VariantUtils::ConvertVariantToValue(const UnifiedVariantVectorData &varian
 		if (count) {
 			auto child_index_start = VarintDecode<uint32_t>(ptr);
 			for (idx_t i = 0; i < count; i++) {
-				auto child_index = variant.GetValueId(row, child_index_start + i);
+				auto child_index = variant.GetValuesIndex(row, child_index_start + i);
 				array_items.emplace_back(ConvertVariantToValue(variant, row, child_index));
 			}
 		}
@@ -242,10 +242,10 @@ Value VariantUtils::ConvertVariantToValue(const UnifiedVariantVectorData &varian
 		if (count) {
 			auto child_index_start = VarintDecode<uint32_t>(ptr);
 			for (idx_t i = 0; i < count; i++) {
-				auto child_value_idx = variant.GetValueId(row, child_index_start + i);
+				auto child_value_idx = variant.GetValuesIndex(row, child_index_start + i);
 				auto val = ConvertVariantToValue(variant, row, child_value_idx);
 
-				auto child_key_id = variant.GetKeyId(row, child_index_start + i);
+				auto child_key_id = variant.GetKeysIndex(row, child_index_start + i);
 				auto &key = variant.GetKey(row, child_key_id);
 
 				object_children.emplace_back(key.GetString(), std::move(val));
@@ -284,11 +284,11 @@ bool VariantUtils::Verify(Vector &variant, const SelectionVector &sel_p, idx_t c
 	auto children_data = children.GetData<list_entry_t>(children);
 
 	//! children.key_id
-	auto &key_id = UnifiedVariantVector::GetChildrenKeyId(format);
+	auto &key_id = UnifiedVariantVector::GetChildrenKeysIndex(format);
 	auto key_id_data = key_id.GetData<uint32_t>(key_id);
 
 	//! children.value_id
-	auto &value_id = UnifiedVariantVector::GetChildrenValueId(format);
+	auto &value_id = UnifiedVariantVector::GetChildrenValuesIndex(format);
 	auto value_id_data = value_id.GetData<uint32_t>(value_id);
 
 	//! values
@@ -332,9 +332,9 @@ bool VariantUtils::Verify(Vector &variant, const SelectionVector &sel_p, idx_t c
 
 		//! verify keys
 		for (idx_t j = 0; j < keys_list_entry.length; j++) {
-			auto keys_index = keys_entry.sel->get_index(j + keys_list_entry.offset);
-			D_ASSERT(keys_entry.validity.RowIsValid(keys_index));
-			keys_entry_data[keys_index].Verify();
+			auto keys_entry_index = keys_entry.sel->get_index(j + keys_list_entry.offset);
+			D_ASSERT(keys_entry.validity.RowIsValid(keys_entry_index));
+			keys_entry_data[keys_entry_index].Verify();
 		}
 		//! verify children
 		for (idx_t j = 0; j < children_list_entry.length; j++) {

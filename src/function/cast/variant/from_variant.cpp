@@ -194,7 +194,7 @@ static bool CastVariantToPrimitive(FromVariantConversionData &conversion_data, V
 static bool FindValues(UnifiedVariantVectorData &variant, idx_t row_index, SelectionVector &sel,
                        VariantNestedData &nested_data_entry) {
 	for (idx_t child_idx = 0; child_idx < nested_data_entry.child_count; child_idx++) {
-		auto value_id = variant.GetValueId(row_index, nested_data_entry.children_idx + child_idx);
+		auto value_id = variant.GetValuesIndex(row_index, nested_data_entry.children_idx + child_idx);
 		sel[child_idx] = value_id;
 	}
 	return true;

@@ -10,7 +10,7 @@ bool ConvertUnionToVariant(Vector &source, VariantVectorData &result, DataChunk 
                            idx_t source_size, optional_ptr<const SelectionVector> selvec,
                            optional_ptr<const SelectionVector> source_sel, SelectionVector &keys_selvec,
                            OrderedOwningStringMap<uint32_t> &dictionary,
-                           optional_ptr<const SelectionVector> value_ids_selvec, const bool is_root) {
+                           optional_ptr<const SelectionVector> values_index_selvec, const bool is_root) {
 	auto &children = StructVector::GetEntries(source);
 
 	UnifiedVectorFormat source_format;
@@ -24,7 +24,7 @@ bool ConvertUnionToVariant(Vector &source, VariantVectorData &result, DataChunk 
 		//! UNION will have exactly 1 non-null value for each row
 		if (!ConvertToVariant<WRITE_DATA, /*ignore_nulls = */ true>(child, result, offsets, count, source_size, selvec,
 		                                                            source_sel, keys_selvec, dictionary,
-		                                                            value_ids_selvec, is_root)) {
+		                                                            values_index_selvec, is_root)) {
 			return false;
 		}
 	}
@@ -54,7 +54,7 @@ bool ConvertUnionToVariant(Vector &source, VariantVectorData &result, DataChunk 
 		//! This row is NULL entirely
 		auto result_index = selvec ? selvec->get_index(i) : i;
 		auto &blob_offset = blob_offset_data[result_index];
-		HandleVariantNull<WRITE_DATA>(result, result_index, values_offset_data, blob_offset, value_ids_selvec, i,
+		HandleVariantNull<WRITE_DATA>(result, result_index, values_offset_data, blob_offset, values_index_selvec, i,
 		                              is_root);
 	}
 	return true;

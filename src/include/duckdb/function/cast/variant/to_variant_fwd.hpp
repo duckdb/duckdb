@@ -61,7 +61,7 @@ public:
 	//! Create a selection vector that maps to a subset (the rows where the parent isn't null) of rows of the child
 	//! vector
 	SelectionVector non_null_selection;
-	//! Create a selection vector that maps to the children.value_id entry of the parent
+	//! Create a selection vector that maps to the children.values_index entry of the parent
 	SelectionVector children_selection;
 };
 
@@ -74,7 +74,7 @@ void WriteArrayChildren(VariantVectorData &result, uint64_t children_offset, uin
 		sel.new_selection.set_index(child_idx + sel.count, result_index);
 		if (WRITE_DATA) {
 			sel.children_selection.set_index(child_idx + sel.count, children_index + child_idx);
-			result.key_id_validity.SetInvalid(children_index + child_idx);
+			result.keys_index_validity.SetInvalid(children_index + child_idx);
 		}
 		sel.non_null_selection.set_index(sel.count + child_idx, source_entry.offset + child_idx);
 	}
@@ -84,7 +84,7 @@ void WriteArrayChildren(VariantVectorData &result, uint64_t children_offset, uin
 
 template <bool WRITE_DATA>
 void WriteVariantMetadata(VariantVectorData &result, idx_t result_index, uint32_t *values_offsets, uint32_t blob_offset,
-                          optional_ptr<const SelectionVector> value_ids_selvec, idx_t i, VariantLogicalType type_id) {
+                          optional_ptr<const SelectionVector> value_index_selvec, idx_t i, VariantLogicalType type_id) {
 
 	auto &values_offset_data = values_offsets[result_index];
 	if (WRITE_DATA) {
@@ -94,8 +94,8 @@ void WriteVariantMetadata(VariantVectorData &result, idx_t result_index, uint32_
 		values_offset = values_list_entry.offset + values_offset_data;
 		result.type_ids_data[values_offset] = static_cast<uint8_t>(type_id);
 		result.byte_offset_data[values_offset] = blob_offset;
-		if (value_ids_selvec) {
-			result.value_id_data[value_ids_selvec->get_index(i)] = values_offset_data;
+		if (value_index_selvec) {
+			result.values_index_data[value_index_selvec->get_index(i)] = values_offset_data;
 		}
 	}
 	values_offset_data++;
@@ -103,14 +103,14 @@ void WriteVariantMetadata(VariantVectorData &result, idx_t result_index, uint32_
 
 template <bool WRITE_DATA>
 void HandleVariantNull(VariantVectorData &result, idx_t result_index, uint32_t *values_offsets, uint32_t blob_offset,
-                       optional_ptr<const SelectionVector> value_ids_selvec, idx_t i, const bool is_root) {
+                       optional_ptr<const SelectionVector> value_index_selvec, idx_t i, const bool is_root) {
 	if (is_root) {
 		if (WRITE_DATA) {
 			FlatVector::SetNull(result.variant, result_index, true);
 		}
 		return;
 	}
-	WriteVariantMetadata<WRITE_DATA>(result, result_index, values_offsets, blob_offset, value_ids_selvec, i,
+	WriteVariantMetadata<WRITE_DATA>(result, result_index, values_offsets, blob_offset, value_index_selvec, i,
 	                                 VariantLogicalType::VARIANT_NULL);
 }
 
@@ -118,7 +118,7 @@ template <bool WRITE_DATA, bool IGNORE_NULLS = false>
 bool ConvertToVariant(Vector &source, VariantVectorData &result, DataChunk &offsets, idx_t count, idx_t source_size,
                       optional_ptr<const SelectionVector> selvec, optional_ptr<const SelectionVector> source_sel,
                       SelectionVector &keys_selvec, OrderedOwningStringMap<uint32_t> &dictionary,
-                      optional_ptr<const SelectionVector> value_ids_selvec, const bool is_root);
+                      optional_ptr<const SelectionVector> value_index_selvec, const bool is_root);
 
 } // namespace variant
 } // namespace duckdb

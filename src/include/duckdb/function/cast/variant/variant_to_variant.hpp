@@ -94,7 +94,7 @@ bool ConvertVariantToVariant(Vector &source_vec, VariantVectorData &result, Data
                              idx_t source_size, optional_ptr<const SelectionVector> selvec,
                              optional_ptr<const SelectionVector> source_sel, SelectionVector &keys_selvec,
                              OrderedOwningStringMap<uint32_t> &dictionary,
-                             optional_ptr<const SelectionVector> value_ids_selvec, const bool is_root) {
+                             optional_ptr<const SelectionVector> values_index_selvec, const bool is_root) {
 
 	auto keys_offset_data = OffsetData::GetKeys(offsets);
 	auto children_offset_data = OffsetData::GetChildren(offsets);
@@ -121,14 +121,14 @@ bool ConvertVariantToVariant(Vector &source_vec, VariantVectorData &result, Data
 		uint32_t blob_size = 0;
 		if (!source.RowIsValid(source_index)) {
 			if (!IGNORE_NULLS) {
-				HandleVariantNull<WRITE_DATA>(result, result_index, values_offset_data, blob_offset, value_ids_selvec,
-				                              source_index, is_root);
+				HandleVariantNull<WRITE_DATA>(result, result_index, values_offset_data, blob_offset,
+				                              values_index_selvec, source_index, is_root);
 			}
 			continue;
 		}
-		if (WRITE_DATA && value_ids_selvec) {
-			//! Write the value_id for the parent of this column
-			result.value_id_data[value_ids_selvec->get_index(source_index)] = values_offset;
+		if (WRITE_DATA && values_index_selvec) {
+			//! Write the values_index for the parent of this column
+			result.values_index_data[values_index_selvec->get_index(source_index)] = values_offset;
 		}
 
 		//! FIXME: we might want to add some checks to make sure the NumericLimits<uint32_t>::Maximum isn't exceeded,
@@ -139,33 +139,33 @@ bool ConvertVariantToVariant(Vector &source_vec, VariantVectorData &result, Data
 		auto source_children_list_entry = source.GetChildrenListEntry(source_index);
 		for (idx_t source_children_index = 0; source_children_index < source_children_list_entry.length;
 		     source_children_index++) {
-			//! value_id
+			//! values_index
 			if (WRITE_DATA) {
-				auto source_value_index = source.GetValueId(source_index, source_children_index);
-				result.value_id_data[children_list_entry.offset + children_offset + source_children_index] =
+				auto source_value_index = source.GetValuesIndex(source_index, source_children_index);
+				result.values_index_data[children_list_entry.offset + children_offset + source_children_index] =
 				    values_offset + source_value_index;
 			}
 
-			//! key_id
-			if (source.KeyIdIsValid(source_index, source_children_index)) {
+			//! keys_index
+			if (source.KeysIndexIsValid(source_index, source_children_index)) {
 				if (WRITE_DATA) {
 					//! Look up the existing key from 'source'
-					auto source_key_index = source.GetKeyId(source_index, source_children_index);
+					auto source_key_index = source.GetKeysIndex(source_index, source_children_index);
 					auto &source_key_value = source.GetKey(source_index, source_key_index);
 
 					//! Now write this key to the dictionary of the result
 					auto dictionary_size = dictionary.size();
 					auto dict_index =
 					    dictionary.emplace(std::make_pair(source_key_value, dictionary_size)).first->second;
-					result.key_id_data[children_list_entry.offset + children_offset + source_children_index] =
+					result.keys_index_data[children_list_entry.offset + children_offset + source_children_index] =
 					    NumericCast<uint32_t>(keys_offset + keys_count);
 					keys_selvec.set_index(keys_list_entry.offset + keys_offset + keys_count, dict_index);
 				}
 				keys_count++;
 			} else {
 				if (WRITE_DATA) {
-					result.key_id_validity.SetInvalid(children_list_entry.offset + children_offset +
-					                                  source_children_index);
+					result.keys_index_validity.SetInvalid(children_list_entry.offset + children_offset +
+					                                      source_children_index);
 				}
 			}
 		}
