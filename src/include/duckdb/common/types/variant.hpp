@@ -28,6 +28,11 @@ struct VariantNestedData {
 	bool is_null;
 };
 
+struct VariantDecimalData {
+	uint32_t width;
+	uint32_t scale;
+};
+
 struct VariantVectorData {
 public:
 	explicit VariantVectorData(Vector &variant)
@@ -125,41 +130,41 @@ public:
 	}
 
 public:
-	bool RowIsValid(idx_t row) {
+	bool RowIsValid(idx_t row) const {
 		return variant.unified.validity.RowIsValid(variant.unified.sel->get_index(row));
 	}
-	bool KeyIdIsValid(idx_t row, idx_t index) {
+	bool KeyIdIsValid(idx_t row, idx_t index) const {
 		auto list_entry = GetChildrenListEntry(row);
 		return key_id_validity.RowIsValid(key_id.sel->get_index(list_entry.offset + index));
 	}
 
-	list_entry_t GetChildrenListEntry(idx_t row) {
+	list_entry_t GetChildrenListEntry(idx_t row) const {
 		return children_data[children.sel->get_index(row)];
 	}
-	list_entry_t GetValuesListEntry(idx_t row) {
+	list_entry_t GetValuesListEntry(idx_t row) const {
 		return values_data[values.sel->get_index(row)];
 	}
-	const string_t &GetKey(idx_t row, idx_t index) {
+	const string_t &GetKey(idx_t row, idx_t index) const {
 		auto list_entry = keys_data[keys.sel->get_index(row)];
 		return keys_entry_data[keys_entry.sel->get_index(list_entry.offset + index)];
 	}
-	uint32_t GetKeyId(idx_t row, idx_t child_index) {
+	uint32_t GetKeyId(idx_t row, idx_t child_index) const {
 		auto list_entry = GetChildrenListEntry(row);
 		return key_id_data[key_id.sel->get_index(list_entry.offset + child_index)];
 	}
-	uint32_t GetValueId(idx_t row, idx_t child_index) {
+	uint32_t GetValueId(idx_t row, idx_t child_index) const {
 		auto list_entry = GetChildrenListEntry(row);
 		return value_id_data[value_id.sel->get_index(list_entry.offset + child_index)];
 	}
-	VariantLogicalType GetTypeId(idx_t row, idx_t value_index) {
+	VariantLogicalType GetTypeId(idx_t row, idx_t value_index) const {
 		auto list_entry = values_data[values.sel->get_index(row)];
 		return static_cast<VariantLogicalType>(type_id_data[type_id.sel->get_index(list_entry.offset + value_index)]);
 	}
-	uint32_t GetByteOffset(idx_t row, idx_t value_index) {
+	uint32_t GetByteOffset(idx_t row, idx_t value_index) const {
 		auto list_entry = values_data[values.sel->get_index(row)];
 		return byte_offset_data[byte_offset.sel->get_index(list_entry.offset + value_index)];
 	}
-	const string_t &GetData(idx_t row) {
+	const string_t &GetData(idx_t row) const {
 		return blob_data[data.sel->get_index(row)];
 	}
 

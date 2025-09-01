@@ -105,8 +105,8 @@ bool ConvertVariantToVariant(Vector &source_vec, VariantVectorData &result, Data
 	Vector::RecursiveToUnifiedFormat(source_vec, source_size, source_format);
 	UnifiedVariantVectorData source(source_format);
 
-	for (idx_t i = 0; i < count; i++) {
-		auto result_index = selvec ? selvec->get_index(i) : i;
+	for (idx_t source_index = 0; source_index < count; source_index++) {
+		auto result_index = selvec ? selvec->get_index(source_index) : source_index;
 
 		auto &keys_list_entry = result.keys_data[result_index];
 		auto &children_list_entry = result.children_data[result_index];
@@ -119,16 +119,16 @@ bool ConvertVariantToVariant(Vector &source_vec, VariantVectorData &result, Data
 
 		uint32_t keys_count = 0;
 		uint32_t blob_size = 0;
-		if (!source.RowIsValid(i)) {
+		if (!source.RowIsValid(source_index)) {
 			if (!IGNORE_NULLS) {
 				HandleVariantNull<WRITE_DATA>(result, result_index, values_offset_data, blob_offset, value_ids_selvec,
-				                              i, is_root);
+				                              source_index, is_root);
 			}
 			continue;
 		}
 		if (WRITE_DATA && value_ids_selvec) {
 			//! Write the value_id for the parent of this column
-			result.value_id_data[value_ids_selvec->get_index(i)] = values_offset;
+			result.value_id_data[value_ids_selvec->get_index(source_index)] = values_offset;
 		}
 
 		//! FIXME: we might want to add some checks to make sure the NumericLimits<uint32_t>::Maximum isn't exceeded,
@@ -136,45 +136,48 @@ bool ConvertVariantToVariant(Vector &source_vec, VariantVectorData &result, Data
 
 		//! First write all children
 		//! NOTE: this has to happen first because we use 'values_offset', which is increased when we write the values
-		auto source_children_list_entry = source.GetChildrenListEntry(i);
-		for (idx_t j = 0; j < source_children_list_entry.length; j++) {
+		auto source_children_list_entry = source.GetChildrenListEntry(source_index);
+		for (idx_t source_children_index = 0; source_children_index < source_children_list_entry.length;
+		     source_children_index++) {
 			//! value_id
 			if (WRITE_DATA) {
-				auto source_value_index = source.GetValueId(i, j);
-				result.value_id_data[children_list_entry.offset + children_offset + j] =
+				auto source_value_index = source.GetValueId(source_index, source_children_index);
+				result.value_id_data[children_list_entry.offset + children_offset + source_children_index] =
 				    values_offset + source_value_index;
 			}
 
 			//! key_id
-			if (source.KeyIdIsValid(i, j)) {
+			if (source.KeyIdIsValid(source_index, source_children_index)) {
 				if (WRITE_DATA) {
 					//! Look up the existing key from 'source'
-					auto source_key_index = source.GetKeyId(i, j);
-					auto &source_key_value = source.GetKey(i, source_key_index);
+					auto source_key_index = source.GetKeyId(source_index, source_children_index);
+					auto &source_key_value = source.GetKey(source_index, source_key_index);
 
 					//! Now write this key to the dictionary of the result
 					auto dictionary_size = dictionary.size();
 					auto dict_index =
 					    dictionary.emplace(std::make_pair(source_key_value, dictionary_size)).first->second;
-					result.key_id_data[children_list_entry.offset + children_offset + j] =
+					result.key_id_data[children_list_entry.offset + children_offset + source_children_index] =
 					    NumericCast<uint32_t>(keys_offset + keys_count);
 					keys_selvec.set_index(keys_list_entry.offset + keys_offset + keys_count, dict_index);
 				}
 				keys_count++;
 			} else {
 				if (WRITE_DATA) {
-					result.key_id_validity.SetInvalid(children_list_entry.offset + children_offset + j);
+					result.key_id_validity.SetInvalid(children_list_entry.offset + children_offset +
+					                                  source_children_index);
 				}
 			}
 		}
 
-		auto source_blob_data = const_data_ptr_cast(source.GetData(i).GetData());
+		auto source_blob_data = const_data_ptr_cast(source.GetData(source_index).GetData());
 
 		//! Then write all values
-		auto source_values_list_entry = source.GetValuesListEntry(i);
-		for (idx_t j = 0; j < source_values_list_entry.length; j++) {
-			auto source_type_id = source.GetTypeId(i, j);
-			auto source_byte_offset = source.GetByteOffset(i, j);
+		auto source_values_list_entry = source.GetValuesListEntry(source_index);
+		for (uint32_t source_value_index = 0; source_value_index < source_values_list_entry.length;
+		     source_value_index++) {
+			auto source_type_id = source.GetTypeId(source_index, source_value_index);
+			auto source_byte_offset = source.GetByteOffset(source_index, source_value_index);
 
 			//! NOTE: we have to deserialize these in both passes
 			//! because to figure out the size of the 'data' that is added by the VARIANT, we have to traverse the
@@ -183,15 +186,13 @@ bool ConvertVariantToVariant(Vector &source_vec, VariantVectorData &result, Data
 			                                 0, source_type_id);
 
 			if (source_type_id == VariantLogicalType::ARRAY || source_type_id == VariantLogicalType::OBJECT) {
-				auto container_blob_data = source_blob_data + source_byte_offset;
-				auto length = VarintDecode<uint32_t>(container_blob_data);
+				auto source_nested_data = VariantUtils::DecodeNestedData(source, source_index, source_value_index);
 				if (WRITE_DATA) {
-					VarintEncode(length, blob_data + blob_offset + blob_size);
+					VarintEncode(source_nested_data.child_count, blob_data + blob_offset + blob_size);
 				}
-				blob_size += GetVarintSize(length);
-				if (length) {
-					auto child_index = VarintDecode<uint32_t>(container_blob_data);
-					auto new_child_index = child_index + children_offset;
+				blob_size += GetVarintSize(source_nested_data.child_count);
+				if (source_nested_data.child_count) {
+					auto new_child_index = source_nested_data.children_idx + children_offset;
 					if (WRITE_DATA) {
 						VarintEncode(new_child_index, blob_data + blob_offset + blob_size);
 					}

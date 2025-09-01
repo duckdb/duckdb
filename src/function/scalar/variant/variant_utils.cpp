@@ -7,7 +7,43 @@
 
 namespace duckdb {
 
-bool VariantUtils::FindChildValues(UnifiedVariantVectorData &variant, const VariantPathComponent &component,
+bool VariantUtils::IsNestedType(const UnifiedVariantVectorData &variant, idx_t row, uint32_t value_index) {
+	auto type_id = variant.GetTypeId(row, value_index);
+	return type_id == VariantLogicalType::ARRAY || type_id == VariantLogicalType::OBJECT;
+}
+
+VariantDecimalData VariantUtils::DecodeDecimalData(const UnifiedVariantVectorData &variant, idx_t row,
+                                                   uint32_t value_index) {
+	D_ASSERT(variant.GetTypeId(row, value_index) == VariantLogicalType::DECIMAL);
+	auto byte_offset = variant.GetByteOffset(row, value_index);
+	auto data = const_data_ptr_cast(variant.GetData(row).GetData());
+	auto ptr = data + byte_offset;
+
+	VariantDecimalData result;
+	result.width = VarintDecode<uint32_t>(ptr);
+	result.scale = VarintDecode<uint32_t>(ptr);
+	return result;
+}
+
+VariantNestedData VariantUtils::DecodeNestedData(const UnifiedVariantVectorData &variant, idx_t row,
+                                                 uint32_t value_index) {
+	D_ASSERT(IsNestedType(variant, row, value_index));
+	auto byte_offset = variant.GetByteOffset(row, value_index);
+	auto data = const_data_ptr_cast(variant.GetData(row).GetData());
+	auto ptr = data + byte_offset;
+
+	VariantNestedData result;
+	result.is_null = false;
+	result.child_count = VarintDecode<uint32_t>(ptr);
+	if (result.child_count) {
+		result.children_idx = VarintDecode<uint32_t>(ptr);
+	} else {
+		result.children_idx = 0;
+	}
+	return result;
+}
+
+bool VariantUtils::FindChildValues(const UnifiedVariantVectorData &variant, const VariantPathComponent &component,
                                    optional_idx row, SelectionVector &res, VariantNestedData *nested_data,
                                    idx_t count) {
 
@@ -52,8 +88,8 @@ bool VariantUtils::FindChildValues(UnifiedVariantVectorData &variant, const Vari
 	return true;
 }
 
-vector<uint32_t> VariantUtils::ValueIsNull(UnifiedVariantVectorData &variant, const SelectionVector &sel, idx_t count,
-                                           optional_idx row) {
+vector<uint32_t> VariantUtils::ValueIsNull(const UnifiedVariantVectorData &variant, const SelectionVector &sel,
+                                           idx_t count, optional_idx row) {
 	vector<uint32_t> res;
 	res.reserve(count);
 	for (idx_t i = 0; i < count; i++) {
@@ -73,7 +109,7 @@ vector<uint32_t> VariantUtils::ValueIsNull(UnifiedVariantVectorData &variant, co
 	return res;
 }
 
-bool VariantUtils::CollectNestedData(UnifiedVariantVectorData &variant, VariantLogicalType expected_type,
+bool VariantUtils::CollectNestedData(const UnifiedVariantVectorData &variant, VariantLogicalType expected_type,
                                      const SelectionVector &sel, idx_t count, optional_idx row, idx_t offset,
                                      VariantNestedData *child_data, ValidityMask &validity, string &error) {
 	for (idx_t i = 0; i < count; i++) {
@@ -84,12 +120,7 @@ bool VariantUtils::CollectNestedData(UnifiedVariantVectorData &variant, VariantL
 			child_data[i].is_null = true;
 			continue;
 		}
-		child_data[i].is_null = false;
-
-		//! type_id + byte_offset
 		auto type_id = variant.GetTypeId(row_index, sel[i]);
-		auto byte_offset = variant.GetByteOffset(row_index, sel[i]);
-
 		if (type_id == VariantLogicalType::VARIANT_NULL) {
 			child_data[i].is_null = true;
 			continue;
@@ -100,21 +131,12 @@ bool VariantUtils::CollectNestedData(UnifiedVariantVectorData &variant, VariantL
 			                           EnumUtil::ToString(expected_type), EnumUtil::ToString(type_id));
 			return false;
 		}
-
-		auto blob_data = const_data_ptr_cast(variant.GetData(row_index).GetData());
-		auto ptr = blob_data + byte_offset;
-
-		child_data[i].child_count = VarintDecode<uint32_t>(ptr);
-		if (child_data[i].child_count) {
-			child_data[i].children_idx = VarintDecode<uint32_t>(ptr);
-		} else {
-			child_data[i].children_idx = 0;
-		}
+		child_data[i] = DecodeNestedData(variant, row_index, sel[i]);
 	}
 	return true;
 }
 
-Value VariantUtils::ConvertVariantToValue(UnifiedVariantVectorData &variant, idx_t row, idx_t values_idx) {
+Value VariantUtils::ConvertVariantToValue(const UnifiedVariantVectorData &variant, idx_t row, idx_t values_idx) {
 	if (!variant.RowIsValid(row)) {
 		return Value(LogicalTypeId::SQLNULL);
 	}

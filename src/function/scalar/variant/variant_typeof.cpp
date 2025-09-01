@@ -29,7 +29,6 @@ static void VariantTypeofFunction(DataChunk &input, ExpressionState &state, Vect
 			continue;
 		}
 
-		auto blob_data = variant.GetData(i).GetData();
 		auto type = variant.GetTypeId(i, 0);
 
 		string type_str;
@@ -37,34 +36,25 @@ static void VariantTypeofFunction(DataChunk &input, ExpressionState &state, Vect
 			if (type != VariantLogicalType::DECIMAL) {
 				type_str = EnumUtil::ToString(type);
 			} else {
-				auto value_byte_offset = variant.GetByteOffset(i, 0);
-				auto ptr = const_data_ptr_cast(blob_data + value_byte_offset);
-				auto width = VarintDecode<uint32_t>(ptr);
-				auto scale = VarintDecode<uint32_t>(ptr);
-				type_str = StringUtil::Format("DECIMAL(%d, %d)", width, scale);
+				auto decimal_data = VariantUtils::DecodeDecimalData(variant, i, 0);
+				type_str = StringUtil::Format("DECIMAL(%d, %d)", decimal_data.width, decimal_data.scale);
 			}
 			result_data[i] = StringVector::AddString(result, type_str.c_str());
 			continue;
 		}
 
 		if (type == VariantLogicalType::OBJECT) {
-			auto value_byte_offset = variant.GetByteOffset(i, 0);
-			auto ptr = const_data_ptr_cast(blob_data + value_byte_offset);
-			auto child_count = VarintDecode<uint32_t>(ptr);
-			auto children_index = VarintDecode<uint32_t>(ptr);
-
+			auto nested_data = VariantUtils::DecodeNestedData(variant, i, 0);
 			vector<string> object_keys;
-			for (idx_t child_idx = 0; child_idx < child_count; child_idx++) {
-				auto child_key_id = variant.GetKeyId(i, children_index + child_idx);
+			for (idx_t child_idx = 0; child_idx < nested_data.child_count; child_idx++) {
+				auto child_key_id = variant.GetKeyId(i, nested_data.children_idx + child_idx);
 				object_keys.push_back(variant.GetKey(i, child_key_id).GetString());
 			}
 			type_str = StringUtil::Format("OBJECT(%s)", StringUtil::Join(object_keys, ", "));
 		} else {
 			D_ASSERT(type == VariantLogicalType::ARRAY);
-			auto value_byte_offset = variant.GetByteOffset(i, 0);
-			auto ptr = const_data_ptr_cast(blob_data + value_byte_offset);
-			auto child_count = VarintDecode<uint32_t>(ptr);
-			type_str = StringUtil::Format("ARRAY(%d)", child_count);
+			auto nested_data = VariantUtils::DecodeNestedData(variant, i, 0);
+			type_str = StringUtil::Format("ARRAY(%d)", nested_data.child_count);
 		}
 		result_data[i] = StringVector::AddString(result, type_str.c_str());
 	}
