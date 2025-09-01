@@ -38,7 +38,7 @@ void addLog(const string &msg) {
 	}
 }
 
-unique_ptr<MaterializedQueryResult> execQuery(Connection &conn, const string &query) {
+duckdb::unique_ptr<MaterializedQueryResult> execQuery(Connection &conn, const string &query) {
 	auto result = conn.Query(query);
 	if (result->HasError()) {
 		Printer::Print(result->GetError());
