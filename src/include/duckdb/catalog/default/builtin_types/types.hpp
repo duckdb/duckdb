@@ -19,7 +19,7 @@ struct DefaultType {
 	LogicalTypeId type;
 };
 
-using builtin_type_array = std::array<DefaultType, 74>;
+using builtin_type_array = std::array<DefaultType, 75>;
 
 static constexpr const builtin_type_array BUILTIN_TYPES{{
 	{"decimal", LogicalTypeId::DECIMAL},
@@ -84,6 +84,7 @@ static constexpr const builtin_type_array BUILTIN_TYPES{{
 	{"bit", LogicalTypeId::BIT},
 	{"bitstring", LogicalTypeId::BIT},
 	{"bignum", LogicalTypeId::BIGNUM},
+	{"varint", LogicalTypeId::BIGNUM},
 	{"boolean", LogicalTypeId::BOOLEAN},
 	{"bool", LogicalTypeId::BOOLEAN},
 	{"logical", LogicalTypeId::BOOLEAN},
