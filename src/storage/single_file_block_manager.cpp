@@ -381,7 +381,6 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	// We need the unique database identifier, if the storage version is new enough.
 	// If encryption is enabled, we also use it as the salt.
 	memset(options.db_identifier, 0, MainHeader::DB_IDENTIFIER_LEN);
-
 	if (encryption_enabled || options.version_number.GetIndex() >= 67) {
 		GenerateDBIdentifier(options.db_identifier);
 	}

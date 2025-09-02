@@ -141,7 +141,7 @@ public:
 		return db_identifier;
 	}
 
-	static bool CompareDBIdentifier(const data_ptr_t db_identifier_1, const data_ptr_t db_identifier_2) {
+	static bool CompareDBIdentifiers(const data_ptr_t db_identifier_1, const data_ptr_t db_identifier_2) {
 		for (idx_t i = 0; i < DB_IDENTIFIER_LEN; i++) {
 			if (db_identifier_1[i] != db_identifier_2[i]) {
 				return false;

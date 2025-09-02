@@ -465,7 +465,7 @@ void WriteAheadLogDeserializer::ReplayVersion() {
 			db_identifier[i] = list.ReadElement<uint8_t>();
 		});
 		auto expected_db_identifier = single_file_block_manager.GetDBIdentifier();
-		if (!MainHeader::CompareDBIdentifier(db_identifier, expected_db_identifier)) {
+		if (!MainHeader::CompareDBIdentifiers(db_identifier, expected_db_identifier)) {
 			throw IOException("WAL does not match database file.");
 		}
 

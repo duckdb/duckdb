@@ -147,7 +147,7 @@ private:
 
 	// Encrypt, Store, Decrypt the canary
 	static void StoreEncryptedCanary(DatabaseInstance &db, MainHeader &main_header, const string &key_id);
-	static void StoreDBIdentifier(MainHeader &main_header, data_ptr_t db_identifier);
+	static void StoreDBIdentifier(MainHeader &main_header, const data_ptr_t db_identifier);
 	void StoreEncryptionMetadata(MainHeader &main_header) const;
 
 	//! Check and adding Encryption Keys
