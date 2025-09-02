@@ -215,7 +215,7 @@ select * from read_json_auto('__TEST_DIR__/my.json', format='array')
 statement error
 copy (select range as i from range(10)) to '__TEST_DIR__/my.json' (COMPRESSION)
 ----
-Binder Error
+Invalid Input Error
 
 statement ok
 copy (select range as i from range(10)) to '__TEST_DIR__/my.json.gz' (COMPRESSION GZIP)
