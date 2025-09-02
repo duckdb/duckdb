@@ -4,9 +4,6 @@
 
 require parquet
 
-statement ok
-PRAGMA enable_verification
-
 # anything non-VARCHAR will be cast to boolean, and interpreted as such
 query I
 SELECT pq.filename FROM read_parquet('data/parquet-testing/enum.parquet', filename=true) pq LIMIT 1

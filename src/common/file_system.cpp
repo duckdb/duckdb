@@ -333,6 +333,17 @@ string FileSystem::ExtractBaseName(const string &path) {
 	return vec[0];
 }
 
+string FileSystem::ExtractExtension(const string &path) {
+	if (path.empty()) {
+		return string();
+	}
+	auto vec = StringUtil::Split(ExtractName(path), ".");
+	if (vec.size() < 2) {
+		return string();
+	}
+	return vec.back();
+}
+
 string FileSystem::GetHomeDirectory(optional_ptr<FileOpener> opener) {
 	// read the home_directory setting first, if it is set
 	if (opener) {
@@ -626,7 +637,7 @@ static string LookupExtensionForPattern(const string &pattern) {
 	return "";
 }
 
-vector<OpenFileInfo> FileSystem::GlobFiles(const string &pattern, ClientContext &context, FileGlobOptions options) {
+vector<OpenFileInfo> FileSystem::GlobFiles(const string &pattern, ClientContext &context, const FileGlobInput &input) {
 	auto result = Glob(pattern);
 	if (result.empty()) {
 		string required_extension = LookupExtensionForPattern(pattern);
@@ -648,9 +659,23 @@ vector<OpenFileInfo> FileSystem::GlobFiles(const string &pattern, ClientContext 
 				throw InternalException("Extension load \"%s\" did not throw but somehow the extension was not loaded",
 				                        required_extension);
 			}
-			return GlobFiles(pattern, context, options);
+			return GlobFiles(pattern, context, input);
 		}
-		if (options == FileGlobOptions::DISALLOW_EMPTY) {
+		if (input.behavior == FileGlobOptions::FALLBACK_GLOB && !HasGlob(pattern)) {
+			// if we have no glob in the pattern and we have an extension, we try to glob
+			if (!HasGlob(pattern)) {
+				if (input.extension.empty()) {
+					throw InternalException("FALLBACK_GLOB requires an extension to be specified");
+				}
+				string new_pattern = JoinPath(JoinPath(pattern, "**"), "*." + input.extension);
+				result = GlobFiles(new_pattern, context, FileGlobOptions::ALLOW_EMPTY);
+				if (!result.empty()) {
+					// we found files by globbing the target as if it was a directory - return them
+					return result;
+				}
+			}
+		}
+		if (input.behavior == FileGlobOptions::FALLBACK_GLOB || input.behavior == FileGlobOptions::DISALLOW_EMPTY) {
 			throw IOException("No files found that match the pattern \"%s\"", pattern);
 		}
 	}
@@ -726,7 +751,10 @@ void FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes, idx_t 
 }
 
 void FileHandle::Write(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) {
-	// FIXME: Add profiling.
+	if (context.GetClientContext() != nullptr) {
+		context.GetClientContext()->client_data->profiler->AddBytesWritten(nr_bytes);
+	}
+
 	file_system.Write(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
 }
 

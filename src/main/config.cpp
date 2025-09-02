@@ -173,7 +173,6 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(TempFileEncryptionSetting),
     DUCKDB_GLOBAL(ThreadsSetting),
     DUCKDB_GLOBAL(UsernameSetting),
-    DUCKDB_GLOBAL(WalEncryptionSetting),
     DUCKDB_GLOBAL(ZstdMinStringLengthSetting),
     FINAL_SETTING};
 
@@ -191,6 +190,14 @@ vector<ConfigurationOption> DBConfig::GetOptions() {
 		options.push_back(internal_options[index]);
 	}
 	return options;
+}
+
+vector<ConfigurationAlias> DBConfig::GetAliases() {
+	vector<ConfigurationAlias> aliases;
+	for (idx_t index = 0; index < GetAliasCount(); index++) {
+		aliases.push_back(setting_aliases[index]);
+	}
+	return aliases;
 }
 
 SettingCallbackInfo::SettingCallbackInfo(ClientContext &context_p, SetScope scope)

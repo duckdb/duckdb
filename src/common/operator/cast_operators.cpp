@@ -1684,7 +1684,26 @@ dtime_tz_t Cast::Operation(string_t input) {
 //===--------------------------------------------------------------------===//
 template <>
 bool TryCastErrorMessage::Operation(string_t input, timestamp_t &result, CastParameters &parameters) {
-	switch (Timestamp::TryConvertTimestamp(input.GetData(), input.GetSize(), result)) {
+	switch (Timestamp::TryConvertTimestamp(input.GetData(), input.GetSize(), result, false)) {
+	case TimestampCastResult::SUCCESS:
+	case TimestampCastResult::STRICT_UTC:
+		return true;
+	case TimestampCastResult::ERROR_INCORRECT_FORMAT:
+		HandleCastError::AssignError(Timestamp::FormatError(input), parameters);
+		break;
+	case TimestampCastResult::ERROR_NON_UTC_TIMEZONE:
+		HandleCastError::AssignError(Timestamp::UnsupportedTimezoneError(input), parameters);
+		break;
+	case TimestampCastResult::ERROR_RANGE:
+		HandleCastError::AssignError(Timestamp::RangeError(input), parameters);
+		break;
+	}
+	return false;
+}
+
+template <>
+bool TryCastErrorMessage::Operation(string_t input, timestamp_tz_t &result, CastParameters &parameters) {
+	switch (Timestamp::TryConvertTimestamp(input.GetData(), input.GetSize(), result, true)) {
 	case TimestampCastResult::SUCCESS:
 	case TimestampCastResult::STRICT_UTC:
 		return true;
@@ -1703,7 +1722,14 @@ bool TryCastErrorMessage::Operation(string_t input, timestamp_t &result, CastPar
 
 template <>
 bool TryCast::Operation(string_t input, timestamp_t &result, bool strict) {
-	return Timestamp::TryConvertTimestamp(input.GetData(), input.GetSize(), result) == TimestampCastResult::SUCCESS;
+	return Timestamp::TryConvertTimestamp(input.GetData(), input.GetSize(), result, false) ==
+	       TimestampCastResult::SUCCESS;
+}
+
+template <>
+bool TryCast::Operation(string_t input, timestamp_tz_t &result, bool strict) {
+	return Timestamp::TryConvertTimestamp(input.GetData(), input.GetSize(), result, true) ==
+	       TimestampCastResult::SUCCESS;
 }
 
 template <>
@@ -1713,13 +1739,18 @@ bool TryCast::Operation(string_t input, timestamp_ns_t &result, bool strict) {
 
 template <>
 timestamp_t Cast::Operation(string_t input) {
-	return Timestamp::FromCString(input.GetData(), input.GetSize());
+	return Timestamp::FromCString(input.GetData(), input.GetSize(), false);
+}
+
+template <>
+timestamp_tz_t Cast::Operation(string_t input) {
+	return timestamp_tz_t(Timestamp::FromCString(input.GetData(), input.GetSize(), true));
 }
 
 template <>
 timestamp_ns_t Cast::Operation(string_t input) {
 	int32_t nanos;
-	const auto ts = Timestamp::FromCString(input.GetData(), input.GetSize(), &nanos);
+	const auto ts = Timestamp::FromCString(input.GetData(), input.GetSize(), false, &nanos);
 	timestamp_ns_t result;
 	if (!Timestamp::TryFromTimestampNanos(ts, nanos, result)) {
 		throw ConversionException(Timestamp::RangeError(input));

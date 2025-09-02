@@ -35,8 +35,8 @@ SourceResultType PhysicalTransaction::GetData(ExecutionContext &context, DataChu
 			if (DBConfig::GetSetting<ImmediateTransactionModeSetting>(context.client)) {
 				// if immediate transaction mode is enabled then start all transactions immediately
 				auto databases = DatabaseManager::Get(client).GetDatabases(client);
-				for (auto db : databases) {
-					context.client.transaction.ActiveTransaction().GetTransaction(db.get());
+				for (auto &db : databases) {
+					context.client.transaction.ActiveTransaction().GetTransaction(*db);
 				}
 			}
 		} else {

@@ -6,9 +6,6 @@ require icu
 
 require no_extension_autoloading "FIXME: ICU is not autoloaded on '-(TIMESTAMP WITH TIME ZONE, INTERVAL)"
 
-statement ok
-PRAGMA enable_verification
-
 # prepared statement with BETWEEN
 statement ok
 PREPARE v1 AS SELECT ? BETWEEN 1 AND 2

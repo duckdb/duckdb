@@ -83,6 +83,9 @@ set(GENERATED_CPP_FILE
     ${PROJECT_BINARY_DIR}/codegen/src/generated_extension_loader.cpp)
 configure_file(generated_extension_loader.cpp.in "${GENERATED_CPP_FILE}")
 add_definitions(-DGENERATED_EXTENSION_HEADERS=1)
+add_definitions(-DDUCKDB_MAJOR_VERSION=${DUCKDB_MAJOR_VERSION})
+add_definitions(-DDUCKDB_MINOR_VERSION=${DUCKDB_MINOR_VERSION})
+add_definitions(-DDUCKDB_PATCH_VERSION=${DUCKDB_PATCH_VERSION})
 
 add_library(duckdb_generated_extension_loader OBJECT ${GENERATED_CPP_FILE})
 set(generated_loader_obj_files

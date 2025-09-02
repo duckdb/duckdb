@@ -24,22 +24,27 @@ SELECT list_aggr(list(i)::varchar[], 'string_agg', '|') FROM range(1, 4) tbl(i);
 statement error
 SELECT list_aggr([0, 1, 2, 3], 'arg_min', i) FROM range(1, 4) tbl(i);
 ----
+<REGEX>:.*Invalid Input Error.*extra arguments were not removed during bind.*
 
 # not enough arguments
 statement error
 SELECT list_aggr(list(i), 'quantile') FROM range(10) tbl(i);
 ----
+<REGEX>:.*Binder Error.*requires a range argument.*
 
 # too many arguments
 statement error
 SELECT list_aggr(list(i), 'min', 1) FROM range(10) tbl(i);
 ----
+<REGEX>:.*Invalid Input Error.*extra arguments were not removed during bind.*
 
 statement error
 SELECT list_aggr(list(i), 'quantile', 0.5, 0.3, 0.5) FROM range(10) tbl(i);
 ----
+<REGEX>:.*Binder Error.*No matching aggregate function.*
 
 # non-constant argument
 statement error
 SELECT list_aggr(list(i), 'quantile', i) FROM range(10) tbl(i);
 ----
+<REGEX>:.*Binder Error.*can only take constant parameters.*

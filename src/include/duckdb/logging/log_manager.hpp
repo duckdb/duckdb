@@ -50,7 +50,7 @@ public:
 	DUCKDB_API shared_ptr<LogStorage> GetLogStorage();
 	DUCKDB_API bool CanScan(LoggingTargetTable table);
 
-	DUCKDB_API void SetConfig(DatabaseInstance &db, LogConfig config);
+	DUCKDB_API void SetConfig(DatabaseInstance &db, const LogConfig &config);
 	DUCKDB_API void SetEnableLogging(bool enable);
 	DUCKDB_API void SetLogMode(LogMode mode);
 	DUCKDB_API void SetLogLevel(LogLevel level);
@@ -82,6 +82,8 @@ protected:
 	void SetLogStorageInternal(DatabaseInstance &db, const string &storage_name);
 
 	optional_ptr<const LogType> LookupLogTypeInternal(const string &type);
+
+	void SetConfigInternal(LogConfig config);
 
 	mutex lock;
 	LogConfig config;

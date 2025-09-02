@@ -127,7 +127,6 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 				if (const_exp.value.TryCastAs(context, LogicalType::UINTEGER)) {
 					// Array extraction: if the cast fails it's definitely out-of-bounds for a JSON array
 					auto index = UIntegerValue::Get(const_exp.value);
-					index -= index > 0; // Subtract 1 for SQL 1-based indexing (except when accessing from back)
 					const_exp.value = StringUtil::Format("$[%lld]", index);
 					const_exp.return_type = LogicalType::VARCHAR;
 				} else if (const_exp.return_type.id() == LogicalType::VARCHAR) {

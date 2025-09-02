@@ -372,4 +372,11 @@ void WindowNaiveAggregator::Evaluate(ExecutionContext &context, const DataChunk 
 	lnstate.Evaluate(context, gnstate, bounds, result, count, row_idx, sink.interrupt_state);
 }
 
+bool WindowNaiveAggregator::CanAggregate(const BoundWindowExpression &wexpr) {
+	if (!wexpr.aggregate || !wexpr.aggregate->CanAggregate()) {
+		return false;
+	}
+	return true;
+}
+
 } // namespace duckdb
