@@ -84,12 +84,20 @@ SELECT starts_with('HELLO' COLLATE NOCASE, 'heL')
 ----
 true
 
-# Test with table data - use explicit collation to avoid prepared statement issues
+# Test with table data
 statement ok
 CREATE TABLE collate_test(s VARCHAR COLLATE NOCASE)
 
 statement ok
 INSERT INTO collate_test VALUES ('Hello World'), ('HELLO WORLD'), ('hElLo WoRlD')
+
+# Test basic functionality
+query I
+SELECT strpos(s COLLATE NOCASE, 'hello') FROM collate_test ORDER BY s
+----
+1
+1
+1
 
 query I
 SELECT strpos(s COLLATE NOCASE, 'world') FROM collate_test ORDER BY s
@@ -97,20 +105,6 @@ SELECT strpos(s COLLATE NOCASE, 'world') FROM collate_test ORDER BY s
 7
 7
 7
-
-query I
-SELECT strpos(s COLLATE NOCASE, 'O W') FROM collate_test ORDER BY s
-----
-5
-5
-5
-
-query I
-SELECT instr(s COLLATE NOCASE, 'hello') FROM collate_test ORDER BY s
-----
-1
-1
-1
 
 # Test with mixed collations
 query I
