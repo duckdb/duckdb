@@ -1,23 +1,28 @@
 diff --git a/extension/httpfs/crypto.cpp b/extension/httpfs/crypto.cpp
-index 8578f27..9c05111 100644
+index 8578f27..094e3d5 100644
 --- a/extension/httpfs/crypto.cpp
 +++ b/extension/httpfs/crypto.cpp
-@@ -19,9 +19,12 @@
+@@ -7,6 +7,10 @@
+ 
+ #define CPPHTTPLIB_OPENSSL_SUPPORT
+ 
++#include "include/crypto.hpp"
++
++#include "re2/re2.h"
++
+ #include <openssl/err.h>
+ #include <openssl/evp.h>
+ #include <openssl/ssl.h>
+@@ -19,7 +23,7 @@
  
  namespace duckdb {
  
 -AESStateSSL::AESStateSSL(const std::string *key) : context(EVP_CIPHER_CTX_new()) {
-+
-+
-+AESStateSSL::AESStateSSL(EncryptionTypes::CipherType cipher_p, const_data_ptr_t key,
-+									idx_t key_len) : EncryptionState(cipher_p, key, key_len), context(EVP_CIPHER_CTX_new()), cipher(cipher_p) {
++AESStateSSL::AESStateSSL(EncryptionTypes::CipherType  cipher_p, const std::string *key) : EncryptionState(cipher_p), context(EVP_CIPHER_CTX_new()), cipher(cipher_p) {
  	if (!(context)) {
--		throw InternalException("AES GCM failed with initializing context");
-+		throw InternalException("Failed with initializing context");
+ 		throw InternalException("AES GCM failed with initializing context");
  	}
- }
- 
-@@ -33,7 +36,7 @@ AESStateSSL::~AESStateSSL() {
+@@ -33,7 +37,7 @@ AESStateSSL::~AESStateSSL() {
  const EVP_CIPHER *AESStateSSL::GetCipher(idx_t key_len) {
  
  	switch (cipher) {
@@ -26,7 +31,7 @@ index 8578f27..9c05111 100644
  		switch (key_len) {
  		case 16:
  			return EVP_aes_128_gcm();
-@@ -44,7 +47,7 @@ const EVP_CIPHER *AESStateSSL::GetCipher(idx_t key_len) {
+@@ -44,7 +48,7 @@ const EVP_CIPHER *AESStateSSL::GetCipher(idx_t key_len) {
  		default:
  			throw InternalException("Invalid AES key length");
  		}
@@ -35,10 +40,11 @@ index 8578f27..9c05111 100644
  		switch (key_len) {
  		case 16:
  			return EVP_aes_128_ctr();
-@@ -55,6 +58,17 @@ const EVP_CIPHER *AESStateSSL::GetCipher(idx_t key_len) {
+@@ -55,7 +59,17 @@ const EVP_CIPHER *AESStateSSL::GetCipher(idx_t key_len) {
  		default:
  			throw InternalException("Invalid AES key length");
  		}
+-
 +	case EncryptionTypes::CBC:
 +		switch (key_len) {
 +	case 16:
@@ -50,9 +56,9 @@ index 8578f27..9c05111 100644
 +	default:
 +			throw InternalException("Invalid AES key length");
 +		}
- 
  	default:
  		throw duckdb::InternalException("Invalid Encryption/Decryption Cipher: %d", static_cast<int>(cipher));
+ 	}
 @@ -67,7 +81,7 @@ void AESStateSSL::GenerateRandomData(data_ptr_t data, idx_t len) {
  }
  
@@ -67,7 +73,7 @@ index 8578f27..9c05111 100644
  
  void AESStateSSL::InitializeDecryption(const_data_ptr_t iv, idx_t iv_len, const_data_ptr_t key, idx_t key_len, const_data_ptr_t aad, idx_t aad_len) {
 -	mode = DECRYPT;
-+	mode = EncryptionTypes::ENCRYPT;
++	mode = EncryptionTypes::DECRYPT;
  
  	if (1 != EVP_DecryptInit_ex(context, GetCipher(key_len), NULL, key, iv)) {
  		throw InternalException("DecryptInit failed");
@@ -88,20 +94,7 @@ index 8578f27..9c05111 100644
  		if (1 != EVP_DecryptUpdate(context, data_ptr_cast(out), reinterpret_cast<int *>(&out_len),
  		                           const_data_ptr_cast(in), (int)in_len)) {
  
-@@ -115,10 +129,11 @@ size_t AESStateSSL::Process(const_data_ptr_t in, idx_t in_len, data_ptr_t out, i
- 		break;
- 	}
- 
--	if (out_len != in_len) {
-+	if (cipher == EncryptionTypes::GCM && out_len != in_len) {
- 		throw InternalException("AES GCM failed, in- and output lengths differ");
- 	}
- 
-+
- 	return out_len;
- }
- 
-@@ -126,7 +141,7 @@ size_t AESStateSSL::FinalizeGCM(data_ptr_t out, idx_t out_len, data_ptr_t tag, i
+@@ -126,7 +140,7 @@ size_t AESStateSSL::FinalizeGCM(data_ptr_t out, idx_t out_len, data_ptr_t tag, i
  	auto text_len = out_len;
  
  	switch (mode) {
@@ -110,7 +103,7 @@ index 8578f27..9c05111 100644
  		if (1 != EVP_EncryptFinal_ex(context, data_ptr_cast(out) + out_len, reinterpret_cast<int *>(&out_len))) {
  			throw InternalException("EncryptFinal failed");
  		}
-@@ -138,7 +153,7 @@ size_t AESStateSSL::FinalizeGCM(data_ptr_t out, idx_t out_len, data_ptr_t tag, i
+@@ -138,7 +152,7 @@ size_t AESStateSSL::FinalizeGCM(data_ptr_t out, idx_t out_len, data_ptr_t tag, i
  		}
  		return text_len;
  	}
@@ -119,7 +112,7 @@ index 8578f27..9c05111 100644
  		// Set expected tag value
  		if (!EVP_CIPHER_CTX_ctrl(context, EVP_CTRL_GCM_SET_TAG, tag_len, tag)) {
  			throw InternalException("Finalizing tag failed");
-@@ -161,14 +176,14 @@ size_t AESStateSSL::FinalizeGCM(data_ptr_t out, idx_t out_len, data_ptr_t tag, i
+@@ -161,14 +175,14 @@ size_t AESStateSSL::FinalizeGCM(data_ptr_t out, idx_t out_len, data_ptr_t tag, i
  
  size_t AESStateSSL::Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, idx_t tag_len) {
  
@@ -136,7 +129,7 @@ index 8578f27..9c05111 100644
  		if (1 != EVP_EncryptFinal_ex(context, data_ptr_cast(out) + out_len, reinterpret_cast<int *>(&out_len))) {
  			throw InternalException("EncryptFinal failed");
  		}
-@@ -176,7 +191,7 @@ size_t AESStateSSL::Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, idx_
+@@ -176,7 +190,7 @@ size_t AESStateSSL::Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, idx_
  		return text_len += out_len;
  	}
  
@@ -145,29 +138,27 @@ index 8578f27..9c05111 100644
  		// EVP_DecryptFinal() will return an error code if final block is not correctly formatted.
  		int ret = EVP_DecryptFinal_ex(context, data_ptr_cast(out) + out_len, reinterpret_cast<int *>(&out_len));
  		text_len += out_len;
-@@ -192,7 +207,6 @@ size_t AESStateSSL::Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, idx_
- 		throw InternalException("Unhandled encryption mode %d", static_cast<int>(mode));
- 	}
- }
--
- } // namespace duckdb
- 
- extern "C" {
+@@ -201,4 +215,4 @@ extern "C" {
+ DUCKDB_EXTENSION_API AESStateSSLFactory *CreateSSLFactory() {
+ 	return new AESStateSSLFactory();
+ };
+-}
++}
+\ No newline at end of file
 diff --git a/extension/httpfs/include/crypto.hpp b/extension/httpfs/include/crypto.hpp
-index 1e142df..707a986 100644
+index 1e142df..31295a1 100644
 --- a/extension/httpfs/include/crypto.hpp
 +++ b/extension/httpfs/include/crypto.hpp
-@@ -25,7 +25,8 @@ void hex256(hash_bytes &in, hash_str &out);
+@@ -25,7 +25,7 @@ void hex256(hash_bytes &in, hash_str &out);
  class DUCKDB_EXTENSION_API AESStateSSL : public duckdb::EncryptionState {
  
  public:
 -	explicit AESStateSSL(const std::string *key = nullptr);
-+	explicit AESStateSSL(duckdb::EncryptionTypes::CipherType cipher_p, duckdb::const_data_ptr_t key = nullptr,
-+										duckdb::idx_t key_len = 0);
++	explicit AESStateSSL(duckdb::EncryptionTypes::CipherType cipher_p, const std::string *key = nullptr);
  	~AESStateSSL() override;
  
  public:
-@@ -40,8 +41,8 @@ public:
+@@ -40,24 +40,24 @@ public:
  
  private:
  	EVP_CIPHER_CTX *context;
@@ -178,21 +169,34 @@ index 1e142df..707a986 100644
  };
  
  } // namespace duckdb
-@@ -53,9 +54,12 @@ public:
- 	explicit AESStateSSLFactory() {
- 	}
+ 
+ extern "C" {
+ 
+-class DUCKDB_EXTENSION_API AESStateSSLFactory : public duckdb::EncryptionUtil {
+-public:
+-	explicit AESStateSSLFactory() {
+-	}
++	class DUCKDB_EXTENSION_API AESStateSSLFactory : public duckdb::EncryptionUtil {
++	public:
++		explicit AESStateSSLFactory() {
++		}
  
 -	duckdb::shared_ptr<duckdb::EncryptionState> CreateEncryptionState(duckdb::const_data_ptr_t key = nullptr, duckdb::idx_t key_len = 0) const override {
 -		return duckdb::make_shared_ptr<duckdb::AESStateSSL>();
-+	duckdb::shared_ptr<duckdb::EncryptionState> CreateEncryptionState(duckdb::EncryptionTypes::CipherType cipher_p,
-+														  duckdb::const_data_ptr_t key = nullptr, duckdb::idx_t key_len = 0) const override {
-+		return duckdb::make_shared_ptr<duckdb::AESStateSSL>(cipher_p, key, key_len);
- 	}
-+	
-+
+-	}
++		duckdb::shared_ptr<duckdb::EncryptionState> CreateEncryptionState(duckdb::EncryptionTypes::CipherType cipher_p, duckdb::const_data_ptr_t key = nullptr, duckdb::idx_t key_len = 0) const override {
++			return duckdb::make_shared_ptr<duckdb::AESStateSSL>(cipher_p);
++		}
  
- 	~AESStateSSLFactory() override {
- 	}
+-	~AESStateSSLFactory() override {
+-	}
+-};
+-}
++		~AESStateSSLFactory() override {
++		}
++	};
++}
+\ No newline at end of file
 diff --git a/test/sql/copy/csv/test_csv_httpfs.test b/test/sql/copy/csv/test_csv_httpfs.test
 index 76b92bd..d461416 100644
 --- a/test/sql/copy/csv/test_csv_httpfs.test
