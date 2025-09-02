@@ -81,7 +81,7 @@ COPY test TO '__TEST_DIR__/test_reorder.csv' (FORCE_QUOTE (col_c, col_d));
 statement error
 COPY test FROM '__TEST_DIR__/test_reorder.csv' (FORCE_QUOTE (col_c, col_d));
 ----
-Unrecognized option for CSV reader "force_quote"
+Option "FORCE_QUOTE" is not supported for reading - only for writing
 
 # FORCE_QUOTE must not be empty and must have the correct parameter type
 statement error
