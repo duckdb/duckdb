@@ -4755,7 +4755,7 @@ static const char zOptions[] =
     "   -s COMMAND           run \"COMMAND\" and exit\n"
     "   -safe                enable safe-mode\n"
     "   -separator SEP       set output column separator. Default: '|'\n"
-    "   -storage-version V   database storage compatibility version to use Default: 'v0.10.0'\n"
+    "   -storage-version V   database storage compatibility version to use. Default: 'v0.10.0'\n"
     "   -table               set output mode to 'table'\n"
     "   -ui                  launches a web interface using the ui extension (configurable with .ui_command)\n"
     "   -unredacted          allow printing unredacted secrets\n"
