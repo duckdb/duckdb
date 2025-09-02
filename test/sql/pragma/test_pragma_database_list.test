@@ -21,3 +21,4 @@ memory	NULL
 statement error
 PRAGMA database_list()
 ----
+<REGEX>:.*Parser Error.*syntax error.*
