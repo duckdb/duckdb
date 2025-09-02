@@ -91,8 +91,8 @@ unique_ptr<ParsedExpression> Transformer::TransformAExprInternal(duckdb_libpgque
 	auto name = string(PGPointerCast<duckdb_libpgquery::PGValue>(root.name->head->data.ptr_value)->val.str);
 
 	switch (root.kind) {
-    case duckdb_libpgquery::PG_AEXPR_OP_ALL:
-    case duckdb_libpgquery::PG_AEXPR_OP_ANY: {
+	case duckdb_libpgquery::PG_AEXPR_OP_ALL:
+	case duckdb_libpgquery::PG_AEXPR_OP_ANY: {
 		// left=ANY(right)
 		// we turn this into left=ANY((SELECT UNNEST(right)))
 		auto left_expr = TransformExpression(root.lexpr);
@@ -119,14 +119,14 @@ unique_ptr<ParsedExpression> Transformer::TransformAExprInternal(duckdb_libpgque
 				// Primnode ARRAY (less common in raw parse), handle for completeness
 				auto parray = PGPointerCast<duckdb_libpgquery::PGArrayExpr>(rexpr_node);
 				list = parray->elements;
-	    } else if (rexpr_node->type == duckdb_libpgquery::T_PGFuncCall) {
+			} else if (rexpr_node->type == duckdb_libpgquery::T_PGFuncCall) {
 				// Some ARRAY[...] forms arrive as a FuncCall("array", args)
 				auto fcall = PGPointerCast<duckdb_libpgquery::PGFuncCall>(rexpr_node);
 				if (fcall->funcname && fcall->funcname->length >= 1) {
 					auto fname_val = PGPointerCast<duckdb_libpgquery::PGValue>(fcall->funcname->head->data.ptr_value);
 					string fname = fname_val->val.str ? string(fname_val->val.str) : string();
 					auto fname_lower = StringUtil::Lower(fname);
-		    if (fname_lower == "array" || fname_lower == "construct_array") {
+					if (fname_lower == "array" || fname_lower == "construct_array") {
 						list = fcall->args;
 						if (!list || list->length == 0) {
 							throw ParserException("LIKE ANY() requires at least one pattern");
@@ -139,23 +139,23 @@ unique_ptr<ParsedExpression> Transformer::TransformAExprInternal(duckdb_libpgque
 				if (!list->head || list->length == 0) {
 					throw ParserException("LIKE ANY() requires at least one pattern");
 				}
-			vector<unique_ptr<ParsedExpression>> or_children;
-			for (auto cell = list->head; cell != nullptr; cell = cell->next) {
-				auto n = PGPointerCast<duckdb_libpgquery::PGNode>(cell->data.ptr_value);
-				vector<unique_ptr<ParsedExpression>> like_children;
-				like_children.push_back(left_expr->Copy());
-				like_children.push_back(TransformExpression(n));
-				auto like_func = make_uniq<FunctionExpression>(name, std::move(like_children));
-				like_func->is_operator = true;
-				or_children.push_back(std::move(like_func));
-			}
-			if (or_children.size() == 1) {
-				return std::move(or_children[0]);
-			}
-			auto disjunction = make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_OR);
-			disjunction->children = std::move(or_children);
-			SetQueryLocation(*disjunction, root.location);
-			return std::move(disjunction);
+				vector<unique_ptr<ParsedExpression>> or_children;
+				for (auto cell = list->head; cell != nullptr; cell = cell->next) {
+					auto n = PGPointerCast<duckdb_libpgquery::PGNode>(cell->data.ptr_value);
+					vector<unique_ptr<ParsedExpression>> like_children;
+					like_children.push_back(left_expr->Copy());
+					like_children.push_back(TransformExpression(n));
+					auto like_func = make_uniq<FunctionExpression>(name, std::move(like_children));
+					like_func->is_operator = true;
+					or_children.push_back(std::move(like_func));
+				}
+				if (or_children.size() == 1) {
+					return std::move(or_children[0]);
+				}
+				auto disjunction = make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_OR);
+				disjunction->children = std::move(or_children);
+				SetQueryLocation(*disjunction, root.location);
+				return std::move(disjunction);
 			}
 		}
 
