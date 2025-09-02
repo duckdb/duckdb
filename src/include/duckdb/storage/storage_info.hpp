@@ -98,9 +98,10 @@ public:
 	//! The set of flags used by the database.
 	uint64_t flags[FLAG_COUNT];
 
+	//! The length of the unique database identifier.
+	static constexpr idx_t DB_IDENTIFIER_LEN = 16;
 	//! Optional metadata for encryption, if encryption flag is set.
 	static constexpr idx_t ENCRYPTION_METADATA_LEN = 8;
-	static constexpr idx_t SALT_LEN = 16;
 	//! The canary is a known plaintext for detecting wrong keys early.
 	static constexpr idx_t CANARY_BYTE_SIZE = 8;
 	//! Nonce, IV (nonce + counter) and tag length.
@@ -126,9 +127,9 @@ public:
 		memcpy(encryption_metadata, source, ENCRYPTION_METADATA_LEN);
 	}
 
-	void SetSalt(data_ptr_t source) {
-		memset(salt, 0, SALT_LEN);
-		memcpy(salt, source, SALT_LEN);
+	void SetDBIdentifier(data_ptr_t source) {
+		memset(db_identifier, 0, DB_IDENTIFIER_LEN);
+		memcpy(db_identifier, source, DB_IDENTIFIER_LEN);
 	}
 
 	void SetEncryptedCanary(data_ptr_t source) {
@@ -136,13 +137,13 @@ public:
 		memcpy(encrypted_canary, source, CANARY_BYTE_SIZE);
 	}
 
-	data_ptr_t GetSalt() {
-		return salt;
+	data_ptr_t GetDBIdentifier() {
+		return db_identifier;
 	}
 
-	static bool CompareSalt(const data_ptr_t s1, const data_ptr_t s2) {
-		for (idx_t i = 0; i < SALT_LEN; i++) {
-			if (s1[i] != s2[i]) {
+	static bool CompareDBIdentifier(const data_ptr_t db_identifier_1, const data_ptr_t db_identifier_2) {
+		for (idx_t i = 0; i < DB_IDENTIFIER_LEN; i++) {
+			if (db_identifier_1[i] != db_identifier_2[i]) {
 				return false;
 			}
 		}
@@ -160,8 +161,8 @@ private:
 	data_t library_git_desc[MAX_VERSION_SIZE];
 	data_t library_git_hash[MAX_VERSION_SIZE];
 	data_t encryption_metadata[ENCRYPTION_METADATA_LEN];
-	//! Salt serves as a unique file identifier and is used for encryption.
-	data_t salt[SALT_LEN];
+	//! The unique database identifier and optional encryption salt.
+	data_t db_identifier[DB_IDENTIFIER_LEN];
 	data_t encrypted_canary[CANARY_BYTE_SIZE];
 };
 

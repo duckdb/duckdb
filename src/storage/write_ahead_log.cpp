@@ -261,9 +261,9 @@ void WriteAheadLog::WriteHeader() {
 	auto &single_file_block_manager = database.GetStorageManager().GetBlockManager().Cast<SingleFileBlockManager>();
 	auto file_version_number = single_file_block_manager.GetVersionNumber();
 	if (file_version_number > 66) {
-		auto salt = single_file_block_manager.GetSalt();
-		serializer.WriteList(102, "header_id", MainHeader::SALT_LEN,
-		                     [&](Serializer::List &list, idx_t i) { list.WriteElement(salt[i]); });
+		auto db_identifier = single_file_block_manager.GetDBIdentifier();
+		serializer.WriteList(102, "db_identifier", MainHeader::DB_IDENTIFIER_LEN,
+		                     [&](Serializer::List &list, idx_t i) { list.WriteElement(db_identifier[i]); });
 		auto checkpoint_iteration = single_file_block_manager.GetCheckpointIteration();
 		serializer.WriteProperty(103, "checkpoint_iteration", checkpoint_iteration);
 	}

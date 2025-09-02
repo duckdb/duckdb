@@ -48,8 +48,8 @@ struct StorageManagerOptions {
 	optional_idx storage_version;
 	optional_idx version_number;
 	optional_idx block_header_size;
-	//! Unique file identifier and optional encryption salt.
-	data_t salt[MainHeader::SALT_LEN];
+	//! Unique database identifier and optional encryption salt.
+	data_t db_identifier[MainHeader::DB_IDENTIFIER_LEN];
 	EncryptionOptions encryption_options;
 };
 
@@ -122,9 +122,9 @@ public:
 	}
 	//! Return the version number of the file.
 	uint64_t GetVersionNumber() const;
-	//! Return the header ID of the file.
-	data_ptr_t GetSalt() {
-		return options.salt;
+	//! Return the database identifier.
+	data_ptr_t GetDBIdentifier() {
+		return options.db_identifier;
 	}
 
 private:
@@ -147,13 +147,12 @@ private:
 
 	// Encrypt, Store, Decrypt the canary
 	static void StoreEncryptedCanary(DatabaseInstance &db, MainHeader &main_header, const string &key_id);
-	static void StoreSalt(MainHeader &main_header, data_ptr_t salt);
+	static void StoreDBIdentifier(MainHeader &main_header, data_ptr_t db_identifier);
 	void StoreEncryptionMetadata(MainHeader &main_header) const;
 
 	//! Check and adding Encryption Keys
 	void CheckAndAddEncryptionKey(MainHeader &main_header, string &user_key);
 	void CheckAndAddEncryptionKey(MainHeader &main_header);
-	void CheckAndAddEncryptionKey(MainHeader &main_header, DBConfigOptions &config_options);
 
 	//! Return the blocks to which we will write the free list and modified blocks
 	vector<MetadataHandle> GetFreeListBlocks();

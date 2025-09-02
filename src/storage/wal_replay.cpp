@@ -460,20 +460,24 @@ void WriteAheadLogDeserializer::ReplayVersion() {
 	auto &single_file_block_manager = db.GetStorageManager().GetBlockManager().Cast<SingleFileBlockManager>();
 	auto file_version_number = single_file_block_manager.GetVersionNumber();
 	if (file_version_number > 66) {
-		data_t salt[MainHeader::SALT_LEN];
-		deserializer.ReadList(102, "header_id",
-		                      [&](Deserializer::List &list, idx_t i) { salt[i] = list.ReadElement<uint8_t>(); });
-		auto expected_salt = single_file_block_manager.GetSalt();
-		if (!MainHeader::CompareSalt(salt, expected_salt)) {
+		data_t db_identifier[MainHeader::DB_IDENTIFIER_LEN];
+		deserializer.ReadList(102, "db_identifier", [&](Deserializer::List &list, idx_t i) {
+			db_identifier[i] = list.ReadElement<uint8_t>();
+		});
+		auto expected_db_identifier = single_file_block_manager.GetDBIdentifier();
+		if (!MainHeader::CompareDBIdentifier(db_identifier, expected_db_identifier)) {
 			throw IOException("WAL does not match database file.");
 		}
 
 		auto expected_checkpoint_iteration = single_file_block_manager.GetCheckpointIteration();
 		auto checkpoint_iteration = deserializer.ReadProperty<uint64_t>(103, "checkpoint_iteration");
 		if (expected_checkpoint_iteration != checkpoint_iteration) {
-			throw IOException("WAL checkpoint iteration does not match database file. File checkpoint "
+			string relation = checkpoint_iteration < expected_checkpoint_iteration ? "older" : "newer";
+			throw IOException("This WAL was created for this database file, but the WAL checkpoint iteration does not "
+			                  "match the database file. "
+			                  "That means the WAL was created for a %s version of this database. File checkpoint "
 			                  "iteration: %d, WAL checkpoint iteration: %d",
-			                  expected_checkpoint_iteration, checkpoint_iteration);
+			                  relation, expected_checkpoint_iteration, checkpoint_iteration);
 		}
 	}
 }

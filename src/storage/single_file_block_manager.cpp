@@ -35,11 +35,11 @@ void SerializeVersionNumber(WriteStream &ser, const string &version_str) {
 	ser.WriteData(version, MainHeader::MAX_VERSION_SIZE);
 }
 
-void SerializeSalt(WriteStream &ser, data_ptr_t salt_p) {
-	data_t salt[MainHeader::SALT_LEN];
-	memset(salt, 0, MainHeader::SALT_LEN);
-	memcpy(salt, salt_p, MainHeader::SALT_LEN);
-	ser.WriteData(salt, MainHeader::SALT_LEN);
+void SerializeDBIdentifier(WriteStream &ser, data_ptr_t db_identifier_p) {
+	data_t db_identifier[MainHeader::DB_IDENTIFIER_LEN];
+	memset(db_identifier, 0, MainHeader::DB_IDENTIFIER_LEN);
+	memcpy(db_identifier, db_identifier_p, MainHeader::DB_IDENTIFIER_LEN);
+	ser.WriteData(db_identifier, MainHeader::DB_IDENTIFIER_LEN);
 }
 
 void SerializeEncryptionMetadata(WriteStream &ser, data_ptr_t metadata_p, const bool encrypted) {
@@ -64,9 +64,10 @@ void DeserializeEncryptionData(ReadStream &stream, data_t *dest, idx_t size) {
 	stream.ReadData(dest, size);
 }
 
-void GenerateSalt(uint8_t *salt) {
-	memset(salt, 0, MainHeader::SALT_LEN);
-	duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLS::GenerateRandomDataStatic(salt, MainHeader::SALT_LEN);
+void GenerateDBIdentifier(uint8_t *db_identifier) {
+	memset(db_identifier, 0, MainHeader::DB_IDENTIFIER_LEN);
+	duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLS::GenerateRandomDataStatic(db_identifier,
+	                                                                          MainHeader::DB_IDENTIFIER_LEN);
 }
 
 void EncryptCanary(MainHeader &main_header, const shared_ptr<EncryptionState> &encryption_state,
@@ -121,14 +122,11 @@ void MainHeader::Write(WriteStream &ser) {
 	SerializeVersionNumber(ser, DuckDB::LibraryVersion());
 	SerializeVersionNumber(ser, DuckDB::SourceID());
 
-	// FIXME: MainHeader::ENCRYPTED_DATABASE_FLAG is 1 and can still be turned into a bit,
-	// FIXME: which I think flags should be.
-
 	// We always serialize, and write zeros, if not set.
-	auto encrypted = flags[0] == MainHeader::ENCRYPTED_DATABASE_FLAG;
-	SerializeEncryptionMetadata(ser, encryption_metadata, encrypted);
-	SerializeSalt(ser, salt);
-	SerializeEncryptionMetadata(ser, encrypted_canary, encrypted);
+	auto encryption_enabled = flags[0] & MainHeader::ENCRYPTED_DATABASE_FLAG;
+	SerializeEncryptionMetadata(ser, encryption_metadata, encryption_enabled);
+	SerializeDBIdentifier(ser, db_identifier);
+	SerializeEncryptionMetadata(ser, encrypted_canary, encryption_enabled);
 }
 
 void MainHeader::CheckMagicBytes(QueryContext context, FileHandle &handle) {
@@ -185,7 +183,7 @@ MainHeader MainHeader::Read(ReadStream &source) {
 
 	// We always deserialize, and read zeros, if not set.
 	DeserializeEncryptionData(source, header.encryption_metadata, MainHeader::ENCRYPTION_METADATA_LEN);
-	DeserializeEncryptionData(source, header.salt, MainHeader::SALT_LEN);
+	DeserializeEncryptionData(source, header.db_identifier, MainHeader::DB_IDENTIFIER_LEN);
 	DeserializeEncryptionData(source, header.encrypted_canary, MainHeader::CANARY_BYTE_SIZE);
 
 	return header;
@@ -305,8 +303,8 @@ void SingleFileBlockManager::StoreEncryptedCanary(DatabaseInstance &db, MainHead
 	EncryptCanary(main_header, encryption_state, key);
 }
 
-void SingleFileBlockManager::StoreSalt(MainHeader &main_header, data_ptr_t salt) {
-	main_header.SetSalt(salt);
+void SingleFileBlockManager::StoreDBIdentifier(MainHeader &main_header, data_ptr_t db_identifier) {
+	main_header.SetDBIdentifier(db_identifier);
 }
 
 void SingleFileBlockManager::StoreEncryptionMetadata(MainHeader &main_header) const {
@@ -332,15 +330,15 @@ void SingleFileBlockManager::StoreEncryptionMetadata(MainHeader &main_header) co
 }
 
 void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header, string &user_key) {
-	//! Get the stored salt
-	uint8_t salt[MainHeader::SALT_LEN];
-	memset(salt, 0, MainHeader::SALT_LEN);
-	memcpy(salt, main_header.GetSalt(), MainHeader::SALT_LEN);
+	//! Get the database identifier.
+	uint8_t db_identifier[MainHeader::DB_IDENTIFIER_LEN];
+	memset(db_identifier, 0, MainHeader::DB_IDENTIFIER_LEN);
+	memcpy(db_identifier, main_header.GetDBIdentifier(), MainHeader::DB_IDENTIFIER_LEN);
 
 	//! Check if the correct key is used to decrypt the database
 	// Derive the encryption key and add it to cache
 	data_t derived_key[MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH];
-	EncryptionKeyManager::DeriveKey(user_key, salt, derived_key);
+	EncryptionKeyManager::DeriveKey(user_key, db_identifier, derived_key);
 
 	auto encryption_state = db.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(
 	    derived_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
@@ -378,20 +376,23 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	// Derive the encryption key and add it to the cache.
 	// Not used for plain databases.
 	data_t derived_key[MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH];
+	auto encryption_enabled = options.encryption_options.encryption_enabled;
 
-	// We always need the salt for the unique file identifier.
-	// If encryption is enabled, we generate a random salt.
-	memset(options.salt, 0, MainHeader::SALT_LEN);
-	GenerateSalt(options.salt);
+	// We need the unique database identifier, if the storage version is new enough.
+	// If encryption is enabled, we also use it as the salt.
+	memset(options.db_identifier, 0, MainHeader::DB_IDENTIFIER_LEN);
 
-	if (options.encryption_options.encryption_enabled) {
+	if (encryption_enabled || options.version_number.GetIndex() >= 67) {
+		GenerateDBIdentifier(options.db_identifier);
+	}
+
+	if (encryption_enabled) {
 		// The key is given via ATTACH.
-		EncryptionKeyManager::DeriveKey(*options.encryption_options.user_key, options.salt, derived_key);
+		EncryptionKeyManager::DeriveKey(*options.encryption_options.user_key, options.db_identifier, derived_key);
 		options.encryption_options.user_key = nullptr;
 
-		// Set the encrypted DB bit to 0.
-		// FIXME: Currently, we set the entire uint64_t, not just the bit.
-		main_header.flags[0] = MainHeader::ENCRYPTED_DATABASE_FLAG;
+		// Set the encrypted DB bit to 1.
+		main_header.flags[0] |= MainHeader::ENCRYPTED_DATABASE_FLAG;
 
 		// The derived key is wiped in AddKeyToCache.
 		options.encryption_options.derived_key_id = EncryptionEngine::AddKeyToCache(db.GetDatabase(), derived_key);
@@ -401,12 +402,12 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	}
 
 	// Store all metadata in the main header.
-	if (options.encryption_options.encryption_enabled) {
+	if (encryption_enabled) {
 		StoreEncryptionMetadata(main_header);
 	}
-	// Always store the salt (unique file identifier).
-	StoreSalt(main_header, options.salt);
-	if (options.encryption_options.encryption_enabled) {
+	// Always store the database identifier.
+	StoreDBIdentifier(main_header, options.db_identifier);
+	if (encryption_enabled) {
 		StoreEncryptedCanary(db.GetDatabase(), main_header, options.encryption_options.derived_key_id);
 	}
 
@@ -472,7 +473,7 @@ void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
 	}
 
 	MainHeader main_header = DeserializeMainHeader(header_buffer.buffer - delta);
-	memcpy(options.salt, main_header.GetSalt(), MainHeader::SALT_LEN);
+	memcpy(options.db_identifier, main_header.GetDBIdentifier(), MainHeader::DB_IDENTIFIER_LEN);
 
 	if (!main_header.IsEncrypted() && options.encryption_options.encryption_enabled) {
 		throw CatalogException("A key is explicitly specified, but database \"%s\" is not encrypted", path);
