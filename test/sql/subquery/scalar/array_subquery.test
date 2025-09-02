@@ -93,3 +93,4 @@ NULL	[]
 statement error
 select array(select 1,2)
 ----
+<REGEX>:.*inder Error.*Subquery returns 2 columns.*

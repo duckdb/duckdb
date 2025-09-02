@@ -53,6 +53,7 @@ void DataChunk::Initialize(Allocator &allocator, const vector<LogicalType> &type
 	D_ASSERT(data.empty());
 
 	capacity = capacity_p;
+	initial_capacity = capacity_p;
 	for (idx_t i = 0; i < types.size(); i++) {
 		// We copy the type here so we don't create another reference to the same shared_ptr<ExtraTypeInfo>
 		// Otherwise, threads will constantly increment/decrement the atomic ref count to the same shared_ptr
@@ -92,7 +93,7 @@ void DataChunk::Reset() {
 	for (idx_t i = 0; i < ColumnCount(); i++) {
 		data[i].ResetFromCache(vector_caches[i]);
 	}
-	capacity = STANDARD_VECTOR_SIZE;
+	capacity = initial_capacity;
 }
 
 void DataChunk::Destroy() {

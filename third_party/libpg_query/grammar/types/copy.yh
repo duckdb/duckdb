@@ -9,5 +9,5 @@
 %type <defelt> opt_binary
 %type <defelt> copy_opt_item
 %type <node> copy_generic_opt_arg_list_item
-%type <str> copy_file_name
+%type <node> copy_file_name
 %type <conststr> copy_database_flag

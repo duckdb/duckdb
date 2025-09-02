@@ -132,6 +132,10 @@ bool BufferingLogStorage::IsEnabledInternal(LoggingTargetTable table) {
 	return table == LoggingTargetTable::ALL_LOGS;
 }
 
+idx_t BufferingLogStorage::GetBufferLimit() const {
+	return buffer_limit;
+}
+
 void CSVLogStorage::ExecuteCast(LoggingTargetTable table, DataChunk &chunk) {
 	// Reset the cast buffer before use
 	cast_buffers[table]->Reset();
@@ -192,9 +196,10 @@ void CSVLogStorage::InitializeCastChunk(LoggingTargetTable table) {
 
 	vector<LogicalType> types;
 	types.resize(GetSchema(table).size(), LogicalType::VARCHAR);
-
-	cast_buffers[table]->Initialize(Allocator::DefaultAllocator(), types);
+	idx_t buffer_size = MaxValue<idx_t>(GetBufferLimit(), 1);
+	cast_buffers[table]->Initialize(Allocator::DefaultAllocator(), types, buffer_size);
 }
+
 void CSVLogStorage::ResetCastChunk() {
 	InitializeCastChunk(LoggingTargetTable::LOG_ENTRIES);
 	InitializeCastChunk(LoggingTargetTable::LOG_CONTEXTS);
@@ -513,7 +518,8 @@ unique_ptr<TableRef> FileLogStorage::BindReplace(ClientContext &context, TableFu
 
 	string columns;
 	if (table == LoggingTargetTable::LOG_ENTRIES) {
-		columns = "'context_id': 'UBIGINT', 'timestamp': 'TIMESTAMP', 'type': 'VARCHAR', 'log_level': 'VARCHAR' , "
+		columns = "'context_id': 'UBIGINT', 'timestamp': 'TIMESTAMP WITH TIME ZONE', 'type': 'VARCHAR', 'log_level': "
+		          "'VARCHAR' , "
 		          "'message': 'VARCHAR'";
 	} else if (table == LoggingTargetTable::LOG_CONTEXTS) {
 		columns = "'context_id': 'UBIGINT', 'scope': 'VARCHAR', 'connection_id': 'UBIGINT', 'transaction_id': "
@@ -522,7 +528,8 @@ unique_ptr<TableRef> FileLogStorage::BindReplace(ClientContext &context, TableFu
 		select = "SELECT context_id, scope, connection_id, transaction_id, query_id, thread_id, timestamp, type, "
 		         "log_level, message ";
 		columns = "'context_id': 'UBIGINT', 'scope': 'VARCHAR', 'connection_id': 'UBIGINT', 'transaction_id': "
-		          "'UBIGINT', 'query_id': 'UBIGINT', 'thread_id': 'UBIGINT', 'timestamp': 'TIMESTAMP', 'type': "
+		          "'UBIGINT', 'query_id': 'UBIGINT', 'thread_id': 'UBIGINT', 'timestamp': 'TIMESTAMP WITH TIME ZONE', "
+		          "'type': "
 		          "'VARCHAR', 'log_level': 'VARCHAR' , 'message': 'VARCHAR'";
 	} else {
 		throw InternalException("Invalid logging target table");
@@ -537,18 +544,19 @@ BufferingLogStorage::BufferingLogStorage(DatabaseInstance &db_p, idx_t buffer_si
 }
 
 void BufferingLogStorage::ResetLogBuffers() {
+	idx_t buffer_size = MaxValue<idx_t>(buffer_limit, 1);
 	if (normalize_contexts) {
 		buffers[LoggingTargetTable::LOG_ENTRIES] = make_uniq<DataChunk>();
 		buffers[LoggingTargetTable::LOG_CONTEXTS] = make_uniq<DataChunk>();
 		buffers[LoggingTargetTable::LOG_ENTRIES]->Initialize(Allocator::DefaultAllocator(),
-		                                                     GetSchema(LoggingTargetTable::LOG_ENTRIES), buffer_limit);
-		buffers[LoggingTargetTable::LOG_CONTEXTS]->Initialize(
-		    Allocator::DefaultAllocator(), GetSchema(LoggingTargetTable::LOG_CONTEXTS), buffer_limit);
+		                                                     GetSchema(LoggingTargetTable::LOG_ENTRIES), buffer_size);
+		buffers[LoggingTargetTable::LOG_CONTEXTS]->Initialize(Allocator::DefaultAllocator(),
+		                                                      GetSchema(LoggingTargetTable::LOG_CONTEXTS), buffer_size);
 
 	} else {
 		buffers[LoggingTargetTable::ALL_LOGS] = make_uniq<DataChunk>();
 		buffers[LoggingTargetTable::ALL_LOGS]->Initialize(Allocator::DefaultAllocator(),
-		                                                  GetSchema(LoggingTargetTable::ALL_LOGS), buffer_limit);
+		                                                  GetSchema(LoggingTargetTable::ALL_LOGS), buffer_size);
 	}
 }
 
@@ -637,7 +645,7 @@ void BufferingLogStorage::WriteLogEntry(timestamp_t timestamp, LogLevel level, c
 	    normalize_contexts ? buffers[LoggingTargetTable::LOG_ENTRIES] : buffers[LoggingTargetTable::ALL_LOGS];
 
 	auto size = log_entries_buffer->size();
-	if (size >= buffer_limit) {
+	if (size >= buffer_limit && buffer_limit != 0) {
 		throw InternalException("Log buffer limit exceeded: code should have flushed before");
 	}
 

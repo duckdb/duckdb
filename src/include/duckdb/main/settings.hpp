@@ -1233,16 +1233,6 @@ struct UsernameSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct WalEncryptionSetting {
-	using RETURN_TYPE = bool;
-	static constexpr const char *Name = "wal_encryption";
-	static constexpr const char *Description = "Encrypt the WAL if the database is encrypted";
-	static constexpr const char *InputType = "BOOLEAN";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
-};
-
 struct ZstdMinStringLengthSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "zstd_min_string_length";

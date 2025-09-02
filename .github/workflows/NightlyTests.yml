@@ -91,7 +91,7 @@ jobs:
 
     - name: Install
       shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build libcurl4-openssl-dev
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
@@ -239,7 +239,7 @@ jobs:
 
     - name: Install
       shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build llvm
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build llvm libcurl4-openssl-dev
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
@@ -425,7 +425,8 @@ jobs:
 
      - name: Install
        shell: bash
-       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build && pip install requests
+       run: |
+        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build libcurl4-openssl-dev && pip install requests
 
      - name: Setup Ccache
        uses: hendrikmuhs/ccache-action@main
@@ -479,6 +480,8 @@ jobs:
   vector-and-block-sizes:
     name: Tests different vector and block sizes
     runs-on: ubuntu-24.04
+    env:
+      LSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-leak-suppressions.txt
     needs: linux-memory-leaks
 
     steps:
@@ -516,6 +519,8 @@ jobs:
   linux-debug-configs:
     name: Tests different configurations with a debug build
     runs-on: ubuntu-24.04
+    env:
+      LSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-leak-suppressions.txt
     needs: linux-memory-leaks
 
     steps:
