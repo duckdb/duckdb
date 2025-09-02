@@ -71,22 +71,22 @@ TEST_CASE("Test replaying mismatching WAL files", "[persistence][.]") {
 	result = con.Query("ATTACH '" + too_old_path_file + "';");
 	REQUIRE(result->HasError());
 	string error_msg = result->GetError();
-	REQUIRE(StringUtil::Contains(error_msg, "File checkpoint iteration: %d, WAL checkpoint iteration: %d"));
+	REQUIRE(StringUtil::Contains(error_msg, "File checkpoint iteration: 1, WAL checkpoint iteration: 0"));
 
 	result = con.Query("ATTACH '" + too_new_path_file + "';");
 	REQUIRE(result->HasError());
 	error_msg = result->GetError();
-	REQUIRE(StringUtil::Contains(error_msg, "File checkpoint iteration: %d, WAL checkpoint iteration: %d"));
+	REQUIRE(StringUtil::Contains(error_msg, "File checkpoint iteration: 0, WAL checkpoint iteration: 1"));
 
 	// Create and initialize a different file.
 	string other_db_path = test_dir + "/my_other_db.db";
-
 	REQUIRE_NO_FAIL(con.Query("ATTACH '" + other_db_path + "';"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE my_other_db.tbl AS SELECT range AS id FROM range(100);"));
 	REQUIRE_NO_FAIL(con.Query("CHECKPOINT my_other_db;"));
 	REQUIRE_NO_FAIL(con.Query("DETACH my_other_db;"));
 
-	string other_path_wal = test_dir + "/" + other_db_path + ".wal";
+	// Also copy this WAL for the file mismatch test.
+	string other_path_wal = test_dir + "/my_other_db.db.wal";
 	copy_wal_cmd = "cp " + wal_path + " " + other_path_wal;
 	system(copy_wal_cmd.c_str());
 
