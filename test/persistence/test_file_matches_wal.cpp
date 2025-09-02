@@ -7,23 +7,6 @@
 using namespace duckdb;
 using namespace std;
 
-// static void copy_file(const string &src, const string &dst) {
-//	fstream in(src, ios::binary|ios::in);
-//	fstream out(dst, ios::binary|ios::out);
-//
-//	char c;
-//	while (true) {
-//		c = in.get();
-//		if (in.eof()) {
-//			break;
-//		}
-//		out.put(c);
-//	}
-//
-//	in.close();
-//	out.close();
-//}
-
 TEST_CASE("Test replaying mismatching WAL files", "[persistence][.]") {
 	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);

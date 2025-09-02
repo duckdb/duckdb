@@ -119,10 +119,6 @@ public:
 		return string(char_ptr_cast(library_git_hash), 0, MAX_VERSION_SIZE);
 	}
 
-	hugeint_t GetHeaderId() const {
-		return header_id;
-	}
-
 	bool IsEncrypted() const {
 		return flags[0] == MainHeader::ENCRYPTED_DATABASE_FLAG;
 	}
@@ -140,10 +136,6 @@ public:
 	void SetEncryptedCanary(data_ptr_t source) {
 		memset(encrypted_canary, 0, CANARY_BYTE_SIZE);
 		memcpy(encrypted_canary, source, CANARY_BYTE_SIZE);
-	}
-
-	data_ptr_t GetEncryptionMetadata() {
-		return encryption_metadata;
 	}
 
 	data_ptr_t GetSalt() {

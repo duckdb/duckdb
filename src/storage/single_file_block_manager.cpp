@@ -281,19 +281,13 @@ void SingleFileBlockManager::AddStorageVersionTag() {
 }
 
 uint64_t SingleFileBlockManager::GetVersionNumber() const {
-	uint64_t version_number = VERSION_NUMBER;
 	auto storage_version = options.storage_version.GetIndex();
-	if (storage_version >= 4) {
-		// Look up the matching version number.
-		auto version_name = GetStorageVersionName(storage_version, false);
-		version_number = GetStorageVersion(version_name.c_str()).GetIndex();
-
-		// have serialization_version_info, want storage_version_info
-		//		for (idx_t i = 0; i < serialization)
-		//		version_number = 65;
-		//		version_number = VERSION_NUMBER_UPPER;
+	if (storage_version < 4) {
+		return VERSION_NUMBER;
 	}
-	return version_number;
+	// Look up the matching version number.
+	auto version_name = GetStorageVersionName(storage_version, false);
+	return GetStorageVersion(version_name.c_str()).GetIndex();
 }
 
 MainHeader ConstructMainHeader(idx_t version_number) {
