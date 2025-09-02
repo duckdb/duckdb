@@ -29,19 +29,19 @@ SET inspect_range_filter = true;
 query II
 explain SELECT * FROM t1 WHERE a = 1100000;
 ----
-logical_opt	<REGEX>:.*~1. Rows.*
+logical_opt	<REGEX>:.*~1. rows.*
 
 
 # on border
 query II
 explain SELECT * FROM t1 WHERE a <= 1000000;
 ----
-logical_opt	<REGEX>:.*~1. Rows.*
+logical_opt	<REGEX>:.*~1. rows.*
 
 query II
 explain SELECT * FROM t1 WHERE a >= 1999999;
 ----
-logical_opt	<REGEX>:.*~1. Rows.*
+logical_opt	<REGEX>:.*~1. rows.*
 
 # smaller than minimum
 query II
@@ -59,7 +59,7 @@ logical_opt	<REGEX>:.*EMPTY_RESULT.*
 query II
 explain SELECT * FROM t1 WHERE a > 1001000 AND a < 1004000;
 ----
-logical_opt	<REGEX>:.*~120.. Rows.*
+logical_opt	<REGEX>:.*~12,... rows.*
 
 
 #### 2. Test when inspect_range_filter = false ###
@@ -71,19 +71,19 @@ SET inspect_range_filter = false;
 query II
 explain SELECT * FROM t1 WHERE a = 1100000;
 ----
-logical_opt	<REGEX>:.*~1. Rows.*
+logical_opt	<REGEX>:.*~1. rows.*
 
 
 # on border
 query II
 explain SELECT * FROM t1 WHERE a <= 1000000;
 ----
-logical_opt	<REGEX>:.*~8..... Rows.*
+logical_opt	<REGEX>:.*~8..,... rows.*
 
 query II
 explain SELECT * FROM t1 WHERE a >= 1999999;
 ----
-logical_opt	<REGEX>:.*~8..... Rows.*
+logical_opt	<REGEX>:.*~8..,... rows.*
 
 # smaller than minimum
 query II
@@ -101,7 +101,7 @@ logical_opt	<REGEX>:.*EMPTY_RESULT.*
 query II
 explain SELECT * FROM t1 WHERE a > 1001000 AND a < 1004000;
 ----
-logical_opt	<REGEX>:.*~8..... Rows.*
+logical_opt	<REGEX>:.*~8..,... rows.*
 
 
 #### 3. Test cardinality estimation when join ###
