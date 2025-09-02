@@ -1,6 +1,9 @@
 #include "duckdb/parser/tableref.hpp"
 
 #include "duckdb/common/printer.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
+#include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/to_string.hpp"
 
 namespace duckdb {
 
