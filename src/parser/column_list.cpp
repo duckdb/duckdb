@@ -1,5 +1,6 @@
 #include "duckdb/parser/column_list.hpp"
 #include "duckdb/common/string.hpp"
+#include "duckdb/common/to_string.hpp"
 #include "duckdb/common/exception/catalog_exception.hpp"
 
 namespace duckdb {
