@@ -71,6 +71,7 @@ public:
 
 private:
 	void ScanSegments(const std::function<void(Vector &, idx_t)> &callback);
+	void ScanSegmentsWithSample(const std::function<void(Vector &, idx_t)> &callback, double sample_rate);
 	vector<CheckpointAnalyzeResult> DetectBestCompressionMethod();
 	void WriteToDisk();
 	bool HasChanges(ColumnData &col_data);

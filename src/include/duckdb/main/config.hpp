@@ -164,6 +164,8 @@ struct DBConfigOptions {
 	set<CompressionType> disabled_compression_methods;
 	//! Force a specific bitpacking mode to be used when using the bitpacking compression method
 	BitpackingMode force_bitpacking_mode = BitpackingMode::AUTO;
+	//! Sampling ratio when performing compression analysis.
+	double compression_sample_rate = 1.0;
 	//! Database configuration variables as controlled by SET
 	case_insensitive_map_t<Value> set_variables;
 	//! Database configuration variable default values;
