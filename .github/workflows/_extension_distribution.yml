@@ -28,6 +28,10 @@ on:
         required: false
         type: boolean
         default: false
+      save_cache:
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   build:
@@ -58,7 +62,7 @@ jobs:
       duckdb_tag: ${{ inputs.override_tag }}
 
       skip_tests: ${{ inputs.skip_tests }}
-      save_cache: true
+      save_cache: ${{ inputs.save_cache }}
 
       # The extension_config.cmake configuration that gets built
       extra_extension_config: ${{ inputs.extension_config }}
