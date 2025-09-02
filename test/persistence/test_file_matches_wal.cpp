@@ -16,6 +16,7 @@ TEST_CASE("Test replaying mismatching WAL files", "[persistence][.]") {
 	REQUIRE_NO_FAIL(con.Query("PRAGMA disable_checkpoint_on_shutdown;"));
 	REQUIRE_NO_FAIL(con.Query("SET checkpoint_threshold = '10.0 GB';"));
 	REQUIRE_NO_FAIL(con.Query("SET storage_compatibility_version='v1.4.0';"));
+	REQUIRE_NO_FAIL(con.Query("SET threads = 1;"));
 
 	auto test_dir = TestDirectoryPath();
 	string db_name = "my_db";
@@ -32,9 +33,9 @@ TEST_CASE("Test replaying mismatching WAL files", "[persistence][.]") {
 	string too_old_path_wal = test_dir + "/" + db_name + "_too_old.db.wal";
 
 	string copy_file_cmd = "cp " + db_path + " " + too_new_path_file;
-	system(copy_file_cmd.c_str());
+	REQUIRE(system(copy_file_cmd.c_str()) == 0);
 	string copy_wal_cmd = "cp " + wal_path + " " + too_old_path_wal;
-	system(copy_wal_cmd.c_str());
+	REQUIRE(system(copy_wal_cmd.c_str()) == 0);
 
 	// Replay the WAL and make more changes.
 	REQUIRE_NO_FAIL(con.Query("ATTACH '" + db_path + "';"));
@@ -47,9 +48,9 @@ TEST_CASE("Test replaying mismatching WAL files", "[persistence][.]") {
 	string too_new_path_wal = test_dir + "/" + db_name + "_too_new.db.wal";
 
 	copy_file_cmd = "cp " + db_path + " " + too_old_path_file;
-	system(copy_file_cmd.c_str());
+	REQUIRE(system(copy_file_cmd.c_str()) == 0);
 	copy_wal_cmd = "cp " + wal_path + " " + too_new_path_wal;
-	system(copy_wal_cmd.c_str());
+	REQUIRE(system(copy_wal_cmd.c_str()) == 0);
 
 	result = con.Query("ATTACH '" + too_old_path_file + "';");
 	REQUIRE(result->HasError());
@@ -71,7 +72,7 @@ TEST_CASE("Test replaying mismatching WAL files", "[persistence][.]") {
 	// Also copy this WAL for the file mismatch test.
 	string other_path_wal = test_dir + "/my_other_db.db.wal";
 	copy_wal_cmd = "cp " + wal_path + " " + other_path_wal;
-	system(copy_wal_cmd.c_str());
+	REQUIRE(system(copy_wal_cmd.c_str()) == 0);
 
 	result = con.Query("ATTACH '" + other_db_path + "';");
 	REQUIRE(result->HasError());

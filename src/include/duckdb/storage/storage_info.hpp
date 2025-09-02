@@ -97,8 +97,6 @@ public:
 	uint64_t version_number;
 	//! The set of flags used by the database.
 	uint64_t flags[FLAG_COUNT];
-	//! The unique database file identifier.
-	hugeint_t header_id;
 
 	//! Optional metadata for encryption, if encryption flag is set.
 	static constexpr idx_t ENCRYPTION_METADATA_LEN = 8;
@@ -142,6 +140,15 @@ public:
 		return salt;
 	}
 
+	static bool CompareSalt(const data_ptr_t s1, const data_ptr_t s2) {
+		for (idx_t i = 0; i < SALT_LEN; i++) {
+			if (s1[i] != s2[i]) {
+				return false;
+			}
+		}
+		return true;
+	}
+
 	data_ptr_t GetEncryptedCanary() {
 		return encrypted_canary;
 	}
@@ -153,6 +160,7 @@ private:
 	data_t library_git_desc[MAX_VERSION_SIZE];
 	data_t library_git_hash[MAX_VERSION_SIZE];
 	data_t encryption_metadata[ENCRYPTION_METADATA_LEN];
+	//! Salt serves as a unique file identifier and is used for encryption.
 	data_t salt[SALT_LEN];
 	data_t encrypted_canary[CANARY_BYTE_SIZE];
 };

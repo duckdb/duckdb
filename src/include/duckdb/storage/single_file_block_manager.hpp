@@ -31,7 +31,7 @@ struct EncryptionOptions {
 	//! derived encryption key id
 	string derived_key_id;
 	//! Cipher used for encryption
-	EncryptionTypes::CipherType cipher;
+	EncryptionTypes::CipherType cipher = EncryptionTypes::CipherType::UNKNOWN;
 	//! key derivation function (kdf) used
 	EncryptionTypes::KeyDerivationFunction kdf = EncryptionTypes::KeyDerivationFunction::SHA256;
 	//! Key Length
@@ -48,7 +48,8 @@ struct StorageManagerOptions {
 	optional_idx storage_version;
 	optional_idx version_number;
 	optional_idx block_header_size;
-	hugeint_t header_id;
+	//! Unique file identifier and optional encryption salt.
+	data_t salt[MainHeader::SALT_LEN];
 	EncryptionOptions encryption_options;
 };
 
@@ -122,8 +123,8 @@ public:
 	//! Return the version number of the file.
 	uint64_t GetVersionNumber() const;
 	//! Return the header ID of the file.
-	hugeint_t GetHeaderId() const {
-		return options.header_id;
+	data_ptr_t GetSalt() {
+		return options.salt;
 	}
 
 private:

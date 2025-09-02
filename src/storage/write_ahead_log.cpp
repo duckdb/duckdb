@@ -14,15 +14,14 @@
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
-#include "duckdb/main/database.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
-#include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/index.hpp"
+#include "duckdb/storage/single_file_block_manager.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
-#include "duckdb/storage/storage_manager.hpp"
 
 namespace duckdb {
 
@@ -262,8 +261,9 @@ void WriteAheadLog::WriteHeader() {
 	auto &single_file_block_manager = database.GetStorageManager().GetBlockManager().Cast<SingleFileBlockManager>();
 	auto file_version_number = single_file_block_manager.GetVersionNumber();
 	if (file_version_number > 66) {
-		auto header_id = single_file_block_manager.GetHeaderId();
-		serializer.WriteProperty(102, "header_id", header_id);
+		auto salt = single_file_block_manager.GetSalt();
+		serializer.WriteList(102, "header_id", MainHeader::SALT_LEN,
+		                     [&](Serializer::List &list, idx_t i) { list.WriteElement(salt[i]); });
 		auto checkpoint_iteration = single_file_block_manager.GetCheckpointIteration();
 		serializer.WriteProperty(103, "checkpoint_iteration", checkpoint_iteration);
 	}

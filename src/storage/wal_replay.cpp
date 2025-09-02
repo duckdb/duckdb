@@ -2,13 +2,12 @@
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/common/checksum.hpp"
 #include "duckdb/common/encryption_functions.hpp"
 #include "duckdb/common/encryption_key_manager.hpp"
-#include "duckdb/common/printer.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/buffered_file_reader.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
@@ -27,11 +26,12 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression_binder/index_binder.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
+#include "duckdb/storage/single_file_block_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/delete_state.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
-#include "duckdb/storage/table/column_data.hpp"
 
 namespace duckdb {
 
@@ -460,11 +460,12 @@ void WriteAheadLogDeserializer::ReplayVersion() {
 	auto &single_file_block_manager = db.GetStorageManager().GetBlockManager().Cast<SingleFileBlockManager>();
 	auto file_version_number = single_file_block_manager.GetVersionNumber();
 	if (file_version_number > 66) {
-		auto expected_header_id = single_file_block_manager.GetHeaderId();
-		auto header_id = deserializer.ReadProperty<hugeint_t>(102, "header_id");
-		if (expected_header_id != header_id) {
-			throw IOException("WAL does not match database file. File ID: %d, WAL file id: %d", expected_header_id,
-			                  header_id);
+		data_t salt[MainHeader::SALT_LEN];
+		deserializer.ReadList(102, "header_id",
+		                      [&](Deserializer::List &list, idx_t i) { salt[i] = list.ReadElement<uint8_t>(); });
+		auto expected_salt = single_file_block_manager.GetSalt();
+		if (!MainHeader::CompareSalt(salt, expected_salt)) {
+			throw IOException("WAL does not match database file.");
 		}
 
 		auto expected_checkpoint_iteration = single_file_block_manager.GetCheckpointIteration();
