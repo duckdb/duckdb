@@ -185,7 +185,8 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "enable_progress_bar_print",
 	    "progress_bar_time",
 	    "index_scan_max_count",
-	    "profiling_mode"};
+	    "profiling_mode",
+	    "compression_sample_rate"};
 	return excluded_options.count(name) == 1;
 }
 

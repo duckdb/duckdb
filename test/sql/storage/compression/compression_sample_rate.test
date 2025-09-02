@@ -1,0 +1,51 @@
+# name: test/sql/storage/compression/compression_sample_rate.test
+# group: [compression]
+
+load __TEST_DIR__/test_compression_sample_rate.db readwrite v1.0.0
+
+# compression_sample_rate = 1, default.
+statement ok
+SET GLOBAL compression_sample_rate=1;
+
+statement ok
+CREATE TABLE employees1 AS SELECT i AS id, 'Employee ' || i AS name FROM generate_series(1, 200000) AS t(i);
+
+statement ok
+CHECKPOINT;
+
+query I
+SELECT DISTINCT compression FROM pragma_storage_info('employees1') WHERE segment_type ILIKE 'VARCHAR' limit 10;
+----
+FSST
+
+
+# compression_sample_rate = 0, use the first segment to detect best compression method.
+statement ok
+SET GLOBAL compression_sample_rate=0;
+
+statement ok
+CREATE TABLE employees0 AS SELECT i AS id, 'Employee ' || i AS name FROM generate_series(1, 200000) AS t(i);
+
+statement ok
+CHECKPOINT;
+
+query I
+SELECT DISTINCT compression FROM pragma_storage_info('employees0') WHERE segment_type ILIKE 'VARCHAR' limit 10;
+----
+Uncompressed
+
+
+# compression_sample_rate = 0.1.
+statement ok
+SET GLOBAL compression_sample_rate=0.1;
+
+statement ok
+CREATE TABLE employees01 AS SELECT i AS id, 'Employee ' || i AS name FROM generate_series(1, 200000) AS t(i);
+
+statement ok
+CHECKPOINT;
+
+query I
+SELECT DISTINCT compression FROM pragma_storage_info('employees01') WHERE segment_type ILIKE 'VARCHAR' limit 10;
+----
+FSST

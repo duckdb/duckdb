@@ -104,6 +104,63 @@ void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &, idx
 	}
 }
 
+void ColumnDataCheckpointer::ScanSegmentsWithSample(const std::function<void(Vector &, idx_t)> &callback,
+                                                    double sample_rate) {
+	if (sample_rate == 1) {
+		return ScanSegments(callback);
+	}
+
+	Vector scan_vector(intermediate.GetType(), nullptr);
+	auto &first_state = checkpoint_states[0];
+	auto &col_data = first_state.get().column_data;
+	auto &nodes = col_data.data.ReferenceSegments();
+
+	bool sampled_any = false;
+	std::default_random_engine rng(0xdeadbeef ^ col_data.column_index);
+	std::uniform_real_distribution<double> dist(0.0, 1.0);
+
+	// TODO: scan all the nodes from all segments, no need for CheckpointScan to virtualize this I think..
+	for (idx_t segment_idx = 0; segment_idx < nodes.size(); segment_idx++) {
+		auto &segment_node = *nodes[segment_idx];
+		auto &segment = *segment_node.node;
+		ColumnScanState scan_state;
+		scan_state.current = segment_node;
+		segment.InitializeScan(scan_state);
+
+		for (idx_t base_row_index = 0; base_row_index < segment.count; base_row_index += STANDARD_VECTOR_SIZE) {
+			if (dist(rng) >= sample_rate) {
+				continue;
+			}
+			sampled_any = true;
+
+			scan_vector.Reference(intermediate);
+
+			idx_t count = MinValue<idx_t>(segment.count - base_row_index, STANDARD_VECTOR_SIZE);
+			scan_state.row_index = segment.start + base_row_index;
+
+			col_data.CheckpointScan(segment, scan_state, row_group.start, count, scan_vector);
+			callback(scan_vector, count);
+		}
+	}
+
+	// Make sure to sample at least one segment.
+	if (!sampled_any && !nodes.empty()) {
+		auto &segment_node = *nodes[0];
+		auto &segment = *segment_node.node;
+		ColumnScanState scan_state;
+		scan_state.current = segment_node;
+		segment.InitializeScan(scan_state);
+
+		scan_vector.Reference(intermediate);
+
+		idx_t count = MinValue<idx_t>(segment.count, STANDARD_VECTOR_SIZE);
+		scan_state.row_index = segment.start;
+
+		col_data.CheckpointScan(segment, scan_state, row_group.start, count, scan_vector);
+		callback(scan_vector, count);
+	}
+}
+
 CompressionType ForceCompression(StorageManager &storage_manager,
                                  vector<optional_ptr<CompressionFunction>> &compression_functions,
                                  CompressionType compression_type) {
@@ -183,29 +240,31 @@ vector<CheckpointAnalyzeResult> ColumnDataCheckpointer::DetectBestCompressionMet
 
 	InitAnalyze();
 
-	// scan over all the segments and run the analyze step
-	ScanSegments([&](Vector &scan_vector, idx_t count) {
-		for (idx_t i = 0; i < checkpoint_states.size(); i++) {
-			if (!has_changes[i]) {
-				continue;
-			}
+	// Sample a subset of segments to run the analyze step
+	ScanSegmentsWithSample(
+	    [&](Vector &scan_vector, idx_t count) {
+		    for (idx_t i = 0; i < checkpoint_states.size(); i++) {
+			    if (!has_changes[i]) {
+				    continue;
+			    }
 
-			auto &functions = compression_functions[i];
-			auto &states = analyze_states[i];
-			for (idx_t j = 0; j < functions.size(); j++) {
-				auto &state = states[j];
-				auto &func = functions[j];
+			    auto &functions = compression_functions[i];
+			    auto &states = analyze_states[i];
+			    for (idx_t j = 0; j < functions.size(); j++) {
+				    auto &state = states[j];
+				    auto &func = functions[j];
 
-				if (!state) {
-					continue;
-				}
-				if (!func->analyze(*state, scan_vector, count)) {
-					state = nullptr;
-					func = nullptr;
-				}
-			}
-		}
-	});
+				    if (!state) {
+					    continue;
+				    }
+				    if (!func->analyze(*state, scan_vector, count)) {
+					    state = nullptr;
+					    func = nullptr;
+				    }
+			    }
+		    }
+	    },
+	    config.options.compression_sample_rate);
 
 	vector<CheckpointAnalyzeResult> result;
 	result.resize(checkpoint_states.size());

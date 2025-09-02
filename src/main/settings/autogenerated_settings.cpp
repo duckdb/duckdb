@@ -207,6 +207,18 @@ void CheckpointThresholdSetting::ResetGlobal(DatabaseInstance *db, DBConfig &con
 }
 
 //===----------------------------------------------------------------------===//
+// Compression Sample Rate
+//===----------------------------------------------------------------------===//
+void CompressionSampleRateSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.compression_sample_rate = DBConfigOptions().compression_sample_rate;
+}
+
+Value CompressionSampleRateSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::DOUBLE(config.options.compression_sample_rate);
+}
+
+//===----------------------------------------------------------------------===//
 // Custom Extension Repository
 //===----------------------------------------------------------------------===//
 void CustomExtensionRepositorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {

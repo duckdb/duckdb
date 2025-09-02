@@ -328,6 +328,18 @@ Value CheckpointThresholdSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Compression Sample Rate
+//===----------------------------------------------------------------------===//
+void CompressionSampleRateSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto compression_sample_rate = input.GetValue<double>();
+	if (compression_sample_rate < 0 || compression_sample_rate > 1.0) {
+		throw InvalidInputException("the compression sample rate must be within [0, 1]");
+	}
+
+	config.options.compression_sample_rate = input.GetValue<double>();
+}
+
+//===----------------------------------------------------------------------===//
 // Custom Profiling Settings
 //===----------------------------------------------------------------------===//
 bool IsEnabledOptimizer(MetricsType metric, const set<OptimizerType> &disabled_optimizers) {

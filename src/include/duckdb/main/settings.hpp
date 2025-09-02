@@ -270,6 +270,16 @@ struct CheckpointThresholdSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct CompressionSampleRateSetting {
+	using RETURN_TYPE = double;
+	static constexpr const char *Name = "compression_sample_rate";
+	static constexpr const char *Description = "The sampling ratio used to detect the best compression method.";
+	static constexpr const char *InputType = "DOUBLE";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct CustomExtensionRepositorySetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "custom_extension_repository";
