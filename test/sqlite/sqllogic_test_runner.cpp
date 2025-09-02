@@ -422,6 +422,26 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 #endif
 	}
 
+	if (param == "notsqlite") {
+		auto &test_config = TestConfiguration::Get();
+		auto ducklake_dbms_catalog = test_config.GetDuckLakeDBMSCatalog();
+		if (ducklake_dbms_catalog == "sqlite") {
+			return RequireResult::MISSING;
+		} else {
+			return RequireResult::PRESENT;
+		}
+	}
+
+	if (param == "notpostgres") {
+		auto &test_config = TestConfiguration::Get();
+		auto ducklake_dbms_catalog = test_config.GetDuckLakeDBMSCatalog();
+		if (ducklake_dbms_catalog == "postgres") {
+			return RequireResult::MISSING;
+		} else {
+			return RequireResult::PRESENT;
+		}
+	}
+
 	if (param == "longdouble") {
 #if LDBL_MANT_DIG < 54
 		return RequireResult::MISSING;
