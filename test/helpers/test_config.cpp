@@ -36,6 +36,7 @@ static const TestConfigOption test_config_options[] = {
     {"init_script", "Script to execute on init", LogicalType::VARCHAR, TestConfiguration::ParseConnectScript},
     {"on_cleanup", "SQL statements to execute on test end", LogicalType::VARCHAR, nullptr},
     {"on_init", "SQL statements to execute on init", LogicalType::VARCHAR, nullptr},
+    {"ducklake_dbms_catalog", "Which DBMS should be used as a DuckLake catalog on Attach (i.e., 'postgres' or 'sqlite')", LogicalType::VARCHAR, nullptr},
     {"on_load", "SQL statements to execute on explicit load", LogicalType::VARCHAR, nullptr},
     {"on_new_connection", "SQL statements to execute on connection", LogicalType::VARCHAR, nullptr},
     {"skip_tests", "Tests to be skipped",
@@ -377,6 +378,19 @@ bool TestConfiguration::GetSkipCompiledTests() {
 string TestConfiguration::GetStorageVersion() {
 	return GetOptionOrDefault("storage_version", string());
 }
+
+string TestConfiguration::GetDuckLakeDBMSCatalog() {
+	auto entry = options.find("ducklake_dbms_catalog");
+	if (entry != options.end()) {
+		ducklake_catalog_dbms = entry->second.GetValue<string>();
+		ducklake_catalog_dbms = StringUtil::Lower(ducklake_catalog_dbms);
+		if (ducklake_catalog_dbms != "duckdb" && ducklake_catalog_dbms != "postgres" &&ducklake_catalog_dbms != "sqlite") {
+			throw InvalidInputException("ducklake_dbms_catalog option $s is not valid", ducklake_catalog_dbms);
+		}
+	}
+	return ducklake_catalog_dbms;
+}
+
 
 DebugVectorVerification TestConfiguration::GetVectorVerification() {
 	return EnumUtil::FromString<DebugVectorVerification>(GetOptionOrDefault<string>("verify_vector", "NONE"));

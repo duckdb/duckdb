@@ -166,6 +166,28 @@ void Command::RestartDatabase(ExecuteContext &context, Connection *&connection, 
 unique_ptr<MaterializedQueryResult> Command::ExecuteQuery(ExecuteContext &context, Connection *connection,
                                                           string file_name, idx_t query_line) const {
 	query_break(query_line);
+	// here?
+	auto &test_config = TestConfiguration::Get();
+	if (StringUtil::Contains(context.sql_query, "ATTACH 'ducklake:")) {
+		auto ducklake_dbms_catalog = test_config.GetDuckLakeDBMSCatalog();
+		if (ducklake_dbms_catalog != "duckdb") {
+
+			 //    if dbms == "sqlite":
+    //     lines = [line.replace("ducklake:__TEST_DIR__", "ducklake:sqlite:__TEST_DIR__") for line in lines]
+    // elif dbms == "postgres":
+    //     lines = [re.sub(r"'ducklake:__TEST_DIR__[^']*'", "'ducklake:postgres:dbname=ducklakedb'",line)for line in lines]
+			if (ducklake_dbms_catalog == "postgres") {
+				auto values = StringUtil::Split(context.sql_query, "'");
+				// values[1]
+				idx_t i = 0;
+			} else if (ducklake_dbms_catalog == "sqlite") {
+				context.sql_query = StringUtil::Replace(context.sql_query, "ducklake:", "ducklake:sqlite:");
+			}
+		}
+	}
+
+	auto init_cmd = test_config.OnConnectionCommand();
+
 	if (TestConfiguration::TestForceReload() && TestConfiguration::TestForceStorage()) {
 		RestartDatabase(context, connection, context.sql_query);
 	}
