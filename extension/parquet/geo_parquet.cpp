@@ -448,16 +448,11 @@ unique_ptr<ColumnReader> GeoParquetFileMetadata::CreateColumnReader(ParquetReade
                                                                     const ParquetColumnSchema &schema,
                                                                     ClientContext &context) {
 
-	D_ASSERT(IsGeometryColumn(schema.name));
-
-	const auto &column = geometry_columns[schema.name];
-
 	// Get the catalog
 	auto &catalog = Catalog::GetSystemCatalog(context);
 
 	// WKB encoding
-	if (schema.children[0].type.id() == LogicalTypeId::BLOB &&
-	    column.geometry_encoding == GeoParquetColumnEncoding::WKB) {
+	if (schema.children[0].type.id() == LogicalTypeId::BLOB) {
 		// Look for a conversion function in the catalog
 		auto &conversion_func_set =
 		    catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "st_geomfromwkb");

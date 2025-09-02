@@ -219,8 +219,8 @@ public:
 	                                                  const ClientContext &context);
 	const unordered_map<string, GeoParquetColumnMetadata> &GetColumnMeta() const;
 
-	unique_ptr<ColumnReader> CreateColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema,
-	                                            ClientContext &context);
+	static unique_ptr<ColumnReader> CreateColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema,
+	                                                   ClientContext &context);
 
 	bool IsGeometryColumn(const string &column_name) const;
 
