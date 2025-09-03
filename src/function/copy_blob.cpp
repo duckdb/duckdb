@@ -14,7 +14,7 @@ struct WriteBlobBindData final : public TableFunctionData {
 	FileCompressionType compression_type = FileCompressionType::AUTO_DETECT;
 };
 
-static string ParseStringOption(const Value &value, const string &loption) {
+string ParseStringOption(const Value &value, const string &loption) {
 	if (value.IsNull()) {
 		return string();
 	}
@@ -59,13 +59,12 @@ struct WriteBlobGlobalState final : public GlobalFunctionData {
 	mutex lock;
 };
 
-static unique_ptr<GlobalFunctionData> WriteBlobInitializeGlobal(ClientContext &context, FunctionData &bind_data,
-                                                                const string &file_path) {
+unique_ptr<GlobalFunctionData> WriteBlobInitializeGlobal(ClientContext &context, FunctionData &bind_data,
+                                                         const string &file_path) {
 
 	auto &bdata = bind_data.Cast<WriteBlobBindData>();
 	auto &fs = FileSystem::GetFileSystem(context);
 
-	auto file_name = file_path;
 	auto flags = FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW | bdata.compression_type;
 	auto handle = fs.OpenFile(file_path, flags);
 
@@ -80,15 +79,15 @@ static unique_ptr<GlobalFunctionData> WriteBlobInitializeGlobal(ClientContext &c
 //----------------------------------------------------------------------------------------------------------------------
 struct WriteBlobLocalState final : public LocalFunctionData {};
 
-static unique_ptr<LocalFunctionData> WriteBlobInitializeLocal(ExecutionContext &context, FunctionData &bind_data) {
+unique_ptr<LocalFunctionData> WriteBlobInitializeLocal(ExecutionContext &context, FunctionData &bind_data) {
 	return make_uniq_base<LocalFunctionData, WriteBlobLocalState>();
 }
 
 //----------------------------------------------------------------------------------------------------------------------
 // Sink
 //----------------------------------------------------------------------------------------------------------------------
-static void WriteBlobSink(ExecutionContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
-                          LocalFunctionData &lstate, DataChunk &input) {
+void WriteBlobSink(ExecutionContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
+                   LocalFunctionData &lstate, DataChunk &input) {
 	D_ASSERT(input.ColumnCount() == 1);
 
 	auto &state = gstate.Cast<WriteBlobGlobalState>();
@@ -123,8 +122,8 @@ static void WriteBlobSink(ExecutionContext &context, FunctionData &bind_data, Gl
 //----------------------------------------------------------------------------------------------------------------------
 // Combine
 //----------------------------------------------------------------------------------------------------------------------
-static void WriteBlobCombine(ExecutionContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
-                             LocalFunctionData &lstate) {
+void WriteBlobCombine(ExecutionContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
+                      LocalFunctionData &lstate) {
 }
 
 //----------------------------------------------------------------------------------------------------------------------

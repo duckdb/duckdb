@@ -37,9 +37,9 @@ test.blob.gz	26
 
 # With explicit compression
 statement ok
-COPY (select 'foo'::BLOB) TO 'test.blob' (FORMAT BLOB, COMPRESSION 'GZIP');
+COPY (select 'foo'::BLOB) TO 'test2.blob' (FORMAT BLOB, COMPRESSION 'GZIP');
 
 query II
-select filename, size from read_blob('test.blob');
+select filename, size from read_blob('test2.blob');
 ----
-test.blob	26
+test2.blob	26
