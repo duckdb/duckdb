@@ -1,4 +1,5 @@
 #include "duckdb/storage/table/row_group_collection.hpp"
+
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
@@ -15,6 +16,7 @@
 #include "duckdb/storage/table/row_group_segment_tree.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -33,6 +35,7 @@ void RowGroupSegmentTree::Initialize(PersistentTableData &data) {
 	max_row_group = data.row_group_count;
 	finished_loading = false;
 	reader = make_uniq<MetadataReader>(collection.GetMetadataManager(), data.block_pointer);
+	root_pointer = data.block_pointer;
 }
 
 unique_ptr<RowGroup> RowGroupSegmentTree::LoadSegment() {
@@ -62,7 +65,7 @@ RowGroupCollection::RowGroupCollection(shared_ptr<DataTableInfo> info_p, BlockMa
                                        vector<LogicalType> types_p, idx_t row_start_p, idx_t total_rows_p,
                                        idx_t row_group_size_p)
     : block_manager(block_manager), row_group_size(row_group_size_p), total_rows(total_rows_p), info(std::move(info_p)),
-      types(std::move(types_p)), row_start(row_start_p), allocation_size(0) {
+      types(std::move(types_p)), row_start(row_start_p), allocation_size(0), requires_new_row_group(false) {
 	row_groups = make_shared_ptr<RowGroupSegmentTree>(*this);
 }
 
@@ -95,6 +98,7 @@ void RowGroupCollection::Initialize(PersistentTableData &data) {
 	this->total_rows = data.total_rows;
 	row_groups->Initialize(data);
 	stats.Initialize(types, data);
+	metadata_pointer = data.base_table_pointer;
 }
 
 void RowGroupCollection::Initialize(PersistentCollectionData &data) {
@@ -108,6 +112,10 @@ void RowGroupCollection::Initialize(PersistentCollectionData &data) {
 	}
 }
 
+void RowGroupCollection::SetAppendRequiresNewRowGroup() {
+	requires_new_row_group = true;
+}
+
 void RowGroupCollection::InitializeEmpty() {
 	stats.InitializeEmpty(types);
 }
@@ -117,6 +125,7 @@ void RowGroupCollection::AppendRowGroup(SegmentLock &l, idx_t start_row) {
 	auto new_row_group = make_uniq<RowGroup>(*this, start_row, 0U);
 	new_row_group->InitializeEmpty(types);
 	row_groups->AppendSegment(l, std::move(new_row_group));
+	requires_new_row_group = false;
 }
 
 RowGroup *RowGroupCollection::GetRowGroup(int64_t index) {
@@ -305,6 +314,19 @@ void RowGroupCollection::Fetch(TransactionData transaction, DataChunk &result, c
 	result.SetCardinality(count);
 }
 
+bool RowGroupCollection::CanFetch(TransactionData transaction, const row_t row_id) {
+	RowGroup *row_group;
+	{
+		idx_t segment_index;
+		auto l = row_groups->Lock();
+		if (!row_groups->TryGetSegmentIndex(l, UnsafeNumericCast<idx_t>(row_id), segment_index)) {
+			return false;
+		}
+		row_group = row_groups->GetSegmentByIndex(l, UnsafeNumericCast<int64_t>(segment_index));
+	}
+	return row_group->Fetch(transaction, UnsafeNumericCast<idx_t>(row_id) - row_group->start);
+}
+
 //===--------------------------------------------------------------------===//
 // Append
 //===--------------------------------------------------------------------===//
@@ -332,9 +354,9 @@ void RowGroupCollection::InitializeAppend(TransactionData transaction, TableAppe
 
 	// start writing to the row_groups
 	auto l = row_groups->Lock();
-	if (IsEmpty(l)) {
+	if (IsEmpty(l) || requires_new_row_group) {
 		// empty row group collection: empty first row group
-		AppendRowGroup(l, row_start);
+		AppendRowGroup(l, row_start + total_rows);
 	}
 	state.start_row_group = row_groups->GetLastSegment(l);
 	D_ASSERT(this->row_start + total_rows == state.start_row_group->start + state.start_row_group->count);
@@ -927,9 +949,10 @@ private:
 
 void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkpoint_state, VacuumState &state,
                                                vector<SegmentNode<RowGroup>> &segments) {
-	bool is_full_checkpoint = checkpoint_state.writer.GetCheckpointType() == CheckpointType::FULL_CHECKPOINT;
+	auto checkpoint_type = checkpoint_state.writer.GetCheckpointType();
+	bool vacuum_is_allowed = checkpoint_type != CheckpointType::CONCURRENT_CHECKPOINT;
 	// currently we can only vacuum deletes if we are doing a full checkpoint and there are no indexes
-	state.can_vacuum_deletes = info->GetIndexes().Empty() && is_full_checkpoint;
+	state.can_vacuum_deletes = info->GetIndexes().Empty() && vacuum_is_allowed;
 	if (!state.can_vacuum_deletes) {
 		return;
 	}
@@ -975,7 +998,7 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 	// check if we can merge row groups adjacent to the current segment_idx
 	// we try merging row groups into batches of 1-3 row groups
 	// our goal is to reduce the amount of row groups
-	// hence we target_count should be less than merge_count for a marge to be worth it
+	// hence we target_count should be less than merge_count for a merge to be worth it
 	// we greedily prefer to merge to the lowest target_count
 	// i.e. we prefer to merge 2 row groups into 1, than 3 row groups into 2
 	const idx_t row_group_size = GetRowGroupSize();
@@ -994,6 +1017,22 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 			// we can merge this row group together with the other row group
 			merge_rows += state.row_group_counts[next_idx];
 			merge_count++;
+		}
+		if (next_idx == checkpoint_state.segments.size()) {
+			// in order to prevent poor performance when performing small appends, we only merge row groups at the end
+			// if we can reach a "target" size of twice the current size, or the max row group size
+			// this is to prevent repeated expensive checkpoints where:
+			// we have a row group with 100K rows
+			// merge it with a row group with 1 row, creating a row group with 100K+1 rows
+			// merge it with a row group with 1 row, creating a row group with 100K+2 rows
+			// etc. This leads to constant rewriting of the original 100K rows.
+			idx_t minimum_target =
+			    MinValue<idx_t>(state.row_group_counts[segment_idx] * 2, row_group_size) * target_count;
+			if (merge_rows >= STANDARD_VECTOR_SIZE && merge_rows < minimum_target) {
+				// we haven't reached the minimum target - don't do this vacuum
+				next_idx = segment_idx + 1;
+				continue;
+			}
 		}
 		if (target_count < merge_count) {
 			// we can reduce "merge_count" row groups to "target_count"
@@ -1035,12 +1074,11 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	try {
 		// schedule tasks
 		idx_t total_vacuum_tasks = 0;
-		auto &config = DBConfig::GetConfig(writer.GetDatabase());
-
+		auto max_vacuum_tasks = DBConfig::GetSetting<MaxVacuumTasksSetting>(writer.GetDatabase());
 		for (idx_t segment_idx = 0; segment_idx < segments.size(); segment_idx++) {
 			auto &entry = segments[segment_idx];
-			auto vacuum_tasks = ScheduleVacuumTasks(checkpoint_state, vacuum_state, segment_idx,
-			                                        total_vacuum_tasks < config.options.max_vacuum_tasks);
+			auto vacuum_tasks =
+			    ScheduleVacuumTasks(checkpoint_state, vacuum_state, segment_idx, total_vacuum_tasks < max_vacuum_tasks);
 			if (vacuum_tasks) {
 				// vacuum tasks were scheduled - don't schedule a checkpoint task yet
 				total_vacuum_tasks++;
@@ -1052,8 +1090,10 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			}
 			// schedule a checkpoint task for this row group
 			entry.node->MoveToCollection(*this, vacuum_state.row_start);
-			auto checkpoint_task = GetCheckpointTask(checkpoint_state, segment_idx);
-			checkpoint_state.executor->ScheduleTask(std::move(checkpoint_task));
+			if (writer.GetCheckpointType() != CheckpointType::VACUUM_ONLY) {
+				auto checkpoint_task = GetCheckpointTask(checkpoint_state, segment_idx);
+				checkpoint_state.executor->ScheduleTask(std::move(checkpoint_task));
+			}
 			vacuum_state.row_start += entry.node->count;
 		}
 	} catch (const std::exception &e) {
@@ -1066,6 +1106,39 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	checkpoint_state.executor->WorkOnTasks();
 
 	// no errors - finalize the row groups
+	// if the table already exists on disk - check if all row groups have stayed the same
+	if (metadata_pointer.IsValid()) {
+		bool table_has_changes = false;
+		for (idx_t segment_idx = 0; segment_idx < segments.size(); segment_idx++) {
+			auto &entry = segments[segment_idx];
+			if (!entry.node) {
+				table_has_changes = true;
+				break;
+			}
+			auto &write_state = checkpoint_state.write_data[segment_idx];
+			if (write_state.existing_pointers.empty()) {
+				table_has_changes = true;
+				break;
+			}
+		}
+		if (!table_has_changes) {
+			// table is unmodified and already exists on disk
+			// we can directly re-use the metadata pointer
+			// mark all blocks associated with row groups as still being in-use
+			auto &metadata_manager = writer.GetMetadataManager();
+			for (idx_t segment_idx = 0; segment_idx < segments.size(); segment_idx++) {
+				auto &entry = segments[segment_idx];
+				auto &row_group = *entry.node;
+				auto &write_state = checkpoint_state.write_data[segment_idx];
+				metadata_manager.ClearModifiedBlocks(write_state.existing_pointers);
+				metadata_manager.ClearModifiedBlocks(row_group.GetDeletesPointers());
+				row_groups->AppendSegment(l, std::move(entry.node));
+			}
+			writer.WriteUnchangedTable(metadata_pointer, total_rows.load());
+			return;
+		}
+	}
+
 	idx_t new_total_rows = 0;
 	for (idx_t segment_idx = 0; segment_idx < segments.size(); segment_idx++) {
 		auto &entry = segments[segment_idx];
@@ -1074,6 +1147,13 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			continue;
 		}
 		auto &row_group = *entry.node;
+		if (!checkpoint_state.writers[segment_idx]) {
+			// row group was not checkpointed - this can happen if compressing is disabled for in-memory tables
+			D_ASSERT(writer.GetCheckpointType() == CheckpointType::VACUUM_ONLY);
+			row_groups->AppendSegment(l, std::move(entry.node));
+			new_total_rows += row_group.count;
+			continue;
+		}
 		auto row_group_writer = std::move(checkpoint_state.writers[segment_idx]);
 		if (!row_group_writer) {
 			throw InternalException("Missing row group writer for index %llu", segment_idx);

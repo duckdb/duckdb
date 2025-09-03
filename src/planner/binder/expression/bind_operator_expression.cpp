@@ -77,8 +77,9 @@ LogicalType ExpressionBinder::ResolveOperatorType(OperatorExpression &op, vector
 	case ExpressionType::OPERATOR_COALESCE: {
 		return ResolveCoalesceType(op, children);
 	}
-	case ExpressionType::OPERATOR_TRY:
-		return ExpressionBinder::GetExpressionReturnType(*children[0]);
+	case ExpressionType::OPERATOR_TRY: {
+		return children[0]->return_type;
+	}
 	case ExpressionType::OPERATOR_NOT:
 		return ResolveNotType(op, children);
 	default:
@@ -120,10 +121,17 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 			function_name = "json_extract";
 			// Make sure we only extract array elements, not fields, by adding the $[] syntax
 			auto &i_exp = BoundExpression::GetExpression(*op.children[1]);
-			if (i_exp->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+			if (i_exp->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT &&
+			    !i_exp->Cast<BoundConstantExpression>().value.IsNull()) {
 				auto &const_exp = i_exp->Cast<BoundConstantExpression>();
-				if (!const_exp.value.IsNull()) {
-					const_exp.value = StringUtil::Format("$[%s]", const_exp.value.ToString());
+				if (const_exp.value.TryCastAs(context, LogicalType::UINTEGER)) {
+					// Array extraction: if the cast fails it's definitely out-of-bounds for a JSON array
+					auto index = UIntegerValue::Get(const_exp.value);
+					const_exp.value = StringUtil::Format("$[%lld]", index);
+					const_exp.return_type = LogicalType::VARCHAR;
+				} else if (const_exp.return_type.id() == LogicalType::VARCHAR) {
+					// Field extraction
+					const_exp.value = StringUtil::Format("$.\"%s\"", const_exp.value.ToString());
 					const_exp.return_type = LogicalType::VARCHAR;
 				}
 			}

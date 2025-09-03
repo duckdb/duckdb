@@ -184,7 +184,7 @@ bool CSVSniffer::CanYouCastIt(ClientContext &context, const string_t value, cons
 			    ->second.GetValue()
 			    .TryParseTimestamp(value, dummy_value, error_message);
 		}
-		return Timestamp::TryConvertTimestamp(value_ptr, value_size, dummy_value, nullptr, true) ==
+		return Timestamp::TryConvertTimestamp(value_ptr, value_size, dummy_value, false, nullptr, true) ==
 		       TimestampCastResult::SUCCESS;
 	}
 	case LogicalTypeId::TIME: {
@@ -425,7 +425,7 @@ void CSVSniffer::DetectTypes() {
 	idx_t min_varchar_cols = max_columns_found + 1;
 	idx_t min_errors = NumericLimits<idx_t>::Maximum();
 	vector<LogicalType> return_types;
-	// check which info candidate leads to minimum amount of non-varchar columns...
+	// check which info candidate leads to the minimum number of non-varchar columns...
 	for (auto &candidate_cc : candidates) {
 		auto &sniffing_state_machine = candidate_cc->GetStateMachine();
 		unordered_map<idx_t, vector<LogicalType>> info_sql_types_candidates;
@@ -441,7 +441,7 @@ void CSVSniffer::DetectTypes() {
 		// Reset candidate for parsing
 		auto candidate = candidate_cc->UpgradeToStringValueScanner();
 		SetUserDefinedDateTimeFormat(*candidate->state_machine);
-		// Parse chunk and read csv with info candidate
+		// Parse chunk and read csv with info-candidate
 		auto &data_chunk = candidate->ParseChunk().ToChunk();
 		if (candidate->error_handler->AnyErrors() && !candidate->error_handler->HasError(MAXIMUM_LINE_SIZE) &&
 		    !candidate->state_machine->options.ignore_errors.GetValue()) {
@@ -502,7 +502,7 @@ void CSVSniffer::DetectTypes() {
 	}
 	if (!best_candidate) {
 		DialectCandidates dialect_candidates(options.dialect_options.state_machine_options);
-		auto error = CSVError::SniffingError(options, dialect_candidates.Print(), max_columns_found, set_columns);
+		auto error = CSVError::SniffingError(options, dialect_candidates.Print(), max_columns_found, set_columns, true);
 		error_handler->Error(error, true);
 	}
 	// Assert that it's all good at this point.

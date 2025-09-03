@@ -16,7 +16,7 @@ PRAGMA memory_limit='2MB'
 statement error
 CREATE TABLE t2 AS SELECT * FROM range(1000000);
 ----
-could not allocate block of size
+<REGEX>:.*Out of Memory Error.*could not allocate block of size.*
 
 # after we set the temp directory, we can create this table
 statement ok
@@ -29,3 +29,4 @@ CREATE TABLE t2 AS SELECT * FROM range(1000000);
 statement error
 PRAGMA temp_directory=''
 ----
+<REGEX>:.*Not implemented Error.*Cannot switch temporary directory.*

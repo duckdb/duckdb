@@ -63,9 +63,6 @@ class ExecuteResult:
 
 BUILTIN_EXTENSIONS = [
     'json',
-    'fts',
-    'tpcds',
-    'tpch',
     'parquet',
     'icu',
 ]
@@ -129,6 +126,8 @@ class QueryResult:
         if not error:
             self._column_count = len(self.types)
             self._row_count = len(result)
+            if self._row_count > 0:
+                assert self._column_count == len(self._result[0])
 
     def get_value(self, column, row):
         return self._result[row][column]
@@ -159,7 +158,7 @@ class QueryResult:
 
         # If the result has an error, log it
         if self.has_error():
-            logger.unexpected_failure(self)
+            logger.unexpected_failure()
             if runner.skip_error_message(self.get_error()):
                 runner.finished_processing_file = True
                 return
@@ -322,21 +321,31 @@ class QueryResult:
                 context.fail("")
         else:
             hash_compare_error = False
+            expected_hash_value = None
             if query_has_label:
-                entry = runner.hash_label_map.get(query_label)
-                if entry is None:
+                expected_hash_value = runner.hash_label_map.get(query_label)
+                if expected_hash_value is None:
                     runner.hash_label_map[query_label] = hash_value
                     runner.result_label_map[query_label] = self
                 else:
-                    hash_compare_error = entry != hash_value
+                    hash_compare_error = expected_hash_value != hash_value
 
-            if is_hash:
+            if is_hash and not hash_compare_error:
+                expected_hash_value = values[0]
                 hash_compare_error = values[0] != hash_value
 
             if hash_compare_error:
                 expected_result = runner.result_label_map.get(query_label)
-                # logger.wrong_result_hash(expected_result, self)
-                context.fail(query)
+                logger.wrong_result_hash(expected_hash_value, hash_value)
+
+                if expected_result:
+                    logger.print_result_error(
+                        result_values_string,
+                        duck_db_convert_result(expected_result, runner.original_sqlite_test),
+                        expected_result.column_count,
+                        False,
+                    )
+                context.fail("")
 
             assert not hash_compare_error
 
@@ -352,7 +361,7 @@ class SQLLogicConnectionPool:
         self.cursors = {}
         self.connection = con
 
-    def initialize_connection(self, context: "SQLLogicContext", con):
+    def initialize_connection(self, context: "SQLLogicContext", con: duckdb.DuckDBPyConnection):
         runner = context.runner
         if runner.test.is_sqlite_test():
             con.execute("SET integer_division=true")
@@ -783,7 +792,7 @@ class SQLLogicContext:
         assert key in self.keywords
         self.keywords.pop(key)
 
-    def fail(self, message):
+    def fail(self, message: str):
         self.error = FailException(self.current_statement, message)
         raise self.error
 
@@ -823,6 +832,9 @@ class SQLLogicContext:
         else:
             additional_config['access_mode'] = 'automatic'
 
+        if load.version:
+            additional_config['storage_compatibility_version'] = str(load.version)
+
         self.pool = None
         self.runner.database = None
         self.runner.database = SQLLogicDatabase(dbpath, self, additional_config)
@@ -845,24 +857,31 @@ class SQLLogicContext:
             if 'pivot' in sql_query and len(statements) != 1:
                 self.skiptest("Can not deal properly with a PIVOT statement")
 
-            def is_query_result(sql_query, statement) -> bool:
-                if duckdb.ExpectedResultType.QUERY_RESULT not in statement.expected_result_type:
+            def returns_changed_rows(sql_query, statement) -> bool:
+                if duckdb.ExpectedResultType.CHANGED_ROWS not in statement.expected_result_type:
                     return False
                 if statement.type in [
                     duckdb.StatementType.DELETE,
                     duckdb.StatementType.UPDATE,
                     duckdb.StatementType.INSERT,
+                    duckdb.StatementType.MERGE_INTO,
                 ]:
-                    if 'returning' not in sql_query.lower():
+                    if 'returning' in sql_query.lower():
                         return False
                     return True
                 if statement.type in [duckdb.StatementType.COPY]:
-                    if 'return_files' not in sql_query.lower():
+                    if 'return_files' in sql_query.lower():
+                        return False
+                    if 'return_stats' in sql_query.lower():
                         return False
                     return True
                 return len(statement.expected_result_type) == 1
 
-            if is_query_result(sql_query, statement):
+            if returns_changed_rows(sql_query, statement):
+                conn.execute(sql_query)
+                result = conn.fetchall()
+                query_result = QueryResult(result, [duckdb.typing.BIGINT])
+            elif duckdb.ExpectedResultType.QUERY_RESULT in statement.expected_result_type:
                 original_rel = conn.query(sql_query)
                 if original_rel is None:
                     query_result = QueryResult([(0,)], ['BIGINT'])
@@ -884,10 +903,6 @@ class SQLLogicContext:
                         self.fail(f"Could not select from the ValueRelation: {str(e)}")
                     result = stringified_rel.fetchall()
                     query_result = QueryResult(result, original_types)
-            elif duckdb.ExpectedResultType.CHANGED_ROWS in statement.expected_result_type:
-                conn.execute(sql_query)
-                result = conn.fetchall()
-                query_result = QueryResult(result, [duckdb.typing.BIGINT])
             else:
                 conn.execute(sql_query)
                 result = conn.fetchall()
@@ -958,13 +973,20 @@ class SQLLogicContext:
 
     def execute_set(self, statement: Set):
         option = statement.header.parameters[0]
-        string_set = (
-            self.runner.ignore_error_messages
-            if option == "ignore_error_messages"
-            else self.runner.always_fail_error_messages
-        )
-        string_set.clear()
-        string_set = statement.error_messages
+        if option == 'ignore_error_messages':
+            string_set = (
+                self.runner.ignore_error_messages
+                if option == "ignore_error_messages"
+                else self.runner.always_fail_error_messages
+            )
+            string_set.clear()
+            string_set = statement.error_messages
+        elif option == 'seed':
+            con = self.get_connection()
+            con.execute(f"SELECT SETSEED({statement.header.parameters[1]})")
+            self.runner.skip_reload = True
+        else:
+            self.skiptest(f"SET '{option}' is not implemented!")
 
     def execute_hash_threshold(self, statement: HashThreshold):
         self.runner.hash_threshold = statement.threshold

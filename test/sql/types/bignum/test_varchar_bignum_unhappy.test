@@ -1,0 +1,130 @@
+# name: test/sql/types/bignum/test_varchar_bignum_unhappy.test
+# description: Test unhappy paths of varchar bignum
+# group: [bignum]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+select '-0'::BIGNUM
+----
+0
+
+query I
+select '+0'::BIGNUM
+----
+0
+
+# for BC reasons VARINT is an alias for BIGNUM
+query I
+select '+0'::VARINT
+----
+0
+
+statement error
+select '+-0'::BIGNUM
+----
+Conversion Error: Could not convert string '+-0'
+
+
+statement error
+select '-+0'::BIGNUM
+----
+Conversion Error: Could not convert string '-+0'
+
+
+statement error
+select '-'::BIGNUM
+----
+Could not convert string '-'
+
+query I
+select '-0010'::BIGNUM
+----
+-10
+
+query I
+select '-0010.'::BIGNUM
+----
+-10
+
+query I
+select '-0010.5'::BIGNUM
+----
+-10
+
+query I
+select '-0010.4999'::BIGNUM
+----
+-10
+
+query I
+select '0010.5'::BIGNUM
+----
+10
+
+query I
+select '0010.4999'::BIGNUM
+----
+10
+
+statement error
+select '00-0010'::BIGNUM
+----
+Conversion Error: Could not convert string '00-0010'
+
+query I
+select '-0010.2'::BIGNUM
+----
+-10
+
+query I
+select '-0010.9'::BIGNUM
+----
+-10
+
+query I
+select '0010.2'::BIGNUM
+----
+10
+
+query I
+select '0010.9'::BIGNUM
+----
+10
+
+statement error
+select ''::BIGNUM
+----
+Conversion Error: Could not convert string ''
+
+query I
+select (-0)::BIGNUM
+----
+0
+
+
+statement error
+select 'bla'::BIGNUM
+----
+Conversion Error: Could not convert string 'bla'
+
+statement error
+select '1000bla'::BIGNUM
+----
+Conversion Error: Could not convert string '1000bla'
+
+statement error
+select '1000.bla'::BIGNUM
+----
+Conversion Error: Could not convert string '1000.bla'
+
+statement error
+select '1000...'::BIGNUM
+----
+Conversion Error: Could not convert string '1000...'
+
+statement error
+select '1000.0.0'::BIGNUM
+----
+Could not convert string '1000.0.0'

@@ -49,6 +49,10 @@ struct InterpretedBenchmarkState : public BenchmarkState {
 		auto &instance = BenchmarkRunner::GetInstance();
 		auto res = con.Query("PRAGMA threads=" + to_string(instance.threads));
 		D_ASSERT(!res->HasError());
+		if (!instance.memory_limit.empty()) {
+			res = con.Query("PRAGMA memory_limit='" + instance.memory_limit + "'");
+			D_ASSERT(!res->HasError());
+		}
 	}
 
 	duckdb::unique_ptr<DBConfig> GetBenchmarkConfig(const string &version = "") {
@@ -137,7 +141,7 @@ BenchmarkQuery InterpretedBenchmark::ReadQueryFromReader(BenchmarkFileReader &re
 			break;
 		}
 		auto result_splits = StringUtil::Split(line, "\t");
-		if ((int64_t)result_splits.size() != query.column_count) {
+		if (result_splits.size() != query.column_count) {
 			throw std::runtime_error(reader.FormatException("expected " + std::to_string(result_splits.size()) +
 			                                                " values but got " + std::to_string(query.column_count)));
 		}
@@ -607,11 +611,12 @@ ScopedConfigSetting PrepareResultCollector(ClientConfig &config, InterpretedBenc
 		return ScopedConfigSetting(
 		    config,
 		    [&benchmark](ClientConfig &config) {
-			    config.result_collector = [&benchmark](ClientContext &context, PreparedStatementData &data) {
+			    config.get_result_collector = [&benchmark](ClientContext &context,
+			                                               PreparedStatementData &data) -> PhysicalOperator & {
 				    return PhysicalArrowCollector::Create(context, data, benchmark.ArrowBatchSize());
 			    };
 		    },
-		    [](ClientConfig &config) { config.result_collector = nullptr; });
+		    [](ClientConfig &config) { config.get_result_collector = nullptr; });
 	}
 	return ScopedConfigSetting(config);
 }
@@ -689,7 +694,7 @@ string InterpretedBenchmark::VerifyInternal(BenchmarkState *state_p, const Bench
 
 	auto &result_values = query.expected_result;
 	D_ASSERT(query.column_count >= 1);
-	if (query.column_count != (int64_t)result.ColumnCount()) {
+	if (query.column_count != result.ColumnCount()) {
 		return StringUtil::Format("Error in result: expected %lld columns but got %lld\nObtained result: %s",
 		                          (int64_t)query.column_count, (int64_t)result.ColumnCount(), result.ToString());
 	}
@@ -700,8 +705,8 @@ string InterpretedBenchmark::VerifyInternal(BenchmarkState *state_p, const Bench
 		                          (int64_t)result_values.size(), (int64_t)result.RowCount(), result.ToString());
 	}
 	// compare values
-	for (int64_t r = 0; r < (int64_t)result_values.size(); r++) {
-		for (int64_t c = 0; c < query.column_count; c++) {
+	for (idx_t r = 0; r < result_values.size(); r++) {
+		for (idx_t c = 0; c < query.column_count; c++) {
 			auto value = result.GetValue(c, r);
 			if (result_values[r][c] == "NULL" && value.IsNull()) {
 				continue;
@@ -755,9 +760,14 @@ string InterpretedBenchmark::Verify(BenchmarkState *state_p) {
 	auto &collection = state.result->Collection();
 	auto &names = state.result->names;
 	auto &types = state.result->types;
+	case_insensitive_set_t name_set;
 	// first create the (empty) table
 	string create_tbl = "CREATE OR REPLACE TEMP TABLE __answer(";
 	for (idx_t i = 0; i < names.size(); i++) {
+		if (!name_set.insert(names[i]).second) {
+			auto err_str = StringUtil::Format("Duplicate column name \"%s\" in benchmark query", names[i]);
+			throw std::runtime_error(err_str);
+		}
 		if (i > 0) {
 			create_tbl += ", ";
 		}

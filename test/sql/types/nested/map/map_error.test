@@ -2,9 +2,6 @@
 # description: Test map queries triggering various error messages
 # group: [map]
 
-statement ok
-PRAGMA enable_verification;
-
 statement error
 SELECT MAP(list_value(NULL, NULL, NULL, NULL, NULL), list_value(10, 9, 10, 11, 13))
 ----
@@ -23,7 +20,7 @@ Map keys must be unique
 statement error
 SELECT MAP(NULL)
 ----
-Invalid map argument(s)
+Binder Error: No function matches the given name and argument types 'map("NULL")'
 
 statement ok
 CREATE TABLE tbl (a INTEGER[], b TEXT[])
@@ -44,17 +41,17 @@ The map key list does not align with the map value list
 statement error
 SELECT MAP(10, 12)
 ----
-Invalid map argument(s)
+Binder Error: No function matches the given name and argument types
 
 statement error
 SELECT MAP(list_value(10), list_value(10), list_value(10))
 ----
-Invalid map argument(s)
+Binder Error: No function matches the given name and argument types
 
 statement error
 SELECT MAP(list_value(10), 10)
 ----
-Invalid map argument(s)
+Binder Error: No function matches the given name and argument types
 
 statement error
 SELECT MAP(list_value(10, 20), list_value(10))

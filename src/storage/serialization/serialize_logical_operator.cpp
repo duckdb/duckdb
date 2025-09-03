@@ -136,6 +136,9 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
 		result = LogicalMaterializedCTE::Deserialize(deserializer);
 		break;
+	case LogicalOperatorType::LOGICAL_MERGE_INTO:
+		result = LogicalMergeInto::Deserialize(deserializer);
+		break;
 	case LogicalOperatorType::LOGICAL_ORDER_BY:
 		result = LogicalOrder::Deserialize(deserializer);
 		break;
@@ -189,6 +192,26 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	return result;
 }
 
+void BoundMergeIntoAction::Serialize(Serializer &serializer) const {
+	serializer.WriteProperty<MergeActionType>(200, "action_type", action_type);
+	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(201, "condition", condition);
+	serializer.WritePropertyWithDefault<vector<PhysicalIndex>>(202, "columns", columns);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(203, "expressions", expressions);
+	serializer.WriteProperty<IndexVector<idx_t, PhysicalIndex>>(204, "column_index_map", column_index_map);
+	serializer.WritePropertyWithDefault<bool>(205, "update_is_del_and_insert", update_is_del_and_insert);
+}
+
+unique_ptr<BoundMergeIntoAction> BoundMergeIntoAction::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<BoundMergeIntoAction>(new BoundMergeIntoAction());
+	deserializer.ReadProperty<MergeActionType>(200, "action_type", result->action_type);
+	deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(201, "condition", result->condition);
+	deserializer.ReadPropertyWithDefault<vector<PhysicalIndex>>(202, "columns", result->columns);
+	deserializer.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(203, "expressions", result->expressions);
+	deserializer.ReadProperty<IndexVector<idx_t, PhysicalIndex>>(204, "column_index_map", result->column_index_map);
+	deserializer.ReadPropertyWithDefault<bool>(205, "update_is_del_and_insert", result->update_is_del_and_insert);
+	return result;
+}
+
 void FileNameSegment::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<FileNameSegmentType>(200, "type", type);
 	serializer.WritePropertyWithDefault<string>(201, "data", data);
@@ -226,6 +249,7 @@ void LogicalAggregate::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(204, "groups", groups);
 	serializer.WritePropertyWithDefault<vector<GroupingSet>>(205, "grouping_sets", grouping_sets);
 	serializer.WritePropertyWithDefault<vector<unsafe_vector<idx_t>>>(206, "grouping_functions", grouping_functions);
+	serializer.WritePropertyWithDefault<TupleDataValidityType>(207, "distinct_validity", distinct_validity, TupleDataValidityType::CAN_HAVE_NULL_VALUES);
 }
 
 unique_ptr<LogicalOperator> LogicalAggregate::Deserialize(Deserializer &deserializer) {
@@ -237,6 +261,7 @@ unique_ptr<LogicalOperator> LogicalAggregate::Deserialize(Deserializer &deserial
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(204, "groups", result->groups);
 	deserializer.ReadPropertyWithDefault<vector<GroupingSet>>(205, "grouping_sets", result->grouping_sets);
 	deserializer.ReadPropertyWithDefault<vector<unsafe_vector<idx_t>>>(206, "grouping_functions", result->grouping_functions);
+	deserializer.ReadPropertyWithExplicitDefault<TupleDataValidityType>(207, "distinct_validity", result->distinct_validity, TupleDataValidityType::CAN_HAVE_NULL_VALUES);
 	return std::move(result);
 }
 
@@ -515,18 +540,18 @@ void LogicalInsert::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<idx_t>(204, "table_index", table_index);
 	serializer.WritePropertyWithDefault<bool>(205, "return_chunk", return_chunk);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(206, "bound_defaults", bound_defaults);
-	serializer.WriteProperty<OnConflictAction>(207, "action_type", action_type);
-	serializer.WritePropertyWithDefault<vector<LogicalType>>(208, "expected_set_types", expected_set_types);
-	serializer.WritePropertyWithDefault<unordered_set<idx_t>>(209, "on_conflict_filter", on_conflict_filter);
-	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(210, "on_conflict_condition", on_conflict_condition);
-	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(211, "do_update_condition", do_update_condition);
-	serializer.WritePropertyWithDefault<vector<PhysicalIndex>>(212, "set_columns", set_columns);
-	serializer.WritePropertyWithDefault<vector<LogicalType>>(213, "set_types", set_types);
-	serializer.WritePropertyWithDefault<idx_t>(214, "excluded_table_index", excluded_table_index);
-	serializer.WritePropertyWithDefault<vector<column_t>>(215, "columns_to_fetch", columns_to_fetch);
-	serializer.WritePropertyWithDefault<vector<column_t>>(216, "source_columns", source_columns);
+	serializer.WriteProperty<OnConflictAction>(207, "action_type", on_conflict_info.action_type);
+	serializer.WritePropertyWithDefault<vector<LogicalType>>(208, "expected_set_types", on_conflict_info.expected_set_types);
+	serializer.WritePropertyWithDefault<unordered_set<idx_t>>(209, "on_conflict_filter", on_conflict_info.on_conflict_filter);
+	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(210, "on_conflict_condition", on_conflict_info.on_conflict_condition);
+	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(211, "do_update_condition", on_conflict_info.do_update_condition);
+	serializer.WritePropertyWithDefault<vector<PhysicalIndex>>(212, "set_columns", on_conflict_info.set_columns);
+	serializer.WritePropertyWithDefault<vector<LogicalType>>(213, "set_types", on_conflict_info.set_types);
+	serializer.WritePropertyWithDefault<idx_t>(214, "excluded_table_index", on_conflict_info.excluded_table_index);
+	serializer.WritePropertyWithDefault<vector<column_t>>(215, "columns_to_fetch", on_conflict_info.columns_to_fetch);
+	serializer.WritePropertyWithDefault<vector<column_t>>(216, "source_columns", on_conflict_info.source_columns);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(217, "expressions", expressions);
-	serializer.WritePropertyWithDefault<bool>(218, "update_is_del_and_insert", update_is_del_and_insert, false);
+	serializer.WritePropertyWithDefault<bool>(218, "update_is_del_and_insert", on_conflict_info.update_is_del_and_insert, false);
 }
 
 unique_ptr<LogicalOperator> LogicalInsert::Deserialize(Deserializer &deserializer) {
@@ -538,18 +563,18 @@ unique_ptr<LogicalOperator> LogicalInsert::Deserialize(Deserializer &deserialize
 	deserializer.ReadPropertyWithDefault<idx_t>(204, "table_index", result->table_index);
 	deserializer.ReadPropertyWithDefault<bool>(205, "return_chunk", result->return_chunk);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(206, "bound_defaults", result->bound_defaults);
-	deserializer.ReadProperty<OnConflictAction>(207, "action_type", result->action_type);
-	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(208, "expected_set_types", result->expected_set_types);
-	deserializer.ReadPropertyWithDefault<unordered_set<idx_t>>(209, "on_conflict_filter", result->on_conflict_filter);
-	deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(210, "on_conflict_condition", result->on_conflict_condition);
-	deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(211, "do_update_condition", result->do_update_condition);
-	deserializer.ReadPropertyWithDefault<vector<PhysicalIndex>>(212, "set_columns", result->set_columns);
-	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(213, "set_types", result->set_types);
-	deserializer.ReadPropertyWithDefault<idx_t>(214, "excluded_table_index", result->excluded_table_index);
-	deserializer.ReadPropertyWithDefault<vector<column_t>>(215, "columns_to_fetch", result->columns_to_fetch);
-	deserializer.ReadPropertyWithDefault<vector<column_t>>(216, "source_columns", result->source_columns);
+	deserializer.ReadProperty<OnConflictAction>(207, "action_type", result->on_conflict_info.action_type);
+	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(208, "expected_set_types", result->on_conflict_info.expected_set_types);
+	deserializer.ReadPropertyWithDefault<unordered_set<idx_t>>(209, "on_conflict_filter", result->on_conflict_info.on_conflict_filter);
+	deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(210, "on_conflict_condition", result->on_conflict_info.on_conflict_condition);
+	deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(211, "do_update_condition", result->on_conflict_info.do_update_condition);
+	deserializer.ReadPropertyWithDefault<vector<PhysicalIndex>>(212, "set_columns", result->on_conflict_info.set_columns);
+	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(213, "set_types", result->on_conflict_info.set_types);
+	deserializer.ReadPropertyWithDefault<idx_t>(214, "excluded_table_index", result->on_conflict_info.excluded_table_index);
+	deserializer.ReadPropertyWithDefault<vector<column_t>>(215, "columns_to_fetch", result->on_conflict_info.columns_to_fetch);
+	deserializer.ReadPropertyWithDefault<vector<column_t>>(216, "source_columns", result->on_conflict_info.source_columns);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(217, "expressions", result->expressions);
-	deserializer.ReadPropertyWithExplicitDefault<bool>(218, "update_is_del_and_insert", result->update_is_del_and_insert, false);
+	deserializer.ReadPropertyWithExplicitDefault<bool>(218, "update_is_del_and_insert", result->on_conflict_info.update_is_del_and_insert, false);
 	return std::move(result);
 }
 
@@ -571,6 +596,7 @@ void LogicalMaterializedCTE::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<idx_t>(200, "table_index", table_index);
 	serializer.WritePropertyWithDefault<idx_t>(201, "column_count", column_count);
 	serializer.WritePropertyWithDefault<string>(202, "ctename", ctename);
+	serializer.WritePropertyWithDefault<CTEMaterialize>(203, "materialize", materialize, CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
 }
 
 unique_ptr<LogicalOperator> LogicalMaterializedCTE::Deserialize(Deserializer &deserializer) {
@@ -578,6 +604,30 @@ unique_ptr<LogicalOperator> LogicalMaterializedCTE::Deserialize(Deserializer &de
 	deserializer.ReadPropertyWithDefault<idx_t>(200, "table_index", result->table_index);
 	deserializer.ReadPropertyWithDefault<idx_t>(201, "column_count", result->column_count);
 	deserializer.ReadPropertyWithDefault<string>(202, "ctename", result->ctename);
+	deserializer.ReadPropertyWithExplicitDefault<CTEMaterialize>(203, "materialize", result->materialize, CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
+	return std::move(result);
+}
+
+void LogicalMergeInto::Serialize(Serializer &serializer) const {
+	LogicalOperator::Serialize(serializer);
+	serializer.WritePropertyWithDefault<unique_ptr<CreateInfo>>(200, "table_info", table.GetInfo());
+	serializer.WritePropertyWithDefault<idx_t>(201, "table_index", table_index);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(202, "bound_defaults", bound_defaults);
+	serializer.WritePropertyWithDefault<idx_t>(203, "row_id_start", row_id_start);
+	serializer.WriteProperty<optional_idx>(204, "source_marker", source_marker);
+	serializer.WritePropertyWithDefault<map<MergeActionCondition, vector<unique_ptr<BoundMergeIntoAction>>>>(205, "actions", actions);
+	serializer.WritePropertyWithDefault<bool>(206, "return_chunk", return_chunk);
+}
+
+unique_ptr<LogicalOperator> LogicalMergeInto::Deserialize(Deserializer &deserializer) {
+	auto table_info = deserializer.ReadPropertyWithDefault<unique_ptr<CreateInfo>>(200, "table_info");
+	auto result = duckdb::unique_ptr<LogicalMergeInto>(new LogicalMergeInto(deserializer.Get<ClientContext &>(), table_info));
+	deserializer.ReadPropertyWithDefault<idx_t>(201, "table_index", result->table_index);
+	deserializer.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(202, "bound_defaults", result->bound_defaults);
+	deserializer.ReadPropertyWithDefault<idx_t>(203, "row_id_start", result->row_id_start);
+	deserializer.ReadProperty<optional_idx>(204, "source_marker", result->source_marker);
+	deserializer.ReadPropertyWithDefault<map<MergeActionCondition, vector<unique_ptr<BoundMergeIntoAction>>>>(205, "actions", result->actions);
+	deserializer.ReadPropertyWithDefault<bool>(206, "return_chunk", result->return_chunk);
 	return std::move(result);
 }
 

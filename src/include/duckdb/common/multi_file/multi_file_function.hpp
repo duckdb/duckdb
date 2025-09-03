@@ -20,6 +20,7 @@ namespace duckdb {
 struct MultiFileReaderInterface {
 	virtual ~MultiFileReaderInterface();
 
+	virtual void InitializeInterface(ClientContext &context, MultiFileReader &reader, MultiFileList &file_list);
 	virtual unique_ptr<BaseFileReaderOptions> InitializeOptions(ClientContext &context,
 	                                                            optional_ptr<TableFunctionInfo> info) = 0;
 	virtual bool ParseCopyOption(ClientContext &context, const string &key, const vector<Value> &values,
@@ -55,6 +56,7 @@ struct MultiFileReaderInterface {
 	virtual unique_ptr<NodeStatistics> GetCardinality(const MultiFileBindData &bind_data, idx_t file_count) = 0;
 	virtual void GetVirtualColumns(ClientContext &context, MultiFileBindData &bind_data, virtual_column_map_t &result);
 	virtual unique_ptr<MultiFileReaderInterface> Copy();
+	virtual FileGlobInput GetGlobInput();
 };
 
 template <class OP>
@@ -159,10 +161,13 @@ public:
 
 	static unique_ptr<FunctionData> MultiFileBind(ClientContext &context, TableFunctionBindInput &input,
 	                                              vector<LogicalType> &return_types, vector<string> &names) {
+		auto interface = OP::CreateInterface(context);
 		auto multi_file_reader = MultiFileReader::Create(input.table_function);
-		auto file_list = multi_file_reader->CreateFileList(context, input.inputs[0]);
 
-		auto interface = OP::InitializeInterface(context, *multi_file_reader, *file_list);
+		auto glob_input = multi_file_reader->GetGlobInput(*interface);
+		auto file_list = multi_file_reader->CreateFileList(context, input.inputs[0], glob_input);
+
+		interface->InitializeInterface(context, *multi_file_reader, *file_list);
 
 		MultiFileOptions file_options;
 
@@ -181,19 +186,21 @@ public:
 		                             std::move(file_options), std::move(options), std::move(interface));
 	}
 
-	static unique_ptr<FunctionData> MultiFileBindCopy(ClientContext &context, CopyInfo &info,
+	static unique_ptr<FunctionData> MultiFileBindCopy(ClientContext &context, CopyFromFunctionBindInput &input,
 	                                                  vector<string> &expected_names,
 	                                                  vector<LogicalType> &expected_types) {
+		auto interface = OP::CreateInterface(context);
 		auto multi_file_reader = MultiFileReader::CreateDefault("COPY");
-		vector<string> paths = {info.file_path};
-		auto file_list = multi_file_reader->CreateFileList(context, paths);
+		vector<string> paths = {input.info.file_path};
+		auto glob_input = multi_file_reader->GetGlobInput(*interface);
+		auto file_list = multi_file_reader->CreateFileList(context, paths, glob_input);
 
-		auto interface = OP::InitializeInterface(context, *multi_file_reader, *file_list);
+		interface->InitializeInterface(context, *multi_file_reader, *file_list);
 
 		auto options = interface->InitializeOptions(context, nullptr);
 		MultiFileOptions file_options;
 
-		for (auto &option : info.options) {
+		for (auto &option : input.info.options) {
 			auto loption = StringUtil::Lower(option.first);
 			if (interface->ParseCopyOption(context, loption, option.second, *options, expected_names, expected_types)) {
 				continue;
@@ -235,8 +242,7 @@ public:
 	static ReaderInitializeType InitializeReader(MultiFileReaderData &reader_data, const MultiFileBindData &bind_data,
 	                                             const vector<ColumnIndex> &global_column_ids,
 	                                             optional_ptr<TableFilterSet> table_filters, ClientContext &context,
-	                                             optional_idx file_idx,
-	                                             optional_ptr<MultiFileReaderGlobalState> reader_state) {
+	                                             optional_idx file_idx, MultiFileGlobalState &global_state) {
 		auto &reader = *reader_data.reader;
 		// Mark the file in the file list we are scanning here
 		reader.file_list_idx = file_idx;
@@ -246,7 +252,7 @@ public:
 		// 2. The 'schema' parquet option
 		auto &global_columns = bind_data.reader_bind.schema.empty() ? bind_data.columns : bind_data.reader_bind.schema;
 		return bind_data.multi_file_reader->InitializeReader(reader_data, bind_data, global_columns, global_column_ids,
-		                                                     table_filters, context, reader_state);
+		                                                     table_filters, context, global_state);
 	}
 
 	//! Helper function that try to start opening a next file. Parallel lock should be locked when calling.
@@ -291,9 +297,9 @@ public:
 						    context, *global_state.global_state, current_reader_data.file_to_be_opened,
 						    current_file_index, bind_data);
 					}
-					auto init_result = InitializeReader(current_reader_data, bind_data, global_state.column_indexes,
-					                                    global_state.filters, context, current_file_index,
-					                                    global_state.multi_file_reader_state);
+					auto init_result =
+					    InitializeReader(current_reader_data, bind_data, global_state.column_indexes,
+					                     global_state.filters, context, current_file_index, global_state);
 					if (init_result == ReaderInitializeType::SKIP_READING_FILE) {
 						//! File can be skipped entirely, close it and move on
 						can_skip_file = true;
@@ -370,7 +376,7 @@ public:
 			}
 		}
 		lstate.scan_chunk.Destroy();
-		lstate.scan_chunk.Initialize(context, intermediate_chunk_types);
+		lstate.scan_chunk.Initialize(BufferAllocator::Get(context), intermediate_chunk_types);
 
 		auto &executor = lstate.executor;
 		executor.ClearExpressions();
@@ -502,6 +508,7 @@ public:
 		result->file_index = 0;
 		result->column_indexes = input.column_indexes;
 		result->filters = input.filters.get();
+		result->op = input.op;
 		result->global_state = bind_data.interface->InitializeGlobalState(context, bind_data, *result);
 		result->max_threads = NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
 
@@ -520,7 +527,7 @@ public:
 					throw InternalException("Mismatch in filename order and reader order in multi file scan");
 				}
 				auto init_result = InitializeReader(*reader_data, bind_data, input.column_indexes, input.filters,
-				                                    context, file_idx, result->multi_file_reader_state);
+				                                    context, file_idx, *result);
 				if (init_result == ReaderInitializeType::SKIP_READING_FILE) {
 					//! File can be skipped entirely, close it and move on
 					reader_data->file_state = MultiFileFileState::SKIPPED;
@@ -611,11 +618,6 @@ public:
 	                                                     column_t column_index) {
 		auto &bind_data = bind_data_p->Cast<MultiFileBindData>();
 
-		// NOTE: we do not want to parse the file metadata for the sole purpose of getting column statistics
-		if (bind_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES) {
-			// multiple files, no luck!
-			return nullptr;
-		}
 		if (!bind_data.initial_reader) {
 			// no reader
 			return nullptr;
@@ -624,7 +626,32 @@ public:
 		if (IsVirtualColumn(column_index)) {
 			return nullptr;
 		}
-		return bind_data.initial_reader->GetStatistics(context, bind_data.names[column_index]);
+
+		const auto &col_name = bind_data.names[column_index];
+
+		// NOTE: we do not want to parse the file metadata for the sole purpose of getting column statistics
+		if (bind_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES) {
+			if (!bind_data.file_options.union_by_name) {
+				// multiple files, but no union_by_name: no luck!
+				return nullptr;
+			}
+
+			auto merged_stats = bind_data.initial_reader->GetStatistics(context, col_name);
+			if (!merged_stats) {
+				return nullptr;
+			}
+
+			for (idx_t i = 1; i < bind_data.union_readers.size(); i++) {
+				auto &union_reader = *bind_data.union_readers[i];
+				auto stats = union_reader.GetStatistics(context, col_name);
+				if (!stats || merged_stats->GetType() != stats->GetType()) {
+					return nullptr;
+				}
+				merged_stats->Merge(*stats);
+			}
+			return merged_stats;
+		}
+		return bind_data.initial_reader->GetStatistics(context, col_name);
 	}
 
 	static double MultiFileProgress(ClientContext &context, const FunctionData *bind_data_p,

@@ -13,6 +13,7 @@
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/operator/logical_cross_product.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -113,7 +114,7 @@ double BuildProbeSideOptimizer::GetBuildSize(vector<LogicalType> types, const id
 	// Row width in the hash table
 	types.push_back(LogicalType::HASH);
 	auto tuple_layout = TupleDataLayout();
-	tuple_layout.Initialize(types);
+	tuple_layout.Initialize(types, TupleDataValidityType::CAN_HAVE_NULL_VALUES);
 	auto row_width = tuple_layout.GetRowWidth();
 
 	for (const auto &type : types) {
@@ -156,7 +157,7 @@ idx_t BuildProbeSideOptimizer::ChildHasJoins(LogicalOperator &op) {
 	return ChildHasJoins(*op.children[0]);
 }
 
-void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op) const {
+bool BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op) const {
 	auto &left_child = *op.children[0];
 	auto &right_child = *op.children[1];
 	const auto lhs_cardinality = left_child.has_estimated_cardinality ? left_child.estimated_cardinality
@@ -208,6 +209,7 @@ void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op) const {
 	if (swap) {
 		FlipChildren(op);
 	}
+	return swap;
 }
 
 void BuildProbeSideOptimizer::VisitOperator(LogicalOperator &op) {
@@ -216,8 +218,7 @@ void BuildProbeSideOptimizer::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
 		auto &join = op.Cast<LogicalComparisonJoin>();
 		if (HasInverseJoinType(join.join_type)) {
-			FlipChildren(join);
-			join.delim_flipped = true;
+			join.delim_flipped = TryFlipJoinChildren(join);
 		}
 		break;
 	}
@@ -229,8 +230,9 @@ void BuildProbeSideOptimizer::VisitOperator(LogicalOperator &op) {
 			// if the conditions have no equality, do not flip the children.
 			// There is no physical join operator (yet) that can do an inequality right_semi/anti join.
 			idx_t has_range = 0;
+			bool prefer_range_joins = DBConfig::GetSetting<PreferRangeJoinsSetting>(context);
 			if (op.type == LogicalOperatorType::LOGICAL_ANY_JOIN ||
-			    (op.Cast<LogicalComparisonJoin>().HasEquality(has_range) && !context.config.prefer_range_joins)) {
+			    (op.Cast<LogicalComparisonJoin>().HasEquality(has_range) && !prefer_range_joins)) {
 				TryFlipJoinChildren(join);
 			}
 			break;

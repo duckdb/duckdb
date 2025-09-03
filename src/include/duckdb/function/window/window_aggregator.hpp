@@ -17,27 +17,6 @@ class WindowCollection;
 class WindowCursor;
 struct WindowSharedExpressions;
 
-class WindowAggregatorState {
-public:
-	WindowAggregatorState();
-	virtual ~WindowAggregatorState() {
-	}
-
-	template <class TARGET>
-	TARGET &Cast() {
-		DynamicCastCheck<TARGET>(this);
-		return reinterpret_cast<TARGET &>(*this);
-	}
-	template <class TARGET>
-	const TARGET &Cast() const {
-		DynamicCastCheck<TARGET>(this);
-		return reinterpret_cast<const TARGET &>(*this);
-	}
-
-	//! Allocator for aggregates
-	ArenaAllocator allocator;
-};
-
 class WindowAggregator {
 public:
 	using CollectionPtr = optional_ptr<WindowCollection>;
@@ -110,19 +89,20 @@ public:
 	virtual ~WindowAggregator();
 
 	//	Threading states
-	virtual unique_ptr<WindowAggregatorState> GetGlobalState(ClientContext &context, idx_t group_count,
-	                                                         const ValidityMask &partition_mask) const;
-	virtual unique_ptr<WindowAggregatorState> GetLocalState(const WindowAggregatorState &gstate) const = 0;
+	virtual unique_ptr<GlobalSinkState> GetGlobalState(ClientContext &client, idx_t group_count,
+	                                                   const ValidityMask &partition_mask) const;
+	virtual unique_ptr<LocalSinkState> GetLocalState(ExecutionContext &context,
+	                                                 const GlobalSinkState &gstate) const = 0;
 
 	//	Build
-	virtual void Sink(WindowAggregatorState &gstate, WindowAggregatorState &lstate, DataChunk &sink_chunk,
-	                  DataChunk &coll_chunk, idx_t input_idx, optional_ptr<SelectionVector> filter_sel, idx_t filtered);
-	virtual void Finalize(WindowAggregatorState &gstate, WindowAggregatorState &lstate, CollectionPtr collection,
-	                      const FrameStats &stats);
+	virtual void Sink(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk, idx_t input_idx,
+	                  optional_ptr<SelectionVector> filter_sel, idx_t filtered, OperatorSinkInput &sink);
+	virtual void Finalize(ExecutionContext &context, CollectionPtr collection, const FrameStats &stats,
+	                      OperatorSinkInput &sink);
 
 	//	Probe
-	virtual void Evaluate(const WindowAggregatorState &gsink, WindowAggregatorState &lstate, const DataChunk &bounds,
-	                      Vector &result, idx_t count, idx_t row_idx) const = 0;
+	virtual void Evaluate(ExecutionContext &context, const DataChunk &bounds, Vector &result, idx_t count,
+	                      idx_t row_idx, OperatorSinkInput &sink) const = 0;
 
 	//! The window function
 	const BoundWindowExpression &wexpr;
@@ -140,21 +120,15 @@ public:
 	vector<column_t> child_idx;
 };
 
-class WindowAggregatorGlobalState : public WindowAggregatorState {
+class WindowAggregatorGlobalState : public GlobalSinkState {
 public:
-	WindowAggregatorGlobalState(ClientContext &context, const WindowAggregator &aggregator_p, idx_t group_count)
-	    : context(context), aggregator(aggregator_p), aggr(aggregator.wexpr), locals(0), finalized(0) {
+	WindowAggregatorGlobalState(ClientContext &client, const WindowAggregator &aggregator_p, idx_t group_count);
 
-		if (aggr.filter) {
-			// 	Start with all invalid and set the ones that pass
-			filter_mask.Initialize(group_count, false);
-		} else {
-			filter_mask.InitializeEmpty(group_count);
-		}
-	}
+	//! The client we are in
+	ClientContext &client;
 
-	//! The context we are in
-	ClientContext &context;
+	//! Global allocator
+	ArenaAllocator allocator;
 
 	//! The aggregator data
 	const WindowAggregator &aggregator;
@@ -175,17 +149,20 @@ public:
 	std::atomic<idx_t> finalized;
 };
 
-class WindowAggregatorLocalState : public WindowAggregatorState {
+class WindowAggregatorLocalState : public LocalSinkState {
 public:
 	using CollectionPtr = optional_ptr<WindowCollection>;
 
 	static void InitSubFrames(SubFrames &frames, const WindowExcludeMode exclude_mode);
 
-	WindowAggregatorLocalState() {
-	}
+	explicit WindowAggregatorLocalState(ExecutionContext &context);
 
-	void Sink(WindowAggregatorGlobalState &gastate, DataChunk &sink_chunk, DataChunk &coll_chunk, idx_t row_idx);
-	virtual void Finalize(WindowAggregatorGlobalState &gastate, CollectionPtr collection);
+	void Sink(ExecutionContext &context, WindowAggregatorGlobalState &gastate, DataChunk &sink_chunk,
+	          DataChunk &coll_chunk, idx_t row_idx);
+	virtual void Finalize(ExecutionContext &context, WindowAggregatorGlobalState &gastate, CollectionPtr collection);
+
+	//! Global allocator
+	ArenaAllocator allocator;
 
 	//! The state used for reading the collection
 	unique_ptr<WindowCursor> cursor;

@@ -56,7 +56,7 @@ unique_ptr<FunctionData> MultiFileBindData::Copy() const {
 	if (bind_data) {
 		result->bind_data = unique_ptr_cast<FunctionData, TableFunctionData>(bind_data->Copy());
 	}
-	result->file_list = make_uniq<SimpleMultiFileList>(file_list->GetAllFiles());
+	result->file_list = file_list->Copy();
 	result->multi_file_reader = multi_file_reader->Copy();
 	result->interface = interface->Copy();
 	result->columns = columns;
@@ -116,22 +116,22 @@ vector<string> MultiFileReader::ParsePaths(const Value &input) {
 }
 
 shared_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context, const vector<string> &paths,
-                                                          FileGlobOptions options) {
+                                                          const FileGlobInput &glob_input) {
 	vector<OpenFileInfo> open_files;
 	for (auto &path : paths) {
 		open_files.emplace_back(path);
 	}
-	auto res = make_uniq<GlobMultiFileList>(context, std::move(open_files), options);
-	if (res->GetExpandResult() == FileExpandResult::NO_FILES && options == FileGlobOptions::DISALLOW_EMPTY) {
+	auto res = make_uniq<GlobMultiFileList>(context, std::move(open_files), glob_input);
+	if (res->GetExpandResult() == FileExpandResult::NO_FILES && glob_input.behavior != FileGlobOptions::ALLOW_EMPTY) {
 		throw IOException("%s needs at least one file to read", function_name);
 	}
 	return std::move(res);
 }
 
 shared_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context, const Value &input,
-                                                          FileGlobOptions options) {
+                                                          const FileGlobInput &glob_input) {
 	auto paths = ParsePaths(input);
-	return CreateFileList(context, paths, options);
+	return CreateFileList(context, paths, glob_input);
 }
 
 bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFileOptions &options,
@@ -371,16 +371,23 @@ MultiFileReader::InitializeGlobalState(ClientContext &context, const MultiFileOp
 	return nullptr;
 }
 
-ReaderInitializeType MultiFileReader::CreateMapping(ClientContext &context, MultiFileReaderData &reader_data,
-                                                    const vector<MultiFileColumnDefinition> &global_columns,
-                                                    const vector<ColumnIndex> &global_column_ids,
-                                                    optional_ptr<TableFilterSet> filters,
-                                                    const OpenFileInfo &initial_file,
-                                                    const MultiFileReaderBindData &bind_data,
-                                                    const virtual_column_map_t &virtual_columns) {
+ReaderInitializeType
+MultiFileReader::CreateMapping(ClientContext &context, MultiFileReaderData &reader_data,
+                               const vector<MultiFileColumnDefinition> &global_columns,
+                               const vector<ColumnIndex> &global_column_ids, optional_ptr<TableFilterSet> filters,
+                               MultiFileList &multi_file_list, const MultiFileReaderBindData &bind_data,
+                               const virtual_column_map_t &virtual_columns, MultiFileColumnMappingMode mapping_mode) {
 	MultiFileColumnMapper column_mapper(context, *this, reader_data, global_columns, global_column_ids, filters,
-	                                    initial_file, bind_data, virtual_columns);
-	return column_mapper.CreateMapping();
+	                                    multi_file_list, virtual_columns);
+	return column_mapper.CreateMapping(mapping_mode);
+}
+
+ReaderInitializeType MultiFileReader::CreateMapping(
+    ClientContext &context, MultiFileReaderData &reader_data, const vector<MultiFileColumnDefinition> &global_columns,
+    const vector<ColumnIndex> &global_column_ids, optional_ptr<TableFilterSet> filters, MultiFileList &multi_file_list,
+    const MultiFileReaderBindData &bind_data, const virtual_column_map_t &virtual_columns) {
+	return CreateMapping(context, reader_data, global_columns, global_column_ids, filters, multi_file_list, bind_data,
+	                     virtual_columns, bind_data.mapping);
 }
 
 string GetExtendedMultiFileError(const MultiFileBindData &bind_data, const Expression &expr, BaseFileReader &reader,
@@ -577,12 +584,11 @@ ReaderInitializeType MultiFileReader::InitializeReader(MultiFileReaderData &read
                                                        const vector<MultiFileColumnDefinition> &global_columns,
                                                        const vector<ColumnIndex> &global_column_ids,
                                                        optional_ptr<TableFilterSet> table_filters,
-                                                       ClientContext &context,
-                                                       optional_ptr<MultiFileReaderGlobalState> global_state) {
+                                                       ClientContext &context, MultiFileGlobalState &gstate) {
 	FinalizeBind(reader_data, bind_data.file_options, bind_data.reader_bind, global_columns, global_column_ids, context,
-	             global_state);
-	return CreateMapping(context, reader_data, global_columns, global_column_ids, table_filters,
-	                     bind_data.file_list->GetFirstFile(), bind_data.reader_bind, bind_data.virtual_columns);
+	             gstate.multi_file_reader_state.get());
+	return CreateMapping(context, reader_data, global_columns, global_column_ids, table_filters, gstate.file_list,
+	                     bind_data.reader_bind, bind_data.virtual_columns);
 }
 
 shared_ptr<BaseFileReader> MultiFileReader::CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
@@ -637,6 +643,10 @@ void MultiFileReader::PruneReaders(MultiFileBindData &data, MultiFileList &file_
 			continue;
 		}
 	}
+}
+
+FileGlobInput MultiFileReader::GetGlobInput(MultiFileReaderInterface &interface) {
+	return interface.GetGlobInput();
 }
 
 HivePartitioningIndex::HivePartitioningIndex(string value_p, idx_t index) : value(std::move(value_p)), index(index) {

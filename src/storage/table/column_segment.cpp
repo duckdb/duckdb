@@ -35,10 +35,8 @@ unique_ptr<ColumnSegment> ColumnSegment::CreatePersistentSegment(DatabaseInstanc
 	optional_ptr<CompressionFunction> function;
 	shared_ptr<BlockHandle> block;
 
-	if (block_id == INVALID_BLOCK) {
-		function = config.GetCompressionFunction(CompressionType::COMPRESSION_CONSTANT, type.InternalType());
-	} else {
-		function = config.GetCompressionFunction(compression_type, type.InternalType());
+	function = config.GetCompressionFunction(compression_type, type.InternalType());
+	if (block_id != INVALID_BLOCK) {
 		block = block_manager.RegisterBlock(block_id);
 	}
 
@@ -223,35 +221,39 @@ void ColumnSegment::RevertAppend(idx_t start_row) {
 //===--------------------------------------------------------------------===//
 // Convert To Persistent
 //===--------------------------------------------------------------------===//
-void ColumnSegment::ConvertToPersistent(optional_ptr<BlockManager> block_manager, block_id_t block_id_p) {
+void ColumnSegment::ConvertToPersistent(QueryContext context, optional_ptr<BlockManager> block_manager,
+                                        const block_id_t block_id_p) {
 	D_ASSERT(segment_type == ColumnSegmentType::TRANSIENT);
 	segment_type = ColumnSegmentType::PERSISTENT;
-
 	block_id = block_id_p;
 	offset = 0;
 
-	if (block_id == INVALID_BLOCK) {
-		// constant block: no need to write anything to disk besides the stats
-		// set up the compression function to constant
-		D_ASSERT(stats.statistics.IsConstant());
-		auto &config = DBConfig::GetConfig(db);
-		function = *config.GetCompressionFunction(CompressionType::COMPRESSION_CONSTANT, type.InternalType());
-		// reset the block buffer
-		block.reset();
-	} else {
+	if (block_id != INVALID_BLOCK) {
 		D_ASSERT(!stats.statistics.IsConstant());
-		// non-constant block: write the block to disk
-		// the data for the block already exists in-memory of our block
-		// instead of copying the data we alter some metadata so the buffer points to an on-disk block
-		block = block_manager->ConvertToPersistent(block_id, std::move(block));
+		// Non-constant block: write the block to disk.
+		// The block data already exists in memory, so we alter the metadata,
+		// which ensures that the buffer points to an on-disk block.
+		block = block_manager->ConvertToPersistent(context, block_id, std::move(block));
+		return;
 	}
+
+	// Constant block: no need to write anything to disk besides the stats (metadata).
+	// I.e., we do not need to write an actual block.
+	// Thus, we set the compression function to constant and reset the block buffer.
+	D_ASSERT(stats.statistics.IsConstant());
+	auto &config = DBConfig::GetConfig(db);
+	function = *config.GetCompressionFunction(CompressionType::COMPRESSION_CONSTANT, type.InternalType());
+	block.reset();
 }
 
 void ColumnSegment::MarkAsPersistent(shared_ptr<BlockHandle> block_p, uint32_t offset_p) {
 	D_ASSERT(segment_type == ColumnSegmentType::TRANSIENT);
-	segment_type = ColumnSegmentType::PERSISTENT;
-
 	block_id = block_p->BlockId();
+	SetBlock(std::move(block_p), offset_p);
+}
+
+void ColumnSegment::SetBlock(shared_ptr<BlockHandle> block_p, uint32_t offset_p) {
+	segment_type = ColumnSegmentType::PERSISTENT;
 	offset = offset_p;
 	block = std::move(block_p);
 }

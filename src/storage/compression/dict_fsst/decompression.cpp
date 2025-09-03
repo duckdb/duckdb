@@ -134,6 +134,13 @@ const SelectionVector &CompressedStringScanState::GetSelVec(idx_t start, idx_t s
 		sel_t *sel_vec_ptr = sel_vec->data();
 		BitpackingPrimitives::UnPackBuffer<sel_t>(data_ptr_cast(sel_vec_ptr), sel_buf_src, decompress_count,
 		                                          dictionary_indices_width);
+
+		if (start_offset != 0) {
+			for (idx_t i = 0; i < scan_count; i++) {
+				sel_vec->set_index(i, sel_vec->get_index(i + start_offset));
+			}
+		}
+
 		return *sel_vec;
 	}
 	}
@@ -146,14 +153,8 @@ void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_of
 	// Create a decompression buffer of sufficient size if we don't already have one.
 	auto &selvec = GetSelVec(start, scan_count);
 
-	idx_t start_offset = start;
-	if (mode != DictFSSTMode::FSST_ONLY) {
-		// Handling non-bitpacking-group-aligned start values;
-		start_offset %= BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
-	} else {
-		//! (index 0 is reserved for NULL, which we don't have in this mode)
-		start_offset++;
-	}
+	//! (index 0 is reserved for NULL, which we don't have in this mode)
+	const idx_t start_offset = mode == DictFSSTMode::FSST_ONLY ? start + 1 : 0;
 
 	if (dictionary) {
 		// We have prepared the full dictionary, we can reference these strings directly
@@ -203,11 +204,8 @@ void CompressedStringScanState::Select(Vector &result, idx_t start, const Select
 	}
 }
 
-bool CompressedStringScanState::AllowDictionaryScan(idx_t start, idx_t scan_count) {
+bool CompressedStringScanState::AllowDictionaryScan(idx_t scan_count) {
 	if (mode == DictFSSTMode::FSST_ONLY) {
-		return false;
-	}
-	if (start % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE != 0) {
 		return false;
 	}
 	if (scan_count != STANDARD_VECTOR_SIZE) {
@@ -221,7 +219,6 @@ bool CompressedStringScanState::AllowDictionaryScan(idx_t start, idx_t scan_coun
 
 void CompressedStringScanState::ScanToDictionaryVector(ColumnSegment &segment, Vector &result, idx_t result_offset,
                                                        idx_t start, idx_t scan_count) {
-	D_ASSERT(start % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE == 0);
 	D_ASSERT(scan_count == STANDARD_VECTOR_SIZE);
 	D_ASSERT(result_offset == 0);
 

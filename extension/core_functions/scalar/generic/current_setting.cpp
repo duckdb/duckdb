@@ -7,6 +7,7 @@
 #include "duckdb/catalog/catalog.hpp"
 namespace duckdb {
 
+namespace {
 struct CurrentSettingBindData : public FunctionData {
 	explicit CurrentSettingBindData(Value value_p) : value(std::move(value_p)) {
 	}
@@ -24,7 +25,7 @@ public:
 	}
 };
 
-static void CurrentSettingFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+void CurrentSettingFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = func_expr.bind_info->Cast<CurrentSettingBindData>();
 	result.Reference(info.value);
@@ -50,14 +51,19 @@ unique_ptr<FunctionData> CurrentSettingBind(ClientContext &context, ScalarFuncti
 	auto key = StringUtil::Lower(StringValue::Get(key_val));
 	Value val;
 	if (!context.TryGetCurrentSetting(key, val)) {
-		Catalog::AutoloadExtensionByConfigName(context, key);
+		auto extension_name = Catalog::AutoloadExtensionByConfigName(context, key);
 		// If autoloader didn't throw, the config is now available
-		context.TryGetCurrentSetting(key, val);
+		if (!context.TryGetCurrentSetting(key, val)) {
+			throw InternalException("Extension %s did not provide the '%s' config setting",
+			                        extension_name.ToStdString(), key);
+		}
 	}
 
 	bound_function.return_type = val.type();
 	return make_uniq<CurrentSettingBindData>(val);
 }
+
+} // namespace
 
 ScalarFunction CurrentSettingFun::GetFunction() {
 	auto fun = ScalarFunction({LogicalType::VARCHAR}, LogicalType::ANY, CurrentSettingFunction, CurrentSettingBind);

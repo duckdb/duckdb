@@ -3,7 +3,6 @@
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
-#include "duckdb/function/table_macro_function.hpp"
 
 #include "duckdb/function/scalar_macro_function.hpp"
 
@@ -196,12 +195,13 @@ unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalMacroInfo(ar
 			    make_uniq<ColumnRefExpression>(default_macro.parameters[param_idx]));
 		}
 		for (idx_t named_idx = 0; default_macro.named_parameters[named_idx].name != nullptr; named_idx++) {
-			auto expr_list = Parser::ParseExpressionList(default_macro.named_parameters[named_idx].default_value);
+			const auto &named_param = default_macro.named_parameters[named_idx];
+			auto expr_list = Parser::ParseExpressionList(named_param.default_value);
 			if (expr_list.size() != 1) {
 				throw InternalException("Expected a single expression");
 			}
-			function->default_parameters.insert(
-				make_pair(default_macro.named_parameters[named_idx].name, std::move(expr_list[0])));
+			function->parameters.push_back(make_uniq<ColumnRefExpression>(named_param.name));
+			function->default_parameters.insert(make_pair(named_param.name, std::move(expr_list[0])));
 		}
 		D_ASSERT(function->type == MacroType::SCALAR_MACRO);
 		bind_info->macros.push_back(std::move(function));

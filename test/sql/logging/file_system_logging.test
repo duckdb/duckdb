@@ -28,9 +28,7 @@ WHERE type = 'FileSystem'
 ORDER BY timestamp
 ----
 CONNECTION	FileSystem	TRACE	{"fs":"LocalFileSystem","test.csv","op":"OPEN"}
-CONNECTION	FileSystem	TRACE	{"fs":"LocalFileSystem","test.csv","op":"WRITE","bytes":"2","pos":"0"}
-CONNECTION	FileSystem	TRACE	{"fs":"LocalFileSystem","test.csv","op":"WRITE","bytes":"1","pos":"2"}
-CONNECTION	FileSystem	TRACE	{"fs":"LocalFileSystem","test.csv","op":"WRITE","bytes":"1","pos":"3"}
+CONNECTION	FileSystem	TRACE	{"fs":"LocalFileSystem","test.csv","op":"WRITE","bytes":"4","pos":"0"}
 CONNECTION	FileSystem	TRACE	{"fs":"LocalFileSystem","test.csv","op":"CLOSE"}
 CONNECTION	FileSystem	TRACE	{"fs":"LocalFileSystem","test.csv","op":"OPEN"}
 CONNECTION	FileSystem	TRACE	{"fs":"LocalFileSystem","test.csv","op":"READ","bytes":"4","pos":"0"}
@@ -38,7 +36,7 @@ CONNECTION	FileSystem	TRACE	{"fs":"LocalFileSystem","test.csv","op":"READ","byte
 CONNECTION	FileSystem	TRACE	{"fs":"LocalFileSystem","test.csv","op":"CLOSE"}
 
 statement ok
-pragma truncate_duckdb_logs;
+CALL truncate_duckdb_logs();
 
 require httpfs
 
@@ -49,7 +47,7 @@ FROM 'https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv'
 query IIII
 SELECT scope, type, log_level, regexp_replace(message, '\"path\":.*test.csv"', '"test.csv"')
 FROM duckdb_logs
-WHERE type = 'FileSystem'
+WHERE type = 'FileSystem' AND message NOT LIKE '%duckdb_extension%'
 ORDER BY timestamp
 ----
 CONNECTION	FileSystem	TRACE	{"fs":"HTTPFileSystem","path":"https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv","op":"OPEN"}

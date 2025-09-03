@@ -6,6 +6,8 @@
 # -> this should be the case for our autoloading tests where we have the local_extension_repo variable set
 require-env LOCAL_EXTENSION_REPO
 
+require httpfs
+
 statement ok
 set extension_directory='__TEST_DIR__/autoloading_current_setting'
 
@@ -19,7 +21,7 @@ set autoinstall_known_extensions=false
 statement error
 select current_setting('s3_region');
 ----
-Catalog Error: Setting with name "s3_region" is not in the catalog, but it exists in the httpfs extension.
+<REGEX>:.*Catalog Error.*Setting with name "s3_region" is not in the catalog.*
 
 ### Autoloading, but but not autoinstall
 statement ok
@@ -32,8 +34,7 @@ set autoinstall_extension_repository='/tmp/non-existent-repo';
 statement error
 select current_setting('s3_region');
 ----
-Extension Autoloading Error: An error occurred while trying to automatically install the required extension 'httpfs':
-Extension
+<REGEX>:.*Extension Autoloading Error.*An error occurred while trying to automatically install the required extension 'httpfs'.*
 
 ### Autoloading with autoinstall and correct extension repo
 statement ok

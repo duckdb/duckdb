@@ -2,9 +2,6 @@
 # description: Test flatten function
 # group: [list]
 
-statement ok
-PRAGMA enable_verification
-
 # basic functionality
 query T
 SELECT flatten([[1, 2, 3, 4]])

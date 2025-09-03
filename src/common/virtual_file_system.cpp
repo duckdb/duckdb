@@ -1,7 +1,10 @@
 #include "duckdb/common/virtual_file_system.hpp"
+
+#include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/gzip_file_system.hpp"
 #include "duckdb/common/pipe_file_system.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
@@ -36,15 +39,22 @@ unique_ptr<FileHandle> VirtualFileSystem::OpenFileExtended(const OpenFileInfo &f
 	if (!file_handle) {
 		return nullptr;
 	}
+
+	const auto context = !flags.MultiClientAccess() ? FileOpener::TryGetClientContext(opener) : QueryContext();
 	if (file_handle->GetType() == FileType::FILE_TYPE_FIFO) {
-		file_handle = PipeFileSystem::OpenPipe(std::move(file_handle));
+		file_handle = PipeFileSystem::OpenPipe(context, std::move(file_handle));
 	} else if (compression != FileCompressionType::UNCOMPRESSED) {
 		auto entry = compressed_fs.find(compression);
 		if (entry == compressed_fs.end()) {
+			if (compression == FileCompressionType::ZSTD) {
+				throw NotImplementedException(
+				    "Attempting to open a compressed file, but the compression type is not supported.\nConsider "
+				    "explicitly \"INSTALL parquet; LOAD parquet;\" to support this compression scheme");
+			}
 			throw NotImplementedException(
 			    "Attempting to open a compressed file, but the compression type is not supported");
 		}
-		file_handle = entry->second->OpenCompressedFile(std::move(file_handle), flags.OpenForWriting());
+		file_handle = entry->second->OpenCompressedFile(context, std::move(file_handle), flags.OpenForWriting());
 	}
 	return file_handle;
 }
@@ -68,7 +78,7 @@ int64_t VirtualFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_by
 int64_t VirtualFileSystem::GetFileSize(FileHandle &handle) {
 	return handle.file_system.GetFileSize(handle);
 }
-time_t VirtualFileSystem::GetLastModifiedTime(FileHandle &handle) {
+timestamp_t VirtualFileSystem::GetLastModifiedTime(FileHandle &handle) {
 	return handle.file_system.GetLastModifiedTime(handle);
 }
 string VirtualFileSystem::GetVersionTag(FileHandle &handle) {
@@ -200,6 +210,10 @@ void VirtualFileSystem::SetDisabledFileSystems(const vector<string> &names) {
 		}
 	}
 	disabled_file_systems = std::move(new_disabled_file_systems);
+}
+
+bool VirtualFileSystem::SubSystemIsDisabled(const string &name) {
+	return disabled_file_systems.find(name) != disabled_file_systems.end();
 }
 
 FileSystem &VirtualFileSystem::FindFileSystem(const string &path) {

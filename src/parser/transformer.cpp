@@ -223,6 +223,8 @@ unique_ptr<SQLStatement> Transformer::TransformStatementInternal(duckdb_libpgque
 		return TransformDropSecret(PGCast<duckdb_libpgquery::PGDropSecretStmt>(stmt));
 	case duckdb_libpgquery::T_PGCommentOnStmt:
 		return TransformCommentOn(PGCast<duckdb_libpgquery::PGCommentOnStmt>(stmt));
+	case duckdb_libpgquery::T_PGMergeIntoStmt:
+		return TransformMergeInto(PGCast<duckdb_libpgquery::PGMergeIntoStmt>(stmt));
 	default:
 		throw NotImplementedException(NodetypeToString(stmt.type));
 	}
@@ -234,13 +236,12 @@ unique_ptr<QueryNode> Transformer::TransformMaterializedCTE(unique_ptr<QueryNode
 
 	for (auto &cte : root->cte_map.map) {
 		auto &cte_entry = cte.second;
-		if (cte_entry->materialized == CTEMaterialize::CTE_MATERIALIZE_ALWAYS) {
-			auto mat_cte = make_uniq<CTENode>();
-			mat_cte->ctename = cte.first;
-			mat_cte->query = cte_entry->query->node->Copy();
-			mat_cte->aliases = cte_entry->aliases;
-			materialized_ctes.push_back(std::move(mat_cte));
-		}
+		auto mat_cte = make_uniq<CTENode>();
+		mat_cte->ctename = cte.first;
+		mat_cte->query = TransformMaterializedCTE(cte_entry->query->node->Copy());
+		mat_cte->aliases = cte_entry->aliases;
+		mat_cte->materialized = cte_entry->materialized;
+		materialized_ctes.push_back(std::move(mat_cte));
 	}
 
 	while (!materialized_ctes.empty()) {

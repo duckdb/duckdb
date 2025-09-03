@@ -60,9 +60,14 @@ class JoinHashTable {
 public:
 	using ValidityBytes = TemplatedValidityMask<uint8_t>;
 
+#ifdef DUCKDB_HASH_ZERO
+	//! Verify salt when all hashes are 0
+	static constexpr const idx_t USE_SALT_THRESHOLD = 0;
+#else
 	//! only compare salts with the ht entries if the capacity is larger than 8192 so
 	//! that it does not fit into the CPU cache
 	static constexpr const idx_t USE_SALT_THRESHOLD = 8192;
+#endif
 
 	//! Scan structure that can be used to resume scans, as a single probe can
 	//! return 1024*N values (where N is the size of the HT). This is
@@ -82,7 +87,7 @@ public:
 		JoinHashTable &ht;
 		bool finished;
 		bool is_null;
-		bool filtered_probe_keys = false;
+		bool has_null_value_filter = false;
 
 		// it records the RHS pointers for the result chunk
 		Vector rhs_pointers;
@@ -150,11 +155,13 @@ public:
 	struct ProbeState : SharedState {
 		ProbeState();
 
-		vector<uint32_t> lookup_results;
-		Vector ht_offsets_v;
+		Vector ht_offsets_and_salts_v;
 		Vector hashes_dense_v;
 		SelectionVector non_empty_sel;
+
+		vector<uint32_t> lookup_results;
 		SelectionVector bf_found_sel;
+
 	};
 
 	struct InsertState : SharedState {
@@ -171,8 +178,8 @@ public:
 		TupleDataChunkState chunk_state;
 	};
 
-	JoinHashTable(ClientContext &context, const vector<JoinCondition> &conditions, vector<LogicalType> build_types,
-	              JoinType type, const vector<idx_t> &output_columns);
+	JoinHashTable(ClientContext &context, const PhysicalOperator &op, const vector<JoinCondition> &conditions,
+	              vector<LogicalType> build_types, JoinType type, const vector<idx_t> &output_columns);
 	~JoinHashTable();
 
 	//! Add the given data to the HT
@@ -217,6 +224,7 @@ public:
 	}
 
 	ClientContext &context;
+	const PhysicalOperator &op;
 	//! BufferManager
 	BufferManager &buffer_manager;
 	//! The join conditions

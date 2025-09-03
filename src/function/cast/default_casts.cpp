@@ -120,6 +120,8 @@ BoundCastInfo DefaultCasts::GetDefaultCastFunction(BindCastInput &input, const L
 		return DateCastSwitch(input, source, target);
 	case LogicalTypeId::TIME:
 		return TimeCastSwitch(input, source, target);
+	case LogicalTypeId::TIME_NS:
+		return TimeNsCastSwitch(input, source, target);
 	case LogicalTypeId::TIME_TZ:
 		return TimeTzCastSwitch(input, source, target);
 	case LogicalTypeId::TIMESTAMP:
@@ -154,8 +156,8 @@ BoundCastInfo DefaultCasts::GetDefaultCastFunction(BindCastInput &input, const L
 		return EnumCastSwitch(input, source, target);
 	case LogicalTypeId::ARRAY:
 		return ArrayCastSwitch(input, source, target);
-	case LogicalTypeId::VARINT:
-		return VarintCastSwitch(input, source, target);
+	case LogicalTypeId::BIGNUM:
+		return BignumCastSwitch(input, source, target);
 	case LogicalTypeId::AGGREGATE_STATE:
 		return AggregateStateToBlobCast;
 	default:

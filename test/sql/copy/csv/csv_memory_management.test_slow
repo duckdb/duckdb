@@ -15,6 +15,9 @@ SET threads=16;
 statement ok
 COPY (SELECT i, i // 5 AS j FROM range(100000000) t(i)) TO '__TEST_DIR__/integers.csv'
 
+statement ok
+CALL enable_logging('FileSystem')
+
 query I
 select count(*) from '__TEST_DIR__/integers.csv'
 ----

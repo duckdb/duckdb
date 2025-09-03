@@ -60,7 +60,7 @@ static unique_ptr<FunctionData> StructPackBind(ClientContext &context, ScalarFun
 	return make_uniq<VariableReturnBindData>(bound_function.return_type);
 }
 
-unique_ptr<BaseStatistics> StructPackStats(ClientContext &context, FunctionStatisticsInput &input) {
+static unique_ptr<BaseStatistics> StructPackStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
 	auto &expr = input.expr;
 	auto struct_stats = StructStats::CreateUnknown(expr.return_type);
@@ -71,7 +71,7 @@ unique_ptr<BaseStatistics> StructPackStats(ClientContext &context, FunctionStati
 }
 
 template <bool IS_STRUCT_PACK>
-ScalarFunction GetStructPackFunction() {
+static ScalarFunction GetStructPackFunction() {
 	ScalarFunction fun(IS_STRUCT_PACK ? "struct_pack" : "row", {}, LogicalTypeId::STRUCT, StructPackFunction,
 	                   StructPackBind<IS_STRUCT_PACK>, nullptr, StructPackStats);
 	fun.varargs = LogicalType::ANY;

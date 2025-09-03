@@ -27,17 +27,24 @@ public:
 	//! Read content of size read_size into the buffer
 	void ReadData(data_ptr_t buffer, idx_t read_size) override;
 
+	void ReadData(QueryContext context, data_ptr_t buffer, idx_t read_size) override;
+
 	MetaBlockPointer GetMetaBlockPointer();
 
 	MetadataManager &GetMetadataManager() {
 		return manager;
 	}
+	//! Gets a list of all remaining blocks to be read by this metadata reader - consumes all blocks
+	//! If "last_block" is specified, we stop when reaching that block
+	vector<MetaBlockPointer> GetRemainingBlocks(MetaBlockPointer last_block = MetaBlockPointer());
 
 private:
 	data_ptr_t BasePtr();
 	data_ptr_t Ptr();
 
 	void ReadNextBlock();
+
+	void ReadNextBlock(QueryContext context);
 
 	MetadataPointer FromDiskPointer(MetaBlockPointer pointer);
 

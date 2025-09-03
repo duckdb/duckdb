@@ -62,7 +62,7 @@ QueryResult::QueryResult(QueryResultType type, StatementType statement_type, Sta
 
 QueryResult::QueryResult(QueryResultType type, ErrorData error)
     : BaseQueryResult(type, std::move(error)),
-      client_properties("UTC", ArrowOffsetSize::REGULAR, false, false, false, nullptr) {
+      client_properties("UTC", ArrowOffsetSize::REGULAR, false, false, false, ArrowFormatVersion::V1_0, nullptr) {
 }
 
 QueryResult::~QueryResult() {

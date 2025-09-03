@@ -154,18 +154,18 @@ class SQLLogicTestLogger:
         print("Does the result contain tab values? In that case, place every value on a single row.")
         self.print_line_sep()
 
-    def wrong_result_hash(self, expected_result, result):
-        if expected_result:
-            expected_result.print()
-        else:
-            print("???")
-        self.print_error_header("Wrong result hash!")
+    def wrong_result_hash(self, expected_hash_value, hash_value):
+        self.print_error_header("Wrong result hash when comparing to previous query result!")
         self.print_line_sep()
         self.print_sql()
         self.print_line_sep()
-        self.print_header("Expected result:")
+        self.print_header("Expected hash value:")
         self.print_line_sep()
-        self.print_header("Actual result:")
+        print(expected_hash_value)
+        self.print_line_sep()
+        self.print_header("Actual hash value:")
+        self.print_line_sep()
+        print(hash_value)
         self.print_line_sep()
 
     def unexpected_statement(self, expect_ok, result):

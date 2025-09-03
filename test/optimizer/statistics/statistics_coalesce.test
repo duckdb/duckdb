@@ -3,9 +3,6 @@
 # group: [statistics]
 
 statement ok
-PRAGMA enable_verification;
-
-statement ok
 PRAGMA explain_output = OPTIMIZED_ONLY;
 
 statement ok
@@ -97,10 +94,16 @@ SELECT * FROM integers WHERE (COALESCE(i, 4, 17)=3);
 ----
 3
 
-# random needs disabled verification
+# Verification compares results, which are different for random().
+
 statement ok
 PRAGMA disable_verification
 
-# coalesce without stats
 statement ok
-SELECT COALESCE(CASE WHEN RANDOM()<100 THEN RANDOM() ELSE NULL END, NULL, 42) FROM range(10)
+PRAGMA disable_verify_fetch_row;
+
+# COALESCE without statistics.
+
+statement ok
+SELECT COALESCE (CASE WHEN RANDOM() < 100 THEN RANDOM() ELSE NULL END, NULL, 42)
+FROM range(10)

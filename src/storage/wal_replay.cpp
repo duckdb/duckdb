@@ -4,8 +4,10 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/common/checksum.hpp"
-#include "duckdb/common/printer.hpp"
+#include "duckdb/common/encryption_functions.hpp"
+#include "duckdb/common/encryption_key_manager.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/buffered_file_reader.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
@@ -24,11 +26,12 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression_binder/index_binder.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
+#include "duckdb/storage/single_file_block_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/delete_state.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
-#include "duckdb/storage/table/column_data.hpp"
 
 namespace duckdb {
 
@@ -77,35 +80,104 @@ public:
 			// old WAL versions do not have checksums
 			return WriteAheadLogDeserializer(state_p, stream, deserialize_only);
 		}
-		if (state_p.wal_version != 2) {
-			throw IOException("Failed to read WAL of version %llu - can only read version 1 and 2",
-			                  state_p.wal_version);
-		}
-		// read the checksum and size
-		auto size = stream.Read<uint64_t>();
-		auto stored_checksum = stream.Read<uint64_t>();
-		auto offset = stream.CurrentOffset();
-		auto file_size = stream.FileSize();
 
-		if (offset + size > file_size) {
-			throw SerializationException(
-			    "Corrupt WAL file: entry size exceeded remaining data in file at byte position %llu "
-			    "(found entry with size %llu bytes, file size %llu bytes)",
-			    offset, size, file_size);
+		if (state_p.wal_version == 2) {
+			// read the size and checksum
+			auto size = stream.Read<uint64_t>();
+			auto stored_checksum = stream.Read<uint64_t>();
+			auto offset = stream.CurrentOffset();
+			auto file_size = stream.FileSize();
+
+			if (offset + size > file_size) {
+				throw SerializationException(
+				    "Corrupt WAL file: entry size exceeded remaining data in file at byte position %llu "
+				    "(found entry with size %llu bytes, file size %llu bytes)",
+				    offset, size, file_size);
+			}
+
+			// allocate a buffer and read data into the buffer
+			auto buffer = unique_ptr<data_t[]>(new data_t[size]);
+			stream.ReadData(buffer.get(), size);
+
+			// compute and verify the checksum
+			auto computed_checksum = Checksum(buffer.get(), size);
+			if (stored_checksum != computed_checksum) {
+				throw IOException("Corrupt WAL file: entry at byte position %llu computed checksum %llu does not match "
+				                  "stored checksum %llu",
+				                  offset, computed_checksum, stored_checksum);
+			}
+
+			return WriteAheadLogDeserializer(state_p, std::move(buffer), size, deserialize_only);
 		}
 
-		// allocate a buffer and read data into the buffer
-		auto buffer = unique_ptr<data_t[]>(new data_t[size]);
-		stream.ReadData(buffer.get(), size);
+		if (state_p.wal_version == 3) {
+			auto &database = state_p.db.GetDatabase();
+			//! Version 3 means that the WAL is encrypted
+			//! For encryption, the length field remains plaintext
+			//! After the length field, we store a 12-byte nonce (for GCM)
+			//! After the nonce, we store the checksum, followed by the actual entry
+			//! After the stored entry, we store a 16-byte nonce (for GCM).
 
-		// compute and verify the checksum
-		auto computed_checksum = Checksum(buffer.get(), size);
-		if (stored_checksum != computed_checksum) {
-			throw IOException("Corrupt WAL file: entry at byte position %llu computed checksum %llu does not match "
-			                  "stored checksum %llu",
-			                  offset, computed_checksum, stored_checksum);
+			// read the size (this is excluding the nonce, checksum and tag)
+			auto size = stream.Read<uint64_t>();
+			// the ciphertext size is including the checksum
+			const auto ciphertext_size = size + sizeof(uint64_t);
+
+			auto offset = stream.CurrentOffset();
+			auto file_size = stream.FileSize();
+
+			EncryptionNonce nonce;
+			EncryptionTag tag;
+
+			if (offset + nonce.size() + ciphertext_size + tag.size() > file_size) {
+				throw SerializationException(
+				    "Corrupt Encrypted WAL file: entry size exceeded remaining data in file at byte position %llu "
+				    "(found entry with size %llu bytes, file size %llu bytes)",
+				    offset, size, file_size);
+			}
+
+			stream.ReadData(nonce.data(), nonce.size());
+
+			auto &keys = EncryptionKeyManager::Get(state_p.db.GetDatabase());
+			auto &catalog = state_p.db.GetCatalog().Cast<DuckCatalog>();
+			auto derived_key = keys.GetKey(catalog.GetEncryptionKeyId());
+			//! initialize the decryption
+			auto encryption_state = database.GetEncryptionUtil()->CreateEncryptionState(
+			    derived_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+			encryption_state->InitializeDecryption(nonce.data(), nonce.size(), derived_key,
+			                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+
+			//! Allocate a decryption buffer
+			auto buffer = unique_ptr<data_t[]>(new data_t[ciphertext_size]);
+			auto out_buffer = unique_ptr<data_t[]>(new data_t[size]);
+
+			stream.ReadData(buffer.get(), ciphertext_size);
+			encryption_state->Process(buffer.get(), ciphertext_size, buffer.get(), ciphertext_size);
+
+			//! read and verify the stored tag
+			stream.ReadData(tag.data(), tag.size());
+
+			encryption_state->Finalize(buffer.get(), ciphertext_size, tag.data(), tag.size());
+
+			//! read the stored checksum
+			auto stored_checksum = Load<uint64_t>(buffer.get());
+
+			//! copy the decrypted data to the output buffer
+			memcpy(out_buffer.get(), buffer.get() + sizeof(stored_checksum), size);
+
+			// compute and verify the checksum
+			auto computed_checksum = Checksum(out_buffer.get(), size);
+			if (stored_checksum != computed_checksum) {
+				throw IOException("Corrupt WAL file: entry at byte position %llu computed checksum %llu does not match "
+				                  "stored checksum %llu",
+				                  offset, computed_checksum, stored_checksum);
+			}
+
+			return WriteAheadLogDeserializer(state_p, std::move(out_buffer), size, deserialize_only);
 		}
-		return WriteAheadLogDeserializer(state_p, std::move(buffer), size, deserialize_only);
+
+		throw IOException("Failed to read WAL of version %llu - can only read version 1, 2 and 3 (encrypted)",
+		                  state_p.wal_version);
 	}
 
 	bool ReplayEntry() {
@@ -161,6 +233,9 @@ protected:
 	void ReplayDelete();
 	void ReplayUpdate();
 	void ReplayCheckpoint();
+
+private:
+	void ReplayIndexData(IndexStorageInfo &info);
 
 private:
 	ReplayState &state;
@@ -381,6 +456,30 @@ void WriteAheadLogDeserializer::ReplayEntry(WALType entry_type) {
 //===--------------------------------------------------------------------===//
 void WriteAheadLogDeserializer::ReplayVersion() {
 	state.wal_version = deserializer.ReadProperty<idx_t>(101, "version");
+
+	auto &single_file_block_manager = db.GetStorageManager().GetBlockManager().Cast<SingleFileBlockManager>();
+	auto file_version_number = single_file_block_manager.GetVersionNumber();
+	if (file_version_number > 66) {
+		data_t db_identifier[MainHeader::DB_IDENTIFIER_LEN];
+		deserializer.ReadList(102, "db_identifier", [&](Deserializer::List &list, idx_t i) {
+			db_identifier[i] = list.ReadElement<uint8_t>();
+		});
+		auto expected_db_identifier = single_file_block_manager.GetDBIdentifier();
+		if (!MainHeader::CompareDBIdentifiers(db_identifier, expected_db_identifier)) {
+			throw IOException("WAL does not match database file.");
+		}
+
+		auto expected_checkpoint_iteration = single_file_block_manager.GetCheckpointIteration();
+		auto checkpoint_iteration = deserializer.ReadProperty<uint64_t>(103, "checkpoint_iteration");
+		if (expected_checkpoint_iteration != checkpoint_iteration) {
+			string relation = checkpoint_iteration < expected_checkpoint_iteration ? "older" : "newer";
+			throw IOException("This WAL was created for this database file, but the WAL checkpoint iteration does not "
+			                  "match the database file. "
+			                  "That means the WAL was created for a %s version of this database. File checkpoint "
+			                  "iteration: %d, WAL checkpoint iteration: %d",
+			                  relation, expected_checkpoint_iteration, checkpoint_iteration);
+		}
+	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -427,12 +526,10 @@ void ReplayWithoutIndex(ClientContext &context, Catalog &catalog, AlterInfo &inf
 	catalog.Alter(context, info);
 }
 
-void ReplayIndexData(AttachedDatabase &db, BinaryDeserializer &deserializer, IndexStorageInfo &info,
-                     const bool deserialize_only) {
+void WriteAheadLogDeserializer::ReplayIndexData(IndexStorageInfo &info) {
 	D_ASSERT(info.IsValid() && !info.name.empty());
 
-	auto &storage_manager = db.GetStorageManager();
-	auto &single_file_sm = storage_manager.Cast<SingleFileStorageManager>();
+	auto &single_file_sm = db.GetStorageManager().Cast<SingleFileStorageManager>();
 	auto &block_manager = single_file_sm.block_manager;
 	auto &buffer_manager = block_manager->buffer_manager;
 
@@ -452,7 +549,8 @@ void ReplayIndexData(AttachedDatabase &db, BinaryDeserializer &deserializer, Ind
 			// Convert the buffer handle to a persistent block and store the block id.
 			if (!deserialize_only) {
 				auto block_id = block_manager->GetFreeBlockId();
-				block_manager->ConvertToPersistent(block_id, std::move(block_handle), std::move(buffer_handle));
+				block_manager->ConvertToPersistent(QueryContext(context), block_id, std::move(block_handle),
+				                                   std::move(buffer_handle));
 				data_info.block_pointers[j].block_id = block_id;
 			}
 		}
@@ -467,7 +565,7 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 	}
 
 	auto index_storage_info = deserializer.ReadProperty<IndexStorageInfo>(102, "index_storage_info");
-	ReplayIndexData(db, deserializer, index_storage_info, DeserializeOnly());
+	ReplayIndexData(index_storage_info);
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -684,7 +782,7 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 	auto create_info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(101, "index_catalog_entry");
 	auto index_info = deserializer.ReadProperty<IndexStorageInfo>(102, "index_storage_info");
 
-	ReplayIndexData(db, deserializer, index_info, DeserializeOnly());
+	ReplayIndexData(index_info);
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -816,19 +914,24 @@ void WriteAheadLogDeserializer::ReplayDelete() {
 		return;
 	}
 	if (!state.current_table) {
-		throw InternalException("Corrupt WAL: delete without table");
+		throw SerializationException("delete without a table");
 	}
 
 	D_ASSERT(chunk.ColumnCount() == 1 && chunk.data[0].GetType() == LogicalType::ROW_TYPE);
 	row_t row_ids[1];
 	Vector row_identifiers(LogicalType::ROW_TYPE, data_ptr_cast(row_ids));
-
 	auto source_ids = FlatVector::GetData<row_t>(chunk.data[0]);
-	// delete the tuples from the current table
+
+	// Delete the row IDs from the current table.
+	auto &storage = state.current_table->GetStorage();
+	auto total_rows = storage.GetTotalRows();
 	TableDeleteState delete_state;
 	for (idx_t i = 0; i < chunk.size(); i++) {
+		if (source_ids[i] >= UnsafeNumericCast<row_t>(total_rows)) {
+			throw SerializationException("invalid row ID delete in WAL");
+		}
 		row_ids[0] = source_ids[i];
-		state.current_table->GetStorage().Delete(delete_state, context, row_identifiers, 1);
+		storage.Delete(delete_state, context, row_identifiers, 1);
 	}
 }
 

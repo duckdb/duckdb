@@ -1016,7 +1016,7 @@ char Linenoise::Search(char c) {
 
 bool Linenoise::AllWhitespace(const char *z) {
 	for (; *z; z++) {
-		if (isspace((unsigned char)z[0]))
+		if (StringUtil::CharacterIsSpace((unsigned char)z[0]))
 			continue;
 		if (*z == '/' && z[1] == '*') {
 			z += 2;
@@ -1382,10 +1382,10 @@ int Linenoise::Edit() {
 			RefreshLine();
 			break;
 		case CTRL_A: /* Ctrl+a, go to the start of the line */
-			EditMoveHome();
+			EditMoveStartOfLine();
 			break;
 		case CTRL_E: /* ctrl+e, go to the end of the line */
-			EditMoveEnd();
+			EditMoveEndOfLine();
 			break;
 		case CTRL_L: /* ctrl+l, clear screen */
 			linenoiseClearScreen();

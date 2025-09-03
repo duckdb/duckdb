@@ -37,6 +37,11 @@ public:
 	physical_index_set_t key_set;
 	//! Whether this is a PRIMARY KEY constraint, or a UNIQUE constraint.
 	bool is_primary_key;
+
+public:
+	unique_ptr<BoundConstraint> Copy() const override {
+		return make_uniq<BoundUniqueConstraint>(keys, key_set, is_primary_key);
+	}
 };
 
 } // namespace duckdb

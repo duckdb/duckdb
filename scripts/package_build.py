@@ -30,11 +30,14 @@ def third_party_includes():
     includes += [os.path.join('third_party', 'mbedtls', 'library')]
     includes += [os.path.join('third_party', 'miniz')]
     includes += [os.path.join('third_party', 'pcg')]
+    includes += [os.path.join('third_party', 'pdqsort')]
     includes += [os.path.join('third_party', 're2')]
+    includes += [os.path.join('third_party', 'ska_sort')]
     includes += [os.path.join('third_party', 'skiplist')]
     includes += [os.path.join('third_party', 'tdigest')]
     includes += [os.path.join('third_party', 'utf8proc')]
     includes += [os.path.join('third_party', 'utf8proc', 'include')]
+    includes += [os.path.join('third_party', 'vergesort')]
     includes += [os.path.join('third_party', 'yyjson', 'include')]
     includes += [os.path.join('third_party', 'zstd', 'include')]
     return includes
@@ -137,19 +140,24 @@ def get_relative_path(source_dir, target_file):
 
 
 ######
+# MAIN_BRANCH_VERSIONING default should be 'True' for main branch and feature branches
+# MAIN_BRANCH_VERSIONING default should be 'False' for release branches
 # MAIN_BRANCH_VERSIONING default value needs to keep in sync between:
 # - CMakeLists.txt
 # - scripts/amalgamation.py
 # - scripts/package_build.py
-# - tools/pythonpkg/setup.py
 ######
-main_branch_versioning = False if os.getenv('MAIN_BRANCH_VERSIONING') == "0" else True
+MAIN_BRANCH_VERSIONING = True
+if os.getenv('MAIN_BRANCH_VERSIONING') == "0":
+    MAIN_BRANCH_VERSIONING = False
+if os.getenv('MAIN_BRANCH_VERSIONING') == "1":
+    MAIN_BRANCH_VERSIONING = True
 
 
 def get_git_describe():
     override_git_describe = os.getenv('OVERRIDE_GIT_DESCRIBE') or ''
     versioning_tag_match = 'v*.*.*'
-    if main_branch_versioning:
+    if MAIN_BRANCH_VERSIONING:
         versioning_tag_match = 'v*.*.0'
     # empty override_git_describe, either since env was empty string or not existing
     # -> ask git (that can fail, so except in place)
@@ -210,7 +218,7 @@ def git_dev_version():
         else:
             # not on a tag: increment the version by one and add a -devX suffix
             # this needs to keep in sync with changes to CMakeLists.txt
-            if main_branch_versioning == True:
+            if MAIN_BRANCH_VERSIONING == True:
                 # increment minor version
                 version_splits[1] = str(int(version_splits[1]) + 1)
             else:

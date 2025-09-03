@@ -1,6 +1,7 @@
 add_library_unity(
   duckdb_table_func_system
   OBJECT
+  duckdb_approx_database_count.cpp
   duckdb_columns.cpp
   duckdb_constraints.cpp
   duckdb_databases.cpp
@@ -26,6 +27,7 @@ add_library_unity(
   duckdb_types.cpp
   duckdb_variables.cpp
   duckdb_views.cpp
+  logging_utils.cpp
   pragma_collations.cpp
   pragma_database_size.cpp
   pragma_metadata_info.cpp

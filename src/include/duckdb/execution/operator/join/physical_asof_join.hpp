@@ -19,7 +19,8 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::ASOF_JOIN;
 
 public:
-	PhysicalAsOfJoin(LogicalComparisonJoin &op, PhysicalOperator &left, PhysicalOperator &right);
+	PhysicalAsOfJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op, PhysicalOperator &left,
+	                 PhysicalOperator &right);
 
 	vector<LogicalType> join_key_types;
 	vector<column_t> null_sensitive;

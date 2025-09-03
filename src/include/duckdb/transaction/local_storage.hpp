@@ -137,7 +137,7 @@ public:
 	//! Initialize the storage and its indexes, but no row groups.
 	void InitializeStorage(LocalAppendState &state, DataTable &table);
 	//! Append a chunk to the local storage
-	static void Append(LocalAppendState &state, DataChunk &chunk);
+	static void Append(LocalAppendState &state, DataChunk &table_chunk, DataTableInfo &data_table_info);
 	//! Finish appending to the local storage
 	static void FinalizeAppend(LocalAppendState &state);
 	//! Merge a row group collection into the transaction-local storage
@@ -180,6 +180,8 @@ public:
 	void MoveStorage(DataTable &old_dt, DataTable &new_dt);
 	void FetchChunk(DataTable &table, Vector &row_ids, idx_t count, const vector<StorageIndex> &col_ids,
 	                DataChunk &chunk, ColumnFetchState &fetch_state);
+	//! Returns true, if the local storage contains the row id.
+	bool CanFetch(DataTable &table, const row_t row_id);
 	TableIndexList &GetIndexes(ClientContext &context, DataTable &table);
 	optional_ptr<LocalTableStorage> GetStorage(DataTable &table);
 

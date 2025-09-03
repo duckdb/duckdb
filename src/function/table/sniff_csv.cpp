@@ -7,6 +7,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/function/table/range.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_file_handle.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_multi_file_info.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 
 namespace duckdb {
@@ -164,9 +165,13 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 			} else if (i < sniffer_options.sql_type_list.size()) {
 				continue;
 			}
-			D_ASSERT(sniffer_result.return_types[i].id() == LogicalTypeId::BOOLEAN);
 			// we default to varchar if all files are empty or only have a header after all the sniffing
 			sniffer_result.return_types[i] = LogicalType::VARCHAR;
+		}
+	}
+	for (auto &type : sniffer_result.return_types) {
+		if (type.id() == LogicalTypeId::SQLNULL) {
+			type = LogicalType::VARCHAR;
 		}
 	}
 	string str_opt;

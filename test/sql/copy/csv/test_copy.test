@@ -57,7 +57,7 @@ CREATE TABLE test_too_few_rows (a INTEGER, b INTEGER, c VARCHAR, d INTEGER);
 statement error
 COPY test_too_few_rows FROM '__TEST_DIR__/test2.csv' (NULL_PADDING 0);
 ----
-It was not possible to automatically detect the CSV Parsing dialect
+It was not possible to automatically detect the CSV parsing dialect
 
 # create CSV file from query
 query I
@@ -107,55 +107,54 @@ SELECT * FROM test4 ORDER BY 1 LIMIT 3;
 statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (SEP ',', HEADER 0.2);
 ----
-"header" expects a boolean value (e.g. TRUE or 1)
+"HEADER" expected an argument of type BOOLEAN
 
 # empty delimiter
 statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (SEP);
 ----
-"sep" expects a single argument as a string value
+"SEP" requires an argument of type VARCHAR
 
 # number as delimiter
 statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (SEP 1);
 ----
-"sep" expects a string argument!
+"SEP" expected an argument of type VARCHAR
 
-# multiple format options/1, last one wins
+# multiple format options
 statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (FORMAT 'csv', FORMAT 'some_other_copy_function');
 ----
-Catalog Error: Copy Function with name some_other_copy_function does not exist
+duplicate option
 
-# multiple format options/2, last one wins
-query I
+statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (FORMAT 'some_other_copy_function', FORMAT 'csv');
 ----
-5000
+duplicate option
 
 # number as escape string
 statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (ESCAPE 1);
 ----
-"escape" expects a string argument!
+"ESCAPE" expected an argument of type VARCHAR
 
 # no escape string
 statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (ESCAPE);
 ----
-"escape" expects a single argument as a string value
+"ESCAPE" requires an argument of type VARCHAR
 
 # number as quote string
 statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (QUOTE 1);
 ----
-"quote" expects a string argument!
+"QUOTE" expected an argument of type VARCHAR
 
 # no quote string
 statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (QUOTE);
 ----
-"quote" expects a single argument as a string value
+"QUOTE" requires an argument of type VARCHAR
 
 # no format string
 statement error
@@ -167,12 +166,12 @@ Unsupported parameter type for FORMAT: expected e.g. FORMAT 'csv', 'parquet'
 statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (ENCODING);
 ----
-"encoding" expects a single argument as a string value
+"ENCODING" requires an argument of type VARCHAR
 
 statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (ENCODING 42);
 ----
-"encoding" expects a string argument!
+"ENCODING" expected an argument of type VARCHAR
 
 statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (ENCODING 'utf-42');
@@ -183,7 +182,7 @@ The CSV Reader does not support the encoding: "utf-42"
 statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (MAGIC '42');
 ----
-Unrecognized option for CSV reader "magic"
+Unrecognized option "MAGIC"
 
 # Try new_line option
 query I
@@ -264,7 +263,7 @@ COPY test FROM 'data/csv/test/test_pipe.csv' (SEPARATOR '|');
 statement error
 COPY test FROM 'data/csv/test/too_many_values.csv';
 ----
-It was not possible to automatically detect the CSV Parsing dialect
+It was not possible to automatically detect the CSV parsing dialect
 
 # test default null string
 query I
@@ -285,7 +284,7 @@ CREATE TABLE empty_table (a INTEGER, b INTEGER, c VARCHAR(10));
 statement error
 COPY empty_table FROM 'data/csv/test/empty.csv' (HEADER 0);
 ----
-It was not possible to automatically detect the CSV Parsing dialect
+It was not possible to automatically detect the CSV parsing dialect
 
 
 # unterminated quotes

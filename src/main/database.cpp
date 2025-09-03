@@ -30,6 +30,7 @@
 #include "duckdb/storage/compression/empty_validity.hpp"
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/common/http_util.hpp"
+#include "mbedtls_wrapper.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -65,7 +66,7 @@ DBConfig::DBConfig(const case_insensitive_map_t<Value> &config_dict, bool read_o
 DBConfig::~DBConfig() {
 }
 
-DatabaseInstance::DatabaseInstance() {
+DatabaseInstance::DatabaseInstance() : db_validity(*this) {
 	config.is_user_config = false;
 	create_api_v1 = nullptr;
 }
@@ -95,18 +96,6 @@ DatabaseInstance::~DatabaseInstance() {
 	Allocator::SetBackgroundThreads(false);
 	// after all destruction is complete clear the cache entry
 	config.db_cache_entry.reset();
-}
-
-BufferManager &BufferManager::GetBufferManager(DatabaseInstance &db) {
-	return db.GetBufferManager();
-}
-
-const BufferManager &BufferManager::GetBufferManager(const DatabaseInstance &db) {
-	return db.GetBufferManager();
-}
-
-BufferManager &BufferManager::GetBufferManager(AttachedDatabase &db) {
-	return BufferManager::GetBufferManager(db.GetDatabase());
 }
 
 DatabaseInstance &DatabaseInstance::GetDatabase(ClientContext &context) {
@@ -172,9 +161,9 @@ ConnectionManager &ConnectionManager::Get(ClientContext &context) {
 	return ConnectionManager::Get(DatabaseInstance::GetDatabase(context));
 }
 
-unique_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(ClientContext &context, AttachInfo &info,
+shared_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(ClientContext &context, AttachInfo &info,
                                                                       AttachOptions &options) {
-	unique_ptr<AttachedDatabase> attached_database;
+	shared_ptr<AttachedDatabase> attached_database;
 	auto &catalog = Catalog::GetSystemCatalog(*this);
 
 	if (!options.db_type.empty()) {
@@ -188,16 +177,16 @@ unique_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(ClientCont
 		if (entry->second->attach != nullptr && entry->second->create_transaction_manager != nullptr) {
 			// Use the storage extension to create the initial database.
 			attached_database =
-			    make_uniq<AttachedDatabase>(*this, catalog, *entry->second, context, info.name, info, options);
+			    make_shared_ptr<AttachedDatabase>(*this, catalog, *entry->second, context, info.name, info, options);
 			return attached_database;
 		}
 
-		attached_database = make_uniq<AttachedDatabase>(*this, catalog, info.name, info.path, options);
+		attached_database = make_shared_ptr<AttachedDatabase>(*this, catalog, info.name, info.path, options);
 		return attached_database;
 	}
 
 	// An empty db_type defaults to a duckdb database file.
-	attached_database = make_uniq<AttachedDatabase>(*this, catalog, info.name, info.path, options);
+	attached_database = make_shared_ptr<AttachedDatabase>(*this, catalog, info.name, info.path, options);
 	return attached_database;
 }
 
@@ -206,14 +195,13 @@ void DatabaseInstance::CreateMainDatabase() {
 	info.name = AttachedDatabase::ExtractDatabaseName(config.options.database_path, GetFileSystem());
 	info.path = config.options.database_path;
 
-	optional_ptr<AttachedDatabase> initial_database;
 	Connection con(*this);
 	con.BeginTransaction();
 	AttachOptions options(config.options);
-	initial_database = db_manager->AttachDatabase(*con.context, info, options);
-
+	auto initial_database = db_manager->AttachDatabase(*con.context, info, options);
 	initial_database->SetInitialDatabase();
 	initial_database->Initialize(*con.context);
+	db_manager->FinalizeAttach(*con.context, info, std::move(initial_database));
 	con.Commit();
 }
 
@@ -304,6 +292,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	scheduler = make_uniq<TaskScheduler>(*this);
 	object_cache = make_uniq<ObjectCache>();
 	connection_manager = make_uniq<ConnectionManager>();
+	extension_manager = make_uniq<ExtensionManager>(*this);
 
 	// initialize the secret manager
 	config.secret_manager->Initialize(*this);
@@ -345,6 +334,7 @@ DuckDB::DuckDB(const char *path, DBConfig *new_config) : instance(make_shared_pt
 	if (instance->config.options.load_extensions) {
 		ExtensionHelper::LoadAllExtensions(*this);
 	}
+	instance->db_manager->FinalizeStartup();
 }
 
 DuckDB::DuckDB(const string &path, DBConfig *config) : DuckDB(path.c_str(), config) {
@@ -400,6 +390,10 @@ ConnectionManager &DatabaseInstance::GetConnectionManager() {
 	return *connection_manager;
 }
 
+ExtensionManager &DatabaseInstance::GetExtensionManager() {
+	return *extension_manager;
+}
+
 FileSystem &DuckDB::GetFileSystem() {
 	return instance->GetFileSystem();
 }
@@ -452,6 +446,9 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	if (new_config.secret_manager) {
 		config.secret_manager = std::move(new_config.secret_manager);
 	}
+	if (!new_config.storage_extensions.empty()) {
+		config.storage_extensions = std::move(new_config.storage_extensions);
+	}
 	if (config.options.maximum_memory == DConstants::INVALID_INDEX) {
 		config.SetDefaultMaxMemory();
 	}
@@ -493,52 +490,30 @@ idx_t DatabaseInstance::NumberOfThreads() {
 	return NumericCast<idx_t>(scheduler->NumberOfThreads());
 }
 
-const unordered_map<string, ExtensionInfo> &DatabaseInstance::GetExtensions() {
-	return loaded_extensions_info;
-}
-
-void DatabaseInstance::AddExtensionInfo(const string &name, const ExtensionLoadedInfo &info) {
-	loaded_extensions_info[name].load_info = make_uniq<ExtensionLoadedInfo>(info);
-}
-
 idx_t DuckDB::NumberOfThreads() {
 	return instance->NumberOfThreads();
 }
 
-bool DatabaseInstance::ExtensionIsLoaded(const std::string &name) {
-	auto extension_name = ExtensionHelper::GetExtensionName(name);
-	auto it = loaded_extensions_info.find(extension_name);
-	return it != loaded_extensions_info.end() && it->second.is_loaded;
+bool DatabaseInstance::ExtensionIsLoaded(const string &name) {
+	return extension_manager->ExtensionIsLoaded(name);
 }
 
 bool DuckDB::ExtensionIsLoaded(const std::string &name) {
 	return instance->ExtensionIsLoaded(name);
 }
 
-void DatabaseInstance::SetExtensionLoaded(const string &name, ExtensionInstallInfo &install_info) {
-	auto extension_name = ExtensionHelper::GetExtensionName(name);
-	loaded_extensions_info[extension_name].is_loaded = true;
-	loaded_extensions_info[extension_name].install_info = make_uniq<ExtensionInstallInfo>(install_info);
-
-	auto &callbacks = DBConfig::GetConfig(*this).extension_callbacks;
-	for (auto &callback : callbacks) {
-		callback->OnExtensionLoaded(*this, name);
-	}
-	DUCKDB_LOG_INFO(*this, name);
-}
-
-SettingLookupResult DatabaseInstance::TryGetCurrentSetting(const std::string &key, Value &result) const {
+SettingLookupResult DatabaseInstance::TryGetCurrentSetting(const string &key, Value &result) const {
 	// check the session values
 	auto &db_config = DBConfig::GetConfig(*this);
-	const auto &global_config_map = db_config.options.set_variables;
+	return db_config.TryGetCurrentSetting(key, result);
+}
 
-	auto global_value = global_config_map.find(key);
-	bool found_global_value = global_value != global_config_map.end();
-	if (!found_global_value) {
-		return SettingLookupResult();
+shared_ptr<EncryptionUtil> DatabaseInstance::GetEncryptionUtil() const {
+	if (config.encryption_util) {
+		return config.encryption_util;
 	}
-	result = global_value->second;
-	return SettingLookupResult(SettingScope::GLOBAL);
+
+	return make_shared_ptr<duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLSFactory>();
 }
 
 ValidChecker &DatabaseInstance::GetValidChecker() {

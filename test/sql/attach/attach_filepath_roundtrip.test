@@ -4,9 +4,6 @@
 
 require notwindows
 
-statement ok
-PRAGMA enable_verification
-
 # use a concurrent loop to attach many databases
 
 concurrentloop i 1 100
@@ -18,12 +15,9 @@ ATTACH '__TEST_DIR__/concurrent.db';
 endloop
 
 query I
-SELECT database_name FROM duckdb_databases() ORDER BY 1;
+SELECT database_name FROM duckdb_databases() WHERE database_name = 'concurrent';
 ----
 concurrent
-memory
-system
-temp
 
 statement ok
 DETACH concurrent;
@@ -63,19 +57,19 @@ ATTACH '__TEST_DIR__/con1_commit.db';
 statement ok con2
 DETACH con2_rollback_detach;
 
-# we can't attach, because we did not commit the detach yet
+# detach is instant - so we can attach
 
-statement error con1
+statement ok con1
 ATTACH '__TEST_DIR__/con2_rollback_detach.db';
-----
-already attached
+
+statement ok con1
+DETACH con2_rollback_detach
 
 # can't attach con1.db file in con2
-
 statement error con2
 ATTACH '__TEST_DIR__/con1.db';
 ----
-write-write
+already attached by database
 
 statement ok con1
 DETACH con1;
@@ -85,7 +79,7 @@ DETACH con1;
 statement error con2
 ATTACH '__TEST_DIR__/con1.db';
 ----
-transaction is aborted
+already attached by database
 
 # commit con1 and roll back con2
 
@@ -110,9 +104,6 @@ ATTACH '__TEST_DIR__/con1_commit.db';
 ----
 already attached
 
-# we still can't ATTACH, as we rolled back the DETACH
-
-statement error con1
+# we can attach again
+statement ok con1
 ATTACH '__TEST_DIR__/con2_rollback_detach.db';
-----
-

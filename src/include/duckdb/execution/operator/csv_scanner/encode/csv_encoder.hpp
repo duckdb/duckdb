@@ -11,6 +11,7 @@
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/function/encoding_function.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
@@ -40,7 +41,7 @@ struct CSVEncoderBuffer {
 
 private:
 	//! The encoded buffer, we only have one per file, so we cache it and make sure to pass over unused bytes.
-	std::unique_ptr<char[]> encoded_buffer;
+	duckdb::unique_ptr<char[]> encoded_buffer;
 	//! The encoded buffer size is defined as buffer_size/GetRatio()
 	idx_t encoded_buffer_size;
 };
@@ -54,6 +55,8 @@ public:
 	string encoding_name;
 
 private:
+	QueryContext context;
+
 	//! The actual encoded buffer
 	CSVEncoderBuffer encoded_buffer;
 	//! Potential remaining bytes

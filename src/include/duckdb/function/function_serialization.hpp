@@ -12,6 +12,7 @@
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/function/function_binder.hpp"
 
 namespace duckdb {
 
@@ -39,8 +40,8 @@ public:
 
 	template <class FUNC, class CATALOG_ENTRY>
 	static FUNC DeserializeFunction(ClientContext &context, CatalogType catalog_type, const string &catalog_name,
-	                                const string &schema_name, const string &name, vector<LogicalType> arguments,
-	                                vector<LogicalType> original_arguments) {
+	                                const string &schema_name, const string &name, const vector<LogicalType> &arguments,
+	                                const vector<LogicalType> &original_arguments) {
 		EntryLookupInfo lookup_info(catalog_type, name);
 		auto &func_catalog =
 		    Catalog::GetEntry(context, catalog_type, catalog_name.empty() ? SYSTEM_CATALOG : catalog_name,
@@ -52,13 +53,12 @@ public:
 		auto &functions = func_catalog.Cast<CATALOG_ENTRY>();
 		auto function = functions.functions.GetFunctionByArguments(
 		    context, original_arguments.empty() ? arguments : original_arguments);
-		function.arguments = std::move(arguments);
-		function.original_arguments = std::move(original_arguments);
 		return function;
 	}
 
 	template <class FUNC, class CATALOG_ENTRY>
-	static pair<FUNC, bool> DeserializeBase(Deserializer &deserializer, CatalogType catalog_type) {
+	static pair<FUNC, bool> DeserializeBase(Deserializer &deserializer, CatalogType catalog_type,
+	                                        optional_ptr<vector<unique_ptr<Expression>>> children = nullptr) {
 		auto &context = deserializer.Get<ClientContext &>();
 		auto name = deserializer.ReadProperty<string>(500, "name");
 		auto arguments = deserializer.ReadProperty<vector<LogicalType>>(501, "arguments");
@@ -71,9 +71,24 @@ public:
 		if (schema_name.empty()) {
 			schema_name = DEFAULT_SCHEMA;
 		}
+
+		if (arguments.empty() && original_arguments.empty() && children && !children->empty()) {
+			// The function is specified as having no arguments, but somehow expressions were passed anyway
+			// Assume this is a "varargs" function and use the types of the expressions as the arguments
+			// This can happen when we change a function that used to take varargs, to no longer do so.
+			arguments.reserve(children->size());
+			for (auto &child : *children) {
+				arguments.push_back(child->return_type);
+			}
+		}
+
 		auto function = DeserializeFunction<FUNC, CATALOG_ENTRY>(context, catalog_type, catalog_name, schema_name, name,
-		                                                         std::move(arguments), std::move(original_arguments));
+		                                                         arguments, original_arguments);
 		auto has_serialize = deserializer.ReadProperty<bool>(503, "has_serialize");
+		if (has_serialize) {
+			function.arguments = std::move(arguments);
+			function.original_arguments = std::move(original_arguments);
+		}
 		return make_pair(std::move(function), has_serialize);
 	}
 
@@ -130,7 +145,7 @@ public:
 	                                                        vector<unique_ptr<Expression>> &children,
 	                                                        LogicalType return_type) { // NOLINT: clang-tidy bug
 		auto &context = deserializer.Get<ClientContext &>();
-		auto entry = DeserializeBase<FUNC, CATALOG_ENTRY>(deserializer, catalog_type);
+		auto entry = DeserializeBase<FUNC, CATALOG_ENTRY>(deserializer, catalog_type, children);
 		auto &function = entry.first;
 		auto has_serialize = entry.second;
 
@@ -139,15 +154,29 @@ public:
 			deserializer.Set<const LogicalType &>(return_type);
 			bind_data = FunctionDeserialize<FUNC>(deserializer, function);
 			deserializer.Unset<LogicalType>();
-		} else if (function.bind) {
-			try {
-				bind_data = function.bind(context, function, children);
-			} catch (std::exception &ex) {
-				ErrorData error(ex);
-				throw SerializationException("Error during bind of function in deserialization: %s",
-				                             error.RawMessage());
+		} else {
+
+			FunctionBinder binder(context);
+
+			// Resolve templates
+			binder.ResolveTemplateTypes(function, children);
+
+			if (function.bind) {
+				try {
+					bind_data = function.bind(context, function, children);
+				} catch (std::exception &ex) {
+					ErrorData error(ex);
+					throw SerializationException("Error during bind of function in deserialization: %s",
+					                             error.RawMessage());
+				}
 			}
+
+			// Verify that all templates are bound to concrete types.
+			binder.CheckTemplateTypesResolved(function);
+
+			binder.CastToFunctionArguments(function, children);
 		}
+
 		if (TypeRequiresAssignment(function.return_type)) {
 			function.return_type = std::move(return_type);
 		}

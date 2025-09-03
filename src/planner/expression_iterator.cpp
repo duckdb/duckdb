@@ -152,6 +152,37 @@ void ExpressionIterator::EnumerateExpression(unique_ptr<Expression> &expr,
 	                                      [&](unique_ptr<Expression> &child) { EnumerateExpression(child, callback); });
 }
 
+void ExpressionIterator::EnumerateExpression(unique_ptr<Expression> &expr,
+                                             const std::function<void(unique_ptr<Expression> &child)> &callback) {
+	if (!expr) {
+		return;
+	}
+	callback(expr);
+	ExpressionIterator::EnumerateChildren(*expr,
+	                                      [&](unique_ptr<Expression> &child) { EnumerateExpression(child, callback); });
+}
+
+void ExpressionIterator::VisitExpressionClass(const Expression &expr, ExpressionClass expr_class,
+                                              const std::function<void(const Expression &child)> &callback) {
+	if (expr.GetExpressionClass() == expr_class) {
+		callback(expr);
+		return;
+	}
+	ExpressionIterator::EnumerateChildren(
+	    expr, [&](const Expression &child) { VisitExpressionClass(child, expr_class, callback); });
+}
+
+void ExpressionIterator::VisitExpressionClassMutable(
+    unique_ptr<Expression> &expr, ExpressionClass expr_class,
+    const std::function<void(unique_ptr<Expression> &child)> &callback) {
+	if (expr->GetExpressionClass() == expr_class) {
+		callback(expr);
+		return;
+	}
+	ExpressionIterator::EnumerateChildren(
+	    *expr, [&](unique_ptr<Expression> &child) { VisitExpressionClassMutable(child, expr_class, callback); });
+}
+
 void BoundNodeVisitor::VisitExpression(unique_ptr<Expression> &expression) {
 	VisitExpressionChildren(*expression);
 }

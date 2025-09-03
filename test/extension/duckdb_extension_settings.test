@@ -2,6 +2,8 @@
 # description: settings for extensions
 # group: [extension]
 
+require httpfs
+
 statement ok
 SET autoinstall_known_extensions = true;
 

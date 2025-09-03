@@ -7,6 +7,7 @@
 #include "duckdb/main/valid_checker.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -28,15 +29,14 @@ SourceResultType PhysicalTransaction::GetData(ExecutionContext &context, DataChu
 			// prevent it from being closed after this query, hence
 			// preserving the transaction context for the next query
 			client.transaction.SetAutoCommit(false);
-			auto &config = DBConfig::GetConfig(context.client);
 			if (info->modifier == TransactionModifierType::TRANSACTION_READ_ONLY) {
 				client.transaction.SetReadOnly();
 			}
-			if (config.options.immediate_transaction_mode) {
+			if (DBConfig::GetSetting<ImmediateTransactionModeSetting>(context.client)) {
 				// if immediate transaction mode is enabled then start all transactions immediately
 				auto databases = DatabaseManager::Get(client).GetDatabases(client);
-				for (auto db : databases) {
-					context.client.transaction.ActiveTransaction().GetTransaction(db.get());
+				for (auto &db : databases) {
+					context.client.transaction.ActiveTransaction().GetTransaction(*db);
 				}
 			}
 		} else {

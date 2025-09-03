@@ -125,6 +125,10 @@ void CSVReaderOptions::SetDelimiter(const string &input) {
 	if (delim_str.size() > 4) {
 		throw InvalidInputException("The delimiter option cannot exceed a size of 4 bytes.");
 	}
+	if (this->dialect_options.state_machine_options.delimiter.IsSetByUser()) {
+		// we can't know in which order delim and sep were specified, so we throw an exception here
+		throw BinderException("CSV Reader function option delim and sep are aliases, only one can be supplied");
+	}
 	this->dialect_options.state_machine_options.delimiter.Set(delim_str);
 }
 
@@ -744,6 +748,12 @@ void CSVReaderOptions::ParseOption(ClientContext &context, const string &key, co
 		}
 	} else if (loption == "all_varchar") {
 		all_varchar = GetBooleanValue(loption, val);
+	} else if (loption == "files_to_sniff") {
+		files_to_sniff = ParseInteger(val, loption);
+		if (files_to_sniff < 1 && files_to_sniff != -1) {
+			throw BinderException(
+			    "Unsupported parameter for files_to_sniff: value must be -1 for all files or higher than one.");
+		}
 	} else if (loption == "normalize_names") {
 		normalize_names = GetBooleanValue(loption, val);
 	} else {

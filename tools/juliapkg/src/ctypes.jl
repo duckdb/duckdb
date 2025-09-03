@@ -17,6 +17,7 @@ const duckdb_arrow_stream = Ptr{Cvoid}
 const duckdb_bind_info = Ptr{Cvoid}
 const duckdb_cast_function = Ptr{Cvoid}
 const duckdb_cast_function_ptr = Ptr{Cvoid}
+const duckdb_client_context = Ptr{Cvoid}
 const duckdb_config = Ptr{Cvoid}
 const duckdb_connection = Ptr{Cvoid}
 const duckdb_create_type_info = Ptr{Cvoid}
@@ -26,6 +27,7 @@ const duckdb_delete_callback = Ptr{Cvoid}
 const duckdb_extracted_statements = Ptr{Cvoid}
 const duckdb_function_info = Ptr{Cvoid}
 const duckdb_init_info = Ptr{Cvoid}
+const duckdb_instance_cache = Ptr{Cvoid}
 const duckdb_logical_type = Ptr{Cvoid}
 const duckdb_pending_result = Ptr{Cvoid}
 const duckdb_prepared_statement = Ptr{Cvoid}
@@ -33,7 +35,9 @@ const duckdb_profiling_info = Ptr{Cvoid}
 const duckdb_replacement_callback = Ptr{Cvoid}
 const duckdb_replacement_scan_info = Ptr{Cvoid}
 const duckdb_scalar_function = Ptr{Cvoid}
+const duckdb_scalar_function_bind = Ptr{Cvoid}
 const duckdb_scalar_function_set = Ptr{Cvoid}
+const duckdb_selection_vector = Ptr{Cvoid}
 const duckdb_table_description = Ptr{Cvoid}
 const duckdb_table_function = Ptr{Cvoid}
 const duckdb_table_function_ptr = Ptr{Cvoid}
@@ -185,7 +189,10 @@ const duckdb_cast_mode = DUCKDB_CAST_MODE_
     DUCKDB_TYPE_TIMESTAMP_TZ = 31
     DUCKDB_TYPE_ARRAY = 33
     DUCKDB_TYPE_ANY = 34
-    DUCKDB_TYPE_VARINT = 35
+    DUCKDB_TYPE_BIGNUM = 35
+    DUCKDB_TYPE_SQLNULL = 36
+    DUCKDB_TYPE_STRING_LITERAL = 37
+    DUCKDB_TYPE_INTEGER_LITERAL = 38
 end
 const DUCKDB_TYPE = DUCKDB_TYPE_
 
@@ -312,7 +319,7 @@ struct duckdb_query_progress_type
     total_rows_to_process::UInt64
 end
 
-struct duckdb_varint
+struct duckdb_bignum
     data::Ptr{UInt8}
     size::idx_t
     is_negative::Bool

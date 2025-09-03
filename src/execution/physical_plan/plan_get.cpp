@@ -77,6 +77,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 		    Make<PhysicalTableInOutFunction>(op.types, op.function, std::move(op.bind_data), column_ids,
 		                                     op.estimated_cardinality, std::move(op.projected_input));
 		table_in_out.children.push_back(child);
+		auto &cast_table_in_out = table_in_out.Cast<PhysicalTableInOutFunction>();
+		cast_table_in_out.ordinality_idx = op.ordinality_idx;
 		return table_in_out;
 	}
 
@@ -103,7 +105,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 		for (auto &entry : table_filters->filters) {
 			auto column_id = column_ids[entry.first].GetPrimaryIndex();
 			auto &type = op.returned_types[column_id];
-			if (!op.function.supports_pushdown_type(type)) {
+			if (!op.function.supports_pushdown_type(*op.bind_data, column_id)) {
 				idx_t column_id_filter = entry.first;
 				bool found_projection = false;
 				for (idx_t i = 0; i < projection_ids.size(); i++) {
@@ -139,10 +141,10 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 	// create the table scan node
 	if (!op.function.projection_pushdown) {
 		// function does not support projection pushdown
-		auto &table_scan = Make<PhysicalTableScan>(op.returned_types, op.function, std::move(op.bind_data),
-		                                           op.returned_types, column_ids, vector<column_t>(), op.names,
-		                                           std::move(table_filters), op.estimated_cardinality, op.extra_info,
-		                                           std::move(op.parameters), std::move(op.virtual_columns));
+		auto &table_scan = Make<PhysicalTableScan>(
+		    op.returned_types, op.function, std::move(op.bind_data), op.returned_types, column_ids, vector<column_t>(),
+		    op.names, std::move(table_filters), op.estimated_cardinality, std::move(op.extra_info),
+		    std::move(op.parameters), std::move(op.virtual_columns));
 		// first check if an additional projection is necessary
 		if (column_ids.size() == op.returned_types.size()) {
 			bool projection_necessary = false;
@@ -188,7 +190,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 	auto &table_scan =
 	    Make<PhysicalTableScan>(op.types, op.function, std::move(op.bind_data), op.returned_types, column_ids,
 	                            op.projection_ids, op.names, std::move(table_filters), op.estimated_cardinality,
-	                            op.extra_info, std::move(op.parameters), std::move(op.virtual_columns));
+	                            std::move(op.extra_info), std::move(op.parameters), std::move(op.virtual_columns));
 	auto &cast_table_scan = table_scan.Cast<PhysicalTableScan>();
 	cast_table_scan.dynamic_filters = op.dynamic_filters;
 	if (filter) {

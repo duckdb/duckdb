@@ -12,14 +12,16 @@
 #include <string>
 #include <cstdint>
 #include <memory>
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 struct sqlite3;
 struct sqlite3_stmt;
 enum class MetadataResult : uint8_t;
 
 namespace duckdb_shell {
+using duckdb::unique_ptr;
 using std::string;
-using std::unique_ptr;
 using std::vector;
 struct ColumnarResult;
 struct RowResult;
@@ -54,6 +56,8 @@ enum class RenderMode : uint32_t {
 
 enum class PrintOutput { STDOUT, STDERR };
 
+enum class InputMode { STANDARD, FILE };
+
 enum class LargeNumberRendering { NONE = 0, FOOTER = 1, ALL = 2, DEFAULT = 3 };
 
 /*
@@ -69,7 +73,7 @@ enum class LargeNumberRendering { NONE = 0, FOOTER = 1, ALL = 2, DEFAULT = 3 };
 #define SHFLG_HeaderSet     0x00000080 /* .header has been used */
 
 /* ctype macros that work with signed characters */
-#define IsSpace(X) isspace((unsigned char)X)
+#define IsSpace(X) duckdb::StringUtil::CharacterIsSpace((unsigned char)X)
 #define IsDigit(X) isdigit((unsigned char)X)
 #define ToLower(X) (char)tolower((unsigned char)X)
 
@@ -201,11 +205,11 @@ public:
 	void NewTempFile(const char *zSuffix);
 	int DoMetaCommand(char *zLine);
 
-	int RunOneSqlLine(char *zSql);
+	int RunOneSqlLine(InputMode mode, char *zSql);
 	string GetDefaultDuckDBRC();
 	bool ProcessDuckDBRC(const char *file);
 	bool ProcessFile(const string &file, bool is_duckdb_rc = false);
-	int ProcessInput();
+	int ProcessInput(InputMode mode);
 };
 
 } // namespace duckdb_shell

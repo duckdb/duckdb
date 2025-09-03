@@ -52,8 +52,10 @@ public:
 public:
 	//! Get a new pointer to a node and initialize it.
 	static void New(ART &art, Node &node, const NType type);
+	//! Free the node.
+	static void FreeNode(ART &art, Node &node);
 	//! Free the node and its children.
-	static void Free(ART &art, Node &node);
+	static void FreeTree(ART &art, Node &node);
 
 	//! Get a reference to the allocator.
 	static FixedSizeAllocator &GetAllocator(const ART &art, const NType type);
@@ -84,11 +86,11 @@ public:
 	//! Get the immutable child at byte.
 	const unsafe_optional_ptr<Node> GetChild(ART &art, const uint8_t byte) const;
 	//! Get the child at byte.
-	unsafe_optional_ptr<Node> GetChildMutable(ART &art, const uint8_t byte) const;
+	unsafe_optional_ptr<Node> GetChildMutable(ART &art, const uint8_t byte, const bool unsafe = false) const;
 	//! Get the first immutable child greater than or equal to the byte.
 	const unsafe_optional_ptr<Node> GetNextChild(ART &art, uint8_t &byte) const;
 	//! Returns true, if the byte exists, else false.
-	bool HasByte(ART &art, uint8_t &byte) const;
+	bool HasByte(ART &art, const uint8_t byte) const;
 	//! Get the first byte greater than or equal to the byte.
 	bool GetNextByte(ART &art, uint8_t &byte) const;
 
@@ -167,6 +169,31 @@ struct NodeChildren {
 
 	array_ptr<uint8_t> bytes;
 	array_ptr<Node> children;
+};
+
+template <class T>
+class NodeHandle {
+public:
+	NodeHandle(ART &art, const Node node)
+	    : handle(Node::GetAllocator(art, node.GetType()).GetHandle(node)), n(handle.GetRef<T>()) {
+		handle.MarkModified();
+	}
+
+	NodeHandle(const NodeHandle &) = delete;
+	NodeHandle &operator=(const NodeHandle &) = delete;
+
+	NodeHandle(NodeHandle &&other) noexcept : handle(std::move(other.handle)), n(handle.GetRef<T>()) {
+	}
+	NodeHandle &operator=(NodeHandle &&other) noexcept = delete;
+
+public:
+	T &Get() {
+		return n;
+	}
+
+private:
+	SegmentHandle handle;
+	T &n;
 };
 
 } // namespace duckdb

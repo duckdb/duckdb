@@ -10,6 +10,8 @@
 
 #include "duckdb/common/multi_file/multi_file_function.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_buffer_manager.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_schema.hpp"
 
 namespace duckdb {
 
@@ -22,9 +24,15 @@ public:
 	CSVReaderOptions options;
 };
 
-struct CSVMultiFileInfo : public MultiFileReaderInterface {
-	static unique_ptr<MultiFileReaderInterface> InitializeInterface(ClientContext &context, MultiFileReader &reader,
-	                                                                MultiFileList &file_list);
+struct CSVSchemaDiscovery {
+	static CSVSchema SchemaDiscovery(ClientContext &context, shared_ptr<CSVBufferManager> &buffer_manager,
+	                                 CSVReaderOptions &options, const MultiFileOptions &file_options,
+	                                 vector<LogicalType> &return_types, vector<string> &names,
+	                                 MultiFileList &multi_file_list);
+};
+
+struct CSVMultiFileInfo : MultiFileReaderInterface {
+	static unique_ptr<MultiFileReaderInterface> CreateInterface(ClientContext &context);
 
 	unique_ptr<BaseFileReaderOptions> InitializeOptions(ClientContext &context,
 	                                                    optional_ptr<TableFunctionInfo> info) override;
@@ -56,6 +64,7 @@ struct CSVMultiFileInfo : public MultiFileReaderInterface {
 	void FinishReading(ClientContext &context, GlobalTableFunctionState &global_state,
 	                   LocalTableFunctionState &local_state) override;
 	unique_ptr<NodeStatistics> GetCardinality(const MultiFileBindData &bind_data, idx_t file_count) override;
+	FileGlobInput GetGlobInput() override;
 };
 
 } // namespace duckdb

@@ -2,9 +2,6 @@
 # description: Test list_has_any and list_has_all functions
 # group: [list]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 select list_has_any([1,2,3], [2,3,4]);
 ----
@@ -175,7 +172,7 @@ select list_has_all([1, 2], 1);
 statement error
 select list_has_any([[1,2], [2,4]], ['abc', 'def']);
 ----
-Binder Error: 'list_has_any' cannot compare lists of different types: 'INTEGER[]' and 'VARCHAR'
+Binder Error: Cannot deduce template type
 
 # Test Function in Function
 

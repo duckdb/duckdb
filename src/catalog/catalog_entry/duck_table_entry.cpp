@@ -160,7 +160,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AlterEntry(CatalogTransaction transacti
 	}
 
 	// We add foreign key constraints without a client context during checkpoint loading.
-	return AddForeignKeyConstraint(nullptr, foreign_key_constraint_info);
+	return AddForeignKeyConstraint(foreign_key_constraint_info);
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::AlterEntry(ClientContext &context, AlterInfo &info) {
@@ -219,7 +219,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AlterEntry(ClientContext &context, Alte
 	case AlterTableType::FOREIGN_KEY_CONSTRAINT: {
 		auto &foreign_key_constraint_info = table_info.Cast<AlterForeignKeyInfo>();
 		if (foreign_key_constraint_info.type == AlterForeignKeyType::AFT_ADD) {
-			return AddForeignKeyConstraint(context, foreign_key_constraint_info);
+			return AddForeignKeyConstraint(foreign_key_constraint_info);
 		} else {
 			return DropForeignKeyConstraint(context, foreign_key_constraint_info);
 		}
@@ -259,15 +259,12 @@ void DuckTableEntry::UndoAlter(ClientContext &context, AlterInfo &info) {
 	}
 }
 
-static void RenameExpression(ParsedExpression &expr, RenameColumnInfo &info) {
-	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {
-		auto &colref = expr.Cast<ColumnRefExpression>();
+static void RenameExpression(ParsedExpression &root_expr, RenameColumnInfo &info) {
+	ParsedExpressionIterator::VisitExpressionMutable<ColumnRefExpression>(root_expr, [&](ColumnRefExpression &colref) {
 		if (colref.column_names.back() == info.old_name) {
 			colref.column_names.back() = info.new_name;
 		}
-	}
-	ParsedExpressionIterator::EnumerateChildren(
-	    expr, [&](const ParsedExpression &child) { RenameExpression((ParsedExpression &)child, info); });
+	});
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::RenameColumn(ClientContext &context, RenameColumnInfo &info) {
@@ -858,12 +855,12 @@ unique_ptr<CatalogEntry> DuckTableEntry::RenameField(ClientContext &context, Ren
 	if (!ColumnExists(info.column_path[0])) {
 		throw CatalogException("Cannot rename field from column \"%s\" - it does not exist", info.column_path[0]);
 	}
+
 	// follow the path
 	auto &col = GetColumn(info.column_path[0]);
 	auto res = RenameFieldFromStruct(col.Type(), info.column_path, info.new_name, 1);
 	if (res.error.HasError()) {
 		res.error.Throw();
-		return nullptr;
 	}
 
 	// construct the struct remapping expression
@@ -874,7 +871,6 @@ unique_ptr<CatalogEntry> DuckTableEntry::RenameField(ClientContext &context, Ren
 	children.push_back(make_uniq<ConstantExpression>(Value()));
 
 	auto function = make_uniq<FunctionExpression>("remap_struct", std::move(children));
-
 	ChangeColumnTypeInfo change_column_type(info.GetAlterEntryData(), info.column_path[0], std::move(res.new_type),
 	                                        std::move(function));
 	return ChangeColumnType(context, change_column_type);
@@ -1101,8 +1097,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::SetColumnComment(ClientContext &context
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage);
 }
 
-unique_ptr<CatalogEntry> DuckTableEntry::AddForeignKeyConstraint(optional_ptr<ClientContext> context,
-                                                                 AlterForeignKeyInfo &info) {
+unique_ptr<CatalogEntry> DuckTableEntry::AddForeignKeyConstraint(AlterForeignKeyInfo &info) {
 	D_ASSERT(info.type == AlterForeignKeyType::AFT_ADD);
 	auto create_info = make_uniq<CreateTableInfo>(schema, name);
 	create_info->temporary = temporary;
@@ -1123,12 +1118,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddForeignKeyConstraint(optional_ptr<Cl
 	    make_uniq<ForeignKeyConstraint>(info.pk_columns, info.fk_columns, std::move(fk_info)));
 
 	unique_ptr<BoundCreateTableInfo> bound_create_info;
-	if (context) {
-		auto binder = Binder::CreateBinder(*context);
-		bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema);
-	} else {
-		bound_create_info = Binder::BindCreateTableCheckpoint(std::move(create_info), schema);
-	}
+	bound_create_info = Binder::BindCreateTableCheckpoint(std::move(create_info), schema);
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage);
 }
 

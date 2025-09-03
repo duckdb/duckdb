@@ -3,9 +3,6 @@
 # group: [lambdas]
 
 statement ok
-pragma enable_verification
-
-statement ok
 SET lambda_syntax='DISABLE_SINGLE_ARROW'
 
 query I
@@ -472,3 +469,82 @@ SELECT a FROM where_clause WHERE list_reduce(a, lambda x, y: x - y, initial) > 0
 [3, 4, 5]
 [11, 2, 3, 4, 5]
 [5, 4, 3, 2, 1]
+
+# where the initial value has a different type of the list
+query I
+SELECT list_reduce([0], lambda x, y: x > 3, 3.1);
+----
+1.0
+
+query I
+SELECT list_reduce([1, 2, 3], lambda x, y: x + y, 10.5);
+----
+16.5
+
+query I
+SELECT list_reduce([1, 2, 3], lambda x, y: x * y, 2.5);
+----
+15.0
+
+statement ok
+CREATE TABLE cast_test (l int[], initial float);
+
+statement ok
+INSERT INTO cast_test VALUES ([1, 2, 3], 100.0), ([0], 3.1), ([3, 2, 1], 10.5);
+
+query I 
+SELECT list_reduce(l, lambda x, y: x > 3, initial) FROM cast_test;
+----
+0.0
+1.0
+0.0
+
+query I
+SELECT list_reduce(l, lambda x, y: x + y, initial) FROM cast_test;
+----
+106.0
+3.1
+16.5
+
+query I
+SELECT list_reduce(l, lambda x, y: x * y, initial) FROM cast_test;
+----
+600.0
+0.0
+63.0
+
+
+# Test errors with incompatible types
+statement error
+SELECT list_reduce([1, 2, 3], lambda x, y: x + y, [1, 2]);
+----
+The initial value type must be the same as the list child type or a common super type
+
+statement error
+SELECT list_reduce([BLOB 'hello'], lambda x, y: x, 'text');
+----
+The initial value type must be the same as the list child type or a common super type
+
+query I
+SELECT list_reduce([NULL, NULL]::INTEGER[], lambda x, y: x + y, 3.14);
+----
+NULL
+
+# Test using ENUM types
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+query I
+SELECT list_reduce(['sad', 'happy']::mood[], lambda x, y: y::text, 'Mood:');
+----
+happy
+
+query I
+SELECT list_reduce([[1, 2], [3, 4]], lambda x, y: array_append(x, list_aggregate(y, 'sum')), [0]);
+----
+[0, 3, 7]
+
+query I
+SELECT list_reduce([5, 10, 15], lambda x, y: x * y, 1 + 1);
+----
+1500
