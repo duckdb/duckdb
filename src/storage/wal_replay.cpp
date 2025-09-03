@@ -479,9 +479,14 @@ void WriteAheadLogDeserializer::ReplayVersion() {
 	auto file_version_number = single_file_block_manager.GetVersionNumber();
 	if (file_version_number > 66) {
 		data_t db_identifier[MainHeader::DB_IDENTIFIER_LEN];
-		deserializer.ReadList(102, "db_identifier", [&](Deserializer::List &list, idx_t i) {
+		bool is_set = false;
+		deserializer.ReadOptionalList(102, "db_identifier", [&](Deserializer::List &list, idx_t i) {
 			db_identifier[i] = list.ReadElement<uint8_t>();
+			is_set = true;
 		});
+		if (!is_set) {
+			return;
+		}
 		auto expected_db_identifier = single_file_block_manager.GetDBIdentifier();
 		if (!MainHeader::CompareDBIdentifiers(db_identifier, expected_db_identifier)) {
 			throw IOException("WAL does not match database file.");
