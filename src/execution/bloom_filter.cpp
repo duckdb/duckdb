@@ -10,7 +10,7 @@
 
 namespace duckdb {
 namespace {
-static uint32_t CeilPowerOfTwo(uint32_t n) {
+static idx_t CeilPowerOfTwo(idx_t n) {
 	if (n <= 1) {
 		return 1;
 	}
@@ -39,12 +39,12 @@ static Vector HashColumns(DataChunk &chunk, const vector<idx_t> &cols) {
 }
 } // namespace
 
-void BloomFilter::Initialize(ClientContext &context_p, uint32_t est_num_rows) {
+void BloomFilter::Initialize(ClientContext &context_p, idx_t est_num_rows) {
 	context = &context_p;
 	buffer_manager = &BufferManager::GetBufferManager(*context);
 
-	uint32_t min_bits = std::max<uint32_t>(MIN_NUM_BITS, est_num_rows * MIN_NUM_BITS_PER_KEY);
-	num_sectors = std::min(CeilPowerOfTwo(min_bits) >> LOG_SECTOR_SIZE, MAX_NUM_SECTORS);
+	idx_t min_bits = std::max<idx_t>(MIN_NUM_BITS, est_num_rows * MIN_NUM_BITS_PER_KEY);
+	num_sectors = std::min(CeilPowerOfTwo(min_bits) >> LOG_SECTOR_SIZE, MAX_NUM_SECTORS); // todo: There is a ddb function for that
 	num_sectors_log = static_cast<uint32_t>(std::log2(num_sectors));
 
 	buf_ = buffer_manager->GetBufferAllocator().Allocate(64 + num_sectors * sizeof(uint32_t));
@@ -53,17 +53,14 @@ void BloomFilter::Initialize(ClientContext &context_p, uint32_t est_num_rows) {
 	std::fill_n(blocks, num_sectors, 0);
 }
 
-int BloomFilter::Lookup(DataChunk &chunk, vector<uint32_t> &results, const vector<idx_t> &bound_cols_applied) const {
-	int count = static_cast<int>(chunk.size());
-	Vector hashes = HashColumns(chunk, bound_cols_applied);
-	BloomFilterLookup(count, reinterpret_cast<uint64_t *>(hashes.GetData()), blocks, results.data());
-	return count;
+idx_t BloomFilter::Lookup(DataChunk &chunk, vector<uint32_t> &results, const vector<idx_t> &bound_cols_applied) const {
+	const idx_t count = chunk.size();
+	const Vector hashes = HashColumns(chunk, bound_cols_applied);
+	return BloomFilterLookup(count, reinterpret_cast<uint64_t *>(hashes.GetData()), blocks, results.data());
 }
 
-int BloomFilter::LookupHashes(Vector &hashes,const idx_t count_p, vector<uint32_t> &results) const {
-	const int count = static_cast<int>(count_p);
-	BloomFilterLookup(count, reinterpret_cast<uint64_t *>(hashes.GetData()), blocks, results.data());
-	return count;
+idx_t BloomFilter::LookupHashes(Vector &hashes,const idx_t count, vector<uint32_t> &results) const {
+	return BloomFilterLookup(count, reinterpret_cast<uint64_t *>(hashes.GetData()), blocks, results.data());
 }
 
 void BloomFilter::InsertKeys(DataChunk &chunk, const vector<idx_t> &bound_cols_built) {
@@ -72,8 +69,7 @@ void BloomFilter::InsertKeys(DataChunk &chunk, const vector<idx_t> &bound_cols_b
 }
 
 void BloomFilter::InsertHashes(Vector hashes, const idx_t count) {
-	int countCasted = static_cast<int>(count);
 	std::lock_guard<std::mutex> lock(insert_lock);
-	BloomFilterInsert(countCasted, reinterpret_cast<uint64_t *>(hashes.GetData()), blocks);
+	BloomFilterInsert(count, reinterpret_cast<uint64_t *>(hashes.GetData()), blocks);
 }
 } // namespace duckdb

@@ -26,16 +26,16 @@
 
 namespace duckdb {
 
-static constexpr const uint32_t MAX_NUM_SECTORS = (1ULL << 26);
-static constexpr const uint32_t MIN_NUM_BITS_PER_KEY = 16;
-static constexpr const uint32_t MIN_NUM_BITS = 512;
-static constexpr const uint32_t LOG_SECTOR_SIZE = 5;
-static constexpr const int32_t SIMD_BATCH_SIZE = 16;
+static constexpr const idx_t MAX_NUM_SECTORS = (1ULL << 26);
+static constexpr const idx_t MIN_NUM_BITS_PER_KEY = 16;
+static constexpr const idx_t MIN_NUM_BITS = 512;
+static constexpr const idx_t LOG_SECTOR_SIZE = 5;
+static constexpr const idx_t SIMD_BATCH_SIZE = 16;
 
 class BloomFilter {
 public:
 	BloomFilter() = default;
-	void Initialize(ClientContext &context_p, uint32_t est_num_rows);
+	void Initialize(ClientContext &context_p, idx_t est_num_rows);
 
 	ClientContext *context;
 	BufferManager *buffer_manager;
@@ -43,13 +43,13 @@ public:
 	bool finalized_;
 
 public:
-	int Lookup(DataChunk &chunk, vector<uint32_t> &results, const vector<idx_t> &bound_cols_applied) const;
-	int LookupHashes(Vector &hashes, const idx_t count_p,vector<uint32_t> &results) const;
+	idx_t Lookup(DataChunk &chunk, vector<uint32_t> &results, const vector<idx_t> &bound_cols_applied) const;
+	idx_t LookupHashes(Vector &hashes, const idx_t count_p,vector<uint32_t> &results) const;
 	void InsertKeys(DataChunk &chunk, const vector<idx_t> &bound_cols_built);
 	void InsertHashes(Vector hashes, const idx_t count);
 
-	uint32_t num_sectors;
-	uint32_t num_sectors_log;
+	idx_t num_sectors;
+	idx_t num_sectors_log;
 
 	std::mutex insert_lock;
 	uint32_t *blocks;
@@ -77,32 +77,34 @@ private:
 		return block1 ^ (8 + (key_hi & 7));
 	}
 
-	inline void InsertOne(uint32_t key_lo, uint32_t key_hi, uint32_t *BF_RESTRICT bf) const {
-		uint32_t sector1 = GetSector1(key_lo, key_hi);
-		uint32_t mask1 = GetMask1(key_lo);
-		uint32_t sector2 = GetSector2(key_hi, sector1);
-		uint32_t mask2 = GetMask2(key_hi);
+	inline void InsertOne(const uint32_t key_lo, const uint32_t key_hi, uint32_t *BF_RESTRICT bf) const {
+		const uint32_t sector1 = GetSector1(key_lo, key_hi);
+		const uint32_t mask1 = GetMask1(key_lo);
+		const uint32_t sector2 = GetSector2(key_hi, sector1);
+		const uint32_t mask2 = GetMask2(key_hi);
 		bf[sector1] |= mask1;
 		bf[sector2] |= mask2;
+
+		// todo: There is duplicate code here we should get one function to get the two masks
 	}
 	inline bool LookupOne(uint32_t key_lo, uint32_t key_hi, const uint32_t *BF_RESTRICT bf) const {
-		uint32_t sector1 = GetSector1(key_lo, key_hi);
-		uint32_t mask1 = GetMask1(key_lo);
-		uint32_t sector2 = GetSector2(key_hi, sector1);
-		uint32_t mask2 = GetMask2(key_hi);
+		const uint32_t sector1 = GetSector1(key_lo, key_hi);
+		const uint32_t mask1 = GetMask1(key_lo);
+		const uint32_t sector2 = GetSector2(key_hi, sector1);
+		const uint32_t mask2 = GetMask2(key_hi);
 		return ((bf[sector1] & mask1) == mask1) & ((bf[sector2] & mask2) == mask2);
 	}
 
 private:
-	int BloomFilterLookup(int num, const uint64_t *BF_RESTRICT key64, const uint32_t *BF_RESTRICT bf,
+	idx_t BloomFilterLookup(const idx_t num, const uint64_t *BF_RESTRICT key64, const uint32_t *BF_RESTRICT bf,
 	                      uint32_t *BF_RESTRICT out) const {
 		const uint32_t *BF_RESTRICT key = reinterpret_cast<const uint32_t * BF_RESTRICT>(key64);
-		for (int i = 0; i + SIMD_BATCH_SIZE <= num; i += SIMD_BATCH_SIZE) {
+		for (idx_t i = 0; i + SIMD_BATCH_SIZE <= num; i += SIMD_BATCH_SIZE) {
 			uint32_t block1[SIMD_BATCH_SIZE], mask1[SIMD_BATCH_SIZE];
 			uint32_t block2[SIMD_BATCH_SIZE], mask2[SIMD_BATCH_SIZE];
 
-			for (int j = 0; j < SIMD_BATCH_SIZE; j++) {
-				int p = i + j;
+			for (idx_t j = 0; j < SIMD_BATCH_SIZE; j++) {
+				idx_t p = i + j;
 				uint32_t key_lo = key[p + p];
 				uint32_t key_hi = key[p + p + 1];
 				block1[j] = GetSector1(key_lo, key_hi);
@@ -111,26 +113,26 @@ private:
 				mask2[j] = GetMask2(key_hi);
 			}
 
-			for (int j = 0; j < SIMD_BATCH_SIZE; j++) {
+			for (idx_t j = 0; j < SIMD_BATCH_SIZE; j++) {
 				out[i + j] = ((bf[block1[j]] & mask1[j]) == mask1[j]) & ((bf[block2[j]] & mask2[j]) == mask2[j]);
 			}
 		}
 
 		// unaligned tail
-		for (int i = num & ~(SIMD_BATCH_SIZE - 1); i < num; i++) {
+		for (idx_t i = num & ~(SIMD_BATCH_SIZE - 1); i < num; i++) {
 			out[i] = LookupOne(key[i + i], key[i + i + 1], bf);
 		}
 		return num;
 	}
 
-	void BloomFilterInsert(int num, const uint64_t *BF_RESTRICT key64, uint32_t *BF_RESTRICT bf) const {
+	void BloomFilterInsert(const idx_t num, const uint64_t *BF_RESTRICT key64, uint32_t *BF_RESTRICT bf) const {
 		const uint32_t *BF_RESTRICT key = reinterpret_cast<const uint32_t * BF_RESTRICT>(key64);
-		for (int i = 0; i + SIMD_BATCH_SIZE <= num; i += SIMD_BATCH_SIZE) {
+		for (idx_t i = 0; i + SIMD_BATCH_SIZE <= num; i += SIMD_BATCH_SIZE) {
 			uint32_t block1[SIMD_BATCH_SIZE], mask1[SIMD_BATCH_SIZE];
 			uint32_t block2[SIMD_BATCH_SIZE], mask2[SIMD_BATCH_SIZE];
 
-			for (int j = 0; j < SIMD_BATCH_SIZE; j++) {
-				int p = i + j;
+			for (idx_t j = 0; j < SIMD_BATCH_SIZE; j++) {
+				idx_t p = i + j;
 				uint32_t key_lo = key[p + p];
 				uint32_t key_hi = key[p + p + 1];
 				block1[j] = GetSector1(key_lo, key_hi);
@@ -139,14 +141,14 @@ private:
 				mask2[j] = GetMask2(key_hi);
 			}
 
-			for (int j = 0; j < SIMD_BATCH_SIZE; j++) {
+			for (idx_t j = 0; j < SIMD_BATCH_SIZE; j++) {
 				bf[block1[j]] |= mask1[j];
 				bf[block2[j]] |= mask2[j];
 			}
 		}
 
 		// unaligned tail
-		for (int i = num & ~(SIMD_BATCH_SIZE - 1); i < num; i++) {
+		for (idx_t i = num & ~(SIMD_BATCH_SIZE - 1); i < num; i++) {
 			InsertOne(key[i + i], key[i + i + 1], bf);
 		}
 	}
@@ -165,7 +167,7 @@ public:
 	}
 
 public:
-	int Lookup(DataChunk &chunk, vector<uint32_t> &results) const {
+	idx_t Lookup(DataChunk &chunk, vector<uint32_t> &results) const {
 		return bloom_filter->Lookup(chunk, results, bound_cols_applied);
 	}
 	void Insert(DataChunk &chunk) const {
