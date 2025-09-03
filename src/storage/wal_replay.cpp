@@ -2,13 +2,12 @@
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/common/checksum.hpp"
 #include "duckdb/common/encryption_functions.hpp"
 #include "duckdb/common/encryption_key_manager.hpp"
-#include "duckdb/common/printer.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/buffered_file_reader.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
@@ -27,11 +26,12 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression_binder/index_binder.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
+#include "duckdb/storage/single_file_block_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/delete_state.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
-#include "duckdb/storage/table/column_data.hpp"
 
 namespace duckdb {
 
@@ -457,6 +457,30 @@ void WriteAheadLogDeserializer::ReplayEntry(WALType entry_type) {
 //===--------------------------------------------------------------------===//
 void WriteAheadLogDeserializer::ReplayVersion() {
 	state.wal_version = deserializer.ReadProperty<idx_t>(101, "version");
+
+	auto &single_file_block_manager = db.GetStorageManager().GetBlockManager().Cast<SingleFileBlockManager>();
+	auto file_version_number = single_file_block_manager.GetVersionNumber();
+	if (file_version_number > 66) {
+		data_t db_identifier[MainHeader::DB_IDENTIFIER_LEN];
+		deserializer.ReadList(102, "db_identifier", [&](Deserializer::List &list, idx_t i) {
+			db_identifier[i] = list.ReadElement<uint8_t>();
+		});
+		auto expected_db_identifier = single_file_block_manager.GetDBIdentifier();
+		if (!MainHeader::CompareDBIdentifiers(db_identifier, expected_db_identifier)) {
+			throw IOException("WAL does not match database file.");
+		}
+
+		auto expected_checkpoint_iteration = single_file_block_manager.GetCheckpointIteration();
+		auto checkpoint_iteration = deserializer.ReadProperty<uint64_t>(103, "checkpoint_iteration");
+		if (expected_checkpoint_iteration != checkpoint_iteration) {
+			string relation = checkpoint_iteration < expected_checkpoint_iteration ? "older" : "newer";
+			throw IOException("This WAL was created for this database file, but the WAL checkpoint iteration does not "
+			                  "match the database file. "
+			                  "That means the WAL was created for a %s version of this database. File checkpoint "
+			                  "iteration: %d, WAL checkpoint iteration: %d",
+			                  relation, expected_checkpoint_iteration, checkpoint_iteration);
+		}
+	}
 }
 
 //===--------------------------------------------------------------------===//

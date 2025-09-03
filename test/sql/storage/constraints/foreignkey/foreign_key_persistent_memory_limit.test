@@ -1,0 +1,31 @@
+# name: test/sql/storage/constraints/foreignkey/foreign_key_persistent_memory_limit.test
+# group: [foreignkey]
+
+require no_alternative_verify
+
+load __TEST_DIR__/test_fk_persistent.db
+
+statement ok
+SET memory_limit = '1925kB';
+
+statement ok
+SET threads = 2;
+
+statement ok
+CREATE TABLE pk_integers (i INTEGER PRIMARY KEY);
+
+statement ok
+INSERT INTO pk_integers VALUES (1), (2), (3);
+
+statement ok
+CREATE TABLE fk_integers (j INTEGER, FOREIGN KEY (j) REFERENCES pk_integers(i));
+
+statement ok
+INSERT INTO fk_integers VALUES (1), (2);
+
+restart
+
+statement error
+INSERT INTO fk_integers VALUES (3);
+----
+could not allocate

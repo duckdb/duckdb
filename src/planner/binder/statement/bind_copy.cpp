@@ -358,6 +358,9 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt, const CopyFunction &fun
 	if (stmt.info->table.empty()) {
 		throw ParserException("COPY FROM requires a table name to be specified");
 	}
+	if (!function.copy_from_bind) {
+		throw NotImplementedException("COPY FROM is not supported for FORMAT \"%s\"", stmt.info->format);
+	}
 	// COPY FROM a file
 	// generate an insert statement for the to-be-inserted table
 	InsertStatement insert;

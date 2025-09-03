@@ -31,7 +31,7 @@ struct EncryptionOptions {
 	//! derived encryption key id
 	string derived_key_id;
 	//! Cipher used for encryption
-	EncryptionTypes::CipherType cipher;
+	EncryptionTypes::CipherType cipher = EncryptionTypes::CipherType::INVALID;
 	//! key derivation function (kdf) used
 	EncryptionTypes::KeyDerivationFunction kdf = EncryptionTypes::KeyDerivationFunction::SHA256;
 	//! Key Length
@@ -48,7 +48,8 @@ struct StorageManagerOptions {
 	optional_idx storage_version;
 	optional_idx version_number;
 	optional_idx block_header_size;
-
+	//! Unique database identifier and optional encryption salt.
+	data_t db_identifier[MainHeader::DB_IDENTIFIER_LEN];
 	EncryptionOptions encryption_options;
 };
 
@@ -115,6 +116,17 @@ public:
 	//! Whether or not the attached database is a remote file
 	bool IsRemote() override;
 
+	//! Return the checkpoint iteration of the file.
+	uint64_t GetCheckpointIteration() const {
+		return iteration_count;
+	}
+	//! Return the version number of the file.
+	uint64_t GetVersionNumber() const;
+	//! Return the database identifier.
+	data_ptr_t GetDBIdentifier() {
+		return options.db_identifier;
+	}
+
 private:
 	//! Loads the free list of the file.
 	void LoadFreeList(QueryContext context);
@@ -134,14 +146,13 @@ private:
 	idx_t GetBlockLocation(block_id_t block_id) const;
 
 	// Encrypt, Store, Decrypt the canary
-	static void StoreEncryptedCanary(AttachedDatabase &attached_db, MainHeader &main_header, const string &key_id);
-	static void StoreSalt(MainHeader &main_header, data_ptr_t salt);
+	static void StoreEncryptedCanary(AttachedDatabase &db, MainHeader &main_header, const string &key_id);
+	static void StoreDBIdentifier(MainHeader &main_header, const data_ptr_t db_identifier);
 	void StoreEncryptionMetadata(MainHeader &main_header) const;
 
 	//! Check and adding Encryption Keys
 	void CheckAndAddEncryptionKey(MainHeader &main_header, string &user_key);
 	void CheckAndAddEncryptionKey(MainHeader &main_header);
-	void CheckAndAddEncryptionKey(MainHeader &main_header, DBConfigOptions &config_options);
 
 	//! Return the blocks to which we will write the free list and modified blocks
 	vector<MetadataHandle> GetFreeListBlocks();
@@ -153,7 +164,6 @@ private:
 	void VerifyBlocks(const unordered_map<block_id_t, idx_t> &block_usage_count) override;
 
 	void AddStorageVersionTag();
-	uint64_t GetVersionNumber();
 
 private:
 	AttachedDatabase &db;
@@ -181,7 +191,7 @@ private:
 	block_id_t max_block;
 	//! The block id where the free list can be found
 	idx_t free_list_id;
-	//! The current header iteration count
+	//! The current header iteration count.
 	uint64_t iteration_count;
 	//! The storage manager options
 	StorageManagerOptions options;
