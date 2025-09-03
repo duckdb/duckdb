@@ -69,6 +69,7 @@ void DuckDBDatabasesFunction(ClientContext &context, TableFunctionInput &data_p,
 		auto &entry = data.entries[data.offset++];
 
 		auto &attached = *entry;
+		auto &catalog = attached.GetCatalog();
 		// return values:
 
 		idx_t col = 0;
@@ -78,16 +79,14 @@ void DuckDBDatabasesFunction(ClientContext &context, TableFunctionInput &data_p,
 		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(attached.oid)));
 		bool is_internal = attached.IsSystem() || attached.IsTemporary();
 		bool is_readonly = attached.IsReadOnly();
-		bool is_encrypted = false;
-		auto cipher = Value();
+		string cipher_str;
 		// path, VARCHAR
 		Value db_path;
 		if (!is_internal) {
-			bool in_memory = attached.GetCatalog().InMemory();
+			bool in_memory = catalog.InMemory();
 			if (!in_memory) {
-				db_path = Value(attached.GetCatalog().GetDBPath());
-				is_encrypted = attached.GetStorageManager().IsEncrypted();
-				cipher = Value(EncryptionTypes::CipherToString(attached.GetStorageManager().GetCipher()));
+				db_path = Value(catalog.GetDBPath());
+				cipher_str = catalog.GetEncryptionCipher();
 			}
 		}
 		output.SetValue(col++, count, db_path);
@@ -98,13 +97,13 @@ void DuckDBDatabasesFunction(ClientContext &context, TableFunctionInput &data_p,
 		// internal, BOOLEAN
 		output.SetValue(col++, count, Value::BOOLEAN(is_internal));
 		// type, VARCHAR
-		output.SetValue(col++, count, Value(attached.GetCatalog().GetCatalogType()));
+		output.SetValue(col++, count, Value(catalog.GetCatalogType()));
 		// readonly, BOOLEAN
 		output.SetValue(col++, count, Value::BOOLEAN(is_readonly));
 		// encrypted, BOOLEAN
-		output.SetValue(col++, count, Value::BOOLEAN(is_encrypted));
+		output.SetValue(col++, count, Value::BOOLEAN(catalog.IsEncrypted()));
 		// cipher, VARCHAR
-		output.SetValue(col++, count, cipher);
+		output.SetValue(col++, count, cipher_str.empty() ? Value() : Value(cipher_str));
 
 		count++;
 	}
