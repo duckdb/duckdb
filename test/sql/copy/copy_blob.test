@@ -1,0 +1,22 @@
+# name: test/sql/copy/copy_blob.test
+# group: [copy]
+
+statement error
+COPY (select 'foo') TO 'test.blob' (FORMAT BLOB);
+----
+Binder Error: "COPY (FORMAT BLOB)" only supports a single BLOB column
+
+statement error
+COPY (select 'foo'::BLOB, 10) TO 'test.blob' (FORMAT BLOB);
+----
+Binder Error: "COPY (FORMAT BLOB)" only supports a single BLOB column
+
+
+statement ok
+COPY (select 'foo'::BLOB) TO 'test.blob' (FORMAT BLOB);
+
+query III
+select filename, content, size from read_blob('test.blob');
+----
+test.blob	foo	3
+
