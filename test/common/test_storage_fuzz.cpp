@@ -450,14 +450,16 @@ TEST_CASE("fuzzed storage test", "storage") {
 			break;
 		}
 		case ActionType::DELETE: {
-			uint64_t begin = rand() % offset;
-			uint64_t length = rand() % (offset - begin);
-			std::string delete_query =
-			    "DELETE FROM t WHERE i > " + std::to_string(begin) + " and i <" + std::to_string(begin + length);
+			if (offset != 0) {
+				uint64_t begin = rand() % offset;
+				uint64_t length = rand() % (offset - begin);
+				std::string delete_query =
+				    "DELETE FROM t WHERE i > " + std::to_string(begin) + " and i <" + std::to_string(begin + length);
 
-			PRINT_INFO("RUN: " << delete_query);
-			validate(*con.Query(delete_query));
-			break;
+				PRINT_INFO("RUN: " << delete_query);
+				validate(*con.Query(delete_query));
+				break;
+			}
 		}
 		case ActionType::LARGE_WRITE_WITH_FAULT: {
 			raw_fs->InjectFault(LazyFlushFileSystem::FaultInjectionSite::FSYNC);
