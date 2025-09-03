@@ -211,9 +211,9 @@ private:
 	void InitializeSchema(ClientContext &context);
 	bool ScanInternal(ClientContext &context, ParquetReaderScanState &state, DataChunk &output);
 	//! Parse the schema of the file
-	unique_ptr<ParquetColumnSchema> ParseSchema();
+	unique_ptr<ParquetColumnSchema> ParseSchema(ClientContext &context);
 	ParquetColumnSchema ParseSchemaRecursive(idx_t depth, idx_t max_define, idx_t max_repeat, idx_t &next_schema_idx,
-	                                         idx_t &next_file_idx);
+	                                         idx_t &next_file_idx, ClientContext &context);
 
 	unique_ptr<ColumnReader> CreateReader(ClientContext &context);
 
