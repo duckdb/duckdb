@@ -393,15 +393,16 @@ TEST_CASE("fuzzed storage test", "storage") {
 	for (const auto &action : actions) {
 		// Note: the injected file system has to be reset each time. DuckDB construction seems to be std::move'ing them
 
+        /*
 		LazyFlushFileSystem *raw_fs = new LazyFlushFileSystem();
 		config.file_system =
 		    duckdb::make_uniq<duckdb::VirtualFileSystem>(duckdb::unique_ptr<LazyFlushFileSystem>(raw_fs));
+         */
 
-		/*
 		FaultInjectionFileSystem *raw_fs = new FaultInjectionFileSystem();
 		config.file_system =
 		    duckdb::make_uniq<duckdb::VirtualFileSystem>(duckdb::unique_ptr<FaultInjectionFileSystem>(raw_fs));
-		*/
+
 
 		duckdb::DuckDB db(file_path, &config);
 		duckdb::Connection con(db);
