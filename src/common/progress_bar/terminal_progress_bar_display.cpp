@@ -25,10 +25,8 @@ static string FormatETA(double seconds, bool elapsed = false) {
 	//   unknown     remaining
 	//   00:00:00.00 elapsed
 	if (!elapsed && seconds > 3600 * 99) {
-		// estimate larger than 99 hours remaining
-		string result = "(>99 hours remaining)";
-		result += string(RENDER_SIZE - result.size(), ' ');
-		return result;
+		// estimate larger than 99 hours remaining, treat this as invalid/unknown ETA
+		return string(RENDER_SIZE, ' ');
 	}
 	if (seconds < 0) {
 		// Invalid or unknown ETA, skip rendering estimate

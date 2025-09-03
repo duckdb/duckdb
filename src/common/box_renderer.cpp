@@ -980,7 +980,7 @@ void BoxRenderer::RenderRowCount(string &row_count_str, string &readable_rows_st
 		// we still need to render the readable rows/shown strings
 		// check if we can merge the two onto one row
 		idx_t combined_shown_length = readable_rows_str.size() + shown_str.size() + 4;
-		if (combined_shown_length <= total_length) {
+		if (!readable_rows_str.empty() && !shown_str.empty() && combined_shown_length <= total_length) {
 			// we can! merge them
 			ss << config.VERTICAL;
 			ss << " ";
