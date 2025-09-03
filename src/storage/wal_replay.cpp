@@ -476,34 +476,32 @@ void WriteAheadLogDeserializer::ReplayVersion() {
 	state.wal_version = deserializer.ReadProperty<idx_t>(101, "version");
 
 	auto &single_file_block_manager = db.GetStorageManager().GetBlockManager().Cast<SingleFileBlockManager>();
-	auto file_version_number = single_file_block_manager.GetVersionNumber();
-	if (file_version_number > 66) {
-		data_t db_identifier[MainHeader::DB_IDENTIFIER_LEN];
-		bool is_set = false;
-		deserializer.ReadOptionalList(102, "db_identifier", [&](Deserializer::List &list, idx_t i) {
-			db_identifier[i] = list.ReadElement<uint8_t>();
-			is_set = true;
-		});
-		if (!is_set) {
+	data_t db_identifier[MainHeader::DB_IDENTIFIER_LEN];
+	bool is_set = false;
+	deserializer.ReadOptionalList(102, "db_identifier", [&](Deserializer::List &list, idx_t i) {
+		db_identifier[i] = list.ReadElement<uint8_t>();
+		is_set = true;
+	});
+	auto checkpoint_iteration = deserializer.ReadPropertyWithDefault<optional_idx>(103, "checkpoint_iteration");
+	if (!is_set || !checkpoint_iteration.IsValid()) {
+		return;
+	}
+	auto expected_db_identifier = single_file_block_manager.GetDBIdentifier();
+	if (!MainHeader::CompareDBIdentifiers(db_identifier, expected_db_identifier)) {
+		throw IOException("WAL does not match database file.");
+	}
+
+	auto wal_checkpoint_iteration = checkpoint_iteration.GetIndex();
+	auto expected_checkpoint_iteration = single_file_block_manager.GetCheckpointIteration();
+	if (expected_checkpoint_iteration != wal_checkpoint_iteration) {
+		if (wal_checkpoint_iteration + 1 == expected_checkpoint_iteration) {
+			// this iteration is exactly one lower than the expected iteration
+			// this can happen if we aborted AFTER checkpointing the file, but BEFORE truncating the WAL
+			// expect this situation to occur - we will throw an error if it does not later on
+			state.expected_checkpoint_id = expected_checkpoint_iteration;
 			return;
 		}
-		auto expected_db_identifier = single_file_block_manager.GetDBIdentifier();
-		if (!MainHeader::CompareDBIdentifiers(db_identifier, expected_db_identifier)) {
-			throw IOException("WAL does not match database file.");
-		}
-
-		auto expected_checkpoint_iteration = single_file_block_manager.GetCheckpointIteration();
-		auto checkpoint_iteration = deserializer.ReadProperty<uint64_t>(103, "checkpoint_iteration");
-		if (expected_checkpoint_iteration != checkpoint_iteration) {
-			if (checkpoint_iteration + 1 == expected_checkpoint_iteration) {
-				// this iteration is exactly one lower than the expected iteration
-				// this can happen if we aborted AFTER checkpointing the file, but BEFORE truncating the WAL
-				// expect this situation to occur - we will throw an error if it does not later on
-				state.expected_checkpoint_id = expected_checkpoint_iteration;
-				return;
-			}
-			ThrowVersionError(checkpoint_iteration, expected_checkpoint_iteration);
-		}
+		ThrowVersionError(wal_checkpoint_iteration, expected_checkpoint_iteration);
 	}
 }
 
