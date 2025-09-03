@@ -9,7 +9,8 @@ add_library_unity(
   test_parse_logical_type.cpp
   test_utf.cpp
   test_strftime.cpp
-  test_string_util.cpp)
+  test_string_util.cpp
+  test_storage_fuzz.cpp)
 
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:test_common>
