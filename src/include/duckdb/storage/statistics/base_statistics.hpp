@@ -83,7 +83,7 @@ public:
 	inline void SetHasNullFast() {
 		has_null = true;
 	}
-	//! Set that the CURRENT level can have valiod values
+	//! Set that the CURRENT level can have valid values
 	//! Note that this is not correct for nested types unless this information is propagated in a different manner
 	//! Use Set(StatsInfo::CAN_HAVE_VALID_VALUES) in the general case
 	inline void SetHasNoNullFast() {
@@ -104,7 +104,7 @@ public:
 	static BaseStatistics Deserialize(Deserializer &deserializer);
 
 	//! Verify that a vector does not violate the statistics
-	void Verify(Vector &vector, const SelectionVector &sel, idx_t count) const;
+	void Verify(Vector &vector, const SelectionVector &sel, idx_t count, bool ignore_has_null = false) const;
 	void Verify(Vector &vector, idx_t count) const;
 
 	string ToString() const;
