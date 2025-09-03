@@ -59,8 +59,12 @@ struct UnifiedVectorFormat {
 	}
 	template <class T>
 	static inline const T *GetData(const UnifiedVectorFormat &format) {
-		format.VerifyVectorType<T>();
-		return GetDataUnsafe<T>(format);
+		return format.GetData<T>();
+	}
+	template <class T>
+	inline const T *GetData() const {
+		VerifyVectorType<T>();
+		return GetDataUnsafe<T>(*this);
 	}
 	template <class T>
 	static inline T *GetDataNoConst(UnifiedVectorFormat &format) {
@@ -77,23 +81,23 @@ struct RecursiveUnifiedVectorFormat {
 
 struct UnifiedVariantVector {
 	//! The 'keys' list (dictionary)
-	DUCKDB_API static UnifiedVectorFormat &GetKeys(RecursiveUnifiedVectorFormat &vec);
+	DUCKDB_API static const UnifiedVectorFormat &GetKeys(const RecursiveUnifiedVectorFormat &vec);
 	//! The 'keys' list entry
-	DUCKDB_API static UnifiedVectorFormat &GetKeysEntry(RecursiveUnifiedVectorFormat &vec);
+	DUCKDB_API static const UnifiedVectorFormat &GetKeysEntry(const RecursiveUnifiedVectorFormat &vec);
 	//! The 'children' list
-	DUCKDB_API static UnifiedVectorFormat &GetChildren(RecursiveUnifiedVectorFormat &vec);
-	//! The 'key_id' inside the 'children' list
-	DUCKDB_API static UnifiedVectorFormat &GetChildrenKeyId(RecursiveUnifiedVectorFormat &vec);
-	//! The 'value_id' inside the 'children' list
-	DUCKDB_API static UnifiedVectorFormat &GetChildrenValueId(RecursiveUnifiedVectorFormat &vec);
+	DUCKDB_API static const UnifiedVectorFormat &GetChildren(const RecursiveUnifiedVectorFormat &vec);
+	//! The 'keys_index' inside the 'children' list
+	DUCKDB_API static const UnifiedVectorFormat &GetChildrenKeysIndex(const RecursiveUnifiedVectorFormat &vec);
+	//! The 'values_index' inside the 'children' list
+	DUCKDB_API static const UnifiedVectorFormat &GetChildrenValuesIndex(const RecursiveUnifiedVectorFormat &vec);
 	//! The 'values' list
-	DUCKDB_API static UnifiedVectorFormat &GetValues(RecursiveUnifiedVectorFormat &vec);
+	DUCKDB_API static const UnifiedVectorFormat &GetValues(const RecursiveUnifiedVectorFormat &vec);
 	//! The 'type_id' inside the 'values' list
-	DUCKDB_API static UnifiedVectorFormat &GetValuesTypeId(RecursiveUnifiedVectorFormat &vec);
+	DUCKDB_API static const UnifiedVectorFormat &GetValuesTypeId(const RecursiveUnifiedVectorFormat &vec);
 	//! The 'byte_offset' inside the 'values' list
-	DUCKDB_API static UnifiedVectorFormat &GetValuesByteOffset(RecursiveUnifiedVectorFormat &vec);
+	DUCKDB_API static const UnifiedVectorFormat &GetValuesByteOffset(const RecursiveUnifiedVectorFormat &vec);
 	//! The binary blob 'data' encoding the Variant for the row
-	DUCKDB_API static UnifiedVectorFormat &GetData(RecursiveUnifiedVectorFormat &vec);
+	DUCKDB_API static const UnifiedVectorFormat &GetData(const RecursiveUnifiedVectorFormat &vec);
 };
 
 //! This is a helper data structure. It contains all fields necessary to resize a vector.
@@ -225,6 +229,7 @@ public:
 	//! Asserts that the CheckMapValidity returns MapInvalidReason::VALID
 	DUCKDB_API static void VerifyMap(Vector &map, const SelectionVector &sel, idx_t count);
 	DUCKDB_API static void VerifyUnion(Vector &map, const SelectionVector &sel, idx_t count);
+	DUCKDB_API static void VerifyVariant(Vector &map, const SelectionVector &sel, idx_t count);
 	DUCKDB_API static void Verify(Vector &vector, const SelectionVector &sel, idx_t count);
 	DUCKDB_API void UTFVerify(idx_t count);
 	DUCKDB_API void UTFVerify(const SelectionVector &sel, idx_t count);
@@ -630,12 +635,12 @@ struct VariantVector {
 	//! Gets a reference to the 'children' list of a Variant
 	DUCKDB_API static Vector &GetChildren(Vector &vec);
 	DUCKDB_API static Vector &GetChildren(const Vector &vec);
-	//! Gets a reference to the 'key_id' inside the 'children' list of a Variant
-	DUCKDB_API static Vector &GetChildrenKeyId(Vector &vec);
-	DUCKDB_API static Vector &GetChildrenKeyId(const Vector &vec);
-	//! Gets a reference to the 'value_id' inside the 'children' list of a Variant
-	DUCKDB_API static Vector &GetChildrenValueId(Vector &vec);
-	DUCKDB_API static Vector &GetChildrenValueId(const Vector &vec);
+	//! Gets a reference to the 'keys_index' inside the 'children' list of a Variant
+	DUCKDB_API static Vector &GetChildrenKeysIndex(Vector &vec);
+	DUCKDB_API static Vector &GetChildrenKeysIndex(const Vector &vec);
+	//! Gets a reference to the 'values_index' inside the 'children' list of a Variant
+	DUCKDB_API static Vector &GetChildrenValuesIndex(Vector &vec);
+	DUCKDB_API static Vector &GetChildrenValuesIndex(const Vector &vec);
 	//! Gets a reference to the 'values' list of a Variant
 	DUCKDB_API static Vector &GetValues(Vector &vec);
 	DUCKDB_API static Vector &GetValues(const Vector &vec);

@@ -64,8 +64,8 @@ timestamp_t &timestamp_t::operator-=(const int64_t &delta) {
 	return *this;
 }
 
-TimestampCastResult Timestamp::TryConvertTimestampTZ(const char *str, idx_t len, timestamp_t &result, bool &has_offset,
-                                                     string_t &tz, optional_ptr<int32_t> nanos) {
+TimestampCastResult Timestamp::TryConvertTimestampTZ(const char *str, idx_t len, timestamp_t &result, bool use_offset,
+                                                     bool &has_offset, string_t &tz, optional_ptr<int32_t> nanos) {
 	idx_t pos;
 	date_t date;
 	dtime_t time;
@@ -118,7 +118,7 @@ TimestampCastResult Timestamp::TryConvertTimestampTZ(const char *str, idx_t len,
 		} else if (Timestamp::TryParseUTCOffset(str, pos, len, hh, mm, ss)) {
 			const int64_t delta =
 			    hh * Interval::MICROS_PER_HOUR + mm * Interval::MICROS_PER_MINUTE + ss * Interval::MICROS_PER_SEC;
-			if (!TrySubtractOperator::Operation(result.value, delta, result.value)) {
+			if (use_offset && !TrySubtractOperator::Operation(result.value, delta, result.value)) {
 				return TimestampCastResult::ERROR_RANGE;
 			}
 			has_offset = true;
@@ -149,12 +149,12 @@ TimestampCastResult Timestamp::TryConvertTimestampTZ(const char *str, idx_t len,
 	return TimestampCastResult::SUCCESS;
 }
 
-TimestampCastResult Timestamp::TryConvertTimestamp(const char *str, idx_t len, timestamp_t &result,
+TimestampCastResult Timestamp::TryConvertTimestamp(const char *str, idx_t len, timestamp_t &result, bool use_offset,
                                                    optional_ptr<int32_t> nanos, bool strict) {
 	string_t tz(nullptr, 0);
 	bool has_offset = false;
 	// We don't understand TZ without an extension, so fail if one was provided.
-	auto success = TryConvertTimestampTZ(str, len, result, has_offset, tz, nanos);
+	auto success = TryConvertTimestampTZ(str, len, result, use_offset, has_offset, tz, nanos);
 	if (success != TimestampCastResult::SUCCESS) {
 		return success;
 	}
@@ -198,7 +198,7 @@ bool Timestamp::TryFromTimestampNanos(timestamp_t input, int32_t nanos, timestam
 
 TimestampCastResult Timestamp::TryConvertTimestamp(const char *str, idx_t len, timestamp_ns_t &result) {
 	int32_t nanos = 0;
-	auto success = TryConvertTimestamp(str, len, result, &nanos);
+	auto success = TryConvertTimestamp(str, len, result, true, &nanos);
 	if (success != TimestampCastResult::SUCCESS) {
 		return success;
 	}
@@ -236,9 +236,9 @@ string Timestamp::RangeError(string_t str) {
 	return Timestamp::RangeError(str.GetString());
 }
 
-timestamp_t Timestamp::FromCString(const char *str, idx_t len, optional_ptr<int32_t> nanos) {
+timestamp_t Timestamp::FromCString(const char *str, idx_t len, bool use_offset, optional_ptr<int32_t> nanos) {
 	timestamp_t result;
-	switch (Timestamp::TryConvertTimestamp(str, len, result, nanos)) {
+	switch (Timestamp::TryConvertTimestamp(str, len, result, use_offset, nanos)) {
 	case TimestampCastResult::SUCCESS:
 	case TimestampCastResult::STRICT_UTC:
 		break;
@@ -324,8 +324,8 @@ bool Timestamp::TryParseUTCOffset(const char *str, idx_t &pos, idx_t len, int &h
 	return true;
 }
 
-timestamp_t Timestamp::FromString(const string &str) {
-	return Timestamp::FromCString(str.c_str(), str.size());
+timestamp_t Timestamp::FromString(const string &str, bool use_offset) {
+	return Timestamp::FromCString(str.c_str(), str.size(), use_offset);
 }
 
 string Timestamp::ToString(timestamp_t timestamp) {
@@ -429,8 +429,8 @@ void Timestamp::Convert(timestamp_ns_t input, date_t &out_date, dtime_t &out_tim
 
 timestamp_t Timestamp::GetCurrentTimestamp() {
 	auto now = system_clock::now();
-	auto epoch_ms = duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
-	return Timestamp::FromEpochMs(epoch_ms);
+	auto epoch_micros = duration_cast<microseconds>(now.time_since_epoch()).count();
+	return FromEpochMicroSeconds(epoch_micros);
 }
 
 timestamp_t Timestamp::FromEpochSecondsPossiblyInfinite(int64_t sec) {

@@ -136,7 +136,8 @@ void Vector::Reference(const Value &value) {
 
 void Vector::Reference(const Vector &other) {
 	if (other.GetType().id() != GetType().id()) {
-		throw InternalException("Vector::Reference used on vector of different type");
+		throw InternalException("Vector::Reference used on vector of different type (source %s referenced %s)",
+		                        GetType(), other.GetType());
 	}
 	D_ASSERT(other.GetType() == GetType());
 	Reinterpret(other);
@@ -763,12 +764,12 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 	case LogicalTypeId::STRUCT: {
 		// we can derive the value schema from the vector schema
 		auto &child_entries = StructVector::GetEntries(*vector);
-		child_list_t<Value> children;
+		duckdb::vector<Value> children;
 		for (idx_t child_idx = 0; child_idx < child_entries.size(); child_idx++) {
 			auto &struct_child = child_entries[child_idx];
-			children.push_back(make_pair(StructType::GetChildName(type, child_idx), struct_child->GetValue(index_p)));
+			children.push_back(struct_child->GetValue(index_p));
 		}
-		return Value::STRUCT(std::move(children));
+		return Value::STRUCT(type, std::move(children));
 	}
 	case LogicalTypeId::LIST: {
 		auto offlen = reinterpret_cast<list_entry_t *>(data)[index];
@@ -1579,6 +1580,16 @@ void Vector::VerifyUnion(Vector &vector_p, const SelectionVector &sel_p, idx_t c
 #endif // DEBUG
 }
 
+void Vector::VerifyVariant(Vector &vector_p, const SelectionVector &sel_p, idx_t count) {
+#ifdef DEBUG
+
+	D_ASSERT(vector_p.GetType().id() == LogicalTypeId::VARIANT);
+	if (!VariantUtils::Verify(vector_p, sel_p, count)) {
+		throw InternalException("Variant not valid");
+	}
+#endif // DEBUG
+}
+
 void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count) {
 #ifdef DEBUG
 	if (count == 0) {
@@ -1759,6 +1770,9 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 		if (vector->GetType().id() == LogicalTypeId::UNION) {
 			// Pass in raw vector
 			VerifyUnion(vector_p, sel_p, count);
+		}
+		if (vector->GetType().id() == LogicalTypeId::VARIANT) {
+			VerifyVariant(vector_p, sel_p, count);
 		}
 	}
 
@@ -2818,20 +2832,20 @@ Vector &VariantVector::GetChildren(const Vector &vec) {
 	return *StructVector::GetEntries(vec)[1];
 }
 
-Vector &VariantVector::GetChildrenKeyId(Vector &vec) {
+Vector &VariantVector::GetChildrenKeysIndex(Vector &vec) {
 	auto &children = ListVector::GetEntry(GetChildren(vec));
 	return *StructVector::GetEntries(children)[0];
 }
-Vector &VariantVector::GetChildrenKeyId(const Vector &vec) {
+Vector &VariantVector::GetChildrenKeysIndex(const Vector &vec) {
 	auto &children = ListVector::GetEntry(GetChildren(vec));
 	return *StructVector::GetEntries(children)[0];
 }
 
-Vector &VariantVector::GetChildrenValueId(Vector &vec) {
+Vector &VariantVector::GetChildrenValuesIndex(Vector &vec) {
 	auto &children = ListVector::GetEntry(GetChildren(vec));
 	return *StructVector::GetEntries(children)[1];
 }
-Vector &VariantVector::GetChildrenValueId(const Vector &vec) {
+Vector &VariantVector::GetChildrenValuesIndex(const Vector &vec) {
 	auto &children = ListVector::GetEntry(GetChildren(vec));
 	return *StructVector::GetEntries(children)[1];
 }
@@ -2868,41 +2882,41 @@ Vector &VariantVector::GetData(const Vector &vec) {
 	return *StructVector::GetEntries(vec)[3];
 }
 
-UnifiedVectorFormat &UnifiedVariantVector::GetKeys(RecursiveUnifiedVectorFormat &vec) {
+const UnifiedVectorFormat &UnifiedVariantVector::GetKeys(const RecursiveUnifiedVectorFormat &vec) {
 	return vec.children[0].unified;
 }
 
-UnifiedVectorFormat &UnifiedVariantVector::GetKeysEntry(RecursiveUnifiedVectorFormat &vec) {
+const UnifiedVectorFormat &UnifiedVariantVector::GetKeysEntry(const RecursiveUnifiedVectorFormat &vec) {
 	return vec.children[0].children[0].unified;
 }
 
-UnifiedVectorFormat &UnifiedVariantVector::GetChildren(RecursiveUnifiedVectorFormat &vec) {
+const UnifiedVectorFormat &UnifiedVariantVector::GetChildren(const RecursiveUnifiedVectorFormat &vec) {
 	return vec.children[1].unified;
 }
 
-UnifiedVectorFormat &UnifiedVariantVector::GetChildrenKeyId(RecursiveUnifiedVectorFormat &vec) {
+const UnifiedVectorFormat &UnifiedVariantVector::GetChildrenKeysIndex(const RecursiveUnifiedVectorFormat &vec) {
 	return vec.children[1].children[0].children[0].unified;
 }
 
-UnifiedVectorFormat &UnifiedVariantVector::GetChildrenValueId(RecursiveUnifiedVectorFormat &vec) {
+const UnifiedVectorFormat &UnifiedVariantVector::GetChildrenValuesIndex(const RecursiveUnifiedVectorFormat &vec) {
 	return vec.children[1].children[0].children[1].unified;
 }
 
-UnifiedVectorFormat &UnifiedVariantVector::GetValues(RecursiveUnifiedVectorFormat &vec) {
+const UnifiedVectorFormat &UnifiedVariantVector::GetValues(const RecursiveUnifiedVectorFormat &vec) {
 	return vec.children[2].unified;
 }
 
-UnifiedVectorFormat &UnifiedVariantVector::GetValuesTypeId(RecursiveUnifiedVectorFormat &vec) {
+const UnifiedVectorFormat &UnifiedVariantVector::GetValuesTypeId(const RecursiveUnifiedVectorFormat &vec) {
 	auto &values = vec.children[2];
 	return values.children[0].children[0].unified;
 }
 
-UnifiedVectorFormat &UnifiedVariantVector::GetValuesByteOffset(RecursiveUnifiedVectorFormat &vec) {
+const UnifiedVectorFormat &UnifiedVariantVector::GetValuesByteOffset(const RecursiveUnifiedVectorFormat &vec) {
 	auto &values = vec.children[2];
 	return values.children[0].children[1].unified;
 }
 
-UnifiedVectorFormat &UnifiedVariantVector::GetData(RecursiveUnifiedVectorFormat &vec) {
+const UnifiedVectorFormat &UnifiedVariantVector::GetData(const RecursiveUnifiedVectorFormat &vec) {
 	return vec.children[3].unified;
 }
 

@@ -164,10 +164,10 @@ private:
 	                  idx_t total_length, bool has_results, BaseResultRenderer &renderer);
 	void RenderValues(const list<ColumnDataCollection> &collections, const vector<idx_t> &column_map,
 	                  const vector<idx_t> &widths, const vector<LogicalType> &result_types, BaseResultRenderer &ss);
-	void RenderRowCount(string row_count_str, string shown_str, const string &column_count_str,
-	                    const vector<idx_t> &boundaries, bool has_hidden_rows, bool has_hidden_columns,
-	                    idx_t total_length, idx_t row_count, idx_t column_count, idx_t minimum_row_length,
-	                    BaseResultRenderer &ss);
+	void RenderRowCount(string &row_count_str, string &readable_rows_str, string &shown_str,
+	                    const string &column_count_str, const vector<idx_t> &boundaries, bool has_hidden_rows,
+	                    bool has_hidden_columns, idx_t total_length, idx_t row_count, idx_t column_count,
+	                    idx_t minimum_row_length, BaseResultRenderer &ss);
 
 	string FormatNumber(const string &input);
 	string ConvertRenderValue(const string &input, const LogicalType &type);

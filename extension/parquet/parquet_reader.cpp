@@ -1018,7 +1018,9 @@ uint64_t ParquetReader::GetGroupCompressedSize(ParquetReaderScanState &state) {
 
 	if (total_compressed_size != 0 && calc_compressed_size != 0 &&
 	    (idx_t)total_compressed_size != calc_compressed_size) {
-		throw InvalidInputException("mismatch between calculated compressed size and reported compressed size");
+		throw InvalidInputException(
+		    "Failed to read file \"%s\": mismatch between calculated compressed size and reported compressed size",
+		    GetFileName());
 	}
 
 	return total_compressed_size ? total_compressed_size : calc_compressed_size;

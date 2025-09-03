@@ -1,9 +1,6 @@
 # name: test/sql/function/variant/variant_extract.test
 # group: [variant]
 
-# 'dictionary_expression' breaks the internal linkage of the VARIANT type.
-require no_vector_verification
-
 require json
 
 query I
@@ -12,33 +9,36 @@ select variant_extract({'a': 1234}::VARIANT, 'a')::VARCHAR;
 1234
 
 statement ok
-create table struct_cast_tbl3(a VARIANT);
+CREATE MACRO struct_cast_data() AS TABLE (
+	SELECT {'a': [
+		{
+			'b': 'hello',
+			'c': NULL,
+			'a': '1970/03/15'::DATE
+		},
+		{
+			'b': NULL,
+			'c': True,
+			'a': '2020/11/03'::DATE
+		}
+	]}::VARIANT AS a
+	UNION ALL
+	SELECT {'a': [
+		{
+			'b': 'this is a long string',
+			'c': False,
+			'a': '1953/9/16'::DATE
+		}
+	]}::VARIANT
+);
 
-statement ok
-insert into struct_cast_tbl3 select {'a': [
-	{
-		'b': 'hello',
-		'c': NULL,
-		'a': '1970/03/15'::DATE
-	},
-	{
-		'b': NULL,
-		'c': True,
-		'a': '2020/11/03'::DATE
-	}
-]}::VARIANT;
-
-statement ok
-insert into struct_cast_tbl3 select {'a': [
-	{
-		'b': 'this is a long string',
-		'c': False,
-		'a': '1953/9/16'::DATE
-	}
-]}::VARIANT;
+statement error
+select variant_extract(a, 'a[1].c') from struct_cast_data();
+----
+Invalid Input Error: VARIANT(OBJECT(a)) is missing key 'a[1].c'
 
 query I
-select variant_extract(a, 'a[0].c') from struct_cast_tbl3;
+select variant_extract(a, 'a').variant_extract(1::UINTEGER).variant_extract('c') from struct_cast_data();
 ----
 NULL
 false
@@ -46,12 +46,12 @@ false
 # Using shorthand notation
 
 query I
-select ('{"a": 42, "b": [true, "test", true]}'::JSON::VARIANT).b[1];
+select ('{"a": 42, "b": [true, "test", true]}'::JSON::VARIANT).b[2];
 ----
 test
 
 query I
-select ('{"a": 42, "b": [true, "test", true]}'::JSON::VARIANT)['b'][1];
+select ('{"a": 42, "b": [true, "test", true]}'::JSON::VARIANT)['b'][2];
 ----
 test
 
@@ -59,9 +59,14 @@ test
 statement error
 select ('{"a": 42, "b": [true, "test", true]}'::JSON::VARIANT)['b']['1'];
 ----
-Invalid Input Error: 'OBJECT' was expected, found 'ARRAY', can't convert VARIANT
+Invalid Input Error: Can't extract key '1' from a VARIANT(ARRAY)
+
+statement error
+select ('{"a": 42, "b": [true, "test", true]}'::JSON::VARIANT)['b[2]'];
+----
+Invalid Input Error: VARIANT(OBJECT(a,b)) is missing key 'b[2]'
 
 query I
-select ('{"a": 42, "b": [true, "test", true]}'::JSON::VARIANT)['b[1]'];
+select ('{"a": 42, "b": [true, "test", true]}'::JSON::VARIANT)['b'][2];
 ----
 test

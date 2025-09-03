@@ -17,12 +17,12 @@ namespace duckdb {
 
 struct VariantExtractFun {
 	static constexpr const char *Name = "variant_extract";
-	static constexpr const char *Parameters = "input_variant,path";
-	static constexpr const char *Description = "Returns a subset of the `input_variant` using the `path`.";
-	static constexpr const char *Example = "variant_extract({'a': 42, 'b': [1,2,3])::VARIANT, 'b[0]')";
-	static constexpr const char *Categories = "variant";
+	static constexpr const char *Parameters = "input_variant::VARIANT,field::VARCHAR\001input_variant::VARIANT,index::UINTEGER";
+	static constexpr const char *Description = "Returns the `field` from the `input_variant` if it's an OBJECT.\001Returns the entry at `index` from the `input_variant` if it's an ARRAY.";
+	static constexpr const char *Example = "variant_extract({'a': 42, 'b': [1,2,3])::VARIANT, 'b')\001variant_extract([1,2,3])::VARIANT, 0)";
+	static constexpr const char *Categories = "variant\001variant";
 
-	static ScalarFunction GetFunction();
+	static ScalarFunctionSet GetFunctions();
 };
 
 struct VariantTypeofFun {

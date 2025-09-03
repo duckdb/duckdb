@@ -107,19 +107,19 @@ SELECT * FROM test4 ORDER BY 1 LIMIT 3;
 statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (SEP ',', HEADER 0.2);
 ----
-"header" expects a boolean value (e.g. TRUE or 1)
+"HEADER" expected an argument of type BOOLEAN
 
 # empty delimiter
 statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (SEP);
 ----
-"sep" expects a single argument as a string value
+"SEP" requires an argument of type VARCHAR
 
 # number as delimiter
 statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (SEP 1);
 ----
-"sep" expects a string argument!
+"SEP" expected an argument of type VARCHAR
 
 # multiple format options
 statement error
@@ -136,25 +136,25 @@ duplicate option
 statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (ESCAPE 1);
 ----
-"escape" expects a string argument!
+"ESCAPE" expected an argument of type VARCHAR
 
 # no escape string
 statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (ESCAPE);
 ----
-"escape" expects a single argument as a string value
+"ESCAPE" requires an argument of type VARCHAR
 
 # number as quote string
 statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (QUOTE 1);
 ----
-"quote" expects a string argument!
+"QUOTE" expected an argument of type VARCHAR
 
 # no quote string
 statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (QUOTE);
 ----
-"quote" expects a single argument as a string value
+"QUOTE" requires an argument of type VARCHAR
 
 # no format string
 statement error
@@ -166,12 +166,12 @@ Unsupported parameter type for FORMAT: expected e.g. FORMAT 'csv', 'parquet'
 statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (ENCODING);
 ----
-"encoding" expects a single argument as a string value
+"ENCODING" requires an argument of type VARCHAR
 
 statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (ENCODING 42);
 ----
-"encoding" expects a string argument!
+"ENCODING" expected an argument of type VARCHAR
 
 statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (ENCODING 'utf-42');
@@ -182,7 +182,7 @@ The CSV Reader does not support the encoding: "utf-42"
 statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (MAGIC '42');
 ----
-Unrecognized option for CSV reader "magic"
+Unrecognized option "MAGIC"
 
 # Try new_line option
 query I

@@ -911,7 +911,7 @@ static LogicalType DecimalSizeCheck(const LogicalType &left, const LogicalType &
 	uint8_t other_scale;
 	bool success = left.GetDecimalProperties(other_width, other_scale);
 	if (!success) {
-		return right;
+		throw InternalException("Type provided to DecimalSizeCheck was not a numeric type");
 	}
 	D_ASSERT(other_scale == 0);
 	const auto effective_width = width - scale;
@@ -975,6 +975,14 @@ LogicalType LogicalType::NormalizeType(const LogicalType &type) {
 template <class OP>
 static bool CombineUnequalTypes(const LogicalType &left, const LogicalType &right, LogicalType &result) {
 	D_ASSERT(right.id() != left.id());
+	if (right.id() == LogicalTypeId::VARIANT) {
+		result = right;
+		return true;
+	}
+	if (left.id() == LogicalTypeId::VARIANT) {
+		result = left;
+		return true;
+	}
 
 	// left and right are not equal
 	// NULL/unknown (parameter) types always take the other type
@@ -1012,7 +1020,12 @@ static bool CombineUnequalTypes(const LogicalType &left, const LogicalType &righ
 		// we can implicitly cast left to right, return right
 		//! Depending on the type, we might need to grow the `width` of the DECIMAL type
 		if (right.id() == LogicalTypeId::DECIMAL) {
-			result = DecimalSizeCheck(left, right);
+			if (left.id() == LogicalTypeId::VARIANT) {
+				//! Prefer VARIANT always
+				result = left;
+			} else {
+				result = DecimalSizeCheck(left, right);
+			}
 		} else {
 			result = right;
 		}
@@ -1022,7 +1035,12 @@ static bool CombineUnequalTypes(const LogicalType &left, const LogicalType &righ
 		// we can implicitly cast right to left, return left
 		//! Depending on the type, we might need to grow the `width` of the DECIMAL type
 		if (left.id() == LogicalTypeId::DECIMAL) {
-			result = DecimalSizeCheck(right, left);
+			if (right.id() == LogicalTypeId::VARIANT) {
+				//! Prefer VARIANT always
+				result = right;
+			} else {
+				result = DecimalSizeCheck(right, left);
+			}
 		} else {
 			result = left;
 		}
@@ -1979,11 +1997,12 @@ LogicalType LogicalType::VARIANT() {
 	//! keys
 	children.emplace_back("keys", LogicalType::LIST(LogicalTypeId::VARCHAR));
 	//! children
-	children.emplace_back("children", LogicalType::LIST(LogicalType::STRUCT(
-	                                      {{"key_id", LogicalType::UINTEGER}, {"value_id", LogicalType::UINTEGER}})));
+	children.emplace_back("children",
+	                      LogicalType::LIST(LogicalType::STRUCT(
+	                          {{"keys_index", LogicalType::UINTEGER}, {"values_index", LogicalType::UINTEGER}})));
 	//! values
-	children.emplace_back("children", LogicalType::LIST(LogicalType::STRUCT({{"type_id", LogicalType::UTINYINT},
-	                                                                         {"byte_offset", LogicalType::UINTEGER}})));
+	children.emplace_back("values", LogicalType::LIST(LogicalType::STRUCT(
+	                                    {{"type_id", LogicalType::UTINYINT}, {"byte_offset", LogicalType::UINTEGER}})));
 	//! data
 	children.emplace_back("data", LogicalType::BLOB);
 

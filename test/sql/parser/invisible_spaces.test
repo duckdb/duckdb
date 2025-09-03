@@ -57,6 +57,7 @@ endloop
 statement error
 SELEC 
 ----
+<REGEX>:.*Parser Error.*syntax error.*
 
 # only a unicode space
 statement ok
@@ -65,3 +66,4 @@ statement ok
 statement error
 S
 ----
+<REGEX>:.*Parser Error.*syntax error.*

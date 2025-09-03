@@ -1,13 +1,43 @@
 [
 	{
 		"name": "variant_extract",
-		"parameters": "input_variant,path",
-		"description": "Returns a subset of the `input_variant` using the `path`.",
-		"example": "variant_extract({'a': 42, 'b': [1,2,3])::VARIANT, 'b[0]')",
-		"categories": [
-			"variant"
+		"variants": [
+			{
+				"parameters": [
+					{
+						"name": "input_variant",
+						"type": "VARIANT"
+					},
+					{
+						"name": "field",
+						"type": "VARCHAR"
+					}
+				],
+				"categories": [
+					"variant"
+				],
+				"description": "Returns the `field` from the `input_variant` if it's an OBJECT.",
+				"example": "variant_extract({'a': 42, 'b': [1,2,3])::VARIANT, 'b')"
+			},
+			{
+				"parameters": [
+					{
+						"name": "input_variant",
+						"type": "VARIANT"
+					},
+					{
+						"name": "index",
+						"type": "UINTEGER"
+					}
+				],
+				"categories": [
+					"variant"
+				],
+				"description": "Returns the entry at `index` from the `input_variant` if it's an ARRAY.",
+				"example": "variant_extract([1,2,3])::VARIANT, 0)"
+			}
 		],
-		"type": "scalar_function"
+		"type": "scalar_function_set"
 	},
 	{
 		"name": "variant_typeof",
