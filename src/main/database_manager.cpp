@@ -39,6 +39,12 @@ void DatabaseManager::FinalizeStartup() {
 
 optional_ptr<AttachedDatabase> DatabaseManager::GetDatabase(ClientContext &context, const string &name) {
 	auto &meta_transaction = MetaTransaction::Get(context);
+	// first check if we have a local reference to this database already
+	auto database = meta_transaction.GetReferencedDatabase(name);
+	if (database) {
+		// we do! return it
+		return database;
+	}
 	lock_guard<mutex> guard(databases_lock);
 	if (StringUtil::Lower(name) == TEMP_CATALOG) {
 		return meta_transaction.UseDatabase(context.client_data->temporary_objects);
@@ -100,11 +106,12 @@ optional_ptr<AttachedDatabase> DatabaseManager::FinalizeAttach(ClientContext &co
 			}
 		}
 	}
+	auto &meta_transaction = MetaTransaction::Get(context);
 	if (detached_db) {
+		meta_transaction.DetachDatabase(*detached_db);
 		detached_db->OnDetach(context);
 		detached_db.reset();
 	}
-	auto &meta_transaction = MetaTransaction::Get(context);
 	auto &db_ref = meta_transaction.UseDatabase(attached_db);
 	auto &transaction = DuckTransaction::Get(context, *system);
 	auto &transaction_manager = DuckTransactionManager::Get(*system);
