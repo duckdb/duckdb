@@ -36,9 +36,9 @@ static const TestConfigOption test_config_options[] = {
     {"init_script", "Script to execute on init", LogicalType::VARCHAR, TestConfiguration::ParseConnectScript},
     {"on_cleanup", "SQL statements to execute on test end", LogicalType::VARCHAR, nullptr},
     {"on_init", "SQL statements to execute on init", LogicalType::VARCHAR, nullptr},
-    {"ducklake_dbms_catalog", "Which DBMS should be used as a DuckLake catalog on Attach (i.e., 'postgres' or 'sqlite')", LogicalType::VARCHAR, nullptr},
     {"on_load", "SQL statements to execute on explicit load", LogicalType::VARCHAR, nullptr},
     {"on_new_connection", "SQL statements to execute on connection", LogicalType::VARCHAR, nullptr},
+	{"test_env", "The test variables", LogicalType::LIST(LogicalType::STRUCT({{"env_name", LogicalType::VARCHAR}, {"env_value", LogicalType::VARCHAR}})), nullptr},
     {"skip_tests", "Tests to be skipped",
      LogicalType::LIST(
          LogicalType::STRUCT({{"reason", LogicalType::VARCHAR}, {"paths", LogicalType::LIST(LogicalType::VARCHAR)}})),
@@ -293,6 +293,9 @@ string TestConfiguration::ReadFileToString(const string &path) {
 	return buffer.str();
 }
 
+const char *TestConfiguration::get_value() {
+	return "skip_tests";
+}
 void TestConfiguration::LoadConfig(const string &config_path) {
 	// read the config file
 	auto buffer = ReadFileToString(config_path);
@@ -303,8 +306,19 @@ void TestConfiguration::LoadConfig(const string &config_path) {
 		ParseOption(entry.first, Value(entry.second));
 	}
 
+	// Convert to unordered_map<string,string> the test-env
+	auto entry = options.find("test_env");
+	if (entry != options.end()) {
+		auto map_list_entry = MapValue::GetChildren(entry->second);
+		for (const auto &value : map_list_entry) {
+			auto &struct_children = StructValue::GetChildren(value);
+			auto &env = StringValue::Get(struct_children[0]);
+			auto &env_value = StringValue::Get(struct_children[1]);
+			test_env[env] = env_value;
+		}
+	}
 	// Convert to unordered_set<string> the list of tests to be skipped
-	auto entry = options.find("skip_tests");
+	entry = options.find(get_value());
 	if (entry != options.end()) {
 		auto skip_list_entry = ListValue::GetChildren(entry->second);
 		for (const auto &value : skip_list_entry) {
@@ -379,18 +393,13 @@ string TestConfiguration::GetStorageVersion() {
 	return GetOptionOrDefault("storage_version", string());
 }
 
-string TestConfiguration::GetDuckLakeDBMSCatalog() {
-	auto entry = options.find("ducklake_dbms_catalog");
-	if (entry != options.end()) {
-		ducklake_catalog_dbms = entry->second.GetValue<string>();
-		ducklake_catalog_dbms = StringUtil::Lower(ducklake_catalog_dbms);
-		if (ducklake_catalog_dbms != "duckdb" && ducklake_catalog_dbms != "postgres" &&ducklake_catalog_dbms != "sqlite") {
-			throw InvalidInputException("ducklake_dbms_catalog option $s is not valid", ducklake_catalog_dbms);
-		}
+string TestConfiguration::GetTestEnv(const string &key, const string &default_value) {
+	if (test_env.find(key) == test_env.end()) {
+		return default_value;
 	}
-	return ducklake_catalog_dbms;
-}
+	return test_env[key];
 
+}
 
 DebugVectorVerification TestConfiguration::GetVectorVerification() {
 	return EnumUtil::FromString<DebugVectorVerification>(GetOptionOrDefault<string>("verify_vector", "NONE"));

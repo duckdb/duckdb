@@ -57,7 +57,7 @@ public:
 	vector<string> ExtensionToBeLoadedOnLoad();
 	vector<string> ErrorMessagesToBeSkipped();
 	string GetStorageVersion();
-	string GetDuckLakeDBMSCatalog();
+	string GetTestEnv(const string &key, const string &default_value);
 
 	static bool TestForceStorage();
 	static bool TestForceReload();
@@ -70,13 +70,14 @@ public:
 private:
 	case_insensitive_map_t<Value> options;
 	unordered_set<string> tests_to_be_skipped;
-	string ducklake_catalog_dbms = "duckdb";
+	unordered_map<string, string> test_env;
 
 private:
 	template <class T, class VAL_T = T>
 	T GetOptionOrDefault(const string &name, T default_val);
 
 	static string ReadFileToString(const string &path);
+	const char *get_value();
 };
 
 class FailureSummary {

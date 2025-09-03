@@ -422,26 +422,6 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 #endif
 	}
 
-	if (param == "notsqlite") {
-		auto &test_config = TestConfiguration::Get();
-		auto ducklake_dbms_catalog = test_config.GetDuckLakeDBMSCatalog();
-		if (ducklake_dbms_catalog == "sqlite") {
-			return RequireResult::MISSING;
-		} else {
-			return RequireResult::PRESENT;
-		}
-	}
-
-	if (param == "notpostgres") {
-		auto &test_config = TestConfiguration::Get();
-		auto ducklake_dbms_catalog = test_config.GetDuckLakeDBMSCatalog();
-		if (ducklake_dbms_catalog == "postgres") {
-			return RequireResult::MISSING;
-		} else {
-			return RequireResult::PRESENT;
-		}
-	}
-
 	if (param == "longdouble") {
 #if LDBL_MANT_DIG < 54
 		return RequireResult::MISSING;
@@ -1038,6 +1018,23 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				SKIP_TEST("require " + token.parameters[0]);
 				return;
 			}
+		} else if (token.type == SQLLogicTokenType::SQLLOGIC_TEST_ENV) {
+			if (InLoop()) {
+				parser.Fail("test-env cannot be called in a loop");
+			}
+
+			if (token.parameters.size() != 2) {
+				parser.Fail("test-env requires 2 arguments: <env name> <default env val>");
+			}
+			auto env_var = token.parameters[0];
+			auto env_actual = test_config.GetTestEnv(env_var, token.parameters[1]);
+
+			// Check if we have something defining from our test
+			if (environment_variables.count(env_var)) {
+				parser.Fail(StringUtil::Format("Environment/Test variable '%s' has already been defined", env_var));
+			}
+			environment_variables[env_var] = env_actual;
+
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_REQUIRE_ENV) {
 			if (InLoop()) {
 				parser.Fail("require-env cannot be called in a loop");
