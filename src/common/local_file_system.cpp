@@ -1450,10 +1450,6 @@ const char *LocalFileSystem::NormalizeLocalPath(const string &path) {
 	return path.c_str() + GetFileUrlOffset(path);
 }
 
-vector<OpenFileInfo> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
-	return GlobHive(path, opener);
-}
-
 void LocalFileSystem::ProcessSplit(const vector<string> &splits, idx_t i, const string &path,
                                    vector<OpenFileInfo> &result, FileOpener *opener, idx_t max_files,
                                    optional_ptr<HivePartitioningExecutor> hive_partitioning_executor) {
@@ -1492,8 +1488,7 @@ void LocalFileSystem::ProcessSplit(const vector<string> &splits, idx_t i, const 
 	}
 }
 
-vector<OpenFileInfo> LocalFileSystem::GlobHive(const string &path, FileOpener *opener, idx_t max_files,
-                                               optional_ptr<HiveFilterParams> hive_params) {
+vector<OpenFileInfo> LocalFileSystem::Glob(const string &path, FileOpener *opener, const FileGlobInput &glob_input) {
 	if (path.empty()) {
 		return vector<OpenFileInfo>();
 	}
@@ -1537,7 +1532,7 @@ vector<OpenFileInfo> LocalFileSystem::GlobHive(const string &path, FileOpener *o
 			splits[0] = home_directory;
 			D_ASSERT(path[0] == '~');
 			if (!HasGlob(path)) {
-				return GlobHive(home_directory + path.substr(1));
+				return Glob(home_directory + path.substr(1), opener, glob_input);
 			}
 		}
 	}
@@ -1580,6 +1575,7 @@ vector<OpenFileInfo> LocalFileSystem::GlobHive(const string &path, FileOpener *o
 		return result;
 	}
 	unique_ptr<HivePartitioningExecutor> hive_partitioning_executor;
+	auto hive_params = glob_input.hive_params;
 	if (hive_params) {
 		hive_partitioning_executor = make_uniq<HivePartitioningExecutor>(hive_params->context, hive_params->filters,
 		                                                                 hive_params->options, hive_params->info);
@@ -1590,7 +1586,8 @@ vector<OpenFileInfo> LocalFileSystem::GlobHive(const string &path, FileOpener *o
 	}
 
 	for (auto &prev_directory : previous_directories) {
-		ProcessSplit(splits, start_index, prev_directory.path, result, opener, max_files, hive_partitioning_executor);
+		ProcessSplit(splits, start_index, prev_directory.path, result, opener, glob_input.max_files,
+		             hive_partitioning_executor);
 	}
 
 	if (hive_partitioning_executor) {
