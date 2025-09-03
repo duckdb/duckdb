@@ -108,7 +108,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Call /dispatch
-        if: ${{ github.repository == 'duckdb/duckdb' }}
+        if: ${{ github.repository == 'duckdb/duckdb' && inputs.override-git-describe == '' }}
         run: |
           export URL=https://api.github.com/repos/duckdb/duckdb-python/actions/workflows/release.yml/dispatches
           export DATA='{"ref": "${{ inputs.target-branch }}", "inputs": {"duckdb-sha": "${{ inputs.duckdb-sha }}", "stable-version": "${{ inputs.override-git-describe }}", "pypi-index": "prod" }}'
