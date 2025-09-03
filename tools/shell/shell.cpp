@@ -4756,6 +4756,7 @@ static const char zOptions[] =
     "   -s COMMAND           run \"COMMAND\" and exit\n"
     "   -safe                enable safe-mode\n"
     "   -separator SEP       set output column separator. Default: '|'\n"
+    "   -storage-version V   database storage compatibility version to use. Default: 'v0.10.0'\n"
     "   -table               set output mode to 'table'\n"
     "   -ui                  launches a web interface using the ui extension (configurable with .ui_command)\n"
     "   -unredacted          allow printing unredacted secrets\n"
@@ -4965,12 +4966,12 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			data.openFlags |= DUCKDB_UNSIGNED_EXTENSIONS;
 		} else if (strcmp(z, "-safe") == 0) {
 			safe_mode = true;
-		} else if (strcmp(z, "-storage_version") == 0) {
+		} else if (strcmp(z, "-storage_version") == 0 || strcmp(z, "-storage-version") == 0) {
 			auto storage_version = string(cmdline_option_value(argc, argv, ++i));
 			if (storage_version != "latest") {
 				utf8_printf(
 				    stderr,
-				    "%s: Error: unknown argument (%s) for '-storage_version', only 'latest' is supported currently\n",
+				    "%s: Error: unknown argument (%s) for '-storage-version', only 'latest' is supported currently\n",
 				    program_name, storage_version.c_str());
 			} else {
 				data.openFlags |= DUCKDB_LATEST_STORAGE_VERSION;
