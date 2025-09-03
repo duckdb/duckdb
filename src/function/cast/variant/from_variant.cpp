@@ -158,6 +158,7 @@ static bool CastVariantToPrimitive(FromVariantConversionData &conversion_data, V
 	auto result_data = FlatVector::GetData<T>(result);
 	auto &result_validity = FlatVector::Validity(result);
 
+	bool all_valid = true;
 	for (idx_t i = 0; i < count; i++) {
 		auto row_index = row.IsValid() ? row.GetIndex() : i;
 
@@ -181,14 +182,15 @@ static bool CastVariantToPrimitive(FromVariantConversionData &conversion_data, V
 		}
 		if (!converted) {
 			auto value = VariantUtils::ConvertVariantToValue(conversion_data.variant, row_index, sel[i]);
-			result.SetValue(i + offset, value.DefaultCastAs(target_type, true));
+			if (!value.DefaultTryCastAs(target_type, true)) {
+				value = Value(target_type);
+				all_valid = false;
+			}
+			result.SetValue(i + offset, value);
 			converted = true;
 		}
-		if (!converted) {
-			return false;
-		}
 	}
-	return true;
+	return all_valid;
 }
 
 static bool FindValues(UnifiedVariantVectorData &variant, idx_t row_index, SelectionVector &sel,
@@ -435,23 +437,34 @@ static bool CastVariant(FromVariantConversionData &conversion_data, Vector &resu
 		}
 		case LogicalTypeId::UNION: {
 			error = "Can't convert VARIANT";
+			for (idx_t i = 0; i < count; i++) {
+				FlatVector::SetNull(result, offset + i, true);
+			}
 			return false;
 		}
 		default: {
 			error = StringUtil::Format("Nested type: '%s' not handled, can't convert VARIANT", target_type.ToString());
+			for (idx_t i = 0; i < count; i++) {
+				FlatVector::SetNull(result, offset + i, true);
+			}
 			return false;
 		}
 		};
 
+		bool all_valid = true;
 		for (idx_t i = 0; i < count; i++) {
 			auto row_index = row.IsValid() ? row.GetIndex() : i;
 
 			//! Get the index into 'values'
 			uint32_t value_index = sel[i];
 			auto value = VariantUtils::ConvertVariantToValue(conversion_data.variant, row_index, value_index);
-			result.SetValue(i + offset, value.DefaultCastAs(target_type, true));
+			if (!value.DefaultTryCastAs(target_type, true)) {
+				value = Value(target_type);
+				all_valid = false;
+			}
+			result.SetValue(i + offset, value);
 		}
-		return true;
+		return all_valid;
 	} else {
 		EmptyConversionPayloadFromVariant empty_payload;
 		switch (target_type.id()) {
@@ -578,10 +591,12 @@ static bool CastVariant(FromVariantConversionData &conversion_data, Vector &resu
 		}
 		default:
 			error = "Can't convert VARIANT";
+			for (idx_t i = 0; i < count; i++) {
+				FlatVector::SetNull(result, offset + i, true);
+			}
 			return false;
 		};
 	}
-	return true;
 }
 
 static bool CastFromVARIANT(Vector &variant_vec, Vector &result, idx_t count, CastParameters &parameters) {
