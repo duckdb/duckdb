@@ -12,6 +12,7 @@
 #include "duckdb/function/scalar/variant_utils.hpp"
 #include "duckdb/common/string_map_set.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/function/cast/variant/to_variant_fwd.hpp"
 
 namespace duckdb {
 
@@ -25,103 +26,36 @@ void VariantValue::AddItem(VariantValue &&val) {
 	array_items.push_back(std::move(val));
 }
 
-namespace {
-
-struct VariantConversionOffsets {
-	vector<uint32_t> keys;
-	vector<uint32_t> children;
-	vector<uint32_t> values;
-	vector<uint32_t> data;
-};
-
-struct StringDictionary {
-public:
-	uint32_t AddString(Vector &list, string_t str) {
-		auto it = dictionary.find(str);
-
-		if (it != dictionary.end()) {
-			return it->second;
-		}
-		auto dict_count = NumericCast<uint32_t>(dictionary.size());
-		if (dict_count >= dictionary_capacity) {
-			auto new_capacity = NextPowerOfTwo(dictionary_capacity + 1);
-			ListVector::Reserve(list, new_capacity);
-			dictionary_capacity = new_capacity;
-		}
-		auto &list_entry = ListVector::GetEntry(list);
-		auto vec_data = FlatVector::GetData<string_t>(list_entry);
-		vec_data[dict_count] = StringVector::AddStringOrBlob(list_entry, str);
-		dictionary.emplace(vec_data[dict_count], dict_count);
-		return dict_count;
+static void InitializeOffsets(DataChunk &offsets, idx_t count) {
+	auto keys = variant::OffsetData::GetKeys(offsets);
+	auto children = variant::OffsetData::GetChildren(offsets);
+	auto values = variant::OffsetData::GetValues(offsets);
+	auto blob = variant::OffsetData::GetBlob(offsets);
+	for (idx_t i = 0; i < count; i++) {
+		keys[i] = 0;
+		children[i] = 0;
+		values[i] = 0;
+		blob[i] = 0;
 	}
+}
 
-	idx_t Size() const {
-		return dictionary.size();
-	}
+static void AnalyzeValue(const VariantValue &value, idx_t row, DataChunk &offsets) {
+	auto &keys_offset = variant::OffsetData::GetKeys(offsets)[row];
+	auto &children_offset = variant::OffsetData::GetChildren(offsets)[row];
+	auto &values_offset = variant::OffsetData::GetValues(offsets)[row];
+	auto &data_offset = variant::OffsetData::GetBlob(offsets)[row];
 
-	uint32_t Find(string_t str) {
-		auto it = dictionary.find(str);
-		//! The dictionary was populated in the first pass, looked up in the second
-		D_ASSERT(it != dictionary.end());
-		return it->second;
-	}
-
-public:
-	//! Ensure uniqueness of the dictionary entries
-	string_map_t<uint32_t> dictionary;
-	idx_t dictionary_capacity = STANDARD_VECTOR_SIZE;
-};
-
-struct VariantVectorData {
-public:
-	explicit VariantVectorData(Vector &variant)
-	    : key_id_validity(FlatVector::Validity(VariantVector::GetChildrenKeyId(variant))),
-	      keys(VariantVector::GetKeys(variant)) {
-		blob_data = FlatVector::GetData<string_t>(VariantVector::GetData(variant));
-		type_ids_data = FlatVector::GetData<uint8_t>(VariantVector::GetValuesTypeId(variant));
-		byte_offset_data = FlatVector::GetData<uint32_t>(VariantVector::GetValuesByteOffset(variant));
-		key_id_data = FlatVector::GetData<uint32_t>(VariantVector::GetChildrenKeyId(variant));
-		value_id_data = FlatVector::GetData<uint32_t>(VariantVector::GetChildrenValueId(variant));
-		values_data = FlatVector::GetData<list_entry_t>(VariantVector::GetValues(variant));
-		children_data = FlatVector::GetData<list_entry_t>(VariantVector::GetChildren(variant));
-		keys_data = FlatVector::GetData<list_entry_t>(keys);
-	}
-
-public:
-	//! value
-	string_t *blob_data;
-
-	//! values
-	uint8_t *type_ids_data;
-	uint32_t *byte_offset_data;
-
-	//! children
-	uint32_t *key_id_data;
-	uint32_t *value_id_data;
-	ValidityMask &key_id_validity;
-
-	//! values | children | keys
-	list_entry_t *values_data;
-	list_entry_t *children_data;
-	list_entry_t *keys_data;
-
-	Vector &keys;
-};
-
-} // namespace
-
-static void AnalyzeValue(const VariantValue &value, idx_t row, VariantConversionOffsets &offsets) {
-	offsets.values[row]++;
+	values_offset++;
 	switch (value.value_type) {
 	case VariantValueType::OBJECT: {
 		//! Write the count of the children
 		auto &children = value.object_children;
-		offsets.data[row] += GetVarintSize(children.size());
+		data_offset += GetVarintSize(children.size());
 		if (!children.empty()) {
 			//! Write the children offset
-			offsets.data[row] += GetVarintSize(offsets.children[row]);
-			offsets.children[row] += children.size();
-			offsets.keys[row] += children.size();
+			data_offset += GetVarintSize(children_offset);
+			children_offset += children.size();
+			keys_offset += children.size();
 			for (auto &child : children) {
 				auto &child_value = child.second;
 				AnalyzeValue(child_value, row, offsets);
@@ -132,11 +66,11 @@ static void AnalyzeValue(const VariantValue &value, idx_t row, VariantConversion
 	case VariantValueType::ARRAY: {
 		//! Write the count of the children
 		auto &children = value.array_items;
-		offsets.data[row] += GetVarintSize(children.size());
+		data_offset += GetVarintSize(children.size());
 		if (!children.empty()) {
 			//! Write the children offset
-			offsets.data[row] += GetVarintSize(offsets.children[row]);
-			offsets.children[row] += children.size();
+			data_offset += GetVarintSize(children_offset);
+			children_offset += children.size();
 			for (auto &child : children) {
 				AnalyzeValue(child, row, offsets);
 			}
@@ -152,51 +86,51 @@ static void AnalyzeValue(const VariantValue &value, idx_t row, VariantConversion
 			break;
 		}
 		case LogicalTypeId::TINYINT: {
-			offsets.data[row] += sizeof(int8_t);
+			data_offset += sizeof(int8_t);
 			break;
 		}
 		case LogicalTypeId::SMALLINT: {
-			offsets.data[row] += sizeof(int16_t);
+			data_offset += sizeof(int16_t);
 			break;
 		}
 		case LogicalTypeId::INTEGER: {
-			offsets.data[row] += sizeof(int32_t);
+			data_offset += sizeof(int32_t);
 			break;
 		}
 		case LogicalTypeId::BIGINT: {
-			offsets.data[row] += sizeof(int64_t);
+			data_offset += sizeof(int64_t);
 			break;
 		}
 		case LogicalTypeId::DOUBLE: {
-			offsets.data[row] += sizeof(double);
+			data_offset += sizeof(double);
 			break;
 		}
 		case LogicalTypeId::FLOAT: {
-			offsets.data[row] += sizeof(float);
+			data_offset += sizeof(float);
 			break;
 		}
 		case LogicalTypeId::DATE: {
-			offsets.data[row] += sizeof(date_t);
+			data_offset += sizeof(date_t);
 			break;
 		}
 		case LogicalTypeId::TIMESTAMP_TZ: {
-			offsets.data[row] += sizeof(timestamp_tz_t);
+			data_offset += sizeof(timestamp_tz_t);
 			break;
 		}
 		case LogicalTypeId::TIMESTAMP: {
-			offsets.data[row] += sizeof(timestamp_t);
+			data_offset += sizeof(timestamp_t);
 			break;
 		}
 		case LogicalTypeId::TIME: {
-			offsets.data[row] += sizeof(dtime_t);
+			data_offset += sizeof(dtime_t);
 			break;
 		}
 		case LogicalTypeId::TIMESTAMP_NS: {
-			offsets.data[row] += sizeof(timestamp_ns_t);
+			data_offset += sizeof(timestamp_ns_t);
 			break;
 		}
 		case LogicalTypeId::UUID: {
-			offsets.data[row] += sizeof(hugeint_t);
+			data_offset += sizeof(hugeint_t);
 			break;
 		}
 		case LogicalTypeId::DECIMAL: {
@@ -206,19 +140,19 @@ static void AnalyzeValue(const VariantValue &value, idx_t row, VariantConversion
 			type.GetDecimalProperties(width, scale);
 
 			auto physical_type = type.InternalType();
-			offsets.data[row] += GetVarintSize(width);
-			offsets.data[row] += GetVarintSize(scale);
+			data_offset += GetVarintSize(width);
+			data_offset += GetVarintSize(scale);
 			switch (physical_type) {
 			case PhysicalType::INT32: {
-				offsets.data[row] += sizeof(int32_t);
+				data_offset += sizeof(int32_t);
 				break;
 			}
 			case PhysicalType::INT64: {
-				offsets.data[row] += sizeof(int64_t);
+				data_offset += sizeof(int64_t);
 				break;
 			}
 			case PhysicalType::INT128: {
-				offsets.data[row] += sizeof(hugeint_t);
+				data_offset += sizeof(hugeint_t);
 				break;
 			}
 			default:
@@ -230,8 +164,8 @@ static void AnalyzeValue(const VariantValue &value, idx_t row, VariantConversion
 		case LogicalTypeId::BLOB:
 		case LogicalTypeId::VARCHAR: {
 			auto string_data = primitive.GetValueUnsafe<string_t>();
-			offsets.data[row] += GetVarintSize(string_data.GetSize());
-			offsets.data[row] += string_data.GetSize();
+			data_offset += GetVarintSize(string_data.GetSize());
+			data_offset += string_data.GetSize();
 			break;
 		}
 		default:
@@ -245,13 +179,23 @@ static void AnalyzeValue(const VariantValue &value, idx_t row, VariantConversion
 	}
 }
 
-static void ConvertValue(const VariantValue &value, VariantVectorData &result, idx_t row,
-                         VariantConversionOffsets &offsets, SelectionVector &keys_selvec,
-                         StringDictionary &dictionary) {
+uint32_t GetOrCreateIndex(OrderedOwningStringMap<uint32_t> &dictionary, const string_t &key) {
+	auto unsorted_idx = dictionary.size();
+	//! This will later be remapped to the sorted idx (see FinalizeVariantKeys in 'to_variant.cpp')
+	return dictionary.emplace(std::make_pair(key, unsorted_idx)).first->second;
+}
+
+static void ConvertValue(const VariantValue &value, VariantVectorData &result, idx_t row, DataChunk &offsets,
+                         SelectionVector &keys_selvec, OrderedOwningStringMap<uint32_t> &dictionary) {
 	auto blob_data = data_ptr_cast(result.blob_data[row].GetDataWriteable());
-	auto keys_offset = result.keys_data[row].offset;
-	auto children_offset = result.children_data[row].offset;
-	auto values_offset = result.values_data[row].offset;
+	auto keys_list_offset = result.keys_data[row].offset;
+	auto children_list_offset = result.children_data[row].offset;
+	auto values_list_offset = result.values_data[row].offset;
+
+	auto &keys_offset = variant::OffsetData::GetKeys(offsets)[row];
+	auto &children_offset = variant::OffsetData::GetChildren(offsets)[row];
+	auto &values_offset = variant::OffsetData::GetValues(offsets)[row];
+	auto &data_offset = variant::OffsetData::GetBlob(offsets)[row];
 
 	switch (value.value_type) {
 	case VariantValueType::OBJECT: {
@@ -259,35 +203,34 @@ static void ConvertValue(const VariantValue &value, VariantVectorData &result, i
 		auto &children = value.object_children;
 
 		//! values
-		result.type_ids_data[values_offset + offsets.values[row]] = static_cast<uint8_t>(VariantLogicalType::OBJECT);
-		result.byte_offset_data[values_offset + offsets.values[row]] = offsets.data[row];
-		offsets.values[row]++;
+		result.type_ids_data[values_list_offset + values_offset] = static_cast<uint8_t>(VariantLogicalType::OBJECT);
+		result.byte_offset_data[values_list_offset + values_offset] = data_offset;
+		values_offset++;
 
 		//! data
-		VarintEncode<uint32_t>(children.size(), blob_data + offsets.data[row]);
-		offsets.data[row] += GetVarintSize(children.size());
+		VarintEncode<uint32_t>(children.size(), blob_data + data_offset);
+		data_offset += GetVarintSize(children.size());
 
 		if (!children.empty()) {
 			//! Write the children offset
-			VarintEncode<uint32_t>(offsets.children[row], blob_data + offsets.data[row]);
-			offsets.data[row] += GetVarintSize(offsets.children[row]);
+			VarintEncode<uint32_t>(children_offset, blob_data + data_offset);
+			data_offset += GetVarintSize(children_offset);
 
-			auto start_of_children = offsets.children[row];
-			offsets.children[row] += children.size();
+			auto start_of_children = children_offset;
+			children_offset += children.size();
 
 			auto it = children.begin();
 			for (idx_t i = 0; i < children.size(); i++) {
 				//! children
-				result.key_id_data[children_offset + start_of_children + i] = offsets.keys[row];
-				result.value_id_data[children_offset + start_of_children + i] = offsets.values[row];
+				result.keys_index_data[children_list_offset + start_of_children + i] = keys_offset;
+				result.values_index_data[children_list_offset + start_of_children + i] = values_offset;
 
 				auto &child = *it;
 				//! keys
 				auto &child_key = child.first;
-				auto dictionary_index =
-				    dictionary.AddString(result.keys, string_t(child_key.c_str(), child_key.size()));
-				keys_selvec.set_index(keys_offset + offsets.keys[row], dictionary_index);
-				offsets.keys[row]++;
+				auto dictionary_index = GetOrCreateIndex(dictionary, child_key);
+				keys_selvec.set_index(keys_list_offset + keys_offset, dictionary_index);
+				keys_offset++;
 
 				auto &child_value = child.second;
 				ConvertValue(child_value, result, row, offsets, keys_selvec, dictionary);
@@ -301,26 +244,26 @@ static void ConvertValue(const VariantValue &value, VariantVectorData &result, i
 		auto &children = value.array_items;
 
 		//! values
-		result.type_ids_data[values_offset + offsets.values[row]] = static_cast<uint8_t>(VariantLogicalType::ARRAY);
-		result.byte_offset_data[values_offset + offsets.values[row]] = offsets.data[row];
-		offsets.values[row]++;
+		result.type_ids_data[values_list_offset + values_offset] = static_cast<uint8_t>(VariantLogicalType::ARRAY);
+		result.byte_offset_data[values_list_offset + values_offset] = data_offset;
+		values_offset++;
 
 		//! data
-		VarintEncode<uint32_t>(children.size(), blob_data + offsets.data[row]);
-		offsets.data[row] += GetVarintSize(children.size());
+		VarintEncode<uint32_t>(children.size(), blob_data + data_offset);
+		data_offset += GetVarintSize(children.size());
 
 		if (!children.empty()) {
 			//! Write the children offset
-			VarintEncode<uint32_t>(offsets.children[row], blob_data + offsets.data[row]);
-			offsets.data[row] += GetVarintSize(offsets.children[row]);
+			VarintEncode<uint32_t>(children_offset, blob_data + data_offset);
+			data_offset += GetVarintSize(children_offset);
 
-			auto start_of_children = offsets.children[row];
-			offsets.children[row] += children.size();
+			auto start_of_children = children_offset;
+			children_offset += children.size();
 
 			for (idx_t i = 0; i < children.size(); i++) {
 				//! children
-				result.key_id_validity.SetInvalid(children_offset + start_of_children + i);
-				result.value_id_data[children_offset + start_of_children + i] = offsets.values[row];
+				result.keys_index_validity.SetInvalid(children_list_offset + start_of_children + i);
+				result.values_index_data[children_list_offset + start_of_children + i] = values_offset;
 
 				auto &child_value = children[i];
 				ConvertValue(child_value, result, row, offsets, keys_selvec, dictionary);
@@ -331,102 +274,101 @@ static void ConvertValue(const VariantValue &value, VariantVectorData &result, i
 	case VariantValueType::PRIMITIVE: {
 		auto &primitive = value.primitive_value;
 		auto type_id = primitive.type().id();
-		result.byte_offset_data[values_offset + offsets.values[row]] = offsets.data[row];
+		result.byte_offset_data[values_list_offset + values_offset] = data_offset;
 		switch (type_id) {
 		case LogicalTypeId::BOOLEAN: {
 			if (primitive.GetValue<bool>()) {
-				result.type_ids_data[values_offset + offsets.values[row]] =
+				result.type_ids_data[values_list_offset + values_offset] =
 				    static_cast<uint8_t>(VariantLogicalType::BOOL_TRUE);
 			} else {
-				result.type_ids_data[values_offset + offsets.values[row]] =
+				result.type_ids_data[values_list_offset + values_offset] =
 				    static_cast<uint8_t>(VariantLogicalType::BOOL_FALSE);
 			}
 			break;
 		}
 		case LogicalTypeId::SQLNULL: {
-			result.type_ids_data[values_offset + offsets.values[row]] =
+			result.type_ids_data[values_list_offset + values_offset] =
 			    static_cast<uint8_t>(VariantLogicalType::VARIANT_NULL);
 			break;
 		}
 		case LogicalTypeId::TINYINT: {
-			result.type_ids_data[values_offset + offsets.values[row]] = static_cast<uint8_t>(VariantLogicalType::INT8);
-			Store(primitive.GetValueUnsafe<int8_t>(), blob_data + offsets.data[row]);
-			offsets.data[row] += sizeof(int8_t);
+			result.type_ids_data[values_list_offset + values_offset] = static_cast<uint8_t>(VariantLogicalType::INT8);
+			Store(primitive.GetValueUnsafe<int8_t>(), blob_data + data_offset);
+			data_offset += sizeof(int8_t);
 			break;
 		}
 		case LogicalTypeId::SMALLINT: {
-			result.type_ids_data[values_offset + offsets.values[row]] = static_cast<uint8_t>(VariantLogicalType::INT16);
-			Store(primitive.GetValueUnsafe<int16_t>(), blob_data + offsets.data[row]);
-			offsets.data[row] += sizeof(int16_t);
+			result.type_ids_data[values_list_offset + values_offset] = static_cast<uint8_t>(VariantLogicalType::INT16);
+			Store(primitive.GetValueUnsafe<int16_t>(), blob_data + data_offset);
+			data_offset += sizeof(int16_t);
 			break;
 		}
 		case LogicalTypeId::INTEGER: {
-			result.type_ids_data[values_offset + offsets.values[row]] = static_cast<uint8_t>(VariantLogicalType::INT32);
-			Store(primitive.GetValueUnsafe<int32_t>(), blob_data + offsets.data[row]);
-			offsets.data[row] += sizeof(int32_t);
+			result.type_ids_data[values_list_offset + values_offset] = static_cast<uint8_t>(VariantLogicalType::INT32);
+			Store(primitive.GetValueUnsafe<int32_t>(), blob_data + data_offset);
+			data_offset += sizeof(int32_t);
 			break;
 		}
 		case LogicalTypeId::BIGINT: {
-			result.type_ids_data[values_offset + offsets.values[row]] = static_cast<uint8_t>(VariantLogicalType::INT64);
-			Store(primitive.GetValueUnsafe<int64_t>(), blob_data + offsets.data[row]);
-			offsets.data[row] += sizeof(int64_t);
+			result.type_ids_data[values_list_offset + values_offset] = static_cast<uint8_t>(VariantLogicalType::INT64);
+			Store(primitive.GetValueUnsafe<int64_t>(), blob_data + data_offset);
+			data_offset += sizeof(int64_t);
 			break;
 		}
 		case LogicalTypeId::DOUBLE: {
-			result.type_ids_data[values_offset + offsets.values[row]] =
-			    static_cast<uint8_t>(VariantLogicalType::DOUBLE);
-			Store(primitive.GetValueUnsafe<double>(), blob_data + offsets.data[row]);
-			offsets.data[row] += sizeof(double);
+			result.type_ids_data[values_list_offset + values_offset] = static_cast<uint8_t>(VariantLogicalType::DOUBLE);
+			Store(primitive.GetValueUnsafe<double>(), blob_data + data_offset);
+			data_offset += sizeof(double);
 			break;
 		}
 		case LogicalTypeId::FLOAT: {
-			result.type_ids_data[values_offset + offsets.values[row]] = static_cast<uint8_t>(VariantLogicalType::FLOAT);
-			Store(primitive.GetValueUnsafe<float>(), blob_data + offsets.data[row]);
-			offsets.data[row] += sizeof(float);
+			result.type_ids_data[values_list_offset + values_offset] = static_cast<uint8_t>(VariantLogicalType::FLOAT);
+			Store(primitive.GetValueUnsafe<float>(), blob_data + data_offset);
+			data_offset += sizeof(float);
 			break;
 		}
 		case LogicalTypeId::DATE: {
-			result.type_ids_data[values_offset + offsets.values[row]] = static_cast<uint8_t>(VariantLogicalType::DATE);
-			Store(primitive.GetValueUnsafe<date_t>(), blob_data + offsets.data[row]);
-			offsets.data[row] += sizeof(date_t);
+			result.type_ids_data[values_list_offset + values_offset] = static_cast<uint8_t>(VariantLogicalType::DATE);
+			Store(primitive.GetValueUnsafe<date_t>(), blob_data + data_offset);
+			data_offset += sizeof(date_t);
 			break;
 		}
 		case LogicalTypeId::TIMESTAMP_TZ: {
-			result.type_ids_data[values_offset + offsets.values[row]] =
+			result.type_ids_data[values_list_offset + values_offset] =
 			    static_cast<uint8_t>(VariantLogicalType::TIMESTAMP_MICROS_TZ);
-			Store(primitive.GetValueUnsafe<timestamp_tz_t>(), blob_data + offsets.data[row]);
-			offsets.data[row] += sizeof(timestamp_tz_t);
+			Store(primitive.GetValueUnsafe<timestamp_tz_t>(), blob_data + data_offset);
+			data_offset += sizeof(timestamp_tz_t);
 			break;
 		}
 		case LogicalTypeId::TIMESTAMP: {
-			result.type_ids_data[values_offset + offsets.values[row]] =
+			result.type_ids_data[values_list_offset + values_offset] =
 			    static_cast<uint8_t>(VariantLogicalType::TIMESTAMP_MICROS);
-			Store(primitive.GetValueUnsafe<timestamp_t>(), blob_data + offsets.data[row]);
-			offsets.data[row] += sizeof(timestamp_t);
+			Store(primitive.GetValueUnsafe<timestamp_t>(), blob_data + data_offset);
+			data_offset += sizeof(timestamp_t);
 			break;
 		}
 		case LogicalTypeId::TIME: {
-			result.type_ids_data[values_offset + offsets.values[row]] =
+			result.type_ids_data[values_list_offset + values_offset] =
 			    static_cast<uint8_t>(VariantLogicalType::TIME_MICROS);
-			Store(primitive.GetValueUnsafe<dtime_t>(), blob_data + offsets.data[row]);
-			offsets.data[row] += sizeof(dtime_t);
+			Store(primitive.GetValueUnsafe<dtime_t>(), blob_data + data_offset);
+			data_offset += sizeof(dtime_t);
 			break;
 		}
 		case LogicalTypeId::TIMESTAMP_NS: {
-			result.type_ids_data[values_offset + offsets.values[row]] =
+			result.type_ids_data[values_list_offset + values_offset] =
 			    static_cast<uint8_t>(VariantLogicalType::TIMESTAMP_NANOS);
-			Store(primitive.GetValueUnsafe<timestamp_ns_t>(), blob_data + offsets.data[row]);
-			offsets.data[row] += sizeof(timestamp_ns_t);
+			Store(primitive.GetValueUnsafe<timestamp_ns_t>(), blob_data + data_offset);
+			data_offset += sizeof(timestamp_ns_t);
 			break;
 		}
 		case LogicalTypeId::UUID: {
-			result.type_ids_data[values_offset + offsets.values[row]] = static_cast<uint8_t>(VariantLogicalType::UUID);
-			Store(primitive.GetValueUnsafe<hugeint_t>(), blob_data + offsets.data[row]);
-			offsets.data[row] += sizeof(hugeint_t);
+			result.type_ids_data[values_list_offset + values_offset] = static_cast<uint8_t>(VariantLogicalType::UUID);
+			Store(primitive.GetValueUnsafe<hugeint_t>(), blob_data + data_offset);
+			data_offset += sizeof(hugeint_t);
 			break;
 		}
 		case LogicalTypeId::DECIMAL: {
-			result.type_ids_data[values_offset + offsets.values[row]] =
+			result.type_ids_data[values_list_offset + values_offset] =
 			    static_cast<uint8_t>(VariantLogicalType::DECIMAL);
 			auto &type = primitive.type();
 			uint8_t width;
@@ -434,24 +376,24 @@ static void ConvertValue(const VariantValue &value, VariantVectorData &result, i
 			type.GetDecimalProperties(width, scale);
 
 			auto physical_type = type.InternalType();
-			VarintEncode<uint32_t>(width, blob_data + offsets.data[row]);
-			offsets.data[row] += GetVarintSize(width);
-			VarintEncode<uint32_t>(scale, blob_data + offsets.data[row]);
-			offsets.data[row] += GetVarintSize(scale);
+			VarintEncode<uint32_t>(width, blob_data + data_offset);
+			data_offset += GetVarintSize(width);
+			VarintEncode<uint32_t>(scale, blob_data + data_offset);
+			data_offset += GetVarintSize(scale);
 			switch (physical_type) {
 			case PhysicalType::INT32: {
-				Store(primitive.GetValueUnsafe<int32_t>(), blob_data + offsets.data[row]);
-				offsets.data[row] += sizeof(int32_t);
+				Store(primitive.GetValueUnsafe<int32_t>(), blob_data + data_offset);
+				data_offset += sizeof(int32_t);
 				break;
 			}
 			case PhysicalType::INT64: {
-				Store(primitive.GetValueUnsafe<int64_t>(), blob_data + offsets.data[row]);
-				offsets.data[row] += sizeof(int64_t);
+				Store(primitive.GetValueUnsafe<int64_t>(), blob_data + data_offset);
+				data_offset += sizeof(int64_t);
 				break;
 			}
 			case PhysicalType::INT128: {
-				Store(primitive.GetValueUnsafe<hugeint_t>(), blob_data + offsets.data[row]);
-				offsets.data[row] += sizeof(hugeint_t);
+				Store(primitive.GetValueUnsafe<hugeint_t>(), blob_data + data_offset);
+				data_offset += sizeof(hugeint_t);
 				break;
 			}
 			default:
@@ -463,25 +405,25 @@ static void ConvertValue(const VariantValue &value, VariantVectorData &result, i
 		case LogicalTypeId::BLOB:
 		case LogicalTypeId::VARCHAR: {
 			if (type_id == LogicalTypeId::BLOB) {
-				result.type_ids_data[values_offset + offsets.values[row]] =
+				result.type_ids_data[values_list_offset + values_offset] =
 				    static_cast<uint8_t>(VariantLogicalType::BLOB);
 			} else {
-				result.type_ids_data[values_offset + offsets.values[row]] =
+				result.type_ids_data[values_list_offset + values_offset] =
 				    static_cast<uint8_t>(VariantLogicalType::VARCHAR);
 			}
 			auto string_data = primitive.GetValueUnsafe<string_t>();
 			auto string_size = string_data.GetSize();
-			VarintEncode<uint32_t>(string_size, blob_data + offsets.data[row]);
-			offsets.data[row] += GetVarintSize(string_size);
-			memcpy(blob_data + offsets.data[row], string_data.GetData(), string_size);
-			offsets.data[row] += string_size;
+			VarintEncode<uint32_t>(string_size, blob_data + data_offset);
+			data_offset += GetVarintSize(string_size);
+			memcpy(blob_data + data_offset, string_data.GetData(), string_size);
+			data_offset += string_size;
 			break;
 		}
 		default:
 			throw InternalException("Encountered unrecognized LogicalType in VariantValue::AnalyzeValue: %s",
 			                        primitive.type().ToString());
 		}
-		offsets.values[row]++;
+		values_offset++;
 		break;
 	}
 	default:
@@ -490,8 +432,7 @@ static void ConvertValue(const VariantValue &value, VariantVectorData &result, i
 }
 
 //! Copied and modified from 'to_variant.cpp'
-static void InitializeVariants(VariantConversionOffsets &offsets, Vector &result, SelectionVector &keys_selvec,
-                               idx_t &selvec_size) {
+static void InitializeVariants(DataChunk &offsets, Vector &result, SelectionVector &keys_selvec, idx_t &selvec_size) {
 	auto &keys = VariantVector::GetKeys(result);
 	auto keys_data = ListVector::GetData(keys);
 
@@ -508,19 +449,19 @@ static void InitializeVariants(VariantConversionOffsets &offsets, Vector &result
 	idx_t values_offset = 0;
 	idx_t keys_offset = 0;
 
-	auto keys_sizes = offsets.keys;
-	auto children_sizes = offsets.children;
-	auto values_sizes = offsets.values;
-	auto blob_sizes = offsets.data;
+	auto keys_sizes = variant::OffsetData::GetKeys(offsets);
+	auto children_sizes = variant::OffsetData::GetChildren(offsets);
+	auto values_sizes = variant::OffsetData::GetValues(offsets);
+	auto blob_sizes = variant::OffsetData::GetBlob(offsets);
 
-	auto count = values_sizes.size();
+	auto count = offsets.size();
 	for (idx_t i = 0; i < count; i++) {
 		auto &keys_entry = keys_data[i];
 		auto &children_entry = children_data[i];
 		auto &values_entry = values_data[i];
 
 		//! keys
-		keys_entry.length = offsets.keys[i];
+		keys_entry.length = keys_sizes[i];
 		keys_entry.offset = keys_offset;
 		keys_offset += keys_entry.length;
 
@@ -554,13 +495,17 @@ static void InitializeVariants(VariantConversionOffsets &offsets, Vector &result
 
 void VariantValue::ToVARIANT(vector<VariantValue> &input, Vector &result) {
 	auto count = input.size();
+	if (input.empty()) {
+		return;
+	}
 
 	//! Keep track of all the offsets for each row.
-	VariantConversionOffsets analyze_offsets;
-	analyze_offsets.keys.resize(count, 0);
-	analyze_offsets.children.resize(count, 0);
-	analyze_offsets.values.resize(count, 0);
-	analyze_offsets.data.resize(count, 0);
+	DataChunk analyze_offsets;
+	analyze_offsets.Initialize(
+	    Allocator::DefaultAllocator(),
+	    {LogicalType::UINTEGER, LogicalType::UINTEGER, LogicalType::UINTEGER, LogicalType::UINTEGER}, count);
+	analyze_offsets.SetCardinality(count);
+	InitializeOffsets(analyze_offsets, count);
 
 	for (idx_t i = 0; i < count; i++) {
 		auto &value = input[i];
@@ -573,14 +518,17 @@ void VariantValue::ToVARIANT(vector<VariantValue> &input, Vector &result) {
 	SelectionVector keys_selvec;
 	idx_t keys_selvec_size;
 	InitializeVariants(analyze_offsets, result, keys_selvec, keys_selvec_size);
-	StringDictionary dictionary;
 
-	//! Reset the offsets
-	VariantConversionOffsets conversion_offsets;
-	conversion_offsets.keys.resize(count, 0);
-	conversion_offsets.children.resize(count, 0);
-	conversion_offsets.values.resize(count, 0);
-	conversion_offsets.data.resize(count, 0);
+	auto &keys = VariantVector::GetKeys(result);
+	auto &keys_entry = ListVector::GetEntry(keys);
+	OrderedOwningStringMap<uint32_t> dictionary(StringVector::GetStringBuffer(keys_entry).GetStringAllocator());
+
+	DataChunk conversion_offsets;
+	conversion_offsets.Initialize(
+	    Allocator::DefaultAllocator(),
+	    {LogicalType::UINTEGER, LogicalType::UINTEGER, LogicalType::UINTEGER, LogicalType::UINTEGER}, count);
+	conversion_offsets.SetCardinality(count);
+	InitializeOffsets(conversion_offsets, count);
 
 	VariantVectorData variant_data(result);
 	for (idx_t i = 0; i < count; i++) {
@@ -593,26 +541,43 @@ void VariantValue::ToVARIANT(vector<VariantValue> &input, Vector &result) {
 	}
 
 #ifdef DEBUG
-	for (idx_t i = 0; i < count; i++) {
-		D_ASSERT(conversion_offsets.keys[i] == analyze_offsets.keys[i]);
-		D_ASSERT(conversion_offsets.children[i] == analyze_offsets.children[i]);
-		D_ASSERT(conversion_offsets.values[i] == analyze_offsets.values[i]);
-		D_ASSERT(conversion_offsets.data[i] == analyze_offsets.data[i]);
+	{
+		auto conversion_keys_offset = variant::OffsetData::GetKeys(conversion_offsets);
+		auto conversion_children_offset = variant::OffsetData::GetChildren(conversion_offsets);
+		auto conversion_values_offset = variant::OffsetData::GetValues(conversion_offsets);
+		auto conversion_data_offset = variant::OffsetData::GetBlob(conversion_offsets);
+
+		auto analyze_keys_offset = variant::OffsetData::GetKeys(analyze_offsets);
+		auto analyze_children_offset = variant::OffsetData::GetChildren(analyze_offsets);
+		auto analyze_values_offset = variant::OffsetData::GetValues(analyze_offsets);
+		auto analyze_data_offset = variant::OffsetData::GetBlob(analyze_offsets);
+
+		for (idx_t i = 0; i < count; i++) {
+			D_ASSERT(conversion_keys_offset[i] == analyze_keys_offset[i]);
+			D_ASSERT(conversion_children_offset[i] == analyze_children_offset[i]);
+			D_ASSERT(conversion_values_offset[i] == analyze_values_offset[i]);
+			D_ASSERT(conversion_data_offset[i] == analyze_data_offset[i]);
+		}
 	}
+
 #endif
 
 	//! Finalize the 'data' column of the VARIANT
+	auto conversion_data_offsets = variant::OffsetData::GetBlob(conversion_offsets);
 	for (idx_t i = 0; i < count; i++) {
 		auto &data = variant_data.blob_data[i];
-		data.SetSizeAndFinalize(conversion_offsets.data[i]);
+		data.SetSizeAndFinalize(conversion_data_offsets[i]);
 	}
 
-	auto &keys = VariantVector::GetKeys(result);
-	auto &keys_entry = ListVector::GetEntry(keys);
-	VariantUtils::SortVariantKeys(keys_entry, dictionary.Size(), keys_selvec, keys_selvec_size);
+	VariantUtils::FinalizeVariantKeys(result, dictionary, keys_selvec, keys_selvec_size);
 
 	keys_entry.Slice(keys_selvec, keys_selvec_size);
 	keys_entry.Flatten(keys_selvec_size);
+
+	if (input.size() == 1) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	}
+	result.Verify(count);
 }
 
 yyjson_mut_val *VariantValue::ToJSON(ClientContext &context, yyjson_mut_doc *doc) const {

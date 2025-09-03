@@ -1652,7 +1652,7 @@ idx_t StructType::GetChildCount(const LogicalType &type) {
 bool StructType::IsUnnamed(const LogicalType &type) {
 	auto &child_types = StructType::GetChildTypes(type);
 	if (child_types.empty()) {
-		return false;
+		return true;
 	}
 	return child_types[0].first.empty(); // NOLINT
 }
