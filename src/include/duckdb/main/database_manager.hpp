@@ -17,6 +17,7 @@
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/parser/parsed_data/attach_info.hpp"
+#include "duckdb/main/database_file_path_manager.hpp"
 
 namespace duckdb {
 class AttachedDatabase;
@@ -80,10 +81,7 @@ public:
 	//! Scans the catalog set and returns each committed database entry
 	vector<shared_ptr<AttachedDatabase>> GetDatabases();
 	//! Returns the approximate count of attached databases.
-	idx_t ApproxDatabaseCount() {
-		lock_guard<mutex> path_lock(db_paths_lock);
-		return db_paths_to_name.size();
-	}
+	idx_t ApproxDatabaseCount();
 	//! Removes all databases from the catalog set. This is necessary for the database instance's destructor,
 	//! as the database manager has to be alive when destroying the catalog set objects.
 	void ResetDatabases(unique_ptr<TaskScheduler> &scheduler);
@@ -124,13 +122,8 @@ private:
 	atomic<transaction_t> current_transaction_id;
 	//! The current default database
 	string default_database;
-
-	//! The lock to add entries to the database path map
-	mutex db_paths_lock;
-	//! A set containing all attached database path
-	//! This allows to attach many databases efficiently, and to avoid attaching the
-	//! same file path twice
-	case_insensitive_map_t<string> db_paths_to_name;
+	//! Manager for ensuring we never open the same database file twice in the same program
+	shared_ptr<DatabaseFilePathManager> path_manager;
 };
 
 } // namespace duckdb
