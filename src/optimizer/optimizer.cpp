@@ -169,6 +169,12 @@ void Optimizer::RunBuiltInOptimizers() {
 		plan = deliminator.Optimize(std::move(plan));
 	});
 
+	// try to inline CTEs instead of materialization
+	RunOptimizer(OptimizerType::CTE_INLINING, [&]() {
+		CTEInlining cte_inlining(*this);
+		plan = cte_inlining.Optimize(std::move(plan));
+	});
+
 	// Pulls up empty results
 	RunOptimizer(OptimizerType::EMPTY_RESULT_PULLUP, [&]() {
 		EmptyResultPullup empty_result_pullup;
