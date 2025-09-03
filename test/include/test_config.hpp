@@ -77,7 +77,6 @@ private:
 	T GetOptionOrDefault(const string &name, T default_val);
 
 	static string ReadFileToString(const string &path);
-	const char *get_value();
 };
 
 class FailureSummary {

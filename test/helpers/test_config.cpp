@@ -295,9 +295,6 @@ string TestConfiguration::ReadFileToString(const string &path) {
 	return buffer.str();
 }
 
-const char *TestConfiguration::get_value() {
-	return "skip_tests";
-}
 void TestConfiguration::LoadConfig(const string &config_path) {
 	// read the config file
 	auto buffer = ReadFileToString(config_path);
@@ -309,7 +306,7 @@ void TestConfiguration::LoadConfig(const string &config_path) {
 	}
 
 	// Convert to unordered_set<string> the list of tests to be skipped
-	auto entry = options.find(get_value());
+	auto entry = options.find("skip_tests");
 	if (entry != options.end()) {
 		auto skip_list_entry = ListValue::GetChildren(entry->second);
 		for (const auto &value : skip_list_entry) {
