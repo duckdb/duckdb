@@ -67,7 +67,7 @@ true
 
 # mix with non-null values
 statement ok
-INSERT INTO nulls VALUES (1), (1), (1), (2), (2), (2)
+CREATE OR REPLACE TABLE nulls AS FROM nulls UNION ALL VALUES (1), (1), (1), (2), (2), (2)
 
 query III
 SELECT COUNT(*), COUNT(i::INT), SUM(i::INT) FROM nulls
