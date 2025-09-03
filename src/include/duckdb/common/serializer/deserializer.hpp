@@ -201,7 +201,6 @@ public:
 			OnOptionalPropertyEnd(false);
 			return;
 		}
-		OnOptionalPropertyBegin(field_id, tag);
 		ReadListInternal(func);
 		OnOptionalPropertyEnd(true);
 	}
