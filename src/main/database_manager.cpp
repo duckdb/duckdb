@@ -86,15 +86,23 @@ optional_ptr<AttachedDatabase> DatabaseManager::FinalizeAttach(ClientContext &co
 	if (default_database.empty()) {
 		default_database = name;
 	}
-	if (info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
-		DetachDatabase(context, name, OnEntryNotFound::RETURN_NULL);
-	}
+	shared_ptr<AttachedDatabase> detached_db;
 	{
 		lock_guard<mutex> guard(databases_lock);
 		auto entry = databases.emplace(name, attached_db);
 		if (!entry.second) {
-			throw BinderException("Failed to attach database: database with name \"%s\" already exists", name);
+			if (info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
+				detached_db = std::move(entry.first);
+				databases.erase(entry);
+
+				databases[name] = attached_db;
+			} else {
+				throw BinderException("Failed to attach database: database with name \"%s\" already exists", name);
+			}
 		}
+	}
+	if (detached_db) {
+		detached_db->OnDetach(context);
 	}
 	auto &meta_transaction = MetaTransaction::Get(context);
 	auto &db_ref = meta_transaction.UseDatabase(attached_db);
