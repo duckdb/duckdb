@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "bloom_filter.hpp"
 #include "duckdb/common/types/column/column_data_consumer.hpp"
 #include "duckdb/common/types/column/partitioned_column_data.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
@@ -19,6 +18,7 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/ht_entry.hpp"
+#include "duckdb/planner/filter/bloom_filter.hpp"
 
 namespace duckdb {
 
@@ -344,7 +344,7 @@ public:
 	// External Join
 	//===--------------------------------------------------------------------===//
 	static constexpr const idx_t INITIAL_RADIX_BITS = 4;
-	BloomFilter bloom_filter;
+	CacheSectorizedBloomFilter bloom_filter;
 
 	struct ProbeSpillLocalAppendState {
 		ProbeSpillLocalAppendState() {

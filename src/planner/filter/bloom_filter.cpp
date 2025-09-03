@@ -1,15 +1,9 @@
 
-#include "duckdb/execution/bloom_filter.hpp"
 
-#include "duckdb/common/types/selection_vector.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
-
-#include <random>
-#include <cmath>
-#include <iostream>
-
+#include "duckdb/planner/filter/bloom_filter.hpp"
 namespace duckdb {
-namespace {
+
+
 static idx_t CeilPowerOfTwo(idx_t n) {
 	if (n <= 1) {
 		return 1;
@@ -37,9 +31,8 @@ static Vector HashColumns(DataChunk &chunk, const vector<idx_t> &cols) {
 
 	return hashes;
 }
-} // namespace
 
-void BloomFilter::Initialize(ClientContext &context_p, idx_t est_num_rows) {
+void CacheSectorizedBloomFilter::Initialize(ClientContext &context_p, idx_t est_num_rows) {
 	context = &context_p;
 	buffer_manager = &BufferManager::GetBufferManager(*context);
 
@@ -53,23 +46,24 @@ void BloomFilter::Initialize(ClientContext &context_p, idx_t est_num_rows) {
 	std::fill_n(blocks, num_sectors, 0);
 }
 
-idx_t BloomFilter::Lookup(DataChunk &chunk, vector<uint32_t> &results, const vector<idx_t> &bound_cols_applied) const {
+idx_t CacheSectorizedBloomFilter::Lookup(DataChunk &chunk, vector<uint32_t> &results, const vector<idx_t> &bound_cols_applied) const {
 	const idx_t count = chunk.size();
 	const Vector hashes = HashColumns(chunk, bound_cols_applied);
 	return BloomFilterLookup(count, reinterpret_cast<uint64_t *>(hashes.GetData()), blocks, results.data());
 }
 
-idx_t BloomFilter::LookupHashes(Vector &hashes,const idx_t count, vector<uint32_t> &results) const {
+idx_t CacheSectorizedBloomFilter::LookupHashes(Vector &hashes,const idx_t count, vector<uint32_t> &results) const {
 	return BloomFilterLookup(count, reinterpret_cast<uint64_t *>(hashes.GetData()), blocks, results.data());
 }
 
-void BloomFilter::InsertKeys(DataChunk &chunk, const vector<idx_t> &bound_cols_built) {
+void CacheSectorizedBloomFilter::InsertKeys(DataChunk &chunk, const vector<idx_t> &bound_cols_built) {
 	Vector hashes = HashColumns(chunk, bound_cols_built);
 	InsertHashes(hashes, chunk.size());
 }
 
-void BloomFilter::InsertHashes(Vector hashes, const idx_t count) {
+void CacheSectorizedBloomFilter::InsertHashes(Vector hashes, const idx_t count) {
 	std::lock_guard<std::mutex> lock(insert_lock);
 	BloomFilterInsert(count, reinterpret_cast<uint64_t *>(hashes.GetData()), blocks);
 }
-} // namespace duckdb
+
+}

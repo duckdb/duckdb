@@ -1,17 +1,18 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/optimizer/predicate_transfer/bloom_filter/bloom_filter.hpp
+// duckdb/planner/filter/bloom_filter
 //
 //
 //===----------------------------------------------------------------------===//
+
 #pragma once
 
-#include "duckdb/planner/column_binding.hpp"
+#include "duckdb/planner/table_filter.hpp"
+#include "duckdb/common/types/value.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
-#include <cstdint>
-#include <mutex>
+namespace duckdb {
 
 #ifndef BF_RESTRICT
 #if defined(_MSC_VER)
@@ -24,17 +25,16 @@
 #endif
 #endif
 
-namespace duckdb {
+class CacheSectorizedBloomFilter {
 
-static constexpr const idx_t MAX_NUM_SECTORS = (1ULL << 26);
-static constexpr const idx_t MIN_NUM_BITS_PER_KEY = 16;
-static constexpr const idx_t MIN_NUM_BITS = 512;
-static constexpr const idx_t LOG_SECTOR_SIZE = 5;
-static constexpr const idx_t SIMD_BATCH_SIZE = 16;
+	static constexpr const idx_t MAX_NUM_SECTORS = (1ULL << 26);
+	static constexpr const idx_t MIN_NUM_BITS_PER_KEY = 16;
+	static constexpr const idx_t MIN_NUM_BITS = 512;
+	static constexpr const idx_t LOG_SECTOR_SIZE = 5;
+	static constexpr const idx_t SIMD_BATCH_SIZE = 16;
 
-class BloomFilter {
 public:
-	BloomFilter() = default;
+	CacheSectorizedBloomFilter() = default;
 	void Initialize(ClientContext &context_p, idx_t est_num_rows);
 
 	ClientContext *context;
@@ -44,7 +44,7 @@ public:
 
 public:
 	idx_t Lookup(DataChunk &chunk, vector<uint32_t> &results, const vector<idx_t> &bound_cols_applied) const;
-	idx_t LookupHashes(Vector &hashes, const idx_t count_p,vector<uint32_t> &results) const;
+	idx_t LookupHashes(Vector &hashes, const idx_t count_p, vector<uint32_t> &results) const;
 	void InsertKeys(DataChunk &chunk, const vector<idx_t> &bound_cols_built);
 	void InsertHashes(Vector hashes, const idx_t count);
 
@@ -97,7 +97,7 @@ private:
 
 private:
 	idx_t BloomFilterLookup(const idx_t num, const uint64_t *BF_RESTRICT key64, const uint32_t *BF_RESTRICT bf,
-	                      uint32_t *BF_RESTRICT out) const {
+	                        uint32_t *BF_RESTRICT out) const {
 		const uint32_t *BF_RESTRICT key = reinterpret_cast<const uint32_t * BF_RESTRICT>(key64);
 		for (idx_t i = 0; i + SIMD_BATCH_SIZE <= num; i += SIMD_BATCH_SIZE) {
 			uint32_t block1[SIMD_BATCH_SIZE], mask1[SIMD_BATCH_SIZE];
@@ -156,28 +156,24 @@ private:
 	AllocatedData buf_;
 };
 
-class BloomFilterUsage {
+class BloomFilter : public TableFilter {
 public:
-	BloomFilterUsage(shared_ptr<BloomFilter> bloom_filter, const vector<idx_t> &applied, const vector<idx_t> &built)
-	    : bloom_filter(std::move(bloom_filter)), bound_cols_applied(applied), bound_cols_built(built) {
-	}
-
-	bool IsValid() const {
-		return bloom_filter->finalized_;
-	}
+	static constexpr auto TYPE = TableFilterType::BLOOM_FILTER;
 
 public:
-	idx_t Lookup(DataChunk &chunk, vector<uint32_t> &results) const {
-		return bloom_filter->Lookup(chunk, results, bound_cols_applied);
-	}
-	void Insert(DataChunk &chunk) const {
-		return bloom_filter->InsertKeys(chunk, bound_cols_applied);
+	explicit BloomFilter(unique_ptr<CacheSectorizedBloomFilter> filter_p) : TableFilter(TYPE), filter(std::move(filter_p)) {
 	}
 
-private:
-	shared_ptr<BloomFilter> bloom_filter;
-	vector<idx_t> bound_cols_applied;
-	vector<idx_t> bound_cols_built;
+	unique_ptr<CacheSectorizedBloomFilter> filter;
+
+public:
+	// FilterPropagateResult CheckStatistics(BaseStatistics &stats) const override;
+	// string ToString(const string &column_name) const override;
+	// bool Equals(const TableFilter &other) const override;
+	// unique_ptr<TableFilter> Copy() const override;
+	// unique_ptr<Expression> ToExpression(const Expression &column) const override;
+	// void Serialize(Serializer &serializer) const override;
+	// static unique_ptr<TableFilter> Deserialize(Deserializer &deserializer);
 };
 
 } // namespace duckdb

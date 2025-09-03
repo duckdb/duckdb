@@ -749,6 +749,11 @@ void JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, 
 unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, optional_ptr<JoinHashTable> ht,
                                                        JoinFilterGlobalState &gstate,
                                                        const PhysicalComparisonJoin &op) const {
+
+	// set the bloom filter that was build during the joining
+	// todo: Add the bloom filter here!
+	auto bf = make_uniq<BloomFilter>(ht->bloom_filter);
+
 	// finalize the min/max aggregates
 	vector<LogicalType> min_max_types;
 	for (auto &aggr_expr : min_max_aggregates) {
