@@ -10,7 +10,26 @@ namespace duckdb {
 //----------------------------------------------------------------------------------------------------------------------
 namespace {
 
-struct WriteBlobBindData final : public TableFunctionData {};
+struct WriteBlobBindData final : public TableFunctionData {
+	FileCompressionType compression_type = FileCompressionType::AUTO_DETECT;
+};
+
+static string ParseStringOption(const Value &value, const string &loption) {
+	if (value.IsNull()) {
+		return string();
+	}
+	if (value.type().id() == LogicalTypeId::LIST) {
+		auto &children = ListValue::GetChildren(value);
+		if (children.size() != 1) {
+			throw BinderException("\"%s\" expects a single argument as a string value", loption);
+		}
+		return ParseStringOption(children[0], loption);
+	}
+	if (value.type().id() != LogicalTypeId::VARCHAR) {
+		throw BinderException("\"%s\" expects a string argument!", loption);
+	}
+	return value.GetValue<string>();
+}
 
 unique_ptr<FunctionData> WriteBlobBind(ClientContext &context, CopyFunctionBindInput &input,
                                        const vector<string> &names, const vector<LogicalType> &sql_types) {
@@ -18,7 +37,18 @@ unique_ptr<FunctionData> WriteBlobBind(ClientContext &context, CopyFunctionBindI
 		throw BinderException("\"COPY (FORMAT BLOB)\" only supports a single BLOB column");
 	}
 
-	return make_uniq_base<FunctionData, WriteBlobBindData>();
+	auto result = make_uniq<WriteBlobBindData>();
+
+	for (auto &lopt : input.info.options) {
+		if (StringUtil::CIEquals(lopt.first, "compression")) {
+			auto compression_str = ParseStringOption(lopt.second[0], lopt.first);
+			result->compression_type = FileCompressionTypeFromString(compression_str);
+		} else {
+			throw BinderException("Unrecognized option for COPY (FORMAT BLOB): \"%s\"", lopt.first);
+		}
+	}
+
+	return std::move(result);
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -32,8 +62,12 @@ struct WriteBlobGlobalState final : public GlobalFunctionData {
 static unique_ptr<GlobalFunctionData> WriteBlobInitializeGlobal(ClientContext &context, FunctionData &bind_data,
                                                                 const string &file_path) {
 
+	auto &bdata = bind_data.Cast<WriteBlobBindData>();
 	auto &fs = FileSystem::GetFileSystem(context);
-	auto handle = fs.OpenFile(file_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
+
+	auto file_name = file_path;
+	auto flags = FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW | bdata.compression_type;
+	auto handle = fs.OpenFile(file_path, flags);
 
 	auto result = make_uniq<WriteBlobGlobalState>();
 	result->handle = std::move(handle);
@@ -100,7 +134,6 @@ void WriteBlobFinalize(ClientContext &context, FunctionData &bind_data, GlobalFu
 	auto &state = gstate.Cast<WriteBlobGlobalState>();
 	lock_guard<mutex> glock(state.lock);
 
-	state.handle->Sync();
 	state.handle->Close();
 }
 

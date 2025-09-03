@@ -20,3 +20,26 @@ select filename, content, size from read_blob('test.blob');
 ----
 test.blob	foo	3
 
+
+statement error
+COPY (select 'foo'::BLOB) TO 'test.blob.gz' (FORMAT BLOB, ASDFGH);
+----
+Binder Error: Unrecognized option for COPY (FORMAT BLOB): "ASDFGH"
+
+# With compression
+statement ok
+COPY (select 'foo'::BLOB) TO 'test.blob.gz' (FORMAT BLOB);
+
+query II
+select filename, size from read_blob('test.blob.gz');
+----
+test.blob.gz	26
+
+# With explicit compression
+statement ok
+COPY (select 'foo'::BLOB) TO 'test.blob' (FORMAT BLOB, COMPRESSION 'GZIP');
+
+query II
+select filename, size from read_blob('test.blob');
+----
+test.blob	26
