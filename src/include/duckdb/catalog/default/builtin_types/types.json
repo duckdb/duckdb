@@ -238,7 +238,8 @@
 	{
 		"id": "BIGNUM",
 		"names": [
-			"bignum"
+			"bignum",
+			"varint"
 		],
 		"description": "Integers with variable size."
 	},
