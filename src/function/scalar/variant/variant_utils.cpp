@@ -43,9 +43,20 @@ VariantNestedData VariantUtils::DecodeNestedData(const UnifiedVariantVectorData 
 	return result;
 }
 
-bool VariantUtils::FindChildValues(const UnifiedVariantVectorData &variant, const VariantPathComponent &component,
-                                   optional_idx row, SelectionVector &res, VariantNestedData *nested_data,
-                                   idx_t count) {
+vector<string> VariantUtils::GetObjectKeys(const UnifiedVariantVectorData &variant, idx_t row,
+                                           const VariantNestedData &nested_data) {
+	vector<string> object_keys;
+	for (idx_t child_idx = 0; child_idx < nested_data.child_count; child_idx++) {
+		auto child_key_id = variant.GetKeysIndex(row, nested_data.children_idx + child_idx);
+		object_keys.push_back(variant.GetKey(row, child_key_id).GetString());
+	}
+	return object_keys;
+}
+
+VariantChildDataCollectionResult VariantUtils::FindChildValues(const UnifiedVariantVectorData &variant,
+                                                               const VariantPathComponent &component, optional_idx row,
+                                                               SelectionVector &res, VariantNestedData *nested_data,
+                                                               idx_t count) {
 
 	for (idx_t i = 0; i < count; i++) {
 		auto row_index = row.IsValid() ? row.GetIndex() : i;
@@ -57,12 +68,12 @@ bool VariantUtils::FindChildValues(const UnifiedVariantVectorData &variant, cons
 		if (component.lookup_mode == VariantChildLookupMode::BY_INDEX) {
 			auto child_idx = component.index;
 			if (child_idx == 0) {
-				return false;
+				return VariantChildDataCollectionResult::IndexZero();
 			}
 			child_idx--;
 			if (child_idx >= nested_data_entry.child_count) {
 				//! The list is too small to contain this index
-				return false;
+				return VariantChildDataCollectionResult::NotFound(i);
 			}
 			auto value_id = variant.GetValuesIndex(row_index, nested_data_entry.children_idx + child_idx);
 			res[i] = static_cast<uint8_t>(value_id);
@@ -82,10 +93,10 @@ bool VariantUtils::FindChildValues(const UnifiedVariantVectorData &variant, cons
 			}
 		}
 		if (!found_child) {
-			return false;
+			return VariantChildDataCollectionResult::NotFound(i);
 		}
 	}
-	return true;
+	return VariantChildDataCollectionResult();
 }
 
 vector<uint32_t> VariantUtils::ValueIsNull(const UnifiedVariantVectorData &variant, const SelectionVector &sel,
@@ -109,9 +120,10 @@ vector<uint32_t> VariantUtils::ValueIsNull(const UnifiedVariantVectorData &varia
 	return res;
 }
 
-bool VariantUtils::CollectNestedData(const UnifiedVariantVectorData &variant, VariantLogicalType expected_type,
-                                     const SelectionVector &sel, idx_t count, optional_idx row, idx_t offset,
-                                     VariantNestedData *child_data, ValidityMask &validity, string &error) {
+VariantNestedDataCollectionResult
+VariantUtils::CollectNestedData(const UnifiedVariantVectorData &variant, VariantLogicalType expected_type,
+                                const SelectionVector &sel, idx_t count, optional_idx row, idx_t offset,
+                                VariantNestedData *child_data, ValidityMask &validity) {
 	for (idx_t i = 0; i < count; i++) {
 		auto row_index = row.IsValid() ? row.GetIndex() : i;
 
@@ -127,13 +139,11 @@ bool VariantUtils::CollectNestedData(const UnifiedVariantVectorData &variant, Va
 		}
 
 		if (type_id != expected_type) {
-			error = StringUtil::Format("'%s' was expected, found '%s', can't convert VARIANT",
-			                           EnumUtil::ToString(expected_type), EnumUtil::ToString(type_id));
-			return false;
+			return VariantNestedDataCollectionResult(type_id);
 		}
 		child_data[i] = DecodeNestedData(variant, row_index, sel[i]);
 	}
-	return true;
+	return VariantNestedDataCollectionResult();
 }
 
 Value VariantUtils::ConvertVariantToValue(const UnifiedVariantVectorData &variant, idx_t row, idx_t values_idx) {

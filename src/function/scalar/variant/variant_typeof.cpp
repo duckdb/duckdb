@@ -45,11 +45,7 @@ static void VariantTypeofFunction(DataChunk &input, ExpressionState &state, Vect
 		if (type == VariantLogicalType::OBJECT) {
 			auto nested_data = VariantUtils::DecodeNestedData(variant, i, 0);
 			//! Find all the keys of the children of this object
-			vector<string> object_keys;
-			for (idx_t child_idx = 0; child_idx < nested_data.child_count; child_idx++) {
-				auto child_key_id = variant.GetKeysIndex(i, nested_data.children_idx + child_idx);
-				object_keys.push_back(variant.GetKey(i, child_key_id).GetString());
-			}
+			auto object_keys = VariantUtils::GetObjectKeys(variant, i, nested_data);
 			type_str = StringUtil::Format("OBJECT(%s)", StringUtil::Join(object_keys, ", "));
 		} else {
 			D_ASSERT(type == VariantLogicalType::ARRAY);

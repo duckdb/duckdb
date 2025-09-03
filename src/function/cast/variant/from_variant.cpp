@@ -183,6 +183,8 @@ static bool CastVariantToPrimitive(FromVariantConversionData &conversion_data, V
 		if (!converted) {
 			auto value = VariantUtils::ConvertVariantToValue(conversion_data.variant, row_index, sel[i]);
 			if (!value.DefaultTryCastAs(target_type, true)) {
+				conversion_data.error = StringUtil::Format("Can't convert VARIANT(%s) value '%s'",
+				                                           EnumUtil::ToString(type_id), value.ToString());
 				value = Value(target_type);
 				all_valid = false;
 			}
@@ -216,8 +218,13 @@ static bool ConvertVariantToList(FromVariantConversionData &conversion_data, Vec
 		child_data = reinterpret_cast<VariantNestedData *>(owned_child_data.get());
 	}
 
-	if (!VariantUtils::CollectNestedData(conversion_data.variant, VariantLogicalType::ARRAY, sel, count, row, offset,
-	                                     child_data, FlatVector::Validity(result), conversion_data.error)) {
+	auto collection_result =
+	    VariantUtils::CollectNestedData(conversion_data.variant, VariantLogicalType::ARRAY, sel, count, row, offset,
+	                                    child_data, FlatVector::Validity(result));
+	if (!collection_result.success) {
+		conversion_data.error =
+		    StringUtil::Format("Expected to find VARIANT(ARRAY), found VARIANT(%s) instead, can't convert",
+		                       EnumUtil::ToString(collection_result.wrong_type));
 		return false;
 	}
 	idx_t total_children = 0;
@@ -277,8 +284,13 @@ static bool ConvertVariantToArray(FromVariantConversionData &conversion_data, Ve
 		child_data = reinterpret_cast<VariantNestedData *>(owned_child_data.get());
 	}
 
-	if (!VariantUtils::CollectNestedData(conversion_data.variant, VariantLogicalType::ARRAY, sel, count, row, offset,
-	                                     child_data, FlatVector::Validity(result), conversion_data.error)) {
+	auto collection_result =
+	    VariantUtils::CollectNestedData(conversion_data.variant, VariantLogicalType::ARRAY, sel, count, row, offset,
+	                                    child_data, FlatVector::Validity(result));
+	if (!collection_result.success) {
+		conversion_data.error =
+		    StringUtil::Format("Expected to find VARIANT(ARRAY), found VARIANT(%s) instead, can't convert",
+		                       EnumUtil::ToString(collection_result.wrong_type));
 		return false;
 	}
 
@@ -330,9 +342,13 @@ static bool ConvertVariantToStruct(FromVariantConversionData &conversion_data, V
 		child_data = reinterpret_cast<VariantNestedData *>(owned_child_data.get());
 	}
 
-	//! First get all the Object data from the VARIANT
-	if (!VariantUtils::CollectNestedData(conversion_data.variant, VariantLogicalType::OBJECT, sel, count, row, offset,
-	                                     child_data, FlatVector::Validity(result), conversion_data.error)) {
+	auto collection_result =
+	    VariantUtils::CollectNestedData(conversion_data.variant, VariantLogicalType::OBJECT, sel, count, row, offset,
+	                                    child_data, FlatVector::Validity(result));
+	if (!collection_result.success) {
+		conversion_data.error =
+		    StringUtil::Format("Expected to find VARIANT(OBJECT), found VARIANT(%s) instead, can't convert",
+		                       EnumUtil::ToString(collection_result.wrong_type));
 		return false;
 	}
 
@@ -356,9 +372,16 @@ static bool ConvertVariantToStruct(FromVariantConversionData &conversion_data, V
 		VariantPathComponent component;
 		component.key = child_name;
 		component.lookup_mode = VariantChildLookupMode::BY_KEY;
-		if (!VariantUtils::FindChildValues(conversion_data.variant, component, row, child_values_sel, child_data,
-		                                   count)) {
-			conversion_data.error = StringUtil::Format("VARIANT(OBJECT) is missing key '%s'");
+		auto collection_result =
+		    VariantUtils::FindChildValues(conversion_data.variant, component, row, child_values_sel, child_data, count);
+		if (!collection_result.Success()) {
+			D_ASSERT(collection_result.type == VariantChildDataCollectionResult::Type::COMPONENT_NOT_FOUND);
+			auto nested_index = collection_result.nested_data_index;
+			auto row_index = row.IsValid() ? row.GetIndex() : nested_index;
+			auto object_keys =
+			    VariantUtils::GetObjectKeys(conversion_data.variant, row_index, child_data[nested_index]);
+			conversion_data.error = StringUtil::Format("VARIANT(OBJECT(%s)) is missing key '%s'",
+			                                           StringUtil::Join(object_keys, ","), component.key);
 			return false;
 		}
 		//! Now cast all the values we found to the target type

@@ -127,21 +127,40 @@ static void VariantExtractFunction(DataChunk &input, ExpressionState &state, Vec
 	auto &component = info.component;
 	auto expected_type = component.lookup_mode == VariantChildLookupMode::BY_INDEX ? VariantLogicalType::ARRAY
 	                                                                               : VariantLogicalType::OBJECT;
-	string error;
-	if (!VariantUtils::CollectNestedData(variant, expected_type, value_index_sel, count, optional_idx(), 0, nested_data,
-	                                     FlatVector::Validity(result), error)) {
-		//! value_index 0 is not a nested type, can't extract
-		throw InvalidInputException(error);
+	auto collection_result = VariantUtils::CollectNestedData(
+	    variant, expected_type, value_index_sel, count, optional_idx(), 0, nested_data, FlatVector::Validity(result));
+	if (!collection_result.success) {
+		if (expected_type == VariantLogicalType::ARRAY) {
+			throw InvalidInputException("Can't extract index %d from a VARIANT(%s)", component.index,
+			                            EnumUtil::ToString(collection_result.wrong_type));
+		} else {
+			D_ASSERT(expected_type == VariantLogicalType::OBJECT);
+			throw InvalidInputException("Can't extract key '%s' from a VARIANT(%s)", component.key,
+			                            EnumUtil::ToString(collection_result.wrong_type));
+		}
 	}
 
 	//! Look up the value_index of the child we're extracting
-	if (!VariantUtils::FindChildValues(variant, component, optional_idx(), new_value_index_sel, nested_data, count)) {
+	auto child_collection_result =
+	    VariantUtils::FindChildValues(variant, component, optional_idx(), new_value_index_sel, nested_data, count);
+	if (!child_collection_result.Success()) {
+		if (child_collection_result.type == VariantChildDataCollectionResult::Type::INDEX_ZERO) {
+			throw InvalidInputException("Extracting index 0 from VARIANT(ARRAY) is invalid, indexes are 1-based");
+		}
 		switch (component.lookup_mode) {
 		case VariantChildLookupMode::BY_INDEX: {
-			throw InvalidInputException("ARRAY does not contain the index: %d", component.index);
+			D_ASSERT(child_collection_result.type == VariantChildDataCollectionResult::Type::COMPONENT_NOT_FOUND);
+			auto nested_index = child_collection_result.nested_data_index;
+			throw InvalidInputException("VARIANT(ARRAY(%d)) is missing index %d", nested_data[nested_index].child_count,
+			                            component.index);
 		}
 		case VariantChildLookupMode::BY_KEY: {
-			throw InvalidInputException("OBJECT does not contain the key: %s", component.key);
+			D_ASSERT(child_collection_result.type == VariantChildDataCollectionResult::Type::COMPONENT_NOT_FOUND);
+			auto nested_index = child_collection_result.nested_data_index;
+			auto row_index = nested_index;
+			auto object_keys = VariantUtils::GetObjectKeys(variant, row_index, nested_data[nested_index]);
+			throw InvalidInputException("VARIANT(OBJECT(%s)) is missing key '%s'", StringUtil::Join(object_keys, ","),
+			                            component.key);
 		}
 		}
 	}

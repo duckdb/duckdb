@@ -35,7 +35,7 @@ CREATE MACRO struct_cast_data() AS TABLE (
 statement error
 select variant_extract(a, 'a[1].c') from struct_cast_data();
 ----
-Invalid Input Error: OBJECT does not contain the key: a[1].c
+Invalid Input Error: VARIANT(OBJECT(a)) is missing key 'a[1].c'
 
 query I
 select variant_extract(a, 'a').variant_extract(1::UINTEGER).variant_extract('c') from struct_cast_data();
@@ -59,12 +59,12 @@ test
 statement error
 select ('{"a": 42, "b": [true, "test", true]}'::JSON::VARIANT)['b']['1'];
 ----
-Invalid Input Error: 'OBJECT' was expected, found 'ARRAY', can't convert VARIANT
+Invalid Input Error: Can't extract key '1' from a VARIANT(ARRAY)
 
 statement error
 select ('{"a": 42, "b": [true, "test", true]}'::JSON::VARIANT)['b[2]'];
 ----
-Invalid Input Error: OBJECT does not contain the key: b[2]
+Invalid Input Error: VARIANT(OBJECT(a,b)) is missing key 'b[2]'
 
 query I
 select ('{"a": 42, "b": [true, "test", true]}'::JSON::VARIANT)['b'][2];
