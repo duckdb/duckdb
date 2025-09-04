@@ -27,7 +27,6 @@ public:
 
 	virtual idx_t ReadChunk(ClientContext &context, DataChunk &output, idx_t output_offset, idx_t max_rows) = 0;
 	virtual bool IsExhausted() const = 0;
-	virtual void Reset() = 0;
 
 protected:
 	string file_path;
@@ -161,57 +160,6 @@ static Value ParquetElementBoolean(bool value, bool is_iset) {
 	return Value::BOOLEAN(value);
 }
 
-static Value ConvertParquetGeoStatsBBOX(const duckdb_parquet::GeospatialStatistics &stats) {
-	if (!stats.__isset.bbox) {
-		return Value(LogicalType::STRUCT({
-		    {"xmin", LogicalType::DOUBLE},
-		    {"xmax", LogicalType::DOUBLE},
-		    {"ymin", LogicalType::DOUBLE},
-		    {"ymax", LogicalType::DOUBLE},
-		    {"zmin", LogicalType::DOUBLE},
-		    {"zmax", LogicalType::DOUBLE},
-		    {"mmin", LogicalType::DOUBLE},
-		    {"mmax", LogicalType::DOUBLE},
-		}));
-	}
-
-	return Value::STRUCT({
-	    {"xmin", Value::DOUBLE(stats.bbox.xmin)},
-	    {"xmax", Value::DOUBLE(stats.bbox.xmax)},
-	    {"ymin", Value::DOUBLE(stats.bbox.ymin)},
-	    {"ymax", Value::DOUBLE(stats.bbox.ymax)},
-	    {"zmin", stats.bbox.__isset.zmin ? Value::DOUBLE(stats.bbox.zmin) : Value(LogicalTypeId::DOUBLE)},
-	    {"zmax", stats.bbox.__isset.zmax ? Value::DOUBLE(stats.bbox.zmax) : Value(LogicalTypeId::DOUBLE)},
-	    {"mmin", stats.bbox.__isset.mmin ? Value::DOUBLE(stats.bbox.mmin) : Value(LogicalTypeId::DOUBLE)},
-	    {"mmax", stats.bbox.__isset.mmax ? Value::DOUBLE(stats.bbox.mmax) : Value(LogicalTypeId::DOUBLE)},
-	});
-}
-
-static Value ConvertParquetGeoStatsTypes(const duckdb_parquet::GeospatialStatistics &stats) {
-	if (!stats.__isset.geospatial_types) {
-		return Value(LogicalType::LIST(LogicalType::VARCHAR));
-	}
-	vector<Value> types;
-	types.reserve(stats.geospatial_types.size());
-
-	GeometryKindSet kind_set;
-	for (auto &type : stats.geospatial_types) {
-		kind_set.Add(type);
-	}
-	for (auto &type_name : kind_set.ToString(true)) {
-		types.push_back(Value(type_name));
-	}
-	return Value::LIST(LogicalType::VARCHAR, types);
-}
-
-static Value ConvertParquetStats(const LogicalType &type, const ParquetColumnSchema &schema_ele, bool stats_is_set,
-                                 const std::string &stats) {
-	if (!stats_is_set) {
-		return Value(LogicalType::VARCHAR);
-	}
-	return ParquetStatisticsUtils::ConvertValue(type, schema_ele, stats).DefaultCastAs(LogicalType::VARCHAR);
-}
-
 ParquetMetadataFileProcessor::ParquetMetadataFileProcessor(ClientContext &context, const string &file_path_p,
                                                            ParquetMetadataOperatorType op_type)
     : file_path(file_path_p), operation_type(op_type) {
@@ -236,7 +184,6 @@ public:
 
 	idx_t ReadChunk(ClientContext &context, DataChunk &output, idx_t output_offset, idx_t max_rows) override;
 	bool IsExhausted() const override;
-	void Reset() override;
 
 private:
 	idx_t current_row_group = 0;
@@ -352,6 +299,57 @@ void ParquetMetaDataOperator<ParquetMetadataOperatorType::META_DATA>::BindSchema
 	return_types.emplace_back(LogicalType::LIST(LogicalType::VARCHAR));
 }
 
+static Value ConvertParquetStats(const LogicalType &type, const ParquetColumnSchema &schema_ele, bool stats_is_set,
+                                 const std::string &stats) {
+	if (!stats_is_set) {
+		return Value(LogicalType::VARCHAR);
+	}
+	return ParquetStatisticsUtils::ConvertValue(type, schema_ele, stats).DefaultCastAs(LogicalType::VARCHAR);
+}
+
+static Value ConvertParquetGeoStatsBBOX(const duckdb_parquet::GeospatialStatistics &stats) {
+	if (!stats.__isset.bbox) {
+		return Value(LogicalType::STRUCT({
+		    {"xmin", LogicalType::DOUBLE},
+		    {"xmax", LogicalType::DOUBLE},
+		    {"ymin", LogicalType::DOUBLE},
+		    {"ymax", LogicalType::DOUBLE},
+		    {"zmin", LogicalType::DOUBLE},
+		    {"zmax", LogicalType::DOUBLE},
+		    {"mmin", LogicalType::DOUBLE},
+		    {"mmax", LogicalType::DOUBLE},
+		}));
+	}
+
+	return Value::STRUCT({
+	    {"xmin", Value::DOUBLE(stats.bbox.xmin)},
+	    {"xmax", Value::DOUBLE(stats.bbox.xmax)},
+	    {"ymin", Value::DOUBLE(stats.bbox.ymin)},
+	    {"ymax", Value::DOUBLE(stats.bbox.ymax)},
+	    {"zmin", stats.bbox.__isset.zmin ? Value::DOUBLE(stats.bbox.zmin) : Value(LogicalTypeId::DOUBLE)},
+	    {"zmax", stats.bbox.__isset.zmax ? Value::DOUBLE(stats.bbox.zmax) : Value(LogicalTypeId::DOUBLE)},
+	    {"mmin", stats.bbox.__isset.mmin ? Value::DOUBLE(stats.bbox.mmin) : Value(LogicalTypeId::DOUBLE)},
+	    {"mmax", stats.bbox.__isset.mmax ? Value::DOUBLE(stats.bbox.mmax) : Value(LogicalTypeId::DOUBLE)},
+	});
+}
+
+static Value ConvertParquetGeoStatsTypes(const duckdb_parquet::GeospatialStatistics &stats) {
+	if (!stats.__isset.geospatial_types) {
+		return Value(LogicalType::LIST(LogicalType::VARCHAR));
+	}
+	vector<Value> types;
+	types.reserve(stats.geospatial_types.size());
+
+	GeometryKindSet kind_set;
+	for (auto &type : stats.geospatial_types) {
+		kind_set.Add(type);
+	}
+	for (auto &type_name : kind_set.ToString(true)) {
+		types.push_back(Value(type_name));
+	}
+	return Value::LIST(LogicalType::VARCHAR, types);
+}
+
 ParquetRowGroupMetadataProcessor::ParquetRowGroupMetadataProcessor(ClientContext &context, const string &file_path)
     : ParquetMetadataFileProcessor(context, file_path, ParquetMetadataOperatorType::META_DATA) {
 }
@@ -401,12 +399,6 @@ idx_t ParquetRowGroupMetadataProcessor::ReadChunk(ClientContext &context, DataCh
 
 bool ParquetRowGroupMetadataProcessor::IsExhausted() const {
 	return exhausted;
-}
-
-void ParquetRowGroupMetadataProcessor::Reset() {
-	current_row_group = 0;
-	current_column = 0;
-	exhausted = false;
 }
 
 void ParquetRowGroupMetadataProcessor::ProcessRowGroupColumn(DataChunk &output, idx_t output_idx, idx_t row_group_idx,
@@ -527,7 +519,6 @@ public:
 
 	idx_t ReadChunk(ClientContext &context, DataChunk &output, idx_t output_offset, idx_t max_rows) override;
 	bool IsExhausted() const override;
-	void Reset() override;
 
 private:
 	idx_t current_schema_element = 0;
@@ -603,11 +594,6 @@ idx_t ParquetSchemaProcessor::ReadChunk(ClientContext &context, DataChunk &outpu
 
 bool ParquetSchemaProcessor::IsExhausted() const {
 	return exhausted;
-}
-
-void ParquetSchemaProcessor::Reset() {
-	current_schema_element = 0;
-	exhausted = false;
 }
 
 static Value ParquetLogicalTypeToString(const duckdb_parquet::LogicalType &type, bool is_set) {
@@ -710,7 +696,6 @@ public:
 
 	idx_t ReadChunk(ClientContext &context, DataChunk &output, idx_t output_offset, idx_t max_rows) override;
 	bool IsExhausted() const override;
-	void Reset() override;
 
 private:
 	idx_t current_kv_entry = 0;
@@ -761,11 +746,6 @@ bool ParquetKeyValueMetadataProcessor::IsExhausted() const {
 	return exhausted;
 }
 
-void ParquetKeyValueMetadataProcessor::Reset() {
-	current_kv_entry = 0;
-	exhausted = false;
-}
-
 void ParquetKeyValueMetadataProcessor::ProcessKeyValueEntry(DataChunk &output, idx_t output_idx, idx_t kv_idx) {
 	auto meta_data = reader->GetFileMetadata();
 	auto &entry = meta_data->key_value_metadata[kv_idx];
@@ -785,7 +765,6 @@ public:
 
 	idx_t ReadChunk(ClientContext &context, DataChunk &output, idx_t output_offset, idx_t max_rows) override;
 	bool IsExhausted() const override;
-	void Reset() override;
 
 private:
 	bool processed = false;
@@ -844,10 +823,6 @@ bool ParquetFileMetadataProcessor::IsExhausted() const {
 	return processed;
 }
 
-void ParquetFileMetadataProcessor::Reset() {
-	processed = false;
-}
-
 void ParquetFileMetadataProcessor::ProcessFileMetadata(DataChunk &output, idx_t output_idx) {
 	auto meta_data = reader->GetFileMetadata();
 
@@ -885,7 +860,6 @@ public:
 
 	idx_t ReadChunk(ClientContext &context, DataChunk &output, idx_t output_offset, idx_t max_rows) override;
 	bool IsExhausted() const override;
-	void Reset() override;
 
 private:
 	string probe_column_name;
@@ -944,12 +918,6 @@ idx_t ParquetBloomProbeProcessor::ReadChunk(ClientContext &context, DataChunk &o
 
 bool ParquetBloomProbeProcessor::IsExhausted() const {
 	return exhausted;
-}
-
-void ParquetBloomProbeProcessor::Reset() {
-	current_row_group = 0;
-	exhausted = false;
-	probe_column_idx = optional_idx();
 }
 
 void ParquetBloomProbeProcessor::InitializeProbeColumn() {
