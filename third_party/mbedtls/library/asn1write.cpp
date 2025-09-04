@@ -90,7 +90,9 @@ int mbedtls_asn1_write_raw_buffer(unsigned char **p, const unsigned char *start,
 
     len = size;
     (*p) -= len;
-    memcpy(*p, buf, len);
+    if (len != 0) {
+        memcpy(*p, buf, len);
+    }
 
     return (int) len;
 }
@@ -389,7 +391,7 @@ mbedtls_asn1_named_data *mbedtls_asn1_store_named_data(
         }
 
         cur->oid.len = oid_len;
-        cur->oid.p = (unsigned char *) mbedtls_calloc(1, oid_len);
+        cur->oid.p = mbedtls_calloc(1, oid_len);
         if (cur->oid.p == NULL) {
             mbedtls_free(cur);
             return NULL;
@@ -399,7 +401,7 @@ mbedtls_asn1_named_data *mbedtls_asn1_store_named_data(
 
         cur->val.len = val_len;
         if (val_len != 0) {
-            cur->val.p = (unsigned char *) mbedtls_calloc(1, val_len);
+            cur->val.p = mbedtls_calloc(1, val_len);
             if (cur->val.p == NULL) {
                 mbedtls_free(cur->oid.p);
                 mbedtls_free(cur);
@@ -412,6 +414,7 @@ mbedtls_asn1_named_data *mbedtls_asn1_store_named_data(
     } else if (val_len == 0) {
         mbedtls_free(cur->val.p);
         cur->val.p = NULL;
+        cur->val.len = 0;
     } else if (cur->val.len != val_len) {
         /*
          * Enlarge existing value buffer if needed
@@ -424,7 +427,7 @@ mbedtls_asn1_named_data *mbedtls_asn1_store_named_data(
         }
 
         mbedtls_free(cur->val.p);
-        cur->val.p = (unsigned char *)p;
+        cur->val.p = p;
         cur->val.len = val_len;
     }
 
