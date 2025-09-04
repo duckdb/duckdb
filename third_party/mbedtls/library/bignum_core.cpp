@@ -19,7 +19,6 @@
 
 #include "bignum_core.h"
 #include "bn_mul.h"
-#include "constant_time_internal.h"
 
 size_t mbedtls_mpi_core_clz(mbedtls_mpi_uint a)
 {

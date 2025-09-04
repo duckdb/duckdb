@@ -150,7 +150,7 @@ int mbedtls_ct_memcmp_partial(const void *a,
 
 void mbedtls_ct_memmove_left(void *start, size_t total, size_t offset)
 {
-    volatile unsigned char *buf = start;
+    volatile unsigned char *buf = (unsigned char *) start;
     for (size_t i = 0; i < total; i++) {
         mbedtls_ct_condition_t no_op = mbedtls_ct_uint_gt(total - offset, i);
         /* The first `total - offset` passes are a no-op. The last

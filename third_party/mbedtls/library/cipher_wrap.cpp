@@ -131,7 +131,7 @@ static void *gcm_ctx_alloc(void)
 
 static void gcm_ctx_free(void *ctx)
 {
-    mbedtls_gcm_free(ctx);
+    mbedtls_gcm_free((mbedtls_gcm_context *) ctx);
     mbedtls_free(ctx);
 }
 #endif /* MBEDTLS_GCM_C */
@@ -246,7 +246,7 @@ static int aes_setkey_enc_wrap(void *ctx, const unsigned char *key,
 
 static void *aes_ctx_alloc(void)
 {
-    mbedtls_aes_context *aes = mbedtls_calloc(1, sizeof(mbedtls_aes_context));
+    mbedtls_aes_context *aes = (mbedtls_aes_context *) mbedtls_calloc(1, sizeof(mbedtls_aes_context));
 
     if (aes == NULL) {
         return NULL;

@@ -29,7 +29,6 @@
 #if defined(MBEDTLS_USE_PSA_CRYPTO)
 #include "psa_util_internal.h"
 #include "psa/crypto.h"
-#include "mbedtls/psa_util.h"
 
 #if defined(MBEDTLS_RSA_C)
 #include "pkwrite.h"

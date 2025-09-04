@@ -1451,7 +1451,7 @@ static int mbedtls_cipher_aead_encrypt(mbedtls_cipher_context_t *ctx,
 #if defined(MBEDTLS_GCM_C)
     if (MBEDTLS_MODE_GCM == ((mbedtls_cipher_mode_t) ctx->cipher_info->mode)) {
         *olen = ilen;
-        return mbedtls_gcm_crypt_and_tag(ctx->cipher_ctx, MBEDTLS_GCM_ENCRYPT,
+        return mbedtls_gcm_crypt_and_tag((mbedtls_gcm_context *) ctx->cipher_ctx, MBEDTLS_GCM_ENCRYPT,
                                          ilen, iv, iv_len, ad, ad_len,
                                          input, output, tag_len, tag);
     }
@@ -1531,7 +1531,7 @@ static int mbedtls_cipher_aead_decrypt(mbedtls_cipher_context_t *ctx,
         int ret = MBEDTLS_ERR_ERROR_CORRUPTION_DETECTED;
 
         *olen = ilen;
-        ret = mbedtls_gcm_auth_decrypt(ctx->cipher_ctx, ilen,
+        ret = mbedtls_gcm_auth_decrypt((mbedtls_gcm_context *) ctx->cipher_ctx, ilen,
                                        iv, iv_len, ad, ad_len,
                                        tag, tag_len, input, output);
 
