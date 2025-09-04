@@ -12,6 +12,17 @@
 
 namespace duckdb {
 
+struct ParquetMetaDataBindData : public TableFunctionData {
+	vector<string> file_paths;
+	vector<LogicalType> return_types;
+	vector<string> column_names;
+};
+
+struct ParquetBloomProbeBindData : public ParquetMetaDataBindData {
+	string probe_column_name;
+	Value probe_constant;
+};
+
 enum class ParquetMetadataOperatorType : uint8_t {
 	META_DATA,
 	SCHEMA,
@@ -26,14 +37,17 @@ public:
 	virtual ~ParquetMetadataFileProcessor() = default;
 
 	virtual idx_t ReadChunk(ClientContext &context, DataChunk &output, idx_t output_offset, idx_t max_rows) = 0;
-	virtual bool IsExhausted() const = 0;
+	virtual bool IsExhausted() const {
+		return exhausted;
+	}
 
 protected:
 	string file_path;
 	ParquetMetadataOperatorType operation_type;
 	unique_ptr<ParquetReader> reader;
-	bool initialized = false;
 	ClientContext *context_ptr = nullptr;
+	bool initialized = false;
+	bool exhausted = false;
 
 	void InitializeReader(ClientContext &context);
 };
@@ -95,17 +109,6 @@ struct ParquetMetadataLocalState : public LocalTableFunctionState {
 	idx_t current_file_idx;
 	unique_ptr<ParquetMetadataFileProcessor> processor;
 	bool file_exhausted = true;
-};
-
-struct ParquetMetaDataBindData : public TableFunctionData {
-	vector<string> file_paths;
-	vector<LogicalType> return_types;
-	vector<string> column_names;
-};
-
-struct ParquetBloomProbeBindData : public ParquetMetaDataBindData {
-	string probe_column_name;
-	Value probe_constant;
 };
 
 template <class T>
@@ -183,12 +186,10 @@ public:
 	ParquetRowGroupMetadataProcessor(ClientContext &context, const string &file_path);
 
 	idx_t ReadChunk(ClientContext &context, DataChunk &output, idx_t output_offset, idx_t max_rows) override;
-	bool IsExhausted() const override;
 
 private:
 	idx_t current_row_group = 0;
 	idx_t current_column = 0;
-	bool exhausted = false;
 
 	void ProcessRowGroupColumn(DataChunk &output, idx_t output_idx, idx_t row_group_idx, idx_t col_idx);
 };
@@ -397,10 +398,6 @@ idx_t ParquetRowGroupMetadataProcessor::ReadChunk(ClientContext &context, DataCh
 	return rows_written;
 }
 
-bool ParquetRowGroupMetadataProcessor::IsExhausted() const {
-	return exhausted;
-}
-
 void ParquetRowGroupMetadataProcessor::ProcessRowGroupColumn(DataChunk &output, idx_t output_idx, idx_t row_group_idx,
                                                              idx_t col_idx) {
 	auto meta_data = reader->GetFileMetadata();
@@ -518,11 +515,9 @@ public:
 	ParquetSchemaProcessor(ClientContext &context, const string &file_path);
 
 	idx_t ReadChunk(ClientContext &context, DataChunk &output, idx_t output_offset, idx_t max_rows) override;
-	bool IsExhausted() const override;
 
 private:
 	idx_t current_schema_element = 0;
-	bool exhausted = false;
 
 	void ProcessSchemaElement(DataChunk &output, idx_t output_idx, idx_t schema_idx);
 };
@@ -590,10 +585,6 @@ idx_t ParquetSchemaProcessor::ReadChunk(ClientContext &context, DataChunk &outpu
 	}
 
 	return rows_written;
-}
-
-bool ParquetSchemaProcessor::IsExhausted() const {
-	return exhausted;
 }
 
 static Value ParquetLogicalTypeToString(const duckdb_parquet::LogicalType &type, bool is_set) {
@@ -695,7 +686,6 @@ public:
 	ParquetKeyValueMetadataProcessor(ClientContext &context, const string &file_path);
 
 	idx_t ReadChunk(ClientContext &context, DataChunk &output, idx_t output_offset, idx_t max_rows) override;
-	bool IsExhausted() const override;
 
 private:
 	idx_t current_kv_entry = 0;
@@ -742,10 +732,6 @@ idx_t ParquetKeyValueMetadataProcessor::ReadChunk(ClientContext &context, DataCh
 	return rows_written;
 }
 
-bool ParquetKeyValueMetadataProcessor::IsExhausted() const {
-	return exhausted;
-}
-
 void ParquetKeyValueMetadataProcessor::ProcessKeyValueEntry(DataChunk &output, idx_t output_idx, idx_t kv_idx) {
 	auto meta_data = reader->GetFileMetadata();
 	auto &entry = meta_data->key_value_metadata[kv_idx];
@@ -764,7 +750,6 @@ public:
 	ParquetFileMetadataProcessor(ClientContext &context, const string &file_path);
 
 	idx_t ReadChunk(ClientContext &context, DataChunk &output, idx_t output_offset, idx_t max_rows) override;
-	bool IsExhausted() const override;
 
 private:
 	bool processed = false;
@@ -819,10 +804,6 @@ idx_t ParquetFileMetadataProcessor::ReadChunk(ClientContext &context, DataChunk 
 	return 1;
 }
 
-bool ParquetFileMetadataProcessor::IsExhausted() const {
-	return processed;
-}
-
 void ParquetFileMetadataProcessor::ProcessFileMetadata(DataChunk &output, idx_t output_idx) {
 	auto meta_data = reader->GetFileMetadata();
 
@@ -859,7 +840,6 @@ public:
 	                           const Value &probe_value);
 
 	idx_t ReadChunk(ClientContext &context, DataChunk &output, idx_t output_offset, idx_t max_rows) override;
-	bool IsExhausted() const override;
 
 private:
 	string probe_column_name;
@@ -914,10 +894,6 @@ idx_t ParquetBloomProbeProcessor::ReadChunk(ClientContext &context, DataChunk &o
 	}
 
 	return rows_written;
-}
-
-bool ParquetBloomProbeProcessor::IsExhausted() const {
-	return exhausted;
 }
 
 void ParquetBloomProbeProcessor::InitializeProbeColumn() {
