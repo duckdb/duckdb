@@ -1170,6 +1170,8 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 		new_total_rows += row_group.count;
 	}
 	total_rows = new_total_rows;
+	l.Release();
+	Verify();
 }
 
 //===--------------------------------------------------------------------===//

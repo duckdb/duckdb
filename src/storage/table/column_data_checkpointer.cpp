@@ -426,7 +426,14 @@ void ColumnDataCheckpointer::FinalizeCheckpoint() {
 		// replace the old tree with the new one
 		auto new_segments = state.new_tree.MoveSegments();
 		auto l = col_data.data.Lock();
+		idx_t current_start = col_data.start;
 		for (auto &new_segment : new_segments) {
+			if (new_segment.node->start != current_start) {
+				throw InternalException(
+				    "Failure while checkpointing - start offsets of columns not aligned (expected %d, got %d)",
+				    current_start, new_segment.node->start);
+			}
+			current_start += new_segment.node->count;
 			col_data.AppendSegment(l, std::move(new_segment.node));
 		}
 		col_data.ClearUpdates();

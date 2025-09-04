@@ -219,7 +219,14 @@ public:
 		// binary search to find the node
 		while (lower <= upper) {
 			idx_t index = (lower + upper) / 2;
-			D_ASSERT(index < nodes.size());
+			if (index >= nodes.size()) {
+				string segments;
+				for (auto &entry : nodes) {
+					segments += StringUtil::Format("Start %d Count %d", entry.row_start, entry.node->count.load());
+				}
+				throw InternalException("Segment tree index not found for row number %d\nSegments:%s", row_number,
+				                        segments);
+			}
 			auto &entry = nodes[index];
 			D_ASSERT(entry.row_start == entry.node->start);
 			if (row_number < entry.row_start) {
