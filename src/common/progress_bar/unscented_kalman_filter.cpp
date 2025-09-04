@@ -42,6 +42,7 @@ void UnscentedKalmanFilter::Update(double progress, double time) {
 void UnscentedKalmanFilter::Initialize(double initial_progress, double current_time) {
 	x[0] = initial_progress;
 	x[1] = current_time == 0 ? 0.01 : initial_progress / current_time; // initial velocity guess
+	start_time = current_time;
 	last_time = current_time;
 	initialized = true;
 }
@@ -168,6 +169,8 @@ void UnscentedKalmanFilter::Predict(double current_time) {
 
 void UnscentedKalmanFilter::UpdateInternal(double measured_progress) {
 	D_ASSERT(initialized);
+	last_progress = measured_progress;
+
 	// Generate sigma points
 	auto sigma_points = GenerateSigmaPoints();
 
@@ -222,7 +225,7 @@ void UnscentedKalmanFilter::UpdateInternal(double measured_progress) {
 	// Update state
 	vector<double> innovation = {measured_progress - z_pred[0]};
 	for (size_t i = 0; i < STATE_DIM; i++) {
-		x[i] += MaxValue<double>(K[i][0] * innovation[0], 0);
+		x[i] += K[i][0] * innovation[0];
 	}
 
 	// Update covariance
@@ -250,6 +253,13 @@ double UnscentedKalmanFilter::GetEstimatedRemainingSeconds() const {
 	}
 	if (x[1] <= 0) {
 		// velocity is negative or zero - we estimate this will never finish
+		if (last_time > start_time && last_progress > 0) {
+			// fallback to a simple linear estimation
+			double elapsed_time = last_time - start_time;
+			double remaining_progress = 1.0 - last_progress;
+			double progress_per_second = last_progress / elapsed_time;
+			return remaining_progress / progress_per_second;
+		}
 		return NumericLimits<double>::Maximum();
 	}
 	double remaining_progress = 1.0 - x[0];

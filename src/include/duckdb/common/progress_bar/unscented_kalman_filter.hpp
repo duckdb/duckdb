@@ -34,6 +34,8 @@ private:
 	vector<vector<double>> R; // measurement noise
 
 	double last_time;
+	double last_progress = 0;
+	double start_time;
 	bool initialized;
 
 	// Helper functions
