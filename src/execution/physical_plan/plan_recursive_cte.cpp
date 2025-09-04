@@ -45,7 +45,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 		auto &target = op.key_targets[i];
 		D_ASSERT(target->type == ExpressionType::BOUND_REF);
 		auto &bound_ref = target->Cast<BoundReferenceExpression>();
-		distinct_idx.emplace_back(i);
+		distinct_idx.emplace_back(bound_ref.index);
 		distinct_types.push_back(bound_ref.return_type);
 	}
 

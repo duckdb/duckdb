@@ -59,3 +59,20 @@ ORDER BY here, there;
 1	2	2	1
 1	3	3	1
 2	3	3	1
+
+# use correlated column in recursive CTE with aggregation
+query IIII
+SELECT  *
+FROM    range(1, 4) AS _(l),
+   LATERAL (
+     WITH RECURSIVE cte(a, b, c) USING KEY (a ; list(b)) AS (
+       SELECT 1, l, 3
+         union
+       SELECT a, l + 1, c - 1
+       FROM   recurring.cte
+       WHERE  c > 0)
+	TABLE cte) ORDER BY l;
+----
+1	1	[1, 2, 2, 2]	0
+2	1	[2, 3, 3, 3]	0
+3	1	[3, 4, 4, 4]	0

@@ -114,7 +114,8 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 			result->payload_aggregates.push_back(std::move(first_aggregate));
 		}
 	}
-
+	// We are done with binding all key and payload columns. We can now destroy the expression binder.
+	PopExpressionBinder();
 
 	// BTODO: only here until i know how to fix ResolveTypes()
 	// We have finished binding all the aggregates. Now, we will update the types of the operator.
