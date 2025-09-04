@@ -498,12 +498,17 @@ void RowGroupCollection::RevertAppendInternal(idx_t start_row) {
 		segment_index = segment_count - 1;
 	}
 	auto &segment = *row_groups->GetSegmentByIndex(l, UnsafeNumericCast<int64_t>(segment_index));
+	if (segment.start == start_row) {
+		// we are truncating exactly this row group - erase it entirely
+		row_groups->EraseSegments(l, segment_index);
+	} else {
+		// we need to truncate within a row group
+		// remove any segments AFTER this segment: they should be deleted entirely
+		row_groups->EraseSegments(l, segment_index + 1);
 
-	// remove any segments AFTER this segment: they should be deleted entirely
-	row_groups->EraseSegments(l, segment_index);
-
-	segment.next = nullptr;
-	segment.RevertAppend(start_row);
+		segment.next = nullptr;
+		segment.RevertAppend(start_row);
+	}
 }
 
 void RowGroupCollection::CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count) {

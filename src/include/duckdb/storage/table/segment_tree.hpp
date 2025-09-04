@@ -183,10 +183,10 @@ public:
 	//! Erase all segments after a specific segment
 	void EraseSegments(SegmentLock &l, idx_t segment_start) {
 		LoadAllSegments(l);
-		if (segment_start >= nodes.size() - 1) {
+		if (segment_start >= nodes.size()) {
 			return;
 		}
-		nodes.erase(nodes.begin() + UnsafeNumericCast<int64_t>(segment_start) + 1, nodes.end());
+		nodes.erase(nodes.begin() + UnsafeNumericCast<int64_t>(segment_start), nodes.end());
 	}
 
 	//! Get the segment index of the column segment for the given row
