@@ -262,7 +262,7 @@ void workUnit(std::unique_ptr<Connection> conn, const idx_t worker_id) {
 	}
 }
 
-TEST_CASE("Run a concurrent ATTACH/DETACH scenario", "[attach][.]") {
+TEST_CASE("Run a concurrent ATTACH/DETACH scenario", "[interquery][.]") {
 	test_dir_path = TestDirectoryPath();
 
 	DuckDB db(nullptr);
