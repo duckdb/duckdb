@@ -11,6 +11,8 @@ ExpressionFilterState::ExpressionFilterState(ClientContext &context, const Expre
 
 unique_ptr<TableFilterState> TableFilterState::Initialize(ClientContext &context, const TableFilter &filter) {
 	switch (filter.filter_type) {
+	case TableFilterType::BLOOM_FILTER:
+		return make_uniq<TableFilterState>();
 	case TableFilterType::OPTIONAL_FILTER:
 		// optional filter is not executed - create an empty filter state
 		return make_uniq<TableFilterState>();

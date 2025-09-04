@@ -746,13 +746,23 @@ void JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, 
 	return;
 }
 
-unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, optional_ptr<JoinHashTable> ht,
+unique_ptr<DataChunk> JoinFilterPushdownInfo:: Finalize(ClientContext &context, optional_ptr<JoinHashTable> ht,
                                                        JoinFilterGlobalState &gstate,
                                                        const PhysicalComparisonJoin &op) const {
 
-	// set the bloom filter that was build during the joining
-	// todo: Add the bloom filter here!
-	auto bf = make_uniq<BloomFilter>(ht->bloom_filter);
+	// bfs are only allowed for single key joins so far
+	if (join_condition.size() == 1 && ht) {
+		const idx_t filter_idx = 0;
+
+		for (auto &info : probe_info) {
+			auto filter_col_idx = info.columns[filter_idx].probe_column_index.column_index;
+			auto bf_filter = make_uniq<BloomFilter>(ht->bloom_filter);
+			info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(bf_filter));
+
+		}
+	}
+
+
 
 	// finalize the min/max aggregates
 	vector<LogicalType> min_max_types;

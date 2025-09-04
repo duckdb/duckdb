@@ -38,7 +38,7 @@ enum class TableFilterType : uint8_t {
 };
 
 //! TableFilter represents a filter pushed down into the table scan.
-class TableFilter {
+class  TableFilter {
 public:
 	explicit TableFilter(TableFilterType filter_type_p) : filter_type(filter_type_p) {
 	}

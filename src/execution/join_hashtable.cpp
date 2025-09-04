@@ -273,32 +273,11 @@ static void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &key_sta
 		VectorOperations::Copy(hashes_v, state.hashes_dense_v, count, 0, 0);
 	}
 
-	// 1. Lookup the BloomFilter
-	ht.bloom_filter.LookupHashes(state.hashes_dense_v, count, state.lookup_results);
-
-	// 2. Fill results
-	idx_t bf_found_count = 0;
-	for (size_t flat_idx = 0; flat_idx < count; flat_idx++) {
-		const idx_t row_idx = row_sel->get_index(flat_idx);
-		state.bf_found_sel.set_index(bf_found_count, row_idx);
-		bf_found_count += state.lookup_results[flat_idx];
-	}
-	auto hashes_dense = FlatVector::GetData<idx_t>(state.hashes_dense_v);
-
-	// 3. Densify the hashes again!
-	for (idx_t i = 0; i < bf_found_count; i++) {
-		const auto found_idx = state.bf_found_sel.get_index(i);
-		hashes_dense[i] = hashes_dense[found_idx];
-	}
-
-	idx_t elements_to_probe_count = bf_found_count;
-	row_sel = &state.bf_found_sel;
-	has_row_sel = true;
-
 	// the number of keys that match for all iterations of the following loop
 	idx_t match_count = 0;
 
 	idx_t keys_no_match_count;
+	idx_t elements_to_probe_count = count;
 
 	do {
 		const idx_t keys_to_compare_count = ProbeForPointers<USE_SALTS>(state, ht, entries, pointers_result_v, row_sel,
@@ -325,6 +304,7 @@ static void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &key_sta
 		}
 
 		const auto ht_offsets_and_salts = FlatVector::GetData<idx_t>(state.ht_offsets_and_salts_v);
+		const auto hashes_dense = FlatVector::GetData<hash_t>(state.hashes_dense_v);
 
 		// For all the non-matches, increment the offset to continue probing but keep the salt intact
 		for (idx_t i = 0; i < keys_no_match_count; i++) {

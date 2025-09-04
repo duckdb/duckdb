@@ -14,28 +14,29 @@
 
 namespace duckdb {
 
-#ifndef BF_RESTRICT
-#if defined(_MSC_VER)
-#define BF_RESTRICT __restrict
-#elif defined(__GNUC__) || defined(__clang__)
-#define BF_RESTRICT __restrict__
-#else
-// Fallback: just return the pointer as-is
-#define BF_RESTRICT
-#endif
-#endif
+static constexpr const idx_t MAX_NUM_SECTORS = (1ULL << 26);
+static constexpr const idx_t MIN_NUM_BITS_PER_KEY = 16;
+static constexpr const idx_t MIN_NUM_BITS = 512;
+static constexpr const idx_t LOG_SECTOR_SIZE = 5;
+static constexpr const idx_t SIMD_BATCH_SIZE = 16;
 
 class CacheSectorizedBloomFilter {
 
-	static constexpr const idx_t MAX_NUM_SECTORS = (1ULL << 26);
-	static constexpr const idx_t MIN_NUM_BITS_PER_KEY = 16;
-	static constexpr const idx_t MIN_NUM_BITS = 512;
-	static constexpr const idx_t LOG_SECTOR_SIZE = 5;
-	static constexpr const idx_t SIMD_BATCH_SIZE = 16;
-
 public:
 	CacheSectorizedBloomFilter() = default;
-	void Initialize(ClientContext &context_p, idx_t est_num_rows);
+	void Initialize(ClientContext &context_p, idx_t est_num_rows) {
+		context = &context_p;
+		buffer_manager = &BufferManager::GetBufferManager(*context);
+
+		idx_t min_bits = std::max<idx_t>(MIN_NUM_BITS, est_num_rows * MIN_NUM_BITS_PER_KEY);
+		num_sectors = std::min(NextPowerOfTwo(min_bits) >> LOG_SECTOR_SIZE, MAX_NUM_SECTORS);
+		num_sectors_log = static_cast<uint32_t>(std::log2(num_sectors));
+
+		buf_ = buffer_manager->GetBufferAllocator().Allocate(64 + num_sectors * sizeof(uint32_t));
+		// make sure blocks is a 64-byte aligned pointer, i.e., cache-line aligned
+		blocks = reinterpret_cast<uint32_t *>((64ULL + reinterpret_cast<uint64_t>(buf_.get())) & ~63ULL);
+		std::fill_n(blocks, num_sectors, 0);
+	}
 
 	ClientContext *context;
 	BufferManager *buffer_manager;
@@ -43,8 +44,7 @@ public:
 	bool finalized_;
 
 public:
-	idx_t Lookup(DataChunk &chunk, vector<uint32_t> &results, const vector<idx_t> &bound_cols_applied) const;
-	idx_t LookupHashes(Vector &hashes, const idx_t count_p, vector<uint32_t> &results) const;
+	idx_t LookupHashes(Vector &hashes, SelectionVector &result_sel, const idx_t count_p) const;
 	void InsertKeys(DataChunk &chunk, const vector<idx_t> &bound_cols_built);
 	void InsertHashes(Vector hashes, const idx_t count);
 
@@ -77,7 +77,7 @@ private:
 		return block1 ^ (8 + (key_hi & 7));
 	}
 
-	inline void InsertOne(const uint32_t key_lo, const uint32_t key_hi, uint32_t *BF_RESTRICT bf) const {
+	inline void InsertOne(const uint32_t key_lo, const uint32_t key_hi, uint32_t *__restrict bf) const {
 		const uint32_t sector1 = GetSector1(key_lo, key_hi);
 		const uint32_t mask1 = GetMask1(key_lo);
 		const uint32_t sector2 = GetSector2(key_hi, sector1);
@@ -87,7 +87,7 @@ private:
 
 		// todo: There is duplicate code here we should get one function to get the two masks
 	}
-	inline bool LookupOne(uint32_t key_lo, uint32_t key_hi, const uint32_t *BF_RESTRICT bf) const {
+	inline bool LookupOne(uint32_t key_lo, uint32_t key_hi, const uint32_t *__restrict bf) const {
 		const uint32_t sector1 = GetSector1(key_lo, key_hi);
 		const uint32_t mask1 = GetMask1(key_lo);
 		const uint32_t sector2 = GetSector2(key_hi, sector1);
@@ -96,17 +96,18 @@ private:
 	}
 
 private:
-	idx_t BloomFilterLookup(const idx_t num, const uint64_t *BF_RESTRICT key64, const uint32_t *BF_RESTRICT bf,
-	                        uint32_t *BF_RESTRICT out) const {
-		const uint32_t *BF_RESTRICT key = reinterpret_cast<const uint32_t * BF_RESTRICT>(key64);
+	idx_t BloomFilterLookup(const hash_t *__restrict hashes, const uint32_t *__restrict bf,
+	                        SelectionVector &found_sel, const idx_t num) const {
+		const auto key = reinterpret_cast<const uint32_t *__restrict>(hashes);
+		idx_t found_count = 0;
 		for (idx_t i = 0; i + SIMD_BATCH_SIZE <= num; i += SIMD_BATCH_SIZE) {
 			uint32_t block1[SIMD_BATCH_SIZE], mask1[SIMD_BATCH_SIZE];
 			uint32_t block2[SIMD_BATCH_SIZE], mask2[SIMD_BATCH_SIZE];
 
 			for (idx_t j = 0; j < SIMD_BATCH_SIZE; j++) {
 				idx_t p = i + j;
-				uint32_t key_lo = key[p + p];
-				uint32_t key_hi = key[p + p + 1];
+				const uint32_t key_lo = key[p + p];
+				const uint32_t key_hi = key[p + p + 1];
 				block1[j] = GetSector1(key_lo, key_hi);
 				mask1[j] = GetMask1(key_lo);
 				block2[j] = GetSector2(key_hi, block1[j]);
@@ -114,19 +115,23 @@ private:
 			}
 
 			for (idx_t j = 0; j < SIMD_BATCH_SIZE; j++) {
-				out[i + j] = ((bf[block1[j]] & mask1[j]) == mask1[j]) & ((bf[block2[j]] & mask2[j]) == mask2[j]);
+				const bool hit = ((bf[block1[j]] & mask1[j]) == mask1[j]) & ((bf[block2[j]] & mask2[j]) == mask2[j]);
+				found_sel.set_index(found_count, i + j);
+				found_count += hit;
 			}
 		}
 
 		// unaligned tail
 		for (idx_t i = num & ~(SIMD_BATCH_SIZE - 1); i < num; i++) {
-			out[i] = LookupOne(key[i + i], key[i + i + 1], bf);
+			bool hit = LookupOne(key[i + i], key[i + i + 1], bf);
+			found_sel.set_index(found_count, i);
+			found_count += hit;
 		}
-		return num;
+		return found_count;
 	}
 
-	void BloomFilterInsert(const idx_t num, const uint64_t *BF_RESTRICT key64, uint32_t *BF_RESTRICT bf) const {
-		const uint32_t *BF_RESTRICT key = reinterpret_cast<const uint32_t * BF_RESTRICT>(key64);
+	void BloomFilterInsert(const idx_t num, const uint64_t *__restrict key64, uint32_t *__restrict bf) const {
+		const uint32_t *__restrict key = reinterpret_cast<const uint32_t *__restrict>(key64);
 		for (idx_t i = 0; i + SIMD_BATCH_SIZE <= num; i += SIMD_BATCH_SIZE) {
 			uint32_t block1[SIMD_BATCH_SIZE], mask1[SIMD_BATCH_SIZE];
 			uint32_t block2[SIMD_BATCH_SIZE], mask2[SIMD_BATCH_SIZE];
@@ -157,23 +162,51 @@ private:
 };
 
 class BloomFilter : public TableFilter {
+
+private:
+	CacheSectorizedBloomFilter &filter;
+
 public:
 	static constexpr auto TYPE = TableFilterType::BLOOM_FILTER;
 
 public:
-	explicit BloomFilter(unique_ptr<CacheSectorizedBloomFilter> filter_p) : TableFilter(TYPE), filter(std::move(filter_p)) {
+	explicit BloomFilter(CacheSectorizedBloomFilter &filter_p) : TableFilter(TYPE), filter(filter_p) {
 	}
 
-	unique_ptr<CacheSectorizedBloomFilter> filter;
-
 public:
-	// FilterPropagateResult CheckStatistics(BaseStatistics &stats) const override;
-	// string ToString(const string &column_name) const override;
-	// bool Equals(const TableFilter &other) const override;
-	// unique_ptr<TableFilter> Copy() const override;
-	// unique_ptr<Expression> ToExpression(const Expression &column) const override;
-	// void Serialize(Serializer &serializer) const override;
-	// static unique_ptr<TableFilter> Deserialize(Deserializer &deserializer);
+	// Filters the data by first hashing and then probing the bloom filter. The &sel will hold
+	// the remaining tuples, &approved_tuple_count will hold the approved count.
+	idx_t Filter(Vector &keys_v, SelectionVector &sel, idx_t &approved_tuple_count) const {
+		Vector hashes_v(LogicalType::HASH, approved_tuple_count);
+		SelectionVector temp_sel(approved_tuple_count);
+		keys_v.Flatten(sel, approved_tuple_count); // this is hacky and won't really work!
+		VectorOperations::Hash(keys_v, hashes_v, approved_tuple_count);
+
+		const idx_t found_count = this->filter.LookupHashes(hashes_v, temp_sel, approved_tuple_count);
+		sel.Initialize(temp_sel);
+		approved_tuple_count = found_count;
+		return found_count;
+	}
+	FilterPropagateResult CheckStatistics(BaseStatistics &stats) const override {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+
+	string ToString(const string &column_name) const override {
+		return "BF Lookup";
+	};
+	bool Equals(const TableFilter &other) const override {
+		return false;
+	}
+	unique_ptr<TableFilter> Copy() const override {
+		return make_uniq<BloomFilter>(this->filter);
+	}
+
+	unique_ptr<Expression> ToExpression(const Expression &column) const override {
+	}
+	void Serialize(Serializer &serializer) const override {
+	}
+	static unique_ptr<TableFilter> Deserialize(Deserializer &deserializer) {
+	}
 };
 
 } // namespace duckdb
