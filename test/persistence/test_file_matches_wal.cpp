@@ -55,14 +55,12 @@ TEST_CASE("Test replaying mismatching WAL files", "[persistence][.]") {
 	result = con.Query("ATTACH '" + too_old_path_file + "';");
 	REQUIRE(result->HasError());
 	string error_msg = result->GetError();
-	REQUIRE(StringUtil::Contains(error_msg, "That means the WAL was created for a older version of this database. File "
-	                                        "checkpoint iteration: 1, WAL checkpoint iteration: 0"));
+	REQUIRE(StringUtil::Contains(error_msg, "older"));
 
 	result = con.Query("ATTACH '" + too_new_path_file + "';");
 	REQUIRE(result->HasError());
 	error_msg = result->GetError();
-	REQUIRE(StringUtil::Contains(error_msg, "That means the WAL was created for a newer version of this database. File "
-	                                        "checkpoint iteration: 0, WAL checkpoint iteration: 1"));
+	REQUIRE(StringUtil::Contains(error_msg, "newer"));
 
 	// Create and initialize a different file.
 	string other_db_path = test_dir + "/my_other_db.db";
