@@ -435,7 +435,7 @@ option(FORCE_ASYNC_SINK_SOURCE "Debug setting: forces sinks/sources to block the
 option(DEBUG_ALLOCATION "Debug setting: keep track of outstanding allocations to detect memory leaks" FALSE)
 option(DEBUG_STACKTRACE "Debug setting: print a stracktrace on asserts and when testing crashes" FALSE)
 option(DEBUG_MOVE "Debug setting: Ensure std::move is being used" FALSE)
-option(VERIFY_VECTOR "Debug setting: verify vectors (options: dictionary_expression, dictionary_operator, constant_operator, sequence_operator, nested_shuffle)" "none")
+option(VERIFY_VECTOR "Debug setting: verify vectors (options: dictionary_expression, dictionary_operator, constant_operator, sequence_operator, nested_shuffle, variant_vector)" "none")
 option(CLANG_TIDY "Enable build for clang-tidy, this disables all source files excluding the core database. This does not produce a working build." FALSE)
 option(BUILD_UNITTESTS "Build the unittest runner." TRUE)
 option(ENABLE_UNITTEST_CPP_TESTS "Build the C++ Unit Tests." TRUE)

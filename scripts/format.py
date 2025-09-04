@@ -13,6 +13,8 @@ import tempfile
 import uuid
 import concurrent.futures
 import argparse
+import shutil
+import traceback
 from python_helpers import open_utf8
 
 try:
@@ -380,7 +382,7 @@ def format_file(f, full_path, directory, ext):
         tmpfile = os.path.join(tempfile.gettempdir(), str(uuid.uuid4()))
         with open_utf8(tmpfile, 'w+') as f:
             f.write(new_text)
-        os.rename(tmpfile, full_path)
+        shutil.move(tmpfile, full_path)
 
 
 class ToFormatFile:
@@ -427,7 +429,11 @@ else:
 def process_file(f):
     if not silent:
         print(f.full_path)
-    format_file(f.filename, f.full_path, f.directory, f.ext)
+    try:
+        format_file(f.filename, f.full_path, f.directory, f.ext)
+    except:
+        print(traceback.format_exc())
+        sys.exit(1)
 
 
 # Create thread for each file

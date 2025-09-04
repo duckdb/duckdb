@@ -7,6 +7,12 @@ require icu
 statement ok
 PRAGMA enable_verification
 
+statement ok
+set Calendar='gregorian';
+
+statement ok
+set TimeZone='UTC';
+
 # Offset parsing for plain  timestamps drops the offset instead of subtracting it
 query I
 SELECT '2025-01-01T08:00:00+08'::TIMESTAMP AS c;
@@ -17,12 +23,6 @@ query I
 SELECT '2025-01-01T08:00:00+08'::TIMESTAMPTZ AS c;
 ----
 2025-01-01 00:00:00+00
-
-statement ok
-set Calendar='gregorian';
-
-statement ok
-set TimeZone='UTC';
 
 query I
 select timestamptz '2020-12-31 21:25:58.745232';

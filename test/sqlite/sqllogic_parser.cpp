@@ -163,6 +163,7 @@ bool SQLLogicParser::IsSingleLineStatement(SQLLogicToken &token) {
 	case SQLLogicTokenType::SQLLOGIC_ENDLOOP:
 	case SQLLogicTokenType::SQLLOGIC_REQUIRE:
 	case SQLLogicTokenType::SQLLOGIC_REQUIRE_ENV:
+	case SQLLogicTokenType::SQLLOGIC_TEST_ENV:
 	case SQLLogicTokenType::SQLLOGIC_LOAD:
 	case SQLLogicTokenType::SQLLOGIC_RESTART:
 	case SQLLogicTokenType::SQLLOGIC_RECONNECT:
@@ -215,6 +216,8 @@ SQLLogicTokenType SQLLogicParser::CommandToToken(const string &token) {
 		return SQLLogicTokenType::SQLLOGIC_REQUIRE;
 	} else if (token == "require-env") {
 		return SQLLogicTokenType::SQLLOGIC_REQUIRE_ENV;
+	} else if (token == "test-env") {
+		return SQLLogicTokenType::SQLLOGIC_TEST_ENV;
 	} else if (token == "load") {
 		return SQLLogicTokenType::SQLLOGIC_LOAD;
 	} else if (token == "restart") {
