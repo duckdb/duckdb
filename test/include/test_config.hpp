@@ -43,6 +43,7 @@ public:
 	bool GetForceRestart();
 	bool GetCheckpointOnShutdown();
 	bool GetTestMemoryLeaks();
+	bool RunStorageFuzzer();
 	bool GetSummarizeFailures();
 	bool GetSkipCompiledTests();
 	DebugVectorVerification GetVectorVerification();
@@ -61,6 +62,7 @@ public:
 	static bool TestForceStorage();
 	static bool TestForceReload();
 	static bool TestMemoryLeaks();
+	static bool TestRunStorageFuzzer();
 
 	static void ParseConnectScript(const Value &input);
 	static void CheckSortStyle(const Value &input);
