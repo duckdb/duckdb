@@ -9,6 +9,7 @@
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include <iostream>
 
 namespace duckdb {
 
@@ -44,9 +45,15 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 	// This allows the right side to reference the CTE recursively
 	bind_context.AddGenericBinding(result->setop_index, statement.ctename, result->names, result->types);
 
+
+
+	// Create temporary binder to bind expressions
+	auto bin = Binder::CreateBinder(context, nullptr);
 	ErrorData error;
-	FunctionBinder function_binder(*this);
-	ExpressionBinder expression_binder(*this, context);
+	FunctionBinder function_binder(*bin);
+	bin->bind_context.AddGenericBinding(result->setop_index, statement.ctename, result->names, result->types);
+	ExpressionBinder expression_binder(*bin, context);
+
 	// Set contains column indices that are already bound
 	unordered_set<idx_t> column_references;
 
@@ -99,28 +106,29 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 		column_references.insert(aggregate_idx);
 	}
 
-	// Bind every column that is neither referenced as a key nor by an aggregate to a LAST aggregate
-	for (idx_t i = 0; i < result->left->types.size(); i++) {
-		if (column_references.find(i) == column_references.end()) {
-			// Create a new bound column reference for the missing columns
-			vector<unique_ptr<Expression>> first_children;
-			auto bound = make_uniq<BoundColumnRefExpression>(result->types[i], ColumnBinding(result->setop_index, i));
-			first_children.push_back(std::move(bound));
+	// If we have key targets, then all the other columns must be aggregated
+	if (!result->key_targets.empty()) {
+		// Bind every column that is neither referenced as a key nor by an aggregate to a LAST aggregate
+		for (idx_t i = 0; i < result->left->types.size(); i++) {
+			if (column_references.find(i) == column_references.end()) {
+				// Create a new bound column reference for the missing columns
+				vector<unique_ptr<Expression>> first_children;
+				auto bound =
+				    make_uniq<BoundColumnRefExpression>(result->types[i], ColumnBinding(result->setop_index, i));
+				first_children.push_back(std::move(bound));
 
-			// Create a last aggregate for the newly bound column reference
-			auto first_aggregate =
-			    function_binder.BindAggregateFunction(LastFunctionGetter::GetFunction(result->types[i]),
-			                                          std::move(first_children), nullptr, AggregateType::NON_DISTINCT);
+				// Create a last aggregate for the newly bound column reference
+				auto first_aggregate = function_binder.BindAggregateFunction(
+				    LastFunctionGetter::GetFunction(result->types[i]), std::move(first_children), nullptr,
+				    AggregateType::NON_DISTINCT);
 
-			result->payload_aggregates.push_back(std::move(first_aggregate));
+				result->payload_aggregates.push_back(std::move(first_aggregate));
+			}
 		}
 	}
 
-	// We are done binding all key and payload columns, so we can destroy the expression binder.
-	PopExpressionBinder();
-
 	// BTODO: only here until i know how to fix ResolveTypes()
-	// Now that we have finished binding all aggregates, we can update the operator types.
+	// Now that we have finished binding all aggregates, we can update the operator types
 	result->types = result->return_types;
 
 	result->right_binder = Binder::CreateBinder(context, this);
