@@ -1198,7 +1198,8 @@ vector<PartitionStatistics> RowGroupCollection::GetPartitionStats() const {
 //===--------------------------------------------------------------------===//
 vector<ColumnSegmentInfo> RowGroupCollection::GetColumnSegmentInfo() {
 	vector<ColumnSegmentInfo> result;
-	for (auto &row_group : row_groups->Segments()) {
+	auto lock = row_groups->Lock();
+	for (auto &row_group : row_groups->Segments(lock)) {
 		row_group.GetColumnSegmentInfo(row_group.index, result);
 	}
 	return result;
