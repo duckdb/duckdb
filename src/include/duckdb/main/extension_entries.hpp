@@ -227,6 +227,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"iceberg_metadata", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
     {"iceberg_scan", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
     {"iceberg_snapshots", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"iceberg_to_ducklake", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
     {"icu_calendar_names", "icu", CatalogType::TABLE_FUNCTION_ENTRY},
     {"icu_collate_af", "icu", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"icu_collate_am", "icu", CatalogType::SCALAR_FUNCTION_ENTRY},
