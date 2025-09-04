@@ -15,7 +15,6 @@ namespace duckdb {
 struct ParquetMetaDataBindData : public TableFunctionData {
 	vector<string> file_paths;
 	vector<LogicalType> return_types;
-	vector<string> column_names;
 };
 
 struct ParquetBloomProbeBindData : public ParquetMetaDataBindData {
@@ -49,7 +48,7 @@ protected:
 	bool initialized = false;
 	bool exhausted = false;
 
-	void InitializeReader(ClientContext &context);
+	virtual void InitializeReader(ClientContext &context);
 };
 
 struct ParquetMetaDataBindData;
@@ -172,7 +171,6 @@ void ParquetMetadataFileProcessor::InitializeReader(ClientContext &context) {
 	if (!initialized) {
 		ParquetOptions parquet_options(context);
 		reader = make_uniq<ParquetReader>(context, file_path, parquet_options);
-		context_ptr = &context;
 		initialized = true;
 	}
 }
@@ -187,9 +185,13 @@ public:
 
 	idx_t ReadChunk(ClientContext &context, DataChunk &output, idx_t output_offset, idx_t max_rows) override;
 
+protected:
+	void InitializeReader(ClientContext &context) override;
+
 private:
 	idx_t current_row_group = 0;
 	idx_t current_column = 0;
+	vector<ParquetColumnSchema> column_schemas;
 
 	void ProcessRowGroupColumn(DataChunk &output, idx_t output_idx, idx_t row_group_idx, idx_t col_idx);
 };
@@ -355,15 +357,12 @@ ParquetRowGroupMetadataProcessor::ParquetRowGroupMetadataProcessor(ClientContext
     : ParquetMetadataFileProcessor(context, file_path, ParquetMetadataOperatorType::META_DATA) {
 }
 
-idx_t ParquetRowGroupMetadataProcessor::ReadChunk(ClientContext &context, DataChunk &output, idx_t output_offset,
-                                                  idx_t max_rows) {
-	InitializeReader(context);
+void ParquetRowGroupMetadataProcessor::InitializeReader(ClientContext &context) {
+	bool was_initialized = initialized;
+	ParquetMetadataFileProcessor::InitializeReader(context);
 
-	auto meta_data = reader->GetFileMetadata();
-	vector<ParquetColumnSchema> column_schemas;
-
-	// Initialize column schemas if not done already
-	if (current_row_group == 0 && current_column == 0) {
+	if (!was_initialized) {
+		auto meta_data = reader->GetFileMetadata();
 		for (idx_t schema_idx = 0; schema_idx < meta_data->schema.size(); schema_idx++) {
 			auto &schema_element = meta_data->schema[schema_idx];
 			if (schema_element.num_children > 0) {
@@ -374,6 +373,13 @@ idx_t ParquetRowGroupMetadataProcessor::ReadChunk(ClientContext &context, DataCh
 			column_schemas.push_back(std::move(column_schema));
 		}
 	}
+}
+
+idx_t ParquetRowGroupMetadataProcessor::ReadChunk(ClientContext &context, DataChunk &output, idx_t output_offset,
+                                                  idx_t max_rows) {
+	InitializeReader(context);
+
+	auto meta_data = reader->GetFileMetadata();
 
 	idx_t rows_written = 0;
 
@@ -402,25 +408,11 @@ void ParquetRowGroupMetadataProcessor::ProcessRowGroupColumn(DataChunk &output, 
                                                              idx_t col_idx) {
 	auto meta_data = reader->GetFileMetadata();
 	auto &row_group = meta_data->row_groups[row_group_idx];
+
 	auto &column = row_group.columns[col_idx];
+	auto &column_schema = column_schemas[col_idx];
 	auto &col_meta = column.meta_data;
 	auto &stats = col_meta.statistics;
-
-	// Build column schema for this column
-	ParquetColumnSchema column_schema;
-	idx_t schema_col_idx = 0;
-	for (idx_t schema_idx = 0; schema_idx < meta_data->schema.size(); schema_idx++) {
-		auto &schema_element = meta_data->schema[schema_idx];
-		if (schema_element.num_children > 0) {
-			continue;
-		}
-		if (schema_col_idx == col_idx) {
-			column_schema.type = reader->DeriveLogicalType(schema_element, column_schema);
-			break;
-		}
-		schema_col_idx++;
-	}
-
 	auto &column_type = column_schema.type;
 
 	// file_name
@@ -689,7 +681,6 @@ public:
 
 private:
 	idx_t current_kv_entry = 0;
-	bool exhausted = false;
 
 	void ProcessKeyValueEntry(DataChunk &output, idx_t output_idx, idx_t kv_idx);
 };
@@ -845,10 +836,9 @@ private:
 	string probe_column_name;
 	Value probe_constant;
 	idx_t current_row_group = 0;
-	bool exhausted = false;
 	optional_idx probe_column_idx;
 
-	void ProcessRowGroupBloomProbe(DataChunk &output, idx_t output_idx, idx_t row_group_idx);
+	void ProcessRowGroupBloomProbe(ClientContext &context, DataChunk &output, idx_t output_idx, idx_t row_group_idx);
 	void InitializeProbeColumn();
 };
 
@@ -888,7 +878,7 @@ idx_t ParquetBloomProbeProcessor::ReadChunk(ClientContext &context, DataChunk &o
 			break;
 		}
 
-		ProcessRowGroupBloomProbe(output, output_offset + rows_written, current_row_group);
+		ProcessRowGroupBloomProbe(context, output, output_offset + rows_written, current_row_group);
 		rows_written++;
 		current_row_group++;
 	}
@@ -909,19 +899,20 @@ void ParquetBloomProbeProcessor::InitializeProbeColumn() {
 	}
 }
 
-void ParquetBloomProbeProcessor::ProcessRowGroupBloomProbe(DataChunk &output, idx_t output_idx, idx_t row_group_idx) {
+void ParquetBloomProbeProcessor::ProcessRowGroupBloomProbe(ClientContext &context, DataChunk &output, idx_t output_idx,
+                                                           idx_t row_group_idx) {
 	auto meta_data = reader->GetFileMetadata();
 	auto &row_group = meta_data->row_groups[row_group_idx];
 	auto &column = row_group.columns[probe_column_idx.GetIndex()];
 
-	auto &allocator = BufferAllocator::Get(*context_ptr);
+	auto &allocator = BufferAllocator::Get(context);
 	auto transport = duckdb_base_std::make_shared<ThriftFileTransport>(reader->GetHandle(), false);
 	auto protocol =
 	    make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
 
 	D_ASSERT(!probe_constant.IsNull());
 	ConstantFilter filter(ExpressionType::COMPARE_EQUAL,
-	                      probe_constant.CastAs(*context_ptr, reader->GetColumns()[probe_column_idx.GetIndex()].type));
+	                      probe_constant.CastAs(context, reader->GetColumns()[probe_column_idx.GetIndex()].type));
 
 	auto bloom_excludes = ParquetStatisticsUtils::BloomFilterExcludes(filter, column.meta_data, *protocol, allocator);
 
@@ -971,7 +962,6 @@ unique_ptr<FunctionData> ParquetMetaDataOperator<OP_TYPE>::Bind(ClientContext &c
 	BindSchema(return_types, names);
 	result->file_paths = std::move(file_paths);
 	result->return_types = return_types;
-	result->column_names = names;
 
 	return std::move(result);
 }
