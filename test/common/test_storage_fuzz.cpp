@@ -404,16 +404,15 @@ TEST_CASE("fuzzed storage test", "[storage][.]") {
 	for (const auto &action : actions) {
 		// Note: the injected file system has to be reset each time. DuckDB construction seems to be std::move'ing them
 
-        /*
+		/*
 		LazyFlushFileSystem *raw_fs = new LazyFlushFileSystem();
 		config.file_system =
 		    duckdb::make_uniq<duckdb::VirtualFileSystem>(duckdb::unique_ptr<LazyFlushFileSystem>(raw_fs));
-         */
+		 */
 
 		FaultInjectionFileSystem *raw_fs = new FaultInjectionFileSystem();
 		config.file_system =
 		    duckdb::make_uniq<duckdb::VirtualFileSystem>(duckdb::unique_ptr<FaultInjectionFileSystem>(raw_fs));
-
 
 		duckdb::DuckDB db(file_path, &config);
 		duckdb::Connection con(db);
@@ -427,7 +426,8 @@ TEST_CASE("fuzzed storage test", "[storage][.]") {
 			if (computed_checksum != expected_checksum) {
 				auto result = con.Query("SELECT * FROM t ORDER BY ALL");
 				string error;
-				ColumnDataCollection::ResultEquals(previous_result->Cast<MaterializedQueryResult>().Collection(), result->Cast<MaterializedQueryResult>().Collection(), error);
+				ColumnDataCollection::ResultEquals(previous_result->Cast<MaterializedQueryResult>().Collection(),
+				                                   result->Cast<MaterializedQueryResult>().Collection(), error);
 				Printer::PrintF("Checksum failure\nResult comparison:\n%s", error);
 				REQUIRE(computed_checksum == expected_checksum);
 			}
