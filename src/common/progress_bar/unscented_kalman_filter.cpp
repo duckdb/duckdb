@@ -222,7 +222,7 @@ void UnscentedKalmanFilter::UpdateInternal(double measured_progress) {
 	// Update state
 	vector<double> innovation = {measured_progress - z_pred[0]};
 	for (size_t i = 0; i < STATE_DIM; i++) {
-		x[i] += K[i][0] * innovation[0];
+		x[i] += MaxValue<double>(K[i][0] * innovation[0], 0);
 	}
 
 	// Update covariance
