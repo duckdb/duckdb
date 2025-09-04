@@ -321,6 +321,12 @@ public:
 	virtual bool SupportsTimeTravel() const {
 		return false;
 	}
+	virtual bool IsEncrypted() const {
+		return false;
+	}
+	virtual string GetEncryptionCipher() const {
+		return string();
+	}
 
 	//! Whether or not this catalog should search a specific type with the standard priority
 	DUCKDB_API virtual CatalogLookupBehavior CatalogTypeLookupRule(CatalogType type) const {
