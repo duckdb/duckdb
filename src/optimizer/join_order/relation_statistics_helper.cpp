@@ -425,7 +425,7 @@ static idx_t InspectTableFilterForRangeForType(idx_t cardinality, BaseStatistics
 
 	bool is_less_than = (comparison_type == ExpressionType::COMPARE_LESSTHAN ||
 	                     comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO);
-	// Filter ride on the border, get cardinlity same with equal filter.
+	// Filter right on the border, get cardinality same with equal filter.
 	if ((filter == max && comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO) ||
 	    (filter == min && comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO)) {
 		if (distinct_count > 0) {
@@ -456,7 +456,7 @@ static idx_t InspectTableFilterForRangeForType(idx_t cardinality, BaseStatistics
 
 static idx_t InspectTableFilterForRange(idx_t cardinality, BaseStatistics &base_stats,
                                         const ConstantFilter &comparison_filter) {
-	id_t cardinality_after_filters = cardinality;
+	idx_t cardinality_after_filters = cardinality;
 	auto min_value = NumericStats::Min(base_stats);
 	auto max_value = NumericStats::Max(base_stats);
 
