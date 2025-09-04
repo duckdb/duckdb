@@ -1,10 +1,16 @@
 #include "catch.hpp"
 #include "duckdb.hpp"
+#include "duckdb/common/common.hpp"
 #include "duckdb/common/local_file_system.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
+#include "duckdb/main/materialized_query_result.hpp"
+#include "test_config.hpp"
+#include "test_helpers.hpp"
 
 #include <iostream>
 #include <shared_mutex>
+
+using namespace duckdb;
 
 bool g_enable_verbose_output = false;
 bool g_enable_info_output = true;
