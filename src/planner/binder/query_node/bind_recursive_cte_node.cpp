@@ -44,10 +44,13 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 	// This allows the right side to reference the CTE recursively
 	bind_context.AddGenericBinding(result->setop_index, statement.ctename, result->names, result->types);
 
+	ErrorData error;
+	FunctionBinder function_binder(*this);
+	ExpressionBinder expression_binder(*this, context);
 	// Set contains column indices that are already bound
 	unordered_set<idx_t> column_references;
+
 	// Bind specified keys to the referenced column
-	auto expression_binder = ExpressionBinder(*this, context);
 	for (unique_ptr<ParsedExpression> &expr : statement.key_targets) {
 		auto bound_expr = expression_binder.Bind(expr);
 		D_ASSERT(bound_expr->type == ExpressionType::BOUND_COLUMN_REF);
@@ -57,8 +60,6 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 		result->key_targets.push_back(std::move(bound_expr));
 	}
 
-	ErrorData error;
-	FunctionBinder function_binder(*this);
 	// Bind user-defined aggregates
 	for (auto &expr : statement.payload_aggregates) {
 		D_ASSERT(expr->type == ExpressionType::FUNCTION);
@@ -114,11 +115,12 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 			result->payload_aggregates.push_back(std::move(first_aggregate));
 		}
 	}
-	// We are done with binding all key and payload columns. We can now destroy the expression binder.
+
+	// We are done binding all key and payload columns, so we can destroy the expression binder.
 	PopExpressionBinder();
 
 	// BTODO: only here until i know how to fix ResolveTypes()
-	// We have finished binding all the aggregates. Now, we will update the types of the operator.
+	// Now that we have finished binding all aggregates, we can update the operator types.
 	result->types = result->return_types;
 
 	result->right_binder = Binder::CreateBinder(context, this);
