@@ -38,6 +38,9 @@ static const TestConfigOption test_config_options[] = {
     {"on_init", "SQL statements to execute on init", LogicalType::VARCHAR, nullptr},
     {"on_load", "SQL statements to execute on explicit load", LogicalType::VARCHAR, nullptr},
     {"on_new_connection", "SQL statements to execute on connection", LogicalType::VARCHAR, nullptr},
+    {"test_env", "The test variables",
+     LogicalType::LIST(LogicalType::STRUCT({{"env_name", LogicalType::VARCHAR}, {"env_value", LogicalType::VARCHAR}})),
+     nullptr},
     {"skip_tests", "Tests to be skipped",
      LogicalType::LIST(
          LogicalType::STRUCT({{"reason", LogicalType::VARCHAR}, {"paths", LogicalType::LIST(LogicalType::VARCHAR)}})),
@@ -376,6 +379,23 @@ bool TestConfiguration::GetSkipCompiledTests() {
 
 string TestConfiguration::GetStorageVersion() {
 	return GetOptionOrDefault("storage_version", string());
+}
+
+string TestConfiguration::GetTestEnv(const string &key, const string &default_value) {
+	if (test_env.empty() && options.find("test_env") != options.end()) {
+		auto entry = options["test_env"];
+		auto list_children = ListValue::GetChildren(entry);
+		for (const auto &value : list_children) {
+			auto &struct_children = StructValue::GetChildren(value);
+			auto &env = StringValue::Get(struct_children[0]);
+			auto &env_value = StringValue::Get(struct_children[1]);
+			test_env[env] = env_value;
+		}
+	}
+	if (test_env.find(key) == test_env.end()) {
+		return default_value;
+	}
+	return test_env[key];
 }
 
 DebugVectorVerification TestConfiguration::GetVectorVerification() {
