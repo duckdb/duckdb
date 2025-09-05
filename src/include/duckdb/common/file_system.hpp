@@ -28,6 +28,24 @@
 
 namespace duckdb {
 
+// Forward declarations
+class Expression;
+struct MultiFileOptions;
+struct MultiFilePushdownInfo;
+
+//! Wrapper struct for hive filtering parameters passed to Glob
+struct HiveFilterParams {
+	ClientContext &context;
+	vector<unique_ptr<Expression>> &filters;
+	const MultiFileOptions &options;
+	MultiFilePushdownInfo &info;
+
+	HiveFilterParams(ClientContext &context, vector<unique_ptr<Expression>> &filters, const MultiFileOptions &options,
+	                 MultiFilePushdownInfo &info)
+	    : context(context), filters(filters), options(options), info(info) {
+	}
+};
+
 class AttachedDatabase;
 class DatabaseInstance;
 class FileOpener;
@@ -232,7 +250,8 @@ public:
 	//! Whether there is a glob in the string
 	DUCKDB_API static bool HasGlob(const string &str);
 	//! Runs a glob on the file system, returning a list of matching files
-	DUCKDB_API virtual vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr);
+	DUCKDB_API virtual vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr,
+	                                             const FileGlobInput &input = FileGlobOptions::DISALLOW_EMPTY);
 	DUCKDB_API vector<OpenFileInfo> GlobFiles(const string &path, ClientContext &context,
 	                                          const FileGlobInput &input = FileGlobOptions::DISALLOW_EMPTY);
 

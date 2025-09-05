@@ -592,7 +592,7 @@ bool FileSystem::HasGlob(const string &str) {
 	return false;
 }
 
-vector<OpenFileInfo> FileSystem::Glob(const string &path, FileOpener *opener) {
+vector<OpenFileInfo> FileSystem::Glob(const string &path, FileOpener *opener, const FileGlobInput &file_glob_input) {
 	throw NotImplementedException("%s: Glob is not implemented!", GetName());
 }
 
@@ -638,7 +638,7 @@ static string LookupExtensionForPattern(const string &pattern) {
 }
 
 vector<OpenFileInfo> FileSystem::GlobFiles(const string &pattern, ClientContext &context, const FileGlobInput &input) {
-	auto result = Glob(pattern);
+	auto result = Glob(pattern, nullptr, input);
 	if (result.empty()) {
 		string required_extension = LookupExtensionForPattern(pattern);
 		if (!required_extension.empty() && !context.db->ExtensionIsLoaded(required_extension)) {
@@ -668,7 +668,9 @@ vector<OpenFileInfo> FileSystem::GlobFiles(const string &pattern, ClientContext 
 					throw InternalException("FALLBACK_GLOB requires an extension to be specified");
 				}
 				string new_pattern = JoinPath(JoinPath(pattern, "**"), "*." + input.extension);
-				result = GlobFiles(new_pattern, context, FileGlobOptions::ALLOW_EMPTY);
+				auto file_glob_input = input;
+				file_glob_input.behavior = FileGlobOptions::ALLOW_EMPTY;
+				result = GlobFiles(new_pattern, context, file_glob_input);
 				if (!result.empty()) {
 					// we found files by globbing the target as if it was a directory - return them
 					return result;
