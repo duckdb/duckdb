@@ -17,6 +17,7 @@ INSERT INTO t0(c0) VALUES (1);
 statement error
 INSERT INTO t0(c0) VALUES (1);
 ----
+<REGEX>:.*Constraint Error.*Duplicate key.*
 
 query I
 SELECT * FROM t0 WHERE t0.c0 = 1;
@@ -38,3 +39,4 @@ INSERT INTO merge_violation VALUES (2047);
 statement error
 CREATE UNIQUE INDEX idx ON merge_violation(id);
 ----
+<REGEX>:.*Constraint Error.*contains duplicates on indexed column.*

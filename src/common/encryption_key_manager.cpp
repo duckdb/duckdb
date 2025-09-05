@@ -92,7 +92,7 @@ void EncryptionKeyManager::KeyDerivationFunctionSHA256(const_data_ptr_t key, idx
                                                        data_ptr_t derived_key) {
 	//! For now, we are only using SHA256 for key derivation
 	duckdb_mbedtls::MbedTlsWrapper::SHA256State state;
-	state.AddSalt(salt, MainHeader::SALT_LEN);
+	state.AddSalt(salt, MainHeader::DB_IDENTIFIER_LEN);
 	state.AddBytes(key, key_size);
 	state.FinalizeDerivedKey(derived_key);
 }

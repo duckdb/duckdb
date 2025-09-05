@@ -1,0 +1,118 @@
+# name: test/sql/types/variant/json_cast.test
+# group: [variant]
+
+require json
+
+# ---------- JSON -> VARIANT ----------
+
+query I
+select '"test"'::JSON::VARIANT;
+----
+test
+
+query I
+select ['"test"' for _ in range(10)]::JSON::VARIANT;
+----
+["test", "test", "test", "test", "test", "test", "test", "test", "test", "test"]
+
+query I
+select '{"hello": [1,2,true, false, null], "test": [1, {"test": false}, ["blob", "this is a long string", 123]]}'::JSON::VARIANT;
+----
+{'hello': [1, 2, true, false, NULL], 'test': [1, {'test': false}, [blob, this is a long string, 123]]}
+
+# ---------- VARIANT -> JSON ----------
+
+query I
+select '"test"'::JSON::VARIANT::JSON;
+----
+"test"
+
+query I
+select ['"test"' for _ in range(10)]::JSON::VARIANT::JSON;
+----
+["\"test\"","\"test\"","\"test\"","\"test\"","\"test\"","\"test\"","\"test\"","\"test\"","\"test\"","\"test\""]
+
+query I
+select '{"hello": [1,2,true, false, null], "test": [1, {"test": false}, ["blob", "this is a long string", 123]]}'::JSON::VARIANT::JSON;
+----
+{"hello":[1,2,true,false,null],"test":[1,{"test":false},["blob","this is a long string",123]]}
+
+query I
+select '{"hello": [1,2,true, false, null], "test": [1, {"test": false}, ["blob", "this is a long string", 123]]}'::JSON::VARIANT::JSON from range(10);
+----
+{"hello":[1,2,true,false,null],"test":[1,{"test":false},["blob","this is a long string",123]]}
+{"hello":[1,2,true,false,null],"test":[1,{"test":false},["blob","this is a long string",123]]}
+{"hello":[1,2,true,false,null],"test":[1,{"test":false},["blob","this is a long string",123]]}
+{"hello":[1,2,true,false,null],"test":[1,{"test":false},["blob","this is a long string",123]]}
+{"hello":[1,2,true,false,null],"test":[1,{"test":false},["blob","this is a long string",123]]}
+{"hello":[1,2,true,false,null],"test":[1,{"test":false},["blob","this is a long string",123]]}
+{"hello":[1,2,true,false,null],"test":[1,{"test":false},["blob","this is a long string",123]]}
+{"hello":[1,2,true,false,null],"test":[1,{"test":false},["blob","this is a long string",123]]}
+{"hello":[1,2,true,false,null],"test":[1,{"test":false},["blob","this is a long string",123]]}
+{"hello":[1,2,true,false,null],"test":[1,{"test":false},["blob","this is a long string",123]]}
+
+statement ok
+create table tbl(var JSON);
+
+statement ok
+insert into tbl select '{"test":123,"hello":[1,2,3],"world":{"test":true}}';
+
+statement ok
+insert into tbl select '{"test":123,"hello":[4,5,6],"world":{"test":true}}';
+
+statement ok
+insert into tbl select '{"test":123,"hello":[],"world":{"test":true}}';
+
+query I
+select var::VARIANT from tbl;
+----
+{'test': 123, 'hello': [1, 2, 3], 'world': {'test': true}}
+{'test': 123, 'hello': [4, 5, 6], 'world': {'test': true}}
+{'test': 123, 'hello': [], 'world': {'test': true}}
+
+query I
+select var::VARIANT::JSON from tbl;
+----
+{"test":123,"hello":[1,2,3],"world":{"test":true}}
+{"test":123,"hello":[4,5,6],"world":{"test":true}}
+{"test":123,"hello":[],"world":{"test":true}}
+
+query I
+with base as (
+	from (VALUES
+		(
+			'NULL'
+		),
+		(
+			'{"b": [1,2,true, "hello"], "a": NULL}'
+		),
+		(
+			'true'
+		)
+	) t(a)
+)
+select a::VARIANT from base;
+----
+NULL
+{"b": [1,2,true, "hello"], "a": NULL}
+true
+
+query I
+with base as (
+	from (VALUES
+		(
+			'null'
+		),
+		(
+			'{"b": [1,2,true, "hello"], "a": null}'
+		),
+		(
+			'true'
+		)
+	) t(a)
+)
+select {'var': a::JSON}::VARIANT from base;
+----
+{'var': NULL}
+{'var': {'b': [1, 2, true, hello], 'a': NULL}}
+{'var': true}

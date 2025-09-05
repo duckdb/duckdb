@@ -1,0 +1,73 @@
+# name: test/sql/types/variant/try_cast_from_variant.test
+# group: [variant]
+
+query I
+select try_cast('hello world'::variant as int) + 1;
+----
+NULL
+
+query I
+select try_cast('hello world'::variant as STRUCT(a varchar, b boolean));
+----
+NULL
+
+query I
+select try_cast('hello world'::variant as INTEGER[]);
+----
+NULL
+
+query I
+with cte as (
+	from ( values
+		('test'::VARIANT),
+		(null::VARIANT),
+		(42::VARIANT)
+	) t(a)
+)
+select try_cast(a as INT) from cte;
+----
+NULL
+NULL
+42
+
+query I
+with cte as (
+	from ( values
+		('test'::VARIANT),
+		(null::VARIANT),
+		(42::VARIANT)
+	) t(a)
+)
+select try_cast(a as STRUCT(a varchar, b boolean)) from cte;
+----
+NULL
+NULL
+NULL
+
+query I
+with cte as (
+	from ( values
+		('test'::VARIANT),
+		(null::VARIANT),
+		(42::VARIANT)
+	) t(a)
+)
+select try_cast(a as BOOLEAN[]) from cte;
+----
+NULL
+NULL
+NULL
+
+query I
+with cte as (
+	from ( values
+		('test'::VARIANT),
+		(null::VARIANT),
+		(42::VARIANT)
+	) t(a)
+)
+select try_cast(a as UNION(a integer, b decimal)) from cte;
+----
+NULL
+NULL
+NULL

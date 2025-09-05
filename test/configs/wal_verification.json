@@ -28,6 +28,11 @@
         "test/sql/attach/attach_use_rollback.test"
       ]
     },
+    {"reason": "Loading from disk is necessary to trigger expected OOM.",
+      "paths": [
+        "test/sql/storage/constraints/foreignkey/foreign_key_persistent_memory_limit.test"
+      ]
+    },
     {
       "reason": "FIXME: Unexpected (?) binder error.",
       "paths": [

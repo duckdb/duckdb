@@ -403,7 +403,7 @@ string BaseStatistics::ToString() const {
 	return result;
 }
 
-void BaseStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t count) const {
+void BaseStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t count, const bool ignore_has_null) const {
 	D_ASSERT(vector.GetType() == this->type);
 	switch (GetStatsType()) {
 	case StatisticsType::NUMERIC_STATS:
@@ -439,7 +439,7 @@ void BaseStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t co
 			    "Statistics mismatch: vector labeled as having only NULL values, but vector contains valid values: %s",
 			    vector.ToString(count));
 		}
-		if (!row_is_valid && !has_null) {
+		if (!row_is_valid && !has_null && !ignore_has_null) {
 			throw InternalException(
 			    "Statistics mismatch: vector labeled as not having NULL values, but vector contains null values: %s",
 			    vector.ToString(count));
@@ -449,7 +449,7 @@ void BaseStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t co
 
 void BaseStatistics::Verify(Vector &vector, idx_t count) const {
 	auto sel = FlatVector::IncrementalSelectionVector();
-	Verify(vector, *sel, count);
+	Verify(vector, *sel, count, false);
 }
 
 BaseStatistics BaseStatistics::FromConstantType(const Value &input) {

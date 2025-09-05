@@ -657,7 +657,7 @@ CatalogException Catalog::CreateMissingEntryException(CatalogEntryRetriever &ret
 	auto &db_manager = DatabaseManager::Get(context);
 	auto databases = db_manager.GetDatabases(context, max_schema_count);
 
-	for (auto database : databases) {
+	for (const auto &database : databases) {
 		if (unseen_schemas.size() >= max_schema_count) {
 			break;
 		}
