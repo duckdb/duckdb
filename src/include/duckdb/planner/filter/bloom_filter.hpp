@@ -26,7 +26,6 @@ public:
 	CacheSectorizedBloomFilter() = default;
 	void Initialize(ClientContext &context_p, idx_t est_num_rows) {
 
-		printf("Initializing bf for %llu rows \n", est_num_rows);
 		context = &context_p;
 		buffer_manager = &BufferManager::GetBufferManager(*context);
 
