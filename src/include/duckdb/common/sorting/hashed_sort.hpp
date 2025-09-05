@@ -35,6 +35,8 @@ public:
 	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const;
 	SinkCombineResultType Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const;
 	SinkFinalizeType Finalize(ClientContext &client, OperatorSinkFinalizeInput &finalize) const;
+	ProgressData GetSinkProgress(ClientContext &context, GlobalSinkState &gstate,
+	                             const ProgressData source_progress) const;
 
 public:
 	//===--------------------------------------------------------------------===//

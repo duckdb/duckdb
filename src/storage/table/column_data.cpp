@@ -517,30 +517,37 @@ void ColumnData::AppendData(BaseStatistics &append_stats, ColumnAppendState &sta
 	}
 }
 
-void ColumnData::RevertAppend(row_t start_row) {
+void ColumnData::RevertAppend(row_t start_row_p) {
+	idx_t start_row = NumericCast<idx_t>(start_row_p);
 	auto l = data.Lock();
 	// check if this row is in the segment tree at all
 	auto last_segment = data.GetLastSegment(l);
 	if (!last_segment) {
 		return;
 	}
-	if (NumericCast<idx_t>(start_row) >= last_segment->start + last_segment->count) {
+	if (start_row >= last_segment->start + last_segment->count) {
 		// the start row is equal to the final portion of the column data: nothing was ever appended here
-		D_ASSERT(NumericCast<idx_t>(start_row) == last_segment->start + last_segment->count);
+		D_ASSERT(start_row == last_segment->start + last_segment->count);
 		return;
 	}
 	// find the segment index that the current row belongs to
-	idx_t segment_index = data.GetSegmentIndex(l, UnsafeNumericCast<idx_t>(start_row));
+	idx_t segment_index = data.GetSegmentIndex(l, start_row);
 	auto segment = data.GetSegmentByIndex(l, UnsafeNumericCast<int64_t>(segment_index));
-	auto &transient = *segment;
-	D_ASSERT(transient.segment_type == ColumnSegmentType::TRANSIENT);
+	if (segment->start == start_row) {
+		// we are truncating exactly this segment - erase it entirely
+		data.EraseSegments(l, segment_index);
+	} else {
+		// we need to truncate within the segment
+		// remove any segments AFTER this segment: they should be deleted entirely
+		data.EraseSegments(l, segment_index + 1);
 
-	// remove any segments AFTER this segment: they should be deleted entirely
-	data.EraseSegments(l, segment_index);
+		auto &transient = *segment;
+		D_ASSERT(transient.segment_type == ColumnSegmentType::TRANSIENT);
+		segment->next = nullptr;
+		transient.RevertAppend(start_row);
+	}
 
-	this->count = UnsafeNumericCast<idx_t>(start_row) - this->start;
-	segment->next = nullptr;
-	transient.RevertAppend(UnsafeNumericCast<idx_t>(start_row));
+	this->count = start_row - this->start;
 }
 
 idx_t ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {

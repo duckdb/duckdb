@@ -346,7 +346,7 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(AttachedDatabase &databa
 				}
 				state.replay_index_infos.clear();
 
-				successful_offset = reader.offset;
+				successful_offset = reader.CurrentOffset();
 				// check if the file is exhausted
 				if (reader.Finished()) {
 					// we finished reading the file: break

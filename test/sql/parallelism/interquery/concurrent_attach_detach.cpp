@@ -1,14 +1,15 @@
 #include "catch.hpp"
-#include "test_helpers.hpp"
-#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/map.hpp"
+#include "duckdb/common/mutex.hpp"
+#include "duckdb/common/vector.hpp"
+#include "test_helpers.hpp"
 
-#include <string>
-#include <vector>
 #include <thread>
 
 using namespace duckdb;
+
+namespace {
 
 string test_dir_path;
 const string prefix = "db_";
@@ -25,9 +26,9 @@ string getDBName(idx_t i) {
 const idx_t db_count = 10;
 const idx_t worker_count = 40;
 const idx_t iteration_count = 100;
-const idx_t nr_initial_rows = 10000;
+const idx_t nr_initial_rows = 2050;
 
-std::vector<string> logging;
+vector<string> logging;
 mutex log_mutex;
 atomic<bool> success {true};
 
@@ -54,7 +55,7 @@ struct TableInfo {
 struct DBInfo {
 	mutex mu;
 	idx_t table_count = 0;
-	std::vector<TableInfo> tables;
+	vector<TableInfo> tables;
 };
 
 DBInfo db_infos[db_count];
@@ -64,7 +65,7 @@ public:
 	mutex mu;
 	map<idx_t, idx_t> m;
 
-	void addWorker(Connection &conn, idx_t i) {
+	void addWorker(Connection &conn, const idx_t i) {
 		lock_guard<mutex> lock(mu);
 
 		if (m.find(i) != m.end()) {
@@ -77,7 +78,7 @@ public:
 		execQuery(conn, query);
 	}
 
-	void removeWorker(Connection &conn, idx_t i) {
+	void removeWorker(Connection &conn, const idx_t i) {
 		lock_guard<mutex> lock(mu);
 
 		m[i]--;
@@ -93,7 +94,7 @@ public:
 
 DBPoolMgr db_pool;
 
-void createTbl(Connection &conn, idx_t db_id, idx_t worker_id) {
+void createTbl(Connection &conn, const idx_t db_id, const idx_t worker_id) {
 	lock_guard<mutex> lock(db_infos[db_id].mu);
 	auto tbl_id = db_infos[db_id].table_count;
 	db_infos[db_id].tables.emplace_back(TableInfo {nr_initial_rows});
@@ -101,18 +102,18 @@ void createTbl(Connection &conn, idx_t db_id, idx_t worker_id) {
 
 	string query = "CREATE TABLE " + getDBName(db_id) + ".tbl_" + to_string(tbl_id) +
 	               " AS SELECT "
-	               "range::BIGINT AS i, "
+	               "range::UBIGINT AS i, "
 	               "range::VARCHAR AS s, "
-	               // note: timestamps in this test increment with 1 millisecond (i.e. 1000 microsecond)
+	               // Note: We increment timestamps by 1 millisecond (i.e., 1000 microseconds).
 	               "epoch_ms(range) AS ts, "
-	               "{'key1': range::BIGINT, 'key2': range::VARCHAR} AS obj "
+	               "{'key1': range::UBIGINT, 'key2': range::VARCHAR} AS obj "
 	               "FROM range(" +
 	               to_string(nr_initial_rows) + ")";
 	addLog("thread: " + to_string(worker_id) + "; q: " + query);
 	execQuery(conn, query);
 }
 
-void lookup(Connection &conn, idx_t db_id, idx_t worker_id) {
+void lookup(Connection &conn, const idx_t db_id, const idx_t worker_id) {
 	unique_lock<mutex> lock(db_infos[db_id].mu);
 	auto max_tbl_id = db_infos[db_id].table_count;
 
@@ -125,49 +126,63 @@ void lookup(Connection &conn, idx_t db_id, idx_t worker_id) {
 	auto expected_max_val = db_infos[db_id].tables[tbl_id].size - 1;
 	lock.unlock();
 
-	// run query
+	// Run the query.
 	auto table_name = getDBName(db_id) + ".tbl_" + to_string(tbl_id);
 	string query = "SELECT i, s, ts, obj FROM " + table_name + " WHERE i = " + to_string(expected_max_val);
 	addLog("thread: " + to_string(worker_id) + "; q: " + query);
 	auto result = execQuery(conn, query);
 
-	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(expected_max_val)}));
-	REQUIRE(CHECK_COLUMN(result, 1, {to_string(expected_max_val)}));
-	REQUIRE(CHECK_COLUMN(result, 2, {Value::TIMESTAMP(timestamp_t {static_cast<int64_t>(expected_max_val * 1000)})}));
-	REQUIRE(CHECK_COLUMN(
-	    result, 3,
-	    {Value::STRUCT({{"key1", Value::INTEGER(expected_max_val)}, {"key2", to_string(expected_max_val)}})}));
+	if (!CHECK_COLUMN(result, 0, {Value::UBIGINT(expected_max_val)})) {
+		success = false;
+		return;
+	}
+	if (!CHECK_COLUMN(result, 1, {to_string(expected_max_val)})) {
+		success = false;
+		return;
+	}
+	if (!CHECK_COLUMN(result, 2, {Value::TIMESTAMP(timestamp_t {static_cast<int64_t>(expected_max_val * 1000)})})) {
+		success = false;
+		return;
+	}
+	if (!CHECK_COLUMN(
+	        result, 3,
+	        {Value::STRUCT({{"key1", Value::UBIGINT(expected_max_val)}, {"key2", to_string(expected_max_val)}})})) {
+		success = false;
+		return;
+	}
 }
 
-void append(Connection &conn, idx_t db_id, idx_t worker_id, idx_t append_num_rows = STANDARD_VECTOR_SIZE) {
+void append(Connection &conn, const idx_t db_id, const idx_t worker_id) {
 	lock_guard<mutex> lock(db_infos[db_id].mu);
 	auto max_tbl_id = db_infos[db_id].table_count;
 	if (max_tbl_id == 0) {
 		return;
 	}
+
 	auto tbl_id = std::rand() % max_tbl_id;
 	auto current_num_rows = db_infos[db_id].tables[tbl_id].size;
-	db_infos[db_id].tables[tbl_id].size += append_num_rows;
+	db_infos[db_id].tables[tbl_id].size += STANDARD_VECTOR_SIZE;
 
 	// set appender
 	auto tbl_str = "tbl_" + to_string(tbl_id);
 	addLog("thread: " + to_string(worker_id) + "; db: " + getDBName(db_id) + "; table: " + tbl_str + "; append rows");
+
 	try {
-		duckdb::Appender appender(conn, getDBName(db_id), DEFAULT_SCHEMA, tbl_str);
+		Appender appender(conn, getDBName(db_id), DEFAULT_SCHEMA, tbl_str);
 		DataChunk chunk;
 
 		child_list_t<LogicalType> struct_children;
-		struct_children.emplace_back(make_pair("key1", LogicalTypeId::BIGINT));
+		struct_children.emplace_back(make_pair("key1", LogicalTypeId::UBIGINT));
 		struct_children.emplace_back(make_pair("key2", LogicalTypeId::VARCHAR));
 
-		const duckdb::vector<LogicalType> types = {LogicalType::BIGINT, LogicalType::VARCHAR, LogicalType::TIMESTAMP,
-		                                           LogicalType::STRUCT(struct_children)};
+		const vector<LogicalType> types = {LogicalType::UBIGINT, LogicalType::VARCHAR, LogicalType::TIMESTAMP,
+		                                   LogicalType::STRUCT(struct_children)};
 
 		// fill up datachunk
 		chunk.Initialize(*conn.context, types);
 		// int
-		auto &col_int = chunk.data[0];
-		auto data_int = FlatVector::GetData<int64_t>(col_int);
+		auto &col_ubigint = chunk.data[0];
+		auto data_ubigint = FlatVector::GetData<uint64_t>(col_ubigint);
 		// varchar
 		auto &col_varchar = chunk.data[1];
 		auto data_varchar = FlatVector::GetData<string_t>(col_varchar);
@@ -177,39 +192,41 @@ void append(Connection &conn, idx_t db_id, idx_t worker_id, idx_t append_num_row
 		// struct
 		auto &col_struct = chunk.data[3];
 		auto &data_struct_entries = StructVector::GetEntries(col_struct);
-		auto &entry_int = data_struct_entries[0];
-		entry_int->SetVectorType(VectorType::FLAT_VECTOR);
-		auto data_struct_int = FlatVector::GetData<int64_t>(*entry_int);
+		auto &entry_ubigint = data_struct_entries[0];
+		auto data_struct_ubigint = FlatVector::GetData<uint64_t>(*entry_ubigint);
 		auto &entry_varchar = data_struct_entries[1];
-		entry_varchar->SetVectorType(VectorType::FLAT_VECTOR);
 		auto data_struct_varchar = FlatVector::GetData<string_t>(*entry_varchar);
 
-		for (idx_t row_idx = 0; row_idx < append_num_rows; row_idx++) {
-			data_int[row_idx] = current_num_rows + row_idx;
+		for (idx_t row_idx = 0; row_idx < STANDARD_VECTOR_SIZE; row_idx++) {
+			data_ubigint[row_idx] = current_num_rows + row_idx;
 			data_varchar[row_idx] = StringVector::AddString(col_varchar, to_string(current_num_rows + row_idx));
 			data_ts[row_idx] = timestamp_t {static_cast<int64_t>(1000 * (current_num_rows + row_idx))};
-			data_struct_int[row_idx] = current_num_rows + row_idx;
+			data_struct_ubigint[row_idx] = current_num_rows + row_idx;
 			data_struct_varchar[row_idx] =
 			    StringVector::AddString(*entry_varchar, to_string(current_num_rows + row_idx));
 		}
 
-		chunk.SetCardinality(append_num_rows);
+		chunk.SetCardinality(STANDARD_VECTOR_SIZE);
 		appender.AppendDataChunk(chunk);
 		appender.Close();
+
 	} catch (const std::exception &e) {
-		addLog("Caught exception when using Appender: " + std::string(e.what()));
+		addLog("Caught exception when using Appender: " + string(e.what()));
 		success = false;
+		return;
 	} catch (...) {
 		addLog("Caught error when using Appender!");
 		success = false;
+		return;
 	}
 }
 
-void workUnit(std::unique_ptr<Connection> conn, const idx_t &worker_id) {
-	for (int i = 0; i < iteration_count; i++) {
+void workUnit(std::unique_ptr<Connection> conn, const idx_t worker_id) {
+	for (idx_t i = 0; i < iteration_count; i++) {
 		if (!success) {
-			break;
+			return;
 		}
+
 		try {
 			idx_t scenario_id = std::rand() % 3;
 			idx_t db_id = std::rand() % db_count;
@@ -229,16 +246,23 @@ void workUnit(std::unique_ptr<Connection> conn, const idx_t &worker_id) {
 			default:
 				addLog("invalid scenario: " + to_string(scenario_id));
 				success = false;
+				return;
 			}
-
 			db_pool.removeWorker(*conn, db_id);
+
+		} catch (const std::exception &e) {
+			addLog("Caught exception when running iterations: " + string(e.what()));
+			success = false;
+			return;
 		} catch (...) {
-			break;
+			addLog("Caught unknown when using running iterations");
+			success = false;
+			return;
 		}
 	}
 }
 
-TEST_CASE("Run a concurrent ATTACH/DETACH scenario", "[attach][.]") {
+TEST_CASE("Run a concurrent ATTACH/DETACH scenario", "[interquery][.]") {
 	test_dir_path = TestDirectoryPath();
 
 	DuckDB db(nullptr);
@@ -246,11 +270,10 @@ TEST_CASE("Run a concurrent ATTACH/DETACH scenario", "[attach][.]") {
 
 	execQuery(init_conn, "SET catalog_error_max_schemas = '0'");
 	execQuery(init_conn, "SET threads = '1'");
-	// execQuery(initConn, "SET default_block_size = '16384'");
-	// execQuery(initConn, "SET storage_compatibility_version = 'v1.3.2'");
+	execQuery(init_conn, "SET storage_compatibility_version = 'v1.3.2'");
 
-	std::vector<std::thread> workers;
-	for (int i = 0; i < worker_count; i++) {
+	vector<std::thread> workers;
+	for (idx_t i = 0; i < worker_count; i++) {
 		auto conn = make_uniq<Connection>(db);
 		workers.emplace_back(workUnit, std::move(conn), i);
 	}
@@ -259,9 +282,11 @@ TEST_CASE("Run a concurrent ATTACH/DETACH scenario", "[attach][.]") {
 		worker.join();
 	}
 	if (!success) {
-		for (auto msg : logging) {
+		for (const auto &msg : logging) {
 			Printer::Print(msg);
 		}
 		FAIL();
 	}
 }
+
+} // anonymous namespace
