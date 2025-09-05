@@ -187,9 +187,16 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 				}
 
 				if (ref.schema_name == "recurring") {
-					throw BinderException("There is a WITH item named \"%s\", but the recurring table cannot be "
-					                      "referenced from this part of the query.",
-					                      ref.table_name);
+					if (cte.key_targets.empty()) {
+						throw BinderException("There is a WITH item named \"%s\", but the USING KEY clause is missing, "
+						                      "so there is no recurring table.",
+						                      ref.table_name);
+
+					} else {
+						throw BinderException("There is a WITH item named \"%s\", but the recurring table cannot be "
+											  "referenced from this part of the query.",
+											  ref.table_name);
+					}
 				}
 			}
 		}
