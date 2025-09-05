@@ -1,5 +1,6 @@
 #include "duckdb/main/db_instance_cache.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/main/database_file_path_manager.hpp"
 
 namespace duckdb {
 
@@ -29,6 +30,13 @@ string GetDBAbsolutePath(const string &database_p, FileSystem &fs) {
 		return fs.NormalizeAbsolutePath(database);
 	}
 	return fs.NormalizeAbsolutePath(fs.JoinPath(FileSystem::GetWorkingDirectory(), database));
+}
+
+DBInstanceCache::DBInstanceCache() {
+	path_manager = make_shared_ptr<DatabaseFilePathManager>();
+}
+
+DBInstanceCache::~DBInstanceCache() {
 }
 
 shared_ptr<DuckDB> DBInstanceCache::GetInstanceInternal(const string &database, const DBConfig &config,
@@ -100,6 +108,7 @@ shared_ptr<DuckDB> DBInstanceCache::CreateInstanceInternal(const string &databas
 		instance_path = IN_MEMORY_PATH;
 	}
 	shared_ptr<DuckDB> db_instance;
+	config.path_manager = path_manager;
 	if (cache_instance) {
 		D_ASSERT(db_instances.find(abs_database_path) == db_instances.end());
 		shared_ptr<DatabaseCacheEntry> cache_entry = make_shared_ptr<DatabaseCacheEntry>();
