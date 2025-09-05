@@ -25,6 +25,8 @@ class CacheSectorizedBloomFilter {
 public:
 	CacheSectorizedBloomFilter() = default;
 	void Initialize(ClientContext &context_p, idx_t est_num_rows) {
+
+		printf("Initializing bf for %llu rows \n", est_num_rows);
 		context = &context_p;
 		buffer_manager = &BufferManager::GetBufferManager(*context);
 
@@ -36,17 +38,23 @@ public:
 		// make sure blocks is a 64-byte aligned pointer, i.e., cache-line aligned
 		blocks = reinterpret_cast<uint32_t *>((64ULL + reinterpret_cast<uint64_t>(buf_.get())) & ~63ULL);
 		std::fill_n(blocks, num_sectors, 0);
+
+		initialized = true;
 	}
 
 	ClientContext *context;
 	BufferManager *buffer_manager;
 
+	bool initialized = false;
 	bool finalized_;
 
 public:
 	idx_t LookupHashes(Vector &hashes, SelectionVector &result_sel, const idx_t count_p) const;
-	void InsertKeys(DataChunk &chunk, const vector<idx_t> &bound_cols_built);
 	void InsertHashes(Vector hashes, const idx_t count);
+
+	bool IsInitialized() const {
+		return initialized;
+	}
 
 	idx_t num_sectors;
 	idx_t num_sectors_log;
@@ -96,8 +104,8 @@ private:
 	}
 
 private:
-	idx_t BloomFilterLookup(const hash_t *__restrict hashes, const uint32_t *__restrict bf,
-	                        SelectionVector &found_sel, const idx_t num) const {
+	idx_t BloomFilterLookup(const hash_t *__restrict hashes, const uint32_t *__restrict bf, SelectionVector &found_sel,
+	                        const idx_t num) const {
 		const auto key = reinterpret_cast<const uint32_t *__restrict>(hashes);
 		idx_t found_count = 0;
 		for (idx_t i = 0; i + SIMD_BATCH_SIZE <= num; i += SIMD_BATCH_SIZE) {
@@ -174,15 +182,36 @@ public:
 	}
 
 public:
+
+	__attribute__((noinline))
+	void HashInternal(Vector &keys_v, Vector &hashes_v, SelectionVector &sel, idx_t &approved_count) const {
+		if (sel.IsSet()) {
+			VectorOperations::Hash(keys_v, hashes_v, sel, approved_count);
+			hashes_v.Flatten(sel, approved_count);
+		} else {
+			VectorOperations::Hash(keys_v, hashes_v, approved_count);
+		}
+	}
+
 	// Filters the data by first hashing and then probing the bloom filter. The &sel will hold
 	// the remaining tuples, &approved_tuple_count will hold the approved count.
-	idx_t Filter(Vector &keys_v, SelectionVector &sel, idx_t &approved_tuple_count) const {
+	idx_t Filter(Vector keys_v, UnifiedVectorFormat &keys_uvf, SelectionVector &sel,
+	             idx_t &approved_tuple_count) const {
+
+		// printf("Filter bf: bf has %llu sectors and initialized=%hd \n", filter.num_sectors, filter.IsInitialized());
+		if (!this->filter.IsInitialized()) {
+			return approved_tuple_count;
+		}
+
 		Vector hashes_v(LogicalType::HASH, approved_tuple_count);
+
+		HashInternal(keys_v, hashes_v, sel, approved_tuple_count);
+
+		// todo: we need to properly find out how one would densify the hashes here!
 		SelectionVector temp_sel(approved_tuple_count);
-		keys_v.Flatten(sel, approved_tuple_count); // this is hacky and won't really work!
-		VectorOperations::Hash(keys_v, hashes_v, approved_tuple_count);
 
 		const idx_t found_count = this->filter.LookupHashes(hashes_v, temp_sel, approved_tuple_count);
+
 		sel.Initialize(temp_sel);
 		approved_tuple_count = found_count;
 		return found_count;
@@ -195,17 +224,24 @@ public:
 		return "BF Lookup";
 	};
 	bool Equals(const TableFilter &other) const override {
+		if (!TableFilter::Equals(other)) {
+			return false;
+		}
+
+		// todo: not really sure what to do here :(
 		return false;
 	}
 	unique_ptr<TableFilter> Copy() const override {
 		return make_uniq<BloomFilter>(this->filter);
 	}
 
-	unique_ptr<Expression> ToExpression(const Expression &column) const override {
-	}
+	unique_ptr<Expression> ToExpression(const Expression &column) const override;
+
 	void Serialize(Serializer &serializer) const override {
+		printf("IDK How to do this\n");
 	}
 	static unique_ptr<TableFilter> Deserialize(Deserializer &deserializer) {
+		printf("IDK How to do this\n");
 	}
 };
 

@@ -562,7 +562,7 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 	}
 	case TableFilterType::BLOOM_FILTER: {
 		auto &bloom_filter = filter.Cast<BloomFilter>();
-		return bloom_filter.Filter(vector, sel, approved_tuple_count);
+		return bloom_filter.Filter(vector, vdata, sel, approved_tuple_count);
 	}
 	case TableFilterType::EXPRESSION_FILTER: {
 		auto &state = filter_state.Cast<ExpressionFilterState>();

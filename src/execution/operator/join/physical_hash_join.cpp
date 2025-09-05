@@ -758,7 +758,6 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo:: Finalize(ClientContext &context, 
 			auto filter_col_idx = info.columns[filter_idx].probe_column_index.column_index;
 			auto bf_filter = make_uniq<BloomFilter>(ht->bloom_filter);
 			info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(bf_filter));
-
 		}
 	}
 
