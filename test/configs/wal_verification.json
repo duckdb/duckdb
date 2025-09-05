@@ -69,6 +69,7 @@
         "test/sql/index/art/types/test_art_expression_key.test",
         "test/sql/index/art/types/test_art_union.test",
         "test/sql/types/alias/type_with_schema.test",
+        "test/sql/types/struct/create_type_struct.test",
         "test/sql/types/enum/test_alter_enum.test",
         "test/sql/types/enum/test_enum_schema.test",
         "test/sql/types/enum/test_enum_structs.test"
