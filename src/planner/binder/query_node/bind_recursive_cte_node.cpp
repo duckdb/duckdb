@@ -63,7 +63,14 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 		D_ASSERT(bound_expr->type == ExpressionType::BOUND_COLUMN_REF);
 		auto &bound_ref = bound_expr->Cast<BoundColumnRefExpression>();
 
-		column_references.insert(bound_ref.binding.column_index);
+		idx_t column_index = bound_ref.binding.column_index;
+		if (column_references.find(column_index) != column_references.end()) {
+			throw BinderException(bound_ref.GetQueryLocation(),
+			                      "Column '%s' referenced multiple times in recursive CTE aggregates",
+			                      result->names[column_index]);
+		}
+
+		column_references.insert(column_index);
 		result->key_targets.push_back(std::move(bound_expr));
 	}
 
@@ -100,6 +107,13 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 		                                                       nullptr, AggregateType::NON_DISTINCT);
 
 		idx_t aggregate_idx = aggregate->children[0]->Cast<BoundColumnRefExpression>().binding.column_index;
+
+		if (column_references.find(aggregate_idx) != column_references.end()) {
+			throw BinderException(aggregate->children[0]->GetQueryLocation(),
+			                      "Column '%s' referenced multiple times in recursive CTE aggregates",
+			                      result->names[aggregate_idx]);
+		}
+
 		// BTODO: only here until i know how to fix ResolveTypes()
 		result->return_types[aggregate_idx] = aggregate->return_type;
 		result->payload_aggregates.push_back(std::move(aggregate));
