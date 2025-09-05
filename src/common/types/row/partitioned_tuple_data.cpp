@@ -2,8 +2,8 @@
 
 #include "duckdb/common/radix_partitioning.hpp"
 #include "duckdb/common/types/row/tuple_data_iterator.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/common/printer.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 

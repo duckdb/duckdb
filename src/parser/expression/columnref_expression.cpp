@@ -2,8 +2,8 @@
 
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/planner/binding_alias.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
 
 namespace duckdb {
 

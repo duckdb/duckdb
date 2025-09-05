@@ -2,10 +2,6 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/hash.hpp"
-#include "duckdb/common/to_string.hpp"
-
-#include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
