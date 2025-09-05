@@ -1,0 +1,11 @@
+{
+  "description": "Skip tests in Windows",
+  "skip_tests": [
+    {
+      "reason": "Bug in Win32",
+      "paths": [
+        "test/sql/json/scalar/test_json_transform.test"
+      ]
+    }
+  ]
+}

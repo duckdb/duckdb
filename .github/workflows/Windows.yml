@@ -200,7 +200,7 @@ jobs:
 
     - name: Test
       shell: bash
-      run: test/Release/unittest.exe
+      run: test/Release/unittest.exe --test-config test/configs/skip_in_windows.json
 
     - name: Tools Test
       shell: bash
