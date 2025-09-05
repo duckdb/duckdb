@@ -211,6 +211,8 @@ void LogicalGet::Serialize(Serializer &serializer) const {
 	FunctionSerializer::Serialize(serializer, function, bind_data.get());
 	if (!function.serialize) {
 		D_ASSERT(!function.serialize);
+		//! Assert that parameters isnt empty, because that is expected by Deserialize
+		D_ASSERT(!parameters.empty());
 		// no serialize method: serialize input values and named_parameters for rebinding purposes
 		serializer.WriteProperty(206, "parameters", parameters);
 		serializer.WriteProperty(207, "named_parameters", named_parameters);
