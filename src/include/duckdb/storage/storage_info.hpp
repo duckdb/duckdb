@@ -12,6 +12,8 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/vector_size.hpp"
+#include "duckdb/common/vector_size.hpp"
+#include "duckdb/common/encryption_state.hpp"
 
 namespace duckdb {
 
@@ -125,6 +127,10 @@ public:
 	void SetEncryptionMetadata(data_ptr_t source) {
 		memset(encryption_metadata, 0, ENCRYPTION_METADATA_LEN);
 		memcpy(encryption_metadata, source, ENCRYPTION_METADATA_LEN);
+	}
+
+	EncryptionTypes::CipherType GetEncryptionCipher() {
+		return static_cast<EncryptionTypes::CipherType>(encryption_metadata[2]);
 	}
 
 	void SetDBIdentifier(data_ptr_t source) {
