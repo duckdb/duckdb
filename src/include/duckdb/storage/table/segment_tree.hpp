@@ -183,10 +183,10 @@ public:
 	//! Erase all segments after a specific segment
 	void EraseSegments(SegmentLock &l, idx_t segment_start) {
 		LoadAllSegments(l);
-		if (segment_start >= nodes.size() - 1) {
+		if (segment_start >= nodes.size()) {
 			return;
 		}
-		nodes.erase(nodes.begin() + UnsafeNumericCast<int64_t>(segment_start) + 1, nodes.end());
+		nodes.erase(nodes.begin() + UnsafeNumericCast<int64_t>(segment_start), nodes.end());
 	}
 
 	//! Get the segment index of the column segment for the given row
@@ -219,7 +219,14 @@ public:
 		// binary search to find the node
 		while (lower <= upper) {
 			idx_t index = (lower + upper) / 2;
-			D_ASSERT(index < nodes.size());
+			if (index >= nodes.size()) {
+				string segments;
+				for (auto &entry : nodes) {
+					segments += StringUtil::Format("Start %d Count %d", entry.row_start, entry.node->count.load());
+				}
+				throw InternalException("Segment tree index not found for row number %d\nSegments:%s", row_number,
+				                        segments);
+			}
 			auto &entry = nodes[index];
 			D_ASSERT(entry.row_start == entry.node->start);
 			if (row_number < entry.row_start) {

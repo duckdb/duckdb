@@ -30,6 +30,7 @@ static const TestConfigOption test_config_options[] = {
     {"force_restart", "Force restart the database between runs", LogicalType::BOOLEAN, nullptr},
     {"summarize_failures", "Print a summary of all test failures after running", LogicalType::BOOLEAN, nullptr},
     {"test_memory_leaks", "Run memory leak tests", LogicalType::BOOLEAN, nullptr},
+    {"storage_fuzzer", "Run storage fuzzer tests", LogicalType::BOOLEAN, nullptr},
     {"verify_vector", "Run vector verification for a specific vector type", LogicalType::VARCHAR, nullptr},
     {"debug_initialize", "Initialize buffers with all 0 or all 1", LogicalType::VARCHAR, nullptr},
     {"autoloading", "Loading strategy for extensions not bundled in", LogicalType::VARCHAR, nullptr},
@@ -369,6 +370,10 @@ bool TestConfiguration::GetTestMemoryLeaks() {
 	return GetOptionOrDefault("test_memory_leaks", false);
 }
 
+bool TestConfiguration::RunStorageFuzzer() {
+	return GetOptionOrDefault("storage_fuzzer", false);
+}
+
 bool TestConfiguration::GetSummarizeFailures() {
 	return GetOptionOrDefault("summarize_failures", false);
 }
@@ -419,6 +424,11 @@ bool TestConfiguration::TestForceReload() {
 bool TestConfiguration::TestMemoryLeaks() {
 	auto &test_config = TestConfiguration::Get();
 	return test_config.GetTestMemoryLeaks();
+}
+
+bool TestConfiguration::TestRunStorageFuzzer() {
+	auto &test_config = TestConfiguration::Get();
+	return test_config.RunStorageFuzzer();
 }
 
 FailureSummary::FailureSummary() : failures_summary_counter(0) {
