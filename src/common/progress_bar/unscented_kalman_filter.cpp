@@ -4,7 +4,7 @@ namespace duckdb {
 
 UnscentedKalmanFilter::UnscentedKalmanFilter()
     : x(STATE_DIM, 0.0), P(STATE_DIM, vector<double>(STATE_DIM, 0.0)), Q(STATE_DIM, vector<double>(STATE_DIM, 0.0)),
-      R(OBS_DIM, vector<double>(OBS_DIM, 0.0)), last_time(0.0), initialized(false) {
+      R(OBS_DIM, vector<double>(OBS_DIM, 0.0)), last_time(0.0), last_progress(-1.0), initialized(false) {
 
 	// Calculate UKF parameters
 	lambda = ALPHA * ALPHA * (STATE_DIM + KAPPA) - STATE_DIM;
@@ -21,13 +21,13 @@ UnscentedKalmanFilter::UnscentedKalmanFilter()
 	}
 
 	// Initialize covariance matrices
-	P[0][0] = 0.01;  // progress variance
-	P[1][1] = 0.001; // velocity variance
+	P[0][0] = 0.001; // progress variance
+	P[1][1] = 0.01;  // velocity variance
 
-	Q[0][0] = 1e-6; // process noise for progress
-	Q[1][1] = 1e-4; // process noise for velocity
+	Q[0][0] = 0.1; // process noise for progress
+	Q[1][1] = 0.0; // process noise for velocity
 
-	R[0][0] = 0.05; // measurement noise for progress
+	R[0][0] = 0.017; // measurement noise for progress
 }
 
 void UnscentedKalmanFilter::Update(double progress, double time) {
@@ -36,13 +36,19 @@ void UnscentedKalmanFilter::Update(double progress, double time) {
 		return;
 	}
 	Predict(time);
-	UpdateInternal(progress);
+	if (last_progress != progress) {
+		UpdateInternal(progress);
+		last_progress = progress;
+	}
 }
 
 void UnscentedKalmanFilter::Initialize(double initial_progress, double current_time) {
+	D_ASSERT(initial_progress != 0.0);
+	D_ASSERT(current_time != 0.0);
 	x[0] = initial_progress;
-	x[1] = current_time == 0 ? 0.01 : initial_progress / current_time; // initial velocity guess
+	x[1] = initial_progress / current_time; // initial velocity guess
 	last_time = current_time;
+	last_progress = initial_progress;
 	initialized = true;
 }
 
@@ -246,7 +252,7 @@ double UnscentedKalmanFilter::GetVelocity() const {
 
 double UnscentedKalmanFilter::GetEstimatedRemainingSeconds() const {
 	if (!initialized) {
-		return -1.0;
+		return 2147483647.0;
 	}
 	if (x[1] <= 0) {
 		// velocity is negative or zero - we estimate this will never finish

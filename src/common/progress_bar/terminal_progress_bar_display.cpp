@@ -20,19 +20,17 @@ static string FormatETA(double seconds, bool elapsed = false) {
 	// the maximum length here is "(~10.35 minutes remaining)" (26 bytes)
 	// always pad to this amount
 	static constexpr idx_t RENDER_SIZE = 26;
-	// Desired formats:
-	//   00:00:00.00 remaining
-	//   unknown     remaining
-	//   00:00:00.00 elapsed
+
+	if (seconds < 0 || seconds == 2147483647) {
+		// Invalid or unknown ETA, skip rendering estimate
+		return string(RENDER_SIZE, ' ');
+	}
+
 	if (!elapsed && seconds > 3600 * 99) {
 		// estimate larger than 99 hours remaining
 		string result = "(>99 hours remaining)";
 		result += string(RENDER_SIZE - result.size(), ' ');
 		return result;
-	}
-	if (seconds < 0) {
-		// Invalid or unknown ETA, skip rendering estimate
-		return string(RENDER_SIZE, ' ');
 	}
 
 	// Round to nearest centisecond as integer
@@ -120,9 +118,33 @@ void TerminalProgressBarDisplay::Update(double percentage) {
 
 	// Filters go from 0 to 1, percentage is from 0-100
 	const double filter_percentage = percentage / 100.0;
-	ukf.Update(filter_percentage, current_time);
 
-	double estimated_seconds_remaining = std::min(ukf.GetEstimatedRemainingSeconds(), 2147483647.0);
+	// The Kalman filter needs an initial guess about what the value
+	// is of query velocity, if we have no prior information, we should
+	// wait until a bit of the query has been processed.
+	//
+	// This guess about query velocity will be improved by the filter over time.
+	//
+	// Normally there is a progress bar delay, so its easy to make a guess,
+	// but if the progress bar interval is set to zero, just delay until some of the
+	// query has been processed and time has gone by.
+	//
+	// For the interval where there are no estimates, no ETA will be shown, but
+	// the progress bar will appear.
+	if (current_time > 0.5 && filter_percentage > 0.01) {
+		ukf.Update(filter_percentage, current_time);
+	}
+
+	double estimated_seconds_remaining;
+	// If the query is mostly completed, there can be oscillation of estimated
+	// time to completion since the progress updates seem sparse near the very
+	// end of the query, so clamp time remaining to not oscillate with estimates
+	// that are unlikely to be correct.
+	if (filter_percentage > 0.99) {
+		estimated_seconds_remaining = 0.5;
+	} else {
+		estimated_seconds_remaining = std::min(ukf.GetEstimatedRemainingSeconds(), 2147483647.0);
+	}
 	auto percentage_int = NormalizePercentage(percentage);
 
 	TerminalProgressBarDisplayedProgressInfo updated_progress_info = {(idx_t)percentage_int,
