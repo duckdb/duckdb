@@ -18,6 +18,7 @@
 #include "duckdb/storage/statistics/segment_statistics.hpp"
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/storage/table/segment_base.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
@@ -29,7 +30,6 @@ class DatabaseInstance;
 class TableFilter;
 class Transaction;
 class UpdateSegment;
-
 struct ColumnAppendState;
 struct ColumnFetchState;
 struct ColumnScanState;
