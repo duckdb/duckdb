@@ -5,10 +5,9 @@
 
 namespace duckdb {
 
-
 unique_ptr<Expression> BloomFilter::ToExpression(const Expression &column) const {
 	auto bound_constant = make_uniq<BoundConstantExpression>(Value(true));
-	return std::move(bound_constant); //todo: I can't really have an expression for this, so this is a hack
+	return std::move(bound_constant); // todo: I can't really have an expression for this, so this is a hack
 }
 
 idx_t CacheSectorizedBloomFilter::LookupHashes(Vector &hashes, SelectionVector &res_sel, const idx_t count) const {
@@ -20,5 +19,4 @@ void CacheSectorizedBloomFilter::InsertHashes(Vector hashes, const idx_t count) 
 	BloomFilterInsert(count, reinterpret_cast<uint64_t *>(hashes.GetData()), blocks);
 }
 
-
-}
+} // namespace duckdb

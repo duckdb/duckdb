@@ -746,7 +746,7 @@ void JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, 
 	return;
 }
 
-unique_ptr<DataChunk> JoinFilterPushdownInfo:: Finalize(ClientContext &context, optional_ptr<JoinHashTable> ht,
+unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, optional_ptr<JoinHashTable> ht,
                                                        JoinFilterGlobalState &gstate,
                                                        const PhysicalComparisonJoin &op) const {
 
@@ -760,8 +760,6 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo:: Finalize(ClientContext &context, 
 			info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(bf_filter));
 		}
 	}
-
-
 
 	// finalize the min/max aggregates
 	vector<LogicalType> min_max_types;

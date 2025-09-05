@@ -182,10 +182,18 @@ public:
 	}
 
 public:
+	__attribute__((noinline)) // todo: we can remove this
+	void
+	HashInternal(Vector &keys_v, Vector &hashes_v, SelectionVector &sel, idx_t &approved_count) const {
+		if (sel.IsSet()) {
+			Vector keys_flat(keys_v.GetType(), approved_count);
+			VectorOperations::Copy(keys_v, keys_flat, sel, approved_count, 0, 0);
+			D_ASSERT(keys_flat.GetVectorType() == VectorType::FLAT_VECTOR);
+			VectorOperations::Hash(keys_flat, hashes_v, approved_count); // todo: we actually only want to hash the sel!
 
-	__attribute__((noinline))
-	void HashInternal(Vector &keys_v, Vector &hashes_v, SelectionVector &sel, idx_t &approved_count) const {
-		VectorOperations::Hash(keys_v, hashes_v, approved_count);
+		} else {
+			VectorOperations::Hash(keys_v, hashes_v, approved_count); // todo: we actually only want to hash the sel!
+		}
 	}
 
 	// Filters the data by first hashing and then probing the bloom filter. The &sel will hold
@@ -203,11 +211,18 @@ public:
 		HashInternal(keys_v, hashes_v, sel, approved_tuple_count);
 
 		// todo: we need to properly find out how one would densify the hashes here!
-		SelectionVector temp_sel(approved_tuple_count);
+		SelectionVector bf_sel(approved_tuple_count);
+		const idx_t found_count = this->filter.LookupHashes(hashes_v, bf_sel, approved_tuple_count);
 
-		const idx_t found_count = this->filter.LookupHashes(hashes_v, temp_sel, approved_tuple_count);
-
-		sel.Initialize(temp_sel);
+		if (sel.IsSet()) {
+			for (idx_t idx = 0; idx < found_count; idx++) {
+				const idx_t flat_sel_idx = bf_sel.get_index(idx);
+				const idx_t original_sel_idx = sel.get_index(flat_sel_idx);
+				sel.set_index(idx, original_sel_idx);
+			}
+		} else {
+			sel.Initialize(bf_sel);
+		}
 		approved_tuple_count = found_count;
 		return found_count;
 	}
