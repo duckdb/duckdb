@@ -12,7 +12,6 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/vector_size.hpp"
-#include "duckdb/common/vector_size.hpp"
 #include "duckdb/common/encryption_state.hpp"
 
 namespace duckdb {
