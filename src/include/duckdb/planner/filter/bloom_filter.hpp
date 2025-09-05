@@ -185,12 +185,7 @@ public:
 
 	__attribute__((noinline))
 	void HashInternal(Vector &keys_v, Vector &hashes_v, SelectionVector &sel, idx_t &approved_count) const {
-		if (sel.IsSet()) {
-			VectorOperations::Hash(keys_v, hashes_v, sel, approved_count);
-			hashes_v.Flatten(sel, approved_count);
-		} else {
-			VectorOperations::Hash(keys_v, hashes_v, approved_count);
-		}
+		VectorOperations::Hash(keys_v, hashes_v, approved_count);
 	}
 
 	// Filters the data by first hashing and then probing the bloom filter. The &sel will hold
