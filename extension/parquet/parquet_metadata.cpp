@@ -856,7 +856,7 @@ unique_ptr<LocalTableFunctionState> ParquetMetaDataOperator::InitLocal(Execution
 	default:
 		throw InternalException("Unsupported ParquetMetadataOperatorType");
 	}
-	return res;
+	return unique_ptr_cast<LocalTableFunctionState, ParquetMetadataLocalState>(std::move(res));
 }
 
 template <ParquetMetadataOperatorType OP_TYPE>
