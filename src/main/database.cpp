@@ -89,6 +89,8 @@ DatabaseInstance::~DatabaseInstance() {
 
 	buffer_manager.reset();
 
+	keyword_manager.reset();
+
 	// flush allocations and disable the background thread
 	if (Allocator::SupportsFlush()) {
 		Allocator::FlushAll();
@@ -293,6 +295,8 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	object_cache = make_uniq<ObjectCache>();
 	connection_manager = make_uniq<ConnectionManager>();
 	extension_manager = make_uniq<ExtensionManager>(*this);
+
+	keyword_manager = make_uniq<ParserKeywordManager>();
 
 	// initialize the secret manager
 	config.secret_manager->Initialize(*this);
@@ -527,6 +531,10 @@ const duckdb_ext_api_v1 DatabaseInstance::GetExtensionAPIV1() {
 
 LogManager &DatabaseInstance::GetLogManager() const {
 	return *log_manager;
+}
+
+ParserKeywordManager &DatabaseInstance::GetKeywordManager() const {
+	return *keyword_manager;
 }
 
 ValidChecker &ValidChecker::Get(DatabaseInstance &db) {
