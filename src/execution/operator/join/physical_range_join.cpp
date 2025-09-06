@@ -134,6 +134,9 @@ public:
 		sort.MaterializeSortedRun(execution, input);
 		if (++table.tasks_completed == tasks_scheduled) {
 			table.sorted = sort.GetSortedRun(sort_global);
+			if (!table.sorted) {
+				table.sorted = make_uniq<SortedRun>(execution.client, sort, false);
+			}
 		}
 
 		event->FinishTask();
@@ -198,6 +201,9 @@ void PhysicalRangeJoin::GlobalSortedTable::Materialize(ExecutionContext &context
 	OperatorSourceInput source {*global_source, *local_source, interrupt};
 	sort->MaterializeSortedRun(context, source);
 	sorted = sort->GetSortedRun(*global_source);
+	if (!sorted) {
+		sorted = make_uniq<SortedRun>(context.client, *sort, false);
+	}
 }
 
 PhysicalRangeJoin::PhysicalRangeJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op, PhysicalOperatorType type,
