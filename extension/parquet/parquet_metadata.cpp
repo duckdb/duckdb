@@ -106,6 +106,7 @@ struct ParquetMetadataGlobalState : public GlobalTableFunctionState {
 
 	double GetProgress() const {
 		// Not the most accurate, instantly assumes all files are done and equal
+		unique_lock<mutex> lock(file_paths->file_lock);
 		return static_cast<double>(file_paths->scan_data.current_file_idx) / file_paths->file_list->GetTotalFileCount();
 	}
 
