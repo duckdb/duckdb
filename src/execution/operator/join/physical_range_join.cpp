@@ -73,7 +73,6 @@ PhysicalRangeJoin::GlobalSortedTable::GlobalSortedTable(ClientContext &client,
 	// Set up the sort. We will materialize keys ourselves, so just set up references.
 	vector<BoundOrderByNode> orders;
 	vector<LogicalType> input_types;
-	D_ASSERT(order_bys.size() == 1);
 	for (const auto &order_by : order_bys) {
 		auto order = order_by.Copy();
 		const auto type = order.expression->return_type;

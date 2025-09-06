@@ -436,6 +436,7 @@ idx_t IEJoinUnion::AppendKey(ExecutionContext &context, InterruptState &interrup
 	}
 	OperatorSinkCombineInput combine {*marked.global_sink, *local_sort_state, interrupt};
 	sort.Combine(context, combine);
+	marked.count += inserted;
 
 	return inserted;
 }
@@ -505,7 +506,7 @@ IEJoinUnion::IEJoinUnion(ExecutionContext &context, const PhysicalIEJoin &op, So
 	InterruptState interrupt;
 
 	// 0. Filter out tables with no overlap
-	if (t1.sorted->key_data->ChunkCount() >= b1 || t2.sorted->key_data->ChunkCount() >= b2) {
+	if (t1.sorted->key_data->ChunkCount() <= b1 || t2.sorted->key_data->ChunkCount() <= b2) {
 		return;
 	}
 
@@ -801,11 +802,21 @@ idx_t IEJoinUnion::JoinComplexBlocks(SelectionVector &lsel, SelectionVector &rse
 
 class IEJoinLocalSourceState : public LocalSourceState {
 public:
-	explicit IEJoinLocalSourceState(ClientContext &context, const PhysicalIEJoin &op)
+	IEJoinLocalSourceState(ClientContext &context, const PhysicalIEJoin &op)
 	    : op(op), true_sel(STANDARD_VECTOR_SIZE), left_executor(context), right_executor(context),
 	      left_matches(nullptr), right_matches(nullptr) {
 		auto &allocator = Allocator::Get(context);
 		unprojected.Initialize(allocator, op.unprojected_types);
+
+		auto &ie_sink = op.sink_state->Cast<IEJoinGlobalState>();
+		auto &left_table = *ie_sink.tables[0];
+		auto &right_table = *ie_sink.tables[1];
+
+		left_iterator = left_table.CreateIteratorState();
+		right_iterator = right_table.CreateIteratorState();
+
+		left_table.InitializePayloadState(left_chunk_state);
+		right_table.InitializePayloadState(right_chunk_state);
 
 		if (op.conditions.size() < 3) {
 			return;
@@ -825,16 +836,6 @@ public:
 
 		left_keys.Initialize(allocator, left_types);
 		right_keys.Initialize(allocator, right_types);
-
-		auto &ie_sink = op.sink_state->Cast<IEJoinGlobalState>();
-		auto &left_table = *ie_sink.tables[0];
-		auto &right_table = *ie_sink.tables[1];
-
-		left_iterator = left_table.CreateIteratorState();
-		right_iterator = right_table.CreateIteratorState();
-
-		left_table.InitializePayloadState(left_chunk_state);
-		right_table.InitializePayloadState(right_chunk_state);
 	}
 
 	idx_t SelectOuterRows(bool *matches) {
