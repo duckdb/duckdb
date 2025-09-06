@@ -1,6 +1,7 @@
 #include "duckdb/function/window/window_rank_function.hpp"
 #include "duckdb/function/window/window_shared_expressions.hpp"
 #include "duckdb/function/window/window_token_tree.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 
 namespace duckdb {

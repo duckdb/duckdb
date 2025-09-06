@@ -1,5 +1,8 @@
 #include "duckdb/function/window/window_merge_sort_tree.hpp"
+#include "duckdb/main/client_config.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 
 #include <thread>
 #include <utility>
