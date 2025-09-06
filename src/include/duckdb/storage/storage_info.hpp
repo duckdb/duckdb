@@ -120,7 +120,10 @@ public:
 	}
 
 	bool IsEncrypted() const {
-		return flags[0] == MainHeader::ENCRYPTED_DATABASE_FLAG;
+		return flags[0] & MainHeader::ENCRYPTED_DATABASE_FLAG;
+	}
+	void SetEncrypted() {
+		flags[0] |= MainHeader::ENCRYPTED_DATABASE_FLAG;
 	}
 
 	void SetEncryptionMetadata(data_ptr_t source) {

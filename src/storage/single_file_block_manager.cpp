@@ -123,7 +123,7 @@ void MainHeader::Write(WriteStream &ser) {
 	SerializeVersionNumber(ser, DuckDB::SourceID());
 
 	// We always serialize, and write zeros, if not set.
-	auto encryption_enabled = flags[0] & MainHeader::ENCRYPTED_DATABASE_FLAG;
+	auto encryption_enabled = IsEncrypted();
 	SerializeEncryptionMetadata(ser, encryption_metadata, encryption_enabled);
 	SerializeDBIdentifier(ser, db_identifier);
 	SerializeEncryptionMetadata(ser, encrypted_canary, encryption_enabled);
@@ -396,7 +396,7 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 		}
 
 		// Set the encrypted DB bit to 1.
-		main_header.flags[0] |= MainHeader::ENCRYPTED_DATABASE_FLAG;
+		main_header.SetEncrypted();
 
 		// The derived key is wiped in AddKeyToCache.
 		options.encryption_options.derived_key_id = EncryptionEngine::AddKeyToCache(db.GetDatabase(), derived_key);
