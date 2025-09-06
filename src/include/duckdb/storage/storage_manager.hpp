@@ -125,12 +125,11 @@ public:
 		return storage_options.compress_in_memory == CompressInMemory::COMPRESS;
 	}
 	EncryptionTypes::CipherType GetCipher() const {
-		// TODO: the type of this thing should probably change
-		auto cipher = EncryptionTypes::StringToCipher(storage_options.encryption_cipher);
-		if (cipher == EncryptionTypes::INVALID) {
-			throw InternalException("Invalid encryption cipher type %s", storage_options.encryption_cipher);
-		}
-		return cipher;
+		return storage_options.encryption_cipher;
+	}
+	void SetCipher(EncryptionTypes::CipherType cipher_p) {
+		D_ASSERT(cipher_p != EncryptionTypes::INVALID);
+		storage_options.encryption_cipher = cipher_p;
 	}
 	bool IsEncrypted() const {
 		return storage_options.encryption;

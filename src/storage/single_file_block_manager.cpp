@@ -299,7 +299,7 @@ void SingleFileBlockManager::StoreEncryptedCanary(AttachedDatabase &db, MainHead
 	const_data_ptr_t key = EncryptionEngine::GetKeyFromCache(db.GetDatabase(), key_id);
 	// Encrypt canary with the derived key
 	auto encryption_state = db.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(
-	    db.GetStorageManager().GetCipher(), key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	    main_header.GetEncryptionCipher(), key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 	EncryptCanary(main_header, encryption_state, key);
 }
 
@@ -322,7 +322,7 @@ void SingleFileBlockManager::StoreEncryptionMetadata(MainHeader &main_header) co
 	offset++;
 	Store<uint8_t>(options.encryption_options.additional_authenticated_data, offset);
 	offset++;
-	Store<uint8_t>(options.encryption_options.cipher, offset);
+	Store<uint8_t>(db.GetStorageManager().GetCipher(), offset);
 	offset += 2;
 	Store<uint32_t>(options.encryption_options.key_length, offset);
 
@@ -341,7 +341,7 @@ void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header, s
 	EncryptionKeyManager::DeriveKey(user_key, db_identifier, derived_key);
 
 	auto encryption_state = db.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(
-	    db.GetStorageManager().GetCipher(), derived_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	    main_header.GetEncryptionCipher(), derived_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 	if (!DecryptCanary(main_header, encryption_state, derived_key)) {
 		throw IOException("Wrong encryption key used to open the database file");
 	}
@@ -389,6 +389,11 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 		// The key is given via ATTACH.
 		EncryptionKeyManager::DeriveKey(*options.encryption_options.user_key, options.db_identifier, derived_key);
 		options.encryption_options.user_key = nullptr;
+
+		// if no encryption cipher is specified, use GCM
+		if (db.GetStorageManager().GetCipher() == EncryptionTypes::INVALID) {
+			db.GetStorageManager().SetCipher(EncryptionTypes::GCM);
+		}
 
 		// Set the encrypted DB bit to 1.
 		main_header.flags[0] |= MainHeader::ENCRYPTED_DATABASE_FLAG;
@@ -491,6 +496,18 @@ void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
 			// if encrypted, but no encryption key given
 			throw CatalogException("Cannot open encrypted database \"%s\" without a key", path);
 		}
+
+		// if a cipher was provided, check if it is the same as in the config
+		auto stored_cipher = main_header.GetEncryptionCipher();
+		auto config_cipher = db.GetStorageManager().GetCipher();
+		if (config_cipher != EncryptionTypes::INVALID && config_cipher != stored_cipher) {
+			throw CatalogException("Cannot open encrypted database \"%s\" with a different cipher (%s) than the one "
+			                       "used to create it (%s)",
+			                       path, EncryptionTypes::CipherToString(config_cipher),
+			                       EncryptionTypes::CipherToString(stored_cipher));
+		}
+		// this is ugly, but the storage manager does not know the cipher type before
+		db.GetStorageManager().SetCipher(stored_cipher);
 	}
 
 	options.version_number = main_header.version_number;
