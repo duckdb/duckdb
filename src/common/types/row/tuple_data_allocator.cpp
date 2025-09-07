@@ -241,8 +241,8 @@ TupleDataChunkPart TupleDataAllocator::BuildChunkPart(TupleDataPinState &pin_sta
 		if (total_heap_size == 0) {
 			result.SetHeapEmpty();
 		} else {
-			const auto heap_remaining = MaxValue<idx_t>(
-			    heap_blocks.empty() ? block_size : heap_blocks.back().RemainingCapacity(), heap_sizes[append_offset]);
+			const auto heap_remaining = (heap_blocks.empty() || heap_blocks.back().RemainingCapacity() < heap_sizes[append_offset]) ?
+			    MaxValue<idx_t>(block_size, heap_sizes[append_offset]) : heap_blocks.back().RemainingCapacity();
 
 			if (total_heap_size <= heap_remaining) {
 				// Everything fits
