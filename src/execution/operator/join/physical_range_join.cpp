@@ -110,6 +110,11 @@ void PhysicalRangeJoin::GlobalSortedTable::IntializeMatches() {
 	memset(found_match.get(), 0, sizeof(bool) * Count());
 }
 
+void PhysicalRangeJoin::GlobalSortedTable::MaterializeEmpty(ClientContext &client) {
+	D_ASSERT(!sorted);
+	sorted = make_uniq<SortedRun>(client, *sort, false);
+}
+
 //===--------------------------------------------------------------------===//
 // RangeJoinMaterializeTask
 //===--------------------------------------------------------------------===//
@@ -135,7 +140,7 @@ public:
 		if (++table.tasks_completed == tasks_scheduled) {
 			table.sorted = sort.GetSortedRun(sort_global);
 			if (!table.sorted) {
-				table.sorted = make_uniq<SortedRun>(execution.client, sort, false);
+				table.MaterializeEmpty(execution.client);
 			}
 		}
 
@@ -202,7 +207,7 @@ void PhysicalRangeJoin::GlobalSortedTable::Materialize(ExecutionContext &context
 	sort->MaterializeSortedRun(context, source);
 	sorted = sort->GetSortedRun(*global_source);
 	if (!sorted) {
-		sorted = make_uniq<SortedRun>(context.client, *sort, false);
+		MaterializeEmpty(context.client);
 	}
 }
 

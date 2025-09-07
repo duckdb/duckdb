@@ -371,7 +371,8 @@ struct IEJoinUnion {
 
 idx_t IEJoinUnion::AppendKey(ExecutionContext &context, InterruptState &interrupt, SortedTable &table,
                              ExpressionExecutor &executor, SortedTable &marked, int64_t increment, int64_t rid,
-                             const idx_t chunk_idx) {
+                             const idx_t chunk_begin) {
+	const auto chunk_end = chunk_begin + 1;
 
 	// Reading
 	const auto valid = table.count - table.has_null;
@@ -384,7 +385,7 @@ idx_t IEJoinUnion::AppendKey(ExecutionContext &context, InterruptState &interrup
 
 	// TODO: Random access into TupleDataCollection (NextScanIndex is private...)
 	idx_t table_idx = 0;
-	for (idx_t i = 0; i < chunk_idx; ++i) {
+	for (idx_t i = 0; i < chunk_begin; ++i) {
 		source.Scan(scanner, scanned);
 		table_idx += scanned.size();
 	}
@@ -405,14 +406,19 @@ idx_t IEJoinUnion::AppendKey(ExecutionContext &context, InterruptState &interrup
 
 	OperatorSinkInput sink {*marked.global_sink, *local_sort_state, interrupt};
 	idx_t inserted = 0;
-	while (table_idx < valid) {
+	for (auto chunk_idx = chunk_begin; chunk_idx < chunk_end; ++chunk_idx) {
 		source.Scan(scanner, scanned);
 
 		// NULLs are at the end, so stop when we reach them
 		auto scan_count = scanned.size();
 		if (table_idx + scan_count > valid) {
-			scan_count = valid - table_idx;
-			scanned.SetCardinality(scan_count);
+			if (table_idx >= valid) {
+				scan_count = 0;
+				;
+			} else {
+				scan_count = valid - table_idx;
+				scanned.SetCardinality(scan_count);
+			}
 		}
 		if (scan_count == 0) {
 			break;
