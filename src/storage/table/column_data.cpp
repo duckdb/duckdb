@@ -572,8 +572,7 @@ void ColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, 
 	FetchUpdateRow(transaction, row_id, result, result_idx);
 }
 
-idx_t ColumnData::FetchUpdateData(row_t *row_ids, Vector &base_vector) {
-	ColumnScanState state;
+idx_t ColumnData::FetchUpdateData(ColumnScanState &state, row_t *row_ids, Vector &base_vector) {
 	auto fetch_count = ColumnData::Fetch(state, row_ids[0], base_vector);
 	base_vector.Flatten(fetch_count);
 	return fetch_count;
@@ -582,7 +581,8 @@ idx_t ColumnData::FetchUpdateData(row_t *row_ids, Vector &base_vector) {
 void ColumnData::Update(TransactionData transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
                         idx_t update_count) {
 	Vector base_vector(type);
-	FetchUpdateData(row_ids, base_vector);
+	ColumnScanState state;
+	FetchUpdateData(state, row_ids, base_vector);
 
 	UpdateInternal(transaction, column_index, update_vector, row_ids, update_count, base_vector);
 }

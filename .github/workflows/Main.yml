@@ -486,3 +486,9 @@ jobs:
       shell: bash
       run: |
         ./build/release/test/unittest --test-config test/configs/variant_vector.json
+
+    - name: Test variant_vector
+      if: (success() || failure()) && steps.build.conclusion == 'success'
+      shell: bash
+      run: |
+        ./build/release/test/unittest --test-config test/configs/compressed_in_memory.json
