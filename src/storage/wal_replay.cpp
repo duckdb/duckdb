@@ -925,7 +925,7 @@ void WriteAheadLogDeserializer::ReplayRowGroupData() {
 	}
 	auto &storage = state.current_table->GetStorage();
 	auto &table_info = storage.GetDataTableInfo();
-	RowGroupCollection new_row_groups(table_info, table_info->GetIOManager(), storage.GetTypes(), 0);
+	RowGroupCollection new_row_groups(storage, table_info->GetIOManager(), storage.GetTypes(), 0);
 	new_row_groups.Initialize(data);
 	TableIndexList index_list;
 	storage.MergeStorage(new_row_groups, index_list, nullptr);

@@ -55,16 +55,15 @@ unique_ptr<RowGroup> RowGroupSegmentTree::LoadSegment() {
 //===--------------------------------------------------------------------===//
 // Row Group Collection
 //===--------------------------------------------------------------------===//
-RowGroupCollection::RowGroupCollection(shared_ptr<DataTableInfo> info_p, TableIOManager &io_manager,
-                                       vector<LogicalType> types_p, idx_t row_start, idx_t total_rows)
-    : RowGroupCollection(std::move(info_p), io_manager.GetBlockManagerForRowData(), std::move(types_p), row_start,
-                         total_rows, io_manager.GetRowGroupSize()) {
+RowGroupCollection::RowGroupCollection(DataTable &table, TableIOManager &io_manager, vector<LogicalType> types_p,
+                                       idx_t row_start, idx_t total_rows)
+    : RowGroupCollection(table, io_manager.GetBlockManagerForRowData(), std::move(types_p), row_start, total_rows,
+                         io_manager.GetRowGroupSize()) {
 }
 
-RowGroupCollection::RowGroupCollection(shared_ptr<DataTableInfo> info_p, BlockManager &block_manager,
-                                       vector<LogicalType> types_p, idx_t row_start_p, idx_t total_rows_p,
-                                       idx_t row_group_size_p)
-    : block_manager(block_manager), row_group_size(row_group_size_p), total_rows(total_rows_p), info(std::move(info_p)),
+RowGroupCollection::RowGroupCollection(DataTable &table, BlockManager &block_manager, vector<LogicalType> types_p,
+                                       idx_t row_start_p, idx_t total_rows_p, idx_t row_group_size_p)
+    : table(table), block_manager(block_manager), row_group_size(row_group_size_p), total_rows(total_rows_p),
       types(std::move(types_p)), row_start(row_start_p), allocation_size(0), requires_new_row_group(false) {
 	row_groups = make_shared_ptr<RowGroupSegmentTree>(*this);
 }
@@ -78,7 +77,7 @@ const vector<LogicalType> &RowGroupCollection::GetTypes() const {
 }
 
 Allocator &RowGroupCollection::GetAllocator() const {
-	return Allocator::Get(info->GetDB());
+	return Allocator::Get(table.db);
 }
 
 AttachedDatabase &RowGroupCollection::GetAttached() {
@@ -87,6 +86,10 @@ AttachedDatabase &RowGroupCollection::GetAttached() {
 
 MetadataManager &RowGroupCollection::GetMetadataManager() {
 	return GetBlockManager().GetMetadataManager();
+}
+
+DataTableInfo &RowGroupCollection::GetTableInfo() {
+	return *table.GetDataTableInfo();
 }
 
 //===--------------------------------------------------------------------===//
@@ -749,7 +752,7 @@ void RowGroupCollection::RemoveFromIndexes(TableIndexList &indexes, Vector &row_
 			throw MissingExtensionException(
 			    "Cannot delete from index '%s', unknown index type '%s'. You need to load the "
 			    "extension that provides this index type before table '%s' can be modified.",
-			    index.GetIndexName(), index.GetIndexType(), info->GetTableName());
+			    index.GetIndexName(), index.GetIndexType(), table.GetTableName());
 		});
 	}
 }
@@ -957,7 +960,7 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 	auto checkpoint_type = checkpoint_state.writer.GetCheckpointType();
 	bool vacuum_is_allowed = checkpoint_type != CheckpointType::CONCURRENT_CHECKPOINT;
 	// currently we can only vacuum deletes if we are doing a full checkpoint and there are no indexes
-	state.can_vacuum_deletes = info->GetIndexes().Empty() && vacuum_is_allowed;
+	state.can_vacuum_deletes = table.GetDataTableInfo()->GetIndexes().Empty() && vacuum_is_allowed;
 	if (!state.can_vacuum_deletes) {
 		return;
 	}
@@ -1215,12 +1218,13 @@ vector<ColumnSegmentInfo> RowGroupCollection::GetColumnSegmentInfo() {
 //===--------------------------------------------------------------------===//
 // Alter
 //===--------------------------------------------------------------------===//
-shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ClientContext &context, ColumnDefinition &new_column,
+shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(DataTable &new_table, ClientContext &context,
+                                                             ColumnDefinition &new_column,
                                                              ExpressionExecutor &default_executor) {
 	idx_t new_column_idx = types.size();
 	auto new_types = types;
 	new_types.push_back(new_column.GetType());
-	auto result = make_shared_ptr<RowGroupCollection>(info, block_manager, std::move(new_types), row_start,
+	auto result = make_shared_ptr<RowGroupCollection>(new_table, block_manager, std::move(new_types), row_start,
 	                                                  total_rows.load(), row_group_size);
 
 	DataChunk dummy_chunk;
@@ -1243,12 +1247,12 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ClientContext &cont
 	return result;
 }
 
-shared_ptr<RowGroupCollection> RowGroupCollection::RemoveColumn(idx_t col_idx) {
+shared_ptr<RowGroupCollection> RowGroupCollection::RemoveColumn(DataTable &new_table, idx_t col_idx) {
 	D_ASSERT(col_idx < types.size());
 	auto new_types = types;
 	new_types.erase_at(col_idx);
 
-	auto result = make_shared_ptr<RowGroupCollection>(info, block_manager, std::move(new_types), row_start,
+	auto result = make_shared_ptr<RowGroupCollection>(new_table, block_manager, std::move(new_types), row_start,
 	                                                  total_rows.load(), row_group_size);
 	result->stats.InitializeRemoveColumn(stats, col_idx);
 
@@ -1262,15 +1266,15 @@ shared_ptr<RowGroupCollection> RowGroupCollection::RemoveColumn(idx_t col_idx) {
 	return result;
 }
 
-shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(ClientContext &context, idx_t changed_idx,
-                                                             const LogicalType &target_type,
+shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(DataTable &new_table, ClientContext &context,
+                                                             idx_t changed_idx, const LogicalType &target_type,
                                                              vector<StorageIndex> bound_columns,
                                                              Expression &cast_expr) {
 	D_ASSERT(changed_idx < types.size());
 	auto new_types = types;
 	new_types[changed_idx] = target_type;
 
-	auto result = make_shared_ptr<RowGroupCollection>(info, block_manager, std::move(new_types), row_start,
+	auto result = make_shared_ptr<RowGroupCollection>(new_table, block_manager, std::move(new_types), row_start,
 	                                                  total_rows.load(), row_group_size);
 	result->stats.InitializeAlterType(stats, changed_idx, target_type);
 
@@ -1340,7 +1344,7 @@ void RowGroupCollection::VerifyNewConstraint(DataTable &parent, const BoundConst
 		// Verify the NOT NULL constraint.
 		if (VectorOperations::HasNull(scan_chunk.data[0], scan_chunk.size())) {
 			auto name = parent.Columns()[physical_index].GetName();
-			throw ConstraintException("NOT NULL constraint failed: %s.%s", info->GetTableName(), name);
+			throw ConstraintException("NOT NULL constraint failed: %s.%s", table.GetTableName(), name);
 		}
 	}
 }

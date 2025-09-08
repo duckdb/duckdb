@@ -54,7 +54,7 @@ DataTable::DataTable(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_m
 	// initialize the table with the existing data from disk, if any
 	auto types = GetTypes();
 	auto &io_manager = TableIOManager::Get(*this);
-	this->row_groups = make_shared_ptr<RowGroupCollection>(info, io_manager, types, 0);
+	this->row_groups = make_shared_ptr<RowGroupCollection>(*this, io_manager, types, 0);
 	if (data && data->row_group_count > 0) {
 		this->row_groups->Initialize(*data);
 		if (!HasIndexes()) {
@@ -86,7 +86,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 	// prevent any new tuples from being added to the parent
 	lock_guard<mutex> parent_lock(parent.append_lock);
 
-	this->row_groups = parent.row_groups->AddColumn(context, new_column, default_executor);
+	this->row_groups = parent.row_groups->AddColumn(*this, context, new_column, default_executor);
 
 	// also add this column to client local storage
 	local_storage.AddColumn(parent, *this, new_column, default_executor);
@@ -135,7 +135,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 	}
 
 	// alter the row_groups and remove the column from each of them
-	this->row_groups = parent.row_groups->RemoveColumn(removed_column);
+	this->row_groups = parent.row_groups->RemoveColumn(*this, removed_column);
 
 	// scan the original table, and fill the new column with the transformed value
 	local_storage.DropColumn(parent, *this, removed_column);
@@ -199,7 +199,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 
 	// set up the statistics for the table
 	// the column that had its type changed will have the new statistics computed during conversion
-	row_groups = parent.row_groups->AlterType(context, changed_idx, target_type, bound_columns, cast_expr);
+	row_groups = parent.row_groups->AlterType(*this, context, changed_idx, target_type, bound_columns, cast_expr);
 
 	// scan the original table, and fill the new column with the transformed value
 	local_storage.ChangeType(parent, *this, changed_idx, target_type, bound_columns, cast_expr);

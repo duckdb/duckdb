@@ -36,13 +36,14 @@ struct CollectionCheckpointState;
 struct PersistentCollectionData;
 class CheckpointTask;
 class TableIOManager;
+class DataTable;
 
 class RowGroupCollection {
 public:
-	RowGroupCollection(shared_ptr<DataTableInfo> info, TableIOManager &io_manager, vector<LogicalType> types,
-	                   idx_t row_start, idx_t total_rows = 0);
-	RowGroupCollection(shared_ptr<DataTableInfo> info, BlockManager &block_manager, vector<LogicalType> types,
-	                   idx_t row_start, idx_t total_rows, idx_t row_group_size);
+	RowGroupCollection(DataTable &table, TableIOManager &io_manager, vector<LogicalType> types, idx_t row_start,
+	                   idx_t total_rows = 0);
+	RowGroupCollection(DataTable &table, BlockManager &block_manager, vector<LogicalType> types, idx_t row_start,
+	                   idx_t total_rows, idx_t row_group_size);
 
 public:
 	idx_t GetTotalRows() const;
@@ -117,11 +118,12 @@ public:
 	vector<ColumnSegmentInfo> GetColumnSegmentInfo();
 	const vector<LogicalType> &GetTypes() const;
 
-	shared_ptr<RowGroupCollection> AddColumn(ClientContext &context, ColumnDefinition &new_column,
+	shared_ptr<RowGroupCollection> AddColumn(DataTable &new_table, ClientContext &context, ColumnDefinition &new_column,
 	                                         ExpressionExecutor &default_executor);
-	shared_ptr<RowGroupCollection> RemoveColumn(idx_t col_idx);
-	shared_ptr<RowGroupCollection> AlterType(ClientContext &context, idx_t changed_idx, const LogicalType &target_type,
-	                                         vector<StorageIndex> bound_columns, Expression &cast_expr);
+	shared_ptr<RowGroupCollection> RemoveColumn(DataTable &new_table, idx_t col_idx);
+	shared_ptr<RowGroupCollection> AlterType(DataTable &new_table, ClientContext &context, idx_t changed_idx,
+	                                         const LogicalType &target_type, vector<StorageIndex> bound_columns,
+	                                         Expression &cast_expr);
 	void VerifyNewConstraint(DataTable &parent, const BoundConstraint &constraint);
 
 	void CopyStats(TableStatistics &stats);
@@ -134,9 +136,7 @@ public:
 		return block_manager;
 	}
 	MetadataManager &GetMetadataManager();
-	DataTableInfo &GetTableInfo() {
-		return *info;
-	}
+	DataTableInfo &GetTableInfo();
 
 	idx_t GetAllocationSize() const {
 		return allocation_size;
@@ -151,14 +151,14 @@ private:
 	bool IsEmpty(SegmentLock &) const;
 
 private:
+	//! The data table that owns this row group collection
+	DataTable &table;
 	//! BlockManager
 	BlockManager &block_manager;
 	//! The row group size of the row group collection
 	const idx_t row_group_size;
 	//! The number of rows in the table
 	atomic<idx_t> total_rows;
-	//! The data table info
-	shared_ptr<DataTableInfo> info;
 	//! The column types of the row group collection
 	vector<LogicalType> types;
 	idx_t row_start;
