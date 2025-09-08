@@ -99,21 +99,22 @@ SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk
 	auto &g_state = input.global_state.Cast<TableScanGlobalSourceState>();
 	auto &l_state = input.local_state.Cast<TableScanLocalSourceState>();
 
-	TableFunctionInput data(bind_data.get(), l_state.local_state.get(), g_state.global_state.get());
-
 	if (function.function) {
+		TableFunctionInput data(bind_data.get(), l_state.local_state.get(), g_state.global_state.get());
 		function.function(context.client, data, chunk);
 		return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 	}
+
+	// Table In/Out function: pass interrupt_state to support async operations
+	TableFunctionInput data(bind_data.get(), l_state.local_state.get(), g_state.global_state.get(), &input.interrupt_state);
 
 	if (g_state.in_out_final) {
 		function.in_out_function_final(context, data, chunk);
 	}
 	switch (function.in_out_function(context, data, g_state.input_chunk, chunk)) {
-
 	case OperatorResultType::BLOCKED: {
-		auto guard = g_state.Lock();
-		return g_state.BlockSource(guard, input.interrupt_state);
+		// Table function can wake itself up via interrupt_state.Callback(), return BLOCKED directly
+		return SourceResultType::BLOCKED;
 	}
 	default:
 		// FIXME: Handling for other cases (such as NEED_MORE_INPUT) breaks current functionality and extensions that
