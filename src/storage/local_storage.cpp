@@ -22,7 +22,7 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &table)
 	auto types = table.GetTypes();
 	auto data_table_info = table.GetDataTableInfo();
 	auto &io_manager = TableIOManager::Get(table);
-	row_groups = make_shared_ptr<RowGroupCollection>(table, io_manager, types, MAX_ROW_ID, 0);
+	row_groups = make_shared_ptr<RowGroupCollection>(data_table_info, io_manager, types, MAX_ROW_ID, 0);
 	row_groups->InitializeEmpty();
 
 	data_table_info->GetIndexes().Scan([&](Index &index) {
@@ -564,7 +564,7 @@ void LocalStorage::Update(DataTable &table, Vector &row_ids, const vector<Physic
 	D_ASSERT(storage);
 
 	auto ids = FlatVector::GetData<row_t>(row_ids);
-	storage->row_groups->Update(TransactionData(0, 0), ids, column_ids, updates);
+	storage->row_groups->Update(TransactionData(0, 0), table, ids, column_ids, updates);
 }
 
 void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_ptr<StorageCommitState> commit_state) {

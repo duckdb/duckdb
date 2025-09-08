@@ -880,7 +880,7 @@ void RowGroup::Update(TransactionData transaction, DataTable &data_table, DataCh
 	}
 }
 
-void RowGroup::UpdateColumn(TransactionData transaction, DataChunk &updates, Vector &row_ids,
+void RowGroup::UpdateColumn(TransactionData transaction, DataTable &data_table, DataChunk &updates, Vector &row_ids,
                             const vector<column_t> &column_path) {
 	D_ASSERT(updates.ColumnCount() == 1);
 	auto ids = FlatVector::GetData<row_t>(row_ids);
@@ -888,8 +888,7 @@ void RowGroup::UpdateColumn(TransactionData transaction, DataChunk &updates, Vec
 	auto primary_column_idx = column_path[0];
 	D_ASSERT(primary_column_idx < columns.size());
 	auto &col_data = GetColumn(primary_column_idx);
-	col_data.UpdateColumn(transaction, collection.get().GetTableStorage(), column_path, updates.data[0], ids,
-	                      updates.size(), 1);
+	col_data.UpdateColumn(transaction, data_table, column_path, updates.data[0], ids, updates.size(), 1);
 	MergeStatistics(primary_column_idx, *col_data.GetUpdateStatistics());
 }
 

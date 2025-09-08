@@ -40,10 +40,10 @@ class DataTable;
 
 class RowGroupCollection {
 public:
-	RowGroupCollection(DataTable &table, TableIOManager &io_manager, vector<LogicalType> types, idx_t row_start,
-	                   idx_t total_rows = 0);
-	RowGroupCollection(DataTable &table, BlockManager &block_manager, vector<LogicalType> types, idx_t row_start,
-	                   idx_t total_rows, idx_t row_group_size);
+	RowGroupCollection(shared_ptr<DataTableInfo> info, TableIOManager &io_manager, vector<LogicalType> types,
+	                   idx_t row_start, idx_t total_rows = 0);
+	RowGroupCollection(shared_ptr<DataTableInfo> info, BlockManager &block_manager, vector<LogicalType> types,
+	                   idx_t row_start, idx_t total_rows, idx_t row_group_size);
 
 public:
 	idx_t GetTotalRows() const;
@@ -99,9 +99,10 @@ public:
 	void RemoveFromIndexes(TableIndexList &indexes, Vector &row_identifiers, idx_t count);
 
 	idx_t Delete(TransactionData transaction, DataTable &table, row_t *ids, idx_t count);
-	void Update(TransactionData transaction, row_t *ids, const vector<PhysicalIndex> &column_ids, DataChunk &updates);
-	void UpdateColumn(TransactionData transaction, Vector &row_ids, const vector<column_t> &column_path,
-	                  DataChunk &updates);
+	void Update(TransactionData transaction, DataTable &table, row_t *ids, const vector<PhysicalIndex> &column_ids,
+	            DataChunk &updates);
+	void UpdateColumn(TransactionData transaction, DataTable &table, Vector &row_ids,
+	                  const vector<column_t> &column_path, DataChunk &updates);
 
 	void Checkpoint(TableDataWriter &writer, TableStatistics &global_stats);
 
@@ -137,7 +138,6 @@ public:
 	}
 	MetadataManager &GetMetadataManager();
 	DataTableInfo &GetTableInfo();
-	DataTable &GetTableStorage();
 
 	idx_t GetAllocationSize() const {
 		return allocation_size;
@@ -152,14 +152,14 @@ private:
 	bool IsEmpty(SegmentLock &) const;
 
 private:
-	//! The data table that owns this row group collection
-	DataTable &table;
 	//! BlockManager
 	BlockManager &block_manager;
 	//! The row group size of the row group collection
 	const idx_t row_group_size;
 	//! The number of rows in the table
 	atomic<idx_t> total_rows;
+	//! The data table info
+	shared_ptr<DataTableInfo> info;
 	//! The column types of the row group collection
 	vector<LogicalType> types;
 	idx_t row_start;
