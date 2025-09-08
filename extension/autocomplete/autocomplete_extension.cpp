@@ -20,6 +20,7 @@
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "transformer/peg_transformer.hpp"
 #include "duckdb/main/settings.hpp"
+#include "parser/peg_parser_override.hpp"
 
 namespace duckdb {
 
@@ -493,7 +494,8 @@ static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(Clien
 	// tokenize the input
 	vector<MatcherToken> tokens;
 	vector<MatcherSuggestion> suggestions;
-	MatchState state(tokens, suggestions);
+	ParseResultAllocator allocator;
+	MatchState state(tokens, suggestions, allocator);
 	vector<UnicodeSpace> unicode_spaces;
 	string clean_sql;
 	const string &sql_ref = StripUnicodeSpaces(sql, clean_sql) ? clean_sql : sql;
@@ -612,23 +614,6 @@ void SQLAutoCompleteFunction(ClientContext &context, TableFunctionInput &data_p,
 	output.SetCardinality(count);
 }
 
-class ParserTokenizer : public BaseTokenizer {
-public:
-	ParserTokenizer(const string &sql, vector<MatcherToken> &tokens) : BaseTokenizer(sql, tokens) {
-	}
-	void OnStatementEnd(idx_t pos) override {
-		statements.push_back(std::move(tokens));
-		tokens.clear();
-	}
-	void OnLastToken(TokenizeState state, string last_word, idx_t) override {
-		if (last_word.empty()) {
-			return;
-		}
-		tokens.push_back(std::move(last_word));
-	}
-
-	vector<vector<MatcherToken>> statements;
-};
 
 static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &context, TableFunctionBindInput &input,
                                                            vector<LogicalType> &return_types, vector<string> &names) {
@@ -656,10 +641,11 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 			continue;
 		}
 		vector<MatcherSuggestion> suggestions;
-		MatchState state(tokens, suggestions);
+		ParseResultAllocator parse_result_allocator;
+		MatchState state(tokens, suggestions, parse_result_allocator);
 
-		MatcherAllocator allocator;
-		auto &matcher = Matcher::RootMatcher(allocator);
+		MatcherAllocator matcher_allocator;
+		auto &matcher = Matcher::RootMatcher(matcher_allocator);
 		auto match_result = matcher.Match(state);
 		if (match_result != MatchResultType::SUCCESS || state.token_index < tokens.size()) {
 			string token_list;

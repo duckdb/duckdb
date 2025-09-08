@@ -2,7 +2,7 @@
 #include "keyword_helper.hpp"
 
 namespace duckdb {
-void KeywordHelper::InitializeKeywordMaps() { // Renamed for clarity
+void PEGKeywordHelper::InitializeKeywordMaps() { // Renamed for clarity
 	if (initialized) {
 		return;
 	};

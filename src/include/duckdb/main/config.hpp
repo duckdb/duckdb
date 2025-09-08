@@ -37,6 +37,7 @@
 #include "duckdb/function/encoding_function.hpp"
 #include "duckdb/main/setting_info.hpp"
 #include "duckdb/logging/log_manager.hpp"
+#include "duckdb/parser/parser_override.hpp"
 
 namespace duckdb {
 
@@ -249,6 +250,8 @@ public:
 	DBConfigOptions options;
 	//! Extensions made to the parser
 	vector<ParserExtension> parser_extensions;
+	//! Override of the parser, returns transformed statements
+	unique_ptr<ParserOverride> parser_override;
 	//! Extensions made to the optimizer
 	vector<OptimizerExtension> optimizer_extensions;
 	//! Error manager

@@ -2,24 +2,17 @@
 
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/string.hpp"
+#include "duckdb/parser/simplified_token.hpp"
 
 namespace duckdb {
-enum class KeywordCategory : uint8_t {
-	KEYWORD_NONE,
-	KEYWORD_UNRESERVED,
-	KEYWORD_RESERVED,
-	KEYWORD_TYPE_FUNC,
-	KEYWORD_COL_NAME
-};
-
-class KeywordHelper {
+class PEGKeywordHelper {
 public:
-	static KeywordHelper &Instance();
+	static PEGKeywordHelper &Instance();
 	bool KeywordCategoryType(const string &text, KeywordCategory type) const;
 	void InitializeKeywordMaps();
 
 private:
-	KeywordHelper();
+	PEGKeywordHelper();
 	bool initialized;
 	case_insensitive_set_t reserved_keyword_map;
 	case_insensitive_set_t unreserved_keyword_map;

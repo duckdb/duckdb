@@ -51,4 +51,23 @@ protected:
 	vector<MatcherToken> &tokens;
 };
 
+class ParserTokenizer : public BaseTokenizer {
+public:
+	ParserTokenizer(const string &sql, vector<MatcherToken> &tokens) : BaseTokenizer(sql, tokens) {
+	}
+	void OnStatementEnd(idx_t pos) override {
+		statements.push_back(std::move(tokens));
+		tokens.clear();
+	}
+	void OnLastToken(TokenizeState state, string last_word, idx_t) override {
+		if (last_word.empty()) {
+			return;
+		}
+		tokens.push_back(std::move(last_word));
+	}
+
+	vector<vector<MatcherToken>> statements;
+};
+
+
 } // namespace duckdb

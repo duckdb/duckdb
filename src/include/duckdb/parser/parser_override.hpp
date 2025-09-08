@@ -1,5 +1,6 @@
 #pragma once
 
+#include "duckdb/common/helper.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 
