@@ -53,6 +53,8 @@ static const TestConfigOption test_config_options[] = {
     {"statically_loaded_extensions", "Extensions to be loaded (from the statically available one)",
      LogicalType::LIST(LogicalType::VARCHAR), nullptr},
     {"storage_version", "Database storage version to use by default", LogicalType::VARCHAR, nullptr},
+    {"data_location", "Directory where static test files are read (defaults to `data/`)", LogicalType::VARCHAR,
+     nullptr},
     {nullptr, nullptr, LogicalType::INVALID, nullptr},
 };
 
@@ -194,6 +196,10 @@ TestConfiguration::ExtensionAutoLoadingMode TestConfiguration::GetExtensionAutoL
 
 bool TestConfiguration::ShouldSkipTest(const string &test_name) {
 	return tests_to_be_skipped.count(test_name);
+}
+
+string TestConfiguration::DataLocation() {
+	return GetOptionOrDefault("data_location", string("data/"));
 }
 
 string TestConfiguration::OnInitCommand() {

@@ -50,6 +50,7 @@ public:
 	DebugInitialize GetDebugInitialize();
 	ExtensionAutoLoadingMode GetExtensionAutoLoadingMode();
 	bool ShouldSkipTest(const string &test_name);
+	string DataLocation();
 	string OnInitCommand();
 	string OnLoadCommand();
 	string OnConnectionCommand();
