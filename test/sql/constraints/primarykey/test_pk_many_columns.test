@@ -9,6 +9,7 @@ CREATE TABLE numbers(a integer, b integer, c integer, d integer, e integer, PRIM
 statement error
 INSERT INTO numbers VALUES (1,1,1,1,1), (1,1,1,1,1)
 ----
+<REGEX>:.*Constraint Error.*constraint violation.*
 
 # insert unique values
 statement ok
@@ -18,6 +19,7 @@ INSERT INTO numbers VALUES (1,1,1,1,1),(1,2,1,1,1),(1,1,2,1,1),(2,2,2,2,2)
 statement error
 INSERT INTO numbers VALUES (1,1,1,1,1),(1,1,1,1,4);
 ----
+<REGEX>:.*Constraint Error: Duplicate key.*
 
 # now insert just the second value
 statement ok
@@ -27,4 +29,4 @@ INSERT INTO numbers VALUES (1,1,1,1,4);
 statement error
 UPDATE numbers SET c=1 WHERE c=2
 ----
-
+<REGEX>:.*Constraint Error: Duplicate key.*
