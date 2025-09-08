@@ -614,7 +614,6 @@ void SQLAutoCompleteFunction(ClientContext &context, TableFunctionInput &data_p,
 	output.SetCardinality(count);
 }
 
-
 static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &context, TableFunctionBindInput &input,
                                                            vector<LogicalType> &return_types, vector<string> &names) {
 	if (input.inputs[0].IsNull()) {
@@ -670,8 +669,7 @@ void CheckPEGParserFunction(ClientContext &context, TableFunctionInput &data_p, 
 }
 
 struct PEGParserFunctionData : public TableFunctionData {
-	explicit PEGParserFunctionData(unique_ptr<ParserOverrideOptions> options_p)
-		: options(std::move(options_p)) {
+	explicit PEGParserFunctionData(unique_ptr<ParserOverrideOptions> options_p) : options(std::move(options_p)) {
 	}
 
 	unique_ptr<ParserOverrideOptions> options;
@@ -680,8 +678,6 @@ struct PEGParserFunctionData : public TableFunctionData {
 struct PEGParserData : public GlobalTableFunctionState {
 	PEGParserData() = default;
 };
-
-
 
 void PEGParserFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &config = DBConfig::GetConfig(context);
@@ -704,7 +700,8 @@ static duckdb::unique_ptr<FunctionData> PEGParserBind(ClientContext &context, Ta
 		} else if (StringUtil::Lower(on_error) == "continue") {
 			error_option = OnParserOverrideError::CONTINUE_ON_ERROR;
 		} else {
-			throw InvalidInputException("Invalid option specified for \"on_error\", use either \"throw\" or \"continue\"");
+			throw InvalidInputException(
+			    "Invalid option specified for \"on_error\", use either \"throw\" or \"continue\"");
 		}
 	}
 	bool enable_logging = false;

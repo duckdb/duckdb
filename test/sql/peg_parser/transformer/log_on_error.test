@@ -1,5 +1,5 @@
-# name: test/sql/peg_parser/transformer/use_statement.test
-# description:
+# name: test/sql/peg_parser/transformer/log_on_error.test
+# description: 
 # group: [transformer]
 
 require autocomplete

@@ -1,6 +1,5 @@
 #include "duckdb/parser/parser_override.hpp"
 
-
 namespace duckdb {
 
 void ParserOverride::LogQuery(const string &message) {
@@ -16,4 +15,4 @@ void ParserOverride::LogError(const string &message, const std::exception &e) {
 	logger.Flush();
 }
 
-}
+} // namespace duckdb

@@ -99,11 +99,11 @@ struct MatcherSuggestion {
 
 struct MatchState {
 	MatchState(vector<MatcherToken> &tokens, vector<MatcherSuggestion> &suggestions, ParseResultAllocator &allocator)
-		: tokens(tokens), suggestions(suggestions), token_index(0), allocator(allocator) {
+	    : tokens(tokens), suggestions(suggestions), token_index(0), allocator(allocator) {
 	}
 	MatchState(MatchState &state)
-		: tokens(state.tokens), suggestions(state.suggestions), token_index(state.token_index),
-		  allocator(state.allocator) {
+	    : tokens(state.tokens), suggestions(state.suggestions), token_index(state.token_index),
+	      allocator(state.allocator) {
 	}
 
 	vector<MatcherToken> &tokens;

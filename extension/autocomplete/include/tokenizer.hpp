@@ -69,5 +69,4 @@ public:
 	vector<vector<MatcherToken>> statements;
 };
 
-
 } // namespace duckdb
