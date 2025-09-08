@@ -11,6 +11,7 @@ PRAGMA enable_verification
 statement error
 SELECT * FROM parquet_scan('does_not_exist')
 ----
+<REGEX>:.*IO Error: No files found.*
 
 # alltypes_plain.parquet
 query ITIIIIRRTTT
@@ -247,3 +248,4 @@ SELECT FIRST(comments) OVER w, LAST(comments) OVER w FROM userdata1 WINDOW w AS 
 statement error
 SELECT * FROM parquet_scan('data/parquet-testing/broken-arrow.parquet')
 ----
+<REGEX>:.*Invalid Error: Out of buffer.*
