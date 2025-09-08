@@ -153,8 +153,13 @@ duckdb_aggregate_function duckdb_create_aggregate_function() {
 	                                              duckdb::CAPIAggregateStateInit, duckdb::CAPIAggregateUpdate,
 	                                              duckdb::CAPIAggregateCombine, duckdb::CAPIAggregateFinalize, nullptr,
 	                                              duckdb::CAPIAggregateBind);
-	function->function_info = duckdb::make_shared_ptr<duckdb::CAggregateFunctionInfo>();
-	return reinterpret_cast<duckdb_aggregate_function>(function);
+	try {
+		function->function_info = duckdb::make_shared_ptr<duckdb::CAggregateFunctionInfo>();
+		return reinterpret_cast<duckdb_aggregate_function>(function);
+	} catch (...) {
+		delete function;
+		return nullptr;
+	}
 }
 
 void duckdb_destroy_aggregate_function(duckdb_aggregate_function *function) {
@@ -266,8 +271,12 @@ duckdb_aggregate_function_set duckdb_create_aggregate_function_set(const char *n
 	if (!name || !*name) {
 		return nullptr;
 	}
-	auto function_set = new duckdb::AggregateFunctionSet(name);
-	return reinterpret_cast<duckdb_aggregate_function_set>(function_set);
+	try {
+		auto function_set = new duckdb::AggregateFunctionSet(name);
+		return reinterpret_cast<duckdb_aggregate_function_set>(function_set);
+	} catch (...) {
+		return nullptr;
+	}
 }
 
 void duckdb_destroy_aggregate_function_set(duckdb_aggregate_function_set *set) {
