@@ -137,6 +137,7 @@ public:
 	}
 	MetadataManager &GetMetadataManager();
 	DataTableInfo &GetTableInfo();
+	DataTable &GetTableStorage();
 
 	idx_t GetAllocationSize() const {
 		return allocation_size;

@@ -92,6 +92,10 @@ DataTableInfo &RowGroupCollection::GetTableInfo() {
 	return *table.GetDataTableInfo();
 }
 
+DataTable &RowGroupCollection::GetTableStorage() {
+	return table;
+}
+
 //===--------------------------------------------------------------------===//
 // Initialize
 //===--------------------------------------------------------------------===//
@@ -645,7 +649,7 @@ void RowGroupCollection::Update(TransactionData transaction, row_t *ids, const v
 				break;
 			}
 		}
-		row_group->Update(transaction, updates, ids, start, pos - start, column_ids);
+		row_group->Update(transaction, table, updates, ids, start, pos - start, column_ids);
 
 		auto l = stats.GetLock();
 		for (idx_t i = 0; i < column_ids.size(); i++) {

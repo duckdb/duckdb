@@ -59,6 +59,10 @@ void CleanupState::CleanupUpdate(UpdateInfo &info) {
 
 void CleanupState::CleanupDelete(DeleteInfo &info) {
 	auto version_table = info.table;
+	if (!version_table->IsMainTable()) {
+		//! table was altered/dropped by a different transaction
+		return;
+	}
 	if (!version_table->HasIndexes()) {
 		// this table has no indexes: no cleanup to be done
 		return;

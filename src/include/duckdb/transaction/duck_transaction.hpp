@@ -76,7 +76,7 @@ public:
 	                idx_t base_row);
 	void PushSequenceUsage(SequenceCatalogEntry &entry, const SequenceData &data);
 	void PushAppend(DataTable &table, idx_t row_start, idx_t row_count);
-	UndoBufferReference CreateUpdateInfo(idx_t type_size, idx_t entries);
+	UndoBufferReference CreateUpdateInfo(idx_t type_size, DataTable &data_table, idx_t entries);
 
 	bool IsDuckTransaction() const override {
 		return true;
@@ -89,8 +89,6 @@ public:
 
 	//! Get a shared lock on a table
 	shared_ptr<CheckpointLock> SharedLockTable(DataTableInfo &info);
-
-	void ModifyTable(DataTable &tbl);
 
 private:
 	DuckTransactionManager &transaction_manager;
@@ -105,10 +103,6 @@ private:
 	mutex sequence_lock;
 	//! Map of all sequences that were used during the transaction and the value they had in this transaction
 	reference_map_t<SequenceCatalogEntry, reference<SequenceValue>> sequence_usage;
-	//! Lock for modified_tables
-	mutex modified_tables_lock;
-	//! Tables that are modified by this transaction
-	reference_map_t<DataTable, shared_ptr<DataTable>> modified_tables;
 	//! Lock for the active_locks map
 	mutex active_locks_lock;
 	struct ActiveTableLock {

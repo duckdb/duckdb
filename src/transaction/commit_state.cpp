@@ -206,6 +206,9 @@ void CommitState::RevertCommit(UndoFlags type, data_ptr_t data) {
 	}
 	case UndoFlags::INSERT_TUPLE: {
 		auto info = reinterpret_cast<AppendInfo *>(data);
+		if (!info->table->IsMainTable()) {
+			throw InternalException("eek append");
+		}
 		// revert this append
 		info->table->RevertAppend(transaction, info->start_row, info->count);
 		break;
@@ -213,6 +216,9 @@ void CommitState::RevertCommit(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::DELETE_TUPLE: {
 		// deletion:
 		auto info = reinterpret_cast<DeleteInfo *>(data);
+		if (!info->table->IsMainTable()) {
+			throw InternalException("eek delete");
+		}
 		// revert the commit by writing the (uncommitted) transaction_id back into the version info
 		info->version_info->CommitDelete(info->vector_idx, transaction_id, *info);
 		break;
@@ -220,6 +226,9 @@ void CommitState::RevertCommit(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::UPDATE_TUPLE: {
 		// update:
 		auto info = reinterpret_cast<UpdateInfo *>(data);
+		if (!info->table->IsMainTable()) {
+			throw InternalException("eek update");
+		}
 		info->version_number = transaction_id;
 		break;
 	}

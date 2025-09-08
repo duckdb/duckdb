@@ -85,7 +85,6 @@ void DuckTransaction::PushAttach(AttachedDatabase &db) {
 
 void DuckTransaction::PushDelete(DataTable &table, RowVersionManager &info, idx_t vector_idx, row_t rows[], idx_t count,
                                  idx_t base_row) {
-	ModifyTable(table);
 	bool is_consecutive = true;
 	// check if the rows are consecutive
 	for (idx_t i = 0; i < count; i++) {
@@ -118,7 +117,6 @@ void DuckTransaction::PushDelete(DataTable &table, RowVersionManager &info, idx_
 }
 
 void DuckTransaction::PushAppend(DataTable &table, idx_t start_row, idx_t row_count) {
-	ModifyTable(table);
 	auto undo_entry = undo_buffer.CreateEntry(UndoFlags::INSERT_TUPLE, sizeof(AppendInfo));
 	auto append_info = reinterpret_cast<AppendInfo *>(undo_entry.Ptr());
 	append_info->table = &table;
@@ -126,11 +124,11 @@ void DuckTransaction::PushAppend(DataTable &table, idx_t start_row, idx_t row_co
 	append_info->count = row_count;
 }
 
-UndoBufferReference DuckTransaction::CreateUpdateInfo(idx_t type_size, idx_t entries) {
+UndoBufferReference DuckTransaction::CreateUpdateInfo(idx_t type_size, DataTable &data_table, idx_t entries) {
 	idx_t alloc_size = UpdateInfo::GetAllocSize(type_size);
 	auto undo_entry = undo_buffer.CreateEntry(UndoFlags::UPDATE_TUPLE, alloc_size);
 	auto &update_info = UpdateInfo::Get(undo_entry);
-	UpdateInfo::Initialize(update_info, transaction_id);
+	UpdateInfo::Initialize(update_info, data_table, transaction_id);
 	return undo_entry;
 }
 
@@ -150,17 +148,6 @@ void DuckTransaction::PushSequenceUsage(SequenceCatalogEntry &sequence, const Se
 		sequence_info.usage_count = data.usage_count;
 		sequence_info.counter = data.counter;
 	}
-}
-
-void DuckTransaction::ModifyTable(DataTable &tbl) {
-	lock_guard<mutex> guard(modified_tables_lock);
-	auto table_ref = reference<DataTable>(tbl);
-	auto entry = modified_tables.find(table_ref);
-	if (entry != modified_tables.end()) {
-		// already exists
-		return;
-	}
-	modified_tables.insert(make_pair(table_ref, tbl.shared_from_this()));
 }
 
 bool DuckTransaction::ChangesMade() {
@@ -245,14 +232,6 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, transaction_t new_commit
 	if (!ChangesMade()) {
 		// no need to flush anything if we made no changes
 		return ErrorData();
-	}
-	for (auto &entry : modified_tables) {
-		auto &tbl = entry.first.get();
-		if (!tbl.IsMainTable()) {
-			return ErrorData(
-			    TransactionException("Attempting to modify table %s but another transaction has %s this table",
-			                         tbl.GetTableName(), tbl.TableModification()));
-		}
 	}
 	D_ASSERT(db.IsSystem() || db.IsTemporary() || !IsReadOnly());
 
