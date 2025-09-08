@@ -496,6 +496,8 @@ void DBConfig::SetDefaultTempDirectory() {
 		options.temporary_directory = string();
 	} else if (DBConfig::IsInMemoryDatabase(options.database_path.c_str())) {
 		options.temporary_directory = ".tmp";
+	} else if (StringUtil::Contains(options.database_path, "?")) {
+		options.temporary_directory = StringUtil::Split(options.database_path, "?")[0] + ".tmp";
 	} else {
 		options.temporary_directory = options.database_path + ".tmp";
 	}
