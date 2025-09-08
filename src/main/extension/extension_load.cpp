@@ -522,6 +522,17 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 	if (!info) {
 		return;
 	}
+	try {
+		LoadExternalExtensionInternal(db, fs, extension, *info);
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		info->LoadFail(error);
+		throw;
+	}
+}
+
+void ExtensionHelper::LoadExternalExtensionInternal(DatabaseInstance &db, FileSystem &fs, const string &extension,
+                                                    ExtensionActiveLoad &info) {
 #ifdef DUCKDB_DISABLE_EXTENSION_LOAD
 	throw PermissionException("Loading external extensions is disabled through a compile time flag");
 #else
@@ -538,7 +549,7 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 		}
 
 		try {
-			ExtensionLoader loader(*info);
+			ExtensionLoader loader(info);
 			(*init_fun)(loader);
 			loader.FinalizeLoad();
 		} catch (std::exception &e) {
@@ -549,7 +560,7 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 
 		D_ASSERT(extension_init_result.install_info);
 
-		info->FinishLoad(*extension_init_result.install_info);
+		info.FinishLoad(*extension_init_result.install_info);
 		return;
 	}
 
@@ -589,7 +600,7 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 
 		D_ASSERT(extension_init_result.install_info);
 
-		info->FinishLoad(*extension_init_result.install_info);
+		info.FinishLoad(*extension_init_result.install_info);
 		return;
 	}
 

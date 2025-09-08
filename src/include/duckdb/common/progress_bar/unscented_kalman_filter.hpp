@@ -20,7 +20,7 @@ private:
 	static constexpr size_t SIGMA_POINTS = 2 * STATE_DIM + 1;
 
 	// UKF parameters
-	static constexpr double ALPHA = 0.1;
+	static constexpr double ALPHA = 0.044;
 	static constexpr double BETA = 1.0;
 	static constexpr double KAPPA = 0.0;
 
@@ -35,6 +35,8 @@ private:
 
 	double last_time;
 	bool initialized;
+	double last_progress;
+	double scale_factor;
 
 	// Helper functions
 	vector<vector<double>> MatrixSqrt(const vector<vector<double>> &mat);

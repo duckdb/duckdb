@@ -588,6 +588,15 @@ typedef struct {
 	void (*duckdb_destroy_arrow_options)(duckdb_arrow_options *arrow_options);
 #endif
 
+// API to get information about the results of a prepared statement
+#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+	idx_t (*duckdb_prepared_statement_column_count)(duckdb_prepared_statement prepared_statement);
+	const char *(*duckdb_prepared_statement_column_name)(duckdb_prepared_statement prepared_statement, idx_t col_idx);
+	duckdb_logical_type (*duckdb_prepared_statement_column_logical_type)(duckdb_prepared_statement prepared_statement,
+	                                                                     idx_t col_idx);
+	duckdb_type (*duckdb_prepared_statement_column_type)(duckdb_prepared_statement prepared_statement, idx_t col_idx);
+#endif
+
 // New query execution functions
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
 	duckdb_arrow_options (*duckdb_result_get_arrow_options)(duckdb_result *result);
@@ -1091,6 +1100,12 @@ typedef struct {
 #define duckdb_destroy_client_context           duckdb_ext_api.duckdb_destroy_client_context
 #define duckdb_destroy_arrow_options            duckdb_ext_api.duckdb_destroy_arrow_options
 #define duckdb_get_table_names                  duckdb_ext_api.duckdb_get_table_names
+
+// Version unstable_new_prepared_statement_functions
+#define duckdb_prepared_statement_column_count        duckdb_ext_api.duckdb_prepared_statement_column_count
+#define duckdb_prepared_statement_column_name         duckdb_ext_api.duckdb_prepared_statement_column_name
+#define duckdb_prepared_statement_column_logical_type duckdb_ext_api.duckdb_prepared_statement_column_logical_type
+#define duckdb_prepared_statement_column_type         duckdb_ext_api.duckdb_prepared_statement_column_type
 
 // Version unstable_new_query_execution_functions
 #define duckdb_result_get_arrow_options duckdb_ext_api.duckdb_result_get_arrow_options
