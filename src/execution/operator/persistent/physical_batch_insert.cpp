@@ -198,7 +198,7 @@ public:
 
 		// Create the local row group collection.
 		auto max_row_id = NumericCast<idx_t>(MAX_ROW_ID);
-		auto collection = make_uniq<RowGroupCollection>(table_info, io_manager, insert_types, max_row_id);
+		auto collection = make_uniq<RowGroupCollection>(std::move(table_info), io_manager, insert_types, max_row_id);
 		collection->InitializeEmpty();
 		collection->InitializeAppend(current_append_state);
 

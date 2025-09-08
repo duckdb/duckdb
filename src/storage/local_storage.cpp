@@ -68,8 +68,7 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_data
       optimistic_writer(new_data_table, parent.optimistic_writer), merged_storage(parent.merged_storage) {
 
 	// Alter the column type.
-	row_groups = parent.row_groups->AlterType(new_data_table, context, alter_column_index, target_type, bound_columns,
-	                                          cast_expr);
+	row_groups = parent.row_groups->AlterType(context, alter_column_index, target_type, bound_columns, cast_expr);
 	parent.row_groups->CommitDropColumn(alter_column_index);
 	parent.row_groups.reset();
 
@@ -83,7 +82,7 @@ LocalTableStorage::LocalTableStorage(DataTable &new_data_table, LocalTableStorag
       optimistic_writer(new_data_table, parent.optimistic_writer), merged_storage(parent.merged_storage) {
 
 	// Remove the column from the previous table storage.
-	row_groups = parent.row_groups->RemoveColumn(new_data_table, drop_column_index);
+	row_groups = parent.row_groups->RemoveColumn(drop_column_index);
 	parent.row_groups->CommitDropColumn(drop_column_index);
 	parent.row_groups.reset();
 
@@ -96,7 +95,7 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_dt, 
       optimistic_collections(std::move(parent.optimistic_collections)),
       optimistic_writer(new_dt, parent.optimistic_writer), merged_storage(parent.merged_storage) {
 
-	row_groups = parent.row_groups->AddColumn(new_dt, context, new_column, default_executor);
+	row_groups = parent.row_groups->AddColumn(context, new_column, default_executor);
 	parent.row_groups.reset();
 	append_indexes.Move(parent.append_indexes);
 }

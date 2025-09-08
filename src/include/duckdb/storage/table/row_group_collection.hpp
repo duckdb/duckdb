@@ -119,12 +119,11 @@ public:
 	vector<ColumnSegmentInfo> GetColumnSegmentInfo();
 	const vector<LogicalType> &GetTypes() const;
 
-	shared_ptr<RowGroupCollection> AddColumn(DataTable &new_table, ClientContext &context, ColumnDefinition &new_column,
+	shared_ptr<RowGroupCollection> AddColumn(ClientContext &context, ColumnDefinition &new_column,
 	                                         ExpressionExecutor &default_executor);
-	shared_ptr<RowGroupCollection> RemoveColumn(DataTable &new_table, idx_t col_idx);
-	shared_ptr<RowGroupCollection> AlterType(DataTable &new_table, ClientContext &context, idx_t changed_idx,
-	                                         const LogicalType &target_type, vector<StorageIndex> bound_columns,
-	                                         Expression &cast_expr);
+	shared_ptr<RowGroupCollection> RemoveColumn(idx_t col_idx);
+	shared_ptr<RowGroupCollection> AlterType(ClientContext &context, idx_t changed_idx, const LogicalType &target_type,
+	                                         vector<StorageIndex> bound_columns, Expression &cast_expr);
 	void VerifyNewConstraint(DataTable &parent, const BoundConstraint &constraint);
 
 	void CopyStats(TableStatistics &stats);
@@ -137,7 +136,9 @@ public:
 		return block_manager;
 	}
 	MetadataManager &GetMetadataManager();
-	DataTableInfo &GetTableInfo();
+	DataTableInfo &GetTableInfo() {
+		return *info;
+	}
 
 	idx_t GetAllocationSize() const {
 		return allocation_size;

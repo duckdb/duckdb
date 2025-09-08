@@ -89,10 +89,6 @@ MetadataManager &RowGroupCollection::GetMetadataManager() {
 	return GetBlockManager().GetMetadataManager();
 }
 
-DataTableInfo &RowGroupCollection::GetTableInfo() {
-	return *info;
-}
-
 //===--------------------------------------------------------------------===//
 // Initialize
 //===--------------------------------------------------------------------===//
@@ -1219,8 +1215,7 @@ vector<ColumnSegmentInfo> RowGroupCollection::GetColumnSegmentInfo() {
 //===--------------------------------------------------------------------===//
 // Alter
 //===--------------------------------------------------------------------===//
-shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(DataTable &new_table, ClientContext &context,
-                                                             ColumnDefinition &new_column,
+shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ClientContext &context, ColumnDefinition &new_column,
                                                              ExpressionExecutor &default_executor) {
 	idx_t new_column_idx = types.size();
 	auto new_types = types;
@@ -1248,7 +1243,7 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(DataTable &new_tabl
 	return result;
 }
 
-shared_ptr<RowGroupCollection> RowGroupCollection::RemoveColumn(DataTable &new_table, idx_t col_idx) {
+shared_ptr<RowGroupCollection> RowGroupCollection::RemoveColumn(idx_t col_idx) {
 	D_ASSERT(col_idx < types.size());
 	auto new_types = types;
 	new_types.erase_at(col_idx);
@@ -1267,8 +1262,8 @@ shared_ptr<RowGroupCollection> RowGroupCollection::RemoveColumn(DataTable &new_t
 	return result;
 }
 
-shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(DataTable &new_table, ClientContext &context,
-                                                             idx_t changed_idx, const LogicalType &target_type,
+shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(ClientContext &context, idx_t changed_idx,
+                                                             const LogicalType &target_type,
                                                              vector<StorageIndex> bound_columns,
                                                              Expression &cast_expr) {
 	D_ASSERT(changed_idx < types.size());
