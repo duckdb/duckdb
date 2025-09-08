@@ -1005,6 +1005,7 @@ static constexpr ExtensionFunctionOverloadEntry EXTENSION_FUNCTION_OVERLOADS[] =
 }; // END_OF_EXTENSION_FUNCTION_OVERLOADS
 
 static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
+    {"auto_fallback_to_full_download", "httpfs"},
     {"azure_account_name", "azure"},
     {"azure_context_caching", "azure"},
     {"azure_credential_chain", "azure"},
@@ -1025,6 +1026,7 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"ducklake_max_retry_count", "ducklake"},
     {"ducklake_retry_backoff", "ducklake"},
     {"ducklake_retry_wait_ms", "ducklake"},
+    {"enable_curl_server_cert_verification", "httpfs"},
     {"enable_geoparquet_conversion", "parquet"},
     {"enable_server_cert_verification", "httpfs"},
     {"force_download", "httpfs"},
