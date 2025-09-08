@@ -7,14 +7,23 @@ require autocomplete
 load __TEST_DIR__/test_peg_parser.db
 
 statement ok
+pragma enable_logging=true;
+
+statement ok
 call peg_parser(on_error='throw', enable_logging=true);
 
 restart
 
 statement ok
+pragma enable_logging=true;
+
+statement ok
 call peg_parser(on_error='continue', enable_logging=true);
 
 restart
+
+statement ok
+pragma enable_logging=true;
 
 statement error
 call peg_parser(on_error='doesnotexist', enable_logging=true);
@@ -35,10 +44,14 @@ Invalid Input Error: Failed to cast value: Could not convert string 'doesnotexis
 
 restart
 
-PRAGMA enable_logging;
+statement ok
+PRAGMA enable_logging=true;
 
 statement ok
 call peg_parser(on_error='throw', enable_logging=true);
 
-statement ok
+# This is an expected error for now.
+statement error
 select * from foo;
+----
+Not implemented Error: PEGTransformerFactory::TransformStatement
