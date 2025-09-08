@@ -409,9 +409,9 @@ void StandardBufferManager::VerifyZeroReaders(BlockLock &lock, shared_ptr<BlockH
 #ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
 	unique_ptr<FileBuffer> replacement_buffer;
 	auto &allocator = Allocator::Get(db);
-	auto block_header_size = handle->block_manager.GetBlockHeaderSize();
-	auto alloc_size = handle->GetMemoryUsage() - block_header_size;
 	auto &buffer = handle->GetBuffer(lock);
+	auto block_header_size = buffer->GetHeaderSize();
+	auto alloc_size = buffer->AllocSize() - block_header_size;
 	if (handle->GetBufferType() == FileBufferType::BLOCK) {
 		auto block = reinterpret_cast<Block *>(buffer.get());
 		replacement_buffer = make_uniq<Block>(allocator, block->id, alloc_size, block_header_size);
