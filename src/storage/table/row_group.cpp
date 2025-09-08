@@ -934,7 +934,9 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriteInfo &info) {
 	// pointers all end up densely packed, and thus more cache-friendly.
 	for (idx_t column_idx = 0; column_idx < GetColumnCount(); column_idx++) {
 		auto &column = GetColumn(column_idx);
-		D_ASSERT(column.start == start);
+		if (column.start != start) {
+			throw InternalException("RowGroup::WriteToDisk - child-column is unaligned with row group");
+		}
 		ColumnCheckpointInfo checkpoint_info(info, column_idx);
 		auto checkpoint_state = column.Checkpoint(*this, checkpoint_info);
 		D_ASSERT(checkpoint_state);
