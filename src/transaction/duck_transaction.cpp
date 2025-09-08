@@ -85,6 +85,7 @@ void DuckTransaction::PushAttach(AttachedDatabase &db) {
 
 void DuckTransaction::PushDelete(DataTable &table, RowVersionManager &info, idx_t vector_idx, row_t rows[], idx_t count,
                                  idx_t base_row) {
+	ModifyTable(table);
 	bool is_consecutive = true;
 	// check if the rows are consecutive
 	for (idx_t i = 0; i < count; i++) {
@@ -117,6 +118,7 @@ void DuckTransaction::PushDelete(DataTable &table, RowVersionManager &info, idx_
 }
 
 void DuckTransaction::PushAppend(DataTable &table, idx_t start_row, idx_t row_count) {
+	ModifyTable(table);
 	auto undo_entry = undo_buffer.CreateEntry(UndoFlags::INSERT_TUPLE, sizeof(AppendInfo));
 	auto append_info = reinterpret_cast<AppendInfo *>(undo_entry.Ptr());
 	append_info->table = &table;
@@ -148,6 +150,17 @@ void DuckTransaction::PushSequenceUsage(SequenceCatalogEntry &sequence, const Se
 		sequence_info.usage_count = data.usage_count;
 		sequence_info.counter = data.counter;
 	}
+}
+
+void DuckTransaction::ModifyTable(DataTable &tbl) {
+	lock_guard<mutex> guard(modified_tables_lock);
+	auto table_ref = reference<DataTable>(tbl);
+	auto entry = modified_tables.find(table_ref);
+	if (entry != modified_tables.end()) {
+		// already exists
+		return;
+	}
+	modified_tables.insert(make_pair(table_ref, tbl.shared_from_this()));
 }
 
 bool DuckTransaction::ChangesMade() {
