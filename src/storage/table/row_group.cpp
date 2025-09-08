@@ -21,6 +21,7 @@
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/storage/table/row_id_column_data.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -933,7 +934,9 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriteInfo &info) {
 	// pointers all end up densely packed, and thus more cache-friendly.
 	for (idx_t column_idx = 0; column_idx < GetColumnCount(); column_idx++) {
 		auto &column = GetColumn(column_idx);
-		D_ASSERT(column.start == start);
+		if (column.start != start) {
+			throw InternalException("RowGroup::WriteToDisk - child-column is unaligned with row group");
+		}
 		ColumnCheckpointInfo checkpoint_info(info, column_idx);
 		auto checkpoint_state = column.Checkpoint(*this, checkpoint_info);
 		D_ASSERT(checkpoint_state);
@@ -1000,7 +1003,8 @@ vector<MetaBlockPointer> RowGroup::GetColumnPointers() {
 }
 
 RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
-	if (!column_pointers.empty() && !HasChanges()) {
+	if (DBConfig::GetSetting<ExperimentalMetadataReuseSetting>(writer.GetDatabase()) && !column_pointers.empty() &&
+	    !HasChanges()) {
 		// we have existing metadata and the row group has not been changed
 		// re-use previous metadata
 		RowGroupWriteData result;
