@@ -7,44 +7,54 @@ require parquet
 statement error
 SELECT * FROM 'data/parquet-testing/broken/broken_bigint.parquet';
 ----
+<REGEX>:.*IO Error.*converted type.*
 
 statement error
 SELECT * FROM 'data/parquet-testing/broken/broken_date.parquet';
 ----
+<REGEX>:.*IO Error.*converted type.*
 
 statement error
 SELECT * FROM 'data/parquet-testing/broken/broken_int.parquet';
 ----
+<REGEX>:.*IO Error.*converted type.*
 
 statement error
 SELECT * FROM 'data/parquet-testing/broken/broken_smallint.parquet';
 ----
+<REGEX>:.*IO Error.*converted type.*
 
 statement error
 SELECT * FROM 'data/parquet-testing/broken/broken_timestamp.parquet';
 ----
+<REGEX>:.*IO Error.*converted type.*
 
 statement error
 SELECT * FROM 'data/parquet-testing/broken/broken_timestamp_ms.parquet';
 ----
+<REGEX>:.*IO Error.*converted type.*
 
 statement error
 SELECT * FROM 'data/parquet-testing/broken/broken_tinyint.parquet';
 ----
+<REGEX>:.*IO Error.*converted type.*
 
 statement error
 SELECT * FROM 'data/parquet-testing/broken/broken_ubigint.parquet';
 ----
+<REGEX>:.*IO Error.*converted type.*
 
 statement error
 SELECT * FROM 'data/parquet-testing/broken/broken_uinteger.parquet';
 ----
+<REGEX>:.*IO Error.*converted type.*
 
 statement error
 SELECT * FROM 'data/parquet-testing/broken/broken_usmallint.parquet';
 ----
+<REGEX>:.*IO Error.*converted type.*
 
 statement error
 SELECT * FROM 'data/parquet-testing/broken/broken_utinyint.parquet';
 ----
-
+<REGEX>:.*IO Error.*converted type.*
