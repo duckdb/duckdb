@@ -199,7 +199,12 @@ bool TestConfiguration::ShouldSkipTest(const string &test_name) {
 }
 
 string TestConfiguration::DataLocation() {
-	return GetOptionOrDefault("data_location", string("data/"));
+	string res = GetOptionOrDefault("data_location", string("data/"));
+	// Force DataLocation to end with a '/'
+	if (res.back() != '/') {
+		res += "/";
+	}
+	return res;
 }
 
 string TestConfiguration::OnInitCommand() {
