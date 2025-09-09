@@ -51,7 +51,7 @@ EncryptionTypes::CipherType EncryptionTypes::StringToCipher(const string &encryp
 		return CTR;
 	}
 	if (encryption_cipher == "CBC") {
-		return CBC;
+		throw NotImplementedException("CBC encryption is disabled");
 	}
 	return INVALID;
 }

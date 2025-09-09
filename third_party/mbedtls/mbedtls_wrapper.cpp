@@ -258,11 +258,11 @@ const mbedtls_cipher_info_t *MbedTlsWrapper::AESStateMBEDTLS::GetCipher(size_t k
 	case duckdb::EncryptionTypes::CipherType::CBC:
 		switch (key_len) {
 		case 16:
-			return mbedtls_cipher_info_from_type(MBEDTLS_CIPHER_AES_128_CTR);
+			return mbedtls_cipher_info_from_type(MBEDTLS_CIPHER_AES_128_CBC);
 		case 24:
-			return mbedtls_cipher_info_from_type(MBEDTLS_CIPHER_AES_192_CTR);
+			return mbedtls_cipher_info_from_type(MBEDTLS_CIPHER_AES_192_CBC);
 		case 32:
-			return mbedtls_cipher_info_from_type(MBEDTLS_CIPHER_AES_256_CTR);
+			return mbedtls_cipher_info_from_type(MBEDTLS_CIPHER_AES_256_CBC);
 		default:
 			throw runtime_error("Invalid AES key length");
 		}
@@ -279,9 +279,11 @@ MbedTlsWrapper::AESStateMBEDTLS::AESStateMBEDTLS(duckdb::EncryptionTypes::Cipher
 	if (!cipher_info) {
 		throw runtime_error("Failed to get Cipher");
 	}
-
 	if (mbedtls_cipher_setup(context.get(), cipher_info)) {
 		throw runtime_error("Failed to initialize cipher context");
+	}
+	if (cipher_p == duckdb::EncryptionTypes::CipherType::CBC && mbedtls_cipher_set_padding_mode(context.get(), MBEDTLS_PADDING_PKCS7)) {
+		throw runtime_error("Failed to set CBC padding");
 	}
 }
 
