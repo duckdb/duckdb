@@ -144,7 +144,7 @@ struct PEGQualifiedName {
 
 
 template <typename T>
-inline T PEGTransformer::Transform(optional_ptr<ParseResult> parse_result) {
+T PEGTransformer::Transform(optional_ptr<ParseResult> parse_result) {
 	if (!parse_result) {
 		throw InternalException("PEGTransformer::Transform called with null ParseResult");
 	}
@@ -167,7 +167,7 @@ inline T PEGTransformer::Transform(optional_ptr<ParseResult> parse_result) {
 }
 
 template <typename T>
-inline T PEGTransformer::TransformEnum(optional_ptr<ParseResult> parse_result) {
+T PEGTransformer::TransformEnum(optional_ptr<ParseResult> parse_result) {
 	if (!parse_result) {
 		throw InternalException("PEGTransformer::TransformEnum called with null ParseResult");
 	}
@@ -186,7 +186,7 @@ inline T PEGTransformer::TransformEnum(optional_ptr<ParseResult> parse_result) {
 }
 
 template <typename T>
-inline void PEGTransformer::TransformOptional(ListParseResult &list_pr, idx_t child_idx, T &target) {
+void PEGTransformer::TransformOptional(ListParseResult &list_pr, idx_t child_idx, T &target) {
 	auto &opt = list_pr.Child<OptionalParseResult>(child_idx);
 	if (opt.HasResult()) {
 		target = Transform<T>(opt.optional_result);
