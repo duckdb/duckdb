@@ -9,6 +9,7 @@
 #include "duckdb/planner/filter/list.hpp"
 #include "duckdb/function/scalar/struct_functions.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/planner/filter/bloom_filter.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 
 namespace duckdb {
@@ -865,6 +866,10 @@ bool MultiFileColumnMapper::EvaluateFilterAgainstConstant(TableFilter &filter, c
 	case TableFilterType::EXPRESSION_FILTER: {
 		auto &expr_filter = filter.Cast<ExpressionFilter>();
 		return expr_filter.EvaluateWithConstant(context, constant);
+	}
+	case TableFilterType::BLOOM_FILTER: {
+		auto &bloom_filter = filter.Cast<BloomFilter>();
+		return bloom_filter.FilterValue(constant);
 	}
 	default:
 		throw NotImplementedException("Can't evaluate TableFilterType (%s) against a constant",

@@ -49,6 +49,7 @@ public:
 
 public:
 	idx_t LookupHashes(Vector &hashes, SelectionVector &result_sel, const idx_t count_p) const;
+	bool LookupHash(hash_t hash) const;
 	void InsertHashes(Vector hashes, const idx_t count);
 
 	bool IsInitialized() const {
@@ -130,7 +131,7 @@ private:
 
 		// unaligned tail
 		for (idx_t i = num & ~(SIMD_BATCH_SIZE - 1); i < num; i++) {
-			bool hit = LookupOne(key[i + i], key[i + i + 1], bf);
+			const bool hit = LookupOne(key[i + i], key[i + i + 1], bf);
 			found_sel.set_index(found_count, i);
 			found_count += hit;
 		}
@@ -233,6 +234,12 @@ public:
 		approved_tuple_count = found_count;
 		return found_count;
 	}
+
+	bool FilterValue(const Value &value) const {
+		const auto hash = value.Hash();
+		return filter.LookupHash(hash);
+	}
+
 	FilterPropagateResult CheckStatistics(BaseStatistics &stats) const override {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}

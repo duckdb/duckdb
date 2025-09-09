@@ -14,6 +14,17 @@ idx_t CacheSectorizedBloomFilter::LookupHashes(Vector &hashes, SelectionVector &
 	return BloomFilterLookup(reinterpret_cast<hash_t *>(hashes.GetData()), blocks, res_sel, count);
 }
 
+bool CacheSectorizedBloomFilter::LookupHash(hash_t hash) const {
+	// Reinterpret the address of a value as a pointer to uint32_t
+	const uint32_t* parts = reinterpret_cast<uint32_t*>(&hash);
+
+	const uint32_t lower = parts[0];
+	const uint32_t higher = parts[1];
+
+	return  LookupOne(lower, higher, blocks);
+}
+
+
 void CacheSectorizedBloomFilter::InsertHashes(Vector hashes, const idx_t count) {
 	std::lock_guard<std::mutex> lock(insert_lock);
 	BloomFilterInsert(count, reinterpret_cast<uint64_t *>(hashes.GetData()), blocks);
