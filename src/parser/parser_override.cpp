@@ -1,4 +1,6 @@
 #include "duckdb/parser/parser_override.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/logging/log_storage.hpp"
 
 namespace duckdb {
 
