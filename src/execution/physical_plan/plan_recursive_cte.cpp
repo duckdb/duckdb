@@ -35,8 +35,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 		return cte;
 	}
 
-	vector<LogicalType> payload_types, distinct_types, aggregate_types;
-	vector<idx_t> payload_idx, distinct_idx, aggregate_idx;
+	vector<LogicalType> distinct_types, aggr_output_types, aggr_input_types;
+	vector<idx_t> distinct_idx, aggr_output_idx, aggr_input_idx;
 	vector<unique_ptr<Expression>> payload_aggregates;
 
 	// create a group for each target, these are the columns that should be grouped
@@ -62,10 +62,10 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 				throw BinderException("Payload aggregate must be a column reference");
 			}
 			auto& bound_ref = child->Cast<BoundReferenceExpression>();
-			// Add the index of the column to the aggregate_idx and aggregate_types
+			// Add the index of the column to the aggr_input_idx and aggr_input_types
 			// to populate the internal DataChunk
-			aggregate_idx.push_back(bound_ref.index);
-			aggregate_types.push_back(bound_ref.return_type);
+			aggr_input_idx.push_back(bound_ref.index);
+			aggr_input_types.push_back(bound_ref.return_type);
 		}
 
 		D_ASSERT(agg.children[0]->type == ExpressionType::BOUND_REF);
@@ -74,8 +74,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 
 		payload_aggregates.push_back(std::move(op.payload_aggregates[i]));
 		// add the logical type of the aggregate to the payload types
-		payload_types.push_back(agg.return_type);
-		payload_idx.emplace_back(bound_ref.index);
+		aggr_output_types.push_back(agg.return_type);
+		aggr_output_idx.emplace_back(bound_ref.index);
 	}
 
 	// If the key variant has been used, a recurring table will be created.
@@ -90,10 +90,10 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 	cast_cte.payload_aggregates = std::move(payload_aggregates);
 	cast_cte.distinct_idx = distinct_idx;
 	cast_cte.distinct_types = distinct_types;
-	cast_cte.aggr_output_idx = payload_idx;
-	cast_cte.aggr_output_types = payload_types;
-	cast_cte.aggr_input_idx = aggregate_idx;
-	cast_cte.aggr_input_types = aggregate_types;
+	cast_cte.aggr_output_idx = aggr_output_idx;
+	cast_cte.aggr_output_types = aggr_output_types;
+	cast_cte.aggr_input_idx = aggr_input_idx;
+	cast_cte.aggr_input_types = aggr_input_types;
 	cast_cte.internal_types = op.internal_types;
 	cast_cte.ref_recurring = op.ref_recurring;
 	cast_cte.working_table = working_table;
