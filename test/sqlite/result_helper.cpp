@@ -311,6 +311,7 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
 		if (result.HasError() && !statement.expected_error.empty()) {
 			// We run both comparions on purpose, we might move to only the second but might require some changes in
 			// tests
+			// This is due to some errors containing absolute paths, some relatives
 			if (!StringUtil::Contains(result.GetError(), statement.expected_error) &&
 			    !StringUtil::Contains(result.GetError(), runner.ReplaceKeywords(statement.expected_error))) {
 				bool success = false;
@@ -491,6 +492,7 @@ bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, MaterializedQue
 	bool error = false;
 	// simple first test: compare string value directly
 	// We run both comparions on purpose, we might move to only the second but might require some changes in tests
+	// This is due to some results containing absolute paths, some relatives
 	if (lvalue_str == rvalue_str || lvalue_str == runner.ReplaceKeywords(rvalue_str)) {
 		return true;
 	}
