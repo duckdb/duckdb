@@ -106,7 +106,7 @@ public:
 	//! The canary is a known plaintext for detecting wrong keys early.
 	static constexpr idx_t CANARY_BYTE_SIZE = 8;
 	//! Nonce, IV (nonce + counter) and tag length
-	static constexpr uint64_t AES_NONCE_LEN = 16;
+	static constexpr uint64_t AES_NONCE_LEN = 12;
 	static constexpr uint64_t AES_IV_LEN = 16;
 	static constexpr uint64_t AES_TAG_LEN = 16;
 

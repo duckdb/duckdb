@@ -76,11 +76,11 @@ void EncryptCanary(MainHeader &main_header, const shared_ptr<EncryptionState> &e
 	uint8_t canary_buffer[MainHeader::CANARY_BYTE_SIZE];
 
 	// we zero-out the iv and the (not yet) encrypted canary
-	uint8_t iv[16];
+	uint8_t iv[MainHeader::AES_IV_LEN];
 	memset(iv, 0, sizeof(iv));
 	memset(canary_buffer, 0, MainHeader::CANARY_BYTE_SIZE);
 
-	encryption_state->InitializeEncryption(iv, MainHeader::AES_NONCE_LEN, derived_key,
+	encryption_state->InitializeEncryption(iv, MainHeader::AES_IV_LEN, derived_key,
 	                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 	encryption_state->Process(reinterpret_cast<const_data_ptr_t>(MainHeader::CANARY), MainHeader::CANARY_BYTE_SIZE,
 	                          canary_buffer, MainHeader::CANARY_BYTE_SIZE);
@@ -91,7 +91,7 @@ void EncryptCanary(MainHeader &main_header, const shared_ptr<EncryptionState> &e
 bool DecryptCanary(MainHeader &main_header, const shared_ptr<EncryptionState> &encryption_state,
                    data_ptr_t derived_key) {
 	// just zero-out the iv
-	uint8_t iv[16];
+	uint8_t iv[MainHeader::AES_IV_LEN];
 	memset(iv, 0, sizeof(iv));
 
 	//! allocate a buffer for the decrypted canary
@@ -99,7 +99,7 @@ bool DecryptCanary(MainHeader &main_header, const shared_ptr<EncryptionState> &e
 	memset(decrypted_canary, 0, MainHeader::CANARY_BYTE_SIZE);
 
 	//! Decrypt the canary
-	encryption_state->InitializeDecryption(iv, MainHeader::AES_NONCE_LEN, derived_key,
+	encryption_state->InitializeDecryption(iv, MainHeader::AES_IV_LEN, derived_key,
 	                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 	encryption_state->Process(main_header.GetEncryptedCanary(), MainHeader::CANARY_BYTE_SIZE, decrypted_canary,
 	                          MainHeader::CANARY_BYTE_SIZE);
