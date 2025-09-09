@@ -1112,7 +1112,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 
 	// no errors - finalize the row groups
 	// if the table already exists on disk - check if all row groups have stayed the same
-	if (metadata_pointer.IsValid()) {
+	if (DBConfig::GetSetting<ExperimentalMetadataReuseSetting>(writer.GetDatabase()) && metadata_pointer.IsValid()) {
 		bool table_has_changes = false;
 		for (idx_t segment_idx = 0; segment_idx < segments.size(); segment_idx++) {
 			auto &entry = segments[segment_idx];
