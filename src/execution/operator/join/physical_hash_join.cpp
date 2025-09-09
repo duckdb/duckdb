@@ -751,12 +751,14 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, o
                                                        const PhysicalComparisonJoin &op) const {
 
 	// bfs are only allowed for single key joins so far
-	if (join_condition.size() == 1 && ht) {
-		const idx_t filter_idx = 0;
+	if (ht && ht->conditions.size() == 1) {
+		constexpr idx_t col_idx = 0;
 
 		for (auto &info : probe_info) {
-			auto filter_col_idx = info.columns[filter_idx].probe_column_index.column_index;
-			auto bf_filter = make_uniq<BloomFilter>(ht->bloom_filter);
+			auto filter_col_idx = info.columns[col_idx].probe_column_index.column_index;
+			// If the nulls are equal, we let nulls pass. If not, we filter them
+			auto filters_null_values = !ht->NullValuesAreEqual(col_idx);
+			auto bf_filter = make_uniq<BloomFilter>(ht->bloom_filter, filters_null_values);
 			info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(bf_filter));
 		}
 	}
@@ -1397,7 +1399,7 @@ void HashJoinLocalSourceState::ExternalProbe(HashJoinGlobalSinkState &sink, Hash
 	D_ASSERT(local_stage == HashJoinSourceStage::PROBE && sink.hash_table->finalized);
 
 	if (!scan_structure.is_null) {
-		// Still have elements remaining (i.e. we got >STANDARD_VECTOR_SIZE elements in the previous probe)
+		// Still have elements remaining (i.e., we got >STANDARD_VECTOR_SIZE elements in the previous probe)
 		scan_structure.Next(lhs_join_keys, lhs_output, chunk);
 		if (chunk.size() != 0 || !scan_structure.PointersExhausted()) {
 			return;

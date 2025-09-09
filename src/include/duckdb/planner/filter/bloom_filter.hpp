@@ -173,11 +173,19 @@ class BloomFilter : public TableFilter {
 private:
 	CacheSectorizedBloomFilter &filter;
 
+	bool filters_null_values;
+
 public:
 	static constexpr auto TYPE = TableFilterType::BLOOM_FILTER;
 
 public:
-	explicit BloomFilter(CacheSectorizedBloomFilter &filter_p) : TableFilter(TYPE), filter(filter_p) {
+	explicit BloomFilter(CacheSectorizedBloomFilter &filter_p, const bool filters_null_values_p) : TableFilter(TYPE), filter(filter_p), filters_null_values(filters_null_values_p) {
+	}
+
+	/// If the join condition is e.g. "A = B", the bf will filter null values.
+	/// If the condition is "A is B" the filter will let nulls pass
+	bool FiltersNullValues() const {
+		return filters_null_values;
 	}
 
 public:
@@ -241,7 +249,7 @@ public:
 		return false;
 	}
 	unique_ptr<TableFilter> Copy() const override {
-		return make_uniq<BloomFilter>(this->filter);
+		return make_uniq<BloomFilter>(this->filter, this->filters_null_values);
 	}
 
 	unique_ptr<Expression> ToExpression(const Expression &column) const override;
