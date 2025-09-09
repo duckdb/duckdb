@@ -2,9 +2,6 @@
 # description: Test list_concat function
 # group: [list]
 
-statement ok
-PRAGMA enable_verification
-
 # basic functionality
 query T
 SELECT list_concat([1, 2], [3, 4])

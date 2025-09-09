@@ -12,10 +12,45 @@ statement ok
 SET threads = 1;
 
 statement ok
+SET wal_autocheckpoint = '1TB';
+
+statement ok
 ATTACH '__TEST_DIR__/profile_fs.db';
 
 statement ok
 CREATE TABLE profile_fs.tbl AS SELECT range AS id FROM range(10000);
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profile_fs.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"TOTAL_BYTES_READ": "true", "TOTAL_BYTES_WRITTEN": "true"}';
+
+statement ok
+SET profiling_coverage='ALL';
+
+statement ok
+CHECKPOINT profile_fs;
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profile_fs.json';
+
+statement ok
+SELECT total_bytes_written FROM metrics_output;
+
+query I
+SELECT
+	CASE WHEN total_bytes_written > 0 THEN 'true'
+	ELSE 'false' END
+FROM metrics_output;
+----
+true
 
 statement ok
 CREATE INDEX idx ON profile_fs.tbl(id);
@@ -30,7 +65,7 @@ statement ok
 PRAGMA profiling_output = '__TEST_DIR__/profile_fs.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"TOTAL_BYTES_READ": "true"}';
+PRAGMA custom_profiling_settings='{"TOTAL_BYTES_READ": "true", "TOTAL_BYTES_WRITTEN": "true"}';
 
 statement ok
 SET profiling_coverage='ALL';

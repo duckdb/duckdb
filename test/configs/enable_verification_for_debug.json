@@ -92,6 +92,8 @@
         "test/sql/copy/csv/test_non_unicode_header.test",
         "test/sql/logging/file_system_logging.test",
         "test/sql/logging/logging.test",
+        "test/sql/logging/logging_buffer_size.test",
+        "test/sql/logging/logging_csv.test",
         "test/sql/logging/logging_types.test",
         "test/sql/logging/test_logging_function.test",
         "test/sql/pragma/test_query_log.test"
@@ -718,10 +720,10 @@
         "test/sql/copy/parquet/corrupt_stats.test",
         "test/sql/copy/parquet/parquet_1618_struct_strings.test",
         "test/sql/create/create_table_compression.test",
+        "test/sql/logging/logging_file_bind_replace.test",
         "test/sql/optimizer/test_rowid_pushdown_plan.test",
         "test/sql/pg_catalog/system_functions.test",
-        "test/sql/storage/compression/test_using_compression.test",
-        "test/sql/storage/types/struct/nested_struct_storage.test"
+        "test/sql/storage/compression/test_using_compression.test"
       ]
     }
   ]

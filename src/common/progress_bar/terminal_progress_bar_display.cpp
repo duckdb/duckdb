@@ -25,10 +25,8 @@ static string FormatETA(double seconds, bool elapsed = false) {
 	//   unknown     remaining
 	//   00:00:00.00 elapsed
 	if (!elapsed && seconds > 3600 * 99) {
-		// estimate larger than 99 hours remaining
-		string result = "(>99 hours remaining)";
-		result += string(RENDER_SIZE - result.size(), ' ');
-		return result;
+		// estimate larger than 99 hours remaining, treat this as invalid/unknown ETA
+		return string(RENDER_SIZE, ' ');
 	}
 	if (seconds < 0) {
 		// Invalid or unknown ETA, skip rendering estimate
@@ -122,10 +120,16 @@ void TerminalProgressBarDisplay::Update(double percentage) {
 	const double filter_percentage = percentage / 100.0;
 	ukf.Update(filter_percentage, current_time);
 
-	double estimated_seconds_remaining = ukf.GetEstimatedRemainingSeconds();
+	double estimated_seconds_remaining = std::min(ukf.GetEstimatedRemainingSeconds(), 2147483647.0);
 	auto percentage_int = NormalizePercentage(percentage);
-	PrintProgressInternal(percentage_int, estimated_seconds_remaining);
-	Printer::Flush(OutputStream::STREAM_STDOUT);
+
+	TerminalProgressBarDisplayedProgressInfo updated_progress_info = {(idx_t)percentage_int,
+	                                                                  (idx_t)estimated_seconds_remaining};
+	if (displayed_progress_info != updated_progress_info) {
+		PrintProgressInternal(percentage_int, estimated_seconds_remaining);
+		Printer::Flush(OutputStream::STREAM_STDOUT);
+		displayed_progress_info = updated_progress_info;
+	}
 }
 
 void TerminalProgressBarDisplay::Finish() {

@@ -1,0 +1,223 @@
+# name: test/sql/logging/logging_call_functions.test
+# description: Test logging
+# group: [logging]
+
+require noforcestorage
+
+# Create test view to get log settings 
+statement ok 
+CREATE VIEW log_settings AS select name, value from duckdb_settings() where name in ['logging_level', 'logging_mode', 'logging_storage', 'enable_logging', 'enabled_log_types', 'disabled_log_types'] ORDER BY name
+
+#### 
+# Most simple way to enable logging: turns on default behaviour
+###
+
+statement ok
+CALL enable_logging();
+
+query II
+FROM log_settings;
+----
+disabled_log_types	(empty)
+enable_logging	1
+enabled_log_types	(empty)
+logging_level	INFO
+logging_mode	LEVEL_ONLY
+logging_storage	memory
+
+statement ok
+CALL disable_logging()
+
+# Logging now disabled again
+query II
+FROM log_settings;
+----
+disabled_log_types	(empty)
+enable_logging	0
+enabled_log_types	(empty)
+logging_level	INFO
+logging_mode	LEVEL_ONLY
+logging_storage	memory
+
+#### 
+# Enabling logging at a specific level
+###
+
+statement ok
+CALL enable_logging(level='DEBUG');
+
+query II
+FROM log_settings;
+----
+disabled_log_types	(empty)
+enable_logging	1
+enabled_log_types	(empty)
+logging_level	DEBUG
+logging_mode	LEVEL_ONLY
+logging_storage	memory
+
+# Note: disable_logging resets the log config
+statement ok
+CALL disable_logging()
+
+# disable logging turns off logging only
+query II
+FROM log_settings;
+----
+disabled_log_types	(empty)
+enable_logging	0
+enabled_log_types	(empty)
+logging_level	DEBUG
+logging_mode	LEVEL_ONLY
+logging_storage	memory
+
+#### 
+# Enabling logging of a specific type
+###
+
+statement ok
+CALL enable_logging('QueryLog');
+
+query II
+FROM log_settings;
+----
+disabled_log_types	(empty)
+enable_logging	1
+enabled_log_types	QueryLog
+logging_level	INFO
+logging_mode	ENABLE_SELECTED
+logging_storage	memory
+
+#### 
+# Enabling logging of multiple types (note that log level will match lowest level of the types)
+###
+
+statement ok
+CALL enable_logging(['QueryLog', 'FileSystem']);
+
+# Use sorted list to avoid indeterministic result
+query II
+SELECT name, list_sort(split(value, ',')) FROM log_settings;
+----
+disabled_log_types	['']
+enable_logging	[1]
+enabled_log_types	[FileSystem, QueryLog]
+logging_level	[TRACE]
+logging_mode	[ENABLE_SELECTED]
+logging_storage	[memory]
+
+
+# Due to different file locking behaviour, this currently fails on windows
+require notwindows
+
+#### 
+# Configuring a different log storage, using the config param to pass arbitrary (extensible!) options
+###
+
+statement ok
+CALL enable_logging('FileSystem', storage='file', storage_config={'path': '__TEST_DIR__/logging_call_functions_test_log'});
+
+query II
+FROM log_settings;
+----
+disabled_log_types	(empty)
+enable_logging	1
+enabled_log_types	FileSystem
+logging_level	TRACE
+logging_mode	ENABLE_SELECTED
+logging_storage	file
+
+#### 
+# Syntactic sugar exists to easily pass some log_storage related settings
+###
+
+statement ok
+CALL enable_logging(storage='file', storage_path='__TEST_DIR__/logging_call_functions');
+
+statement ok
+CALL disable_logging()
+
+#### 
+# For the storage_path setting we can even omit the storage and it will automatically set it to storage='file'
+###
+
+statement ok
+CALL enable_logging(storage_path='__TEST_DIR__/logging_call_functions');
+
+query II
+FROM log_settings;
+----
+disabled_log_types	(empty)
+enable_logging	1
+enabled_log_types	(empty)
+logging_level	INFO
+logging_mode	LEVEL_ONLY
+logging_storage	file
+
+# Reset
+statement ok
+CALL enable_logging()
+
+#### 
+# Some invalid invocations throw nice errors
+###
+
+statement error
+CALL enable_logging(hocus_pocus='this is bogus');
+----
+Binder Error: Invalid named parameter "hocus_pocus" for function enable_logging
+
+# enable_logging is currently not atomic TODO: fix this
+query II
+FROM log_settings;
+----
+disabled_log_types	(empty)
+enable_logging	1
+enabled_log_types	(empty)
+logging_level	INFO
+logging_mode	LEVEL_ONLY
+logging_storage	memory
+
+# Unknown storage option: this error is thrown by the log storage, because not all log storages implement the same params
+statement error
+CALL enable_logging(storage='file', level='DEBUG', storage_config={'hocus_pocus': 'this is bogus', 'path': '__TEST_DIR__/hi.csv'});
+----
+Invalid Input Error: Unrecognized log storage config option for storage: 'FileLogStorage': 'hocus_pocus'
+
+# enable_logging is currently not atomic TODO: fix this
+query II
+FROM log_settings;
+----
+disabled_log_types	(empty)
+enable_logging	1
+enabled_log_types	(empty)
+logging_level	DEBUG
+logging_mode	LEVEL_ONLY
+logging_storage	file
+
+statement ok
+CALL disable_logging();
+
+# The path param does not exist for the memory storage
+statement error
+CALL enable_logging(storage='memory', storage_config={'path': 'bla'});
+----
+Invalid Input Error: Unrecognized log storage config option for storage: 'InMemoryLogStorage': 'path'
+
+# storage_config should be a struct
+statement error
+CALL enable_logging(storage_config='hi')
+----
+Invalid Input Error: EnableLogging: storage_config must be a struct
+
+# Logging config remains untouched TODO: fix
+query II
+FROM log_settings;
+----
+disabled_log_types	(empty)
+enable_logging	1
+enabled_log_types	(empty)
+logging_level	INFO
+logging_mode	LEVEL_ONLY
+logging_storage	memory
+

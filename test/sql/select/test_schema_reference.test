@@ -19,8 +19,10 @@ SELECT s1.tbl.i FROM s1.tbl;
 statement error
 SELECT s2.tbl.i FROM s1.tbl;
 ----
+<REGEX>:.*Binder Error.*table.*not found.*
 
 # no schema present
 statement error
 SELECT a.tbl.i FROM range(10) tbl(i)
 ----
+<REGEX>:.*Binder Error.*table.*not found.*

@@ -259,6 +259,9 @@ typedef uint32_t sel_t;
 //! bind data (if any), init data (if any), extra data for replacement scans (if any), etc.
 typedef void (*duckdb_delete_callback_t)(void *data);
 
+//! The callback to copy data, e.g., bind data (if any).
+typedef void *(*duckdb_copy_callback_t)(void *data);
+
 //! Used for threading, contains a task state.
 //! Must be destroyed with `duckdb_destroy_task_state`.
 typedef void *duckdb_task_state;

@@ -3,9 +3,6 @@
 # group: [pushdown]
 
 statement ok
-pragma enable_verification
-
-statement ok
 CREATE TABLE t1 (c1 DATE);
 
 statement ok

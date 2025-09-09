@@ -29,6 +29,7 @@ public:
 	static constexpr idx_t FILE_FLAGS_EXCLUSIVE_CREATE = idx_t(1 << 9);
 	static constexpr idx_t FILE_FLAGS_NULL_IF_EXISTS = idx_t(1 << 10);
 	static constexpr idx_t FILE_FLAGS_MULTI_CLIENT_ACCESS = idx_t(1 << 11);
+	static constexpr idx_t FILE_FLAGS_DISABLE_LOGGING = idx_t(1 << 12);
 
 public:
 	FileOpenFlags() = default;
@@ -111,6 +112,9 @@ public:
 	inline bool MultiClientAccess() const {
 		return flags & FILE_FLAGS_MULTI_CLIENT_ACCESS;
 	}
+	inline bool DisableLogging() const {
+		return flags & FILE_FLAGS_DISABLE_LOGGING;
+	}
 	inline idx_t GetFlagsInternal() const {
 		return flags;
 	}
@@ -152,6 +156,9 @@ public:
 	//! Multiple clients may access the file at the same time
 	static constexpr FileOpenFlags FILE_FLAGS_MULTI_CLIENT_ACCESS =
 	    FileOpenFlags(FileOpenFlags::FILE_FLAGS_MULTI_CLIENT_ACCESS);
+	//! Disables logging to avoid infinite loops when using FileHandle-backed log storage
+	static constexpr FileOpenFlags FILE_FLAGS_DISABLE_LOGGING =
+	    FileOpenFlags(FileOpenFlags::FILE_FLAGS_DISABLE_LOGGING);
 };
 
 } // namespace duckdb
