@@ -1,4 +1,4 @@
-add_library_unity(duckdb_peg_transformer OBJECT peg_transformer.cpp
+add_library_unity(duckdb_peg_transformer OBJECT
                   peg_transformer_factory.cpp)
 
 set(AUTOCOMPLETE_EXTENSION_FILES

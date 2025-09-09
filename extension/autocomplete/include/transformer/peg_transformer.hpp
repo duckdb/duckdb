@@ -40,13 +40,13 @@ public:
 
 public:
 	template <typename T>
-	T Transform(optional_ptr<ParseResult> parse_result);
+	inline T Transform(optional_ptr<ParseResult> parse_result);
 
 	template <typename T>
-	T TransformEnum(optional_ptr<ParseResult> parse_result);
+    inline T TransformEnum(optional_ptr<ParseResult> parse_result);
 
 	template <typename T>
-	void TransformOptional(ListParseResult &list_pr, idx_t child_idx, T &target);
+	inline void TransformOptional(ListParseResult &list_pr, idx_t child_idx, T &target);
 
 	// Make overloads return raw pointers, as ownership is handled by the ArenaAllocator.
 	template <class T, typename... Args>
@@ -141,5 +141,56 @@ struct PEGQualifiedName {
 
 	static PEGQualifiedName FromIdentifierList(const ListParseResult &identifier_list_pr);
 };
+
+
+template <typename T>
+inline T PEGTransformer::Transform(optional_ptr<ParseResult> parse_result) {
+	if (!parse_result) {
+		throw InternalException("PEGTransformer::Transform called with null ParseResult");
+	}
+	auto it = transform_functions.find(parse_result->name);
+	if (it == transform_functions.end()) {
+		throw NotImplementedException("No transformer function found for rule '%s'", parse_result->name);
+	}
+	auto &func = it->second;
+
+	auto base_result = func(*this, parse_result);
+	if (!base_result) {
+		throw InternalException("Transformer for rule '%s' returned a nullptr.", parse_result->name);
+	}
+
+	auto *typed = dynamic_cast<TypedTransformResult<T> *>(base_result.get());
+	if (!typed) {
+		throw InternalException("Transformer for rule '" + parse_result->name + "' returned an unexpected type.");
+	}
+	return std::move(typed->value);
+}
+
+template <typename T>
+inline T PEGTransformer::TransformEnum(optional_ptr<ParseResult> parse_result) {
+	if (!parse_result) {
+		throw InternalException("PEGTransformer::TransformEnum called with null ParseResult");
+	}
+	auto enum_rule_name = parse_result->name;
+
+	auto rule_value = enum_mappings.find(enum_rule_name);
+	if (rule_value == enum_mappings.end()) {
+		throw ParserException("Enum transform failed: could not find mapping for '%s'", enum_rule_name);
+	}
+
+	auto *typed = dynamic_cast<TypedTransformEnumResult<T> *>(rule_value->second.get());
+	if (!typed) {
+		throw InternalException("Enum mapping for rule '%s' has an unexpected type.", enum_rule_name);
+	}
+	return typed->value;
+}
+
+template <typename T>
+inline void PEGTransformer::TransformOptional(ListParseResult &list_pr, idx_t child_idx, T &target) {
+	auto &opt = list_pr.Child<OptionalParseResult>(child_idx);
+	if (opt.HasResult()) {
+		target = Transform<T>(opt.optional_result);
+	}
+}
 
 } // namespace duckdb
