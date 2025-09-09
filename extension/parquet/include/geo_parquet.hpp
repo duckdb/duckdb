@@ -125,6 +125,11 @@ struct GeometryExtent {
 	double mmin = NumericLimits<double>::Maximum();
 	double mmax = NumericLimits<double>::Minimum();
 
+	bool IsSet() const {
+		return xmin != NumericLimits<double>::Maximum() && xmax != NumericLimits<double>::Minimum() &&
+		       ymin != NumericLimits<double>::Maximum() && ymax != NumericLimits<double>::Minimum();
+	}
+
 	bool HasZ() const {
 		return zmin != NumericLimits<double>::Maximum() && zmax != NumericLimits<double>::Minimum();
 	}
