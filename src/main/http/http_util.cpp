@@ -380,7 +380,7 @@ HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)
 		bool should_retry = !response || response->ShouldRetry();
 		if (!should_retry) {
 			auto response_code = static_cast<uint16_t>(response->status);
-			if (response_code >= 200 and response_code < 300) {
+			if (response_code >= 200 && response_code < 300) {
 				response->success = true;
 				return response;
 			}
