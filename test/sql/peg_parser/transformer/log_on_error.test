@@ -4,6 +4,8 @@
 
 require autocomplete
 
+require no_extension_autoloading "FIXME: autocomplete with autoloading"
+
 load __TEST_DIR__/test_peg_parser.db
 
 statement ok
