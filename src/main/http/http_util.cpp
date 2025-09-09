@@ -382,7 +382,7 @@ HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)
 			auto response_code = static_cast<uint16_t>(response->status);
 			if (response_code >= 200 and response_code < 300) {
 				response->success = true;
-				break;
+				return response;
 			}
 			switch (response->status) {
 			case HTTPStatusCode::NotModified_304:
