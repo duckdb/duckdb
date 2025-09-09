@@ -43,7 +43,7 @@ public:
 	inline T Transform(optional_ptr<ParseResult> parse_result);
 
 	template <typename T>
-    inline T TransformEnum(optional_ptr<ParseResult> parse_result);
+	inline T TransformEnum(optional_ptr<ParseResult> parse_result);
 
 	template <typename T>
 	inline void TransformOptional(ListParseResult &list_pr, idx_t child_idx, T &target);
@@ -141,7 +141,6 @@ struct PEGQualifiedName {
 
 	static PEGQualifiedName FromIdentifierList(const ListParseResult &identifier_list_pr);
 };
-
 
 template <typename T>
 T PEGTransformer::Transform(optional_ptr<ParseResult> parse_result) {
