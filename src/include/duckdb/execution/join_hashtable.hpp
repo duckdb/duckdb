@@ -158,10 +158,6 @@ public:
 		Vector ht_offsets_and_salts_v;
 		Vector hashes_dense_v;
 		SelectionVector non_empty_sel;
-
-		vector<uint32_t> lookup_results;
-		SelectionVector bf_found_sel;
-
 	};
 
 	struct InsertState : SharedState {
