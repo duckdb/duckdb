@@ -63,6 +63,8 @@ const char *DuckDB::LibraryVersion() {
 }
 
 const char *DuckDB::ReleaseCodename() {
+	bool rc_postfix = StringUtil::Contains(DUCKDB_VERSION, "-rc");
+
 	// dev releases have no name
 	if (StringUtil::Contains(DUCKDB_VERSION, "-dev")) {
 		return "Development Version";
@@ -74,6 +76,9 @@ const char *DuckDB::ReleaseCodename() {
 		return "Ossivalis";
 	}
 	if (StringUtil::StartsWith(DUCKDB_VERSION, "v1.4.")) {
+		if (rc_postfix) {
+			return "Andium Release Candidate";
+		}
 		return "Andium";
 	}
 	// add new version names here
