@@ -6,7 +6,11 @@
 namespace duckdb {
 
 string BloomFilter::ToString(const string &column_name) const {
-	return column_name +  " IN BF(" + key_column_name + ")";
+	if (filter.IsInitialized()) {
+		return column_name +  " IN BF(" + key_column_name + ")";
+	} else {
+		return "True";
+	}
 }
 
 unique_ptr<Expression> BloomFilter::ToExpression(const Expression &column) const {
@@ -15,6 +19,8 @@ unique_ptr<Expression> BloomFilter::ToExpression(const Expression &column) const
 }
 
 idx_t CacheSectorizedBloomFilter::LookupHashes(Vector &hashes, SelectionVector &res_sel, const idx_t count) const {
+	D_ASSERT(hashes.GetVectorType() == VectorType::FLAT_VECTOR);
+	D_ASSERT(hashes.GetType() == LogicalType::HASH);
 	return BloomFilterLookup(reinterpret_cast<hash_t *>(hashes.GetData()), blocks, res_sel, count);
 }
 

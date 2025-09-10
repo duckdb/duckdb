@@ -180,7 +180,10 @@ public:
 	static constexpr auto TYPE = TableFilterType::BLOOM_FILTER;
 
 public:
-	explicit BloomFilter(CacheSectorizedBloomFilter &filter_p, const bool filters_null_values_p, const string &key_column_name_p) : TableFilter(TYPE), filter(filter_p), filters_null_values(filters_null_values_p), key_column_name(key_column_name_p) {
+	explicit BloomFilter(CacheSectorizedBloomFilter &filter_p, const bool filters_null_values_p,
+	                     const string &key_column_name_p)
+	    : TableFilter(TYPE), filter(filter_p), filters_null_values(filters_null_values_p),
+	      key_column_name(key_column_name_p) {
 	}
 
 	/// If the join condition is e.g. "A = B", the bf will filter null values.
@@ -190,12 +193,11 @@ public:
 	}
 
 public:
-
-
 	string ToString(const string &column_name) const override;
 
 	// todo: we can remove this
-	__attribute__((noinline)) void HashInternal(Vector &keys_v, Vector &hashes_v, SelectionVector &sel, idx_t &approved_count) const {
+	__attribute__((noinline)) void HashInternal(Vector &keys_v, Vector &hashes_v, SelectionVector &sel,
+	                                            idx_t &approved_count) const {
 		if (sel.IsSet()) {
 			Vector keys_flat(keys_v.GetType(), approved_count);
 			VectorOperations::Copy(keys_v, keys_flat, sel, approved_count, 0, 0);
@@ -214,7 +216,7 @@ public:
 
 		// printf("Filter bf: bf has %llu sectors and initialized=%hd \n", filter.num_sectors, filter.IsInitialized());
 		if (!this->filter.IsInitialized()) {
-			return approved_tuple_count; //todo: may
+			return approved_tuple_count; // todo: may
 		}
 
 		Vector hashes_v(LogicalType::HASH, approved_tuple_count);
@@ -222,8 +224,16 @@ public:
 		HashInternal(keys_v, hashes_v, sel, approved_tuple_count);
 
 		// todo: we need to properly find out how one would densify the hashes here!
+		idx_t found_count;
 		SelectionVector bf_sel(approved_tuple_count);
-		const idx_t found_count = this->filter.LookupHashes(hashes_v, bf_sel, approved_tuple_count);
+		if (hashes_v.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+			const auto &hash = *ConstantVector::GetData<hash_t>(hashes_v);
+			const bool found = this->filter.LookupHash(hash);
+			found_count = found ? approved_tuple_count : 0;
+		} else {
+			hashes_v.Flatten(approved_tuple_count);
+			found_count = this->filter.LookupHashes(hashes_v, bf_sel, approved_tuple_count);
+		}
 
 		// all the elements have been found, we don't need to translate anything
 		if (found_count == approved_tuple_count) {

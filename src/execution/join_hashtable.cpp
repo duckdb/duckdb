@@ -737,9 +737,9 @@ void JoinHashTable::AllocatePointerTable() {
 		throw InternalException("Hashtable capacity exceeds 48-bit limit (2^48 - 1)");
 	}
 
-	if (Count() >= 1024) {
-		bloom_filter.Initialize(context, Count());
-	}
+
+	bloom_filter.Initialize(context, Count());
+
 
 	if (hash_map.get()) {
 		// There is already a hash map
