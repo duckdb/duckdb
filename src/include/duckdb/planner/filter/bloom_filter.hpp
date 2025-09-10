@@ -202,7 +202,7 @@ public:
 	string ToString(const string &column_name) const override;
 
 	// todo: we can remove this
-	__attribute__((noinline)) void HashInternal(Vector &keys_v, const SelectionVector &sel, idx_t &approved_count,
+	void HashInternal(Vector &keys_v, const SelectionVector &sel, idx_t &approved_count,
 	                                            BloomFilterState &state) const {
 		if (sel.IsSet()) {
 			VectorOperations::Copy(keys_v, state.keys_flat_v, sel, approved_count, 0, 0);
@@ -218,7 +218,7 @@ public:
 
 	// Filters the data by first hashing and then probing the bloom filter. The &sel will hold
 	// the remaining tuples, &approved_tuple_count will hold the approved count.
-	idx_t Filter(Vector &keys_v, UnifiedVectorFormat &keys_uvf, SelectionVector &sel, idx_t &approved_tuple_count,
+	__attribute__((noinline)) idx_t Filter(Vector &keys_v, UnifiedVectorFormat &keys_uvf, SelectionVector &sel, idx_t &approved_tuple_count,
 	             BloomFilterState &state) const {
 
 		// printf("Filter bf: bf has %llu sectors and initialized=%hd \n", filter.num_sectors, filter.IsInitialized());
@@ -255,6 +255,7 @@ public:
 			if (state.vectors_processed == 40) {
 				const double selectivity =
 				    static_cast<double>(state.tuples_accepted) / static_cast<double>(state.tuples_processed);
+				printf("%f\n", selectivity);
 				if (selectivity > 0.8) {
 					state.continue_filtering = false;
 				}

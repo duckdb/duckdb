@@ -18,7 +18,7 @@ unique_ptr<Expression> BloomFilter::ToExpression(const Expression &column) const
 	return std::move(bound_constant); // todo: I can't really have an expression for this, so this is a hack
 }
 
-idx_t CacheSectorizedBloomFilter::LookupHashes(Vector &hashes, SelectionVector &res_sel, const idx_t count) const {
+idx_t __attribute__((noinline)) CacheSectorizedBloomFilter::LookupHashes(Vector &hashes, SelectionVector &res_sel, const idx_t count) const {
 	D_ASSERT(hashes.GetVectorType() == VectorType::FLAT_VECTOR);
 	D_ASSERT(hashes.GetType() == LogicalType::HASH);
 	return BloomFilterLookup(reinterpret_cast<hash_t *>(hashes.GetData()), blocks, res_sel, count);
