@@ -226,6 +226,13 @@ public:
 			return approved_tuple_count; // todo: may
 		}
 
+		if (state.current_capacity < approved_tuple_count) {
+			state.keys_flat_v.Initialize(false, approved_tuple_count);
+			state.hashes_v.Initialize(false, approved_tuple_count);
+			state.bf_sel.Initialize(approved_tuple_count);
+			state.current_capacity = approved_tuple_count;
+		}
+
 		HashInternal(keys_v, sel, approved_tuple_count, state);
 
 		// todo: we need to properly find out how one would densify the hashes here!
