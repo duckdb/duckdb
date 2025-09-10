@@ -8,6 +8,7 @@
 #include "duckdb/function/function_binder.hpp"
 
 namespace duckdb {
+constexpr const char *CollateCatalogEntry::Name;
 
 bool PushVarcharCollation(ClientContext &context, unique_ptr<Expression> &source, const LogicalType &sql_type,
                           CollationType type) {

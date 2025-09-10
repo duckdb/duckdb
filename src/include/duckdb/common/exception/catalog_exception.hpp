@@ -22,10 +22,11 @@ public:
 	DUCKDB_API explicit CatalogException(const string &msg, const unordered_map<string, string> &extra_info);
 
 	template <typename... ARGS>
-	explicit CatalogException(const string &msg, ARGS... params) : CatalogException(ConstructMessage(msg, params...)) {
+	explicit CatalogException(const string &msg, ARGS const &...params)
+	    : CatalogException(ConstructMessage(msg, params...)) {
 	}
 	template <typename... ARGS>
-	explicit CatalogException(QueryErrorContext error_context, const string &msg, ARGS... params)
+	explicit CatalogException(QueryErrorContext error_context, const string &msg, ARGS const &...params)
 	    : CatalogException(ConstructMessage(msg, params...), Exception::InitializeExtraInfo(error_context)) {
 	}
 

@@ -21,11 +21,11 @@ public:
 	DUCKDB_API ConversionException(const LogicalType &orig_type, const LogicalType &new_type);
 
 	template <typename... ARGS>
-	explicit ConversionException(const string &msg, ARGS... params)
+	explicit ConversionException(const string &msg, ARGS const &...params)
 	    : ConversionException(ConstructMessage(msg, params...)) {
 	}
 	template <typename... ARGS>
-	explicit ConversionException(optional_idx error_location, const string &msg, ARGS... params)
+	explicit ConversionException(optional_idx error_location, const string &msg, ARGS const &...params)
 	    : ConversionException(error_location, ConstructMessage(msg, params...)) {
 	}
 };
