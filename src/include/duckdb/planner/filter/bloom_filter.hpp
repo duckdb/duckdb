@@ -247,15 +247,15 @@ public:
 		}
 
 		// add the runtime statistics to stop using the bf if not selective
-		if (state.vectors_processed < 20) {
+		if (state.vectors_processed < 40) {
 			state.vectors_processed += 1;
 			state.tuples_accepted += found_count;
 			state.tuples_processed += approved_tuple_count;
 
-			if (state.vectors_processed == 20) {
+			if (state.vectors_processed == 40) {
 				const double selectivity =
 				    static_cast<double>(state.tuples_accepted) / static_cast<double>(state.tuples_processed);
-				if (selectivity > 0.7) {
+				if (selectivity > 0.8) {
 					state.continue_filtering = false;
 				}
 			}
