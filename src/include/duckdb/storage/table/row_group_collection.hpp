@@ -146,6 +146,7 @@ public:
 	idx_t GetRowGroupSize() const {
 		return row_group_size;
 	}
+	void SetAppendRequiresNewRowGroup();
 
 private:
 	bool IsEmpty(SegmentLock &) const;
@@ -170,6 +171,8 @@ private:
 	atomic<idx_t> allocation_size;
 	//! Root metadata pointer, if the collection is loaded from disk
 	MetaBlockPointer metadata_pointer;
+	//! Whether or not we need to append a new row group prior to appending
+	bool requires_new_row_group;
 };
 
 } // namespace duckdb

@@ -1535,7 +1535,7 @@ typedef struct PGCopyStmt {
 								 * for all columns */
 	bool is_from;         /* TO or FROM */
 	bool is_program;      /* is 'filename' a program to popen? */
-	char *filename;       /* filename, or NULL for STDIN/STDOUT */
+	PGNode *filename;     /* filename */
 	PGList *options;      /* PGList of PGDefElem nodes */
 } PGCopyStmt;
 
@@ -2298,5 +2298,17 @@ typedef struct PGMatchAction {
 	PGNode *errorMessage;                    /* Expression to generate the error message, if any */
 	bool defaultValues;                      /* DEFAULT VALUES */
 } PGMatchAction;
+
+/* ----------------------
+ *		Function Parameter
+ * ----------------------
+ */
+
+typedef struct PGFunctionParameter {
+	PGNodeTag type;
+	char *name;                   /* name of parameter */
+	PGTypeName *typeName;         /* type of parameter (optional) */
+	PGExpr *defaultValue;		  /* default value of parameter (optional) */
+} PGFunctionParameter;
 
 }

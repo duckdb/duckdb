@@ -269,6 +269,30 @@ struct ParquetWriteLocalState : public LocalFunctionData {
 	ColumnDataAppendState append_state;
 };
 
+static void ParquetListCopyOptions(ClientContext &context, CopyOptionsInput &input) {
+	auto &copy_options = input.options;
+	copy_options["row_group_size"] = CopyOption(LogicalType::UBIGINT, CopyOptionMode::READ_WRITE);
+	copy_options["chunk_size"] = CopyOption(LogicalType::UBIGINT, CopyOptionMode::WRITE_ONLY);
+	copy_options["row_group_size_bytes"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
+	copy_options["row_groups_per_file"] = CopyOption(LogicalType::UBIGINT, CopyOptionMode::WRITE_ONLY);
+	copy_options["compression"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::READ_WRITE);
+	copy_options["codec"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::READ_WRITE);
+	copy_options["field_ids"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
+	copy_options["kv_metadata"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
+	copy_options["encryption_config"] = CopyOption(LogicalType::ANY, CopyOptionMode::READ_WRITE);
+	copy_options["dictionary_compression_ratio_threshold"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
+	copy_options["dictionary_size_limit"] = CopyOption(LogicalType::BIGINT, CopyOptionMode::WRITE_ONLY);
+	copy_options["string_dictionary_page_size_limit"] = CopyOption(LogicalType::UBIGINT, CopyOptionMode::WRITE_ONLY);
+	copy_options["bloom_filter_false_positive_ratio"] = CopyOption(LogicalType::DOUBLE, CopyOptionMode::WRITE_ONLY);
+	copy_options["write_bloom_filter"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::WRITE_ONLY);
+	copy_options["debug_use_openssl"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_WRITE);
+	copy_options["compression_level"] = CopyOption(LogicalType::BIGINT, CopyOptionMode::WRITE_ONLY);
+	copy_options["parquet_version"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::WRITE_ONLY);
+	copy_options["binary_as_string"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_ONLY);
+	copy_options["file_row_number"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_ONLY);
+	copy_options["can_have_nan"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_ONLY);
+}
+
 static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBindInput &input,
                                                  const vector<string> &names, const vector<LogicalType> &sql_types) {
 	D_ASSERT(names.size() == sql_types.size());
@@ -403,7 +427,7 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 				throw BinderException("Expected parquet_version 'V1' or 'V2'");
 			}
 		} else {
-			throw NotImplementedException("Unrecognized option for PARQUET: %s", option.first.c_str());
+			throw InternalException("Unrecognized option for PARQUET: %s", option.first.c_str());
 		}
 	}
 	if (row_group_size_bytes_set) {
@@ -903,6 +927,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	CopyFunction function("parquet");
 	function.copy_to_select = ParquetWriteSelect;
 	function.copy_to_bind = ParquetWriteBind;
+	function.copy_options = ParquetListCopyOptions;
 	function.copy_to_initialize_global = ParquetWriteInitializeGlobal;
 	function.copy_to_initialize_local = ParquetWriteInitializeLocal;
 	function.copy_to_get_written_statistics = ParquetWriteGetWrittenStatistics;

@@ -45,6 +45,7 @@ void BuiltinFunctions::RegisterSQLiteFunctions() {
 	DuckDBTypesFun::RegisterFunction(*this);
 	DuckDBVariablesFun::RegisterFunction(*this);
 	DuckDBViewsFun::RegisterFunction(*this);
+	EnableLoggingFun::RegisterFunction(*this);
 	TestAllTypesFun::RegisterFunction(*this);
 	TestVectorTypesFun::RegisterFunction(*this);
 }

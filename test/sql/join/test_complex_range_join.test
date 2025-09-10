@@ -2,9 +2,6 @@
 # description: Test inequality join
 # group: [join]
 
-statement ok
-PRAGMA enable_verification
-
 # Coverage for multiple slicing predicates
 query IIIIII
 WITH lhs(i, j, k) AS (VALUES

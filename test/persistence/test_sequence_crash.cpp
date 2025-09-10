@@ -1,7 +1,5 @@
 #include "catch.hpp"
-#include "duckdb/common/file_system.hpp"
 #include "duckdb.hpp"
-#include "duckdb/main/appender.hpp"
 #include "test_helpers.hpp"
 
 #include <signal.h>

@@ -194,8 +194,6 @@ struct DBConfigOptions {
 	string duckdb_api;
 	//! Metadata from DuckDB callers
 	string custom_user_agent;
-	//!  By default, WAL is encrypted for encrypted databases
-	bool wal_encryption = true;
 	//! Encrypt the temp files
 	bool temp_file_encryption = false;
 	//! The default block allocation size for new duckdb database files (new as-in, they do not yet exist).
@@ -281,6 +279,7 @@ public:
 	DUCKDB_API static const DBConfig &GetConfig(const ClientContext &context);
 	DUCKDB_API static const DBConfig &GetConfig(const DatabaseInstance &db);
 	DUCKDB_API static vector<ConfigurationOption> GetOptions();
+	DUCKDB_API static vector<ConfigurationAlias> GetAliases();
 	DUCKDB_API static idx_t GetOptionCount();
 	DUCKDB_API static idx_t GetAliasCount();
 	DUCKDB_API static vector<string> GetOptionNames();

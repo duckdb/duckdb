@@ -27,7 +27,7 @@ foreach key_len 128 192 256
 statement error
 COPY (SELECT 42 i) to '__TEST_DIR__/encrypted${key_len}_openssl.parquet' (ENCRYPTION_CONFIG {footer_key: 'key${key_len}'}, DEBUG_USE_OPENSSL randomval)
 ----
-Binder Error: Expected debug_use_openssl to be a BOOLEAN
+BOOL
 
 # write files with OpenSSL enabled
 statement ok

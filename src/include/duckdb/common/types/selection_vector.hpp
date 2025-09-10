@@ -112,7 +112,10 @@ public:
 	string ToString(idx_t count = 0) const;
 	void Print(idx_t count = 0) const;
 
-	inline sel_t &operator[](idx_t index) const {
+	inline const sel_t &operator[](idx_t index) const {
+		return sel_vector[index];
+	}
+	inline sel_t &operator[](idx_t index) {
 		return sel_vector[index];
 	}
 	inline bool IsSet() const {

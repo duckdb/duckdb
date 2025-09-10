@@ -57,6 +57,7 @@ public:
 	vector<string> ExtensionToBeLoadedOnLoad();
 	vector<string> ErrorMessagesToBeSkipped();
 	string GetStorageVersion();
+	string GetTestEnv(const string &key, const string &default_value);
 
 	static bool TestForceStorage();
 	static bool TestForceReload();
@@ -69,6 +70,7 @@ public:
 private:
 	case_insensitive_map_t<Value> options;
 	unordered_set<string> tests_to_be_skipped;
+	unordered_map<string, string> test_env;
 
 private:
 	template <class T, class VAL_T = T>
@@ -84,14 +86,17 @@ public:
 	static void Log(string message);
 	static string GetFailureSummary();
 	static idx_t GetSummaryCounter();
+	static bool SkipLoggingSameError(const string &file_name);
 
 private:
 	static FailureSummary &Instance();
+	bool SkipLoggingSameErrorInternal(const string &file_name);
 
 private:
 	mutex failures_lock;
 	atomic<idx_t> failures_summary_counter;
 	vector<string> failures_summary;
+	set<string> reported_files;
 };
 
 } // namespace duckdb

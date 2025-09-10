@@ -472,6 +472,9 @@ typedef struct {
 	duckdb_state (*duckdb_append_default_to_chunk)(duckdb_appender appender, duckdb_data_chunk chunk, idx_t col,
 	                                               idx_t row);
 	duckdb_error_data (*duckdb_appender_error_data)(duckdb_appender appender);
+	duckdb_state (*duckdb_appender_create_query)(duckdb_connection connection, const char *query, idx_t column_count,
+	                                             duckdb_logical_type *types, const char *table_name,
+	                                             const char **column_names, duckdb_appender *out_appender);
 	// New arrow interface functions
 
 	duckdb_error_data (*duckdb_to_arrow_schema)(duckdb_arrow_options arrow_options, duckdb_logical_type *types,
@@ -520,6 +523,7 @@ typedef struct {
 	void *(*duckdb_scalar_function_bind_get_extra_info)(duckdb_bind_info info);
 	idx_t (*duckdb_scalar_function_bind_get_argument_count)(duckdb_bind_info info);
 	duckdb_expression (*duckdb_scalar_function_bind_get_argument)(duckdb_bind_info info, idx_t index);
+	void (*duckdb_scalar_function_set_bind_data_copy)(duckdb_bind_info info, duckdb_copy_callback_t copy);
 	// New string functions that are added
 
 	char *(*duckdb_value_to_string)(duckdb_value value);
@@ -961,6 +965,7 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_destroy_instance_cache = duckdb_destroy_instance_cache;
 	result.duckdb_append_default_to_chunk = duckdb_append_default_to_chunk;
 	result.duckdb_appender_error_data = duckdb_appender_error_data;
+	result.duckdb_appender_create_query = duckdb_appender_create_query;
 	result.duckdb_to_arrow_schema = duckdb_to_arrow_schema;
 	result.duckdb_data_chunk_to_arrow = duckdb_data_chunk_to_arrow;
 	result.duckdb_schema_from_arrow = duckdb_schema_from_arrow;
@@ -990,6 +995,7 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_scalar_function_bind_get_extra_info = duckdb_scalar_function_bind_get_extra_info;
 	result.duckdb_scalar_function_bind_get_argument_count = duckdb_scalar_function_bind_get_argument_count;
 	result.duckdb_scalar_function_bind_get_argument = duckdb_scalar_function_bind_get_argument;
+	result.duckdb_scalar_function_set_bind_data_copy = duckdb_scalar_function_set_bind_data_copy;
 	result.duckdb_value_to_string = duckdb_value_to_string;
 	result.duckdb_table_function_get_client_context = duckdb_table_function_get_client_context;
 	result.duckdb_create_map_value = duckdb_create_map_value;

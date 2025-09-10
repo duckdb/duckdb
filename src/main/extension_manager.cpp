@@ -96,6 +96,10 @@ unique_ptr<ExtensionActiveLoad> ExtensionManager::BeginLoad(const string &name) 
 	if (info->is_loaded) {
 		return nullptr;
 	}
+	auto &callbacks = DBConfig::GetConfig(db).extension_callbacks;
+	for (auto &callback : callbacks) {
+		callback->OnBeginExtensionLoad(db, extension_name);
+	}
 	// extension is not loaded yet and we are in charge of loading it - return
 	return result;
 }

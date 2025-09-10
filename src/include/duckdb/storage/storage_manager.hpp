@@ -124,6 +124,17 @@ public:
 	bool CompressionIsEnabled() const {
 		return storage_options.compress_in_memory == CompressInMemory::COMPRESS;
 	}
+	EncryptionTypes::CipherType GetCipher() const {
+		// TODO: the type of this thing should probably change
+		auto cipher = EncryptionTypes::StringToCipher(storage_options.encryption_cipher);
+		if (cipher == EncryptionTypes::INVALID) {
+			throw InternalException("Invalid encryption cipher type %s", storage_options.encryption_cipher);
+		}
+		return cipher;
+	}
+	bool IsEncrypted() const {
+		return storage_options.encryption;
+	}
 
 protected:
 	virtual void LoadDatabase(QueryContext context) = 0;

@@ -790,7 +790,6 @@ void EnableProfilingSetting::SetLocal(ClientContext &context, const Value &input
 	auto &config = ClientConfig::GetConfig(context);
 	config.enable_profiler = true;
 	config.emit_profiler_output = true;
-	config.profiler_settings = ClientConfig().profiler_settings;
 
 	if (parameter == "json") {
 		config.profiler_print_format = ProfilerPrintFormat::JSON;
