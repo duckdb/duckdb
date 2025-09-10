@@ -32,7 +32,7 @@ enum class AttachedDatabaseType {
 };
 
 struct StoredDatabasePath {
-	StoredDatabasePath(DatabaseManager &manager, string path, const string &name);
+	StoredDatabasePath(DatabaseManager &manager, string path, const string &name, bool throw_on_conflict = true);
 	~StoredDatabasePath();
 
 	DatabaseManager &manager;
@@ -103,7 +103,7 @@ public:
 	static string ExtractDatabaseName(const string &dbpath, FileSystem &fs);
 
 private:
-	void InsertDatabasePath(const string &path);
+	void InsertDatabasePath(const string &path, bool throw_on_conflict = true);
 
 private:
 	DatabaseInstance &db;

@@ -17,9 +17,9 @@ namespace duckdb {
 //! The DatabaseFilePathManager is used to ensure we only ever open a single database file once
 class DatabaseFilePathManager {
 public:
-	void CheckPathConflict(const string &path, const string &name) const;
+	bool CheckPathConflict(const string &path, const string &name) const;
 	idx_t ApproxDatabaseCount() const;
-	void InsertDatabasePath(const string &path, const string &name);
+	void InsertDatabasePath(const string &path, const string &name, bool throw_on_conflict=true);
 	void EraseDatabasePath(const string &path);
 
 private:

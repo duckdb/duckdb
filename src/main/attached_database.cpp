@@ -14,9 +14,9 @@
 
 namespace duckdb {
 
-StoredDatabasePath::StoredDatabasePath(DatabaseManager &manager, string path_p, const string &name)
+StoredDatabasePath::StoredDatabasePath(DatabaseManager &manager, string path_p, const string &name, bool throw_on_conflict)
     : manager(manager), path(std::move(path_p)) {
-	manager.InsertDatabasePath(path, name);
+	manager.InsertDatabasePath(path, name, throw_on_conflict);
 }
 
 StoredDatabasePath::~StoredDatabasePath() {
@@ -124,7 +124,7 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Sto
 		throw InternalException("AttachedDatabase - attach function did not return a catalog");
 	}
 	if (catalog->IsDuckCatalog()) {
-		InsertDatabasePath(info.path);
+		InsertDatabasePath(info.path, info.on_conflict == OnCreateConflict::ERROR_ON_CONFLICT);
 		// The attached database uses the DuckCatalog.
 		storage = make_uniq<SingleFileStorageManager>(*this, info.path, options);
 	}
@@ -152,7 +152,7 @@ bool AttachedDatabase::IsReadOnly() const {
 	return type == AttachedDatabaseType::READ_ONLY_DATABASE;
 }
 
-void AttachedDatabase::InsertDatabasePath(const string &path) {
+void AttachedDatabase::InsertDatabasePath(const string &path, bool throw_on_conflict) {
 	if (path.empty() || path == IN_MEMORY_PATH) {
 		return;
 	}

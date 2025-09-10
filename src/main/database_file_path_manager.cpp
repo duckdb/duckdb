@@ -3,9 +3,9 @@
 
 namespace duckdb {
 
-void DatabaseFilePathManager::CheckPathConflict(const string &path, const string &name) const {
+bool DatabaseFilePathManager::CheckPathConflict(const string &path, const string &name) const {
 	if (path.empty() || path == IN_MEMORY_PATH) {
-		return;
+		return true;
 	}
 
 	lock_guard<mutex> path_lock(db_paths_lock);
@@ -15,6 +15,7 @@ void DatabaseFilePathManager::CheckPathConflict(const string &path, const string
 		                      "attached by database \"%s\"",
 		                      name, path, entry->second);
 	}
+	return true;
 }
 
 idx_t DatabaseFilePathManager::ApproxDatabaseCount() const {
@@ -22,14 +23,14 @@ idx_t DatabaseFilePathManager::ApproxDatabaseCount() const {
 	return db_paths_to_name.size();
 }
 
-void DatabaseFilePathManager::InsertDatabasePath(const string &path, const string &name) {
+void DatabaseFilePathManager::InsertDatabasePath(const string &path, const string &name, bool throw_on_conflict) {
 	if (path.empty() || path == IN_MEMORY_PATH) {
 		return;
 	}
 
 	lock_guard<mutex> path_lock(db_paths_lock);
 	auto entry = db_paths_to_name.emplace(path, name);
-	if (!entry.second) {
+	if (!entry.second && throw_on_conflict) {
 		throw BinderException("Unique file handle conflict: Cannot attach \"%s\" - the database file \"%s\" is already "
 		                      "attached by database \"%s\"",
 		                      name, path, entry.first->second);

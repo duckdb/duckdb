@@ -157,16 +157,16 @@ shared_ptr<AttachedDatabase> DatabaseManager::DetachInternal(const string &name)
 	return attached_db;
 }
 
-void DatabaseManager::CheckPathConflict(const string &path, const string &name) {
-	path_manager->CheckPathConflict(path, name);
+bool DatabaseManager::CheckPathConflict(const string &path, const string &name) {
+	return path_manager->CheckPathConflict(path, name);
 }
 
 idx_t DatabaseManager::ApproxDatabaseCount() {
 	return path_manager->ApproxDatabaseCount();
 }
 
-void DatabaseManager::InsertDatabasePath(const string &path, const string &name) {
-	path_manager->InsertDatabasePath(path, name);
+void DatabaseManager::InsertDatabasePath(const string &path, const string &name, bool throw_on_conflict) {
+	path_manager->InsertDatabasePath(path, name, throw_on_conflict);
 }
 
 void DatabaseManager::EraseDatabasePath(const string &path) {
