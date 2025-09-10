@@ -5,14 +5,14 @@ PivotUsing <- 'USING' TargetList
 
 PivotColumnList <- List(Expression)
 
-PivotKeyword <- 'PIVOT'i / 'PIVOT_WIDER'i
-UnpivotKeyword <- 'UNPIVOT'i / 'PIVOT_LONGER'i
+PivotKeyword <- 'PIVOT' / 'PIVOT_WIDER'
+UnpivotKeyword <- 'UNPIVOT' / 'PIVOT_LONGER'
 
 UnpivotStatement <- UnpivotKeyword TableRef 'ON' TargetList IntoNameValues?
 
-IntoNameValues <- 'INTO' 'NAME' ColIdOrString ValueOrValues List(Identifier)
+IntoNameValues <- 'NTO' 'NAME' ColIdOrString ValueOrValues List(Identifier)
 
 ValueOrValues <- 'VALUE' / 'VALUES'
 
-IncludeExcludeNulls <- ('INCLUDE' / 'EXCLUDE') 'NULLS'
+IncludeExcludeNulls <- ('NCLUDE' / 'EXCLUDE') 'NULLS'
 UnpivotHeader <- ColIdOrString / Parens(List(ColIdOrString))
