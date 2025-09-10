@@ -133,7 +133,7 @@ index 4e311ed..61270e2 100644
  			// success
  			return text_len;
 diff --git a/extension/httpfs/include/crypto.hpp b/extension/httpfs/include/crypto.hpp
-index 72100ef..c167540 100644
+index 72100ef..f18fe0f 100644
 --- a/extension/httpfs/include/crypto.hpp
 +++ b/extension/httpfs/include/crypto.hpp
 @@ -22,10 +22,10 @@ void hmac256(std::string message, hash_bytes secret, hash_bytes &out);
@@ -149,18 +149,17 @@ index 72100ef..c167540 100644
  	~AESStateSSL() override;
  
  public:
-@@ -40,8 +40,8 @@ public:
+@@ -40,8 +40,7 @@ public:
  
  private:
  	EVP_CIPHER_CTX *context;
 -	duckdb::EncryptionTypes::Mode mode;
 -	duckdb::EncryptionTypes::CipherType cipher;
 +	EncryptionTypes::Mode mode;
-+	EncryptionTypes::CipherType cipher;
  };
  
  } // namespace duckdb
-@@ -53,8 +53,8 @@ public:
+@@ -53,8 +52,8 @@ public:
  	explicit AESStateSSLFactory() {
  	}
  

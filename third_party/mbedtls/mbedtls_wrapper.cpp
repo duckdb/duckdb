@@ -255,17 +255,17 @@ const mbedtls_cipher_info_t *MbedTlsWrapper::AESStateMBEDTLS::GetCipher(size_t k
 		    default:
 			    throw runtime_error("Invalid AES key length for CTR");
 		    }
-	case duckdb::EncryptionTypes::CipherType::CBC:
-		switch (key_len) {
-		case 16:
-			return mbedtls_cipher_info_from_type(MBEDTLS_CIPHER_AES_128_CBC);
-		case 24:
-			return mbedtls_cipher_info_from_type(MBEDTLS_CIPHER_AES_192_CBC);
-		case 32:
-			return mbedtls_cipher_info_from_type(MBEDTLS_CIPHER_AES_256_CBC);
-		default:
-			throw runtime_error("Invalid AES key length for CBC");
-		}
+		case duckdb::EncryptionTypes::CipherType::CBC:
+			switch (key_len) {
+			case 16:
+				return mbedtls_cipher_info_from_type(MBEDTLS_CIPHER_AES_128_CBC);
+			case 24:
+				return mbedtls_cipher_info_from_type(MBEDTLS_CIPHER_AES_192_CBC);
+			case 32:
+				return mbedtls_cipher_info_from_type(MBEDTLS_CIPHER_AES_256_CBC);
+			default:
+				throw runtime_error("Invalid AES key length for CBC");
+			}
 		default:
 				throw duckdb::InternalException("Invalid Encryption/Decryption Cipher: %s", duckdb::EncryptionTypes::CipherToString(cipher));
 	}
