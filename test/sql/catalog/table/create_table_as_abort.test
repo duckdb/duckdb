@@ -11,3 +11,4 @@ CREATE TABLE IF NOT EXISTS integers AS SELECT i1.i FROM range(10000000000000000)
 statement error
 CREATE TABLE integers AS SELECT i1.i FROM range(10000000000000000) i1(i);
 ----
+<REGEX>:.*Catalog Error.*already exists.*
