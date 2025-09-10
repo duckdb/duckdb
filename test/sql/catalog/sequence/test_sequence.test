@@ -16,6 +16,7 @@ CREATE SEQUENCE seq;
 statement error
 CREATE SEQUENCE seq;
 ----
+<REGEX>:.*Catalog Error.*already exists.*
 
 # ignore errors if sequence already exists
 statement ok
@@ -80,17 +81,18 @@ NULL
 statement error
 SELECT nextval(a) FROM (VALUES ('seq'), (NULL), ('seq')) tbl1(a)
 ----
-non-constant sequences are no longer supported
+<REGEX>:.*Not implemented Error.*non-constant sequences are no longer supported.*
 
 statement error
 SELECT currval(a) FROM (VALUES ('seq'), (NULL), ('seq')) tbl1(a)
 ----
-non-constant sequences are no longer supported
+<REGEX>:.*Not implemented Error.*non-constant sequences are no longer supported.*
 
 # can't create a sequence that already exists
 statement error
 CREATE SEQUENCE seq;
 ----
+<REGEX>:.*Catalog Error.*already exists.*
 
 # drop the sequence
 statement ok
@@ -100,6 +102,7 @@ DROP SEQUENCE seq;
 statement error
 DROP SEQUENCE seq;
 ----
+<REGEX>:.*Catalog Error: Sequence.*does not exist.*
 
 # but doesn't fail with IF EXISTS
 statement ok
@@ -162,6 +165,7 @@ SELECT nextval('seq')
 statement error
 SELECT nextval('seq')
 ----
+<REGEX>:.*Sequence Error.*reached maximum value of sequence.*
 
 statement ok
 DROP SEQUENCE seq;
@@ -263,6 +267,7 @@ SELECT currval('seq')
 statement error
 SELECT nextval('seq')
 ----
+<REGEX>:.*Sequence Error.*reached minimum value of sequence.*
 
 query I
 SELECT currval('seq')
@@ -294,6 +299,7 @@ SELECT nextval('seq')
 statement error
 SELECT nextval('seq')
 ----
+<REGEX>:.*Sequence Error.*reached maximum value of sequence.*
 
 statement ok
 DROP SEQUENCE seq;
@@ -367,11 +373,13 @@ DROP SEQUENCE seq;
 statement error
 CREATE SEQUENCE seq INCREMENT 1 START -1 CYCLE;
 ----
+<REGEX>:.*Parser Error.*cannot be less than MINVALUE.*
 
 # max_value defaults to -1, setting start to 1 gives start > max_value
 statement error
 CREATE SEQUENCE seq INCREMENT -1 START 1 CYCLE;
 ----
+<REGEX>:.*Parser Error.*cannot be greater than MAXVALUE.*
 
 # sequences in schemas
 statement ok
@@ -411,31 +419,37 @@ SELECT currval('"a"."seq"'), currval('"b".seq');
 statement error
 SELECT nextval('"a"."seq');
 ----
+<REGEX>:.*Parser Error.*Unterminated quote.*
 
 # too many separators
 statement error
 SELECT nextval('a.b.c.d');
 ----
+<REGEX>:.*Parser Error.*too many entries found.*
 
 # start exceeds max value
 statement error
 CREATE SEQUENCE seq MAXVALUE 5 START WITH 6;
 ----
+<REGEX>:.*Parser Error.*cannot be greater than MAXVALUE.*
 
 # start preceeds min value
 statement error
 CREATE SEQUENCE seq MINVALUE 5 START WITH 4;
 ----
+<REGEX>:.*Parser Error.*cannot be less than MINVALUE.*
 
 # min value bigger than max
 statement error
 CREATE SEQUENCE seq MINVALUE 7 MAXVALUE 5;
 ----
+<REGEX>:.*Parser Error.*must be less than MAXVALUE.*
 
 # increment must not be 0
 statement error
 CREATE SEQUENCE seq INCREMENT 0;
 ----
+<REGEX>:.*Parser Error.*Increment must not be zero.*
 
 statement ok
 CREATE SEQUENCE seq;
@@ -479,12 +493,12 @@ seq2	2
 statement error
 SELECT s, nextval(s) FROM strings
 ----
-non-constant sequences are no longer supported
+<REGEX>:.*Not implemented Error.*non-constant sequences are no longer supported.*
 
 statement error
 SELECT s, currval(s) FROM strings
 ----
-non-constant sequences are no longer supported
+<REGEX>:.*Not implemented Error.*non-constant sequences are no longer supported.*
 
 # this will also cause an error if the sequence does not exist
 statement ok
@@ -493,6 +507,7 @@ INSERT INTO strings VALUES ('nonexistant_seq')
 statement error
 SELECT s, nextval(s) FROM strings
 ----
+<REGEX>:.*Not implemented Error.*non-constant sequences are no longer supported.*
 
 # currval causes error for new sequence
 statement ok
@@ -501,37 +516,45 @@ CREATE SEQUENCE fresh;
 statement error
 select currval('fresh');
 ----
+<REGEX>:.*Sequence Error.*sequence is not yet defined in this session.*
 
 # convert inputs into varchar if that's not the case
 statement error
 select nextval(1 + 1);
 ----
+<REGEX>:.*Binder Error: No function matches.*
 
 statement error
 select currval(true);
 ----
+<REGEX>:.*Binder Error: No function matches.*
 
 # max value specified more than once
 statement error
 CREATE SEQUENCE wrongseq NO MAXVALUE MAXVALUE 2;
 ----
+<REGEX>:.*Parser Error: Maxvalue should be passed as most once.*
 
 # min value specified more than once
 statement error
 CREATE SEQUENCE wrongseq MINVALUE 10 MINVALUE 2;
 ----
+<REGEX>:.*Parser Error: Minvalue should be passed as most once.*
 
 # start value specified more than once
 statement error
 CREATE SEQUENCE wrongseq START 13 START WITH 3;
 ----
+<REGEX>:.*Parser Error: Start value should be passed as most once.*
 
 # cycle value specified more than once
 statement error
 CREATE SEQUENCE wrongseq CYCLE MAXVALUE 2 MINVALUE 1 NO CYCLE;
 ----
+<REGEX>:.*Parser Error: Cycle value should be passed as most once.*
 
 # increment value specified more than once
 statement error
 CREATE SEQUENCE wrongseq INCREMENT 2 INCREMENT BY -1;
 ----
+<REGEX>:.*Parser Error: Increment value should be passed as most once.*
