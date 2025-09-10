@@ -18,6 +18,13 @@ static void ThrowJSONCopyParameterException(const string &loption) {
 }
 
 static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
+	static const unordered_set<string> SUPPORTED_BASE_OPTIONS {
+	    "compression", "encoding", "use_tmp_file", "overwrite_or_ignore", "overwrite", "append", "filename_pattern",
+	    "file_extension", "per_thread_output", "file_size_bytes",
+	    // "partition_by", unsupported
+	    "return_files", "preserve_order", "return_stats", "write_partition_columns", "write_empty_file",
+	    "hive_file_pattern"};
+
 	auto stmt_copy = stmt.Copy();
 	auto &copy = stmt_copy->Cast<CopyStatement>();
 	auto &copied_info = *copy.info;
@@ -48,9 +55,7 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 				csv_copy_options["suffix"] = {"\n]\n"};
 				csv_copy_options["new_line"] = {",\n\t"};
 			}
-		} else if (loption == "compression" || loption == "encoding" || loption == "per_thread_output" ||
-		           loption == "file_size_bytes" || loption == "use_tmp_file" || loption == "overwrite_or_ignore" ||
-		           loption == "filename_pattern" || loption == "file_extension") {
+		} else if (SUPPORTED_BASE_OPTIONS.find(loption) != SUPPORTED_BASE_OPTIONS.end()) {
 			// We support these base options
 			csv_copy_options.insert(kv);
 		} else {

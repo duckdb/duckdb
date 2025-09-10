@@ -227,6 +227,16 @@ string SQLLogicTestRunner::ReplaceKeywords(string input) {
 	input = StringUtil::Replace(input, "__TEST_DIR__", TestDirectoryPath());
 	input = StringUtil::Replace(input, "__WORKING_DIRECTORY__", FileSystem::GetWorkingDirectory());
 	input = StringUtil::Replace(input, "__BUILD_DIRECTORY__", DUCKDB_BUILD_DIRECTORY);
+
+	auto &test_config = TestConfiguration::Get();
+	string data_location = test_config.DataLocation();
+
+	input = StringUtil::Replace(input, "'data/", string("'") + data_location);
+	input = StringUtil::Replace(input, "\"data/", string("\"") + data_location);
+	if (StringUtil::StartsWith(input, "data/")) {
+		input = data_location + input.substr(5);
+	}
+
 	return input;
 }
 

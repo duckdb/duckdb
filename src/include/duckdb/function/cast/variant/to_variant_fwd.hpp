@@ -92,11 +92,11 @@ public:
 template <bool WRITE_DATA>
 void WriteArrayChildren(VariantVectorData &result, uint64_t children_offset, uint32_t &children_offset_data,
                         const list_entry_t source_entry, idx_t result_index, ContainerSelectionVectors &sel) {
-	idx_t children_index = children_offset + children_offset_data;
 	for (idx_t child_idx = 0; child_idx < source_entry.length; child_idx++) {
 		//! Set up the selection vector for the child of the list vector
 		sel.new_selection.set_index(child_idx + sel.count, result_index);
 		if (WRITE_DATA) {
+			idx_t children_index = children_offset + children_offset_data;
 			sel.children_selection.set_index(child_idx + sel.count, children_index + child_idx);
 			result.keys_index_validity.SetInvalid(children_index + child_idx);
 		}
