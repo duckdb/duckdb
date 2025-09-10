@@ -10,6 +10,7 @@
 
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/planner/table_filter_state.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
@@ -29,7 +30,7 @@ public:
 		context = &context_p;
 		buffer_manager = &BufferManager::GetBufferManager(*context);
 
-		idx_t min_bits = std::max<idx_t>(MIN_NUM_BITS, est_num_rows * MIN_NUM_BITS_PER_KEY);
+		const idx_t min_bits = std::max<idx_t>(MIN_NUM_BITS, est_num_rows * MIN_NUM_BITS_PER_KEY);
 		num_sectors = std::min(NextPowerOfTwo(min_bits) >> LOG_SECTOR_SIZE, MAX_NUM_SECTORS);
 		num_sectors_log = static_cast<uint32_t>(std::log2(num_sectors));
 
@@ -50,7 +51,7 @@ public:
 public:
 	idx_t LookupHashes(Vector &hashes, SelectionVector &result_sel, const idx_t count_p) const;
 	bool LookupHash(hash_t hash) const;
-	void InsertHashes(Vector hashes, const idx_t count);
+	void InsertHashes(const Vector &hashes, idx_t count, bool parallel);
 
 	bool IsInitialized() const {
 		return initialized;
@@ -175,64 +176,82 @@ private:
 
 	bool filters_null_values;
 	string key_column_name;
+	LogicalType key_type;
 
 public:
 	static constexpr auto TYPE = TableFilterType::BLOOM_FILTER;
 
 public:
 	explicit BloomFilter(CacheSectorizedBloomFilter &filter_p, const bool filters_null_values_p,
-	                     const string &key_column_name_p)
+	                     const string &key_column_name_p, const LogicalType &key_type_p)
 	    : TableFilter(TYPE), filter(filter_p), filters_null_values(filters_null_values_p),
-	      key_column_name(key_column_name_p) {
+	      key_column_name(key_column_name_p), key_type(key_type_p) {
 	}
 
-	/// If the join condition is e.g. "A = B", the bf will filter null values.
-	/// If the condition is "A is B" the filter will let nulls pass
+	//! If the join condition is e.g. "A = B", the bf will filter null values.
+	//! If the condition is "A is B" the filter will let nulls pass
 	bool FiltersNullValues() const {
 		return filters_null_values;
+	}
+
+	LogicalType GetKeyType() const {
+		return key_type;
 	}
 
 public:
 	string ToString(const string &column_name) const override;
 
 	// todo: we can remove this
-	__attribute__((noinline)) void HashInternal(Vector &keys_v, Vector &hashes_v, SelectionVector &sel,
-	                                            idx_t &approved_count) const {
+	__attribute__((noinline)) void HashInternal(Vector &keys_v, const SelectionVector &sel, idx_t &approved_count,
+	                                            BloomFilterState &state) const {
 		if (sel.IsSet()) {
-			Vector keys_flat(keys_v.GetType(), approved_count);
-			VectorOperations::Copy(keys_v, keys_flat, sel, approved_count, 0, 0);
-			D_ASSERT(keys_flat.GetVectorType() == VectorType::FLAT_VECTOR);
-			VectorOperations::Hash(keys_flat, hashes_v, approved_count); // todo: we actually only want to hash the sel!
+			VectorOperations::Copy(keys_v, state.keys_flat_v, sel, approved_count, 0, 0);
+			D_ASSERT(state.keys_flat_v.GetVectorType() == VectorType::FLAT_VECTOR);
+			VectorOperations::Hash(state.keys_flat_v, state.hashes_v,
+			                       approved_count); // todo: we actually only want to hash the sel!
 
 		} else {
-			VectorOperations::Hash(keys_v, hashes_v, approved_count); // todo: we actually only want to hash the sel!
+			VectorOperations::Hash(keys_v, state.hashes_v,
+			                       approved_count); // todo: we actually only want to hash the sel!
 		}
 	}
 
 	// Filters the data by first hashing and then probing the bloom filter. The &sel will hold
 	// the remaining tuples, &approved_tuple_count will hold the approved count.
-	idx_t Filter(Vector keys_v, UnifiedVectorFormat &keys_uvf, SelectionVector &sel,
-	             idx_t &approved_tuple_count) const {
+	idx_t Filter(Vector &keys_v, UnifiedVectorFormat &keys_uvf, SelectionVector &sel, idx_t &approved_tuple_count,
+	             BloomFilterState &state) const {
 
 		// printf("Filter bf: bf has %llu sectors and initialized=%hd \n", filter.num_sectors, filter.IsInitialized());
-		if (!this->filter.IsInitialized()) {
+		if (!this->filter.IsInitialized() || !state.continue_filtering) {
 			return approved_tuple_count; // todo: may
 		}
 
-		Vector hashes_v(LogicalType::HASH, approved_tuple_count);
-
-		HashInternal(keys_v, hashes_v, sel, approved_tuple_count);
+		HashInternal(keys_v, sel, approved_tuple_count, state);
 
 		// todo: we need to properly find out how one would densify the hashes here!
 		idx_t found_count;
-		SelectionVector bf_sel(approved_tuple_count);
-		if (hashes_v.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-			const auto &hash = *ConstantVector::GetData<hash_t>(hashes_v);
+		if (state.hashes_v.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+			const auto &hash = *ConstantVector::GetData<hash_t>(state.hashes_v);
 			const bool found = this->filter.LookupHash(hash);
 			found_count = found ? approved_tuple_count : 0;
 		} else {
-			hashes_v.Flatten(approved_tuple_count);
-			found_count = this->filter.LookupHashes(hashes_v, bf_sel, approved_tuple_count);
+			state.hashes_v.Flatten(approved_tuple_count);
+			found_count = this->filter.LookupHashes(state.hashes_v, state.bf_sel, approved_tuple_count);
+		}
+
+		// add the runtime statistics to stop using the bf if not selective
+		if (state.vectors_processed < 20) {
+			state.vectors_processed += 1;
+			state.tuples_accepted += found_count;
+			state.tuples_processed += approved_tuple_count;
+
+			if (state.vectors_processed == 20) {
+				const double selectivity =
+				    static_cast<double>(state.tuples_accepted) / static_cast<double>(state.tuples_processed);
+				if (selectivity > 0.7) {
+					state.continue_filtering = false;
+				}
+			}
 		}
 
 		// all the elements have been found, we don't need to translate anything
@@ -242,13 +261,14 @@ public:
 
 		if (sel.IsSet()) {
 			for (idx_t idx = 0; idx < found_count; idx++) {
-				const idx_t flat_sel_idx = bf_sel.get_index(idx);
+				const idx_t flat_sel_idx = state.bf_sel.get_index(idx);
 				const idx_t original_sel_idx = sel.get_index(flat_sel_idx);
 				sel.set_index(idx, original_sel_idx);
 			}
 		} else {
-			sel.Initialize(bf_sel);
+			sel.Initialize(state.bf_sel); // maybe we could also reference here?
 		}
+
 		approved_tuple_count = found_count;
 		return approved_tuple_count;
 	}
@@ -271,7 +291,7 @@ public:
 		return false;
 	}
 	unique_ptr<TableFilter> Copy() const override {
-		return make_uniq<BloomFilter>(this->filter, this->filters_null_values, this->key_column_name);
+		return make_uniq<BloomFilter>(this->filter, this->filters_null_values, this->key_column_name, this->key_type);
 	}
 
 	unique_ptr<Expression> ToExpression(const Expression &column) const override;

@@ -802,7 +802,6 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, o
 				// Note that this also works for equalities.
 				auto constant_filter = make_uniq<ConstantFilter>(cmp, std::move(min_val));
 				info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(constant_filter));
-				create_bloom_filter = false;
 			} else {
 				// min != max - generate a range filter
 				// for non-equalities, the range must be half-open
@@ -833,14 +832,23 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, o
 					break;
 				}
 
+				const bool can_use_bf = ht && ht->conditions.size() == 1 && cmp == ExpressionType::COMPARE_EQUAL;
+
 				// bloom filter is only supported for single key equality joins so far
-				if (ht && ht->conditions.size() == 1 && cmp == ExpressionType::COMPARE_EQUAL && create_bloom_filter) {
-					// If the nulls are equal, we let nulls pass. If not, we filter them
-					auto filters_null_values = !ht->NullValuesAreEqual(join_condition[filter_idx]);
-					const auto key_name = ht->conditions[0].right->ToString();
-					auto bf_filter = make_uniq<BloomFilter>(ht->GetBloomFilter(), filters_null_values, key_name);
-					ht->SetBuildBloomFilter(true);
-					info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(bf_filter));
+				if (ht&& can_use_bf) {
+
+					const double build_to_probe_ratio = static_cast<double>(op.children[0].get().estimated_cardinality) / static_cast<double>(ht->Count());
+					const bool should_use_bf = create_bloom_filter && rhs_has_filter && build_to_probe_ratio > 4;
+
+					if (should_use_bf) {
+						// If the nulls are equal, we let nulls pass. If not, we filter them
+						auto filters_null_values = !ht->NullValuesAreEqual(join_condition[filter_idx]);
+						const auto key_name = ht->conditions[0].right->ToString();
+						const auto key_type = ht->conditions[0].left->return_type;
+						auto bf_filter = make_uniq<BloomFilter>(ht->GetBloomFilter(), filters_null_values, key_name, key_type);
+						ht->SetBuildBloomFilter(true);
+						info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(bf_filter));
+					}
 				}
 			}
 		}

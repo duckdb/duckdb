@@ -717,7 +717,7 @@ void JoinHashTable::InsertHashes(Vector &hashes_v, const idx_t count, TupleDataC
                                  InsertState &insert_state, bool parallel) {
 	// Insert Hashes into the BF
 	if (bloom_filter.IsInitialized()) {
-		bloom_filter.InsertHashes(hashes_v, count);
+		bloom_filter.InsertHashes(hashes_v, count, parallel);
 	}
 	auto atomic_entries = reinterpret_cast<atomic<ht_entry_t> *>(this->entries);
 	auto row_locations = chunk_state.row_locations;

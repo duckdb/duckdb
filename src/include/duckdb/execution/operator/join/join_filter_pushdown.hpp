@@ -64,6 +64,9 @@ struct JoinFilterPushdownInfo {
 	//! Min/Max aggregates
 	vector<unique_ptr<Expression>> min_max_aggregates;
 
+	//! Whether the RHS has filters
+	idx_t rhs_has_filter;
+
 public:
 	unique_ptr<JoinFilterGlobalState> GetGlobalState(ClientContext &context, const PhysicalOperator &op) const;
 	unique_ptr<JoinFilterLocalState> GetLocalState(JoinFilterGlobalState &gstate) const;
