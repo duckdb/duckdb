@@ -121,7 +121,7 @@ public:
 
 	bool AnyVerification() const;
 
-	void SetUserVariable(const string &name, Value value);
+	void SetUserVariable(const String &name, Value value);
 	bool GetUserVariable(const string &name, Value &result);
 	void ResetUserVariable(const String &name);
 

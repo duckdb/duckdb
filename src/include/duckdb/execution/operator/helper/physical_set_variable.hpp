@@ -37,7 +37,7 @@ public:
 	}
 
 public:
-	const string name;
+	String name;
 };
 
 } // namespace duckdb
