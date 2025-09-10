@@ -1,11 +1,11 @@
-MergeIntoStatement <- WithClause? 'MERGE' 'NTO' TargetOptAlias MergeIntoUsingClause MergeMatch* ReturningClause?
+MergeIntoStatement <- WithClause? 'MERGE' 'INTO' TargetOptAlias MergeIntoUsingClause MergeMatch* ReturningClause?
 MergeIntoUsingClause <- 'USING' TableRef JoinQualifier
 MergeMatch <- MatchedClause / NotMatchedClause
 MatchedClause <- 'WHEN' 'MATCHED' AndExpression? 'THEN' MatchedClauseAction
 MatchedClauseAction <- UpdateMatchClause / DeleteMatchClause / InsertMatchClause / DoNothingMatchClause / ErrorMatchClause
 UpdateMatchClause <- 'UPDATE' (UpdateMatchSetClause / ByNameOrPosition?)
 DeleteMatchClause <- 'DELETE'
-InsertMatchClause <- 'NSERT' (InsertValuesList / DefaultValues / InsertByNameOrPosition)?
+InsertMatchClause <- 'INSERT' (InsertValuesList / DefaultValues / InsertByNameOrPosition)?
 InsertByNameOrPosition <- ByNameOrPosition? '*'?
 InsertValuesList <- InsertColumnList? 'VALUES' Parens(List(Expression))
 DoNothingMatchClause <- 'DO' 'NOTHING'

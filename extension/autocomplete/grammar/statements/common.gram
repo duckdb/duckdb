@@ -61,7 +61,7 @@ CharacterType <- ('CHARACTER' 'VARYING'?) /
                  ('NATIONAL' 'CHAR' 'VARYING'?) /
                  ('NCHAR' 'VARYING'?) /
                  'VARCHAR'
-IntervalType <- ('NTERVAL' Interval?) / ('NTERVAL' Parens(NumberLiteral))
+IntervalType <- ('INTERVAL' Interval?) / ('INTERVAL' Parens(NumberLiteral))
 
 YearKeyword         <- 'YEAR' / 'YEARS'
 MonthKeyword        <- 'MONTH' / 'MONTHS'
@@ -100,8 +100,8 @@ Interval <- YearKeyword /
 
 BitType <- 'BIT' 'VARYING'? Parens(List(Expression))?
 
-NumericType <- 'NT' /
-               'NTEGER' /
+NumericType <- 'INT' /
+               'INTEGER' /
                'SMALLINT' /
                'BIGINT' /
                'REAL' /

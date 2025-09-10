@@ -9,7 +9,7 @@ SequenceOption <-
 	SeqOwnedBy
 
 SeqSetCycle <- 'NO'? 'CYCLE'
-SeqSetIncrement <- 'NCREMENT' 'BY'? Expression
+SeqSetIncrement <- 'INCREMENT' 'BY'? Expression
 SeqSetMinMax <- SeqMinOrMax Expression
 SeqNoMinMax <- 'NO' SeqMinOrMax
 SeqStartWith <- 'START' 'WITH'? Expression

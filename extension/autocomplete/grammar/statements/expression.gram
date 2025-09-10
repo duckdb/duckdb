@@ -12,7 +12,7 @@ DistinctOrAll <- 'DISTINCT' / 'ALL'
 ExportClause <- 'EXPORT_STATE'
 WithinGroupClause <- 'WITHIN' 'GROUP' Parens(OrderByClause)
 FilterClause <- 'FILTER' Parens('WHERE'? Expression)
-IgnoreNulls <- ('GNORE' 'NULLS') / ('RESPECT' 'NULLS')
+IgnoreNulls <- ('IGNORE' 'NULLS') / ('RESPECT' 'NULLS')
 
 ParenthesisExpression <- Parens(List(Expression))
 LiteralExpression <- StringLiteral / NumberLiteral / 'NULL' / 'TRUE' / 'FALSE'
@@ -31,7 +31,7 @@ CaseExpression <- 'CASE' Expression? CaseWhenThen CaseWhenThen* CaseElse? 'END'
 CaseWhenThen <- 'WHEN' Expression 'THEN' Expression
 CaseElse <- 'ELSE' Expression
 TypeLiteral <- ColId StringLiteral
-IntervalLiteral <- 'NTERVAL' IntervalParameter IntervalUnit?
+IntervalLiteral <- 'INTERVAL' IntervalParameter IntervalUnit?
 IntervalParameter <- StringLiteral / NumberLiteral / Parens(Expression)
 IntervalUnit <- ColId
 FrameClause <- Framing FrameExtent WindowExcludeClause?
@@ -62,7 +62,7 @@ PositionalExpression <- '#' NumberLiteral
 DefaultExpression <- 'DEFAULT'
 
 ListComprehensionExpression <- '[' Expression 'FOR' List(Expression) ListComprehensionFilter? ']'
-ListComprehensionFilter <- 'F' Expression
+ListComprehensionFilter <- 'IF' Expression
 
 SingleExpression <-
 	LiteralExpression /
@@ -90,9 +90,9 @@ SingleExpression <-
 
 OperatorLiteral <- <[\+\-\*\/\%\^\<\>\=\~\!\@\&\|\`]+>
 LikeOperator <- 'NOT'? LikeOrSimilarTo
-LikeOrSimilarTo <- 'LIKE' / 'LIKE' / 'GLOB' / ('SIMILAR' 'TO')
-InOperator <- 'NOT'? 'N'
-IsOperator <- 'S' 'NOT'? DistinctFrom?
+LikeOrSimilarTo <- 'LIKE' / 'ILIKE' / 'GLOB' / ('SIMILAR' 'TO')
+InOperator <- 'NOT'? 'IN'
+IsOperator <- 'IS' 'NOT'? DistinctFrom?
 DistinctFrom <- 'DISTINCT' 'FROM'
 ConjunctionOperator <- 'OR' / 'AND'
 ComparisonOperator <- '=' / '<=' / '>=' / '<' / '>' / '<>' / '!=' / '=='

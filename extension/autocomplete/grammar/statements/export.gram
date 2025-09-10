@@ -2,4 +2,4 @@ ExportStatement <- 'EXPORT' 'DATABASE' ExportSource? StringLiteral Parens(Generi
 
 ExportSource <- CatalogName 'TO'
 
-ImportStatement <- 'MPORT' 'DATABASE' StringLiteral
+ImportStatement <- 'IMPORT' 'DATABASE' StringLiteral

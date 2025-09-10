@@ -10,9 +10,9 @@ UnpivotKeyword <- 'UNPIVOT' / 'PIVOT_LONGER'
 
 UnpivotStatement <- UnpivotKeyword TableRef 'ON' TargetList IntoNameValues?
 
-IntoNameValues <- 'NTO' 'NAME' ColIdOrString ValueOrValues List(Identifier)
+IntoNameValues <- 'INTO' 'NAME' ColIdOrString ValueOrValues List(Identifier)
 
 ValueOrValues <- 'VALUE' / 'VALUES'
 
-IncludeExcludeNulls <- ('NCLUDE' / 'EXCLUDE') 'NULLS'
+IncludeExcludeNulls <- ('INCLUDE' / 'EXCLUDE') 'NULLS'
 UnpivotHeader <- ColIdOrString / Parens(List(ColIdOrString))

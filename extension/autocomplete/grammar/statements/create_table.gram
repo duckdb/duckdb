@@ -8,7 +8,7 @@ CreateTableAs <- IdentifierList? 'AS' SelectStatement WithData?
 WithData <- 'WITH' 'NO'? 'DATA'
 IdentifierList <- Parens(List(Identifier))
 CreateColumnList <- Parens(CreateTableColumnList)
-IfNotExists <- 'F' 'NOT' 'EXISTS'
+IfNotExists <- 'IF' 'NOT' 'EXISTS'
 QualifiedName <- CatalogReservedSchemaIdentifier / SchemaReservedIdentifierOrStringLiteral / IdentifierOrStringLiteral
 SchemaReservedIdentifierOrStringLiteral <- SchemaQualification ReservedIdentifierOrStringLiteral
 CatalogReservedSchemaIdentifier <- CatalogQualification ReservedSchemaQualification ReservedIdentifierOrStringLiteral

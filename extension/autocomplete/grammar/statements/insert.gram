@@ -1,6 +1,6 @@
-InsertStatement <- WithClause? 'NSERT' OrAction? 'NTO' InsertTarget ByNameOrPosition? InsertColumnList? InsertValues OnConflictClause? ReturningClause?
+InsertStatement <- WithClause? 'INSERT' OrAction? 'INTO' InsertTarget ByNameOrPosition? InsertColumnList? InsertValues OnConflictClause? ReturningClause?
 
-OrAction <- 'OR' 'REPLACE' / 'GNORE'
+OrAction <- 'OR' 'REPLACE' / 'IGNORE'
 ByNameOrPosition <- 'BY' 'NAME' / 'POSITION'
 
 InsertTarget <- BaseTableName InsertAlias?

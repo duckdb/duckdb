@@ -1,6 +1,6 @@
 SelectStatement <- SelectOrParens (SetopClause SelectStatement)* ResultModifiers
 
-SetopClause <- ('UNION' / 'EXCEPT' / 'NTERSECT') DistinctOrAll? ByName?
+SetopClause <- ('UNION' / 'EXCEPT' / 'INTERSECT') DistinctOrAll? ByName?
 ByName <- 'BY' 'NAME'
 SelectOrParens <- BaseSelect / Parens(SelectStatement)
 
@@ -39,7 +39,7 @@ TableUnpivotClause <- 'UNPIVOT' IncludeExcludeNulls? Parens(UnpivotHeader 'FOR' 
 
 PivotHeader <- BaseExpression
 PivotValueLists <- PivotValueList PivotValueList*
-PivotValueList <- PivotHeader 'N' PivotTargetList
+PivotValueList <- PivotHeader 'IN' PivotTargetList
 PivotTargetList <- Identifier / Parens(TargetList)
 
 Lateral <- 'LATERAL'
@@ -71,7 +71,7 @@ OnClause <- 'ON' Expression
 UsingClause <- 'USING' Parens(List(ColumnName))
 
 OuterJoinType <- 'FULL' / 'LEFT' / 'RIGHT'
-JoinType <- (OuterJoinType 'OUTER'?) / 'SEMI' / 'ANTI' / 'NNER'
+JoinType <- (OuterJoinType 'OUTER'?) / 'SEMI' / 'ANTI' / 'INNER'
 JoinPrefix <- 'CROSS' / ('NATURAL' JoinType?) / 'POSITIONAL'
 
 FromClause <- 'FROM' List(TableRef)
