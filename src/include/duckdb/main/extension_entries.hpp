@@ -482,6 +482,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"parse_dirpath", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"parse_filename", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"parse_path", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"peg_parser", "autocomplete", CatalogType::TABLE_FUNCTION_ENTRY},
     {"pg_clear_cache", "postgres_scanner", CatalogType::TABLE_FUNCTION_ENTRY},
     {"pg_timezone_names", "icu", CatalogType::TABLE_FUNCTION_ENTRY},
     {"pi", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
