@@ -1725,9 +1725,10 @@ Typename:	SimpleTypename opt_array_bounds
 					$$->arrayBounds = list_make1(makeInteger(-1));
 					$$->setof = true;
 				}
-			| qualified_typename
+			| qualified_typename opt_array_bounds
 				{
 					$$ = makeTypeNameFromNameList($1);
+					$$->arrayBounds = $2;
 				}
 			| RowOrStruct '(' colid_type_list ')' opt_array_bounds
 				{
