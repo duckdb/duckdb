@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/helper/physical_set_variable.hpp"
 #include "duckdb/main/client_config.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
 
 namespace duckdb {
 

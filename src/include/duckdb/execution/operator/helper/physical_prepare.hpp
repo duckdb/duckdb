@@ -11,6 +11,7 @@
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/common/enums/physical_operator_type.hpp"
 #include "duckdb/main/prepared_statement_data.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
 
 namespace duckdb {
 
