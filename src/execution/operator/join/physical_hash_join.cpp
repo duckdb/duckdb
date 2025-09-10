@@ -754,20 +754,6 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, o
                                                        JoinFilterGlobalState &gstate,
                                                        const PhysicalComparisonJoin &op) const {
 
-	// bfs are only allowed for single key joins so far
-	if (ht && ht->conditions.size() == 1) {
-		constexpr idx_t col_idx = 0;
-
-		for (auto &info : probe_info) {
-			auto filter_col_idx = info.columns[col_idx].probe_column_index.column_index;
-			// If the nulls are equal, we let nulls pass. If not, we filter them
-			auto filters_null_values = !ht->NullValuesAreEqual(col_idx);
-			const auto key_name = ht->conditions[0].right->ToString();
-			auto bf_filter = make_uniq<BloomFilter>(ht->bloom_filter, filters_null_values, key_name);
-			info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(bf_filter));
-		}
-	}
-
 	// finalize the min/max aggregates
 	vector<LogicalType> min_max_types;
 	for (auto &aggr_expr : min_max_aggregates) {
@@ -787,6 +773,9 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, o
 	for (idx_t filter_idx = 0; filter_idx < join_condition.size(); filter_idx++) {
 		const auto cmp = op.conditions[join_condition[filter_idx]].comparison;
 		for (auto &info : probe_info) {
+
+			bool create_bloom_filter = true;
+
 			auto filter_col_idx = info.columns[filter_idx].probe_column_index.column_index;
 			auto min_idx = filter_idx * 2;
 			auto max_idx = min_idx + 1;
@@ -804,6 +793,7 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, o
 			if (ht && ht->Count() > 1 && ht->Count() <= dynamic_or_filter_threshold &&
 			    cmp == ExpressionType::COMPARE_EQUAL) {
 				PushInFilter(info, *ht, op, filter_idx, filter_col_idx);
+				create_bloom_filter = false;
 			}
 
 			if (Value::NotDistinctFrom(min_val, max_val)) {
@@ -812,10 +802,12 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, o
 				// Note that this also works for equalities.
 				auto constant_filter = make_uniq<ConstantFilter>(cmp, std::move(min_val));
 				info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(constant_filter));
+				create_bloom_filter = false;
 			} else {
 				// min != max - generate a range filter
 				// for non-equalities, the range must be half-open
 				// e.g., for lhs < rhs we can only use lhs <= max
+
 				switch (cmp) {
 				case ExpressionType::COMPARE_EQUAL:
 				case ExpressionType::COMPARE_GREATERTHAN:
@@ -839,6 +831,16 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, o
 				}
 				default:
 					break;
+				}
+
+				// bloom filter is only supported for single key equality joins so far
+				if (ht && ht->conditions.size() == 1 && cmp == ExpressionType::COMPARE_EQUAL && create_bloom_filter) {
+					// If the nulls are equal, we let nulls pass. If not, we filter them
+					auto filters_null_values = !ht->NullValuesAreEqual(join_condition[filter_idx]);
+					const auto key_name = ht->conditions[0].right->ToString();
+					auto bf_filter = make_uniq<BloomFilter>(ht->GetBloomFilter(), filters_null_values, key_name);
+					ht->SetBuildBloomFilter(true);
+					info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(bf_filter));
 				}
 			}
 		}

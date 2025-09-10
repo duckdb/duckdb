@@ -336,6 +336,10 @@ private:
 	//! An empty tuple that's a "dead end", can be used to stop chains early
 	unsafe_unique_array<data_t> dead_end;
 
+	//! Whether or not to use a bloom filter will be determined by the operator
+	CacheSectorizedBloomFilter bloom_filter;
+	bool should_build_bloom_filter = false;
+
 	//! Copying not allowed
 	JoinHashTable(const JoinHashTable &) = delete;
 
@@ -344,8 +348,6 @@ public:
 	// External Join
 	//===--------------------------------------------------------------------===//
 	static constexpr const idx_t INITIAL_RADIX_BITS = 4;
-	CacheSectorizedBloomFilter bloom_filter;
-
 	struct ProbeSpillLocalAppendState {
 		ProbeSpillLocalAppendState() {
 		}
@@ -414,6 +416,14 @@ public:
 	//! Size of the pointer table (in bytes)
 	idx_t PointerTableSize(idx_t count) const {
 		return PointerTableCapacity(count) * sizeof(data_ptr_t);
+	}
+
+	void SetBuildBloomFilter(const bool should_build) {
+		this->should_build_bloom_filter = should_build;
+	}
+
+	CacheSectorizedBloomFilter& GetBloomFilter() {
+		return bloom_filter;
 	}
 
 	//! Get total size of HT if all partitions would be built
