@@ -30,6 +30,10 @@ void CompressedMaterialization::CompressComparisonJoin(unique_ptr<LogicalOperato
 	auto &right_child = *join.children[1];
 
 #ifndef DEBUG
+	// fixme: if we compress a join key we can't use it anymore for bloom filter pushdown, disable for now as bf performance
+	// fixme: is higher then compression (4% faster for TPC-H)
+	return;
+
 	// In debug mode, we always apply compressed materialization to joins regardless of cardinalities,
 	// so that it is well-tested. In release mode, we use the thresholds defined in the header
 	const auto build_cardinality = right_child.has_estimated_cardinality ? right_child.estimated_cardinality
