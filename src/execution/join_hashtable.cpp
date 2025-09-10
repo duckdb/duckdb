@@ -716,8 +716,9 @@ static void InsertHashesLoop(atomic<ht_entry_t> entries[], Vector &row_locations
 void JoinHashTable::InsertHashes(Vector &hashes_v, const idx_t count, TupleDataChunkState &chunk_state,
                                  InsertState &insert_state, bool parallel) {
 	// Insert Hashes into the BF
-	bloom_filter.InsertHashes(hashes_v, count);
-
+	if (bloom_filter.IsInitialized()) {
+		bloom_filter.InsertHashes(hashes_v, count);
+	}
 	auto atomic_entries = reinterpret_cast<atomic<ht_entry_t> *>(this->entries);
 	auto row_locations = chunk_state.row_locations;
 	if (parallel) {
@@ -736,7 +737,9 @@ void JoinHashTable::AllocatePointerTable() {
 		throw InternalException("Hashtable capacity exceeds 48-bit limit (2^48 - 1)");
 	}
 
-	bloom_filter.Initialize(context, Count());
+	if (Count() >= 1024) {
+		bloom_filter.Initialize(context, Count());
+	}
 
 	if (hash_map.get()) {
 		// There is already a hash map

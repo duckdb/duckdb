@@ -92,7 +92,6 @@ private:
 		const uint32_t mask2 = GetMask2(key_hi);
 		bf[sector1] |= mask1;
 		bf[sector2] |= mask2;
-
 		// todo: There is duplicate code here we should get one function to get the two masks
 	}
 	inline bool LookupOne(uint32_t key_lo, uint32_t key_hi, const uint32_t *__restrict bf) const {
@@ -175,12 +174,13 @@ private:
 	CacheSectorizedBloomFilter &filter;
 
 	bool filters_null_values;
+	string key_column_name;
 
 public:
 	static constexpr auto TYPE = TableFilterType::BLOOM_FILTER;
 
 public:
-	explicit BloomFilter(CacheSectorizedBloomFilter &filter_p, const bool filters_null_values_p) : TableFilter(TYPE), filter(filter_p), filters_null_values(filters_null_values_p) {
+	explicit BloomFilter(CacheSectorizedBloomFilter &filter_p, const bool filters_null_values_p, const string &key_column_name_p) : TableFilter(TYPE), filter(filter_p), filters_null_values(filters_null_values_p), key_column_name(key_column_name_p) {
 	}
 
 	/// If the join condition is e.g. "A = B", the bf will filter null values.
@@ -190,9 +190,12 @@ public:
 	}
 
 public:
-	__attribute__((noinline)) // todo: we can remove this
-	void
-	HashInternal(Vector &keys_v, Vector &hashes_v, SelectionVector &sel, idx_t &approved_count) const {
+
+
+	string ToString(const string &column_name) const override;
+
+	// todo: we can remove this
+	__attribute__((noinline)) void HashInternal(Vector &keys_v, Vector &hashes_v, SelectionVector &sel, idx_t &approved_count) const {
 		if (sel.IsSet()) {
 			Vector keys_flat(keys_v.GetType(), approved_count);
 			VectorOperations::Copy(keys_v, keys_flat, sel, approved_count, 0, 0);
@@ -211,7 +214,7 @@ public:
 
 		// printf("Filter bf: bf has %llu sectors and initialized=%hd \n", filter.num_sectors, filter.IsInitialized());
 		if (!this->filter.IsInitialized()) {
-			return approved_tuple_count;
+			return approved_tuple_count; //todo: may
 		}
 
 		Vector hashes_v(LogicalType::HASH, approved_tuple_count);
@@ -221,6 +224,11 @@ public:
 		// todo: we need to properly find out how one would densify the hashes here!
 		SelectionVector bf_sel(approved_tuple_count);
 		const idx_t found_count = this->filter.LookupHashes(hashes_v, bf_sel, approved_tuple_count);
+
+		// all the elements have been found, we don't need to translate anything
+		if (found_count == approved_tuple_count) {
+			return approved_tuple_count;
+		}
 
 		if (sel.IsSet()) {
 			for (idx_t idx = 0; idx < found_count; idx++) {
@@ -232,7 +240,7 @@ public:
 			sel.Initialize(bf_sel);
 		}
 		approved_tuple_count = found_count;
-		return found_count;
+		return approved_tuple_count;
 	}
 
 	bool FilterValue(const Value &value) const {
@@ -244,9 +252,6 @@ public:
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 
-	string ToString(const string &column_name) const override {
-		return "BF Lookup";
-	};
 	bool Equals(const TableFilter &other) const override {
 		if (!TableFilter::Equals(other)) {
 			return false;
@@ -256,16 +261,16 @@ public:
 		return false;
 	}
 	unique_ptr<TableFilter> Copy() const override {
-		return make_uniq<BloomFilter>(this->filter, this->filters_null_values);
+		return make_uniq<BloomFilter>(this->filter, this->filters_null_values, this->key_column_name);
 	}
 
 	unique_ptr<Expression> ToExpression(const Expression &column) const override;
 
 	void Serialize(Serializer &serializer) const override {
-		printf("IDK How to do this\n");
+		printf("I don't know how to do this\n");
 	}
 	static unique_ptr<TableFilter> Deserialize(Deserializer &deserializer) {
-		printf("IDK How to do this\n");
+		printf("I don't know how to do this\n");
 	}
 };
 
