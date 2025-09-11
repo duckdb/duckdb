@@ -10,6 +10,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/logging/file_system_logger.hpp"
+#include "duckdb/common/hive_partitioning.hpp"
 #include "duckdb/logging/log_manager.hpp"
 
 #include <cstdint>
@@ -1317,41 +1318,73 @@ static bool IsSymbolicLink(const string &path) {
 #endif
 }
 
-static void RecursiveGlobDirectories(FileSystem &fs, const string &path, vector<OpenFileInfo> &result,
-                                     bool match_directory, bool join_path) {
+void LocalFileSystem::RecursiveGlobDirectories(const vector<string> &splits, idx_t i, const string &path,
+                                               vector<OpenFileInfo> &result, FileOpener *opener, idx_t max_files,
+                                               optional_ptr<HivePartitioningExecutor> hive_partitioning_executor) {
+	bool is_last_chunk = i + 1 == splits.size();
+	bool is_deepest_directory = i + 2 >= splits.size();
 
-	fs.ListFiles(path, [&](OpenFileInfo &info) {
-		if (join_path) {
-			info.path = fs.JoinPath(path, info.path);
+	ListFiles(path, [&](OpenFileInfo &info) {
+		if (result.size() >= max_files) {
+			return;
+		}
+		if (path != ".") {
+			info.path = JoinPath(path, info.path);
 		}
 		if (IsSymbolicLink(info.path)) {
 			return;
 		}
 		bool is_directory = FileSystem::IsDirectory(info);
-		bool return_file = is_directory == match_directory;
 		if (is_directory) {
-			if (return_file) {
-				result.push_back(info);
+			if (hive_partitioning_executor &&
+			    hive_partitioning_executor->ApplyFiltersToFile(info, is_deepest_directory)) {
+				return;
 			}
-			RecursiveGlobDirectories(fs, info.path, result, match_directory, true);
-		} else if (return_file) {
-			result.push_back(std::move(info));
+			if (!is_last_chunk) {
+				ProcessSplit(splits, i + 1, info.path, result, opener, max_files, hive_partitioning_executor);
+			}
+			if (result.size() >= max_files) {
+				return;
+			}
+			RecursiveGlobDirectories(splits, i, info.path, result, opener, max_files, hive_partitioning_executor);
+		} else {
+			if (is_last_chunk) {
+				result.push_back(std::move(info));
+			}
 		}
 	});
 }
 
-static void GlobFilesInternal(FileSystem &fs, const string &path, const string &glob, bool match_directory,
-                              vector<OpenFileInfo> &result, bool join_path) {
-	fs.ListFiles(path, [&](OpenFileInfo &info) {
-		bool is_directory = FileSystem::IsDirectory(info);
-		if (is_directory != match_directory) {
+void LocalFileSystem::GlobFilesInternal(const vector<string> &splits, idx_t i, const string &path, const string &glob,
+                                        vector<OpenFileInfo> &result, FileOpener *opener, idx_t max_files,
+                                        optional_ptr<HivePartitioningExecutor> hive_partitioning_executor) {
+	bool is_last_chunk = i + 1 == splits.size();
+	bool is_deepest_directory = i + 2 >= splits.size();
+	ListFiles(path, [&](OpenFileInfo &info) {
+		if (result.size() >= max_files) {
 			return;
 		}
-		if (Glob(info.path.c_str(), info.path.size(), glob.c_str(), glob.size())) {
-			if (join_path) {
-				info.path = fs.JoinPath(path, info.path);
+		bool is_directory = FileSystem::IsDirectory(info);
+		if (is_last_chunk && is_directory) {
+			return;
+		}
+		if (duckdb::Glob(info.path.c_str(), info.path.size(), glob.c_str(), glob.size())) {
+			if (path != ".") {
+				info.path = JoinPath(path, info.path);
 			}
-			result.push_back(std::move(info));
+			if (is_directory) {
+				if (hive_partitioning_executor &&
+				    hive_partitioning_executor->ApplyFiltersToFile(info, is_deepest_directory)) {
+					return;
+				}
+				if (!is_last_chunk) {
+					ProcessSplit(splits, i + 1, info.path, result, opener, max_files, hive_partitioning_executor);
+				}
+			} else {
+				if (is_last_chunk) {
+					result.push_back(std::move(info));
+				}
+			}
 		}
 	});
 }
@@ -1417,7 +1450,45 @@ const char *LocalFileSystem::NormalizeLocalPath(const string &path) {
 	return path.c_str() + GetFileUrlOffset(path);
 }
 
-vector<OpenFileInfo> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
+void LocalFileSystem::ProcessSplit(const vector<string> &splits, idx_t i, const string &path,
+                                   vector<OpenFileInfo> &result, FileOpener *opener, idx_t max_files,
+                                   optional_ptr<HivePartitioningExecutor> hive_partitioning_executor) {
+	if (result.size() >= max_files) {
+		return;
+	}
+	bool has_glob = HasGlob(splits[i]);
+	bool is_last_chunk = i + 1 == splits.size();
+	if (!has_glob) {
+		// no glob, just append as-is
+		const string filename = JoinPath(path, splits[i]);
+		if (is_last_chunk) {
+			if (FileExists(filename, opener) || DirectoryExists(filename, opener)) {
+				result.push_back(filename);
+			}
+		} else {
+			if (hive_partitioning_executor) {
+				auto info = OpenFileInfo(filename);
+				bool is_deepest_directory = i + 2 >= splits.size();
+				if (hive_partitioning_executor->ApplyFiltersToFile(info, is_deepest_directory)) {
+					return;
+				}
+			}
+			ProcessSplit(splits, i + 1, filename, result, opener, max_files, hive_partitioning_executor);
+		}
+	} else {
+		auto glob_path = path.empty() ? "." : path;
+		if (IsCrawl(splits[i])) {
+			if (!is_last_chunk) {
+				ProcessSplit(splits, i + 1, glob_path, result, opener, max_files, hive_partitioning_executor);
+			}
+			RecursiveGlobDirectories(splits, i, glob_path, result, opener, max_files, hive_partitioning_executor);
+		} else {
+			GlobFilesInternal(splits, i, glob_path, splits[i], result, opener, max_files, hive_partitioning_executor);
+		}
+	}
+}
+
+vector<OpenFileInfo> LocalFileSystem::Glob(const string &path, FileOpener *opener, const FileGlobInput &glob_input) {
 	if (path.empty()) {
 		return vector<OpenFileInfo>();
 	}
@@ -1461,7 +1532,7 @@ vector<OpenFileInfo> LocalFileSystem::Glob(const string &path, FileOpener *opene
 			splits[0] = home_directory;
 			D_ASSERT(path[0] == '~');
 			if (!HasGlob(path)) {
-				return Glob(home_directory + path.substr(1));
+				return Glob(home_directory + path.substr(1), opener, glob_input);
 			}
 		}
 	}
@@ -1499,66 +1570,36 @@ vector<OpenFileInfo> LocalFileSystem::Glob(const string &path, FileOpener *opene
 		start_index = 0;
 	}
 
-	for (idx_t i = start_index ? 1 : 0; i < splits.size(); i++) {
-		bool is_last_chunk = i + 1 == splits.size();
-		bool has_glob = HasGlob(splits[i]);
-		// if it's the last chunk we need to find files, otherwise we find directories
-		// not the last chunk: gather a list of all directories that match the glob pattern
-		vector<OpenFileInfo> result;
-		if (!has_glob) {
-			// no glob, just append as-is
-			if (previous_directories.empty()) {
-				result.push_back(splits[i]);
-			} else {
-				if (is_last_chunk) {
-					for (auto &prev_directory : previous_directories) {
-						const string filename = JoinPath(prev_directory.path, splits[i]);
-						if (FileExists(filename, opener) || DirectoryExists(filename, opener)) {
-							result.push_back(filename);
-						}
-					}
-				} else {
-					for (auto &prev_directory : previous_directories) {
-						result.push_back(JoinPath(prev_directory.path, splits[i]));
-					}
-				}
-			}
-		} else {
-			if (IsCrawl(splits[i])) {
-				if (!is_last_chunk) {
-					result = previous_directories;
-				}
-				if (previous_directories.empty()) {
-					RecursiveGlobDirectories(*this, ".", result, !is_last_chunk, false);
-				} else {
-					for (auto &prev_dir : previous_directories) {
-						RecursiveGlobDirectories(*this, prev_dir.path, result, !is_last_chunk, true);
-					}
-				}
-			} else {
-				if (previous_directories.empty()) {
-					// no previous directories: list in the current path
-					GlobFilesInternal(*this, ".", splits[i], !is_last_chunk, result, false);
-				} else {
-					// previous directories
-					// we iterate over each of the previous directories, and apply the glob of the current directory
-					for (auto &prev_directory : previous_directories) {
-						GlobFilesInternal(*this, prev_directory.path, splits[i], !is_last_chunk, result, true);
-					}
-				}
-			}
-		}
-		if (result.empty()) {
-			// no result found that matches the glob
-			// last ditch effort: search the path as a string literal
-			return FetchFileWithoutGlob(path, opener, absolute_path);
-		}
-		if (is_last_chunk) {
-			return result;
-		}
-		previous_directories = std::move(result);
+	vector<OpenFileInfo> result;
+	if (start_index >= splits.size()) {
+		return result;
 	}
-	return vector<OpenFileInfo>();
+	unique_ptr<HivePartitioningExecutor> hive_partitioning_executor;
+	auto hive_params = glob_input.hive_params;
+	if (hive_params) {
+		hive_partitioning_executor = make_uniq<HivePartitioningExecutor>(hive_params->context, hive_params->filters,
+		                                                                 hive_params->options, hive_params->info);
+	}
+
+	if (previous_directories.empty()) {
+		previous_directories.push_back(OpenFileInfo());
+	}
+
+	for (auto &prev_directory : previous_directories) {
+		ProcessSplit(splits, start_index, prev_directory.path, result, opener, glob_input.max_files,
+		             hive_partitioning_executor);
+	}
+
+	if (hive_partitioning_executor) {
+		hive_partitioning_executor->Finalize();
+	}
+
+	if (result.empty()) {
+		// no result found that matches the glob
+		// last ditch effort: search the path as a string literal
+		return FetchFileWithoutGlob(path, opener, absolute_path);
+	}
+	return result;
 }
 
 unique_ptr<FileSystem> FileSystem::CreateLocal() {

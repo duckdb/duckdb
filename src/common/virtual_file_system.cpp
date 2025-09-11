@@ -138,8 +138,8 @@ string VirtualFileSystem::PathSeparator(const string &path) {
 	return FindFileSystem(path).PathSeparator(path);
 }
 
-vector<OpenFileInfo> VirtualFileSystem::Glob(const string &path, FileOpener *opener) {
-	return FindFileSystem(path).Glob(path, opener);
+vector<OpenFileInfo> VirtualFileSystem::Glob(const string &path, FileOpener *opener, const FileGlobInput &input) {
+	return FindFileSystem(path).Glob(path, opener, input);
 }
 
 void VirtualFileSystem::RegisterSubSystem(unique_ptr<FileSystem> fs) {

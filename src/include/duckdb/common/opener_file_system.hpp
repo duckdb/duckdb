@@ -117,10 +117,11 @@ public:
 		return GetFileSystem().PathSeparator(path);
 	}
 
-	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr) override {
+	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr,
+	                          const FileGlobInput &input = FileGlobOptions::DISALLOW_EMPTY) override {
 		VerifyNoOpener(opener);
 		VerifyCanAccessFile(path);
-		return GetFileSystem().Glob(path, GetOpener().get());
+		return GetFileSystem().Glob(path, GetOpener().get(), input);
 	}
 
 	std::string GetName() const override {
