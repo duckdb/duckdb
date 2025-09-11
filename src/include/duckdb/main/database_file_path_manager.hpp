@@ -19,7 +19,7 @@ class DatabaseFilePathManager {
 public:
 	bool CheckPathConflict(const string &path, const string &name) const;
 	idx_t ApproxDatabaseCount() const;
-	void InsertDatabasePath(const string &path, const string &name, bool throw_on_conflict=true);
+	void InsertDatabasePath(const string &path, const string &name, bool throw_on_conflict = true);
 	void EraseDatabasePath(const string &path);
 
 private:

@@ -14,7 +14,8 @@
 
 namespace duckdb {
 
-StoredDatabasePath::StoredDatabasePath(DatabaseManager &manager, string path_p, const string &name, bool throw_on_conflict)
+StoredDatabasePath::StoredDatabasePath(DatabaseManager &manager, string path_p, const string &name,
+                                       bool throw_on_conflict)
     : manager(manager), path(std::move(path_p)) {
 	manager.InsertDatabasePath(path, name, throw_on_conflict);
 }

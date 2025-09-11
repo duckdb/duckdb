@@ -64,7 +64,7 @@ public:
 	void SetDefaultDatabase(ClientContext &context, const string &new_value);
 
 	//! Inserts a path to name mapping to the database paths map
-	void InsertDatabasePath(const string &path, const string &name, bool throw_on_conflict=true);
+	void InsertDatabasePath(const string &path, const string &name, bool throw_on_conflict = true);
 	//! Erases a path from the database paths map
 	void EraseDatabasePath(const string &path);
 	//! Check if a path has a conflict
