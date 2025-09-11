@@ -1,0 +1,11 @@
+# name: test/sql/catalog/function/test_macro_issue_18927.test
+# description: Test Issue 18927 - Dot operator (function chaining) fails with macros
+# group: [function]
+
+statement ok
+CREATE OR REPLACE MACRO my(s) AS s.lower().split('').aggregate('count');
+
+query I
+SELECT my('AA');
+----
+2
