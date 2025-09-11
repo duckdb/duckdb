@@ -16,6 +16,7 @@ NULL
 statement error
 select list_kurtosis([2e304, 2e305, 2e306, 2e307])
 ----
+<REGEX>:.*Out of Range Error.*out of range.*
 
 statement ok
 create table aggr(k int[]);
@@ -50,3 +51,4 @@ NULL
 statement error
 select list_kurtosis()
 ----
+<REGEX>:.*Binder Error.*does not support the supplied arguments.*

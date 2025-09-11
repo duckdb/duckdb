@@ -101,3 +101,29 @@ TEST_CASE("Test db creation does not block instance cache", "[api]") {
 	REQUIRE(opening_slow_db_takes_remaining_time);
 	REQUIRE(no_delay_for_db_creation);
 }
+
+TEST_CASE("Test attaching the same database path from different databases", "[api][.]") {
+	DBInstanceCache instance_cache;
+	auto test_path = TestCreatePath("instance_cache_reuse.db");
+
+	DBConfig config;
+	auto db1 = instance_cache.GetOrCreateInstance(":memory:", config, false);
+	auto db2 = instance_cache.GetOrCreateInstance(":memory:", config, false);
+
+	string attach_query = "ATTACH '" + test_path + "' AS db_ref";
+
+	Connection con1(*db1);
+	REQUIRE_NO_FAIL(con1.Query(attach_query));
+
+	// fails - already attached in db1
+	Connection con2(*db2);
+	REQUIRE_FAIL(con2.Query(attach_query));
+
+	// if we detach from con1, we can now attach in con2
+	REQUIRE_NO_FAIL(con1.Query("DETACH db_ref"));
+
+	REQUIRE_NO_FAIL(con2.Query(attach_query));
+
+	// .. but not in con1 anymore!
+	REQUIRE_FAIL(con1.Query(attach_query));
+}

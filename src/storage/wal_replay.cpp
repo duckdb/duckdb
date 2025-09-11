@@ -145,7 +145,7 @@ public:
 
 			//! initialize the decryption
 			auto encryption_state = database.GetEncryptionUtil()->CreateEncryptionState(
-			    state_p.db.GetStorageManager().GetCipher(), derived_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+			    state_p.db.GetStorageManager().GetCipher(), MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 			encryption_state->InitializeDecryption(nonce.data(), nonce.size(), derived_key,
 			                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 
@@ -346,7 +346,7 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(AttachedDatabase &databa
 				}
 				state.replay_index_infos.clear();
 
-				successful_offset = reader.offset;
+				successful_offset = reader.CurrentOffset();
 				// check if the file is exhausted
 				if (reader.Finished()) {
 					// we finished reading the file: break

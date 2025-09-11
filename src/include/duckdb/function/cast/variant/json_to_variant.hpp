@@ -147,11 +147,11 @@ static bool ConvertJSONPrimitive(yyjson_val *val, ToVariantGlobalResultData &res
 	case YYJSON_TYPE_RAW | YYJSON_SUBTYPE_NONE: {
 		WriteVariantMetadata<WRITE_DATA>(result, result_index, values_offset_data, blob_offset_data[result_index],
 		                                 nullptr, 0, VariantLogicalType::VARCHAR);
-		auto str = unsafe_yyjson_get_str(val);
 		uint32_t length = NumericCast<uint32_t>(unsafe_yyjson_get_len(val));
-		auto str_blob_data = blob_data + blob_offset_data[result_index];
 		auto length_varint_size = GetVarintSize(length);
 		if (WRITE_DATA) {
+			auto str = unsafe_yyjson_get_str(val);
+			auto str_blob_data = blob_data + blob_offset_data[result_index];
 			VarintEncode(length, str_blob_data);
 			memcpy(str_blob_data + length_varint_size, const_data_ptr_cast(str), length);
 		}
@@ -169,30 +169,30 @@ static bool ConvertJSONPrimitive(yyjson_val *val, ToVariantGlobalResultData &res
 		break;
 	}
 	case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_UINT: {
-		auto value = unsafe_yyjson_get_uint(val);
 		WriteVariantMetadata<WRITE_DATA>(result, result_index, values_offset_data, blob_offset_data[result_index],
 		                                 nullptr, 0, VariantLogicalType::UINT64);
 		if (WRITE_DATA) {
+			auto value = unsafe_yyjson_get_uint(val);
 			memcpy(blob_data + blob_offset_data[result_index], const_data_ptr_cast(&value), sizeof(uint64_t));
 		}
 		blob_offset_data[result_index] += sizeof(uint64_t);
 		break;
 	}
 	case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_SINT: {
-		auto value = unsafe_yyjson_get_sint(val);
 		WriteVariantMetadata<WRITE_DATA>(result, result_index, values_offset_data, blob_offset_data[result_index],
 		                                 nullptr, 0, VariantLogicalType::INT64);
 		if (WRITE_DATA) {
+			auto value = unsafe_yyjson_get_sint(val);
 			memcpy(blob_data + blob_offset_data[result_index], const_data_ptr_cast(&value), sizeof(int64_t));
 		}
 		blob_offset_data[result_index] += sizeof(int64_t);
 		break;
 	}
 	case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_REAL: {
-		auto value = unsafe_yyjson_get_real(val);
 		WriteVariantMetadata<WRITE_DATA>(result, result_index, values_offset_data, blob_offset_data[result_index],
 		                                 nullptr, 0, VariantLogicalType::DOUBLE);
 		if (WRITE_DATA) {
+			auto value = unsafe_yyjson_get_real(val);
 			memcpy(blob_data + blob_offset_data[result_index], const_data_ptr_cast(&value), sizeof(double));
 		}
 		blob_offset_data[result_index] += sizeof(double);

@@ -498,12 +498,17 @@ void RowGroupCollection::RevertAppendInternal(idx_t start_row) {
 		segment_index = segment_count - 1;
 	}
 	auto &segment = *row_groups->GetSegmentByIndex(l, UnsafeNumericCast<int64_t>(segment_index));
+	if (segment.start == start_row) {
+		// we are truncating exactly this row group - erase it entirely
+		row_groups->EraseSegments(l, segment_index);
+	} else {
+		// we need to truncate within a row group
+		// remove any segments AFTER this segment: they should be deleted entirely
+		row_groups->EraseSegments(l, segment_index + 1);
 
-	// remove any segments AFTER this segment: they should be deleted entirely
-	row_groups->EraseSegments(l, segment_index);
-
-	segment.next = nullptr;
-	segment.RevertAppend(start_row);
+		segment.next = nullptr;
+		segment.RevertAppend(start_row);
+	}
 }
 
 void RowGroupCollection::CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count) {
@@ -1107,7 +1112,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 
 	// no errors - finalize the row groups
 	// if the table already exists on disk - check if all row groups have stayed the same
-	if (metadata_pointer.IsValid()) {
+	if (DBConfig::GetSetting<ExperimentalMetadataReuseSetting>(writer.GetDatabase()) && metadata_pointer.IsValid()) {
 		bool table_has_changes = false;
 		for (idx_t segment_idx = 0; segment_idx < segments.size(); segment_idx++) {
 			auto &entry = segments[segment_idx];
@@ -1165,6 +1170,8 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 		new_total_rows += row_group.count;
 	}
 	total_rows = new_total_rows;
+	l.Release();
+	Verify();
 }
 
 //===--------------------------------------------------------------------===//
@@ -1198,7 +1205,8 @@ vector<PartitionStatistics> RowGroupCollection::GetPartitionStats() const {
 //===--------------------------------------------------------------------===//
 vector<ColumnSegmentInfo> RowGroupCollection::GetColumnSegmentInfo() {
 	vector<ColumnSegmentInfo> result;
-	for (auto &row_group : row_groups->Segments()) {
+	auto lock = row_groups->Lock();
+	for (auto &row_group : row_groups->Segments(lock)) {
 		row_group.GetColumnSegmentInfo(row_group.index, result);
 	}
 	return result;

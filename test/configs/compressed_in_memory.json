@@ -5,13 +5,18 @@
   "on_load": "skip",
   "skip_compiled": "true",
   "skip_tests": [
-    "test/fuzzer/sqlsmith/current_schemas_null.test",
-    "test/sql/settings/drop_set_schema.test",
-    "test/sql/catalog/test_set_search_path.test",
-    "test/sql/storage/temp_directory/max_swap_space_explicit.test",
-    "test/sql/storage/temp_directory/max_swap_space_inmemory.test",
-    "test/sql/storage/temp_directory/max_swap_space_error.test",
-    "test/sql/storage/buffer_manager_temp_dir.test",
-    "test/sql/pg_catalog/system_functions.test"
+    {
+      "reason": "Unknown, to be investigated",
+      "paths": [
+        "test/fuzzer/sqlsmith/current_schemas_null.test",
+        "test/sql/settings/drop_set_schema.test",
+        "test/sql/catalog/test_set_search_path.test",
+        "test/sql/storage/temp_directory/max_swap_space_explicit.test",
+        "test/sql/storage/temp_directory/max_swap_space_inmemory.test",
+        "test/sql/storage/temp_directory/max_swap_space_error.test",
+        "test/sql/storage/buffer_manager_temp_dir.test",
+        "test/sql/pg_catalog/system_functions.test"
+      ]
+    }
   ]
 }
