@@ -2,6 +2,9 @@
 # description: Test BLOB with persistent storage with an encrypted WAL
 # group: [wal]
 
+foreach cipher GCM CTR
+
+
 load __TEST_DIR__/any_file.db
 
 statement ok
@@ -12,7 +15,7 @@ PRAGMA wal_autocheckpoint='1TB';
 
 # # load the DB from disk
 statement ok
-ATTACH '__TEST_DIR__/encrypted_blob_storage.db' AS enc (ENCRYPTION_KEY 'asdf');
+ATTACH '__TEST_DIR__/encrypted_blob_storage_${cipher}.db' AS enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
 
 # create a table with hugeints
 statement ok
@@ -25,7 +28,7 @@ statement ok
 DETACH enc
 
 statement ok
-ATTACH '__TEST_DIR__/encrypted_blob_storage.db' AS enc (ENCRYPTION_KEY 'asdf');
+ATTACH '__TEST_DIR__/encrypted_blob_storage_${cipher}.db' AS enc (ENCRYPTION_KEY 'asdf');
 
 query I
 SELECT * FROM enc.blobs
@@ -38,5 +41,7 @@ NULL
 U\xAA\xFFU\xAA\xFFU\xAA\xFF\x01
 U\xAA\xFFU\xAA\xFFU\xAA\xFF\x01
 
-# endloop
+restart
+
+endloop
 

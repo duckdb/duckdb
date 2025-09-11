@@ -134,4 +134,4 @@ aaa
 statement error
 SELECT s FROM strings WHERE s SIMILAR TO 'ab.*%' {escape ''}
 ----
-
+<REGEX>:.*Parser Error: syntax error.*

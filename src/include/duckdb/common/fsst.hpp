@@ -57,7 +57,7 @@ public:
 			                  decompressed_string_size, string_t::INLINE_LENGTH);
 		}
 		D_ASSERT(decompressed_string_size <= string_t::INLINE_LENGTH);
-		result.str.SetSizeAndFinalize(UnsafeNumericCast<uint32_t>(decompressed_string_size));
+		result.str.SetSizeAndFinalize(UnsafeNumericCast<uint32_t>(decompressed_string_size), string_t::INLINE_LENGTH);
 		return result.str;
 	}
 	static string DecompressValue(void *duckdb_fsst_decoder, const char *compressed_string,

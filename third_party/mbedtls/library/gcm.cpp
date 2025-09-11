@@ -55,7 +55,7 @@ void mbedtls_gcm_init(mbedtls_gcm_context *ctx)
     memset(ctx, 0, sizeof(mbedtls_gcm_context));
 }
 
-inline void gcm_set_acceleration(mbedtls_gcm_context *ctx)
+static inline void gcm_set_acceleration(mbedtls_gcm_context *ctx)
 {
 #if defined(MBEDTLS_GCM_LARGE_TABLE)
     ctx->acceleration = MBEDTLS_GCM_ACC_LARGETABLE;
@@ -77,7 +77,7 @@ inline void gcm_set_acceleration(mbedtls_gcm_context *ctx)
 #endif
 }
 
-inline void gcm_gen_table_rightshift(uint64_t dst[2], const uint64_t src[2])
+static inline void gcm_gen_table_rightshift(uint64_t dst[2], const uint64_t src[2])
 {
     uint8_t *u8Dst = (uint8_t *) dst;
     uint8_t *u8Src = (uint8_t *) src;

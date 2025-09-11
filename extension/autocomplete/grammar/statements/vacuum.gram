@@ -1,12 +1,12 @@
-VacuumStatement <- 'VACUUM'i (VacuumLegacyOptions AnalyzeStatement / VacuumLegacyOptions QualifiedTarget / VacuumLegacyOptions / VacuumParensOptions QualifiedTarget?)?
+VacuumStatement <- 'VACUUM' (VacuumLegacyOptions AnalyzeStatement / VacuumLegacyOptions QualifiedTarget / VacuumLegacyOptions / VacuumParensOptions QualifiedTarget?)?
 
 VacuumLegacyOptions <- OptFull OptFreeze OptVerbose
 VacuumParensOptions <- Parens(List(VacuumOption))
-VacuumOption <- 'ANALYZE'i / 'VERBOSE'i / 'FREEZE'i / 'FULL'i / Identifier
+VacuumOption <- 'ANALYZE' / 'VERBOSE' / 'FREEZE' / 'FULL' / Identifier
 
-OptFull <- 'FULL'i?
-OptFreeze <- 'FREEZE'i?
-OptVerbose <- 'VERBOSE'i?
+OptFull <- 'FULL'?
+OptFreeze <- 'FREEZE'?
+OptVerbose <- 'VERBOSE'?
 
 QualifiedTarget <- QualifiedName OptNameList
 OptNameList <- Parens(List(Name))?

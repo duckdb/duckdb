@@ -19,6 +19,11 @@ OBJECT(bool, tinyint, smallint, int, bigint, hugeint, uhugeint, utinyint, usmall
 OBJECT(bool, tinyint, smallint, int, bigint, hugeint, uhugeint, utinyint, usmallint, uint, ubigint, bignum, date, time, timestamp, timestamp_s, timestamp_ms, timestamp_ns, time_tz, timestamp_tz, float, double, dec_4_1, dec_9_4, dec_18_6, dec38_10, uuid, interval, varchar, blob, bit, small_enum, medium_enum, large_enum, int_array, double_array, date_array, timestamp_array, timestamptz_array, varchar_array, nested_int_array, struct, struct_of_arrays, array_of_structs, map, union, fixed_int_array, fixed_varchar_array, fixed_nested_int_array, fixed_nested_varchar_array, fixed_struct_array, struct_of_fixed_array, fixed_array_of_int_list, list_of_fixed_int_array)
 
 statement error
+CREATE TABLE T  (v VARIANT);
+----
+A table cannot be created from a VARIANT column yet
+
+statement error
 create table all_types as select struct_pack(*COLUMNS(*))::VARIANT test from test_all_types();
 ----
 Not implemented Error: A table cannot be created from a VARIANT column yet

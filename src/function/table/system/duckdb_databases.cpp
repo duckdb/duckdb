@@ -86,6 +86,8 @@ void DuckDBDatabasesFunction(ClientContext &context, TableFunctionInput &data_p,
 			bool in_memory = catalog.InMemory();
 			if (!in_memory) {
 				db_path = Value(catalog.GetDBPath());
+			}
+			if (catalog.IsEncrypted()) {
 				cipher_str = catalog.GetEncryptionCipher();
 			}
 		}

@@ -227,6 +227,16 @@ string SQLLogicTestRunner::ReplaceKeywords(string input) {
 	input = StringUtil::Replace(input, "__TEST_DIR__", TestDirectoryPath());
 	input = StringUtil::Replace(input, "__WORKING_DIRECTORY__", FileSystem::GetWorkingDirectory());
 	input = StringUtil::Replace(input, "__BUILD_DIRECTORY__", DUCKDB_BUILD_DIRECTORY);
+
+	auto &test_config = TestConfiguration::Get();
+	string data_location = test_config.DataLocation();
+
+	input = StringUtil::Replace(input, "'data/", string("'") + data_location);
+	input = StringUtil::Replace(input, "\"data/", string("\"") + data_location);
+	if (StringUtil::StartsWith(input, "data/")) {
+		input = data_location + input.substr(5);
+	}
+
 	return input;
 }
 
@@ -598,7 +608,14 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 	bool perform_install = false;
 	bool perform_load = false;
 	if (!config->options.autoload_known_extensions) {
-		auto result = SQLLogicTestRunner::LoadExtension(*db, param);
+		auto result = ExtensionLoadResult::NOT_LOADED;
+		try {
+			result = SQLLogicTestRunner::LoadExtension(*db, param);
+		} catch (std::exception &ex) {
+			ErrorData error_data(ex);
+			parser.Fail("extension '%s' load threw an exception: %s", param, error_data.Message());
+		}
+
 		if (result == ExtensionLoadResult::LOADED_EXTENSION) {
 			// add the extension to the list of loaded extensions
 			extensions.insert(param);

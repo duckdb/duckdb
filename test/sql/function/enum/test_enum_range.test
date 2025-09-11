@@ -40,19 +40,24 @@ SELECT enum_range_boundary('orange'::rainbow, NULL)
 statement error
 SELECT enum_range_boundary('orange'::rainbow, 'brl'::currency)
 ----
+<REGEX>:.*Binder Error.*parameters need to link.*
 
 statement error
 SELECT enum_range_boundary(NULL, NULL)
 ----
+<REGEX>:.*Binder Error.*This function needs an ENUM.*
 
 statement error
 SELECT enum_last('bla')
 ----
+<REGEX>:.*Binder Error.*This function needs an ENUM.*
 
 statement error
 SELECT enum_range_boundary('orange'::rainbow, 1)
 ----
+<REGEX>:.*Binder Error.*This function needs an ENUM.*
 
 statement error
 SELECT enum_range_boundary(1, 'orange'::rainbow)
 ----
+<REGEX>:.*Binder Error.*This function needs an ENUM.*

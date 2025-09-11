@@ -29,8 +29,7 @@ public:
 class EncryptionState {
 
 public:
-	DUCKDB_API explicit EncryptionState(EncryptionTypes::CipherType cipher_p, const_data_ptr_t key = nullptr,
-	                                    idx_t key_len = 0);
+	DUCKDB_API explicit EncryptionState(EncryptionTypes::CipherType cipher_p, idx_t key_len);
 	DUCKDB_API virtual ~EncryptionState();
 
 public:
@@ -41,6 +40,10 @@ public:
 	DUCKDB_API virtual size_t Process(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len);
 	DUCKDB_API virtual size_t Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, idx_t tag_len);
 	DUCKDB_API virtual void GenerateRandomData(data_ptr_t data, idx_t len);
+
+protected:
+	EncryptionTypes::CipherType cipher;
+	idx_t key_len;
 };
 
 class EncryptionUtil {
@@ -50,8 +53,8 @@ public:
 
 public:
 	virtual shared_ptr<EncryptionState> CreateEncryptionState(EncryptionTypes::CipherType cipher_p,
-	                                                          const_data_ptr_t key = nullptr, idx_t key_len = 0) const {
-		return make_shared_ptr<EncryptionState>(cipher_p, key, key_len);
+	                                                          idx_t key_len = 0) const {
+		return make_shared_ptr<EncryptionState>(cipher_p, key_len);
 	}
 
 	virtual ~EncryptionUtil() {
