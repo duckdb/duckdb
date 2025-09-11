@@ -275,23 +275,26 @@ public:
 		const auto &types = geo_stats.types;
 		const auto &bbox = geo_stats.bbox;
 
-		stats.__isset.bbox = true;
-		stats.bbox.xmin = bbox.xmin;
-		stats.bbox.xmax = bbox.xmax;
-		stats.bbox.ymin = bbox.ymin;
-		stats.bbox.ymax = bbox.ymax;
+		if (bbox.IsSet()) {
 
-		if (bbox.HasZ()) {
-			stats.bbox.__isset.zmin = true;
-			stats.bbox.__isset.zmax = true;
-			stats.bbox.zmin = bbox.zmin;
-			stats.bbox.zmax = bbox.zmax;
-		}
-		if (bbox.HasM()) {
-			stats.bbox.__isset.mmin = true;
-			stats.bbox.__isset.mmax = true;
-			stats.bbox.mmin = bbox.mmin;
-			stats.bbox.mmax = bbox.mmax;
+			stats.__isset.bbox = true;
+			stats.bbox.xmin = bbox.xmin;
+			stats.bbox.xmax = bbox.xmax;
+			stats.bbox.ymin = bbox.ymin;
+			stats.bbox.ymax = bbox.ymax;
+
+			if (bbox.HasZ()) {
+				stats.bbox.__isset.zmin = true;
+				stats.bbox.__isset.zmax = true;
+				stats.bbox.zmin = bbox.zmin;
+				stats.bbox.zmax = bbox.zmax;
+			}
+			if (bbox.HasM()) {
+				stats.bbox.__isset.mmin = true;
+				stats.bbox.__isset.mmax = true;
+				stats.bbox.mmin = bbox.mmin;
+				stats.bbox.mmax = bbox.mmax;
+			}
 		}
 
 		stats.__isset.geospatial_types = true;

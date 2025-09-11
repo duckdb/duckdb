@@ -77,6 +77,17 @@ select * from roundtrip
 ----
 
 
+# test issue 18816
+statement ok
+copy (select 42 i)
+to '__TEST_DIR__/json_batch'
+(format json, per_thread_output true, overwrite true);
+
+statement ok
+copy (select 42 i)
+to '__TEST_DIR__/json_batch'
+(format json, per_thread_output true, append true);
+
 # test issue #6305
 statement ok
 copy (

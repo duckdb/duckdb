@@ -483,8 +483,8 @@ void CombineHashTypeSwitch(Vector &hashes, Vector &input, const SelectionVector 
 
 void VectorOperations::Hash(Vector &input, Vector &result, idx_t count) {
 	if (input.GetVectorType() == VectorType::DICTIONARY_VECTOR && DictionaryVector::CanCacheHashes(input)) {
-		VectorOperations::Copy(DictionaryVector::GetCachedHashes(input), result, DictionaryVector::SelVector(input),
-		                       count, 0, 0);
+		Vector input_hashes(DictionaryVector::GetCachedHashes(input), DictionaryVector::SelVector(input), count);
+		TemplatedLoopHash<false, hash_t, true>(input_hashes, result, nullptr, count);
 	} else {
 		HashTypeSwitch<false>(input, result, nullptr, count);
 	}
