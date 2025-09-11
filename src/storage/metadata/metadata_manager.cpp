@@ -353,7 +353,6 @@ void MetadataManager::MarkBlocksAsModified() {
 		auto &block = kv.second;
 		idx_t free_list = block.FreeBlocksToInteger();
 		idx_t occupied_list = ~free_list;
-		auto modified_block_list = MetadataBlock::BlocksFromInteger(occupied_list);
 		modified_blocks[block.block_id] = occupied_list;
 	}
 }
