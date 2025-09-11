@@ -55,6 +55,9 @@ public:
 	                                              shared_ptr<AttachedDatabase> database);
 	//! Detach an existing database
 	void DetachDatabase(ClientContext &context, const string &name, OnEntryNotFound if_not_found);
+	//! Rename an existing database
+	void RenameDatabase(ClientContext &context, const string &old_name, const string &new_name,
+	                    OnEntryNotFound if_not_found);
 	//! Rollback the attach of a database
 	shared_ptr<AttachedDatabase> DetachInternal(const string &name);
 	//! Returns a reference to the system catalog

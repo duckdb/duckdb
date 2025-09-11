@@ -1,7 +1,7 @@
 AlterStatement <- 'ALTER' AlterOptions
 
 
-AlterOptions <- AlterTableStmt / AlterViewStmt / AlterSequenceStmt
+AlterOptions <- AlterTableStmt / AlterViewStmt / AlterSequenceStmt / AlterDatabaseStmt
 
 AlterTableStmt <- 'TABLE' IfExists? BaseTableName AlterTableOptions
 
@@ -39,3 +39,7 @@ QualifiedSequenceName <- CatalogQualification? SchemaQualification? SequenceName
 
 AlterSequenceOptions <- RenameAlter / SetSequenceOption
 SetSequenceOption <- List(SequenceOption)
+
+AlterDatabaseStmt <- 'DATABASE'i IfExists? Identifier RenameDatabaseAlter
+
+RenameDatabaseAlter <- 'RENAME'i 'TO'i Identifier

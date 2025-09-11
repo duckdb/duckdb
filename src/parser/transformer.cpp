@@ -173,6 +173,8 @@ unique_ptr<SQLStatement> Transformer::TransformStatementInternal(duckdb_libpgque
 		return TransformCreateIndex(PGCast<duckdb_libpgquery::PGIndexStmt>(stmt));
 	case duckdb_libpgquery::T_PGAlterTableStmt:
 		return TransformAlter(PGCast<duckdb_libpgquery::PGAlterTableStmt>(stmt));
+	case duckdb_libpgquery::T_PGAlterDatabaseStmt:
+		return TransformAlterDatabase(PGCast<duckdb_libpgquery::PGAlterDatabaseStmt>(stmt));
 	case duckdb_libpgquery::T_PGRenameStmt:
 		return TransformRename(PGCast<duckdb_libpgquery::PGRenameStmt>(stmt));
 	case duckdb_libpgquery::T_PGPrepareStmt:

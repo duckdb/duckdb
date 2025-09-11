@@ -2086,6 +2086,18 @@ typedef struct PGCopyDatabaseStmt {
 	const char *copy_database_flag;
 } PGCopyDatabaseStmt;
 
+typedef enum PGAlterDatabaseType {
+	PG_ALTER_DATABASE_RENAME
+} PGAlterDatabaseType;
+
+typedef struct PGAlterDatabaseStmt {
+	PGNodeTag type;
+	const char *dbname;
+	const char *new_name;
+	PGAlterDatabaseType alter_type;
+	bool missing_ok;
+} PGAlterDatabaseStmt;
+
 /* ----------------------
  *		Interval Constant
  * ----------------------
