@@ -1,4 +1,4 @@
-DeleteStatement <- WithClause? 'DELETE'i 'FROM'i TargetOptAlias DeleteUsingClause? WhereClause? ReturningClause?
-TruncateStatement <- 'TRUNCATE'i 'TABLE'i? BaseTableName
-TargetOptAlias <- BaseTableName 'AS'i? ColId?
-DeleteUsingClause <- 'USING'i List(TableRef)
+DeleteStatement <- WithClause? 'DELETE' 'FROM' TargetOptAlias DeleteUsingClause? WhereClause? ReturningClause?
+TruncateStatement <- 'TRUNCATE' 'TABLE'? BaseTableName
+TargetOptAlias <- BaseTableName 'AS'? ColId?
+DeleteUsingClause <- 'USING' List(TableRef)

@@ -57,7 +57,7 @@
  * usage of the returned pointer explicit. Of course the returned value is
  * const or non-const accordingly.
  */
-inline const mbedtls_ecp_keypair *mbedtls_pk_ec_ro(const mbedtls_pk_context pk)
+static inline const mbedtls_ecp_keypair *mbedtls_pk_ec_ro(const mbedtls_pk_context pk)
 {
     switch (mbedtls_pk_get_type(&pk)) {
         case MBEDTLS_PK_ECKEY:
@@ -69,7 +69,7 @@ inline const mbedtls_ecp_keypair *mbedtls_pk_ec_ro(const mbedtls_pk_context pk)
     }
 }
 
-inline mbedtls_ecp_keypair *mbedtls_pk_ec_rw(const mbedtls_pk_context pk)
+static inline mbedtls_ecp_keypair *mbedtls_pk_ec_rw(const mbedtls_pk_context pk)
 {
     switch (mbedtls_pk_get_type(&pk)) {
         case MBEDTLS_PK_ECKEY:
@@ -83,7 +83,7 @@ inline mbedtls_ecp_keypair *mbedtls_pk_ec_rw(const mbedtls_pk_context pk)
 #endif /* MBEDTLS_PK_HAVE_ECC_KEYS && !MBEDTLS_PK_USE_PSA_EC_DATA */
 
 #if defined(MBEDTLS_PK_HAVE_ECC_KEYS)
-inline mbedtls_ecp_group_id mbedtls_pk_get_ec_group_id(const mbedtls_pk_context *pk)
+static inline mbedtls_ecp_group_id mbedtls_pk_get_ec_group_id(const mbedtls_pk_context *pk)
 {
     mbedtls_ecp_group_id id;
 
@@ -121,7 +121,7 @@ inline mbedtls_ecp_group_id mbedtls_pk_get_ec_group_id(const mbedtls_pk_context 
 #define MBEDTLS_PK_IS_RFC8410_GROUP_ID(id)  \
     ((id == MBEDTLS_ECP_DP_CURVE25519) || (id == MBEDTLS_ECP_DP_CURVE448))
 
-inline int mbedtls_pk_is_rfc8410(const mbedtls_pk_context *pk)
+static inline int mbedtls_pk_is_rfc8410(const mbedtls_pk_context *pk)
 {
     mbedtls_ecp_group_id id = mbedtls_pk_get_ec_group_id(pk);
 

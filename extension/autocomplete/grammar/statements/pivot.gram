@@ -5,8 +5,8 @@ PivotUsing <- 'USING' TargetList
 
 PivotColumnList <- List(Expression)
 
-PivotKeyword <- 'PIVOT'i / 'PIVOT_WIDER'i
-UnpivotKeyword <- 'UNPIVOT'i / 'PIVOT_LONGER'i
+PivotKeyword <- 'PIVOT' / 'PIVOT_WIDER'
+UnpivotKeyword <- 'UNPIVOT' / 'PIVOT_LONGER'
 
 UnpivotStatement <- UnpivotKeyword TableRef 'ON' TargetList IntoNameValues?
 

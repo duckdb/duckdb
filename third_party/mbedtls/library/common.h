@@ -135,7 +135,7 @@ void mbedtls_zeroize_and_free(void *buf, size_t len);
  *              Note that this is only a valid pointer if the size of the
  *              buffer is at least \p n + 1.
  */
-inline unsigned char *mbedtls_buffer_offset(
+static inline unsigned char *mbedtls_buffer_offset(
     unsigned char *p, size_t n)
 {
     return p == NULL ? NULL : p + n;
@@ -152,7 +152,7 @@ inline unsigned char *mbedtls_buffer_offset(
  *              Note that this is only a valid pointer if the size of the
  *              buffer is at least \p n + 1.
  */
-inline const unsigned char *mbedtls_buffer_offset_const(
+static inline const unsigned char *mbedtls_buffer_offset_const(
     const unsigned char *p, size_t n)
 {
     return p == NULL ? NULL : p + n;
@@ -183,7 +183,7 @@ __attribute__((always_inline))
  *            the result is not used immediately (e.g., in AES-CTR), mbedtls_xor() may be faster.
  *            For targets without SIMD support, they will behave the same.
  */
-inline void mbedtls_xor(unsigned char *r,
+static inline void mbedtls_xor(unsigned char *r,
                                const unsigned char *a,
                                const unsigned char *b,
                                size_t n)
@@ -265,7 +265,7 @@ __attribute__((always_inline))
  *            the result is not used immediately (e.g., in AES-CTR), mbedtls_xor() may be faster.
  *            For targets without SIMD support, they will behave the same.
  */
-inline void mbedtls_xor_no_simd(unsigned char *r,
+static inline void mbedtls_xor_no_simd(unsigned char *r,
                                        const unsigned char *a,
                                        const unsigned char *b,
                                        size_t n)
@@ -433,5 +433,21 @@ inline void mbedtls_xor_no_simd(unsigned char *r,
 #if !defined(MBEDTLS_MAYBE_UNUSED)
 #    define MBEDTLS_MAYBE_UNUSED
 #endif
+
+/* GCC >= 15 has a warning 'unterminated-string-initialization' which complains if you initialize
+ * a string into an array without space for a terminating NULL character. In some places in the
+ * codebase this behaviour is intended, so we add the macro MBEDTLS_ATTRIBUTE_UNTERMINATED_STRING
+ * to suppress the warning in these places.
+ */
+#if defined(__has_attribute)
+#if __has_attribute(nonstring)
+#define MBEDTLS_HAS_ATTRIBUTE_NONSTRING
+#endif /* __has_attribute(nonstring) */
+#endif /* __has_attribute */
+#if defined(MBEDTLS_HAS_ATTRIBUTE_NONSTRING)
+#define MBEDTLS_ATTRIBUTE_UNTERMINATED_STRING __attribute__((nonstring))
+#else
+#define MBEDTLS_ATTRIBUTE_UNTERMINATED_STRING
+#endif /* MBEDTLS_HAS_ATTRIBUTE_NONSTRING */
 
 #endif /* MBEDTLS_LIBRARY_COMMON_H */

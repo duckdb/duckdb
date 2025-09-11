@@ -16,6 +16,12 @@ namespace duckdb {
 DatabaseManager::DatabaseManager(DatabaseInstance &db)
     : next_oid(0), current_query_number(1), current_transaction_id(0) {
 	system = make_shared_ptr<AttachedDatabase>(db);
+	auto &config = DBConfig::GetConfig(db);
+	path_manager = config.path_manager;
+	if (!path_manager) {
+		// no shared path manager
+		path_manager = make_shared_ptr<DatabaseFilePathManager>();
+	}
 }
 
 DatabaseManager::~DatabaseManager() {
@@ -152,48 +158,37 @@ shared_ptr<AttachedDatabase> DatabaseManager::DetachInternal(const string &name)
 }
 
 void DatabaseManager::CheckPathConflict(const string &path, const string &name) {
-	if (path.empty() || path == IN_MEMORY_PATH) {
-		return;
-	}
+	path_manager->CheckPathConflict(path, name);
+}
 
-	lock_guard<mutex> path_lock(db_paths_lock);
-	auto entry = db_paths_to_name.find(path);
-	if (entry != db_paths_to_name.end()) {
-		throw BinderException("Unique file handle conflict: Cannot attach \"%s\" - the database file \"%s\" is already "
-		                      "attached by database \"%s\"",
-		                      name, path, entry->second);
-	}
+idx_t DatabaseManager::ApproxDatabaseCount() {
+	return path_manager->ApproxDatabaseCount();
 }
 
 void DatabaseManager::InsertDatabasePath(const string &path, const string &name) {
-	if (path.empty() || path == IN_MEMORY_PATH) {
-		return;
-	}
-
-	lock_guard<mutex> path_lock(db_paths_lock);
-	auto entry = db_paths_to_name.emplace(path, name);
-	if (!entry.second) {
-		throw BinderException("Unique file handle conflict: Cannot attach \"%s\" - the database file \"%s\" is already "
-		                      "attached by database \"%s\"",
-		                      name, path, entry.first->second);
-	}
+	path_manager->InsertDatabasePath(path, name);
 }
 
 void DatabaseManager::EraseDatabasePath(const string &path) {
-	if (path.empty() || path == IN_MEMORY_PATH) {
-		return;
-	}
-	lock_guard<mutex> path_lock(db_paths_lock);
-	db_paths_to_name.erase(path);
+	path_manager->EraseDatabasePath(path);
 }
 
 vector<string> DatabaseManager::GetAttachedDatabasePaths() {
-	lock_guard<mutex> path_lock(db_paths_lock);
-	vector<string> paths;
-	for (auto &entry : db_paths_to_name) {
-		paths.push_back(entry.first);
+	vector<string> result;
+	lock_guard<mutex> guard(databases_lock);
+	for (auto &entry : databases) {
+		auto &db_ref = *entry.second;
+		auto &catalog = db_ref.GetCatalog();
+		if (catalog.InMemory() || catalog.IsSystemCatalog()) {
+			continue;
+		}
+		auto path = catalog.GetDBPath();
+		if (path.empty()) {
+			continue;
+		}
+		result.push_back(std::move(path));
 	}
-	return paths;
+	return result;
 }
 
 void DatabaseManager::GetDatabaseType(ClientContext &context, AttachInfo &info, const DBConfig &config,
