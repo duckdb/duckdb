@@ -114,10 +114,14 @@ void SQLLogicTestRunner::EndLoop() {
 }
 
 ExtensionLoadResult SQLLogicTestRunner::LoadExtension(DuckDB &db, const std::string &extension) {
-	Connection con(db);
-	auto result = con.Query("LOAD " + extension);
-	if (!result->HasError()) {
-		return ExtensionLoadResult::LOADED_EXTENSION;
+	auto &test_config = TestConfiguration::Get();
+	if (test_config.GetExtensionAutoLoadingMode() != TestConfiguration::ExtensionAutoLoadingMode::NONE) {
+		// try LOAD extension
+		Connection con(db);
+		auto result = con.Query("LOAD " + extension);
+		if (!result->HasError()) {
+			return ExtensionLoadResult::LOADED_EXTENSION;
+		}
 	}
 	return ExtensionHelper::LoadExtension(db, extension);
 }
