@@ -1,0 +1,59 @@
+name: Re-run Checks on Label Approved
+
+on:
+  pull_request_target:
+    types: [labeled]
+permissions:
+  actions: write
+  pull-requests: read
+  contents: read
+env:
+  GH_TOKEN: ${{ secrets.DUCKDBLABS_BOT_TOKEN }}
+
+jobs:
+  approved:
+    if: github.event.label.name == 'approved'
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check actor is org member
+      id: orgcheck
+      run: |
+          resp=$(curl -sS \
+          -H "Authorization: Bearer ${{ env.GH_TOKEN }}" \
+          -H "Accept: application/vnd.github+json" \
+          https://api.github.com/orgs/zul8ha/memberships/${{ github.actor }})
+
+          state=$(jq -r '.state // empty' <<< $resp)
+          if [ $state != "active" ]; then
+              echo "Not an org member (or token lacks read:org)"; exit 1
+          fi
+
+  code-quality:
+    needs: approved
+    if: ${{ needs.approved.result == 'success' }}
+    uses: ./.github/workflows/CodeQuality.yml
+    secrets: inherit
+
+  main:
+    needs: approved
+    if: ${{ needs.approved.result == 'success' }}
+    uses: ./.github/workflows/Main.yml
+    secrets: inherit
+
+  linux-release:
+    needs: approved
+    if: ${{ needs.approved.result == 'success' }}
+    uses: ./.github/workflows/LinuxRelease.yml
+    secrets: inherit
+
+  windows:
+    needs: approved
+    if: ${{ needs.approved.result == 'success' }}
+    uses: ./.github/workflows/Windows.yml
+    secrets: inherit  
+
+  extensions:
+    needs: approved
+    if: ${{ needs.approved.result == 'success' }}
+    uses: ./.github/workflows/Extensions.yml
+    secrets: inherit
