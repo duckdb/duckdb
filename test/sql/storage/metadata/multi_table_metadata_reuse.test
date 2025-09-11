@@ -1,0 +1,58 @@
+# name: test/sql/storage/metadata/multi_table_metadata_reuse.test
+# description: Test metadata reuse with multiple tables and restarts
+# group: [metadata]
+
+load __TEST_DIR__/multi_table_metadata_reuse.db
+
+statement ok
+SET experimental_metadata_reuse=true;
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+CREATE TABLE ducklake_table(end_snapshot BIGINT);
+
+statement ok
+CREATE TABLE ducklake_column(end_snapshot BIGINT);
+
+statement ok
+COMMIT;
+
+restart
+
+statement ok
+SET experimental_metadata_reuse=true;
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+INSERT INTO ducklake_table VALUES (1);
+
+statement ok
+INSERT INTO ducklake_column VALUES (1);
+
+statement ok
+COMMIT;
+
+restart
+
+statement ok
+SET experimental_metadata_reuse=true;
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+UPDATE ducklake_table SET end_snapshot = 3
+
+statement ok
+UPDATE ducklake_column SET end_snapshot = 3
+
+statement ok
+COMMIT;
+
+statement ok
+CREATE TABLE my_table (a INTEGER, b INTEGER);
+

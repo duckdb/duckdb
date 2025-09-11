@@ -2,7 +2,6 @@
 
 #include "duckdb/common/serializer/read_stream.hpp"
 #include "duckdb/common/serializer/write_stream.hpp"
-#include "duckdb/common/printer.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
@@ -233,7 +232,6 @@ void MetadataManager::Flush() {
 	// Write the blocks of the metadata manager to disk.
 	const idx_t total_metadata_size = GetMetadataBlockSize() * METADATA_BLOCK_COUNT;
 
-	Printer::PrintF("\nFlush");
 	for (auto &kv : blocks) {
 		auto &block = kv.second;
 		if (!block.dirty) {
@@ -242,7 +240,6 @@ void MetadataManager::Flush() {
 			}
 			continue;
 		}
-		Printer::PrintF("Writing block %s", block.ToString());
 		auto handle = buffer_manager.Pin(block.block);
 		// zero-initialize the few leftover bytes
 		memset(handle.Ptr() + total_metadata_size, 0, block_manager.GetBlockSize() - total_metadata_size);
@@ -331,7 +328,6 @@ void MetadataBlock::FreeBlocksFromInteger(idx_t free_list) {
 }
 
 void MetadataManager::MarkBlocksAsModified() {
-	Printer::PrintF("\nMarkBlocksAsModified");
 	// for any blocks that were modified in the last checkpoint - set them to free blocks currently
 	for (auto &kv : modified_blocks) {
 		auto block_id = kv.first;
@@ -346,11 +342,9 @@ void MetadataManager::MarkBlocksAsModified() {
 			// if new free_blocks is all blocks - mark entire block as modified
 			blocks.erase(entry);
 			block_manager.MarkBlockAsModified(block_id);
-			Printer::PrintF("New free block %d", block_id);
 		} else {
 			// set the new set of free blocks
 			block.FreeBlocksFromInteger(new_free_blocks);
-			Printer::PrintF("New free blocks %s", block.ToString());
 		}
 	}
 
@@ -360,15 +354,6 @@ void MetadataManager::MarkBlocksAsModified() {
 		idx_t free_list = block.FreeBlocksToInteger();
 		idx_t occupied_list = ~free_list;
 		auto modified_block_list = MetadataBlock::BlocksFromInteger(occupied_list);
-		std::sort(modified_block_list.begin(), modified_block_list.end());
-		string block_list;
-		for (auto &id : modified_block_list) {
-			if (!block_list.empty()) {
-				block_list += ", ";
-			}
-			block_list += to_string(id);
-		}
-		Printer::PrintF("New modified blocks block_id: %d [%s]", block.block_id, block_list);
 		modified_blocks[block.block_id] = occupied_list;
 	}
 }
@@ -377,7 +362,6 @@ void MetadataManager::ClearModifiedBlocks(const vector<MetaBlockPointer> &pointe
 	if (pointers.empty()) {
 		return;
 	}
-	string cleared_block_list;
 	for (auto &pointer : pointers) {
 		auto block_id = pointer.GetBlockId();
 		auto block_index = pointer.GetBlockIndex();
@@ -385,15 +369,10 @@ void MetadataManager::ClearModifiedBlocks(const vector<MetaBlockPointer> &pointe
 		if (entry == modified_blocks.end()) {
 			throw InternalException("ClearModifiedBlocks - Block id %llu not found in modified_blocks", block_id);
 		}
-		if (!cleared_block_list.empty()) {
-			cleared_block_list += ", ";
-		}
-		cleared_block_list += to_string(block_id) + "." + to_string(block_index);
 		auto &modified_list = entry->second;
 		// unset the bit
 		modified_list &= ~(1ULL << block_index);
 	}
-	Printer::PrintF("Clear modified blocks: %s", cleared_block_list);
 }
 
 vector<MetadataBlockInfo> MetadataManager::GetMetadataInfo() const {
