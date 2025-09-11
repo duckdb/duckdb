@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/planner/table_filter_state.hpp"
@@ -255,7 +257,7 @@ public:
 			if (state.vectors_processed == 40) {
 				const double selectivity =
 				    static_cast<double>(state.tuples_accepted) / static_cast<double>(state.tuples_processed);
-				printf("%f\n", selectivity);
+				// printf("%f\n", selectivity);
 				if (selectivity > 0.8) {
 					state.continue_filtering = false;
 				}
@@ -305,10 +307,21 @@ public:
 	unique_ptr<Expression> ToExpression(const Expression &column) const override;
 
 	void Serialize(Serializer &serializer) const override {
-		printf("I don't know how to do this\n");
+		TableFilter::Serialize(serializer);
+		serializer.WriteProperty<bool>(200, "filters_null_values", filters_null_values);
+		serializer.WriteProperty<string>(201, "key_column_name", key_column_name);
+		serializer.WriteProperty<LogicalType>(202, "key_type", key_type);
+
+		// todo: How/Should be serialize the bloom filter?
 	}
 	static unique_ptr<TableFilter> Deserialize(Deserializer &deserializer) {
-		printf("I don't know how to do this\n");
+		bool filters_null_values = deserializer.ReadProperty<bool>(200, "filters_null_values");
+		string key_column_name = deserializer.ReadProperty<string>(201, "key_column_name");
+		LogicalType key_type = deserializer.ReadProperty<LogicalType>(202, "key_type");
+
+		CacheSectorizedBloomFilter filter;
+		auto result = make_uniq<BloomFilter>(filter, filters_null_values, key_column_name, key_type);
+		return std::move(result);
 	}
 };
 
