@@ -29,7 +29,7 @@ CompressionFunction GetPatasFunction<double>(PhysicalType data_type) {
 	                           PatasScan<double>, PatasScanPartial<double>, PatasFetchRow<double>, PatasSkip<double>);
 }
 
-CompressionFunction PatasCompressionFun::GetFunction(PhysicalType type) {
+CompressionFunction PatasCompressionFun::GetFunction(QueryContext context, PhysicalType type) {
 	switch (type) {
 	case PhysicalType::FLOAT:
 		return GetPatasFunction<float>(type);

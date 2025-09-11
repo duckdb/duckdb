@@ -3,7 +3,7 @@
 
 namespace duckdb {
 
-CompressionFunction UncompressedFun::GetFunction(PhysicalType type) {
+CompressionFunction UncompressedFun::GetFunction(QueryContext context, PhysicalType type) {
 	switch (type) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
@@ -20,7 +20,7 @@ CompressionFunction UncompressedFun::GetFunction(PhysicalType type) {
 	case PhysicalType::DOUBLE:
 	case PhysicalType::LIST:
 	case PhysicalType::INTERVAL:
-		return FixedSizeUncompressed::GetFunction(type);
+		return FixedSizeUncompressed::GetFunction(context, type);
 	case PhysicalType::BIT:
 		return ValidityUncompressed::GetFunction(type);
 	case PhysicalType::VARCHAR:
