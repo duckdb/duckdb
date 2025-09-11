@@ -89,8 +89,8 @@ InMemoryTableDataWriter::InMemoryTableDataWriter(InMemoryCheckpointer &checkpoin
 void InMemoryTableDataWriter::WriteUnchangedTable(MetaBlockPointer pointer, idx_t total_rows) {
 }
 
-void InMemoryTableDataWriter::FinalizeTable(const TableStatistics &global_stats, DataTableInfo *info,
-                                            Serializer &serializer) {
+void InMemoryTableDataWriter::FinalizeTable(const TableStatistics &global_stats, DataTableInfo &info,
+                                            RowGroupCollection &collection, Serializer &serializer) {
 	// nop: no need to write anything
 }
 
