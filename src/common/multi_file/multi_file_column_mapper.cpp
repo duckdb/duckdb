@@ -9,7 +9,6 @@
 #include "duckdb/planner/filter/list.hpp"
 #include "duckdb/function/scalar/struct_functions.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
-#include "duckdb/planner/filter/bloom_filter.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 
 namespace duckdb {
