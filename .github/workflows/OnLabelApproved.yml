@@ -9,6 +9,7 @@ permissions:
   contents: read
 env:
   GH_TOKEN: ${{ secrets.DUCKDBLABS_BOT_TOKEN }}
+  ORG: 'duckdb'
 
 jobs:
   approved:
@@ -21,7 +22,7 @@ jobs:
           resp=$(curl -sS \
           -H "Authorization: Bearer ${{ env.GH_TOKEN }}" \
           -H "Accept: application/vnd.github+json" \
-          https://api.github.com/orgs/zul8ha/memberships/${{ github.actor }})
+          https://api.github.com/orgs/${{ env.ORG }}/memberships/${{ github.actor }})
 
           state=$(jq -r '.state // empty' <<< $resp)
           if [ $state != "active" ]; then
