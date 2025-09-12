@@ -58,3 +58,21 @@ jobs:
     if: ${{ needs.approved.result == 'success' }}
     uses: ./.github/workflows/Extensions.yml
     secrets: inherit
+
+  swift:
+    needs: approved
+    if: ${{ needs.approved.result == 'success' }}
+    uses: ./.github/workflows/Swift.yml
+    secrets: inherit
+
+  regression:
+    needs: approved
+    if: ${{ needs.approved.result == 'success' }}
+    uses: ./.github/workflows/Regression.yml
+    secrets: inherit
+
+  julia:
+    needs: approved
+    if: ${{ needs.approved.result == 'success' }}
+    uses: ./.github/workflows/Julia.yml
+    secrets: inherit
