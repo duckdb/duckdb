@@ -64,11 +64,7 @@ public:
 	void SetDefaultDatabase(ClientContext &context, const string &new_value);
 
 	//! Inserts a path to name mapping to the database paths map
-	void InsertDatabasePath(const string &path, const string &name);
-	//! Erases a path from the database paths map
-	void EraseDatabasePath(const string &path);
-	//! Check if a path has a conflict
-	void CheckPathConflict(const string &path, const string &name);
+	InsertDatabasePathResult InsertDatabasePath(const AttachInfo &info, AttachOptions &options);
 
 	//! Returns the database type. This might require checking the header of the file, in which case the file handle is
 	//! necessary. We can only grab the file handle, if it is not yet held, even for uncommitted changes. Thus, we have
