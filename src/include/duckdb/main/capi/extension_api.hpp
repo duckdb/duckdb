@@ -519,6 +519,17 @@ typedef struct {
 	// New query execution functions
 
 	duckdb_arrow_options (*duckdb_result_get_arrow_options)(duckdb_result *result);
+	// New functions around the registering of functions with conflict resolution
+
+	duckdb_state (*duckdb_register_aggregate_function_or)(duckdb_connection con,
+	                                                      duckdb_aggregate_function aggregate_function,
+	                                                      duckdb_on_conflict on_conflict);
+	duckdb_state (*duckdb_register_aggregate_function_set_or)(duckdb_connection con, duckdb_aggregate_function_set set,
+	                                                          duckdb_on_conflict on_conflict);
+	duckdb_state (*duckdb_register_scalar_function_or)(duckdb_connection con, duckdb_scalar_function scalar_function,
+	                                                   duckdb_on_conflict on_conflict);
+	duckdb_state (*duckdb_register_scalar_function_set_or)(duckdb_connection con, duckdb_scalar_function_set set,
+	                                                       duckdb_on_conflict on_conflict);
 	// New functions around scalar function binding
 
 	void (*duckdb_scalar_function_set_bind)(duckdb_scalar_function scalar_function, duckdb_scalar_function_bind_t bind);
@@ -998,6 +1009,10 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_prepared_statement_column_logical_type = duckdb_prepared_statement_column_logical_type;
 	result.duckdb_prepared_statement_column_type = duckdb_prepared_statement_column_type;
 	result.duckdb_result_get_arrow_options = duckdb_result_get_arrow_options;
+	result.duckdb_register_aggregate_function_or = duckdb_register_aggregate_function_or;
+	result.duckdb_register_aggregate_function_set_or = duckdb_register_aggregate_function_set_or;
+	result.duckdb_register_scalar_function_or = duckdb_register_scalar_function_or;
+	result.duckdb_register_scalar_function_set_or = duckdb_register_scalar_function_set_or;
 	result.duckdb_scalar_function_set_bind = duckdb_scalar_function_set_bind;
 	result.duckdb_scalar_function_bind_set_error = duckdb_scalar_function_bind_set_error;
 	result.duckdb_scalar_function_get_client_context = duckdb_scalar_function_get_client_context;

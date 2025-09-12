@@ -602,6 +602,19 @@ typedef struct {
 	duckdb_arrow_options (*duckdb_result_get_arrow_options)(duckdb_result *result);
 #endif
 
+// New functions around the registering of functions with conflict resolution
+#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+	duckdb_state (*duckdb_register_aggregate_function_or)(duckdb_connection con,
+	                                                      duckdb_aggregate_function aggregate_function,
+	                                                      duckdb_on_conflict on_conflict);
+	duckdb_state (*duckdb_register_aggregate_function_set_or)(duckdb_connection con, duckdb_aggregate_function_set set,
+	                                                          duckdb_on_conflict on_conflict);
+	duckdb_state (*duckdb_register_scalar_function_or)(duckdb_connection con, duckdb_scalar_function scalar_function,
+	                                                   duckdb_on_conflict on_conflict);
+	duckdb_state (*duckdb_register_scalar_function_set_or)(duckdb_connection con, duckdb_scalar_function_set set,
+	                                                       duckdb_on_conflict on_conflict);
+#endif
+
 // New functions around scalar function binding
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
 	void (*duckdb_scalar_function_set_bind)(duckdb_scalar_function scalar_function, duckdb_scalar_function_bind_t bind);
@@ -1109,6 +1122,12 @@ typedef struct {
 
 // Version unstable_new_query_execution_functions
 #define duckdb_result_get_arrow_options duckdb_ext_api.duckdb_result_get_arrow_options
+
+// Version unstable_new_registration_conflict_handling_functions
+#define duckdb_register_scalar_function_or        duckdb_ext_api.duckdb_register_scalar_function_or
+#define duckdb_register_scalar_function_set_or    duckdb_ext_api.duckdb_register_scalar_function_set_or
+#define duckdb_register_aggregate_function_or     duckdb_ext_api.duckdb_register_aggregate_function_or
+#define duckdb_register_aggregate_function_set_or duckdb_ext_api.duckdb_register_aggregate_function_set_or
 
 // Version unstable_new_scalar_function_functions
 #define duckdb_scalar_function_set_bind                duckdb_ext_api.duckdb_scalar_function_set_bind

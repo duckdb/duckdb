@@ -343,13 +343,19 @@ void duckdb_scalar_function_set_function(duckdb_scalar_function function, duckdb
 }
 
 duckdb_state duckdb_register_scalar_function(duckdb_connection connection, duckdb_scalar_function function) {
+	return duckdb_register_scalar_function_or(connection, function, DUCKDB_ON_CONFLICT_ERROR);
+}
+
+duckdb_state duckdb_register_scalar_function_or(duckdb_connection connection, duckdb_scalar_function function,
+                                                duckdb_on_conflict on_conflict) {
 	if (!connection || !function) {
 		return DuckDBError;
 	}
 	auto &scalar_function = GetCScalarFunction(function);
 	duckdb::ScalarFunctionSet set(scalar_function.name);
 	set.AddFunction(scalar_function);
-	return duckdb_register_scalar_function_set(connection, reinterpret_cast<duckdb_scalar_function_set>(&set));
+	return duckdb_register_scalar_function_set_or(connection, reinterpret_cast<duckdb_scalar_function_set>(&set),
+	                                              on_conflict);
 }
 
 duckdb_scalar_function_set duckdb_create_scalar_function_set(const char *name) {
@@ -379,6 +385,11 @@ duckdb_state duckdb_add_scalar_function_to_set(duckdb_scalar_function_set set, d
 }
 
 duckdb_state duckdb_register_scalar_function_set(duckdb_connection connection, duckdb_scalar_function_set set) {
+	return duckdb_register_scalar_function_set_or(connection, set, DUCKDB_ON_CONFLICT_ERROR);
+}
+
+duckdb_state duckdb_register_scalar_function_set_or(duckdb_connection connection, duckdb_scalar_function_set set,
+                                                    duckdb_on_conflict on_conflict) {
 	if (!connection || !set) {
 		return DuckDBError;
 	}
@@ -401,11 +412,30 @@ duckdb_state duckdb_register_scalar_function_set(duckdb_connection connection, d
 		}
 	}
 
+	auto on_conflict_handle = duckdb::OnCreateConflict::ERROR_ON_CONFLICT;
+	switch (on_conflict) {
+	case DUCKDB_ON_CONFLICT_ERROR:
+		on_conflict_handle = duckdb::OnCreateConflict::ERROR_ON_CONFLICT;
+		break;
+	case DUCKDB_ON_CONFLICT_IGNORE:
+		on_conflict_handle = duckdb::OnCreateConflict::IGNORE_ON_CONFLICT;
+		break;
+	case DUCKDB_ON_CONFLICT_REPLACE:
+		on_conflict_handle = duckdb::OnCreateConflict::REPLACE_ON_CONFLICT;
+		break;
+	case DUCKDB_ON_CONFLICT_ALTER:
+		on_conflict_handle = duckdb::OnCreateConflict::ALTER_ON_CONFLICT;
+		break;
+	default:
+		return DuckDBError;
+	}
+
 	try {
 		auto con = reinterpret_cast<duckdb::Connection *>(connection);
 		con->context->RunFunctionInTransaction([&]() {
 			auto &catalog = duckdb::Catalog::GetSystemCatalog(*con->context);
 			duckdb::CreateScalarFunctionInfo sf_info(scalar_function_set);
+			sf_info.on_conflict = on_conflict_handle;
 			catalog.CreateFunction(*con->context, sf_info);
 		});
 	} catch (...) {

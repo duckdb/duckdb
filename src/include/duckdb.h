@@ -245,6 +245,13 @@ typedef enum duckdb_error_type {
 //! An enum over DuckDB's different cast modes.
 typedef enum duckdb_cast_mode { DUCKDB_CAST_NORMAL = 0, DUCKDB_CAST_TRY = 1 } duckdb_cast_mode;
 
+typedef enum duckdb_on_conflict {
+	DUCKDB_ON_CONFLICT_ERROR = 0,   // Error on conflict
+	DUCKDB_ON_CONFLICT_IGNORE = 1,  // Ignore on conflict
+	DUCKDB_ON_CONFLICT_REPLACE = 2, // Replace on conflict
+	DUCKDB_ON_CONFLICT_ALTER = 3    // Only for functions: attempt to add an overload on conflict
+} duckdb_on_conflict;
+
 //===--------------------------------------------------------------------===//
 // General type definitions
 //===--------------------------------------------------------------------===//
@@ -3580,6 +3587,22 @@ DUCKDB_C_API duckdb_state duckdb_register_scalar_function(duckdb_connection con,
                                                           duckdb_scalar_function scalar_function);
 
 /*!
+Register the scalar function object within the given connection.
+
+The function requires at least a name, a function and a return type.
+
+If the function is incomplete DuckDBError is returned.
+
+* @param con The connection to register it in.
+* @param scalar_function The function pointer
+* @param on_conflict The conflict resolution strategy to apply if a function with the same name already exists.
+* @return Whether or not the registration was successful.
+*/
+DUCKDB_C_API duckdb_state duckdb_register_scalar_function_or(duckdb_connection con,
+                                                             duckdb_scalar_function scalar_function,
+                                                             duckdb_on_conflict on_conflict);
+
+/*!
 Retrieves the extra info of the function as set in `duckdb_scalar_function_set_extra_info`.
 
 * @param info The info object.
@@ -3658,6 +3681,21 @@ If the set is incomplete or a function with this name already exists DuckDBError
 * @return Whether or not the registration was successful.
 */
 DUCKDB_C_API duckdb_state duckdb_register_scalar_function_set(duckdb_connection con, duckdb_scalar_function_set set);
+
+/*!
+Register the scalar function set within the given connection.
+
+The set requires at least a single valid overload.
+
+If the set is incomplete DuckDBError is returned.
+
+* @param con The connection to register it in.
+* @param set The function set to register
+* @param on_conflict The conflict resolution strategy to apply if a function with the same name already exists.
+* @return Whether or not the registration was successful.
+*/
+DUCKDB_C_API duckdb_state duckdb_register_scalar_function_set_or(duckdb_connection con, duckdb_scalar_function_set set,
+                                                                 duckdb_on_conflict on_conflict);
 
 /*!
 Returns the number of input arguments of the scalar function.
@@ -3789,6 +3827,21 @@ DUCKDB_C_API duckdb_state duckdb_register_aggregate_function(duckdb_connection c
                                                              duckdb_aggregate_function aggregate_function);
 
 /*!
+Register the aggregate function object within the given connection.
+
+The function requires at least a name, functions and a return type.
+
+If the function is incomplete DuckDBError is returned.
+
+* @param con The connection to register it in.
+* @param on_conflict The conflict resolution strategy to apply if a function with the same name already exists.
+* @return Whether or not the registration was successful.
+*/
+DUCKDB_C_API duckdb_state duckdb_register_aggregate_function_or(duckdb_connection con,
+                                                                duckdb_aggregate_function aggregate_function,
+                                                                duckdb_on_conflict on_conflict);
+
+/*!
 Sets the NULL handling of the aggregate function to SPECIAL_HANDLING.
 
 * @param aggregate_function The aggregate function
@@ -3860,6 +3913,22 @@ If the set is incomplete or a function with this name already exists DuckDBError
 */
 DUCKDB_C_API duckdb_state duckdb_register_aggregate_function_set(duckdb_connection con,
                                                                  duckdb_aggregate_function_set set);
+
+/*!
+Register the aggregate function set within the given connection.
+
+The set requires at least a single valid overload.
+
+If the set is incomplete DuckDBError is returned.
+
+* @param con The connection to register it in.
+* @param set The function set to register
+* @param on_conflict The conflict resolution strategy to apply if a function with the same name already exists.
+* @return Whether or not the registration was successful.
+*/
+DUCKDB_C_API duckdb_state duckdb_register_aggregate_function_set_or(duckdb_connection con,
+                                                                    duckdb_aggregate_function_set set,
+                                                                    duckdb_on_conflict on_conflict);
 
 //===--------------------------------------------------------------------===//
 // Table Functions
