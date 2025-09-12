@@ -558,6 +558,8 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"st_area_spheroid", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_asgeojson", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_ashexwkb", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"st_asmvt", "spatial", CatalogType::AGGREGATE_FUNCTION_ENTRY},
+    {"st_asmvtgeom", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_assvg", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_astext", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_aswkb", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
