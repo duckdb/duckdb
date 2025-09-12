@@ -13,16 +13,7 @@ SourceResultType PhysicalAlter::GetData(ExecutionContext &context, DataChunk &ch
 	if (info->type == AlterType::ALTER_DATABASE) {
 		auto &db_info = info->Cast<AlterDatabaseInfo>();
 		auto &db_manager = DatabaseManager::Get(context.client);
-
-		switch (db_info.alter_database_type) {
-		case AlterDatabaseType::RENAME_DATABASE: {
-			auto &rename_info = db_info.Cast<RenameDatabaseInfo>();
-			db_manager.RenameDatabase(context.client, db_info.catalog, rename_info.new_name, db_info.if_not_found);
-			break;
-		}
-		default:
-			throw InternalException("Unsupported ALTER DATABASE operation");
-		}
+		db_manager.Alter(context.client, db_info);
 	} else {
 		auto &catalog = Catalog::GetCatalog(context.client, info->catalog);
 		catalog.Alter(context.client, *info);

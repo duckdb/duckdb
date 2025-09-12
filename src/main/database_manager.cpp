@@ -10,6 +10,7 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
+#include "duckdb/parser/parsed_data/alter_database_info.hpp"
 
 namespace duckdb {
 
@@ -141,6 +142,20 @@ void DatabaseManager::DetachDatabase(ClientContext &context, const string &name,
 	}
 
 	attached_db->OnDetach(context);
+}
+
+void DatabaseManager::Alter(ClientContext &context, AlterInfo &info) {
+	auto &db_info = info.Cast<AlterDatabaseInfo>();
+
+	switch (db_info.alter_database_type) {
+	case AlterDatabaseType::RENAME_DATABASE: {
+		auto &rename_info = db_info.Cast<RenameDatabaseInfo>();
+		RenameDatabase(context, db_info.catalog, rename_info.new_name, db_info.if_not_found);
+		break;
+	}
+	default:
+		throw InternalException("Unsupported ALTER DATABASE operation");
+	}
 }
 
 void DatabaseManager::RenameDatabase(ClientContext &context, const string &old_name, const string &new_name,
