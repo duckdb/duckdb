@@ -69,12 +69,17 @@ optional_ptr<AttachedDatabase> DatabaseManager::GetDatabase(ClientContext &conte
 shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &context, AttachInfo &info,
                                                              AttachOptions &options) {
 	auto &config = DBConfig::GetConfig(context);
-	if (options.db_type.empty() || StringUtil::CIEquals(options.db_type, "DUCKDB")) {
+	if (options.db_type.empty() || StringUtil::CIEquals(options.db_type, "duckdb")) {
 		if (InsertDatabasePath(info, options) == InsertDatabasePathResult::ALREADY_EXISTS) {
 			return nullptr;
 		}
 	}
 	GetDatabaseType(context, info, config, options);
+	if (!options.db_type.empty()) {
+		// we only need to prevent duplicate opening of DuckDB files
+		// if this is not a DuckDB file but e.g. a CSV or Parquet file, we don't need to do this duplicate protection
+		options.stored_database_path.reset();
+	}
 	if (AttachedDatabase::NameIsReserved(info.name)) {
 		throw BinderException("Attached database name \"%s\" cannot be used because it is a reserved name", info.name);
 	}
@@ -194,7 +199,7 @@ void DatabaseManager::GetDatabaseType(ClientContext &context, AttachInfo &info, 
                                       AttachOptions &options) {
 
 	// Test if the database is a DuckDB database file.
-	if (StringUtil::CIEquals(options.db_type, "DUCKDB")) {
+	if (StringUtil::CIEquals(options.db_type, "duckdb")) {
 		options.db_type = "";
 		return;
 	}
