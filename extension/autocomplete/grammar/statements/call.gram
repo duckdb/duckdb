@@ -1,1 +1,1 @@
-CallStatement <- 'CALL'i TableFunctionName TableFunctionArguments
+CallStatement <- 'CALL' TableFunctionName TableFunctionArguments

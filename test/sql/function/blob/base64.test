@@ -87,8 +87,10 @@ select from_base64('AAAA');
 statement error
 SELECT from_base64('ab');
 ----
+<REGEX>:.*Conversion Error: Could not decode string.*
 
 # unknown bytes
 statement error
 SELECT from_base64('üab');
 ----
+<REGEX>:.*Conversion Error: Could not decode string.*

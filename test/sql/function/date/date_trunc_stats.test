@@ -15,3 +15,4 @@ SELECT date_trunc('DAY', A0) FROM T1
 statement error
 SELECT datetrunc('milliseconds', DATE '-2005205-7-28');
 ----
+<REGEX>:.*Conversion Error.*not in timestamp range.*

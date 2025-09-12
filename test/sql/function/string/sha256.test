@@ -49,3 +49,4 @@ d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35	6b86b273ff34fce
 statement error
 SELECT sha256()
 ----
+<REGEX>:.*Binder Error: No function matches.*

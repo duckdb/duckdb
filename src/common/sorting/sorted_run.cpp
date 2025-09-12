@@ -451,6 +451,9 @@ void SortedRun::Finalize(bool external) {
 		const auto sort_key_type = key_data->GetLayout().GetSortKeyType();
 		if (!SortKeyUtils::IsConstantSize(sort_key_type) || SortKeyUtils::HasPayload(sort_key_type)) {
 			Reorder(context, key_data, payload_data);
+		} else {
+			// This ensures keys are unpinned even if they are constant size and have no payload
+			key_data->Unpin();
 		}
 	}
 

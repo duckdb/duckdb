@@ -575,7 +575,7 @@ void Linenoise::EditMoveEnd() {
 
 /* Move cursor to the start of the line. */
 void Linenoise::EditMoveStartOfLine() {
-	while (pos > 0 && buf[pos] != '\n') {
+	while (pos > 0 && buf[pos - 1] != '\n') {
 		pos--;
 	}
 	RefreshLine();

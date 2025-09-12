@@ -31,8 +31,6 @@ bool ConvertStructToVariant(ToVariantSourceData &source, ToVariantGlobalResultDa
 		auto result_index = selvec ? selvec->get_index(i) : i;
 
 		auto &blob_offset = blob_offset_data[result_index];
-		auto &children_list_entry = variant.children_data[result_index];
-		auto &keys_list_entry = variant.keys_data[result_index];
 
 		if (source_validity.RowIsValid(index)) {
 			WriteVariantMetadata<WRITE_DATA>(result, result_index, values_offset_data, blob_offset, values_index_selvec,
@@ -55,6 +53,9 @@ bool ConvertStructToVariant(ToVariantSourceData &source, ToVariantGlobalResultDa
 
 			//! children
 			if (WRITE_DATA) {
+				auto &children_list_entry = variant.children_data[result_index];
+				auto &keys_list_entry = variant.keys_data[result_index];
+
 				idx_t children_index = children_list_entry.offset + children_offset_data[result_index];
 				idx_t keys_offset = keys_list_entry.offset + keys_offset_data[result_index];
 				for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {

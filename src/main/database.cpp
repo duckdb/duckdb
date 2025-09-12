@@ -31,6 +31,7 @@
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/common/http_util.hpp"
 #include "mbedtls_wrapper.hpp"
+#include "duckdb/main/database_file_path_manager.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -476,6 +477,7 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 		                                                 config.options.allocator_bulk_deallocation_flush_threshold);
 	}
 	config.db_cache_entry = std::move(new_config.db_cache_entry);
+	config.path_manager = std::move(new_config.path_manager);
 }
 
 DBConfig &DBConfig::GetConfig(ClientContext &context) {

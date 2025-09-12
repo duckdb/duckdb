@@ -38,10 +38,12 @@ bool QueryProfiler::IsDetailedEnabled() const {
 
 ProfilerPrintFormat QueryProfiler::GetPrintFormat(ExplainFormat format) const {
 	auto print_format = ClientConfig::GetConfig(context).profiler_print_format;
-	if (format == ExplainFormat::DEFAULT) {
-		return print_format;
-	}
 	switch (format) {
+	case ExplainFormat::DEFAULT:
+		if (print_format != ProfilerPrintFormat::NO_OUTPUT) {
+			return print_format;
+		}
+		DUCKDB_EXPLICIT_FALLTHROUGH;
 	case ExplainFormat::TEXT:
 		return ProfilerPrintFormat::QUERY_TREE;
 	case ExplainFormat::JSON:
