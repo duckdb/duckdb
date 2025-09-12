@@ -246,10 +246,14 @@ typedef enum duckdb_error_type {
 typedef enum duckdb_cast_mode { DUCKDB_CAST_NORMAL = 0, DUCKDB_CAST_TRY = 1 } duckdb_cast_mode;
 
 typedef enum duckdb_on_conflict {
-	DUCKDB_ON_CONFLICT_ERROR = 0,   // Error on conflict
-	DUCKDB_ON_CONFLICT_IGNORE = 1,  // Ignore on conflict
-	DUCKDB_ON_CONFLICT_REPLACE = 2, // Replace on conflict
-	DUCKDB_ON_CONFLICT_ALTER = 3    // Only for functions: attempt to add an overload on conflict
+	// Error on conflict
+	DUCKDB_ON_CONFLICT_ERROR = 0,
+	// Silently do nothing on conflict
+	DUCKDB_ON_CONFLICT_IGNORE = 1,
+	// Replace on conflict
+	DUCKDB_ON_CONFLICT_REPLACE = 2,
+	// Only for functions: attempt to add an overload if the function already exists
+	DUCKDB_ON_CONFLICT_ALTER = 3
 } duckdb_on_conflict;
 
 //===--------------------------------------------------------------------===//
