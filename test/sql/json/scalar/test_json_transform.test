@@ -525,3 +525,25 @@ statement error
 select json_transform_strict('42', '"TIMESTAMP"')
 ----
 <REGEX>:.*Invalid Input Error.*Unable to cast.*
+
+# enum tests
+statement ok
+CREATE OR REPLACE TYPE test_enum AS ENUM ('a', 'b', 'c');
+
+query T
+select json_transform('{"test": "a"}', '{"test": "test_enum"}')
+----
+{'test': a}
+
+query T
+select json_transform('{"test": ["a","b"]}', '{"test": "test_enum[]"}')
+----
+{'test': [a, b]}
+
+query T
+select json_transform('{"test": ["a","b"]}', '{"test": "test_enum[2]"}')
+----
+{'test': [a, b]}
+
+statement ok
+DROP TYPE test_enum;

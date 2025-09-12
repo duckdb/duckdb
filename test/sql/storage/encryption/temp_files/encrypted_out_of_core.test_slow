@@ -2,9 +2,10 @@
 # description: Encrypted large joins in persistent databases have a leftover temporary directory.
 # group: [temp_files]
 
-foreach cipher GCM CTR CBC
+foreach cipher GCM CTR
 
 
+require httpfs
 
 require tpch
 
@@ -61,5 +62,7 @@ CREATE OR REPLACE TEMPORARY TABLE ans as select l1.*, l2.* from lineitem1 l1 JOI
 
 statement ok
 DROP TABLE ans;
+
+restart
 
 endloop

@@ -457,6 +457,13 @@
         "struct": "ErrorsAsJSONSetting"
     },
     {
+        "name": "experimental_metadata_reuse",
+        "description": "EXPERIMENTAL: Re-use row group and table metadata when checkpointing.",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
         "name": "explain_output",
         "description": "Output of EXPLAIN statements (ALL, OPTIMIZED_ONLY, PHYSICAL_ONLY)",
         "type": "ENUM<ExplainOutputType>",
