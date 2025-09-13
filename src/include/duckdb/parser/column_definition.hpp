@@ -13,7 +13,6 @@
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/common/enums/compression_type.hpp"
 #include "duckdb/catalog/catalog_entry/table_column_type.hpp"
-#include "duckdb/common/case_insensitive_map.hpp"
 
 namespace duckdb {
 

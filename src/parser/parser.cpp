@@ -1,10 +1,8 @@
 #include "duckdb/parser/parser.hpp"
 
-#include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/group_by_node.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/parser/parser_extension.hpp"
-#include "duckdb/parser/query_error_context.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/parser/statement/extension_statement.hpp"
