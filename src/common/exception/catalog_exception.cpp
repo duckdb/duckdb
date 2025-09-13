@@ -23,6 +23,12 @@ CatalogException CatalogException::MissingEntry(const EntryLookupInfo &lookup_in
 	if (!suggestion.empty()) {
 		did_you_mean = "\nDid you mean \"" + suggestion + "\"?";
 	}
+
+	if (type == CatalogType::PRAGMA_FUNCTION_ENTRY) {
+		did_you_mean += "\n" + CatalogTypeToString(type) +
+		                " might be available also as table function statements (eg: `CALL ...();`)";
+	}
+
 	string version_info;
 	if (at_clause) {
 		version_info += " at " + StringUtil::Lower(at_clause->Unit()) + " " + at_clause->GetValue().ToString();
