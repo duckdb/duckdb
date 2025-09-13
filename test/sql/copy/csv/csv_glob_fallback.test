@@ -15,3 +15,4 @@ SELECT * FROM 'data/csv/[avalon]_daily-avg.csv'
 statement error
 SELECT * FROM 'data/csv/[avxalon]_daily-avg.csv'
 ----
+<REGEX>:.*IO Error: No files found.*

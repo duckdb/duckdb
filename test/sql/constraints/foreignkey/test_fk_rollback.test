@@ -18,7 +18,7 @@ CREATE TABLE fk_integers(j INTEGER, FOREIGN KEY (j) REFERENCES pk_integers(i))
 statement error
 DROP TABLE pk_integers
 ----
-Could not drop the table because this table is main key table of the table "fk_integers"
+<REGEX>:.*Catalog Error.*Could not drop the table.*
 
 statement ok
 ROLLBACK
@@ -51,11 +51,14 @@ ROLLBACK
 statement error
 DELETE FROM pk_integers WHERE i=2;
 ----
+<REGEX>:.*Constraint Error: Violates foreign key constraint.*
 
 statement error
 INSERT INTO fk_integers VALUES (3);
 ----
+<REGEX>:.*Constraint Error: Violates foreign key constraint.*
 
 statement error
 DROP TABLE pk_integers
 ----
+<REGEX>:.*Catalog Error.*Could not drop the table.*

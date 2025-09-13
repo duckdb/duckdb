@@ -8,3 +8,4 @@ require parquet
 statement error
 SELECT type_param_constraints FROM 'data/parquet-testing/bug4903.parquet' limit 10
 ----
+<REGEX>:.*Binder Error.*not found in FROM clause.*

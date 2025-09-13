@@ -38,6 +38,7 @@ SELECT SUM(i), SUM(j) FROM integers
 statement error
 INSERT INTO integers VALUES (NULL, NULL)
 ----
+<REGEX>:.*Constraint Error.*constraint failed.*
 
 statement ok
 DROP TABLE integers
@@ -72,6 +73,7 @@ SELECT SUM(i), SUM(j) FROM integers
 statement error
 INSERT INTO integers VALUES (NULL, NULL)
 ----
+<REGEX>:.*Constraint Error.*constraint failed.*
 
 statement ok
 DROP TABLE integers
@@ -106,3 +108,4 @@ SELECT SUM(i), SUM(j) FROM integers
 statement error
 INSERT INTO integers VALUES (NULL, NULL)
 ----
+<REGEX>:.*Constraint Error.*constraint failed.*

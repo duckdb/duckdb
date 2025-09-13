@@ -17,3 +17,4 @@ INSERT INTO s1.pk_integers VALUES (1), (2), (3)
 statement error
 CREATE TABLE s2.fk_integers(j INTEGER, FOREIGN KEY (j) REFERENCES s1.pk_intexgers(i))
 ----
+<REGEX>:.*Catalog Error.*does not exist.*

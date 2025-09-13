@@ -9,6 +9,7 @@ CREATE TABLE integers(i INTEGER PRIMARY KEY, j INTEGER)
 statement error
 INSERT INTO integers VALUES (3, 4), (3, 5)
 ----
+<REGEX>:.*Constraint Error.*constraint violation.*
 
 # insert unique values
 statement ok
@@ -24,6 +25,7 @@ SELECT * FROM integers
 statement error
 INSERT INTO integers VALUES (6, 6), (3, 4);
 ----
+<REGEX>:.*Constraint Error.*violates primary key constraint.*
 
 # now insert just the first value
 statement ok
@@ -40,11 +42,13 @@ SELECT * FROM integers
 statement error
 INSERT INTO integers VALUES (NULL, 4);
 ----
+<REGEX>:.*Constraint Error.*constraint failed.*
 
 # update NULL is also not allowed
 statement error
 UPDATE integers SET i=NULL;
 ----
+<REGEX>:.*Constraint Error.*constraint failed.*
 
 # insert the same value from multiple connections
 # NOTE: this tests current behavior
@@ -71,4 +75,4 @@ COMMIT
 statement error con2
 COMMIT
 ----
-
+<REGEX>:.*TransactionContext Error.*constraint violation.*
