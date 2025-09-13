@@ -338,6 +338,8 @@ void TestConfiguration::ProcessPath(string &path, const string &test_name) {
 
 	auto base_test_name = StringUtil::Replace(test_name, "/", "_");
 	path = StringUtil::Replace(path, "{BASE_TEST_NAME}", base_test_name);
+	path = StringUtil::Replace(path, "__TEST_DIR__", TestDirectoryPath());
+	path = StringUtil::Replace(path, "__WORKING_DIRECTORY__", FileSystem::GetWorkingDirectory());
 }
 
 template <class T, class VAL_T>

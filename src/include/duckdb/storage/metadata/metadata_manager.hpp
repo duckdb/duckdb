@@ -38,6 +38,9 @@ struct MetadataBlock {
 
 	idx_t FreeBlocksToInteger();
 	void FreeBlocksFromInteger(idx_t blocks);
+	static vector<uint8_t> BlocksFromInteger(idx_t free_list);
+
+	string ToString() const;
 };
 
 struct MetadataPointer {

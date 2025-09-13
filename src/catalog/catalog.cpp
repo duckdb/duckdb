@@ -1235,4 +1235,9 @@ void Catalog::FinalizeLoad(optional_ptr<ClientContext> context) {
 void Catalog::OnDetach(ClientContext &context) {
 }
 
+bool Catalog::HasConflictingAttachOptions(const string &path, const AttachOptions &options) {
+	auto const db_type = options.db_type.empty() ? "duckdb" : options.db_type;
+	return GetDBPath() != path || GetCatalogType() != db_type;
+}
+
 } // namespace duckdb

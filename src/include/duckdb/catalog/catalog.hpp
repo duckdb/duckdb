@@ -26,6 +26,7 @@
 #include <functional>
 
 namespace duckdb {
+struct AttachOptions;
 struct CreateSchemaInfo;
 struct DropInfo;
 struct BoundCreateTableInfo;
@@ -345,6 +346,9 @@ public:
 
 	//! Returns the dependency manager of this catalog - if the catalog has anye
 	virtual optional_ptr<DependencyManager> GetDependencyManager();
+
+	//! Whether attaching a catalog with the given path and attach options would be considered a conflict
+	virtual bool HasConflictingAttachOptions(const string &path, const AttachOptions &options);
 
 public:
 	template <class T>
