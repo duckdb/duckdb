@@ -29,7 +29,7 @@ struct VariantTypeofFun {
 	static constexpr const char *Name = "variant_typeof";
 	static constexpr const char *Parameters = "input_variant";
 	static constexpr const char *Description = "Returns the internal type of the `input_variant`.";
-	static constexpr const char *Example = "variant_typeof({'a': 42, 'b': [1,2,3])::VARIANT)";
+	static constexpr const char *Example = "variant_typeof({'a': 42, 'b': [1,2,3]})::VARIANT)";
 	static constexpr const char *Categories = "variant";
 
 	static ScalarFunction GetFunction();
