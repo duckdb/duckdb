@@ -327,6 +327,13 @@ else()
           set(GIT_COMMIT_HASH "0123456789")
     endif()
     endif()
+      execute_process(
+            COMMAND ${GIT_EXECUTABLE} describe --tags --long --match "${VERSIONING_TAG_MATCH}-rc*" --exact-match
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+            RESULT_VARIABLE GIT_RESULT
+            OUTPUT_VARIABLE GIT_DESCRIBE
+            OUTPUT_STRIP_TRAILING_WHITESPACE)
+    if (GIT_RESULT)
     execute_process(
           COMMAND ${GIT_EXECUTABLE} describe --tags --long --match "${VERSIONING_TAG_MATCH}"
           WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
@@ -337,12 +344,29 @@ else()
       message(WARNING "git is available (at ${GIT_EXECUTABLE}) but has failed to execute 'describe --tags --long', likely due to shallow clone. Consider providing explicit OVERRIDE_GIT_DESCRIBE or clone with tags. Continuing with dummy version v0.0.1")
       set(GIT_DESCRIBE "v0.0.1-0-g${GIT_COMMIT_HASH}")
     endif()
+    endif()
   else()
     message(WARNING "Git NOT FOUND and EXTERNAL_GIT_DESCRIBE not provided, continuing with dummy version v0.0.1")
     set(GIT_DESCRIBE "v0.0.1-0-g0123456789")
   endif()
 endif()
 
+if (GIT_DESCRIBE MATCHES "^v[0-9]+\.[0-9]+\.[0-9]+\-rc[0-9]+-0+\-g[a-f0-9]+$")
+# This is only for release candidates
+
+string(REGEX REPLACE "v([0-9]+)\.[0-9]+\.[0-9]+\-.*" "\\1" DUCKDB_MAJOR_VERSION "${GIT_DESCRIBE}")
+string(REGEX REPLACE "v[0-9]+\.([0-9]+)\.[0-9]+\-.*" "\\1" DUCKDB_MINOR_VERSION "${GIT_DESCRIBE}")
+string(REGEX REPLACE "v[0-9]+\.[0-9]+\.([0-9]+)\-.*" "\\1" DUCKDB_PATCH_VERSION "${GIT_DESCRIBE}")
+string(REGEX REPLACE "v[0-9]+\.[0-9]+\.[0-9]+\-rc([0-9]+)\-.*" "\\1" DUCKDB_RC_VERSION "${GIT_DESCRIBE}")
+string(REGEX REPLACE "v[0-9]+\.[0-9]+\.[0-9]+\-rc[0-9]+\-([0-9]+)\-g.*" "\\1" DUCKDB_DEV_ITERATION "${GIT_DESCRIBE}")
+if (NOT DEFINED GIT_COMMIT_HASH)
+  string(REGEX REPLACE "v[0-9]+\.[0-9]+\.[0-9]+\-[0-9]+\-rc[0-9]+\-g([a-f0-9]+)" "\\1" GIT_COMMIT_HASH "${GIT_DESCRIBE}")
+endif()
+
+set(DUCKDB_VERSION_NUMBER "v${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION}.${DUCKDB_PATCH_VERSION}-rc${DUCKDB_RC_VERSION}")
+  set (DUCKDB_EXPLICIT_VERSION "${DUCKDB_VERSION_NUMBER}")
+
+else ()
 if (NOT GIT_DESCRIBE MATCHES "^v[0-9]+\.[0-9]+\.[0-9]+\-[0-9]+\-g[a-f0-9]+$")
   message(FATAL_ERROR "Computed GIT_DESCRIBE '${GIT_DESCRIBE}' is not in the expected form 'vX.Y.Z-N-gGITHASH123'. Consider providing OVERRIDE_GIT_DESCRIBE explicitly to CMake")
 endif()
@@ -356,6 +380,7 @@ if (NOT DEFINED GIT_COMMIT_HASH)
 endif()
 
 set(DUCKDB_VERSION_NUMBER "${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION}.${DUCKDB_PATCH_VERSION}")
+endif()
 
 string(LENGTH "${GIT_COMMIT_HASH}" LENGTH_GIT_COMMIT_HASH)
 if (NOT ${LENGTH_GIT_COMMIT_HASH} EQUAL 10)
@@ -370,6 +395,9 @@ if(DUCKDB_EXPLICIT_VERSION)
 elseif(DUCKDB_DEV_ITERATION EQUAL 0)
   # on a tag; directly use the version
   set(DUCKDB_VERSION "v${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION}.${DUCKDB_PATCH_VERSION}")
+  if (DEFINED ${DUCKDB_RC_VERSION})
+    set(DUCKDB_VERSION "${DUCKDB_VERSION}-rc${DUCKDB_RC_VERSION}")
+  endif()
 else()
   # not on a tag, increment the patch version by one and add a -devX suffix
   if(${MAIN_BRANCH_VERSIONING})
