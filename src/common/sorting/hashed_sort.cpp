@@ -341,6 +341,9 @@ HashedSortLocalSinkState::HashedSortLocalSinkState(ExecutionContext &context, co
 		}
 		// OVER(...)
 		payload_chunk.Initialize(allocator, payload_types);
+	} else {
+		unsorted = make_uniq<ColumnDataCollection>(context.client, hashed_sort.payload_types);
+		unsorted->InitializeAppend(unsorted_append);
 	}
 }
 
@@ -369,10 +372,6 @@ SinkResultType HashedSort::Sink(ExecutionContext &context, DataChunk &input_chun
 
 	// OVER()
 	if (gstate.hashed_sort.sort_col_count == 0) {
-		if (!lstate.unsorted) {
-			lstate.unsorted = make_uniq<ColumnDataCollection>(context.client, payload_types);
-			lstate.unsorted->InitializeAppend(lstate.unsorted_append);
-		}
 		lstate.unsorted->Append(lstate.unsorted_append, input_chunk);
 		return SinkResultType::NEED_MORE_INPUT;
 	}
