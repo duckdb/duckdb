@@ -1,0 +1,26 @@
+# name: test/sql/table_function/duckdb_regexp_split_to_table_issue18523.test
+# description: Issue 18523 - Catalog Error: Table Function with name regexp_split_to_table does not exist
+# group: [table_function]
+
+# Setup test data
+statement ok
+pragma enable_verification
+
+statement ok
+CREATE TABLE T (s text);
+
+statement ok
+INSERT INTO T VALUES ('abc(1-2)xyz');
+
+# regexp_split_to_table works when called directly
+query T
+select regexp_split_to_table(substr(t.s::text, strpos(t.s::text,'(') + 1, strpos(t.s::text,')') - strpos(t.s::text, '(') - 1), '-') from t;
+----
+1
+2
+
+# regexp_split_to_table works when used in a FROM clause in a SELECT subquery
+query T
+select (select string_agg(num, '') from regexp_split_to_table(substr(t.s::text, strpos(t.s::text,'(') + 1, strpos(t.s::text,')') - strpos(t.s::text, '(') - 1), '-') num) from t;
+----
+12
