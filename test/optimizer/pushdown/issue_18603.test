@@ -1,0 +1,46 @@
+# name: test/optimizer/pushdown/issue_18603.test
+# description: Test filter pushdown with conflict comparison filters
+# group: [pushdown]
+
+statement ok
+pragma enable_verification
+
+statement ok
+CREATE TABLE t0(c0 INT, c1 BOOLEAN);
+
+statement ok
+CREATE TABLE t1(c0 INT);
+
+statement ok
+INSERT INTO t0(c0, c1) VALUES (0, 0);
+
+statement ok
+INSERT INTO t1(c0) VALUES (1);
+
+# test different order of filters
+query III
+SELECT * FROM t0 INNER JOIN t1 ON (t0.c1 > t0.c0) AND (t1.c0 > t0.c0) AND (t0.c0 < 7) AND (t0.c1 = t0.c0);
+----
+
+query II
+EXPLAIN SELECT * FROM t0 INNER JOIN t1 ON (t0.c1 > t0.c0) AND (t1.c0 > t0.c0) AND (t0.c0 < 7) AND (t0.c1 = t0.c0);
+----
+physical_plan	<REGEX>:.*EMPTY_RESULT.*
+
+query II
+EXPLAIN SELECT * FROM t0 INNER JOIN t1 ON (t0.c1 > t0.c0) AND (t1.c0 > t0.c0) AND (t0.c0 < 7) AND (t0.c1 = t0.c0);
+----
+physical_plan	<!REGEX>:.*c0 > c0.*
+
+query II
+EXPLAIN SELECT * FROM t0 INNER JOIN t1 ON (t0.c1 > t0.c0) AND (t1.c0 > t0.c0) AND (t0.c0 < 7) AND (t0.c1 = t0.c0);
+----
+physical_plan	<!REGEX>:.*c0 < 7.*
+
+query III
+SELECT * FROM t0 INNER JOIN t1 ON (t0.c1 = t0.c0) AND (t0.c1 > t0.c0) AND (t1.c0 > t0.c0) AND (t0.c0 < 7);
+----
+
+query III
+SELECT * FROM t0 INNER JOIN t1 ON (t0.c1 = t0.c0) AND  (t0.c0 < 7) AND (t0.c1 > t0.c0) AND (t1.c0 > t0.c0);
+----
