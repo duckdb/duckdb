@@ -352,12 +352,14 @@ bool VariantUtils::Verify(Vector &variant, const SelectionVector &sel_p, idx_t c
 			if (key_id.validity.RowIsValid(key_id_index)) {
 				auto children_key_id = key_id_data[key_id_index];
 				D_ASSERT(children_key_id < keys_list_entry.length);
+				(void)children_key_id;
 			}
 
 			auto value_id_index = value_id.sel->get_index(j + children_list_entry.offset);
 			D_ASSERT(value_id.validity.RowIsValid(value_id_index));
 			auto children_value_id = value_id_data[value_id_index];
 			D_ASSERT(children_value_id < values_list_entry.length);
+			(void)children_value_id;
 		}
 
 		//! verify values
@@ -397,6 +399,7 @@ bool VariantUtils::Verify(Vector &variant, const SelectionVector &sel_p, idx_t c
 					} else {
 						D_ASSERT(!key_id.validity.RowIsValid(child_key_id_index));
 					}
+					(void)child_key_id_index;
 				}
 				break;
 			}
