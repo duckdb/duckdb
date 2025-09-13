@@ -126,11 +126,11 @@ void DuckTransaction::PushAppend(DataTable &table, idx_t start_row, idx_t row_co
 	append_info->count = row_count;
 }
 
-UndoBufferReference DuckTransaction::CreateUpdateInfo(idx_t type_size, idx_t entries) {
+UndoBufferReference DuckTransaction::CreateUpdateInfo(idx_t type_size, DataTable &data_table, idx_t entries) {
 	idx_t alloc_size = UpdateInfo::GetAllocSize(type_size);
 	auto undo_entry = undo_buffer.CreateEntry(UndoFlags::UPDATE_TUPLE, alloc_size);
 	auto &update_info = UpdateInfo::Get(undo_entry);
-	UpdateInfo::Initialize(update_info, transaction_id);
+	UpdateInfo::Initialize(update_info, data_table, transaction_id);
 	return undo_entry;
 }
 
@@ -245,14 +245,6 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, transaction_t new_commit
 	if (!ChangesMade()) {
 		// no need to flush anything if we made no changes
 		return ErrorData();
-	}
-	for (auto &entry : modified_tables) {
-		auto &tbl = entry.first.get();
-		if (!tbl.IsMainTable()) {
-			return ErrorData(
-			    TransactionException("Attempting to modify table %s but another transaction has %s this table",
-			                         tbl.GetTableName(), tbl.TableModification()));
-		}
 	}
 	D_ASSERT(db.IsSystem() || db.IsTemporary() || !IsReadOnly());
 
