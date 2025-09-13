@@ -175,6 +175,33 @@
             }
         },
         {
+            "name": "duckdb_register_aggregate_function_or",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_connection",
+                    "name": "con"
+                },
+                {
+                    "type": "duckdb_aggregate_function",
+                    "name": "aggregate_function"
+                },
+                {
+                    "type": "duckdb_on_conflict",
+                    "name": "on_conflict"
+                }
+            ],
+            "comment": {
+                "description": "Register the aggregate function object within the given connection.\n\nThe function requires at least a name, functions and a return type.\n\nIf the function is incomplete DuckDBError is returned.\n\n",
+                "param_comments": {
+                    "con": "The connection to register it in.",
+                    "function": "The function pointer",
+                    "on_conflict": "The conflict resolution strategy to apply if a function with the same name already exists."
+                },
+                "return_value": "Whether or not the registration was successful."
+            }
+        },
+        {
             "name": "duckdb_aggregate_function_set_special_handling",
             "return_type": "void",
             "params": [
@@ -323,6 +350,33 @@
                 "param_comments": {
                     "con": "The connection to register it in.",
                     "set": "The function set to register"
+                },
+                "return_value": "Whether or not the registration was successful."
+            }
+        },
+        {
+            "name": "duckdb_register_aggregate_function_set_or",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_connection",
+                    "name": "con"
+                },
+                {
+                    "type": "duckdb_aggregate_function_set",
+                    "name": "set"
+                },
+                {
+                    "type": "duckdb_on_conflict",
+                    "name": "on_conflict"
+                }
+            ],
+            "comment": {
+                "description": "Register the aggregate function set within the given connection.\n\nThe set requires at least a single valid overload.\n\nIf the set is incomplete DuckDBError is returned.\n\n",
+                "param_comments": {
+                    "con": "The connection to register it in.",
+                    "set": "The function set to register",
+                    "on_conflict": "The conflict resolution strategy to apply if a function with the same name already exists."
                 },
                 "return_value": "Whether or not the registration was successful."
             }

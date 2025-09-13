@@ -1,0 +1,10 @@
+{
+  "version": "unstable_new_registration_conflict_handling_functions",
+  "description": "New functions around the registering of functions with conflict resolution",
+  "entries": [
+    "duckdb_register_aggregate_function_or",
+    "duckdb_register_aggregate_function_set_or",
+    "duckdb_register_scalar_function_or",
+    "duckdb_register_scalar_function_set_or"
+  ]
+}
