@@ -528,6 +528,10 @@ idx_t DBConfig::GetSystemMaxThreads(FileSystem &fs) {
 }
 
 idx_t DBConfig::GetSystemAvailableMemory(FileSystem &fs) {
+	// System memory detection
+	auto memory = FileSystem::GetAvailableMemory();
+	auto available_memory = memory.IsValid() ? memory.GetIndex() : DBConfigOptions().maximum_memory;
+
 #ifdef __linux__
 	// Check SLURM environment variables first
 	const char *slurm_mem_per_node = getenv("SLURM_MEM_PER_NODE");
@@ -550,18 +554,11 @@ idx_t DBConfig::GetSystemAvailableMemory(FileSystem &fs) {
 	auto cgroup_memory_limit = CGroups::GetMemoryLimit(fs);
 	if (cgroup_memory_limit.IsValid()) {
 		auto cgroup_memory_limit_value = cgroup_memory_limit.GetIndex();
-		if (cgroup_memory_limit_value < NumericLimits<int64_t>::Maximum() - NumericLimits<int16_t>::Maximum()) {
-			return cgroup_memory_limit_value;
-		}
+		return std::min(cgroup_memory_limit_value, available_memory);
 	}
 #endif
 
-	// System memory detection
-	auto memory = FileSystem::GetAvailableMemory();
-	if (!memory.IsValid()) {
-		return DBConfigOptions().maximum_memory;
-	}
-	return memory.GetIndex();
+	return available_memory;
 }
 
 idx_t DBConfig::ParseMemoryLimit(const string &arg) {
