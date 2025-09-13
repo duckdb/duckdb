@@ -507,6 +507,9 @@ void ParquetMetaDataOperator::BindSchema<ParquetMetadataOperatorType::SCHEMA>(ve
 
 	names.emplace_back("duckdb_type");
 	return_types.emplace_back(LogicalType::VARCHAR);
+
+	names.emplace_back("column_id");
+	return_types.emplace_back(LogicalType::BIGINT);
 }
 
 static Value ParquetLogicalTypeToString(const duckdb_parquet::LogicalType &type, bool is_set) {
@@ -601,6 +604,8 @@ void ParquetSchemaProcessor::ReadRow(DataChunk &output, idx_t output_idx, idx_t 
 		duckdb_type = reader->DeriveLogicalType(column, column_schema).ToString();
 	}
 	output.SetValue(11, output_idx, duckdb_type);
+	// column_id
+	output.SetValue(12, output_idx, Value::BIGINT(UnsafeNumericCast<int64_t>(row_idx)));
 }
 
 //===--------------------------------------------------------------------===//
