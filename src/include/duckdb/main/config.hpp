@@ -37,6 +37,7 @@
 #include "duckdb/function/encoding_function.hpp"
 #include "duckdb/main/setting_info.hpp"
 #include "duckdb/logging/log_manager.hpp"
+#include "duckdb/parser/parser_keyword_manager.hpp"
 
 namespace duckdb {
 
