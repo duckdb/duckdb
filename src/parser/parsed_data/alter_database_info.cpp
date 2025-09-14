@@ -18,7 +18,7 @@ CatalogType AlterDatabaseInfo::GetCatalogType() const {
 
 void AlterDatabaseInfo::Serialize(Serializer &serializer) const {
 	AlterInfo::Serialize(serializer);
-	serializer.WriteProperty(100, "alter_database_type", alter_database_type);
+	serializer.WriteProperty(300, "alter_database_type", alter_database_type);
 }
 
 RenameDatabaseInfo::RenameDatabaseInfo(string catalog_p, string new_name_p, OnEntryNotFound if_not_found)
