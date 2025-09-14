@@ -11,15 +11,20 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/enums/on_create_conflict.hpp"
 
 namespace duckdb {
+struct AttachInfo;
+struct AttachOptions;
+
+enum class InsertDatabasePathResult { SUCCESS, ALREADY_EXISTS };
 
 //! The DatabaseFilePathManager is used to ensure we only ever open a single database file once
 class DatabaseFilePathManager {
 public:
-	void CheckPathConflict(const string &path, const string &name) const;
 	idx_t ApproxDatabaseCount() const;
-	void InsertDatabasePath(const string &path, const string &name);
+	InsertDatabasePathResult InsertDatabasePath(const string &path, const string &name, OnCreateConflict on_conflict,
+	                                            AttachOptions &options);
 	void EraseDatabasePath(const string &path);
 
 private:

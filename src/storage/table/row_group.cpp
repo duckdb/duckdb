@@ -1087,6 +1087,11 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 		// this metadata block is not stored - add it to the extra metadata blocks
 		row_group_pointer.extra_metadata_blocks.push_back(column_pointer.block_pointer);
 	}
+	// set up the pointers correctly within this row group for future operations
+	column_pointers = row_group_pointer.data_pointers;
+	has_metadata_blocks = true;
+	extra_metadata_blocks = row_group_pointer.extra_metadata_blocks;
+
 	if (metadata_manager) {
 		row_group_pointer.deletes_pointers = CheckpointDeletes(*metadata_manager);
 	}
