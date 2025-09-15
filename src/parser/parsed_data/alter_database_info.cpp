@@ -3,6 +3,11 @@
 
 namespace duckdb {
 
+AlterDatabaseInfo::AlterDatabaseInfo(AlterDatabaseType alter_database_type)
+    : AlterInfo(AlterType::ALTER_DATABASE, string(), "", "", OnEntryNotFound::THROW_EXCEPTION),
+      alter_database_type(alter_database_type) {
+}
+
 AlterDatabaseInfo::AlterDatabaseInfo(AlterDatabaseType alter_database_type, string catalog_p,
                                      OnEntryNotFound if_not_found)
     : AlterInfo(AlterType::ALTER_DATABASE, std::move(catalog_p), "", "", if_not_found),
@@ -16,9 +21,7 @@ CatalogType AlterDatabaseInfo::GetCatalogType() const {
 	return CatalogType::DATABASE_ENTRY;
 }
 
-void AlterDatabaseInfo::Serialize(Serializer &serializer) const {
-	AlterInfo::Serialize(serializer);
-	serializer.WriteProperty(300, "alter_database_type", alter_database_type);
+RenameDatabaseInfo::RenameDatabaseInfo() : AlterDatabaseInfo(AlterDatabaseType::RENAME_DATABASE) {
 }
 
 RenameDatabaseInfo::RenameDatabaseInfo(string catalog_p, string new_name_p, OnEntryNotFound if_not_found)
@@ -31,12 +34,13 @@ unique_ptr<AlterInfo> RenameDatabaseInfo::Copy() const {
 }
 
 string RenameDatabaseInfo::ToString() const {
-	return "ALTER DATABASE " + catalog + " RENAME TO " + new_name;
-}
-
-void RenameDatabaseInfo::Serialize(Serializer &serializer) const {
-	AlterDatabaseInfo::Serialize(serializer);
-	serializer.WriteProperty(200, "new_name", new_name);
+	string result;
+	result = "ALTER DATABASE ";
+	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+		result += "IF EXISTS ";
+	}
+	result += StringUtil::Format("%s RENAME TO %s", SQLIdentifier(catalog), SQLIdentifier(new_name));
+	return result;
 }
 
 } // namespace duckdb
