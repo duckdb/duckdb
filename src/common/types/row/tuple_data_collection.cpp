@@ -570,7 +570,7 @@ idx_t TupleDataCollection::FetchChunk(TupleDataScanState &state, idx_t chunk_idx
 	for (idx_t segment_idx = 0; segment_idx < segments.size(); segment_idx++) {
 		auto &segment = *segments[segment_idx];
 		if (chunk_idx < segment.ChunkCount()) {
-			allocator->InitializeChunkState(segment, state.pin_state, state.chunk_state, chunk_idx, init_heap);
+			segment.allocator->InitializeChunkState(segment, state.pin_state, state.chunk_state, chunk_idx, init_heap);
 			return segment.chunks[chunk_idx].count;
 		}
 		chunk_idx -= segment.ChunkCount();
