@@ -16,6 +16,7 @@ unique_ptr<Expression> ExpressionRewriter::ApplyRules(LogicalOperator &op, const
 		vector<reference<Expression>> bindings;
 		if (rule.get().root->Match(*expr, bindings)) {
 			// the rule matches! try to apply it
+			// Printer::Print("Applying rule to " + expr->ToString());
 			bool rule_made_change = false;
 			auto alias = expr->alias;
 			auto result = rule.get().Apply(op, bindings, rule_made_change, is_root);
@@ -26,7 +27,8 @@ unique_ptr<Expression> ExpressionRewriter::ApplyRules(LogicalOperator &op, const
 				if (!alias.empty()) {
 					result->alias = std::move(alias);
 				}
-				return ExpressionRewriter::ApplyRules(op, rules, std::move(result), changes_made);
+				auto ret = ExpressionRewriter::ApplyRules(op, rules, std::move(result), changes_made);
+				return ret;
 			} else if (rule_made_change) {
 				changes_made = true;
 				// the base node didn't change, but changes were made, rerun
