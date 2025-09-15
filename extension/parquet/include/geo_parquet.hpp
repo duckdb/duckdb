@@ -16,58 +16,169 @@
 #include "parquet_types.h"
 
 namespace duckdb {
+
 struct ParquetColumnSchema;
 
-enum class WKBGeometryType : uint16_t {
-	POINT = 1,
-	LINESTRING = 2,
-	POLYGON = 3,
-	MULTIPOINT = 4,
-	MULTILINESTRING = 5,
-	MULTIPOLYGON = 6,
-	GEOMETRYCOLLECTION = 7,
+struct GeometryKindSet {
 
-	POINT_Z = 1001,
-	LINESTRING_Z = 1002,
-	POLYGON_Z = 1003,
-	MULTIPOINT_Z = 1004,
-	MULTILINESTRING_Z = 1005,
-	MULTIPOLYGON_Z = 1006,
-	GEOMETRYCOLLECTION_Z = 1007,
+	uint8_t bits[4] = {0, 0, 0, 0};
+
+	void Add(uint32_t wkb_type) {
+		auto kind = wkb_type % 1000;
+		auto dims = wkb_type / 1000;
+		if (kind < 1 || kind > 7 || (dims) > 3) {
+			return;
+		}
+		bits[dims] |= (1 << (kind - 1));
+	}
+
+	void Combine(const GeometryKindSet &other) {
+		for (uint32_t d = 0; d < 4; d++) {
+			bits[d] |= other.bits[d];
+		}
+	}
+
+	bool IsEmpty() const {
+		for (uint32_t d = 0; d < 4; d++) {
+			if (bits[d] != 0) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	template <class T>
+	vector<T> ToList() const {
+		vector<T> result;
+		for (uint32_t d = 0; d < 4; d++) {
+			for (uint32_t i = 1; i <= 7; i++) {
+				if (bits[d] & (1 << (i - 1))) {
+					result.push_back(i + d * 1000);
+				}
+			}
+		}
+		return result;
+	}
+
+	vector<string> ToString(bool snake_case) const {
+		vector<string> result;
+		for (uint32_t d = 0; d < 4; d++) {
+			for (uint32_t i = 1; i <= 7; i++) {
+				if (bits[d] & (1 << (i - 1))) {
+					string str;
+					switch (i) {
+					case 1:
+						str = snake_case ? "point" : "Point";
+						break;
+					case 2:
+						str = snake_case ? "linestring" : "LineString";
+						break;
+					case 3:
+						str = snake_case ? "polygon" : "Polygon";
+						break;
+					case 4:
+						str = snake_case ? "multipoint" : "MultiPoint";
+						break;
+					case 5:
+						str = snake_case ? "multilinestring" : "MultiLineString";
+						break;
+					case 6:
+						str = snake_case ? "multipolygon" : "MultiPolygon";
+						break;
+					case 7:
+						str = snake_case ? "geometrycollection" : "GeometryCollection";
+						break;
+					default:
+						str = snake_case ? "unknown" : "Unknown";
+						break;
+					}
+					switch (d) {
+					case 1:
+						str += snake_case ? "_z" : " Z";
+						break;
+					case 2:
+						str += snake_case ? "_m" : " M";
+						break;
+					case 3:
+						str += snake_case ? "_zm" : " ZM";
+						break;
+					default:
+						break;
+					}
+
+					result.push_back(str);
+				}
+			}
+		}
+		return result;
+	}
 };
 
-struct WKBGeometryTypes {
-	static const char *ToString(WKBGeometryType type);
+struct GeometryExtent {
+
+	double xmin = NumericLimits<double>::Maximum();
+	double xmax = NumericLimits<double>::Minimum();
+	double ymin = NumericLimits<double>::Maximum();
+	double ymax = NumericLimits<double>::Minimum();
+	double zmin = NumericLimits<double>::Maximum();
+	double zmax = NumericLimits<double>::Minimum();
+	double mmin = NumericLimits<double>::Maximum();
+	double mmax = NumericLimits<double>::Minimum();
+
+	bool IsSet() const {
+		return xmin != NumericLimits<double>::Maximum() && xmax != NumericLimits<double>::Minimum() &&
+		       ymin != NumericLimits<double>::Maximum() && ymax != NumericLimits<double>::Minimum();
+	}
+
+	bool HasZ() const {
+		return zmin != NumericLimits<double>::Maximum() && zmax != NumericLimits<double>::Minimum();
+	}
+
+	bool HasM() const {
+		return mmin != NumericLimits<double>::Maximum() && mmax != NumericLimits<double>::Minimum();
+	}
+
+	void Combine(const GeometryExtent &other) {
+		xmin = std::min(xmin, other.xmin);
+		xmax = std::max(xmax, other.xmax);
+		ymin = std::min(ymin, other.ymin);
+		ymax = std::max(ymax, other.ymax);
+		zmin = std::min(zmin, other.zmin);
+		zmax = std::max(zmax, other.zmax);
+		mmin = std::min(mmin, other.mmin);
+		mmax = std::max(mmax, other.mmax);
+	}
+
+	void Combine(const double &xmin_p, const double &xmax_p, const double &ymin_p, const double &ymax_p) {
+		xmin = std::min(xmin, xmin_p);
+		xmax = std::max(xmax, xmax_p);
+		ymin = std::min(ymin, ymin_p);
+		ymax = std::max(ymax, ymax_p);
+	}
+
+	void ExtendX(const double &x) {
+		xmin = std::min(xmin, x);
+		xmax = std::max(xmax, x);
+	}
+	void ExtendY(const double &y) {
+		ymin = std::min(ymin, y);
+		ymax = std::max(ymax, y);
+	}
+	void ExtendZ(const double &z) {
+		zmin = std::min(zmin, z);
+		zmax = std::max(zmax, z);
+	}
+	void ExtendM(const double &m) {
+		mmin = std::min(mmin, m);
+		mmax = std::max(mmax, m);
+	}
 };
 
-struct GeometryBounds {
-	double min_x = NumericLimits<double>::Maximum();
-	double max_x = NumericLimits<double>::Minimum();
-	double min_y = NumericLimits<double>::Maximum();
-	double max_y = NumericLimits<double>::Minimum();
+struct GeometryStats {
+	GeometryKindSet types;
+	GeometryExtent bbox;
 
-	GeometryBounds() = default;
-
-	void Combine(const GeometryBounds &other) {
-		min_x = std::min(min_x, other.min_x);
-		max_x = std::max(max_x, other.max_x);
-		min_y = std::min(min_y, other.min_y);
-		max_y = std::max(max_y, other.max_y);
-	}
-
-	void Combine(const double &x, const double &y) {
-		min_x = std::min(min_x, x);
-		max_x = std::max(max_x, x);
-		min_y = std::min(min_y, y);
-		max_y = std::max(max_y, y);
-	}
-
-	void Combine(const double &min_x, const double &max_x, const double &min_y, const double &max_y) {
-		this->min_x = std::min(this->min_x, min_x);
-		this->max_x = std::max(this->max_x, max_x);
-		this->min_y = std::min(this->min_y, min_y);
-		this->max_y = std::max(this->max_y, max_y);
-	}
+	void Update(const string_t &wkb);
 };
 
 //------------------------------------------------------------------------------
@@ -92,47 +203,31 @@ struct GeoParquetColumnMetadata {
 	// The encoding of the geometry column
 	GeoParquetColumnEncoding geometry_encoding;
 
-	// The geometry types that are present in the column
-	set<WKBGeometryType> geometry_types;
-
-	// The bounds of the geometry column
-	GeometryBounds bbox;
+	// The statistics of the geometry column
+	GeometryStats stats;
 
 	// The crs of the geometry column (if any) in PROJJSON format
 	string projjson;
-};
 
-class GeoParquetColumnMetadataWriter {
-	unique_ptr<ExpressionExecutor> executor;
-	DataChunk input_chunk;
-	DataChunk result_chunk;
-
-	unique_ptr<Expression> type_expr;
-	unique_ptr<Expression> flag_expr;
-	unique_ptr<Expression> bbox_expr;
-
-public:
-	explicit GeoParquetColumnMetadataWriter(ClientContext &context);
-	void Update(GeoParquetColumnMetadata &meta, Vector &vector, idx_t count);
+	// Used to track the "primary" geometry column (if any)
+	idx_t insertion_index = 0;
 };
 
 class GeoParquetFileMetadata {
 public:
+	void AddGeoParquetStats(const string &column_name, const LogicalType &type, const GeometryStats &stats);
+	void Write(duckdb_parquet::FileMetaData &file_meta_data);
+
 	// Try to read GeoParquet metadata. Returns nullptr if not found, invalid or the required spatial extension is not
 	// available.
-
 	static unique_ptr<GeoParquetFileMetadata> TryRead(const duckdb_parquet::FileMetaData &file_meta_data,
 	                                                  const ClientContext &context);
-	void Write(duckdb_parquet::FileMetaData &file_meta_data) const;
-
-	void FlushColumnMeta(const string &column_name, const GeoParquetColumnMetadata &meta);
 	const unordered_map<string, GeoParquetColumnMetadata> &GetColumnMeta() const;
 
-	unique_ptr<ColumnReader> CreateColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema,
-	                                            ClientContext &context);
+	static unique_ptr<ColumnReader> CreateColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema,
+	                                                   ClientContext &context);
 
 	bool IsGeometryColumn(const string &column_name) const;
-	void RegisterGeometryColumn(const string &column_name);
 
 	static bool IsGeoParquetConversionEnabled(const ClientContext &context);
 	static LogicalType GeometryType();
@@ -140,7 +235,6 @@ public:
 private:
 	mutex write_lock;
 	string version = "1.1.0";
-	string primary_geometry_column;
 	unordered_map<string, GeoParquetColumnMetadata> geometry_columns;
 };
 

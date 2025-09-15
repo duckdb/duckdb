@@ -55,6 +55,7 @@ class SecretManager;
 class CompressionInfo;
 class EncryptionUtil;
 class HTTPUtil;
+class DatabaseFilePathManager;
 
 struct CompressionFunctionSet;
 struct DatabaseCacheEntry;
@@ -194,8 +195,6 @@ struct DBConfigOptions {
 	string duckdb_api;
 	//! Metadata from DuckDB callers
 	string custom_user_agent;
-	//!  By default, WAL is encrypted for encrypted databases
-	bool wal_encryption = true;
 	//! Encrypt the temp files
 	bool temp_file_encryption = false;
 	//! The default block allocation size for new duckdb database files (new as-in, they do not yet exist).
@@ -273,6 +272,8 @@ public:
 	shared_ptr<HTTPUtil> http_util;
 	//! Reference to the database cache entry (if any)
 	shared_ptr<DatabaseCacheEntry> db_cache_entry;
+	//! Reference to the database file path manager
+	shared_ptr<DatabaseFilePathManager> path_manager;
 
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);

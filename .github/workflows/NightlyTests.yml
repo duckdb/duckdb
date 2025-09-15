@@ -628,6 +628,40 @@ jobs:
         path: |
           duckdb-wasm32.zip
 
+  hash-zero:
+   name: Hash Zero
+   runs-on: ubuntu-24.04
+   needs: linux-memory-leaks
+   env:
+     GEN: ninja
+     CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
+     HASH_ZERO: 1
+     LSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-leak-suppressions.txt
+     DUCKDB_TEST_DESCRIPTION: 'Compiled with HASH_ZERO=1. Use require no_hash_zero to skip.'
+
+   steps:
+     - uses: actions/checkout@v3
+       with:
+         fetch-depth: 0
+
+     - name: Install
+       shell: bash
+       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+     - name: Setup Ccache
+       uses: hendrikmuhs/ccache-action@main
+       with:
+         key: ${{ github.job }}
+         save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+
+     - name: Build
+       shell: bash
+       run: make relassert
+
+     - name: Test
+       shell: bash
+       run: build/relassert/test/unittest --test-config test/configs/hash_zero.json
+
   codecov:
     name: Code Coverage
     runs-on: ubuntu-22.04

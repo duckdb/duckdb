@@ -1284,11 +1284,11 @@ struct ValueResultEquals {
 bool ColumnDataCollection::ResultEquals(const ColumnDataCollection &left, const ColumnDataCollection &right,
                                         string &error_message, bool ordered) {
 	if (left.ColumnCount() != right.ColumnCount()) {
-		error_message = "Column count mismatch";
+		error_message = StringUtil::Format("Column count mismatch (%d vs %d)", left.Count(), right.Count());
 		return false;
 	}
 	if (left.Count() != right.Count()) {
-		error_message = "Row count mismatch";
+		error_message = StringUtil::Format("Row count mismatch (%d vs %d)", left.Count(), right.Count());
 		return false;
 	}
 	auto left_rows = left.GetRows();

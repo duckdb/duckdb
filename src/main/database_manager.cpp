@@ -16,6 +16,12 @@ namespace duckdb {
 DatabaseManager::DatabaseManager(DatabaseInstance &db)
     : next_oid(0), current_query_number(1), current_transaction_id(0) {
 	system = make_shared_ptr<AttachedDatabase>(db);
+	auto &config = DBConfig::GetConfig(db);
+	path_manager = config.path_manager;
+	if (!path_manager) {
+		// no shared path manager
+		path_manager = make_shared_ptr<DatabaseFilePathManager>();
+	}
 }
 
 DatabaseManager::~DatabaseManager() {
@@ -39,6 +45,12 @@ void DatabaseManager::FinalizeStartup() {
 
 optional_ptr<AttachedDatabase> DatabaseManager::GetDatabase(ClientContext &context, const string &name) {
 	auto &meta_transaction = MetaTransaction::Get(context);
+	// first check if we have a local reference to this database already
+	auto database = meta_transaction.GetReferencedDatabase(name);
+	if (database) {
+		// we do! return it
+		return database;
+	}
 	lock_guard<mutex> guard(databases_lock);
 	if (StringUtil::Lower(name) == TEMP_CATALOG) {
 		return meta_transaction.UseDatabase(context.client_data->temporary_objects);
@@ -56,6 +68,18 @@ optional_ptr<AttachedDatabase> DatabaseManager::GetDatabase(ClientContext &conte
 
 shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &context, AttachInfo &info,
                                                              AttachOptions &options) {
+	auto &config = DBConfig::GetConfig(context);
+	if (options.db_type.empty() || StringUtil::CIEquals(options.db_type, "duckdb")) {
+		if (InsertDatabasePath(info, options) == InsertDatabasePathResult::ALREADY_EXISTS) {
+			return nullptr;
+		}
+	}
+	GetDatabaseType(context, info, config, options);
+	if (!options.db_type.empty()) {
+		// we only need to prevent duplicate opening of DuckDB files
+		// if this is not a DuckDB file but e.g. a CSV or Parquet file, we don't need to do this duplicate protection
+		options.stored_database_path.reset();
+	}
 	if (AttachedDatabase::NameIsReserved(info.name)) {
 		throw BinderException("Attached database name \"%s\" cannot be used because it is a reserved name", info.name);
 	}
@@ -86,17 +110,26 @@ optional_ptr<AttachedDatabase> DatabaseManager::FinalizeAttach(ClientContext &co
 	if (default_database.empty()) {
 		default_database = name;
 	}
-	if (info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
-		DetachDatabase(context, name, OnEntryNotFound::RETURN_NULL);
-	}
+	shared_ptr<AttachedDatabase> detached_db;
 	{
 		lock_guard<mutex> guard(databases_lock);
 		auto entry = databases.emplace(name, attached_db);
 		if (!entry.second) {
-			throw BinderException("Failed to attach database: database with name \"%s\" already exists", name);
+			if (info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
+				// override existing entry
+				detached_db = std::move(entry.first->second);
+				databases[name] = attached_db;
+			} else {
+				throw BinderException("Failed to attach database: database with name \"%s\" already exists", name);
+			}
 		}
 	}
 	auto &meta_transaction = MetaTransaction::Get(context);
+	if (detached_db) {
+		meta_transaction.DetachDatabase(*detached_db);
+		detached_db->OnDetach(context);
+		detached_db.reset();
+	}
 	auto &db_ref = meta_transaction.UseDatabase(attached_db);
 	auto &transaction = DuckTransaction::Get(context, *system);
 	auto &transaction_manager = DuckTransactionManager::Get(*system);
@@ -136,56 +169,37 @@ shared_ptr<AttachedDatabase> DatabaseManager::DetachInternal(const string &name)
 	return attached_db;
 }
 
-void DatabaseManager::CheckPathConflict(const string &path, const string &name) {
-	if (path.empty() || path == IN_MEMORY_PATH) {
-		return;
-	}
-
-	lock_guard<mutex> path_lock(db_paths_lock);
-	auto entry = db_paths_to_name.find(path);
-	if (entry != db_paths_to_name.end()) {
-		throw BinderException("Unique file handle conflict: Cannot attach \"%s\" - the database file \"%s\" is already "
-		                      "attached by database \"%s\"",
-		                      name, path, entry->second);
-	}
+idx_t DatabaseManager::ApproxDatabaseCount() {
+	return path_manager->ApproxDatabaseCount();
 }
 
-void DatabaseManager::InsertDatabasePath(const string &path, const string &name) {
-	if (path.empty() || path == IN_MEMORY_PATH) {
-		return;
-	}
-
-	lock_guard<mutex> path_lock(db_paths_lock);
-	auto entry = db_paths_to_name.emplace(path, name);
-	if (!entry.second) {
-		throw BinderException("Unique file handle conflict: Cannot attach \"%s\" - the database file \"%s\" is already "
-		                      "attached by database \"%s\"",
-		                      name, path, entry.first->second);
-	}
-}
-
-void DatabaseManager::EraseDatabasePath(const string &path) {
-	if (path.empty() || path == IN_MEMORY_PATH) {
-		return;
-	}
-	lock_guard<mutex> path_lock(db_paths_lock);
-	db_paths_to_name.erase(path);
+InsertDatabasePathResult DatabaseManager::InsertDatabasePath(const AttachInfo &info, AttachOptions &options) {
+	return path_manager->InsertDatabasePath(info.path, info.name, info.on_conflict, options);
 }
 
 vector<string> DatabaseManager::GetAttachedDatabasePaths() {
-	lock_guard<mutex> path_lock(db_paths_lock);
-	vector<string> paths;
-	for (auto &entry : db_paths_to_name) {
-		paths.push_back(entry.first);
+	vector<string> result;
+	lock_guard<mutex> guard(databases_lock);
+	for (auto &entry : databases) {
+		auto &db_ref = *entry.second;
+		auto &catalog = db_ref.GetCatalog();
+		if (catalog.InMemory() || catalog.IsSystemCatalog()) {
+			continue;
+		}
+		auto path = catalog.GetDBPath();
+		if (path.empty()) {
+			continue;
+		}
+		result.push_back(std::move(path));
 	}
-	return paths;
+	return result;
 }
 
 void DatabaseManager::GetDatabaseType(ClientContext &context, AttachInfo &info, const DBConfig &config,
                                       AttachOptions &options) {
 
 	// Test if the database is a DuckDB database file.
-	if (StringUtil::CIEquals(options.db_type, "DUCKDB")) {
+	if (StringUtil::CIEquals(options.db_type, "duckdb")) {
 		options.db_type = "";
 		return;
 	}
@@ -193,7 +207,6 @@ void DatabaseManager::GetDatabaseType(ClientContext &context, AttachInfo &info, 
 	// Try to extract the database type from the path.
 	if (options.db_type.empty()) {
 		auto &fs = FileSystem::GetFileSystem(context);
-		CheckPathConflict(info.path, info.name);
 		DBPathAndType::CheckMagicBytes(QueryContext(context), fs, info.path, options.db_type);
 	}
 

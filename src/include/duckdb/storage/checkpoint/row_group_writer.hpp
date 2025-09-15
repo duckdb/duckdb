@@ -40,6 +40,7 @@ public:
 	virtual void FinishWritingColumns() {
 	}
 
+	DatabaseInstance &GetDatabase();
 	PartialBlockManager &GetPartialBlockManager() {
 		return partial_block_manager;
 	}

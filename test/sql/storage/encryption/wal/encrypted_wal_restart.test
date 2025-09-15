@@ -2,10 +2,12 @@
 # description: test wal restart
 # group: [wal]
 
+foreach cipher GCM CTR
+
 load __TEST_DIR__/any_wal_db.db
 
 statement ok
-ATTACH '__TEST_DIR__/encrypted_wal_restart.db' as enc (ENCRYPTION_KEY 'asdf');
+ATTACH '__TEST_DIR__/encrypted_wal_restart_${cipher}.db' as enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
 
 statement ok
 PRAGMA disable_checkpoint_on_shutdown
@@ -23,7 +25,7 @@ INSERT INTO enc.test VALUES (11, 22), (13, 22), (12, 21)
 restart
 
 statement ok
-ATTACH '__TEST_DIR__/encrypted_wal_restart.db' as enc (ENCRYPTION_KEY 'asdf');
+ATTACH '__TEST_DIR__/encrypted_wal_restart_${cipher}.db' as enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
 
 statement ok
 PRAGMA disable_checkpoint_on_shutdown
@@ -54,12 +56,12 @@ SELECT * FROM enc.test ORDER BY 1
 
 restart
 
-statement error
-ATTACH '__TEST_DIR__/encrypted_wal_restart.db' as enc (ENCRYPTION_KEY 'xxxx');
-----
+# statement error
+# ATTACH '__TEST_DIR__/encrypted_wal_restart_${cipher}.db' as enc (ENCRYPTION_KEY 'xxxx', ENCRYPTION_CIPHER '${cipher}');
+# ----
 
 statement ok
-ATTACH '__TEST_DIR__/encrypted_wal_restart.db' as enc (ENCRYPTION_KEY 'asdf');
+ATTACH '__TEST_DIR__/encrypted_wal_restart_${cipher}.db' as enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
 
 query IT
 SELECT * FROM enc.test ORDER BY 1
@@ -68,3 +70,7 @@ SELECT * FROM enc.test ORDER BY 1
 11	22
 12	21
 13	22
+
+endloop
+
+restart

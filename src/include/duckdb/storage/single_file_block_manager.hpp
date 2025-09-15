@@ -30,8 +30,8 @@ struct EncryptionOptions {
 	bool additional_authenticated_data = false;
 	//! derived encryption key id
 	string derived_key_id;
-	//! Cipher used for encryption
-	EncryptionTypes::CipherType cipher = EncryptionTypes::CipherType::UNKNOWN;
+	// //! Cipher used for encryption
+	// EncryptionTypes::CipherType cipher = EncryptionTypes::CipherType::INVALID;
 	//! key derivation function (kdf) used
 	EncryptionTypes::KeyDerivationFunction kdf = EncryptionTypes::KeyDerivationFunction::SHA256;
 	//! Key Length
@@ -146,7 +146,7 @@ private:
 	idx_t GetBlockLocation(block_id_t block_id) const;
 
 	// Encrypt, Store, Decrypt the canary
-	static void StoreEncryptedCanary(DatabaseInstance &db, MainHeader &main_header, const string &key_id);
+	static void StoreEncryptedCanary(AttachedDatabase &db, MainHeader &main_header, const string &key_id);
 	static void StoreDBIdentifier(MainHeader &main_header, const data_ptr_t db_identifier);
 	void StoreEncryptionMetadata(MainHeader &main_header) const;
 

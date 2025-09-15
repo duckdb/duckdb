@@ -70,6 +70,8 @@ public:
 
 	DUCKDB_API bool InMemory() override;
 	DUCKDB_API string GetDBPath() override;
+	DUCKDB_API bool IsEncrypted() const override;
+	DUCKDB_API string GetEncryptionCipher() const override;
 
 	DUCKDB_API optional_idx GetCatalogVersion(ClientContext &context) override;
 

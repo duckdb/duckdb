@@ -566,7 +566,7 @@ void VariantValue::ToVARIANT(vector<VariantValue> &input, Vector &result) {
 	auto conversion_data_offsets = variant::OffsetData::GetBlob(conversion_offsets);
 	for (idx_t i = 0; i < count; i++) {
 		auto &data = variant_data.blob_data[i];
-		data.SetSizeAndFinalize(conversion_data_offsets[i]);
+		data.SetSizeAndFinalize(conversion_data_offsets[i], conversion_data_offsets[i]);
 	}
 
 	VariantUtils::FinalizeVariantKeys(result, dictionary, keys_selvec, keys_selvec_size);

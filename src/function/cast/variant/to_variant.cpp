@@ -27,7 +27,8 @@ void VariantUtils::FinalizeVariantKeys(Vector &variant, OrderedOwningStringMap<u
 		unsorted_to_sorted[unsorted_idx] = sorted_idx;
 		D_ASSERT(sorted_idx < ListVector::GetListSize(keys));
 		keys_entry_data[sorted_idx] = it->first;
-		keys_entry_data[sorted_idx].SetSizeAndFinalize(static_cast<uint32_t>(keys_entry_data[sorted_idx].GetSize()));
+		auto size = static_cast<uint32_t>(keys_entry_data[sorted_idx].GetSize());
+		keys_entry_data[sorted_idx].SetSizeAndFinalize(size, size);
 		it++;
 	}
 
@@ -140,8 +141,8 @@ static bool CastToVARIANT(Vector &source, Vector &result, idx_t count, CastParam
 	//! Initialize the dictionary
 	OrderedOwningStringMap<uint32_t> dictionary(StringVector::GetStringBuffer(keys_entry).GetStringAllocator());
 	SelectionVector keys_selvec;
-
 	ToVariantSourceData source_data(source, count);
+
 	{
 		VariantVectorData variant_data(result);
 		ToVariantGlobalResultData result_data(variant_data, offsets, dictionary, keys_selvec);
@@ -166,8 +167,10 @@ static bool CastToVARIANT(Vector &source, Vector &result, idx_t count, CastParam
 	//! Finalize the 'data'
 	auto &blob = VariantVector::GetData(result);
 	auto blob_data = FlatVector::GetData<string_t>(blob);
+	auto blob_offsets = OffsetData::GetBlob(offsets);
 	for (idx_t i = 0; i < count; i++) {
-		blob_data[i].SetSizeAndFinalize(static_cast<uint32_t>(blob_data[i].GetSize()));
+		auto size = blob_offsets[i];
+		blob_data[i].SetSizeAndFinalize(size, size);
 	}
 
 	keys_entry.Slice(keys_selvec, keys_selvec_size);

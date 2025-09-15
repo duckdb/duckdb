@@ -624,6 +624,10 @@ LogicalType GetUserTypeRecursive(const LogicalType &type, ClientContext &context
 	if (type.id() == LogicalTypeId::LIST) {
 		return LogicalType::LIST(GetUserTypeRecursive(ListType::GetChildType(type), context));
 	}
+	if (type.id() == LogicalTypeId::ARRAY) {
+		return LogicalType::ARRAY(GetUserTypeRecursive(ArrayType::GetChildType(type), context),
+		                          ArrayType::GetSize(type));
+	}
 	if (type.id() == LogicalTypeId::MAP) {
 		return LogicalType::MAP(GetUserTypeRecursive(MapType::KeyType(type), context),
 		                        GetUserTypeRecursive(MapType::ValueType(type), context));

@@ -12,6 +12,7 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/vector_size.hpp"
+#include "duckdb/common/encryption_state.hpp"
 
 namespace duckdb {
 
@@ -34,7 +35,7 @@ class QueryContext;
 //! The configurable block allocation size.
 #ifndef DUCKDB_BLOCK_HEADER_STORAGE_SIZE
 #define DUCKDB_BLOCK_HEADER_STORAGE_SIZE     DEFAULT_BLOCK_HEADER_STORAGE_SIZE
-#define DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE 28ULL
+#define DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE 32ULL
 #endif
 
 using block_id_t = int64_t;
@@ -55,8 +56,8 @@ struct Storage {
 	constexpr static idx_t DEFAULT_BLOCK_HEADER_SIZE = sizeof(idx_t);
 	//! The default block header size for blocks written to storage.
 	constexpr static idx_t MAX_BLOCK_HEADER_SIZE = 128ULL;
-	//! Block header size for encrypted blocks (40 bytes)
-	constexpr static idx_t ENCRYPTED_BLOCK_HEADER_SIZE = 40ULL;
+	//! Block header size for encrypted blocks (64 bytes)
+	constexpr static idx_t ENCRYPTED_BLOCK_HEADER_SIZE = 64ULL;
 	//! The default block size.
 	constexpr static idx_t DEFAULT_BLOCK_SIZE = DEFAULT_BLOCK_ALLOC_SIZE - DEFAULT_BLOCK_HEADER_SIZE;
 
@@ -104,8 +105,8 @@ public:
 	static constexpr idx_t ENCRYPTION_METADATA_LEN = 8;
 	//! The canary is a known plaintext for detecting wrong keys early.
 	static constexpr idx_t CANARY_BYTE_SIZE = 8;
-	//! Nonce, IV (nonce + counter) and tag length.
-	static constexpr uint64_t AES_NONCE_LEN = 12;
+	//! Nonce, IV (nonce + counter) and tag length
+	static constexpr uint64_t AES_NONCE_LEN = 16;
 	static constexpr uint64_t AES_IV_LEN = 16;
 	static constexpr uint64_t AES_TAG_LEN = 16;
 
@@ -119,12 +120,19 @@ public:
 	}
 
 	bool IsEncrypted() const {
-		return flags[0] == MainHeader::ENCRYPTED_DATABASE_FLAG;
+		return flags[0] & MainHeader::ENCRYPTED_DATABASE_FLAG;
+	}
+	void SetEncrypted() {
+		flags[0] |= MainHeader::ENCRYPTED_DATABASE_FLAG;
 	}
 
 	void SetEncryptionMetadata(data_ptr_t source) {
 		memset(encryption_metadata, 0, ENCRYPTION_METADATA_LEN);
 		memcpy(encryption_metadata, source, ENCRYPTION_METADATA_LEN);
+	}
+
+	EncryptionTypes::CipherType GetEncryptionCipher() {
+		return static_cast<EncryptionTypes::CipherType>(encryption_metadata[2]);
 	}
 
 	void SetDBIdentifier(data_ptr_t source) {

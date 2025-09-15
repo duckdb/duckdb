@@ -115,6 +115,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(EnableViewDependenciesSetting),
     DUCKDB_GLOBAL(EnabledLogTypes),
     DUCKDB_LOCAL(ErrorsAsJSONSetting),
+    DUCKDB_SETTING(ExperimentalMetadataReuseSetting),
     DUCKDB_LOCAL(ExplainOutputSetting),
     DUCKDB_GLOBAL(ExtensionDirectorySetting),
     DUCKDB_GLOBAL(ExternalThreadsSetting),
@@ -176,12 +177,12 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(ZstdMinStringLengthSetting),
     FINAL_SETTING};
 
-static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("memory_limit", 82),
+static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("memory_limit", 83),
                                                      DUCKDB_SETTING_ALIAS("null_order", 33),
-                                                     DUCKDB_SETTING_ALIAS("profiling_output", 101),
-                                                     DUCKDB_SETTING_ALIAS("user", 115),
+                                                     DUCKDB_SETTING_ALIAS("profiling_output", 102),
+                                                     DUCKDB_SETTING_ALIAS("user", 116),
                                                      DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 20),
-                                                     DUCKDB_SETTING_ALIAS("worker_threads", 114),
+                                                     DUCKDB_SETTING_ALIAS("worker_threads", 115),
                                                      FINAL_ALIAS};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {
@@ -496,6 +497,8 @@ void DBConfig::SetDefaultTempDirectory() {
 		options.temporary_directory = string();
 	} else if (DBConfig::IsInMemoryDatabase(options.database_path.c_str())) {
 		options.temporary_directory = ".tmp";
+	} else if (StringUtil::Contains(options.database_path, "?")) {
+		options.temporary_directory = StringUtil::Split(options.database_path, "?")[0] + ".tmp";
 	} else {
 		options.temporary_directory = options.database_path + ".tmp";
 	}
@@ -536,6 +539,10 @@ idx_t DBConfig::GetSystemMaxThreads(FileSystem &fs) {
 }
 
 idx_t DBConfig::GetSystemAvailableMemory(FileSystem &fs) {
+	// System memory detection
+	auto memory = FileSystem::GetAvailableMemory();
+	auto available_memory = memory.IsValid() ? memory.GetIndex() : DBConfigOptions().maximum_memory;
+
 #ifdef __linux__
 	// Check SLURM environment variables first
 	const char *slurm_mem_per_node = getenv("SLURM_MEM_PER_NODE");
@@ -557,16 +564,12 @@ idx_t DBConfig::GetSystemAvailableMemory(FileSystem &fs) {
 	// Check cgroup memory limit
 	auto cgroup_memory_limit = CGroups::GetMemoryLimit(fs);
 	if (cgroup_memory_limit.IsValid()) {
-		return cgroup_memory_limit.GetIndex();
+		auto cgroup_memory_limit_value = cgroup_memory_limit.GetIndex();
+		return std::min(cgroup_memory_limit_value, available_memory);
 	}
 #endif
 
-	// System memory detection
-	auto memory = FileSystem::GetAvailableMemory();
-	if (!memory.IsValid()) {
-		return DBConfigOptions().maximum_memory;
-	}
-	return memory.GetIndex();
+	return available_memory;
 }
 
 idx_t DBConfig::ParseMemoryLimit(const string &arg) {
