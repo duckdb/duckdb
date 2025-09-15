@@ -457,6 +457,37 @@ static bool HighlightResults() {
 }
 
 /*
+** Pager configuration
+*/
+enum class PagerMode { OFF, ON, AUTO };
+static PagerMode pager_mode = PagerMode::OFF;
+static string pager_command = "";
+
+/*
+** Get the system default pager command
+*/
+static string getSystemPager() {
+	const char *pager_env = getenv("PAGER");
+	if (pager_env && strlen(pager_env) > 0) {
+		return string(pager_env);
+	}
+#if defined(_WIN32) || defined(WIN32)
+	return "more";
+#else
+	return "less -S";
+#endif
+}
+
+/*
+** Initialize pager settings
+*/
+static void initializePager() {
+	if (pager_command.empty()) {
+		pager_command = getSystemPager();
+	}
+}
+
+/*
 ** Prompt strings. Initialized in main. Settable with
 **   .prompt main continue
 */
@@ -1682,6 +1713,8 @@ public:
 ** Run a prepared statement
 */
 void ShellState::ExecutePreparedStatement(sqlite3_stmt *pStmt) {
+	bool pager_setup = SetupPager();
+
 	if (cMode == RenderMode::DUCKBOX) {
 		size_t max_rows = this->max_rows;
 		size_t max_width = this->max_width;
@@ -1700,16 +1733,25 @@ void ShellState::ExecutePreparedStatement(sqlite3_stmt *pStmt) {
 		DuckBoxRenderer renderer(*this, HighlightResults());
 		sqlite3_print_duckbox(pStmt, max_rows, max_width, nullValue.c_str(), columns, thousand_separator,
 		                      decimal_separator, int(large_rendering), &renderer);
+		if (pager_setup) {
+			ResetOutput();
+		}
 		return;
 	}
 	if (cMode == RenderMode::TRASH) {
 		TrashRenderer renderer;
 		sqlite3_print_duckbox(pStmt, 1, 80, "", false, '\0', '\0', 0, &renderer);
+		if (pager_setup) {
+			ResetOutput();
+		}
 		return;
 	}
 
 	if (ShellRenderer::IsColumnar(cMode)) {
 		ExecutePreparedStatementColumnar(pStmt);
+		if (pager_setup) {
+			ResetOutput();
+		}
 		return;
 	}
 
@@ -1719,6 +1761,9 @@ void ShellState::ExecutePreparedStatement(sqlite3_stmt *pStmt) {
 	int rc = sqlite3_step(pStmt);
 	/* if we have a result set... */
 	if (SQLITE_ROW != rc) {
+		if (pager_setup) {
+			ResetOutput();
+		}
 		return;
 	}
 	RowResult result;
@@ -1759,6 +1804,10 @@ void ShellState::ExecutePreparedStatement(sqlite3_stmt *pStmt) {
 	} while (SQLITE_ROW == rc);
 
 	renderer->RenderFooter(result);
+
+	if (pager_setup) {
+		ResetOutput();
+	}
 }
 
 /*
@@ -2327,6 +2376,11 @@ static const char *azHelp[] = {
     "     --bom                 Prefix output with a UTF8 byte-order mark",
     "     -e                    Send output to the system text editor",
     "     -x                    Send output as CSV to a spreadsheet",
+    ".pager on|off|auto|<cmd> Control pager usage for output",
+    "   on     Always use pager for output to stdout",
+    "   off    Never use pager",
+    "   auto   Use pager automatically if available (default)",
+    "   <cmd>  Set custom pager command and enable pager",
     ".print STRING...         Print literal STRING",
     ".prompt MAIN CONTINUE    Replace the standard prompts",
     ".quit                    Exit this program",
@@ -2959,6 +3013,50 @@ void ShellState::ResetOutput() {
 	outfile = string();
 	out = stdout;
 	stdout_is_console = true;
+}
+
+/*
+** Setup pager output based on pager mode and availability
+*/
+bool ShellState::SetupPager() {
+	if (out != stdout || !stdout_is_console) {
+		return false;
+	}
+
+	bool should_use_pager = false;
+	switch (pager_mode) {
+	case PagerMode::OFF:
+		should_use_pager = false;
+		break;
+	case PagerMode::ON:
+		should_use_pager = true;
+		break;
+	case PagerMode::AUTO:
+		// Auto mode: use pager if system pager is available
+		should_use_pager = !pager_command.empty();
+		break;
+	}
+
+	if (!should_use_pager) {
+		return false;
+	}
+
+#ifndef SQLITE_OMIT_POPEN
+	string pager_cmd = pager_command;
+	if (pager_cmd.empty()) {
+		pager_cmd = getSystemPager();
+	}
+
+	out = popen(pager_cmd.c_str(), "w");
+	if (out == nullptr) {
+		out = stdout;
+		return false;
+	}
+	outfile = "|" + pager_cmd;
+	return true;
+#else
+	return false;
+#endif
 }
 
 void ShellState::PrintDatabaseError(const char *zErr) {
@@ -4316,6 +4414,54 @@ MetadataResult SetUICommand(ShellState &state, const char **azArg, idx_t nArg) {
 	return MetadataResult::SUCCESS;
 }
 
+MetadataResult SetPager(ShellState &state, const char **azArg, idx_t nArg) {
+	if (nArg == 1) {
+		// Show current pager status
+		const char *mode_str;
+		switch (pager_mode) {
+		case PagerMode::OFF:
+			mode_str = "off";
+			break;
+		case PagerMode::ON:
+			mode_str = "on";
+			break;
+		case PagerMode::AUTO:
+			mode_str = "auto";
+			break;
+		}
+		raw_printf(state.out, "current pager mode: %s\n", mode_str);
+		if (pager_mode != PagerMode::OFF) {
+			raw_printf(state.out, "pager command: %s\n", pager_command.c_str());
+		}
+		return MetadataResult::SUCCESS;
+	}
+
+	if (nArg != 2) {
+		return MetadataResult::PRINT_USAGE;
+	}
+
+	const char *arg = azArg[1];
+	if (strcmp(arg, "off") == 0) {
+		pager_mode = PagerMode::OFF;
+	} else if (strcmp(arg, "on") == 0) {
+		pager_mode = PagerMode::ON;
+		if (pager_command.empty()) {
+			pager_command = getSystemPager();
+		}
+	} else if (strcmp(arg, "auto") == 0) {
+		pager_mode = PagerMode::AUTO;
+		if (pager_command.empty()) {
+			pager_command = getSystemPager();
+		}
+	} else {
+		// Custom pager command
+		pager_command = arg;
+		pager_mode = PagerMode::ON;
+	}
+
+	return MetadataResult::SUCCESS;
+}
+
 #if defined(_WIN32) || defined(WIN32)
 MetadataResult SetUTF8Mode(ShellState &state, const char **azArg, idx_t nArg) {
 	win_utf8_mode = 1;
@@ -4365,6 +4511,7 @@ static const MetadataCommand metadata_commands[] = {
     {"open", 0, OpenDatabase, "?OPTIONS? ?FILE?", "Close existing database and reopen FILE", 2},
     {"once", 0, SetOutputOnce, "?FILE?", "Output for the next SQL command only to FILE", 0},
     {"output", 0, SetOutput, "?FILE?", "Send output to FILE or stdout if FILE is omitted", 0},
+    {"pager", 0, SetPager, "on|off|auto|<cmd>", "Control pager usage for output", 0},
     {"print", 0, PrintArguments, "STRING...", "Print literal STRING", 3},
     {"prompt", 0, SetPrompt, "MAIN CONTINUE", "Replace the standard prompts", 0},
 
@@ -5014,6 +5161,9 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 #elif (defined(_WIN32) || defined(WIN32)) && !defined(_WIN32_WCE)
 	SetConsoleCtrlHandler(ConsoleCtrlHandler, TRUE);
 #endif
+
+	/* Initialize pager settings */
+	initializePager();
 
 #ifdef SQLITE_SHELL_DBNAME_PROC
 	{
