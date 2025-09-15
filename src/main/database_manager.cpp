@@ -70,8 +70,18 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
                                                              AttachOptions &options) {
 	auto &config = DBConfig::GetConfig(context);
 	if (options.db_type.empty() || StringUtil::CIEquals(options.db_type, "duckdb")) {
-		if (InsertDatabasePath(info, options) == InsertDatabasePathResult::ALREADY_EXISTS) {
-			return nullptr;
+		while (InsertDatabasePath(info, options) == InsertDatabasePathResult::ALREADY_EXISTS) {
+			// database with this name and path already exists
+			// ... but it might not be done attaching yet!
+			// verify the database has actually finished attaching prior to returning
+			lock_guard<mutex> guard(databases_lock);
+			if (databases.find(info.name) != databases.end()) {
+				// database ACTUALLY exists - return
+				return nullptr;
+			}
+			if (context.interrupted) {
+				throw InterruptException();
+			}
 		}
 	}
 	GetDatabaseType(context, info, config, options);
