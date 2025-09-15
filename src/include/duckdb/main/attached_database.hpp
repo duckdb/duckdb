@@ -96,6 +96,9 @@ public:
 	const string &GetName() const {
 		return name;
 	}
+	void SetName(const string &new_name) {
+		name = new_name;
+	}
 	bool IsSystem() const;
 	bool IsTemporary() const;
 	bool IsReadOnly() const;

@@ -10,6 +10,7 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
+#include "duckdb/parser/parsed_data/alter_database_info.hpp"
 
 namespace duckdb {
 
@@ -163,6 +164,54 @@ void DatabaseManager::DetachDatabase(ClientContext &context, const string &name,
 	}
 
 	attached_db->OnDetach(context);
+}
+
+void DatabaseManager::Alter(ClientContext &context, AlterInfo &info) {
+	auto &db_info = info.Cast<AlterDatabaseInfo>();
+
+	switch (db_info.alter_database_type) {
+	case AlterDatabaseType::RENAME_DATABASE: {
+		auto &rename_info = db_info.Cast<RenameDatabaseInfo>();
+		RenameDatabase(context, db_info.catalog, rename_info.new_name, db_info.if_not_found);
+		break;
+	}
+	default:
+		throw InternalException("Unsupported ALTER DATABASE operation");
+	}
+}
+
+void DatabaseManager::RenameDatabase(ClientContext &context, const string &old_name, const string &new_name,
+                                     OnEntryNotFound if_not_found) {
+	if (AttachedDatabase::NameIsReserved(new_name)) {
+		throw BinderException("Database name \"%s\" cannot be used because it is a reserved name", new_name);
+	}
+
+	shared_ptr<AttachedDatabase> attached_db;
+	{
+		lock_guard<mutex> guard(databases_lock);
+		auto old_entry = databases.find(old_name);
+		if (old_entry == databases.end()) {
+			if (if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
+				throw BinderException("Failed to rename database \"%s\": database not found", old_name);
+			}
+			return;
+		}
+
+		auto new_entry = databases.find(new_name);
+		if (new_entry != databases.end()) {
+			throw BinderException("Failed to rename database \"%s\" to \"%s\": database with new name already exists",
+			                      old_name, new_name);
+		}
+
+		attached_db = old_entry->second;
+		databases.erase(old_entry);
+		attached_db->SetName(new_name);
+		databases[new_name] = attached_db;
+	}
+
+	if (default_database == old_name) {
+		default_database = new_name;
+	}
 }
 
 shared_ptr<AttachedDatabase> DatabaseManager::DetachInternal(const string &name) {
