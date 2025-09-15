@@ -50,6 +50,8 @@ enum class AggregateOrderDependent : uint8_t;
 
 enum class AggregateType : uint8_t;
 
+enum class AlterDatabaseType : uint8_t;
+
 enum class AlterForeignKeyType : uint8_t;
 
 enum class AlterScalarFunctionType : uint8_t;
@@ -471,6 +473,9 @@ const char* EnumUtil::ToChars<AggregateOrderDependent>(AggregateOrderDependent v
 
 template<>
 const char* EnumUtil::ToChars<AggregateType>(AggregateType value);
+
+template<>
+const char* EnumUtil::ToChars<AlterDatabaseType>(AlterDatabaseType value);
 
 template<>
 const char* EnumUtil::ToChars<AlterForeignKeyType>(AlterForeignKeyType value);
@@ -1090,6 +1095,9 @@ AggregateOrderDependent EnumUtil::FromString<AggregateOrderDependent>(const char
 
 template<>
 AggregateType EnumUtil::FromString<AggregateType>(const char *value);
+
+template<>
+AlterDatabaseType EnumUtil::FromString<AlterDatabaseType>(const char *value);
 
 template<>
 AlterForeignKeyType EnumUtil::FromString<AlterForeignKeyType>(const char *value);

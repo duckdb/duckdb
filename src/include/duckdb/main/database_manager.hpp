@@ -28,6 +28,7 @@ class ClientContext;
 class DatabaseInstance;
 class TaskScheduler;
 struct AttachOptions;
+struct AlterInfo;
 
 //! The DatabaseManager is a class that sits at the root of all attached databases
 class DatabaseManager {
@@ -55,6 +56,8 @@ public:
 	                                              shared_ptr<AttachedDatabase> database);
 	//! Detach an existing database
 	void DetachDatabase(ClientContext &context, const string &name, OnEntryNotFound if_not_found);
+	//! Alter operation dispatcher
+	void Alter(ClientContext &context, AlterInfo &info);
 	//! Rollback the attach of a database
 	shared_ptr<AttachedDatabase> DetachInternal(const string &name);
 	//! Returns a reference to the system catalog
@@ -64,11 +67,7 @@ public:
 	void SetDefaultDatabase(ClientContext &context, const string &new_value);
 
 	//! Inserts a path to name mapping to the database paths map
-	void InsertDatabasePath(const string &path, const string &name);
-	//! Erases a path from the database paths map
-	void EraseDatabasePath(const string &path);
-	//! Check if a path has a conflict
-	void CheckPathConflict(const string &path, const string &name);
+	InsertDatabasePathResult InsertDatabasePath(const AttachInfo &info, AttachOptions &options);
 
 	//! Returns the database type. This might require checking the header of the file, in which case the file handle is
 	//! necessary. We can only grab the file handle, if it is not yet held, even for uncommitted changes. Thus, we have
@@ -124,6 +123,11 @@ private:
 	string default_database;
 	//! Manager for ensuring we never open the same database file twice in the same program
 	shared_ptr<DatabaseFilePathManager> path_manager;
+
+private:
+	//! Rename an existing database
+	void RenameDatabase(ClientContext &context, const string &old_name, const string &new_name,
+	                    OnEntryNotFound if_not_found);
 };
 
 } // namespace duckdb
