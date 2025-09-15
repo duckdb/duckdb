@@ -622,30 +622,36 @@ idx_t RowGroupCollection::Delete(TransactionData transaction, DataTable &table, 
 //===--------------------------------------------------------------------===//
 // Update
 //===--------------------------------------------------------------------===//
+optional_ptr<RowGroup> RowGroupCollection::NextUpdateRowGroup(row_t *ids, idx_t &pos, idx_t count) const {
+	auto row_group = row_groups->GetSegment(UnsafeNumericCast<idx_t>(ids[pos]));
+
+	row_t base_id =
+	    UnsafeNumericCast<row_t>(row_group->start + ((UnsafeNumericCast<idx_t>(ids[pos]) - row_group->start) /
+	                                                 STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE));
+	auto max_id =
+	    MinValue<row_t>(base_id + STANDARD_VECTOR_SIZE, UnsafeNumericCast<row_t>(row_group->start + row_group->count));
+	for (pos++; pos < count; pos++) {
+		D_ASSERT(ids[pos] >= 0);
+		// check if this id still belongs to this vector in this row group
+		if (ids[pos] < base_id) {
+			// id is before vector start -> it does not
+			break;
+		}
+		if (ids[pos] >= max_id) {
+			// id is after the maximum id in this vector -> it does not
+			break;
+		}
+	}
+	return row_group;
+}
+
 void RowGroupCollection::Update(TransactionData transaction, row_t *ids, const vector<PhysicalIndex> &column_ids,
                                 DataChunk &updates) {
 	D_ASSERT(updates.size() >= 1);
 	idx_t pos = 0;
 	do {
 		idx_t start = pos;
-		auto row_group = row_groups->GetSegment(UnsafeNumericCast<idx_t>(ids[pos]));
-		row_t base_id =
-		    UnsafeNumericCast<row_t>(row_group->start + ((UnsafeNumericCast<idx_t>(ids[pos]) - row_group->start) /
-		                                                 STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE));
-		auto max_id = MinValue<row_t>(base_id + STANDARD_VECTOR_SIZE,
-		                              UnsafeNumericCast<row_t>(row_group->start + row_group->count));
-		for (pos++; pos < updates.size(); pos++) {
-			D_ASSERT(ids[pos] >= 0);
-			// check if this id still belongs to this vector in this row group
-			if (ids[pos] < base_id) {
-				// id is before vector start -> it does not
-				break;
-			}
-			if (ids[pos] >= max_id) {
-				// id is after the maximum id in this vector -> it does not
-				break;
-			}
-		}
+		auto row_group = NextUpdateRowGroup(ids, pos, updates.size());
 		row_group->Update(transaction, updates, ids, start, pos - start, column_ids);
 
 		auto l = stats.GetLock();
@@ -765,24 +771,7 @@ void RowGroupCollection::UpdateColumn(TransactionData transaction, Vector &row_i
 	idx_t pos = 0;
 	do {
 		idx_t start = pos;
-		auto row_group = row_groups->GetSegment(UnsafeNumericCast<idx_t>(ids[pos]));
-		row_t base_id =
-		    UnsafeNumericCast<row_t>(row_group->start + ((UnsafeNumericCast<idx_t>(ids[pos]) - row_group->start) /
-		                                                 STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE));
-		auto max_id = MinValue<row_t>(base_id + STANDARD_VECTOR_SIZE,
-		                              UnsafeNumericCast<row_t>(row_group->start + row_group->count));
-		for (pos++; pos < updates.size(); pos++) {
-			D_ASSERT(ids[pos] >= 0);
-			// check if this id still belongs to this vector in this row group
-			if (ids[pos] < base_id) {
-				// id is before vector start -> it does not
-				break;
-			}
-			if (ids[pos] >= max_id) {
-				// id is after the maximum id in this vector -> it does not
-				break;
-			}
-		}
+		auto row_group = NextUpdateRowGroup(ids, pos, updates.size());
 		row_group->UpdateColumn(transaction, updates, row_ids, start, pos - start, column_path);
 
 		auto lock = stats.GetLock();
