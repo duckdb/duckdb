@@ -1,5 +1,6 @@
 #include "duckdb/optimizer/common_subplan_optimizer.hpp"
 
+#include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
@@ -11,12 +12,16 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 class PlanSignature {
 private:
-	PlanSignature() {
+	explicit PlanSignature(const idx_t operator_count_p) : operator_count(operator_count_p) {
 	}
 
 public:
-	static shared_ptr<PlanSignature> Create(LogicalOperator &op,
-	                                        vector<shared_ptr<PlanSignature>> child_signatures = {}) {
+	static unique_ptr<PlanSignature> Create(LogicalOperator &op, vector<reference<PlanSignature>> child_signatures,
+	                                        const idx_t operator_count) {
+		if (!OperatorIsSupported(op)) {
+			return nullptr;
+		}
+
 		// Construct maps for converting column bindings to uniform representation and back
 		static constexpr idx_t UNIFORM_OFFSET = 10000000000000;
 		unordered_map<idx_t, idx_t> to_uniform;
@@ -51,16 +56,20 @@ public:
 		ConvertTableIndices<false>(op, table_indices);
 		ConvertColumnRefs(op, from_uniform);
 
-		auto res = shared_ptr<PlanSignature>(new PlanSignature());
+		auto res = unique_ptr<PlanSignature>(new PlanSignature(operator_count));
 		res->signature.append(char_ptr_cast(stream.GetData()), stream.GetPosition());
 		res->children = std::move(child_signatures);
 		return res;
 	}
 
+	idx_t OperatorCount() const {
+		return operator_count;
+	}
+
 	hash_t Hash() const {
 		auto res = std::hash<string>()(signature);
 		for (auto &child : children) {
-			res = CombineHash(res, child->Hash());
+			res = CombineHash(res, child.get().Hash());
 		}
 		return res;
 	}
@@ -73,7 +82,7 @@ public:
 			return false;
 		}
 		for (idx_t child_idx = 0; child_idx < this->children.size(); ++child_idx) {
-			if (!this->children[child_idx]->Equals(*other.children[child_idx])) {
+			if (!this->children[child_idx].get().Equals(other.children[child_idx].get())) {
 				return false;
 			}
 		}
@@ -81,6 +90,49 @@ public:
 	}
 
 private:
+	static bool OperatorIsSupported(const LogicalOperator &op) {
+		switch (op.type) {
+		case LogicalOperatorType::LOGICAL_PROJECTION:
+		case LogicalOperatorType::LOGICAL_FILTER:
+		case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
+		case LogicalOperatorType::LOGICAL_WINDOW:
+		case LogicalOperatorType::LOGICAL_UNNEST:
+		case LogicalOperatorType::LOGICAL_LIMIT:
+		case LogicalOperatorType::LOGICAL_ORDER_BY:
+		case LogicalOperatorType::LOGICAL_TOP_N:
+		case LogicalOperatorType::LOGICAL_DISTINCT:
+		case LogicalOperatorType::LOGICAL_PIVOT:
+		case LogicalOperatorType::LOGICAL_GET:
+		case LogicalOperatorType::LOGICAL_CHUNK_GET:
+		case LogicalOperatorType::LOGICAL_EXPRESSION_GET:
+		case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
+		case LogicalOperatorType::LOGICAL_EMPTY_RESULT:
+		case LogicalOperatorType::LOGICAL_CTE_REF:
+		case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
+		case LogicalOperatorType::LOGICAL_ANY_JOIN:
+		case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
+		case LogicalOperatorType::LOGICAL_POSITIONAL_JOIN:
+		case LogicalOperatorType::LOGICAL_ASOF_JOIN:
+		case LogicalOperatorType::LOGICAL_UNION:
+		case LogicalOperatorType::LOGICAL_EXCEPT:
+		case LogicalOperatorType::LOGICAL_INTERSECT:
+			return true;
+		default:
+			// Unsupported:
+			// - case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
+			// - case LogicalOperatorType::LOGICAL_SAMPLE:
+			// - case LogicalOperatorType::LOGICAL_COPY_DATABASE:
+			// - case LogicalOperatorType::LOGICAL_DELIM_GET:
+			// - case LogicalOperatorType::LOGICAL_JOIN:
+			// - case LogicalOperatorType::LOGICAL_DELIM_JOIN:
+			// - case LogicalOperatorType::LOGICAL_DEPENDENT_JOIN:
+			// - case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
+			// - case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
+			// - case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR
+			return false;
+		}
+	}
+
 	template <bool TO_UNIFORM>
 	static void ConvertTableIndices(LogicalOperator &op, vector<idx_t> &table_indices) {
 		switch (op.type) {
@@ -183,7 +235,8 @@ private:
 
 private:
 	string signature;
-	vector<shared_ptr<PlanSignature>> children;
+	vector<reference<PlanSignature>> children;
+	const idx_t operator_count;
 };
 
 struct PlanSignatureHash {
@@ -208,11 +261,11 @@ struct SubplanInfo {
 using subplan_map_t = unordered_map<PlanSignature, SubplanInfo, PlanSignatureHash, PlanSignatureEquality>;
 
 //===--------------------------------------------------------------------===//
-// PlanSignatureFinder
+// CommonSubplanFinder
 //===--------------------------------------------------------------------===//
-class PlanSignatureFinder {
+class CommonSubplanFinder {
 public:
-	PlanSignatureFinder() {
+	CommonSubplanFinder() {
 	}
 
 private:
@@ -222,7 +275,7 @@ private:
 
 		unique_ptr<LogicalOperator> &parent;
 		const idx_t depth;
-		shared_ptr<PlanSignature> signature;
+		unique_ptr<PlanSignature> signature;
 	};
 
 	struct StackNode {
@@ -243,7 +296,8 @@ private:
 	};
 
 public:
-	void FindPlanSignatures(unique_ptr<LogicalOperator> &root) {
+	subplan_map_t FindCommonSubplans(unique_ptr<LogicalOperator> &root) {
+		// Recurse through query plan using stack-based recursion
 		vector<StackNode> stack;
 		stack.emplace_back(root);
 		operator_infos.emplace(root, OperatorInfo(root, 0));
@@ -280,20 +334,43 @@ public:
 			// Done with current
 			stack.pop_back();
 		}
+
+		// Remove redundant subplans before returning
+		for (auto it = subplans.begin(); it != subplans.end();) {
+			if (it->first.OperatorCount() == 1) {
+				it = subplans.erase(it); // Just one operator in this subplan
+				continue;
+			}
+			if (it->second.subplans.size() == 1) {
+				it = subplans.erase(it); // No other identical subplan
+				continue;
+			}
+			auto &parent_signature = *operator_infos.find(it->second.subplans[0].get())->second.signature;
+			auto parent_it = subplans.find(parent_signature);
+			if (parent_it != subplans.end() && it->second.subplans.size() == parent_it->second.subplans.size()) {
+				it = subplans.erase(it); // Parent has exact same number of identical subplans
+				continue;
+			}
+			it++; // This subplan is not redundant
+		}
+
+		return std::move(subplans);
 	}
 
 private:
-	shared_ptr<PlanSignature> CreatePlanSignature(const unique_ptr<LogicalOperator> &op) {
-		vector<shared_ptr<PlanSignature>> child_signatures;
+	unique_ptr<PlanSignature> CreatePlanSignature(const unique_ptr<LogicalOperator> &op) {
+		vector<reference<PlanSignature>> child_signatures;
+		idx_t operator_count = 1;
 		for (auto &child : op->children) {
 			auto it = operator_infos.find(child);
 			D_ASSERT(it != operator_infos.end());
 			if (!it->second.signature) {
 				return nullptr; // Failed to create signature from one of the children
 			}
-			child_signatures.emplace_back(it->second.signature);
+			child_signatures.emplace_back(*it->second.signature);
+			operator_count += it->second.signature->OperatorCount();
 		}
-		return PlanSignature::Create(*op, std::move(child_signatures));
+		return PlanSignature::Create(*op, std::move(child_signatures), operator_count);
 	}
 
 	unique_ptr<LogicalOperator> &LowestCommonAncestor(reference<unique_ptr<LogicalOperator>> a,
@@ -339,13 +416,34 @@ private:
 CommonSubplanOptimizer::CommonSubplanOptimizer(Optimizer &optimizer_p) : optimizer(optimizer_p) {
 }
 
-unique_ptr<LogicalOperator> CommonSubplanOptimizer::Optimize(unique_ptr<LogicalOperator> op) {
-	PlanSignatureFinder finder;
-	finder.FindPlanSignatures(op);
-
-	// TODO eliminate common subplans
+static unique_ptr<LogicalOperator> ConvertSubplansToCTE(Optimizer &optimizer, unique_ptr<LogicalOperator> op,
+                                                        SubplanInfo &subplan_info) {
+	auto &subplan = subplan_info.subplans[0].get();
+	auto cte = make_uniq<LogicalMaterializedCTE>("todo", optimizer.binder.GenerateTableIndex(),
+	                                             subplan->GetColumnBindings().size(), nullptr, nullptr, // TODO
+	                                             CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
 
 	return op;
+}
+
+unique_ptr<LogicalOperator> CommonSubplanOptimizer::Optimize(unique_ptr<LogicalOperator> op) {
+	// Bottom-up identification of identical subplans
+	CommonSubplanFinder finder;
+	auto subplans = finder.FindCommonSubplans(op);
+
+	// Identify the single best subplan (TODO: for now, in the future we should identify multiple)
+	if (subplans.empty()) {
+		return op; // No matching subplans
+	}
+	auto best_it = subplans.begin();
+	for (auto it = ++subplans.begin(); it != subplans.end(); it++) {
+		if (it->first.OperatorCount() > best_it->first.OperatorCount()) {
+			best_it = it;
+		}
+	}
+
+	// Create a CTE!
+	return ConvertSubplansToCTE(optimizer, std::move(op), best_it->second);
 }
 
 } // namespace duckdb
