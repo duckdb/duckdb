@@ -16,11 +16,6 @@ CatalogType AlterDatabaseInfo::GetCatalogType() const {
 	return CatalogType::DATABASE_ENTRY;
 }
 
-void AlterDatabaseInfo::Serialize(Serializer &serializer) const {
-	AlterInfo::Serialize(serializer);
-	serializer.WriteProperty(300, "alter_database_type", alter_database_type);
-}
-
 RenameDatabaseInfo::RenameDatabaseInfo(string catalog_p, string new_name_p, OnEntryNotFound if_not_found)
     : AlterDatabaseInfo(AlterDatabaseType::RENAME_DATABASE, std::move(catalog_p), if_not_found),
       new_name(std::move(new_name_p)) {
@@ -31,12 +26,7 @@ unique_ptr<AlterInfo> RenameDatabaseInfo::Copy() const {
 }
 
 string RenameDatabaseInfo::ToString() const {
-	return "ALTER DATABASE " + catalog + " RENAME TO " + new_name;
-}
-
-void RenameDatabaseInfo::Serialize(Serializer &serializer) const {
-	AlterDatabaseInfo::Serialize(serializer);
-	serializer.WriteProperty(200, "new_name", new_name);
+	return StringUtil::Format("ALTER DATABASE %s RENAME TO %s", SQLIdentifier(catalog), SQLIdentifier(new_name));
 }
 
 } // namespace duckdb

@@ -27,6 +27,7 @@ public:
 
 protected:
 	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<AlterInfo> Deserialize(Deserializer &deserializer);
 };
 
 struct RenameDatabaseInfo : public AlterDatabaseInfo {
@@ -41,6 +42,7 @@ public:
 
 protected:
 	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<AlterInfo> Deserialize(Deserializer &deserializer);
 };
 
 } // namespace duckdb
