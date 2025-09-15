@@ -63,6 +63,9 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 			    uncast_constant != constant_value) {
 				return nullptr;
 			}
+			if (cast_expression.try_cast) {
+				return nullptr;
+			}
 		}
 
 		//! We can cast, now we change our column_ref_expression from an operator cast to a column reference
@@ -75,6 +78,7 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 			expr.left = std::move(new_constant_expr);
 			expr.right = std::move(child_expression);
 		}
+		changes_made = true;
 	}
 	return nullptr;
 }
