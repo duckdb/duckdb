@@ -61,9 +61,11 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 		}
 	}
 
-	// Get the database type and attach the database.
-	db_manager.GetDatabaseType(context.client, *info, config, options);
+	// attach the database.
 	auto attached_db = db_manager.AttachDatabase(context.client, *info, options);
+	if (!attached_db) {
+		return SourceResultType::FINISHED;
+	}
 
 	//! Initialize the database.
 	attached_db->Initialize(context.client);

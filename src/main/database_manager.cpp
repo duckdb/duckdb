@@ -68,6 +68,28 @@ optional_ptr<AttachedDatabase> DatabaseManager::GetDatabase(ClientContext &conte
 
 shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &context, AttachInfo &info,
                                                              AttachOptions &options) {
+	auto &config = DBConfig::GetConfig(context);
+	if (options.db_type.empty() || StringUtil::CIEquals(options.db_type, "duckdb")) {
+		while (InsertDatabasePath(info, options) == InsertDatabasePathResult::ALREADY_EXISTS) {
+			// database with this name and path already exists
+			// ... but it might not be done attaching yet!
+			// verify the database has actually finished attaching prior to returning
+			lock_guard<mutex> guard(databases_lock);
+			if (databases.find(info.name) != databases.end()) {
+				// database ACTUALLY exists - return
+				return nullptr;
+			}
+			if (context.interrupted) {
+				throw InterruptException();
+			}
+		}
+	}
+	GetDatabaseType(context, info, config, options);
+	if (!options.db_type.empty()) {
+		// we only need to prevent duplicate opening of DuckDB files
+		// if this is not a DuckDB file but e.g. a CSV or Parquet file, we don't need to do this duplicate protection
+		options.stored_database_path.reset();
+	}
 	if (AttachedDatabase::NameIsReserved(info.name)) {
 		throw BinderException("Attached database name \"%s\" cannot be used because it is a reserved name", info.name);
 	}
@@ -157,20 +179,12 @@ shared_ptr<AttachedDatabase> DatabaseManager::DetachInternal(const string &name)
 	return attached_db;
 }
 
-void DatabaseManager::CheckPathConflict(const string &path, const string &name) {
-	path_manager->CheckPathConflict(path, name);
-}
-
 idx_t DatabaseManager::ApproxDatabaseCount() {
 	return path_manager->ApproxDatabaseCount();
 }
 
-void DatabaseManager::InsertDatabasePath(const string &path, const string &name) {
-	path_manager->InsertDatabasePath(path, name);
-}
-
-void DatabaseManager::EraseDatabasePath(const string &path) {
-	path_manager->EraseDatabasePath(path);
+InsertDatabasePathResult DatabaseManager::InsertDatabasePath(const AttachInfo &info, AttachOptions &options) {
+	return path_manager->InsertDatabasePath(info.path, info.name, info.on_conflict, options);
 }
 
 vector<string> DatabaseManager::GetAttachedDatabasePaths() {
@@ -195,7 +209,7 @@ void DatabaseManager::GetDatabaseType(ClientContext &context, AttachInfo &info, 
                                       AttachOptions &options) {
 
 	// Test if the database is a DuckDB database file.
-	if (StringUtil::CIEquals(options.db_type, "DUCKDB")) {
+	if (StringUtil::CIEquals(options.db_type, "duckdb")) {
 		options.db_type = "";
 		return;
 	}
@@ -203,7 +217,6 @@ void DatabaseManager::GetDatabaseType(ClientContext &context, AttachInfo &info, 
 	// Try to extract the database type from the path.
 	if (options.db_type.empty()) {
 		auto &fs = FileSystem::GetFileSystem(context);
-		CheckPathConflict(info.path, info.name);
 		DBPathAndType::CheckMagicBytes(QueryContext(context), fs, info.path, options.db_type);
 	}
 
