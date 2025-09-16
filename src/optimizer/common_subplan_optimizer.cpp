@@ -14,10 +14,12 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 class PlanSignature {
 private:
-	PlanSignature(data_ptr_t signature_ptr, idx_t signature_len, idx_t operator_count_p,
+	PlanSignature(MemoryStream &&stream_p, idx_t operator_count_p,
 	              vector<reference<PlanSignature>> &&child_signatures_p)
-	    : signature(char_ptr_cast(signature_ptr), signature_len), signature_hash(Hash(signature_ptr, signature_len)),
-	      operator_count(operator_count_p), child_signatures(std::move(child_signatures_p)) {
+	    : stream(std::move(stream_p)),
+	      signature(char_ptr_cast(stream.GetData()), NumericCast<uint32_t>(stream.GetPosition())),
+	      signature_hash(Hash(signature.c_str(), signature.size())), operator_count(operator_count_p),
+	      child_signatures(std::move(child_signatures_p)) {
 	}
 
 public:
@@ -76,7 +78,7 @@ public:
 		op.children = std::move(children);
 
 		return unique_ptr<PlanSignature>(
-		    new PlanSignature(stream.GetData(), stream.GetPosition(), operator_count, std::move(child_signatures)));
+		    new PlanSignature(std::move(stream), operator_count, std::move(child_signatures)));
 	}
 
 	idx_t OperatorCount() const {
@@ -264,7 +266,8 @@ private:
 	}
 
 private:
-	const string signature;
+	MemoryStream stream;
+	const String signature;
 	const hash_t signature_hash;
 	const idx_t operator_count;
 	vector<reference<PlanSignature>> child_signatures;
@@ -289,7 +292,7 @@ struct SubplanInfo {
 	reference<unique_ptr<LogicalOperator>> lowest_common_ancestor;
 };
 
-using subplan_map_t = unordered_map<PlanSignature, SubplanInfo, PlanSignatureHash, PlanSignatureEquality>;
+using subplan_map_t = unordered_map<reference<PlanSignature>, SubplanInfo, PlanSignatureHash, PlanSignatureEquality>;
 
 //===--------------------------------------------------------------------===//
 // CommonSubplanFinder
@@ -368,7 +371,7 @@ public:
 
 		// Filter out redundant or ineligible subplans before returning
 		for (auto it = subplans.begin(); it != subplans.end();) {
-			if (it->first.OperatorCount() == 1) {
+			if (it->first.get().OperatorCount() == 1) {
 				it = subplans.erase(it); // Just one operator in this subplan
 				continue;
 			}
@@ -508,7 +511,7 @@ unique_ptr<LogicalOperator> CommonSubplanOptimizer::Optimize(unique_ptr<LogicalO
 	}
 	auto best_it = subplans.begin();
 	for (auto it = ++subplans.begin(); it != subplans.end(); it++) {
-		if (it->first.OperatorCount() > best_it->first.OperatorCount()) {
+		if (it->first.get().OperatorCount() > best_it->first.get().OperatorCount()) {
 			best_it = it;
 		}
 	}
