@@ -30,5 +30,12 @@ SELECT (true OR((TRY_CAST(t0.c0 AS DECIMAL(10,2)) > 0))) AS r FROM t0;
 ----
 true
 
+statement error
+SELECT (((CAST(t0.c0 AS DECIMAL(10,2)) > 0))) AS r FROM t0;
+----
+Conversion Error
 
+query I
+SELECT t0.c1 FROM t0 WHERE (true AND((TRY_CAST(t0.c0 AS DECIMAL(10,2)) > 0)));
+----
 
