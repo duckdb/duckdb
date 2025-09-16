@@ -26,8 +26,7 @@ unique_ptr<Expression> ExpressionRewriter::ApplyRules(LogicalOperator &op, const
 				if (!alias.empty()) {
 					result->alias = std::move(alias);
 				}
-				auto ret = ExpressionRewriter::ApplyRules(op, rules, std::move(result), changes_made);
-				return ret;
+				return ExpressionRewriter::ApplyRules(op, rules, std::move(result), changes_made);
 			} else if (rule_made_change) {
 				changes_made = true;
 				// the base node didn't change, but changes were made, rerun
