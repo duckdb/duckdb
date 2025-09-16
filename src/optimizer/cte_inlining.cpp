@@ -138,7 +138,7 @@ void CTEInlining::TryInlining(unique_ptr<LogicalOperator> &op) {
 			// even if only a part of the CTE result is needed.
 			// Therefore, we check if the CTE Scans are below the LIMIT or TOP_N operator
 			// and if so, we try to inline the CTE definition.
-			if (ContainsLimit(*op->children[1])) {
+			if (ContainsLimit(*op->children[1]) || op->children[0]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
 				// this CTE is referenced multiple times and has a limit, we want to inline it
 				bool success = Inline(op->children[1], *op, true);
 				if (success) {

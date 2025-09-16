@@ -15,6 +15,7 @@
 
 namespace duckdb {
 class DBInstanceCache;
+class DatabaseFilePathManager;
 
 struct DatabaseCacheEntry {
 	DatabaseCacheEntry();
@@ -27,8 +28,8 @@ struct DatabaseCacheEntry {
 
 class DBInstanceCache {
 public:
-	DBInstanceCache() {
-	}
+	DBInstanceCache();
+	~DBInstanceCache();
 
 	//! Gets a DB Instance from the cache if already exists (Fails if the configurations do not match)
 	shared_ptr<DuckDB> GetInstance(const string &database, const DBConfig &config_dict);
@@ -42,6 +43,7 @@ public:
 	                                       const std::function<void(DuckDB &)> &on_create = nullptr);
 
 private:
+	shared_ptr<DatabaseFilePathManager> path_manager;
 	//! A map with the cached instances <absolute_path/instance>
 	unordered_map<string, weak_ptr<DatabaseCacheEntry>> db_instances;
 

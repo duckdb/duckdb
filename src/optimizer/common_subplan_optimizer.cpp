@@ -481,8 +481,6 @@ static void ConvertSubplansToCTE(Optimizer &optimizer, unique_ptr<LogicalOperato
 		}
 	}
 
-	// const auto lca_is_root = RefersToSameObject(*op, *subplan_info.lowest_common_ancestor.get());
-
 	// Create the materialized CTE and replace the common subplans with references to it
 	auto &lowest_common_ancestor = subplan_info.lowest_common_ancestor.get();
 	auto cte =
@@ -506,7 +504,7 @@ unique_ptr<LogicalOperator> CommonSubplanOptimizer::Optimize(unique_ptr<LogicalO
 
 	// Identify the single best subplan (TODO: for now, in the future we should identify multiple)
 	if (subplans.empty()) {
-		return op; // No matching subplans
+		return op; // No eligible subplans
 	}
 	auto best_it = subplans.begin();
 	for (auto it = ++subplans.begin(); it != subplans.end(); it++) {

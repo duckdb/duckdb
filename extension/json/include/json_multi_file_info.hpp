@@ -19,8 +19,7 @@ public:
 };
 
 struct JSONMultiFileInfo : MultiFileReaderInterface {
-	static unique_ptr<MultiFileReaderInterface> InitializeInterface(ClientContext &context, MultiFileReader &reader,
-	                                                                MultiFileList &file_list);
+	static unique_ptr<MultiFileReaderInterface> CreateInterface(ClientContext &context);
 
 	unique_ptr<BaseFileReaderOptions> InitializeOptions(ClientContext &context,
 	                                                    optional_ptr<TableFunctionInfo> info) override;
@@ -49,6 +48,7 @@ struct JSONMultiFileInfo : MultiFileReaderInterface {
 	void FinishReading(ClientContext &context, GlobalTableFunctionState &global_state,
 	                   LocalTableFunctionState &local_state) override;
 	unique_ptr<NodeStatistics> GetCardinality(const MultiFileBindData &bind_data, idx_t file_count) override;
+	FileGlobInput GetGlobInput() override;
 };
 
 } // namespace duckdb

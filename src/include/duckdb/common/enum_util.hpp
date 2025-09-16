@@ -50,6 +50,8 @@ enum class AggregateOrderDependent : uint8_t;
 
 enum class AggregateType : uint8_t;
 
+enum class AlterDatabaseType : uint8_t;
+
 enum class AlterForeignKeyType : uint8_t;
 
 enum class AlterScalarFunctionType : uint8_t;
@@ -420,6 +422,10 @@ enum class UndoFlags : uint32_t;
 
 enum class UnionInvalidReason : uint8_t;
 
+enum class VariantChildLookupMode : uint8_t;
+
+enum class VariantLogicalType : uint8_t;
+
 enum class VectorAuxiliaryDataType : uint8_t;
 
 enum class VectorBufferType : uint8_t;
@@ -467,6 +473,9 @@ const char* EnumUtil::ToChars<AggregateOrderDependent>(AggregateOrderDependent v
 
 template<>
 const char* EnumUtil::ToChars<AggregateType>(AggregateType value);
+
+template<>
+const char* EnumUtil::ToChars<AlterDatabaseType>(AlterDatabaseType value);
 
 template<>
 const char* EnumUtil::ToChars<AlterForeignKeyType>(AlterForeignKeyType value);
@@ -1024,6 +1033,12 @@ template<>
 const char* EnumUtil::ToChars<UnionInvalidReason>(UnionInvalidReason value);
 
 template<>
+const char* EnumUtil::ToChars<VariantChildLookupMode>(VariantChildLookupMode value);
+
+template<>
+const char* EnumUtil::ToChars<VariantLogicalType>(VariantLogicalType value);
+
+template<>
 const char* EnumUtil::ToChars<VectorAuxiliaryDataType>(VectorAuxiliaryDataType value);
 
 template<>
@@ -1080,6 +1095,9 @@ AggregateOrderDependent EnumUtil::FromString<AggregateOrderDependent>(const char
 
 template<>
 AggregateType EnumUtil::FromString<AggregateType>(const char *value);
+
+template<>
+AlterDatabaseType EnumUtil::FromString<AlterDatabaseType>(const char *value);
 
 template<>
 AlterForeignKeyType EnumUtil::FromString<AlterForeignKeyType>(const char *value);
@@ -1635,6 +1653,12 @@ UndoFlags EnumUtil::FromString<UndoFlags>(const char *value);
 
 template<>
 UnionInvalidReason EnumUtil::FromString<UnionInvalidReason>(const char *value);
+
+template<>
+VariantChildLookupMode EnumUtil::FromString<VariantChildLookupMode>(const char *value);
+
+template<>
+VariantLogicalType EnumUtil::FromString<VariantLogicalType>(const char *value);
 
 template<>
 VectorAuxiliaryDataType EnumUtil::FromString<VectorAuxiliaryDataType>(const char *value);

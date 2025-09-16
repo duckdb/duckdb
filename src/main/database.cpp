@@ -31,6 +31,7 @@
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/common/http_util.hpp"
 #include "mbedtls_wrapper.hpp"
+#include "duckdb/main/database_file_path_manager.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -161,9 +162,9 @@ ConnectionManager &ConnectionManager::Get(ClientContext &context) {
 	return ConnectionManager::Get(DatabaseInstance::GetDatabase(context));
 }
 
-unique_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(ClientContext &context, AttachInfo &info,
+shared_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(ClientContext &context, AttachInfo &info,
                                                                       AttachOptions &options) {
-	unique_ptr<AttachedDatabase> attached_database;
+	shared_ptr<AttachedDatabase> attached_database;
 	auto &catalog = Catalog::GetSystemCatalog(*this);
 
 	if (!options.db_type.empty()) {
@@ -177,16 +178,16 @@ unique_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(ClientCont
 		if (entry->second->attach != nullptr && entry->second->create_transaction_manager != nullptr) {
 			// Use the storage extension to create the initial database.
 			attached_database =
-			    make_uniq<AttachedDatabase>(*this, catalog, *entry->second, context, info.name, info, options);
+			    make_shared_ptr<AttachedDatabase>(*this, catalog, *entry->second, context, info.name, info, options);
 			return attached_database;
 		}
 
-		attached_database = make_uniq<AttachedDatabase>(*this, catalog, info.name, info.path, options);
+		attached_database = make_shared_ptr<AttachedDatabase>(*this, catalog, info.name, info.path, options);
 		return attached_database;
 	}
 
 	// An empty db_type defaults to a duckdb database file.
-	attached_database = make_uniq<AttachedDatabase>(*this, catalog, info.name, info.path, options);
+	attached_database = make_shared_ptr<AttachedDatabase>(*this, catalog, info.name, info.path, options);
 	return attached_database;
 }
 
@@ -195,14 +196,13 @@ void DatabaseInstance::CreateMainDatabase() {
 	info.name = AttachedDatabase::ExtractDatabaseName(config.options.database_path, GetFileSystem());
 	info.path = config.options.database_path;
 
-	optional_ptr<AttachedDatabase> initial_database;
 	Connection con(*this);
 	con.BeginTransaction();
 	AttachOptions options(config.options);
-	initial_database = db_manager->AttachDatabase(*con.context, info, options);
-
+	auto initial_database = db_manager->AttachDatabase(*con.context, info, options);
 	initial_database->SetInitialDatabase();
 	initial_database->Initialize(*con.context);
+	db_manager->FinalizeAttach(*con.context, info, std::move(initial_database));
 	con.Commit();
 }
 
@@ -298,17 +298,14 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	// initialize the secret manager
 	config.secret_manager->Initialize(*this);
 
-	// resolve the type of teh database we are opening
+	// resolve the type of the database we are opening
 	auto &fs = FileSystem::GetFileSystem(*this);
 	DBPathAndType::ResolveDatabaseType(fs, config.options.database_path, config.options.database_type);
 
 	// initialize the system catalog
 	db_manager->InitializeSystemCatalog();
 
-	if (config.options.database_type == "duckdb") {
-		config.options.database_type = string();
-	}
-	if (!config.options.database_type.empty()) {
+	if (!config.options.database_type.empty() && !StringUtil::CIEquals(config.options.database_type, "duckdb")) {
 		// if we are opening an extension database - load the extension
 		if (!config.file_system) {
 			throw InternalException("No file system!?");
@@ -477,6 +474,7 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 		                                                 config.options.allocator_bulk_deallocation_flush_threshold);
 	}
 	config.db_cache_entry = std::move(new_config.db_cache_entry);
+	config.path_manager = std::move(new_config.path_manager);
 }
 
 DBConfig &DBConfig::GetConfig(ClientContext &context) {

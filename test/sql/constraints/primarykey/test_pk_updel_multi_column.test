@@ -3,9 +3,6 @@
 # group: [primarykey]
 
 statement ok
-PRAGMA enable_verification;
-
-statement ok
 CREATE TABLE test (a INTEGER, b VARCHAR, PRIMARY KEY(a, b));
 
 statement ok

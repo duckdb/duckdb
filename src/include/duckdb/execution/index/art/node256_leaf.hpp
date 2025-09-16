@@ -42,7 +42,7 @@ public:
 	static void DeleteByte(ART &art, Node &node, const uint8_t byte);
 
 	//! Returns true, if the byte exists, else false.
-	bool HasByte(uint8_t &byte);
+	bool HasByte(const uint8_t byte);
 
 	//! Returns a pointer to the bytes in the leaf.
 	//! The pointer data is valid as long as the arena is valid.

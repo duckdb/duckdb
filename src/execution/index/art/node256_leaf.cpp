@@ -46,7 +46,7 @@ void Node256Leaf::DeleteByte(ART &art, Node &node, const uint8_t byte) {
 	Node15Leaf::ShrinkNode256Leaf(art, node, node256);
 }
 
-bool Node256Leaf::HasByte(uint8_t &byte) {
+bool Node256Leaf::HasByte(const uint8_t byte) {
 	ValidityMask v_mask(&mask[0], Node256::CAPACITY);
 	return v_mask.RowIsValid(byte);
 }

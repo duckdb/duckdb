@@ -1,0 +1,106 @@
+# name: test/sql/logging/logging_buffer_size.test
+# description: 
+# group: [logging]
+
+require noforcestorage
+
+# By default we flush the logger automatically at certain sensible moments (most importantly, on Query End)
+# for this test we want to disable automatic flushing to test the buffer size param  
+statement ok
+CALL enable_logging('QueryLog', storage_config={'buffer_size': 10, 'only_flush_on_full_buffer': true});
+
+statement ok
+SELECT 1 as a;
+
+query I
+SELECT count(*) FROM duckdb_logs
+----
+0
+
+loop i 0 10
+
+statement ok
+SELECT 1 as a;
+
+endloop
+
+# We expect a single flush to have happened, e.g. 10 log entries
+query I
+SELECT count(*) FROM duckdb_logs
+----
+10
+
+statement ok
+CALL disable_logging()
+
+statement ok
+CALL truncate_duckdb_logs()
+
+# Change logging to manualog log type
+statement ok
+CALL enable_logging('', level='trace', storage='memory', storage_config={'buffer_size': 3000, 'only_flush_on_full_buffer': true});
+
+# Buffers aaaaalmost full
+statement ok
+SELECT write_log('hello from the connection log scope', level := 'error', scope := 'connection') from range(0,2999);
+
+query I
+SELECT count(*) FROM duckdb_logs()
+----
+0
+
+# "it's only a wafer-thin mint"
+statement ok
+SELECT write_log('hello from the connection log scope', level := 'error', scope := 'connection');
+
+# Buffer has expl.. been flushed
+query I
+SELECT count(*) FROM duckdb_logs() where type=''
+----
+3000
+
+# Note that there are 2 logging contexts now, since we wrote the log entries across 2 queries with each their own logging context
+query I
+SELECT count(*) FROM duckdb_log_contexts()
+----
+2
+
+# Try with some big buffers now
+
+statement ok
+CALL disable_logging()
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+CALL enable_logging(level='trace', storage='memory', storage_config={'buffer_size': 20*2048});
+
+statement ok
+SELECT write_log('hello from the connection log scope', level := 'error', scope := 'connection') from range(0,40*2048);
+
+statement ok
+FROM duckdb_logs()
+
+statement ok
+CALL enable_logging(level='trace', storage='file', storage_config={'buffer_size': 20*2048, 'path': '__TEST_DIR__/logging_buffer_size'});
+
+statement ok
+SELECT write_log('hello from the connection log scope', level := 'error', scope := 'connection') from range(0,40*2048);
+
+
+# Try direct flushing 
+
+statement ok
+CALL enable_logging(level='trace', storage='file', storage_config={'buffer_size': 0, 'path': '__TEST_DIR__/logging_buffer_size'});
+
+statement ok
+SELECT write_log('hello from the connection log scope', level := 'error', scope := 'connection') from range(0, 2048);
+
+
+# Try weird buffer size
+
+statement error
+CALL enable_logging(level='trace', storage='file', storage_config={'buffer_size': -1, 'path': '__TEST_DIR__/logging_buffer_size'});
+----
+Invalid Input Error

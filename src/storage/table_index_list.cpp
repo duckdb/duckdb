@@ -25,6 +25,9 @@ void TableIndexList::AddIndex(unique_ptr<Index> index) {
 	lock_guard<mutex> lock(index_entries_lock);
 	auto index_entry = make_uniq<IndexEntry>(std::move(index));
 	index_entries.push_back(std::move(index_entry));
+	if (!index_entries.back()->index->IsBound()) {
+		unbound_count++;
+	}
 }
 
 void TableIndexList::RemoveIndex(const string &name) {
@@ -32,6 +35,9 @@ void TableIndexList::RemoveIndex(const string &name) {
 	for (idx_t i = 0; i < index_entries.size(); i++) {
 		auto &index = *index_entries[i]->index;
 		if (index.GetIndexName() == name) {
+			if (!index.IsBound()) {
+				unbound_count--;
+			}
 			index_entries.erase_at(i);
 			return;
 		}
@@ -77,20 +83,12 @@ optional_ptr<BoundIndex> TableIndexList::Find(const string &name) {
 }
 
 void TableIndexList::Bind(ClientContext &context, DataTableInfo &table_info, const char *index_type) {
-	// Early-out, if we have no unbound indexes.
-	bool needs_binding = false;
 	{
+		// Early-out, if we have no unbound indexes.
 		lock_guard<mutex> lock(index_entries_lock);
-		for (auto &entry : index_entries) {
-			auto &index = *entry->index;
-			if (!index.IsBound() && (index_type == nullptr || index.GetIndexType() == index_type)) {
-				needs_binding = true;
-				break;
-			}
+		if (unbound_count == 0) {
+			return;
 		}
-	}
-	if (!needs_binding) {
-		return;
 	}
 
 	// Get the table from the catalog, so we can add it to the binder.
@@ -120,6 +118,7 @@ void TableIndexList::Bind(ClientContext &context, DataTableInfo &table_info, con
 		}
 		if (!index_entry) {
 			// We bound all indexes.
+			D_ASSERT(unbound_count == 0);
 			break;
 		}
 		if (index_entry->bind_state == IndexBindState::BINDING) {
@@ -152,29 +151,16 @@ void TableIndexList::Bind(ClientContext &context, DataTableInfo &table_info, con
 		auto &unbound_index = index_entry->index->Cast<UnboundIndex>();
 		auto bound_idx = idx_binder.BindIndex(unbound_index);
 		if (unbound_index.HasBufferedAppends()) {
-			bound_idx->ApplyBufferedAppends(unbound_index.GetBufferedAppends());
+			bound_idx->ApplyBufferedAppends(column_types, unbound_index.GetBufferedAppends(),
+			                                unbound_index.GetMappedColumnIds());
 		}
 
 		// Commit the bound index to the index entry.
 		lock.lock();
 		index_entry->bind_state = IndexBindState::BOUND;
 		index_entry->index = std::move(bound_idx);
+		unbound_count--;
 	}
-}
-
-bool TableIndexList::Empty() {
-	lock_guard<mutex> lock(index_entries_lock);
-	return index_entries.empty();
-}
-
-idx_t TableIndexList::Count() {
-	lock_guard<mutex> lock(index_entries_lock);
-	return index_entries.size();
-}
-
-void TableIndexList::Move(TableIndexList &other) {
-	D_ASSERT(index_entries.empty());
-	index_entries = std::move(other.index_entries);
 }
 
 bool IsForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, Index &index, ForeignKeyType fk_type) {
@@ -260,6 +246,31 @@ vector<IndexStorageInfo> TableIndexList::SerializeToDisk(QueryContext context,
 		infos.push_back(info);
 	}
 	return infos;
+}
+
+void TableIndexList::InitializeIndexChunk(DataChunk &index_chunk, const vector<LogicalType> &table_types,
+                                          vector<StorageIndex> &mapped_column_ids, DataTableInfo &data_table_info) {
+	// table_chunk contains all table columns.
+	// We only reference the index columns in the index chunk.
+	auto &index_list = data_table_info.GetIndexes();
+	auto indexed_columns = index_list.GetRequiredColumns();
+
+	vector<LogicalType> index_types;
+	for (auto &col : indexed_columns) {
+		index_types.push_back(table_types[col]);
+		mapped_column_ids.emplace_back(col);
+	}
+
+	index_chunk.InitializeEmpty(index_types);
+}
+
+void TableIndexList::ReferenceIndexChunk(DataChunk &table_chunk, DataChunk &index_chunk,
+                                         vector<StorageIndex> &mapped_column_ids) {
+	for (idx_t i = 0; i < mapped_column_ids.size(); i++) {
+		auto col_id = mapped_column_ids[i].GetPrimaryIndex();
+		index_chunk.data[i].Reference(table_chunk.data[col_id]);
+	}
+	index_chunk.SetCardinality(table_chunk);
 }
 
 } // namespace duckdb

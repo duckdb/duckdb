@@ -349,6 +349,10 @@ bool PhysicalStreamingWindow::IsStreamingFunction(ClientContext &context, unique
 	switch (wexpr.GetExpressionType()) {
 	// TODO: add more expression types here?
 	case ExpressionType::WINDOW_AGGREGATE:
+		// Aggregates with destructors (e.g., quantile) are too slow to repeatedly update/finalize
+		if (wexpr.aggregate->destructor) {
+			return false;
+		}
 		// We can stream aggregates if they are "running totals"
 		return wexpr.start == WindowBoundary::UNBOUNDED_PRECEDING && wexpr.end == WindowBoundary::CURRENT_ROW_ROWS;
 	case ExpressionType::WINDOW_FIRST_VALUE:

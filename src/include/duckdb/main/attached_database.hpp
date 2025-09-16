@@ -23,12 +23,23 @@ class StorageExtension;
 class DatabaseManager;
 
 struct AttachInfo;
+struct StoredDatabasePath;
 
 enum class AttachedDatabaseType {
 	READ_WRITE_DATABASE,
 	READ_ONLY_DATABASE,
 	SYSTEM_DATABASE,
 	TEMP_DATABASE,
+};
+
+class DatabaseFilePathManager;
+
+struct StoredDatabasePath {
+	StoredDatabasePath(DatabaseFilePathManager &manager, string path, const string &name);
+	~StoredDatabasePath();
+
+	DatabaseFilePathManager &manager;
+	string path;
 };
 
 //! AttachOptions holds information about a database we plan to attach. These options are generalized, i.e.,
@@ -47,10 +58,12 @@ struct AttachOptions {
 	unordered_map<string, Value> options;
 	//! (optionally) a catalog can be provided with a default table
 	QualifiedName default_table;
+	//! The stored database path (in the path manager)
+	unique_ptr<StoredDatabasePath> stored_database_path;
 };
 
 //! The AttachedDatabase represents an attached database instance.
-class AttachedDatabase : public CatalogEntry {
+class AttachedDatabase : public CatalogEntry, public enable_shared_from_this<AttachedDatabase> {
 public:
 	//! Create the built-in system database (without storage).
 	explicit AttachedDatabase(DatabaseInstance &db, AttachedDatabaseType type = AttachedDatabaseType::SYSTEM_DATABASE);
@@ -68,6 +81,7 @@ public:
 
 	Catalog &ParentCatalog() override;
 	const Catalog &ParentCatalog() const override;
+	bool HasStorageManager() const;
 	StorageManager &GetStorageManager();
 	Catalog &GetCatalog();
 	TransactionManager &GetTransactionManager();
@@ -82,6 +96,9 @@ public:
 	const string &GetName() const {
 		return name;
 	}
+	void SetName(const string &new_name) {
+		name = new_name;
+	}
 	bool IsSystem() const;
 	bool IsTemporary() const;
 	bool IsReadOnly() const;
@@ -95,6 +112,7 @@ public:
 
 private:
 	DatabaseInstance &db;
+	unique_ptr<StoredDatabasePath> stored_database_path;
 	unique_ptr<StorageManager> storage;
 	unique_ptr<Catalog> catalog;
 	unique_ptr<TransactionManager> transaction_manager;

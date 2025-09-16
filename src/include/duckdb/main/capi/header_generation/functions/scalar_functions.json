@@ -209,11 +209,32 @@
                 }
             ],
             "comment": {
-                "description": "Sets the user-provided bind data in the bind object of the scalar function. \nThis object can be retrieved again during execution.\n\n",
+                "description": "Sets the user-provided bind data in the bind object of the scalar function. \nThe bind data object can be retrieved again during execution. \nIn most case, you also need to set the copy-callback of your bind data via duckdb_scalar_function_set_bind_data_copy. \n\n",
                 "param_comments": {
                     "info": "The bind info of the scalar function.",
                     "bind_data": "The bind data object.",
                     "destroy": "The callback to destroy the bind data (if any)."
+                }
+            }
+        },
+        {
+            "name": "duckdb_scalar_function_set_bind_data_copy",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_bind_info",
+                    "name": "info"
+                },
+                {
+                    "type": "duckdb_copy_callback_t",
+                    "name": "copy"
+                }
+            ],
+            "comment": {
+                "description": "Sets the copy-callback for the user-provided bind data in the bind object of the scalar function.\n\n",
+                "param_comments": {
+                    "info": "The bind info of the scalar function.",
+                    "copy": "The callback to copy the bind data (if any)."
                 }
             }
         },

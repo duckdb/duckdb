@@ -14,15 +14,14 @@
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
-#include "duckdb/main/database.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
-#include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/index.hpp"
+#include "duckdb/storage/single_file_block_manager.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
-#include "duckdb/storage/storage_manager.hpp"
 
 namespace duckdb {
 
@@ -47,9 +46,10 @@ BufferedFileWriter &WriteAheadLog::Initialize() {
 	}
 	lock_guard<mutex> lock(wal_lock);
 	if (!writer) {
-		writer = make_uniq<BufferedFileWriter>(FileSystem::Get(database), wal_path,
-		                                       FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE |
-		                                           FileFlags::FILE_FLAGS_APPEND);
+		writer =
+		    make_uniq<BufferedFileWriter>(FileSystem::Get(database), wal_path,
+		                                  FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE |
+		                                      FileFlags::FILE_FLAGS_APPEND | FileFlags::FILE_FLAGS_MULTI_CLIENT_ACCESS);
 		if (init_state == WALInitState::UNINITIALIZED_REQUIRES_TRUNCATE) {
 			writer->Truncate(wal_size);
 		}
@@ -125,7 +125,7 @@ public:
 		// then encrypt WAL before flushing
 		auto &catalog = wal.GetDatabase().GetCatalog().Cast<DuckCatalog>();
 
-		if (wal.IsEncrypted() && catalog.GetIsEncrypted()) {
+		if (catalog.GetIsEncrypted()) {
 			return FlushEncrypted();
 		}
 
@@ -154,8 +154,9 @@ public:
 
 		auto &db = wal.GetDatabase();
 		auto &keys = EncryptionKeyManager::Get(db.GetDatabase());
+
 		auto encryption_state = db.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(
-		    keys.GetKey(encryption_key_id), MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+		    db.GetStorageManager().GetCipher(), MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 
 		// temp buffer
 		const idx_t ciphertext_size = size + sizeof(uint64_t);
@@ -206,8 +207,8 @@ public:
 		if (!wal.Initialized()) {
 			wal.Initialize();
 		}
-		// write a version marker if none has been written yet
-		wal.WriteVersion();
+		// Write a header, if none has been written yet.
+		wal.WriteHeader();
 		serializer.Begin();
 		serializer.WriteProperty(100, "wal_type", wal_type);
 	}
@@ -236,24 +237,38 @@ private:
 //===--------------------------------------------------------------------===//
 // Write Entries
 //===--------------------------------------------------------------------===//
-void WriteAheadLog::WriteVersion() {
+void WriteAheadLog::WriteHeader() {
 	D_ASSERT(writer);
 	if (writer->GetFileSize() > 0) {
-		// already written - no need to write a version marker
+		// Already written - no need to write a header.
 		return;
 	}
-	// write the version marker
-	// note that we explicitly do not checksum the version entry
+
+	// Write the header containing
+	// - the version marker,
+	// - the header_id of the matching database file, and
+	// - the checkpoint iteration of the matching database file.
+	// Note that we explicitly do not checksum the header, as it contains the version entry.
+
 	BinarySerializer serializer(*writer);
 	serializer.Begin();
 	serializer.WriteProperty(100, "wal_type", WALType::WAL_VERSION);
-	auto &catalog = GetDatabase().GetCatalog().Cast<DuckCatalog>();
-	auto encryption_key_id = catalog.GetEncryptionKeyId();
-	if (IsEncrypted() && catalog.GetIsEncrypted()) {
-		serializer.WriteProperty(101, "version", idx_t(WAL_ENCRYPTED_VERSION_NUMBER));
-	} else {
-		serializer.WriteProperty(101, "version", idx_t(WAL_VERSION_NUMBER));
+
+	auto &catalog = database.GetCatalog().Cast<DuckCatalog>();
+	auto encryption_version_number =
+	    catalog.GetIsEncrypted() ? idx_t(WAL_ENCRYPTED_VERSION_NUMBER) : idx_t(WAL_VERSION_NUMBER);
+	serializer.WriteProperty(101, "version", encryption_version_number);
+
+	auto &single_file_block_manager = database.GetStorageManager().GetBlockManager().Cast<SingleFileBlockManager>();
+	auto file_version_number = single_file_block_manager.GetVersionNumber();
+	if (file_version_number > 66) {
+		auto db_identifier = single_file_block_manager.GetDBIdentifier();
+		serializer.WriteList(102, "db_identifier", MainHeader::DB_IDENTIFIER_LEN,
+		                     [&](Serializer::List &list, idx_t i) { list.WriteElement(db_identifier[i]); });
+		auto checkpoint_iteration = single_file_block_manager.GetCheckpointIteration();
+		serializer.WriteProperty(103, "checkpoint_iteration", checkpoint_iteration);
 	}
+
 	serializer.End();
 }
 
@@ -261,11 +276,6 @@ void WriteAheadLog::WriteCheckpoint(MetaBlockPointer meta_block) {
 	WriteAheadLogSerializer serializer(*this, WALType::CHECKPOINT);
 	serializer.WriteProperty(101, "meta_block", meta_block);
 	serializer.End();
-}
-
-bool WriteAheadLog::IsEncrypted() const {
-	const auto &config = DBConfig::GetConfig(database.GetDatabase());
-	return config.options.wal_encryption;
 }
 
 //===--------------------------------------------------------------------===//

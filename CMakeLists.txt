@@ -164,30 +164,8 @@ option(ENABLE_SANITIZER "Enable address sanitizer." TRUE)
 option(ENABLE_THREAD_SANITIZER "Enable thread sanitizer." FALSE)
 option(ENABLE_UBSAN "Enable undefined behavior sanitizer." TRUE)
 option(DISABLE_VPTR_SANITIZER "Disable vptr sanitizer; work-around for sanitizer false positive on Macbook M1" FALSE)
-option(
-  FORCE_SANITIZER
-  "Forces building with sanitizers even if the Python and R modules are enabled."
-  FALSE)
 option(STANDALONE_DEBUG "add clang compile option -fstandalone-debug" FALSE)
 
-if((BUILD_PYTHON)
-   AND (ENABLE_SANITIZER OR ENABLE_UBSAN)
-   AND ("${CMAKE_BUILD_TYPE}" STREQUAL "Debug"))
-  if(FORCE_SANITIZER)
-    message(
-      WARNING
-        "FORCE_SANITIZER is set and the Python/R/Node builds are enabled. Sanitizers will be linked as a shared library (-shared-libasan). You may need to do LD_PRELOAD tricks to load packages built in this way."
-    )
-    set(CXX_EXTRA_DEBUG "${CXX_EXTRA_DEBUG} -shared-libasan")
-  else()
-    message(
-      WARNING
-        "Sanitizers are enabled but will not be built because the Python/R builds are enabled. Use FORCE_SANITIZER to force building of the sanitizers even when building these packages."
-    )
-    set(ENABLE_SANITIZER FALSE)
-    set(ENABLE_UBSAN FALSE)
-  endif()
-endif()
 if(${ENABLE_THREAD_SANITIZER})
   if(${ENABLE_SANITIZER})
     message(
@@ -259,7 +237,6 @@ set(VERSIONING_TAG_MATCH "v*.*.*")
 # - CMakeLists.txt
 # - scripts/amalgamation.py
 # - scripts/package_build.py
-# - tools/pythonpkg/setup.py
 ######
 option(MAIN_BRANCH_VERSIONING "Versioning scheme for main branch" TRUE)
 if(${MAIN_BRANCH_VERSIONING})
@@ -274,7 +251,7 @@ if (ENABLE_EXTENSION_AUTOLOADING)
   add_definitions(-DDUCKDB_EXTENSION_AUTOLOAD_DEFAULT=1)
 endif()
 if (ENABLE_EXTENSION_AUTOINSTALL)
-  add_definitions(-DDUCKDB_EXTENSION_AUTOINSTALL_DEFAULT=${ENABLE_EXTENSION_AUTOINSTALL})
+  add_definitions(-DDUCKDB_EXTENSION_AUTOINSTALL_DEFAULT=1)
 endif()
 
 option(OSX_BUILD_UNIVERSAL "Build both architectures on OSX and create a single binary containing both." FALSE)
@@ -442,9 +419,6 @@ option(BUILD_BENCHMARKS "Enable building of the benchmark suite." FALSE)
 option(BUILD_TPCE "Enable building of the TPC-E tool." FALSE)
 option(DISABLE_BUILTIN_EXTENSIONS "Disable linking extensions." FALSE)
 option(GENERATE_EXTENSION_ENTRIES "Build for generating extension_entries.hpp" FALSE)
-option(BUILD_PYTHON "Build the DuckDB Python extension" FALSE)
-option(PYTHON_DEV "Build Intellisense and clang-tidy support and install dev dependencies" FALSE)
-option(USER_SPACE "Build the DuckDB Python in the user space" FALSE)
 option(FORCE_QUERY_LOG "If enabled, all queries will be logged to the specified path" OFF)
 option(BUILD_SHELL "Build the DuckDB Shell and SQLite API Wrappers" TRUE)
 option(DISABLE_THREADS "Disable support for multi-threading" FALSE)
@@ -454,13 +428,14 @@ option(DISABLE_MEMORY_SAFETY "Debug setting: disable memory access checks at run
 option(DISABLE_ASSERTIONS "Debug setting: disable assertions" FALSE)
 option(ALTERNATIVE_VERIFY "Debug setting: use alternative verify mode" FALSE)
 option(DISABLE_POINTER_SALT "Debug setting: verify correct results without pointer salt" FALSE)
+option(HASH_ZERO "Debug setting: verify hash collision resolution by setting all hashes to 0" FALSE)
 option(RUN_SLOW_VERIFIERS "Debug setting: enable a more extensive set of verifiers" FALSE)
 option(DESTROY_UNPINNED_BLOCKS "Debug setting: destroy unpinned buffer-managed blocks" FALSE)
 option(FORCE_ASYNC_SINK_SOURCE "Debug setting: forces sinks/sources to block the first 2 times they're called" FALSE)
 option(DEBUG_ALLOCATION "Debug setting: keep track of outstanding allocations to detect memory leaks" FALSE)
 option(DEBUG_STACKTRACE "Debug setting: print a stracktrace on asserts and when testing crashes" FALSE)
 option(DEBUG_MOVE "Debug setting: Ensure std::move is being used" FALSE)
-option(VERIFY_VECTOR "Debug setting: verify vectors (options: dictionary_expression, dictionary_operator, constant_operator, sequence_operator, nested_shuffle)" "none")
+option(VERIFY_VECTOR "Debug setting: verify vectors (options: dictionary_expression, dictionary_operator, constant_operator, sequence_operator, nested_shuffle, variant_vector)" "none")
 option(CLANG_TIDY "Enable build for clang-tidy, this disables all source files excluding the core database. This does not produce a working build." FALSE)
 option(BUILD_UNITTESTS "Build the unittest runner." TRUE)
 option(ENABLE_UNITTEST_CPP_TESTS "Build the C++ Unit Tests." TRUE)
@@ -468,6 +443,7 @@ option(EXTENSION_CONFIG_BUILD "Produce extension configuration artifacts instead
 option(CUSTOM_LINKER "Use a custom linker program" "")
 option(CRASH_ON_ASSERT "Trigger a sigabort on an assert failing, instead of throwing an exception" FALSE)
 option(FORCE_ASSERT "Enable checking of assertions, even in release mode" FALSE)
+option(FORCE_DEBUG "Force adding a debug define, even in release mode" FALSE)
 
 option(TREAT_WARNINGS_AS_ERRORS "Treat warnings as errors" FALSE)
 option(EXPORT_DLL_SYMBOLS "Export dll symbols on Windows, else import" TRUE)
@@ -546,6 +522,10 @@ if(DISABLE_POINTER_SALT)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_DISABLE_POINTER_SALT")
 endif()
 
+if(HASH_ZERO)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_HASH_ZERO")
+endif()
+
 if(LATEST_STORAGE)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_LATEST_STORAGE")
 endif()
@@ -572,6 +552,10 @@ endif()
 
 if(FORCE_ASSERT)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_FORCE_ASSERT")
+endif()
+
+if(FORCE_DEBUG)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDEBUG")
 endif()
 
 if(STANDALONE_DEBUG)
@@ -1315,11 +1299,6 @@ if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/extension/extension_config_local.cmake)
   include(${CMAKE_CURRENT_SOURCE_DIR}/extension/extension_config_local.cmake)
 endif()
 
-# Load Python client specific config
-if(BUILD_PYTHON)
-  include(${CMAKE_CURRENT_SOURCE_DIR}/tools/pythonpkg/duckdb_extension_config.cmake)
-endif()
-
 # Load base extension config
 include(${CMAKE_CURRENT_SOURCE_DIR}/extension/extension_config.cmake)
 
@@ -1352,7 +1331,7 @@ foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
 
   # Warning for trying to load vcpkg extensions without having VCPKG_BUILD SET
   if (EXISTS "${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_PATH}/vcpkg.json" AND NOT DEFINED VCPKG_BUILD)
-    message(WARNING "Extension '${EXT_NAME}' has a vcpkg.json, but build was not run with VCPKG. If build fails, check out VCPKG build instructions in 'duckdb/extension/README.md' or try manually installing the dependencies in ${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_PATH}vcpkg.json")
+    message(WARNING "Extension '${EXT_NAME}' has a vcpkg.json, but build was not run with VCPKG. If build fails, check out VCPKG build instructions in 'duckdb/extension/README.md' or try manually installing the dependencies in ${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_PATH}/vcpkg.json")
   endif()
 
   if (NOT "${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_EXT_VERSION}" STREQUAL "")
@@ -1439,61 +1418,6 @@ if(${EXTENSION_CONFIG_BUILD})
   endforeach()
 
   return()
-endif()
-
-if(BUILD_PYTHON)
-  if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-    set(ALL_COMPILE_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_DEBUG}")
-  elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
-    set(ALL_COMPILE_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_RELEASE}")
-  elseif(CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
-    set(ALL_COMPILE_FLAGS
-            "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_RELWITHDEBINFO}")
-  else()
-    set(ALL_COMPILE_FLAGS "${CMAKE_CXX_FLAGS}")
-  endif()
-
-  # Check for MSVC compiler and set the correct C++ standard flag
-  if(MSVC)
-    # MSVC does not support `-std=c++11` or `-std=c++14`, use `/std:c++14`
-    set(ALL_COMPILE_FLAGS "${ALL_COMPILE_FLAGS} /std:c++14")
-  else()
-    # For non-MSVC compilers, use the `-std=c++11`
-    set(ALL_COMPILE_FLAGS "${ALL_COMPILE_FLAGS} -std=c++11")
-  endif()
-
-  get_target_property(duckdb_libs duckdb LINK_LIBRARIES)
-
-  set(PIP_COMMAND
-      cmake
-      -E
-      env
-      DUCKDB_BINARY_DIR=${PROJECT_BINARY_DIR}
-      DUCKDB_COMPILE_FLAGS=${ALL_COMPILE_FLAGS}
-      DUCKDB_LIBS="${duckdb_libs}"
-    )
-
-  if(PYTHON_DEV)
-    set(PIP_COMMAND ${PIP_COMMAND} ${Python3_EXECUTABLE} -m pip install .[dev])
-    # Enable intellisense / clang-tidy support for IDEs
-    add_subdirectory(tools/pythonpkg EXCLUDE_FROM_ALL)
-  elseif(PYTHON_EDITABLE_BUILD)
-    set(PIP_COMMAND ${PIP_COMMAND} ${Python3_EXECUTABLE} -m pip install --editable .)
-  else()
-    set(PIP_COMMAND ${PIP_COMMAND} ${Python3_EXECUTABLE} -m pip install .)
-  endif()
-
-  if(USER_SPACE)
-    set(PIP_COMMAND ${PIP_COMMAND} --user)
-  endif()
-  add_custom_target(
-    duckdb_python ALL
-    COMMAND ${PIP_COMMAND}
-    DEPENDS duckdb duckdb_static
-    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/pythonpkg
-    COMMENT Build
-    Python package)
-  add_extension_dependencies(duckdb_python)
 endif()
 
 if(NOT DUCKDB_EXPLICIT_PLATFORM)

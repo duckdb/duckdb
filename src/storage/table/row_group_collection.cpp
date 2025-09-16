@@ -65,7 +65,7 @@ RowGroupCollection::RowGroupCollection(shared_ptr<DataTableInfo> info_p, BlockMa
                                        vector<LogicalType> types_p, idx_t row_start_p, idx_t total_rows_p,
                                        idx_t row_group_size_p)
     : block_manager(block_manager), row_group_size(row_group_size_p), total_rows(total_rows_p), info(std::move(info_p)),
-      types(std::move(types_p)), row_start(row_start_p), allocation_size(0) {
+      types(std::move(types_p)), row_start(row_start_p), allocation_size(0), requires_new_row_group(false) {
 	row_groups = make_shared_ptr<RowGroupSegmentTree>(*this);
 }
 
@@ -101,6 +101,10 @@ void RowGroupCollection::Initialize(PersistentTableData &data) {
 	metadata_pointer = data.base_table_pointer;
 }
 
+void RowGroupCollection::FinalizeCheckpoint(MetaBlockPointer pointer) {
+	metadata_pointer = pointer;
+}
+
 void RowGroupCollection::Initialize(PersistentCollectionData &data) {
 	stats.InitializeEmpty(types);
 	auto l = row_groups->Lock();
@@ -112,6 +116,10 @@ void RowGroupCollection::Initialize(PersistentCollectionData &data) {
 	}
 }
 
+void RowGroupCollection::SetAppendRequiresNewRowGroup() {
+	requires_new_row_group = true;
+}
+
 void RowGroupCollection::InitializeEmpty() {
 	stats.InitializeEmpty(types);
 }
@@ -121,6 +129,7 @@ void RowGroupCollection::AppendRowGroup(SegmentLock &l, idx_t start_row) {
 	auto new_row_group = make_uniq<RowGroup>(*this, start_row, 0U);
 	new_row_group->InitializeEmpty(types);
 	row_groups->AppendSegment(l, std::move(new_row_group));
+	requires_new_row_group = false;
 }
 
 RowGroup *RowGroupCollection::GetRowGroup(int64_t index) {
@@ -349,9 +358,9 @@ void RowGroupCollection::InitializeAppend(TransactionData transaction, TableAppe
 
 	// start writing to the row_groups
 	auto l = row_groups->Lock();
-	if (IsEmpty(l)) {
+	if (IsEmpty(l) || requires_new_row_group) {
 		// empty row group collection: empty first row group
-		AppendRowGroup(l, row_start);
+		AppendRowGroup(l, row_start + total_rows);
 	}
 	state.start_row_group = row_groups->GetLastSegment(l);
 	D_ASSERT(this->row_start + total_rows == state.start_row_group->start + state.start_row_group->count);
@@ -493,12 +502,17 @@ void RowGroupCollection::RevertAppendInternal(idx_t start_row) {
 		segment_index = segment_count - 1;
 	}
 	auto &segment = *row_groups->GetSegmentByIndex(l, UnsafeNumericCast<int64_t>(segment_index));
+	if (segment.start == start_row) {
+		// we are truncating exactly this row group - erase it entirely
+		row_groups->EraseSegments(l, segment_index);
+	} else {
+		// we need to truncate within a row group
+		// remove any segments AFTER this segment: they should be deleted entirely
+		row_groups->EraseSegments(l, segment_index + 1);
 
-	// remove any segments AFTER this segment: they should be deleted entirely
-	row_groups->EraseSegments(l, segment_index);
-
-	segment.next = nullptr;
-	segment.RevertAppend(start_row);
+		segment.next = nullptr;
+		segment.RevertAppend(start_row);
+	}
 }
 
 void RowGroupCollection::CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count) {
@@ -993,7 +1007,7 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 	// check if we can merge row groups adjacent to the current segment_idx
 	// we try merging row groups into batches of 1-3 row groups
 	// our goal is to reduce the amount of row groups
-	// hence we target_count should be less than merge_count for a marge to be worth it
+	// hence we target_count should be less than merge_count for a merge to be worth it
 	// we greedily prefer to merge to the lowest target_count
 	// i.e. we prefer to merge 2 row groups into 1, than 3 row groups into 2
 	const idx_t row_group_size = GetRowGroupSize();
@@ -1012,6 +1026,22 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 			// we can merge this row group together with the other row group
 			merge_rows += state.row_group_counts[next_idx];
 			merge_count++;
+		}
+		if (next_idx == checkpoint_state.segments.size()) {
+			// in order to prevent poor performance when performing small appends, we only merge row groups at the end
+			// if we can reach a "target" size of twice the current size, or the max row group size
+			// this is to prevent repeated expensive checkpoints where:
+			// we have a row group with 100K rows
+			// merge it with a row group with 1 row, creating a row group with 100K+1 rows
+			// merge it with a row group with 1 row, creating a row group with 100K+2 rows
+			// etc. This leads to constant rewriting of the original 100K rows.
+			idx_t minimum_target =
+			    MinValue<idx_t>(state.row_group_counts[segment_idx] * 2, row_group_size) * target_count;
+			if (merge_rows >= STANDARD_VECTOR_SIZE && merge_rows < minimum_target) {
+				// we haven't reached the minimum target - don't do this vacuum
+				next_idx = segment_idx + 1;
+				continue;
+			}
 		}
 		if (target_count < merge_count) {
 			// we can reduce "merge_count" row groups to "target_count"
@@ -1086,7 +1116,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 
 	// no errors - finalize the row groups
 	// if the table already exists on disk - check if all row groups have stayed the same
-	if (metadata_pointer.IsValid()) {
+	if (DBConfig::GetSetting<ExperimentalMetadataReuseSetting>(writer.GetDatabase()) && metadata_pointer.IsValid()) {
 		bool table_has_changes = false;
 		for (idx_t segment_idx = 0; segment_idx < segments.size(); segment_idx++) {
 			auto &entry = segments[segment_idx];
@@ -1144,6 +1174,8 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 		new_total_rows += row_group.count;
 	}
 	total_rows = new_total_rows;
+	l.Release();
+	Verify();
 }
 
 //===--------------------------------------------------------------------===//
@@ -1177,7 +1209,8 @@ vector<PartitionStatistics> RowGroupCollection::GetPartitionStats() const {
 //===--------------------------------------------------------------------===//
 vector<ColumnSegmentInfo> RowGroupCollection::GetColumnSegmentInfo() {
 	vector<ColumnSegmentInfo> result;
-	for (auto &row_group : row_groups->Segments()) {
+	auto lock = row_groups->Lock();
+	for (auto &row_group : row_groups->Segments(lock)) {
 		row_group.GetColumnSegmentInfo(row_group.index, result);
 	}
 	return result;

@@ -26,6 +26,8 @@
 #include "duckdb/common/types/bignum.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/types/string.hpp"
+#include "duckdb/common/types/value_map.hpp"
 
 #include <utility>
 #include <cmath>
@@ -157,6 +159,13 @@ Value::Value(string val) : type_(LogicalType::VARCHAR), is_null(false) {
 		throw ErrorManager::InvalidUnicodeError(val, "value construction");
 	}
 	value_info_ = make_shared_ptr<StringValueInfo>(std::move(val));
+}
+
+Value::Value(String val) : type_(LogicalType::VARCHAR), is_null(false) {
+	if (!Value::StringIsValid(val.c_str(), val.size())) {
+		throw ErrorManager::InvalidUnicodeError(val, "value construction");
+	}
+	value_info_ = make_shared_ptr<StringValueInfo>(val.ToStdString());
 }
 
 Value::~Value() {
@@ -750,24 +759,32 @@ Value Value::STRUCT(child_list_t<Value> values) {
 	return Value::STRUCT(LogicalType::STRUCT(child_types), std::move(struct_values));
 }
 
-void MapKeyCheck(unordered_set<hash_t> &unique_keys, const Value &key) {
+Value Value::VARIANT(vector<Value> val) {
+	D_ASSERT(val.size() == 4);
+	D_ASSERT(val[0].type().id() == LogicalTypeId::LIST);
+	D_ASSERT(val[1].type().id() == LogicalTypeId::LIST);
+	D_ASSERT(val[2].type().id() == LogicalTypeId::LIST);
+	D_ASSERT(val[3].type().id() == LogicalTypeId::BLOB);
+	return Value::STRUCT(LogicalType::VARIANT(), std::move(val));
+}
+
+void MapKeyCheck(value_set_t &unique_keys, const Value &key) {
 	// NULL key check.
 	if (key.IsNull()) {
 		MapVector::EvalMapInvalidReason(MapInvalidReason::NULL_KEY);
 	}
 
 	// Duplicate key check.
-	auto key_hash = key.Hash();
-	if (unique_keys.find(key_hash) != unique_keys.end()) {
+	if (unique_keys.find(key) != unique_keys.end()) {
 		MapVector::EvalMapInvalidReason(MapInvalidReason::DUPLICATE_KEY);
 	}
-	unique_keys.insert(key_hash);
+	unique_keys.insert(key);
 }
 
 Value Value::MAP(const LogicalType &child_type, vector<Value> values) { // NOLINT
 	vector<Value> map_keys;
 	vector<Value> map_values;
-	unordered_set<hash_t> unique_keys;
+	value_set_t unique_keys;
 
 	for (auto &val : values) {
 		D_ASSERT(val.type().InternalType() == PhysicalType::STRUCT);
@@ -792,7 +809,7 @@ Value Value::MAP(const LogicalType &key_type, const LogicalType &value_type, vec
 
 	result.type_ = LogicalType::MAP(key_type, value_type);
 	result.is_null = false;
-	unordered_set<hash_t> unique_keys;
+	value_set_t unique_keys;
 
 	for (idx_t i = 0; i < keys.size(); i++) {
 		child_list_t<LogicalType> struct_types;
@@ -1611,6 +1628,7 @@ string Value::ToSQLString() const {
 		}
 		return "'" + StringUtil::Replace(ToString(), "'", "''") + "'";
 	}
+	case LogicalTypeId::VARIANT:
 	case LogicalTypeId::STRUCT: {
 		bool is_unnamed = StructType::IsUnnamed(type_);
 		string ret = is_unnamed ? "(" : "{";

@@ -3,6 +3,7 @@
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
@@ -292,6 +293,16 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 
 		// found a matching function! bind it as an aggregate
 		auto bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
+
+		if (!bound_function.CanAggregate() && bound_function.CanWindow() && !window.arg_orders.empty()) {
+			// ORDER BY in non-aggregate window functions not supported
+			// (The WindowCustomAggregator does not support it for now)
+			ErrorData err(BinderException("Function '%s' cannot be used as a window with ORDER BY arguments",
+			                              bound_function.name));
+			err.AddQueryLocation(window);
+			err.Throw();
+		}
+
 		auto window_bound_aggregate = function_binder.BindAggregateFunction(bound_function, std::move(children));
 		// create the aggregate
 		aggregate = make_uniq<AggregateFunction>(window_bound_aggregate->function);

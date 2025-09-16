@@ -457,6 +457,13 @@
         "struct": "ErrorsAsJSONSetting"
     },
     {
+        "name": "experimental_metadata_reuse",
+        "description": "EXPERIMENTAL: Re-use row group and table metadata when checkpointing.",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
         "name": "explain_output",
         "description": "Output of EXPLAIN statements (ALL, OPTIMIZED_ONLY, PHYSICAL_ONLY)",
         "type": "ENUM<ExplainOutputType>",
@@ -542,8 +549,8 @@
         "name": "ieee_floating_point_ops",
         "description": "Use IEE754-compliant floating point operations (returning NAN instead of errors/NULL).",
         "type": "BOOLEAN",
-        "scope": "local",
-        "struct": "IEEEFloatingPointOpsSetting"
+        "default_scope": "local",
+        "default_value": "true"
     },
     {
         "name": "immediate_transaction_mode",
@@ -613,7 +620,7 @@
     },
     {
         "name": "logging_mode",
-        "description": "Enables the logger",
+        "description": "Determines which types of log messages are logged",
         "type": "VARCHAR",
         "scope": "global",
         "struct": "LoggingMode",
@@ -621,7 +628,7 @@
     },
     {
         "name": "logging_storage",
-        "description": "Set the logging storage (memory/stdout/file)",
+        "description": "Set the logging storage (memory/stdout/file/<custom>)",
         "type": "VARCHAR",
         "scope": "global",
         "struct": "LoggingStorage",
@@ -689,7 +696,8 @@
         "name": "ordered_aggregate_threshold",
         "description": "The number of rows to accumulate before sorting, used for tuning",
         "type": "UBIGINT",
-        "scope": "local",
+        "default_scope": "local",
+        "default_value": "262144",
         "on_callbacks": [
             "set"
         ]
@@ -719,10 +727,10 @@
         "name": "perfect_ht_threshold",
         "description": "Threshold in bytes for when to use a perfect hash table",
         "type": "UBIGINT",
-        "scope": "local",
-        "custom_implementation": [
-            "set",
-            "get"
+        "default_scope": "local",
+        "default_value": "12",
+        "on_callbacks": [
+            "set"
         ]
     },
     {
@@ -885,12 +893,6 @@
         "aliases": [
             "user"
         ]
-    },
-    {
-        "name": "wal_encryption",
-        "description": "Encrypt the WAL if the database is encrypted",
-        "type": "BOOLEAN",
-        "scope": "global"
     },
     {
         "name": "zstd_min_string_length",

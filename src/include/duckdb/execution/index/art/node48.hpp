@@ -85,8 +85,11 @@ public:
 	}
 
 	template <class NODE>
-	static unsafe_optional_ptr<Node> GetChild(NODE &n, const uint8_t byte) {
+	static unsafe_optional_ptr<Node> GetChild(NODE &n, const uint8_t byte, const bool unsafe = false) {
 		if (n.child_index[byte] != Node48::EMPTY_MARKER) {
+			if (!unsafe && !n.children[n.child_index[byte]].HasMetadata()) {
+				throw InternalException("empty child for byte %d in Node48::GetChild", byte);
+			}
 			return &n.children[n.child_index[byte]];
 		}
 		return nullptr;

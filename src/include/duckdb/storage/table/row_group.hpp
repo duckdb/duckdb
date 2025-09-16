@@ -204,6 +204,8 @@ private:
 	ColumnData &GetColumn(const StorageIndex &c);
 	idx_t GetColumnCount() const;
 	vector<shared_ptr<ColumnData>> &GetColumns();
+	ColumnData &GetRowIdColumnData();
+	void SetCount(idx_t count);
 
 	template <TableScanType TYPE>
 	void TemplatedScan(TransactionData transaction, CollectionScanState &state, DataChunk &result);
@@ -221,6 +223,9 @@ private:
 	vector<idx_t> extra_metadata_blocks;
 	atomic<bool> deletes_is_loaded;
 	atomic<idx_t> allocation_size;
+	unique_ptr<ColumnData> row_id_column_data;
+	atomic<bool> row_id_is_loaded;
+	atomic<bool> has_changes;
 };
 
 } // namespace duckdb

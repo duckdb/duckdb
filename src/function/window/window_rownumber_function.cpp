@@ -55,34 +55,33 @@ public:
 	}
 
 	//! Accumulate the secondary sort values
-	void Sink(ExecutionContext &context, WindowExecutorGlobalState &gstate, DataChunk &sink_chunk,
-	          DataChunk &coll_chunk, idx_t input_idx) override;
+	void Sink(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk, idx_t input_idx,
+	          OperatorSinkInput &sink) override;
 	//! Finish the sinking and prepare to scan
-	void Finalize(ExecutionContext &context, WindowExecutorGlobalState &gstate, CollectionPtr collection) override;
+	void Finalize(ExecutionContext &context, CollectionPtr collection, OperatorSinkInput &sink) override;
 
 	//! The corresponding global peer state
 	const WindowRowNumberGlobalState &grstate;
 	//! The optional sorting state for secondary sorts
-	unique_ptr<WindowAggregatorState> local_tree;
+	unique_ptr<LocalSinkState> local_tree;
 };
 
-void WindowRowNumberLocalState::Sink(ExecutionContext &context, WindowExecutorGlobalState &gstate,
-                                     DataChunk &sink_chunk, DataChunk &coll_chunk, idx_t input_idx) {
-	WindowExecutorBoundsLocalState::Sink(context, gstate, sink_chunk, coll_chunk, input_idx);
+void WindowRowNumberLocalState::Sink(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk,
+                                     idx_t input_idx, OperatorSinkInput &sink) {
+	WindowExecutorBoundsLocalState::Sink(context, sink_chunk, coll_chunk, input_idx, sink);
 
 	if (local_tree) {
 		auto &local_tokens = local_tree->Cast<WindowMergeSortTreeLocalState>();
-		local_tokens.Sink(context, sink_chunk, input_idx, nullptr, 0);
+		local_tokens.Sink(context, sink_chunk, input_idx, nullptr, 0, sink.interrupt_state);
 	}
 }
 
-void WindowRowNumberLocalState::Finalize(ExecutionContext &context, WindowExecutorGlobalState &gstate,
-                                         CollectionPtr collection) {
-	WindowExecutorBoundsLocalState::Finalize(context, gstate, collection);
+void WindowRowNumberLocalState::Finalize(ExecutionContext &context, CollectionPtr collection, OperatorSinkInput &sink) {
+	WindowExecutorBoundsLocalState::Finalize(context, collection, sink);
 
 	if (local_tree) {
 		auto &local_tokens = local_tree->Cast<WindowMergeSortTreeLocalState>();
-		local_tokens.Finalize(context);
+		local_tokens.Finalize(context, sink.interrupt_state);
 		local_tokens.window_tree.Build();
 	}
 }
@@ -98,23 +97,21 @@ WindowRowNumberExecutor::WindowRowNumberExecutor(BoundWindowExpression &wexpr, W
 	}
 }
 
-unique_ptr<WindowExecutorGlobalState> WindowRowNumberExecutor::GetGlobalState(ClientContext &client,
-                                                                              const idx_t payload_count,
-                                                                              const ValidityMask &partition_mask,
-                                                                              const ValidityMask &order_mask) const {
+unique_ptr<GlobalSinkState> WindowRowNumberExecutor::GetGlobalState(ClientContext &client, const idx_t payload_count,
+                                                                    const ValidityMask &partition_mask,
+                                                                    const ValidityMask &order_mask) const {
 	return make_uniq<WindowRowNumberGlobalState>(client, *this, payload_count, partition_mask, order_mask);
 }
 
-unique_ptr<WindowExecutorLocalState>
-WindowRowNumberExecutor::GetLocalState(ExecutionContext &context, const WindowExecutorGlobalState &gstate) const {
+unique_ptr<LocalSinkState> WindowRowNumberExecutor::GetLocalState(ExecutionContext &context,
+                                                                  const GlobalSinkState &gstate) const {
 	return make_uniq<WindowRowNumberLocalState>(context, gstate.Cast<WindowRowNumberGlobalState>());
 }
 
-void WindowRowNumberExecutor::EvaluateInternal(ExecutionContext &context, WindowExecutorGlobalState &gstate,
-                                               WindowExecutorLocalState &lstate, DataChunk &eval_chunk, Vector &result,
-                                               idx_t count, idx_t row_idx) const {
-	auto &grstate = gstate.Cast<WindowRowNumberGlobalState>();
-	auto &lrstate = lstate.Cast<WindowRowNumberLocalState>();
+void WindowRowNumberExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result,
+                                               idx_t count, idx_t row_idx, OperatorSinkInput &sink) const {
+	auto &grstate = sink.global_state.Cast<WindowRowNumberGlobalState>();
+	auto &lrstate = sink.local_state.Cast<WindowRowNumberLocalState>();
 	auto rdata = FlatVector::GetData<int64_t>(result);
 
 	if (grstate.use_framing) {
@@ -149,11 +146,10 @@ WindowNtileExecutor::WindowNtileExecutor(BoundWindowExpression &wexpr, WindowSha
 	ntile_idx = shared.RegisterEvaluate(wexpr.children[0]);
 }
 
-void WindowNtileExecutor::EvaluateInternal(ExecutionContext &context, WindowExecutorGlobalState &gstate,
-                                           WindowExecutorLocalState &lstate, DataChunk &eval_chunk, Vector &result,
-                                           idx_t count, idx_t row_idx) const {
-	auto &grstate = gstate.Cast<WindowRowNumberGlobalState>();
-	auto &lrstate = lstate.Cast<WindowRowNumberLocalState>();
+void WindowNtileExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result,
+                                           idx_t count, idx_t row_idx, OperatorSinkInput &sink) const {
+	auto &grstate = sink.global_state.Cast<WindowRowNumberGlobalState>();
+	auto &lrstate = sink.local_state.Cast<WindowRowNumberLocalState>();
 	auto partition_begin = FlatVector::GetData<const idx_t>(lrstate.bounds.data[PARTITION_BEGIN]);
 	auto partition_end = FlatVector::GetData<const idx_t>(lrstate.bounds.data[PARTITION_END]);
 	if (grstate.use_framing) {

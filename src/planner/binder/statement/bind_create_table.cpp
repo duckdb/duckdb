@@ -559,13 +559,15 @@ static void BindCreateTableConstraints(CreateTableInfo &create_info, CatalogEntr
 		FindMatchingPrimaryKeyColumns(pk_table_entry_ptr.GetColumns(), pk_table_entry_ptr.GetConstraints(), fk);
 		FindForeignKeyIndexes(pk_table_entry_ptr.GetColumns(), fk.pk_columns, fk.info.pk_keys);
 		CheckForeignKeyTypes(pk_table_entry_ptr.GetColumns(), create_info.columns, fk);
-		auto &storage = pk_table_entry_ptr.GetStorage();
+		if (pk_table_entry_ptr.IsDuckTable()) {
+			auto &storage = pk_table_entry_ptr.GetStorage();
 
-		if (!storage.HasForeignKeyIndex(fk.info.pk_keys, ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE)) {
-			auto fk_column_names = StringUtil::Join(fk.pk_columns, ",");
-			throw BinderException("Failed to create foreign key on %s(%s): no UNIQUE or PRIMARY KEY constraint "
-			                      "present on these columns",
-			                      pk_table_entry_ptr.name, fk_column_names);
+			if (!storage.HasForeignKeyIndex(fk.info.pk_keys, ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE)) {
+				auto fk_column_names = StringUtil::Join(fk.pk_columns, ",");
+				throw BinderException("Failed to create foreign key on %s(%s): no UNIQUE or PRIMARY KEY constraint "
+				                      "present on these columns",
+				                      pk_table_entry_ptr.name, fk_column_names);
+			}
 		}
 
 		D_ASSERT(fk.info.pk_keys.size() == fk.info.fk_keys.size());

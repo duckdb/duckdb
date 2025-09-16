@@ -137,7 +137,7 @@ public:
 	//! Initialize the storage and its indexes, but no row groups.
 	void InitializeStorage(LocalAppendState &state, DataTable &table);
 	//! Append a chunk to the local storage
-	static void Append(LocalAppendState &state, DataChunk &chunk);
+	static void Append(LocalAppendState &state, DataChunk &table_chunk, DataTableInfo &data_table_info);
 	//! Finish appending to the local storage
 	static void FinalizeAppend(LocalAppendState &state);
 	//! Merge a row group collection into the transaction-local storage

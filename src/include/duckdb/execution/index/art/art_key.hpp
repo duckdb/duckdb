@@ -91,17 +91,4 @@ ARTKey ARTKey::CreateARTKey(ArenaAllocator &allocator, const char *value);
 template <>
 void ARTKey::CreateARTKey(ArenaAllocator &allocator, ARTKey &key, string_t value);
 
-class ARTKeySection {
-public:
-	ARTKeySection(idx_t start, idx_t end, idx_t depth, data_t byte);
-	ARTKeySection(idx_t start, idx_t end, const unsafe_vector<ARTKey> &keys, const ARTKeySection &section);
-
-	idx_t start;
-	idx_t end;
-	idx_t depth;
-	data_t key_byte;
-
-public:
-	void GetChildSections(unsafe_vector<ARTKeySection> &sections, const unsafe_vector<ARTKey> &keys);
-};
 } // namespace duckdb

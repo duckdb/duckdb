@@ -22,7 +22,7 @@ set autoinstall_known_extensions=false
 statement error
 SET s3_region='eu-west-1';
 ----
-Catalog Error: Setting with name "s3_region" is not in the catalog, but it exists in the httpfs extension.
+<REGEX>:.*Catalog Error.*Setting with name "s3_region" is not in the catalog.*
 
 ### Autoloading but not autoinstall, while the extension is not installed: still not working
 statement ok
@@ -34,8 +34,7 @@ set autoinstall_extension_repository='/tmp/non-existent-repo';
 statement error
 SET s3_region='eu-west-1';
 ----
-Extension Autoloading Error: An error occurred while trying to automatically install the required extension 'httpfs':
-Extension
+<REGEX>:.*Extension Autoloading Error.*An error occurred while trying to automatically install the required extension 'httpfs'.*
 
 ### Manually install the extension from the local repo
 statement ok

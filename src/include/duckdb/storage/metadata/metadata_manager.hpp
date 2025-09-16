@@ -38,6 +38,9 @@ struct MetadataBlock {
 
 	idx_t FreeBlocksToInteger();
 	void FreeBlocksFromInteger(idx_t blocks);
+	static vector<uint8_t> BlocksFromInteger(idx_t free_list);
+
+	string ToString() const;
 };
 
 struct MetadataPointer {
@@ -61,6 +64,8 @@ public:
 
 	MetadataHandle AllocateHandle();
 	MetadataHandle Pin(const MetadataPointer &pointer);
+
+	MetadataHandle Pin(QueryContext context, const MetadataPointer &pointer);
 
 	MetaBlockPointer GetDiskPointer(const MetadataPointer &pointer, uint32_t offset = 0);
 	MetadataPointer FromDiskPointer(MetaBlockPointer pointer);

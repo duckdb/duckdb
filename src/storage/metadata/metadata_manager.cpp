@@ -31,6 +31,19 @@ MetadataBlock &MetadataBlock::operator=(MetadataBlock &&other) noexcept {
 	return *this;
 }
 
+string MetadataBlock::ToString() const {
+	string result;
+	for (idx_t i = 0; i < MetadataManager::METADATA_BLOCK_COUNT; i++) {
+		if (std::find(free_blocks.begin(), free_blocks.end(), i) != free_blocks.end()) {
+			if (!result.empty()) {
+				result += ", ";
+			}
+			result += to_string(i);
+		}
+	}
+	return "block_id: " + to_string(block_id) + " [" + result + "]";
+}
+
 MetadataManager::MetadataManager(BlockManager &block_manager, BufferManager &buffer_manager)
     : block_manager(block_manager), buffer_manager(buffer_manager) {
 }
@@ -77,6 +90,10 @@ MetadataHandle MetadataManager::AllocateHandle() {
 }
 
 MetadataHandle MetadataManager::Pin(const MetadataPointer &pointer) {
+	return Pin(QueryContext(), pointer);
+}
+
+MetadataHandle MetadataManager::Pin(QueryContext context, const MetadataPointer &pointer) {
 	D_ASSERT(pointer.index < METADATA_BLOCK_COUNT);
 	auto &block = blocks[UnsafeNumericCast<int64_t>(pointer.block_index)];
 #ifdef DEBUG
@@ -290,18 +307,24 @@ idx_t MetadataBlock::FreeBlocksToInteger() {
 	return result;
 }
 
+vector<uint8_t> MetadataBlock::BlocksFromInteger(idx_t free_list) {
+	vector<uint8_t> blocks;
+	for (idx_t i = 64; i > 0; i--) {
+		auto index = i - 1;
+		idx_t mask = idx_t(1) << index;
+		if (free_list & mask) {
+			blocks.push_back(UnsafeNumericCast<uint8_t>(index));
+		}
+	}
+	return blocks;
+}
+
 void MetadataBlock::FreeBlocksFromInteger(idx_t free_list) {
 	free_blocks.clear();
 	if (free_list == 0) {
 		return;
 	}
-	for (idx_t i = 64; i > 0; i--) {
-		auto index = i - 1;
-		idx_t mask = idx_t(1) << index;
-		if (free_list & mask) {
-			free_blocks.push_back(UnsafeNumericCast<uint8_t>(index));
-		}
-	}
+	free_blocks = BlocksFromInteger(free_list);
 }
 
 void MetadataManager::MarkBlocksAsModified() {
@@ -335,6 +358,9 @@ void MetadataManager::MarkBlocksAsModified() {
 }
 
 void MetadataManager::ClearModifiedBlocks(const vector<MetaBlockPointer> &pointers) {
+	if (pointers.empty()) {
+		return;
+	}
 	for (auto &pointer : pointers) {
 		auto block_id = pointer.GetBlockId();
 		auto block_index = pointer.GetBlockIndex();
