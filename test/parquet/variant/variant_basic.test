@@ -173,7 +173,7 @@ from 'data/parquet-testing/variant_double_negative.parquet';
 query II
 from 'data/parquet-testing/variant_object_empty.parquet';
 ----
-1	()
+1	{}
 
 query II
 from 'data/parquet-testing/variant_null.parquet';
