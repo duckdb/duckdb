@@ -580,7 +580,7 @@ static unique_ptr<ComplexJSON> ParseJSON(const string &json, yyjson_doc *doc, yy
 	case YYJSON_TYPE_RAW | YYJSON_SUBTYPE_NONE:
 		return make_uniq<ComplexJSON>(to_string(unsafe_yyjson_get_real(root)));
 	case YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE:
-		return make_uniq<ComplexJSON>(ComplexJSONType::NULL_VALUE);
+		return make_uniq<ComplexJSON>("null");
 	default:
 		yyjson_doc_free(doc);
 		throw SerializationException("Failed to parse JSON string: %s", json);

@@ -4,7 +4,7 @@ namespace duckdb {
 ComplexJSON::ComplexJSON(const string &str) : str_value(str), type(ComplexJSONType::VALUE) {
 }
 
-ComplexJSON::ComplexJSON(ComplexJSONType type_p) : type(type_p) {
+ComplexJSON::ComplexJSON() : type(ComplexJSONType::VALUE) {
 }
 
 void ComplexJSON::AddObjectEntry(const string &key, unique_ptr<ComplexJSON> object) {

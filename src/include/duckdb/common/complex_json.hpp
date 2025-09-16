@@ -16,14 +16,14 @@
 
 namespace duckdb {
 
-enum class ComplexJSONType : uint8_t { VALUE = 0, OBJECT = 1, ARRAY = 2, NULL_VALUE = 3 };
+enum class ComplexJSONType : uint8_t { VALUE = 0, OBJECT = 1, ARRAY = 2 };
 
 //! Custom struct to handle both strings and nested JSON objects
 struct ComplexJSON {
 	//! Constructor for string values
 	explicit ComplexJSON(const string &str);
 	//! Basic empty constructor
-	explicit ComplexJSON(ComplexJSONType type = ComplexJSONType::VALUE);
+	explicit ComplexJSON();
 	//! Adds entry to the underlying map, also sets the type to OBJECT
 	void AddObjectEntry(const string &key, unique_ptr<ComplexJSON> object);
 	//! Adds element to the underlying list, also sets the type to ARRAY
