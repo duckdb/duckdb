@@ -572,6 +572,15 @@ static unique_ptr<ComplexJSON> ParseJSON(const string &json, yyjson_doc *doc, yy
 		const bool bool_val = yyjson_get_bool(root);
 		return make_uniq<ComplexJSON>(bool_val ? "true" : "false");
 	}
+	case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_UINT:
+		return make_uniq<ComplexJSON>(to_string(unsafe_yyjson_get_uint(root)));
+	case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_SINT:
+		return make_uniq<ComplexJSON>(to_string(unsafe_yyjson_get_sint(root)));
+	case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_REAL:
+	case YYJSON_TYPE_RAW | YYJSON_SUBTYPE_NONE:
+		return make_uniq<ComplexJSON>(to_string(unsafe_yyjson_get_real(root)));
+	case YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE:
+		return make_uniq<ComplexJSON>(ComplexJSONType::NULL_VALUE);
 	default:
 		yyjson_doc_free(doc);
 		throw SerializationException("Failed to parse JSON string: %s", json);
