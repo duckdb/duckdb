@@ -242,9 +242,9 @@ void AttachedDatabase::Close() {
 
 	// shutting down: attempt to checkpoint the database
 	// but only if we are not cleaning up as part of an exception unwind
+	auto &config = DBConfig::GetConfig(db);
 	if (!Exception::UncaughtException() && storage && !storage->InMemory() && !ValidChecker::IsInvalidated(db)) {
 		try {
-			auto &config = DBConfig::GetConfig(db);
 			if (config.options.checkpoint_on_shutdown) {
 				CheckpointOptions options;
 				options.wal_action = CheckpointWALAction::DELETE_WAL;
@@ -254,6 +254,13 @@ void AttachedDatabase::Close() {
 		}
 	}
 
+	if (storage) {
+		try {
+			// destroy the storage
+			storage->Destroy();
+		} catch (...) { // NOLINT
+		}
+	}
 	transaction_manager.reset();
 	catalog.reset();
 	storage.reset();

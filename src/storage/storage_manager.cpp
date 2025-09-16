@@ -142,6 +142,9 @@ bool StorageManager::InMemory() const {
 	return path == IN_MEMORY_PATH;
 }
 
+void StorageManager::Destroy() {
+}
+
 void StorageManager::Initialize(QueryContext context) {
 	bool in_memory = InMemory();
 	if (in_memory && read_only) {
@@ -487,6 +490,33 @@ void SingleFileStorageManager::CreateCheckpoint(QueryContext context, Checkpoint
 
 	if (db.GetStorageExtension()) {
 		db.GetStorageExtension()->OnCheckpointEnd(db, options);
+	}
+}
+
+void SingleFileStorageManager::Destroy() {
+	if (!load_complete) {
+		return;
+	}
+	vector<reference<SchemaCatalogEntry>> schemas;
+	// we scan the set of committed schemas
+	auto &catalog = Catalog::GetCatalog(db).Cast<DuckCatalog>();
+	catalog.ScanSchemas([&](SchemaCatalogEntry &entry) { schemas.push_back(entry); });
+
+	vector<reference<DuckTableEntry>> tables;
+	for (auto &schema : schemas) {
+		schema.get().Scan(CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
+			if (entry.internal) {
+				return;
+			}
+			if (entry.type == CatalogType::TABLE_ENTRY) {
+				tables.push_back(entry.Cast<DuckTableEntry>());
+			}
+		});
+	}
+
+	for (auto &table : tables) {
+		auto &data_table = table.get().GetStorage();
+		data_table.Destroy();
 	}
 }
 

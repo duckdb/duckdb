@@ -1186,6 +1186,36 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 }
 
 //===--------------------------------------------------------------------===//
+// Destroy
+//===--------------------------------------------------------------------===//
+
+class DestroyTask : public BaseExecutorTask {
+public:
+	DestroyTask(TaskExecutor &executor, unique_ptr<RowGroup> row_group_p)
+	    : BaseExecutorTask(executor), row_group(std::move(row_group_p)) {
+	}
+
+	void ExecuteTask() override {
+		row_group.reset();
+	}
+
+private:
+	unique_ptr<RowGroup> row_group;
+};
+
+void RowGroupCollection::Destroy() {
+	auto l = row_groups->Lock();
+	auto &segments = row_groups->ReferenceLoadedSegmentsMutable(l);
+
+	TaskExecutor executor(TaskScheduler::GetScheduler(GetAttached().GetDatabase()));
+	for (auto &segment : segments) {
+		auto destroy_task = make_uniq<DestroyTask>(executor, std::move(segment.node));
+		executor.ScheduleTask(std::move(destroy_task));
+	}
+	executor.WorkOnTasks();
+}
+
+//===--------------------------------------------------------------------===//
 // CommitDrop
 //===--------------------------------------------------------------------===//
 void RowGroupCollection::CommitDropColumn(const idx_t column_index) {
