@@ -15,7 +15,7 @@ namespace duckdb {
 class Optimizer;
 class LogicalOperator;
 
-//! The CommonSubplanOptimizer optimizer converts duplicate subplans to a materialized CTE
+//! The CommonSubplanOptimizer optimizer detects common subplans, and converts them to refs of a materialized CTE
 class CommonSubplanOptimizer {
 public:
 	explicit CommonSubplanOptimizer(Optimizer &optimizer);

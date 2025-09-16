@@ -55,7 +55,7 @@ public:
 
 		// Convert expressions to canonical (table indices, aliases, query locations)
 		vector<pair<string, optional_idx>> expression_info;
-		ConvertExpressions(op, to_canonical, expression_info);
+		bool can_materialize = ConvertExpressions(op, to_canonical, expression_info);
 
 		// Temporarily move children here as we don't want to serialize them
 		auto children = std::move(op.children);
@@ -67,7 +67,11 @@ public:
 
 		// Serialize canonical representation of operator
 		serializer.Begin();
-		op.Serialize(serializer);
+		try {
+			op.Serialize(serializer);
+		} catch (std::exception &) {
+			can_materialize = false;
+		}
 		serializer.End();
 
 		// Convert back from canonical
@@ -77,8 +81,11 @@ public:
 		// Restore children
 		op.children = std::move(children);
 
-		return unique_ptr<PlanSignature>(
-		    new PlanSignature(std::move(stream), operator_count, std::move(child_signatures)));
+		if (can_materialize) {
+			return unique_ptr<PlanSignature>(
+			    new PlanSignature(std::move(stream), operator_count, std::move(child_signatures)));
+		}
+		return nullptr;
 	}
 
 	idx_t OperatorCount() const {
@@ -126,7 +133,6 @@ private:
 		case LogicalOperatorType::LOGICAL_EXPRESSION_GET:
 		case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
 		case LogicalOperatorType::LOGICAL_EMPTY_RESULT:
-		case LogicalOperatorType::LOGICAL_CTE_REF:
 		case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 		case LogicalOperatorType::LOGICAL_ANY_JOIN:
 		case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
@@ -142,6 +148,7 @@ private:
 			// - case LogicalOperatorType::LOGICAL_SAMPLE:
 			// - case LogicalOperatorType::LOGICAL_COPY_DATABASE:
 			// - case LogicalOperatorType::LOGICAL_DELIM_GET:
+			// - case LogicalOperatorType::LOGICAL_CTE_REF:
 			// - case LogicalOperatorType::LOGICAL_JOIN:
 			// - case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 			// - case LogicalOperatorType::LOGICAL_DEPENDENT_JOIN:
@@ -239,8 +246,9 @@ private:
 		generic.table_index = TO_CANONICAL ? 0 : table_idxs[0];
 	}
 
-	static void ConvertExpressions(LogicalOperator &op, const unordered_map<idx_t, idx_t> &table_index_mapping,
+	static bool ConvertExpressions(LogicalOperator &op, const unordered_map<idx_t, idx_t> &table_index_mapping,
 	                               vector<pair<string, optional_idx>> &expression_info) {
+		bool can_materialize = true;
 		const auto to_canonical = expression_info.empty();
 		idx_t info_idx = 0;
 		LogicalOperatorVisitor::EnumerateExpressions(op, [&](unique_ptr<Expression> *expr) {
@@ -261,16 +269,20 @@ private:
 					child->alias = std::move(info.first);
 					child->query_location = info.second;
 				}
+				if (child->IsVolatile()) {
+					can_materialize = false;
+				}
 			});
 		});
+		return can_materialize;
 	}
 
 private:
-	MemoryStream stream;
+	const MemoryStream stream;
 	const String signature;
 	const hash_t signature_hash;
 	const idx_t operator_count;
-	vector<reference<PlanSignature>> child_signatures;
+	const vector<reference<PlanSignature>> child_signatures;
 };
 
 struct PlanSignatureHash {
@@ -381,11 +393,13 @@ public:
 			}
 			auto &subplan = it->second.subplans[0].get();
 			auto &parent = operator_infos.find(subplan)->second.parent;
-			auto &parent_signature = *operator_infos.find(parent)->second.signature;
-			auto parent_it = subplans.find(parent_signature);
-			if (parent_it != subplans.end() && it->second.subplans.size() == parent_it->second.subplans.size()) {
-				it = subplans.erase(it); // Parent has exact same number of identical subplans
-				continue;
+			auto &parent_signature = operator_infos.find(parent)->second.signature;
+			if (parent_signature) {
+				auto parent_it = subplans.find(*parent_signature);
+				if (parent_it != subplans.end() && it->second.subplans.size() == parent_it->second.subplans.size()) {
+					it = subplans.erase(it); // Parent has exact same number of identical subplans
+					continue;
+				}
 			}
 			if (!CTEInlining::EndsInAggregateOrDistinct(*subplan)) {
 				it = subplans.erase(it); // Not eligible for materialization
