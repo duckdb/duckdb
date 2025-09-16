@@ -53,6 +53,7 @@ DROP SCHEMA temp CASCADE
 statement error
 DROP TABLE memory.main.integersx
 ----
+<REGEX>:.*Catalog Error.*does not exist.*
 
 statement ok
 DROP TABLE integersx
@@ -67,11 +68,13 @@ DROP TABLE temp.integersx
 statement error
 CREATE TEMPORARY TABLE integers2(i INTEGER) ON COMMIT DELETE ROWS
 ----
+<REGEX>:.*Not implemented Error: Only ON COMMIT PRESERVE ROWS is supported.*
 
 # temp table already exists
 statement error
 CREATE TEMPORARY TABLE integers(i INTEGER)
 ----
+<REGEX>:.*Catalog Error.*already exists.*
 
 statement ok
 INSERT INTO integers VALUES (42)
@@ -151,8 +154,10 @@ ROLLBACK
 statement error
 SELECT i from integers3
 ----
+<REGEX>:.*Catalog Error.*does not exist.*
 
 # table is not visible to other cons
 statement error con2
 INSERT INTO integers VALUES (42)
 ----
+<REGEX>:.*Catalog Error.*does not exist.*
