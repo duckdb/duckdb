@@ -691,11 +691,12 @@ SecretStorageSpecifier <- 'IN' Identifier
 
 CreateViewStmt <- 'RECURSIVE'? 'VIEW' IfNotExists? QualifiedName InsertColumnList? 'AS' SelectStatement
 
-DescribeStatement <- ShowSelect / ShowAllTables / ShowQualifiedName
+DescribeStatement <- ShowTables / ShowSelect / ShowAllTables / ShowQualifiedName
 
 ShowSelect <- ShowOrDescribeOrSummarize SelectStatement
 ShowAllTables <- ShowOrDescribe 'ALL' 'TABLES'
 ShowQualifiedName <- ShowOrDescribeOrSummarize (BaseTableName / StringLiteral)?
+ShowTables <- ShowOrDescribe 'TABLES' 'FROM' QualifiedName
 
 ShowOrDescribeOrSummarize <- ShowOrDescribe / 'SUMMARIZE'
 ShowOrDescribe <- 'SHOW' / 'DESCRIBE' / 'DESC'
