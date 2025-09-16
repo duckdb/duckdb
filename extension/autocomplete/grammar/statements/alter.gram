@@ -40,6 +40,6 @@ QualifiedSequenceName <- CatalogQualification? SchemaQualification? SequenceName
 AlterSequenceOptions <- RenameAlter / SetSequenceOption
 SetSequenceOption <- List(SequenceOption)
 
-AlterDatabaseStmt <- 'DATABASE'i IfExists? Identifier RenameDatabaseAlter
+AlterDatabaseStmt <- 'DATABASE' IfExists? Identifier RenameDatabaseAlter
 
-RenameDatabaseAlter <- 'RENAME'i 'TO'i Identifier
+RenameDatabaseAlter <- 'RENAME' 'TO' Identifier
