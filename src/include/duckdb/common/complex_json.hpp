@@ -23,7 +23,7 @@ struct ComplexJSON {
 	//! Constructor for string values
 	explicit ComplexJSON(const string &str);
 	//! Basic empty constructor
-	explicit ComplexJSON();
+	ComplexJSON();
 	//! Adds entry to the underlying map, also sets the type to OBJECT
 	void AddObjectEntry(const string &key, unique_ptr<ComplexJSON> object);
 	//! Adds element to the underlying list, also sets the type to ARRAY
