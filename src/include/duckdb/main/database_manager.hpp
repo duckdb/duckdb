@@ -48,6 +48,7 @@ public:
 	void FinalizeStartup();
 	//! Get an attached database by its name
 	optional_ptr<AttachedDatabase> GetDatabase(ClientContext &context, const string &name);
+	shared_ptr<AttachedDatabase> GetDatabase(const string &name);
 	//! Attach a new database
 	shared_ptr<AttachedDatabase> AttachDatabase(ClientContext &context, AttachInfo &info, AttachOptions &options);
 
@@ -102,6 +103,8 @@ public:
 	}
 	//! Gets a list of all attached database paths
 	vector<string> GetAttachedDatabasePaths();
+
+	shared_ptr<AttachedDatabase> GetDatabaseInternal(const lock_guard<mutex> &, const string &name);
 
 private:
 	//! The system database is a special database that holds system entries (e.g. functions)
