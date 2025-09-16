@@ -1158,7 +1158,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"MacroOrFunction <- 'MACRO' / 'FUNCTION'\n"
 	"MacroDefinition <- Parens(MacroParameters?) 'AS' (TableMacroDefinition / ScalarMacroDefinition)\n"
 	"MacroParameters <- List(MacroParameter)\n"
-	"MacroParameter <- NamedParameter / TypeFuncName\n"
+	"MacroParameter <- NamedParameter / TypeFuncName Type?\n"
 	"ScalarMacroDefinition <- Expression\n"
 	"TableMacroDefinition <- 'TABLE' SelectStatement\n"
 	"CommentStatement <- 'COMMENT' 'ON' CommentOnType ColumnReference 'IS' CommentValue\n"

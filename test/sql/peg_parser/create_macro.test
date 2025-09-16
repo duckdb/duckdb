@@ -6,3 +6,6 @@ require autocomplete
 
 statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$create macro my_range(x) as table from range(x);$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$create macro m(s varchar) as s || 'c'$TEST_PEG_PARSER$);
