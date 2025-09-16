@@ -5,8 +5,9 @@
 statement error
 CREATE TABLE t0 ( c1 INT DEFAULT ? );
 ----
-DEFAULT values cannot contain parameters
+Binder Error: DEFAULT values cannot contain parameters
 
 statement error
 CREATE TABLE t0 ( c1 INT CHECK (?) );
 ----
+Invalid Input Error: Expected 2 parameters, but none were supplied
