@@ -68,6 +68,26 @@ optional_ptr<AttachedDatabase> DatabaseManager::GetDatabase(ClientContext &conte
 
 shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &context, AttachInfo &info,
                                                              AttachOptions &options) {
+	auto attached_db = AttachDatabaseInternal(context, info, options);
+
+	//! Initialize the database.
+	if (options.is_main_database) {
+		attached_db->SetInitialDatabase();
+		attached_db->Initialize(context);
+	} else {
+		attached_db->Initialize(context);
+		if (!options.default_table.name.empty()) {
+			attached_db->GetCatalog().SetDefaultTable(options.default_table.schema, options.default_table.name);
+		}
+		attached_db->FinalizeLoad(context);
+	}
+
+	FinalizeAttach(context, info, attached_db);
+	return attached_db;
+}
+
+shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabaseInternal(ClientContext &context, AttachInfo &info,
+                                                                     AttachOptions &options) {
 	if (AttachedDatabase::NameIsReserved(info.name)) {
 		throw BinderException("Attached database name \"%s\" cannot be used because it is a reserved name", info.name);
 	}

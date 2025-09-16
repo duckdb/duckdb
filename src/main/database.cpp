@@ -199,10 +199,8 @@ void DatabaseInstance::CreateMainDatabase() {
 	Connection con(*this);
 	con.BeginTransaction();
 	AttachOptions options(config.options);
-	auto initial_database = db_manager->AttachDatabase(*con.context, info, options);
-	initial_database->SetInitialDatabase();
-	initial_database->Initialize(*con.context);
-	db_manager->FinalizeAttach(*con.context, info, std::move(initial_database));
+	options.is_main_database = true;
+	db_manager->AttachDatabase(*con.context, info, options);
 	con.Commit();
 }
 

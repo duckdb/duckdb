@@ -65,16 +65,7 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 
 	// Get the database type and attach the database.
 	db_manager.GetDatabaseType(context.client, *info, config, options);
-	auto attached_db = db_manager.AttachDatabase(context.client, *info, options);
-
-	//! Initialize the database.
-	attached_db->Initialize(context.client);
-	if (!options.default_table.name.empty()) {
-		attached_db->GetCatalog().SetDefaultTable(options.default_table.schema, options.default_table.name);
-	}
-	attached_db->FinalizeLoad(context.client);
-
-	db_manager.FinalizeAttach(context.client, *info, std::move(attached_db));
+	db_manager.AttachDatabase(context.client, *info, options);
 	return SourceResultType::FINISHED;
 }
 
