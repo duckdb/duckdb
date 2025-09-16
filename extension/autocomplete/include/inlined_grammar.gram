@@ -957,7 +957,7 @@ WithOrdinality <- 'WITH' 'ORDINALITY'
 QualifiedTableFunction <- CatalogQualification? SchemaQualification? TableFunctionName
 TableFunctionArguments <- Parens(List(FunctionArgument)?)
 FunctionArgument <- NamedParameter / Expression
-NamedParameter <- TypeName NamedParameterAssignment Expression
+NamedParameter <- TypeName Type? NamedParameterAssignment Expression
 NamedParameterAssignment <- ':=' / '=>'
 
 TableAlias <- 'AS'? (Identifier / StringLiteral) ColumnAliases?
@@ -1315,7 +1315,7 @@ MacroOrFunction <- 'MACRO' / 'FUNCTION'
 MacroDefinition <- Parens(MacroParameters?) 'AS' (TableMacroDefinition / ScalarMacroDefinition)
 
 MacroParameters <- List(MacroParameter)
-MacroParameter <- NamedParameter / TypeFuncName Type?
+MacroParameter <- NamedParameter / (TypeFuncName Type?)
 
 ScalarMacroDefinition <- Expression
 TableMacroDefinition <- 'TABLE' SelectStatement

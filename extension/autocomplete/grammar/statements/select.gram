@@ -55,7 +55,7 @@ WithOrdinality <- 'WITH' 'ORDINALITY'
 QualifiedTableFunction <- CatalogQualification? SchemaQualification? TableFunctionName
 TableFunctionArguments <- Parens(List(FunctionArgument)?)
 FunctionArgument <- NamedParameter / Expression
-NamedParameter <- TypeName NamedParameterAssignment Expression
+NamedParameter <- TypeName Type? NamedParameterAssignment Expression
 NamedParameterAssignment <- ':=' / '=>'
 
 TableAlias <- 'AS'? (Identifier / StringLiteral) ColumnAliases?

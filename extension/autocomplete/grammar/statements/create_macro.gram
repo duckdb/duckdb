@@ -5,7 +5,7 @@ MacroOrFunction <- 'MACRO' / 'FUNCTION'
 MacroDefinition <- Parens(MacroParameters?) 'AS' (TableMacroDefinition / ScalarMacroDefinition)
 
 MacroParameters <- List(MacroParameter)
-MacroParameter <- NamedParameter / TypeFuncName Type?
+MacroParameter <- NamedParameter / (TypeFuncName Type?)
 
 ScalarMacroDefinition <- Expression
 TableMacroDefinition <- 'TABLE' SelectStatement
