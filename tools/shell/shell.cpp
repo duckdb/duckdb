@@ -467,14 +467,21 @@ static string pager_command = "";
 ** Get the system default pager command
 */
 static string getSystemPager() {
-	const char *pager_env = getenv("PAGER");
+	const char *pager_env = getenv("DUCKDB_PAGER");
 	if (pager_env && strlen(pager_env) > 0) {
 		return string(pager_env);
 	}
+	pager_env = getenv("PAGER");
+	if (pager_env && strlen(pager_env) > 0) {
+		return string(pager_env);
+	}
+	// No pager environment variable set
 #if defined(_WIN32) || defined(WIN32)
+	// On Windows, use 'more' as default pager
 	return "more";
 #else
-	return "less -S";
+	// On other systems, return empty string (no default)
+	return "";
 #endif
 }
 
