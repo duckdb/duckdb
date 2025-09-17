@@ -4207,6 +4207,12 @@ void ShellState::ShowConfiguration() {
 	}
 	raw_printf(out, "\n");
 	utf8_printf(out, "%12.12s: %s\n", "filename", zDbFilename.c_str());
+	if (!pager_command.empty() || !getSystemPager().empty()) {
+		string pager = pager_command.empty() ? getSystemPager() : pager_command;
+		utf8_printf(out, "%12.12s: %s (%s)\n", "pager", pager.c_str(), pager_mode == PagerMode::ON ? "on" : "off");
+	} else {
+		utf8_printf(out, "%12.12s: %s\n", "pager", "off");
+	}
 }
 
 MetadataResult ShowConfiguration(ShellState &state, const char **azArg, idx_t nArg) {
