@@ -39,11 +39,12 @@ void StorageOptions::Initialize(const unordered_map<string, Value> &options) {
 			block_header_size = DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE;
 			encryption = true;
 		} else if (entry.first == "encryption_cipher") {
-			encryption_cipher = StringUtil::Lower(entry.second.ToString());
-			auto parsed_cipher = EncryptionTypes::StringToCipher(encryption_cipher);
-			if (parsed_cipher == EncryptionTypes::CipherType::INVALID) {
-				throw BinderException("\"%s\" is not a valid cipher. Try 'GCM', 'CTR', or 'CBC'.", encryption_cipher);
+			auto parsed_cipher = EncryptionTypes::StringToCipher(entry.second.ToString());
+			if (parsed_cipher != EncryptionTypes::CipherType::GCM &&
+			    parsed_cipher != EncryptionTypes::CipherType::CTR) {
+				throw BinderException("\"%s\" is not a valid cipher. Try 'GCM' or 'CTR'.", entry.second.ToString());
 			}
+			encryption_cipher = parsed_cipher;
 		} else if (entry.first == "row_group_size") {
 			row_group_size = entry.second.GetValue<uint64_t>();
 		} else if (entry.first == "storage_version") {
@@ -210,7 +211,6 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 		// key is given upon ATTACH
 		D_ASSERT(storage_options.block_header_size == DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
 		options.encryption_options.encryption_enabled = true;
-		options.encryption_options.cipher = EncryptionTypes::StringToCipher(storage_options.encryption_cipher);
 		options.encryption_options.user_key = std::move(storage_options.user_key);
 	}
 

@@ -1,1 +1,1 @@
-CheckpointStatement <- 'FORCE'i? 'CHECKPOINT'i CatalogName?
+CheckpointStatement <- 'FORCE'? 'CHECKPOINT' CatalogName?

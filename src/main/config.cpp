@@ -115,6 +115,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(EnableViewDependenciesSetting),
     DUCKDB_GLOBAL(EnabledLogTypes),
     DUCKDB_LOCAL(ErrorsAsJSONSetting),
+    DUCKDB_SETTING(ExperimentalMetadataReuseSetting),
     DUCKDB_LOCAL(ExplainOutputSetting),
     DUCKDB_GLOBAL(ExtensionDirectorySetting),
     DUCKDB_GLOBAL(ExternalThreadsSetting),
@@ -176,12 +177,12 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(ZstdMinStringLengthSetting),
     FINAL_SETTING};
 
-static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("memory_limit", 82),
+static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("memory_limit", 83),
                                                      DUCKDB_SETTING_ALIAS("null_order", 33),
-                                                     DUCKDB_SETTING_ALIAS("profiling_output", 101),
-                                                     DUCKDB_SETTING_ALIAS("user", 115),
+                                                     DUCKDB_SETTING_ALIAS("profiling_output", 102),
+                                                     DUCKDB_SETTING_ALIAS("user", 116),
                                                      DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 20),
-                                                     DUCKDB_SETTING_ALIAS("worker_threads", 114),
+                                                     DUCKDB_SETTING_ALIAS("worker_threads", 115),
                                                      FINAL_ALIAS};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {
@@ -496,6 +497,8 @@ void DBConfig::SetDefaultTempDirectory() {
 		options.temporary_directory = string();
 	} else if (DBConfig::IsInMemoryDatabase(options.database_path.c_str())) {
 		options.temporary_directory = ".tmp";
+	} else if (StringUtil::Contains(options.database_path, "?")) {
+		options.temporary_directory = StringUtil::Split(options.database_path, "?")[0] + ".tmp";
 	} else {
 		options.temporary_directory = options.database_path + ".tmp";
 	}

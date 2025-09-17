@@ -225,6 +225,7 @@ private:
 	atomic<idx_t> allocation_size;
 	unique_ptr<ColumnData> row_id_column_data;
 	atomic<bool> row_id_is_loaded;
+	atomic<bool> has_changes;
 };
 
 } // namespace duckdb

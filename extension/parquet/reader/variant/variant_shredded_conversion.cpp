@@ -407,6 +407,7 @@ vector<VariantValue> VariantShreddedConversion::ConvertShreddedObject(Vector &me
 	value.ToUnifiedFormat(total_size, value_format);
 	auto value_data = value_format.GetData<string_t>(value_format);
 	auto &validity = value_format.validity;
+	(void)validity;
 
 	//! 'metadata'
 	UnifiedVectorFormat metadata_format;

@@ -55,6 +55,7 @@ class SecretManager;
 class CompressionInfo;
 class EncryptionUtil;
 class HTTPUtil;
+class DatabaseFilePathManager;
 
 struct CompressionFunctionSet;
 struct DatabaseCacheEntry;
@@ -271,6 +272,8 @@ public:
 	shared_ptr<HTTPUtil> http_util;
 	//! Reference to the database cache entry (if any)
 	shared_ptr<DatabaseCacheEntry> db_cache_entry;
+	//! Reference to the database file path manager
+	shared_ptr<DatabaseFilePathManager> path_manager;
 
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);

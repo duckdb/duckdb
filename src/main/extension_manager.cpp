@@ -24,6 +24,14 @@ void ExtensionActiveLoad::FinishLoad(ExtensionInstallInfo &install_info) {
 	DUCKDB_LOG_INFO(db, extension_name);
 }
 
+void ExtensionActiveLoad::LoadFail(const ErrorData &error) {
+	auto &callbacks = DBConfig::GetConfig(db).extension_callbacks;
+	for (auto &callback : callbacks) {
+		callback->OnExtensionLoadFail(db, extension_name, error);
+	}
+	DUCKDB_LOG_INFO(db, "Failed to load extension '%s': %s", extension_name, error.Message());
+}
+
 ExtensionManager::ExtensionManager(DatabaseInstance &db) : db(db) {
 }
 
