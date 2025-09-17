@@ -4431,6 +4431,22 @@ MetadataResult SetUICommand(ShellState &state, const char **azArg, idx_t nArg) {
 	return MetadataResult::SUCCESS;
 }
 
+#include <algorithm>
+#include <cctype>
+#include <locale>
+
+static inline std::string trim(const std::string &s) {
+	auto start = s.begin();
+	while (start != s.end() && std::isspace(*start, std::locale::classic())) {
+		start++;
+	}
+	auto end = s.end();
+	do {
+		end--;
+	} while (std::distance(start, end) > 0 && std::isspace(*end, std::locale::classic()));
+	return std::string(start, end + 1);
+}
+
 MetadataResult SetPager(ShellState &state, const char **azArg, idx_t nArg) {
 	if (nArg == 1) {
 		// Show current pager status
