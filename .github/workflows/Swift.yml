@@ -62,7 +62,7 @@ jobs:
             destination: 'iOS Simulator,name=iPhone 16'
           - isRelease: false
             destination: 'tvOS Simulator,name=Apple TV 4K (at 1080p) (3nd generation)'
-    runs-on: [macos-latest self-hosted]
+    runs-on: macos-selfhosted
     steps:
 
       - name: Checkout
