@@ -3,6 +3,7 @@
 #include "duckdb/common/local_file_system.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
 
+#include <cstdlib>
 #include <iostream>
 #include <shared_mutex>
 
@@ -47,7 +48,7 @@ public:
 	}
 
 	void FileSync(duckdb::FileHandle &handle) override {
-		PRINT_VERBOSE("FS fsync " << handle.GetPath() << " file_size=" << handle.GetFileSize());
+		PRINT_INFO("FS fsync " << handle.GetPath() << " file_size=" << handle.GetFileSize());
 		if (is_db_file(handle)) {
 			ThrowInjectedFaultIfSet(FaultInjectionSite::FSYNC);
 		}
@@ -270,6 +271,10 @@ void validate(ResultT &r, std::string expected_err_message = "") {
 		PRINT_INFO("Unexpected: query failed with " << r.GetError());
 	}
 	REQUIRE(expected_err == r.HasError());
+	if (expected_err) {
+	    PRINT_INFO("Expected error: " << expected_err_message);
+	    PRINT_INFO("Actual error: " << r.GetError());
+	}
 	if (r.HasError()) {
 		REQUIRE(r.GetError().find(expected_err_message) != std::string::npos);
 	}
@@ -322,6 +327,25 @@ TEST_CASE("simple fault injection storage test", "storage") {
 	}
 }
 
+enum ColumnType {
+	INTEGER = 0,
+	VARCHAR = 1,
+};
+
+struct TableInfo {
+	int num_columns;
+	std::vector<std::string> column_names;
+	std::vector<ColumnType> column_types;
+	int small_write_size;
+	int large_write_size;
+
+	TableInfo(int num_cols, std::vector<std::string> names, std::vector<ColumnType> types, int small_size = 100,
+	          int large_size = 100000)
+	    : num_columns(num_cols), column_names(std::move(names)), column_types(std::move(types)),
+	      small_write_size(small_size), large_write_size(large_size) {
+	}
+};
+
 enum ActionType {
 	// This action will simply flip the setting true -> false or false -> true
 	TOGGLE_SKIP_CHECKPOINTS_ON_COMMIT = 0,
@@ -332,6 +356,229 @@ enum ActionType {
 	DELETE = 6,
 	RESET_TABLE = 7,
 };
+
+class SimpleTestSchema {
+public:
+	SimpleTestSchema(const TableInfo &table_info) : table_info_(table_info), skip_checkpoint_on_commit_(true) {};
+
+	std::string get_simple_string(int length) {
+		std::string result;
+		result.reserve(length);
+		for (int i = 0; i < length; i++) {
+			result += 'a' + rand() % 26;
+		}
+		return result;
+	}
+
+	void write_data(duckdb::Connection &con, int num_rows) {
+		/* if(insert_query_.empty()) {
+		    insert_query_ = "INSERT INTO t VALUES (";
+		    for (int i = 0; i < table_info_.num_columns; i++) {
+		        insert_query_ += "? , ";
+		    }
+		    insert_query_ += ")";
+		} */
+
+		con.BeginTransaction();
+		Appender appender(con, "t");
+		for (int row = 0; row < num_rows; row++) {
+			appender.BeginRow();
+			for (int i = 0; i < table_info_.num_columns; i++) {
+				if (table_info_.column_types[i] == ColumnType::INTEGER) {
+					appender.Append(rand() % 1000);
+				} else {
+					appender.Append(get_simple_string(50).c_str());
+				}
+			}
+			appender.EndRow();
+		}
+		appender.Flush();
+		con.Commit();
+	}
+	void small_write(duckdb::Connection &con) {
+		PRINT_INFO("RUN: small write");
+		write_data(con, table_info_.small_write_size);
+	}
+
+	void large_write(duckdb::Connection &con) {
+		PRINT_INFO("RUN: large write");
+		write_data(con, table_info_.large_write_size);
+	}
+
+	void update(duckdb::Connection &con) {
+		auto column_index = rand() % table_info_.num_columns;
+		auto column_name = table_info_.column_names[column_index];
+		std::string update_query = "UPDATE t ";
+		if (table_info_.column_types[column_index] == ColumnType::INTEGER) {
+			auto begin = rand() % 1000;
+			update_query += " SET " + column_name + " = " + column_name + " * 2 WHERE " + column_name + " > " +
+			                std::to_string(begin) + " and " + column_name + " <" + std::to_string(begin + 20);
+			PRINT_INFO("RUN: " << update_query);
+			validate(*con.Query(update_query));
+		} else {
+			update_query += " SET " + column_name + " = '" + get_simple_string(20) + "' WHERE " + column_name +
+			                " like '%" + get_simple_string(2) + "%';";
+			PRINT_INFO("RUN: " << update_query);
+			validate(*con.Query(update_query));
+		}
+	}
+
+	void delete_data(duckdb::Connection &con) {
+		auto column_index = rand() % table_info_.num_columns;
+		auto column_name = table_info_.column_names[column_index];
+		std::string delete_query = "DELETE FROM t WHERE ";
+		if (table_info_.column_types[column_index] == ColumnType::INTEGER) {
+			auto begin = rand() % 1000;
+			auto length = rand() % 100;
+			delete_query += column_name + " > " + std::to_string(begin) + " and " + column_name + " < " +
+			                std::to_string(begin + length) + ";";
+		} else {
+			delete_query += column_name + " like '%" + get_simple_string(2) + "%';";
+		}
+		PRINT_INFO("RUN: " << delete_query);
+		validate(*con.Query(delete_query));
+	}
+
+	void create_or_replace_table(duckdb::Connection &con) {
+		std::string create_table_query = "CREATE OR REPLACE TABLE t(";
+		for (int i = 0; i < table_info_.num_columns; i++) {
+			create_table_query += table_info_.column_names[i] + " " +
+			                      (table_info_.column_types[i] == ColumnType::INTEGER ? "INTEGER, " : "VARCHAR, ");
+		}
+		create_table_query += ");";
+		PRINT_INFO("RUN: " << create_table_query);
+		validate(*con.Query(create_table_query));
+	}
+
+	void toggle_skip_checkpoints_on_commit(duckdb::Connection &con, duckdb::DBConfig &config) {
+		skip_checkpoint_on_commit_ = !skip_checkpoint_on_commit_;
+		PRINT_INFO("Setting skip commit=" << skip_checkpoint_on_commit_);
+		config.options.set_variables["debug_skip_checkpoint_on_commit"] = duckdb::Value(skip_checkpoint_on_commit_);
+	}
+
+	void compute_checksum(duckdb::Connection &con) {
+		if (checksum_query_.empty()) {
+			checksum_query_ = "WITH row_hashes AS (SELECT hash(ROW(";
+			for (const auto &column_name : table_info_.column_names) {
+				checksum_query_ += column_name + ", ";
+			}
+			checksum_query_ += ")) AS row_hash FROM t) SELECT bit_xor(row_hash) FROM row_hashes;";
+		}
+		PRINT_INFO("RUN: " << checksum_query_);
+		auto checksum_query_result = con.Query(checksum_query_);
+		validate(*checksum_query_result);
+		expected_checksum_ = checksum_query_result->GetValue(0, 0).ToString();
+	}
+
+	void verify_checksum(duckdb::Connection &con) {
+		if (expected_checksum_.empty()) {
+			return;
+		}
+		auto checksum = con.Query(checksum_query_);
+		validate(*checksum);
+		REQUIRE(checksum->GetValue(0, 0).ToString() == expected_checksum_);
+	}
+
+	void start_test(int num_actions) {
+		std::map<double, ActionType> pct_to_action = {{0.1, ActionType::TOGGLE_SKIP_CHECKPOINTS_ON_COMMIT},
+		                                              {0.3, ActionType::LARGE_WRITE},
+		                                              {0.5, ActionType::SMALL_WRITE},
+		                                              {0.7, ActionType::UPDATE},
+		                                              {0.85, ActionType::DELETE},
+		                                              {1.0, ActionType::LARGE_WRITE_WITH_FAULT}};
+
+		std::vector<ActionType> actions = {};
+		actions.push_back(ActionType::RESET_TABLE);
+		for (int i = 0; i < num_actions; i++) {
+			double selection = (rand() % 100) / 100.0;
+			for (const auto &prob_type : pct_to_action) {
+				auto prob = prob_type.first;
+				auto type = prob_type.second;
+				if (selection > prob) {
+					continue;
+				}
+				actions.push_back(type);
+				break;
+			}
+		}
+
+		std::string file_path = "/tmp/pig.db";
+		cleanup_db_file(file_path);
+		duckdb::DBConfig config;
+		
+		for (const auto &action : actions) {
+            FaultInjectionFileSystem *raw_fs = new LazyFlushFileSystem();
+			config.file_system =
+			    duckdb::make_uniq<duckdb::VirtualFileSystem>(duckdb::unique_ptr<FaultInjectionFileSystem>(raw_fs));
+
+			duckdb::DuckDB db("/tmp/pig.db", &config);
+			duckdb::Connection con(db);
+			verify_checksum(con);
+			switch (action) {
+			case ActionType::TOGGLE_SKIP_CHECKPOINTS_ON_COMMIT:
+				toggle_skip_checkpoints_on_commit(con, config);
+				break;
+			case ActionType::SMALL_WRITE:
+				small_write(con);
+				break;
+			case ActionType::LARGE_WRITE:
+				large_write(con);
+				break;
+			case ActionType::UPDATE:
+				update(con);
+				break;
+			case ActionType::DELETE:
+				delete_data(con);
+				break;
+			case ActionType::RESET_TABLE:
+				create_or_replace_table(con);
+				break;
+			case ActionType::LARGE_WRITE_WITH_FAULT:
+			    PRINT_INFO("RUN: large write with fault");
+				raw_fs->InjectFault(LazyFlushFileSystem::FaultInjectionSite::FSYNC);
+				/*
+				int offset = rand() % 1000000;
+				std::string large_insert = "INSERT INTO t (col0) SELECT * FROM RANGE(" + std::to_string(offset) + ", " +
+				                           std::to_string(offset + table_info_.large_write_size*10) + ")";
+
+				PRINT_INFO("RUN with fault: " << large_insert);
+				validate(*con.Query(large_insert), "TransactionContext Error: Failed to commit: Injected fault");
+				*/
+				large_write(con);
+				break;
+			}
+			if (action != ActionType::LARGE_WRITE_WITH_FAULT) {
+				compute_checksum(con);
+			} 
+		}
+	}
+
+private:
+	TableInfo table_info_;
+	bool skip_checkpoint_on_commit_;
+	std::string checksum_query_;
+	std::string expected_checksum_;
+};
+
+TEST_CASE("fuzzed storage test with simple schema", "storage") {
+	TableInfo table_info(1, {"i"}, {ColumnType::INTEGER}, 100, 100000);
+	SimpleTestSchema schema(table_info);
+	schema.start_test(/*num_actions=*/100);
+}
+
+TEST_CASE("fuzzed storage test with wide column table", "storage") {
+	TableInfo table_info(200, {}, {}, 20, 100);
+	for (int i = 0; i < 200; i++) {
+		table_info.column_names.push_back("col" + std::to_string(i));
+		if (i % 3 == 0) {
+			table_info.column_types.push_back(ColumnType::VARCHAR);
+		} else {
+			table_info.column_types.push_back(ColumnType::INTEGER);
+		}
+	}
+	SimpleTestSchema schema(table_info);
+	schema.start_test(/*num_actions=*/100);
+}
 
 TEST_CASE("fuzzed storage test", "storage") {
 	// DuckDB Configurations
@@ -393,16 +640,15 @@ TEST_CASE("fuzzed storage test", "storage") {
 	for (const auto &action : actions) {
 		// Note: the injected file system has to be reset each time. DuckDB construction seems to be std::move'ing them
 
-        /*
+		/*
 		LazyFlushFileSystem *raw_fs = new LazyFlushFileSystem();
 		config.file_system =
 		    duckdb::make_uniq<duckdb::VirtualFileSystem>(duckdb::unique_ptr<LazyFlushFileSystem>(raw_fs));
-         */
+		 */
 
 		FaultInjectionFileSystem *raw_fs = new FaultInjectionFileSystem();
 		config.file_system =
 		    duckdb::make_uniq<duckdb::VirtualFileSystem>(duckdb::unique_ptr<FaultInjectionFileSystem>(raw_fs));
-
 
 		duckdb::DuckDB db(file_path, &config);
 		duckdb::Connection con(db);
@@ -491,3 +737,112 @@ TEST_CASE("fuzzed storage test", "storage") {
 		}
 	}
 }
+
+/*
+TEST_CASE("wide column table", "storage") {
+    cleanup_db_file("/tmp/pig.db");
+
+    duckdb::DBConfig config;
+    duckdb::DuckDB db("/tmp/pig.db", &config);
+    duckdb::Connection con(db);
+
+    int num_columns = rand() % 100 + 100;
+    std::string create_table_query = "CREATE TABLE IF NOT EXISTS t(";
+    for (int i = 0; i < num_columns; i++) {
+        if (i % 2 == 0) {
+            create_table_query += "col" + std::to_string(i) + " INTEGER, ";
+        } else {
+            create_table_query += "col" + std::to_string(i) + " VARCHAR, ";
+        }
+    }
+    create_table_query += ")";
+    validate(*con.Query(create_table_query));
+
+    enum ActionType {
+        INSERT = 0,
+        UPDATE = 1,
+        DELETE = 2,
+        SELECT = 3,
+    };
+
+    std::vector<ActionType> actions = {ActionType::INSERT, ActionType::UPDATE, ActionType::DELETE, ActionType::SELECT};
+
+    auto get_random_string = [](int length) {
+        std::string result;
+        result.reserve(length);
+
+        // Use a much larger character set for higher entropy
+        // Includes: uppercase, lowercase, digits, and special characters
+        const char charset[] =
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+-=[]{}|;:,./<>?~`";
+        const int charset_size = sizeof(charset) - 1; // -1 to exclude null terminator
+
+        for (int i = 0; i < length; i++) {
+            result += charset[rand() % charset_size];
+        }
+        return result;
+    };
+
+    auto get_simple_string = [](int length) {
+        std::string result;
+        result.reserve(length);
+        for (int i = 0; i < length; i++) {
+            result += 'a' + rand() % 26;
+        }
+        return result;
+    };
+
+    std::set<std::string> inserted_columns;
+    for (int i = 0; i < 1000; i++) {
+        auto action = actions[rand() % actions.size()];
+        switch (action) {
+        case ActionType::INSERT: {
+            int num_rows = rand() % 100 + 1;
+            for (int j = 0; j < num_rows; j++) {
+                std::string insert_query = "INSERT INTO t VALUES (";
+                for (int i = 0; i < num_columns; i++) {
+                    auto column_name = "col" + std::to_string(i);
+                    if (i % 2 == 0) {
+                        auto value = std::to_string(rand() % 1000);
+                        insert_query += value + ", ";
+                        inserted_columns.insert(column_name + " = " + std::to_string(rand() % 1000));
+                    } else {
+                        auto value = get_simple_string(50);
+                        insert_query += "'" + value + "', ";
+                        inserted_columns.insert(column_name += " = '" + value + "'");
+                    }
+                }
+                insert_query += ")";
+                validate(*con.Query(insert_query));
+            }
+            break;
+        }
+        case ActionType::UPDATE: {
+            std::string update_query =
+                "UPDATE t SET col" + std::to_string(rand() % num_columns) + " = " + std::to_string(rand() % 1000000);
+            validate(*con.Query(update_query));
+            break;
+        }
+        case ActionType::DELETE: {
+            // Only delete if there are columns to delete
+            if (inserted_columns.empty()) {
+                break;
+            }
+            // Get a random column that has been inserted
+            auto it = inserted_columns.begin();
+            std::advance(it, rand() % inserted_columns.size());
+            auto column_value = *it;
+            inserted_columns.erase(it);
+
+            std::string delete_query = "DELETE FROM t";
+            delete_query += " WHERE " + column_value + ";";
+            PRINT_INFO("RUN: " << delete_query);
+            validate(*con.Query(delete_query));
+            break;
+        }
+        case ActionType::SELECT: {
+            break;
+        }
+        }
+    }
+}*/
