@@ -1018,8 +1018,11 @@ OrderByExpressions <- List(OrderByExpression) / OrderByAll
 OrderByAll <- 'ALL' DescOrAsc? NullsFirstOrLast?
 
 LimitClause <- 'LIMIT' LimitValue
-OffsetClause <- 'OFFSET' LimitValue
+OffsetClause <- 'OFFSET' OffsetValue
 LimitValue <- 'ALL' / (NumberLiteral 'PERCENT') / (Expression '%'?)
+OffsetValue <- Expression RowOrRows?
+RowOrRows <- 'ROW' / 'ROWS'
+
 
 AliasedExpression <- (ColId ':' Expression) / (Expression 'AS' ColLabelOrString) / (Expression Identifier?)
 
