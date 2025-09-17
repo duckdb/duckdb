@@ -3031,6 +3031,7 @@ bool ShellState::SetupPager() {
 		return false;
 	}
 
+#ifndef SQLITE_OMIT_POPEN
 	bool should_use_pager = false;
 	switch (pager_mode) {
 	case PagerMode::OFF:
@@ -3039,24 +3040,26 @@ bool ShellState::SetupPager() {
 	case PagerMode::ON:
 		should_use_pager = true;
 		break;
-	case PagerMode::AUTO:
-		// Auto mode: use pager if system pager is available
-		should_use_pager = !pager_command.empty();
-		break;
 	}
 
 	if (!should_use_pager) {
 		return false;
 	}
 
-#ifndef SQLITE_OMIT_POPEN
 	string pager_cmd = pager_command;
 	if (pager_cmd.empty()) {
 		pager_cmd = getSystemPager();
+		if (pager_cmd.empty()) {
+			utf8_printf(stderr, "Warning: No pager configured. Set DUCKDB_PAGER or PAGER environment variable\n"
+			                    "or supply a command like `.pager 'less -SR'` or `.pager 'pspg --csv'`.\n");
+			return false;
+		}
 	}
 
 	out = popen(pager_cmd.c_str(), "w");
 	if (out == nullptr) {
+		utf8_printf(stderr, "Error: Failed to start pager process: %s. Output will be sent to stdout.\n",
+		            strerror(errno));
 		out = stdout;
 		return false;
 	}
