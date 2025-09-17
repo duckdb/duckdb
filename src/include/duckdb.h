@@ -54,7 +54,7 @@ extern "C" {
 // Enums
 //===--------------------------------------------------------------------===//
 
-//! WARNING: The numbers of these enums should not be changed, as changing the numbers breaks ABI compatibility.
+//! WARNING: The numbers of these enums should not be changed, as changing the numbers breaks API compatibility.
 //! Always add enums at the END of the enum
 
 //! An enum over DuckDB's internal types.
