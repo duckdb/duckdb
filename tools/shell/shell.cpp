@@ -459,7 +459,7 @@ static bool HighlightResults() {
 /*
 ** Pager configuration
 */
-enum class PagerMode { OFF, ON, AUTO };
+enum class PagerMode { OFF, ON };
 static PagerMode pager_mode = PagerMode::OFF;
 static string pager_command = "";
 
