@@ -814,7 +814,8 @@ Generated <- 'GENERATED' AlwaysOrByDefault?
 AlwaysOrByDefault <- 'ALWAYS' / ('BY' 'DEFAULT')
 GeneratedColumnType <- 'VIRTUAL' / 'STORED'
 
-CommitAction <- 'ON' 'COMMIT' 'PRESERVE' 'ROWS'
+CommitAction <- 'ON' 'COMMIT' PreserveOrDelete
+PreserveOrDelete <- ('PRESERVE' / 'DELETE') 'ROWS'
 
 CreateIndexStmt <- Unique? 'INDEX' IfNotExists? IndexName? 'ON' BaseTableName IndexType? Parens(List(IndexElement)) WithList?
 
@@ -1105,9 +1106,10 @@ SchemaOrData <- 'SCHEMA' / 'DATA'
 AlterStatement <- 'ALTER' AlterOptions
 
 
-AlterOptions <- AlterTableStmt / AlterViewStmt / AlterSequenceStmt / AlterDatabaseStmt
+AlterOptions <- AlterTableStmt / AlterViewStmt / AlterSequenceStmt / AlterDatabaseStmt / AlterSchemaStmt
 
 AlterTableStmt <- 'TABLE' IfExists? BaseTableName AlterTableOptions
+AlterSchemaStmt <- 'SCHEMA' IfExists? QualifiedName RenameAlter
 
 AlterTableOptions <- AddColumn / DropColumn / AlterColumn / AddConstraint / ChangeNullability / RenameColumn / RenameAlter / SetPartitionedBy / ResetPartitionedBy / SetSortedBy / ResetSortedBy
 
@@ -1120,7 +1122,7 @@ NestedColumnName <- (Identifier '.')* ColumnName
 RenameAlter <- 'RENAME' 'TO' Identifier
 SetPartitionedBy <- 'SET' 'PARTITIONED' 'BY' Parens(List(Expression))
 ResetPartitionedBy <- 'RESET' 'PARTITIONED' 'BY'
-SetSortedBy <- 'SET' 'SORTED' 'BY' OrderByExpressions
+SetSortedBy <- 'SET' 'SORTED' 'BY' Parens(OrderByExpressions)
 ResetSortedBy <- 'RESET' 'SORTED' 'BY'
 
 AlterColumnEntry <- AddOrDropDefault / ChangeNullability / AlterType
