@@ -46,7 +46,8 @@ env:
 jobs:
   xcode-debug:
     name: OSX Debug
-    runs-on: macos-14
+    runs-on: [macos-latest self-hosted]
+
 
     env:
       TREAT_WARNINGS_AS_ERRORS: 1
@@ -102,7 +103,7 @@ jobs:
   xcode-release:
     # Builds binaries for osx_arm64 and osx_amd64
     name: OSX Release
-    runs-on: macos-14
+    runs-on: [macos-latest self-hosted]
     needs: xcode-debug
     env:
       EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
