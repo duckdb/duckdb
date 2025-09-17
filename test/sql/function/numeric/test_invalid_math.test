@@ -16,7 +16,7 @@ SELECT ln(0);
 ----
 
 statement error
-SELECl ln(-1);
+SELECT ln(-1);
 ----
 
 statement error
