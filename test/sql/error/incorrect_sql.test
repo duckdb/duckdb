@@ -6,14 +6,17 @@
 statement error
 SELEC 42;
 ----
+Parser Error: syntax error at or near "SELEC"
 
 statement error
 SELEC 42, 'thisisareallylongstringloremipsumblablathisisareallylongstringloremipsumblablalthisisareallylongstringloremipsumblablalthisisareallylongstringloremipsumblablal';
 ----
+Parser Error: syntax error at or near "SELEC"
 
 statement error
 SELEC 42, '🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆';
 ----
+Parser Error: syntax error at or near "SELEC"
 
 # unrecognized column
 statement error
@@ -69,6 +72,8 @@ SELECT 42;
 statement error
 SELECT 42; SELEC 42;
 ----
+Parser Error: syntax error at or near "SELEC"
+
 
 # non-existent table
 statement error

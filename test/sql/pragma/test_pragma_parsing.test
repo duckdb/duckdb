@@ -6,11 +6,14 @@
 statement error
 PRAG
 ----
+Parser Error: syntax error at or near "PRAG"
 
 # Pragma without a keyword
 statement error
 PRAGMA 
 ----
+Parser Error: syntax error at or near ";"
+
 
 # Unknown pragma error
 statement error
