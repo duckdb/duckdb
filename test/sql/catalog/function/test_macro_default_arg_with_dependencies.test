@@ -67,10 +67,8 @@ Invalid default value
 
 # to test the dependencies we create this macro instead
 statement ok
-create macro my_macro2(i := 42) as (
-	select min(a) + i from integers
-);
-
+create macro my_macro2(i := 42) as
+    i + (select min(a) from integers);
 
 statement ok
 insert into integers values (5), (10), (13)
