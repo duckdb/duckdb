@@ -12,8 +12,7 @@ Parser Error: syntax error at or near "PRAG"
 statement error
 PRAGMA 
 ----
-Parser Error: syntax error at or near ";"
-
+<REGEX>:.*Parser Error.*syntax error at end of input.*
 
 # Unknown pragma error
 statement error

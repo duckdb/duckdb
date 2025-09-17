@@ -266,7 +266,7 @@ SELECT *
       AS p
   ORDER BY EMPID;
 ----
-Parser Error:syntax error at or near ")"
+Parser Error: syntax error at or near ")"
 
 # star
 statement error

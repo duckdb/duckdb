@@ -84,7 +84,7 @@ NULL
 statement error
 SELECT 2 ^ ANY(SELECT * FROM integers)
 ----
-Parser Error:ANY and ALL operators require one of =,<>,>,<,>=,<= comparisons!
+Parser Error: ANY and ALL operators require one of =,<>,>,<,>=,<= comparisons!
 
 statement error
 SELECT 2 ^ ANY([1, 2, 3])
