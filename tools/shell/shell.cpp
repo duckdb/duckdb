@@ -88,6 +88,7 @@ typedef sqlite3_int64 i64;
 typedef sqlite3_uint64 u64;
 typedef unsigned char u8;
 #include <ctype.h>
+#include <errno.h>
 
 #if !defined(_WIN32) && !defined(WIN32)
 #include <signal.h>
@@ -5190,6 +5191,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 	*/
 #ifdef SIGINT
 	signal(SIGINT, interrupt_handler);
+	signal(SIGPIPE, SIG_IGN);
 #elif (defined(_WIN32) || defined(WIN32)) && !defined(_WIN32_WCE)
 	SetConsoleCtrlHandler(ConsoleCtrlHandler, TRUE);
 #endif
