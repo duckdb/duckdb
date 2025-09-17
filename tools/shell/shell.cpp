@@ -4458,14 +4458,9 @@ MetadataResult SetPager(ShellState &state, const char **azArg, idx_t nArg) {
 		case PagerMode::ON:
 			mode_str = "on";
 			break;
-		case PagerMode::AUTO:
-			mode_str = "auto";
-			break;
 		}
 		raw_printf(state.out, "current pager mode: %s\n", mode_str);
-		if (pager_mode != PagerMode::OFF) {
-			raw_printf(state.out, "pager command: %s\n", pager_command.c_str());
-		}
+
 		return MetadataResult::SUCCESS;
 	}
 
@@ -4473,18 +4468,22 @@ MetadataResult SetPager(ShellState &state, const char **azArg, idx_t nArg) {
 		return MetadataResult::PRINT_USAGE;
 	}
 
-	const char *arg = azArg[1];
-	if (strcmp(arg, "off") == 0) {
+	std::string arg = azArg[1];
+	arg = trim(arg);
+	if (arg.empty() || arg == "off") {
 		pager_mode = PagerMode::OFF;
-	} else if (strcmp(arg, "on") == 0) {
-		pager_mode = PagerMode::ON;
+	} else if (arg == "on") {
 		if (pager_command.empty()) {
 			pager_command = getSystemPager();
 		}
-	} else if (strcmp(arg, "auto") == 0) {
-		pager_mode = PagerMode::AUTO;
 		if (pager_command.empty()) {
-			pager_command = getSystemPager();
+			utf8_printf(stderr, "Warning: No pager configured. Set DUCKDB_PAGER or PAGER environment variable\n"
+			                    "or supply a command like `.pager 'less -SR'` or `.pager 'pspg --csv'`.\n");
+			// Keep pager off since no command available
+			pager_mode = PagerMode::OFF;
+		} else {
+			// Only turn on if we have a command
+			pager_mode = PagerMode::ON;
 		}
 	} else {
 		// Custom pager command
