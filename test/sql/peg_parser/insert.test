@@ -1,4 +1,4 @@
-# name: test/sql/peg_parser/analyze_vacuum.test
+# name: test/sql/peg_parser/insert.test
 # description: Test analyze and vacuum statements in peg parser
 # group: [peg_parser]
 
