@@ -12,78 +12,95 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Subplan Signature/Info
 //===--------------------------------------------------------------------===//
+struct PlanSignatureCreateState {
+	PlanSignatureCreateState() : stream(DEFAULT_BLOCK_ALLOC_SIZE), serializer(stream) {
+	}
+
+	void Reset() {
+		to_canonical.clear();
+		from_canonical.clear();
+		table_indices.clear();
+		expression_info.clear();
+	}
+
+	MemoryStream stream;
+	BinarySerializer serializer;
+
+	unordered_map<idx_t, idx_t> to_canonical;
+	unordered_map<idx_t, idx_t> from_canonical;
+
+	vector<idx_t> table_indices;
+	vector<pair<string, optional_idx>> expression_info;
+};
+
 class PlanSignature {
 private:
-	PlanSignature(MemoryStream &&stream_p, idx_t operator_count_p,
-	              vector<reference<PlanSignature>> &&child_signatures_p)
-	    : stream(std::move(stream_p)),
-	      signature(char_ptr_cast(stream.GetData()), NumericCast<uint32_t>(stream.GetPosition())),
-	      signature_hash(Hash(signature.c_str(), signature.size())), operator_count(operator_count_p),
-	      child_signatures(std::move(child_signatures_p)) {
+	PlanSignature(const MemoryStream &stream_p, idx_t offset_p, idx_t length_p,
+	              vector<reference<PlanSignature>> &&child_signatures_p, idx_t operator_count_p)
+	    : stream(stream_p), offset(offset_p), length(length_p),
+	      signature_hash(Hash(stream_p.GetData() + offset, length)), child_signatures(std::move(child_signatures_p)),
+	      operator_count(operator_count_p) {
 	}
 
 public:
-	static unique_ptr<PlanSignature> Create(LogicalOperator &op, vector<reference<PlanSignature>> &&child_signatures,
+	static unique_ptr<PlanSignature> Create(PlanSignatureCreateState &state, LogicalOperator &op,
+	                                        vector<reference<PlanSignature>> &&child_signatures,
 	                                        const idx_t operator_count) {
+		state.Reset();
 		if (!OperatorIsSupported(op)) {
 			return nullptr;
 		}
 
 		// Construct maps for converting column bindings to canonical representation and back
 		static constexpr idx_t CANONICAL_TABLE_INDEX_OFFSET = 10000000000000;
-		unordered_map<idx_t, idx_t> to_canonical;
-		unordered_map<idx_t, idx_t> from_canonical;
 		for (const auto &child_op : op.children) {
 			for (const auto &child_cb : child_op->GetColumnBindings()) {
 				const auto &original = child_cb.table_index;
-				auto it = to_canonical.find(original);
-				if (it != to_canonical.end()) {
+				auto it = state.to_canonical.find(original);
+				if (it != state.to_canonical.end()) {
 					continue; // We've seen this table index before
 				}
-				const auto canonical = CANONICAL_TABLE_INDEX_OFFSET + to_canonical.size();
-				to_canonical[original] = canonical;
-				from_canonical[canonical] = original;
+				const auto canonical = CANONICAL_TABLE_INDEX_OFFSET + state.to_canonical.size();
+				state.to_canonical[original] = canonical;
+				state.from_canonical[canonical] = original;
 			}
 		}
 
-		MemoryStream stream;
-		BinarySerializer serializer(stream);
-
 		// Convert operators to canonical table indices
-		vector<idx_t> table_indices;
-		ConvertTableIndices<true>(op, table_indices);
+		ConvertTableIndices<true>(op, state.table_indices);
 
 		// Convert expressions to canonical (table indices, aliases, query locations)
-		vector<pair<string, optional_idx>> expression_info;
-		bool can_materialize = ConvertExpressions(op, to_canonical, expression_info);
+		bool can_materialize = ConvertExpressions(op, state.to_canonical, state.expression_info);
 
 		// Temporarily move children here as we don't want to serialize them
 		auto children = std::move(op.children);
 		op.children.clear();
 
-		// TODO: to allow for better detection of equivalent plans, we should:
+		// TODO: to allow for better detection of equivalent plans, we could:
 		//  1. Sort the children of operators
 		//  2. Sort the expressions of operators
 
 		// Serialize canonical representation of operator
-		serializer.Begin();
-		try {
-			op.Serialize(serializer);
+		const auto offset = state.stream.GetPosition();
+		state.serializer.Begin();
+		try { // Operators will throw if they cannot serialize, so we need to try/catch here
+			op.Serialize(state.serializer);
 		} catch (std::exception &) {
 			can_materialize = false;
 		}
-		serializer.End();
+		state.serializer.End();
+		const auto length = state.stream.GetPosition() - offset;
 
 		// Convert back from canonical
-		ConvertTableIndices<false>(op, table_indices);
-		ConvertExpressions(op, from_canonical, expression_info);
+		ConvertTableIndices<false>(op, state.table_indices);
+		ConvertExpressions(op, state.from_canonical, state.expression_info);
 
 		// Restore children
 		op.children = std::move(children);
 
 		if (can_materialize) {
 			return unique_ptr<PlanSignature>(
-			    new PlanSignature(std::move(stream), operator_count, std::move(child_signatures)));
+			    new PlanSignature(state.stream, offset, length, std::move(child_signatures), operator_count));
 		}
 		return nullptr;
 	}
@@ -101,7 +118,7 @@ public:
 	}
 
 	bool Equals(const PlanSignature &other) const {
-		if (this->signature != other.signature) {
+		if (this->GetSignature() != other.GetSignature()) {
 			return false;
 		}
 		if (this->child_signatures.size() != other.child_signatures.size()) {
@@ -116,6 +133,10 @@ public:
 	}
 
 private:
+	String GetSignature() const {
+		return String(char_ptr_cast(stream.GetData() + offset), NumericCast<uint32_t>(length));
+	}
+
 	static bool OperatorIsSupported(const LogicalOperator &op) {
 		switch (op.type) {
 		case LogicalOperatorType::LOGICAL_PROJECTION:
@@ -278,11 +299,14 @@ private:
 	}
 
 private:
-	const MemoryStream stream;
-	const String signature;
+	const MemoryStream &stream;
+	const idx_t offset;
+	const idx_t length;
+
 	const hash_t signature_hash;
-	const idx_t operator_count;
+
 	const vector<reference<PlanSignature>> child_signatures;
+	const idx_t operator_count;
 };
 
 struct PlanSignatureHash {
@@ -342,7 +366,12 @@ private:
 	};
 
 public:
-	subplan_map_t FindCommonSubplans(unique_ptr<LogicalOperator> &root) {
+	subplan_map_t FindCommonSubplans(reference<unique_ptr<LogicalOperator>> root) {
+		// Find first operator with more than 1 child
+		while (root.get()->children.size() == 1) {
+			root = root.get()->children[0];
+		}
+
 		// Recurse through query plan using stack-based recursion
 		vector<StackNode> stack;
 		stack.emplace_back(root);
@@ -359,7 +388,7 @@ public:
 				continue;
 			}
 
-			if (!RefersToSameObject(current.op, root)) {
+			if (!RefersToSameObject(current.op, root.get())) {
 				// We have all child information for this operator now, compute signature
 				auto &signature = operator_infos.find(current.op)->second.signature;
 				signature = CreatePlanSignature(current.op);
@@ -424,7 +453,7 @@ private:
 			child_signatures.emplace_back(*it->second.signature);
 			operator_count += it->second.signature->OperatorCount();
 		}
-		return PlanSignature::Create(*op, std::move(child_signatures), operator_count);
+		return PlanSignature::Create(state, *op, std::move(child_signatures), operator_count);
 	}
 
 	unique_ptr<LogicalOperator> &LowestCommonAncestor(reference<unique_ptr<LogicalOperator>> a,
@@ -462,6 +491,8 @@ private:
 	reference_map_t<unique_ptr<LogicalOperator>, OperatorInfo> operator_infos;
 	//! Mapping from subplan signature to subplan information
 	subplan_map_t subplans;
+	//! State for creating PlanSignature with reusable data structures
+	PlanSignatureCreateState state;
 };
 
 //===--------------------------------------------------------------------===//
