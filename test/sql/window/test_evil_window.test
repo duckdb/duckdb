@@ -77,3 +77,11 @@ personnel	100.000000
 sales	34.246575
 sales	100.000000
 
+statement ok
+CREATE TABLE empty_unsorted(c0 VARCHAR);
+
+statement ok
+SELECT * 
+FROM empty_unsorted 
+WHERE(NOT(false = ANY([]))) 
+ORDER BY(~((SUM(true) OVER() - SUM(true) OVER())::INT)) ASC;

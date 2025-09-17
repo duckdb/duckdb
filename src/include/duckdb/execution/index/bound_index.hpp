@@ -155,7 +155,8 @@ public:
 	virtual string GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index,
 	                                             DataChunk &input) = 0;
 
-	void ApplyBufferedAppends(ColumnDataCollection &buffered_appends);
+	void ApplyBufferedAppends(const vector<LogicalType> &table_types, ColumnDataCollection &buffered_appends,
+	                          const vector<StorageIndex> &mapped_column_ids);
 
 protected:
 	//! Lock used for any changes to the index

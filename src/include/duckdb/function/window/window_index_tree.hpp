@@ -33,7 +33,7 @@ public:
 	                const idx_t count);
 	~WindowIndexTree() override = default;
 
-	unique_ptr<WindowAggregatorState> GetLocalState(ExecutionContext &context) override;
+	unique_ptr<LocalSinkState> GetLocalState(ExecutionContext &context) override;
 
 	//! Find the Nth index in the set of subframes
 	//! Returns {nth index, 0} or {nth offset, overflow}

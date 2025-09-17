@@ -15,9 +15,6 @@ statement ok
 CREATE TABLE t2 AS SELECT * FROM (VALUES (NULL)) tbl(c0);
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 PRAGMA explain_output = OPTIMIZED_ONLY;
 
 # this is statically false, but there are null values NOT in a filter, so we can't optimize it away

@@ -162,7 +162,9 @@ public:
 
 	//! Resize the actual buffer
 	void ResizeBuffer(BlockLock &, idx_t block_size, int64_t memory_delta);
-	BufferHandle Load(unique_ptr<FileBuffer> buffer = nullptr);
+
+	BufferHandle Load(QueryContext context, unique_ptr<FileBuffer> buffer = nullptr);
+
 	BufferHandle LoadFromBuffer(BlockLock &l, data_ptr_t data, unique_ptr<FileBuffer> reusable_buffer,
 	                            BufferPoolReservation reservation);
 	unique_ptr<FileBuffer> UnloadAndTakeBlock(BlockLock &);

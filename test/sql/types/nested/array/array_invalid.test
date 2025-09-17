@@ -11,57 +11,66 @@ PRAGMA verify_external
 statement error
 CREATE TABLE t1(a INT, b INT[0]);
 ----
+<REGEX>:.*Parser Error.*Arrays must have a size.*
 
 # Should not be able to create an array above limit
 # this is more than the postgres parser allows
 statement error
 CREATE TABLE t1(a INT, b INT[4294967299]);
 ----
-Parser Error: syntax error at or near "4294967299"
+<REGEX>:.*Parser Error.*syntax error at or near "4294967299".*
 
 # Should not be able to create an array above limit
 # this is more than what we allow
 statement error
 CREATE TABLE t1(a INT, b INT[2147483647]);
 ----
-Parser Error: Arrays must have a size of at most 100000
+<REGEX>:.*Parser Error.*Arrays must have a size of at most 100000.*
 
 # Should not be able to create an array with 0 elements
 statement error
 SELECT array_value();
 ----
+<REGEX>:.*Invalid Input Error.*array_value requires at least one argument.*
 
 # Should not be able to create an array with a negative number of elements
 statement error
 CREATE TABLE t1(a INT, b INT[-1]);
 ----
+<REGEX>:.*Parser Error.*syntax error at or near "-".*
 
 # Should not be able to create an array with a non-integer number of elements
 statement error
 CREATE TABLE t1(a INT, b INT[1.5]);
 ----
+<REGEX>:.*Parser Error.*syntax error at or near "1.5".*
 
 # Should not be able to create an array with a non-integer number of elements
 statement error
 CREATE TABLE t1(a INT, b INT['foobar']);
 ----
+<REGEX>:.*Parser Error.*syntax error at or near.*
 
 # Should not be able to cast array to 0 elements
 statement error
 SELECT ([1,2,3]::INTEGER[3])::INTEGER[0];
 ----
+<REGEX>:.*Parser Error.*Arrays must have a size of at least.*
 
 # Should not be able to cast array to a negative number of elements
 statement error
 SELECT ([1,2,3]::INTEGER[3])::INTEGER[-1];
 ----
+<REGEX>:.*Parser Error.*syntax error at or near "-".*
 
 # Should not be able to cast array to a non-integer number of elements
 statement error
 SELECT ([1,2,3]::INTEGER[3])::INTEGER[1.5];
 ----
+<REGEX>:.*Parser Error.*syntax error at or near "1.5".*
 
 # Should not be able to cast array to a non-integer number of elements
 statement error
 SELECT ([1,2,3]::INTEGER[3])::INTEGER['foobar'];
 ----
+<REGEX>:.*Parser Error.*syntax error at or near.*

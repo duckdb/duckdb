@@ -54,7 +54,6 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"disabled_compression_methods", {"RLE"}},
 	    {"disabled_optimizers", {"extension"}},
 	    {"debug_force_external", {Value(true)}},
-	    {"wal_encryption", {Value(false)}},
 	    {"old_implicit_casting", {Value(true)}},
 	    {"prefer_range_joins", {Value(true)}},
 	    {"allow_persistent_secrets", {Value(false)}},

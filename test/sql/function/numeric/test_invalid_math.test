@@ -2,9 +2,6 @@
 # description: Test invalid input for math functions
 # group: [numeric]
 
-statement ok
-PRAGMA enable_verification
-
 # cannot take log of negative number or zero
 statement error
 SELECTl log(0);

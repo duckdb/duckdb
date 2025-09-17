@@ -35,11 +35,7 @@
 #ifdef DUCKDB_STATIC_BUILD
 #define DUCKDB_EXTENSION_API
 #else
-#ifdef DUCKDB_BUILD_LOADABLE_EXTENSION
 #define DUCKDB_EXTENSION_API __declspec(dllexport)
-#else
-#define DUCKDB_EXTENSION_API
-#endif
 #endif
 #else
 #define DUCKDB_EXTENSION_API __attribute__((visibility("default")))
@@ -258,6 +254,9 @@ typedef uint32_t sel_t;
 //! The callback to destroy data, e.g.,
 //! bind data (if any), init data (if any), extra data for replacement scans (if any), etc.
 typedef void (*duckdb_delete_callback_t)(void *data);
+
+//! The callback to copy data, e.g., bind data (if any).
+typedef void *(*duckdb_copy_callback_t)(void *data);
 
 //! Used for threading, contains a task state.
 //! Must be destroyed with `duckdb_destroy_task_state`.
@@ -1804,6 +1803,53 @@ Returns the statement type of the statement to be executed
 * @return duckdb_statement_type value or DUCKDB_STATEMENT_TYPE_INVALID
 */
 DUCKDB_C_API duckdb_statement_type duckdb_prepared_statement_type(duckdb_prepared_statement statement);
+
+/*!
+Returns the number of columns present in a the result of the prepared statement. If any of the column types are invalid,
+the result will be 1.
+
+* @param prepared_statement The prepared statement.
+* @return The number of columns present in the result of the prepared statement.
+*/
+DUCKDB_C_API idx_t duckdb_prepared_statement_column_count(duckdb_prepared_statement prepared_statement);
+
+/*!
+Returns the name of the specified column of the result of the prepared_statement.
+The returned string should be freed using `duckdb_free`.
+
+Returns `nullptr` if the column is out of range.
+
+* @param prepared_statement The prepared statement.
+* @param col_idx The column index.
+* @return The column name of the specified column.
+*/
+DUCKDB_C_API const char *duckdb_prepared_statement_column_name(duckdb_prepared_statement prepared_statement,
+                                                               idx_t col_idx);
+
+/*!
+Returns the column type of the specified column of the result of the prepared_statement.
+
+Returns `DUCKDB_TYPE_INVALID` if the column is out of range.
+The return type of this call should be destroyed with `duckdb_destroy_logical_type`.
+
+* @param prepared_statement The prepared statement to fetch the column type from.
+* @param col_idx The column index.
+* @return The logical type of the specified column.
+*/
+DUCKDB_C_API duckdb_logical_type
+duckdb_prepared_statement_column_logical_type(duckdb_prepared_statement prepared_statement, idx_t col_idx);
+
+/*!
+Returns the column type of the specified column of the result of the prepared_statement.
+
+Returns `DUCKDB_TYPE_INVALID` if the column is out of range.
+
+* @param prepared_statement The prepared statement to fetch the column type from.
+* @param col_idx The column index.
+* @return The type of the specified column.
+*/
+DUCKDB_C_API duckdb_type duckdb_prepared_statement_column_type(duckdb_prepared_statement prepared_statement,
+                                                               idx_t col_idx);
 
 //===--------------------------------------------------------------------===//
 // Bind Values to Prepared Statements
@@ -3480,7 +3526,8 @@ DUCKDB_C_API void duckdb_scalar_function_set_bind(duckdb_scalar_function scalar_
 
 /*!
 Sets the user-provided bind data in the bind object of the scalar function.
-This object can be retrieved again during execution.
+The bind data object can be retrieved again during execution.
+In most case, you also need to set the copy-callback of your bind data via duckdb_scalar_function_set_bind_data_copy.
 
 * @param info The bind info of the scalar function.
 * @param bind_data The bind data object.
@@ -3488,6 +3535,14 @@ This object can be retrieved again during execution.
 */
 DUCKDB_C_API void duckdb_scalar_function_set_bind_data(duckdb_bind_info info, void *bind_data,
                                                        duckdb_delete_callback_t destroy);
+
+/*!
+Sets the copy-callback for the user-provided bind data in the bind object of the scalar function.
+
+* @param info The bind info of the scalar function.
+* @param copy The callback to copy the bind data (if any).
+*/
+DUCKDB_C_API void duckdb_scalar_function_set_bind_data_copy(duckdb_bind_info info, duckdb_copy_callback_t copy);
 
 /*!
 Report that an error has occurred while calling bind on a scalar function.
@@ -4258,6 +4313,25 @@ Note that the object must be destroyed with `duckdb_appender_destroy`.
 DUCKDB_C_API duckdb_state duckdb_appender_create_ext(duckdb_connection connection, const char *catalog,
                                                      const char *schema, const char *table,
                                                      duckdb_appender *out_appender);
+
+/*!
+Creates an appender object that executes the given query with any data appended to it.
+
+Note that the object must be destroyed with `duckdb_appender_destroy`.
+
+* @param connection The connection context to create the appender in.
+* @param query The query to execute, can be an INSERT, DELETE, UPDATE or MERGE INTO statement.
+* @param column_count The number of columns to append.
+* @param types The types of the columns to append.
+* @param table_name (optionally) the table name used to refer to the appended data, defaults to "appended_data".
+* @param column_names (optionally) the list of column names, defaults to "col1", "col2", ...
+* @param out_appender The resulting appender object.
+* @return `DuckDBSuccess` on success or `DuckDBError` on failure.
+*/
+DUCKDB_C_API duckdb_state duckdb_appender_create_query(duckdb_connection connection, const char *query,
+                                                       idx_t column_count, duckdb_logical_type *types,
+                                                       const char *table_name, const char **column_names,
+                                                       duckdb_appender *out_appender);
 
 /*!
 Returns the number of columns that belong to the appender.

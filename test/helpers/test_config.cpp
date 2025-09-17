@@ -30,6 +30,7 @@ static const TestConfigOption test_config_options[] = {
     {"force_restart", "Force restart the database between runs", LogicalType::BOOLEAN, nullptr},
     {"summarize_failures", "Print a summary of all test failures after running", LogicalType::BOOLEAN, nullptr},
     {"test_memory_leaks", "Run memory leak tests", LogicalType::BOOLEAN, nullptr},
+    {"storage_fuzzer", "Run storage fuzzer tests", LogicalType::BOOLEAN, nullptr},
     {"verify_vector", "Run vector verification for a specific vector type", LogicalType::VARCHAR, nullptr},
     {"debug_initialize", "Initialize buffers with all 0 or all 1", LogicalType::VARCHAR, nullptr},
     {"autoloading", "Loading strategy for extensions not bundled in", LogicalType::VARCHAR, nullptr},
@@ -38,6 +39,9 @@ static const TestConfigOption test_config_options[] = {
     {"on_init", "SQL statements to execute on init", LogicalType::VARCHAR, nullptr},
     {"on_load", "SQL statements to execute on explicit load", LogicalType::VARCHAR, nullptr},
     {"on_new_connection", "SQL statements to execute on connection", LogicalType::VARCHAR, nullptr},
+    {"test_env", "The test variables",
+     LogicalType::LIST(LogicalType::STRUCT({{"env_name", LogicalType::VARCHAR}, {"env_value", LogicalType::VARCHAR}})),
+     nullptr},
     {"skip_tests", "Tests to be skipped",
      LogicalType::LIST(
          LogicalType::STRUCT({{"reason", LogicalType::VARCHAR}, {"paths", LogicalType::LIST(LogicalType::VARCHAR)}})),
@@ -49,6 +53,8 @@ static const TestConfigOption test_config_options[] = {
     {"statically_loaded_extensions", "Extensions to be loaded (from the statically available one)",
      LogicalType::LIST(LogicalType::VARCHAR), nullptr},
     {"storage_version", "Database storage version to use by default", LogicalType::VARCHAR, nullptr},
+    {"data_location", "Directory where static test files are read (defaults to `data/`)", LogicalType::VARCHAR,
+     nullptr},
     {nullptr, nullptr, LogicalType::INVALID, nullptr},
 };
 
@@ -192,6 +198,15 @@ bool TestConfiguration::ShouldSkipTest(const string &test_name) {
 	return tests_to_be_skipped.count(test_name);
 }
 
+string TestConfiguration::DataLocation() {
+	string res = GetOptionOrDefault("data_location", string("data/"));
+	// Force DataLocation to end with a '/'
+	if (res.back() != '/') {
+		res += "/";
+	}
+	return res;
+}
+
 string TestConfiguration::OnInitCommand() {
 	return GetOptionOrDefault("on_init", string());
 }
@@ -323,6 +338,8 @@ void TestConfiguration::ProcessPath(string &path, const string &test_name) {
 
 	auto base_test_name = StringUtil::Replace(test_name, "/", "_");
 	path = StringUtil::Replace(path, "{BASE_TEST_NAME}", base_test_name);
+	path = StringUtil::Replace(path, "__TEST_DIR__", TestDirectoryPath());
+	path = StringUtil::Replace(path, "__WORKING_DIRECTORY__", FileSystem::GetWorkingDirectory());
 }
 
 template <class T, class VAL_T>
@@ -366,6 +383,10 @@ bool TestConfiguration::GetTestMemoryLeaks() {
 	return GetOptionOrDefault("test_memory_leaks", false);
 }
 
+bool TestConfiguration::RunStorageFuzzer() {
+	return GetOptionOrDefault("storage_fuzzer", false);
+}
+
 bool TestConfiguration::GetSummarizeFailures() {
 	return GetOptionOrDefault("summarize_failures", false);
 }
@@ -376,6 +397,23 @@ bool TestConfiguration::GetSkipCompiledTests() {
 
 string TestConfiguration::GetStorageVersion() {
 	return GetOptionOrDefault("storage_version", string());
+}
+
+string TestConfiguration::GetTestEnv(const string &key, const string &default_value) {
+	if (test_env.empty() && options.find("test_env") != options.end()) {
+		auto entry = options["test_env"];
+		auto list_children = ListValue::GetChildren(entry);
+		for (const auto &value : list_children) {
+			auto &struct_children = StructValue::GetChildren(value);
+			auto &env = StringValue::Get(struct_children[0]);
+			auto &env_value = StringValue::Get(struct_children[1]);
+			test_env[env] = env_value;
+		}
+	}
+	if (test_env.find(key) == test_env.end()) {
+		return default_value;
+	}
+	return test_env[key];
 }
 
 DebugVectorVerification TestConfiguration::GetVectorVerification() {
@@ -399,6 +437,11 @@ bool TestConfiguration::TestForceReload() {
 bool TestConfiguration::TestMemoryLeaks() {
 	auto &test_config = TestConfiguration::Get();
 	return test_config.GetTestMemoryLeaks();
+}
+
+bool TestConfiguration::TestRunStorageFuzzer() {
+	auto &test_config = TestConfiguration::Get();
+	return test_config.RunStorageFuzzer();
 }
 
 FailureSummary::FailureSummary() : failures_summary_counter(0) {
@@ -432,6 +475,22 @@ void FailureSummary::Log(string log_message) {
 idx_t FailureSummary::GetSummaryCounter() {
 	auto &summary = FailureSummary::Instance();
 	return ++summary.failures_summary_counter;
+}
+
+bool FailureSummary::SkipLoggingSameError(const string &file_name) {
+	return Instance().SkipLoggingSameErrorInternal(file_name);
+}
+
+bool FailureSummary::SkipLoggingSameErrorInternal(const string &file_name) {
+	if (file_name.empty()) {
+		return false;
+	}
+	lock_guard<mutex> lock(failures_lock);
+	if (reported_files.count(file_name) > 0) {
+		return true;
+	}
+	reported_files.insert(file_name);
+	return false;
 }
 
 } // namespace duckdb

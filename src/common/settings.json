@@ -457,6 +457,13 @@
         "struct": "ErrorsAsJSONSetting"
     },
     {
+        "name": "experimental_metadata_reuse",
+        "description": "EXPERIMENTAL: Re-use row group and table metadata when checkpointing.",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
         "name": "explain_output",
         "description": "Output of EXPLAIN statements (ALL, OPTIMIZED_ONLY, PHYSICAL_ONLY)",
         "type": "ENUM<ExplainOutputType>",
@@ -613,7 +620,7 @@
     },
     {
         "name": "logging_mode",
-        "description": "Enables the logger",
+        "description": "Determines which types of log messages are logged",
         "type": "VARCHAR",
         "scope": "global",
         "struct": "LoggingMode",
@@ -621,7 +628,7 @@
     },
     {
         "name": "logging_storage",
-        "description": "Set the logging storage (memory/stdout/file)",
+        "description": "Set the logging storage (memory/stdout/file/<custom>)",
         "type": "VARCHAR",
         "scope": "global",
         "struct": "LoggingStorage",
@@ -886,12 +893,6 @@
         "aliases": [
             "user"
         ]
-    },
-    {
-        "name": "wal_encryption",
-        "description": "Encrypt the WAL if the database is encrypted",
-        "type": "BOOLEAN",
-        "scope": "global"
     },
     {
         "name": "zstd_min_string_length",

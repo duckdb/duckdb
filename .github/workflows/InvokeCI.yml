@@ -54,24 +54,6 @@ jobs:
       skip_tests: ${{ inputs.skip_tests }}
       run_all: ${{ inputs.run_all }}
 
-  python:
-    uses: ./.github/workflows/Python.yml
-    secrets: inherit
-    with:
-      override_git_describe: ${{ inputs.override_git_describe }}
-      git_ref: ${{ inputs.git_ref }}
-      skip_tests: ${{ inputs.skip_tests }}
-      run_all: ${{ inputs.run_all }}
-      override_twine_upload: ${{ inputs.twine_upload }}
-
-  pyodide:
-    uses: ./.github/workflows/Pyodide.yml
-    secrets: inherit
-    with:
-      override_git_describe: ${{ inputs.override_git_describe }}
-      git_ref: ${{ inputs.git_ref }}
-      skip_tests: ${{ inputs.skip_tests }}
-
   static-libraries:
     uses: ./.github/workflows/BundleStaticLibs.yml
     secrets: inherit
@@ -88,8 +70,6 @@ jobs:
       - osx
       - linux-release
       - windows
-      - python
-      - pyodide
       - static-libraries
     outputs:
       is-success: ${{ steps.set-output.outputs.success }}
@@ -101,8 +81,6 @@ jobs:
                 "${{ needs.osx.result }}" == "success" && \
                 "${{ needs.linux-release.result }}" == "success" && \
                 "${{ needs.windows.result }}" == "success" && \
-                "${{ needs.python.result }}" == "success" && \
-                "${{ needs.pyodide.result }}" == "success" && \
                 "${{ needs.static-libraries.result }}" == "success" ]]; then
             echo "success=true" >> $GITHUB_OUTPUT
           else

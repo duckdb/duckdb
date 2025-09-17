@@ -6,13 +6,28 @@ statement ok
 pragma enable_verification
 
 statement ok
+PRAGMA explain_output = PHYSICAL_ONLY;
+
+statement ok
 SET merge_join_threshold=0
+
+statement ok
+SET nested_loop_join_threshold=0
 
 statement ok
 create table tt (x int, y int, z int);
 
 statement ok
 insert into tt select nullif(r % 3, 0), nullif (r % 5, 0), r from range(10) tbl(r);
+
+query II
+EXPLAIN
+select * 
+from tt t1 left join tt t2 
+on t1.x < t2.x and t1.y < t2.y 
+order by t1.x nulls first, t1.y nulls first, t1.z, t2.x, t2.y, t2.z;
+----
+physical_plan	<REGEX>:.*IE_JOIN.*
 
 query IIIIII
 select * 
@@ -40,6 +55,18 @@ create table tt2 (x int);
 
 statement ok
 insert into tt2 select * from range(10);
+
+query II
+explain
+select t1.x, t1.y
+from (
+    select (case when x < 100 then null else 99 end) x, (case when x < 100 then 99 else 99 end) y
+    from tt2
+) t1 left join tt2 t2
+on t1.x < t2.x and t1.y < t2.x
+order by t1.x nulls first, t1.y nulls first;
+----
+physical_plan	<REGEX>:.*IE_JOIN.*
 
 query II
 select t1.x, t1.y

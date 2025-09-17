@@ -67,10 +67,8 @@ public:
 	//! Initializes the file of the WAL by creating the file writer.
 	BufferedFileWriter &Initialize();
 
-	void WriteVersion();
-
-	//! Determines if WAL should be encrypted
-	bool IsEncrypted() const;
+	//! Write the WAL header.
+	void WriteHeader();
 
 	virtual void WriteCreateTable(const TableCatalogEntry &entry);
 	void WriteDropTable(const TableCatalogEntry &entry);

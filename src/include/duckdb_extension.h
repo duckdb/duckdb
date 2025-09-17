@@ -541,6 +541,9 @@ typedef struct {
 	duckdb_state (*duckdb_append_default_to_chunk)(duckdb_appender appender, duckdb_data_chunk chunk, idx_t col,
 	                                               idx_t row);
 	duckdb_error_data (*duckdb_appender_error_data)(duckdb_appender appender);
+	duckdb_state (*duckdb_appender_create_query)(duckdb_connection connection, const char *query, idx_t column_count,
+	                                             duckdb_logical_type *types, const char *table_name,
+	                                             const char **column_names, duckdb_appender *out_appender);
 #endif
 
 // New arrow interface functions
@@ -585,6 +588,15 @@ typedef struct {
 	void (*duckdb_destroy_arrow_options)(duckdb_arrow_options *arrow_options);
 #endif
 
+// API to get information about the results of a prepared statement
+#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+	idx_t (*duckdb_prepared_statement_column_count)(duckdb_prepared_statement prepared_statement);
+	const char *(*duckdb_prepared_statement_column_name)(duckdb_prepared_statement prepared_statement, idx_t col_idx);
+	duckdb_logical_type (*duckdb_prepared_statement_column_logical_type)(duckdb_prepared_statement prepared_statement,
+	                                                                     idx_t col_idx);
+	duckdb_type (*duckdb_prepared_statement_column_type)(duckdb_prepared_statement prepared_statement, idx_t col_idx);
+#endif
+
 // New query execution functions
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
 	duckdb_arrow_options (*duckdb_result_get_arrow_options)(duckdb_result *result);
@@ -601,6 +613,7 @@ typedef struct {
 	void *(*duckdb_scalar_function_bind_get_extra_info)(duckdb_bind_info info);
 	idx_t (*duckdb_scalar_function_bind_get_argument_count)(duckdb_bind_info info);
 	duckdb_expression (*duckdb_scalar_function_bind_get_argument)(duckdb_bind_info info, idx_t index);
+	void (*duckdb_scalar_function_set_bind_data_copy)(duckdb_bind_info info, duckdb_copy_callback_t copy);
 #endif
 
 // New string functions that are added
@@ -1056,6 +1069,7 @@ typedef struct {
 #define duckdb_destroy_instance_cache   duckdb_ext_api.duckdb_destroy_instance_cache
 
 // Version unstable_new_append_functions
+#define duckdb_appender_create_query   duckdb_ext_api.duckdb_appender_create_query
 #define duckdb_appender_error_data     duckdb_ext_api.duckdb_appender_error_data
 #define duckdb_append_default_to_chunk duckdb_ext_api.duckdb_append_default_to_chunk
 
@@ -1087,12 +1101,19 @@ typedef struct {
 #define duckdb_destroy_arrow_options            duckdb_ext_api.duckdb_destroy_arrow_options
 #define duckdb_get_table_names                  duckdb_ext_api.duckdb_get_table_names
 
+// Version unstable_new_prepared_statement_functions
+#define duckdb_prepared_statement_column_count        duckdb_ext_api.duckdb_prepared_statement_column_count
+#define duckdb_prepared_statement_column_name         duckdb_ext_api.duckdb_prepared_statement_column_name
+#define duckdb_prepared_statement_column_logical_type duckdb_ext_api.duckdb_prepared_statement_column_logical_type
+#define duckdb_prepared_statement_column_type         duckdb_ext_api.duckdb_prepared_statement_column_type
+
 // Version unstable_new_query_execution_functions
 #define duckdb_result_get_arrow_options duckdb_ext_api.duckdb_result_get_arrow_options
 
 // Version unstable_new_scalar_function_functions
 #define duckdb_scalar_function_set_bind                duckdb_ext_api.duckdb_scalar_function_set_bind
 #define duckdb_scalar_function_set_bind_data           duckdb_ext_api.duckdb_scalar_function_set_bind_data
+#define duckdb_scalar_function_set_bind_data_copy      duckdb_ext_api.duckdb_scalar_function_set_bind_data_copy
 #define duckdb_scalar_function_bind_set_error          duckdb_ext_api.duckdb_scalar_function_bind_set_error
 #define duckdb_scalar_function_bind_get_extra_info     duckdb_ext_api.duckdb_scalar_function_bind_get_extra_info
 #define duckdb_scalar_function_get_bind_data           duckdb_ext_api.duckdb_scalar_function_get_bind_data

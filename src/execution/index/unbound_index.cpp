@@ -35,14 +35,17 @@ void UnboundIndex::CommitDrop() {
 	}
 }
 
-void UnboundIndex::BufferChunk(DataChunk &chunk, Vector &row_ids) {
+void UnboundIndex::BufferChunk(DataChunk &chunk, Vector &row_ids, const vector<StorageIndex> &mapped_column_ids_p) {
+	D_ASSERT(!column_ids.empty());
 	auto types = chunk.GetTypes();
 	types.push_back(LogicalType::ROW_TYPE);
 
 	if (!buffered_appends) {
 		auto &allocator = Allocator::Get(db);
 		buffered_appends = make_uniq<ColumnDataCollection>(allocator, types);
+		mapped_column_ids = mapped_column_ids_p;
 	}
+	D_ASSERT(mapped_column_ids == mapped_column_ids_p);
 
 	DataChunk combined_chunk;
 	combined_chunk.InitializeEmpty(types);

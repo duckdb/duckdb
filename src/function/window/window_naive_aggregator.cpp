@@ -48,12 +48,12 @@ public:
 
 	using RowSet = std::unordered_set<idx_t, HashRow, EqualRow>;
 
-	explicit WindowNaiveLocalState(const WindowNaiveAggregator &gsink);
+	WindowNaiveLocalState(ExecutionContext &context, const WindowNaiveAggregator &aggregator);
 
 	void Finalize(ExecutionContext &context, WindowAggregatorGlobalState &gastate, CollectionPtr collection) override;
 
 	void Evaluate(ExecutionContext &context, const WindowAggregatorGlobalState &gsink, const DataChunk &bounds,
-	              Vector &result, idx_t count, idx_t row_idx);
+	              Vector &result, idx_t count, idx_t row_idx, InterruptState &interrupt);
 
 protected:
 	//! Flush the accumulated intermediate states into the result states
@@ -97,9 +97,9 @@ protected:
 	SelectionVector orderby_sel;
 };
 
-WindowNaiveLocalState::WindowNaiveLocalState(const WindowNaiveAggregator &aggregator)
-    : aggregator(aggregator), state(aggregator.state_size * STANDARD_VECTOR_SIZE), statef(LogicalType::POINTER),
-      statep((LogicalType::POINTER)), flush_count(0), hashes(LogicalType::HASH) {
+WindowNaiveLocalState::WindowNaiveLocalState(ExecutionContext &context, const WindowNaiveAggregator &aggregator)
+    : WindowAggregatorLocalState(context), aggregator(aggregator), state(aggregator.state_size * STANDARD_VECTOR_SIZE),
+      statef(LogicalType::POINTER), statep((LogicalType::POINTER)), flush_count(0), hashes(LogicalType::HASH) {
 	InitSubFrames(frames, aggregator.exclude_mode);
 
 	update_sel.Initialize();
@@ -220,7 +220,8 @@ bool WindowNaiveLocalState::KeyEqual(const idx_t &lidx, const idx_t &ridx) {
 }
 
 void WindowNaiveLocalState::Evaluate(ExecutionContext &context, const WindowAggregatorGlobalState &gsink,
-                                     const DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx) {
+                                     const DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx,
+                                     InterruptState &interrupt) {
 	const auto &aggr = gsink.aggr;
 	auto &filter_mask = gsink.filter_mask;
 	const auto types = cursor->chunk.GetTypes();
@@ -243,7 +244,6 @@ void WindowNaiveLocalState::Evaluate(ExecutionContext &context, const WindowAggr
 		if (arg_orderer) {
 			auto global_sink = sort->GetGlobalSinkState(context.client);
 			auto local_sink = sort->GetLocalSinkState(context);
-			InterruptState interrupt;
 			OperatorSinkInput sink {*global_sink, *local_sink, interrupt};
 
 			idx_t orderby_count = 0;
@@ -360,16 +360,23 @@ void WindowNaiveLocalState::Evaluate(ExecutionContext &context, const WindowAggr
 	}
 }
 
-unique_ptr<WindowAggregatorState> WindowNaiveAggregator::GetLocalState(const WindowAggregatorState &gstate) const {
-	return make_uniq<WindowNaiveLocalState>(*this);
+unique_ptr<LocalSinkState> WindowNaiveAggregator::GetLocalState(ExecutionContext &context,
+                                                                const GlobalSinkState &gstate) const {
+	return make_uniq<WindowNaiveLocalState>(context, *this);
 }
 
-void WindowNaiveAggregator::Evaluate(ExecutionContext &context, const WindowAggregatorState &gsink,
-                                     WindowAggregatorState &lstate, const DataChunk &bounds, Vector &result,
-                                     idx_t count, idx_t row_idx) const {
-	const auto &gnstate = gsink.Cast<WindowAggregatorGlobalState>();
-	auto &lnstate = lstate.Cast<WindowNaiveLocalState>();
-	lnstate.Evaluate(context, gnstate, bounds, result, count, row_idx);
+void WindowNaiveAggregator::Evaluate(ExecutionContext &context, const DataChunk &bounds, Vector &result, idx_t count,
+                                     idx_t row_idx, OperatorSinkInput &sink) const {
+	const auto &gnstate = sink.global_state.Cast<WindowAggregatorGlobalState>();
+	auto &lnstate = sink.local_state.Cast<WindowNaiveLocalState>();
+	lnstate.Evaluate(context, gnstate, bounds, result, count, row_idx, sink.interrupt_state);
+}
+
+bool WindowNaiveAggregator::CanAggregate(const BoundWindowExpression &wexpr) {
+	if (!wexpr.aggregate || !wexpr.aggregate->CanAggregate()) {
+		return false;
+	}
+	return true;
 }
 
 } // namespace duckdb

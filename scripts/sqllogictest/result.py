@@ -321,21 +321,31 @@ class QueryResult:
                 context.fail("")
         else:
             hash_compare_error = False
+            expected_hash_value = None
             if query_has_label:
-                entry = runner.hash_label_map.get(query_label)
-                if entry is None:
+                expected_hash_value = runner.hash_label_map.get(query_label)
+                if expected_hash_value is None:
                     runner.hash_label_map[query_label] = hash_value
                     runner.result_label_map[query_label] = self
                 else:
-                    hash_compare_error = entry != hash_value
+                    hash_compare_error = expected_hash_value != hash_value
 
-            if is_hash:
+            if is_hash and not hash_compare_error:
+                expected_hash_value = values[0]
                 hash_compare_error = values[0] != hash_value
 
             if hash_compare_error:
                 expected_result = runner.result_label_map.get(query_label)
-                # logger.wrong_result_hash(expected_result, self)
-                context.fail(query)
+                logger.wrong_result_hash(expected_hash_value, hash_value)
+
+                if expected_result:
+                    logger.print_result_error(
+                        result_values_string,
+                        duck_db_convert_result(expected_result, runner.original_sqlite_test),
+                        expected_result.column_count,
+                        False,
+                    )
+                context.fail("")
 
             assert not hash_compare_error
 
@@ -854,6 +864,7 @@ class SQLLogicContext:
                     duckdb.StatementType.DELETE,
                     duckdb.StatementType.UPDATE,
                     duckdb.StatementType.INSERT,
+                    duckdb.StatementType.MERGE_INTO,
                 ]:
                     if 'returning' in sql_query.lower():
                         return False

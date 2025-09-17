@@ -2,8 +2,10 @@
 # description: Test merge queue and repartitioning with encrypted temporary files
 # group: [temp_files]
 
+foreach cipher GCM CTR
+
 statement ok
-ATTACH '__TEST_DIR__/encrypted_temp_files.db' AS enc (ENCRYPTION_KEY 'asdf');
+ATTACH '__TEST_DIR__/encrypted_temp_files_${cipher}.db' AS enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
 
 statement ok
 SET temp_file_encryption=true;
@@ -36,3 +38,7 @@ WITH build AS (
 FROM probe ASOF JOIN build USING(k, t)
 ----
 26790	1488
+
+restart
+
+endloop

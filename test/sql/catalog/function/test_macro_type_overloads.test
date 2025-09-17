@@ -1,0 +1,352 @@
+# name: test/sql/catalog/function/test_macro_type_overloads.test
+# description: Test macro TYPE overloads
+# group: [function]
+
+# always works for in-memory dbs
+statement ok
+attach ':memory:' AS inmemorydb
+
+statement ok
+use inmemorydb
+
+statement ok
+create or replace macro m(s varchar) as s || 'c'
+
+statement ok
+drop macro m;
+
+statement ok
+attach '__TEST_DIR__/test_macro_type_overloads_olderdb.db' AS olderdb (storage_version 'v1.3.0')
+
+statement ok
+use olderdb
+
+# does not work for older versions
+statement error
+create or replace macro m(s varchar) as s || 'c'
+----
+Typed macro parameters are only supported for
+
+# we can also always create temporary typed macros
+statement ok
+create or replace temporary macro m(s varchar) as s || 'c'
+
+statement ok
+drop macro m;
+
+# rest of the tests proceed with a db version that works
+statement ok
+attach '__TEST_DIR__/test_macro_type_overloads_newerdb.db' AS newerdb (storage_version 'v1.4.0')
+
+statement ok
+use newerdb
+
+statement ok
+create view v as select 42
+
+# create macro with type varchar
+statement ok
+create or replace macro m(s varchar) as s || 'c'
+
+# this works
+query I
+select m('ab')
+----
+abc
+
+query I
+select m(s := 'ab')
+----
+abc
+
+# list cannot be implicitly cast to varchar, so this fails
+statement error
+select m([42])
+----
+does not support the supplied arguments
+
+statement error
+select m(s := [42])
+----
+does not support the supplied arguments
+
+# test the same behavior with an arg with a default
+statement ok
+create or replace macro m(s varchar := 'cc') as s || 'c'
+
+query I
+select m('ab')
+----
+abc
+
+query I
+select m(s := 'ab')
+----
+abc
+
+statement error
+select m([42])
+----
+does not support the supplied arguments
+
+statement error
+select m(s := [42])
+----
+does not support the supplied arguments
+
+statement ok
+create or replace macro m
+    (a tinyint) as a + 1,
+    (a smallint) as a + 2,
+    (a integer) as a + 3,
+    (a bigint) as a + 4,
+    (a hugeint) as a + 5,
+    (a) as a + 10
+
+# to support the sliding window of forwards compatibility, we don't yet serialize parameter types to storage
+# therefore, this test has is skipped in the force_storage_restart.json test config
+query I
+select parameter_types[1]
+from duckdb_functions()
+where function_name = 'm'
+and function_type = 'macro'
+order by all
+----
+BIGINT
+HUGEINT
+INTEGER
+SMALLINT
+TINYINT
+NULL
+
+query IIIIII
+select
+    m(0::tinyint),
+    m(0::smallint),
+    m(0::integer),
+    m(0::bigint),
+    m(0::hugeint),
+    m(0::double)
+----
+1	2	3	4	5	10
+
+# not sure if I agree with this but this is how our implicit cast cost rules select the lowest cost function
+# i also doubt that people will create this many integer type overloads with different behaviors
+query IIIIII
+select
+    m(0::utinyint),
+    m(0::usmallint),
+    m(0::uinteger),
+    m(0::ubigint),
+    m(0::uhugeint),
+    m(0::float)
+----
+4	4	4	5	10	10
+
+statement ok
+create or replace macro m
+    (i int, j) as i + j,
+    (i, j int) as i - j;
+
+# exact same cost, can't disambiguate with these arguments
+statement error
+select m(0, 42)
+----
+has multiple overloads
+
+# this resolves to the first one because the first arg is int
+query I
+select m(0, 42::float)
+----
+42
+
+# this resolves to the second one because the second arg is int
+query I
+select m(0::float, 42)
+----
+-42
+
+# user types should at least bind properly (instead of defaulting to LogicalTypeId::USER)
+statement ok
+create or replace type cool_string as varchar;
+
+statement ok
+create or replace macro m(s cool_string) as s;
+
+statement ok
+select m('duck')
+
+# this fails on creation because we won't implicitly cast
+statement error
+create or replace macro m(s varchar := 42) as s
+----
+cannot be implicitly cast
+
+# can fix with an explicit type cast
+statement ok
+create or replace macro m(s varchar := 42::varchar) as s
+
+# this can be implicitly cast so it succeeds
+statement ok
+create or replace macro m(i bigint := 42::integer) as i
+
+# test that the supplied arg is cast to a bigint
+query I
+select typeof(m(42::integer))
+----
+BIGINT
+
+# replicate tests above with table macro
+statement ok
+create or replace macro m(s varchar) as table (select s || 'c')
+
+query I
+from m('ab')
+----
+abc
+
+query I
+from m(s := 'ab')
+----
+abc
+
+statement error
+from m([42])
+----
+does not support the supplied arguments
+
+statement error
+from m(s := [42])
+----
+does not support the supplied arguments
+
+statement ok
+create or replace macro m(s varchar := 'cc') as table (select s || 'c')
+
+query I
+from m('ab')
+----
+abc
+
+query I
+from m(s := 'ab')
+----
+abc
+
+statement error
+from m([42])
+----
+does not support the supplied arguments
+
+statement error
+from m(s := [42])
+----
+does not support the supplied arguments
+
+statement ok
+create or replace macro m
+    (a tinyint) as table (select a + 1),
+    (a smallint) as table (select a + 2),
+    (a integer) as table (select a + 3),
+    (a bigint) as table (select a + 4),
+    (a hugeint) as table (select a + 5),
+    (a) as table (select a + 10)
+
+query I
+select parameter_types[1]
+from duckdb_functions()
+where function_name = 'm'
+and function_type = 'table_macro'
+order by all
+----
+BIGINT
+HUGEINT
+INTEGER
+SMALLINT
+TINYINT
+NULL
+
+query I
+from m(0::tinyint)
+union all
+from m(0::smallint)
+union all
+from m(0::integer)
+union all
+from m(0::bigint)
+union all
+from m(0::hugeint)
+union all
+from m(0::double)
+----
+1
+2
+3
+4
+5
+10
+
+query I
+from m(0::utinyint)
+union all
+from m(0::usmallint)
+union all
+from m(0::uinteger)
+union all
+from m(0::ubigint)
+union all
+from m(0::uhugeint)
+union all
+from m(0::float)
+----
+4
+4
+4
+5
+10
+10
+
+statement ok
+create or replace macro m
+    (i int, j) as table (select i + j),
+    (i, j int) as table (select i - j);
+
+statement error
+from m(0, 42)
+----
+has multiple overloads
+
+query I
+from m(0, 42::float)
+----
+42
+
+query I
+from m(0::float, 42)
+----
+-42
+
+statement ok
+create or replace type cool_string as varchar;
+
+statement ok
+create or replace macro m(s cool_string) as table (select s);
+
+statement ok
+from m('duck')
+
+statement error
+create or replace macro m(s varchar := 42) as table (select s)
+----
+cannot be implicitly cast
+
+statement ok
+create or replace macro m(s varchar := 42::varchar) as table (select s)
+
+statement ok
+create or replace macro m(i bigint := 42::integer) as table (select i as i)
+
+query I
+select typeof(i) from m(42::integer)
+----
+BIGINT

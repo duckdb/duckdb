@@ -759,6 +759,15 @@ Value Value::STRUCT(child_list_t<Value> values) {
 	return Value::STRUCT(LogicalType::STRUCT(child_types), std::move(struct_values));
 }
 
+Value Value::VARIANT(vector<Value> val) {
+	D_ASSERT(val.size() == 4);
+	D_ASSERT(val[0].type().id() == LogicalTypeId::LIST);
+	D_ASSERT(val[1].type().id() == LogicalTypeId::LIST);
+	D_ASSERT(val[2].type().id() == LogicalTypeId::LIST);
+	D_ASSERT(val[3].type().id() == LogicalTypeId::BLOB);
+	return Value::STRUCT(LogicalType::VARIANT(), std::move(val));
+}
+
 void MapKeyCheck(value_set_t &unique_keys, const Value &key) {
 	// NULL key check.
 	if (key.IsNull()) {
@@ -1619,6 +1628,7 @@ string Value::ToSQLString() const {
 		}
 		return "'" + StringUtil::Replace(ToString(), "'", "''") + "'";
 	}
+	case LogicalTypeId::VARIANT:
 	case LogicalTypeId::STRUCT: {
 		bool is_unnamed = StructType::IsUnnamed(type_);
 		string ret = is_unnamed ? "(" : "{";

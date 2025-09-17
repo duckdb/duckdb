@@ -123,38 +123,45 @@ DuckTransactionManager::CanCheckpoint(DuckTransaction &transaction, unique_ptr<S
 		                          "another read transaction relies on data that is not yet committed");
 	}
 	auto checkpoint_type = CheckpointType::FULL_CHECKPOINT;
-	if (undo_properties.has_updates || undo_properties.has_deletes || undo_properties.has_dropped_entries) {
-		// if we have made updates/deletes/catalog changes in this transaction we might need to change our strategy
-		// in the presence of other transactions
-		string other_transactions;
-		for (auto &active_transaction : active_transactions) {
-			if (!RefersToSameObject(*active_transaction, transaction)) {
-				if (!other_transactions.empty()) {
-					other_transactions += ", ";
-				}
-				other_transactions += "[" + to_string(active_transaction->transaction_id) + "]";
-			}
+	bool has_other_transactions = false;
+	for (auto &active_transaction : active_transactions) {
+		if (!RefersToSameObject(*active_transaction, transaction)) {
+			has_other_transactions = true;
+			break;
 		}
-		if (!other_transactions.empty()) {
-			// there are other transactions!
-			// these active transactions might need data from BEFORE this transaction
-			// we might need to change our strategy here based on what changes THIS transaction has made
-			if (undo_properties.has_dropped_entries) {
-				// this transaction has changed the catalog - we cannot checkpoint
-				return CheckpointDecision("Transaction has dropped catalog entries and there are other transactions "
-				                          "active\nActive transactions: " +
-				                          other_transactions);
-			} else if (undo_properties.has_updates) {
+	}
+	if (has_other_transactions) {
+		if (undo_properties.has_updates || undo_properties.has_dropped_entries) {
+			// if we have made updates/catalog changes in this transaction we cannot checkpoint
+			// in the presence of other transactions
+			string other_transactions;
+			for (auto &active_transaction : active_transactions) {
+				if (!RefersToSameObject(*active_transaction, transaction)) {
+					if (!other_transactions.empty()) {
+						other_transactions += ", ";
+					}
+					other_transactions += "[" + to_string(active_transaction->transaction_id) + "]";
+				}
+			}
+			if (!other_transactions.empty()) {
+				// there are other transactions!
+				// these active transactions might need data from BEFORE this transaction
+				// we might need to change our strategy here based on what changes THIS transaction has made
+				if (undo_properties.has_dropped_entries) {
+					// this transaction has changed the catalog - we cannot checkpoint
+					return CheckpointDecision(
+					    "Transaction has dropped catalog entries and there are other transactions "
+					    "active\nActive transactions: " +
+					    other_transactions);
+				}
 				// this transaction has performed updates - we cannot checkpoint
 				return CheckpointDecision(
 				    "Transaction has performed updates and there are other transactions active\nActive transactions: " +
 				    other_transactions);
-			} else {
-				// this transaction has performed deletes - we cannot vacuum - initiate a concurrent checkpoint instead
-				D_ASSERT(undo_properties.has_deletes);
-				checkpoint_type = CheckpointType::CONCURRENT_CHECKPOINT;
 			}
 		}
+		// otherwise - we need to do a concurrent checkpoint
+		checkpoint_type = CheckpointType::CONCURRENT_CHECKPOINT;
 	}
 	if (storage_manager.InMemory() && !storage_manager.CompressionIsEnabled()) {
 		if (checkpoint_type == CheckpointType::CONCURRENT_CHECKPOINT) {
@@ -525,6 +532,15 @@ void DuckTransactionManager::PushCatalogEntry(Transaction &transaction_p, duckdb
 	}
 	transaction.catalog_version = ++last_uncommitted_catalog_version;
 	transaction.PushCatalogEntry(entry, extra_data, extra_data_size);
+}
+
+void DuckTransactionManager::PushAttach(Transaction &transaction_p, AttachedDatabase &attached_db) {
+	auto &transaction = transaction_p.Cast<DuckTransaction>();
+	if (!db.IsSystem()) {
+		throw InternalException("Can only ATTACH in the system catalog");
+	}
+	transaction.catalog_version = ++last_uncommitted_catalog_version;
+	transaction.PushAttach(attached_db);
 }
 
 } // namespace duckdb

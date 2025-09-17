@@ -58,7 +58,8 @@ public:
 	//! Get the first meta block id
 	virtual idx_t GetMetaBlock() = 0;
 	//! Read the content of the block from disk
-	virtual void Read(Block &block) = 0;
+	virtual void Read(QueryContext context, Block &block) = 0;
+
 	//! Read the content of the block from disk
 	virtual void ReadBlocks(FileBuffer &buffer, block_id_t start_block, idx_t block_count) = 0;
 	//! Writes the block to disk.
@@ -144,6 +145,18 @@ public:
 	}
 	//! Verify the block usage count
 	virtual void VerifyBlocks(const unordered_map<block_id_t, idx_t> &block_usage_count) {
+	}
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 
 private:

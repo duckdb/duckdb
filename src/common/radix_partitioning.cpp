@@ -51,9 +51,9 @@ RETURN_TYPE RadixBitsSwitch(const idx_t radix_bits, ARGS &&... args) {
 	case 10:
 		return OP::template Operation<10>(std::forward<ARGS>(args)...);
 	case 11:
-		return OP::template Operation<10>(std::forward<ARGS>(args)...);
+		return OP::template Operation<11>(std::forward<ARGS>(args)...);
 	case 12:
-		return OP::template Operation<10>(std::forward<ARGS>(args)...);
+		return OP::template Operation<12>(std::forward<ARGS>(args)...);
 	default:
 		throw InternalException(
 		    "radix_bits higher than RadixPartitioning::MAX_RADIX_BITS encountered in RadixBitsSwitch");

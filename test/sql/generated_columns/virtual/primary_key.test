@@ -12,6 +12,7 @@ CREATE TABLE unit (
 	amount_sold AS (price) PRIMARY KEY,
 );
 ----
+<REGEX>:.*Binder Error.*Constraints on generated columns.*
 
 # Also not as a column list
 statement error
@@ -21,6 +22,7 @@ CREATE TABLE unit (
 	PRIMARY KEY (amount_sold),
 );
 ----
+<REGEX>:.*Binder Error.*Constraints on generated columns.*
 
 # Show that proper PRIMARY KEY constraints still work when mixed in when generated columns
 statement ok
@@ -37,3 +39,4 @@ INSERT INTO tbl VALUES (5);
 statement error
 INSERT INTO tbl VALUES (5);
 ----
+<REGEX>:.*Constraint Error.*Duplicate key.*

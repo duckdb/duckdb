@@ -373,9 +373,10 @@ void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool
 			success = timestamp_format.TryParseTimestamp(
 			    value_ptr, size, static_cast<timestamp_t *>(vector_ptr[chunk_col_id])[number_of_rows]);
 		} else {
+			const bool use_offset = (parse_types[chunk_col_id].type_id == LogicalTypeId::TIMESTAMP_TZ);
 			success = Timestamp::TryConvertTimestamp(
-			              value_ptr, size, static_cast<timestamp_t *>(vector_ptr[chunk_col_id])[number_of_rows]) ==
-			          TimestampCastResult::SUCCESS;
+			              value_ptr, size, static_cast<timestamp_t *>(vector_ptr[chunk_col_id])[number_of_rows],
+			              use_offset) == TimestampCastResult::SUCCESS;
 		}
 		break;
 	}

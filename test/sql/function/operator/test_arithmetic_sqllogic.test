@@ -3,9 +3,6 @@
 # group: [operator]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE tab0(col0 INTEGER, col1 INTEGER, col2 INTEGER);
 
 statement ok

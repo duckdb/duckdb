@@ -35,8 +35,9 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundRecursiveCTENode &node) {
 	if ((!node.right_binder->bind_context.cte_references[node.ctename] ||
 	     *node.right_binder->bind_context.cte_references[node.ctename] == 0) &&
 	    !ref_recurring) {
-		auto root = make_uniq<LogicalSetOperation>(node.setop_index, node.types.size(), std::move(left_node),
-		                                           std::move(right_node), LogicalOperatorType::LOGICAL_UNION, true);
+		auto root =
+		    make_uniq<LogicalSetOperation>(node.setop_index, node.types.size(), std::move(left_node),
+		                                   std::move(right_node), LogicalOperatorType::LOGICAL_UNION, node.union_all);
 		return VisitQueryNode(node, std::move(root));
 	}
 

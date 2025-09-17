@@ -207,12 +207,12 @@ copy_generic_opt_arg_list_item:
 			opt_boolean_or_string	{ $$ = (PGNode *) makeString($1); }
 		;
 
-
 copy_file_name:
-			Sconst									{ $$ = $1; }
-			| STDIN									{ $$ = NULL; }
-			| STDOUT								{ $$ = NULL; }
-			| IDENT '.' ColId						{ $$ = psprintf("%s.%s", $1, $3); }
-			| IDENT									{ $$ = $1; }
-
+			Sconst									{ $$ = makeStringConst($1, @1); }
+			| STDIN									{ $$ = makeStringConst("/dev/stdin", @1); }
+			| STDOUT								{ $$ = makeStringConst("/dev/stdout", @1); }
+			| IDENT '.' ColId						{ $$ = makeStringConst(psprintf("%s.%s", $1, $3), @1); }
+			| IDENT									{ $$ = makeStringConst($1, @1); }
+			| '(' a_expr ')'						{ $$ = $2; }
+			| param_expr							{ $$ = $1; }
 		;

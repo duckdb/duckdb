@@ -15,7 +15,7 @@ set autoinstall_known_extensions=false
 statement error
 FROM read_csv('data/csv/test/test.csv', encoding = 'shift_jis')
 ----
-You can try "INSTALL encodings; LOAD encodings"
+<REGEX>:.*Invalid Input Error.*You can try "INSTALL encodings; LOAD encodings".*
 
 statement ok
 set autoload_known_extensions=true

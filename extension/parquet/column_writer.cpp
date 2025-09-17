@@ -92,6 +92,18 @@ bool ColumnWriterStatistics::MaxIsExact() {
 	return true;
 }
 
+bool ColumnWriterStatistics::HasGeoStats() {
+	return false;
+}
+
+optional_ptr<GeometryStats> ColumnWriterStatistics::GetGeoStats() {
+	return nullptr;
+}
+
+void ColumnWriterStatistics::WriteGeoStats(duckdb_parquet::GeospatialStatistics &stats) {
+	D_ASSERT(false); // this should never be called
+}
+
 //===--------------------------------------------------------------------===//
 // ColumnWriter
 //===--------------------------------------------------------------------===//
@@ -219,59 +231,6 @@ void ColumnWriter::HandleDefineLevels(ColumnWriterState &state, ColumnWriterStat
 		}
 	}
 }
-
-//===--------------------------------------------------------------------===//
-// WKB Column Writer
-//===--------------------------------------------------------------------===//
-// Used to store the metadata for a WKB-encoded geometry column when writing
-// GeoParquet files.
-class WKBColumnWriterState final : public StandardColumnWriterState<string_t, string_t, ParquetStringOperator> {
-public:
-	WKBColumnWriterState(ParquetWriter &writer, duckdb_parquet::RowGroup &row_group, idx_t col_idx)
-	    : StandardColumnWriterState(writer, row_group, col_idx), geo_data(), geo_data_writer(writer.GetContext()) {
-	}
-
-	GeoParquetColumnMetadata geo_data;
-	GeoParquetColumnMetadataWriter geo_data_writer;
-};
-
-class WKBColumnWriter final : public StandardColumnWriter<string_t, string_t, ParquetStringOperator> {
-public:
-	WKBColumnWriter(ParquetWriter &writer, const ParquetColumnSchema &column_schema, vector<string> schema_path_p,
-	                bool can_have_nulls, string name)
-	    : StandardColumnWriter(writer, column_schema, std::move(schema_path_p), can_have_nulls),
-	      column_name(std::move(name)) {
-
-		this->writer.GetGeoParquetData().RegisterGeometryColumn(column_name);
-	}
-
-	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::RowGroup &row_group) override {
-		auto result = make_uniq<WKBColumnWriterState>(writer, row_group, row_group.columns.size());
-		result->encoding = Encoding::RLE_DICTIONARY;
-		RegisterToRowGroup(row_group);
-		return std::move(result);
-	}
-
-	void Write(ColumnWriterState &state, Vector &vector, idx_t count) override {
-		StandardColumnWriter::Write(state, vector, count);
-
-		auto &geo_state = state.Cast<WKBColumnWriterState>();
-		geo_state.geo_data_writer.Update(geo_state.geo_data, vector, count);
-	}
-
-	void FinalizeWrite(ColumnWriterState &state) override {
-		StandardColumnWriter::FinalizeWrite(state);
-
-		// Add the geodata object to the writer
-		const auto &geo_state = state.Cast<WKBColumnWriterState>();
-
-		// Merge this state's geo column data with the writer's geo column data
-		writer.GetGeoParquetData().FlushColumnMeta(column_name, geo_state.geo_data);
-	}
-
-private:
-	string column_name;
-};
 
 //===--------------------------------------------------------------------===//
 // Create Column Writer
@@ -470,9 +429,10 @@ ColumnWriter::CreateWriterRecursive(ClientContext &context, ParquetWriter &write
 		    make_uniq<StructColumnWriter>(writer, schema, path_in_schema, std::move(child_writers), can_have_nulls);
 		return make_uniq<ListColumnWriter>(writer, schema, path_in_schema, std::move(struct_writer), can_have_nulls);
 	}
-	if (type.id() == LogicalTypeId::BLOB && type.GetAlias() == "WKB_BLOB" &&
-	    GeoParquetFileMetadata::IsGeoParquetConversionEnabled(context)) {
-		return make_uniq<WKBColumnWriter>(writer, schema, std::move(path_in_schema), can_have_nulls, schema.name);
+
+	if (type.id() == LogicalTypeId::BLOB && type.GetAlias() == "WKB_BLOB") {
+		return make_uniq<StandardColumnWriter<string_t, string_t, ParquetGeometryOperator>>(
+		    writer, schema, std::move(path_in_schema), can_have_nulls);
 	}
 
 	switch (type.id()) {

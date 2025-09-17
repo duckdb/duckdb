@@ -124,6 +124,19 @@ public:
 	bool CompressionIsEnabled() const {
 		return storage_options.compress_in_memory == CompressInMemory::COMPRESS;
 	}
+	EncryptionTypes::CipherType GetCipher() const {
+		return storage_options.encryption_cipher;
+	}
+	void SetCipher(EncryptionTypes::CipherType cipher_p) {
+		D_ASSERT(cipher_p != EncryptionTypes::INVALID);
+		if (cipher_p == EncryptionTypes::CBC) {
+			throw InvalidInputException("CBC cipher is disabled");
+		}
+		storage_options.encryption_cipher = cipher_p;
+	}
+	bool IsEncrypted() const {
+		return storage_options.encryption;
+	}
 
 protected:
 	virtual void LoadDatabase(QueryContext context) = 0;
