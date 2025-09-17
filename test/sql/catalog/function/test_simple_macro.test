@@ -255,7 +255,7 @@ SELECT add_default5(b := 6, 3)
 ----
 
 statement error
-CREATE MACRO wrong_order(a, b := 3, c) as a + b + c;
+CREATE MACRO wrong_order(a, b := 3, c);
 ----
 
 statement error
