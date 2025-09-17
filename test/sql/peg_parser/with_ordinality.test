@@ -1,5 +1,5 @@
-# name: test/sql/peg_parser/window_function.test
-# description: Test window function syntax in peg parser
+# name: test/sql/peg_parser/with_ordinality.test
+# description: Test with ordinality syntax in peg parser
 # group: [peg_parser]
 
 require autocomplete
