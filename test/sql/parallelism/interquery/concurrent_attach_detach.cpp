@@ -25,8 +25,8 @@ string getDBName(idx_t i) {
 }
 
 const idx_t db_count = 10;
-const idx_t worker_count = 100;
-const idx_t iteration_count = 500;
+const idx_t worker_count = 40;
+const idx_t iteration_count = 100;
 const idx_t nr_initial_rows = 2050;
 
 vector<vector<string>> logging;
