@@ -1,3 +1,4 @@
+#include "duckdb/main/attached_database.hpp"
 #include "duckdb/logging/file_system_logger.hpp"
 #include "duckdb/logging/log_type.hpp"
 #include "duckdb/common/file_opener.hpp"
@@ -13,6 +14,7 @@ constexpr LogLevel FileSystemLogType::LEVEL;
 constexpr LogLevel QueryLogType::LEVEL;
 constexpr LogLevel HTTPLogType::LEVEL;
 constexpr LogLevel PhysicalOperatorLogType::LEVEL;
+constexpr LogLevel CheckpointLogType::LEVEL;
 
 FileSystemLogType::FileSystemLogType() : LogType(NAME, LEVEL, GetLogType()) {
 }
@@ -36,6 +38,9 @@ LogicalType FileSystemLogType::GetLogType() {
 	return LogicalType::STRUCT(child_list);
 }
 
+//===--------------------------------------------------------------------===//
+// HTTPLogType
+//===--------------------------------------------------------------------===//
 HTTPLogType::HTTPLogType() : LogType(NAME, LEVEL, GetLogType()) {
 }
 
@@ -92,6 +97,9 @@ string HTTPLogType::ConstructLogMessage(BaseRequest &request, optional_ptr<HTTPR
 	return Value::STRUCT(child_list).ToString();
 }
 
+//===--------------------------------------------------------------------===//
+// PhysicalOperatorLogType
+//===--------------------------------------------------------------------===//
 PhysicalOperatorLogType::PhysicalOperatorLogType() : LogType(NAME, LEVEL, GetLogType()) {
 }
 
@@ -128,6 +136,51 @@ string PhysicalOperatorLogType::ConstructLogMessage(const PhysicalOperator &phys
 	};
 
 	return Value::STRUCT(std::move(child_list)).ToString();
+}
+//===--------------------------------------------------------------------===//
+// CheckpointLogType
+//===--------------------------------------------------------------------===//
+CheckpointLogType::CheckpointLogType() : LogType(NAME, LEVEL, GetLogType()) {
+}
+
+LogicalType CheckpointLogType::GetLogType() {
+	child_list_t<LogicalType> child_list = {
+	    {"database", LogicalType::VARCHAR},
+	    {"schema", LogicalType::VARCHAR},
+	    {"table", LogicalType::VARCHAR},
+	    {"type", LogicalType::VARCHAR},
+	    {"info", LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR)},
+	};
+	return LogicalType::STRUCT(child_list);
+}
+
+string CheckpointLogType::CreateLog(const AttachedDatabase &db, DataTableInfo &table, const char *op_name,
+                                    vector<Value> map_keys, vector<Value> map_values) {
+	child_list_t<Value> child_list = {
+	    {"database", db.name},
+	    {"schema", table.GetSchemaName()},
+	    {"table", table.GetTableName()},
+	    {"type", op_name},
+	    {"info", Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR, std::move(map_keys), std::move(map_values))},
+	};
+
+	return Value::STRUCT(std::move(child_list)).ToString();
+}
+
+string CheckpointLogType::ConstructLogMessage(const AttachedDatabase &db, DataTableInfo &table, idx_t segment_idx,
+                                              idx_t merge_count, idx_t target_count, idx_t merge_rows,
+                                              idx_t row_start) {
+	vector<Value> map_keys = {"segment_idx", "merge_count", "target_count", "merge_rows", "row_start"};
+	vector<Value> map_values = {to_string(segment_idx), to_string(merge_count), to_string(target_count),
+	                            to_string(merge_rows), to_string(row_start)};
+	return CreateLog(db, table, "vacuum", std::move(map_keys), std::move(map_values));
+}
+
+string CheckpointLogType::ConstructLogMessage(const AttachedDatabase &db, DataTableInfo &table, idx_t segment_idx,
+                                              RowGroup &row_group) {
+	vector<Value> map_keys = {"segment_idx", "start", "count"};
+	vector<Value> map_values = {to_string(segment_idx), to_string(row_group.start), to_string(row_group.count.load())};
+	return CreateLog(db, table, "checkpoint", std::move(map_keys), std::move(map_values));
 }
 
 } // namespace duckdb
