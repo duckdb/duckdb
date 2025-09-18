@@ -129,6 +129,7 @@ select RTRIM('hello', 'world', 'aaa')
 statement error
 select TRIM()
 ----
+Parser Error: syntax error at or near ")"
 
 statement error
 select TRIM('hello', 'world', 'aaa')

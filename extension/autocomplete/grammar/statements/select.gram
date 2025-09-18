@@ -49,12 +49,13 @@ SchemaReservedTable <- SchemaQualification ReservedTableName
 CatalogReservedSchemaTable <- CatalogQualification ReservedSchemaQualification ReservedTableName
 
 TableFunction <- TableFunctionLateralOpt / TableFunctionAliasColon
-TableFunctionLateralOpt <- Lateral? QualifiedTableFunction TableFunctionArguments TableAlias?
-TableFunctionAliasColon <- TableAliasColon QualifiedTableFunction TableFunctionArguments
+TableFunctionLateralOpt <- Lateral? QualifiedTableFunction TableFunctionArguments WithOrdinality? TableAlias?
+TableFunctionAliasColon <- TableAliasColon QualifiedTableFunction TableFunctionArguments WithOrdinality?
+WithOrdinality <- 'WITH' 'ORDINALITY'
 QualifiedTableFunction <- CatalogQualification? SchemaQualification? TableFunctionName
 TableFunctionArguments <- Parens(List(FunctionArgument)?)
 FunctionArgument <- NamedParameter / Expression
-NamedParameter <- TypeName NamedParameterAssignment Expression
+NamedParameter <- TypeName Type? NamedParameterAssignment Expression
 NamedParameterAssignment <- ':=' / '=>'
 
 TableAlias <- 'AS'? (Identifier / StringLiteral) ColumnAliases?
@@ -113,8 +114,11 @@ OrderByExpressions <- List(OrderByExpression) / OrderByAll
 OrderByAll <- 'ALL' DescOrAsc? NullsFirstOrLast?
 
 LimitClause <- 'LIMIT' LimitValue
-OffsetClause <- 'OFFSET' LimitValue
+OffsetClause <- 'OFFSET' OffsetValue
 LimitValue <- 'ALL' / (NumberLiteral 'PERCENT') / (Expression '%'?)
+OffsetValue <- Expression RowOrRows?
+RowOrRows <- 'ROW' / 'ROWS'
+
 
 AliasedExpression <- (ColId ':' Expression) / (Expression 'AS' ColLabelOrString) / (Expression Identifier?)
 
