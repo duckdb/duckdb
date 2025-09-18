@@ -303,9 +303,10 @@ void MetadataManager::Write(WriteStream &sink) {
 
 void MetadataManager::Read(ReadStream &source) {
 	auto block_count = source.Read<uint64_t>();
-	unique_lock<mutex> guard(block_lock);
 	for (idx_t i = 0; i < block_count; i++) {
 		auto block = MetadataBlock::Read(source);
+
+		unique_lock<mutex> guard(block_lock);
 		auto entry = blocks.find(block.block_id);
 		if (entry == blocks.end()) {
 			// block does not exist yet
