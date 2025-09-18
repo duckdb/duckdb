@@ -20,10 +20,17 @@ public:
 
 	//! Optimize TopN window function to aggregate
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> op);
+
+private:
 	//! Whether we can perform the optimization on this operator
 	static bool CanOptimize(LogicalOperator &op, optional_ptr<ClientContext> context = nullptr);
 
-private:
+	unique_ptr<LogicalOperator> CreateAggregateOperator(vector<unique_ptr<Expression>> children, LogicalWindow &window,
+	                                                    unique_ptr<Expression> limit) const;
+	unique_ptr<LogicalOperator> CreateUnnestListOperator(const child_list_t<LogicalType> &input_types,
+	                                                     idx_t aggregate_idx) const;
+	unique_ptr<LogicalOperator> CreateUnnestStructOperator(const child_list_t<LogicalType> &input_types,
+	                                                       idx_t unnest_list_idx) const;
 	ClientContext &context;
 	Optimizer &optimizer;
 };
