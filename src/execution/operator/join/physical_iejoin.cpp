@@ -279,9 +279,6 @@ struct IEJoinUnion {
 		result.reserve(table.count);
 
 		auto &collection = *table.sorted->payload_data;
-		TupleDataScanState scanner;
-		collection.InitializeScan(scanner);
-
 		vector<column_t> scan_ids(1, col_idx);
 		TupleDataScanState state;
 		collection.InitializeScan(state, scan_ids);
@@ -986,7 +983,7 @@ public:
 			return;
 		}
 
-		// Compute the starting row for reach block
+		// Compute the starting row for each block
 		// (In theory these are all the same size, but you never know...)
 		auto &left_table = *gsink.tables[0];
 		const auto left_blocks = left_table.BlockCount();

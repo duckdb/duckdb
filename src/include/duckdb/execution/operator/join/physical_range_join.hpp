@@ -88,6 +88,8 @@ public:
 		void Materialize(ExecutionContext &context, InterruptState &interrupt);
 		//! Materialize an empty sorted run.
 		void MaterializeEmpty(ClientContext &client);
+		//! Print the table to the console
+		void Print();
 
 		//! Create an iteration state
 		unique_ptr<ExternalBlockIteratorState> CreateIteratorState() {

@@ -115,6 +115,20 @@ void PhysicalRangeJoin::GlobalSortedTable::MaterializeEmpty(ClientContext &clien
 	sorted = make_uniq<SortedRun>(client, *sort, false);
 }
 
+void PhysicalRangeJoin::GlobalSortedTable::Print() {
+	D_ASSERT(sorted);
+	auto &collection = *sorted->payload_data;
+	TupleDataScanState scanner;
+	collection.InitializeScan(scanner);
+
+	DataChunk payload;
+	collection.InitializeScanChunk(scanner, payload);
+
+	while (collection.Scan(scanner, payload)) {
+		payload.Print();
+	}
+}
+
 //===--------------------------------------------------------------------===//
 // RangeJoinMaterializeTask
 //===--------------------------------------------------------------------===//
@@ -393,7 +407,7 @@ static void TemplatedSliceSortedPayload(DataChunk &chunk, TupleDataCollection &p
 
 	const auto payload_ptrs = FlatVector::GetData<data_ptr_t>(chunk_state.row_locations);
 	for (idx_t i = 0; i < result_count; ++i) {
-		const auto idx = result.get_index(i);
+		const auto idx = state.GetIndex(chunk_idx, result.get_index(i));
 		payload_ptrs[i] = itr[idx].GetPayload();
 	}
 	TupleDataCollection::ResetCachedCastVectors(chunk_state, chunk_state.column_ids);
