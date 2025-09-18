@@ -122,10 +122,18 @@ static void TemplatedSort(ClientContext &context, const TupleDataCollection &key
 	auto ska_extract_key =
 	    SkaExtractKey<SORT_KEY>(requires_next_sort, ska_sort_width, sort_skippable_bytes, context.interrupted);
 
-	const auto fallback = [ska_extract_key](const BLOCK_ITERATOR &fb_begin, const BLOCK_ITERATOR &fb_end) {
-		duckdb_ska_sort::ska_sort(fb_begin, fb_end, ska_extract_key);
-	};
-	duckdb_vergesort::vergesort(begin, end, std::less<SORT_KEY>(), fallback);
+	if (std::is_same<NextUnsigned<uint64_t>::type, uhugeint_t>::value) {
+		// No native support for __uint128_t, so random access with FastMod is more expensive: avoid radix sort
+		static const auto fallback = [](const BLOCK_ITERATOR &fb_begin, const BLOCK_ITERATOR &fb_end) {
+			duckdb_pdqsort::pdqsort_branchless(fb_begin, fb_end);
+		};
+		duckdb_vergesort::vergesort(begin, end, std::less<SORT_KEY>(), fallback);
+	} else {
+		const auto fallback = [ska_extract_key](const BLOCK_ITERATOR &fb_begin, const BLOCK_ITERATOR &fb_end) {
+			duckdb_ska_sort::ska_sort(fb_begin, fb_end, ska_extract_key);
+		};
+		duckdb_vergesort::vergesort(begin, end, std::less<SORT_KEY>(), fallback);
+	}
 
 	if (context.interrupted.load(std::memory_order_relaxed)) {
 		throw InterruptException();
