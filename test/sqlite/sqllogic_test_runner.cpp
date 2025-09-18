@@ -5,6 +5,7 @@
 #include "duckdb/common/file_open_flags.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
 #include "duckdb/main/extension/generated_extension_loader.hpp"
+#include "duckdb/common/types/uuid.hpp"
 #include "duckdb/main/extension_entries.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "sqllogic_parser.hpp"
@@ -222,9 +223,20 @@ string SQLLogicTestRunner::ReplaceKeywords(string input) {
 		auto &value = it.second;
 		input = StringUtil::Replace(input, StringUtil::Format("${%s}", name), value);
 	}
+	input = StringUtil::Replace(input, "{UUID}", UUID::ToString(UUID::GenerateRandomUUID()));
 	input = StringUtil::Replace(input, "__TEST_DIR__", TestDirectoryPath());
 	input = StringUtil::Replace(input, "__WORKING_DIRECTORY__", FileSystem::GetWorkingDirectory());
 	input = StringUtil::Replace(input, "__BUILD_DIRECTORY__", DUCKDB_BUILD_DIRECTORY);
+
+	auto &test_config = TestConfiguration::Get();
+	string data_location = test_config.DataLocation();
+
+	input = StringUtil::Replace(input, "'data/", string("'") + data_location);
+	input = StringUtil::Replace(input, "\"data/", string("\"") + data_location);
+	if (StringUtil::StartsWith(input, "data/")) {
+		input = data_location + input.substr(5);
+	}
+
 	return input;
 }
 
@@ -596,7 +608,14 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 	bool perform_install = false;
 	bool perform_load = false;
 	if (!config->options.autoload_known_extensions) {
-		auto result = SQLLogicTestRunner::LoadExtension(*db, param);
+		auto result = ExtensionLoadResult::NOT_LOADED;
+		try {
+			result = SQLLogicTestRunner::LoadExtension(*db, param);
+		} catch (std::exception &ex) {
+			ErrorData error_data(ex);
+			parser.Fail("extension '%s' load threw an exception: %s", param, error_data.Message());
+		}
+
 		if (result == ExtensionLoadResult::LOADED_EXTENSION) {
 			// add the extension to the list of loaded extensions
 			extensions.insert(param);
@@ -1016,6 +1035,23 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				SKIP_TEST("require " + token.parameters[0]);
 				return;
 			}
+		} else if (token.type == SQLLogicTokenType::SQLLOGIC_TEST_ENV) {
+			if (InLoop()) {
+				parser.Fail("test-env cannot be called in a loop");
+			}
+
+			if (token.parameters.size() != 2) {
+				parser.Fail("test-env requires 2 arguments: <env name> <default env val>");
+			}
+			auto env_var = token.parameters[0];
+			auto env_actual = test_config.GetTestEnv(env_var, token.parameters[1]);
+
+			// Check if we have something defining from our test
+			if (environment_variables.count(env_var)) {
+				parser.Fail(StringUtil::Format("Environment/Test variable '%s' has already been defined", env_var));
+			}
+			environment_variables[env_var] = env_actual;
+
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_REQUIRE_ENV) {
 			if (InLoop()) {
 				parser.Fail("require-env cannot be called in a loop");

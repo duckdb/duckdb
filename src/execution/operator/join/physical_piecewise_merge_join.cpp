@@ -161,17 +161,20 @@ SinkFinalizeType PhysicalPiecewiseMergeJoin::Finalize(Pipeline &pipeline, Event 
 		(void)filter_pushdown->Finalize(client, nullptr, *gstate.global_filter_state, *this);
 	}
 
+	gstate.table->Finalize(client, input.interrupt_state);
+
 	if (PropagatesBuildSide(join_type)) {
 		// for FULL/RIGHT OUTER JOIN, initialize found_match to false for every tuple
 		gstate.table->IntializeMatches();
 	}
+
 	if (gstate.table->Count() == 0 && EmptyResultIfRHSIsEmpty()) {
 		// Empty input!
+		gstate.table->MaterializeEmpty(client);
 		return SinkFinalizeType::NO_OUTPUT_POSSIBLE;
 	}
 
 	// Sort the current input child
-	gstate.table->Finalize(client, input.interrupt_state);
 	gstate.table->Materialize(pipeline, event);
 
 	return SinkFinalizeType::READY;

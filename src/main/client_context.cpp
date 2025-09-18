@@ -33,9 +33,14 @@
 #include "duckdb/parser/statement/drop_statement.hpp"
 #include "duckdb/parser/statement/execute_statement.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
+#include "duckdb/parser/statement/delete_statement.hpp"
+#include "duckdb/parser/statement/insert_statement.hpp"
+#include "duckdb/parser/statement/merge_into_statement.hpp"
+#include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/parser/statement/prepare_statement.hpp"
 #include "duckdb/parser/statement/relation_statement.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/tableref/column_data_ref.hpp"
 #include "duckdb/planner/operator/logical_execute.hpp"
 #include "duckdb/planner/planner.hpp"
 #include "duckdb/planner/pragma_handler.hpp"
@@ -497,7 +502,8 @@ void ClientContext::CheckIfPreparedStatementIsExecutable(PreparedStatementData &
 		auto &modified_database = it.first;
 		auto entry = manager.GetDatabase(*this, modified_database);
 		if (!entry) {
-			throw InternalException("Database \"%s\" not found", modified_database);
+			// database has been detached
+			throw InvalidInputException("Database \"%s\" not found", modified_database);
 		}
 		if (entry->IsReadOnly()) {
 			throw InvalidInputException(StringUtil::Format(
@@ -1204,32 +1210,86 @@ unique_ptr<TableDescription> ClientContext::TableInfo(const string &schema_name,
 	return TableInfo(INVALID_CATALOG, schema_name, table_name);
 }
 
+CommonTableExpressionMap &GetCTEMap(SQLStatement &statement) {
+	switch (statement.type) {
+	case StatementType::INSERT_STATEMENT:
+		return statement.Cast<InsertStatement>().cte_map;
+	case StatementType::DELETE_STATEMENT:
+		return statement.Cast<DeleteStatement>().cte_map;
+	case StatementType::UPDATE_STATEMENT:
+		return statement.Cast<UpdateStatement>().cte_map;
+	case StatementType::MERGE_INTO_STATEMENT:
+		return statement.Cast<MergeIntoStatement>().cte_map;
+	default:
+		throw InvalidInputException(
+		    "Unsupported statement type for appender: expected INSERT, DELETE, UPDATE or MERGE INTO");
+	}
+}
+
+void ClientContext::Append(ColumnDataCollection &collection, const string &query, const vector<string> &column_names,
+                           const string &collection_name) {
+	// create the CTE for the appender
+	string alias = collection_name.empty() ? "appended_data" : collection_name;
+	auto column_data_ref = make_uniq<ColumnDataRef>(collection);
+	column_data_ref->alias = alias;
+	column_data_ref->expected_names = column_names;
+	auto cte = make_uniq<SelectNode>();
+	cte->select_list.push_back(make_uniq<StarExpression>());
+	cte->from_table = std::move(column_data_ref);
+	auto cte_select = make_uniq<SelectStatement>();
+	cte_select->node = std::move(cte);
+
+	// parse the query
+	Parser parser;
+	parser.ParseQuery(query);
+
+	// must be a single statement with CTEs
+	if (parser.statements.size() != 1) {
+		throw InvalidInputException("Expected exactly 1 query for appending data");
+	}
+
+	// add the appender data as a CTE to the cte map
+	auto &cte_map = GetCTEMap(*parser.statements[0]);
+	auto cte_info = make_uniq<CommonTableExpressionInfo>();
+	cte_info->query = std::move(cte_select);
+	cte_info->materialized = CTEMaterialize::CTE_MATERIALIZE_NEVER;
+
+	cte_map.map.insert(alias, std::move(cte_info));
+
+	// now we have the query - run it in a transaction
+	auto result = Query(std::move(parser.statements[0]), false);
+	if (result->HasError()) {
+		result->GetErrorObject().Throw("Failed to append: ");
+	}
+}
+
 void ClientContext::Append(TableDescription &description, ColumnDataCollection &collection,
                            optional_ptr<const vector<LogicalIndex>> column_ids) {
-
-	RunFunctionInTransaction([&]() {
-		auto &table_entry =
-		    Catalog::GetEntry<TableCatalogEntry>(*this, description.database, description.schema, description.table);
-		// verify that the table columns and types match up
-		if (description.PhysicalColumnCount() != table_entry.GetColumns().PhysicalColumnCount()) {
-			throw InvalidInputException("Failed to append: table entry has different number of columns!");
-		}
-		idx_t table_entry_col_idx = 0;
-		for (idx_t i = 0; i < description.columns.size(); i++) {
-			auto &column = description.columns[i];
-			if (column.Generated()) {
-				continue;
+	string table_name = "__duckdb_internal_appended_data";
+	string query = "INSERT INTO ";
+	if (!description.database.empty()) {
+		query += StringUtil::Format("%s.", SQLIdentifier(description.database));
+	}
+	if (!description.schema.empty()) {
+		query += StringUtil::Format("%s.", SQLIdentifier(description.schema));
+	}
+	query += StringUtil::Format("%s", SQLIdentifier(description.table));
+	if (column_ids && !column_ids->empty()) {
+		query += "(";
+		auto &ids = *column_ids;
+		for (idx_t i = 0; i < ids.size(); i++) {
+			if (i > 0) {
+				query += ", ";
 			}
-			if (column.Type() != table_entry.GetColumns().GetColumn(PhysicalIndex(table_entry_col_idx)).Type()) {
-				throw InvalidInputException("Failed to append: table entry has different number of columns!");
-			}
-			table_entry_col_idx++;
+			auto &col_name = description.columns[ids[i].index].Name();
+			query += StringUtil::Format("%s", SQLIdentifier(col_name));
 		}
-		auto binder = Binder::CreateBinder(*this);
-		auto bound_constraints = binder->BindConstraints(table_entry);
-		MetaTransaction::Get(*this).ModifyDatabase(table_entry.ParentCatalog().GetAttached());
-		table_entry.GetStorage().LocalAppend(table_entry, *this, collection, bound_constraints, column_ids);
-	});
+		query += ")";
+	}
+	query += " FROM ";
+	query += table_name;
+	vector<string> column_names;
+	Append(collection, query, column_names, table_name);
 }
 
 void ClientContext::InternalTryBindRelation(Relation &relation, vector<ColumnDefinition> &result_columns) {

@@ -186,8 +186,8 @@ public:
 	//! Initialize a parallel scan over the tuple data collection over a subset of the columns
 	void InitializeScan(TupleDataParallelScanState &gstate, vector<column_t> column_ids,
 	                    TupleDataPinProperties properties = TupleDataPinProperties::UNPIN_AFTER_DONE) const;
-	//! Grab the chunk state for the given segment and chunk index, returns the count of the chunk
-	idx_t FetchChunk(TupleDataScanState &state, idx_t segment_idx, idx_t chunk_idx, bool init_heap);
+	//! Grab the chunk state for the given chunk index, returns the count of the chunk
+	idx_t FetchChunk(TupleDataScanState &state, idx_t chunk_idx, bool init_heap);
 	//! Scans a DataChunk from the TupleDataCollection
 	bool Scan(TupleDataScanState &state, DataChunk &result);
 	//! Scans a DataChunk from the TupleDataCollection

@@ -86,6 +86,8 @@ public:
 		void Materialize(Pipeline &pipeline, Event &event);
 		//! Single-threaded materialisation.
 		void Materialize(ExecutionContext &context, InterruptState &interrupt);
+		//! Materialize an empty sorted run.
+		void MaterializeEmpty(ClientContext &client);
 
 		//! Create an iteration state
 		unique_ptr<ExternalBlockIteratorState> CreateIteratorState() {

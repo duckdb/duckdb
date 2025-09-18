@@ -566,11 +566,16 @@ void TupleDataCollection::InitializeScan(TupleDataParallelScanState &state, vect
 	InitializeScan(state.scan_state, std::move(column_ids), properties);
 }
 
-idx_t TupleDataCollection::FetchChunk(TupleDataScanState &state, const idx_t segment_idx, const idx_t chunk_idx,
-                                      const bool init_heap) {
-	auto &segment = *segments[segment_idx];
-	allocator->InitializeChunkState(segment, state.pin_state, state.chunk_state, chunk_idx, init_heap);
-	return segment.chunks[chunk_idx].count;
+idx_t TupleDataCollection::FetchChunk(TupleDataScanState &state, idx_t chunk_idx, bool init_heap) {
+	for (idx_t segment_idx = 0; segment_idx < segments.size(); segment_idx++) {
+		auto &segment = *segments[segment_idx];
+		if (chunk_idx < segment.ChunkCount()) {
+			segment.allocator->InitializeChunkState(segment, state.pin_state, state.chunk_state, chunk_idx, init_heap);
+			return segment.chunks[chunk_idx].count;
+		}
+		chunk_idx -= segment.ChunkCount();
+	}
+	throw InternalException("Chunk index out of in TupleDataCollection::FetchChunk");
 }
 
 bool TupleDataCollection::Scan(TupleDataScanState &state, DataChunk &result) {

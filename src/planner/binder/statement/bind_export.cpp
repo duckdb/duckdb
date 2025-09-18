@@ -268,6 +268,39 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	}
 
 	stmt.info->catalog = catalog;
+	// prepare the options for export
+	auto &format = stmt.info->format;
+	auto &options = stmt.info->options;
+	if (format == "csv") {
+		// insert default csv options, if not specified
+		if (options.find("header") == options.end()) {
+			options["header"].push_back(Value::INTEGER(1));
+		}
+		if (options.find("delimiter") == options.end() && options.find("sep") == options.end() &&
+		    options.find("delim") == options.end()) {
+			options["delimiter"].push_back(Value(","));
+		}
+		if (options.find("quote") == options.end()) {
+			options["quote"].push_back(Value("\""));
+		}
+		options.erase("force_quote");
+	}
+	// for any options that are write-only, use them for writing but don't put them in the COPY statements we generate
+	// for reading
+	auto &function = copy_function.function;
+	if (function.copy_options) {
+		auto copy_options = GetFullCopyOptionsList(function, CopyOptionMode::READ_ONLY);
+		vector<string> erased_options;
+		for (auto &entry : options) {
+			if (copy_options.find(entry.first) == copy_options.end()) {
+				erased_options.push_back(entry.first);
+			}
+		}
+		for (auto &erased : erased_options) {
+			options.erase(erased);
+		}
+	}
+
 	// create the export node
 	auto export_node =
 	    make_uniq<LogicalExport>(copy_function.function, std::move(stmt.info), std::move(exported_tables));

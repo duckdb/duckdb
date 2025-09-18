@@ -236,57 +236,70 @@ SELECT SUM(ue) FROM (SELECT UNNEST(le) ue FROM (SELECT g, LIST(e) le from list_d
 statement error
 SELECT SUM(UNNEST(le)) FROM ( SELECT g, LIST(e) le from list_data  GROUP BY g ORDER BY g) xx
 ----
+<REGEX>:.*Binder Error.*UNNEST not supported here.*
 
 # you're holding it wrong
 statement error
 SELECT LIST(LIST(42))
 ----
+<REGEX>:.*Binder Error.*aggregate function calls cannot be nested.*
 
 statement error
 SELECT UNNEST(UNNEST(LIST(42))
 ----
+<REGEX>:.*Parser Error.*syntax error.*
 
 statement error
 SELECT LIST()
 ----
+<REGEX>:.*Binder Error.*No function matches.*
 
 statement error
 SELECT LIST() FROM list_data
 ----
+<REGEX>:.*Binder Error.*No function matches.*
 
 statement error
 SELECT LIST(e, g) FROM list_data
 ----
+<REGEX>:.*Binder Error.*No function matches.*
 
 statement error
 SELECT g, UNNEST(l+1) u FROM (SELECT g, LIST(e) l FROM list_data GROUP BY g) u1
 ----
+<REGEX>:.*Binder Error.*No function matches.*
 
 statement error
 SELECT g, UNNEST(g) u FROM (SELECT g, LIST(e) l FROM list_data GROUP BY g) u1
 ----
+<REGEX>:.*Binder Error.*can only be applied to lists.*
 
 statement error
 SELECT g, UNNEST() u FROM (SELECT g, LIST(e) l FROM list_data GROUP BY g) u1
 ----
+<REGEX>:.*Binder Error.*requires a single argument.*
 
 statement error
 SELECT UNNEST(42)
 ----
+<REGEX>:.*Binder Error.*can only be applied to lists.*
 
 statement error
 SELECT UNNEST()
 ----
+<REGEX>:.*Binder Error.*requires a single argument.*
 
 statement error
 SELECT UNNEST(42) from list_data
 ----
+<REGEX>:.*Binder Error.*can only be applied to lists.*
 
 statement error
 SELECT UNNEST() from list_data
 ----
+<REGEX>:.*Binder Error.*requires a single argument.*
 
 statement error
 SELECT g FROM (SELECT g, LIST(e) l FROM list_data GROUP BY g) u1 where UNNEST(l) > 42
 ----
-
+<REGEX>:.*Binder Error.*UNNEST not supported here.*

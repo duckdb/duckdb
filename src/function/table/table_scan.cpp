@@ -2,15 +2,19 @@
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/dependency_list.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_config.hpp"
-#include "duckdb/optimizer/matcher/expression_matcher.hpp"
-#include "duckdb/planner/expression/bound_between_expression.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
@@ -491,6 +495,35 @@ bool TryScanIndex(ART &art, const ColumnList &column_list, TableFunctionInitInpu
 	// NOTE: We do not push down multi-column filters, e.g., 42 = a + b.
 	if (indexed_columns.size() != 1) {
 		return false;
+	}
+
+	// Resolve bound column references in the index_expr against the current input projection
+	column_t updated_index_column;
+	bool found_index_column_in_input = false;
+
+	// Find the indexed column amongst the input columns
+	for (idx_t i = 0; i < input.column_ids.size(); ++i) {
+		if (input.column_ids[i] == indexed_columns[0]) {
+			updated_index_column = i;
+			found_index_column_in_input = true;
+			break;
+		}
+	}
+
+	// If found, update the bound column ref within index_expr
+	if (found_index_column_in_input) {
+		ExpressionIterator::EnumerateExpression(index_expr, [&](Expression &expr) {
+			if (expr.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+				return;
+			}
+
+			auto &bound_column_ref_expr = expr.Cast<BoundColumnRefExpression>();
+
+			// If the bound column references the index column, use updated_index_column
+			if (bound_column_ref_expr.binding.column_index == indexed_columns[0]) {
+				bound_column_ref_expr.binding.column_index = updated_index_column;
+			}
+		});
 	}
 
 	// Get ART column.

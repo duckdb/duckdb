@@ -63,7 +63,12 @@ Connection *Command::CommandConnection(ExecuteContext &context) const {
 			if (!init_cmd.empty()) {
 				auto res = context.con->Query(init_cmd);
 				if (res->HasError()) {
-					FAIL("Startup queries provided via on_init failed: " + res->GetError());
+					string error_msg = "Startup queries provided via on_init failed: " + res->GetError();
+					if (context.is_parallel) {
+						throw std::runtime_error(error_msg);
+					} else {
+						FAIL(error_msg);
+					}
 				}
 			}
 
@@ -89,7 +94,7 @@ bool CanRestart(Connection &conn) {
 	auto databases = db_manager.GetDatabases();
 	idx_t database_count = 0;
 	for (auto &db_ref : databases) {
-		auto &db = db_ref.get();
+		auto &db = *db_ref;
 		if (db.IsSystem()) {
 			continue;
 		}
@@ -161,6 +166,7 @@ void Command::RestartDatabase(ExecuteContext &context, Connection *&connection, 
 unique_ptr<MaterializedQueryResult> Command::ExecuteQuery(ExecuteContext &context, Connection *connection,
                                                           string file_name, idx_t query_line) const {
 	query_break(query_line);
+
 	if (TestConfiguration::TestForceReload() && TestConfiguration::TestForceStorage()) {
 		RestartDatabase(context, connection, context.sql_query);
 	}

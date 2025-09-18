@@ -73,7 +73,6 @@ PhysicalRangeJoin::GlobalSortedTable::GlobalSortedTable(ClientContext &client,
 	// Set up the sort. We will materialize keys ourselves, so just set up references.
 	vector<BoundOrderByNode> orders;
 	vector<LogicalType> input_types;
-	D_ASSERT(order_bys.size() == 1);
 	for (const auto &order_by : order_bys) {
 		auto order = order_by.Copy();
 		const auto type = order.expression->return_type;
@@ -111,6 +110,11 @@ void PhysicalRangeJoin::GlobalSortedTable::IntializeMatches() {
 	memset(found_match.get(), 0, sizeof(bool) * Count());
 }
 
+void PhysicalRangeJoin::GlobalSortedTable::MaterializeEmpty(ClientContext &client) {
+	D_ASSERT(!sorted);
+	sorted = make_uniq<SortedRun>(client, *sort, false);
+}
+
 //===--------------------------------------------------------------------===//
 // RangeJoinMaterializeTask
 //===--------------------------------------------------------------------===//
@@ -135,6 +139,9 @@ public:
 		sort.MaterializeSortedRun(execution, input);
 		if (++table.tasks_completed == tasks_scheduled) {
 			table.sorted = sort.GetSortedRun(sort_global);
+			if (!table.sorted) {
+				table.MaterializeEmpty(execution.client);
+			}
 		}
 
 		event->FinishTask();
@@ -199,6 +206,9 @@ void PhysicalRangeJoin::GlobalSortedTable::Materialize(ExecutionContext &context
 	OperatorSourceInput source {*global_source, *local_source, interrupt};
 	sort->MaterializeSortedRun(context, source);
 	sorted = sort->GetSortedRun(*global_source);
+	if (!sorted) {
+		MaterializeEmpty(context.client);
+	}
 }
 
 PhysicalRangeJoin::PhysicalRangeJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op, PhysicalOperatorType type,

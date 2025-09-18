@@ -42,7 +42,7 @@ SELECT * FROM test ORDER BY 1;
 statement error
 COPY test TO 'data/csv/test/force_not_null.csv' (FORCE_NOT_NULL (col_b), NULL 'test', HEADER 0);
 ----
- Unrecognized option CSV writer "force_not_null"
+Option "FORCE_NOT_NULL" is not supported for writing - only for reading
 
 # FORCE_NOT_NULL must not be empty and must have the correct parameter type
 statement error

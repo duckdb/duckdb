@@ -76,6 +76,9 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::Decorrelate(unique_ptr<Logica
 				op.children[0] = DecorrelateIndependent(binder, std::move(op.children[0]));
 			}
 
+			// we are now done with the left side, mark it as uncorrelated
+			entry->second = false;
+
 			// rewrite
 			idx_t lateral_depth = 0;
 
@@ -184,10 +187,15 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::Decorrelate(unique_ptr<Logica
 				JoinCondition compare_cond;
 				compare_cond.left = std::move(op.expression_children[child_idx]);
 				auto &child_type = op.child_types[child_idx];
+				auto &compare_type = op.child_targets[child_idx];
 				compare_cond.right = BoundCastExpression::AddDefaultCastToType(
 				    make_uniq<BoundColumnRefExpression>(child_type, plan_columns[child_idx]),
 				    op.child_targets[child_idx]);
 				compare_cond.comparison = op.comparison_type;
+
+				// push collations
+				ExpressionBinder::PushCollation(binder.context, compare_cond.left, compare_type);
+				ExpressionBinder::PushCollation(binder.context, compare_cond.right, compare_type);
 				op.conditions.push_back(std::move(compare_cond));
 			}
 		}

@@ -322,7 +322,7 @@ string_t BignumIntermediate::Add(Vector &result_vector, const BignumIntermediate
 	}
 	Trim(reinterpret_cast<data_ptr_t>(target_data + Bignum::BIGNUM_HEADER_SIZE), result_size_data, is_result_negative);
 	Bignum::SetHeader(target_data, result_size_data, is_result_negative);
-	target.SetSizeAndFinalize(result_size_data + Bignum::BIGNUM_HEADER_SIZE);
+	target.SetSizeAndFinalize(result_size_data + Bignum::BIGNUM_HEADER_SIZE, result_size);
 	return target;
 }
 void BignumIntermediate::AddInPlace(ArenaAllocator &allocator, const BignumIntermediate &rhs) {

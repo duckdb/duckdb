@@ -372,8 +372,14 @@ void ColumnDataCheckpointer::WritePersistentSegments(ColumnCheckpointState &stat
 	auto &col_data = state.column_data;
 	auto nodes = col_data.data.MoveSegments();
 
+	idx_t current_row = row_group.start;
 	for (idx_t segment_idx = 0; segment_idx < nodes.size(); segment_idx++) {
 		auto segment = nodes[segment_idx].node.get();
+		if (segment->start != current_row) {
+			throw InternalException(
+			    "Failure in RowGroup::Checkpoint - column data pointer is unaligned with row group start");
+		}
+		current_row += segment->count;
 		auto pointer = segment->GetDataPointer();
 
 		// merge the persistent stats into the global column stats

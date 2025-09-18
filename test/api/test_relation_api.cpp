@@ -1,8 +1,11 @@
 #include "catch.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/enums/joinref_type.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/main/relation/value_relation.hpp"
 #include "iostream"
 #include "test_helpers.hpp"
+#include "duckdb/main/relation/materialized_relation.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -1057,5 +1060,78 @@ TEST_CASE("Test Relation Pending Query API", "[relation_api]") {
 		// query the connection as normal after
 		result = con.Query("SELECT 42");
 		REQUIRE(CHECK_COLUMN(result, 0, {42}));
+	}
+}
+
+TEST_CASE("Construct ValueRelation with RelationContextWrapper and operate on it", "[relation_api][txn][wrapper]") {
+	DuckDB db;
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	// Build expressions to force the "expressions" overload (not the constants path)
+	duckdb::vector<duckdb::vector<duckdb::unique_ptr<duckdb::ParsedExpression>>> expressions;
+	{
+		duckdb::vector<duckdb::unique_ptr<duckdb::ParsedExpression>> row;
+
+		{
+			duckdb::ConstantExpression ce1(duckdb::Value::INTEGER(1));
+			row.push_back(ce1.Copy());
+		}
+		{
+			duckdb::ConstantExpression ce2(duckdb::Value::INTEGER(2));
+			row.push_back(ce2.Copy());
+		}
+		expressions.push_back(std::move(row));
+	}
+
+	// Explicitly create a RelationContextWrapper from the client's context
+	auto rcw = duckdb::make_shared_ptr<duckdb::RelationContextWrapper>(con.context);
+
+	// Manually construct a ValueRelation using the RelationContextWrapper + expressions ctor
+	duckdb::shared_ptr<duckdb::Relation> rel;
+	REQUIRE_NOTHROW(rel = duckdb::make_shared_ptr<duckdb::ValueRelation>(rcw, std::move(expressions),
+	                                                                     duckdb::vector<std::string> {}, "vr"));
+
+	// Base relation should execute (1 row, 2 columns)
+	duckdb::unique_ptr<QueryResult> result;
+	REQUIRE_NOTHROW(result = rel->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	REQUIRE(CHECK_COLUMN(result, 1, {2}));
+
+	// Project on top — should bind & execute under a valid transaction
+	REQUIRE_NOTHROW(result = rel->Project("1+1, 2+2")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {4}));
+
+	// Aggregate on top — also must bind & execute cleanly
+	REQUIRE_NOTHROW(result = rel->Aggregate("count(*)")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+}
+
+TEST_CASE("Test materialized relations", "[relation_api]") {
+	auto db_path = TestCreatePath("relational_api_materialized_view.db");
+	{
+		DuckDB db(db_path);
+		Connection con(db);
+		con.EnableQueryVerification();
+
+		REQUIRE_NO_FAIL(con.Query("create table tbl(a varchar);"));
+
+		auto result = con.Query("insert into tbl values ('test') returning *");
+		auto &materialized_result = result->Cast<MaterializedQueryResult>();
+		auto materialized_relation = make_shared_ptr<MaterializedRelation>(
+		    con.context, materialized_result.TakeCollection(), result->names, "vw");
+		materialized_relation->CreateView("vw");
+		materialized_relation.reset();
+
+		result = con.Query("SELECT * FROM vw");
+		REQUIRE(CHECK_COLUMN(result, 0, {"test"}));
+	}
+	// reset and query again
+	{
+		DuckDB db(db_path);
+		Connection con(db);
+		auto result = con.Query("SELECT * FROM vw");
+		REQUIRE(CHECK_COLUMN(result, 0, {"test"}));
 	}
 }

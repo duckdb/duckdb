@@ -69,7 +69,7 @@ struct ArrowResultWrapper {
 };
 
 struct AppenderWrapper {
-	unique_ptr<Appender> appender;
+	unique_ptr<BaseAppender> appender;
 	ErrorData error_data;
 };
 

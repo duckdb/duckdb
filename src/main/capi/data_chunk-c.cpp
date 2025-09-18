@@ -48,8 +48,12 @@ void duckdb_data_chunk_reset(duckdb_data_chunk chunk) {
 
 duckdb_vector duckdb_create_vector(duckdb_logical_type type, idx_t capacity) {
 	auto dtype = reinterpret_cast<duckdb::LogicalType *>(type);
-	auto vector = new duckdb::Vector(*dtype, capacity);
-	return reinterpret_cast<duckdb_vector>(vector);
+	try {
+		auto vector = new duckdb::Vector(*dtype, capacity);
+		return reinterpret_cast<duckdb_vector>(vector);
+	} catch (...) {
+		return nullptr;
+	}
 }
 
 void duckdb_destroy_vector(duckdb_vector *vector) {

@@ -639,6 +639,15 @@ struct ErrorsAsJSONSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct ExperimentalMetadataReuseSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "experimental_metadata_reuse";
+	static constexpr const char *Description = "EXPERIMENTAL: Re-use row group and table metadata when checkpointing.";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
+};
+
 struct ExplainOutputSetting {
 	using RETURN_TYPE = ExplainOutputType;
 	static constexpr const char *Name = "explain_output";
@@ -860,7 +869,7 @@ struct LoggingLevel {
 struct LoggingMode {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "logging_mode";
-	static constexpr const char *Description = "Enables the logger";
+	static constexpr const char *Description = "Determines which types of log messages are logged";
 	static constexpr const char *InputType = "VARCHAR";
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
@@ -870,7 +879,7 @@ struct LoggingMode {
 struct LoggingStorage {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "logging_storage";
-	static constexpr const char *Description = "Set the logging storage (memory/stdout/file)";
+	static constexpr const char *Description = "Set the logging storage (memory/stdout/file/<custom>)";
 	static constexpr const char *InputType = "VARCHAR";
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
@@ -1228,16 +1237,6 @@ struct UsernameSetting {
 	static constexpr const char *Name = "username";
 	static constexpr const char *Description = "The username to use. Ignored for legacy compatibility.";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
-};
-
-struct WalEncryptionSetting {
-	using RETURN_TYPE = bool;
-	static constexpr const char *Name = "wal_encryption";
-	static constexpr const char *Description = "Encrypt the WAL if the database is encrypted";
-	static constexpr const char *InputType = "BOOLEAN";
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);

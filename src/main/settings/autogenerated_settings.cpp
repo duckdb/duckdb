@@ -26,7 +26,7 @@ void AccessModeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const 
 }
 
 void AccessModeSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.access_mode = DBConfig().options.access_mode;
+	config.options.access_mode = DBConfigOptions().access_mode;
 }
 
 Value AccessModeSetting::GetSetting(const ClientContext &context) {
@@ -48,7 +48,7 @@ void AllocatorBackgroundThreadsSetting::ResetGlobal(DatabaseInstance *db, DBConf
 	if (!OnGlobalReset(db, config)) {
 		return;
 	}
-	config.options.allocator_background_threads = DBConfig().options.allocator_background_threads;
+	config.options.allocator_background_threads = DBConfigOptions().allocator_background_threads;
 }
 
 Value AllocatorBackgroundThreadsSetting::GetSetting(const ClientContext &context) {
@@ -70,7 +70,7 @@ void AllowCommunityExtensionsSetting::ResetGlobal(DatabaseInstance *db, DBConfig
 	if (!OnGlobalReset(db, config)) {
 		return;
 	}
-	config.options.allow_community_extensions = DBConfig().options.allow_community_extensions;
+	config.options.allow_community_extensions = DBConfigOptions().allow_community_extensions;
 }
 
 Value AllowCommunityExtensionsSetting::GetSetting(const ClientContext &context) {
@@ -92,7 +92,7 @@ void AllowUnredactedSecretsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &
 	if (!OnGlobalReset(db, config)) {
 		return;
 	}
-	config.options.allow_unredacted_secrets = DBConfig().options.allow_unredacted_secrets;
+	config.options.allow_unredacted_secrets = DBConfigOptions().allow_unredacted_secrets;
 }
 
 Value AllowUnredactedSecretsSetting::GetSetting(const ClientContext &context) {
@@ -114,7 +114,7 @@ void AllowUnsignedExtensionsSetting::ResetGlobal(DatabaseInstance *db, DBConfig 
 	if (!OnGlobalReset(db, config)) {
 		return;
 	}
-	config.options.allow_unsigned_extensions = DBConfig().options.allow_unsigned_extensions;
+	config.options.allow_unsigned_extensions = DBConfigOptions().allow_unsigned_extensions;
 }
 
 Value AllowUnsignedExtensionsSetting::GetSetting(const ClientContext &context) {
@@ -137,7 +137,7 @@ void AutoinstallExtensionRepositorySetting::SetGlobal(DatabaseInstance *db, DBCo
 }
 
 void AutoinstallExtensionRepositorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.autoinstall_extension_repo = DBConfig().options.autoinstall_extension_repo;
+	config.options.autoinstall_extension_repo = DBConfigOptions().autoinstall_extension_repo;
 }
 
 Value AutoinstallExtensionRepositorySetting::GetSetting(const ClientContext &context) {
@@ -153,7 +153,7 @@ void AutoinstallKnownExtensionsSetting::SetGlobal(DatabaseInstance *db, DBConfig
 }
 
 void AutoinstallKnownExtensionsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.autoinstall_known_extensions = DBConfig().options.autoinstall_known_extensions;
+	config.options.autoinstall_known_extensions = DBConfigOptions().autoinstall_known_extensions;
 }
 
 Value AutoinstallKnownExtensionsSetting::GetSetting(const ClientContext &context) {
@@ -169,7 +169,7 @@ void AutoloadKnownExtensionsSetting::SetGlobal(DatabaseInstance *db, DBConfig &c
 }
 
 void AutoloadKnownExtensionsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.autoload_known_extensions = DBConfig().options.autoload_known_extensions;
+	config.options.autoload_known_extensions = DBConfigOptions().autoload_known_extensions;
 }
 
 Value AutoloadKnownExtensionsSetting::GetSetting(const ClientContext &context) {
@@ -181,7 +181,7 @@ Value AutoloadKnownExtensionsSetting::GetSetting(const ClientContext &context) {
 // Checkpoint Threshold
 //===----------------------------------------------------------------------===//
 void CheckpointThresholdSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.checkpoint_wal_size = DBConfig().options.checkpoint_wal_size;
+	config.options.checkpoint_wal_size = DBConfigOptions().checkpoint_wal_size;
 }
 
 //===----------------------------------------------------------------------===//
@@ -192,7 +192,7 @@ void CustomExtensionRepositorySetting::SetGlobal(DatabaseInstance *db, DBConfig 
 }
 
 void CustomExtensionRepositorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.custom_extension_repo = DBConfig().options.custom_extension_repo;
+	config.options.custom_extension_repo = DBConfigOptions().custom_extension_repo;
 }
 
 Value CustomExtensionRepositorySetting::GetSetting(const ClientContext &context) {
@@ -260,7 +260,7 @@ void DisableDatabaseInvalidationSetting::ResetGlobal(DatabaseInstance *db, DBCon
 	if (!OnGlobalReset(db, config)) {
 		return;
 	}
-	config.options.disable_database_invalidation = DBConfig().options.disable_database_invalidation;
+	config.options.disable_database_invalidation = DBConfigOptions().disable_database_invalidation;
 }
 
 Value DisableDatabaseInvalidationSetting::GetSetting(const ClientContext &context) {
@@ -282,7 +282,7 @@ void EnableExternalAccessSetting::ResetGlobal(DatabaseInstance *db, DBConfig &co
 	if (!OnGlobalReset(db, config)) {
 		return;
 	}
-	config.options.enable_external_access = DBConfig().options.enable_external_access;
+	config.options.enable_external_access = DBConfigOptions().enable_external_access;
 }
 
 Value EnableExternalAccessSetting::GetSetting(const ClientContext &context) {
@@ -298,7 +298,7 @@ void EnableHTTPMetadataCacheSetting::SetGlobal(DatabaseInstance *db, DBConfig &c
 }
 
 void EnableHTTPMetadataCacheSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.http_metadata_cache_enable = DBConfig().options.http_metadata_cache_enable;
+	config.options.http_metadata_cache_enable = DBConfigOptions().http_metadata_cache_enable;
 }
 
 Value EnableHTTPMetadataCacheSetting::GetSetting(const ClientContext &context) {
@@ -372,7 +372,7 @@ void ExtensionDirectorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config
 }
 
 void ExtensionDirectorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.extension_directory = DBConfig().options.extension_directory;
+	config.options.extension_directory = DBConfigOptions().extension_directory;
 }
 
 Value ExtensionDirectorySetting::GetSetting(const ClientContext &context) {
@@ -394,7 +394,7 @@ void ExternalThreadsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config)
 	if (!OnGlobalReset(db, config)) {
 		return;
 	}
-	config.options.external_threads = DBConfig().options.external_threads;
+	config.options.external_threads = DBConfigOptions().external_threads;
 }
 
 Value ExternalThreadsSetting::GetSetting(const ClientContext &context) {
@@ -422,7 +422,7 @@ void HTTPProxySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const V
 }
 
 void HTTPProxySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.http_proxy = DBConfig().options.http_proxy;
+	config.options.http_proxy = DBConfigOptions().http_proxy;
 }
 
 Value HTTPProxySetting::GetSetting(const ClientContext &context) {
@@ -438,7 +438,7 @@ void HTTPProxyPasswordSetting::SetGlobal(DatabaseInstance *db, DBConfig &config,
 }
 
 void HTTPProxyPasswordSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.http_proxy_password = DBConfig().options.http_proxy_password;
+	config.options.http_proxy_password = DBConfigOptions().http_proxy_password;
 }
 
 Value HTTPProxyPasswordSetting::GetSetting(const ClientContext &context) {
@@ -454,7 +454,7 @@ void HTTPProxyUsernameSetting::SetGlobal(DatabaseInstance *db, DBConfig &config,
 }
 
 void HTTPProxyUsernameSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.http_proxy_username = DBConfig().options.http_proxy_username;
+	config.options.http_proxy_username = DBConfigOptions().http_proxy_username;
 }
 
 Value HTTPProxyUsernameSetting::GetSetting(const ClientContext &context) {
@@ -470,7 +470,7 @@ void LockConfigurationSetting::SetGlobal(DatabaseInstance *db, DBConfig &config,
 }
 
 void LockConfigurationSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.lock_configuration = DBConfig().options.lock_configuration;
+	config.options.lock_configuration = DBConfigOptions().lock_configuration;
 }
 
 Value LockConfigurationSetting::GetSetting(const ClientContext &context) {
@@ -504,7 +504,7 @@ void PinThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const 
 }
 
 void PinThreadsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.pin_threads = DBConfig().options.pin_threads;
+	config.options.pin_threads = DBConfigOptions().pin_threads;
 }
 
 Value PinThreadsSetting::GetSetting(const ClientContext &context) {
@@ -520,28 +520,12 @@ void SchedulerProcessPartialSetting::SetGlobal(DatabaseInstance *db, DBConfig &c
 }
 
 void SchedulerProcessPartialSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.scheduler_process_partial = DBConfig().options.scheduler_process_partial;
+	config.options.scheduler_process_partial = DBConfigOptions().scheduler_process_partial;
 }
 
 Value SchedulerProcessPartialSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value::BOOLEAN(config.options.scheduler_process_partial);
-}
-
-//===----------------------------------------------------------------------===//
-// Wal Encryption
-//===----------------------------------------------------------------------===//
-void WalEncryptionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.wal_encryption = input.GetValue<bool>();
-}
-
-void WalEncryptionSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.wal_encryption = DBConfig().options.wal_encryption;
-}
-
-Value WalEncryptionSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::BOOLEAN(config.options.wal_encryption);
 }
 
 //===----------------------------------------------------------------------===//
@@ -552,7 +536,7 @@ void ZstdMinStringLengthSetting::SetGlobal(DatabaseInstance *db, DBConfig &confi
 }
 
 void ZstdMinStringLengthSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.zstd_min_string_length = DBConfig().options.zstd_min_string_length;
+	config.options.zstd_min_string_length = DBConfigOptions().zstd_min_string_length;
 }
 
 Value ZstdMinStringLengthSetting::GetSetting(const ClientContext &context) {

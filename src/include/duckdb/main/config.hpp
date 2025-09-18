@@ -55,6 +55,7 @@ class SecretManager;
 class CompressionInfo;
 class EncryptionUtil;
 class HTTPUtil;
+class DatabaseFilePathManager;
 
 struct CompressionFunctionSet;
 struct DatabaseCacheEntry;
@@ -194,8 +195,6 @@ struct DBConfigOptions {
 	string duckdb_api;
 	//! Metadata from DuckDB callers
 	string custom_user_agent;
-	//!  By default, WAL is encrypted for encrypted databases
-	bool wal_encryption = true;
 	//! Encrypt the temp files
 	bool temp_file_encryption = false;
 	//! The default block allocation size for new duckdb database files (new as-in, they do not yet exist).
@@ -273,6 +272,8 @@ public:
 	shared_ptr<HTTPUtil> http_util;
 	//! Reference to the database cache entry (if any)
 	shared_ptr<DatabaseCacheEntry> db_cache_entry;
+	//! Reference to the database file path manager
+	shared_ptr<DatabaseFilePathManager> path_manager;
 
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);
@@ -281,6 +282,7 @@ public:
 	DUCKDB_API static const DBConfig &GetConfig(const ClientContext &context);
 	DUCKDB_API static const DBConfig &GetConfig(const DatabaseInstance &db);
 	DUCKDB_API static vector<ConfigurationOption> GetOptions();
+	DUCKDB_API static vector<ConfigurationAlias> GetAliases();
 	DUCKDB_API static idx_t GetOptionCount();
 	DUCKDB_API static idx_t GetAliasCount();
 	DUCKDB_API static vector<string> GetOptionNames();
@@ -294,18 +296,18 @@ public:
 	//! Fetcha n alias by index, or nullptr if out of range
 	DUCKDB_API static optional_ptr<const ConfigurationAlias> GetAliasByIndex(idx_t index);
 	//! Fetch an option by name. Returns a pointer to the option, or nullptr if none exists.
-	DUCKDB_API static optional_ptr<const ConfigurationOption> GetOptionByName(const string &name);
+	DUCKDB_API static optional_ptr<const ConfigurationOption> GetOptionByName(const String &name);
 	DUCKDB_API void SetOption(const ConfigurationOption &option, const Value &value);
 	DUCKDB_API void SetOption(optional_ptr<DatabaseInstance> db, const ConfigurationOption &option, const Value &value);
 	DUCKDB_API void SetOptionByName(const string &name, const Value &value);
 	DUCKDB_API void SetOptionsByName(const case_insensitive_map_t<Value> &values);
 	DUCKDB_API void ResetOption(optional_ptr<DatabaseInstance> db, const ConfigurationOption &option);
 	DUCKDB_API void SetOption(const string &name, Value value);
-	DUCKDB_API void ResetOption(const string &name);
-	DUCKDB_API void ResetGenericOption(const string &name);
+	DUCKDB_API void ResetOption(const String &name);
+	DUCKDB_API void ResetGenericOption(const String &name);
 	static LogicalType ParseLogicalType(const string &type);
 
-	DUCKDB_API void CheckLock(const string &name);
+	DUCKDB_API void CheckLock(const String &name);
 
 	DUCKDB_API static idx_t ParseMemoryLimit(const string &arg);
 

@@ -4,7 +4,8 @@ namespace duckdb {
 
 UnscentedKalmanFilter::UnscentedKalmanFilter()
     : x(STATE_DIM, 0.0), P(STATE_DIM, vector<double>(STATE_DIM, 0.0)), Q(STATE_DIM, vector<double>(STATE_DIM, 0.0)),
-      R(OBS_DIM, vector<double>(OBS_DIM, 0.0)), last_time(0.0), initialized(false) {
+      R(OBS_DIM, vector<double>(OBS_DIM, 0.0)), last_time(0.0), initialized(false), last_progress(-1.0),
+      scale_factor(1.0) {
 
 	// Calculate UKF parameters
 	lambda = ALPHA * ALPHA * (STATE_DIM + KAPPA) - STATE_DIM;
@@ -21,28 +22,48 @@ UnscentedKalmanFilter::UnscentedKalmanFilter()
 	}
 
 	// Initialize covariance matrices
-	P[0][0] = 0.01;  // progress variance
-	P[1][1] = 0.001; // velocity variance
+	P[0][0] = 0.165;  // progress variance
+	P[1][1] = 0.0098; // velocity variance
 
-	Q[0][0] = 1e-6; // process noise for progress
-	Q[1][1] = 1e-4; // process noise for velocity
+	Q[0][0] = 0.01; // process noise for progress
+	Q[1][1] = 0.0;  // process noise for velocity
 
-	R[0][0] = 0.05; // measurement noise for progress
+	R[0][0] = 0.000077; // measurement noise for progress
 }
 
 void UnscentedKalmanFilter::Update(double progress, double time) {
+	progress *= scale_factor;
 	if (!initialized) {
 		Initialize(progress, time);
 		return;
 	}
 	Predict(time);
-	UpdateInternal(progress);
+	if (last_progress != progress) {
+		UpdateInternal(progress);
+		last_progress = progress;
+	}
 }
 
 void UnscentedKalmanFilter::Initialize(double initial_progress, double current_time) {
+	// If the initial progress is zero we can't yet initalize, since the filter
+	// wont' have a reasonable guess about query velocity, just wait until some
+	// progress has been made.
+	if (initial_progress == 0.0 || current_time == 0.0) {
+		return;
+	}
+	// If the initial progress value is very small, it needs to be scaled up so
+	// its the same relative magnitude of updates that was used to determine
+	// the P, Q, and R parameters of the Kalman filter.
+	//
+	// The settings for the Kalman filter make assumptions around the magnitude of
+	// measurement noise.  If the progress updates are very small, the updates
+	// could be considered noise by the Kalman filter.
+	scale_factor = std::max(1.0, 0.1 / initial_progress);
+	initial_progress *= scale_factor;
 	x[0] = initial_progress;
-	x[1] = current_time == 0 ? 0.01 : initial_progress / current_time; // initial velocity guess
+	x[1] = initial_progress / current_time; // initial velocity guess
 	last_time = current_time;
+	last_progress = initial_progress;
 	initialized = true;
 }
 
@@ -246,14 +267,14 @@ double UnscentedKalmanFilter::GetVelocity() const {
 
 double UnscentedKalmanFilter::GetEstimatedRemainingSeconds() const {
 	if (!initialized) {
-		return -1.0;
+		return 2147483647.0;
 	}
 	if (x[1] <= 0) {
 		// velocity is negative or zero - we estimate this will never finish
 		return NumericLimits<double>::Maximum();
 	}
-	double remaining_progress = 1.0 - x[0];
-	return remaining_progress / x[1];
+	double remaining_progress = (1.0 * scale_factor) - x[0];
+	return std::max(remaining_progress / x[1], 0.0);
 }
 
 double UnscentedKalmanFilter::GetProgressVariance() const {

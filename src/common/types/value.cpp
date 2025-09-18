@@ -26,6 +26,7 @@
 #include "duckdb/common/types/bignum.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/types/string.hpp"
 #include "duckdb/common/types/value_map.hpp"
 
 #include <utility>
@@ -158,6 +159,13 @@ Value::Value(string val) : type_(LogicalType::VARCHAR), is_null(false) {
 		throw ErrorManager::InvalidUnicodeError(val, "value construction");
 	}
 	value_info_ = make_shared_ptr<StringValueInfo>(std::move(val));
+}
+
+Value::Value(String val) : type_(LogicalType::VARCHAR), is_null(false) {
+	if (!Value::StringIsValid(val.c_str(), val.size())) {
+		throw ErrorManager::InvalidUnicodeError(val, "value construction");
+	}
+	value_info_ = make_shared_ptr<StringValueInfo>(val.ToStdString());
 }
 
 Value::~Value() {
@@ -749,6 +757,15 @@ Value Value::STRUCT(child_list_t<Value> values) {
 		struct_values.push_back(std::move(child.second));
 	}
 	return Value::STRUCT(LogicalType::STRUCT(child_types), std::move(struct_values));
+}
+
+Value Value::VARIANT(vector<Value> val) {
+	D_ASSERT(val.size() == 4);
+	D_ASSERT(val[0].type().id() == LogicalTypeId::LIST);
+	D_ASSERT(val[1].type().id() == LogicalTypeId::LIST);
+	D_ASSERT(val[2].type().id() == LogicalTypeId::LIST);
+	D_ASSERT(val[3].type().id() == LogicalTypeId::BLOB);
+	return Value::STRUCT(LogicalType::VARIANT(), std::move(val));
 }
 
 void MapKeyCheck(value_set_t &unique_keys, const Value &key) {
@@ -1611,6 +1628,7 @@ string Value::ToSQLString() const {
 		}
 		return "'" + StringUtil::Replace(ToString(), "'", "''") + "'";
 	}
+	case LogicalTypeId::VARIANT:
 	case LogicalTypeId::STRUCT: {
 		bool is_unnamed = StructType::IsUnnamed(type_);
 		string ret = is_unnamed ? "(" : "{";

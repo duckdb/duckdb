@@ -91,7 +91,7 @@ jobs:
 
     - name: Install
       shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build libcurl4-openssl-dev
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
@@ -239,7 +239,7 @@ jobs:
 
     - name: Install
       shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build llvm
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build llvm libcurl4-openssl-dev
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
@@ -255,80 +255,6 @@ jobs:
       shell: bash
       run: |
           python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --no-exit --timeout 1200
-
-  linux-tarball:
-     name: Python 3 Tarball
-     runs-on: ubuntu-22.04
-     needs: linux-memory-leaks
-     steps:
-     - uses: actions/checkout@v3
-       with:
-         fetch-depth: 0
-
-     - uses: actions/setup-python@v5
-       with:
-         python-version: '3.12'
-
-     - name: Install
-       shell: bash
-       working-directory: tools/pythonpkg
-       run: pip install -r requirements-dev.txt
-
-     - name: Setup Ccache
-       uses: hendrikmuhs/ccache-action@main
-       with:
-         key: ${{ github.job }}
-         save: ${{ env.CCACHE_SAVE }}
-
-     - name: Build
-       shell: bash
-       run: |
-         python --version
-         git archive --format zip --output test-tarball.zip HEAD
-         mkdir duckdb-test-tarball
-         mv test-tarball.zip duckdb-test-tarball
-         cd duckdb-test-tarball
-         unzip test-tarball.zip
-         cd tools/pythonpkg
-         export SETUPTOOLS_SCM_PRETEND_VERSION=0.2.2
-         export DISTUTILS_C_COMPILER_LAUNCHER=ccache
-         pip install . --user
-         (cd tests/ && python -m pytest)
-
-  python-sqllogic:
-     name: Python SQLLogicTest Library (Linux)
-     needs: check-draft
-     runs-on: ubuntu-22.04
-     env:
-        GEN: ninja
-        DUCKDEBUG: 1
-        ASAN_OPTIONS: detect_leaks=0
-
-     steps:
-     - uses: actions/checkout@v3
-       with:
-         fetch-depth: 0
-
-     - uses: actions/setup-python@v5
-       with:
-         python-version: '3.10'
-
-     - name: Install Python Test Dependencies
-       shell: bash
-       run: |
-         cd tools/pythonpkg
-         python3 -m pip install -r requirements-dev.txt
-
-     - name: Install DuckDB Python
-       shell: bash
-       run: |
-         cd tools/pythonpkg
-         python3 -m pip install .
-
-     - name: Run Python SQLLogicTester
-       shell: bash
-       run: |
-         python3 -m pytest './tools/pythonpkg/sqllogic/' --verbose --test-dir './test'
 
   sqllogic:
      name: Sqllogic tests
@@ -499,7 +425,8 @@ jobs:
 
      - name: Install
        shell: bash
-       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build && pip install requests
+       run: |
+        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build libcurl4-openssl-dev && pip install requests
 
      - name: Setup Ccache
        uses: hendrikmuhs/ccache-action@main
@@ -553,6 +480,8 @@ jobs:
   vector-and-block-sizes:
     name: Tests different vector and block sizes
     runs-on: ubuntu-24.04
+    env:
+      LSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-leak-suppressions.txt
     needs: linux-memory-leaks
 
     steps:
@@ -590,6 +519,8 @@ jobs:
   linux-debug-configs:
     name: Tests different configurations with a debug build
     runs-on: ubuntu-24.04
+    env:
+      LSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-leak-suppressions.txt
     needs: linux-memory-leaks
 
     steps:
@@ -697,6 +628,40 @@ jobs:
         path: |
           duckdb-wasm32.zip
 
+  hash-zero:
+   name: Hash Zero
+   runs-on: ubuntu-24.04
+   needs: linux-memory-leaks
+   env:
+     GEN: ninja
+     CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
+     HASH_ZERO: 1
+     LSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-leak-suppressions.txt
+     DUCKDB_TEST_DESCRIPTION: 'Compiled with HASH_ZERO=1. Use require no_hash_zero to skip.'
+
+   steps:
+     - uses: actions/checkout@v3
+       with:
+         fetch-depth: 0
+
+     - name: Install
+       shell: bash
+       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+     - name: Setup Ccache
+       uses: hendrikmuhs/ccache-action@main
+       with:
+         key: ${{ github.job }}
+         save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+
+     - name: Build
+       shell: bash
+       run: make relassert
+
+     - name: Test
+       shell: bash
+       run: build/relassert/test/unittest --test-config test/configs/hash_zero.json
+
   codecov:
     name: Code Coverage
     runs-on: ubuntu-22.04
@@ -739,8 +704,3 @@ jobs:
           name: coverage
           path: coverage.zip
           if-no-files-found: error
-
-  pyodide:
-    needs: check-draft
-    uses: ./.github/workflows/Pyodide.yml
-    secrets: inherit

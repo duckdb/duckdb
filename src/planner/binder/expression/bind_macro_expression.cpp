@@ -94,36 +94,19 @@ void ExpressionBinder::ReplaceMacroParameters(unique_ptr<ParsedExpression> &expr
 }
 
 void ExpressionBinder::UnfoldMacroExpression(FunctionExpression &function, ScalarMacroCatalogEntry &macro_func,
-                                             unique_ptr<ParsedExpression> &expr) {
+                                             unique_ptr<ParsedExpression> &expr, idx_t depth) {
 	// validate the arguments and separate positional and default arguments
-	vector<unique_ptr<ParsedExpression>> positionals;
-	unordered_map<string, unique_ptr<ParsedExpression>> defaults;
-
-	auto bind_result =
-	    MacroFunction::BindMacroFunction(macro_func.macros, macro_func.name, function, positionals, defaults);
+	vector<unique_ptr<ParsedExpression>> positional_arguments;
+	InsertionOrderPreservingMap<unique_ptr<ParsedExpression>> named_arguments;
+	auto bind_result = MacroFunction::BindMacroFunction(binder, macro_func.macros, macro_func.name, function,
+	                                                    positional_arguments, named_arguments, depth);
 	if (!bind_result.error.empty()) {
 		throw BinderException(*expr, bind_result.error);
 	}
 	auto &macro_def = macro_func.macros[bind_result.function_idx.GetIndex()]->Cast<ScalarMacroFunction>();
 
-	// create a MacroBinding to bind this macro's parameters to its arguments
-	vector<LogicalType> types;
-	vector<string> names;
-	// positional parameters
-	for (idx_t i = 0; i < macro_def.parameters.size(); i++) {
-		types.emplace_back(LogicalTypeId::UNKNOWN);
-		auto &param = macro_def.parameters[i]->Cast<ColumnRefExpression>();
-		names.push_back(param.GetColumnName());
-	}
-	// default parameters
-	for (auto it = macro_def.default_parameters.begin(); it != macro_def.default_parameters.end(); it++) {
-		types.emplace_back(LogicalTypeId::UNKNOWN);
-		names.push_back(it->first);
-		// now push the defaults into the positionals
-		positionals.push_back(std::move(defaults[it->first]));
-	}
-	auto new_macro_binding = make_uniq<DummyBinding>(types, names, macro_func.name);
-	new_macro_binding->arguments = &positionals;
+	auto new_macro_binding =
+	    MacroFunction::CreateDummyBinding(macro_def, macro_func.name, positional_arguments, named_arguments);
 	macro_binding = new_macro_binding.get();
 
 	// replace current expression with stored macro expression
@@ -163,7 +146,7 @@ BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacro
 	auto stack_checker = StackCheck(*expr, 3);
 
 	// unfold the macro expression
-	UnfoldMacroExpression(function, macro_func, expr);
+	UnfoldMacroExpression(function, macro_func, expr, depth);
 
 	// bind the unfolded macro
 	return BindExpression(expr, depth);

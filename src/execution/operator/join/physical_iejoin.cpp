@@ -371,7 +371,8 @@ struct IEJoinUnion {
 
 idx_t IEJoinUnion::AppendKey(ExecutionContext &context, InterruptState &interrupt, SortedTable &table,
                              ExpressionExecutor &executor, SortedTable &marked, int64_t increment, int64_t rid,
-                             const idx_t chunk_idx) {
+                             const idx_t chunk_begin) {
+	const auto chunk_end = chunk_begin + 1;
 
 	// Reading
 	const auto valid = table.count - table.has_null;
@@ -384,7 +385,7 @@ idx_t IEJoinUnion::AppendKey(ExecutionContext &context, InterruptState &interrup
 
 	// TODO: Random access into TupleDataCollection (NextScanIndex is private...)
 	idx_t table_idx = 0;
-	for (idx_t i = 0; i < chunk_idx; ++i) {
+	for (idx_t i = 0; i < chunk_begin; ++i) {
 		source.Scan(scanner, scanned);
 		table_idx += scanned.size();
 	}
@@ -405,14 +406,19 @@ idx_t IEJoinUnion::AppendKey(ExecutionContext &context, InterruptState &interrup
 
 	OperatorSinkInput sink {*marked.global_sink, *local_sort_state, interrupt};
 	idx_t inserted = 0;
-	while (table_idx < valid) {
+	for (auto chunk_idx = chunk_begin; chunk_idx < chunk_end; ++chunk_idx) {
 		source.Scan(scanner, scanned);
 
 		// NULLs are at the end, so stop when we reach them
 		auto scan_count = scanned.size();
 		if (table_idx + scan_count > valid) {
-			scan_count = valid - table_idx;
-			scanned.SetCardinality(scan_count);
+			if (table_idx >= valid) {
+				scan_count = 0;
+				;
+			} else {
+				scan_count = valid - table_idx;
+				scanned.SetCardinality(scan_count);
+			}
 		}
 		if (scan_count == 0) {
 			break;
@@ -436,6 +442,7 @@ idx_t IEJoinUnion::AppendKey(ExecutionContext &context, InterruptState &interrup
 	}
 	OperatorSinkCombineInput combine {*marked.global_sink, *local_sort_state, interrupt};
 	sort.Combine(context, combine);
+	marked.count += inserted;
 
 	return inserted;
 }
@@ -505,7 +512,7 @@ IEJoinUnion::IEJoinUnion(ExecutionContext &context, const PhysicalIEJoin &op, So
 	InterruptState interrupt;
 
 	// 0. Filter out tables with no overlap
-	if (t1.sorted->key_data->ChunkCount() >= b1 || t2.sorted->key_data->ChunkCount() >= b2) {
+	if (t1.sorted->key_data->ChunkCount() <= b1 || t2.sorted->key_data->ChunkCount() <= b2) {
 		return;
 	}
 
@@ -801,11 +808,21 @@ idx_t IEJoinUnion::JoinComplexBlocks(SelectionVector &lsel, SelectionVector &rse
 
 class IEJoinLocalSourceState : public LocalSourceState {
 public:
-	explicit IEJoinLocalSourceState(ClientContext &context, const PhysicalIEJoin &op)
+	IEJoinLocalSourceState(ClientContext &context, const PhysicalIEJoin &op)
 	    : op(op), true_sel(STANDARD_VECTOR_SIZE), left_executor(context), right_executor(context),
 	      left_matches(nullptr), right_matches(nullptr) {
 		auto &allocator = Allocator::Get(context);
 		unprojected.Initialize(allocator, op.unprojected_types);
+
+		auto &ie_sink = op.sink_state->Cast<IEJoinGlobalState>();
+		auto &left_table = *ie_sink.tables[0];
+		auto &right_table = *ie_sink.tables[1];
+
+		left_iterator = left_table.CreateIteratorState();
+		right_iterator = right_table.CreateIteratorState();
+
+		left_table.InitializePayloadState(left_chunk_state);
+		right_table.InitializePayloadState(right_chunk_state);
 
 		if (op.conditions.size() < 3) {
 			return;
@@ -825,16 +842,6 @@ public:
 
 		left_keys.Initialize(allocator, left_types);
 		right_keys.Initialize(allocator, right_types);
-
-		auto &ie_sink = op.sink_state->Cast<IEJoinGlobalState>();
-		auto &left_table = *ie_sink.tables[0];
-		auto &right_table = *ie_sink.tables[1];
-
-		left_iterator = left_table.CreateIteratorState();
-		right_iterator = right_table.CreateIteratorState();
-
-		left_table.InitializePayloadState(left_chunk_state);
-		right_table.InitializePayloadState(right_chunk_state);
 	}
 
 	idx_t SelectOuterRows(bool *matches) {

@@ -10,9 +10,18 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/main/database_path_and_type.hpp"
+#include "duckdb/main/valid_checker.hpp"
 
 namespace duckdb {
 
+StoredDatabasePath::StoredDatabasePath(DatabaseManager &manager, string path_p, const string &name)
+    : manager(manager), path(std::move(path_p)) {
+	manager.InsertDatabasePath(path, name);
+}
+
+StoredDatabasePath::~StoredDatabasePath() {
+	manager.EraseDatabasePath(path);
+}
 //===--------------------------------------------------------------------===//
 // Attach Options
 //===--------------------------------------------------------------------===//
@@ -65,7 +74,6 @@ AttachOptions::AttachOptions(const unordered_map<string, Value> &attach_options,
 //===--------------------------------------------------------------------===//
 // Attached Database
 //===--------------------------------------------------------------------===//
-
 AttachedDatabase::AttachedDatabase(DatabaseInstance &db, AttachedDatabaseType type)
     : CatalogEntry(CatalogType::DATABASE_ENTRY,
                    type == AttachedDatabaseType::SYSTEM_DATABASE ? SYSTEM_CATALOG : TEMP_CATALOG, 0),
@@ -87,7 +95,6 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, AttachedDatabaseType ty
 AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, string name_p, string file_path_p,
                                    AttachOptions &options)
     : CatalogEntry(CatalogType::DATABASE_ENTRY, catalog_p, std::move(name_p)), db(db), parent_catalog(&catalog_p) {
-
 	if (options.access_mode == AccessMode::READ_ONLY) {
 		type = AttachedDatabaseType::READ_ONLY_DATABASE;
 	} else {
@@ -95,6 +102,7 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, str
 	}
 	// We create the storage after the catalog to guarantee we allow extensions to instantiate the DuckCatalog.
 	catalog = make_uniq<DuckCatalog>(*this);
+	InsertDatabasePath(file_path_p);
 	storage = make_uniq<SingleFileStorageManager>(*this, std::move(file_path_p), options);
 	transaction_manager = make_uniq<DuckTransactionManager>(*this);
 	internal = true;
@@ -116,6 +124,7 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Sto
 		throw InternalException("AttachedDatabase - attach function did not return a catalog");
 	}
 	if (catalog->IsDuckCatalog()) {
+		InsertDatabasePath(info.path);
 		// The attached database uses the DuckCatalog.
 		storage = make_uniq<SingleFileStorageManager>(*this, info.path, options);
 	}
@@ -141,6 +150,13 @@ bool AttachedDatabase::IsTemporary() const {
 }
 bool AttachedDatabase::IsReadOnly() const {
 	return type == AttachedDatabaseType::READ_ONLY_DATABASE;
+}
+
+void AttachedDatabase::InsertDatabasePath(const string &path) {
+	if (path.empty() || path == IN_MEMORY_PATH) {
+		return;
+	}
+	stored_database_path = make_uniq<StoredDatabasePath>(db.GetDatabaseManager(), path, name);
 }
 
 bool AttachedDatabase::NameIsReserved(const string &name) {
@@ -177,6 +193,10 @@ void AttachedDatabase::Initialize(optional_ptr<ClientContext> context) {
 
 void AttachedDatabase::FinalizeLoad(optional_ptr<ClientContext> context) {
 	catalog->FinalizeLoad(context);
+}
+
+bool AttachedDatabase::HasStorageManager() const {
+	return storage.get();
 }
 
 StorageManager &AttachedDatabase::GetStorageManager() {
@@ -222,37 +242,30 @@ void AttachedDatabase::OnDetach(ClientContext &context) {
 }
 
 void AttachedDatabase::Close() {
-	D_ASSERT(catalog);
 	if (is_closed) {
 		return;
 	}
+	D_ASSERT(catalog);
 	is_closed = true;
-
-	if (!IsSystem() && !catalog->InMemory()) {
-		db.GetDatabaseManager().EraseDatabasePath(catalog->GetDBPath());
-	}
-
-	if (Exception::UncaughtException()) {
-		return;
-	}
-	if (!storage) {
-		return;
-	}
 
 	// shutting down: attempt to checkpoint the database
 	// but only if we are not cleaning up as part of an exception unwind
-	try {
-		if (!storage->InMemory()) {
+	if (!Exception::UncaughtException() && storage && !storage->InMemory() && !ValidChecker::IsInvalidated(db)) {
+		try {
 			auto &config = DBConfig::GetConfig(db);
-			if (!config.options.checkpoint_on_shutdown) {
-				return;
+			if (config.options.checkpoint_on_shutdown) {
+				CheckpointOptions options;
+				options.wal_action = CheckpointWALAction::DELETE_WAL;
+				storage->CreateCheckpoint(QueryContext(), options);
 			}
-			CheckpointOptions options;
-			options.wal_action = CheckpointWALAction::DELETE_WAL;
-			storage->CreateCheckpoint(QueryContext(), options);
+		} catch (...) { // NOLINT
 		}
-	} catch (...) { // NOLINT
 	}
+
+	transaction_manager.reset();
+	catalog.reset();
+	storage.reset();
+	stored_database_path.reset();
 
 	if (Allocator::SupportsFlush()) {
 		Allocator::FlushAll();
