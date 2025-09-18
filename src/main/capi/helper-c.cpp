@@ -82,6 +82,8 @@ LogicalTypeId LogicalTypeIdFromC(const duckdb_type type) {
 		return LogicalTypeId::STRING_LITERAL;
 	case DUCKDB_TYPE_INTEGER_LITERAL:
 		return LogicalTypeId::INTEGER_LITERAL;
+	case DUCKDB_TYPE_TIME_NS:
+		return LogicalTypeId::TIME_NS;
 	default: // LCOV_EXCL_START
 		D_ASSERT(0);
 		return LogicalTypeId::INVALID;
@@ -170,6 +172,8 @@ duckdb_type LogicalTypeIdToC(const LogicalTypeId type) {
 		return DUCKDB_TYPE_STRING_LITERAL;
 	case LogicalTypeId::INTEGER_LITERAL:
 		return DUCKDB_TYPE_INTEGER_LITERAL;
+	case LogicalTypeId::TIME_NS:
+		return DUCKDB_TYPE_TIME_NS;
 	default: // LCOV_EXCL_START
 		D_ASSERT(0);
 		return DUCKDB_TYPE_INVALID;
@@ -207,6 +211,7 @@ idx_t GetCTypeSize(const duckdb_type type) {
 	case DUCKDB_TYPE_DATE:
 		return sizeof(duckdb_date);
 	case DUCKDB_TYPE_TIME:
+	case DUCKDB_TYPE_TIME_NS:
 		return sizeof(duckdb_time);
 	case DUCKDB_TYPE_TIMESTAMP:
 	case DUCKDB_TYPE_TIMESTAMP_TZ:
