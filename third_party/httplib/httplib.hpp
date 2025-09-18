@@ -7077,7 +7077,11 @@ inline bool ClientImpl::redirect(Request &req, Response &res, Error &error) {
   }
 
   auto location = res.get_header_value("location");
-  if (location.empty()) { return false; }
+  if (location.empty()) { 
+	// potentially a s3 redirect. new location is in x-amz-region-bucket response header
+        // FileHandle is reponsible for parsing the header and requesting the new location
+	return true; 
+  }
 
   const Regex re(
       R"((?:(https?):)?(?://(?:\[([\d:]+)\]|([^:/?#]+))(?::(\d+))?)?([^?#]*)(\?[^#]*)?(?:#.*)?)");
