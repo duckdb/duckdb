@@ -17,6 +17,7 @@
 #include "duckdb/storage/data_pointer.hpp"
 #include "duckdb/storage/storage_info.hpp"
 #include "duckdb/storage/block_manager.hpp"
+#include "duckdb/storage/storage_lock.hpp"
 
 namespace duckdb {
 class DatabaseInstance;
@@ -333,7 +334,7 @@ public:
 
 //! The set of compression functions
 struct CompressionFunctionSet {
-	mutex lock;
+	StorageLock lock;
 	map<CompressionType, map<PhysicalType, CompressionFunction>> functions;
 };
 

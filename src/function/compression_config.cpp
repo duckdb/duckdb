@@ -97,17 +97,21 @@ vector<reference<CompressionFunction>> DBConfig::GetCompressionFunctions(const P
 
 optional_ptr<CompressionFunction> DBConfig::GetCompressionFunction(CompressionType type,
                                                                    const PhysicalType physical_type) {
-	lock_guard<mutex> l(compression_functions->lock);
 
-	// Check if the function is already loaded into the global compression functions.
-	auto function = FindCompressionFunction(*compression_functions, type, physical_type);
-	if (function) {
-		return function;
+	{
+		auto read_lock = compression_functions->lock.GetSharedLock();
+		// Check if the function is already loaded into the global compression functions.
+		auto function = FindCompressionFunction(*compression_functions, type, physical_type);
+		if (function) {
+			return function;
+		}
 	}
-
-	// We could not find the function in the global compression functions,
-	// so we attempt loading it.
-	return LoadCompressionFunction(*compression_functions, type, physical_type);
+	{
+		auto write_lock = compression_functions->lock.GetExclusiveLock();
+		// We could not find the function in the global compression functions,
+		// so we attempt loading it.
+		return LoadCompressionFunction(*compression_functions, type, physical_type);
+	}
 }
 
 } // namespace duckdb
