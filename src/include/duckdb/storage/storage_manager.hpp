@@ -129,6 +129,9 @@ public:
 	}
 	void SetCipher(EncryptionTypes::CipherType cipher_p) {
 		D_ASSERT(cipher_p != EncryptionTypes::INVALID);
+		if (cipher_p == EncryptionTypes::CBC) {
+			throw InvalidInputException("CBC cipher is disabled");
+		}
 		storage_options.encryption_cipher = cipher_p;
 	}
 	bool IsEncrypted() const {

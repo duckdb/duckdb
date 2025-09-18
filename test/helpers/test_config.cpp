@@ -53,6 +53,8 @@ static const TestConfigOption test_config_options[] = {
     {"statically_loaded_extensions", "Extensions to be loaded (from the statically available one)",
      LogicalType::LIST(LogicalType::VARCHAR), nullptr},
     {"storage_version", "Database storage version to use by default", LogicalType::VARCHAR, nullptr},
+    {"data_location", "Directory where static test files are read (defaults to `data/`)", LogicalType::VARCHAR,
+     nullptr},
     {nullptr, nullptr, LogicalType::INVALID, nullptr},
 };
 
@@ -196,6 +198,15 @@ bool TestConfiguration::ShouldSkipTest(const string &test_name) {
 	return tests_to_be_skipped.count(test_name);
 }
 
+string TestConfiguration::DataLocation() {
+	string res = GetOptionOrDefault("data_location", string("data/"));
+	// Force DataLocation to end with a '/'
+	if (res.back() != '/') {
+		res += "/";
+	}
+	return res;
+}
+
 string TestConfiguration::OnInitCommand() {
 	return GetOptionOrDefault("on_init", string());
 }
@@ -327,6 +338,8 @@ void TestConfiguration::ProcessPath(string &path, const string &test_name) {
 
 	auto base_test_name = StringUtil::Replace(test_name, "/", "_");
 	path = StringUtil::Replace(path, "{BASE_TEST_NAME}", base_test_name);
+	path = StringUtil::Replace(path, "__TEST_DIR__", TestDirectoryPath());
+	path = StringUtil::Replace(path, "__WORKING_DIRECTORY__", FileSystem::GetWorkingDirectory());
 }
 
 template <class T, class VAL_T>

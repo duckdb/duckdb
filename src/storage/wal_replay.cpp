@@ -145,7 +145,7 @@ public:
 
 			//! initialize the decryption
 			auto encryption_state = database.GetEncryptionUtil()->CreateEncryptionState(
-			    state_p.db.GetStorageManager().GetCipher(), derived_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+			    state_p.db.GetStorageManager().GetCipher(), MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 			encryption_state->InitializeDecryption(nonce.data(), nonce.size(), derived_key,
 			                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 

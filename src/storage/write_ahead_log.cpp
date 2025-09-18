@@ -156,8 +156,7 @@ public:
 		auto &keys = EncryptionKeyManager::Get(db.GetDatabase());
 
 		auto encryption_state = db.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(
-		    db.GetStorageManager().GetCipher(), keys.GetKey(encryption_key_id),
-		    MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+		    db.GetStorageManager().GetCipher(), MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 
 		// temp buffer
 		const idx_t ciphertext_size = size + sizeof(uint64_t);

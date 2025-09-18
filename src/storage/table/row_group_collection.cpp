@@ -101,6 +101,10 @@ void RowGroupCollection::Initialize(PersistentTableData &data) {
 	metadata_pointer = data.base_table_pointer;
 }
 
+void RowGroupCollection::FinalizeCheckpoint(MetaBlockPointer pointer) {
+	metadata_pointer = pointer;
+}
+
 void RowGroupCollection::Initialize(PersistentCollectionData &data) {
 	stats.InitializeEmpty(types);
 	auto l = row_groups->Lock();
@@ -618,30 +622,36 @@ idx_t RowGroupCollection::Delete(TransactionData transaction, DataTable &table, 
 //===--------------------------------------------------------------------===//
 // Update
 //===--------------------------------------------------------------------===//
+optional_ptr<RowGroup> RowGroupCollection::NextUpdateRowGroup(row_t *ids, idx_t &pos, idx_t count) const {
+	auto row_group = row_groups->GetSegment(UnsafeNumericCast<idx_t>(ids[pos]));
+
+	row_t base_id =
+	    UnsafeNumericCast<row_t>(row_group->start + ((UnsafeNumericCast<idx_t>(ids[pos]) - row_group->start) /
+	                                                 STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE));
+	auto max_id =
+	    MinValue<row_t>(base_id + STANDARD_VECTOR_SIZE, UnsafeNumericCast<row_t>(row_group->start + row_group->count));
+	for (pos++; pos < count; pos++) {
+		D_ASSERT(ids[pos] >= 0);
+		// check if this id still belongs to this vector in this row group
+		if (ids[pos] < base_id) {
+			// id is before vector start -> it does not
+			break;
+		}
+		if (ids[pos] >= max_id) {
+			// id is after the maximum id in this vector -> it does not
+			break;
+		}
+	}
+	return row_group;
+}
+
 void RowGroupCollection::Update(TransactionData transaction, DataTable &data_table, row_t *ids,
                                 const vector<PhysicalIndex> &column_ids, DataChunk &updates) {
 	D_ASSERT(updates.size() >= 1);
 	idx_t pos = 0;
 	do {
 		idx_t start = pos;
-		auto row_group = row_groups->GetSegment(UnsafeNumericCast<idx_t>(ids[pos]));
-		row_t base_id =
-		    UnsafeNumericCast<row_t>(row_group->start + ((UnsafeNumericCast<idx_t>(ids[pos]) - row_group->start) /
-		                                                 STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE));
-		auto max_id = MinValue<row_t>(base_id + STANDARD_VECTOR_SIZE,
-		                              UnsafeNumericCast<row_t>(row_group->start + row_group->count));
-		for (pos++; pos < updates.size(); pos++) {
-			D_ASSERT(ids[pos] >= 0);
-			// check if this id still belongs to this vector in this row group
-			if (ids[pos] < base_id) {
-				// id is before vector start -> it does not
-				break;
-			}
-			if (ids[pos] >= max_id) {
-				// id is after the maximum id in this vector -> it does not
-				break;
-			}
-		}
+		auto row_group = NextUpdateRowGroup(ids, pos, updates.size());
 		row_group->Update(transaction, data_table, updates, ids, start, pos - start, column_ids);
 
 		auto l = stats.GetLock();
@@ -756,17 +766,18 @@ void RowGroupCollection::RemoveFromIndexes(TableIndexList &indexes, Vector &row_
 
 void RowGroupCollection::UpdateColumn(TransactionData transaction, DataTable &data_table, Vector &row_ids,
                                       const vector<column_t> &column_path, DataChunk &updates) {
-	auto first_id = FlatVector::GetValue<row_t>(row_ids, 0);
-	if (first_id >= MAX_ROW_ID) {
-		throw NotImplementedException("Cannot update a column-path on transaction local data");
-	}
-	// find the row_group this id belongs to
-	auto primary_column_idx = column_path[0];
-	auto row_group = row_groups->GetSegment(UnsafeNumericCast<idx_t>(first_id));
-	row_group->UpdateColumn(transaction, data_table, updates, row_ids, column_path);
+	D_ASSERT(updates.size() >= 1);
+	auto ids = FlatVector::GetData<row_t>(row_ids);
+	idx_t pos = 0;
+	do {
+		idx_t start = pos;
+		auto row_group = NextUpdateRowGroup(ids, pos, updates.size());
+		row_group->UpdateColumn(transaction, data_table, updates, row_ids, start, pos - start, column_path);
 
-	auto lock = stats.GetLock();
-	row_group->MergeIntoStatistics(primary_column_idx, stats.GetStats(*lock, primary_column_idx).Statistics());
+		auto lock = stats.GetLock();
+		auto primary_column_idx = column_path[0];
+		row_group->MergeIntoStatistics(primary_column_idx, stats.GetStats(*lock, primary_column_idx).Statistics());
+	} while (pos < updates.size());
 }
 
 //===--------------------------------------------------------------------===//
@@ -1112,7 +1123,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 
 	// no errors - finalize the row groups
 	// if the table already exists on disk - check if all row groups have stayed the same
-	if (metadata_pointer.IsValid()) {
+	if (DBConfig::GetSetting<ExperimentalMetadataReuseSetting>(writer.GetDatabase()) && metadata_pointer.IsValid()) {
 		bool table_has_changes = false;
 		for (idx_t segment_idx = 0; segment_idx < segments.size(); segment_idx++) {
 			auto &entry = segments[segment_idx];

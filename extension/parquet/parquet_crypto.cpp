@@ -90,8 +90,7 @@ class EncryptionTransport : public TTransport {
 public:
 	EncryptionTransport(TProtocol &prot_p, const string &key, const EncryptionUtil &encryption_util_p)
 	    : prot(prot_p), trans(*prot.getTransport()),
-	      aes(encryption_util_p.CreateEncryptionState(EncryptionTypes::GCM,
-	                                                  reinterpret_cast<const_data_ptr_t>(key.data()), key.size())),
+	      aes(encryption_util_p.CreateEncryptionState(EncryptionTypes::GCM, key.size())),
 	      allocator(Allocator::DefaultAllocator(), ParquetCrypto::CRYPTO_BLOCK_SIZE) {
 		Initialize(key);
 	}
@@ -174,9 +173,8 @@ class DecryptionTransport : public TTransport {
 public:
 	DecryptionTransport(TProtocol &prot_p, const string &key, const EncryptionUtil &encryption_util_p)
 	    : prot(prot_p), trans(*prot.getTransport()),
-	      aes(encryption_util_p.CreateEncryptionState(EncryptionTypes::GCM,
-	                                                  reinterpret_cast<const_data_ptr_t>(key.data()), key.size())),
-	      read_buffer_size(0), read_buffer_offset(0) {
+	      aes(encryption_util_p.CreateEncryptionState(EncryptionTypes::GCM, key.size())), read_buffer_size(0),
+	      read_buffer_offset(0) {
 		Initialize(key);
 	}
 	uint32_t read_virt(uint8_t *buf, uint32_t len) override {

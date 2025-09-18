@@ -558,6 +558,8 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"st_area_spheroid", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_asgeojson", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_ashexwkb", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"st_asmvt", "spatial", CatalogType::AGGREGATE_FUNCTION_ENTRY},
+    {"st_asmvtgeom", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_assvg", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_astext", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_aswkb", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -1005,6 +1007,7 @@ static constexpr ExtensionFunctionOverloadEntry EXTENSION_FUNCTION_OVERLOADS[] =
 }; // END_OF_EXTENSION_FUNCTION_OVERLOADS
 
 static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
+    {"auto_fallback_to_full_download", "httpfs"},
     {"azure_account_name", "azure"},
     {"azure_context_caching", "azure"},
     {"azure_credential_chain", "azure"},
@@ -1025,6 +1028,7 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"ducklake_max_retry_count", "ducklake"},
     {"ducklake_retry_backoff", "ducklake"},
     {"ducklake_retry_wait_ms", "ducklake"},
+    {"enable_curl_server_cert_verification", "httpfs"},
     {"enable_geoparquet_conversion", "parquet"},
     {"enable_server_cert_verification", "httpfs"},
     {"force_download", "httpfs"},
@@ -1074,6 +1078,7 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"ui_local_port", "ui"},
     {"ui_polling_interval", "ui"},
     {"ui_remote_url", "ui"},
+    {"unsafe_disable_etag_checks", "httpfs"},
     {"unsafe_enable_version_guessing", "iceberg"},
     {"variant_legacy_encoding", "parquet"},
 }; // END_OF_EXTENSION_SETTINGS

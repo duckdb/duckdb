@@ -52,6 +52,7 @@ public:
 	void Initialize(PersistentCollectionData &data);
 	void Initialize(PersistentTableData &data);
 	void InitializeEmpty();
+	void FinalizeCheckpoint(MetaBlockPointer pointer);
 
 	bool IsEmpty() const;
 
@@ -151,6 +152,8 @@ public:
 
 private:
 	bool IsEmpty(SegmentLock &) const;
+
+	optional_ptr<RowGroup> NextUpdateRowGroup(row_t *ids, idx_t &pos, idx_t count) const;
 
 private:
 	//! BlockManager

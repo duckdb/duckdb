@@ -114,10 +114,14 @@ void SQLLogicTestRunner::EndLoop() {
 }
 
 ExtensionLoadResult SQLLogicTestRunner::LoadExtension(DuckDB &db, const std::string &extension) {
-	Connection con(db);
-	auto result = con.Query("LOAD " + extension);
-	if (!result->HasError()) {
-		return ExtensionLoadResult::LOADED_EXTENSION;
+	auto &test_config = TestConfiguration::Get();
+	if (test_config.GetExtensionAutoLoadingMode() != TestConfiguration::ExtensionAutoLoadingMode::NONE) {
+		// try LOAD extension
+		Connection con(db);
+		auto result = con.Query("LOAD " + extension);
+		if (!result->HasError()) {
+			return ExtensionLoadResult::LOADED_EXTENSION;
+		}
 	}
 	return ExtensionHelper::LoadExtension(db, extension);
 }
@@ -223,10 +227,18 @@ string SQLLogicTestRunner::ReplaceKeywords(string input) {
 		auto &value = it.second;
 		input = StringUtil::Replace(input, StringUtil::Format("${%s}", name), value);
 	}
-	input = StringUtil::Replace(input, "{UUID}", UUID::ToString(UUID::GenerateRandomUUID()));
-	input = StringUtil::Replace(input, "__TEST_DIR__", TestDirectoryPath());
-	input = StringUtil::Replace(input, "__WORKING_DIRECTORY__", FileSystem::GetWorkingDirectory());
+	auto &test_config = TestConfiguration::Get();
+	test_config.ProcessPath(input, file_name);
 	input = StringUtil::Replace(input, "__BUILD_DIRECTORY__", DUCKDB_BUILD_DIRECTORY);
+
+	string data_location = test_config.DataLocation();
+
+	input = StringUtil::Replace(input, "'data/", string("'") + data_location);
+	input = StringUtil::Replace(input, "\"data/", string("\"") + data_location);
+	if (StringUtil::StartsWith(input, "data/")) {
+		input = data_location + input.substr(5);
+	}
+
 	return input;
 }
 
@@ -598,7 +610,14 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 	bool perform_install = false;
 	bool perform_load = false;
 	if (!config->options.autoload_known_extensions) {
-		auto result = SQLLogicTestRunner::LoadExtension(*db, param);
+		auto result = ExtensionLoadResult::NOT_LOADED;
+		try {
+			result = SQLLogicTestRunner::LoadExtension(*db, param);
+		} catch (std::exception &ex) {
+			ErrorData error_data(ex);
+			parser.Fail("extension '%s' load threw an exception: %s", param, error_data.Message());
+		}
+
 		if (result == ExtensionLoadResult::LOADED_EXTENSION) {
 			// add the extension to the list of loaded extensions
 			extensions.insert(param);
