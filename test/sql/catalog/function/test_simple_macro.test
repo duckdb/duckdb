@@ -280,11 +280,21 @@ CREATE MACRO select_plus_floats(a, f := b) AS (SELECT a + f FROM floats)
 ----
 Invalid default value
 
-# +(FLOAT, VARCHAR) does not work - constant types are checked at create time
-statement error
+# +(FLOAT, VARCHAR) does not work - but types are only checked once the macro is called
+statement ok
 CREATE MACRO wrong_type(s := 'not a float') AS (SELECT b + s FROM floats)
+
+# this should fail
+statement error
+select wrong_type()
 ----
-No function matches the given name and argument types '+(FLOAT, VARCHAR)'
+Could not convert
+
+# but succeed if we pass the correct type
+query I
+select wrong_type(42)
+----
+42.5
 
 statement error
 CREATE MACRO two_default_params(a := 4, a := 2) AS a + a

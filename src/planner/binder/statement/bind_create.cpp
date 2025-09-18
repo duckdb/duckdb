@@ -285,16 +285,7 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 		// positional parameters
 		for (idx_t param_idx = 0; param_idx < function->parameters.size(); param_idx++) {
 			dummy_types.emplace_back(function->types.empty() ? LogicalType::UNKNOWN : function->types[param_idx]);
-			auto &col_name = function->parameters[param_idx]->Cast<ColumnRefExpression>().GetColumnName();
-			dummy_names.push_back(col_name);
-			if (dummy_types.back() != LogicalType::UNKNOWN) {
-				continue;
-			}
-			// We can do better than UNKNOWN for untyped params with a default
-			auto it = function->default_parameters.find(col_name);
-			if (it != function->default_parameters.end()) {
-				dummy_types.back() = it->second->Cast<ConstantExpression>().value.type();
-			}
+			dummy_names.push_back(function->parameters[param_idx]->Cast<ColumnRefExpression>().GetColumnName());
 		}
 
 		if (!type_overloads.insert(dummy_types).second) {
