@@ -16,6 +16,16 @@ constexpr LogLevel HTTPLogType::LEVEL;
 constexpr LogLevel PhysicalOperatorLogType::LEVEL;
 constexpr LogLevel CheckpointLogType::LEVEL;
 
+//===--------------------------------------------------------------------===//
+// QueryLogType
+//===--------------------------------------------------------------------===//
+string QueryLogType::ConstructLogMessage(const string &str) {
+	return str;
+}
+
+//===--------------------------------------------------------------------===//
+// FileSystemLogType
+//===--------------------------------------------------------------------===//
 FileSystemLogType::FileSystemLogType() : LogType(NAME, LEVEL, GetLogType()) {
 }
 

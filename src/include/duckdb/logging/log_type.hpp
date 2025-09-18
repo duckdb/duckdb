@@ -57,9 +57,7 @@ public:
 
 	QueryLogType() : LogType(NAME, LEVEL) {};
 
-	static string ConstructLogMessage(const string &str) {
-		return str;
-	}
+	static string ConstructLogMessage(const string &str);
 };
 
 class FileSystemLogType : public LogType {
