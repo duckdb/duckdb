@@ -101,6 +101,10 @@ void RowGroupCollection::Initialize(PersistentTableData &data) {
 	metadata_pointer = data.base_table_pointer;
 }
 
+void RowGroupCollection::FinalizeCheckpoint(MetaBlockPointer pointer) {
+	metadata_pointer = pointer;
+}
+
 void RowGroupCollection::Initialize(PersistentCollectionData &data) {
 	stats.InitializeEmpty(types);
 	auto l = row_groups->Lock();
