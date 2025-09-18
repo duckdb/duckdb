@@ -24,8 +24,8 @@ string getDBName(idx_t i) {
 	return prefix + to_string(i);
 }
 
-const idx_t db_count = 100;
-const idx_t worker_count = 50;
+const idx_t db_count = 10;
+const idx_t worker_count = 100;
 const idx_t iteration_count = 500;
 const idx_t nr_initial_rows = 2050;
 
@@ -309,7 +309,8 @@ void checkpoint_db(Connection &conn, const idx_t db_id, const idx_t worker_id) {
 	unique_lock<mutex> lock(db_infos[db_id].mu);
 	string checkpoint_sql = "CHECKPOINT " + getDBName(db_id);
 	addLog(worker_id, "q: " + checkpoint_sql);
-	execQuery(conn, checkpoint_sql);
+	// checkpoint can fail, we don't care
+	conn.Query(checkpoint_sql);
 }
 
 void workUnit(std::unique_ptr<Connection> conn, const idx_t worker_id) {
