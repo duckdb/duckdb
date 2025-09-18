@@ -348,6 +348,7 @@ void FromStringRecursive(TextReader &reader, BlobWriter &writer, uint32_t depth,
 	} break;
 	case GeometryType::MULTILINESTRING: {
 		if (is_empty) {
+			writer.Write<uint32_t>(0);
 			return; // No linestrings in empty multilinestring
 		}
 		auto part_count = writer.Reserve<uint32_t>();
@@ -573,7 +574,6 @@ void ToStringRecursive(BlobReader &reader, TextWriter &writer, idx_t depth, bool
 			if (part_idx > 0) {
 				writer.Write(", ");
 			}
-			// writer.Write('(');
 			double vert[4] = {0, 0, 0, 0};
 			auto all_nan = true;
 			for (uint32_t d_idx = 0; d_idx < dims; d_idx++) {
@@ -582,9 +582,9 @@ void ToStringRecursive(BlobReader &reader, TextWriter &writer, idx_t depth, bool
 			}
 			if (all_nan) {
 				writer.Write("EMPTY");
-				// writer.Write(')');
 				continue;
 			}
+			// writer.Write('(');
 			for (uint32_t d_idx = 0; d_idx < dims; d_idx++) {
 				if (d_idx > 0) {
 					writer.Write(' ');
