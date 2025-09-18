@@ -1406,15 +1406,7 @@ unique_ptr<QueryResult> ClientContext::Execute(const shared_ptr<Relation> &relat
 	return ErrorResult<MaterializedQueryResult>(ErrorData(err_str));
 }
 
-SettingLookupResult ClientContext::TryGetCurrentSetting(const std::string &key, Value &result) const {
-	// first check the built-in settings
-	auto &db_config = DBConfig::GetConfig(*this);
-	auto option = db_config.GetOptionByName(key);
-	if (option && option->get_setting) {
-		result = option->get_setting(*this);
-		return SettingLookupResult(SettingScope::LOCAL);
-	}
-
+SettingLookupResult ClientContext::TryGetCurrentSettingInternal(const string &key, Value &result) const {
 	// check the client session values
 	const auto &session_config_map = config.set_variables;
 
@@ -1426,6 +1418,21 @@ SettingLookupResult ClientContext::TryGetCurrentSetting(const std::string &key, 
 	}
 	// finally check the global session values
 	return db->TryGetCurrentSetting(key, result);
+}
+
+SettingLookupResult ClientContext::TryGetCurrentSetting(const string &key, Value &result) const {
+	// first check the built-in settings
+	auto &db_config = DBConfig::GetConfig(*this);
+	auto option = db_config.GetOptionByName(key);
+	if (option) {
+		if (option->get_setting) {
+			result = option->get_setting(*this);
+			return SettingLookupResult(SettingScope::LOCAL);
+		}
+		// alias - search for the default key
+		return TryGetCurrentSettingInternal(option->name, result);
+	}
+	return TryGetCurrentSettingInternal(key, result);
 }
 
 ParserOptions ClientContext::GetParserOptions() const {
