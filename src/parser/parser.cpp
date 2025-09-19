@@ -201,7 +201,24 @@ void Parser::ParseQuery(const string &query) {
 			return;
 		}
 	}
-	{
+	bool use_default_parser = !options.parser_override;
+	if (options.parser_override) {
+		try {
+			if (options.parser_override->LoggingEnabled()) {
+				options.parser_override->LogQuery(query);
+			}
+			statements = options.parser_override->Parse(query);
+		} catch (const std::exception &e) {
+			if (options.parser_override->LoggingEnabled()) {
+				options.parser_override->LogError(query, e);
+			}
+			if (options.parser_override->ThrowOnError()) {
+				throw;
+			}
+			use_default_parser = true;
+		}
+	}
+	if (use_default_parser) {
 		PostgresParser::SetPreserveIdentifierCase(options.preserve_identifier_case);
 		bool parsing_succeed = false;
 		// Creating a new scope to prevent multiple PostgresParser destructors being called
