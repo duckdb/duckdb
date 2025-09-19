@@ -10,8 +10,6 @@
 
 #include "duckdb/parser/tableref.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
-#include "duckdb/common/types.hpp"
-#include "duckdb/common/vector.hpp"
 #include "duckdb/parser/query_node.hpp"
 
 namespace duckdb {

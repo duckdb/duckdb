@@ -4,6 +4,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/exception/list.hpp"
 #include "duckdb/parser/tableref.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/planner/expression.hpp"
 
 #ifdef DUCKDB_CRASH_ON_ASSERT

@@ -13,6 +13,7 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/queue.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/parser/expression/list.hpp"
 #include "duckdb/common/index_map.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
