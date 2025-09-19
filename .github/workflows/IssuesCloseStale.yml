@@ -23,7 +23,7 @@ jobs:
           close-pr-message: 'This pull request was closed because it has been stale for 30 days with no activity.'
           exempt-issue-labels: 'no stale'
           exempt-pr-labels: 'no stale'
-          days-before-stale: 180
+          days-before-stale: 365
           days-before-close: 30
           operations-per-run: 500
           stale-issue-label: stale
