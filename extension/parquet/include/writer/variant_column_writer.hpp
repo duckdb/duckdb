@@ -12,19 +12,6 @@
 
 namespace duckdb {
 
-class VariantColumnWriterState : public ColumnWriterState {
-public:
-	VariantColumnWriterState(duckdb_parquet::RowGroup &row_group, idx_t col_idx)
-	    : row_group(row_group), col_idx(col_idx) {
-	}
-	~VariantColumnWriterState() override = default;
-
-	duckdb_parquet::RowGroup &row_group;
-	idx_t col_idx;
-	unique_ptr<ColumnWriterState> child_state;
-	idx_t parent_index = 0;
-};
-
 class VariantColumnWriter : public ColumnWriter {
 public:
 	VariantColumnWriter(ParquetWriter &writer, const ParquetColumnSchema &column_schema, vector<string> schema_path_p,

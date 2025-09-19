@@ -188,9 +188,12 @@ void ColumnWriter::HandleRepeatLevels(ColumnWriterState &state, ColumnWriterStat
 		// no repeat levels without a parent node
 		return;
 	}
-	while (state.repetition_levels.size() < parent->repetition_levels.size()) {
-		state.repetition_levels.push_back(parent->repetition_levels[state.repetition_levels.size()]);
+	if (state.repetition_levels.size() >= parent->repetition_levels.size()) {
+		return;
 	}
+	state.repetition_levels.insert(state.repetition_levels.end(),
+	                               parent->repetition_levels.begin() + state.repetition_levels.size(),
+	                               parent->repetition_levels.end());
 }
 
 void ColumnWriter::HandleDefineLevels(ColumnWriterState &state, ColumnWriterState *parent, const ValidityMask &validity,
@@ -201,35 +204,40 @@ void ColumnWriter::HandleDefineLevels(ColumnWriterState &state, ColumnWriterStat
 		while (state.definition_levels.size() < parent->definition_levels.size()) {
 			idx_t current_index = state.definition_levels.size();
 			if (parent->definition_levels[current_index] != PARQUET_DEFINE_VALID) {
+				//! Inherit nulls from parent
 				state.definition_levels.push_back(parent->definition_levels[current_index]);
 				state.parent_null_count++;
 			} else if (validity.RowIsValid(vector_index)) {
+				//! Produce a non-null define
 				state.definition_levels.push_back(define_value);
 			} else {
+				//! Produce a null define
 				if (!can_have_nulls) {
 					throw IOException("Parquet writer: map key column is not allowed to contain NULL values");
 				}
 				state.null_count++;
 				state.definition_levels.push_back(null_value);
 			}
+			D_ASSERT(parent->is_empty.empty() || current_index < parent->is_empty.size());
 			if (parent->is_empty.empty() || !parent->is_empty[current_index]) {
 				vector_index++;
 			}
 		}
+		return;
+	}
+
+	// no parent: set definition levels only from this validity mask
+	if (validity.AllValid()) {
+		state.definition_levels.insert(state.definition_levels.end(), count, define_value);
 	} else {
-		// no parent: set definition levels only from this validity mask
-		if (validity.AllValid()) {
-			state.definition_levels.insert(state.definition_levels.end(), count, define_value);
-		} else {
-			for (idx_t i = 0; i < count; i++) {
-				const auto is_null = !validity.RowIsValid(i);
-				state.definition_levels.emplace_back(is_null ? null_value : define_value);
-				state.null_count += is_null;
-			}
+		for (idx_t i = 0; i < count; i++) {
+			const auto is_null = !validity.RowIsValid(i);
+			state.definition_levels.emplace_back(is_null ? null_value : define_value);
+			state.null_count += is_null;
 		}
-		if (!can_have_nulls && state.null_count != 0) {
-			throw IOException("Parquet writer: map key column is not allowed to contain NULL values");
-		}
+	}
+	if (!can_have_nulls && state.null_count != 0) {
+		throw IOException("Parquet writer: map key column is not allowed to contain NULL values");
 	}
 }
 

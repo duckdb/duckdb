@@ -2,11 +2,30 @@
 
 namespace duckdb {
 
+namespace {
+
+class VariantColumnWriterState : public ColumnWriterState {
+public:
+	VariantColumnWriterState(duckdb_parquet::RowGroup &row_group, idx_t col_idx)
+	    : row_group(row_group), col_idx(col_idx) {
+	}
+	~VariantColumnWriterState() override = default;
+
+	duckdb_parquet::RowGroup &row_group;
+	idx_t col_idx;
+	vector<unique_ptr<ColumnWriterState>> child_states;
+};
+
+} // namespace
+
 unique_ptr<ColumnWriterState> VariantColumnWriter::InitializeWriteState(duckdb_parquet::RowGroup &row_group) {
-	throw NotImplementedException("VariantColumnWriter::InitializeWriteState");
-	// auto result = make_uniq<VariantColumnWriterState>(row_group, row_group.columns.size());
-	// result->child_state = child_writer->InitializeWriteState(row_group);
-	// return std::move(result);
+	auto result = make_uniq<VariantColumnWriterState>(row_group, row_group.columns.size());
+
+	result->child_states.reserve(child_writers.size());
+	for (auto &child_writer : child_writers) {
+		result->child_states.push_back(child_writer->InitializeWriteState(row_group));
+	}
+	return std::move(result);
 }
 
 bool VariantColumnWriter::HasAnalyze() {
