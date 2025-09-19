@@ -15,3 +15,37 @@ query I
 SELECT * FROM read_duckdb('__TEST_DIR__/read_duckdb_test.db')
 ----
 42
+
+query I
+SELECT COUNT(*) FROM duckdb_databases
+----
+1
+
+statement ok
+ATTACH '__TEST_DIR__/read_duckdb_test.db'
+
+statement ok
+CREATE TABLE read_duckdb_test.my_tbl2 AS SELECT 84 j
+
+statement ok
+DETACH read_duckdb_test
+
+statement error
+SELECT * FROM read_duckdb('__TEST_DIR__/read_duckdb_test.db')
+----
+multiple tables
+
+query I
+SELECT * FROM read_duckdb('__TEST_DIR__/read_duckdb_test.db', tables='my_tbl')
+----
+42
+
+query I
+SELECT * FROM read_duckdb('__TEST_DIR__/read_duckdb_test.db', tables='my_tbl2')
+----
+84
+
+statement error
+SELECT * FROM read_duckdb('__TEST_DIR__/read_duckdb_test.db', tables='my_tblx')
+----
+my_tbl2

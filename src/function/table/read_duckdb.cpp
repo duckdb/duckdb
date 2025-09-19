@@ -41,6 +41,8 @@ struct DuckDBMultiFileInfo : MultiFileReaderInterface {
 class DuckDBFileReaderOptions : public BaseFileReaderOptions {
 public:
 	DuckDBFileReaderOptions() = default;
+
+	string table_name;
 };
 
 struct DuckDBReadBindData : TableFunctionData {
@@ -54,7 +56,7 @@ struct DuckDBReadBindData : TableFunctionData {
 
 class DuckDBReader : public BaseFileReader {
 public:
-	DuckDBReader(ClientContext &context, OpenFileInfo file);
+	DuckDBReader(ClientContext &context, OpenFileInfo file, const DuckDBFileReaderOptions &options);
 	~DuckDBReader() override;
 
 public:
@@ -83,34 +85,73 @@ struct DuckDBReadLocalState : LocalTableFunctionState {
 	unique_ptr<LocalTableFunctionState> local_state;
 };
 
-DuckDBReader::DuckDBReader(ClientContext &context_p, OpenFileInfo file_p)
+DuckDBReader::DuckDBReader(ClientContext &context_p, OpenFileInfo file_p, const DuckDBFileReaderOptions &options)
     : BaseFileReader(std::move(file_p)), context(context_p), finished(false) {
 	auto &db_manager = DatabaseManager::Get(context);
 	AttachInfo info;
 	info.path = file.path;
 	info.name = "__duckdb_reader_" + info.path;
 	info.on_conflict = OnCreateConflict::ERROR_ON_CONFLICT;
-	unordered_map<string, Value> attach_options;
-	AttachOptions options(attach_options, AccessMode::READ_ONLY);
+	unordered_map<string, Value> attach_kv;
+	AttachOptions attach_options(attach_kv, AccessMode::READ_ONLY);
 
-	attached_database = db_manager.AttachDatabase(context, info, options);
+	attached_database = db_manager.AttachDatabase(context, info, attach_options);
 
 	auto &catalog = attached_database->GetCatalog();
+	vector<reference<TableCatalogEntry>> tables;
 	catalog.ScanSchemas(context, [&](SchemaCatalogEntry &schema) {
 		schema.Scan(CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
 			if (entry.type != CatalogType::TABLE_ENTRY) {
 				return;
 			}
 			auto &table = entry.Cast<TableCatalogEntry>();
-			if (table_entry) {
-				throw BinderException("Database \"%s\" has multiple table entries", file.path);
-			}
-			table_entry = table;
+			tables.push_back(table);
 		});
 	});
-	if (!table_entry) {
-		throw BinderException("Database \"%s\" does not have any tables", file.path);
+	vector<reference<TableCatalogEntry>> candidate_tables;
+	string candidate_str;
+	if (!options.table_name.empty()) {
+		vector<reference<TableCatalogEntry>> new_tables;
+		for (auto &table : tables) {
+			if (StringUtil::CIEquals(table.get().name, options.table_name)) {
+				new_tables.push_back(table);
+			}
+		}
+		if (new_tables.empty()) {
+			vector<string> candidate_list;
+			for (auto &table : tables) {
+				candidate_list.push_back(table.get().name);
+			}
+			candidate_str = StringUtil::CandidatesMessage(candidate_list, options.table_name);
+		}
+		tables = std::move(new_tables);
 	}
+	if (tables.size() != 1) {
+		string error_msg = tables.empty() ? "does not have any tables" : "has multiple tables";
+		string extra_info;
+		if (options.table_name.empty()) {
+			extra_info = "\nSelect a table using `tables='<name>'";
+		} else {
+			extra_info = " matching \"" + options.table_name + "\"";
+		}
+		if (candidate_str.empty()) {
+			constexpr idx_t MAX_CANDIDATE_STR_LENGTH = 80;
+			for (auto &table : tables) {
+				if (candidate_str.size() > MAX_CANDIDATE_STR_LENGTH) {
+					break;
+				}
+				if (!candidate_str.empty()) {
+					candidate_str += ", ";
+				}
+				candidate_str += table.get().name;
+			}
+			if (!candidate_str.empty()) {
+				candidate_str = "\nCandidates: " + candidate_str;
+			}
+		}
+		throw BinderException("Database \"%s\" %s%s%s", file.path, error_msg, extra_info, candidate_str);
+	}
+	table_entry = tables[0].get();
 	for (auto &col : table_entry->GetColumns().Logical()) {
 		columns.emplace_back(col.Name(), col.Type());
 	}
@@ -170,7 +211,16 @@ bool DuckDBMultiFileInfo::ParseCopyOption(ClientContext &context, const string &
 }
 
 bool DuckDBMultiFileInfo::ParseOption(ClientContext &context, const string &key, const Value &val,
-                                      MultiFileOptions &file_options, BaseFileReaderOptions &options) {
+                                      MultiFileOptions &file_options, BaseFileReaderOptions &options_p) {
+	auto &options = options_p.Cast<DuckDBFileReaderOptions>();
+	if (key == "tables") {
+		if (val.type().id() == LogicalTypeId::VARCHAR) {
+			options.table_name = StringValue::Get(val);
+		} else {
+			throw NotImplementedException("Unimplemented type %s for option \"tables\"", val.type());
+		}
+		return true;
+	}
 	return false;
 }
 
@@ -214,14 +264,15 @@ shared_ptr<BaseFileReader> DuckDBMultiFileInfo::CreateReader(ClientContext &cont
 
 shared_ptr<BaseFileReader> DuckDBMultiFileInfo::CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
                                                              const OpenFileInfo &file, idx_t file_idx,
-                                                             const MultiFileBindData &bind_data) {
-	return make_shared_ptr<DuckDBReader>(context, file);
+                                                             const MultiFileBindData &multi_bind_data) {
+	auto &bind_data = multi_bind_data.bind_data->Cast<DuckDBReadBindData>();
+	return make_shared_ptr<DuckDBReader>(context, file, *bind_data.options);
 }
 
 shared_ptr<BaseFileReader> DuckDBMultiFileInfo::CreateReader(ClientContext &context, const OpenFileInfo &file,
                                                              BaseFileReaderOptions &options,
                                                              const MultiFileOptions &file_options) {
-	return make_shared_ptr<DuckDBReader>(context, file);
+	return make_shared_ptr<DuckDBReader>(context, file, options.Cast<DuckDBFileReaderOptions>());
 }
 
 void DuckDBMultiFileInfo::FinishReading(ClientContext &context, GlobalTableFunctionState &global_state,
@@ -237,8 +288,15 @@ FileGlobInput DuckDBMultiFileInfo::GetGlobInput() {
 	return FileGlobInput(FileGlobOptions::FALLBACK_GLOB, "db");
 }
 
+void ReadDuckDBAddNamedParameters(TableFunction &table_function) {
+	table_function.named_parameters["tables"] = LogicalType::ANY;
+
+	MultiFileReader::AddParameters(table_function);
+}
+
 TableFunction ReadDuckDBTableFunction::GetFunction() {
 	MultiFileFunction<DuckDBMultiFileInfo> read_duckdb("read_duckdb");
+	ReadDuckDBAddNamedParameters(read_duckdb);
 	return static_cast<TableFunction>(read_duckdb);
 }
 
