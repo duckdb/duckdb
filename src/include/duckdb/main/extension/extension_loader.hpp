@@ -97,6 +97,8 @@ public:
 	DUCKDB_API void RegisterCastFunction(const LogicalType &source, const LogicalType &target, BoundCastInfo function,
 	                                     int64_t implicit_cast_cost = -1);
 
+	DUCKDB_API void RegisterKeyword(const string &keyword, const KeywordCategory &category) const;
+
 private:
 	void FinalizeLoad();
 
