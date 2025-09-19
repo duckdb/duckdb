@@ -36,7 +36,7 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 	if (info->on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT ||
 	    info->on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
 		// constant-time lookup in the catalog for the db name
-		auto existing_db = db_manager.GetDatabase(context.client, name);
+		auto existing_db = db_manager.GetDatabase(name);
 		if (existing_db) {
 			if ((existing_db->IsReadOnly() && options.access_mode == AccessMode::READ_WRITE) ||
 			    (!existing_db->IsReadOnly() && options.access_mode == AccessMode::READ_ONLY)) {

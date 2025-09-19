@@ -1620,6 +1620,10 @@ void DataTable::CommitDropColumn(const idx_t column_index) {
 	row_groups->CommitDropColumn(column_index);
 }
 
+void DataTable::Destroy() {
+	row_groups->Destroy();
+}
+
 idx_t DataTable::ColumnCount() const {
 	return column_definitions.size();
 }

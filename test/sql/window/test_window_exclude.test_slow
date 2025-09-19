@@ -877,7 +877,9 @@ NULL	5200	6000
 statement error
 SELECT sum(i) OVER (EXCLUDE CURRENT ROW) FROM generate_series(1,10) AS _(i);
 ----
+Parser Error: syntax error at or near "CURRENT"
 
 statement error
 SELECT sum(i) OVER (ROWS UNBOUNDED PRECEDING EXCLUDE GROUPS) FROM generate_series(1,10) AS _(i);
 ----
+Parser Error: syntax error at or near "GROUPS"
