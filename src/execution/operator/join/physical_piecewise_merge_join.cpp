@@ -206,11 +206,13 @@ public:
 			condition_types.push_back(order.expression->return_type);
 		}
 		rhs_keys.Initialize(client, condition_types);
+		rhs_input.Initialize(client, op.children[1].get().GetTypes());
 
 		auto &gsink = op.sink_state->Cast<MergeJoinGlobalState>();
 		auto &rhs_table = *gsink.table;
 		rhs_iterator = rhs_table.CreateIteratorState();
 		rhs_table.InitializePayloadState(rhs_chunk_state);
+		rhs_scan_state = rhs_table.CreateScanState(client);
 
 		//	Since we have now materialized the payload, the keys will not have payloads?
 		sort_key_type = rhs_table.GetSortKeyType();
@@ -241,6 +243,7 @@ public:
 	idx_t right_base;
 	idx_t prev_left_index;
 	TupleDataChunkState rhs_chunk_state;
+	unique_ptr<SortedRunScanState> rhs_scan_state;
 
 	// Secondary predicate shared data
 	SelectionVector sel;
@@ -575,8 +578,9 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 		ChunkMergeInfo left_info(*state.lhs_iterator, 0, state.left_position, lhs_not_null);
 
 		auto &rhs_table = *gstate.table;
+		auto &rhs_iterator = *state.rhs_iterator;
 		const auto rhs_not_null = SortedChunkNotNull(state.right_chunk_index, rhs_table.count, rhs_table.has_null);
-		ChunkMergeInfo right_info(*state.rhs_iterator, state.right_chunk_index, state.right_position, rhs_not_null);
+		ChunkMergeInfo right_info(rhs_iterator, state.right_chunk_index, state.right_position, rhs_not_null);
 
 		idx_t result_count = MergeJoinComplexBlocks(state.sort_key_type, left_info, right_info,
 		                                            conditions[0].comparison, state.prev_left_index);
@@ -592,12 +596,17 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 			}
 		} else {
 			// found matches: extract them
+			SliceSortedPayload(state.rhs_input, rhs_table, rhs_iterator, state.rhs_chunk_state, right_info.block_idx,
+			                   right_info.result, result_count, *state.rhs_scan_state);
+
 			chunk.Reset();
-			for (idx_t c = 0; c < state.lhs_payload.ColumnCount(); ++c) {
-				chunk.data[c].Slice(state.lhs_payload.data[c], left_info.result, result_count);
+			for (idx_t col_idx = 0; col_idx < chunk.ColumnCount(); ++col_idx) {
+				if (col_idx < left_cols) {
+					chunk.data[col_idx].Slice(state.lhs_payload.data[col_idx], left_info.result, result_count);
+				} else {
+					chunk.data[col_idx].Reference(state.rhs_input.data[col_idx - left_cols]);
+				}
 			}
-			SliceSortedPayload(chunk, rhs_table, *state.rhs_iterator, state.rhs_chunk_state, right_info.block_idx,
-			                   right_info.result, result_count, left_cols);
 			chunk.SetCardinality(result_count);
 
 			auto sel = FlatVector::IncrementalSelectionVector();
@@ -605,7 +614,6 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 				// If there are more expressions to compute,
 				// split the result chunk into the left and right halves
 				// so we can compute the values for comparison.
-				chunk.Split(state.rhs_input, left_cols);
 				state.rhs_executor.SetChunk(state.rhs_input);
 				state.rhs_keys.Reset();
 
@@ -625,7 +633,6 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 					    SelectJoinTail(conditions[cmp_idx].comparison, left, right, sel, tail_count, &state.sel);
 					sel = &state.sel;
 				}
-				chunk.Fuse(state.rhs_input);
 
 				if (tail_count < result_count) {
 					result_count = tail_count;

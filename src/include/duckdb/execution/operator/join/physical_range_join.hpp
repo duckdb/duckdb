@@ -95,6 +95,10 @@ public:
 		unique_ptr<ExternalBlockIteratorState> CreateIteratorState() {
 			return make_uniq<ExternalBlockIteratorState>(*sorted->key_data, sorted->payload_data.get());
 		}
+		//! Create an iteration state
+		unique_ptr<SortedRunScanState> CreateScanState(ClientContext &client) {
+			return make_uniq<SortedRunScanState>(client, *sort);
+		}
 		//! Initialize a payload scanning state
 		void InitializePayloadState(TupleDataChunkState &state) {
 			sorted->payload_data->InitializeChunkState(state);
@@ -135,10 +139,9 @@ public:
 
 public:
 	// Gather the result values and slice the payload columns to those values.
-	// Returns a buffer handle to the pinned heap block (if any)
 	static void SliceSortedPayload(DataChunk &chunk, GlobalSortedTable &table, ExternalBlockIteratorState &state,
 	                               TupleDataChunkState &chunk_state, const idx_t chunk_idx, SelectionVector &result,
-	                               const idx_t result_count, const idx_t left_cols = 0);
+	                               const idx_t result_count, SortedRunScanState &scan_state);
 	// Apply a tail condition to the current selection
 	static idx_t SelectJoinTail(const ExpressionType &condition, Vector &left, Vector &right,
 	                            const SelectionVector *sel, idx_t count, SelectionVector *true_sel);

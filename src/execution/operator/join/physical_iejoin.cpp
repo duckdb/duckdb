@@ -805,11 +805,15 @@ idx_t IEJoinUnion::JoinComplexBlocks(SelectionVector &lsel, SelectionVector &rse
 
 class IEJoinLocalSourceState : public LocalSourceState {
 public:
-	IEJoinLocalSourceState(ClientContext &context, const PhysicalIEJoin &op)
-	    : op(op), true_sel(STANDARD_VECTOR_SIZE), left_executor(context), right_executor(context),
-	      left_matches(nullptr), right_matches(nullptr) {
-		auto &allocator = Allocator::Get(context);
-		unprojected.Initialize(allocator, op.unprojected_types);
+	IEJoinLocalSourceState(ClientContext &client, const PhysicalIEJoin &op)
+	    : op(op), lsel(STANDARD_VECTOR_SIZE), rsel(STANDARD_VECTOR_SIZE), true_sel(STANDARD_VECTOR_SIZE),
+	      left_executor(client), right_executor(client), left_matches(nullptr), right_matches(nullptr)
+
+	{
+		auto &allocator = Allocator::Get(client);
+		unprojected.InitializeEmpty(op.unprojected_types);
+		lpayload.Initialize(allocator, op.children[0].get().GetTypes());
+		rpayload.Initialize(allocator, op.children[1].get().GetTypes());
 
 		auto &ie_sink = op.sink_state->Cast<IEJoinGlobalState>();
 		auto &left_table = *ie_sink.tables[0];
@@ -820,6 +824,9 @@ public:
 
 		left_table.InitializePayloadState(left_chunk_state);
 		right_table.InitializePayloadState(right_chunk_state);
+
+		left_scan_state = left_table.CreateScanState(client);
+		right_scan_state = right_table.CreateScanState(client);
 
 		if (op.conditions.size() < 3) {
 			return;
@@ -865,11 +872,17 @@ public:
 	idx_t left_block_index;
 	unique_ptr<ExternalBlockIteratorState> left_iterator;
 	TupleDataChunkState left_chunk_state;
+	SelectionVector lsel;
+	DataChunk lpayload;
+	unique_ptr<SortedRunScanState> left_scan_state;
 
 	idx_t right_base;
 	idx_t right_block_index;
 	unique_ptr<ExternalBlockIteratorState> right_iterator;
 	TupleDataChunkState right_chunk_state;
+	SelectionVector rsel;
+	DataChunk rpayload;
+	unique_ptr<SortedRunScanState> right_scan_state;
 
 	// Trailing predicates
 	SelectionVector true_sel;
@@ -892,13 +905,26 @@ public:
 void PhysicalIEJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &result, LocalSourceState &state_p) const {
 	auto &state = state_p.Cast<IEJoinLocalSourceState>();
 	auto &ie_sink = sink_state->Cast<IEJoinGlobalState>();
-	auto &left_table = *ie_sink.tables[0];
-	auto &right_table = *ie_sink.tables[1];
 
-	const auto left_cols = children[0].get().GetTypes().size();
 	auto &chunk = state.unprojected;
-	SelectionVector lsel(STANDARD_VECTOR_SIZE);
-	SelectionVector rsel(STANDARD_VECTOR_SIZE);
+
+	auto &left_table = *ie_sink.tables[0];
+	auto &lsel = state.lsel;
+	auto &lpayload = state.lpayload;
+	auto &left_iterator = *state.left_iterator;
+	auto &left_chunk_state = state.left_chunk_state;
+	auto &left_block_index = state.left_block_index;
+	auto &left_scan_state = *state.left_scan_state;
+	const auto left_cols = children[0].get().GetTypes().size();
+
+	auto &right_table = *ie_sink.tables[1];
+	auto &rsel = state.rsel;
+	auto &rpayload = state.rpayload;
+	auto &right_iterator = *state.right_iterator;
+	auto &right_chunk_state = state.right_chunk_state;
+	auto &right_block_index = state.right_block_index;
+	auto &right_scan_state = *state.right_scan_state;
+
 	do {
 		auto result_count = state.joiner->JoinComplexBlocks(lsel, rsel);
 		if (result_count == 0) {
@@ -908,24 +934,20 @@ void PhysicalIEJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &re
 
 		// found matches: extract them
 
-		chunk.Reset();
-		SliceSortedPayload(chunk, left_table, *state.left_iterator, state.left_chunk_state, state.left_block_index,
-		                   lsel, result_count, 0);
-		SliceSortedPayload(chunk, right_table, *state.right_iterator, state.right_chunk_state, state.right_block_index,
-		                   rsel, result_count, left_cols);
-		chunk.SetCardinality(result_count);
+		SliceSortedPayload(lpayload, left_table, left_iterator, left_chunk_state, left_block_index, lsel, result_count,
+		                   left_scan_state);
+		SliceSortedPayload(rpayload, right_table, right_iterator, right_chunk_state, right_block_index, rsel,
+		                   result_count, right_scan_state);
 
 		auto sel = FlatVector::IncrementalSelectionVector();
 		if (conditions.size() > 2) {
 			// If there are more expressions to compute,
-			// split the result chunk into the left and right halves
-			// so we can compute the values for comparison.
+			// use the left and right payloads
+			// to we can compute the values for comparison.
 			const auto tail_cols = conditions.size() - 2;
 
-			DataChunk right_chunk;
-			chunk.Split(right_chunk, left_cols);
-			state.left_executor.SetChunk(chunk);
-			state.right_executor.SetChunk(right_chunk);
+			state.left_executor.SetChunk(lpayload);
+			state.right_executor.SetChunk(rpayload);
 
 			auto tail_count = result_count;
 			auto true_sel = &state.true_sel;
@@ -943,13 +965,24 @@ void PhysicalIEJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &re
 				tail_count = SelectJoinTail(conditions[cmp_idx + 2].comparison, left, right, sel, tail_count, true_sel);
 				sel = true_sel;
 			}
-			chunk.Fuse(right_chunk);
 
 			if (tail_count < result_count) {
 				result_count = tail_count;
-				chunk.Slice(*sel, result_count);
+				lpayload.Slice(*sel, result_count);
+				rpayload.Slice(*sel, result_count);
 			}
 		}
+
+		//	Merge the payloads
+		chunk.Reset();
+		for (column_t col_idx = 0; col_idx < chunk.ColumnCount(); ++col_idx) {
+			if (col_idx < left_cols) {
+				chunk.data[col_idx].Reference(lpayload.data[col_idx]);
+			} else {
+				chunk.data[col_idx].Reference(rpayload.data[col_idx - left_cols]);
+			}
+		}
+		chunk.SetCardinality(result_count);
 
 		//	We need all of the data to compute other predicates,
 		//	but we only return what is in the projection map
@@ -972,7 +1005,7 @@ void PhysicalIEJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &re
 
 class IEJoinGlobalSourceState : public GlobalSourceState {
 public:
-	explicit IEJoinGlobalSourceState(const PhysicalIEJoin &op, IEJoinGlobalState &gsink)
+	IEJoinGlobalSourceState(const PhysicalIEJoin &op, IEJoinGlobalState &gsink)
 	    : op(op), gsink(gsink), initialized(false), next_pair(0), completed(0), left_outers(0), next_left(0),
 	      right_outers(0), next_right(0) {
 	}
@@ -1178,21 +1211,32 @@ SourceResultType PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &r
 
 	// Process LEFT OUTER results
 	const auto left_cols = children[0].get().GetTypes().size();
+	auto &chunk = ie_lstate.unprojected;
 	while (ie_lstate.left_matches) {
 		const idx_t count = ie_lstate.SelectOuterRows(ie_lstate.left_matches);
 		if (!count) {
 			ie_gstate.GetNextPair(context, ie_lstate);
 			continue;
 		}
-		auto &chunk = ie_lstate.unprojected;
-		chunk.Reset();
-		SliceSortedPayload(chunk, *ie_sink.tables[0], *ie_lstate.left_iterator, ie_lstate.left_chunk_state,
-		                   ie_lstate.left_block_index, ie_lstate.true_sel, count, 0);
+		auto &left_table = *ie_sink.tables[0];
+		auto &lpayload = ie_lstate.lpayload;
+		auto &left_iterator = *ie_lstate.left_iterator;
+		auto &left_chunk_state = ie_lstate.left_chunk_state;
+		auto &left_block_index = ie_lstate.left_block_index;
+		auto &left_scan_state = *ie_lstate.left_scan_state;
+
+		SliceSortedPayload(lpayload, left_table, left_iterator, left_chunk_state, left_block_index, ie_lstate.true_sel,
+		                   count, left_scan_state);
 
 		// Fill in NULLs to the right
-		for (auto col_idx = left_cols; col_idx < chunk.ColumnCount(); ++col_idx) {
-			chunk.data[col_idx].SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(chunk.data[col_idx], true);
+		chunk.Reset();
+		for (column_t col_idx = 0; col_idx < chunk.ColumnCount(); ++col_idx) {
+			if (col_idx < left_cols) {
+				chunk.data[col_idx].Reference(lpayload.data[col_idx]);
+			} else {
+				chunk.data[col_idx].SetVectorType(VectorType::CONSTANT_VECTOR);
+				ConstantVector::SetNull(chunk.data[col_idx], true);
+			}
 		}
 
 		ProjectResult(chunk, result);
@@ -1210,15 +1254,26 @@ SourceResultType PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &r
 			continue;
 		}
 
-		auto &chunk = ie_lstate.unprojected;
-		chunk.Reset();
-		SliceSortedPayload(chunk, *ie_sink.tables[1], *ie_lstate.right_iterator, ie_lstate.right_chunk_state,
-		                   ie_lstate.right_block_index, ie_lstate.true_sel, count, left_cols);
+		auto &right_table = *ie_sink.tables[1];
+		auto &rsel = ie_lstate.true_sel;
+		auto &rpayload = ie_lstate.rpayload;
+		auto &right_iterator = *ie_lstate.right_iterator;
+		auto &right_chunk_state = ie_lstate.right_chunk_state;
+		auto &right_block_index = ie_lstate.right_block_index;
+		auto &right_scan_state = *ie_lstate.right_scan_state;
+
+		SliceSortedPayload(rpayload, right_table, right_iterator, right_chunk_state, right_block_index, rsel, count,
+		                   right_scan_state);
 
 		// Fill in NULLs to the left
-		for (idx_t col_idx = 0; col_idx < left_cols; ++col_idx) {
-			chunk.data[col_idx].SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(chunk.data[col_idx], true);
+		chunk.Reset();
+		for (column_t col_idx = 0; col_idx < chunk.ColumnCount(); ++col_idx) {
+			if (col_idx < left_cols) {
+				chunk.data[col_idx].SetVectorType(VectorType::CONSTANT_VECTOR);
+				ConstantVector::SetNull(chunk.data[col_idx], true);
+			} else {
+				chunk.data[col_idx].Reference(rpayload.data[col_idx - left_cols]);
+			}
 		}
 
 		ProjectResult(chunk, result);
