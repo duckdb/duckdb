@@ -61,7 +61,7 @@ Invalid Input Error: hive_types: 'season' must be a VARCHAR, instead: 'INTEGER' 
 statement error
 select typeof(season),typeof(director),typeof(aired) from read_parquet('__TEST_DIR__/partition/**/*.parquet', hive_partitioning=0) limit 1;
 ----
-Binder Error: Referenced column "season" not found in FROM clause!
+Binder Error: Referenced column "season" was not found because the FROM clause is missing
 
 query III
 select typeof(season),typeof(director),typeof(aired) from read_parquet('__TEST_DIR__/partition/**/*.parquet', hive_partitioning=1, hive_types_autocast=0) limit 1;
@@ -109,7 +109,7 @@ Unable to cast
 statement error
 explain from parquet_scan('__TEST_DIR__/partition/**/*.parquet', HIVE_PARTITIONING=0, HIVE_TYPES_AUTOCAST=0) where aired < '2006-1-1';
 ----
-Binder Error: Referenced column "aired" not found in FROM clause!
+Binder Error: Referenced column "aired" was not found because the FROM clause is missing
 
 query II
 explain (FORMAT JSON) from parquet_scan('__TEST_DIR__/partition/**/*.parquet', HIVE_PARTITIONING=1, HIVE_TYPES_AUTOCAST=0) where aired < '2006-1-1';
