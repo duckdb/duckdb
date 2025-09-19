@@ -1,5 +1,6 @@
 #include "duckdb/optimizer/topn_window_elimination.hpp"
 
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
@@ -110,14 +111,21 @@ unique_ptr<LogicalOperator> TopNWindowElimination::CreateAggregateOperator(vecto
 	D_ASSERT(window_expr.orders.size() == 1);
 
 	vector<unique_ptr<Expression>> fun_params;
+	vector<LogicalType> arg_types;
 	fun_params.reserve(3);
+	arg_types.reserve(3);
+	arg_types.push_back(struct_pack_expr->return_type);
 	fun_params.push_back(std::move(struct_pack_expr));
+	arg_types.push_back(window_expr.orders[0].expression->return_type);
 	fun_params.push_back(std::move(window_expr.orders[0].expression));
+	arg_types.push_back(limit->return_type);
 	fun_params.push_back(std::move(limit));
 
-	auto max_fun = MaxFun::GetFunctions().GetFunctionByOffset(1);
-	max_fun.name = "max_by";
-	auto bound_agg_fun = function_binder.BindAggregateFunction(max_fun, std::move(fun_params));
+	auto &function =
+	    Catalog::GetSystemCatalog(context).GetEntry<AggregateFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "arg_max");
+	auto arg_max_fun = function.functions.GetFunctionByArguments(context, arg_types);
+
+	auto bound_agg_fun = function_binder.BindAggregateFunction(arg_max_fun, std::move(fun_params));
 
 	vector<unique_ptr<Expression>> select_list(1);
 	select_list[0] = std::move(bound_agg_fun);
@@ -148,24 +156,24 @@ TopNWindowElimination::CreateUnnestListOperator(const child_list_t<LogicalType> 
 }
 
 unique_ptr<LogicalOperator>
-TopNWindowElimination::CreateUnnestStructOperator(const child_list_t<LogicalType> &input_types,
-                                                  idx_t unnest_list_idx) const {
+TopNWindowElimination::CreateUnnestStructOperator(const child_list_t<LogicalType> &input_types, idx_t unnest_list_idx,
+                                                  idx_t table_idx) const {
 	FunctionBinder function_binder(context);
 
 	vector<unique_ptr<Expression>> unnest_struct_exprs;
 	unnest_struct_exprs.reserve(input_types.size());
 	const auto struct_extract_fun = StructExtractFun::GetFunctions().GetFunctionByOffset(0);
+	const auto input_struct_type = LogicalType::STRUCT(input_types);
 
 	for (const auto &type : input_types) {
 		const auto &alias = type.first;
-		const auto &logical_type = type.second;
 		vector<unique_ptr<Expression>> fun_args(2);
-		fun_args[0] = make_uniq<BoundColumnRefExpression>(logical_type, ColumnBinding(unnest_list_idx, 0));
+		fun_args[0] = make_uniq<BoundColumnRefExpression>(input_struct_type, ColumnBinding(unnest_list_idx, 0));
 		fun_args[1] = make_uniq<BoundConstantExpression>(alias);
 		auto bound_function = function_binder.BindScalarFunction(struct_extract_fun, std::move(fun_args));
 		unnest_struct_exprs.push_back(std::move(bound_function));
 	}
-	return make_uniq<LogicalProjection>(optimizer.binder.GenerateTableIndex(), std::move(unnest_struct_exprs));
+	return make_uniq<LogicalProjection>(table_idx, std::move(unnest_struct_exprs));
 }
 
 unique_ptr<LogicalOperator> TopNWindowElimination::Optimize(unique_ptr<LogicalOperator> op) {
@@ -173,6 +181,7 @@ unique_ptr<LogicalOperator> TopNWindowElimination::Optimize(unique_ptr<LogicalOp
 		D_ASSERT(op->type == LogicalOperatorType::LOGICAL_PROJECTION);
 		auto *projection = &op->Cast<LogicalProjection>();
 		auto struct_pack_input_exprs = std::move(projection->expressions);
+		const idx_t topmost_projection_idx = projection->table_index;
 
 		op = std::move(projection->children[0]);
 
@@ -217,7 +226,7 @@ unique_ptr<LogicalOperator> TopNWindowElimination::Optimize(unique_ptr<LogicalOp
 		auto unnest_list = CreateUnnestListOperator(struct_info, aggregate_idx);
 		const idx_t unnest_list_idx = unnest_list->Cast<LogicalUnnest>().unnest_index;
 
-		auto unnest_struct = CreateUnnestStructOperator(struct_info, unnest_list_idx);
+		auto unnest_struct = CreateUnnestStructOperator(struct_info, unnest_list_idx, topmost_projection_idx);
 
 		aggregate->children.push_back(Optimize(std::move(child->children[0])));
 		unnest_list->children.push_back(std::move(aggregate));
