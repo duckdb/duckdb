@@ -108,8 +108,6 @@ public:
 	shared_ptr<AttachedDatabase> GetDatabaseInternal(const lock_guard<mutex> &, const string &name);
 
 private:
-	shared_ptr<AttachedDatabase> AttachDatabaseInternal(ClientContext &context, AttachInfo &info,
-	                                                    AttachOptions &options);
 	optional_ptr<AttachedDatabase> FinalizeAttach(ClientContext &context, AttachInfo &info,
 	                                              shared_ptr<AttachedDatabase> database);
 
