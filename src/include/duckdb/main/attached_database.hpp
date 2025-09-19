@@ -23,6 +23,7 @@ class StorageExtension;
 class DatabaseManager;
 
 struct AttachInfo;
+struct StoredDatabasePath;
 
 enum class AttachedDatabaseType {
 	READ_WRITE_DATABASE,
@@ -31,11 +32,13 @@ enum class AttachedDatabaseType {
 	TEMP_DATABASE,
 };
 
+class DatabaseFilePathManager;
+
 struct StoredDatabasePath {
-	StoredDatabasePath(DatabaseManager &manager, string path, const string &name);
+	StoredDatabasePath(DatabaseFilePathManager &manager, string path, const string &name);
 	~StoredDatabasePath();
 
-	DatabaseManager &manager;
+	DatabaseFilePathManager &manager;
 	string path;
 };
 
@@ -57,6 +60,8 @@ struct AttachOptions {
 	QualifiedName default_table;
 	//! Whether or not this is the main database
 	bool is_main_database = false;
+	//! The stored database path (in the path manager)
+	unique_ptr<StoredDatabasePath> stored_database_path;
 };
 
 //! The AttachedDatabase represents an attached database instance.
@@ -93,6 +98,9 @@ public:
 	const string &GetName() const {
 		return name;
 	}
+	void SetName(const string &new_name) {
+		name = new_name;
+	}
 	bool IsSystem() const;
 	bool IsTemporary() const;
 	bool IsReadOnly() const;
@@ -103,9 +111,6 @@ public:
 
 	static bool NameIsReserved(const string &name);
 	static string ExtractDatabaseName(const string &dbpath, FileSystem &fs);
-
-private:
-	void InsertDatabasePath(const string &path);
 
 private:
 	DatabaseInstance &db;

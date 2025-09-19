@@ -263,7 +263,7 @@ bool ConstantFun::TypeIsSupported(const PhysicalType physical_type) {
 	case PhysicalType::DOUBLE:
 		return true;
 	default:
-		throw InternalException("Unsupported type for constant function");
+		return false;
 	}
 }
 

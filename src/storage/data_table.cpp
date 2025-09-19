@@ -1613,11 +1613,15 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 	//   row-group pointers
 	//   table pointer
 	//   index data
-	writer.FinalizeTable(global_stats, info.get(), serializer);
+	writer.FinalizeTable(global_stats, *info, *row_groups, serializer);
 }
 
 void DataTable::CommitDropColumn(const idx_t column_index) {
 	row_groups->CommitDropColumn(column_index);
+}
+
+void DataTable::Destroy() {
+	row_groups->Destroy();
 }
 
 idx_t DataTable::ColumnCount() const {

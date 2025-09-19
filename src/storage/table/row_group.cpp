@@ -881,7 +881,7 @@ void RowGroup::Update(TransactionData transaction, DataChunk &update_chunk, row_
 	}
 }
 
-void RowGroup::UpdateColumn(TransactionData transaction, DataChunk &updates, Vector &row_ids,
+void RowGroup::UpdateColumn(TransactionData transaction, DataChunk &updates, Vector &row_ids, idx_t offset, idx_t count,
                             const vector<column_t> &column_path) {
 	D_ASSERT(updates.ColumnCount() == 1);
 	auto ids = FlatVector::GetData<row_t>(row_ids);
@@ -889,7 +889,13 @@ void RowGroup::UpdateColumn(TransactionData transaction, DataChunk &updates, Vec
 	auto primary_column_idx = column_path[0];
 	D_ASSERT(primary_column_idx < columns.size());
 	auto &col_data = GetColumn(primary_column_idx);
-	col_data.UpdateColumn(transaction, column_path, updates.data[0], ids, updates.size(), 1);
+	if (offset > 0) {
+		Vector sliced_vector(updates.data[0], offset, offset + count);
+		sliced_vector.Flatten(count);
+		col_data.UpdateColumn(transaction, column_path, sliced_vector, ids + offset, count, 1);
+	} else {
+		col_data.UpdateColumn(transaction, column_path, updates.data[0], ids, count, 1);
+	}
 	MergeStatistics(primary_column_idx, *col_data.GetUpdateStatistics());
 }
 
@@ -1087,6 +1093,11 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 		// this metadata block is not stored - add it to the extra metadata blocks
 		row_group_pointer.extra_metadata_blocks.push_back(column_pointer.block_pointer);
 	}
+	// set up the pointers correctly within this row group for future operations
+	column_pointers = row_group_pointer.data_pointers;
+	has_metadata_blocks = true;
+	extra_metadata_blocks = row_group_pointer.extra_metadata_blocks;
+
 	if (metadata_manager) {
 		row_group_pointer.deletes_pointers = CheckpointDeletes(*metadata_manager);
 	}

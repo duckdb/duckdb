@@ -327,6 +327,7 @@ duckdb_state duckdb_register_aggregate_function_set(duckdb_connection connection
 		con->context->RunFunctionInTransaction([&]() {
 			auto &catalog = duckdb::Catalog::GetSystemCatalog(*con->context);
 			duckdb::CreateAggregateFunctionInfo sf_info(set);
+			sf_info.on_conflict = duckdb::OnCreateConflict::ALTER_ON_CONFLICT;
 			catalog.CreateFunction(*con->context, sf_info);
 		});
 	} catch (...) {
