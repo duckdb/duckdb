@@ -168,6 +168,7 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION_ALIAS(StructIndexofFun),
 	DUCKDB_SCALAR_FUNCTION(StructPackFun),
 	DUCKDB_SCALAR_FUNCTION(StructPositionFun),
+	DUCKDB_SCALAR_FUNCTION(StructToSparseVariantFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(SubstrFun),
 	DUCKDB_SCALAR_FUNCTION_SET(SubstringFun),
 	DUCKDB_SCALAR_FUNCTION_SET(SubstringGraphemeFun),

@@ -57,5 +57,12 @@
         "example": "struct_position(ROW(3, 3, 0), 3)",
         "type": "scalar_function",
         "aliases": ["struct_indexof"]
+    },
+    {
+        "name": "struct_to_sparse_variant",
+        "parameters": "struct",
+        "description": "Convert a STRUCT to a sparse VARIANT, without NULLs",
+        "example": "struct_to_sparse_variant({duck: 42, goose: NULL})",
+        "type": "scalar_function"
     }
 ]
