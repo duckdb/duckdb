@@ -66,7 +66,7 @@ void BaseAppender::EndRow() {
 	}
 	column = 0;
 	chunk.SetCardinality(chunk.size() + 1);
-	if (chunk.size() >= STANDARD_VECTOR_SIZE) {
+	if (ShouldFlushChunk()) {
 		FlushChunk();
 	}
 }
@@ -338,7 +338,7 @@ void BaseAppender::AppendDataChunk(DataChunk &chunk_p) {
 	// Early-out, if types match.
 	if (chunk_types == appender_types) {
 		collection->Append(chunk_p);
-		if (collection->Count() >= flush_count) {
+		if (ShouldFlush()) {
 			Flush();
 		}
 		return;
@@ -371,7 +371,7 @@ void BaseAppender::AppendDataChunk(DataChunk &chunk_p) {
 	}
 
 	collection->Append(cast_chunk);
-	if (collection->Count() >= flush_count) {
+	if (ShouldFlush()) {
 		Flush();
 	}
 }
@@ -382,7 +382,7 @@ void BaseAppender::FlushChunk() {
 	}
 	collection->Append(chunk);
 	chunk.Reset();
-	if (collection->Count() >= flush_count) {
+	if (ShouldFlush()) {
 		Flush();
 	}
 }
@@ -422,8 +422,10 @@ void BaseAppender::ClearColumns() {
 //===--------------------------------------------------------------------===//
 // Table Appender
 //===--------------------------------------------------------------------===//
-Appender::Appender(Connection &con, const string &database_name, const string &schema_name, const string &table_name)
+Appender::Appender(Connection &con, const string &database_name, const string &schema_name, const string &table_name,
+                   const idx_t flush_memory_threshold_p)
     : BaseAppender(Allocator::DefaultAllocator(), AppenderType::LOGICAL), context(con.context) {
+	flush_memory_threshold = flush_memory_threshold_p;
 
 	description = con.TableInfo(database_name, schema_name, table_name);
 	if (!description) {
@@ -480,12 +482,13 @@ Appender::Appender(Connection &con, const string &database_name, const string &s
 	collection = make_uniq<ColumnDataCollection>(allocator, GetActiveTypes());
 }
 
-Appender::Appender(Connection &con, const string &schema_name, const string &table_name)
-    : Appender(con, INVALID_CATALOG, schema_name, table_name) {
+Appender::Appender(Connection &con, const string &schema_name, const string &table_name,
+                   const idx_t flush_memory_threshold_p)
+    : Appender(con, INVALID_CATALOG, schema_name, table_name, flush_memory_threshold_p) {
 }
 
-Appender::Appender(Connection &con, const string &table_name)
-    : Appender(con, INVALID_CATALOG, DEFAULT_SCHEMA, table_name) {
+Appender::Appender(Connection &con, const string &table_name, const idx_t flush_memory_threshold_p)
+    : Appender(con, INVALID_CATALOG, DEFAULT_SCHEMA, table_name, flush_memory_threshold_p) {
 }
 
 Appender::~Appender() {
@@ -577,12 +580,13 @@ void Appender::ClearColumns() {
 // Query Appender
 //===--------------------------------------------------------------------===//
 QueryAppender::QueryAppender(Connection &con, string query_p, vector<LogicalType> types_p, vector<string> names_p,
-                             string table_name_p)
+                             string table_name_p, const idx_t flush_memory_threshold_p)
     : BaseAppender(Allocator::DefaultAllocator(), AppenderType::LOGICAL), context(con.context),
       query(std::move(query_p)), names(std::move(names_p)), table_name(std::move(table_name_p)) {
 	types = std::move(types_p);
 	InitializeChunk();
 	collection = make_uniq<ColumnDataCollection>(allocator, GetActiveTypes());
+	flush_memory_threshold = flush_memory_threshold_p;
 }
 
 QueryAppender::~QueryAppender() {
@@ -599,9 +603,11 @@ void QueryAppender::FlushInternal(ColumnDataCollection &collection) {
 //===--------------------------------------------------------------------===//
 // Internal Appender
 //===--------------------------------------------------------------------===//
-InternalAppender::InternalAppender(ClientContext &context_p, TableCatalogEntry &table_p, const idx_t flush_count_p)
+InternalAppender::InternalAppender(ClientContext &context_p, TableCatalogEntry &table_p, const idx_t flush_count_p,
+                                   const idx_t flush_memory_threshold_p)
     : BaseAppender(Allocator::DefaultAllocator(), table_p.GetTypes(), AppenderType::PHYSICAL, flush_count_p),
       context(context_p), table(table_p) {
+	flush_memory_threshold = flush_memory_threshold_p;
 }
 
 InternalAppender::~InternalAppender() {
@@ -618,6 +624,14 @@ void BaseAppender::Close() {
 	if (column == 0 || column == GetActiveTypes().size()) {
 		Flush();
 	}
+}
+
+bool BaseAppender::ShouldFlushChunk() const {
+	return (chunk.size() >= STANDARD_VECTOR_SIZE || collection->AllocationSize() >= flush_memory_threshold);
+}
+
+bool BaseAppender::ShouldFlush() const {
+	return (collection->Count() >= flush_count || collection->AllocationSize() >= flush_memory_threshold);
 }
 
 } // namespace duckdb
