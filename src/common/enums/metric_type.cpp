@@ -31,7 +31,6 @@ profiler_settings_t MetricsUtils::GetOptimizerMetrics() {
         MetricsType::OPTIMIZER_BUILD_SIDE_PROBE_SIDE,
         MetricsType::OPTIMIZER_LIMIT_PUSHDOWN,
         MetricsType::OPTIMIZER_TOP_N,
-        MetricsType::OPTIMIZER_TOP_N_WINDOW_ELIMINATION,
         MetricsType::OPTIMIZER_COMPRESSED_MATERIALIZATION,
         MetricsType::OPTIMIZER_DUPLICATE_GROUPS,
         MetricsType::OPTIMIZER_REORDER_FILTER,
@@ -96,8 +95,6 @@ MetricsType MetricsUtils::GetOptimizerMetricByType(OptimizerType type) {
             return MetricsType::OPTIMIZER_LIMIT_PUSHDOWN;
         case OptimizerType::TOP_N:
             return MetricsType::OPTIMIZER_TOP_N;
-        case OptimizerType::TOP_N_WINDOW_ELIMINATION:
-            return MetricsType::OPTIMIZER_TOP_N_WINDOW_ELIMINATION;
         case OptimizerType::COMPRESSED_MATERIALIZATION:
             return MetricsType::OPTIMIZER_COMPRESSED_MATERIALIZATION;
         case OptimizerType::DUPLICATE_GROUPS:
@@ -161,8 +158,6 @@ OptimizerType MetricsUtils::GetOptimizerTypeByMetric(MetricsType type) {
             return OptimizerType::LIMIT_PUSHDOWN;
         case MetricsType::OPTIMIZER_TOP_N:
             return OptimizerType::TOP_N;
-        case MetricsType::OPTIMIZER_TOP_N_WINDOW_ELIMINATION:
-            return OptimizerType::TOP_N_WINDOW_ELIMINATION;
         case MetricsType::OPTIMIZER_COMPRESSED_MATERIALIZATION:
             return OptimizerType::COMPRESSED_MATERIALIZATION;
         case MetricsType::OPTIMIZER_DUPLICATE_GROUPS:
@@ -208,7 +203,6 @@ bool MetricsUtils::IsOptimizerMetric(MetricsType type) {
         case MetricsType::OPTIMIZER_BUILD_SIDE_PROBE_SIDE:
         case MetricsType::OPTIMIZER_LIMIT_PUSHDOWN:
         case MetricsType::OPTIMIZER_TOP_N:
-        case MetricsType::OPTIMIZER_TOP_N_WINDOW_ELIMINATION:
         case MetricsType::OPTIMIZER_COMPRESSED_MATERIALIZATION:
         case MetricsType::OPTIMIZER_DUPLICATE_GROUPS:
         case MetricsType::OPTIMIZER_REORDER_FILTER:
