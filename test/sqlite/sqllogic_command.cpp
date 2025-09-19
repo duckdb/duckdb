@@ -23,7 +23,7 @@ static void query_break(int line) {
 	(void)line;
 }
 
-static Connection *GetConnection(DuckDB &db,
+static Connection *GetConnection(SQLLogicTestRunner &runner, DuckDB &db,
                                  unordered_map<string, duckdb::unique_ptr<Connection>> &named_connection_map,
                                  string con_name) {
 	auto entry = named_connection_map.find(con_name);
@@ -34,7 +34,7 @@ static Connection *GetConnection(DuckDB &db,
 		auto &test_config = TestConfiguration::Get();
 		auto init_cmd = test_config.OnConnectionCommand();
 		if (!init_cmd.empty()) {
-			auto res = con->Query(init_cmd);
+			auto res = con->Query(runner.ReplaceKeywords(init_cmd));
 			if (res->HasError()) {
 				FAIL("Startup queries provided via on_init failed: " + res->GetError());
 			}
@@ -61,7 +61,7 @@ Connection *Command::CommandConnection(ExecuteContext &context) const {
 			auto &test_config = TestConfiguration::Get();
 			auto init_cmd = test_config.OnConnectionCommand();
 			if (!init_cmd.empty()) {
-				auto res = context.con->Query(init_cmd);
+				auto res = context.con->Query(runner.ReplaceKeywords(init_cmd));
 				if (res->HasError()) {
 					string error_msg = "Startup queries provided via on_init failed: " + res->GetError();
 					if (context.is_parallel) {
@@ -81,7 +81,7 @@ Connection *Command::CommandConnection(ExecuteContext &context) const {
 		if (context.is_parallel) {
 			throw std::runtime_error("Named connections not supported in parallel loop");
 		}
-		return GetConnection(*runner.db, runner.named_connection_map, connection_name);
+		return GetConnection(runner, *runner.db, runner.named_connection_map, connection_name);
 	}
 }
 
