@@ -43,7 +43,7 @@
 		"name": "variant_typeof",
 		"parameters": "input_variant",
 		"description": "Returns the internal type of the `input_variant`.",
-		"example": "variant_typeof({'a': 42, 'b': [1,2,3])::VARIANT)",
+		"example": "variant_typeof({'a': 42, 'b': [1,2,3]})::VARIANT)",
 		"categories": [
 			"variant"
 		],
