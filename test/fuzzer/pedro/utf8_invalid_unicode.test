@@ -13,6 +13,25 @@ SELECT decode('\xF6\x96\xB0\x85'::BLOB)::VARCHAR ILIKE '1';
 ----
 <REGEX>:Conversion Error.*Failure in decode.*blob to UTF8.*
 
+# invalid utf8, strict mode
+statement error
+SELECT upper(decode('\xF6\x96\xB0\x85'::BLOB, 'strict')::VARCHAR);
+----
+<REGEX>:Conversion Error.*Failure in decode.*blob to UTF8.*
+
+# invalid utf8, replace mode
+query I
+SELECT decode('\xA0\x50\x51\xA0\xA0'::BLOB, 'replace')::VARCHAR;
+----
+?PQ??
+
+# invalid utf8, ignore mode
+query I
+SELECT decode('\xA0\x50\x51\xA0\xA0'::BLOB, 'ignore')::VARCHAR;
+----
+PQ
+
+
 query I
 SELECT upper(decode('\xF0\x9F\x98\x84'::BLOB)::VARCHAR);
 ----
