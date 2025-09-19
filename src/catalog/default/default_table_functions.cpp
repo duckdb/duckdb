@@ -71,7 +71,10 @@ SELECT * EXCLUDE (message), UNNEST(parse_duckdb_log_message(log_type, message))
 FROM duckdb_logs(denormalized_table=1)
 WHERE type = log_type
 )"},
-	{nullptr, nullptr, {nullptr}, {{nullptr, nullptr}}, nullptr}
+	{DEFAULT_SCHEMA, "regexp_split_to_table", {"text", "pattern", nullptr}, {{nullptr, nullptr}}, R"(
+SELECT UNNEST(string_split_regex(text, pattern)) AS num
+)"},
+	{nullptr, nullptr, {nullptr}, {{nullptr, nullptr}}, nullptr},
 	};
 // clang-format on
 
