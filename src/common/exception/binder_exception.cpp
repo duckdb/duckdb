@@ -7,8 +7,8 @@ namespace duckdb {
 BinderException::BinderException(const string &msg) : Exception(ExceptionType::BINDER, msg) {
 }
 
-BinderException::BinderException(const string &msg, const unordered_map<string, string> &extra_info)
-    : Exception(ExceptionType::BINDER, msg, extra_info) {
+BinderException::BinderException(const unordered_map<string, string> &extra_info, const string &msg)
+	: Exception(extra_info, ExceptionType::BINDER, msg) {
 }
 
 BinderException BinderException::ColumnNotFound(const string &name, const vector<string> &similar_bindings,
@@ -20,7 +20,7 @@ BinderException BinderException::ColumnNotFound(const string &name, const vector
 		extra_info["candidates"] = StringUtil::Join(similar_bindings, ",");
 	}
 	return BinderException(
-	    StringUtil::Format("Referenced column \"%s\" not found in FROM clause!%s", name, candidate_str), extra_info);
+		extra_info, StringUtil::Format("Referenced column \"%s\" not found in FROM clause!%s", name, candidate_str));
 }
 
 BinderException BinderException::NoMatchingFunction(const string &catalog_name, const string &schema_name,
@@ -45,15 +45,14 @@ BinderException BinderException::NoMatchingFunction(const string &catalog_name, 
 		extra_info["candidates"] = StringUtil::Join(candidates, ",");
 	}
 	return BinderException(
-	    StringUtil::Format("No function matches the given name and argument types '%s'. You might need to add "
-	                       "explicit type casts.\n\tCandidate functions:\n%s",
-	                       call_str, candidate_str),
-	    extra_info);
+		extra_info,
+		StringUtil::Format("No function matches the given name and argument types '%s'. You might need to add "
+		                   "explicit type casts.\n\tCandidate functions:\n%s",
+		                   call_str, candidate_str));
 }
 
 BinderException BinderException::Unsupported(ParsedExpression &expr, const string &message) {
 	auto extra_info = Exception::InitializeExtraInfo("UNSUPPORTED", expr.GetQueryLocation());
-	return BinderException(message, extra_info);
+	return BinderException(extra_info, message);
 }
-
 } // namespace duckdb
