@@ -725,6 +725,12 @@
         "test/sql/pg_catalog/system_functions.test",
         "test/sql/storage/compression/test_using_compression.test"
       ]
+    },
+    {
+      "reason": "For select statements, profiling is actively disabled for select statements",
+      "paths": [
+        "test/sql/pragma/profiling/test_profiling_fs.test"
+      ]
     }
   ]
 }

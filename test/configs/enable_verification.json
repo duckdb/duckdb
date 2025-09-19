@@ -217,6 +217,12 @@
       "paths": [
         "test/sql/alter/test_alter_database_rename.test"
       ]
+    },
+    {
+      "reason": "For select statements, profiling is actively disabled for select statements",
+      "paths": [
+        "test/sql/pragma/profiling/test_profiling_fs.test"
+      ]
     }
   ]
 }
