@@ -238,7 +238,7 @@ set(VERSIONING_TAG_MATCH "v*.*.*")
 # - scripts/amalgamation.py
 # - scripts/package_build.py
 ######
-option(MAIN_BRANCH_VERSIONING "Versioning scheme for main branch" FALSE)
+option(MAIN_BRANCH_VERSIONING "Versioning scheme for main branch" TRUE)
 if(${MAIN_BRANCH_VERSIONING})
   set(VERSIONING_TAG_MATCH "v*.*.0")
 endif()
