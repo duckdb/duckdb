@@ -238,7 +238,7 @@ set(VERSIONING_TAG_MATCH "v*.*.*")
 # - scripts/amalgamation.py
 # - scripts/package_build.py
 ######
-option(MAIN_BRANCH_VERSIONING "Versioning scheme for main branch" TRUE)
+option(MAIN_BRANCH_VERSIONING "Versioning scheme for main branch" FALSE)
 if(${MAIN_BRANCH_VERSIONING})
   set(VERSIONING_TAG_MATCH "v*.*.0")
 endif()
@@ -443,6 +443,7 @@ option(EXTENSION_CONFIG_BUILD "Produce extension configuration artifacts instead
 option(CUSTOM_LINKER "Use a custom linker program" "")
 option(CRASH_ON_ASSERT "Trigger a sigabort on an assert failing, instead of throwing an exception" FALSE)
 option(FORCE_ASSERT "Enable checking of assertions, even in release mode" FALSE)
+option(FORCE_DEBUG "Force adding a debug define, even in release mode" FALSE)
 
 option(TREAT_WARNINGS_AS_ERRORS "Treat warnings as errors" FALSE)
 option(EXPORT_DLL_SYMBOLS "Export dll symbols on Windows, else import" TRUE)
@@ -551,6 +552,10 @@ endif()
 
 if(FORCE_ASSERT)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_FORCE_ASSERT")
+endif()
+
+if(FORCE_DEBUG)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDEBUG")
 endif()
 
 if(STANDALONE_DEBUG)

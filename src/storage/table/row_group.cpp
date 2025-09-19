@@ -21,18 +21,19 @@
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/storage/table/row_id_column_data.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
 RowGroup::RowGroup(RowGroupCollection &collection_p, idx_t start, idx_t count)
     : SegmentBase<RowGroup>(start, count), collection(collection_p), version_info(nullptr), allocation_size(0),
-      row_id_is_loaded(false) {
+      row_id_is_loaded(false), has_changes(false) {
 	Verify();
 }
 
 RowGroup::RowGroup(RowGroupCollection &collection_p, RowGroupPointer pointer)
     : SegmentBase<RowGroup>(pointer.row_start, pointer.tuple_count), collection(collection_p), version_info(nullptr),
-      allocation_size(0), row_id_is_loaded(false) {
+      allocation_size(0), row_id_is_loaded(false), has_changes(false) {
 	// deserialize the columns
 	if (pointer.data_pointers.size() != collection_p.GetTypes().size()) {
 		throw IOException("Row group column count is unaligned with table column count. Corrupt file?");
@@ -53,7 +54,7 @@ RowGroup::RowGroup(RowGroupCollection &collection_p, RowGroupPointer pointer)
 
 RowGroup::RowGroup(RowGroupCollection &collection_p, PersistentRowGroupData &data)
     : SegmentBase<RowGroup>(data.start, data.count), collection(collection_p), version_info(nullptr),
-      allocation_size(0), row_id_is_loaded(false) {
+      allocation_size(0), row_id_is_loaded(false), has_changes(false) {
 	auto &block_manager = GetBlockManager();
 	auto &info = GetTableInfo();
 	auto &types = collection.get().GetTypes();
@@ -69,6 +70,9 @@ RowGroup::RowGroup(RowGroupCollection &collection_p, PersistentRowGroupData &dat
 
 void RowGroup::MoveToCollection(RowGroupCollection &collection_p, idx_t new_start) {
 	lock_guard<mutex> l(row_group_lock);
+	if (start != new_start) {
+		has_changes = true;
+	}
 	this->collection = collection_p;
 	this->start = new_start;
 	for (idx_t c = 0; c < columns.size(); c++) {
@@ -820,7 +824,7 @@ void RowGroup::CommitAppend(transaction_t commit_id, idx_t row_group_start, idx_
 void RowGroup::RevertAppend(idx_t row_group_start) {
 	auto &vinfo = GetOrCreateVersionInfo();
 	vinfo.RevertAppend(row_group_start - this->start);
-	for (auto &column : columns) {
+	for (auto &column : GetColumns()) {
 		column->RevertAppend(UnsafeNumericCast<row_t>(row_group_start));
 	}
 	SetCount(MinValue<idx_t>(row_group_start - this->start, this->count));
@@ -877,7 +881,7 @@ void RowGroup::Update(TransactionData transaction, DataChunk &update_chunk, row_
 	}
 }
 
-void RowGroup::UpdateColumn(TransactionData transaction, DataChunk &updates, Vector &row_ids,
+void RowGroup::UpdateColumn(TransactionData transaction, DataChunk &updates, Vector &row_ids, idx_t offset, idx_t count,
                             const vector<column_t> &column_path) {
 	D_ASSERT(updates.ColumnCount() == 1);
 	auto ids = FlatVector::GetData<row_t>(row_ids);
@@ -885,7 +889,13 @@ void RowGroup::UpdateColumn(TransactionData transaction, DataChunk &updates, Vec
 	auto primary_column_idx = column_path[0];
 	D_ASSERT(primary_column_idx < columns.size());
 	auto &col_data = GetColumn(primary_column_idx);
-	col_data.UpdateColumn(transaction, column_path, updates.data[0], ids, updates.size(), 1);
+	if (offset > 0) {
+		Vector sliced_vector(updates.data[0], offset, offset + count);
+		sliced_vector.Flatten(count);
+		col_data.UpdateColumn(transaction, column_path, sliced_vector, ids + offset, count, 1);
+	} else {
+		col_data.UpdateColumn(transaction, column_path, updates.data[0], ids, count, 1);
+	}
 	MergeStatistics(primary_column_idx, *col_data.GetUpdateStatistics());
 }
 
@@ -930,6 +940,9 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriteInfo &info) {
 	// pointers all end up densely packed, and thus more cache-friendly.
 	for (idx_t column_idx = 0; column_idx < GetColumnCount(); column_idx++) {
 		auto &column = GetColumn(column_idx);
+		if (column.start != start) {
+			throw InternalException("RowGroup::WriteToDisk - child-column is unaligned with row group");
+		}
 		ColumnCheckpointInfo checkpoint_info(info, column_idx);
 		auto checkpoint_state = column.Checkpoint(*this, checkpoint_info);
 		D_ASSERT(checkpoint_state);
@@ -996,7 +1009,8 @@ vector<MetaBlockPointer> RowGroup::GetColumnPointers() {
 }
 
 RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
-	if (!column_pointers.empty() && !HasChanges()) {
+	if (DBConfig::GetSetting<ExperimentalMetadataReuseSetting>(writer.GetDatabase()) && !column_pointers.empty() &&
+	    !HasChanges()) {
 		// we have existing metadata and the row group has not been changed
 		// re-use previous metadata
 		RowGroupWriteData result;
@@ -1079,6 +1093,11 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 		// this metadata block is not stored - add it to the extra metadata blocks
 		row_group_pointer.extra_metadata_blocks.push_back(column_pointer.block_pointer);
 	}
+	// set up the pointers correctly within this row group for future operations
+	column_pointers = row_group_pointer.data_pointers;
+	has_metadata_blocks = true;
+	extra_metadata_blocks = row_group_pointer.extra_metadata_blocks;
+
 	if (metadata_manager) {
 		row_group_pointer.deletes_pointers = CheckpointDeletes(*metadata_manager);
 	}
@@ -1087,6 +1106,9 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 }
 
 bool RowGroup::HasChanges() const {
+	if (has_changes) {
+		return true;
+	}
 	if (version_info.load()) {
 		// we have deletes
 		return true;

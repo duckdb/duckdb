@@ -35,11 +35,7 @@
 #ifdef DUCKDB_STATIC_BUILD
 #define DUCKDB_EXTENSION_API
 #else
-#ifdef DUCKDB_BUILD_LOADABLE_EXTENSION
 #define DUCKDB_EXTENSION_API __declspec(dllexport)
-#else
-#define DUCKDB_EXTENSION_API
-#endif
 #endif
 #else
 #define DUCKDB_EXTENSION_API __attribute__((visibility("default")))
@@ -1807,6 +1803,53 @@ Returns the statement type of the statement to be executed
 * @return duckdb_statement_type value or DUCKDB_STATEMENT_TYPE_INVALID
 */
 DUCKDB_C_API duckdb_statement_type duckdb_prepared_statement_type(duckdb_prepared_statement statement);
+
+/*!
+Returns the number of columns present in a the result of the prepared statement. If any of the column types are invalid,
+the result will be 1.
+
+* @param prepared_statement The prepared statement.
+* @return The number of columns present in the result of the prepared statement.
+*/
+DUCKDB_C_API idx_t duckdb_prepared_statement_column_count(duckdb_prepared_statement prepared_statement);
+
+/*!
+Returns the name of the specified column of the result of the prepared_statement.
+The returned string should be freed using `duckdb_free`.
+
+Returns `nullptr` if the column is out of range.
+
+* @param prepared_statement The prepared statement.
+* @param col_idx The column index.
+* @return The column name of the specified column.
+*/
+DUCKDB_C_API const char *duckdb_prepared_statement_column_name(duckdb_prepared_statement prepared_statement,
+                                                               idx_t col_idx);
+
+/*!
+Returns the column type of the specified column of the result of the prepared_statement.
+
+Returns `DUCKDB_TYPE_INVALID` if the column is out of range.
+The return type of this call should be destroyed with `duckdb_destroy_logical_type`.
+
+* @param prepared_statement The prepared statement to fetch the column type from.
+* @param col_idx The column index.
+* @return The logical type of the specified column.
+*/
+DUCKDB_C_API duckdb_logical_type
+duckdb_prepared_statement_column_logical_type(duckdb_prepared_statement prepared_statement, idx_t col_idx);
+
+/*!
+Returns the column type of the specified column of the result of the prepared_statement.
+
+Returns `DUCKDB_TYPE_INVALID` if the column is out of range.
+
+* @param prepared_statement The prepared statement to fetch the column type from.
+* @param col_idx The column index.
+* @return The type of the specified column.
+*/
+DUCKDB_C_API duckdb_type duckdb_prepared_statement_column_type(duckdb_prepared_statement prepared_statement,
+                                                               idx_t col_idx);
 
 //===--------------------------------------------------------------------===//
 // Bind Values to Prepared Statements

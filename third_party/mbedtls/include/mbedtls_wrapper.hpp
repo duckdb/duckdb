@@ -66,7 +66,7 @@ public:
 
 class AESStateMBEDTLS : public duckdb::EncryptionState {
 	public:
-		DUCKDB_API explicit AESStateMBEDTLS(duckdb::EncryptionTypes::CipherType cipher_p, duckdb::const_data_ptr_t key = nullptr, duckdb::idx_t key_len = 0);
+		DUCKDB_API explicit AESStateMBEDTLS(duckdb::EncryptionTypes::CipherType cipher_p, duckdb::idx_t key_len);
 		DUCKDB_API ~AESStateMBEDTLS() override;
 
 	public:
@@ -87,15 +87,14 @@ class AESStateMBEDTLS : public duckdb::EncryptionState {
 
 	private:
 		duckdb::EncryptionTypes::Mode mode;
-		duckdb::EncryptionTypes::CipherType cipher;
 		duckdb::unique_ptr<mbedtls_cipher_context_t> context;
 	};
 
 	class AESStateMBEDTLSFactory : public duckdb::EncryptionUtil {
 
 	public:
-		duckdb::shared_ptr<duckdb::EncryptionState> CreateEncryptionState(duckdb::EncryptionTypes::CipherType cipher_p, duckdb::const_data_ptr_t key = nullptr, duckdb::idx_t key_len = 0) const override {
-			return duckdb::make_shared_ptr<MbedTlsWrapper::AESStateMBEDTLS>(cipher_p, key, key_len);
+		duckdb::shared_ptr<duckdb::EncryptionState> CreateEncryptionState(duckdb::EncryptionTypes::CipherType cipher_p, duckdb::idx_t key_len = 0) const override {
+			return duckdb::make_shared_ptr<MbedTlsWrapper::AESStateMBEDTLS>(cipher_p, key_len);
 		}
 
 		~AESStateMBEDTLSFactory() override {} //

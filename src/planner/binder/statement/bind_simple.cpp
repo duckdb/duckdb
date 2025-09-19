@@ -77,6 +77,16 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 	BoundStatement result;
 	result.names = {"Success"};
 	result.types = {LogicalType::BOOLEAN};
+
+	// Special handling for ALTER DATABASE - doesn't use schema binding
+	if (stmt.info->type == AlterType::ALTER_DATABASE) {
+		auto &properties = GetStatementProperties();
+		properties.return_type = StatementReturnType::NOTHING;
+		properties.RegisterDBModify(Catalog::GetSystemCatalog(context), context);
+		result.plan = make_uniq<LogicalSimple>(LogicalOperatorType::LOGICAL_ALTER, std::move(stmt.info));
+		return result;
+	}
+
 	BindSchemaOrCatalog(stmt.info->catalog, stmt.info->schema);
 
 	optional_ptr<CatalogEntry> entry;

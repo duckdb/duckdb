@@ -334,6 +334,12 @@ SinkFinalizeType PhysicalWindow::Finalize(Pipeline &pipeline, Event &event, Clie
 	return global_partition.MaterializeHashGroups(pipeline, event, *this, hfinalize);
 }
 
+ProgressData PhysicalWindow::GetSinkProgress(ClientContext &context, GlobalSinkState &gstate,
+                                             const ProgressData source_progress) const {
+	auto &gsink = gstate.Cast<WindowGlobalSinkState>();
+	return gsink.global_partition->GetSinkProgress(context, *gsink.hashed_sink, source_progress);
+}
+
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
@@ -381,8 +387,8 @@ public:
 	atomic<idx_t> finished;
 	//! Stop producing tasks
 	atomic<bool> stopped;
-	//! The number of rows returned
-	atomic<idx_t> returned;
+	//! The number of tasks completed. This will combine both build and evaluate.
+	atomic<idx_t> completed;
 
 public:
 	idx_t MaxThreads() override {
@@ -397,7 +403,7 @@ protected:
 };
 
 WindowGlobalSourceState::WindowGlobalSourceState(ClientContext &client, WindowGlobalSinkState &gsink_p)
-    : client(client), gsink(gsink_p), next_group(0), locals(0), started(0), finished(0), stopped(false), returned(0) {
+    : client(client), gsink(gsink_p), next_group(0), locals(0), started(0), finished(0), stopped(false), completed(0) {
 
 	auto &global_partition = *gsink.global_partition;
 	auto hashed_source = global_partition.GetGlobalSourceState(client, *gsink.hashed_sink);
@@ -888,6 +894,9 @@ void WindowGlobalSourceState::FinishTask(TaskPtr task) {
 		auto &v = active_groups;
 		v.erase(std::remove(v.begin(), v.end(), group_idx), v.end());
 	}
+
+	//	Count the global tasks completed.
+	++completed;
 }
 
 bool WindowLocalSourceState::TryAssignTask() {
@@ -1020,17 +1029,20 @@ OrderPreservationType PhysicalWindow::SourceOrder() const {
 
 ProgressData PhysicalWindow::GetProgress(ClientContext &client, GlobalSourceState &gsource_p) const {
 	auto &gsource = gsource_p.Cast<WindowGlobalSourceState>();
-	const auto returned = gsource.returned.load();
-
 	auto &gsink = gsource.gsink;
 	const auto count = gsink.count.load();
+	const auto completed = gsource.completed.load();
+
 	ProgressData res;
 	if (count) {
-		res.done = double(returned);
-		res.total = double(count);
+		res.done = double(completed);
+		res.total = double(gsource.total_tasks);
+		//	Convert to tuples.
+		res.Normalize(double(count));
 	} else {
 		res.SetInvalid();
 	}
+
 	return res;
 }
 
@@ -1070,8 +1082,6 @@ SourceResultType PhysicalWindow::GetData(ExecutionContext &context, DataChunk &c
 			}
 		}
 	}
-
-	gsource.returned += chunk.size();
 
 	if (chunk.size() == 0) {
 		return SourceResultType::FINISHED;

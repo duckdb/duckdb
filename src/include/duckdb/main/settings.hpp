@@ -639,6 +639,15 @@ struct ErrorsAsJSONSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct ExperimentalMetadataReuseSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "experimental_metadata_reuse";
+	static constexpr const char *Description = "EXPERIMENTAL: Re-use row group and table metadata when checkpointing.";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
+};
+
 struct ExplainOutputSetting {
 	using RETURN_TYPE = ExplainOutputType;
 	static constexpr const char *Name = "explain_output";

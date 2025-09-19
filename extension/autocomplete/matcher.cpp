@@ -18,7 +18,6 @@
 #endif
 
 namespace duckdb {
-// struct PEGParser;
 
 SuggestionType Matcher::AddSuggestion(MatchState &state) const {
 	auto entry = state.added_suggestions.find(*this);
@@ -330,7 +329,6 @@ public:
 
 	optional_ptr<ParseResult> MatchParseResult(MatchState &state) const override {
 		MatchState repeat_state(state);
-		// TODO(dtenwolde) check if this is correct
 		vector<optional_ptr<ParseResult>> results;
 
 		// First, we MUST match the element at least once.

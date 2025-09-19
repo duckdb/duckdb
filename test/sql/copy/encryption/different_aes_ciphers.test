@@ -12,19 +12,19 @@ Binder Error: Not a valid key. A key cannot be empty
 statement error
 ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER 'random');
 ----
-Binder Error: "random" is not a valid cipher. Try 'GCM', 'CTR', or 'CBC'.
+Binder Error: "random" is not a valid cipher. Try 'GCM' or 'CTR'.
 
 statement error
 ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '');
 ----
-Binder Error: "" is not a valid cipher. Try 'GCM', 'CTR', or 'CBC'.
+Binder Error: "" is not a valid cipher. Try 'GCM' or 'CTR'.
 
 statement error
 ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER 42);
 ----
-Binder Error: "42" is not a valid cipher. Try 'GCM', 'CTR', or 'CBC'.
+Binder Error: "42" is not a valid cipher. Try 'GCM' or 'CTR'.
 
-foreach cipher GCM CTR CBC
+foreach cipher GCM CTR
 
 statement ok
 ATTACH '__TEST_DIR__/encrypted_${cipher}.duckdb' AS encrypted_${cipher} (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
@@ -35,3 +35,51 @@ select encrypted from duckdb_databases() where database_name = 'encrypted_${ciph
 true
 
 endloop
+
+
+# we can create a database with a specific cipher (CTR)
+statement ok
+ATTACH '__TEST_DIR__/encrypted_default_cipher.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER 'CTR');
+
+statement ok
+create table encrypted.fuu as select 42;
+
+statement ok
+DETACH encrypted
+
+# we can open it again by specifying that same cipher again
+statement ok
+ATTACH '__TEST_DIR__/encrypted_default_cipher.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER 'CTR');
+
+query I
+FROM encrypted.fuu
+----
+42
+
+statement ok
+DETACH encrypted
+
+# or open it without specifying the cipher, it will be read from file
+statement ok
+ATTACH '__TEST_DIR__/encrypted_default_cipher.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');
+
+query I
+FROM encrypted.fuu
+----
+42
+
+statement ok
+DETACH encrypted
+
+# but it will fail if we specify the wrong one
+statement error
+ATTACH '__TEST_DIR__/encrypted_default_cipher.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER 'GCM');
+----
+with a different cipher (GCM) than the one used to create it (CTR)
+
+
+# CBC is disabled (for now)
+statement error
+ATTACH '__TEST_DIR__/CBC.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER 'CBC');
+----
+CBC encryption is disabled

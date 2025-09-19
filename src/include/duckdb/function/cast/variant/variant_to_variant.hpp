@@ -113,7 +113,6 @@ bool ConvertVariantToVariant(ToVariantSourceData &source_data, ToVariantGlobalRe
 
 		auto &keys_offset = keys_offset_data[result_index];
 		auto &children_offset = children_offset_data[result_index];
-		auto &values_offset = values_offset_data[result_index];
 		auto &blob_offset = blob_offset_data[result_index];
 
 		uint32_t keys_count = 0;
@@ -126,6 +125,7 @@ bool ConvertVariantToVariant(ToVariantSourceData &source_data, ToVariantGlobalRe
 			continue;
 		}
 		if (WRITE_DATA && values_index_selvec) {
+			auto &values_offset = values_offset_data[result_index];
 			//! Write the values_index for the parent of this column
 			result.values_index_data[values_index_selvec->get_index(source_index)] = values_offset;
 		}
@@ -140,6 +140,7 @@ bool ConvertVariantToVariant(ToVariantSourceData &source_data, ToVariantGlobalRe
 		     source_children_index++) {
 			//! values_index
 			if (WRITE_DATA) {
+				auto &values_offset = values_offset_data[result_index];
 				auto source_value_index = source.GetValuesIndex(source_index, source_children_index);
 				result.values_index_data[children_list_entry.offset + children_offset + source_children_index] =
 				    values_offset + source_value_index;

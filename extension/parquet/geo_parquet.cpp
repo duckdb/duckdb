@@ -361,21 +361,26 @@ void GeoParquetFileMetadata::Write(duckdb_parquet::FileMetaData &file_meta_data)
 		for (auto &type_name : column.second.stats.types.ToString(false)) {
 			yyjson_mut_arr_add_strcpy(doc, geometry_types, type_name.c_str());
 		}
-		const auto bbox_arr = yyjson_mut_obj_add_arr(doc, column_json, "bbox");
+
 		const auto &bbox = column.second.stats.bbox;
 
-		if (!column.second.stats.bbox.HasZ()) {
-			yyjson_mut_arr_add_real(doc, bbox_arr, bbox.xmin);
-			yyjson_mut_arr_add_real(doc, bbox_arr, bbox.ymin);
-			yyjson_mut_arr_add_real(doc, bbox_arr, bbox.xmax);
-			yyjson_mut_arr_add_real(doc, bbox_arr, bbox.ymax);
-		} else {
-			yyjson_mut_arr_add_real(doc, bbox_arr, bbox.xmin);
-			yyjson_mut_arr_add_real(doc, bbox_arr, bbox.ymin);
-			yyjson_mut_arr_add_real(doc, bbox_arr, bbox.zmin);
-			yyjson_mut_arr_add_real(doc, bbox_arr, bbox.xmax);
-			yyjson_mut_arr_add_real(doc, bbox_arr, bbox.ymax);
-			yyjson_mut_arr_add_real(doc, bbox_arr, bbox.zmax);
+		if (bbox.IsSet()) {
+
+			const auto bbox_arr = yyjson_mut_obj_add_arr(doc, column_json, "bbox");
+
+			if (!column.second.stats.bbox.HasZ()) {
+				yyjson_mut_arr_add_real(doc, bbox_arr, bbox.xmin);
+				yyjson_mut_arr_add_real(doc, bbox_arr, bbox.ymin);
+				yyjson_mut_arr_add_real(doc, bbox_arr, bbox.xmax);
+				yyjson_mut_arr_add_real(doc, bbox_arr, bbox.ymax);
+			} else {
+				yyjson_mut_arr_add_real(doc, bbox_arr, bbox.xmin);
+				yyjson_mut_arr_add_real(doc, bbox_arr, bbox.ymin);
+				yyjson_mut_arr_add_real(doc, bbox_arr, bbox.zmin);
+				yyjson_mut_arr_add_real(doc, bbox_arr, bbox.xmax);
+				yyjson_mut_arr_add_real(doc, bbox_arr, bbox.ymax);
+				yyjson_mut_arr_add_real(doc, bbox_arr, bbox.zmax);
+			}
 		}
 
 		// If the CRS is present, add it
