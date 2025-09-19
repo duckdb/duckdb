@@ -120,7 +120,7 @@ unique_ptr<LogicalOperator> TopNWindowElimination::CreateAggregateOperator(vecto
 	fun_params.push_back(std::move(window_expr.orders[0].expression));
 	arg_types.push_back(limit->return_type);
 	fun_params.push_back(std::move(limit));
-
+	// TODO: If limit is 1, use simple group by + max
 	auto &function =
 	    Catalog::GetSystemCatalog(context).GetEntry<AggregateFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "arg_max");
 	auto arg_max_fun = function.functions.GetFunctionByArguments(context, arg_types);
@@ -165,6 +165,7 @@ TopNWindowElimination::CreateUnnestStructOperator(const child_list_t<LogicalType
 	const auto struct_extract_fun = StructExtractFun::GetFunctions().GetFunctionByOffset(0);
 	const auto input_struct_type = LogicalType::STRUCT(input_types);
 
+	// TODO: add generate_subscript operator if we need the row_number
 	for (const auto &type : input_types) {
 		const auto &alias = type.first;
 		vector<unique_ptr<Expression>> fun_args(2);
@@ -210,6 +211,17 @@ unique_ptr<LogicalOperator> TopNWindowElimination::Optimize(unique_ptr<LogicalOp
 
 		D_ASSERT(child->type == LogicalOperatorType::LOGICAL_WINDOW);
 		auto &window = child->Cast<LogicalWindow>();
+
+		bool require_row_number = false;
+		idx_t row_number_idx;
+		for (idx_t i = 0; i < struct_pack_input_exprs.size(); i++) {
+			auto &expr = struct_pack_input_exprs[i];
+			if (expr->Cast<BoundColumnRefExpression>().binding.table_index == window.window_index) {
+				D_ASSERT(require_row_number == false);
+				require_row_number = true;
+				row_number_idx = i;
+			}
+		}
 
 		child_list_t<LogicalType> struct_info;
 		struct_info.reserve(struct_pack_input_exprs.size());
