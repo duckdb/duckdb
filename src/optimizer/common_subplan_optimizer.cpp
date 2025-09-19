@@ -51,6 +51,12 @@ public:
 			return nullptr;
 		}
 
+		if (op.type == LogicalOperatorType::LOGICAL_CHUNK_GET &&
+		    op.Cast<LogicalColumnDataGet>().collection->Count() > 1000) {
+			// Avoid serializing massive amounts of data (this is here because of the "Test TPCH arrow roundtrip" test)
+			return nullptr;
+		}
+
 		// Construct maps for converting column bindings to canonical representation and back
 		static constexpr idx_t CANONICAL_TABLE_INDEX_OFFSET = 10000000000000;
 		for (const auto &child_op : op.children) {
