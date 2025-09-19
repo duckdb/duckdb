@@ -1,0 +1,377 @@
+diff --git a/extension/httpfs/httpfs.cpp b/extension/httpfs/httpfs.cpp
+index bb7267a..3687009 100644
+--- a/extension/httpfs/httpfs.cpp
++++ b/extension/httpfs/httpfs.cpp
+@@ -85,20 +85,26 @@ unique_ptr<HTTPParams> HTTPFSUtil::InitializeParameters(optional_ptr<FileOpener>
+ 	return std::move(result);
+ }
+ 
+-unique_ptr<HTTPClient> HTTPClientCache::GetClient() {
++unique_ptr<HTTPClient> HTTPClientCache::GetClient(string host) {
+ 	lock_guard<mutex> lck(lock);
+ 	if (clients.size() == 0) {
+ 		return nullptr;
+ 	}
++	if (clients.find(host) == clients.end()) {
++		return nullptr;
++	}
+ 
+-	auto client = std::move(clients.back());
+-	clients.pop_back();
++	auto client = std::move((clients[host].back()));
++	clients[host].pop_back();
+ 	return client;
+ }
+ 
+-void HTTPClientCache::StoreClient(unique_ptr<HTTPClient> client) {
++void HTTPClientCache::StoreClient(string host, unique_ptr<HTTPClient> client) {
+ 	lock_guard<mutex> lck(lock);
+-	clients.push_back(std::move(client));
++	if (clients.find(host) == clients.end()) {
++		clients[host] = vector<unique_ptr<HTTPClient>>();
++	}
++	clients[host].push_back(std::move(client));
+ }
+ 
+ unique_ptr<HTTPResponse> HTTPFileSystem::PostRequest(FileHandle &handle, string url, HTTPHeaders header_map,
+@@ -125,23 +131,26 @@ unique_ptr<HTTPResponse> HTTPFileSystem::PutRequest(FileHandle &handle, string u
+ unique_ptr<HTTPResponse> HTTPFileSystem::HeadRequest(FileHandle &handle, string url, HTTPHeaders header_map) {
+ 	auto &hfh = handle.Cast<HTTPFileHandle>();
+ 	auto &http_util = hfh.http_params.http_util;
+-	auto http_client = hfh.GetClient();
++	string path_out, proto_host_port;
++	HTTPUtil::DecomposeURL(url, path_out, proto_host_port);
++	auto http_client = hfh.GetClient(proto_host_port);
+ 
+ 	HeadRequestInfo head_request(url, header_map, hfh.http_params);
+ 	auto response = http_util.Request(head_request, http_client);
+-
+-	hfh.StoreClient(std::move(http_client));
++	hfh.StoreClient(proto_host_port, std::move(http_client));
+ 	return response;
+ }
+ 
+ unique_ptr<HTTPResponse> HTTPFileSystem::DeleteRequest(FileHandle &handle, string url, HTTPHeaders header_map) {
+ 	auto &hfh = handle.Cast<HTTPFileHandle>();
+ 	auto &http_util = hfh.http_params.http_util;
+-	auto http_client = hfh.GetClient();
++	string path_out, proto_host_port;
++	HTTPUtil::DecomposeURL(url, path_out, proto_host_port);
++	auto http_client = hfh.GetClient(proto_host_port);
+ 	DeleteRequestInfo delete_request(url, header_map, hfh.http_params);
+ 	auto response = http_util.Request(delete_request, http_client);
+ 
+-	hfh.StoreClient(std::move(http_client));
++	hfh.StoreClient(proto_host_port, std::move(http_client));
+ 	return response;
+ }
+ 
+@@ -161,8 +170,9 @@ unique_ptr<HTTPResponse> HTTPFileSystem::GetRequest(FileHandle &handle, string u
+ 	auto &http_util = hfh.http_params.http_util;
+ 
+ 	D_ASSERT(hfh.cached_file_handle);
+-
+-	auto http_client = hfh.GetClient();
++	string path_out, proto_host_port;
++	HTTPUtil::DecomposeURL(url, path_out, proto_host_port);
++	auto http_client = hfh.GetClient(proto_host_port);
+ 	GetRequestInfo get_request(
+ 	    url, header_map, hfh.http_params,
+ 	    [&](const HTTPResponse &response) {
+@@ -200,7 +210,7 @@ unique_ptr<HTTPResponse> HTTPFileSystem::GetRequest(FileHandle &handle, string u
+ 
+ 	auto response = http_util.Request(get_request, http_client);
+ 
+-	hfh.StoreClient(std::move(http_client));
++	hfh.StoreClient(proto_host_port, std::move(http_client));
+ 	return response;
+ }
+ 
+@@ -213,7 +223,9 @@ unique_ptr<HTTPResponse> HTTPFileSystem::GetRangeRequest(FileHandle &handle, str
+ 	string range_expr = "bytes=" + to_string(file_offset) + "-" + to_string(file_offset + buffer_out_len - 1);
+ 	header_map.Insert("Range", range_expr);
+ 
+-	auto http_client = hfh.GetClient();
++	string path_out, proto_host_port;
++	HTTPUtil::DecomposeURL(url, path_out, proto_host_port);
++	auto http_client = hfh.GetClient(proto_host_port);
+ 
+ 	idx_t out_offset = 0;
+ 
+@@ -272,7 +284,7 @@ unique_ptr<HTTPResponse> HTTPFileSystem::GetRangeRequest(FileHandle &handle, str
+ 
+ 	auto response = http_util.Request(get_request, http_client);
+ 
+-	hfh.StoreClient(std::move(http_client));
++	hfh.StoreClient(proto_host_port, std::move(http_client));
+ 	return response;
+ }
+ 
+@@ -681,7 +693,14 @@ void HTTPFileHandle::LoadFileInfo() {
+ 			length = 0;
+ 			return;
+ 		} else {
+-			// HEAD request fail, use Range request for another try (read only one byte)
++			// HEAD request fail,
++			auto status_code = static_cast<uint16_t>(res->status);
++			if (status_code >= 300 && status_code < 400) {
++				// resource has moved, do not try range request, we will get the same response
++				throw HTTPException(*res, "Unable to connect to URL \"%s\": %d (%s).", path,
++														static_cast<int>(res->status), res->GetError());
++			}
++			// Use range request for another try (read only one byte)
+ 			if (flags.OpenForReading() && res->status != HTTPStatusCode::NotFound_404) {
+ 				auto range_res = hfs.GetRangeRequest(*this, path, {}, 0, nullptr, 2);
+ 				if (range_res->status != HTTPStatusCode::PartialContent_206 &&
+@@ -786,13 +805,12 @@ void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
+ 	}
+ }
+ 
+-unique_ptr<HTTPClient> HTTPFileHandle::GetClient() {
++unique_ptr<HTTPClient> HTTPFileHandle::GetClient(string host) {
+ 	// Try to fetch a cached client
+-	auto cached_client = client_cache.GetClient();
++	auto cached_client = client_cache.GetClient(host);
+ 	if (cached_client) {
+ 		return cached_client;
+ 	}
+-
+ 	// Create a new client
+ 	return CreateClient();
+ }
+@@ -804,8 +822,10 @@ unique_ptr<HTTPClient> HTTPFileHandle::CreateClient() {
+ 	return http_params.http_util.InitializeClient(http_params, proto_host_port);
+ }
+ 
+-void HTTPFileHandle::StoreClient(unique_ptr<HTTPClient> client) {
+-	client_cache.StoreClient(std::move(client));
++void HTTPFileHandle::StoreClient(string url, unique_ptr<HTTPClient> client) {
++	string path_out, proto_host_port;
++	HTTPUtil::DecomposeURL(url, path_out, proto_host_port);
++	client_cache.StoreClient(proto_host_port, std::move(client));
+ }
+ 
+ HTTPFileHandle::~HTTPFileHandle() {
+diff --git a/extension/httpfs/httpfs_extension.cpp b/extension/httpfs/httpfs_extension.cpp
+index 695ca30..a60fbba 100644
+--- a/extension/httpfs/httpfs_extension.cpp
++++ b/extension/httpfs/httpfs_extension.cpp
+@@ -62,7 +62,7 @@ static void LoadInternal(ExtensionLoader &loader) {
+ 	config.AddExtensionOption("ca_cert_file", "Path to a custom certificate file for self-signed certificates.",
+ 	                          LogicalType::VARCHAR, Value(""));
+ 	// Global S3 config
+-	config.AddExtensionOption("s3_region", "S3 Region", LogicalType::VARCHAR, Value("us-east-1"));
++	config.AddExtensionOption("s3_region", "S3 Region", LogicalType::VARCHAR);
+ 	config.AddExtensionOption("s3_access_key_id", "S3 Access Key ID", LogicalType::VARCHAR);
+ 	config.AddExtensionOption("s3_secret_access_key", "S3 Access Key", LogicalType::VARCHAR);
+ 	config.AddExtensionOption("s3_session_token", "S3 Session Token", LogicalType::VARCHAR);
+diff --git a/extension/httpfs/include/httpfs.hpp b/extension/httpfs/include/httpfs.hpp
+index 5f24455..8dad063 100644
+--- a/extension/httpfs/include/httpfs.hpp
++++ b/extension/httpfs/include/httpfs.hpp
+@@ -30,13 +30,13 @@ public:
+ class HTTPClientCache {
+ public:
+ 	//! Get a client from the client cache
+-	unique_ptr<HTTPClient> GetClient();
++	unique_ptr<HTTPClient> GetClient(string host);
+ 	//! Store a client in the cache for reuse
+-	void StoreClient(unique_ptr<HTTPClient> client);
++	void StoreClient(string host, unique_ptr<HTTPClient> client);
+ 
+ protected:
+-	//! The cached clients
+-	vector<unique_ptr<HTTPClient>> clients;
++	//! The cached clients for a host
++	case_insensitive_map_t<vector<unique_ptr<HTTPClient>>> clients;
+ 	//! Lock to fetch a client
+ 	mutex lock;
+ };
+@@ -89,9 +89,9 @@ public:
+ 	void AddHeaders(HTTPHeaders &map);
+ 
+ 	// Get a Client to run requests over
+-	unique_ptr<HTTPClient> GetClient();
++	unique_ptr<HTTPClient> GetClient(string host);
+ 	// Return the client for re-use
+-	void StoreClient(unique_ptr<HTTPClient> client);
++	void StoreClient(string url, unique_ptr<HTTPClient> client);
+ 
+ public:
+ 	void Close() override {
+diff --git a/extension/httpfs/include/s3fs.hpp b/extension/httpfs/include/s3fs.hpp
+index b848d2c..69358c4 100644
+--- a/extension/httpfs/include/s3fs.hpp
++++ b/extension/httpfs/include/s3fs.hpp
+@@ -34,6 +34,7 @@ struct S3AuthParams {
+ 	string oauth2_bearer_token; // OAuth2 bearer token for GCS
+ 
+ 	static S3AuthParams ReadFrom(optional_ptr<FileOpener> opener, FileOpenerInfo &info);
++	void OverwriteRegionAndEndpoint(string &region);
+ };
+ 
+ struct AWSEnvironmentCredentialsProvider {
+diff --git a/extension/httpfs/s3fs.cpp b/extension/httpfs/s3fs.cpp
+index 3ea2b98..c20bd73 100644
+--- a/extension/httpfs/s3fs.cpp
++++ b/extension/httpfs/s3fs.cpp
+@@ -183,6 +183,15 @@ S3AuthParams AWSEnvironmentCredentialsProvider::CreateParams() {
+ 	return params;
+ }
+ 
++void S3AuthParams::OverwriteRegionAndEndpoint(string &region) {
++	D_ASSERT(!region.empty());
++	D_ASSERT(!endpoint.empty());
++	this->region = region;
++	if (!this->endpoint.empty()) {
++		this->endpoint = StringUtil::Format("s3.%s.amazonaws.com", this->region);
++	}
++}
++
+ S3AuthParams S3AuthParams::ReadFrom(optional_ptr<FileOpener> opener, FileOpenerInfo &info) {
+ 	auto result = S3AuthParams();
+ 
+@@ -836,22 +845,37 @@ void S3FileHandle::Initialize(optional_ptr<FileOpener> opener) {
+ 		HTTPFileHandle::Initialize(opener);
+ 	} catch (std::exception &ex) {
+ 		ErrorData error(ex);
++		bool incorrect_region_supplied = false;
+ 		bool refreshed_secret = false;
++		auto &extra_info = error.ExtraInfo();
++		auto entry = extra_info.find("status_code");
++		string new_region = "";
+ 		if (error.Type() == ExceptionType::IO || error.Type() == ExceptionType::HTTP) {
+-			auto context = opener->TryGetClientContext();
+-			if (context) {
+-				auto transaction = CatalogTransaction::GetSystemCatalogTransaction(*context);
+-				for (const string type : {"s3", "r2", "gcs", "aws"}) {
+-					auto res = context->db->GetSecretManager().LookupSecret(transaction, path, type);
+-					if (res.HasMatch()) {
+-						refreshed_secret |= CreateS3SecretFunctions::TryRefreshS3Secret(*context, *res.secret_entry);
++			if (entry->second == "301") {
++				auto region_header = extra_info.find("header_x-amz-bucket-region");
++				if (region_header != extra_info.end()) {
++					auth_params.region = region_header->second;
++					new_region = region_header->second;
++					incorrect_region_supplied = true;
++					// FIXME: add log that we are trying a different region.
++				} else {
++					auto extra_text = S3FileSystem::GetS3BadRequestError(auth_params);
++					throw Exception(error.Type(), error.RawMessage() + extra_text, extra_info);
++				}
++			} else {
++				auto context = opener->TryGetClientContext();
++				if (context) {
++					auto transaction = CatalogTransaction::GetSystemCatalogTransaction(*context);
++					for (const string type : {"s3", "r2", "gcs", "aws"}) {
++						auto res = context->db->GetSecretManager().LookupSecret(transaction, path, type);
++						if (res.HasMatch()) {
++							refreshed_secret |= CreateS3SecretFunctions::TryRefreshS3Secret(*context, *res.secret_entry);
++						}
+ 					}
+ 				}
+ 			}
+ 		}
+-		if (!refreshed_secret) {
+-			auto &extra_info = error.ExtraInfo();
+-			auto entry = extra_info.find("status_code");
++		if (!refreshed_secret && !incorrect_region_supplied) {
+ 			if (entry != extra_info.end()) {
+ 				if (entry->second == "400") {
+ 					// 400: BAD REQUEST
+@@ -868,17 +892,24 @@ void S3FileHandle::Initialize(optional_ptr<FileOpener> opener) {
+ 					}
+ 					throw Exception(error.Type(), error.RawMessage() + extra_text, extra_info);
+ 				}
++			} else if (error.Message().find("Unknown error for HTTP HEAD to") != string::npos) {
++				// FIXME: Potentially a request to a bucket with an incorrect region. This returns a 301 Permanently Moved
++				//        http_util thinks this is a failed request, and ignores all response information
++				//        see: duckdblabs/duckdb-internal/issues/5905
++				auto extra_text = S3FileSystem::GetS3BadRequestError(auth_params);
++				throw Exception(error.Type(), error.RawMessage() + extra_text, extra_info);
+ 			}
+ 			throw;
+ 		}
+ 		// We have succesfully refreshed a secret: retry initializing with new credentials
+ 		FileOpenerInfo info = {path};
+ 		auth_params = S3AuthParams::ReadFrom(opener, info);
++		// pass correct region from redirect response
++		auth_params.OverwriteRegionAndEndpoint(new_region);
+ 		HTTPFileHandle::Initialize(opener);
+ 	}
+ 
+ 	auto &s3fs = file_system.Cast<S3FileSystem>();
+-
+ 	if (flags.OpenForWriting()) {
+ 		auto aws_minimum_part_size = 5242880; // 5 MiB https://docs.aws.amazon.com/AmazonS3/latest/userguide/qfacts.html
+ 		auto max_part_count = config_params.max_parts_per_file;
+diff --git a/test/sql/test_headers_parsed.test b/test/sql/test_headers_parsed.test
+index d0e76bd..09ae251 100644
+--- a/test/sql/test_headers_parsed.test
++++ b/test/sql/test_headers_parsed.test
+@@ -1,4 +1,4 @@
+-# name: test/sql/copy/csv/test_headers_parsed.test
++# name: test/sql/test_headers_parsed.test
+ # description: This test triggers the http prefetch mechanism.
+ # group: [csv]
+ 
+diff --git a/test/sql/test_region_errors.test b/test/sql/test_region_errors.test
+new file mode 100644
+index 0000000..6ec5bce
+--- /dev/null
++++ b/test/sql/test_region_errors.test
+@@ -0,0 +1,54 @@
++# name: test/sql/test_region_errors.test
++# description: This test triggers the http prefetch mechanism.
++# group: [csv]
++
++require httpfs
++
++require parquet
++
++require-env AWS_ACCESS_KEY_ID
++
++require-env AWS_SECRET_ACCESS_KEY
++
++set ignore_error_messages
++
++statement ok
++CREATE or replace SECRET s1 (
++    TYPE S3,
++    KEY_ID '${AWS_ACCESS_KEY_ID}',
++    SECRET '${AWS_SECRET_ACCESS_KEY}'
++)
++
++statement ok
++set s3_region='';
++
++# no region set, no error
++statement error
++select * from 's3://clickhouse-public-datasets/hits_compatible/hits.parquet' limit 1;
++----
++HTTP Error:
++
++statement ok
++set s3_region='us-east-1';
++
++# incorrect region set, no error
++statement error
++select * from 's3://clickhouse-public-datasets/hits_compatible/hits.parquet' limit 1;
++----
++HTTP Error:
++
++mode output_result
++
++# see there has been a redirect
++query III
++select request.url, request.type, response.status from duckdb_logs_parsed('HTTP');
++----
++
++statement ok
++set s3_region='eu-central-1';
++
++# correct region also works.
++statement ok
++select * from 's3://clickhouse-public-datasets/hits_compatible/hits.parquet' limit 1;
++
++
