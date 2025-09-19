@@ -54,7 +54,8 @@ struct ChildFieldIDs {
 };
 
 struct FieldID {
-	static constexpr const char *DUCKDB_FIELD_ID = "__duckdb_field_id";
+	static constexpr const auto DUCKDB_FIELD_ID = "__duckdb_field_id";
+
 	FieldID();
 	explicit FieldID(int32_t field_id);
 	FieldID Copy() const;

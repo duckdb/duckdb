@@ -369,7 +369,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 		if (flags.ReturnNullIfExists() && errno == EEXIST) {
 			return nullptr;
 		}
-		throw IOException("Cannot open file \"%s\": %s", {{"errno", std::to_string(errno)}}, path, strerror(errno));
+		throw IOException({{"errno", std::to_string(errno)}}, "Cannot open file \"%s\": %s", path, strerror(errno));
 	}
 
 #if defined(__DARWIN__) || defined(__APPLE__)
@@ -436,7 +436,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 					extended_error += ". Also, failed closing file";
 				}
 				extended_error += ". See also https://duckdb.org/docs/stable/connect/concurrency";
-				throw IOException("Could not set lock on file \"%s\": %s", {{"errno", std::to_string(retained_errno)}},
+				throw IOException({{"errno", std::to_string(retained_errno)}}, "Could not set lock on file \"%s\": %s",
 				                  path, extended_error);
 			}
 		}
@@ -454,7 +454,7 @@ void LocalFileSystem::SetFilePointer(FileHandle &handle, idx_t location) {
 	int fd = handle.Cast<UnixFileHandle>().fd;
 	off_t offset = lseek(fd, UnsafeNumericCast<off_t>(location), SEEK_SET);
 	if (offset == (off_t)-1) {
-		throw IOException("Could not seek to location %lld for file \"%s\": %s", {{"errno", std::to_string(errno)}},
+		throw IOException({{"errno", std::to_string(errno)}}, "Could not seek to location %lld for file \"%s\": %s",
 		                  location, handle.path, strerror(errno));
 	}
 }
@@ -463,7 +463,7 @@ idx_t LocalFileSystem::GetFilePointer(FileHandle &handle) {
 	int fd = handle.Cast<UnixFileHandle>().fd;
 	off_t position = lseek(fd, 0, SEEK_CUR);
 	if (position == (off_t)-1) {
-		throw IOException("Could not get file position file \"%s\": %s", {{"errno", std::to_string(errno)}},
+		throw IOException({{"errno", std::to_string(errno)}}, "Could not get file position file \"%s\": %s",
 		                  handle.path, strerror(errno));
 	}
 	return UnsafeNumericCast<idx_t>(position);
@@ -477,7 +477,7 @@ void LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, i
 		int64_t bytes_read =
 		    pread(fd, read_buffer, UnsafeNumericCast<size_t>(nr_bytes), UnsafeNumericCast<off_t>(location));
 		if (bytes_read == -1) {
-			throw IOException("Could not read from file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
+			throw IOException({{"errno", std::to_string(errno)}}, "Could not read from file \"%s\": %s", handle.path,
 			                  strerror(errno));
 		}
 		if (bytes_read == 0) {
@@ -498,7 +498,7 @@ int64_t LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes
 	int fd = unix_handle.fd;
 	int64_t bytes_read = read(fd, buffer, UnsafeNumericCast<size_t>(nr_bytes));
 	if (bytes_read == -1) {
-		throw IOException("Could not read from file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
+		throw IOException({{"errno", std::to_string(errno)}}, "Could not read from file \"%s\": %s", handle.path,
 		                  strerror(errno));
 	}
 
@@ -519,12 +519,13 @@ void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, 
 		int64_t bytes_written = pwrite(fd, write_buffer, UnsafeNumericCast<size_t>(bytes_to_write),
 		                               UnsafeNumericCast<off_t>(current_location));
 		if (bytes_written < 0) {
-			throw IOException("Could not write file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
+			throw IOException({{"errno", std::to_string(errno)}}, "Could not write file \"%s\": %s", handle.path,
 			                  strerror(errno));
 		}
 		if (bytes_written == 0) {
-			throw IOException("Could not write to file \"%s\" - attempted to write 0 bytes: %s",
-			                  {{"errno", std::to_string(errno)}}, handle.path, strerror(errno));
+			throw IOException({{"errno", std::to_string(errno)}},
+			                  "Could not write to file \"%s\" - attempted to write 0 bytes: %s",
+			                  handle.path, strerror(errno));
 		}
 		write_buffer += bytes_written;
 		bytes_to_write -= bytes_written;
@@ -544,7 +545,7 @@ int64_t LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_byte
 		    MinValue<idx_t>(idx_t(NumericLimits<int32_t>::Maximum()), idx_t(bytes_to_write));
 		int64_t current_bytes_written = write(fd, buffer, bytes_to_write_this_call);
 		if (current_bytes_written <= 0) {
-			throw IOException("Could not write file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
+			throw IOException({{"errno", std::to_string(errno)}}, "Could not write file \"%s\": %s", handle.path,
 			                  strerror(errno));
 		}
 		buffer = (void *)(data_ptr_cast(buffer) + current_bytes_written);
@@ -577,7 +578,7 @@ int64_t LocalFileSystem::GetFileSize(FileHandle &handle) {
 	int fd = handle.Cast<UnixFileHandle>().fd;
 	struct stat s;
 	if (fstat(fd, &s) == -1) {
-		throw IOException("Failed to get file size for file \"%s\": %s", {{"errno", std::to_string(errno)}},
+		throw IOException({{"errno", std::to_string(errno)}}, "Failed to get file size for file \"%s\": %s",
 		                  handle.path, strerror(errno));
 	}
 	return s.st_size;
@@ -587,7 +588,7 @@ timestamp_t LocalFileSystem::GetLastModifiedTime(FileHandle &handle) {
 	int fd = handle.Cast<UnixFileHandle>().fd;
 	struct stat s;
 	if (fstat(fd, &s) == -1) {
-		throw IOException("Failed to get last modified time for file \"%s\": %s", {{"errno", std::to_string(errno)}},
+		throw IOException({{"errno", std::to_string(errno)}}, "Failed to get last modified time for file \"%s\": %s",
 		                  handle.path, strerror(errno));
 	}
 	return Timestamp::FromEpochSeconds(s.st_mtime);
@@ -601,7 +602,7 @@ FileType LocalFileSystem::GetFileType(FileHandle &handle) {
 void LocalFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 	int fd = handle.Cast<UnixFileHandle>().fd;
 	if (ftruncate(fd, new_size) != 0) {
-		throw IOException("Could not truncate file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
+		throw IOException({{"errno", std::to_string(errno)}}, "Could not truncate file \"%s\": %s", handle.path,
 		                  strerror(errno));
 	}
 }
@@ -628,12 +629,13 @@ void LocalFileSystem::CreateDirectory(const string &directory, optional_ptr<File
 	if (stat(normalized_dir, &st) != 0) {
 		/* Directory does not exist. EEXIST for race condition */
 		if (mkdir(normalized_dir, 0755) != 0 && errno != EEXIST) {
-			throw IOException("Failed to create directory \"%s\": %s", {{"errno", std::to_string(errno)}}, directory,
+			throw IOException({{"errno", std::to_string(errno)}}, "Failed to create directory \"%s\": %s", directory,
 			                  strerror(errno));
 		}
 	} else if (!S_ISDIR(st.st_mode)) {
-		throw IOException("Failed to create directory \"%s\": path exists but is not a directory!",
-		                  {{"errno", std::to_string(errno)}}, directory);
+		throw IOException({{"errno", std::to_string(errno)}},
+		                  "Failed to create directory \"%s\": path exists but is not a directory!",
+		                  directory);
 	}
 }
 
@@ -685,7 +687,7 @@ void LocalFileSystem::RemoveDirectory(const string &directory, optional_ptr<File
 void LocalFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
 	auto normalized_file = NormalizeLocalPath(filename);
 	if (std::remove(normalized_file) != 0) {
-		throw IOException("Could not remove file \"%s\": %s", {{"errno", std::to_string(errno)}}, filename,
+		throw IOException({{"errno", std::to_string(errno)}}, "Could not remove file \"%s\": %s", filename,
 		                  strerror(errno));
 	}
 }
@@ -767,7 +769,7 @@ void LocalFileSystem::FileSync(FileHandle &handle) {
 	}
 
 	// For other types of errors, throw normal IO exception.
-	throw IOException("Could not fsync file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.GetPath(),
+	throw IOException("Could not fsync file \"%s\": %s", handle.GetPath(),
 	                  strerror(errno));
 }
 
@@ -776,7 +778,7 @@ void LocalFileSystem::MoveFile(const string &source, const string &target, optio
 	auto normalized_target = NormalizeLocalPath(target);
 	//! FIXME: rename does not guarantee atomicity or overwriting target file if it exists
 	if (rename(normalized_source, normalized_target) != 0) {
-		throw IOException("Could not rename file!", {{"errno", std::to_string(errno)}});
+		throw IOException({{"errno", std::to_string(errno)}}, "Could not rename file!");
 	}
 }
 
