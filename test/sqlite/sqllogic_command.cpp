@@ -36,7 +36,7 @@ static Connection *GetConnection(SQLLogicTestRunner &runner, DuckDB &db,
 		if (!init_cmd.empty()) {
 			auto res = con->Query(runner.ReplaceKeywords(init_cmd));
 			if (res->HasError()) {
-				FAIL("Startup queries provided via on_init failed: " + res->GetError());
+				FAIL("Startup queries provided via on_new_connection failed: " + res->GetError());
 			}
 		}
 		auto res = con.get();
@@ -63,7 +63,7 @@ Connection *Command::CommandConnection(ExecuteContext &context) const {
 			if (!init_cmd.empty()) {
 				auto res = context.con->Query(runner.ReplaceKeywords(init_cmd));
 				if (res->HasError()) {
-					string error_msg = "Startup queries provided via on_init failed: " + res->GetError();
+					string error_msg = "Startup queries provided via on_new_connection failed: " + res->GetError();
 					if (context.is_parallel) {
 						throw std::runtime_error(error_msg);
 					} else {
