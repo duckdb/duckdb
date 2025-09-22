@@ -87,9 +87,9 @@ TEST_CASE("Test catalog versioning", "[catalog]") {
 
 	// system transactions do not register catalog version changes :/
 	duckdb::TableFunction tf("some_new_table_function", {}, SomeTableFunc);
-	ExtensionInfo extension_info{};
-	ExtensionActiveLoad load_info{*db.instance, extension_info, "test_catalog_extension"};
-	ExtensionLoader loader{load_info};
+	ExtensionInfo extension_info {};
+	ExtensionActiveLoad load_info {*db.instance, extension_info, "test_catalog_extension"};
+	ExtensionLoader loader {load_info};
 	loader.RegisterFunction(tf);
 
 	con1.context->RunFunctionInTransaction([&]() {

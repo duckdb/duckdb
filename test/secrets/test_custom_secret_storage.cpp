@@ -29,9 +29,9 @@ struct DemoSecretType {
 	}
 
 	static void RegisterDemoSecret(DatabaseInstance &instance, const string &type_name) {
-		ExtensionInfo extension_info{};
-		ExtensionActiveLoad load_info{instance, extension_info, "demo_secret_type_" + type_name};
-		ExtensionLoader loader{load_info};
+		ExtensionInfo extension_info {};
+		ExtensionActiveLoad load_info {instance, extension_info, "demo_secret_type_" + type_name};
+		ExtensionLoader loader {load_info};
 		SecretType secret_type;
 		secret_type.name = type_name;
 		secret_type.deserializer = KeyValueSecret::Deserialize<KeyValueSecret>;
