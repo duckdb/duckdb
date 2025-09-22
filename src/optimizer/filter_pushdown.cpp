@@ -317,7 +317,6 @@ unique_ptr<LogicalOperator> FilterPushdown::FinishPushdown(unique_ptr<LogicalOpe
 				i--;
 				break;
 			}
-
 		}
 	}
 
