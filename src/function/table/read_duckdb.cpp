@@ -40,9 +40,11 @@ struct DuckDBMultiFileInfo : MultiFileReaderInterface {
 
 class DuckDBFileReaderOptions : public BaseFileReaderOptions {
 public:
-	DuckDBFileReaderOptions() = default;
-
+	string schema_name;
 	string table_name;
+
+	bool Matches(TableCatalogEntry &table) const;
+	string GetCandidates(const vector<reference<TableCatalogEntry>> &tables) const;
 };
 
 struct DuckDBReadBindData : TableFunctionData {
@@ -50,6 +52,7 @@ struct DuckDBReadBindData : TableFunctionData {
 
 	unique_ptr<FunctionData> Copy() const override {
 		auto result = make_uniq<DuckDBReadBindData>();
+		result->options = make_uniq<DuckDBFileReaderOptions>(*options);
 		return std::move(result);
 	}
 };
@@ -85,6 +88,43 @@ struct DuckDBReadLocalState : LocalTableFunctionState {
 	unique_ptr<LocalTableFunctionState> local_state;
 };
 
+string DuckDBFileReaderOptions::GetCandidates(const vector<reference<TableCatalogEntry>> &tables) const {
+	if (tables.empty()) {
+		return string();
+	}
+	case_insensitive_map_t<idx_t> table_names;
+	for (auto &table : tables) {
+		table_names[table.get().name]++;
+	}
+	vector<string> candidate_list;
+	for (auto &table_ref : tables) {
+		auto &table = table_ref.get();
+		if (table_names[table.name] > 1) {
+			// name conflicts across schemas - add the schema name
+			auto &schema = table.ParentSchema();
+			candidate_list.push_back(schema.name + "." + table.name);
+		} else {
+			candidate_list.push_back(table.name);
+		}
+	}
+	string search_term = schema_name;
+	if (!search_term.empty()) {
+		search_term += ".";
+	}
+	search_term += table_name;
+	return StringUtil::CandidatesErrorMessage(candidate_list, search_term, "Candidates");
+}
+
+bool DuckDBFileReaderOptions::Matches(TableCatalogEntry &table) const {
+	if (!schema_name.empty() && !StringUtil::CIEquals(table.ParentSchema().name, schema_name)) {
+		return false;
+	}
+	if (!table_name.empty() && !StringUtil::CIEquals(table.name, table_name)) {
+		return false;
+	}
+	return true;
+}
+
 DuckDBReader::DuckDBReader(ClientContext &context_p, OpenFileInfo file_p, const DuckDBFileReaderOptions &options)
     : BaseFileReader(std::move(file_p)), context(context_p), finished(false) {
 	auto &db_manager = DatabaseManager::Get(context);
@@ -100,56 +140,28 @@ DuckDBReader::DuckDBReader(ClientContext &context_p, OpenFileInfo file_p, const 
 
 	auto &catalog = attached_database->GetCatalog();
 	vector<reference<TableCatalogEntry>> tables;
+	vector<reference<TableCatalogEntry>> candidate_tables;
 	catalog.ScanSchemas(context, [&](SchemaCatalogEntry &schema) {
 		schema.Scan(CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
 			if (entry.type != CatalogType::TABLE_ENTRY) {
 				return;
 			}
 			auto &table = entry.Cast<TableCatalogEntry>();
-			tables.push_back(table);
+			if (options.Matches(table)) {
+				tables.push_back(table);
+			}
+			candidate_tables.push_back(table);
 		});
 	});
-	vector<reference<TableCatalogEntry>> candidate_tables;
-	string candidate_str;
-	if (!options.table_name.empty()) {
-		vector<reference<TableCatalogEntry>> new_tables;
-		for (auto &table : tables) {
-			if (StringUtil::CIEquals(table.get().name, options.table_name)) {
-				new_tables.push_back(table);
-			}
-		}
-		if (new_tables.empty()) {
-			vector<string> candidate_list;
-			for (auto &table : tables) {
-				candidate_list.push_back(table.get().name);
-			}
-			candidate_str = StringUtil::CandidatesMessage(candidate_list, options.table_name);
-		}
-		tables = std::move(new_tables);
-	}
 	if (tables.size() != 1) {
 		string error_msg = tables.empty() ? "does not have any tables" : "has multiple tables";
 		string extra_info;
 		if (options.table_name.empty()) {
-			extra_info = "\nSelect a table using `tables='<name>'";
+			extra_info = "\nSelect a table using `table_name='<name>'";
 		} else {
 			extra_info = " matching \"" + options.table_name + "\"";
 		}
-		if (candidate_str.empty()) {
-			constexpr idx_t MAX_CANDIDATE_STR_LENGTH = 80;
-			for (auto &table : tables) {
-				if (candidate_str.size() > MAX_CANDIDATE_STR_LENGTH) {
-					break;
-				}
-				if (!candidate_str.empty()) {
-					candidate_str += ", ";
-				}
-				candidate_str += table.get().name;
-			}
-			if (!candidate_str.empty()) {
-				candidate_str = "\nCandidates: " + candidate_str;
-			}
-		}
+		string candidate_str = options.GetCandidates(candidate_tables);
 		throw BinderException("Database \"%s\" %s%s%s", file.path, error_msg, extra_info, candidate_str);
 	}
 	table_entry = tables[0].get();
@@ -214,12 +226,12 @@ bool DuckDBMultiFileInfo::ParseCopyOption(ClientContext &context, const string &
 bool DuckDBMultiFileInfo::ParseOption(ClientContext &context, const string &key, const Value &val,
                                       MultiFileOptions &file_options, BaseFileReaderOptions &options_p) {
 	auto &options = options_p.Cast<DuckDBFileReaderOptions>();
-	if (key == "tables") {
-		if (val.type().id() == LogicalTypeId::VARCHAR) {
-			options.table_name = StringValue::Get(val);
-		} else {
-			throw NotImplementedException("Unimplemented type %s for option \"tables\"", val.type());
-		}
+	if (key == "schema_name") {
+		options.schema_name = StringValue::Get(val);
+		return true;
+	}
+	if (key == "table_name") {
+		options.table_name = StringValue::Get(val);
 		return true;
 	}
 	return false;
@@ -290,7 +302,8 @@ FileGlobInput DuckDBMultiFileInfo::GetGlobInput() {
 }
 
 void ReadDuckDBAddNamedParameters(TableFunction &table_function) {
-	table_function.named_parameters["tables"] = LogicalType::ANY;
+	table_function.named_parameters["schema_name"] = LogicalType::VARCHAR;
+	table_function.named_parameters["table_name"] = LogicalType::VARCHAR;
 
 	MultiFileReader::AddParameters(table_function);
 }
