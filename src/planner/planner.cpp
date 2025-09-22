@@ -70,6 +70,11 @@ void Planner::CreatePlan(SQLStatement &statement) {
 					this->names = bound_statement.names;
 					this->types = bound_statement.types;
 					this->plan = std::move(bound_statement.plan);
+
+					auto max_tree_depth = ClientConfig::GetConfig(context).max_expression_depth;
+					CheckTreeDepth(*plan, max_tree_depth);
+
+					this->plan = FlattenDependentJoins::DecorrelateIndependent(*this->binder, std::move(this->plan));
 					break;
 				}
 			}
