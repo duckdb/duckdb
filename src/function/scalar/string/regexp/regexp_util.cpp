@@ -119,7 +119,7 @@ void ParseGroupNameList(ClientContext &context, const string &function_name, Exp
 		}
 		if ((idx_t)group_cnt < out_names.size()) {
 			throw BinderException("Not enough capturing groups (%d) for provided names (%llu)", group_cnt,
-			                      (unsigned long long)out_names.size());
+			                      (uint64_t)out_names.size());
 		}
 	}
 }
