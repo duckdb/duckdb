@@ -3,6 +3,7 @@
 #include "duckdb/common/multi_file/multi_file_function.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/function/replacement_scan.hpp"
 
 namespace duckdb {
 

@@ -11,6 +11,8 @@
 #include "duckdb/function/table_function.hpp"
 
 namespace duckdb {
+struct ReplacementScanInput;
+struct ReplacementScanData;
 
 struct ReadDuckDBTableFunction {
 	static TableFunction GetFunction();
