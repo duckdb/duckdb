@@ -197,14 +197,14 @@ template <bool WRITE_DATA, bool IGNORE_NULLS>
 bool ConvertStructToSparseVariant(ToVariantSourceData &source, ToVariantGlobalResultData &result, idx_t count,
                                   optional_ptr<const SelectionVector> selvec,
                                   optional_ptr<const SelectionVector> values_index_selvec, const bool is_root) {
-	auto keys_offset_data = OffsetData::GetKeys(result.offsets);
-	auto values_offset_data = OffsetData::GetValues(result.offsets);
-	auto blob_offset_data = OffsetData::GetBlob(result.offsets);
-	auto children_offset_data = OffsetData::GetChildren(result.offsets);
-	auto &type = source.vec.GetType();
+	const auto keys_offset_data = OffsetData::GetKeys(result.offsets);
+	const auto values_offset_data = OffsetData::GetValues(result.offsets);
+	const auto blob_offset_data = OffsetData::GetBlob(result.offsets);
+	const auto children_offset_data = OffsetData::GetChildren(result.offsets);
+	const auto &type = source.vec.GetType();
 
-	auto &source_format = source.source_format;
-	auto &source_validity = source_format.validity;
+	const auto &source_format = source.source_format;
+	const auto &source_validity = source_format.validity;
 
 	auto &children = StructVector::GetEntries(source.vec);
 	vector<ToVariantSourceData> child_source_data;
@@ -214,11 +214,11 @@ bool ConvertStructToSparseVariant(ToVariantSourceData &source, ToVariantGlobalRe
 	}
 
 	idx_t non_null_child_counts[STANDARD_VECTOR_SIZE] = {0};
-	vector<bool> key_is_used(children.size(), false);
+	unsafe_vector<bool> key_is_used(children.size(), false);
 	for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
 		const auto &child_format = child_source_data[child_idx].source_format;
 		for (idx_t i = 0; i < count; i++) {
-			auto index = source[i];
+			const auto index = source[i];
 			if (!source_validity.RowIsValid(index)) {
 				continue;
 			}
@@ -236,13 +236,13 @@ bool ConvertStructToSparseVariant(ToVariantSourceData &source, ToVariantGlobalRe
 	auto &variant = result.variant;
 	ContainerSelectionVectors sel(count);
 	for (idx_t i = 0; i < count; i++) {
-		auto index = source[i];
-		auto result_index = selvec ? selvec->get_index(i) : i;
+		const auto index = source[i];
+		const auto result_index = selvec ? selvec->get_index(i) : i;
 
 		auto &blob_offset = blob_offset_data[result_index];
 
 		const auto &non_null_child_count = non_null_child_counts[i];
-		if (source_validity.RowIsValid(index)) {
+		if (source_validity.RowIsValid(index) && non_null_child_count != 0) {
 			WriteVariantMetadata<WRITE_DATA>(result, result_index, values_offset_data, blob_offset, values_index_selvec,
 			                                 i, VariantLogicalType::OBJECT);
 			WriteContainerData<WRITE_DATA>(result.variant, result_index, blob_offset, non_null_child_count,
@@ -254,13 +254,14 @@ bool ConvertStructToSparseVariant(ToVariantSourceData &source, ToVariantGlobalRe
 				}
 				auto &struct_children = StructType::GetChildTypes(type);
 				for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
-					if (!key_is_used[child_idx]) {
-						continue;
+					if (key_is_used[child_idx]) {
+						auto &struct_child = struct_children[child_idx];
+						string_t struct_child_str(struct_child.first.c_str(),
+						                          NumericCast<uint32_t>(struct_child.first.size()));
+						dictionary_indices.push_back(result.GetOrCreateIndex(struct_child_str));
+					} else {
+						dictionary_indices.push_back(static_cast<uint32_t>(-1));
 					}
-					auto &struct_child = struct_children[child_idx];
-					string_t struct_child_str(struct_child.first.c_str(),
-					                          NumericCast<uint32_t>(struct_child.first.size()));
-					dictionary_indices.push_back(result.GetOrCreateIndex(struct_child_str));
 				}
 			}
 
@@ -275,12 +276,12 @@ bool ConvertStructToSparseVariant(ToVariantSourceData &source, ToVariantGlobalRe
 				idx_t non_null_idx = 0; // Keep track of non-NULL children because this is a sparse conversion
 				for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
 					const auto &child_format = child_source_data[child_idx].source_format;
-					if (!child_format.validity.RowIsValid(child_format.sel->get_index(i))) {
+					if (!child_format.validity.RowIsValid(child_format.sel->get_index(index))) {
 						continue; // Sparse conversion: skip NULL
 					}
 					variant.keys_index_data[children_index + non_null_idx] =
 					    NumericCast<uint32_t>(keys_offset_data[result_index] + non_null_idx);
-					result.keys_selvec.set_index(keys_offset + non_null_idx, dictionary_indices[non_null_idx]);
+					result.keys_selvec.set_index(keys_offset + non_null_idx, dictionary_indices[child_idx]);
 					non_null_idx++;
 				}
 				//! Map from index of the child to the children.values_index of the parent
@@ -320,11 +321,16 @@ bool ConvertStructToSparseVariant(ToVariantSourceData &source, ToVariantGlobalRe
 		}
 		if (WRITE_DATA) {
 			//! Now forward the selection to point to the next index in the children.values_index
+			const auto &child_format = child_source_data[child_idx].source_format;
 			for (idx_t i = 0; i < sel.count; i++) {
-				sel.children_selection[i]++;
+				const auto index = source[i];
+				if (child_format.validity.RowIsValid(child_format.sel->get_index(index))) {
+					sel.children_selection[i]++;
+				}
 			}
 		}
 	}
+
 	return true;
 }
 
