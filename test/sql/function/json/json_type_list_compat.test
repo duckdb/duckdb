@@ -1,0 +1,44 @@
+# name: test/sql/function/json/json_type_list_compat.test
+# description: Test json_type function with LIST(JSON) input
+# group: [json]
+
+require json
+
+query T
+SELECT json_type(json_extract('{"duck":[1,2,3]}', '$..duck'));
+----
+ARRAY
+
+query T
+SELECT json_type(json_extract('{"duck":[1,2,3]}', '$.duck[*]'));
+----
+ARRAY
+
+query T
+SELECT json_type(json_extract('{"a":{"duck":[1]},"b":{"duck":[2,3]}}', '$..duck'));
+----
+ARRAY
+
+query T
+SELECT json_type(json_extract(doc, '$..duck')) FROM (VALUES
+('{"duck":[1,2,3]}'),
+('{"nested":{"duck":[4]}}')
+) t(doc);
+----
+ARRAY
+ARRAY
+
+query T
+SELECT json_type(CAST(json_extract('{"duck":[1,2,3]}', '$..duck') AS VARCHAR));
+----
+ARRAY
+
+query T
+SELECT json_type(json_extract('{"duck":42}', '$.duck'));
+----
+UBIGINT
+
+query T
+SELECT json_type(json_extract('{"duck":true}', '$.duck'));
+----
+BOOLEAN

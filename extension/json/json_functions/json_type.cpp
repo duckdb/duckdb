@@ -18,6 +18,25 @@ static void ManyTypeFunction(DataChunk &args, ExpressionState &state, Vector &re
 	JSONExecutors::ExecuteMany<string_t>(args, state, result, GetType);
 }
 
+static void ListJSONContainerTypeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+	auto data = FlatVector::GetData<string_t>(result);
+	auto &validity = FlatVector::Validity(result);
+
+	const idx_t count = args.size();
+	UnifiedVectorFormat input;
+	args.data[0].ToUnifiedFormat(count, input);
+
+	for (idx_t i = 0; i < count; i++) {
+		const auto idx = input.sel->get_index(i);
+		if (!input.validity.RowIsValid(idx)) {
+			validity.SetInvalid(i);
+			continue;
+		}
+		data[i] = StringVector::AddString(result, "ARRAY");
+	}
+}
+
 static void GetTypeFunctionsInternal(ScalarFunctionSet &set, const LogicalType &input_type) {
 	set.AddFunction(ScalarFunction({input_type}, LogicalType::VARCHAR, UnaryTypeFunction, nullptr, nullptr, nullptr,
 	                               JSONFunctionLocalState::Init));
@@ -28,10 +47,17 @@ static void GetTypeFunctionsInternal(ScalarFunctionSet &set, const LogicalType &
 	                               JSONReadManyFunctionData::Bind, nullptr, nullptr, JSONFunctionLocalState::Init));
 }
 
+static void GetTypeFunctionsForListJSON(ScalarFunctionSet &set) {
+	set.AddFunction(ScalarFunction({LogicalType::LIST(LogicalType::JSON())}, LogicalType::VARCHAR,
+	                               ListJSONContainerTypeFunction, nullptr, nullptr, nullptr,
+	                               JSONFunctionLocalState::Init));
+}
+
 ScalarFunctionSet JSONFunctions::GetTypeFunction() {
 	ScalarFunctionSet set("json_type");
 	GetTypeFunctionsInternal(set, LogicalType::VARCHAR);
 	GetTypeFunctionsInternal(set, LogicalType::JSON());
+	GetTypeFunctionsForListJSON(set);
 	return set;
 }
 
