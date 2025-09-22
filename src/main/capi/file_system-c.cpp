@@ -26,7 +26,7 @@ struct CFileOpenOptions {
 	bool create_new = false;
 };
 
-struct CFile {
+struct CFileHandle {
 	ErrorData error_data;
 	unique_ptr<FileHandle> handle;
 
@@ -43,6 +43,7 @@ struct CFile {
 
 void duckdb_connection_get_file_system(duckdb_connection connection, duckdb_file_system *out_file_system) {
 	if (!connection || !out_file_system) {
+		*out_file_system = nullptr;
 		return;
 	}
 	auto conn = reinterpret_cast<duckdb::Connection *>(connection);
@@ -56,11 +57,12 @@ void duckdb_connection_get_file_system(duckdb_connection connection, duckdb_file
 
 void duckdb_client_context_get_file_system(duckdb_client_context context, duckdb_file_system *out_file_system) {
 	if (!context || !out_file_system) {
+		*out_file_system = nullptr;
 		return;
 	}
-	auto ctx = reinterpret_cast<duckdb::ClientContext *>(context);
+	auto ctx = reinterpret_cast<duckdb::CClientContextWrapper *>(context);
 	try {
-		auto wrapper = new duckdb::CFileSystem(duckdb::FileSystem::GetFileSystem(*ctx));
+		auto wrapper = new duckdb::CFileSystem(duckdb::FileSystem::GetFileSystem(ctx->context));
 		*out_file_system = reinterpret_cast<duckdb_file_system>(wrapper);
 	} catch (...) {
 		*out_file_system = nullptr;
@@ -87,7 +89,6 @@ duckdb_state duckdb_file_open_options_set_flag(duckdb_file_open_options options,
 	}
 	auto coptions = reinterpret_cast<duckdb::CFileOpenOptions *>(options);
 
-	duckdb::FileOpenFlags open_flags;
 	switch (flag) {
 	case DUCKDB_FILE_FLAGS_READ:
 		coptions->read = value;
@@ -150,12 +151,13 @@ duckdb_state duckdb_file_system_open(duckdb_file_system fs, const char *path, du
 		}
 
 		auto handle = cfs->fs.OpenFile(duckdb::string(path), flags);
-		auto wrapper = new duckdb::CFile();
+		auto wrapper = new duckdb::CFileHandle();
 		wrapper->handle = std::move(handle);
 		*out_file = reinterpret_cast<duckdb_file_handle>(wrapper);
 		return DuckDBSuccess;
 	} catch (const std::exception &ex) {
 		cfs->SetError(ex);
+		return DuckDBError;
 	} catch (...) {
 		cfs->SetError("Unknown error occurred during file open");
 		return DuckDBError;
@@ -176,7 +178,7 @@ void duckdb_destroy_file_handle(duckdb_file_handle *file) {
 	if (!file || !*file) {
 		return;
 	}
-	auto cfile = reinterpret_cast<duckdb::CFile *>(*file);
+	auto cfile = reinterpret_cast<duckdb::CFileHandle *>(*file);
 	cfile->handle->Close(); // Ensure the file is closed before destroying
 	delete cfile;
 	*file = nullptr;
@@ -187,7 +189,7 @@ duckdb_error_data duckdb_file_handle_error_data(duckdb_file_handle file) {
 	if (!file) {
 		return reinterpret_cast<duckdb_error_data>(wrapper);
 	}
-	auto cfile = reinterpret_cast<duckdb::CFile *>(file);
+	auto cfile = reinterpret_cast<duckdb::CFileHandle *>(file);
 	wrapper->error_data = cfile->error_data;
 	return reinterpret_cast<duckdb_error_data>(wrapper);
 }
@@ -196,9 +198,9 @@ int64_t duckdb_file_handle_read(duckdb_file_handle file, void *buffer, int64_t s
 	if (!file || !buffer || size < 0) {
 		return -1;
 	}
-	auto cfile = reinterpret_cast<duckdb::CFile *>(file);
+	auto cfile = reinterpret_cast<duckdb::CFileHandle *>(file);
 	try {
-		return cfile->handle->Read(buffer, size);
+		return cfile->handle->Read(buffer, static_cast<idx_t>(size));
 	} catch (std::exception &ex) {
 		cfile->SetError(ex);
 		return -1;
@@ -212,9 +214,9 @@ int64_t duckdb_file_handle_write(duckdb_file_handle file, const void *buffer, in
 	if (!file || !buffer || size < 0) {
 		return -1;
 	}
-	auto cfile = reinterpret_cast<duckdb::CFile *>(file);
+	auto cfile = reinterpret_cast<duckdb::CFileHandle *>(file);
 	try {
-		return cfile->handle->Write(const_cast<void *>(buffer), size);
+		return cfile->handle->Write(const_cast<void *>(buffer), static_cast<idx_t>(size));
 	} catch (std::exception &ex) {
 		cfile->SetError(ex);
 		return -1;
@@ -228,9 +230,9 @@ int64_t duckdb_file_handle_tell(duckdb_file_handle file) {
 	if (!file) {
 		return -1;
 	}
-	auto cfile = reinterpret_cast<duckdb::CFile *>(file);
+	auto cfile = reinterpret_cast<duckdb::CFileHandle *>(file);
 	try {
-		return cfile->handle->SeekPosition();
+		return static_cast<int64_t>(cfile->handle->SeekPosition());
 	} catch (std::exception &ex) {
 		cfile->SetError(ex);
 		return -1;
@@ -244,7 +246,7 @@ int64_t duckdb_file_handle_size(duckdb_file_handle file) {
 	if (!file) {
 		return -1;
 	}
-	auto cfile = reinterpret_cast<duckdb::CFile *>(file);
+	auto cfile = reinterpret_cast<duckdb::CFileHandle *>(file);
 	try {
 		return static_cast<int64_t>(cfile->handle->GetFileSize());
 	} catch (std::exception &ex) {
@@ -257,12 +259,12 @@ int64_t duckdb_file_handle_size(duckdb_file_handle file) {
 }
 
 duckdb_state duckdb_file_handle_seek(duckdb_file_handle file, int64_t position) {
-	if (!file) {
+	if (!file || position < 0) {
 		return DuckDBError;
 	}
-	auto cfile = reinterpret_cast<duckdb::CFile *>(file);
+	auto cfile = reinterpret_cast<duckdb::CFileHandle *>(file);
 	try {
-		cfile->handle->Seek(position);
+		cfile->handle->Seek(static_cast<idx_t>(position));
 		return DuckDBSuccess;
 	} catch (std::exception &ex) {
 		cfile->SetError(ex);
@@ -277,7 +279,7 @@ duckdb_state duckdb_file_handle_sync(duckdb_file_handle file) {
 	if (!file) {
 		return DuckDBError;
 	}
-	auto cfile = reinterpret_cast<duckdb::CFile *>(file);
+	auto cfile = reinterpret_cast<duckdb::CFileHandle *>(file);
 	try {
 		cfile->handle->Sync();
 		return DuckDBSuccess;
@@ -294,7 +296,7 @@ duckdb_state duckdb_file_handle_close(duckdb_file_handle file) {
 	if (!file) {
 		return DuckDBError;
 	}
-	auto cfile = reinterpret_cast<duckdb::CFile *>(file);
+	auto cfile = reinterpret_cast<duckdb::CFileHandle *>(file);
 	try {
 		cfile->handle->Close();
 		return DuckDBSuccess;

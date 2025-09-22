@@ -3,6 +3,7 @@ add_library_unity(
   OBJECT
   capi_aggregate_functions.cpp
   capi_custom_type.cpp
+  capi_file_system.cpp
   capi_scalar_functions.cpp
   capi_table_functions.cpp
   test_capi.cpp
