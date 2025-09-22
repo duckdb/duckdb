@@ -220,3 +220,7 @@ SELECT b.x
 FROM (SELECT 1) _(x), LATERAL (SELECT * FROM cte) b(x)
 ----
 
+query III
+WITH RECURSIVE rec(a, b, c) AS (select a,b,c from (values(1,2,3),(1,2,3)) s(a,b,c) union select 1,2,3) select * from rec;
+----
+1	2	3

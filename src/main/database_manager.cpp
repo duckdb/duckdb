@@ -53,18 +53,33 @@ optional_ptr<AttachedDatabase> DatabaseManager::GetDatabase(ClientContext &conte
 		return database;
 	}
 	lock_guard<mutex> guard(databases_lock);
+	shared_ptr<AttachedDatabase> db;
 	if (StringUtil::Lower(name) == TEMP_CATALOG) {
-		return meta_transaction.UseDatabase(context.client_data->temporary_objects);
+		db = context.client_data->temporary_objects;
+	} else {
+		db = GetDatabaseInternal(guard, name);
 	}
+	if (!db) {
+		return nullptr;
+	}
+	return meta_transaction.UseDatabase(db);
+}
+
+shared_ptr<AttachedDatabase> DatabaseManager::GetDatabase(const string &name) {
+	lock_guard<mutex> guard(databases_lock);
+	return GetDatabaseInternal(guard, name);
+}
+
+shared_ptr<AttachedDatabase> DatabaseManager::GetDatabaseInternal(const lock_guard<mutex> &, const string &name) {
 	if (StringUtil::Lower(name) == SYSTEM_CATALOG) {
-		return meta_transaction.UseDatabase(system);
+		return system;
 	}
 	auto entry = databases.find(name);
 	if (entry == databases.end()) {
 		// not found
 		return nullptr;
 	}
-	return meta_transaction.UseDatabase(entry->second);
+	return entry->second;
 }
 
 shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &context, AttachInfo &info,

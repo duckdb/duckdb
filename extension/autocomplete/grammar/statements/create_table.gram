@@ -65,4 +65,5 @@ Generated <- 'GENERATED' AlwaysOrByDefault?
 AlwaysOrByDefault <- 'ALWAYS' / ('BY' 'DEFAULT')
 GeneratedColumnType <- 'VIRTUAL' / 'STORED'
 
-CommitAction <- 'ON' 'COMMIT' 'PRESERVE' 'ROWS'
+CommitAction <- 'ON' 'COMMIT' PreserveOrDelete
+PreserveOrDelete <- ('PRESERVE' / 'DELETE') 'ROWS'

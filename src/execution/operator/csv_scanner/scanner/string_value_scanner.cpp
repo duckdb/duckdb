@@ -797,7 +797,7 @@ void StringValueResult::NullPaddingQuotedNewlineCheck() const {
 		// If we have null_padding set, we found a quoted new line, we are scanning the file in parallel; We error.
 		LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), lines_read);
 		auto csv_error = CSVError::NullPaddingFail(state_machine.options, lines_per_batch, path);
-		error_handler.Error(csv_error, try_row);
+		error_handler.Error(csv_error, true);
 	}
 }
 
