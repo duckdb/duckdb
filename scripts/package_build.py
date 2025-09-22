@@ -147,7 +147,7 @@ def get_relative_path(source_dir, target_file):
 # - scripts/amalgamation.py
 # - scripts/package_build.py
 ######
-MAIN_BRANCH_VERSIONING = False
+MAIN_BRANCH_VERSIONING = True
 if os.getenv('MAIN_BRANCH_VERSIONING') == "0":
     MAIN_BRANCH_VERSIONING = False
 if os.getenv('MAIN_BRANCH_VERSIONING') == "1":
