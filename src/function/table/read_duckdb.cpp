@@ -35,6 +35,7 @@ struct DuckDBMultiFileInfo : MultiFileReaderInterface {
 	void FinishReading(ClientContext &context, GlobalTableFunctionState &global_state,
 	                   LocalTableFunctionState &local_state) override;
 	unique_ptr<NodeStatistics> GetCardinality(const MultiFileBindData &bind_data, idx_t file_count) override;
+	void GetVirtualColumns(ClientContext &, MultiFileBindData &, virtual_column_map_t &result) override;
 	FileGlobInput GetGlobInput() override;
 };
 
@@ -70,7 +71,8 @@ public:
 	void Scan(ClientContext &context, GlobalTableFunctionState &global_state, LocalTableFunctionState &local_state,
 	          DataChunk &chunk) override;
 	double GetProgressInFile(ClientContext &context) override;
-
+	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const string &name) override;
+	void AddVirtualColumn(column_t virtual_column_id) override;
 	string GetReaderType() const override {
 		return "duckdb";
 	}
@@ -83,6 +85,7 @@ private:
 	unique_ptr<FunctionData> bind_data;
 	unique_ptr<GlobalTableFunctionState> global_state;
 	atomic<bool> finished;
+	idx_t column_count;
 };
 
 struct DuckDBReadGlobalState : GlobalTableFunctionState {};
@@ -195,6 +198,7 @@ DuckDBReader::DuckDBReader(ClientContext &context_p, OpenFileInfo file_p, const 
 	for (auto &col : table_entry->GetColumns().Logical()) {
 		columns.emplace_back(col.Name(), col.Type());
 	}
+	column_count = columns.size();
 }
 
 DuckDBReader::~DuckDBReader() {
@@ -211,6 +215,11 @@ bool DuckDBReader::TryInitializeScan(ClientContext &context, GlobalTableFunction
 		return false;
 	}
 	if (!global_state) {
+		for (auto &col : column_indexes) {
+			if (col.GetPrimaryIndex() >= column_count) {
+				col = ColumnIndex(COLUMN_IDENTIFIER_ROW_ID);
+			}
+		}
 		// initialize the scan over this table
 		scan_function = table_entry->GetScanFunction(context, bind_data);
 		TableFunctionInitInput input(bind_data.get(), column_indexes, vector<idx_t>(), nullptr);
@@ -235,11 +244,22 @@ void DuckDBReader::Scan(ClientContext &context, GlobalTableFunctionState &gstate
 	}
 }
 
+unique_ptr<BaseStatistics> DuckDBReader::GetStatistics(ClientContext &context, const string &name) {
+	Printer::PrintF("Get stats");
+	return scan_function.statistics(context, bind_data.get(), table_entry->GetColumn(name).Physical().index);
+}
+
 double DuckDBReader::GetProgressInFile(ClientContext &context) {
 	if (!scan_function.table_scan_progress) {
 		return BaseFileReader::GetProgressInFile(context);
 	}
 	return scan_function.table_scan_progress(context, bind_data.get(), global_state.get());
+}
+
+void DuckDBReader::AddVirtualColumn(column_t virtual_column_id) {
+	if (virtual_column_id != COLUMN_IDENTIFIER_ROW_ID) {
+		throw InternalException("Unsupported virtual column id %d for duckdb reader", virtual_column_id);
+	}
 }
 
 unique_ptr<MultiFileReaderInterface> DuckDBMultiFileInfo::CreateInterface(ClientContext &context) {
@@ -335,6 +355,10 @@ FileGlobInput DuckDBMultiFileInfo::GetGlobInput() {
 	return FileGlobInput(FileGlobOptions::FALLBACK_GLOB, "db");
 }
 
+void DuckDBMultiFileInfo::GetVirtualColumns(ClientContext &, MultiFileBindData &, virtual_column_map_t &result) {
+	result.insert(make_pair(COLUMN_IDENTIFIER_ROW_ID, TableColumn("rowid", LogicalType::BIGINT)));
+}
+
 void ReadDuckDBAddNamedParameters(TableFunction &table_function) {
 	table_function.named_parameters["schema_name"] = LogicalType::VARCHAR;
 	table_function.named_parameters["table_name"] = LogicalType::VARCHAR;
@@ -342,8 +366,16 @@ void ReadDuckDBAddNamedParameters(TableFunction &table_function) {
 	MultiFileReader::AddParameters(table_function);
 }
 
+static vector<column_t> DuckDBGetRowIdColumns(ClientContext &context, optional_ptr<FunctionData> bind_data) {
+	vector<column_t> result;
+	result.emplace_back(COLUMN_IDENTIFIER_ROW_ID);
+	return result;
+}
+
 TableFunction ReadDuckDBTableFunction::GetFunction() {
 	MultiFileFunction<DuckDBMultiFileInfo> read_duckdb("read_duckdb");
+	read_duckdb.statistics = MultiFileFunction<DuckDBMultiFileInfo>::MultiFileScanStats;
+	read_duckdb.get_row_id_columns = DuckDBGetRowIdColumns;
 	ReadDuckDBAddNamedParameters(read_duckdb);
 	return static_cast<TableFunction>(read_duckdb);
 }
