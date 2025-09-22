@@ -74,6 +74,7 @@ public:
 	                       LocalTableFunctionState &lstate) override;
 	void Scan(ClientContext &context, GlobalTableFunctionState &global_state, LocalTableFunctionState &local_state,
 	          DataChunk &chunk) override;
+	shared_ptr<BaseUnionData> GetUnionData(idx_t file_idx) override;
 	double GetProgressInFile(ClientContext &context) override;
 	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const string &name) override;
 	void AddVirtualColumn(column_t virtual_column_id) override;
@@ -263,6 +264,9 @@ unique_ptr<BaseStatistics> DuckDBReader::GetStatistics(ClientContext &context, c
 	if (!scan_function.statistics) {
 		return BaseFileReader::GetStatistics(context, name);
 	}
+	if (!table_entry->ColumnExists(name)) {
+		return nullptr;
+	}
 	return scan_function.statistics(context, bind_data.get(), table_entry->GetColumn(name).Logical().index);
 }
 
@@ -348,10 +352,17 @@ unique_ptr<LocalTableFunctionState> DuckDBMultiFileInfo::InitializeLocalState(Ex
 	return make_uniq<DuckDBReadLocalState>();
 }
 
+struct DuckDBReaderUnionData : BaseUnionData {
+	explicit DuckDBReaderUnionData(OpenFileInfo file_p) : BaseUnionData(std::move(file_p)) {
+	}
+};
+
 shared_ptr<BaseFileReader> DuckDBMultiFileInfo::CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
-                                                             BaseUnionData &union_data,
-                                                             const MultiFileBindData &bind_data_p) {
-	throw InternalException("Unimplemented method in DuckDBMultiFileInfo");
+                                                             BaseUnionData &union_data_p,
+                                                             const MultiFileBindData &multi_bind_data) {
+	auto &union_data = union_data_p.Cast<DuckDBReaderUnionData>();
+	auto &bind_data = multi_bind_data.bind_data->Cast<DuckDBReadBindData>();
+	return make_shared_ptr<DuckDBReader>(context, union_data.file, *bind_data.options);
 }
 
 shared_ptr<BaseFileReader> DuckDBMultiFileInfo::CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
@@ -367,12 +378,25 @@ shared_ptr<BaseFileReader> DuckDBMultiFileInfo::CreateReader(ClientContext &cont
 	return make_shared_ptr<DuckDBReader>(context, file, options.Cast<DuckDBFileReaderOptions>());
 }
 
+shared_ptr<BaseUnionData> DuckDBReader::GetUnionData(idx_t file_idx) {
+	auto result = make_uniq<DuckDBReaderUnionData>(file);
+	for (auto &column : columns) {
+		result->names.push_back(column.name);
+		result->types.push_back(column.type);
+	}
+	result->reader = shared_from_this();
+	return std::move(result);
+}
+
 void DuckDBMultiFileInfo::FinishReading(ClientContext &context, GlobalTableFunctionState &global_state,
                                         LocalTableFunctionState &local_state) {
 }
 
 unique_ptr<NodeStatistics> DuckDBMultiFileInfo::GetCardinality(const MultiFileBindData &bind_data_p, idx_t file_count) {
-	// FIXME: get cardinality of table
+	auto &bind_data = bind_data_p.bind_data->Cast<DuckDBReadBindData>();
+	if (bind_data.initial_file_cardinality.IsValid()) {
+		return make_uniq<NodeStatistics>(file_count * bind_data.initial_file_cardinality.GetIndex());
+	}
 	return make_uniq<NodeStatistics>(file_count);
 }
 
