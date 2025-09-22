@@ -217,15 +217,15 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 		state->QueryBegin(*this);
 	}
 
-	// Flush the old Logger
+	// Flush the old logger.
 	logger->Flush();
 
-	// Refresh the logger to ensure we are in sync with global log settings
-	LoggingContext context(LogContextScope::CONNECTION);
-	context.connection_id = connection_id;
-	context.transaction_id = transaction.ActiveTransaction().global_transaction_id;
-	context.query_id = transaction.GetActiveQuery();
-	logger = db->GetLogManager().CreateLogger(context, true);
+	// Refresh the logger to ensure we are in sync with the global log settings.
+	LoggingContext logging_context(LogContextScope::CONNECTION);
+	logging_context.connection_id = connection_id;
+	logging_context.transaction_id = transaction.ActiveTransaction().global_transaction_id;
+	logging_context.query_id = transaction.GetActiveQuery();
+	logger = db->GetLogManager().CreateLogger(logging_context, true);
 	DUCKDB_LOG(*this, QueryLogType, query);
 }
 
@@ -889,6 +889,10 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
     shared_ptr<PreparedStatementData> &prepared, const PendingQueryParameters &parameters) {
 	unique_ptr<PendingQueryResult> pending;
 
+	// Start the profiler.
+	auto &profiler = QueryProfiler::Get(*this);
+	profiler.StartQuery(query, IsExplainAnalyze(statement ? statement.get() : prepared->unbound_statement.get()));
+
 	try {
 		BeginQueryInternal(lock, query);
 	} catch (std::exception &ex) {
@@ -900,9 +904,6 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 		}
 		return ErrorResult<PendingQueryResult>(std::move(error), query);
 	}
-	// start the profiler
-	auto &profiler = QueryProfiler::Get(*this);
-	profiler.StartQuery(query, IsExplainAnalyze(statement ? statement.get() : prepared->unbound_statement.get()));
 
 	bool invalidate_query = true;
 	try {
