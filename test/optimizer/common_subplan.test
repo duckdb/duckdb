@@ -28,6 +28,28 @@ from (select sum(random()) s from range(10)) t1,
 ----
 logical_opt	<!REGEX>:.*CTE.*
 
+# common subplan inside of a materialized cte and outside of it
+# should yield two ctes
+query I
+with cte as materialized (
+    select sum(range) s from range(10)
+)
+select t1.s + t2.s
+from cte t1,
+     (select sum(range) s from range(10)) t2
+----
+90
+
+query II
+explain with cte as materialized (
+    select sum(range) s from range(10)
+)
+select t1.s + t2.s
+from cte t1,
+     (select sum(range) s from range(10)) t2
+----
+logical_opt	<REGEX>:.*CTE.*CTE.*
+
 require tpcds
 
 statement ok
