@@ -10,12 +10,12 @@
 namespace duckdb {
 
 MaterializedRelation::MaterializedRelation(const shared_ptr<ClientContext> &context,
-                                           unique_ptr<ColumnDataCollection> &&collection_p, vector<string> names,
+                                           shared_ptr<ManagedQueryResult> managed_result_p, vector<string> names,
                                            string alias_p)
     : Relation(context, RelationType::MATERIALIZED_RELATION), alias(std::move(alias_p)),
-      collection(std::move(collection_p)) {
+      managed_result(std::move(managed_result_p)) {
 	// create constant expressions for the values
-	auto types = collection->Types();
+	auto types = managed_result->Collection().Types();
 	D_ASSERT(types.size() == names.size());
 
 	QueryResult::DeduplicateColumns(names);
@@ -35,7 +35,7 @@ unique_ptr<QueryNode> MaterializedRelation::GetQueryNode() {
 }
 
 unique_ptr<TableRef> MaterializedRelation::GetTableRef() {
-	auto table_ref = make_uniq<ColumnDataRef>(collection);
+	auto table_ref = make_uniq<ColumnDataRef>(managed_result->Collection());
 	for (auto &col : columns) {
 		table_ref->expected_names.push_back(col.Name());
 	}
@@ -52,7 +52,7 @@ const vector<ColumnDefinition> &MaterializedRelation::Columns() {
 }
 
 string MaterializedRelation::ToString(idx_t depth) {
-	return collection->ToString();
+	return managed_result->Collection().ToString();
 }
 
 } // namespace duckdb

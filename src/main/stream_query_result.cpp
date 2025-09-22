@@ -145,7 +145,7 @@ unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
 	if (HasError() || !context) {
 		return make_uniq<MaterializedQueryResult>(GetErrorObject());
 	}
-	auto collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
+	auto collection = make_uniq<ColumnDataCollection>(*context, types);
 
 	ColumnDataAppendState append_state;
 	collection->InitializeAppend(append_state);
@@ -160,8 +160,9 @@ unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
 		}
 		collection->Append(append_state, *chunk);
 	}
-	auto result =
-	    make_uniq<MaterializedQueryResult>(statement_type, properties, names, std::move(collection), client_properties);
+	auto managed_result = QueryResultManager::Get(*context).Add(std::move(collection));
+	auto result = make_uniq<MaterializedQueryResult>(statement_type, properties, names, std::move(managed_result),
+	                                                 client_properties);
 	if (HasError()) {
 		return make_uniq<MaterializedQueryResult>(GetErrorObject());
 	}

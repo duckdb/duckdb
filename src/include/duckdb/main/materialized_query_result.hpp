@@ -11,6 +11,7 @@
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/main/query_result.hpp"
+#include "duckdb/main/query_result_manager.hpp"
 
 namespace duckdb {
 
@@ -24,7 +25,7 @@ public:
 	friend class ClientContext;
 	//! Creates a successful query result with the specified names and types
 	DUCKDB_API MaterializedQueryResult(StatementType statement_type, StatementProperties properties,
-	                                   vector<string> names, unique_ptr<ColumnDataCollection> collection,
+	                                   vector<string> names, shared_ptr<ManagedQueryResult> managed_result,
 	                                   ClientProperties client_properties);
 	//! Creates an unsuccessful query result with error condition
 	DUCKDB_API explicit MaterializedQueryResult(ErrorData error);
@@ -50,14 +51,17 @@ public:
 
 	DUCKDB_API idx_t RowCount() const;
 
-	//! Returns a reference to the underlying column data collection
-	ColumnDataCollection &Collection();
+	bool HasCollection() const;
 
-	//! Takes ownership of the collection, 'collection' is null after this operation
-	unique_ptr<ColumnDataCollection> TakeCollection();
+	//! Returns a reference to the underlying column data collection
+	ColumnDataCollection &Collection() const;
+
+	//! Takes ownership of the managed_result, becomes null after this operation
+	shared_ptr<ManagedQueryResult> TakeManagedResult();
 
 private:
-	unique_ptr<ColumnDataCollection> collection;
+	weak_ptr<DatabaseInstance> db;
+	shared_ptr<ManagedQueryResult> managed_result;
 	//! Row collection, only created if GetValue is called
 	unique_ptr<ColumnDataRowCollection> row_collection;
 	//! Scan state for Fetch calls

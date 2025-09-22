@@ -33,7 +33,7 @@ public:
 
 public:
 	//! The final method used to fetch the query result from this operator
-	virtual unique_ptr<QueryResult> GetResult(GlobalSinkState &state) = 0;
+	virtual unique_ptr<QueryResult> GetResult(GlobalSinkState &state) const = 0;
 
 	bool IsSink() const override {
 		return true;

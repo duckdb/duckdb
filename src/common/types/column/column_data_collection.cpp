@@ -54,6 +54,13 @@ ColumnDataCollection::ColumnDataCollection(Allocator &allocator_p) {
 	allocator = make_shared_ptr<ColumnDataAllocator>(allocator_p);
 }
 
+ColumnDataCollection::ColumnDataCollection(ClientContext &context) {
+	types.clear();
+	count = 0;
+	this->finished_append = false;
+	allocator = make_shared_ptr<ColumnDataAllocator>(context, ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
+}
+
 ColumnDataCollection::ColumnDataCollection(Allocator &allocator_p, vector<LogicalType> types_p) {
 	Initialize(std::move(types_p));
 	allocator = make_shared_ptr<ColumnDataAllocator>(allocator_p);

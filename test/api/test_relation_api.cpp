@@ -1120,7 +1120,7 @@ TEST_CASE("Test materialized relations", "[relation_api]") {
 		auto result = con.Query("insert into tbl values ('test') returning *");
 		auto &materialized_result = result->Cast<MaterializedQueryResult>();
 		auto materialized_relation = make_shared_ptr<MaterializedRelation>(
-		    con.context, materialized_result.TakeCollection(), result->names, "vw");
+		    con.context, materialized_result.TakeManagedResult(), result->names, "vw");
 		materialized_relation->CreateView("vw");
 		materialized_relation.reset();
 

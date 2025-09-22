@@ -1,16 +1,19 @@
 #include "duckdb/main/materialized_query_result.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/common/box_renderer.hpp"
+#include "duckdb/main/query_result_manager.hpp"
 
 namespace duckdb {
 
 MaterializedQueryResult::MaterializedQueryResult(StatementType statement_type, StatementProperties properties,
-                                                 vector<string> names_p, unique_ptr<ColumnDataCollection> collection_p,
+                                                 vector<string> names_p,
+                                                 shared_ptr<ManagedQueryResult> managed_result_p,
                                                  ClientProperties client_properties)
-    : QueryResult(QueryResultType::MATERIALIZED_RESULT, statement_type, std::move(properties), collection_p->Types(),
-                  std::move(names_p), std::move(client_properties)),
-      collection(std::move(collection_p)), scan_initialized(false) {
+    : QueryResult(QueryResultType::MATERIALIZED_RESULT, statement_type, std::move(properties),
+                  managed_result_p->Collection().Types(), std::move(names_p), std::move(client_properties)),
+      managed_result(std::move(managed_result_p)), scan_initialized(false) {
 }
 
 MaterializedQueryResult::MaterializedQueryResult(ErrorData error)
@@ -21,8 +24,8 @@ string MaterializedQueryResult::ToString() {
 	string result;
 	if (success) {
 		result = HeaderToString();
-		result += "[ Rows: " + to_string(collection->Count()) + "]\n";
 		auto &coll = Collection();
+		result += "[ Rows: " + to_string(coll.Count()) + "]\n";
 		for (auto &row : coll.Rows()) {
 			for (idx_t col_idx = 0; col_idx < coll.ColumnCount(); col_idx++) {
 				if (col_idx > 0) {
@@ -44,7 +47,7 @@ string MaterializedQueryResult::ToBox(ClientContext &context, const BoxRendererC
 	if (!success) {
 		return GetError() + "\n";
 	}
-	if (!collection) {
+	if (!HasCollection()) {
 		return "Internal error - result was successful but there was no collection";
 	}
 	BoxRenderer renderer(config);
@@ -53,35 +56,39 @@ string MaterializedQueryResult::ToBox(ClientContext &context, const BoxRendererC
 
 Value MaterializedQueryResult::GetValue(idx_t column, idx_t index) {
 	if (!row_collection) {
-		row_collection = make_uniq<ColumnDataRowCollection>(collection->GetRows());
+		row_collection = make_uniq<ColumnDataRowCollection>(Collection().GetRows());
 	}
 	return row_collection->GetValue(column, index);
 }
 
 idx_t MaterializedQueryResult::RowCount() const {
-	return collection ? collection->Count() : 0;
+	return HasCollection() ? Collection().Count() : 0;
 }
 
-ColumnDataCollection &MaterializedQueryResult::Collection() {
+bool MaterializedQueryResult::HasCollection() const {
+	return managed_result.get();
+}
+
+ColumnDataCollection &MaterializedQueryResult::Collection() const {
 	if (HasError()) {
 		throw InvalidInputException("Attempting to get collection from an unsuccessful query result\n: Error %s",
 		                            GetError());
 	}
-	if (!collection) {
+	if (!HasCollection()) {
 		throw InternalException("Missing collection from materialized query result");
 	}
-	return *collection;
+	return managed_result->Collection();
 }
 
-unique_ptr<ColumnDataCollection> MaterializedQueryResult::TakeCollection() {
+shared_ptr<ManagedQueryResult> MaterializedQueryResult::TakeManagedResult() {
 	if (HasError()) {
 		throw InvalidInputException("Attempting to get collection from an unsuccessful query result\n: Error %s",
 		                            GetError());
 	}
-	if (!collection) {
+	if (!HasCollection()) {
 		throw InternalException("Missing collection from materialized query result");
 	}
-	return std::move(collection);
+	return std::move(managed_result);
 }
 
 unique_ptr<DataChunk> MaterializedQueryResult::Fetch() {
@@ -89,17 +96,15 @@ unique_ptr<DataChunk> MaterializedQueryResult::Fetch() {
 }
 
 unique_ptr<DataChunk> MaterializedQueryResult::FetchRaw() {
-	if (HasError()) {
-		throw InvalidInputException("Attempting to fetch from an unsuccessful query result\nError: %s", GetError());
-	}
+	auto &collection = Collection();
 	auto result = make_uniq<DataChunk>();
-	collection->InitializeScanChunk(*result);
+	collection.InitializeScanChunk(*result);
 	if (!scan_initialized) {
 		// we disallow zero copy so the chunk is independently usable even after the result is destroyed
-		collection->InitializeScan(scan_state, ColumnDataScanProperties::DISALLOW_ZERO_COPY);
+		collection.InitializeScan(scan_state, ColumnDataScanProperties::DISALLOW_ZERO_COPY);
 		scan_initialized = true;
 	}
-	collection->Scan(scan_state, *result);
+	collection.Scan(scan_state, *result);
 	if (result->size() == 0) {
 		return nullptr;
 	}

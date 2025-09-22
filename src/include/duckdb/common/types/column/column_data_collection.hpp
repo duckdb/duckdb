@@ -29,6 +29,8 @@ public:
 	DUCKDB_API ColumnDataCollection(Allocator &allocator, vector<LogicalType> types);
 	//! Constructs an empty (but valid) in-memory column data collection from an allocator
 	DUCKDB_API explicit ColumnDataCollection(Allocator &allocator);
+	//! Constructs an empty (but valid) buffer-managed column data collection
+	DUCKDB_API explicit ColumnDataCollection(ClientContext &context);
 	//! Constructs a buffer-managed column data collection
 	DUCKDB_API ColumnDataCollection(BufferManager &buffer_manager, vector<LogicalType> types);
 	//! Constructs either an in-memory or a buffer-managed column data collection
