@@ -1,0 +1,79 @@
+diff --git a/extension/httpfs/httpfs_extension.cpp b/extension/httpfs/httpfs_extension.cpp
+index 695ca30..a60fbba 100644
+--- a/extension/httpfs/httpfs_extension.cpp
++++ b/extension/httpfs/httpfs_extension.cpp
+@@ -62,7 +62,7 @@ static void LoadInternal(ExtensionLoader &loader) {
+ 	config.AddExtensionOption("ca_cert_file", "Path to a custom certificate file for self-signed certificates.",
+ 	                          LogicalType::VARCHAR, Value(""));
+ 	// Global S3 config
+-	config.AddExtensionOption("s3_region", "S3 Region", LogicalType::VARCHAR, Value("us-east-1"));
++	config.AddExtensionOption("s3_region", "S3 Region", LogicalType::VARCHAR);
+ 	config.AddExtensionOption("s3_access_key_id", "S3 Access Key ID", LogicalType::VARCHAR);
+ 	config.AddExtensionOption("s3_secret_access_key", "S3 Access Key", LogicalType::VARCHAR);
+ 	config.AddExtensionOption("s3_session_token", "S3 Session Token", LogicalType::VARCHAR);
+diff --git a/extension/httpfs/include/s3fs.hpp b/extension/httpfs/include/s3fs.hpp
+index b848d2c..64af105 100644
+--- a/extension/httpfs/include/s3fs.hpp
++++ b/extension/httpfs/include/s3fs.hpp
+@@ -227,7 +227,7 @@ public:
+ 		return true;
+ 	}
+ 
+-	static string GetS3BadRequestError(S3AuthParams &s3_auth_params);
++	static string GetS3BadRequestError(S3AuthParams &s3_auth_params, string correct_region = "");
+ 	static string GetS3AuthError(S3AuthParams &s3_auth_params);
+ 	static string GetGCSAuthError(S3AuthParams &s3_auth_params);
+ 	static HTTPException GetS3Error(S3AuthParams &s3_auth_params, const HTTPResponse &response, const string &url);
+diff --git a/extension/httpfs/s3fs.cpp b/extension/httpfs/s3fs.cpp
+index 3ea2b98..eba2466 100644
+--- a/extension/httpfs/s3fs.cpp
++++ b/extension/httpfs/s3fs.cpp
+@@ -837,7 +837,10 @@ void S3FileHandle::Initialize(optional_ptr<FileOpener> opener) {
+ 	} catch (std::exception &ex) {
+ 		ErrorData error(ex);
+ 		bool refreshed_secret = false;
++		auto &extra_info = error.ExtraInfo();
++		auto entry = extra_info.find("status_code");
+ 		if (error.Type() == ExceptionType::IO || error.Type() == ExceptionType::HTTP) {
++			// legacy endpoint (no region) returns 400
+ 			auto context = opener->TryGetClientContext();
+ 			if (context) {
+ 				auto transaction = CatalogTransaction::GetSystemCatalogTransaction(*context);
+@@ -850,12 +853,14 @@ void S3FileHandle::Initialize(optional_ptr<FileOpener> opener) {
+ 			}
+ 		}
+ 		if (!refreshed_secret) {
+-			auto &extra_info = error.ExtraInfo();
+-			auto entry = extra_info.find("status_code");
+ 			if (entry != extra_info.end()) {
+-				if (entry->second == "400") {
+-					// 400: BAD REQUEST
+-					auto extra_text = S3FileSystem::GetS3BadRequestError(auth_params);
++				if (entry->second == "301" || entry->second == "400") {
++					auto new_region = extra_info.find("header_x-amz-bucket-region");
++					string correct_region = "";
++					if (new_region != extra_info.end()) {
++						correct_region = new_region->second;
++					}
++					auto extra_text = S3FileSystem::GetS3BadRequestError(auth_params, correct_region);
+ 					throw Exception(error.Type(), error.RawMessage() + extra_text, extra_info);
+ 				}
+ 				if (entry->second == "403") {
+@@ -1106,12 +1111,15 @@ bool S3FileSystem::ListFiles(const string &directory, const std::function<void(c
+ 	return true;
+ }
+ 
+-string S3FileSystem::GetS3BadRequestError(S3AuthParams &s3_auth_params) {
++string S3FileSystem::GetS3BadRequestError(S3AuthParams &s3_auth_params, string correct_region) {
+ 	string extra_text = "\n\nBad Request - this can be caused by the S3 region being set incorrectly.";
+ 	if (s3_auth_params.region.empty()) {
+ 		extra_text += "\n* No region is provided.";
+ 	} else {
+-		extra_text += "\n* Provided region is \"" + s3_auth_params.region + "\"";
++		extra_text += "\n* Provided region is: \"" + s3_auth_params.region + "\"";
++	}
++	if (!correct_region.empty()) {
++		extra_text += "\n* Correct region is: \"" + correct_region + "\"";
+ 	}
+ 	return extra_text;
+ }
