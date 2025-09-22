@@ -174,7 +174,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(ThreadsSetting),
     DUCKDB_GLOBAL(UsernameSetting),
     DUCKDB_GLOBAL(ZstdMinStringLengthSetting),
-	DUCKDB_LOCAL(InspectRangeFilterSetting),
+    DUCKDB_LOCAL(InspectRangeFilterSetting),
     FINAL_SETTING};
 
 static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("memory_limit", 82),

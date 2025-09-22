@@ -123,7 +123,7 @@ public:
 		T new_value = new_v.GetValueUnsafe<T>();
 		D_ASSERT(GetStatsType() == StatisticsType::NUMERIC_STATS);
 		if (new_value <= stats_union.numeric_data.min.GetReferenceUnsafe<T>() ||
-			new_value >= stats_union.numeric_data.max.GetReferenceUnsafe<T>()) {
+		    new_value >= stats_union.numeric_data.max.GetReferenceUnsafe<T>()) {
 			return;
 		}
 		if (is_left) {

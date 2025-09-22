@@ -495,8 +495,9 @@ idx_t RelationStatisticsHelper::InspectTableFilter(idx_t cardinality, idx_t colu
 	case TableFilterType::CONJUNCTION_AND: {
 		auto &and_filter = filter.Cast<ConjunctionAndFilter>();
 		for (auto &child_filter : and_filter.child_filters) {
-			cardinality_after_filters = MinValue(
-				cardinality_after_filters, InspectTableFilter(cardinality, column_index, *child_filter, base_stats, context));
+			cardinality_after_filters =
+			    MinValue(cardinality_after_filters,
+			             InspectTableFilter(cardinality, column_index, *child_filter, base_stats, context));
 		}
 		return cardinality_after_filters;
 	}
@@ -511,9 +512,9 @@ idx_t RelationStatisticsHelper::InspectTableFilter(idx_t cardinality, idx_t colu
 				cardinality_after_filters = (cardinality + column_count - 1) / column_count;
 			}
 		} else if (ClientConfig::GetConfig(context).GetSetting<InspectRangeFilterSetting>(context) &&
-				(comparison_filter.comparison_type >= ExpressionType::COMPARE_LESSTHAN &&
-				comparison_filter.comparison_type <= ExpressionType::COMPARE_GREATERTHANOREQUALTO) &&
-				NumericStats::HasMinMax(base_stats)) {
+		           (comparison_filter.comparison_type >= ExpressionType::COMPARE_LESSTHAN &&
+		            comparison_filter.comparison_type <= ExpressionType::COMPARE_GREATERTHANOREQUALTO) &&
+		           NumericStats::HasMinMax(base_stats)) {
 			cardinality_after_filters = InspectTableFilterForRange(cardinality, base_stats, comparison_filter);
 		}
 		return cardinality_after_filters;
