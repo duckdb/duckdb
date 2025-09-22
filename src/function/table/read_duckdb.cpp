@@ -397,10 +397,11 @@ void DuckDBMultiFileInfo::FinishReading(ClientContext &context, GlobalTableFunct
 
 unique_ptr<NodeStatistics> DuckDBMultiFileInfo::GetCardinality(const MultiFileBindData &bind_data_p, idx_t file_count) {
 	auto &bind_data = bind_data_p.bind_data->Cast<DuckDBReadBindData>();
+	idx_t estimated_cardinality = file_count;
 	if (bind_data.initial_file_cardinality.IsValid()) {
-		return make_uniq<NodeStatistics>(file_count * bind_data.initial_file_cardinality.GetIndex());
+		estimated_cardinality = file_count * bind_data.initial_file_cardinality.GetIndex();
 	}
-	return make_uniq<NodeStatistics>(file_count);
+	return make_uniq<NodeStatistics>(estimated_cardinality);
 }
 
 FileGlobInput DuckDBMultiFileInfo::GetGlobInput() {
