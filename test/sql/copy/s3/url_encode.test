@@ -132,12 +132,22 @@ set s3_endpoint='';
 statement error
 SELECT * FROM 's3://test-bucket/whatever.parquet';
 ----
-<REGEX>:.*Unknown error for HTTP HEAD to 'http://test-bucket.s3.eu-west-1.amazonaws.com/whatever.parquet'.*
+<REGEX>:.*HTTP Error: Unable to connect to URL .*s3://test-bucket/whatever.parquet.*: 301 .Moved Permanently..*
+.*
+.*Bad Request - this can be caused by the S3 region being set incorrectly.*
+.*Provided region is: .eu-west-1.*
+.*Correct region is: .us-east-1.*
+
+
 
 statement error
 SELECT * FROM 'r2://test-bucket/whatever.parquet';
 ----
-<REGEX>:.*Unknown error for HTTP HEAD to 'http://test-bucket.s3.eu-west-1.amazonaws.com/whatever.parquet'.*
+<REGEX>:.*HTTP Error: Unable to connect to URL .*r2://test-bucket/whatever.parquet.*: 301 .Moved Permanently.*
+.*
+.*Bad Request - this can be caused by the S3 region being set incorrectly.*
+.*Provided region is: .eu-west-1.*
+.*Correct region is: .us-east-1.*
 
 statement error
 SELECT * FROM 'gcs://test-bucket/whatever.parquet';
