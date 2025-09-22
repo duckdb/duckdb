@@ -2,6 +2,7 @@
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "duckdb/common/multi_file/multi_file_function.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/main/attached_database.hpp"
 
 namespace duckdb {
 
@@ -166,11 +167,13 @@ DuckDBReader::DuckDBReader(ClientContext &context_p, OpenFileInfo file_p, const 
 	auto &db_manager = DatabaseManager::Get(context);
 	AttachInfo info;
 	info.path = file.path;
-	info.name = "__duckdb_reader_" + info.path;
+	// use invalid UTF-8 so that the database name cannot be attached by a user
+	info.name = "\x80__duckdb_reader_" + info.path;
 
 	info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	unordered_map<string, Value> attach_kv;
 	AttachOptions attach_options(attach_kv, AccessMode::READ_ONLY);
+	attach_options.visibility = AttachVisibility::HIDDEN;
 
 	attached_database = db_manager.AttachDatabase(context, info, attach_options);
 

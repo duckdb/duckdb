@@ -32,6 +32,8 @@ enum class AttachedDatabaseType {
 	TEMP_DATABASE,
 };
 
+enum class AttachVisibility { SHOWN, HIDDEN };
+
 class DatabaseFilePathManager;
 
 struct StoredDatabasePath {
@@ -60,6 +62,8 @@ struct AttachOptions {
 	QualifiedName default_table;
 	//! Whether or not this is the main database
 	bool is_main_database = false;
+	//! The visibility of the attached database
+	AttachVisibility visibility = AttachVisibility::SHOWN;
 	//! The stored database path (in the path manager)
 	unique_ptr<StoredDatabasePath> stored_database_path;
 };
@@ -108,6 +112,9 @@ public:
 	void SetInitialDatabase();
 	void SetReadOnlyDatabase();
 	void OnDetach(ClientContext &context);
+	AttachVisibility GetVisibility() const {
+		return visibility;
+	}
 
 	static bool NameIsReserved(const string &name);
 	static string ExtractDatabaseName(const string &dbpath, FileSystem &fs);
@@ -121,6 +128,7 @@ private:
 	AttachedDatabaseType type;
 	optional_ptr<Catalog> parent_catalog;
 	optional_ptr<StorageExtension> storage_extension;
+	AttachVisibility visibility = AttachVisibility::SHOWN;
 	bool is_initial_database = false;
 	bool is_closed = false;
 };

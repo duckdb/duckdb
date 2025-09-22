@@ -13,6 +13,22 @@ DETACH read_duckdb_concurrent
 
 concurrentloop i 0 10
 
+loop x 0 100
+
+onlyif i=0
+query I
+SHOW DATABASES
+----
+memory
+
+onlyif i=0
+query I
+SHOW TABLES
+----
+
+endloop
+
+onlyif i>0
 query II
 SELECT COUNT(*), SUM(i) FROM read_duckdb('__TEST_DIR__/read_duckdb_concurrent.db')
 ----
