@@ -5278,7 +5278,7 @@ Reads data from the file into the buffer.
 * @param file The file instance to read from.
 * @param buffer The buffer to read data into.
 * @param size The number of bytes to read.
-* @return The number of bytes actually read, or -1 on error.
+* @return The number of bytes actually read, or negative on error.
 */
 DUCKDB_C_API int64_t duckdb_file_handle_read(duckdb_file_handle file, void *buffer, int64_t size);
 
@@ -5288,7 +5288,7 @@ Writes data from the buffer to the file.
 * @param file The file instance to write to.
 * @param buffer The buffer containing data to write.
 * @param size The number of bytes to write.
-* @return The number of bytes actually written, or -1 on error.
+* @return The number of bytes actually written, or negative on error.
 */
 DUCKDB_C_API int64_t duckdb_file_handle_write(duckdb_file_handle file, const void *buffer, int64_t size);
 
@@ -5296,7 +5296,7 @@ DUCKDB_C_API int64_t duckdb_file_handle_write(duckdb_file_handle file, const voi
 Tells the current position in the file.
 
 * @param file The file instance to tell the position of.
-* @return The current position in the file, or -1 on error.
+* @return The current position in the file, or negative on error.
 */
 DUCKDB_C_API int64_t duckdb_file_handle_tell(duckdb_file_handle file);
 
@@ -5304,7 +5304,7 @@ DUCKDB_C_API int64_t duckdb_file_handle_tell(duckdb_file_handle file);
 Gets the size of the file.
 
 * @param file The file instance to get the size of.
-* @return The size of the file in bytes, or -1 on error.
+* @return The size of the file in bytes, or negative on error.
 */
 DUCKDB_C_API int64_t duckdb_file_handle_size(duckdb_file_handle file);
 

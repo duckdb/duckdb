@@ -198,7 +198,7 @@
           "buffer": "The buffer to read data into.",
           "size": "The number of bytes to read."
         },
-        "return_value": "The number of bytes actually read, or -1 on error."
+        "return_value": "The number of bytes actually read, or negative on error."
       }
     },
     {
@@ -225,7 +225,7 @@
           "buffer": "The buffer containing data to write.",
           "size": "The number of bytes to write."
         },
-        "return_value": "The number of bytes actually written, or -1 on error."
+        "return_value": "The number of bytes actually written, or negative on error."
       }
     },
     {
@@ -242,7 +242,7 @@
         "param_comments": {
           "file": "The file instance to tell the position of."
         },
-        "return_value": "The current position in the file, or -1 on error."
+        "return_value": "The current position in the file, or negative on error."
       }
     },
     {
@@ -259,7 +259,7 @@
         "param_comments": {
           "file": "The file instance to get the size of."
         },
-        "return_value": "The size of the file in bytes, or -1 on error."
+        "return_value": "The size of the file in bytes, or negative on error."
       }
     },
     {
