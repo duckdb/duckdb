@@ -1,6 +1,7 @@
 #include "duckdb/optimizer/filter_pushdown.hpp"
 #include "duckdb/optimizer/filter_combiner.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/optimizer/unnest_rewriter.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
@@ -8,6 +9,7 @@
 #include "duckdb/planner/operator/logical_join.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
+#include "fmt/printf.h"
 
 namespace duckdb {
 
@@ -277,6 +279,50 @@ unique_ptr<LogicalOperator> FilterPushdown::PushFinalFilters(unique_ptr<LogicalO
 
 unique_ptr<LogicalOperator> FilterPushdown::FinishPushdown(unique_ptr<LogicalOperator> op) {
 	// unhandled type, first perform filter pushdown in its children
+	if (op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
+		for (idx_t i = 0; i < filters.size(); i++) {
+			auto &f = *filters[i];
+			for (auto &child : op->children) {
+				FilterPushdown pushdown(optimizer, convert_mark_joins);
+
+				// check if filter bindings can be applied to the child bindings.
+				auto child_bindings = child->GetColumnBindings();
+				unordered_set<idx_t> child_bindings_table;
+				for (auto &binding : child_bindings) {
+					child_bindings_table.insert(binding.table_index);
+				}
+
+				// Check if ALL bindings of the filter are present in the child
+				bool should_push = true;
+				for (auto &binding : f.bindings) {
+					if (child_bindings_table.find(binding) == child_bindings_table.end()) {
+						should_push = false;
+						break;
+					}
+				}
+
+				if (!should_push) {
+					continue;
+				}
+
+				// copy the filter
+				auto filter_copy = f.filter->Copy();
+				if (pushdown.AddFilter(std::move(filter_copy)) == FilterResult::UNSATISFIABLE) {
+					return make_uniq<LogicalEmptyResult>(std::move(op));
+				}
+
+				// push the filter into the child.
+				pushdown.GenerateFilters();
+				child = pushdown.Rewrite(std::move(child));
+
+				// Don't push same filter again
+				filters.erase_at(i);
+				i--;
+				break;
+			}
+
+		}
+	}
 	for (auto &child : op->children) {
 		FilterPushdown pushdown(optimizer, convert_mark_joins);
 		child = pushdown.Rewrite(std::move(child));
