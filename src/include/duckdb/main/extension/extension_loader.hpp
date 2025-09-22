@@ -31,7 +31,6 @@ class ExtensionLoader {
 
 public:
 	explicit ExtensionLoader(ExtensionActiveLoad &load_info);
-	ExtensionLoader(DatabaseInstance &db, const string &extension_name);
 
 	//! Returns the DatabaseInstance associated with this extension loader
 	DUCKDB_API DatabaseInstance &GetDatabaseInstance();

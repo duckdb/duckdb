@@ -23,9 +23,6 @@ ExtensionLoader::ExtensionLoader(ExtensionActiveLoad &load_info)
     : db(load_info.db), extension_name(load_info.extension_name), extension_info(load_info.info) {
 }
 
-ExtensionLoader::ExtensionLoader(DatabaseInstance &db, const string &name) : db(db), extension_name(name) {
-}
-
 DatabaseInstance &ExtensionLoader::GetDatabaseInstance() {
 	return db;
 }
