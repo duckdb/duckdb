@@ -1117,6 +1117,20 @@ Value MaxMemorySetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// MaxJSONObjectSizeSetting
+//===----------------------------------------------------------------------===//
+void MaxJSONObjectSizeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.maximum_json_object_size = DBConfig::ParseMemoryLimit(input.ToString());
+}
+void MaxJSONObjectSizeSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.maximum_json_object_size = 16777216; // 16MB default
+}
+Value MaxJSONObjectSizeSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value(StringUtil::BytesToHumanReadableString(config.options.maximum_json_object_size));
+}
+
+//===----------------------------------------------------------------------===//
 // Max Temp Directory Size
 //===----------------------------------------------------------------------===//
 void MaxTempDirectorySizeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {

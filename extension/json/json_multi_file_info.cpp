@@ -1,6 +1,7 @@
 #include "json_multi_file_info.hpp"
 #include "json_scan.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 
@@ -12,6 +13,11 @@ unique_ptr<BaseFileReaderOptions> JSONMultiFileInfo::InitializeOptions(ClientCon
                                                                        optional_ptr<TableFunctionInfo> info) {
 	auto reader_options = make_uniq<JSONFileReaderOptions>();
 	auto &options = reader_options->options;
+
+	// Set maximum_object_size from global config
+	auto &config = DBConfig::GetConfig(context);
+	options.maximum_object_size = config.options.maximum_json_object_size;
+
 	if (info) {
 		auto &scan_info = info->Cast<JSONScanInfo>();
 		options.type = scan_info.type;

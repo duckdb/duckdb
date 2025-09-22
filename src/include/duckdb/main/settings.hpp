@@ -908,6 +908,16 @@ struct MaxMemorySetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct MaxJSONObjectSizeSetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "maximum_json_object_size";
+	static constexpr const char *Description = "The maximum JSON object size (e.g. 16MB)";
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct MaxTempDirectorySizeSetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "max_temp_directory_size";

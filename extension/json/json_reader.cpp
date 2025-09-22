@@ -717,7 +717,8 @@ void JSONReader::AutoDetect(Allocator &allocator, idx_t buffer_capacity) {
 void JSONReader::ThrowObjectSizeError(const idx_t object_size) {
 	throw InvalidInputException(
 	    "\"maximum_object_size\" of %llu bytes exceeded while reading file \"%s\" (>%llu bytes)."
-	    "\n Try increasing \"maximum_object_size\".",
+	    "\n Try increasing \"maximum_object_size\" for read_json()."
+		"\n Or increase it globally with \"SET maximum_json_object_size = '64mb';\"",
 	    options.maximum_object_size, GetFileName(), object_size);
 }
 

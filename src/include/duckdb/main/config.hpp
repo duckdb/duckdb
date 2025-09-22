@@ -118,6 +118,8 @@ struct DBConfigOptions {
 	idx_t maximum_memory = DConstants::INVALID_INDEX;
 	//! The maximum size of the 'temp_directory' folder when set (in bytes). Default: 90% of available disk space.
 	idx_t maximum_swap_space = DConstants::INVALID_INDEX;
+	//! The maximum JSON object size (in bytes). Default: 16MB.
+	idx_t maximum_json_object_size = 16777216;
 	//! The maximum amount of CPU threads used by the database system. Default: all available.
 	idx_t maximum_threads = DConstants::INVALID_INDEX;
 	//! The number of external threads that work on DuckDB tasks. Default: 1.
