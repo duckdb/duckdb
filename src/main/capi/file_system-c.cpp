@@ -237,7 +237,7 @@ int64_t duckdb_file_handle_tell(duckdb_file_handle file) {
 		cfile->SetError(ex);
 		return -1;
 	} catch (...) {
-		cfile->SetError("Unknown error occurred during when getting file position");
+		cfile->SetError("Unknown error occurred when getting file position");
 		return -1;
 	}
 }
