@@ -1059,7 +1059,7 @@ bool ColumnDataCollection::Scan(ColumnDataParallelScanState &state, ColumnDataLo
 }
 
 void ColumnDataCollection::InitializeScanChunk(DataChunk &chunk) const {
-	chunk.Initialize(allocator->GetAllocator(), types);
+	InitializeScanChunk(Allocator::DefaultAllocator(), chunk);
 }
 
 void ColumnDataCollection::InitializeScanChunk(ColumnDataScanState &state, DataChunk &chunk) const {
