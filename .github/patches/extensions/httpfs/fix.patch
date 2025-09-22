@@ -1,3 +1,16 @@
+diff --git a/extension/httpfs/httpfs.cpp b/extension/httpfs/httpfs.cpp
+index bb7267a..d1c5eee 100644
+--- a/extension/httpfs/httpfs.cpp
++++ b/extension/httpfs/httpfs.cpp
+@@ -682,7 +682,7 @@ void HTTPFileHandle::LoadFileInfo() {
+ 			return;
+ 		} else {
+ 			// HEAD request fail, use Range request for another try (read only one byte)
+-			if (flags.OpenForReading() && res->status != HTTPStatusCode::NotFound_404) {
++			if (flags.OpenForReading() && res->status != HTTPStatusCode::NotFound_404 && res->status != HTTPStatusCode::MovedPermanently_301) {
+ 				auto range_res = hfs.GetRangeRequest(*this, path, {}, 0, nullptr, 2);
+ 				if (range_res->status != HTTPStatusCode::PartialContent_206 &&
+ 				    range_res->status != HTTPStatusCode::Accepted_202 && range_res->status != HTTPStatusCode::OK_200) {
 diff --git a/extension/httpfs/httpfs_extension.cpp b/extension/httpfs/httpfs_extension.cpp
 index 695ca30..a60fbba 100644
 --- a/extension/httpfs/httpfs_extension.cpp
@@ -25,26 +38,20 @@ index b848d2c..64af105 100644
  	static string GetGCSAuthError(S3AuthParams &s3_auth_params);
  	static HTTPException GetS3Error(S3AuthParams &s3_auth_params, const HTTPResponse &response, const string &url);
 diff --git a/extension/httpfs/s3fs.cpp b/extension/httpfs/s3fs.cpp
-index 3ea2b98..eba2466 100644
+index 3ea2b98..c39287a 100644
 --- a/extension/httpfs/s3fs.cpp
 +++ b/extension/httpfs/s3fs.cpp
-@@ -837,7 +837,10 @@ void S3FileHandle::Initialize(optional_ptr<FileOpener> opener) {
- 	} catch (std::exception &ex) {
+@@ -838,6 +838,7 @@ void S3FileHandle::Initialize(optional_ptr<FileOpener> opener) {
  		ErrorData error(ex);
  		bool refreshed_secret = false;
-+		auto &extra_info = error.ExtraInfo();
-+		auto entry = extra_info.find("status_code");
  		if (error.Type() == ExceptionType::IO || error.Type() == ExceptionType::HTTP) {
 +			// legacy endpoint (no region) returns 400
  			auto context = opener->TryGetClientContext();
  			if (context) {
  				auto transaction = CatalogTransaction::GetSystemCatalogTransaction(*context);
-@@ -850,12 +853,14 @@ void S3FileHandle::Initialize(optional_ptr<FileOpener> opener) {
- 			}
- 		}
- 		if (!refreshed_secret) {
--			auto &extra_info = error.ExtraInfo();
--			auto entry = extra_info.find("status_code");
+@@ -853,9 +854,13 @@ void S3FileHandle::Initialize(optional_ptr<FileOpener> opener) {
+ 			auto &extra_info = error.ExtraInfo();
+ 			auto entry = extra_info.find("status_code");
  			if (entry != extra_info.end()) {
 -				if (entry->second == "400") {
 -					// 400: BAD REQUEST
