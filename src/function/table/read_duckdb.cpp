@@ -418,7 +418,7 @@ void ReadDuckDBAddNamedParameters(TableFunction &table_function) {
 	MultiFileReader::AddParameters(table_function);
 }
 
-static vector<column_t> DuckDBGetRowIdColumns(ClientContext &context, optional_ptr<FunctionData> bind_data) {
+static vector<column_t> DuckDBGetRowIdColumns(ClientContext &, optional_ptr<FunctionData>) {
 	vector<column_t> result;
 	result.emplace_back(COLUMN_IDENTIFIER_ROW_ID);
 	return result;
@@ -430,6 +430,27 @@ TableFunction ReadDuckDBTableFunction::GetFunction() {
 	read_duckdb.get_row_id_columns = DuckDBGetRowIdColumns;
 	ReadDuckDBAddNamedParameters(read_duckdb);
 	return static_cast<TableFunction>(read_duckdb);
+}
+
+unique_ptr<TableRef> ReadDuckDBTableFunction::ReplacementScan(ClientContext &context, ReplacementScanInput &input,
+                                                              optional_ptr<ReplacementScanData>) {
+	auto table_name = ReplacementScan::GetFullPath(input);
+	auto lower_name = StringUtil::Lower(table_name);
+	if (!StringUtil::EndsWith(lower_name, ".db") && !StringUtil::Contains(lower_name, ".db?") &&
+	    !StringUtil::EndsWith(lower_name, ".ddb") && !StringUtil::Contains(lower_name, ".ddb?") &&
+	    !StringUtil::EndsWith(lower_name, ".duckdb") && !StringUtil::Contains(lower_name, ".duckdb?")) {
+		return nullptr;
+	}
+	auto table_function = make_uniq<TableFunctionRef>();
+	vector<unique_ptr<ParsedExpression>> children;
+	children.push_back(make_uniq<ConstantExpression>(Value(table_name)));
+	table_function->function = make_uniq<FunctionExpression>("read_duckdb", std::move(children));
+
+	if (!FileSystem::HasGlob(table_name)) {
+		auto &fs = FileSystem::GetFileSystem(context);
+		table_function->alias = fs.ExtractBaseName(table_name);
+	}
+	return std::move(table_function);
 }
 
 } // namespace duckdb

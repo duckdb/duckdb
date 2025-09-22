@@ -14,6 +14,8 @@ namespace duckdb {
 
 struct ReadDuckDBTableFunction {
 	static TableFunction GetFunction();
+	static unique_ptr<TableRef> ReplacementScan(ClientContext &context, ReplacementScanInput &input,
+	                                            optional_ptr<ReplacementScanData> data);
 };
 
 } // namespace duckdb

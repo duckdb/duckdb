@@ -196,6 +196,7 @@ void BuiltinFunctions::RegisterReadFunctions() {
 	AddFunction(MultiFileReader::CreateFunctionSet(ReadDuckDBTableFunction::GetFunction()));
 	auto &config = DBConfig::GetConfig(*transaction.db);
 	config.replacement_scans.emplace_back(ReadCSVReplacement);
+	config.replacement_scans.emplace_back(ReadDuckDBTableFunction::ReplacementScan);
 }
 
 } // namespace duckdb

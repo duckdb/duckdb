@@ -43,6 +43,13 @@ SELECT * FROM read_duckdb('__TEST_DIR__/read_duckdb_test*.db')
 42
 100
 
+# replacement scan
+query I
+SELECT * FROM '__TEST_DIR__/read_duckdb_test*.db'
+----
+42
+100
+
 # multi-table
 statement ok
 ATTACH '__TEST_DIR__/read_duckdb_test.db'
