@@ -35,3 +35,8 @@ query I
 SELECT * FROM read_duckdb('__TEST_DIR__/read_duckdb_schema.db', schema_name='s2', table_name='my_tbl')
 ----
 84
+
+statement error
+SELECT * FROM read_duckdb('__TEST_DIR__/read_duckdb_schema.db', schema_name='s3', table_name='my_tbl')
+----
+schema_name="s3", table_name="my_tbl"

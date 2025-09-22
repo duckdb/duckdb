@@ -44,6 +44,8 @@ public:
 	string table_name;
 
 	bool Matches(TableCatalogEntry &table) const;
+	bool HasSelection() const;
+	string PrintOptions() const;
 	string GetCandidates(const vector<reference<TableCatalogEntry>> &tables) const;
 };
 
@@ -67,6 +69,7 @@ public:
 	                       LocalTableFunctionState &lstate) override;
 	void Scan(ClientContext &context, GlobalTableFunctionState &global_state, LocalTableFunctionState &local_state,
 	          DataChunk &chunk) override;
+	double GetProgressInFile(ClientContext &context) override;
 
 	string GetReaderType() const override {
 		return "duckdb";
@@ -115,6 +118,30 @@ string DuckDBFileReaderOptions::GetCandidates(const vector<reference<TableCatalo
 	return StringUtil::CandidatesErrorMessage(candidate_list, search_term, "Candidates");
 }
 
+bool DuckDBFileReaderOptions::HasSelection() const {
+	if (!table_name.empty()) {
+		return true;
+	}
+	if (!schema_name.empty()) {
+		return true;
+	}
+	return false;
+}
+
+string DuckDBFileReaderOptions::PrintOptions() const {
+	string options;
+	if (!schema_name.empty()) {
+		options += "schema_name=\"" + schema_name + "\"";
+	}
+	if (!options.empty()) {
+		options += ", ";
+	}
+	if (!table_name.empty()) {
+		options += "table_name=\"" + table_name + "\"";
+	}
+	return options;
+}
+
 bool DuckDBFileReaderOptions::Matches(TableCatalogEntry &table) const {
 	if (!schema_name.empty() && !StringUtil::CIEquals(table.ParentSchema().name, schema_name)) {
 		return false;
@@ -156,10 +183,10 @@ DuckDBReader::DuckDBReader(ClientContext &context_p, OpenFileInfo file_p, const 
 	if (tables.size() != 1) {
 		string error_msg = tables.empty() ? "does not have any tables" : "has multiple tables";
 		string extra_info;
-		if (options.table_name.empty()) {
+		if (!options.HasSelection()) {
 			extra_info = "\nSelect a table using `table_name='<name>'";
 		} else {
-			extra_info = " matching \"" + options.table_name + "\"";
+			extra_info = " matching " + options.PrintOptions();
 		}
 		string candidate_str = options.GetCandidates(candidate_tables);
 		throw BinderException("Database \"%s\" %s%s%s", file.path, error_msg, extra_info, candidate_str);
@@ -206,6 +233,13 @@ void DuckDBReader::Scan(ClientContext &context, GlobalTableFunctionState &gstate
 	if (chunk.size() == 0) {
 		finished = true;
 	}
+}
+
+double DuckDBReader::GetProgressInFile(ClientContext &context) {
+	if (!scan_function.table_scan_progress) {
+		return BaseFileReader::GetProgressInFile(context);
+	}
+	return scan_function.table_scan_progress(context, bind_data.get(), global_state.get());
 }
 
 unique_ptr<MultiFileReaderInterface> DuckDBMultiFileInfo::CreateInterface(ClientContext &context) {
