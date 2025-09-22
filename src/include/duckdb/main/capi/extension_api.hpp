@@ -504,6 +504,7 @@ typedef struct {
 	// API to manage file system operations
 
 	void (*duckdb_connection_get_file_system)(duckdb_connection connection, duckdb_file_system *out_file_system);
+	void (*duckdb_client_context_get_file_system)(duckdb_client_context context, duckdb_file_system *out_file_system);
 	void (*duckdb_destroy_file_system)(duckdb_file_system *file_system);
 	duckdb_state (*duckdb_file_system_open)(duckdb_file_system file_system, const char *path,
 	                                        duckdb_file_open_options options, duckdb_file_handle *out_file);
@@ -1008,6 +1009,7 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_expression_is_foldable = duckdb_expression_is_foldable;
 	result.duckdb_expression_fold = duckdb_expression_fold;
 	result.duckdb_connection_get_file_system = duckdb_connection_get_file_system;
+	result.duckdb_client_context_get_file_system = duckdb_client_context_get_file_system;
 	result.duckdb_destroy_file_system = duckdb_destroy_file_system;
 	result.duckdb_file_system_open = duckdb_file_system_open;
 	result.duckdb_file_system_error_data = duckdb_file_system_error_data;

@@ -581,6 +581,7 @@ typedef struct {
 // API to manage file system operations
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
 	void (*duckdb_connection_get_file_system)(duckdb_connection connection, duckdb_file_system *out_file_system);
+	void (*duckdb_client_context_get_file_system)(duckdb_client_context context, duckdb_file_system *out_file_system);
 	void (*duckdb_destroy_file_system)(duckdb_file_system *file_system);
 	duckdb_state (*duckdb_file_system_open)(duckdb_file_system file_system, const char *path,
 	                                        duckdb_file_open_options options, duckdb_file_handle *out_file);
@@ -1116,22 +1117,23 @@ typedef struct {
 #define duckdb_expression_fold        duckdb_ext_api.duckdb_expression_fold
 
 // Version unstable_new_file_system_api
-#define duckdb_connection_get_file_system duckdb_ext_api.duckdb_connection_get_file_system
-#define duckdb_destroy_file_system        duckdb_ext_api.duckdb_destroy_file_system
-#define duckdb_file_system_error_data     duckdb_ext_api.duckdb_file_system_error_data
-#define duckdb_file_system_open           duckdb_ext_api.duckdb_file_system_open
-#define duckdb_create_file_open_options   duckdb_ext_api.duckdb_create_file_open_options
-#define duckdb_file_open_options_set_flag duckdb_ext_api.duckdb_file_open_options_set_flag
-#define duckdb_destroy_file_open_options  duckdb_ext_api.duckdb_destroy_file_open_options
-#define duckdb_destroy_file_handle        duckdb_ext_api.duckdb_destroy_file_handle
-#define duckdb_file_handle_error_data     duckdb_ext_api.duckdb_file_handle_error_data
-#define duckdb_file_handle_read           duckdb_ext_api.duckdb_file_handle_read
-#define duckdb_file_handle_write          duckdb_ext_api.duckdb_file_handle_write
-#define duckdb_file_handle_tell           duckdb_ext_api.duckdb_file_handle_tell
-#define duckdb_file_handle_size           duckdb_ext_api.duckdb_file_handle_size
-#define duckdb_file_handle_seek           duckdb_ext_api.duckdb_file_handle_seek
-#define duckdb_file_handle_sync           duckdb_ext_api.duckdb_file_handle_sync
-#define duckdb_file_handle_close          duckdb_ext_api.duckdb_file_handle_close
+#define duckdb_connection_get_file_system     duckdb_ext_api.duckdb_connection_get_file_system
+#define duckdb_client_context_get_file_system duckdb_ext_api.duckdb_client_context_get_file_system
+#define duckdb_destroy_file_system            duckdb_ext_api.duckdb_destroy_file_system
+#define duckdb_file_system_error_data         duckdb_ext_api.duckdb_file_system_error_data
+#define duckdb_file_system_open               duckdb_ext_api.duckdb_file_system_open
+#define duckdb_create_file_open_options       duckdb_ext_api.duckdb_create_file_open_options
+#define duckdb_file_open_options_set_flag     duckdb_ext_api.duckdb_file_open_options_set_flag
+#define duckdb_destroy_file_open_options      duckdb_ext_api.duckdb_destroy_file_open_options
+#define duckdb_destroy_file_handle            duckdb_ext_api.duckdb_destroy_file_handle
+#define duckdb_file_handle_error_data         duckdb_ext_api.duckdb_file_handle_error_data
+#define duckdb_file_handle_read               duckdb_ext_api.duckdb_file_handle_read
+#define duckdb_file_handle_write              duckdb_ext_api.duckdb_file_handle_write
+#define duckdb_file_handle_tell               duckdb_ext_api.duckdb_file_handle_tell
+#define duckdb_file_handle_size               duckdb_ext_api.duckdb_file_handle_size
+#define duckdb_file_handle_seek               duckdb_ext_api.duckdb_file_handle_seek
+#define duckdb_file_handle_sync               duckdb_ext_api.duckdb_file_handle_sync
+#define duckdb_file_handle_close              duckdb_ext_api.duckdb_file_handle_close
 
 // Version unstable_new_open_connect_functions
 #define duckdb_connection_get_client_context    duckdb_ext_api.duckdb_connection_get_client_context

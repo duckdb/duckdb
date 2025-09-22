@@ -24,6 +24,27 @@
       }
     },
     {
+      "name": "duckdb_client_context_get_file_system",
+      "return_type": "void",
+      "params": [
+        {
+          "type": "duckdb_client_context",
+          "name": "context"
+        },
+        {
+          "type": "duckdb_file_system*",
+          "name": "out_file_system"
+        }
+      ],
+      "comment": {
+        "description": "Creates a new file system instance associated with the given client context.\n\n",
+        "param_comments": {
+          "context": "The client context.",
+          "out_file_system": "The resulting file system instance. or NULL if not available."
+        }
+      }
+    },
+    {
       "name": "duckdb_destroy_file_system",
       "return_type": "void",
       "params": [

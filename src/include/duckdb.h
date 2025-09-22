@@ -5204,6 +5204,15 @@ Creates a new file system instance associated with the given connection.
 DUCKDB_C_API void duckdb_connection_get_file_system(duckdb_connection connection, duckdb_file_system *out_file_system);
 
 /*!
+Creates a new file system instance associated with the given client context.
+
+* @param context The client context.
+* @param out_file_system The resulting file system instance. or NULL if not available.
+*/
+DUCKDB_C_API void duckdb_client_context_get_file_system(duckdb_client_context context,
+                                                        duckdb_file_system *out_file_system);
+
+/*!
 Destroys the given file system instance.
 * @param file_system The file system instance to destroy.
 */

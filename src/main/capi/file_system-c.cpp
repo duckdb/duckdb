@@ -54,6 +54,19 @@ void duckdb_connection_get_file_system(duckdb_connection connection, duckdb_file
 	}
 }
 
+void duckdb_client_context_get_file_system(duckdb_client_context context, duckdb_file_system *out_file_system) {
+	if (!context || !out_file_system) {
+		return;
+	}
+	auto ctx = reinterpret_cast<duckdb::ClientContext *>(context);
+	try {
+		auto wrapper = new duckdb::CFileSystem(duckdb::FileSystem::GetFileSystem(*ctx));
+		*out_file_system = reinterpret_cast<duckdb_file_system>(wrapper);
+	} catch (...) {
+		*out_file_system = nullptr;
+	}
+}
+
 void duckdb_destroy_file_system(duckdb_file_system *file_system) {
 	if (!file_system || !*file_system) {
 		return;
