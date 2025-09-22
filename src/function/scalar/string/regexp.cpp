@@ -245,6 +245,11 @@ static void RegexExtractFunction(DataChunk &args, ExpressionState &state, Vector
 // Regexp Extract Struct
 //===--------------------------------------------------------------------===//
 static void RegexExtractStructFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	// This function assumes a constant pre-compiled pattern stored in the local state.
+	// If a non-constant pattern reaches here it indicates a binder bug. Return a clean error instead of crashing.
+	if (!ExecuteFunctionState::GetFunctionState(state)) {
+		throw InternalException("REGEXP_EXTRACT struct variant executed without constant pattern state");
+	}
 	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RegexLocalState>();
 
 	const auto count = args.size();
@@ -345,6 +350,9 @@ static unique_ptr<FunctionData> RegexExtractBind(ClientContext &context, ScalarF
 		if (group.IsNull()) {
 			group_string = "";
 		} else if (group.type().id() == LogicalTypeId::LIST) {
+			if (!constant_pattern) {
+				throw BinderException("%s with LIST of group names requires a constant pattern", bound_function.name);
+			}
 			vector<string> dummy_names; // not reused after bind
 			child_list_t<LogicalType> struct_children;
 			regexp_util::ParseGroupNameList(context, bound_function.name, *arguments[2], constant_string, options,
