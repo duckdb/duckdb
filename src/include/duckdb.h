@@ -685,6 +685,23 @@ typedef void (*duckdb_table_function_init_t)(duckdb_init_info info);
 //! The function to generate an output chunk during table function execution.
 typedef void (*duckdb_table_function_t)(duckdb_function_info info, duckdb_data_chunk output);
 
+//! Comparison operators supported for filter pushdown in table functions.
+typedef enum {
+        DUCKDB_TABLE_FILTER_OPERATOR_INVALID = 0,
+        DUCKDB_TABLE_FILTER_OPERATOR_EQUAL = 1,
+        DUCKDB_TABLE_FILTER_OPERATOR_NOT_EQUAL = 2,
+        DUCKDB_TABLE_FILTER_OPERATOR_GREATER_THAN = 3,
+        DUCKDB_TABLE_FILTER_OPERATOR_GREATER_THAN_OR_EQUAL = 4,
+        DUCKDB_TABLE_FILTER_OPERATOR_LESS_THAN = 5,
+        DUCKDB_TABLE_FILTER_OPERATOR_LESS_THAN_OR_EQUAL = 6
+} duckdb_table_filter_operator;
+
+//! A filter that was pushed down into a table function. Must be destroyed with
+//! `duckdb_destroy_table_function_filter`.
+typedef struct _duckdb_table_function_filter {
+        void *internal_ptr;
+} * duckdb_table_function_filter;
+
 //===--------------------------------------------------------------------===//
 // Cast types
 //===--------------------------------------------------------------------===//
@@ -3963,6 +3980,18 @@ DUCKDB_C_API void duckdb_table_function_supports_projection_pushdown(duckdb_tabl
                                                                      bool pushdown);
 
 /*!
+Sets whether or not the given table function supports filter pushdown.
+
+If this is set to true, the system will provide filters that can be inspected in the `init` stage through
+the `duckdb_init_get_filter_count` and `duckdb_init_get_filter` functions.
+If this is set to false (the default), the system will apply filters after the table function has produced its data.
+
+* @param table_function The table function
+* @param pushdown True if the table function supports filter pushdown, false otherwise.
+*/
+DUCKDB_C_API void duckdb_table_function_supports_filter_pushdown(duckdb_table_function table_function, bool pushdown);
+
+/*!
 Register the table function object within the given connection.
 
 The function requires at least a name, a bind function, an init function and a main function.
@@ -4112,6 +4141,68 @@ This function must be used if projection pushdown is enabled to figure out which
 * @return The column index of the projected column.
 */
 DUCKDB_C_API idx_t duckdb_init_get_column_index(duckdb_init_info info, idx_t column_index);
+
+/*!
+Returns the number of filters that were pushed into the table function.
+
+The returned filters can be inspected through `duckdb_init_get_filter`. Only filters using the comparison operators
+`=`, `!=`, `>`, `<`, `>=`, and `<=` are reported through this interface.
+
+* @param info The info object
+* @return The number of pushed filters supported by the C API.
+*/
+DUCKDB_C_API idx_t duckdb_init_get_filter_count(duckdb_init_info info);
+
+/*!
+Retrieves the pushed filter at the specified index.
+
+The index must be smaller than the value returned by `duckdb_init_get_filter_count`. The returned filter handle must be
+destroyed with `duckdb_destroy_table_function_filter` when it is no longer needed. Use
+`duckdb_table_function_filter_get_column_index`, `duckdb_table_function_filter_get_operator`, and
+`duckdb_table_function_filter_get_constant` to inspect the filter properties. The value returned by
+`duckdb_table_function_filter_get_constant` must be destroyed with `duckdb_destroy_value` when it is no longer needed.
+
+* @param info The info object
+* @param filter_index The index of the filter to fetch, from 0..duckdb_init_get_filter_count(info)
+* @param out_filter The output filter handle.
+* @return `DuckDBSuccess` on success or `DuckDBError` if the filter index is invalid.
+*/
+DUCKDB_C_API duckdb_state duckdb_init_get_filter(duckdb_init_info info, idx_t filter_index,
+                                                 duckdb_table_function_filter *out_filter);
+
+/*!
+Returns the column index the pushed filter applies to.
+
+* @param filter The filter handle.
+* @return The column index of the filter or 0 if the handle is invalid.
+*/
+DUCKDB_C_API idx_t duckdb_table_function_filter_get_column_index(duckdb_table_function_filter filter);
+
+/*!
+Returns the comparison operator of the pushed filter.
+
+* @param filter The filter handle.
+* @return The comparison operator of the filter. Returns `DUCKDB_TABLE_FILTER_OPERATOR_INVALID` if the handle is
+* invalid.
+*/
+DUCKDB_C_API duckdb_table_filter_operator duckdb_table_function_filter_get_operator(duckdb_table_function_filter filter);
+
+/*!
+Returns the constant value the pushed filter compares against.
+
+The returned value must be destroyed with `duckdb_destroy_value` when it is no longer needed.
+
+* @param filter The filter handle.
+* @return The constant value of the filter.
+*/
+DUCKDB_C_API duckdb_value duckdb_table_function_filter_get_constant(duckdb_table_function_filter filter);
+
+/*!
+Destroys the given table function filter handle.
+
+* @param filter The filter handle to destroy.
+*/
+DUCKDB_C_API void duckdb_destroy_table_function_filter(duckdb_table_function_filter *filter);
 
 /*!
 Sets how many threads can process this table function in parallel (default: 1)

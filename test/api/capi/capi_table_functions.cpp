@@ -1,5 +1,7 @@
 #include "capi_tester.hpp"
 
+#include <vector>
+
 using namespace duckdb;
 using namespace std;
 
@@ -51,8 +53,8 @@ void my_function(duckdb_function_info info, duckdb_data_chunk output) {
 }
 
 static void capi_register_table_function(duckdb_connection connection, const char *name,
-                                         duckdb_table_function_bind_t bind, duckdb_table_function_init_t init,
-                                         duckdb_table_function_t f, duckdb_state expected_state = DuckDBSuccess) {
+					 duckdb_table_function_bind_t bind, duckdb_table_function_init_t init,
+					 duckdb_table_function_t f, duckdb_state expected_state = DuckDBSuccess) {
 	duckdb_state status;
 	// create a table function
 	auto function = duckdb_create_table_function();
@@ -319,4 +321,117 @@ TEST_CASE("Table function client context return") {
 	REQUIRE(result->Fetch<int64_t>(1, 0) == 42);
 	REQUIRE(result->Fetch<int64_t>(1, 1) == 42);
 	REQUIRE(result->Fetch<int64_t>(1, 2) == 42);
+}
+
+struct capi_filter_pushdown_info {
+	idx_t column_index;
+	duckdb_table_filter_operator op;
+	int64_t constant;
+};
+
+static std::vector<capi_filter_pushdown_info> capi_last_filters;
+static idx_t capi_last_filter_count = 0;
+
+void capi_filter_pushdown_bind(duckdb_bind_info info) {
+	duckdb_logical_type type = duckdb_create_logical_type(DUCKDB_TYPE_BIGINT);
+	duckdb_bind_add_result_column(info, "value", type);
+	duckdb_destroy_logical_type(&type);
+}
+
+void capi_filter_pushdown_init(duckdb_init_info info) {
+	capi_last_filters.clear();
+	capi_last_filter_count = duckdb_init_get_filter_count(info);
+	for (idx_t i = 0; i < capi_last_filter_count; i++) {
+		duckdb_table_function_filter filter;
+		REQUIRE(duckdb_init_get_filter(info, i, &filter) == DuckDBSuccess);
+		REQUIRE(filter);
+
+		capi_filter_pushdown_info entry;
+		entry.column_index = duckdb_table_function_filter_get_column_index(filter);
+		entry.op = duckdb_table_function_filter_get_operator(filter);
+		duckdb_value constant = duckdb_table_function_filter_get_constant(filter);
+		REQUIRE(constant);
+		entry.constant = duckdb_get_int64(constant);
+		duckdb_destroy_value(&constant);
+		duckdb_destroy_table_function_filter(&filter);
+		capi_last_filters.push_back(entry);
+	}
+}
+
+void capi_filter_pushdown_function(duckdb_function_info info, duckdb_data_chunk output) {
+	auto vec = duckdb_data_chunk_get_vector(output, 0);
+	auto data = static_cast<int64_t *>(duckdb_vector_get_data(vec));
+	for (idx_t i = 0; i < 10; i++) {
+		data[i] = static_cast<int64_t>(i);
+	}
+	duckdb_data_chunk_set_size(output, 10);
+}
+
+static void capi_register_filter_pushdown_function(duckdb_connection connection, const char *name) {
+	auto function = duckdb_create_table_function();
+	duckdb_table_function_set_name(function, name);
+	duckdb_table_function_set_bind(function, capi_filter_pushdown_bind);
+	duckdb_table_function_set_init(function, capi_filter_pushdown_init);
+	duckdb_table_function_set_function(function, capi_filter_pushdown_function);
+	duckdb_table_function_supports_projection_pushdown(function, true);
+	duckdb_table_function_supports_filter_pushdown(function, true);
+	REQUIRE(duckdb_register_table_function(connection, function) == DuckDBSuccess);
+	duckdb_destroy_table_function(&function);
+}
+
+TEST_CASE("Table function filter pushdown via C API") {
+	CAPITester tester;
+	duckdb::unique_ptr<CAPIResult> result;
+
+	REQUIRE(tester.OpenDatabase(nullptr));
+	capi_register_filter_pushdown_function(tester.connection, "capi_filter_pushdown");
+
+	struct ExpectedFilter {
+		duckdb_table_filter_operator op;
+		int64_t constant;
+	};
+
+	struct QueryExpectation {
+		const char *query;
+		std::vector<ExpectedFilter> expected_filters;
+	};
+
+	std::vector<QueryExpectation> expectations = {
+	    {"SELECT * FROM capi_filter_pushdown() WHERE value = 5", {{DUCKDB_TABLE_FILTER_OPERATOR_EQUAL, 5}}},
+	    {"SELECT * FROM capi_filter_pushdown() WHERE value != 3", {{DUCKDB_TABLE_FILTER_OPERATOR_NOT_EQUAL, 3}}},
+	    {"SELECT * FROM capi_filter_pushdown() WHERE value > 7", {{DUCKDB_TABLE_FILTER_OPERATOR_GREATER_THAN, 7}}},
+	    {"SELECT * FROM capi_filter_pushdown() WHERE value >= 8", {{DUCKDB_TABLE_FILTER_OPERATOR_GREATER_THAN_OR_EQUAL, 8}}},
+	    {"SELECT * FROM capi_filter_pushdown() WHERE value < 4", {{DUCKDB_TABLE_FILTER_OPERATOR_LESS_THAN, 4}}},
+	    {"SELECT * FROM capi_filter_pushdown() WHERE value <= 6", {{DUCKDB_TABLE_FILTER_OPERATOR_LESS_THAN_OR_EQUAL, 6}}},
+	    {"SELECT * FROM capi_filter_pushdown() WHERE value BETWEEN 2 AND 6",
+	     {{DUCKDB_TABLE_FILTER_OPERATOR_GREATER_THAN_OR_EQUAL, 2},
+	      {DUCKDB_TABLE_FILTER_OPERATOR_LESS_THAN_OR_EQUAL, 6}}},
+	    {"SELECT * FROM capi_filter_pushdown() WHERE value = 5 OR value = 7", {}}
+	};
+
+	for (auto &expectation : expectations) {
+		capi_last_filters.clear();
+		capi_last_filter_count = 0;
+
+		result = tester.Query(expectation.query);
+		REQUIRE_NO_FAIL(*result);
+
+		REQUIRE(capi_last_filter_count == expectation.expected_filters.size());
+		REQUIRE(capi_last_filters.size() == expectation.expected_filters.size());
+
+		for (auto &filter_info : capi_last_filters) {
+			REQUIRE(filter_info.column_index == 0);
+		}
+
+		for (auto &expected : expectation.expected_filters) {
+			bool found_match = false;
+			for (auto &captured : capi_last_filters) {
+				if (captured.op == expected.op && captured.constant == expected.constant) {
+					found_match = true;
+					break;
+				}
+			}
+			REQUIRE(found_match);
+		}
+	}
 }

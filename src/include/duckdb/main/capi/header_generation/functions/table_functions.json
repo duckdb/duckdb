@@ -227,6 +227,27 @@
             }
         },
         {
+            "name": "duckdb_table_function_supports_filter_pushdown",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_table_function",
+                    "name": "table_function"
+                },
+                {
+                    "type": "bool",
+                    "name": "pushdown"
+                }
+            ],
+            "comment": {
+                "description": "Sets whether or not the given table function supports filter pushdown.\n\nIf this is set to true, the system will provide filters that can be inspected in the `init` stage through the `duckdb_init_get_filter_count` and `duckdb_init_get_filter` functions.\nIf this is set to false (the default), the system will apply filters after the table function has produced its data.\n\n",
+                "param_comments": {
+                    "table_function": "The table function",
+                    "pushdown": "True if the table function supports filter pushdown, false otherwise."
+                }
+            }
+        },
+        {
             "name": "duckdb_register_table_function",
             "return_type": "duckdb_state",
             "params": [
