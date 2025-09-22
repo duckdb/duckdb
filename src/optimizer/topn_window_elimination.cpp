@@ -1,6 +1,8 @@
 #include "duckdb/optimizer/topn_window_elimination.hpp"
 
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
@@ -28,7 +30,6 @@
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 
 namespace duckdb {
-
 TopNWindowElimination::TopNWindowElimination(ClientContext &context_p, Optimizer &optimizer)
     : context(context_p), optimizer(optimizer) {
 }
@@ -142,8 +143,9 @@ unique_ptr<LogicalOperator> TopNWindowElimination::CreateAggregateOperator(vecto
 }
 
 unique_ptr<LogicalOperator>
-TopNWindowElimination::CreateUnnestListOperator(const child_list_t<LogicalType> &input_types,
-                                                idx_t aggregate_idx) const {
+TopNWindowElimination::CreateUnnestListOperator(const child_list_t<LogicalType> &input_types, const idx_t aggregate_idx,
+                                                const bool include_row_number,
+                                                unique_ptr<Expression> limit_value) const {
 	auto unnest = make_uniq<LogicalUnnest>(optimizer.binder.GenerateTableIndex());
 	auto struct_type = LogicalType::STRUCT(input_types);
 	auto unnest_expr = make_uniq<BoundUnnestExpression>(struct_type);
@@ -151,13 +153,32 @@ TopNWindowElimination::CreateUnnestListOperator(const child_list_t<LogicalType> 
 	unnest_expr->child =
 	    make_uniq<BoundColumnRefExpression>(LogicalType::LIST(struct_type), ColumnBinding(aggregate_idx, 0));
 	unnest->expressions.push_back(std::move(unnest_expr));
+	if (include_row_number) {
+		FunctionBinder function_binder(context);
+
+		auto &func = Catalog::GetSystemCatalog(context).GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA,
+		                                                                                     "generate_series");
+
+		vector<unique_ptr<Expression>> generate_series_exprs;
+		generate_series_exprs.push_back(make_uniq<BoundConstantExpression>(1));
+		generate_series_exprs.push_back(std::move(limit_value));
+		auto generate_series_fun = func.functions.GetFunctionByArguments(
+		    context, {generate_series_exprs[0]->return_type, generate_series_exprs[1]->return_type});
+		auto bound_generate_series_fun =
+		    function_binder.BindScalarFunction(generate_series_fun, std::move(generate_series_exprs));
+		auto unnest_row_number_expr = make_uniq<BoundUnnestExpression>(LogicalType::BIGINT);
+		// TODO: set alias
+		unnest_row_number_expr->child = std::move(bound_generate_series_fun);
+		unnest->expressions.push_back(std::move(unnest_row_number_expr));
+	}
 
 	return unnest;
 }
 
 unique_ptr<LogicalOperator>
-TopNWindowElimination::CreateUnnestStructOperator(const child_list_t<LogicalType> &input_types, idx_t unnest_list_idx,
-                                                  idx_t table_idx) const {
+TopNWindowElimination::CreateUnnestStructOperator(const child_list_t<LogicalType> &input_types,
+                                                  const idx_t unnest_list_idx, const idx_t table_idx,
+                                                  const bool include_row_number, const idx_t row_number_idx) const {
 	FunctionBinder function_binder(context);
 
 	vector<unique_ptr<Expression>> unnest_struct_exprs;
@@ -165,15 +186,24 @@ TopNWindowElimination::CreateUnnestStructOperator(const child_list_t<LogicalType
 	const auto struct_extract_fun = StructExtractFun::GetFunctions().GetFunctionByOffset(0);
 	const auto input_struct_type = LogicalType::STRUCT(input_types);
 
-	// TODO: add generate_subscript operator if we need the row_number
-	for (const auto &type : input_types) {
+	for (idx_t i = 0; i < input_types.size(); i++) {
+		const auto &type = input_types[i];
 		const auto &alias = type.first;
 		vector<unique_ptr<Expression>> fun_args(2);
 		fun_args[0] = make_uniq<BoundColumnRefExpression>(input_struct_type, ColumnBinding(unnest_list_idx, 0));
 		fun_args[1] = make_uniq<BoundConstantExpression>(alias);
 		auto bound_function = function_binder.BindScalarFunction(struct_extract_fun, std::move(fun_args));
+		bound_function->alias = alias;
 		unnest_struct_exprs.push_back(std::move(bound_function));
 	}
+
+	if (include_row_number) {
+		auto row_number_reference =
+		    make_uniq<BoundColumnRefExpression>(LogicalType::BIGINT, ColumnBinding(unnest_list_idx, 1));
+		unnest_struct_exprs.insert(unnest_struct_exprs.begin() + static_cast<int64_t>(row_number_idx),
+		                           std::move(row_number_reference));
+	}
+
 	return make_uniq<LogicalProjection>(table_idx, std::move(unnest_struct_exprs));
 }
 
@@ -181,7 +211,7 @@ unique_ptr<LogicalOperator> TopNWindowElimination::Optimize(unique_ptr<LogicalOp
 	if (CanOptimize(*op, &context)) {
 		D_ASSERT(op->type == LogicalOperatorType::LOGICAL_PROJECTION);
 		auto *projection = &op->Cast<LogicalProjection>();
-		auto struct_pack_input_exprs = std::move(projection->expressions);
+		auto topmost_exprs = std::move(projection->expressions);
 		const idx_t topmost_projection_idx = projection->table_index;
 
 		op = std::move(projection->children[0]);
@@ -190,11 +220,35 @@ unique_ptr<LogicalOperator> TopNWindowElimination::Optimize(unique_ptr<LogicalOp
 		auto &filter_expr = filter.expressions[0]->Cast<BoundComparisonExpression>();
 
 		// Cycle through child projections and update table index
+		vector<idx_t> constant_idxs;
+		constant_idxs.reserve(topmost_exprs.size());
+
+		vector<unique_ptr<Expression>> struct_pack_input_exprs;
+		struct_pack_input_exprs.reserve(topmost_exprs.size());
+
+		for (idx_t i = 0; i < topmost_exprs.size(); i++) {
+			if (topmost_exprs[i]->type == ExpressionType::VALUE_CONSTANT) {
+				constant_idxs.push_back(i);
+				continue;
+			}
+			if (topmost_exprs[i]->alias.empty()) {
+				// We need aliases to struct_pack the columns
+				topmost_exprs[i]->alias = to_string(i);
+			}
+			struct_pack_input_exprs.push_back(std::move(topmost_exprs[i]));
+		}
+
 		auto *child = filter.children[0].get();
+
 		while (child->type == LogicalOperatorType::LOGICAL_PROJECTION) {
 			projection = &child->Cast<LogicalProjection>();
 			for (auto &expr : struct_pack_input_exprs) {
-				D_ASSERT(expr->type == ExpressionType::BOUND_COLUMN_REF);
+				D_ASSERT(expr->type == ExpressionType::BOUND_COLUMN_REF ||
+				         expr->type == ExpressionType::VALUE_CONSTANT);
+				if (expr->type == ExpressionType::VALUE_CONSTANT) {
+					continue;
+				}
+
 				auto &column_ref = expr->Cast<BoundColumnRefExpression>();
 
 				if (column_ref.binding.table_index == projection->table_index) {
@@ -212,14 +266,14 @@ unique_ptr<LogicalOperator> TopNWindowElimination::Optimize(unique_ptr<LogicalOp
 		D_ASSERT(child->type == LogicalOperatorType::LOGICAL_WINDOW);
 		auto &window = child->Cast<LogicalWindow>();
 
-		bool require_row_number = false;
-		idx_t row_number_idx;
+		bool include_row_number = false;
+		idx_t row_number_idx = 0;
 		for (idx_t i = 0; i < struct_pack_input_exprs.size(); i++) {
 			auto &expr = struct_pack_input_exprs[i];
 			if (expr->Cast<BoundColumnRefExpression>().binding.table_index == window.window_index) {
-				D_ASSERT(require_row_number == false);
-				require_row_number = true;
+				include_row_number = true;
 				row_number_idx = i;
+				struct_pack_input_exprs.erase_at(i);
 			}
 		}
 
@@ -231,14 +285,19 @@ unique_ptr<LogicalOperator> TopNWindowElimination::Optimize(unique_ptr<LogicalOp
 		}
 
 		// Create logical operators
-		auto aggregate =
-		    CreateAggregateOperator(std::move(struct_pack_input_exprs), window, std::move(filter_expr.right));
+		auto aggregate = CreateAggregateOperator(std::move(struct_pack_input_exprs), window, filter_expr.right->Copy());
 		const idx_t aggregate_idx = aggregate->Cast<LogicalAggregate>().aggregate_index;
 
-		auto unnest_list = CreateUnnestListOperator(struct_info, aggregate_idx);
+		auto unnest_list =
+		    CreateUnnestListOperator(struct_info, aggregate_idx, include_row_number, std::move(filter_expr.right));
 		const idx_t unnest_list_idx = unnest_list->Cast<LogicalUnnest>().unnest_index;
 
-		auto unnest_struct = CreateUnnestStructOperator(struct_info, unnest_list_idx, topmost_projection_idx);
+		auto unnest_struct = CreateUnnestStructOperator(struct_info, unnest_list_idx, topmost_projection_idx,
+		                                                include_row_number, row_number_idx);
+		for (auto constant_idx : constant_idxs) {
+			unnest_struct->expressions.insert(unnest_struct->expressions.begin() + static_cast<int64_t>(constant_idx),
+			                                  std::move(topmost_exprs[constant_idx]));
+		}
 
 		aggregate->children.push_back(Optimize(std::move(child->children[0])));
 		unnest_list->children.push_back(std::move(aggregate));
@@ -253,5 +312,4 @@ unique_ptr<LogicalOperator> TopNWindowElimination::Optimize(unique_ptr<LogicalOp
 
 	return op;
 }
-
 } // namespace duckdb
