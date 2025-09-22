@@ -1,25 +1,29 @@
 diff --git a/extension/httpfs/httpfs.cpp b/extension/httpfs/httpfs.cpp
-index bb7267a..3687009 100644
+index bb7267a..3bc8d06 100644
 --- a/extension/httpfs/httpfs.cpp
 +++ b/extension/httpfs/httpfs.cpp
-@@ -85,20 +85,26 @@ unique_ptr<HTTPParams> HTTPFSUtil::InitializeParameters(optional_ptr<FileOpener>
+@@ -85,20 +85,29 @@ unique_ptr<HTTPParams> HTTPFSUtil::InitializeParameters(optional_ptr<FileOpener>
  	return std::move(result);
  }
  
 -unique_ptr<HTTPClient> HTTPClientCache::GetClient() {
-+unique_ptr<HTTPClient> HTTPClientCache::GetClient(string host) {
++unique_ptr<HTTPClient> HTTPClientCache::GetClient(string &host) {
  	lock_guard<mutex> lck(lock);
  	if (clients.size() == 0) {
  		return nullptr;
  	}
+-
+-	auto client = std::move(clients.back());
+-	clients.pop_back();
 +	if (clients.find(host) == clients.end()) {
 +		return nullptr;
 +	}
- 
--	auto client = std::move(clients.back());
--	clients.pop_back();
-+	auto client = std::move((clients[host].back()));
-+	clients[host].pop_back();
++	auto &client_list = clients[host];
++	if (client_list.empty()) {
++		return nullptr;
++	}
++	auto client = std::move(client_list.back());
++	client_list.pop_back();
  	return client;
  }
  
@@ -34,7 +38,7 @@ index bb7267a..3687009 100644
  }
  
  unique_ptr<HTTPResponse> HTTPFileSystem::PostRequest(FileHandle &handle, string url, HTTPHeaders header_map,
-@@ -125,23 +131,26 @@ unique_ptr<HTTPResponse> HTTPFileSystem::PutRequest(FileHandle &handle, string u
+@@ -125,23 +134,26 @@ unique_ptr<HTTPResponse> HTTPFileSystem::PutRequest(FileHandle &handle, string u
  unique_ptr<HTTPResponse> HTTPFileSystem::HeadRequest(FileHandle &handle, string url, HTTPHeaders header_map) {
  	auto &hfh = handle.Cast<HTTPFileHandle>();
  	auto &http_util = hfh.http_params.http_util;
@@ -66,7 +70,7 @@ index bb7267a..3687009 100644
  	return response;
  }
  
-@@ -161,8 +170,9 @@ unique_ptr<HTTPResponse> HTTPFileSystem::GetRequest(FileHandle &handle, string u
+@@ -161,8 +173,9 @@ unique_ptr<HTTPResponse> HTTPFileSystem::GetRequest(FileHandle &handle, string u
  	auto &http_util = hfh.http_params.http_util;
  
  	D_ASSERT(hfh.cached_file_handle);
@@ -78,7 +82,7 @@ index bb7267a..3687009 100644
  	GetRequestInfo get_request(
  	    url, header_map, hfh.http_params,
  	    [&](const HTTPResponse &response) {
-@@ -200,7 +210,7 @@ unique_ptr<HTTPResponse> HTTPFileSystem::GetRequest(FileHandle &handle, string u
+@@ -200,7 +213,7 @@ unique_ptr<HTTPResponse> HTTPFileSystem::GetRequest(FileHandle &handle, string u
  
  	auto response = http_util.Request(get_request, http_client);
  
@@ -87,7 +91,7 @@ index bb7267a..3687009 100644
  	return response;
  }
  
-@@ -213,7 +223,9 @@ unique_ptr<HTTPResponse> HTTPFileSystem::GetRangeRequest(FileHandle &handle, str
+@@ -213,7 +226,9 @@ unique_ptr<HTTPResponse> HTTPFileSystem::GetRangeRequest(FileHandle &handle, str
  	string range_expr = "bytes=" + to_string(file_offset) + "-" + to_string(file_offset + buffer_out_len - 1);
  	header_map.Insert("Range", range_expr);
  
@@ -98,7 +102,7 @@ index bb7267a..3687009 100644
  
  	idx_t out_offset = 0;
  
-@@ -272,7 +284,7 @@ unique_ptr<HTTPResponse> HTTPFileSystem::GetRangeRequest(FileHandle &handle, str
+@@ -272,7 +287,7 @@ unique_ptr<HTTPResponse> HTTPFileSystem::GetRangeRequest(FileHandle &handle, str
  
  	auto response = http_util.Request(get_request, http_client);
  
@@ -107,7 +111,7 @@ index bb7267a..3687009 100644
  	return response;
  }
  
-@@ -681,7 +693,14 @@ void HTTPFileHandle::LoadFileInfo() {
+@@ -681,7 +696,14 @@ void HTTPFileHandle::LoadFileInfo() {
  			length = 0;
  			return;
  		} else {
@@ -123,12 +127,12 @@ index bb7267a..3687009 100644
  			if (flags.OpenForReading() && res->status != HTTPStatusCode::NotFound_404) {
  				auto range_res = hfs.GetRangeRequest(*this, path, {}, 0, nullptr, 2);
  				if (range_res->status != HTTPStatusCode::PartialContent_206 &&
-@@ -786,13 +805,12 @@ void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
+@@ -786,13 +808,12 @@ void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
  	}
  }
  
 -unique_ptr<HTTPClient> HTTPFileHandle::GetClient() {
-+unique_ptr<HTTPClient> HTTPFileHandle::GetClient(string host) {
++unique_ptr<HTTPClient> HTTPFileHandle::GetClient(string &host) {
  	// Try to fetch a cached client
 -	auto cached_client = client_cache.GetClient();
 +	auto cached_client = client_cache.GetClient(host);
@@ -139,21 +143,19 @@ index bb7267a..3687009 100644
  	// Create a new client
  	return CreateClient();
  }
-@@ -804,8 +822,10 @@ unique_ptr<HTTPClient> HTTPFileHandle::CreateClient() {
+@@ -804,8 +825,8 @@ unique_ptr<HTTPClient> HTTPFileHandle::CreateClient() {
  	return http_params.http_util.InitializeClient(http_params, proto_host_port);
  }
  
 -void HTTPFileHandle::StoreClient(unique_ptr<HTTPClient> client) {
 -	client_cache.StoreClient(std::move(client));
-+void HTTPFileHandle::StoreClient(string url, unique_ptr<HTTPClient> client) {
-+	string path_out, proto_host_port;
-+	HTTPUtil::DecomposeURL(url, path_out, proto_host_port);
-+	client_cache.StoreClient(proto_host_port, std::move(client));
++void HTTPFileHandle::StoreClient(string &host, unique_ptr<HTTPClient> client) {
++	client_cache.StoreClient(host, std::move(client));
  }
  
  HTTPFileHandle::~HTTPFileHandle() {
 diff --git a/extension/httpfs/httpfs_extension.cpp b/extension/httpfs/httpfs_extension.cpp
-index 695ca30..a60fbba 100644
+index 695ca30..c91f012 100644
 --- a/extension/httpfs/httpfs_extension.cpp
 +++ b/extension/httpfs/httpfs_extension.cpp
 @@ -62,7 +62,7 @@ static void LoadInternal(ExtensionLoader &loader) {
@@ -165,8 +167,17 @@ index 695ca30..a60fbba 100644
  	config.AddExtensionOption("s3_access_key_id", "S3 Access Key ID", LogicalType::VARCHAR);
  	config.AddExtensionOption("s3_secret_access_key", "S3 Access Key", LogicalType::VARCHAR);
  	config.AddExtensionOption("s3_session_token", "S3 Session Token", LogicalType::VARCHAR);
+@@ -83,6 +83,8 @@ static void LoadInternal(ExtensionLoader &loader) {
+ 	                          Value(50));
+ 	config.AddExtensionOption("unsafe_disable_etag_checks", "Disable checks on ETag consistency",
+ 	                          LogicalType::BOOLEAN, Value(false));
++	config.AddExtensionOption("follow_s3_region_redirects", "Follow S3 redirect to correct region. Only 1 redirect will be followed",
++							  LogicalType::BOOLEAN, Value(true));
+ 
+ 	// HuggingFace options
+ 	config.AddExtensionOption("hf_max_per_page", "Debug option to limit number of items returned in list requests",
 diff --git a/extension/httpfs/include/httpfs.hpp b/extension/httpfs/include/httpfs.hpp
-index 5f24455..8dad063 100644
+index 5f24455..3186614 100644
 --- a/extension/httpfs/include/httpfs.hpp
 +++ b/extension/httpfs/include/httpfs.hpp
 @@ -30,13 +30,13 @@ public:
@@ -174,7 +185,7 @@ index 5f24455..8dad063 100644
  public:
  	//! Get a client from the client cache
 -	unique_ptr<HTTPClient> GetClient();
-+	unique_ptr<HTTPClient> GetClient(string host);
++	unique_ptr<HTTPClient> GetClient(string &host);
  	//! Store a client in the cache for reuse
 -	void StoreClient(unique_ptr<HTTPClient> client);
 +	void StoreClient(string host, unique_ptr<HTTPClient> client);
@@ -192,46 +203,64 @@ index 5f24455..8dad063 100644
  
  	// Get a Client to run requests over
 -	unique_ptr<HTTPClient> GetClient();
-+	unique_ptr<HTTPClient> GetClient(string host);
++	unique_ptr<HTTPClient> GetClient(string &host);
  	// Return the client for re-use
 -	void StoreClient(unique_ptr<HTTPClient> client);
-+	void StoreClient(string url, unique_ptr<HTTPClient> client);
++	void StoreClient(string &host, unique_ptr<HTTPClient> client);
  
  public:
  	void Close() override {
 diff --git a/extension/httpfs/include/s3fs.hpp b/extension/httpfs/include/s3fs.hpp
-index b848d2c..69358c4 100644
+index b848d2c..f748dc2 100644
 --- a/extension/httpfs/include/s3fs.hpp
 +++ b/extension/httpfs/include/s3fs.hpp
 @@ -34,6 +34,7 @@ struct S3AuthParams {
  	string oauth2_bearer_token; // OAuth2 bearer token for GCS
  
  	static S3AuthParams ReadFrom(optional_ptr<FileOpener> opener, FileOpenerInfo &info);
-+	void OverwriteRegionAndEndpoint(string &region);
++	void OverwriteRegionAndEndpoint(string &new_region);
  };
  
  struct AWSEnvironmentCredentialsProvider {
 diff --git a/extension/httpfs/s3fs.cpp b/extension/httpfs/s3fs.cpp
-index 3ea2b98..c20bd73 100644
+index 3ea2b98..4555307 100644
 --- a/extension/httpfs/s3fs.cpp
 +++ b/extension/httpfs/s3fs.cpp
-@@ -183,6 +183,15 @@ S3AuthParams AWSEnvironmentCredentialsProvider::CreateParams() {
+@@ -183,6 +183,14 @@ S3AuthParams AWSEnvironmentCredentialsProvider::CreateParams() {
  	return params;
  }
  
-+void S3AuthParams::OverwriteRegionAndEndpoint(string &region) {
-+	D_ASSERT(!region.empty());
++void S3AuthParams::OverwriteRegionAndEndpoint(string &new_region) {
 +	D_ASSERT(!endpoint.empty());
-+	this->region = region;
-+	if (!this->endpoint.empty()) {
-+		this->endpoint = StringUtil::Format("s3.%s.amazonaws.com", this->region);
++	region = new_region;
++	if (!endpoint.empty()) {
++		endpoint = StringUtil::Format("s3.%s.amazonaws.com", region);
 +	}
 +}
 +
  S3AuthParams S3AuthParams::ReadFrom(optional_ptr<FileOpener> opener, FileOpenerInfo &info) {
  	auto result = S3AuthParams();
  
-@@ -836,22 +845,37 @@ void S3FileHandle::Initialize(optional_ptr<FileOpener> opener) {
+@@ -831,27 +839,74 @@ unique_ptr<HTTPFileHandle> S3FileSystem::CreateHandle(const OpenFileInfo &file,
+ 	                                       S3ConfigParams::ReadFrom(opener));
+ }
+ 
++// FIXME: I think extra_info in ErrorData should be a case_insensitive map,
++// but that is too big of a fix in this current PR.
++static string GetXamzBucketHeader(const unordered_map<string, string> &headers) {
++	auto iter = headers.find("header_x-amz-bucket-region");
++	if (iter != headers.end()) {
++		return iter->second;
++	}
++	iter = headers.find("header_X-Amz-Bucket-Region");
++	if (iter != headers.end()) {
++		return iter->second;
++	}
++	return "";
++}
++
+ void S3FileHandle::Initialize(optional_ptr<FileOpener> opener) {
+ 	try {
  		HTTPFileHandle::Initialize(opener);
  	} catch (std::exception &ex) {
  		ErrorData error(ex);
@@ -239,7 +268,14 @@ index 3ea2b98..c20bd73 100644
  		bool refreshed_secret = false;
 +		auto &extra_info = error.ExtraInfo();
 +		auto entry = extra_info.find("status_code");
-+		string new_region = "";
++
++		Value follow_redirects;
++		bool follow_region_redirects = true;
++		if (FileOpener::TryGetCurrentSetting(opener, "follow_s3_region_redirects", follow_redirects)) {
++			follow_region_redirects = follow_redirects.GetValue<bool>();
++		}
++
++		auto new_region = string("");
  		if (error.Type() == ExceptionType::IO || error.Type() == ExceptionType::HTTP) {
 -			auto context = opener->TryGetClientContext();
 -			if (context) {
@@ -248,18 +284,29 @@ index 3ea2b98..c20bd73 100644
 -					auto res = context->db->GetSecretManager().LookupSecret(transaction, path, type);
 -					if (res.HasMatch()) {
 -						refreshed_secret |= CreateS3SecretFunctions::TryRefreshS3Secret(*context, *res.secret_entry);
-+			if (entry->second == "301") {
-+				auto region_header = extra_info.find("header_x-amz-bucket-region");
-+				if (region_header != extra_info.end()) {
-+					auth_params.region = region_header->second;
-+					new_region = region_header->second;
-+					incorrect_region_supplied = true;
-+					// FIXME: add log that we are trying a different region.
-+				} else {
++			if (entry != extra_info.end() && (entry->second == "301" || entry->second == "400")) {
++				// Check if a different region has been supplied in the header. Minio returns 400 instead of 301
++				new_region = GetXamzBucketHeader(extra_info);
++				if (!new_region.empty()) {
++					auto old_region = auth_params.region;
++					if (old_region != new_region) {
++						incorrect_region_supplied = true;
++						auth_params.region = new_region;
++						auto context = opener->TryGetClientContext();
++						if (old_region.empty()) {
++							old_region = "(No Provided Value)";
++						}
++						if (context) {
++							DUCKDB_LOG_INFO(*context, "Redirecting S3 request from region '%s' to region '%s'", old_region, new_region);
++						}
++					}
++				}
++				if (!incorrect_region_supplied && (entry->second == "400" || entry->second == "403")) {
 +					auto extra_text = S3FileSystem::GetS3BadRequestError(auth_params);
 +					throw Exception(error.Type(), error.RawMessage() + extra_text, extra_info);
 +				}
-+			} else {
++			}
++			if (!incorrect_region_supplied) {
 +				auto context = opener->TryGetClientContext();
 +				if (context) {
 +					auto transaction = CatalogTransaction::GetSystemCatalogTransaction(*context);
@@ -279,7 +326,7 @@ index 3ea2b98..c20bd73 100644
  			if (entry != extra_info.end()) {
  				if (entry->second == "400") {
  					// 400: BAD REQUEST
-@@ -868,17 +892,24 @@ void S3FileHandle::Initialize(optional_ptr<FileOpener> opener) {
+@@ -868,17 +923,27 @@ void S3FileHandle::Initialize(optional_ptr<FileOpener> opener) {
  					}
  					throw Exception(error.Type(), error.RawMessage() + extra_text, extra_info);
  				}
@@ -297,6 +344,9 @@ index 3ea2b98..c20bd73 100644
  		auth_params = S3AuthParams::ReadFrom(opener, info);
 +		// pass correct region from redirect response
 +		auth_params.OverwriteRegionAndEndpoint(new_region);
++		if (!(incorrect_region_supplied && follow_region_redirects) && !refreshed_secret) {
++			throw;
++		}
  		HTTPFileHandle::Initialize(opener);
  	}
  

@@ -129,17 +129,55 @@ endloop
 statement ok
 set s3_endpoint='';
 
+statement ok
+call enable_logging();
+
 statement error
 SELECT * FROM 's3://test-bucket/whatever.parquet';
 ----
-<REGEX>:.*Unknown error for HTTP HEAD to 'http://test-bucket.s3.eu-west-1.amazonaws.com/whatever.parquet'.*
+<REGEX>:.*HTTP GET error on.*http://test-bucket.s3.us-east-1.amazonaws.com/whatever.parquet.*HTTP 403.*
 
 statement error
 SELECT * FROM 'r2://test-bucket/whatever.parquet';
 ----
-<REGEX>:.*Unknown error for HTTP HEAD to 'http://test-bucket.s3.eu-west-1.amazonaws.com/whatever.parquet'.*
+<REGEX>:.*HTTP GET error on.*http://test-bucket.s3.us-east-1.amazonaws.com/whatever.parquet.*HTTP 403.*
+
+# check redirects (minio automatically redirects to us-east-1).
+query I
+select message from duckdb_logs() where log_level like '%INFO%' and message like 'Redirecting%';
+----
+Redirecting S3 request from region 'eu-west-1' to region 'us-east-1'
+Redirecting S3 request from region 'eu-west-1' to region 'us-east-1'
 
 statement error
 SELECT * FROM 'gcs://test-bucket/whatever.parquet';
 ----
-HTTP GET error on 'http://storage.googleapis.com/test-bucket/whatever.parquet'
+<REGEX>:.*HTTP GET error on.*http://storage.googleapis.com/test-bucket/whatever.parquet.*HTTP 403.*
+.*Authentication Failure - GCS authentication failed.*
+.*HMAC credentials were provided but authentication failed.*
+.*Ensure your HMAC key_id and secret are correct.*
+
+statement ok
+call truncate_duckdb_logs();
+
+statement ok
+set s3_region='';
+
+# FIXME
+# I don't know why yet, but minio has 2 redirects. 1 from regionless to us-west-1 and then from eu-west-1 to us-east 1
+# we only follow 1 of these.
+statement error
+SELECT * FROM 's3://test-bucket/whatever.parquet';
+----
+<REGEX>:.*HTTP Error: Unable to connect to URL \"s3://test-bucket/whatever.parquet\": 301 \(Moved Permanently\).*
+
+statement error
+SELECT * FROM 'r2://test-bucket/whatever.parquet';
+----
+<REGEX>:.*HTTP Error: Unable to connect to URL \"r2://test-bucket/whatever.parquet\": 301 \(Moved Permanently\).*
+
+query I
+select message from duckdb_logs() where log_level like '%INFO%' and message like 'Redirecting%';
+----
+Redirecting S3 request from region '(No Provided Value)' to region 'eu-west-1'
+Redirecting S3 request from region '(No Provided Value)' to region 'eu-west-1'
