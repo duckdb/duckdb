@@ -8,6 +8,12 @@ ATTACH '__TEST_DIR__/read_duckdb_test.db'
 statement ok
 CREATE TABLE read_duckdb_test.my_tbl AS SELECT 42 i
 
+# we cannot read a database that is already attached
+statement error
+SELECT * FROM read_duckdb('__TEST_DIR__/read_duckdb_test.db')
+----
+already attached by database
+
 statement ok
 DETACH read_duckdb_test
 

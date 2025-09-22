@@ -17,6 +17,8 @@ struct DuckDBMultiFileInfo : MultiFileReaderInterface {
 	                 BaseFileReaderOptions &options) override;
 	void FinalizeCopyBind(ClientContext &context, BaseFileReaderOptions &options, const vector<string> &expected_names,
 	                      const vector<LogicalType> &expected_types) override;
+	void FinalizeBindData(MultiFileBindData &multi_file_data) override;
+
 	unique_ptr<TableFunctionData> InitializeBindData(MultiFileBindData &multi_file_data,
 	                                                 unique_ptr<BaseFileReaderOptions> options) override;
 	void BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
@@ -52,10 +54,12 @@ public:
 
 struct DuckDBReadBindData : TableFunctionData {
 	unique_ptr<DuckDBFileReaderOptions> options;
+	optional_idx initial_file_cardinality;
 
 	unique_ptr<FunctionData> Copy() const override {
 		auto result = make_uniq<DuckDBReadBindData>();
 		result->options = make_uniq<DuckDBFileReaderOptions>(*options);
+		result->initial_file_cardinality = initial_file_cardinality;
 		return std::move(result);
 	}
 };
@@ -76,6 +80,7 @@ public:
 	string GetReaderType() const override {
 		return "duckdb";
 	}
+	optional_idx NumRows();
 
 private:
 	ClientContext &context;
@@ -219,6 +224,12 @@ bool DuckDBReader::TryInitializeScan(ClientContext &context, GlobalTableFunction
 		for (auto &col : column_indexes) {
 			if (col.GetPrimaryIndex() >= column_count) {
 				col = ColumnIndex(COLUMN_IDENTIFIER_ROW_ID);
+			} else {
+				auto &column = table_entry->GetColumn(LogicalIndex(col.GetPrimaryIndex()));
+				if (column.Generated()) {
+					throw NotImplementedException("Unsupported: read_duckdb cannot read generated column %s",
+					                              column.Name());
+				}
 			}
 		}
 		// initialize the scan over this table
@@ -244,11 +255,15 @@ void DuckDBReader::Scan(ClientContext &context, GlobalTableFunctionState &gstate
 	}
 }
 
+optional_idx DuckDBReader::NumRows() {
+	return table_entry->GetStorage().GetTotalRows();
+}
+
 unique_ptr<BaseStatistics> DuckDBReader::GetStatistics(ClientContext &context, const string &name) {
 	if (!scan_function.statistics) {
 		return BaseFileReader::GetStatistics(context, name);
 	}
-	return scan_function.statistics(context, bind_data.get(), table_entry->GetColumn(name).Physical().index);
+	return scan_function.statistics(context, bind_data.get(), table_entry->GetColumn(name).Logical().index);
 }
 
 double DuckDBReader::GetProgressInFile(ClientContext &context) {
@@ -297,6 +312,14 @@ void DuckDBMultiFileInfo::FinalizeCopyBind(ClientContext &context, BaseFileReade
                                            const vector<string> &expected_names,
                                            const vector<LogicalType> &expected_types) {
 	throw InternalException("Unimplemented method in DuckDBMultiFileInfo");
+}
+
+void DuckDBMultiFileInfo::FinalizeBindData(MultiFileBindData &multi_file_data) {
+	auto &bind_data = multi_file_data.bind_data->Cast<DuckDBReadBindData>();
+	if (multi_file_data.initial_reader) {
+		auto &initial_reader = multi_file_data.initial_reader->Cast<DuckDBReader>();
+		bind_data.initial_file_cardinality = initial_reader.NumRows();
+	}
 }
 
 unique_ptr<TableFunctionData> DuckDBMultiFileInfo::InitializeBindData(MultiFileBindData &multi_file_data,
