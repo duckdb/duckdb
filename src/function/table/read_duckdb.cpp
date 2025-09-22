@@ -199,6 +199,7 @@ DuckDBReader::DuckDBReader(ClientContext &context_p, OpenFileInfo file_p, const 
 		columns.emplace_back(col.Name(), col.Type());
 	}
 	column_count = columns.size();
+	scan_function = table_entry->GetScanFunction(context, bind_data);
 }
 
 DuckDBReader::~DuckDBReader() {
@@ -221,7 +222,6 @@ bool DuckDBReader::TryInitializeScan(ClientContext &context, GlobalTableFunction
 			}
 		}
 		// initialize the scan over this table
-		scan_function = table_entry->GetScanFunction(context, bind_data);
 		TableFunctionInitInput input(bind_data.get(), column_indexes, vector<idx_t>(), nullptr);
 		global_state = scan_function.init_global(context, input);
 	}
@@ -245,12 +245,14 @@ void DuckDBReader::Scan(ClientContext &context, GlobalTableFunctionState &gstate
 }
 
 unique_ptr<BaseStatistics> DuckDBReader::GetStatistics(ClientContext &context, const string &name) {
-	Printer::PrintF("Get stats");
+	if (!scan_function.statistics) {
+		return BaseFileReader::GetStatistics(context, name);
+	}
 	return scan_function.statistics(context, bind_data.get(), table_entry->GetColumn(name).Physical().index);
 }
 
 double DuckDBReader::GetProgressInFile(ClientContext &context) {
-	if (!scan_function.table_scan_progress) {
+	if (!scan_function.table_scan_progress || !global_state) {
 		return BaseFileReader::GetProgressInFile(context);
 	}
 	return scan_function.table_scan_progress(context, bind_data.get(), global_state.get());
