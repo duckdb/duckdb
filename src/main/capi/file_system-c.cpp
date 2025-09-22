@@ -1,0 +1,295 @@
+#include "duckdb/main/capi/capi_internal.hpp"
+
+namespace duckdb {
+namespace {
+struct CFileSystem {
+
+	FileSystem &fs;
+	ErrorData error_data;
+
+	explicit CFileSystem(FileSystem &fs_p) : fs(fs_p) {
+	}
+
+	void SetError(const char *message) {
+		error_data = ErrorData(ExceptionType::IO, message);
+	}
+	void SetError(const std::exception &ex) {
+		error_data = ErrorData(ex);
+	}
+};
+
+struct CFileOpenOptions {
+	bool read = false;
+	bool write = false;
+	bool append = false;
+	bool create = false;
+	bool create_new = false;
+};
+
+struct CFile {
+	ErrorData error_data;
+	unique_ptr<FileHandle> handle;
+
+	void SetError(const char *message) {
+		error_data = ErrorData(ExceptionType::IO, message);
+	}
+	void SetError(const std::exception &ex) {
+		error_data = ErrorData(ex);
+	}
+};
+
+} // namespace
+} // namespace duckdb
+
+void duckdb_connection_get_file_system(duckdb_connection connection, duckdb_file_system *out_file_system) {
+	if (!connection || !out_file_system) {
+		return;
+	}
+	auto conn = reinterpret_cast<duckdb::Connection *>(connection);
+	try {
+		auto wrapper = new duckdb::CFileSystem(duckdb::FileSystem::GetFileSystem(*conn->context));
+		*out_file_system = reinterpret_cast<duckdb_file_system>(wrapper);
+	} catch (...) {
+		*out_file_system = nullptr;
+	}
+}
+
+void duckdb_destroy_file_system(duckdb_file_system *file_system) {
+	if (!file_system || !*file_system) {
+		return;
+	}
+	const auto fs = reinterpret_cast<duckdb::CFileSystem *>(*file_system);
+	delete fs;
+	*file_system = nullptr;
+}
+
+duckdb_file_open_options duckdb_create_file_open_options() {
+	auto options = new duckdb::CFileOpenOptions();
+	return reinterpret_cast<duckdb_file_open_options>(options);
+}
+
+duckdb_state duckdb_file_open_options_set_flag(duckdb_file_open_options options, duckdb_file_flag flag, bool value) {
+	if (!options) {
+		return DuckDBError;
+	}
+	auto coptions = reinterpret_cast<duckdb::CFileOpenOptions *>(options);
+
+	duckdb::FileOpenFlags open_flags;
+	switch (flag) {
+	case DUCKDB_FILE_FLAGS_READ:
+		coptions->read = value;
+		break;
+	case DUCKDB_FILE_FLAGS_WRITE:
+		coptions->write = value;
+		break;
+	case DUCKDB_FILE_FLAGS_APPEND:
+		coptions->append = value;
+		break;
+	case DUCKDB_FILE_FLAGS_CREATE:
+		coptions->create = value;
+		break;
+	case DUCKDB_FILE_FLAGS_CREATE_NEW:
+		coptions->create_new = value;
+		break;
+	default:
+		return DuckDBError;
+	}
+	return DuckDBSuccess;
+}
+
+void duckdb_destroy_file_open_options(duckdb_file_open_options *options) {
+	if (!options || !*options) {
+		return;
+	}
+	auto coptions = reinterpret_cast<duckdb::CFileOpenOptions *>(*options);
+	delete coptions;
+	*options = nullptr;
+}
+
+duckdb_state duckdb_file_system_open(duckdb_file_system fs, const char *path, duckdb_file_open_options options,
+                                     duckdb_file_handle *out_file) {
+	if (!fs) {
+		return DuckDBError;
+	}
+	auto cfs = reinterpret_cast<duckdb::CFileSystem *>(fs);
+	if (!path || !options || !out_file) {
+		cfs->SetError("Invalid input to duckdb_file_system_open");
+		return DuckDBError;
+	}
+
+	try {
+		duckdb::FileOpenFlags flags;
+		auto coptions = reinterpret_cast<duckdb::CFileOpenOptions *>(options);
+		if (coptions->read) {
+			flags |= duckdb::FileOpenFlags::FILE_FLAGS_READ;
+		}
+		if (coptions->write) {
+			flags |= duckdb::FileOpenFlags::FILE_FLAGS_WRITE;
+		}
+		if (coptions->append) {
+			flags |= duckdb::FileOpenFlags::FILE_FLAGS_APPEND;
+		}
+		if (coptions->create) {
+			flags |= duckdb::FileOpenFlags::FILE_FLAGS_FILE_CREATE;
+		}
+		if (coptions->create_new) {
+			flags |= duckdb::FileOpenFlags::FILE_FLAGS_EXCLUSIVE_CREATE;
+		}
+
+		auto handle = cfs->fs.OpenFile(duckdb::string(path), flags);
+		auto wrapper = new duckdb::CFile();
+		wrapper->handle = std::move(handle);
+		*out_file = reinterpret_cast<duckdb_file_handle>(wrapper);
+		return DuckDBSuccess;
+	} catch (const std::exception &ex) {
+		cfs->SetError(ex);
+	} catch (...) {
+		cfs->SetError("Unknown error occurred during file open");
+		return DuckDBError;
+	}
+}
+
+duckdb_error_data duckdb_file_system_error_data(duckdb_file_system fs) {
+	auto wrapper = new ErrorDataWrapper();
+	if (!fs) {
+		return reinterpret_cast<duckdb_error_data>(wrapper);
+	}
+	auto cfs = reinterpret_cast<duckdb::CFileSystem *>(fs);
+	wrapper->error_data = cfs->error_data;
+	return reinterpret_cast<duckdb_error_data>(wrapper);
+}
+
+void duckdb_destroy_file_handle(duckdb_file_handle *file) {
+	if (!file || !*file) {
+		return;
+	}
+	auto cfile = reinterpret_cast<duckdb::CFile *>(*file);
+	cfile->handle->Close(); // Ensure the file is closed before destroying
+	delete cfile;
+	*file = nullptr;
+}
+
+duckdb_error_data duckdb_file_handle_error_data(duckdb_file_handle file) {
+	auto wrapper = new ErrorDataWrapper();
+	if (!file) {
+		return reinterpret_cast<duckdb_error_data>(wrapper);
+	}
+	auto cfile = reinterpret_cast<duckdb::CFile *>(file);
+	wrapper->error_data = cfile->error_data;
+	return reinterpret_cast<duckdb_error_data>(wrapper);
+}
+
+int64_t duckdb_file_handle_read(duckdb_file_handle file, void *buffer, int64_t size) {
+	if (!file || !buffer || size < 0) {
+		return -1;
+	}
+	auto cfile = reinterpret_cast<duckdb::CFile *>(file);
+	try {
+		return cfile->handle->Read(buffer, size);
+	} catch (std::exception &ex) {
+		cfile->SetError(ex);
+		return -1;
+	} catch (...) {
+		cfile->SetError("Unknown error occurred during file read");
+		return -1;
+	}
+}
+
+int64_t duckdb_file_handle_write(duckdb_file_handle file, const void *buffer, int64_t size) {
+	if (!file || !buffer || size < 0) {
+		return -1;
+	}
+	auto cfile = reinterpret_cast<duckdb::CFile *>(file);
+	try {
+		return cfile->handle->Write(const_cast<void *>(buffer), size);
+	} catch (std::exception &ex) {
+		cfile->SetError(ex);
+		return -1;
+	} catch (...) {
+		cfile->SetError("Unknown error occurred during file write");
+		return -1;
+	}
+}
+
+int64_t duckdb_file_handle_tell(duckdb_file_handle file) {
+	if (!file) {
+		return -1;
+	}
+	auto cfile = reinterpret_cast<duckdb::CFile *>(file);
+	try {
+		return cfile->handle->SeekPosition();
+	} catch (std::exception &ex) {
+		cfile->SetError(ex);
+		return -1;
+	} catch (...) {
+		cfile->SetError("Unknown error occurred during when getting file position");
+		return -1;
+	}
+}
+
+int64_t duckdb_file_handle_size(duckdb_file_handle file) {
+	if (!file) {
+		return -1;
+	}
+	auto cfile = reinterpret_cast<duckdb::CFile *>(file);
+	try {
+		return static_cast<int64_t>(cfile->handle->GetFileSize());
+	} catch (std::exception &ex) {
+		cfile->SetError(ex);
+		return -1;
+	} catch (...) {
+		cfile->SetError("Unknown error occurred when getting file size");
+		return -1;
+	}
+}
+
+duckdb_state duckdb_file_handle_seek(duckdb_file_handle file, int64_t position) {
+	if (!file) {
+		return DuckDBError;
+	}
+	auto cfile = reinterpret_cast<duckdb::CFile *>(file);
+	try {
+		cfile->handle->Seek(position);
+		return DuckDBSuccess;
+	} catch (std::exception &ex) {
+		cfile->SetError(ex);
+		return DuckDBError;
+	} catch (...) {
+		cfile->SetError("Unknown error occurred when seeking in file");
+		return DuckDBError;
+	}
+}
+
+duckdb_state duckdb_file_handle_sync(duckdb_file_handle file) {
+	if (!file) {
+		return DuckDBError;
+	}
+	auto cfile = reinterpret_cast<duckdb::CFile *>(file);
+	try {
+		cfile->handle->Sync();
+		return DuckDBSuccess;
+	} catch (std::exception &ex) {
+		cfile->SetError(ex);
+		return DuckDBError;
+	} catch (...) {
+		cfile->SetError("Unknown error occurred when syncing file");
+		return DuckDBError;
+	}
+}
+
+duckdb_state duckdb_file_handle_close(duckdb_file_handle file) {
+	if (!file) {
+		return DuckDBError;
+	}
+	auto cfile = reinterpret_cast<duckdb::CFile *>(file);
+	try {
+		cfile->handle->Close();
+		return DuckDBSuccess;
+	} catch (std::exception &ex) {
+		cfile->SetError(ex);
+		return DuckDBError;
+	} catch (...) {
+		cfile->SetError("Unknown error occurred when closing file");
+		return DuckDBError;
+	}
+}

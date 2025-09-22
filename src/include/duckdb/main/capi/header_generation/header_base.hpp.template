@@ -755,6 +755,35 @@ typedef struct _duckdb_arrow_options {
 	void *internal_ptr;
 } * duckdb_arrow_options;
 
+//===--------------------------------------------------------------------===//
+// Virtual File System Access
+//===--------------------------------------------------------------------===//
+
+typedef enum duckdb_file_flag {
+	DUCKDB_FILE_FLAGS_NONE = 0,
+	// Open a file for reading only.
+	DUCKDB_FILE_FLAGS_READ = 1,
+	// Open a file for writing only.
+	DUCKDB_FILE_FLAGS_WRITE = 2,
+	// Create or open the file if it already exists.
+	DUCKDB_FILE_FLAGS_CREATE = 3,
+	// Create a new file, fail if it already exists.
+	DUCKDB_FILE_FLAGS_CREATE_NEW = 4,
+	// Open the file in append mode.
+	DUCKDB_FILE_FLAGS_APPEND = 5,
+} duckdb_file_flag;
+
+typedef struct _duckdb_file_open_options {
+	void *internal_ptr;
+} * duckdb_file_open_options;
+
+typedef struct _duckdb_file_system {
+	void *internal_ptr;
+} * duckdb_file_system;
+
+typedef struct _duckdb_file_handle {
+	void *internal_ptr;
+} * duckdb_file_handle;
 
 //===--------------------------------------------------------------------===//
 // DuckDB extension access

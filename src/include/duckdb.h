@@ -757,6 +757,36 @@ typedef struct _duckdb_arrow_options {
 } * duckdb_arrow_options;
 
 //===--------------------------------------------------------------------===//
+// Virtual File System Access
+//===--------------------------------------------------------------------===//
+
+typedef enum duckdb_file_flag {
+	DUCKDB_FILE_FLAGS_NONE = 0,
+	// Open a file for reading only.
+	DUCKDB_FILE_FLAGS_READ = 1,
+	// Open a file for writing only.
+	DUCKDB_FILE_FLAGS_WRITE = 2,
+	// Create or open the file if it already exists.
+	DUCKDB_FILE_FLAGS_CREATE = 3,
+	// Create a new file, fail if it already exists.
+	DUCKDB_FILE_FLAGS_CREATE_NEW = 4,
+	// Open the file in append mode.
+	DUCKDB_FILE_FLAGS_APPEND = 5,
+} duckdb_file_flag;
+
+typedef struct _duckdb_file_open_options {
+	void *internal_ptr;
+} * duckdb_file_open_options;
+
+typedef struct _duckdb_file_system {
+	void *internal_ptr;
+} * duckdb_file_system;
+
+typedef struct _duckdb_file_handle {
+	void *internal_ptr;
+} * duckdb_file_handle;
+
+//===--------------------------------------------------------------------===//
 // DuckDB extension access
 //===--------------------------------------------------------------------===//
 
@@ -5160,6 +5190,148 @@ Folds an expression creating a folded value.
 */
 DUCKDB_C_API duckdb_error_data duckdb_expression_fold(duckdb_client_context context, duckdb_expression expr,
                                                       duckdb_value *out_value);
+
+//===--------------------------------------------------------------------===//
+// File System Interface
+//===--------------------------------------------------------------------===//
+
+/*!
+Creates a new file system instance associated with the given connection.
+
+* @param connection The database connection.
+* @param out_file_system The resulting file system instance. or NULL if not available.
+*/
+DUCKDB_C_API void duckdb_connection_get_file_system(duckdb_connection connection, duckdb_file_system *out_file_system);
+
+/*!
+Destroys the given file system instance.
+* @param file_system The file system instance to destroy.
+*/
+DUCKDB_C_API void duckdb_destroy_file_system(duckdb_file_system *file_system);
+
+/*!
+Retrieves the last error that occurred on the given file system instance.
+Must be destroyed with duckdb_destroy_error_data.
+
+* @param file_system The file system instance.
+* @return The error data.
+*/
+DUCKDB_C_API duckdb_error_data duckdb_file_system_error_data(duckdb_file_system file_system);
+
+/*!
+Opens a file at the given path with the specified flags.
+
+* @param file_system The file system instance.
+* @param path The path to the file.
+* @param options The file open options specifying how to open the file.
+* @param out_file The resulting file instance, or NULL if the open failed.
+* @return Whether the operation was successful. If not, the error data can be retrieved using
+`duckdb_file_system_error_data`.
+*/
+DUCKDB_C_API duckdb_state duckdb_file_system_open(duckdb_file_system file_system, const char *path,
+                                                  duckdb_file_open_options options, duckdb_file_handle *out_file);
+
+/*!
+Creates a new file open options instance with blank settings.
+
+* @return The new file open options instance.
+*/
+DUCKDB_C_API duckdb_file_open_options duckdb_create_file_open_options();
+
+/*!
+Sets a specific flag in the file open options.
+
+* @param options The file open options instance.
+* @param flag The flag to set (e.g., read, write).
+* @param value The value to set for the flag (true or false).
+* @return `DuckDBSuccess` on success or `DuckDBError` if the flag is unrecognized.
+*/
+DUCKDB_C_API duckdb_state duckdb_file_open_options_set_flag(duckdb_file_open_options options, duckdb_file_flag flag,
+                                                            bool value);
+
+/*!
+Destroys the given file open options instance.
+* @param options The file open options instance to destroy.
+*/
+DUCKDB_C_API void duckdb_destroy_file_open_options(duckdb_file_open_options *options);
+
+/*!
+Destroys the given file instance and deallocates all associated resources.
+This will also close the file if it is still open.
+
+* @param file The file instance to destroy.
+*/
+DUCKDB_C_API void duckdb_destroy_file_handle(duckdb_file_handle *file);
+
+/*!
+Retrieves the last error that occurred on the given file instance.
+Must be destroyed with duckdb_destroy_error_data.
+
+* @param file The file instance.
+* @return The error data.
+*/
+DUCKDB_C_API duckdb_error_data duckdb_file_handle_error_data(duckdb_file_handle file);
+
+/*!
+Reads data from the file into the buffer.
+
+* @param file The file instance to read from.
+* @param buffer The buffer to read data into.
+* @param size The number of bytes to read.
+* @return The number of bytes actually read, or -1 on error.
+*/
+DUCKDB_C_API int64_t duckdb_file_handle_read(duckdb_file_handle file, void *buffer, int64_t size);
+
+/*!
+Writes data from the buffer to the file.
+
+* @param file The file instance to write to.
+* @param buffer The buffer containing data to write.
+* @param size The number of bytes to write.
+* @return The number of bytes actually written, or -1 on error.
+*/
+DUCKDB_C_API int64_t duckdb_file_handle_write(duckdb_file_handle file, const void *buffer, int64_t size);
+
+/*!
+Tells the current position in the file.
+
+* @param file The file instance to tell the position of.
+* @return The current position in the file, or -1 on error.
+*/
+DUCKDB_C_API int64_t duckdb_file_handle_tell(duckdb_file_handle file);
+
+/*!
+Gets the size of the file.
+
+* @param file The file instance to get the size of.
+* @return The size of the file in bytes, or -1 on error.
+*/
+DUCKDB_C_API int64_t duckdb_file_handle_size(duckdb_file_handle file);
+
+/*!
+Seeks to a specific position in the file.
+
+* @param file The file instance to seek in.
+* @return Whether the seek was successful. If not, the error data can be retrieved using
+`duckdb_file_handle_error_data`.
+*/
+DUCKDB_C_API duckdb_state duckdb_file_handle_seek(duckdb_file_handle file, int64_t position);
+
+/*!
+Synchronizes the file's state with the underlying storage.
+
+* @param file The file instance to synchronize.
+* @return `DuckDBSuccess` on success or `DuckDBError` on failure.
+*/
+DUCKDB_C_API duckdb_state duckdb_file_handle_sync(duckdb_file_handle file);
+
+/*!
+Closes the given file instance.
+
+* @param file The file instance to close.
+* @return `DuckDBSuccess` on success or `DuckDBError` on failure.
+*/
+DUCKDB_C_API duckdb_state duckdb_file_handle_close(duckdb_file_handle file);
 
 #endif
 
