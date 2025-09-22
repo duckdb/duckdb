@@ -1,5 +1,7 @@
 #include "duckdb/function/scalar/regexp.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "re2/re2.h"
+#include "re2/stringpiece.h"
 
 namespace duckdb {
 
@@ -76,6 +78,50 @@ void ParseRegexOptions(ClientContext &context, Expression &expr, RE2::Options &t
 		throw InvalidInputException("Regex options field must be a string");
 	}
 	ParseRegexOptions(StringValue::Get(options_str), target, global_replace);
+}
+
+void ParseGroupNameList(ClientContext &context, const string &function_name, Expression &group_expr,
+						const string &pattern_string, RE2::Options &options, bool require_constant_pattern,
+						vector<string> &out_names, child_list_t<LogicalType> &out_struct_children) {
+	if (group_expr.HasParameter()) {
+		throw ParameterNotResolvedException();
+	}
+	if (!group_expr.IsFoldable()) {
+		throw InvalidInputException("Group specification field must be a constant list");
+	}
+	Value list_val = ExpressionExecutor::EvaluateScalar(context, group_expr);
+	if (list_val.IsNull() || list_val.type().id() != LogicalTypeId::LIST) {
+		throw BinderException("Group specification must be a non-NULL LIST");
+	}
+	auto &children = ListValue::GetChildren(list_val);
+	if (children.empty()) {
+		throw BinderException("Group name list must be non-empty");
+	}
+	case_insensitive_set_t name_set;
+	for (auto &child : children) {
+		if (child.IsNull()) {
+			throw BinderException("NULL group name in %s", function_name);
+		}
+		auto name = child.ToString();
+		if (name_set.find(name) != name_set.end()) {
+			throw BinderException("Duplicate group name '%s' in %s", name, function_name);
+		}
+		name_set.insert(name);
+		out_names.push_back(name);
+		out_struct_children.emplace_back(make_pair(name, LogicalType::VARCHAR));
+	}
+	if (require_constant_pattern) {
+		duckdb_re2::StringPiece const_piece(pattern_string.c_str(), pattern_string.size());
+		RE2 constant_re(const_piece, options);
+		auto group_cnt = constant_re.NumberOfCapturingGroups();
+		if (group_cnt == -1) {
+			throw BinderException("Pattern failed to parse: %s", constant_re.error());
+		}
+		if ((idx_t)group_cnt < out_names.size()) {
+			throw BinderException("Not enough capturing groups (%d) for provided names (%llu)", group_cnt,
+								  (unsigned long long)out_names.size());
+		}
+	}
 }
 
 } // namespace regexp_util
