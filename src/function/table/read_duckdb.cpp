@@ -333,7 +333,7 @@ unique_ptr<TableFunctionData> DuckDBMultiFileInfo::InitializeBindData(MultiFileB
                                                                       unique_ptr<BaseFileReaderOptions> options_p) {
 	auto result = make_uniq<DuckDBReadBindData>();
 	result->options = unique_ptr_cast<BaseFileReaderOptions, DuckDBFileReaderOptions>(std::move(options_p));
-	return result;
+	return std::move(result);
 }
 
 void DuckDBMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
