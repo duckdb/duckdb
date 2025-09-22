@@ -81,8 +81,8 @@ void ParseRegexOptions(ClientContext &context, Expression &expr, RE2::Options &t
 }
 
 void ParseGroupNameList(ClientContext &context, const string &function_name, Expression &group_expr,
-						const string &pattern_string, RE2::Options &options, bool require_constant_pattern,
-						vector<string> &out_names, child_list_t<LogicalType> &out_struct_children) {
+                        const string &pattern_string, RE2::Options &options, bool require_constant_pattern,
+                        vector<string> &out_names, child_list_t<LogicalType> &out_struct_children) {
 	if (group_expr.HasParameter()) {
 		throw ParameterNotResolvedException();
 	}
@@ -119,7 +119,7 @@ void ParseGroupNameList(ClientContext &context, const string &function_name, Exp
 		}
 		if ((idx_t)group_cnt < out_names.size()) {
 			throw BinderException("Not enough capturing groups (%d) for provided names (%llu)", group_cnt,
-								  (unsigned long long)out_names.size());
+			                      (unsigned long long)out_names.size());
 		}
 	}
 }

@@ -21,8 +21,8 @@ bool TryParseConstantPattern(ClientContext &context, Expression &expr, string &c
 void ParseRegexOptions(const string &options, duckdb_re2::RE2::Options &result, bool *global_replace = nullptr);
 void ParseRegexOptions(ClientContext &context, Expression &expr, RE2::Options &target, bool *global_replace = nullptr);
 void ParseGroupNameList(ClientContext &context, const string &function_name, Expression &group_expr,
-						const string &pattern_string, RE2::Options &options, bool require_constant_pattern,
-						vector<string> &out_names, child_list_t<LogicalType> &out_struct_children);
+                        const string &pattern_string, RE2::Options &options, bool require_constant_pattern,
+                        vector<string> &out_names, child_list_t<LogicalType> &out_struct_children);
 
 inline duckdb_re2::StringPiece CreateStringPiece(const string_t &input) {
 	return duckdb_re2::StringPiece(input.GetData(), input.GetSize());
@@ -58,7 +58,7 @@ struct RegexpBaseBindData : public FunctionData {
 
 struct RegexpExtractAllStructBindData : public RegexpBaseBindData {
 	RegexpExtractAllStructBindData(duckdb_re2::RE2::Options options, string constant_string, bool constant_pattern,
-	                              vector<string> group_names)
+	                               vector<string> group_names)
 	    : RegexpBaseBindData(options, std::move(constant_string), constant_pattern),
 	      group_names(std::move(group_names)) {
 	}

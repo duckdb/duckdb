@@ -23,8 +23,8 @@ RegexpExtractAll::InitLocalState(ExpressionState &state, const BoundFunctionExpr
 }
 
 unique_ptr<FunctionLocalState> RegexpExtractAllStruct::InitLocalState(ExpressionState &state,
-																	  const BoundFunctionExpression &expr,
-																	  FunctionData *bind_data) {
+                                                                      const BoundFunctionExpression &expr,
+                                                                      FunctionData *bind_data) {
 	auto &info = bind_data->Cast<RegexpExtractAllStructBindData>();
 	if (info.constant_pattern) {
 		return make_uniq<RegexLocalState>(info, true);
@@ -260,7 +260,7 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 }
 
 static inline bool ExtractAllStruct(duckdb_re2::StringPiece &input, duckdb_re2::RE2 &re, idx_t &startpos,
-									  duckdb_re2::StringPiece *groups, int provided_groups) {
+                                    duckdb_re2::StringPiece *groups, int provided_groups) {
 	D_ASSERT(re.ok());
 	if (!re.Match(input, startpos, input.size(), re.UNANCHORED, groups, provided_groups + 1)) {
 		return false;
@@ -274,8 +274,8 @@ static inline bool ExtractAllStruct(duckdb_re2::StringPiece &input, duckdb_re2::
 }
 
 static void ExtractStructAllSingleTuple(const string_t &string_val, duckdb_re2::RE2 &re,
-									  vector<duckdb_re2::StringPiece> &group_spans,
-									  vector<unique_ptr<Vector>> &child_entries, Vector &result, idx_t row) {
+                                        vector<duckdb_re2::StringPiece> &group_spans,
+                                        vector<unique_ptr<Vector>> &child_entries, Vector &result, idx_t row) {
 	const idx_t group_count = child_entries.size();
 	auto list_entries = FlatVector::GetData<list_entry_t>(result);
 	idx_t current_list_size = ListVector::GetListSize(result);
@@ -302,8 +302,8 @@ static void ExtractStructAllSingleTuple(const string_t &string_val, duckdb_re2::
 				cdata[current_list_size] = string_t(string_val.GetData(), 0);
 			} else {
 				auto offset = span.begin() - string_val.GetData();
-				cdata[current_list_size] = string_t(string_val.GetData() + offset,
-											UnsafeNumericCast<uint32_t>(span.size()));
+				cdata[current_list_size] =
+				    string_t(string_val.GetData() + offset, UnsafeNumericCast<uint32_t>(span.size()));
 			}
 		}
 		current_list_size++;
@@ -365,7 +365,7 @@ void RegexpExtractAllStruct::Execute(DataChunk &args, ExpressionState &state, Ve
 }
 
 unique_ptr<FunctionData> RegexpExtractAllStruct::Bind(ClientContext &context, ScalarFunction &bound_function,
-													  vector<unique_ptr<Expression>> &arguments) {
+                                                      vector<unique_ptr<Expression>> &arguments) {
 	// arguments: string, pattern, LIST<VARCHAR> group_names [, options]
 	if (arguments.size() < 3) {
 		throw BinderException("regexp_extract_all struct variant requires at least 3 arguments");
@@ -383,10 +383,10 @@ unique_ptr<FunctionData> RegexpExtractAllStruct::Bind(ClientContext &context, Sc
 	vector<string> group_names;
 	child_list_t<LogicalType> struct_children;
 	regexp_util::ParseGroupNameList(context, bound_function.name, *arguments[2], constant_string, options, true,
-									 group_names, struct_children);
+	                                group_names, struct_children);
 	bound_function.return_type = LogicalType::LIST(LogicalType::STRUCT(struct_children));
 	return make_uniq<RegexpExtractAllStructBindData>(options, std::move(constant_string), constant_pattern,
-													 std::move(group_names));
+	                                                 std::move(group_names));
 }
 
 unique_ptr<FunctionData> RegexpExtractAll::Bind(ClientContext &context, ScalarFunction &bound_function,

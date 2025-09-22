@@ -356,7 +356,7 @@ static unique_ptr<FunctionData> RegexExtractBind(ClientContext &context, ScalarF
 			vector<string> dummy_names; // not reused after bind
 			child_list_t<LogicalType> struct_children;
 			regexp_util::ParseGroupNameList(context, bound_function.name, *arguments[2], constant_string, options,
-			                              constant_pattern, dummy_names, struct_children);
+			                                constant_pattern, dummy_names, struct_children);
 			bound_function.return_type = LogicalType::STRUCT(struct_children);
 		} else {
 			auto group_idx = group.GetValue<int32_t>();
@@ -454,12 +454,12 @@ ScalarFunctionSet RegexpExtractAllFun::GetFunctions() {
 	                   nullptr, nullptr, RegexpExtractAll::InitLocalState, LogicalType::INVALID,
 	                   FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING));
 	// Struct multi-match variant(s): pattern must be constant due to bind-time struct shape inference
-	regexp_extract_all.AddFunction(ScalarFunction(
-	    {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::LIST(LogicalType::VARCHAR)},
-	    LogicalType::LIST(LogicalType::VARCHAR), // temporary, replaced in bind
-	    RegexpExtractAllStruct::Execute, RegexpExtractAllStruct::Bind, nullptr, nullptr,
-	    RegexpExtractAllStruct::InitLocalState, LogicalType::INVALID, FunctionStability::CONSISTENT,
-	    FunctionNullHandling::SPECIAL_HANDLING));
+	regexp_extract_all.AddFunction(
+	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::LIST(LogicalType::VARCHAR)},
+	                   LogicalType::LIST(LogicalType::VARCHAR), // temporary, replaced in bind
+	                   RegexpExtractAllStruct::Execute, RegexpExtractAllStruct::Bind, nullptr, nullptr,
+	                   RegexpExtractAllStruct::InitLocalState, LogicalType::INVALID, FunctionStability::CONSISTENT,
+	                   FunctionNullHandling::SPECIAL_HANDLING));
 	regexp_extract_all.AddFunction(ScalarFunction(
 	    {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::LIST(LogicalType::VARCHAR), LogicalType::VARCHAR},
 	    LogicalType::LIST(LogicalType::VARCHAR), // temporary, replaced in bind
