@@ -435,9 +435,9 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		// create dummy aggregation for the duplicate elimination
 		auto dummy_aggr = make_uniq<LogicalAggregate>(DConstants::INVALID_INDEX - 1, DConstants::INVALID_INDEX,
 		                                              vector<unique_ptr<Expression>>());
-		// dummy_aggr->grouping_sets.emplace_back();
+		dummy_aggr->grouping_sets.emplace_back();
 		for (auto &delim_col : delim_join.duplicate_eliminated_columns) {
-			// dummy_aggr->grouping_sets.back().insert(dummy_aggr->groups.size());
+			dummy_aggr->grouping_sets.back().insert(dummy_aggr->groups.size());
 			dummy_aggr->groups.push_back(delim_col->Copy());
 		}
 		auto lhs_delim_stats = RelationStatisticsHelper::ExtractAggregationStats(*dummy_aggr, lhs_stats);
