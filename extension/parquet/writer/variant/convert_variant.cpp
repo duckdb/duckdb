@@ -118,12 +118,6 @@ static idx_t AnalyzeValueData(const UnifiedVariantVectorData &variant, idx_t row
 		auto num_elements = nested_data.child_count;
 		const bool is_large = num_elements > NumericLimits<uint8_t>::Maximum();
 
-		// uint8_t value_header = 0;
-		// value_header |= VariantBasicType::OBJECT << 6;
-		// value_header |= static_cast<uint8_t>(is_large) << 4;
-		// value_header |= (static_cast<uint8_t>(field_id_size) - 1) << 2;
-		// value_header |= (static_cast<uint8_t>(field_offset_size) - 1);
-
 		//! Now add the sizes for the objects value data
 		if (is_large) {
 			total_size += sizeof(uint32_t);
@@ -243,8 +237,8 @@ static idx_t AnalyzeValueData(const UnifiedVariantVectorData &variant, idx_t row
 template <VariantPrimitiveType TYPE_ID>
 void WritePrimitiveTypeHeader(data_ptr_t &value_data) {
 	uint8_t value_header = 0;
-	value_header |= static_cast<uint8_t>(VariantBasicType::PRIMITIVE) << 6;
-	value_header |= static_cast<uint8_t>(TYPE_ID);
+	value_header |= static_cast<uint8_t>(VariantBasicType::PRIMITIVE);
+	value_header |= static_cast<uint8_t>(TYPE_ID) << 2;
 
 	*value_data = value_header;
 	value_data++;
@@ -418,10 +412,10 @@ static void WriteValueData(const UnifiedVariantVectorData &variant, idx_t row, u
 		const bool is_large = num_elements > NumericLimits<uint8_t>::Maximum();
 
 		uint8_t value_header = 0;
-		value_header |= static_cast<uint8_t>(VariantBasicType::OBJECT) << 6;
-		value_header |= static_cast<uint8_t>(is_large) << 4;
-		value_header |= (static_cast<uint8_t>(field_id_size) - 1) << 2;
-		value_header |= static_cast<uint8_t>(field_offset_size) - 1;
+		value_header |= static_cast<uint8_t>(VariantBasicType::OBJECT);
+		value_header |= static_cast<uint8_t>(is_large) << 6;
+		value_header |= (static_cast<uint8_t>(field_id_size) - 1) << 4;
+		value_header |= (static_cast<uint8_t>(field_offset_size) - 1) << 2;
 
 		*value_data = value_header;
 		value_data++;
@@ -467,9 +461,9 @@ static void WriteValueData(const UnifiedVariantVectorData &variant, idx_t row, u
 		const bool is_large = num_elements > NumericLimits<uint8_t>::Maximum();
 
 		uint8_t value_header = 0;
-		value_header |= static_cast<uint8_t>(VariantBasicType::ARRAY) << 6;
-		value_header |= static_cast<uint8_t>(is_large) << 2;
-		value_header |= static_cast<uint8_t>(field_offset_size) - 1;
+		value_header |= static_cast<uint8_t>(VariantBasicType::ARRAY);
+		value_header |= static_cast<uint8_t>(is_large) << 4;
+		value_header |= (static_cast<uint8_t>(field_offset_size) - 1) << 2;
 
 		*value_data = value_header;
 		value_data++;
