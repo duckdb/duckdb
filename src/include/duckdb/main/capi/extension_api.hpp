@@ -513,15 +513,15 @@ typedef struct {
 	duckdb_state (*duckdb_file_open_options_set_flag)(duckdb_file_open_options options, duckdb_file_flag flag,
 	                                                  bool value);
 	void (*duckdb_destroy_file_open_options)(duckdb_file_open_options *options);
-	void (*duckdb_destroy_file_handle)(duckdb_file_handle *file);
-	duckdb_error_data (*duckdb_file_handle_error_data)(duckdb_file_handle file);
-	duckdb_state (*duckdb_file_handle_close)(duckdb_file_handle file);
-	int64_t (*duckdb_file_handle_read)(duckdb_file_handle file, void *buffer, int64_t size);
-	int64_t (*duckdb_file_handle_write)(duckdb_file_handle file, const void *buffer, int64_t size);
-	duckdb_state (*duckdb_file_handle_seek)(duckdb_file_handle file, int64_t position);
-	int64_t (*duckdb_file_handle_tell)(duckdb_file_handle file);
-	duckdb_state (*duckdb_file_handle_sync)(duckdb_file_handle file);
-	int64_t (*duckdb_file_handle_size)(duckdb_file_handle file);
+	void (*duckdb_destroy_file_handle)(duckdb_file_handle *file_handle);
+	duckdb_error_data (*duckdb_file_handle_error_data)(duckdb_file_handle file_handle);
+	duckdb_state (*duckdb_file_handle_close)(duckdb_file_handle file_handle);
+	int64_t (*duckdb_file_handle_read)(duckdb_file_handle file_handle, void *buffer, int64_t size);
+	int64_t (*duckdb_file_handle_write)(duckdb_file_handle file_handle, const void *buffer, int64_t size);
+	duckdb_state (*duckdb_file_handle_seek)(duckdb_file_handle file_handle, int64_t position);
+	int64_t (*duckdb_file_handle_tell)(duckdb_file_handle file_handle);
+	duckdb_state (*duckdb_file_handle_sync)(duckdb_file_handle file_handle);
+	int64_t (*duckdb_file_handle_size)(duckdb_file_handle file_handle);
 	// New functions around the client context
 
 	idx_t (*duckdb_client_context_get_connection_id)(duckdb_client_context context);

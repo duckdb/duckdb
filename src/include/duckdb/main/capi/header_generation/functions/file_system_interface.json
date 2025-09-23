@@ -16,10 +16,10 @@
         }
       ],
       "comment": {
-        "description": "Creates a new file system instance associated with the given connection.\n\n",
+        "description": "Get a file system instance associated with the given connection.\nMust be destroyed with `duckdb_destroy_file_system`\n\n",
         "param_comments": {
           "connection": "The database connection.",
-          "out_file_system": "The resulting file system instance. or NULL if not available."
+          "out_file_system": "The resulting file system instance, or `nullptr` if not available. Must be destroyed with `duckdb_destroy_file_system`."
         }
       }
     },
@@ -37,10 +37,10 @@
         }
       ],
       "comment": {
-        "description": "Creates a new file system instance associated with the given client context.\n\n",
+        "description": "Get a file system instance associated with the given client context.\nMust be destroyed with `duckdb_destroy_file_system`\n\n",
         "param_comments": {
           "context": "The client context.",
-          "out_file_system": "The resulting file system instance. or NULL if not available."
+          "out_file_system": "The resulting file system instance, or `nullptr` if not available. Must be destroyed with `duckdb_destroy_file_system`."
         }
       }
     },
@@ -104,7 +104,7 @@
           "file_system": "The file system instance.",
           "path": "The path to the file.",
           "options": "The file open options specifying how to open the file.",
-          "out_file": "The resulting file instance, or NULL if the open failed."
+          "out_file": "The resulting file handle instance, or `nullptr` if the open failed. Must be destroyed with `duckdb_destroy_file_handle`."
         },
         "return_value": "Whether the operation was successful. If not, the error data can be retrieved using `duckdb_file_system_error_data`."
       }
@@ -114,7 +114,7 @@
       "return_type": "duckdb_file_open_options",
       "params": [],
       "comment": {
-        "description": "Creates a new file open options instance with blank settings.\n\n",
+        "description": "Creates a new file open options instance with blank settings.\nMust be destroyed with `duckdb_destroy_file_open_options`.\n\n",
         "param_comments": {},
         "return_value": "The new file open options instance."
       }
@@ -141,9 +141,9 @@
         "param_comments": {
           "options": "The file open options instance.",
           "flag": "The flag to set (e.g., read, write).",
-          "value": "The value to set for the flag (true or false)."
+          "value": "If the flag is enabled or disabled."
         },
-        "return_value": "`DuckDBSuccess` on success or `DuckDBError` if the flag is unrecognized."
+        "return_value": "`DuckDBSuccess` on success or `DuckDBError` if the flag is unrecognized or unsupported by this version of DuckDB."
       }
     },
     {
@@ -168,13 +168,13 @@
       "params": [
         {
           "type": "duckdb_file_handle*",
-          "name": "file"
+          "name": "file_handle"
         }
       ],
       "comment": {
-        "description": "Destroys the given file instance and deallocates all associated resources.\nThis will also close the file if it is still open.\n\n",
+        "description": "Destroys the given file handle and deallocates all associated resources.\nThis will also close the file if it is still open.\n\n",
         "param_comments": {
-          "file": "The file instance to destroy."
+          "file_handle": "The file handle to destroy."
         }
       }
     },
@@ -184,13 +184,13 @@
       "params": [
         {
           "type": "duckdb_file_handle",
-          "name": "file"
+          "name": "file_handle"
         }
       ],
       "comment": {
-        "description": "Retrieves the last error that occurred on the given file instance.\nMust be destroyed with duckdb_destroy_error_data.\n\n",
+        "description": "Retrieves the last error that occurred on the given file handle.\nMust be destroyed with duckdb_destroy_error_data.\n\n",
         "param_comments": {
-          "file": "The file instance."
+          "file_handle": "The file handle."
         },
         "return_value": "The error data."
       }
@@ -201,7 +201,7 @@
       "params": [
         {
           "type": "duckdb_file_handle",
-          "name": "file"
+          "name": "file_handle"
         },
         {
           "type": "void*",
@@ -215,7 +215,7 @@
       "comment": {
         "description": "Reads data from the file into the buffer.\n\n",
         "param_comments": {
-          "file": "The file instance to read from.",
+          "file_handle": "The file handle to read from.",
           "buffer": "The buffer to read data into.",
           "size": "The number of bytes to read."
         },
@@ -228,7 +228,7 @@
       "params": [
         {
           "type": "duckdb_file_handle",
-          "name": "file"
+          "name": "file_handle"
         },
         {
           "type": "const void*",
@@ -242,7 +242,7 @@
       "comment": {
         "description": "Writes data from the buffer to the file.\n\n",
         "param_comments": {
-          "file": "The file instance to write to.",
+          "file_handle": "The file handle to write to.",
           "buffer": "The buffer containing data to write.",
           "size": "The number of bytes to write."
         },
@@ -255,13 +255,13 @@
       "params": [
         {
           "type": "duckdb_file_handle",
-          "name": "file"
+          "name": "file_handle"
         }
       ],
       "comment": {
         "description": "Tells the current position in the file.\n\n",
         "param_comments": {
-          "file": "The file instance to tell the position of."
+          "file_handle": "The file handle to tell the position of."
         },
         "return_value": "The current position in the file, or negative on error."
       }
@@ -272,13 +272,13 @@
       "params": [
         {
           "type": "duckdb_file_handle",
-          "name": "file"
+          "name": "file_handle"
         }
       ],
       "comment": {
         "description": "Gets the size of the file.\n\n",
         "param_comments": {
-          "file": "The file instance to get the size of."
+          "file_handle": "The file handle to get the size of."
         },
         "return_value": "The size of the file in bytes, or negative on error."
       }
@@ -289,7 +289,7 @@
       "params": [
         {
           "type": "duckdb_file_handle",
-          "name": "file"
+          "name": "file_handle"
         },
         {
           "type": "int64_t",
@@ -299,7 +299,7 @@
       "comment": {
         "description": "Seeks to a specific position in the file.\n\n",
         "param_comments": {
-          "file": "The file instance to seek in.",
+          "file_handle": "The file handle to seek in.",
           "offset": "The position to seek to."
         },
         "return_value": "Whether the seek was successful. If not, the error data can be retrieved using `duckdb_file_handle_error_data`."
@@ -311,13 +311,13 @@
       "params": [
         {
           "type": "duckdb_file_handle",
-          "name": "file"
+          "name": "file_handle"
         }
       ],
       "comment": {
         "description": "Synchronizes the file's state with the underlying storage.\n\n",
         "param_comments": {
-          "file": "The file instance to synchronize."
+          "file_handle": "The file handle to synchronize."
         },
         "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure."
       }
@@ -328,13 +328,13 @@
       "params": [
         {
           "type": "duckdb_file_handle",
-          "name": "file"
+          "name": "file_handle"
         }
       ],
       "comment": {
-        "description": "Closes the given file instance.\n\n",
+        "description": "Closes the given file handle.\n\n",
         "param_comments": {
-          "file": "The file instance to close."
+          "file_handle": "The file handle to close."
         },
         "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure."
       }

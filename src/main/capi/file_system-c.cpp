@@ -19,11 +19,7 @@ struct CFileSystem {
 };
 
 struct CFileOpenOptions {
-	bool read = false;
-	bool write = false;
-	bool append = false;
-	bool create = false;
-	bool create_new = false;
+	duckdb::FileOpenFlags flags;
 };
 
 struct CFileHandle {
@@ -90,20 +86,20 @@ duckdb_state duckdb_file_open_options_set_flag(duckdb_file_open_options options,
 	auto coptions = reinterpret_cast<duckdb::CFileOpenOptions *>(options);
 
 	switch (flag) {
-	case DUCKDB_FILE_FLAGS_READ:
-		coptions->read = value;
+	case DUCKDB_FILE_FLAG_READ:
+		coptions->flags |= duckdb::FileOpenFlags::FILE_FLAGS_READ;
 		break;
-	case DUCKDB_FILE_FLAGS_WRITE:
-		coptions->write = value;
+	case DUCKDB_FILE_FLAG_WRITE:
+		coptions->flags |= duckdb::FileOpenFlags::FILE_FLAGS_WRITE;
 		break;
-	case DUCKDB_FILE_FLAGS_APPEND:
-		coptions->append = value;
+	case DUCKDB_FILE_FLAG_APPEND:
+		coptions->flags |= duckdb::FileOpenFlags::FILE_FLAGS_APPEND;
 		break;
-	case DUCKDB_FILE_FLAGS_CREATE:
-		coptions->create = value;
+	case DUCKDB_FILE_FLAG_CREATE:
+		coptions->flags |= duckdb::FileOpenFlags::FILE_FLAGS_FILE_CREATE;
 		break;
-	case DUCKDB_FILE_FLAGS_CREATE_NEW:
-		coptions->create_new = value;
+	case DUCKDB_FILE_FLAG_CREATE_NEW:
+		coptions->flags |= duckdb::FileOpenFlags::FILE_FLAGS_EXCLUSIVE_CREATE;
 		break;
 	default:
 		return DuckDBError;
@@ -123,43 +119,30 @@ void duckdb_destroy_file_open_options(duckdb_file_open_options *options) {
 duckdb_state duckdb_file_system_open(duckdb_file_system fs, const char *path, duckdb_file_open_options options,
                                      duckdb_file_handle *out_file) {
 	if (!fs) {
+		*out_file = nullptr;
 		return DuckDBError;
 	}
 	auto cfs = reinterpret_cast<duckdb::CFileSystem *>(fs);
 	if (!path || !options || !out_file) {
 		cfs->SetError("Invalid input to duckdb_file_system_open");
+		*out_file = nullptr;
 		return DuckDBError;
 	}
 
 	try {
-		duckdb::FileOpenFlags flags;
 		auto coptions = reinterpret_cast<duckdb::CFileOpenOptions *>(options);
-		if (coptions->read) {
-			flags |= duckdb::FileOpenFlags::FILE_FLAGS_READ;
-		}
-		if (coptions->write) {
-			flags |= duckdb::FileOpenFlags::FILE_FLAGS_WRITE;
-		}
-		if (coptions->append) {
-			flags |= duckdb::FileOpenFlags::FILE_FLAGS_APPEND;
-		}
-		if (coptions->create) {
-			flags |= duckdb::FileOpenFlags::FILE_FLAGS_FILE_CREATE;
-		}
-		if (coptions->create_new) {
-			flags |= duckdb::FileOpenFlags::FILE_FLAGS_EXCLUSIVE_CREATE;
-		}
-
-		auto handle = cfs->fs.OpenFile(duckdb::string(path), flags);
+		auto handle = cfs->fs.OpenFile(duckdb::string(path), coptions->flags);
 		auto wrapper = new duckdb::CFileHandle();
 		wrapper->handle = std::move(handle);
 		*out_file = reinterpret_cast<duckdb_file_handle>(wrapper);
 		return DuckDBSuccess;
 	} catch (const std::exception &ex) {
 		cfs->SetError(ex);
+		*out_file = nullptr;
 		return DuckDBError;
 	} catch (...) {
 		cfs->SetError("Unknown error occurred during file open");
+		*out_file = nullptr;
 		return DuckDBError;
 	}
 }

@@ -12,9 +12,9 @@ static void test_file_system(duckdb_file_system fs, string file_name) {
 	auto file_path = TestDirectoryPath() + "/" + file_name;
 
 	auto options = duckdb_create_file_open_options();
-	state = duckdb_file_open_options_set_flag(options, DUCKDB_FILE_FLAGS_WRITE, true);
+	state = duckdb_file_open_options_set_flag(options, DUCKDB_FILE_FLAG_WRITE, true);
 	REQUIRE(state == DuckDBSuccess);
-	state = duckdb_file_open_options_set_flag(options, DUCKDB_FILE_FLAGS_READ, true);
+	state = duckdb_file_open_options_set_flag(options, DUCKDB_FILE_FLAG_READ, true);
 	REQUIRE(state == DuckDBSuccess);
 
 	// Try to open non-existing file without create flag
@@ -25,8 +25,16 @@ static void test_file_system(duckdb_file_system fs, string file_name) {
 	REQUIRE(error_type == DUCKDB_ERROR_IO);
 	duckdb_destroy_error_data(&error_data);
 
+	// Try to write to a null file handle
+	int64_t failed_bytes_written = duckdb_file_handle_write(file, "data", 4);
+	REQUIRE(failed_bytes_written == -1);
+	auto file_error_data = duckdb_file_handle_error_data(file);
+	auto has_error = duckdb_error_data_has_error(file_error_data);
+	REQUIRE(has_error == false);
+	duckdb_destroy_error_data(&file_error_data);
+
 	// Set create flag
-	state = duckdb_file_open_options_set_flag(options, DUCKDB_FILE_FLAGS_CREATE, true);
+	state = duckdb_file_open_options_set_flag(options, DUCKDB_FILE_FLAG_CREATE, true);
 	REQUIRE(state == DuckDBSuccess);
 
 	// Create and open a file
@@ -42,6 +50,9 @@ static void test_file_system(duckdb_file_system fs, string file_name) {
 	REQUIRE(position == bytes_written);
 	int64_t size = duckdb_file_handle_size(file);
 	REQUIRE(size == bytes_written);
+
+	// Sync
+	state = duckdb_file_handle_sync(file);
 
 	// Seek to the beginning
 	state = duckdb_file_handle_seek(file, 0);
@@ -77,7 +88,7 @@ static void test_file_system(duckdb_file_system fs, string file_name) {
 	size = duckdb_file_handle_size(file);
 	REQUIRE(size == bytes_written);
 
-	// Close the file
+	// Seek back to the beginning
 	state = duckdb_file_handle_seek(file, 0);
 	REQUIRE(state == DuckDBSuccess);
 	position = duckdb_file_handle_tell(file);
@@ -85,9 +96,41 @@ static void test_file_system(duckdb_file_system fs, string file_name) {
 	size = duckdb_file_handle_size(file);
 	REQUIRE(size == bytes_written);
 
-	// Free resources
+	// Close the file
+	duckdb_file_handle_close(file);
+	duckdb_destroy_file_handle(&file);
+
+	// Open file again for reading
+	state = duckdb_file_system_open(fs, file_path.c_str(), options, &file);
+	REQUIRE(state == DuckDBSuccess);
+	REQUIRE(file != nullptr);
+	size = duckdb_file_handle_size(file);
+	REQUIRE(size == bytes_written);
+	// Check that the data is still there
+	memset(buffer, 0, sizeof(buffer));
+	bytes_read = duckdb_file_handle_read(file, buffer, sizeof(buffer) - 1);
+	REQUIRE(bytes_read == bytes_written);
+	REQUIRE(strcmp(buffer, data) == 0);
+	position = duckdb_file_handle_tell(file);
+	REQUIRE(position == bytes_read);
+	size = duckdb_file_handle_size(file);
+	REQUIRE(size == bytes_written);
+
+	// Close the file again
+	duckdb_file_handle_close(file);
+	duckdb_destroy_file_handle(&file);
+
+	duckdb_destroy_file_open_options(&options);
+
+	REQUIRE(file == nullptr);
+	REQUIRE(options == nullptr);
+
+	// Try destroy again for good measure
 	duckdb_destroy_file_handle(&file);
 	duckdb_destroy_file_open_options(&options);
+
+	REQUIRE(file == nullptr);
+	REQUIRE(options == nullptr);
 }
 
 TEST_CASE("Test File System in C API", "[capi]") {
@@ -117,4 +160,8 @@ TEST_CASE("Test File System in C API", "[capi]") {
 	REQUIRE(fs == nullptr);
 
 	duckdb_destroy_client_context(&context);
+
+	// Try to destory fs again
+	duckdb_destroy_file_system(&fs);
+	REQUIRE(fs == nullptr);
 }
