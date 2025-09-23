@@ -1020,18 +1020,12 @@ public:
 			return;
 		}
 
-		//	How many threads are we using?
-		auto &ts = TaskScheduler::GetScheduler(client);
-		const auto threads = NumericCast<idx_t>(ts.NumberOfThreads());
-
 		// Compute the starting row for each block
 		auto &left_table = *gsink.tables[0];
 		const auto left_blocks = left_table.BlockCount();
-		left_per_thread = MaxValue<idx_t>(1, (left_blocks + threads - 1) / threads);
 
 		auto &right_table = *gsink.tables[1];
 		const auto right_blocks = right_table.BlockCount();
-		right_per_thread = MaxValue<idx_t>(1, (right_blocks + threads - 1) / threads);
 
 		// Outer join block counts
 		if (left_table.found_match) {
@@ -1161,8 +1155,8 @@ public:
 	bool initialized = false;
 
 	// Join queue state
-	idx_t left_per_thread = 0;
-	idx_t right_per_thread = 0;
+	const idx_t left_per_thread = 1024;
+	const idx_t right_per_thread = 1024;
 	atomic<size_t> next_pair;
 	atomic<size_t> completed;
 
