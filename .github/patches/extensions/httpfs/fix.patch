@@ -20,7 +20,7 @@ index 695ca30..a60fbba 100644
  	                          LogicalType::VARCHAR, Value(""));
  	// Global S3 config
 -	config.AddExtensionOption("s3_region", "S3 Region", LogicalType::VARCHAR, Value("us-east-1"));
-+	config.AddExtensionOption("s3_region", "S3 Region", LogicalType::VARCHAR);
++	config.AddExtensionOption("s3_region", "S3 Region", LogicalType::VARCHAR, Value(""));
  	config.AddExtensionOption("s3_access_key_id", "S3 Access Key ID", LogicalType::VARCHAR);
  	config.AddExtensionOption("s3_secret_access_key", "S3 Access Key", LogicalType::VARCHAR);
  	config.AddExtensionOption("s3_session_token", "S3 Session Token", LogicalType::VARCHAR);
