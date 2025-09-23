@@ -89,17 +89,17 @@ void PhysicalCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline)
 	auto &state = meta_pipeline.GetState();
 
 	auto &child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, *this);
-	child_meta_pipeline.Build(children[0]);
+	child_meta_pipeline.Build(children.getAt(0));
 
 	for (auto &cte_scan : cte_scans) {
 		state.cte_dependencies.insert(make_pair(cte_scan, reference<Pipeline>(*child_meta_pipeline.GetBasePipeline())));
 	}
 
-	children[1].get().BuildPipelines(current, meta_pipeline);
+	children.getAt(1).get().BuildPipelines(current, meta_pipeline);
 }
 
 vector<const_reference<PhysicalOperator>> PhysicalCTE::GetSources() const {
-	return children[1].get().GetSources();
+	return children.getAt(1).get().GetSources();
 }
 
 InsertionOrderPreservingMap<string> PhysicalCTE::ParamsToString() const {

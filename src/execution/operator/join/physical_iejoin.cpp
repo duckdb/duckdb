@@ -83,13 +83,13 @@ public:
 	IEJoinGlobalState(ClientContext &context, const PhysicalIEJoin &op) : child(1) {
 		tables.resize(2);
 		RowLayout lhs_layout;
-		lhs_layout.Initialize(op.children[0].get().GetTypes());
+		lhs_layout.Initialize(op.children.getAt(0).get().GetTypes());
 		vector<BoundOrderByNode> lhs_order;
 		lhs_order.emplace_back(op.lhs_orders[0].Copy());
 		tables[0] = make_uniq<GlobalSortedTable>(context, lhs_order, lhs_layout, op);
 
 		RowLayout rhs_layout;
-		rhs_layout.Initialize(op.children[1].get().GetTypes());
+		rhs_layout.Initialize(op.children.getAt(1).get().GetTypes());
 		vector<BoundOrderByNode> rhs_order;
 		rhs_order.emplace_back(op.rhs_orders[0].Copy());
 		tables[1] = make_uniq<GlobalSortedTable>(context, rhs_order, rhs_layout, op);
@@ -738,7 +738,7 @@ void PhysicalIEJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &re
 	auto &left_table = *ie_sink.tables[0];
 	auto &right_table = *ie_sink.tables[1];
 
-	const auto left_cols = children[0].get().GetTypes().size();
+	const auto left_cols = children.getAt(0).get().GetTypes().size();
 	auto &chunk = state.unprojected;
 	do {
 		SelectionVector lsel(STANDARD_VECTOR_SIZE);
@@ -1019,7 +1019,7 @@ SourceResultType PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &r
 	}
 
 	// Process LEFT OUTER results
-	const auto left_cols = children[0].get().GetTypes().size();
+	const auto left_cols = children.getAt(0).get().GetTypes().size();
 	while (ie_lstate.left_matches) {
 		const idx_t count = ie_lstate.SelectOuterRows(ie_lstate.left_matches);
 		if (!count) {
@@ -1090,11 +1090,11 @@ void PhysicalIEJoin::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeli
 
 	// Build out RHS first because that is the order the join planner expects.
 	auto rhs_pipeline = child_meta_pipeline.GetBasePipeline();
-	children[1].get().BuildPipelines(*rhs_pipeline, child_meta_pipeline);
+	children.getAt(1).get().BuildPipelines(*rhs_pipeline, child_meta_pipeline);
 
 	// Build out LHS
 	auto &lhs_pipeline = child_meta_pipeline.CreatePipeline();
-	children[0].get().BuildPipelines(lhs_pipeline, child_meta_pipeline);
+	children.getAt(0).get().BuildPipelines(lhs_pipeline, child_meta_pipeline);
 
 	// Despite having the same sink, LHS and everything created after it need their own (same) PipelineFinishEvent
 	child_meta_pipeline.AddFinishEvent(lhs_pipeline);

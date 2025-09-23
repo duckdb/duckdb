@@ -76,7 +76,7 @@ bool PerfectHashJoinExecutor::CanDoPerfectHashJoin(const PhysicalHashJoin &op, c
 	}
 
 	// We bail out if there are nested types on the RHS
-	for (auto &type : op.children[1].get().GetTypes()) {
+	for (auto &type : op.children.getAt(1).get().GetTypes()) {
 		switch (type.InternalType()) {
 		case PhysicalType::STRUCT:
 		case PhysicalType::LIST:

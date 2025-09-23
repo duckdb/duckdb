@@ -210,7 +210,7 @@ PhysicalRangeJoin::PhysicalRangeJoin(PhysicalPlan &physical_plan, LogicalCompari
 	//	Fill out the left projection map.
 	left_projection_map = op.left_projection_map;
 	if (left_projection_map.empty()) {
-		const auto left_count = children[0].get().GetTypes().size();
+		const auto left_count = children.getAt(0).get().GetTypes().size();
 		left_projection_map.reserve(left_count);
 		for (column_t i = 0; i < left_count; ++i) {
 			left_projection_map.emplace_back(i);
@@ -219,7 +219,7 @@ PhysicalRangeJoin::PhysicalRangeJoin(PhysicalPlan &physical_plan, LogicalCompari
 	//	Fill out the right projection map.
 	right_projection_map = op.right_projection_map;
 	if (right_projection_map.empty()) {
-		const auto right_count = children[1].get().GetTypes().size();
+		const auto right_count = children.getAt(1).get().GetTypes().size();
 		right_projection_map.reserve(right_count);
 		for (column_t i = 0; i < right_count; ++i) {
 			right_projection_map.emplace_back(i);
@@ -227,8 +227,8 @@ PhysicalRangeJoin::PhysicalRangeJoin(PhysicalPlan &physical_plan, LogicalCompari
 	}
 
 	//	Construct the unprojected type layout from the children's types
-	unprojected_types = children[0].get().GetTypes();
-	auto &types = children[1].get().GetTypes();
+	unprojected_types = children.getAt(0).get().GetTypes();
+	auto &types = children.getAt(1).get().GetTypes();
 	unprojected_types.insert(unprojected_types.end(), types.begin(), types.end());
 }
 
@@ -329,7 +329,7 @@ void PhysicalRangeJoin::ProjectResult(DataChunk &chunk, DataChunk &result) const
 	for (idx_t i = 0; i < left_projected; ++i) {
 		result.data[i].Reference(chunk.data[left_projection_map[i]]);
 	}
-	const auto left_width = children[0].get().GetTypes().size();
+	const auto left_width = children.getAt(0).get().GetTypes().size();
 	for (idx_t i = 0; i < right_projection_map.size(); ++i) {
 		result.data[left_projected + i].Reference(chunk.data[left_width + right_projection_map[i]]);
 	}

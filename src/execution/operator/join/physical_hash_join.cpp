@@ -52,7 +52,7 @@ PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator 
 		}
 	}
 
-	auto &lhs_input_types = children[0].get().GetTypes();
+	auto &lhs_input_types = children.getAt(0).get().GetTypes();
 
 	// Create a projection map for the LHS (if it was empty), for convenience
 	lhs_output_columns.col_idxs = left_projection_map;
@@ -73,7 +73,7 @@ PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator 
 		return;
 	}
 
-	auto &rhs_input_types = children[1].get().GetTypes();
+	auto &rhs_input_types = children.getAt(1).get().GetTypes();
 
 	// Create a projection map for the RHS (if it was empty), for convenience
 	auto right_projection_map_copy = right_projection_map;
@@ -152,7 +152,7 @@ public:
 		// For external hash join
 		external = ClientConfig::GetConfig(context).force_external;
 		// Set probe types
-		probe_types = op.children[0].get().GetTypes();
+		probe_types = op.children.getAt(0).get().GetTypes();
 		probe_types.emplace_back(LogicalType::HASH);
 
 		if (op.filter_pushdown) {
@@ -447,13 +447,13 @@ void PhysicalHashJoin::PrepareFinalize(ClientContext &context, GlobalSinkState &
 	gstate.total_size =
 	    ht.GetTotalSize(gstate.local_hash_tables, gstate.max_partition_size, gstate.max_partition_count);
 	gstate.probe_side_requirement =
-	    GetPartitioningSpaceRequirement(context, children[0].get().GetTypes(), ht.GetRadixBits(), gstate.num_threads);
+	    GetPartitioningSpaceRequirement(context, children.getAt(0).get().GetTypes(), ht.GetRadixBits(), gstate.num_threads);
 	const auto max_partition_ht_size =
 	    gstate.max_partition_size + gstate.hash_table->PointerTableSize(gstate.max_partition_count);
 	gstate.temporary_memory_state->SetMinimumReservation(max_partition_ht_size + gstate.probe_side_requirement);
 
 	bool all_constant;
-	gstate.temporary_memory_state->SetMaterializationPenalty(GetTupleWidth(children[0].get().GetTypes(), all_constant));
+	gstate.temporary_memory_state->SetMaterializationPenalty(GetTupleWidth(children.getAt(0).get().GetTypes(), all_constant));
 	gstate.temporary_memory_state->SetRemainingSize(gstate.total_size);
 }
 
@@ -1158,7 +1158,7 @@ unique_ptr<LocalSourceState> PhysicalHashJoin::GetLocalSourceState(ExecutionCont
 
 HashJoinGlobalSourceState::HashJoinGlobalSourceState(const PhysicalHashJoin &op, const ClientContext &context)
     : op(op), global_stage(HashJoinSourceStage::INIT), build_chunk_count(0), build_chunk_done(0), probe_chunk_count(0),
-      probe_chunk_done(0), probe_count(op.children[0].get().estimated_cardinality),
+      probe_chunk_done(0), probe_count(op.children.getAt(0).get().estimated_cardinality),
       parallel_scan_chunk_count(context.config.verify_parallelism ? 1 : 120) {
 }
 

@@ -492,7 +492,7 @@ void PhysicalStreamingWindow::ExecuteFunctions(ExecutionContext &context, DataCh
 
 	// Compute window functions
 	const idx_t count = output.size();
-	const column_t input_width = children[0].get().GetTypes().size();
+	const column_t input_width = children.getAt(0).get().GetTypes().size();
 	for (column_t expr_idx = 0; expr_idx < select_list.size(); expr_idx++) {
 		column_t col_idx = input_width + expr_idx;
 		auto &expr = *select_list[expr_idx];

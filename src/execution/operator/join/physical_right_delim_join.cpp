@@ -20,10 +20,10 @@ PhysicalRightDelimJoin::PhysicalRightDelimJoin(PhysicalPlan &physical_plan, Phys
 	D_ASSERT(join.children.size() == 2);
 	// now for the original join
 	// we take its right child, this is the side that we will duplicate eliminate
-	children.push_back(join.children[1]);
+	children.push_back(join.children.getAt(1));
 
 	// we replace it with a PhysicalDummyScan, which contains no data, just the types, it won't be scanned anyway
-	join.children[1] = planner.Make<PhysicalDummyScan>(children[0].get().GetTypes(), estimated_cardinality);
+	join.children.getAt(1) = planner.Make<PhysicalDummyScan>(children.getAt(0).get().GetTypes(), estimated_cardinality);
 }
 
 //===--------------------------------------------------------------------===//
@@ -105,7 +105,7 @@ void PhysicalRightDelimJoin::BuildPipelines(Pipeline &current, MetaPipeline &met
 	sink_state.reset();
 
 	auto &child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, *this);
-	child_meta_pipeline.Build(children[0]);
+	child_meta_pipeline.Build(children.getAt(0));
 
 	D_ASSERT(type == PhysicalOperatorType::RIGHT_DELIM_JOIN);
 	// recurse into the actual join

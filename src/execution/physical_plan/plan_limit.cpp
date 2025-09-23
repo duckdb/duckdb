@@ -21,7 +21,7 @@ bool UseBatchLimit(PhysicalOperator &child_node, BoundLimitNode &limit_val, Boun
 		case PhysicalOperatorType::TABLE_SCAN:
 			return false;
 		case PhysicalOperatorType::PROJECTION:
-			current_ref = current_op.children[0];
+			current_ref = current_op.children.getAt(0);
 			break;
 		default:
 			finished = true;

@@ -143,7 +143,7 @@ bool PhysicalNestedLoopJoin::IsSupported(const vector<JoinCondition> &conditions
 class NestedLoopJoinGlobalState : public GlobalSinkState {
 public:
 	explicit NestedLoopJoinGlobalState(ClientContext &context, const PhysicalNestedLoopJoin &op)
-	    : right_payload_data(context, op.children[1].get().GetTypes()),
+	    : right_payload_data(context, op.children.getAt(1).get().GetTypes()),
 	      right_condition_data(context, op.GetJoinTypes()), has_null(false),
 	      right_outer(PropagatesBuildSide(op.join_type)) {
 		if (op.filter_pushdown) {
@@ -282,7 +282,7 @@ public:
 		auto &allocator = Allocator::Get(context);
 		left_condition.Initialize(allocator, condition_types);
 		right_condition.Initialize(allocator, condition_types);
-		right_payload.Initialize(allocator, op.children[1].get().GetTypes());
+		right_payload.Initialize(allocator, op.children.getAt(1).get().GetTypes());
 		left_outer.Initialize(STANDARD_VECTOR_SIZE);
 	}
 

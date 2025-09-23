@@ -170,7 +170,7 @@ public:
 	FixedBatchCopyState current_task = FixedBatchCopyState::SINKING_DATA;
 
 	void InitializeCollection(ClientContext &context, const PhysicalOperator &op) {
-		collection = make_uniq<ColumnDataCollection>(context, op.children[0].get().GetTypes());
+		collection = make_uniq<ColumnDataCollection>(context, op.children.getAt(0).get().GetTypes());
 		collection->SetPartitionIndex(0); // Makes the buffer manager less likely to spill this data
 		collection->InitializeAppend(append_state);
 		local_memory_usage = 0;
@@ -469,7 +469,7 @@ void PhysicalBatchCopyToFile::RepartitionBatches(ClientContext &context, GlobalS
 			} else {
 				// the collection is too large for a batch - we need to repartition
 				// create an empty collection
-				auto new_collection = make_uniq<ColumnDataCollection>(context, children[0].get().GetTypes());
+				auto new_collection = make_uniq<ColumnDataCollection>(context, children.getAt(0).get().GetTypes());
 				new_collection->SetPartitionIndex(0); // Makes the buffer manager less likely to spill this data
 				append_batch = make_uniq<FixedRawBatchData>(0U, std::move(new_collection));
 			}
@@ -494,7 +494,7 @@ void PhysicalBatchCopyToFile::RepartitionBatches(ClientContext &context, GlobalS
 			// the collection is full - move it to the result and create a new one
 			task_manager.AddTask(make_uniq<PrepareBatchTask>(gstate.scheduled_batch_index++, std::move(append_batch)));
 
-			auto new_collection = make_uniq<ColumnDataCollection>(context, children[0].get().GetTypes());
+			auto new_collection = make_uniq<ColumnDataCollection>(context, children.getAt(0).get().GetTypes());
 			new_collection->SetPartitionIndex(0); // Makes the buffer manager less likely to spill this data
 			append_batch = make_uniq<FixedRawBatchData>(0U, std::move(new_collection));
 			append_batch->collection->InitializeAppend(append_state);
@@ -631,7 +631,7 @@ unique_ptr<LocalSinkState> PhysicalBatchCopyToFile::GetLocalSinkState(ExecutionC
 unique_ptr<GlobalSinkState> PhysicalBatchCopyToFile::GetGlobalSinkState(ClientContext &context) const {
 	// request memory based on the minimum amount of memory per column
 	auto minimum_memory_per_thread =
-	    FixedBatchCopyGlobalState::MINIMUM_MEMORY_PER_COLUMN_PER_THREAD * children[0].get().GetTypes().size();
+	    FixedBatchCopyGlobalState::MINIMUM_MEMORY_PER_COLUMN_PER_THREAD * children.getAt(0).get().GetTypes().size();
 	auto result = make_uniq<FixedBatchCopyGlobalState>(context, minimum_memory_per_thread);
 	if (write_empty_file) {
 		// if we are writing the file also if it is empty - initialize now

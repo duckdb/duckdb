@@ -35,7 +35,7 @@ public:
 class BlockwiseNLJoinGlobalState : public GlobalSinkState {
 public:
 	explicit BlockwiseNLJoinGlobalState(ClientContext &context, const PhysicalBlockwiseNLJoin &op)
-	    : right_chunks(context, op.children[1].get().GetTypes()), right_outer(PropagatesBuildSide(op.join_type)) {
+	    : right_chunks(context, op.children.getAt(1).get().GetTypes()), right_outer(PropagatesBuildSide(op.join_type)) {
 	}
 
 	mutex lock;
@@ -109,10 +109,10 @@ unique_ptr<OperatorState> PhysicalBlockwiseNLJoin::GetOperatorState(ExecutionCon
 	auto result = make_uniq<BlockwiseNLJoinState>(context, gstate.right_chunks, *this);
 	if (join_type == JoinType::SEMI || join_type == JoinType::ANTI) {
 		vector<LogicalType> intermediate_types;
-		for (auto &type : children[0].get().GetTypes()) {
+		for (auto &type : children.getAt(0).get().GetTypes()) {
 			intermediate_types.emplace_back(type);
 		}
-		for (auto &type : children[1].get().GetTypes()) {
+		for (auto &type : children.getAt(1).get().GetTypes()) {
 			intermediate_types.emplace_back(type);
 		}
 		result->intermediate_chunk.Initialize(Allocator::DefaultAllocator(), intermediate_types);

@@ -96,7 +96,7 @@ public:
 			states.push_back(std::move(state));
 		}
 		for (idx_t i = 0; i < 3; i++) {
-			match_results.emplace_back(context.client, op.children[0].get().types);
+			match_results.emplace_back(context.client, op.children.getAt(0).get().types);
 		}
 	}
 

@@ -19,17 +19,17 @@ PhysicalLeftDelimJoin::PhysicalLeftDelimJoin(PhysicalPlan &physical_plan, Physic
 	D_ASSERT(join.children.size() == 2);
 	// now for the original join
 	// we take its left child, this is the side that we will duplicate eliminate
-	children.push_back(join.children[0]);
+	children.push_back(join.children.getAt(0));
 
 	// we replace it with a PhysicalColumnDataScan, that scans the ColumnDataCollection that we keep cached
 	// the actual chunk collection to scan will be created in the LeftDelimJoinGlobalState
 	auto &cached_scan = planner.Make<PhysicalColumnDataScan>(
-	    children[0].get().GetTypes(), PhysicalOperatorType::COLUMN_DATA_SCAN, estimated_cardinality, nullptr);
+	    children.getAt(0).get().GetTypes(), PhysicalOperatorType::COLUMN_DATA_SCAN, estimated_cardinality, nullptr);
 	if (delim_idx.IsValid()) {
 		auto &cast_cached_scan = cached_scan.Cast<PhysicalColumnDataScan>();
 		cast_cached_scan.cte_index = delim_idx.GetIndex();
 	}
-	join.children[0] = cached_scan;
+	join.children.getAt(0) = cached_scan;
 }
 
 //===--------------------------------------------------------------------===//
@@ -38,10 +38,10 @@ PhysicalLeftDelimJoin::PhysicalLeftDelimJoin(PhysicalPlan &physical_plan, Physic
 class LeftDelimJoinGlobalState : public GlobalSinkState {
 public:
 	explicit LeftDelimJoinGlobalState(ClientContext &context, const PhysicalLeftDelimJoin &delim_join)
-	    : lhs_data(context, delim_join.children[0].get().GetTypes()) {
+	    : lhs_data(context, delim_join.children.getAt(0).get().GetTypes()) {
 		D_ASSERT(!delim_join.delim_scans.empty());
 		// set up the delim join chunk to scan in the original join
-		auto &cast_cached_scan = delim_join.join.children[0].get().Cast<PhysicalColumnDataScan>();
+		auto &cast_cached_scan = delim_join.join.children.getAt(0).get().Cast<PhysicalColumnDataScan>();
 		cast_cached_scan.collection = &lhs_data;
 	}
 
@@ -57,7 +57,7 @@ public:
 class LeftDelimJoinLocalState : public LocalSinkState {
 public:
 	explicit LeftDelimJoinLocalState(ClientContext &context, const PhysicalLeftDelimJoin &delim_join)
-	    : lhs_data(context, delim_join.children[0].get().GetTypes()) {
+	    : lhs_data(context, delim_join.children.getAt(0).get().GetTypes()) {
 		lhs_data.InitializeAppend(append_state);
 	}
 
@@ -126,7 +126,7 @@ void PhysicalLeftDelimJoin::BuildPipelines(Pipeline &current, MetaPipeline &meta
 	sink_state.reset();
 
 	auto &child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, *this);
-	child_meta_pipeline.Build(children[0]);
+	child_meta_pipeline.Build(children.getAt(0));
 
 	D_ASSERT(type == PhysicalOperatorType::LEFT_DELIM_JOIN);
 	// recurse into the actual join

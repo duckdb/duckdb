@@ -61,7 +61,7 @@ PhysicalAsOfJoin::PhysicalAsOfJoin(PhysicalPlan &physical_plan, LogicalCompariso
 	//	Fill out the right projection map.
 	right_projection_map = op.right_projection_map;
 	if (right_projection_map.empty()) {
-		const auto right_count = children[1].get().GetTypes().size();
+		const auto right_count = children.getAt(1).get().GetTypes().size();
 		right_projection_map.reserve(right_count);
 		for (column_t i = 0; i < right_count; ++i) {
 			right_projection_map.emplace_back(i);
@@ -75,7 +75,7 @@ PhysicalAsOfJoin::PhysicalAsOfJoin(PhysicalPlan &physical_plan, LogicalCompariso
 class AsOfGlobalSinkState : public GlobalSinkState {
 public:
 	AsOfGlobalSinkState(ClientContext &context, const PhysicalAsOfJoin &op)
-	    : rhs_sink(context, op.rhs_partitions, op.rhs_orders, op.children[1].get().GetTypes(), {},
+	    : rhs_sink(context, op.rhs_partitions, op.rhs_orders, op.children.getAt(1).get().GetTypes(), {},
 	               op.estimated_cardinality),
 	      is_outer(IsRightOuterJoin(op.join_type)), has_null(false) {
 	}
@@ -155,7 +155,7 @@ SinkFinalizeType PhysicalAsOfJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 	// The data is all in so we can initialise the left partitioning.
 	const vector<unique_ptr<BaseStatistics>> partitions_stats;
 	gstate.lhs_sink = make_uniq<PartitionGlobalSinkState>(context, lhs_partitions, lhs_orders,
-	                                                      children[0].get().GetTypes(), partitions_stats, 0U);
+	                                                      children.getAt(0).get().GetTypes(), partitions_stats, 0U);
 	gstate.lhs_sink->SyncPartitioning(gstate.rhs_sink);
 
 	// Find the first group to sort
@@ -203,7 +203,7 @@ public:
 			lhs_executor.AddExpression(*cond.left);
 		}
 
-		lhs_payload.Initialize(allocator, op.children[0].get().GetTypes());
+		lhs_payload.Initialize(allocator, op.children.getAt(0).get().GetTypes());
 		lhs_sel.Initialize();
 		left_outer.Initialize(STANDARD_VECTOR_SIZE);
 
@@ -400,8 +400,8 @@ AsOfProbeBuffer::AsOfProbeBuffer(ClientContext &context, const PhysicalAsOfJoin 
 	                                            partition_stats);
 
 	//	We sort the row numbers of the incoming block, not the rows
-	lhs_payload.Initialize(allocator, op.children[0].get().GetTypes());
-	rhs_payload.Initialize(allocator, op.children[1].get().GetTypes());
+	lhs_payload.Initialize(allocator, op.children.getAt(0).get().GetTypes());
+	rhs_payload.Initialize(allocator, op.children.getAt(1).get().GetTypes());
 
 	lhs_sel.Initialize();
 	left_outer.Initialize(STANDARD_VECTOR_SIZE);
@@ -895,7 +895,7 @@ SourceResultType PhysicalAsOfJoin::GetData(ExecutionContext &context, DataChunk 
 
 		if (result_count > 0) {
 			// if there were any tuples that didn't find a match, output them
-			const idx_t left_column_count = children[0].get().GetTypes().size();
+			const idx_t left_column_count = children.getAt(0).get().GetTypes().size();
 			for (idx_t col_idx = 0; col_idx < left_column_count; ++col_idx) {
 				chunk.data[col_idx].SetVectorType(VectorType::CONSTANT_VECTOR);
 				ConstantVector::SetNull(chunk.data[col_idx], true);

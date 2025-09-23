@@ -290,15 +290,15 @@ void PhysicalRecursiveCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_
 
 	// the LHS of the recursive CTE is our initial state
 	auto &initial_state_pipeline = meta_pipeline.CreateChildMetaPipeline(current, *this);
-	initial_state_pipeline.Build(children[0]);
+	initial_state_pipeline.Build(children.getAt(0));
 
 	// the RHS is the recursive pipeline
 	recursive_meta_pipeline = make_shared_ptr<MetaPipeline>(executor, state, this);
 	recursive_meta_pipeline->SetRecursiveCTE();
-	recursive_meta_pipeline->Build(children[1]);
+	recursive_meta_pipeline->Build(children.getAt(1));
 
 	vector<const_reference<PhysicalOperator>> ops;
-	GatherColumnDataScans(children[1], ops);
+	GatherColumnDataScans(children.getAt(1), ops);
 
 	for (auto op : ops) {
 		auto entry = state.cte_dependencies.find(op);

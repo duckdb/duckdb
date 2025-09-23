@@ -32,7 +32,7 @@ PhysicalOperator &PhysicalPlanGenerator::PlanDelimJoin(LogicalComparisonJoin &op
 	// first gather the scans on the duplicate eliminated data set from the delim side
 	const idx_t delim_idx = op.delim_flipped ? 0 : 1;
 	vector<const_reference<PhysicalOperator>> delim_scans;
-	GatherDelimScans(plan.children[delim_idx], delim_scans, ++this->delim_index);
+	GatherDelimScans(plan.children.getAt(delim_idx), delim_scans, ++this->delim_index);
 	if (delim_scans.empty()) {
 		// no duplicate eliminated scans in the delim side!
 		// in this case we don't need to create a delim join

@@ -19,7 +19,7 @@ PhysicalPositionalJoin::PhysicalPositionalJoin(PhysicalPlan &physical_plan, vect
 class PositionalJoinGlobalState : public GlobalSinkState {
 public:
 	explicit PositionalJoinGlobalState(ClientContext &context, const PhysicalPositionalJoin &op)
-	    : rhs(context, op.children[1].get().GetTypes()), initialized(false), source_offset(0), exhausted(false) {
+	    : rhs(context, op.children.getAt(1).get().GetTypes()), initialized(false), source_offset(0), exhausted(false) {
 		rhs.InitializeAppend(append_state);
 	}
 
@@ -187,7 +187,7 @@ void PhysicalPositionalJoin::BuildPipelines(Pipeline &current, MetaPipeline &met
 }
 
 vector<const_reference<PhysicalOperator>> PhysicalPositionalJoin::GetSources() const {
-	auto result = children[0].get().GetSources();
+	auto result = children.getAt(0).get().GetSources();
 	if (IsSource()) {
 		result.push_back(*this);
 	}

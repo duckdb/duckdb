@@ -228,13 +228,13 @@ void PhysicalOperator::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipe
 
 		// Create a new pipeline starting at the child.
 		auto &child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, *this);
-		child_meta_pipeline.Build(children[0].get());
+		child_meta_pipeline.Build(children.getAt(0).get());
 		return;
 	}
 
 	// Recurse into the child.
 	state.AddPipelineOperator(current, *this);
-	children[0].get().BuildPipelines(current, meta_pipeline);
+	children.getAt(0).get().BuildPipelines(current, meta_pipeline);
 }
 
 vector<const_reference<PhysicalOperator>> PhysicalOperator::GetSources() const {
@@ -255,7 +255,7 @@ vector<const_reference<PhysicalOperator>> PhysicalOperator::GetSources() const {
 	}
 
 	// Recurse into the child.
-	return children[0].get().GetSources();
+	return children.getAt(0).get().GetSources();
 }
 
 bool PhysicalOperator::AllSourcesSupportBatchIndex() const {

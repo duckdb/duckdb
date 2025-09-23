@@ -74,12 +74,12 @@ static bool CanUsePartitionedAggregate(ClientContext &context, LogicalAggregate 
 			}
 			// continue into child node with new columns
 			partition_columns = std::move(new_columns);
-			child_ref = child_op.children[0];
+			child_ref = child_op.children.getAt(0);
 			break;
 		}
 		case PhysicalOperatorType::FILTER:
 			// continue into child operators
-			child_ref = child_op.children[0];
+			child_ref = child_op.children.getAt(0);
 			break;
 		default:
 			// unsupported operator for partition pass-through
