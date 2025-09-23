@@ -691,11 +691,12 @@ SecretStorageSpecifier <- 'IN' Identifier
 
 CreateViewStmt <- 'RECURSIVE'? 'VIEW' IfNotExists? QualifiedName InsertColumnList? 'AS' SelectStatement
 
-DescribeStatement <- ShowSelect / ShowAllTables / ShowQualifiedName
+DescribeStatement <- ShowTables / ShowSelect / ShowAllTables / ShowQualifiedName
 
 ShowSelect <- ShowOrDescribeOrSummarize SelectStatement
 ShowAllTables <- ShowOrDescribe 'ALL' 'TABLES'
 ShowQualifiedName <- ShowOrDescribeOrSummarize (BaseTableName / StringLiteral)?
+ShowTables <- ShowOrDescribe 'TABLES' 'FROM' QualifiedName
 
 ShowOrDescribeOrSummarize <- ShowOrDescribe / 'SUMMARIZE'
 ShowOrDescribe <- 'SHOW' / 'DESCRIBE' / 'DESC'
@@ -813,9 +814,10 @@ Generated <- 'GENERATED' AlwaysOrByDefault?
 AlwaysOrByDefault <- 'ALWAYS' / ('BY' 'DEFAULT')
 GeneratedColumnType <- 'VIRTUAL' / 'STORED'
 
-CommitAction <- 'ON' 'COMMIT' 'PRESERVE' 'ROWS'
+CommitAction <- 'ON' 'COMMIT' PreserveOrDelete
+PreserveOrDelete <- ('PRESERVE' / 'DELETE') 'ROWS'
 
-CreateIndexStmt <- Unique? 'INDEX' IfNotExists? IndexName? 'ON' BaseTableName IndexType? Parens(List(IndexElement)) WithList?
+CreateIndexStmt <- Unique? 'INDEX' IfNotExists? IndexName? 'ON' BaseTableName IndexType? Parens(List(IndexElement)) WithList? WhereClause?
 
 WithList <- 'WITH' Parens(List(RelOption)) / Oids
 Oids <- ('WITH' / 'WITHOUT') 'OIDS'
@@ -951,12 +953,13 @@ SchemaReservedTable <- SchemaQualification ReservedTableName
 CatalogReservedSchemaTable <- CatalogQualification ReservedSchemaQualification ReservedTableName
 
 TableFunction <- TableFunctionLateralOpt / TableFunctionAliasColon
-TableFunctionLateralOpt <- Lateral? QualifiedTableFunction TableFunctionArguments TableAlias?
-TableFunctionAliasColon <- TableAliasColon QualifiedTableFunction TableFunctionArguments
+TableFunctionLateralOpt <- Lateral? QualifiedTableFunction TableFunctionArguments WithOrdinality? TableAlias?
+TableFunctionAliasColon <- TableAliasColon QualifiedTableFunction TableFunctionArguments WithOrdinality?
+WithOrdinality <- 'WITH' 'ORDINALITY'
 QualifiedTableFunction <- CatalogQualification? SchemaQualification? TableFunctionName
 TableFunctionArguments <- Parens(List(FunctionArgument)?)
 FunctionArgument <- NamedParameter / Expression
-NamedParameter <- TypeName NamedParameterAssignment Expression
+NamedParameter <- TypeName Type? NamedParameterAssignment Expression
 NamedParameterAssignment <- ':=' / '=>'
 
 TableAlias <- 'AS'? (Identifier / StringLiteral) ColumnAliases?
@@ -1015,8 +1018,11 @@ OrderByExpressions <- List(OrderByExpression) / OrderByAll
 OrderByAll <- 'ALL' DescOrAsc? NullsFirstOrLast?
 
 LimitClause <- 'LIMIT' LimitValue
-OffsetClause <- 'OFFSET' LimitValue
+OffsetClause <- 'OFFSET' OffsetValue
 LimitValue <- 'ALL' / (NumberLiteral 'PERCENT') / (Expression '%'?)
+OffsetValue <- Expression RowOrRows?
+RowOrRows <- 'ROW' / 'ROWS'
+
 
 AliasedExpression <- (ColId ':' Expression) / (Expression 'AS' ColLabelOrString) / (Expression Identifier?)
 
@@ -1076,7 +1082,7 @@ FromOrTo <- 'FROM' / 'TO'
 
 CopySelect <- Parens(SelectStatement) 'TO' CopyFileName CopyOptions?
 
-CopyFileName <- StringLiteral / Identifier / (Identifier '.' ColId)
+CopyFileName <- Expression / StringLiteral / Identifier / (Identifier '.' ColId)
 CopyOptions <- 'WITH'? (Parens(GenericCopyOptionList) / (SpecializedOptions*))
 SpecializedOptions <-
 	'BINARY' / 'FREEZE' / 'OIDS' / 'CSV' / 'HEADER' /
@@ -1103,9 +1109,10 @@ SchemaOrData <- 'SCHEMA' / 'DATA'
 AlterStatement <- 'ALTER' AlterOptions
 
 
-AlterOptions <- AlterTableStmt / AlterViewStmt / AlterSequenceStmt
+AlterOptions <- AlterTableStmt / AlterViewStmt / AlterSequenceStmt / AlterDatabaseStmt / AlterSchemaStmt
 
 AlterTableStmt <- 'TABLE' IfExists? BaseTableName AlterTableOptions
+AlterSchemaStmt <- 'SCHEMA' IfExists? QualifiedName RenameAlter
 
 AlterTableOptions <- AddColumn / DropColumn / AlterColumn / AddConstraint / ChangeNullability / RenameColumn / RenameAlter / SetPartitionedBy / ResetPartitionedBy / SetSortedBy / ResetSortedBy
 
@@ -1118,7 +1125,7 @@ NestedColumnName <- (Identifier '.')* ColumnName
 RenameAlter <- 'RENAME' 'TO' Identifier
 SetPartitionedBy <- 'SET' 'PARTITIONED' 'BY' Parens(List(Expression))
 ResetPartitionedBy <- 'RESET' 'PARTITIONED' 'BY'
-SetSortedBy <- 'SET' 'SORTED' 'BY' OrderByExpressions
+SetSortedBy <- 'SET' 'SORTED' 'BY' Parens(OrderByExpressions)
 ResetSortedBy <- 'RESET' 'SORTED' 'BY'
 
 AlterColumnEntry <- AddOrDropDefault / ChangeNullability / AlterType
@@ -1141,6 +1148,10 @@ QualifiedSequenceName <- CatalogQualification? SchemaQualification? SequenceName
 
 AlterSequenceOptions <- RenameAlter / SetSequenceOption
 SetSequenceOption <- List(SequenceOption)
+
+AlterDatabaseStmt <- 'DATABASE' IfExists? Identifier RenameDatabaseAlter
+
+RenameDatabaseAlter <- 'RENAME' 'TO' Identifier
 
 CreateSequenceStmt <- 'SEQUENCE' IfNotExists? QualifiedName SequenceOption*
 
@@ -1218,7 +1229,7 @@ SecretName <- ColId
 NumberLiteral <- < [+-]?[0-9]*([.][0-9]*)? >
 StringLiteral <- '\'' [^\']* '\''
 
-Type <- (TimeType / IntervalType / BitType / RowType / MapType / UnionType / NumericType / SimpleType) ArrayBounds*
+Type <- (TimeType / IntervalType / BitType / RowType / MapType / UnionType / NumericType / SetofType / SimpleType) ArrayBounds*
 SimpleType <- (QualifiedTypeName / CharacterType) TypeModifiers?
 CharacterType <- ('CHARACTER' 'VARYING'?) /
                  ('CHAR' 'VARYING'?) /
@@ -1281,6 +1292,7 @@ QualifiedTypeName <- CatalogQualification? SchemaQualification? TypeName
 TypeModifiers <- Parens(List(Expression)?)
 RowType <- RowOrStruct Parens(List(ColIdType))
 UnionType <- 'UNION' Parens(List(ColIdType))
+SetofType <- 'SETOF' Type
 MapType <- 'MAP' Parens(List(Type))
 ColIdType <- ColId Type
 ArrayBounds <- ('[' NumberLiteral? ']') / 'ARRAY'
@@ -1310,7 +1322,7 @@ MacroOrFunction <- 'MACRO' / 'FUNCTION'
 MacroDefinition <- Parens(MacroParameters?) 'AS' (TableMacroDefinition / ScalarMacroDefinition)
 
 MacroParameters <- List(MacroParameter)
-MacroParameter <- NamedParameter / TypeFuncName
+MacroParameter <- NamedParameter / (TypeFuncName Type?)
 
 ScalarMacroDefinition <- Expression
 TableMacroDefinition <- 'TABLE' SelectStatement

@@ -258,6 +258,7 @@ public:
 	void VacuumIndexes();
 	void VerifyIndexBuffers();
 	void CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count);
+	void Destroy();
 
 	string GetTableName() const;
 	void SetTableName(string new_name);

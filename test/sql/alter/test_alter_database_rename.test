@@ -38,7 +38,9 @@ ALTER DATABASE another_db RENAME TO renamed_db;
 statement error
 ALTER DATABSE renamed_db RENAME TO system;
 ----
+Parser Error: syntax error at or near "DATABSE"
 
 statement error
 ALTER DATABSE renamed_db RENAME TO temp;
 ----
+Parser Error: syntax error at or near "DATABSE"

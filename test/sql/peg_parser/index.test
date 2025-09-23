@@ -5,6 +5,9 @@
 require autocomplete
 
 statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$create unique index part_comp_key_index on insertconflicttest(key, fruit) where 1;$TEST_PEG_PARSER$);
+
+statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$CREATE INDEX my_ip_idx ON t1 USING HNSW (vec) WITH (metric = 'ip');$TEST_PEG_PARSER$);
 
 statement ok
