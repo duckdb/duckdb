@@ -1,0 +1,37 @@
+# name: test/optimizer/test_try_cast_decimal.test
+# description: Test try cast inconsistency
+# group: [optimizer]
+
+statement ok
+pragma enable_verification
+
+statement ok
+CREATE  TABLE  t0(c0 INT , c1 BOOLEAN , PRIMARY KEY(c0));
+
+statement ok
+INSERT INTO t0(c0, c1) VALUES (890608529, false);
+
+query I
+SELECT (true AND((TRY_CAST(t0.c0 AS DECIMAL(10,2)) > 0))) AS r FROM t0;
+----
+NULL
+
+query I
+SELECT (((TRY_CAST(t0.c0 AS DECIMAL(10,2)) > 0))) AS r FROM t0;
+----
+NULL
+
+query I
+SELECT (true OR((TRY_CAST(t0.c0 AS DECIMAL(10,2)) > 0))) AS r FROM t0;
+----
+true
+
+statement error
+SELECT (((CAST(t0.c0 AS DECIMAL(10,2)) > 0))) AS r FROM t0;
+----
+Conversion Error
+
+query I
+SELECT t0.c1 FROM t0 WHERE (true AND((TRY_CAST(t0.c0 AS DECIMAL(10,2)) > 0)));
+----
+

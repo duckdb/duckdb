@@ -1,0 +1,126 @@
+{
+  "description": "Run with verification enabled (suitable for debug builds).",
+  "on_init": "ATTACH '{TEST_DIR}/unittester_mashup.db' as ____db (STORAGE_VERSION 'v1.4.0'); DROP SCHEMA IF EXISTS ____db.\"{BASE_TEST_NAME}\" CASCADE; CREATE SCHEMA ____db.\"{BASE_TEST_NAME}\";",
+  "on_new_connection": "USE ____db.\"{BASE_TEST_NAME}\";",
+  "on_load": "skip",
+  "skip_compiled": "true",
+  "skip_error_messages": [
+    "Catalog Error", "Unable to connect"
+  ],
+  "skip_tests": [
+    {
+      "reason": "Tests that relies on specific DB/schema name",
+      "paths": [
+        "test/sql/attach/show_databases.test",
+        "test/sql/table_function/duckdb_sequences.test",
+        "test/sql/table_function/sqlite_master_quotes.test",
+        "test/sql/table_function/duckdb_constraints_fk.test",
+        "test/sql/table_function/duckdb_tables.test",
+        "test/sql/table_function/duckdb_schemas.test",
+        "test/sql/table_function/sqlite_master.test",
+        "test/sql/table_function/duckdb_databases.test",
+        "test/sql/table_function/duckdb_views.test",
+        "test/sql/keywords/keywords_in_expressions.test",
+        "test/sql/attach/show_databases.test",
+        "test/sql/attach/attach_show_all_tables.test",
+        "test/sql/attach/attach_table_info.test",
+        "test/sql/pg_catalog/sqlalchemy.test",
+        "test/sql/pg_catalog/system_functions.test",
+        "test/sql/storage/temp_directory/max_swap_space_error.test",
+        "test/sql/pragma/test_show_tables_temp_views.test",
+        "test/sql/catalog/view/test_view_sql.test",
+        "test/sql/catalog/view/test_view_sql_with_dependencies.test",
+        "test/sql/catalog/function/test_table_macro.test",
+        "test/sql/catalog/test_set_search_path.test",
+        "test/sql/generated_columns/virtual/group_by.test",
+        "test/sql/show_select/test_describe_all.test",
+        "test/sql/settings/drop_set_schema.test",
+        "test/fuzzer/sqlsmith/current_schemas_null.test",
+        "test/sql/attach/attach_issue_7660.test",
+        "test/sql/attach/attach_issue7711.test",
+        "test/sql/attach/attach_table_constraints.test"
+      ]
+    },
+    {
+      "reason": "Tests that list types / tables / schemas DB-wide, so can't come with extra schemas",
+      "paths": [
+        "test/sql/settings/setting_preserve_identifier_case.test",
+        "test/sql/types/enum/test_enum_duckdb_types.test",
+        "test/sql/generated_columns/virtual/gcol_duckdb_columns.test",
+        "test/sql/constraints/foreignkey/fk_4365.test",
+        "test/sql/catalog/sequence/test_duckdb_sequences.test",
+        "test/sql/catalog/comment_on_pg_description.test",
+        "test/sql/catalog/dependencies/test_alter_owning_table.test",
+        "test/sql/catalog/comment_on_extended.test",
+        "test/sql/catalog/comment_on_dependencies.test",
+        "test/sql/constraints/foreignkey/fk_4365.test",
+        "test/sql/pg_catalog/pg_views.test",
+        "test/sql/pg_catalog/pg_constraint.test",
+        "test/sql/pg_catalog/pg_sequence.test",
+        "test/sql/pg_catalog/pg_attribute.test",
+        "test/sql/catalog/sequence/test_duckdb_sequences.test",
+        "test/sql/pg_catalog/pg_sequences.test",
+        "test/sql/attach/attach_show_table.test",
+        "test/sql/attach/attach_catalog_error_early_out.test",
+        "test/sql/index/art/create_drop/test_art_create_if_exists.test",
+        "test/sql/export/export_indexes.test",
+        "test/sql/copy_database/copy_database_with_index.test",
+        "test/sql/table_function/information_schema.test",
+        "test/sql/table_function/information_schema_issue12867.test",
+        "test/sql/table_function/duckdb_indexes.test",
+        "test/sql/table_function/duckdb_constraints.test",
+        "test/sql/table_function/information_schema_fkey_constraint_names.test",
+        "test/sql/table_function/duckdb_columns.test",
+        "test/sql/table_function/duckdb_constraints_issue11284.test",
+        "test/sql/table_function/test_information_schema_columns.test",
+        "test/sql/table_function/duckdb_constraints_issue12863.test"
+      ]
+    },
+    {
+      "reason": "Tests that rely on DB to be basically empty to start with",
+      "paths": [
+        "test/sql/alter/rename_table/test_rename_table.test",
+        "test/sql/alter/rename_table/test_rename_table_transactions.test"
+      ]
+    },
+    {
+      "reason": "Weird EXPORT to CSV/parquet corner case: Too many open files",
+      "paths": [
+        "test/sql/index/art/storage/test_art_import.test",
+        "test/sql/copy/csv/test_export_force_quotes.test",
+        "test/sql/copy/csv/test_export_not_null.test",
+        "test/sql/export/export_quoted_union.test",
+        "test/sql/export/export_external_access.test",
+        "test/sql/export/empty_export.test",
+        "test/sql/export/export_quoted_enum.test",
+        "test/sql/export/parquet_export.test",
+        "test/sql/export/export_quoted_structs.test",
+        "test/sql/export/export_hive_path.test",
+        "test/sql/export/export_compression_level.test",
+        "test/sql/export/export_generated_columns.test",
+        "test/sql/export/parquet/export_parquet_struct.test",
+        "test/sql/export/parquet/export_parquet_list.test",
+        "test/sql/export/parquet/export_parquet_map.test",
+        "test/sql/export/parquet/export_parquet_enum.test",
+        "test/sql/export/parquet/export_parquet_bit.test",
+        "test/sql/export/parquet/export_parquet_hugeint.test",
+        "test/sql/export/parquet/export_parquet_union.test"
+      ]
+    },
+    {
+      "reason": "Test that rely on empty directory",
+      "paths": [
+        "test/sql/copy/partitioned/hive_partitioned_auto_detect.test",
+        "test/sql/copy/parquet/writer/partition_without_hive.test",
+        "test/sql/copy/parquet/writer/skip_empty_write.test"
+      ]
+    },
+    {
+      "reason": "Tests that rely on exporting the whole database, that has in the meanime exploded in size",
+      "paths": [
+        "test/sql/constraints/foreignkey/test_fk_export.test"
+      ]
+    }
+
+  ]
+}

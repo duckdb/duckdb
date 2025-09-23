@@ -48,7 +48,7 @@ for version_dir in $BASE_DIR/*; do
             echo "Processing extension: $ext_name (architecture: $architecture, version: $duckdb_version, path: $f)"
             
             # args: <name> <extension_version> <duckdb_version> <architecture> <s3_bucket> <copy_to_latest> <copy_to_versioned> [<path_to_ext>]
-            $script_dir/extension-upload-single.sh $ext_name "" "$duckdb_version" "$architecture" "duckdb-extensions" true false "$(dirname "$f")"
+            $script_dir/extension-upload-single.sh $ext_name "" "$duckdb_version" "$architecture" "duckdb-core-extensions" true false "$(dirname "$f")"
         done
         echo ""
     done
