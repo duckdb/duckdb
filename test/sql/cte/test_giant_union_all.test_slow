@@ -3,9 +3,6 @@
 # group: [cte]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE VIEW union_view AS
 SELECT 0 i
 UNION ALL
@@ -2006,7 +2003,6 @@ UNION ALL
 SELECT 998
 UNION ALL
 SELECT 999
-
 
 query IIII
 SELECT COUNT(*), MIN(i), MAX(i), AVG(i) FROM union_view

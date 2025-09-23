@@ -50,8 +50,8 @@ public:
 	SetOperationNode(SetOperationType setop_type, unique_ptr<QueryNode> left, unique_ptr<QueryNode> right,
 	                 vector<unique_ptr<QueryNode>> children, bool setop_all);
 
-	unique_ptr<QueryNode> SerializeChildNode(idx_t index) const;
-	vector<unique_ptr<QueryNode>> SerializeChildNodes() const;
+	unique_ptr<QueryNode> SerializeChildNode(Serializer &serializer, idx_t index) const;
+	bool SerializeChildList(Serializer &serializer) const;
 };
 
 } // namespace duckdb
