@@ -117,7 +117,7 @@ public:
 	//! The client context
 	ClientContext &context;
 	//! A mapping of names to common table expressions
-	case_insensitive_map_t<reference<CommonTableExpressionInfo>> CTE_bindings; // NOLINT
+	case_insensitive_set_t CTE_bindings; // NOLINT
 	//! The CTEs that have already been bound
 	reference_set_t<CommonTableExpressionInfo> bound_ctes;
 	//! The bind context
@@ -183,10 +183,11 @@ public:
 	                                           const EntryLookupInfo &lookup_info, OnEntryNotFound on_entry_not_found);
 
 	//! Add a common table expression to the binder
-	void AddCTE(const string &name, CommonTableExpressionInfo &cte);
+	void AddCTE(const string &name);
 	//! Find all candidate common table expression by name; returns empty vector if none exists
-	vector<reference<CommonTableExpressionInfo>> FindCTE(const string &name, bool skip = false);
+	vector<reference<Binding>> FindCTE(const string &name, bool skip = false);
 
+	bool CTEExists(const string &name);
 	bool CTEIsAlreadyBound(CommonTableExpressionInfo &cte);
 
 	//! Add the view to the set of currently bound views - used for detecting recursive view definitions
