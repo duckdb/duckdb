@@ -7,6 +7,9 @@
 namespace duckdb {
 
 static idx_t CalculateByteLength(idx_t value) {
+	if (value == 0) {
+		return 1;
+	}
 	auto value_data = reinterpret_cast<data_ptr_t>(&value);
 	idx_t irrelevant_bytes = 0;
 	//! Check how many of the most significant bytes are 0
