@@ -33,15 +33,16 @@ unique_ptr<ColumnWriterState> VariantColumnWriter::InitializeWriteState(duckdb_p
 }
 
 bool VariantColumnWriter::HasAnalyze() {
+	for (auto &child_writer : child_writers) {
+		if (child_writer->HasAnalyze()) {
+			return true;
+		}
+	}
 	return false;
 }
 
 void VariantColumnWriter::Analyze(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count) {
-	throw NotImplementedException("VariantColumnWriter::Analyze");
-	// auto &state = state_p.Cast<VariantColumnWriterState>();
-	// auto &list_child = ListVector::GetEntry(vector);
-	// auto list_count = ListVector::GetListSize(vector);
-	// child_writer->Analyze(*state.child_state, &state_p, list_child, list_count);
+	throw NotImplementedException("VARIANT requires transforming the input chunk, which can't be done yet");
 }
 
 void VariantColumnWriter::FinalizeAnalyze(ColumnWriterState &state_p) {
@@ -59,6 +60,17 @@ void VariantColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState 
 	auto &state = state_p.Cast<VariantColumnWriterState>();
 	auto &metadata_state = *state.child_states[0];
 	auto &value_state = *state.child_states[1];
+
+	auto &validity = FlatVector::Validity(vector);
+	if (parent) {
+		// propagate empty entries from the parent
+		if (state.is_empty.size() < parent->is_empty.size()) {
+			state.is_empty.insert(state.is_empty.end(), parent->is_empty.begin() + state.is_empty.size(),
+			                      parent->is_empty.end());
+		}
+	}
+	HandleRepeatLevels(state_p, parent, count);
+	HandleDefineLevels(state_p, parent, validity, count, PARQUET_DEFINE_VALID, MaxDefine() - 1);
 
 	metadata_writer.Prepare(metadata_state, &state_p, vector, count, vector_can_span_multiple_pages);
 	value_writer.Prepare(value_state, &state_p, vector, count, vector_can_span_multiple_pages);
@@ -78,7 +90,7 @@ void VariantColumnWriter::BeginWrite(ColumnWriterState &state_p) {
 }
 
 static idx_t CalculateByteLength(idx_t value) {
-	auto value_data = reinterpret_cast<uint8_t *>(&value);
+	auto value_data = reinterpret_cast<data_ptr_t>(&value);
 	idx_t irrelevant_bytes = 0;
 	//! Check how many of the most significant bytes are 0
 	for (idx_t i = sizeof(idx_t); i > 0 && value_data[i - 1] == 0; i--) {
@@ -112,6 +124,7 @@ static void CreateMetadata(Vector &input, Vector &metadata, idx_t count) {
 
 	//! NOTE: the parquet variant is limited to a max dictionary size of NumericLimits<uint32_t>::Maximum()
 	//! Whereas we can have NumericLimits<uint32_t>::Maximum() *per* string in DuckDB
+	auto metadata_data = FlatVector::GetData<string_t>(metadata);
 	auto &validity = FlatVector::Validity(metadata);
 	for (idx_t row = 0; row < count; row++) {
 		if (!variant.RowIsValid(row)) {
@@ -133,26 +146,24 @@ static void CreateMetadata(Vector &input, Vector &metadata, idx_t count) {
 		auto byte_length = CalculateByteLength(dictionary_size);
 		auto total_length = 1 + (byte_length * (dictionary_count + 2)) + dictionary_size;
 
-		auto metadata_blob = StringVector::EmptyString(metadata, total_length);
+		metadata_data[row] = StringVector::EmptyString(metadata, total_length);
+		auto &metadata_blob = metadata_data[row];
 		auto metadata_blob_data = metadata_blob.GetDataWriteable();
 
 		metadata_blob_data[0] = EncodeMetadataHeader(byte_length);
-		memcpy(metadata_blob_data + 1, reinterpret_cast<data_ptr_t>(&dictionary_count) + (sizeof(idx_t) - byte_length),
-		       byte_length);
+		memcpy(metadata_blob_data + 1, reinterpret_cast<data_ptr_t>(&dictionary_count), byte_length);
 
 		auto offset_ptr = metadata_blob_data + 1 + byte_length;
 		auto string_ptr = metadata_blob_data + 1 + byte_length + ((dictionary_count + 1) * byte_length);
 		idx_t total_offset = 0;
 		for (idx_t i = 0; i < dictionary_count; i++) {
-			memcpy(offset_ptr + (i * byte_length),
-			       reinterpret_cast<data_ptr_t>(&total_offset) + (sizeof(idx_t) - byte_length), byte_length);
+			memcpy(offset_ptr + (i * byte_length), reinterpret_cast<data_ptr_t>(&total_offset), byte_length);
 			auto &key = variant.GetKey(row, i);
 
 			memcpy(string_ptr + total_offset, key.GetData(), key.GetSize());
 			total_offset += key.GetSize();
 		}
-		memcpy(offset_ptr + (dictionary_count * byte_length),
-		       reinterpret_cast<data_ptr_t>(&total_offset) + (sizeof(idx_t) - byte_length), byte_length);
+		memcpy(offset_ptr + (dictionary_count * byte_length), reinterpret_cast<data_ptr_t>(&total_offset), byte_length);
 		D_ASSERT(offset_ptr + ((dictionary_count + 1) * byte_length) == string_ptr);
 		D_ASSERT(string_ptr + total_offset == metadata_blob_data + total_length);
 		metadata_blob.SetSizeAndFinalize(total_length, total_length);
@@ -510,8 +521,7 @@ static void WriteValueData(const UnifiedVariantVectorData &variant, idx_t row, u
 		//! Write the 'field_id' entries
 		for (idx_t i = 0; i < nested_data.child_count; i++) {
 			auto keys_index = variant.GetKeysIndex(row, i + nested_data.children_idx);
-			memcpy(value_data, reinterpret_cast<uint8_t *>(&keys_index) + (sizeof(idx_t) - field_id_size),
-			       field_id_size);
+			memcpy(value_data, reinterpret_cast<data_ptr_t>(&keys_index), field_id_size);
 			value_data += field_id_size;
 		}
 
@@ -521,13 +531,11 @@ static void WriteValueData(const UnifiedVariantVectorData &variant, idx_t row, u
 		for (idx_t i = 0; i < nested_data.child_count; i++) {
 			auto values_index = variant.GetValuesIndex(row, i + nested_data.children_idx);
 
-			memcpy(value_data, reinterpret_cast<uint8_t *>(&total_offset) + (sizeof(idx_t) - field_offset_size),
-			       field_offset_size);
+			memcpy(value_data, reinterpret_cast<data_ptr_t>(&total_offset), field_offset_size);
 			value_data += field_offset_size;
 			WriteValueData(variant, row, values_index, children_ptr, offsets, offset_index);
 		}
-		memcpy(value_data, reinterpret_cast<uint8_t *>(&total_offset) + (sizeof(idx_t) - field_offset_size),
-		       field_offset_size);
+		memcpy(value_data, reinterpret_cast<data_ptr_t>(&total_offset), field_offset_size);
 		value_data = children_ptr;
 	} else if (type_id == VariantLogicalType::ARRAY) {
 		auto nested_data = VariantUtils::DecodeNestedData(variant, row, values_index);
@@ -564,13 +572,11 @@ static void WriteValueData(const UnifiedVariantVectorData &variant, idx_t row, u
 		for (idx_t i = 0; i < nested_data.child_count; i++) {
 			auto values_index = variant.GetValuesIndex(row, i + nested_data.children_idx);
 
-			memcpy(value_data, reinterpret_cast<uint8_t *>(&total_offset) + (sizeof(idx_t) - field_offset_size),
-			       field_offset_size);
+			memcpy(value_data, reinterpret_cast<data_ptr_t>(&total_offset), field_offset_size);
 			value_data += field_offset_size;
 			WriteValueData(variant, row, values_index, children_ptr, offsets, offset_index);
 		}
-		memcpy(value_data, reinterpret_cast<uint8_t *>(&total_offset) + (sizeof(idx_t) - field_offset_size),
-		       field_offset_size);
+		memcpy(value_data, reinterpret_cast<data_ptr_t>(&total_offset), field_offset_size);
 		value_data = children_ptr;
 	} else {
 		WritePrimitiveValueData(variant, row, values_index, value_data, offsets, offset_index);
@@ -619,11 +625,8 @@ static void DuckDBVariantToParquetVariant(Vector &input, DataChunk &result, idx_
 	// - metadata = BLOB
 	// - value = BLOB
 
-	Vector metadata_sizes(LogicalType::UINTEGER, true, true, count);
-	Vector value_sizes(LogicalType::UINTEGER, true, true, count);
-
-	CreateMetadata(input, metadata_sizes, count);
-	CreateValues(input, value_sizes, count);
+	CreateMetadata(input, result.data[0], count);
+	CreateValues(input, result.data[1], count);
 
 	result.SetCardinality(count);
 }
