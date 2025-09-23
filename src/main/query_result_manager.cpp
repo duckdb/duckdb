@@ -17,11 +17,20 @@ ManagedQueryResult::~ManagedQueryResult() {
 	}
 }
 
-ColumnDataCollection &ManagedQueryResult::Collection() {
+void ManagedQueryResult::ValidateResult() {
 	if (!collection) {
 		throw ConnectionException("Trying to access a query result after the database instance has been closed");
 	}
+}
+
+ColumnDataCollection &ManagedQueryResult::Collection() {
+	ValidateResult();
 	return *collection;
+}
+
+ColumnDataScanState &ManagedQueryResult::ScanState() {
+	ValidateResult();
+	return scan_state;
 }
 
 QueryResultManager::QueryResultManager(DatabaseInstance &db_p) : db(db_p.shared_from_this()) {
@@ -31,6 +40,7 @@ QueryResultManager::~QueryResultManager() {
 	for (auto &open_result : open_results) {
 		auto open_result_ref = open_result.second.lock();
 		if (open_result_ref) {
+			open_result_ref->scan_state.current_chunk_state.handles.clear();
 			open_result_ref->collection.reset();
 		}
 	}

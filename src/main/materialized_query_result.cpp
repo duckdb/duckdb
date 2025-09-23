@@ -24,10 +24,10 @@ string MaterializedQueryResult::ToString() {
 	string result;
 	if (success) {
 		result = HeaderToString();
-		auto &coll = Collection();
-		result += "[ Rows: " + to_string(coll.Count()) + "]\n";
-		for (auto &row : coll.Rows()) {
-			for (idx_t col_idx = 0; col_idx < coll.ColumnCount(); col_idx++) {
+		auto &collection = Collection();
+		result += "[ Rows: " + to_string(collection.Count()) + "]\n";
+		for (auto &row : collection.Rows()) {
+			for (idx_t col_idx = 0; col_idx < collection.ColumnCount(); col_idx++) {
 				if (col_idx > 0) {
 					result += "\t";
 				}
@@ -69,7 +69,7 @@ bool MaterializedQueryResult::HasCollection() const {
 	return managed_result.get();
 }
 
-ColumnDataCollection &MaterializedQueryResult::Collection() const {
+void MaterializedQueryResult::ValidateManagedResultInternal() const {
 	if (HasError()) {
 		throw InvalidInputException("Attempting to get collection from an unsuccessful query result\n: Error %s",
 		                            GetError());
@@ -77,17 +77,15 @@ ColumnDataCollection &MaterializedQueryResult::Collection() const {
 	if (!HasCollection()) {
 		throw InternalException("Missing collection from materialized query result");
 	}
+}
+
+ColumnDataCollection &MaterializedQueryResult::Collection() const {
+	ValidateManagedResultInternal();
 	return managed_result->Collection();
 }
 
 shared_ptr<ManagedQueryResult> MaterializedQueryResult::TakeManagedResult() {
-	if (HasError()) {
-		throw InvalidInputException("Attempting to get collection from an unsuccessful query result\n: Error %s",
-		                            GetError());
-	}
-	if (!HasCollection()) {
-		throw InternalException("Missing collection from materialized query result");
-	}
+	ValidateManagedResultInternal();
 	return std::move(managed_result);
 }
 
@@ -97,8 +95,10 @@ unique_ptr<DataChunk> MaterializedQueryResult::Fetch() {
 
 unique_ptr<DataChunk> MaterializedQueryResult::FetchRaw() {
 	auto &collection = Collection();
+	auto &scan_state = managed_result->ScanState();
 	auto result = make_uniq<DataChunk>();
-	collection.InitializeScanChunk(*result);
+	// Use default allocator so the chunk is independently usable even after the DB allocator is destroyed
+	collection.InitializeScanChunk(Allocator::DefaultAllocator(), *result);
 	if (!scan_initialized) {
 		// we disallow zero copy so the chunk is independently usable even after the result is destroyed
 		collection.InitializeScan(scan_state, ColumnDataScanProperties::DISALLOW_ZERO_COPY);

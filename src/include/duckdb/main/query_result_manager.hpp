@@ -30,10 +30,15 @@ public:
 
 public:
 	ColumnDataCollection &Collection();
+	ColumnDataScanState &ScanState();
+
+private:
+	void ValidateResult();
 
 private:
 	weak_ptr<DatabaseInstance> db;
 	unique_ptr<ColumnDataCollection> collection;
+	ColumnDataScanState scan_state;
 };
 
 class QueryResultManager {

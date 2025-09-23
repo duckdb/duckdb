@@ -60,12 +60,12 @@ public:
 	shared_ptr<ManagedQueryResult> TakeManagedResult();
 
 private:
-	weak_ptr<DatabaseInstance> db;
+	void ValidateManagedResultInternal() const;
+
+private:
 	shared_ptr<ManagedQueryResult> managed_result;
 	//! Row collection, only created if GetValue is called
 	unique_ptr<ColumnDataRowCollection> row_collection;
-	//! Scan state for Fetch calls
-	ColumnDataScanState scan_state;
 	bool scan_initialized;
 };
 

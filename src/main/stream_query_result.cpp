@@ -145,7 +145,13 @@ unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
 	if (HasError() || !context) {
 		return make_uniq<MaterializedQueryResult>(GetErrorObject());
 	}
-	auto collection = make_uniq<ColumnDataCollection>(*context, types);
+
+	// We have to make a local copy of the context here:
+	// the "context" in the StreamQueryResult could be the last ref to the last ClientContext of the DatabaseInstance
+	// This is reset on the last call to "Fetch()", which calls Close(), potentially destroying the DatabaseInstance
+	// Any ManagedQueryResult is destroyed once the last DatabaseInstance is destroyed
+	auto context_local = context;
+	auto collection = make_uniq<ColumnDataCollection>(*context_local, types);
 
 	ColumnDataAppendState append_state;
 	collection->InitializeAppend(append_state);
@@ -160,9 +166,13 @@ unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
 		}
 		collection->Append(append_state, *chunk);
 	}
-	auto managed_result = QueryResultManager::Get(*context).Add(std::move(collection));
+	// Clear these so that the handles are destroyed before "context_local" goes out of scope
+	append_state.current_chunk_state.handles.clear();
+
+	auto managed_result = QueryResultManager::Get(*context_local).Add(std::move(collection));
 	auto result = make_uniq<MaterializedQueryResult>(statement_type, properties, names, std::move(managed_result),
 	                                                 client_properties);
+
 	if (HasError()) {
 		return make_uniq<MaterializedQueryResult>(GetErrorObject());
 	}

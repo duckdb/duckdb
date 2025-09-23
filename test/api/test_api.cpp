@@ -120,7 +120,14 @@ TEST_CASE("Test closing result after database is gone", "[api]") {
 	// destroy the database
 	db.reset();
 	conn.reset();
-	REQUIRE(CHECK_COLUMN(streaming_result, 0, {42}));
+	// This forces the result to convert from a StreamQueryResult to a MaterializedQueryResult
+	// This succeeds, but the StreamQueryResult holds the last reference to the ClientContext
+	// So when the conversion is done, the last ClientContext is destroyed
+	// This causes the DatabaseInstance to be destroyed too
+	// Destroying the DB instance now destroys any MaterializedQueryResult
+	// Because MaterializedQueryResults are now buffer-managed
+	// So, the following line now throws (instead of succeeding like before)
+	REQUIRE_THROWS(CHECK_COLUMN(streaming_result, 0, {42}));
 	streaming_result.reset();
 }
 

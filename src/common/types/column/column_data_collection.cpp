@@ -153,16 +153,26 @@ idx_t ColumnDataRow::RowIndex() const {
 //===--------------------------------------------------------------------===//
 // ColumnDataRowCollection
 //===--------------------------------------------------------------------===//
-ColumnDataRowCollection::ColumnDataRowCollection(const ColumnDataCollection &collection) {
+ColumnDataRowCollection::ColumnDataRowCollection(const ColumnDataCollection &collection, bool independently_usable) {
 	if (collection.Count() == 0) {
 		return;
 	}
 	// read all the chunks
 	ColumnDataScanState temp_scan_state;
-	collection.InitializeScan(temp_scan_state, ColumnDataScanProperties::DISALLOW_ZERO_COPY);
+	// we disallow zero copy so the chunk is independently usable even after the result is destroyed
+	if (independently_usable) {
+		collection.InitializeScan(temp_scan_state, ColumnDataScanProperties::DISALLOW_ZERO_COPY);
+	} else {
+		collection.InitializeScan(temp_scan_state, ColumnDataScanProperties::ALLOW_ZERO_COPY);
+	}
 	while (true) {
 		auto chunk = make_uniq<DataChunk>();
-		collection.InitializeScanChunk(*chunk);
+		// Use default allocator so the chunk is independently usable even after the DB allocator is destroyed
+		if (independently_usable) {
+			collection.InitializeScanChunk(Allocator::DefaultAllocator(), *chunk);
+		} else {
+			collection.InitializeScanChunk(*chunk);
+		}
 		if (!collection.Scan(temp_scan_state, *chunk)) {
 			break;
 		}
@@ -1059,7 +1069,11 @@ bool ColumnDataCollection::Scan(ColumnDataParallelScanState &state, ColumnDataLo
 }
 
 void ColumnDataCollection::InitializeScanChunk(DataChunk &chunk) const {
-	InitializeScanChunk(Allocator::DefaultAllocator(), chunk);
+	InitializeScanChunk(allocator->GetAllocator(), chunk);
+}
+
+void ColumnDataCollection::InitializeScanChunk(Allocator &allocator, DataChunk &chunk) const {
+	chunk.Initialize(allocator, types);
 }
 
 void ColumnDataCollection::InitializeScanChunk(ColumnDataScanState &state, DataChunk &chunk) const {

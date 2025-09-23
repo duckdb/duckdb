@@ -80,6 +80,7 @@ public:
 
 	//! Initializes a chunk with the correct types that can be used to call Scan
 	DUCKDB_API void InitializeScanChunk(DataChunk &chunk) const;
+	DUCKDB_API void InitializeScanChunk(Allocator &allocator, DataChunk &chunk) const;
 	//! Initializes a chunk with the correct types for a given scan state
 	DUCKDB_API void InitializeScanChunk(ColumnDataScanState &state, DataChunk &chunk) const;
 	//! Initializes a Scan state for scanning all columns
@@ -196,7 +197,8 @@ private:
 //! The ColumnDataRowCollection represents a set of materialized rows, as obtained from the ColumnDataCollection
 class ColumnDataRowCollection {
 public:
-	DUCKDB_API explicit ColumnDataRowCollection(const ColumnDataCollection &collection);
+	DUCKDB_API explicit ColumnDataRowCollection(const ColumnDataCollection &collection,
+	                                            bool independently_usable = true);
 
 public:
 	DUCKDB_API Value GetValue(idx_t column, idx_t index) const;
