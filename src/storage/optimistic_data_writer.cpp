@@ -58,7 +58,7 @@ void OptimisticDataWriter::WriteNewRowGroup(OptimisticWriteCollection &row_group
 		// we have 5 unflushed row groups - flush
 		vector<reference<RowGroup>> to_flush;
 		for (idx_t i = row_groups.last_flushed; i < row_groups.complete_row_groups; i++) {
-			to_flush.push_back(*row_groups.collection->GetRowGroup(i));
+			to_flush.push_back(*row_groups.collection->GetRowGroup(NumericCast<int64_t>(i)));
 		}
 		FlushToDisk(to_flush);
 		row_groups.last_flushed = row_groups.complete_row_groups;
@@ -73,7 +73,7 @@ void OptimisticDataWriter::WriteLastRowGroup(OptimisticWriteCollection &row_grou
 	// flush the last batch of row groups
 	vector<reference<RowGroup>> to_flush;
 	for (idx_t i = row_groups.last_flushed; i < row_groups.complete_row_groups; i++) {
-		to_flush.push_back(*row_groups.collection->GetRowGroup(i));
+		to_flush.push_back(*row_groups.collection->GetRowGroup(NumericCast<int64_t>(i)));
 	}
 	// add the last (incomplete) row group
 	to_flush.push_back(*row_groups.collection->GetRowGroup(-1));
