@@ -225,7 +225,7 @@ RelationStats RelationStatisticsHelper::CombineStatsOfReorderableOperator(vector
 }
 
 RelationStats RelationStatisticsHelper::CombineStatsOfNonReorderableOperator(LogicalOperator &op,
-                                                                             vector<RelationStats> child_stats) {
+                                                                             const vector<RelationStats> &child_stats) {
 	RelationStats ret;
 	ret.cardinality = 0;
 
