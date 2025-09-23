@@ -265,3 +265,61 @@ TEST_CASE("Test profiling after throwing an error", "[capi]") {
 
 	tester.Cleanup();
 }
+
+TEST_CASE("Test profiling with Extra Info enabled", "[capi]") {
+	CAPITester tester;
+	duckdb::unique_ptr<CAPIResult> result;
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	REQUIRE_NO_FAIL(tester.Query("PRAGMA enable_profiling = 'no_output'"));
+
+	// test only EXTRA_INFO profiling
+	duckdb::vector<string> settings = {"EXTRA_INFO"};
+	REQUIRE_NO_FAIL(tester.Query("PRAGMA custom_profiling_settings=" + BuildSettingsString(settings)));
+	REQUIRE_NO_FAIL(tester.Query("SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', "
+	                             "'Tania']) AS names ORDER BY random();"));
+
+	auto info = duckdb_get_profiling_info(tester.connection);
+	REQUIRE(info != nullptr);
+
+	// There is no extra info in root, so retrieve the child.
+	auto child_count = duckdb_profiling_info_get_child_count(info);
+	REQUIRE(child_count != 0);
+	auto child_info = duckdb_profiling_info_get_child(info, 0);
+
+	// Get child metrics
+	auto map = duckdb_profiling_info_get_metrics(child_info);
+	REQUIRE(map);
+	auto count = duckdb_get_map_size(map);
+	REQUIRE(count != 0);
+
+	for (idx_t i = 0; i < count; i++) {
+		auto key = duckdb_get_map_key(map, i);
+		REQUIRE(key);
+
+		// continue if not EXTRA_INFO
+		auto key_c_str = duckdb_get_varchar(key);
+		auto key_str = duckdb::string(key_c_str);
+		if (key_str != EnumUtil::ToString(MetricsType::EXTRA_INFO)) {
+			duckdb_destroy_value(&key);
+			duckdb_free(key_c_str);
+			continue;
+		}
+
+		auto value = duckdb_get_map_value(map, i);
+		REQUIRE(value);
+		auto value_c_str = duckdb_get_varchar(value);
+		auto value_str = duckdb::string(value_c_str);
+		REQUIRE(value_str == "{__order_by__=#7 ASC}");
+
+		duckdb_destroy_value(&key);
+		duckdb_destroy_value(&value);
+		duckdb_free(key_c_str);
+		duckdb_free(value_c_str);
+		break;
+	}
+
+	duckdb_destroy_value(&map);
+
+	tester.Cleanup();
+}

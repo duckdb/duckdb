@@ -557,7 +557,7 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 			info.MetricSum<idx_t>(MetricsType::RESULT_SET_SIZE, node.second.result_set_size);
 		}
 		if (ProfilingInfo::Enabled(profiler.settings, MetricsType::EXTRA_INFO)) {
-			info.extra_info = node.second.extra_info;
+			info.metrics[MetricsType::EXTRA_INFO] = Value::MAP(node.second.extra_info);
 		}
 		if (ProfilingInfo::Enabled(profiler.settings, MetricsType::SYSTEM_PEAK_BUFFER_MEMORY)) {
 			query_metrics.query_global_info.MetricMax(MetricsType::SYSTEM_PEAK_BUFFER_MEMORY,
@@ -721,18 +721,24 @@ void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
 	}
 }
 
-InsertionOrderPreservingMap<string> QueryProfiler::JSONSanitize(const InsertionOrderPreservingMap<string> &input) {
+Value QueryProfiler::JSONSanitize(const Value &input) {
+	D_ASSERT(input.type().id() == LogicalTypeId::MAP);
+
 	InsertionOrderPreservingMap<string> result;
-	for (auto &it : input) {
-		auto key = it.first;
+	auto children = MapValue::GetChildren(input);
+	for (auto &child : children) {
+		auto struct_children = StructValue::GetChildren(child);
+		auto key = struct_children[0].GetValue<string>();
+		auto value = struct_children[1].GetValue<string>();
+
 		if (StringUtil::StartsWith(key, "__")) {
 			key = StringUtil::Replace(key, "__", "");
 			key = StringUtil::Replace(key, "_", " ");
 			key = StringUtil::Title(key);
 		}
-		result[key] = it.second;
+		result[key] = value;
 	}
-	return result;
+	return Value::MAP(result);
 }
 
 string QueryProfiler::JSONSanitize(const std::string &text) {
@@ -772,7 +778,10 @@ string QueryProfiler::JSONSanitize(const std::string &text) {
 static yyjson_mut_val *ToJSONRecursive(yyjson_mut_doc *doc, ProfilingNode &node) {
 	auto result_obj = yyjson_mut_obj(doc);
 	auto &profiling_info = node.GetProfilingInfo();
-	profiling_info.extra_info = QueryProfiler::JSONSanitize(profiling_info.extra_info);
+
+	profiling_info.metrics[MetricsType::EXTRA_INFO] =
+	    QueryProfiler::JSONSanitize(profiling_info.metrics.at(MetricsType::EXTRA_INFO));
+
 	profiling_info.WriteMetricsToJSON(doc, result_obj);
 
 	auto children_list = yyjson_mut_arr(doc);
@@ -871,7 +880,7 @@ unique_ptr<ProfilingNode> QueryProfiler::CreateTree(const PhysicalOperator &root
 		info.MetricSum<uint8_t>(MetricsType::OPERATOR_TYPE, static_cast<uint8_t>(root_p.type));
 	}
 	if (info.Enabled(info.settings, MetricsType::EXTRA_INFO)) {
-		info.extra_info = root_p.ParamsToString();
+		info.metrics[MetricsType::EXTRA_INFO] = Value::MAP(root_p.ParamsToString());
 	}
 
 	tree_map.insert(make_pair(reference<const PhysicalOperator>(root_p), reference<ProfilingNode>(*node)));

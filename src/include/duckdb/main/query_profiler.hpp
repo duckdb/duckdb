@@ -180,7 +180,8 @@ public:
 	DUCKDB_API string ToString(ExplainFormat format = ExplainFormat::DEFAULT) const;
 	DUCKDB_API string ToString(ProfilerPrintFormat format) const;
 
-	static InsertionOrderPreservingMap<string> JSONSanitize(const InsertionOrderPreservingMap<string> &input);
+	static Value JSONSanitize(const Value &input);
+
 	static string JSONSanitize(const string &text);
 	static string DrawPadded(const string &str, idx_t width);
 	DUCKDB_API string ToJSON() const;
