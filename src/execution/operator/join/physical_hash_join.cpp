@@ -446,14 +446,15 @@ void PhysicalHashJoin::PrepareFinalize(ClientContext &context, GlobalSinkState &
 
 	gstate.total_size =
 	    ht.GetTotalSize(gstate.local_hash_tables, gstate.max_partition_size, gstate.max_partition_count);
-	gstate.probe_side_requirement =
-	    GetPartitioningSpaceRequirement(context, children.getAt(0).get().GetTypes(), ht.GetRadixBits(), gstate.num_threads);
+	gstate.probe_side_requirement = GetPartitioningSpaceRequirement(context, children.getAt(0).get().GetTypes(),
+	                                                                ht.GetRadixBits(), gstate.num_threads);
 	const auto max_partition_ht_size =
 	    gstate.max_partition_size + gstate.hash_table->PointerTableSize(gstate.max_partition_count);
 	gstate.temporary_memory_state->SetMinimumReservation(max_partition_ht_size + gstate.probe_side_requirement);
 
 	bool all_constant;
-	gstate.temporary_memory_state->SetMaterializationPenalty(GetTupleWidth(children.getAt(0).get().GetTypes(), all_constant));
+	gstate.temporary_memory_state->SetMaterializationPenalty(
+	    GetTupleWidth(children.getAt(0).get().GetTypes(), all_constant));
 	gstate.temporary_memory_state->SetRemainingSize(gstate.total_size);
 }
 

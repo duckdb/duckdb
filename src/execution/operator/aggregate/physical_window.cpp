@@ -283,8 +283,9 @@ WindowGlobalSinkState::WindowGlobalSinkState(const PhysicalWindow &op, ClientCon
 		executors.emplace_back(std::move(wexec));
 	}
 
-	global_partition = make_uniq<HashedSort>(client, wexpr.partitions, wexpr.orders, op.children.getAt(0).get().GetTypes(),
-	                                         wexpr.partitions_stats, op.estimated_cardinality);
+	global_partition =
+	    make_uniq<HashedSort>(client, wexpr.partitions, wexpr.orders, op.children.getAt(0).get().GetTypes(),
+	                          wexpr.partitions_stats, op.estimated_cardinality);
 	hashed_sink = global_partition->GetGlobalSinkState(client);
 }
 

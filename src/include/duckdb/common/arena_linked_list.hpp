@@ -58,7 +58,7 @@ public:
 		_size++;
 	}
 
-	T& getAt(idx_t index) {
+	T &getAt(idx_t index) {
 		idx_t i = 0;
 		for (auto &elem : *this) {
 			if (i == index) {
@@ -69,7 +69,7 @@ public:
 		throw InternalException("index out of bounds in ArenaLinkedList");
 	}
 
-	const T& getAt(idx_t index) const {
+	const T &getAt(idx_t index) const {
 		idx_t i = 0;
 		for (const auto &elem : *this) {
 			if (i == index) {
