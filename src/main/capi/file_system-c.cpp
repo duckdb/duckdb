@@ -129,7 +129,7 @@ duckdb_state duckdb_file_system_open(duckdb_file_system fs, const char *path, du
 }
 
 duckdb_error_data duckdb_file_system_error_data(duckdb_file_system fs) {
-	auto wrapper = new ErrorDataWrapper();
+	auto wrapper = new duckdb::ErrorDataWrapper();
 	if (!fs) {
 		return reinterpret_cast<duckdb_error_data>(wrapper);
 	}
@@ -149,7 +149,7 @@ void duckdb_destroy_file_handle(duckdb_file_handle *file) {
 }
 
 duckdb_error_data duckdb_file_handle_error_data(duckdb_file_handle file) {
-	auto wrapper = new ErrorDataWrapper();
+	auto wrapper = new duckdb::ErrorDataWrapper();
 	if (!file) {
 		return reinterpret_cast<duckdb_error_data>(wrapper);
 	}
