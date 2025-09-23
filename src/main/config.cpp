@@ -448,10 +448,6 @@ void DBConfig::AddExtensionOption(const string &name, string description, Logica
 		options.set_variables[name] = iter->second;
 		options.unrecognized_options.erase(iter);
 	}
-	if (!default_value.IsNull() && options.set_variables.find(name) == options.set_variables.end()) {
-		// Default value is set, insert it into the 'set_variables' list
-		options.set_variables[name] = default_value;
-	}
 }
 
 bool DBConfig::IsInMemoryDatabase(const char *database_path) {
@@ -726,6 +722,11 @@ SettingLookupResult DBConfig::TryGetCurrentSetting(const string &key, Value &res
 	if (option && option->default_value) {
 		auto input_type = ParseLogicalType(option->parameter_type);
 		result = Value(option->default_value).DefaultCastAs(input_type);
+		return SettingLookupResult(SettingScope::GLOBAL);
+	}
+	auto ext_entry = extension_parameters.find(key);
+	if (ext_entry != extension_parameters.end()) {
+		result = ext_entry->second.default_value;
 		return SettingLookupResult(SettingScope::GLOBAL);
 	}
 	return SettingLookupResult();

@@ -22,6 +22,11 @@ require-env DUCKDB_S3_USE_SSL
 # override the default behaviour of skipping HTTP errors and connection failures: this test fails on connection issues
 set ignore_error_messages
 
+query I
+select current_setting('s3_access_key_id');
+----
+NULL
+
 statement ok
 CREATE TABLE test as SELECT * FROM range(0,10) tbl(i);
 
