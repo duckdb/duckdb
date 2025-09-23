@@ -171,7 +171,7 @@ DuckDBReader::DuckDBReader(ClientContext &context_p, OpenFileInfo file_p, const 
 	auto &db_manager = DatabaseManager::Get(context);
 	AttachInfo info;
 	info.path = file.path;
-	// use invalid UTF-8 so that the database name cannot be attached by a user
+	// use invalid UTF-8 so that a conflicting database name cannot be attached by a user
 	info.name = "\x80__duckdb_reader_" + info.path;
 
 	info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
@@ -179,7 +179,18 @@ DuckDBReader::DuckDBReader(ClientContext &context_p, OpenFileInfo file_p, const 
 	AttachOptions attach_options(attach_kv, AccessMode::READ_ONLY);
 	attach_options.visibility = AttachVisibility::HIDDEN;
 
-	attached_database = db_manager.AttachDatabase(context, info, attach_options);
+	auto &meta_transaction = MetaTransaction::Get(context);
+	auto existing_db = meta_transaction.GetReferencedDatabaseOwning(info.name);
+	if (existing_db && existing_db->StoredPath() == info.path && existing_db->IsReadOnly() &&
+	    existing_db->GetVisibility() == AttachVisibility::HIDDEN) {
+		// we are referencing this database already
+		// this can happen if we have already run a scan over this database within this transaction
+		// use the already attached database directly
+		attached_database = existing_db;
+	} else {
+		// attach
+		attached_database = db_manager.AttachDatabase(context, info, attach_options);
+	}
 
 	auto &catalog = attached_database->GetCatalog();
 	vector<reference<TableCatalogEntry>> tables;

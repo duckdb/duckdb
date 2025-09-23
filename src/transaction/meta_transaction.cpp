@@ -194,6 +194,19 @@ optional_ptr<AttachedDatabase> MetaTransaction::GetReferencedDatabase(const stri
 	return nullptr;
 }
 
+shared_ptr<AttachedDatabase> MetaTransaction::GetReferencedDatabaseOwning(const string &name) {
+	lock_guard<mutex> guard(referenced_database_lock);
+	auto entry = used_databases.find(name);
+	if (entry != used_databases.end()) {
+		auto refer_entry = referenced_databases.find(entry->second.get());
+		if (refer_entry == referenced_databases.end()) {
+			throw InternalException("Used database found not found in referenced databases");
+		}
+		return refer_entry->second;
+	}
+	return nullptr;
+}
+
 void MetaTransaction::DetachDatabase(AttachedDatabase &database) {
 	lock_guard<mutex> guard(referenced_database_lock);
 	used_databases.erase(database.GetName());
