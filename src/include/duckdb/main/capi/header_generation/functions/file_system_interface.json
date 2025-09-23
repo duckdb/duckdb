@@ -12,7 +12,7 @@
         }
       ],
       "comment": {
-        "description": "Get a file system instance associated with the given client context.\nMust be destroyed with `duckdb_destroy_file_system`\n\n",
+        "description": "Get a file system instance associated with the given client context.\n\n",
         "param_comments": {
           "context": "The client context."
         },
@@ -45,7 +45,7 @@
         }
       ],
       "comment": {
-        "description": "Retrieves the last error that occurred on the given file system instance.\nMust be destroyed with duckdb_destroy_error_data.\n\n",
+        "description": "Retrieves the last error that occurred on the given file system instance.\n\n",
         "param_comments": {
           "file_system": "The file system instance."
         },
@@ -74,7 +74,7 @@
         }
       ],
       "comment": {
-        "description": "Opens a file at the given path with the specified flags.\n\n",
+        "description": "Opens a file at the given path with the specified options.\n\n",
         "param_comments": {
           "file_system": "The file system instance.",
           "path": "The path to the file.",
@@ -89,9 +89,9 @@
       "return_type": "duckdb_file_open_options",
       "params": [],
       "comment": {
-        "description": "Creates a new file open options instance with blank settings.\nMust be destroyed with `duckdb_destroy_file_open_options`.\n\n",
+        "description": "Creates a new file open options instance with blank settings.\n\n",
         "param_comments": {},
-        "return_value": "The new file open options instance."
+        "return_value": "The new file open options instance. Must be destroyed with `duckdb_destroy_file_open_options`."
       }
     },
     {
@@ -163,11 +163,11 @@
         }
       ],
       "comment": {
-        "description": "Retrieves the last error that occurred on the given file handle.\nMust be destroyed with duckdb_destroy_error_data.\n\n",
+        "description": "Retrieves the last error that occurred on the given file handle.\n\n",
         "param_comments": {
           "file_handle": "The file handle."
         },
-        "return_value": "The error data."
+        "return_value": "The error data. Must be destroyed with `duckdb_destroy_error_data`"
       }
     },
     {
@@ -277,7 +277,7 @@
           "file_handle": "The file handle to seek in.",
           "offset": "The position to seek to."
         },
-        "return_value": "Whether the seek was successful. If not, the error data can be retrieved using `duckdb_file_handle_error_data`."
+        "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure. If unsuccessful, the error data can be retrieved using `duckdb_file_handle_error_data`."
       }
     },
     {
@@ -294,7 +294,7 @@
         "param_comments": {
           "file_handle": "The file handle to synchronize."
         },
-        "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure."
+        "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure. If unsuccessful, the error data can be retrieved using `duckdb_file_handle_error_data`."
       }
     },
     {
@@ -311,7 +311,7 @@
         "param_comments": {
           "file_handle": "The file handle to close."
         },
-        "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure."
+        "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure. If unsuccessful, the error data can be retrieved using `duckdb_file_handle_error_data`."
       }
     }
   ]

@@ -26,7 +26,7 @@ static void test_file_system(duckdb_file_system fs, string file_name) {
 	duckdb_destroy_error_data(&error_data);
 
 	// Try to write to a null file handle
-	int64_t failed_bytes_written = duckdb_file_handle_write(file, "data", 4);
+	auto failed_bytes_written = duckdb_file_handle_write(file, "data", 4);
 	REQUIRE(failed_bytes_written == -1);
 	auto file_error_data = duckdb_file_handle_error_data(file);
 	auto has_error = duckdb_error_data_has_error(file_error_data);
@@ -44,11 +44,11 @@ static void test_file_system(duckdb_file_system fs, string file_name) {
 
 	// Write to the file
 	const char *data = "Hello, DuckDB File System!";
-	int64_t bytes_written = duckdb_file_handle_write(file, data, strlen(data));
+	auto bytes_written = duckdb_file_handle_write(file, data, strlen(data));
 	REQUIRE(bytes_written == (int64_t)strlen(data));
-	int64_t position = duckdb_file_handle_tell(file);
+	auto position = duckdb_file_handle_tell(file);
 	REQUIRE(position == bytes_written);
-	int64_t size = duckdb_file_handle_size(file);
+	auto size = duckdb_file_handle_size(file);
 	REQUIRE(size == bytes_written);
 
 	// Sync
@@ -63,7 +63,7 @@ static void test_file_system(duckdb_file_system fs, string file_name) {
 	// Read from the file
 	char buffer[30];
 	memset(buffer, 0, sizeof(buffer));
-	int64_t bytes_read = duckdb_file_handle_read(file, buffer, sizeof(buffer) - 1);
+	auto bytes_read = duckdb_file_handle_read(file, buffer, sizeof(buffer) - 1);
 	REQUIRE(bytes_read == bytes_written);
 	REQUIRE(strcmp(buffer, data) == 0);
 	position = duckdb_file_handle_tell(file);

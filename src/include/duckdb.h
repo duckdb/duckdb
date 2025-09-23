@@ -243,15 +243,15 @@ typedef enum duckdb_cast_mode { DUCKDB_CAST_NORMAL = 0, DUCKDB_CAST_TRY = 1 } du
 
 typedef enum duckdb_file_flag {
 	DUCKDB_FILE_FLAG_INVALID = 0,
-	// Open a file for reading only.
+	// Open the file with "read" capabilities.
 	DUCKDB_FILE_FLAG_READ = 1,
-	// Open a file for writing only.
+	// Open the file with "write" capabilities.
 	DUCKDB_FILE_FLAG_WRITE = 2,
-	// Create or open the file if it already exists.
+	// Create a new file, or open if it already exists.
 	DUCKDB_FILE_FLAG_CREATE = 3,
-	// Create a new file, fail if it already exists.
+	// Create a new file, or fail if it already exists.
 	DUCKDB_FILE_FLAG_CREATE_NEW = 4,
-	// Open the file in append mode.
+	// Open the file in "append" mode.
 	DUCKDB_FILE_FLAG_APPEND = 5,
 } duckdb_file_flag;
 
@@ -5197,7 +5197,6 @@ DUCKDB_C_API duckdb_error_data duckdb_expression_fold(duckdb_client_context cont
 
 /*!
 Get a file system instance associated with the given client context.
-Must be destroyed with `duckdb_destroy_file_system`
 
 * @param context The client context.
 * @return The resulting file system instance. Must be destroyed with `duckdb_destroy_file_system`.
@@ -5212,7 +5211,6 @@ DUCKDB_C_API void duckdb_destroy_file_system(duckdb_file_system *file_system);
 
 /*!
 Retrieves the last error that occurred on the given file system instance.
-Must be destroyed with duckdb_destroy_error_data.
 
 * @param file_system The file system instance.
 * @return The error data.
@@ -5220,7 +5218,7 @@ Must be destroyed with duckdb_destroy_error_data.
 DUCKDB_C_API duckdb_error_data duckdb_file_system_error_data(duckdb_file_system file_system);
 
 /*!
-Opens a file at the given path with the specified flags.
+Opens a file at the given path with the specified options.
 
 * @param file_system The file system instance.
 * @param path The path to the file.
@@ -5235,9 +5233,8 @@ DUCKDB_C_API duckdb_state duckdb_file_system_open(duckdb_file_system file_system
 
 /*!
 Creates a new file open options instance with blank settings.
-Must be destroyed with `duckdb_destroy_file_open_options`.
 
-* @return The new file open options instance.
+* @return The new file open options instance. Must be destroyed with `duckdb_destroy_file_open_options`.
 */
 DUCKDB_C_API duckdb_file_open_options duckdb_create_file_open_options();
 
@@ -5269,10 +5266,9 @@ DUCKDB_C_API void duckdb_destroy_file_handle(duckdb_file_handle *file_handle);
 
 /*!
 Retrieves the last error that occurred on the given file handle.
-Must be destroyed with duckdb_destroy_error_data.
 
 * @param file_handle The file handle.
-* @return The error data.
+* @return The error data. Must be destroyed with `duckdb_destroy_error_data`
 */
 DUCKDB_C_API duckdb_error_data duckdb_file_handle_error_data(duckdb_file_handle file_handle);
 
@@ -5316,7 +5312,7 @@ DUCKDB_C_API int64_t duckdb_file_handle_size(duckdb_file_handle file_handle);
 Seeks to a specific position in the file.
 
 * @param file_handle The file handle to seek in.
-* @return Whether the seek was successful. If not, the error data can be retrieved using
+* @return `DuckDBSuccess` on success or `DuckDBError` on failure. If unsuccessful, the error data can be retrieved using
 `duckdb_file_handle_error_data`.
 */
 DUCKDB_C_API duckdb_state duckdb_file_handle_seek(duckdb_file_handle file_handle, int64_t position);
@@ -5325,7 +5321,8 @@ DUCKDB_C_API duckdb_state duckdb_file_handle_seek(duckdb_file_handle file_handle
 Synchronizes the file's state with the underlying storage.
 
 * @param file_handle The file handle to synchronize.
-* @return `DuckDBSuccess` on success or `DuckDBError` on failure.
+* @return `DuckDBSuccess` on success or `DuckDBError` on failure. If unsuccessful, the error data can be retrieved using
+`duckdb_file_handle_error_data`.
 */
 DUCKDB_C_API duckdb_state duckdb_file_handle_sync(duckdb_file_handle file_handle);
 
@@ -5333,7 +5330,8 @@ DUCKDB_C_API duckdb_state duckdb_file_handle_sync(duckdb_file_handle file_handle
 Closes the given file handle.
 
 * @param file_handle The file handle to close.
-* @return `DuckDBSuccess` on success or `DuckDBError` on failure.
+* @return `DuckDBSuccess` on success or `DuckDBError` on failure. If unsuccessful, the error data can be retrieved using
+`duckdb_file_handle_error_data`.
 */
 DUCKDB_C_API duckdb_state duckdb_file_handle_close(duckdb_file_handle file_handle);
 
