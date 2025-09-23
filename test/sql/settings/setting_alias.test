@@ -1,0 +1,26 @@
+# name: test/sql/settings/setting_alias.test
+# description: Test behavior of aliased settings
+# group: [settings]
+
+require skip_reload
+
+query II
+SELECT current_setting('null_order'), (SELECT value FROM duckdb_settings() WHERE name='null_order')
+----
+NULLS_LAST	NULLS_LAST
+
+statement ok
+SET null_order='NULLS_FIRST'
+
+query II
+SELECT current_setting('null_order'), (SELECT value FROM duckdb_settings() WHERE name='null_order')
+----
+NULLS_FIRST	NULLS_FIRST
+
+statement ok
+RESET null_order
+
+query II
+SELECT current_setting('null_order'), (SELECT value FROM duckdb_settings() WHERE name='null_order')
+----
+NULLS_LAST	NULLS_LAST
