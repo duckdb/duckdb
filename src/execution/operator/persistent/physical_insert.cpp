@@ -652,22 +652,25 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, DataChunk &insert
 	auto &data_table = gstate.table.GetStorage();
 	if (!lstate.collection_index.IsValid()) {
 		// Create the local row group collection.
-		auto collection = OptimisticDataWriter::CreateCollection(storage, insert_types);
-		collection->InitializeEmpty();
-		collection->InitializeAppend(lstate.local_append_state);
+		auto optimistic_collection = OptimisticDataWriter::CreateCollection(storage, insert_types);
+		auto &collection = *optimistic_collection->collection;
+		collection.InitializeEmpty();
+		collection.InitializeAppend(lstate.local_append_state);
 
 		lock_guard<mutex> l(gstate.lock);
 		lstate.optimistic_writer = make_uniq<OptimisticDataWriter>(context.client, data_table);
-		lstate.collection_index = data_table.CreateOptimisticCollection(context.client, std::move(collection));
+		lstate.collection_index =
+		    data_table.CreateOptimisticCollection(context.client, std::move(optimistic_collection));
 	}
 
 	OnConflictHandling(table, context, gstate, lstate, insert_chunk);
 	D_ASSERT(action_type != OnConflictAction::UPDATE);
 
-	auto &collection = data_table.GetOptimisticCollection(context.client, lstate.collection_index);
+	auto &optimistic_collection = data_table.GetOptimisticCollection(context.client, lstate.collection_index);
+	auto &collection = *optimistic_collection.collection;
 	auto new_row_group = collection.Append(insert_chunk, lstate.local_append_state);
 	if (new_row_group) {
-		lstate.optimistic_writer->WriteNewRowGroup(collection);
+		lstate.optimistic_writer->WriteNewRowGroup(optimistic_collection);
 	}
 	return SinkResultType::NEED_MORE_INPUT;
 }
@@ -690,7 +693,8 @@ SinkCombineResultType PhysicalInsert::Combine(ExecutionContext &context, Operato
 	// parallel append: finalize the append
 	TransactionData tdata(0, 0);
 	auto &data_table = gstate.table.GetStorage();
-	auto &collection = data_table.GetOptimisticCollection(context.client, lstate.collection_index);
+	auto &optimistic_collection = data_table.GetOptimisticCollection(context.client, lstate.collection_index);
+	auto &collection = *optimistic_collection.collection;
 	collection.FinalizeAppend(tdata, lstate.local_append_state);
 
 	auto append_count = collection.GetTotalRows();
@@ -709,9 +713,9 @@ SinkCombineResultType PhysicalInsert::Combine(ExecutionContext &context, Operato
 		storage.FinalizeLocalAppend(append_state);
 	} else {
 		// we have written rows to disk optimistically - merge directly into the transaction-local storage
-		lstate.optimistic_writer->WriteLastRowGroup(collection);
+		lstate.optimistic_writer->WriteLastRowGroup(optimistic_collection);
 		lstate.optimistic_writer->FinalFlush();
-		gstate.table.GetStorage().LocalMerge(context.client, collection);
+		gstate.table.GetStorage().LocalMerge(context.client, optimistic_collection);
 		auto &optimistic_writer = gstate.table.GetStorage().GetOptimisticWriter(context.client);
 		optimistic_writer.Merge(*lstate.optimistic_writer);
 	}

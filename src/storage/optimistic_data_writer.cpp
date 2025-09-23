@@ -33,33 +33,37 @@ bool OptimisticDataWriter::PrepareWrite() {
 	return true;
 }
 
-unique_ptr<RowGroupCollection> OptimisticDataWriter::CreateCollection(DataTable &storage,
-                                                                      const vector<LogicalType> &insert_types) {
+unique_ptr<OptimisticWriteCollection> OptimisticDataWriter::CreateCollection(DataTable &storage,
+                                                                             const vector<LogicalType> &insert_types) {
 	auto table_info = storage.GetDataTableInfo();
 	auto &io_manager = TableIOManager::Get(storage);
 
 	// Create the local row group collection.
 	auto max_row_id = NumericCast<idx_t>(MAX_ROW_ID);
-	return make_uniq<RowGroupCollection>(std::move(table_info), io_manager, insert_types, max_row_id);
+	auto row_groups = make_shared_ptr<RowGroupCollection>(std::move(table_info), io_manager, insert_types, max_row_id);
+
+	auto result = make_uniq<OptimisticWriteCollection>();
+	result->collection = std::move(row_groups);
+	return result;
 }
 
-void OptimisticDataWriter::WriteNewRowGroup(RowGroupCollection &row_groups) {
+void OptimisticDataWriter::WriteNewRowGroup(OptimisticWriteCollection &row_groups) {
 	// we finished writing a complete row group
 	if (!PrepareWrite()) {
 		return;
 	}
 	// flush second-to-last row group
-	auto row_group = row_groups.GetRowGroup(-2);
+	auto row_group = row_groups.collection->GetRowGroup(-2);
 	FlushToDisk(*row_group);
 }
 
-void OptimisticDataWriter::WriteLastRowGroup(RowGroupCollection &row_groups) {
+void OptimisticDataWriter::WriteLastRowGroup(OptimisticWriteCollection &row_groups) {
 	// we finished writing a complete row group
 	if (!PrepareWrite()) {
 		return;
 	}
 	// flush second-to-last row group
-	auto row_group = row_groups.GetRowGroup(-1);
+	auto row_group = row_groups.collection->GetRowGroup(-1);
 	if (!row_group) {
 		return;
 	}
