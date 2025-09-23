@@ -69,6 +69,15 @@ struct DuckDBReadBindData : TableFunctionData {
 	}
 };
 
+struct AttachedDatabaseWrapper {
+	AttachedDatabaseWrapper(ClientContext &context, shared_ptr<AttachedDatabase> attached_database_p);
+	~AttachedDatabaseWrapper();
+
+	ClientContext &context;
+	shared_ptr<AttachedDatabase> attached_database;
+	optional_ptr<TableCatalogEntry> table_entry;
+};
+
 class DuckDBReader : public BaseFileReader {
 public:
 	DuckDBReader(ClientContext &context, OpenFileInfo file, const DuckDBFileReaderOptions &options);
@@ -80,6 +89,7 @@ public:
 	void Scan(ClientContext &context, GlobalTableFunctionState &global_state, LocalTableFunctionState &local_state,
 	          DataChunk &chunk) override;
 	shared_ptr<BaseUnionData> GetUnionData(idx_t file_idx) override;
+	void FinishFile(ClientContext &context, GlobalTableFunctionState &gstate) override;
 	double GetProgressInFile(ClientContext &context) override;
 	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const string &name) override;
 	void AddVirtualColumn(column_t virtual_column_id) override;
@@ -87,22 +97,26 @@ public:
 		return "duckdb";
 	}
 	optional_idx NumRows();
+	AttachedDatabase &GetAttachedDatabase();
+	TableCatalogEntry &GetTableEntry();
 
 private:
 	ClientContext &context;
-	shared_ptr<AttachedDatabase> attached_database;
-	optional_ptr<TableCatalogEntry> table_entry;
+	shared_ptr<AttachedDatabaseWrapper> db_wrapper;
 	TableFunction scan_function;
 	unique_ptr<FunctionData> bind_data;
 	unique_ptr<GlobalTableFunctionState> global_state;
 	atomic<bool> finished;
 	idx_t column_count;
+	string schema_name;
+	string table_name;
 };
 
 struct DuckDBReadGlobalState : GlobalTableFunctionState {};
 
 struct DuckDBReadLocalState : LocalTableFunctionState {
 	unique_ptr<LocalTableFunctionState> local_state;
+	shared_ptr<AttachedDatabaseWrapper> attached_database;
 };
 
 string DuckDBFileReaderOptions::GetCandidates(const vector<reference<TableCatalogEntry>> &tables) const {
@@ -166,33 +180,22 @@ bool DuckDBFileReaderOptions::Matches(TableCatalogEntry &table) const {
 	return true;
 }
 
+AttachedDatabaseWrapper::AttachedDatabaseWrapper(ClientContext &context,
+                                                 shared_ptr<AttachedDatabase> attached_database_p)
+    : context(context), attached_database(std::move(attached_database_p)) {
+}
+
+AttachedDatabaseWrapper::~AttachedDatabaseWrapper() {
+	if (attached_database) {
+		auto &db_manager = DatabaseManager::Get(context);
+		db_manager.DetachDatabase(context, attached_database->GetName(), OnEntryNotFound::RETURN_NULL);
+		attached_database.reset();
+	}
+}
 DuckDBReader::DuckDBReader(ClientContext &context_p, OpenFileInfo file_p, const DuckDBFileReaderOptions &options)
     : BaseFileReader(std::move(file_p)), context(context_p), finished(false) {
-	auto &db_manager = DatabaseManager::Get(context);
-	AttachInfo info;
-	info.path = file.path;
-	// use invalid UTF-8 so that a conflicting database name cannot be attached by a user
-	info.name = "\x80__duckdb_reader_" + info.path;
-
-	info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
-	unordered_map<string, Value> attach_kv;
-	AttachOptions attach_options(attach_kv, AccessMode::READ_ONLY);
-	attach_options.visibility = AttachVisibility::HIDDEN;
-
-	auto &meta_transaction = MetaTransaction::Get(context);
-	auto existing_db = meta_transaction.GetReferencedDatabaseOwning(info.name);
-	if (existing_db && existing_db->StoredPath() == info.path && existing_db->IsReadOnly() &&
-	    existing_db->GetVisibility() == AttachVisibility::HIDDEN) {
-		// we are referencing this database already
-		// this can happen if we have already run a scan over this database within this transaction
-		// use the already attached database directly
-		attached_database = existing_db;
-	} else {
-		// attach
-		attached_database = db_manager.AttachDatabase(context, info, attach_options);
-	}
-
-	auto &catalog = attached_database->GetCatalog();
+	auto &attached = GetAttachedDatabase();
+	auto &catalog = attached.GetCatalog();
 	vector<reference<TableCatalogEntry>> tables;
 	vector<reference<TableCatalogEntry>> candidate_tables;
 	catalog.ScanSchemas(context, [&](SchemaCatalogEntry &schema) {
@@ -218,43 +221,76 @@ DuckDBReader::DuckDBReader(ClientContext &context_p, OpenFileInfo file_p, const 
 		string candidate_str = options.GetCandidates(candidate_tables);
 		throw BinderException("Database \"%s\" %s%s%s", file.path, error_msg, extra_info, candidate_str);
 	}
-	table_entry = tables[0].get();
-	for (auto &col : table_entry->GetColumns().Logical()) {
+	auto &table = tables[0].get();
+	for (auto &col : table.GetColumns().Logical()) {
 		columns.emplace_back(col.Name(), col.Type());
 	}
 	column_count = columns.size();
-	scan_function = table_entry->GetScanFunction(context, bind_data);
+	schema_name = table.ParentSchema().name;
+	table_name = table.name;
+	db_wrapper->table_entry = table;
 }
 
 DuckDBReader::~DuckDBReader() {
-	if (attached_database) {
+}
+
+AttachedDatabase &DuckDBReader::GetAttachedDatabase() {
+	if (!db_wrapper) {
 		auto &db_manager = DatabaseManager::Get(context);
-		db_manager.DetachDatabase(context, attached_database->GetName(), OnEntryNotFound::RETURN_NULL);
+		AttachInfo info;
+		info.path = file.path;
+		// use invalid UTF-8 so that a conflicting database name cannot be attached by a user
+		info.name = "\x80__duckdb_reader_" + info.path;
+
+		info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
+		unordered_map<string, Value> attach_kv;
+		AttachOptions attach_options(attach_kv, AccessMode::READ_ONLY);
+		attach_options.visibility = AttachVisibility::HIDDEN;
+
+		auto attached = db_manager.AttachDatabase(context, info, attach_options);
+		db_wrapper = make_shared_ptr<AttachedDatabaseWrapper>(context, std::move(attached));
 	}
+	return *db_wrapper->attached_database;
+}
+
+TableCatalogEntry &DuckDBReader::GetTableEntry() {
+	auto &attached = GetAttachedDatabase();
+	if (!db_wrapper->table_entry) {
+		auto &catalog = attached.GetCatalog();
+		db_wrapper->table_entry =
+		    catalog.GetEntry<TableCatalogEntry>(context, schema_name, table_name, OnEntryNotFound::THROW_EXCEPTION);
+	}
+	return *db_wrapper->table_entry;
 }
 
 bool DuckDBReader::TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate,
                                      LocalTableFunctionState &lstate_p) {
 	auto &lstate = lstate_p.Cast<DuckDBReadLocalState>();
 	if (finished) {
+		lstate.attached_database.reset();
 		return false;
 	}
 	if (!global_state) {
+		lstate.attached_database.reset();
+		auto &table_entry = GetTableEntry();
+		scan_function = table_entry.GetScanFunction(context, bind_data);
 		for (auto &col : column_indexes) {
 			if (col.GetPrimaryIndex() >= column_count) {
 				col = ColumnIndex(COLUMN_IDENTIFIER_ROW_ID);
 			} else {
-				auto &column = table_entry->GetColumn(LogicalIndex(col.GetPrimaryIndex()));
+				auto &column = table_entry.GetColumn(LogicalIndex(col.GetPrimaryIndex()));
 				if (column.Generated()) {
 					throw NotImplementedException("Unsupported: read_duckdb cannot read generated column %s",
 					                              column.Name());
 				}
 			}
 		}
+
 		// initialize the scan over this table
 		TableFunctionInitInput input(bind_data.get(), column_indexes, vector<idx_t>(), nullptr);
 		global_state = scan_function.init_global(context, input);
 	}
+	AssignSharedPointer(lstate.attached_database, db_wrapper);
 	// initialize the local scan
 	ThreadContext thread(context);
 	ExecutionContext exec_context(context, thread, nullptr);
@@ -274,18 +310,24 @@ void DuckDBReader::Scan(ClientContext &context, GlobalTableFunctionState &gstate
 	}
 }
 
+void DuckDBReader::FinishFile(ClientContext &context, GlobalTableFunctionState &gstate) {
+	db_wrapper.reset();
+}
+
 optional_idx DuckDBReader::NumRows() {
-	return table_entry->GetStorage().GetTotalRows();
+	auto &table_entry = GetTableEntry();
+	return table_entry.GetStorage().GetTotalRows();
 }
 
 unique_ptr<BaseStatistics> DuckDBReader::GetStatistics(ClientContext &context, const string &name) {
 	if (!scan_function.statistics) {
 		return BaseFileReader::GetStatistics(context, name);
 	}
-	if (!table_entry->ColumnExists(name)) {
+	auto &table_entry = GetTableEntry();
+	if (!table_entry.ColumnExists(name)) {
 		return nullptr;
 	}
-	return scan_function.statistics(context, bind_data.get(), table_entry->GetColumn(name).Logical().index);
+	return scan_function.statistics(context, bind_data.get(), table_entry.GetColumn(name).Logical().index);
 }
 
 double DuckDBReader::GetProgressInFile(ClientContext &context) {
@@ -407,7 +449,9 @@ shared_ptr<BaseUnionData> DuckDBReader::GetUnionData(idx_t file_idx) {
 }
 
 void DuckDBMultiFileInfo::FinishReading(ClientContext &context, GlobalTableFunctionState &global_state,
-                                        LocalTableFunctionState &local_state) {
+                                        LocalTableFunctionState &lstate_p) {
+	auto &lstate = lstate_p.Cast<DuckDBReadLocalState>();
+	lstate.attached_database.reset();
 }
 
 unique_ptr<NodeStatistics> DuckDBMultiFileInfo::GetCardinality(const MultiFileBindData &bind_data_p, idx_t file_count) {

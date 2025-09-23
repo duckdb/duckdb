@@ -22,10 +22,6 @@ StoredDatabasePath::~StoredDatabasePath() {
 	manager.EraseDatabasePath(path);
 }
 
-void StoredDatabasePath::OnDetach() {
-	manager.DetachDatabase(path);
-}
-
 //===--------------------------------------------------------------------===//
 // Attach Options
 //===--------------------------------------------------------------------===//
@@ -242,9 +238,6 @@ void AttachedDatabase::SetReadOnlyDatabase() {
 void AttachedDatabase::OnDetach(ClientContext &context) {
 	if (catalog) {
 		catalog->OnDetach(context);
-	}
-	if (stored_database_path) {
-		stored_database_path->OnDetach();
 	}
 }
 

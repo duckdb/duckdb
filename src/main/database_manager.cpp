@@ -87,6 +87,13 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 	if (options.db_type.empty() || StringUtil::CIEquals(options.db_type, "duckdb")) {
 		while (InsertDatabasePath(info, options) == InsertDatabasePathResult::ALREADY_EXISTS) {
 			// database with this name and path already exists
+			// first check if it exists within this transaction
+			auto &meta_transaction = MetaTransaction::Get(context);
+			auto existing_db = meta_transaction.GetReferencedDatabaseOwning(info.name);
+			if (existing_db) {
+				// it does! return it
+				return existing_db;
+			}
 			// ... but it might not be done attaching yet!
 			// verify the database has actually finished attaching prior to returning
 			lock_guard<mutex> guard(databases_lock);

@@ -50,6 +50,16 @@ SELECT * FROM '__TEST_DIR__/read_duckdb_test*.db'
 42
 100
 
+# prepared statement
+statement ok
+PREPARE v1 AS FROM read_duckdb('__TEST_DIR__/read_duckdb_test*.db')
+
+query I
+EXECUTE v1
+----
+42
+100
+
 # multi-table
 statement ok
 ATTACH '__TEST_DIR__/read_duckdb_test.db'

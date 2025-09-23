@@ -21,7 +21,7 @@ InsertDatabasePathResult DatabaseFilePathManager::InsertDatabasePath(const strin
 	auto entry = db_paths.emplace(path, DatabasePathInfo(name));
 	if (!entry.second) {
 		auto &existing = entry.first->second;
-		if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT && existing.is_attached && existing.name == name) {
+		if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT && existing.name == name) {
 			return InsertDatabasePathResult::ALREADY_EXISTS;
 		}
 		throw BinderException("Unique file handle conflict: Cannot attach \"%s\" - the database file \"%s\" is already "
@@ -38,17 +38,6 @@ void DatabaseFilePathManager::EraseDatabasePath(const string &path) {
 	}
 	lock_guard<mutex> path_lock(db_paths_lock);
 	db_paths.erase(path);
-}
-
-void DatabaseFilePathManager::DetachDatabase(const string &path) {
-	if (path.empty() || path == IN_MEMORY_PATH) {
-		return;
-	}
-	lock_guard<mutex> path_lock(db_paths_lock);
-	auto entry = db_paths.find(path);
-	if (entry != db_paths.end()) {
-		entry->second.is_attached = false;
-	}
 }
 
 } // namespace duckdb

@@ -20,11 +20,10 @@ struct AttachOptions;
 enum class InsertDatabasePathResult { SUCCESS, ALREADY_EXISTS };
 
 struct DatabasePathInfo {
-	explicit DatabasePathInfo(string name_p) : name(std::move(name_p)), is_attached(true) {
+	explicit DatabasePathInfo(string name_p) : name(std::move(name_p)) {
 	}
 
 	string name;
-	bool is_attached;
 };
 
 //! The DatabaseFilePathManager is used to ensure we only ever open a single database file once
@@ -35,8 +34,6 @@ public:
 	                                            AttachOptions &options);
 	//! Erase a database path - indicating we are done with using it
 	void EraseDatabasePath(const string &path);
-	//! Called when a database is detached, but before it is fully finished being used
-	void DetachDatabase(const string &path);
 
 private:
 	//! The lock to add entries to the db_paths map

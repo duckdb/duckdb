@@ -42,8 +42,6 @@ struct StoredDatabasePath {
 
 	DatabaseFilePathManager &manager;
 	string path;
-
-	void OnDetach();
 };
 
 //! AttachOptions holds information about a database we plan to attach. These options are generalized, i.e.,

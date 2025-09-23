@@ -95,6 +95,12 @@
         "test/fuzzer/sqlsmith/nullif_map_with_config.test",
         "test/sql/storage/memory/in_memory_compress.test"
       ]
+    },
+    {
+      "reason": "FIXME: Attempting to checkpoint read-only database.",
+      "paths": [
+        "test/sql/storage/read_duckdb/read_duckdb_index.test"
+      ]
     }
   ]
 }
