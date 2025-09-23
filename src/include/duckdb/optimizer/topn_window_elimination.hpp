@@ -24,6 +24,8 @@ public:
 private:
 	//! Whether we can perform the optimization on this operator
 	static bool CanOptimize(LogicalOperator &op, optional_ptr<ClientContext> context = nullptr);
+	unique_ptr<LogicalOperator> OptimizeInternal(unique_ptr<LogicalOperator> op, bool &update_table_idx,
+	                                             idx_t &new_table_idx);
 
 	unique_ptr<LogicalOperator> CreateAggregateOperator(vector<unique_ptr<Expression>> children, LogicalWindow &window,
 	                                                    unique_ptr<Expression> limit) const;
@@ -34,7 +36,8 @@ private:
 
 	unique_ptr<LogicalOperator> CreateUnnestStructOperator(const child_list_t<LogicalType> &input_types,
 	                                                       idx_t unnest_list_idx, idx_t table_idx,
-	                                                       bool include_row_number, idx_t row_number_idx) const;
+	                                                       bool include_row_number,
+	                                                       const set<idx_t> &row_number_idxs) const;
 
 	ClientContext &context;
 	Optimizer &optimizer;
