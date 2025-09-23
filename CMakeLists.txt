@@ -1082,17 +1082,25 @@ endfunction()
 # Downloads the external extension repo at the specified commit and calls register_extension
 macro(register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD LOAD_TESTS PATH INCLUDE_PATH TEST_PATH APPLY_PATCHES LINKED_LIBS SUBMODULES EXTENSION_VERSION)
   include(FetchContent)
-  if (${APPLY_PATCHES})
-    set(PATCH_COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/apply_extension_patches.py ${CMAKE_SOURCE_DIR}/.github/patches/extensions/${NAME}/)
+
+  string(TOUPPER "${NAME}_DIRECTORY" DIRECTORY_OVERRIDE)
+  if(DEFINED ENV{${DIRECTORY_OVERRIDE}})
+    set("${NAME}_extension_fc_SOURCE_DIR" "$ENV{${DIRECTORY_OVERRIDE}}")
+    message(STATUS "Load extension '${NAME}' from local path \"${${NAME}_extension_fc_SOURCE_DIR}\"")
+  else()
+    if (${APPLY_PATCHES})
+      set(PATCH_COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/apply_extension_patches.py ${CMAKE_SOURCE_DIR}/.github/patches/extensions/${NAME}/)
+    endif()
+    FETCHCONTENT_DECLARE(
+            ${NAME}_extension_fc
+            GIT_REPOSITORY ${URL}
+            GIT_TAG ${COMMIT}
+            GIT_SUBMODULES "${SUBMODULES}"
+            PATCH_COMMAND ${PATCH_COMMAND}
+    )
+    FETCHCONTENT_POPULATE(${NAME}_EXTENSION_FC)
+    message(STATUS "Load extension '${NAME}' from ${URL} @ ${EXTERNAL_EXTENSION_VERSION}")
   endif()
-  FETCHCONTENT_DECLARE(
-          ${NAME}_extension_fc
-          GIT_REPOSITORY ${URL}
-          GIT_TAG ${COMMIT}
-          GIT_SUBMODULES "${SUBMODULES}"
-          PATCH_COMMAND ${PATCH_COMMAND}
-  )
-  FETCHCONTENT_POPULATE(${NAME}_EXTENSION_FC)
 
   # Autogenerate version tag if not provided
   if ("${EXTENSION_VERSION}" STREQUAL "")
@@ -1100,8 +1108,6 @@ macro(register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD LOAD_TEST
   else()
     set(EXTERNAL_EXTENSION_VERSION "${EXTENSION_VERSION}")
   endif()
-
-  message(STATUS "Load extension '${NAME}' from ${URL} @ ${EXTERNAL_EXTENSION_VERSION}")
 
   string(TOUPPER ${NAME} EXTENSION_NAME_UPPERCASE)
   set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_EXT_VERSION "${EXTERNAL_EXTENSION_VERSION}" PARENT_SCOPE)
