@@ -81,7 +81,7 @@ FileHandle &CachingFileHandle::GetFileHandle() {
 
 BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, const idx_t location) {
 	BufferHandle result;
-	if (!external_file_cache.IsEnabled()) {
+	if (!external_file_cache.IsEnabled() || GetFileHandle().IsPipe()) {
 		result = external_file_cache.GetBufferManager().Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
 		buffer = result.Ptr();
 		GetFileHandle().Read(context, buffer, nr_bytes, location);
