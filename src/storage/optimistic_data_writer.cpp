@@ -48,14 +48,15 @@ unique_ptr<OptimisticWriteCollection> OptimisticDataWriter::CreateCollection(Dat
 }
 
 void OptimisticDataWriter::WriteNewRowGroup(OptimisticWriteCollection &row_groups) {
+	static constexpr const idx_t ROW_GROUP_FLUSH_THRESHOLD = 5;
 	// we finished writing a complete row group
 	if (!PrepareWrite()) {
 		return;
 	}
 	row_groups.complete_row_groups++;
 	auto unflushed_row_groups = row_groups.complete_row_groups - row_groups.last_flushed;
-	if (unflushed_row_groups >= 5) {
-		// we have 5 unflushed row groups - flush
+	if (unflushed_row_groups >= ROW_GROUP_FLUSH_THRESHOLD) {
+		// we have crossed our flush threshold - flush any unwritten row groups to disk
 		vector<reference<RowGroup>> to_flush;
 		for (idx_t i = row_groups.last_flushed; i < row_groups.complete_row_groups; i++) {
 			to_flush.push_back(*row_groups.collection->GetRowGroup(NumericCast<int64_t>(i)));
