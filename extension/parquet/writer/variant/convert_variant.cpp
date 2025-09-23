@@ -490,7 +490,9 @@ static void WriteValueData(const UnifiedVariantVectorData &variant, idx_t row, u
 
 			memcpy(value_data, reinterpret_cast<data_ptr_t>(&total_offset), field_offset_size);
 			value_data += field_offset_size;
+			auto start_ptr = children_ptr;
 			WriteValueData(variant, row, values_index, children_ptr, offsets, offset_index);
+			total_offset += (children_ptr - start_ptr);
 		}
 		memcpy(value_data, reinterpret_cast<data_ptr_t>(&total_offset), field_offset_size);
 		value_data = children_ptr;
