@@ -236,6 +236,8 @@ enum class LogLevel : uint8_t;
 
 enum class LogMode : uint8_t;
 
+enum class LoggingTargetTable : uint8_t;
+
 enum class LogicalOperatorType : uint8_t;
 
 enum class LogicalTypeId : uint8_t;
@@ -752,6 +754,9 @@ const char* EnumUtil::ToChars<LogLevel>(LogLevel value);
 
 template<>
 const char* EnumUtil::ToChars<LogMode>(LogMode value);
+
+template<>
+const char* EnumUtil::ToChars<LoggingTargetTable>(LoggingTargetTable value);
 
 template<>
 const char* EnumUtil::ToChars<LogicalOperatorType>(LogicalOperatorType value);
@@ -1374,6 +1379,9 @@ LogLevel EnumUtil::FromString<LogLevel>(const char *value);
 
 template<>
 LogMode EnumUtil::FromString<LogMode>(const char *value);
+
+template<>
+LoggingTargetTable EnumUtil::FromString<LoggingTargetTable>(const char *value);
 
 template<>
 LogicalOperatorType EnumUtil::FromString<LogicalOperatorType>(const char *value);

@@ -12,6 +12,10 @@ struct DuckDBSettingValue {
 	string input_type;
 	string scope;
 	vector<Value> aliases;
+
+	inline bool operator<(const DuckDBSettingValue &rhs) const {
+		return name < rhs.name;
+	};
 };
 
 struct DuckDBSettingsData : public GlobalTableFunctionState {
@@ -79,7 +83,12 @@ unique_ptr<GlobalTableFunctionState> DuckDBSettingsInit(ClientContext &context, 
 		if (entry != aliases.end()) {
 			value.aliases = std::move(entry->second);
 		}
-
+		for (auto &alias : value.aliases) {
+			DuckDBSettingValue alias_value = value;
+			alias_value.name = StringValue::Get(alias);
+			alias_value.aliases.clear();
+			result->settings.push_back(std::move(alias_value));
+		}
 		result->settings.push_back(std::move(value));
 	}
 	for (auto &ext_param : config.extension_parameters) {
@@ -98,6 +107,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBSettingsInit(ClientContext &context, 
 
 		result->settings.push_back(std::move(value));
 	}
+	std::sort(result->settings.begin(), result->settings.end());
 	return std::move(result);
 }
 

@@ -62,8 +62,9 @@ void StructColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *
 	auto &validity = FlatVector::Validity(vector);
 	if (parent) {
 		// propagate empty entries from the parent
-		while (state.is_empty.size() < parent->is_empty.size()) {
-			state.is_empty.push_back(parent->is_empty[state.is_empty.size()]);
+		if (state.is_empty.size() < parent->is_empty.size()) {
+			state.is_empty.insert(state.is_empty.end(), parent->is_empty.begin() + state.is_empty.size(),
+			                      parent->is_empty.end());
 		}
 	}
 	HandleRepeatLevels(state_p, parent, count, MaxRepeat());
