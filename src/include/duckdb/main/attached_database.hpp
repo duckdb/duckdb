@@ -112,7 +112,6 @@ public:
 	void SetInitialDatabase();
 	void SetReadOnlyDatabase();
 	void OnDetach(ClientContext &context);
-	string StoredPath() const;
 	AttachVisibility GetVisibility() const {
 		return visibility;
 	}
