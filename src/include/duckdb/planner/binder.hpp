@@ -118,8 +118,6 @@ public:
 	ClientContext &context;
 	//! A mapping of names to common table expressions
 	case_insensitive_set_t CTE_bindings; // NOLINT
-	//! The CTEs that have already been bound
-	reference_set_t<CommonTableExpressionInfo> bound_ctes;
 	//! The bind context
 	BindContext bind_context;
 	//! The set of correlated columns bound by this binder (FIXME: this should probably be an unordered_set and not a
@@ -367,7 +365,7 @@ private:
 	unique_ptr<BoundTableRef> Bind(BaseTableRef &ref);
 	unique_ptr<BoundTableRef> Bind(BoundRefWrapper &ref);
 	unique_ptr<BoundTableRef> Bind(JoinRef &ref);
-	unique_ptr<BoundTableRef> Bind(SubqueryRef &ref, optional_ptr<CommonTableExpressionInfo> cte = nullptr);
+	unique_ptr<BoundTableRef> Bind(SubqueryRef &ref);
 	unique_ptr<BoundTableRef> Bind(TableFunctionRef &ref);
 	unique_ptr<BoundTableRef> Bind(EmptyTableRef &ref);
 	unique_ptr<BoundTableRef> Bind(DelimGetRef &ref);
