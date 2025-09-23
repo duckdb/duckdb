@@ -35,10 +35,9 @@ void ArrayColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *p
 	// write definition levels and repeats
 	// the main difference between this and ListColumnWriter::Prepare is that we need to make sure to write out
 	// repetition levels and definitions for the child elements of the array even if the array itself is NULL.
-	idx_t start = 0;
 	idx_t vcount = parent ? parent->definition_levels.size() - state.parent_index : count;
 	idx_t vector_index = 0;
-	for (idx_t i = start; i < vcount; i++) {
+	for (idx_t i = 0; i < vcount; i++) {
 		idx_t parent_index = state.parent_index + i;
 		if (parent && !parent->is_empty.empty() && parent->is_empty[parent_index]) {
 			WriteArrayState(state, array_size, parent->repetition_levels[parent_index],

@@ -31,6 +31,7 @@ struct VariantNestedData {
 struct VariantDecimalData {
 	uint32_t width;
 	uint32_t scale;
+	const_data_ptr_t value_ptr;
 };
 
 struct VariantVectorData {

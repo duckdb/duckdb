@@ -74,8 +74,8 @@ VariantMetadata::VariantMetadata(const string_t &metadata) : metadata(metadata) 
 	const_data_ptr_t ptr = reinterpret_cast<const_data_ptr_t>(metadata_data + sizeof(uint8_t));
 	idx_t dictionary_size = ReadVariableLengthLittleEndian(header.offset_size, ptr);
 
-	offsets = ptr;
-	bytes = offsets + ((dictionary_size + 1) * header.offset_size);
+	auto offsets = ptr;
+	auto bytes = offsets + ((dictionary_size + 1) * header.offset_size);
 	idx_t last_offset = ReadVariableLengthLittleEndian(header.offset_size, ptr);
 	for (idx_t i = 0; i < dictionary_size; i++) {
 		auto next_offset = ReadVariableLengthLittleEndian(header.offset_size, ptr);
