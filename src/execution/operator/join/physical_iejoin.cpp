@@ -231,6 +231,7 @@ OperatorResultType PhysicalIEJoin::ExecuteInternal(ExecutionContext &context, Da
 //===--------------------------------------------------------------------===//
 struct IEJoinUnion {
 	using SortedTable = PhysicalRangeJoin::GlobalSortedTable;
+	using ChunkRange = std::pair<idx_t, idx_t>;
 
 	//	Comparison utilities
 	static bool IsStrictComparison(ExpressionType comparison) {
@@ -262,11 +263,12 @@ struct IEJoinUnion {
 	static bool CompareKeys(ExternalBlockIteratorState &state1, const idx_t pos1, ExternalBlockIteratorState &state2,
 	                        const idx_t pos2, bool strict, const SortKeyType &sort_key_type);
 
-	static bool CompareBounds(SortedTable &t1, const idx_t b1, SortedTable &t2, const idx_t b2, bool strict);
+	static bool CompareBounds(SortedTable &t1, const ChunkRange &b1, SortedTable &t2, const ChunkRange &b2,
+	                          bool strict);
 
 	static idx_t AppendKey(ExecutionContext &context, InterruptState &interrupt, SortedTable &table,
 	                       ExpressionExecutor &executor, SortedTable &marked, int64_t increment, int64_t rid,
-	                       const idx_t chunk_idx);
+	                       const ChunkRange &range);
 
 	static void Sort(ExecutionContext &context, InterruptState &interrupt, SortedTable &table) {
 		table.Finalize(context.client, interrupt);
@@ -301,6 +303,8 @@ struct IEJoinUnion {
 	public:
 		explicit UnionIterator(SortedTable &table, bool strict)
 		    : state(*table.sorted->key_data, table.sorted->payload_data.get()), strict(strict) {
+			state.SetKeepPinned(true);
+			state.SetPinPayload(true);
 		}
 
 		inline idx_t GetIndex() const {
@@ -321,8 +325,8 @@ struct IEJoinUnion {
 		const bool strict;
 	};
 
-	IEJoinUnion(ExecutionContext &context, const PhysicalIEJoin &op, SortedTable &t1, const idx_t b1, SortedTable &t2,
-	            const idx_t b2);
+	IEJoinUnion(ExecutionContext &context, const PhysicalIEJoin &op, SortedTable &t1, const ChunkRange &b1,
+	            SortedTable &t2, const ChunkRange &b2);
 
 	idx_t SearchL1(idx_t pos);
 
@@ -368,8 +372,9 @@ struct IEJoinUnion {
 
 idx_t IEJoinUnion::AppendKey(ExecutionContext &context, InterruptState &interrupt, SortedTable &table,
                              ExpressionExecutor &executor, SortedTable &marked, int64_t increment, int64_t rid,
-                             const idx_t chunk_begin) {
-	const auto chunk_end = chunk_begin + 1;
+                             const ChunkRange &chunk_range) {
+	const auto chunk_begin = chunk_range.first;
+	const auto chunk_end = chunk_range.second;
 
 	// Reading
 	const auto valid = table.count - table.has_null;
@@ -484,22 +489,23 @@ bool IEJoinUnion::CompareKeys(ExternalBlockIteratorState &state1, const idx_t po
 	}
 }
 
-bool IEJoinUnion::CompareBounds(SortedTable &t1, const idx_t b1, SortedTable &t2, const idx_t b2, bool strict) {
+bool IEJoinUnion::CompareBounds(SortedTable &t1, const ChunkRange &b1, SortedTable &t2, const ChunkRange &b2,
+                                bool strict) {
 	auto &keys1 = *t1.sorted->key_data;
 	ExternalBlockIteratorState state1(keys1, nullptr);
-	const idx_t pos1 = t1.BlockStart(b1);
+	const idx_t pos1 = t1.BlockStart(b1.first);
 
 	auto &keys2 = *t2.sorted->key_data;
 	ExternalBlockIteratorState state2(keys2, nullptr);
-	const idx_t pos2 = t2.BlockEnd(b2);
+	const idx_t pos2 = t2.BlockEnd(b2.second - 1);
 
 	const auto sort_key_type = t1.GetSortKeyType();
 	D_ASSERT(sort_key_type == t2.GetSortKeyType());
 	return CompareKeys(state1, pos1, state2, pos2, strict, sort_key_type);
 }
 
-IEJoinUnion::IEJoinUnion(ExecutionContext &context, const PhysicalIEJoin &op, SortedTable &t1, const idx_t b1,
-                         SortedTable &t2, const idx_t b2)
+IEJoinUnion::IEJoinUnion(ExecutionContext &context, const PhysicalIEJoin &op, SortedTable &t1, const ChunkRange &b1,
+                         SortedTable &t2, const ChunkRange &b2)
     : n(0), i(0) {
 	// input : query Q with 2 join predicates t1.X op1 t2.X' and t1.Y op2 t2.Y', tables T, T' of sizes m and n resp.
 	// output: a list of tuple pairs (ti , tj)
@@ -509,7 +515,7 @@ IEJoinUnion::IEJoinUnion(ExecutionContext &context, const PhysicalIEJoin &op, So
 	InterruptState interrupt;
 
 	// 0. Filter out tables with no overlap
-	if (t1.sorted->key_data->ChunkCount() <= b1 || t2.sorted->key_data->ChunkCount() <= b2) {
+	if (t1.sorted->key_data->ChunkCount() <= b1.first || t2.sorted->key_data->ChunkCount() <= b2.first) {
 		return;
 	}
 
@@ -605,9 +611,7 @@ IEJoinUnion::IEJoinUnion(ExecutionContext &context, const PhysicalIEJoin &op, So
 	executor.AddExpression(*orders[0].expression);
 
 	l2 = make_uniq<SortedTable>(context.client, orders, types, op);
-	for (idx_t base = 0, block_idx = 0; block_idx < l1->BlockCount(); ++block_idx) {
-		base += AppendKey(context, interrupt, *l1, executor, *l2, 1, NumericCast<int64_t>(base), block_idx);
-	}
+	AppendKey(context, interrupt, *l1, executor, *l2, 1, 0, {0, l1->BlockCount()});
 
 	Sort(context, interrupt, *l2);
 
@@ -1010,30 +1014,24 @@ public:
 	      right_outers(0), next_right(0) {
 	}
 
-	void Initialize() {
+	void Initialize(ClientContext &client) {
 		auto guard = Lock();
 		if (initialized) {
 			return;
 		}
 
+		//	How many threads are we using?
+		auto &ts = TaskScheduler::GetScheduler(client);
+		const auto threads = NumericCast<idx_t>(ts.NumberOfThreads());
+
 		// Compute the starting row for each block
-		// (In theory these are all the same size, but you never know...)
 		auto &left_table = *gsink.tables[0];
 		const auto left_blocks = left_table.BlockCount();
-		idx_t left_base = 0;
-
-		for (size_t lhs = 0; lhs < left_blocks; ++lhs) {
-			left_bases.emplace_back(left_base);
-			left_base += left_table.BlockSize(lhs);
-		}
+		left_per_thread = MaxValue<idx_t>(1, (left_blocks + threads - 1) / threads);
 
 		auto &right_table = *gsink.tables[1];
 		const auto right_blocks = right_table.BlockCount();
-		idx_t right_base = 0;
-		for (size_t rhs = 0; rhs < right_blocks; ++rhs) {
-			right_bases.emplace_back(right_base);
-			right_base += right_table.BlockSize(rhs);
-		}
+		right_per_thread = MaxValue<idx_t>(1, (right_blocks + threads - 1) / threads);
 
 		// Outer join block counts
 		if (left_table.found_match) {
@@ -1056,26 +1054,33 @@ public:
 	}
 
 	void GetNextPair(ExecutionContext &context, IEJoinLocalSourceState &lstate) {
+		using ChunkRange = IEJoinUnion::ChunkRange;
 		auto &left_table = *gsink.tables[0];
 		auto &right_table = *gsink.tables[1];
 
 		const auto left_blocks = left_table.BlockCount();
+		const auto left_ranges = (left_blocks + left_per_thread - 1) / left_per_thread;
+
 		const auto right_blocks = right_table.BlockCount();
-		const auto pair_count = left_blocks * right_blocks;
+		const auto right_ranges = (right_blocks + right_per_thread - 1) / right_per_thread;
+
+		const auto pair_count = left_ranges * right_ranges;
 
 		// Regular block
 		const auto i = next_pair++;
 		if (i < pair_count) {
-			const auto b1 = i / right_blocks;
-			const auto b2 = i % right_blocks;
+			const auto b1 = (i / right_ranges) * left_per_thread;
+			const auto b2 = (i % right_ranges) * right_per_thread;
 
-			lstate.left_block_index = b1;
-			lstate.left_base = left_bases[b1];
+			ChunkRange l_range {b1, MinValue(left_blocks, b1 + left_per_thread)};
+			lstate.left_block_index = l_range.first;
+			lstate.left_base = left_table.BlockStart(l_range.first);
 
-			lstate.right_block_index = b2;
-			lstate.right_base = right_bases[b2];
+			ChunkRange r_range {b2, MinValue(right_blocks, b2 + right_per_thread)};
+			lstate.right_block_index = r_range.first;
+			lstate.right_base = right_table.BlockStart(r_range.first);
 
-			lstate.joiner = make_uniq<IEJoinUnion>(context, op, left_table, b1, right_table, b2);
+			lstate.joiner = make_uniq<IEJoinUnion>(context, op, left_table, l_range, right_table, r_range);
 			return;
 		}
 
@@ -1094,7 +1099,7 @@ public:
 		if (l < left_outers) {
 			lstate.joiner = nullptr;
 			lstate.left_block_index = l;
-			lstate.left_base = left_bases[l];
+			lstate.left_base = left_table.BlockStart(l);
 
 			lstate.left_matches = left_table.found_match.get() + lstate.left_base;
 			lstate.outer_idx = 0;
@@ -1109,7 +1114,7 @@ public:
 		if (r < right_outers) {
 			lstate.joiner = nullptr;
 			lstate.right_block_index = r;
-			lstate.right_base = right_bases[r];
+			lstate.right_base = right_table.BlockStart(r);
 
 			lstate.right_matches = right_table.found_match.get() + lstate.right_base;
 			lstate.outer_idx = 0;
@@ -1153,15 +1158,13 @@ public:
 	const PhysicalIEJoin &op;
 	IEJoinGlobalState &gsink;
 
-	bool initialized;
+	bool initialized = false;
 
 	// Join queue state
+	idx_t left_per_thread = 0;
+	idx_t right_per_thread = 0;
 	atomic<size_t> next_pair;
 	atomic<size_t> completed;
-
-	// Block base row number
-	vector<idx_t> left_bases;
-	vector<idx_t> right_bases;
 
 	// Outer joins
 	atomic<idx_t> left_outers;
@@ -1192,7 +1195,7 @@ SourceResultType PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &r
 	auto &ie_gstate = input.global_state.Cast<IEJoinGlobalSourceState>();
 	auto &ie_lstate = input.local_state.Cast<IEJoinLocalSourceState>();
 
-	ie_gstate.Initialize();
+	ie_gstate.Initialize(context.client);
 
 	if (!ie_lstate.joiner && !ie_lstate.left_matches && !ie_lstate.right_matches) {
 		ie_gstate.GetNextPair(context, ie_lstate);
