@@ -580,8 +580,7 @@ typedef struct {
 
 // API to manage file system operations
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
-	void (*duckdb_connection_get_file_system)(duckdb_connection connection, duckdb_file_system *out_file_system);
-	void (*duckdb_client_context_get_file_system)(duckdb_client_context context, duckdb_file_system *out_file_system);
+	duckdb_file_system (*duckdb_client_context_get_file_system)(duckdb_client_context context);
 	void (*duckdb_destroy_file_system)(duckdb_file_system *file_system);
 	duckdb_state (*duckdb_file_system_open)(duckdb_file_system file_system, const char *path,
 	                                        duckdb_file_open_options options, duckdb_file_handle *out_file);
@@ -1117,7 +1116,6 @@ typedef struct {
 #define duckdb_expression_fold        duckdb_ext_api.duckdb_expression_fold
 
 // Version unstable_new_file_system_api
-#define duckdb_connection_get_file_system     duckdb_ext_api.duckdb_connection_get_file_system
 #define duckdb_client_context_get_file_system duckdb_ext_api.duckdb_client_context_get_file_system
 #define duckdb_destroy_file_system            duckdb_ext_api.duckdb_destroy_file_system
 #define duckdb_file_system_error_data         duckdb_ext_api.duckdb_file_system_error_data

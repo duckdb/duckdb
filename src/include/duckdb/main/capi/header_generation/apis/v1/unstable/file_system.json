@@ -2,7 +2,6 @@
   "version": "unstable_new_file_system_api",
   "description": "API to manage file system operations",
   "entries": [
-    "duckdb_connection_get_file_system",
     "duckdb_client_context_get_file_system",
     "duckdb_destroy_file_system",
     "duckdb_file_system_open",

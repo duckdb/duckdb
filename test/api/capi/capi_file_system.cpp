@@ -135,26 +135,18 @@ static void test_file_system(duckdb_file_system fs, string file_name) {
 
 TEST_CASE("Test File System in C API", "[capi]") {
 	CAPITester tester;
+	duckdb_client_context context;
 	duckdb_file_system fs;
 	duckdb::unique_ptr<CAPIResult> result;
 
 	REQUIRE(tester.OpenDatabase(nullptr));
-	duckdb_connection_get_file_system(tester.connection, &fs);
+
+	// get a file system from the client context
+	duckdb_connection_get_client_context(tester.connection, &context);
+	fs = duckdb_client_context_get_file_system(context);
 	REQUIRE(fs != nullptr);
 
 	test_file_system(fs, "test_file_capi_1.txt");
-
-	duckdb_destroy_file_system(&fs);
-	REQUIRE(fs == nullptr);
-
-	// get a file system from the client context as well
-	duckdb_client_context context;
-	duckdb_connection_get_client_context(tester.connection, &context);
-
-	duckdb_client_context_get_file_system(context, &fs);
-	REQUIRE(fs != nullptr);
-
-	test_file_system(fs, "test_file_capi_2.txt");
 
 	duckdb_destroy_file_system(&fs);
 	REQUIRE(fs == nullptr);

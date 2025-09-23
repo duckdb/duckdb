@@ -3,45 +3,20 @@
   "deprecated": false,
   "entries": [
     {
-      "name": "duckdb_connection_get_file_system",
-      "return_type": "void",
-      "params": [
-        {
-          "type": "duckdb_connection",
-          "name": "connection"
-        },
-        {
-          "type": "duckdb_file_system*",
-          "name": "out_file_system"
-        }
-      ],
-      "comment": {
-        "description": "Get a file system instance associated with the given connection.\nMust be destroyed with `duckdb_destroy_file_system`\n\n",
-        "param_comments": {
-          "connection": "The database connection.",
-          "out_file_system": "The resulting file system instance, or `nullptr` if not available. Must be destroyed with `duckdb_destroy_file_system`."
-        }
-      }
-    },
-    {
       "name": "duckdb_client_context_get_file_system",
-      "return_type": "void",
+      "return_type": "duckdb_file_system",
       "params": [
         {
           "type": "duckdb_client_context",
           "name": "context"
-        },
-        {
-          "type": "duckdb_file_system*",
-          "name": "out_file_system"
         }
       ],
       "comment": {
         "description": "Get a file system instance associated with the given client context.\nMust be destroyed with `duckdb_destroy_file_system`\n\n",
         "param_comments": {
-          "context": "The client context.",
-          "out_file_system": "The resulting file system instance, or `nullptr` if not available. Must be destroyed with `duckdb_destroy_file_system`."
-        }
+          "context": "The client context."
+        },
+        "return_value": "The resulting file system instance. Must be destroyed with `duckdb_destroy_file_system`."
       }
     },
     {

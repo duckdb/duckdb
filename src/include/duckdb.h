@@ -5196,25 +5196,13 @@ DUCKDB_C_API duckdb_error_data duckdb_expression_fold(duckdb_client_context cont
 //===--------------------------------------------------------------------===//
 
 /*!
-Get a file system instance associated with the given connection.
-Must be destroyed with `duckdb_destroy_file_system`
-
-* @param connection The database connection.
-* @param out_file_system The resulting file system instance, or `nullptr` if not available. Must be destroyed with
-`duckdb_destroy_file_system`.
-*/
-DUCKDB_C_API void duckdb_connection_get_file_system(duckdb_connection connection, duckdb_file_system *out_file_system);
-
-/*!
 Get a file system instance associated with the given client context.
 Must be destroyed with `duckdb_destroy_file_system`
 
 * @param context The client context.
-* @param out_file_system The resulting file system instance, or `nullptr` if not available. Must be destroyed with
-`duckdb_destroy_file_system`.
+* @return The resulting file system instance. Must be destroyed with `duckdb_destroy_file_system`.
 */
-DUCKDB_C_API void duckdb_client_context_get_file_system(duckdb_client_context context,
-                                                        duckdb_file_system *out_file_system);
+DUCKDB_C_API duckdb_file_system duckdb_client_context_get_file_system(duckdb_client_context context);
 
 /*!
 Destroys the given file system instance.

@@ -37,32 +37,13 @@ struct CFileHandle {
 } // namespace
 } // namespace duckdb
 
-void duckdb_connection_get_file_system(duckdb_connection connection, duckdb_file_system *out_file_system) {
-	if (!connection || !out_file_system) {
-		*out_file_system = nullptr;
-		return;
-	}
-	auto conn = reinterpret_cast<duckdb::Connection *>(connection);
-	try {
-		auto wrapper = new duckdb::CFileSystem(duckdb::FileSystem::GetFileSystem(*conn->context));
-		*out_file_system = reinterpret_cast<duckdb_file_system>(wrapper);
-	} catch (...) {
-		*out_file_system = nullptr;
-	}
-}
-
-void duckdb_client_context_get_file_system(duckdb_client_context context, duckdb_file_system *out_file_system) {
-	if (!context || !out_file_system) {
-		*out_file_system = nullptr;
-		return;
+duckdb_file_system duckdb_client_context_get_file_system(duckdb_client_context context) {
+	if (!context) {
+		return nullptr;
 	}
 	auto ctx = reinterpret_cast<duckdb::CClientContextWrapper *>(context);
-	try {
-		auto wrapper = new duckdb::CFileSystem(duckdb::FileSystem::GetFileSystem(ctx->context));
-		*out_file_system = reinterpret_cast<duckdb_file_system>(wrapper);
-	} catch (...) {
-		*out_file_system = nullptr;
-	}
+	auto wrapper = new duckdb::CFileSystem(duckdb::FileSystem::GetFileSystem(ctx->context));
+	return reinterpret_cast<duckdb_file_system>(wrapper);
 }
 
 void duckdb_destroy_file_system(duckdb_file_system *file_system) {
