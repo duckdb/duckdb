@@ -18,7 +18,6 @@
 #include "duckdb/storage/statistics/segment_statistics.hpp"
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/storage/table/segment_base.hpp"
-#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
