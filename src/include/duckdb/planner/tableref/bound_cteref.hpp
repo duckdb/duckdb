@@ -19,13 +19,12 @@ public:
 
 public:
 	BoundCTERef(idx_t bind_index, idx_t cte_index)
-	    : BoundTableRef(TableReferenceType::CTE), bind_index(bind_index), cte_index(cte_index)
-	      {
+	    : BoundTableRef(TableReferenceType::CTE), bind_index(bind_index), cte_index(cte_index) {
 	}
 
 	BoundCTERef(idx_t bind_index, idx_t cte_index, bool is_recurring)
 	    : BoundTableRef(TableReferenceType::CTE), bind_index(bind_index), cte_index(cte_index),
-	       is_recurring(is_recurring) {
+	      is_recurring(is_recurring) {
 	}
 	//! The set of columns bound to this base table reference
 	vector<string> bound_columns;
