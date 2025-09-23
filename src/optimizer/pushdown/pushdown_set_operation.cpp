@@ -51,39 +51,28 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<Logi
 		// pushdown into the child
 		child = child_pushdown.Rewrite(std::move(child));
 	}
+	bool all_empty = true;
+	for (auto &child : op->children) {
+		if (child->type != LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
+			all_empty = false;
+		}
+	}
+	if (all_empty) {
+		// all sides are empty: the result must be empty
+		return make_uniq<LogicalEmptyResult>(std::move(op));
+	}
 	if (op->type == LogicalOperatorType::LOGICAL_UNION) {
-		// for UNION we can erase all children that are empty
+		// for UNION (ALL) - delete all empty children and return
 		for (idx_t i = 0; i < op->children.size(); i++) {
 			if (op->children[i]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
 				op->children.erase(op->children.begin() + static_cast<int64_t>(i));
 				i--;
 			}
 		}
-		switch (op->children.size()) {
-		case 0:
-			// no children left
-			return make_uniq<LogicalEmptyResult>(std::move(op));
-		case 1: {
-			// single child left
-			if (op->children[0]->type == LogicalOperatorType::LOGICAL_PROJECTION) {
-				// union or except with empty right child: return left child
-				auto &projection = op->children[0]->Cast<LogicalProjection>();
-				projection.table_index = setop.table_index;
-				return std::move(op->children[0]);
-			}
-			return op;
-		}
-		default:
-			// return the operator
-			return op;
-		}
+		return op;
 	}
 	bool left_empty = op->children[0]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT;
 	bool right_empty = op->children[1]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT;
-	if (left_empty && right_empty) {
-		// both empty: return empty result
-		return make_uniq<LogicalEmptyResult>(std::move(op));
-	}
 	if (left_empty && setop.setop_all) {
 		// left child is empty result
 		switch (op->type) {
