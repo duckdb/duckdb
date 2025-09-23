@@ -193,12 +193,7 @@ public:
 
 	void CreateNewCollection(ClientContext &context, DuckTableEntry &table_entry,
 	                         const vector<LogicalType> &insert_types) {
-		auto table_info = table_entry.GetStorage().GetDataTableInfo();
-		auto &io_manager = TableIOManager::Get(table_entry.GetStorage());
-
-		// Create the local row group collection.
-		auto max_row_id = NumericCast<idx_t>(MAX_ROW_ID);
-		auto collection = make_uniq<RowGroupCollection>(std::move(table_info), io_manager, insert_types, max_row_id);
+		auto collection = OptimisticDataWriter::CreateCollection(table_entry.GetStorage(), insert_types);
 		collection->InitializeEmpty();
 		collection->InitializeAppend(current_append_state);
 

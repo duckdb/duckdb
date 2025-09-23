@@ -33,6 +33,16 @@ bool OptimisticDataWriter::PrepareWrite() {
 	return true;
 }
 
+unique_ptr<RowGroupCollection> OptimisticDataWriter::CreateCollection(DataTable &storage,
+                                                                      const vector<LogicalType> &insert_types) {
+	auto table_info = storage.GetDataTableInfo();
+	auto &io_manager = TableIOManager::Get(storage);
+
+	// Create the local row group collection.
+	auto max_row_id = NumericCast<idx_t>(MAX_ROW_ID);
+	return make_uniq<RowGroupCollection>(std::move(table_info), io_manager, insert_types, max_row_id);
+}
+
 void OptimisticDataWriter::WriteNewRowGroup(RowGroupCollection &row_groups) {
 	// we finished writing a complete row group
 	if (!PrepareWrite()) {

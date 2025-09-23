@@ -651,12 +651,8 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, DataChunk &insert
 	D_ASSERT(!return_chunk);
 	auto &data_table = gstate.table.GetStorage();
 	if (!lstate.collection_index.IsValid()) {
-		auto table_info = storage.GetDataTableInfo();
-		auto &io_manager = TableIOManager::Get(table.GetStorage());
-
 		// Create the local row group collection.
-		auto max_row_id = NumericCast<idx_t>(MAX_ROW_ID);
-		auto collection = make_uniq<RowGroupCollection>(std::move(table_info), io_manager, insert_types, max_row_id);
+		auto collection = OptimisticDataWriter::CreateCollection(storage, insert_types);
 		collection->InitializeEmpty();
 		collection->InitializeAppend(lstate.local_append_state);
 

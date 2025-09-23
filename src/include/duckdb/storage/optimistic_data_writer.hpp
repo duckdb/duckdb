@@ -19,6 +19,8 @@ public:
 	OptimisticDataWriter(DataTable &table, OptimisticDataWriter &parent);
 	~OptimisticDataWriter();
 
+	//! Creates a collection to write to
+	static unique_ptr<RowGroupCollection> CreateCollection(DataTable &storage, const vector<LogicalType> &insert_types);
 	//! Write a new row group to disk (if possible)
 	void WriteNewRowGroup(RowGroupCollection &row_groups);
 	//! Write the last row group of a collection to disk
