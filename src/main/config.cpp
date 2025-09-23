@@ -448,6 +448,10 @@ void DBConfig::AddExtensionOption(const string &name, string description, Logica
 		options.set_variables[name] = iter->second;
 		options.unrecognized_options.erase(iter);
 	}
+	if (!default_value.IsNull() && options.set_variables.find(name) == options.set_variables.end()) {
+		// Default value is set, insert it into the 'set_variables' list
+		options.set_variables[name] = default_value;
+	}
 }
 
 bool DBConfig::IsInMemoryDatabase(const char *database_path) {
