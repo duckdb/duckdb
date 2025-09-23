@@ -1,4 +1,4 @@
-# name: test/sql/cte/test_giant_union_all.test
+# name: test/sql/cte/test_giant_union_all.test_slow
 # description: Test giant chain of UNION ALL statements
 # group: [cte]
 
