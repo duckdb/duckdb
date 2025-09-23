@@ -9,6 +9,7 @@
 #pragma once
 
 #include "column_writer.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
 
@@ -34,6 +35,25 @@ public:
 	void BeginWrite(ColumnWriterState &state) override;
 	void Write(ColumnWriterState &state, Vector &vector, idx_t count) override;
 	void FinalizeWrite(ColumnWriterState &state) override;
+
+	bool HasTransform() override {
+		return true;
+	}
+	LogicalType TransformedType() override {
+		child_list_t<LogicalType> children;
+		children.emplace_back("metadata", LogicalType::BLOB);
+		children.emplace_back("value", LogicalType::BLOB);
+		return LogicalType::STRUCT(std::move(children));
+	}
+	unique_ptr<Expression> TransformExpression(unique_ptr<BoundReferenceExpression> expr) override {
+		vector<unique_ptr<Expression>> arguments;
+		arguments.push_back(unique_ptr_cast<BoundReferenceExpression, Expression>(std::move(expr)));
+
+		return make_uniq<BoundFunctionExpression>(TransformedType(), GetTransformFunction(), std::move(arguments),
+		                                          nullptr, false);
+	}
+
+	ScalarFunction GetTransformFunction();
 };
 
 } // namespace duckdb

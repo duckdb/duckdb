@@ -459,7 +459,7 @@ void ParquetWriter::PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGro
 			write_states.emplace_back(col_writers.back().get().InitializeWriteState(row_group));
 		}
 
-		for (auto &chunk : buffer.Chunks({column_ids})) {
+		for (auto &chunk : buffer.Chunks(column_ids)) {
 			for (idx_t i = 0; i < next; i++) {
 				if (col_writers[i].get().HasAnalyze()) {
 					col_writers[i].get().Analyze(*write_states[i], nullptr, chunk.data[i], chunk.size());
@@ -578,7 +578,50 @@ void ParquetWriter::Flush(ColumnDataCollection &buffer) {
 	}
 
 	PreparedRowGroup prepared_row_group;
-	PrepareRowGroup(buffer, prepared_row_group);
+
+	bool needs_transform = false;
+	D_ASSERT(buffer.ColumnCount() == column_writers.size());
+	for (idx_t col_idx = 0; col_idx < column_writers.size(); col_idx++) {
+		auto &column_writer = *column_writers[col_idx];
+		if (!column_writer.HasTransform()) {
+			continue;
+		}
+		needs_transform = true;
+	}
+
+	if (needs_transform) {
+		vector<LogicalType> transformed_buffer_types;
+		vector<unique_ptr<Expression>> transform_expressions;
+		D_ASSERT(buffer.ColumnCount() == column_writers.size());
+		for (idx_t col_idx = 0; col_idx < column_writers.size(); col_idx++) {
+			auto &column_writer = *column_writers[col_idx];
+			auto &original_type = buffer.Types()[col_idx];
+			auto expr = make_uniq<BoundReferenceExpression>(original_type, col_idx);
+			if (!column_writer.HasTransform()) {
+				transformed_buffer_types.push_back(original_type);
+				transform_expressions.push_back(std::move(expr));
+				continue;
+			}
+			transformed_buffer_types.push_back(column_writer.TransformedType());
+			transform_expressions.push_back(column_writer.TransformExpression(std::move(expr)));
+		}
+
+		ColumnDataCollection transformed_buffer(GetContext(), transformed_buffer_types,
+		                                        ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
+		DataChunk transformed_chunk;
+		transformed_chunk.Initialize(buffer.GetAllocator(), transformed_buffer_types);
+		ExpressionExecutor executor(GetContext(), transform_expressions);
+
+		for (auto &chunk : buffer.Chunks()) {
+			transformed_chunk.Reset();
+			executor.Execute(chunk, transformed_chunk);
+			transformed_buffer.Append(transformed_chunk);
+		}
+
+		PrepareRowGroup(transformed_buffer, prepared_row_group);
+	} else {
+		PrepareRowGroup(buffer, prepared_row_group);
+	}
 	buffer.Reset();
 
 	FlushRowGroup(prepared_row_group);
