@@ -188,7 +188,6 @@ public:
 	vector<reference<Binding>> FindCTE(const string &name, bool skip = false);
 
 	bool CTEExists(const string &name);
-	bool CTEIsAlreadyBound(CommonTableExpressionInfo &cte);
 
 	//! Add the view to the set of currently bound views - used for detecting recursive view definitions
 	void AddBoundView(ViewCatalogEntry &view);

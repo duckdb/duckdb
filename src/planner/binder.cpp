@@ -371,16 +371,6 @@ bool Binder::CTEExists(const string &name) {
 	return false;
 }
 
-bool Binder::CTEIsAlreadyBound(CommonTableExpressionInfo &cte) {
-	if (bound_ctes.find(cte) != bound_ctes.end()) {
-		return true;
-	}
-	if (parent && binder_type == BinderType::REGULAR_BINDER) {
-		return parent->CTEIsAlreadyBound(cte);
-	}
-	return false;
-}
-
 void Binder::AddBoundView(ViewCatalogEntry &view) {
 	// check if the view is already bound
 	auto current = this;
