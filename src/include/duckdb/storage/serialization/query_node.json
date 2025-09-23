@@ -90,12 +90,14 @@
       {
         "id": 201,
         "name": "left",
-        "type": "QueryNode*"
+        "type": "QueryNode*",
+        "serialize_property": "SerializeChildNode(0)"
       },
       {
         "id": 202,
         "name": "right",
-        "type": "QueryNode*"
+        "type": "QueryNode*",
+        "serialize_property": "SerializeChildNode(1)"
       },
       {
         "id": 203,

@@ -8,28 +8,34 @@ namespace duckdb {
 SetOperationNode::SetOperationNode() : QueryNode(QueryNodeType::SET_OPERATION_NODE) {
 }
 
+const vector<unique_ptr<ParsedExpression>> &SetOperationNode::GetSelectList() const {
+	return children[0]->GetSelectList();
+}
+
 string SetOperationNode::ToString() const {
 	string result;
 	result = cte_map.ToString();
-	result += "(" + left->ToString() + ") ";
+	result += "(" + children[0]->ToString() + ") ";
 
-	switch (setop_type) {
-	case SetOperationType::UNION:
-		result += setop_all ? "UNION ALL" : "UNION";
-		break;
-	case SetOperationType::UNION_BY_NAME:
-		result += setop_all ? "UNION ALL BY NAME" : "UNION BY NAME";
-		break;
-	case SetOperationType::EXCEPT:
-		result += setop_all ? "EXCEPT ALL" : "EXCEPT";
-		break;
-	case SetOperationType::INTERSECT:
-		result += setop_all ? "INTERSECT ALL" : "INTERSECT";
-		break;
-	default:
-		throw InternalException("Unsupported set operation type");
+	for (idx_t i = 1; i < children.size(); i++) {
+		switch (setop_type) {
+		case SetOperationType::UNION:
+			result += setop_all ? "UNION ALL" : "UNION";
+			break;
+		case SetOperationType::UNION_BY_NAME:
+			result += setop_all ? "UNION ALL BY NAME" : "UNION BY NAME";
+			break;
+		case SetOperationType::EXCEPT:
+			result += setop_all ? "EXCEPT ALL" : "EXCEPT";
+			break;
+		case SetOperationType::INTERSECT:
+			result += setop_all ? "INTERSECT ALL" : "INTERSECT";
+			break;
+		default:
+			throw InternalException("Unsupported set operation type");
+		}
+		result += " (" + children[i]->ToString() + ")";
 	}
-	result += " (" + right->ToString() + ")";
 	return result + ResultModifiersToString();
 }
 
@@ -47,11 +53,13 @@ bool SetOperationNode::Equals(const QueryNode *other_p) const {
 	if (setop_all != other.setop_all) {
 		return false;
 	}
-	if (!left->Equals(other.left.get())) {
+	if (children.size() != other.children.size()) {
 		return false;
 	}
-	if (!right->Equals(other.right.get())) {
-		return false;
+	for (idx_t i = 0; i < children.size(); i++) {
+		if (!children[i]->Equals(other.children[i].get())) {
+			return false;
+		}
 	}
 	return true;
 }
@@ -60,55 +68,50 @@ unique_ptr<QueryNode> SetOperationNode::Copy() const {
 	auto result = make_uniq<SetOperationNode>();
 	result->setop_type = setop_type;
 	result->setop_all = setop_all;
-	result->left = left->Copy();
-	result->right = right->Copy();
+	for (auto &child : children) {
+		result->children.push_back(child->Copy());
+	}
 	this->CopyProperties(*result);
 	return std::move(result);
 }
 
 SetOperationNode::SetOperationNode(SetOperationType setop_type, unique_ptr<QueryNode> left, unique_ptr<QueryNode> right,
-                                   vector<unique_ptr<QueryNode>> children, bool setop_all)
+                                   vector<unique_ptr<QueryNode>> children_p, bool setop_all)
     : QueryNode(QueryNodeType::SET_OPERATION_NODE), setop_type(setop_type), setop_all(setop_all) {
-	if (left && right) {
-		// simple case - left/right are supplied
-		this->left = std::move(left);
-		this->right = std::move(right);
-		return;
-	}
-	if (children.size() == 2) {
-		this->left = std::move(children[0]);
-		this->right = std::move(children[1]);
-	}
-	// we have multiple children - we need to construct a tree of set operation nodes
-	if (children.size() <= 1) {
-		throw SerializationException("Set Operation requires at least 2 children");
-	}
-	if (setop_type != SetOperationType::UNION) {
-		throw SerializationException("Multiple children in set-operations are only supported for UNION");
-	}
-	// construct a balanced tree from the union
-	while (children.size() > 2) {
-		vector<unique_ptr<QueryNode>> new_children;
-		for (idx_t i = 0; i < children.size(); i += 2) {
-			if (i + 1 == children.size()) {
-				new_children.push_back(std::move(children[i]));
-			} else {
-				vector<unique_ptr<QueryNode>> empty_children;
-				auto setop_node =
-				    make_uniq<SetOperationNode>(setop_type, std::move(children[i]), std::move(children[i + 1]),
-				                                std::move(empty_children), setop_all);
-				new_children.push_back(std::move(setop_node));
-			}
+	if (children_p.empty()) {
+		if (!left || !right) {
+			throw SerializationException("Error deserializing SetOperationNode - left/right or children must be set");
 		}
-		children = std::move(new_children);
+		children.push_back(std::move(left));
+		children.push_back(std::move(right));
+	} else {
+		if (left || right) {
+			throw SerializationException("Error deserializing SetOperationNode - left/right or children must be set");
+		}
+		children = std::move(children_p);
 	}
-	// two children left - fill in the left/right of this node
-	this->left = std::move(children[0]);
-	this->right = std::move(children[1]);
+	if (children.size() < 2) {
+		throw SerializationException("SetOperationNode must have at least two children");
+	}
+}
+
+unique_ptr<QueryNode> SetOperationNode::SerializeChildNode(idx_t index) const {
+	// backwards compatibility - serialize as left/right if we have exactly two children
+	if (children.size() == 2) {
+		return children[index]->Copy();
+	}
+	return nullptr;
 }
 
 vector<unique_ptr<QueryNode>> SetOperationNode::SerializeChildNodes() const {
-	// we always serialize children as left/right currently
+	// backwards compatibility - only serialize child list if we have more than two children
+	if (children.size() != 2) {
+		vector<unique_ptr<QueryNode>> nodes;
+		for (auto &child : children) {
+			nodes.push_back(child->Copy());
+		}
+		return nodes;
+	}
 	return vector<unique_ptr<QueryNode>>();
 }
 
