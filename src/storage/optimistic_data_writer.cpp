@@ -52,9 +52,17 @@ void OptimisticDataWriter::WriteNewRowGroup(OptimisticWriteCollection &row_group
 	if (!PrepareWrite()) {
 		return;
 	}
-	// flush second-to-last row group
-	auto row_group = row_groups.collection->GetRowGroup(-2);
-	FlushToDisk(*row_group);
+	row_groups.complete_row_groups++;
+	auto unflushed_row_groups = row_groups.complete_row_groups - row_groups.last_flushed;
+	if (unflushed_row_groups >= 5) {
+		// we have 5 unflushed row groups - flush
+		vector<reference<RowGroup>> to_flush;
+		for (idx_t i = row_groups.last_flushed; i < row_groups.complete_row_groups; i++) {
+			to_flush.push_back(*row_groups.collection->GetRowGroup(i));
+		}
+		FlushToDisk(to_flush);
+		row_groups.last_flushed = row_groups.complete_row_groups;
+	}
 }
 
 void OptimisticDataWriter::WriteLastRowGroup(OptimisticWriteCollection &row_groups) {
@@ -62,15 +70,17 @@ void OptimisticDataWriter::WriteLastRowGroup(OptimisticWriteCollection &row_grou
 	if (!PrepareWrite()) {
 		return;
 	}
-	// flush second-to-last row group
-	auto row_group = row_groups.collection->GetRowGroup(-1);
-	if (!row_group) {
-		return;
+	// flush the last batch of row groups
+	vector<reference<RowGroup>> to_flush;
+	for (idx_t i = row_groups.last_flushed; i < row_groups.complete_row_groups; i++) {
+		to_flush.push_back(*row_groups.collection->GetRowGroup(i));
 	}
-	FlushToDisk(*row_group);
+	// add the last (incomplete) row group
+	to_flush.push_back(*row_groups.collection->GetRowGroup(-1));
+	FlushToDisk(to_flush);
 }
 
-void OptimisticDataWriter::FlushToDisk(RowGroup &row_group) {
+void OptimisticDataWriter::FlushToDisk(const vector<reference<RowGroup>> &row_groups) {
 	//! The set of column compression types (if any)
 	vector<CompressionType> compression_types;
 	D_ASSERT(compression_types.empty());
@@ -78,7 +88,7 @@ void OptimisticDataWriter::FlushToDisk(RowGroup &row_group) {
 		compression_types.push_back(column.CompressionType());
 	}
 	RowGroupWriteInfo info(*partial_manager, compression_types);
-	row_group.WriteToDisk(info);
+	RowGroup::WriteToDisk(info, row_groups);
 }
 
 void OptimisticDataWriter::Merge(OptimisticDataWriter &other) {

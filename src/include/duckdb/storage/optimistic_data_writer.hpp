@@ -16,7 +16,7 @@ class PartialBlockManager;
 struct OptimisticWriteCollection {
 	shared_ptr<RowGroupCollection> collection;
 	idx_t last_flushed = 0;
-	idx_t row_group_count = 0;
+	idx_t complete_row_groups = 0;
 };
 
 class OptimisticDataWriter {
@@ -35,7 +35,7 @@ public:
 	//! Final flush of the optimistic writer - fully flushes the partial block manager
 	void FinalFlush();
 	//! Flushes a specific row group to disk
-	void FlushToDisk(RowGroup &row_group);
+	void FlushToDisk(const vector<reference<RowGroup>> &row_groups);
 	//! Merge the partially written blocks from one optimistic writer into another
 	void Merge(OptimisticDataWriter &other);
 	//! Rollback
