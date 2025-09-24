@@ -1,0 +1,22 @@
+# name: test/extension/load_extension.test
+# description: Try loading a shared object with an extension
+# group: [extension]
+
+require notmingw
+
+require skip_reload
+
+require allow_unsigned_extensions
+
+statement error
+QUACK
+----
+Parser Error: syntax error at or near "QUACK"
+
+statement ok
+LOAD '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
+
+query I
+BAR
+----
+Bar

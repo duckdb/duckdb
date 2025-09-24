@@ -12,6 +12,10 @@
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/common/extension_type_info.hpp"
+#include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/tableref/emptytableref.hpp"
 
 using namespace duckdb;
 
@@ -192,6 +196,7 @@ public:
 	QuackExtension() {
 		parse_function = QuackParseFunction;
 		plan_function = QuackPlanFunction;
+		parser_override = QuackParser;
 	}
 
 	static ParserExtensionParseResult QuackParseFunction(ParserExtensionInfo *info, const string &query) {
@@ -227,6 +232,27 @@ public:
 		result.requires_valid_transaction = false;
 		result.return_type = StatementReturnType::QUERY_RESULT;
 		return result;
+	}
+
+	static ParserOverrideResult QuackParser(ParserExtensionInfo *info, const string &query) {
+		// auto lcase = StringUtil::Lower(StringUtil::Replace(query, ";", ""));
+		// if (!StringUtil::CIEquals(lcase, "foo")) {
+		// 	// quack not found!?
+		// 	if (StringUtil::Contains(lcase, "bar")) {
+		// 		// use our error
+		// 		throw ParserException("Did you mean... FOO!?");
+		// 	}
+		// 	// use original error
+		// 	throw ParserException("This is not a foo: " + lcase);
+		// }
+		auto select_node = make_uniq<SelectNode>();
+		select_node->select_list.push_back(make_uniq<ConstantExpression>(Value("Bar")));
+		select_node->from_table = make_uniq<EmptyTableRef>();
+		auto select_statement = make_uniq<SelectStatement>();
+		select_statement->node = std::move(select_node);
+		vector<unique_ptr<SQLStatement>> statements;
+		statements.push_back(std::move(select_statement));
+		return ParserOverrideResult(std::move(statements));
 	}
 };
 
