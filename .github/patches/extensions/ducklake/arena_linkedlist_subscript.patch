@@ -1,10 +1,3 @@
-diff --git a/duckdb b/duckdb
-index b8a06e4..2e7891c 160000
---- a/duckdb
-+++ b/duckdb
-@@ -1 +1 @@
--Subproject commit b8a06e4a22672e254cd0baa68a3dbed2eb51c56e
-+Subproject commit 2e7891c5911c5c6ba4bc649f236f9688eda66a24
 diff --git a/src/storage/ducklake_merge_into.cpp b/src/storage/ducklake_merge_into.cpp
 index 0b48d5c..76bfdd7 100644
 --- a/src/storage/ducklake_merge_into.cpp
