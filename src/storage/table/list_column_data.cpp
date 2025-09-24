@@ -391,8 +391,8 @@ void ListColumnData::InitializeColumn(PersistentColumnData &column_data, BaseSta
 	child_column->InitializeColumn(column_data.child_columns[1], child_stats);
 }
 
-void ListColumnData::GetColumnSegmentInfo(QueryContext context, duckdb::idx_t row_group_index,
-                                          vector<duckdb::idx_t> col_path, vector<duckdb::ColumnSegmentInfo> &result) {
+void ListColumnData::GetColumnSegmentInfo(QueryContext context, idx_t row_group_index, vector<idx_t> col_path,
+                                          vector<ColumnSegmentInfo> &result) {
 	ColumnData::GetColumnSegmentInfo(context, row_group_index, col_path, result);
 	col_path.push_back(0);
 	validity.GetColumnSegmentInfo(context, row_group_index, col_path, result);

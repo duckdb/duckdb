@@ -78,6 +78,7 @@ struct IndexScanState {
 typedef unordered_map<block_id_t, BufferHandle> buffer_handle_set_t;
 
 struct ColumnScanState {
+	//! The query context for this scan
 	QueryContext context;
 	//! The column segment that is currently being scanned
 	ColumnSegment *current = nullptr;
@@ -116,6 +117,7 @@ public:
 };
 
 struct ColumnFetchState {
+	//! The query context for this fetch
 	QueryContext context;
 	//! The set of pinned block handles for this set of fetches
 	buffer_handle_set_t handles;

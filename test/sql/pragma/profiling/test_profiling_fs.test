@@ -9,9 +9,6 @@ require noforcestorage
 require skip_reload
 
 statement ok
-PRAGMA enable_profiling;
-
-statement ok
 SET threads = 1;
 
 statement ok

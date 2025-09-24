@@ -40,7 +40,6 @@ struct ColumnSegmentState {
 	}
 
 public:
-	QueryContext *context;
 	vector<block_id_t> blocks;
 };
 
