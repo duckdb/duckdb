@@ -202,8 +202,6 @@ void Parser::ParseQuery(const string &query) {
 		}
 	}
 	{
-		PostgresParser::SetPreserveIdentifierCase(options.preserve_identifier_case);
-		bool parsing_succeed = false;
 		if (options.extensions) {
 			for (auto &ext : *options.extensions) {
 				if (!ext.parser_override) {
@@ -218,6 +216,8 @@ void Parser::ParseQuery(const string &query) {
 				}
 			}
 		}
+		PostgresParser::SetPreserveIdentifierCase(options.preserve_identifier_case);
+		bool parsing_succeed = false;
 		// Creating a new scope to prevent multiple PostgresParser destructors being called
 		// which led to some memory issues
 		{
