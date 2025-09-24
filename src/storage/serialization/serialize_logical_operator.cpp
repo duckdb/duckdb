@@ -690,6 +690,7 @@ void LogicalRecursiveCTE::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(206, "payload_aggregates", payload_aggregates);
 	serializer.WritePropertyWithDefault<vector<LogicalType>>(207, "internal_types", internal_types);
 	serializer.WritePropertyWithDefault<vector<LogicalType>>(208, "result_types", result_types);
+	serializer.WritePropertyWithDefault<vector<string>>(209, "names", names);
 }
 
 unique_ptr<LogicalOperator> LogicalRecursiveCTE::Deserialize(Deserializer &deserializer) {
@@ -703,6 +704,7 @@ unique_ptr<LogicalOperator> LogicalRecursiveCTE::Deserialize(Deserializer &deser
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(206, "payload_aggregates", result->payload_aggregates);
 	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(207, "internal_types", result->internal_types);
 	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(208, "result_types", result->result_types);
+	deserializer.ReadPropertyWithDefault<vector<string>>(209, "names", result->names);
 	return std::move(result);
 }
 

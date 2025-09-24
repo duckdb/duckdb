@@ -33,20 +33,30 @@ PhysicalRecursiveCTE::~PhysicalRecursiveCTE() {
 class RecursiveCTEState : public GlobalSinkState {
 public:
 	explicit RecursiveCTEState(ClientContext &context, const PhysicalRecursiveCTE &op)
-	    : intermediate_table(context, op.using_key ? op.internal_types : op.types), new_groups(STANDARD_VECTOR_SIZE) {
+	    : executor(context), intermediate_table(context, op.using_key ? op.internal_types : op.types),
+	      new_groups(STANDARD_VECTOR_SIZE){
 
+		vector<LogicalType> aggr_input_types;
 		vector<BoundAggregateExpression *> payload_aggregates_ptr;
 		for (idx_t i = 0; i < op.payload_aggregates.size(); i++) {
 			D_ASSERT(op.payload_aggregates[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 			auto &dat = op.payload_aggregates[i]->Cast<BoundAggregateExpression>();
+			for (auto &expr : dat.children) {
+				executor.AddExpression(*expr);
+				aggr_input_types.push_back(expr->return_type);
+			}
 			payload_aggregates_ptr.push_back(&dat);
 		}
 
+		payload_rows.Initialize(Allocator::DefaultAllocator(), aggr_input_types);
+
 		ht = make_uniq<GroupedAggregateHashTable>(context, BufferAllocator::Get(context), op.distinct_types,
-		                                          op.aggr_output_types, payload_aggregates_ptr);
+		                                          op.payload_types, payload_aggregates_ptr);
 	}
 
 	unique_ptr<GroupedAggregateHashTable> ht;
+	ExpressionExecutor executor;
+	DataChunk payload_rows;
 
 	mutex intermediate_table_lock;
 	ColumnDataCollection intermediate_table;
@@ -106,15 +116,18 @@ SinkResultType PhysicalRecursiveCTE::Sink(ExecutionContext &context, DataChunk &
 		DataChunk distinct_rows;
 		distinct_rows.Initialize(Allocator::DefaultAllocator(), distinct_types);
 		PopulateChunk(distinct_rows, chunk, distinct_idx, true);
-		DataChunk payload_rows;
-		if (!aggr_input_types.empty()) {
-			payload_rows.Initialize(Allocator::DefaultAllocator(), aggr_input_types);
-		}
-		PopulateChunk(payload_rows, chunk, aggr_input_idx, true);
 
-		// Add the chunk to the hash table and append it to the intermediate table
-		gstate.ht->AddChunk(distinct_rows, payload_rows, AggregateType::NON_DISTINCT);
+		// Add result of recursive anchor to intermediate table
 		gstate.intermediate_table.Append(chunk);
+
+		// Execute aggregate expressions on chunk if any
+		if (!gstate.executor.expressions.empty()) {
+			gstate.payload_rows.Reset();
+			gstate.executor.Execute(chunk, gstate.payload_rows);
+		}
+
+		// Add the result of the executed expressions to the hash table
+		gstate.ht->AddChunk(distinct_rows, gstate.payload_rows, AggregateType::NON_DISTINCT);
 	}
 
 	return SinkResultType::NEED_MORE_INPUT;
@@ -166,15 +179,15 @@ SourceResultType PhysicalRecursiveCTE::GetData(ExecutionContext &context, DataCh
 				DataChunk payload_rows;
 				DataChunk distinct_rows;
 				distinct_rows.Initialize(Allocator::DefaultAllocator(), distinct_types);
-				if (!aggr_output_types.empty()) {
-					payload_rows.Initialize(Allocator::DefaultAllocator(), aggr_output_types);
+				if (!payload_types.empty()) {
+					payload_rows.Initialize(Allocator::DefaultAllocator(), payload_types);
 				}
 				result.Initialize(Allocator::DefaultAllocator(), chunk.GetTypes());
 
 				while (gstate.ht->Scan(scan_state, distinct_rows, payload_rows)) {
 					// Populate the result DataChunk with the keys and the payload.
 					PopulateChunk(result, distinct_rows, distinct_idx, false);
-					PopulateChunk(result, payload_rows, aggr_output_idx, false);
+					PopulateChunk(result, payload_rows, payload_idx, false);
 					// Append the result to the recurring table.
 					recurring_table->Append(result);
 				}
@@ -198,12 +211,12 @@ SourceResultType PhysicalRecursiveCTE::GetData(ExecutionContext &context, DataCh
 					DataChunk payload_rows;
 					DataChunk distinct_rows;
 					distinct_rows.Initialize(Allocator::DefaultAllocator(), distinct_types);
-					if (!aggr_output_types.empty()) {
-						payload_rows.Initialize(Allocator::DefaultAllocator(), aggr_output_types);
+					if (!payload_types.empty()) {
+						payload_rows.Initialize(Allocator::DefaultAllocator(), payload_types);
 					}
 					gstate.ht->Scan(gstate.ht_scan_state, distinct_rows, payload_rows);
 					PopulateChunk(chunk, distinct_rows, distinct_idx, false);
-					PopulateChunk(chunk, payload_rows, aggr_output_idx, false);
+					PopulateChunk(chunk, payload_rows, payload_idx, false);
 				}
 				break;
 			}

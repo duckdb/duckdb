@@ -5,8 +5,11 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/query_node/bound_recursive_cte_node.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/function/function_binder.hpp"
+#include "duckdb/planner/expression_binder/aggregate_binder.hpp"
+
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 
@@ -33,8 +36,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 	// the result types of the CTE are the types of the LHS
 	result->types = result->left->types;
 	result->internal_types = result->left->types;
-	// BTODO: only here until i know how to fix ResolveTypes()
-	result->return_types = result->types;
+
 	// names are picked from the LHS, unless aliases are explicitly specified
 	result->names = result->left->names;
 	for (idx_t i = 0; i < statement.aliases.size() && i < result->names.size(); i++) {
@@ -43,8 +45,6 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 
 	// This allows the right side to reference the CTE recursively
 	bind_context.AddGenericBinding(result->setop_index, statement.ctename, result->names, result->types);
-
-
 
 	// Create temporary binder to bind expressions
 	auto bin = Binder::CreateBinder(context, nullptr);
@@ -55,6 +55,8 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 
 	// Set contains column indices that are already bound
 	unordered_set<idx_t> column_references;
+	// Temporary copy of return types that we can modify without having a conflict with binding the aggregates
+	vector<LogicalType> return_types = result->types;
 
 	// Bind specified keys to the referenced column
 	for (unique_ptr<ParsedExpression> &expr : statement.key_targets) {
@@ -83,14 +85,35 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 																								func_expr.function_name);
 		vector<LogicalType> aggregation_input_types;
 		vector<unique_ptr<Expression>> bound_children;
-		// Bind the children of the aggregate function and check if they are valid column references
+		// Bind the children of the aggregate function
 		for (auto& child : func_expr.children) {
 			auto bound_child = expression_binder.Bind(child);
-			if (bound_child->type != ExpressionType::BOUND_COLUMN_REF) {
-				throw BinderException(*bound_child, "Aggregate function argument must be a column reference");
-			}
 			aggregation_input_types.push_back(bound_child->return_type);
 			bound_children.push_back(std::move(bound_child));
+		}
+
+		// BTODO: change payload idx determination
+		auto& alias = func_expr.GetAlias();
+		idx_t aggregate_idx;
+		if (func_expr.HasAlias()) {
+			bool found = false;
+			for (idx_t i = 0; i < result->names.size(); i++) {
+				if (result->names[i] == alias) {
+					aggregate_idx = i;
+					found = true;
+					break;
+				}
+			}
+			if (!found) {
+				throw BinderException(expr->GetQueryLocation(),
+				                      "Could not find column with name '%s' to bind aggregate to", alias);
+			}
+		} else {
+			if (bound_children[0]->type != ExpressionType::BOUND_COLUMN_REF) {
+				throw BinderException(expr->GetQueryLocation(),
+				                      "Payload aggregate must be a column reference or have an alias");
+			}
+			aggregate_idx = bound_children[0]->Cast<BoundColumnRefExpression>().binding.column_index;
 		}
 
 		// Find the best matching aggregate function
@@ -105,19 +128,20 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 		auto aggregate = function_binder.BindAggregateFunction(std::move(best_function), std::move(bound_children),
 		                                                       nullptr, AggregateType::NON_DISTINCT);
 
-		idx_t aggregate_idx = aggregate->children[0]->Cast<BoundColumnRefExpression>().binding.column_index;
-
+		aggregate->SetAlias(func_expr.GetAlias());
 		if (column_references.find(aggregate_idx) != column_references.end()) {
-			throw BinderException(aggregate->children[0]->GetQueryLocation(),
+			throw BinderException(func_expr.GetQueryLocation(),
 			                      "Column '%s' referenced multiple times in recursive CTE aggregates",
 			                      result->names[aggregate_idx]);
 		}
 
-		// BTODO: only here until i know how to fix ResolveTypes()
-		result->return_types[aggregate_idx] = aggregate->return_type;
+		return_types[aggregate_idx] = aggregate->return_type;
 		result->payload_aggregates.push_back(std::move(aggregate));
 		column_references.insert(aggregate_idx);
 	}
+
+	// Now that we have finished binding all aggregates, we can update the operator types
+	result->types = std::move(return_types);
 
 	// If we have key targets, then all the other columns must be aggregated
 	if (!result->key_targets.empty()) {
@@ -139,10 +163,6 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 			}
 		}
 	}
-
-	// BTODO: only here until i know how to fix ResolveTypes()
-	// Now that we have finished binding all aggregates, we can update the operator types
-	result->types = result->return_types;
 
 	result->right_binder = Binder::CreateBinder(context, this);
 

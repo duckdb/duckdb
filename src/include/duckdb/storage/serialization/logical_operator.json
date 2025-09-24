@@ -609,6 +609,11 @@
         "id": 208,
         "name": "result_types",
         "type": "vector<LogicalType>"
+      },
+      {
+        "id": 209,
+        "name": "names",
+        "type": "vector<string>"
       }
     ]
   },

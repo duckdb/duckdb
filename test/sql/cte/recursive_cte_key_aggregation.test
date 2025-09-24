@@ -115,3 +115,27 @@ WITH RECURSIVE tbl(a,b,c) USING KEY (a, a ; list(b)) AS (
 SELECT * FROM tbl;
 ----
 Binder Error: Column 'a' referenced multiple times in recursive CTE aggregates
+
+# Use alias to set aggregation destination
+query II
+WITH RECURSIVE tbl(a,b) USING KEY (a ; string_agg(':a') AS b) AS (
+	VALUES (1,2), (1,3)
+		UNION
+	SELECT a, b + 1
+	FROM tbl
+	WHERE b < 4)
+SELECT * FROM tbl;
+----
+1	:a,:a,:a,:a,:a
+
+# constant as an aggregate argument
+query II
+WITH RECURSIVE tbl(a,b) USING KEY (a ; string_agg(b, ', ') ) AS (
+    SELECT 1, 5
+		UNION
+	SELECT tbl.a, tbl.b - 1
+    FROM tbl
+    WHERE tbl.b > 0)
+TABLE tbl;
+----
+1	5, 4, 3, 2, 1, 0

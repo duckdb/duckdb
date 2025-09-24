@@ -32,7 +32,7 @@
 %type <range>	OptTempTableName
 %type <into>	into_clause
 %type <node>	opt_on_key
-%type <list> 	function_list
+%type <list> 	uk_aggr_list
 
 %type <lockstrength>	for_locking_strength
 %type <node>	for_locking_item

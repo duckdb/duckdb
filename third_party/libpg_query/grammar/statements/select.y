@@ -478,7 +478,7 @@ opt_on_key:
 				n->key_targets = $4;
 				$$ = (PGNode *) n;
 			}
-		| USING KEY '(' column_ref_list_opt_comma ';' function_list ')'
+		| USING KEY '(' column_ref_list_opt_comma ';' uk_aggr_list ')'
 			{
 				PGUsingKeyClause* n = makeNode(PGUsingKeyClause);
 				n->key_targets = $4;
@@ -488,9 +488,15 @@ opt_on_key:
 		| /*EMPTY*/												{ $$ = NULL; }
 		;
 
-function_list:
-		func_application								{ $$ = list_make1($1); }
-		| function_list ',' func_application			{ $$ = lappend($1, $3); }
+uk_aggr_list:
+		func_expr AS opt_alias_clause
+			{
+				PGFuncCall *n = (PGFuncCall *) $1;
+				n->alias = $3;
+				$$ = list_make1(n);
+			}
+		| func_expr									{ $$ = list_make1($1); }
+		| uk_aggr_list ',' func_expr			{ $$ = lappend($1, $3); }
 		;
 
 column_ref_list_opt_comma:
