@@ -67,4 +67,4 @@ with cte as MATERIALIZED (Select i as j from a) select * from cte where j = (wit
 statement error
 with cte as MATERIALIZED (select * from cte) select * from cte
 ----
-<REGEX>:.*Binder Error.*cannot be referenced.*
+<REGEX>:.*Binder Error.*Circular reference to CTE.*
