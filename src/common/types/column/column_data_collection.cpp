@@ -54,11 +54,12 @@ ColumnDataCollection::ColumnDataCollection(Allocator &allocator_p) {
 	allocator = make_shared_ptr<ColumnDataAllocator>(allocator_p);
 }
 
-ColumnDataCollection::ColumnDataCollection(ClientContext &context) {
+ColumnDataCollection::ColumnDataCollection(DatabaseInstance &db) {
 	types.clear();
 	count = 0;
 	this->finished_append = false;
-	allocator = make_shared_ptr<ColumnDataAllocator>(context, ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
+	// NOTE: this uses the DatabaseInstance BufferManager because ColumnDataCollection can outlive a ClientContext
+	allocator = make_shared_ptr<ColumnDataAllocator>(BufferManager::GetBufferManager(db));
 }
 
 ColumnDataCollection::ColumnDataCollection(Allocator &allocator_p, vector<LogicalType> types_p) {
@@ -1373,6 +1374,11 @@ vector<shared_ptr<StringHeap>> ColumnDataCollection::GetHeapReferences() {
 
 ColumnDataAllocatorType ColumnDataCollection::GetAllocatorType() const {
 	return allocator->GetType();
+}
+
+BufferManager &ColumnDataCollection::GetBufferManager() const {
+	D_ASSERT(allocator->GetType() == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
+	return allocator->GetBufferManager();
 }
 
 const vector<unique_ptr<ColumnDataCollectionSegment>> &ColumnDataCollection::GetSegments() const {

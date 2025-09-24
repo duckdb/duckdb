@@ -150,7 +150,9 @@ unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
 	unique_ptr<ColumnDataCollection> collection;
 	{
 		auto lock = LockContext();
-		collection = make_uniq<ColumnDataCollection>(*lock.context, types);
+		// Use the DatabaseInstance BufferManager because the query result can outlive the ClientContext
+		auto &buffer_manager = BufferManager::GetBufferManager(*lock.context->db);
+		collection = make_uniq<ColumnDataCollection>(buffer_manager, types);
 	}
 
 	ColumnDataAppendState append_state;

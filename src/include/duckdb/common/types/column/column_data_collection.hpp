@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/pair.hpp"
 #include "duckdb/common/types/column/column_data_collection_iterators.hpp"
 
 namespace duckdb {
@@ -30,7 +29,7 @@ public:
 	//! Constructs an empty (but valid) in-memory column data collection from an allocator
 	DUCKDB_API explicit ColumnDataCollection(Allocator &allocator);
 	//! Constructs an empty (but valid) buffer-managed column data collection
-	DUCKDB_API explicit ColumnDataCollection(ClientContext &context);
+	DUCKDB_API explicit ColumnDataCollection(DatabaseInstance &db);
 	//! Constructs a buffer-managed column data collection
 	DUCKDB_API ColumnDataCollection(BufferManager &buffer_manager, vector<LogicalType> types);
 	//! Constructs either an in-memory or a buffer-managed column data collection
@@ -164,6 +163,8 @@ public:
 	vector<shared_ptr<StringHeap>> GetHeapReferences();
 	//! Get the allocator type of this ColumnDataCollection
 	ColumnDataAllocatorType GetAllocatorType() const;
+	//! Get the buffer manager of the allocator
+	BufferManager &GetBufferManager() const;
 
 	//! Get a vector of the segments in this ColumnDataCollection
 	const vector<unique_ptr<ColumnDataCollectionSegment>> &GetSegments() const;

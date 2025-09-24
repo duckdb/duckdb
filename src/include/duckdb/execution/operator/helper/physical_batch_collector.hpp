@@ -45,7 +45,8 @@ public:
 class BatchCollectorGlobalState : public GlobalSinkState {
 public:
 	BatchCollectorGlobalState(ClientContext &context, const PhysicalBatchCollector &op)
-	    : data(context, op.types, true) {
+	    : data(context, op.types, ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR,
+	           BatchedDataCollectionBufferManagerType::DATABASE_INSTANCE) {
 	}
 
 	mutex glock;
@@ -55,7 +56,9 @@ public:
 
 class BatchCollectorLocalState : public LocalSinkState {
 public:
-	BatchCollectorLocalState(ClientContext &context, const PhysicalBatchCollector &op) : data(context, op.types, true) {
+	BatchCollectorLocalState(ClientContext &context, const PhysicalBatchCollector &op)
+	    : data(context, op.types, ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR,
+	           BatchedDataCollectionBufferManagerType::DATABASE_INSTANCE) {
 	}
 
 	BatchedDataCollection data;

@@ -2,18 +2,37 @@
 
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/printer.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
 BatchedDataCollection::BatchedDataCollection(ClientContext &context_p, vector<LogicalType> types_p,
-                                             bool buffer_managed_p)
-    : context(context_p), types(std::move(types_p)), buffer_managed(buffer_managed_p) {
+                                             ColumnDataAllocatorType allocator_type_p,
+                                             BatchedDataCollectionBufferManagerType buffer_manager_type_p)
+    : context(context_p), types(std::move(types_p)), allocator_type(allocator_type_p),
+      buffer_manager_type(buffer_manager_type_p) {
 }
 
 BatchedDataCollection::BatchedDataCollection(ClientContext &context_p, vector<LogicalType> types_p, batch_map_t batches,
-                                             bool buffer_managed_p)
-    : context(context_p), types(std::move(types_p)), buffer_managed(buffer_managed_p), data(std::move(batches)) {
+                                             ColumnDataAllocatorType allocator_type_p,
+                                             BatchedDataCollectionBufferManagerType buffer_manager_type_p)
+    : context(context_p), types(std::move(types_p)), allocator_type(allocator_type_p),
+      buffer_manager_type(buffer_manager_type_p), data(std::move(batches)) {
+}
+
+unique_ptr<ColumnDataCollection> BatchedDataCollection::CreateCollection() const {
+	if (last_collection.collection) {
+		return make_uniq<ColumnDataCollection>(*last_collection.collection);
+	} else if (allocator_type == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR) {
+		auto &buffer_manager = buffer_manager_type == BatchedDataCollectionBufferManagerType::CLIENT_CONTEXT
+		                           ? BufferManager::GetBufferManager(context)
+		                           : BufferManager::GetBufferManager(*context.db);
+		return make_uniq<ColumnDataCollection>(buffer_manager, types);
+	} else {
+		D_ASSERT(allocator_type == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR);
+		return make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
+	}
 }
 
 void BatchedDataCollection::Append(DataChunk &input, idx_t batch_index) {
@@ -25,14 +44,7 @@ void BatchedDataCollection::Append(DataChunk &input, idx_t batch_index) {
 	} else {
 		// new collection: check if there is already an entry
 		D_ASSERT(data.find(batch_index) == data.end());
-		unique_ptr<ColumnDataCollection> new_collection;
-		if (last_collection.collection) {
-			new_collection = make_uniq<ColumnDataCollection>(*last_collection.collection);
-		} else if (buffer_managed) {
-			new_collection = make_uniq<ColumnDataCollection>(BufferManager::GetBufferManager(context), types);
-		} else {
-			new_collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
-		}
+		unique_ptr<ColumnDataCollection> new_collection = CreateCollection();
 		last_collection.collection = new_collection.get();
 		last_collection.batch_index = batch_index;
 		new_collection->InitializeAppend(last_collection.append_state);
@@ -98,7 +110,7 @@ unique_ptr<ColumnDataCollection> BatchedDataCollection::FetchCollection() {
 	data.clear();
 	if (!result) {
 		// empty result
-		return make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
+		return CreateCollection();
 	}
 	return result;
 }

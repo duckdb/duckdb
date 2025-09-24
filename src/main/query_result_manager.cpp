@@ -58,6 +58,7 @@ QueryResultManager &QueryResultManager::Get(ClientContext &context) {
 
 shared_ptr<ManagedQueryResult> QueryResultManager::Add(unique_ptr<ColumnDataCollection> collection) {
 	D_ASSERT(collection->GetAllocatorType() == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
+	D_ASSERT(RefersToSameObject(collection->GetBufferManager(), BufferManager::GetBufferManager(*db.lock())));
 	auto result = shared_ptr<ManagedQueryResult>(new ManagedQueryResult(db, std::move(collection)));
 	lock_guard<mutex> guard(lock);
 	open_results[*result] = weak_ptr<ManagedQueryResult>(result);

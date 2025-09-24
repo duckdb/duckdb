@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/types/column/column_data_scan_states.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/reference_map.hpp"

@@ -978,7 +978,7 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, bool allow_str
 		// no statements, return empty successful result
 		StatementProperties properties;
 		vector<string> names;
-		auto managed_result = QueryResultManager::Get(*this).Add(make_uniq<ColumnDataCollection>(*this));
+		auto managed_result = QueryResultManager::Get(*this).Add(make_uniq<ColumnDataCollection>(*db));
 		return make_uniq<MaterializedQueryResult>(StatementType::INVALID_STATEMENT, properties, std::move(names),
 		                                          std::move(managed_result), GetClientProperties());
 	}
