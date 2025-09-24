@@ -11,6 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/statement_type.hpp"
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/parser/sql_statement.hpp"
 
 namespace duckdb {
 
@@ -77,6 +78,26 @@ typedef ParserExtensionPlanResult (*plan_function_t)(ParserExtensionInfo *info, 
                                                      unique_ptr<ParserExtensionParseData> parse_data);
 
 //===--------------------------------------------------------------------===//
+// Parser override
+//===--------------------------------------------------------------------===//
+struct ParserOverrideResult {
+	explicit ParserOverrideResult()
+	: type(ParserExtensionResultType::DISPLAY_ORIGINAL_ERROR) {};
+
+	explicit ParserOverrideResult(vector<unique_ptr<SQLStatement>> statements_p)
+	: type(ParserExtensionResultType::PARSE_SUCCESSFUL), statements(std::move(statements_p)) {};
+
+	explicit ParserOverrideResult(string error_p)
+	: type(ParserExtensionResultType::DISPLAY_EXTENSION_ERROR), error(error_p) {};
+
+	ParserExtensionResultType type;
+	vector<unique_ptr<SQLStatement>> statements;
+	string error;
+};
+
+typedef ParserOverrideResult(*parser_override_function_t)(ParserExtensionInfo *info, const string &query);
+
+//===--------------------------------------------------------------------===//
 // ParserExtension
 //===--------------------------------------------------------------------===//
 class ParserExtension {
@@ -88,6 +109,9 @@ public:
 	//! The plan function of the parser extension
 	//! Takes as input the result of the parse_function, and outputs various properties of the resulting plan
 	plan_function_t plan_function;
+
+	//! Override the current parser with a new parser and return a vector of SQL statements
+	parser_override_function_t parser_override;
 
 	//! Additional parser info passed to the parse function
 	shared_ptr<ParserExtensionInfo> parser_info;

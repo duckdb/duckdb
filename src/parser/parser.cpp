@@ -204,6 +204,20 @@ void Parser::ParseQuery(const string &query) {
 	{
 		PostgresParser::SetPreserveIdentifierCase(options.preserve_identifier_case);
 		bool parsing_succeed = false;
+		if (options.extensions) {
+			for (auto &ext : *options.extensions) {
+				if (!ext.parser_override) {
+					continue;
+				}
+				auto result = ext.parser_override(ext.parser_info.get(), query);
+				if (result.type == ParserExtensionResultType::PARSE_SUCCESSFUL) {
+					statements = std::move(result.statements);
+					return;
+				} else if (result.type == ParserExtensionResultType::DISPLAY_EXTENSION_ERROR) {
+					throw ParserException(result.error);
+				}
+			}
+		}
 		// Creating a new scope to prevent multiple PostgresParser destructors being called
 		// which led to some memory issues
 		{
