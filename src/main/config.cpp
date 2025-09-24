@@ -724,11 +724,6 @@ SettingLookupResult DBConfig::TryGetCurrentSetting(const string &key, Value &res
 		result = Value(option->default_value).DefaultCastAs(input_type);
 		return SettingLookupResult(SettingScope::GLOBAL);
 	}
-	auto ext_entry = extension_parameters.find(key);
-	if (ext_entry != extension_parameters.end()) {
-		result = ext_entry->second.default_value;
-		return SettingLookupResult(SettingScope::GLOBAL);
-	}
 	return SettingLookupResult();
 }
 
