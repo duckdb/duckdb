@@ -90,30 +90,42 @@ BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, c
 
 	// Try to read from the cache, filling overlapping_ranges in the process
 	vector<shared_ptr<CachedFileRange>> overlapping_ranges;
-	result = TryReadFromCache(buffer, nr_bytes, location, overlapping_ranges);
+	idx_t start_location_of_next_range = DConstants::INVALID_INDEX;
+	result = TryReadFromCache(buffer, nr_bytes, location, overlapping_ranges, start_location_of_next_range);
 	if (result.IsValid()) {
 		return result; // Success
 	}
 
+	idx_t new_nr_bytes = nr_bytes;
+	if (start_location_of_next_range != DConstants::INVALID_INDEX) {
+		if (start_location_of_next_range < location + 2 * nr_bytes &&
+		    start_location_of_next_range < location + nr_bytes + 1000000) {
+			// Grow the range from location to start_location_of_next_range, so that to fill gaps in the cached ranges
+			new_nr_bytes = start_location_of_next_range - location;
+		}
+	}
+
 	// Finally, if we weren't able to find the file range in the cache, we have to create a new file range
-	result = external_file_cache.GetBufferManager().Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
-	auto new_file_range = make_shared_ptr<CachedFileRange>(result.GetBlockHandle(), nr_bytes, location, version_tag);
+	result = external_file_cache.GetBufferManager().Allocate(MemoryTag::EXTERNAL_FILE_CACHE, new_nr_bytes);
+	auto new_file_range =
+	    make_shared_ptr<CachedFileRange>(result.GetBlockHandle(), new_nr_bytes, location, version_tag);
 	buffer = result.Ptr();
 
 	// Interleave reading and copying from cached buffers
 	if (OnDiskFile()) {
 		// On-disk file: prefer interleaving reading and copying from cached buffers
-		ReadAndCopyInterleaved(overlapping_ranges, new_file_range, buffer, nr_bytes, location, true);
+		ReadAndCopyInterleaved(overlapping_ranges, new_file_range, buffer, new_nr_bytes, location, true);
 	} else {
-		// Remote file: prefer interleaving reading and copying from cached buffers only if reduces number of real reads
-		if (ReadAndCopyInterleaved(overlapping_ranges, new_file_range, buffer, nr_bytes, location, false) <= 1) {
-			ReadAndCopyInterleaved(overlapping_ranges, new_file_range, buffer, nr_bytes, location, true);
+		// Remote file: prefer interleaving reading and copying from cached buffers only if reduces number of real
+		// reads
+		if (ReadAndCopyInterleaved(overlapping_ranges, new_file_range, buffer, new_nr_bytes, location, false) <= 1) {
+			ReadAndCopyInterleaved(overlapping_ranges, new_file_range, buffer, new_nr_bytes, location, true);
 		} else {
-			GetFileHandle().Read(context, buffer, nr_bytes, location);
+			GetFileHandle().Read(context, buffer, new_nr_bytes, location);
 		}
 	}
 
-	return TryInsertFileRange(result, buffer, nr_bytes, location, new_file_range);
+	return TryInsertFileRange(result, buffer, new_nr_bytes, location, new_file_range);
 }
 
 BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, idx_t &nr_bytes) {
@@ -131,7 +143,12 @@ BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, idx_t &nr_bytes) {
 
 	// Try to read from the cache first
 	vector<shared_ptr<CachedFileRange>> overlapping_ranges;
-	result = TryReadFromCache(buffer, nr_bytes, position, overlapping_ranges);
+	{
+		idx_t start_location_of_next_range = DConstants::INVALID_INDEX;
+		result = TryReadFromCache(buffer, nr_bytes, position, overlapping_ranges, start_location_of_next_range);
+		// start_location_of_next_range is in this case discarded
+	}
+
 	if (result.IsValid()) {
 		position += nr_bytes;
 		return result; // Success
@@ -214,7 +231,8 @@ const string &CachingFileHandle::GetVersionTag(const unique_ptr<StorageLockKey> 
 }
 
 BufferHandle CachingFileHandle::TryReadFromCache(data_ptr_t &buffer, idx_t nr_bytes, idx_t location,
-                                                 vector<shared_ptr<CachedFileRange>> &overlapping_ranges) {
+                                                 vector<shared_ptr<CachedFileRange>> &overlapping_ranges,
+                                                 idx_t &start_location_of_next_range) {
 	BufferHandle result;
 
 	// Get read lock for cached ranges
@@ -246,7 +264,8 @@ BufferHandle CachingFileHandle::TryReadFromCache(data_ptr_t &buffer, idx_t nr_by
 	}
 	while (it != ranges.end()) {
 		if (it->second->location >= this_end) {
-			// We're past the requested location
+			// We're past the requested location, we are going to bail out, save start_location_of_next_range
+			start_location_of_next_range = it->second->location;
 			break;
 		}
 		// Check if the cached range overlaps the requested one
