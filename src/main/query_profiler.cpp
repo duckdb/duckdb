@@ -16,6 +16,7 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
 #include "yyjson.hpp"
+#include "yyjson_utils.hpp"
 
 #include <algorithm>
 #include <utility>
@@ -793,44 +794,43 @@ static yyjson_mut_val *ToJSONRecursive(yyjson_mut_doc *doc, ProfilingNode &node)
 	return result_obj;
 }
 
-static string StringifyAndFree(yyjson_mut_doc *doc, yyjson_mut_val *object) {
-	auto data = yyjson_mut_val_write_opts(object, YYJSON_WRITE_ALLOW_INF_AND_NAN | YYJSON_WRITE_PRETTY, nullptr,
-	                                      nullptr, nullptr);
-	if (!data) {
-		yyjson_mut_doc_free(doc);
+static string StringifyAndFree(ConvertedJSONHolder &json_holder, yyjson_mut_val *object) {
+	json_holder.stringified_json = yyjson_mut_val_write_opts(
+	    object, YYJSON_WRITE_ALLOW_INF_AND_NAN | YYJSON_WRITE_PRETTY, nullptr, nullptr, nullptr);
+	if (!json_holder.stringified_json) {
 		throw InternalException("The plan could not be rendered as JSON, yyjson failed");
 	}
-	auto result = string(data);
-	free(data);
-	yyjson_mut_doc_free(doc);
+	auto result = string(json_holder.stringified_json);
 	return result;
 }
 
 string QueryProfiler::ToJSON() const {
 	lock_guard<std::mutex> guard(lock);
-	auto doc = yyjson_mut_doc_new(nullptr);
-	auto result_obj = yyjson_mut_obj(doc);
-	yyjson_mut_doc_set_root(doc, result_obj);
+	ConvertedJSONHolder json_holder;
+
+	json_holder.doc = yyjson_mut_doc_new(nullptr);
+	auto result_obj = yyjson_mut_obj(json_holder.doc);
+	yyjson_mut_doc_set_root(json_holder.doc, result_obj);
 
 	if (query_metrics.query.empty() && !root) {
-		yyjson_mut_obj_add_str(doc, result_obj, "result", "empty");
-		return StringifyAndFree(doc, result_obj);
+		yyjson_mut_obj_add_str(json_holder.doc, result_obj, "result", "empty");
+		return StringifyAndFree(json_holder, result_obj);
 	}
 	if (!root) {
-		yyjson_mut_obj_add_str(doc, result_obj, "result", "error");
-		return StringifyAndFree(doc, result_obj);
+		yyjson_mut_obj_add_str(json_holder.doc, result_obj, "result", "error");
+		return StringifyAndFree(json_holder, result_obj);
 	}
 
 	auto &settings = root->GetProfilingInfo();
 
-	settings.WriteMetricsToJSON(doc, result_obj);
+	settings.WriteMetricsToJSON(json_holder.doc, result_obj);
 
 	// recursively print the physical operator tree
-	auto children_list = yyjson_mut_arr(doc);
-	yyjson_mut_obj_add_val(doc, result_obj, "children", children_list);
-	auto child = ToJSONRecursive(doc, *root->GetChild(0));
+	auto children_list = yyjson_mut_arr(json_holder.doc);
+	yyjson_mut_obj_add_val(json_holder.doc, result_obj, "children", children_list);
+	auto child = ToJSONRecursive(json_holder.doc, *root->GetChild(0));
 	yyjson_mut_arr_add_val(children_list, child);
-	return StringifyAndFree(doc, result_obj);
+	return StringifyAndFree(json_holder, result_obj);
 }
 
 void QueryProfiler::WriteToFile(const char *path, string &info) const {
@@ -914,12 +914,13 @@ string QueryProfiler::RenderDisabledMessage(ProfilerPrintFormat format) const {
 				}
 			)";
 	case ProfilerPrintFormat::JSON: {
-		auto doc = yyjson_mut_doc_new(nullptr);
-		auto result_obj = yyjson_mut_obj(doc);
-		yyjson_mut_doc_set_root(doc, result_obj);
+		ConvertedJSONHolder json_holder;
+		json_holder.doc = yyjson_mut_doc_new(nullptr);
+		auto result_obj = yyjson_mut_obj(json_holder.doc);
+		yyjson_mut_doc_set_root(json_holder.doc, result_obj);
 
-		yyjson_mut_obj_add_str(doc, result_obj, "result", "disabled");
-		return StringifyAndFree(doc, result_obj);
+		yyjson_mut_obj_add_str(json_holder.doc, result_obj, "result", "disabled");
+		return StringifyAndFree(json_holder, result_obj);
 	}
 	default:
 		throw InternalException("Unknown ProfilerPrintFormat \"%s\"", EnumUtil::ToString(format));
