@@ -2,6 +2,7 @@
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/partial_block_manager.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
