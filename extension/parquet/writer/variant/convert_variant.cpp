@@ -33,12 +33,7 @@ static uint8_t EncodeMetadataHeader(idx_t byte_length) {
 	return header_byte;
 }
 
-static void CreateMetadata(Vector &input, Vector &metadata, idx_t count) {
-	RecursiveUnifiedVectorFormat recursive_format;
-	Vector::RecursiveToUnifiedFormat(input, count, recursive_format);
-
-	UnifiedVariantVectorData variant(recursive_format);
-
+static void CreateMetadata(UnifiedVariantVectorData &variant, Vector &metadata, idx_t count) {
 	auto &keys = variant.keys;
 	auto keys_data = variant.keys_data;
 
@@ -267,7 +262,7 @@ static void WritePrimitiveValueData(const UnifiedVariantVectorData &variant, idx
 	case VariantLogicalType::VARCHAR: {
 		auto string_value = VariantUtils::DecodeStringData(variant, row, values_index);
 		auto string_size = string_value.GetSize();
-		if (type_id != VariantLogicalType::VARCHAR || string_size > 64) {
+		if (type_id == VariantLogicalType::BLOB || string_size > 64) {
 			if (type_id == VariantLogicalType::BLOB) {
 				WritePrimitiveTypeHeader<VariantPrimitiveType::BINARY>(value_data);
 			} else {
@@ -278,7 +273,7 @@ static void WritePrimitiveValueData(const UnifiedVariantVectorData &variant, idx
 		} else {
 			uint8_t value_header = 0;
 			value_header |= static_cast<uint8_t>(VariantBasicType::SHORT_STRING);
-			value_header |= static_cast<uint8_t>(string_size);
+			value_header |= static_cast<uint8_t>(string_size) << 2;
 
 			*value_data = value_header;
 			value_data++;
@@ -407,7 +402,10 @@ static void WriteValueData(const UnifiedVariantVectorData &variant, idx_t row, u
 		}
 		auto field_id_size = CalculateByteLength(highest_keys_index);
 
-		auto last_offset = offsets[offset_index + nested_data.child_count - 1];
+		uint32_t last_offset = 0;
+		if (nested_data.child_count) {
+			last_offset = offsets[offset_index + nested_data.child_count - 1];
+		}
 		offset_index += nested_data.child_count;
 		auto field_offset_size = CalculateByteLength(last_offset);
 
@@ -458,7 +456,10 @@ static void WriteValueData(const UnifiedVariantVectorData &variant, idx_t row, u
 
 		//! -- Array value header --
 
-		auto last_offset = offsets[offset_index + nested_data.child_count - 1];
+		uint32_t last_offset = 0;
+		if (nested_data.child_count) {
+			last_offset = offsets[offset_index + nested_data.child_count - 1];
+		}
 		offset_index += nested_data.child_count;
 		auto field_offset_size = CalculateByteLength(last_offset);
 
@@ -501,11 +502,7 @@ static void WriteValueData(const UnifiedVariantVectorData &variant, idx_t row, u
 	}
 }
 
-static void CreateValues(Vector &input, Vector &value, idx_t count) {
-	RecursiveUnifiedVectorFormat recursive_format;
-	Vector::RecursiveToUnifiedFormat(input, count, recursive_format);
-
-	UnifiedVariantVectorData variant(recursive_format);
+static void CreateValues(UnifiedVariantVectorData &variant, Vector &value, idx_t count) {
 	auto &validity = FlatVector::Validity(value);
 	auto value_data = FlatVector::GetData<string_t>(value);
 
@@ -543,10 +540,21 @@ static void ToParquetVariant(DataChunk &input, ExpressionState &state, Vector &r
 	// - metadata = BLOB
 	// - value = BLOB
 
-	auto &variant = input.data[0];
+	auto &variant_vec = input.data[0];
 	auto count = input.size();
 
+	RecursiveUnifiedVectorFormat recursive_format;
+	Vector::RecursiveToUnifiedFormat(variant_vec, count, recursive_format);
+	UnifiedVariantVectorData variant(recursive_format);
+
 	auto &result_vectors = StructVector::GetEntries(result);
+	auto &validity = FlatVector::Validity(result);
+	for (idx_t i = 0; i < count; i++) {
+		if (!variant.RowIsValid(i)) {
+			validity.SetInvalid(i);
+		}
+	}
+
 	CreateMetadata(variant, *result_vectors[0], count);
 	CreateValues(variant, *result_vectors[1], count);
 }
@@ -554,6 +562,7 @@ static void ToParquetVariant(DataChunk &input, ExpressionState &state, Vector &r
 ScalarFunction VariantColumnWriter::GetTransformFunction() {
 	ScalarFunction transform("variant_to_parquet_variant", {LogicalType::VARIANT()}, TransformedType(),
 	                         ToParquetVariant);
+	transform.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return transform;
 }
 

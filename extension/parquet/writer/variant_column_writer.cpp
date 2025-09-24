@@ -82,8 +82,9 @@ void VariantColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState 
 	HandleRepeatLevels(state_p, parent, count);
 	HandleDefineLevels(state_p, parent, validity, count, PARQUET_DEFINE_VALID, MaxDefine() - 1);
 
-	metadata_writer.Prepare(metadata_state, &state_p, vector, count, vector_can_span_multiple_pages);
-	value_writer.Prepare(value_state, &state_p, vector, count, vector_can_span_multiple_pages);
+	auto &child_vectors = StructVector::GetEntries(vector);
+	metadata_writer.Prepare(metadata_state, &state_p, *child_vectors[0], count, vector_can_span_multiple_pages);
+	value_writer.Prepare(value_state, &state_p, *child_vectors[1], count, vector_can_span_multiple_pages);
 }
 
 void VariantColumnWriter::BeginWrite(ColumnWriterState &state_p) {
