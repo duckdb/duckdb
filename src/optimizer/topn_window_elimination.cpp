@@ -152,9 +152,9 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 }
 
 // CreateAggregateOperator: vec<Expr> struct_pack_children, window_expr, limit -> uniq<logOp>
-unique_ptr<LogicalOperator> TopNWindowElimination::CreateAggregateOperator(vector<unique_ptr<Expression>> children,
-                                                                           LogicalWindow &window,
-                                                                           unique_ptr<Expression> limit) const {
+unique_ptr<LogicalAggregate> TopNWindowElimination::CreateAggregateOperator(vector<unique_ptr<Expression>> children,
+                                                                            LogicalWindow &window,
+                                                                            unique_ptr<Expression> limit) const {
 	auto struct_pack_fun = StructPackFun::GetFunction();
 	FunctionBinder function_binder(context);
 	auto struct_pack_expr = function_binder.BindScalarFunction(struct_pack_fun, std::move(children));
@@ -194,10 +194,10 @@ unique_ptr<LogicalOperator> TopNWindowElimination::CreateAggregateOperator(vecto
 	return aggregate;
 }
 
-unique_ptr<LogicalOperator>
-TopNWindowElimination::CreateUnnestListOperator(const child_list_t<LogicalType> &input_types, const idx_t aggregate_idx,
-                                                const bool include_row_number,
-                                                unique_ptr<Expression> limit_value) const {
+unique_ptr<LogicalUnnest> TopNWindowElimination::CreateUnnestListOperator(const child_list_t<LogicalType> &input_types,
+                                                                          const idx_t aggregate_idx,
+                                                                          const bool include_row_number,
+                                                                          unique_ptr<Expression> limit_value) const {
 	auto unnest = make_uniq<LogicalUnnest>(optimizer.binder.GenerateTableIndex());
 	auto struct_type = LogicalType::STRUCT(input_types);
 	auto unnest_expr = make_uniq<BoundUnnestExpression>(struct_type);
@@ -227,7 +227,7 @@ TopNWindowElimination::CreateUnnestListOperator(const child_list_t<LogicalType> 
 	return unnest;
 }
 
-unique_ptr<LogicalOperator> TopNWindowElimination::CreateUnnestStructOperator(
+unique_ptr<LogicalProjection> TopNWindowElimination::CreateUnnestStructOperator(
     const child_list_t<LogicalType> &input_types, const idx_t unnest_list_idx, const idx_t table_idx,
     const bool include_row_number, const set<idx_t> &row_number_idxs) const {
 	FunctionBinder function_binder(context);

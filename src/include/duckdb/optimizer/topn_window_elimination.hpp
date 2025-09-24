@@ -11,34 +11,30 @@
 #include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
-class LogicalOperator;
-class Optimizer;
 
 class TopNWindowElimination {
 public:
 	explicit TopNWindowElimination(ClientContext &context, Optimizer &optimizer);
 
-	//! Optimize TopN window function to aggregate
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> op);
 
 private:
-	//! Whether we can perform the optimization on this operator
 	static bool CanOptimize(LogicalOperator &op, optional_ptr<ClientContext> context = nullptr);
 
 	unique_ptr<LogicalOperator> OptimizeInternal(unique_ptr<LogicalOperator> op, bool &update_table_idx,
 	                                             idx_t &new_table_idx);
 
-	unique_ptr<LogicalOperator> CreateAggregateOperator(vector<unique_ptr<Expression>> children, LogicalWindow &window,
-	                                                    unique_ptr<Expression> limit) const;
+	unique_ptr<LogicalAggregate> CreateAggregateOperator(vector<unique_ptr<Expression>> children, LogicalWindow &window,
+	                                                     unique_ptr<Expression> limit) const;
 
-	unique_ptr<LogicalOperator> CreateUnnestListOperator(const child_list_t<LogicalType> &input_types,
-	                                                     idx_t aggregate_idx, bool include_row_number,
-	                                                     unique_ptr<Expression> limit_value) const;
+	unique_ptr<LogicalUnnest> CreateUnnestListOperator(const child_list_t<LogicalType> &input_types,
+	                                                   idx_t aggregate_idx, bool include_row_number,
+	                                                   unique_ptr<Expression> limit_value) const;
 
-	unique_ptr<LogicalOperator> CreateUnnestStructOperator(const child_list_t<LogicalType> &input_types,
-	                                                       idx_t unnest_list_idx, idx_t table_idx,
-	                                                       bool include_row_number,
-	                                                       const set<idx_t> &row_number_idxs) const;
+	unique_ptr<LogicalProjection> CreateUnnestStructOperator(const child_list_t<LogicalType> &input_types,
+	                                                         idx_t unnest_list_idx, idx_t table_idx,
+	                                                         bool include_row_number,
+	                                                         const set<idx_t> &row_number_idxs) const;
 
 	static void UpdateTableIdxInExpressions(LogicalProjection &projection, idx_t table_idx);
 	static vector<idx_t> GeneratePaddingIdxs(const vector<ColumnBinding> &bindings);
@@ -49,6 +45,7 @@ private:
 	                                         set<idx_t> &row_number_idxs, bool use_new_child_idx = false,
 	                                         idx_t new_child_idx = 0);
 
+private:
 	ClientContext &context;
 	Optimizer &optimizer;
 };
