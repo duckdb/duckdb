@@ -237,7 +237,8 @@ public:
 	static ParserOverrideResult QuackParser(ParserExtensionInfo *info, const string &query) {
 		if (StringUtil::CIEquals(query, "override")) {
 			auto select_node = make_uniq<SelectNode>();
-			select_node->select_list.push_back(make_uniq<ConstantExpression>(Value("The DuckDB parser has been overridden")));
+			select_node->select_list.push_back(
+			    make_uniq<ConstantExpression>(Value("The DuckDB parser has been overridden")));
 			select_node->from_table = make_uniq<EmptyTableRef>();
 			auto select_statement = make_uniq<SelectStatement>();
 			select_statement->node = std::move(select_node);

@@ -1,4 +1,4 @@
-# name: test/extension/load_extension.test
+# name: test/extension/loadable_parser_override.test
 # description: Try loading a parser override with an extension
 # group: [extension]
 

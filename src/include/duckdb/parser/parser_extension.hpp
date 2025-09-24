@@ -81,21 +81,20 @@ typedef ParserExtensionPlanResult (*plan_function_t)(ParserExtensionInfo *info, 
 // Parser override
 //===--------------------------------------------------------------------===//
 struct ParserOverrideResult {
-	explicit ParserOverrideResult()
-	: type(ParserExtensionResultType::DISPLAY_ORIGINAL_ERROR) {};
+	explicit ParserOverrideResult() : type(ParserExtensionResultType::DISPLAY_ORIGINAL_ERROR) {};
 
 	explicit ParserOverrideResult(vector<unique_ptr<SQLStatement>> statements_p)
-	: type(ParserExtensionResultType::PARSE_SUCCESSFUL), statements(std::move(statements_p)) {};
+	    : type(ParserExtensionResultType::PARSE_SUCCESSFUL), statements(std::move(statements_p)) {};
 
 	explicit ParserOverrideResult(string error_p)
-	: type(ParserExtensionResultType::DISPLAY_EXTENSION_ERROR), error(error_p) {};
+	    : type(ParserExtensionResultType::DISPLAY_EXTENSION_ERROR), error(error_p) {};
 
 	ParserExtensionResultType type;
 	vector<unique_ptr<SQLStatement>> statements;
 	string error;
 };
 
-typedef ParserOverrideResult(*parser_override_function_t)(ParserExtensionInfo *info, const string &query);
+typedef ParserOverrideResult (*parser_override_function_t)(ParserExtensionInfo *info, const string &query);
 
 //===--------------------------------------------------------------------===//
 // ParserExtension
