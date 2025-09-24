@@ -18,9 +18,8 @@
 
 namespace duckdb {
 
-FlattenDependentJoins::FlattenDependentJoins(Binder &binder, const vector<CorrelatedColumnInfo> &correlated,
-                                             bool perform_delim, bool any_join,
-                                             optional_ptr<FlattenDependentJoins> parent)
+FlattenDependentJoins::FlattenDependentJoins(Binder &binder, const CorrelatedColumns &correlated, bool perform_delim,
+                                             bool any_join, optional_ptr<FlattenDependentJoins> parent)
     : binder(binder), delim_offset(DConstants::INVALID_INDEX), correlated_columns(correlated),
       perform_delim(perform_delim), any_join(any_join), parent(parent) {
 	for (idx_t i = 0; i < correlated_columns.size(); i++) {
@@ -30,8 +29,7 @@ FlattenDependentJoins::FlattenDependentJoins(Binder &binder, const vector<Correl
 	}
 }
 
-static void CreateDelimJoinConditions(LogicalComparisonJoin &delim_join,
-                                      const vector<CorrelatedColumnInfo> &correlated_columns,
+static void CreateDelimJoinConditions(LogicalComparisonJoin &delim_join, const CorrelatedColumns &correlated_columns,
                                       vector<ColumnBinding> bindings, idx_t base_offset, bool perform_delim) {
 	auto col_count = perform_delim ? correlated_columns.size() : 1;
 	for (idx_t i = 0; i < col_count; i++) {
@@ -50,7 +48,7 @@ static void CreateDelimJoinConditions(LogicalComparisonJoin &delim_join,
 
 unique_ptr<LogicalOperator> FlattenDependentJoins::DecorrelateIndependent(Binder &binder,
                                                                           unique_ptr<LogicalOperator> plan) {
-	vector<CorrelatedColumnInfo> correlated;
+	CorrelatedColumns correlated;
 	FlattenDependentJoins flatten(binder, correlated);
 	return flatten.Decorrelate(std::move(plan));
 }
@@ -94,14 +92,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::Decorrelate(unique_ptr<Logica
 		if (!op.perform_delim) {
 			// if we are not performing a delim join, we push a row_number() OVER() window operator on the LHS
 			// and perform all duplicate elimination on that row number instead
-			idx_t col_idx = 0;
-			for (; col_idx < op.correlated_columns.size(); col_idx++) {
-				const auto &col = op.correlated_columns[col_idx];
-				if (col.type.id() == LogicalTypeId::BIGINT && col.name == "delim_index") {
-					break;
-				}
-			}
-			const auto &op_col = op.correlated_columns[col_idx];
+			const auto &op_col = op.correlated_columns[op.correlated_columns.GetDelimIndex()];
 			auto window = make_uniq<LogicalWindow>(op_col.binding.table_index);
 			auto row_number = make_uniq<BoundWindowExpression>(ExpressionType::WINDOW_ROW_NUMBER, LogicalType::BIGINT,
 			                                                   nullptr, nullptr);
