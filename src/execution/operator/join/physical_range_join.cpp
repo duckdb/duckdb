@@ -405,9 +405,6 @@ static void TemplatedSliceSortedPayload(DataChunk &chunk, const SortedRun &sorte
 	using BLOCK_ITERATOR = block_iterator_t<ExternalBlockIteratorState, SORT_KEY>;
 	BLOCK_ITERATOR itr(state, chunk_idx, 0);
 
-	state.SetKeepPinned(true);
-	state.SetPinPayload(true);
-
 	const auto sort_keys = FlatVector::GetData<SORT_KEY *>(sort_key_pointers);
 	for (idx_t i = 0; i < result_count; ++i) {
 		const auto idx = state.GetIndex(chunk_idx, result.get_index(i));

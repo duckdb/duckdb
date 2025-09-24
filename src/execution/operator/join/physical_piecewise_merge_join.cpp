@@ -341,6 +341,7 @@ static idx_t TemplatedMergeJoinSimpleBlocks(PiecewiseMergeJoinState &lstate, Mer
 		// now we start from the current lpos value and check if we found a new value that is [<= OR <] the max RHS
 		// value
 		while (true) {
+			//	Note that both subscripts here are table indices, not chunk indices.
 			if (MergeJoinBefore(lhs_itr[l_entry_idx], rhs_itr[r_entry_idx], strict)) {
 				// found a match for lpos, set it in the found_match vector
 				found_match[l_entry_idx] = true;
@@ -451,6 +452,10 @@ struct ChunkMergeInfo {
 	ChunkMergeInfo(ExternalBlockIteratorState &state, idx_t block_idx, idx_t &entry_idx, idx_t not_null)
 	    : state(state), block_idx(block_idx), not_null(not_null), entry_idx(entry_idx), result(STANDARD_VECTOR_SIZE) {
 	}
+
+	idx_t GetIndex() const {
+		return state.GetIndex(block_idx, entry_idx);
+	}
 };
 
 template <SortKeyType SORT_KEY_TYPE>
@@ -483,7 +488,7 @@ static idx_t TemplatedMergeJoinComplexBlocks(ChunkMergeInfo &l, ChunkMergeInfo &
 			continue;
 		}
 		if (l.entry_idx < l.not_null) {
-			if (MergeJoinBefore(l_ptr[l.entry_idx], r_ptr[r.entry_idx], strict)) {
+			if (MergeJoinBefore(l_ptr[l.GetIndex()], r_ptr[r.GetIndex()], strict)) {
 				// left side smaller: found match
 				l.result.set_index(result_count, sel_t(l.entry_idx));
 				r.result.set_index(result_count, sel_t(r.entry_idx));
@@ -591,7 +596,7 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 			state.right_position = 0;
 			state.right_base += STANDARD_VECTOR_SIZE;
 			state.right_chunk_index++;
-			if (state.right_base >= rhs_not_null) {
+			if (state.right_chunk_index >= rhs_table.BlockCount()) {
 				state.finished = true;
 			}
 		} else {

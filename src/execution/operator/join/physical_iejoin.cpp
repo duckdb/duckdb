@@ -301,10 +301,7 @@ struct IEJoinUnion {
 
 	class UnionIterator {
 	public:
-		explicit UnionIterator(SortedTable &table, bool strict)
-		    : state(*table.sorted->key_data, table.sorted->payload_data.get()), strict(strict) {
-			state.SetKeepPinned(true);
-			state.SetPinPayload(true);
+		UnionIterator(SortedTable &table, bool strict) : state(table.CreateIteratorState()), strict(strict) {
 		}
 
 		inline idx_t GetIndex() const {
@@ -320,7 +317,7 @@ struct IEJoinUnion {
 			return *this;
 		}
 
-		ExternalBlockIteratorState state;
+		unique_ptr<ExternalBlockIteratorState> state;
 		idx_t index = 0;
 		const bool strict;
 	};
@@ -678,8 +675,8 @@ bool IEJoinUnion::NextRow() {
 	using SORT_KEY = SortKey<SORT_KEY_TYPE>;
 	using BLOCKS_ITERATOR = block_iterator_t<ExternalBlockIteratorState, SORT_KEY>;
 
-	BLOCKS_ITERATOR off2_itr(off2->state);
-	BLOCKS_ITERATOR op2_itr(op2->state);
+	BLOCKS_ITERATOR off2_itr(*off2->state);
+	BLOCKS_ITERATOR op2_itr(*op2->state);
 	const auto strict = off2->strict;
 
 	for (; i < n; ++i) {

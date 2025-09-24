@@ -93,7 +93,13 @@ public:
 
 		//! Create an iteration state
 		unique_ptr<ExternalBlockIteratorState> CreateIteratorState() {
-			return make_uniq<ExternalBlockIteratorState>(*sorted->key_data, sorted->payload_data.get());
+			auto state = make_uniq<ExternalBlockIteratorState>(*sorted->key_data, sorted->payload_data.get());
+
+			// Unless we do this, we will only get values from the first chunk
+			state->SetKeepPinned(true);
+			state->SetPinPayload(true);
+
+			return state;
 		}
 		//! Create an iteration state
 		unique_ptr<SortedRunScanState> CreateScanState(ClientContext &client) {
