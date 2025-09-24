@@ -140,6 +140,7 @@ SELECT * FROM 's3://test-bucket/whatever.parquet';
 
 
 
+
 statement error
 SELECT * FROM 'r2://test-bucket/whatever.parquet';
 ----
