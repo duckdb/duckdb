@@ -47,5 +47,5 @@ do
     echo "found extension: '$ext_name'"
 
     # args: <name> <extension_version> <duckdb_version> <architecture> <s3_bucket> <copy_to_latest> <copy_to_versioned> [<path_to_ext>]
-	  $script_dir/extension-upload-single.sh $ext_name "" "$2" "$1" "duckdb-extensions" true false "$(dirname "$f")"
+	  $script_dir/extension-upload-single.sh $ext_name "" "$2" "$1" "duckdb-core-extensions" true false "$(dirname "$f")"
 done

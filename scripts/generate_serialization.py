@@ -490,8 +490,10 @@ class SerializableClass:
 
         assignment = '.' if self.pointer_type == 'none' else '->'
         default_argument = '' if default_value is None else f', {get_default_argument(default_value)}'
+        storage_version = lookup_serialization_version(entry.version)
+        conditional_serialization = storage_version != 1
         template = SERIALIZE_ELEMENT_FORMAT
-        if entry.status != MemberVariableStatus.EXISTING:
+        if entry.status != MemberVariableStatus.EXISTING and not conditional_serialization:
             template = "\t/* [Deleted] ({property_type}) \"{property_name}\" */\n"
         elif entry.has_default:
             template = template.replace('WriteProperty', 'WritePropertyWithDefault')
@@ -504,10 +506,14 @@ class SerializableClass:
             assignment=assignment,
         )
 
-        storage_version = lookup_serialization_version(entry.version)
-        if storage_version != 1:
+        if conditional_serialization:
             code = []
-            code.append(f'\tif (serializer.ShouldSerialize({storage_version})) {{')
+            if entry.status != MemberVariableStatus.EXISTING:
+                # conditional delete
+                code.append(f'\tif (!serializer.ShouldSerialize({storage_version})) {{')
+            else:
+                # conditional serialization
+                code.append(f'\tif (serializer.ShouldSerialize({storage_version})) {{')
             code.append('\t' + serialization_code)
 
             result = '\n'.join(code) + '\t}\n'
