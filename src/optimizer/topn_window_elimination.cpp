@@ -26,114 +26,36 @@ TopNWindowElimination::TopNWindowElimination(ClientContext &context_p, Optimizer
     : context(context_p), optimizer(optimizer) {
 }
 
-bool TopNWindowElimination::CanOptimize(LogicalOperator &op, optional_ptr<ClientContext> context) {
-	if (op.type != LogicalOperatorType::LOGICAL_FILTER) {
-		return false;
-	}
-
-	const auto &filter = op.Cast<LogicalFilter>();
-	if (filter.expressions.size() != 1) {
-		return false;
-	}
-
-	if (filter.expressions[0]->type != ExpressionType::COMPARE_LESSTHANOREQUALTO) {
-		return false;
-	}
-
-	const auto &filter_comparison = filter.expressions[0]->Cast<BoundComparisonExpression>();
-	if (filter_comparison.right->type != ExpressionType::VALUE_CONSTANT) {
-		return false;
-	}
-	auto &filter_value = filter_comparison.right->Cast<BoundConstantExpression>();
-	if (filter_value.value.type() != LogicalType::BIGINT) {
-		return false;
-	}
-	if (filter_value.value.GetValue<int64_t>() <= 1) {
-		return false;
-	}
-
-	const auto &filter_reference = filter_comparison.left->Cast<BoundColumnRefExpression>();
-	idx_t filter_table_idx = filter_reference.binding.table_index;
-	idx_t filter_column_idx = filter_reference.binding.column_index;
-
-	auto *child = filter.children[0].get();
-	while (child->type == LogicalOperatorType::LOGICAL_PROJECTION) {
-		const auto &projection = child->Cast<LogicalProjection>();
-		if (projection.table_index == filter_table_idx) {
-			if (projection.expressions[filter_column_idx]->type != ExpressionType::BOUND_COLUMN_REF) {
-				return false;
-			}
-			const auto &column_ref = projection.expressions[filter_column_idx]->Cast<BoundColumnRefExpression>();
-			filter_table_idx = column_ref.binding.table_index;
-			filter_column_idx = column_ref.binding.column_index;
-		}
-		child = child->children[0].get();
-	}
-
-	if (child->type != LogicalOperatorType::LOGICAL_WINDOW) {
-		return false;
-	}
-	const auto &window = child->Cast<LogicalWindow>();
-	if (window.window_index != filter_table_idx) {
-		return false;
-	}
-	if (window.expressions.size() != 1) {
-		for (idx_t i = 1; i < window.expressions.size(); ++i) {
-			if (!window.expressions[i]->Equals(*window.expressions[0])) {
-				return false;
-			}
-		}
-	}
-	if (window.expressions[0]->type != ExpressionType::WINDOW_ROW_NUMBER) {
-		return false;
-	}
-	const auto &window_expr = window.expressions[0]->Cast<BoundWindowExpression>();
-	if (window_expr.orders.size() != 1) {
-		return false;
-	}
-
-	// We have found a grouped top-n window construct!
-	return true;
+unique_ptr<LogicalOperator> TopNWindowElimination::Optimize(unique_ptr<LogicalOperator> op) {
+	bool update_table_idx;
+	idx_t new_table_idx;
+	return OptimizeInternal(std::move(op), update_table_idx, new_table_idx);
 }
 
 unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<LogicalOperator> op,
                                                                     bool &update_table_idx, idx_t &new_table_idx) {
 	if (CanOptimize(*op, &context)) {
-		D_ASSERT(op->type == LogicalOperatorType::LOGICAL_FILTER);
+		// We have made sure that this is an operator sequence of filter -> N optional projections -> window
 		auto &filter = op->Cast<LogicalFilter>();
 		auto &filter_expr = filter.expressions[0]->Cast<BoundComparisonExpression>();
 
+		// Get bindings and types from filter to use in top-most operator later
 		filter.ResolveOperatorTypes();
 		auto target_bindings = filter.GetColumnBindings();
 		auto target_types = std::move(filter.types);
 		const idx_t last_op_idx = target_bindings[0].table_index;
 		vector<string> target_names(target_bindings.size());
 
-		vector<unique_ptr<Expression>> struct_pack_input_exprs;
-		struct_pack_input_exprs.reserve(target_bindings.size());
+		// The filter parent may have projected out columns. Generate null constants as a padding s.t. the filter parent
+		// accesses the correct output columns
+		const auto padding_column_idxs = GeneratePaddingIdxs(target_bindings);
 
-		set<idx_t> projected_column_idxs;
-		for (auto &binding : target_bindings) {
-			projected_column_idxs.insert(binding.column_index);
-		}
-
-		vector<idx_t> padding_column_idxs;
-		padding_column_idxs.reserve(*projected_column_idxs.rbegin() - 1);
-		auto projected_column_idx_it = projected_column_idxs.begin();
-
-		for (idx_t i = 0; i < *projected_column_idxs.rbegin(); i++) {
-			if (i < *projected_column_idx_it) {
-				padding_column_idxs.push_back(i);
-			} else {
-				++projected_column_idx_it;
-			}
-		}
-
-		// Cycle through child projections and update table index
+		// Cycle through child projections and update bindings to retrieve aggregate input
+		bool has_intermediate_projections = false;
 		auto *child = filter.children[0].get();
-		bool duplicate_table_idx = child->type != LogicalOperatorType::LOGICAL_PROJECTION;
 
 		while (child->type == LogicalOperatorType::LOGICAL_PROJECTION) {
+			has_intermediate_projections = true;
 			auto &projection = child->Cast<LogicalProjection>();
 
 			for (idx_t i = 0; i < target_bindings.size(); i++) {
@@ -154,74 +76,51 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 		D_ASSERT(child->type == LogicalOperatorType::LOGICAL_WINDOW);
 		auto &window = child->Cast<LogicalWindow>();
 
-		// Check if we have to replace table index
-		idx_t new_child_idx = optimizer.binder.GenerateTableIndex();
-		if (duplicate_table_idx) {
+		// Generate the column references for the struct_pack function that is used as the value for max_by
+		vector<unique_ptr<Expression>> struct_pack_input_exprs;
+		struct_pack_input_exprs.reserve(target_bindings.size());
+
+		set<idx_t> row_number_idxs;
+		bool include_row_number = false;
+
+		if (!has_intermediate_projections) {
+			// There is no projection between filter and window. Thus, we must change the filter parent's table index
+			// in the column bindings of its expressions as the parent may reference output from the window operator
+			// AND the window's child operator
 			update_table_idx = true;
 			new_table_idx = last_op_idx;
-			child = child->children[0].get();
-			D_ASSERT(child->type == LogicalOperatorType::LOGICAL_PROJECTION ||
-			         child->type == LogicalOperatorType::LOGICAL_GET);
-			if (child->type == LogicalOperatorType::LOGICAL_PROJECTION) {
-				auto &projection = child->Cast<LogicalProjection>();
-				projection.table_index = new_child_idx;
-			} else {
-				auto &get = child->Cast<LogicalGet>();
-				get.table_index = new_child_idx;
-			}
+			// This also means that we cannot just steal the table index for our top-most operator as it may come from
+			// the operator below the window
+			idx_t new_child_idx = optimizer.binder.GenerateTableIndex();
+			AssignChildNewTableIdx(window, new_child_idx);
 
-			for (auto &expr : window.expressions) {
-				auto &window_expr = expr->Cast<BoundWindowExpression>();
-				for (auto &partition : window_expr.partitions) {
-					auto &column_ref = partition->Cast<BoundColumnRefExpression>();
-					column_ref.binding.table_index = new_child_idx;
-				}
-				for (auto &order : window_expr.orders) {
-					auto &column_ref = order.expression->Cast<BoundColumnRefExpression>();
-					column_ref.binding.table_index = new_child_idx;
-				}
-			}
+			// Turn the filter bindings into inputs to the struct
+			include_row_number =
+			    GenerateStructPackInputExprs(window, target_bindings, target_names, target_types,
+			                                 struct_pack_input_exprs, row_number_idxs, true, new_child_idx);
+		} else {
+			// Turn the filter bindings into inputs to the struct
+			include_row_number = GenerateStructPackInputExprs(window, target_bindings, target_names, target_types,
+			                                                  struct_pack_input_exprs, row_number_idxs);
 		}
 
-		for (size_t i = 0; i < target_bindings.size(); i++) {
-			if (duplicate_table_idx && target_bindings[i].table_index == last_op_idx) {
-				struct_pack_input_exprs.push_back(make_uniq<BoundColumnRefExpression>(
-				    target_names[i].empty() ? to_string(i) : target_names[i], target_types[i],
-				    ColumnBinding {new_child_idx, target_bindings[i].column_index}));
-			} else {
-				struct_pack_input_exprs.push_back(make_uniq<BoundColumnRefExpression>(
-				    target_names[i].empty() ? to_string(i) : target_names[i], target_types[i], target_bindings[i]));
-			}
-		}
-
-		bool include_row_number = false;
-		set<idx_t> row_number_idxs;
-		for (idx_t i = struct_pack_input_exprs.size(); i > 0; i--) {
-			auto &expr = struct_pack_input_exprs[i - 1];
-			if (expr->Cast<BoundColumnRefExpression>().binding.table_index == window.window_index) {
-				include_row_number = true;
-				row_number_idxs.insert(i - 1);
-				struct_pack_input_exprs.erase_at(i - 1);
-			}
-		}
-
-		child_list_t<LogicalType> struct_info;
-		struct_info.reserve(struct_pack_input_exprs.size());
+		child_list_t<LogicalType> unnest_info;
+		unnest_info.reserve(struct_pack_input_exprs.size());
 
 		for (const auto &expr : struct_pack_input_exprs) {
-			struct_info.emplace_back(expr->alias, expr->return_type);
+			unnest_info.emplace_back(expr->alias, expr->return_type);
 		}
 
-		// Create logical operators
+		// Create the logical operators
 		auto aggregate = CreateAggregateOperator(std::move(struct_pack_input_exprs), window, filter_expr.right->Copy());
 		const idx_t aggregate_idx = aggregate->Cast<LogicalAggregate>().aggregate_index;
 
 		auto unnest_list =
-		    CreateUnnestListOperator(struct_info, aggregate_idx, include_row_number, std::move(filter_expr.right));
+		    CreateUnnestListOperator(unnest_info, aggregate_idx, include_row_number, std::move(filter_expr.right));
 		const idx_t unnest_list_idx = unnest_list->Cast<LogicalUnnest>().unnest_index;
 
 		auto unnest_struct =
-		    CreateUnnestStructOperator(struct_info, unnest_list_idx, last_op_idx, include_row_number, row_number_idxs);
+		    CreateUnnestStructOperator(unnest_info, unnest_list_idx, last_op_idx, include_row_number, row_number_idxs);
 
 		auto aggregate_child = Optimize(std::move(window.children[0]));
 
@@ -229,6 +128,7 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 		unnest_list->children.push_back(std::move(aggregate));
 		unnest_struct->children.push_back(std::move(unnest_list));
 
+		// Add the padding columns
 		auto &expressions = unnest_struct->expressions;
 		for (auto padding_idx : padding_column_idxs) {
 			expressions.insert(expressions.begin() + static_cast<int64_t>(padding_idx),
@@ -239,23 +139,12 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 	}
 
 	for (auto &child : op->children) {
-		bool update_table_idx = false;
-		idx_t new_table_idx = 0;
-		child = OptimizeInternal(std::move(child), update_table_idx, new_table_idx);
-		if (update_table_idx) {
-			if (op->type == LogicalOperatorType::LOGICAL_PROJECTION) {
-				auto &projection = op->Cast<LogicalProjection>();
-				for (idx_t i = 0; i < projection.expressions.size(); i++) {
-					auto &expr = projection.expressions[i];
-					if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
-						auto &column_ref = expr->Cast<BoundColumnRefExpression>();
-						if (column_ref.binding.table_index != new_table_idx) {
-							column_ref.binding.table_index = new_table_idx;
-							column_ref.binding.column_index = i;
-						}
-					}
-				}
-			}
+		bool update_this_table_idx = false;
+		idx_t table_idx = 0;
+		child = OptimizeInternal(std::move(child), update_this_table_idx, table_idx);
+		if (update_this_table_idx) {
+			D_ASSERT(op->type == LogicalOperatorType::LOGICAL_PROJECTION);
+			UpdateTableIdxInExpressions(op->Cast<LogicalProjection>(), table_idx);
 		}
 	}
 
@@ -361,7 +250,7 @@ unique_ptr<LogicalOperator> TopNWindowElimination::CreateUnnestStructOperator(
 
 	if (include_row_number) {
 		// TODO: Test if generate_series is still correct, if there are groups with less than k rows
-		for (auto row_number_idx : row_number_idxs) {
+		for (const auto row_number_idx : row_number_idxs) {
 			auto row_number_reference =
 			    make_uniq<BoundColumnRefExpression>(LogicalType::BIGINT, ColumnBinding(unnest_list_idx, 1));
 			unnest_struct_exprs.insert(unnest_struct_exprs.begin() + static_cast<int64_t>(row_number_idx),
@@ -372,9 +261,157 @@ unique_ptr<LogicalOperator> TopNWindowElimination::CreateUnnestStructOperator(
 	return make_uniq<LogicalProjection>(table_idx, std::move(unnest_struct_exprs));
 }
 
-unique_ptr<LogicalOperator> TopNWindowElimination::Optimize(unique_ptr<LogicalOperator> op) {
-	bool update_table_idx = false;
-	idx_t new_table_idx = 0;
-	return OptimizeInternal(std::move(op), update_table_idx, new_table_idx);
+bool TopNWindowElimination::CanOptimize(LogicalOperator &op, optional_ptr<ClientContext> context) {
+	if (op.type != LogicalOperatorType::LOGICAL_FILTER) {
+		return false;
+	}
+
+	const auto &filter = op.Cast<LogicalFilter>();
+	if (filter.expressions.size() != 1) {
+		return false;
+	}
+
+	if (filter.expressions[0]->type != ExpressionType::COMPARE_LESSTHANOREQUALTO) {
+		return false;
+	}
+
+	const auto &filter_comparison = filter.expressions[0]->Cast<BoundComparisonExpression>();
+	if (filter_comparison.right->type != ExpressionType::VALUE_CONSTANT) {
+		return false;
+	}
+	auto &filter_value = filter_comparison.right->Cast<BoundConstantExpression>();
+	if (filter_value.value.type() != LogicalType::BIGINT) {
+		return false;
+	}
+	if (filter_value.value.GetValue<int64_t>() <= 1) {
+		return false;
+	}
+
+	const auto &filter_reference = filter_comparison.left->Cast<BoundColumnRefExpression>();
+	idx_t filter_table_idx = filter_reference.binding.table_index;
+	idx_t filter_column_idx = filter_reference.binding.column_index;
+
+	auto *child = filter.children[0].get();
+	while (child->type == LogicalOperatorType::LOGICAL_PROJECTION) {
+		const auto &projection = child->Cast<LogicalProjection>();
+		if (projection.table_index == filter_table_idx) {
+			if (projection.expressions[filter_column_idx]->type != ExpressionType::BOUND_COLUMN_REF) {
+				return false;
+			}
+			const auto &column_ref = projection.expressions[filter_column_idx]->Cast<BoundColumnRefExpression>();
+			filter_table_idx = column_ref.binding.table_index;
+			filter_column_idx = column_ref.binding.column_index;
+		}
+		child = child->children[0].get();
+	}
+
+	if (child->type != LogicalOperatorType::LOGICAL_WINDOW) {
+		return false;
+	}
+	const auto &window = child->Cast<LogicalWindow>();
+	if (window.window_index != filter_table_idx) {
+		return false;
+	}
+	if (window.expressions.size() != 1) {
+		for (idx_t i = 1; i < window.expressions.size(); ++i) {
+			if (!window.expressions[i]->Equals(*window.expressions[0])) {
+				return false;
+			}
+		}
+	}
+	if (window.expressions[0]->type != ExpressionType::WINDOW_ROW_NUMBER) {
+		return false;
+	}
+	const auto &window_expr = window.expressions[0]->Cast<BoundWindowExpression>();
+	if (window_expr.orders.size() != 1) {
+		return false;
+	}
+
+	// We have found a grouped top-n window construct!
+	return true;
 }
+
+void TopNWindowElimination::UpdateTableIdxInExpressions(LogicalProjection &projection, idx_t table_idx) {
+	for (idx_t i = 0; i < projection.expressions.size(); i++) {
+		auto &expr = projection.expressions[i];
+		if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
+			auto &column_ref = expr->Cast<BoundColumnRefExpression>();
+			if (column_ref.binding.table_index != table_idx) {
+				// This column references output from the window operator, which is in the i-th column of the child op
+				column_ref.binding.table_index = table_idx;
+				column_ref.binding.column_index = i;
+			}
+		}
+	}
+}
+
+vector<idx_t> TopNWindowElimination::GeneratePaddingIdxs(const vector<ColumnBinding> &bindings) {
+	set<idx_t> projected_column_idxs;
+	for (auto &binding : bindings) {
+		projected_column_idxs.insert(binding.column_index);
+	}
+
+	vector<idx_t> padding_column_idxs;
+	padding_column_idxs.reserve(*projected_column_idxs.rbegin() - 1);
+	auto projected_column_idx_it = projected_column_idxs.begin();
+
+	for (idx_t i = 0; i < *projected_column_idxs.rbegin(); i++) {
+		if (i < *projected_column_idx_it) {
+			padding_column_idxs.push_back(i);
+		} else {
+			++projected_column_idx_it;
+		}
+	}
+	return padding_column_idxs;
+}
+
+void TopNWindowElimination::AssignChildNewTableIdx(LogicalWindow &window, const idx_t table_idx) {
+	auto *window_child = window.children[0].get();
+
+	D_ASSERT(window_child->type == LogicalOperatorType::LOGICAL_PROJECTION ||
+	         window_child->type == LogicalOperatorType::LOGICAL_GET);
+	if (window_child->type == LogicalOperatorType::LOGICAL_PROJECTION) {
+		auto &projection = window_child->Cast<LogicalProjection>();
+		projection.table_index = table_idx;
+	} else {
+		auto &get = window_child->Cast<LogicalGet>();
+		get.table_index = table_idx;
+	}
+
+	for (auto &expr : window.expressions) {
+		auto &window_expr = expr->Cast<BoundWindowExpression>();
+		for (auto &partition : window_expr.partitions) {
+			auto &column_ref = partition->Cast<BoundColumnRefExpression>();
+			column_ref.binding.table_index = table_idx;
+		}
+		for (auto &order : window_expr.orders) {
+			auto &column_ref = order.expression->Cast<BoundColumnRefExpression>();
+			column_ref.binding.table_index = table_idx;
+		}
+	}
+}
+bool TopNWindowElimination::GenerateStructPackInputExprs(
+    const LogicalWindow &window, const vector<ColumnBinding> &bindings, const vector<string> &column_names,
+    const vector<LogicalType> &types, vector<unique_ptr<Expression>> &struct_input_exprs, set<idx_t> &row_number_idxs,
+    bool use_new_child_idx, idx_t new_child_idx) {
+	bool include_row_number = false;
+	for (size_t i = 0; i < bindings.size(); i++) {
+		if (bindings[i].table_index == window.window_index) {
+			// This is a projection on row_number. We generate these numbers later in the unnest operator.
+			include_row_number = true;
+			row_number_idxs.insert(i);
+			continue;
+		}
+
+		string column_name = column_names[i].empty() ? to_string(i) : column_names[i];
+		if (use_new_child_idx) {
+			struct_input_exprs.push_back(make_uniq<BoundColumnRefExpression>(
+			    column_name, types[i], ColumnBinding {new_child_idx, bindings[i].column_index}));
+		} else {
+			struct_input_exprs.push_back(make_uniq<BoundColumnRefExpression>(column_name, types[i], bindings[i]));
+		}
+	}
+	return include_row_number;
+}
+
 } // namespace duckdb

@@ -24,6 +24,7 @@ public:
 private:
 	//! Whether we can perform the optimization on this operator
 	static bool CanOptimize(LogicalOperator &op, optional_ptr<ClientContext> context = nullptr);
+
 	unique_ptr<LogicalOperator> OptimizeInternal(unique_ptr<LogicalOperator> op, bool &update_table_idx,
 	                                             idx_t &new_table_idx);
 
@@ -38,6 +39,15 @@ private:
 	                                                       idx_t unnest_list_idx, idx_t table_idx,
 	                                                       bool include_row_number,
 	                                                       const set<idx_t> &row_number_idxs) const;
+
+	static void UpdateTableIdxInExpressions(LogicalProjection &projection, idx_t table_idx);
+	static vector<idx_t> GeneratePaddingIdxs(const vector<ColumnBinding> &bindings);
+	static void AssignChildNewTableIdx(LogicalWindow &window, idx_t table_idx);
+	static bool GenerateStructPackInputExprs(const LogicalWindow &window, const vector<ColumnBinding> &bindings,
+	                                         const vector<string> &column_names, const vector<LogicalType> &types,
+	                                         vector<unique_ptr<Expression>> &struct_input_exprs,
+	                                         set<idx_t> &row_number_idxs, bool use_new_child_idx = false,
+	                                         idx_t new_child_idx = 0);
 
 	ClientContext &context;
 	Optimizer &optimizer;
