@@ -72,11 +72,6 @@ public:
 	             bool can_have_nulls);
 	virtual ~ColumnWriter();
 
-	ParquetWriter &writer;
-	const ParquetColumnSchema &column_schema;
-	vector<string> schema_path;
-	bool can_have_nulls;
-
 public:
 	const LogicalType &Type() const {
 		return column_schema.type;
@@ -94,6 +89,13 @@ public:
 		return column_schema.max_repeat;
 	}
 	virtual bool HasTransform() {
+		for (auto &child_writer : child_writers) {
+			if (child_writer->HasTransform()) {
+				throw NotImplementedException("ColumnWriter of type '%s' requires a transform, but is not a root "
+				                              "column, this isn't supported currently",
+				                              child_writer->Type());
+			}
+		}
 		return false;
 	}
 	virtual LogicalType TransformedType() {
@@ -143,6 +145,15 @@ protected:
 
 	void CompressPage(MemoryStream &temp_writer, size_t &compressed_size, data_ptr_t &compressed_data,
 	                  AllocatedData &compressed_buf);
+
+public:
+	ParquetWriter &writer;
+	const ParquetColumnSchema &column_schema;
+	vector<string> schema_path;
+	bool can_have_nulls;
+
+protected:
+	vector<unique_ptr<ColumnWriter>> child_writers;
 };
 
 } // namespace duckdb

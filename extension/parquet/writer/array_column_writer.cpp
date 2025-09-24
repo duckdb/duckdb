@@ -6,7 +6,7 @@ void ArrayColumnWriter::Analyze(ColumnWriterState &state_p, ColumnWriterState *p
 	auto &state = state_p.Cast<ListColumnWriterState>();
 	auto &array_child = ArrayVector::GetEntry(vector);
 	auto array_size = ArrayType::GetSize(vector.GetType());
-	child_writer->Analyze(*state.child_state, &state_p, array_child, array_size * count);
+	GetChildWriter().Analyze(*state.child_state, &state_p, array_child, array_size * count);
 }
 
 void ArrayColumnWriter::WriteArrayState(ListColumnWriterState &state, idx_t array_size, uint16_t first_repeat_level,
@@ -62,14 +62,14 @@ void ArrayColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *p
 	auto &array_child = ArrayVector::GetEntry(vector);
 	// The elements of a single array should not span multiple Parquet pages
 	// So, we force the entire vector to fit on a single page by setting "vector_can_span_multiple_pages=false"
-	child_writer->Prepare(*state.child_state, &state_p, array_child, count * array_size, false);
+	GetChildWriter().Prepare(*state.child_state, &state_p, array_child, count * array_size, false);
 }
 
 void ArrayColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t count) {
 	auto &state = state_p.Cast<ListColumnWriterState>();
 	auto array_size = ArrayType::GetSize(vector.GetType());
 	auto &array_child = ArrayVector::GetEntry(vector);
-	child_writer->Write(*state.child_state, array_child, count * array_size);
+	GetChildWriter().Write(*state.child_state, array_child, count * array_size);
 }
 
 } // namespace duckdb
