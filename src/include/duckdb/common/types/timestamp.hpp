@@ -141,19 +141,21 @@ public:
 
 public:
 	//! Convert a string in the format "YYYY-MM-DD hh:mm:ss[.f][-+TH[:tm]]" to a timestamp object
-	DUCKDB_API static timestamp_t FromString(const string &str);
+	DUCKDB_API static timestamp_t FromString(const string &str, bool use_offset);
 	//! Convert a string where the offset can also be a time zone string: / [A_Za-z0-9/_]+/
 	//! If has_offset is true, then the result is an instant that was offset from UTC
 	//! If the tz is not empty, the result is still an instant, but the parts can be extracted and applied to the TZ
 	DUCKDB_API static TimestampCastResult TryConvertTimestampTZ(const char *str, idx_t len, timestamp_t &result,
-	                                                            bool &has_offset, string_t &tz,
+	                                                            const bool use_offset, bool &has_offset, string_t &tz,
 	                                                            optional_ptr<int32_t> nanos = nullptr);
 	//! Strict Timestamp does not accept offsets.
 	DUCKDB_API static TimestampCastResult TryConvertTimestamp(const char *str, idx_t len, timestamp_t &result,
+	                                                          const bool use_offset,
 	                                                          optional_ptr<int32_t> nanos = nullptr,
 	                                                          bool strict = false);
 	DUCKDB_API static TimestampCastResult TryConvertTimestamp(const char *str, idx_t len, timestamp_ns_t &result);
-	DUCKDB_API static timestamp_t FromCString(const char *str, idx_t len, optional_ptr<int32_t> nanos = nullptr);
+	DUCKDB_API static timestamp_t FromCString(const char *str, idx_t len, bool use_offset = false,
+	                                          optional_ptr<int32_t> nanos = nullptr);
 	//! Convert a date object to a string in the format "YYYY-MM-DD hh:mm:ss"
 	DUCKDB_API static string ToString(timestamp_t timestamp);
 

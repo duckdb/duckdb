@@ -18,6 +18,10 @@ TupleDataCollection::TupleDataCollection(BufferManager &buffer_manager, shared_p
 	Initialize();
 }
 
+TupleDataCollection::TupleDataCollection(ClientContext &context, shared_ptr<TupleDataLayout> layout_ptr)
+    : TupleDataCollection(BufferManager::GetBufferManager(context), std::move(layout_ptr)) {
+}
+
 TupleDataCollection::~TupleDataCollection() {
 }
 
@@ -122,11 +126,17 @@ void TupleDataCollection::DestroyChunks(const idx_t chunk_idx_begin, const idx_t
 	}
 
 	if (!layout.AllConstant()) {
+		if (chunk_begin.heap_block_ids.Empty()) {
+			return;
+		}
 		const auto heap_block_begin = chunk_begin.heap_block_ids.Start();
 		if (chunk_idx_end == ChunkCount()) {
 			segment.allocator->DestroyHeapBlocks(heap_block_begin, segment.allocator->HeapBlockCount());
 		} else {
 			auto &chunk_end = segment.chunks[chunk_idx_end];
+			if (chunk_end.heap_block_ids.Empty()) {
+				return;
+			}
 			const auto heap_block_end = chunk_end.heap_block_ids.Start();
 			segment.allocator->DestroyHeapBlocks(heap_block_begin, heap_block_end);
 		}
@@ -556,11 +566,16 @@ void TupleDataCollection::InitializeScan(TupleDataParallelScanState &state, vect
 	InitializeScan(state.scan_state, std::move(column_ids), properties);
 }
 
-idx_t TupleDataCollection::FetchChunk(TupleDataScanState &state, const idx_t segment_idx, const idx_t chunk_idx,
-                                      const bool init_heap) {
-	auto &segment = *segments[segment_idx];
-	allocator->InitializeChunkState(segment, state.pin_state, state.chunk_state, chunk_idx, init_heap);
-	return segment.chunks[chunk_idx].count;
+idx_t TupleDataCollection::FetchChunk(TupleDataScanState &state, idx_t chunk_idx, bool init_heap) {
+	for (idx_t segment_idx = 0; segment_idx < segments.size(); segment_idx++) {
+		auto &segment = *segments[segment_idx];
+		if (chunk_idx < segment.ChunkCount()) {
+			segment.allocator->InitializeChunkState(segment, state.pin_state, state.chunk_state, chunk_idx, init_heap);
+			return segment.chunks[chunk_idx].count;
+		}
+		chunk_idx -= segment.ChunkCount();
+	}
+	throw InternalException("Chunk index out of in TupleDataCollection::FetchChunk");
 }
 
 bool TupleDataCollection::Scan(TupleDataScanState &state, DataChunk &result) {

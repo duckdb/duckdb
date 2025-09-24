@@ -167,10 +167,15 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 			JoinCondition cond;
 			cond.left = std::move(expr.children[child_idx]);
 			auto &child_type = expr.child_types[child_idx];
+			auto &compare_type = expr.child_targets[child_idx];
 			cond.right = BoundCastExpression::AddDefaultCastToType(
-			    make_uniq<BoundColumnRefExpression>(child_type, plan_columns[child_idx]),
-			    expr.child_targets[child_idx]);
+			    make_uniq<BoundColumnRefExpression>(child_type, plan_columns[child_idx]), compare_type);
 			cond.comparison = expr.comparison_type;
+
+			// push collations
+			ExpressionBinder::PushCollation(binder.context, cond.left, compare_type);
+			ExpressionBinder::PushCollation(binder.context, cond.right, compare_type);
+
 			join->conditions.push_back(std::move(cond));
 		}
 		root = std::move(join);

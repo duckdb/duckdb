@@ -10,6 +10,7 @@
 
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/types/string.hpp"
 
 namespace duckdb {
 
@@ -81,6 +82,25 @@ public:
 	T *Make(ARGS &&... args) {
 		auto mem = AllocateAligned(sizeof(T));
 		return new (mem) T(std::forward<ARGS>(args)...);
+	}
+
+	String MakeString(const char *data, const size_t len) {
+		data_ptr_t mem = nullptr;
+
+		D_ASSERT(len < NumericLimits<uint32_t>::Maximum());
+		const auto size = static_cast<uint32_t>(len);
+		if (!String::CanBeInlined(size)) {
+			// If the string can't be inlined, we allocate it on the arena allocator
+			mem = AllocateAligned(sizeof(char) * size + 1); // +1 for null terminator
+			memcpy(mem, data, size);
+			mem[size] = '\0';
+		}
+
+		return String::Reference(mem ? reinterpret_cast<char *>(mem) : data, size);
+	}
+
+	String MakeString(const std::string &data) {
+		return MakeString(data.c_str(), data.size());
 	}
 
 private:

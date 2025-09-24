@@ -22,8 +22,13 @@ public:
 
 public:
 	void Analyze(ColumnWriterState &state, ColumnWriterState *parent, Vector &vector, idx_t count) override;
-	void Prepare(ColumnWriterState &state, ColumnWriterState *parent, Vector &vector, idx_t count) override;
+	void Prepare(ColumnWriterState &state, ColumnWriterState *parent, Vector &vector, idx_t count,
+	             bool vector_can_span_multiple_pages) override;
 	void Write(ColumnWriterState &state, Vector &vector, idx_t count) override;
+
+protected:
+	void WriteArrayState(ListColumnWriterState &state, idx_t array_size, uint16_t first_repeat_level,
+	                     idx_t define_value, const bool is_empty = false);
 };
 
 } // namespace duckdb

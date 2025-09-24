@@ -27,7 +27,7 @@ public:
 
 	unsafe_vector<uint16_t> definition_levels;
 	unsafe_vector<uint16_t> repetition_levels;
-	vector<bool> is_empty;
+	unsafe_vector<uint8_t> is_empty;
 	idx_t parent_null_count = 0;
 	idx_t null_count = 0;
 
@@ -119,7 +119,8 @@ public:
 		throw NotImplementedException("Writer does not need analysis");
 	}
 
-	virtual void Prepare(ColumnWriterState &state, ColumnWriterState *parent, Vector &vector, idx_t count) = 0;
+	virtual void Prepare(ColumnWriterState &state, ColumnWriterState *parent, Vector &vector, idx_t count,
+	                     bool vector_can_span_multiple_pages) = 0;
 
 	virtual void BeginWrite(ColumnWriterState &state) = 0;
 	virtual void Write(ColumnWriterState &state, Vector &vector, idx_t count) = 0;

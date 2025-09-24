@@ -1,0 +1,176 @@
+# name: test/sql/collate/test_strpos_collate.test
+# description: Test that strpos/instr/position functions properly support COLLATE NOCASE
+# group: [collate]
+
+# Test that strpos works with COLLATE NOCASE
+query I
+SELECT strpos('HELLO' COLLATE NOCASE, 'el')
+----
+2
+
+# Test with different case combinations
+query I
+SELECT strpos('HELLO' COLLATE NOCASE, 'EL')
+----
+2
+
+query I
+SELECT strpos('hello' COLLATE NOCASE, 'EL')
+----
+2
+
+query I
+SELECT strpos('HeLLo' COLLATE NOCASE, 'el')
+----
+2
+
+# Test instr function (alias for strpos)
+query I
+SELECT instr('HELLO' COLLATE NOCASE, 'el')
+----
+2
+
+query I
+SELECT instr('hello' COLLATE NOCASE, 'EL')
+----
+2
+
+# Test position function (alias for strpos)
+query I
+SELECT position('el' IN ('HELLO' COLLATE NOCASE))
+----
+2
+
+query I
+SELECT position('EL' IN ('hello' COLLATE NOCASE))
+----
+2
+
+# Test edge cases
+query I
+SELECT strpos('HELLO' COLLATE NOCASE, '')
+----
+1
+
+query I
+SELECT strpos('HELLO' COLLATE NOCASE, 'xyz')
+----
+0
+
+query I
+SELECT strpos('HELLO' COLLATE NOCASE, 'HELLO')
+----
+1
+
+# Test with longer strings
+query I
+SELECT strpos('Hello World' COLLATE NOCASE, 'world')
+----
+7
+
+query I
+SELECT strpos('HELLO WORLD' COLLATE NOCASE, 'o w')
+----
+5
+
+# Test that other string functions still work (regression test)
+query T
+SELECT contains('HELLO' COLLATE NOCASE, 'hEllO')
+----
+true
+
+query T
+SELECT starts_with('HELLO' COLLATE NOCASE, 'heL')
+----
+true
+
+# Test with table data
+statement ok
+CREATE TABLE collate_test(s VARCHAR COLLATE NOCASE)
+
+statement ok
+INSERT INTO collate_test VALUES ('Hello World'), ('HELLO WORLD'), ('hElLo WoRlD')
+
+# Test basic functionality
+query I
+SELECT strpos(s COLLATE NOCASE, 'hello') FROM collate_test ORDER BY s
+----
+1
+1
+1
+
+query I
+SELECT strpos(s COLLATE NOCASE, 'world') FROM collate_test ORDER BY s
+----
+7
+7
+7
+
+# Test with mixed collations
+query I
+SELECT strpos('HELLO' COLLATE NOCASE, 'el' COLLATE NOCASE)
+----
+2
+
+query I
+SELECT strpos('HELLO' COLLATE NOCASE, 'EL')
+----
+2
+
+# Test that non-collated versions still work
+query I
+SELECT strpos('HELLO', 'el')
+----
+0
+
+query I
+SELECT strpos('HELLO', 'EL')
+----
+2
+
+# Test with empty strings and edge cases
+query I
+SELECT strpos('' COLLATE NOCASE, '')
+----
+1
+
+query I
+SELECT strpos('' COLLATE NOCASE, 'a')
+----
+0
+
+query I
+SELECT strpos('a' COLLATE NOCASE, '')
+----
+1
+
+# Test with special characters
+query I
+SELECT strpos('HéLLO' COLLATE NOCASE, 'éll')
+----
+2
+
+query I
+SELECT strpos('HÉLLO' COLLATE NOCASE, 'éll')
+----
+2
+
+# Test that the fix doesn't break existing behavior
+query I
+SELECT strpos('HELLO', 'HELLO')
+----
+1
+
+query I
+SELECT strpos('HELLO', '')
+----
+1
+
+query I
+SELECT strpos('HELLO', 'xyz')
+----
+0
+
+# Clean up
+statement ok
+DROP TABLE collate_test

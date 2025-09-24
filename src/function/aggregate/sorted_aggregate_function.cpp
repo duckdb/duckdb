@@ -10,6 +10,8 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/parallel/thread_context.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -22,7 +24,7 @@ struct SortedAggregateBindData : public FunctionData {
 	SortedAggregateBindData(ClientContext &context, Expressions &children, AggregateFunction &aggregate,
 	                        BindInfoPtr &bind_info, OrderBys &order_bys)
 	    : context(context), function(aggregate), bind_info(std::move(bind_info)),
-	      threshold(ClientConfig::GetConfig(context).ordered_aggregate_threshold) {
+	      threshold(DBConfig::GetSetting<OrderedAggregateThresholdSetting>(context)) {
 
 		//	Describe the arguments.
 		for (const auto &child : children) {

@@ -1,5 +1,8 @@
 #include "duckdb/function/window/window_merge_sort_tree.hpp"
+#include "duckdb/main/client_config.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 
 #include <thread>
 #include <utility>
@@ -65,7 +68,8 @@ WindowMergeSortTreeLocalState::WindowMergeSortTreeLocalState(ExecutionContext &c
 }
 
 void WindowMergeSortTreeLocalState::Sink(ExecutionContext &context, DataChunk &chunk, const idx_t row_idx,
-                                         optional_ptr<SelectionVector> filter_sel, idx_t filtered) {
+                                         optional_ptr<SelectionVector> filter_sel, idx_t filtered,
+                                         InterruptState &interrupt) {
 	//	Sequence the payload column
 	sort_chunk.Reset();
 	auto &indices = sort_chunk.data.back();
@@ -83,25 +87,22 @@ void WindowMergeSortTreeLocalState::Sink(ExecutionContext &context, DataChunk &c
 		sort_chunk.Slice(*filter_sel, filtered);
 	}
 
-	InterruptState interrupt;
 	OperatorSinkInput sink {*window_tree.global_sink, *local_sink, interrupt};
 	window_tree.sort->Sink(context, sort_chunk, sink);
 }
 
-void WindowMergeSortTreeLocalState::ExecuteSortTask(ExecutionContext &context) {
+void WindowMergeSortTreeLocalState::ExecuteSortTask(ExecutionContext &context, InterruptState &interrupt) {
 	PostIncrement<atomic<idx_t>> on_completed(window_tree.tasks_completed);
 
 	switch (build_stage) {
 	case WindowMergeSortStage::COMBINE: {
 		auto &local_sink = *window_tree.local_sinks[build_task];
-		InterruptState interrupt_state;
-		OperatorSinkCombineInput combine {*window_tree.global_sink, local_sink, interrupt_state};
+		OperatorSinkCombineInput combine {*window_tree.global_sink, local_sink, interrupt};
 		window_tree.sort->Combine(context, combine);
 		break;
 	}
 	case WindowMergeSortStage::FINALIZE: {
 		auto &sort = *window_tree.sort;
-		InterruptState interrupt;
 		OperatorSinkFinalizeInput finalize {*window_tree.global_sink, interrupt};
 		sort.Finalize(context.client, finalize);
 		auto sort_global = sort.GetGlobalSourceState(context.client, *window_tree.global_sink);
@@ -201,11 +202,11 @@ bool WindowMergeSortTree::TryPrepareSortStage(WindowMergeSortTreeLocalState &lst
 	return true;
 }
 
-void WindowMergeSortTreeLocalState::Finalize(ExecutionContext &context) {
+void WindowMergeSortTreeLocalState::Finalize(ExecutionContext &context, InterruptState &interrupt) {
 	// Sort, merge and build the tree in parallel
 	while (window_tree.build_stage.load() != WindowMergeSortStage::FINISHED) {
 		if (window_tree.TryPrepareSortStage(*this)) {
-			ExecuteSortTask(context);
+			ExecuteSortTask(context, interrupt);
 		} else {
 			std::this_thread::yield();
 		}

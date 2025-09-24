@@ -52,23 +52,32 @@ select f(x:=a) from t;
 statement error
 create macro my_macro1(a, b := a) as a + b;
 ----
-Binder Error: table "0_macro_parametersmy_macro1" has duplicate column name "a"
+Invalid default value
 
 statement ok
 create table integers (a integer);
 
-statement ok
+# this used to be allowed but is no longer (and for good reason)
+statement error
 create macro my_macro2(a := i) as (
 	select min(a) from integers
+);
+----
+Invalid default value
+
+# to test the dependencies we create this macro instead
+statement ok
+create macro my_macro2(i := 42) as (
+    select min(a) + i from integers
 );
 
 statement ok
 insert into integers values (5), (10), (13)
 
 query I
-select my_macro2(can_not_be_empty)
+select my_macro2(84)
 ----
-5
+89
 
 statement error
 drop table integers;

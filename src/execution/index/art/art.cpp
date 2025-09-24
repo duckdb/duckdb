@@ -4,7 +4,11 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/index/art/art_builder.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
+#include "duckdb/execution/index/art/art_merger.hpp"
+#include "duckdb/execution/index/art/art_operator.hpp"
+#include "duckdb/execution/index/art/art_scanner.hpp"
 #include "duckdb/execution/index/art/base_leaf.hpp"
 #include "duckdb/execution/index/art/base_node.hpp"
 #include "duckdb/execution/index/art/iterator.hpp"
@@ -21,9 +25,6 @@
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
-#include "duckdb/execution/index/art/art_scanner.hpp"
-#include "duckdb/execution/index/art/art_merger.hpp"
-#include "duckdb/execution/index/art/art_operator.hpp"
 
 namespace duckdb {
 
@@ -424,76 +425,17 @@ void ART::GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, Vector
 }
 
 //===--------------------------------------------------------------------===//
-// Construct from sorted data.
+// Build from sorted data.
 //===--------------------------------------------------------------------===//
 
-bool ART::ConstructInternal(const unsafe_vector<ARTKey> &keys, const unsafe_vector<ARTKey> &row_ids, Node &node,
-                            ARTKeySection &section) {
-	D_ASSERT(section.start < keys.size());
-	D_ASSERT(section.end < keys.size());
-	D_ASSERT(section.start <= section.end);
+ARTConflictType ART::Build(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_ids, const idx_t row_count) {
+	ArenaAllocator arena(BufferAllocator::Get(db));
+	ARTBuilder builder(arena, *this, keys, row_ids);
+	builder.Init(tree, row_count - 1);
 
-	auto &start = keys[section.start];
-	auto &end = keys[section.end];
-	D_ASSERT(start.len != 0);
-
-	// Increment the depth until we reach a leaf or find a mismatching byte.
-	auto prefix_depth = section.depth;
-	while (start.len != section.depth && start.ByteMatches(end, section.depth)) {
-		section.depth++;
-	}
-
-	if (start.len == section.depth) {
-		// We reached a leaf. All the bytes of start_key and end_key match.
-		auto row_id_count = section.end - section.start + 1;
-		if (IsUnique() && row_id_count != 1) {
-			return false;
-		}
-
-		reference<Node> ref(node);
-		auto count = UnsafeNumericCast<uint8_t>(start.len - prefix_depth);
-		Prefix::New(*this, ref, start, prefix_depth, count);
-		if (row_id_count == 1) {
-			Leaf::New(ref, row_ids[section.start].GetRowId());
-		} else {
-			// Loop and insert the row IDs.
-			// We cannot use Construct in the leaf because row IDs are not sorted.
-			ArenaAllocator arena(BufferAllocator::Get(db));
-			for (idx_t i = section.start; i < section.start + row_id_count; i++) {
-				ARTOperator::Insert(arena, *this, ref, row_ids[i], 0, row_ids[i], GateStatus::GATE_SET, nullptr,
-				                    IndexAppendMode::DEFAULT);
-			}
-			ref.get().SetGateStatus(GateStatus::GATE_SET);
-		}
-		return true;
-	}
-
-	// Create a new node and recurse.
-	unsafe_vector<ARTKeySection> children;
-	section.GetChildSections(children, keys);
-
-	// Create the prefix.
-	reference<Node> ref(node);
-	auto prefix_length = section.depth - prefix_depth;
-	Prefix::New(*this, ref, start, prefix_depth, prefix_length);
-
-	// Create the node.
-	Node::New(*this, ref, Node::GetNodeType(children.size()));
-	for (auto &child : children) {
-		Node new_child;
-		auto success = ConstructInternal(keys, row_ids, new_child, child);
-		Node::InsertChild(*this, ref, child.key_byte, new_child);
-		if (!success) {
-			return false;
-		}
-	}
-	return true;
-}
-
-bool ART::Construct(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_ids, const idx_t row_count) {
-	ARTKeySection section(0, row_count - 1, 0, 0);
-	if (!ConstructInternal(keys, row_ids, tree, section)) {
-		return false;
+	auto result = builder.Build();
+	if (result != ARTConflictType::NO_CONFLICT) {
+		return result;
 	}
 
 #ifdef DEBUG
@@ -504,7 +446,8 @@ bool ART::Construct(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_ids,
 	it.Scan(empty_key, NumericLimits<row_t>().Maximum(), row_ids_debug, false);
 	D_ASSERT(row_count == row_ids_debug.size());
 #endif
-	return true;
+
+	return ARTConflictType::NO_CONFLICT;
 }
 
 //===--------------------------------------------------------------------===//
@@ -554,7 +497,8 @@ ErrorData ART::Insert(IndexLock &l, DataChunk &chunk, Vector &row_ids, IndexAppe
 			if (keys[i].Empty()) {
 				continue;
 			}
-			Erase(tree, keys[i], 0, row_id_keys[i], tree.GetGateStatus());
+			D_ASSERT(tree.GetGateStatus() == GateStatus::GATE_NOT_SET);
+			ARTOperator::Delete(*this, tree, keys[i], row_id_keys[i]);
 		}
 	}
 
@@ -643,7 +587,8 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 		if (keys[i].Empty()) {
 			continue;
 		}
-		Erase(tree, keys[i], 0, row_id_keys[i], tree.GetGateStatus());
+		D_ASSERT(tree.GetGateStatus() == GateStatus::GATE_NOT_SET);
+		ARTOperator::Delete(*this, tree, keys[i], row_id_keys[i]);
 	}
 
 	if (!tree.HasMetadata()) {
@@ -662,101 +607,6 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 		}
 	}
 #endif
-}
-
-void ART::Erase(Node &node, reference<const ARTKey> key, idx_t depth, reference<const ARTKey> row_id,
-                GateStatus status) {
-	if (!node.HasMetadata()) {
-		return;
-	}
-
-	// Traverse the prefix.
-	reference<Node> next(node);
-	if (next.get().GetType() == NType::PREFIX) {
-		auto pos = Prefix::TraverseMutable(*this, next, key, depth);
-		if (pos.IsValid()) {
-			// Prefixes don't match: nothing to erase.
-			return;
-		}
-	}
-
-	//	Delete the row ID from the leaf.
-	//	This is the root node, which can be a leaf with possible prefix nodes.
-	if (next.get().GetType() == NType::LEAF_INLINED) {
-		if (next.get().GetRowId() == row_id.get().GetRowId()) {
-			Node::Free(*this, node);
-		}
-		return;
-	}
-
-	// Transform a deprecated leaf.
-	if (next.get().GetType() == NType::LEAF) {
-		D_ASSERT(status == GateStatus::GATE_NOT_SET);
-		Leaf::TransformToNested(*this, next);
-	}
-
-	// Enter a nested leaf.
-	if (status == GateStatus::GATE_NOT_SET && next.get().GetGateStatus() == GateStatus::GATE_SET) {
-		return Erase(next, row_id, 0, row_id, GateStatus::GATE_SET);
-	}
-
-	D_ASSERT(depth < key.get().len);
-	if (next.get().IsLeafNode()) {
-		auto byte = key.get()[depth];
-		if (next.get().HasByte(*this, byte)) {
-			Node::DeleteChild(*this, next, node, key.get()[depth], status, key.get());
-		}
-		return;
-	}
-
-	auto child = next.get().GetChildMutable(*this, key.get()[depth]);
-	if (!child) {
-		// No child at the byte: nothing to erase.
-		return;
-	}
-
-	// Transform a deprecated leaf.
-	if (child->GetType() == NType::LEAF) {
-		D_ASSERT(status == GateStatus::GATE_NOT_SET);
-		Leaf::TransformToNested(*this, *child);
-	}
-
-	// Enter a nested leaf.
-	if (status == GateStatus::GATE_NOT_SET && child->GetGateStatus() == GateStatus::GATE_SET) {
-		Erase(*child, row_id, 0, row_id, GateStatus::GATE_SET);
-		if (!child->HasMetadata()) {
-			Node::DeleteChild(*this, next, node, key.get()[depth], status, key.get());
-		} else {
-			next.get().ReplaceChild(*this, key.get()[depth], *child);
-		}
-		return;
-	}
-
-	auto temp_depth = depth + 1;
-	reference<Node> ref(*child);
-
-	if (ref.get().GetType() == NType::PREFIX) {
-		auto pos = Prefix::TraverseMutable(*this, ref, key, temp_depth);
-		if (pos.IsValid()) {
-			// Prefixes don't match: nothing to erase.
-			return;
-		}
-	}
-
-	if (ref.get().GetType() == NType::LEAF_INLINED) {
-		if (ref.get().GetRowId() == row_id.get().GetRowId()) {
-			Node::DeleteChild(*this, next, node, key.get()[depth], status, key.get());
-		}
-		return;
-	}
-
-	// Recurse.
-	Erase(*child, key, depth + 1, row_id, status);
-	if (!child->HasMetadata()) {
-		Node::DeleteChild(*this, next, node, key.get()[depth], status, key.get());
-	} else {
-		next.get().ReplaceChild(*this, key.get()[depth], *child);
-	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -1264,7 +1114,7 @@ void ART::Vacuum(IndexLock &state) {
 			break;
 		}
 		default:
-			throw InternalException("invalid node type for Vacuum: %s", EnumUtil::ToString(type));
+			throw InternalException("invalid node type for Vacuum: %d", type);
 		}
 
 		const auto idx = Node::GetAllocatorIdx(type);
@@ -1303,14 +1153,14 @@ void ART::InitializeMerge(Node &node, unsafe_vector<idx_t> &upper_bounds) {
 	auto handler = [&upper_bounds](Node &node) {
 		const auto type = node.GetType();
 		if (node.GetType() == NType::LEAF_INLINED) {
-			return ARTHandlingResult::CONTINUE;
+			return ARTHandlingResult::NONE;
 		}
 		if (type == NType::LEAF) {
 			throw InternalException("deprecated ART storage in InitializeMerge");
 		}
 		const auto idx = Node::GetAllocatorIdx(type);
 		node.IncreaseBufferId(upper_bounds[idx]);
-		return ARTHandlingResult::CONTINUE;
+		return ARTHandlingResult::NONE;
 	};
 
 	ARTScanner<ARTScanHandling::POP, Node> scanner(*this, handler, node);

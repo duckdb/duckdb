@@ -152,6 +152,16 @@ void ExpressionIterator::EnumerateExpression(unique_ptr<Expression> &expr,
 	                                      [&](unique_ptr<Expression> &child) { EnumerateExpression(child, callback); });
 }
 
+void ExpressionIterator::EnumerateExpression(unique_ptr<Expression> &expr,
+                                             const std::function<void(unique_ptr<Expression> &child)> &callback) {
+	if (!expr) {
+		return;
+	}
+	callback(expr);
+	ExpressionIterator::EnumerateChildren(*expr,
+	                                      [&](unique_ptr<Expression> &child) { EnumerateExpression(child, callback); });
+}
+
 void ExpressionIterator::VisitExpressionClass(const Expression &expr, ExpressionClass expr_class,
                                               const std::function<void(const Expression &child)> &callback) {
 	if (expr.GetExpressionClass() == expr_class) {
@@ -185,8 +195,9 @@ void BoundNodeVisitor::VisitBoundQueryNode(BoundQueryNode &node) {
 	switch (node.type) {
 	case QueryNodeType::SET_OPERATION_NODE: {
 		auto &bound_setop = node.Cast<BoundSetOperationNode>();
-		VisitBoundQueryNode(*bound_setop.left);
-		VisitBoundQueryNode(*bound_setop.right);
+		for (auto &child : bound_setop.bound_children) {
+			VisitBoundQueryNode(*child.node);
+		}
 		break;
 	}
 	case QueryNodeType::RECURSIVE_CTE_NODE: {

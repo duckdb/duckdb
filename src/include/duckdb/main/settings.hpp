@@ -639,6 +639,15 @@ struct ErrorsAsJSONSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct ExperimentalMetadataReuseSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "experimental_metadata_reuse";
+	static constexpr const char *Description = "EXPERIMENTAL: Re-use row group and table metadata when checkpointing.";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
+};
+
 struct ExplainOutputSetting {
 	using RETURN_TYPE = ExplainOutputType;
 	static constexpr const char *Name = "explain_output";
@@ -752,15 +761,14 @@ struct HTTPProxyUsernameSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct IEEEFloatingPointOpsSetting {
+struct IeeeFloatingPointOpsSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "ieee_floating_point_ops";
 	static constexpr const char *Description =
 	    "Use IEE754-compliant floating point operations (returning NAN instead of errors/NULL).";
 	static constexpr const char *InputType = "BOOLEAN";
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "true";
+	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
 
 struct ImmediateTransactionModeSetting {
@@ -861,7 +869,7 @@ struct LoggingLevel {
 struct LoggingMode {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "logging_mode";
-	static constexpr const char *Description = "Enables the logger";
+	static constexpr const char *Description = "Determines which types of log messages are logged";
 	static constexpr const char *InputType = "VARCHAR";
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
@@ -871,7 +879,7 @@ struct LoggingMode {
 struct LoggingStorage {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "logging_storage";
-	static constexpr const char *Description = "Set the logging storage (memory/stdout/file)";
+	static constexpr const char *Description = "Set the logging storage (memory/stdout/file/<custom>)";
 	static constexpr const char *InputType = "VARCHAR";
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
@@ -963,10 +971,9 @@ struct OrderedAggregateThresholdSetting {
 	static constexpr const char *Name = "ordered_aggregate_threshold";
 	static constexpr const char *Description = "The number of rows to accumulate before sorting, used for tuning";
 	static constexpr const char *InputType = "UBIGINT";
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static bool OnLocalSet(ClientContext &context, const Value &input);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "262144";
+	static constexpr SetScope DefaultScope = SetScope::SESSION;
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct PartitionedWriteFlushThresholdSetting {
@@ -1004,9 +1011,9 @@ struct PerfectHtThresholdSetting {
 	static constexpr const char *Name = "perfect_ht_threshold";
 	static constexpr const char *Description = "Threshold in bytes for when to use a perfect hash table";
 	static constexpr const char *InputType = "UBIGINT";
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "12";
+	static constexpr SetScope DefaultScope = SetScope::SESSION;
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct PinThreadsSetting {
@@ -1230,16 +1237,6 @@ struct UsernameSetting {
 	static constexpr const char *Name = "username";
 	static constexpr const char *Description = "The username to use. Ignored for legacy compatibility.";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
-};
-
-struct WalEncryptionSetting {
-	using RETURN_TYPE = bool;
-	static constexpr const char *Name = "wal_encryption";
-	static constexpr const char *Description = "Encrypt the WAL if the database is encrypted";
-	static constexpr const char *InputType = "BOOLEAN";
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);

@@ -41,7 +41,7 @@ COPY integers FROM 'data/csv/test/error_too_little_end_of_filled_chunk.csv' (HEA
 statement error
 COPY integers FROM 'data/csv/test/error_too_little_end_of_filled_chunk.csv' (HEADER, NULL_PADDING 0)
 ----
-It was not possible to automatically detect the CSV Parsing dialect
+It was not possible to automatically detect the CSV parsing dialect
 
 # not enough columns provided
 query II

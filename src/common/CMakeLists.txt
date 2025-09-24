@@ -35,6 +35,7 @@ add_library_unity(
   bind_helpers.cpp
   box_renderer.cpp
   cgroups.cpp
+  csv_writer.cpp
   complex_json.cpp
   compressed_file_system.cpp
   constants.cpp
@@ -66,7 +67,7 @@ add_library_unity(
   render_tree.cpp
   tree_renderer.cpp
   types.cpp
-  varint.cpp
+  bignum.cpp
   virtual_file_system.cpp
   windows_util.cpp)
 set(ALL_OBJECT_FILES

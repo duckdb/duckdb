@@ -15,6 +15,9 @@
 
 #include "duckdb/original/std/memory.hpp"
 #include "duckdb/common/string.hpp"
+#include <exception>
+#include <stdexcept>
+
 
 /*
  * Configuration
@@ -285,6 +288,7 @@ using socket_t = int;
 
 #include <iostream>
 #include <sstream>
+
 
 // Disabled OpenSSL version check for CI
 //#if OPENSSL_VERSION_NUMBER < 0x1010100fL
@@ -2578,7 +2582,7 @@ inline std::string trim_double_quotes_copy(const std::string &s) {
 
 inline void split(const char *b, const char *e, char d,
                   std::function<void(const char *, const char *)> fn) {
-  return split(b, e, d, std::numeric_limits<size_t>::max(), fn);
+  return split(b, e, d, static_cast<size_t>((std::numeric_limits<size_t>::max)()), fn);
 }
 
 inline void split(const char *b, const char *e, char d, size_t m,
@@ -8551,7 +8555,11 @@ inline long SSLClient::get_openssl_verify_result() const {
 inline SSL_CTX *SSLClient::ssl_context() const { return ctx_; }
 
 inline bool SSLClient::create_and_connect_socket(Socket &socket, Error &error) {
-  return is_valid() && ClientImpl::create_and_connect_socket(socket, error);
+  if (!is_valid()) {
+    error = Error::SSLConnection;
+    return false;
+  }
+  return ClientImpl::create_and_connect_socket(socket, error);
 }
 
 // Assumes that socket_mutex_ is locked and that there are no requests in flight

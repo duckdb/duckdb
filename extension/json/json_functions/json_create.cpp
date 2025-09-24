@@ -67,7 +67,7 @@ static LogicalType GetJSONType(StructNames &const_struct_names, const LogicalTyp
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::UUID:
-	case LogicalTypeId::VARINT:
+	case LogicalTypeId::BIGNUM:
 	case LogicalTypeId::DECIMAL:
 		return type;
 	case LogicalTypeId::LIST:
@@ -585,7 +585,7 @@ static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_m
 		TemplatedCreateValues<string_t, string_t>(doc, vals, string_vector, count);
 		break;
 	}
-	case LogicalTypeId::VARINT: {
+	case LogicalTypeId::BIGNUM: {
 		Vector string_vector(LogicalTypeId::VARCHAR, count);
 		VectorOperations::DefaultCast(value_v, string_vector, count);
 		CreateRawValues(doc, vals, string_vector, count);
@@ -608,6 +608,7 @@ static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_m
 	case LogicalTypeId::ANY:
 	case LogicalTypeId::USER:
 	case LogicalTypeId::TEMPLATE:
+	case LogicalTypeId::VARIANT:
 	case LogicalTypeId::CHAR:
 	case LogicalTypeId::STRING_LITERAL:
 	case LogicalTypeId::INTEGER_LITERAL:
@@ -793,7 +794,7 @@ BoundCastInfo AnyToJSONCastBind(BindCastInput &input, const LogicalType &source,
 	return BoundCastInfo(AnyToJSONCast, std::move(cast_data), JSONFunctionLocalState::InitCastLocalState);
 }
 
-void JSONFunctions::RegisterJSONCreateCastFunctions(CastFunctionSet &casts) {
+void JSONFunctions::RegisterJSONCreateCastFunctions(ExtensionLoader &loader) {
 	// Anything can be cast to JSON
 	for (const auto &type : LogicalType::AllTypes()) {
 		LogicalType source_type;
@@ -820,9 +821,9 @@ void JSONFunctions::RegisterJSONCreateCastFunctions(CastFunctionSet &casts) {
 			source_type = type;
 		}
 		// We prefer going to JSON over going to VARCHAR if a function can do either
-		const auto source_to_json_cost =
-		    MaxValue<int64_t>(casts.ImplicitCastCost(nullptr, source_type, LogicalType::VARCHAR) - 1, 0);
-		casts.RegisterCastFunction(source_type, LogicalType::JSON(), AnyToJSONCastBind, source_to_json_cost);
+		const auto source_to_json_cost = MaxValue<int64_t>(
+		    CastFunctionSet::ImplicitCastCost(loader.GetDatabaseInstance(), source_type, LogicalType::VARCHAR) - 1, 0);
+		loader.RegisterCastFunction(source_type, LogicalType::JSON(), AnyToJSONCastBind, source_to_json_cost);
 	}
 }
 

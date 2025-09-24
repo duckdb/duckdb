@@ -5,7 +5,7 @@
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb/common/types/value.hpp"
-#include "duckdb/common/types/varint.hpp"
+#include "duckdb/common/types/bignum.hpp"
 #include "duckdb/main/capi/capi_internal.hpp"
 
 using duckdb::LogicalTypeId;
@@ -119,16 +119,16 @@ duckdb_uhugeint duckdb_get_uhugeint(duckdb_value val) {
 	auto res = CAPIGetValue<duckdb::uhugeint_t, LogicalTypeId::UHUGEINT>(val);
 	return {res.lower, res.upper};
 }
-duckdb_value duckdb_create_varint(duckdb_varint input) {
+duckdb_value duckdb_create_bignum(duckdb_bignum input) {
 	return WrapValue(new duckdb::Value(
-	    duckdb::Value::VARINT(duckdb::Varint::FromByteArray(input.data, input.size, input.is_negative))));
+	    duckdb::Value::BIGNUM(duckdb::Bignum::FromByteArray(input.data, input.size, input.is_negative))));
 }
-duckdb_varint duckdb_get_varint(duckdb_value val) {
-	auto v = UnwrapValue(val).DefaultCastAs(duckdb::LogicalType::VARINT);
+duckdb_bignum duckdb_get_bignum(duckdb_value val) {
+	auto v = UnwrapValue(val).DefaultCastAs(duckdb::LogicalType::BIGNUM);
 	auto &str = duckdb::StringValue::Get(v);
 	duckdb::vector<uint8_t> byte_array;
 	bool is_negative;
-	duckdb::Varint::GetByteArray(byte_array, is_negative, duckdb::string_t(str));
+	duckdb::Bignum::GetByteArray(byte_array, is_negative, duckdb::string_t(str));
 	auto size = byte_array.size();
 	auto data = reinterpret_cast<uint8_t *>(malloc(size));
 	memcpy(data, byte_array.data(), size);

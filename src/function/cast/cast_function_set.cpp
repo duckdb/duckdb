@@ -109,6 +109,8 @@ static auto RelaxedTypeMatch(type_map_t<MAP_VALUE_TYPE> &map, const LogicalType 
 		return map.find(LogicalType::UNION({{"any", LogicalType::ANY}}));
 	case LogicalTypeId::ARRAY:
 		return map.find(LogicalType::ARRAY(LogicalType::ANY, optional_idx()));
+	case LogicalTypeId::DECIMAL:
+		return map.find(LogicalTypeId::DECIMAL);
 	default:
 		return map.find(LogicalType::ANY);
 	}
@@ -191,6 +193,10 @@ int64_t CastFunctionSet::ImplicitCastCost(optional_ptr<ClientContext> context, c
 int64_t CastFunctionSet::ImplicitCastCost(ClientContext &context, const LogicalType &source,
                                           const LogicalType &target) {
 	return CastFunctionSet::Get(context).ImplicitCastCost(&context, source, target);
+}
+
+int64_t CastFunctionSet::ImplicitCastCost(DatabaseInstance &db, const LogicalType &source, const LogicalType &target) {
+	return CastFunctionSet::Get(db).ImplicitCastCost(nullptr, source, target);
 }
 
 static BoundCastInfo MapCastFunction(BindCastInput &input, const LogicalType &source, const LogicalType &target) {

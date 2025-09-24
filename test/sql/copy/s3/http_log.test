@@ -26,7 +26,7 @@ statement ok
 COPY (SELECT 'value-1' as value) TO 's3://test-bucket/http_log/test.parquet';
 
 statement ok
-pragma enable_logging('HTTP')
+CALL enable_logging('HTTP')
 
 statement ok
 set logging_level='debug'

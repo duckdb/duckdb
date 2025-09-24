@@ -29,11 +29,7 @@
 #ifdef DUCKDB_STATIC_BUILD
 #define DUCKDB_EXTENSION_API
 #else
-#ifdef DUCKDB_BUILD_LOADABLE_EXTENSION
 #define DUCKDB_EXTENSION_API __declspec(dllexport)
-#else
-#define DUCKDB_EXTENSION_API
-#endif
 #endif
 #else
 #define DUCKDB_EXTENSION_API __attribute__((visibility("default")))
@@ -126,8 +122,8 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_TIMESTAMP_TZ = 31,
 	// enum type, only useful as logical type
 	DUCKDB_TYPE_ANY = 34,
-	// duckdb_varint
-	DUCKDB_TYPE_VARINT = 35,
+	// duckdb_bignum
+	DUCKDB_TYPE_BIGNUM = 35,
 	// enum type, only useful as logical type
 	DUCKDB_TYPE_SQLNULL = 36,
 	// enum type, only useful as logical type
@@ -245,6 +241,20 @@ typedef enum duckdb_cast_mode {
 	DUCKDB_CAST_TRY = 1
 } duckdb_cast_mode;
 
+typedef enum duckdb_file_flag {
+	DUCKDB_FILE_FLAG_INVALID = 0,
+	// Open the file with "read" capabilities.
+	DUCKDB_FILE_FLAG_READ = 1,
+	// Open the file with "write" capabilities.
+	DUCKDB_FILE_FLAG_WRITE = 2,
+	// Create a new file, or open if it already exists.
+	DUCKDB_FILE_FLAG_CREATE = 3,
+	// Create a new file, or fail if it already exists.
+	DUCKDB_FILE_FLAG_CREATE_NEW = 4,
+	// Open the file in "append" mode.
+	DUCKDB_FILE_FLAG_APPEND = 5,
+} duckdb_file_flag;
+
 //===--------------------------------------------------------------------===//
 // General type definitions
 //===--------------------------------------------------------------------===//
@@ -258,6 +268,9 @@ typedef uint32_t sel_t;
 //! The callback to destroy data, e.g.,
 //! bind data (if any), init data (if any), extra data for replacement scans (if any), etc.
 typedef void (*duckdb_delete_callback_t)(void *data);
+
+//! The callback to copy data, e.g., bind data (if any).
+typedef void *(*duckdb_copy_callback_t)(void *data);
 
 //! Used for threading, contains a task state.
 //! Must be destroyed with `duckdb_destroy_task_state`.
@@ -455,14 +468,14 @@ typedef struct {
 	idx_t size;
 } duckdb_bit;
 
-//! VARINTs are composed of a byte pointer, a size, and an `is_negative` bool.
+//! BIGNUMs are composed of a byte pointer, a size, and an `is_negative` bool.
 //! The absolute value of the number is stored in `data` in little endian format.
 //! You must free `data` with `duckdb_free`.
 typedef struct {
 	uint8_t *data;
 	idx_t size;
 	bool is_negative;
-} duckdb_varint;
+} duckdb_bignum;
 
 //! A query result consists of a pointer to its internal data.
 //! Must be freed with 'duckdb_destroy_result'.
@@ -756,6 +769,21 @@ typedef struct _duckdb_arrow_options {
 	void *internal_ptr;
 } * duckdb_arrow_options;
 
+//===--------------------------------------------------------------------===//
+// Virtual File System Access
+//===--------------------------------------------------------------------===//
+
+typedef struct _duckdb_file_open_options {
+	void *internal_ptr;
+} * duckdb_file_open_options;
+
+typedef struct _duckdb_file_system {
+	void *internal_ptr;
+} * duckdb_file_system;
+
+typedef struct _duckdb_file_handle {
+	void *internal_ptr;
+} * duckdb_file_handle;
 
 //===--------------------------------------------------------------------===//
 // DuckDB extension access

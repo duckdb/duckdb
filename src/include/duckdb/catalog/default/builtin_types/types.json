@@ -229,8 +229,16 @@
         "description": "binary value"
     },
     {
-        "id": "VARINT",
+        "id": "VARIANT",
         "names": [
+            "variant"
+        ],
+        "description": "A semi-structured type, where type is defined at the row level, allowing it to store data sets of diverging types."
+    },
+    {
+        "id": "BIGNUM",
+        "names": [
+            "bignum",
             "varint"
         ],
         "description": "Integers with variable size."

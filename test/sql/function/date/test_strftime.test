@@ -132,16 +132,19 @@ endloop
 statement error
 SELECT strftime(d, d::VARCHAR) FROM dates ORDER BY d;
 ----
+<REGEX>:.*Invalid Input Error.*must be a constant.*
 
 # unterminated escape
 statement error
 SELECT strftime(DATE '1992-01-01', '%');
 ----
+<REGEX>:.*Invalid Input Error.*Failed to parse format.*
 
 # unrecognized code
 statement error
 SELECT strftime(DATE '1992-01-01', '%R');
 ----
+<REGEX>:.*Invalid Input Error.*Failed to parse format.*
 
 # millisecond specifier %g
 query IIII
@@ -155,13 +158,15 @@ select strftime(strptime('023', '%g'), '%g'), strftime(strptime('0', '%g'), '%g'
 statement error
 SELECT strptime('-1', '%g');
 ----
+<REGEX>:.*Invalid Input Error.*Could not parse string.*
 
 statement error
 SELECT strptime('1000', '%g');
 ----
+<REGEX>:.*Invalid Input Error.*Could not parse string.*
 
 # this won't work without explicit casts
 statement error
 SELECT strftime('%Y', '1992-01-01');
 ----
-
+<REGEX>:.*Binder Error.*Could not choose a best candidate.*

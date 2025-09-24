@@ -45,3 +45,4 @@ NULL	0	NULL
 statement error
 SELECT list_bit_xor()
 ----
+<REGEX>:.*Binder Error.*does not support the supplied arguments.*

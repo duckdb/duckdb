@@ -149,6 +149,9 @@ LogicalType Transformer::TransformTypeNameInternal(duckdb_libpgquery::PGTypeName
 		D_ASSERT(!children.empty());
 		return LogicalType::STRUCT(children);
 	}
+	if (base_type == LogicalTypeId::VARIANT) {
+		return LogicalType::VARIANT();
+	}
 	if (base_type == LogicalTypeId::MAP) {
 		if (!type_name.typmods || type_name.typmods->length != 2) {
 			throw ParserException("Map type needs exactly two entries, key and value type");

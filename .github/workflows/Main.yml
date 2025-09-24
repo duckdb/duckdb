@@ -315,8 +315,10 @@ jobs:
           python scripts/amalgamation.py --extended
           clang++ -std=c++17 -Isrc/amalgamation src/amalgamation/duckdb.cpp -emit-llvm -S -O0
 
+ # TODO: Bring back BLOCK_VERIFICATION: 1, and consider bringing back fts
+ # TODO: DEBUG_STACKTRACE: 1 + reldebug ?
  linux-configs:
-    name: Tests with different configurations
+    name: Tests a release build with different configurations
     runs-on: ubuntu-24.04
     needs: check-draft
     env:
@@ -344,8 +346,6 @@ jobs:
     - name: Build
       id: build
       shell: bash
-      # Bring back BLOCK_VERIFICATION: 1, and consider bringing back fts
-      # DEBUG_STACKTRACE: 1 + reldebug ?
       env:
         CORE_EXTENSIONS: "json;parquet;icu;tpch;tpcds"
         GEN: ninja
@@ -375,6 +375,18 @@ jobs:
       run: |
         ./build/release/test/unittest --test-config test/configs/latest_storage.json
 
+    - name: test/configs/verify_fetch_row.json
+      if: (success() || failure()) && steps.build.conclusion == 'success'
+      shell: bash
+      run: |
+        ./build/release/test/unittest --test-config test/configs/verify_fetch_row.json
+
+    - name: test/configs/wal_verification.json
+      if: (success() || failure()) && steps.build.conclusion == 'success'
+      shell: bash
+      run: |
+        ./build/release/test/unittest --test-config test/configs/wal_verification.json
+
     - name: test/configs/prefetch_all_parquet_files.json
       if: (success() || failure()) && steps.build.conclusion == 'success'
       shell: bash
@@ -398,6 +410,12 @@ jobs:
       shell: bash
       run: |
         ./build/release/test/unittest --test-config test/configs/latest_storage_block_size_16kB.json
+
+    - name: test/configs/enable_verification.json
+      if: (success() || failure()) && steps.build.conclusion == 'success'
+      shell: bash
+      run: |
+        ./build/release/test/unittest --test-config test/configs/enable_verification.json
 
     - name: Test dictionary_expression
       if: (success() || failure()) && steps.build.conclusion == 'success'
@@ -428,3 +446,15 @@ jobs:
       shell: bash
       run: |
         ./build/release/test/unittest --verify-vector nested_shuffle --skip-compiled
+
+    - name: Test variant_vector
+      if: (success() || failure()) && steps.build.conclusion == 'success'
+      shell: bash
+      run: |
+        ./build/release/test/unittest --test-config test/configs/variant_vector.json
+
+    - name: Test variant_vector
+      if: (success() || failure()) && steps.build.conclusion == 'success'
+      shell: bash
+      run: |
+        ./build/release/test/unittest --test-config test/configs/compressed_in_memory.json

@@ -56,6 +56,8 @@ public:
 	                                    const LogicalType &target);
 	DUCKDB_API static int64_t ImplicitCastCost(ClientContext &context, const LogicalType &source,
 	                                           const LogicalType &target);
+	DUCKDB_API static int64_t ImplicitCastCost(DatabaseInstance &db, const LogicalType &source,
+	                                           const LogicalType &target);
 	//! Register a new cast function from source to target
 	DUCKDB_API void RegisterCastFunction(const LogicalType &source, const LogicalType &target, BoundCastInfo function,
 	                                     int64_t implicit_cast_cost = -1);

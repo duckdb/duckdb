@@ -223,7 +223,7 @@ enum class LogicalTypeId : uint8_t {
 	BIT = 36,
 	STRING_LITERAL = 37, /* string literals, used for constant strings - only exists while binding */
 	INTEGER_LITERAL = 38,/* integer literals, used for constant integers - only exists while binding */
-	VARINT = 39,
+	BIGNUM = 39,
 	UHUGEINT = 49,
 	HUGEINT = 50,
 	POINTER = 51,
@@ -238,7 +238,8 @@ enum class LogicalTypeId : uint8_t {
 	AGGREGATE_STATE = 105,
 	LAMBDA = 106,
 	UNION = 107,
-	ARRAY = 108
+	ARRAY = 108,
+	VARIANT = 109
 };
 
 struct ExtraTypeInfo;
@@ -405,7 +406,7 @@ public:
 	static constexpr const LogicalTypeId ANY = LogicalTypeId::ANY;
 	static constexpr const LogicalTypeId BLOB = LogicalTypeId::BLOB;
 	static constexpr const LogicalTypeId BIT = LogicalTypeId::BIT;
-	static constexpr const LogicalTypeId VARINT = LogicalTypeId::VARINT;
+	static constexpr const LogicalTypeId BIGNUM = LogicalTypeId::BIGNUM;
 
 	static constexpr const LogicalTypeId INTERVAL = LogicalTypeId::INTERVAL;
 	static constexpr const LogicalTypeId HUGEINT = LogicalTypeId::HUGEINT;
@@ -432,6 +433,7 @@ public:
 	// ANY but with special rules (default is LogicalType::ANY, 5)
 	DUCKDB_API static LogicalType ANY_PARAMS(LogicalType target, idx_t cast_score = 5); // NOLINT
 	DUCKDB_API static LogicalType TEMPLATE(const string &name);							// NOLINT
+	DUCKDB_API static LogicalType VARIANT(); // NOLINT
 	//! Integer literal of the specified value
 	DUCKDB_API static LogicalType INTEGER_LITERAL(const Value &constant);               // NOLINT
 	// DEPRECATED - provided for backwards compatibility

@@ -52,7 +52,9 @@ profiler_settings_t ProfilingInfo::DefaultSettings() {
 	        MetricsType::OPERATOR_TIMING,
 	        MetricsType::RESULT_SET_SIZE,
 	        MetricsType::LATENCY,
-	        MetricsType::ROWS_RETURNED};
+	        MetricsType::ROWS_RETURNED,
+	        MetricsType::TOTAL_BYTES_READ,
+	        MetricsType::TOTAL_BYTES_WRITTEN};
 }
 
 profiler_settings_t ProfilingInfo::DefaultRootSettings() {
@@ -97,6 +99,8 @@ void ProfilingInfo::ResetMetrics() {
 		case MetricsType::OPERATOR_ROWS_SCANNED:
 		case MetricsType::SYSTEM_PEAK_BUFFER_MEMORY:
 		case MetricsType::SYSTEM_PEAK_TEMP_DIR_SIZE:
+		case MetricsType::TOTAL_BYTES_READ:
+		case MetricsType::TOTAL_BYTES_WRITTEN:
 			metrics[metric] = Value::CreateValue<uint64_t>(0);
 			break;
 		case MetricsType::EXTRA_INFO:
@@ -223,7 +227,9 @@ void ProfilingInfo::WriteMetricsToJSON(yyjson_mut_doc *doc, yyjson_mut_val *dest
 		case MetricsType::CUMULATIVE_ROWS_SCANNED:
 		case MetricsType::OPERATOR_ROWS_SCANNED:
 		case MetricsType::SYSTEM_PEAK_BUFFER_MEMORY:
-		case MetricsType::SYSTEM_PEAK_TEMP_DIR_SIZE: {
+		case MetricsType::SYSTEM_PEAK_TEMP_DIR_SIZE:
+		case MetricsType::TOTAL_BYTES_READ:
+		case MetricsType::TOTAL_BYTES_WRITTEN: {
 			yyjson_mut_obj_add_uint(doc, dest, key_ptr, metrics[metric].GetValue<uint64_t>());
 			break;
 		}

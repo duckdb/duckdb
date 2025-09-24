@@ -49,9 +49,9 @@ require notwindows
 statement error
 SELECT COUNT(*) FROM read_csv_auto('data/csv/nullpadding_big_mixed.csv', buffer_size=55)
 ----
-It was not possible to automatically detect the CSV Parsing dialect
+It was not possible to automatically detect the CSV parsing dialect
 
 statement error
 SELECT COUNT(*) FROM read_csv_auto('data/csv/nullpadding_big_mixed.csv', buffer_size=55, null_padding=False)
 ----
-It was not possible to automatically detect the CSV Parsing dialect
+It was not possible to automatically detect the CSV parsing dialect

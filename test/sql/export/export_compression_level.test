@@ -1,0 +1,40 @@
+# name: test/sql/export/export_compression_level.test
+# description: Test export with parameters that are only supported on export, not on import
+# group: [export]
+
+require parquet
+
+statement ok
+CREATE TABLE test_table (
+    id INTEGER,
+    name VARCHAR,
+    value DOUBLE,
+    created_at TIMESTAMP
+);
+
+statement ok
+INSERT INTO test_table VALUES
+    (1, 'Alice', 123.45, '2024-01-01 10:00:00'),
+    (2, 'Bob', 67.89, '2024-01-02 11:30:00'),
+    (3, 'Charlie', 234.56, '2024-01-03 14:15:00');
+
+statement ok
+EXPORT DATABASE 'my_duckdb' (
+    FORMAT parquet,
+    COMPRESSION zstd,
+    COMPRESSION_LEVEL 12,
+    ROW_GROUP_SIZE 100_000
+);
+
+statement ok
+DROP TABLE test_table;
+
+statement ok
+IMPORT DATABASE 'my_duckdb';
+
+query IIII
+FROM test_table;
+----
+1	Alice	123.45	2024-01-01 10:00:00
+2	Bob	67.89	2024-01-02 11:30:00
+3	Charlie	234.56	2024-01-03 14:15:00
