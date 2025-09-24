@@ -115,6 +115,8 @@ public:
 	idx_t FreeBlocks() override;
 	//! Whether or not the attached database is a remote file
 	bool IsRemote() override;
+	//! Whether or not to prefetch
+	bool Prefetch() override;
 
 	//! Return the checkpoint iteration of the file.
 	uint64_t GetCheckpointIteration() const {

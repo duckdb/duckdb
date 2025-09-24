@@ -18,6 +18,7 @@
 #include "duckdb/common/enums/output_type.hpp"
 #include "duckdb/common/enums/thread_pin_mode.hpp"
 #include "duckdb/common/enums/arrow_format_version.hpp"
+#include "duckdb/common/enums/storage_block_prefetch.hpp"
 
 namespace duckdb {
 
@@ -1179,6 +1180,16 @@ struct SecretDirectorySetting {
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
+};
+
+struct StorageBlockPrefetchSetting {
+	using RETURN_TYPE = StorageBlockPrefetch;
+	static constexpr const char *Name = "storage_block_prefetch";
+	static constexpr const char *Description = "In which scenarios to use storage block prefetching";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *DefaultValue = "REMOTE_ONLY";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct StorageCompatibilityVersionSetting {

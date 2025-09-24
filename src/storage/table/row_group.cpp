@@ -551,14 +551,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 			count = max_count;
 		}
 		auto &block_manager = GetBlockManager();
-#ifndef DUCKDB_ALTERNATIVE_VERIFY
-		// // in regular operation we only prefetch from remote file systems
-		// // when alternative verify is set, we always prefetch for testing purposes
-		if (block_manager.IsRemote())
-#else
-		if (!block_manager.InMemory())
-#endif
-		{
+		if (block_manager.Prefetch()) {
 			PrefetchState prefetch_state;
 			for (idx_t i = 0; i < column_ids.size(); i++) {
 				const auto &column = column_ids[i];
