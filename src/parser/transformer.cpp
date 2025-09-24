@@ -249,7 +249,6 @@ unique_ptr<QueryNode> Transformer::TransformMaterializedCTE(unique_ptr<QueryNode
 	while (!materialized_ctes.empty()) {
 		unique_ptr<CTENode> node_result;
 		node_result = std::move(materialized_ctes.back());
-		node_result->cte_map = root->cte_map.Copy();
 		node_result->child = std::move(root);
 		root = std::move(node_result);
 		materialized_ctes.pop_back();

@@ -225,25 +225,31 @@ RelationStats RelationStatisticsHelper::CombineStatsOfReorderableOperator(vector
 }
 
 RelationStats RelationStatisticsHelper::CombineStatsOfNonReorderableOperator(LogicalOperator &op,
-                                                                             vector<RelationStats> child_stats) {
-	D_ASSERT(child_stats.size() == 2);
+                                                                             const vector<RelationStats> &child_stats) {
 	RelationStats ret;
-	idx_t child_1_card = child_stats[0].stats_initialized ? child_stats[0].cardinality : 0;
-	idx_t child_2_card = child_stats[1].stats_initialized ? child_stats[1].cardinality : 0;
-	ret.cardinality = MaxValue(child_1_card, child_2_card);
+	ret.cardinality = 0;
+
+	// default predicted cardinality is the max of all child cardinalities
+	vector<idx_t> child_cardinalities;
+	for (auto &stats : child_stats) {
+		idx_t child_cardinality = stats.stats_initialized ? stats.cardinality : 0;
+		ret.cardinality = MaxValue(ret.cardinality, child_cardinality);
+		child_cardinalities.push_back(child_cardinality);
+	}
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
+		D_ASSERT(child_stats.size() == 2);
 		auto &join = op.Cast<LogicalComparisonJoin>();
 		switch (join.join_type) {
 		case JoinType::RIGHT_ANTI:
 		case JoinType::RIGHT_SEMI:
-			ret.cardinality = child_2_card;
+			ret.cardinality = child_cardinalities[1];
 			break;
 		case JoinType::ANTI:
 		case JoinType::SEMI:
 		case JoinType::SINGLE:
 		case JoinType::MARK:
-			ret.cardinality = child_1_card;
+			ret.cardinality = child_cardinalities[0];
 			break;
 		default:
 			break;
@@ -254,18 +260,21 @@ RelationStats RelationStatisticsHelper::CombineStatsOfNonReorderableOperator(Log
 		auto &setop = op.Cast<LogicalSetOperation>();
 		if (setop.setop_all) {
 			// setop returns all records
-			ret.cardinality = child_1_card + child_2_card;
-		} else {
-			ret.cardinality = MaxValue(child_1_card, child_2_card);
+			ret.cardinality = 0;
+			for (auto &child_cardinality : child_cardinalities) {
+				ret.cardinality += child_cardinality;
+			}
 		}
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_INTERSECT: {
-		ret.cardinality = MinValue(child_1_card, child_2_card);
+		D_ASSERT(child_stats.size() == 2);
+		ret.cardinality = MinValue(child_cardinalities[0], child_cardinalities[1]);
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_EXCEPT: {
-		ret.cardinality = child_1_card;
+		D_ASSERT(child_stats.size() == 2);
+		ret.cardinality = child_cardinalities[0];
 		break;
 	}
 	default:
@@ -274,8 +283,12 @@ RelationStats RelationStatisticsHelper::CombineStatsOfNonReorderableOperator(Log
 
 	ret.stats_initialized = true;
 	ret.filter_strength = 1;
-	ret.table_name = child_stats[0].table_name + " joined with " + child_stats[1].table_name;
+	ret.table_name = string();
 	for (auto &stats : child_stats) {
+		if (!ret.table_name.empty()) {
+			ret.table_name += " joined with ";
+		}
+		ret.table_name += stats.table_name;
 		// MARK joins are nonreorderable. They won't return initialized stats
 		// continue in this case.
 		if (!stats.stats_initialized) {

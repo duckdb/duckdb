@@ -20,8 +20,8 @@ unique_ptr<QueryNode> SetOpRelation::GetQueryNode() {
 	if (!setop_all) {
 		result->modifiers.push_back(make_uniq<DistinctModifier>());
 	}
-	result->left = left->GetQueryNode();
-	result->right = right->GetQueryNode();
+	result->children.push_back(left->GetQueryNode());
+	result->children.push_back(right->GetQueryNode());
 	result->setop_type = setop_type;
 	result->setop_all = setop_all;
 	return std::move(result);

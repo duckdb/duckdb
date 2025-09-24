@@ -7,7 +7,7 @@ namespace duckdb {
 
 idx_t DatabaseFilePathManager::ApproxDatabaseCount() const {
 	lock_guard<mutex> path_lock(db_paths_lock);
-	return db_paths_to_name.size();
+	return db_paths.size();
 }
 
 InsertDatabasePathResult DatabaseFilePathManager::InsertDatabasePath(const string &path, const string &name,
@@ -18,14 +18,15 @@ InsertDatabasePathResult DatabaseFilePathManager::InsertDatabasePath(const strin
 	}
 
 	lock_guard<mutex> path_lock(db_paths_lock);
-	auto entry = db_paths_to_name.emplace(path, name);
+	auto entry = db_paths.emplace(path, DatabasePathInfo(name));
 	if (!entry.second) {
-		if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT && entry.first->second == name) {
+		auto &existing = entry.first->second;
+		if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT && existing.name == name) {
 			return InsertDatabasePathResult::ALREADY_EXISTS;
 		}
 		throw BinderException("Unique file handle conflict: Cannot attach \"%s\" - the database file \"%s\" is already "
 		                      "attached by database \"%s\"",
-		                      name, path, entry.first->second);
+		                      name, path, existing.name);
 	}
 	options.stored_database_path = make_uniq<StoredDatabasePath>(*this, path, name);
 	return InsertDatabasePathResult::SUCCESS;
@@ -36,7 +37,7 @@ void DatabaseFilePathManager::EraseDatabasePath(const string &path) {
 		return;
 	}
 	lock_guard<mutex> path_lock(db_paths_lock);
-	db_paths_to_name.erase(path);
+	db_paths.erase(path);
 }
 
 } // namespace duckdb
