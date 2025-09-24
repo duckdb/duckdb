@@ -1,0 +1,70 @@
+# name: test/parquet/variant/variant_basic_writing.test
+# group: [variant]
+
+require parquet
+
+require json
+
+# STRUCT(a INTEGER, b INTEGER[])
+statement ok
+COPY (select
+	{
+		'a': 42,
+		'b': [null, 1, 2]
+	}::VARIANT
+	from range(10)
+) TO '__TEST_DIR__/integer_variant.parquet';
+
+query I
+select * from '__TEST_DIR__/integer_variant.parquet';
+----
+{"a":42,"b":[null,1,2]}
+{"a":42,"b":[null,1,2]}
+{"a":42,"b":[null,1,2]}
+{"a":42,"b":[null,1,2]}
+{"a":42,"b":[null,1,2]}
+{"a":42,"b":[null,1,2]}
+{"a":42,"b":[null,1,2]}
+{"a":42,"b":[null,1,2]}
+{"a":42,"b":[null,1,2]}
+{"a":42,"b":[null,1,2]}
+
+statement ok
+COPY (select
+	'[["string","iceberg",-34],[-34,null],[],["string","iceberg"],-34]'::JSON::VARIANT
+	from range(5)
+) TO '__TEST_DIR__/list_of_list_variant.parquet'
+
+query I
+select * from '__TEST_DIR__/list_of_list_variant.parquet';
+----
+[["string","iceberg",-34],[-34,null],[],["string","iceberg"],-34]
+[["string","iceberg",-34],[-34,null],[],["string","iceberg"],-34]
+[["string","iceberg",-34],[-34,null],[],["string","iceberg"],-34]
+[["string","iceberg",-34],[-34,null],[],["string","iceberg"],-34]
+[["string","iceberg",-34],[-34,null],[],["string","iceberg"],-34]
+
+statement ok
+COPY (
+	with cte as (
+		FROM (VALUES
+			({'a': 21, 'b': NULL}::VARIANT),
+			([]::VARIANT),
+			(NULL::VARIANT),
+			([{'b': True, 'c': 'test'}]::VARIANT),
+			('this is a long string'::VARIANT),
+			('this is big enough to not be classified as a "short string" by parquet VARIANT'::VARIANT)
+		) t(a)
+	)
+	select a from cte
+) TO '__TEST_DIR__/varied_variant.parquet'
+
+query I
+select * from '__TEST_DIR__/varied_variant.parquet';
+----
+{"a":21,"b":null}
+[]
+NULL
+[{"b":true,"c":"test"}]
+"this is a long string"
+"this is big enough to not be classified as a \"short string\" by parquet VARIANT"
