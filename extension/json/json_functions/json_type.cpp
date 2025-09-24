@@ -27,7 +27,6 @@ static void ListJSONContainerTypeFunction(DataChunk &args, ExpressionState &stat
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		auto data = ConstantVector::GetData<string_t>(result);
 		auto &validity = ConstantVector::Validity(result);
-		
 		if (!input.validity.RowIsValid(0)) {
 			validity.SetInvalid(0);
 		} else {

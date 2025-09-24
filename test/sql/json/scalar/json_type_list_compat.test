@@ -1,6 +1,6 @@
 # name: test/sql/json/scalar/json_type_list_compat.test
 # description: Test json_type function with LIST(JSON) input
-# group: [json]
+# group: [scalar]
 
 require json
 
