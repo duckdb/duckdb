@@ -17,6 +17,7 @@ public:
 	using Orders = vector<BoundOrderByNode>;
 	using Types = vector<LogicalType>;
 	using HashGroupPtr = unique_ptr<ColumnDataCollection>;
+	using SortedRunPtr = unique_ptr<SortedRun>;
 
 	static void GenerateOrderings(Orders &partitions, Orders &orders,
 	                              const vector<unique_ptr<Expression>> &partition_bys, const Orders &order_bys,
@@ -52,6 +53,10 @@ public:
 	SinkFinalizeType MaterializeHashGroups(Pipeline &pipeline, Event &event, const PhysicalOperator &op,
 	                                       OperatorSinkFinalizeInput &finalize) const;
 	vector<HashGroupPtr> &GetHashGroups(GlobalSourceState &global_state) const;
+
+	SinkFinalizeType MaterializeSortedRuns(Pipeline &pipeline, Event &event, const PhysicalOperator &op,
+	                                       OperatorSinkFinalizeInput &finalize) const;
+	vector<SortedRunPtr> &GetSortedRuns(GlobalSourceState &global_state);
 
 public:
 	ClientContext &client;
