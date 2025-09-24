@@ -11,19 +11,25 @@ ManagedQueryResult::ManagedQueryResult(weak_ptr<DatabaseInstance> db_p, unique_p
 }
 
 ManagedQueryResult::~ManagedQueryResult() {
+	scan_state.current_chunk_state.handles.clear();
 	auto db_ref = db.lock();
 	if (db_ref) {
 		db_ref->GetQueryResultManager().Remove(*this);
 	}
 }
 
-void ManagedQueryResult::ValidateResult() {
+void ManagedQueryResult::ValidateResult() const {
 	if (!collection) {
 		throw ConnectionException("Trying to access a query result after the database instance has been closed");
 	}
 }
 
 ColumnDataCollection &ManagedQueryResult::Collection() {
+	ValidateResult();
+	return *collection;
+}
+
+ColumnDataCollection &ManagedQueryResult::Collection() const {
 	ValidateResult();
 	return *collection;
 }

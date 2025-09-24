@@ -35,7 +35,7 @@ unique_ptr<QueryNode> MaterializedRelation::GetQueryNode() {
 }
 
 unique_ptr<TableRef> MaterializedRelation::GetTableRef() {
-	auto table_ref = make_uniq<ColumnDataRef>(managed_result->Collection());
+	auto table_ref = make_uniq<ColumnDataRef>(managed_result);
 	for (auto &col : columns) {
 		table_ref->expected_names.push_back(col.Name());
 	}

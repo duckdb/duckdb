@@ -84,9 +84,9 @@ ColumnDataCollection &MaterializedQueryResult::Collection() const {
 	return managed_result->Collection();
 }
 
-shared_ptr<ManagedQueryResult> MaterializedQueryResult::TakeManagedResult() {
+shared_ptr<ManagedQueryResult> MaterializedQueryResult::GetManagedResult() {
 	ValidateManagedResultInternal();
-	return std::move(managed_result);
+	return managed_result;
 }
 
 unique_ptr<DataChunk> MaterializedQueryResult::Fetch() {

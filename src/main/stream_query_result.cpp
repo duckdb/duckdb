@@ -2,7 +2,6 @@
 
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/materialized_query_result.hpp"
-#include "duckdb/common/box_renderer.hpp"
 #include "duckdb/main/database.hpp"
 
 namespace duckdb {
@@ -13,7 +12,6 @@ StreamQueryResult::StreamQueryResult(StatementType statement_type, StatementProp
     : QueryResult(QueryResultType::STREAM_RESULT, statement_type, std::move(properties), std::move(types),
                   std::move(names), std::move(client_properties)),
       buffered_data(std::move(data)) {
-	context = buffered_data->GetContext();
 }
 
 StreamQueryResult::StreamQueryResult(ErrorData error) : QueryResult(QueryResultType::STREAM_RESULT, std::move(error)) {
@@ -33,30 +31,34 @@ string StreamQueryResult::ToString() {
 	return result;
 }
 
-unique_ptr<ClientContextLock> StreamQueryResult::LockContext() {
-	if (!context) {
-		string error_str = "Attempting to execute an unsuccessful or closed pending query result";
+StreamQueryResult::LockContextResult StreamQueryResult::LockContext(shared_ptr<ClientContext> context) {
+	LockContextResult result;
+	result.context = context ? std::move(context) : buffered_data->GetContext();
+	if (!result.context) {
+		string error_str = "Attempting to execute an unsuccessful or closed pending query result.";
+		error_str += "Hint: query results are closed upon closing the corresponding connection.";
 		if (HasError()) {
 			error_str += StringUtil::Format("\nError: %s", GetError());
 		}
 		throw InvalidInputException(error_str);
 	}
-	return context->LockContext();
+	result.lock = result.context->LockContext();
+	return result;
 }
 
-StreamExecutionResult StreamQueryResult::ExecuteTaskInternal(ClientContextLock &lock) {
-	return buffered_data->ExecuteTaskInternal(*this, lock);
+StreamExecutionResult StreamQueryResult::ExecuteTaskInternal(LockContextResult &lock) {
+	return buffered_data->ExecuteTaskInternal(*this, *lock.lock);
 }
 
 StreamExecutionResult StreamQueryResult::ExecuteTask() {
 	auto lock = LockContext();
-	return ExecuteTaskInternal(*lock);
+	return ExecuteTaskInternal(lock);
 }
 
 void StreamQueryResult::WaitForTask() {
 	auto lock = LockContext();
 	buffered_data->UnblockSinks();
-	context->WaitForTask(*lock, *this);
+	lock.context->WaitForTask(*lock.lock, *this);
 }
 
 static bool ExecutionErrorOccurred(StreamExecutionResult result) {
@@ -69,18 +71,18 @@ static bool ExecutionErrorOccurred(StreamExecutionResult result) {
 	return false;
 }
 
-unique_ptr<DataChunk> StreamQueryResult::FetchInternal(ClientContextLock &lock) {
+unique_ptr<DataChunk> StreamQueryResult::FetchInternal(LockContextResult &lock) {
 	bool invalidate_query = true;
 	unique_ptr<DataChunk> chunk;
 	try {
 		// fetch the chunk and return it
-		auto stream_execution_result = buffered_data->ReplenishBuffer(*this, lock);
+		auto stream_execution_result = buffered_data->ReplenishBuffer(*this, *lock.lock);
 		if (ExecutionErrorOccurred(stream_execution_result)) {
 			return chunk;
 		}
 		chunk = buffered_data->Scan();
 		if (!chunk || chunk->ColumnCount() == 0 || chunk->size() == 0) {
-			context->CleanupInternal(lock, this);
+			lock.context->CleanupInternal(*lock.lock, this);
 			chunk = nullptr;
 		}
 		return chunk;
@@ -91,18 +93,18 @@ unique_ptr<DataChunk> StreamQueryResult::FetchInternal(ClientContextLock &lock) 
 			invalidate_query = false;
 		} else if (Exception::InvalidatesDatabase(error.Type())) {
 			// fatal exceptions invalidate the entire database
-			auto &config = context->config;
+			auto &config = lock.context->config;
 			if (!config.query_verification_enabled) {
-				auto &db_instance = DatabaseInstance::GetDatabase(*context);
+				auto &db_instance = DatabaseInstance::GetDatabase(*lock.context);
 				ValidChecker::Invalidate(db_instance, error.RawMessage());
 			}
 		}
-		context->ProcessError(error, context->GetCurrentQuery());
+		lock.context->ProcessError(error, lock.context->GetCurrentQuery());
 		SetError(std::move(error));
 	} catch (...) { // LCOV_EXCL_START
 		SetError(ErrorData("Unhandled exception in FetchInternal"));
 	} // LCOV_EXCL_STOP
-	context->CleanupInternal(lock, this, invalidate_query);
+	lock.context->CleanupInternal(*lock.lock, this, invalidate_query);
 	return nullptr;
 }
 
@@ -110,8 +112,8 @@ unique_ptr<DataChunk> StreamQueryResult::FetchRaw() {
 	unique_ptr<DataChunk> chunk;
 	{
 		auto lock = LockContext();
-		CheckExecutableInternal(*lock);
-		chunk = FetchInternal(*lock);
+		CheckExecutableInternal(lock);
+		chunk = FetchInternal(lock);
 	}
 	if (!chunk || chunk->ColumnCount() == 0 || chunk->size() == 0) {
 		Close();
@@ -142,16 +144,14 @@ static unique_ptr<DataChunk> AlternativeFetch(StreamQueryResult &stream_result) 
 #endif
 
 unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
-	if (HasError() || !context) {
+	if (HasError()) {
 		return make_uniq<MaterializedQueryResult>(GetErrorObject());
 	}
-
-	// We have to make a local copy of the context here:
-	// the "context" in the StreamQueryResult could be the last ref to the last ClientContext of the DatabaseInstance
-	// This is reset on the last call to "Fetch()", which calls Close(), potentially destroying the DatabaseInstance
-	// Any ManagedQueryResult is destroyed once the last DatabaseInstance is destroyed
-	auto context_local = context;
-	auto collection = make_uniq<ColumnDataCollection>(*context_local, types);
+	unique_ptr<ColumnDataCollection> collection;
+	{
+		auto lock = LockContext();
+		collection = make_uniq<ColumnDataCollection>(*lock.context, types);
+	}
 
 	ColumnDataAppendState append_state;
 	collection->InitializeAppend(append_state);
@@ -166,10 +166,14 @@ unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
 		}
 		collection->Append(append_state, *chunk);
 	}
-	// Clear these so that the handles are destroyed before "context_local" goes out of scope
+	// Clear these so that the handles are destroyed before "context" goes out of scope
 	append_state.current_chunk_state.handles.clear();
 
-	auto managed_result = QueryResultManager::Get(*context_local).Add(std::move(collection));
+	shared_ptr<ManagedQueryResult> managed_result;
+	{
+		auto lock = LockContext();
+		managed_result = QueryResultManager::Get(*lock.context).Add(std::move(collection));
+	}
 	auto result = make_uniq<MaterializedQueryResult>(statement_type, properties, names, std::move(managed_result),
 	                                                 client_properties);
 
@@ -179,15 +183,15 @@ unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
 	return result;
 }
 
-bool StreamQueryResult::IsOpenInternal(ClientContextLock &lock) {
-	bool invalidated = !success || !context;
+bool StreamQueryResult::IsOpenInternal(LockContextResult &lock) {
+	bool invalidated = !success || !lock.context;
 	if (!invalidated) {
-		invalidated = !context->IsActiveResult(lock, *this);
+		invalidated = !lock.context->IsActiveResult(*lock.lock, *this);
 	}
 	return !invalidated;
 }
 
-void StreamQueryResult::CheckExecutableInternal(ClientContextLock &lock) {
+void StreamQueryResult::CheckExecutableInternal(LockContextResult &lock) {
 	if (!IsOpenInternal(lock)) {
 		string error_str = "Attempting to execute an unsuccessful or closed pending query result";
 		if (HasError()) {
@@ -198,16 +202,16 @@ void StreamQueryResult::CheckExecutableInternal(ClientContextLock &lock) {
 }
 
 bool StreamQueryResult::IsOpen() {
+	auto context = buffered_data->GetContext();
 	if (!success || !context) {
 		return false;
 	}
-	auto lock = LockContext();
-	return IsOpenInternal(*lock);
+	auto lock = LockContext(std::move(context));
+	return IsOpenInternal(lock);
 }
 
 void StreamQueryResult::Close() {
 	buffered_data->Close();
-	context.reset();
 }
 
 bool StreamQueryResult::IsChunkReady(StreamExecutionResult result) {

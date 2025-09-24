@@ -26,6 +26,11 @@ class PreparedStatementData;
 class StreamQueryResult : public QueryResult {
 	friend class ClientContext;
 
+	struct LockContextResult {
+		shared_ptr<ClientContext> context;
+		unique_ptr<ClientContextLock> lock;
+	};
+
 public:
 	static constexpr const QueryResultType TYPE = QueryResultType::STREAM_RESULT;
 
@@ -56,15 +61,12 @@ public:
 	//! Closes the StreamQueryResult
 	DUCKDB_API void Close();
 
-	//! The client context this StreamQueryResult belongs to
-	shared_ptr<ClientContext> context;
-
 private:
-	StreamExecutionResult ExecuteTaskInternal(ClientContextLock &lock);
-	unique_ptr<DataChunk> FetchInternal(ClientContextLock &lock);
-	unique_ptr<ClientContextLock> LockContext();
-	void CheckExecutableInternal(ClientContextLock &lock);
-	bool IsOpenInternal(ClientContextLock &lock);
+	StreamExecutionResult ExecuteTaskInternal(LockContextResult &lock);
+	unique_ptr<DataChunk> FetchInternal(LockContextResult &lock);
+	LockContextResult LockContext(shared_ptr<ClientContext> context = nullptr);
+	void CheckExecutableInternal(LockContextResult &lock);
+	bool IsOpenInternal(LockContextResult &lock);
 
 private:
 	shared_ptr<BufferedData> buffered_data;

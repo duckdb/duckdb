@@ -56,8 +56,8 @@ public:
 	//! Returns a reference to the underlying column data collection
 	ColumnDataCollection &Collection() const;
 
-	//! Takes ownership of the managed_result, becomes null after this operation
-	shared_ptr<ManagedQueryResult> TakeManagedResult();
+	//! Get the managed result, leaving the one in here intact
+	shared_ptr<ManagedQueryResult> GetManagedResult();
 
 private:
 	void ValidateManagedResultInternal() const;

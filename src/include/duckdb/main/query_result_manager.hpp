@@ -30,10 +30,11 @@ public:
 
 public:
 	ColumnDataCollection &Collection();
+	ColumnDataCollection &Collection() const;
 	ColumnDataScanState &ScanState();
 
 private:
-	void ValidateResult();
+	void ValidateResult() const;
 
 private:
 	weak_ptr<DatabaseInstance> db;
