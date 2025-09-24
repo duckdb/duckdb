@@ -648,27 +648,6 @@ vector<unique_ptr<SQLStatement>> ClientContext::ParseStatements(const string &qu
 }
 
 vector<unique_ptr<SQLStatement>> ClientContext::ParseStatementsInternal(ClientContextLock &lock, const string &query) {
-	auto &config = DBConfig::GetConfig(*db);
-	if (config.parser_override) {
-		try {
-			if (config.parser_override->LoggingEnabled()) {
-				config.parser_override->LogQuery(query);
-			}
-			auto statements = config.parser_override->Parse(query);
-			if (!statements.empty()) {
-				PragmaHandler handler(*this);
-				handler.HandlePragmaStatements(lock, statements);
-				return statements;
-			}
-		} catch (const duckdb::Exception &e) {
-			if (config.parser_override->LoggingEnabled()) {
-				config.parser_override->LogError(query, e);
-			}
-			if (config.parser_override->ThrowOnError()) {
-				throw;
-			}
-		}
-	}
 	try {
 		Parser parser(GetParserOptions());
 		parser.ParseQuery(query);
@@ -1456,7 +1435,6 @@ ParserOptions ClientContext::GetParserOptions() const {
 	options.integer_division = DBConfig::GetSetting<IntegerDivisionSetting>(*this);
 	options.max_expression_depth = client_config.max_expression_depth;
 	options.extensions = &DBConfig::GetConfig(*this).parser_extensions;
-	options.parser_override = DBConfig::GetConfig(*this).parser_override.get();
 	return options;
 }
 

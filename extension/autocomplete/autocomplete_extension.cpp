@@ -668,60 +668,60 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 void CheckPEGParserFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 }
 
-struct PEGParserFunctionData : public TableFunctionData {
-	explicit PEGParserFunctionData(unique_ptr<ParserOverrideOptions> options_p) : options(std::move(options_p)) {
-	}
+// struct PEGParserFunctionData : public TableFunctionData {
+// 	explicit PEGParserFunctionData(unique_ptr<ParserOverrideOptions> options_p) : options(std::move(options_p)) {
+// 	}
+//
+// 	unique_ptr<ParserOverrideOptions> options;
+// };
 
-	unique_ptr<ParserOverrideOptions> options;
-};
+// struct PEGParserData : public GlobalTableFunctionState {
+// 	PEGParserData() = default;
+// };
 
-struct PEGParserData : public GlobalTableFunctionState {
-	PEGParserData() = default;
-};
+// void PEGParserFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+// 	auto &config = DBConfig::GetConfig(context);
+//
+// 	auto &bind_data = data_p.bind_data->Cast<PEGParserFunctionData>();
+//
+// 	if (config.parser_override) {
+// 		throw BinderException("Cannot install PEGParser: a parser override is already active.");
+// 	}
+// 	config.parser_override = make_uniq<PEGParserOverride>(bind_data.options->Copy(), context);
+// }
 
-void PEGParserFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &config = DBConfig::GetConfig(context);
-
-	auto &bind_data = data_p.bind_data->Cast<PEGParserFunctionData>();
-
-	if (config.parser_override) {
-		throw BinderException("Cannot install PEGParser: a parser override is already active.");
-	}
-	config.parser_override = make_uniq<PEGParserOverride>(bind_data.options->Copy(), context);
-}
-
-static duckdb::unique_ptr<FunctionData> PEGParserBind(ClientContext &context, TableFunctionBindInput &input,
-                                                      vector<LogicalType> &return_types, vector<string> &names) {
-	OnParserOverrideError error_option = OnParserOverrideError::THROW_ON_ERROR;
-	if (input.named_parameters.find("on_error") != input.named_parameters.end()) {
-		auto on_error = input.named_parameters.at("on_error").GetValue<string>();
-		if (StringUtil::Lower(on_error) == "throw") {
-			error_option = OnParserOverrideError::THROW_ON_ERROR;
-		} else if (StringUtil::Lower(on_error) == "continue") {
-			error_option = OnParserOverrideError::CONTINUE_ON_ERROR;
-		} else {
-			throw InvalidInputException(
-			    "Invalid option specified for \"on_error\", use either \"throw\" or \"continue\"");
-		}
-	}
-	bool enable_logging = false;
-	if (input.named_parameters.find("enable_logging") != input.named_parameters.end()) {
-		enable_logging = input.named_parameters.at("enable_logging").GetValue<bool>();
-	}
-	if (enable_logging) {
-		auto result = ClientConfig::GetSettingValue<EnableLogging>(context);
-		if (!result.GetValue<bool>()) {
-			throw InvalidInputException("Please execute \"PRAGMA enable_logging\" first.");
-		}
-	}
-
-	auto options = make_uniq<ParserOverrideOptions>(error_option, enable_logging);
-
-	names.emplace_back("success");
-	return_types.emplace_back(LogicalType::BOOLEAN);
-
-	return make_uniq<PEGParserFunctionData>(std::move(options));
-}
+// static duckdb::unique_ptr<FunctionData> PEGParserBind(ClientContext &context, TableFunctionBindInput &input,
+//                                                       vector<LogicalType> &return_types, vector<string> &names) {
+// 	OnParserOverrideError error_option = OnParserOverrideError::THROW_ON_ERROR;
+// 	if (input.named_parameters.find("on_error") != input.named_parameters.end()) {
+// 		auto on_error = input.named_parameters.at("on_error").GetValue<string>();
+// 		if (StringUtil::Lower(on_error) == "throw") {
+// 			error_option = OnParserOverrideError::THROW_ON_ERROR;
+// 		} else if (StringUtil::Lower(on_error) == "continue") {
+// 			error_option = OnParserOverrideError::CONTINUE_ON_ERROR;
+// 		} else {
+// 			throw InvalidInputException(
+// 			    "Invalid option specified for \"on_error\", use either \"throw\" or \"continue\"");
+// 		}
+// 	}
+// 	bool enable_logging = false;
+// 	if (input.named_parameters.find("enable_logging") != input.named_parameters.end()) {
+// 		enable_logging = input.named_parameters.at("enable_logging").GetValue<bool>();
+// 	}
+// 	if (enable_logging) {
+// 		auto result = ClientConfig::GetSettingValue<EnableLogging>(context);
+// 		if (!result.GetValue<bool>()) {
+// 			throw InvalidInputException("Please execute \"PRAGMA enable_logging\" first.");
+// 		}
+// 	}
+//
+// 	auto options = make_uniq<ParserOverrideOptions>(error_option, enable_logging);
+//
+// 	names.emplace_back("success");
+// 	return_types.emplace_back(LogicalType::BOOLEAN);
+//
+// 	return make_uniq<PEGParserFunctionData>(std::move(options));
+// }
 
 static void LoadInternal(ExtensionLoader &loader) {
 	TableFunction auto_complete_fun("sql_auto_complete", {LogicalType::VARCHAR}, SQLAutoCompleteFunction,
@@ -732,10 +732,10 @@ static void LoadInternal(ExtensionLoader &loader) {
 	                                   CheckPEGParserBind, nullptr);
 	loader.RegisterFunction(check_peg_parser_fun);
 
-	TableFunction peg_parser_fun("peg_parser", {}, PEGParserFunction, PEGParserBind, nullptr);
-	peg_parser_fun.named_parameters["on_error"] = LogicalType::VARCHAR; // Behaviour on error ("throw" or "continue")
-	peg_parser_fun.named_parameters["enable_logging"] = LogicalType::BOOLEAN;
-	loader.RegisterFunction(peg_parser_fun);
+	// TableFunction peg_parser_fun("peg_parser", {}, PEGParserFunction, PEGParserBind, nullptr);
+	// peg_parser_fun.named_parameters["on_error"] = LogicalType::VARCHAR; // Behaviour on error ("throw" or "continue")
+	// peg_parser_fun.named_parameters["enable_logging"] = LogicalType::BOOLEAN;
+	// loader.RegisterFunction(peg_parser_fun);
 }
 
 void AutocompleteExtension::Load(ExtensionLoader &loader) {
