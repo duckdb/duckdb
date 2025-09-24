@@ -99,6 +99,7 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, str
 	} else {
 		type = AttachedDatabaseType::READ_WRITE_DATABASE;
 	}
+	visibility = options.visibility;
 	// We create the storage after the catalog to guarantee we allow extensions to instantiate the DuckCatalog.
 	catalog = make_uniq<DuckCatalog>(*this);
 	stored_database_path = std::move(options.stored_database_path);
@@ -116,6 +117,7 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Sto
 	} else {
 		type = AttachedDatabaseType::READ_WRITE_DATABASE;
 	}
+	visibility = options.visibility;
 
 	optional_ptr<StorageExtensionInfo> storage_info = storage_extension->storage_info.get();
 	catalog = storage_extension->attach(storage_info, context, *this, name, info, options);
@@ -227,10 +229,9 @@ void AttachedDatabase::SetReadOnlyDatabase() {
 }
 
 void AttachedDatabase::OnDetach(ClientContext &context) {
-	if (!catalog) {
-		return;
+	if (catalog) {
+		catalog->OnDetach(context);
 	}
-	catalog->OnDetach(context);
 }
 
 void AttachedDatabase::Close() {
