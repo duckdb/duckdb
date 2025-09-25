@@ -8,10 +8,9 @@ permissions:
   pull-requests: read
   contents: read
 env:
-  GH_TOKEN: ${{ secrets.DUCKDBLABS_BOT_TOKEN }}
+  GH_TOKEN: ${{ secrets.DUCKDBLABS_BOT_TOKEN }} # for curl
+  GITHUB_TOKEN: ${{ secrets.DUCKDBLABS_BOT_TOKEN }} # for gh cli
   ORG: 'duckdb'
-  REPO: 'duckdb/duckdb'
-  PR: ${{ github.event.pull_request.number }}
 
 jobs:
   approved:
@@ -35,24 +34,27 @@ jobs:
     needs: 
       - approved
     runs-on: ubuntu-latest
+    env:
+      REPO: 'duckdb/duckdb'
+      PR: ${{ github.event.pull_request.number }}
     steps:
       - name: Approve all waiting runs for this PR
         run: |
           # exit on error, unset vars are errros, show error message from pipe
           set -euo pipefail
 
-          # get all waiting runs for PR
+          # list waiting runs for PR
           gh api -H "X-GitHub-Api-Version: 2022-11-28" \
-            "/repos/zul8ha/demo-repository/actions/runs?event=pull_request&per_page=100" --paginate \
-          | jq -r --argjson pr "$PR" '
+            "/repos/${{ env.REPO }}/actions/runs?event=pull_request&per_page=100" --paginate \
+          | jq -r --argjson pr "${PR}" '
                 .workflow_runs[]
-                | select(.head_repository.fork == true and any(.pull_requests[]?; .number == $pr))
+                | select(.head_repository.fork == true and (.pull_requests[]?; .number == $pr))
                 | .id
               ' \
           | while read -r RUN_ID; do
               [ -z "$RUN_ID" ] && continue
               echo "Approving run $RUN_ID"
               gh api -X POST -H "X-GitHub-Api-Version: 2022-11-28" \
-                "repos/zul8ha/demo-repository/actions/runs/$RUN_ID/approve" \
+                "repos/${{ env.REPO }}/actions/runs/$RUN_ID/approve" \
               || echo "Skip $RUN_ID: already approved or not awaiting approval anymore"
             done
