@@ -293,6 +293,7 @@ TEST_CASE("Test profiling with Extra Info enabled", "[capi]") {
 	auto count = duckdb_get_map_size(map);
 	REQUIRE(count != 0);
 
+	bool found_extra_info = false;
 	for (idx_t i = 0; i < count; i++) {
 		auto key = duckdb_get_map_key(map, i);
 		REQUIRE(key);
@@ -309,14 +310,19 @@ TEST_CASE("Test profiling with Extra Info enabled", "[capi]") {
 
 			duckdb_destroy_value(&value);
 			duckdb_free(value_c_str);
-			break;
+			found_extra_info = true;
 		}
 
 		duckdb_destroy_value(&key);
 		duckdb_free(key_c_str);
+
+		if (found_extra_info) {
+			break;
+		}
 	}
 
 	duckdb_destroy_value(&map);
+	REQUIRE(found_extra_info);
 
 	tester.Cleanup();
 }
