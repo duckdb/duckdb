@@ -276,6 +276,51 @@ unique_ptr<LogicalOperator> FilterPushdown::PushFinalFilters(unique_ptr<LogicalO
 	return AddLogicalFilter(std::move(op), std::move(expressions));
 }
 
+unique_ptr<LogicalOperator> FilterPushdown::FilterPushdownUnnestWithDelimJoin(unique_ptr<LogicalOperator> op) {
+	for (idx_t i = 0; i < filters.size(); i++) {
+		auto &f = *filters[i];
+		for (auto &child : op->children) {
+			FilterPushdown pushdown(optimizer, convert_mark_joins);
+
+			// check if filter bindings can be applied to the child bindings.
+			auto child_bindings = child->GetColumnBindings();
+			unordered_set<idx_t> child_bindings_table;
+			for (auto &binding : child_bindings) {
+				child_bindings_table.insert(binding.table_index);
+			}
+
+			// Check if ALL bindings of the filter are present in the child
+			bool should_push = true;
+			for (auto &binding : f.bindings) {
+				if (child_bindings_table.find(binding) == child_bindings_table.end()) {
+					should_push = false;
+					break;
+				}
+			}
+
+			if (!should_push) {
+				continue;
+			}
+
+			// copy the filter
+			auto filter_copy = f.filter->Copy();
+			if (pushdown.AddFilter(std::move(filter_copy)) == FilterResult::UNSATISFIABLE) {
+				return make_uniq<LogicalEmptyResult>(std::move(op));
+			}
+
+			// push the filter into the child.
+			pushdown.GenerateFilters();
+			child = pushdown.Rewrite(std::move(child));
+
+			// Don't push same filter again
+			filters.erase_at(i);
+			i--;
+			break;
+		}
+	}
+	return op;
+}
+
 unique_ptr<LogicalOperator> FilterPushdown::FinishPushdown(unique_ptr<LogicalOperator> op) {
 	if (op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
 		for (idx_t i = 0; i < filters.size(); i++) {
