@@ -301,22 +301,19 @@ TEST_CASE("Test profiling with Extra Info enabled", "[capi]") {
 		auto key_c_str = duckdb_get_varchar(key);
 		auto key_str = duckdb::string(key_c_str);
 		if (key_str != EnumUtil::ToString(MetricsType::EXTRA_INFO)) {
-			duckdb_destroy_value(&key);
-			duckdb_free(key_c_str);
-			continue;
+			auto value = duckdb_get_map_value(map, i);
+			REQUIRE(value);
+			auto value_c_str = duckdb_get_varchar(value);
+			auto value_str = duckdb::string(value_c_str);
+			REQUIRE(value_str == "{__order_by__=#7 ASC}");
+
+			duckdb_destroy_value(&value);
+			duckdb_free(value_c_str);
+			break;
 		}
 
-		auto value = duckdb_get_map_value(map, i);
-		REQUIRE(value);
-		auto value_c_str = duckdb_get_varchar(value);
-		auto value_str = duckdb::string(value_c_str);
-		REQUIRE(value_str == "{__order_by__=#7 ASC}");
-
 		duckdb_destroy_value(&key);
-		duckdb_destroy_value(&value);
 		duckdb_free(key_c_str);
-		duckdb_free(value_c_str);
-		break;
 	}
 
 	duckdb_destroy_value(&map);
