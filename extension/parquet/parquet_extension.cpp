@@ -952,6 +952,10 @@ static void LoadInternal(ExtensionLoader &loader) {
 	// variant_to_parquet_variant
 	loader.RegisterFunction(VariantColumnWriter::GetTransformFunction());
 
+	// parquet_column_metadata
+	ParquetColumnMetadataFunction column_meta_fun;
+	loader.RegisterFunction(MultiFileReader::CreateFunctionSet(column_meta_fun));
+
 	CopyFunction function("parquet");
 	function.copy_to_select = ParquetWriteSelect;
 	function.copy_to_bind = ParquetWriteBind;
