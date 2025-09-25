@@ -109,7 +109,7 @@
         "id": 204,
         "name": "children",
         "type": "vector<QueryNode*>",
-        "version": "6"
+        "version": "v1.4.0"
       }
     ],
     "constructor": ["setop_type", "left", "right", "children", "setop_all"]
