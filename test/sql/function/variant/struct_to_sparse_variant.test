@@ -1,0 +1,119 @@
+# name: test/sql/function/variant/struct_to_sparse_variant.test
+# group: [variant]
+
+# if there are no NULL values, it's the same as casting to VARIANT
+query I
+select struct_to_sparse_variant({duck:42})
+----
+{'duck': 42}
+
+# fields with a NULL value are not added to the VARIANT
+query I
+select struct_to_sparse_variant({duck:42,goose:NULL})
+----
+{'duck': 42}
+
+query I
+select struct_to_sparse_variant({duck:NULL,goose:42})
+----
+{'goose': 42}
+
+# we cannot create empty STRUCTs (even within VARIANT),
+# so if all fields have a value of NULL, the entire VARIANT becomes NULL
+query I
+select struct_to_sparse_variant({goose:NULL})
+----
+NULL
+
+# skips enum/union because this can't roundtrip
+query I
+with cte1 as (
+    select struct_to_sparse_variant(t) sv, t.*
+    from test_all_types() t
+), cte2 as (
+    select
+        cast_to_type(try(sv."bool"), "bool") IS NOT DISTINCT FROM "bool",
+        cast_to_type(try(sv."tinyint"), "tinyint") IS NOT DISTINCT FROM "tinyint",
+        cast_to_type(try(sv."smallint"), "smallint") IS NOT DISTINCT FROM "smallint",
+        cast_to_type(try(sv."int"), "int") IS NOT DISTINCT FROM "int",
+        cast_to_type(try(sv."bigint"), "bigint") IS NOT DISTINCT FROM "bigint",
+        cast_to_type(try(sv."hugeint"), "hugeint") IS NOT DISTINCT FROM "hugeint",
+        cast_to_type(try(sv."uhugeint"), "uhugeint") IS NOT DISTINCT FROM "uhugeint",
+        cast_to_type(try(sv."utinyint"), "utinyint") IS NOT DISTINCT FROM "utinyint",
+        cast_to_type(try(sv."usmallint"), "usmallint") IS NOT DISTINCT FROM "usmallint",
+        cast_to_type(try(sv."uint"), "uint") IS NOT DISTINCT FROM "uint",
+        cast_to_type(try(sv."ubigint"), "ubigint") IS NOT DISTINCT FROM "ubigint",
+        cast_to_type(try(sv."bignum"), "bignum") IS NOT DISTINCT FROM "bignum",
+        cast_to_type(try(sv."date"), "date") IS NOT DISTINCT FROM "date",
+        cast_to_type(try(sv."time"), "time") IS NOT DISTINCT FROM "time",
+        cast_to_type(try(sv."timestamp"), "timestamp") IS NOT DISTINCT FROM "timestamp",
+        cast_to_type(try(sv."timestamp_s"), "timestamp_s") IS NOT DISTINCT FROM "timestamp_s",
+        cast_to_type(try(sv."timestamp_ms"), "timestamp_ms") IS NOT DISTINCT FROM "timestamp_ms",
+        cast_to_type(try(sv."timestamp_ns"), "timestamp_ns") IS NOT DISTINCT FROM "timestamp_ns",
+        cast_to_type(try(sv."time_tz"), "time_tz") IS NOT DISTINCT FROM "time_tz",
+        cast_to_type(try(sv."timestamp_tz"), "timestamp_tz") IS NOT DISTINCT FROM "timestamp_tz",
+        cast_to_type(try(sv."float"), "float") IS NOT DISTINCT FROM "float",
+        cast_to_type(try(sv."double"), "double") IS NOT DISTINCT FROM "double",
+        cast_to_type(try(sv."dec_4_1"), "dec_4_1") IS NOT DISTINCT FROM "dec_4_1",
+        cast_to_type(try(sv."dec_9_4"), "dec_9_4") IS NOT DISTINCT FROM "dec_9_4",
+        cast_to_type(try(sv."dec_18_6"), "dec_18_6") IS NOT DISTINCT FROM "dec_18_6",
+        cast_to_type(try(sv."dec38_10"), "dec38_10") IS NOT DISTINCT FROM "dec38_10",
+        cast_to_type(try(sv."uuid"), "uuid") IS NOT DISTINCT FROM "uuid",
+        cast_to_type(try(sv."interval"), "interval") IS NOT DISTINCT FROM "interval",
+        cast_to_type(try(sv."varchar"), "varchar") IS NOT DISTINCT FROM "varchar",
+        cast_to_type(try(sv."blob"), "blob") IS NOT DISTINCT FROM "blob",
+        cast_to_type(try(sv."bit"), "bit") IS NOT DISTINCT FROM "bit",
+        cast_to_type(try(sv."int_array"), "int_array") IS NOT DISTINCT FROM "int_array",
+        cast_to_type(try(sv."double_array"), "double_array") IS NOT DISTINCT FROM "double_array",
+        cast_to_type(try(sv."date_array"), "date_array") IS NOT DISTINCT FROM "date_array",
+        cast_to_type(try(sv."timestamp_array"), "timestamp_array") IS NOT DISTINCT FROM "timestamp_array",
+        cast_to_type(try(sv."timestamptz_array"), "timestamptz_array") IS NOT DISTINCT FROM "timestamptz_array",
+        cast_to_type(try(sv."varchar_array"), "varchar_array") IS NOT DISTINCT FROM "varchar_array",
+        cast_to_type(try(sv."nested_int_array"), "nested_int_array") IS NOT DISTINCT FROM "nested_int_array",
+        cast_to_type(try(sv."struct"), "struct") IS NOT DISTINCT FROM "struct",
+        cast_to_type(try(sv."struct_of_arrays"), "struct_of_arrays") IS NOT DISTINCT FROM "struct_of_arrays",
+        cast_to_type(try(sv."array_of_structs"), "array_of_structs") IS NOT DISTINCT FROM "array_of_structs",
+        cast_to_type(try(sv."map"), "map") IS NOT DISTINCT FROM "map",
+        cast_to_type(try(sv."fixed_int_array"), "fixed_int_array") IS NOT DISTINCT FROM "fixed_int_array",
+        cast_to_type(try(sv."fixed_varchar_array"), "fixed_varchar_array") IS NOT DISTINCT FROM "fixed_varchar_array",
+        cast_to_type(try(sv."fixed_nested_int_array"), "fixed_nested_int_array") IS NOT DISTINCT FROM "fixed_nested_int_array",
+        cast_to_type(try(sv."fixed_nested_varchar_array"), "fixed_nested_varchar_array") IS NOT DISTINCT FROM "fixed_nested_varchar_array",
+        cast_to_type(try(sv."fixed_struct_array"), "fixed_struct_array") IS NOT DISTINCT FROM "fixed_struct_array",
+        cast_to_type(try(sv."struct_of_fixed_array"), "struct_of_fixed_array") IS NOT DISTINCT FROM "struct_of_fixed_array",
+        cast_to_type(try(sv."fixed_array_of_int_list"), "fixed_array_of_int_list") IS NOT DISTINCT FROM "fixed_array_of_int_list",
+        cast_to_type(try(sv."list_of_fixed_int_array"), "list_of_fixed_int_array") IS NOT DISTINCT FROM "list_of_fixed_int_array",
+    from cte1
+), cte3 as (
+    select sum(columns(*))
+    from cte2
+)
+select least(*columns(*))
+from cte3
+----
+3
+
+# ^ what we've done up here is verify that we can roundtrip everything through struct_to_sparse_variant
+# and that what comes out is all exactly the same. test_all_types has 3 rows, so if we sum up the bools,
+# we should get 3 for each column, which we check is the case for all columns by doing least(*columns(*))
+
+# test a few combinations, make sure we're getting the correct keys
+query I
+with vals as (
+    select *
+    from (values (42), (NULL)) tbl(i)
+), combinations as (
+    select cte1.i as duck, cte2.i as goose, cte3.i as swan
+    from vals cte1, vals cte2, vals cte3
+    order by all
+)
+select struct_to_sparse_variant(c)
+from combinations c
+----
+{'duck': 42, 'goose': 42, 'swan': 42}
+{'duck': 42, 'goose': 42}
+{'duck': 42, 'swan': 42}
+{'duck': 42}
+{'goose': 42, 'swan': 42}
+{'goose': 42}
+{'swan': 42}
+NULL
