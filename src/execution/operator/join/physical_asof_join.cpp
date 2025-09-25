@@ -93,8 +93,8 @@ public:
 		partition_sinks.emplace_back(std::move(sink));
 
 		// Record join types
-		is_outer.push_back(IsRightOuterJoin(op.join_type));
 		is_outer.push_back(IsLeftOuterJoin(op.join_type));
+		is_outer.push_back(IsRightOuterJoin(op.join_type));
 
 		outer_markers.resize(2);
 		local_buffers.resize(2);
