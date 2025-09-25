@@ -1,0 +1,101 @@
+# name: test/optimizer/topn_window_elimination.test
+# description: Test Top-N Window Elimination Rule
+# group: [optimizer]
+
+#statement ok
+#PRAGMA enable_verification
+
+statement ok
+CREATE TABLE tbl AS SELECT i % 4 grp, i val_1, CAST(i AS VARCHAR) val_2 FROM range(100) tbl(i)
+
+# Window functions
+query IIII
+SELECT * FROM (
+	SELECT row_number() OVER (PARTITION BY grp ORDER BY val_1 DESC) as rn, *
+	FROM tbl
+	QUALIFY rn <= 1
+)
+ORDER BY grp
+----
+1	0	96	96
+1	1	97	97
+1	2	98	98
+1	3	99	99
+
+query III
+SELECT * EXCLUDE (rn) FROM (
+	SELECT row_number() OVER (PARTITION BY grp ORDER BY val_1 DESC) as rn, *
+	FROM tbl
+	QUALIFY rn <= 1
+)
+ORDER BY grp
+----
+0	96	96
+1	97	97
+2	98	98
+3	99	99
+
+query IIII
+SELECT * FROM (
+	SELECT row_number() OVER (PARTITION BY grp ORDER BY val_1 DESC) as rn, *
+	FROM tbl
+	QUALIFY rn <= 2
+)
+ORDER BY grp, rn
+----
+1	0	96	96
+2	0	92	92
+1	1	97	97
+2	1	93	93
+1	2	98	98
+2	2	94	94
+1	3	99	99
+2	3	95	95
+
+query IIII
+SELECT * FROM (
+	SELECT row_number() OVER (PARTITION BY grp ORDER BY val_1 DESC) as rn, *
+	FROM tbl
+	WHERE val_2 < '50'
+	QUALIFY rn <= 1
+)
+ORDER BY grp
+----
+1	0	48	48
+1	1	49	49
+1	2	46	46
+1	3	47	47
+
+statement ok
+CREATE TABLE tbl2 AS SELECT * FROM tbl WHERE grp <> 1 OR val_1 = 1
+
+query IIII
+SELECT * FROM (
+	SELECT row_number() OVER (PARTITION BY grp ORDER BY val_1 DESC) as rn, *
+	FROM tbl2
+	QUALIFY rn <= 2
+)
+ORDER BY grp, rn
+----
+1	0	96	96
+2	0	92	92
+1	1	1	1
+1	2	98	98
+2	2	94	94
+1	3	99	99
+2	3	95	95
+
+query IIII
+SELECT * FROM (
+	SELECT row_number() OVER (PARTITION BY grp ORDER BY val_1 ASC) as rn, *
+	FROM tbl
+	QUALIFY rn <= 1
+)
+ORDER BY grp
+----
+1	0	0	0
+1	1	1	1
+1	2	2	2
+1	3	3	3
+
+# Lateral joins
