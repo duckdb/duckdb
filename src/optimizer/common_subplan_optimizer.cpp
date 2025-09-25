@@ -525,8 +525,8 @@ static void ConvertSubplansToCTE(Optimizer &optimizer, unique_ptr<LogicalOperato
 	vector<unique_ptr<LogicalCTERef>> cte_refs;
 	ColumnBindingReplacer replacer;
 	for (auto &subplan : subplan_info.subplans) {
-		cte_refs.emplace_back(make_uniq<LogicalCTERef>(optimizer.binder.GenerateTableIndex(), cte_index, types,
-		                                               col_names, CTEMaterialize::CTE_MATERIALIZE_DEFAULT));
+		cte_refs.emplace_back(
+		    make_uniq<LogicalCTERef>(optimizer.binder.GenerateTableIndex(), cte_index, types, col_names));
 		const auto old_bindings = subplan.get()->GetColumnBindings();
 		const auto new_bindings = cte_refs.back()->GetColumnBindings();
 		D_ASSERT(old_bindings.size() == new_bindings.size());
