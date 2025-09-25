@@ -32,6 +32,13 @@ public:
 	void BeginWrite(ColumnWriterState &state) override;
 	void Write(ColumnWriterState &state, Vector &vector, idx_t count) override;
 	void FinalizeWrite(ColumnWriterState &state) override;
+	LogicalType TransformedType() override {
+		child_list_t<LogicalType> children;
+		for (auto &child_writer : child_writers) {
+			children.emplace_back(child_writer->Schema().name, child_writer->TransformedType());
+		}
+		return LogicalType::STRUCT(std::move(children));
+	}
 };
 
 } // namespace duckdb

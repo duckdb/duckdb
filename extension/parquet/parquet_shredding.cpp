@@ -11,8 +11,8 @@ ShreddingType::ShreddingType(LogicalTypeId shredding_type) : set(true), shreddin
 }
 
 static ShreddingType ConvertShreddingTypeRecursive(const LogicalType &type) {
-	if (type.id() == LogicalTypeId::ANY) {
-		return ShreddingType(type.id());
+	if (type.id() == LogicalTypeId::VARIANT) {
+		return ShreddingType(LogicalTypeId::ANY);
 	}
 	if (!type.IsNested()) {
 		return ShreddingType(type.id());

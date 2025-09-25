@@ -41,8 +41,9 @@ public:
 	}
 	LogicalType TransformedType() override {
 		child_list_t<LogicalType> children;
-		children.emplace_back("metadata", LogicalType::BLOB);
-		children.emplace_back("value", LogicalType::BLOB);
+		for (auto &child_writer : child_writers) {
+			children.emplace_back(child_writer->Schema().name, child_writer->TransformedType());
+		}
 		return LogicalType::STRUCT(std::move(children));
 	}
 	unique_ptr<Expression> TransformExpression(unique_ptr<BoundReferenceExpression> expr) override {

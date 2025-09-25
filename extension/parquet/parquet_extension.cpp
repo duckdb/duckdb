@@ -354,10 +354,11 @@ static unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext
 	auto &fs = FileSystem::GetFileSystem(context);
 	global_state->writer = make_uniq<ParquetWriter>(
 	    context, fs, file_path, parquet_bind.sql_types, parquet_bind.column_names, parquet_bind.codec,
-	    parquet_bind.field_ids.Copy(), parquet_bind.kv_metadata, parquet_bind.encryption_config,
-	    parquet_bind.dictionary_size_limit, parquet_bind.string_dictionary_page_size_limit,
-	    parquet_bind.enable_bloom_filters, parquet_bind.bloom_filter_false_positive_ratio,
-	    parquet_bind.compression_level, parquet_bind.debug_use_openssl, parquet_bind.parquet_version);
+	    parquet_bind.field_ids.Copy(), parquet_bind.shredding_types, parquet_bind.kv_metadata,
+	    parquet_bind.encryption_config, parquet_bind.dictionary_size_limit,
+	    parquet_bind.string_dictionary_page_size_limit, parquet_bind.enable_bloom_filters,
+	    parquet_bind.bloom_filter_false_positive_ratio, parquet_bind.compression_level, parquet_bind.debug_use_openssl,
+	    parquet_bind.parquet_version);
 	return std::move(global_state);
 }
 

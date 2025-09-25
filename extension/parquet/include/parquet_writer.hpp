@@ -22,6 +22,7 @@
 #include "parquet_statistics.hpp"
 #include "column_writer.hpp"
 #include "parquet_field_id.hpp"
+#include "parquet_shredding.hpp"
 #include "parquet_types.h"
 #include "geo_parquet.hpp"
 #include "writer/parquet_write_stats.hpp"
@@ -78,7 +79,7 @@ class ParquetWriter {
 public:
 	ParquetWriter(ClientContext &context, FileSystem &fs, string file_name, vector<LogicalType> types,
 	              vector<string> names, duckdb_parquet::CompressionCodec::type codec, ChildFieldIDs field_ids,
-	              const vector<pair<string, string>> &kv_metadata,
+	              ShreddingType shredding_types, const vector<pair<string, string>> &kv_metadata,
 	              shared_ptr<ParquetEncryptionConfig> encryption_config, optional_idx dictionary_size_limit,
 	              idx_t string_dictionary_page_size_limit, bool enable_bloom_filters,
 	              double bloom_filter_false_positive_ratio, int64_t compression_level, bool debug_use_openssl,
@@ -163,6 +164,7 @@ private:
 	vector<string> column_names;
 	duckdb_parquet::CompressionCodec::type codec;
 	ChildFieldIDs field_ids;
+	ShreddingType shredding_types;
 	shared_ptr<ParquetEncryptionConfig> encryption_config;
 	optional_idx dictionary_size_limit;
 	idx_t string_dictionary_page_size_limit;
