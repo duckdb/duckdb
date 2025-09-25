@@ -1242,6 +1242,16 @@ struct UsernameSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct WriteBufferRowGroupCountSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "write_buffer_row_group_count";
+	static constexpr const char *Description = "The amount of row groups to buffer in bulk ingestion prior to flushing "
+	                                           "them together. Reducing this setting can reduce memory consumption.";
+	static constexpr const char *InputType = "UBIGINT";
+	static constexpr const char *DefaultValue = "5";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
+};
+
 struct ZstdMinStringLengthSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "zstd_min_string_length";
