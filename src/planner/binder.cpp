@@ -200,7 +200,7 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 
 void Binder::AddCTEMap(CommonTableExpressionMap &cte_map) {
 	for (auto &cte_it : cte_map.map) {
-		AddCTE(cte_it.first, *cte_it.second);
+		AddCTE(cte_it.first);
 	}
 }
 
@@ -343,22 +343,16 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundTableRef &ref) {
 	return root;
 }
 
-void Binder::AddCTE(const string &name, CommonTableExpressionInfo &info) {
+void Binder::AddCTE(const string &name) {
 	D_ASSERT(!name.empty());
-	auto entry = CTE_bindings.find(name);
-	if (entry != CTE_bindings.end()) {
-		throw InternalException("Duplicate CTE \"%s\" in query!", name);
-	}
-	CTE_bindings.insert(make_pair(name, reference<CommonTableExpressionInfo>(info)));
+	CTE_bindings.insert(name);
 }
 
-vector<reference<CommonTableExpressionInfo>> Binder::FindCTE(const string &name, bool skip) {
-	auto entry = CTE_bindings.find(name);
-	vector<reference<CommonTableExpressionInfo>> ctes;
-	if (entry != CTE_bindings.end()) {
-		if (!skip || entry->second.get().query->node->type == QueryNodeType::RECURSIVE_CTE_NODE) {
-			ctes.push_back(entry->second);
-		}
+vector<reference<Binding>> Binder::FindCTE(const string &name, bool skip) {
+	auto entry = bind_context.GetCTEBinding(name);
+	vector<reference<Binding>> ctes;
+	if (entry) {
+		ctes.push_back(*entry.get());
 	}
 	if (parent && binder_type == BinderType::REGULAR_BINDER) {
 		auto parent_ctes = parent->FindCTE(name, name == alias);
@@ -367,12 +361,12 @@ vector<reference<CommonTableExpressionInfo>> Binder::FindCTE(const string &name,
 	return ctes;
 }
 
-bool Binder::CTEIsAlreadyBound(CommonTableExpressionInfo &cte) {
-	if (bound_ctes.find(cte) != bound_ctes.end()) {
+bool Binder::CTEExists(const string &name) {
+	if (CTE_bindings.find(name) != CTE_bindings.end()) {
 		return true;
 	}
 	if (parent && binder_type == BinderType::REGULAR_BINDER) {
-		return parent->CTEIsAlreadyBound(cte);
+		return parent->CTEExists(name);
 	}
 	return false;
 }

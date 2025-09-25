@@ -76,6 +76,7 @@ public:
 		return all_transactions;
 	}
 	optional_ptr<AttachedDatabase> GetReferencedDatabase(const string &name);
+	shared_ptr<AttachedDatabase> GetReferencedDatabaseOwning(const string &name);
 	AttachedDatabase &UseDatabase(shared_ptr<AttachedDatabase> &database);
 	void DetachDatabase(AttachedDatabase &database);
 
