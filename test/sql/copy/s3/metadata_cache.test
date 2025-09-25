@@ -38,12 +38,12 @@ CREATE TABLE test1 as SELECT * FROM range(10,20) tbl(i);
 query II
 EXPLAIN ANALYZE COPY test TO 's3://test-bucket-public/root-dir/metadata_cache/test.parquet';
 ----
-analyzed_plan	<REGEX>:.*HTTP Stats.*\#HEAD\: 0.*GET\: 0.*PUT\: 1.*\#POST\: 2.*
+analyzed_plan	<REGEX>:.*HTTP Stats.*\#HEAD\: 0.*GET\: 0.*PUT\: 1.*\#POST\: 0.*
 
 query II
 EXPLAIN ANALYZE COPY test TO 's3://test-bucket-public/root-dir/metadata_cache/test1.parquet';
 ----
-analyzed_plan	<REGEX>:.*HTTP Stats.*\#HEAD\: 0.*GET\: 0.*PUT\: 1.*\#POST\: 2.*
+analyzed_plan	<REGEX>:.*HTTP Stats.*\#HEAD\: 0.*GET\: 0.*PUT\: 1.*\#POST\: 0.*
 
 # Now we query the file metadata without the global metadata cache: There should be 1 HEAD request for the file size,
 # then a GET for the pointer to the parquet metadata, then a GET for the metadata.
