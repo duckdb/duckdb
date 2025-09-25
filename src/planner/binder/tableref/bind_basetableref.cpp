@@ -123,81 +123,60 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 
 	// CTE name should never be qualified (i.e. schema_name should be empty)
 	// unless we want to refer to the recurring table of "using key".
-	vector<reference<CommonTableExpressionInfo>> found_ctes;
+	vector<reference<Binding>> found_ctes;
 	if (ref.schema_name.empty() || ref.schema_name == "recurring") {
-		found_ctes = FindCTE(ref.table_name, ref.table_name == alias);
+		found_ctes = FindCTE(ref.table_name, false);
 	}
 
 	if (!found_ctes.empty()) {
 		// Check if there is a CTE binding in the BindContext
-		bool circular_cte = false;
-		for (auto found_cte : found_ctes) {
-			auto &cte = found_cte.get();
-			auto ctebinding = bind_context.GetCTEBinding(ref.table_name);
-			if (ctebinding) {
-				// There is a CTE binding in the BindContext.
-				// This can only be the case if there is a recursive CTE,
-				// or a materialized CTE present.
-				auto index = GenerateTableIndex();
-				auto materialized = cte.materialized;
+		auto ctebinding = bind_context.GetCTEBinding(ref.table_name);
+		if (ctebinding) {
+			// There is a CTE binding in the BindContext.
+			// This can only be the case if there is a recursive CTE,
+			// or a materialized CTE present.
+			auto index = GenerateTableIndex();
 
-				if (ref.schema_name == "recurring" && cte.key_targets.empty()) {
-					throw InvalidInputException("RECURRING can only be used with USING KEY in recursive CTE.");
-				}
-
-				auto result =
-				    make_uniq<BoundCTERef>(index, ctebinding->index, materialized, ref.schema_name == "recurring");
-				auto alias = ref.alias.empty() ? ref.table_name : ref.alias;
-				auto names = BindContext::AliasColumnNames(alias, ctebinding->names, ref.column_name_alias);
-
-				bind_context.AddGenericBinding(index, alias, names, ctebinding->types);
-
-				auto cte_reference = ref.schema_name.empty() ? ref.table_name : ref.schema_name + "." + ref.table_name;
-
-				// Update references to CTE
-				auto cteref = bind_context.cte_references[cte_reference];
-
-				if (cteref == nullptr && ref.schema_name == "recurring") {
-					throw BinderException("There is a WITH item named \"%s\", but the recurring table cannot be "
-					                      "referenced from this part of the query.",
-					                      ref.table_name);
-				}
-
-				(*cteref)++;
-
-				result->types = ctebinding->types;
-				result->bound_columns = std::move(names);
-				return std::move(result);
-			} else {
-				if (CTEIsAlreadyBound(cte)) {
-					// remember error state
-					circular_cte = true;
-					// retry with next candidate CTE
-					continue;
-				}
-
-				// If we have found a materialized CTE, but no corresponding CTE binding,
-				// something is wrong.
-				if (cte.materialized == CTEMaterialize::CTE_MATERIALIZE_ALWAYS) {
-					throw BinderException(
-					    "There is a WITH item named \"%s\", but it cannot be referenced from this part of the query.",
-					    ref.table_name);
-				}
-
-				if (ref.schema_name == "recurring") {
-					throw BinderException("There is a WITH item named \"%s\", but the recurring table cannot be "
-					                      "referenced from this part of the query.",
+			if (ref.schema_name == "recurring") {
+				auto recurring_bindings = FindCTE("recurring." + ref.table_name, false);
+				if (recurring_bindings.empty()) {
+					throw BinderException(error_context,
+					                      "There is a WITH item named \"%s\", but the recurring table cannot be "
+					                      "referenced from this part of the query."
+					                      " Hint: RECURRING can only be used with USING KEY in recursive CTE.",
 					                      ref.table_name);
 				}
 			}
+
+			auto result = make_uniq<BoundCTERef>(index, ctebinding->index, ref.schema_name == "recurring");
+			auto alias = ref.alias.empty() ? ref.table_name : ref.alias;
+			auto names = BindContext::AliasColumnNames(alias, ctebinding->names, ref.column_name_alias);
+
+			bind_context.AddGenericBinding(index, alias, names, ctebinding->types);
+
+			auto cte_reference = ref.schema_name.empty() ? ref.table_name : ref.schema_name + "." + ref.table_name;
+
+			// Update references to CTE
+			auto cteref = bind_context.cte_references[cte_reference];
+
+			if (cteref == nullptr && ref.schema_name == "recurring") {
+				throw BinderException(error_context,
+				                      "There is a WITH item named \"%s\", but the recurring table cannot be "
+				                      "referenced from this part of the query.",
+				                      ref.table_name);
+			}
+
+			(*cteref)++;
+
+			result->types = ctebinding->types;
+			result->bound_columns = std::move(names);
+			return std::move(result);
 		}
-		if (circular_cte) {
-			auto replacement_scan_bind_result = BindWithReplacementScan(context, ref);
-			if (replacement_scan_bind_result) {
-				return replacement_scan_bind_result;
-			}
-
+	} else {
+		// remember that we did not find a CTE
+		if (ref.schema_name.empty() && CTEExists(ref.table_name)) {
 			throw BinderException(
+			    error_context,
 			    "Circular reference to CTE \"%s\", There are two possible solutions. \n1. use WITH RECURSIVE to "
 			    "use recursive CTEs. \n2. If "
 			    "you want to use the TABLE name \"%s\" the same as the CTE name, please explicitly add "
@@ -205,6 +184,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 			    ref.table_name, ref.table_name, ref.table_name);
 		}
 	}
+
 	// not a CTE
 	// extract a table or view from the catalog
 	auto at_clause = BindAtClause(ref.at_clause);
@@ -343,7 +323,6 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		while (!materialized_ctes.empty()) {
 			unique_ptr<CTENode> node_result;
 			node_result = std::move(materialized_ctes.back());
-			node_result->cte_map = root->cte_map.Copy();
 			node_result->child = std::move(root);
 			root = std::move(node_result);
 			materialized_ctes.pop_back();

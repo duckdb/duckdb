@@ -61,4 +61,4 @@ with cte as (Select i as j from a) select * from cte where j = (with cte as (sel
 statement error
 with cte as (select * from cte) select * from cte
 ----
-<REGEX>:.*Catalog Error.*does not exist.*
+<REGEX>:.*Binder Error.*Circular reference to CTE.*

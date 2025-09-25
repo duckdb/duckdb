@@ -895,6 +895,13 @@
         ]
     },
     {
+        "name": "write_buffer_row_group_count",
+        "description": "The amount of row groups to buffer in bulk ingestion prior to flushing them together. Reducing this setting can reduce memory consumption.",
+        "type": "UBIGINT",
+        "default_scope": "global",
+        "default_value": "5"
+    },
+    {
         "name": "zstd_min_string_length",
         "description": "The (average) length at which to enable ZSTD compression, defaults to 4096",
         "type": "UBIGINT",
