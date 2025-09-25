@@ -708,10 +708,6 @@ string StringUtil::ValidateJSON(const char *data, const idx_t &len) {
 	    YYJSON_READ_ALLOW_INF_AND_NAN | YYJSON_READ_ALLOW_TRAILING_COMMAS | YYJSON_READ_BIGNUM_AS_RAW;
 	yyjson_read_err error;
 	yyjson_doc *doc = yyjson_read_opts((char *)data, len, READ_FLAG, nullptr, &error); // NOLINT: for yyjson
-	if (!doc) {
-		return StringUtil::Format("Failed to parse JSON string: %s", string(data, len));
-	}
-
 	if (error.code != YYJSON_READ_SUCCESS) {
 		return StringUtil::Format("Malformed JSON at byte %lld of input: %s. Input: \"%s\"", error.pos, error.msg,
 		                          string(data, len));
