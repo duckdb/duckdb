@@ -8,6 +8,9 @@ require noforcestorage
 
 require skip_reload
 
+# FIXME: Enable when more read paths have been added to profiling.
+require no_alternative_verify
+
 statement ok
 SET threads = 1;
 
