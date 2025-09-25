@@ -12,6 +12,7 @@
 #include "duckdb/storage/temporary_file_manager.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
 #include "duckdb/common/encryption_functions.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
