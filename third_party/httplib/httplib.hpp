@@ -7077,7 +7077,12 @@ inline bool ClientImpl::redirect(Request &req, Response &res, Error &error) {
   }
 
   auto location = res.get_header_value("location");
-  if (location.empty()) { return false; }
+  if (location.empty()) {
+    // s3 requests will not return a location header, and instead a
+    // X-Amx-Region-Bucket header. Return true so all response headers
+    // are returned to the httpfs/calling extension
+    return true;
+  }
 
   const Regex re(
       R"((?:(https?):)?(?://(?:\[([\d:]+)\]|([^:/?#]+))(?::(\d+))?)?([^?#]*)(\?[^#]*)?(?:#.*)?)");
