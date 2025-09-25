@@ -529,6 +529,30 @@ static void CreateValues(UnifiedVariantVectorData &variant, Vector &value, idx_t
 	}
 }
 
+static void WriteVariantValues(UnifiedVariantVectorData &variant, Vector &result, idx_t count) {
+	optional_ptr<Vector> value;
+	optional_ptr<Vector> typed_value;
+
+	auto &result_type = result.GetType();
+	D_ASSERT(result_type.id() == LogicalTypeId::STRUCT);
+	auto &child_types = StructType::GetChildTypes(result_type);
+	auto &child_vectors = StructVector::GetEntries(result);
+	D_ASSERT(child_types.size() == child_vectors.size());
+	for (idx_t i = 0; i < child_types.size(); i++) {
+		auto &name = child_types[i].first;
+		if (name == "value") {
+			value = child_vectors[i].get();
+		} else if (name == "typed_value") {
+			typed_value = child_vectors[i].get();
+		}
+	}
+
+	//! TODO: this should be able to be used recursively
+	//! The method is not vectorized
+
+	CreateValues(variant, *value, count);
+}
+
 static void ToParquetVariant(DataChunk &input, ExpressionState &state, Vector &result) {
 	// DuckDB Variant:
 	// - keys = VARCHAR[]
@@ -548,15 +572,20 @@ static void ToParquetVariant(DataChunk &input, ExpressionState &state, Vector &r
 	UnifiedVariantVectorData variant(recursive_format);
 
 	auto &result_vectors = StructVector::GetEntries(result);
-	auto &validity = FlatVector::Validity(result);
+	bool all_null = true;
 	for (idx_t i = 0; i < count; i++) {
 		if (!variant.RowIsValid(i)) {
-			validity.SetInvalid(i);
+			FlatVector::SetNull(result, i, true);
+		} else {
+			all_null = false;
 		}
 	}
-
-	CreateMetadata(variant, *result_vectors[0], count);
-	CreateValues(variant, *result_vectors[1], count);
+	if (all_null) {
+		return;
+	}
+	auto &metadata = *result_vectors[0];
+	CreateMetadata(variant, metadata, count);
+	WriteVariantValues(variant, result, count);
 }
 
 ScalarFunction VariantColumnWriter::GetTransformFunction() {
