@@ -116,7 +116,7 @@
   {
     "class": "FieldID",
     "includes": [
-      "parquet_writer.hpp"
+      "parquet_field_id.hpp"
     ],
     "members": [
       {
@@ -140,7 +140,7 @@
   {
     "class": "ChildFieldIDs",
     "includes": [
-      "parquet_writer.hpp"
+      "parquet_field_id.hpp"
     ],
     "members": [
       {

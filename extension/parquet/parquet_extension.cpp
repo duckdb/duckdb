@@ -12,6 +12,7 @@
 #include "parquet_metadata.hpp"
 #include "parquet_reader.hpp"
 #include "parquet_writer.hpp"
+#include "parquet_shredding.hpp"
 #include "reader/struct_column_reader.hpp"
 #include "zstd_file_system.hpp"
 #include "writer/primitive_column_writer.hpp"
@@ -83,6 +84,7 @@ struct ParquetWriteBindData : public TableFunctionData {
 	optional_idx row_groups_per_file;
 
 	ChildFieldIDs field_ids;
+	ShreddingType shredding_types;
 	//! The compression level, higher value is more
 	int64_t compression_level = ZStdFileSystem::DefaultCompressionLevel();
 
@@ -211,7 +213,47 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 			    StringUtil::Lower(StringValue::Get(option.second[0])) == "auto") {
 				throw NotImplementedException("The 'auto' option is not yet implemented for 'shredding'");
 			} else {
-				throw NotImplementedException("Shredding");
+				case_insensitive_set_t variant_names;
+				for (idx_t col_idx = 0; col_idx < names.size(); col_idx++) {
+					if (sql_types[col_idx].id() != LogicalTypeId::VARIANT) {
+						continue;
+					}
+					variant_names.emplace(names[col_idx]);
+				}
+				auto &shredding_types_value = option.second[0];
+				if (shredding_types_value.type().id() != LogicalTypeId::STRUCT) {
+					BinderException("SHREDDING value should be a STRUCT of column names to types, i.e: {col1: "
+					                "'INTEGER[]', col2: 'BOOLEAN'}");
+				}
+				const auto &struct_type = shredding_types_value.type();
+				const auto &struct_children = StructValue::GetChildren(shredding_types_value);
+				D_ASSERT(StructType::GetChildTypes(struct_type).size() == struct_children.size());
+				for (idx_t i = 0; i < struct_children.size(); i++) {
+					const auto &col_name = StringUtil::Lower(StructType::GetChildName(struct_type, i));
+					auto it = variant_names.find(col_name);
+					if (it == variant_names.end()) {
+						string names;
+						for (const auto &entry : variant_names) {
+							if (!names.empty()) {
+								names += ", ";
+							}
+							names += entry;
+						}
+						if (names.empty()) {
+							throw BinderException("VARIANT by name \"%s\" specified in SHREDDING not found. There are "
+							                      "no VARIANT columns present.",
+							                      col_name);
+						} else {
+							throw BinderException(
+							    "VARIANT by name \"%s\" specified in SHREDDING not found. Consider using "
+							    "WRITE_PARTITION_COLUMNS if this "
+							    "column is a partition column. Available names of VARIANT columns: [%s]",
+							    col_name, names);
+						}
+					}
+					const auto &child_value = struct_children[i];
+					bind_data->shredding_types.children[col_name] = ShreddingType::GetShreddingTypes(child_value);
+				}
 			}
 		} else if (loption == "kv_metadata") {
 			auto &kv_struct = option.second[0];

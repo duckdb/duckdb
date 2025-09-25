@@ -25,6 +25,7 @@ set(PARQUET_EXTENSION_FILES
     parquet_statistics.cpp
     parquet_timestamp.cpp
     parquet_writer.cpp
+    parquet_shredding.cpp
     serialize_parquet.cpp
     zstd_file_system.cpp
     geo_parquet.cpp)

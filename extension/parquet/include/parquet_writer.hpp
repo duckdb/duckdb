@@ -44,19 +44,6 @@ struct PreparedRowGroup {
 	vector<unique_ptr<ColumnWriterState>> states;
 };
 
-struct ShreddingType {
-	static constexpr const auto DUCKDB_SHREDDING = "__duckdb_shredding";
-	ShreddingType();
-	explicit ShreddingType(int32_t shredding_type);
-	ShreddingType Copy() const;
-	bool set;
-	LogicalTypeId shredding_type;
-	case_insensitive_map_t<ShreddingType> child_shredding_types;
-
-	void Serialize(Serializer &serializer) const;
-	static ShreddingType Deserialize(Deserializer &source);
-};
-
 struct ParquetBloomFilterEntry {
 	unique_ptr<ParquetBloomFilter> bloom_filter;
 	idx_t row_group_idx;

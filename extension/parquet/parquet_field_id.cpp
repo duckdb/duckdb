@@ -92,7 +92,6 @@ void FieldID::GenerateFieldIDs(ChildFieldIDs &field_ids, idx_t &field_id, const 
 		vector<string> child_names;
 		vector<LogicalType> child_types;
 		GetChildNamesAndTypes(col_type, child_names, child_types);
-
 		GenerateFieldIDs(inserted.first->second.child_field_ids, field_id, child_names, child_types);
 	}
 }
