@@ -35,29 +35,6 @@ using duckdb_parquet::PageType;
 using ParquetRowGroup = duckdb_parquet::RowGroup;
 using duckdb_parquet::Type;
 
-ChildFieldIDs::ChildFieldIDs() : ids(make_uniq<case_insensitive_map_t<FieldID>>()) {
-}
-
-ChildFieldIDs ChildFieldIDs::Copy() const {
-	ChildFieldIDs result;
-	for (const auto &id : *ids) {
-		result.ids->emplace(id.first, id.second.Copy());
-	}
-	return result;
-}
-
-FieldID::FieldID() : set(false) {
-}
-
-FieldID::FieldID(int32_t field_id_p) : set(true), field_id(field_id_p) {
-}
-
-FieldID FieldID::Copy() const {
-	auto result = set ? FieldID(field_id) : FieldID();
-	result.child_field_ids = child_field_ids.Copy();
-	return result;
-}
-
 class MyTransport : public TTransport {
 public:
 	explicit MyTransport(WriteStream &serializer) : serializer(serializer) {

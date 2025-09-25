@@ -21,6 +21,7 @@
 
 #include "parquet_statistics.hpp"
 #include "column_writer.hpp"
+#include "parquet_field_id.hpp"
 #include "parquet_types.h"
 #include "geo_parquet.hpp"
 #include "writer/parquet_write_stats.hpp"
@@ -43,27 +44,17 @@ struct PreparedRowGroup {
 	vector<unique_ptr<ColumnWriterState>> states;
 };
 
-struct FieldID;
-struct ChildFieldIDs {
-	ChildFieldIDs();
-	ChildFieldIDs Copy() const;
-	unique_ptr<case_insensitive_map_t<FieldID>> ids;
-
-	void Serialize(Serializer &serializer) const;
-	static ChildFieldIDs Deserialize(Deserializer &source);
-};
-
-struct FieldID {
-	static constexpr const auto DUCKDB_FIELD_ID = "__duckdb_field_id";
-	FieldID();
-	explicit FieldID(int32_t field_id);
-	FieldID Copy() const;
+struct ShreddingType {
+	static constexpr const auto DUCKDB_SHREDDING = "__duckdb_shredding";
+	ShreddingType();
+	explicit ShreddingType(int32_t shredding_type);
+	ShreddingType Copy() const;
 	bool set;
-	int32_t field_id;
-	ChildFieldIDs child_field_ids;
+	LogicalTypeId shredding_type;
+	case_insensitive_map_t<ShreddingType> child_shredding_types;
 
 	void Serialize(Serializer &serializer) const;
-	static FieldID Deserialize(Deserializer &source);
+	static ShreddingType Deserialize(Deserializer &source);
 };
 
 struct ParquetBloomFilterEntry {
