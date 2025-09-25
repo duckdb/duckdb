@@ -2,8 +2,8 @@
 # description: Test Top-N Window Elimination Rule
 # group: [optimizer]
 
-#statement ok
-#PRAGMA enable_verification
+statement ok
+PRAGMA enable_verification
 
 statement ok
 CREATE TABLE tbl AS SELECT i % 4 grp, i val_1, CAST(i AS VARCHAR) val_2 FROM range(100) tbl(i)

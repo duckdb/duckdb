@@ -28,7 +28,11 @@ TopNWindowElimination::TopNWindowElimination(ClientContext &context_p, Optimizer
 
 unique_ptr<LogicalOperator> TopNWindowElimination::Optimize(unique_ptr<LogicalOperator> op) {
 	ColumnBindingReplacer replacer;
-	return OptimizeInternal(std::move(op), replacer);
+	op = OptimizeInternal(std::move(op), replacer);
+	if (!replacer.replacement_bindings.empty()) {
+		replacer.VisitOperator(*op);
+	}
+	return op;
 }
 
 unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<LogicalOperator> op,
@@ -37,11 +41,6 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 		// Traverse through query plan to find grouped top-n pattern
 		for (auto &child : op->children) {
 			child = OptimizeInternal(std::move(child), replacer);
-			if (!replacer.replacement_bindings.empty()) {
-				replacer.stop_operator = child;
-				replacer.VisitOperator(*op);
-				replacer = ColumnBindingReplacer();
-			}
 		}
 		return op;
 	}
@@ -82,12 +81,13 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 	auto unnest_struct =
 	    CreateUnnestStructOperator(unnest_info, unnest_list_idx, unnest_struct_idx, generate_row_number);
 	UpdateBindings(window.window_index, unnest_struct_idx, old_bindings, new_bindings, replacer);
+	replacer.stop_operator = unnest_struct.get();
 
 	auto aggregate_child = Optimize(std::move(window.children[0]));
 
-	aggregate->children.push_back(std::move(aggregate_child));
-	unnest_list->children.push_back(std::move(aggregate));
-	unnest_struct->children.push_back(std::move(unnest_list));
+	aggregate->children.push_back(unique_ptr<LogicalOperator>(std::move(aggregate_child)));
+	unnest_list->children.push_back(unique_ptr<LogicalOperator>(std::move(aggregate)));
+	unnest_struct->children.push_back(unique_ptr<LogicalOperator>(std::move(unnest_list)));
 
 	return unnest_struct;
 }
@@ -343,6 +343,7 @@ void TopNWindowElimination::UpdateBindings(const idx_t window_idx, const idx_t n
                                            const vector<ColumnBinding> &old_bindings,
                                            vector<ColumnBinding> &new_bindings, ColumnBindingReplacer &replacer) {
 	D_ASSERT(old_bindings.size() == new_bindings.size());
+	D_ASSERT(replacer.replacement_bindings.empty());
 	replacer.replacement_bindings.reserve(new_bindings.size());
 	set<idx_t> row_id_binding_idxs;
 	idx_t struct_column_count = 0;
