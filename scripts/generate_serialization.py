@@ -53,7 +53,7 @@ def get_file_list():
 
 
 scripts_dir = os.path.dirname(os.path.abspath(__file__))
-version_map_path = scripts_dir + '/../src/storage/version_map.json'
+version_map_path = os.path.join(scripts_dir, '..', 'src', 'storage', 'version_map.json')
 version_map_file = file = open(version_map_path)
 version_map = json.load(version_map_file)
 
@@ -90,17 +90,16 @@ def lookup_serialization_version(version: str):
                 f"Specified version ({current_version}) could not be found in the version_map.json, and it is lower than the last defined version ({last_registered_version})!"
             )
             exit(1)
-
-        if hasattr(lookup_serialization_version, 'latest_version'):
+        if hasattr(versions, 'latest'):
             # We have already mapped a version to 'latest', check that the versions match
-            latest_version = getattr(lookup_serialization_version, 'latest_version')
+            latest_version = getattr(versions, 'latest')
             if current_version != latest_version:
                 print(
-                    f"Found more than one version that is not present in the version_map.json!: {current_version}, {latest_version}"
+                    f"Found more than one version that is not present in the version_map.json!: Current: {current_version}, Latest: {latest_version}"
                 )
                 exit(1)
         else:
-            setattr(lookup_serialization_version, 'latest_version', current_version)
+            setattr(lookup_serialization_version, 'latest', current_version)
         return versions['latest']
     return versions[version]
 

@@ -173,10 +173,6 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 			return std::move(result);
 		}
 	} else {
-		auto replacement_scan_bind_result = BindWithReplacementScan(context, ref);
-		if (replacement_scan_bind_result) {
-			return replacement_scan_bind_result;
-		}
 		// remember that we did not find a CTE
 		if (ref.schema_name.empty() && CTEExists(ref.table_name)) {
 			throw BinderException(
@@ -188,6 +184,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 			    ref.table_name, ref.table_name, ref.table_name);
 		}
 	}
+
 	// not a CTE
 	// extract a table or view from the catalog
 	auto at_clause = BindAtClause(ref.at_clause);
