@@ -184,7 +184,7 @@ SinkFinalizeType PhysicalAsOfJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 			return SinkFinalizeType::NO_OUTPUT_POSSIBLE;
 		}
 	} else {
-		D_ASSERT(gstate.child == 1);
+		D_ASSERT(gstate.child == 0);
 		// Find the first group to sort
 		if (!partition_sink.HasMergeTasks()) {
 			// Empty input!
@@ -456,10 +456,6 @@ AsOfProbeBuffer::AsOfProbeBuffer(ClientContext &context, const PhysicalAsOfJoin 
 void AsOfProbeBuffer::BeginLeftScan(hash_t scan_bin) {
 	auto &gsink = op.sink_state->Cast<AsOfGlobalSinkState>();
 
-	auto &lhs_sink = *gsink.partition_sinks[0];
-	left_group = lhs_sink.bin_groups[scan_bin];
-	lhs_matches = gsink.outer_markers[0][left_group].GetMatches();
-
 	//	Always set right_group too for memory management
 	auto &rhs_sink = *gsink.partition_sinks[1];
 	if (scan_bin < rhs_sink.bin_groups.size()) {
@@ -468,9 +464,19 @@ void AsOfProbeBuffer::BeginLeftScan(hash_t scan_bin) {
 		right_group = rhs_sink.bin_groups.size();
 	}
 
+	auto &lhs_sink = *gsink.partition_sinks[0];
+	left_group = lhs_sink.bin_groups[scan_bin];
+	if (scan_bin < lhs_sink.bin_groups.size()) {
+		left_group = lhs_sink.bin_groups[scan_bin];
+	} else {
+		left_group = lhs_sink.bin_groups.size();
+	}
+
 	if (left_group >= lhs_sink.bin_groups.size()) {
 		return;
 	}
+
+	lhs_matches = gsink.outer_markers[0][left_group].GetMatches();
 
 	auto iterator_comp = ExpressionType::INVALID;
 	switch (op.comparison_type) {
