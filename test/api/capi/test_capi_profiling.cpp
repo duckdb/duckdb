@@ -298,10 +298,9 @@ TEST_CASE("Test profiling with Extra Info enabled", "[capi]") {
 		auto key = duckdb_get_map_key(map, i);
 		REQUIRE(key);
 
-		// continue if not EXTRA_INFO
 		auto key_c_str = duckdb_get_varchar(key);
 		auto key_str = duckdb::string(key_c_str);
-		if (key_str != EnumUtil::ToString(MetricsType::EXTRA_INFO)) {
+		if (key_str == EnumUtil::ToString(MetricsType::EXTRA_INFO)) {
 			auto value = duckdb_get_map_value(map, i);
 			REQUIRE(value);
 			auto value_c_str = duckdb_get_varchar(value);
