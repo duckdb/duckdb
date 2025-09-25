@@ -89,7 +89,7 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 	unnest_list->children.push_back(unique_ptr<LogicalOperator>(std::move(aggregate)));
 	unnest_struct->children.push_back(unique_ptr<LogicalOperator>(std::move(unnest_list)));
 
-	return unnest_struct;
+	return unique_ptr<LogicalOperator>(std::move(unnest_struct));
 }
 
 unique_ptr<LogicalAggregate> TopNWindowElimination::CreateAggregateOperator(vector<unique_ptr<Expression>> children,
