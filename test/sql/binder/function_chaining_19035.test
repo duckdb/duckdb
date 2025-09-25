@@ -1,0 +1,12 @@
+# name: test/sql/binder/duplicate_alias.test
+# description: Duplicate table aliases
+# group: [binder]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+select ['a a ', ' b ', ' cc'].list_transform(lambda x: nullif(trim(x), '')) as trimmed_and_nulled
+
+statement ok
+select ['a a ', ' b ', ' cc'].list_transform(lambda x: x.trim().nullif('')) as trimmed_and_nulled;
