@@ -25,7 +25,8 @@
         "test/sql/pg_catalog/system_functions.test",
         "test/sql/pragma/test_show_tables_temp_views.test",
         "test/sql/show_select/test_describe_all.test",
-        "test/sql/attach/attach_use_rollback.test"
+        "test/sql/attach/attach_use_rollback.test",
+        "test/sql/storage/read_duckdb/read_duckdb_basic.test"
       ]
     },
     {"reason": "Loading from disk is necessary to trigger expected OOM.",
@@ -93,6 +94,12 @@
       "paths": [
         "test/fuzzer/sqlsmith/nullif_map_with_config.test",
         "test/sql/storage/memory/in_memory_compress.test"
+      ]
+    },
+    {
+      "reason": "FIXME: Attempting to checkpoint read-only database.",
+      "paths": [
+        "test/sql/storage/read_duckdb/read_duckdb_index.test"
       ]
     }
   ]

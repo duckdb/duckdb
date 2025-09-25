@@ -195,8 +195,9 @@ void BoundNodeVisitor::VisitBoundQueryNode(BoundQueryNode &node) {
 	switch (node.type) {
 	case QueryNodeType::SET_OPERATION_NODE: {
 		auto &bound_setop = node.Cast<BoundSetOperationNode>();
-		VisitBoundQueryNode(*bound_setop.left);
-		VisitBoundQueryNode(*bound_setop.right);
+		for (auto &child : bound_setop.bound_children) {
+			VisitBoundQueryNode(*child.node);
+		}
 		break;
 	}
 	case QueryNodeType::RECURSIVE_CTE_NODE: {

@@ -53,28 +53,61 @@ optional_ptr<AttachedDatabase> DatabaseManager::GetDatabase(ClientContext &conte
 		return database;
 	}
 	lock_guard<mutex> guard(databases_lock);
+	shared_ptr<AttachedDatabase> db;
 	if (StringUtil::Lower(name) == TEMP_CATALOG) {
-		return meta_transaction.UseDatabase(context.client_data->temporary_objects);
+		db = context.client_data->temporary_objects;
+	} else {
+		db = GetDatabaseInternal(guard, name);
 	}
+	if (!db) {
+		return nullptr;
+	}
+	return meta_transaction.UseDatabase(db);
+}
+
+shared_ptr<AttachedDatabase> DatabaseManager::GetDatabase(const string &name) {
+	lock_guard<mutex> guard(databases_lock);
+	return GetDatabaseInternal(guard, name);
+}
+
+shared_ptr<AttachedDatabase> DatabaseManager::GetDatabaseInternal(const lock_guard<mutex> &, const string &name) {
 	if (StringUtil::Lower(name) == SYSTEM_CATALOG) {
-		return meta_transaction.UseDatabase(system);
+		return system;
 	}
 	auto entry = databases.find(name);
 	if (entry == databases.end()) {
 		// not found
 		return nullptr;
 	}
-	return meta_transaction.UseDatabase(entry->second);
+	return entry->second;
 }
 
 shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &context, AttachInfo &info,
                                                              AttachOptions &options) {
-	auto &config = DBConfig::GetConfig(context);
 	if (options.db_type.empty() || StringUtil::CIEquals(options.db_type, "duckdb")) {
-		if (InsertDatabasePath(info, options) == InsertDatabasePathResult::ALREADY_EXISTS) {
-			return nullptr;
+		while (InsertDatabasePath(info, options) == InsertDatabasePathResult::ALREADY_EXISTS) {
+			// database with this name and path already exists
+			// first check if it exists within this transaction
+			auto &meta_transaction = MetaTransaction::Get(context);
+			auto existing_db = meta_transaction.GetReferencedDatabaseOwning(info.name);
+			if (existing_db) {
+				// it does! return it
+				return existing_db;
+			}
+			// ... but it might not be done attaching yet!
+			// verify the database has actually finished attaching prior to returning
+			lock_guard<mutex> guard(databases_lock);
+			auto entry = databases.find(info.name);
+			if (entry != databases.end()) {
+				// database ACTUALLY exists - return it
+				return entry->second;
+			}
+			if (context.interrupted) {
+				throw InterruptException();
+			}
 		}
 	}
+	auto &config = DBConfig::GetConfig(context);
 	GetDatabaseType(context, info, config, options);
 	if (!options.db_type.empty()) {
 		// we only need to prevent duplicate opening of DuckDB files
@@ -101,6 +134,20 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 	// now create the attached database
 	auto &db = DatabaseInstance::GetDatabase(context);
 	auto attached_db = db.CreateAttachedDatabase(context, info, options);
+
+	//! Initialize the database.
+	if (options.is_main_database) {
+		attached_db->SetInitialDatabase();
+		attached_db->Initialize(context);
+	} else {
+		attached_db->Initialize(context);
+		if (!options.default_table.name.empty()) {
+			attached_db->GetCatalog().SetDefaultTable(options.default_table.schema, options.default_table.name);
+		}
+		attached_db->FinalizeLoad(context);
+	}
+
+	FinalizeAttach(context, info, attached_db);
 	return attached_db;
 }
 

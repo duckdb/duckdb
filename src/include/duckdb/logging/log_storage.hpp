@@ -33,7 +33,7 @@ struct CSVReaderOptions;
 
 //! Logging storage can store entries normalized or denormalized. This enum describes what a single table/file/etc
 //! contains
-enum class LoggingTargetTable {
+enum class LoggingTargetTable : uint8_t {
 	ALL_LOGS,     // Denormalized: log entries consisting of both the full log entry and the context
 	LOG_ENTRIES,  // Normalized: contains only the log entries and a context_id
 	LOG_CONTEXTS, // Normalized: contains only the log contexts
@@ -165,7 +165,7 @@ private:
 	//! Debug option for testing buffering behaviour
 	bool only_flush_on_full_buffer = false;
 	//! The buffers used for each table
-	unordered_map<LoggingTargetTable, unique_ptr<DataChunk>> buffers;
+	map<LoggingTargetTable, unique_ptr<DataChunk>> buffers;
 	//! This flag is set whenever a new context_is written to the entry buffer. It means that the next flush of
 	//! LoggingTargetTable::LOG_ENTRIES also requires a flush of LoggingTargetTable::LOG_CONTEXTS
 	bool flush_contexts_on_next_entry_flush = false;
@@ -218,9 +218,9 @@ private:
 	void InitializeCastChunk(LoggingTargetTable table);
 
 	//! The cast buffers used to cast from the original types to the VARCHAR types ready to write to CSV format
-	unordered_map<LoggingTargetTable, unique_ptr<DataChunk>> cast_buffers;
+	map<LoggingTargetTable, unique_ptr<DataChunk>> cast_buffers;
 	//! The writers to be registered by child classes
-	unordered_map<LoggingTargetTable, unique_ptr<CSVWriter>> writers;
+	map<LoggingTargetTable, unique_ptr<CSVWriter>> writers;
 
 	//! CSV Options to initialize the CSVWriters with. TODO: cleanup, this is now a little bit of a mixed bag of
 	//! settings
@@ -302,7 +302,7 @@ private:
 	};
 
 	//! The table info per table
-	unordered_map<LoggingTargetTable, TableWriter> tables;
+	map<LoggingTargetTable, TableWriter> tables;
 
 	//! Base path to generate the file paths from
 	string base_path;
@@ -349,7 +349,7 @@ private:
 	//! Helper function to get the buffer
 	ColumnDataCollection &GetBuffer(LoggingTargetTable table) const;
 
-	unordered_map<LoggingTargetTable, unique_ptr<ColumnDataCollection>> log_storage_buffers;
+	map<LoggingTargetTable, unique_ptr<ColumnDataCollection>> log_storage_buffers;
 };
 
 } // namespace duckdb

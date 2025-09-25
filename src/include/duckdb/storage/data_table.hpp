@@ -42,6 +42,7 @@ struct TableDeleteState;
 struct ConstraintState;
 struct TableUpdateState;
 enum class VerifyExistenceType : uint8_t;
+struct OptimisticWriteCollection;
 
 enum class DataTableVersion {
 	MAIN_TABLE, // this is the newest version of the table - it has not been altered or dropped
@@ -124,12 +125,12 @@ public:
 	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints,
 	                 optional_ptr<const vector<LogicalIndex>> column_ids);
 	//! Merge a row group collection into the transaction-local storage
-	void LocalMerge(ClientContext &context, RowGroupCollection &collection);
+	void LocalMerge(ClientContext &context, OptimisticWriteCollection &collection);
 	//! Create an optimistic row group collection for this table. Used for optimistically writing parallel appends.
 	//! Returns the index into the optimistic_collections vector for newly created collection.
-	PhysicalIndex CreateOptimisticCollection(ClientContext &context, unique_ptr<RowGroupCollection> collection);
+	PhysicalIndex CreateOptimisticCollection(ClientContext &context, unique_ptr<OptimisticWriteCollection> collection);
 	//! Returns the optimistic row group collection corresponding to the index.
-	RowGroupCollection &GetOptimisticCollection(ClientContext &context, const PhysicalIndex collection_index);
+	OptimisticWriteCollection &GetOptimisticCollection(ClientContext &context, const PhysicalIndex collection_index);
 	//! Resets the optimistic row group collection corresponding to the index.
 	void ResetOptimisticCollection(ClientContext &context, const PhysicalIndex collection_index);
 	//! Returns the optimistic writer of the corresponding local table.
@@ -258,6 +259,7 @@ public:
 	void VacuumIndexes();
 	void VerifyIndexBuffers();
 	void CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count);
+	void Destroy();
 
 	string GetTableName() const;
 	void SetTableName(string new_name);

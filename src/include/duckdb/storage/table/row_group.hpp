@@ -149,6 +149,8 @@ public:
 	//! Delete the given set of rows in the version manager
 	idx_t Delete(TransactionData transaction, DataTable &table, row_t *row_ids, idx_t count);
 
+	static vector<RowGroupWriteData> WriteToDisk(RowGroupWriteInfo &info,
+	                                             const vector<reference<RowGroup>> &row_groups);
 	RowGroupWriteData WriteToDisk(RowGroupWriteInfo &info);
 	//! Returns the number of committed rows (count - committed deletes)
 	idx_t GetCommittedRowCount();
@@ -164,7 +166,7 @@ public:
 	            const vector<PhysicalIndex> &column_ids);
 	//! Update a single column; corresponds to DataTable::UpdateColumn
 	//! This method should only be called from the WAL
-	void UpdateColumn(TransactionData transaction, DataChunk &updates, Vector &row_ids,
+	void UpdateColumn(TransactionData transaction, DataChunk &updates, Vector &row_ids, idx_t offset, idx_t count,
 	                  const vector<column_t> &column_path);
 
 	void MergeStatistics(idx_t column_idx, const BaseStatistics &other);

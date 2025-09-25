@@ -132,8 +132,8 @@ void RowGroupCollection::AppendRowGroup(SegmentLock &l, idx_t start_row) {
 	requires_new_row_group = false;
 }
 
-RowGroup *RowGroupCollection::GetRowGroup(int64_t index) {
-	return (RowGroup *)row_groups->GetSegmentByIndex(index);
+optional_ptr<RowGroup> RowGroupCollection::GetRowGroup(int64_t index) {
+	return row_groups->GetSegmentByIndex(index);
 }
 
 void RowGroupCollection::Verify() {
@@ -622,30 +622,36 @@ idx_t RowGroupCollection::Delete(TransactionData transaction, DataTable &table, 
 //===--------------------------------------------------------------------===//
 // Update
 //===--------------------------------------------------------------------===//
+optional_ptr<RowGroup> RowGroupCollection::NextUpdateRowGroup(row_t *ids, idx_t &pos, idx_t count) const {
+	auto row_group = row_groups->GetSegment(UnsafeNumericCast<idx_t>(ids[pos]));
+
+	row_t base_id =
+	    UnsafeNumericCast<row_t>(row_group->start + ((UnsafeNumericCast<idx_t>(ids[pos]) - row_group->start) /
+	                                                 STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE));
+	auto max_id =
+	    MinValue<row_t>(base_id + STANDARD_VECTOR_SIZE, UnsafeNumericCast<row_t>(row_group->start + row_group->count));
+	for (pos++; pos < count; pos++) {
+		D_ASSERT(ids[pos] >= 0);
+		// check if this id still belongs to this vector in this row group
+		if (ids[pos] < base_id) {
+			// id is before vector start -> it does not
+			break;
+		}
+		if (ids[pos] >= max_id) {
+			// id is after the maximum id in this vector -> it does not
+			break;
+		}
+	}
+	return row_group;
+}
+
 void RowGroupCollection::Update(TransactionData transaction, row_t *ids, const vector<PhysicalIndex> &column_ids,
                                 DataChunk &updates) {
 	D_ASSERT(updates.size() >= 1);
 	idx_t pos = 0;
 	do {
 		idx_t start = pos;
-		auto row_group = row_groups->GetSegment(UnsafeNumericCast<idx_t>(ids[pos]));
-		row_t base_id =
-		    UnsafeNumericCast<row_t>(row_group->start + ((UnsafeNumericCast<idx_t>(ids[pos]) - row_group->start) /
-		                                                 STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE));
-		auto max_id = MinValue<row_t>(base_id + STANDARD_VECTOR_SIZE,
-		                              UnsafeNumericCast<row_t>(row_group->start + row_group->count));
-		for (pos++; pos < updates.size(); pos++) {
-			D_ASSERT(ids[pos] >= 0);
-			// check if this id still belongs to this vector in this row group
-			if (ids[pos] < base_id) {
-				// id is before vector start -> it does not
-				break;
-			}
-			if (ids[pos] >= max_id) {
-				// id is after the maximum id in this vector -> it does not
-				break;
-			}
-		}
+		auto row_group = NextUpdateRowGroup(ids, pos, updates.size());
 		row_group->Update(transaction, updates, ids, start, pos - start, column_ids);
 
 		auto l = stats.GetLock();
@@ -760,17 +766,18 @@ void RowGroupCollection::RemoveFromIndexes(TableIndexList &indexes, Vector &row_
 
 void RowGroupCollection::UpdateColumn(TransactionData transaction, Vector &row_ids, const vector<column_t> &column_path,
                                       DataChunk &updates) {
-	auto first_id = FlatVector::GetValue<row_t>(row_ids, 0);
-	if (first_id >= MAX_ROW_ID) {
-		throw NotImplementedException("Cannot update a column-path on transaction local data");
-	}
-	// find the row_group this id belongs to
-	auto primary_column_idx = column_path[0];
-	auto row_group = row_groups->GetSegment(UnsafeNumericCast<idx_t>(first_id));
-	row_group->UpdateColumn(transaction, updates, row_ids, column_path);
+	D_ASSERT(updates.size() >= 1);
+	auto ids = FlatVector::GetData<row_t>(row_ids);
+	idx_t pos = 0;
+	do {
+		idx_t start = pos;
+		auto row_group = NextUpdateRowGroup(ids, pos, updates.size());
+		row_group->UpdateColumn(transaction, updates, row_ids, start, pos - start, column_path);
 
-	auto lock = stats.GetLock();
-	row_group->MergeIntoStatistics(primary_column_idx, stats.GetStats(*lock, primary_column_idx).Statistics());
+		auto lock = stats.GetLock();
+		auto primary_column_idx = column_path[0];
+		row_group->MergeIntoStatistics(primary_column_idx, stats.GetStats(*lock, primary_column_idx).Statistics());
+	} while (pos < updates.size());
 }
 
 //===--------------------------------------------------------------------===//
@@ -1001,8 +1008,8 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 	}
 	idx_t merge_rows;
 	idx_t next_idx = 0;
-	idx_t merge_count;
-	idx_t target_count;
+	idx_t merge_count = 0;
+	idx_t target_count = 0;
 	bool perform_merge = false;
 	// check if we can merge row groups adjacent to the current segment_idx
 	// we try merging row groups into batches of 1-3 row groups
@@ -1054,6 +1061,8 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 		return false;
 	}
 	// schedule the vacuum task
+	DUCKDB_LOG(checkpoint_state.writer.GetDatabase(), CheckpointLogType, GetAttached(), *info, segment_idx, merge_count,
+	           target_count, merge_rows, state.row_start);
 	auto vacuum_task = make_uniq<VacuumTask>(checkpoint_state, state, segment_idx, merge_count, target_count,
 	                                         merge_rows, state.row_start);
 	checkpoint_state.executor->ScheduleTask(std::move(vacuum_task));
@@ -1100,6 +1109,8 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			// schedule a checkpoint task for this row group
 			entry.node->MoveToCollection(*this, vacuum_state.row_start);
 			if (writer.GetCheckpointType() != CheckpointType::VACUUM_ONLY) {
+				DUCKDB_LOG(checkpoint_state.writer.GetDatabase(), CheckpointLogType, GetAttached(), *info, segment_idx,
+				           *entry.node);
 				auto checkpoint_task = GetCheckpointTask(checkpoint_state, segment_idx);
 				checkpoint_state.executor->ScheduleTask(std::move(checkpoint_task));
 			}
@@ -1176,6 +1187,36 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	total_rows = new_total_rows;
 	l.Release();
 	Verify();
+}
+
+//===--------------------------------------------------------------------===//
+// Destroy
+//===--------------------------------------------------------------------===//
+
+class DestroyTask : public BaseExecutorTask {
+public:
+	DestroyTask(TaskExecutor &executor, unique_ptr<RowGroup> row_group_p)
+	    : BaseExecutorTask(executor), row_group(std::move(row_group_p)) {
+	}
+
+	void ExecuteTask() override {
+		row_group.reset();
+	}
+
+private:
+	unique_ptr<RowGroup> row_group;
+};
+
+void RowGroupCollection::Destroy() {
+	auto l = row_groups->Lock();
+	auto &segments = row_groups->ReferenceLoadedSegmentsMutable(l);
+
+	TaskExecutor executor(TaskScheduler::GetScheduler(GetAttached().GetDatabase()));
+	for (auto &segment : segments) {
+		auto destroy_task = make_uniq<DestroyTask>(executor, std::move(segment.node));
+		executor.ScheduleTask(std::move(destroy_task));
+	}
+	executor.WorkOnTasks();
 }
 
 //===--------------------------------------------------------------------===//
