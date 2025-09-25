@@ -918,36 +918,60 @@ CompressionType ColumnCheckpointInfo::GetCompressionType() {
 	return info.compression_types[column_idx];
 }
 
-RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriteInfo &info) {
-	RowGroupWriteData result;
-	result.states.reserve(columns.size());
-	result.statistics.reserve(columns.size());
+vector<RowGroupWriteData> RowGroup::WriteToDisk(RowGroupWriteInfo &info,
+                                                const vector<reference<RowGroup>> &row_groups) {
+	vector<RowGroupWriteData> result;
+	if (row_groups.empty()) {
+		return result;
+	}
 
-	// Checkpoint the individual columns of the row group
-	// Here we're iterating over columns. Each column can have multiple segments.
+	idx_t column_count = row_groups[0].get().GetColumnCount();
+	for (auto &row_group : row_groups) {
+		D_ASSERT(column_count == row_group.get().GetColumnCount());
+		RowGroupWriteData write_data;
+		write_data.states.reserve(column_count);
+		write_data.statistics.reserve(column_count);
+		result.push_back(std::move(write_data));
+	}
+
+	// Checkpoint the row groups
+	// In order to co-locate columns across different row groups, we write column-at-a-time
+	// i.e. we first write column #0 of all row groups, then column #1, ...
+
+	// Each column can have multiple segments.
 	// (Some columns will be wider than others, and require different numbers
 	// of blocks to encode.) Segments cannot span blocks.
 	//
 	// Some of these columns are composite (list, struct). The data is written
 	// first sequentially, and the pointers are written later, so that the
 	// pointers all end up densely packed, and thus more cache-friendly.
-	for (idx_t column_idx = 0; column_idx < GetColumnCount(); column_idx++) {
-		auto &column = GetColumn(column_idx);
-		if (column.start != start) {
-			throw InternalException("RowGroup::WriteToDisk - child-column is unaligned with row group");
+	for (idx_t column_idx = 0; column_idx < column_count; column_idx++) {
+		for (idx_t row_group_idx = 0; row_group_idx < row_groups.size(); row_group_idx++) {
+			auto &row_group = row_groups[row_group_idx].get();
+			auto &row_group_write_data = result[row_group_idx];
+			auto &column = row_group.GetColumn(column_idx);
+			if (column.start != row_group.start) {
+				throw InternalException("RowGroup::WriteToDisk - child-column is unaligned with row group");
+			}
+			ColumnCheckpointInfo checkpoint_info(info, column_idx);
+			auto checkpoint_state = column.Checkpoint(row_group, checkpoint_info);
+			D_ASSERT(checkpoint_state);
+
+			auto stats = checkpoint_state->GetStatistics();
+			D_ASSERT(stats);
+
+			row_group_write_data.statistics.push_back(stats->Copy());
+			row_group_write_data.states.push_back(std::move(checkpoint_state));
 		}
-		ColumnCheckpointInfo checkpoint_info(info, column_idx);
-		auto checkpoint_state = column.Checkpoint(*this, checkpoint_info);
-		D_ASSERT(checkpoint_state);
-
-		auto stats = checkpoint_state->GetStatistics();
-		D_ASSERT(stats);
-
-		result.statistics.push_back(stats->Copy());
-		result.states.push_back(std::move(checkpoint_state));
 	}
-	D_ASSERT(result.states.size() == result.statistics.size());
 	return result;
+}
+
+RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriteInfo &info) {
+	vector<reference<RowGroup>> row_groups;
+	row_groups.push_back(*this);
+	auto result = WriteToDisk(info, row_groups);
+	return std::move(result[0]);
 }
 
 idx_t RowGroup::GetCommittedRowCount() {
