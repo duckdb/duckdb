@@ -30,7 +30,7 @@ jobs:
           if [ $state != "active" ]; then
               echo "Not an org member (or token lacks read:org)"; exit 1
           fi
-          
+
   trigger-rerun:
     needs: 
       - approved
@@ -38,19 +38,21 @@ jobs:
     steps:
       - name: Approve all waiting runs for this PR
         run: |
+          # exit on error, unset vars are errros, show error message from pipe
+          set -euo pipefail
+
           # get all waiting runs for PR
           gh api -H "X-GitHub-Api-Version: 2022-11-28" \
-            "/repos/${{ env.REPO }}/actions/runs?event=pull_request&per_page=100" --paginate \
-            | jq -r --argjson pr "$PR" '
+            "/repos/zul8ha/demo-repository/actions/runs?event=pull_request&per_page=100" --paginate \
+          | jq -r --argjson pr "$PR" '
                 .workflow_runs[]
                 | select(.head_repository.fork == true and any(.pull_requests[]?; .number == $pr))
                 | .id
-            '
-          # rerun them
+              ' \
           | while read -r RUN_ID; do
-            [ -z "$RUN_ID" ] && continue
-             echo "Approving run $RUN_ID"
-             gh api -X POST -H "X-GitHub-Api-Version: 2022-11-28" \
-              "repos/${{ env.REPO }}/actions/runs/$RUN_ID/approve" \
-            || echo "Skip $RUN_ID: already approved or not awaiting approval anymore"
-          done
+              [ -z "$RUN_ID" ] && continue
+              echo "Approving run $RUN_ID"
+              gh api -X POST -H "X-GitHub-Api-Version: 2022-11-28" \
+                "repos/zul8ha/demo-repository/actions/runs/$RUN_ID/approve" \
+              || echo "Skip $RUN_ID: already approved or not awaiting approval anymore"
+            done
