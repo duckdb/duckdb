@@ -1,0 +1,31 @@
+diff --git a/src/storage/mysql_execute_query.cpp b/src/storage/mysql_execute_query.cpp
+index 3bae886..892cbc0 100644
+--- a/src/storage/mysql_execute_query.cpp
++++ b/src/storage/mysql_execute_query.cpp
+@@ -87,7 +87,7 @@ string ExtractFilters(PhysicalOperator &child, const string &statement) {
+ 	// in the planning process to convert this into a SQL statement
+ 	if (child.type == PhysicalOperatorType::FILTER) {
+ 		auto &filter = child.Cast<PhysicalFilter>();
+-		auto result = ExtractFilters(child.children[0], statement);
++		auto result = ExtractFilters(child.children.getAt(0), statement);
+ 		auto filter_str = filter.expression->ToString();
+ 		if (result.empty()) {
+ 			return filter_str;
+@@ -108,7 +108,7 @@ string ExtractFilters(PhysicalOperator &child, const string &statement) {
+ 				                              "are supported in the MySQL connector");
+ 			}
+ 		}
+-		return ExtractFilters(child.children[0], statement);
++		return ExtractFilters(child.children.getAt(0), statement);
+ 	} else if (child.type == PhysicalOperatorType::TABLE_SCAN) {
+ 		auto &table_scan = child.Cast<PhysicalTableScan>();
+ 		if (!table_scan.table_filters) {
+@@ -206,7 +206,7 @@ string ConstructUpdateStatement(LogicalUpdate &op, PhysicalOperator &child) {
+ 		}
+ 	}
+ 	result += " ";
+-	auto filters = ExtractFilters(child.children[0], "UPDATE");
++	auto filters = ExtractFilters(child.children.getAt(0), "UPDATE");
+ 	if (!filters.empty()) {
+ 		result += " WHERE " + filters;
+ 	}
