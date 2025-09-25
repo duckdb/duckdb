@@ -347,11 +347,8 @@ TEST_CASE("Test fetch API not to completion", "[api]") {
 	auto result = conn->SendQuery("SELECT 42");
 	// close the connection
 	conn.reset();
-	// now try to fetch a chunk, this should not return a nullptr
-	auto chunk = result->Fetch();
-	REQUIRE(chunk);
-	// Only if we would call Fetch again would we Close the QueryResult
-	// this is testing that it can get cleaned up without this.
+	// now try to fetch a chunk, this should throw an exception that the connection has been closed
+	REQUIRE_THROWS(result->Fetch());
 
 	db.reset();
 }

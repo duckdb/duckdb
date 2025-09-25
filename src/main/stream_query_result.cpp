@@ -35,7 +35,7 @@ StreamQueryResult::LockContextResult StreamQueryResult::LockContext(shared_ptr<C
 	LockContextResult result;
 	result.context = context ? std::move(context) : buffered_data->GetContext();
 	if (!result.context) {
-		string error_str = "Attempting to execute an unsuccessful or closed pending query result.";
+		string error_str = "Attempting to execute an unsuccessful or closed pending query result. ";
 		error_str += "Hint: query results are closed upon closing the corresponding connection.";
 		if (HasError()) {
 			error_str += StringUtil::Format("\nError: %s", GetError());
@@ -147,16 +147,18 @@ unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
 	if (HasError()) {
 		return make_uniq<MaterializedQueryResult>(GetErrorObject());
 	}
-	unique_ptr<ColumnDataCollection> collection;
+
+	shared_ptr<ManagedQueryResult> managed_result;
 	{
 		auto lock = LockContext();
 		// Use the DatabaseInstance BufferManager because the query result can outlive the ClientContext
-		auto &buffer_manager = BufferManager::GetBufferManager(*lock.context->db);
-		collection = make_uniq<ColumnDataCollection>(buffer_manager, types);
+		auto collection = make_uniq<ColumnDataCollection>(BufferManager::GetBufferManager(*lock.context->db), types);
+		managed_result = QueryResultManager::Get(*lock.context).Add(std::move(collection));
 	}
+	auto &collection = managed_result->Collection();
 
 	ColumnDataAppendState append_state;
-	collection->InitializeAppend(append_state);
+	collection.InitializeAppend(append_state);
 	while (true) {
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
 		auto chunk = AlternativeFetch(*this);
@@ -166,15 +168,7 @@ unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
 		if (!chunk || chunk->size() == 0) {
 			break;
 		}
-		collection->Append(append_state, *chunk);
-	}
-	// Clear these so that the handles are destroyed before "context" goes out of scope
-	append_state.current_chunk_state.handles.clear();
-
-	shared_ptr<ManagedQueryResult> managed_result;
-	{
-		auto lock = LockContext();
-		managed_result = QueryResultManager::Get(*lock.context).Add(std::move(collection));
+		collection.Append(append_state, *chunk);
 	}
 	auto result = make_uniq<MaterializedQueryResult>(statement_type, properties, names, std::move(managed_result),
 	                                                 client_properties);
