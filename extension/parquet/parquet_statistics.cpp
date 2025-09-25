@@ -395,7 +395,9 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 		}
 		break;
 	case LogicalTypeId::VARCHAR: {
-		auto string_stats = StringStats::CreateEmpty(type);
+		const auto have_stats = (parquet_stats.__isset.min_value || parquet_stats.__isset.min) &&
+		                        (parquet_stats.__isset.max_value || parquet_stats.__isset.max);
+		auto string_stats = have_stats ? StringStats::CreateEmpty(type) : StringStats::CreateUnknown(type);
 		if (parquet_stats.__isset.min_value) {
 			StringColumnReader::VerifyString(parquet_stats.min_value.c_str(), parquet_stats.min_value.size(), true);
 			StringStats::Update(string_stats, parquet_stats.min_value);
