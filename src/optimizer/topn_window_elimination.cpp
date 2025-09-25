@@ -147,10 +147,11 @@ unique_ptr<LogicalUnnest> TopNWindowElimination::CreateUnnestListOperator(const 
 	if (include_row_number) {
 		// Create unnest(generate_series(1, array_length(column_ref, 1))) function to generate row ids
 		FunctionBinder function_binder(context);
+		auto &catalog = Catalog::GetSystemCatalog(context);
 
 		// array_length
-		auto &array_length_entry = Catalog::GetSystemCatalog(context).GetEntry<ScalarFunctionCatalogEntry>(
-		    context, DEFAULT_SCHEMA, "array_length");
+		auto &array_length_entry =
+		    catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "array_length");
 		vector<unique_ptr<Expression>> array_length_exprs;
 		array_length_exprs.push_back(
 		    make_uniq<BoundColumnRefExpression>(LogicalType::LIST(struct_type), ColumnBinding(aggregate_idx, 0)));
@@ -162,8 +163,8 @@ unique_ptr<LogicalUnnest> TopNWindowElimination::CreateUnnestListOperator(const 
 		    function_binder.BindScalarFunction(array_length_fun, std::move(array_length_exprs));
 
 		// generate_series
-		auto &generate_series_entry = Catalog::GetSystemCatalog(context).GetEntry<ScalarFunctionCatalogEntry>(
-		    context, DEFAULT_SCHEMA, "generate_series");
+		auto &generate_series_entry =
+		    catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "generate_series");
 
 		vector<unique_ptr<Expression>> generate_series_exprs;
 		generate_series_exprs.push_back(make_uniq<BoundConstantExpression>(1));
@@ -189,11 +190,16 @@ TopNWindowElimination::CreateUnnestStructOperator(const child_list_t<LogicalType
                                                   const idx_t unnest_list_idx, const idx_t table_idx,
                                                   const bool include_row_number) const {
 	FunctionBinder function_binder(context);
+	const auto input_struct_type = LogicalType::STRUCT(input_types);
+
+	auto &catalog = Catalog::GetSystemCatalog(context);
+	auto &struct_extract_entry =
+	    catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "struct_extract");
+	const auto struct_extract_fun =
+	    struct_extract_entry.functions.GetFunctionByArguments(context, {input_struct_type, LogicalType::VARCHAR});
 
 	vector<unique_ptr<Expression>> unnest_struct_exprs;
 	unnest_struct_exprs.reserve(input_types.size());
-	const auto struct_extract_fun = StructExtractFun::GetFunctions().GetFunctionByOffset(0);
-	const auto input_struct_type = LogicalType::STRUCT(input_types);
 
 	for (idx_t i = 0; i < input_types.size(); i++) {
 		const auto &type = input_types[i];

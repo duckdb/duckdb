@@ -6,6 +6,9 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+statement ok
 CREATE TABLE tbl AS SELECT i % 4 grp, i val_1, CAST(i AS VARCHAR) val_2 FROM range(100) tbl(i)
 
 # Window functions
@@ -15,12 +18,22 @@ SELECT * FROM (
 	FROM tbl
 	QUALIFY rn <= 1
 )
-ORDER BY grp
+ORDER BY ALL
 ----
 1	0	96	96
 1	1	97	97
 1	2	98	98
 1	3	99	99
+
+query II
+EXPLAIN SELECT * FROM (
+	SELECT row_number() OVER (PARTITION BY grp ORDER BY val_1 DESC) as rn, *
+	FROM tbl
+	QUALIFY rn <= 1
+)
+ORDER BY ALL
+----
+logical_opt	<!REGEX>:.*FILTER.*WINDOW.*
 
 query III
 SELECT * EXCLUDE (rn) FROM (
@@ -28,7 +41,7 @@ SELECT * EXCLUDE (rn) FROM (
 	FROM tbl
 	QUALIFY rn <= 1
 )
-ORDER BY grp
+ORDER BY ALL
 ----
 0	96	96
 1	97	97
@@ -59,7 +72,7 @@ SELECT * FROM (
 	WHERE val_2 < '50'
 	QUALIFY rn <= 1
 )
-ORDER BY grp
+ORDER BY ALL
 ----
 1	0	48	48
 1	1	49	49
@@ -91,7 +104,7 @@ SELECT * FROM (
 	FROM tbl
 	QUALIFY rn <= 1
 )
-ORDER BY grp
+ORDER BY ALL
 ----
 1	0	0	0
 1	1	1	1
@@ -99,3 +112,135 @@ ORDER BY grp
 1	3	3	3
 
 # Lateral joins
+query III
+SELECT t2.*
+FROM (
+	SELECT DISTINCT(grp)
+	FROM tbl
+) t1
+INNER JOIN LATERAL (
+    SELECT *
+    FROM tbl t2
+    WHERE t1.grp = t2.grp
+    ORDER BY val_1 DESC
+    LIMIT 1
+) t2 ON true
+ORDER BY ALL
+----
+0	96	96
+1	97	97
+2	98	98
+3	99	99
+
+query III
+SELECT t2.*
+FROM (
+	SELECT DISTINCT(grp)
+	FROM tbl
+) t1
+INNER JOIN LATERAL (
+    SELECT *
+    FROM tbl t2
+    WHERE t1.grp = t2.grp
+    ORDER BY val_1 DESC
+    LIMIT 2
+) t2 ON true
+ORDER BY ALL
+----
+0	92	92
+0	96	96
+1	93	93
+1	97	97
+2	94	94
+2	98	98
+3	95	95
+3	99	99
+
+query III
+SELECT t2.*
+FROM (
+	SELECT DISTINCT(grp)
+	FROM tbl
+) t1
+INNER JOIN LATERAL (
+    SELECT *
+    FROM tbl t2
+    WHERE t1.grp = t2.grp
+    ORDER BY val_1 ASC
+    LIMIT 1
+) t2 ON true
+ORDER BY ALL
+----
+0	0	0
+1	1	1
+2	2	2
+3	3	3
+
+query II
+EXPLAIN SELECT t1.*
+FROM tbl t1
+INNER JOIN LATERAL (
+    SELECT *
+    FROM tbl t2
+    WHERE t1.grp = t2.grp
+    ORDER BY val_1 DESC
+    LIMIT 1
+) b ON true
+----
+logical_opt	<!REGEX>:.*FILTER.*WINDOW.*
+
+# Vector functions
+
+# Set threads to 1 for reproducible results
+statement ok
+SET threads TO 1
+
+statement ok
+CREATE TABLE vectors AS
+SELECT [x,y,z] AS vec, row_number() OVER () AS id
+FROM range(0,10) r(x), range(0,10) rr(y), range(0, 10) rrr(z);
+
+statement ok
+CREATE OR REPLACE TABLE with_optimizer AS SELECT * EXCLUDE (rn)
+FROM (SELECT *, list_distance(vec, [5,5,5]) AS dist, row_number() over (ORDER BY dist ASC) as rn FROM vectors)
+WHERE rn <= 5;
+
+statement ok
+set disabled_optimizers = 'top_n_window_elimination'
+
+statement ok
+CREATE OR REPLACE TABLE without_optimizer AS SELECT * EXCLUDE (rn)
+FROM (SELECT *, list_distance(vec, [5,5,5]) AS dist, row_number() over (ORDER BY dist ASC) as rn FROM vectors)
+WHERE rn <= 5;
+
+statement ok
+set disabled_optimizers = ''
+
+query III
+SELECT * FROM (FROM with_optimizer) EXCEPT (FROM without_optimizer);
+----
+
+statement ok
+CREATE OR REPLACE TABLE with_optimizer AS SELECT a.id, a.vec, neighbor.id as nbr_id, neighbor.vec as nbr_vec
+FROM vectors as a, LATERAL (
+	SELECT *, b.id
+	FROM vectors as b
+	ORDER BY list_distance(a.vec, b.vec) LIMIT 3
+) as neighbor
+ORDER BY a.id, list_distance(a.vec, neighbor.vec);
+
+statement ok
+set disabled_optimizers = 'top_n_window_elimination'
+
+statement ok
+CREATE OR REPLACE TABLE without_optimizer AS SELECT a.id, a.vec, neighbor.id as nbr_id, neighbor.vec as nbr_vec
+FROM vectors as a, LATERAL (
+	SELECT *, b.id
+	FROM vectors as b
+	ORDER BY list_distance(a.vec, b.vec) LIMIT 3
+) as neighbor
+ORDER BY a.id, list_distance(a.vec, neighbor.vec);
+
+query IIII
+SELECT * FROM (FROM with_optimizer) EXCEPT (FROM without_optimizer);
+----
