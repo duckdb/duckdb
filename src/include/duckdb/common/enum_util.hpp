@@ -78,6 +78,8 @@ enum class ArrowTypeInfoType : uint8_t;
 
 enum class ArrowVariableSizeType : uint8_t;
 
+enum class BatchedDataCollectionBufferManagerType : uint8_t;
+
 enum class BinderType : uint8_t;
 
 enum class BindingMode : uint8_t;
@@ -515,6 +517,9 @@ const char* EnumUtil::ToChars<ArrowTypeInfoType>(ArrowTypeInfoType value);
 
 template<>
 const char* EnumUtil::ToChars<ArrowVariableSizeType>(ArrowVariableSizeType value);
+
+template<>
+const char* EnumUtil::ToChars<BatchedDataCollectionBufferManagerType>(BatchedDataCollectionBufferManagerType value);
 
 template<>
 const char* EnumUtil::ToChars<BinderType>(BinderType value);
@@ -1137,6 +1142,9 @@ ArrowTypeInfoType EnumUtil::FromString<ArrowTypeInfoType>(const char *value);
 
 template<>
 ArrowVariableSizeType EnumUtil::FromString<ArrowVariableSizeType>(const char *value);
+
+template<>
+BatchedDataCollectionBufferManagerType EnumUtil::FromString<BatchedDataCollectionBufferManagerType>(const char *value);
 
 template<>
 BinderType EnumUtil::FromString<BinderType>(const char *value);
