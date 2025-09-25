@@ -529,6 +529,24 @@ static void CreateValues(UnifiedVariantVectorData &variant, Vector &value, idx_t
 	}
 }
 
+namespace {
+
+struct ShreddingState {
+public:
+	explicit ShreddingState(idx_t total_count) : shredded_sel(total_count), values_index_sel(total_count) {
+	}
+
+public:
+	//! row that is shredded
+	SelectionVector shredded_sel;
+	//! 'values_index' of the shredded value
+	SelectionVector values_index_sel;
+	//! The amount of rows that are shredded on
+	idx_t count = 0;
+};
+
+} // namespace
+
 static void WriteVariantValues(UnifiedVariantVectorData &variant, Vector &result, idx_t count) {
 	optional_ptr<Vector> value;
 	optional_ptr<Vector> typed_value;
