@@ -173,7 +173,7 @@ ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &quer
 		// test with a random width
 		config.max_width = random.NextRandomInteger() % 500;
 		BoxRenderer renderer(config);
-		renderer.ToString(*this, original->materialized_result->names, original->materialized_result->Collection());
+		renderer.ToString(*this, original->materialized_result->names, original->materialized_result->Pin());
 #endif
 	}
 

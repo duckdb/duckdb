@@ -3,17 +3,16 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/common/box_renderer.hpp"
-#include "duckdb/main/query_result_manager.hpp"
+#include "duckdb/main/result_set_manager.hpp"
 
 namespace duckdb {
 
 MaterializedQueryResult::MaterializedQueryResult(StatementType statement_type, StatementProperties properties,
-                                                 vector<string> names_p,
-                                                 shared_ptr<ManagedQueryResult> managed_result_p,
+                                                 vector<string> names_p, shared_ptr<ManagedResultSet> result_set_p,
                                                  ClientProperties client_properties)
     : QueryResult(QueryResultType::MATERIALIZED_RESULT, statement_type, std::move(properties),
-                  managed_result_p->Collection().Types(), std::move(names_p), std::move(client_properties)),
-      managed_result(std::move(managed_result_p)), scan_initialized(false) {
+                  result_set_p->Pin()->collection.Types(), std::move(names_p), std::move(client_properties)),
+      result_set(std::move(result_set_p)), scan_initialized(false) {
 }
 
 MaterializedQueryResult::MaterializedQueryResult(ErrorData error)
@@ -24,7 +23,8 @@ string MaterializedQueryResult::ToString() {
 	string result;
 	if (success) {
 		result = HeaderToString();
-		auto &collection = Collection();
+		auto pinned_result_set = Pin();
+		auto &collection = pinned_result_set->collection;
 		result += "[ Rows: " + to_string(collection.Count()) + "]\n";
 		for (auto &row : collection.Rows()) {
 			for (idx_t col_idx = 0; col_idx < collection.ColumnCount(); col_idx++) {
@@ -47,26 +47,32 @@ string MaterializedQueryResult::ToBox(ClientContext &context, const BoxRendererC
 	if (!success) {
 		return GetError() + "\n";
 	}
-	if (!HasCollection()) {
+	if (!HasManagedResult()) {
 		return "Internal error - result was successful but there was no collection";
 	}
+	auto pinned_result_set = Pin();
 	BoxRenderer renderer(config);
-	return renderer.ToString(context, names, Collection());
+	return renderer.ToString(context, names, pinned_result_set->collection);
 }
 
 Value MaterializedQueryResult::GetValue(idx_t column, idx_t index) {
+	auto pinned_result_set = Pin();
 	if (!row_collection) {
-		row_collection = make_uniq<ColumnDataRowCollection>(Collection().GetRows());
+		row_collection = make_uniq<ColumnDataRowCollection>(pinned_result_set->collection.GetRows());
 	}
 	return row_collection->GetValue(column, index);
 }
 
 idx_t MaterializedQueryResult::RowCount() const {
-	return HasCollection() ? Collection().Count() : 0;
+	if (!HasManagedResult()) {
+		return 0;
+	}
+	auto pinned_result_set = Pin();
+	return pinned_result_set->collection.Count();
 }
 
-bool MaterializedQueryResult::HasCollection() const {
-	return managed_result.get();
+bool MaterializedQueryResult::HasManagedResult() const {
+	return result_set.get();
 }
 
 void MaterializedQueryResult::ValidateManagedResultInternal() const {
@@ -74,19 +80,19 @@ void MaterializedQueryResult::ValidateManagedResultInternal() const {
 		throw InvalidInputException("Attempting to get collection from an unsuccessful query result\n: Error %s",
 		                            GetError());
 	}
-	if (!HasCollection()) {
+	if (!HasManagedResult()) {
 		throw InternalException("Missing collection from materialized query result");
 	}
 }
 
-ColumnDataCollection &MaterializedQueryResult::Collection() const {
+unique_ptr<PinnedResultSet> MaterializedQueryResult::Pin() const {
 	ValidateManagedResultInternal();
-	return managed_result->Collection();
+	return result_set->Pin();
 }
 
-shared_ptr<ManagedQueryResult> MaterializedQueryResult::GetManagedResult() {
+shared_ptr<ManagedResultSet> MaterializedQueryResult::GetManagedResultSet() {
 	ValidateManagedResultInternal();
-	return managed_result;
+	return result_set;
 }
 
 unique_ptr<DataChunk> MaterializedQueryResult::Fetch() {
@@ -94,8 +100,9 @@ unique_ptr<DataChunk> MaterializedQueryResult::Fetch() {
 }
 
 unique_ptr<DataChunk> MaterializedQueryResult::FetchRaw() {
-	auto &collection = Collection();
-	auto &scan_state = managed_result->ScanState();
+	auto pinned_result_set = Pin();
+	auto &collection = pinned_result_set->collection;
+	auto &scan_state = pinned_result_set->scan_state;
 	auto result = make_uniq<DataChunk>();
 	// Use default allocator so the chunk is independently usable even after the DB allocator is destroyed
 	collection.InitializeScanChunk(Allocator::DefaultAllocator(), *result);

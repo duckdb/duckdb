@@ -14,7 +14,7 @@
 
 namespace duckdb {
 
-class ManagedQueryResult;
+class ManagedResultSet;
 
 //! LogicalColumnDataGet represents a scan operation from a ColumnDataCollection
 class LogicalColumnDataGet : public LogicalOperator {

@@ -333,7 +333,8 @@ unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lo
 	D_ASSERT(active_query->prepared);
 	auto &executor = GetExecutor();
 	auto &prepared = *active_query->prepared;
-	bool create_stream_result = prepared.properties.allow_stream_result && pending.allow_stream_result;
+	bool create_stream_result =
+	    prepared.properties.streaming_mode == QueryResultStreamingMode::ALLOW && pending.allow_stream_result;
 	unique_ptr<QueryResult> result;
 	D_ASSERT(executor.HasResultCollector());
 	// we have a result collector - fetch the result directly from the result collector
@@ -539,7 +540,8 @@ ClientContext::PendingPreparedStatementInternal(ClientContextLock &lock,
 		query_progress.Restart();
 	}
 
-	auto stream_result = parameters.allow_stream_result && statement_data.properties.allow_stream_result;
+	auto stream_result =
+	    parameters.allow_stream_result && statement_data.properties.streaming_mode == QueryResultStreamingMode::ALLOW;
 
 	// Decide how to get the result collector.
 	get_result_collector_t get_collector = PhysicalResultCollector::GetResultCollector;
@@ -979,9 +981,10 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, bool allow_str
 		// no statements, return empty successful result
 		StatementProperties properties;
 		vector<string> names;
-		auto managed_result = QueryResultManager::Get(*this).Add(make_uniq<ColumnDataCollection>(*db));
+		auto result_set = ResultSetManager::Get(*this).Add(make_uniq<ColumnDataCollection>(*db),
+		                                                   QueryResultMemoryManagementType::IN_MEMORY);
 		return make_uniq<MaterializedQueryResult>(StatementType::INVALID_STATEMENT, properties, std::move(names),
-		                                          std::move(managed_result), GetClientProperties());
+		                                          std::move(result_set), GetClientProperties());
 	}
 
 	unique_ptr<QueryResult> result;

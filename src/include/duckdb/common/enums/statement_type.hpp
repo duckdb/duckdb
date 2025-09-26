@@ -11,6 +11,7 @@
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/main/query_parameters.hpp"
 
 namespace duckdb {
 
@@ -67,7 +68,8 @@ class ClientContext;
 //! A struct containing various properties of a SQL statement
 struct StatementProperties {
 	StatementProperties()
-	    : requires_valid_transaction(true), allow_stream_result(false), bound_all_parameters(true),
+	    : requires_valid_transaction(true), streaming_mode(QueryResultStreamingMode::DO_NOT_ALLOW),
+	      memory_management_type(QueryResultMemoryManagementType::IN_MEMORY), bound_all_parameters(true),
 	      return_type(StatementReturnType::QUERY_RESULT), parameter_count(0), always_require_rebind(false) {
 	}
 
@@ -92,7 +94,9 @@ struct StatementProperties {
 	//! exception of ROLLBACK
 	bool requires_valid_transaction;
 	//! Whether or not the result can be streamed to the client
-	bool allow_stream_result;
+	QueryResultStreamingMode streaming_mode;
+	//! Whether or not the result can be buffer-managed
+	QueryResultMemoryManagementType memory_management_type;
 	//! Whether or not all parameters have successfully had their types determined
 	bool bound_all_parameters;
 	//! What type of data the statement returns

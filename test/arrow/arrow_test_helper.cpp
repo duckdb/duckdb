@@ -155,10 +155,11 @@ bool ArrowTestHelper::CompareResults(Connection &con, unique_ptr<QueryResult> ar
 	// compare the results
 	string error;
 
-	auto arrow_rel = make_shared_ptr<MaterializedRelation>(con.context, materialized_arrow.GetManagedResult(),
+	auto arrow_rel = make_shared_ptr<MaterializedRelation>(con.context, materialized_arrow.GetManagedResultSet(),
 	                                                       materialized_arrow.names, "arrow");
 
-	auto duck_rel = make_shared_ptr<MaterializedRelation>(con.context, duck->GetManagedResult(), duck->names, "duck");
+	auto duck_rel =
+	    make_shared_ptr<MaterializedRelation>(con.context, duck->GetManagedResultSet(), duck->names, "duck");
 
 	if (materialized_arrow.types != duck->types) {
 		bool mismatch_error = false;

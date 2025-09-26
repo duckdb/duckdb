@@ -71,8 +71,9 @@ unique_ptr<QueryResult> PhysicalMaterializedCollector::GetResult(GlobalSinkState
 		auto &buffer_manager = BufferManager::GetBufferManager(*gstate.context->db);
 		gstate.collection = make_uniq<ColumnDataCollection>(buffer_manager, types);
 	}
-	auto managed_result = QueryResultManager::Get(*gstate.context).Add(std::move(gstate.collection));
-	auto result = make_uniq<MaterializedQueryResult>(statement_type, properties, names, std::move(managed_result),
+	auto result_set =
+	    ResultSetManager::Get(*gstate.context).Add(std::move(gstate.collection), properties.memory_management_type);
+	auto result = make_uniq<MaterializedQueryResult>(statement_type, properties, names, std::move(result_set),
 	                                                 gstate.context->GetClientProperties());
 	return std::move(result);
 }

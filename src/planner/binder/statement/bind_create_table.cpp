@@ -673,7 +673,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 	result->dependencies.VerifyDependencies(schema.catalog, result->Base().table);
 
 	auto &properties = GetStatementProperties();
-	properties.allow_stream_result = false;
+	properties.streaming_mode = QueryResultStreamingMode::DO_NOT_ALLOW;
 	return result;
 }
 

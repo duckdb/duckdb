@@ -94,7 +94,7 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 	result.names = {"Success"};
 	result.types = {LogicalType::BOOLEAN};
 
-	properties.allow_stream_result = false;
+	properties.streaming_mode = QueryResultStreamingMode::DO_NOT_ALLOW;
 	properties.return_type = StatementReturnType::NOTHING;
 	return result;
 }

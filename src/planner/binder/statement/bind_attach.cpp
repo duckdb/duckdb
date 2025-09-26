@@ -29,7 +29,7 @@ BoundStatement Binder::Bind(AttachStatement &stmt) {
 	result.plan = make_uniq<LogicalSimple>(LogicalOperatorType::LOGICAL_ATTACH, std::move(stmt.info));
 
 	auto &properties = GetStatementProperties();
-	properties.allow_stream_result = false;
+	properties.streaming_mode = QueryResultStreamingMode::DO_NOT_ALLOW;
 	properties.return_type = StatementReturnType::NOTHING;
 	return result;
 }

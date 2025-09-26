@@ -11,29 +11,13 @@ ColumnDataRef::ColumnDataRef(optionally_owned_ptr<ColumnDataCollection> collecti
       collection(std::move(collection_p)) {
 }
 
-ColumnDataRef::ColumnDataRef(shared_ptr<ManagedQueryResult> managed_result_p, vector<string> expected_names)
+ColumnDataRef::ColumnDataRef(unique_ptr<PinnedResultSet> pinned_query_result_p, vector<string> expected_names)
     : TableRef(TableReferenceType::COLUMN_DATA), expected_names(std::move(expected_names)),
-      collection(managed_result_p->Collection()), managed_result(std::move(managed_result_p)) {
-}
-
-optionally_owned_ptr<ColumnDataCollection> &ColumnDataRef::Collection() {
-	if (managed_result) {
-		// This checks if it's still valid
-		managed_result->Collection();
-	}
-	return collection;
-}
-
-const optionally_owned_ptr<ColumnDataCollection> &ColumnDataRef::Collection() const {
-	if (managed_result) {
-		// This checks if it's still valid
-		managed_result->Collection();
-	}
-	return collection;
+      collection(pinned_query_result_p->collection), pinned_query_result(std::move(pinned_query_result_p)) {
 }
 
 string ColumnDataRef::ToString() const {
-	auto result = Collection()->ToString();
+	auto result = collection->ToString();
 	return BaseToString(result, expected_names);
 }
 
@@ -42,8 +26,8 @@ bool ColumnDataRef::Equals(const TableRef &other_p) const {
 		return false;
 	}
 	auto &other = other_p.Cast<ColumnDataRef>();
-	auto expected_types = Collection()->Types();
-	auto other_expected_types = other.Collection()->Types();
+	auto expected_types = collection->Types();
+	auto other_expected_types = other.collection->Types();
 	if (expected_types.size() != other_expected_types.size()) {
 		return false;
 	}
@@ -66,7 +50,7 @@ bool ColumnDataRef::Equals(const TableRef &other_p) const {
 		}
 	}
 	string unused;
-	if (!ColumnDataCollection::ResultEquals(*Collection(), *other.Collection(), unused, true)) {
+	if (!ColumnDataCollection::ResultEquals(*collection, *other.collection, unused, true)) {
 		return false;
 	}
 	return true;
@@ -92,13 +76,8 @@ optionally_owned_ptr<ColumnDataCollection> CopyCollection(optionally_owned_ptr<C
 }
 
 unique_ptr<TableRef> ColumnDataRef::Copy() {
-	unique_ptr<ColumnDataRef> result;
-	if (managed_result) {
-		result = make_uniq<ColumnDataRef>(managed_result, expected_names);
-	} else {
-		auto copied_collection = CopyCollection(collection);
-		result = make_uniq<ColumnDataRef>(std::move(copied_collection), expected_names);
-	}
+	auto copied_collection = CopyCollection(collection);
+	auto result = make_uniq<ColumnDataRef>(std::move(copied_collection), expected_names);
 	CopyProperties(*result);
 	return std::move(result);
 }

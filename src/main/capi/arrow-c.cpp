@@ -273,7 +273,8 @@ idx_t duckdb_arrow_rows_changed(duckdb_arrow result) {
 		return 0;
 	}
 	idx_t rows_changed = 0;
-	auto &collection = wrapper->result->Collection();
+	auto pinned_result_set = wrapper->result->Pin();
+	auto &collection = pinned_result_set->collection;
 	idx_t row_count = collection.Count();
 	if (row_count > 0 && wrapper->result->properties.return_type == duckdb::StatementReturnType::CHANGED_ROWS) {
 		auto rows = collection.GetRows();

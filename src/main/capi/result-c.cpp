@@ -144,7 +144,8 @@ void WriteData(duckdb_column *column, ColumnDataCollection &source, const vector
 
 duckdb_state deprecated_duckdb_translate_column(MaterializedQueryResult &result, duckdb_column *column, idx_t col) {
 	D_ASSERT(!result.HasError());
-	auto &collection = result.Collection();
+	auto pinned_result_set = result.Pin();
+	auto &collection = pinned_result_set->collection;
 	idx_t row_count = collection.Count();
 	column->deprecated_nullmask = (bool *)duckdb_malloc(sizeof(bool) * collection.Count());
 
@@ -552,7 +553,8 @@ idx_t duckdb_result_chunk_count(duckdb_result result) {
 		return 0;
 	}
 	auto &materialized = reinterpret_cast<duckdb::MaterializedQueryResult &>(*result_data.result);
-	return materialized.Collection().ChunkCount();
+	auto pinned_result_set = materialized.Pin();
+	return pinned_result_set->collection.ChunkCount();
 }
 
 duckdb_data_chunk duckdb_result_get_chunk(duckdb_result result, idx_t chunk_idx) {
@@ -569,7 +571,8 @@ duckdb_data_chunk duckdb_result_get_chunk(duckdb_result result, idx_t chunk_idx)
 	}
 	result_data.result_set_type = duckdb::CAPIResultSetType::CAPI_RESULT_TYPE_MATERIALIZED;
 	auto &materialized = reinterpret_cast<duckdb::MaterializedQueryResult &>(*result_data.result);
-	auto &collection = materialized.Collection();
+	auto pinned_result_set = materialized.Pin();
+	auto &collection = pinned_result_set->collection;
 	if (chunk_idx >= collection.ChunkCount()) {
 		return nullptr;
 	}

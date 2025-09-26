@@ -26,7 +26,7 @@ BoundStatement Binder::Bind(LogicalPlanStatement &stmt) {
 	result.plan = std::move(stmt.plan);
 
 	auto &properties = GetStatementProperties();
-	properties.allow_stream_result = true;
+	properties.streaming_mode = QueryResultStreamingMode::DO_NOT_ALLOW;
 	properties.return_type = StatementReturnType::QUERY_RESULT; // TODO could also be something else
 
 	if (parent) {

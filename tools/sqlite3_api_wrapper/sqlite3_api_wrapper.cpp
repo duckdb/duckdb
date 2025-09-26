@@ -282,12 +282,12 @@ void sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_widt
 			pStmt->pending = nullptr;
 			return;
 		}
-		auto &materialized = (MaterializedQueryResult &)*pStmt->result;
+		auto &materialized = pStmt->result->Cast<MaterializedQueryResult>();
 
 		auto properties = pStmt->result->properties;
 		if (properties.return_type == StatementReturnType::CHANGED_ROWS && materialized.RowCount() > 0) {
 			// update total changes
-			auto row_changes = materialized.Collection().GetRows().GetValue(0, 0);
+			auto row_changes = materialized.Pin()->collection.GetRows().GetValue(0, 0);
 			if (!row_changes.IsNull() && row_changes.DefaultTryCastAs(LogicalType::BIGINT)) {
 				pStmt->db->last_changes = row_changes.GetValue<int64_t>();
 				pStmt->db->total_changes += row_changes.GetValue<int64_t>();
@@ -311,8 +311,10 @@ void sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_widt
 		config.thousand_separator = thousand_separator;
 		config.max_width = max_width;
 		config.large_number_rendering = static_cast<LargeNumberRendering>(large_number_rendering);
+		auto pinned_result_set = materialized.Pin();
 		BoxRenderer renderer(config);
-		renderer.Render(*pStmt->db->con->context, pStmt->result->names, materialized.Collection(), *result_renderer);
+		renderer.Render(*pStmt->db->con->context, pStmt->result->names, pinned_result_set->collection,
+		                *result_renderer);
 	} catch (std::exception &ex) {
 		string error_str = ErrorData(ex).Message() + "\n";
 		result_renderer->RenderLayout(error_str);

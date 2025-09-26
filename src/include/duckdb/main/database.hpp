@@ -34,7 +34,7 @@ class DatabaseFileSystem;
 struct DatabaseCacheEntry;
 class LogManager;
 class ExternalFileCache;
-class QueryResultManager;
+class ResultSetManager;
 
 class DatabaseInstance : public enable_shared_from_this<DatabaseInstance> {
 	friend class DuckDB;
@@ -53,7 +53,7 @@ public:
 	DUCKDB_API DatabaseManager &GetDatabaseManager();
 	DUCKDB_API FileSystem &GetFileSystem();
 	DUCKDB_API ExternalFileCache &GetExternalFileCache();
-	DUCKDB_API QueryResultManager &GetQueryResultManager();
+	DUCKDB_API ResultSetManager &GetResultSetManager();
 	DUCKDB_API TaskScheduler &GetScheduler();
 	DUCKDB_API ObjectCache &GetObjectCache();
 	DUCKDB_API ConnectionManager &GetConnectionManager();
@@ -95,7 +95,7 @@ private:
 	unique_ptr<DatabaseFileSystem> db_file_system;
 	shared_ptr<LogManager> log_manager;
 	unique_ptr<ExternalFileCache> external_file_cache;
-	unique_ptr<QueryResultManager> query_result_manager;
+	unique_ptr<ResultSetManager> result_set_manager;
 
 	duckdb_ext_api_v1 (*create_api_v1)();
 };

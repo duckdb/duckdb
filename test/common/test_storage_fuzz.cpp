@@ -431,9 +431,10 @@ TEST_CASE("fuzzed storage test", "[storage][.]") {
 			PRINT_INFO("Verifying checksum computed=" << computed_checksum << ", actual=" << expected_checksum);
 			if (computed_checksum != expected_checksum) {
 				auto result = con.Query("SELECT * FROM t ORDER BY ALL");
+				auto previous_pin = previous_result->Cast<MaterializedQueryResult>().Pin();
+				auto this_pin = result->Cast<MaterializedQueryResult>().Pin();
 				string error;
-				ColumnDataCollection::ResultEquals(previous_result->Cast<MaterializedQueryResult>().Collection(),
-				                                   result->Cast<MaterializedQueryResult>().Collection(), error);
+				ColumnDataCollection::ResultEquals(previous_pin->collection, this_pin->collection, error);
 				Printer::PrintF("Checksum failure\nResult comparison:\n%s", error);
 				REQUIRE(computed_checksum == expected_checksum);
 			}

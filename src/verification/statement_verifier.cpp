@@ -149,7 +149,9 @@ string StatementVerifier::CompareResults(const StatementVerifier &other) {
 	if (materialized_result->HasError()) {
 		return "";
 	}
-	if (!ColumnDataCollection::ResultEquals(materialized_result->Collection(), other.materialized_result->Collection(),
+	auto this_pinned_result_set = materialized_result->Pin();
+	auto other_pinned_result_set = other.materialized_result->Pin();
+	if (!ColumnDataCollection::ResultEquals(this_pinned_result_set->collection, other_pinned_result_set->collection,
 	                                        error)) { // LCOV_EXCL_START
 		string result = other.name + " statement differs from original result!\n";
 		result += "Original Result:\n" + materialized_result->ToString();
