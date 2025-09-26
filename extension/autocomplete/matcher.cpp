@@ -10,6 +10,8 @@
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
 #include "tokenizer.hpp"
+#include "parser/peg_parser.hpp"
+#include "transformer/parse_result.hpp"
 #ifdef PEG_PARSER_SOURCE_FILE
 #include <fstream>
 #else
@@ -53,15 +55,21 @@ public:
 	}
 
 	MatchResultType Match(MatchState &state) const override {
-		auto &token = state.tokens[state.token_index];
-		if (StringUtil::CIEquals(keyword, token.text)) {
-			// move to the next token
-			state.token_index++;
-			return MatchResultType::SUCCESS;
-		} else {
+		if (!MatchKeyword(state)) {
 			return MatchResultType::FAIL;
 		}
+		return MatchResultType::SUCCESS;
 	}
+
+	optional_ptr<ParseResult> MatchParseResult(MatchState &state) const override {
+		if (!MatchKeyword(state)) {
+			return nullptr;
+		}
+		auto result = state.allocator.Allocate(make_uniq<KeywordParseResult>(keyword));
+		result->name = name;
+		return result;
+	}
+
 
 	SuggestionType AddSuggestionInternal(MatchState &state) const override {
 		AutoCompleteCandidate candidate(keyword, score_bonus, CandidateType::KEYWORD);
@@ -72,6 +80,20 @@ public:
 
 	string ToString() const override {
 		return "'" + keyword + "'";
+	}
+
+private:
+	bool MatchKeyword(MatchState &state) const {
+		if (state.token_index >= state.tokens.size()) {
+			return false;
+		}
+		auto &token = state.tokens[state.token_index];
+		if (StringUtil::CIEquals(keyword, token.text)) {
+			// move to the next token
+			state.token_index++;
+			return true;
+		}
+		return false;
 	}
 
 private:
@@ -122,6 +144,22 @@ public:
 		return MatchResultType::SUCCESS;
 	}
 
+	optional_ptr<ParseResult> MatchParseResult(MatchState &state) const override {
+		MatchState list_state(state);
+		vector<optional_ptr<ParseResult>> results;
+
+		for (const auto &child_matcher : matchers) {
+			auto child_result = child_matcher.get().MatchParseResult(list_state);
+			if (!child_result) {
+				return nullptr;
+			}
+			results.push_back(std::move(child_result));
+		}
+		state.token_index = list_state.token_index;
+		// Empty name implies it's a subrule, e.g. 'SET'i (StandardAssignment / SetTimeZone)
+		return state.allocator.Allocate(make_uniq<ListParseResult>(std::move(results), name));
+	}
+
 	SuggestionType AddSuggestionInternal(MatchState &state) const override {
 		for (auto &matcher : matchers) {
 			auto suggestion_result = matcher.get().AddSuggestion(state);
@@ -160,13 +198,25 @@ public:
 	MatchResultType Match(MatchState &state) const override {
 		MatchState child_state(state);
 		auto child_match = matcher.Match(child_state);
-		if (child_match != MatchResultType::SUCCESS) {
+		if (child_match == MatchResultType::FAIL) {
 			// did not succeed in matching - go back up (but return success anyway)
 			return MatchResultType::SUCCESS;
 		}
 		// propagate the child state upwards
 		state.token_index = child_state.token_index;
 		return MatchResultType::SUCCESS;
+	}
+
+	optional_ptr<ParseResult> MatchParseResult(MatchState &state) const override {
+		MatchState child_state(state);
+		auto child_match = matcher.MatchParseResult(child_state);
+		if (child_match == nullptr) {
+			// did not succeed in matching - go back up (simply return a nullptr)
+			return state.allocator.Allocate(make_uniq<OptionalParseResult>());
+		}
+		// propagate the child state upwards
+		state.token_index = child_state.token_index;
+		return state.allocator.Allocate(make_uniq<OptionalParseResult>(child_match));
 	}
 
 	SuggestionType AddSuggestionInternal(MatchState &state) const override {
@@ -203,6 +253,20 @@ public:
 			}
 		}
 		return MatchResultType::FAIL;
+	}
+
+	optional_ptr<ParseResult> MatchParseResult(MatchState &state) const override {
+		for (idx_t i = 0; i < matchers.size(); i++) {
+			MatchState choice_state(state);
+			auto child_result = matchers[i].get().MatchParseResult(choice_state);
+			if (child_result != nullptr) {
+				// we matched this child - propagate upwards
+				state.token_index = choice_state.token_index;
+				auto result = state.allocator.Allocate(make_uniq<ChoiceParseResult>(child_result, i));
+				return result;
+			}
+		}
+		return nullptr;
 	}
 
 	SuggestionType AddSuggestionInternal(MatchState &state) const override {
@@ -266,6 +330,42 @@ public:
 		}
 	}
 
+	optional_ptr<ParseResult> MatchParseResult(MatchState &state) const override {
+		MatchState repeat_state(state);
+		vector<optional_ptr<ParseResult>> results;
+
+		// First, we MUST match the element at least once.
+		auto first_result = element.MatchParseResult(repeat_state);
+		if (!first_result) {
+			// The first match failed, so the whole repeat fails.
+			return nullptr;
+		}
+		results.push_back(first_result);
+
+		// After the first success, the overall result is a success.
+		// Now, we continue matching the element as many times as possible.
+		while (true) {
+			// Propagate the new state upwards.
+			state.token_index = repeat_state.token_index;
+
+			// Check if there are any tokens left.
+			if (repeat_state.token_index >= state.tokens.size()) {
+				break;
+			}
+
+			// Try to match the element again.
+			auto next_result = element.MatchParseResult(repeat_state);
+			if (!next_result) {
+				break;
+			}
+			results.push_back(next_result);
+		}
+
+		// Return all collected results in a RepeatParseResult.
+		return state.allocator.Allocate(make_uniq<RepeatParseResult>(std::move(results)));
+	}
+
+
 	SuggestionType AddSuggestionInternal(MatchState &state) const override {
 		element.AddSuggestion(state);
 		return SuggestionType::MANDATORY;
@@ -301,42 +401,21 @@ public:
 	}
 
 	MatchResultType Match(MatchState &state) const override {
-		// variable matchers match anything except for reserved keywords
-		auto &token_text = state.tokens[state.token_index].text;
-		const auto &keyword_helper = KeywordHelper::Instance();
-		switch (suggestion_type) {
-		case SuggestionState::SUGGEST_TYPE_NAME:
-			if (keyword_helper.KeywordCategoryType(token_text, KeywordCategory::KEYWORD_RESERVED) ||
-			    keyword_helper.KeywordCategoryType(token_text, GetBannedCategory())) {
-				return MatchResultType::FAIL;
-			}
-			break;
-		default: {
-			const auto banned_category = GetBannedCategory();
-			const auto allowed_override_category = banned_category == KeywordCategory::KEYWORD_COL_NAME
-			                                           ? KeywordCategory::KEYWORD_TYPE_FUNC
-			                                           : KeywordCategory::KEYWORD_COL_NAME;
-
-			const bool is_reserved = keyword_helper.KeywordCategoryType(token_text, KeywordCategory::KEYWORD_RESERVED);
-			const bool has_extra_banned_category = keyword_helper.KeywordCategoryType(token_text, banned_category);
-			const bool has_banned_flag = is_reserved || has_extra_banned_category;
-
-			const bool is_unreserved =
-			    keyword_helper.KeywordCategoryType(token_text, KeywordCategory::KEYWORD_UNRESERVED);
-			const bool has_override_flag = keyword_helper.KeywordCategoryType(token_text, allowed_override_category);
-			const bool has_allowed_flag = is_unreserved || has_override_flag;
-
-			if (has_banned_flag && !has_allowed_flag) {
-				return MatchResultType::FAIL;
-			}
-			break;
-		}
-		}
-		if (!IsIdentifier(token_text)) {
+		if (!MatchIdentifier(state)) {
 			return MatchResultType::FAIL;
 		}
-		state.token_index++;
 		return MatchResultType::SUCCESS;
+	}
+
+	optional_ptr<ParseResult> MatchParseResult(MatchState &state) const override {
+		if (state.token_index >= state.tokens.size()) {
+			return nullptr;
+		}
+		auto &token_text = state.tokens[state.token_index].text;
+		if (!MatchIdentifier(state)) {
+			return nullptr;
+		}
+		return state.allocator.Allocate(make_uniq<IdentifierParseResult>(token_text));
 	}
 
 	bool SupportsStringLiteral() const {
@@ -349,13 +428,13 @@ public:
 		}
 	}
 
-	KeywordCategory GetBannedCategory() const {
+	PEGKeywordCategory GetBannedCategory() const {
 		switch (suggestion_type) {
 		case SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME:
 		case SuggestionState::SUGGEST_TABLE_FUNCTION_NAME:
-			return KeywordCategory::KEYWORD_COL_NAME;
+			return PEGKeywordCategory::KEYWORD_COL_NAME;
 		default:
-			return KeywordCategory::KEYWORD_TYPE_FUNC;
+			return PEGKeywordCategory::KEYWORD_TYPE_FUNC;
 		}
 	}
 
@@ -395,6 +474,46 @@ public:
 		}
 	}
 
+private:
+	bool MatchIdentifier(MatchState &state) const {
+		// variable matchers match anything except for reserved keywords
+		auto &token_text = state.tokens[state.token_index].text;
+		const auto &keyword_helper = PEGKeywordHelper::Instance();
+		switch (suggestion_type) {
+		case SuggestionState::SUGGEST_TYPE_NAME:
+			if (keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_RESERVED) ||
+				keyword_helper.KeywordCategoryType(token_text, GetBannedCategory())) {
+				return false;
+				}
+			break;
+		default: {
+			const auto banned_category = GetBannedCategory();
+			const auto allowed_override_category = banned_category == PEGKeywordCategory::KEYWORD_COL_NAME
+													   ? PEGKeywordCategory::KEYWORD_TYPE_FUNC
+													   : PEGKeywordCategory::KEYWORD_COL_NAME;
+
+			const bool is_reserved = keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_RESERVED);
+			const bool has_extra_banned_category = keyword_helper.KeywordCategoryType(token_text, banned_category);
+			const bool has_banned_flag = is_reserved || has_extra_banned_category;
+
+			const bool is_unreserved =
+				keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_UNRESERVED);
+			const bool has_override_flag = keyword_helper.KeywordCategoryType(token_text, allowed_override_category);
+			const bool has_allowed_flag = is_unreserved || has_override_flag;
+
+			if (has_banned_flag && !has_allowed_flag) {
+				return false;
+			}
+			break;
+		}
+		}
+		if (!IsIdentifier(token_text)) {
+			return false;
+		}
+		state.token_index++;
+		return true;
+	}
+
 	SuggestionState suggestion_type;
 };
 
@@ -407,13 +526,28 @@ public:
 	}
 
 	MatchResultType Match(MatchState &state) const override {
-		// reserved variable matchers match anything
-		auto &token_text = state.tokens[state.token_index].text;
-		if (!IsIdentifier(token_text)) {
+		if (!MatchReservedIdentifier(state)) {
 			return MatchResultType::FAIL;
 		}
-		state.token_index++;
 		return MatchResultType::SUCCESS;
+	}
+
+	optional_ptr<ParseResult> MatchParseResult(MatchState &state) const override {
+		auto &token_text = state.tokens[state.token_index].text;
+		if (!MatchReservedIdentifier(state)) {
+			return nullptr;
+		}
+		return state.allocator.Allocate(make_uniq<IdentifierParseResult>(token_text));
+	}
+
+private:
+	bool MatchReservedIdentifier(MatchState &state) const {
+		auto &token_text = state.tokens[state.token_index].text;
+		if (!IsIdentifier(token_text)) {
+			return false;
+		}
+		state.token_index++;
+		return true;
 	}
 };
 
@@ -427,12 +561,25 @@ public:
 
 	MatchResultType Match(MatchState &state) const override {
 		// variable matchers match anything except for reserved keywords
-		auto &token_text = state.tokens[state.token_index].text;
-		if (token_text.size() >= 2 && token_text.front() == '\'' && token_text.back() == '\'') {
-			state.token_index++;
-			return MatchResultType::SUCCESS;
+		if (!MatchStringLiteral(state)) {
+			return MatchResultType::FAIL;
 		}
-		return MatchResultType::FAIL;
+		return MatchResultType::SUCCESS;
+	}
+
+	optional_ptr<ParseResult> MatchParseResult(MatchState &state) const override {
+		if (state.token_index >= state.tokens.size()) {
+			return nullptr;
+		}
+		auto &token_text = state.tokens[state.token_index].text;
+		if (!MatchStringLiteral(state)) {
+			return nullptr;
+		}
+		string stripped_string = token_text.substr(1, token_text.length() - 2);
+
+		auto result = state.allocator.Allocate(make_uniq<StringLiteralParseResult>(stripped_string));
+		result->name = name;
+		return result;
 	}
 
 	SuggestionType AddSuggestionInternal(MatchState &state) const override {
@@ -441,6 +588,16 @@ public:
 
 	string ToString() const override {
 		return "STRING_LITERAL";
+	}
+
+private:
+	static bool MatchStringLiteral(MatchState &state) {
+		auto &token_text = state.tokens[state.token_index].text;
+		if (token_text.size() >= 2 && token_text.front() == '\'' && token_text.back() == '\'') {
+			state.token_index++;
+			return true;
+		}
+		return false;
 	}
 };
 
@@ -454,17 +611,23 @@ public:
 
 	MatchResultType Match(MatchState &state) const override {
 		// variable matchers match anything except for reserved keywords
-		auto &token_text = state.tokens[state.token_index].text;
-		if (!BaseTokenizer::CharacterIsInitialNumber(token_text[0])) {
+		if (!MatchNumberLiteral(state)) {
 			return MatchResultType::FAIL;
 		}
-		for (idx_t i = 1; i < token_text.size(); i++) {
-			if (!BaseTokenizer::CharacterIsNumber(token_text[i])) {
-				return MatchResultType::FAIL;
-			}
-		}
-		state.token_index++;
 		return MatchResultType::SUCCESS;
+	}
+
+	optional_ptr<ParseResult> MatchParseResult(MatchState &state) const override {
+		if (state.token_index >= state.tokens.size()) {
+			return nullptr;
+		}
+		auto &token_text = state.tokens[state.token_index].text;
+		if (!MatchNumberLiteral(state)) {
+			return nullptr;
+		}
+		auto result = state.allocator.Allocate(make_uniq<NumberParseResult>(token_text));
+		result->name = name;
+		return result;
 	}
 
 	SuggestionType AddSuggestionInternal(MatchState &state) const override {
@@ -473,6 +636,21 @@ public:
 
 	string ToString() const override {
 		return "NUMBER_LITERAL";
+	}
+
+private:
+	static bool MatchNumberLiteral(MatchState &state) {
+		auto &token_text = state.tokens[state.token_index].text;
+		if (!BaseTokenizer::CharacterIsInitialNumber(token_text[0])) {
+			return false;
+		}
+		for (idx_t i = 1; i < token_text.size(); i++) {
+			if (!BaseTokenizer::CharacterIsNumber(token_text[i])) {
+				return false;
+			}
+		}
+		state.token_index++;
+		return true;
 	}
 };
 
@@ -485,6 +663,33 @@ public:
 	}
 
 	MatchResultType Match(MatchState &state) const override {
+		if (!MatchOperator(state)) {
+			return MatchResultType::FAIL;
+		}
+		return MatchResultType::SUCCESS;
+	}
+
+	optional_ptr<ParseResult> MatchParseResult(MatchState &state) const override {
+		if (state.token_index >= state.tokens.size()) {
+			return nullptr;
+		}
+		auto &token_text = state.tokens[state.token_index].text;
+		if (!MatchOperator(state)) {
+			return nullptr;
+		}
+		return state.allocator.Allocate(make_uniq<OperatorParseResult>(token_text));
+	}
+
+	SuggestionType AddSuggestionInternal(MatchState &state) const override {
+		return SuggestionType::MANDATORY;
+	}
+
+	string ToString() const override {
+		return "OPERATOR";
+	}
+
+private:
+	static bool MatchOperator(MatchState &state) {
 		auto &token_text = state.tokens[state.token_index].text;
 		for (auto &c : token_text) {
 			switch (c) {
@@ -504,19 +709,11 @@ public:
 			case '|':
 				break;
 			default:
-				return MatchResultType::FAIL;
+				return false;
 			}
 		}
 		state.token_index++;
-		return MatchResultType::SUCCESS;
-	}
-
-	SuggestionType AddSuggestionInternal(MatchState &state) const override {
-		return SuggestionType::MANDATORY;
-	}
-
-	string ToString() const override {
-		return "OPERATOR";
+		return true;
 	}
 };
 
