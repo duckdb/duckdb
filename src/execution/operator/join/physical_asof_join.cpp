@@ -79,7 +79,7 @@ public:
 	using PartitionMarkers = vector<OuterJoinMarker>;
 	using LocalBuffers = vector<unique_ptr<PartitionLocalSinkState>>;
 
-	AsOfGlobalSinkState(ClientContext &context, const PhysicalAsOfJoin &op) {
+	AsOfGlobalSinkState(ClientContext &context, const PhysicalAsOfJoin &op) : is_outer(IsRightOuterJoin(op.join_type)) {
 		// Set up partitions for both sides
 		partition_sinks.reserve(2);
 		const vector<unique_ptr<BaseStatistics>> partitions_stats;
@@ -92,11 +92,6 @@ public:
 		                                           partitions_stats, rhs.estimated_cardinality);
 		partition_sinks.emplace_back(std::move(sink));
 
-		// Record join types
-		is_outer.push_back(IsLeftOuterJoin(op.join_type));
-		is_outer.push_back(IsRightOuterJoin(op.join_type));
-
-		outer_markers.resize(2);
 		local_buffers.resize(2);
 	}
 
@@ -115,12 +110,10 @@ public:
 	size_t child = 1;
 	//! The child's partitioning buffer
 	vector<PartitionSinkPtr> partition_sinks;
-	//! Whether the child is outer
-	vector<bool> is_outer;
-	//! The child's outer join markers (one per partition)
-	vector<PartitionMarkers> outer_markers;
-	//! The child's NULL count
-	vector<idx_t> has_null {false, false};
+	//! Whether the right side is outer
+	const bool is_outer;
+	//! The right outer join markers (one per partition)
+	vector<OuterJoinMarker> right_outers;
 
 	mutex lock;
 	vector<LocalBuffers> local_buffers;
@@ -260,7 +253,6 @@ public:
 	ValidityMask lhs_valid_mask;
 	idx_t left_group = 0;
 	SelectionVector lhs_match_sel;
-	const bool *lhs_matches = {};
 
 	//	RHS scanning
 	optional_ptr<PartitionGlobalHashGroup> right_hash;
@@ -330,8 +322,6 @@ void AsOfProbeBuffer::BeginLeftScan(hash_t scan_bin) {
 		return;
 	}
 
-	lhs_matches = gsink.outer_markers[0][left_group].GetMatches();
-
 	auto iterator_comp = ExpressionType::INVALID;
 	switch (op.comparison_type) {
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
@@ -359,10 +349,10 @@ void AsOfProbeBuffer::BeginLeftScan(hash_t scan_bin) {
 	left_itr = make_uniq<SBIterator>(left_sort, iterator_comp);
 
 	// We are only probing the corresponding right side bin, which may be empty
-	// If they are empty, we leave the iterator as null so we can emit left matches
+	// If it is empty, we leave the iterator as null so we can emit left matches
 	if (right_group < rhs_sink.bin_groups.size()) {
 		right_hash = rhs_sink.hash_groups[right_group].get();
-		right_outer = gsink.outer_markers[1].data() + right_group;
+		right_outer = gsink.right_outers.data() + right_group;
 		auto &right_sort = *(right_hash->global_sort);
 		if (!right_sort.sorted_blocks.empty()) {
 			right_itr = make_uniq<SBIterator>(right_sort, iterator_comp);
@@ -439,7 +429,7 @@ void AsOfProbeBuffer::EndLeftScan() {
 	right_outer = nullptr;
 
 	auto &rhs_sink = *gsink.partition_sinks[1];
-	if (!gsink.is_outer[1] && right_group < rhs_sink.bin_groups.size()) {
+	if (!gsink.is_outer && right_group < rhs_sink.bin_groups.size()) {
 		rhs_sink.hash_groups[right_group].reset();
 	}
 
@@ -626,14 +616,14 @@ public:
 	explicit AsOfGlobalSourceState(AsOfGlobalSinkState &gsink_p)
 	    : gsink(gsink_p), next_left(0), flushed(0), next_right(0) {
 
-		// for LEFT/FULL/RIGHT OUTER JOIN, initialize to false for every tuple
-		for (idx_t child = 0; child < gsink.partition_sinks.size(); ++child) {
-			auto &partition_sink = *gsink.partition_sinks[child];
-			auto &outer_markers = gsink.outer_markers[child];
-			outer_markers.reserve(partition_sink.hash_groups.size());
-			for (const auto &hash_group : partition_sink.hash_groups) {
-				outer_markers.emplace_back(OuterJoinMarker(gsink.is_outer[child]));
-				outer_markers.back().Initialize(hash_group->count);
+		if (gsink.child == 1) {
+			// for FULL/RIGHT OUTER JOIN, initialize right_outers to false for every tuple
+			auto &rhs_partition = *gsink.partition_sinks[gsink.child];
+			auto &right_outers = gsink.right_outers;
+			right_outers.reserve(rhs_partition.hash_groups.size());
+			for (const auto &hash_group : rhs_partition.hash_groups) {
+				right_outers.emplace_back(OuterJoinMarker(gsink.is_outer));
+				right_outers.back().Initialize(hash_group->count);
 			}
 		}
 	}
@@ -695,7 +685,7 @@ idx_t AsOfLocalSourceState::BeginRightScan(const idx_t hash_bin_p) {
 	}
 	scanner = make_uniq<PayloadScanner>(*hash_group->global_sort);
 
-	rhs_matches = gsource.gsink.outer_markers[1][hash_bin].GetMatches();
+	rhs_matches = gsource.gsink.right_outers[hash_bin].GetMatches();
 
 	return scanner->Remaining();
 }
@@ -746,9 +736,7 @@ SourceResultType PhysicalAsOfJoin::GetData(ExecutionContext &context, DataChunk 
 		}
 	}
 
-	//	Step 2: Emit left join matches
-
-	//	Step 3: Emit right join matches
+	//	Step 2: Emit right join matches
 	if (!IsRightOuterJoin(join_type)) {
 		return SourceResultType::FINISHED;
 	}
