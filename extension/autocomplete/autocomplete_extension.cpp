@@ -18,6 +18,7 @@
 #include "duckdb/catalog/catalog_entry/pragma_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
+#include "transformer/peg_transformer.hpp"
 
 namespace duckdb {
 
@@ -687,7 +688,6 @@ public:
 		parser_override = PEGParser;
 	}
 
-	unique_ptr<PEGTransformerFactory> factory;
 
 	static ParserOverrideResult PEGParser(ParserExtensionInfo *info, const string &query) {
 		vector<MatcherToken> root_tokens;
@@ -703,7 +703,7 @@ public:
 				if (tokenized_statement.empty()) {
 					continue;
 				}
-				auto statement = factory->Transform(tokenizer.statements[0], "Statement");
+				auto statement = PEGTransformerFactory::Transform(tokenizer.statements[0], "Statement");
 				result.push_back(std::move(statement));
 			}
 			return ParserOverrideResult(result);

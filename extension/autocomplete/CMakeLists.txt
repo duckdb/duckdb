@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 2.8.12...3.29)
 project(AutoCompleteExtension)
 
 include_directories(include)
+include_directories(parser)
 include_directories(transformer)
 
 set(AUTOCOMPLETE_EXTENSION_FILES
