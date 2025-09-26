@@ -19,6 +19,7 @@ namespace duckdb {
 
 class Serializer;
 class Deserializer;
+class QueryContext;
 
 struct ColumnSegmentState {
 	virtual ~ColumnSegmentState() {

@@ -573,7 +573,7 @@ void WriteAheadLogDeserializer::ReplayIndexData(IndexStorageInfo &info) {
 			// Convert the buffer handle to a persistent block and store the block id.
 			if (!deserialize_only) {
 				auto block_id = block_manager->GetFreeBlockId();
-				block_manager->ConvertToPersistent(QueryContext(context), block_id, std::move(block_handle),
+				block_manager->ConvertToPersistent(context, block_id, std::move(block_handle),
 				                                   std::move(buffer_handle));
 				data_info.block_pointers[j].block_id = block_id;
 			}

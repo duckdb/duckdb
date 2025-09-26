@@ -64,7 +64,7 @@ void DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionState &gl
 		if (FileSystem::IsRemoteFile(file.path)) {
 			flags |= FileFlags::FILE_FLAGS_DIRECT_IO;
 		}
-		file_handle = fs.OpenFile(QueryContext(context), file, flags);
+		file_handle = fs.OpenFile(context, file, flags);
 	}
 
 	for (idx_t col_idx = 0; col_idx < state.column_ids.size(); col_idx++) {

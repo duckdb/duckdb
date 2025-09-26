@@ -216,7 +216,7 @@ void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
 		options.type = CheckpointType::CONCURRENT_CHECKPOINT;
 	}
 
-	storage_manager.CreateCheckpoint(QueryContext(context), options);
+	storage_manager.CreateCheckpoint(context, options);
 }
 
 unique_ptr<StorageLockKey> DuckTransactionManager::SharedCheckpointLock() {
@@ -353,7 +353,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		options.type = checkpoint_decision.type;
 		auto &storage_manager = db.GetStorageManager();
 		try {
-			storage_manager.CreateCheckpoint(QueryContext(context), options);
+			storage_manager.CreateCheckpoint(context, options);
 		} catch (std::exception &ex) {
 			error.Merge(ErrorData(ex));
 		}

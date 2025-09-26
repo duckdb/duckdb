@@ -88,7 +88,7 @@ static unique_ptr<FunctionData> PragmaStorageInfoBind(ClientContext &context, Ta
 	Binder::BindSchemaOrCatalog(context, qname.catalog, qname.schema);
 	auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(context, qname.catalog, qname.schema, qname.name);
 	auto result = make_uniq<PragmaStorageFunctionData>(table_entry);
-	result->column_segments_info = table_entry.GetColumnSegmentInfo();
+	result->column_segments_info = table_entry.GetColumnSegmentInfo(context);
 	return std::move(result);
 }
 
