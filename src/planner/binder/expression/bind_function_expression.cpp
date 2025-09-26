@@ -199,6 +199,7 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 			binder.SetAlwaysRequireRebind();
 		}
 	}
+	binder.is_function_bound = true;
 	return BindResult(std::move(result));
 }
 

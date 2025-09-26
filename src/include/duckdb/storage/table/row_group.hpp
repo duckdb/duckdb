@@ -39,6 +39,7 @@ class Vector;
 struct ColumnCheckpointState;
 struct PersistentColumnData;
 struct PersistentRowGroupData;
+struct PersistentCollectionData;
 struct RowGroupPointer;
 struct TransactionData;
 class CollectionScanState;
@@ -115,7 +116,8 @@ public:
 	                               ExpressionExecutor &executor, CollectionScanState &scan_state,
 	                               DataChunk &scan_chunk);
 	unique_ptr<RowGroup> AddColumn(RowGroupCollection &collection, ColumnDefinition &new_column,
-	                               ExpressionExecutor &executor, Vector &intermediate);
+	                               ExpressionExecutor &executor, Vector &intermediate,
+	                               shared_ptr<PersistentCollectionData> stable_result = nullptr);
 	unique_ptr<RowGroup> RemoveColumn(RowGroupCollection &collection, idx_t removed_column);
 
 	void CommitDrop();
@@ -161,12 +163,13 @@ public:
 	static vector<RowGroupWriteData> WriteToDisk(RowGroupWriteInfo &info,
 	                                             const vector<reference<RowGroup>> &row_groups);
 	RowGroupWriteData WriteToDisk(RowGroupWriteInfo &info);
+	void WriteLastColumnToDisk(RowGroupWriteInfo &info);
 	//! Returns the number of committed rows (count - committed deletes)
 	idx_t GetCommittedRowCount();
 	RowGroupWriteData WriteToDisk(RowGroupWriter &writer);
 	RowGroupPointer Checkpoint(RowGroupWriteData write_data, RowGroupWriter &writer, TableStatistics &global_stats);
 	bool IsPersistent() const;
-	PersistentRowGroupData SerializeRowGroupInfo() const;
+	PersistentRowGroupData SerializeRowGroupInfo(bool only_last_column = false) const;
 
 	void InitializeAppend(RowGroupAppendState &append_state);
 	void Append(RowGroupAppendState &append_state, DataChunk &chunk, idx_t append_count);

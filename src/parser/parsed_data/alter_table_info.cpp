@@ -2,6 +2,7 @@
 #include "duckdb/common/extra_type_info.hpp"
 
 #include "duckdb/parser/constraint.hpp"
+#include "duckdb/storage/table/column_data.hpp"
 
 namespace duckdb {
 

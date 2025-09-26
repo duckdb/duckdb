@@ -14,6 +14,7 @@
 #include "duckdb/planner/constraints/bound_foreign_key_constraint.hpp"
 #include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
 #include "duckdb/planner/constraints/bound_unique_constraint.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_binder/alter_binder.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
@@ -22,6 +23,7 @@
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/storage/table/add_column_checkpoint_state.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/common/type_visitor.hpp"
 
@@ -369,9 +371,31 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddColumn(ClientContext &context, AddCo
 
 	create_info->columns.AddColumn(std::move(col));
 
+	// If we are currently replaying WAL and `ADD COLUMN` uses FUNCTION as the DEFAULT VALUE, we need to use
+	// `stable_result` directly instead of re-executing FUNCTION
+	bool skip_bind_default = info.is_replay_wal && info.replay_stable_result;
+	unique_ptr<AddColumnCheckpointState> add_column_checkpoint_state = nullptr;
+
 	vector<unique_ptr<Expression>> bound_defaults;
-	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema, bound_defaults);
-	auto new_storage = make_shared_ptr<DataTable>(context, *storage, info.new_column, *bound_defaults.back());
+	auto bound_create_info =
+	    binder->BindCreateTableInfo(std::move(create_info), schema, bound_defaults, skip_bind_default);
+
+	if (skip_bind_default) {
+		// Because we skip bind default, a useless `Expression` object is constructed here
+		bound_defaults.emplace_back(make_uniq<BoundConstantExpression>(Value(info.new_column.Type())));
+	}
+
+	if (binder->IsFunctionBound() || skip_bind_default) {
+		// 1. When `ADD COLUMN`, if FUNCTION is bound, we need to construct an `AddColumnCheckpointState` object to
+		//    persist the execution result for Crash Recovery
+		// 2. When we are replaying WAL and need to use `stable_result`, we need to construct an
+		//    `AddColumnCheckpointState` object to parse `stable_result`
+		add_column_checkpoint_state = make_uniq<AddColumnCheckpointState>(context, *storage, info);
+	}
+
+	auto new_storage = make_shared_ptr<DataTable>(context, *storage, info.new_column, *bound_defaults.back(),
+	                                              info.is_replay_wal, std::move(add_column_checkpoint_state));
+
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, new_storage);
 }
 
@@ -1192,6 +1216,11 @@ void DuckTableEntry::Rollback(CatalogEntry &prev_entry) {
 			prev_indexes.RemoveIndex(index_name);
 		}
 	}
+
+	// If we ADD a column with default value FUNCTION, we need to persist the added
+	// column. Now, we need to ROLLBACK the added column, and we must free the data
+	// blocks used by the added column.
+	table.GetStorage().RollbackAddedColumnIfNeeded();
 }
 
 void DuckTableEntry::OnDrop() {
