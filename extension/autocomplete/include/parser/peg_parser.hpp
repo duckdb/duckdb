@@ -1,5 +1,6 @@
 
 #pragma once
+#include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/string_map_set.hpp"
 
 namespace duckdb {
@@ -39,7 +40,7 @@ public:
 	void ParseRules(const char *grammar);
 	void AddRule(string_t rule_name, PEGRule rule);
 
-	string_map_t<PEGRule> rules;
+	case_insensitive_map_t<PEGRule> rules;
 };
 
 enum class PEGParseState {

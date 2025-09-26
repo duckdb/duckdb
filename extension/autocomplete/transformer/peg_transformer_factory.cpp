@@ -43,13 +43,20 @@ unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &
 	match_result->name = root_rule;
 	ArenaAllocator transformer_allocator(Allocator::DefaultAllocator());
 	PEGTransformerState transformer_state(tokens);
-	PEGTransformer transformer(transformer_allocator, transformer_state, sql_transform_functions, parser.rules,
-	                           enum_mappings);
-	auto transformed_result = transformer.Transform<unique_ptr<SQLStatement>>(match_result);
-	return transformed_result;
+	auto &factory = GetInstance();
+	PEGTransformer transformer(transformer_allocator, transformer_state,
+							 factory.sql_transform_functions,
+							 factory.parser.rules,
+							 factory.enum_mappings);
+	return transformer.Transform<unique_ptr<SQLStatement>>(match_result);
 }
 
 #define REGISTER_TRANSFORM(FUNCTION) Register(string(#FUNCTION).substr(9), &FUNCTION)
+
+PEGTransformerFactory &PEGTransformerFactory::GetInstance() {
+	static PEGTransformerFactory instance;
+	return instance;
+}
 
 PEGTransformerFactory::PEGTransformerFactory() {
 	// Registering transform functions using the macro for brevity

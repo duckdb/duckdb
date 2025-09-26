@@ -492,7 +492,8 @@ static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(Clien
 	// tokenize the input
 	vector<MatcherToken> tokens;
 	vector<MatcherSuggestion> suggestions;
-	MatchState state(tokens, suggestions);
+	ParseResultAllocator parse_allocator;
+	MatchState state(tokens, suggestions, parse_allocator);
 	vector<UnicodeSpace> unicode_spaces;
 	string clean_sql;
 	const string &sql_ref = StripUnicodeSpaces(sql, clean_sql) ? clean_sql : sql;
@@ -655,7 +656,8 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 			continue;
 		}
 		vector<MatcherSuggestion> suggestions;
-		MatchState state(tokens, suggestions);
+		ParseResultAllocator parse_allocator;
+		MatchState state(tokens, suggestions, parse_allocator);
 
 		MatcherAllocator allocator;
 		auto &matcher = Matcher::RootMatcher(allocator);
@@ -706,7 +708,7 @@ public:
 				auto statement = PEGTransformerFactory::Transform(tokenizer.statements[0], "Statement");
 				result.push_back(std::move(statement));
 			}
-			return ParserOverrideResult(result);
+			return ParserOverrideResult(std::move(result));
 		} catch (const ParserException &) {
 			return ParserOverrideResult();
 		}
