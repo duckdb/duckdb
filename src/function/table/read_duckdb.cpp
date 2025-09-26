@@ -43,6 +43,7 @@ struct DuckDBMultiFileInfo : MultiFileReaderInterface {
 	                   LocalTableFunctionState &local_state) override;
 	unique_ptr<NodeStatistics> GetCardinality(const MultiFileBindData &bind_data, idx_t file_count) override;
 	void GetVirtualColumns(ClientContext &, MultiFileBindData &, virtual_column_map_t &result) override;
+	unique_ptr<MultiFileReaderInterface> Copy() override;
 	FileGlobInput GetGlobInput() override;
 };
 
@@ -287,14 +288,14 @@ bool DuckDBReader::TryInitializeScan(ClientContext &context, GlobalTableFunction
 		}
 
 		// initialize the scan over this table
-		TableFunctionInitInput input(bind_data.get(), column_indexes, vector<idx_t>(), nullptr);
+		TableFunctionInitInput input(bind_data.get(), column_indexes, vector<idx_t>(), filters.get());
 		global_state = scan_function.init_global(context, input);
 	}
 	AssignSharedPointer(lstate.attached_database, db_wrapper);
 	// initialize the local scan
 	ThreadContext thread(context);
 	ExecutionContext exec_context(context, thread, nullptr);
-	TableFunctionInitInput input(bind_data.get(), column_indexes, vector<idx_t>(), nullptr);
+	TableFunctionInitInput input(bind_data.get(), column_indexes, vector<idx_t>(), filters.get());
 	lstate.local_state = scan_function.init_local(exec_context, input, global_state.get());
 	return true;
 }
@@ -463,6 +464,10 @@ unique_ptr<NodeStatistics> DuckDBMultiFileInfo::GetCardinality(const MultiFileBi
 	return make_uniq<NodeStatistics>(estimated_cardinality);
 }
 
+unique_ptr<MultiFileReaderInterface> DuckDBMultiFileInfo::Copy() {
+	return make_uniq<DuckDBMultiFileInfo>();
+}
+
 FileGlobInput DuckDBMultiFileInfo::GetGlobInput() {
 	return FileGlobInput(FileGlobOptions::FALLBACK_GLOB, "db");
 }
@@ -485,10 +490,18 @@ static vector<column_t> DuckDBGetRowIdColumns(ClientContext &, optional_ptr<Func
 	return result;
 }
 
+static bool DuckDBScanPushdownExpression(ClientContext &context, const LogicalGet &get, Expression &expr) {
+	return true;
+}
+
 TableFunction ReadDuckDBTableFunction::GetFunction() {
 	MultiFileFunction<DuckDBMultiFileInfo> read_duckdb("read_duckdb");
 	read_duckdb.statistics = MultiFileFunction<DuckDBMultiFileInfo>::MultiFileScanStats;
 	read_duckdb.get_row_id_columns = DuckDBGetRowIdColumns;
+	read_duckdb.pushdown_expression = DuckDBScanPushdownExpression;
+	read_duckdb.filter_pushdown = true;
+	read_duckdb.filter_prune = true;
+	read_duckdb.late_materialization = true;
 	ReadDuckDBAddNamedParameters(read_duckdb);
 	return static_cast<TableFunction>(read_duckdb);
 }
