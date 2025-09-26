@@ -182,7 +182,10 @@ unique_ptr<MaterializedQueryResult> Command::ExecuteQuery(ExecuteContext &contex
 		return unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(result));
 	}
 #else
-	return connection->Query(context.sql_query);
+	QueryParameters query_parameters;
+	query_parameters.streaming_mode = QueryResultStreamingMode::DO_NOT_ALLOW;
+	query_parameters.memory_management_type = QueryResultMemoryManagementType::BUFFER_MANAGED;
+	return connection->Query(context.sql_query, query_parameters);
 #endif
 }
 

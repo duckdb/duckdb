@@ -223,7 +223,10 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 			stmt->prepared = std::move(prepared);
 		} else {
 			// Use eager execution: there are no parameters so we can safely create a PendingQuery here
-			auto pending = db->con->PendingQuery(std::move(statements.back()), false);
+			QueryParameters query_parameters;
+			query_parameters.streaming_mode = QueryResultStreamingMode::DO_NOT_ALLOW;
+			query_parameters.memory_management_type = QueryResultMemoryManagementType::BUFFER_MANAGED;
+			auto pending = db->con->PendingQuery(std::move(statements.back()), query_parameters);
 			if (pending->HasError()) {
 				// failed to prepare: set the error message
 				db->last_error = pending->GetErrorObject();
