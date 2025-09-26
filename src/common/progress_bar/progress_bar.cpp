@@ -68,6 +68,18 @@ QueryProgress ProgressBar::GetDetailedQueryProgress() {
 	return query_progress;
 }
 
+void ProgressBar::AddTextualInfo(const string &tag, const string &info) {
+	if (display) {
+		display->AddTextualInfo(tag, info);
+	}
+}
+
+void ProgressBar::AddNumericInfo(const string &tag, double info) {
+	if (display) {
+		display->AddNumericInfo(tag, info);
+	}
+}
+
 void ProgressBar::Start() {
 	profiler.Start();
 	query_progress.Initialize();
@@ -148,6 +160,7 @@ void ProgressBar::FinishProgressBarPrint() {
 		return;
 	}
 	D_ASSERT(display);
+	display->AddNumericInfo("total_time", profiler.Elapsed());
 	display->Finish();
 	finished = true;
 	if (query_progress.percentage == 0) {
