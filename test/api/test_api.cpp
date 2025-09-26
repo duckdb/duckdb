@@ -361,9 +361,8 @@ TEST_CASE("Test fetch API robustness", "[api]") {
 	auto result = conn->SendQuery("SELECT 42");
 	// close the connection
 	conn.reset();
-	// now try to fetch a chunk, this should not return a nullptr
-	auto chunk = result->Fetch();
-	REQUIRE(chunk);
+	// now try to fetch a chunk, this should throw because the connection is closed
+	REQUIRE_THROWS(result->Fetch());
 
 	// now close the entire database
 	conn = make_uniq<Connection>(*db);
@@ -371,7 +370,7 @@ TEST_CASE("Test fetch API robustness", "[api]") {
 
 	db.reset();
 	// fetch should not fail
-	chunk = result->Fetch();
+	auto chunk = result->Fetch();
 	REQUIRE(chunk);
 	// new queries on the connection should not fail either
 	REQUIRE_NO_FAIL(conn->SendQuery("SELECT 42"));
