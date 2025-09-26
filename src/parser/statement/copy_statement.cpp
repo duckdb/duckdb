@@ -2,10 +2,12 @@
 
 namespace duckdb {
 
-CopyStatement::CopyStatement() : SQLStatement(StatementType::COPY_STATEMENT), info(make_uniq<CopyInfo>()) {
+CopyStatement::CopyStatement()
+    : SQLStatement(StatementType::COPY_STATEMENT), info(make_uniq<CopyInfo>()), has_been_planned(false) {
 }
 
-CopyStatement::CopyStatement(const CopyStatement &other) : SQLStatement(other), info(other.info->Copy()) {
+CopyStatement::CopyStatement(const CopyStatement &other)
+    : SQLStatement(other), info(other.info->Copy()), has_been_planned(other.has_been_planned) {
 }
 
 string CopyStatement::ToString() const {

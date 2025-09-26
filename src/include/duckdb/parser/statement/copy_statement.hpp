@@ -27,6 +27,8 @@ public:
 
 	string ToString() const override;
 
+	bool has_been_planned = false;
+
 protected:
 	CopyStatement(const CopyStatement &other);
 
