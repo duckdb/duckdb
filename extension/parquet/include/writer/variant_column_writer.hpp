@@ -39,13 +39,7 @@ public:
 	bool HasTransform() override {
 		return true;
 	}
-	LogicalType TransformedType() override {
-		child_list_t<LogicalType> children;
-		for (auto &child_writer : child_writers) {
-			children.emplace_back(child_writer->Schema().name, child_writer->TransformedType());
-		}
-		return LogicalType::STRUCT(std::move(children));
-	}
+	LogicalType TransformedType() override;
 	unique_ptr<Expression> TransformExpression(unique_ptr<BoundReferenceExpression> expr) override {
 		vector<unique_ptr<Expression>> arguments;
 		arguments.push_back(unique_ptr_cast<BoundReferenceExpression, Expression>(std::move(expr)));

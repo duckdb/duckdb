@@ -7,20 +7,20 @@ namespace duckdb {
 ShreddingType::ShreddingType() : set(false) {
 }
 
-ShreddingType::ShreddingType(LogicalTypeId shredding_type) : set(true), shredding_type(shredding_type) {
+ShreddingType::ShreddingType(const LogicalType &shredding_type) : set(true), shredding_type(shredding_type) {
 }
 
 static ShreddingType ConvertShreddingTypeRecursive(const LogicalType &type) {
 	if (type.id() == LogicalTypeId::VARIANT) {
-		return ShreddingType(LogicalTypeId::ANY);
+		return ShreddingType(LogicalType(LogicalTypeId::ANY));
 	}
 	if (!type.IsNested()) {
-		return ShreddingType(type.id());
+		return ShreddingType(type);
 	}
 
 	switch (type.id()) {
 	case LogicalTypeId::STRUCT: {
-		ShreddingType res(LogicalTypeId::STRUCT);
+		ShreddingType res(type);
 		auto &children = StructType::GetChildTypes(type);
 		for (auto &entry : children) {
 			res.children[entry.first] = ConvertShreddingTypeRecursive(entry.second);
@@ -28,7 +28,7 @@ static ShreddingType ConvertShreddingTypeRecursive(const LogicalType &type) {
 		return res;
 	}
 	case LogicalTypeId::LIST: {
-		ShreddingType res(LogicalTypeId::STRUCT);
+		ShreddingType res(type);
 		const auto &child = ListType::GetChildType(type);
 		res.children["element"] = ConvertShreddingTypeRecursive(child);
 		return res;

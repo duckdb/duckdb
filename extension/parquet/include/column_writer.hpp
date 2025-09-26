@@ -100,7 +100,7 @@ public:
 		return false;
 	}
 	virtual LogicalType TransformedType() {
-		return Type();
+		throw NotImplementedException("Writer does not have a transformed type");
 	}
 	virtual unique_ptr<Expression> TransformExpression(unique_ptr<BoundReferenceExpression> expr) {
 		throw NotImplementedException("Writer does not have a transform expression");

@@ -128,4 +128,48 @@ void VariantColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 	value_writer.FinalizeWrite(value_state);
 }
 
+//! Create the 'typed_value' struct for the input type
+LogicalType TransformTypedValueRecursive(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::STRUCT: {
+		//! Wrap all fields of the struct in a struct with 'value' and 'typed_value' fields
+		auto &child_types = StructType::GetChildTypes(type);
+		child_list_t<LogicalType> replaced_types;
+		for (auto &entry : child_types) {
+			child_list_t<LogicalType> child_children;
+			child_children.emplace_back("value", LogicalType::BLOB);
+			if (entry.second.id() != LogicalTypeId::VARIANT) {
+				child_children.emplace_back("typed_value", TransformTypedValueRecursive(entry.second));
+			}
+			replaced_types.emplace_back(entry.first, LogicalType::STRUCT(child_children));
+		}
+		return LogicalType::STRUCT(replaced_types);
+	}
+	case LogicalTypeId::LIST: {
+		auto &child_type = ListType::GetChildType(type);
+		child_list_t<LogicalType> replaced_types;
+		replaced_types.emplace_back("value", LogicalType::BLOB);
+		if (child_type.id() != LogicalTypeId::VARIANT) {
+			replaced_types.emplace_back("typed_value", child_type);
+		}
+		return LogicalType::LIST(LogicalType::STRUCT(replaced_types));
+	}
+	case LogicalTypeId::UNION:
+	case LogicalTypeId::MAP:
+	case LogicalTypeId::VARIANT:
+	case LogicalTypeId::ARRAY:
+		throw InternalException("'%s' can't appear inside the a 'typed_value' shredded type!", type.ToString());
+	default:
+		return type;
+	}
+}
+
+LogicalType VariantColumnWriter::TransformedType() {
+	child_list_t<LogicalType> children;
+	for (auto &child_writer : child_writers) {
+		children.emplace_back(child_writer->Schema().name, TransformTypedValueRecursive(child_writer->Type()));
+	}
+	return LogicalType::STRUCT(std::move(children));
+}
+
 } // namespace duckdb

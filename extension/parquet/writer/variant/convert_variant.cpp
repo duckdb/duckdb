@@ -3,6 +3,7 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
 #include "reader/variant/variant_binary_decoder.hpp"
+#include "parquet_shredding.hpp"
 
 namespace duckdb {
 
@@ -85,8 +86,101 @@ static void CreateMetadata(UnifiedVariantVectorData &variant, Vector &metadata, 
 	}
 }
 
+namespace {
+
+static unordered_set<VariantLogicalType> GetVariantType(const LogicalType &type) {
+	if (type.id() == LogicalTypeId::ANY) {
+		return {};
+	}
+	switch (type.id()) {
+	case LogicalTypeId::STRUCT:
+		return {VariantLogicalType::OBJECT};
+	case LogicalTypeId::LIST:
+		return {VariantLogicalType::ARRAY};
+	case LogicalTypeId::BOOLEAN:
+		return {VariantLogicalType::BOOL_TRUE, VariantLogicalType::BOOL_FALSE};
+	case LogicalTypeId::TINYINT:
+		return {VariantLogicalType::INT8};
+	case LogicalTypeId::SMALLINT:
+		return {VariantLogicalType::INT16};
+	case LogicalTypeId::INTEGER:
+		return {VariantLogicalType::INT32};
+	case LogicalTypeId::BIGINT:
+		return {VariantLogicalType::INT64};
+	case LogicalTypeId::FLOAT:
+		return {VariantLogicalType::FLOAT};
+	case LogicalTypeId::DOUBLE:
+		return {VariantLogicalType::DOUBLE};
+	case LogicalTypeId::DECIMAL:
+		return {VariantLogicalType::DECIMAL};
+	case LogicalTypeId::DATE:
+		return {VariantLogicalType::DATE};
+	case LogicalTypeId::TIME:
+		return {VariantLogicalType::TIME_MICROS};
+	case LogicalTypeId::TIMESTAMP_TZ:
+		return {VariantLogicalType::TIMESTAMP_MICROS_TZ};
+	case LogicalTypeId::TIMESTAMP:
+		return {VariantLogicalType::TIMESTAMP_MICROS};
+	case LogicalTypeId::TIMESTAMP_NS:
+		return {VariantLogicalType::TIMESTAMP_NANOS};
+	case LogicalTypeId::BLOB:
+		return {VariantLogicalType::BLOB};
+	case LogicalTypeId::VARCHAR:
+		return {VariantLogicalType::VARCHAR};
+	case LogicalTypeId::UUID:
+		return {VariantLogicalType::UUID};
+	default:
+		throw BinderException("Type '%s' can't be translated to a VARIANT type", type.ToString());
+	}
+}
+
+struct ShreddingState {
+public:
+	explicit ShreddingState(const LogicalType &type, idx_t total_count)
+	    : type(type), shredded_sel(total_count), values_index_sel(total_count) {
+		variant_types = GetVariantType(type);
+	}
+
+public:
+	bool ValueIsShredded(UnifiedVariantVectorData &variant, idx_t row, idx_t values_index) {
+		auto type_id = variant.GetTypeId(row, values_index);
+		if (!variant_types.count(type_id)) {
+			return false;
+		}
+		return true;
+	}
+	void SetShredded(idx_t row, idx_t values_index) {
+		shredded_sel[count] = row;
+		values_index_sel[count] = values_index;
+		count++;
+	}
+	case_insensitive_string_set_t ObjectFields() {
+		D_ASSERT(type.id() == LogicalTypeId::STRUCT);
+		case_insensitive_string_set_t res;
+		auto &child_types = StructType::GetChildTypes(type);
+		for (auto &entry : child_types) {
+			auto &type = entry.first;
+			res.emplace(string_t(type.c_str(), type.size()));
+		}
+		return res;
+	}
+
+public:
+	//! The type the field is shredded on
+	const LogicalType &type;
+	unordered_set<VariantLogicalType> variant_types;
+	//! row that is shredded
+	SelectionVector shredded_sel;
+	//! 'values_index' of the shredded value
+	SelectionVector values_index_sel;
+	//! The amount of rows that are shredded on
+	idx_t count = 0;
+};
+
+} // namespace
+
 static idx_t AnalyzeValueData(const UnifiedVariantVectorData &variant, idx_t row, uint32_t values_index,
-                              vector<uint32_t> &offsets) {
+                              vector<uint32_t> &offsets, optional_ptr<ShreddingState> shredding_state) {
 	D_ASSERT(variant.RowIsValid(row));
 
 	idx_t total_size = 0;
@@ -101,12 +195,39 @@ static idx_t AnalyzeValueData(const UnifiedVariantVectorData &variant, idx_t row
 		//! Calculate value and key offsets for all children
 		idx_t total_offset = 0;
 		uint32_t highest_keys_index = 0;
-		for (idx_t i = 0; i < nested_data.child_count; i++) {
+
+		vector<idx_t> child_indices;
+		if (shredding_state && shredding_state->type.id() == LogicalTypeId::STRUCT) {
+			//! FIXME: The variant spec says that field names should be case-sensitive, not insensitive
+			case_insensitive_string_set_t shredded_fields = shredding_state->ObjectFields();
+
+			for (idx_t i = 0; i < nested_data.child_count; i++) {
+				auto keys_index = variant.GetKeysIndex(row, i + nested_data.children_idx);
+				auto &key = variant.GetKey(row, keys_index);
+
+				if (shredded_fields.count(key)) {
+					//! This field is shredded on, omit it from the value
+					continue;
+				}
+				child_indices.push_back(i);
+			}
+		} else {
+			for (idx_t i = 0; i < nested_data.child_count; i++) {
+				child_indices.push_back(i);
+			}
+		}
+
+		if (nested_data.child_count && child_indices.empty()) {
+			//! All fields of the object are shredded, omit the object entirely
+			return 0;
+		}
+
+		for (auto &i : child_indices) {
 			auto keys_index = variant.GetKeysIndex(row, i + nested_data.children_idx);
 			auto values_index = variant.GetValuesIndex(row, i + nested_data.children_idx);
 			offsets.push_back(total_offset);
 
-			total_offset += AnalyzeValueData(variant, row, values_index, offsets);
+			total_offset += AnalyzeValueData(variant, row, values_index, offsets, nullptr);
 			highest_keys_index = MaxValue(highest_keys_index, keys_index);
 		}
 
@@ -135,7 +256,7 @@ static idx_t AnalyzeValueData(const UnifiedVariantVectorData &variant, idx_t row
 			auto values_index = variant.GetValuesIndex(row, i + nested_data.children_idx);
 			offsets.push_back(total_offset);
 
-			total_offset += AnalyzeValueData(variant, row, values_index, offsets);
+			total_offset += AnalyzeValueData(variant, row, values_index, offsets, nullptr);
 		}
 
 		auto field_offset_size = CalculateByteLength(total_offset);
@@ -385,7 +506,8 @@ static void WritePrimitiveValueData(const UnifiedVariantVectorData &variant, idx
 }
 
 static void WriteValueData(const UnifiedVariantVectorData &variant, idx_t row, uint32_t values_index,
-                           data_ptr_t &value_data, const vector<uint32_t> &offsets, idx_t &offset_index) {
+                           data_ptr_t &value_data, const vector<uint32_t> &offsets, idx_t &offset_index,
+                           optional_ptr<ShreddingState> shredding_state) {
 	D_ASSERT(variant.RowIsValid(row));
 
 	auto type_id = variant.GetTypeId(row, values_index);
@@ -394,22 +516,48 @@ static void WriteValueData(const UnifiedVariantVectorData &variant, idx_t row, u
 
 		//! -- Object value header --
 
+		vector<idx_t> child_indices;
+		if (shredding_state && shredding_state->type.id() == LogicalTypeId::STRUCT) {
+			//! FIXME: The variant spec says that field names should be case-sensitive, not insensitive
+			case_insensitive_string_set_t shredded_fields = shredding_state->ObjectFields();
+
+			for (idx_t i = 0; i < nested_data.child_count; i++) {
+				auto keys_index = variant.GetKeysIndex(row, i + nested_data.children_idx);
+				auto &key = variant.GetKey(row, keys_index);
+
+				if (shredded_fields.count(key)) {
+					//! This field is shredded on, omit it from the value
+					continue;
+				}
+				child_indices.push_back(i);
+			}
+		} else {
+			for (idx_t i = 0; i < nested_data.child_count; i++) {
+				child_indices.push_back(i);
+			}
+		}
+
+		if (nested_data.child_count && child_indices.empty()) {
+			throw InternalException(
+			    "The entire should be omitted, should have been handled by the Analyze step already");
+		}
+		auto num_elements = child_indices.size();
+
 		//! Determine the 'field_id_size'
 		uint32_t highest_keys_index = 0;
-		for (idx_t i = 0; i < nested_data.child_count; i++) {
+		for (auto &i : child_indices) {
 			auto keys_index = variant.GetKeysIndex(row, i + nested_data.children_idx);
 			highest_keys_index = MaxValue(highest_keys_index, keys_index);
 		}
 		auto field_id_size = CalculateByteLength(highest_keys_index);
 
 		uint32_t last_offset = 0;
-		if (nested_data.child_count) {
-			last_offset = offsets[offset_index + nested_data.child_count - 1];
+		if (num_elements) {
+			last_offset = offsets[offset_index + num_elements - 1];
 		}
-		offset_index += nested_data.child_count;
+		offset_index += num_elements;
 		auto field_offset_size = CalculateByteLength(last_offset);
 
-		auto num_elements = nested_data.child_count;
 		const bool is_large = num_elements > NumericLimits<uint8_t>::Maximum();
 
 		uint8_t value_header = 0;
@@ -431,7 +579,7 @@ static void WriteValueData(const UnifiedVariantVectorData &variant, idx_t row, u
 		}
 
 		//! Write the 'field_id' entries
-		for (idx_t i = 0; i < nested_data.child_count; i++) {
+		for (auto &i : child_indices) {
 			auto keys_index = variant.GetKeysIndex(row, i + nested_data.children_idx);
 			memcpy(value_data, reinterpret_cast<data_ptr_t>(&keys_index), field_id_size);
 			value_data += field_id_size;
@@ -440,13 +588,13 @@ static void WriteValueData(const UnifiedVariantVectorData &variant, idx_t row, u
 		//! Write the 'field_offset' entries and the child 'value's
 		auto children_ptr = value_data + ((num_elements + 1) * field_offset_size);
 		idx_t total_offset = 0;
-		for (idx_t i = 0; i < nested_data.child_count; i++) {
+		for (auto &i : child_indices) {
 			auto values_index = variant.GetValuesIndex(row, i + nested_data.children_idx);
 
 			memcpy(value_data, reinterpret_cast<data_ptr_t>(&total_offset), field_offset_size);
 			value_data += field_offset_size;
 			auto start_ptr = children_ptr;
-			WriteValueData(variant, row, values_index, children_ptr, offsets, offset_index);
+			WriteValueData(variant, row, values_index, children_ptr, offsets, offset_index, nullptr);
 			total_offset += (children_ptr - start_ptr);
 		}
 		memcpy(value_data, reinterpret_cast<data_ptr_t>(&total_offset), field_offset_size);
@@ -492,7 +640,7 @@ static void WriteValueData(const UnifiedVariantVectorData &variant, idx_t row, u
 			memcpy(value_data, reinterpret_cast<data_ptr_t>(&total_offset), field_offset_size);
 			value_data += field_offset_size;
 			auto start_ptr = children_ptr;
-			WriteValueData(variant, row, values_index, children_ptr, offsets, offset_index);
+			WriteValueData(variant, row, values_index, children_ptr, offsets, offset_index, nullptr);
 			total_offset += (children_ptr - start_ptr);
 		}
 		memcpy(value_data, reinterpret_cast<data_ptr_t>(&total_offset), field_offset_size);
@@ -502,21 +650,42 @@ static void WriteValueData(const UnifiedVariantVectorData &variant, idx_t row, u
 	}
 }
 
-static void CreateValues(UnifiedVariantVectorData &variant, Vector &value, idx_t count) {
+static void CreateValues(UnifiedVariantVectorData &variant, Vector &value, optional_ptr<const SelectionVector> sel,
+                         optional_ptr<const SelectionVector> value_index_sel,
+                         optional_ptr<ShreddingState> shredding_state, idx_t count) {
 	auto &validity = FlatVector::Validity(value);
 	auto value_data = FlatVector::GetData<string_t>(value);
 
-	for (idx_t row = 0; row < count; row++) {
+	for (idx_t i = 0; i < count; i++) {
+		idx_t value_index = 0;
+		if (value_index_sel) {
+			value_index = value_index_sel->get_index(i);
+		}
+
+		idx_t row = i;
+		if (sel) {
+			row = sel->get_index(i);
+		}
+
 		if (!variant.RowIsValid(row)) {
 			validity.SetInvalid(row);
 			continue;
+		}
+		if (shredding_state && shredding_state->ValueIsShredded(variant, row, value_index)) {
+			shredding_state->SetShredded(row, value_index);
+			//! Value is shredded, write a NULL to the 'value'
+			if (shredding_state->type.id() != LogicalTypeId::STRUCT) {
+				validity.SetInvalid(row);
+				continue;
+			}
 		}
 
 		//! The (relative) offsets for each value, in the case of nesting
 		vector<uint32_t> offsets;
 		//! Determine the size of this 'value' blob
-		idx_t blob_length = AnalyzeValueData(variant, row, 0, offsets);
+		idx_t blob_length = AnalyzeValueData(variant, row, value_index, offsets, shredding_state);
 		if (!blob_length) {
+			validity.SetInvalid(row);
 			continue;
 		}
 		value_data[row] = StringVector::EmptyString(value, blob_length);
@@ -524,30 +693,118 @@ static void CreateValues(UnifiedVariantVectorData &variant, Vector &value, idx_t
 		auto value_blob_data = reinterpret_cast<data_ptr_t>(value_blob.GetDataWriteable());
 
 		idx_t offset_index = 0;
-		WriteValueData(variant, row, 0, value_blob_data, offsets, offset_index);
+		WriteValueData(variant, row, value_index, value_blob_data, offsets, offset_index, shredding_state);
 		value_blob.SetSizeAndFinalize(blob_length, blob_length);
 	}
 }
 
-namespace {
+//! fwd-declare static method
+static void WriteVariantValues(UnifiedVariantVectorData &variant, Vector &result,
+                               optional_ptr<const SelectionVector> sel,
+                               optional_ptr<const SelectionVector> value_index_sel, idx_t count);
 
-struct ShreddingState {
-public:
-	explicit ShreddingState(idx_t total_count) : shredded_sel(total_count), values_index_sel(total_count) {
+static void WriteTypedObjectValues(UnifiedVariantVectorData &variant, Vector &result, const SelectionVector &sel,
+                                   const SelectionVector &value_index_sel, idx_t count) {
+	auto &type = result.GetType();
+	D_ASSERT(type.id() == LogicalTypeId::STRUCT);
+
+	auto &validity = FlatVector::Validity(result);
+	(void)validity;
+
+	//! Collect the nested data for the objects
+	auto nested_data = make_unsafe_uniq_array_uninitialized<VariantNestedData>(count);
+	for (idx_t i = 0; i < count; i++) {
+		auto row = sel[i];
+		//! When we're shredding an object, the top-level struct of it should always be valid
+		D_ASSERT(validity.RowIsValid(row));
+		auto value_index = value_index_sel[i];
+		D_ASSERT(variant.GetTypeId(row, value_index) == VariantLogicalType::OBJECT);
+		nested_data[i] = VariantUtils::DecodeNestedData(variant, row, value_index);
 	}
 
-public:
-	//! row that is shredded
-	SelectionVector shredded_sel;
-	//! 'values_index' of the shredded value
-	SelectionVector values_index_sel;
-	//! The amount of rows that are shredded on
-	idx_t count = 0;
-};
+	auto &shredded_types = StructType::GetChildTypes(type);
+	auto &shredded_fields = StructVector::GetEntries(result);
+	D_ASSERT(shredded_types.size() == shredded_fields.size());
 
-} // namespace
+	SelectionVector child_values_indexes;
+	SelectionVector child_row_sel;
+	child_values_indexes.Initialize(count);
+	child_row_sel.Initialize(count);
 
-static void WriteVariantValues(UnifiedVariantVectorData &variant, Vector &result, idx_t count) {
+	for (idx_t child_idx = 0; child_idx < shredded_types.size(); child_idx++) {
+		auto &child_vec = *shredded_fields[child_idx];
+		D_ASSERT(child_vec.GetType() == shredded_types[child_idx].second);
+
+		//! Prepare the path component to perform the lookup for
+		auto &key = shredded_types[child_idx].first;
+		VariantPathComponent path_component;
+		path_component.lookup_mode = VariantChildLookupMode::BY_KEY;
+		path_component.key = key;
+
+		ValidityMask lookup_validity(count);
+		VariantUtils::FindChildValues(variant, path_component, sel, child_values_indexes, lookup_validity,
+		                              nested_data.get(), count);
+
+		if (!lookup_validity.AllValid()) {
+			auto &child_variant_vectors = StructVector::GetEntries(child_vec);
+			auto &value_validity = FlatVector::Validity(*child_variant_vectors[0]);
+			optional_ptr<ValidityMask> typed_value_validity;
+			if (child_variant_vectors.size() == 2) {
+				typed_value_validity = FlatVector::Validity(*child_variant_vectors[1]);
+			}
+			//! For some of the rows the field is missing, adjust the selection vector to exclude these rows.
+			idx_t child_count = 0;
+			for (idx_t i = 0; i < count; i++) {
+				if (!lookup_validity.RowIsValid(i)) {
+					//! The field is missing, set it to null
+					value_validity.SetInvalid(sel[i]);
+					if (typed_value_validity) {
+						typed_value_validity->SetInvalid(sel[i]);
+					}
+					continue;
+				}
+
+				child_row_sel[child_count] = sel[i];
+				child_values_indexes[child_count] = child_values_indexes[i];
+				child_count++;
+			}
+
+			WriteVariantValues(variant, child_vec, child_row_sel, child_values_indexes, child_count);
+		} else {
+			WriteVariantValues(variant, child_vec, &sel, child_values_indexes, count);
+		}
+	}
+}
+
+static void WriteTypedArrayValues(UnifiedVariantVectorData &variant, Vector &result, const SelectionVector &sel,
+                                  const SelectionVector &value_index_sel, idx_t count) {
+	throw NotImplementedException("Array values");
+}
+
+static void WriteTypedPrimitiveValues(UnifiedVariantVectorData &variant, Vector &result, const SelectionVector &sel,
+                                      const SelectionVector &value_index_sel, idx_t count) {
+	throw NotImplementedException("Primitive values");
+}
+
+static void WriteTypedValues(UnifiedVariantVectorData &variant, Vector &result, const SelectionVector &sel,
+                             const SelectionVector &value_index_sel, idx_t count) {
+	auto &type = result.GetType();
+
+	if (type.id() == LogicalTypeId::STRUCT) {
+		//! Shredded OBJECT
+		WriteTypedObjectValues(variant, result, sel, value_index_sel, count);
+	} else if (type.id() == LogicalTypeId::LIST) {
+		//! Shredded ARRAY
+		WriteTypedArrayValues(variant, result, sel, value_index_sel, count);
+	} else {
+		//! Primitive types
+		WriteTypedPrimitiveValues(variant, result, sel, value_index_sel, count);
+	}
+}
+
+static void WriteVariantValues(UnifiedVariantVectorData &variant, Vector &result,
+                               optional_ptr<const SelectionVector> sel,
+                               optional_ptr<const SelectionVector> value_index_sel, idx_t count) {
 	optional_ptr<Vector> value;
 	optional_ptr<Vector> typed_value;
 
@@ -565,10 +822,30 @@ static void WriteVariantValues(UnifiedVariantVectorData &variant, Vector &result
 		}
 	}
 
-	//! TODO: this should be able to be used recursively
-	//! The method is not vectorized
+	if (typed_value) {
+		ShreddingState shredding_state(typed_value->GetType(), count);
+		CreateValues(variant, *value, sel, value_index_sel, &shredding_state, count);
+		auto &validity = FlatVector::Validity(*typed_value);
+		if (shredding_state.count) {
+			WriteTypedValues(variant, *typed_value, shredding_state.shredded_sel, shredding_state.values_index_sel,
+			                 shredding_state.count);
 
-	CreateValues(variant, *value, count);
+			//! Invert the selection to take all the rows that aren't shredded on, to set them to NULL
+			SelectionVector inverted_sel(count);
+			auto inverted_count =
+			    SelectionVector::Inverted(shredding_state.shredded_sel, inverted_sel, shredding_state.count, count);
+			for (idx_t i = 0; i < inverted_count; i++) {
+				validity.SetInvalid(inverted_sel[i]);
+			}
+		} else {
+			//! Set all rows of the typed_value to NULL, nothing is shredded on
+			for (idx_t i = 0; i < count; i++) {
+				validity.SetInvalid(i);
+			}
+		}
+	} else {
+		CreateValues(variant, *value, sel, value_index_sel, nullptr, count);
+	}
 }
 
 static void ToParquetVariant(DataChunk &input, ExpressionState &state, Vector &result) {
@@ -603,7 +880,7 @@ static void ToParquetVariant(DataChunk &input, ExpressionState &state, Vector &r
 	}
 	auto &metadata = *result_vectors[0];
 	CreateMetadata(variant, metadata, count);
-	WriteVariantValues(variant, result, count);
+	WriteVariantValues(variant, result, nullptr, nullptr, count);
 }
 
 ScalarFunction VariantColumnWriter::GetTransformFunction() {

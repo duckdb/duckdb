@@ -2,13 +2,14 @@
 
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/types/variant.hpp"
 
 namespace duckdb {
 
 struct ShreddingType {
 public:
 	ShreddingType();
-	explicit ShreddingType(LogicalTypeId shredding_type);
+	explicit ShreddingType(const LogicalType &shredding_type);
 
 public:
 	void Serialize(Serializer &serializer) const;
@@ -19,7 +20,7 @@ public:
 
 public:
 	bool set = false;
-	LogicalTypeId shredding_type;
+	LogicalType shredding_type;
 	case_insensitive_map_t<ShreddingType> children;
 };
 

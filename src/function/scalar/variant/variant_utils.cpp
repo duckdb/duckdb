@@ -63,27 +63,25 @@ vector<string> VariantUtils::GetObjectKeys(const UnifiedVariantVectorData &varia
 	return object_keys;
 }
 
-VariantChildDataCollectionResult VariantUtils::FindChildValues(const UnifiedVariantVectorData &variant,
-                                                               const VariantPathComponent &component, optional_idx row,
-                                                               SelectionVector &res, VariantNestedData *nested_data,
-                                                               idx_t count) {
+//! FIXME: this shouldn't return a "result", it should populate a validity mask instead.
+void VariantUtils::FindChildValues(const UnifiedVariantVectorData &variant, const VariantPathComponent &component,
+                                   optional_ptr<const SelectionVector> sel, SelectionVector &res,
+                                   ValidityMask &res_validity, VariantNestedData *nested_data, idx_t count) {
 
 	for (idx_t i = 0; i < count; i++) {
-		auto row_index = row.IsValid() ? row.GetIndex() : i;
+		auto row_index = sel ? sel->get_index(i) : i;
 
 		auto &nested_data_entry = nested_data[i];
 		if (nested_data_entry.is_null) {
+			res_validity.SetInvalid(i);
 			continue;
 		}
 		if (component.lookup_mode == VariantChildLookupMode::BY_INDEX) {
 			auto child_idx = component.index;
-			if (child_idx == 0) {
-				return VariantChildDataCollectionResult::IndexZero();
-			}
-			child_idx--;
 			if (child_idx >= nested_data_entry.child_count) {
 				//! The list is too small to contain this index
-				return VariantChildDataCollectionResult::NotFound(i);
+				res_validity.SetInvalid(i);
+				continue;
 			}
 			auto value_id = variant.GetValuesIndex(row_index, nested_data_entry.children_idx + child_idx);
 			res[i] = static_cast<uint8_t>(value_id);
@@ -103,10 +101,9 @@ VariantChildDataCollectionResult VariantUtils::FindChildValues(const UnifiedVari
 			}
 		}
 		if (!found_child) {
-			return VariantChildDataCollectionResult::NotFound(i);
+			res_validity.SetInvalid(i);
 		}
 	}
-	return VariantChildDataCollectionResult();
 }
 
 vector<uint32_t> VariantUtils::ValueIsNull(const UnifiedVariantVectorData &variant, const SelectionVector &sel,
