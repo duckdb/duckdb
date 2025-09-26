@@ -710,10 +710,8 @@ public:
 		} catch (const ParserException &) {
 			return ParserOverrideResult();
 		}
-
 	}
 };
-
 
 static void LoadInternal(ExtensionLoader &loader) {
 	TableFunction auto_complete_fun("sql_auto_complete", {LogicalType::VARCHAR}, SQLAutoCompleteFunction,
