@@ -918,8 +918,12 @@ ColumnCheckpointInfo::ColumnCheckpointInfo(RowGroupWriteInfo &info, idx_t column
     : column_idx(column_idx), info(info) {
 }
 
+PartialBlockManager &RowGroupWriteInfo::GetPartialBlockManager(idx_t column_idx) {
+	return manager;
+}
+
 PartialBlockManager &ColumnCheckpointInfo::GetPartialBlockManager() {
-	return info.manager;
+	return info.GetPartialBlockManager(column_idx);
 }
 
 CompressionType ColumnCheckpointInfo::GetCompressionType() {
