@@ -34,6 +34,7 @@
 #include "duckdb/optimizer/topn_optimizer.hpp"
 #include "duckdb/optimizer/unnest_rewriter.hpp"
 #include "duckdb/optimizer/late_materialization.hpp"
+#include "duckdb/optimizer/common_subplan_optimizer.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/planner.hpp"
 
@@ -125,6 +126,12 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::CTE_INLINING, [&]() {
 		CTEInlining cte_inlining(*this);
 		plan = cte_inlining.Optimize(std::move(plan));
+	});
+
+	// convert common subplans into materialized CTEs
+	RunOptimizer(OptimizerType::COMMON_SUBPLAN, [&]() {
+		CommonSubplanOptimizer common_subplan_optimizer(*this);
+		plan = common_subplan_optimizer.Optimize(std::move(plan));
 	});
 
 	// Rewrites SUM(x + C) into SUM(x) + C * COUNT(x)

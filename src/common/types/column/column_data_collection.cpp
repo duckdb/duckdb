@@ -842,7 +842,8 @@ void ColumnDataCopyArray(ColumnDataMetaData &meta_data, const UnifiedVectorForma
 	child_vector.ToUnifiedFormat(copy_count * array_size, child_vector_data);
 
 	// Broadcast and sync the validity of the array vector to the child vector
-
+	// This requires creating a copy of the validity mask: we cannot modify the input validity
+	child_vector_data.validity = ValidityMask(child_vector_data.validity, child_vector_data.validity.Capacity());
 	if (source_data.validity.IsMaskSet()) {
 		for (idx_t i = 0; i < copy_count; i++) {
 			auto source_idx = source_data.sel->get_index(offset + i);

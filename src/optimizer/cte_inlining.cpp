@@ -55,10 +55,14 @@ static bool ContainsLimit(const LogicalOperator &op) {
 	return false;
 }
 
-static bool EndsInAggregateOrDistinct(const LogicalOperator &op) {
-	if (op.type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY ||
-	    op.type == LogicalOperatorType::LOGICAL_DISTINCT) {
+bool CTEInlining::EndsInAggregateOrDistinct(const LogicalOperator &op) {
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
+	case LogicalOperatorType::LOGICAL_DISTINCT:
+	case LogicalOperatorType::LOGICAL_WINDOW:
 		return true;
+	default:
+		break;
 	}
 	if (op.children.size() != 1) {
 		return false;
@@ -146,8 +150,7 @@ void CTEInlining::TryInlining(unique_ptr<LogicalOperator> &op) {
 	}
 }
 
-bool CTEInlining::Inline(unique_ptr<duckdb::LogicalOperator> &op, LogicalOperator &materialized_cte,
-                         bool requires_copy) {
+bool CTEInlining::Inline(unique_ptr<LogicalOperator> &op, LogicalOperator &materialized_cte, bool requires_copy) {
 	if (op->type == LogicalOperatorType::LOGICAL_CTE_REF) {
 		auto &cteref = op->Cast<LogicalCTERef>();
 		auto &cte = materialized_cte.Cast<LogicalCTE>();
