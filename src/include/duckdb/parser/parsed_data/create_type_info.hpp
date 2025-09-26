@@ -9,8 +9,6 @@
 #pragma once
 
 #include "duckdb/parser/parsed_data/create_info.hpp"
-#include "duckdb/parser/column_definition.hpp"
-#include "duckdb/parser/constraint.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 
 namespace duckdb {

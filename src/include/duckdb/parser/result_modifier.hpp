@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/enums/order_type.hpp"
 #include "duckdb/parser/parsed_expression.hpp"

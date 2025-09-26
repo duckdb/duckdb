@@ -5,6 +5,7 @@
 #include "duckdb/common/bind_helpers.hpp"
 #include "duckdb/common/filename_pattern.hpp"
 #include "duckdb/common/local_file_system.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
