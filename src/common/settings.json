@@ -847,6 +847,13 @@
         "custom_implementation": true
     },
     {
+        "name": "storage_block_prefetch",
+        "description": "In which scenarios to use storage block prefetching",
+        "type": "ENUM<StorageBlockPrefetch>",
+        "default_scope": "global",
+        "default_value": "REMOTE_ONLY"
+    },
+    {
         "name": "storage_compatibility_version",
         "description": "Serialize on checkpoint with compatibility for a given duckdb version",
         "type": "VARCHAR",

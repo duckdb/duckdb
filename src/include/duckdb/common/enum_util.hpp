@@ -382,6 +382,8 @@ enum class StatisticsType : uint8_t;
 
 enum class StatsInfo : uint8_t;
 
+enum class StorageBlockPrefetch : uint8_t;
+
 enum class StrTimeSpecifier : uint8_t;
 
 enum class StreamExecutionResult : uint8_t;
@@ -973,6 +975,9 @@ const char* EnumUtil::ToChars<StatisticsType>(StatisticsType value);
 
 template<>
 const char* EnumUtil::ToChars<StatsInfo>(StatsInfo value);
+
+template<>
+const char* EnumUtil::ToChars<StorageBlockPrefetch>(StorageBlockPrefetch value);
 
 template<>
 const char* EnumUtil::ToChars<StrTimeSpecifier>(StrTimeSpecifier value);
@@ -1598,6 +1603,9 @@ StatisticsType EnumUtil::FromString<StatisticsType>(const char *value);
 
 template<>
 StatsInfo EnumUtil::FromString<StatsInfo>(const char *value);
+
+template<>
+StorageBlockPrefetch EnumUtil::FromString<StorageBlockPrefetch>(const char *value);
 
 template<>
 StrTimeSpecifier EnumUtil::FromString<StrTimeSpecifier>(const char *value);

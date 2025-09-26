@@ -279,7 +279,7 @@ void SingleFileCheckpointReader::LoadFromStorage() {
 		return;
 	}
 
-	if (block_manager.IsRemote()) {
+	if (block_manager.Prefetch()) {
 		auto metadata_blocks = metadata_manager.GetBlocks();
 		auto &buffer_manager = BufferManager::GetBufferManager(storage.GetDatabase());
 		buffer_manager.Prefetch(metadata_blocks);
