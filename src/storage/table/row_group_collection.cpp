@@ -132,8 +132,8 @@ void RowGroupCollection::AppendRowGroup(SegmentLock &l, idx_t start_row) {
 	requires_new_row_group = false;
 }
 
-RowGroup *RowGroupCollection::GetRowGroup(int64_t index) {
-	return (RowGroup *)row_groups->GetSegmentByIndex(index);
+optional_ptr<RowGroup> RowGroupCollection::GetRowGroup(int64_t index) {
+	return row_groups->GetSegmentByIndex(index);
 }
 
 void RowGroupCollection::Verify() {
