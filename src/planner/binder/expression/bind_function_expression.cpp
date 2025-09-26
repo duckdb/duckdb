@@ -4,6 +4,7 @@
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/function_binder.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/lambda_expression.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -199,6 +200,7 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 			binder.SetAlwaysRequireRebind();
 		}
 	}
+	ClientData::Get(context).is_function_bound = ClientData::Get(context).is_add_column;
 	return BindResult(std::move(result));
 }
 

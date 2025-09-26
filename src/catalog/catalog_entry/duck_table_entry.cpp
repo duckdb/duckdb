@@ -6,6 +6,7 @@
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/parser/parsed_data/comment_on_column_info.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
@@ -14,6 +15,7 @@
 #include "duckdb/planner/constraints/bound_foreign_key_constraint.hpp"
 #include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
 #include "duckdb/planner/constraints/bound_unique_constraint.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_binder/alter_binder.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
@@ -22,6 +24,7 @@
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/storage/table/add_column_checkpoint_state.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/common/type_visitor.hpp"
 
@@ -369,9 +372,29 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddColumn(ClientContext &context, AddCo
 
 	create_info->columns.AddColumn(std::move(col));
 
+	ClientData::Get(context).is_add_column = true;
+	ClientData::Get(context).skip_bind_default = ClientData::Get(context).is_replay_wal && info.replay_stable_result;
+
 	vector<unique_ptr<Expression>> bound_defaults;
-	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema, bound_defaults);
+	auto bound_create_info =
+	    binder->BindCreateTableInfo(std::move(create_info), schema, bound_defaults);
+
+	if (ClientData::Get(context).skip_bind_default) {
+		bound_defaults.emplace_back(make_uniq<BoundConstantExpression>(Value(info.new_column.Type())));
+	}
+
+	if (ClientData::Get(context).is_function_bound || ClientData::Get(context).skip_bind_default) {
+		ClientData::Get(context).add_column_checkpoint_state =
+		    make_uniq<AddColumnCheckpointState>(context, *storage, info);
+	}
+
 	auto new_storage = make_shared_ptr<DataTable>(context, *storage, info.new_column, *bound_defaults.back());
+
+	ClientData::Get(context).skip_bind_default = false;
+	ClientData::Get(context).is_add_column = false;
+	ClientData::Get(context).is_function_bound = false;
+	ClientData::Get(context).add_column_checkpoint_state.reset();
+
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, new_storage);
 }
 
