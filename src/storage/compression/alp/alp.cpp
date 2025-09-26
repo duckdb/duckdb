@@ -28,7 +28,7 @@ CompressionFunction GetAlpFunction<double>(PhysicalType data_type) {
 	                           AlpScanPartial<double>, AlpFetchRow<double>, AlpSkip<double>);
 }
 
-CompressionFunction AlpCompressionFun::GetFunction(QueryContext context, PhysicalType type) {
+CompressionFunction AlpCompressionFun::GetFunction(PhysicalType type) {
 	switch (type) {
 	case PhysicalType::FLOAT:
 		return GetAlpFunction<float>(type);

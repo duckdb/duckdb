@@ -162,7 +162,7 @@ void DictionaryCompressionStorage::StringFetchRow(ColumnSegment &segment, Column
 //===--------------------------------------------------------------------===//
 // Get Function
 //===--------------------------------------------------------------------===//
-CompressionFunction DictionaryCompressionFun::GetFunction(QueryContext context, PhysicalType data_type) {
+CompressionFunction DictionaryCompressionFun::GetFunction(PhysicalType data_type) {
 	return CompressionFunction(
 	    CompressionType::COMPRESSION_DICTIONARY, data_type, DictionaryCompressionStorage ::StringInitAnalyze,
 	    DictionaryCompressionStorage::StringAnalyze, DictionaryCompressionStorage::StringFinalAnalyze,

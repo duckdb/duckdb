@@ -247,7 +247,7 @@ bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollec
 
 		// initialize the scan for this row group
 		bool need_to_scan =
-		    InitializeScanInRowGroup(QueryContext(context), scan_state, *collection, *row_group, vector_index, max_row);
+		    InitializeScanInRowGroup(context, scan_state, *collection, *row_group, vector_index, max_row);
 		if (!need_to_scan) {
 			// skip this row group
 			continue;
@@ -271,7 +271,7 @@ bool RowGroupCollection::Scan(DuckTransaction &transaction, const vector<Storage
 	// initialize the scan
 	TableScanState state;
 	state.Initialize(column_ids, nullptr);
-	InitializeScan(QueryContext(transaction.context), state.local_state, column_ids, nullptr);
+	InitializeScan(transaction.context, state.local_state, column_ids, nullptr);
 
 	while (true) {
 		chunk.Reset();

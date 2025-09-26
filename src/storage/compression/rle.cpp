@@ -576,7 +576,7 @@ CompressionFunction GetRLEFunction(PhysicalType data_type) {
 	                           RLEFilter<T>);
 }
 
-CompressionFunction RLEFun::GetFunction(QueryContext context, PhysicalType type) {
+CompressionFunction RLEFun::GetFunction(PhysicalType type) {
 	switch (type) {
 	case PhysicalType::BOOL: {
 		auto function = GetRLEFunction<int8_t>(type);

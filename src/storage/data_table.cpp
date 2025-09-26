@@ -245,7 +245,7 @@ void DataTable::InitializeScan(ClientContext &context, DuckTransaction &transact
 	state.checkpoint_lock = transaction.SharedLockTable(*info);
 	auto &local_storage = LocalStorage::Get(transaction);
 	state.Initialize(column_ids, context, table_filters);
-	row_groups->InitializeScan(QueryContext(context), state.table_state, column_ids, table_filters);
+	row_groups->InitializeScan(context, state.table_state, column_ids, table_filters);
 	local_storage.InitializeScan(*this, state.local_state, table_filters);
 }
 
@@ -681,7 +681,7 @@ void DataTable::VerifyNewConstraint(LocalStorage &local_storage, DataTable &pare
 		throw NotImplementedException("FIXME: ALTER COLUMN with such constraint is not supported yet");
 	}
 
-	parent.row_groups->VerifyNewConstraint(QueryContext(local_storage.GetClientContext()), parent, constraint);
+	parent.row_groups->VerifyNewConstraint(local_storage.GetClientContext(), parent, constraint);
 	local_storage.VerifyNewConstraint(parent, constraint);
 }
 

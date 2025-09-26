@@ -15,7 +15,7 @@ CompressionFunction GetChimpFunction(PhysicalType data_type) {
 	                           ChimpFetchRow<T>, ChimpSkip<T>);
 }
 
-CompressionFunction ChimpCompressionFun::GetFunction(QueryContext context, PhysicalType type) {
+CompressionFunction ChimpCompressionFun::GetFunction(PhysicalType type) {
 	switch (type) {
 	case PhysicalType::FLOAT:
 		return GetChimpFunction<float>(type);

@@ -234,7 +234,7 @@ static void DictFSSTFilter(ColumnSegment &segment, ColumnScanState &state, idx_t
 //===--------------------------------------------------------------------===//
 // Get Function
 //===--------------------------------------------------------------------===//
-CompressionFunction DictFSSTCompressionFun::GetFunction(QueryContext context, PhysicalType data_type) {
+CompressionFunction DictFSSTCompressionFun::GetFunction(PhysicalType data_type) {
 	auto res = CompressionFunction(
 	    CompressionType::COMPRESSION_DICT_FSST, data_type, dict_fsst::DictFSSTCompressionStorage::StringInitAnalyze,
 	    dict_fsst::DictFSSTCompressionStorage::StringAnalyze, dict_fsst::DictFSSTCompressionStorage::StringFinalAnalyze,

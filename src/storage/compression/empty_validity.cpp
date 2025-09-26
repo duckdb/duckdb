@@ -3,7 +3,7 @@
 
 namespace duckdb {
 
-CompressionFunction EmptyValidityCompressionFun::GetFunction(QueryContext context, PhysicalType type) {
+CompressionFunction EmptyValidityCompressionFun::GetFunction(PhysicalType type) {
 	return EmptyValidityCompression::CreateFunction();
 }
 

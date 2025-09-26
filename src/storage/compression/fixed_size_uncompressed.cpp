@@ -271,7 +271,7 @@ idx_t FixedSizeFinalizeAppend(ColumnSegment &segment, SegmentStatistics &stats) 
 // Get Function
 //===--------------------------------------------------------------------===//
 template <class T, class APPENDER = StandardFixedSizeAppend>
-CompressionFunction FixedSizeGetFunction(QueryContext context, PhysicalType data_type) {
+CompressionFunction FixedSizeGetFunction(PhysicalType data_type) {
 	return CompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, data_type, FixedSizeInitAnalyze,
 	                           FixedSizeAnalyze, FixedSizeFinalAnalyze<T>, UncompressedFunctions::InitCompression,
 	                           UncompressedFunctions::Compress, UncompressedFunctions::FinalizeCompress,
@@ -280,37 +280,37 @@ CompressionFunction FixedSizeGetFunction(QueryContext context, PhysicalType data
 	                           FixedSizeAppend<T, APPENDER>, FixedSizeFinalizeAppend<T>);
 }
 
-CompressionFunction FixedSizeUncompressed::GetFunction(QueryContext context, PhysicalType data_type) {
+CompressionFunction FixedSizeUncompressed::GetFunction(PhysicalType data_type) {
 	switch (data_type) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
-		return FixedSizeGetFunction<int8_t>(context, data_type);
+		return FixedSizeGetFunction<int8_t>(data_type);
 	case PhysicalType::INT16:
-		return FixedSizeGetFunction<int16_t>(context, data_type);
+		return FixedSizeGetFunction<int16_t>(data_type);
 	case PhysicalType::INT32:
-		return FixedSizeGetFunction<int32_t>(context, data_type);
+		return FixedSizeGetFunction<int32_t>(data_type);
 	case PhysicalType::INT64:
-		return FixedSizeGetFunction<int64_t>(context, data_type);
+		return FixedSizeGetFunction<int64_t>(data_type);
 	case PhysicalType::UINT8:
-		return FixedSizeGetFunction<uint8_t>(context, data_type);
+		return FixedSizeGetFunction<uint8_t>(data_type);
 	case PhysicalType::UINT16:
-		return FixedSizeGetFunction<uint16_t>(context, data_type);
+		return FixedSizeGetFunction<uint16_t>(data_type);
 	case PhysicalType::UINT32:
-		return FixedSizeGetFunction<uint32_t>(context, data_type);
+		return FixedSizeGetFunction<uint32_t>(data_type);
 	case PhysicalType::UINT64:
-		return FixedSizeGetFunction<uint64_t>(context, data_type);
+		return FixedSizeGetFunction<uint64_t>(data_type);
 	case PhysicalType::INT128:
-		return FixedSizeGetFunction<hugeint_t>(context, data_type);
+		return FixedSizeGetFunction<hugeint_t>(data_type);
 	case PhysicalType::UINT128:
-		return FixedSizeGetFunction<uhugeint_t>(context, data_type);
+		return FixedSizeGetFunction<uhugeint_t>(data_type);
 	case PhysicalType::FLOAT:
-		return FixedSizeGetFunction<float>(context, data_type);
+		return FixedSizeGetFunction<float>(data_type);
 	case PhysicalType::DOUBLE:
-		return FixedSizeGetFunction<double>(context, data_type);
+		return FixedSizeGetFunction<double>(data_type);
 	case PhysicalType::INTERVAL:
-		return FixedSizeGetFunction<interval_t>(context, data_type);
+		return FixedSizeGetFunction<interval_t>(data_type);
 	case PhysicalType::LIST:
-		return FixedSizeGetFunction<uint64_t, ListFixedSizeAppend>(context, data_type);
+		return FixedSizeGetFunction<uint64_t, ListFixedSizeAppend>(data_type);
 	default:
 		throw InternalException("Unsupported type for FixedSizeUncompressed::GetFunction");
 	}

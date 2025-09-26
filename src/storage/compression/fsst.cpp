@@ -778,7 +778,7 @@ void FSSTStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state
 //===--------------------------------------------------------------------===//
 // Get Function
 //===--------------------------------------------------------------------===//
-CompressionFunction FSSTFun::GetFunction(QueryContext context, PhysicalType data_type) {
+CompressionFunction FSSTFun::GetFunction(PhysicalType data_type) {
 	D_ASSERT(data_type == PhysicalType::VARCHAR);
 	return CompressionFunction(CompressionType::COMPRESSION_FSST, data_type, FSSTStorage::StringInitAnalyze,
 	                           FSSTStorage::StringAnalyze, FSSTStorage::StringFinalAnalyze,

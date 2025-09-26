@@ -211,7 +211,7 @@ CompressionFunction ConstantGetFunction(PhysicalType data_type) {
 	                           nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, ConstantSelect<T>);
 }
 
-CompressionFunction ConstantFun::GetFunction(QueryContext context, PhysicalType data_type) {
+CompressionFunction ConstantFun::GetFunction(PhysicalType data_type) {
 	switch (data_type) {
 	case PhysicalType::BIT:
 		return ConstantGetFunctionValidity(data_type);

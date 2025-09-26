@@ -23,7 +23,7 @@ struct UncompressedFunctions {
 };
 
 struct FixedSizeUncompressed {
-	static CompressionFunction GetFunction(QueryContext context, PhysicalType data_type);
+	static CompressionFunction GetFunction(PhysicalType data_type);
 };
 
 struct ValidityUncompressed {

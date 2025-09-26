@@ -90,8 +90,7 @@ public:
 				auto &collection = data_table.GetOptimisticCollection(context, collection_indexes[i]);
 				TableScanState scan_state;
 				scan_state.Initialize(column_ids);
-				collection.collection->InitializeScan(QueryContext(context), scan_state.local_state, column_ids,
-				                                      nullptr);
+				collection.collection->InitializeScan(context, scan_state.local_state, column_ids, nullptr);
 
 				while (true) {
 					scan_chunk.Reset();

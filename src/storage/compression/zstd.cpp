@@ -1030,7 +1030,7 @@ void ZSTDStorage::CleanupState(ColumnSegment &segment) {
 //===--------------------------------------------------------------------===//
 // Get Function
 //===--------------------------------------------------------------------===//
-CompressionFunction ZSTDFun::GetFunction(QueryContext context, PhysicalType data_type) {
+CompressionFunction ZSTDFun::GetFunction(PhysicalType data_type) {
 	D_ASSERT(data_type == PhysicalType::VARCHAR);
 	auto zstd = CompressionFunction(
 	    CompressionType::COMPRESSION_ZSTD, data_type, ZSTDStorage::StringInitAnalyze, ZSTDStorage::StringAnalyze,

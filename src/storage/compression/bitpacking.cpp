@@ -990,7 +990,7 @@ CompressionFunction GetBitpackingFunction(PhysicalType data_type) {
 	return bitpacking;
 }
 
-CompressionFunction BitpackingFun::GetFunction(QueryContext context, PhysicalType type) {
+CompressionFunction BitpackingFun::GetFunction(PhysicalType type) {
 	switch (type) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:

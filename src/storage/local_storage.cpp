@@ -16,8 +16,8 @@
 namespace duckdb {
 
 LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &table)
-    : table_ref(table), allocator(Allocator::Get(table.db)), deleted_rows(0), optimistic_writer(context, table),
-      merged_storage(false) {
+    : context(context), table_ref(table), allocator(Allocator::Get(table.db)), deleted_rows(0),
+      optimistic_writer(context, table), merged_storage(false) {
 
 	auto types = table.GetTypes();
 	auto data_table_info = table.GetDataTableInfo();
@@ -63,8 +63,8 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &table)
 LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_data_table, LocalTableStorage &parent,
                                      const idx_t alter_column_index, const LogicalType &target_type,
                                      const vector<StorageIndex> &bound_columns, Expression &cast_expr)
-    : table_ref(new_data_table), allocator(Allocator::Get(new_data_table.db)), deleted_rows(parent.deleted_rows),
-      optimistic_collections(std::move(parent.optimistic_collections)),
+    : context(context), table_ref(new_data_table), allocator(Allocator::Get(new_data_table.db)),
+      deleted_rows(parent.deleted_rows), optimistic_collections(std::move(parent.optimistic_collections)),
       optimistic_writer(new_data_table, parent.optimistic_writer), merged_storage(parent.merged_storage) {
 
 	// Alter the column type.
@@ -110,8 +110,7 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_dt, 
 LocalTableStorage::~LocalTableStorage() {
 }
 
-void LocalTableStorage::InitializeScan(QueryContext context, CollectionScanState &state,
-                                       optional_ptr<TableFilterSet> table_filters) {
+void LocalTableStorage::InitializeScan(CollectionScanState &state, optional_ptr<TableFilterSet> table_filters) {
 	auto &collection = *row_groups->collection;
 	if (collection.GetTotalRows() == 0) {
 		throw InternalException("No rows in LocalTableStorage row group for scan");
@@ -413,7 +412,7 @@ void LocalStorage::InitializeScan(DataTable &table, CollectionScanState &state,
 	if (storage == nullptr || storage->GetCollection().GetTotalRows() == 0) {
 		return;
 	}
-	storage->InitializeScan(QueryContext(context), state, table_filters);
+	storage->InitializeScan(state, table_filters);
 }
 
 void LocalStorage::Scan(CollectionScanState &state, const vector<StorageIndex> &, DataChunk &result) {
@@ -565,7 +564,7 @@ idx_t LocalStorage::Delete(DataTable &table, Vector &row_ids, idx_t count) {
 
 	// delete from unique indices (if any)
 	if (!storage->append_indexes.Empty()) {
-		storage->GetCollection().RemoveFromIndexes(QueryContext(context), storage->append_indexes, row_ids, count);
+		storage->GetCollection().RemoveFromIndexes(context, storage->append_indexes, row_ids, count);
 	}
 
 	auto ids = FlatVector::GetData<row_t>(row_ids);
@@ -753,7 +752,7 @@ void LocalStorage::VerifyNewConstraint(DataTable &parent, const BoundConstraint 
 	if (!storage) {
 		return;
 	}
-	storage->GetCollection().VerifyNewConstraint(QueryContext(context), parent, constraint);
+	storage->GetCollection().VerifyNewConstraint(context, parent, constraint);
 }
 
 } // namespace duckdb

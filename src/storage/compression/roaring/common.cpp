@@ -266,7 +266,7 @@ CompressionFunction GetCompressionFunction(PhysicalType data_type) {
 	                           roaring::RoaringSkip, roaring::RoaringInitSegment);
 }
 
-CompressionFunction RoaringCompressionFun::GetFunction(QueryContext context, PhysicalType type) {
+CompressionFunction RoaringCompressionFun::GetFunction(PhysicalType type) {
 	switch (type) {
 	case PhysicalType::BIT:
 		return GetCompressionFunction(type);
