@@ -27,7 +27,7 @@ include("${EXTENSION_CONFIG_BASE_DIR}/iceberg.cmake")
 include("${EXTENSION_CONFIG_BASE_DIR}/inet.cmake")
 include("${EXTENSION_CONFIG_BASE_DIR}/mysql_scanner.cmake")
 include("${EXTENSION_CONFIG_BASE_DIR}/postgres_scanner.cmake")
-include("${EXTENSION_CONFIG_BASE_DIR}/spatial.cmake")
+# include("${EXTENSION_CONFIG_BASE_DIR}/spatial.cmake") Remove spatial until the geometry refactor is done
 include("${EXTENSION_CONFIG_BASE_DIR}/sqlite_scanner.cmake")
 include("${EXTENSION_CONFIG_BASE_DIR}/sqlsmith.cmake")
 include("${EXTENSION_CONFIG_BASE_DIR}/vss.cmake")

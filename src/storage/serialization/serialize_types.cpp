@@ -42,6 +42,9 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(Deserializer &deserializer)
 	case ExtraTypeInfoType::GENERIC_TYPE_INFO:
 		result = make_shared_ptr<ExtraTypeInfo>(type);
 		break;
+	case ExtraTypeInfoType::GEO_TYPE_INFO:
+		result = GeoTypeInfo::Deserialize(deserializer);
+		break;
 	case ExtraTypeInfoType::INTEGER_LITERAL_TYPE_INFO:
 		result = IntegerLiteralTypeInfo::Deserialize(deserializer);
 		break;
@@ -134,6 +137,15 @@ unique_ptr<ExtensionTypeInfo> ExtensionTypeInfo::Deserialize(Deserializer &deser
 	deserializer.ReadPropertyWithDefault<vector<LogicalTypeModifier>>(100, "modifiers", result->modifiers);
 	deserializer.ReadPropertyWithExplicitDefault<unordered_map<string, Value>>(101, "properties", result->properties, unordered_map<string, Value>());
 	return result;
+}
+
+void GeoTypeInfo::Serialize(Serializer &serializer) const {
+	ExtraTypeInfo::Serialize(serializer);
+}
+
+shared_ptr<ExtraTypeInfo> GeoTypeInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::shared_ptr<GeoTypeInfo>(new GeoTypeInfo());
+	return std::move(result);
 }
 
 void IntegerLiteralTypeInfo::Serialize(Serializer &serializer) const {

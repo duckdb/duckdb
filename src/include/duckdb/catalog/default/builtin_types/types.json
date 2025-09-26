@@ -290,5 +290,12 @@
             "float8"
         ],
         "description": "double precision floating-point number (8 bytes)"
+    },
+    {
+        "id": "GEOMETRY",
+        "names": [
+            "geometry"
+        ],
+        "description": "A data type that represents geometric objects such as points, lines, and polygons."
     }
 ]

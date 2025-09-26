@@ -507,4 +507,19 @@ shared_ptr<ExtraTypeInfo> TemplateTypeInfo::Copy() const {
 	return make_shared_ptr<TemplateTypeInfo>(*this);
 }
 
+//===--------------------------------------------------------------------===//
+// Geo Type Info
+//===--------------------------------------------------------------------===//
+GeoTypeInfo::GeoTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::GEO_TYPE_INFO) {
+}
+
+bool GeoTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
+	// No additional info to compare
+	return true;
+}
+
+shared_ptr<ExtraTypeInfo> GeoTypeInfo::Copy() const {
+	return make_shared_ptr<GeoTypeInfo>(*this);
+}
+
 } // namespace duckdb
