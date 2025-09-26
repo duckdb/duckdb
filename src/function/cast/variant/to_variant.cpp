@@ -218,11 +218,10 @@ bool ConvertStructToSparseVariant(ToVariantSourceData &source, ToVariantGlobalRe
 	for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
 		const auto &child_format = child_source_data[child_idx].source_format;
 		for (idx_t i = 0; i < count; i++) {
-			const auto index = source[i];
-			if (!source_validity.RowIsValid(index)) {
+			if (!source_validity.RowIsValid(source[i])) {
 				continue;
 			}
-			if (child_format.validity.RowIsValid(child_format.sel->get_index(index))) {
+			if (child_format.validity.RowIsValid(child_format.sel->get_index(i))) {
 				non_null_child_counts[i]++;
 				key_is_used[child_idx] = true;
 			}
@@ -276,7 +275,7 @@ bool ConvertStructToSparseVariant(ToVariantSourceData &source, ToVariantGlobalRe
 				idx_t non_null_idx = 0; // Keep track of non-NULL children because this is a sparse conversion
 				for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
 					const auto &child_format = child_source_data[child_idx].source_format;
-					if (!child_format.validity.RowIsValid(child_format.sel->get_index(index))) {
+					if (!child_format.validity.RowIsValid(child_format.sel->get_index(i))) {
 						continue; // Sparse conversion: skip NULL
 					}
 					variant.keys_index_data[children_index + non_null_idx] =
@@ -323,8 +322,10 @@ bool ConvertStructToSparseVariant(ToVariantSourceData &source, ToVariantGlobalRe
 			//! Now forward the selection to point to the next index in the children.values_index
 			const auto &child_format = child_source_data[child_idx].source_format;
 			for (idx_t i = 0; i < sel.count; i++) {
-				const auto index = source[i];
-				if (child_format.validity.RowIsValid(child_format.sel->get_index(index))) {
+				if (!source_validity.RowIsValid(source[i]) || non_null_child_counts[i] == 0) {
+					continue;
+				}
+				if (child_format.validity.RowIsValid(child_format.sel->get_index(i))) {
 					sel.children_selection[i]++;
 				}
 			}
