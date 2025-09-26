@@ -687,9 +687,13 @@ void CheckPEGParserFunction(ClientContext &context, TableFunctionInput &data_p, 
 class PEGParserExtension : public ParserExtension {
 public:
 	PEGParserExtension() {
+		parse_function = PEGParseFunction;
 		parser_override = PEGParser;
 	}
 
+	static ParserExtensionParseResult PEGParseFunction(ParserExtensionInfo *info, const string &query) {
+		return ParserExtensionParseResult();
+	}
 
 	static ParserOverrideResult PEGParser(ParserExtensionInfo *info, const string &query) {
 		vector<MatcherToken> root_tokens;

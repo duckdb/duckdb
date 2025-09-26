@@ -103,7 +103,7 @@ private:
 		};
 	}
 
-	PEGTransformerFactory(const PEGTransformerFactory&) = delete;
+	PEGTransformerFactory(const PEGTransformerFactory &) = delete;
 
 	static unique_ptr<SQLStatement> TransformStatement(PEGTransformer &, optional_ptr<ParseResult> list);
 

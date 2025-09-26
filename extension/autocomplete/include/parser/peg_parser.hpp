@@ -63,4 +63,4 @@ inline bool IsPEGOperator(char c) {
 	}
 }
 
-}
+} // namespace duckdb

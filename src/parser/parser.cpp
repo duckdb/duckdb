@@ -14,6 +14,7 @@
 #include "duckdb/parser/transformer.hpp"
 #include "parser/parser.hpp"
 #include "postgres_parser.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -205,6 +206,9 @@ void Parser::ParseQuery(const string &query) {
 		if (options.extensions) {
 			for (auto &ext : *options.extensions) {
 				if (!ext.parser_override) {
+					continue;
+				}
+				if (!options.allow_parser_overrides) {
 					continue;
 				}
 				auto result = ext.parser_override(ext.parser_info.get(), query);
