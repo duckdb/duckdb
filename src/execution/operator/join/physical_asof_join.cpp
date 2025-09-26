@@ -396,8 +396,7 @@ public:
 		return !fetch_next_left || (lhs_scanner && lhs_scanner->Remaining());
 	}
 
-	ClientContext &context;
-	Allocator &allocator;
+	ClientContext &client;
 	const PhysicalAsOfJoin &op;
 	BufferManager &buffer_manager;
 	const bool force_external;
@@ -405,13 +404,17 @@ public:
 	Orders lhs_orders;
 
 	//	LHS scanning
-	SelectionVector lhs_sel;
+	SelectionVector lhs_scan_sel;
 	optional_ptr<PartitionGlobalHashGroup> left_hash;
 	OuterJoinMarker left_outer;
 	unique_ptr<SBIterator> left_itr;
 	unique_ptr<PayloadScanner> lhs_scanner;
 	DataChunk lhs_payload;
+	ExpressionExecutor lhs_executor;
+	DataChunk lhs_keys;
+	ValidityMask lhs_valid_mask;
 	idx_t left_group = 0;
+	SelectionVector lhs_match_sel;
 	const bool *lhs_matches = {};
 
 	//	RHS scanning
@@ -430,21 +433,26 @@ public:
 	bool fetch_next_left;
 };
 
-AsOfProbeBuffer::AsOfProbeBuffer(ClientContext &context, const PhysicalAsOfJoin &op)
-    : context(context), allocator(Allocator::Get(context)), op(op),
-      buffer_manager(BufferManager::GetBufferManager(context)), force_external(IsExternal(context)),
-      memory_per_thread(op.GetMaxThreadMemory(context)), left_outer(IsLeftOuterJoin(op.join_type)), filterer(context),
-      fetch_next_left(true) {
+AsOfProbeBuffer::AsOfProbeBuffer(ClientContext &client, const PhysicalAsOfJoin &op)
+    : client(client), op(op), buffer_manager(BufferManager::GetBufferManager(client)),
+      force_external(IsExternal(client)), memory_per_thread(op.GetMaxThreadMemory(client)),
+      left_outer(IsLeftOuterJoin(op.join_type)), lhs_executor(client), filterer(client), fetch_next_left(true) {
 	vector<unique_ptr<BaseStatistics>> partition_stats;
 	Orders partitions; // Not used.
 	PartitionGlobalSinkState::GenerateOrderings(partitions, lhs_orders, op.lhs_partitions, op.lhs_orders,
 	                                            partition_stats);
 
-	//	We sort the row numbers of the incoming block, not the rows
-	lhs_payload.Initialize(allocator, op.children[0].get().GetTypes());
-	rhs_payload.Initialize(allocator, op.children[1].get().GetTypes());
+	lhs_keys.Initialize(client, op.join_key_types);
+	for (const auto &cond : op.conditions) {
+		lhs_executor.AddExpression(*cond.left);
+	}
 
-	lhs_sel.Initialize();
+	//	We sort the row numbers of the incoming block, not the rows
+	lhs_payload.Initialize(client, op.children[0].get().GetTypes());
+	rhs_payload.Initialize(client, op.children[1].get().GetTypes());
+
+	lhs_scan_sel.Initialize();
+	lhs_match_sel.Initialize();
 	left_outer.Initialize(STANDARD_VECTOR_SIZE);
 
 	if (op.predicate) {
@@ -524,6 +532,54 @@ bool AsOfProbeBuffer::NextLeft() {
 	lhs_payload.Reset();
 	left_itr->SetIndex(lhs_scanner->Scanned());
 	lhs_scanner->Scan(lhs_payload);
+
+	//	Compute the join keys
+	lhs_keys.Reset();
+	lhs_executor.Execute(lhs_payload, lhs_keys);
+	lhs_keys.Flatten();
+
+	//	Combine the NULLs
+	const auto count = lhs_payload.size();
+	lhs_valid_mask.Reset();
+	for (auto col_idx : op.null_sensitive) {
+		auto &col = lhs_keys.data[col_idx];
+		UnifiedVectorFormat unified;
+		col.ToUnifiedFormat(count, unified);
+		lhs_valid_mask.Combine(unified.validity, count);
+	}
+
+	//	Convert the mask to a selection vector
+	//	and mark all the rows that cannot match for early return.
+	idx_t lhs_valid = 0;
+	const auto entry_count = lhs_valid_mask.EntryCount(count);
+	idx_t base_idx = 0;
+	left_outer.Reset();
+	for (idx_t entry_idx = 0; entry_idx < entry_count;) {
+		const auto validity_entry = lhs_valid_mask.GetValidityEntry(entry_idx++);
+		const auto next = MinValue<idx_t>(base_idx + ValidityMask::BITS_PER_VALUE, count);
+		if (ValidityMask::AllValid(validity_entry)) {
+			for (; base_idx < next; ++base_idx) {
+				lhs_scan_sel.set_index(lhs_valid++, base_idx);
+				left_outer.SetMatch(base_idx);
+			}
+		} else if (ValidityMask::NoneValid(validity_entry)) {
+			base_idx = next;
+		} else {
+			const auto start = base_idx;
+			for (; base_idx < next; ++base_idx) {
+				if (ValidityMask::RowIsValid(validity_entry, base_idx - start)) {
+					lhs_scan_sel.set_index(lhs_valid++, base_idx);
+					left_outer.SetMatch(base_idx);
+				}
+			}
+		}
+	}
+
+	//	Slice the keys to the ones we can match
+	if (lhs_valid < count) {
+		lhs_payload.Slice(lhs_scan_sel, lhs_valid);
+		lhs_payload.SetCardinality(lhs_valid);
+	}
 
 	return true;
 }
@@ -612,7 +668,7 @@ void AsOfProbeBuffer::ResolveJoin(bool *found_match, idx_t *matches) {
 		if (matches) {
 			matches[i] = first;
 		}
-		lhs_sel.set_index(lhs_match_count++, i);
+		lhs_match_sel.set_index(lhs_match_count++, i);
 	}
 }
 
@@ -640,7 +696,7 @@ void AsOfProbeBuffer::ResolveComplexJoin(ExecutionContext &context, DataChunk &c
 	ResolveJoin(nullptr, matches);
 
 	for (idx_t i = 0; i < lhs_match_count; ++i) {
-		const auto idx = lhs_sel[i];
+		const auto idx = lhs_match_sel[i];
 		const auto match_pos = matches[idx];
 		// Skip to the range containing the match
 		while (match_pos >= rhs_scanner->Scanned()) {
@@ -660,10 +716,10 @@ void AsOfProbeBuffer::ResolveComplexJoin(ExecutionContext &context, DataChunk &c
 
 	//	Slice the left payload into the result
 	for (column_t i = 0; i < lhs_payload.ColumnCount(); ++i) {
-		chunk.data[i].Slice(lhs_payload.data[i], lhs_sel, lhs_match_count);
+		chunk.data[i].Slice(lhs_payload.data[i], lhs_match_sel, lhs_match_count);
 	}
 	chunk.SetCardinality(lhs_match_count);
-	auto match_sel = &lhs_sel;
+	auto match_sel = &lhs_match_sel;
 	if (filterer.expressions.size() == 1) {
 		lhs_match_count = filterer.SelectExpression(chunk, filter_sel);
 		chunk.Slice(filter_sel, lhs_match_count);
