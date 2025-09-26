@@ -7,11 +7,14 @@ require httpfs
 statement error
 ATTACH 'https://duckdb.org/non_existing.db' AS db2 (READ_ONLY)
 ----
+IO Error: Cannot open database
 
 statement error
 ATTACH 'https://duckdb.org/non_existing.db' AS db2
 ----
+IO Error: Cannot open database
 
 statement error
 ATTACH 'https://duckdb.org/non_existing.db' AS db2 (READ_WRITE)
 ----
+HTTP Error: HTTP GET error
