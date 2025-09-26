@@ -83,7 +83,6 @@ public:
 	case_insensitive_map_t<idx_t> named_parameter_map;
 	idx_t prepared_statement_parameter_index = 0;
 	PreparedParamType last_param_type = PreparedParamType::INVALID;
-
 };
 
 class PEGTransformerFactory {
@@ -135,6 +134,5 @@ private:
 	case_insensitive_map_t<PEGTransformer::AnyTransformFunction> sql_transform_functions;
 	case_insensitive_map_t<unique_ptr<TransformEnumValue>> enum_mappings;
 };
-
 
 } // namespace duckdb
