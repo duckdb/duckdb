@@ -1,0 +1,32 @@
+# name: test/extension/loadable_parser_override.test
+# description: Try loading a parser override with an extension
+# group: [extension]
+
+require notmingw
+
+require skip_reload
+
+require allow_unsigned_extensions
+
+statement error
+override
+----
+Parser Error: syntax error at or near "override"
+
+statement ok
+LOAD '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
+
+query I
+override
+----
+The DuckDB parser has been overridden
+
+statement error
+overr;
+----
+Parser Error: Parser overridden, query contained "over" but not "override"
+
+query I
+SELECT 1;
+----
+1
