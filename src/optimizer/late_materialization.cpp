@@ -62,6 +62,10 @@ unique_ptr<LogicalGet> LateMaterialization::ConstructLHS(LogicalGet &get) {
 	                                     get.names, get.virtual_columns);
 	new_get->GetMutableColumnIds() = get.GetColumnIds();
 	new_get->projection_ids = get.projection_ids;
+	new_get->parameters = get.parameters;
+	new_get->named_parameters = get.named_parameters;
+	new_get->input_table_types = get.input_table_types;
+	new_get->input_table_names = get.input_table_names;
 	return new_get;
 }
 
