@@ -115,9 +115,6 @@ struct ClientConfig {
 	//! (empty = output to the DuckDB logger)
 	string http_logging_output;
 
-	//! Specify required validations for SECRET CREATE to complete successfully
-	string secret_validation;
-
 public:
 	static ClientConfig &GetConfig(ClientContext &context);
 	static const ClientConfig &GetConfig(const ClientContext &context);
