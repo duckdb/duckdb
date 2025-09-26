@@ -27,8 +27,15 @@ CREATE OR REPLACE TABLE tbl AS SELECT * FROM
 		(SELECT ${val_col} as val_col FROM all_types)
 	CROSS JOIN (SELECT i % 2 as grp_col FROM range(5) as r(i));
 
+# Disable top_n_window_elimination to prevent comparing max and max_by
+statement ok
+SET disabled_optimizers = 'top_n_window_elimination'
+
 statement ok
 CREATE OR REPLACE TABLE window_table AS SELECT * FROM compute_top_k(tbl, grp_col, val_col, 2) as rs(grp, res);
+
+statement ok
+SET disabled_optimizers = ''
 
 statement ok
 CREATE OR REPLACE TABLE agg_table AS SELECT grp_col as grp, max(val_col, 2) as res FROM tbl GROUP BY ALL ORDER BY ALL;
