@@ -102,6 +102,178 @@
             }
         },
         {
+            "name": "duckdb_init_get_filter_count",
+            "return_type": "idx_t",
+            "params": [
+                {
+                    "type": "duckdb_init_info",
+                    "name": "info"
+                }
+            ],
+            "comment": {
+                "description": "Returns the number of filter predicate trees that were pushed into the table function.\n\nThe returned filters can be inspected through `duckdb_init_get_filter`. Only predicates composed of the comparison operators `=`, `!=`, `>`, `<`, `>=`, and `<=`, optionally combined through AND/OR, are reported through this interface.\n\n",
+                "param_comments": {
+                    "info": "The info object"
+                },
+                "return_value": "The number of pushed filters supported by the C API."
+            }
+        },
+        {
+            "name": "duckdb_init_get_filter",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_init_info",
+                    "name": "info"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "filter_index"
+                },
+                {
+                    "type": "duckdb_table_function_filter *",
+                    "name": "out_filter"
+                }
+            ],
+            "comment": {
+                "description": "Retrieves the pushed filter tree at the specified index.\n\nThe index must be smaller than the value returned by `duckdb_init_get_filter_count`. The returned filter handle must be destroyed with `duckdb_destroy_table_function_filter` when it is no longer needed. Use `duckdb_table_function_filter_get_type`, `duckdb_table_function_filter_get_child_count`, `duckdb_table_function_filter_get_child`, `duckdb_table_function_filter_get_column_index`, `duckdb_table_function_filter_get_operator`, and `duckdb_table_function_filter_get_constant` to inspect the tree. The value returned by `duckdb_table_function_filter_get_constant` must be destroyed with `duckdb_destroy_value` when it is no longer needed.\n\n",
+                "param_comments": {
+                    "info": "The info object",
+                    "filter_index": "The index of the filter to fetch, from 0..duckdb_init_get_filter_count(info)",
+                    "out_filter": "The output filter handle."
+                },
+                "return_value": "`DuckDBSuccess` on success or `DuckDBError` if the filter index is invalid."
+            }
+        },
+        {
+            "name": "duckdb_table_function_filter_get_column_index",
+            "return_type": "idx_t",
+            "params": [
+                {
+                    "type": "duckdb_table_function_filter",
+                    "name": "filter"
+                }
+            ],
+            "comment": {
+                "description": "Returns the column index the pushed filter applies to.\n\n",
+                "param_comments": {
+                    "filter": "The filter handle."
+                },
+                "return_value": "The column index of the filter or 0 if the handle is invalid."
+            }
+        },
+        {
+            "name": "duckdb_table_function_filter_get_type",
+            "return_type": "duckdb_table_filter_type",
+            "params": [
+                {
+                    "type": "duckdb_table_function_filter",
+                    "name": "filter"
+                }
+            ],
+            "comment": {
+                "description": "Returns the node type of the pushed filter.\n\n",
+                "param_comments": {
+                    "filter": "The filter handle."
+                },
+                "return_value": "The node type of the filter. Returns `DUCKDB_TABLE_FILTER_TYPE_INVALID` if the handle is invalid."
+            }
+        },
+        {
+            "name": "duckdb_table_function_filter_get_operator",
+            "return_type": "duckdb_table_filter_operator",
+            "params": [
+                {
+                    "type": "duckdb_table_function_filter",
+                    "name": "filter"
+                }
+            ],
+            "comment": {
+                "description": "Returns the comparison operator of the pushed filter.\n\n",
+                "param_comments": {
+                    "filter": "The filter handle."
+                },
+                "return_value": "The comparison operator of the filter. Returns `DUCKDB_TABLE_FILTER_OPERATOR_INVALID` if the handle is invalid."
+            }
+        },
+        {
+            "name": "duckdb_table_function_filter_get_constant",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "duckdb_table_function_filter",
+                    "name": "filter"
+                }
+            ],
+            "comment": {
+                "description": "Returns the constant value the pushed filter compares against.\n\nThe returned value must be destroyed with `duckdb_destroy_value` when it is no longer needed.\n\n",
+                "param_comments": {
+                    "filter": "The filter handle."
+                },
+                "return_value": "The constant value of the filter."
+            }
+        },
+        {
+            "name": "duckdb_table_function_filter_get_child_count",
+            "return_type": "idx_t",
+            "params": [
+                {
+                    "type": "duckdb_table_function_filter",
+                    "name": "filter"
+                }
+            ],
+            "comment": {
+                "description": "Returns the number of child predicates of the pushed filter node.\n\n",
+                "param_comments": {
+                    "filter": "The filter handle."
+                },
+                "return_value": "The number of child predicates. Returns 0 if the handle is invalid or the node has no children."
+            }
+        },
+        {
+            "name": "duckdb_table_function_filter_get_child",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_table_function_filter",
+                    "name": "filter"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "index"
+                },
+                {
+                    "type": "duckdb_table_function_filter *",
+                    "name": "out_child"
+                }
+            ],
+            "comment": {
+                "description": "Retrieves a child predicate of the pushed filter node.\n\nThe index must be smaller than the value returned by `duckdb_table_function_filter_get_child_count`. The returned filter handle must be destroyed with `duckdb_destroy_table_function_filter` when it is no longer needed.\n\n",
+                "param_comments": {
+                    "filter": "The filter handle.",
+                    "index": "The index of the child to fetch, from 0..duckdb_table_function_filter_get_child_count(filter)",
+                    "out_child": "The output child filter handle."
+                },
+                "return_value": "`DuckDBSuccess` on success or `DuckDBError` if the filter or index is invalid."
+            }
+        },
+        {
+            "name": "duckdb_destroy_table_function_filter",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_table_function_filter *",
+                    "name": "filter"
+                }
+            ],
+            "comment": {
+                "description": "Destroys the given table function filter handle.\n\n",
+                "param_comments": {
+                    "filter": "The filter handle to destroy."
+                }
+            }
+        },
+        {
             "name": "duckdb_init_set_max_threads",
             "return_type": "void",
             "params": [
