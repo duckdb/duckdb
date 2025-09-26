@@ -43,12 +43,11 @@ static void CreateMetadata(UnifiedVariantVectorData &variant, Vector &metadata, 
 	auto metadata_data = FlatVector::GetData<string_t>(metadata);
 	auto &validity = FlatVector::Validity(metadata);
 	for (idx_t row = 0; row < count; row++) {
-		if (!variant.RowIsValid(row)) {
-			validity.SetInvalid(row);
-			continue;
+		uint64_t dictionary_count = 0;
+		if (variant.RowIsValid(row)) {
+			auto list_entry = keys_data[keys.sel->get_index(row)];
+			dictionary_count = list_entry.length;
 		}
-		auto list_entry = keys_data[keys.sel->get_index(row)];
-		auto dictionary_count = list_entry.length;
 		idx_t dictionary_size = 0;
 		for (idx_t i = 0; i < dictionary_count; i++) {
 			auto &key = variant.GetKey(row, i);
@@ -181,13 +180,14 @@ public:
 
 static idx_t AnalyzeValueData(const UnifiedVariantVectorData &variant, idx_t row, uint32_t values_index,
                               vector<uint32_t> &offsets, optional_ptr<ShreddingState> shredding_state) {
-	D_ASSERT(variant.RowIsValid(row));
-
 	idx_t total_size = 0;
 	//! Every value has at least a value header
 	total_size++;
 
-	auto type_id = variant.GetTypeId(row, values_index);
+	VariantLogicalType type_id = VariantLogicalType::VARIANT_NULL;
+	if (variant.RowIsValid(row)) {
+		type_id = variant.GetTypeId(row, values_index);
+	}
 	switch (type_id) {
 	case VariantLogicalType::OBJECT: {
 		auto nested_data = VariantUtils::DecodeNestedData(variant, row, values_index);
@@ -375,7 +375,10 @@ void CopySimplePrimitiveData(const UnifiedVariantVectorData &variant, data_ptr_t
 
 static void WritePrimitiveValueData(const UnifiedVariantVectorData &variant, idx_t row, uint32_t values_index,
                                     data_ptr_t &value_data, const vector<uint32_t> &offsets, idx_t &offset_index) {
-	auto type_id = variant.GetTypeId(row, values_index);
+	VariantLogicalType type_id = VariantLogicalType::VARIANT_NULL;
+	if (variant.RowIsValid(row)) {
+		type_id = variant.GetTypeId(row, values_index);
+	}
 
 	D_ASSERT(type_id != VariantLogicalType::OBJECT && type_id != VariantLogicalType::ARRAY);
 	switch (type_id) {
@@ -508,9 +511,11 @@ static void WritePrimitiveValueData(const UnifiedVariantVectorData &variant, idx
 static void WriteValueData(const UnifiedVariantVectorData &variant, idx_t row, uint32_t values_index,
                            data_ptr_t &value_data, const vector<uint32_t> &offsets, idx_t &offset_index,
                            optional_ptr<ShreddingState> shredding_state) {
-	D_ASSERT(variant.RowIsValid(row));
 
-	auto type_id = variant.GetTypeId(row, values_index);
+	VariantLogicalType type_id = VariantLogicalType::VARIANT_NULL;
+	if (variant.RowIsValid(row)) {
+		type_id = variant.GetTypeId(row, values_index);
+	}
 	if (type_id == VariantLogicalType::OBJECT) {
 		auto nested_data = VariantUtils::DecodeNestedData(variant, row, values_index);
 
@@ -667,14 +672,13 @@ static void CreateValues(UnifiedVariantVectorData &variant, Vector &value, optio
 			row = sel->get_index(i);
 		}
 
-		if (!variant.RowIsValid(row)) {
-			validity.SetInvalid(row);
-			continue;
-		}
-		if (shredding_state && shredding_state->ValueIsShredded(variant, row, value_index)) {
+		bool is_shredded = false;
+		if (variant.RowIsValid(row) && shredding_state && shredding_state->ValueIsShredded(variant, row, value_index)) {
 			shredding_state->SetShredded(row, value_index);
-			//! Value is shredded, write a NULL to the 'value'
+			is_shredded = true;
 			if (shredding_state->type.id() != LogicalTypeId::STRUCT) {
+				//! Value is shredded, directly write a NULL to the 'value' if the type is not an OBJECT
+				//! When the type is OBJECT, all excess fields would still need to be written to the 'value'
 				validity.SetInvalid(row);
 				continue;
 			}
@@ -685,6 +689,10 @@ static void CreateValues(UnifiedVariantVectorData &variant, Vector &value, optio
 		//! Determine the size of this 'value' blob
 		idx_t blob_length = AnalyzeValueData(variant, row, value_index, offsets, shredding_state);
 		if (!blob_length) {
+			//! This is only allowed to happen for a shredded OBJECT, where there are no excess fields to write for the
+			//! OBJECT
+			(void)is_shredded;
+			D_ASSERT(is_shredded);
 			validity.SetInvalid(row);
 			continue;
 		}
@@ -769,7 +777,10 @@ static void WriteTypedObjectValues(UnifiedVariantVectorData &variant, Vector &re
 				child_count++;
 			}
 
-			WriteVariantValues(variant, child_vec, child_row_sel, child_values_indexes, child_count);
+			if (child_count) {
+				//! If not all rows are missing this field, write the values for it
+				WriteVariantValues(variant, child_vec, child_row_sel, child_values_indexes, child_count);
+			}
 		} else {
 			WriteVariantValues(variant, child_vec, &sel, child_values_indexes, count);
 		}
@@ -825,7 +836,8 @@ static void WriteVariantValues(UnifiedVariantVectorData &variant, Vector &result
 	if (typed_value) {
 		ShreddingState shredding_state(typed_value->GetType(), count);
 		CreateValues(variant, *value, sel, value_index_sel, &shredding_state, count);
-		auto &validity = FlatVector::Validity(*typed_value);
+
+		SelectionVector null_values;
 		if (shredding_state.count) {
 			WriteTypedValues(variant, *typed_value, shredding_state.shredded_sel, shredding_state.values_index_sel,
 			                 shredding_state.count);
@@ -835,12 +847,12 @@ static void WriteVariantValues(UnifiedVariantVectorData &variant, Vector &result
 			auto inverted_count =
 			    SelectionVector::Inverted(shredding_state.shredded_sel, inverted_sel, shredding_state.count, count);
 			for (idx_t i = 0; i < inverted_count; i++) {
-				validity.SetInvalid(inverted_sel[i]);
+				FlatVector::SetNull(*typed_value, inverted_sel[i], true);
 			}
 		} else {
 			//! Set all rows of the typed_value to NULL, nothing is shredded on
 			for (idx_t i = 0; i < count; i++) {
-				validity.SetInvalid(i);
+				FlatVector::SetNull(*typed_value, sel ? sel->get_index(i) : i, true);
 			}
 		}
 	} else {
@@ -867,17 +879,6 @@ static void ToParquetVariant(DataChunk &input, ExpressionState &state, Vector &r
 	UnifiedVariantVectorData variant(recursive_format);
 
 	auto &result_vectors = StructVector::GetEntries(result);
-	bool all_null = true;
-	for (idx_t i = 0; i < count; i++) {
-		if (!variant.RowIsValid(i)) {
-			FlatVector::SetNull(result, i, true);
-		} else {
-			all_null = false;
-		}
-	}
-	if (all_null) {
-		return;
-	}
 	auto &metadata = *result_vectors[0];
 	CreateMetadata(variant, metadata, count);
 	WriteVariantValues(variant, result, nullptr, nullptr, count);

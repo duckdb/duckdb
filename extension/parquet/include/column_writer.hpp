@@ -109,7 +109,7 @@ public:
 	static ParquetColumnSchema
 	FillParquetSchema(vector<duckdb_parquet::SchemaElement> &schemas, const LogicalType &type, const string &name,
 	                  optional_ptr<const ChildFieldIDs> field_ids, optional_ptr<const ShreddingType> shredding_types,
-	                  idx_t max_repeat = 0, idx_t max_define = 1, bool can_have_nulls = true, bool in_variant = false);
+	                  idx_t max_repeat = 0, idx_t max_define = 1, bool can_have_nulls = true);
 	//! Create the column writer for a specific type recursively
 	static unique_ptr<ColumnWriter> CreateWriterRecursive(ClientContext &context, ParquetWriter &writer,
 	                                                      const vector<duckdb_parquet::SchemaElement> &parquet_schemas,

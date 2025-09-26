@@ -244,11 +244,46 @@ void ColumnWriter::HandleDefineLevels(ColumnWriterState &state, ColumnWriterStat
 // Create Column Writer
 //===--------------------------------------------------------------------===//
 
+LogicalType TransformTypedValueRecursive(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::STRUCT: {
+		//! Wrap all fields of the struct in a struct with 'value' and 'typed_value' fields
+		auto &child_types = StructType::GetChildTypes(type);
+		child_list_t<LogicalType> replaced_types;
+		for (auto &entry : child_types) {
+			child_list_t<LogicalType> child_children;
+			child_children.emplace_back("value", LogicalType::BLOB);
+			if (entry.second.id() != LogicalTypeId::VARIANT) {
+				child_children.emplace_back("typed_value", TransformTypedValueRecursive(entry.second));
+			}
+			replaced_types.emplace_back(entry.first, LogicalType::STRUCT(child_children));
+		}
+		return LogicalType::STRUCT(replaced_types);
+	}
+	case LogicalTypeId::LIST: {
+		auto &child_type = ListType::GetChildType(type);
+		child_list_t<LogicalType> replaced_types;
+		replaced_types.emplace_back("value", LogicalType::BLOB);
+		if (child_type.id() != LogicalTypeId::VARIANT) {
+			replaced_types.emplace_back("typed_value", child_type);
+		}
+		return LogicalType::LIST(LogicalType::STRUCT(replaced_types));
+	}
+	case LogicalTypeId::UNION:
+	case LogicalTypeId::MAP:
+	case LogicalTypeId::VARIANT:
+	case LogicalTypeId::ARRAY:
+		throw InternalException("'%s' can't appear inside the a 'typed_value' shredded type!", type.ToString());
+	default:
+		return type;
+	}
+}
+
 ParquetColumnSchema ColumnWriter::FillParquetSchema(vector<duckdb_parquet::SchemaElement> &schemas,
                                                     const LogicalType &type, const string &name,
                                                     optional_ptr<const ChildFieldIDs> field_ids,
                                                     optional_ptr<const ShreddingType> shredding_types, idx_t max_repeat,
-                                                    idx_t max_define, bool can_have_nulls, bool in_variant) {
+                                                    idx_t max_define, bool can_have_nulls) {
 	auto null_type = can_have_nulls ? FieldRepetitionType::OPTIONAL : FieldRepetitionType::REQUIRED;
 	if (!can_have_nulls) {
 		max_define--;
@@ -270,9 +305,6 @@ ParquetColumnSchema ColumnWriter::FillParquetSchema(vector<duckdb_parquet::Schem
 		if (it != shredding_types->children.end()) {
 			shredding_type = &it->second;
 		}
-	}
-	if (in_variant && type.id() != LogicalTypeId::VARIANT) {
-		shredding_type = shredding_types;
 	}
 
 	if (type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::UNION) {
@@ -297,7 +329,7 @@ ParquetColumnSchema ColumnWriter::FillParquetSchema(vector<duckdb_parquet::Schem
 		for (auto &child_type : child_types) {
 			struct_column.children.emplace_back(FillParquetSchema(schemas, child_type.second, child_type.first,
 			                                                      child_field_ids, shredding_type, max_repeat,
-			                                                      max_define + 1, true, in_variant));
+			                                                      max_define + 1, true));
 		}
 		return struct_column;
 	}
@@ -334,8 +366,7 @@ ParquetColumnSchema ColumnWriter::FillParquetSchema(vector<duckdb_parquet::Schem
 
 		ParquetColumnSchema list_column(name, type, max_define, max_repeat, schema_idx, 0);
 		list_column.children.push_back(FillParquetSchema(schemas, child_type, "element", child_field_ids,
-		                                                 shredding_type, max_repeat + 1, max_define + 2, true,
-		                                                 in_variant));
+		                                                 shredding_type, max_repeat + 1, max_define + 2, true));
 		return list_column;
 	}
 	if (type.id() == LogicalTypeId::MAP) {
@@ -383,7 +414,7 @@ ParquetColumnSchema ColumnWriter::FillParquetSchema(vector<duckdb_parquet::Schem
 			// key needs to be marked as REQUIRED
 			bool is_key = i == 0;
 			auto child_schema = FillParquetSchema(schemas, kv_types[i], kv_names[i], child_field_ids, shredding_type,
-			                                      max_repeat + 1, max_define + 2, !is_key, in_variant);
+			                                      max_repeat + 1, max_define + 2, !is_key);
 
 			map_column.children.push_back(std::move(child_schema));
 		}
@@ -402,22 +433,12 @@ ParquetColumnSchema ColumnWriter::FillParquetSchema(vector<duckdb_parquet::Schem
 		const bool is_shredded = shredding_type != nullptr;
 
 		child_list_t<LogicalType> child_types;
-		if (!in_variant) {
-			child_types.emplace_back("metadata", LogicalType::BLOB);
-		}
+		child_types.emplace_back("metadata", LogicalType::BLOB);
 		child_types.emplace_back("value", LogicalType::BLOB);
 		if (is_shredded) {
-			auto &shredding = *shredding_type;
-			if (shredding.shredding_type == LogicalTypeId::STRUCT) {
-				child_list_t<LogicalType> typed_value_types;
-				for (auto &child : shredding.children) {
-					typed_value_types.emplace_back(child.first, LogicalType::VARIANT());
-				}
-				child_types.emplace_back("typed_value", LogicalType::STRUCT(typed_value_types));
-			} else if (shredding.shredding_type == LogicalTypeId::LIST) {
-				child_types.emplace_back("typed_value", LogicalType::LIST(LogicalType::VARIANT()));
-			} else if (shredding.shredding_type != LogicalTypeId::ANY) {
-				child_types.emplace_back("typed_value", shredding.shredding_type);
+			auto &typed_value_type = shredding_type->shredding_type;
+			if (typed_value_type.id() != LogicalTypeId::ANY) {
+				child_types.emplace_back("typed_value", TransformTypedValueRecursive(typed_value_type));
 			}
 		}
 
@@ -454,7 +475,7 @@ ParquetColumnSchema ColumnWriter::FillParquetSchema(vector<duckdb_parquet::Schem
 			}
 			variant_column.children.emplace_back(FillParquetSchema(schemas, child_type.second, child_type.first,
 			                                                       child_field_ids, shredding_type, max_repeat,
-			                                                       max_define + 1, is_optional, true));
+			                                                       max_define + 1, is_optional));
 		}
 
 		return variant_column;
