@@ -3,7 +3,7 @@
 namespace duckdb {
 
 void PEGParser::AddRule(string_t rule_name, PEGRule rule) {
-	auto entry = rules.find(rule_name);
+	auto entry = rules.find(rule_name.GetString());
 	if (entry != rules.end()) {
 		throw InternalException("Failed to parse grammar - duplicate rule name %s", rule_name.GetString());
 	}

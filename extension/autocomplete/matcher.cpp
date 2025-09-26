@@ -19,7 +19,6 @@
 #endif
 
 namespace duckdb {
-struct PEGParser;
 
 SuggestionType Matcher::AddSuggestion(MatchState &state) const {
 	auto entry = state.added_suggestions.find(*this);

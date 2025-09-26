@@ -10,6 +10,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
+#include "transformer/peg_transformer.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "matcher.hpp"
 #include "duckdb/catalog/default/builtin_types/types.hpp"
@@ -18,7 +19,6 @@
 #include "duckdb/catalog/catalog_entry/pragma_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
-#include "transformer/peg_transformer.hpp"
 
 namespace duckdb {
 
@@ -705,7 +705,8 @@ public:
 				if (tokenized_statement.empty()) {
 					continue;
 				}
-				auto statement = PEGTransformerFactory::Transform(tokenizer.statements[0], "Statement");
+				auto &transformer = PEGTransformerFactory::GetInstance();
+				auto statement = transformer.Transform(tokenizer.statements[0], "Statement");
 				result.push_back(std::move(statement));
 			}
 			return ParserOverrideResult(std::move(result));
