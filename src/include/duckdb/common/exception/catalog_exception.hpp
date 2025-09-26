@@ -23,14 +23,14 @@ public:
 	DUCKDB_API explicit CatalogException(const unordered_map<string, string> &extra_info, const string &msg);
 
 	template <typename... ARGS>
-	explicit CatalogException(const string &msg, ARGS &&... params)
-		: CatalogException(ConstructMessage(msg, std::forward<ARGS>(params)...)) {
+	explicit CatalogException(const string &msg, ARGS &&...params)
+	    : CatalogException(ConstructMessage(msg, std::forward<ARGS>(params)...)) {
 	}
 
 	template <typename... ARGS>
-	explicit CatalogException(QueryErrorContext error_context, const string &msg, ARGS &&... params)
-		: CatalogException(Exception::InitializeExtraInfo(error_context),
-		                   ConstructMessage(msg, std::forward<ARGS>(params)...)) {
+	explicit CatalogException(QueryErrorContext error_context, const string &msg, ARGS &&...params)
+	    : CatalogException(Exception::InitializeExtraInfo(error_context),
+	                       ConstructMessage(msg, std::forward<ARGS>(params)...)) {
 	}
 
 	static CatalogException MissingEntry(const EntryLookupInfo &lookup_info, const string &suggestion);

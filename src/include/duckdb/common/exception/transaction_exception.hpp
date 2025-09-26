@@ -11,13 +11,13 @@
 #include "duckdb/common/exception.hpp"
 
 namespace duckdb {
-    class TransactionException : public Exception {
-    public:
-        DUCKDB_API explicit TransactionException(const string &msg);
+class TransactionException : public Exception {
+public:
+	DUCKDB_API explicit TransactionException(const string &msg);
 
-        template<typename... ARGS>
-        explicit TransactionException(const string &msg, ARGS &&... params)
-            : TransactionException(ConstructMessage(msg, std::forward<ARGS>(params)...)) {
-        }
-    };
+	template <typename... ARGS>
+	explicit TransactionException(const string &msg, ARGS &&...params)
+	    : TransactionException(ConstructMessage(msg, std::forward<ARGS>(params)...)) {
+	}
+};
 } // namespace duckdb

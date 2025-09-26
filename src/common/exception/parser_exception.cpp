@@ -8,7 +8,7 @@ ParserException::ParserException(const string &msg) : Exception(ExceptionType::P
 }
 
 ParserException::ParserException(const unordered_map<string, string> &extra_info, const string &msg)
-	: Exception(extra_info, ExceptionType::PARSER, msg) {
+    : Exception(extra_info, ExceptionType::PARSER, msg) {
 }
 
 ParserException ParserException::SyntaxError(const string &query, const string &error_message,

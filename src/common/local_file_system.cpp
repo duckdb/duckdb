@@ -524,8 +524,8 @@ void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, 
 		}
 		if (bytes_written == 0) {
 			throw IOException({{"errno", std::to_string(errno)}},
-			                  "Could not write to file \"%s\" - attempted to write 0 bytes: %s",
-			                  handle.path, strerror(errno));
+			                  "Could not write to file \"%s\" - attempted to write 0 bytes: %s", handle.path,
+			                  strerror(errno));
 		}
 		write_buffer += bytes_written;
 		bytes_to_write -= bytes_written;
@@ -634,8 +634,7 @@ void LocalFileSystem::CreateDirectory(const string &directory, optional_ptr<File
 		}
 	} else if (!S_ISDIR(st.st_mode)) {
 		throw IOException({{"errno", std::to_string(errno)}},
-		                  "Failed to create directory \"%s\": path exists but is not a directory!",
-		                  directory);
+		                  "Failed to create directory \"%s\": path exists but is not a directory!", directory);
 	}
 }
 
@@ -769,8 +768,7 @@ void LocalFileSystem::FileSync(FileHandle &handle) {
 	}
 
 	// For other types of errors, throw normal IO exception.
-	throw IOException("Could not fsync file \"%s\": %s", handle.GetPath(),
-	                  strerror(errno));
+	throw IOException("Could not fsync file \"%s\": %s", handle.GetPath(), strerror(errno));
 }
 
 void LocalFileSystem::MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) {
@@ -1054,7 +1052,7 @@ static int64_t FSWrite(FileHandle &handle, HANDLE hFile, void *buffer, int64_t n
 		auto bytes_to_write = MinValue<idx_t>(idx_t(NumericLimits<int32_t>::Maximum()), idx_t(nr_bytes));
 		DWORD current_bytes_written = FSInternalWrite(handle, hFile, buffer, bytes_to_write, location);
 		if (current_bytes_written <= 0) {
-			throw IOException("Could not write file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
+			throw IOException({{"errno", std::to_string(errno)}}, "Could not write file \"%s\": %s", handle.path,
 			                  strerror(errno));
 		}
 		bytes_written += current_bytes_written;
