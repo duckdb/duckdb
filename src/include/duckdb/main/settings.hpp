@@ -1181,6 +1181,17 @@ struct SecretDirectorySetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct SecretValidationSetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "secret_validation";
+	static constexpr const char *Description =
+	    "Specify validations required for SECRET CREATE to complete successfully";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *DefaultValue = "exists";
+	static constexpr SetScope DefaultScope = SetScope::SESSION;
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
 struct StorageCompatibilityVersionSetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "storage_compatibility_version";

@@ -847,6 +847,16 @@
         "custom_implementation": true
     },
     {
+        "name": "secret_validation",
+        "description": "Specify validations required for SECRET CREATE to complete successfully",
+        "type": "VARCHAR",
+        "default_scope": "local",
+        "default_value": "exists",
+        "on_callbacks": [
+            "set"
+        ]
+    },
+    {
         "name": "storage_compatibility_version",
         "description": "Serialize on checkpoint with compatibility for a given duckdb version",
         "type": "VARCHAR",
