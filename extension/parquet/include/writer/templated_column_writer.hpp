@@ -197,6 +197,7 @@ public:
 
 		const bool check_parent_empty = parent && !parent->is_empty.empty();
 		const idx_t parent_index = state.definition_levels.size();
+		D_ASSERT(!check_parent_empty || parent_index < parent->is_empty.size());
 
 		const idx_t vcount =
 		    check_parent_empty ? parent->definition_levels.size() - state.definition_levels.size() : count;

@@ -98,7 +98,7 @@ bool ConvertStructToVariant(ToVariantSourceData &source, ToVariantGlobalResultDa
 			}
 		}
 		if (WRITE_DATA) {
-			//! Now forward the selection to point to the next index in the children.values_index
+			//! Now move the selection forward to write the value_id for the next struct child, for each row
 			for (idx_t i = 0; i < sel.count; i++) {
 				sel.children_selection[i]++;
 			}

@@ -22,7 +22,17 @@ VariantDecimalData VariantUtils::DecodeDecimalData(const UnifiedVariantVectorDat
 	VariantDecimalData result;
 	result.width = VarintDecode<uint32_t>(ptr);
 	result.scale = VarintDecode<uint32_t>(ptr);
+	result.value_ptr = ptr;
 	return result;
+}
+
+string_t VariantUtils::DecodeStringData(const UnifiedVariantVectorData &variant, idx_t row, uint32_t value_index) {
+	auto byte_offset = variant.GetByteOffset(row, value_index);
+	auto data = const_data_ptr_cast(variant.GetData(row).GetData());
+	auto ptr = data + byte_offset;
+
+	auto length = VarintDecode<uint32_t>(ptr);
+	return string_t(reinterpret_cast<const char *>(ptr), length);
 }
 
 VariantNestedData VariantUtils::DecodeNestedData(const UnifiedVariantVectorData &variant, idx_t row,

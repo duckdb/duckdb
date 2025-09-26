@@ -11,6 +11,7 @@
 #include "duckdb.hpp"
 #include "parquet_types.h"
 #include "parquet_column_schema.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 
 namespace duckdb {
 class MemoryStream;
@@ -71,11 +72,6 @@ public:
 	             bool can_have_nulls);
 	virtual ~ColumnWriter();
 
-	ParquetWriter &writer;
-	const ParquetColumnSchema &column_schema;
-	vector<string> schema_path;
-	bool can_have_nulls;
-
 public:
 	const LogicalType &Type() const {
 		return column_schema.type;
@@ -91,6 +87,22 @@ public:
 	}
 	idx_t MaxRepeat() const {
 		return column_schema.max_repeat;
+	}
+	virtual bool HasTransform() {
+		for (auto &child_writer : child_writers) {
+			if (child_writer->HasTransform()) {
+				throw NotImplementedException("ColumnWriter of type '%s' requires a transform, but is not a root "
+				                              "column, this isn't supported currently",
+				                              child_writer->Type());
+			}
+		}
+		return false;
+	}
+	virtual LogicalType TransformedType() {
+		throw NotImplementedException("Writer does not have a transformed type");
+	}
+	virtual unique_ptr<Expression> TransformExpression(unique_ptr<BoundReferenceExpression> expr) {
+		throw NotImplementedException("Writer does not have a transform expression");
 	}
 
 	static ParquetColumnSchema FillParquetSchema(vector<duckdb_parquet::SchemaElement> &schemas,
@@ -129,10 +141,19 @@ public:
 protected:
 	void HandleDefineLevels(ColumnWriterState &state, ColumnWriterState *parent, const ValidityMask &validity,
 	                        const idx_t count, const uint16_t define_value, const uint16_t null_value) const;
-	void HandleRepeatLevels(ColumnWriterState &state_p, ColumnWriterState *parent, idx_t count, idx_t max_repeat) const;
+	void HandleRepeatLevels(ColumnWriterState &state_p, ColumnWriterState *parent, idx_t count) const;
 
 	void CompressPage(MemoryStream &temp_writer, size_t &compressed_size, data_ptr_t &compressed_data,
 	                  AllocatedData &compressed_buf);
+
+public:
+	ParquetWriter &writer;
+	const ParquetColumnSchema &column_schema;
+	vector<string> schema_path;
+	bool can_have_nulls;
+
+protected:
+	vector<unique_ptr<ColumnWriter>> child_writers;
 };
 
 } // namespace duckdb
