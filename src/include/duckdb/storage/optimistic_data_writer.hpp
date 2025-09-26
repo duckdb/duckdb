@@ -14,9 +14,12 @@ namespace duckdb {
 class PartialBlockManager;
 
 struct OptimisticWriteCollection {
+	~OptimisticWriteCollection();
+
 	shared_ptr<RowGroupCollection> collection;
 	idx_t last_flushed = 0;
 	idx_t complete_row_groups = 0;
+	vector<unique_ptr<PartialBlockManager>> partial_block_managers;
 };
 
 class OptimisticDataWriter {
@@ -26,8 +29,7 @@ public:
 	~OptimisticDataWriter();
 
 	//! Creates a collection to write to
-	static unique_ptr<OptimisticWriteCollection> CreateCollection(DataTable &storage,
-	                                                              const vector<LogicalType> &insert_types);
+	unique_ptr<OptimisticWriteCollection> CreateCollection(DataTable &storage, const vector<LogicalType> &insert_types);
 	//! Write a new row group to disk (if possible)
 	void WriteNewRowGroup(OptimisticWriteCollection &row_groups);
 	//! Write the last row group of a collection to disk
@@ -35,9 +37,10 @@ public:
 	//! Final flush of the optimistic writer - fully flushes the partial block manager
 	void FinalFlush();
 	//! Flushes a specific row group to disk
-	void FlushToDisk(const vector<reference<RowGroup>> &row_groups);
+	void FlushToDisk(OptimisticWriteCollection &collection, const vector<reference<RowGroup>> &row_groups);
 	//! Merge the partially written blocks from one optimistic writer into another
 	void Merge(OptimisticDataWriter &other);
+	void Merge(unique_ptr<PartialBlockManager> &other_manager);
 	//! Rollback
 	void Rollback();
 

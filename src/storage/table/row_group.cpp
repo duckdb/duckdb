@@ -919,6 +919,9 @@ ColumnCheckpointInfo::ColumnCheckpointInfo(RowGroupWriteInfo &info, idx_t column
 }
 
 PartialBlockManager &RowGroupWriteInfo::GetPartialBlockManager(idx_t column_idx) {
+	if (column_partial_block_managers) {
+		return *column_partial_block_managers->at(column_idx);
+	}
 	return manager;
 }
 

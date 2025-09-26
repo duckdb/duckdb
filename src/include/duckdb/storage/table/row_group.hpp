@@ -56,6 +56,11 @@ struct RowGroupWriteInfo {
 	                  CheckpointType checkpoint_type = CheckpointType::FULL_CHECKPOINT)
 	    : manager(manager), compression_types(compression_types), checkpoint_type(checkpoint_type) {
 	}
+	RowGroupWriteInfo(PartialBlockManager &manager, const vector<CompressionType> &compression_types,
+	                  vector<unique_ptr<PartialBlockManager>> &column_partial_block_managers_p)
+	    : manager(manager), compression_types(compression_types), checkpoint_type(CheckpointType::FULL_CHECKPOINT),
+	      column_partial_block_managers(column_partial_block_managers_p) {
+	}
 
 	const vector<CompressionType> &compression_types;
 	CheckpointType checkpoint_type;
@@ -65,6 +70,7 @@ public:
 
 private:
 	PartialBlockManager &manager;
+	optional_ptr<vector<unique_ptr<PartialBlockManager>>> column_partial_block_managers;
 };
 
 struct RowGroupWriteData {
