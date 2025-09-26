@@ -12,7 +12,7 @@ using Filter = FilterPushdown::Filter;
 unique_ptr<LogicalOperator> FilterPushdown::PushdownSemiAntiJoin(unique_ptr<LogicalOperator> op) {
 	auto &join = op->Cast<LogicalJoin>();
 	if (op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
-		op = FilterPushdownUnnestWithDelimJoin(std::move(op));
+		op = PushFiltersIntoDelimJoin(std::move(op));
 		return FinishPushdown(std::move(op));
 	}
 
