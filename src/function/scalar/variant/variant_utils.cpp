@@ -7,6 +7,18 @@
 
 namespace duckdb {
 
+PhysicalType VariantDecimalData::GetPhysicalType() const {
+	if (width > DecimalWidth<int64_t>::max) {
+		return PhysicalType::INT128;
+	} else if (width > DecimalWidth<int32_t>::max) {
+		return PhysicalType::INT64;
+	} else if (width > DecimalWidth<int16_t>::max) {
+		return PhysicalType::INT32;
+	} else {
+		return PhysicalType::INT16;
+	}
+}
+
 bool VariantUtils::IsNestedType(const UnifiedVariantVectorData &variant, idx_t row, uint32_t value_index) {
 	auto type_id = variant.GetTypeId(row, value_index);
 	return type_id == VariantLogicalType::ARRAY || type_id == VariantLogicalType::OBJECT;
@@ -19,11 +31,10 @@ VariantDecimalData VariantUtils::DecodeDecimalData(const UnifiedVariantVectorDat
 	auto data = const_data_ptr_cast(variant.GetData(row).GetData());
 	auto ptr = data + byte_offset;
 
-	VariantDecimalData result;
-	result.width = VarintDecode<uint32_t>(ptr);
-	result.scale = VarintDecode<uint32_t>(ptr);
-	result.value_ptr = ptr;
-	return result;
+	auto width = VarintDecode<uint32_t>(ptr);
+	auto scale = VarintDecode<uint32_t>(ptr);
+	auto value_ptr = ptr;
+	return VariantDecimalData(width, scale, value_ptr);
 }
 
 string_t VariantUtils::DecodeStringData(const UnifiedVariantVectorData &variant, idx_t row, uint32_t value_index) {

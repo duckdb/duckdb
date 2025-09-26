@@ -29,9 +29,18 @@ struct VariantNestedData {
 };
 
 struct VariantDecimalData {
+public:
+	VariantDecimalData(uint32_t width, uint32_t scale, const_data_ptr_t value_ptr)
+	    : width(width), scale(scale), value_ptr(value_ptr) {
+	}
+
+public:
+	PhysicalType GetPhysicalType() const;
+
+public:
 	uint32_t width;
 	uint32_t scale;
-	const_data_ptr_t value_ptr;
+	const_data_ptr_t value_ptr = nullptr;
 };
 
 struct VariantVectorData {
