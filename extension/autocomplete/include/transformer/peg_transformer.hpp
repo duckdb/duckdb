@@ -2,6 +2,7 @@
 
 #include "tokenizer.hpp"
 #include "parse_result.hpp"
+#include "duckdb/parser/sql_statement.hpp"
 #include "transform_enum_result.hpp"
 #include "transform_result.hpp"
 #include "duckdb/function/macro_function.hpp"
@@ -74,6 +75,7 @@ public:
 
 class PEGTransformerFactory {
 public:
+	static PEGTransformerFactory &GetInstance();
 	explicit PEGTransformerFactory();
 	static unique_ptr<SQLStatement> Transform(vector<MatcherToken> &tokens, const char *root_rule = "Statement");
 
@@ -101,18 +103,7 @@ private:
 		};
 	}
 
-	// Register for functions taking one ParseResult child
-	template <class RETURN_TYPE, class A, idx_t INDEX_A, class FUNC>
-	void Register(const string &rule_name, FUNC function) {
-		sql_transform_functions[rule_name] =
-		    [function](PEGTransformer &transformer,
-		               optional_ptr<ParseResult> parse_result) -> unique_ptr<TransformResultValue> {
-			auto &list_pr = parse_result->Cast<ListParseResult>();
-			auto &child_a = list_pr.Child<A>(INDEX_A);
-			RETURN_TYPE result_value = function(transformer, child_a);
-			return make_uniq<TypedTransformResult<RETURN_TYPE>>(std::move(result_value));
-		};
-	}
+	PEGTransformerFactory(const PEGTransformerFactory&) = delete;
 
 	static unique_ptr<SQLStatement> TransformStatement(PEGTransformer &, optional_ptr<ParseResult> list);
 

@@ -723,6 +723,12 @@ Matcher &MatcherAllocator::Allocate(unique_ptr<Matcher> matcher) {
 	return result;
 }
 
+optional_ptr<ParseResult> ParseResultAllocator::Allocate(unique_ptr<ParseResult> parse_result) {
+	auto result_ptr = parse_result.get();
+	parse_results.push_back(std::move(parse_result));
+	return optional_ptr<ParseResult>(result_ptr);
+}
+
 //! Class for building matchers
 class MatcherFactory {
 	friend struct MatcherList;
@@ -973,7 +979,7 @@ Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name, ve
 		}
 	}
 	// look up the rule
-	auto entry = parser.rules.find(rule_name);
+	auto entry = parser.rules.find(rule_name.GetString());
 	if (entry == parser.rules.end()) {
 		throw InternalException("Failed to create matcher for rule %s - rule is missing", rule_name.GetString());
 	}
