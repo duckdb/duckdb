@@ -4,27 +4,14 @@
 #include "parse_result.hpp"
 #include "transform_enum_result.hpp"
 #include "transform_result.hpp"
-#include "ast/column_element.hpp"
-#include "ast/create_table_as.hpp"
-#include "ast/extension_repository_info.hpp"
-#include "ast/generic_copy_option.hpp"
-#include "ast/insert_values.hpp"
-#include "ast/join_prefix.hpp"
-#include "ast/join_qualifier.hpp"
-#include "ast/limit_percent_result.hpp"
-#include "ast/on_conflict_expression_target.hpp"
-#include "ast/prepared_parameter.hpp"
-#include "ast/sequence_option.hpp"
-#include "ast/set_info.hpp"
-#include "ast/table_alias.hpp"
-#include "ast/update_set_element.hpp"
 #include "duckdb/function/macro_function.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
+#include "duckdb/parser/expression/parameter_expression.hpp"
 #include "duckdb/parser/statement/copy_database_statement.hpp"
-#include "duckdb/parser/statement/set_statement.hpp"
-#include "parser/peg_parser.hpp"
+#include "matcher.hpp"
 #include "duckdb/storage/arena_allocator.hpp"
 #include "duckdb/parser/statement/drop_statement.hpp"
+#include "parser/peg_parser.hpp"
 
 namespace duckdb {
 
@@ -88,7 +75,7 @@ public:
 class PEGTransformerFactory {
 public:
 	explicit PEGTransformerFactory();
-	unique_ptr<SQLStatement> Transform(vector<MatcherToken> &tokens, const char *root_rule = "Statement");
+	static unique_ptr<SQLStatement> Transform(vector<MatcherToken> &tokens, const char *root_rule = "Statement");
 
 private:
 	template <typename T>
