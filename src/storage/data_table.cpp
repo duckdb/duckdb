@@ -12,6 +12,7 @@
 #include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/planner/constraints/list.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
@@ -86,7 +87,15 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 	// prevent any new tuples from being added to the parent
 	lock_guard<mutex> parent_lock(parent.append_lock);
 
-	this->row_groups = parent.row_groups->AddColumn(context, new_column, default_executor);
+	if (ClientData::Get(context).add_column_checkpoint_state && ClientData::Get(context).is_replay_wal) {
+		this->row_groups = ClientData::Get(context).add_column_checkpoint_state->GetRowGroups();
+	} else {
+		this->row_groups = parent.row_groups->AddColumn(context, new_column, default_executor);
+	}
+
+	if (ClientData::Get(context).add_column_checkpoint_state && !ClientData::Get(context).is_replay_wal) {
+		ClientData::Get(context).add_column_checkpoint_state->FlushToDisk(*this->row_groups);
+	}
 
 	// also add this column to client local storage
 	local_storage.AddColumn(parent, *this, new_column, default_executor);

@@ -16,6 +16,7 @@
 #include "duckdb/execution/index/index_type_set.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
@@ -280,6 +281,8 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(AttachedDatabase &databa
 		// WAL file exists but it is empty - we can delete the file
 		return nullptr;
 	}
+
+	ClientData::Get(*con.context).is_replay_wal = true;
 
 	con.BeginTransaction();
 	MetaTransaction::Get(*con.context).ModifyDatabase(database);
@@ -581,10 +584,26 @@ void WriteAheadLogDeserializer::ReplayIndexData(IndexStorageInfo &info) {
 	});
 }
 
+static void MarkBlocksAsUsed(BlockManager &manager, const PersistentColumnData &col_data);
+
 void WriteAheadLogDeserializer::ReplayAlter() {
 	auto info = deserializer.ReadProperty<unique_ptr<ParseInfo>>(101, "info");
 	auto &alter_info = info->Cast<AlterInfo>();
 	if (!alter_info.IsAddPrimaryKey()) {
+		if (DeserializeOnly()) {
+			if (alter_info.type == AlterType::ALTER_TABLE &&
+			    alter_info.Cast<AlterTableInfo>().alter_table_type == AlterTableType::ADD_COLUMN) {
+				auto &add_column_info = alter_info.Cast<AddColumnInfo>();
+				auto &block_manager = db.GetStorageManager().GetBlockManager();
+				if (add_column_info.stable_result) {
+					for (auto &group : add_column_info.stable_result->row_group_data) {
+						for (auto &col_data : group.column_data) {
+							MarkBlocksAsUsed(block_manager, col_data);
+						}
+					}
+				}
+			}
+		}
 		return ReplayWithoutIndex(context, catalog, alter_info, DeserializeOnly());
 	}
 

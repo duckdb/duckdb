@@ -22,6 +22,7 @@
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/main/client_data.hpp"
 
 namespace duckdb {
 
@@ -660,10 +661,12 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 			throw BinderException("Constraints on generated columns are not supported yet");
 		}
 		bound_constraints = BindNewConstraints(base.constraints, base.table, base.columns);
-		// bind the default values
-		auto &catalog_name = schema.ParentCatalog().GetName();
-		auto &schema_name = schema.name;
-		BindDefaultValues(base.columns, bound_defaults, catalog_name, schema_name);
+		if (!ClientData::Get(context).skip_bind_default) {
+			// bind the default values
+			auto &catalog_name = schema.ParentCatalog().GetName();
+			auto &schema_name = schema.name;
+			BindDefaultValues(base.columns, bound_defaults, catalog_name, schema_name);
+		}
 	}
 
 	if (base.columns.PhysicalColumnCount() == 0) {
