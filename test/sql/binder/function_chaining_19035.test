@@ -1,0 +1,22 @@
+# name: test/sql/binder/function_chaining_19035.test
+# description: Lambda expression with macro function chaining
+# group: [binder]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+select ['a a ', ' b ', ' cc'].list_transform(lambda x: nullif(trim(x), '')) as trimmed_and_nulled
+----
+[a a, b, cc]
+
+
+query I
+select ['a a ', ' b ', ' cc'].list_transform(lambda x: x.trim().nullif('')) as trimmed_and_nulled;
+----
+[a a, b, cc]
+
+query I
+select ['a a ', ' b ', ' cd'].list_transform(lambda x: x.trim().nullif('').reverse()) as trimmed_and_nulled;
+----
+[a a, b, dc]
