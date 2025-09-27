@@ -121,7 +121,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"arrow_output_version", {"1.5"}},
 	    {"enable_external_file_cache", {false}},
 	    {"pin_threads", {"off"}},
-	    {"secret_validation", {"exists"}}};
+	    {"secret_validation", {"none"}}};
 	// Every option that's not excluded has to be part of this map
 	if (!value_map.count(name)) {
 		switch (type.id()) {
