@@ -48,10 +48,10 @@ public:
 	void AppendData(BaseStatistics &stats, ColumnAppendState &state, UnifiedVectorFormat &vdata, idx_t count) override;
 	void RevertAppend(row_t start_row) override;
 
-	void Update(TransactionData transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
-	            idx_t update_count) override;
-	void UpdateColumn(TransactionData transaction, const vector<column_t> &column_path, Vector &update_vector,
-	                  row_t *row_ids, idx_t update_count, idx_t depth) override;
+	void Update(TransactionData transaction, DataTable &data_table, idx_t column_index, Vector &update_vector,
+	            row_t *row_ids, idx_t update_count) override;
+	void UpdateColumn(TransactionData transaction, DataTable &data_table, const vector<column_t> &column_path,
+	                  Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t depth) override;
 
 	void CommitDropColumn() override;
 
