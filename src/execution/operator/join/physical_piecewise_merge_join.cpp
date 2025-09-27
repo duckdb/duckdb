@@ -708,17 +708,28 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ExecuteInternal(ExecutionContext 
 class PiecewiseJoinGlobalScanState : public GlobalSourceState {
 public:
 	explicit PiecewiseJoinGlobalScanState(TupleDataCollection &payload) : payload(payload), right_outer_position(0) {
-		payload.InitializeScan(scanner);
+		payload.InitializeScan(parallel_scan);
+	}
+
+	idx_t Scan(TupleDataLocalScanState &local_scan, DataChunk &chunk) {
+		lock_guard<mutex> guard(lock);
+		const auto result = right_outer_position;
+		payload.Scan(parallel_scan, local_scan, chunk);
+		right_outer_position += chunk.size();
+		return result;
 	}
 
 	TupleDataCollection &payload;
-	TupleDataParallelScanState scanner;
-	idx_t right_outer_position;
 
 public:
 	idx_t MaxThreads() override {
 		return payload.ChunkCount();
 	}
+
+private:
+	mutex lock;
+	TupleDataParallelScanState parallel_scan;
+	idx_t right_outer_position;
 };
 
 class PiecewiseJoinLocalScanState : public LocalSourceState {
@@ -760,11 +771,12 @@ SourceResultType PhysicalPiecewiseMergeJoin::GetData(ExecutionContext &context, 
 	const auto found_match = gsink.table->found_match.get();
 
 	auto &lsource = source.local_state.Cast<PiecewiseJoinLocalScanState>();
-	auto &rhs_chunk = lsource.Cast<PiecewiseJoinLocalScanState>().rhs_chunk;
+	auto &rhs_chunk = lsource.rhs_chunk;
 	auto &rsel = lsource.rsel;
 	for (;;) {
 		// Read the next sorted chunk
-		gsource.payload.Scan(gsource.scanner, lsource.scanner, rhs_chunk);
+		rhs_chunk.Reset();
+		const auto rhs_pos = gsource.Scan(lsource.scanner, rhs_chunk);
 
 		const auto count = rhs_chunk.size();
 		if (count == 0) {
@@ -774,11 +786,10 @@ SourceResultType PhysicalPiecewiseMergeJoin::GetData(ExecutionContext &context, 
 		idx_t result_count = 0;
 		// figure out which tuples didn't find a match in the RHS
 		for (idx_t i = 0; i < count; i++) {
-			if (!found_match[gsource.right_outer_position + i]) {
+			if (!found_match[rhs_pos + i]) {
 				rsel.set_index(result_count++, i);
 			}
 		}
-		gsource.right_outer_position += count;
 
 		if (result_count > 0) {
 			// if there were any tuples that didn't find a match, output them
