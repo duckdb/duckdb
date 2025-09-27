@@ -224,3 +224,15 @@ TEST_CASE("extract subsystem", "[file_system]") {
 	vfs.SetDisabledFileSystems(disabled_subfilesystems);
 	REQUIRE(vfs.ExtractSubSystem(target_fs) == nullptr);
 }
+
+TEST_CASE("re-register subsystem", "[file_system]") {
+	duckdb::VirtualFileSystem vfs;
+
+	// First time registration should succeed.
+	auto local_filesystem = FileSystem::CreateLocal();
+	vfs.RegisterSubSystem(std::move(local_filesystem));
+
+	// Re-register an already registered subfilesystem should throw.
+	auto second_local_filesystem = FileSystem::CreateLocal();
+	REQUIRE_THROWS(vfs.RegisterSubSystem(std::move(second_local_filesystem)));
+}
