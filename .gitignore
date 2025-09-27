@@ -268,6 +268,8 @@ venv/
 .vs
 settings.json
 .vscode
+# Don't ignore our actual settings json file
+!src/common/settings.json
 
 # QtCreator files
 *.user

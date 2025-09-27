@@ -1359,6 +1359,17 @@ Value SecretDirectorySetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Secret Validation
+//===----------------------------------------------------------------------===//
+void SecretValidationSetting::OnSet(SettingCallbackInfo &, Value &input) {
+	auto param = StringUtil::Lower(input.ToString());
+	if (param != "none" && param != "exists") {
+		throw InvalidInputException(
+		    "Unrecognized parameter for option SECRET_VALIDATION \"%s\". Expected NONE or EXISTS.", param);
+	}
+}
+
+//===----------------------------------------------------------------------===//
 // Storage Compatibility Version
 //===----------------------------------------------------------------------===//
 void StorageCompatibilityVersionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
