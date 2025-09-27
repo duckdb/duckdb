@@ -702,8 +702,8 @@ static void CreateValues(UnifiedVariantVectorData &variant, Vector &value, optio
 			validity.SetInvalid(row);
 			continue;
 		}
-		value_data[row] = StringVector::EmptyString(value, blob_length);
-		auto &value_blob = value_data[row];
+		value_data[i] = StringVector::EmptyString(value, blob_length);
+		auto &value_blob = value_data[i];
 		auto value_blob_data = reinterpret_cast<data_ptr_t>(value_blob.GetDataWriteable());
 
 		idx_t offset_index = 0;
@@ -795,7 +795,50 @@ static void WriteTypedObjectValues(UnifiedVariantVectorData &variant, Vector &re
 
 static void WriteTypedArrayValues(UnifiedVariantVectorData &variant, Vector &result, const SelectionVector &sel,
                                   const SelectionVector &value_index_sel, idx_t count) {
-	throw NotImplementedException("Array values");
+	auto list_data = FlatVector::GetData<list_entry_t>(result);
+
+	auto nested_data = make_unsafe_uniq_array_uninitialized<VariantNestedData>(count);
+
+	idx_t total_offset = 0;
+	for (idx_t i = 0; i < count; i++) {
+		auto row = sel[i];
+		auto value_index = value_index_sel[i];
+		auto result_row = i;
+
+		D_ASSERT(variant.GetTypeId(row, value_index) == VariantLogicalType::ARRAY);
+		nested_data[i] = VariantUtils::DecodeNestedData(variant, row, value_index);
+
+		list_entry_t list_entry;
+		list_entry.length = nested_data[i].child_count;
+		list_entry.offset = total_offset;
+		list_data[result_row] = list_entry;
+
+		total_offset += nested_data[i].child_count;
+	}
+	ListVector::Reserve(result, total_offset);
+	ListVector::SetListSize(result, total_offset);
+
+	SelectionVector child_sel;
+	child_sel.Initialize(total_offset);
+
+	SelectionVector child_value_index_sel;
+	child_value_index_sel.Initialize(total_offset);
+
+	for (idx_t i = 0; i < count; i++) {
+		auto row = sel[i];
+		auto result_row = i;
+
+		auto &array_data = nested_data[i];
+		auto &entry = list_data[result_row];
+		for (idx_t j = 0; j < entry.length; j++) {
+			auto offset = entry.offset + j;
+			child_sel[offset] = row;
+			child_value_index_sel[offset] = variant.GetValuesIndex(row, array_data.children_idx + j);
+		}
+	}
+
+	auto &child_vector = ListVector::GetEntry(result);
+	WriteVariantValues(variant, child_vector, child_sel, child_value_index_sel, total_offset);
 }
 
 //! TODO: introduce a third selection vector, because we also need one to map to the result row to write
@@ -806,7 +849,7 @@ static void WriteShreddedPrimitive(UnifiedVariantVectorData &variant, Vector &re
 	auto result_data = FlatVector::GetData(result);
 	for (idx_t i = 0; i < count; i++) {
 		auto row = sel[i];
-		auto result_row = sel[i];
+		auto result_row = i;
 		auto value_index = value_index_sel[i];
 		D_ASSERT(variant.RowIsValid(row));
 
@@ -824,7 +867,7 @@ static void WriteShreddedDecimal(UnifiedVariantVectorData &variant, Vector &resu
 	auto result_data = FlatVector::GetData(result);
 	for (idx_t i = 0; i < count; i++) {
 		auto row = sel[i];
-		auto result_row = sel[i];
+		auto result_row = i;
 		auto value_index = value_index_sel[i];
 		D_ASSERT(variant.RowIsValid(row) && variant.GetTypeId(row, value_index) == VariantLogicalType::DECIMAL);
 
@@ -840,7 +883,7 @@ static void WriteShreddedString(UnifiedVariantVectorData &variant, Vector &resul
 	auto result_data = FlatVector::GetData<string_t>(result);
 	for (idx_t i = 0; i < count; i++) {
 		auto row = sel[i];
-		auto result_row = sel[i];
+		auto result_row = i;
 		auto value_index = value_index_sel[i];
 		D_ASSERT(variant.RowIsValid(row) && (variant.GetTypeId(row, value_index) == VariantLogicalType::VARCHAR ||
 		                                     variant.GetTypeId(row, value_index) == VariantLogicalType::BLOB));
@@ -855,7 +898,7 @@ static void WriteShreddedBoolean(UnifiedVariantVectorData &variant, Vector &resu
 	auto result_data = FlatVector::GetData<bool>(result);
 	for (idx_t i = 0; i < count; i++) {
 		auto row = sel[i];
-		auto result_row = sel[i];
+		auto result_row = i;
 		auto value_index = value_index_sel[i];
 		D_ASSERT(variant.RowIsValid(row));
 		auto type_id = variant.GetTypeId(row, value_index);
