@@ -4763,17 +4763,17 @@ static const char zOptions[] =
     "   -unsigned            allow loading of unsigned extensions\n"
     "   -version             show DuckDB version\n";
 static void usage(int showDetail) {
-	utf8_printf(stderr,
+	utf8_printf(stdout,
 	            "Usage: %s [OPTIONS] FILENAME [SQL]\n"
 	            "FILENAME is the name of a DuckDB database. A new database is created\n"
 	            "if the file does not previously exist.\n",
 	            program_name);
 	if (showDetail) {
-		utf8_printf(stderr, "OPTIONS include:\n%s", zOptions);
+		utf8_printf(stdout, "OPTIONS include:\n%s", zOptions);
 	} else {
-		raw_printf(stderr, "Use the -help option for additional information\n");
+		raw_printf(stdout, "Use the -help option for additional information\n");
 	}
-	exit(1);
+	exit(0);
 }
 
 /*
