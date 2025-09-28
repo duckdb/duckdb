@@ -265,7 +265,7 @@ LogicalType TransformTypedValueRecursive(const LogicalType &type) {
 		child_list_t<LogicalType> replaced_types;
 		replaced_types.emplace_back("value", LogicalType::BLOB);
 		if (child_type.id() != LogicalTypeId::VARIANT) {
-			replaced_types.emplace_back("typed_value", child_type);
+			replaced_types.emplace_back("typed_value", TransformTypedValueRecursive(child_type));
 		}
 		return LogicalType::LIST(LogicalType::STRUCT(replaced_types));
 	}
