@@ -11,7 +11,6 @@
 #include "duckdb.hpp"
 #include "parquet_types.h"
 #include "parquet_column_schema.hpp"
-#include "duckdb/planner/expression/bound_reference_expression.hpp"
 
 namespace duckdb {
 class MemoryStream;
@@ -88,22 +87,6 @@ public:
 	}
 	idx_t MaxRepeat() const {
 		return column_schema.max_repeat;
-	}
-	virtual bool HasTransform() {
-		for (auto &child_writer : child_writers) {
-			if (child_writer->HasTransform()) {
-				throw NotImplementedException("ColumnWriter of type '%s' requires a transform, but is not a root "
-				                              "column, this isn't supported currently",
-				                              child_writer->Type());
-			}
-		}
-		return false;
-	}
-	virtual LogicalType TransformedType() {
-		throw NotImplementedException("Writer does not have a transformed type");
-	}
-	virtual unique_ptr<Expression> TransformExpression(unique_ptr<BoundReferenceExpression> expr) {
-		throw NotImplementedException("Writer does not have a transform expression");
 	}
 
 	static ParquetColumnSchema

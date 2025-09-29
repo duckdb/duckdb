@@ -44,9 +44,6 @@ public:
 	void BeginWrite(ColumnWriterState &state) override;
 	void Write(ColumnWriterState &state, Vector &vector, idx_t count) override;
 	void FinalizeWrite(ColumnWriterState &state) override;
-	LogicalType TransformedType() override {
-		return LogicalType::LIST(GetChildWriter().TransformedType());
-	}
 
 protected:
 	ColumnWriter &GetChildWriter();

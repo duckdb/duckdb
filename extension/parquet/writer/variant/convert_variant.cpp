@@ -5,6 +5,7 @@
 #include "reader/variant/variant_binary_decoder.hpp"
 #include "parquet_shredding.hpp"
 #include "duckdb/common/types/decimal.hpp"
+#include "duckdb/common/types/uuid.hpp"
 
 namespace duckdb {
 
@@ -382,6 +383,17 @@ void CopySimplePrimitiveData(const UnifiedVariantVectorData &variant, data_ptr_t
 	value_data += sizeof(T);
 }
 
+void CopyUUIDData(const UnifiedVariantVectorData &variant, data_ptr_t &value_data, idx_t row, uint32_t values_index) {
+
+	auto byte_offset = variant.GetByteOffset(row, values_index);
+	auto data = const_data_ptr_cast(variant.GetData(row).GetData());
+	auto ptr = data + byte_offset;
+
+	auto uuid = Load<uhugeint_t>(ptr);
+	BaseUUID::ToBlob(uuid, value_data);
+	value_data += sizeof(uhugeint_t);
+}
+
 static void WritePrimitiveValueData(const UnifiedVariantVectorData &variant, idx_t row, uint32_t values_index,
                                     data_ptr_t &value_data, const vector<uint32_t> &offsets, idx_t &offset_index) {
 	VariantLogicalType type_id = VariantLogicalType::VARIANT_NULL;
@@ -450,7 +462,7 @@ static void WritePrimitiveValueData(const UnifiedVariantVectorData &variant, idx
 		break;
 	case VariantLogicalType::UUID:
 		WritePrimitiveTypeHeader<VariantPrimitiveType::UUID>(value_data);
-		CopySimplePrimitiveData<uhugeint_t>(variant, value_data, row, values_index);
+		CopyUUIDData(variant, value_data, row, values_index);
 		break;
 	case VariantLogicalType::DATE:
 		WritePrimitiveTypeHeader<VariantPrimitiveType::DATE>(value_data);
@@ -474,7 +486,11 @@ static void WritePrimitiveValueData(const UnifiedVariantVectorData &variant, idx
 		break;
 	case VariantLogicalType::DECIMAL: {
 		auto decimal_data = VariantUtils::DecodeDecimalData(variant, row, values_index);
-		if (decimal_data.width <= 9) {
+
+		if (decimal_data.width <= 4 || decimal_data.width > 38) {
+			throw InvalidInputException("Can't convert VARIANT DECIMAL(%d, %d) to Parquet VARIANT", decimal_data.width,
+			                            decimal_data.scale);
+		} else if (decimal_data.width <= 9) {
 			WritePrimitiveTypeHeader<VariantPrimitiveType::DECIMAL4>(value_data);
 			Store<int8_t>(decimal_data.scale, value_data);
 			value_data++;
@@ -493,8 +509,9 @@ static void WritePrimitiveValueData(const UnifiedVariantVectorData &variant, idx
 			memcpy(value_data, decimal_data.value_ptr, sizeof(hugeint_t));
 			value_data += sizeof(hugeint_t);
 		} else {
-			throw InvalidInputException("Can't convert VARIANT DECIMAL(%d, %d) to Parquet VARIANT", decimal_data.width,
-			                            decimal_data.scale);
+			throw InternalException(
+			    "Uncovered VARIANT(DECIMAL) -> Parquet VARIANT conversion for type 'DECIMAL(%d, %d)'",
+			    decimal_data.width, decimal_data.scale);
 		}
 		break;
 	}
@@ -1074,9 +1091,29 @@ static void ToParquetVariant(DataChunk &input, ExpressionState &state, Vector &r
 	WriteVariantValues(variant, result, nullptr, nullptr, nullptr, count);
 }
 
+static LogicalType GetParquetVariantType(const LogicalType &type) {
+	(void)type;
+	child_list_t<LogicalType> children;
+	children.emplace_back("metadata", LogicalType::BLOB);
+	children.emplace_back("value", LogicalType::BLOB);
+	auto res = LogicalType::STRUCT(std::move(children));
+	res.SetAlias("PARQUET_VARIANT");
+	return res;
+}
+
+static unique_ptr<FunctionData> BindTransform(ClientContext &context, ScalarFunction &bound_function,
+                                              vector<unique_ptr<Expression>> &arguments) {
+	if (arguments.empty()) {
+		return nullptr;
+	}
+	auto type = ExpressionBinder::GetExpressionReturnType(*arguments[0]);
+	bound_function.return_type = GetParquetVariantType(type);
+	return nullptr;
+}
+
 ScalarFunction VariantColumnWriter::GetTransformFunction() {
-	ScalarFunction transform("variant_to_parquet_variant", {LogicalType::VARIANT()}, TransformedType(),
-	                         ToParquetVariant);
+	ScalarFunction transform("variant_to_parquet_variant", {LogicalType::VARIANT()}, LogicalType::ANY, ToParquetVariant,
+	                         BindTransform);
 	transform.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return transform;
 }

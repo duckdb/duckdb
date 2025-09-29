@@ -23,20 +23,7 @@ public:
 	~VariantColumnWriter() override = default;
 
 public:
-	bool HasTransform() override {
-		return true;
-	}
-	LogicalType TransformedType() override;
-	unique_ptr<Expression> TransformExpression(unique_ptr<BoundReferenceExpression> expr) override {
-		vector<unique_ptr<Expression>> arguments;
-		arguments.push_back(unique_ptr_cast<BoundReferenceExpression, Expression>(std::move(expr)));
-
-		return make_uniq<BoundFunctionExpression>(TransformedType(), GetTransformFunction(), std::move(arguments),
-		                                          nullptr, false);
-	}
-
-public:
-	ScalarFunction GetTransformFunction();
+	static ScalarFunction GetTransformFunction();
 };
 
 } // namespace duckdb
