@@ -334,6 +334,11 @@ static idx_t TemplatedMergeJoinSimpleBlocks(PiecewiseMergeJoinState &lstate, Mer
 	BLOCK_ITERATOR lhs_itr(lhs_iterator);
 	BLOCK_ITERATOR rhs_itr(rhs_iterator);
 	for (idx_t r_idx = 0; r_idx < rhs_not_null; r_idx += STANDARD_VECTOR_SIZE) {
+		//	Repin the RHS to release memory
+		//	This is safe because we only return the LHS values
+		//	Note we only do this for the RHS because the LHS is only one chunk.
+		rhs_table.Repin(rhs_iterator);
+
 		// we only care about the BIGGEST value in the RHS
 		// because we want to figure out if the LHS values are less than [or equal] to ANY value
 		const auto r_entry_idx = MinValue<idx_t>(r_idx + STANDARD_VECTOR_SIZE, rhs_not_null) - 1;
@@ -586,6 +591,10 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 		auto &rhs_iterator = *state.rhs_iterator;
 		const auto rhs_not_null = SortedChunkNotNull(state.right_chunk_index, rhs_table.count, rhs_table.has_null);
 		ChunkMergeInfo right_info(rhs_iterator, state.right_chunk_index, state.right_position, rhs_not_null);
+
+		//	Repin so we don't hang on to data after we have scanned it
+		//	Note we only do this for the RHS because the LHS is only one chunk.
+		rhs_table.Repin(rhs_iterator);
 
 		idx_t result_count = MergeJoinComplexBlocks(state.sort_key_type, left_info, right_info,
 		                                            conditions[0].comparison, state.prev_left_index);

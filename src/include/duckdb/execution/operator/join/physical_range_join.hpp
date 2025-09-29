@@ -96,10 +96,14 @@ public:
 			auto state = make_uniq<ExternalBlockIteratorState>(*sorted->key_data, sorted->payload_data.get());
 
 			// Unless we do this, we will only get values from the first chunk
-			state->SetKeepPinned(true);
-			state->SetPinPayload(true);
+			Repin(*state);
 
 			return state;
+		}
+		//! Reset the pins for an iterator so we release memory in a timely manner
+		static void Repin(ExternalBlockIteratorState &iter) {
+			iter.SetKeepPinned(true);
+			iter.SetPinPayload(true);
 		}
 		//! Create an iteration state
 		unique_ptr<SortedRunScanState> CreateScanState(ClientContext &client) {
