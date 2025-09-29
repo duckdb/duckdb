@@ -22,6 +22,8 @@ struct OptimisticWriteCollection {
 	vector<unique_ptr<PartialBlockManager>> partial_block_managers;
 };
 
+enum class OptimisticWritePartialManagers { PER_COLUMN, GLOBAL };
+
 class OptimisticDataWriter {
 public:
 	OptimisticDataWriter(ClientContext &context, DataTable &table);
@@ -29,7 +31,9 @@ public:
 	~OptimisticDataWriter();
 
 	//! Creates a collection to write to
-	unique_ptr<OptimisticWriteCollection> CreateCollection(DataTable &storage, const vector<LogicalType> &insert_types);
+	unique_ptr<OptimisticWriteCollection>
+	CreateCollection(DataTable &storage, const vector<LogicalType> &insert_types,
+	                 OptimisticWritePartialManagers type = OptimisticWritePartialManagers::PER_COLUMN);
 	//! Write a new row group to disk (if possible)
 	void WriteNewRowGroup(OptimisticWriteCollection &row_groups);
 	//! Write the last row group of a collection to disk

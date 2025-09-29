@@ -38,7 +38,8 @@ bool OptimisticDataWriter::PrepareWrite() {
 }
 
 unique_ptr<OptimisticWriteCollection> OptimisticDataWriter::CreateCollection(DataTable &storage,
-                                                                             const vector<LogicalType> &insert_types) {
+                                                                             const vector<LogicalType> &insert_types,
+                                                                             OptimisticWritePartialManagers type) {
 	auto table_info = storage.GetDataTableInfo();
 	auto &io_manager = TableIOManager::Get(storage);
 
@@ -48,10 +49,12 @@ unique_ptr<OptimisticWriteCollection> OptimisticDataWriter::CreateCollection(Dat
 
 	auto result = make_uniq<OptimisticWriteCollection>();
 	result->collection = std::move(row_groups);
-	for (idx_t i = 0; i < insert_types.size(); i++) {
-		auto &block_manager = table.GetTableIOManager().GetBlockManagerForRowData();
-		result->partial_block_managers.push_back(
-		    make_uniq<PartialBlockManager>(QueryContext(context), block_manager, PartialBlockType::APPEND_TO_TABLE));
+	if (type == OptimisticWritePartialManagers::PER_COLUMN) {
+		for (idx_t i = 0; i < insert_types.size(); i++) {
+			auto &block_manager = table.GetTableIOManager().GetBlockManagerForRowData();
+			result->partial_block_managers.push_back(make_uniq<PartialBlockManager>(
+			    QueryContext(context), block_manager, PartialBlockType::APPEND_TO_TABLE));
+		}
 	}
 	return result;
 }

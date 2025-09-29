@@ -59,6 +59,7 @@ struct RowGroupWriteInfo {
 
 private:
 	PartialBlockManager &manager;
+
 public:
 	const vector<CompressionType> &compression_types;
 	CheckpointType checkpoint_type;
