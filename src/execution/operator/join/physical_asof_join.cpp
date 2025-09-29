@@ -167,6 +167,7 @@ SinkFinalizeType PhysicalAsOfJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 	auto &gstate = input.global_state.Cast<AsOfGlobalSinkState>();
 
 	// The data is all in so we can synchronise the left partitioning.
+	auto result = SinkFinalizeType::READY;
 	auto &partition_sink = *gstate.partition_sinks[gstate.child];
 	if (gstate.child == 1) {
 		gstate.partition_sinks[1 - gstate.child]->SyncPartitioning(partition_sink);
@@ -174,26 +175,20 @@ SinkFinalizeType PhysicalAsOfJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 		// Find the first group to sort
 		if (!partition_sink.HasMergeTasks() && EmptyResultIfRHSIsEmpty()) {
 			// Empty input!
-			gstate.child = 1 - gstate.child;
-			return SinkFinalizeType::NO_OUTPUT_POSSIBLE;
-		}
-	} else {
-		D_ASSERT(gstate.child == 0);
-		// Find the first group to sort
-		if (!partition_sink.HasMergeTasks()) {
-			// Empty input!
-			return SinkFinalizeType::NO_OUTPUT_POSSIBLE;
+			result = SinkFinalizeType::NO_OUTPUT_POSSIBLE;
 		}
 	}
 
 	// Schedule all the sorts for maximum thread utilisation
-	auto new_event = make_shared_ptr<PartitionMergeEvent>(partition_sink, pipeline, *this);
-	event.InsertEvent(std::move(new_event));
+	if (partition_sink.HasMergeTasks()) {
+		auto new_event = make_shared_ptr<PartitionMergeEvent>(partition_sink, pipeline, *this);
+		event.InsertEvent(std::move(new_event));
+	}
 
 	// Switch sides
 	gstate.child = 1 - gstate.child;
 
-	return SinkFinalizeType::READY;
+	return result;
 }
 
 OperatorResultType PhysicalAsOfJoin::ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
