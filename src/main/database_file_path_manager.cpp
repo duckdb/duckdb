@@ -18,14 +18,20 @@ InsertDatabasePathResult DatabaseFilePathManager::InsertDatabasePath(const strin
 	}
 
 	lock_guard<mutex> path_lock(db_paths_lock);
-	auto entry = db_paths_to_name.emplace(path, name);
+	auto entry = db_paths_to_name.emplace(path, DatabasePathInfo(name));
 	if (!entry.second) {
-		if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT && entry.first->second == name) {
-			return InsertDatabasePathResult::ALREADY_EXISTS;
+		auto &existing = entry.first->second;
+		if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT && existing.name == name) {
+			if (existing.is_attached) {
+				return InsertDatabasePathResult::ALREADY_EXISTS;
+			}
+			throw BinderException("Unique file handle conflict: Cannot attach \"%s\" - the database file \"%s\" is in "
+			                      "the process of being detached",
+			                      name, path);
 		}
 		throw BinderException("Unique file handle conflict: Cannot attach \"%s\" - the database file \"%s\" is already "
 		                      "attached by database \"%s\"",
-		                      name, path, entry.first->second);
+		                      name, path, existing.name);
 	}
 	options.stored_database_path = make_uniq<StoredDatabasePath>(*this, path, name);
 	return InsertDatabasePathResult::SUCCESS;
@@ -37,6 +43,17 @@ void DatabaseFilePathManager::EraseDatabasePath(const string &path) {
 	}
 	lock_guard<mutex> path_lock(db_paths_lock);
 	db_paths_to_name.erase(path);
+}
+
+void DatabaseFilePathManager::DetachDatabase(const string &path) {
+	if (path.empty() || path == IN_MEMORY_PATH) {
+		return;
+	}
+	lock_guard<mutex> path_lock(db_paths_lock);
+	auto entry = db_paths_to_name.find(path);
+	if (entry != db_paths_to_name.end()) {
+		entry->second.is_attached = false;
+	}
 }
 
 } // namespace duckdb
