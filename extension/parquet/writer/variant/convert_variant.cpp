@@ -559,9 +559,29 @@ static void ToParquetVariant(DataChunk &input, ExpressionState &state, Vector &r
 	CreateValues(variant, *result_vectors[1], count);
 }
 
+static LogicalType GetParquetVariantType(const LogicalType &type) {
+	(void)type;
+	child_list_t<LogicalType> children;
+	children.emplace_back("metadata", LogicalType::BLOB);
+	children.emplace_back("value", LogicalType::BLOB);
+	auto res = LogicalType::STRUCT(std::move(children));
+	res.SetAlias("PARQUET_VARIANT");
+	return res;
+}
+
+static unique_ptr<FunctionData> BindTransform(ClientContext &context, ScalarFunction &bound_function,
+                                              vector<unique_ptr<Expression>> &arguments) {
+	if (arguments.empty()) {
+		return nullptr;
+	}
+	auto type = ExpressionBinder::GetExpressionReturnType(*arguments[0]);
+	bound_function.return_type = GetParquetVariantType(type);
+	return nullptr;
+}
+
 ScalarFunction VariantColumnWriter::GetTransformFunction() {
-	ScalarFunction transform("variant_to_parquet_variant", {LogicalType::VARIANT()}, TransformedType(),
-	                         ToParquetVariant);
+	ScalarFunction transform("variant_to_parquet_variant", {LogicalType::VARIANT()}, LogicalType::ANY, ToParquetVariant,
+	                         BindTransform);
 	transform.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return transform;
 }

@@ -264,6 +264,45 @@ ParquetColumnSchema ColumnWriter::FillParquetSchema(vector<duckdb_parquet::Schem
 		}
 	}
 
+	if (type.id() == LogicalTypeId::STRUCT && type.GetAlias() == "PARQUET_VARIANT") {
+		// variant type
+		// variants are stored as follows:
+		// group <name> VARIANT {
+		//	metadata BYTE_ARRAY,
+		//	value BYTE_ARRAY,
+		//	[<typed_value>]
+		// }
+
+		const bool is_shredded = false;
+
+		// variant group
+		duckdb_parquet::SchemaElement top_element;
+		top_element.repetition_type = null_type;
+		top_element.num_children = is_shredded ? 3 : 2;
+		top_element.logicalType.__isset.VARIANT = true;
+		top_element.logicalType.VARIANT.__isset.specification_version = true;
+		top_element.logicalType.VARIANT.specification_version = 1;
+		top_element.__isset.logicalType = true;
+		top_element.__isset.num_children = true;
+		top_element.__isset.repetition_type = true;
+		schemas.push_back(std::move(top_element));
+
+		child_list_t<LogicalType> child_types;
+		child_types.emplace_back("metadata", LogicalType::BLOB);
+		child_types.emplace_back("value", LogicalType::BLOB);
+		if (is_shredded) {
+			throw NotImplementedException("Writing shredded VARIANT isn't supported for Parquet yet");
+		}
+
+		ParquetColumnSchema variant_column(name, type, max_define, max_repeat, schema_idx, 0);
+		variant_column.children.reserve(child_types.size());
+		for (auto &child_type : child_types) {
+			variant_column.children.emplace_back(FillParquetSchema(schemas, child_type.second, child_type.first,
+			                                                       child_field_ids, max_repeat, max_define + 1, false));
+		}
+		return variant_column;
+	}
+
 	if (type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::UNION) {
 		auto &child_types = StructType::GetChildTypes(type);
 		// set up the schema element for this struct
@@ -377,45 +416,6 @@ ParquetColumnSchema ColumnWriter::FillParquetSchema(vector<duckdb_parquet::Schem
 		return map_column;
 	}
 
-	if (type.id() == LogicalTypeId::VARIANT) {
-		// variant type
-		// variants are stored as follows:
-		// group <name> VARIANT {
-		//	metadata BYTE_ARRAY,
-		//	value BYTE_ARRAY,
-		//	[<typed_value>]
-		// }
-
-		const bool is_shredded = false;
-
-		// variant group
-		duckdb_parquet::SchemaElement top_element;
-		top_element.repetition_type = null_type;
-		top_element.num_children = is_shredded ? 3 : 2;
-		top_element.logicalType.__isset.VARIANT = true;
-		top_element.logicalType.VARIANT.__isset.specification_version = true;
-		top_element.logicalType.VARIANT.specification_version = 1;
-		top_element.__isset.logicalType = true;
-		top_element.__isset.num_children = true;
-		top_element.__isset.repetition_type = true;
-		schemas.push_back(std::move(top_element));
-
-		child_list_t<LogicalType> child_types;
-		child_types.emplace_back("metadata", LogicalType::BLOB);
-		child_types.emplace_back("value", LogicalType::BLOB);
-		if (is_shredded) {
-			throw NotImplementedException("Writing shredded VARIANT isn't supported for Parquet yet");
-		}
-
-		ParquetColumnSchema variant_column(name, type, max_define, max_repeat, schema_idx, 0);
-		variant_column.children.reserve(child_types.size());
-		for (auto &child_type : child_types) {
-			variant_column.children.emplace_back(FillParquetSchema(schemas, child_type.second, child_type.first,
-			                                                       child_field_ids, max_repeat, max_define + 1, false));
-		}
-		return variant_column;
-	}
-
 	duckdb_parquet::SchemaElement schema_element;
 	schema_element.type = ParquetWriter::DuckDBTypeToParquetType(type);
 	schema_element.repetition_type = null_type;
@@ -439,6 +439,19 @@ ColumnWriter::CreateWriterRecursive(ClientContext &context, ParquetWriter &write
 	auto &type = schema.type;
 	auto can_have_nulls = parquet_schemas[schema.schema_index].repetition_type == FieldRepetitionType::OPTIONAL;
 	path_in_schema.push_back(schema.name);
+
+	if (type.id() == LogicalTypeId::STRUCT && type.GetAlias() == "PARQUET_VARIANT") {
+		D_ASSERT(schema.children.size() == 2); //! NOTE: shredded variants not supported yet
+
+		vector<unique_ptr<ColumnWriter>> child_writers;
+		child_writers.reserve(schema.children.size());
+		for (idx_t i = 0; i < schema.children.size(); i++) {
+			child_writers.push_back(
+			    CreateWriterRecursive(context, writer, parquet_schemas, schema.children[i], path_in_schema));
+		}
+		return make_uniq<VariantColumnWriter>(writer, schema, path_in_schema, std::move(child_writers), can_have_nulls);
+	}
+
 	if (type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::UNION) {
 		// construct the child writers recursively
 		vector<unique_ptr<ColumnWriter>> child_writers;
@@ -476,17 +489,6 @@ ColumnWriter::CreateWriterRecursive(ClientContext &context, ParquetWriter &write
 		auto struct_writer =
 		    make_uniq<StructColumnWriter>(writer, schema, path_in_schema, std::move(child_writers), can_have_nulls);
 		return make_uniq<ListColumnWriter>(writer, schema, path_in_schema, std::move(struct_writer), can_have_nulls);
-	}
-	if (type.id() == LogicalTypeId::VARIANT) {
-		D_ASSERT(schema.children.size() == 2); //! NOTE: shredded variants not supported yet
-
-		vector<unique_ptr<ColumnWriter>> child_writers;
-		child_writers.reserve(schema.children.size());
-		for (idx_t i = 0; i < schema.children.size(); i++) {
-			child_writers.push_back(
-			    CreateWriterRecursive(context, writer, parquet_schemas, schema.children[i], path_in_schema));
-		}
-		return make_uniq<VariantColumnWriter>(writer, schema, path_in_schema, std::move(child_writers), can_have_nulls);
 	}
 
 	if (type.id() == LogicalTypeId::BLOB && type.GetAlias() == "WKB_BLOB") {

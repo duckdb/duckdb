@@ -77,25 +77,6 @@ enum class ParquetVersion : uint8_t {
 	V2 = 2, //! Includes the encodings above
 };
 
-class ParquetWriteTransformData {
-public:
-	ParquetWriteTransformData(ClientContext &context, vector<LogicalType> types,
-	                          vector<unique_ptr<Expression>> expressions);
-
-public:
-	ColumnDataCollection &ApplyTransform(ColumnDataCollection &input);
-
-private:
-	//! The buffer to store the transformed chunks of a rowgroup
-	ColumnDataCollection buffer;
-	//! The expression(s) to apply to the input chunk
-	vector<unique_ptr<Expression>> expressions;
-	//! The expression executor used to transform the input chunk
-	ExpressionExecutor executor;
-	//! The intermediate chunk to target the transform to
-	DataChunk chunk;
-};
-
 class ParquetWriter {
 public:
 	ParquetWriter(ClientContext &context, FileSystem &fs, string file_name, vector<LogicalType> types,
@@ -211,7 +192,6 @@ private:
 
 	optional_ptr<CopyFunctionFileStatistics> written_stats;
 	unique_ptr<ParquetStatsAccumulator> stats_accumulator;
-	unique_ptr<ParquetWriteTransformData> transform_data;
 };
 
 } // namespace duckdb
