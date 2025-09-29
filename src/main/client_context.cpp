@@ -1007,7 +1007,7 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, QueryParameter
 		bool is_last_statement = i + 1 == statements.size();
 		PendingQueryParameters parameters;
 		parameters.query_parameters = query_parameters;
-		if (is_last_statement) {
+		if (!is_last_statement) {
 			parameters.query_parameters.streaming_mode = QueryResultStreamingMode::DO_NOT_ALLOW;
 		}
 		auto pending_query = PendingQueryInternal(*lock, std::move(statement), parameters);
