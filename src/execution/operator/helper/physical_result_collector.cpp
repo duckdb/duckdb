@@ -10,6 +10,8 @@
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/parallel/pipeline.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
@@ -64,6 +66,19 @@ void PhysicalResultCollector::BuildPipelines(Pipeline &current, MetaPipeline &me
 	// we create a new pipeline starting from the child
 	auto &child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, *this);
 	child_meta_pipeline.Build(plan);
+}
+
+unique_ptr<ColumnDataCollection> PhysicalResultCollector::CreateCollection(ClientContext &context) const {
+	switch (properties.memory_management_type) {
+	case QueryResultMemoryManagementType::IN_MEMORY:
+		return make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
+	case QueryResultMemoryManagementType::BUFFER_MANAGED:
+		// Use the DatabaseInstance BufferManager because the query result can outlive the ClientContext
+		return make_uniq<ColumnDataCollection>(BufferManager::GetBufferManager(*context.db), types);
+	default:
+		throw NotImplementedException("PhysicalResultCollector::CreateCollection for %s",
+		                              EnumUtil::ToString(properties.memory_management_type));
+	}
 }
 
 } // namespace duckdb

@@ -57,9 +57,7 @@ unique_ptr<GlobalSinkState> PhysicalMaterializedCollector::GetGlobalSinkState(Cl
 
 unique_ptr<LocalSinkState> PhysicalMaterializedCollector::GetLocalSinkState(ExecutionContext &context) const {
 	auto state = make_uniq<MaterializedCollectorLocalState>();
-	// Use the DatabaseInstance BufferManager because the query result can outlive the ClientContext
-	auto &buffer_manager = BufferManager::GetBufferManager(*context.client.db);
-	state->collection = make_uniq<ColumnDataCollection>(buffer_manager, types);
+	state->collection = CreateCollection(context.client);
 	state->collection->InitializeAppend(state->append_state);
 	return std::move(state);
 }
@@ -67,9 +65,7 @@ unique_ptr<LocalSinkState> PhysicalMaterializedCollector::GetLocalSinkState(Exec
 unique_ptr<QueryResult> PhysicalMaterializedCollector::GetResult(GlobalSinkState &state) const {
 	auto &gstate = state.Cast<MaterializedCollectorGlobalState>();
 	if (!gstate.collection) {
-		// Use the DatabaseInstance BufferManager because the query result can outlive the ClientContext
-		auto &buffer_manager = BufferManager::GetBufferManager(*gstate.context->db);
-		gstate.collection = make_uniq<ColumnDataCollection>(buffer_manager, types);
+		gstate.collection = CreateCollection(*gstate.context);
 	}
 	auto result_set =
 	    ResultSetManager::Get(*gstate.context).Add(std::move(gstate.collection), properties.memory_management_type);

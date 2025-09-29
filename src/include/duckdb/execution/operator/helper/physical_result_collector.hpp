@@ -13,7 +13,9 @@
 #include "duckdb/common/enums/statement_type.hpp"
 
 namespace duckdb {
+
 class PreparedStatementData;
+class ColumnDataCollection;
 
 //! PhysicalResultCollector is an abstract class that is used to generate the final result of a query
 class PhysicalResultCollector : public PhysicalOperator {
@@ -52,6 +54,9 @@ public:
 	virtual bool IsStreaming() const {
 		return false;
 	}
+
+protected:
+	unique_ptr<ColumnDataCollection> CreateCollection(ClientContext &context) const;
 };
 
 } // namespace duckdb

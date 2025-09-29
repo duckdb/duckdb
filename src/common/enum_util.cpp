@@ -126,6 +126,7 @@
 #include "duckdb/main/extension.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/extension_install_info.hpp"
+#include "duckdb/main/query_parameters.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/secret/secret.hpp"
@@ -3626,6 +3627,42 @@ const char* EnumUtil::ToChars<QueryNodeType>(QueryNodeType value) {
 template<>
 QueryNodeType EnumUtil::FromString<QueryNodeType>(const char *value) {
 	return static_cast<QueryNodeType>(StringUtil::StringToEnum(GetQueryNodeTypeValues(), 5, "QueryNodeType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetQueryResultMemoryManagementTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(QueryResultMemoryManagementType::IN_MEMORY), "IN_MEMORY" },
+		{ static_cast<uint32_t>(QueryResultMemoryManagementType::BUFFER_MANAGED), "BUFFER_MANAGED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<QueryResultMemoryManagementType>(QueryResultMemoryManagementType value) {
+	return StringUtil::EnumToString(GetQueryResultMemoryManagementTypeValues(), 2, "QueryResultMemoryManagementType", static_cast<uint32_t>(value));
+}
+
+template<>
+QueryResultMemoryManagementType EnumUtil::FromString<QueryResultMemoryManagementType>(const char *value) {
+	return static_cast<QueryResultMemoryManagementType>(StringUtil::StringToEnum(GetQueryResultMemoryManagementTypeValues(), 2, "QueryResultMemoryManagementType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetQueryResultStreamingModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(QueryResultStreamingMode::DO_NOT_ALLOW), "DO_NOT_ALLOW" },
+		{ static_cast<uint32_t>(QueryResultStreamingMode::ALLOW), "ALLOW" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<QueryResultStreamingMode>(QueryResultStreamingMode value) {
+	return StringUtil::EnumToString(GetQueryResultStreamingModeValues(), 2, "QueryResultStreamingMode", static_cast<uint32_t>(value));
+}
+
+template<>
+QueryResultStreamingMode EnumUtil::FromString<QueryResultStreamingMode>(const char *value) {
+	return static_cast<QueryResultStreamingMode>(StringUtil::StringToEnum(GetQueryResultStreamingModeValues(), 2, "QueryResultStreamingMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetQueryResultTypeValues() {
