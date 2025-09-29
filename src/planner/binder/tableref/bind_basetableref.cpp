@@ -230,28 +230,23 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 			}
 		}
 
+		// remember that we did not find a CTE, but there is a CTE with the same name
+		// this means that there is a circular reference
+		// Otherwise, re-throw the original exception
+		if (found_ctes.empty() && ref.schema_name.empty() && CTEExists(ref.table_name)) {
+			throw BinderException(
+			    error_context,
+			    "Circular reference to CTE \"%s\", There are two possible solutions. \n1. use WITH RECURSIVE to "
+			    "use recursive CTEs. \n2. If "
+			    "you want to use the TABLE name \"%s\" the same as the CTE name, please explicitly add "
+			    "\"SCHEMA\" before table name. You can try \"main.%s\" (main is the duckdb default schema)",
+			    ref.table_name, ref.table_name, ref.table_name);
+		}
 		// could not find an alternative: bind again to get the error
 		// note: this will always throw when using DuckDB as a catalog, but a second look-up might succeed
 		// in catalogs that do not have transactional DDL
-		try {
-			table_or_view = entry_retriever.GetEntry(ref.catalog_name, ref.schema_name, table_lookup,
-			                                         OnEntryNotFound::THROW_EXCEPTION);
-		} catch (Exception &ex) {
-			// remember that we did not find a CTE, but there is a CTE with the same name
-			// this means that there is a circular reference
-			// Otherwise, re-throw the original exception
-			if (found_ctes.empty() && ref.schema_name.empty() && CTEExists(ref.table_name)) {
-				throw BinderException(
-				    error_context,
-				    "Circular reference to CTE \"%s\", There are two possible solutions. \n1. use WITH RECURSIVE to "
-				    "use recursive CTEs. \n2. If "
-				    "you want to use the TABLE name \"%s\" the same as the CTE name, please explicitly add "
-				    "\"SCHEMA\" before table name. You can try \"main.%s\" (main is the duckdb default schema)",
-				    ref.table_name, ref.table_name, ref.table_name);
-			} else {
-				throw ex;
-			}
-		}
+		table_or_view =
+		    entry_retriever.GetEntry(ref.catalog_name, ref.schema_name, table_lookup, OnEntryNotFound::THROW_EXCEPTION);
 	}
 
 	switch (table_or_view->type) {
