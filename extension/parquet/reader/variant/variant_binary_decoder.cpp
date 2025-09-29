@@ -15,7 +15,7 @@ static constexpr uint8_t VERSION_MASK = 0xF;
 static constexpr uint8_t SORTED_STRINGS_MASK = 0x1;
 static constexpr uint8_t SORTED_STRINGS_SHIFT = 4;
 static constexpr uint8_t OFFSET_SIZE_MINUS_ONE_MASK = 0x3;
-static constexpr uint8_t OFFSET_SIZE_MINUS_ONE_SHIFT = 5;
+static constexpr uint8_t OFFSET_SIZE_MINUS_ONE_SHIFT = 6;
 
 static constexpr uint8_t BASIC_TYPE_MASK = 0x3;
 static constexpr uint8_t VALUE_HEADER_SHIFT = 2;
