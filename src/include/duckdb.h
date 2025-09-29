@@ -700,6 +700,40 @@ typedef void (*duckdb_table_function_init_t)(duckdb_init_info info);
 typedef void (*duckdb_table_function_t)(duckdb_function_info info, duckdb_data_chunk output);
 
 //===--------------------------------------------------------------------===//
+// Copy function types
+//===--------------------------------------------------------------------===//
+
+//! A COPY function. Must be destroyed with `duckdb_destroy_copy_function`.
+typedef struct _duckdb_copy_function {
+	void *internal_ptr;
+} * duckdb_copy_function;
+
+//! Info for the sink function of a COPY function.
+typedef struct _duckdb_copy_export_sink_info {
+	void *internal_ptr;
+} * duckdb_copy_export_sink_info;
+
+//! Info for the finalize function of a COPY function.
+typedef struct _duckdb_copy_export_finalize_info {
+	void *internal_ptr;
+} * duckdb_copy_export_finalize_info;
+
+//! The bind function to use when preparing a COPY ... TO statement.
+typedef void (*duckdb_copy_function_export_bind_t)(duckdb_bind_info info);
+
+//! The initialization function to use when initializing a COPY ... TO statement.
+typedef void (*duckdb_copy_function_export_init_t)(duckdb_init_info info);
+
+//! The function to sink an input chunk into during COPY ... TO execution.
+typedef void (*duckdb_copy_function_export_sink_t)(duckdb_copy_export_sink_info, duckdb_data_chunk input);
+
+//! The function to finalize the COPY ... TO execution.
+typedef void (*duckdb_copy_function_export_finalize_t)(duckdb_copy_export_finalize_info info);
+
+//! The bind function to use when preparing a COPY ... FROM statement.
+typedef void (*duckdb_copy_import_bind_t)(duckdb_bind_info info);
+
+//===--------------------------------------------------------------------===//
 // Cast types
 //===--------------------------------------------------------------------===//
 
@@ -5334,6 +5368,129 @@ Closes the given file handle.
 `duckdb_file_handle_error_data`.
 */
 DUCKDB_C_API duckdb_state duckdb_file_handle_close(duckdb_file_handle file_handle);
+
+//===--------------------------------------------------------------------===//
+// Copy Functions
+//===--------------------------------------------------------------------===//
+
+/*!
+Creates a new empty copy function.
+
+The return value should be destroyed with `duckdb_destroy_copy_function`.
+
+* @return The copy function object.
+*/
+DUCKDB_C_API duckdb_copy_function duckdb_create_copy_function();
+
+/*!
+Destroys the given copy function object.
+* @param copy_function The copy function to destroy.
+*/
+DUCKDB_C_API void duckdb_destroy_copy_function(duckdb_copy_function *copy_function);
+
+/*!
+Adds a parameter to the `COPY ... FROM` variant of the copy function.
+
+* @param copy_function The copy function
+* @param name The name of the parameter
+* @param type The type of the parameter
+* @param description (optional) The description of the parameter
+*/
+DUCKDB_C_API void duckdb_copy_function_add_import_parameter(duckdb_copy_function copy_function, const char *name,
+                                                            duckdb_logical_type type, const char *description);
+
+/*!
+Adds a parameter to the `COPY ... TO` variant of the copy function.
+
+* @param copy_function The copy function
+* @param name The name of the parameter
+* @param type The type of the parameter
+* @param description (optional) The description of the parameter
+*/
+DUCKDB_C_API void duckdb_copy_function_add_export_parameter(duckdb_copy_function copy_function, const char *name,
+                                                            duckdb_logical_type type, const char *description);
+
+/*!
+Sets the bind function of the copy function, to use when binding `COPY (...) TO`.
+
+* @param bind The bind function
+*/
+DUCKDB_C_API void *duckdb_copy_function_set_export_bind(duckdb_copy_function copy_function,
+                                                        duckdb_copy_function_export_bind_t bind);
+
+/*!
+Report that an error occurred during the bind function of a copy function.
+
+* @param info The bind info provided to the bind function
+* @param error The error message
+*/
+DUCKDB_C_API void duckdb_copy_function_export_bind_set_error(duckdb_bind_info info, const char *error);
+
+/*!
+Sets the init function of the copy function, called right before executing `COPY (...) TO`.
+
+* @param init The init function
+*/
+DUCKDB_C_API void *duckdb_copy_function_set_export_init(duckdb_copy_function copy_function,
+                                                        duckdb_copy_function_export_init_t init);
+
+/*!
+Report that an error occurred during the init function of a copy function.
+
+* @param info The init info provided to the init function
+* @param error The error message
+*/
+DUCKDB_C_API void duckdb_copy_function_export_init_set_error(duckdb_init_info info, const char *error);
+
+/*!
+Sets the sink function of the copy function, called during `COPY (...) TO`.
+
+* @param function The sink function
+*/
+DUCKDB_C_API void *duckdb_copy_function_set_export_sink(duckdb_copy_function copy_function,
+                                                        duckdb_copy_function_export_sink_t function);
+
+/*!
+Report that an error occurred during the sink function of a copy function.
+
+* @param info The sink info provided to the sink function
+* @param error The error message
+*/
+DUCKDB_C_API void duckdb_copy_function_export_sink_set_error(duckdb_copy_export_sink_info info, const char *error);
+
+/*!
+Sets the finalize function of the copy function, called at the end of `COPY ... TO`.
+
+* @param finalize The finalize function
+*/
+DUCKDB_C_API void duckdb_copy_function_set_export_finalize(duckdb_copy_function copy_function,
+                                                           duckdb_copy_function_export_finalize_t finalize);
+
+/*!
+Report that an error occurred during the finalize function of a copy function.
+
+* @param info The finalize info provided to the finalize function
+* @param error The error message
+*/
+DUCKDB_C_API void duckdb_copy_function_export_finalize_set_error(duckdb_copy_export_finalize_info info,
+                                                                 const char *error);
+
+/*!
+Sets the bind function of the copy function, to use when binding `COPY ... FROM`.
+
+* @param bind The bind function
+*/
+DUCKDB_C_API void *duckdb_copy_function_set_import_bind(duckdb_copy_function copy_function,
+                                                        duckdb_copy_import_bind_t bind);
+
+/*!
+Sets the underlying table function to use for `COPY ... FROM`.
+
+* @param copy_function The copy function
+* @param table_function The underlying table function
+*/
+DUCKDB_C_API void duckdb_copy_function_set_import_function(duckdb_copy_function copy_function,
+                                                           duckdb_table_function table_function);
 
 #endif
 
