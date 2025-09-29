@@ -31,6 +31,11 @@ static uint8_t EncodeMetadataHeader(idx_t byte_length) {
 	//! Set 'offset_size_minus_one' to byte_length-1
 	header_byte |= (static_cast<uint8_t>(byte_length) - 1) << 6;
 
+#ifdef DEBUG
+	auto decoded_header = VariantMetadataHeader::FromHeaderByte(header_byte);
+	D_ASSERT(decoded_header.offset_size == byte_length);
+#endif
+
 	return header_byte;
 }
 
@@ -83,6 +88,14 @@ static void CreateMetadata(UnifiedVariantVectorData &variant, Vector &metadata, 
 		D_ASSERT(offset_ptr + ((dictionary_count + 1) * byte_length) == string_ptr);
 		D_ASSERT(string_ptr + total_offset == metadata_blob_data + total_length);
 		metadata_blob.SetSizeAndFinalize(total_length, total_length);
+
+#ifdef DEBUG
+		auto decoded_metadata = VariantMetadata(metadata_blob);
+		D_ASSERT(decoded_metadata.strings.size() == dictionary_count);
+		for (idx_t i = 0; i < dictionary_count; i++) {
+			D_ASSERT(decoded_metadata.strings[i] == variant.GetKey(row, i).GetString());
+		}
+#endif
 	}
 }
 
