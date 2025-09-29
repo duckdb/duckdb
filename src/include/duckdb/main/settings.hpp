@@ -96,12 +96,14 @@ struct AllowExtensionsMetadataMismatchSetting {
 };
 
 struct AllowParserOverrideExtensionSetting {
-	using RETURN_TYPE = bool;
+	using RETURN_TYPE = string;
 	static constexpr const char *Name = "allow_parser_override_extension";
 	static constexpr const char *Description = "Allow extensions to override the current parser";
-	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "false";
-	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static bool OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct AllowPersistentSecretsSetting {

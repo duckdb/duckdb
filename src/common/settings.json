@@ -52,9 +52,11 @@
     {
         "name": "allow_parser_override_extension",
         "description": "Allow extensions to override the current parser",
-        "type": "BOOLEAN",
-        "default_scope": "global",
-        "default_value": "false"
+        "type": "VARCHAR",
+        "scope": "global",
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "allow_persistent_secrets",

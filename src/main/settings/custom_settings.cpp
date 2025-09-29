@@ -151,6 +151,19 @@ bool AllowCommunityExtensionsSetting::OnGlobalReset(DatabaseInstance *db, DBConf
 }
 
 //===----------------------------------------------------------------------===//
+// Allow Parser Override
+//===----------------------------------------------------------------------===//
+bool AllowParserOverrideExtensionSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto new_value = input.GetValue<string>();
+	if (!StringUtil::CIEquals(new_value, "default") && !StringUtil::CIEquals(new_value, "fallback") &&
+	    !StringUtil::CIEquals(new_value, "strict")) {
+		throw InvalidInputException("Unrecognized value for parser override setting. Valid options are: \"default\", "
+		                            "\"fallback\", \"strict\".");
+	}
+	return true;
+}
+
+//===----------------------------------------------------------------------===//
 // Allow Persistent Secrets
 //===----------------------------------------------------------------------===//
 void AllowPersistentSecretsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
