@@ -33,6 +33,7 @@ public:
 	idx_t ApproxDatabaseCount() const;
 	InsertDatabasePathResult InsertDatabasePath(const string &path, const string &name, OnCreateConflict on_conflict,
 	                                            AttachOptions &options);
+	//! Erase a database path - indicating we are done with using it
 	void EraseDatabasePath(const string &path);
 	//! Called when a database is detached, but before it is fully finished being used
 	void DetachDatabase(const string &path);
@@ -43,7 +44,7 @@ private:
 	//! A set containing all attached database path
 	//! This allows to attach many databases efficiently, and to avoid attaching the
 	//! same file path twice
-	case_insensitive_map_t<DatabasePathInfo> db_paths_to_name;
+	case_insensitive_map_t<DatabasePathInfo> db_paths;
 };
 
 } // namespace duckdb

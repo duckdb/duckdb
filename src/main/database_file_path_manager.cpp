@@ -42,7 +42,7 @@ void DatabaseFilePathManager::EraseDatabasePath(const string &path) {
 		return;
 	}
 	lock_guard<mutex> path_lock(db_paths_lock);
-	db_paths_to_name.erase(path);
+	db_paths.erase(path);
 }
 
 void DatabaseFilePathManager::DetachDatabase(const string &path) {
@@ -50,8 +50,8 @@ void DatabaseFilePathManager::DetachDatabase(const string &path) {
 		return;
 	}
 	lock_guard<mutex> path_lock(db_paths_lock);
-	auto entry = db_paths_to_name.find(path);
-	if (entry != db_paths_to_name.end()) {
+	auto entry = db_paths.find(path);
+	if (entry != db_paths.end()) {
 		entry->second.is_attached = false;
 	}
 }
