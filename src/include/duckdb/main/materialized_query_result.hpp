@@ -11,11 +11,12 @@
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/main/query_result.hpp"
-#include "duckdb/main/result_set_manager.hpp"
 
 namespace duckdb {
 
 class ClientContext;
+class ManagedResultSet;
+class PinnedResultSet;
 
 class MaterializedQueryResult : public QueryResult {
 public:

@@ -120,14 +120,7 @@ TEST_CASE("Test closing result after database is gone", "[api]") {
 	// destroy the database
 	db.reset();
 	conn.reset();
-	// This forces the result to convert from a StreamQueryResult to a MaterializedQueryResult
-	// This succeeds, but the StreamQueryResult holds the last reference to the ClientContext
-	// So when the conversion is done, the last ClientContext is destroyed
-	// This causes the DatabaseInstance to be destroyed too
-	// Destroying the DB instance now destroys any MaterializedQueryResult
-	// Because MaterializedQueryResults are now buffer-managed
-	// So, the following line now throws (instead of succeeding like before)
-	REQUIRE_THROWS(CHECK_COLUMN(streaming_result, 0, {42}));
+	REQUIRE(CHECK_COLUMN(streaming_result, 0, {42}));
 	streaming_result.reset();
 }
 
@@ -347,8 +340,11 @@ TEST_CASE("Test fetch API not to completion", "[api]") {
 	auto result = conn->SendQuery("SELECT 42");
 	// close the connection
 	conn.reset();
-	// now try to fetch a chunk, this should throw an exception that the connection has been closed
-	REQUIRE_THROWS(result->Fetch());
+	// now try to fetch a chunk, this should not return a nullptr
+	auto chunk = result->Fetch();
+	REQUIRE(chunk);
+	// Only if we would call Fetch again would we Close the QueryResult
+	// this is testing that it can get cleaned up without this.
 
 	db.reset();
 }
@@ -361,8 +357,9 @@ TEST_CASE("Test fetch API robustness", "[api]") {
 	auto result = conn->SendQuery("SELECT 42");
 	// close the connection
 	conn.reset();
-	// now try to fetch a chunk, this should throw because the connection is closed
-	REQUIRE_THROWS(result->Fetch());
+	// now try to fetch a chunk, this should not return a nullptr
+	auto chunk = result->Fetch();
+	REQUIRE(chunk);
 
 	// now close the entire database
 	conn = make_uniq<Connection>(*db);
@@ -370,7 +367,7 @@ TEST_CASE("Test fetch API robustness", "[api]") {
 
 	db.reset();
 	// fetch should not fail
-	auto chunk = result->Fetch();
+	chunk = result->Fetch();
 	REQUIRE(chunk);
 	// new queries on the connection should not fail either
 	REQUIRE_NO_FAIL(conn->SendQuery("SELECT 42"));

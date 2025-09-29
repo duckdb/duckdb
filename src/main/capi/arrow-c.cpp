@@ -3,6 +3,7 @@
 #include "duckdb/function/table/arrow.hpp"
 #include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/main/prepared_statement_data.hpp"
+#include "duckdb/main/result_set_manager.hpp"
 #include "fmt/format.h"
 
 using duckdb::ArrowConverter;

@@ -12,6 +12,7 @@
 #include "duckdb/verification/no_operator_caching_verifier.hpp"
 #include "duckdb/verification/fetch_row_verifier.hpp"
 #include "duckdb/verification/explain_statement_verifier.hpp"
+#include "duckdb/main/result_set_manager.hpp"
 
 namespace duckdb {
 

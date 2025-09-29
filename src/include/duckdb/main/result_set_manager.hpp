@@ -22,7 +22,7 @@ class ClientContext;
 class DatabaseInstance;
 class ColumnDataCollection;
 
-class ManagedResultSet {
+class ManagedResultSet : public enable_shared_from_this<ManagedResultSet> {
 	friend class ResultSetManager;
 
 private:
@@ -46,17 +46,23 @@ class PinnedResultSet {
 	friend class ManagedResultSet;
 
 private:
-	PinnedResultSet(ColumnDataCollection &collection_p, ColumnDataScanState &scan_state_p,
-	                shared_ptr<DatabaseInstance> db_p)
-	    : collection(collection_p), scan_state(scan_state_p), db(std::move(db_p)) {
+	PinnedResultSet(shared_ptr<DatabaseInstance> db_p, shared_ptr<ManagedResultSet> result_set_p,
+	                ColumnDataCollection &collection_p, ColumnDataScanState &scan_state_p)
+	    : db(std::move(db_p)), result_set(std::move(result_set_p)), collection(collection_p), scan_state(scan_state_p) {
 	}
+
+public:
+	unique_ptr<PinnedResultSet> Copy() const {
+		return unique_ptr<PinnedResultSet>(new PinnedResultSet(db, result_set, collection, scan_state));
+	}
+
+private:
+	shared_ptr<DatabaseInstance> db;
+	shared_ptr<ManagedResultSet> result_set;
 
 public:
 	ColumnDataCollection &collection;
 	ColumnDataScanState &scan_state;
-
-private:
-	shared_ptr<DatabaseInstance> db;
 };
 
 class ResultSetManager {

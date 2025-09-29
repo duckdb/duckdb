@@ -6,6 +6,7 @@
 #include "duckdb/parser/tableref/column_data_ref.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/main/result_set_manager.hpp"
 
 namespace duckdb {
 

@@ -10,6 +10,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/main/result_set_manager.hpp"
 #include "sqlite3.h"
 #include "sqlite3_udf_wrapper.hpp"
 #include "udf_struct_sqlite3.h"

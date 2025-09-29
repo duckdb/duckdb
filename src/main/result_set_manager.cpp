@@ -22,14 +22,15 @@ ManagedResultSet::~ManagedResultSet() {
 
 unique_ptr<PinnedResultSet> ManagedResultSet::Pin() {
 	if (memory_management_type == QueryResultMemoryManagementType::IN_MEMORY) {
-		return unique_ptr<PinnedResultSet>(new PinnedResultSet(*collection, scan_state, nullptr));
+		return unique_ptr<PinnedResultSet>(new PinnedResultSet(nullptr, shared_from_this(), *collection, scan_state));
 	}
 	D_ASSERT(memory_management_type == QueryResultMemoryManagementType::BUFFER_MANAGED);
 	auto db_ref = db.lock();
 	if (!db_ref) {
 		throw ConnectionException("Trying to access a query result after the database instance has been closed");
 	}
-	return unique_ptr<PinnedResultSet>(new PinnedResultSet(*collection, scan_state, db_ref));
+	return unique_ptr<PinnedResultSet>(
+	    new PinnedResultSet(std::move(db_ref), shared_from_this(), *collection, scan_state));
 }
 
 ResultSetManager::ResultSetManager(DatabaseInstance &db_p) : db(db_p.shared_from_this()) {

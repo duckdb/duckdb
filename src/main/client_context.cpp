@@ -51,6 +51,7 @@
 #include "duckdb/logging/log_type.hpp"
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/main/result_set_manager.hpp"
 
 namespace duckdb {
 
