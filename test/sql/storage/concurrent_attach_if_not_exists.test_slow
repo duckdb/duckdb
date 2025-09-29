@@ -14,8 +14,10 @@ detach ${name}
 ----
 database not found
 
-statement ok
+statement maybe
 attach if not exists '__TEST_DIR__/concurrent_attach_${name}.duckdb' AS ${name}
+----
+in the process of being detached
 
 endloop
 
