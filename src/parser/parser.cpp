@@ -193,7 +193,6 @@ void Parser::ParseQuery(const string &query) {
 	string parser_error;
 	optional_idx parser_error_location;
 	string parser_override_option = StringUtil::Lower(options.parser_override_setting);
-	Printer::PrintF("%s, %s", parser_override_option, query);
 	{
 		// check if there are any unicode spaces in the string
 		string new_query;
