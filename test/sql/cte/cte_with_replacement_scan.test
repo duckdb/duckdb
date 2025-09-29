@@ -1,0 +1,19 @@
+# name: test/sql/cte/cte_with_replacement_scan.test
+# description: Test CTE with same name as file
+# group: [cte]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+copy (select 42 as answer) to 'df.parquet';
+
+query I
+WITH 'df.parquet' AS (
+	SELECT answer FROM 'df.parquet'
+)
+SELECT * FROM 'df.parquet';
+----
+42
