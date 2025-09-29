@@ -74,3 +74,37 @@ statement error
 COPY (select [123::VARIANT]) TO '__TEST_DIR__/list_of_variant.parquet'
 ----
 Not implemented Error: Unimplemented type for Parquet "VARIANT"
+
+statement ok
+create macro data() as table (
+	select COLUMNS([
+		x for x in (*) if x NOT IN [
+			'utinyint',
+			'usmallint',
+			'uint',
+			'ubigint',
+			'hugeint',
+			'uhugeint',
+			'bignum',
+			'timestamp_s',
+			'timestamp_ms',
+			'timestamp_tz',
+			'time_tz',
+			'interval',
+			'bit',
+		]
+	])::VARIANT as "\0" from test_all_types()
+)
+
+statement ok
+COPY (
+	from data()
+) TO '__TEST_DIR__/variant_test_all_types.parquet';
+
+query I nosort expected_res
+select IF(VARIANT_TYPEOF(COLUMNS(*)) == 'VARIANT_NULL', NULL, COLUMNS(*)::JSON) from data();
+----
+
+query I nosort expected_res
+select * from '__TEST_DIR__/variant_test_all_types.parquet';
+----
