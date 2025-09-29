@@ -55,7 +55,8 @@
         "type": "VARCHAR",
         "scope": "global",
         "on_callbacks": [
-            "set"
+            "set",
+            "reset"
         ]
     },
     {

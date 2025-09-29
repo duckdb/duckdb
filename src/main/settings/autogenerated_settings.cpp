@@ -89,6 +89,9 @@ void AllowParserOverrideExtensionSetting::SetGlobal(DatabaseInstance *db, DBConf
 }
 
 void AllowParserOverrideExtensionSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	if (!OnGlobalReset(db, config)) {
+		return;
+	}
 	config.options.allow_parser_override_extension = DBConfigOptions().allow_parser_override_extension;
 }
 

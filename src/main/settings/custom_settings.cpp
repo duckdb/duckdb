@@ -163,6 +163,11 @@ bool AllowParserOverrideExtensionSetting::OnGlobalSet(DatabaseInstance *db, DBCo
 	return true;
 }
 
+bool AllowParserOverrideExtensionSetting::OnGlobalReset(DatabaseInstance *db, DBConfig &config) {
+	config.options.allow_parser_override_extension = "default";
+	return true;
+}
+
 //===----------------------------------------------------------------------===//
 // Allow Persistent Secrets
 //===----------------------------------------------------------------------===//
