@@ -213,8 +213,9 @@ bool ConvertStructToSparseVariant(ToVariantSourceData &source, ToVariantGlobalRe
 		child_source_data.emplace_back(child, source.source_size);
 	}
 
-	idx_t non_null_child_counts[STANDARD_VECTOR_SIZE] = {0};
-	unsafe_vector<bool> key_is_used(children.size(), false);
+	unsafe_vector<idx_t> non_null_child_counts(count, 0);
+	ValidityMask key_is_used(children.size());
+	key_is_used.SetAllInvalid(children.size());
 	for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
 		const auto &child_format = child_source_data[child_idx].source_format;
 		for (idx_t i = 0; i < count; i++) {
@@ -223,7 +224,7 @@ bool ConvertStructToSparseVariant(ToVariantSourceData &source, ToVariantGlobalRe
 			}
 			if (child_format.validity.RowIsValid(child_format.sel->get_index(i))) {
 				non_null_child_counts[i]++;
-				key_is_used[child_idx] = true;
+				key_is_used.SetValidUnsafe(child_idx);
 			}
 		}
 	}
@@ -253,7 +254,7 @@ bool ConvertStructToSparseVariant(ToVariantSourceData &source, ToVariantGlobalRe
 				}
 				auto &struct_children = StructType::GetChildTypes(type);
 				for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
-					if (key_is_used[child_idx]) {
+					if (key_is_used.RowIsValidUnsafe(child_idx)) {
 						auto &struct_child = struct_children[child_idx];
 						string_t struct_child_str(struct_child.first.c_str(),
 						                          NumericCast<uint32_t>(struct_child.first.size()));
@@ -298,6 +299,7 @@ bool ConvertStructToSparseVariant(ToVariantSourceData &source, ToVariantGlobalRe
 		}
 	}
 
+	// NOTE: this does not apply recursively, children will just be cast to VARIANT
 	for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
 		auto &child = *children[child_idx];
 
