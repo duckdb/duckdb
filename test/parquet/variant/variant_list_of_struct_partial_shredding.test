@@ -31,8 +31,10 @@ create macro data() AS TABLE (
 		),
 		(
 			[
-				{a:['alpha'],      b:true,  c:{a:'deep'}},
-				{a:[],             b:NULL,  c:{a:'leaf'}}
+				{a:['alpha'], b:true, c:{a:'deep'}}::VARIANT,
+				{a: [[1,2]::VARIANT, 'hello', {a: 42}]}, -- fields 'b' and 'c' are missing, 'a' element is of a wrong type
+				{b: false}, -- fields 'a' and 'c' are missing
+				{a:[], b:NULL, c:{a:'leaf'}}
 			]
 		),
 		(

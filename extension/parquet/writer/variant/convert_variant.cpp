@@ -741,7 +741,7 @@ static void WriteTypedObjectValues(UnifiedVariantVectorData &variant, Vector &re
 	for (idx_t i = 0; i < count; i++) {
 		auto row = sel[i];
 		//! When we're shredding an object, the top-level struct of it should always be valid
-		D_ASSERT(validity.RowIsValid(row));
+		D_ASSERT(validity.RowIsValid(result_sel[i]));
 		auto value_index = value_index_sel[i];
 		D_ASSERT(variant.GetTypeId(row, value_index) == VariantLogicalType::OBJECT);
 		nested_data[i] = VariantUtils::DecodeNestedData(variant, row, value_index);
@@ -774,19 +774,15 @@ static void WriteTypedObjectValues(UnifiedVariantVectorData &variant, Vector &re
 
 		if (!lookup_validity.AllValid()) {
 			auto &child_variant_vectors = StructVector::GetEntries(child_vec);
-			auto &value_validity = FlatVector::Validity(*child_variant_vectors[0]);
-			optional_ptr<ValidityMask> typed_value_validity;
-			if (child_variant_vectors.size() == 2) {
-				typed_value_validity = FlatVector::Validity(*child_variant_vectors[1]);
-			}
+
 			//! For some of the rows the field is missing, adjust the selection vector to exclude these rows.
 			idx_t child_count = 0;
 			for (idx_t i = 0; i < count; i++) {
 				if (!lookup_validity.RowIsValid(i)) {
 					//! The field is missing, set it to null
-					value_validity.SetInvalid(result_sel[i]);
-					if (typed_value_validity) {
-						typed_value_validity->SetInvalid(result_sel[i]);
+					FlatVector::SetNull(*child_variant_vectors[0], result_sel[i], true);
+					if (child_variant_vectors.size() >= 2) {
+						FlatVector::SetNull(*child_variant_vectors[1], result_sel[i], true);
 					}
 					continue;
 				}
