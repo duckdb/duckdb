@@ -784,9 +784,9 @@ static void WriteTypedObjectValues(UnifiedVariantVectorData &variant, Vector &re
 			for (idx_t i = 0; i < count; i++) {
 				if (!lookup_validity.RowIsValid(i)) {
 					//! The field is missing, set it to null
-					value_validity.SetInvalid(sel[i]);
+					value_validity.SetInvalid(result_sel[i]);
 					if (typed_value_validity) {
-						typed_value_validity->SetInvalid(sel[i]);
+						typed_value_validity->SetInvalid(result_sel[i]);
 					}
 					continue;
 				}
