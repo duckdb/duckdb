@@ -529,6 +529,13 @@ Value SchedulerProcessPartialSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Storage Block Prefetch
+//===----------------------------------------------------------------------===//
+void StorageBlockPrefetchSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	EnumUtil::FromString<StorageBlockPrefetch>(StringValue::Get(parameter));
+}
+
+//===----------------------------------------------------------------------===//
 // Zstd Min String Length
 //===----------------------------------------------------------------------===//
 void ZstdMinStringLengthSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
