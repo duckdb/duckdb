@@ -1028,13 +1028,16 @@ static void WriteVariantValues(UnifiedVariantVectorData &variant, Vector &result
 		if (shredding_state.count) {
 			WriteTypedValues(variant, *typed_value, shredding_state.shredded_sel, shredding_state.values_index_sel,
 			                 shredding_state.result_sel, shredding_state.count);
-
-			//! Invert the selection to take all the rows that aren't shredded on, to set them to NULL
-			SelectionVector inverted_sel(count);
-			auto inverted_count =
-			    SelectionVector::Inverted(shredding_state.result_sel, inverted_sel, shredding_state.count, count);
-			for (idx_t i = 0; i < inverted_count; i++) {
-				FlatVector::SetNull(*typed_value, inverted_sel[i], true);
+			//! 'shredding_state.result_sel' will always be a subset of 'result_sel', set the rows not in the subset to
+			//! NULL
+			idx_t sel_idx = 0;
+			for (idx_t i = 0; i < count; i++) {
+				auto original_index = result_sel ? result_sel->get_index(i) : i;
+				if (sel_idx < shredding_state.count && shredding_state.result_sel[sel_idx] == original_index) {
+					sel_idx++;
+					continue;
+				}
+				FlatVector::SetNull(*typed_value, original_index, true);
 			}
 		} else {
 			//! Set all rows of the typed_value to NULL, nothing is shredded on
