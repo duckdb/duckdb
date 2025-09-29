@@ -690,7 +690,6 @@ public:
 		parser_override = PEGParser;
 	}
 
-
 	static ParserOverrideResult PEGParser(ParserExtensionInfo *info, const string &query) {
 		vector<MatcherToken> root_tokens;
 		string clean_sql;
