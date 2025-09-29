@@ -191,4 +191,4 @@ void PEGParser::ParseRules(const char *grammar) {
 	}
 }
 
-} // namespace duckdb
+}

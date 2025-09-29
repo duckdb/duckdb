@@ -95,15 +95,6 @@ struct AllowExtensionsMetadataMismatchSetting {
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
 
-struct AllowParserOverrideExtensionSetting {
-	using RETURN_TYPE = bool;
-	static constexpr const char *Name = "allow_parser_override_extension";
-	static constexpr const char *Description = "Allow extensions to override the current parser";
-	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "false";
-	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
-};
-
 struct AllowPersistentSecretsSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "allow_persistent_secrets";

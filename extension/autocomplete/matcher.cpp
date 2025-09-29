@@ -69,6 +69,7 @@ public:
 		return result;
 	}
 
+
 	SuggestionType AddSuggestionInternal(MatchState &state) const override {
 		AutoCompleteCandidate candidate(keyword, score_bonus, CandidateType::KEYWORD);
 		candidate.extra_char = extra_char;
@@ -363,6 +364,7 @@ public:
 		return state.allocator.Allocate(make_uniq<RepeatParseResult>(std::move(results)));
 	}
 
+
 	SuggestionType AddSuggestionInternal(MatchState &state) const override {
 		element.AddSuggestion(state);
 		return SuggestionType::MANDATORY;
@@ -479,23 +481,22 @@ private:
 		switch (suggestion_type) {
 		case SuggestionState::SUGGEST_TYPE_NAME:
 			if (keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_RESERVED) ||
-			    keyword_helper.KeywordCategoryType(token_text, GetBannedCategory())) {
+				keyword_helper.KeywordCategoryType(token_text, GetBannedCategory())) {
 				return false;
-			}
+				}
 			break;
 		default: {
 			const auto banned_category = GetBannedCategory();
 			const auto allowed_override_category = banned_category == PEGKeywordCategory::KEYWORD_COL_NAME
-			                                           ? PEGKeywordCategory::KEYWORD_TYPE_FUNC
-			                                           : PEGKeywordCategory::KEYWORD_COL_NAME;
+													   ? PEGKeywordCategory::KEYWORD_TYPE_FUNC
+													   : PEGKeywordCategory::KEYWORD_COL_NAME;
 
-			const bool is_reserved =
-			    keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_RESERVED);
+			const bool is_reserved = keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_RESERVED);
 			const bool has_extra_banned_category = keyword_helper.KeywordCategoryType(token_text, banned_category);
 			const bool has_banned_flag = is_reserved || has_extra_banned_category;
 
 			const bool is_unreserved =
-			    keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_UNRESERVED);
+				keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_UNRESERVED);
 			const bool has_override_flag = keyword_helper.KeywordCategoryType(token_text, allowed_override_category);
 			const bool has_allowed_flag = is_unreserved || has_override_flag;
 
@@ -874,6 +875,7 @@ Matcher &MatcherFactory::StringLiteral() const {
 Matcher &MatcherFactory::Operator() const {
 	return allocator.Allocate(make_uniq<OperatorMatcher>());
 }
+
 
 Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name) {
 	vector<reference<Matcher>> parameters;
