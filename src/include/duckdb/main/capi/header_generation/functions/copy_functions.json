@@ -1,0 +1,303 @@
+{
+  "group": "copy_functions",
+  "deprecated": false,
+  "entries": [
+    {
+      "name": "duckdb_create_copy_function",
+      "return_type": "duckdb_copy_function",
+      "params": [],
+      "comment": {
+        "description": "Creates a new empty copy function.\n\nThe return value should be destroyed with `duckdb_destroy_copy_function`.\n\n",
+        "return_value": "The copy function object."
+      }
+    },
+    {
+      "name": "duckdb_destroy_copy_function",
+      "return_type": "void",
+      "params": [
+        {
+          "type": "duckdb_copy_function *",
+          "name": "copy_function"
+        }
+      ],
+      "comment": {
+        "description": "Destroys the given copy function object.\n",
+        "param_comments": {
+          "copy_function": "The copy function to destroy."
+        }
+      }
+    },
+    {
+      "name": "duckdb_copy_function_add_import_parameter",
+      "return_type": "void",
+      "params": [
+          {
+            "type": "duckdb_copy_function",
+            "name": "copy_function"
+          },
+          {
+            "type": "const char *",
+            "name": "name"
+          },
+          {
+            "type": "duckdb_logical_type",
+            "name": "type"
+          },
+          {
+            "type": "const char *",
+            "name": "description"
+          }
+      ],
+      "comment": {
+        "description": "Adds a parameter to the `COPY ... FROM` variant of the copy function.\n\n",
+        "param_comments": {
+          "copy_function": "The copy function",
+          "name": "The name of the parameter",
+          "type": "The type of the parameter",
+          "description": "(optional) The description of the parameter"
+        }
+      }
+    },
+    {
+      "name": "duckdb_copy_function_add_export_parameter",
+      "return_type": "void",
+      "params": [
+          {
+            "type": "duckdb_copy_function",
+            "name": "copy_function"
+          },
+          {
+            "type": "const char *",
+            "name": "name"
+          },
+          {
+            "type": "duckdb_logical_type",
+            "name": "type"
+          },
+          {
+            "type": "const char *",
+            "name": "description"
+          }
+      ],
+      "comment": {
+        "description": "Adds a parameter to the `COPY ... TO` variant of the copy function.\n\n",
+        "param_comments": {
+          "copy_function": "The copy function",
+          "name": "The name of the parameter",
+          "type": "The type of the parameter",
+          "description": "(optional) The description of the parameter"
+        }
+      }
+    },
+    {
+      "name": "duckdb_copy_function_set_export_bind",
+      "return_type": "void *",
+      "params": [
+        {
+          "type": "duckdb_copy_function",
+          "name": "copy_function"
+        },
+        {
+          "type": "duckdb_copy_function_export_bind_t",
+          "name": "bind"
+        }
+      ],
+      "comment": {
+        "description": "Sets the bind function of the copy function, to use when binding `COPY (...) TO`.\n\n",
+        "param_comments": {
+          "table_function": "The copy function",
+          "bind": "The bind function"
+        }
+      }
+    },
+    {
+      "name": "duckdb_copy_function_export_bind_set_error",
+      "return_type": "void",
+      "params": [
+        {
+          "type": "duckdb_bind_info",
+          "name": "info"
+        },
+        {
+          "type": "const char *",
+          "name": "error"
+        }
+      ],
+      "comment": {
+        "description": "Report that an error occurred during the bind function of a copy function.\n\n",
+        "param_comments": {
+          "info": "The bind info provided to the bind function",
+          "error": "The error message"
+        }
+      }
+    },
+    {
+      "name": "duckdb_copy_function_set_export_init",
+      "return_type": "void *",
+      "params": [
+        {
+          "type": "duckdb_copy_function",
+          "name": "copy_function"
+        },
+        {
+          "type": "duckdb_copy_function_export_init_t",
+          "name": "init"
+        }
+      ],
+      "comment": {
+        "description": "Sets the init function of the copy function, called right before executing `COPY (...) TO`.\n\n",
+        "param_comments": {
+          "table_function": "The copy function",
+          "init": "The init function"
+        }
+      }
+    },
+    {
+      "name": "duckdb_copy_function_export_init_set_error",
+      "return_type": "void",
+      "params": [
+        {
+          "type": "duckdb_init_info",
+          "name": "info"
+        },
+        {
+          "type": "const char *",
+          "name": "error"
+        }
+      ],
+      "comment": {
+        "description": "Report that an error occurred during the init function of a copy function.\n\n",
+        "param_comments": {
+          "info": "The init info provided to the init function",
+          "error": "The error message"
+        }
+      }
+    },
+    {
+      "name": "duckdb_copy_function_set_export_sink",
+      "return_type": "void *",
+      "params": [
+        {
+          "type": "duckdb_copy_function",
+          "name": "copy_function"
+        },
+        {
+          "type": "duckdb_copy_function_export_sink_t",
+          "name": "function"
+        }
+      ],
+      "comment": {
+        "description": "Sets the sink function of the copy function, called during `COPY (...) TO`.\n\n",
+        "param_comments": {
+          "table_function": "The copy function",
+          "function": "The sink function"
+        }
+      }
+    },
+    {
+      "name": "duckdb_copy_function_export_sink_set_error",
+      "return_type": "void",
+      "params": [
+        {
+          "type": "duckdb_copy_export_sink_info",
+          "name": "info"
+        },
+        {
+          "type": "const char *",
+          "name": "error"
+        }
+      ],
+      "comment": {
+        "description": "Report that an error occurred during the sink function of a copy function.\n\n",
+        "param_comments": {
+          "info": "The sink info provided to the sink function",
+          "error": "The error message"
+        }
+      }
+    },
+    {
+      "name": "duckdb_copy_function_set_export_finalize",
+      "return_type": "void",
+      "params": [
+        {
+          "type": "duckdb_copy_function",
+          "name": "copy_function"
+        },
+        {
+          "type": "duckdb_copy_function_export_finalize_t",
+          "name": "finalize"
+        }
+      ],
+      "comment": {
+        "description": "Sets the finalize function of the copy function, called at the end of `COPY ... TO`.\n\n",
+        "param_comments": {
+          "table_function": "The copy function",
+          "finalize": "The finalize function"
+        }
+      }
+    },
+    {
+      "name": "duckdb_copy_function_export_finalize_set_error",
+      "return_type": "void",
+      "params": [
+        {
+          "type": "duckdb_copy_export_finalize_info",
+          "name": "info"
+        },
+        {
+          "type": "const char *",
+          "name": "error"
+        }
+      ],
+      "comment": {
+        "description": "Report that an error occurred during the finalize function of a copy function.\n\n",
+        "param_comments": {
+          "info": "The finalize info provided to the finalize function",
+          "error": "The error message"
+        }
+      }
+    },
+    {
+      "name": "duckdb_copy_function_set_import_bind",
+      "return_type": "void *",
+      "params": [
+        {
+          "type": "duckdb_copy_function",
+          "name": "copy_function"
+        },
+        {
+          "type": "duckdb_copy_import_bind_t",
+          "name": "bind"
+        }
+      ],
+      "comment": {
+        "description": "Sets the bind function of the copy function, to use when binding `COPY ... FROM`.\n\n",
+        "param_comments": {
+          "table_function": "The copy function",
+          "bind": "The bind function"
+        }
+      }
+    },
+    {
+      "name": "duckdb_copy_function_set_import_function",
+      "return_type": "void",
+      "params": [
+        {
+          "type": "duckdb_copy_function",
+          "name": "copy_function"
+        },
+        {
+          "type": "duckdb_table_function",
+          "name": "table_function"
+        }
+      ],
+      "comment": {
+        "description": "Sets the underlying table function to use for `COPY ... FROM`.\n\n",
+        "param_comments": {
+          "copy_function": "The copy function",
+          "table_function": "The underlying table function"
+        }
+      }
+    }
+  ]
+}

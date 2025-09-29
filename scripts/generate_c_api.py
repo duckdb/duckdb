@@ -82,6 +82,7 @@ ORIGINAL_FUNCTION_GROUP_ORDER = [
     'cast_functions',
     'expression_interface',
     'file_system_interface',
+    'copy_functions',
 ]
 
 # The file that forms the base for the header generation
