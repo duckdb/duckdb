@@ -19,10 +19,11 @@
 namespace duckdb {
 
 Connection::Connection(DatabaseInstance &database)
-    : context(make_shared_ptr<ClientContext>(database.shared_from_this())), warning_cb(nullptr) {
+    : context(make_shared_ptr<ClientContext>(database.shared_from_this())) {
 	auto &connection_manager = ConnectionManager::Get(database);
 	connection_manager.AddConnection(*context);
 	connection_manager.AssignConnectionId(*this);
+	D_ASSERT(1);
 
 #ifdef DEBUG
 	EnableProfiling();
@@ -31,18 +32,16 @@ Connection::Connection(DatabaseInstance &database)
 }
 
 Connection::Connection(DuckDB &database) : Connection(*database.instance) {
-	// Initialization of warning_cb happens in the other constructor
+	D_ASSERT(1);
 }
 
-Connection::Connection(Connection &&other) noexcept : warning_cb(nullptr) {
+Connection::Connection(Connection &&other) noexcept {
 	std::swap(context, other.context);
-	std::swap(warning_cb, other.warning_cb);
 	std::swap(connection_id, other.connection_id);
 }
 
 Connection &Connection::operator=(Connection &&other) noexcept {
 	std::swap(context, other.context);
-	std::swap(warning_cb, other.warning_cb);
 	std::swap(connection_id, other.connection_id);
 	return *this;
 }
