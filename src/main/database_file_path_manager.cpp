@@ -7,7 +7,7 @@ namespace duckdb {
 
 idx_t DatabaseFilePathManager::ApproxDatabaseCount() const {
 	lock_guard<mutex> path_lock(db_paths_lock);
-	return db_paths_to_name.size();
+	return db_paths.size();
 }
 
 InsertDatabasePathResult DatabaseFilePathManager::InsertDatabasePath(const string &path, const string &name,
@@ -18,7 +18,7 @@ InsertDatabasePathResult DatabaseFilePathManager::InsertDatabasePath(const strin
 	}
 
 	lock_guard<mutex> path_lock(db_paths_lock);
-	auto entry = db_paths_to_name.emplace(path, DatabasePathInfo(name));
+	auto entry = db_paths.emplace(path, DatabasePathInfo(name));
 	if (!entry.second) {
 		auto &existing = entry.first->second;
 		if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT && existing.name == name) {
