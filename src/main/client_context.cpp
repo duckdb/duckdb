@@ -540,8 +540,8 @@ ClientContext::PendingPreparedStatementInternal(ClientContextLock &lock,
 		query_progress.Restart();
 	}
 
-	auto stream_result =
-	    parameters.allow_stream_result && statement_data.properties.streaming_mode == QueryResultStreamingMode::ALLOW;
+	auto stream_result = parameters.query_parameters.streaming_mode == QueryResultStreamingMode::ALLOW &&
+	                     statement_data.properties.streaming_mode == QueryResultStreamingMode::ALLOW;
 
 	// Decide how to get the result collector.
 	get_result_collector_t get_collector = PhysicalResultCollector::GetResultCollector;
@@ -780,7 +780,8 @@ unique_ptr<QueryResult> ClientContext::Execute(const string &query, shared_ptr<P
                                                bool allow_stream_result) {
 	PendingQueryParameters parameters;
 	parameters.parameters = &values;
-	parameters.allow_stream_result = allow_stream_result;
+	parameters.query_parameters.streaming_mode =
+	    allow_stream_result ? QueryResultStreamingMode::ALLOW : QueryResultStreamingMode::DO_NOT_ALLOW;
 	return Execute(query, prepared, parameters);
 }
 
@@ -809,13 +810,9 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementInternal(ClientCon
 	return PendingPreparedStatementInternal(lock, std::move(prepared), parameters);
 }
 
-unique_ptr<QueryResult>
-ClientContext::RunStatementInternal(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
-                                    bool allow_stream_result,
-                                    optional_ptr<case_insensitive_map_t<BoundParameterData>> params, bool verify) {
-	PendingQueryParameters parameters;
-	parameters.allow_stream_result = allow_stream_result;
-	parameters.parameters = params;
+unique_ptr<QueryResult> ClientContext::RunStatementInternal(ClientContextLock &lock, const string &query,
+                                                            unique_ptr<SQLStatement> statement,
+                                                            const PendingQueryParameters &parameters, bool verify) {
 	auto pending = PendingQueryInternal(lock, std::move(statement), parameters, verify);
 	if (pending->HasError()) {
 		return ErrorResult<MaterializedQueryResult>(pending->GetErrorObject());
@@ -961,7 +958,14 @@ void ClientContext::LogQueryInternal(ClientContextLock &, const string &query) {
 }
 
 unique_ptr<QueryResult> ClientContext::Query(unique_ptr<SQLStatement> statement, bool allow_stream_result) {
-	auto pending_query = PendingQuery(std::move(statement), allow_stream_result);
+	QueryParameters parameters;
+	parameters.streaming_mode =
+	    allow_stream_result ? QueryResultStreamingMode::ALLOW : QueryResultStreamingMode::DO_NOT_ALLOW;
+	return Query(std::move(statement), parameters);
+}
+
+unique_ptr<QueryResult> ClientContext::Query(unique_ptr<SQLStatement> statement, QueryParameters parameters) {
+	auto pending_query = PendingQuery(std::move(statement), parameters);
 	if (pending_query->HasError()) {
 		return ErrorResult<MaterializedQueryResult>(pending_query->GetErrorObject());
 	}
@@ -969,6 +973,13 @@ unique_ptr<QueryResult> ClientContext::Query(unique_ptr<SQLStatement> statement,
 }
 
 unique_ptr<QueryResult> ClientContext::Query(const string &query, bool allow_stream_result) {
+	QueryParameters parameters;
+	parameters.streaming_mode =
+	    allow_stream_result ? QueryResultStreamingMode::ALLOW : QueryResultStreamingMode::DO_NOT_ALLOW;
+	return Query(query, parameters);
+}
+
+unique_ptr<QueryResult> ClientContext::Query(const string &query, QueryParameters query_parameters) {
 	auto lock = LockContext();
 
 	vector<unique_ptr<SQLStatement>> statements;
@@ -994,7 +1005,10 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, bool allow_str
 		auto &statement = statements[i];
 		bool is_last_statement = i + 1 == statements.size();
 		PendingQueryParameters parameters;
-		parameters.allow_stream_result = allow_stream_result && is_last_statement;
+		parameters.query_parameters = query_parameters;
+		if (is_last_statement) {
+			parameters.query_parameters.streaming_mode = QueryResultStreamingMode::DO_NOT_ALLOW;
+		}
 		auto pending_query = PendingQueryInternal(*lock, std::move(statement), parameters);
 		auto has_result = pending_query->properties.return_type == StatementReturnType::QUERY_RESULT;
 		unique_ptr<QueryResult> current_result;
@@ -1037,18 +1051,51 @@ vector<unique_ptr<SQLStatement>> ClientContext::ParseStatements(ClientContextLoc
 
 unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const string &query, bool allow_stream_result) {
 	case_insensitive_map_t<BoundParameterData> empty_param_list;
-	return PendingQuery(query, empty_param_list, allow_stream_result);
+	QueryParameters parameters;
+	parameters.streaming_mode =
+	    allow_stream_result ? QueryResultStreamingMode::ALLOW : QueryResultStreamingMode::DO_NOT_ALLOW;
+	return PendingQuery(query, empty_param_list, parameters);
+}
+
+unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const string &query, QueryParameters parameters) {
+	case_insensitive_map_t<BoundParameterData> empty_param_list;
+	return PendingQuery(query, empty_param_list, parameters);
 }
 
 unique_ptr<PendingQueryResult> ClientContext::PendingQuery(unique_ptr<SQLStatement> statement,
                                                            bool allow_stream_result) {
 	case_insensitive_map_t<BoundParameterData> empty_param_list;
-	return PendingQuery(std::move(statement), empty_param_list, allow_stream_result);
+	QueryParameters parameters;
+	parameters.streaming_mode =
+	    allow_stream_result ? QueryResultStreamingMode::ALLOW : QueryResultStreamingMode::DO_NOT_ALLOW;
+	return PendingQuery(std::move(statement), empty_param_list, parameters);
+}
+
+unique_ptr<PendingQueryResult> ClientContext::PendingQuery(unique_ptr<SQLStatement> statement,
+                                                           QueryParameters parameters) {
+	case_insensitive_map_t<BoundParameterData> empty_param_list;
+	return PendingQuery(std::move(statement), empty_param_list, parameters);
 }
 
 unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const string &query,
                                                            case_insensitive_map_t<BoundParameterData> &values,
                                                            bool allow_stream_result) {
+	QueryParameters parameters;
+	parameters.streaming_mode =
+	    allow_stream_result ? QueryResultStreamingMode::ALLOW : QueryResultStreamingMode::DO_NOT_ALLOW;
+	return PendingQuery(query, values, parameters);
+}
+
+unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const string &query,
+                                                           case_insensitive_map_t<BoundParameterData> &values,
+                                                           QueryParameters parameters) {
+	PendingQueryParameters params;
+	params.parameters = values;
+	params.query_parameters = parameters;
+	return PendingQuery(query, params);
+}
+
+unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const string &query, PendingQueryParameters parameters) {
 	auto lock = LockContext();
 	try {
 		InitialCleanup(*lock);
@@ -1061,11 +1108,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const string &query,
 			throw InvalidInputException("Cannot prepare multiple statements at once!");
 		}
 
-		PendingQueryParameters params;
-		params.allow_stream_result = allow_stream_result;
-		params.parameters = values;
-
-		return PendingQueryInternal(*lock, std::move(statements[0]), params, true);
+		return PendingQueryInternal(*lock, std::move(statements[0]), parameters, true);
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
 		ProcessError(error, query);
@@ -1076,13 +1119,22 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const string &query,
 unique_ptr<PendingQueryResult> ClientContext::PendingQuery(unique_ptr<SQLStatement> statement,
                                                            case_insensitive_map_t<BoundParameterData> &values,
                                                            bool allow_stream_result) {
+	QueryParameters parameters;
+	parameters.streaming_mode =
+	    allow_stream_result ? QueryResultStreamingMode::ALLOW : QueryResultStreamingMode::DO_NOT_ALLOW;
+	return PendingQuery(std::move(statement), values, parameters);
+}
+
+unique_ptr<PendingQueryResult> ClientContext::PendingQuery(unique_ptr<SQLStatement> statement,
+                                                           case_insensitive_map_t<BoundParameterData> &values,
+                                                           QueryParameters parameters) {
 	auto lock = LockContext();
 	auto query = statement->query;
 	try {
 		InitialCleanup(*lock);
 
 		PendingQueryParameters params;
-		params.allow_stream_result = allow_stream_result;
+		params.query_parameters = parameters;
 		params.parameters = values;
 
 		return PendingQueryInternal(*lock, std::move(statement), params, true);
@@ -1339,6 +1391,15 @@ unordered_set<string> ClientContext::GetTableNames(const string &query, const bo
 unique_ptr<PendingQueryResult> ClientContext::PendingQueryInternal(ClientContextLock &lock,
                                                                    const shared_ptr<Relation> &relation,
                                                                    bool allow_stream_result) {
+	QueryParameters parameters;
+	parameters.streaming_mode =
+	    allow_stream_result ? QueryResultStreamingMode::ALLOW : QueryResultStreamingMode::DO_NOT_ALLOW;
+	return PendingQueryInternal(lock, relation, parameters);
+}
+
+unique_ptr<PendingQueryResult> ClientContext::PendingQueryInternal(ClientContextLock &lock,
+                                                                   const shared_ptr<Relation> &relation,
+                                                                   QueryParameters query_parameters) {
 	InitialCleanup(lock);
 
 	string query;
@@ -1350,20 +1411,26 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQueryInternal(ClientContext
 			// verify read only statements by running a select statement
 			auto select = make_uniq<SelectStatement>();
 			select->node = relation->GetQueryNode();
-			RunStatementInternal(lock, query, std::move(select), false, nullptr);
+			PendingQueryParameters parameters;
+			parameters.query_parameters = query_parameters;
+			query_parameters.streaming_mode = QueryResultStreamingMode::DO_NOT_ALLOW;
+			RunStatementInternal(lock, query, std::move(select), parameters);
 		}
 	}
 
 	auto relation_stmt = make_uniq<RelationStatement>(relation);
 	PendingQueryParameters parameters;
-	parameters.allow_stream_result = allow_stream_result;
+	parameters.query_parameters = query_parameters;
 	return PendingQueryInternal(lock, std::move(relation_stmt), parameters);
 }
 
 unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const shared_ptr<Relation> &relation,
                                                            bool allow_stream_result) {
+	QueryParameters parameters;
+	parameters.streaming_mode =
+	    allow_stream_result ? QueryResultStreamingMode::ALLOW : QueryResultStreamingMode::DO_NOT_ALLOW;
 	auto lock = LockContext();
-	return PendingQueryInternal(*lock, relation, allow_stream_result);
+	return PendingQueryInternal(*lock, relation, parameters);
 }
 
 unique_ptr<QueryResult> ClientContext::Execute(const shared_ptr<Relation> &relation) {

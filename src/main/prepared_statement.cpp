@@ -110,8 +110,10 @@ unique_ptr<PendingQueryResult> PreparedStatement::PendingQuery(case_insensitive_
 	}
 
 	D_ASSERT(data);
-	parameters.allow_stream_result =
-	    allow_stream_result && data->properties.streaming_mode == QueryResultStreamingMode::ALLOW;
+	parameters.query_parameters.streaming_mode =
+	    allow_stream_result && data->properties.streaming_mode == QueryResultStreamingMode::ALLOW
+	        ? QueryResultStreamingMode::ALLOW
+	        : QueryResultStreamingMode::DO_NOT_ALLOW;
 	auto result = context->PendingQuery(query, data, parameters);
 	// The result should not contain any reference to the 'vector<Value> parameters.parameters'
 	return result;

@@ -95,10 +95,14 @@ ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &quer
 	}
 
 	// Execute the original statement
+	PendingQueryParameters query_parameters;
+	query_parameters.parameters = parameters;
+	query_parameters.query_parameters.streaming_mode = QueryResultStreamingMode::DO_NOT_ALLOW;
+	query_parameters.query_parameters.memory_management_type = QueryResultMemoryManagementType::BUFFER_MANAGED;
 	bool any_failed = original->Run(*this, query,
 	                                [&](const string &q, unique_ptr<SQLStatement> s,
 	                                    optional_ptr<case_insensitive_map_t<BoundParameterData>> params) {
-		                                return RunStatementInternal(lock, q, std::move(s), false, params, false);
+		                                return RunStatementInternal(lock, q, std::move(s), query_parameters, false);
 	                                });
 	if (!any_failed) {
 		statement_verifiers.emplace_back(
@@ -109,7 +113,7 @@ ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &quer
 		bool failed = verifier->Run(*this, query,
 		                            [&](const string &q, unique_ptr<SQLStatement> s,
 		                                optional_ptr<case_insensitive_map_t<BoundParameterData>> params) {
-			                            return RunStatementInternal(lock, q, std::move(s), false, params, false);
+			                            return RunStatementInternal(lock, q, std::move(s), query_parameters, false);
 		                            });
 		any_failed = any_failed || failed;
 	}
@@ -120,7 +124,7 @@ ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &quer
 		    *this, query,
 		    [&](const string &q, unique_ptr<SQLStatement> s,
 		        optional_ptr<case_insensitive_map_t<BoundParameterData>> params) {
-			    return RunStatementInternal(lock, q, std::move(s), false, params, false);
+			    return RunStatementInternal(lock, q, std::move(s), query_parameters, false);
 		    });
 		if (!failed) {
 			// PreparedStatementVerifier fails if it runs into a ParameterNotAllowedException, which is OK
@@ -155,7 +159,7 @@ ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &quer
 		    *this, explain_q,
 		    [&](const string &q, unique_ptr<SQLStatement> s,
 		        optional_ptr<case_insensitive_map_t<BoundParameterData>> params) {
-			    return RunStatementInternal(lock, q, std::move(s), false, params, false);
+			    return RunStatementInternal(lock, q, std::move(s), query_parameters, false);
 		    });
 
 		if (explain_failed) { // LCOV_EXCL_START

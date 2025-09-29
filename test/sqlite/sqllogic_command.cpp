@@ -13,6 +13,7 @@
 #include "test_config.hpp"
 #include "sqllogic_test_logger.hpp"
 #include "catch.hpp"
+
 #include <list>
 #include <thread>
 #include <chrono>
@@ -171,9 +172,14 @@ unique_ptr<MaterializedQueryResult> Command::ExecuteQuery(ExecuteContext &contex
 		RestartDatabase(context, connection, context.sql_query);
 	}
 
+	QueryParameters parameters;
+	parameters.streaming_mode = QueryResultStreamingMode::DO_NOT_ALLOW;
+	parameters.memory_management_type = QueryResultMemoryManagementType::BUFFER_MANAGED;
+
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
+	parameters.streaming_mode = QueryResultStreamingMode::ALLOW;
 	auto ccontext = connection->context;
-	auto result = ccontext->Query(context.sql_query, true);
+	auto result = ccontext->Query(context.sql_query, parameters);
 	if (result->type == QueryResultType::STREAM_RESULT) {
 		auto &stream_result = result->Cast<StreamQueryResult>();
 		return stream_result.Materialize();
@@ -182,10 +188,8 @@ unique_ptr<MaterializedQueryResult> Command::ExecuteQuery(ExecuteContext &contex
 		return unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(result));
 	}
 #else
-	QueryParameters query_parameters;
-	query_parameters.streaming_mode = QueryResultStreamingMode::DO_NOT_ALLOW;
-	query_parameters.memory_management_type = QueryResultMemoryManagementType::BUFFER_MANAGED;
-	return connection->Query(context.sql_query, query_parameters);
+	auto res = connection->context->Query(context.sql_query, parameters);
+	return unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(res));
 #endif
 }
 
