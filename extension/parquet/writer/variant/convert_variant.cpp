@@ -3,6 +3,7 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
 #include "reader/variant/variant_binary_decoder.hpp"
+#include "duckdb/common/types/uuid.hpp"
 
 namespace duckdb {
 
@@ -252,6 +253,17 @@ void CopySimplePrimitiveData(const UnifiedVariantVectorData &variant, data_ptr_t
 	value_data += sizeof(T);
 }
 
+void CopyUUIDData(const UnifiedVariantVectorData &variant, data_ptr_t &value_data, idx_t row, uint32_t values_index) {
+
+	auto byte_offset = variant.GetByteOffset(row, values_index);
+	auto data = const_data_ptr_cast(variant.GetData(row).GetData());
+	auto ptr = data + byte_offset;
+
+	auto uuid = Load<uhugeint_t>(ptr);
+	BaseUUID::ToBlob(uuid, value_data);
+	value_data += sizeof(uhugeint_t);
+}
+
 static void WritePrimitiveValueData(const UnifiedVariantVectorData &variant, idx_t row, uint32_t values_index,
                                     data_ptr_t &value_data, const vector<uint32_t> &offsets, idx_t &offset_index) {
 	auto type_id = variant.GetTypeId(row, values_index);
@@ -317,7 +329,7 @@ static void WritePrimitiveValueData(const UnifiedVariantVectorData &variant, idx
 		break;
 	case VariantLogicalType::UUID:
 		WritePrimitiveTypeHeader<VariantPrimitiveType::UUID>(value_data);
-		CopySimplePrimitiveData<uhugeint_t>(variant, value_data, row, values_index);
+		CopyUUIDData(variant, value_data, row, values_index);
 		break;
 	case VariantLogicalType::DATE:
 		WritePrimitiveTypeHeader<VariantPrimitiveType::DATE>(value_data);
@@ -341,7 +353,11 @@ static void WritePrimitiveValueData(const UnifiedVariantVectorData &variant, idx
 		break;
 	case VariantLogicalType::DECIMAL: {
 		auto decimal_data = VariantUtils::DecodeDecimalData(variant, row, values_index);
-		if (decimal_data.width <= 9) {
+
+		if (decimal_data.width <= 4 || decimal_data.width > 38) {
+			throw InvalidInputException("Can't convert VARIANT DECIMAL(%d, %d) to Parquet VARIANT", decimal_data.width,
+			                            decimal_data.scale);
+		} else if (decimal_data.width <= 9) {
 			WritePrimitiveTypeHeader<VariantPrimitiveType::DECIMAL4>(value_data);
 			Store<int8_t>(decimal_data.scale, value_data);
 			value_data++;
@@ -360,8 +376,9 @@ static void WritePrimitiveValueData(const UnifiedVariantVectorData &variant, idx
 			memcpy(value_data, decimal_data.value_ptr, sizeof(hugeint_t));
 			value_data += sizeof(hugeint_t);
 		} else {
-			throw InvalidInputException("Can't convert VARIANT DECIMAL(%d, %d) to Parquet VARIANT", decimal_data.width,
-			                            decimal_data.scale);
+			throw InternalException(
+			    "Uncovered VARIANT(DECIMAL) -> Parquet VARIANT conversion for type 'DECIMAL(%d, %d)'",
+			    decimal_data.width, decimal_data.scale);
 		}
 		break;
 	}

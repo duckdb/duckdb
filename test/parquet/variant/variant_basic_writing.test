@@ -92,6 +92,12 @@ create macro data() as table (
 			'time_tz',
 			'interval',
 			'bit',
+			'dec_4_1', -- Parquet VARIANT doesn't have int16_t DECIMAL
+-- Conversion isn't 1-to-1
+			'dec_9_4', -- can't roundtrip with json
+			'dec_18_6', -- can't roundtrip with json
+			'dec38_10', -- can't roundtrip with json
+			'blob' -- data is base64-encoded in parquet read
 		]
 	])::VARIANT as "\0" from test_all_types()
 )
