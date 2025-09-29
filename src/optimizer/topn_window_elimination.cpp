@@ -35,6 +35,30 @@ unique_ptr<LogicalOperator> TopNWindowElimination::Optimize(unique_ptr<LogicalOp
 	return op;
 }
 
+bool OnlyProjectsGroupsAndAggregates(const vector<ColumnBinding> &bindings, const LogicalWindow &window) {
+	const auto &window_expr = window.expressions[0]->Cast<BoundWindowExpression>();
+	const auto &order_column_ref = window_expr.orders[0].expression->Cast<BoundColumnRefExpression>();
+	for (const auto& binding : bindings) {
+		if (binding.table_index == window.window_index || binding == order_column_ref.binding) {
+			continue;
+		}
+
+		bool is_partition_reference = false;
+		for (const auto &partition : window_expr.partitions) {
+			const auto &column_ref = partition->Cast<BoundColumnRefExpression>();
+			if (binding == column_ref.binding) {
+				is_partition_reference = true;
+				break;
+			}
+		}
+		if (is_partition_reference) {
+			continue;
+		}
+		return false;
+	}
+	return true;
+}
+
 unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<LogicalOperator> op,
                                                                     ColumnBindingReplacer &replacer) {
 	if (!CanOptimize(*op, &context)) {
@@ -54,6 +78,13 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 
 	D_ASSERT(child->type == LogicalOperatorType::LOGICAL_WINDOW);
 	auto &window = child->Cast<LogicalWindow>();
+	if (OnlyProjectsGroupsAndAggregates(new_bindings, window)) {
+		// We can use a simple max function
+
+	} else {
+		// We have must use arg_max, project the rowids, then semi-join with the base table
+	}
+
 
 	// Generate the column references for the struct_pack function that is used as the value for max_by
 	bool generate_row_number = false;
@@ -92,35 +123,35 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 	return unique_ptr<LogicalOperator>(std::move(unnest_struct));
 }
 
-unique_ptr<LogicalAggregate> TopNWindowElimination::CreateAggregateOperator(vector<unique_ptr<Expression>> children,
-                                                                            LogicalWindow &window,
-                                                                            unique_ptr<Expression> limit) const {
-	// Create arg_max(struct_pack(vals), args, limit)) function
-	FunctionBinder function_binder(context);
+AggregateFunction TopNWindowElimination::CreateAggregateFunction(const vector<LogicalType> &param_types, bool requires_arg) const {
 	auto &catalog = Catalog::GetSystemCatalog(context);
+	if (requires_arg) {
+		auto &fun_entry = catalog.GetEntry<AggregateFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "arg_max");
+		return fun_entry.functions.GetFunctionByArguments(context, param_types);
+	}
+	auto &fun_entry = catalog.GetEntry<AggregateFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "max");
+	return fun_entry.functions.GetFunctionByArguments(context, param_types);
+}
 
-	// struct_pack
-	auto &struct_pack_entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "struct_pack");
-	const auto struct_pack_fun =
-	    struct_pack_entry.functions.GetFunctionByArguments(context, ExtractReturnTypes(children));
-	auto struct_pack_expr = function_binder.BindScalarFunction(struct_pack_fun, std::move(children));
-
-	// arg_max
+unique_ptr<LogicalAggregate> TopNWindowElimination::CreateAggregateOperator(LogicalWindow &window, unique_ptr<Expression> limit, optional_ptr<ColumnBinding> arg_binding) const {
+	FunctionBinder function_binder(context);
 	auto &window_expr = window.expressions[0]->Cast<BoundWindowExpression>();
 	D_ASSERT(window_expr.orders.size() == 1);
+	const auto limit_value = limit->Cast<BoundConstantExpression>().value.GetValue<int64_t>();
 
 	vector<unique_ptr<Expression>> arg_max_params;
 	arg_max_params.reserve(3);
 
-	arg_max_params.push_back(std::move(struct_pack_expr));
+	if (arg_binding) {
+		arg_max_params.push_back(make_uniq<BoundColumnRefExpression>("rowid", LogicalType::BIGINT, *arg_binding));
+	}
 	arg_max_params.push_back(std::move(window_expr.orders[0].expression));
-	arg_max_params.push_back(std::move(limit));
+	if (limit_value > 1) {
+		arg_max_params.push_back(std::move(limit));
+	}
 
-	// TODO: If limit is 1, use simple group by + max
-	auto &arg_max_entry = catalog.GetEntry<AggregateFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "arg_max");
-	const auto arg_max_fun =
-	    arg_max_entry.functions.GetFunctionByArguments(context, ExtractReturnTypes(arg_max_params));
-	auto arg_max_expr = function_binder.BindAggregateFunction(arg_max_fun, std::move(arg_max_params));
+	auto max_fun = CreateAggregateFunction(ExtractReturnTypes(arg_max_params), arg_binding);
+	auto arg_max_expr = function_binder.BindAggregateFunction(max_fun, std::move(arg_max_params));
 
 	// Create aggregate operator with arg_max expression and partitions from window function as groups
 	vector<unique_ptr<Expression>> select_list(1);
