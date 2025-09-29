@@ -23,7 +23,7 @@ private:
 	static bool CanOptimize(LogicalOperator &op, optional_ptr<ClientContext> context = nullptr);
 	unique_ptr<LogicalOperator> OptimizeInternal(unique_ptr<LogicalOperator> op, ColumnBindingReplacer &replacer);
 
-	unique_ptr<LogicalAggregate> CreateAggregateOperator(LogicalWindow &window, unique_ptr<Expression> limit, optional_ptr<ColumnBinding> arg_binding) const;
+	unique_ptr<LogicalAggregate> CreateAggregateOperator(LogicalWindow &window, unique_ptr<Expression> limit, vector<unique_ptr<Expression>> args) const;
 	unique_ptr<LogicalUnnest> CreateUnnestListOperator(const child_list_t<LogicalType> &input_types,
 	                                                   idx_t aggregate_idx, bool include_row_number) const;
 	unique_ptr<LogicalProjection> CreateUnnestStructOperator(const child_list_t<LogicalType> &input_types,
@@ -37,7 +37,7 @@ private:
 	static vector<ColumnBinding> TraverseProjectionBindings(const std::vector<ColumnBinding> &old_bindings,
 	                                                        LogicalOperator *&op);
 	static vector<LogicalType> ExtractReturnTypes(const vector<unique_ptr<Expression>> &exprs);
-	AggregateFunction CreateAggregateFunction(const vector<LogicalType> &param_types, bool requires_arg) const;
+	unique_ptr<Expression> CreateAggregateExpression(vector<unique_ptr<Expression>> aggregate_params, bool requires_arg, OrderType order_type) const;
 
 
 private:

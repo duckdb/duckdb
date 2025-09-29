@@ -1,4 +1,6 @@
 #include "duckdb/optimizer/late_materialization.hpp"
+
+#include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
@@ -8,6 +10,7 @@
 #include "duckdb/planner/operator/logical_sample.hpp"
 #include "duckdb/planner/operator/logical_top_n.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
@@ -240,6 +243,24 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 			VisitOperatorExpressions(child.get());
 			// continue into child
 			child = *child.get().children[0];
+			break;
+		}
+		case LogicalOperatorType::LOGICAL_UNNEST: {
+			source_operators.push_back(child);
+			VisitOperatorExpressions(child.get());
+			child = *child.get().children[0];
+			break;
+		}
+		case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
+			source_operators.push_back(child);
+			auto &aggregate = child.get().Cast<LogicalAggregate>();
+			column_references.clear();
+			for (auto &group : aggregate.groups) {
+				VisitExpression(&group);
+			}
+			auto &aggregate_val_expr = aggregate.expressions[0]->Cast<BoundFunctionExpression>().children[1];
+			D_ASSERT(aggregate_val_expr->type == ExpressionType::BOUND_COLUMN_REF);
+			VisitExpression(&aggregate_val_expr);
 			break;
 		}
 		default:
@@ -486,6 +507,49 @@ unique_ptr<LogicalOperator> LateMaterialization::Optimize(unique_ptr<LogicalOper
 		}
 		break;
 	}
+	case LogicalOperatorType::LOGICAL_PROJECTION: {
+		// Try late materialization for arg_max(struct_pack, val, N) constructs
+		const auto &proj = op->Cast<LogicalProjection>();
+		bool is_struct_extract = false;
+		for (const auto &expr : proj.expressions) {
+			if (expr->type == ExpressionType::BOUND_FUNCTION) {
+				const auto &fun_expr = expr->Cast<BoundFunctionExpression>();
+				if (fun_expr.function.name == "struct_extract") {
+					is_struct_extract = true;
+					break;
+				}
+			}
+		}
+		if (is_struct_extract) {
+			const auto *child = proj.children[0].get();
+			if (child->type != LogicalOperatorType::LOGICAL_UNNEST) {
+				break;
+			}
+			child = child->children[0].get();
+			if (child->type != LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
+				break;
+			}
+
+			const auto &aggregate = child->Cast<LogicalAggregate>();
+			if (aggregate.expressions.empty() || aggregate.expressions[0]->type != ExpressionType::BOUND_FUNCTION) {
+				break;
+			}
+			const auto &agg_fun_expr = aggregate.expressions[0]->Cast<BoundFunctionExpression>();
+			if (agg_fun_expr.children.empty() || agg_fun_expr.children[0]->type != ExpressionType::BOUND_FUNCTION) {
+				break;
+			}
+			const auto &agg_child_fun_expr = agg_fun_expr.children[0]->Cast<BoundFunctionExpression>();
+			if (agg_child_fun_expr.function.name != "struct_pack") {
+				break;
+			}
+
+			if (TryLateMaterialization(op)) {
+				return op;
+			}
+			break;
+		}
+	}
+
 	default:
 		break;
 	}

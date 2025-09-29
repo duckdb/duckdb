@@ -35,7 +35,10 @@ unique_ptr<LogicalOperator> TopNWindowElimination::Optimize(unique_ptr<LogicalOp
 	return op;
 }
 
-bool OnlyProjectsGroupsAndAggregates(const vector<ColumnBinding> &bindings, const LogicalWindow &window) {
+vector<ColumnBinding> RetrieveNonAggregateProjections(const vector<ColumnBinding> &bindings, const LogicalWindow &window) {
+	vector<ColumnBinding> result;
+	result.reserve(bindings.size());
+
 	const auto &window_expr = window.expressions[0]->Cast<BoundWindowExpression>();
 	const auto &order_column_ref = window_expr.orders[0].expression->Cast<BoundColumnRefExpression>();
 	for (const auto& binding : bindings) {
@@ -54,10 +57,110 @@ bool OnlyProjectsGroupsAndAggregates(const vector<ColumnBinding> &bindings, cons
 		if (is_partition_reference) {
 			continue;
 		}
-		return false;
+		result.push_back(binding);
 	}
-	return true;
+	return result;
 }
+
+/*vector<unique_ptr<Expression>> TryProjectRowIds(ClientContext &context, LogicalWindow &window, const vector<ColumnBinding> &extra_projections) {
+	vector<reference<LogicalOperator>> stack;
+	reference<LogicalOperator> child = *window.children[0];
+	while (child.get().type != LogicalOperatorType::LOGICAL_GET) {
+		if (child.get().children.size() > 1) {
+			// TODO: Support joins if projections stem from the same table
+			return {};
+		}
+		stack.push_back(child);
+		child = *child.get().children[0];
+	}
+	// we have reached the logical get - now we need to push the row-id column (if it is not yet projected out)
+	auto &get = child.get().Cast<LogicalGet>();
+	if (!get.function.late_materialization || !get.function.get_row_id_columns) {
+		// this function does not support late materialization
+		return {};
+	}
+	auto row_id_column_ids = get.function.get_row_id_columns(context, get.bind_data.get());
+	if (row_id_column_ids.empty() || row_id_column_ids.size() > extra_projections.size()) {
+		return {};
+	}
+
+	// We are now sure that we want to project the rownumber
+	vector<TableColumn> row_id_columns;
+	for (auto &col_id : row_id_column_ids) {
+		auto entry = get.virtual_columns.find(col_id);
+		if (entry == get.virtual_columns.end()) {
+			throw InternalException("Row id column id not found in virtual column list");
+		}
+		row_id_columns.push_back(entry->second);
+	}
+
+	auto &column_ids = get.GetMutableColumnIds();
+	vector<idx_t> row_id_indexes;
+	for (idx_t r_idx = 0; r_idx < row_id_column_ids.size(); ++r_idx) {
+		// check if it is already projected
+		auto row_id_column_id = row_id_column_ids[r_idx];
+		auto &row_id_column = row_id_columns[r_idx];
+		optional_idx row_id_index;
+		for (idx_t i = 0; i < column_ids.size(); ++i) {
+			if (column_ids[i].GetPrimaryIndex() == row_id_column_id) {
+				// already projected - return the id
+				row_id_index = i;
+				break;
+			}
+		}
+		if (row_id_index.IsValid()) {
+			row_id_indexes.push_back(row_id_index.GetIndex());
+			continue;
+		}
+		// row id is not yet projected - push it and return the new index
+		column_ids.push_back(ColumnIndex(row_id_column_id));
+		if (!get.projection_ids.empty()) {
+			get.projection_ids.push_back(column_ids.size() - 1);
+		}
+		if (!get.types.empty()) {
+			get.types.push_back(row_id_column.type);
+		}
+		row_id_indexes.push_back(column_ids.size() - 1);
+	}
+	idx_t column_count = get.projection_ids.empty() ? get.GetColumnIds().size() : get.projection_ids.size();
+	D_ASSERT(column_count == get.GetColumnBindings().size());
+
+	// the row id has been projected - now project it up the stack
+	vector<ColumnBinding> row_id_bindings;
+	for (auto &row_id_index : row_id_indexes) {
+		row_id_bindings.emplace_back(get.table_index, row_id_index);
+	}
+	for (idx_t i = stack.size(); i > 0; i--) {
+		auto &op = stack[i - 1].get();
+		switch (op.type) {
+		case LogicalOperatorType::LOGICAL_PROJECTION: {
+			auto &proj = op.Cast<LogicalProjection>();
+			// push projection of the row-id columns
+			for (idx_t r_idx = 0; r_idx < row_id_columns.size(); r_idx++) {
+				auto &r_col = row_id_columns[r_idx];
+				proj.expressions.push_back(
+				    make_uniq<BoundColumnRefExpression>(r_col.name, r_col.type, row_id_bindings[r_idx]));
+				// modify the row-id-binding to the new projection
+				row_id_bindings[r_idx] = ColumnBinding(proj.table_index, proj.expressions.size() - 1);
+			}
+			column_count = proj.expressions.size();
+			break;
+		}
+		case LogicalOperatorType::LOGICAL_FILTER: {
+			auto &filter = op.Cast<LogicalFilter>();
+			// column bindings pass-through this operator as-is UNLESS the filter has a projection map
+			if (filter.HasProjectionMap()) {
+				// if the filter has a projection map, we need to project the new column
+				// TODO: Shouldn't this project all rowid columns??
+				filter.projection_map.push_back(column_count - 1);
+			}
+			break;
+		}
+		default:
+			throw InternalException("Unsupported logical operator in LateMaterialization::ConstructRHS");
+		}
+	}
+}*/
 
 unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<LogicalOperator> op,
                                                                     ColumnBindingReplacer &replacer) {
@@ -78,30 +181,37 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 
 	D_ASSERT(child->type == LogicalOperatorType::LOGICAL_WINDOW);
 	auto &window = child->Cast<LogicalWindow>();
-	if (OnlyProjectsGroupsAndAggregates(new_bindings, window)) {
-		// We can use a simple max function
+	auto extra_projections = RetrieveNonAggregateProjections(new_bindings, window);
 
-	} else {
-		// We have must use arg_max, project the rowids, then semi-join with the base table
+	vector<unique_ptr<Expression>> args;
+	bool generate_row_number = false;
+	if (extra_projections.size() == 1) {
+		// With one extra projection, we can use this projection directly as the argument in arg_max
+		window.children[0]->ResolveOperatorTypes();
+		const auto &window_child_types = window.children[0]->types;
+		const auto window_child_bindings = window.children[0]->GetColumnBindings();
+
+		args.push_back(make_uniq<BoundColumnRefExpression>(window_child_types[extra_projections[0].column_index], window_child_bindings[extra_projections[0].column_index]));
+	} else if (extra_projections.size() > 1) {
+		// With two or more projections, we either:
+		//   a) Use rowid as the arg_max argument, and late-materialize the table (if there is one rowid column)
+		//   b) We struct_pack the rowid columns, late-materialize (if there are more projections than rowid columns)
+		//   c) We struct_pack/unnest the projections (else, no late-materialize in get, projections from > 1 table)
+
+		// For now, let's only do the fallback
+		args = GenerateStructPackExprs(new_bindings, window, generate_row_number);
 	}
 
-
-	// Generate the column references for the struct_pack function that is used as the value for max_by
-	bool generate_row_number = false;
-	auto struct_pack_input_exprs = GenerateStructPackExprs(new_bindings, window, generate_row_number);
-
 	child_list_t<LogicalType> unnest_info;
-	unnest_info.reserve(struct_pack_input_exprs.size());
+	unnest_info.reserve(args.size());
 
-	for (const auto &expr : struct_pack_input_exprs) {
+	for (const auto &expr : args) {
 		unnest_info.emplace_back(expr->alias, expr->return_type);
 	}
 
-	// Create the logical operators
-	// Create aggregate with struct_pack
 	auto &filter_constant = filter.expressions[0]->Cast<BoundComparisonExpression>().right;
-	auto aggregate = CreateAggregateOperator(std::move(struct_pack_input_exprs), window, std::move(filter_constant));
-	const idx_t aggregate_idx = aggregate->Cast<LogicalAggregate>().aggregate_index;
+	auto aggregate_op = CreateAggregateOperator(window, std::move(filter_constant), std::move(args));
+	const idx_t aggregate_idx = aggregate_op->Cast<LogicalAggregate>().aggregate_index;
 
 	// Create unnest list and generate row numbers
 	auto unnest_list = CreateUnnestListOperator(unnest_info, aggregate_idx, generate_row_number);
@@ -116,46 +226,59 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 
 	auto aggregate_child = Optimize(std::move(window.children[0]));
 
-	aggregate->children.push_back(unique_ptr<LogicalOperator>(std::move(aggregate_child)));
-	unnest_list->children.push_back(unique_ptr<LogicalOperator>(std::move(aggregate)));
+	aggregate_op->children.push_back(unique_ptr<LogicalOperator>(std::move(aggregate_child)));
+	unnest_list->children.push_back(unique_ptr<LogicalOperator>(std::move(aggregate_op)));
 	unnest_struct->children.push_back(unique_ptr<LogicalOperator>(std::move(unnest_list)));
 
 	return unique_ptr<LogicalOperator>(std::move(unnest_struct));
 }
 
-AggregateFunction TopNWindowElimination::CreateAggregateFunction(const vector<LogicalType> &param_types, bool requires_arg) const {
+unique_ptr<Expression> TopNWindowElimination::CreateAggregateExpression(vector<unique_ptr<Expression>> aggregate_params, const bool requires_arg, const OrderType order_type) const {
 	auto &catalog = Catalog::GetSystemCatalog(context);
-	if (requires_arg) {
-		auto &fun_entry = catalog.GetEntry<AggregateFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "arg_max");
-		return fun_entry.functions.GetFunctionByArguments(context, param_types);
-	}
-	auto &fun_entry = catalog.GetEntry<AggregateFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "max");
-	return fun_entry.functions.GetFunctionByArguments(context, param_types);
+	FunctionBinder function_binder(context);
+
+	D_ASSERT(order_type == OrderType::ASCENDING || order_type == OrderType::DESCENDING);
+	string fun_name = requires_arg ? "arg_" : "";
+	fun_name += order_type == OrderType::ASCENDING ? "min" : "max";
+
+	auto &fun_entry = catalog.GetEntry<AggregateFunctionCatalogEntry>(context, DEFAULT_SCHEMA, fun_name);
+	const auto fun = fun_entry.functions.GetFunctionByArguments(context, ExtractReturnTypes(aggregate_params));
+	return function_binder.BindAggregateFunction(fun, std::move(aggregate_params));
 }
 
-unique_ptr<LogicalAggregate> TopNWindowElimination::CreateAggregateOperator(LogicalWindow &window, unique_ptr<Expression> limit, optional_ptr<ColumnBinding> arg_binding) const {
-	FunctionBinder function_binder(context);
+unique_ptr<LogicalAggregate> TopNWindowElimination::CreateAggregateOperator(LogicalWindow &window, unique_ptr<Expression> limit, vector<unique_ptr<Expression>> args) const {
 	auto &window_expr = window.expressions[0]->Cast<BoundWindowExpression>();
 	D_ASSERT(window_expr.orders.size() == 1);
+	const auto order_type = window_expr.orders[0].type;
 	const auto limit_value = limit->Cast<BoundConstantExpression>().value.GetValue<int64_t>();
 
-	vector<unique_ptr<Expression>> arg_max_params;
-	arg_max_params.reserve(3);
+	vector<unique_ptr<Expression>> aggregate_params;
+	aggregate_params.reserve(3);
 
-	if (arg_binding) {
-		arg_max_params.push_back(make_uniq<BoundColumnRefExpression>("rowid", LogicalType::BIGINT, *arg_binding));
+	bool use_struct_pack = false;
+	if (args.size() == 1) {
+		aggregate_params.push_back(std::move(args[0]));
+	} else if (args.size() > 1) {
+		use_struct_pack = true;
+		auto &catalog = Catalog::GetSystemCatalog(context);
+		FunctionBinder function_binder(context);
+		auto &struct_pack_entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "struct_pack");
+		const auto struct_pack_fun =
+			struct_pack_entry.functions.GetFunctionByArguments(context, ExtractReturnTypes(args));
+		auto struct_pack_expr = function_binder.BindScalarFunction(struct_pack_fun, std::move(args));
+		aggregate_params.push_back(std::move(struct_pack_expr));
 	}
-	arg_max_params.push_back(std::move(window_expr.orders[0].expression));
+
+	aggregate_params.push_back(std::move(window_expr.orders[0].expression));
 	if (limit_value > 1) {
-		arg_max_params.push_back(std::move(limit));
+		aggregate_params.push_back(std::move(limit));
 	}
 
-	auto max_fun = CreateAggregateFunction(ExtractReturnTypes(arg_max_params), arg_binding);
-	auto arg_max_expr = function_binder.BindAggregateFunction(max_fun, std::move(arg_max_params));
+	auto aggregate_expr = CreateAggregateExpression(aggregate_params, use_struct_pack, order_type);
 
 	// Create aggregate operator with arg_max expression and partitions from window function as groups
 	vector<unique_ptr<Expression>> select_list(1);
-	select_list[0] = std::move(arg_max_expr);
+	select_list[0] = std::move(aggregate_expr);
 
 	auto aggregate = make_uniq<LogicalAggregate>(optimizer.binder.GenerateTableIndex(),
 	                                             optimizer.binder.GenerateTableIndex(), std::move(select_list));
@@ -317,8 +440,7 @@ bool TopNWindowElimination::CanOptimize(LogicalOperator &op, optional_ptr<Client
 	if (window_expr.orders.size() != 1) {
 		return false;
 	}
-	if (window_expr.orders[0].type != OrderType::DESCENDING) {
-		// TODO: Support ascending order with min_by
+	if (window_expr.orders[0].type != OrderType::DESCENDING && window_expr.orders[0].type != OrderType::ASCENDING) {
 		return false;
 	}
 
