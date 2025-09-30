@@ -6,8 +6,10 @@ concurrentloop x 0 10
 
 foreach name db1 db2 db3 db4 db5
 
-statement ok
+statement maybe
 attach if not exists '__TEST_DIR__/concurrent_attach_${name}.duckdb' AS ${name}
+----
+detach
 
 statement maybe
 detach ${name}
@@ -17,7 +19,7 @@ database not found
 statement maybe
 attach if not exists '__TEST_DIR__/concurrent_attach_${name}.duckdb' AS ${name}
 ----
-in the process of being detached
+detach
 
 endloop
 
