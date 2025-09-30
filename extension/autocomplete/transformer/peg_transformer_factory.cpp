@@ -5,7 +5,6 @@
 #include "duckdb/parser/statement/insert_statement.hpp"
 #include "duckdb/parser/tableref/showref.hpp"
 
-
 namespace duckdb {
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformStatement(PEGTransformer &transformer,
