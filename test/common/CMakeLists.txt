@@ -1,6 +1,7 @@
 add_library_unity(
   test_common
   OBJECT
+  test_assertion.cpp
   test_cast.cpp
   test_checksum.cpp
   test_file_system.cpp
