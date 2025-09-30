@@ -8,3 +8,4 @@ PRAGMA enable_verification
 statement error
 FROM (VALUES (42)) t(i) PIVOT (current_date() FOR (i) IN (41))
 ----
+Catalog Error: Aggregate Function with name "current_date"
