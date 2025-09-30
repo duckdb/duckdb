@@ -1,4 +1,4 @@
-# name: test/extension/load_test_alias.test
+# name: test/extension/consistent_semicolon_extension_parse.test
 # description: Original issue: https://github.com/duckdb/duckdb/issues/18485
 # group: [extension]
 
