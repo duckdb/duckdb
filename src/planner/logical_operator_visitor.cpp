@@ -132,11 +132,11 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 	}
 	case LogicalOperatorType::LOGICAL_INSERT: {
 		auto &insert = op.Cast<LogicalInsert>();
-		if (insert.on_conflict_condition) {
-			callback(&insert.on_conflict_condition);
+		if (insert.on_conflict_info.on_conflict_condition) {
+			callback(&insert.on_conflict_info.on_conflict_condition);
 		}
-		if (insert.do_update_condition) {
-			callback(&insert.do_update_condition);
+		if (insert.on_conflict_info.do_update_condition) {
+			callback(&insert.on_conflict_info.do_update_condition);
 		}
 		break;
 	}
@@ -192,6 +192,20 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 		auto &aggr = op.Cast<LogicalAggregate>();
 		for (auto &group : aggr.groups) {
 			callback(&group);
+		}
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_MERGE_INTO: {
+		auto &merge_into = op.Cast<LogicalMergeInto>();
+		for (auto &entry : merge_into.actions) {
+			for (auto &action : entry.second) {
+				if (action->condition) {
+					callback(&action->condition);
+				}
+				for (auto &expr : action->expressions) {
+					callback(&expr);
+				}
+			}
 		}
 		break;
 	}

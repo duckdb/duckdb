@@ -16,11 +16,11 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/enums/access_mode.hpp"
+#include "duckdb/common/enums/thread_pin_mode.hpp"
 #include "duckdb/common/enums/compression_type.hpp"
 #include "duckdb/common/enums/optimizer_type.hpp"
 #include "duckdb/common/enums/order_type.hpp"
 #include "duckdb/common/enums/set_scope.hpp"
-#include "duckdb/common/enums/window_aggregation_mode.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/set.hpp"
 #include "duckdb/common/types/value.hpp"
@@ -29,16 +29,14 @@
 #include "duckdb/execution/index/index_type_set.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/replacement_scan.hpp"
-#include "duckdb/main/client_properties.hpp"
 #include "duckdb/optimizer/optimizer_extension.hpp"
 #include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/planner/operator_extension.hpp"
 #include "duckdb/storage/compression/bitpacking.hpp"
 #include "duckdb/function/encoding_function.hpp"
+#include "duckdb/main/setting_info.hpp"
 #include "duckdb/logging/log_manager.hpp"
-#include "duckdb/common/enums/debug_vector_verification.hpp"
-#include "duckdb/logging/logging.hpp"
 
 namespace duckdb {
 
@@ -57,50 +55,12 @@ class SecretManager;
 class CompressionInfo;
 class EncryptionUtil;
 class HTTPUtil;
+class DatabaseFilePathManager;
 
 struct CompressionFunctionSet;
 struct DatabaseCacheEntry;
 struct DBConfig;
-
-enum class CheckpointAbort : uint8_t {
-	NO_ABORT = 0,
-	DEBUG_ABORT_BEFORE_TRUNCATE = 1,
-	DEBUG_ABORT_BEFORE_HEADER = 2,
-	DEBUG_ABORT_AFTER_FREE_LIST_WRITE = 3
-};
-
-typedef void (*set_global_function_t)(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-typedef void (*set_local_function_t)(ClientContext &context, const Value &parameter);
-typedef void (*reset_global_function_t)(DatabaseInstance *db, DBConfig &config);
-typedef void (*reset_local_function_t)(ClientContext &context);
-typedef Value (*get_setting_function_t)(const ClientContext &context);
-
-struct ConfigurationOption {
-	const char *name;
-	const char *description;
-	const char *parameter_type;
-	set_global_function_t set_global;
-	set_local_function_t set_local;
-	reset_global_function_t reset_global;
-	reset_local_function_t reset_local;
-	get_setting_function_t get_setting;
-};
-
-typedef void (*set_option_callback_t)(ClientContext &context, SetScope scope, Value &parameter);
-
-struct ExtensionOption {
-	// NOLINTNEXTLINE: work around bug in clang-tidy
-	ExtensionOption(string description_p, LogicalType type_p, set_option_callback_t set_function_p,
-	                Value default_value_p)
-	    : description(std::move(description_p)), type(std::move(type_p)), set_function(set_function_p),
-	      default_value(std::move(default_value_p)) {
-	}
-
-	string description;
-	LogicalType type;
-	set_option_callback_t set_function;
-	Value default_value;
-};
+struct SettingLookupResult;
 
 class SerializationCompatibility {
 public:
@@ -174,12 +134,8 @@ struct DBConfigOptions {
 	bool buffer_manager_track_eviction_timestamps = false;
 	//! Whether or not to allow printing unredacted secrets
 	bool allow_unredacted_secrets = false;
-	//! The collation type of the database
-	string collation = string();
-	//! The order type used when none is specified (default: ASC)
-	OrderType default_order_type = OrderType::ASCENDING;
-	//! NULL ordering used when none is specified (default: NULLS LAST)
-	DefaultOrderByNullType default_null_order = DefaultOrderByNullType::NULLS_LAST;
+	//! Disables invalidating the database instance when encountering a fatal error.
+	bool disable_database_invalidation = false;
 	//! enable COPY and related commands
 	bool enable_external_access = true;
 	//! Whether or not the global http metadata cache is used
@@ -196,8 +152,6 @@ struct DBConfigOptions {
 	bool checkpoint_on_shutdown = true;
 	//! Serialize the metadata on checkpoint with compatibility for a given DuckDB version.
 	SerializationCompatibility serialization_compatibility = SerializationCompatibility::Default();
-	//! Debug flag that decides when a checkpoing should be aborted. Only used for testing purposes.
-	CheckpointAbort checkpoint_abort = CheckpointAbort::NO_ABORT;
 	//! Initialize the database with the standard set of DuckDB functions
 	//! You should probably not touch this unless you know what you are doing
 	bool initialize_default_database = true;
@@ -207,23 +161,8 @@ struct DBConfigOptions {
 	uint64_t zstd_min_string_length = 4096;
 	//! Force a specific compression method to be used when checkpointing (if available)
 	CompressionType force_compression = CompressionType::COMPRESSION_AUTO;
-	//! The set of disabled compression methods (default empty)
-	set<CompressionType> disabled_compression_methods;
 	//! Force a specific bitpacking mode to be used when using the bitpacking compression method
 	BitpackingMode force_bitpacking_mode = BitpackingMode::AUTO;
-	//! Debug setting for window aggregation mode: (window, combine, separate)
-	WindowAggregationMode window_mode = WindowAggregationMode::WINDOW;
-	//! Whether preserving insertion order should be preserved
-	bool preserve_insertion_order = true;
-	//! Whether Arrow Arrays use Large or Regular buffers
-	ArrowOffsetSize arrow_offset_size = ArrowOffsetSize::REGULAR;
-	//! Whether LISTs should produce Arrow ListViews
-	bool arrow_use_list_view = false;
-	//! Whenever a DuckDB type does not have a clear native or canonical extension match in Arrow, export the types
-	//! with a duckdb.type_name extension name
-	bool arrow_lossless_conversion = false;
-	//! Whether when producing arrow objects we produce string_views or regular strings
-	bool produce_arrow_string_views = false;
 	//! Database configuration variables as controlled by SET
 	case_insensitive_map_t<Value> set_variables;
 	//! Database configuration variable default values;
@@ -234,16 +173,6 @@ struct DBConfigOptions {
 	bool allow_unsigned_extensions = false;
 	//! Whether community extensions should be loaded
 	bool allow_community_extensions = true;
-	//! Whether extensions with missing metadata should be loaded
-	bool allow_extensions_metadata_mismatch = false;
-	//! Enable emitting FSST Vectors
-	bool enable_fsst_vectors = false;
-	//! Enable VIEWs to create dependencies
-	bool enable_view_dependencies = false;
-	//! Enable macros to create dependencies
-	bool enable_macro_dependencies = false;
-	//! Start transactions immediately in all attached databases - instead of lazily when a database is referenced
-	bool immediate_transaction_mode = false;
 	//! Debug setting - how to initialize  blocks in the storage layer when allocating
 	DebugInitialize debug_initialize = DebugInitialize::NO_INITIALIZE;
 	//! The set of user-provided options
@@ -264,30 +193,14 @@ struct DBConfigOptions {
 	string duckdb_api;
 	//! Metadata from DuckDB callers
 	string custom_user_agent;
-	//! Use old implicit casting style (i.e. allow everything to be implicitly casted to VARCHAR)
-	bool old_implicit_casting = false;
+	//! Encrypt the temp files
+	bool temp_file_encryption = false;
 	//! The default block allocation size for new duckdb database files (new as-in, they do not yet exist).
-	idx_t default_block_alloc_size = DUCKDB_BLOCK_ALLOC_SIZE;
+	idx_t default_block_alloc_size = DEFAULT_BLOCK_ALLOC_SIZE;
 	//! The default block header size for new duckdb database files.
 	idx_t default_block_header_size = DUCKDB_BLOCK_HEADER_STORAGE_SIZE;
 	//!  Whether or not to abort if a serialization exception is thrown during WAL playback (when reading truncated WAL)
 	bool abort_on_wal_failure = false;
-	//! The index_scan_percentage sets a threshold for index scans.
-	//! If fewer than MAX(index_scan_max_count, index_scan_percentage * total_row_count)
-	//! rows match, we perform an index scan instead of a table scan.
-	double index_scan_percentage = 0.001;
-	//! The index_scan_max_count sets a threshold for index scans.
-	//! If fewer than MAX(index_scan_max_count, index_scan_percentage * total_row_count)
-	//! rows match, we perform an index scan instead of a table scan.
-	idx_t index_scan_max_count = STANDARD_VECTOR_SIZE;
-	//! The maximum number of schemas we will look through for "did you mean..." style errors in the catalog
-	idx_t catalog_error_max_schemas = 100;
-	//!  Whether or not to always write to the WAL file, even if this is not required
-	bool debug_skip_checkpoint_on_commit = false;
-	//! Vector verification to enable (debug setting only)
-	DebugVectorVerification debug_verify_vector = DebugVectorVerification::NONE;
-	//! The maximum amount of vacuum tasks to schedule during a checkpoint
-	idx_t max_vacuum_tasks = 100;
 	//! Paths that are explicitly allowed, even if enable_external_access is false
 	unordered_set<string> allowed_paths;
 	//! Directories that are explicitly allowed, even if enable_external_access is false
@@ -296,14 +209,14 @@ struct DBConfigOptions {
 	LogConfig log_config = LogConfig();
 	//! Whether to enable external file caching using CachingFileSystem
 	bool enable_external_file_cache = true;
-	//! Output version of arrow depending on the format version
-	ArrowFormatVersion arrow_output_version = V1_0;
 	//! Partially process tasks before rescheduling - allows for more scheduler fairness between separate queries
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
 	bool scheduler_process_partial = true;
 #else
 	bool scheduler_process_partial = false;
 #endif
+	//! Whether to pin threads to cores (linux only, default AUTOMATIC: on when there are more than 64 cores)
+	ThreadPinMode pin_threads = ThreadPinMode::AUTO;
 
 	bool operator==(const DBConfigOptions &other) const;
 };
@@ -318,7 +231,7 @@ public:
 	DUCKDB_API DBConfig(const case_insensitive_map_t<Value> &config_dict, bool read_only);
 	DUCKDB_API ~DBConfig();
 
-	mutex config_lock;
+	mutable mutex config_lock;
 	//! Replacement table scans are automatically attempted when a table name cannot be found in the schema
 	vector<ReplacementScan> replacement_scans;
 
@@ -357,6 +270,8 @@ public:
 	shared_ptr<HTTPUtil> http_util;
 	//! Reference to the database cache entry (if any)
 	shared_ptr<DatabaseCacheEntry> db_cache_entry;
+	//! Reference to the database file path manager
+	shared_ptr<DatabaseFilePathManager> path_manager;
 
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);
@@ -365,26 +280,32 @@ public:
 	DUCKDB_API static const DBConfig &GetConfig(const ClientContext &context);
 	DUCKDB_API static const DBConfig &GetConfig(const DatabaseInstance &db);
 	DUCKDB_API static vector<ConfigurationOption> GetOptions();
+	DUCKDB_API static vector<ConfigurationAlias> GetAliases();
 	DUCKDB_API static idx_t GetOptionCount();
+	DUCKDB_API static idx_t GetAliasCount();
 	DUCKDB_API static vector<string> GetOptionNames();
 	DUCKDB_API static bool IsInMemoryDatabase(const char *database_path);
 
 	DUCKDB_API void AddExtensionOption(const string &name, string description, LogicalType parameter,
-	                                   const Value &default_value = Value(), set_option_callback_t function = nullptr);
+	                                   const Value &default_value = Value(), set_option_callback_t function = nullptr,
+	                                   SetScope default_scope = SetScope::SESSION);
 	//! Fetch an option by index. Returns a pointer to the option, or nullptr if out of range
 	DUCKDB_API static optional_ptr<const ConfigurationOption> GetOptionByIndex(idx_t index);
+	//! Fetcha n alias by index, or nullptr if out of range
+	DUCKDB_API static optional_ptr<const ConfigurationAlias> GetAliasByIndex(idx_t index);
 	//! Fetch an option by name. Returns a pointer to the option, or nullptr if none exists.
-	DUCKDB_API static optional_ptr<const ConfigurationOption> GetOptionByName(const string &name);
+	DUCKDB_API static optional_ptr<const ConfigurationOption> GetOptionByName(const String &name);
 	DUCKDB_API void SetOption(const ConfigurationOption &option, const Value &value);
-	DUCKDB_API void SetOption(DatabaseInstance *db, const ConfigurationOption &option, const Value &value);
+	DUCKDB_API void SetOption(optional_ptr<DatabaseInstance> db, const ConfigurationOption &option, const Value &value);
 	DUCKDB_API void SetOptionByName(const string &name, const Value &value);
 	DUCKDB_API void SetOptionsByName(const case_insensitive_map_t<Value> &values);
-	DUCKDB_API void ResetOption(DatabaseInstance *db, const ConfigurationOption &option);
+	DUCKDB_API void ResetOption(optional_ptr<DatabaseInstance> db, const ConfigurationOption &option);
 	DUCKDB_API void SetOption(const string &name, Value value);
-	DUCKDB_API void ResetOption(const string &name);
+	DUCKDB_API void ResetOption(const String &name);
+	DUCKDB_API void ResetGenericOption(const String &name);
 	static LogicalType ParseLogicalType(const string &type);
 
-	DUCKDB_API void CheckLock(const string &name);
+	DUCKDB_API void CheckLock(const String &name);
 
 	DUCKDB_API static idx_t ParseMemoryLimit(const string &arg);
 
@@ -393,6 +314,10 @@ public:
 	//! Returns the compression function matching the compression and physical type.
 	DUCKDB_API optional_ptr<CompressionFunction> GetCompressionFunction(CompressionType type,
 	                                                                    const PhysicalType physical_type);
+	//! Sets the disabled compression methods
+	DUCKDB_API void SetDisabledCompressionMethods(const vector<CompressionType> &disabled_compression_methods);
+	//! Returns a list of disabled compression methods
+	DUCKDB_API vector<CompressionType> GetDisabledCompressionMethods() const;
 
 	//! Returns the encode function matching the encoding name.
 	DUCKDB_API optional_ptr<EncodingFunction> GetEncodeFunction(const string &name) const;
@@ -418,19 +343,28 @@ public:
 	void SetDefaultMaxMemory();
 	void SetDefaultTempDirectory();
 
-	OrderType ResolveOrder(OrderType order_type) const;
-	OrderByNullType ResolveNullOrder(OrderType order_type, OrderByNullType null_type) const;
+	OrderType ResolveOrder(ClientContext &context, OrderType order_type) const;
+	OrderByNullType ResolveNullOrder(ClientContext &context, OrderType order_type, OrderByNullType null_type) const;
 	const string UserAgent() const;
 
-	template <class OP>
-	typename OP::RETURN_TYPE GetSetting(const ClientContext &context) {
-		std::lock_guard<mutex> lock(config_lock);
-		return OP::GetSetting(context).template GetValue<typename OP::RETURN_TYPE>();
+	SettingLookupResult TryGetCurrentSetting(const string &key, Value &result) const;
+
+	template <class OP, class SOURCE>
+	static typename std::enable_if<std::is_enum<typename OP::RETURN_TYPE>::value, typename OP::RETURN_TYPE>::type
+	GetSetting(const SOURCE &source) {
+		return EnumUtil::FromString<typename OP::RETURN_TYPE>(
+		    GetSettingInternal(source, OP::Name, OP::DefaultValue).ToString());
+	}
+
+	template <class OP, class SOURCE>
+	static typename std::enable_if<!std::is_enum<typename OP::RETURN_TYPE>::value, typename OP::RETURN_TYPE>::type
+	GetSetting(const SOURCE &source) {
+		return GetSettingInternal(source, OP::Name, OP::DefaultValue).template GetValue<typename OP::RETURN_TYPE>();
 	}
 
 	template <class OP>
-	Value GetSettingValue(const ClientContext &context) {
-		std::lock_guard<mutex> lock(config_lock);
+	Value GetSettingValue(const ClientContext &context) const {
+		lock_guard<mutex> lock(config_lock);
 		return OP::GetSetting(context);
 	}
 
@@ -438,6 +372,11 @@ public:
 	void AddAllowedDirectory(const string &path);
 	void AddAllowedPath(const string &path);
 	string SanitizeAllowedPath(const string &path) const;
+
+private:
+	static Value GetSettingInternal(const DatabaseInstance &db, const char *setting, const char *default_value);
+	static Value GetSettingInternal(const DBConfig &config, const char *setting, const char *default_value);
+	static Value GetSettingInternal(const ClientContext &context, const char *setting, const char *default_value);
 
 private:
 	unique_ptr<CompressionFunctionSet> compression_functions;

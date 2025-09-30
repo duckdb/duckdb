@@ -13,7 +13,6 @@
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/types/date.hpp"
-#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb/common/types/interval.hpp"
@@ -22,7 +21,6 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types.hpp"
 #include "fast_float/fast_float.h"
-#include "fmt/format.h"
 #include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/operator/integer_cast_operator.hpp"
 #include "duckdb/common/operator/double_cast_operator.hpp"
@@ -1042,6 +1040,27 @@ bool TryCast::Operation(dtime_t input, dtime_t &result, bool strict) {
 }
 
 template <>
+bool TryCast::Operation(dtime_ns_t input, dtime_ns_t &result, bool strict) {
+	result.micros = input.micros;
+	return true;
+}
+
+template <>
+bool TryCast::Operation(dtime_ns_t input, dtime_t &result, bool strict) {
+	//	Round
+	result.micros = (input.micros + (Interval::NANOS_PER_MICRO / 2)) / Interval::NANOS_PER_MICRO;
+	return true;
+}
+
+template <>
+bool TryCast::Operation(dtime_t input, dtime_ns_t &result, bool strict) {
+	if (!TryMultiplyOperator::Operation(input.micros, Interval::NANOS_PER_MICRO, result.micros)) {
+		throw ConversionException("Could not convert TIME to TIME_NS");
+	}
+	return true;
+}
+
+template <>
 bool TryCast::Operation(dtime_t input, dtime_tz_t &result, bool strict) {
 	result = dtime_tz_t(input, 0);
 	return true;
@@ -1258,6 +1277,11 @@ template <>
 dtime_t CastTimestampNsToTime::Operation(timestamp_t input) {
 	const auto us = CastTimestampNsToUs::Operation<timestamp_t, timestamp_t>(input);
 	return Timestamp::GetTime(us);
+}
+
+template <>
+dtime_ns_t CastTimestampNsToTimeNs::Operation(timestamp_ns_t input) {
+	return Timestamp::GetTimeNs(input);
 }
 
 template <>
@@ -1478,11 +1502,62 @@ string_t CastFromUUID::Operation(hugeint_t input, Vector &vector) {
 }
 
 //===--------------------------------------------------------------------===//
+// Cast From UUID To Blob
+//===--------------------------------------------------------------------===//
+template <>
+string_t CastFromUUIDToBlob::Operation(hugeint_t input, Vector &vector) {
+	// UUID is 16 bytes (128 bits)
+	string_t result = StringVector::EmptyString(vector, 16);
+	auto data = result.GetDataWriteable();
+
+	// Use the utility function from BaseUUID
+	BaseUUID::ToBlob(input, data_ptr_cast(data));
+
+	result.Finalize();
+	return result;
+}
+
+//===--------------------------------------------------------------------===//
 // Cast To UUID
 //===--------------------------------------------------------------------===//
 template <>
 bool TryCastToUUID::Operation(string_t input, hugeint_t &result, Vector &result_vector, CastParameters &parameters) {
 	return UUID::FromString(input.GetString(), result, parameters.strict);
+}
+
+//===--------------------------------------------------------------------===//
+// Cast Blob To UUID
+//===--------------------------------------------------------------------===//
+template <>
+bool TryCastBlobToUUID::Operation(string_t input, hugeint_t &result, Vector &result_vector,
+                                  CastParameters &parameters) {
+	// BLOB must be exactly 16 bytes for UUID
+	if (input.GetSize() != 16) {
+		HandleCastError::AssignError("BLOB must be exactly 16 bytes to convert to UUID", parameters);
+		return false;
+	}
+
+	auto data = const_data_ptr_cast(input.GetData());
+
+	// Use the utility function from BaseUUID
+	result = BaseUUID::FromBlob(data);
+
+	return true;
+}
+
+template <>
+bool TryCastBlobToUUID::Operation(string_t input, hugeint_t &result, bool strict) {
+	// BLOB must be exactly 16 bytes for UUID
+	if (input.GetSize() != 16) {
+		return false;
+	}
+
+	auto data = const_data_ptr_cast(input.GetData());
+
+	// Use the utility function from BaseUUID
+	result = BaseUUID::FromBlob(data);
+
+	return true;
 }
 
 //===--------------------------------------------------------------------===//
@@ -1542,6 +1617,41 @@ dtime_t Cast::Operation(string_t input) {
 }
 
 //===--------------------------------------------------------------------===//
+// Cast To Time (ns)
+//===--------------------------------------------------------------------===//
+template <>
+bool TryCastErrorMessage::Operation(string_t input, dtime_ns_t &result, CastParameters &parameters) {
+	if (!TryCast::Operation<string_t, dtime_ns_t>(input, result, parameters.strict)) {
+		HandleCastError::AssignError(Time::ConversionError(input), parameters);
+		return false;
+	}
+	return true;
+}
+
+template <>
+bool TryCast::Operation(string_t input, dtime_ns_t &result, bool strict) {
+	idx_t pos;
+	dtime_t micros;
+	int32_t nanos = 0;
+	if (!Time::TryConvertTime(input.GetData(), input.GetSize(), pos, micros, strict, &nanos)) {
+		return false;
+	}
+	if (!TryCast::Operation(micros, result)) {
+		return false;
+	}
+	return TryAddOperator::Operation<int64_t, int64_t, int64_t>(result.micros, nanos, result.micros);
+}
+
+template <>
+dtime_ns_t Cast::Operation(string_t input) {
+	dtime_ns_t result;
+	if (!TryCast::Operation(input, result, false)) {
+		throw ConversionException(Time::ConversionError(input));
+	}
+	return result;
+}
+
+//===--------------------------------------------------------------------===//
 // Cast To TimeTZ
 //===--------------------------------------------------------------------===//
 template <>
@@ -1574,7 +1684,26 @@ dtime_tz_t Cast::Operation(string_t input) {
 //===--------------------------------------------------------------------===//
 template <>
 bool TryCastErrorMessage::Operation(string_t input, timestamp_t &result, CastParameters &parameters) {
-	switch (Timestamp::TryConvertTimestamp(input.GetData(), input.GetSize(), result)) {
+	switch (Timestamp::TryConvertTimestamp(input.GetData(), input.GetSize(), result, false)) {
+	case TimestampCastResult::SUCCESS:
+	case TimestampCastResult::STRICT_UTC:
+		return true;
+	case TimestampCastResult::ERROR_INCORRECT_FORMAT:
+		HandleCastError::AssignError(Timestamp::FormatError(input), parameters);
+		break;
+	case TimestampCastResult::ERROR_NON_UTC_TIMEZONE:
+		HandleCastError::AssignError(Timestamp::UnsupportedTimezoneError(input), parameters);
+		break;
+	case TimestampCastResult::ERROR_RANGE:
+		HandleCastError::AssignError(Timestamp::RangeError(input), parameters);
+		break;
+	}
+	return false;
+}
+
+template <>
+bool TryCastErrorMessage::Operation(string_t input, timestamp_tz_t &result, CastParameters &parameters) {
+	switch (Timestamp::TryConvertTimestamp(input.GetData(), input.GetSize(), result, true)) {
 	case TimestampCastResult::SUCCESS:
 	case TimestampCastResult::STRICT_UTC:
 		return true;
@@ -1593,7 +1722,14 @@ bool TryCastErrorMessage::Operation(string_t input, timestamp_t &result, CastPar
 
 template <>
 bool TryCast::Operation(string_t input, timestamp_t &result, bool strict) {
-	return Timestamp::TryConvertTimestamp(input.GetData(), input.GetSize(), result) == TimestampCastResult::SUCCESS;
+	return Timestamp::TryConvertTimestamp(input.GetData(), input.GetSize(), result, false) ==
+	       TimestampCastResult::SUCCESS;
+}
+
+template <>
+bool TryCast::Operation(string_t input, timestamp_tz_t &result, bool strict) {
+	return Timestamp::TryConvertTimestamp(input.GetData(), input.GetSize(), result, true) ==
+	       TimestampCastResult::SUCCESS;
 }
 
 template <>
@@ -1603,13 +1739,18 @@ bool TryCast::Operation(string_t input, timestamp_ns_t &result, bool strict) {
 
 template <>
 timestamp_t Cast::Operation(string_t input) {
-	return Timestamp::FromCString(input.GetData(), input.GetSize());
+	return Timestamp::FromCString(input.GetData(), input.GetSize(), false);
+}
+
+template <>
+timestamp_tz_t Cast::Operation(string_t input) {
+	return timestamp_tz_t(Timestamp::FromCString(input.GetData(), input.GetSize(), true));
 }
 
 template <>
 timestamp_ns_t Cast::Operation(string_t input) {
 	int32_t nanos;
-	const auto ts = Timestamp::FromCString(input.GetData(), input.GetSize(), &nanos);
+	const auto ts = Timestamp::FromCString(input.GetData(), input.GetSize(), false, &nanos);
 	timestamp_ns_t result;
 	if (!Timestamp::TryFromTimestampNanos(ts, nanos, result)) {
 		throw ConversionException(Timestamp::RangeError(input));

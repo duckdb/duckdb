@@ -6,6 +6,7 @@
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
+#include "duckdb/common/types/string.hpp"
 
 namespace duckdb {
 
@@ -15,6 +16,9 @@ ExceptionFormatValue::ExceptionFormatValue(double dbl_val)
 ExceptionFormatValue::ExceptionFormatValue(int64_t int_val)
     : type(ExceptionFormatValueType::FORMAT_VALUE_TYPE_INTEGER), int_val(int_val) {
 }
+ExceptionFormatValue::ExceptionFormatValue(idx_t uint_val)
+    : type(ExceptionFormatValueType::FORMAT_VALUE_TYPE_INTEGER), int_val(Hugeint::Convert(uint_val)) {
+}
 ExceptionFormatValue::ExceptionFormatValue(hugeint_t huge_val)
     : type(ExceptionFormatValueType::FORMAT_VALUE_TYPE_STRING), str_val(Hugeint::ToString(huge_val)) {
 }
@@ -23,6 +27,9 @@ ExceptionFormatValue::ExceptionFormatValue(uhugeint_t uhuge_val)
 }
 ExceptionFormatValue::ExceptionFormatValue(string str_val)
     : type(ExceptionFormatValueType::FORMAT_VALUE_TYPE_STRING), str_val(std::move(str_val)) {
+}
+ExceptionFormatValue::ExceptionFormatValue(String str_val)
+    : type(ExceptionFormatValueType::FORMAT_VALUE_TYPE_STRING), str_val(str_val.ToStdString()) {
 }
 
 template <>
@@ -46,7 +53,10 @@ template <>
 ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(string value) {
 	return ExceptionFormatValue(std::move(value));
 }
-
+template <>
+ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(String value) {
+	return ExceptionFormatValue(std::move(value));
+}
 template <>
 ExceptionFormatValue
 ExceptionFormatValue::CreateFormatValue(SQLString value) { // NOLINT: templating requires us to copy value here
@@ -66,6 +76,10 @@ ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const char *value) 
 template <>
 ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(char *value) {
 	return ExceptionFormatValue(string(value));
+}
+template <>
+ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(idx_t value) {
+	return ExceptionFormatValue(value);
 }
 template <>
 ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(hugeint_t value) {

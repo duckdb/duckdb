@@ -9,6 +9,7 @@
 #include "duckdb/common/types/constraint_conflict_info.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/constraints/list.hpp"
@@ -37,8 +38,8 @@ DataTableInfo::DataTableInfo(AttachedDatabase &db, shared_ptr<TableIOManager> ta
     : db(db), table_io_manager(std::move(table_io_manager_p)), schema(std::move(schema)), table(std::move(table)) {
 }
 
-void DataTableInfo::InitializeIndexes(ClientContext &context, const char *index_type) {
-	indexes.InitializeIndexes(context, *this, index_type);
+void DataTableInfo::BindIndexes(ClientContext &context, const char *index_type) {
+	indexes.Bind(context, *this, index_type);
 }
 
 bool DataTableInfo::IsTemporary() const {
@@ -56,6 +57,12 @@ DataTable::DataTable(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_m
 	this->row_groups = make_shared_ptr<RowGroupCollection>(info, io_manager, types, 0);
 	if (data && data->row_group_count > 0) {
 		this->row_groups->Initialize(*data);
+		if (!HasIndexes()) {
+			// if we don't have indexes, always append a new row group upon appending
+			// we can clean up this row group again when vacuuming
+			// since we don't yet support vacuum when there are indexes, we only do this when there are no indexes
+			row_groups->SetAppendRequiresNewRowGroup();
+		}
 	} else {
 		this->row_groups->InitializeEmpty();
 		D_ASSERT(row_groups->GetTotalRows() == 0);
@@ -98,7 +105,8 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 		column_definitions.emplace_back(column_def.Copy());
 	}
 
-	info->InitializeIndexes(context);
+	// Bind all indexes.
+	info->BindIndexes(context);
 
 	// first check if there are any indexes that exist that point to the removed column
 	info->indexes.Scan([&](Index &index) {
@@ -145,7 +153,9 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, BoundConstraint 
 	for (const auto &index_info : parent.info->index_storage_infos) {
 		info->index_storage_infos.push_back(IndexStorageInfo(index_info.name));
 	}
-	info->InitializeIndexes(context);
+
+	// Bind all indexes.
+	info->BindIndexes(context);
 
 	auto &local_storage = LocalStorage::Get(context, db);
 	lock_guard<mutex> parent_lock(parent.append_lock);
@@ -163,6 +173,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, BoundConstraint 
 DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, const LogicalType &target_type,
                      const vector<StorageIndex> &bound_columns, Expression &cast_expr)
     : db(parent.db), info(parent.info), version(DataTableVersion::MAIN_TABLE) {
+
 	auto &local_storage = LocalStorage::Get(context, db);
 	// prevent any tuples from being added to the parent
 	lock_guard<mutex> lock(append_lock);
@@ -170,7 +181,8 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 		column_definitions.emplace_back(column_def.Copy());
 	}
 
-	info->InitializeIndexes(context);
+	// Bind all indexes.
+	info->BindIndexes(context);
 
 	// first check if there are any indexes that exist that point to the changed column
 	info->indexes.Scan([&](Index &index) {
@@ -187,7 +199,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 
 	// set up the statistics for the table
 	// the column that had its type changed will have the new statistics computed during conversion
-	this->row_groups = parent.row_groups->AlterType(context, changed_idx, target_type, bound_columns, cast_expr);
+	row_groups = parent.row_groups->AlterType(context, changed_idx, target_type, bound_columns, cast_expr);
 
 	// scan the original table, and fill the new column with the transformed value
 	local_storage.ChangeType(parent, *this, changed_idx, target_type, bound_columns, cast_expr);
@@ -311,8 +323,8 @@ shared_ptr<DataTableInfo> &DataTable::GetDataTableInfo() {
 	return info;
 }
 
-void DataTable::InitializeIndexes(ClientContext &context) {
-	info->InitializeIndexes(context);
+void DataTable::BindIndexes(ClientContext &context) {
+	info->BindIndexes(context);
 }
 
 bool DataTable::HasIndexes() const {
@@ -419,6 +431,11 @@ void DataTable::Fetch(DuckTransaction &transaction, DataChunk &result, const vec
 	row_groups->Fetch(transaction, result, column_ids, row_identifiers, fetch_count, state);
 }
 
+bool DataTable::CanFetch(DuckTransaction &transaction, const row_t row_id) {
+	auto lock = transaction.SharedLockTable(*info);
+	return row_groups->CanFetch(transaction, row_id);
+}
+
 //===--------------------------------------------------------------------===//
 // Append
 //===--------------------------------------------------------------------===//
@@ -476,49 +493,42 @@ static void VerifyCheckConstraint(ClientContext &context, TableCatalogEntry &tab
 	}
 }
 
-// Find the first index that is not null, and did not find a match
-static idx_t FirstMissingMatch(const ManagedSelection &matches) {
-	idx_t match_idx = 0;
-
-	for (idx_t i = 0; i < matches.Size(); i++) {
-		auto match = matches.IndexMapsToLocation(match_idx, i);
-		match_idx += match;
-		if (!match) {
-			// This index is missing in the matches vector
-			return i;
-		}
+static idx_t FirstMissingMatch(ConflictManager &manager, const idx_t count) {
+	// Find the first non-NULL index without a match.
+	if (!manager.HasConflicts()) {
+		return 0;
 	}
-	return DConstants::INVALID_INDEX;
+	auto conflict = manager.GetFirstInvalidIndex(count, true);
+	if (conflict.IsValid()) {
+		return conflict.GetIndex();
+	}
+	throw InternalException("expected a missing match for the index");
 }
 
-idx_t LocateErrorIndex(bool is_append, const ManagedSelection &matches) {
+idx_t LocateErrorIndex(ConflictManager &manager, const bool is_append, const idx_t count) {
 	// We expected to find nothing, so the first error is the first match.
 	if (!is_append) {
-		return matches[0];
+		return manager.GetFirstIndex();
 	}
-	// We expected to find matches for all of them, so the first missing match is the first error.
-	return FirstMissingMatch(matches);
+	// We expected to find matches for each row.
+	// Thus, the first missing match is the first error.
+	return FirstMissingMatch(manager, count);
 }
 
-[[noreturn]] static void ThrowForeignKeyConstraintError(idx_t failed_index, bool is_append, Index &conflict_index,
-                                                        DataChunk &input) {
-	// The index that caused the conflict has to be bound by this point (or we would not have gotten here)
-	D_ASSERT(conflict_index.IsBound());
-	auto &index = conflict_index.Cast<BoundIndex>();
+static string ConstructForeignKeyError(optional_idx conflict, bool is_append, Index &index, DataChunk &input) {
+	D_ASSERT(index.IsBound());
+	auto &bound_index = index.Cast<BoundIndex>();
 	auto verify_type = is_append ? VerifyExistenceType::APPEND_FK : VerifyExistenceType::DELETE_FK;
-	D_ASSERT(failed_index != DConstants::INVALID_INDEX);
-	auto message = index.GetConstraintViolationMessage(verify_type, failed_index, input);
-	throw ConstraintException(message);
+	return bound_index.GetConstraintViolationMessage(verify_type, conflict.GetIndex(), input);
 }
 
-bool IsForeignKeyConstraintError(bool is_append, idx_t input_count, const ManagedSelection &matches) {
+bool IsForeignKeyConstraintError(const ConflictManager &manager, const bool is_append, const idx_t input_count) {
 	if (is_append) {
-		// We need to find a match for all values
-		return matches.Count() != input_count;
-	} else {
-		// We should not find any matches
-		return matches.Count() != 0;
+		// We need to find a match for all values.
+		return manager.ConflictCount() != input_count;
 	}
+	// Nothing should match.
+	return manager.ConflictCount() != 0;
 }
 
 static bool IsAppend(VerifyExistenceType verify_type) {
@@ -531,7 +541,7 @@ void DataTable::VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> stora
 	reference<const vector<PhysicalIndex>> src_keys_ptr = bound_foreign_key.info.fk_keys;
 	reference<const vector<PhysicalIndex>> dst_keys_ptr = bound_foreign_key.info.pk_keys;
 
-	bool is_append = IsAppend(verify_type);
+	auto is_append = IsAppend(verify_type);
 	if (!is_append) {
 		src_keys_ptr = bound_foreign_key.info.pk_keys;
 		dst_keys_ptr = bound_foreign_key.info.fk_keys;
@@ -562,16 +572,15 @@ void DataTable::VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> stora
 	// Record conflicts instead of throwing immediately.
 	unordered_set<column_t> empty_column_list;
 	ConflictInfo empty_conflict_info(empty_column_list, false);
-	ConflictManager global_conflicts(verify_type, count, &empty_conflict_info);
-	ConflictManager local_conflicts(verify_type, count, &empty_conflict_info);
-	global_conflicts.SetMode(ConflictManagerMode::SCAN);
-	local_conflicts.SetMode(ConflictManagerMode::SCAN);
+
+	ConflictManager global_conflict_manager(verify_type, count, &empty_conflict_info);
+	global_conflict_manager.SetMode(ConflictManagerMode::SCAN);
+	ConflictManager local_conflict_manager(verify_type, count, &empty_conflict_info);
+	local_conflict_manager.SetMode(ConflictManagerMode::SCAN);
 
 	// Global constraint verification.
 	auto &data_table = table_entry.GetStorage();
-	data_table.info->indexes.VerifyForeignKey(storage, dst_keys_ptr, dst_chunk, global_conflicts);
-	global_conflicts.Finalize();
-	auto &global_matches = global_conflicts.Conflicts();
+	data_table.info->indexes.VerifyForeignKey(storage, dst_keys_ptr, dst_chunk, global_conflict_manager);
 
 	// Check if we can insert the chunk into the local storage.
 	auto &local_storage = LocalStorage::Get(context, db);
@@ -581,78 +590,77 @@ void DataTable::VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> stora
 	// Local constraint verification.
 	if (local_verification) {
 		auto &local_indexes = local_storage.GetIndexes(context, data_table);
-		local_indexes.VerifyForeignKey(storage, dst_keys_ptr, dst_chunk, local_conflicts);
-		local_conflicts.Finalize();
-		auto &local_matches = local_conflicts.Conflicts();
-		local_error = IsForeignKeyConstraintError(is_append, count, local_matches);
+		local_indexes.VerifyForeignKey(storage, dst_keys_ptr, dst_chunk, local_conflict_manager);
+		local_error = IsForeignKeyConstraintError(local_conflict_manager, is_append, count);
 	}
+	// Global constraint verification.
+	auto global_error = IsForeignKeyConstraintError(global_conflict_manager, is_append, count);
 
 	// No constraint violation.
-	auto global_error = IsForeignKeyConstraintError(is_append, count, global_matches);
 	if (!global_error && !local_error) {
 		return;
 	}
 
-	// Some error occurred, and we likely want to throw
+	// Either a global or local error occurred.
+	// We construct the error message and throw.
 	optional_ptr<Index> index;
 	optional_ptr<Index> transaction_index;
-
 	auto fk_type = is_append ? ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE : ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE;
-	// check whether or not the chunk can be inserted or deleted into the referenced table' storage
+
+	// Check whether we can insert into the foreign key table, or delete from the reference table.
 	index = data_table.info->indexes.FindForeignKeyIndex(dst_keys_ptr, fk_type);
-	if (local_verification) {
-		auto &transact_index = local_storage.GetIndexes(context, data_table);
-		// check whether or not the chunk can be inserted or deleted into the referenced table' storage
-		transaction_index = transact_index.FindForeignKeyIndex(dst_keys_ptr, fk_type);
-	}
-
 	if (!local_verification) {
-		// Only local state is checked, throw the error
-		D_ASSERT(global_error);
-		auto failed_index = LocateErrorIndex(is_append, global_matches);
-		D_ASSERT(failed_index != DConstants::INVALID_INDEX);
-		ThrowForeignKeyConstraintError(failed_index, is_append, *index, dst_chunk);
+		auto conflict = LocateErrorIndex(global_conflict_manager, is_append, count);
+		auto message = ConstructForeignKeyError(conflict, is_append, *index, dst_chunk);
+		throw ConstraintException(message);
 	}
-	if (local_error && global_error && is_append) {
-		// When we want to do an append, we only throw if the foreign key does not exist in both transaction and local
-		// storage
-		auto &transaction_matches = local_conflicts.Conflicts();
-		idx_t failed_index = DConstants::INVALID_INDEX;
-		idx_t regular_idx = 0;
-		idx_t transaction_idx = 0;
-		for (idx_t i = 0; i < count; i++) {
-			bool in_regular = global_matches.IndexMapsToLocation(regular_idx, i);
-			regular_idx += in_regular;
-			bool in_transaction = transaction_matches.IndexMapsToLocation(transaction_idx, i);
-			transaction_idx += in_transaction;
 
-			if (!in_regular && !in_transaction) {
-				// We need to find a match for all of the input values
-				// The failed index is i, it does not show up in either regular or transaction storage
-				failed_index = i;
-				break;
+	auto &transact_index = local_storage.GetIndexes(context, data_table);
+	transaction_index = transact_index.FindForeignKeyIndex(dst_keys_ptr, fk_type);
+
+	if (local_error && global_error && is_append) {
+		// For appends, we throw if the foreign key neither exists in the transaction nor the local storage.
+		optional_idx conflict;
+		auto global_conflicts = global_conflict_manager.HasConflicts();
+		auto local_conflicts = local_conflict_manager.HasConflicts();
+		if (!global_conflicts && !local_conflicts) {
+			conflict = 0;
+		} else if (!global_conflicts && local_conflicts) {
+			conflict = local_conflict_manager.GetFirstInvalidIndex(count);
+		} else if (global_conflicts && !local_conflicts) {
+			conflict = global_conflict_manager.GetFirstInvalidIndex(count);
+		} else {
+			auto &global_validity = global_conflict_manager.GetFirstValidity();
+			auto &local_validity = local_conflict_manager.GetFirstValidity();
+			for (idx_t i = 0; i < count; i++) {
+				auto global_match = global_validity.RowIsValid(i);
+				auto local_match = local_validity.RowIsValid(i);
+				if (!global_match && !local_match) {
+					conflict = i;
+					break;
+				}
 			}
 		}
-		if (failed_index == DConstants::INVALID_INDEX) {
+
+		if (!conflict.IsValid()) {
 			// We don't throw, every value was present in either regular or transaction storage
 			return;
 		}
-		ThrowForeignKeyConstraintError(failed_index, true, *index, dst_chunk);
+		auto message = ConstructForeignKeyError(conflict, true, *index, dst_chunk);
+		throw ConstraintException(message);
 	}
+
 	if (!is_append) {
-		D_ASSERT(local_verification);
-		auto &transaction_matches = local_conflicts.Conflicts();
 		if (global_error) {
-			auto failed_index = LocateErrorIndex(false, global_matches);
-			D_ASSERT(failed_index != DConstants::INVALID_INDEX);
-			ThrowForeignKeyConstraintError(failed_index, false, *index, dst_chunk);
-		} else {
-			D_ASSERT(local_error);
-			D_ASSERT(transaction_matches.Count() != DConstants::INVALID_INDEX);
-			auto failed_index = LocateErrorIndex(false, transaction_matches);
-			D_ASSERT(failed_index != DConstants::INVALID_INDEX);
-			ThrowForeignKeyConstraintError(failed_index, false, *transaction_index, dst_chunk);
+			auto conflict = LocateErrorIndex(global_conflict_manager, false, count);
+			auto message = ConstructForeignKeyError(conflict, false, *index, dst_chunk);
+			throw ConstraintException(message);
 		}
+
+		D_ASSERT(local_conflict_manager.HasConflicts());
+		auto conflict = LocateErrorIndex(local_conflict_manager, false, count);
+		auto message = ConstructForeignKeyError(conflict, false, *transaction_index, dst_chunk);
+		throw ConstraintException(message);
 	}
 }
 
@@ -681,13 +689,15 @@ void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<LocalT
                                     optional_ptr<ConflictManager> manager) {
 	// Verify the constraint without a conflict manager.
 	if (!manager) {
-		return indexes.ScanBound<ART>([&](ART &art) {
-			if (!art.IsUnique()) {
+		return indexes.Scan([&](Index &index) {
+			if (!index.IsUnique() || index.GetIndexType() != ART::TYPE_NAME) {
 				return false;
 			}
-
+			D_ASSERT(index.IsBound());
+			auto &art = index.Cast<ART>();
 			if (storage) {
 				auto delete_index = storage->delete_indexes.Find(art.GetIndexName());
+				D_ASSERT(!delete_index || delete_index->IsBound());
 				IndexAppendInfo index_append_info(IndexAppendMode::DEFAULT, delete_index);
 				art.VerifyAppend(chunk, index_append_info, nullptr);
 			} else {
@@ -702,16 +712,18 @@ void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<LocalT
 	auto &conflict_info = manager->GetConflictInfo();
 
 	// Find all indexes matching the conflict target.
-	indexes.ScanBound<ART>([&](ART &art) {
-		if (!art.IsUnique()) {
+	indexes.Scan([&](Index &index) {
+		if (!index.IsUnique() || index.GetIndexType() != ART::TYPE_NAME) {
 			return false;
 		}
-		if (!conflict_info.ConflictTargetMatches(art)) {
+		if (!conflict_info.ConflictTargetMatches(index)) {
 			return false;
 		}
-
+		D_ASSERT(index.IsBound());
+		auto &art = index.Cast<ART>();
 		if (storage) {
 			auto delete_index = storage->delete_indexes.Find(art.GetIndexName());
+			D_ASSERT(!delete_index || delete_index->IsBound());
 			manager->AddIndex(art, delete_index);
 		} else {
 			manager->AddIndex(art, nullptr);
@@ -721,26 +733,28 @@ void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<LocalT
 
 	// Verify indexes matching the conflict target.
 	manager->SetMode(ConflictManagerMode::SCAN);
-	auto &matched_indexes = manager->MatchedIndexes();
-	auto &matched_delete_indexes = manager->MatchedDeleteIndexes();
+	auto &matching_indexes = manager->MatchingIndexes();
+	auto &matching_delete_indexes = manager->MatchingDeleteIndexes();
 	IndexAppendInfo index_append_info(IndexAppendMode::DEFAULT, nullptr);
-	for (idx_t i = 0; i < matched_indexes.size(); i++) {
-		index_append_info.delete_index = matched_delete_indexes[i];
-		matched_indexes[i].get().VerifyAppend(chunk, index_append_info, *manager);
+	for (idx_t i = 0; i < matching_indexes.size(); i++) {
+		index_append_info.delete_index = matching_delete_indexes[i];
+		matching_indexes[i].get().VerifyAppend(chunk, index_append_info, *manager);
 	}
 
 	// Scan the other indexes and throw, if there are any conflicts.
 	manager->SetMode(ConflictManagerMode::THROW);
-	indexes.ScanBound<ART>([&](ART &art) {
-		if (!art.IsUnique()) {
+	indexes.Scan([&](Index &index) {
+		if (!index.IsUnique() || index.GetIndexType() != ART::TYPE_NAME) {
 			return false;
 		}
-		if (manager->MatchedIndex(art)) {
+		if (manager->IndexMatches(index.Cast<BoundIndex>())) {
 			return false;
 		}
-
+		D_ASSERT(index.IsBound());
+		auto &art = index.Cast<ART>();
 		if (storage) {
 			auto delete_index = storage->delete_indexes.Find(art.GetIndexName());
+			D_ASSERT(!delete_index || delete_index->IsBound());
 			IndexAppendInfo index_append_info(IndexAppendMode::DEFAULT, delete_index);
 			art.VerifyAppend(chunk, index_append_info, *manager);
 		} else {
@@ -875,7 +889,8 @@ void DataTable::LocalAppend(LocalAppendState &state, ClientContext &context, Dat
 	}
 
 	// Append to the transaction-local data.
-	LocalStorage::Append(state, chunk);
+	auto data_table_info = GetDataTableInfo();
+	LocalStorage::Append(state, chunk, *data_table_info);
 }
 
 void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
@@ -890,12 +905,14 @@ void DataTable::FinalizeLocalAppend(LocalAppendState &state) {
 	LocalStorage::FinalizeAppend(state);
 }
 
-PhysicalIndex DataTable::CreateOptimisticCollection(ClientContext &context, unique_ptr<RowGroupCollection> collection) {
+PhysicalIndex DataTable::CreateOptimisticCollection(ClientContext &context,
+                                                    unique_ptr<OptimisticWriteCollection> collection) {
 	auto &local_storage = LocalStorage::Get(context, db);
 	return local_storage.CreateOptimisticCollection(*this, std::move(collection));
 }
 
-RowGroupCollection &DataTable::GetOptimisticCollection(ClientContext &context, const PhysicalIndex collection_index) {
+OptimisticWriteCollection &DataTable::GetOptimisticCollection(ClientContext &context,
+                                                              const PhysicalIndex collection_index) {
 	auto &local_storage = LocalStorage::Get(context, db);
 	return local_storage.GetOptimisticCollection(*this, collection_index);
 }
@@ -910,7 +927,7 @@ OptimisticDataWriter &DataTable::GetOptimisticWriter(ClientContext &context) {
 	return local_storage.GetOptimisticWriter(*this);
 }
 
-void DataTable::LocalMerge(ClientContext &context, RowGroupCollection &collection) {
+void DataTable::LocalMerge(ClientContext &context, OptimisticWriteCollection &collection) {
 	auto &local_storage = LocalStorage::Get(context, db);
 	local_storage.LocalMerge(*this, collection);
 }
@@ -1136,7 +1153,7 @@ void DataTable::RevertAppend(DuckTransaction &transaction, idx_t start_row, idx_
 				row_data[i] = NumericCast<row_t>(current_row_base + i);
 			}
 			info->indexes.Scan([&](Index &index) {
-				// We cant add to unbound indexes anyways, so there is no need to revert them
+				// We cannot add to unbound indexes, so there is no need to revert them.
 				if (index.IsBound()) {
 					index.Cast<BoundIndex>().Delete(chunk, row_identifiers);
 				}
@@ -1164,36 +1181,40 @@ void DataTable::RevertAppend(DuckTransaction &transaction, idx_t start_row, idx_
 // Indexes
 //===--------------------------------------------------------------------===//
 ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<TableIndexList> delete_indexes,
-                                     DataChunk &chunk, row_t row_start, const IndexAppendMode index_append_mode) {
-	ErrorData error;
-	if (indexes.Empty()) {
-		return error;
-	}
-
-	// first generate the vector of row identifiers
+                                     DataChunk &table_chunk, DataChunk &index_chunk,
+                                     const vector<StorageIndex> &mapped_column_ids, row_t row_start,
+                                     const IndexAppendMode index_append_mode) {
+	// Generate the vector of row identifiers.
 	Vector row_ids(LogicalType::ROW_TYPE);
-	VectorOperations::GenerateSequence(row_ids, chunk.size(), row_start, 1);
+	VectorOperations::GenerateSequence(row_ids, table_chunk.size(), row_start, 1);
 
-	vector<BoundIndex *> already_appended;
+	vector<reference<BoundIndex>> already_appended;
 	bool append_failed = false;
-	// now append the entries to the indices
-	indexes.Scan([&](Index &index_to_append) {
-		if (!index_to_append.IsBound()) {
-			throw InternalException("unbound index in DataTable::AppendToIndexes");
+
+	// Append the entries to the indexes.
+	ErrorData error;
+	indexes.Scan([&](Index &index) {
+		if (!index.IsBound()) {
+			// Buffer only the key columns, and store their mapping.
+			auto &unbound_index = index.Cast<UnboundIndex>();
+			unbound_index.BufferChunk(index_chunk, row_ids, mapped_column_ids);
+			return false;
 		}
-		auto &index = index_to_append.Cast<BoundIndex>();
+
+		auto &bound_index = index.Cast<BoundIndex>();
 
 		// Find the matching delete index.
 		optional_ptr<BoundIndex> delete_index;
-		if (index.IsUnique()) {
+		if (bound_index.IsUnique()) {
 			if (delete_indexes) {
-				delete_index = delete_indexes->Find(index.name);
+				delete_index = delete_indexes->Find(bound_index.name);
 			}
 		}
 
 		try {
+			// Append the mock chunk containing empty columns for non-key columns.
 			IndexAppendInfo index_append_info(index_append_mode, delete_index);
-			error = index.Append(chunk, row_ids, index_append_info);
+			error = bound_index.Append(table_chunk, row_ids, index_append_info);
 		} catch (std::exception &ex) {
 			error = ErrorData(ex);
 		}
@@ -1202,24 +1223,26 @@ ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<Table
 			append_failed = true;
 			return true;
 		}
-		already_appended.push_back(&index);
+
+		already_appended.push_back(bound_index);
 		return false;
 	});
 
 	if (append_failed) {
-		// constraint violation!
-		// remove any appended entries from previous indexes (if any)
-		for (auto *index : already_appended) {
-			index->Delete(chunk, row_ids);
+		// Constraint violation: remove any appended entries from previous indexes (if any).
+		for (auto index : already_appended) {
+			index.get().Delete(table_chunk, row_ids);
 		}
 	}
 	return error;
 }
 
-ErrorData DataTable::AppendToIndexes(optional_ptr<TableIndexList> delete_indexes, DataChunk &chunk, row_t row_start,
-                                     const IndexAppendMode index_append_mode) {
+ErrorData DataTable::AppendToIndexes(optional_ptr<TableIndexList> delete_indexes, DataChunk &table_chunk,
+                                     DataChunk &index_chunk, const vector<StorageIndex> &mapped_column_ids,
+                                     row_t row_start, const IndexAppendMode index_append_mode) {
 	D_ASSERT(IsMainTable());
-	return AppendToIndexes(info->indexes, delete_indexes, chunk, row_start, index_append_mode);
+	return AppendToIndexes(info->indexes, delete_indexes, table_chunk, index_chunk, mapped_column_ids, row_start,
+	                       index_append_mode);
 }
 
 void DataTable::RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, row_t row_start) {
@@ -1299,8 +1322,8 @@ void DataTable::VerifyDeleteConstraints(optional_ptr<LocalTableStorage> storage,
 
 unique_ptr<TableDeleteState> DataTable::InitializeDelete(TableCatalogEntry &table, ClientContext &context,
                                                          const vector<unique_ptr<BoundConstraint>> &bound_constraints) {
-	// initialize indexes (if any)
-	info->InitializeIndexes(context);
+	// Bind all indexes.
+	info->BindIndexes(context);
 
 	auto binder = Binder::CreateBinder(context);
 	vector<LogicalType> types;
@@ -1464,9 +1487,8 @@ void DataTable::VerifyUpdateConstraints(ConstraintState &state, ClientContext &c
 
 unique_ptr<TableUpdateState> DataTable::InitializeUpdate(TableCatalogEntry &table, ClientContext &context,
                                                          const vector<unique_ptr<BoundConstraint>> &bound_constraints) {
-	// check that there are no unknown indexes
-	info->InitializeIndexes(context);
-
+	// Bind all indexes.
+	info->BindIndexes(context);
 	auto result = make_uniq<TableUpdateState>();
 	result->constraint_state = InitializeConstraintState(table, bound_constraints);
 	return result;
@@ -1584,17 +1606,24 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 	TableStatistics global_stats;
 	row_groups->CopyStats(global_stats);
 	row_groups->Checkpoint(writer, global_stats);
+	if (!HasIndexes()) {
+		row_groups->SetAppendRequiresNewRowGroup();
+	}
 	// The row group payload data has been written. Now write:
 	//   sample
 	//   column stats
 	//   row-group pointers
 	//   table pointer
 	//   index data
-	writer.FinalizeTable(global_stats, info.get(), serializer);
+	writer.FinalizeTable(global_stats, *info, *row_groups, serializer);
 }
 
 void DataTable::CommitDropColumn(const idx_t column_index) {
 	row_groups->CommitDropColumn(column_index);
+}
+
+void DataTable::Destroy() {
+	row_groups->Destroy();
 }
 
 idx_t DataTable::ColumnCount() const {

@@ -22,13 +22,11 @@ public:
 
 	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
 	void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
-
 	int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
-
 	int64_t Write(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
 
 	int64_t GetFileSize(FileHandle &handle) override;
-	time_t GetLastModifiedTime(FileHandle &handle) override;
+	timestamp_t GetLastModifiedTime(FileHandle &handle) override;
 	string GetVersionTag(FileHandle &handle) override;
 	FileType GetFileType(FileHandle &handle) override;
 
@@ -65,6 +63,7 @@ public:
 	std::string GetName() const override;
 
 	void SetDisabledFileSystems(const vector<string> &names) override;
+	bool SubSystemIsDisabled(const string &name) override;
 
 	string PathSeparator(const string &path) override;
 

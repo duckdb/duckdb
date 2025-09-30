@@ -575,7 +575,7 @@ void Linenoise::EditMoveEnd() {
 
 /* Move cursor to the start of the line. */
 void Linenoise::EditMoveStartOfLine() {
-	while (pos > 0 && buf[pos] != '\n') {
+	while (pos > 0 && buf[pos - 1] != '\n') {
 		pos--;
 	}
 	RefreshLine();
@@ -1382,10 +1382,10 @@ int Linenoise::Edit() {
 			RefreshLine();
 			break;
 		case CTRL_A: /* Ctrl+a, go to the start of the line */
-			EditMoveHome();
+			EditMoveStartOfLine();
 			break;
 		case CTRL_E: /* ctrl+e, go to the end of the line */
-			EditMoveEnd();
+			EditMoveEndOfLine();
 			break;
 		case CTRL_L: /* ctrl+l, clear screen */
 			linenoiseClearScreen();

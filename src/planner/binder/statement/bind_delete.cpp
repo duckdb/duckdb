@@ -13,8 +13,6 @@
 namespace duckdb {
 
 BoundStatement Binder::Bind(DeleteStatement &stmt) {
-	BoundStatement result;
-
 	// visit the table reference
 	auto bound_table = Bind(*stmt.table);
 	if (bound_table->type != TableReferenceType::BASE_TABLE) {
@@ -84,8 +82,9 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 
 		unique_ptr<LogicalOperator> del_as_logicaloperator = std::move(del);
 		return BindReturning(std::move(stmt.returning_list), table, stmt.table->alias, update_table_index,
-		                     std::move(del_as_logicaloperator), std::move(result));
+		                     std::move(del_as_logicaloperator));
 	}
+	BoundStatement result;
 	result.plan = std::move(del);
 	result.names = {"Count"};
 	result.types = {LogicalType::BIGINT};

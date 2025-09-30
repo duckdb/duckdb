@@ -267,19 +267,14 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(ClientContext &con
 	}
 }
 
-static bool HasCorrelatedColumns(Expression &expression) {
-	if (expression.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-		auto &colref = expression.Cast<BoundColumnRefExpression>();
-		if (colref.depth > 0) {
-			return true;
-		}
-	}
+static bool HasCorrelatedColumns(const Expression &root_expr) {
 	bool has_correlated_columns = false;
-	ExpressionIterator::EnumerateChildren(expression, [&](Expression &child) {
-		if (HasCorrelatedColumns(child)) {
-			has_correlated_columns = true;
-		}
-	});
+	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(root_expr,
+	                                                              [&](const BoundColumnRefExpression &colref) {
+		                                                              if (colref.depth > 0) {
+			                                                              has_correlated_columns = true;
+		                                                              }
+	                                                              });
 	return has_correlated_columns;
 }
 

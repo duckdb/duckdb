@@ -1,0 +1,41 @@
+# name: test/sql/storage/encryption/temp_files/temp_directory_enable_external_access.test
+# group: [temp_files]
+
+foreach cipher GCM CTR
+
+
+require block_size 262144
+
+statement ok
+SET temp_directory='__TEST_DIR__/test_temp_dir'
+
+statement ok
+ATTACH '__TEST_DIR__/encrypted_temp_files_${cipher}.db' AS enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
+
+statement ok
+USE enc;
+
+statement ok
+SET memory_limit = '8MB';
+
+statement ok
+SET enable_external_access=false
+
+# cannot modify the temp directory when enable_external_access is set
+statement error
+SET temp_directory='__TEST_DIR__/new_temp_dir'
+----
+disabled by configuration
+
+statement error
+RESET temp_directory
+----
+disabled by configuration
+
+# 10M row table with 8B rows -> 80MB uncompressed - this requires the temp directory
+statement ok
+CREATE TEMPORARY TABLE tbl AS FROM range(10_000_000)
+
+restart
+
+endloop

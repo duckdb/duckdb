@@ -8,6 +8,7 @@
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/planner/operator/logical_copy_to_file.hpp"
+#include "duckdb/main/settings.hpp"
 
 #include <algorithm>
 
@@ -50,7 +51,7 @@ public:
 	explicit CopyToFunctionGlobalState(ClientContext &context)
 	    : initialized(false), rows_copied(0), last_file_offset(0),
 	      file_write_lock_if_rotating(make_uniq<StorageLock>()) {
-		max_open_files = ClientConfig::GetConfig(context).partitioned_write_max_open_files;
+		max_open_files = DBConfig::GetSetting<PartitionedWriteMaxOpenFilesSetting>(context);
 	}
 
 	StorageLock lock;
@@ -252,11 +253,14 @@ string PhysicalCopyToFile::GetTrimmedPath(ClientContext &context) const {
 
 class CopyToFunctionLocalState : public LocalSinkState {
 public:
-	explicit CopyToFunctionLocalState(unique_ptr<LocalFunctionData> local_state) : local_state(std::move(local_state)) {
+	explicit CopyToFunctionLocalState(ClientContext &context, unique_ptr<LocalFunctionData> local_state)
+	    : local_state(std::move(local_state)) {
+		partitioned_write_flush_threshold = DBConfig::GetSetting<PartitionedWriteFlushThresholdSetting>(context);
 	}
 	unique_ptr<GlobalFunctionData> global_state;
 	unique_ptr<LocalFunctionData> local_state;
 	idx_t total_rows_copied = 0;
+	idx_t partitioned_write_flush_threshold;
 
 	//! Buffers the tuples in partitions before writing
 	unique_ptr<HivePartitionedColumnData> part_buffer;
@@ -281,7 +285,7 @@ public:
 		}
 		part_buffer->Append(*part_buffer_append_state, chunk);
 		append_count += chunk.size();
-		if (append_count >= ClientConfig::GetConfig(context.client).partitioned_write_flush_threshold) {
+		if (append_count >= partitioned_write_flush_threshold) {
 			// flush all cached partitions
 			FlushPartitions(context, op, g);
 		}
@@ -370,11 +374,12 @@ unique_ptr<LocalSinkState> PhysicalCopyToFile::GetLocalSinkState(ExecutionContex
 	if (partition_output) {
 		auto &g = sink_state->Cast<CopyToFunctionGlobalState>();
 
-		auto state = make_uniq<CopyToFunctionLocalState>(nullptr);
+		auto state = make_uniq<CopyToFunctionLocalState>(context.client, nullptr);
 		state->InitializeAppendState(context.client, *this, g);
 		return std::move(state);
 	}
-	auto res = make_uniq<CopyToFunctionLocalState>(function.copy_to_initialize_local(context, *bind_data));
+	auto res =
+	    make_uniq<CopyToFunctionLocalState>(context.client, function.copy_to_initialize_local(context, *bind_data));
 	return std::move(res);
 }
 
@@ -483,9 +488,9 @@ string PhysicalCopyToFile::GetNonTmpFile(ClientContext &context, const string &t
 	return fs.JoinPath(path, base);
 }
 
-PhysicalCopyToFile::PhysicalCopyToFile(vector<LogicalType> types, CopyFunction function_p,
+PhysicalCopyToFile::PhysicalCopyToFile(PhysicalPlan &physical_plan, vector<LogicalType> types, CopyFunction function_p,
                                        unique_ptr<FunctionData> bind_data, idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::COPY_TO_FILE, std::move(types), estimated_cardinality),
+    : PhysicalOperator(physical_plan, PhysicalOperatorType::COPY_TO_FILE, std::move(types), estimated_cardinality),
       function(std::move(function_p)), bind_data(std::move(bind_data)), parallel(false) {
 }
 

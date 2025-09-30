@@ -2,9 +2,6 @@
 # description: Issue #3505: foreign key support without an explicit column name
 # group: [foreignkey]
 
-statement ok
-PRAGMA enable_verification
-
 # non-existant reference
 statement error
 CREATE TABLE routes (

@@ -1,0 +1,34 @@
+# name: test/sql/merge/merge_into_multiple_inserts.test_slow
+# description: Test MERGE INTO with multiple inserts
+# group: [merge]
+
+statement ok
+CREATE TABLE Stock(item_id int, balance int);
+
+statement ok
+CREATE TABLE Buys(item_id int, volume int);
+
+statement ok
+INSERT INTO Buys SELECT i, (random() * 100)::INT FROM range(1000000) t(i);
+
+query I
+MERGE INTO Stock USING Buys USING (item_id)
+WHEN MATCHED THEN ERROR
+WHEN NOT MATCHED BY TARGET AND random() < 0.3 THEN INSERT
+WHEN NOT MATCHED BY TARGET AND random() < 0.3 THEN INSERT
+WHEN NOT MATCHED BY TARGET THEN INSERT
+----
+1000000
+
+query I
+SELECT COUNT(*) FROM Stock
+----
+1000000
+
+query II
+FROM Buys EXCEPT FROM Stock
+----
+
+query II
+FROM Stock EXCEPT FROM Buys
+----

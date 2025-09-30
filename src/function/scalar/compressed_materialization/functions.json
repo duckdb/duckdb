@@ -63,6 +63,13 @@
         "type": "scalar_function"
     },
     {
+        "name": "__internal_compress_string_hugeint",
+        "parameters": "",
+        "description": "",
+        "example": "",
+        "type": "scalar_function"
+    },
+    {
         "name": "__internal_decompress_integral_smallint",
         "parameters": "",
         "description": "",

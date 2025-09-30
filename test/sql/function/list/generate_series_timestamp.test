@@ -2,9 +2,6 @@
 # description: Test generate_series/range function
 # group: [list]
 
-statement ok
-PRAGMA enable_verification
-
 # standard generate_series (inclusive bound)
 query I
 SELECT generate_series(timestamp '2020-01-01', timestamp '2020-07-01', interval '3' month);

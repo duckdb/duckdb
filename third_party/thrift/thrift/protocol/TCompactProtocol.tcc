@@ -93,7 +93,7 @@ uint32_t TCompactProtocolT<Transport_>::writeMessageBegin(
   uint32_t wsize = 0;
   wsize += writeByte(PROTOCOL_ID);
   wsize += writeByte((VERSION_N & VERSION_MASK) | (((int32_t)messageType << TYPE_SHIFT_AMOUNT) & TYPE_MASK));
-  wsize += writeVarint32(seqid);
+  wsize += writeBignum32(seqid);
   wsize += writeString(name);
   return wsize;
 }
@@ -102,7 +102,7 @@ uint32_t TCompactProtocolT<Transport_>::writeMessageBegin(
  * Write a field header containing the field id and field type. If the
  * difference between the current field id and the last one is small (< 15),
  * then the field id will be encoded in the 4 MSB as a delta. Otherwise, the
- * field id will follow the type header as a zigzag varint.
+ * field id will follow the type header as a zigzag bignum.
  */
 template <class Transport_>
 uint32_t TCompactProtocolT<Transport_>::writeFieldBegin(const char* name,
@@ -182,7 +182,7 @@ uint32_t TCompactProtocolT<Transport_>::writeMapBegin(const TType keyType,
   if (size == 0) {
     wsize += writeByte(0);
   } else {
-    wsize += writeVarint32(size);
+    wsize += writeBignum32(size);
     wsize += writeByte(getCompactType(keyType) << 4 | getCompactType(valType));
   }
   return wsize;
@@ -225,27 +225,27 @@ uint32_t TCompactProtocolT<Transport_>::writeByte(const int8_t byte) {
 }
 
 /**
- * Write an i16 as a zigzag varint.
+ * Write an i16 as a zigzag bignum.
  */
 template <class Transport_>
 uint32_t TCompactProtocolT<Transport_>::writeI16(const int16_t i16) {
-  return writeVarint32(i32ToZigzag(i16));
+  return writeBignum32(i32ToZigzag(i16));
 }
 
 /**
- * Write an i32 as a zigzag varint.
+ * Write an i32 as a zigzag bignum.
  */
 template <class Transport_>
 uint32_t TCompactProtocolT<Transport_>::writeI32(const int32_t i32) {
-  return writeVarint32(i32ToZigzag(i32));
+  return writeBignum32(i32ToZigzag(i32));
 }
 
 /**
- * Write an i64 as a zigzag varint.
+ * Write an i64 as a zigzag bignum.
  */
 template <class Transport_>
 uint32_t TCompactProtocolT<Transport_>::writeI64(const int64_t i64) {
-  return writeVarint64(i64ToZigzag(i64));
+  return writeBignum64(i64ToZigzag(i64));
 }
 
 /**
@@ -263,7 +263,7 @@ uint32_t TCompactProtocolT<Transport_>::writeDouble(const double dub) {
 }
 
 /**
- * Write a string to the wire with a varint size preceding.
+ * Write a string to the wire with a bignum size preceding.
  */
 template <class Transport_>
 uint32_t TCompactProtocolT<Transport_>::writeString(const std::string& str) {
@@ -275,7 +275,7 @@ uint32_t TCompactProtocolT<Transport_>::writeBinary(const std::string& str) {
   if(str.size() > (std::numeric_limits<uint32_t>::max)())
     throw TProtocolException(TProtocolException::SIZE_LIMIT);
   uint32_t ssize = static_cast<uint32_t>(str.size());
-  uint32_t wsize = writeVarint32(ssize) ;
+  uint32_t wsize = writeBignum32(ssize) ;
   // checking ssize + wsize > uint_max, but we don't want to overflow while checking for overflows.
   // transforming the check to ssize > uint_max - wsize
   if(ssize > (std::numeric_limits<uint32_t>::max)() - wsize)
@@ -334,16 +334,16 @@ uint32_t TCompactProtocolT<Transport_>::writeCollectionBegin(const TType elemTyp
                                            << 4 | getCompactType(elemType)));
   } else {
     wsize += writeByte(0xf0 | getCompactType(elemType));
-    wsize += writeVarint32(size);
+    wsize += writeBignum32(size);
   }
   return wsize;
 }
 
 /**
- * Write an i32 as a varint. Results in 1-5 bytes on the wire.
+ * Write an i32 as a bignum. Results in 1-5 bytes on the wire.
  */
 template <class Transport_>
-uint32_t TCompactProtocolT<Transport_>::writeVarint32(uint32_t n) {
+uint32_t TCompactProtocolT<Transport_>::writeBignum32(uint32_t n) {
   uint8_t buf[5];
   uint32_t wsize = 0;
 
@@ -361,10 +361,10 @@ uint32_t TCompactProtocolT<Transport_>::writeVarint32(uint32_t n) {
 }
 
 /**
- * Write an i64 as a varint. Results in 1-10 bytes on the wire.
+ * Write an i64 as a bignum. Results in 1-10 bytes on the wire.
  */
 template <class Transport_>
-uint32_t TCompactProtocolT<Transport_>::writeVarint64(uint64_t n) {
+uint32_t TCompactProtocolT<Transport_>::writeBignum64(uint64_t n) {
   uint8_t buf[10];
   uint32_t wsize = 0;
 
@@ -383,7 +383,7 @@ uint32_t TCompactProtocolT<Transport_>::writeVarint64(uint64_t n) {
 
 /**
  * Convert l into a zigzag long. This allows negative numbers to be
- * represented compactly as a varint.
+ * represented compactly as a bignum.
  */
 template <class Transport_>
 uint64_t TCompactProtocolT<Transport_>::i64ToZigzag(const int64_t l) {
@@ -392,7 +392,7 @@ uint64_t TCompactProtocolT<Transport_>::i64ToZigzag(const int64_t l) {
 
 /**
  * Convert n into a zigzag int. This allows negative numbers to be
- * represented compactly as a varint.
+ * represented compactly as a bignum.
  */
 template <class Transport_>
 uint32_t TCompactProtocolT<Transport_>::i32ToZigzag(const int32_t n) {
@@ -436,7 +436,7 @@ uint32_t TCompactProtocolT<Transport_>::readMessageBegin(
   }
 
   messageType = (TMessageType)((versionAndType >> TYPE_SHIFT_AMOUNT) & TYPE_BITS);
-  rsize += readVarint32(seqid);
+  rsize += readBignum32(seqid);
   rsize += readString(name);
 
   return rsize;
@@ -490,7 +490,7 @@ uint32_t TCompactProtocolT<Transport_>::readFieldBegin(std::string& name,
   // mask off the 4 MSB of the type header. it could contain a field id delta.
   int16_t modifier = (int16_t)(((uint8_t)byte & 0xf0) >> 4);
   if (modifier == 0) {
-    // not a delta, look ahead for the zigzag varint field id.
+    // not a delta, look ahead for the zigzag bignum field id.
     rsize += readI16(fieldId);
   } else {
     fieldId = (int16_t)(lastFieldId_ + modifier);
@@ -524,7 +524,7 @@ uint32_t TCompactProtocolT<Transport_>::readMapBegin(TType& keyType,
   int8_t kvType = 0;
   int32_t msize = 0;
 
-  rsize += readVarint32(msize);
+  rsize += readBignum32(msize);
   if (msize != 0)
     rsize += readByte(kvType);
 
@@ -544,7 +544,7 @@ uint32_t TCompactProtocolT<Transport_>::readMapBegin(TType& keyType,
 /**
  * Read a list header off the wire. If the list size is 0-14, the size will
  * be packed into the element type header. If it's a longer list, the 4 MSB
- * of the element type header will be 0xF, and a varint will follow with the
+ * of the element type header will be 0xF, and a bignum will follow with the
  * true size.
  */
 template <class Transport_>
@@ -558,7 +558,7 @@ uint32_t TCompactProtocolT<Transport_>::readListBegin(TType& elemType,
 
   lsize = ((uint8_t)size_and_type >> 4) & 0x0f;
   if (lsize == 15) {
-    rsize += readVarint32(lsize);
+    rsize += readBignum32(lsize);
   }
 
   if (lsize < 0) {
@@ -576,7 +576,7 @@ uint32_t TCompactProtocolT<Transport_>::readListBegin(TType& elemType,
 /**
  * Read a set header off the wire. If the set size is 0-14, the size will
  * be packed into the element type header. If it's a longer set, the 4 MSB
- * of the element type header will be 0xF, and a varint will follow with the
+ * of the element type header will be 0xF, and a bignum will follow with the
  * true size.
  */
 template <class Transport_>
@@ -616,34 +616,34 @@ uint32_t TCompactProtocolT<Transport_>::readByte(int8_t& byte) {
 }
 
 /**
- * Read an i16 from the wire as a zigzag varint.
+ * Read an i16 from the wire as a zigzag bignum.
  */
 template <class Transport_>
 uint32_t TCompactProtocolT<Transport_>::readI16(int16_t& i16) {
   int32_t value;
-  uint32_t rsize = readVarint32(value);
+  uint32_t rsize = readBignum32(value);
   i16 = (int16_t)zigzagToI32(value);
   return rsize;
 }
 
 /**
- * Read an i32 from the wire as a zigzag varint.
+ * Read an i32 from the wire as a zigzag bignum.
  */
 template <class Transport_>
 uint32_t TCompactProtocolT<Transport_>::readI32(int32_t& i32) {
   int32_t value;
-  uint32_t rsize = readVarint32(value);
+  uint32_t rsize = readBignum32(value);
   i32 = zigzagToI32(value);
   return rsize;
 }
 
 /**
- * Read an i64 from the wire as a zigzag varint.
+ * Read an i64 from the wire as a zigzag bignum.
  */
 template <class Transport_>
 uint32_t TCompactProtocolT<Transport_>::readI64(int64_t& i64) {
   int64_t value;
-  uint32_t rsize = readVarint64(value);
+  uint32_t rsize = readBignum64(value);
   i64 = zigzagToI64(value);
   return rsize;
 }
@@ -679,7 +679,7 @@ uint32_t TCompactProtocolT<Transport_>::readBinary(std::string& str) {
   int32_t rsize = 0;
   int32_t size;
 
-  rsize += readVarint32(size);
+  rsize += readBignum32(size);
   // Catch empty string case
   if (size == 0) {
     str = "";
@@ -710,23 +710,23 @@ uint32_t TCompactProtocolT<Transport_>::readBinary(std::string& str) {
 }
 
 /**
- * Read an i32 from the wire as a varint. The MSB of each byte is set
+ * Read an i32 from the wire as a bignum. The MSB of each byte is set
  * if there is another byte to follow. This can read up to 5 bytes.
  */
 template <class Transport_>
-uint32_t TCompactProtocolT<Transport_>::readVarint32(int32_t& i32) {
+uint32_t TCompactProtocolT<Transport_>::readBignum32(int32_t& i32) {
   int64_t val;
-  uint32_t rsize = readVarint64(val);
+  uint32_t rsize = readBignum64(val);
   i32 = (int32_t)val;
   return rsize;
 }
 
 /**
- * Read an i64 from the wire as a proper varint. The MSB of each byte is set
+ * Read an i64 from the wire as a proper bignum. The MSB of each byte is set
  * if there is another byte to follow. This can read up to 10 bytes.
  */
 template <class Transport_>
-uint32_t TCompactProtocolT<Transport_>::readVarint64(int64_t& i64) {
+uint32_t TCompactProtocolT<Transport_>::readBignum64(int64_t& i64) {
   uint32_t rsize = 0;
   uint64_t val = 0;
   int shift = 0;

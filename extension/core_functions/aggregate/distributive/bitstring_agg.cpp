@@ -13,6 +13,8 @@
 
 namespace duckdb {
 
+namespace {
+
 template <class INPUT_TYPE>
 struct BitAggState {
 	bool is_set;
@@ -258,7 +260,7 @@ unique_ptr<FunctionData> BindBitstringAgg(ClientContext &context, AggregateFunct
 }
 
 template <class TYPE>
-static void BindBitString(AggregateFunctionSet &bitstring_agg, const LogicalTypeId &type) {
+void BindBitString(AggregateFunctionSet &bitstring_agg, const LogicalTypeId &type) {
 	auto function =
 	    AggregateFunction::UnaryAggregateDestructor<BitAggState<TYPE>, TYPE, string_t, BitStringAggOperation>(
 	        type, LogicalType::BIT);
@@ -308,6 +310,8 @@ void GetBitStringAggregate(const LogicalType &type, AggregateFunctionSet &bitstr
 		throw InternalException("Unimplemented bitstring aggregate");
 	}
 }
+
+} // namespace
 
 AggregateFunctionSet BitstringAggFun::GetFunctions() {
 	AggregateFunctionSet bitstring_agg("bitstring_agg");

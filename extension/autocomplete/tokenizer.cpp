@@ -1,4 +1,6 @@
 #include "tokenizer.hpp"
+
+#include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
@@ -135,10 +137,24 @@ void BaseTokenizer::PushToken(idx_t start, idx_t end) {
 	tokens.emplace_back(std::move(last_token));
 }
 
+bool BaseTokenizer::IsValidDollarTagCharacter(char c) {
+	if (c >= 'A' && c <= 'Z') {
+		return true;
+	}
+	if (c >= 'a' && c <= 'z') {
+		return true;
+	}
+	if (c >= '\200' && c <= '\377') {
+		return true;
+	}
+	return false;
+}
+
 bool BaseTokenizer::TokenizeInput() {
 	auto state = TokenizeState::STANDARD;
 
 	idx_t last_pos = 0;
+	string dollar_quote_marker;
 	for (idx_t i = 0; i < sql.size(); i++) {
 		auto c = sql[i];
 		switch (state) {
@@ -157,6 +173,42 @@ bool BaseTokenizer::TokenizeInput() {
 				// end of statement
 				OnStatementEnd(i);
 				last_pos = i + 1;
+				break;
+			}
+			if (c == '$') {
+				// Dollar-quoted string statement
+				if (i + 1 >= sql.size()) {
+					// We need more than a single dollar
+					break;
+				}
+				if (sql[i + 1] >= '0' && sql[i + 1] <= '9') {
+					// $[numeric] is a parameter, not a dollar-quoted string
+					break;
+				}
+				// Dollar-quoted string
+				last_pos = i;
+				// Scan until next $
+				idx_t next_dollar = 0;
+				for (idx_t idx = i + 1; idx < sql.size(); idx++) {
+					if (sql[idx] == '$') {
+						next_dollar = idx;
+						break;
+					}
+					if (!IsValidDollarTagCharacter(sql[idx])) {
+						break;
+					}
+				}
+				if (next_dollar == 0) {
+					break;
+				}
+				state = TokenizeState::DOLLAR_QUOTED_STRING;
+				last_pos = i;
+				i = next_dollar;
+				if (i < sql.size()) {
+					// Found a complete marker, store it.
+					idx_t marker_start = last_pos + 1;
+					dollar_quote_marker = string(sql.begin() + marker_start, sql.begin() + i);
+				}
 				break;
 			}
 			if (c == '-' && i + 1 < sql.size() && sql[i + 1] == '-') {
@@ -275,6 +327,44 @@ bool BaseTokenizer::TokenizeInput() {
 				state = TokenizeState::STANDARD;
 			}
 			break;
+		case TokenizeState::DOLLAR_QUOTED_STRING: {
+			// Dollar-quoted string -- all that will get us out is a $[marker]$
+			if (c != '$') {
+				break;
+			}
+			if (i + 1 >= sql.size()) {
+				// No room for the final dollar
+				break;
+			}
+			// Skip to the next dollar symbol
+			idx_t start = i + 1;
+			idx_t end = start;
+			while (end < sql.size() && sql[end] != '$') {
+				end++;
+			}
+			if (end >= sql.size()) {
+				// No final dollar, continue as normal
+				break;
+			}
+			if (end - start != dollar_quote_marker.size()) {
+				// Length mismatch, cannot match
+				break;
+			}
+			if (sql.compare(start, dollar_quote_marker.size(), dollar_quote_marker) != 0) {
+				// marker mismatch
+				break;
+			}
+			// Marker found! Revert to standard state
+			size_t full_marker_len = dollar_quote_marker.size() + 2;
+			string quoted = sql.substr(last_pos, (start + dollar_quote_marker.size() + 1) - last_pos);
+			quoted = "'" + quoted.substr(full_marker_len, quoted.size() - 2 * full_marker_len) + "'";
+			tokens.emplace_back(quoted);
+			dollar_quote_marker = string();
+			state = TokenizeState::STANDARD;
+			i = end;
+			last_pos = i + 1;
+			break;
+		}
 		default:
 			throw InternalException("unrecognized tokenize state");
 		}

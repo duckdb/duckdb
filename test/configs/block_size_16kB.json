@@ -1,0 +1,13 @@
+{
+  "description": "Run with a default block size of 16kB (smallest possible).",
+  "block_size": "16384",
+  "skip_compiled": "true",
+  "skip_tests": [
+    {
+      "reason": "Loading from disk does not trigger OOM.",
+      "paths": [
+        "test/sql/storage/constraints/foreignkey/foreign_key_persistent_memory_limit.test"
+      ]
+    }
+  ]
+}

@@ -1,5 +1,9 @@
+#include "duckdb/main/settings.hpp"
+
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/bignum.hpp"
 #include "duckdb/common/operator/add.hpp"
+#include "duckdb/common/operator/interpolate.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/operator/numeric_binary_operators.hpp"
 #include "duckdb/common/operator/subtract.hpp"
@@ -78,6 +82,8 @@ static scalar_function_t GetScalarBinaryFunction(PhysicalType type) {
 //===--------------------------------------------------------------------===//
 // + [add]
 //===--------------------------------------------------------------------===//
+namespace {
+
 struct AddPropagateStatistics {
 	template <class T, class OP>
 	static bool Operation(const LogicalType &type, BaseStatistics &lstats, BaseStatistics &rstats, Value &new_min,
@@ -133,7 +139,7 @@ struct DecimalArithmeticBindData : public FunctionData {
 };
 
 template <class OP, class PROPAGATE, class BASEOP>
-static unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, FunctionStatisticsInput &input) {
+unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
 	auto &expr = input.expr;
 	D_ASSERT(child_stats.size() == 2);
@@ -260,8 +266,8 @@ unique_ptr<FunctionData> BindDecimalAddSubtract(ClientContext &context, ScalarFu
 	return std::move(bind_data);
 }
 
-static void SerializeDecimalArithmetic(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-                                       const ScalarFunction &function) {
+void SerializeDecimalArithmetic(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+                                const ScalarFunction &function) {
 	auto &bind_data = bind_data_p->Cast<DecimalArithmeticBindData>();
 	serializer.WriteProperty(100, "check_overflow", bind_data.check_overflow);
 	serializer.WriteProperty(101, "return_type", function.return_type);
@@ -297,6 +303,8 @@ unique_ptr<FunctionData> NopDecimalBind(ClientContext &context, ScalarFunction &
 	return nullptr;
 }
 
+} // namespace
+
 ScalarFunction AddFunction::GetFunction(const LogicalType &type) {
 	D_ASSERT(type.IsNumeric());
 	if (type.id() == LogicalTypeId::DECIMAL) {
@@ -304,6 +312,40 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &type) {
 	} else {
 		return ScalarFunction("+", {type}, type, ScalarFunction::NopFunction);
 	}
+}
+
+void BignumAdd(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &allocator = state.GetAllocator();
+	ArenaAllocator arena(allocator);
+	BinaryExecutor::Execute<bignum_t, bignum_t, string_t>(args.data[0], args.data[1], result, args.size(),
+	                                                      [&](bignum_t a, bignum_t b) {
+		                                                      const BignumIntermediate lhs(a);
+		                                                      const BignumIntermediate rhs(b);
+		                                                      return BignumIntermediate::Add(result, lhs, rhs);
+	                                                      });
+}
+
+void BignumSubtract(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &allocator = state.GetAllocator();
+	ArenaAllocator arena(allocator);
+	BinaryExecutor::Execute<bignum_t, bignum_t, string_t>(
+	    args.data[0], args.data[1], result, args.size(), [&](bignum_t a, bignum_t b) {
+		    const BignumIntermediate lhs(a);
+		    BignumIntermediate rhs(b);
+		    rhs.NegateInPlace();
+		    auto result_value = BignumIntermediate::Add(result, lhs, rhs);
+		    rhs.NegateInPlace();
+		    return result_value;
+	    });
+}
+
+void BignumNegate(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &allocator = state.GetAllocator();
+	ArenaAllocator arena(allocator);
+	UnaryExecutor::Execute<bignum_t, string_t>(args.data[0], result, args.size(), [&](bignum_t a) {
+		const BignumIntermediate lhs(a);
+		return lhs.Negate(result);
+	});
 }
 
 ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const LogicalType &right_type) {
@@ -331,6 +373,14 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const Logi
 	}
 
 	switch (left_type.id()) {
+	case LogicalTypeId::BIGNUM:
+		if (right_type.id() == LogicalTypeId::BIGNUM) {
+			ScalarFunction function("+", {left_type, right_type}, LogicalType::BIGNUM, BignumAdd);
+			BaseScalarFunction::SetReturnsError(function);
+			return function;
+		}
+		break;
+
 	case LogicalTypeId::DATE:
 		if (right_type.id() == LogicalTypeId::INTEGER) {
 			ScalarFunction function("+", {left_type, right_type}, LogicalType::DATE,
@@ -472,12 +522,17 @@ ScalarFunctionSet OperatorAddFun::GetFunctions() {
 	// we can add lists together
 	add.AddFunction(ListConcatFun::GetFunction());
 
+	// we can add bignums together
+	add.AddFunction(AddFunction::GetFunction(LogicalType::BIGNUM, LogicalType::BIGNUM));
+
 	return add;
 }
 
 //===--------------------------------------------------------------------===//
 // - [subtract]
 //===--------------------------------------------------------------------===//
+namespace {
+
 struct NegateOperator {
 	template <class T>
 	static bool CanNegate(T input) {
@@ -571,7 +626,7 @@ struct NegatePropagateStatistics {
 	}
 };
 
-static unique_ptr<BaseStatistics> NegateBindStatistics(ClientContext &context, FunctionStatisticsInput &input) {
+unique_ptr<BaseStatistics> NegateBindStatistics(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
 	auto &expr = input.expr;
 	D_ASSERT(child_stats.size() == 1);
@@ -612,6 +667,8 @@ static unique_ptr<BaseStatistics> NegateBindStatistics(ClientContext &context, F
 	return stats.ToUnique();
 }
 
+} // namespace
+
 ScalarFunction SubtractFunction::GetFunction(const LogicalType &type) {
 	if (type.id() == LogicalTypeId::INTERVAL) {
 		ScalarFunction func("-", {type}, type, ScalarFunction::UnaryFunction<interval_t, interval_t, NegateOperator>);
@@ -619,6 +676,9 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &type) {
 		return func;
 	} else if (type.id() == LogicalTypeId::DECIMAL) {
 		ScalarFunction func("-", {type}, type, nullptr, DecimalNegateBind, nullptr, NegateBindStatistics);
+		return func;
+	} else if (type.id() == LogicalTypeId::BIGNUM) {
+		ScalarFunction func("+", {type}, LogicalType::BIGNUM, BignumNegate);
 		return func;
 	} else {
 		D_ASSERT(type.IsNumeric());
@@ -655,6 +715,10 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &left_type, const
 	}
 
 	switch (left_type.id()) {
+	case LogicalTypeId::BIGNUM: {
+		ScalarFunction function("-", {left_type, right_type}, left_type, BignumSubtract);
+		return function;
+	}
 	case LogicalTypeId::DATE:
 		if (right_type.id() == LogicalTypeId::DATE) {
 			ScalarFunction function("-", {left_type, right_type}, LogicalType::BIGINT,
@@ -732,6 +796,8 @@ ScalarFunctionSet OperatorSubtractFun::GetFunctions() {
 		// binary subtract function "a - b", subtracts b from a
 		subtract.AddFunction(SubtractFunction::GetFunction(type, type));
 	}
+	subtract.AddFunction(SubtractFunction::GetFunction(LogicalType::BIGNUM));
+	subtract.AddFunction(SubtractFunction::GetFunction(LogicalType::BIGNUM, LogicalType::BIGNUM));
 	// we can subtract dates from each other
 	subtract.AddFunction(SubtractFunction::GetFunction(LogicalType::DATE, LogicalType::DATE));
 	// we can subtract integers from dates
@@ -754,6 +820,8 @@ ScalarFunctionSet OperatorSubtractFun::GetFunctions() {
 //===--------------------------------------------------------------------===//
 // * [multiply]
 //===--------------------------------------------------------------------===//
+namespace {
+
 struct MultiplyPropagateStatistics {
 	template <class T, class OP>
 	static bool Operation(const LogicalType &type, BaseStatistics &lstats, BaseStatistics &rstats, Value &new_min,
@@ -861,6 +929,8 @@ unique_ptr<FunctionData> BindDecimalMultiply(ClientContext &context, ScalarFunct
 	return std::move(bind_data);
 }
 
+} // namespace
+
 ScalarFunctionSet OperatorMultiplyFun::GetFunctions() {
 	ScalarFunctionSet multiply("*");
 	for (auto &type : LogicalType::Numeric()) {
@@ -931,6 +1001,8 @@ interval_t DivideOperator::Operation(interval_t left, double right) {
 	return result;
 }
 
+namespace {
+
 struct BinaryNumericDivideWrapper {
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
 	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, ValidityMask &mask, idx_t idx) {
@@ -984,12 +1056,12 @@ struct BinaryNumericDivideHugeintWrapper {
 };
 
 template <class TA, class TB, class TC, class OP, class ZWRAPPER = BinaryZeroIsNullWrapper>
-static void BinaryScalarFunctionIgnoreZero(DataChunk &input, ExpressionState &state, Vector &result) {
+void BinaryScalarFunctionIgnoreZero(DataChunk &input, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<TA, TB, TC, OP, ZWRAPPER>(input.data[0], input.data[1], result, input.size());
 }
 
 template <class OP>
-static scalar_function_t GetBinaryFunctionIgnoreZero(PhysicalType type) {
+scalar_function_t GetBinaryFunctionIgnoreZero(PhysicalType type) {
 	switch (type) {
 	case PhysicalType::INT8:
 		return BinaryScalarFunctionIgnoreZero<int8_t, int8_t, int8_t, OP, BinaryNumericDivideWrapper>;
@@ -1023,8 +1095,7 @@ static scalar_function_t GetBinaryFunctionIgnoreZero(PhysicalType type) {
 template <class OP>
 unique_ptr<FunctionData> BindBinaryFloatingPoint(ClientContext &context, ScalarFunction &bound_function,
                                                  vector<unique_ptr<Expression>> &arguments) {
-	auto &config = ClientConfig::GetConfig(context);
-	if (config.ieee_floating_point_ops) {
+	if (DBConfig::GetSetting<IeeeFloatingPointOpsSetting>(context)) {
 		bound_function.function = GetScalarBinaryFunction<OP>(bound_function.return_type.InternalType());
 	} else {
 		bound_function.function = GetBinaryFunctionIgnoreZero<OP>(bound_function.return_type.InternalType());
@@ -1032,6 +1103,7 @@ unique_ptr<FunctionData> BindBinaryFloatingPoint(ClientContext &context, ScalarF
 	return nullptr;
 }
 
+} // namespace
 ScalarFunctionSet OperatorFloatDivideFun::GetFunctions() {
 	ScalarFunctionSet fp_divide("/");
 	fp_divide.AddFunction(ScalarFunction({LogicalType::FLOAT, LogicalType::FLOAT}, LogicalType::FLOAT, nullptr,
@@ -1067,8 +1139,8 @@ ScalarFunctionSet OperatorIntegerDivideFun::GetFunctions() {
 // % [modulo]
 //===--------------------------------------------------------------------===//
 template <class OP>
-unique_ptr<FunctionData> BindDecimalModulo(ClientContext &context, ScalarFunction &bound_function,
-                                           vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> BindDecimalModulo(ClientContext &context, ScalarFunction &bound_function,
+                                                  vector<unique_ptr<Expression>> &arguments) {
 	auto bind_data = BindDecimalArithmetic<true>(context, bound_function, arguments);
 	// now select the physical function to execute
 	if (bind_data->check_overflow) {
@@ -1120,6 +1192,54 @@ ScalarFunctionSet OperatorModuloFun::GetFunctions() {
 	}
 
 	return modulo;
+}
+
+//===--------------------------------------------------------------------===//
+// Linear Interpolation
+//===--------------------------------------------------------------------===//
+
+template <>
+double InterpolateOperator::Operation(const double &lo, const double d, const double &hi) {
+	return lo * (1.0 - d) + hi * d;
+}
+
+template <>
+dtime_t InterpolateOperator::Operation(const dtime_t &lo, const double d, const dtime_t &hi) {
+	return dtime_t(std::llround(static_cast<double>(lo.micros) * (1.0 - d) + static_cast<double>(hi.micros) * d));
+}
+
+template <>
+timestamp_t InterpolateOperator::Operation(const timestamp_t &lo, const double d, const timestamp_t &hi) {
+	return timestamp_t(std::llround(static_cast<double>(lo.value) * (1.0 - d) + static_cast<double>(hi.value) * d));
+}
+
+template <>
+hugeint_t InterpolateOperator::Operation(const hugeint_t &lo, const double d, const hugeint_t &hi) {
+	return Hugeint::Convert(Operation(Hugeint::Cast<double>(lo), d, Hugeint::Cast<double>(hi)));
+}
+
+template <>
+uhugeint_t InterpolateOperator::Operation(const uhugeint_t &lo, const double d, const uhugeint_t &hi) {
+	return Hugeint::Convert(Operation(Uhugeint::Cast<double>(lo), d, Uhugeint::Cast<double>(hi)));
+}
+
+static interval_t MultiplyByDouble(const interval_t &i, const double &d) { // NOLINT
+	D_ASSERT(d >= 0 && d <= 1);
+	return Interval::FromMicro(std::llround(static_cast<double>(Interval::GetMicro(i)) * d));
+}
+
+inline interval_t operator+(const interval_t &lhs, const interval_t &rhs) {
+	return Interval::FromMicro(Interval::GetMicro(lhs) + Interval::GetMicro(rhs));
+}
+
+inline interval_t operator-(const interval_t &lhs, const interval_t &rhs) {
+	return Interval::FromMicro(Interval::GetMicro(lhs) - Interval::GetMicro(rhs));
+}
+
+template <>
+interval_t InterpolateOperator::Operation(const interval_t &lo, const double d, const interval_t &hi) {
+	const interval_t delta = hi - lo;
+	return lo + MultiplyByDouble(delta, d);
 }
 
 } // namespace duckdb

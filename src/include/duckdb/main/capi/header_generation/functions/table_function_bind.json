@@ -20,6 +20,27 @@
             }
         },
         {
+            "name": "duckdb_table_function_get_client_context",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_bind_info",
+                    "name": "info"
+                },
+                {
+                    "type": "duckdb_client_context *",
+                    "name": "out_context"
+                }
+            ],
+            "comment": {
+                "description": "Retrieves the client context of the bind info of a table function.\n\n",
+                "param_comments": {
+                    "info": "The bind info object of the table function.",
+                    "out_context": "The client context of the bind info. Must be destroyed with `duckdb_destroy_client_context`."
+                }
+            }
+        },
+        {
             "name": "duckdb_bind_add_result_column",
             "return_type": "void",
             "params": [

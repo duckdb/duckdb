@@ -9,6 +9,8 @@
 
 namespace duckdb {
 
+namespace {
+
 struct StringSplitInput {
 	StringSplitInput(Vector &result_list, Vector &result_child, idx_t offset)
 	    : result_list(result_list), result_child(result_child), offset(offset) {
@@ -105,7 +107,7 @@ struct StringSplitter {
 };
 
 template <class OP>
-static void StringSplitExecutor(DataChunk &args, ExpressionState &state, Vector &result, void *data = nullptr) {
+void StringSplitExecutor(DataChunk &args, ExpressionState &state, Vector &result, void *data = nullptr) {
 	UnifiedVectorFormat input_data;
 	args.data[0].ToUnifiedFormat(args.size(), input_data);
 	auto inputs = UnifiedVectorFormat::GetData<string_t>(input_data);
@@ -156,11 +158,11 @@ static void StringSplitExecutor(DataChunk &args, ExpressionState &state, Vector 
 	StringVector::AddHeapReference(child_entry, args.data[0]);
 }
 
-static void StringSplitFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+void StringSplitFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	StringSplitExecutor<RegularStringSplit>(args, state, result, nullptr);
 }
 
-static void StringSplitRegexFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+void StringSplitRegexFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = func_expr.bind_info->Cast<RegexpMatchesBindData>();
 	if (info.constant_pattern) {
@@ -172,6 +174,8 @@ static void StringSplitRegexFunction(DataChunk &args, ExpressionState &state, Ve
 		StringSplitExecutor<RegexpStringSplit>(args, state, result);
 	}
 }
+
+} // namespace
 
 ScalarFunction StringSplitFun::GetFunction() {
 	auto varchar_list_type = LogicalType::LIST(LogicalType::VARCHAR);

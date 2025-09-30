@@ -347,6 +347,7 @@ duckdb_state duckdb_register_table_function(duckdb_connection connection, duckdb
 		con->context->RunFunctionInTransaction([&]() {
 			auto &catalog = duckdb::Catalog::GetSystemCatalog(*con->context);
 			duckdb::CreateTableFunctionInfo tf_info(tf);
+			tf_info.on_conflict = duckdb::OnCreateConflict::ALTER_ON_CONFLICT;
 			catalog.CreateTableFunction(*con->context, tf_info);
 		});
 	} catch (...) { // LCOV_EXCL_START
@@ -366,6 +367,15 @@ void *duckdb_bind_get_extra_info(duckdb_bind_info info) {
 	}
 	auto &bind_info = GetCTableFunctionBindInfo(info);
 	return bind_info.function_info.extra_info;
+}
+
+void duckdb_table_function_get_client_context(duckdb_bind_info info, duckdb_client_context *out_context) {
+	if (!info || !out_context) {
+		return;
+	}
+	auto &bind_info = GetCTableFunctionBindInfo(info);
+	auto wrapper = new duckdb::CClientContextWrapper(bind_info.context);
+	*out_context = reinterpret_cast<duckdb_client_context>(wrapper);
 }
 
 void duckdb_bind_add_result_column(duckdb_bind_info info, const char *name, duckdb_logical_type type) {

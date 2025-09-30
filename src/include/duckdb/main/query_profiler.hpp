@@ -27,11 +27,14 @@
 #include <stack>
 
 namespace duckdb {
+
 class ClientContext;
 class ExpressionExecutor;
 class ProfilingNode;
 class PhysicalOperator;
 class SQLStatement;
+
+enum class ProfilingCoverage : uint8_t { SELECT = 0, ALL = 1 };
 
 struct OperatorInformation {
 	explicit OperatorInformation() {
@@ -110,31 +113,34 @@ private:
 	reference_map_t<const PhysicalOperator, OperatorInformation> operator_infos;
 };
 
-struct QueryInfo {
-	QueryInfo() {
-	}
-	string query_name;
+//! Top level query metrics.
+struct QueryMetrics {
+	QueryMetrics() : total_bytes_read(0), total_bytes_written(0) {};
+
 	ProfilingInfo query_global_info;
+
+	//! The SQL string of the query
+	string query;
+	//! The timer used to time the excution time of the entire query
+	Profiler latency;
+	//! The total bytes read by the file system
+	atomic<idx_t> total_bytes_read;
+	//! The total bytes written by the file system
+	atomic<idx_t> total_bytes_written;
 };
 
-//! The QueryProfiler can be used to measure timings of queries
+//! QueryProfiler collects the profiling metrics of a query.
 class QueryProfiler {
+public:
+	using TreeMap = reference_map_t<const PhysicalOperator, reference<ProfilingNode>>;
+
 public:
 	DUCKDB_API explicit QueryProfiler(ClientContext &context);
 
 public:
-	// Propagate save_location, enabled, detailed_enabled and automatic_print_format.
+	//! Propagate save_location, enabled, detailed_enabled and automatic_print_format.
 	void Propagate(QueryProfiler &qp);
 
-	using TreeMap = reference_map_t<const PhysicalOperator, reference<ProfilingNode>>;
-
-private:
-	unique_ptr<ProfilingNode> CreateTree(const PhysicalOperator &root, const profiler_settings_t &settings,
-	                                     const idx_t depth = 0);
-	void Render(const ProfilingNode &node, std::ostream &str) const;
-	string RenderDisabledMessage(ProfilerPrintFormat format) const;
-
-public:
 	DUCKDB_API bool IsEnabled() const;
 	DUCKDB_API bool IsDetailedEnabled() const;
 	DUCKDB_API ProfilerPrintFormat GetPrintFormat(ExplainFormat format = ExplainFormat::DEFAULT) const;
@@ -143,8 +149,15 @@ public:
 
 	DUCKDB_API static QueryProfiler &Get(ClientContext &context);
 
-	DUCKDB_API void StartQuery(string query, bool is_explain_analyze = false, bool start_at_optimizer = false);
+	DUCKDB_API void Start(const string &query);
+	DUCKDB_API void Reset();
+	DUCKDB_API void StartQuery(const string &query, bool is_explain_analyze = false, bool start_at_optimizer = false);
 	DUCKDB_API void EndQuery();
+
+	//! Adds nr_bytes bytes to the total bytes read.
+	DUCKDB_API void AddBytesRead(const idx_t nr_bytes);
+	//! Adds nr_bytes bytes to the total bytes written.
+	DUCKDB_API void AddBytesWritten(const idx_t nr_bytes);
 
 	DUCKDB_API void StartExplainAnalyze();
 
@@ -179,17 +192,23 @@ public:
 
 	void Finalize(ProfilingNode &node);
 
-	//! Return the root of the query tree
+	//! Return the root of the query tree.
 	optional_ptr<ProfilingNode> GetRoot() {
 		return root.get();
 	}
 
-	//! Provides access to the root of the query tree, but ensures there are no concurrent modifications
-	//! This can be useful when implementing continuous profiling or making customizations
+	//! Provides access to the root of the query tree, but ensures there are no concurrent modifications.
+	//! This can be useful when implementing continuous profiling or making customizations.
 	DUCKDB_API void GetRootUnderLock(const std::function<void(optional_ptr<ProfilingNode>)> &callback) {
 		lock_guard<std::mutex> guard(lock);
 		callback(GetRoot());
 	}
+
+private:
+	unique_ptr<ProfilingNode> CreateTree(const PhysicalOperator &root, const profiler_settings_t &settings,
+	                                     const idx_t depth = 0);
+	void Render(const ProfilingNode &node, std::ostream &str) const;
+	string RenderDisabledMessage(ProfilerPrintFormat format) const;
 
 private:
 	ClientContext &context;
@@ -206,9 +225,8 @@ private:
 	unique_ptr<ProfilingNode> root;
 
 	//! Top level query information.
-	QueryInfo query_info;
-	//! The timer used to time the execution time of the entire query
-	Profiler main_query;
+	QueryMetrics query_metrics;
+
 	//! A map of a Physical Operator pointer to a tree node
 	TreeMap tree_map;
 	//! Whether or not we are running as part of a explain_analyze query
@@ -234,7 +252,7 @@ private:
 
 	//! Check whether or not an operator type requires query profiling. If none of the ops in a query require profiling
 	//! no profiling information is output.
-	bool OperatorRequiresProfiling(PhysicalOperatorType op_type);
+	bool OperatorRequiresProfiling(const PhysicalOperatorType op_type);
 	ExplainFormat GetExplainFormat(ProfilerPrintFormat format) const;
 };
 

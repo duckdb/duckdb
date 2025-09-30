@@ -193,6 +193,20 @@ void Parser::ParseQuery(const string &query) {
 		}
 	}
 	{
+		if (options.extensions) {
+			for (auto &ext : *options.extensions) {
+				if (!ext.parser_override) {
+					continue;
+				}
+				auto result = ext.parser_override(ext.parser_info.get(), query);
+				if (result.type == ParserExtensionResultType::PARSE_SUCCESSFUL) {
+					statements = std::move(result.statements);
+					return;
+				} else if (result.type == ParserExtensionResultType::DISPLAY_EXTENSION_ERROR) {
+					throw ParserException(result.error);
+				}
+			}
+		}
 		PostgresParser::SetPreserveIdentifierCase(options.preserve_identifier_case);
 		bool parsing_succeed = false;
 		// Creating a new scope to prevent multiple PostgresParser destructors being called
@@ -600,6 +614,11 @@ ColumnList Parser::ParseColumnList(const string &column_list, ParserOptions opti
 	}
 	auto &info = create.info->Cast<CreateTableInfo>();
 	return std::move(info.columns);
+}
+
+ColumnDefinition Parser::ParseColumnDefinition(const string &column_definition, ParserOptions options) {
+	auto column_list = ParseColumnList(column_definition, options);
+	return column_list.GetColumn(LogicalIndex(0)).Copy();
 }
 
 } // namespace duckdb

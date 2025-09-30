@@ -1,8 +1,3 @@
-//===--------------------------------------------------------------------===//
-// row_gather.cpp
-// Description: This file contains the implementation of the gather operators
-//===--------------------------------------------------------------------===//
-
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/operator/constant_operators.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"

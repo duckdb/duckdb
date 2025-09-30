@@ -10,10 +10,7 @@
 
 #include "parquet_types.h"
 #include "duckdb/common/encryption_state.hpp"
-
-#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/storage/object_cache.hpp"
-#endif
 
 namespace duckdb {
 

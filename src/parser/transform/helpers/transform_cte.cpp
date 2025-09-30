@@ -20,6 +20,9 @@ unique_ptr<CommonTableExpressionInfo> CommonTableExpressionInfo::Copy() {
 	return result;
 }
 
+CommonTableExpressionInfo::~CommonTableExpressionInfo() {
+}
+
 void Transformer::ExtractCTEsRecursive(CommonTableExpressionMap &cte_map) {
 	for (auto &cte_entry : stored_cte_map) {
 		for (auto &entry : cte_entry->map) {
@@ -73,7 +76,7 @@ void Transformer::TransformCTE(duckdb_libpgquery::PGWithClause &de_with_clause, 
 		}
 		// we need a query
 		if (!cte.ctequery || cte.ctequery->type != duckdb_libpgquery::T_PGSelectStmt) {
-			throw NotImplementedException("A CTE needs a SELECT");
+			throw ParserException("A CTE needs a SELECT");
 		}
 
 		// CTE transformation can either result in inlining for non recursive CTEs, or in recursive CTE bindings

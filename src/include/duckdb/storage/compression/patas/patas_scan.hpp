@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/storage/compression/chimp/chimp_scan.hpp
+// duckdb/common/storage/compression/patas/patas_scan.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -10,6 +10,11 @@
 
 #include "duckdb/storage/compression/chimp/chimp.hpp"
 #include "duckdb/storage/compression/chimp/algorithm/chimp_utils.hpp"
+#include "duckdb/storage/compression/chimp/algorithm/packed_data.hpp"
+#include "duckdb/storage/compression/chimp/algorithm/byte_reader.hpp"
+#include "duckdb/storage/compression/patas/shared.hpp"
+#include "duckdb/storage/compression/patas/algorithm/patas.hpp"
+#include "duckdb/storage/compression/patas/patas.hpp"
 
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/types/null_value.hpp"
@@ -214,7 +219,7 @@ void PatasScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan
 	auto &scan_state = (PatasScanState<T> &)*state.scan_state;
 
 	// Get the pointer to the result values
-	auto current_result_ptr = FlatVector::GetData<EXACT_TYPE>(result);
+	auto current_result_ptr = FlatVector::GetDataUnsafe<EXACT_TYPE>(result);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	current_result_ptr += result_offset;
 

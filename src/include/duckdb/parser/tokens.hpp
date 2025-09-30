@@ -43,6 +43,7 @@ class LoadStatement;
 class LogicalPlanStatement;
 class MultiStatement;
 class CopyDatabaseStatement;
+class MergeIntoStatement;
 
 //===--------------------------------------------------------------------===//
 // Query Node
@@ -92,6 +93,7 @@ class ForeignKeyConstraint;
 class TableRef;
 
 class BaseTableRef;
+class BoundRefWrapper;
 class JoinRef;
 class SubqueryRef;
 class TableFunctionRef;
@@ -105,5 +107,6 @@ class ShowRef;
 // Other
 //===--------------------------------------------------------------------===//
 class SampleOptions;
+class MergeIntoAction;
 
 } // namespace duckdb

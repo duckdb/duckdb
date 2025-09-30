@@ -22,10 +22,12 @@ SELECT one()
 statement error
 SELECT one(1)
 ----
+does not support the supplied arguments
 
 statement error
 SELECT one(NULL)
 ----
+does not support the supplied arguments
 
 statement ok
 DROP MACRO one;
@@ -98,6 +100,7 @@ DROP FUNCTION two;
 statement error
 CREATE MACRO add_macro(a) AS a + b
 ----
+column "b" not found
 
 statement ok
 CREATE MACRO add_macro(a, b) AS a + b
@@ -159,27 +162,33 @@ false
 statement error
 SELECT IFELSE();
 ----
+does not support the supplied arguments
 
 statement error
 SELECT IFELSE(1);
 ----
+does not support the supplied arguments
 
 statement error
 SELECT IFELSE(1, 2);
 ----
+does not support the supplied arguments
 
 statement error
 SELECT IFELSE(1, 2, 3, 4);
 ----
+does not support the supplied arguments
 
 # no duplicate macro function names
 statement error
 CREATE MACRO IFELSE(a,b) AS a+b
 ----
+already exists
 
 statement error
 CREATE MACRO ifelse(a,b) AS a+b
 ----
+already exists
 
 query T
 SELECT IFELSE('1', 'random', RANDOM()::VARCHAR)
@@ -235,9 +244,10 @@ CREATE MACRO conflict(a, a := 1) AS a + a
 statement ok
 CREATE MACRO add_default5(a, b := 5) AS a + b
 
-statement error
+query I
 SELECT add_default5(3, 6)
 ----
+9
 
 query T
 SELECT add_default5(3)
@@ -252,28 +262,44 @@ SELECT add_default5(3, b := 6)
 statement error
 SELECT add_default5(b := 6, 3)
 ----
+positional argument following named argument
 
 statement error
-CREATE MACRO wrong_order(a, b := 3, c)
+CREATE MACRO wrong_order(a, b := 3, c) AS a + b + c
 ----
+Parameter without a default follows parameter with a default
 
 statement error
-CREATE MACRO wrong_order(a := 3, b)
+CREATE MACRO wrong_order(a := 3, b) AS a + b
 ----
+Parameter without a default follows parameter with a default
 
 # only constant default values are allowed
 statement error
 CREATE MACRO select_plus_floats(a, f := b) AS (SELECT a + f FROM floats)
 ----
+Invalid default value
 
-# +(FLOAT, VARCHAR) does not work - constant types are checked at create time
+# +(FLOAT, VARCHAR) does not work - but types are only checked once the macro is called
+statement ok
+CREATE MACRO wrong_type(s := 'not a float') AS (SELECT b + s FROM floats)
+
+# this should fail
 statement error
-CREATE MACRO wrong_type(s='not a float') AS (SELECT b + s FROM floats)
+select wrong_type()
 ----
+Could not convert
+
+# but succeed if we pass the correct type
+query I
+select wrong_type(42)
+----
+42.5
 
 statement error
 CREATE MACRO two_default_params(a := 4, a := 2) AS a + a
 ----
+Duplicate parameter
 
 statement ok
 CREATE MACRO two_default_params(a := 4, b := 2) AS a + b
@@ -296,22 +322,27 @@ SELECT two_default_params(b := 3)
 statement error
 SELECT two_default_params(a := 5, a := 3)
 ----
+has named argument repeated
 
 statement error
 SELECT two_default_params(b := 5, b := 3)
 ----
+has named argument repeated
 
 statement error
 CREATE MACRO macros.add_macro(a, b) AS a + b
 ----
+already exists
 
 statement error
 CREATE MACRO my_macro(a.b) AS 42;
 ----
+syntax error
 
 statement error
 CREATE MACRO my_macro(a.b.c) AS 42;
 ----
+syntax error
 
 statement ok
 CREATE MACRO my_macro(a) AS 42;
@@ -319,10 +350,12 @@ CREATE MACRO my_macro(a) AS 42;
 statement error
 SELECT my_macro(x := 42);
 ----
+does not support the supplied arguments
 
 statement error
 SELECT my_macro(a := 42, a := 42);
 ----
+has named argument repeated
 
 # internal issue 1044
 statement ok

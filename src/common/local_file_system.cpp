@@ -10,6 +10,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/logging/file_system_logger.hpp"
+#include "duckdb/logging/log_manager.hpp"
 
 #include <cstdint>
 #include <cstdio>
@@ -237,7 +238,7 @@ static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
 
 	try {
 		auto cmdline_file = fs.OpenFile(StringUtil::Format("/proc/%d/cmdline", pid), FileFlags::FILE_FLAGS_READ);
-		auto cmdline = cmdline_file->ReadLine();
+		auto cmdline = cmdline_file->ReadLine(QueryContext());
 		process_name = basename(const_cast<char *>(cmdline.c_str())); // NOLINT: old C API does not take const
 	} catch (std::exception &) {
 		// ignore
@@ -257,7 +258,7 @@ static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
 	// try to find out who created that process
 	try {
 		auto loginuid_file = fs.OpenFile(StringUtil::Format("/proc/%d/loginuid", pid), FileFlags::FILE_FLAGS_READ);
-		auto uid = std::stoi(loginuid_file->ReadLine());
+		auto uid = std::stoi(loginuid_file->ReadLine(QueryContext()));
 		auto pw = getpwuid(uid);
 		if (pw) {
 			process_owner = pw->pw_name;
@@ -488,6 +489,7 @@ void LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, i
 		nr_bytes -= bytes_read;
 		location += UnsafeNumericCast<idx_t>(bytes_read);
 	}
+
 	DUCKDB_LOG_FILE_SYSTEM_READ(handle, bytes_to_read, location - UnsafeNumericCast<idx_t>(bytes_to_read));
 }
 
@@ -499,8 +501,10 @@ int64_t LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes
 		throw IOException("Could not read from file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
 		                  strerror(errno));
 	}
+
 	DUCKDB_LOG_FILE_SYSTEM_READ(handle, bytes_read, unix_handle.current_pos);
 	unix_handle.current_pos += UnsafeNumericCast<idx_t>(bytes_read);
+
 	return bytes_read;
 }
 
@@ -579,14 +583,14 @@ int64_t LocalFileSystem::GetFileSize(FileHandle &handle) {
 	return s.st_size;
 }
 
-time_t LocalFileSystem::GetLastModifiedTime(FileHandle &handle) {
+timestamp_t LocalFileSystem::GetLastModifiedTime(FileHandle &handle) {
 	int fd = handle.Cast<UnixFileHandle>().fd;
 	struct stat s;
 	if (fstat(fd, &s) == -1) {
 		throw IOException("Failed to get last modified time for file \"%s\": %s", {{"errno", std::to_string(errno)}},
 		                  handle.path, strerror(errno));
 	}
-	return s.st_mtime;
+	return Timestamp::FromEpochSeconds(s.st_mtime);
 }
 
 FileType LocalFileSystem::GetFileType(FileHandle &handle) {
@@ -791,12 +795,18 @@ std::string LocalFileSystem::GetLastErrorAsString() {
 	if (errorMessageID == 0)
 		return std::string(); // No error message has been recorded
 
-	LPSTR messageBuffer = nullptr;
-	idx_t size =
-	    FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-	                   NULL, errorMessageID, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&messageBuffer, 0, NULL);
+	LPWSTR messageBuffer = nullptr;
+	idx_t size = FormatMessageW(
+	    FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL,
+	    errorMessageID, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPWSTR)&messageBuffer, 0, NULL);
 
-	std::string message(messageBuffer, size);
+	if (size == 0) {
+		return std::string();
+	}
+
+	// Convert wide string to UTF-8
+	std::wstring wideMessage(messageBuffer, size);
+	std::string message = WindowsUtil::UnicodeToUTF8(wideMessage.c_str());
 
 	// Free the buffer.
 	LocalFree(messageBuffer);
@@ -1087,7 +1097,7 @@ int64_t LocalFileSystem::GetFileSize(FileHandle &handle) {
 	return result.QuadPart;
 }
 
-time_t FiletimeToTimeT(FILETIME file_time) {
+timestamp_t FiletimeToTimeStamp(FILETIME file_time) {
 	// https://stackoverflow.com/questions/29266743/what-is-dwlowdatetime-and-dwhighdatetime
 	ULARGE_INTEGER ul;
 	ul.LowPart = file_time.dwLowDateTime;
@@ -1101,11 +1111,10 @@ time_t FiletimeToTimeT(FILETIME file_time) {
 	// Adapted from: https://stackoverflow.com/questions/6161776/convert-windows-filetime-to-second-in-unix-linux
 	const auto WINDOWS_TICK = 10000000;
 	const auto SEC_TO_UNIX_EPOCH = 11644473600LL;
-	time_t result = (fileTime64 / WINDOWS_TICK - SEC_TO_UNIX_EPOCH);
-	return result;
+	return Timestamp::FromTimeT(fileTime64 / WINDOWS_TICK - SEC_TO_UNIX_EPOCH);
 }
 
-time_t LocalFileSystem::GetLastModifiedTime(FileHandle &handle) {
+timestamp_t LocalFileSystem::GetLastModifiedTime(FileHandle &handle) {
 	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
 
 	// https://docs.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfiletime
@@ -1114,7 +1123,7 @@ time_t LocalFileSystem::GetLastModifiedTime(FileHandle &handle) {
 		auto error = LocalFileSystem::GetLastErrorAsString();
 		throw IOException("Failed to get last modified time for file \"%s\": %s", handle.path, error);
 	}
-	return FiletimeToTimeT(last_write);
+	return FiletimeToTimeStamp(last_write);
 }
 
 void LocalFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
@@ -1214,8 +1223,8 @@ bool LocalFileSystem::ListFilesExtended(const string &directory,
 		    (static_cast<int64_t>(ffd.nFileSizeHigh) << 32) | static_cast<int64_t>(ffd.nFileSizeLow);
 		options.emplace("file_size", Value::BIGINT(file_size_bytes));
 		// last modified time
-		auto last_modified_time = FiletimeToTimeT(ffd.ftLastWriteTime);
-		options.emplace("last_modified", Value::TIMESTAMP(Timestamp::FromTimeT(last_modified_time)));
+		auto last_modified_time = FiletimeToTimeStamp(ffd.ftLastWriteTime);
+		options.emplace("last_modified", Value::TIMESTAMP(last_modified_time));
 
 		// callback
 		callback(info);

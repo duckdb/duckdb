@@ -48,6 +48,7 @@ enum class StatementType : uint8_t {
 	MULTI_STATEMENT,
 	COPY_DATABASE_STATEMENT,
 	UPDATE_EXTENSIONS_STATEMENT,
+	MERGE_INTO_STATEMENT
 };
 
 DUCKDB_API string StatementTypeToString(StatementType type);

@@ -19,13 +19,11 @@
 
 namespace duckdb {
 
-PhysicalIEJoin::PhysicalIEJoin(LogicalComparisonJoin &op, PhysicalOperator &left, PhysicalOperator &right,
-                               vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality,
-                               unique_ptr<JoinFilterPushdownInfo> pushdown_info)
-    : PhysicalRangeJoin(op, PhysicalOperatorType::IE_JOIN, left, right, std::move(cond), join_type,
-                        estimated_cardinality) {
-
-	filter_pushdown = std::move(pushdown_info);
+PhysicalIEJoin::PhysicalIEJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op, PhysicalOperator &left,
+                               PhysicalOperator &right, vector<JoinCondition> cond, JoinType join_type,
+                               idx_t estimated_cardinality, unique_ptr<JoinFilterPushdownInfo> pushdown_info)
+    : PhysicalRangeJoin(physical_plan, op, PhysicalOperatorType::IE_JOIN, left, right, std::move(cond), join_type,
+                        estimated_cardinality, std::move(pushdown_info)) {
 
 	// 1. let L1 (resp. L2) be the array of column X (resp. Y)
 	D_ASSERT(conditions.size() >= 2);
@@ -66,9 +64,10 @@ PhysicalIEJoin::PhysicalIEJoin(LogicalComparisonJoin &op, PhysicalOperator &left
 	}
 }
 
-PhysicalIEJoin::PhysicalIEJoin(LogicalComparisonJoin &op, PhysicalOperator &left, PhysicalOperator &right,
-                               vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality)
-    : PhysicalIEJoin(op, left, right, std::move(cond), join_type, estimated_cardinality, nullptr) {
+PhysicalIEJoin::PhysicalIEJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op, PhysicalOperator &left,
+                               PhysicalOperator &right, vector<JoinCondition> cond, JoinType join_type,
+                               idx_t estimated_cardinality)
+    : PhysicalIEJoin(physical_plan, op, left, right, std::move(cond), join_type, estimated_cardinality, nullptr) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -254,7 +253,7 @@ struct IEJoinUnion {
 		}
 	}
 
-	template <typename T>
+	template <typename T, typename VECTOR_TYPE = T>
 	static vector<T> ExtractColumn(SortedTable &table, idx_t col_idx) {
 		vector<T> result;
 		result.reserve(table.count);
@@ -273,8 +272,10 @@ struct IEJoinUnion {
 				break;
 			}
 
-			const auto data_ptr = FlatVector::GetData<T>(payload.data[col_idx]);
-			result.insert(result.end(), data_ptr, data_ptr + count);
+			const auto data_ptr = FlatVector::GetData<VECTOR_TYPE>(payload.data[col_idx]);
+			for (idx_t i = 0; i < count; i++) {
+				result.push_back(UnsafeNumericCast<T>(data_ptr[i]));
+			}
 		}
 
 		return result;
@@ -512,7 +513,7 @@ IEJoinUnion::IEJoinUnion(ClientContext &context, const PhysicalIEJoin &op, Sorte
 	// We don't actually need the L2 column, just its sort key, which is in the sort blocks
 
 	// 6. compute the permutation array P of L2 w.r.t. L1
-	p = ExtractColumn<idx_t>(*l2, types.size() - 1);
+	p = ExtractColumn<idx_t, int64_t>(*l2, types.size() - 1);
 
 	// 7. initialize bit-array B (|B| = n), and set all bits to 0
 	n = l2->count.load();

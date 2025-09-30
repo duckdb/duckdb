@@ -77,7 +77,7 @@ SELECT * FROM test_null_option ORDER BY 1 LIMIT 3;
 statement error
 COPY test_null_option FROM 'data/csv/test/test_null_option.csv' (NULL null);
 ----
-syntax error at or near "null"
+NULL is not supported
 
 # delimiter must not appear in the NULL specification
 statement error
@@ -88,12 +88,12 @@ DELIMITER must not appear in the NULL specification and vice versa
 statement error
 COPY test_null_option FROM 'data/csv/test/test_null_option.csv' (DELIMITER 'null', NULL 'null');
 ----
-It was not possible to automatically detect the CSV Parsing dialect/types
+It was not possible to automatically detect the CSV parsing dialect
 
 statement error
 COPY test_null_option FROM 'data/csv/test/test_null_option.csv' (DELIMITER 'null', NULL 'nu');
 ----
-It was not possible to automatically detect the CSV Parsing dialect/types
+It was not possible to automatically detect the CSV parsing dialect
 
 # no parameter type
 statement error
@@ -108,7 +108,7 @@ CREATE TABLE test_null_option_2 (col_a INTEGER, col_b INTEGER, col_c VARCHAR(10)
 statement error
 COPY test_null_option_2 FROM 'data/csv/test/test_null_option.csv' (NULL 'null');
 ----
-It was not possible to automatically detect the CSV Parsing dialect
+It was not possible to automatically detect the CSV parsing dialect
 
 # test COPY ... TO ...
 # implicitly using default NULL value

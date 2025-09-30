@@ -13,6 +13,8 @@
 // start catch.hpp
 
 #include <memory>
+#include <sstream>
+
 #ifndef DUCKDB_BASE_STD
 namespace duckdb_base_std {
 	using ::std::unique_ptr;
@@ -21,7 +23,7 @@ namespace duckdb_base_std {
 	using ::std::stringstream;
 } // namespace duckdb_base_std
 #endif
-// optional support for printing stacktraces on a crash -- using the backtrace support in DuckDB 
+// optional support for printing stacktraces on a crash -- using the backtrace support in DuckDB
 #ifdef DUCKDB_DEBUG_STACKTRACE
 #include "duckdb/common/exception.hpp"
 #define CATCH_STACKTRACE(X) duckdb::Exception::FormatStackTrace(X).c_str()
@@ -3013,6 +3015,7 @@ namespace Catch {
         virtual void registerTranslator( const IExceptionTranslator* translator ) = 0;
         virtual void registerTagAlias( std::string const& alias, std::string const& tag, SourceLineInfo const& lineInfo ) = 0;
         virtual void registerStartupException() noexcept = 0;
+        virtual void clearTests() = 0;
         virtual IMutableEnumValuesRegistry& getMutableEnumValuesRegistry() = 0;
     };
 
@@ -12385,6 +12388,7 @@ namespace Catch {
         virtual ~TestRegistry() = default;
 
         virtual void registerTest( TestCase const& testCase );
+        virtual void clearTests();
 
         std::vector<TestCase> const& getAllTests() const override;
         std::vector<TestCase> const& getAllTestsSorted( IConfig const& config ) const override;
@@ -12566,6 +12570,9 @@ namespace Catch {
             }
             void registerTest( TestCase const& testInfo ) override {
                 m_testCaseRegistry.registerTest( testInfo );
+            }
+            void clearTests() override {
+                m_testCaseRegistry.clearTests();
             }
             void registerTranslator( const IExceptionTranslator* translator ) override {
                 m_exceptionTranslatorRegistry.registerTranslator( translator );
@@ -14448,6 +14455,10 @@ namespace Catch {
             return registerTest( testCase.withName( rss.str() ) );
         }
         m_functions.push_back( testCase );
+    }
+
+    void TestRegistry::clearTests() {
+        m_functions.clear();
     }
 
     std::vector<TestCase> const& TestRegistry::getAllTests() const {
@@ -18130,4 +18141,3 @@ using Catch::Detail::Approx;
 // end catch_reenable_warnings.h
 // end catch.hpp
 #endif // TWOBLUECUBES_SINGLE_INCLUDE_CATCH_HPP_INCLUDED
-

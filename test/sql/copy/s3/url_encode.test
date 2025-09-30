@@ -132,12 +132,12 @@ set s3_endpoint='';
 statement error
 SELECT * FROM 's3://test-bucket/whatever.parquet';
 ----
-HTTP GET error on 'http://test-bucket.s3.amazonaws.com/whatever.parquet'
+<REGEX>:.*Unknown error for HTTP HEAD to 'http://test-bucket.s3.eu-west-1.amazonaws.com/whatever.parquet'.*
 
 statement error
 SELECT * FROM 'r2://test-bucket/whatever.parquet';
 ----
-HTTP GET error on 'http://test-bucket.s3.amazonaws.com/whatever.parquet'
+<REGEX>:.*Unknown error for HTTP HEAD to 'http://test-bucket.s3.eu-west-1.amazonaws.com/whatever.parquet'.*
 
 statement error
 SELECT * FROM 'gcs://test-bucket/whatever.parquet';

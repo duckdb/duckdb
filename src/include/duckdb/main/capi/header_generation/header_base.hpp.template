@@ -29,11 +29,7 @@
 #ifdef DUCKDB_STATIC_BUILD
 #define DUCKDB_EXTENSION_API
 #else
-#ifdef DUCKDB_BUILD_LOADABLE_EXTENSION
 #define DUCKDB_EXTENSION_API __declspec(dllexport)
-#else
-#define DUCKDB_EXTENSION_API
-#endif
 #endif
 #else
 #define DUCKDB_EXTENSION_API __attribute__((visibility("default")))
@@ -51,8 +47,10 @@ extern "C" {
 //===--------------------------------------------------------------------===//
 // Enums
 //===--------------------------------------------------------------------===//
-// WARNING: the numbers of these enums should not be changed, as changing the numbers breaks ABI compatibility
-// Always add enums at the END of the enum
+
+//! WARNING: The numbers of these enums should not be changed, as changing the numbers breaks ABI compatibility.
+//! Always add enums at the END of the enum
+
 //! An enum over DuckDB's internal types.
 typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_INVALID = 0,
@@ -122,19 +120,26 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_TIME_TZ = 30,
 	// duckdb_timestamp (microseconds)
 	DUCKDB_TYPE_TIMESTAMP_TZ = 31,
-	// ANY type
+	// enum type, only useful as logical type
 	DUCKDB_TYPE_ANY = 34,
-	// duckdb_varint
-	DUCKDB_TYPE_VARINT = 35,
-	// SQLNULL type
+	// duckdb_bignum
+	DUCKDB_TYPE_BIGNUM = 35,
+	// enum type, only useful as logical type
 	DUCKDB_TYPE_SQLNULL = 36,
-	// STRING_LITERAL type
+	// enum type, only useful as logical type
 	DUCKDB_TYPE_STRING_LITERAL = 37,
-	// INTEGER_LITERAL type
+	// enum type, only useful as logical type
 	DUCKDB_TYPE_INTEGER_LITERAL = 38,
+	// duckdb_time_ns (nanoseconds)
+	DUCKDB_TYPE_TIME_NS = 39,
 } duckdb_type;
+
 //! An enum over the returned state of different functions.
-typedef enum duckdb_state { DuckDBSuccess = 0, DuckDBError = 1 } duckdb_state;
+typedef enum duckdb_state {
+	DuckDBSuccess = 0,
+	DuckDBError = 1
+} duckdb_state;
+
 //! An enum over the pending state of a pending query result.
 typedef enum duckdb_pending_state {
 	DUCKDB_PENDING_RESULT_READY = 0,
@@ -142,6 +147,7 @@ typedef enum duckdb_pending_state {
 	DUCKDB_PENDING_ERROR = 2,
 	DUCKDB_PENDING_NO_TASKS_AVAILABLE = 3
 } duckdb_pending_state;
+
 //! An enum over DuckDB's different result types.
 typedef enum duckdb_result_type {
 	DUCKDB_RESULT_TYPE_INVALID = 0,
@@ -149,6 +155,7 @@ typedef enum duckdb_result_type {
 	DUCKDB_RESULT_TYPE_NOTHING = 2,
 	DUCKDB_RESULT_TYPE_QUERY_RESULT = 3,
 } duckdb_result_type;
+
 //! An enum over DuckDB's different statement types.
 typedef enum duckdb_statement_type {
 	DUCKDB_STATEMENT_TYPE_INVALID = 0,
@@ -180,6 +187,7 @@ typedef enum duckdb_statement_type {
 	DUCKDB_STATEMENT_TYPE_DETACH = 26,
 	DUCKDB_STATEMENT_TYPE_MULTI = 27,
 } duckdb_statement_type;
+
 //! An enum over DuckDB's different error types.
 typedef enum duckdb_error_type {
 	DUCKDB_ERROR_INVALID = 0,
@@ -226,11 +234,26 @@ typedef enum duckdb_error_type {
 	DUCKDB_ERROR_SEQUENCE = 41,
 	DUCKDB_INVALID_CONFIGURATION = 42
 } duckdb_error_type;
+
 //! An enum over DuckDB's different cast modes.
 typedef enum duckdb_cast_mode {
 	DUCKDB_CAST_NORMAL = 0,
 	DUCKDB_CAST_TRY = 1
 } duckdb_cast_mode;
+
+typedef enum duckdb_file_flag {
+	DUCKDB_FILE_FLAG_INVALID = 0,
+	// Open the file with "read" capabilities.
+	DUCKDB_FILE_FLAG_READ = 1,
+	// Open the file with "write" capabilities.
+	DUCKDB_FILE_FLAG_WRITE = 2,
+	// Create a new file, or open if it already exists.
+	DUCKDB_FILE_FLAG_CREATE = 3,
+	// Create a new file, or fail if it already exists.
+	DUCKDB_FILE_FLAG_CREATE_NEW = 4,
+	// Open the file in "append" mode.
+	DUCKDB_FILE_FLAG_APPEND = 5,
+} duckdb_file_flag;
 
 //===--------------------------------------------------------------------===//
 // General type definitions
@@ -239,36 +262,42 @@ typedef enum duckdb_cast_mode {
 //! DuckDB's index type.
 typedef uint64_t idx_t;
 
-//! Type used for the selection vector
+//! Type definition for the data pointers of selection vectors.
 typedef uint32_t sel_t;
 
-//! The callback that will be called to destroy data, e.g.,
-//! bind data (if any), init data (if any), extra data for replacement scans (if any)
+//! The callback to destroy data, e.g.,
+//! bind data (if any), init data (if any), extra data for replacement scans (if any), etc.
 typedef void (*duckdb_delete_callback_t)(void *data);
 
-//! Used for threading, contains a task state. Must be destroyed with `duckdb_destroy_task_state`.
+//! The callback to copy data, e.g., bind data (if any).
+typedef void *(*duckdb_copy_callback_t)(void *data);
+
+//! Used for threading, contains a task state.
+//! Must be destroyed with `duckdb_destroy_task_state`.
 typedef void *duckdb_task_state;
 
 //===--------------------------------------------------------------------===//
 // Types (no explicit freeing)
 //===--------------------------------------------------------------------===//
 
-//! Days are stored as days since 1970-01-01
-//! Use the duckdb_from_date/duckdb_to_date function to extract individual information
+//! DATE is stored as days since 1970-01-01.
+//! Use the `duckdb_from_date` and `duckdb_to_date` functions to extract individual information.
 typedef struct {
 	int32_t days;
 } duckdb_date;
+
 typedef struct {
 	int32_t year;
 	int8_t month;
 	int8_t day;
 } duckdb_date_struct;
 
-//! Time is stored as microseconds since 00:00:00
-//! Use the duckdb_from_time/duckdb_to_time function to extract individual information
+//! TIME is stored as microseconds since 00:00:00.
+//! Use the `duckdb_from_time` and `duckdb_to_time` functions to extract individual information.
 typedef struct {
 	int64_t micros;
 } duckdb_time;
+
 typedef struct {
 	int8_t hour;
 	int8_t min;
@@ -276,67 +305,80 @@ typedef struct {
 	int32_t micros;
 } duckdb_time_struct;
 
-//! TIME_TZ is stored as 40 bits for int64_t micros, and 24 bits for int32_t offset
+//! TIME_NS is stored as nanoseconds since 00:00:00.
+typedef struct {
+	int64_t nanos;
+} duckdb_time_ns;
+
+//! TIME_TZ is stored as 40 bits for the int64_t microseconds, and 24 bits for the int32_t offset.
+//! Use the `duckdb_from_time_tz` function to extract individual information.
 typedef struct {
 	uint64_t bits;
 } duckdb_time_tz;
+
 typedef struct {
 	duckdb_time_struct time;
 	int32_t offset;
 } duckdb_time_tz_struct;
 
-//! TIMESTAMP values are stored as microseconds since 1970-01-01.
-//! Use the duckdb_from_timestamp and duckdb_to_timestamp functions to extract individual information.
+//! TIMESTAMP is stored as microseconds since 1970-01-01.
+//! Use the `duckdb_from_timestamp` and `duckdb_to_timestamp` functions to extract individual information.
 typedef struct {
 	int64_t micros;
 } duckdb_timestamp;
-
-//! TIMESTAMP_S values are stored as seconds since 1970-01-01.
-typedef struct {
-	int64_t seconds;
-} duckdb_timestamp_s;
-
-//! TIMESTAMP_MS values are stored as milliseconds since 1970-01-01.
-typedef struct {
-	int64_t millis;
-} duckdb_timestamp_ms;
-
-//! TIMESTAMP_NS values are stored as nanoseconds since 1970-01-01.
-typedef struct {
-	int64_t nanos;
-} duckdb_timestamp_ns;
 
 typedef struct {
 	duckdb_date_struct date;
 	duckdb_time_struct time;
 } duckdb_timestamp_struct;
 
+//! TIMESTAMP_S is stored as seconds since 1970-01-01.
+typedef struct {
+	int64_t seconds;
+} duckdb_timestamp_s;
+
+//! TIMESTAMP_MS is stored as milliseconds since 1970-01-01.
+typedef struct {
+	int64_t millis;
+} duckdb_timestamp_ms;
+
+//! TIMESTAMP_NS is stored as nanoseconds since 1970-01-01.
+typedef struct {
+	int64_t nanos;
+} duckdb_timestamp_ns;
+
+//! INTERVAL is stored in months, days, and micros.
 typedef struct {
 	int32_t months;
 	int32_t days;
 	int64_t micros;
 } duckdb_interval;
 
-//! Hugeints are composed of a (lower, upper) component
-//! The value of the hugeint is upper * 2^64 + lower
-//! For easy usage, the functions duckdb_hugeint_to_double/duckdb_double_to_hugeint are recommended
+//! HUGEINT is composed of a lower and upper component.
+//! Its value is upper * 2^64 + lower.
+//! For simplified usage, use `duckdb_hugeint_to_double` and `duckdb_double_to_hugeint`.
 typedef struct {
 	uint64_t lower;
 	int64_t upper;
 } duckdb_hugeint;
+
+//! UHUGEINT is composed of a lower and upper component.
+//! Its value is upper * 2^64 + lower.
+//! For simplified usage, use `duckdb_uhugeint_to_double` and `duckdb_double_to_uhugeint`.
 typedef struct {
 	uint64_t lower;
 	uint64_t upper;
 } duckdb_uhugeint;
 
-//! Decimals are composed of a width and a scale, and are stored in a hugeint
+//! DECIMAL is composed of a width and a scale.
+//! Their value is stored in a HUGEINT.
 typedef struct {
 	uint8_t width;
 	uint8_t scale;
 	duckdb_hugeint value;
 } duckdb_decimal;
 
-//! A type holding information about the query execution progress
+//! A type holding information about the query execution progress.
 typedef struct {
 	double percentage;
 	uint64_t rows_processed;
@@ -344,7 +386,7 @@ typedef struct {
 } duckdb_query_progress_type;
 
 //! The internal representation of a VARCHAR (string_t). If the VARCHAR does not
-//! exceed 12 characters, then we inline it. Otherwise, we inline a prefix for faster
+//! exceed 12 characters, then we inline it. Otherwise, we inline a four-byte prefix for faster
 //! string comparisons and store a pointer to the remaining characters. This is a non-
 //! owning structure, i.e., it does not have to be freed.
 typedef struct {
@@ -361,38 +403,39 @@ typedef struct {
 	} value;
 } duckdb_string_t;
 
-//! The internal representation of a list metadata entry contains the list's offset in
-//! the child vector, and its length. The parent vector holds these metadata entries,
-//! whereas the child vector holds the data
+//! DuckDB's LISTs are composed of a 'parent' vector holding metadata of each list,
+//! and a child vector holding the entries of the lists.
+//! The `duckdb_list_entry` struct contains the internal representation of a LIST metadata entry.
+//! A metadata entry contains the length of the list, and its offset in the child vector.
 typedef struct {
 	uint64_t offset;
 	uint64_t length;
 } duckdb_list_entry;
 
 //! A column consists of a pointer to its internal data. Don't operate on this type directly.
-//! Instead, use functions such as duckdb_column_data, duckdb_nullmask_data,
-//! duckdb_column_type, and duckdb_column_name, which take the result and the column index
-//! as their parameters
+//! Instead, use functions such as `duckdb_column_data`, `duckdb_nullmask_data`,
+//! `duckdb_column_type`, and `duckdb_column_name`.
 typedef struct {
-	// deprecated, use duckdb_column_data
+	// Deprecated, use `duckdb_column_data`.
 	void *deprecated_data;
-	// deprecated, use duckdb_nullmask_data
+	// Deprecated, use `duckdb_nullmask_data`.
 	bool *deprecated_nullmask;
-	// deprecated, use duckdb_column_type
+	// Deprecated, use `duckdb_column_type`.
 	duckdb_type deprecated_type;
-	// deprecated, use duckdb_column_name
+	// Deprecated, use `duckdb_column_name`.
 	char *deprecated_name;
 	void *internal_data;
 } duckdb_column;
 
-//! A vector to a specified column in a data chunk. Lives as long as the
-//! data chunk lives, i.e., must not be destroyed.
+//! 1. A standalone vector that must be destroyed, or
+//! 2. A vector to a column in a data chunk that lives as long as the data chunk lives.
 typedef struct _duckdb_vector {
 	void *internal_ptr;
 } * duckdb_vector;
 
-//! A selection vector is a possibly duplicative vector of indices, which refer to values in a vector.
-//! The resulting vector is make up of the values at each index in the selection vector.
+//! A selection vector is a vector of indices, which usually refer to values in a vector.
+//! Can be used to slice vectors, changing their length and the order of their entries.
+//! Standalone selection vectors must be destroyed.
 typedef struct _duckdb_selection_vector {
 	void *internal_ptr;
 } * duckdb_selection_vector;
@@ -401,15 +444,15 @@ typedef struct _duckdb_selection_vector {
 // Types (explicit freeing/destroying)
 //===--------------------------------------------------------------------===//
 
-//! Strings are composed of a char pointer and a size. You must free string.data
-//! with `duckdb_free`.
+//! Strings are composed of a `char` pointer and a size.
+//! You must free `string.data` with `duckdb_free`.
 typedef struct {
 	char *data;
 	idx_t size;
 } duckdb_string;
 
-//! BLOBs are composed of a byte pointer and a size. You must free blob.data
-//! with `duckdb_free`.
+//! BLOBs are composed of a byte pointer and a size.
+//! You must free `blob.data` with `duckdb_free`.
 typedef struct {
 	void *data;
 	idx_t size;
@@ -418,34 +461,34 @@ typedef struct {
 //! BITs are composed of a byte pointer and a size.
 //! BIT byte data has 0 to 7 bits of padding.
 //! The first byte contains the number of padding bits.
-//! This number of bits of the second byte are set to 1, starting from the MSB.
+//! The padding bits of the second byte are set to 1, starting from the MSB.
 //! You must free `data` with `duckdb_free`.
 typedef struct {
 	uint8_t *data;
 	idx_t size;
 } duckdb_bit;
 
-//! VARINTs are composed of a byte pointer, a size, and an is_negative bool.
+//! BIGNUMs are composed of a byte pointer, a size, and an `is_negative` bool.
 //! The absolute value of the number is stored in `data` in little endian format.
 //! You must free `data` with `duckdb_free`.
 typedef struct {
 	uint8_t *data;
 	idx_t size;
 	bool is_negative;
-} duckdb_varint;
+} duckdb_bignum;
 
 //! A query result consists of a pointer to its internal data.
 //! Must be freed with 'duckdb_destroy_result'.
 typedef struct {
-	// deprecated, use duckdb_column_count
+	// Deprecated, use `duckdb_column_count`.
 	idx_t deprecated_column_count;
-	// deprecated, use duckdb_row_count
+	// Deprecated, use `duckdb_row_count`.
 	idx_t deprecated_row_count;
-	// deprecated, use duckdb_rows_changed
+	// Deprecated, use `duckdb_rows_changed`.
 	idx_t deprecated_rows_changed;
-	// deprecated, use duckdb_column_*-family of functions
+	// Deprecated, use `duckdb_column_*`-family of functions.
 	duckdb_column *deprecated_columns;
-	// deprecated, use duckdb_result_error
+	// Deprecated, use `duckdb_result_error`.
 	char *deprecated_error_message;
 	void *internal_data;
 } duckdb_result;
@@ -493,52 +536,65 @@ typedef struct _duckdb_appender {
 	void *internal_ptr;
 } * duckdb_appender;
 
-//! The table description allows querying info about the table.
+//! The table description allows querying information about the table.
 //! Must be destroyed with `duckdb_table_description_destroy`.
 typedef struct _duckdb_table_description {
 	void *internal_ptr;
 } * duckdb_table_description;
 
-//! Can be used to provide start-up options for the DuckDB instance.
+//! The configuration can be used to provide start-up options for a database.
 //! Must be destroyed with `duckdb_destroy_config`.
 typedef struct _duckdb_config {
 	void *internal_ptr;
 } * duckdb_config;
 
-//! Holds an internal logical type.
+//! A logical type.
 //! Must be destroyed with `duckdb_destroy_logical_type`.
 typedef struct _duckdb_logical_type {
 	void *internal_ptr;
 } * duckdb_logical_type;
 
-//! Holds extra information used when registering a custom logical type.
+//! Holds extra information to register a custom logical type.
 //! Reserved for future use.
 typedef struct _duckdb_create_type_info {
 	void *internal_ptr;
 } * duckdb_create_type_info;
 
-//! Contains a data chunk from a duckdb_result.
+//! Contains a data chunk of a duckdb_result.
 //! Must be destroyed with `duckdb_destroy_data_chunk`.
 typedef struct _duckdb_data_chunk {
 	void *internal_ptr;
 } * duckdb_data_chunk;
 
-//! Holds a DuckDB value, which wraps a type.
+//! A value of a logical type.
 //! Must be destroyed with `duckdb_destroy_value`.
 typedef struct _duckdb_value {
 	void *internal_ptr;
 } * duckdb_value;
 
-//! Holds a recursive tree that matches the query plan.
+//! Holds a recursive tree containing profiling metrics.
+//! The tree matches the query plan, and has a top-level node.
 typedef struct _duckdb_profiling_info {
 	void *internal_ptr;
 } * duckdb_profiling_info;
 
+//! Holds error data.
+//! Must be destroyed with `duckdb_destroy_error_data`.
+typedef struct _duckdb_error_data {
+	void *internal_ptr;
+} * duckdb_error_data;
+
+//! Holds a bound expression.
+//! Must be destroyed with `duckdb_destroy_expression`.
+typedef struct _duckdb_expression {
+	void *internal_ptr;
+} * duckdb_expression;
+
 //===--------------------------------------------------------------------===//
-// C API Extension info
+// C API extension information
 //===--------------------------------------------------------------------===//
 
-//! Holds state during the C API extension intialization process
+//! Holds the state of the C API extension initialization process.
 typedef struct _duckdb_extension_info {
 	void *internal_ptr;
 } * duckdb_extension_info;
@@ -573,15 +629,16 @@ typedef struct _duckdb_scalar_function_set {
 	void *internal_ptr;
 } * duckdb_scalar_function_set;
 
-//! The bind function of the scalar function.
+//! The bind function callback of the scalar function.
 typedef void (*duckdb_scalar_function_bind_t)(duckdb_bind_info info);
 
-//! The main function of the scalar function.
+//! The function to execute the scalar function on an input chunk.
 typedef void (*duckdb_scalar_function_t)(duckdb_function_info info, duckdb_data_chunk input, duckdb_vector output);
 
 //===--------------------------------------------------------------------===//
 // Aggregate function types
 //===--------------------------------------------------------------------===//
+
 //! An aggregate function. Must be destroyed with `duckdb_destroy_aggregate_function`.
 typedef struct _duckdb_aggregate_function {
 	void *internal_ptr;
@@ -592,24 +649,29 @@ typedef struct _duckdb_aggregate_function_set {
 	void *internal_ptr;
 } * duckdb_aggregate_function_set;
 
-//! Aggregate state
+//! The state of an aggregate function.
 typedef struct _duckdb_aggregate_state {
 	void *internal_ptr;
 } * duckdb_aggregate_state;
 
-//! Returns the aggregate state size
+//! A function to return the aggregate state's size.
 typedef idx_t (*duckdb_aggregate_state_size)(duckdb_function_info info);
-//! Initialize the aggregate state
+
+//! A function to initialize an aggregate state.
 typedef void (*duckdb_aggregate_init_t)(duckdb_function_info info, duckdb_aggregate_state state);
-//! Destroy aggregate state (optional)
+
+//! An optional function to destroy an aggregate state.
 typedef void (*duckdb_aggregate_destroy_t)(duckdb_aggregate_state *states, idx_t count);
-//! Update a set of aggregate states with new values
+
+//! A function to update a set of aggregate states with new values.
 typedef void (*duckdb_aggregate_update_t)(duckdb_function_info info, duckdb_data_chunk input,
                                           duckdb_aggregate_state *states);
-//! Combine aggregate states
+
+//! A function to combine aggregate states.
 typedef void (*duckdb_aggregate_combine_t)(duckdb_function_info info, duckdb_aggregate_state *source,
                                            duckdb_aggregate_state *target, idx_t count);
-//! Finalize aggregate states into a result vector
+
+//! A function to finalize aggregate states into a result vector.
 typedef void (*duckdb_aggregate_finalize_t)(duckdb_function_info info, duckdb_aggregate_state *source,
                                             duckdb_vector result, idx_t count, idx_t offset);
 
@@ -622,7 +684,8 @@ typedef struct _duckdb_table_function {
 	void *internal_ptr;
 } * duckdb_table_function;
 
-//! Additional function init info. When setting this info, it is necessary to pass a destroy-callback function.
+//! Additional function initialization info.
+//! When setting this info, it is necessary to pass a destroy-callback function.
 typedef struct _duckdb_init_info {
 	void *internal_ptr;
 } * duckdb_init_info;
@@ -630,10 +693,10 @@ typedef struct _duckdb_init_info {
 //! The bind function of the table function.
 typedef void (*duckdb_table_function_bind_t)(duckdb_bind_info info);
 
-//! The (possibly thread-local) init function of the table function.
+//! The possibly thread-local initialization function of the table function.
 typedef void (*duckdb_table_function_init_t)(duckdb_init_info info);
 
-//! The main function of the table function.
+//! The function to generate an output chunk during table function execution.
 typedef void (*duckdb_table_function_t)(duckdb_function_info info, duckdb_data_chunk output);
 
 //===--------------------------------------------------------------------===//
@@ -645,6 +708,7 @@ typedef struct _duckdb_cast_function {
 	void *internal_ptr;
 } * duckdb_cast_function;
 
+//! The function to cast from an input vector to an output vector.
 typedef bool (*duckdb_cast_function_t)(duckdb_function_info info, idx_t count, duckdb_vector input, duckdb_vector output);
 
 //===--------------------------------------------------------------------===//
@@ -656,12 +720,20 @@ typedef struct _duckdb_replacement_scan_info {
 	void *internal_ptr;
 } * duckdb_replacement_scan_info;
 
-//! A replacement scan function that can be added to a database.
+//! A replacement scan function.
 typedef void (*duckdb_replacement_callback_t)(duckdb_replacement_scan_info info, const char *table_name, void *data);
 
 //===--------------------------------------------------------------------===//
 // Arrow-related types
 //===--------------------------------------------------------------------===//
+
+//! Forward declare Arrow structs
+//! It is important to notice that these structs are not defined by DuckDB but are actually Arrow external objects.
+//! They're defined by the C Data Interface Arrow spec: https://arrow.apache.org/docs/format/CDataInterface.html
+
+struct ArrowArray;
+
+struct ArrowSchema;
 
 //! Holds an arrow query result. Must be destroyed with `duckdb_destroy_arrow`.
 typedef struct _duckdb_arrow {
@@ -678,21 +750,52 @@ typedef struct _duckdb_arrow_schema {
 	void *internal_ptr;
 } * duckdb_arrow_schema;
 
-//! Holds an arrow array. Remember to release the respective ArrowArray object.
+//! Holds an arrow converted schema (i.e., duckdb::ArrowTableSchema).
+//! In practice, this object holds the information necessary to do proper conversion between Arrow Types and DuckDB Types.
+//! Check duckdb/function/table/arrow/arrow_duck_schema.hpp for more details!
+//! Must be destroyed with `duckdb_destroy_arrow_converted_schema`
+typedef struct _duckdb_arrow_converted_schema {
+	void *internal_ptr;
+} * duckdb_arrow_converted_schema;
+
+//! Holds an arrow array. Remember to release the respective ArrowSchema object.
 typedef struct _duckdb_arrow_array {
 	void *internal_ptr;
 } * duckdb_arrow_array;
 
+//! The arrow options used when transforming the DuckDB schema and datachunks into Arrow schema and arrays.
+//! Used in `duckdb_to_arrow_schema` and `duckdb_data_chunk_to_arrow`
+typedef struct _duckdb_arrow_options {
+	void *internal_ptr;
+} * duckdb_arrow_options;
+
+//===--------------------------------------------------------------------===//
+// Virtual File System Access
+//===--------------------------------------------------------------------===//
+
+typedef struct _duckdb_file_open_options {
+	void *internal_ptr;
+} * duckdb_file_open_options;
+
+typedef struct _duckdb_file_system {
+	void *internal_ptr;
+} * duckdb_file_system;
+
+typedef struct _duckdb_file_handle {
+	void *internal_ptr;
+} * duckdb_file_handle;
+
 //===--------------------------------------------------------------------===//
 // DuckDB extension access
 //===--------------------------------------------------------------------===//
-//! Passed to C API extension as parameter to the entrypoint
+
+//! Passed to C API extension as a parameter to the entrypoint.
 struct duckdb_extension_access {
-	//! Indicate that an error has occurred
+	//! Indicate that an error has occurred.
 	void (*set_error)(duckdb_extension_info info, const char *error);
-	//! Fetch the database from duckdb to register extensions to
+	//! Fetch the database on which to register the extension.
 	duckdb_database *(*get_database)(duckdb_extension_info info);
-	//! Fetch the API
+	//! Fetch the API struct pointer.
 	const void *(*get_api)(duckdb_extension_info info, const char *version);
 };
 

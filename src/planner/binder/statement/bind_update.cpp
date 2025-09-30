@@ -20,14 +20,10 @@
 
 namespace duckdb {
 
-// This creates a LogicalProjection and moves 'root' into it as a child
-// unless there are no expressions to project, in which case it just returns 'root'
-unique_ptr<LogicalOperator> Binder::BindUpdateSet(LogicalOperator &op, unique_ptr<LogicalOperator> root,
-                                                  UpdateSetInfo &set_info, TableCatalogEntry &table,
-                                                  vector<PhysicalIndex> &columns) {
-	auto proj_index = GenerateTableIndex();
-
-	vector<unique_ptr<Expression>> projection_expressions;
+void Binder::BindUpdateSet(idx_t proj_index, unique_ptr<LogicalOperator> &root, UpdateSetInfo &set_info,
+                           TableCatalogEntry &table, vector<PhysicalIndex> &columns,
+                           vector<unique_ptr<Expression>> &update_expressions,
+                           vector<unique_ptr<Expression>> &projection_expressions) {
 	D_ASSERT(set_info.columns.size() == set_info.expressions.size());
 	for (idx_t i = 0; i < set_info.columns.size(); i++) {
 		auto &colname = set_info.columns[i];
@@ -49,18 +45,29 @@ unique_ptr<LogicalOperator> Binder::BindUpdateSet(LogicalOperator &op, unique_pt
 		}
 		columns.push_back(column.Physical());
 		if (expr->GetExpressionType() == ExpressionType::VALUE_DEFAULT) {
-			op.expressions.push_back(make_uniq<BoundDefaultExpression>(column.Type()));
+			update_expressions.push_back(make_uniq<BoundDefaultExpression>(column.Type()));
 		} else {
 			UpdateBinder binder(*this, context);
 			binder.target_type = column.Type();
 			auto bound_expr = binder.Bind(expr);
 			PlanSubqueries(bound_expr, root);
 
-			op.expressions.push_back(make_uniq<BoundColumnRefExpression>(
+			update_expressions.push_back(make_uniq<BoundColumnRefExpression>(
 			    bound_expr->return_type, ColumnBinding(proj_index, projection_expressions.size())));
 			projection_expressions.push_back(std::move(bound_expr));
 		}
 	}
+}
+
+// This creates a LogicalProjection and moves 'root' into it as a child
+// unless there are no expressions to project, in which case it just returns 'root'
+unique_ptr<LogicalOperator> Binder::BindUpdateSet(LogicalOperator &op, unique_ptr<LogicalOperator> root,
+                                                  UpdateSetInfo &set_info, TableCatalogEntry &table,
+                                                  vector<PhysicalIndex> &columns) {
+	auto proj_index = GenerateTableIndex();
+
+	vector<unique_ptr<Expression>> projection_expressions;
+	BindUpdateSet(proj_index, root, set_info, table, columns, op.expressions, projection_expressions);
 	if (op.type != LogicalOperatorType::LOGICAL_UPDATE && projection_expressions.empty()) {
 		return root;
 	}
@@ -88,8 +95,10 @@ void Binder::BindRowIdColumns(TableCatalogEntry &table, LogicalGet &get, vector<
 				break;
 			}
 		}
-		expressions.push_back(
-		    make_uniq<BoundColumnRefExpression>(row_id_entry->second.type, ColumnBinding(get.table_index, column_idx)));
+		auto row_id_expr =
+		    make_uniq<BoundColumnRefExpression>(row_id_entry->second.type, ColumnBinding(get.table_index, column_idx));
+		row_id_expr->alias = row_id_entry->second.name;
+		expressions.push_back(std::move(row_id_expr));
 		if (column_idx == column_ids.size()) {
 			get.AddColumnId(row_id_column);
 		}
@@ -97,7 +106,6 @@ void Binder::BindRowIdColumns(TableCatalogEntry &table, LogicalGet &get, vector<
 }
 
 BoundStatement Binder::Bind(UpdateStatement &stmt) {
-	BoundStatement result;
 	unique_ptr<LogicalOperator> root;
 
 	// visit the table reference
@@ -175,9 +183,10 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 		unique_ptr<LogicalOperator> update_as_logicaloperator = std::move(update);
 
 		return BindReturning(std::move(stmt.returning_list), table, stmt.table->alias, update_table_index,
-		                     std::move(update_as_logicaloperator), std::move(result));
+		                     std::move(update_as_logicaloperator));
 	}
 
+	BoundStatement result;
 	result.names = {"Count"};
 	result.types = {LogicalType::BIGINT};
 	result.plan = std::move(update);

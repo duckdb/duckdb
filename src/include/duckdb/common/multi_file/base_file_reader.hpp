@@ -18,6 +18,8 @@
 #include "duckdb/common/open_file_info.hpp"
 
 namespace duckdb {
+
+class BaseStatistics;
 class BaseUnionData;
 struct GlobalTableFunctionState;
 struct LocalTableFunctionState;
@@ -133,6 +135,8 @@ public:
 	const string &GetFileName() {
 		return file.path;
 	}
+
+	virtual unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const string &name);
 
 public:
 	template <class TARGET>

@@ -40,28 +40,15 @@ public:
 	static inline uint8_t Count(const ART &art) {
 		return art.prefix_count;
 	}
-	static optional_idx GetMismatchWithKey(ART &art, const Node &node, const ARTKey &key, idx_t &depth);
 	static uint8_t GetByte(const ART &art, const Node &node, const uint8_t pos);
 
 public:
 	//! Get a new list of prefix nodes. The node reference holds the child of the last prefix node.
 	static void New(ART &art, reference<Node> &ref, const ARTKey &key, const idx_t depth, idx_t count);
 
-	//! Free the prefix and its child.
-	static void Free(ART &art, Node &node);
-
-	//! Concatenates parent -> byte -> child. Special-handling, if
-	//! 1. the byte was in a gate node.
-	//! 2. the byte was in PREFIX_INLINED.
-	static void Concat(ART &art, Node &parent, uint8_t byte, const GateStatus old_status, const Node &child,
-	                   const GateStatus status);
-
-	//! Traverse a prefix and a key until
-	//! 1. a non-prefix node.
-	//! 2. a mismatching byte.
-	//! Early-out, if the next prefix is a gate node.
-	static optional_idx Traverse(ART &art, reference<const Node> &node, const ARTKey &key, idx_t &depth);
-	static optional_idx TraverseMutable(ART &art, reference<Node> &node, const ARTKey &key, idx_t &depth);
+	//! Concatenates parent -> prev_node4 -> child.
+	static void Concat(ART &art, Node &parent, Node &node4, const Node child, uint8_t byte,
+	                   const GateStatus node4_status);
 
 	//! Removes up to pos bytes from the prefix.
 	//! Shifts all subsequent bytes by pos. Frees empty nodes.
@@ -80,13 +67,15 @@ public:
 	static void TransformToDeprecated(ART &art, Node &node, unsafe_unique_ptr<FixedSizeAllocator> &allocator);
 
 private:
-	static Prefix NewInternal(ART &art, Node &node, const data_ptr_t data, const uint8_t count, const idx_t offset,
-	                          const NType type);
+	static Prefix NewInternal(ART &art, Node &node, const data_ptr_t data, const uint8_t count, const idx_t offset);
 
 	static Prefix GetTail(ART &art, const Node &node);
 
-	static void ConcatGate(ART &art, Node &parent, uint8_t byte, const Node &child);
-	static void ConcatChildIsGate(ART &art, Node &parent, uint8_t byte, const Node &child);
+	static void ConcatInternal(ART &art, Node &parent, Node &node4, const Node child, uint8_t byte,
+	                           const bool inside_gate);
+	static void ConcatNode4WasGate(ART &art, Node &node4, const Node child, uint8_t byte);
+	static void ConcatChildIsGate(ART &art, Node &parent, Node &node4, const Node child, uint8_t byte);
+	static void ConcatOutsideGate(ART &art, Node &parent, Node &node4, const Node child, uint8_t byte);
 
 	Prefix Append(ART &art, const uint8_t byte);
 	void Append(ART &art, Node other);

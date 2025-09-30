@@ -11,8 +11,7 @@ ExplainFormat ParseFormat(const Value &val) {
 	auto format_val = val.GetValue<string>();
 	case_insensitive_map_t<ExplainFormat> format_mapping {
 	    {"default", ExplainFormat::DEFAULT}, {"text", ExplainFormat::TEXT},         {"json", ExplainFormat::JSON},
-	    {"html", ExplainFormat::HTML},       {"graphviz", ExplainFormat::GRAPHVIZ},
-	};
+	    {"html", ExplainFormat::HTML},       {"graphviz", ExplainFormat::GRAPHVIZ}, {"yaml", ExplainFormat::YAML}};
 	auto it = format_mapping.find(format_val);
 	if (it != format_mapping.end()) {
 		return it->second;

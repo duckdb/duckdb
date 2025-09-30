@@ -134,7 +134,7 @@ struct RLECompressState : public CompressionState {
 
 	idx_t MaxRLECount() {
 		auto entry_size = sizeof(T) + sizeof(rle_count_t);
-		return (info.GetBlockSize() - RLEConstants::RLE_HEADER_SIZE) / entry_size;
+		return AlignValueFloor((info.GetBlockSize() - RLEConstants::RLE_HEADER_SIZE) / entry_size);
 	}
 
 	RLECompressState(ColumnDataCheckpointData &checkpoint_data_p, const CompressionInfo &info)

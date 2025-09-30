@@ -81,6 +81,8 @@ public:
 	typedef void (*rollback_update_function_t)(UpdateInfo &base_info, UpdateInfo &rollback_info);
 	typedef idx_t (*statistics_update_function_t)(UpdateSegment *segment, SegmentStatistics &stats,
 	                                              UnifiedVectorFormat &update, idx_t count, SelectionVector &sel);
+	typedef idx_t (*get_effective_updates_t)(UnifiedVectorFormat &update_format, row_t *ids, idx_t count,
+	                                         SelectionVector &sel, Vector &base_data, idx_t id_offset);
 
 private:
 	initialize_update_function_t initialize_update_function;
@@ -91,6 +93,7 @@ private:
 	fetch_row_function_t fetch_row_function;
 	rollback_update_function_t rollback_update_function;
 	statistics_update_function_t statistics_update_function;
+	get_effective_updates_t get_effective_updates;
 
 private:
 	UndoBufferPointer GetUpdateNode(StorageLockKey &lock, idx_t vector_idx) const;

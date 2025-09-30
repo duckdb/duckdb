@@ -6,7 +6,7 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_map_set.hpp"
 #include "duckdb/common/types/string_type.hpp"
-#include "duckdb/parser/keyword_helper.hpp"
+#include "keyword_helper.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
 #include "tokenizer.hpp"
@@ -303,9 +303,34 @@ public:
 	MatchResultType Match(MatchState &state) const override {
 		// variable matchers match anything except for reserved keywords
 		auto &token_text = state.tokens[state.token_index].text;
-		auto category = KeywordHelper::KeywordCategoryType(token_text);
-		if (category == KeywordCategory::KEYWORD_RESERVED || category == GetBannedCategory()) {
-			return MatchResultType::FAIL;
+		const auto &keyword_helper = KeywordHelper::Instance();
+		switch (suggestion_type) {
+		case SuggestionState::SUGGEST_TYPE_NAME:
+			if (keyword_helper.KeywordCategoryType(token_text, KeywordCategory::KEYWORD_RESERVED) ||
+			    keyword_helper.KeywordCategoryType(token_text, GetBannedCategory())) {
+				return MatchResultType::FAIL;
+			}
+			break;
+		default: {
+			const auto banned_category = GetBannedCategory();
+			const auto allowed_override_category = banned_category == KeywordCategory::KEYWORD_COL_NAME
+			                                           ? KeywordCategory::KEYWORD_TYPE_FUNC
+			                                           : KeywordCategory::KEYWORD_COL_NAME;
+
+			const bool is_reserved = keyword_helper.KeywordCategoryType(token_text, KeywordCategory::KEYWORD_RESERVED);
+			const bool has_extra_banned_category = keyword_helper.KeywordCategoryType(token_text, banned_category);
+			const bool has_banned_flag = is_reserved || has_extra_banned_category;
+
+			const bool is_unreserved =
+			    keyword_helper.KeywordCategoryType(token_text, KeywordCategory::KEYWORD_UNRESERVED);
+			const bool has_override_flag = keyword_helper.KeywordCategoryType(token_text, allowed_override_category);
+			const bool has_allowed_flag = is_unreserved || has_override_flag;
+
+			if (has_banned_flag && !has_allowed_flag) {
+				return MatchResultType::FAIL;
+			}
+			break;
+		}
 		}
 		if (!IsIdentifier(token_text)) {
 			return MatchResultType::FAIL;
@@ -371,6 +396,25 @@ public:
 	}
 
 	SuggestionState suggestion_type;
+};
+
+class ReservedIdentifierMatcher : public IdentifierMatcher {
+public:
+	static constexpr MatcherType TYPE = MatcherType::VARIABLE;
+
+public:
+	explicit ReservedIdentifierMatcher(SuggestionState suggestion_type) : IdentifierMatcher(suggestion_type) {
+	}
+
+	MatchResultType Match(MatchState &state) const override {
+		// reserved variable matchers match anything
+		auto &token_text = state.tokens[state.token_index].text;
+		if (!IsIdentifier(token_text)) {
+			return MatchResultType::FAIL;
+		}
+		state.token_index++;
+		return MatchResultType::SUCCESS;
+	}
 };
 
 class StringLiteralMatcher : public Matcher {
@@ -514,6 +558,11 @@ private:
 	Matcher &TableFunctionName() const;
 	Matcher &PragmaName() const;
 	Matcher &SettingName() const;
+	Matcher &ReservedSchemaName() const;
+	Matcher &ReservedTableName() const;
+	Matcher &ReservedColumnName() const;
+	Matcher &ReservedScalarFunctionName() const;
+	Matcher &ReservedVariable() const;
 
 	void AddKeywordOverride(const char *name, uint32_t score, char extra_char = ' ');
 	void AddRuleOverride(const char *name, Matcher &matcher);
@@ -558,6 +607,9 @@ Matcher &MatcherFactory::Variable() const {
 	return allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE));
 }
 
+Matcher &MatcherFactory::ReservedVariable() const {
+	return allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE));
+}
 Matcher &MatcherFactory::CatalogName() const {
 	return allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_CATALOG_NAME));
 }
@@ -566,12 +618,24 @@ Matcher &MatcherFactory::SchemaName() const {
 	return allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_SCHEMA_NAME));
 }
 
+Matcher &MatcherFactory::ReservedSchemaName() const {
+	return allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_SCHEMA_NAME));
+}
+
 Matcher &MatcherFactory::TableName() const {
 	return allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_TABLE_NAME));
 }
 
+Matcher &MatcherFactory::ReservedTableName() const {
+	return allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_TABLE_NAME));
+}
+
 Matcher &MatcherFactory::ColumnName() const {
 	return allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_COLUMN_NAME));
+}
+
+Matcher &MatcherFactory::ReservedColumnName() const {
+	return allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_COLUMN_NAME));
 }
 
 Matcher &MatcherFactory::TypeName() const {
@@ -580,6 +644,10 @@ Matcher &MatcherFactory::TypeName() const {
 
 Matcher &MatcherFactory::ScalarFunctionName() const {
 	return allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME));
+}
+
+Matcher &MatcherFactory::ReservedScalarFunctionName() const {
+	return allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME));
 }
 
 Matcher &MatcherFactory::TableFunctionName() const {
@@ -777,11 +845,6 @@ void PEGParser::ParseRules(const char *grammar) {
 				token.type = PEGTokenType::LITERAL;
 				rule.tokens.push_back(token);
 				c++;
-				if (grammar[c] == 'i') {
-					// skip optional case insensitive marker
-					// note: all keywords we parse are case insensitive so we just ignore this marker
-					c++;
-				}
 			} else if (StringUtil::CharacterIsAlphaNumeric(grammar[c])) {
 				// alphanumeric character - this is a rule reference
 				idx_t rule_start = c;
@@ -1108,13 +1171,18 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	AddKeywordOverride("(", 0, '\0');
 	// rule overrides
 	AddRuleOverride("Identifier", Variable());
+	AddRuleOverride("ReservedIdentifier", ReservedVariable());
 	AddRuleOverride("TypeName", TypeName());
 	AddRuleOverride("TableName", TableName());
+	AddRuleOverride("ReservedTableName", ReservedTableName());
 	AddRuleOverride("CatalogName", CatalogName());
 	AddRuleOverride("SchemaName", SchemaName());
+	AddRuleOverride("ReservedSchemaName", ReservedSchemaName());
 	AddRuleOverride("ColumnName", ColumnName());
-	AddRuleOverride("FunctionName", ScalarFunctionName());
+	AddRuleOverride("ReservedColumnName", ReservedColumnName());
 	AddRuleOverride("TableFunctionName", TableFunctionName());
+	AddRuleOverride("FunctionName", ScalarFunctionName());
+	AddRuleOverride("ReservedFunctionName", ReservedScalarFunctionName());
 	AddRuleOverride("PragmaName", PragmaName());
 	AddRuleOverride("SettingName", SettingName());
 	AddRuleOverride("NumberLiteral", NumberLiteral());

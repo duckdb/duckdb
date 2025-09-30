@@ -88,9 +88,13 @@ BoundCastInfo DefaultCasts::GetDefaultCastFunction(BindCastInput &input, const L
                                                    const LogicalType &target) {
 	D_ASSERT(source != target);
 
-	// first check if were casting to a union
+	if (target.id() == LogicalTypeId::VARIANT) {
+		return ImplicitToVariantCast(input, source, target);
+	}
+
+	// then check if were casting to a union
 	if (source.id() != LogicalTypeId::UNION && source.id() != LogicalTypeId::SQLNULL &&
-	    target.id() == LogicalTypeId::UNION) {
+	    source.id() != LogicalTypeId::VARIANT && target.id() == LogicalTypeId::UNION) {
 		return ImplicitToUnionCast(input, source, target);
 	}
 
@@ -120,6 +124,8 @@ BoundCastInfo DefaultCasts::GetDefaultCastFunction(BindCastInput &input, const L
 		return DateCastSwitch(input, source, target);
 	case LogicalTypeId::TIME:
 		return TimeCastSwitch(input, source, target);
+	case LogicalTypeId::TIME_NS:
+		return TimeNsCastSwitch(input, source, target);
 	case LogicalTypeId::TIME_TZ:
 		return TimeTzCastSwitch(input, source, target);
 	case LogicalTypeId::TIMESTAMP:
@@ -150,12 +156,14 @@ BoundCastInfo DefaultCasts::GetDefaultCastFunction(BindCastInput &input, const L
 		return ListCastSwitch(input, source, target);
 	case LogicalTypeId::UNION:
 		return UnionCastSwitch(input, source, target);
+	case LogicalTypeId::VARIANT:
+		return VariantCastSwitch(input, source, target);
 	case LogicalTypeId::ENUM:
 		return EnumCastSwitch(input, source, target);
 	case LogicalTypeId::ARRAY:
 		return ArrayCastSwitch(input, source, target);
-	case LogicalTypeId::VARINT:
-		return VarintCastSwitch(input, source, target);
+	case LogicalTypeId::BIGNUM:
+		return BignumCastSwitch(input, source, target);
 	case LogicalTypeId::AGGREGATE_STATE:
 		return AggregateStateToBlobCast;
 	default:

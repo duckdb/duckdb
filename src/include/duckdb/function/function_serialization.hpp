@@ -57,7 +57,8 @@ public:
 	}
 
 	template <class FUNC, class CATALOG_ENTRY>
-	static pair<FUNC, bool> DeserializeBase(Deserializer &deserializer, CatalogType catalog_type) {
+	static pair<FUNC, bool> DeserializeBase(Deserializer &deserializer, CatalogType catalog_type,
+	                                        optional_ptr<vector<unique_ptr<Expression>>> children = nullptr) {
 		auto &context = deserializer.Get<ClientContext &>();
 		auto name = deserializer.ReadProperty<string>(500, "name");
 		auto arguments = deserializer.ReadProperty<vector<LogicalType>>(501, "arguments");
@@ -70,6 +71,17 @@ public:
 		if (schema_name.empty()) {
 			schema_name = DEFAULT_SCHEMA;
 		}
+
+		if (arguments.empty() && original_arguments.empty() && children && !children->empty()) {
+			// The function is specified as having no arguments, but somehow expressions were passed anyway
+			// Assume this is a "varargs" function and use the types of the expressions as the arguments
+			// This can happen when we change a function that used to take varargs, to no longer do so.
+			arguments.reserve(children->size());
+			for (auto &child : *children) {
+				arguments.push_back(child->return_type);
+			}
+		}
+
 		auto function = DeserializeFunction<FUNC, CATALOG_ENTRY>(context, catalog_type, catalog_name, schema_name, name,
 		                                                         arguments, original_arguments);
 		auto has_serialize = deserializer.ReadProperty<bool>(503, "has_serialize");
@@ -100,6 +112,7 @@ public:
 			return true;
 		case LogicalTypeId::DECIMAL:
 		case LogicalTypeId::UNION:
+		case LogicalTypeId::VARIANT:
 		case LogicalTypeId::MAP:
 			if (!type.AuxInfo()) {
 				return true;
@@ -133,7 +146,7 @@ public:
 	                                                        vector<unique_ptr<Expression>> &children,
 	                                                        LogicalType return_type) { // NOLINT: clang-tidy bug
 		auto &context = deserializer.Get<ClientContext &>();
-		auto entry = DeserializeBase<FUNC, CATALOG_ENTRY>(deserializer, catalog_type);
+		auto entry = DeserializeBase<FUNC, CATALOG_ENTRY>(deserializer, catalog_type, children);
 		auto &function = entry.first;
 		auto has_serialize = entry.second;
 
@@ -143,6 +156,12 @@ public:
 			bind_data = FunctionDeserialize<FUNC>(deserializer, function);
 			deserializer.Unset<LogicalType>();
 		} else {
+
+			FunctionBinder binder(context);
+
+			// Resolve templates
+			binder.ResolveTemplateTypes(function, children);
+
 			if (function.bind) {
 				try {
 					bind_data = function.bind(context, function, children);
@@ -152,7 +171,10 @@ public:
 					                             error.RawMessage());
 				}
 			}
-			FunctionBinder binder(context);
+
+			// Verify that all templates are bound to concrete types.
+			binder.CheckTemplateTypesResolved(function);
+
 			binder.CastToFunctionArguments(function, children);
 		}
 

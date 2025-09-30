@@ -33,21 +33,21 @@ statement ok
 create type small_enum as enum ('DUCK_DUCK_ENUM', 'GOOSE');
 
 query I nosort q0
-select * exclude (varchar, blob, bit, medium_enum, large_enum, hugeint, uhugeint, varint)
+select * exclude (varchar, blob, bit, medium_enum, large_enum, hugeint, uhugeint, bignum)
          replace (dec_18_6::DOUBLE as dec_18_6, dec38_10::DOUBLE as dec38_10)
 from test_all_types()
 ----
 
 statement ok
 copy (
-select * exclude (varchar, blob, bit, medium_enum, large_enum, hugeint, uhugeint, varint)
+select * exclude (varchar, blob, bit, medium_enum, large_enum, hugeint, uhugeint, bignum)
          replace (dec_18_6::DOUBLE as dec_18_6, dec38_10::DOUBLE as dec38_10)
 from test_all_types()
 ) to '__TEST_DIR__/all_types.ndjson'
 
 statement ok
 create table roundtrip as
-select * exclude (varchar, blob, bit, medium_enum, large_enum, hugeint, uhugeint, varint)
+select * exclude (varchar, blob, bit, medium_enum, large_enum, hugeint, uhugeint, bignum)
          replace (dec_18_6::DOUBLE as dec_18_6, dec38_10::DOUBLE as dec38_10)
 from test_all_types()
 limit 0
@@ -64,7 +64,7 @@ delete from roundtrip
 
 statement ok
 copy (
-select * exclude (varchar, blob, bit, medium_enum, large_enum, hugeint, uhugeint, varint)
+select * exclude (varchar, blob, bit, medium_enum, large_enum, hugeint, uhugeint, bignum)
          replace (dec_18_6::DOUBLE as dec_18_6, dec38_10::DOUBLE as dec38_10)
 from test_all_types()
 ) to '__TEST_DIR__/all_types.json' (array true)
@@ -76,6 +76,17 @@ query I nosort q0
 select * from roundtrip
 ----
 
+
+# test issue 18816
+statement ok
+copy (select 42 i)
+to '__TEST_DIR__/json_batch'
+(format json, per_thread_output true, overwrite true);
+
+statement ok
+copy (select 42 i)
+to '__TEST_DIR__/json_batch'
+(format json, per_thread_output true, append true);
 
 # test issue #6305
 statement ok
@@ -215,7 +226,7 @@ select * from read_json_auto('__TEST_DIR__/my.json', format='array')
 statement error
 copy (select range as i from range(10)) to '__TEST_DIR__/my.json' (COMPRESSION)
 ----
-Binder Error
+Invalid Input Error
 
 statement ok
 copy (select range as i from range(10)) to '__TEST_DIR__/my.json.gz' (COMPRESSION GZIP)

@@ -12,6 +12,7 @@
 #include "duckdb/common/named_parameter_map.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/main/setting_info.hpp"
 
 namespace duckdb {
 class BaseSecret;

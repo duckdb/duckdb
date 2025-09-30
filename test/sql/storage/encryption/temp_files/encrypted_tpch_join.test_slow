@@ -1,0 +1,35 @@
+# name: test/sql/storage/encryption/temp_files/encrypted_tpch_join.test_slow
+# group: [temp_files]
+
+foreach cipher GCM CTR
+
+require tpch
+
+statement ok
+SET threads = 8;
+
+statement ok
+SET memory_limit = '1GB';
+
+statement ok
+ATTACH '__TEST_DIR__/tpch_enc_${cipher}.db' as enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
+
+statement ok
+USE enc;
+
+statement ok
+CALL dbgen (sf = 1) ;
+
+statement ok
+ALTER TABLE lineitem RENAME TO lineitem1;
+
+statement ok
+CREATE TABLE lineitem2 AS FROM lineitem1;
+
+statement ok
+CREATE OR REPLACE TABLE ans as select l1.* , l2.* from lineitem1 l1
+JOIN lineitem2 l2 USING (l_orderkey , l_linenumber);
+
+restart
+
+endloop

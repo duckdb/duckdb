@@ -81,6 +81,7 @@
 #include <assert.h>
 #include "duckdb_shell_wrapper.h"
 #include "duckdb/common/box_renderer.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 #include "sqlite3.h"
 typedef sqlite3_int64 i64;
 typedef sqlite3_uint64 u64;
@@ -2367,6 +2368,7 @@ int deduceDatabaseType(const char *zName, int dfltZip) {
 ** the database fails to open, print an error message and exit.
 */
 void ShellState::OpenDB(int flags) {
+
 	if (db == 0) {
 		if (openMode == SHELL_OPEN_UNSPEC) {
 			if (zDbFilename.empty()) {
@@ -2463,6 +2465,7 @@ static char **readline_completion(const char *zText, int iStart, int iEnd) {
 /*
 ** Linenoise completion callback
 */
+static int linenoise_open_flags = 0;
 static void linenoise_completion(const char *zLine, linenoiseCompletions *lc) {
 	idx_t nLine = ShellState::StringLength(zLine);
 	int copiedSuggestion = 0;
@@ -2506,7 +2509,7 @@ static void linenoise_completion(const char *zLine, linenoiseCompletions *lc) {
 	zSql = sqlite3_mprintf("CALL sql_auto_complete(%Q)", zLine);
 	sqlite3 *localDb = NULL;
 	if (!globalDb) {
-		sqlite3_open(":memory:", &localDb);
+		sqlite3_open_v2(":memory:", &localDb, linenoise_open_flags, 0);
 		sqlite3_prepare_v2(localDb, zSql, -1, &pStmt, 0);
 	} else {
 		sqlite3_prepare_v2(globalDb, zSql, -1, &pStmt, 0);
@@ -3856,7 +3859,7 @@ bool ShellState::ReadFromFile(const string &file) {
 		utf8_printf(stderr, "Error: cannot open \"%s\"\n", file.c_str());
 		rc = 1;
 	} else {
-		rc = ProcessInput();
+		rc = ProcessInput(InputMode::FILE);
 		fclose(in);
 	}
 	in = inSaved;
@@ -4032,37 +4035,78 @@ MetadataResult ShellState::DisplayEntries(const char **azArg, idx_t nArg, char t
 	int ii;
 	string s;
 	OpenDB(0);
-	//    rc = sqlite3_prepare_v2(db, "PRAGMA database_list", -1, &pStmt, 0);
-	//    if( rc ){
-	//      sqlite3_finalize(pStmt);
-	//      return shellDatabaseError(db);
-	//    }
 
 	if (nArg > 2) {
 		return MetadataResult::PRINT_USAGE;
 	}
-	//    for(ii=0; sqlite3_step(pStmt)==SQLITE_ROW; ii++){
-	//      const char *zDbName = (const char*)sqlite3_column_text(pStmt, 1);
-	//      if( zDbName==0 ) continue;
-	//      if( s.z && s.z[0] ) appendText(&s, " UNION ALL ", 0);
-	appendText(s, "SELECT name FROM ", 0);
-	//      appendText(&s, zDbName, '"');
-	appendText(s, "sqlite_schema ", 0);
+
+	// Parse the filter pattern to check for schema qualification
+	string filter_pattern = nArg > 1 ? azArg[1] : "%";
+	string schema_filter = "";
+	string table_filter = filter_pattern;
+
+	// Parse the filter pattern to check for schema qualification
+	try {
+		auto components = duckdb::QualifiedName::ParseComponents(filter_pattern);
+		if (components.size() >= 2) {
+			// e.g : "schema.table" or "schema.%"
+			schema_filter = components[0];
+			table_filter = components[1];
+			// e.g : "schema."
+			if (table_filter.empty()) {
+				table_filter = "%";
+			}
+		}
+	} catch (const duckdb::ParserException &) {
+		// If parsing fails, treat as a simple table pattern
+		schema_filter = "";
+		table_filter = filter_pattern;
+	}
+
+	// Use DuckDB's system tables instead of SQLite's sqlite_schema
 	if (type == 't') {
-		appendText(s,
-		           " WHERE type IN ('table','view')"
-		           "   AND name NOT LIKE 'sqlite_%'"
-		           "   AND name LIKE ?1",
-		           0);
+		// For tables, we need to handle schema disambiguation
+		appendText(s, "WITH all_objects AS (", 0);
+		appendText(s, "  SELECT schema_name, table_name as name FROM duckdb_tables", 0);
+		if (!schema_filter.empty()) {
+			appendText(s, "  WHERE schema_name LIKE ?1", 0);
+		}
+		appendText(s, "  UNION ALL", 0);
+		appendText(s, "  SELECT schema_name, view_name as name FROM duckdb_views", 0);
+		if (!schema_filter.empty()) {
+			appendText(s, "  WHERE schema_name LIKE ?1", 0);
+		}
+		appendText(s, "),", 0);
+		appendText(s, "name_counts AS (", 0);
+		appendText(s, "  SELECT name, COUNT(*) as count FROM all_objects", 0);
+		appendText(s, "  GROUP BY name", 0);
+		appendText(s, "),", 0);
+		appendText(s, "disambiguated AS (", 0);
+		appendText(s, "  SELECT", 0);
+		appendText(s, "    CASE", 0);
+		appendText(s, "      WHEN nc.count > 1 THEN ao.schema_name || '.' || ao.name", 0);
+		appendText(s, "      ELSE ao.name", 0);
+		appendText(s, "    END as display_name", 0);
+		appendText(s, "  FROM all_objects ao", 0);
+		appendText(s, "  JOIN name_counts nc ON ao.name = nc.name", 0);
+		if (!schema_filter.empty()) {
+			appendText(s, "  WHERE ao.name LIKE ?2", 0);
+		} else {
+			appendText(s, "  WHERE ao.name LIKE ?1", 0);
+		}
+		appendText(s, ")", 0);
+		appendText(s, "SELECT DISTINCT display_name FROM disambiguated ORDER BY display_name", 0);
 	} else {
+		// For indexes, use the original SQLite approach
+		appendText(s, "SELECT name FROM ", 0);
+		appendText(s, "sqlite_schema ", 0);
 		appendText(s,
 		           " WHERE type='index'"
 		           "   AND tbl_name LIKE ?1",
 		           0);
+		appendText(s, " ORDER BY 1", 0);
 	}
-	//    }
-	//    rc = sqlite3_finalize(pStmt);
-	appendText(s, " ORDER BY 1", 0);
+
 	int rc = sqlite3_prepare_v2(db, s.c_str(), -1, &pStmt, 0);
 	if (rc) {
 		return MetadataResult::FAIL;
@@ -4072,11 +4116,24 @@ MetadataResult ShellState::DisplayEntries(const char **azArg, idx_t nArg, char t
 	** as an array of nul-terminated strings in azResult[].  */
 	nRow = nAlloc = 0;
 	azResult = nullptr;
-	if (nArg > 1) {
-		sqlite3_bind_text(pStmt, 1, azArg[1], -1, SQLITE_TRANSIENT);
+
+	if (type == 't') {
+		// Bind parameters for the new DuckDB query
+		if (!schema_filter.empty()) {
+			sqlite3_bind_text(pStmt, 1, schema_filter.c_str(), -1, SQLITE_TRANSIENT);
+			sqlite3_bind_text(pStmt, 2, table_filter.c_str(), -1, SQLITE_TRANSIENT);
+		} else {
+			sqlite3_bind_text(pStmt, 1, filter_pattern.c_str(), -1, SQLITE_TRANSIENT);
+		}
 	} else {
-		sqlite3_bind_text(pStmt, 1, "%", -1, SQLITE_STATIC);
+		// Original binding for indexes
+		if (nArg > 1) {
+			sqlite3_bind_text(pStmt, 1, azArg[1], -1, SQLITE_TRANSIENT);
+		} else {
+			sqlite3_bind_text(pStmt, 1, "%", -1, SQLITE_STATIC);
+		}
 	}
+
 	while (sqlite3_step(pStmt) == SQLITE_ROW) {
 		if (nRow >= nAlloc) {
 			char **azNew;
@@ -4391,7 +4448,7 @@ static bool _all_whitespace(const char *z) {
 /*
 ** Run a single line of SQL.  Return the number of errors.
 */
-int ShellState::RunOneSqlLine(char *zSql) {
+int ShellState::RunOneSqlLine(InputMode mode, char *zSql) {
 	int rc;
 	char *zErrMsg = nullptr;
 
@@ -4400,7 +4457,7 @@ int ShellState::RunOneSqlLine(char *zSql) {
 		resolve_backslashes(zSql);
 	}
 #ifndef SHELL_USE_LOCAL_GETLINE
-	if (zSql && *zSql && *zSql != '\3') {
+	if (mode == InputMode::STANDARD && zSql && *zSql && *zSql != '\3') {
 		shell_add_history(zSql);
 	}
 #endif
@@ -4431,7 +4488,7 @@ int ShellState::RunOneSqlLine(char *zSql) {
 **
 ** Return the number of errors.
 */
-int ShellState::ProcessInput() {
+int ShellState::ProcessInput(InputMode mode) {
 	char *zLine = nullptr; /* A single input line */
 	char *zSql = nullptr;  /* Accumulated SQL text */
 	idx_t nLine;           /* Length of current line */
@@ -4486,7 +4543,7 @@ int ShellState::ProcessInput() {
 			}
 			if (zLine[0] == '.') {
 #ifndef SHELL_USE_LOCAL_GETLINE
-				if (zLine && *zLine && *zLine != '\3')
+				if (mode == InputMode::STANDARD && zLine && *zLine && *zLine != '\3')
 					shell_add_history(zLine);
 #endif
 				rc = DoMetaCommand(zLine);
@@ -4520,7 +4577,7 @@ int ShellState::ProcessInput() {
 			nSql += nLine;
 		}
 		if (nSql && line_contains_semicolon(&zSql[nSqlPrior], nSql - nSqlPrior) && sqlite3_complete(zSql)) {
-			errCnt += RunOneSqlLine(zSql);
+			errCnt += RunOneSqlLine(mode, zSql);
 			nSql = 0;
 			if (outCount) {
 				ResetOutput();
@@ -4536,7 +4593,7 @@ int ShellState::ProcessInput() {
 		}
 	}
 	if (nSql && !_all_whitespace(zSql)) {
-		errCnt += RunOneSqlLine(zSql);
+		errCnt += RunOneSqlLine(mode, zSql);
 	}
 	free(zSql);
 	free(zLine);
@@ -4641,7 +4698,7 @@ bool ShellState::ProcessFile(const string &file, bool is_duckdb_rc) {
 		if (stdin_is_interactive && is_duckdb_rc) {
 			utf8_printf(stderr, "-- Loading resources from %s\n", file.c_str());
 		}
-		rc = ProcessInput();
+		rc = ProcessInput(InputMode::FILE);
 		fclose(in);
 	} else if (!is_duckdb_rc) {
 		utf8_printf(stderr, "Failed to read file \"%s\"\n", file.c_str());
@@ -4699,23 +4756,24 @@ static const char zOptions[] =
     "   -s COMMAND           run \"COMMAND\" and exit\n"
     "   -safe                enable safe-mode\n"
     "   -separator SEP       set output column separator. Default: '|'\n"
+    "   -storage-version V   database storage compatibility version to use. Default: 'v0.10.0'\n"
     "   -table               set output mode to 'table'\n"
     "   -ui                  launches a web interface using the ui extension (configurable with .ui_command)\n"
     "   -unredacted          allow printing unredacted secrets\n"
     "   -unsigned            allow loading of unsigned extensions\n"
     "   -version             show DuckDB version\n";
 static void usage(int showDetail) {
-	utf8_printf(stderr,
+	utf8_printf(stdout,
 	            "Usage: %s [OPTIONS] FILENAME [SQL]\n"
-	            "FILENAME is the name of an DuckDB database. A new database is created\n"
+	            "FILENAME is the name of a DuckDB database. A new database is created\n"
 	            "if the file does not previously exist.\n",
 	            program_name);
 	if (showDetail) {
-		utf8_printf(stderr, "OPTIONS include:\n%s", zOptions);
+		utf8_printf(stdout, "OPTIONS include:\n%s", zOptions);
 	} else {
-		raw_printf(stderr, "Use the -help option for additional information\n");
+		raw_printf(stdout, "Use the -help option for additional information\n");
 	}
-	exit(1);
+	exit(0);
 }
 
 /*
@@ -4908,12 +4966,12 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			data.openFlags |= DUCKDB_UNSIGNED_EXTENSIONS;
 		} else if (strcmp(z, "-safe") == 0) {
 			safe_mode = true;
-		} else if (strcmp(z, "-storage_version") == 0) {
+		} else if (strcmp(z, "-storage_version") == 0 || strcmp(z, "-storage-version") == 0) {
 			auto storage_version = string(cmdline_option_value(argc, argv, ++i));
 			if (storage_version != "latest") {
 				utf8_printf(
 				    stderr,
-				    "%s: Error: unknown argument (%s) for '-storage_version', only 'latest' is supported currently\n",
+				    "%s: Error: unknown argument (%s) for '-storage-version', only 'latest' is supported currently\n",
 				    program_name, storage_version.c_str());
 			} else {
 				data.openFlags |= DUCKDB_LATEST_STORAGE_VERSION;
@@ -5157,10 +5215,11 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 #if HAVE_READLINE || HAVE_EDITLINE
 			rl_attempted_completion_function = readline_completion;
 #elif HAVE_LINENOISE
+			linenoise_open_flags = data.openFlags;
 			linenoiseSetCompletionCallback(linenoise_completion);
 #endif
 			data.in = 0;
-			rc = data.ProcessInput();
+			rc = data.ProcessInput(InputMode::STANDARD);
 			if (zHistory) {
 				shell_stifle_history(2000);
 				shell_write_history(zHistory);
@@ -5168,7 +5227,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			}
 		} else {
 			data.in = stdin;
-			rc = data.ProcessInput();
+			rc = data.ProcessInput(InputMode::STANDARD);
 		}
 	}
 	data.SetTableName(0);

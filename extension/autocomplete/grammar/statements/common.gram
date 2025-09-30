@@ -1,0 +1,133 @@
+Statement <-
+	CreateStatement /
+	SelectStatement /
+	SetStatement /
+	PragmaStatement /
+	CallStatement /
+	InsertStatement /
+	DropStatement /
+	CopyStatement /
+	ExplainStatement /
+	UpdateStatement /
+	PrepareStatement /
+	ExecuteStatement /
+	AlterStatement /
+	TransactionStatement /
+	DeleteStatement /
+	AttachStatement /
+	UseStatement /
+	DetachStatement /
+	CheckpointStatement /
+	VacuumStatement /
+	ResetStatement /
+	ExportStatement /
+	ImportStatement /
+	CommentStatement /
+	DeallocateStatement /
+	TruncateStatement /
+	LoadStatement /
+	InstallStatement /
+	AnalyzeStatement /
+	MergeIntoStatement
+
+CatalogName <- Identifier
+SchemaName <- Identifier
+ReservedSchemaName <- Identifier
+TableName <- Identifier
+ReservedTableName <- Identifier
+ReservedIdentifier <- Identifier
+ColumnName <- Identifier
+ReservedColumnName <- Identifier
+IndexName <- Identifier
+SettingName <- Identifier
+PragmaName <- Identifier
+FunctionName <- Identifier
+ReservedFunctionName <- Identifier
+TableFunctionName <- Identifier
+ConstraintName <- ColIdOrString
+SequenceName <- Identifier
+CollationName <- Identifier
+CopyOptionName <- ColLabel
+SecretName <- ColId
+
+NumberLiteral <- < [+-]?[0-9]*([.][0-9]*)? >
+StringLiteral <- '\'' [^\']* '\''
+
+Type <- (TimeType / IntervalType / BitType / RowType / MapType / UnionType / NumericType / SetofType / SimpleType) ArrayBounds*
+SimpleType <- (QualifiedTypeName / CharacterType) TypeModifiers?
+CharacterType <- ('CHARACTER' 'VARYING'?) /
+                 ('CHAR' 'VARYING'?) /
+                 ('NATIONAL' 'CHARACTER' 'VARYING'?) /
+                 ('NATIONAL' 'CHAR' 'VARYING'?) /
+                 ('NCHAR' 'VARYING'?) /
+                 'VARCHAR'
+IntervalType <- ('INTERVAL' Interval?) / ('INTERVAL' Parens(NumberLiteral))
+
+YearKeyword         <- 'YEAR' / 'YEARS'
+MonthKeyword        <- 'MONTH' / 'MONTHS'
+DayKeyword          <- 'DAY' / 'DAYS'
+HourKeyword         <- 'HOUR' / 'HOURS'
+MinuteKeyword       <- 'MINUTE' / 'MINUTES'
+SecondKeyword       <- 'SECOND' / 'SECONDS'
+MillisecondKeyword  <- 'MILLISECOND' / 'MILLISECONDS'
+MicrosecondKeyword  <- 'MICROSECOND' / 'MICROSECONDS'
+WeekKeyword         <- 'WEEK' / 'WEEKS'
+QuarterKeyword      <- 'QUARTER' / 'QUARTERS'
+DecadeKeyword       <- 'DECADE' / 'DECADES'
+CenturyKeyword      <- 'CENTURY' / 'CENTURIES'
+MillenniumKeyword   <- 'MILLENNIUM' / 'MILLENNIA'
+
+Interval <- YearKeyword /
+    MonthKeyword /
+    DayKeyword /
+    HourKeyword /
+    MinuteKeyword /
+    SecondKeyword /
+    MillisecondKeyword /
+    MicrosecondKeyword /
+    WeekKeyword /
+    QuarterKeyword /
+    DecadeKeyword /
+    CenturyKeyword /
+    MillenniumKeyword /
+    (YearKeyword 'TO' MonthKeyword) /
+    (DayKeyword 'TO' HourKeyword) /
+    (DayKeyword 'TO' MinuteKeyword) /
+    (DayKeyword 'TO' SecondKeyword) /
+    (HourKeyword 'TO' MinuteKeyword) /
+    (HourKeyword 'TO' SecondKeyword) /
+    (MinuteKeyword 'TO' SecondKeyword)
+
+BitType <- 'BIT' 'VARYING'? Parens(List(Expression))?
+
+NumericType <- 'INT' /
+               'INTEGER' /
+               'SMALLINT' /
+               'BIGINT' /
+               'REAL' /
+               'BOOLEAN' /
+               ('FLOAT' Parens(NumberLiteral)?) /
+               ('DOUBLE' 'PRECISION') /
+               ('DECIMAL' TypeModifiers?) /
+               ('DEC' TypeModifiers?) /
+               ('NUMERIC' TypeModifiers?)
+
+QualifiedTypeName <- CatalogQualification? SchemaQualification? TypeName
+TypeModifiers <- Parens(List(Expression)?)
+RowType <- RowOrStruct Parens(List(ColIdType))
+UnionType <- 'UNION' Parens(List(ColIdType))
+SetofType <- 'SETOF' Type
+MapType <- 'MAP' Parens(List(Type))
+ColIdType <- ColId Type
+ArrayBounds <- ('[' NumberLiteral? ']') / 'ARRAY'
+TimeType <- TimeOrTimestamp TypeModifiers? TimeZone?
+TimeOrTimestamp <- 'TIME' / 'TIMESTAMP'
+TimeZone <- WithOrWithout 'TIME' 'ZONE'
+WithOrWithout <- 'WITH' / 'WITHOUT'
+
+RowOrStruct <- 'ROW' / 'STRUCT'
+
+# internal definitions
+%whitespace <- [ \t\n\r]*
+List(D) <- D (',' D)* ','?
+Parens(D) <- '(' D ')'

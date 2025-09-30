@@ -186,8 +186,8 @@
             "comment": {
                 "description": "Sets the (optional) bind function of the scalar function.\n\n",
                 "param_comments": {
-                    "scalar_function": "The scalar function",
-                    "bind": "The bind function"
+                    "scalar_function": "The scalar function.",
+                    "bind": "The bind function."
                 }
             }
         },
@@ -209,11 +209,32 @@
                 }
             ],
             "comment": {
-                "description": "Sets the user-provided bind data in the bind object of the scalar function. \nThis object can be retrieved again during execution.\n\n",
+                "description": "Sets the user-provided bind data in the bind object of the scalar function. \nThe bind data object can be retrieved again during execution. \nIn most case, you also need to set the copy-callback of your bind data via duckdb_scalar_function_set_bind_data_copy. \n\n",
                 "param_comments": {
                     "info": "The bind info of the scalar function.",
                     "bind_data": "The bind data object.",
                     "destroy": "The callback to destroy the bind data (if any)."
+                }
+            }
+        },
+        {
+            "name": "duckdb_scalar_function_set_bind_data_copy",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_bind_info",
+                    "name": "info"
+                },
+                {
+                    "type": "duckdb_copy_callback_t",
+                    "name": "copy"
+                }
+            ],
+            "comment": {
+                "description": "Sets the copy-callback for the user-provided bind data in the bind object of the scalar function.\n\n",
+                "param_comments": {
+                    "info": "The bind info of the scalar function.",
+                    "copy": "The callback to copy the bind data (if any)."
                 }
             }
         },
@@ -233,8 +254,8 @@
             "comment": {
                 "description": "Report that an error has occurred while calling bind on a scalar function.\n\n",
                 "param_comments": {
-                    "info": "The bind info object",
-                    "error": "The error message"
+                    "info": "The bind info object.",
+                    "error": "The error message."
                 }
             }
         },
@@ -299,6 +320,23 @@
             }
         },
         {
+            "name": "duckdb_scalar_function_bind_get_extra_info",
+            "return_type": "void *",
+            "params": [
+                {
+                    "type": "duckdb_bind_info",
+                    "name": "info"
+                }
+            ],
+            "comment": {
+                "description": "Retrieves the extra info of the function as set in the bind info.\n\n",
+                "param_comments": {
+                    "info": "The info object."
+                },
+                "return_value": "The extra info."
+            }
+        },
+        {
             "name": "duckdb_scalar_function_get_bind_data",
             "return_type": "void *",
             "params": [
@@ -308,7 +346,7 @@
                 }
             ],
             "comment": {
-                "description": "Gets the scalar function's bind data set by `duckdb_scalar_function_set_bind_data`. \n\nNote that the bind data is read-only.\n\n",
+                "description": "Gets the scalar function's bind data set by `duckdb_scalar_function_set_bind_data`. \nNote that the bind data is read-only.\n\n",
                 "param_comments": {
                     "info": "The function info."
                 },
@@ -428,6 +466,45 @@
                     "set": "The function set to register"
                 },
                 "return_value": "Whether or not the registration was successful."
+            }
+        },
+        {
+            "name": "duckdb_scalar_function_bind_get_argument_count",
+            "return_type": "idx_t",
+            "params": [
+                {
+                    "type": "duckdb_bind_info",
+                    "name": "info"
+                }
+            ],
+            "comment": {
+                "description": "Returns the number of input arguments of the scalar function.\n\n",
+                "param_comments": {
+                    "info": "The bind info."
+                },
+                "return_value": "The number of input arguments."
+            }
+        },
+        {
+            "name": "duckdb_scalar_function_bind_get_argument",
+            "return_type": "duckdb_expression",
+            "params": [
+                {
+                    "type": "duckdb_bind_info",
+                    "name": "info"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "index"
+                }
+            ],
+            "comment": {
+                "description": "Returns the input argument at index of the scalar function.\n\n",
+                "param_comments": {
+                    "info": "The bind info.",
+                    "index": "The argument index."
+                },
+                "return_value": "The input argument at index. Must be destroyed with `duckdb_destroy_expression`."
             }
         }
     ]

@@ -2,13 +2,15 @@
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/partial_block_manager.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
-OptimisticDataWriter::OptimisticDataWriter(DataTable &table) : table(table) {
+OptimisticDataWriter::OptimisticDataWriter(ClientContext &context, DataTable &table) : context(context), table(table) {
 }
 
-OptimisticDataWriter::OptimisticDataWriter(DataTable &table, OptimisticDataWriter &parent) : table(table) {
+OptimisticDataWriter::OptimisticDataWriter(DataTable &table, OptimisticDataWriter &parent)
+    : context(parent.GetClientContext()), table(table) {
 	if (parent.partial_manager) {
 		parent.partial_manager->ClearBlocks();
 	}
@@ -26,35 +28,61 @@ bool OptimisticDataWriter::PrepareWrite() {
 	// allocate the partial block-manager if none is allocated yet
 	if (!partial_manager) {
 		auto &block_manager = table.GetTableIOManager().GetBlockManagerForRowData();
-		partial_manager = make_uniq<PartialBlockManager>(block_manager, PartialBlockType::APPEND_TO_TABLE);
+		partial_manager =
+		    make_uniq<PartialBlockManager>(QueryContext(context), block_manager, PartialBlockType::APPEND_TO_TABLE);
 	}
 	return true;
 }
 
-void OptimisticDataWriter::WriteNewRowGroup(RowGroupCollection &row_groups) {
+unique_ptr<OptimisticWriteCollection> OptimisticDataWriter::CreateCollection(DataTable &storage,
+                                                                             const vector<LogicalType> &insert_types) {
+	auto table_info = storage.GetDataTableInfo();
+	auto &io_manager = TableIOManager::Get(storage);
+
+	// Create the local row group collection.
+	auto max_row_id = NumericCast<idx_t>(MAX_ROW_ID);
+	auto row_groups = make_shared_ptr<RowGroupCollection>(std::move(table_info), io_manager, insert_types, max_row_id);
+
+	auto result = make_uniq<OptimisticWriteCollection>();
+	result->collection = std::move(row_groups);
+	return result;
+}
+
+void OptimisticDataWriter::WriteNewRowGroup(OptimisticWriteCollection &row_groups) {
 	// we finished writing a complete row group
 	if (!PrepareWrite()) {
 		return;
 	}
-	// flush second-to-last row group
-	auto row_group = row_groups.GetRowGroup(-2);
-	FlushToDisk(*row_group);
+
+	row_groups.complete_row_groups++;
+	auto unflushed_row_groups = row_groups.complete_row_groups - row_groups.last_flushed;
+	if (unflushed_row_groups >= DBConfig::GetSetting<WriteBufferRowGroupCountSetting>(context)) {
+		// we have crossed our flush threshold - flush any unwritten row groups to disk
+		vector<reference<RowGroup>> to_flush;
+		for (idx_t i = row_groups.last_flushed; i < row_groups.complete_row_groups; i++) {
+			to_flush.push_back(*row_groups.collection->GetRowGroup(NumericCast<int64_t>(i)));
+		}
+		FlushToDisk(to_flush);
+		row_groups.last_flushed = row_groups.complete_row_groups;
+	}
 }
 
-void OptimisticDataWriter::WriteLastRowGroup(RowGroupCollection &row_groups) {
+void OptimisticDataWriter::WriteLastRowGroup(OptimisticWriteCollection &row_groups) {
 	// we finished writing a complete row group
 	if (!PrepareWrite()) {
 		return;
 	}
-	// flush second-to-last row group
-	auto row_group = row_groups.GetRowGroup(-1);
-	if (!row_group) {
-		return;
+	// flush the last batch of row groups
+	vector<reference<RowGroup>> to_flush;
+	for (idx_t i = row_groups.last_flushed; i < row_groups.complete_row_groups; i++) {
+		to_flush.push_back(*row_groups.collection->GetRowGroup(NumericCast<int64_t>(i)));
 	}
-	FlushToDisk(*row_group);
+	// add the last (incomplete) row group
+	to_flush.push_back(*row_groups.collection->GetRowGroup(-1));
+	FlushToDisk(to_flush);
 }
 
-void OptimisticDataWriter::FlushToDisk(RowGroup &row_group) {
+void OptimisticDataWriter::FlushToDisk(const vector<reference<RowGroup>> &row_groups) {
 	//! The set of column compression types (if any)
 	vector<CompressionType> compression_types;
 	D_ASSERT(compression_types.empty());
@@ -62,7 +90,7 @@ void OptimisticDataWriter::FlushToDisk(RowGroup &row_group) {
 		compression_types.push_back(column.CompressionType());
 	}
 	RowGroupWriteInfo info(*partial_manager, compression_types);
-	row_group.WriteToDisk(info);
+	RowGroup::WriteToDisk(info, row_groups);
 }
 
 void OptimisticDataWriter::Merge(OptimisticDataWriter &other) {

@@ -332,13 +332,11 @@ FilterPushdownResult FilterCombiner::TryPushdownConstantFilter(TableFilterSet &t
 	return FilterPushdownResult::PUSHED_DOWN_FULLY;
 }
 
-void ReplaceWithBoundReference(unique_ptr<Expression> &expr) {
-	if (expr->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-		expr = make_uniq<BoundReferenceExpression>(expr->return_type, 0ULL);
-		return;
-	}
-	ExpressionIterator::EnumerateChildren(*expr,
-	                                      [&](unique_ptr<Expression> &child) { ReplaceWithBoundReference(child); });
+void ReplaceWithBoundReference(unique_ptr<Expression> &root_expr) {
+	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
+	    root_expr, [&](BoundColumnRefExpression &col_ref, unique_ptr<Expression> &expr) {
+		    expr = make_uniq<BoundReferenceExpression>(col_ref.return_type, 0ULL);
+	    });
 }
 
 FilterPushdownResult FilterCombiner::TryPushdownGenericExpression(LogicalGet &get, Expression &expr) {

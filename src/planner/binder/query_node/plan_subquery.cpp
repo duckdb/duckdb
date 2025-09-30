@@ -19,6 +19,7 @@
 #include "duckdb/planner/operator/logical_dependent_join.hpp"
 #include "duckdb/planner/subquery/recursive_dependent_join_planner.hpp"
 #include "duckdb/function/scalar/generic_functions.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -78,8 +79,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		D_ASSERT(bindings.size() == 1);
 		idx_t table_idx = bindings[0].table_index;
 
-		auto &config = ClientConfig::GetConfig(binder.context);
-		bool error_on_multiple_rows = config.scalar_subquery_error_on_multiple_rows;
+		bool error_on_multiple_rows = DBConfig::GetSetting<ScalarSubqueryErrorOnMultipleRowsSetting>(binder.context);
 
 		// we push an aggregate that returns the FIRST element
 		vector<unique_ptr<Expression>> expressions;
@@ -167,10 +167,15 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 			JoinCondition cond;
 			cond.left = std::move(expr.children[child_idx]);
 			auto &child_type = expr.child_types[child_idx];
+			auto &compare_type = expr.child_targets[child_idx];
 			cond.right = BoundCastExpression::AddDefaultCastToType(
-			    make_uniq<BoundColumnRefExpression>(child_type, plan_columns[child_idx]),
-			    expr.child_targets[child_idx]);
+			    make_uniq<BoundColumnRefExpression>(child_type, plan_columns[child_idx]), compare_type);
 			cond.comparison = expr.comparison_type;
+
+			// push collations
+			ExpressionBinder::PushCollation(binder.context, cond.left, compare_type);
+			ExpressionBinder::PushCollation(binder.context, cond.right, compare_type);
+
 			join->conditions.push_back(std::move(cond));
 		}
 		root = std::move(join);
@@ -372,6 +377,7 @@ unique_ptr<Expression> Binder::PlanSubquery(BoundSubqueryExpression &expr, uniqu
 	} else {
 		result_expression = PlanCorrelatedSubquery(*this, expr, root, std::move(plan));
 	}
+	IncreaseDepth();
 	// finally, we recursively plan the nested subqueries (if there are any)
 	if (sub_binder->has_unplanned_dependent_joins) {
 		RecursiveDependentJoinPlanner plan(*this);

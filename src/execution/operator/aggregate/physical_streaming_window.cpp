@@ -8,9 +8,11 @@
 
 namespace duckdb {
 
-PhysicalStreamingWindow::PhysicalStreamingWindow(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
+PhysicalStreamingWindow::PhysicalStreamingWindow(PhysicalPlan &physical_plan, vector<LogicalType> types,
+                                                 vector<unique_ptr<Expression>> select_list,
                                                  idx_t estimated_cardinality, PhysicalOperatorType type)
-    : PhysicalOperator(type, std::move(types), estimated_cardinality), select_list(std::move(select_list)) {
+    : PhysicalOperator(physical_plan, type, std::move(types), estimated_cardinality),
+      select_list(std::move(select_list)) {
 }
 
 class StreamingWindowGlobalState : public GlobalOperatorState {
@@ -347,6 +349,10 @@ bool PhysicalStreamingWindow::IsStreamingFunction(ClientContext &context, unique
 	switch (wexpr.GetExpressionType()) {
 	// TODO: add more expression types here?
 	case ExpressionType::WINDOW_AGGREGATE:
+		// Aggregates with destructors (e.g., quantile) are too slow to repeatedly update/finalize
+		if (wexpr.aggregate->destructor) {
+			return false;
+		}
 		// We can stream aggregates if they are "running totals"
 		return wexpr.start == WindowBoundary::UNBOUNDED_PRECEDING && wexpr.end == WindowBoundary::CURRENT_ROW_ROWS;
 	case ExpressionType::WINDOW_FIRST_VALUE:

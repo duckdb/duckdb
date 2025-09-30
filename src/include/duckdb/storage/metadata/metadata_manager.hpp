@@ -11,6 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/storage/block.hpp"
 #include "duckdb/storage/block_manager.hpp"
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/set.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 
@@ -19,15 +20,27 @@ class DatabaseInstance;
 struct MetadataBlockInfo;
 
 struct MetadataBlock {
+	MetadataBlock();
+	// disable copy constructors
+	MetadataBlock(const MetadataBlock &other) = delete;
+	MetadataBlock &operator=(const MetadataBlock &) = delete;
+	//! enable move constructors
+	DUCKDB_API MetadataBlock(MetadataBlock &&other) noexcept;
+	DUCKDB_API MetadataBlock &operator=(MetadataBlock &&) noexcept;
+
 	shared_ptr<BlockHandle> block;
 	block_id_t block_id;
 	vector<uint8_t> free_blocks;
+	atomic<bool> dirty;
 
 	void Write(WriteStream &sink);
 	static MetadataBlock Read(ReadStream &source);
 
 	idx_t FreeBlocksToInteger();
 	void FreeBlocksFromInteger(idx_t blocks);
+	static vector<uint8_t> BlocksFromInteger(idx_t free_list);
+
+	string ToString() const;
 };
 
 struct MetadataPointer {
@@ -51,6 +64,8 @@ public:
 
 	MetadataHandle AllocateHandle();
 	MetadataHandle Pin(const MetadataPointer &pointer);
+
+	MetadataHandle Pin(QueryContext context, const MetadataPointer &pointer);
 
 	MetaBlockPointer GetDiskPointer(const MetadataPointer &pointer, uint32_t offset = 0);
 	MetadataPointer FromDiskPointer(MetaBlockPointer pointer);
@@ -77,17 +92,19 @@ public:
 protected:
 	BlockManager &block_manager;
 	BufferManager &buffer_manager;
+	mutable mutex block_lock;
 	unordered_map<block_id_t, MetadataBlock> blocks;
 	unordered_map<block_id_t, idx_t> modified_blocks;
 
 protected:
-	block_id_t AllocateNewBlock();
-	block_id_t PeekNextBlockId();
-	block_id_t GetNextBlockId();
+	block_id_t AllocateNewBlock(unique_lock<mutex> &block_lock);
+	block_id_t PeekNextBlockId() const;
+	block_id_t GetNextBlockId() const;
 
-	void AddBlock(MetadataBlock new_block, bool if_exists = false);
-	void AddAndRegisterBlock(MetadataBlock block);
-	void ConvertToTransient(MetadataBlock &block);
+	void AddBlock(unique_lock<mutex> &block_lock, MetadataBlock new_block, bool if_exists = false);
+	void AddAndRegisterBlock(unique_lock<mutex> &block_lock, MetadataBlock block);
+	void ConvertToTransient(unique_lock<mutex> &block_lock, MetadataBlock &block);
+	MetadataPointer FromDiskPointerInternal(unique_lock<mutex> &block_lock, MetaBlockPointer pointer);
 };
 
 } // namespace duckdb

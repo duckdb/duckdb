@@ -2,8 +2,6 @@
 # description: Issue #5836: Test database oid
 # group: [table_function]
 
-require noforcestorage
-
 statement ok
 CREATE TEMP TABLE x (x INT);
 

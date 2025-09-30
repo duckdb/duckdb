@@ -1,11 +1,14 @@
 #include "duckdb/common/http_util.hpp"
-#include "duckdb/main/database.hpp"
+
+#include "duckdb/common/exception/http_exception.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/common/exception/http_exception.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_context_file_opener.hpp"
-#include "duckdb/main/database_file_opener.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/main/database_file_opener.hpp"
+
 #ifndef DISABLE_DUCKDB_REMOTE_INSTALL
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
 #include "httplib.hpp"
@@ -224,7 +227,13 @@ unique_ptr<HTTPResponse> HTTPUtil::SendRequest(BaseRequest &request, unique_ptr<
 	}
 
 	std::function<unique_ptr<HTTPResponse>(void)> on_request([&]() {
-		auto response = client->Request(request);
+		unique_ptr<HTTPResponse> response;
+		try {
+			response = client->Request(request);
+		} catch (...) {
+			LogRequest(request, nullptr);
+			throw;
+		}
 		LogRequest(request, response ? response.get() : nullptr);
 		return response;
 	});
@@ -370,8 +379,12 @@ HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)
 		// Note: request errors will always be retried
 		bool should_retry = !response || response->ShouldRetry();
 		if (!should_retry) {
+			auto response_code = static_cast<uint16_t>(response->status);
+			if (response_code >= 200 && response_code < 300) {
+				response->success = true;
+				return response;
+			}
 			switch (response->status) {
-			case HTTPStatusCode::OK_200:
 			case HTTPStatusCode::NotModified_304:
 				response->success = true;
 				break;

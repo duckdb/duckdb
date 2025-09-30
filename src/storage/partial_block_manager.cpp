@@ -1,4 +1,6 @@
 #include "duckdb/storage/partial_block_manager.hpp"
+#include "duckdb/storage/table/in_memory_checkpoint.hpp"
+#include "duckdb/storage/table/column_checkpoint_state.hpp"
 
 namespace duckdb {
 
@@ -13,6 +15,10 @@ PartialBlock::PartialBlock(PartialBlockState state, BlockManager &block_manager,
 
 void PartialBlock::AddUninitializedRegion(idx_t start, idx_t end) {
 	uninitialized_regions.push_back({start, end});
+}
+
+void PartialBlock::AddSegmentToTail(ColumnData &data, ColumnSegment &segment, uint32_t offset_in_block) {
+	throw InternalException("PartialBlock::AddSegmentToTail not supported for this block type");
 }
 
 void PartialBlock::FlushInternal(const idx_t free_space_left) {
@@ -34,9 +40,11 @@ void PartialBlock::FlushInternal(const idx_t free_space_left) {
 // PartialBlockManager
 //===--------------------------------------------------------------------===//
 
-PartialBlockManager::PartialBlockManager(BlockManager &block_manager, PartialBlockType partial_block_type,
-                                         optional_idx max_partial_block_size_p, uint32_t max_use_count)
-    : block_manager(block_manager), partial_block_type(partial_block_type), max_use_count(max_use_count) {
+PartialBlockManager::PartialBlockManager(QueryContext context, BlockManager &block_manager,
+                                         PartialBlockType partial_block_type, optional_idx max_partial_block_size_p,
+                                         uint32_t max_use_count)
+    : context(context.GetClientContext()), block_manager(block_manager), partial_block_type(partial_block_type),
+      max_use_count(max_use_count) {
 
 	if (max_partial_block_size_p.IsValid()) {
 		max_partial_block_size = NumericCast<uint32_t>(max_partial_block_size_p.GetIndex());
@@ -103,6 +111,14 @@ bool PartialBlockManager::GetPartialBlock(idx_t segment_size, unique_ptr<Partial
 	return true;
 }
 
+unique_ptr<PartialBlock> PartialBlockManager::CreatePartialBlock(ColumnData &column_data, ColumnSegment &segment,
+                                                                 PartialBlockState state, BlockManager &block_manager) {
+	if (partial_block_type == PartialBlockType::IN_MEMORY_CHECKPOINT) {
+		return make_uniq<InMemoryPartialBlock>(column_data, segment, state, block_manager);
+	}
+	return make_uniq<PartialBlockForCheckpoint>(column_data, segment, state, block_manager);
+}
+
 void PartialBlockManager::RegisterPartialBlock(PartialBlockAllocation allocation) {
 	auto &state = allocation.partial_block->state;
 	D_ASSERT(partial_block_type != PartialBlockType::FULL_CHECKPOINT || state.block_id >= 0);
@@ -118,6 +134,7 @@ void PartialBlockManager::RegisterPartialBlock(PartialBlockAllocation allocation
 		// check if the block is STILL partially filled after adding the segment_size
 		if (new_space_left >= block_manager.GetBlockSize() - max_partial_block_size) {
 			// the block is still partially filled: add it to the partially_filled_blocks list
+			D_ASSERT(allocation.partial_block->state.offset > 0);
 			partially_filled_blocks.insert(make_pair(new_space_left, std::move(allocation.partial_block)));
 		}
 	}
@@ -132,7 +149,7 @@ void PartialBlockManager::RegisterPartialBlock(PartialBlockAllocation allocation
 	}
 	// Flush any block that we're not going to reuse.
 	if (block_to_free) {
-		block_to_free->Flush(free_space);
+		block_to_free->Flush(context, free_space);
 	}
 }
 
@@ -173,13 +190,17 @@ void PartialBlockManager::ClearBlocks() {
 
 void PartialBlockManager::FlushPartialBlocks() {
 	for (auto &e : partially_filled_blocks) {
-		e.second->Flush(e.first);
+		e.second->Flush(context, e.first);
 	}
 	partially_filled_blocks.clear();
 }
 
 BlockManager &PartialBlockManager::GetBlockManager() const {
 	return block_manager;
+}
+
+optional_ptr<ClientContext> PartialBlockManager::GetClientContext() const {
+	return context;
 }
 
 void PartialBlockManager::Rollback() {

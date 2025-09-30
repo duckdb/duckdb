@@ -32,7 +32,7 @@ add_library_unity(
   time.cpp
   validity_mask.cpp
   value.cpp
-  varint.cpp
+  bignum.cpp
   vector_buffer.cpp
   vector.cpp
   vector_cache.cpp

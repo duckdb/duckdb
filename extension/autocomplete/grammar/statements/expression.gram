@@ -1,0 +1,146 @@
+ColumnReference <- CatalogReservedSchemaTableColumnName / SchemaReservedTableColumnName / TableReservedColumnName / ColumnName
+CatalogReservedSchemaTableColumnName <- CatalogQualification ReservedSchemaQualification ReservedTableQualification ReservedColumnName
+SchemaReservedTableColumnName <- SchemaQualification ReservedTableQualification ReservedColumnName
+TableReservedColumnName <- TableQualification ReservedColumnName
+FunctionExpression <- FunctionIdentifier Parens(DistinctOrAll? List(FunctionArgument)? OrderByClause? IgnoreNulls?) WithinGroupClause? FilterClause? ExportClause? OverClause?
+
+FunctionIdentifier <- CatalogReservedSchemaFunctionName / SchemaReservedFunctionName / FunctionName
+CatalogReservedSchemaFunctionName <- CatalogQualification ReservedSchemaQualification? ReservedFunctionName
+SchemaReservedFunctionName <- SchemaQualification ReservedFunctionName
+
+DistinctOrAll <- 'DISTINCT' / 'ALL'
+ExportClause <- 'EXPORT_STATE'
+WithinGroupClause <- 'WITHIN' 'GROUP' Parens(OrderByClause)
+FilterClause <- 'FILTER' Parens('WHERE'? Expression)
+IgnoreNulls <- ('IGNORE' 'NULLS') / ('RESPECT' 'NULLS')
+
+ParenthesisExpression <- Parens(List(Expression))
+LiteralExpression <- StringLiteral / NumberLiteral / 'NULL' / 'TRUE' / 'FALSE'
+CastExpression <- CastOrTryCast Parens(Expression 'AS' Type)
+CastOrTryCast <- 'CAST' / 'TRY_CAST'
+
+StarExpression <- (ColId '.')* '*' ExcludeList? ReplaceList? RenameList?
+ExcludeList <- 'EXCLUDE' (Parens(List(ExcludeName)) / ExcludeName)
+ExcludeName <- DottedIdentifier / ColIdOrString
+ReplaceList <- 'REPLACE' (Parens(List(ReplaceEntry)) / ReplaceEntry)
+ReplaceEntry <- Expression 'AS' ColumnReference
+RenameList <- 'RENAME' (Parens(List(RenameEntry)) / RenameEntry)
+RenameEntry <- ColumnReference 'AS' Identifier
+SubqueryExpression <- 'NOT'? 'EXISTS'? SubqueryReference
+CaseExpression <- 'CASE' Expression? CaseWhenThen CaseWhenThen* CaseElse? 'END'
+CaseWhenThen <- 'WHEN' Expression 'THEN' Expression
+CaseElse <- 'ELSE' Expression
+TypeLiteral <- ColId StringLiteral
+IntervalLiteral <- 'INTERVAL' IntervalParameter IntervalUnit?
+IntervalParameter <- StringLiteral / NumberLiteral / Parens(Expression)
+IntervalUnit <- ColId
+FrameClause <- Framing FrameExtent WindowExcludeClause?
+Framing <- 'ROWS' / 'RANGE' / 'GROUPS'
+FrameExtent <- ('BETWEEN' FrameBound 'AND' FrameBound) / FrameBound
+FrameBound <- ('UNBOUNDED' 'PRECEDING') / ('UNBOUNDED' 'FOLLOWING') / ('CURRENT' 'ROW') / (Expression 'PRECEDING') / (Expression 'FOLLOWING')
+WindowExcludeClause <- 'EXCLUDE' WindowExcludeElement
+WindowExcludeElement <- ('CURRENT' 'ROW') / 'GROUP' / 'TIES' / ('NO' 'OTHERS')
+OverClause <- 'OVER' WindowFrame
+WindowFrame <- WindowFrameDefinition / Identifier / Parens(Identifier)
+WindowFrameDefinition <- Parens(BaseWindowName? WindowFrameContents) / Parens(WindowFrameContents)
+WindowFrameContents <- WindowPartition? OrderByClause? FrameClause?
+BaseWindowName <- Identifier
+WindowPartition <- 'PARTITION' 'BY' List(Expression)
+PrefixExpression <- PrefixOperator Expression
+PrefixOperator <- 'NOT' / '-' / '+' / '~'
+ListExpression <- 'ARRAY'? (BoundedListExpression / SelectStatement)
+BoundedListExpression <- '[' List(Expression)? ']'
+StructExpression <- '{' List(StructField)? '}'
+StructField <- Expression ':' Expression
+MapExpression <- 'MAP' StructExpression
+GroupingExpression <- GroupingOrGroupingId Parens(List(Expression))
+GroupingOrGroupingId <- 'GROUPING' / 'GROUPING_ID'
+Parameter <- '?' / NumberedParameter / ColLabelParameter
+NumberedParameter <- '$' NumberLiteral
+ColLabelParameter <- '$' ColLabel
+PositionalExpression <- '#' NumberLiteral
+DefaultExpression <- 'DEFAULT'
+
+ListComprehensionExpression <- '[' Expression 'FOR' List(Expression) ListComprehensionFilter? ']'
+ListComprehensionFilter <- 'IF' Expression
+
+SingleExpression <-
+	LiteralExpression /
+	Parameter /
+    SubqueryExpression /
+    SpecialFunctionExpression /
+    ParenthesisExpression /
+    IntervalLiteral /
+    TypeLiteral /
+    CaseExpression /
+    StarExpression /
+    CastExpression /
+    GroupingExpression /
+    MapExpression /
+    FunctionExpression /
+    ColumnReference /
+    PrefixExpression /
+    ListComprehensionExpression /
+    ListExpression /
+    StructExpression /
+    PositionalExpression /
+    DefaultExpression
+
+
+
+OperatorLiteral <- <[\+\-\*\/\%\^\<\>\=\~\!\@\&\|\`]+>
+LikeOperator <- 'NOT'? LikeOrSimilarTo
+LikeOrSimilarTo <- 'LIKE' / 'ILIKE' / 'GLOB' / ('SIMILAR' 'TO')
+InOperator <- 'NOT'? 'IN'
+IsOperator <- 'IS' 'NOT'? DistinctFrom?
+DistinctFrom <- 'DISTINCT' 'FROM'
+ConjunctionOperator <- 'OR' / 'AND'
+ComparisonOperator <- '=' / '<=' / '>=' / '<' / '>' / '<>' / '!=' / '=='
+BetweenOperator <- 'NOT'? 'BETWEEN'
+CollateOperator <- 'COLLATE'
+LambdaOperator <- '->'
+EscapeOperator <- 'ESCAPE'
+AtTimeZoneOperator <- 'AT' 'TIME' 'ZONE'
+PostfixOperator <- '!'
+AnyAllOperator <- ComparisonOperator AnyOrAll
+AnyOrAll <- 'ANY' / 'ALL'
+
+Operator <-
+	AnyAllOperator /
+    ConjunctionOperator /
+    LikeOperator /
+    InOperator /
+    IsOperator /
+    BetweenOperator /
+    CollateOperator /
+    LambdaOperator /
+    EscapeOperator /
+    AtTimeZoneOperator /
+    OperatorLiteral
+
+CastOperator <- '::' Type
+DotOperator <- '.' (FunctionExpression / ColLabel)
+NotNull <- 'NOT' 'NULL'
+Indirection <- CastOperator / DotOperator / SliceExpression / NotNull / PostfixOperator
+
+BaseExpression <- SingleExpression Indirection*
+Expression <- BaseExpression RecursiveExpression*
+RecursiveExpression <- (Operator Expression)
+SliceExpression <- '[' SliceBound ']'
+SliceBound <- Expression? (':' (Expression / '-')?)? (':' Expression?)?
+
+SpecialFunctionExpression <- CoalesceExpression / UnpackExpression / ColumnsExpression / ExtractExpression / LambdaExpression / NullIfExpression / PositionExpression / RowExpression / SubstringExpression / TrimExpression
+CoalesceExpression <- 'COALESCE' Parens(List(Expression))
+UnpackExpression <- 'UNPACK' Parens(Expression)
+ColumnsExpression <- '*'? 'COLUMNS' Parens(Expression)
+ExtractExpression <- 'EXTRACT' Parens(Expression 'FROM' Expression)
+LambdaExpression <- 'LAMBDA' List(ColIdOrString) ':' Expression
+NullIfExpression <- 'NULLIF' Parens(Expression ',' Expression)
+PositionExpression <- 'POSITION' Parens(Expression)
+RowExpression <- 'ROW' Parens(List(Expression))
+SubstringExpression <- 'SUBSTRING' Parens(SubstringParameters / List(Expression))
+SubstringParameters <- Expression 'FROM' NumberLiteral 'FOR' NumberLiteral
+TrimExpression <- 'TRIM' Parens(TrimDirection? TrimSource? List(Expression))
+
+TrimDirection <- 'BOTH' / 'LEADING' / 'TRAILING'
+TrimSource <- Expression? 'FROM'

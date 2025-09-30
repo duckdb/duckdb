@@ -4,7 +4,7 @@
 
 namespace duckdb {
 
-template <class T, class RETURN_TYPE, bool FIND_NULLS = false>
+template <class T, class RETURN_TYPE, bool FIND_NULLS>
 idx_t ListSearchSimpleOp(Vector &input_list, Vector &list_child, Vector &target, Vector &result, const idx_t count) {
 	// If the return type is not a bool, return the position
 	const auto return_pos = std::is_same<RETURN_TYPE, int32_t>::value;
@@ -89,7 +89,7 @@ idx_t ListSearchSimpleOp(Vector &input_list, Vector &list_child, Vector &target,
 	return total_matches;
 }
 
-template <class RETURN_TYPE>
+template <class RETURN_TYPE, bool FIND_NULLS>
 idx_t ListSearchNestedOp(Vector &list_vec, Vector &source_vec, Vector &target_vec, Vector &result_vec,
                          const idx_t target_count) {
 	// Set up sort keys for nested types.
@@ -101,8 +101,8 @@ idx_t ListSearchNestedOp(Vector &list_vec, Vector &source_vec, Vector &target_ve
 	CreateSortKeyHelpers::CreateSortKeyWithValidity(source_vec, source_sort_key_vec, order_modifiers, source_count);
 	CreateSortKeyHelpers::CreateSortKeyWithValidity(target_vec, target_sort_key_vec, order_modifiers, target_count);
 
-	return ListSearchSimpleOp<string_t, RETURN_TYPE>(list_vec, source_sort_key_vec, target_sort_key_vec, result_vec,
-	                                                 target_count);
+	return ListSearchSimpleOp<string_t, RETURN_TYPE, FIND_NULLS>(list_vec, source_sort_key_vec, target_sort_key_vec,
+	                                                             result_vec, target_count);
 }
 
 //! "Search" each list in the list vector for the corresponding value in the target vector, returning either
@@ -152,7 +152,7 @@ idx_t ListSearchOp(Vector &list_v, Vector &source_v, Vector &target_v, Vector &r
 	case PhysicalType::STRUCT:
 	case PhysicalType::LIST:
 	case PhysicalType::ARRAY:
-		return ListSearchNestedOp<RETURN_TYPE>(list_v, source_v, target_v, result_v, target_count);
+		return ListSearchNestedOp<RETURN_TYPE, FIND_NULLS>(list_v, source_v, target_v, result_v, target_count);
 	default:
 		throw NotImplementedException("This function has not been implemented for logical type %s",
 		                              TypeIdToString(type));

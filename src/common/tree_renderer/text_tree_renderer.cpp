@@ -160,6 +160,41 @@ string AdjustTextForRendering(string source, idx_t max_render_width) {
 	return string(half_spaces + extra_left_space, ' ') + source + string(half_spaces, ' ');
 }
 
+string TextTreeRenderer::FormatNumber(const string &input) {
+	if (config.decimal_separator == '\0' && config.thousand_separator == '\0') {
+		// no thousand separator
+		return input;
+	}
+	// first check how many digits there are (preceding any decimal point)
+	idx_t character_count = 0;
+	for (auto c : input) {
+		if (!StringUtil::CharacterIsDigit(c)) {
+			break;
+		}
+		character_count++;
+	}
+	// find the position of the first thousand separator
+	idx_t separator_position = character_count % 3 == 0 ? 3 : character_count % 3;
+	// now add the thousand separators
+	string result;
+	for (idx_t c = 0; c < character_count; c++) {
+		if (c == separator_position && config.thousand_separator != '\0') {
+			result += config.thousand_separator;
+			separator_position += 3;
+		}
+		result += input[c];
+	}
+	// add any remaining characters
+	for (idx_t c = character_count; c < input.size(); c++) {
+		if (input[c] == '.' && config.decimal_separator != '\0') {
+			result += config.decimal_separator;
+		} else {
+			result += input[c];
+		}
+	}
+	return result;
+}
+
 void TextTreeRenderer::RenderBoxContent(RenderTree &root, std::ostream &ss, idx_t y) {
 	// we first need to figure out how high our boxes are going to be
 	vector<vector<string>> extra_info;
@@ -246,7 +281,7 @@ void TextTreeRenderer::RenderBoxContent(RenderTree &root, std::ostream &ss, idx_
 				if (render_y + 1 == extra_height && render_text.empty()) {
 					auto entry = node->extra_text.find(RenderTreeNode::CARDINALITY);
 					if (entry != node->extra_text.end()) {
-						render_text = entry->second + " Rows";
+						render_text = FormatNumber(entry->second) + " row" + (entry->second == "1" ? "" : "s");
 					}
 				}
 				if (render_y == extra_height && render_text.empty()) {
@@ -257,14 +292,16 @@ void TextTreeRenderer::RenderBoxContent(RenderTree &root, std::ostream &ss, idx_
 						// we only render estimated cardinality if there is no real cardinality
 						auto entry = node->extra_text.find(RenderTreeNode::ESTIMATED_CARDINALITY);
 						if (entry != node->extra_text.end()) {
-							render_text = "~" + entry->second + " Rows";
+							render_text =
+							    "~" + FormatNumber(entry->second) + " row" + (entry->second == "1" ? "" : "s");
 						}
 					}
 					if (node->extra_text.find(RenderTreeNode::CARDINALITY) == node->extra_text.end()) {
 						// we only render estimated cardinality if there is no real cardinality
 						auto entry = node->extra_text.find(RenderTreeNode::ESTIMATED_CARDINALITY);
 						if (entry != node->extra_text.end()) {
-							render_text = "~" + entry->second + " Rows";
+							render_text =
+							    "~" + FormatNumber(entry->second) + " row" + (entry->second == "1" ? "" : "s");
 						}
 					}
 				}

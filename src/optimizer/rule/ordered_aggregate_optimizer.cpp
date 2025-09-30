@@ -53,12 +53,7 @@ unique_ptr<Expression> OrderedAggregateOptimizer::Apply(ClientContext &context, 
 	vector<unique_ptr<Expression>> sort_children;
 	for (auto &order : aggr.order_bys->orders) {
 		sort_children.emplace_back(std::move(order.expression));
-
-		string modifier;
-		modifier += (order.type == OrderType::ASCENDING) ? "ASC" : "DESC";
-		modifier += " NULLS";
-		modifier += (order.null_order == OrderByNullType::NULLS_FIRST) ? " FIRST" : " LAST";
-		sort_children.emplace_back(make_uniq<BoundConstantExpression>(Value(modifier)));
+		sort_children.emplace_back(make_uniq<BoundConstantExpression>(Value(order.GetOrderModifier())));
 	}
 	aggr.order_bys.reset();
 

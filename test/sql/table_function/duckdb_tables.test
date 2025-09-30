@@ -2,8 +2,6 @@
 # description: Test duckdb_tables function
 # group: [table_function]
 
-require noforcestorage
-
 query I
 SELECT COUNT(*) FROM duckdb_tables();
 ----
@@ -27,13 +25,23 @@ CREATE TEMPORARY TABLE mytemp(i INTEGER)
 statement ok
 CREATE VIEW v1 AS SELECT 42
 
-query IIIIIIIII
-SELECT database_name, schema_name, table_name, temporary, has_primary_key, estimated_size, column_count, index_count, check_constraint_count FROM duckdb_tables() ORDER BY table_name;
+query IIIIIIII
+SELECT schema_name, table_name, temporary, has_primary_key, estimated_size, column_count, index_count, check_constraint_count
+FROM duckdb_tables() ORDER BY table_name;
 ----
-memory	main	integers	False	False	0	1	0	0
-memory	myschema	mytable	False	False	0	1	0	0
-temp	main	mytemp	True	False	0	1	0	0
-memory	main	pk	False	True	0	2	1	1
+main	integers	False	False	0	1	0	0
+myschema	mytable	False	False	0	1	0	0
+main	mytemp	True	False	0	1	0	0
+main	pk	False	True	0	2	1	1
+
+query I
+SELECT database_name = current_database() OR database_name = 'temp'
+FROM duckdb_tables();
+----
+True
+True
+True
+True
 
 statement error
 SELECT * FROM temp.duckdb_tables

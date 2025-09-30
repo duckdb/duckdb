@@ -68,12 +68,14 @@ DistinctAggregateState::DistinctAggregateState(const DistinctAggregateData &data
 }
 
 //! Persistent + shared (read-only) data for the distinct aggregates
-DistinctAggregateData::DistinctAggregateData(const DistinctAggregateCollectionInfo &info)
-    : DistinctAggregateData(info, {}, nullptr) {
+DistinctAggregateData::DistinctAggregateData(const DistinctAggregateCollectionInfo &info,
+                                             TupleDataValidityType distinct_validity)
+    : DistinctAggregateData(info, {}, nullptr, distinct_validity) {
 }
 
 DistinctAggregateData::DistinctAggregateData(const DistinctAggregateCollectionInfo &info, const GroupingSet &groups,
-                                             const vector<unique_ptr<Expression>> *group_expressions)
+                                             const vector<unique_ptr<Expression>> *group_expressions,
+                                             TupleDataValidityType distinct_validity)
     : info(info) {
 	grouped_aggregate_data.resize(info.table_count);
 	radix_tables.resize(info.table_count);
@@ -103,7 +105,7 @@ DistinctAggregateData::DistinctAggregateData(const DistinctAggregateCollectionIn
 		grouped_aggregate_data[table_idx] = make_uniq<GroupedAggregateData>();
 		grouped_aggregate_data[table_idx]->InitializeDistinct(info.aggregates[i], group_expressions);
 		radix_tables[table_idx] =
-		    make_uniq<RadixPartitionedHashTable>(grouping_set, *grouped_aggregate_data[table_idx]);
+		    make_uniq<RadixPartitionedHashTable>(grouping_set, *grouped_aggregate_data[table_idx], distinct_validity);
 
 		// Fill the chunk_types (only contains the payload of the distinct aggregates)
 		vector<LogicalType> chunk_types;

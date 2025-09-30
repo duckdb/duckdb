@@ -76,6 +76,13 @@ void DuckTransaction::PushCatalogEntry(CatalogEntry &entry, data_ptr_t extra_dat
 	}
 }
 
+void DuckTransaction::PushAttach(AttachedDatabase &db) {
+	auto undo_entry = undo_buffer.CreateEntry(UndoFlags::ATTACHED_DATABASE, sizeof(AttachedDatabase *));
+	auto ptr = undo_entry.Ptr();
+	// store the pointer to the database
+	Store<CatalogEntry *>(&db, ptr);
+}
+
 void DuckTransaction::PushDelete(DataTable &table, RowVersionManager &info, idx_t vector_idx, row_t rows[], idx_t count,
                                  idx_t base_row) {
 	ModifyTable(table);
@@ -146,6 +153,7 @@ void DuckTransaction::PushSequenceUsage(SequenceCatalogEntry &sequence, const Se
 }
 
 void DuckTransaction::ModifyTable(DataTable &tbl) {
+	lock_guard<mutex> guard(modified_tables_lock);
 	auto table_ref = reference<DataTable>(tbl);
 	auto entry = modified_tables.find(table_ref);
 	if (entry != modified_tables.end()) {
@@ -160,7 +168,9 @@ bool DuckTransaction::ChangesMade() {
 }
 
 UndoBufferProperties DuckTransaction::GetUndoProperties() {
-	return undo_buffer.GetProperties();
+	auto properties = undo_buffer.GetProperties();
+	properties.estimated_size += storage->EstimatedSize();
+	return properties;
 }
 
 bool DuckTransaction::AutomaticCheckpoint(AttachedDatabase &db, const UndoBufferProperties &properties) {
@@ -175,7 +185,7 @@ bool DuckTransaction::AutomaticCheckpoint(AttachedDatabase &db, const UndoBuffer
 		return false;
 	}
 	auto &storage_manager = db.GetStorageManager();
-	return storage_manager.AutomaticCheckpoint(storage->EstimatedSize() + properties.estimated_size);
+	return storage_manager.AutomaticCheckpoint(properties.estimated_size);
 }
 
 bool DuckTransaction::ShouldWriteToWAL(AttachedDatabase &db) {

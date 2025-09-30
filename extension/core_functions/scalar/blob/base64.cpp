@@ -3,6 +3,7 @@
 
 namespace duckdb {
 
+namespace {
 struct Base64EncodeOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
@@ -24,15 +25,17 @@ struct Base64DecodeOperator {
 	}
 };
 
-static void Base64EncodeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+void Base64EncodeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	// decode is also a nop cast, but requires verification if the provided string is actually
 	UnaryExecutor::ExecuteString<string_t, string_t, Base64EncodeOperator>(args.data[0], result, args.size());
 }
 
-static void Base64DecodeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+void Base64DecodeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	// decode is also a nop cast, but requires verification if the provided string is actually
 	UnaryExecutor::ExecuteString<string_t, string_t, Base64DecodeOperator>(args.data[0], result, args.size());
 }
+
+} // namespace
 
 ScalarFunction ToBase64Fun::GetFunction() {
 	return ScalarFunction({LogicalType::BLOB}, LogicalType::VARCHAR, Base64EncodeFunction);

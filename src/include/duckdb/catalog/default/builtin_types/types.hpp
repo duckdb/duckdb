@@ -19,13 +19,14 @@ struct DefaultType {
 	LogicalTypeId type;
 };
 
-using builtin_type_array = std::array<DefaultType, 73>;
+using builtin_type_array = std::array<DefaultType, 76>;
 
 static constexpr const builtin_type_array BUILTIN_TYPES{{
 	{"decimal", LogicalTypeId::DECIMAL},
 	{"dec", LogicalTypeId::DECIMAL},
 	{"numeric", LogicalTypeId::DECIMAL},
 	{"time", LogicalTypeId::TIME},
+	{"time_ns", LogicalTypeId::TIME_NS},
 	{"date", LogicalTypeId::DATE},
 	{"timestamp", LogicalTypeId::TIMESTAMP},
 	{"datetime", LogicalTypeId::TIMESTAMP},
@@ -82,7 +83,9 @@ static constexpr const builtin_type_array BUILTIN_TYPES{{
 	{"union", LogicalTypeId::UNION},
 	{"bit", LogicalTypeId::BIT},
 	{"bitstring", LogicalTypeId::BIT},
-	{"varint", LogicalTypeId::VARINT},
+	{"variant", LogicalTypeId::VARIANT},
+	{"bignum", LogicalTypeId::BIGNUM},
+	{"varint", LogicalTypeId::BIGNUM},
 	{"boolean", LogicalTypeId::BOOLEAN},
 	{"bool", LogicalTypeId::BOOLEAN},
 	{"logical", LogicalTypeId::BOOLEAN},

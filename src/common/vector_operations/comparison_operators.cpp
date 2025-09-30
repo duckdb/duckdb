@@ -15,7 +15,7 @@
 namespace duckdb {
 
 template <class T>
-bool EqualsFloat(T left, T right) {
+static bool EqualsFloat(T left, T right) {
 	if (DUCKDB_UNLIKELY(Value::IsNan(left) && Value::IsNan(right))) {
 		return true;
 	}
@@ -33,7 +33,7 @@ bool Equals::Operation(const double &left, const double &right) {
 }
 
 template <class T>
-bool GreaterThanFloat(T left, T right) {
+static bool GreaterThanFloat(T left, T right) {
 	// handle nans
 	// nan is always bigger than everything else
 	bool left_is_nan = Value::IsNan(left);
@@ -60,7 +60,7 @@ bool GreaterThan::Operation(const double &left, const double &right) {
 }
 
 template <class T>
-bool GreaterThanEqualsFloat(T left, T right) {
+static bool GreaterThanEqualsFloat(T left, T right) {
 	// handle nans
 	// nan is always bigger than everything else
 	bool left_is_nan = Value::IsNan(left);
@@ -86,7 +86,7 @@ template <>
 bool GreaterThanEquals::Operation(const double &left, const double &right) {
 	return GreaterThanEqualsFloat<double>(left, right);
 }
-
+namespace {
 struct ComparisonSelector {
 	template <typename OP>
 	static idx_t Select(Vector &left, Vector &right, const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
@@ -280,6 +280,7 @@ public:
 		}
 	}
 };
+} // namespace
 
 void VectorOperations::Equals(Vector &left, Vector &right, Vector &result, idx_t count) {
 	ComparisonExecutor::Execute<duckdb::Equals>(left, right, result, count);

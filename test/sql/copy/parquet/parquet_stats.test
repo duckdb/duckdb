@@ -206,3 +206,14 @@ query II
 select stats_min_value is null c0, stats_max_value is null c1 from parquet_metadata('__TEST_DIR__/test.parquet');
 ----
 false	false
+
+query II
+select row_group_bytes, row_group_compressed_bytes from parquet_metadata('__TEST_DIR__/test.parquet');
+----
+27	29
+
+query II
+select row_group_bytes, row_group_compressed_bytes from parquet_metadata('data/parquet-testing/varchar_stats.parquet');
+----
+200	208
+200	208

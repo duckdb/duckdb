@@ -1,4 +1,3 @@
-#define DUCKDB_EXTENSION_MAIN
 #include "duckdb.hpp"
 #include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
@@ -8,26 +7,30 @@
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/planner/extension_callback.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
-#include "duckdb/main/extension_util.hpp"
+#include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/common/vector_operations/generic_executor.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/common/extension_type_info.hpp"
+#include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/tableref/emptytableref.hpp"
 
 using namespace duckdb;
 
 //===--------------------------------------------------------------------===//
 // Scalar function
 //===--------------------------------------------------------------------===//
-inline int32_t hello_fun(string_t what) {
+static inline int32_t hello_fun(string_t what) {
 	return what.GetSize() + 5;
 }
 
-inline void TestAliasHello(DataChunk &args, ExpressionState &state, Vector &result) {
+static inline void TestAliasHello(DataChunk &args, ExpressionState &state, Vector &result) {
 	result.Reference(Value("Hello Alias!"));
 }
 
-inline void AddPointFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+static inline void AddPointFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &left_vector = args.data[0];
 	auto &right_vector = args.data[1];
 	const int count = args.size();
@@ -68,7 +71,7 @@ inline void AddPointFunction(DataChunk &args, ExpressionState &state, Vector &re
 	result.Verify(count);
 }
 
-inline void SubPointFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+static inline void SubPointFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &left_vector = args.data[0];
 	auto &right_vector = args.data[1];
 	const int count = args.size();
@@ -193,6 +196,7 @@ public:
 	QuackExtension() {
 		parse_function = QuackParseFunction;
 		plan_function = QuackPlanFunction;
+		parser_override = QuackParser;
 	}
 
 	static ParserExtensionParseResult QuackParseFunction(ParserExtensionInfo *info, const string &query) {
@@ -229,6 +233,24 @@ public:
 		result.return_type = StatementReturnType::QUERY_RESULT;
 		return result;
 	}
+
+	static ParserOverrideResult QuackParser(ParserExtensionInfo *info, const string &query) {
+		if (StringUtil::CIEquals(query, "override")) {
+			auto select_node = make_uniq<SelectNode>();
+			select_node->select_list.push_back(
+			    make_uniq<ConstantExpression>(Value("The DuckDB parser has been overridden")));
+			select_node->from_table = make_uniq<EmptyTableRef>();
+			auto select_statement = make_uniq<SelectStatement>();
+			select_statement->node = std::move(select_node);
+			vector<unique_ptr<SQLStatement>> statements;
+			statements.push_back(std::move(select_statement));
+			return ParserOverrideResult(std::move(statements));
+		}
+		if (StringUtil::Contains(query, "over")) {
+			return ParserOverrideResult("Parser overridden, query contained \"over\" but not \"override\"");
+		}
+		return ParserOverrideResult();
+	}
 };
 
 static set<string> test_loaded_extension_list;
@@ -239,7 +261,7 @@ class QuackLoadExtension : public ExtensionCallback {
 	}
 };
 
-inline void LoadedExtensionsFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+static inline void LoadedExtensionsFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	string result_str;
 	for (auto &ext : test_loaded_extension_list) {
 		if (!result_str.empty()) {
@@ -510,10 +532,11 @@ static void MinMaxRangeFunc(DataChunk &args, ExpressionState &state, Vector &res
 // Extension load + setup
 //===--------------------------------------------------------------------===//
 extern "C" {
-DUCKDB_EXTENSION_API void loadable_extension_demo_init(duckdb::DatabaseInstance &db) {
+DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_demo, loader) {
 	CreateScalarFunctionInfo hello_alias_info(
 	    ScalarFunction("test_alias_hello", {}, LogicalType::VARCHAR, TestAliasHello));
 
+	auto &db = loader.GetDatabaseInstance();
 	// create a scalar function
 	Connection con(db);
 	auto &client_context = *con.context;
@@ -572,48 +595,42 @@ DUCKDB_EXTENSION_API void loadable_extension_demo_init(duckdb::DatabaseInstance 
 
 	// Bounded type
 	auto bounded_type = BoundedType::GetDefault();
-	ExtensionUtil::RegisterType(db, "BOUNDED", bounded_type, BoundedType::Bind);
+	loader.RegisterType("BOUNDED", bounded_type, BoundedType::Bind);
 
 	// Example of function inspecting the type property
 	ScalarFunction bounded_max("bounded_max", {bounded_type}, LogicalType::INTEGER, BoundedMaxFunc, BoundedMaxBind);
-	ExtensionUtil::RegisterFunction(db, bounded_max);
+	loader.RegisterFunction(bounded_max);
 
 	// Example of function inspecting the type property and returning the same type
 	ScalarFunction bounded_invert("bounded_invert", {bounded_type}, bounded_type, BoundedInvertFunc, BoundedInvertBind);
 	// bounded_invert.serialize = BoundedReturnSerialize;
 	// bounded_invert.deserialize = BoundedReturnDeserialize;
-	ExtensionUtil::RegisterFunction(db, bounded_invert);
+	loader.RegisterFunction(bounded_invert);
 
 	// Example of function inspecting the type property of both arguments and returning a new type
 	ScalarFunction bounded_add("bounded_add", {bounded_type, bounded_type}, bounded_type, BoundedAddFunc,
 	                           BoundedAddBind);
-	ExtensionUtil::RegisterFunction(db, bounded_add);
+	loader.RegisterFunction(bounded_add);
 
 	// Example of function that is generic over the type property (the bound is not important)
 	ScalarFunction bounded_even("bounded_even", {bounded_type}, LogicalType::BOOLEAN, BoundedEvenFunc);
-	ExtensionUtil::RegisterFunction(db, bounded_even);
+	loader.RegisterFunction(bounded_even);
 
 	// Example of function that is specialized over type property
 	auto bounded_specialized_type = BoundedType::Get(0xFF);
 	ScalarFunction bounded_to_ascii("bounded_ascii", {bounded_specialized_type}, LogicalType::VARCHAR,
 	                                BoundedToAsciiFunc);
-	ExtensionUtil::RegisterFunction(db, bounded_to_ascii);
+	loader.RegisterFunction(bounded_to_ascii);
 
 	// Enable explicit casting to our specialized type
-	ExtensionUtil::RegisterCastFunction(db, bounded_type, bounded_specialized_type, BoundCastInfo(BoundedToBoundedCast),
-	                                    0);
+	loader.RegisterCastFunction(bounded_type, bounded_specialized_type, BoundCastInfo(BoundedToBoundedCast), 0);
 	// Casts
-	ExtensionUtil::RegisterCastFunction(db, LogicalType::INTEGER, bounded_type, BoundCastInfo(IntToBoundedCast), 0);
+	loader.RegisterCastFunction(LogicalType::INTEGER, bounded_type, BoundCastInfo(IntToBoundedCast), 0);
 
 	// MinMax Type
 	auto minmax_type = MinMaxType::GetDefault();
-	ExtensionUtil::RegisterType(db, "MINMAX", minmax_type, MinMaxType::Bind);
-	ExtensionUtil::RegisterCastFunction(db, LogicalType::INTEGER, minmax_type, BoundCastInfo(IntToMinMaxCast), 0);
-	ExtensionUtil::RegisterFunction(
-	    db, ScalarFunction("minmax_range", {minmax_type}, LogicalType::INTEGER, MinMaxRangeFunc));
-}
-
-DUCKDB_EXTENSION_API const char *loadable_extension_demo_version() {
-	return DuckDB::LibraryVersion();
+	loader.RegisterType("MINMAX", minmax_type, MinMaxType::Bind);
+	loader.RegisterCastFunction(LogicalType::INTEGER, minmax_type, BoundCastInfo(IntToMinMaxCast), 0);
+	loader.RegisterFunction(ScalarFunction("minmax_range", {minmax_type}, LogicalType::INTEGER, MinMaxRangeFunc));
 }
 }

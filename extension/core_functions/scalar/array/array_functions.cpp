@@ -60,7 +60,7 @@ static unique_ptr<FunctionData> ArrayGenericBinaryBind(ClientContext &context, S
 //------------------------------------------------------------------------------
 // Given two arrays of the same size, combine their elements into a single array
 // of the same size as the input arrays.
-
+namespace {
 struct CrossProductOp {
 	template <class TYPE>
 	static void Operation(const TYPE *lhs_data, const TYPE *rhs_data, TYPE *res_data, idx_t size) {
@@ -79,6 +79,7 @@ struct CrossProductOp {
 		res_data[2] = lx * ry - ly * rx;
 	}
 };
+} // namespace
 
 template <class TYPE, class OP, idx_t N>
 static void ArrayFixedCombine(DataChunk &args, ExpressionState &state, Vector &result) {

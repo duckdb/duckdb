@@ -131,7 +131,7 @@ void DictFSSTCompressionStorage::StringScanPartial(ColumnSegment &segment, Colum
 	auto &scan_state = state.scan_state->Cast<CompressedStringScanState>();
 
 	auto start = segment.GetRelativeIndex(state.row_index);
-	if (!ALLOW_DICT_VECTORS || !scan_state.AllowDictionaryScan(start, scan_count)) {
+	if (!ALLOW_DICT_VECTORS || !scan_state.AllowDictionaryScan(scan_count)) {
 		scan_state.ScanToFlatVector(result, result_offset, start, scan_count);
 	} else {
 		scan_state.ScanToDictionaryVector(segment, result, result_offset, start, scan_count);
@@ -179,7 +179,7 @@ static void DictFSSTFilter(ColumnSegment &segment, ColumnScanState &state, idx_t
                            TableFilterState &filter_state) {
 	auto &scan_state = state.scan_state->Cast<CompressedStringScanState>();
 	auto start = segment.GetRelativeIndex(state.row_index);
-	if (scan_state.AllowDictionaryScan(start, vector_count)) {
+	if (scan_state.AllowDictionaryScan(vector_count)) {
 		// only pushdown filters on dictionaries
 		if (!scan_state.filter_result) {
 			// no filter result yet - apply filter to the dictionary

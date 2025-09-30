@@ -1,0 +1,46 @@
+{
+  "description": "Run with a (terrible) hash function that always returns 0.",
+  "skip_compiled": "true",
+  "skip_tests": [
+    {
+      "reason": "Too slow.",
+      "paths": [
+        "test/optimizer/pushdown/no_mark_to_semi_if_mark_index_is_projected.test",
+        "test/optimizer/joins/tpcds_nofail.test",
+        "test/fuzzer/duckfuzz/bind_limit_num.test",
+        "test/sql/types/enum/test_5983.test",
+        "test/sql/insert/insert_from_many_grouping_sets.test",
+        "test/sql/subquery/lateral/pg_lateral.test",
+        "test/sql/aggregate/aggregates/test_perfect_ht.test",
+        "test/sql/upsert/upsert_duplicates_issue.test",
+        "test/sql/storage/lazy_load/lazy_load_limit.test",
+        "test/sql/transactions/test_multi_version_large.test",
+        "test/sql/copy/csv/auto/test_auto_cranlogs.test",
+        "test/sql/copy/csv/test_8890.test",
+        "test/sql/copy/csv/test_15211.test",
+        "test/sql/copy/csv/csv_limit_copy.test"
+      ]
+    },
+    {
+      "reason": "HyperLogLog doesn't work.",
+      "paths": [
+        "test/optimizer/joins/better_ce_estimates_for_bad_join_conditions.test",
+        "test/fuzzer/pedro/vacuum_table_with_generated_column.test",
+        "test/sql/types/nested/array/array_summarize.test",
+        "test/sql/types/timestamp/test_infinite_time.test",
+        "test/sql/show_select/test_summarize.test",
+        "test/sql/vacuum/test_analyze.test",
+        "test/sql/aggregate/aggregates/test_approximate_distinct_count.test",
+        "test/sql/function/list/aggregates/approx_count_distinct.test",
+        "test/sql/copy/csv/test_glob_reorder_lineitem.test"
+      ]
+    },
+    {
+      "reason": "Relies on exact hash function output.",
+      "paths": [
+        "test/sql/function/generic/hash_func.test",
+        "test/sql/copy/file_size_bytes.test"
+      ]
+    }
+  ]
+}

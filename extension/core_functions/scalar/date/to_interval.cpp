@@ -11,6 +11,8 @@ bool TryMultiplyOperator::Operation(double left, int64_t right, int64_t &result)
 	return TryCast::Operation<double, int64_t>(left * double(right), result);
 }
 
+namespace {
+
 struct ToMillenniaOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
@@ -185,6 +187,8 @@ ScalarFunctionSet GetIntegerIntervalFunctions() {
 	}
 	return function_set;
 }
+
+} // namespace
 
 ScalarFunctionSet ToMillenniaFun::GetFunctions() {
 	return GetIntegerIntervalFunctions<ToMillenniaOperator>();

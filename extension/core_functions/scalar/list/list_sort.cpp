@@ -6,7 +6,8 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/main/config.hpp"
-#include "duckdb/common/sort/sort.hpp"
+#include "duckdb/common/sorting/sort.hpp"
+#include "duckdb/parallel/thread_context.hpp"
 
 namespace duckdb {
 
@@ -22,11 +23,9 @@ struct ListSortBindData : public FunctionData {
 	bool is_grade_up;
 
 	vector<LogicalType> types;
-	vector<LogicalType> payload_types;
 
 	ClientContext &context;
-	RowLayout payload_layout;
-	vector<BoundOrderByNode> orders;
+	unique_ptr<Sort> sort;
 
 public:
 	bool Equals(const FunctionData &other_p) const override;
@@ -42,20 +41,17 @@ ListSortBindData::ListSortBindData(OrderType order_type_p, OrderByNullType null_
 	// get the vector types
 	types.emplace_back(LogicalType::USMALLINT);
 	types.emplace_back(child_type);
-	D_ASSERT(types.size() == 2);
-
-	// get the payload types
-	payload_types.emplace_back(LogicalType::UINTEGER);
-	D_ASSERT(payload_types.size() == 1);
-
-	// initialize the payload layout
-	payload_layout.Initialize(payload_types);
+	types.emplace_back(LogicalType::UINTEGER);
+	D_ASSERT(types.size() == 3);
 
 	// get the BoundOrderByNode
 	auto idx_col_expr = make_uniq_base<Expression, BoundReferenceExpression>(LogicalType::USMALLINT, 0U);
 	auto lists_col_expr = make_uniq_base<Expression, BoundReferenceExpression>(child_type, 1U);
+	vector<BoundOrderByNode> orders;
 	orders.emplace_back(OrderType::ASCENDING, OrderByNullType::ORDER_DEFAULT, std::move(idx_col_expr));
 	orders.emplace_back(order_type, null_order, std::move(lists_col_expr));
+	sort =
+	    unique_ptr<Sort>(new Sort(context, orders, {LogicalType::USMALLINT, child_type, LogicalType::UINTEGER}, {2}));
 }
 
 unique_ptr<FunctionData> ListSortBindData::Copy() const {
@@ -71,32 +67,26 @@ ListSortBindData::~ListSortBindData() {
 }
 
 // create the key_chunk and the payload_chunk and sink them into the local_sort_state
-void SinkDataChunk(Vector *child_vector, SelectionVector &sel, idx_t offset_lists_indices, vector<LogicalType> &types,
-                   vector<LogicalType> &payload_types, Vector &payload_vector, LocalSortState &local_sort_state,
-                   bool &data_to_sort, Vector &lists_indices) {
+static void SinkDataChunk(const Sort &sort, ExecutionContext &context, OperatorSinkInput &sink_input,
+                          Vector *child_vector, SelectionVector &sel, idx_t offset_lists_indices,
+                          vector<LogicalType> &types, Vector &payload_vector, bool &data_to_sort,
+                          Vector &lists_indices) {
 
 	// slice the child vector
 	Vector slice(*child_vector, sel, offset_lists_indices);
 
-	// initialize and fill key_chunk
-	DataChunk key_chunk;
-	key_chunk.InitializeEmpty(types);
-	key_chunk.data[0].Reference(lists_indices);
-	key_chunk.data[1].Reference(slice);
-	key_chunk.SetCardinality(offset_lists_indices);
-
-	// initialize and fill key_chunk and payload_chunk
-	DataChunk payload_chunk;
-	payload_chunk.InitializeEmpty(payload_types);
-	payload_chunk.data[0].Reference(payload_vector);
-	payload_chunk.SetCardinality(offset_lists_indices);
-
-	key_chunk.Verify();
-	payload_chunk.Verify();
+	// initialize and fill chunk
+	DataChunk chunk;
+	chunk.InitializeEmpty(types);
+	chunk.data[0].Reference(lists_indices);
+	chunk.data[1].Reference(slice);
+	chunk.data[2].Reference(payload_vector);
+	chunk.SetCardinality(offset_lists_indices);
+	chunk.Verify();
 
 	// sink
-	key_chunk.Flatten();
-	local_sort_state.SinkChunk(key_chunk, payload_chunk);
+	chunk.Flatten();
+	sort.Sink(context, chunk, sink_input);
 	data_to_sort = true;
 }
 
@@ -117,10 +107,12 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 	auto &info = func_expr.bind_info->Cast<ListSortBindData>();
 
 	// initialize the global and local sorting state
-	auto &buffer_manager = BufferManager::GetBufferManager(info.context);
-	GlobalSortState global_sort_state(info.context, info.orders, info.payload_layout);
-	LocalSortState local_sort_state;
-	local_sort_state.Initialize(global_sort_state, buffer_manager);
+	auto global_sink_state = info.sort->GetGlobalSinkState(info.context);
+	ThreadContext thread_context(info.context);
+	ExecutionContext execution_context(info.context, thread_context, nullptr);
+	auto local_sink_state = info.sort->GetLocalSinkState(execution_context);
+	InterruptState interrupt_state;
+	OperatorSinkInput sink_input {*global_sink_state, *local_sink_state, interrupt_state};
 
 	Vector sort_result_vec = info.is_grade_up ? Vector(input_lists.GetType()) : result;
 
@@ -174,8 +166,8 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 		for (idx_t child_idx = 0; child_idx < list_entry.length; child_idx++) {
 			// lists_indices vector is full, sink
 			if (offset_lists_indices == STANDARD_VECTOR_SIZE) {
-				SinkDataChunk(&child_vector, sel, offset_lists_indices, info.types, info.payload_types, payload_vector,
-				              local_sort_state, data_to_sort, lists_indices);
+				SinkDataChunk(*info.sort, execution_context, sink_input, &child_vector, sel, offset_lists_indices,
+				              info.types, payload_vector, data_to_sort, lists_indices);
 				offset_lists_indices = 0;
 			}
 
@@ -189,8 +181,8 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 	}
 
 	if (offset_lists_indices != 0) {
-		SinkDataChunk(&child_vector, sel, offset_lists_indices, info.types, info.payload_types, payload_vector,
-		              local_sort_state, data_to_sort, lists_indices);
+		SinkDataChunk(*info.sort, execution_context, sink_input, &child_vector, sel, offset_lists_indices, info.types,
+		              payload_vector, data_to_sort, lists_indices);
 	}
 
 	if (info.is_grade_up) {
@@ -202,20 +194,25 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 
 	if (data_to_sort) {
 		// add local state to global state, which sorts the data
-		global_sort_state.AddLocalState(local_sort_state);
-		global_sort_state.PrepareMergePhase();
+		OperatorSinkCombineInput combine_input {*global_sink_state, *local_sink_state, interrupt_state};
+		info.sort->Combine(execution_context, combine_input);
+
+		OperatorSinkFinalizeInput finalize_input {*global_sink_state, interrupt_state};
+		info.sort->Finalize(info.context, finalize_input);
 
 		// selection vector that is to be filled with the 'sorted' payload
 		SelectionVector sel_sorted(incr_payload_count);
 		idx_t sel_sorted_idx = 0;
 
 		// scan the sorted row data
-		PayloadScanner scanner(*global_sort_state.sorted_blocks[0]->payload_data, global_sort_state);
+		auto global_source_state = info.sort->GetGlobalSourceState(info.context, *global_sink_state);
+		auto local_source_state = info.sort->GetLocalSourceState(execution_context, *global_source_state);
+		OperatorSourceInput source_input {*global_source_state, *local_source_state, interrupt_state};
 		for (;;) {
 			DataChunk result_chunk;
-			result_chunk.Initialize(Allocator::DefaultAllocator(), info.payload_types);
+			result_chunk.Initialize(Allocator::DefaultAllocator(), {LogicalType::UINTEGER});
 			result_chunk.SetCardinality(0);
-			scanner.Scan(result_chunk);
+			info.sort->GetData(execution_context, result_chunk, source_input);
 			if (result_chunk.size() == 0) {
 				break;
 			}
@@ -303,8 +300,8 @@ static unique_ptr<FunctionData> ListGradeUpBind(ClientContext &context, ScalarFu
 		null_order = GetOrder<OrderByNullType>(context, *arguments[2]);
 	}
 	auto &config = DBConfig::GetConfig(context);
-	order = config.ResolveOrder(order);
-	null_order = config.ResolveNullOrder(order, null_order);
+	order = config.ResolveOrder(context, order);
+	null_order = config.ResolveNullOrder(context, order, null_order);
 
 	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
 
@@ -329,8 +326,8 @@ static unique_ptr<FunctionData> ListNormalSortBind(ClientContext &context, Scala
 		null_order = GetOrder<OrderByNullType>(context, *arguments[2]);
 	}
 	auto &config = DBConfig::GetConfig(context);
-	order = config.ResolveOrder(order);
-	null_order = config.ResolveNullOrder(order, null_order);
+	order = config.ResolveOrder(context, order);
+	null_order = config.ResolveNullOrder(context, order, null_order);
 	return ListSortBind(context, bound_function, arguments, order, null_order);
 }
 
@@ -343,7 +340,7 @@ static unique_ptr<FunctionData> ListReverseSortBind(ClientContext &context, Scal
 		null_order = GetOrder<OrderByNullType>(context, *arguments[1]);
 	}
 	auto &config = DBConfig::GetConfig(context);
-	order = config.ResolveOrder(order);
+	order = config.ResolveOrder(context, order);
 	switch (order) {
 	case OrderType::ASCENDING:
 		order = OrderType::DESCENDING;
@@ -354,7 +351,7 @@ static unique_ptr<FunctionData> ListReverseSortBind(ClientContext &context, Scal
 	default:
 		throw InternalException("Unexpected order type in list reverse sort");
 	}
-	null_order = config.ResolveNullOrder(order, null_order);
+	null_order = config.ResolveNullOrder(context, order, null_order);
 	return ListSortBind(context, bound_function, arguments, order, null_order);
 }
 

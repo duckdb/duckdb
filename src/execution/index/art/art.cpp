@@ -4,7 +4,11 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/index/art/art_builder.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
+#include "duckdb/execution/index/art/art_merger.hpp"
+#include "duckdb/execution/index/art/art_operator.hpp"
+#include "duckdb/execution/index/art/art_scanner.hpp"
 #include "duckdb/execution/index/art/base_leaf.hpp"
 #include "duckdb/execution/index/art/base_node.hpp"
 #include "duckdb/execution/index/art/iterator.hpp"
@@ -21,9 +25,6 @@
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
-#include "duckdb/execution/index/art/art_scanner.hpp"
-#include "duckdb/execution/index/art/art_merger.hpp"
-#include "duckdb/execution/index/art/art_operator.hpp"
 
 namespace duckdb {
 
@@ -35,7 +36,7 @@ struct ARTIndexScanState : public IndexScanState {
 	ExpressionType expressions[2];
 	bool checked = false;
 	//! All scanned row IDs.
-	unsafe_vector<row_t> row_ids;
+	set<row_t> row_ids;
 };
 
 //===--------------------------------------------------------------------===//
@@ -207,6 +208,8 @@ unique_ptr<IndexScanState> ART::TryInitializeScan(const Expression &expr, const 
 		high_comparison_type =
 		    between.upper_inclusive ? ExpressionType::COMPARE_LESSTHANOREQUALTO : ExpressionType::COMPARE_LESSTHAN;
 	}
+	// FIXME: add another if...else... to match rewritten BETWEEN,
+	// i.e., WHERE i BETWEEN 50 AND 1502 is rewritten to CONJUNCTION_AND.
 
 	// We cannot use an index scan.
 	if (equal_value.IsNull() && low_value.IsNull() && high_value.IsNull()) {
@@ -422,87 +425,29 @@ void ART::GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, Vector
 }
 
 //===--------------------------------------------------------------------===//
-// Construct from sorted data.
+// Build from sorted data.
 //===--------------------------------------------------------------------===//
 
-bool ART::ConstructInternal(const unsafe_vector<ARTKey> &keys, const unsafe_vector<ARTKey> &row_ids, Node &node,
-                            ARTKeySection &section) {
-	D_ASSERT(section.start < keys.size());
-	D_ASSERT(section.end < keys.size());
-	D_ASSERT(section.start <= section.end);
+ARTConflictType ART::Build(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_ids, const idx_t row_count) {
+	ArenaAllocator arena(BufferAllocator::Get(db));
+	ARTBuilder builder(arena, *this, keys, row_ids);
+	builder.Init(tree, row_count - 1);
 
-	auto &start = keys[section.start];
-	auto &end = keys[section.end];
-	D_ASSERT(start.len != 0);
-
-	// Increment the depth until we reach a leaf or find a mismatching byte.
-	auto prefix_depth = section.depth;
-	while (start.len != section.depth && start.ByteMatches(end, section.depth)) {
-		section.depth++;
-	}
-
-	if (start.len == section.depth) {
-		// We reached a leaf. All the bytes of start_key and end_key match.
-		auto row_id_count = section.end - section.start + 1;
-		if (IsUnique() && row_id_count != 1) {
-			return false;
-		}
-
-		reference<Node> ref(node);
-		auto count = UnsafeNumericCast<uint8_t>(start.len - prefix_depth);
-		Prefix::New(*this, ref, start, prefix_depth, count);
-		if (row_id_count == 1) {
-			Leaf::New(ref, row_ids[section.start].GetRowId());
-		} else {
-			// Loop and insert the row IDs.
-			// We cannot use Construct in the leaf because row IDs are not sorted.
-			ArenaAllocator arena(BufferAllocator::Get(db));
-			for (idx_t i = section.start; i < section.start + row_id_count; i++) {
-				ARTOperator::Insert(arena, *this, ref, row_ids[i], 0, row_ids[i], GateStatus::GATE_SET, nullptr,
-				                    IndexAppendMode::DEFAULT);
-			}
-			ref.get().SetGateStatus(GateStatus::GATE_SET);
-		}
-		return true;
-	}
-
-	// Create a new node and recurse.
-	unsafe_vector<ARTKeySection> children;
-	section.GetChildSections(children, keys);
-
-	// Create the prefix.
-	reference<Node> ref(node);
-	auto prefix_length = section.depth - prefix_depth;
-	Prefix::New(*this, ref, start, prefix_depth, prefix_length);
-
-	// Create the node.
-	Node::New(*this, ref, Node::GetNodeType(children.size()));
-	for (auto &child : children) {
-		Node new_child;
-		auto success = ConstructInternal(keys, row_ids, new_child, child);
-		Node::InsertChild(*this, ref, child.key_byte, new_child);
-		if (!success) {
-			return false;
-		}
-	}
-	return true;
-}
-
-bool ART::Construct(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_ids, const idx_t row_count) {
-	ARTKeySection section(0, row_count - 1, 0, 0);
-	if (!ConstructInternal(keys, row_ids, tree, section)) {
-		return false;
+	auto result = builder.Build();
+	if (result != ARTConflictType::NO_CONFLICT) {
+		return result;
 	}
 
 #ifdef DEBUG
-	unsafe_vector<row_t> row_ids_debug;
+	set<row_t> row_ids_debug;
 	Iterator it(*this);
 	it.FindMinimum(tree);
 	ARTKey empty_key = ARTKey();
 	it.Scan(empty_key, NumericLimits<row_t>().Maximum(), row_ids_debug, false);
 	D_ASSERT(row_count == row_ids_debug.size());
 #endif
-	return true;
+
+	return ARTConflictType::NO_CONFLICT;
 }
 
 //===--------------------------------------------------------------------===//
@@ -552,7 +497,8 @@ ErrorData ART::Insert(IndexLock &l, DataChunk &chunk, Vector &row_ids, IndexAppe
 			if (keys[i].Empty()) {
 				continue;
 			}
-			Erase(tree, keys[i], 0, row_id_keys[i], tree.GetGateStatus());
+			D_ASSERT(tree.GetGateStatus() == GateStatus::GATE_NOT_SET);
+			ARTOperator::Delete(*this, tree, keys[i], row_id_keys[i]);
 		}
 	}
 
@@ -605,7 +551,7 @@ ErrorData ART::Append(IndexLock &l, DataChunk &chunk, Vector &row_ids, IndexAppe
 
 void ART::VerifyAppend(DataChunk &chunk, IndexAppendInfo &info, optional_ptr<ConflictManager> manager) {
 	if (manager) {
-		D_ASSERT(manager->LookupType() == VerifyExistenceType::APPEND);
+		D_ASSERT(manager->GetVerifyExistenceType() == VerifyExistenceType::APPEND);
 		return VerifyConstraint(chunk, info, *manager);
 	}
 	ConflictManager local_manager(VerifyExistenceType::APPEND, chunk.size());
@@ -641,7 +587,8 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 		if (keys[i].Empty()) {
 			continue;
 		}
-		Erase(tree, keys[i], 0, row_id_keys[i], tree.GetGateStatus());
+		D_ASSERT(tree.GetGateStatus() == GateStatus::GATE_NOT_SET);
+		ARTOperator::Delete(*this, tree, keys[i], row_id_keys[i]);
 	}
 
 	if (!tree.HasMetadata()) {
@@ -662,106 +609,11 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 #endif
 }
 
-void ART::Erase(Node &node, reference<const ARTKey> key, idx_t depth, reference<const ARTKey> row_id,
-                GateStatus status) {
-	if (!node.HasMetadata()) {
-		return;
-	}
-
-	// Traverse the prefix.
-	reference<Node> next(node);
-	if (next.get().GetType() == NType::PREFIX) {
-		auto pos = Prefix::TraverseMutable(*this, next, key, depth);
-		if (pos.IsValid()) {
-			// Prefixes don't match: nothing to erase.
-			return;
-		}
-	}
-
-	//	Delete the row ID from the leaf.
-	//	This is the root node, which can be a leaf with possible prefix nodes.
-	if (next.get().GetType() == NType::LEAF_INLINED) {
-		if (next.get().GetRowId() == row_id.get().GetRowId()) {
-			Node::Free(*this, node);
-		}
-		return;
-	}
-
-	// Transform a deprecated leaf.
-	if (next.get().GetType() == NType::LEAF) {
-		D_ASSERT(status == GateStatus::GATE_NOT_SET);
-		Leaf::TransformToNested(*this, next);
-	}
-
-	// Enter a nested leaf.
-	if (status == GateStatus::GATE_NOT_SET && next.get().GetGateStatus() == GateStatus::GATE_SET) {
-		return Erase(next, row_id, 0, row_id, GateStatus::GATE_SET);
-	}
-
-	D_ASSERT(depth < key.get().len);
-	if (next.get().IsLeafNode()) {
-		auto byte = key.get()[depth];
-		if (next.get().HasByte(*this, byte)) {
-			Node::DeleteChild(*this, next, node, key.get()[depth], status, key.get());
-		}
-		return;
-	}
-
-	auto child = next.get().GetChildMutable(*this, key.get()[depth]);
-	if (!child) {
-		// No child at the byte: nothing to erase.
-		return;
-	}
-
-	// Transform a deprecated leaf.
-	if (child->GetType() == NType::LEAF) {
-		D_ASSERT(status == GateStatus::GATE_NOT_SET);
-		Leaf::TransformToNested(*this, *child);
-	}
-
-	// Enter a nested leaf.
-	if (status == GateStatus::GATE_NOT_SET && child->GetGateStatus() == GateStatus::GATE_SET) {
-		Erase(*child, row_id, 0, row_id, GateStatus::GATE_SET);
-		if (!child->HasMetadata()) {
-			Node::DeleteChild(*this, next, node, key.get()[depth], status, key.get());
-		} else {
-			next.get().ReplaceChild(*this, key.get()[depth], *child);
-		}
-		return;
-	}
-
-	auto temp_depth = depth + 1;
-	reference<Node> ref(*child);
-
-	if (ref.get().GetType() == NType::PREFIX) {
-		auto pos = Prefix::TraverseMutable(*this, ref, key, temp_depth);
-		if (pos.IsValid()) {
-			// Prefixes don't match: nothing to erase.
-			return;
-		}
-	}
-
-	if (ref.get().GetType() == NType::LEAF_INLINED) {
-		if (ref.get().GetRowId() == row_id.get().GetRowId()) {
-			Node::DeleteChild(*this, next, node, key.get()[depth], status, key.get());
-		}
-		return;
-	}
-
-	// Recurse.
-	Erase(*child, key, depth + 1, row_id, status);
-	if (!child->HasMetadata()) {
-		Node::DeleteChild(*this, next, node, key.get()[depth], status, key.get());
-	} else {
-		next.get().ReplaceChild(*this, key.get()[depth], *child);
-	}
-}
-
 //===--------------------------------------------------------------------===//
 // Point and range lookups
 //===--------------------------------------------------------------------===//
 
-bool ART::SearchEqual(ARTKey &key, idx_t max_count, unsafe_vector<row_t> &row_ids) {
+bool ART::SearchEqual(ARTKey &key, idx_t max_count, set<row_t> &row_ids) {
 	auto leaf = ARTOperator::Lookup(*this, tree, key, 0);
 	if (!leaf) {
 		return true;
@@ -773,7 +625,7 @@ bool ART::SearchEqual(ARTKey &key, idx_t max_count, unsafe_vector<row_t> &row_id
 	return it.Scan(empty_key, max_count, row_ids, false);
 }
 
-bool ART::SearchGreater(ARTKey &key, bool equal, idx_t max_count, unsafe_vector<row_t> &row_ids) {
+bool ART::SearchGreater(ARTKey &key, bool equal, idx_t max_count, set<row_t> &row_ids) {
 	if (!tree.HasMetadata()) {
 		return true;
 	}
@@ -791,7 +643,7 @@ bool ART::SearchGreater(ARTKey &key, bool equal, idx_t max_count, unsafe_vector<
 	return it.Scan(ARTKey(), max_count, row_ids, false);
 }
 
-bool ART::SearchLess(ARTKey &upper_bound, bool equal, idx_t max_count, unsafe_vector<row_t> &row_ids) {
+bool ART::SearchLess(ARTKey &upper_bound, bool equal, idx_t max_count, set<row_t> &row_ids) {
 	if (!tree.HasMetadata()) {
 		return true;
 	}
@@ -810,7 +662,7 @@ bool ART::SearchLess(ARTKey &upper_bound, bool equal, idx_t max_count, unsafe_ve
 }
 
 bool ART::SearchCloseRange(ARTKey &lower_bound, ARTKey &upper_bound, bool left_equal, bool right_equal, idx_t max_count,
-                           unsafe_vector<row_t> &row_ids) {
+                           set<row_t> &row_ids) {
 	// Find the first node that satisfies the left predicate.
 	Iterator it(*this);
 
@@ -823,7 +675,7 @@ bool ART::SearchCloseRange(ARTKey &lower_bound, ARTKey &upper_bound, bool left_e
 	return it.Scan(upper_bound, max_count, row_ids, right_equal);
 }
 
-bool ART::Scan(IndexScanState &state, const idx_t max_count, unsafe_vector<row_t> &row_ids) {
+bool ART::Scan(IndexScanState &state, const idx_t max_count, set<row_t> &row_ids) {
 	auto &scan_state = state.Cast<ARTIndexScanState>();
 	D_ASSERT(scan_state.values[0].type().InternalType() == types[0]);
 	ArenaAllocator arena_allocator(Allocator::Get(db));
@@ -937,9 +789,6 @@ void ART::VerifyLeaf(const Node &leaf, const ARTKey &key, optional_ptr<ART> dele
 		auto this_row_id = leaf.GetRowId();
 
 		if (deleted_row_id == this_row_id) {
-			if (manager.AddMiss(i)) {
-				conflict_idx = i;
-			}
 			return;
 		}
 
@@ -965,30 +814,27 @@ void ART::VerifyLeaf(const Node &leaf, const ARTKey &key, optional_ptr<ART> dele
 	Iterator it(*this);
 	it.FindMinimum(leaf);
 	ARTKey empty_key = ARTKey();
-	unsafe_vector<row_t> row_ids;
+	set<row_t> row_ids;
 	auto success = it.Scan(empty_key, 2, row_ids, false);
 	if (!success || row_ids.size() != 2) {
 		throw InternalException("VerifyLeaf expects exactly two row IDs to be scanned");
 	}
 
-	if (!deleted_leaf) {
-		if (manager.AddHit(i, row_ids[0]) || manager.AddHit(i, row_ids[1])) {
-			conflict_idx = i;
+	if (deleted_leaf) {
+		auto deleted_row_id = deleted_leaf->GetRowId();
+		for (const auto row_id : row_ids) {
+			if (deleted_row_id == row_id) {
+				return;
+			}
 		}
-		return;
 	}
 
-	auto deleted_row_id = deleted_leaf->GetRowId();
-	if (deleted_row_id == row_ids[0] || deleted_row_id == row_ids[1]) {
-		if (manager.AddMiss(i)) {
-			conflict_idx = i;
-		}
-		return;
-	}
-
-	if (manager.AddHit(i, row_ids[0]) || manager.AddHit(i, row_ids[1])) {
+	auto row_id_it = row_ids.begin();
+	if (manager.AddHit(i, *row_id_it)) {
 		conflict_idx = i;
 	}
+	row_id_it++;
+	manager.AddSecondHit(i, *row_id_it);
 }
 
 void ART::VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictManager &manager) {
@@ -1019,9 +865,6 @@ void ART::VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictMana
 
 		auto leaf = ARTOperator::Lookup(*this, tree, keys[i], 0);
 		if (!leaf) {
-			if (manager.AddMiss(i)) {
-				conflict_idx = i;
-			}
 			continue;
 		}
 		VerifyLeaf(*leaf, keys[i], delete_art, manager, conflict_idx, i);
@@ -1033,7 +876,7 @@ void ART::VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictMana
 	}
 
 	auto key_name = GenerateErrorKeyName(chunk, conflict_idx.GetIndex());
-	auto exception_msg = GenerateConstraintErrorMessage(manager.LookupType(), key_name);
+	auto exception_msg = GenerateConstraintErrorMessage(manager.GetVerifyExistenceType(), key_name);
 	throw ConstraintException(exception_msg);
 }
 
@@ -1072,11 +915,7 @@ void ART::TransformToDeprecated() {
 	}
 }
 
-IndexStorageInfo ART::GetStorageInfo(const case_insensitive_map_t<Value> &options, const bool to_wal) {
-	// If the storage format uses deprecated leaf storage,
-	// then we need to transform all nested leaves before serialization.
-	auto v1_0_0_option = options.find("v1_0_0_storage");
-	bool v1_0_0_storage = v1_0_0_option == options.end() || v1_0_0_option->second != Value(false);
+IndexStorageInfo ART::PrepareSerialize(const case_insensitive_map_t<Value> &options, const bool v1_0_0_storage) {
 	if (v1_0_0_storage) {
 		TransformToDeprecated();
 	}
@@ -1099,27 +938,50 @@ IndexStorageInfo ART::GetStorageInfo(const case_insensitive_map_t<Value> &option
 	}
 #endif
 
-	auto allocator_count = v1_0_0_storage ? DEPRECATED_ALLOCATOR_COUNT : ALLOCATOR_COUNT;
-	if (!to_wal) {
-		// Store the data on disk as partial blocks and set the block ids.
-		WritePartialBlocks(v1_0_0_storage);
+	return info;
+}
 
-	} else {
-		// Set the correct allocation sizes and get the map containing all buffers.
-		for (idx_t i = 0; i < allocator_count; i++) {
-			info.buffers.push_back((*allocators)[i]->InitSerializationToWAL());
-		}
+IndexStorageInfo ART::SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) {
+	// If the storage format uses deprecated leaf storage,
+	// then we need to transform all nested leaves before serialization.
+	auto v1_0_0_option = options.find("v1_0_0_storage");
+	bool v1_0_0_storage = v1_0_0_option == options.end() || v1_0_0_option->second != Value(false);
+	auto info = PrepareSerialize(options, v1_0_0_storage);
+	auto allocator_count = v1_0_0_storage ? DEPRECATED_ALLOCATOR_COUNT : ALLOCATOR_COUNT;
+
+	// Store the data on disk as partial blocks and set the block ids.
+	WritePartialBlocks(context, v1_0_0_storage);
+
+	for (idx_t i = 0; i < allocator_count; i++) {
+		info.allocator_infos.push_back((*allocators)[i]->GetInfo());
+	}
+
+	return info;
+}
+
+IndexStorageInfo ART::SerializeToWAL(const case_insensitive_map_t<Value> &options) {
+	// If the storage format uses deprecated leaf storage,
+	// then we need to transform all nested leaves before serialization.
+	auto v1_0_0_option = options.find("v1_0_0_storage");
+	bool v1_0_0_storage = v1_0_0_option == options.end() || v1_0_0_option->second != Value(false);
+	auto info = PrepareSerialize(options, v1_0_0_storage);
+	auto allocator_count = v1_0_0_storage ? DEPRECATED_ALLOCATOR_COUNT : ALLOCATOR_COUNT;
+
+	// Set the correct allocation sizes and get the map containing all buffers.
+	for (idx_t i = 0; i < allocator_count; i++) {
+		info.buffers.push_back((*allocators)[i]->InitSerializationToWAL());
 	}
 
 	for (idx_t i = 0; i < allocator_count; i++) {
 		info.allocator_infos.push_back((*allocators)[i]->GetInfo());
 	}
+
 	return info;
 }
 
-void ART::WritePartialBlocks(const bool v1_0_0_storage) {
+void ART::WritePartialBlocks(QueryContext context, const bool v1_0_0_storage) {
 	auto &block_manager = table_io_manager.GetIndexBlockManager();
-	PartialBlockManager partial_block_manager(block_manager, PartialBlockType::FULL_CHECKPOINT);
+	PartialBlockManager partial_block_manager(context, block_manager, PartialBlockType::FULL_CHECKPOINT);
 
 	idx_t allocator_count = v1_0_0_storage ? DEPRECATED_ALLOCATOR_COUNT : ALLOCATOR_COUNT;
 	for (idx_t i = 0; i < allocator_count; i++) {
@@ -1252,7 +1114,7 @@ void ART::Vacuum(IndexLock &state) {
 			break;
 		}
 		default:
-			throw InternalException("invalid node type for Vacuum: %s", EnumUtil::ToString(type));
+			throw InternalException("invalid node type for Vacuum: %d", type);
 		}
 
 		const auto idx = Node::GetAllocatorIdx(type);
@@ -1291,14 +1153,14 @@ void ART::InitializeMerge(Node &node, unsafe_vector<idx_t> &upper_bounds) {
 	auto handler = [&upper_bounds](Node &node) {
 		const auto type = node.GetType();
 		if (node.GetType() == NType::LEAF_INLINED) {
-			return ARTHandlingResult::CONTINUE;
+			return ARTHandlingResult::NONE;
 		}
 		if (type == NType::LEAF) {
 			throw InternalException("deprecated ART storage in InitializeMerge");
 		}
 		const auto idx = Node::GetAllocatorIdx(type);
 		node.IncreaseBufferId(upper_bounds[idx]);
-		return ARTHandlingResult::CONTINUE;
+		return ARTHandlingResult::NONE;
 	};
 
 	ARTScanner<ARTScanHandling::POP, Node> scanner(*this, handler, node);

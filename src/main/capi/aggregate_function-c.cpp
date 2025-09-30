@@ -99,7 +99,7 @@ void CAPIAggregateUpdate(Vector inputs[], AggregateInputData &aggr_input_data, i
 	chunk.SetCardinality(count);
 
 	auto &bind_data = aggr_input_data.bind_data->Cast<CAggregateFunctionBindData>();
-	auto state_data = FlatVector::GetData<duckdb_aggregate_state>(state);
+	auto state_data = FlatVector::GetDataUnsafe<duckdb_aggregate_state>(state);
 	auto c_input_chunk = reinterpret_cast<duckdb_data_chunk>(&chunk);
 
 	CAggregateExecuteInfo exec_info(bind_data.info);
@@ -113,8 +113,8 @@ void CAPIAggregateUpdate(Vector inputs[], AggregateInputData &aggr_input_data, i
 void CAPIAggregateCombine(Vector &state, Vector &combined, AggregateInputData &aggr_input_data, idx_t count) {
 	state.Flatten(count);
 	auto &bind_data = aggr_input_data.bind_data->Cast<CAggregateFunctionBindData>();
-	auto input_state_data = FlatVector::GetData<duckdb_aggregate_state>(state);
-	auto result_state_data = FlatVector::GetData<duckdb_aggregate_state>(combined);
+	auto input_state_data = FlatVector::GetDataUnsafe<duckdb_aggregate_state>(state);
+	auto result_state_data = FlatVector::GetDataUnsafe<duckdb_aggregate_state>(combined);
 	CAggregateExecuteInfo exec_info(bind_data.info);
 	auto c_function_info = reinterpret_cast<duckdb_function_info>(&exec_info);
 	bind_data.info.combine(c_function_info, input_state_data, result_state_data, count);
@@ -127,7 +127,7 @@ void CAPIAggregateFinalize(Vector &state, AggregateInputData &aggr_input_data, V
                            idx_t offset) {
 	state.Flatten(count);
 	auto &bind_data = aggr_input_data.bind_data->Cast<CAggregateFunctionBindData>();
-	auto input_state_data = FlatVector::GetData<duckdb_aggregate_state>(state);
+	auto input_state_data = FlatVector::GetDataUnsafe<duckdb_aggregate_state>(state);
 	auto result_vector = reinterpret_cast<duckdb_vector>(&result);
 
 	CAggregateExecuteInfo exec_info(bind_data.info);
@@ -140,7 +140,7 @@ void CAPIAggregateFinalize(Vector &state, AggregateInputData &aggr_input_data, V
 
 void CAPIAggregateDestructor(Vector &state, AggregateInputData &aggr_input_data, idx_t count) {
 	auto &bind_data = aggr_input_data.bind_data->Cast<CAggregateFunctionBindData>();
-	auto input_state_data = FlatVector::GetData<duckdb_aggregate_state>(state);
+	auto input_state_data = FlatVector::GetDataUnsafe<duckdb_aggregate_state>(state);
 	bind_data.info.destroy(input_state_data, count);
 }
 
@@ -153,8 +153,13 @@ duckdb_aggregate_function duckdb_create_aggregate_function() {
 	                                              duckdb::CAPIAggregateStateInit, duckdb::CAPIAggregateUpdate,
 	                                              duckdb::CAPIAggregateCombine, duckdb::CAPIAggregateFinalize, nullptr,
 	                                              duckdb::CAPIAggregateBind);
-	function->function_info = duckdb::make_shared_ptr<duckdb::CAggregateFunctionInfo>();
-	return reinterpret_cast<duckdb_aggregate_function>(function);
+	try {
+		function->function_info = duckdb::make_shared_ptr<duckdb::CAggregateFunctionInfo>();
+		return reinterpret_cast<duckdb_aggregate_function>(function);
+	} catch (...) {
+		delete function;
+		return nullptr;
+	}
 }
 
 void duckdb_destroy_aggregate_function(duckdb_aggregate_function *function) {
@@ -266,8 +271,12 @@ duckdb_aggregate_function_set duckdb_create_aggregate_function_set(const char *n
 	if (!name || !*name) {
 		return nullptr;
 	}
-	auto function_set = new duckdb::AggregateFunctionSet(name);
-	return reinterpret_cast<duckdb_aggregate_function_set>(function_set);
+	try {
+		auto function_set = new duckdb::AggregateFunctionSet(name);
+		return reinterpret_cast<duckdb_aggregate_function_set>(function_set);
+	} catch (...) {
+		return nullptr;
+	}
 }
 
 void duckdb_destroy_aggregate_function_set(duckdb_aggregate_function_set *set) {
@@ -318,6 +327,7 @@ duckdb_state duckdb_register_aggregate_function_set(duckdb_connection connection
 		con->context->RunFunctionInTransaction([&]() {
 			auto &catalog = duckdb::Catalog::GetSystemCatalog(*con->context);
 			duckdb::CreateAggregateFunctionInfo sf_info(set);
+			sf_info.on_conflict = duckdb::OnCreateConflict::ALTER_ON_CONFLICT;
 			catalog.CreateFunction(*con->context, sf_info);
 		});
 	} catch (...) {

@@ -172,7 +172,7 @@ protected:
 	                       const idx_t append_count) const;
 	template <bool fixed>
 	static void BuildPartitionSel(PartitionedTupleDataAppendState &state, const SelectionVector &append_sel,
-	                              const idx_t append_count);
+	                              const idx_t append_count, const idx_t max_partition_idx);
 	//! Builds out the buffer space in the partitions
 	void BuildBufferSpace(PartitionedTupleDataAppendState &state);
 	template <bool fixed>

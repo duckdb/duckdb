@@ -38,7 +38,7 @@
     {
         "name": "current_query_id",
         "description": "Get the current query_id",
-        "example": "current_transaction_id('Hello')",
+        "example": "current_query_id()",
         "type": "scalar_function",
         "struct": "CurrentQueryId"
     },

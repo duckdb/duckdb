@@ -2,8 +2,6 @@
 # description: Test duckdb_sequences function
 # group: [table_function]
 
-require noforcestorage
-
 query I
 SELECT COUNT(*) FROM duckdb_sequences();
 ----
@@ -15,10 +13,16 @@ CREATE SEQUENCE seq
 statement ok
 CREATE TEMPORARY SEQUENCE seq2 MINVALUE 3 MAXVALUE 5 START WITH 4 CYCLE;
 
-query IIIIIIIII
-SELECT database_name, schema_name, sequence_name, temporary, start_value, min_value, max_value, increment_by, cycle FROM duckdb_sequences() ORDER BY sequence_name;
+query IIIIIIII
+SELECT schema_name, sequence_name, temporary, start_value, min_value, max_value, increment_by, cycle
+FROM duckdb_sequences() ORDER BY sequence_name;
 ----
-memory	main	seq	False	1	1	9223372036854775807	1	False
-temp	main	seq2	True	4	3	5	1	True
+main	seq	False	1	1	9223372036854775807	1	False
+main	seq2	True	4	3	5	1	True
 
-
+query I
+SELECT database_name = current_database() OR database_name = 'temp'
+FROM duckdb_sequences();
+----
+True
+True

@@ -290,4 +290,4 @@ aaa
 statement error
 SELECT 'hello' LIKE 'hê?llo' COLLATE idontexist;
 ----
-
+<REGEX>:.*Catalog Error.*does not exist.*

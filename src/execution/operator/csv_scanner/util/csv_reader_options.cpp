@@ -125,6 +125,10 @@ void CSVReaderOptions::SetDelimiter(const string &input) {
 	if (delim_str.size() > 4) {
 		throw InvalidInputException("The delimiter option cannot exceed a size of 4 bytes.");
 	}
+	if (this->dialect_options.state_machine_options.delimiter.IsSetByUser()) {
+		// we can't know in which order delim and sep were specified, so we throw an exception here
+		throw BinderException("CSV Reader function option delim and sep are aliases, only one can be supplied");
+	}
 	this->dialect_options.state_machine_options.delimiter.Set(delim_str);
 }
 

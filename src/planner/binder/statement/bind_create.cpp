@@ -43,6 +43,8 @@
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/common/extension_type_info.hpp"
 #include "duckdb/common/type_visitor.hpp"
+#include "duckdb/function/table_macro_function.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -97,7 +99,7 @@ const string Binder::BindCatalog(string &catalog) {
 	}
 }
 
-SchemaCatalogEntry &Binder::BindSchema(CreateInfo &info) {
+void Binder::SearchSchema(CreateInfo &info) {
 	BindSchemaOrCatalog(info.catalog, info.schema);
 	if (IsInvalidCatalog(info.catalog) && info.temporary) {
 		info.catalog = TEMP_CATALOG;
@@ -125,6 +127,10 @@ SchemaCatalogEntry &Binder::BindSchema(CreateInfo &info) {
 			throw ParserException("TEMPORARY table names can *only* use the \"%s\" catalog", TEMP_CATALOG);
 		}
 	}
+}
+
+SchemaCatalogEntry &Binder::BindSchema(CreateInfo &info) {
+	SearchSchema(info);
 	// fetch the schema in which we want to create the object
 	auto &schema_obj = Catalog::GetSchema(context, info.catalog, info.schema);
 	D_ASSERT(schema_obj.type == CatalogType::SCHEMA_ENTRY);
@@ -155,8 +161,7 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 	auto &dependencies = base.dependencies;
 	auto &catalog = Catalog::GetCatalog(context, base.catalog);
 
-	auto &db_config = DBConfig::GetConfig(context);
-	bool should_create_dependencies = db_config.GetSetting<EnableViewDependenciesSetting>(context);
+	bool should_create_dependencies = DBConfig::GetSetting<EnableViewDependenciesSetting>(context);
 	if (should_create_dependencies) {
 		view_binder->SetCatalogLookupCallback([&dependencies, &catalog](CatalogEntry &entry) {
 			if (&catalog != &entry.ParentCatalog()) {
@@ -182,75 +187,172 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 }
 
 SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
-	auto &base = info.Cast<CreateMacroInfo>();
-
-	auto &dependencies = base.dependencies;
-	auto &catalog = Catalog::GetCatalog(context, info.catalog);
-	auto &db_config = DBConfig::GetConfig(context);
-	// try to bind each of the included functions
-	unordered_set<idx_t> positional_parameters;
-	for (auto &function : base.macros) {
-		auto &scalar_function = function->Cast<ScalarMacroFunction>();
-		if (scalar_function.expression->HasParameter()) {
-			throw BinderException("Parameter expressions within macro's are not supported!");
+	//! Set to identify exact matches in macro overloads
+	struct VectorOfLogicalTypeHash {
+		std::size_t operator()(const vector<LogicalType> &k) const {
+			auto hash = std::hash<size_t>()(k.size());
+			for (auto &type : k) {
+				hash = CombineHash(hash, type.Hash());
+			}
+			return hash;
 		}
+	};
+
+	struct VectorOfLogicalTypeEquality {
+		bool operator()(const vector<LogicalType> &a, const vector<LogicalType> &b) const {
+			if (a.size() != b.size()) {
+				return false;
+			}
+			for (idx_t i = 0; i < a.size(); i++) {
+				if (a[i] != b[i]) {
+					return false;
+				}
+			}
+			return true;
+		}
+	};
+
+	using vector_of_logical_type_set_t =
+	    unordered_set<vector<LogicalType>, VectorOfLogicalTypeHash, VectorOfLogicalTypeEquality>;
+
+	// Bind the catalog/schema
+	SearchSchema(info);
+	auto &catalog = Catalog::GetCatalog(context, info.catalog);
+
+	// Figure out if we can store typed macro parameters
+	auto &attached = catalog.GetAttached();
+	auto store_types = info.temporary || attached.IsTemporary();
+	if (attached.HasStorageManager()) {
+		auto &storage_manager = attached.GetStorageManager();
+		const auto since = SerializationCompatibility::FromString("v1.4.0").serialization_version;
+		store_types |= storage_manager.InMemory() || storage_manager.GetStorageVersion() >= since;
+	}
+
+	// try to bind each of the included functions
+	vector_of_logical_type_set_t type_overloads;
+	auto &base = info.Cast<CreateMacroInfo>();
+	for (auto &function : base.macros) {
+		if (!store_types) {
+			for (const auto &type : function->types) {
+				if (type.id() != LogicalTypeId::UNKNOWN) {
+					string msg = "Typed macro parameters are only supported for storage versions v1.4.0 and higher.\n";
+					msg += "Use an in-memory database, ATTACH with (STORAGE_VERSION v1.4.0), or create a TEMP macro";
+					throw BinderException(msg);
+				}
+			}
+		}
+
+		if (info.type == CatalogType::MACRO_ENTRY) {
+			auto &scalar_function = function->Cast<ScalarMacroFunction>();
+			if (scalar_function.expression->HasParameter()) {
+				throw BinderException("Parameter expressions within macro's are not supported!");
+			}
+		} else {
+			D_ASSERT(info.type == CatalogType::TABLE_MACRO_ENTRY);
+			auto &table_function = function->Cast<TableMacroFunction>();
+			ParsedExpressionIterator::EnumerateQueryNodeChildren(
+			    *table_function.query_node, [](unique_ptr<ParsedExpression> &child) {
+				    if (child->HasParameter()) {
+					    throw BinderException("Parameter expressions within macro's are not supported!");
+				    }
+			    });
+		}
+
+		// Resolve any user type arguments
+		for (idx_t param_idx = 0; param_idx < function->types.size(); param_idx++) {
+			auto &type = function->types[param_idx];
+			if (type.id() == LogicalTypeId::UNKNOWN) {
+				continue;
+			}
+			if (type.id() == LogicalTypeId::USER) {
+				type = TransformStringToLogicalType(type.ToString(), context);
+			}
+			const auto &param_name = function->parameters[param_idx]->Cast<ColumnRefExpression>().GetColumnName();
+			auto it = function->default_parameters.find(param_name);
+			if (it != function->default_parameters.end()) {
+				const auto &val_type = it->second->Cast<ConstantExpression>().value.type();
+				if (CastFunctionSet::ImplicitCastCost(context, val_type, type) < 0) {
+					auto msg =
+					    StringUtil::Format("Default value '%s' for parameter '%s' cannot be implicitly cast to '%s'.",
+					                       it->second->ToString(), param_name, type.ToString());
+					throw BinderException(msg + " Please add an explicit type cast.");
+				}
+			}
+		}
+
 		vector<LogicalType> dummy_types;
 		vector<string> dummy_names;
-		auto parameter_count = function->parameters.size();
-		if (positional_parameters.find(parameter_count) != positional_parameters.end()) {
-			throw BinderException(
-			    "Ambiguity in macro overloads - macro \"%s\" has multiple definitions with %llu parameters", base.name,
-			    parameter_count);
-		}
-		positional_parameters.insert(parameter_count);
-
 		// positional parameters
-		for (auto &param_expr : function->parameters) {
-			auto param = param_expr->Cast<ColumnRefExpression>();
-			if (param.IsQualified()) {
-				throw BinderException("Invalid parameter name '%s': must be unqualified", param.ToString());
-			}
-			dummy_types.emplace_back(LogicalType::UNKNOWN);
-			dummy_names.push_back(param.GetColumnName());
+		for (idx_t param_idx = 0; param_idx < function->parameters.size(); param_idx++) {
+			dummy_types.emplace_back(function->types.empty() ? LogicalType::UNKNOWN : function->types[param_idx]);
+			dummy_names.push_back(function->parameters[param_idx]->Cast<ColumnRefExpression>().GetColumnName());
 		}
-		// default parameters
-		for (auto &entry : function->default_parameters) {
-			auto &val = entry.second->Cast<ConstantExpression>();
-			dummy_types.push_back(val.value.type());
-			dummy_names.push_back(entry.first);
+
+		if (!type_overloads.insert(dummy_types).second) {
+			throw BinderException(
+			    "Ambiguity in macro overloads - macro %s() has multiple definitions with the same parameters",
+			    base.name);
 		}
+
 		auto this_macro_binding = make_uniq<DummyBinding>(dummy_types, dummy_names, base.name);
 		macro_binding = this_macro_binding.get();
 
-		// create a copy of the expression because we do not want to alter the original
-		auto expression = scalar_function.expression->Copy();
-		ExpressionBinder::QualifyColumnNames(*this, expression);
+		auto &dependencies = base.dependencies;
+		const auto should_create_dependencies = DBConfig::GetSetting<EnableMacroDependenciesSetting>(context);
+		const auto binder_callback = [&dependencies, &catalog](CatalogEntry &entry) {
+			if (&catalog != &entry.ParentCatalog()) {
+				// Don't register any cross-catalog dependencies
+				return;
+			}
+			// Register any catalog entry required to bind the macro function
+			dependencies.AddDependency(entry);
+		};
 
 		// bind it to verify the function was defined correctly
-		BoundSelectNode sel_node;
-		BoundGroupInformation group_info;
-		SelectBinder binder(*this, context, sel_node, group_info);
-		bool should_create_dependencies = db_config.GetSetting<EnableMacroDependenciesSetting>(context);
-
-		if (should_create_dependencies) {
-			binder.SetCatalogLookupCallback([&dependencies, &catalog](CatalogEntry &entry) {
-				if (&catalog != &entry.ParentCatalog()) {
-					// Don't register any cross-catalog dependencies
-					return;
-				}
-				// Register any catalog entry required to bind the macro function
-				dependencies.AddDependency(entry);
-			});
-		}
 		ErrorData error;
-		try {
-			error = binder.Bind(expression, 0, false);
-			if (error.HasError()) {
-				error.Throw();
+		if (info.type == CatalogType::MACRO_ENTRY) {
+			BoundSelectNode sel_node;
+			BoundGroupInformation group_info;
+			SelectBinder binder(*this, context, sel_node, group_info);
+			if (should_create_dependencies) {
+				binder.SetCatalogLookupCallback(binder_callback);
 			}
-		} catch (const std::exception &ex) {
-			error = ErrorData(ex);
+
+			// create a copy of the expression because we do not want to alter the original
+			auto expression = function->Cast<ScalarMacroFunction>().expression->Copy();
+			ExpressionBinder::QualifyColumnNames(*this, expression);
+			try {
+				error = binder.Bind(expression, 0, false);
+				if (error.HasError()) {
+					error.Throw();
+				}
+			} catch (const std::exception &ex) {
+				error = ErrorData(ex);
+			}
+		} else {
+			D_ASSERT(info.type == CatalogType::TABLE_MACRO_ENTRY);
+			auto dummy_binder = CreateBinder(context, this);
+			if (should_create_dependencies) {
+				dummy_binder->SetCatalogLookupCallback(binder_callback);
+			}
+
+			// create a copy of the query node because we do not want to alter the original
+			auto query_node = function->Cast<TableMacroFunction>().query_node->Copy();
+			ParsedExpressionIterator::EnumerateQueryNodeChildren(
+			    *query_node, [&dummy_binder](unique_ptr<ParsedExpression> &child) {
+				    ExpressionBinder::QualifyColumnNames(*dummy_binder, child);
+			    });
+			try {
+				dummy_binder->Bind(*query_node);
+			} catch (const std::exception &ex) {
+				// TODO: we would like to do something like "error = ErrorData(ex);" here,
+				//  but that breaks macro's like "create macro m(x) as table (from query_table(x));",
+				//  because dummy-binding these always throws an error instead of a ParameterNotResolvedException.
+				//  So, for now, we allow macro's with bind errors to be created.
+				//  Binding is still useful because we can create the dependencies.
+			}
 		}
+
 		// if we cannot resolve parameters we postpone binding until the macro function is used
 		if (error.HasError() && error.Type() != ExceptionType::PARAMETER_NOT_RESOLVED) {
 			error.Throw();
@@ -426,7 +528,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		break;
 	}
 	case CatalogType::TABLE_MACRO_ENTRY: {
-		auto &schema = BindCreateSchema(*stmt.info);
+		auto &schema = BindCreateFunctionInfo(*stmt.info);
 		result.plan =
 		    make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_MACRO, std::move(stmt.info), &schema);
 		break;

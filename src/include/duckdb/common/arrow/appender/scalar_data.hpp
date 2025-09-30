@@ -96,7 +96,7 @@ struct ArrowScalarBaseData {
 		input.ToUnifiedFormat(input_size, format);
 
 		// append the validity mask
-		AppendValidity(append_data, format, from, to);
+		append_data.AppendValidity(format, from, to);
 
 		// append the main data
 		auto &main_buffer = append_data.GetMainBuffer();

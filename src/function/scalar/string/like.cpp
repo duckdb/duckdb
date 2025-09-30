@@ -9,6 +9,144 @@
 
 namespace duckdb {
 
+bool Glob(const char *string, idx_t slen, const char *pattern, idx_t plen, bool allow_question_mark) {
+	idx_t sidx = 0;
+	idx_t pidx = 0;
+main_loop : {
+	// main matching loop
+	while (sidx < slen && pidx < plen) {
+		char s = string[sidx];
+		char p = pattern[pidx];
+		switch (p) {
+		case '*': {
+			// asterisk: match any set of characters
+			// skip any subsequent asterisks
+			pidx++;
+			while (pidx < plen && pattern[pidx] == '*') {
+				pidx++;
+			}
+			// if the asterisk is the last character, the pattern always matches
+			if (pidx == plen) {
+				return true;
+			}
+			// recursively match the remainder of the pattern
+			for (; sidx < slen; sidx++) {
+				if (Glob(string + sidx, slen - sidx, pattern + pidx, plen - pidx)) {
+					return true;
+				}
+			}
+			return false;
+		}
+		case '?':
+			// when enabled: matches anything but null
+			if (allow_question_mark) {
+				break;
+			}
+			DUCKDB_EXPLICIT_FALLTHROUGH;
+		case '[':
+			pidx++;
+			goto parse_bracket;
+		case '\\':
+			// escape character, next character needs to match literally
+			pidx++;
+			// check that we still have a character remaining
+			if (pidx == plen) {
+				return false;
+			}
+			p = pattern[pidx];
+			if (s != p) {
+				return false;
+			}
+			break;
+		default:
+			// not a control character: characters need to match literally
+			if (s != p) {
+				return false;
+			}
+			break;
+		}
+		sidx++;
+		pidx++;
+	}
+	while (pidx < plen && pattern[pidx] == '*') {
+		pidx++;
+	}
+	// we are finished only if we have consumed the full pattern
+	return pidx == plen && sidx == slen;
+}
+parse_bracket : {
+	// inside a bracket
+	if (pidx == plen) {
+		return false;
+	}
+	// check the first character
+	// if it is an exclamation mark we need to invert our logic
+	char p = pattern[pidx];
+	char s = string[sidx];
+	bool invert = false;
+	if (p == '!') {
+		invert = true;
+		pidx++;
+	}
+	bool found_match = invert;
+	idx_t start_pos = pidx;
+	bool found_closing_bracket = false;
+	// now check the remainder of the pattern
+	while (pidx < plen) {
+		p = pattern[pidx];
+		// if the first character is a closing bracket, we match it literally
+		// otherwise it indicates an end of bracket
+		if (p == ']' && pidx > start_pos) {
+			// end of bracket found: we are done
+			found_closing_bracket = true;
+			pidx++;
+			break;
+		}
+		// we either match a range (a-b) or a single character (a)
+		// check if the next character is a dash
+		if (pidx + 1 == plen) {
+			// no next character!
+			break;
+		}
+		bool matches;
+		if (pattern[pidx + 1] == '-') {
+			// range! find the next character in the range
+			if (pidx + 2 == plen) {
+				break;
+			}
+			char next_char = pattern[pidx + 2];
+			// check if the current character is within the range
+			matches = s >= p && s <= next_char;
+			// shift the pattern forward past the range
+			pidx += 3;
+		} else {
+			// no range! perform a direct match
+			matches = p == s;
+			// shift the pattern forward past the character
+			pidx++;
+		}
+		if (found_match == invert && matches) {
+			// found a match! set the found_matches flag
+			// we keep on pattern matching after this until we reach the end bracket
+			// however, we don't need to update the found_match flag anymore
+			found_match = !invert;
+		}
+	}
+	if (!found_closing_bracket) {
+		// no end of bracket: invalid pattern
+		return false;
+	}
+	if (!found_match) {
+		// did not match the bracket: return false;
+		return false;
+	}
+	// finished the bracket matching: move forward
+	sidx++;
+	goto main_loop;
+}
+}
+
+namespace {
 struct StandardCharacterReader {
 	static void NextCharacter(const char *sdata, idx_t slen, idx_t &sidx) {
 		sidx++;
@@ -203,8 +341,8 @@ private:
 	bool has_end_percentage;
 };
 
-static unique_ptr<FunctionData> LikeBindFunction(ClientContext &context, ScalarFunction &bound_function,
-                                                 vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> LikeBindFunction(ClientContext &context, ScalarFunction &bound_function,
+                                          vector<unique_ptr<Expression>> &arguments) {
 	// pattern is the second argument. If its constant, we can already prepare the pattern and store it for later.
 	D_ASSERT(arguments.size() == 2 || arguments.size() == 3);
 	for (auto &arg : arguments) {
@@ -235,144 +373,7 @@ bool LikeOperatorFunction(string_t &s, string_t &pat, char escape) {
 	return LikeOperatorFunction(s.GetData(), s.GetSize(), pat.GetData(), pat.GetSize(), escape);
 }
 
-bool Glob(const char *string, idx_t slen, const char *pattern, idx_t plen, bool allow_question_mark) {
-	idx_t sidx = 0;
-	idx_t pidx = 0;
-main_loop : {
-	// main matching loop
-	while (sidx < slen && pidx < plen) {
-		char s = string[sidx];
-		char p = pattern[pidx];
-		switch (p) {
-		case '*': {
-			// asterisk: match any set of characters
-			// skip any subsequent asterisks
-			pidx++;
-			while (pidx < plen && pattern[pidx] == '*') {
-				pidx++;
-			}
-			// if the asterisk is the last character, the pattern always matches
-			if (pidx == plen) {
-				return true;
-			}
-			// recursively match the remainder of the pattern
-			for (; sidx < slen; sidx++) {
-				if (Glob(string + sidx, slen - sidx, pattern + pidx, plen - pidx)) {
-					return true;
-				}
-			}
-			return false;
-		}
-		case '?':
-			// when enabled: matches anything but null
-			if (allow_question_mark) {
-				break;
-			}
-			DUCKDB_EXPLICIT_FALLTHROUGH;
-		case '[':
-			pidx++;
-			goto parse_bracket;
-		case '\\':
-			// escape character, next character needs to match literally
-			pidx++;
-			// check that we still have a character remaining
-			if (pidx == plen) {
-				return false;
-			}
-			p = pattern[pidx];
-			if (s != p) {
-				return false;
-			}
-			break;
-		default:
-			// not a control character: characters need to match literally
-			if (s != p) {
-				return false;
-			}
-			break;
-		}
-		sidx++;
-		pidx++;
-	}
-	while (pidx < plen && pattern[pidx] == '*') {
-		pidx++;
-	}
-	// we are finished only if we have consumed the full pattern
-	return pidx == plen && sidx == slen;
-}
-parse_bracket : {
-	// inside a bracket
-	if (pidx == plen) {
-		return false;
-	}
-	// check the first character
-	// if it is an exclamation mark we need to invert our logic
-	char p = pattern[pidx];
-	char s = string[sidx];
-	bool invert = false;
-	if (p == '!') {
-		invert = true;
-		pidx++;
-	}
-	bool found_match = invert;
-	idx_t start_pos = pidx;
-	bool found_closing_bracket = false;
-	// now check the remainder of the pattern
-	while (pidx < plen) {
-		p = pattern[pidx];
-		// if the first character is a closing bracket, we match it literally
-		// otherwise it indicates an end of bracket
-		if (p == ']' && pidx > start_pos) {
-			// end of bracket found: we are done
-			found_closing_bracket = true;
-			pidx++;
-			break;
-		}
-		// we either match a range (a-b) or a single character (a)
-		// check if the next character is a dash
-		if (pidx + 1 == plen) {
-			// no next character!
-			break;
-		}
-		bool matches;
-		if (pattern[pidx + 1] == '-') {
-			// range! find the next character in the range
-			if (pidx + 2 == plen) {
-				break;
-			}
-			char next_char = pattern[pidx + 2];
-			// check if the current character is within the range
-			matches = s >= p && s <= next_char;
-			// shift the pattern forward past the range
-			pidx += 3;
-		} else {
-			// no range! perform a direct match
-			matches = p == s;
-			// shift the pattern forward past the character
-			pidx++;
-		}
-		if (found_match == invert && matches) {
-			// found a match! set the found_matches flag
-			// we keep on pattern matching after this until we reach the end bracket
-			// however, we don't need to update the found_match flag anymore
-			found_match = !invert;
-		}
-	}
-	if (!found_closing_bracket) {
-		// no end of bracket: invalid pattern
-		return false;
-	}
-	if (!found_match) {
-		// did not match the bracket: return false;
-		return false;
-	}
-	// finished the bracket matching: move forward
-	sidx++;
-	goto main_loop;
-}
-}
-
-static char GetEscapeChar(string_t escape) {
+char GetEscapeChar(string_t escape) {
 	// Only one escape character should be allowed
 	if (escape.GetSize() > 1) {
 		throw SyntaxException("Invalid escape string. Escape string must be empty or one character.");
@@ -481,7 +482,7 @@ struct GlobOperator {
 
 // This can be moved to the scalar_function class
 template <typename FUNC>
-static void LikeEscapeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+void LikeEscapeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &str = args.data[0];
 	auto &pattern = args.data[1];
 	auto &escape = args.data[2];
@@ -491,7 +492,7 @@ static void LikeEscapeFunction(DataChunk &args, ExpressionState &state, Vector &
 }
 
 template <class ASCII_OP>
-static unique_ptr<BaseStatistics> ILikePropagateStats(ClientContext &context, FunctionStatisticsInput &input) {
+unique_ptr<BaseStatistics> ILikePropagateStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
 	auto &expr = input.expr;
 	D_ASSERT(child_stats.size() >= 1);
@@ -503,7 +504,7 @@ static unique_ptr<BaseStatistics> ILikePropagateStats(ClientContext &context, Fu
 }
 
 template <class OP, bool INVERT>
-static void RegularLikeFunction(DataChunk &input, ExpressionState &state, Vector &result) {
+void RegularLikeFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	if (func_expr.bind_info) {
 		auto &matcher = func_expr.bind_info->Cast<LikeMatcher>();
@@ -517,6 +518,8 @@ static void RegularLikeFunction(DataChunk &input, ExpressionState &state, Vector
 		                                                              input.size());
 	}
 }
+
+} // namespace
 
 ScalarFunction NotLikeFun::GetFunction() {
 	ScalarFunction not_like("!~~", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,

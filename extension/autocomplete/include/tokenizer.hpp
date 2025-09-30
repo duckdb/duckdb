@@ -20,7 +20,8 @@ enum class TokenizeState {
 	STRING_LITERAL,
 	KEYWORD,
 	NUMERIC,
-	OPERATOR
+	OPERATOR,
+	DOLLAR_QUOTED_STRING
 };
 
 class BaseTokenizer {
@@ -43,6 +44,7 @@ public:
 	static bool CharacterIsControlFlow(char c);
 	static bool CharacterIsKeyword(char c);
 	static bool CharacterIsOperator(char c);
+	bool IsValidDollarTagCharacter(char c);
 
 protected:
 	const string &sql;

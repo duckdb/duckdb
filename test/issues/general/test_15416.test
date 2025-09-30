@@ -1,0 +1,18 @@
+# name: test/issues/general/test_15416.test
+# description: Issue 15416 - CTE does implicit and unexpected cross join when referencing columns that aren't in the table in the from clause
+# group: [general]
+
+statement ok
+PRAGMA enable_verification;
+
+statement error
+WITH cte AS (
+    SELECT x
+)
+SELECT
+    b.x
+FROM
+    (SELECT 1) _(x),
+    LATERAL (SELECT * FROM cte) b(x)
+----
+Referenced column "x" not found in FROM clause!

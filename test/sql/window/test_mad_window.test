@@ -41,7 +41,7 @@ NULL	NULL	NULL	NULL
 
 query III
 SELECT r, r/3.0, mad(r/3.0) over (order by r rows between 1 preceding and 1 following)
-FROM mads ORDER BY 1, 2
+FROM mads ORDER BY 1, 2, 3
 ----
 NULL	NULL	NULL
 NULL	NULL	NULL
@@ -68,7 +68,7 @@ NULL	NULL	0.000000
 19	6.333333	0.166667
 
 query III
-SELECT r, r/3.0, mad(r/3.0) over (order by r rows between 1 preceding and 3 following) FROM mads ORDER BY 1, 2
+SELECT r, r/3.0, mad(r/3.0) over (order by r rows between 1 preceding and 3 following) FROM mads ORDER BY 1, 2, 3
 ----
 NULL	NULL	0.000000
 NULL	NULL	0.166667

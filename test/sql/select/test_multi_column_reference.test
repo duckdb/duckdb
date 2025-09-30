@@ -45,10 +45,12 @@ SELECT test.tbl.col FROM test.tbl;
 statement error
 SELECT test.t.col FROM test.tbl t;
 ----
+<REGEX>:.*Binder Error.*table.*not found.*
 
 statement error
 SELECT test.tbl.col FROM test.tbl t;
 ----
+<REGEX>:.*Binder Error.*table.*not found.*
 
 # check how ties are resolved
 # we create a table called "t" in a schema called "t" with a column called "t" that has a field called "t"
@@ -175,11 +177,14 @@ SELECT s2.t1.t FROM s1.t1, s2.t1
 statement error
 SELECT testX.tbl.col FROM test.tbl;
 ----
+<REGEX>:.*Binder Error.*table.*not found.*
 
 statement error
 SELECT test.tblX.col FROM test.tbl;
 ----
+<REGEX>:.*Binder Error.*table.*not found.*
 
 statement error
 SELECT test.tbl.colX FROM test.tbl;
 ----
+<REGEX>:.*Binder Error.*does not have a column.*

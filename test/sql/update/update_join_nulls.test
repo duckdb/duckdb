@@ -1,0 +1,19 @@
+# name: test/sql/update/update_join_nulls.test
+# description: Test update + join with NULl values
+# group: [update]
+
+statement ok
+CREATE TABLE t(table_id BIGINT, val BOOLEAN);
+
+statement ok
+INSERT INTO t VALUES (1, NULL);
+
+statement ok
+WITH new_values(tid, new_val) AS (
+	VALUES (1, NULL)
+)
+UPDATE t
+SET val=new_val
+FROM new_values
+WHERE table_id=tid
+;

@@ -45,9 +45,6 @@ checkpoint
 
 restart
 
-statement ok
-pragma verify_fetch_row;
-
 query II
 SELECT a[1], strlen(a) from big_string;
 ----

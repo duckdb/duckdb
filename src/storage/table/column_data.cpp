@@ -77,6 +77,29 @@ bool ColumnData::HasChanges(idx_t start_row, idx_t end_row) const {
 	return false;
 }
 
+bool ColumnData::HasChanges() const {
+	auto l = data.Lock();
+	auto &nodes = data.ReferenceLoadedSegments(l);
+	for (idx_t segment_idx = 0; segment_idx < nodes.size(); segment_idx++) {
+		auto segment = nodes[segment_idx].node.get();
+		if (segment->segment_type == ColumnSegmentType::TRANSIENT) {
+			// transient segment: always need to write to disk
+			return true;
+		}
+		// persistent segment; check if there were any updates or deletions in this segment
+		idx_t start_row_idx = segment->start - start;
+		idx_t end_row_idx = start_row_idx + segment->count;
+		if (HasChanges(start_row_idx, end_row_idx)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+bool ColumnData::HasAnyChanges() const {
+	return HasChanges();
+}
+
 void ColumnData::ClearUpdates() {
 	lock_guard<mutex> update_guard(update_lock);
 	updates.reset();
@@ -392,7 +415,8 @@ FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilt
 	if (!state.current) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
-	state.segment_checked = true;
+	// for dynamic filters we never consider the segment being "checked" as it can always change
+	state.segment_checked = filter.filter_type != TableFilterType::DYNAMIC_FILTER;
 	FilterPropagateResult prune_result;
 	{
 		lock_guard<mutex> l(stats_lock);
@@ -493,27 +517,37 @@ void ColumnData::AppendData(BaseStatistics &append_stats, ColumnAppendState &sta
 	}
 }
 
-void ColumnData::RevertAppend(row_t start_row) {
+void ColumnData::RevertAppend(row_t start_row_p) {
+	idx_t start_row = NumericCast<idx_t>(start_row_p);
 	auto l = data.Lock();
 	// check if this row is in the segment tree at all
 	auto last_segment = data.GetLastSegment(l);
-	if (NumericCast<idx_t>(start_row) >= last_segment->start + last_segment->count) {
+	if (!last_segment) {
+		return;
+	}
+	if (start_row >= last_segment->start + last_segment->count) {
 		// the start row is equal to the final portion of the column data: nothing was ever appended here
-		D_ASSERT(NumericCast<idx_t>(start_row) == last_segment->start + last_segment->count);
+		D_ASSERT(start_row == last_segment->start + last_segment->count);
 		return;
 	}
 	// find the segment index that the current row belongs to
-	idx_t segment_index = data.GetSegmentIndex(l, UnsafeNumericCast<idx_t>(start_row));
+	idx_t segment_index = data.GetSegmentIndex(l, start_row);
 	auto segment = data.GetSegmentByIndex(l, UnsafeNumericCast<int64_t>(segment_index));
-	auto &transient = *segment;
-	D_ASSERT(transient.segment_type == ColumnSegmentType::TRANSIENT);
+	if (segment->start == start_row) {
+		// we are truncating exactly this segment - erase it entirely
+		data.EraseSegments(l, segment_index);
+	} else {
+		// we need to truncate within the segment
+		// remove any segments AFTER this segment: they should be deleted entirely
+		data.EraseSegments(l, segment_index + 1);
 
-	// remove any segments AFTER this segment: they should be deleted entirely
-	data.EraseSegments(l, segment_index);
+		auto &transient = *segment;
+		D_ASSERT(transient.segment_type == ColumnSegmentType::TRANSIENT);
+		segment->next = nullptr;
+		transient.RevertAppend(start_row);
+	}
 
-	this->count = UnsafeNumericCast<idx_t>(start_row) - this->start;
-	segment->next = nullptr;
-	transient.RevertAppend(UnsafeNumericCast<idx_t>(start_row));
+	this->count = start_row - this->start;
 }
 
 idx_t ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
@@ -538,13 +572,18 @@ void ColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, 
 	FetchUpdateRow(transaction, row_id, result, result_idx);
 }
 
+idx_t ColumnData::FetchUpdateData(ColumnScanState &state, row_t *row_ids, Vector &base_vector) {
+	auto fetch_count = ColumnData::Fetch(state, row_ids[0], base_vector);
+	base_vector.Flatten(fetch_count);
+	return fetch_count;
+}
+
 void ColumnData::Update(TransactionData transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
                         idx_t update_count) {
 	Vector base_vector(type);
 	ColumnScanState state;
-	auto fetch_count = Fetch(state, row_ids[0], base_vector);
+	FetchUpdateData(state, row_ids, base_vector);
 
-	base_vector.Flatten(fetch_count);
 	UpdateInternal(transaction, column_index, update_vector, row_ids, update_count, base_vector);
 }
 
@@ -660,6 +699,7 @@ void ColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStatist
 	this->count = 0;
 	for (auto &data_pointer : column_data.pointers) {
 		// Update the count and statistics
+		data_pointer.row_start = start + count;
 		this->count += data_pointer.tuple_count;
 
 		// Merge the statistics. If this is a child column, the target_stats reference will point into the parents stats
@@ -834,6 +874,17 @@ PersistentColumnData ColumnData::Serialize() {
 	return result;
 }
 
+void RealignColumnData(PersistentColumnData &column_data, idx_t new_start) {
+	idx_t current_start = new_start;
+	for (auto &pointer : column_data.pointers) {
+		pointer.row_start = current_start;
+		current_start += pointer.tuple_count;
+	}
+	for (auto &child : column_data.child_columns) {
+		RealignColumnData(child, new_start);
+	}
+}
+
 shared_ptr<ColumnData> ColumnData::Deserialize(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
                                                idx_t start_row, ReadStream &source, const LogicalType &type) {
 	auto entry = ColumnData::CreateColumn(block_manager, info, column_index, start_row, type, nullptr);
@@ -850,6 +901,9 @@ shared_ptr<ColumnData> ColumnData::Deserialize(BlockManager &block_manager, Data
 	deserializer.Unset<const CompressionInfo>();
 	deserializer.Unset<DatabaseInstance>();
 	deserializer.End();
+
+	// re-align data segments, in case our start_row has changed
+	RealignColumnData(persistent_column_data, start_row);
 
 	// initialize the column
 	entry->InitializeColumn(persistent_column_data, entry->stats->statistics);

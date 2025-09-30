@@ -56,37 +56,43 @@ ON CONFLICT (key) DO UPDATE SET fruit = excluded.fruit, key = excluded.key;
 statement error
 insert into insertconflicttest values (1, 'Apple') on conflict (key) do update set fruit = excluded.fruit RETURNING excluded.fruit;
 ----
-Not implemented Error: 'excluded' qualified columns are not supported in the RETURNING clause yet
+<REGEX>:.*Not implemented Error.*not supported in the RETURNING clause yet.*
 
 # Only suggest <table>.* column when inference element misspelled:
 
 statement error
 insert into insertconflicttest values (1, 'Apple') on conflict (keyy) do update set fruit = excluded.fruit;
 ----
+<REGEX>:.*Binder Error.*Table "insertconflicttest" does not have a column.*
 
 # Have useful HINT for EXCLUDED.* RTE within UPDATE:
 
 statement error
 insert into insertconflicttest values (1, 'Apple') on conflict (key) do update set fruit = excluded.fruitt;
 ----
+<REGEX>:.*Binder Error.*does not have a column named "fruitt".*
 
 # inference fails:
 
 statement error
 insert into insertconflicttest values (3, 'Kiwi') on conflict (key, fruit) do update set fruit = excluded.fruit;
 ----
+<REGEX>:.*Binder Error.*not referenced by a UNIQUE/PRIMARY KEY CONSTRAINT or INDEX.*
 
 statement error
 insert into insertconflicttest values (4, 'Mango') on conflict (fruit, key) do update set fruit = excluded.fruit;
 ----
+<REGEX>:.*Binder Error.*not referenced by a UNIQUE/PRIMARY KEY CONSTRAINT or INDEX.*
 
 statement error
 insert into insertconflicttest values (5, 'Lemon') on conflict (fruit) do update set fruit = excluded.fruit;
 ----
+<REGEX>:.*Binder Error.*not referenced by a UNIQUE/PRIMARY KEY CONSTRAINT or INDEX.*
 
 statement error
 insert into insertconflicttest values (6, 'Passionfruit') on conflict (fruit) do update set fruit = excluded.fruit;
 ----
+<REGEX>:.*Binder Error.*not referenced by a UNIQUE/PRIMARY KEY CONSTRAINT or INDEX.*
 
 # Check the target relation can be aliased
 
@@ -102,3 +108,4 @@ insert into insertconflicttest AS ict values (6, 'Passionfruit') on conflict (ke
 statement error
 insert into insertconflicttest AS ict values (6, 'Passionfruit') on conflict (key) do update set fruit = insertconflicttest.fruit;
 ----
+<REGEX>:.*Binder Error.*Referenced table.*not found.*

@@ -5,21 +5,22 @@
 #include "duckdb/catalog/catalog_entry/list.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/execution/index/bound_index.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/transaction/cleanup_state.hpp"
 #include "duckdb/transaction/commit_state.hpp"
-#include "duckdb/transaction/rollback_state.hpp"
-#include "duckdb/execution/index/bound_index.hpp"
-#include "duckdb/transaction/wal_write_state.hpp"
 #include "duckdb/transaction/delete_info.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/transaction/rollback_state.hpp"
+#include "duckdb/transaction/wal_write_state.hpp"
 
 namespace duckdb {
 constexpr uint32_t UNDO_ENTRY_HEADER_SIZE = sizeof(UndoFlags) + sizeof(uint32_t);
 
 UndoBuffer::UndoBuffer(DuckTransaction &transaction_p, ClientContext &context_p)
-    : transaction(transaction_p), allocator(BufferManager::GetBufferManager(context_p)) {
+    : transaction(transaction_p), allocator(DatabaseInstance::GetDatabase(context_p).GetBufferManager()) {
 }
 
 UndoBufferReference UndoBuffer::CreateEntry(UndoFlags type, idx_t len) {

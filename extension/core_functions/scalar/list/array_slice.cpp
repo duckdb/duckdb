@@ -11,14 +11,13 @@
 
 namespace duckdb {
 
+namespace {
+
 struct ListSliceBindData : public FunctionData {
 	ListSliceBindData(const LogicalType &return_type_p, bool begin_is_empty_p, bool end_is_empty_p)
 	    : return_type(return_type_p), begin_is_empty(begin_is_empty_p), end_is_empty(end_is_empty_p) {
 	}
-	~ListSliceBindData() override;
-
 	LogicalType return_type;
-
 	bool begin_is_empty;
 	bool end_is_empty;
 
@@ -26,9 +25,6 @@ public:
 	bool Equals(const FunctionData &other_p) const override;
 	unique_ptr<FunctionData> Copy() const override;
 };
-
-ListSliceBindData::~ListSliceBindData() {
-}
 
 bool ListSliceBindData::Equals(const FunctionData &other_p) const {
 	auto &other = other_p.Cast<ListSliceBindData>();
@@ -41,7 +37,7 @@ unique_ptr<FunctionData> ListSliceBindData::Copy() const {
 }
 
 template <typename INDEX_TYPE>
-static idx_t CalculateSliceLength(idx_t begin, idx_t end, INDEX_TYPE step, bool svalid) {
+idx_t CalculateSliceLength(idx_t begin, idx_t end, INDEX_TYPE step, bool svalid) {
 	if (step < 0) {
 		step = AbsValue(step);
 	}
@@ -123,7 +119,7 @@ struct ListSliceOperations {
 };
 
 template <typename INPUT_TYPE, typename INDEX_TYPE>
-static void ClampIndex(INDEX_TYPE &index, const INPUT_TYPE &value, const INDEX_TYPE length, bool is_min) {
+void ClampIndex(INDEX_TYPE &index, const INPUT_TYPE &value, const INDEX_TYPE length, bool is_min) {
 	if (index < 0) {
 		index = (!is_min) ? index + 1 : index;
 		index = length + index;
@@ -135,7 +131,7 @@ static void ClampIndex(INDEX_TYPE &index, const INPUT_TYPE &value, const INDEX_T
 }
 
 template <typename INPUT_TYPE, typename INDEX_TYPE, typename OP>
-static bool ClampSlice(const INPUT_TYPE &value, INDEX_TYPE &begin, INDEX_TYPE &end) {
+bool ClampSlice(const INPUT_TYPE &value, INDEX_TYPE &begin, INDEX_TYPE &end) {
 	// Clamp offsets
 	begin = (begin != 0 && begin != (INDEX_TYPE)NumericLimits<int64_t>::Minimum()) ? begin - 1 : begin;
 
@@ -162,10 +158,9 @@ static bool ClampSlice(const INPUT_TYPE &value, INDEX_TYPE &begin, INDEX_TYPE &e
 }
 
 template <typename INPUT_TYPE, typename INDEX_TYPE, typename OP>
-static void ExecuteConstantSlice(Vector &result, Vector &str_vector, Vector &begin_vector, Vector &end_vector,
-                                 optional_ptr<Vector> step_vector, const idx_t count, SelectionVector &sel,
-                                 idx_t &sel_idx, optional_ptr<Vector> result_child_vector, bool begin_is_empty,
-                                 bool end_is_empty) {
+void ExecuteConstantSlice(Vector &result, Vector &str_vector, Vector &begin_vector, Vector &end_vector,
+                          optional_ptr<Vector> step_vector, const idx_t count, SelectionVector &sel, idx_t &sel_idx,
+                          optional_ptr<Vector> result_child_vector, bool begin_is_empty, bool end_is_empty) {
 
 	// check all this nullness early
 	auto str_valid = !ConstantVector::IsNull(str_vector);
@@ -180,13 +175,20 @@ static void ExecuteConstantSlice(Vector &result, Vector &str_vector, Vector &beg
 
 	auto result_data = ConstantVector::GetData<INPUT_TYPE>(result);
 	auto str_data = ConstantVector::GetData<INPUT_TYPE>(str_vector);
-	auto begin_data = ConstantVector::GetData<INDEX_TYPE>(begin_vector);
-	auto end_data = ConstantVector::GetData<INDEX_TYPE>(end_vector);
 	auto step_data = step_vector ? ConstantVector::GetData<INDEX_TYPE>(*step_vector) : nullptr;
 
 	auto str = str_data[0];
-	auto begin = begin_is_empty ? 0 : begin_data[0];
-	auto end = end_is_empty ? OP::ValueLength(str) : end_data[0];
+	INDEX_TYPE begin, end;
+	if (begin_is_empty) {
+		begin = 0;
+	} else {
+		begin = *ConstantVector::GetData<INDEX_TYPE>(begin_vector);
+	}
+	if (end_is_empty) {
+		end = OP::ValueLength(str);
+	} else {
+		end = *ConstantVector::GetData<INDEX_TYPE>(end_vector);
+	}
 	auto step = step_data ? step_data[0] : 1;
 
 	if (step < 0) {
@@ -227,9 +229,9 @@ static void ExecuteConstantSlice(Vector &result, Vector &str_vector, Vector &beg
 }
 
 template <typename INPUT_TYPE, typename INDEX_TYPE, typename OP>
-static void ExecuteFlatSlice(Vector &result, Vector &list_vector, Vector &begin_vector, Vector &end_vector,
-                             optional_ptr<Vector> step_vector, const idx_t count, SelectionVector &sel, idx_t &sel_idx,
-                             optional_ptr<Vector> result_child_vector, bool begin_is_empty, bool end_is_empty) {
+void ExecuteFlatSlice(Vector &result, Vector &list_vector, Vector &begin_vector, Vector &end_vector,
+                      optional_ptr<Vector> step_vector, const idx_t count, SelectionVector &sel, idx_t &sel_idx,
+                      optional_ptr<Vector> result_child_vector, bool begin_is_empty, bool end_is_empty) {
 	UnifiedVectorFormat list_data, begin_data, end_data, step_data;
 	idx_t sel_length = 0;
 
@@ -303,8 +305,8 @@ static void ExecuteFlatSlice(Vector &result, Vector &list_vector, Vector &begin_
 }
 
 template <typename INPUT_TYPE, typename INDEX_TYPE, typename OP>
-static void ExecuteSlice(Vector &result, Vector &list_or_str_vector, Vector &begin_vector, Vector &end_vector,
-                         optional_ptr<Vector> step_vector, const idx_t count, bool begin_is_empty, bool end_is_empty) {
+void ExecuteSlice(Vector &result, Vector &list_or_str_vector, Vector &begin_vector, Vector &end_vector,
+                  optional_ptr<Vector> step_vector, const idx_t count, bool begin_is_empty, bool end_is_empty) {
 	optional_ptr<Vector> result_child_vector;
 	if (step_vector) {
 		result_child_vector = &ListVector::GetEntry(result);
@@ -325,7 +327,7 @@ static void ExecuteSlice(Vector &result, Vector &list_or_str_vector, Vector &beg
 	result.Verify(count);
 }
 
-static void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 3 || args.ColumnCount() == 4);
 	D_ASSERT(args.data.size() == 3 || args.data.size() == 4);
 	auto count = args.size();
@@ -378,7 +380,7 @@ static void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &
 	}
 }
 
-static bool CheckIfParamIsEmpty(duckdb::unique_ptr<duckdb::Expression> &param) {
+bool CheckIfParamIsEmpty(duckdb::unique_ptr<duckdb::Expression> &param) {
 	bool is_empty = false;
 	if (param->return_type.id() == LogicalTypeId::LIST) {
 		auto empty_list = make_uniq<BoundConstantExpression>(Value::LIST(LogicalType::INTEGER, vector<Value>()));
@@ -391,8 +393,8 @@ static bool CheckIfParamIsEmpty(duckdb::unique_ptr<duckdb::Expression> &param) {
 	return is_empty;
 }
 
-static unique_ptr<FunctionData> ArraySliceBind(ClientContext &context, ScalarFunction &bound_function,
-                                               vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> ArraySliceBind(ClientContext &context, ScalarFunction &bound_function,
+                                        vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(arguments.size() == 3 || arguments.size() == 4);
 	D_ASSERT(bound_function.arguments.size() == 3 || bound_function.arguments.size() == 4);
 
@@ -450,6 +452,7 @@ static unique_ptr<FunctionData> ArraySliceBind(ClientContext &context, ScalarFun
 	return make_uniq<ListSliceBindData>(bound_function.return_type, begin_is_empty, end_is_empty);
 }
 
+} // namespace
 ScalarFunctionSet ListSliceFun::GetFunctions() {
 	// the arguments and return types are actually set in the binder function
 	ScalarFunction fun({LogicalType::ANY, LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY, ArraySliceFunction,

@@ -142,6 +142,9 @@ private:
 	}
 
 	void WriteCurrentBlockBP(WriteStream &writer) {
+		if (bp_block_count == 0) {
+			return;
+		}
 		ParquetDecodeUtils::VarintEncode(BP_BLOCK_SIZE / 8 << 1 | 1, writer); // (... | 1) signals BP run
 		ParquetDecodeUtils::BitPackAligned(bp_block, data_ptr_cast(bp_block_packed), BP_BLOCK_SIZE, bit_width);
 		writer.WriteData(data_ptr_cast(bp_block_packed), BP_BLOCK_SIZE * bit_width / 8);

@@ -221,7 +221,7 @@ vector<MetaBlockPointer> RowVersionManager::Checkpoint(MetadataManager &manager)
 		// we can write the current pointer as-is
 		// ensure the blocks we are pointing to are not marked as free
 		manager.ClearModifiedBlocks(storage_pointers);
-		// return the root pointer
+		// return the current set of pointers
 		return storage_pointers;
 	}
 	// first count how many ChunkInfo's we need to deserialize

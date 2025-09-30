@@ -13,7 +13,7 @@
 
 namespace duckdb {
 
-idx_t StrfTimepecifierSize(StrTimeSpecifier specifier) {
+static idx_t StrfTimepecifierSize(StrTimeSpecifier specifier) {
 	switch (specifier) {
 	case StrTimeSpecifier::ABBREVIATED_WEEKDAY_NAME:
 	case StrTimeSpecifier::ABBREVIATED_MONTH_NAME:
@@ -48,7 +48,7 @@ idx_t StrfTimepecifierSize(StrTimeSpecifier specifier) {
 	}
 }
 
-void StrfTimeSplitOffset(int offset, int &hh, int &mm, int &ss) {
+static void StrfTimeSplitOffset(int offset, int &hh, int &mm, int &ss) {
 	hh = offset / Interval::SECS_PER_HOUR;
 	offset = offset % Interval::SECS_PER_HOUR;
 

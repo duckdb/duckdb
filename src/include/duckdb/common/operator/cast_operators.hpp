@@ -592,6 +592,16 @@ template <>
 DUCKDB_API bool TryCast::Operation(dtime_t input, dtime_tz_t &result, bool strict);
 
 //===--------------------------------------------------------------------===//
+// Time (ns) Casts
+//===--------------------------------------------------------------------===//
+template <>
+DUCKDB_API bool TryCast::Operation(dtime_t input, dtime_ns_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(dtime_ns_t input, dtime_ns_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(dtime_ns_t input, dtime_t &result, bool strict);
+
+//===--------------------------------------------------------------------===//
 // Time With Time Zone Casts (Offset)
 //===--------------------------------------------------------------------===//
 template <>
@@ -652,6 +662,15 @@ DUCKDB_API bool TryCast::Operation(string_t input, dtime_t &result, bool strict)
 template <>
 dtime_t Cast::Operation(string_t input);
 //===--------------------------------------------------------------------===//
+// String -> Time_NS Casts
+//===--------------------------------------------------------------------===//
+template <>
+DUCKDB_API bool TryCastErrorMessage::Operation(string_t input, dtime_ns_t &result, CastParameters &parameters);
+template <>
+DUCKDB_API bool TryCast::Operation(string_t input, dtime_ns_t &result, bool strict);
+template <>
+dtime_ns_t Cast::Operation(string_t input);
+//===--------------------------------------------------------------------===//
 // String -> TimeTZ Casts
 //===--------------------------------------------------------------------===//
 template <>
@@ -666,11 +685,17 @@ dtime_tz_t Cast::Operation(string_t input);
 template <>
 DUCKDB_API bool TryCastErrorMessage::Operation(string_t input, timestamp_t &result, CastParameters &parameters);
 template <>
+DUCKDB_API bool TryCastErrorMessage::Operation(string_t input, timestamp_tz_t &result, CastParameters &parameters);
+template <>
 DUCKDB_API bool TryCast::Operation(string_t input, timestamp_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(string_t input, timestamp_tz_t &result, bool strict);
 template <>
 DUCKDB_API bool TryCast::Operation(string_t input, timestamp_ns_t &result, bool strict);
 template <>
 timestamp_t Cast::Operation(string_t input);
+template <>
+timestamp_tz_t Cast::Operation(string_t input);
 template <>
 timestamp_ns_t Cast::Operation(string_t input);
 //===--------------------------------------------------------------------===//
@@ -716,6 +741,33 @@ template <>
 DUCKDB_API bool TryCastToTimestampMS::Operation(date_t input, timestamp_t &result, bool strict);
 template <>
 DUCKDB_API bool TryCastToTimestampSec::Operation(date_t input, timestamp_t &result, bool strict);
+
+//===--------------------------------------------------------------------===//
+// string -> Non-Standard Time types
+//===--------------------------------------------------------------------===//
+struct TryCastToTimeNS {
+	template <class SRC, class DST>
+	static inline bool Operation(SRC input, DST &result, bool strict = false) {
+		throw InternalException("Unsupported type for try cast to time (ns)");
+	}
+};
+
+template <>
+DUCKDB_API bool TryCastToTimeNS::Operation(string_t input, dtime_ns_t &result, bool strict);
+
+//===--------------------------------------------------------------------===//
+// Non-Standard Time -> string/time types
+//===--------------------------------------------------------------------===//
+
+struct CastFromTimeNS {
+	template <class SRC>
+	static inline string_t Operation(SRC input, Vector &result) {
+		throw duckdb::NotImplementedException("Cast to string could not be performed!");
+	}
+};
+
+template <>
+duckdb::string_t CastFromTimeNS::Operation(duckdb::dtime_ns_t input, Vector &result);
 
 //===--------------------------------------------------------------------===//
 // Non-Standard Timestamps -> string/timestamp types
@@ -803,6 +855,12 @@ struct CastTimestampNsToTime {
 		throw duckdb::NotImplementedException("Cast to TIME could not be performed!");
 	}
 };
+struct CastTimestampNsToTimeNs {
+	template <class SRC, class DST>
+	static inline DST Operation(SRC input) {
+		throw duckdb::NotImplementedException("Cast to TIME_NS could not be performed!");
+	}
+};
 struct CastTimestampNsToUs {
 	template <class SRC, class DST>
 	static inline DST Operation(SRC input) {
@@ -861,6 +919,8 @@ template <>
 duckdb::date_t CastTimestampNsToDate::Operation(duckdb::timestamp_t input);
 template <>
 duckdb::dtime_t CastTimestampNsToTime::Operation(duckdb::timestamp_t input);
+template <>
+duckdb::dtime_ns_t CastTimestampNsToTimeNs::Operation(duckdb::timestamp_ns_t input);
 template <>
 duckdb::timestamp_t CastTimestampNsToUs::Operation(duckdb::timestamp_t input);
 template <>
@@ -985,6 +1045,30 @@ struct TryCastToUUID {
 template <>
 DUCKDB_API bool TryCastToUUID::Operation(string_t input, hugeint_t &result, Vector &result_vector,
                                          CastParameters &parameters);
+
+struct CastFromUUIDToBlob {
+	template <class SRC>
+	static inline string_t Operation(SRC input, Vector &result) {
+		throw duckdb::NotImplementedException("Cast from uuid to blob could not be performed!");
+	}
+};
+template <>
+duckdb::string_t CastFromUUIDToBlob::Operation(duckdb::hugeint_t input, Vector &vector);
+
+struct TryCastBlobToUUID {
+	template <class SRC, class DST>
+	static inline bool Operation(SRC input, DST &result, Vector &result_vector, CastParameters &parameters) {
+		throw InternalException("Unsupported type for try cast blob to uuid");
+	}
+	template <class SRC, class DST>
+	static inline bool Operation(SRC input, DST &result, bool strict) {
+		throw InternalException("Unsupported type for try cast blob to uuid");
+	}
+};
+template <>
+bool TryCastBlobToUUID::Operation(string_t input, hugeint_t &result, Vector &result_vector, CastParameters &parameters);
+template <>
+bool TryCastBlobToUUID::Operation(string_t input, hugeint_t &result, bool strict);
 
 //===--------------------------------------------------------------------===//
 // Pointers

@@ -51,13 +51,15 @@ public:
 	void Initialize(PersistentCollectionData &data);
 	void Initialize(PersistentTableData &data);
 	void InitializeEmpty();
+	void FinalizeCheckpoint(MetaBlockPointer pointer);
 
 	bool IsEmpty() const;
 
 	void AppendRowGroup(SegmentLock &l, idx_t start_row);
 	//! Get the nth row-group, negative numbers start from the back (so -1 is the last row group, etc)
-	RowGroup *GetRowGroup(int64_t index);
+	optional_ptr<RowGroup> GetRowGroup(int64_t index);
 	void Verify();
+	void Destroy();
 
 	void InitializeScan(CollectionScanState &state, const vector<StorageIndex> &column_ids,
 	                    optional_ptr<TableFilterSet> table_filters);
@@ -75,6 +77,8 @@ public:
 
 	void Fetch(TransactionData transaction, DataChunk &result, const vector<StorageIndex> &column_ids,
 	           const Vector &row_identifiers, idx_t fetch_count, ColumnFetchState &state);
+	//! Returns true, if the row group can fetch the row id for the transaction.
+	bool CanFetch(TransactionData, const row_t row_id);
 
 	//! Initialize an append of a variable number of rows. FinalizeAppend must be called after appending is done.
 	void InitializeAppend(TableAppendState &state);
@@ -143,9 +147,12 @@ public:
 	idx_t GetRowGroupSize() const {
 		return row_group_size;
 	}
+	void SetAppendRequiresNewRowGroup();
 
 private:
 	bool IsEmpty(SegmentLock &) const;
+
+	optional_ptr<RowGroup> NextUpdateRowGroup(row_t *ids, idx_t &pos, idx_t count) const;
 
 private:
 	//! BlockManager
@@ -164,7 +171,11 @@ private:
 	//! Table statistics
 	TableStatistics stats;
 	//! Allocation size, only tracked for appends
-	idx_t allocation_size;
+	atomic<idx_t> allocation_size;
+	//! Root metadata pointer, if the collection is loaded from disk
+	MetaBlockPointer metadata_pointer;
+	//! Whether or not we need to append a new row group prior to appending
+	bool requires_new_row_group;
 };
 
 } // namespace duckdb

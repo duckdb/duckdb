@@ -14,39 +14,38 @@
 
 namespace duckdb {
 
-PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(LogicalComparisonJoin &op, PhysicalOperator &left,
-                                                       PhysicalOperator &right, vector<JoinCondition> cond,
-                                                       JoinType join_type, idx_t estimated_cardinality,
+PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op,
+                                                       PhysicalOperator &left, PhysicalOperator &right,
+                                                       vector<JoinCondition> cond, JoinType join_type,
+                                                       idx_t estimated_cardinality,
                                                        unique_ptr<JoinFilterPushdownInfo> pushdown_info_p)
-    : PhysicalRangeJoin(op, PhysicalOperatorType::PIECEWISE_MERGE_JOIN, left, right, std::move(cond), join_type,
-                        estimated_cardinality) {
+    : PhysicalRangeJoin(physical_plan, op, PhysicalOperatorType::PIECEWISE_MERGE_JOIN, left, right, std::move(cond),
+                        join_type, estimated_cardinality, std::move(pushdown_info_p)) {
 
-	filter_pushdown = std::move(pushdown_info_p);
-
-	for (auto &cond : conditions) {
-		D_ASSERT(cond.left->return_type == cond.right->return_type);
-		join_key_types.push_back(cond.left->return_type);
+	for (auto &join_cond : conditions) {
+		D_ASSERT(join_cond.left->return_type == join_cond.right->return_type);
+		join_key_types.push_back(join_cond.left->return_type);
 
 		// Convert the conditions to sort orders
-		auto left = cond.left->Copy();
-		auto right = cond.right->Copy();
-		switch (cond.comparison) {
+		auto left_expr = join_cond.left->Copy();
+		auto right_expr = join_cond.right->Copy();
+		switch (join_cond.comparison) {
 		case ExpressionType::COMPARE_LESSTHAN:
 		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-			lhs_orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_LAST, std::move(left));
-			rhs_orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_LAST, std::move(right));
+			lhs_orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_LAST, std::move(left_expr));
+			rhs_orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_LAST, std::move(right_expr));
 			break;
 		case ExpressionType::COMPARE_GREATERTHAN:
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-			lhs_orders.emplace_back(OrderType::DESCENDING, OrderByNullType::NULLS_LAST, std::move(left));
-			rhs_orders.emplace_back(OrderType::DESCENDING, OrderByNullType::NULLS_LAST, std::move(right));
+			lhs_orders.emplace_back(OrderType::DESCENDING, OrderByNullType::NULLS_LAST, std::move(left_expr));
+			rhs_orders.emplace_back(OrderType::DESCENDING, OrderByNullType::NULLS_LAST, std::move(right_expr));
 			break;
 		case ExpressionType::COMPARE_NOTEQUAL:
 		case ExpressionType::COMPARE_DISTINCT_FROM:
 			// Allowed in multi-predicate joins, but can't be first/sort.
 			D_ASSERT(!lhs_orders.empty());
-			lhs_orders.emplace_back(OrderType::INVALID, OrderByNullType::NULLS_LAST, std::move(left));
-			rhs_orders.emplace_back(OrderType::INVALID, OrderByNullType::NULLS_LAST, std::move(right));
+			lhs_orders.emplace_back(OrderType::INVALID, OrderByNullType::NULLS_LAST, std::move(left_expr));
+			rhs_orders.emplace_back(OrderType::INVALID, OrderByNullType::NULLS_LAST, std::move(right_expr));
 			break;
 
 		default:
@@ -288,8 +287,8 @@ public:
 };
 
 unique_ptr<OperatorState> PhysicalPiecewiseMergeJoin::GetOperatorState(ExecutionContext &context) const {
-	auto &config = ClientConfig::GetConfig(context.client);
-	return make_uniq<PiecewiseMergeJoinState>(context.client, *this, config.force_external);
+	bool force_external = ClientConfig::GetConfig(context.client).force_external;
+	return make_uniq<PiecewiseMergeJoinState>(context.client, *this, force_external);
 }
 
 static inline idx_t SortedBlockNotNull(const idx_t base, const idx_t count, const idx_t not_null) {

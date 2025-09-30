@@ -4,9 +4,6 @@
 
 require parquet
 
-statement ok
-PRAGMA enable_verification
-
 # FIXME: re-enable when or pushdown is fixed
 mode skip
 
