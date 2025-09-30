@@ -126,51 +126,51 @@ public:
 	}
 
 	void Extend(const VertexXY &vertex) {
-		x_min = std::min(x_min, vertex.x);
-		x_max = std::max(x_max, vertex.x);
-		y_min = std::min(y_min, vertex.y);
-		y_max = std::max(y_max, vertex.y);
+		x_min = MinValue(x_min, vertex.x);
+		x_max = MaxValue(x_max, vertex.x);
+		y_min = MinValue(y_min, vertex.y);
+		y_max = MaxValue(y_max, vertex.y);
 	}
 
 	void Extend(const VertexXYZ &vertex) {
-		x_min = std::min(x_min, vertex.x);
-		x_max = std::max(x_max, vertex.x);
-		y_min = std::min(y_min, vertex.y);
-		y_max = std::max(y_max, vertex.y);
-		z_min = std::min(z_min, vertex.z);
-		z_max = std::max(z_max, vertex.z);
+		x_min = MinValue(x_min, vertex.x);
+		x_max = MaxValue(x_max, vertex.x);
+		y_min = MinValue(y_min, vertex.y);
+		y_max = MaxValue(y_max, vertex.y);
+		z_min = MinValue(z_min, vertex.z);
+		z_max = MaxValue(z_max, vertex.z);
 	}
 
 	void Extend(const VertexXYM &vertex) {
-		x_min = std::min(x_min, vertex.x);
-		x_max = std::max(x_max, vertex.x);
-		y_min = std::min(y_min, vertex.y);
-		y_max = std::max(y_max, vertex.y);
-		m_min = std::min(m_min, vertex.m);
-		m_max = std::max(m_max, vertex.m);
+		x_min = MinValue(x_min, vertex.x);
+		x_max = MaxValue(x_max, vertex.x);
+		y_min = MinValue(y_min, vertex.y);
+		y_max = MaxValue(y_max, vertex.y);
+		m_min = MinValue(m_min, vertex.m);
+		m_max = MaxValue(m_max, vertex.m);
 	}
 
 	void Extend(const VertexXYZM &vertex) {
-		x_min = std::min(x_min, vertex.x);
-		x_max = std::max(x_max, vertex.x);
-		y_min = std::min(y_min, vertex.y);
-		y_max = std::max(y_max, vertex.y);
-		z_min = std::min(z_min, vertex.z);
-		z_max = std::max(z_max, vertex.z);
-		m_min = std::min(m_min, vertex.m);
-		m_max = std::max(m_max, vertex.m);
+		x_min = MinValue(x_min, vertex.x);
+		x_max = MaxValue(x_max, vertex.x);
+		y_min = MinValue(y_min, vertex.y);
+		y_max = MaxValue(y_max, vertex.y);
+		z_min = MinValue(z_min, vertex.z);
+		z_max = MaxValue(z_max, vertex.z);
+		m_min = MinValue(m_min, vertex.m);
+		m_max = MaxValue(m_max, vertex.m);
 	}
 
 	void Merge(const GeometryExtent &other) {
-		x_min = std::min(x_min, other.x_min);
-		y_min = std::min(y_min, other.y_min);
-		z_min = std::min(z_min, other.z_min);
-		m_min = std::min(m_min, other.m_min);
+		x_min = MinValue(x_min, other.x_min);
+		y_min = MinValue(y_min, other.y_min);
+		z_min = MinValue(z_min, other.z_min);
+		m_min = MinValue(m_min, other.m_min);
 
-		x_max = std::max(x_max, other.x_max);
-		y_max = std::max(y_max, other.y_max);
-		z_max = std::max(z_max, other.z_max);
-		m_max = std::max(m_max, other.m_max);
+		x_max = MaxValue(x_max, other.x_max);
+		y_max = MaxValue(y_max, other.y_max);
+		z_max = MaxValue(z_max, other.z_max);
+		m_max = MaxValue(m_max, other.m_max);
 	}
 
 	double x_min;
