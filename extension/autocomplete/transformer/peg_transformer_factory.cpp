@@ -1,9 +1,6 @@
 #include "transformer/peg_transformer.hpp"
+#include "duckdb/parser/sql_statement.hpp"
 #include "matcher.hpp"
-#include "chrono"
-#include "duckdb/parser/expression/star_expression.hpp"
-#include "duckdb/parser/statement/insert_statement.hpp"
-#include "duckdb/parser/tableref/showref.hpp"
 
 namespace duckdb {
 
@@ -34,7 +31,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &
 			if (i < 10) {
 				token_list += " ";
 			}
-			token_list += to_string(i) + ":" + tokens[i].text;
+			token_list += std::to_string(i) + ":" + tokens[i].text;
 		}
 		throw BinderException("Failed to parse query - did not consume all tokens (got to token %d - %s)\nTokens:\n%s",
 		                      state.token_index, tokens[state.token_index].text, token_list);
