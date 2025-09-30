@@ -140,8 +140,7 @@ hugeint_t DecodeDecimal(const_data_ptr_t data, uint8_t &scale, uint8_t &width) {
 	return result;
 }
 
-VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantMetadata &metadata,
-                                                       const VariantValueMetadata &value_metadata,
+VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantValueMetadata &value_metadata,
                                                        const_data_ptr_t data) {
 	switch (value_metadata.primitive_type) {
 	case VariantPrimitiveType::NULL_TYPE: {
@@ -267,8 +266,7 @@ VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantMetadata &me
 	}
 }
 
-VariantValue VariantBinaryDecoder::ShortStringDecode(const VariantMetadata &metadata,
-                                                     const VariantValueMetadata &value_metadata,
+VariantValue VariantBinaryDecoder::ShortStringDecode(const VariantValueMetadata &value_metadata,
                                                      const_data_ptr_t data) {
 	D_ASSERT(value_metadata.string_size < 64);
 	auto string_data = reinterpret_cast<const char *>(data);
@@ -348,10 +346,10 @@ VariantValue VariantBinaryDecoder::Decode(const VariantMetadata &variant_metadat
 	data++;
 	switch (value_metadata.basic_type) {
 	case VariantBasicType::PRIMITIVE: {
-		return PrimitiveTypeDecode(variant_metadata, value_metadata, data);
+		return PrimitiveTypeDecode(value_metadata, data);
 	}
 	case VariantBasicType::SHORT_STRING: {
-		return ShortStringDecode(variant_metadata, value_metadata, data);
+		return ShortStringDecode(value_metadata, data);
 	}
 	case VariantBasicType::OBJECT: {
 		return ObjectDecode(variant_metadata, value_metadata, data);
