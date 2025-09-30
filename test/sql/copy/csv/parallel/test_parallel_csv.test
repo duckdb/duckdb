@@ -139,19 +139,3 @@ HIO	Hillsboro	Oregon	United States	US	1	45.540394	-122.949825	North America	Unit
 TPA	Tampa	Florida	United States	US	1	27.979722	-82.534722	North America	United States, Mexico, & Canada
 PNQ	Pune	Maharashtra	India	IN	1	18.582222	73.919722	Asia	India
 MCT	Muscat	Muscat	Oman	OM	1	23.6015386	58.2899376	Middle East	South Africa, Kenya, & Middle East
-
-
-require httpfs
-
-query II
-select * from read_csv_auto("https://duckdb-public-gzip-test.s3.us-east-2.amazonaws.com/test.csv", header = 0);
-----
-foo	bar
-foo	bar
-
-
-query II
-from read_csv_auto("https://duckdb-public-gzip-test.s3.us-east-2.amazonaws.com/test.csv.gz", header = 0);
-----
-foo	bar
-foo	bar

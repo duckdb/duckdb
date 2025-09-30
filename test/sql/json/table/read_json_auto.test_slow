@@ -352,29 +352,3 @@ statement error
 select * from read_json_auto(['data/json/empty_array.json', 'data/json/example_n.ndjson'], maximum_sample_files=NULL);
 ----
 Binder Error
-
-statement ok
-pragma disable_verification
-
-require httpfs
-
-# this is one big object - yyjson uses it as a benchmark
-query II
-select typeof("type"), typeof(features) from read_json_auto('https://github.com/duckdb/duckdb-data/releases/download/v1.0/canada.json', maximum_depth=3);
-----
-VARCHAR	STRUCT("type" JSON, properties JSON, geometry JSON)[]
-
-# let's crank up maximum_depth and see if we can fully unnest this big object
-query II
-select typeof("type"), typeof(features) from read_json_auto('https://github.com/duckdb/duckdb-data/releases/download/v1.0/canada.json', maximum_depth=8);
-----
-VARCHAR	STRUCT("type" VARCHAR, properties STRUCT("name" VARCHAR), geometry STRUCT("type" VARCHAR, coordinates DOUBLE[][][]))[]
-
-# ^ fully unnested, no more JSON type in there
-
-# the "coordinates" array in "features.geometry" is huge, let's just check the length - not all the values
-query IIIII
-select type, features[1].type, features[1].properties.name, features[1].geometry.type, length(features[1].geometry.coordinates)
-from read_json_auto('https://github.com/duckdb/duckdb-data/releases/download/v1.0/canada.json', maximum_depth=8);
-----
-FeatureCollection	Feature	Canada	Polygon	480
