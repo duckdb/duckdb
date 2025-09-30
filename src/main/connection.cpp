@@ -23,7 +23,6 @@ Connection::Connection(DatabaseInstance &database)
 	auto &connection_manager = ConnectionManager::Get(database);
 	connection_manager.AddConnection(*context);
 	connection_manager.AssignConnectionId(*this);
-	D_ASSERT(1);
 
 #ifdef DEBUG
 	EnableProfiling();
@@ -32,7 +31,6 @@ Connection::Connection(DatabaseInstance &database)
 }
 
 Connection::Connection(DuckDB &database) : Connection(*database.instance) {
-	D_ASSERT(1);
 }
 
 Connection::Connection(Connection &&other) noexcept {
