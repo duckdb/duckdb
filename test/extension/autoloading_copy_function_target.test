@@ -1,0 +1,16 @@
+# name: test/extension/autoloading_copy_function_target.test
+# description: Tests for autoloading copy functions targets
+# group: [extension]
+
+require parquet
+
+statement ok
+set autoload_known_extensions=false
+
+statement ok
+set autoinstall_known_extensions=false
+
+statement error
+copy (select 1337 as edgy_hacker_number) TO 's3://non-existent-bucket/test1337.parquet'
+----
+<REGEX>:.*Missing Extension Error: File .*test1337.parquet requires the extension httpfs to be loaded.*
