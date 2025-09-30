@@ -651,14 +651,14 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, DataChunk &insert
 	D_ASSERT(!return_chunk);
 	auto &data_table = gstate.table.GetStorage();
 	if (!lstate.collection_index.IsValid()) {
+		lock_guard<mutex> l(gstate.lock);
+		lstate.optimistic_writer = make_uniq<OptimisticDataWriter>(context.client, data_table);
 		// Create the local row group collection.
-		auto optimistic_collection = OptimisticDataWriter::CreateCollection(storage, insert_types);
+		auto optimistic_collection = lstate.optimistic_writer->CreateCollection(storage, insert_types);
 		auto &collection = *optimistic_collection->collection;
 		collection.InitializeEmpty();
 		collection.InitializeAppend(lstate.local_append_state);
 
-		lock_guard<mutex> l(gstate.lock);
-		lstate.optimistic_writer = make_uniq<OptimisticDataWriter>(context.client, data_table);
 		lstate.collection_index =
 		    data_table.CreateOptimisticCollection(context.client, std::move(optimistic_collection));
 	}
