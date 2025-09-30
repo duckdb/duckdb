@@ -173,7 +173,7 @@ static idx_t AnalyzeValueData(const UnifiedVariantVectorData &variant, idx_t row
 	case VariantLogicalType::VARCHAR: {
 		auto string_value = VariantUtils::DecodeStringData(variant, row, values_index);
 		total_size += string_value.GetSize();
-		if (type_id == VariantLogicalType::VARCHAR && string_value.GetSize() > 64) {
+		if (type_id == VariantLogicalType::BLOB || string_value.GetSize() > 64) {
 			//! Save as regular string value
 			total_size += sizeof(uint32_t);
 		}
