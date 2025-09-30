@@ -265,3 +265,58 @@ TEST_CASE("Test profiling after throwing an error", "[capi]") {
 
 	tester.Cleanup();
 }
+
+TEST_CASE("Test profiling with Extra Info enabled", "[capi]") {
+	CAPITester tester;
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	REQUIRE_NO_FAIL(tester.Query("PRAGMA enable_profiling = 'no_output'"));
+	duckdb::vector<string> settings = {"EXTRA_INFO"};
+	REQUIRE_NO_FAIL(tester.Query("PRAGMA custom_profiling_settings=" + BuildSettingsString(settings)));
+	REQUIRE_NO_FAIL(tester.Query("SELECT 1"));
+
+	auto info = duckdb_get_profiling_info(tester.connection);
+	REQUIRE(info);
+
+	// Retrieve the child node.
+	auto child_info = duckdb_profiling_info_get_child(info, 0);
+	REQUIRE(duckdb_profiling_info_get_child_count(child_info) != 0);
+
+	auto map = duckdb_profiling_info_get_metrics(child_info);
+	REQUIRE(map);
+	auto count = duckdb_get_map_size(map);
+	REQUIRE(count != 0);
+
+	bool found_extra_info = false;
+	for (idx_t i = 0; i < count; i++) {
+		auto key = duckdb_get_map_key(map, i);
+		REQUIRE(key);
+		auto key_c_str = duckdb_get_varchar(key);
+		auto key_str = duckdb::string(key_c_str);
+
+		auto value = duckdb_get_map_value(map, i);
+		REQUIRE(value);
+		auto value_c_str = duckdb_get_varchar(value);
+		auto value_str = duckdb::string(value_c_str);
+
+		if (key_str == EnumUtil::ToString(MetricsType::EXTRA_INFO)) {
+			REQUIRE(value_str.find("__order_by__"));
+			REQUIRE(value_str.find("ASC"));
+			found_extra_info = true;
+		}
+
+		if (key) {
+			duckdb_destroy_value(&key);
+			duckdb_free(key_c_str);
+		}
+		if (value) {
+			duckdb_destroy_value(&value);
+			duckdb_free(value_c_str);
+		}
+	}
+
+	REQUIRE(found_extra_info);
+
+	duckdb_destroy_value(&map);
+	tester.Cleanup();
+}

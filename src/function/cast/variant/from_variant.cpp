@@ -1,3 +1,4 @@
+#include "yyjson_utils.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/common/types/variant.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
@@ -47,22 +48,6 @@ public:
 public:
 	idx_t width;
 	idx_t scale;
-};
-
-struct ConvertedJSONHolder {
-public:
-	~ConvertedJSONHolder() {
-		if (doc) {
-			yyjson_mut_doc_free(doc);
-		}
-		if (stringified_json) {
-			free(stringified_json);
-		}
-	}
-
-public:
-	yyjson_mut_doc *doc = nullptr;
-	char *stringified_json = nullptr;
 };
 
 } // namespace
