@@ -86,55 +86,13 @@ private:
 	FileSystem &FindFileSystem(const string &path, optional_ptr<FileOpener> file_opener);
 	FileSystem &FindFileSystem(const string &path, optional_ptr<ClientContext> client_context);
 	FileSystem &FindFileSystem(const string &path);
-	FileSystem &FindFileSystemInternal(const string &path, bool allow_autoloading_file_system = false);
+	FileSystem &FindFileSystemInternal(const string &path, bool &allow_autoloading_file_system);
 
 private:
 	vector<unique_ptr<FileSystem>> sub_systems;
 	map<FileCompressionType, unique_ptr<FileSystem>> compressed_fs;
 	const unique_ptr<FileSystem> default_fs;
 	unordered_set<string> disabled_file_systems;
-};
-
-class AutoloadingFileSystem : public FileSystem {
-public:
-	bool CanHandleFile(const string &path) override {
-		string required_extension = "";
-		for (const auto &entry : EXTENSION_FILE_PREFIXES) {
-			if (StringUtil::StartsWith(path, entry.name)) {
-				required_extension = entry.extension;
-				return true;
-			}
-		}
-		// success! glob again
-		return false;
-	}
-	std::string GetName() const override {
-		return "AutoloadingBaseFileSystem";
-	}
-
-	bool Autoload(const string &path, optional_ptr<ClientContext> context, string &required_extension) {
-		for (const auto &entry : EXTENSION_FILE_PREFIXES) {
-			if (StringUtil::StartsWith(path, entry.name)) {
-				required_extension = entry.extension;
-			}
-		}
-		if (!required_extension.empty() && context && !context->db->ExtensionIsLoaded(required_extension)) {
-			auto &dbconfig = DBConfig::GetConfig(*context);
-			if (!ExtensionHelper::CanAutoloadExtension(required_extension) ||
-			    !dbconfig.options.autoload_known_extensions) {
-				auto error_message = "File " + path + " requires the extension " + required_extension + " to be loaded";
-				error_message =
-				    ExtensionHelper::AddExtensionInstallHintToErrorMsg(*context, error_message, required_extension);
-				throw MissingExtensionException(error_message);
-			}
-			// an extension is required to read this file, but it is not loaded - try to load it
-			ExtensionHelper::AutoLoadExtension(*context, required_extension);
-		}
-		return true;
-	};
-	bool IsAutoloadingFileSystem() override {
-		return true;
-	}
 };
 
 } // namespace duckdb

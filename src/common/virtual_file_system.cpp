@@ -12,7 +12,6 @@ VirtualFileSystem::VirtualFileSystem() : VirtualFileSystem(FileSystem::CreateLoc
 }
 
 VirtualFileSystem::VirtualFileSystem(unique_ptr<FileSystem> &&inner) : default_fs(std::move(inner)) {
-	VirtualFileSystem::RegisterSubSystem(make_uniq<AutoloadingFileSystem>());
 	VirtualFileSystem::RegisterSubSystem(FileCompressionType::GZIP, make_uniq<GZipFileSystem>());
 }
 
@@ -224,50 +223,63 @@ FileSystem &VirtualFileSystem::FindFileSystem(const string &path, optional_ptr<F
 }
 
 FileSystem &VirtualFileSystem::FindFileSystem(const string &path, optional_ptr<ClientContext> client_context) {
-	auto &fs = FindFileSystemInternal(path, !!client_context);
+	bool should_autoload = true;
+	auto &fs = FindFileSystemInternal(path, should_autoload);
+
+	if (should_autoload && client_context) {
+		string required_extension;
+
+		for (const auto &entry : EXTENSION_FILE_PREFIXES) {
+			if (StringUtil::StartsWith(path, entry.name)) {
+				required_extension = entry.extension;
+			}
+		}
+		if (!required_extension.empty() && client_context &&
+		    !client_context->db->ExtensionIsLoaded(required_extension)) {
+			auto &dbconfig = DBConfig::GetConfig(*client_context);
+			if (!ExtensionHelper::CanAutoloadExtension(required_extension) ||
+			    !dbconfig.options.autoload_known_extensions) {
+				auto error_message = "File " + path + " requires the extension " + required_extension + " to be loaded";
+				error_message = ExtensionHelper::AddExtensionInstallHintToErrorMsg(*client_context, error_message,
+				                                                                   required_extension);
+				throw MissingExtensionException(error_message);
+			}
+			// an extension is required to read this file, but it is not loaded - try to load it
+			ExtensionHelper::AutoLoadExtension(*client_context, required_extension);
+		}
+
+		FileSystem &fs_after_autoloading = FindFileSystem(path);
+		if (!disabled_file_systems.empty() &&
+		    disabled_file_systems.find(fs_after_autoloading.GetName()) != disabled_file_systems.end()) {
+			throw PermissionException("File system %s has been disabled by configuration",
+			                          fs_after_autoloading.GetName());
+		}
+
+		return fs_after_autoloading;
+	}
 
 	if (!disabled_file_systems.empty() && disabled_file_systems.find(fs.GetName()) != disabled_file_systems.end()) {
 		throw PermissionException("File system %s has been disabled by configuration", fs.GetName());
 	}
-
-	if (client_context && fs.IsAutoloadingFileSystem()) {
-		string required_extension;
-		if (!fs.Cast<AutoloadingFileSystem>().Autoload(path, client_context, required_extension)) {
-			// We know an external filesystem is required, and we could not autoload, throw
-
-			auto error_message = "File " + path + " requires the extension " + required_extension + " to be loaded";
-			error_message =
-			    ExtensionHelper::AddExtensionInstallHintToErrorMsg(*client_context, error_message, required_extension);
-			throw MissingExtensionException(error_message);
-		}
-
-		FileSystem &fs_no_autoloading = FindFileSystem(path);
-		if (!disabled_file_systems.empty() &&
-		    disabled_file_systems.find(fs_no_autoloading.GetName()) != disabled_file_systems.end()) {
-			throw PermissionException("File system %s has been disabled by configuration", fs_no_autoloading.GetName());
-		}
-
-		return fs_no_autoloading;
-	}
-
 	return fs;
 }
 
 FileSystem &VirtualFileSystem::FindFileSystem(const string &path) {
-	auto &fs = FindFileSystemInternal(path);
+	bool should_autoload = false;
+	auto &fs = FindFileSystemInternal(path, should_autoload);
+	(void)should_autoload; // Here it's irrelevant, we can't autoload in this path
+
 	if (!disabled_file_systems.empty() && disabled_file_systems.find(fs.GetName()) != disabled_file_systems.end()) {
 		throw PermissionException("File system %s has been disabled by configuration", fs.GetName());
 	}
 	return fs;
 }
 
-FileSystem &VirtualFileSystem::FindFileSystemInternal(const string &path, bool allow_autoloading_file_system) {
+FileSystem &VirtualFileSystem::FindFileSystemInternal(const string &path, bool &should_autoload) {
+	should_autoload = false;
 	FileSystem *fs = nullptr;
 
 	for (auto &sub_system : sub_systems) {
-		if (!allow_autoloading_file_system && sub_system->IsAutoloadingFileSystem()) {
-			continue;
-		}
 		if (sub_system->CanHandleFile(path)) {
 			if (sub_system->IsManuallySet()) {
 				return *sub_system;
@@ -278,6 +290,10 @@ FileSystem &VirtualFileSystem::FindFileSystemInternal(const string &path, bool a
 	if (fs) {
 		return *fs;
 	}
+
+	// Mark that autoloading might be required to find a valid extension
+	should_autoload = true;
+
 	return *default_fs;
 }
 
