@@ -1,6 +1,9 @@
 # name: test/sql/types/geo/geometry_stats.test
 # group: [geo]
 
+# Stats are not preserved when serialized in the stats() function, so this doesnt work
+require no_alternative_verify
+
 statement ok
 create table t1(id INT, g GEOMETRY);
 
