@@ -201,6 +201,31 @@ public:
 
 } // namespace
 
+vector<idx_t> GetChildIndices(const UnifiedVariantVectorData &variant, idx_t row, const VariantNestedData &nested_data,
+                              optional_ptr<ShreddingState> shredding_state) {
+	vector<idx_t> child_indices;
+	if (!shredding_state || shredding_state->type.id() != LogicalTypeId::STRUCT) {
+		for (idx_t i = 0; i < nested_data.child_count; i++) {
+			child_indices.push_back(i);
+		}
+		return child_indices;
+	}
+	//! FIXME: The variant spec says that field names should be case-sensitive, not insensitive
+	case_insensitive_string_set_t shredded_fields = shredding_state->ObjectFields();
+
+	for (idx_t i = 0; i < nested_data.child_count; i++) {
+		auto keys_index = variant.GetKeysIndex(row, i + nested_data.children_idx);
+		auto &key = variant.GetKey(row, keys_index);
+
+		if (shredded_fields.count(key)) {
+			//! This field is shredded on, omit it from the value
+			continue;
+		}
+		child_indices.push_back(i);
+	}
+	return child_indices;
+}
+
 static idx_t AnalyzeValueData(const UnifiedVariantVectorData &variant, idx_t row, uint32_t values_index,
                               vector<uint32_t> &offsets, optional_ptr<ShreddingState> shredding_state) {
 	idx_t total_size = 0;
@@ -220,27 +245,7 @@ static idx_t AnalyzeValueData(const UnifiedVariantVectorData &variant, idx_t row
 		idx_t total_offset = 0;
 		uint32_t highest_keys_index = 0;
 
-		vector<idx_t> child_indices;
-		if (shredding_state && shredding_state->type.id() == LogicalTypeId::STRUCT) {
-			//! FIXME: The variant spec says that field names should be case-sensitive, not insensitive
-			case_insensitive_string_set_t shredded_fields = shredding_state->ObjectFields();
-
-			for (idx_t i = 0; i < nested_data.child_count; i++) {
-				auto keys_index = variant.GetKeysIndex(row, i + nested_data.children_idx);
-				auto &key = variant.GetKey(row, keys_index);
-
-				if (shredded_fields.count(key)) {
-					//! This field is shredded on, omit it from the value
-					continue;
-				}
-				child_indices.push_back(i);
-			}
-		} else {
-			for (idx_t i = 0; i < nested_data.child_count; i++) {
-				child_indices.push_back(i);
-			}
-		}
-
+		auto child_indices = GetChildIndices(variant, row, nested_data, shredding_state);
 		if (nested_data.child_count && child_indices.empty()) {
 			//! All fields of the object are shredded, omit the object entirely
 			return 0;
@@ -253,7 +258,7 @@ static idx_t AnalyzeValueData(const UnifiedVariantVectorData &variant, idx_t row
 			auto i = child_indices[entry];
 			auto keys_index = variant.GetKeysIndex(row, i + nested_data.children_idx);
 			auto values_index = variant.GetValuesIndex(row, i + nested_data.children_idx);
-			offsets[offset_size + i] = total_offset;
+			offsets[offset_size + entry] = total_offset;
 
 			total_offset += AnalyzeValueData(variant, row, values_index, offsets, nullptr);
 			highest_keys_index = MaxValue(highest_keys_index, keys_index);
@@ -566,27 +571,7 @@ static void WriteValueData(const UnifiedVariantVectorData &variant, idx_t row, u
 
 		//! -- Object value header --
 
-		vector<idx_t> child_indices;
-		if (shredding_state && shredding_state->type.id() == LogicalTypeId::STRUCT) {
-			//! FIXME: The variant spec says that field names should be case-sensitive, not insensitive
-			case_insensitive_string_set_t shredded_fields = shredding_state->ObjectFields();
-
-			for (idx_t i = 0; i < nested_data.child_count; i++) {
-				auto keys_index = variant.GetKeysIndex(row, i + nested_data.children_idx);
-				auto &key = variant.GetKey(row, keys_index);
-
-				if (shredded_fields.count(key)) {
-					//! This field is shredded on, omit it from the value
-					continue;
-				}
-				child_indices.push_back(i);
-			}
-		} else {
-			for (idx_t i = 0; i < nested_data.child_count; i++) {
-				child_indices.push_back(i);
-			}
-		}
-
+		auto child_indices = GetChildIndices(variant, row, nested_data, shredding_state);
 		if (nested_data.child_count && child_indices.empty()) {
 			throw InternalException(
 			    "The entire should be omitted, should have been handled by the Analyze step already");
