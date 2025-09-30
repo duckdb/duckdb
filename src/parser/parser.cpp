@@ -297,7 +297,6 @@ void Parser::ParseQuery(const string &query) {
 				bool parsed_single_statement = false;
 				for (auto &ext : *options.extensions) {
 					D_ASSERT(!parsed_single_statement);
-					D_ASSERT(ext.parse_function);
 					if (!ext.parse_function) {
 						continue;
 					}

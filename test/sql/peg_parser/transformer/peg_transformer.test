@@ -1,6 +1,6 @@
-# name: test/sql/peg_parser/alter.test
+# name: test/sql/peg_parser/transformer/peg_transformer.test
 # description: Test analyze and vacuum statements in peg parser
-# group: [peg_parser]
+# group: [transformer]
 
 require autocomplete
 
