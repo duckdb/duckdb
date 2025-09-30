@@ -173,11 +173,11 @@ unique_ptr<MaterializedQueryResult> Command::ExecuteQuery(ExecuteContext &contex
 	}
 
 	QueryParameters parameters;
-	parameters.streaming_mode = QueryResultStreamingMode::DO_NOT_ALLOW;
-	parameters.memory_management_type = QueryResultMemoryManagementType::BUFFER_MANAGED;
+	parameters.output_type = QueryResultOutputType::MATERIALIZED;
+	parameters.memory_type = QueryResultMemoryType::BUFFER_MANAGED;
 
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
-	parameters.streaming_mode = QueryResultStreamingMode::ALLOW;
+	parameters.output_type = QueryResultOutputType::STREAMING;
 	auto ccontext = connection->context;
 	auto result = ccontext->Query(context.sql_query, parameters);
 	if (result->type == QueryResultType::STREAM_RESULT) {

@@ -147,14 +147,13 @@ unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
 	}
 
 	unique_ptr<ColumnDataCollection> result_collection;
-	if (properties.memory_management_type == QueryResultMemoryManagementType::IN_MEMORY) {
+	if (properties.memory_type == QueryResultMemoryType::IN_MEMORY) {
 		result_collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
 	} else {
-		D_ASSERT(properties.memory_management_type == QueryResultMemoryManagementType::BUFFER_MANAGED);
+		D_ASSERT(properties.memory_type == QueryResultMemoryType::BUFFER_MANAGED);
 		result_collection = make_uniq<ColumnDataCollection>(BufferManager::GetBufferManager(*context->db), types);
 	}
-	auto managed_result =
-	    ResultSetManager::Get(*context).Add(std::move(result_collection), properties.memory_management_type);
+	auto managed_result = ResultSetManager::Get(*context).Add(std::move(result_collection), properties.memory_type);
 	auto pinned_result_set = managed_result->Pin();
 	auto &collection = pinned_result_set->collection;
 

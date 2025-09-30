@@ -599,7 +599,7 @@ BoundStatement Binder::Bind(CopyStatement &stmt, CopyToType copy_to_type) {
 	}
 
 	auto &properties = GetStatementProperties();
-	properties.streaming_mode = QueryResultStreamingMode::DO_NOT_ALLOW;
+	properties.output_type = QueryResultOutputType::MATERIALIZED;
 	properties.return_type = StatementReturnType::CHANGED_ROWS;
 	if (stmt.info->is_from) {
 		return BindCopyFrom(stmt, function);

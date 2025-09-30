@@ -22,7 +22,7 @@ static void ThrowIfExceptionIsInternal(StatementVerifier &verifier) {
 }
 
 ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
-                                     optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters) {
+                                     PendingQueryParameters query_parameters) {
 	D_ASSERT(statement->type == StatementType::SELECT_STATEMENT);
 	// Aggressive query verification
 
@@ -31,6 +31,9 @@ ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &quer
 #else
 	bool run_slow_verifiers = false;
 #endif
+
+	auto parameters = query_parameters.parameters;
+	query_parameters.query_parameters.output_type = QueryResultOutputType::MATERIALIZED;
 
 	// The purpose of this function is to test correctness of otherwise hard to test features:
 	// Copy() of statements and expressions
@@ -95,10 +98,6 @@ ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &quer
 	}
 
 	// Execute the original statement
-	PendingQueryParameters query_parameters;
-	query_parameters.parameters = parameters;
-	query_parameters.query_parameters.streaming_mode = QueryResultStreamingMode::DO_NOT_ALLOW;
-	query_parameters.query_parameters.memory_management_type = QueryResultMemoryManagementType::BUFFER_MANAGED;
 	bool any_failed = original->Run(*this, query,
 	                                [&](const string &q, unique_ptr<SQLStatement> s,
 	                                    optional_ptr<case_insensitive_map_t<BoundParameterData>> params) {

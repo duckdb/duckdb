@@ -13,7 +13,7 @@ BoundStatement Binder::Bind(DetachStatement &stmt) {
 	result.types = {LogicalType::BOOLEAN};
 
 	auto &properties = GetStatementProperties();
-	properties.streaming_mode = QueryResultStreamingMode::DO_NOT_ALLOW;
+	properties.output_type = QueryResultOutputType::MATERIALIZED;
 	properties.return_type = StatementReturnType::NOTHING;
 	return result;
 }

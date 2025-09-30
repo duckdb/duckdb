@@ -19,7 +19,7 @@ BoundStatement Binder::Bind(CallStatement &stmt) {
 
 	auto result = Bind(select_statement);
 	auto &properties = GetStatementProperties();
-	properties.streaming_mode = QueryResultStreamingMode::DO_NOT_ALLOW;
+	properties.output_type = QueryResultOutputType::MATERIALIZED;
 	return result;
 }
 

@@ -26,7 +26,7 @@ class ManagedResultSet : public enable_shared_from_this<ManagedResultSet> {
 	friend class ResultSetManager;
 
 private:
-	ManagedResultSet(weak_ptr<DatabaseInstance> db, QueryResultMemoryManagementType memory_management_type,
+	ManagedResultSet(weak_ptr<DatabaseInstance> db, QueryResultMemoryType memory_type,
 	                 unique_ptr<ColumnDataCollection> collection);
 
 public:
@@ -37,7 +37,7 @@ public:
 
 private:
 	weak_ptr<DatabaseInstance> db;
-	const QueryResultMemoryManagementType memory_management_type;
+	const QueryResultMemoryType memory_type;
 	unique_ptr<ColumnDataCollection> collection;
 	ColumnDataScanState scan_state;
 };
@@ -74,8 +74,7 @@ public:
 
 public:
 	static ResultSetManager &Get(ClientContext &context);
-	shared_ptr<ManagedResultSet> Add(unique_ptr<ColumnDataCollection> collection,
-	                                 QueryResultMemoryManagementType memory_management_type);
+	shared_ptr<ManagedResultSet> Add(unique_ptr<ColumnDataCollection> collection, QueryResultMemoryType memory_type);
 
 private:
 	void Remove(ManagedResultSet &query_result);

@@ -12,13 +12,13 @@
 
 namespace duckdb {
 
-enum class QueryResultStreamingMode : uint8_t { DO_NOT_ALLOW, ALLOW };
+enum class QueryResultOutputType : uint8_t { MATERIALIZED, STREAMING };
 
-enum class QueryResultMemoryManagementType : uint8_t { IN_MEMORY, BUFFER_MANAGED };
+enum class QueryResultMemoryType : uint8_t { IN_MEMORY, BUFFER_MANAGED };
 
 struct QueryParameters {
-	QueryResultStreamingMode streaming_mode = QueryResultStreamingMode::DO_NOT_ALLOW;
-	QueryResultMemoryManagementType memory_management_type = QueryResultMemoryManagementType::IN_MEMORY;
+	QueryResultOutputType output_type = QueryResultOutputType::MATERIALIZED;
+	QueryResultMemoryType memory_type = QueryResultMemoryType::IN_MEMORY;
 };
 
 } // namespace duckdb

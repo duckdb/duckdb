@@ -125,7 +125,7 @@ BoundStatement Binder::Bind(CopyDatabaseStatement &stmt) {
 	result.plan = std::move(plan);
 
 	auto &properties = GetStatementProperties();
-	properties.streaming_mode = QueryResultStreamingMode::DO_NOT_ALLOW;
+	properties.output_type = QueryResultOutputType::MATERIALIZED;
 	properties.return_type = StatementReturnType::NOTHING;
 	properties.RegisterDBModify(target_catalog, context);
 	return result;

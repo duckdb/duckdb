@@ -327,7 +327,7 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 	result.types = {LogicalType::BIGINT};
 
 	auto &properties = GetStatementProperties();
-	properties.streaming_mode = QueryResultStreamingMode::DO_NOT_ALLOW;
+	properties.output_type = QueryResultOutputType::MATERIALIZED;
 	properties.return_type = StatementReturnType::CHANGED_ROWS;
 	return result;
 }

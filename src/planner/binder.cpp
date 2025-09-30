@@ -582,7 +582,7 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 	// returned, it should be guaranteed that the row has been inserted.
 	// see https://github.com/duckdb/duckdb/issues/8310
 	auto &properties = GetStatementProperties();
-	properties.streaming_mode = QueryResultStreamingMode::DO_NOT_ALLOW;
+	properties.output_type = QueryResultOutputType::MATERIALIZED;
 	properties.return_type = StatementReturnType::QUERY_RESULT;
 	return result;
 }

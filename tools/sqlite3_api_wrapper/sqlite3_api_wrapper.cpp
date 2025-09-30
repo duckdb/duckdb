@@ -225,8 +225,8 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 		} else {
 			// Use eager execution: there are no parameters so we can safely create a PendingQuery here
 			QueryParameters query_parameters;
-			query_parameters.streaming_mode = QueryResultStreamingMode::DO_NOT_ALLOW;
-			query_parameters.memory_management_type = QueryResultMemoryManagementType::BUFFER_MANAGED;
+			query_parameters.output_type = QueryResultOutputType::MATERIALIZED;
+			query_parameters.memory_type = QueryResultMemoryType::BUFFER_MANAGED;
 			auto pending = db->con->PendingQuery(std::move(statements.back()), query_parameters);
 			if (pending->HasError()) {
 				// failed to prepare: set the error message

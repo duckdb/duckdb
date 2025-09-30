@@ -54,14 +54,6 @@ ColumnDataCollection::ColumnDataCollection(Allocator &allocator_p) {
 	allocator = make_shared_ptr<ColumnDataAllocator>(allocator_p);
 }
 
-ColumnDataCollection::ColumnDataCollection(DatabaseInstance &db) {
-	types.clear();
-	count = 0;
-	this->finished_append = false;
-	// NOTE: this uses the DatabaseInstance BufferManager because ColumnDataCollection can outlive a ClientContext
-	allocator = make_shared_ptr<ColumnDataAllocator>(BufferManager::GetBufferManager(db));
-}
-
 ColumnDataCollection::ColumnDataCollection(Allocator &allocator_p, vector<LogicalType> types_p) {
 	Initialize(std::move(types_p));
 	allocator = make_shared_ptr<ColumnDataAllocator>(allocator_p);

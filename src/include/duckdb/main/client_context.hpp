@@ -253,7 +253,7 @@ private:
 	//! Perform aggressive query verification of a SELECT statement. Only called when query_verification_enabled is
 	//! true.
 	ErrorData VerifyQuery(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
-	                      optional_ptr<case_insensitive_map_t<BoundParameterData>> values = nullptr);
+	                      PendingQueryParameters parameters);
 
 	void InitialCleanup(ClientContextLock &lock);
 	//! Internal clean up, does not lock. Caller must hold the context_lock.
@@ -274,7 +274,7 @@ private:
 	//! Internally prepare a SQL statement. Caller must hold the context_lock.
 	shared_ptr<PreparedStatementData>
 	CreatePreparedStatement(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
-	                        optional_ptr<case_insensitive_map_t<BoundParameterData>> values = nullptr,
+	                        PendingQueryParameters parameters,
 	                        PreparedStatementMode mode = PreparedStatementMode::PREPARE_ONLY);
 	unique_ptr<PendingQueryResult> PendingStatementInternal(ClientContextLock &lock, const string &query,
 	                                                        unique_ptr<SQLStatement> statement,
@@ -316,9 +316,9 @@ private:
 	template <class T>
 	unique_ptr<T> ErrorResult(ErrorData error, const string &query = string());
 
-	shared_ptr<PreparedStatementData>
-	CreatePreparedStatementInternal(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
-	                                optional_ptr<case_insensitive_map_t<BoundParameterData>> values);
+	shared_ptr<PreparedStatementData> CreatePreparedStatementInternal(ClientContextLock &lock, const string &query,
+	                                                                  unique_ptr<SQLStatement> statement,
+	                                                                  PendingQueryParameters parameters);
 
 	SettingLookupResult TryGetCurrentSettingInternal(const string &key, Value &result) const;
 

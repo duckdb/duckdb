@@ -192,7 +192,7 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	result.plan = std::move(update);
 
 	auto &properties = GetStatementProperties();
-	properties.streaming_mode = QueryResultStreamingMode::DO_NOT_ALLOW;
+	properties.output_type = QueryResultOutputType::MATERIALIZED;
 	properties.return_type = StatementReturnType::CHANGED_ROWS;
 	return result;
 }

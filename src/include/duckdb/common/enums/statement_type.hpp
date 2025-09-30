@@ -68,8 +68,8 @@ class ClientContext;
 //! A struct containing various properties of a SQL statement
 struct StatementProperties {
 	StatementProperties()
-	    : requires_valid_transaction(true), streaming_mode(QueryResultStreamingMode::DO_NOT_ALLOW),
-	      memory_management_type(QueryResultMemoryManagementType::IN_MEMORY), bound_all_parameters(true),
+	    : requires_valid_transaction(true), output_type(QueryResultOutputType::MATERIALIZED),
+	      memory_type(QueryResultMemoryType::IN_MEMORY), bound_all_parameters(true),
 	      return_type(StatementReturnType::QUERY_RESULT), parameter_count(0), always_require_rebind(false) {
 	}
 
@@ -94,9 +94,9 @@ struct StatementProperties {
 	//! exception of ROLLBACK
 	bool requires_valid_transaction;
 	//! Whether or not the result can be streamed to the client
-	QueryResultStreamingMode streaming_mode;
+	QueryResultOutputType output_type;
 	//! Whether or not the result can be buffer-managed
-	QueryResultMemoryManagementType memory_management_type;
+	QueryResultMemoryType memory_type;
 	//! Whether or not all parameters have successfully had their types determined
 	bool bound_all_parameters;
 	//! What type of data the statement returns
