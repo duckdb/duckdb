@@ -241,9 +241,10 @@ unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(RowGroup &row_g
 	// to prevent reading the validity data immediately after it is checkpointed we first checkpoint the main column
 	// this is necessary for concurrent checkpointing as due to the partial block manager checkpointed data might be
 	// flushed to disk by a different thread than the one that wrote it, causing a data race
-	auto base_state = CreateCheckpointState(row_group, checkpoint_info.info.manager);
+	auto &partial_block_manager = checkpoint_info.GetPartialBlockManager();
+	auto base_state = CreateCheckpointState(row_group, partial_block_manager);
 	base_state->global_stats = BaseStatistics::CreateEmpty(type).ToUnique();
-	auto validity_state_p = validity.CreateCheckpointState(row_group, checkpoint_info.info.manager);
+	auto validity_state_p = validity.CreateCheckpointState(row_group, partial_block_manager);
 	validity_state_p->global_stats = BaseStatistics::CreateEmpty(validity.type).ToUnique();
 
 	auto &validity_state = *validity_state_p;
