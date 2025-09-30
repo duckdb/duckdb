@@ -12,3 +12,8 @@ statement error
 copy (select 1337 as edgy_hacker_number) TO 's3://non-existent-bucket/test1337.csv'
 ----
 <REGEX>:.*Missing Extension Error: File .*test1337.csv requires the extension httpfs to be loaded.*
+
+statement error
+copy (select 1337 as edgy_hacker_number) TO 'azure://non-existent-bucket/test1337.csv'
+----
+<REGEX>:.*Missing Extension Error: File .*test1337.csv requires the extension azure to be loaded.*
