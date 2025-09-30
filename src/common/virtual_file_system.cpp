@@ -12,6 +12,7 @@ VirtualFileSystem::VirtualFileSystem() : VirtualFileSystem(FileSystem::CreateLoc
 }
 
 VirtualFileSystem::VirtualFileSystem(unique_ptr<FileSystem> &&inner) : default_fs(std::move(inner)) {
+	VirtualFileSystem::RegisterSubSystem(make_uniq<AutoloadingFileSystem>());
 	VirtualFileSystem::RegisterSubSystem(FileCompressionType::GZIP, make_uniq<GZipFileSystem>());
 }
 
@@ -34,8 +35,10 @@ unique_ptr<FileHandle> VirtualFileSystem::OpenFileExtended(const OpenFileInfo &f
 		}
 	}
 	// open the base file handle in UNCOMPRESSED mode
+
+	optional_ptr<ClientContext> client_context = FileOpener::TryGetClientContext(opener);
 	flags.SetCompression(FileCompressionType::UNCOMPRESSED);
-	auto file_handle = FindFileSystem(file.path).OpenFile(file, flags, opener);
+	auto file_handle = FindFileSystem(file.path, client_context).OpenFile(file, flags, opener);
 	if (!file_handle) {
 		return nullptr;
 	}
@@ -216,6 +219,38 @@ bool VirtualFileSystem::SubSystemIsDisabled(const string &name) {
 	return disabled_file_systems.find(name) != disabled_file_systems.end();
 }
 
+FileSystem &VirtualFileSystem::FindFileSystem(const string &path, optional_ptr<FileOpener> opener) {
+	return FindFileSystem(path, FileOpener::TryGetClientContext(opener));
+}
+
+FileSystem &VirtualFileSystem::FindFileSystem(const string &path, optional_ptr<ClientContext> client_context) {
+	auto &fs = FindFileSystemInternal(path, !!client_context);
+
+	if (!disabled_file_systems.empty() && disabled_file_systems.find(fs.GetName()) != disabled_file_systems.end()) {
+		throw PermissionException("File system %s has been disabled by configuration", fs.GetName());
+	}
+
+	if (client_context && fs.IsAutoloadingFileSystem()) {
+		string required_extension;
+		if (!fs.Cast<AutoloadingFileSystem>().Autoload(path, client_context, required_extension)) {
+			// We know an external filesystem is required, and we could not autoload, throw
+
+			auto error_message = "File " + path + " requires the extension " + required_extension + " to be loaded";
+			error_message =
+			    ExtensionHelper::AddExtensionInstallHintToErrorMsg(*client_context, error_message, required_extension);
+			throw MissingExtensionException(error_message);
+		}
+
+		FileSystem &fs_no_autoloading = FindFileSystem(path);
+		if (!disabled_file_systems.empty() && disabled_file_systems.find(fs_no_autoloading.GetName()) != disabled_file_systems.end()) {
+			throw PermissionException("File system %s has been disabled by configuration", fs_no_autoloading.GetName());
+		}
+		return fs_no_autoloading;
+	}
+
+	return fs;
+}
+
 FileSystem &VirtualFileSystem::FindFileSystem(const string &path) {
 	auto &fs = FindFileSystemInternal(path);
 	if (!disabled_file_systems.empty() && disabled_file_systems.find(fs.GetName()) != disabled_file_systems.end()) {
@@ -224,9 +259,13 @@ FileSystem &VirtualFileSystem::FindFileSystem(const string &path) {
 	return fs;
 }
 
-FileSystem &VirtualFileSystem::FindFileSystemInternal(const string &path) {
+FileSystem &VirtualFileSystem::FindFileSystemInternal(const string &path, bool allow_autoloading_file_system) {
 	FileSystem *fs = nullptr;
+
 	for (auto &sub_system : sub_systems) {
+		if (!allow_autoloading_file_system && sub_system->IsAutoloadingFileSystem()) {
+			continue;
+		}
 		if (sub_system->CanHandleFile(path)) {
 			if (sub_system->IsManuallySet()) {
 				return *sub_system;

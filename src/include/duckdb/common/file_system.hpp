@@ -284,6 +284,9 @@ public:
 	DUCKDB_API virtual bool SubSystemIsDisabled(const string &name);
 
 	DUCKDB_API static bool IsDirectory(const OpenFileInfo &info);
+	DUCKDB_API virtual bool IsAutoloadingFileSystem() {
+		return false;
+	}
 
 protected:
 	DUCKDB_API virtual unique_ptr<FileHandle> OpenFileExtended(const OpenFileInfo &path, FileOpenFlags flags,
