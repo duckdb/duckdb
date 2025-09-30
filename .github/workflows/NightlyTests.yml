@@ -334,6 +334,10 @@ jobs:
           sudo rm -rf /var/lib/apt/lists/*
           docker system prune -af || true
           rm -rf ~/.cache
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf "/usr/local/share/boost"
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
           echo "Disk usage after clean up:"
           df -h
 
