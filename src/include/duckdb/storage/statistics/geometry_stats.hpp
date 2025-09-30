@@ -19,7 +19,7 @@
 
 namespace duckdb {
 class BaseStatistics;
-const SelectionVector;
+struct SelectionVector;
 
 class GeometryTypeSet {
 public:
