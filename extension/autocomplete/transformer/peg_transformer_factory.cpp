@@ -1,6 +1,10 @@
 #include "transformer/peg_transformer.hpp"
 #include "duckdb/parser/sql_statement.hpp"
 #include "matcher.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/statement/insert_statement.hpp"
+#include "duckdb/parser/tableref/showref.hpp"
+
 
 namespace duckdb {
 
