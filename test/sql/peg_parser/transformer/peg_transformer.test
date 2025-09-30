@@ -4,6 +4,8 @@
 
 require autocomplete
 
+require skip_reload
+
 statement ok
 set allow_parser_override_extension=strict;
 
