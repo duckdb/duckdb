@@ -535,6 +535,11 @@ static bool CastVariant(FromVariantConversionData &conversion_data, Vector &resu
 			return CastVariantToPrimitive<VariantDirectConversion<string_t, VariantLogicalType::BLOB>>(
 			    conversion_data, result, sel, offset, count, row, string_payload);
 		}
+		case LogicalTypeId::GEOMETRY: {
+			StringConversionPayload string_payload(result);
+			return CastVariantToPrimitive<VariantDirectConversion<string_t, VariantLogicalType::GEOMETRY>>(
+			    conversion_data, result, sel, offset, count, row, string_payload);
+		}
 		case LogicalTypeId::VARCHAR: {
 			if (target_type.IsJSONType()) {
 				return CastVariantToJSON(conversion_data, result, sel, offset, count, row);
@@ -670,6 +675,8 @@ BoundCastInfo DefaultCasts::VariantCastSwitch(BindCastInput &input, const Logica
 	case LogicalTypeId::UNION:
 	case LogicalTypeId::UUID:
 	case LogicalTypeId::ARRAY:
+		return BoundCastInfo(CastFromVARIANT);
+	case LogicalTypeId::GEOMETRY:
 		return BoundCastInfo(CastFromVARIANT);
 	case LogicalTypeId::VARCHAR: {
 		return BoundCastInfo(CastFromVARIANT);
