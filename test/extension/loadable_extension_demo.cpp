@@ -200,7 +200,8 @@ public:
 	}
 
 	static ParserExtensionParseResult QuackParseFunction(ParserExtensionInfo *info, const string &query) {
-		auto lcase = StringUtil::Lower(StringUtil::Replace(query, ";", ""));
+		auto lcase = StringUtil::Lower(query);
+		Printer::Print(query);
 		if (!StringUtil::Contains(lcase, "quack")) {
 			// quack not found!?
 			if (StringUtil::Contains(lcase, "quac")) {
@@ -215,6 +216,7 @@ public:
 			StringUtil::Trim(split);
 			if (!split.empty()) {
 				// we only accept quacks here
+				Printer::Print(split);
 				return ParserExtensionParseResult("This is not a quack: " + split);
 			}
 		}
