@@ -8,6 +8,12 @@
       "paths": [
         "test/sql/storage/constraints/foreignkey/foreign_key_persistent_memory_limit.test"
       ]
+    },
+    {
+      "reason": "ALP is disabled for non-default block sizes.",
+      "paths": [
+        "test/sql/storage/compression/alp/alp_min_max.test"
+      ]
     }
   ]
 }
