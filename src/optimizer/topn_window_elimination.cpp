@@ -62,106 +62,6 @@ vector<ColumnBinding> RetrieveNonAggregateProjections(const vector<ColumnBinding
 	return result;
 }
 
-/*vector<unique_ptr<Expression>> TryProjectRowIds(ClientContext &context, LogicalWindow &window, const vector<ColumnBinding> &extra_projections) {
-	vector<reference<LogicalOperator>> stack;
-	reference<LogicalOperator> child = *window.children[0];
-	while (child.get().type != LogicalOperatorType::LOGICAL_GET) {
-		if (child.get().children.size() > 1) {
-			// TODO: Support joins if projections stem from the same table
-			return {};
-		}
-		stack.push_back(child);
-		child = *child.get().children[0];
-	}
-	// we have reached the logical get - now we need to push the row-id column (if it is not yet projected out)
-	auto &get = child.get().Cast<LogicalGet>();
-	if (!get.function.late_materialization || !get.function.get_row_id_columns) {
-		// this function does not support late materialization
-		return {};
-	}
-	auto row_id_column_ids = get.function.get_row_id_columns(context, get.bind_data.get());
-	if (row_id_column_ids.empty() || row_id_column_ids.size() > extra_projections.size()) {
-		return {};
-	}
-
-	// We are now sure that we want to project the rownumber
-	vector<TableColumn> row_id_columns;
-	for (auto &col_id : row_id_column_ids) {
-		auto entry = get.virtual_columns.find(col_id);
-		if (entry == get.virtual_columns.end()) {
-			throw InternalException("Row id column id not found in virtual column list");
-		}
-		row_id_columns.push_back(entry->second);
-	}
-
-	auto &column_ids = get.GetMutableColumnIds();
-	vector<idx_t> row_id_indexes;
-	for (idx_t r_idx = 0; r_idx < row_id_column_ids.size(); ++r_idx) {
-		// check if it is already projected
-		auto row_id_column_id = row_id_column_ids[r_idx];
-		auto &row_id_column = row_id_columns[r_idx];
-		optional_idx row_id_index;
-		for (idx_t i = 0; i < column_ids.size(); ++i) {
-			if (column_ids[i].GetPrimaryIndex() == row_id_column_id) {
-				// already projected - return the id
-				row_id_index = i;
-				break;
-			}
-		}
-		if (row_id_index.IsValid()) {
-			row_id_indexes.push_back(row_id_index.GetIndex());
-			continue;
-		}
-		// row id is not yet projected - push it and return the new index
-		column_ids.push_back(ColumnIndex(row_id_column_id));
-		if (!get.projection_ids.empty()) {
-			get.projection_ids.push_back(column_ids.size() - 1);
-		}
-		if (!get.types.empty()) {
-			get.types.push_back(row_id_column.type);
-		}
-		row_id_indexes.push_back(column_ids.size() - 1);
-	}
-	idx_t column_count = get.projection_ids.empty() ? get.GetColumnIds().size() : get.projection_ids.size();
-	D_ASSERT(column_count == get.GetColumnBindings().size());
-
-	// the row id has been projected - now project it up the stack
-	vector<ColumnBinding> row_id_bindings;
-	for (auto &row_id_index : row_id_indexes) {
-		row_id_bindings.emplace_back(get.table_index, row_id_index);
-	}
-	for (idx_t i = stack.size(); i > 0; i--) {
-		auto &op = stack[i - 1].get();
-		switch (op.type) {
-		case LogicalOperatorType::LOGICAL_PROJECTION: {
-			auto &proj = op.Cast<LogicalProjection>();
-			// push projection of the row-id columns
-			for (idx_t r_idx = 0; r_idx < row_id_columns.size(); r_idx++) {
-				auto &r_col = row_id_columns[r_idx];
-				proj.expressions.push_back(
-				    make_uniq<BoundColumnRefExpression>(r_col.name, r_col.type, row_id_bindings[r_idx]));
-				// modify the row-id-binding to the new projection
-				row_id_bindings[r_idx] = ColumnBinding(proj.table_index, proj.expressions.size() - 1);
-			}
-			column_count = proj.expressions.size();
-			break;
-		}
-		case LogicalOperatorType::LOGICAL_FILTER: {
-			auto &filter = op.Cast<LogicalFilter>();
-			// column bindings pass-through this operator as-is UNLESS the filter has a projection map
-			if (filter.HasProjectionMap()) {
-				// if the filter has a projection map, we need to project the new column
-				// TODO: Shouldn't this project all rowid columns??
-				filter.projection_map.push_back(column_count - 1);
-			}
-			break;
-		}
-		default:
-			throw InternalException("Unsupported logical operator in LateMaterialization::ConstructRHS");
-		}
-	}
-}*/
-
 unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<LogicalOperator> op,
                                                                     ColumnBindingReplacer &replacer) {
 	if (!CanOptimize(*op, &context)) {
@@ -185,6 +85,12 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 
 	vector<unique_ptr<Expression>> args;
 	bool generate_row_number = false;
+	for (const auto& binding : new_bindings) {
+		if (binding.table_index == window.window_index) {
+			generate_row_number = true;
+		}
+	}
+
 	if (extra_projections.size() == 1) {
 		// With one extra projection, we can use this projection directly as the argument in arg_max
 		window.children[0]->ResolveOperatorTypes();
@@ -209,9 +115,23 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 		unnest_info.emplace_back(expr->alias, expr->return_type);
 	}
 
-	auto &filter_constant = filter.expressions[0]->Cast<BoundComparisonExpression>().right;
-	auto aggregate_op = CreateAggregateOperator(window, std::move(filter_constant), std::move(args));
+	auto limit = filter.expressions[0]->Cast<BoundComparisonExpression>().right->Cast<BoundConstantExpression>().value.GetValue<int64_t>();
+	auto aggregate_op = CreateAggregateOperator(window, limit, std::move(args));
 	const idx_t aggregate_idx = aggregate_op->Cast<LogicalAggregate>().aggregate_index;
+
+	if (limit > 1) {
+		// We need to unnest the result
+		auto unnest_list = CreateUnnestListOperator(unnest_info, aggregate_idx, generate_row_number);
+	}
+
+	if (unnest_info.size() <= 1) {
+		vector<unique_ptr<Expression>> projections;
+		projections.reserve(new_bindings.size());
+		bool projects_rowid = false;
+		for (const auto &binding : new_bindings) {
+
+		}
+	}
 
 	// Create unnest list and generate row numbers
 	auto unnest_list = CreateUnnestListOperator(unnest_info, aggregate_idx, generate_row_number);
@@ -246,11 +166,10 @@ unique_ptr<Expression> TopNWindowElimination::CreateAggregateExpression(vector<u
 	return function_binder.BindAggregateFunction(fun, std::move(aggregate_params));
 }
 
-unique_ptr<LogicalAggregate> TopNWindowElimination::CreateAggregateOperator(LogicalWindow &window, unique_ptr<Expression> limit, vector<unique_ptr<Expression>> args) const {
+unique_ptr<LogicalAggregate> TopNWindowElimination::CreateAggregateOperator(LogicalWindow &window, const int64_t limit, vector<unique_ptr<Expression>> args) const {
 	auto &window_expr = window.expressions[0]->Cast<BoundWindowExpression>();
 	D_ASSERT(window_expr.orders.size() == 1);
 	const auto order_type = window_expr.orders[0].type;
-	const auto limit_value = limit->Cast<BoundConstantExpression>().value.GetValue<int64_t>();
 
 	vector<unique_ptr<Expression>> aggregate_params;
 	aggregate_params.reserve(3);
@@ -270,8 +189,8 @@ unique_ptr<LogicalAggregate> TopNWindowElimination::CreateAggregateOperator(Logi
 	}
 
 	aggregate_params.push_back(std::move(window_expr.orders[0].expression));
-	if (limit_value > 1) {
-		aggregate_params.push_back(std::move(limit));
+	if (limit > 1) {
+		aggregate_params.push_back(make_uniq<BoundConstantExpression>(limit));
 	}
 
 	auto aggregate_expr = CreateAggregateExpression(aggregate_params, use_struct_pack, order_type);
@@ -292,12 +211,17 @@ unique_ptr<LogicalUnnest> TopNWindowElimination::CreateUnnestListOperator(const 
                                                                           const idx_t aggregate_idx,
                                                                           const bool include_row_number) const {
 	auto unnest = make_uniq<LogicalUnnest>(optimizer.binder.GenerateTableIndex());
-	const auto struct_type = LogicalType::STRUCT(input_types);
-	auto unnest_expr = make_uniq<BoundUnnestExpression>(struct_type);
+	if (input_types.size() > 1) {
+		const auto struct_type = LogicalType::STRUCT(input_types);
+		auto unnest_expr = make_uniq<BoundUnnestExpression>(struct_type);
 
-	unnest_expr->child =
-	    make_uniq<BoundColumnRefExpression>(LogicalType::LIST(struct_type), ColumnBinding(aggregate_idx, 0));
-	unnest->expressions.push_back(std::move(unnest_expr));
+		unnest_expr->child =
+			make_uniq<BoundColumnRefExpression>(LogicalType::LIST(struct_type), ColumnBinding(aggregate_idx, 0));
+		unnest->expressions.push_back(std::move(unnest_expr));
+	} else if (input_types.size() == 1) {
+
+	}
+
 	if (include_row_number) {
 		// Create unnest(generate_series(1, array_length(column_ref, 1))) function to generate row ids
 		FunctionBinder function_binder(context);

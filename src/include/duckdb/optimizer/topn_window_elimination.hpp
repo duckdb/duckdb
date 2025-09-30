@@ -23,7 +23,7 @@ private:
 	static bool CanOptimize(LogicalOperator &op, optional_ptr<ClientContext> context = nullptr);
 	unique_ptr<LogicalOperator> OptimizeInternal(unique_ptr<LogicalOperator> op, ColumnBindingReplacer &replacer);
 
-	unique_ptr<LogicalAggregate> CreateAggregateOperator(LogicalWindow &window, unique_ptr<Expression> limit, vector<unique_ptr<Expression>> args) const;
+	unique_ptr<LogicalAggregate> CreateAggregateOperator(LogicalWindow &window, int64_t limit, vector<unique_ptr<Expression>> args) const;
 	unique_ptr<LogicalUnnest> CreateUnnestListOperator(const child_list_t<LogicalType> &input_types,
 	                                                   idx_t aggregate_idx, bool include_row_number) const;
 	unique_ptr<LogicalProjection> CreateUnnestStructOperator(const child_list_t<LogicalType> &input_types,

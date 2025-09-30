@@ -507,49 +507,6 @@ unique_ptr<LogicalOperator> LateMaterialization::Optimize(unique_ptr<LogicalOper
 		}
 		break;
 	}
-	case LogicalOperatorType::LOGICAL_PROJECTION: {
-		// Try late materialization for arg_max(struct_pack, val, N) constructs
-		const auto &proj = op->Cast<LogicalProjection>();
-		bool is_struct_extract = false;
-		for (const auto &expr : proj.expressions) {
-			if (expr->type == ExpressionType::BOUND_FUNCTION) {
-				const auto &fun_expr = expr->Cast<BoundFunctionExpression>();
-				if (fun_expr.function.name == "struct_extract") {
-					is_struct_extract = true;
-					break;
-				}
-			}
-		}
-		if (is_struct_extract) {
-			const auto *child = proj.children[0].get();
-			if (child->type != LogicalOperatorType::LOGICAL_UNNEST) {
-				break;
-			}
-			child = child->children[0].get();
-			if (child->type != LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
-				break;
-			}
-
-			const auto &aggregate = child->Cast<LogicalAggregate>();
-			if (aggregate.expressions.empty() || aggregate.expressions[0]->type != ExpressionType::BOUND_FUNCTION) {
-				break;
-			}
-			const auto &agg_fun_expr = aggregate.expressions[0]->Cast<BoundFunctionExpression>();
-			if (agg_fun_expr.children.empty() || agg_fun_expr.children[0]->type != ExpressionType::BOUND_FUNCTION) {
-				break;
-			}
-			const auto &agg_child_fun_expr = agg_fun_expr.children[0]->Cast<BoundFunctionExpression>();
-			if (agg_child_fun_expr.function.name != "struct_pack") {
-				break;
-			}
-
-			if (TryLateMaterialization(op)) {
-				return op;
-			}
-			break;
-		}
-	}
-
 	default:
 		break;
 	}
