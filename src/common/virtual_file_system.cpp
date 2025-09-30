@@ -122,7 +122,7 @@ void VirtualFileSystem::MoveFile(const string &source, const string &target, opt
 }
 
 bool VirtualFileSystem::FileExists(const string &filename, optional_ptr<FileOpener> opener) {
-	return FindFileSystem(filename).FileExists(filename, opener);
+	return FindFileSystem(filename, opener).FileExists(filename, opener);
 }
 
 bool VirtualFileSystem::IsPipe(const string &filename, optional_ptr<FileOpener> opener) {
