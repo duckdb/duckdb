@@ -229,6 +229,7 @@ public:
 	unique_ptr<GlobalSortedTable> lhs_global_table;
 	unique_ptr<LocalSortedTable> lhs_local_table;
 	SortKeyType sort_key_type;
+	TupleDataScanState lhs_scan;
 
 	// Simple scans
 	idx_t left_position;
@@ -267,9 +268,8 @@ public:
 		// Scan the sorted payload (minus the primary sort column)
 		auto &lhs_table = *lhs_global_table;
 		auto &lhs_payload_data = *lhs_table.sorted->payload_data;
-		TupleDataScanState state;
-		lhs_payload_data.InitializeScan(state);
-		lhs_payload_data.Scan(state, lhs_payload);
+		lhs_payload_data.InitializeScan(lhs_scan);
+		lhs_payload_data.Scan(lhs_scan, lhs_payload);
 
 		// Recompute the sorted keys from the sorted input
 		auto &lhs_keys = lhs_local_table->keys;
@@ -562,6 +562,7 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 	do {
 		if (state.first_fetch) {
 			state.ResolveJoinKeys(context, input);
+			state.lhs_payload.Verify();
 
 			state.right_chunk_index = 0;
 			state.right_base = 0;
