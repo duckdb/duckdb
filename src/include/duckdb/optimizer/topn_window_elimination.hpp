@@ -23,12 +23,9 @@ private:
 	static bool CanOptimize(LogicalOperator &op, optional_ptr<ClientContext> context = nullptr);
 	unique_ptr<LogicalOperator> OptimizeInternal(unique_ptr<LogicalOperator> op, ColumnBindingReplacer &replacer);
 
-	unique_ptr<LogicalAggregate> CreateAggregateOperator(LogicalWindow &window, unique_ptr<Expression> limit, vector<unique_ptr<Expression>> args) const;
-	unique_ptr<LogicalUnnest> CreateUnnestListOperator(const LogicalType &input_types,
-	                                                   idx_t aggregate_idx, bool include_row_number) const;
-	unique_ptr<LogicalProjection> CreateUnnestStructOperator(const LogicalType &input_type,
-	                                                         idx_t unnest_list_idx, idx_t table_idx,
-	                                                         bool include_row_number) const;
+	unique_ptr<LogicalOperator> CreateAggregateOperator(LogicalWindow &window, unique_ptr<Expression> limit, vector<unique_ptr<Expression>> args) const;
+	unique_ptr<LogicalOperator> CreateUnnestListOperator(unique_ptr<LogicalOperator> op, bool include_row_number) const;
+	unique_ptr<LogicalOperator> CreateUnnestStructOperator(unique_ptr<LogicalOperator> op, const bool include_row_number) const;
 
 	static vector<unique_ptr<Expression>> GenerateStructPackExprs(const vector<ColumnBinding> &bindings,
 	                                                              const LogicalWindow &window, bool &generate_row_ids);
