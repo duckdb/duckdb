@@ -46,14 +46,12 @@ static void CreateMetadata(UnifiedVariantVectorData &variant, Vector &metadata, 
 	//! NOTE: the parquet variant is limited to a max dictionary size of NumericLimits<uint32_t>::Maximum()
 	//! Whereas we can have NumericLimits<uint32_t>::Maximum() *per* string in DuckDB
 	auto metadata_data = FlatVector::GetData<string_t>(metadata);
-	auto &validity = FlatVector::Validity(metadata);
 	for (idx_t row = 0; row < count; row++) {
-		if (!variant.RowIsValid(row)) {
-			validity.SetInvalid(row);
-			continue;
+		uint64_t dictionary_count = 0;
+		if (variant.RowIsValid(row)) {
+			auto list_entry = keys_data[keys.sel->get_index(row)];
+			dictionary_count = list_entry.length;
 		}
-		auto list_entry = keys_data[keys.sel->get_index(row)];
-		auto dictionary_count = list_entry.length;
 		idx_t dictionary_size = 0;
 		for (idx_t i = 0; i < dictionary_count; i++) {
 			auto &key = variant.GetKey(row, i);
@@ -101,13 +99,14 @@ static void CreateMetadata(UnifiedVariantVectorData &variant, Vector &metadata, 
 
 static idx_t AnalyzeValueData(const UnifiedVariantVectorData &variant, idx_t row, uint32_t values_index,
                               vector<uint32_t> &offsets) {
-	D_ASSERT(variant.RowIsValid(row));
-
 	idx_t total_size = 0;
 	//! Every value has at least a value header
 	total_size++;
 
-	auto type_id = variant.GetTypeId(row, values_index);
+	VariantLogicalType type_id = VariantLogicalType::VARIANT_NULL;
+	if (variant.RowIsValid(row)) {
+		type_id = variant.GetTypeId(row, values_index);
+	}
 	switch (type_id) {
 	case VariantLogicalType::OBJECT: {
 		auto nested_data = VariantUtils::DecodeNestedData(variant, row, values_index);
@@ -279,7 +278,10 @@ void CopyUUIDData(const UnifiedVariantVectorData &variant, data_ptr_t &value_dat
 
 static void WritePrimitiveValueData(const UnifiedVariantVectorData &variant, idx_t row, uint32_t values_index,
                                     data_ptr_t &value_data, const vector<uint32_t> &offsets, idx_t &offset_index) {
-	auto type_id = variant.GetTypeId(row, values_index);
+	VariantLogicalType type_id = VariantLogicalType::VARIANT_NULL;
+	if (variant.RowIsValid(row)) {
+		type_id = variant.GetTypeId(row, values_index);
+	}
 
 	D_ASSERT(type_id != VariantLogicalType::OBJECT && type_id != VariantLogicalType::ARRAY);
 	switch (type_id) {
@@ -416,9 +418,10 @@ static void WritePrimitiveValueData(const UnifiedVariantVectorData &variant, idx
 
 static void WriteValueData(const UnifiedVariantVectorData &variant, idx_t row, uint32_t values_index,
                            data_ptr_t &value_data, const vector<uint32_t> &offsets, idx_t &offset_index) {
-	D_ASSERT(variant.RowIsValid(row));
-
-	auto type_id = variant.GetTypeId(row, values_index);
+	VariantLogicalType type_id = VariantLogicalType::VARIANT_NULL;
+	if (variant.RowIsValid(row)) {
+		type_id = variant.GetTypeId(row, values_index);
+	}
 	if (type_id == VariantLogicalType::OBJECT) {
 		auto nested_data = VariantUtils::DecodeNestedData(variant, row, values_index);
 
@@ -533,15 +536,9 @@ static void WriteValueData(const UnifiedVariantVectorData &variant, idx_t row, u
 }
 
 static void CreateValues(UnifiedVariantVectorData &variant, Vector &value, idx_t count) {
-	auto &validity = FlatVector::Validity(value);
 	auto value_data = FlatVector::GetData<string_t>(value);
 
 	for (idx_t row = 0; row < count; row++) {
-		if (!variant.RowIsValid(row)) {
-			validity.SetInvalid(row);
-			continue;
-		}
-
 		//! The (relative) offsets for each value, in the case of nesting
 		vector<uint32_t> offsets;
 		//! Determine the size of this 'value' blob
@@ -578,13 +575,6 @@ static void ToParquetVariant(DataChunk &input, ExpressionState &state, Vector &r
 	UnifiedVariantVectorData variant(recursive_format);
 
 	auto &result_vectors = StructVector::GetEntries(result);
-	auto &validity = FlatVector::Validity(result);
-	for (idx_t i = 0; i < count; i++) {
-		if (!variant.RowIsValid(i)) {
-			validity.SetInvalid(i);
-		}
-	}
-
 	CreateMetadata(variant, *result_vectors[0], count);
 	CreateValues(variant, *result_vectors[1], count);
 }
