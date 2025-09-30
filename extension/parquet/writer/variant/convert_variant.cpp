@@ -207,6 +207,7 @@ static idx_t AnalyzeValueData(const UnifiedVariantVectorData &variant, idx_t row
 	//! Every value has at least a value header
 	total_size++;
 
+	idx_t offset_size = offsets.size();
 	VariantLogicalType type_id = VariantLogicalType::VARIANT_NULL;
 	if (variant.RowIsValid(row)) {
 		type_id = variant.GetTypeId(row, values_index);
@@ -245,19 +246,23 @@ static idx_t AnalyzeValueData(const UnifiedVariantVectorData &variant, idx_t row
 			return 0;
 		}
 
-		for (auto &i : child_indices) {
+		auto num_elements = child_indices.size();
+		offsets.resize(offset_size + num_elements + 1);
+
+		for (idx_t entry = 0; entry < child_indices.size(); entry++) {
+			auto i = child_indices[entry];
 			auto keys_index = variant.GetKeysIndex(row, i + nested_data.children_idx);
 			auto values_index = variant.GetValuesIndex(row, i + nested_data.children_idx);
-			offsets.push_back(total_offset);
+			offsets[offset_size + i] = total_offset;
 
 			total_offset += AnalyzeValueData(variant, row, values_index, offsets, nullptr);
 			highest_keys_index = MaxValue(highest_keys_index, keys_index);
 		}
+		offsets[offset_size + num_elements] = total_offset;
 
 		//! Calculate the sizes for the objects value data
 		auto field_id_size = CalculateByteLength(highest_keys_index);
 		auto field_offset_size = CalculateByteLength(total_offset);
-		auto num_elements = nested_data.child_count;
 		const bool is_large = num_elements > NumericLimits<uint8_t>::Maximum();
 
 		//! Now add the sizes for the objects value data
@@ -275,12 +280,14 @@ static idx_t AnalyzeValueData(const UnifiedVariantVectorData &variant, idx_t row
 		auto nested_data = VariantUtils::DecodeNestedData(variant, row, values_index);
 
 		idx_t total_offset = 0;
+		offsets.resize(offset_size + nested_data.child_count + 1);
 		for (idx_t i = 0; i < nested_data.child_count; i++) {
 			auto values_index = variant.GetValuesIndex(row, i + nested_data.children_idx);
-			offsets.push_back(total_offset);
+			offsets[offset_size + i] = total_offset;
 
 			total_offset += AnalyzeValueData(variant, row, values_index, offsets, nullptr);
 		}
+		offsets[offset_size + nested_data.child_count] = total_offset;
 
 		auto field_offset_size = CalculateByteLength(total_offset);
 		auto num_elements = nested_data.child_count;
@@ -298,12 +305,10 @@ static idx_t AnalyzeValueData(const UnifiedVariantVectorData &variant, idx_t row
 	case VariantLogicalType::BLOB:
 	case VariantLogicalType::VARCHAR: {
 		auto string_value = VariantUtils::DecodeStringData(variant, row, values_index);
+		total_size += string_value.GetSize();
 		if (type_id == VariantLogicalType::VARCHAR && string_value.GetSize() > 64) {
 			//! Save as regular string value
-			total_size += sizeof(uint32_t) + string_value.GetSize();
-		} else {
-			//! Save as "short string" type
-			total_size += string_value.GetSize();
+			total_size += sizeof(uint32_t);
 		}
 		break;
 	}
@@ -373,6 +378,7 @@ static idx_t AnalyzeValueData(const UnifiedVariantVectorData &variant, idx_t row
 		throw InvalidInputException("Can't convert VARIANT of type '%s' to Parquet VARIANT",
 		                            EnumUtil::ToString(type_id));
 	}
+
 	return total_size;
 }
 
@@ -597,9 +603,9 @@ static void WriteValueData(const UnifiedVariantVectorData &variant, idx_t row, u
 
 		uint32_t last_offset = 0;
 		if (num_elements) {
-			last_offset = offsets[offset_index + num_elements - 1];
+			last_offset = offsets[offset_index + num_elements];
 		}
-		offset_index += num_elements;
+		offset_index += num_elements + 1;
 		auto field_offset_size = CalculateByteLength(last_offset);
 
 		const bool is_large = num_elements > NumericLimits<uint8_t>::Maximum();
@@ -609,6 +615,14 @@ static void WriteValueData(const UnifiedVariantVectorData &variant, idx_t row, u
 		value_header |= static_cast<uint8_t>(is_large) << 6;
 		value_header |= (static_cast<uint8_t>(field_id_size) - 1) << 4;
 		value_header |= (static_cast<uint8_t>(field_offset_size) - 1) << 2;
+
+#ifdef DEBUG
+		auto object_value_header = VariantValueMetadata::FromHeaderByte(value_header);
+		D_ASSERT(object_value_header.basic_type == VariantBasicType::OBJECT);
+		D_ASSERT(object_value_header.is_large == is_large);
+		D_ASSERT(object_value_header.field_offset_size == field_offset_size);
+		D_ASSERT(object_value_header.field_id_size == field_id_size);
+#endif
 
 		*value_data = value_header;
 		value_data++;
@@ -642,6 +656,8 @@ static void WriteValueData(const UnifiedVariantVectorData &variant, idx_t row, u
 			total_offset += (children_ptr - start_ptr);
 		}
 		memcpy(value_data, reinterpret_cast<data_ptr_t>(&total_offset), field_offset_size);
+		value_data += field_offset_size;
+		D_ASSERT(children_ptr - total_offset == value_data);
 		value_data = children_ptr;
 	} else if (type_id == VariantLogicalType::ARRAY) {
 		auto nested_data = VariantUtils::DecodeNestedData(variant, row, values_index);
@@ -650,9 +666,9 @@ static void WriteValueData(const UnifiedVariantVectorData &variant, idx_t row, u
 
 		uint32_t last_offset = 0;
 		if (nested_data.child_count) {
-			last_offset = offsets[offset_index + nested_data.child_count - 1];
+			last_offset = offsets[offset_index + nested_data.child_count];
 		}
-		offset_index += nested_data.child_count;
+		offset_index += nested_data.child_count + 1;
 		auto field_offset_size = CalculateByteLength(last_offset);
 
 		auto num_elements = nested_data.child_count;
@@ -662,6 +678,13 @@ static void WriteValueData(const UnifiedVariantVectorData &variant, idx_t row, u
 		value_header |= static_cast<uint8_t>(VariantBasicType::ARRAY);
 		value_header |= static_cast<uint8_t>(is_large) << 4;
 		value_header |= (static_cast<uint8_t>(field_offset_size) - 1) << 2;
+
+#ifdef DEBUG
+		auto array_value_header = VariantValueMetadata::FromHeaderByte(value_header);
+		D_ASSERT(array_value_header.basic_type == VariantBasicType::ARRAY);
+		D_ASSERT(array_value_header.is_large == is_large);
+		D_ASSERT(array_value_header.field_offset_size == field_offset_size);
+#endif
 
 		*value_data = value_header;
 		value_data++;
@@ -688,6 +711,8 @@ static void WriteValueData(const UnifiedVariantVectorData &variant, idx_t row, u
 			total_offset += (children_ptr - start_ptr);
 		}
 		memcpy(value_data, reinterpret_cast<data_ptr_t>(&total_offset), field_offset_size);
+		value_data += field_offset_size;
+		D_ASSERT(children_ptr - total_offset == value_data);
 		value_data = children_ptr;
 	} else {
 		WritePrimitiveValueData(variant, row, values_index, value_data, offsets, offset_index);
@@ -747,6 +772,7 @@ static void CreateValues(UnifiedVariantVectorData &variant, Vector &value, optio
 
 		idx_t offset_index = 0;
 		WriteValueData(variant, row, value_index, value_blob_data, offsets, offset_index, shredding_state);
+		D_ASSERT(data_ptr_cast(value_blob.GetDataWriteable() + blob_length) == value_blob_data);
 		value_blob.SetSizeAndFinalize(blob_length, blob_length);
 	}
 }
