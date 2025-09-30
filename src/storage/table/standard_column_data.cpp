@@ -294,7 +294,7 @@ void StandardColumnData::InitializeColumn(PersistentColumnData &column_data, Bas
 	validity.InitializeColumn(column_data.child_columns[0], target_stats);
 }
 
-void StandardColumnData::GetColumnSegmentInfo(QueryContext context, duckdb::idx_t row_group_index,
+void StandardColumnData::GetColumnSegmentInfo(const QueryContext &context, duckdb::idx_t row_group_index,
                                               vector<duckdb::idx_t> col_path,
                                               vector<duckdb::ColumnSegmentInfo> &result) {
 	ColumnData::GetColumnSegmentInfo(context, row_group_index, col_path, result);

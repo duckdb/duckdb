@@ -183,8 +183,8 @@ void RowGroup::InitializeEmpty(const vector<LogicalType> &types) {
 	}
 }
 
-void ColumnScanState::Initialize(QueryContext context_p, const LogicalType &type, const vector<StorageIndex> &children,
-                                 optional_ptr<TableScanOptions> options) {
+void ColumnScanState::Initialize(const QueryContext &context_p, const LogicalType &type,
+                                 const vector<StorageIndex> &children, optional_ptr<TableScanOptions> options) {
 	// Register the options in the state
 	scan_options = options;
 	context = context_p;
@@ -233,13 +233,13 @@ void ColumnScanState::Initialize(QueryContext context_p, const LogicalType &type
 	}
 }
 
-void ColumnScanState::Initialize(QueryContext context_p, const LogicalType &type,
+void ColumnScanState::Initialize(const QueryContext &context_p, const LogicalType &type,
                                  optional_ptr<TableScanOptions> options) {
 	vector<StorageIndex> children;
 	Initialize(context_p, type, children, options);
 }
 
-void CollectionScanState::Initialize(QueryContext context, const vector<LogicalType> &types) {
+void CollectionScanState::Initialize(const QueryContext &context, const vector<LogicalType> &types) {
 	auto &column_ids = GetColumnIds();
 	column_scans = make_unsafe_uniq_array<ColumnScanState>(column_ids.size());
 	for (idx_t i = 0; i < column_ids.size(); i++) {
@@ -1229,7 +1229,8 @@ PartitionStatistics RowGroup::GetPartitionStats() const {
 //===--------------------------------------------------------------------===//
 // GetColumnSegmentInfo
 //===--------------------------------------------------------------------===//
-void RowGroup::GetColumnSegmentInfo(QueryContext context, idx_t row_group_index, vector<ColumnSegmentInfo> &result) {
+void RowGroup::GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index,
+                                    vector<ColumnSegmentInfo> &result) {
 	for (idx_t col_idx = 0; col_idx < GetColumnCount(); col_idx++) {
 		auto &col_data = GetColumn(col_idx);
 		col_data.GetColumnSegmentInfo(context, row_group_index, {col_idx}, result);

@@ -61,12 +61,12 @@ public:
 	void Verify();
 	void Destroy();
 
-	void InitializeScan(QueryContext context, CollectionScanState &state, const vector<StorageIndex> &column_ids,
+	void InitializeScan(const QueryContext &context, CollectionScanState &state, const vector<StorageIndex> &column_ids,
 	                    optional_ptr<TableFilterSet> table_filters);
 	void InitializeCreateIndexScan(CreateIndexScanState &state);
-	void InitializeScanWithOffset(QueryContext context, CollectionScanState &state,
+	void InitializeScanWithOffset(const QueryContext &context, CollectionScanState &state,
 	                              const vector<StorageIndex> &column_ids, idx_t start_row, idx_t end_row);
-	static bool InitializeScanInRowGroup(QueryContext context, CollectionScanState &state,
+	static bool InitializeScanInRowGroup(const QueryContext &context, CollectionScanState &state,
 	                                     RowGroupCollection &collection, RowGroup &row_group, idx_t vector_index,
 	                                     idx_t max_row);
 	void InitializeParallelScan(ParallelCollectionScanState &state);
@@ -98,7 +98,7 @@ public:
 	                  optional_ptr<StorageCommitState> commit_state);
 	bool IsPersistent() const;
 
-	void RemoveFromIndexes(QueryContext context, TableIndexList &indexes, Vector &row_identifiers, idx_t count);
+	void RemoveFromIndexes(const QueryContext &context, TableIndexList &indexes, Vector &row_identifiers, idx_t count);
 
 	idx_t Delete(TransactionData transaction, DataTable &table, row_t *ids, idx_t count);
 	void Update(TransactionData transaction, row_t *ids, const vector<PhysicalIndex> &column_ids, DataChunk &updates);
@@ -117,7 +117,7 @@ public:
 	void CommitDropTable();
 
 	vector<PartitionStatistics> GetPartitionStats() const;
-	vector<ColumnSegmentInfo> GetColumnSegmentInfo(QueryContext context);
+	vector<ColumnSegmentInfo> GetColumnSegmentInfo(const QueryContext &context);
 	const vector<LogicalType> &GetTypes() const;
 
 	shared_ptr<RowGroupCollection> AddColumn(ClientContext &context, ColumnDefinition &new_column,

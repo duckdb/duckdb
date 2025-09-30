@@ -782,7 +782,7 @@ public:
 };
 
 template <class T>
-unique_ptr<SegmentScanState> BitpackingInitScan(QueryContext context, ColumnSegment &segment) {
+unique_ptr<SegmentScanState> BitpackingInitScan(const QueryContext &context, ColumnSegment &segment) {
 	auto result = make_uniq<BitpackingScanState<T>>(context, segment);
 	return std::move(result);
 }

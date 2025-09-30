@@ -107,9 +107,9 @@ struct ColumnScanState {
 	optional_ptr<TableScanOptions> scan_options;
 
 public:
-	void Initialize(QueryContext context_p, const LogicalType &type, const vector<StorageIndex> &children,
+	void Initialize(const QueryContext &context_p, const LogicalType &type, const vector<StorageIndex> &children,
 	                optional_ptr<TableScanOptions> options);
-	void Initialize(QueryContext context_p, const LogicalType &type, optional_ptr<TableScanOptions> options);
+	void Initialize(const QueryContext &context_p, const LogicalType &type, optional_ptr<TableScanOptions> options);
 	//! Move the scan state forward by "count" rows (including all child states)
 	void Next(idx_t count);
 	//! Move ONLY this state forward by "count" rows (i.e. not the child states)
@@ -206,7 +206,7 @@ public:
 	RandomEngine random;
 
 public:
-	void Initialize(QueryContext context, const vector<LogicalType> &types);
+	void Initialize(const QueryContext &context, const vector<LogicalType> &types);
 	const vector<StorageIndex> &GetColumnIds();
 	ScanFilterInfo &GetFilterInfo();
 	ScanSamplingInfo &GetSamplingInfo();

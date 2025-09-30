@@ -361,7 +361,7 @@ void StructColumnData::InitializeColumn(PersistentColumnData &column_data, BaseS
 	this->count = validity.count.load();
 }
 
-void StructColumnData::GetColumnSegmentInfo(QueryContext context, idx_t row_group_index, vector<idx_t> col_path,
+void StructColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<idx_t> col_path,
                                             vector<ColumnSegmentInfo> &result) {
 	col_path.push_back(0);
 	validity.GetColumnSegmentInfo(context, row_group_index, col_path, result);

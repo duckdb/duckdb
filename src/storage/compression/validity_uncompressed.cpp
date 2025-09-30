@@ -207,7 +207,7 @@ struct ValidityScanState : public SegmentScanState {
 	block_id_t block_id;
 };
 
-unique_ptr<SegmentScanState> ValidityInitScan(QueryContext context, ColumnSegment &segment) {
+unique_ptr<SegmentScanState> ValidityInitScan(const QueryContext &context, ColumnSegment &segment) {
 	auto result = make_uniq<ValidityScanState>();
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	result->handle = buffer_manager.Pin(segment.block);

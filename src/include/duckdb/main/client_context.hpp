@@ -339,8 +339,8 @@ public:
 	}
 	QueryContext(ClientContext &context) : context(&context) { // NOLINT: allow implicit construction
 	}
-	QueryContext(weak_ptr<ClientContext> context)
-	    : owning_context(context.lock()), context(owning_context.get()) { // NOLINT: allow implicit construction
+	QueryContext(weak_ptr<ClientContext> context) // NOLINT: allow implicit construction
+	    : owning_context(context.lock()), context(owning_context.get()) {
 	}
 
 public:

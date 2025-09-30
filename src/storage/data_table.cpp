@@ -1270,7 +1270,7 @@ void DataTable::RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, Vec
 	});
 }
 
-void DataTable::RemoveFromIndexes(QueryContext context, Vector &row_identifiers, idx_t count) {
+void DataTable::RemoveFromIndexes(const QueryContext &context, Vector &row_identifiers, idx_t count) {
 	D_ASSERT(IsMainTable());
 	row_groups->RemoveFromIndexes(context, info->indexes, row_identifiers, count);
 }
@@ -1649,7 +1649,7 @@ void DataTable::CommitDropTable() {
 //===--------------------------------------------------------------------===//
 // Column Segment Info
 //===--------------------------------------------------------------------===//
-vector<ColumnSegmentInfo> DataTable::GetColumnSegmentInfo(QueryContext context) {
+vector<ColumnSegmentInfo> DataTable::GetColumnSegmentInfo(const QueryContext &context) {
 	auto lock = GetSharedCheckpointLock();
 	return row_groups->GetColumnSegmentInfo(context);
 }

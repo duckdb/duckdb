@@ -154,7 +154,7 @@ void RowGroupCollection::Verify() {
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
-void RowGroupCollection::InitializeScan(QueryContext context, CollectionScanState &state,
+void RowGroupCollection::InitializeScan(const QueryContext &context, CollectionScanState &state,
                                         const vector<StorageIndex> &column_ids,
                                         optional_ptr<TableFilterSet> table_filters) {
 	auto row_group = row_groups->GetRootSegment();
@@ -171,7 +171,7 @@ void RowGroupCollection::InitializeCreateIndexScan(CreateIndexScanState &state) 
 	state.segment_lock = row_groups->Lock();
 }
 
-void RowGroupCollection::InitializeScanWithOffset(QueryContext context, CollectionScanState &state,
+void RowGroupCollection::InitializeScanWithOffset(const QueryContext &context, CollectionScanState &state,
                                                   const vector<StorageIndex> &column_ids, idx_t start_row,
                                                   idx_t end_row) {
 	auto row_group = row_groups->GetSegment(start_row);
@@ -185,7 +185,7 @@ void RowGroupCollection::InitializeScanWithOffset(QueryContext context, Collecti
 	}
 }
 
-bool RowGroupCollection::InitializeScanInRowGroup(QueryContext context, CollectionScanState &state,
+bool RowGroupCollection::InitializeScanInRowGroup(const QueryContext &context, CollectionScanState &state,
                                                   RowGroupCollection &collection, RowGroup &row_group,
                                                   idx_t vector_index, idx_t max_row) {
 	state.max_row = max_row;
@@ -667,8 +667,8 @@ void RowGroupCollection::Update(TransactionData transaction, row_t *ids, const v
 	} while (pos < updates.size());
 }
 
-void RowGroupCollection::RemoveFromIndexes(QueryContext context, TableIndexList &indexes, Vector &row_identifiers,
-                                           idx_t count) {
+void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableIndexList &indexes,
+                                           Vector &row_identifiers, idx_t count) {
 	auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
 
 	// Collect all indexed columns.
@@ -1254,7 +1254,7 @@ vector<PartitionStatistics> RowGroupCollection::GetPartitionStats() const {
 //===--------------------------------------------------------------------===//
 // GetColumnSegmentInfo
 //===--------------------------------------------------------------------===//
-vector<ColumnSegmentInfo> RowGroupCollection::GetColumnSegmentInfo(QueryContext context) {
+vector<ColumnSegmentInfo> RowGroupCollection::GetColumnSegmentInfo(const QueryContext &context) {
 	vector<ColumnSegmentInfo> result;
 	auto lock = row_groups->Lock();
 	for (auto &row_group : row_groups->Segments(lock)) {

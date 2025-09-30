@@ -909,7 +909,7 @@ shared_ptr<ColumnData> ColumnData::Deserialize(BlockManager &block_manager, Data
 	return entry;
 }
 
-void ColumnData::GetColumnSegmentInfo(QueryContext context, idx_t row_group_index, vector<idx_t> col_path,
+void ColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<idx_t> col_path,
                                       vector<ColumnSegmentInfo> &result) {
 	D_ASSERT(!col_path.empty());
 
