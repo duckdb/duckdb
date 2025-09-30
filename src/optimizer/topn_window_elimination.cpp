@@ -35,13 +35,14 @@ unique_ptr<LogicalOperator> TopNWindowElimination::Optimize(unique_ptr<LogicalOp
 	return op;
 }
 
-vector<ColumnBinding> RetrieveNonAggregateProjections(const vector<ColumnBinding> &bindings, const LogicalWindow &window) {
+vector<ColumnBinding> RetrieveNonAggregateProjections(const vector<ColumnBinding> &bindings,
+                                                      const LogicalWindow &window) {
 	vector<ColumnBinding> result;
 	result.reserve(bindings.size());
 
 	const auto &window_expr = window.expressions[0]->Cast<BoundWindowExpression>();
 	const auto &order_column_ref = window_expr.orders[0].expression->Cast<BoundColumnRefExpression>();
-	for (const auto& binding : bindings) {
+	for (const auto &binding : bindings) {
 		if (binding.table_index == window.window_index || binding == order_column_ref.binding) {
 			continue;
 		}
@@ -81,79 +82,61 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 
 	D_ASSERT(child->type == LogicalOperatorType::LOGICAL_WINDOW);
 	auto &window = child->Cast<LogicalWindow>();
-	auto extra_projections = RetrieveNonAggregateProjections(new_bindings, window);
 
-	vector<unique_ptr<Expression>> args;
-	bool generate_row_number = false;
-	for (const auto& binding : new_bindings) {
-		if (binding.table_index == window.window_index) {
-			generate_row_number = true;
-		}
+	bool generate_row_number;
+	vector<unique_ptr<Expression>> struct_input_exprs =
+	    GenerateStructPackExprs(new_bindings, window, generate_row_number);
+
+	auto limit = std::move(filter.expressions[0]->Cast<BoundComparisonExpression>().right);
+	auto aggregate_op = CreateAggregateOperator(window, std::move(limit), std::move(struct_input_exprs));
+	aggregate_op->children.push_back(std::move(window.children[0]));
+
+	aggregate_op->ResolveOperatorTypes();
+	const auto &aggregate_result_type = aggregate_op->types[aggregate_op->groups.size()];
+
+	if (aggregate_result_type.InternalType() == PhysicalType::LIST) {
+		auto unnest_list =
+		    CreateUnnestListOperator(aggregate_result_type, aggregate_op->aggregate_index, generate_row_number);
+		const auto unnest_list_idx = unnest_list->Cast<LogicalUnnest>().unnest_index;
+
+		aggregate_op->children[0] = Optimize(std::move(aggregate_op->children[0]));
+
+		unnest_list->children.push_back(unique_ptr<LogicalOperator>(std::move(aggregate_op)));
+
+		unnest_list->ResolveOperatorTypes();
+		const auto &unnest_result_type = unnest_list->types[unnest_list->children[0]->types.size()];
+
+		const idx_t unnest_struct_idx = optimizer.binder.GenerateTableIndex();
+		auto unnest_struct =
+		    CreateUnnestStructOperator(unnest_result_type, unnest_list_idx, unnest_struct_idx, generate_row_number);
+		unnest_struct->children.push_back(unique_ptr<LogicalOperator>(std::move(unnest_list)));
+		UpdateBindings(window.window_index, unnest_struct_idx, old_bindings, new_bindings, replacer);
+		replacer.stop_operator = unnest_struct.get();
+		return unique_ptr<LogicalOperator>(std::move(unnest_struct));
 	}
 
-	if (extra_projections.size() == 1) {
-		// With one extra projection, we can use this projection directly as the argument in arg_max
-		window.children[0]->ResolveOperatorTypes();
-		const auto &window_child_types = window.children[0]->types;
-		const auto window_child_bindings = window.children[0]->GetColumnBindings();
-
-		args.push_back(make_uniq<BoundColumnRefExpression>(window_child_types[extra_projections[0].column_index], window_child_bindings[extra_projections[0].column_index]));
-	} else if (extra_projections.size() > 1) {
-		// With two or more projections, we either:
-		//   a) Use rowid as the arg_max argument, and late-materialize the table (if there is one rowid column)
-		//   b) We struct_pack the rowid columns, late-materialize (if there are more projections than rowid columns)
-		//   c) We struct_pack/unnest the projections (else, no late-materialize in get, projections from > 1 table)
-
-		// For now, let's only do the fallback
-		args = GenerateStructPackExprs(new_bindings, window, generate_row_number);
-	}
-
-	child_list_t<LogicalType> unnest_info;
-	unnest_info.reserve(args.size());
-
-	for (const auto &expr : args) {
-		unnest_info.emplace_back(expr->alias, expr->return_type);
-	}
-
-	auto limit = filter.expressions[0]->Cast<BoundComparisonExpression>().right->Cast<BoundConstantExpression>().value.GetValue<int64_t>();
-	auto aggregate_op = CreateAggregateOperator(window, limit, std::move(args));
-	const idx_t aggregate_idx = aggregate_op->Cast<LogicalAggregate>().aggregate_index;
-
-	if (limit > 1) {
-		// We need to unnest the result
-		auto unnest_list = CreateUnnestListOperator(unnest_info, aggregate_idx, generate_row_number);
-	}
-
-	if (unnest_info.size() <= 1) {
-		vector<unique_ptr<Expression>> projections;
-		projections.reserve(new_bindings.size());
-		bool projects_rowid = false;
-		for (const auto &binding : new_bindings) {
-
-		}
-	}
-
-	// Create unnest list and generate row numbers
-	auto unnest_list = CreateUnnestListOperator(unnest_info, aggregate_idx, generate_row_number);
-	const idx_t unnest_list_idx = unnest_list->Cast<LogicalUnnest>().unnest_index;
-
-	// Create unnest struct
+	// Skip the list unnesting, we have a limit 1!
+	D_ASSERT(aggregate_result_type.InternalType() == PhysicalType::STRUCT);
 	const idx_t unnest_struct_idx = optimizer.binder.GenerateTableIndex();
-	auto unnest_struct =
-	    CreateUnnestStructOperator(unnest_info, unnest_list_idx, unnest_struct_idx, generate_row_number);
+	const auto aggregate_bindings = aggregate_op->GetColumnBindings();
+	auto unnest_struct = CreateUnnestStructOperator(
+	    aggregate_result_type, aggregate_bindings[aggregate_op->groups.size()].table_index, unnest_struct_idx, false);
+	// With limit 1, row numbers become a 1 constant
+	if (generate_row_number) {
+		unnest_struct->expressions.push_back(make_uniq<BoundConstantExpression>(1));
+	}
+	aggregate_op->children[0] = Optimize(std::move(aggregate_op->children[0]));
+	unnest_struct->children.push_back(unique_ptr<LogicalOperator>(std::move(aggregate_op)));
+
 	UpdateBindings(window.window_index, unnest_struct_idx, old_bindings, new_bindings, replacer);
 	replacer.stop_operator = unnest_struct.get();
-
-	auto aggregate_child = Optimize(std::move(window.children[0]));
-
-	aggregate_op->children.push_back(unique_ptr<LogicalOperator>(std::move(aggregate_child)));
-	unnest_list->children.push_back(unique_ptr<LogicalOperator>(std::move(aggregate_op)));
-	unnest_struct->children.push_back(unique_ptr<LogicalOperator>(std::move(unnest_list)));
 
 	return unique_ptr<LogicalOperator>(std::move(unnest_struct));
 }
 
-unique_ptr<Expression> TopNWindowElimination::CreateAggregateExpression(vector<unique_ptr<Expression>> aggregate_params, const bool requires_arg, const OrderType order_type) const {
+unique_ptr<Expression> TopNWindowElimination::CreateAggregateExpression(vector<unique_ptr<Expression>> aggregate_params,
+                                                                        const bool requires_arg,
+                                                                        const OrderType order_type) const {
 	auto &catalog = Catalog::GetSystemCatalog(context);
 	FunctionBinder function_binder(context);
 
@@ -166,7 +149,9 @@ unique_ptr<Expression> TopNWindowElimination::CreateAggregateExpression(vector<u
 	return function_binder.BindAggregateFunction(fun, std::move(aggregate_params));
 }
 
-unique_ptr<LogicalAggregate> TopNWindowElimination::CreateAggregateOperator(LogicalWindow &window, const int64_t limit, vector<unique_ptr<Expression>> args) const {
+unique_ptr<LogicalAggregate> TopNWindowElimination::CreateAggregateOperator(LogicalWindow &window,
+                                                                            unique_ptr<Expression> limit,
+                                                                            vector<unique_ptr<Expression>> args) const {
 	auto &window_expr = window.expressions[0]->Cast<BoundWindowExpression>();
 	D_ASSERT(window_expr.orders.size() == 1);
 	const auto order_type = window_expr.orders[0].type;
@@ -183,17 +168,18 @@ unique_ptr<LogicalAggregate> TopNWindowElimination::CreateAggregateOperator(Logi
 		FunctionBinder function_binder(context);
 		auto &struct_pack_entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "struct_pack");
 		const auto struct_pack_fun =
-			struct_pack_entry.functions.GetFunctionByArguments(context, ExtractReturnTypes(args));
+		    struct_pack_entry.functions.GetFunctionByArguments(context, ExtractReturnTypes(args));
 		auto struct_pack_expr = function_binder.BindScalarFunction(struct_pack_fun, std::move(args));
 		aggregate_params.push_back(std::move(struct_pack_expr));
 	}
 
 	aggregate_params.push_back(std::move(window_expr.orders[0].expression));
-	if (limit > 1) {
-		aggregate_params.push_back(make_uniq<BoundConstantExpression>(limit));
+	auto limit_value = limit->Cast<BoundConstantExpression>().value;
+	if (limit_value > 1) {
+		aggregate_params.push_back(std::move(limit));
 	}
 
-	auto aggregate_expr = CreateAggregateExpression(aggregate_params, use_struct_pack, order_type);
+	auto aggregate_expr = CreateAggregateExpression(std::move(aggregate_params), use_struct_pack, order_type);
 
 	// Create aggregate operator with arg_max expression and partitions from window function as groups
 	vector<unique_ptr<Expression>> select_list(1);
@@ -207,20 +193,15 @@ unique_ptr<LogicalAggregate> TopNWindowElimination::CreateAggregateOperator(Logi
 	return aggregate;
 }
 
-unique_ptr<LogicalUnnest> TopNWindowElimination::CreateUnnestListOperator(const child_list_t<LogicalType> &input_types,
+unique_ptr<LogicalUnnest> TopNWindowElimination::CreateUnnestListOperator(const LogicalType &input_type,
                                                                           const idx_t aggregate_idx,
                                                                           const bool include_row_number) const {
+	D_ASSERT(input_type.InternalType() == PhysicalType::LIST);
 	auto unnest = make_uniq<LogicalUnnest>(optimizer.binder.GenerateTableIndex());
-	if (input_types.size() > 1) {
-		const auto struct_type = LogicalType::STRUCT(input_types);
-		auto unnest_expr = make_uniq<BoundUnnestExpression>(struct_type);
+	auto unnest_expr = make_uniq<BoundUnnestExpression>(ListType::GetChildType(input_type));
 
-		unnest_expr->child =
-			make_uniq<BoundColumnRefExpression>(LogicalType::LIST(struct_type), ColumnBinding(aggregate_idx, 0));
-		unnest->expressions.push_back(std::move(unnest_expr));
-	} else if (input_types.size() == 1) {
-
-	}
+	unnest_expr->child = make_uniq<BoundColumnRefExpression>(input_type, ColumnBinding(aggregate_idx, 0));
+	unnest->expressions.push_back(std::move(unnest_expr));
 
 	if (include_row_number) {
 		// Create unnest(generate_series(1, array_length(column_ref, 1))) function to generate row ids
@@ -231,8 +212,7 @@ unique_ptr<LogicalUnnest> TopNWindowElimination::CreateUnnestListOperator(const 
 		auto &array_length_entry =
 		    catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "array_length");
 		vector<unique_ptr<Expression>> array_length_exprs;
-		array_length_exprs.push_back(
-		    make_uniq<BoundColumnRefExpression>(LogicalType::LIST(struct_type), ColumnBinding(aggregate_idx, 0)));
+		array_length_exprs.push_back(make_uniq<BoundColumnRefExpression>(input_type, ColumnBinding(aggregate_idx, 0)));
 		array_length_exprs.push_back(make_uniq<BoundConstantExpression>(1));
 
 		const auto array_length_fun = array_length_entry.functions.GetFunctionByArguments(
@@ -263,27 +243,27 @@ unique_ptr<LogicalUnnest> TopNWindowElimination::CreateUnnestListOperator(const 
 	return unnest;
 }
 
-unique_ptr<LogicalProjection>
-TopNWindowElimination::CreateUnnestStructOperator(const child_list_t<LogicalType> &input_types,
-                                                  const idx_t unnest_list_idx, const idx_t table_idx,
-                                                  const bool include_row_number) const {
+unique_ptr<LogicalProjection> TopNWindowElimination::CreateUnnestStructOperator(const LogicalType &input_type,
+                                                                                const idx_t unnest_list_idx,
+                                                                                const idx_t table_idx,
+                                                                                const bool include_row_number) const {
 	FunctionBinder function_binder(context);
-	const auto input_struct_type = LogicalType::STRUCT(input_types);
+	const auto &child_types = StructType::GetChildTypes(input_type);
 
 	auto &catalog = Catalog::GetSystemCatalog(context);
 	auto &struct_extract_entry =
 	    catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "struct_extract");
 	const auto struct_extract_fun =
-	    struct_extract_entry.functions.GetFunctionByArguments(context, {input_struct_type, LogicalType::VARCHAR});
+	    struct_extract_entry.functions.GetFunctionByArguments(context, {input_type, LogicalType::VARCHAR});
 
 	vector<unique_ptr<Expression>> unnest_struct_exprs;
-	unnest_struct_exprs.reserve(input_types.size());
+	unnest_struct_exprs.reserve(child_types.size());
 
-	for (idx_t i = 0; i < input_types.size(); i++) {
-		const auto &type = input_types[i];
+	for (idx_t i = 0; i < child_types.size(); i++) {
+		const auto &type = child_types[i];
 		const auto &alias = type.first;
 		vector<unique_ptr<Expression>> fun_args(2);
-		fun_args[0] = make_uniq<BoundColumnRefExpression>(input_struct_type, ColumnBinding(unnest_list_idx, 0));
+		fun_args[0] = make_uniq<BoundColumnRefExpression>(input_type, ColumnBinding(unnest_list_idx, 0));
 		fun_args[1] = make_uniq<BoundConstantExpression>(alias);
 		auto bound_function = function_binder.BindScalarFunction(struct_extract_fun, std::move(fun_args));
 		bound_function->alias = alias;
