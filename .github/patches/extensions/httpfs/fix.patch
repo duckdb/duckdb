@@ -1,8 +1,15 @@
-diff --git a/extension/httpfs/httpfs.cpp b/extension/httpfs/httpfs.cpp
-index bb7267a..d1c5eee 100644
---- a/extension/httpfs/httpfs.cpp
-+++ b/extension/httpfs/httpfs.cpp
-@@ -682,7 +682,7 @@ void HTTPFileHandle::LoadFileInfo() {
+diff --git a/duckdb b/duckdb
+index b8a06e4..d0986ed 160000
+--- a/duckdb
++++ b/duckdb
+@@ -1 +1 @@
+-Subproject commit b8a06e4a22672e254cd0baa68a3dbed2eb51c56e
++Subproject commit d0986ed56f3545fbf37550d2eb0b1b422cb74d27-dirty
+diff --git a/src/httpfs.cpp b/src/httpfs.cpp
+index 802581e..a11af95 100644
+--- a/src/httpfs.cpp
++++ b/src/httpfs.cpp
+@@ -729,7 +729,7 @@ void HTTPFileHandle::LoadFileInfo() {
  			return;
  		} else {
  			// HEAD request fail, use Range request for another try (read only one byte)
@@ -11,24 +18,24 @@ index bb7267a..d1c5eee 100644
  				auto range_res = hfs.GetRangeRequest(*this, path, {}, 0, nullptr, 2);
  				if (range_res->status != HTTPStatusCode::PartialContent_206 &&
  				    range_res->status != HTTPStatusCode::Accepted_202 && range_res->status != HTTPStatusCode::OK_200) {
-diff --git a/extension/httpfs/httpfs_extension.cpp b/extension/httpfs/httpfs_extension.cpp
-index 695ca30..a60fbba 100644
---- a/extension/httpfs/httpfs_extension.cpp
-+++ b/extension/httpfs/httpfs_extension.cpp
-@@ -62,7 +62,7 @@ static void LoadInternal(ExtensionLoader &loader) {
+diff --git a/src/httpfs_extension.cpp b/src/httpfs_extension.cpp
+index 79d9923..9070621 100644
+--- a/src/httpfs_extension.cpp
++++ b/src/httpfs_extension.cpp
+@@ -70,7 +70,7 @@ static void LoadInternal(ExtensionLoader &loader) {
  	config.AddExtensionOption("ca_cert_file", "Path to a custom certificate file for self-signed certificates.",
  	                          LogicalType::VARCHAR, Value(""));
  	// Global S3 config
 -	config.AddExtensionOption("s3_region", "S3 Region", LogicalType::VARCHAR, Value("us-east-1"));
-+	config.AddExtensionOption("s3_region", "S3 Region", LogicalType::VARCHAR, Value(""));
++	config.AddExtensionOption("s3_region", "S3 Region", LogicalType::VARCHAR);
  	config.AddExtensionOption("s3_access_key_id", "S3 Access Key ID", LogicalType::VARCHAR);
  	config.AddExtensionOption("s3_secret_access_key", "S3 Access Key", LogicalType::VARCHAR);
  	config.AddExtensionOption("s3_session_token", "S3 Session Token", LogicalType::VARCHAR);
-diff --git a/extension/httpfs/include/s3fs.hpp b/extension/httpfs/include/s3fs.hpp
-index b848d2c..64af105 100644
---- a/extension/httpfs/include/s3fs.hpp
-+++ b/extension/httpfs/include/s3fs.hpp
-@@ -227,7 +227,7 @@ public:
+diff --git a/src/include/s3fs.hpp b/src/include/s3fs.hpp
+index 525e0dd..a7e933e 100644
+--- a/src/include/s3fs.hpp
++++ b/src/include/s3fs.hpp
+@@ -231,7 +231,7 @@ public:
  		return true;
  	}
  
@@ -37,11 +44,11 @@ index b848d2c..64af105 100644
  	static string GetS3AuthError(S3AuthParams &s3_auth_params);
  	static string GetGCSAuthError(S3AuthParams &s3_auth_params);
  	static HTTPException GetS3Error(S3AuthParams &s3_auth_params, const HTTPResponse &response, const string &url);
-diff --git a/extension/httpfs/s3fs.cpp b/extension/httpfs/s3fs.cpp
-index 3ea2b98..c39287a 100644
---- a/extension/httpfs/s3fs.cpp
-+++ b/extension/httpfs/s3fs.cpp
-@@ -838,6 +838,7 @@ void S3FileHandle::Initialize(optional_ptr<FileOpener> opener) {
+diff --git a/src/s3fs.cpp b/src/s3fs.cpp
+index cbdecba..72eddc3 100644
+--- a/src/s3fs.cpp
++++ b/src/s3fs.cpp
+@@ -872,6 +872,7 @@ void S3FileHandle::Initialize(optional_ptr<FileOpener> opener) {
  		ErrorData error(ex);
  		bool refreshed_secret = false;
  		if (error.Type() == ExceptionType::IO || error.Type() == ExceptionType::HTTP) {
@@ -49,7 +56,7 @@ index 3ea2b98..c39287a 100644
  			auto context = opener->TryGetClientContext();
  			if (context) {
  				auto transaction = CatalogTransaction::GetSystemCatalogTransaction(*context);
-@@ -853,9 +854,13 @@ void S3FileHandle::Initialize(optional_ptr<FileOpener> opener) {
+@@ -887,9 +888,13 @@ void S3FileHandle::Initialize(optional_ptr<FileOpener> opener) {
  			auto &extra_info = error.ExtraInfo();
  			auto entry = extra_info.find("status_code");
  			if (entry != extra_info.end()) {
@@ -66,7 +73,7 @@ index 3ea2b98..c39287a 100644
  					throw Exception(error.Type(), error.RawMessage() + extra_text, extra_info);
  				}
  				if (entry->second == "403") {
-@@ -1106,12 +1111,15 @@ bool S3FileSystem::ListFiles(const string &directory, const std::function<void(c
+@@ -1138,12 +1143,15 @@ bool S3FileSystem::ListFiles(const string &directory, const std::function<void(c
  	return true;
  }
  
@@ -84,3 +91,30 @@ index 3ea2b98..c39287a 100644
  	}
  	return extra_text;
  }
+diff --git a/test/sql/copy/s3/url_encode.test b/test/sql/copy/s3/url_encode.test
+index 66cbd5c..f5a5912 100644
+--- a/test/sql/copy/s3/url_encode.test
++++ b/test/sql/copy/s3/url_encode.test
+@@ -132,12 +132,20 @@ set s3_endpoint='';
+ statement error
+ SELECT * FROM 's3://test-bucket/whatever.parquet';
+ ----
+-<REGEX>:.*Unknown error for HTTP HEAD to 'http://test-bucket.s3.eu-west-1.amazonaws.com/whatever.parquet'.*
++<REGEX>:.*HTTP Error: Unable to connect to URL .*http://test-bucket.s3.eu-west-1.amazonaws.com/whatever.parquet.*: 301 .Moved Permanently..*
++.*
++.*Bad Request - this can be caused by the S3 region being set incorrectly.*
++.*Provided region is: .eu-west-1.*
++.*Correct region is: .us-east-1.*
+ 
+ statement error
+ SELECT * FROM 'r2://test-bucket/whatever.parquet';
+ ----
+-<REGEX>:.*Unknown error for HTTP HEAD to 'http://test-bucket.s3.eu-west-1.amazonaws.com/whatever.parquet'.*
++<REGEX>:.*HTTP Error: Unable to connect to URL .*http://test-bucket.s3.eu-west-1.amazonaws.com/whatever.parquet.*: 301 .Moved Permanently..*
++.*
++.*Bad Request - this can be caused by the S3 region being set incorrectly.*
++.*Provided region is: .eu-west-1.*
++.*Correct region is: .us-east-1.*
+ 
+ statement error
+ SELECT * FROM 'gcs://test-bucket/whatever.parquet';
