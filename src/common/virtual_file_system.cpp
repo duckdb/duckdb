@@ -242,9 +242,11 @@ FileSystem &VirtualFileSystem::FindFileSystem(const string &path, optional_ptr<C
 		}
 
 		FileSystem &fs_no_autoloading = FindFileSystem(path);
-		if (!disabled_file_systems.empty() && disabled_file_systems.find(fs_no_autoloading.GetName()) != disabled_file_systems.end()) {
+		if (!disabled_file_systems.empty() &&
+		    disabled_file_systems.find(fs_no_autoloading.GetName()) != disabled_file_systems.end()) {
 			throw PermissionException("File system %s has been disabled by configuration", fs_no_autoloading.GetName());
 		}
+
 		return fs_no_autoloading;
 	}
 
