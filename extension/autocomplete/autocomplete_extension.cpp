@@ -687,6 +687,8 @@ void CheckPEGParserFunction(ClientContext &context, TableFunctionInput &data_p, 
 class PEGParserExtension : public ParserExtension {
 public:
 	PEGParserExtension() {
+		plan_function = nullptr;
+		parse_function = nullptr;
 		parser_override = PEGParser;
 	}
 
