@@ -2,6 +2,8 @@
 # description: Try loading a parser override with an extension
 # group: [extension]
 
+require skip_reload
+
 statement error
 override
 ----
