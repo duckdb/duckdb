@@ -10,6 +10,8 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types.hpp"
+#include <limits>
+#include <cmath>
 
 namespace duckdb {
 
