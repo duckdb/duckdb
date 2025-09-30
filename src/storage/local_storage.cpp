@@ -21,7 +21,7 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &table)
 
 	auto types = table.GetTypes();
 	auto data_table_info = table.GetDataTableInfo();
-	row_groups = OptimisticDataWriter::CreateCollection(table, types);
+	row_groups = optimistic_writer.CreateCollection(table, types, OptimisticWritePartialManagers::GLOBAL);
 	auto &collection = *row_groups->collection;
 	collection.InitializeEmpty();
 
