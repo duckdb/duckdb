@@ -628,15 +628,6 @@ bool FileSystem::CanHandleFile(const string &fpath) {
 	throw NotImplementedException("%s: CanHandleFile is not implemented!", GetName());
 }
 
-static string LookupExtensionForPattern(const string &pattern) {
-	for (const auto &entry : EXTENSION_FILE_PREFIXES) {
-		if (StringUtil::StartsWith(pattern, entry.name)) {
-			return entry.extension;
-		}
-	}
-	return "";
-}
-
 vector<OpenFileInfo> FileSystem::GlobFiles(const string &pattern, ClientContext &context, const FileGlobInput &input) {
 	auto result = Glob(pattern);
 	if (result.empty()) {
