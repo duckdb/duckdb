@@ -5,6 +5,8 @@ TEST_CASE("Assertion passes", "[assertion]") {
 	DUCKDB_ASSERT(true);
 }
 
+#ifndef DUCKDB_CRASH_ON_ASSERT
 TEST_CASE("Assertion fails", "[assertion]") {
 	REQUIRE_THROWS(DUCKDB_ASSERT(false));
 }
+#endif
