@@ -113,7 +113,7 @@ void VirtualFileSystem::RemoveDirectory(const string &directory, optional_ptr<Fi
 bool VirtualFileSystem::ListFilesExtended(const string &directory,
                                           const std::function<void(OpenFileInfo &info)> &callback,
                                           optional_ptr<FileOpener> opener) {
-	return FindFileSystem(directory).ListFiles(directory, callback, opener);
+	return FindFileSystem(directory, opener).ListFiles(directory, callback, opener);
 }
 
 void VirtualFileSystem::MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) {
