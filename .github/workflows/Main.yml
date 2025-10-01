@@ -1,6 +1,5 @@
 name: Main
 on:
-  workflow_call:
   workflow_dispatch:
   repository_dispatch:
   push:
