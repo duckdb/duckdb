@@ -27,15 +27,10 @@ SELECT list_transform(a, lambda x, i: x + i + list_any_value(a)) FROM tbl;
 NULL
 [NULL, 204, 116]
 
-
 query I
 select ['a a ', ' b ', ' cc'].list_transform(lambda x: nullif(trim(x), '')) as trimmed_and_nulled
 ----
 [a a, b, cc]
-
-# add nested lambda inside macro
-
-
 
 query I
 select ['a a ', ' b ', ' cc'].list_transform(lambda x: x.trim().nullif('')) as trimmed_and_nulled;
