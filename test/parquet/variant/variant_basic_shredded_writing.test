@@ -24,7 +24,7 @@ select IF(VARIANT_TYPEOF(COLUMNS(*)) == 'VARIANT_NULL', NULL, COLUMNS(*)::JSON) 
 
 statement ok
 COPY (
-	select a from data()
+	from data() t(a)
 ) TO '__TEST_DIR__/shredded_struct.parquet' (
 	shredding {
 		a: 'STRUCT(a INTEGER, b VARIANT, c BOOLEAN)'

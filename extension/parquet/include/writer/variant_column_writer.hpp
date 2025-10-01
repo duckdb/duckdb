@@ -24,6 +24,7 @@ public:
 
 public:
 	static ScalarFunction GetTransformFunction();
+	static LogicalType TransformTypedValueRecursive(const LogicalType &type);
 };
 
 } // namespace duckdb

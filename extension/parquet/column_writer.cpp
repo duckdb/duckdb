@@ -244,41 +244,6 @@ void ColumnWriter::HandleDefineLevels(ColumnWriterState &state, ColumnWriterStat
 // Create Column Writer
 //===--------------------------------------------------------------------===//
 
-LogicalType TransformTypedValueRecursive(const LogicalType &type) {
-	switch (type.id()) {
-	case LogicalTypeId::STRUCT: {
-		//! Wrap all fields of the struct in a struct with 'value' and 'typed_value' fields
-		auto &child_types = StructType::GetChildTypes(type);
-		child_list_t<LogicalType> replaced_types;
-		for (auto &entry : child_types) {
-			child_list_t<LogicalType> child_children;
-			child_children.emplace_back("value", LogicalType::BLOB);
-			if (entry.second.id() != LogicalTypeId::VARIANT) {
-				child_children.emplace_back("typed_value", TransformTypedValueRecursive(entry.second));
-			}
-			replaced_types.emplace_back(entry.first, LogicalType::STRUCT(child_children));
-		}
-		return LogicalType::STRUCT(replaced_types);
-	}
-	case LogicalTypeId::LIST: {
-		auto &child_type = ListType::GetChildType(type);
-		child_list_t<LogicalType> replaced_types;
-		replaced_types.emplace_back("value", LogicalType::BLOB);
-		if (child_type.id() != LogicalTypeId::VARIANT) {
-			replaced_types.emplace_back("typed_value", TransformTypedValueRecursive(child_type));
-		}
-		return LogicalType::LIST(LogicalType::STRUCT(replaced_types));
-	}
-	case LogicalTypeId::UNION:
-	case LogicalTypeId::MAP:
-	case LogicalTypeId::VARIANT:
-	case LogicalTypeId::ARRAY:
-		throw InternalException("'%s' can't appear inside the a 'typed_value' shredded type!", type.ToString());
-	default:
-		return type;
-	}
-}
-
 ParquetColumnSchema ColumnWriter::FillParquetSchema(vector<duckdb_parquet::SchemaElement> &schemas,
                                                     const LogicalType &type, const string &name,
                                                     optional_ptr<const ChildFieldIDs> field_ids,
@@ -301,10 +266,7 @@ ParquetColumnSchema ColumnWriter::FillParquetSchema(vector<duckdb_parquet::Schem
 	}
 	optional_ptr<const ShreddingType> shredding_type;
 	if (shredding_types) {
-		auto it = shredding_types->children.find(name);
-		if (it != shredding_types->children.end()) {
-			shredding_type = &it->second;
-		}
+		shredding_type = shredding_types->GetChild(name);
 	}
 
 	if (type.id() == LogicalTypeId::STRUCT && type.GetAlias() == "PARQUET_VARIANT") {
@@ -322,9 +284,10 @@ ParquetColumnSchema ColumnWriter::FillParquetSchema(vector<duckdb_parquet::Schem
 		child_types.emplace_back("metadata", LogicalType::BLOB);
 		child_types.emplace_back("value", LogicalType::BLOB);
 		if (is_shredded) {
-			auto &typed_value_type = shredding_type->shredding_type;
+			auto &typed_value_type = shredding_type->type;
 			if (typed_value_type.id() != LogicalTypeId::ANY) {
-				child_types.emplace_back("typed_value", TransformTypedValueRecursive(typed_value_type));
+				child_types.emplace_back("typed_value",
+				                         VariantColumnWriter::TransformTypedValueRecursive(typed_value_type));
 			}
 		}
 

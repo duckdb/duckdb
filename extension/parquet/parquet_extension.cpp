@@ -47,6 +47,7 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/table/row_group.hpp"
@@ -218,7 +219,10 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 			} else {
 				case_insensitive_set_t variant_names;
 				for (idx_t col_idx = 0; col_idx < names.size(); col_idx++) {
-					if (sql_types[col_idx].id() != LogicalTypeId::VARIANT) {
+					if (sql_types[col_idx].id() != LogicalTypeId::STRUCT) {
+						continue;
+					}
+					if (sql_types[col_idx].GetAlias() != "PARQUET_VARIANT") {
 						continue;
 					}
 					variant_names.emplace(names[col_idx]);
@@ -255,7 +259,7 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 						}
 					}
 					const auto &child_value = struct_children[i];
-					bind_data->shredding_types.children[col_name] = ShreddingType::GetShreddingTypes(child_value);
+					bind_data->shredding_types.AddChild(col_name, ShreddingType::GetShreddingTypes(child_value));
 				}
 			}
 		} else if (loption == "kv_metadata") {
@@ -357,7 +361,7 @@ static unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext
 	auto &fs = FileSystem::GetFileSystem(context);
 	global_state->writer = make_uniq<ParquetWriter>(
 	    context, fs, file_path, parquet_bind.sql_types, parquet_bind.column_names, parquet_bind.codec,
-	    parquet_bind.field_ids.Copy(), parquet_bind.shredding_types, parquet_bind.kv_metadata,
+	    parquet_bind.field_ids.Copy(), parquet_bind.shredding_types.Copy(), parquet_bind.kv_metadata,
 	    parquet_bind.encryption_config, parquet_bind.dictionary_size_limit,
 	    parquet_bind.string_dictionary_page_size_limit, parquet_bind.enable_bloom_filters,
 	    parquet_bind.bloom_filter_false_positive_ratio, parquet_bind.compression_level, parquet_bind.debug_use_openssl,
@@ -615,6 +619,7 @@ static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserialize
 	    deserializer.ReadPropertyWithExplicitDefault(114, "parquet_version", default_value.parquet_version);
 	data->string_dictionary_page_size_limit = deserializer.ReadPropertyWithExplicitDefault(
 	    115, "string_dictionary_page_size_limit", default_value.string_dictionary_page_size_limit);
+	data->shredding_types = deserializer.ReadProperty<ShreddingType>(116, "shredding_types");
 
 	return std::move(data);
 }
@@ -745,6 +750,38 @@ static bool IsGeometryType(const LogicalType &type, ClientContext &context) {
 	return GeoParquetFileMetadata::IsGeoParquetConversionEnabled(context);
 }
 
+static string GetShredding(case_insensitive_map_t<vector<Value>> &options, const string &col_name) {
+	//! At this point, the options haven't been parsed yet, so we have to parse them ourselves.
+	auto it = options.find("shredding");
+	if (it == options.end()) {
+		return string();
+	}
+	auto &shredding = it->second;
+	if (shredding.empty()) {
+		return string();
+	}
+
+	auto &shredding_val = shredding[0];
+	if (shredding_val.type().id() != LogicalTypeId::STRUCT) {
+		return string();
+	}
+
+	auto &shredded_variants = StructType::GetChildTypes(shredding_val.type());
+	auto &values = StructValue::GetChildren(shredding_val);
+	for (idx_t i = 0; i < shredded_variants.size(); i++) {
+		auto &shredded_variant = shredded_variants[i];
+		if (shredded_variant.first != col_name) {
+			continue;
+		}
+		auto &shredded_val = values[i];
+		if (shredded_val.type().id() != LogicalTypeId::VARCHAR) {
+			return string();
+		}
+		return shredded_val.GetValue<string>();
+	}
+	return string();
+}
+
 static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &input) {
 
 	auto &context = input.context;
@@ -773,11 +810,20 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &inpu
 			vector<unique_ptr<Expression>> arguments;
 			arguments.push_back(std::move(expr));
 
+			auto shredded_type_str = GetShredding(input.options, name);
+			if (!shredded_type_str.empty()) {
+				//! Add a keyword argument: shredding := <shredded_type_str>
+				auto shredding = make_uniq<BoundConstantExpression>(Value(shredded_type_str));
+				shredding->SetAlias("shredding");
+				arguments.push_back(std::move(shredding));
+			}
+
 			auto transform_func = VariantColumnWriter::GetTransformFunction();
 			transform_func.bind(context, transform_func, arguments);
 
 			auto func_expr = make_uniq<BoundFunctionExpression>(transform_func.return_type, transform_func,
 			                                                    std::move(arguments), nullptr, false);
+			func_expr->SetAlias(name);
 			result.push_back(std::move(func_expr));
 			any_change = true;
 		}

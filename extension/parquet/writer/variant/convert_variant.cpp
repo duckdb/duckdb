@@ -1115,11 +1115,48 @@ static void ToParquetVariant(DataChunk &input, ExpressionState &state, Vector &r
 	WriteVariantValues(variant, result, nullptr, nullptr, nullptr, count);
 }
 
-static LogicalType GetParquetVariantType(const LogicalType &type) {
-	(void)type;
+LogicalType VariantColumnWriter::TransformTypedValueRecursive(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::STRUCT: {
+		//! Wrap all fields of the struct in a struct with 'value' and 'typed_value' fields
+		auto &child_types = StructType::GetChildTypes(type);
+		child_list_t<LogicalType> replaced_types;
+		for (auto &entry : child_types) {
+			child_list_t<LogicalType> child_children;
+			child_children.emplace_back("value", LogicalType::BLOB);
+			if (entry.second.id() != LogicalTypeId::VARIANT) {
+				child_children.emplace_back("typed_value", TransformTypedValueRecursive(entry.second));
+			}
+			replaced_types.emplace_back(entry.first, LogicalType::STRUCT(child_children));
+		}
+		return LogicalType::STRUCT(replaced_types);
+	}
+	case LogicalTypeId::LIST: {
+		auto &child_type = ListType::GetChildType(type);
+		child_list_t<LogicalType> replaced_types;
+		replaced_types.emplace_back("value", LogicalType::BLOB);
+		if (child_type.id() != LogicalTypeId::VARIANT) {
+			replaced_types.emplace_back("typed_value", TransformTypedValueRecursive(child_type));
+		}
+		return LogicalType::LIST(LogicalType::STRUCT(replaced_types));
+	}
+	case LogicalTypeId::UNION:
+	case LogicalTypeId::MAP:
+	case LogicalTypeId::VARIANT:
+	case LogicalTypeId::ARRAY:
+		throw BinderException("'%s' can't appear inside the a 'typed_value' shredded type!", type.ToString());
+	default:
+		return type;
+	}
+}
+
+static LogicalType GetParquetVariantType(optional_ptr<LogicalType> shredding = nullptr) {
 	child_list_t<LogicalType> children;
 	children.emplace_back("metadata", LogicalType::BLOB);
 	children.emplace_back("value", LogicalType::BLOB);
+	if (shredding) {
+		children.emplace_back("typed_value", VariantColumnWriter::TransformTypedValueRecursive(*shredding));
+	}
 	auto res = LogicalType::STRUCT(std::move(children));
 	res.SetAlias("PARQUET_VARIANT");
 	return res;
@@ -1131,7 +1168,29 @@ static unique_ptr<FunctionData> BindTransform(ClientContext &context, ScalarFunc
 		return nullptr;
 	}
 	auto type = ExpressionBinder::GetExpressionReturnType(*arguments[0]);
-	bound_function.return_type = GetParquetVariantType(type);
+
+	if (arguments.size() == 2) {
+		auto &shredding = *arguments[1];
+		auto expr_return_type = ExpressionBinder::GetExpressionReturnType(shredding);
+		expr_return_type = LogicalType::NormalizeType(expr_return_type);
+		if (expr_return_type.id() != LogicalTypeId::VARCHAR) {
+			throw BinderException("Optional second argument 'shredding' has to be of type VARCHAR, i.e: "
+			                      "'STRUCT(my_field BOOLEAN)', found type: '%s' instead",
+			                      expr_return_type);
+		}
+		if (!shredding.IsFoldable()) {
+			throw BinderException("Optional second argument 'shredding' has to be a constant expression");
+		}
+		Value type_str = ExpressionExecutor::EvaluateScalar(context, shredding);
+		if (type_str.IsNull()) {
+			throw BinderException("Optional second argument 'shredding' can not be NULL");
+		}
+		auto shredded_type = TransformStringToLogicalType(type_str.GetValue<string>());
+		bound_function.return_type = GetParquetVariantType(shredded_type);
+	} else {
+		bound_function.return_type = GetParquetVariantType();
+	}
+
 	return nullptr;
 }
 

@@ -4,10 +4,27 @@
 
 namespace duckdb {
 
+ChildShreddingTypes::ChildShreddingTypes() : types(make_uniq<case_insensitive_map_t<ShreddingType>>()) {
+}
+
+ChildShreddingTypes ChildShreddingTypes::Copy() const {
+	ChildShreddingTypes result;
+	for (const auto &type : *types) {
+		result.types->emplace(type.first, type.second.Copy());
+	}
+	return result;
+}
+
 ShreddingType::ShreddingType() : set(false) {
 }
 
-ShreddingType::ShreddingType(const LogicalType &shredding_type) : set(true), shredding_type(shredding_type) {
+ShreddingType::ShreddingType(const LogicalType &type) : set(true), type(type) {
+}
+
+ShreddingType ShreddingType::Copy() const {
+	auto result = set ? ShreddingType(type) : ShreddingType();
+	result.children = children.Copy();
+	return result;
 }
 
 static ShreddingType ConvertShreddingTypeRecursive(const LogicalType &type) {
@@ -23,20 +40,32 @@ static ShreddingType ConvertShreddingTypeRecursive(const LogicalType &type) {
 		ShreddingType res(type);
 		auto &children = StructType::GetChildTypes(type);
 		for (auto &entry : children) {
-			res.children[entry.first] = ConvertShreddingTypeRecursive(entry.second);
+			res.AddChild(entry.first, ConvertShreddingTypeRecursive(entry.second));
 		}
 		return res;
 	}
 	case LogicalTypeId::LIST: {
 		ShreddingType res(type);
 		const auto &child = ListType::GetChildType(type);
-		res.children["element"] = ConvertShreddingTypeRecursive(child);
+		res.AddChild("element", ConvertShreddingTypeRecursive(child));
 		return res;
 	}
 	default:
 		break;
 	}
 	throw BinderException("VARIANT can only be shredded on LIST/STRUCT/ANY/non-nested type, not %s", type.ToString());
+}
+
+void ShreddingType::AddChild(const string &name, ShreddingType &&child) {
+	children.types->emplace(name, std::move(child));
+}
+
+optional_ptr<const ShreddingType> ShreddingType::GetChild(const string &name) const {
+	auto it = children.types->find(name);
+	if (it == children.types->end()) {
+		return nullptr;
+	}
+	return it->second;
 }
 
 ShreddingType ShreddingType::GetShreddingTypes(const Value &val) {
