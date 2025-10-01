@@ -1,13 +1,24 @@
 #pragma once
 
-#include "duckdb/parser/sql_statement.hpp"
+#include "tokenizer.hpp"
 #include "parse_result.hpp"
 #include "transform_enum_result.hpp"
 #include "transform_result.hpp"
-#include "duckdb/parser/expression/parameter_expression.hpp"
-#include "matcher.hpp"
-#include "duckdb/storage/arena_allocator.hpp"
+#include "duckdb/function/macro_function.hpp"
+#include "duckdb/parser/expression/case_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/expression/window_expression.hpp"
+#include "duckdb/parser/parsed_data/create_type_info.hpp"
+#include "duckdb/parser/parsed_data/transaction_info.hpp"
+#include "duckdb/parser/statement/copy_database_statement.hpp"
+#include "duckdb/parser/statement/set_statement.hpp"
+#include "duckdb/parser/statement/create_statement.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
 #include "parser/peg_parser.hpp"
+#include "duckdb/storage/arena_allocator.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/statement/drop_statement.hpp"
+#include "duckdb/parser/statement/insert_statement.hpp"
 
 namespace duckdb {
 
