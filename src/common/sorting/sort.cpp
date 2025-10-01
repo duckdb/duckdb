@@ -379,6 +379,7 @@ public:
 	}
 
 	void Destroy() {
+		auto guard = merger_global_state->Lock();
 		merger.sorted_runs.clear();
 		sink.temporary_memory_state.reset();
 	}
