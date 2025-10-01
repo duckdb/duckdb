@@ -167,15 +167,17 @@ end:
 
 vector<string> SplitQueries(const string &input_query) {
 	vector<string> queries;
-	auto split_queries = StringUtil::Split(input_query, ";");
-	for (auto &query : split_queries) {
-		StringUtil::Trim(query);
-		if (query.empty()) {
-			continue;
+	auto tokenized_input = Parser::Tokenize(input_query);
+	idx_t split_idx = 0;
+	for (const auto &token : tokenized_input) {
+		if (token.type == SimplifiedTokenType::SIMPLIFIED_TOKEN_OPERATOR) {
+			if (input_query[token.start] == ';') {
+				queries.emplace_back(input_query.substr(split_idx, token.start + 1));
+				split_idx = token.start + 1;
+			}
 		}
-		query.append(";");
-		queries.push_back(query);
 	}
+	queries.emplace_back(input_query.substr(split_idx, input_query.size()));
 	return queries;
 }
 
