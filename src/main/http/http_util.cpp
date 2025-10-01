@@ -367,7 +367,9 @@ HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)
 
 		try {
 			response = on_request();
-			response->url = request.url;
+			if (response) {
+				response->url = request.url;
+			}
 		} catch (IOException &e) {
 			exception_error = e.what();
 			caught_e = std::current_exception();

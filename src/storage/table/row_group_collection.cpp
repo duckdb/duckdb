@@ -1008,8 +1008,8 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 	}
 	idx_t merge_rows;
 	idx_t next_idx = 0;
-	idx_t merge_count;
-	idx_t target_count;
+	idx_t merge_count = 0;
+	idx_t target_count = 0;
 	bool perform_merge = false;
 	// check if we can merge row groups adjacent to the current segment_idx
 	// we try merging row groups into batches of 1-3 row groups
@@ -1061,6 +1061,8 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 		return false;
 	}
 	// schedule the vacuum task
+	DUCKDB_LOG(checkpoint_state.writer.GetDatabase(), CheckpointLogType, GetAttached(), *info, segment_idx, merge_count,
+	           target_count, merge_rows, state.row_start);
 	auto vacuum_task = make_uniq<VacuumTask>(checkpoint_state, state, segment_idx, merge_count, target_count,
 	                                         merge_rows, state.row_start);
 	checkpoint_state.executor->ScheduleTask(std::move(vacuum_task));
@@ -1107,6 +1109,8 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			// schedule a checkpoint task for this row group
 			entry.node->MoveToCollection(*this, vacuum_state.row_start);
 			if (writer.GetCheckpointType() != CheckpointType::VACUUM_ONLY) {
+				DUCKDB_LOG(checkpoint_state.writer.GetDatabase(), CheckpointLogType, GetAttached(), *info, segment_idx,
+				           *entry.node);
 				auto checkpoint_task = GetCheckpointTask(checkpoint_state, segment_idx);
 				checkpoint_state.executor->ScheduleTask(std::move(checkpoint_task));
 			}
