@@ -325,3 +325,10 @@ USING (key, begin)
 ORDER BY 1 ASC NULLS FIRST, 2
 ----
 
+# INNER with empty RHS
+query II
+SELECT p.ts, e.value
+FROM range(0,10) p(ts) ASOF JOIN (from events0 where value < 0) e
+ON p.ts >= e.begin
+ORDER BY p.ts ASC
+----

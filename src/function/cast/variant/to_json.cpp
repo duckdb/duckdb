@@ -149,6 +149,12 @@ yyjson_mut_val *VariantCasts::ConvertVariantToJSON(yyjson_mut_doc *doc, const Re
 		auto val_str = Value::BLOB(const_data_ptr_cast(string_data), string_length).ToString();
 		return yyjson_mut_strncpy(doc, val_str.c_str(), val_str.size());
 	}
+	case VariantLogicalType::GEOMETRY: {
+		auto string_length = VarintDecode<uint32_t>(ptr);
+		auto string_data = reinterpret_cast<const char *>(ptr);
+		auto val_str = Value::GEOMETRY(const_data_ptr_cast(string_data), string_length).ToString();
+		return yyjson_mut_strncpy(doc, val_str.c_str(), val_str.size());
+	}
 	case VariantLogicalType::VARCHAR: {
 		auto string_length = VarintDecode<uint32_t>(ptr);
 		auto string_data = reinterpret_cast<const char *>(ptr);

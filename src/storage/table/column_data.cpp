@@ -673,7 +673,8 @@ void ColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, 
 unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, ColumnCheckpointInfo &checkpoint_info) {
 	// scan the segments of the column data
 	// set up the checkpoint state
-	auto checkpoint_state = CreateCheckpointState(row_group, checkpoint_info.info.manager);
+	auto &partial_block_manager = checkpoint_info.GetPartialBlockManager();
+	auto checkpoint_state = CreateCheckpointState(row_group, partial_block_manager);
 	checkpoint_state->global_stats = BaseStatistics::CreateEmpty(type).ToUnique();
 
 	auto &nodes = data.ReferenceSegments();
@@ -699,6 +700,7 @@ void ColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStatist
 	this->count = 0;
 	for (auto &data_pointer : column_data.pointers) {
 		// Update the count and statistics
+		data_pointer.row_start = start + count;
 		this->count += data_pointer.tuple_count;
 
 		// Merge the statistics. If this is a child column, the target_stats reference will point into the parents stats
