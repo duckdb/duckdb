@@ -1,0 +1,11 @@
+[
+  {
+    "name": "st_intersects_extent",
+    "parameters": "geom1,geom2",
+    "description": "Returns true if the geometries bounding boxes intersect",
+    "example": "TODO",
+    "categories": ["geometry"],
+    "type": "scalar_function",
+    "aliases": ["&&"]
+  }
+]
