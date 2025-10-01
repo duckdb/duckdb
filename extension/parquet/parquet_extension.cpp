@@ -812,10 +812,7 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &inpu
 
 			auto shredded_type_str = GetShredding(input.options, name);
 			if (!shredded_type_str.empty()) {
-				//! Add a keyword argument: shredding := <shredded_type_str>
-				auto shredding = make_uniq<BoundConstantExpression>(Value(shredded_type_str));
-				shredding->SetAlias("shredding");
-				arguments.push_back(std::move(shredding));
+				arguments.push_back(make_uniq<BoundConstantExpression>(Value(shredded_type_str)));
 			}
 
 			auto transform_func = VariantColumnWriter::GetTransformFunction();
