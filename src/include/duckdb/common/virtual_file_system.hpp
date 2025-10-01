@@ -84,9 +84,9 @@ protected:
 
 private:
 	FileSystem &FindFileSystem(const string &path, optional_ptr<FileOpener> file_opener);
-	FileSystem &FindFileSystem(const string &path, optional_ptr<ClientContext> client_context);
+	FileSystem &FindFileSystem(const string &path, optional_ptr<DatabaseInstance> database_instance);
 	FileSystem &FindFileSystem(const string &path);
-	FileSystem &FindFileSystemInternal(const string &path, bool &allow_autoloading_file_system);
+	optional_ptr<FileSystem> FindFileSystemInternal(const string &path);
 
 private:
 	vector<unique_ptr<FileSystem>> sub_systems;

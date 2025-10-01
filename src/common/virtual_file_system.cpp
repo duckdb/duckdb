@@ -17,6 +17,7 @@ VirtualFileSystem::VirtualFileSystem(unique_ptr<FileSystem> &&inner) : default_f
 
 unique_ptr<FileHandle> VirtualFileSystem::OpenFileExtended(const OpenFileInfo &file, FileOpenFlags flags,
                                                            optional_ptr<FileOpener> opener) {
+
 	auto compression = flags.Compression();
 	if (compression == FileCompressionType::AUTO_DETECT) {
 		// auto-detect compression settings based on file name
@@ -35,9 +36,8 @@ unique_ptr<FileHandle> VirtualFileSystem::OpenFileExtended(const OpenFileInfo &f
 	}
 	// open the base file handle in UNCOMPRESSED mode
 
-	optional_ptr<ClientContext> client_context = FileOpener::TryGetClientContext(opener);
 	flags.SetCompression(FileCompressionType::UNCOMPRESSED);
-	auto file_handle = FindFileSystem(file.path, client_context).OpenFile(file, flags, opener);
+	auto file_handle = FindFileSystem(file.path, opener).OpenFile(file, flags, opener);
 	if (!file_handle) {
 		return nullptr;
 	}
@@ -219,14 +219,13 @@ bool VirtualFileSystem::SubSystemIsDisabled(const string &name) {
 }
 
 FileSystem &VirtualFileSystem::FindFileSystem(const string &path, optional_ptr<FileOpener> opener) {
-	return FindFileSystem(path, FileOpener::TryGetClientContext(opener));
+	return FindFileSystem(path, FileOpener::TryGetDatabase(opener));
 }
 
-FileSystem &VirtualFileSystem::FindFileSystem(const string &path, optional_ptr<ClientContext> client_context) {
-	bool should_autoload = true;
-	auto &fs = FindFileSystemInternal(path, should_autoload);
+FileSystem &VirtualFileSystem::FindFileSystem(const string &path, optional_ptr<DatabaseInstance> db_instance) {
+	auto fs = FindFileSystemInternal(path);
 
-	if (should_autoload && client_context) {
+	if (!fs && db_instance) {
 		string required_extension;
 
 		for (const auto &entry : EXTENSION_FILE_PREFIXES) {
@@ -234,49 +233,44 @@ FileSystem &VirtualFileSystem::FindFileSystem(const string &path, optional_ptr<C
 				required_extension = entry.extension;
 			}
 		}
-		if (!required_extension.empty() && client_context &&
-		    !client_context->db->ExtensionIsLoaded(required_extension)) {
-			auto &dbconfig = DBConfig::GetConfig(*client_context);
+		if (!required_extension.empty() && db_instance && !db_instance->ExtensionIsLoaded(required_extension)) {
+			auto &dbconfig = DBConfig::GetConfig(*db_instance);
 			if (!ExtensionHelper::CanAutoloadExtension(required_extension) ||
 			    !dbconfig.options.autoload_known_extensions) {
 				auto error_message = "File " + path + " requires the extension " + required_extension + " to be loaded";
-				error_message = ExtensionHelper::AddExtensionInstallHintToErrorMsg(*client_context, error_message,
-				                                                                   required_extension);
+				error_message =
+				    ExtensionHelper::AddExtensionInstallHintToErrorMsg(*db_instance, error_message, required_extension);
 				throw MissingExtensionException(error_message);
 			}
 			// an extension is required to read this file, but it is not loaded - try to load it
-			ExtensionHelper::AutoLoadExtension(*client_context, required_extension);
+			ExtensionHelper::AutoLoadExtension(*db_instance, required_extension);
 		}
 
-		FileSystem &fs_after_autoloading = FindFileSystem(path);
-		if (!disabled_file_systems.empty() &&
-		    disabled_file_systems.find(fs_after_autoloading.GetName()) != disabled_file_systems.end()) {
-			throw PermissionException("File system %s has been disabled by configuration",
-			                          fs_after_autoloading.GetName());
-		}
-
-		return fs_after_autoloading;
+		// Retry after having autoloaded
+		fs = FindFileSystem(path);
 	}
 
-	if (!disabled_file_systems.empty() && disabled_file_systems.find(fs.GetName()) != disabled_file_systems.end()) {
-		throw PermissionException("File system %s has been disabled by configuration", fs.GetName());
+	if (!fs) {
+		fs = default_fs;
 	}
-	return fs;
+	if (!disabled_file_systems.empty() && disabled_file_systems.find(fs->GetName()) != disabled_file_systems.end()) {
+		throw PermissionException("File system %s has been disabled by configuration", fs->GetName());
+	}
+	return *fs;
 }
 
 FileSystem &VirtualFileSystem::FindFileSystem(const string &path) {
-	bool should_autoload = false;
-	auto &fs = FindFileSystemInternal(path, should_autoload);
-	(void)should_autoload; // Here it's irrelevant, we can't autoload in this path
-
-	if (!disabled_file_systems.empty() && disabled_file_systems.find(fs.GetName()) != disabled_file_systems.end()) {
-		throw PermissionException("File system %s has been disabled by configuration", fs.GetName());
+	auto fs = FindFileSystemInternal(path);
+	if (!fs) {
+		fs = default_fs;
 	}
-	return fs;
+	if (!disabled_file_systems.empty() && disabled_file_systems.find(fs->GetName()) != disabled_file_systems.end()) {
+		throw PermissionException("File system %s has been disabled by configuration", fs->GetName());
+	}
+	return *fs;
 }
 
-FileSystem &VirtualFileSystem::FindFileSystemInternal(const string &path, bool &should_autoload) {
-	should_autoload = false;
+optional_ptr<FileSystem> VirtualFileSystem::FindFileSystemInternal(const string &path) {
 	FileSystem *fs = nullptr;
 
 	for (auto &sub_system : sub_systems) {
@@ -291,10 +285,8 @@ FileSystem &VirtualFileSystem::FindFileSystemInternal(const string &path, bool &
 		return *fs;
 	}
 
-	// Mark that autoloading might be required to find a valid extension
-	should_autoload = true;
-
-	return *default_fs;
+	// We could use default_fs, that's on the caller
+	return nullptr;
 }
 
 } // namespace duckdb
