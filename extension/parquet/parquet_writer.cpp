@@ -459,7 +459,7 @@ void ParquetWriter::PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGro
 			write_states.emplace_back(col_writers.back().get().InitializeWriteState(row_group));
 		}
 
-		for (auto &chunk : buffer.Chunks({column_ids})) {
+		for (auto &chunk : buffer.Chunks(column_ids)) {
 			for (idx_t i = 0; i < next; i++) {
 				if (col_writers[i].get().HasAnalyze()) {
 					col_writers[i].get().Analyze(*write_states[i], nullptr, chunk.data[i], chunk.size());

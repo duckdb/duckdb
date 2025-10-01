@@ -71,11 +71,6 @@ public:
 	             bool can_have_nulls);
 	virtual ~ColumnWriter();
 
-	ParquetWriter &writer;
-	const ParquetColumnSchema &column_schema;
-	vector<string> schema_path;
-	bool can_have_nulls;
-
 public:
 	const LogicalType &Type() const {
 		return column_schema.type;
@@ -129,10 +124,19 @@ public:
 protected:
 	void HandleDefineLevels(ColumnWriterState &state, ColumnWriterState *parent, const ValidityMask &validity,
 	                        const idx_t count, const uint16_t define_value, const uint16_t null_value) const;
-	void HandleRepeatLevels(ColumnWriterState &state_p, ColumnWriterState *parent, idx_t count, idx_t max_repeat) const;
+	void HandleRepeatLevels(ColumnWriterState &state_p, ColumnWriterState *parent, idx_t count) const;
 
 	void CompressPage(MemoryStream &temp_writer, size_t &compressed_size, data_ptr_t &compressed_data,
 	                  AllocatedData &compressed_buf);
+
+public:
+	ParquetWriter &writer;
+	const ParquetColumnSchema &column_schema;
+	vector<string> schema_path;
+	bool can_have_nulls;
+
+protected:
+	vector<unique_ptr<ColumnWriter>> child_writers;
 };
 
 } // namespace duckdb
