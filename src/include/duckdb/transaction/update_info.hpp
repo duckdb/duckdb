@@ -17,6 +17,7 @@
 namespace duckdb {
 class UpdateSegment;
 struct DataTableInfo;
+class DataTable;
 
 //! UpdateInfo is a class that represents a set of updates applied to a single vector.
 //! The UpdateInfo struct contains metadata associated with the update.
