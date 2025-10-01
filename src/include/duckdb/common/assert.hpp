@@ -40,4 +40,4 @@ DUCKDB_API void DuckDBAssertInternal(bool condition, const char *condition_name,
 #endif
 
 //! Force assertion implementation, which always asserts whatever build type is used.
-#define DUCKDB_ASSERT(condition) duckdb::DuckDBAssertInternal(bool(condition), #condition, __FILE__, __LINE__)
+#define ALWAYS_ASSERT(condition) duckdb::DuckDBAssertInternal(bool(condition), #condition, __FILE__, __LINE__)

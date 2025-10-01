@@ -2,11 +2,11 @@
 #include "duckdb/common/assert.hpp"
 
 TEST_CASE("Assertion passes", "[assertion]") {
-	DUCKDB_ASSERT(true);
+	ALWAYS_ASSERT(true);
 }
 
 #ifndef DUCKDB_CRASH_ON_ASSERT
 TEST_CASE("Assertion fails", "[assertion]") {
-	REQUIRE_THROWS(DUCKDB_ASSERT(false));
+	REQUIRE_THROWS(ALWAYS_ASSERT(false));
 }
 #endif
