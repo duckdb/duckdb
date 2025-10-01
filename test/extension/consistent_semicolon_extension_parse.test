@@ -5,17 +5,22 @@
 statement ok
 LOAD '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
 
-# statement error
-# quack (foo);
-# ----
-# Parser Error: This is not a quack: (foo);
-#
-# statement error
-# quack 's';
-# ----
-# Parser Error: This is not a quack: 's';
+statement error
+quack (foo);
+----
+Parser Error: This is not a quack: (foo);
 
 statement error
-unrecognizedkeyword ';';anotherunrecognizedkeyword';';
+quack 's';
 ----
-foo
+Parser Error: This is not a quack: 's';
+
+statement error
+unrecognizedkeyword ';';anotherunrecognizedkeyword';';;;;;
+----
+Parser Error: syntax error at or near "unrecognizedkeyword"
+
+statement error
+QUACK string_split('hello-world', ';');QUACK string_split('hello-world', ';')
+----
+string_split('hello-world', ';');

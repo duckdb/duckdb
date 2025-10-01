@@ -168,18 +168,28 @@ end:
 vector<string> SplitQueries(const string &input_query) {
 	vector<string> queries;
 	auto tokenized_input = Parser::Tokenize(input_query);
-	idx_t split_idx = 0;
+	size_t last_split = 0;
+
 	for (const auto &token : tokenized_input) {
-		if (token.type == SimplifiedTokenType::SIMPLIFIED_TOKEN_OPERATOR) {
-			if (input_query[token.start] == ';') {
-				queries.emplace_back(input_query.substr(split_idx, token.start + 1));
-				split_idx = token.start + 1;
+		if (token.type == SimplifiedTokenType::SIMPLIFIED_TOKEN_OPERATOR && input_query[token.start] == ';') {
+			string segment = input_query.substr(last_split, token.start - last_split);
+			StringUtil::Trim(segment);
+			if (!segment.empty()) {
+				segment.append(";");
+				queries.push_back(std::move(segment));
 			}
+			last_split = token.start + 1;
 		}
 	}
-	queries.emplace_back(input_query.substr(split_idx, input_query.size()));
+	string final_segment = input_query.substr(last_split);
+	StringUtil::Trim(final_segment);
+	if (!final_segment.empty()) {
+		final_segment.append(";");
+		queries.push_back(std::move(final_segment));
+	}
 	return queries;
 }
+
 
 void Parser::ParseQuery(const string &query) {
 	Transformer transformer(options);
