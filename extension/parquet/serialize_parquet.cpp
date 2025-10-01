@@ -7,7 +7,7 @@
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "parquet_reader.hpp"
 #include "parquet_crypto.hpp"
-#include "parquet_writer.hpp"
+#include "parquet_field_id.hpp"
 
 namespace duckdb {
 
