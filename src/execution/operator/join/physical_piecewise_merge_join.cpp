@@ -229,6 +229,7 @@ public:
 	unique_ptr<GlobalSortedTable> lhs_global_table;
 	unique_ptr<LocalSortedTable> lhs_local_table;
 	SortKeyType sort_key_type;
+	TupleDataScanState lhs_scan;
 
 	// Simple scans
 	idx_t left_position;
@@ -267,9 +268,8 @@ public:
 		// Scan the sorted payload (minus the primary sort column)
 		auto &lhs_table = *lhs_global_table;
 		auto &lhs_payload_data = *lhs_table.sorted->payload_data;
-		TupleDataScanState state;
-		lhs_payload_data.InitializeScan(state);
-		lhs_payload_data.Scan(state, lhs_payload);
+		lhs_payload_data.InitializeScan(lhs_scan);
+		lhs_payload_data.Scan(lhs_scan, lhs_payload);
 
 		// Recompute the sorted keys from the sorted input
 		auto &lhs_keys = lhs_local_table->keys;
@@ -334,6 +334,11 @@ static idx_t TemplatedMergeJoinSimpleBlocks(PiecewiseMergeJoinState &lstate, Mer
 	BLOCK_ITERATOR lhs_itr(lhs_iterator);
 	BLOCK_ITERATOR rhs_itr(rhs_iterator);
 	for (idx_t r_idx = 0; r_idx < rhs_not_null; r_idx += STANDARD_VECTOR_SIZE) {
+		//	Repin the RHS to release memory
+		//	This is safe because we only return the LHS values
+		//	Note we only do this for the RHS because the LHS is only one chunk.
+		rhs_table.Repin(rhs_iterator);
+
 		// we only care about the BIGGEST value in the RHS
 		// because we want to figure out if the LHS values are less than [or equal] to ANY value
 		const auto r_entry_idx = MinValue<idx_t>(r_idx + STANDARD_VECTOR_SIZE, rhs_not_null) - 1;
@@ -557,6 +562,7 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 	do {
 		if (state.first_fetch) {
 			state.ResolveJoinKeys(context, input);
+			state.lhs_payload.Verify();
 
 			state.right_chunk_index = 0;
 			state.right_base = 0;
@@ -586,6 +592,10 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 		auto &rhs_iterator = *state.rhs_iterator;
 		const auto rhs_not_null = SortedChunkNotNull(state.right_chunk_index, rhs_table.count, rhs_table.has_null);
 		ChunkMergeInfo right_info(rhs_iterator, state.right_chunk_index, state.right_position, rhs_not_null);
+
+		//	Repin so we don't hang on to data after we have scanned it
+		//	Note we only do this for the RHS because the LHS is only one chunk.
+		rhs_table.Repin(rhs_iterator);
 
 		idx_t result_count = MergeJoinComplexBlocks(state.sort_key_type, left_info, right_info,
 		                                            conditions[0].comparison, state.prev_left_index);
@@ -708,17 +718,28 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ExecuteInternal(ExecutionContext 
 class PiecewiseJoinGlobalScanState : public GlobalSourceState {
 public:
 	explicit PiecewiseJoinGlobalScanState(TupleDataCollection &payload) : payload(payload), right_outer_position(0) {
-		payload.InitializeScan(scanner);
+		payload.InitializeScan(parallel_scan);
+	}
+
+	idx_t Scan(TupleDataLocalScanState &local_scan, DataChunk &chunk) {
+		lock_guard<mutex> guard(lock);
+		const auto result = right_outer_position;
+		payload.Scan(parallel_scan, local_scan, chunk);
+		right_outer_position += chunk.size();
+		return result;
 	}
 
 	TupleDataCollection &payload;
-	TupleDataParallelScanState scanner;
-	idx_t right_outer_position;
 
 public:
 	idx_t MaxThreads() override {
 		return payload.ChunkCount();
 	}
+
+private:
+	mutex lock;
+	TupleDataParallelScanState parallel_scan;
+	idx_t right_outer_position;
 };
 
 class PiecewiseJoinLocalScanState : public LocalSourceState {
@@ -760,11 +781,12 @@ SourceResultType PhysicalPiecewiseMergeJoin::GetData(ExecutionContext &context, 
 	const auto found_match = gsink.table->found_match.get();
 
 	auto &lsource = source.local_state.Cast<PiecewiseJoinLocalScanState>();
-	auto &rhs_chunk = lsource.Cast<PiecewiseJoinLocalScanState>().rhs_chunk;
+	auto &rhs_chunk = lsource.rhs_chunk;
 	auto &rsel = lsource.rsel;
 	for (;;) {
 		// Read the next sorted chunk
-		gsource.payload.Scan(gsource.scanner, lsource.scanner, rhs_chunk);
+		rhs_chunk.Reset();
+		const auto rhs_pos = gsource.Scan(lsource.scanner, rhs_chunk);
 
 		const auto count = rhs_chunk.size();
 		if (count == 0) {
@@ -774,11 +796,10 @@ SourceResultType PhysicalPiecewiseMergeJoin::GetData(ExecutionContext &context, 
 		idx_t result_count = 0;
 		// figure out which tuples didn't find a match in the RHS
 		for (idx_t i = 0; i < count; i++) {
-			if (!found_match[gsource.right_outer_position + i]) {
+			if (!found_match[rhs_pos + i]) {
 				rsel.set_index(result_count++, i);
 			}
 		}
-		gsource.right_outer_position += count;
 
 		if (result_count > 0) {
 			// if there were any tuples that didn't find a match, output them

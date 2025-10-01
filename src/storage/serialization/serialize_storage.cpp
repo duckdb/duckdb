@@ -25,7 +25,7 @@ BlockPointer BlockPointer::Deserialize(Deserializer &deserializer) {
 }
 
 void DataPointer::Serialize(Serializer &serializer) const {
-	if (!serializer.ShouldSerialize(6)) {
+	if (!serializer.ShouldSerialize(7)) {
 		serializer.WritePropertyWithDefault<uint64_t>(100, "row_start", row_start);
 	}
 	serializer.WritePropertyWithDefault<uint64_t>(101, "tuple_count", tuple_count);

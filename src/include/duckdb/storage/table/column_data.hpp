@@ -39,14 +39,16 @@ struct PersistentColumnData;
 using column_segment_vector_t = vector<SegmentNode<ColumnSegment>>;
 
 struct ColumnCheckpointInfo {
-	ColumnCheckpointInfo(RowGroupWriteInfo &info, idx_t column_idx) : info(info), column_idx(column_idx) {
-	}
+	ColumnCheckpointInfo(RowGroupWriteInfo &info, idx_t column_idx);
 
-	RowGroupWriteInfo &info;
 	idx_t column_idx;
 
 public:
+	PartialBlockManager &GetPartialBlockManager();
 	CompressionType GetCompressionType();
+
+private:
+	RowGroupWriteInfo &info;
 };
 
 class ColumnData {

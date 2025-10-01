@@ -40,15 +40,6 @@ public:
 	// Predicate (join conditions that don't reference both sides)
 	unique_ptr<Expression> predicate;
 
-public:
-	// Operator Interface
-	unique_ptr<GlobalOperatorState> GetGlobalOperatorState(ClientContext &context) const override;
-	unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context) const override;
-
-	bool ParallelOperator() const override {
-		return true;
-	}
-
 protected:
 	// CachingOperator Interface
 	OperatorResultType ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
@@ -83,6 +74,9 @@ public:
 	bool ParallelSink() const override {
 		return true;
 	}
+
+public:
+	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) override;
 };
 
 } // namespace duckdb

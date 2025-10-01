@@ -935,6 +935,9 @@ void PhysicalIEJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &re
 
 		// found matches: extract them
 
+		left_table.Repin(left_iterator);
+		right_table.Repin(right_iterator);
+
 		SliceSortedPayload(lpayload, left_table, left_iterator, left_chunk_state, left_block_index, lsel, result_count,
 		                   left_scan_state);
 		SliceSortedPayload(rpayload, right_table, right_iterator, right_chunk_state, right_block_index, rsel,
@@ -1219,6 +1222,7 @@ SourceResultType PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &r
 		auto &left_block_index = ie_lstate.left_block_index;
 		auto &left_scan_state = *ie_lstate.left_scan_state;
 
+		left_table.Repin(left_iterator);
 		SliceSortedPayload(lpayload, left_table, left_iterator, left_chunk_state, left_block_index, ie_lstate.true_sel,
 		                   count, left_scan_state);
 
@@ -1256,6 +1260,7 @@ SourceResultType PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &r
 		auto &right_block_index = ie_lstate.right_block_index;
 		auto &right_scan_state = *ie_lstate.right_scan_state;
 
+		right_table.Repin(right_iterator);
 		SliceSortedPayload(rpayload, right_table, right_iterator, right_chunk_state, right_block_index, rsel, count,
 		                   right_scan_state);
 
