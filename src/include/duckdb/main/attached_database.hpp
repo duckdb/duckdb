@@ -40,6 +40,9 @@ struct StoredDatabasePath {
 
 	DatabaseFilePathManager &manager;
 	string path;
+
+public:
+	void OnDetach();
 };
 
 //! AttachOptions holds information about a database we plan to attach. These options are generalized, i.e.,
@@ -103,6 +106,7 @@ public:
 	void SetInitialDatabase();
 	void SetReadOnlyDatabase();
 	void OnDetach(ClientContext &context);
+	string StoredPath() const;
 
 	static bool NameIsReserved(const string &name);
 	static string ExtractDatabaseName(const string &dbpath, FileSystem &fs);

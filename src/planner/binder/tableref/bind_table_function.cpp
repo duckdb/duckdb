@@ -469,8 +469,15 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 		}
 	}
 
-	auto get = BindTableFunctionInternal(table_function, ref, std::move(parameters), std::move(named_parameters),
-	                                     std::move(input_table_types), std::move(input_table_names));
+	unique_ptr<LogicalOperator> get;
+	try {
+		get = BindTableFunctionInternal(table_function, ref, std::move(parameters), std::move(named_parameters),
+		                                std::move(input_table_types), std::move(input_table_names));
+	} catch (std::exception &ex) {
+		error = ErrorData(ex);
+		error.AddQueryLocation(ref);
+		error.Throw();
+	}
 	auto table_function_ref = make_uniq<BoundTableFunction>(std::move(get));
 	table_function_ref->subquery = std::move(subquery);
 	return std::move(table_function_ref);
