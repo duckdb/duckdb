@@ -6,6 +6,8 @@ require autocomplete
 
 require skip_reload
 
+require no_extension_autoloading "FIXME: to be reviewed whether this can be lifted"
+
 statement ok
 set allow_parser_override_extension=strict;
 
