@@ -1,3 +1,4 @@
+#include "yyjson_utils.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/common/types/variant.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
@@ -47,22 +48,6 @@ public:
 public:
 	idx_t width;
 	idx_t scale;
-};
-
-struct ConvertedJSONHolder {
-public:
-	~ConvertedJSONHolder() {
-		if (doc) {
-			yyjson_mut_doc_free(doc);
-		}
-		if (stringified_json) {
-			free(stringified_json);
-		}
-	}
-
-public:
-	yyjson_mut_doc *doc = nullptr;
-	char *stringified_json = nullptr;
 };
 
 } // namespace
@@ -568,6 +553,11 @@ static bool CastVariant(FromVariantConversionData &conversion_data, Vector &resu
 			return CastVariantToPrimitive<VariantDirectConversion<string_t, VariantLogicalType::BLOB>>(
 			    conversion_data, result, sel, offset, count, row, string_payload);
 		}
+		case LogicalTypeId::GEOMETRY: {
+			StringConversionPayload string_payload(result);
+			return CastVariantToPrimitive<VariantDirectConversion<string_t, VariantLogicalType::GEOMETRY>>(
+			    conversion_data, result, sel, offset, count, row, string_payload);
+		}
 		case LogicalTypeId::VARCHAR: {
 			if (target_type.IsJSONType()) {
 				return CastVariantToJSON(conversion_data, result, sel, offset, count, row);
@@ -703,6 +693,8 @@ BoundCastInfo DefaultCasts::VariantCastSwitch(BindCastInput &input, const Logica
 	case LogicalTypeId::UNION:
 	case LogicalTypeId::UUID:
 	case LogicalTypeId::ARRAY:
+		return BoundCastInfo(CastFromVARIANT);
+	case LogicalTypeId::GEOMETRY:
 		return BoundCastInfo(CastFromVARIANT);
 	case LogicalTypeId::VARCHAR: {
 		return BoundCastInfo(CastFromVARIANT);
