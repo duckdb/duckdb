@@ -379,7 +379,6 @@ public:
 	}
 
 	void Destroy() {
-		merger_global_state.reset();
 		merger.sorted_runs.clear();
 		sink.temporary_memory_state.reset();
 	}
