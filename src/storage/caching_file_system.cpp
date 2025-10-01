@@ -79,6 +79,21 @@ FileHandle &CachingFileHandle::GetFileHandle() {
 	return *file_handle;
 }
 
+static bool ShouldExpandToFillGap(const idx_t current_length, const idx_t added_length) {
+	const idx_t MAX_BOUND_TO_BE_ADDED_LENGTH = 1048576;
+
+	if (added_length > MAX_BOUND_TO_BE_ADDED_LENGTH) {
+		// Absolute value of what would be needed to added is too high
+		return false;
+	}
+	if (added_length > current_length) {
+		// Relative value of what would be needed to added is too high
+		return false;
+	}
+
+	return true;
+}
+
 BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, const idx_t location) {
 	BufferHandle result;
 	if (!external_file_cache.IsEnabled()) {
@@ -90,18 +105,18 @@ BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, c
 
 	// Try to read from the cache, filling overlapping_ranges in the process
 	vector<shared_ptr<CachedFileRange>> overlapping_ranges;
-	idx_t start_location_of_next_range = DConstants::INVALID_INDEX;
+	optional_idx start_location_of_next_range;
 	result = TryReadFromCache(buffer, nr_bytes, location, overlapping_ranges, start_location_of_next_range);
 	if (result.IsValid()) {
 		return result; // Success
 	}
 
 	idx_t new_nr_bytes = nr_bytes;
-	if (start_location_of_next_range != DConstants::INVALID_INDEX) {
-		if (start_location_of_next_range < location + 2 * nr_bytes &&
-		    start_location_of_next_range < location + nr_bytes + 1000000) {
+	if (start_location_of_next_range.IsValid()) {
+		const idx_t nr_bytes_to_be_added = start_location_of_next_range.GetIndex() - location - nr_bytes;
+		if (ShouldExpandToFillGap(nr_bytes, nr_bytes_to_be_added)) {
 			// Grow the range from location to start_location_of_next_range, so that to fill gaps in the cached ranges
-			new_nr_bytes = start_location_of_next_range - location;
+			new_nr_bytes = nr_bytes + nr_bytes_to_be_added;
 		}
 	}
 
@@ -144,7 +159,7 @@ BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, idx_t &nr_bytes) {
 	// Try to read from the cache first
 	vector<shared_ptr<CachedFileRange>> overlapping_ranges;
 	{
-		idx_t start_location_of_next_range = DConstants::INVALID_INDEX;
+		optional_idx start_location_of_next_range;
 		result = TryReadFromCache(buffer, nr_bytes, position, overlapping_ranges, start_location_of_next_range);
 		// start_location_of_next_range is in this case discarded
 	}
@@ -232,7 +247,7 @@ const string &CachingFileHandle::GetVersionTag(const unique_ptr<StorageLockKey> 
 
 BufferHandle CachingFileHandle::TryReadFromCache(data_ptr_t &buffer, idx_t nr_bytes, idx_t location,
                                                  vector<shared_ptr<CachedFileRange>> &overlapping_ranges,
-                                                 idx_t &start_location_of_next_range) {
+                                                 optional_idx &start_location_of_next_range) {
 	BufferHandle result;
 
 	// Get read lock for cached ranges

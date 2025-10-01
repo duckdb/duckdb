@@ -62,7 +62,7 @@ private:
 	//! Returns an invalid BufferHandle if it fails
 	BufferHandle TryReadFromCache(data_ptr_t &buffer, idx_t nr_bytes, idx_t location,
 	                              vector<shared_ptr<CachedFileRange>> &overlapping_ranges,
-	                              idx_t &start_location_of_next_range);
+	                              optional_idx &start_location_of_next_range);
 	//! Try to read from the specified range, return an invalid BufferHandle if it fails
 	BufferHandle TryReadFromFileRange(const unique_ptr<StorageLockKey> &guard, CachedFileRange &file_range,
 	                                  data_ptr_t &buffer, idx_t nr_bytes, idx_t location);
