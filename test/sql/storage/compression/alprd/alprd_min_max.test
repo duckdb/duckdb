@@ -1,14 +1,13 @@
 # name: test/sql/storage/compression/alprd/alprd_min_max.test
 # group: [alprd]
 
-# load the DB from disk
 load __TEST_DIR__/alprd_min_max.db
 
 statement ok
 PRAGMA enable_verification
 
 statement ok
-pragma force_compression='alprd';
+PRAGMA force_compression='alprd';
 
 foreach type DOUBLE FLOAT
 
