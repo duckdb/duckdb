@@ -629,7 +629,7 @@ static T DeltaDecode(T *data, T previous_value, const size_t size) {
 template <class T, class T_S = typename MakeSigned<T>::type>
 struct BitpackingScanState : public SegmentScanState {
 public:
-	explicit BitpackingScanState(QueryContext context, ColumnSegment &segment) : current_segment(segment) {
+	explicit BitpackingScanState(const QueryContext &context, ColumnSegment &segment) : current_segment(segment) {
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 		handle = buffer_manager.Pin(context, segment.block);
 		auto data_ptr = handle.Ptr();

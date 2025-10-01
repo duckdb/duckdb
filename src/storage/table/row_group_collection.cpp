@@ -1355,7 +1355,7 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(ClientContext &cont
 	return result;
 }
 
-void RowGroupCollection::VerifyNewConstraint(QueryContext context, DataTable &parent,
+void RowGroupCollection::VerifyNewConstraint(const QueryContext &context, DataTable &parent,
                                              const BoundConstraint &constraint) {
 	if (total_rows == 0) {
 		return;

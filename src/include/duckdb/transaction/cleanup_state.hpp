@@ -22,7 +22,7 @@ struct UpdateInfo;
 
 class CleanupState {
 public:
-	explicit CleanupState(QueryContext context, transaction_t lowest_active_transaction);
+	explicit CleanupState(const QueryContext &context, transaction_t lowest_active_transaction);
 	~CleanupState();
 
 	// all tables with indexes that possibly need a vacuum (after e.g. a delete)

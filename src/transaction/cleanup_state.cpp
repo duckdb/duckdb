@@ -13,7 +13,7 @@
 
 namespace duckdb {
 
-CleanupState::CleanupState(QueryContext context, transaction_t lowest_active_transaction)
+CleanupState::CleanupState(const QueryContext &context, transaction_t lowest_active_transaction)
     : lowest_active_transaction(lowest_active_transaction), current_table(nullptr), count(0) {
 }
 
