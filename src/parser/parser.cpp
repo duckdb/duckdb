@@ -190,7 +190,6 @@ vector<string> SplitQueries(const string &input_query) {
 	return queries;
 }
 
-
 void Parser::ParseQuery(const string &query) {
 	Transformer transformer(options);
 	string parser_error;
