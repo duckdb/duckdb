@@ -97,7 +97,7 @@ idx_t ArrayColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t c
 
 void ArrayColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                              SelectionVector &sel, idx_t sel_count) {
-	bool is_supported = !child_column->type.IsNested();
+	bool is_supported = !child_column->type.IsNested() && child_column->type.InternalType() != PhysicalType::VARCHAR;
 	if (!is_supported) {
 		ColumnData::Select(transaction, vector_index, state, result, sel, sel_count);
 		return;
@@ -302,8 +302,8 @@ unique_ptr<ColumnCheckpointState> ArrayColumnData::CreateCheckpointState(RowGrou
 
 unique_ptr<ColumnCheckpointState> ArrayColumnData::Checkpoint(RowGroup &row_group,
                                                               ColumnCheckpointInfo &checkpoint_info) {
-
-	auto checkpoint_state = make_uniq<ArrayColumnCheckpointState>(row_group, *this, checkpoint_info.info.manager);
+	auto &partial_block_manager = checkpoint_info.GetPartialBlockManager();
+	auto checkpoint_state = make_uniq<ArrayColumnCheckpointState>(row_group, *this, partial_block_manager);
 	checkpoint_state->validity_state = validity.Checkpoint(row_group, checkpoint_info);
 	checkpoint_state->child_state = child_column->Checkpoint(row_group, checkpoint_info);
 	return std::move(checkpoint_state);

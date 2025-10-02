@@ -39,14 +39,16 @@ struct PersistentColumnData;
 using column_segment_vector_t = vector<SegmentNode<ColumnSegment>>;
 
 struct ColumnCheckpointInfo {
-	ColumnCheckpointInfo(RowGroupWriteInfo &info, idx_t column_idx) : info(info), column_idx(column_idx) {
-	}
+	ColumnCheckpointInfo(RowGroupWriteInfo &info, idx_t column_idx);
 
-	RowGroupWriteInfo &info;
 	idx_t column_idx;
 
 public:
+	PartialBlockManager &GetPartialBlockManager();
 	CompressionType GetCompressionType();
+
+private:
+	RowGroupWriteInfo &info;
 };
 
 class ColumnData {
@@ -219,7 +221,7 @@ protected:
 	void FetchUpdateRow(TransactionData transaction, row_t row_id, Vector &result, idx_t result_idx);
 	void UpdateInternal(TransactionData transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
 	                    idx_t update_count, Vector &base_vector);
-	idx_t FetchUpdateData(row_t *row_ids, Vector &base_vector);
+	idx_t FetchUpdateData(ColumnScanState &state, row_t *row_ids, Vector &base_vector);
 
 	idx_t GetVectorCount(idx_t vector_index) const;
 

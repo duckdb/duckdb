@@ -57,6 +57,12 @@ DataTable::DataTable(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_m
 	this->row_groups = make_shared_ptr<RowGroupCollection>(info, io_manager, types, 0);
 	if (data && data->row_group_count > 0) {
 		this->row_groups->Initialize(*data);
+		if (!HasIndexes()) {
+			// if we don't have indexes, always append a new row group upon appending
+			// we can clean up this row group again when vacuuming
+			// since we don't yet support vacuum when there are indexes, we only do this when there are no indexes
+			row_groups->SetAppendRequiresNewRowGroup();
+		}
 	} else {
 		this->row_groups->InitializeEmpty();
 		D_ASSERT(row_groups->GetTotalRows() == 0);
@@ -899,12 +905,14 @@ void DataTable::FinalizeLocalAppend(LocalAppendState &state) {
 	LocalStorage::FinalizeAppend(state);
 }
 
-PhysicalIndex DataTable::CreateOptimisticCollection(ClientContext &context, unique_ptr<RowGroupCollection> collection) {
+PhysicalIndex DataTable::CreateOptimisticCollection(ClientContext &context,
+                                                    unique_ptr<OptimisticWriteCollection> collection) {
 	auto &local_storage = LocalStorage::Get(context, db);
 	return local_storage.CreateOptimisticCollection(*this, std::move(collection));
 }
 
-RowGroupCollection &DataTable::GetOptimisticCollection(ClientContext &context, const PhysicalIndex collection_index) {
+OptimisticWriteCollection &DataTable::GetOptimisticCollection(ClientContext &context,
+                                                              const PhysicalIndex collection_index) {
 	auto &local_storage = LocalStorage::Get(context, db);
 	return local_storage.GetOptimisticCollection(*this, collection_index);
 }
@@ -919,7 +927,7 @@ OptimisticDataWriter &DataTable::GetOptimisticWriter(ClientContext &context) {
 	return local_storage.GetOptimisticWriter(*this);
 }
 
-void DataTable::LocalMerge(ClientContext &context, RowGroupCollection &collection) {
+void DataTable::LocalMerge(ClientContext &context, OptimisticWriteCollection &collection) {
 	auto &local_storage = LocalStorage::Get(context, db);
 	local_storage.LocalMerge(*this, collection);
 }
@@ -1598,17 +1606,24 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 	TableStatistics global_stats;
 	row_groups->CopyStats(global_stats);
 	row_groups->Checkpoint(writer, global_stats);
+	if (!HasIndexes()) {
+		row_groups->SetAppendRequiresNewRowGroup();
+	}
 	// The row group payload data has been written. Now write:
 	//   sample
 	//   column stats
 	//   row-group pointers
 	//   table pointer
 	//   index data
-	writer.FinalizeTable(global_stats, info.get(), serializer);
+	writer.FinalizeTable(global_stats, *info, *row_groups, serializer);
 }
 
 void DataTable::CommitDropColumn(const idx_t column_index) {
 	row_groups->CommitDropColumn(column_index);
+}
+
+void DataTable::Destroy() {
+	row_groups->Destroy();
 }
 
 idx_t DataTable::ColumnCount() const {

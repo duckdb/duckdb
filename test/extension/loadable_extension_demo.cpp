@@ -12,6 +12,10 @@
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/common/extension_type_info.hpp"
+#include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/tableref/emptytableref.hpp"
 
 using namespace duckdb;
 
@@ -192,10 +196,11 @@ public:
 	QuackExtension() {
 		parse_function = QuackParseFunction;
 		plan_function = QuackPlanFunction;
+		parser_override = QuackParser;
 	}
 
 	static ParserExtensionParseResult QuackParseFunction(ParserExtensionInfo *info, const string &query) {
-		auto lcase = StringUtil::Lower(StringUtil::Replace(query, ";", ""));
+		auto lcase = StringUtil::Lower(query);
 		if (!StringUtil::Contains(lcase, "quack")) {
 			// quack not found!?
 			if (StringUtil::Contains(lcase, "quac")) {
@@ -210,11 +215,14 @@ public:
 			StringUtil::Trim(split);
 			if (!split.empty()) {
 				// we only accept quacks here
+				if (StringUtil::CIEquals(split, ";")) {
+					continue;
+				}
 				return ParserExtensionParseResult("This is not a quack: " + split);
 			}
 		}
 		// QUACK
-		return ParserExtensionParseResult(make_uniq<QuackExtensionData>(splits.size() + 1));
+		return ParserExtensionParseResult(make_uniq<QuackExtensionData>(splits.size()));
 	}
 
 	static ParserExtensionPlanResult QuackPlanFunction(ParserExtensionInfo *info, ClientContext &context,
@@ -227,6 +235,24 @@ public:
 		result.requires_valid_transaction = false;
 		result.return_type = StatementReturnType::QUERY_RESULT;
 		return result;
+	}
+
+	static ParserOverrideResult QuackParser(ParserExtensionInfo *info, const string &query) {
+		if (StringUtil::CIEquals(query, "override")) {
+			auto select_node = make_uniq<SelectNode>();
+			select_node->select_list.push_back(
+			    make_uniq<ConstantExpression>(Value("The DuckDB parser has been overridden")));
+			select_node->from_table = make_uniq<EmptyTableRef>();
+			auto select_statement = make_uniq<SelectStatement>();
+			select_statement->node = std::move(select_node);
+			vector<unique_ptr<SQLStatement>> statements;
+			statements.push_back(std::move(select_statement));
+			return ParserOverrideResult(std::move(statements));
+		}
+		if (StringUtil::Contains(query, "over")) {
+			return ParserOverrideResult("Parser overridden, query contained \"over\" but not \"override\"");
+		}
+		return ParserOverrideResult();
 	}
 };
 

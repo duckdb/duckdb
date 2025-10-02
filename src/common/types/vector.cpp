@@ -16,6 +16,7 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/types/value_map.hpp"
 #include "duckdb/common/types/bignum.hpp"
+#include "duckdb/function/scalar/variant_utils.hpp"
 #include "duckdb/common/types/vector_cache.hpp"
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -723,6 +724,10 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		auto str = reinterpret_cast<bignum_t *>(data)[index];
 		return Value::BIGNUM(const_data_ptr_cast(str.data.GetData()), str.data.GetSize());
 	}
+	case LogicalTypeId::GEOMETRY: {
+		auto str = reinterpret_cast<string_t *>(data)[index];
+		return Value::GEOMETRY(const_data_ptr_cast(str.GetData()), str.GetSize());
+	}
 	case LogicalTypeId::AGGREGATE_STATE: {
 		auto str = reinterpret_cast<string_t *>(data)[index];
 		return Value::AGGREGATE_STATE(vector->GetType(), const_data_ptr_cast(str.GetData()), str.GetSize());
@@ -751,6 +756,14 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		} else {
 			return Value(vector->GetType());
 		}
+	}
+	case LogicalTypeId::VARIANT: {
+		duckdb::vector<Value> children;
+		children.emplace_back(VariantVector::GetKeys(*vector).GetValue(index_p));
+		children.emplace_back(VariantVector::GetChildren(*vector).GetValue(index_p));
+		children.emplace_back(VariantVector::GetValues(*vector).GetValue(index_p));
+		children.emplace_back(VariantVector::GetData(*vector).GetValue(index_p));
+		return Value::VARIANT(children);
 	}
 	case LogicalTypeId::STRUCT: {
 		// we can derive the value schema from the vector schema
@@ -1571,6 +1584,16 @@ void Vector::VerifyUnion(Vector &vector_p, const SelectionVector &sel_p, idx_t c
 #endif // DEBUG
 }
 
+void Vector::VerifyVariant(Vector &vector_p, const SelectionVector &sel_p, idx_t count) {
+#ifdef DEBUG
+
+	D_ASSERT(vector_p.GetType().id() == LogicalTypeId::VARIANT);
+	if (!VariantUtils::Verify(vector_p, sel_p, count)) {
+		throw InternalException("Variant not valid");
+	}
+#endif // DEBUG
+}
+
 void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count) {
 #ifdef DEBUG
 	if (count == 0) {
@@ -1751,6 +1774,9 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 		if (vector->GetType().id() == LogicalTypeId::UNION) {
 			// Pass in raw vector
 			VerifyUnion(vector_p, sel_p, count);
+		}
+		if (vector->GetType().id() == LogicalTypeId::VARIANT) {
+			VerifyVariant(vector_p, sel_p, count);
 		}
 	}
 
@@ -2367,7 +2393,8 @@ void MapVector::EvalMapInvalidReason(MapInvalidReason reason) {
 // StructVector
 //===--------------------------------------------------------------------===//
 vector<unique_ptr<Vector>> &StructVector::GetEntries(Vector &vector) {
-	D_ASSERT(vector.GetType().id() == LogicalTypeId::STRUCT || vector.GetType().id() == LogicalTypeId::UNION);
+	D_ASSERT(vector.GetType().id() == LogicalTypeId::STRUCT || vector.GetType().id() == LogicalTypeId::UNION ||
+	         vector.GetType().id() == LogicalTypeId::VARIANT);
 
 	if (vector.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		auto &child = DictionaryVector::Child(vector);
@@ -2790,6 +2817,111 @@ idx_t ArrayVector::GetTotalSize(const Vector &vector) {
 		return ArrayVector::GetTotalSize(child);
 	}
 	return vector.auxiliary->Cast<VectorArrayBuffer>().GetChildSize();
+}
+
+//===--------------------------------------------------------------------===//
+// VariantVector
+//===--------------------------------------------------------------------===//
+Vector &VariantVector::GetKeys(Vector &vec) {
+	return *StructVector::GetEntries(vec)[0];
+}
+Vector &VariantVector::GetKeys(const Vector &vec) {
+	return *StructVector::GetEntries(vec)[0];
+}
+
+Vector &VariantVector::GetChildren(Vector &vec) {
+	return *StructVector::GetEntries(vec)[1];
+}
+Vector &VariantVector::GetChildren(const Vector &vec) {
+	return *StructVector::GetEntries(vec)[1];
+}
+
+Vector &VariantVector::GetChildrenKeysIndex(Vector &vec) {
+	auto &children = ListVector::GetEntry(GetChildren(vec));
+	return *StructVector::GetEntries(children)[0];
+}
+Vector &VariantVector::GetChildrenKeysIndex(const Vector &vec) {
+	auto &children = ListVector::GetEntry(GetChildren(vec));
+	return *StructVector::GetEntries(children)[0];
+}
+
+Vector &VariantVector::GetChildrenValuesIndex(Vector &vec) {
+	auto &children = ListVector::GetEntry(GetChildren(vec));
+	return *StructVector::GetEntries(children)[1];
+}
+Vector &VariantVector::GetChildrenValuesIndex(const Vector &vec) {
+	auto &children = ListVector::GetEntry(GetChildren(vec));
+	return *StructVector::GetEntries(children)[1];
+}
+
+Vector &VariantVector::GetValues(Vector &vec) {
+	return *StructVector::GetEntries(vec)[2];
+}
+Vector &VariantVector::GetValues(const Vector &vec) {
+	return *StructVector::GetEntries(vec)[2];
+}
+
+Vector &VariantVector::GetValuesTypeId(Vector &vec) {
+	auto &values = ListVector::GetEntry(GetValues(vec));
+	return *StructVector::GetEntries(values)[0];
+}
+Vector &VariantVector::GetValuesTypeId(const Vector &vec) {
+	auto &values = ListVector::GetEntry(GetValues(vec));
+	return *StructVector::GetEntries(values)[0];
+}
+
+Vector &VariantVector::GetValuesByteOffset(Vector &vec) {
+	auto &values = ListVector::GetEntry(GetValues(vec));
+	return *StructVector::GetEntries(values)[1];
+}
+Vector &VariantVector::GetValuesByteOffset(const Vector &vec) {
+	auto &values = ListVector::GetEntry(GetValues(vec));
+	return *StructVector::GetEntries(values)[1];
+}
+
+Vector &VariantVector::GetData(Vector &vec) {
+	return *StructVector::GetEntries(vec)[3];
+}
+Vector &VariantVector::GetData(const Vector &vec) {
+	return *StructVector::GetEntries(vec)[3];
+}
+
+const UnifiedVectorFormat &UnifiedVariantVector::GetKeys(const RecursiveUnifiedVectorFormat &vec) {
+	return vec.children[0].unified;
+}
+
+const UnifiedVectorFormat &UnifiedVariantVector::GetKeysEntry(const RecursiveUnifiedVectorFormat &vec) {
+	return vec.children[0].children[0].unified;
+}
+
+const UnifiedVectorFormat &UnifiedVariantVector::GetChildren(const RecursiveUnifiedVectorFormat &vec) {
+	return vec.children[1].unified;
+}
+
+const UnifiedVectorFormat &UnifiedVariantVector::GetChildrenKeysIndex(const RecursiveUnifiedVectorFormat &vec) {
+	return vec.children[1].children[0].children[0].unified;
+}
+
+const UnifiedVectorFormat &UnifiedVariantVector::GetChildrenValuesIndex(const RecursiveUnifiedVectorFormat &vec) {
+	return vec.children[1].children[0].children[1].unified;
+}
+
+const UnifiedVectorFormat &UnifiedVariantVector::GetValues(const RecursiveUnifiedVectorFormat &vec) {
+	return vec.children[2].unified;
+}
+
+const UnifiedVectorFormat &UnifiedVariantVector::GetValuesTypeId(const RecursiveUnifiedVectorFormat &vec) {
+	auto &values = vec.children[2];
+	return values.children[0].children[0].unified;
+}
+
+const UnifiedVectorFormat &UnifiedVariantVector::GetValuesByteOffset(const RecursiveUnifiedVectorFormat &vec) {
+	auto &values = vec.children[2];
+	return values.children[0].children[1].unified;
+}
+
+const UnifiedVectorFormat &UnifiedVariantVector::GetData(const RecursiveUnifiedVectorFormat &vec) {
+	return vec.children[3].unified;
 }
 
 } // namespace duckdb

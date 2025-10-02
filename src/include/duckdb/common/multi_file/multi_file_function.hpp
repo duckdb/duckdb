@@ -199,6 +199,7 @@ public:
 
 		auto options = interface->InitializeOptions(context, nullptr);
 		MultiFileOptions file_options;
+		file_options.auto_detect_hive_partitioning = false;
 
 		for (auto &option : input.info.options) {
 			auto loption = StringUtil::Lower(option.first);

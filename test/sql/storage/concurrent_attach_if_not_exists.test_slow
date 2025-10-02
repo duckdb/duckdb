@@ -1,0 +1,22 @@
+# name: test/sql/storage/concurrent_attach_if_not_exists.test_slow
+# description: Test concurrent attaching
+# group: [storage]
+
+concurrentloop x 0 10
+
+foreach name db1 db2 db3 db4 db5
+
+statement ok
+attach if not exists '__TEST_DIR__/concurrent_attach_${name}.duckdb' AS ${name}
+
+statement maybe
+detach ${name}
+----
+database not found
+
+statement ok
+attach if not exists '__TEST_DIR__/concurrent_attach_${name}.duckdb' AS ${name}
+
+endloop
+
+endloop

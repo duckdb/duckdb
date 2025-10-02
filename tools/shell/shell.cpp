@@ -2465,6 +2465,7 @@ static char **readline_completion(const char *zText, int iStart, int iEnd) {
 /*
 ** Linenoise completion callback
 */
+static int linenoise_open_flags = 0;
 static void linenoise_completion(const char *zLine, linenoiseCompletions *lc) {
 	idx_t nLine = ShellState::StringLength(zLine);
 	int copiedSuggestion = 0;
@@ -2508,7 +2509,7 @@ static void linenoise_completion(const char *zLine, linenoiseCompletions *lc) {
 	zSql = sqlite3_mprintf("CALL sql_auto_complete(%Q)", zLine);
 	sqlite3 *localDb = NULL;
 	if (!globalDb) {
-		sqlite3_open(":memory:", &localDb);
+		sqlite3_open_v2(":memory:", &localDb, linenoise_open_flags, 0);
 		sqlite3_prepare_v2(localDb, zSql, -1, &pStmt, 0);
 	} else {
 		sqlite3_prepare_v2(globalDb, zSql, -1, &pStmt, 0);
@@ -4755,23 +4756,24 @@ static const char zOptions[] =
     "   -s COMMAND           run \"COMMAND\" and exit\n"
     "   -safe                enable safe-mode\n"
     "   -separator SEP       set output column separator. Default: '|'\n"
+    "   -storage-version V   database storage compatibility version to use. Default: 'v0.10.0'\n"
     "   -table               set output mode to 'table'\n"
     "   -ui                  launches a web interface using the ui extension (configurable with .ui_command)\n"
     "   -unredacted          allow printing unredacted secrets\n"
     "   -unsigned            allow loading of unsigned extensions\n"
     "   -version             show DuckDB version\n";
 static void usage(int showDetail) {
-	utf8_printf(stderr,
+	utf8_printf(stdout,
 	            "Usage: %s [OPTIONS] FILENAME [SQL]\n"
 	            "FILENAME is the name of a DuckDB database. A new database is created\n"
 	            "if the file does not previously exist.\n",
 	            program_name);
 	if (showDetail) {
-		utf8_printf(stderr, "OPTIONS include:\n%s", zOptions);
+		utf8_printf(stdout, "OPTIONS include:\n%s", zOptions);
 	} else {
-		raw_printf(stderr, "Use the -help option for additional information\n");
+		raw_printf(stdout, "Use the -help option for additional information\n");
 	}
-	exit(1);
+	exit(0);
 }
 
 /*
@@ -4964,12 +4966,12 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			data.openFlags |= DUCKDB_UNSIGNED_EXTENSIONS;
 		} else if (strcmp(z, "-safe") == 0) {
 			safe_mode = true;
-		} else if (strcmp(z, "-storage_version") == 0) {
+		} else if (strcmp(z, "-storage_version") == 0 || strcmp(z, "-storage-version") == 0) {
 			auto storage_version = string(cmdline_option_value(argc, argv, ++i));
 			if (storage_version != "latest") {
 				utf8_printf(
 				    stderr,
-				    "%s: Error: unknown argument (%s) for '-storage_version', only 'latest' is supported currently\n",
+				    "%s: Error: unknown argument (%s) for '-storage-version', only 'latest' is supported currently\n",
 				    program_name, storage_version.c_str());
 			} else {
 				data.openFlags |= DUCKDB_LATEST_STORAGE_VERSION;
@@ -5213,6 +5215,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 #if HAVE_READLINE || HAVE_EDITLINE
 			rl_attempted_completion_function = readline_completion;
 #elif HAVE_LINENOISE
+			linenoise_open_flags = data.openFlags;
 			linenoiseSetCompletionCallback(linenoise_completion);
 #endif
 			data.in = 0;

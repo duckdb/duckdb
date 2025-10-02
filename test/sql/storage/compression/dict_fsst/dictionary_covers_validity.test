@@ -12,18 +12,16 @@ CREATE TABLE tbl AS SELECT
 		'a': i,
 		'b': NULL::VARCHAR
 	} col
-FROM range(5000) t(i);
-
-statement ok
-set force_compression='dict_fsst';
-
-statement ok
-INSERT INTO tbl VALUES (
+FROM range(5000) t(i)
+union all
+select
 	{
 		'a': 10000,
 		'b': 'hello'
 	}
-);
+
+statement ok
+set force_compression='dict_fsst';
 
 statement ok
 force checkpoint;
@@ -43,12 +41,18 @@ statement ok
 set force_compression='zstd';
 
 statement ok
-INSERT INTO tbl VALUES (
+CREATE OR REPLACE TABLE tbl AS SELECT
+	{
+		'a': i,
+		'b': NULL::VARCHAR
+	} col
+FROM range(5000) t(i)
+union all
+select
 	{
 		'a': 10000,
 		'b': 'hello'
-	}
-);
+	} FROM range(2)
 
 statement ok
 force checkpoint;

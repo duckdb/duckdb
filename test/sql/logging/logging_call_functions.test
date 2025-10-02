@@ -204,6 +204,12 @@ CALL enable_logging(storage='memory', storage_config={'path': 'bla'});
 ----
 Invalid Input Error: Unrecognized log storage config option for storage: 'InMemoryLogStorage': 'path'
 
+# storage_config should be a struct
+statement error
+CALL enable_logging(storage_config='hi')
+----
+Invalid Input Error: EnableLogging: storage_config must be a struct
+
 # Logging config remains untouched TODO: fix
 query II
 FROM log_settings;
@@ -214,3 +220,4 @@ enabled_log_types	(empty)
 logging_level	INFO
 logging_mode	LEVEL_ONLY
 logging_storage	memory
+

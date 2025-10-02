@@ -53,13 +53,22 @@ class StorageCommitState;
 
 struct RowGroupWriteInfo {
 	RowGroupWriteInfo(PartialBlockManager &manager, const vector<CompressionType> &compression_types,
-	                  CheckpointType checkpoint_type = CheckpointType::FULL_CHECKPOINT)
-	    : manager(manager), compression_types(compression_types), checkpoint_type(checkpoint_type) {
-	}
+	                  CheckpointType checkpoint_type = CheckpointType::FULL_CHECKPOINT);
+	RowGroupWriteInfo(PartialBlockManager &manager, const vector<CompressionType> &compression_types,
+	                  vector<unique_ptr<PartialBlockManager>> &column_partial_block_managers_p);
 
+private:
 	PartialBlockManager &manager;
+
+public:
 	const vector<CompressionType> &compression_types;
 	CheckpointType checkpoint_type;
+
+public:
+	PartialBlockManager &GetPartialBlockManager(idx_t column_idx);
+
+private:
+	optional_ptr<vector<unique_ptr<PartialBlockManager>>> column_partial_block_managers;
 };
 
 struct RowGroupWriteData {
@@ -149,6 +158,8 @@ public:
 	//! Delete the given set of rows in the version manager
 	idx_t Delete(TransactionData transaction, DataTable &table, row_t *row_ids, idx_t count);
 
+	static vector<RowGroupWriteData> WriteToDisk(RowGroupWriteInfo &info,
+	                                             const vector<reference<RowGroup>> &row_groups);
 	RowGroupWriteData WriteToDisk(RowGroupWriteInfo &info);
 	//! Returns the number of committed rows (count - committed deletes)
 	idx_t GetCommittedRowCount();
@@ -164,7 +175,7 @@ public:
 	            const vector<PhysicalIndex> &column_ids);
 	//! Update a single column; corresponds to DataTable::UpdateColumn
 	//! This method should only be called from the WAL
-	void UpdateColumn(TransactionData transaction, DataChunk &updates, Vector &row_ids,
+	void UpdateColumn(TransactionData transaction, DataChunk &updates, Vector &row_ids, idx_t offset, idx_t count,
 	                  const vector<column_t> &column_path);
 
 	void MergeStatistics(idx_t column_idx, const BaseStatistics &other);
@@ -225,6 +236,7 @@ private:
 	atomic<idx_t> allocation_size;
 	unique_ptr<ColumnData> row_id_column_data;
 	atomic<bool> row_id_is_loaded;
+	atomic<bool> has_changes;
 };
 
 } // namespace duckdb

@@ -104,6 +104,7 @@ void ProfilingInfo::ResetMetrics() {
 			metrics[metric] = Value::CreateValue<uint64_t>(0);
 			break;
 		case MetricsType::EXTRA_INFO:
+			metrics[metric] = Value::MAP(InsertionOrderPreservingMap<string>());
 			break;
 		default:
 			throw InternalException("MetricsType" + EnumUtil::ToString(metric) + "not implemented");
@@ -149,21 +150,10 @@ string ProfilingInfo::GetMetricAsString(const MetricsType metric) const {
 		throw InternalException("Metric %s not enabled", EnumUtil::ToString(metric));
 	}
 
-	if (metric == MetricsType::EXTRA_INFO) {
-		string result;
-		for (auto &it : extra_info) {
-			if (!result.empty()) {
-				result += ", ";
-			}
-			result += StringUtil::Format("%s: %s", it.first, it.second);
-		}
-		return "\"" + result + "\"";
-	}
-
 	// The metric cannot be NULL and must be initialized.
 	D_ASSERT(!metrics.at(metric).IsNull());
 	if (metric == MetricsType::OPERATOR_TYPE) {
-		auto type = PhysicalOperatorType(metrics.at(metric).GetValue<uint8_t>());
+		const auto type = PhysicalOperatorType(metrics.at(metric).GetValue<uint8_t>());
 		return EnumUtil::ToString(type);
 	}
 	return metrics.at(metric).ToString();
@@ -178,18 +168,25 @@ void ProfilingInfo::WriteMetricsToJSON(yyjson_mut_doc *doc, yyjson_mut_val *dest
 		if (metric == MetricsType::EXTRA_INFO) {
 			auto extra_info_obj = yyjson_mut_obj(doc);
 
-			for (auto &it : extra_info) {
-				auto &key = it.first;
-				auto &value = it.second;
-				auto splits = StringUtil::Split(value, "\n");
+			auto extra_info = metrics.at(metric);
+			auto children = MapValue::GetChildren(extra_info);
+			for (auto &child : children) {
+				auto struct_children = StructValue::GetChildren(child);
+				auto key = struct_children[0].GetValue<string>();
+				auto value = struct_children[1].GetValue<string>();
+
+				auto key_mut = unsafe_yyjson_mut_strncpy(doc, key.c_str(), key.size());
+				auto value_mut = unsafe_yyjson_mut_strncpy(doc, value.c_str(), value.size());
+
+				auto splits = StringUtil::Split(value_mut, "\n");
 				if (splits.size() > 1) {
 					auto list_items = yyjson_mut_arr(doc);
 					for (auto &split : splits) {
 						yyjson_mut_arr_add_strcpy(doc, list_items, split.c_str());
 					}
-					yyjson_mut_obj_add_val(doc, extra_info_obj, key.c_str(), list_items);
+					yyjson_mut_obj_add_val(doc, extra_info_obj, key_mut, list_items);
 				} else {
-					yyjson_mut_obj_add_strcpy(doc, extra_info_obj, key.c_str(), value.c_str());
+					yyjson_mut_obj_add_strcpy(doc, extra_info_obj, key_mut, value_mut);
 				}
 			}
 			yyjson_mut_obj_add_val(doc, dest, key_ptr, extra_info_obj);

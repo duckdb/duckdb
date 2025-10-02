@@ -51,19 +51,17 @@ public:
 
 	HashedSortGlobalSinkState(ClientContext &client, const HashedSort &hashed_sort);
 
-	bool HasMergeTasks() const;
-
 	// OVER(PARTITION BY...) (hash grouping)
 	unique_ptr<RadixPartitionedTupleData> CreatePartition(idx_t new_bits) const;
 	void UpdateLocalPartition(GroupingPartition &local_partition, GroupingAppend &partition_append);
 	void CombineLocalPartition(GroupingPartition &local_partition, GroupingAppend &local_append);
-	void Finalize(ClientContext &context, InterruptState &interrupt_state);
+	ProgressData GetSinkProgress(ClientContext &context, const ProgressData source_progress) const;
 
 	//! System and query state
 	const HashedSort &hashed_sort;
 	BufferManager &buffer_manager;
 	Allocator &allocator;
-	mutex lock;
+	mutable mutex lock;
 
 	// OVER(PARTITION BY...) (hash grouping)
 	GroupingPartition grouping_data;
@@ -207,6 +205,30 @@ void HashedSortGlobalSinkState::CombineLocalPartition(GroupingPartition &local_p
 	}
 }
 
+ProgressData HashedSortGlobalSinkState::GetSinkProgress(ClientContext &client, const ProgressData source) const {
+	ProgressData result;
+	result.done = source.done / 2;
+	result.total = source.total;
+	result.invalid = source.invalid;
+
+	// Sort::GetSinkProgress assumes that there is only 1 sort.
+	// So we just use it to figure out how many rows have been sorted.
+	const ProgressData zero_progress;
+	lock_guard<mutex> guard(lock);
+	const auto &sort = hashed_sort.sort;
+	for (auto &hash_group : hash_groups) {
+		if (!hash_group || !hash_group->sort_global) {
+			continue;
+		}
+
+		const auto group_progress = sort->GetSinkProgress(client, *hash_group->sort_global, zero_progress);
+		result.done += group_progress.done;
+		result.invalid = result.invalid || group_progress.invalid;
+	}
+
+	return result;
+}
+
 SinkFinalizeType HashedSort::Finalize(ClientContext &client, OperatorSinkFinalizeInput &finalize) const {
 	auto &gsink = finalize.global_state.Cast<HashedSortGlobalSinkState>();
 
@@ -233,8 +255,10 @@ SinkFinalizeType HashedSort::Finalize(ClientContext &client, OperatorSinkFinaliz
 	return SinkFinalizeType::READY;
 }
 
-bool HashedSortGlobalSinkState::HasMergeTasks() const {
-	return (!hash_groups.empty());
+ProgressData HashedSort::GetSinkProgress(ClientContext &client, GlobalSinkState &gstate,
+                                         const ProgressData source) const {
+	auto &gsink = gstate.Cast<HashedSortGlobalSinkState>();
+	return gsink.GetSinkProgress(client, source);
 }
 
 //===--------------------------------------------------------------------===//
@@ -317,6 +341,9 @@ HashedSortLocalSinkState::HashedSortLocalSinkState(ExecutionContext &context, co
 		}
 		// OVER(...)
 		payload_chunk.Initialize(allocator, payload_types);
+	} else {
+		unsorted = make_uniq<ColumnDataCollection>(context.client, hashed_sort.payload_types);
+		unsorted->InitializeAppend(unsorted_append);
 	}
 }
 
@@ -345,10 +372,6 @@ SinkResultType HashedSort::Sink(ExecutionContext &context, DataChunk &input_chun
 
 	// OVER()
 	if (gstate.hashed_sort.sort_col_count == 0) {
-		if (!lstate.unsorted) {
-			lstate.unsorted = make_uniq<ColumnDataCollection>(context.client, payload_types);
-			lstate.unsorted->InitializeAppend(lstate.unsorted_append);
-		}
 		lstate.unsorted->Append(lstate.unsorted_append, input_chunk);
 		return SinkResultType::NEED_MORE_INPUT;
 	}

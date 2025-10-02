@@ -12,6 +12,7 @@
 #include "duckdb/storage/temporary_file_manager.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
 #include "duckdb/common/encryption_functions.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -246,14 +247,14 @@ void StandardBufferManager::BatchRead(vector<shared_ptr<BlockHandle>> &handles, 
                                       block_id_t first_block, block_id_t last_block) {
 	auto &block_manager = handles[0]->block_manager;
 	idx_t block_count = NumericCast<idx_t>(last_block - first_block + 1);
-#ifndef DUCKDB_ALTERNATIVE_VERIFY
 	if (block_count == 1) {
-		// prefetching with block_count == 1 has no performance impact since we can't batch reads
-		// skip the prefetch in this case
-		// we do it anyway if alternative_verify is on for extra testing
-		return;
+		if (DBConfig::GetSetting<StorageBlockPrefetchSetting>(db) != StorageBlockPrefetch::DEBUG_FORCE_ALWAYS) {
+			// prefetching with block_count == 1 has no performance impact since we can't batch reads
+			// skip the prefetch in this case
+			// we do it anyway if alternative_verify is on for extra testing
+			return;
+		}
 	}
-#endif
 
 	// allocate a buffer to hold the data of all of the blocks
 	auto total_block_size = block_count * block_manager.GetBlockAllocSize();
@@ -409,9 +410,9 @@ void StandardBufferManager::VerifyZeroReaders(BlockLock &lock, shared_ptr<BlockH
 #ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
 	unique_ptr<FileBuffer> replacement_buffer;
 	auto &allocator = Allocator::Get(db);
-	auto block_header_size = handle->block_manager.GetBlockHeaderSize();
-	auto alloc_size = handle->GetMemoryUsage() - block_header_size;
 	auto &buffer = handle->GetBuffer(lock);
+	auto block_header_size = buffer->GetHeaderSize();
+	auto alloc_size = buffer->AllocSize() - block_header_size;
 	if (handle->GetBufferType() == FileBufferType::BLOCK) {
 		auto block = reinterpret_cast<Block *>(buffer.get());
 		replacement_buffer = make_uniq<Block>(allocator, block->id, alloc_size, block_header_size);

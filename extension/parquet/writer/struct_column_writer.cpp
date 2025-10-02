@@ -62,11 +62,12 @@ void StructColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *
 	auto &validity = FlatVector::Validity(vector);
 	if (parent) {
 		// propagate empty entries from the parent
-		while (state.is_empty.size() < parent->is_empty.size()) {
-			state.is_empty.push_back(parent->is_empty[state.is_empty.size()]);
+		if (state.is_empty.size() < parent->is_empty.size()) {
+			state.is_empty.insert(state.is_empty.end(), parent->is_empty.begin() + state.is_empty.size(),
+			                      parent->is_empty.end());
 		}
 	}
-	HandleRepeatLevels(state_p, parent, count, MaxRepeat());
+	HandleRepeatLevels(state_p, parent, count);
 	HandleDefineLevels(state_p, parent, validity, count, PARQUET_DEFINE_VALID, MaxDefine() - 1);
 	auto &child_vectors = StructVector::GetEntries(vector);
 	for (idx_t child_idx = 0; child_idx < child_writers.size(); child_idx++) {

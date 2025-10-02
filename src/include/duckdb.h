@@ -35,11 +35,7 @@
 #ifdef DUCKDB_STATIC_BUILD
 #define DUCKDB_EXTENSION_API
 #else
-#ifdef DUCKDB_BUILD_LOADABLE_EXTENSION
 #define DUCKDB_EXTENSION_API __declspec(dllexport)
-#else
-#define DUCKDB_EXTENSION_API
-#endif
 #endif
 #else
 #define DUCKDB_EXTENSION_API __attribute__((visibility("default")))
@@ -244,6 +240,20 @@ typedef enum duckdb_error_type {
 
 //! An enum over DuckDB's different cast modes.
 typedef enum duckdb_cast_mode { DUCKDB_CAST_NORMAL = 0, DUCKDB_CAST_TRY = 1 } duckdb_cast_mode;
+
+typedef enum duckdb_file_flag {
+	DUCKDB_FILE_FLAG_INVALID = 0,
+	// Open the file with "read" capabilities.
+	DUCKDB_FILE_FLAG_READ = 1,
+	// Open the file with "write" capabilities.
+	DUCKDB_FILE_FLAG_WRITE = 2,
+	// Create a new file, or open if it already exists.
+	DUCKDB_FILE_FLAG_CREATE = 3,
+	// Create a new file, or fail if it already exists.
+	DUCKDB_FILE_FLAG_CREATE_NEW = 4,
+	// Open the file in "append" mode.
+	DUCKDB_FILE_FLAG_APPEND = 5,
+} duckdb_file_flag;
 
 //===--------------------------------------------------------------------===//
 // General type definitions
@@ -759,6 +769,22 @@ typedef struct _duckdb_arrow_array {
 typedef struct _duckdb_arrow_options {
 	void *internal_ptr;
 } * duckdb_arrow_options;
+
+//===--------------------------------------------------------------------===//
+// Virtual File System Access
+//===--------------------------------------------------------------------===//
+
+typedef struct _duckdb_file_open_options {
+	void *internal_ptr;
+} * duckdb_file_open_options;
+
+typedef struct _duckdb_file_system {
+	void *internal_ptr;
+} * duckdb_file_system;
+
+typedef struct _duckdb_file_handle {
+	void *internal_ptr;
+} * duckdb_file_handle;
 
 //===--------------------------------------------------------------------===//
 // DuckDB extension access
@@ -1807,6 +1833,53 @@ Returns the statement type of the statement to be executed
 * @return duckdb_statement_type value or DUCKDB_STATEMENT_TYPE_INVALID
 */
 DUCKDB_C_API duckdb_statement_type duckdb_prepared_statement_type(duckdb_prepared_statement statement);
+
+/*!
+Returns the number of columns present in a the result of the prepared statement. If any of the column types are invalid,
+the result will be 1.
+
+* @param prepared_statement The prepared statement.
+* @return The number of columns present in the result of the prepared statement.
+*/
+DUCKDB_C_API idx_t duckdb_prepared_statement_column_count(duckdb_prepared_statement prepared_statement);
+
+/*!
+Returns the name of the specified column of the result of the prepared_statement.
+The returned string should be freed using `duckdb_free`.
+
+Returns `nullptr` if the column is out of range.
+
+* @param prepared_statement The prepared statement.
+* @param col_idx The column index.
+* @return The column name of the specified column.
+*/
+DUCKDB_C_API const char *duckdb_prepared_statement_column_name(duckdb_prepared_statement prepared_statement,
+                                                               idx_t col_idx);
+
+/*!
+Returns the column type of the specified column of the result of the prepared_statement.
+
+Returns `DUCKDB_TYPE_INVALID` if the column is out of range.
+The return type of this call should be destroyed with `duckdb_destroy_logical_type`.
+
+* @param prepared_statement The prepared statement to fetch the column type from.
+* @param col_idx The column index.
+* @return The logical type of the specified column.
+*/
+DUCKDB_C_API duckdb_logical_type
+duckdb_prepared_statement_column_logical_type(duckdb_prepared_statement prepared_statement, idx_t col_idx);
+
+/*!
+Returns the column type of the specified column of the result of the prepared_statement.
+
+Returns `DUCKDB_TYPE_INVALID` if the column is out of range.
+
+* @param prepared_statement The prepared statement to fetch the column type from.
+* @param col_idx The column index.
+* @return The type of the specified column.
+*/
+DUCKDB_C_API duckdb_type duckdb_prepared_statement_column_type(duckdb_prepared_statement prepared_statement,
+                                                               idx_t col_idx);
 
 //===--------------------------------------------------------------------===//
 // Bind Values to Prepared Statements
@@ -5117,6 +5190,150 @@ Folds an expression creating a folded value.
 */
 DUCKDB_C_API duckdb_error_data duckdb_expression_fold(duckdb_client_context context, duckdb_expression expr,
                                                       duckdb_value *out_value);
+
+//===--------------------------------------------------------------------===//
+// File System Interface
+//===--------------------------------------------------------------------===//
+
+/*!
+Get a file system instance associated with the given client context.
+
+* @param context The client context.
+* @return The resulting file system instance. Must be destroyed with `duckdb_destroy_file_system`.
+*/
+DUCKDB_C_API duckdb_file_system duckdb_client_context_get_file_system(duckdb_client_context context);
+
+/*!
+Destroys the given file system instance.
+* @param file_system The file system instance to destroy.
+*/
+DUCKDB_C_API void duckdb_destroy_file_system(duckdb_file_system *file_system);
+
+/*!
+Retrieves the last error that occurred on the given file system instance.
+
+* @param file_system The file system instance.
+* @return The error data.
+*/
+DUCKDB_C_API duckdb_error_data duckdb_file_system_error_data(duckdb_file_system file_system);
+
+/*!
+Opens a file at the given path with the specified options.
+
+* @param file_system The file system instance.
+* @param path The path to the file.
+* @param options The file open options specifying how to open the file.
+* @param out_file The resulting file handle instance, or `nullptr` if the open failed. Must be destroyed with
+`duckdb_destroy_file_handle`.
+* @return Whether the operation was successful. If not, the error data can be retrieved using
+`duckdb_file_system_error_data`.
+*/
+DUCKDB_C_API duckdb_state duckdb_file_system_open(duckdb_file_system file_system, const char *path,
+                                                  duckdb_file_open_options options, duckdb_file_handle *out_file);
+
+/*!
+Creates a new file open options instance with blank settings.
+
+* @return The new file open options instance. Must be destroyed with `duckdb_destroy_file_open_options`.
+*/
+DUCKDB_C_API duckdb_file_open_options duckdb_create_file_open_options();
+
+/*!
+Sets a specific flag in the file open options.
+
+* @param options The file open options instance.
+* @param flag The flag to set (e.g., read, write).
+* @param value If the flag is enabled or disabled.
+* @return `DuckDBSuccess` on success or `DuckDBError` if the flag is unrecognized or unsupported by this version of
+DuckDB.
+*/
+DUCKDB_C_API duckdb_state duckdb_file_open_options_set_flag(duckdb_file_open_options options, duckdb_file_flag flag,
+                                                            bool value);
+
+/*!
+Destroys the given file open options instance.
+* @param options The file open options instance to destroy.
+*/
+DUCKDB_C_API void duckdb_destroy_file_open_options(duckdb_file_open_options *options);
+
+/*!
+Destroys the given file handle and deallocates all associated resources.
+This will also close the file if it is still open.
+
+* @param file_handle The file handle to destroy.
+*/
+DUCKDB_C_API void duckdb_destroy_file_handle(duckdb_file_handle *file_handle);
+
+/*!
+Retrieves the last error that occurred on the given file handle.
+
+* @param file_handle The file handle.
+* @return The error data. Must be destroyed with `duckdb_destroy_error_data`
+*/
+DUCKDB_C_API duckdb_error_data duckdb_file_handle_error_data(duckdb_file_handle file_handle);
+
+/*!
+Reads data from the file into the buffer.
+
+* @param file_handle The file handle to read from.
+* @param buffer The buffer to read data into.
+* @param size The number of bytes to read.
+* @return The number of bytes actually read, or negative on error.
+*/
+DUCKDB_C_API int64_t duckdb_file_handle_read(duckdb_file_handle file_handle, void *buffer, int64_t size);
+
+/*!
+Writes data from the buffer to the file.
+
+* @param file_handle The file handle to write to.
+* @param buffer The buffer containing data to write.
+* @param size The number of bytes to write.
+* @return The number of bytes actually written, or negative on error.
+*/
+DUCKDB_C_API int64_t duckdb_file_handle_write(duckdb_file_handle file_handle, const void *buffer, int64_t size);
+
+/*!
+Tells the current position in the file.
+
+* @param file_handle The file handle to tell the position of.
+* @return The current position in the file, or negative on error.
+*/
+DUCKDB_C_API int64_t duckdb_file_handle_tell(duckdb_file_handle file_handle);
+
+/*!
+Gets the size of the file.
+
+* @param file_handle The file handle to get the size of.
+* @return The size of the file in bytes, or negative on error.
+*/
+DUCKDB_C_API int64_t duckdb_file_handle_size(duckdb_file_handle file_handle);
+
+/*!
+Seeks to a specific position in the file.
+
+* @param file_handle The file handle to seek in.
+* @return `DuckDBSuccess` on success or `DuckDBError` on failure. If unsuccessful, the error data can be retrieved using
+`duckdb_file_handle_error_data`.
+*/
+DUCKDB_C_API duckdb_state duckdb_file_handle_seek(duckdb_file_handle file_handle, int64_t position);
+
+/*!
+Synchronizes the file's state with the underlying storage.
+
+* @param file_handle The file handle to synchronize.
+* @return `DuckDBSuccess` on success or `DuckDBError` on failure. If unsuccessful, the error data can be retrieved using
+`duckdb_file_handle_error_data`.
+*/
+DUCKDB_C_API duckdb_state duckdb_file_handle_sync(duckdb_file_handle file_handle);
+
+/*!
+Closes the given file handle.
+
+* @param file_handle The file handle to close.
+* @return `DuckDBSuccess` on success or `DuckDBError` on failure. If unsuccessful, the error data can be retrieved using
+`duckdb_file_handle_error_data`.
+*/
+DUCKDB_C_API duckdb_state duckdb_file_handle_close(duckdb_file_handle file_handle);
 
 #endif
 

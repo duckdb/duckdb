@@ -10,21 +10,21 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/main/database_path_and_type.hpp"
+#include "duckdb/main/valid_checker.hpp"
 
 namespace duckdb {
 
-StoredDatabasePath::StoredDatabasePath(DatabaseManager &manager, string path_p, const string &name)
+StoredDatabasePath::StoredDatabasePath(DatabaseFilePathManager &manager, string path_p, const string &name)
     : manager(manager), path(std::move(path_p)) {
-	manager.InsertDatabasePath(path, name);
 }
 
 StoredDatabasePath::~StoredDatabasePath() {
 	manager.EraseDatabasePath(path);
 }
+
 //===--------------------------------------------------------------------===//
 // Attach Options
 //===--------------------------------------------------------------------===//
-
 AttachOptions::AttachOptions(const DBConfigOptions &options)
     : access_mode(options.access_mode), db_type(options.database_type) {
 }
@@ -99,9 +99,10 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, str
 	} else {
 		type = AttachedDatabaseType::READ_WRITE_DATABASE;
 	}
+	visibility = options.visibility;
 	// We create the storage after the catalog to guarantee we allow extensions to instantiate the DuckCatalog.
 	catalog = make_uniq<DuckCatalog>(*this);
-	InsertDatabasePath(file_path_p);
+	stored_database_path = std::move(options.stored_database_path);
 	storage = make_uniq<SingleFileStorageManager>(*this, std::move(file_path_p), options);
 	transaction_manager = make_uniq<DuckTransactionManager>(*this);
 	internal = true;
@@ -116,14 +117,15 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Sto
 	} else {
 		type = AttachedDatabaseType::READ_WRITE_DATABASE;
 	}
+	visibility = options.visibility;
 
 	optional_ptr<StorageExtensionInfo> storage_info = storage_extension->storage_info.get();
 	catalog = storage_extension->attach(storage_info, context, *this, name, info, options);
+	stored_database_path = std::move(options.stored_database_path);
 	if (!catalog) {
 		throw InternalException("AttachedDatabase - attach function did not return a catalog");
 	}
 	if (catalog->IsDuckCatalog()) {
-		InsertDatabasePath(info.path);
 		// The attached database uses the DuckCatalog.
 		storage = make_uniq<SingleFileStorageManager>(*this, info.path, options);
 	}
@@ -149,13 +151,6 @@ bool AttachedDatabase::IsTemporary() const {
 }
 bool AttachedDatabase::IsReadOnly() const {
 	return type == AttachedDatabaseType::READ_ONLY_DATABASE;
-}
-
-void AttachedDatabase::InsertDatabasePath(const string &path) {
-	if (path.empty() || path == IN_MEMORY_PATH) {
-		return;
-	}
-	stored_database_path = make_uniq<StoredDatabasePath>(db.GetDatabaseManager(), path, name);
 }
 
 bool AttachedDatabase::NameIsReserved(const string &name) {
@@ -234,10 +229,9 @@ void AttachedDatabase::SetReadOnlyDatabase() {
 }
 
 void AttachedDatabase::OnDetach(ClientContext &context) {
-	if (!catalog) {
-		return;
+	if (catalog) {
+		catalog->OnDetach(context);
 	}
-	catalog->OnDetach(context);
 }
 
 void AttachedDatabase::Close() {
@@ -249,14 +243,21 @@ void AttachedDatabase::Close() {
 
 	// shutting down: attempt to checkpoint the database
 	// but only if we are not cleaning up as part of an exception unwind
-	if (!Exception::UncaughtException() && storage && !storage->InMemory()) {
-		try {
-			auto &config = DBConfig::GetConfig(db);
-			if (config.options.checkpoint_on_shutdown) {
-				CheckpointOptions options;
-				options.wal_action = CheckpointWALAction::DELETE_WAL;
-				storage->CreateCheckpoint(QueryContext(), options);
+	if (!Exception::UncaughtException() && storage && !ValidChecker::IsInvalidated(db)) {
+		if (!storage->InMemory()) {
+			try {
+				auto &config = DBConfig::GetConfig(db);
+				if (config.options.checkpoint_on_shutdown) {
+					CheckpointOptions options;
+					options.wal_action = CheckpointWALAction::DELETE_WAL;
+					storage->CreateCheckpoint(QueryContext(), options);
+				}
+			} catch (...) { // NOLINT
 			}
+		}
+		try {
+			// destroy the storage
+			storage->Destroy();
 		} catch (...) { // NOLINT
 		}
 	}

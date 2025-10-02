@@ -112,7 +112,7 @@ typedef struct {
 #elif defined(__GNUC__)
 __attribute__((always_inline))
 #endif
-inline uint16_t mbedtls_get_unaligned_uint16(const void *p)
+static inline uint16_t mbedtls_get_unaligned_uint16(const void *p)
 {
     uint16_t r;
 #if defined(UINT_UNALIGNED)
@@ -139,7 +139,7 @@ inline uint16_t mbedtls_get_unaligned_uint16(const void *p)
 #elif defined(__GNUC__)
 __attribute__((always_inline))
 #endif
-inline void mbedtls_put_unaligned_uint16(void *p, uint16_t x)
+static inline void mbedtls_put_unaligned_uint16(void *p, uint16_t x)
 {
 #if defined(UINT_UNALIGNED)
     mbedtls_uint16_unaligned_t *p16 = (mbedtls_uint16_unaligned_t *) p;
@@ -164,7 +164,7 @@ inline void mbedtls_put_unaligned_uint16(void *p, uint16_t x)
 #elif defined(__GNUC__)
 __attribute__((always_inline))
 #endif
-inline uint32_t mbedtls_get_unaligned_uint32(const void *p)
+static inline uint32_t mbedtls_get_unaligned_uint32(const void *p)
 {
     uint32_t r;
 #if defined(UINT_UNALIGNED)
@@ -191,7 +191,7 @@ inline uint32_t mbedtls_get_unaligned_uint32(const void *p)
 #elif defined(__GNUC__)
 __attribute__((always_inline))
 #endif
-inline void mbedtls_put_unaligned_uint32(void *p, uint32_t x)
+static inline void mbedtls_put_unaligned_uint32(void *p, uint32_t x)
 {
 #if defined(UINT_UNALIGNED)
     mbedtls_uint32_unaligned_t *p32 = (mbedtls_uint32_unaligned_t *) p;
@@ -216,7 +216,7 @@ inline void mbedtls_put_unaligned_uint32(void *p, uint32_t x)
 #elif defined(__GNUC__)
 __attribute__((always_inline))
 #endif
-inline uint64_t mbedtls_get_unaligned_uint64(const void *p)
+static inline uint64_t mbedtls_get_unaligned_uint64(const void *p)
 {
     uint64_t r;
 #if defined(UINT_UNALIGNED)
@@ -243,7 +243,7 @@ inline uint64_t mbedtls_get_unaligned_uint64(const void *p)
 #elif defined(__GNUC__)
 __attribute__((always_inline))
 #endif
-inline void mbedtls_put_unaligned_uint64(void *p, uint64_t x)
+static inline void mbedtls_put_unaligned_uint64(void *p, uint64_t x)
 {
 #if defined(UINT_UNALIGNED)
     mbedtls_uint64_unaligned_t *p64 = (mbedtls_uint64_unaligned_t *) p;
@@ -341,7 +341,7 @@ inline void mbedtls_put_unaligned_uint64(void *p, uint64_t x)
  * similar instruction.
  */
 #if !defined(MBEDTLS_BSWAP16)
-inline uint16_t mbedtls_bswap16(uint16_t x)
+static inline uint16_t mbedtls_bswap16(uint16_t x)
 {
     return
         (x & 0x00ff) << 8 |
@@ -351,7 +351,7 @@ inline uint16_t mbedtls_bswap16(uint16_t x)
 #endif /* !defined(MBEDTLS_BSWAP16) */
 
 #if !defined(MBEDTLS_BSWAP32)
-inline uint32_t mbedtls_bswap32(uint32_t x)
+static inline uint32_t mbedtls_bswap32(uint32_t x)
 {
     return
         (x & 0x000000ff) << 24 |
@@ -363,7 +363,7 @@ inline uint32_t mbedtls_bswap32(uint32_t x)
 #endif /* !defined(MBEDTLS_BSWAP32) */
 
 #if !defined(MBEDTLS_BSWAP64)
-inline uint64_t mbedtls_bswap64(uint64_t x)
+static inline uint64_t mbedtls_bswap64(uint64_t x)
 {
     return
         (x & 0x00000000000000ffULL) << 56 |

@@ -14,6 +14,7 @@ add_library_unity(
   column_lifetime_analyzer.cpp
   empty_result_pullup.cpp
   common_aggregate_optimizer.cpp
+  common_subplan_optimizer.cpp
   compressed_materialization.cpp
   cse_optimizer.cpp
   cte_filter_pusher.cpp

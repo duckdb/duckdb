@@ -120,6 +120,7 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::INTERVAL:
 		return PhysicalType::INTERVAL;
 	case LogicalTypeId::UNION:
+	case LogicalTypeId::VARIANT:
 	case LogicalTypeId::STRUCT:
 		return PhysicalType::STRUCT;
 	case LogicalTypeId::LIST:
@@ -157,6 +158,8 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::USER:
 		return PhysicalType::UNKNOWN;
 	case LogicalTypeId::AGGREGATE_STATE:
+		return PhysicalType::VARCHAR;
+	case LogicalTypeId::GEOMETRY:
 		return PhysicalType::VARCHAR;
 	default:
 		throw InternalException("Invalid LogicalType %s", ToString());
@@ -623,6 +626,10 @@ LogicalType GetUserTypeRecursive(const LogicalType &type, ClientContext &context
 	if (type.id() == LogicalTypeId::LIST) {
 		return LogicalType::LIST(GetUserTypeRecursive(ListType::GetChildType(type), context));
 	}
+	if (type.id() == LogicalTypeId::ARRAY) {
+		return LogicalType::ARRAY(GetUserTypeRecursive(ArrayType::GetChildType(type), context),
+		                          ArrayType::GetSize(type));
+	}
 	if (type.id() == LogicalTypeId::MAP) {
 		return LogicalType::MAP(GetUserTypeRecursive(MapType::KeyType(type), context),
 		                        GetUserTypeRecursive(MapType::ValueType(type), context));
@@ -753,6 +760,7 @@ bool LogicalType::IsComplete() const {
 			break;
 		case LogicalTypeId::STRUCT:
 		case LogicalTypeId::UNION:
+		case LogicalTypeId::VARIANT:
 			if (!type.AuxInfo() || type.AuxInfo()->type != ExtraTypeInfoType::STRUCT_TYPE_INFO) {
 				return true; // Missing or incorrect type info
 			}
@@ -972,6 +980,16 @@ LogicalType LogicalType::NormalizeType(const LogicalType &type) {
 
 template <class OP>
 static bool CombineUnequalTypes(const LogicalType &left, const LogicalType &right, LogicalType &result) {
+	D_ASSERT(right.id() != left.id());
+	if (right.id() == LogicalTypeId::VARIANT) {
+		result = right;
+		return true;
+	}
+	if (left.id() == LogicalTypeId::VARIANT) {
+		result = left;
+		return true;
+	}
+
 	// left and right are not equal
 	// NULL/unknown (parameter) types always take the other type
 	LogicalTypeId other_types[] = {LogicalTypeId::SQLNULL, LogicalTypeId::UNKNOWN};
@@ -1008,7 +1026,12 @@ static bool CombineUnequalTypes(const LogicalType &left, const LogicalType &righ
 		// we can implicitly cast left to right, return right
 		//! Depending on the type, we might need to grow the `width` of the DECIMAL type
 		if (right.id() == LogicalTypeId::DECIMAL) {
-			result = DecimalSizeCheck(left, right);
+			if (left.id() == LogicalTypeId::VARIANT) {
+				//! Prefer VARIANT always
+				result = left;
+			} else {
+				result = DecimalSizeCheck(left, right);
+			}
 		} else {
 			result = right;
 		}
@@ -1018,7 +1041,12 @@ static bool CombineUnequalTypes(const LogicalType &left, const LogicalType &righ
 		// we can implicitly cast right to left, return left
 		//! Depending on the type, we might need to grow the `width` of the DECIMAL type
 		if (left.id() == LogicalTypeId::DECIMAL) {
-			result = DecimalSizeCheck(right, left);
+			if (right.id() == LogicalTypeId::VARIANT) {
+				//! Prefer VARIANT always
+				result = right;
+			} else {
+				result = DecimalSizeCheck(right, left);
+			}
 		} else {
 			result = left;
 		}
@@ -1318,6 +1346,8 @@ static idx_t GetLogicalTypeScore(const LogicalType &type) {
 		return 102;
 	case LogicalTypeId::BIGNUM:
 		return 103;
+	case LogicalTypeId::GEOMETRY:
+		return 104;
 	// nested types
 	case LogicalTypeId::STRUCT:
 		return 125;
@@ -1326,6 +1356,7 @@ static idx_t GetLogicalTypeScore(const LogicalType &type) {
 		return 126;
 	case LogicalTypeId::MAP:
 		return 127;
+	case LogicalTypeId::VARIANT:
 	case LogicalTypeId::UNION:
 	case LogicalTypeId::TABLE:
 		return 150;
@@ -1593,7 +1624,8 @@ const string AggregateStateType::GetTypeName(const LogicalType &type) {
 // Struct Type
 //===--------------------------------------------------------------------===//
 const child_list_t<LogicalType> &StructType::GetChildTypes(const LogicalType &type) {
-	D_ASSERT(type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::UNION);
+	D_ASSERT(type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::UNION ||
+	         type.id() == LogicalTypeId::VARIANT);
 
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
@@ -1962,6 +1994,37 @@ const string &TemplateType::GetName(const LogicalType &type) {
 	auto info = type.AuxInfo();
 	D_ASSERT(info->type == ExtraTypeInfoType::TEMPLATE_TYPE_INFO);
 	return info->Cast<TemplateTypeInfo>().name;
+}
+
+//===--------------------------------------------------------------------===//
+// Variant Type
+//===--------------------------------------------------------------------===//
+
+LogicalType LogicalType::VARIANT() {
+	child_list_t<LogicalType> children;
+	//! keys
+	children.emplace_back("keys", LogicalType::LIST(LogicalTypeId::VARCHAR));
+	//! children
+	children.emplace_back("children",
+	                      LogicalType::LIST(LogicalType::STRUCT(
+	                          {{"keys_index", LogicalType::UINTEGER}, {"values_index", LogicalType::UINTEGER}})));
+	//! values
+	children.emplace_back("values", LogicalType::LIST(LogicalType::STRUCT(
+	                                    {{"type_id", LogicalType::UTINYINT}, {"byte_offset", LogicalType::UINTEGER}})));
+	//! data
+	children.emplace_back("data", LogicalType::BLOB);
+
+	auto info = make_shared_ptr<StructTypeInfo>(std::move(children));
+	return LogicalType(LogicalTypeId::VARIANT, std::move(info));
+}
+
+//===--------------------------------------------------------------------===//
+// Spatial Types
+//===--------------------------------------------------------------------===//
+
+LogicalType LogicalType::GEOMETRY() {
+	auto info = make_shared_ptr<GeoTypeInfo>();
+	return LogicalType(LogicalTypeId::GEOMETRY, std::move(info));
 }
 
 //===--------------------------------------------------------------------===//
