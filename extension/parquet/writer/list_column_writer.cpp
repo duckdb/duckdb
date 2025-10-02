@@ -2,6 +2,11 @@
 
 namespace duckdb {
 
+using namespace duckdb_parquet; // NOLINT
+
+using duckdb_parquet::ConvertedType;
+using duckdb_parquet::FieldRepetitionType;
+
 unique_ptr<ColumnWriterState> ListColumnWriter::InitializeWriteState(duckdb_parquet::RowGroup &row_group) {
 	auto result = make_uniq<ListColumnWriterState>(row_group, row_group.columns.size());
 	result->child_state = GetChildWriter().InitializeWriteState(row_group);
@@ -139,6 +144,54 @@ void ListColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 ColumnWriter &ListColumnWriter::GetChildWriter() {
 	D_ASSERT(child_writers.size() == 1);
 	return *child_writers[0];
+}
+
+void ListColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) {
+	idx_t schema_idx = schemas.size();
+
+	auto &schema = column_schema;
+	schema.SetSchemaIndex(schema_idx);
+
+	auto null_type = schema.repetition_type;
+	auto &name = schema.name;
+	auto &field_id = schema.field_id;
+	auto &type = schema.type;
+
+	// set up the two schema elements for the list
+	// for some reason we only set the converted type in the OPTIONAL element
+	// first an OPTIONAL element
+	duckdb_parquet::SchemaElement optional_element;
+	optional_element.repetition_type = null_type;
+	optional_element.num_children = 1;
+	optional_element.converted_type = (type.id() == LogicalTypeId::MAP) ? ConvertedType::MAP : ConvertedType::LIST;
+	optional_element.__isset.num_children = true;
+	optional_element.__isset.type = false;
+	optional_element.__isset.repetition_type = true;
+	optional_element.__isset.converted_type = true;
+	optional_element.name = name;
+	if (field_id.IsValid()) {
+		optional_element.__isset.field_id = true;
+		optional_element.field_id = field_id.GetIndex();
+	}
+	schemas.push_back(std::move(optional_element));
+
+	//! When we're describing a MAP, we skip the dummy "list" element
+	if (type.id() != LogicalTypeId::MAP) {
+		// then a REPEATED element
+		duckdb_parquet::SchemaElement repeated_element;
+		repeated_element.repetition_type = FieldRepetitionType::REPEATED;
+		repeated_element.__isset.num_children = true;
+		repeated_element.__isset.type = false;
+		repeated_element.__isset.repetition_type = true;
+		repeated_element.num_children = 1;
+		repeated_element.name = "list";
+		schemas.push_back(std::move(repeated_element));
+	} else {
+		//! Instead, the "key_value" struct will be marked as REPEATED
+		D_ASSERT(GetChildWriter().Schema().repetition_type == FieldRepetitionType::REPEATED);
+	}
+
+	GetChildWriter().FinalizeSchema(schemas);
 }
 
 } // namespace duckdb

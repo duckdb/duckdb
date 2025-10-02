@@ -12,6 +12,11 @@
 
 namespace duckdb {
 
+using namespace duckdb_parquet; // NOLINT
+
+using duckdb_parquet::ConvertedType;
+using duckdb_parquet::FieldRepetitionType;
+
 using duckdb_parquet::FileMetaData;
 struct ParquetOptions;
 
@@ -30,19 +35,31 @@ enum class ParquetExtraTypeInfo {
 };
 
 struct ParquetColumnSchema {
+public:
 	ParquetColumnSchema() = default;
 	ParquetColumnSchema(idx_t max_define, idx_t max_repeat, idx_t schema_index, idx_t file_index,
 	                    ParquetColumnSchemaType schema_type = ParquetColumnSchemaType::COLUMN);
-	ParquetColumnSchema(string name, LogicalType type, idx_t max_define, idx_t max_repeat, idx_t schema_index,
-	                    idx_t column_index, ParquetColumnSchemaType schema_type = ParquetColumnSchemaType::COLUMN);
+	ParquetColumnSchema(
+	    string name, LogicalType type, idx_t max_define, idx_t max_repeat, idx_t column_index,
+	    duckdb_parquet::FieldRepetitionType::type repetition_type = duckdb_parquet::FieldRepetitionType::type::OPTIONAL,
+	    ParquetColumnSchemaType schema_type = ParquetColumnSchemaType::COLUMN);
 	ParquetColumnSchema(ParquetColumnSchema parent, LogicalType result_type, ParquetColumnSchemaType schema_type);
 
+public:
+	unique_ptr<BaseStatistics> Stats(const FileMetaData &file_meta_data, const ParquetOptions &parquet_options,
+	                                 idx_t row_group_idx_p, const vector<duckdb_parquet::ColumnChunk> &columns) const;
+
+public:
+	void SetSchemaIndex(idx_t schema_idx);
+
+public:
 	ParquetColumnSchemaType schema_type;
 	string name;
 	LogicalType type;
 	idx_t max_define;
 	idx_t max_repeat;
-	idx_t schema_index;
+	//! Populated by FinalizeSchema
+	optional_idx schema_index;
 	idx_t column_index;
 	optional_idx parent_schema_index;
 	uint32_t type_length = 0;
@@ -50,9 +67,9 @@ struct ParquetColumnSchema {
 	duckdb_parquet::Type::type parquet_type = duckdb_parquet::Type::INT32;
 	ParquetExtraTypeInfo type_info = ParquetExtraTypeInfo::NONE;
 	vector<ParquetColumnSchema> children;
-
-	unique_ptr<BaseStatistics> Stats(const FileMetaData &file_meta_data, const ParquetOptions &parquet_options,
-	                                 idx_t row_group_idx_p, const vector<duckdb_parquet::ColumnChunk> &columns) const;
+	optional_idx field_id;
+	//! Whether a column is nullable or not
+	duckdb_parquet::FieldRepetitionType::type repetition_type;
 };
 
 } // namespace duckdb

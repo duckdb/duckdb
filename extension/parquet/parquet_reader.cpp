@@ -477,20 +477,27 @@ unique_ptr<ColumnReader> ParquetReader::CreateReader(ClientContext &context) {
 
 ParquetColumnSchema::ParquetColumnSchema(idx_t max_define, idx_t max_repeat, idx_t schema_index, idx_t column_index,
                                          ParquetColumnSchemaType schema_type)
-    : ParquetColumnSchema(string(), LogicalTypeId::INVALID, max_define, max_repeat, schema_index, column_index,
-                          schema_type) {
+    : ParquetColumnSchema(string(), LogicalTypeId::INVALID, max_define, max_repeat, column_index,
+                          duckdb_parquet::FieldRepetitionType::OPTIONAL, schema_type) {
+	this->schema_index = schema_index;
+}
+
+void ParquetColumnSchema::SetSchemaIndex(idx_t schema_idx) {
+	D_ASSERT(!schema_index.IsValid());
+	schema_index = schema_idx;
 }
 
 ParquetColumnSchema::ParquetColumnSchema(string name_p, LogicalType type_p, idx_t max_define, idx_t max_repeat,
-                                         idx_t schema_index, idx_t column_index, ParquetColumnSchemaType schema_type)
+                                         idx_t column_index, duckdb_parquet::FieldRepetitionType::type repetition_type,
+                                         ParquetColumnSchemaType schema_type)
     : schema_type(schema_type), name(std::move(name_p)), type(std::move(type_p)), max_define(max_define),
-      max_repeat(max_repeat), schema_index(schema_index), column_index(column_index) {
+      max_repeat(max_repeat), column_index(column_index), repetition_type(repetition_type) {
 }
 
 ParquetColumnSchema::ParquetColumnSchema(ParquetColumnSchema parent, LogicalType result_type,
                                          ParquetColumnSchemaType schema_type)
     : schema_type(schema_type), name(parent.name), type(std::move(result_type)), max_define(parent.max_define),
-      max_repeat(parent.max_repeat), schema_index(parent.schema_index), column_index(parent.column_index) {
+      max_repeat(parent.max_repeat), column_index(parent.column_index) {
 	children.push_back(std::move(parent));
 }
 
@@ -648,11 +655,12 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 			}
 			auto result_type = LogicalType::MAP(child_schemas[0].type, child_schemas[1].type);
 			ParquetColumnSchema struct_schema(s_ele.name, ListType::GetChildType(result_type), max_define - 1,
-			                                  max_repeat - 1, this_idx, next_file_idx);
+			                                  max_repeat - 1, next_file_idx);
+			struct_schema.schema_index = this_idx;
 			struct_schema.children = std::move(child_schemas);
 
-			ParquetColumnSchema map_schema(s_ele.name, std::move(result_type), max_define, max_repeat, this_idx,
-			                               next_file_idx);
+			ParquetColumnSchema map_schema(s_ele.name, std::move(result_type), max_define, max_repeat, next_file_idx);
+			map_schema.schema_index = this_idx;
 			map_schema.children.push_back(std::move(struct_schema));
 			return map_schema;
 		}
@@ -669,8 +677,9 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 			} else {
 				result_type = LogicalType::STRUCT(std::move(struct_types));
 			}
-			ParquetColumnSchema struct_schema(s_ele.name, std::move(result_type), max_define, max_repeat, this_idx,
+			ParquetColumnSchema struct_schema(s_ele.name, std::move(result_type), max_define, max_repeat,
 			                                  next_file_idx);
+			struct_schema.schema_index = this_idx;
 			struct_schema.children = std::move(child_schemas);
 			if (is_variant) {
 				struct_schema.schema_type = ParquetColumnSchemaType::VARIANT;
@@ -683,8 +692,8 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 		}
 		if (is_repeated) {
 			auto list_type = LogicalType::LIST(result.type);
-			ParquetColumnSchema list_schema(s_ele.name, std::move(list_type), max_define, max_repeat, this_idx,
-			                                next_file_idx);
+			ParquetColumnSchema list_schema(s_ele.name, std::move(list_type), max_define, max_repeat, next_file_idx);
+			list_schema.schema_index = this_idx;
 			list_schema.children.push_back(std::move(result));
 			result = std::move(list_schema);
 		}
@@ -699,8 +708,8 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 		auto result = ParseColumnSchema(s_ele, max_define, max_repeat, this_idx, next_file_idx++);
 		if (s_ele.repetition_type == FieldRepetitionType::REPEATED) {
 			auto list_type = LogicalType::LIST(result.type);
-			ParquetColumnSchema list_schema(s_ele.name, std::move(list_type), max_define, max_repeat, this_idx,
-			                                next_file_idx);
+			ParquetColumnSchema list_schema(s_ele.name, std::move(list_type), max_define, max_repeat, next_file_idx);
+			list_schema.schema_index = this_idx;
 			list_schema.children.push_back(std::move(result));
 			return list_schema;
 		}
@@ -717,7 +726,8 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 }
 
 static ParquetColumnSchema FileRowNumberSchema() {
-	return ParquetColumnSchema("file_row_number", LogicalType::BIGINT, 0, 0, 0, 0,
+	return ParquetColumnSchema("file_row_number", LogicalType::BIGINT, 0, 0, 0,
+	                           duckdb_parquet::FieldRepetitionType::type::OPTIONAL,
 	                           ParquetColumnSchemaType::FILE_ROW_NUMBER);
 }
 
@@ -758,7 +768,8 @@ MultiFileColumnDefinition ParquetReader::ParseColumnDefinition(const FileMetaDat
 		result.identifier = Value::INTEGER(MultiFileReader::ORDINAL_FIELD_ID);
 		return result;
 	}
-	auto &column_schema = file_meta_data.schema[element.schema_index];
+	D_ASSERT(element.schema_index.IsValid());
+	auto &column_schema = file_meta_data.schema[element.schema_index.GetIndex()];
 
 	if (column_schema.__isset.field_id) {
 		result.identifier = Value::INTEGER(column_schema.field_id);
