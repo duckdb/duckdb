@@ -261,21 +261,6 @@ typedef enum duckdb_file_flag {
 	DUCKDB_FILE_FLAG_APPEND = 5,
 } duckdb_file_flag;
 
-//! An enum over DuckDB's configuration option scopes.
-//! This enum can be used to specify the default scope when creating a custom configuration option,
-//! but it is also be used to determine the scope in which a configuration option is set when it is
-//! changed or retrieved.
-typedef enum duckdb_config_option_scope {
-	DUCKDB_CONFIG_OPTION_SCOPE_INVALID = 0,
-	// The option is set for the duration of the current transaction only.
-	// !! CURRENTLY NOT IMPLEMENTED !!
-	DUCKDB_CONFIG_OPTION_SCOPE_LOCAL = 1,
-	// The option is set for the current session/connection only.
-	DUCKDB_CONFIG_OPTION_SCOPE_SESSION = 2,
-	// Set the option globally for all sessions/connections.
-	DUCKDB_CONFIG_OPTION_SCOPE_GLOBAL = 3,
-} duckdb_config_option_scope;
-
 //===--------------------------------------------------------------------===//
 // General type definitions
 //===--------------------------------------------------------------------===//
@@ -569,12 +554,6 @@ typedef struct _duckdb_config {
 	void *internal_ptr;
 } * duckdb_config;
 
-//! A custom configuration option instance. Used to register custom options that can be set on a duckdb_config.
-//! or by the user in SQL using `SET <option_name> = <value>`.
-typedef struct _duckdb_config_option {
-	void *internal_ptr;
-} * duckdb_config_option;
-
 //! A logical type.
 //! Must be destroyed with `duckdb_destroy_logical_type`.
 typedef struct _duckdb_logical_type {
@@ -736,29 +715,29 @@ typedef struct _duckdb_copy_function {
 } * duckdb_copy_function;
 
 //! Info for the sink function of a COPY function.
-typedef struct _duckdb_copy_export_sink_info {
+typedef struct _duckdb_copy_to_sink_info {
 	void *internal_ptr;
-} * duckdb_copy_export_sink_info;
+} * duckdb_copy_to_sink_info;
 
 //! Info for the finalize function of a COPY function.
-typedef struct _duckdb_copy_export_finalize_info {
+typedef struct _duckdb_copy_to_finalize_info {
 	void *internal_ptr;
-} * duckdb_copy_export_finalize_info;
+} * duckdb_copy_to_finalize_info;
 
 //! The bind function to use when preparing a COPY ... TO statement.
-typedef void (*duckdb_copy_function_export_bind_t)(duckdb_bind_info info);
+typedef void (*duckdb_copy_function_to_bind_t)(duckdb_bind_info info);
 
 //! The initialization function to use when initializing a COPY ... TO statement.
-typedef void (*duckdb_copy_function_export_init_t)(duckdb_init_info info);
+typedef void (*duckdb_copy_function_to_init_t)(duckdb_init_info info);
 
 //! The function to sink an input chunk into during COPY ... TO execution.
-typedef void (*duckdb_copy_function_export_sink_t)(duckdb_copy_export_sink_info, duckdb_data_chunk input);
+typedef void (*duckdb_copy_function_to_sink_t)(duckdb_copy_to_sink_info, duckdb_data_chunk input);
 
 //! The function to finalize the COPY ... TO execution.
-typedef void (*duckdb_copy_function_export_finalize_t)(duckdb_copy_export_finalize_info info);
+typedef void (*duckdb_copy_function_to_finalize_t)(duckdb_copy_to_finalize_info info);
 
 //! The bind function to use when preparing a COPY ... FROM statement.
-typedef void (*duckdb_copy_import_bind_t)(duckdb_bind_info info);
+typedef void (*duckdb_copy_function_from_bind_t)(duckdb_bind_info info);
 
 //===--------------------------------------------------------------------===//
 // Cast types
@@ -953,10 +932,10 @@ Interrupt running query
 DUCKDB_C_API void duckdb_interrupt(duckdb_connection connection);
 
 /*!
-Get the progress of the running query.
+Get progress of the running query
 
-* @param connection The connection running the query.
-* @return The query progress type containing progress information.
+* @param connection The working connection
+* @return -1 if no progress or a percentage of the progress
 */
 DUCKDB_C_API duckdb_query_progress_type duckdb_query_progress(duckdb_connection connection);
 
@@ -1366,11 +1345,10 @@ DUCKDB_C_API duckdb_result_type duckdb_result_return_type(duckdb_result result);
 // Safe Fetch Functions
 //===--------------------------------------------------------------------===//
 
-// This function group is deprecated.
-// To access the values in a result, use `duckdb_fetch_chunk` repeatedly.
-// For each chunk, use the `duckdb_data_chunk` interface to access any columns and their values.
-
-
+// These functions will perform conversions if necessary.
+// On failure (e.g. if conversion cannot be performed or if the value is NULL) a default value is returned.
+// Note that these functions are slow since they perform bounds checking and conversion
+// For fast access of values prefer using `duckdb_result_get_chunk`
 #ifndef DUCKDB_API_NO_DEPRECATED
 /*!
 **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
@@ -1499,7 +1477,7 @@ DUCKDB_C_API duckdb_timestamp duckdb_value_timestamp(duckdb_result *result, idx_
 DUCKDB_C_API duckdb_interval duckdb_value_interval(duckdb_result *result, idx_t col, idx_t row);
 
 /*!
-**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
+**DEPRECATED**: Use duckdb_value_string instead. This function does not work correctly if the string contains null bytes.
 
 * @return The text value at the specified location as a null-terminated string, or nullptr if the value cannot be
 converted. The result must be freed with `duckdb_free`.
@@ -1509,12 +1487,16 @@ DUCKDB_C_API char *duckdb_value_varchar(duckdb_result *result, idx_t col, idx_t 
 /*!
 **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
 
+No support for nested types, and for other complex types.
+The resulting field "string.data" must be freed with `duckdb_free.`
+
 * @return The string value at the specified location. Attempts to cast the result value to string.
 */
 DUCKDB_C_API duckdb_string duckdb_value_string(duckdb_result *result, idx_t col, idx_t row);
 
 /*!
-**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
+**DEPRECATED**: Use duckdb_value_string_internal instead. This function does not work correctly if the string contains
+null bytes.
 
 * @return The char* value at the specified location. ONLY works on VARCHAR columns and does not auto-cast.
 If the column is NOT a VARCHAR column this function will return NULL.
@@ -1524,8 +1506,8 @@ The result must NOT be freed.
 DUCKDB_C_API char *duckdb_value_varchar_internal(duckdb_result *result, idx_t col, idx_t row);
 
 /*!
-**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
-
+**DEPRECATED**: Use duckdb_value_string_internal instead. This function does not work correctly if the string contains
+null bytes.
 * @return The char* value at the specified location. ONLY works on VARCHAR columns and does not auto-cast.
 If the column is NOT a VARCHAR column this function will return NULL.
 
@@ -3348,26 +3330,23 @@ Returns the size of the child vector of the list.
 DUCKDB_C_API idx_t duckdb_list_vector_get_size(duckdb_vector vector);
 
 /*!
-Sets the size of the underlying child-vector of a list vector.
-Note that this does NOT reserve the memory in the child buffer,
-and that it is possible to set a size exceeding the capacity.
-To set the capacity, use `duckdb_list_vector_reserve`.
+Sets the total size of the underlying child-vector of a list vector.
 
 * @param vector The list vector.
 * @param size The size of the child list.
-* @return The duckdb state. Returns DuckDBError, if the vector is nullptr.
+* @return The duckdb state. Returns DuckDBError if the vector is nullptr.
 */
 DUCKDB_C_API duckdb_state duckdb_list_vector_set_size(duckdb_vector vector, idx_t size);
 
 /*!
-Sets the capacity of the underlying child-vector of a list vector.
-We increment to the next power of two, based on the required capacity.
-Thus, the capacity might not match the size of the list (capacity >= size),
-which is set via `duckdb_list_vector_set_size`.
+Sets the total capacity of the underlying child-vector of a list.
+
+After calling this method, you must call `duckdb_vector_get_validity` and `duckdb_vector_get_data` to obtain current
+data and validity pointers
 
 * @param vector The list vector.
-* @param required_capacity The child buffer capacity to reserve.
-* @return The duckdb state. Returns DuckDBError, if the vector is nullptr.
+* @param required_capacity the total capacity to reserve.
+* @return The duckdb state. Returns DuckDBError if the vector is nullptr.
 */
 DUCKDB_C_API duckdb_state duckdb_list_vector_reserve(duckdb_vector vector, idx_t required_capacity);
 
@@ -4640,14 +4619,6 @@ Check if the column at 'index' index of the table has a DEFAULT expression.
 DUCKDB_C_API duckdb_state duckdb_column_has_default(duckdb_table_description table_description, idx_t index, bool *out);
 
 /*!
-Return the number of columns of the described table.
-
-* @param table_description The table_description to query.
-* @return The column count.
-*/
-DUCKDB_C_API idx_t duckdb_table_description_get_column_count(duckdb_table_description table_description);
-
-/*!
 Obtain the column name at 'index'.
 The out result must be destroyed with `duckdb_free`.
 
@@ -4656,16 +4627,6 @@ The out result must be destroyed with `duckdb_free`.
 * @return The column name.
 */
 DUCKDB_C_API char *duckdb_table_description_get_column_name(duckdb_table_description table_description, idx_t index);
-
-/*!
-Obtain the column type at 'index'.
-The return value must be destroyed with `duckdb_destroy_logical_type`.
-
-* @param table_description The table_description to query.
-* @param index The index of the column to query.
-* @return The column type.
-*/
-DUCKDB_C_API duckdb_logical_type duckdb_table_description_get_column_type(duckdb_table_description table_description, idx_t index);
 
 //===--------------------------------------------------------------------===//
 // Arrow Interface
@@ -5288,87 +5249,6 @@ Closes the given file handle.
 DUCKDB_C_API duckdb_state duckdb_file_handle_close(duckdb_file_handle file_handle);
 
 //===--------------------------------------------------------------------===//
-// Config Options Interface
-//===--------------------------------------------------------------------===//
-
-/*!
-Creates a configuration option instance.
-
-* @return The resulting configuration option instance. Must be destroyed with `duckdb_destroy_config_option`.
-*/
-DUCKDB_C_API duckdb_config_option duckdb_create_config_option();
-
-/*!
-Destroys the given configuration option instance.
-* @param option The configuration option instance to destroy.
-*/
-DUCKDB_C_API void duckdb_destroy_config_option(duckdb_config_option*option);
-
-/*!
-Sets the name of the configuration option.
-
-* @param option The configuration option instance.
-* @param name The name to set.
-*/
-DUCKDB_C_API void duckdb_config_option_set_name(duckdb_config_option option, const char*name);
-
-/*!
-Sets the type of the configuration option.
-
-* @param option The configuration option instance.
-* @param type The type to set.
-*/
-DUCKDB_C_API void duckdb_config_option_set_type(duckdb_config_option option, duckdb_logical_type type);
-
-/*!
-Sets the default value of the configuration option.
-If the type of this option has already been set with `duckdb_config_option_set_type`, the value is cast to the type.
-Otherwise, the type is inferred from the value.
-
-* @param option The configuration option instance.
-* @param default_value The default value to set.
-*/
-DUCKDB_C_API void duckdb_config_option_set_default_value(duckdb_config_option option, duckdb_value default_value);
-
-/*!
-Sets the default scope of the configuration option.
-If not set, this defaults to `DUCKDB_CONFIG_OPTION_SCOPE_SESSION`.
-
-* @param option The configuration option instance.
-* @param default_scope The default scope to set.
-*/
-DUCKDB_C_API void duckdb_config_option_set_default_scope(duckdb_config_option option, duckdb_config_option_scope default_scope);
-
-/*!
-Sets the description of the configuration option.
-
-* @param option The configuration option instance.
-* @param description The description to set.
-*/
-DUCKDB_C_API void duckdb_config_option_set_description(duckdb_config_option option, const char*description);
-
-/*!
-Registers the given configuration option on the specified connection.
-
-* @param connection The connection to register the option on.
-* @param option The configuration option instance to register.
-* @return A duckdb_state indicating success or failure.
-*/
-DUCKDB_C_API duckdb_state duckdb_register_config_option(duckdb_connection connection, duckdb_config_option option);
-
-/*!
-Retrieves the value of a configuration option by name from the given client context.
-
-* @param context The client context.
-* @param name The name of the configuration option to retrieve.
-* @param out_scope Output parameter to optionally store the scope that the configuration option was retrieved from.
-If this is `nullptr`, the scope is not returned.
-If the requested option does not exist the scope is set to `DUCKDB_CONFIG_OPTION_SCOPE_INVALID`.
-* @return The value of the configuration option. Returns `nullptr` if the option does not exist.
-*/
-DUCKDB_C_API duckdb_value duckdb_client_context_get_config_option(duckdb_client_context context, const char*name, duckdb_config_option_scope*out_scope);
-
-//===--------------------------------------------------------------------===//
 // Copy Functions
 //===--------------------------------------------------------------------===//
 
@@ -5388,99 +5268,107 @@ Destroys the given copy function object.
 DUCKDB_C_API void duckdb_destroy_copy_function(duckdb_copy_function *copy_function);
 
 /*!
-Adds a parameter to the `COPY ... FROM` variant of the copy function.
+Adds an option to the `COPY ... FROM` variant of the copy function.
 
 * @param copy_function The copy function
-* @param name The name of the parameter
-* @param type The type of the parameter
-* @param description (optional) The description of the parameter
+* @param name The name of the option
+* @param type The type of the option
+* @param description (optional) The description of the option
 */
-DUCKDB_C_API void duckdb_copy_function_add_import_parameter(duckdb_copy_function copy_function, const char *name, duckdb_logical_type type, const char *description);
+DUCKDB_C_API void duckdb_copy_function_from_add_option(duckdb_copy_function copy_function, const char *name, duckdb_logical_type type, const char *description);
 
 /*!
-Adds a parameter to the `COPY ... TO` variant of the copy function.
+Adds an option to the `COPY ... TO` variant of the copy function.
 
 * @param copy_function The copy function
-* @param name The name of the parameter
-* @param type The type of the parameter
-* @param description (optional) The description of the parameter
+* @param name The name of the option
+* @param type The type of the option
+* @param description (optional) The description of the option
 */
-DUCKDB_C_API void duckdb_copy_function_add_export_parameter(duckdb_copy_function copy_function, const char *name, duckdb_logical_type type, const char *description);
+DUCKDB_C_API void duckdb_copy_function_to_add_option(duckdb_copy_function copy_function, const char *name, duckdb_logical_type type, const char *description);
 
 /*!
-Sets the bind function of the copy function, to use when binding `COPY (...) TO`.
+Sets the bind function of the copy function, to use when binding `COPY ... TO`.
 
 * @param bind The bind function
 */
-DUCKDB_C_API void *duckdb_copy_function_set_export_bind(duckdb_copy_function copy_function, duckdb_copy_function_export_bind_t bind);
+DUCKDB_C_API void *duckdb_copy_function_to_set_bind(duckdb_copy_function copy_function, duckdb_copy_function_to_bind_t bind);
 
 /*!
-Report that an error occurred during the bind function of a copy function.
+Report that an error occurred during the binding-phase of a `COPY ... TO` function.
 
 * @param info The bind info provided to the bind function
 * @param error The error message
 */
-DUCKDB_C_API void duckdb_copy_function_export_bind_set_error(duckdb_bind_info info, const char *error);
+DUCKDB_C_API void duckdb_copy_function_to_bind_set_error(duckdb_bind_info info, const char *error);
 
 /*!
-Sets the init function of the copy function, called right before executing `COPY (...) TO`.
+Sets the initialization function of the copy function, called right before executing `COPY ... TO`.
 
 * @param init The init function
 */
-DUCKDB_C_API void *duckdb_copy_function_set_export_init(duckdb_copy_function copy_function, duckdb_copy_function_export_init_t init);
+DUCKDB_C_API void *duckdb_copy_function_to_set_init(duckdb_copy_function copy_function, duckdb_copy_function_to_init_t init);
 
 /*!
-Report that an error occurred during the init function of a copy function.
+Report that an error occurred during the initialization-phase of a `COPY ... TO` function.
 
 * @param info The init info provided to the init function
 * @param error The error message
 */
-DUCKDB_C_API void duckdb_copy_function_export_init_set_error(duckdb_init_info info, const char *error);
+DUCKDB_C_API void duckdb_copy_function_to_init_set_error(duckdb_init_info info, const char *error);
 
 /*!
-Sets the sink function of the copy function, called during `COPY (...) TO`.
+Sets the sink function of the copy function, called during `COPY ... TO`.
 
 * @param function The sink function
 */
-DUCKDB_C_API void *duckdb_copy_function_set_export_sink(duckdb_copy_function copy_function, duckdb_copy_function_export_sink_t function);
+DUCKDB_C_API void *duckdb_copy_function_to_set_sink(duckdb_copy_function copy_function, duckdb_copy_function_to_sink_t function);
 
 /*!
-Report that an error occurred during the sink function of a copy function.
+Report that an error occurred during the sink-phase of a `COPY ... TO` function.
 
 * @param info The sink info provided to the sink function
 * @param error The error message
 */
-DUCKDB_C_API void duckdb_copy_function_export_sink_set_error(duckdb_copy_export_sink_info info, const char *error);
+DUCKDB_C_API void duckdb_copy_function_to_sink_set_error(duckdb_copy_to_sink_info info, const char *error);
 
 /*!
 Sets the finalize function of the copy function, called at the end of `COPY ... TO`.
 
 * @param finalize The finalize function
 */
-DUCKDB_C_API void duckdb_copy_function_set_export_finalize(duckdb_copy_function copy_function, duckdb_copy_function_export_finalize_t finalize);
+DUCKDB_C_API void duckdb_copy_function_to_set_finalize(duckdb_copy_function copy_function, duckdb_copy_function_to_finalize_t finalize);
 
 /*!
-Report that an error occurred during the finalize function of a copy function.
+Report that an error occurred during the finalize-phase of a `COPY ... TO` function
 
 * @param info The finalize info provided to the finalize function
 * @param error The error message
 */
-DUCKDB_C_API void duckdb_copy_function_export_finalize_set_error(duckdb_copy_export_finalize_info info, const char *error);
+DUCKDB_C_API void duckdb_copy_function_to_finalize_set_error(duckdb_copy_to_finalize_info info, const char *error);
 
 /*!
 Sets the bind function of the copy function, to use when binding `COPY ... FROM`.
 
 * @param bind The bind function
 */
-DUCKDB_C_API void *duckdb_copy_function_set_import_bind(duckdb_copy_function copy_function, duckdb_copy_import_bind_t bind);
+DUCKDB_C_API void *duckdb_copy_function_from_set_bind(duckdb_copy_function copy_function, duckdb_copy_function_from_bind_t bind);
 
 /*!
-Sets the underlying table function to use for `COPY ... FROM`.
+Report that an error occurred during the binding of a `COPY ... FROM` function.
+
+* @param info The bind info provided to the bind function
+* @param error The error message
+*/
+DUCKDB_C_API void duckdb_copy_function_from_bind_set_error(duckdb_bind_info info, const char *error);
+
+/*!
+Sets the underlying table function to use when executing a `COPY ... FROM` function.
 
 * @param copy_function The copy function
 * @param table_function The underlying table function
 */
-DUCKDB_C_API void duckdb_copy_function_set_import_function(duckdb_copy_function copy_function, duckdb_table_function table_function);
+DUCKDB_C_API void duckdb_copy_function_from_set_function(duckdb_copy_function copy_function, duckdb_table_function table_function);
 
 #endif
 
