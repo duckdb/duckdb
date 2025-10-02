@@ -165,7 +165,7 @@ unique_ptr<LogicalOperator> TopNWindowElimination::CreateAggregateOperator(Logic
 	vector<unique_ptr<Expression>> aggregate_params;
 	aggregate_params.reserve(3);
 
-	const bool use_arg = args.size() > 0;
+	const bool use_arg = !args.empty();
 	if (args.size() == 1) {
 		aggregate_params.push_back(std::move(args[0]));
 	} else if (args.size() > 1) {
@@ -339,7 +339,7 @@ unique_ptr<LogicalOperator> TopNWindowElimination::CreateProjectionOperator(uniq
 	logical_projection->children.push_back(std::move(op));
 	logical_projection->ResolveOperatorTypes();
 
-	return logical_projection;
+	return unique_ptr<LogicalOperator>(std::move(logical_projection));
 }
 
 bool TopNWindowElimination::CanOptimize(LogicalOperator &op, optional_ptr<ClientContext> context) {
