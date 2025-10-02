@@ -221,15 +221,7 @@ void TryTransformStarLike(unique_ptr<ParsedExpression> &root) {
 		function.children[0] = make_uniq<ColumnRefExpression>("__lambda_col");
 		function.children[1] = std::move(right);
 
-		unique_ptr<ParsedExpression> root_child;
-		if (root->GetExpressionClass() == ExpressionClass::OPERATOR) {
-			root_child = std::move(root->Cast<OperatorExpression>().children[0]);
-		} else if (root->GetExpressionClass() == ExpressionClass::FUNCTION) {
-			root_child = std::move(root);
-		} else {
-			throw InternalException("Unrecognized expression type");
-		}
-		unique_ptr<ParsedExpression> lambda_body = std::move(root_child);
+		unique_ptr<ParsedExpression> lambda_body = std::move(expr);
 		if (inverse) {
 			vector<unique_ptr<ParsedExpression>> root_children;
 			root_children.push_back(std::move(lambda_body));
