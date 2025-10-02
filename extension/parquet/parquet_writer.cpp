@@ -375,8 +375,6 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
 	file_meta_data.created_by =
 	    StringUtil::Format("DuckDB version %s (build %s)", DuckDB::LibraryVersion(), DuckDB::SourceID());
 
-	file_meta_data.schema.resize(1);
-
 	for (auto &kv_pair : kv_metadata) {
 		duckdb_parquet::KeyValue kv;
 		kv.__set_key(kv_pair.first);
@@ -384,13 +382,6 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
 		file_meta_data.key_value_metadata.push_back(kv);
 		file_meta_data.__isset.key_value_metadata = true;
 	}
-
-	// populate root schema object
-	file_meta_data.schema[0].name = "duckdb_schema";
-	file_meta_data.schema[0].num_children = NumericCast<int32_t>(sql_types.size());
-	file_meta_data.schema[0].__isset.num_children = true;
-	file_meta_data.schema[0].repetition_type = duckdb_parquet::FieldRepetitionType::REQUIRED;
-	file_meta_data.schema[0].__isset.repetition_type = true;
 
 	auto &unique_names = column_names;
 	VerifyUniqueNames(unique_names);
@@ -422,6 +413,20 @@ void ParquetWriter::PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGro
 	auto &row_group = result.row_group;
 	row_group.num_rows = NumericCast<int64_t>(buffer.Count());
 	row_group.__isset.file_offset = true;
+
+	if (file_meta_data.schema.empty()) {
+		// populate root schema object
+		file_meta_data.schema.resize(1);
+		file_meta_data.schema[0].name = "duckdb_schema";
+		file_meta_data.schema[0].num_children = NumericCast<int32_t>(sql_types.size());
+		file_meta_data.schema[0].__isset.num_children = true;
+		file_meta_data.schema[0].repetition_type = duckdb_parquet::FieldRepetitionType::REQUIRED;
+		file_meta_data.schema[0].__isset.repetition_type = true;
+
+		for (auto &column_writer : column_writers) {
+			column_writer->FinalizeSchema(file_meta_data.schema);
+		}
+	}
 
 	auto &states = result.states;
 	// iterate over each of the columns of the chunk collection and write them
