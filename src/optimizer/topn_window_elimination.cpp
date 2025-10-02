@@ -1,6 +1,5 @@
 #include "duckdb/optimizer/topn_window_elimination.hpp"
 
-#include "../../third_party/catch/catch.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
