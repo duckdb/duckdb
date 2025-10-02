@@ -4,6 +4,8 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
 
@@ -166,6 +168,89 @@ const GeometryStatsData &GeometryStats::GetDataUnsafe(const BaseStatistics &stat
 GeometryStatsData &GeometryStats::GetDataUnsafe(BaseStatistics &stats) {
 	D_ASSERT(stats.GetStatsType() == StatisticsType::GEOMETRY_STATS);
 	return stats.stats_union.geometry_data;
+}
+
+// Constant comparison pruning
+FilterPropagateResult GeometryStats::CheckZonemap(const BaseStatistics &stats, ExpressionType comparison_type,
+                                                  array_ptr<const Value> constants) {
+	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+}
+
+// Expression comparison pruning
+static FilterPropagateResult CheckIntersectionFilter(const GeometryStatsData &data, const Value &constant) {
+	if (constant.IsNull() || constant.type().id() != LogicalTypeId::GEOMETRY) {
+		// Cannot prune against NULL
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+
+	const auto &geom = StringValue::Get(constant);
+	auto extent = GeometryExtent::Empty();
+	if (Geometry::GetExtent(string_t(geom), extent) == 0) {
+		// If the geometry is empty, the predicate will never match
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
+
+	// Check if the bounding boxes intersect
+	if (!data.extent.IntersectsXY(extent)) {
+		// If the bounding boxes do not intersect, the predicate will never match
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
+
+	// We cannot prune, as this column may contain geometries that intersect
+	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+}
+
+FilterPropagateResult GeometryStats::CheckZonemap(const BaseStatistics &stats, const unique_ptr<Expression> &expr) {
+	if (expr->GetExpressionType() != ExpressionType::BOUND_FUNCTION) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	if (expr->return_type != LogicalType::BOOLEAN) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	const auto &func = expr->Cast<BoundFunctionExpression>();
+	if (func.children.size() != 2) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+
+	if (func.children[0]->return_type.id() != LogicalTypeId::GEOMETRY ||
+	    func.children[1]->return_type.id() != LogicalTypeId::GEOMETRY) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+
+	// The set of geometry predicates that can be optimized using the bounding box
+	static constexpr const char *geometry_predicates[2] = {"&&", "st_intersects_extent"};
+
+	auto found = false;
+	for (const auto &name : geometry_predicates) {
+		if (StringUtil::CIEquals(func.function.name.c_str(), name)) {
+			found = true;
+			break;
+		}
+	}
+	if (!found) {
+		// Not a geometry predicate we can optimize
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+
+	const auto lhs_kind = func.children[0]->GetExpressionType();
+	const auto rhs_kind = func.children[1]->GetExpressionType();
+	const auto lhs_is_const = lhs_kind == ExpressionType::VALUE_CONSTANT && rhs_kind == ExpressionType::BOUND_REF;
+	const auto rhs_is_const = rhs_kind == ExpressionType::VALUE_CONSTANT && lhs_kind == ExpressionType::BOUND_REF;
+
+	if (!stats.CanHaveNoNull()) {
+		// no non-null values are possible: always false
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
+
+	auto &data = GetDataUnsafe(stats);
+	if (lhs_is_const) {
+		return CheckIntersectionFilter(data, func.children[0]->Cast<BoundConstantExpression>().value);
+	}
+	if (rhs_is_const) {
+		return CheckIntersectionFilter(data, func.children[1]->Cast<BoundConstantExpression>().value);
+	}
+	// Else, no constant argument
+	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 }
 
 } // namespace duckdb

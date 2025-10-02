@@ -136,6 +136,13 @@ struct GeometryStats {
 	DUCKDB_API static void Merge(BaseStatistics &stats, const BaseStatistics &other);
 	DUCKDB_API static void Verify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count);
 
+	//! Check whether or not a given comparison with a constant could possibly be satisfied by rows given the statistics
+	DUCKDB_API static FilterPropagateResult CheckZonemap(const BaseStatistics &stats, ExpressionType comparison_type,
+	                                                     array_ptr<const Value> constants);
+
+	DUCKDB_API static FilterPropagateResult CheckZonemap(const BaseStatistics &stats,
+	                                                     const unique_ptr<Expression> &expr);
+
 private:
 	static GeometryStatsData &GetDataUnsafe(BaseStatistics &stats);
 	static const GeometryStatsData &GetDataUnsafe(const BaseStatistics &stats);

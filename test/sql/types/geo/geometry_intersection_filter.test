@@ -1,0 +1,31 @@
+# name: test/sql/types/geo/geometry_intersection_filter.test
+# group: [geo]
+
+# Stats are not preserved when serialized in the stats() function, so this doesnt work
+#require no_alternative_verify
+
+load __TEST_DIR__/test_geo_storage.db
+
+statement ok
+create table t1 as
+	select
+		(x + y * 1000) as id,
+		printf('POINT(%d %d)', x, y)::GEOMETRY as g
+	from range(1000) xx(x), range(100) yy(y);
+
+
+query II
+explain select * from t1 where g && 'POLYGON((0 0, 100 0, 100 100, 0 100, 0 0))';
+----
+physical_plan	<REGEX>:.*Filters:.*
+
+query II rowsort res_1
+select * from t1 where g && 'POLYGON((0 0, 100 0, 100 100, 0 100, 0 0))' order by id;
+----
+
+statement ok
+set disabled_optimizers = 'filter_pushdown';
+
+query II rowsort res_1
+select * from t1 where g && 'POLYGON((0 0, 100 0, 100 100, 0 100, 0 0))' order by id;
+----
