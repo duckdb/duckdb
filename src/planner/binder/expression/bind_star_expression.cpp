@@ -156,6 +156,7 @@ void TryTransformStarLike(unique_ptr<ParsedExpression> &root) {
 	bool inverse = false;
 
 	if (current_expr->GetExpressionClass() == ExpressionClass::OPERATOR) {
+		// Detect * NOT SIMILAR TO [literal] and similar expressions
 		auto &op = current_expr->Cast<OperatorExpression>();
 		if (op.GetExpressionType() != ExpressionType::OPERATOR_NOT) {
 			return;
