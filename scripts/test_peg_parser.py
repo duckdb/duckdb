@@ -143,7 +143,6 @@ def parse_test_file(filename):
                     for line in stmt.expected_result.lines
                 ):
                     continue
-                continue
         query = ' '.join(stmt.lines)
         statements.append(query)
     return statements
@@ -188,6 +187,8 @@ if __name__ == "__main__":
         'test/sql/peg_parser',  # Fail for some reason
         'test/sql/prepared/parameter_variants.test',  # PostgreSQL parser bug with ?1
         'test/sql/copy/s3/download_config.test',  # Unknown why this passes in SQLLogicTest
+        'test/sql/function/list/lambdas/arrow/lambda_scope_deprecated.test',  # Error in the tokenization of *+*
+        'test/sql/catalog/function/test_simple_macro.test',  # Bug when mixing named parameters and non-named
     }
     if args.all_tests:
         # run all tests

@@ -49,7 +49,7 @@ public:
 	explicit RelationContextWrapper(const ClientContextWrapper &context) : ClientContextWrapper(context) {};
 
 	void TryBindRelation(Relation &relation, vector<ColumnDefinition> &columns) override {
-		GetContext()->InternalTryBindRelation(relation, columns);
+		GetContext()->TryBindRelation(relation, columns);
 	}
 
 private:

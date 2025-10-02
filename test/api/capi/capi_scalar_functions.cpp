@@ -109,8 +109,8 @@ TEST_CASE("Test Scalar Functions C API", "[capi]") {
 
 	REQUIRE(tester.OpenDatabase(nullptr));
 	CAPIRegisterAddition(tester.connection, "my_addition", DuckDBSuccess);
-	// try to register it again - this should be an error
-	CAPIRegisterAddition(tester.connection, "my_addition", DuckDBError);
+	// try to register it again - this should not be an error
+	CAPIRegisterAddition(tester.connection, "my_addition", DuckDBSuccess);
 
 	// now call it
 	result = tester.Query("SELECT my_addition(40, 2)");
@@ -387,8 +387,8 @@ TEST_CASE("Test Scalar Function Overloads C API", "[capi]") {
 
 	REQUIRE(tester.OpenDatabase(nullptr));
 	CAPIRegisterAdditionOverloads(tester.connection, "my_addition", DuckDBSuccess);
-	// try to register it again - this should be an error
-	CAPIRegisterAdditionOverloads(tester.connection, "my_addition", DuckDBError);
+	// try to register it again - this should not be an error
+	CAPIRegisterAdditionOverloads(tester.connection, "my_addition", DuckDBSuccess);
 
 	// now call it
 	result = tester.Query("SELECT my_addition(40, 2)");

@@ -208,6 +208,50 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyFunctio
 	return std::move(bind_data);
 }
 
+static void CSVListCopyOptions(ClientContext &context, CopyOptionsInput &input) {
+	auto &copy_options = input.options;
+	copy_options["auto_detect"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_ONLY);
+	copy_options["sample_size"] = CopyOption(LogicalType::BIGINT, CopyOptionMode::READ_ONLY);
+	copy_options["skip"] = CopyOption(LogicalType::BIGINT, CopyOptionMode::READ_ONLY);
+	copy_options["max_line_size"] = CopyOption(LogicalType::BIGINT, CopyOptionMode::READ_ONLY);
+	copy_options["maximum_line_size"] = CopyOption(LogicalType::BIGINT, CopyOptionMode::READ_ONLY);
+	copy_options["ignore_errors"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_ONLY);
+	copy_options["buffer_size"] = CopyOption(LogicalType::BIGINT, CopyOptionMode::READ_ONLY);
+	copy_options["decimal_separator"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::READ_ONLY);
+	copy_options["null_padding"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_ONLY);
+	copy_options["parallel"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_ONLY);
+	copy_options["allow_quoted_nulls"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_ONLY);
+	copy_options["store_rejects"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_ONLY);
+	copy_options["force_not_null"] = CopyOption(LogicalType::ANY, CopyOptionMode::READ_ONLY);
+	copy_options["rejects_table"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::READ_ONLY);
+	copy_options["rejects_scan"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::READ_ONLY);
+	copy_options["rejects_limit"] = CopyOption(LogicalType::BIGINT, CopyOptionMode::READ_ONLY);
+	copy_options["encoding"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::READ_ONLY);
+	copy_options["thousands"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::READ_ONLY);
+
+	copy_options["force_quote"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
+	copy_options["prefix"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::WRITE_ONLY);
+	copy_options["suffix"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::WRITE_ONLY);
+
+	copy_options["new_line"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::READ_WRITE);
+	copy_options["date_format"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::READ_WRITE);
+	copy_options["dateformat"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::READ_WRITE);
+	copy_options["timestamp_format"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::READ_WRITE);
+	copy_options["timestampformat"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::READ_WRITE);
+	copy_options["quote"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::READ_WRITE);
+	copy_options["comment"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::READ_WRITE);
+	copy_options["delim"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::READ_WRITE);
+	copy_options["delimiter"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::READ_WRITE);
+	copy_options["sep"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::READ_WRITE);
+	copy_options["separator"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::READ_WRITE);
+	copy_options["escape"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::READ_WRITE);
+	copy_options["header"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_WRITE);
+	copy_options["nullstr"] = CopyOption(LogicalType::ANY, CopyOptionMode::READ_WRITE);
+	copy_options["null"] = CopyOption(LogicalType::ANY, CopyOptionMode::READ_WRITE);
+	copy_options["compression"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::READ_WRITE);
+	copy_options["strict_mode"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_WRITE);
+}
+
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
@@ -385,6 +429,7 @@ bool WriteCSVRotateNextFile(GlobalFunctionData &gstate, FunctionData &, const op
 void CSVCopyFunction::RegisterFunction(BuiltinFunctions &set) {
 	CopyFunction info("csv");
 	info.copy_to_bind = WriteCSVBind;
+	info.copy_options = CSVListCopyOptions;
 	info.copy_to_initialize_local = WriteCSVInitializeLocal;
 	info.copy_to_initialize_global = WriteCSVInitializeGlobal;
 	info.copy_to_sink = WriteCSVSink;

@@ -192,7 +192,8 @@ void ColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<ColumnChun
 	D_ASSERT(chunk->__isset.meta_data);
 
 	if (chunk->__isset.file_path) {
-		throw std::runtime_error("Only inlined data files are supported (no references)");
+		throw InvalidInputException("Failed to read file \"%s\": Only inlined data files are supported (no references)",
+		                            Reader().GetFileName());
 	}
 
 	// ugh. sometimes there is an extra offset for the dict. sometimes it's wrong.
@@ -252,7 +253,7 @@ void ColumnReader::PrepareRead(optional_ptr<const TableFilter> filter, optional_
 	}
 	// some basic sanity check
 	if (page_hdr.compressed_page_size < 0 || page_hdr.uncompressed_page_size < 0) {
-		throw std::runtime_error("Page sizes can't be < 0");
+		throw InvalidInputException("Failed to read file \"%s\": Page sizes can't be < 0", Reader().GetFileName());
 	}
 
 	if (PageIsFilteredOut(page_hdr)) {
@@ -273,7 +274,8 @@ void ColumnReader::PrepareRead(optional_ptr<const TableFilter> filter, optional_
 		PreparePage(page_hdr);
 		auto dictionary_size = page_hdr.dictionary_page_header.num_values;
 		if (dictionary_size < 0) {
-			throw std::runtime_error("Invalid dictionary page header (num_values < 0)");
+			throw InvalidInputException("Failed to read file \"%s\": Invalid dictionary page header (num_values < 0)",
+			                            Reader().GetFileName());
 		}
 		dictionary_decoder.InitializeDictionary(dictionary_size, filter, filter_state, HasDefines());
 		break;
@@ -297,7 +299,7 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 	}
 	if (chunk->meta_data.codec == CompressionCodec::UNCOMPRESSED) {
 		if (page_hdr.compressed_page_size != page_hdr.uncompressed_page_size) {
-			throw std::runtime_error("Page size mismatch");
+			throw InvalidInputException("Failed to read file \"%s\": Page size mismatch", Reader().GetFileName());
 		}
 		uncompressed = true;
 	}
@@ -310,8 +312,10 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 	auto uncompressed_bytes = page_hdr.data_page_header_v2.repetition_levels_byte_length +
 	                          page_hdr.data_page_header_v2.definition_levels_byte_length;
 	if (uncompressed_bytes > page_hdr.uncompressed_page_size) {
-		throw std::runtime_error("Page header inconsistency, uncompressed_page_size needs to be larger than "
-		                         "repetition_levels_byte_length + definition_levels_byte_length");
+		throw InvalidInputException(
+		    "Failed to read file \"%s\": header inconsistency, uncompressed_page_size needs to be larger than "
+		    "repetition_levels_byte_length + definition_levels_byte_length",
+		    Reader().GetFileName());
 	}
 	reader.ReadData(*protocol, block->ptr, uncompressed_bytes);
 
@@ -368,7 +372,8 @@ void ColumnReader::DecompressInternal(CompressionCodec::type codec, const_data_p
 		    duckdb_lz4::LZ4_decompress_safe(const_char_ptr_cast(src), char_ptr_cast(dst),
 		                                    UnsafeNumericCast<int32_t>(src_size), UnsafeNumericCast<int32_t>(dst_size));
 		if (res != NumericCast<int>(dst_size)) {
-			throw std::runtime_error("LZ4 decompression failure");
+			throw InvalidInputException("Failed to read file \"%s\": LZ4 decompression failure",
+			                            Reader().GetFileName());
 		}
 		break;
 	}
@@ -377,22 +382,27 @@ void ColumnReader::DecompressInternal(CompressionCodec::type codec, const_data_p
 			size_t uncompressed_size = 0;
 			auto res = duckdb_snappy::GetUncompressedLength(const_char_ptr_cast(src), src_size, &uncompressed_size);
 			if (!res) {
-				throw std::runtime_error("Snappy decompression failure");
+				throw InvalidInputException("Failed to read file \"%s\": Snappy decompression failure",
+				                            Reader().GetFileName());
 			}
 			if (uncompressed_size != dst_size) {
-				throw std::runtime_error("Snappy decompression failure: Uncompressed data size mismatch");
+				throw InvalidInputException(
+				    "Failed to read file \"%s\": Snappy decompression failure: Uncompressed data size mismatch",
+				    Reader().GetFileName());
 			}
 		}
 		auto res = duckdb_snappy::RawUncompress(const_char_ptr_cast(src), src_size, char_ptr_cast(dst));
 		if (!res) {
-			throw std::runtime_error("Snappy decompression failure");
+			throw InvalidInputException("Failed to read file \"%s\": Snappy decompression failure",
+			                            Reader().GetFileName());
 		}
 		break;
 	}
 	case CompressionCodec::ZSTD: {
 		auto res = duckdb_zstd::ZSTD_decompress(dst, dst_size, src, src_size);
 		if (duckdb_zstd::ZSTD_isError(res) || res != dst_size) {
-			throw std::runtime_error("ZSTD Decompression failure");
+			throw InvalidInputException("Failed to read file \"%s\": ZSTD Decompression failure",
+			                            Reader().GetFileName());
 		}
 		break;
 	}
@@ -405,7 +415,8 @@ void ColumnReader::DecompressInternal(CompressionCodec::type codec, const_data_p
 		auto res = duckdb_brotli::BrotliDecoderDecompressStream(state, &src_size_size_t, &src, &dst_size_size_t, &dst,
 		                                                        &total_out);
 		if (res != duckdb_brotli::BROTLI_DECODER_RESULT_SUCCESS) {
-			throw std::runtime_error("Brotli Decompression failure");
+			throw InvalidInputException("Failed to read file \"%s\": Brotli Decompression failure",
+			                            Reader().GetFileName());
 		}
 		duckdb_brotli::BrotliDecoderDestroyInstance(state);
 		break;
@@ -414,18 +425,21 @@ void ColumnReader::DecompressInternal(CompressionCodec::type codec, const_data_p
 	default: {
 		duckdb::stringstream codec_name;
 		codec_name << codec;
-		throw std::runtime_error("Unsupported compression codec \"" + codec_name.str() +
-		                         "\". Supported options are uncompressed, brotli, gzip, lz4_raw, snappy or zstd");
+		throw InvalidInputException("Failed to read file \"%s\": Unsupported compression codec \"%s\". Supported "
+		                            "options are uncompressed, brotli, gzip, lz4_raw, snappy or zstd",
+		                            Reader().GetFileName(), codec_name.str());
 	}
 	}
 }
 
 void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 	if (page_hdr.type == PageType::DATA_PAGE && !page_hdr.__isset.data_page_header) {
-		throw std::runtime_error("Missing data page header from data page");
+		throw InvalidInputException("Failed to read file \"%s\": Missing data page header from data page",
+		                            Reader().GetFileName());
 	}
 	if (page_hdr.type == PageType::DATA_PAGE_V2 && !page_hdr.__isset.data_page_header_v2) {
-		throw std::runtime_error("Missing data page header from data page v2");
+		throw InvalidInputException("Failed to read file \"%s\": Missing data page header from data page v2",
+		                            Reader().GetFileName());
 	}
 
 	bool is_v1 = page_hdr.type == PageType::DATA_PAGE;
@@ -492,7 +506,7 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 		break;
 
 	default:
-		throw std::runtime_error("Unsupported page encoding");
+		throw InvalidInputException("Failed to read file \"%s\": Unsupported page encoding", Reader().GetFileName());
 	}
 }
 

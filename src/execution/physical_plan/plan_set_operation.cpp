@@ -32,23 +32,29 @@ static JoinCondition CreateNotDistinctComparison(const LogicalType &type, idx_t 
 }
 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalSetOperation &op) {
-	D_ASSERT(op.children.size() == 2);
-
-	reference<PhysicalOperator> left = CreatePlan(*op.children[0]);
-	reference<PhysicalOperator> right = CreatePlan(*op.children[1]);
-
-	if (left.get().GetTypes() != right.get().GetTypes()) {
-		throw InvalidInputException("Type mismatch for SET OPERATION");
+	ArenaLinkedList<reference<PhysicalOperator>> children(physical_plan->ArenaRef());
+	for (auto &child : op.children) {
+		children.push_back(CreatePlan(*child));
+	}
+	for (idx_t i = 1; i < children.size(); i++) {
+		if (children[i].get().GetTypes() != children[0].get().GetTypes()) {
+			throw InvalidInputException("Type mismatch for SET OPERATION");
+		}
 	}
 
 	optional_ptr<PhysicalOperator> result;
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_UNION:
 		// UNION
-		result = Make<PhysicalUnion>(op.types, left, right, op.estimated_cardinality, op.allow_out_of_order);
+		result = Make<PhysicalUnion>(op.types, std::move(children), op.estimated_cardinality, op.allow_out_of_order);
 		break;
 	case LogicalOperatorType::LOGICAL_EXCEPT:
 	case LogicalOperatorType::LOGICAL_INTERSECT: {
+		if (children.size() != 2) {
+			throw InternalException("EXCEPT / INTERSECT must have exactly two children");
+		}
+		auto &left = children[0];
+		auto &right = children[1];
 		auto &types = left.get().GetTypes();
 		vector<JoinCondition> conditions;
 		// create equality condition for all columns

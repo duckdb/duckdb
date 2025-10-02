@@ -15,6 +15,7 @@
 #include "reader/struct_column_reader.hpp"
 #include "zstd_file_system.hpp"
 #include "writer/primitive_column_writer.hpp"
+#include "writer/variant_column_writer.hpp"
 
 #include <fstream>
 #include <iostream>
@@ -43,6 +44,8 @@
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/table/row_group.hpp"
@@ -269,6 +272,30 @@ struct ParquetWriteLocalState : public LocalFunctionData {
 	ColumnDataAppendState append_state;
 };
 
+static void ParquetListCopyOptions(ClientContext &context, CopyOptionsInput &input) {
+	auto &copy_options = input.options;
+	copy_options["row_group_size"] = CopyOption(LogicalType::UBIGINT, CopyOptionMode::READ_WRITE);
+	copy_options["chunk_size"] = CopyOption(LogicalType::UBIGINT, CopyOptionMode::WRITE_ONLY);
+	copy_options["row_group_size_bytes"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
+	copy_options["row_groups_per_file"] = CopyOption(LogicalType::UBIGINT, CopyOptionMode::WRITE_ONLY);
+	copy_options["compression"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::READ_WRITE);
+	copy_options["codec"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::READ_WRITE);
+	copy_options["field_ids"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
+	copy_options["kv_metadata"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
+	copy_options["encryption_config"] = CopyOption(LogicalType::ANY, CopyOptionMode::READ_WRITE);
+	copy_options["dictionary_compression_ratio_threshold"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
+	copy_options["dictionary_size_limit"] = CopyOption(LogicalType::BIGINT, CopyOptionMode::WRITE_ONLY);
+	copy_options["string_dictionary_page_size_limit"] = CopyOption(LogicalType::UBIGINT, CopyOptionMode::WRITE_ONLY);
+	copy_options["bloom_filter_false_positive_ratio"] = CopyOption(LogicalType::DOUBLE, CopyOptionMode::WRITE_ONLY);
+	copy_options["write_bloom_filter"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::WRITE_ONLY);
+	copy_options["debug_use_openssl"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_WRITE);
+	copy_options["compression_level"] = CopyOption(LogicalType::BIGINT, CopyOptionMode::WRITE_ONLY);
+	copy_options["parquet_version"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::WRITE_ONLY);
+	copy_options["binary_as_string"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_ONLY);
+	copy_options["file_row_number"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_ONLY);
+	copy_options["can_have_nan"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_ONLY);
+}
+
 static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBindInput &input,
                                                  const vector<string> &names, const vector<LogicalType> &sql_types) {
 	D_ASSERT(names.size() == sql_types.size());
@@ -403,7 +430,7 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 				throw BinderException("Expected parquet_version 'V1' or 'V2'");
 			}
 		} else {
-			throw NotImplementedException("Unrecognized option for PARQUET: %s", option.first.c_str());
+			throw InternalException("Unrecognized option for PARQUET: %s", option.first.c_str());
 		}
 	}
 	if (row_group_size_bytes_set) {
@@ -804,6 +831,19 @@ static bool IsTypeLossy(const LogicalType &type) {
 	return type.id() == LogicalTypeId::HUGEINT || type.id() == LogicalTypeId::UHUGEINT;
 }
 
+static bool IsGeometryType(const LogicalType &type, ClientContext &context) {
+	if (type.id() != LogicalTypeId::BLOB) {
+		return false;
+	}
+	if (!type.HasAlias()) {
+		return false;
+	}
+	if (type.GetAlias() != "GEOMETRY") {
+		return false;
+	}
+	return GeoParquetFileMetadata::IsGeoParquetConversionEnabled(context);
+}
+
 static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &input) {
 
 	auto &context = input.context;
@@ -819,8 +859,7 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &inpu
 
 		// Spatial types need to be encoded into WKB when writing GeoParquet.
 		// But dont perform this conversion if this is a EXPORT DATABASE statement
-		if (input.copy_to_type == CopyToType::COPY_TO_FILE && type.id() == LogicalTypeId::BLOB && type.HasAlias() &&
-		    type.GetAlias() == "GEOMETRY" && GeoParquetFileMetadata::IsGeoParquetConversionEnabled(context)) {
+		if (input.copy_to_type == CopyToType::COPY_TO_FILE && IsGeometryType(type, context)) {
 
 			LogicalType wkb_blob_type(LogicalTypeId::BLOB);
 			wkb_blob_type.SetAlias("WKB_BLOB");
@@ -828,6 +867,17 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &inpu
 			auto cast_expr = BoundCastExpression::AddCastToType(context, std::move(expr), wkb_blob_type, false);
 			cast_expr->SetAlias(name);
 			result.push_back(std::move(cast_expr));
+			any_change = true;
+		} else if (input.copy_to_type == CopyToType::COPY_TO_FILE && type.id() == LogicalTypeId::VARIANT) {
+			vector<unique_ptr<Expression>> arguments;
+			arguments.push_back(std::move(expr));
+
+			auto transform_func = VariantColumnWriter::GetTransformFunction();
+			transform_func.bind(context, transform_func, arguments);
+
+			auto func_expr = make_uniq<BoundFunctionExpression>(transform_func.return_type, transform_func,
+			                                                    std::move(arguments), nullptr, false);
+			result.push_back(std::move(func_expr));
 			any_change = true;
 		}
 		// If this is an EXPORT DATABASE statement, we dont want to write "lossy" types, instead cast them to VARCHAR
@@ -900,9 +950,13 @@ static void LoadInternal(ExtensionLoader &loader) {
 	ParquetBloomProbeFunction bloom_probe_fun;
 	loader.RegisterFunction(MultiFileReader::CreateFunctionSet(bloom_probe_fun));
 
+	// variant_to_parquet_variant
+	loader.RegisterFunction(VariantColumnWriter::GetTransformFunction());
+
 	CopyFunction function("parquet");
 	function.copy_to_select = ParquetWriteSelect;
 	function.copy_to_bind = ParquetWriteBind;
+	function.copy_options = ParquetListCopyOptions;
 	function.copy_to_initialize_global = ParquetWriteInitializeGlobal;
 	function.copy_to_initialize_local = ParquetWriteInitializeLocal;
 	function.copy_to_get_written_statistics = ParquetWriteGetWrittenStatistics;

@@ -82,6 +82,10 @@ public:
 	}
 	//! Whether or not the attached database is in-memory
 	virtual bool InMemory() = 0;
+	//! Whether or not to prefetch
+	virtual bool Prefetch() {
+		return false;
+	}
 
 	//! Sync changes made to the block manager
 	virtual void FileSync() = 0;
@@ -145,6 +149,18 @@ public:
 	}
 	//! Verify the block usage count
 	virtual void VerifyBlocks(const unordered_map<block_id_t, idx_t> &block_usage_count) {
+	}
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 
 private:

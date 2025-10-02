@@ -111,10 +111,12 @@ unique_ptr<QueryNode> SelectNode::Deserialize(Deserializer &deserializer) {
 void SetOperationNode::Serialize(Serializer &serializer) const {
 	QueryNode::Serialize(serializer);
 	serializer.WriteProperty<SetOperationType>(200, "setop_type", setop_type);
-	serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(201, "left", left);
-	serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(202, "right", right);
+	serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(201, "left", SerializeChildNode(serializer, 0));
+	serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(202, "right", SerializeChildNode(serializer, 1));
 	serializer.WritePropertyWithDefault<bool>(203, "setop_all", setop_all, true);
-	serializer.WritePropertyWithDefault<vector<unique_ptr<QueryNode>>>(204, "children", SerializeChildNodes());
+	if (serializer.ShouldSerialize(7)) {
+		serializer.WritePropertyWithDefault<vector<unique_ptr<QueryNode>>>(204, "children", children);
+	}
 }
 
 unique_ptr<QueryNode> SetOperationNode::Deserialize(Deserializer &deserializer) {

@@ -1,27 +1,27 @@
-InsertStatement <- WithClause? 'INSERT'i OrAction? 'INTO'i InsertTarget ByNameOrPosition? InsertColumnList? InsertValues OnConflictClause? ReturningClause?
+InsertStatement <- WithClause? 'INSERT' OrAction? 'INTO' InsertTarget ByNameOrPosition? InsertColumnList? InsertValues OnConflictClause? ReturningClause?
 
-OrAction <- 'OR'i 'REPLACE'i / 'IGNORE'i
-ByNameOrPosition <- 'BY'i 'NAME'i / 'POSITION'i
+OrAction <- 'OR' 'REPLACE' / 'IGNORE'
+ByNameOrPosition <- 'BY' 'NAME' / 'POSITION'
 
 InsertTarget <- BaseTableName InsertAlias?
-InsertAlias <- 'AS'i Identifier
+InsertAlias <- 'AS' Identifier
 
 ColumnList <- List(ColId)
 InsertColumnList <- Parens(ColumnList)
 
 InsertValues <- SelectStatement / DefaultValues
-DefaultValues <- 'DEFAULT'i 'VALUES'i
+DefaultValues <- 'DEFAULT' 'VALUES'
 
-OnConflictClause <- 'ON'i 'CONFLICT'i OnConflictTarget? OnConflictAction
+OnConflictClause <- 'ON' 'CONFLICT' OnConflictTarget? OnConflictAction
 
 OnConflictTarget <- OnConflictExpressionTarget / OnConflictIndexTarget
 OnConflictExpressionTarget <- Parens(List(ColId)) WhereClause?
-OnConflictIndexTarget <- 'ON'i 'CONSTRAINT'i ConstraintName
+OnConflictIndexTarget <- 'ON' 'CONSTRAINT' ConstraintName
 
 
 OnConflictAction <- OnConflictUpdate / OnConflictNothing
 
-OnConflictUpdate <- 'DO'i 'UPDATE'i 'SET'i UpdateSetClause WhereClause?
-OnConflictNothing <- 'DO'i 'NOTHING'i
+OnConflictUpdate <- 'DO' 'UPDATE' 'SET' UpdateSetClause WhereClause?
+OnConflictNothing <- 'DO' 'NOTHING'
 
-ReturningClause <- 'RETURNING'i TargetList
+ReturningClause <- 'RETURNING' TargetList

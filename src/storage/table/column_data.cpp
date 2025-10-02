@@ -517,30 +517,37 @@ void ColumnData::AppendData(BaseStatistics &append_stats, ColumnAppendState &sta
 	}
 }
 
-void ColumnData::RevertAppend(row_t start_row) {
+void ColumnData::RevertAppend(row_t start_row_p) {
+	idx_t start_row = NumericCast<idx_t>(start_row_p);
 	auto l = data.Lock();
 	// check if this row is in the segment tree at all
 	auto last_segment = data.GetLastSegment(l);
 	if (!last_segment) {
 		return;
 	}
-	if (NumericCast<idx_t>(start_row) >= last_segment->start + last_segment->count) {
+	if (start_row >= last_segment->start + last_segment->count) {
 		// the start row is equal to the final portion of the column data: nothing was ever appended here
-		D_ASSERT(NumericCast<idx_t>(start_row) == last_segment->start + last_segment->count);
+		D_ASSERT(start_row == last_segment->start + last_segment->count);
 		return;
 	}
 	// find the segment index that the current row belongs to
-	idx_t segment_index = data.GetSegmentIndex(l, UnsafeNumericCast<idx_t>(start_row));
+	idx_t segment_index = data.GetSegmentIndex(l, start_row);
 	auto segment = data.GetSegmentByIndex(l, UnsafeNumericCast<int64_t>(segment_index));
-	auto &transient = *segment;
-	D_ASSERT(transient.segment_type == ColumnSegmentType::TRANSIENT);
+	if (segment->start == start_row) {
+		// we are truncating exactly this segment - erase it entirely
+		data.EraseSegments(l, segment_index);
+	} else {
+		// we need to truncate within the segment
+		// remove any segments AFTER this segment: they should be deleted entirely
+		data.EraseSegments(l, segment_index + 1);
 
-	// remove any segments AFTER this segment: they should be deleted entirely
-	data.EraseSegments(l, segment_index);
+		auto &transient = *segment;
+		D_ASSERT(transient.segment_type == ColumnSegmentType::TRANSIENT);
+		segment->next = nullptr;
+		transient.RevertAppend(start_row);
+	}
 
-	this->count = UnsafeNumericCast<idx_t>(start_row) - this->start;
-	segment->next = nullptr;
-	transient.RevertAppend(UnsafeNumericCast<idx_t>(start_row));
+	this->count = start_row - this->start;
 }
 
 idx_t ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
@@ -565,8 +572,7 @@ void ColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, 
 	FetchUpdateRow(transaction, row_id, result, result_idx);
 }
 
-idx_t ColumnData::FetchUpdateData(row_t *row_ids, Vector &base_vector) {
-	ColumnScanState state;
+idx_t ColumnData::FetchUpdateData(ColumnScanState &state, row_t *row_ids, Vector &base_vector) {
 	auto fetch_count = ColumnData::Fetch(state, row_ids[0], base_vector);
 	base_vector.Flatten(fetch_count);
 	return fetch_count;
@@ -575,7 +581,8 @@ idx_t ColumnData::FetchUpdateData(row_t *row_ids, Vector &base_vector) {
 void ColumnData::Update(TransactionData transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
                         idx_t update_count) {
 	Vector base_vector(type);
-	FetchUpdateData(row_ids, base_vector);
+	ColumnScanState state;
+	FetchUpdateData(state, row_ids, base_vector);
 
 	UpdateInternal(transaction, column_index, update_vector, row_ids, update_count, base_vector);
 }
@@ -666,7 +673,8 @@ void ColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, 
 unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, ColumnCheckpointInfo &checkpoint_info) {
 	// scan the segments of the column data
 	// set up the checkpoint state
-	auto checkpoint_state = CreateCheckpointState(row_group, checkpoint_info.info.manager);
+	auto &partial_block_manager = checkpoint_info.GetPartialBlockManager();
+	auto checkpoint_state = CreateCheckpointState(row_group, partial_block_manager);
 	checkpoint_state->global_stats = BaseStatistics::CreateEmpty(type).ToUnique();
 
 	auto &nodes = data.ReferenceSegments();
@@ -692,6 +700,7 @@ void ColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStatist
 	this->count = 0;
 	for (auto &data_pointer : column_data.pointers) {
 		// Update the count and statistics
+		data_pointer.row_start = start + count;
 		this->count += data_pointer.tuple_count;
 
 		// Merge the statistics. If this is a child column, the target_stats reference will point into the parents stats
@@ -866,6 +875,17 @@ PersistentColumnData ColumnData::Serialize() {
 	return result;
 }
 
+void RealignColumnData(PersistentColumnData &column_data, idx_t new_start) {
+	idx_t current_start = new_start;
+	for (auto &pointer : column_data.pointers) {
+		pointer.row_start = current_start;
+		current_start += pointer.tuple_count;
+	}
+	for (auto &child : column_data.child_columns) {
+		RealignColumnData(child, new_start);
+	}
+}
+
 shared_ptr<ColumnData> ColumnData::Deserialize(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
                                                idx_t start_row, ReadStream &source, const LogicalType &type) {
 	auto entry = ColumnData::CreateColumn(block_manager, info, column_index, start_row, type, nullptr);
@@ -883,12 +903,15 @@ shared_ptr<ColumnData> ColumnData::Deserialize(BlockManager &block_manager, Data
 	deserializer.Unset<DatabaseInstance>();
 	deserializer.End();
 
+	// re-align data segments, in case our start_row has changed
+	RealignColumnData(persistent_column_data, start_row);
+
 	// initialize the column
 	entry->InitializeColumn(persistent_column_data, entry->stats->statistics);
 	return entry;
 }
 
-void ColumnData::GetColumnSegmentInfo(idx_t row_group_index, vector<idx_t> col_path,
+void ColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<idx_t> col_path,
                                       vector<ColumnSegmentInfo> &result) {
 	D_ASSERT(!col_path.empty());
 
@@ -937,7 +960,7 @@ void ColumnData::GetColumnSegmentInfo(idx_t row_group_index, vector<idx_t> col_p
 			column_info.additional_blocks = segment_state->GetAdditionalBlocks();
 		}
 		if (compression_function.get_segment_info) {
-			auto segment_info = compression_function.get_segment_info(*segment);
+			auto segment_info = compression_function.get_segment_info(context, *segment);
 			vector<string> sinfo;
 			for (auto &item : segment_info) {
 				auto &mode = item.first;

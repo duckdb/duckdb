@@ -723,8 +723,13 @@
         "test/sql/logging/logging_file_bind_replace.test",
         "test/sql/optimizer/test_rowid_pushdown_plan.test",
         "test/sql/pg_catalog/system_functions.test",
-        "test/sql/storage/compression/test_using_compression.test",
-        "test/sql/storage/types/struct/nested_struct_storage.test"
+        "test/sql/storage/compression/test_using_compression.test"
+      ]
+    },
+    {
+      "reason": "Profiling in combination with verification is disabled for SELECT statements",
+      "paths": [
+        "test/sql/pragma/profiling/test_profiling_fs.test"
       ]
     }
   ]

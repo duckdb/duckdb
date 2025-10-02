@@ -221,8 +221,9 @@ struct ICUStrptime : public ICUDateFunc {
 				if (!error.empty()) {
 					throw InvalidInputException("Failed to parse format specifier %s: %s", format_string, error);
 				}
-				// If any format has UTC offsets, then we have to produce TSTZ
+				// If any format has UTC offsets or names, then we have to produce TSTZ
 				has_tz = has_tz || format.HasFormatSpecifier(StrTimeSpecifier::TZ_NAME);
+				has_tz = has_tz || format.HasFormatSpecifier(StrTimeSpecifier::UTC_OFFSET);
 				formats.emplace_back(format);
 			}
 			if (has_tz) {

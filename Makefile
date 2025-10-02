@@ -200,6 +200,9 @@ endif
 ifeq (${FORCE_ASSERT}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DFORCE_ASSERT=1
 endif
+ifeq (${FORCE_DEBUG}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DFORCE_DEBUG=1
+endif
 ifeq (${SMALLER_BINARY}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DSMALLER_BINARY=1
 endif
@@ -525,6 +528,7 @@ bundle-setup:
 	cp src/libduckdb_static.a bundle/. && \
 	cp third_party/*/libduckdb_*.a bundle/. && \
 	cp extension/*/lib*_extension.a bundle/. && \
+	mkdir -p vcpkg_installed && \
 	find vcpkg_installed -name '*.a' -exec cp {} bundle/. \; && \
 	cd bundle && \
 	find . -name '*.a' -exec mkdir -p {}.objects \; -exec mv {} {}.objects \; && \

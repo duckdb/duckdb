@@ -59,7 +59,8 @@ unique_ptr<PhysicalPlan> PhysicalPlanGenerator::PlanInternal(LogicalOperator &op
 
 	auto debug_verify_vector = DBConfig::GetSetting<DebugVerifyVectorSetting>(context);
 	if (debug_verify_vector != DebugVectorVerification::NONE) {
-		if (debug_verify_vector != DebugVectorVerification::DICTIONARY_EXPRESSION) {
+		if (debug_verify_vector != DebugVectorVerification::DICTIONARY_EXPRESSION &&
+		    debug_verify_vector != DebugVectorVerification::VARIANT_VECTOR) {
 			physical_plan->SetRoot(Make<PhysicalVerifyVector>(physical_plan->Root(), debug_verify_vector));
 		}
 	}

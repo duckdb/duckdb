@@ -90,7 +90,7 @@ class EncryptionTransport : public TTransport {
 public:
 	EncryptionTransport(TProtocol &prot_p, const string &key, const EncryptionUtil &encryption_util_p)
 	    : prot(prot_p), trans(*prot.getTransport()),
-	      aes(encryption_util_p.CreateEncryptionState(reinterpret_cast<const_data_ptr_t>(key.data()), key.size())),
+	      aes(encryption_util_p.CreateEncryptionState(EncryptionTypes::GCM, key.size())),
 	      allocator(Allocator::DefaultAllocator(), ParquetCrypto::CRYPTO_BLOCK_SIZE) {
 		Initialize(key);
 	}
@@ -173,8 +173,8 @@ class DecryptionTransport : public TTransport {
 public:
 	DecryptionTransport(TProtocol &prot_p, const string &key, const EncryptionUtil &encryption_util_p)
 	    : prot(prot_p), trans(*prot.getTransport()),
-	      aes(encryption_util_p.CreateEncryptionState(reinterpret_cast<const_data_ptr_t>(key.data()), key.size())),
-	      read_buffer_size(0), read_buffer_offset(0) {
+	      aes(encryption_util_p.CreateEncryptionState(EncryptionTypes::GCM, key.size())), read_buffer_size(0),
+	      read_buffer_offset(0) {
 		Initialize(key);
 	}
 	uint32_t read_virt(uint8_t *buf, uint32_t len) override {
@@ -207,9 +207,7 @@ public:
 
 		data_t computed_tag[ParquetCrypto::TAG_BYTES];
 		transport_remaining -= trans.read(computed_tag, ParquetCrypto::TAG_BYTES);
-		if (aes->Finalize(read_buffer, 0, computed_tag, ParquetCrypto::TAG_BYTES) != 0) {
-			throw InternalException("DecryptionTransport::Finalize was called with bytes remaining in AES context out");
-		}
+		aes->Finalize(read_buffer, 0, computed_tag, ParquetCrypto::TAG_BYTES);
 
 		if (transport_remaining != 0) {
 			throw InvalidInputException("Encoded ciphertext length differs from actual ciphertext length");
