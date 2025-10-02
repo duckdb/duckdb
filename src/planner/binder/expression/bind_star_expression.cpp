@@ -152,24 +152,25 @@ string Binder::ReplaceColumnsAlias(const string &alias, const string &column_nam
 
 void TryTransformStarLike(unique_ptr<ParsedExpression> &root) {
 	// detect "* LIKE [literal]" and similar expressions
-	if (root->GetExpressionClass() == ExpressionClass::OPERATOR) {
-		auto &op = root->Cast<OperatorExpression>();
-		if (op.GetExpressionType() == ExpressionType::OPERATOR_NOT) {
-			auto &func_child = op.children[0]->Cast<FunctionExpression>();
-			auto star_expr = make_uniq<StarExpression>();
-			star_expr->columns = true;
-			star_expr->expr = std::move(std::move(func_child.children[1]));
-			auto not_operator = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT);
-			not_operator->children.push_back(std::move(star_expr));
-			root = std::move(not_operator);
-			Printer::Print(root->ToString());
+	ParsedExpression *current_expr = root.get();
+	bool inverse = false;
+
+	if (current_expr->GetExpressionClass() == ExpressionClass::OPERATOR) {
+		auto &op = current_expr->Cast<OperatorExpression>();
+		if (op.GetExpressionType() != ExpressionType::OPERATOR_NOT) {
 			return;
 		}
+		if (op.children.empty() || !op.children[0]) {
+			return; // Malformed NOT operator.
+		}
+		// It's a NOT operator. Set the flag and inspect its child.
+		inverse = true;
+		current_expr = op.children[0].get();
 	}
-	if (root->GetExpressionClass() != ExpressionClass::FUNCTION) {
+	if (current_expr->GetExpressionClass() != ExpressionClass::FUNCTION) {
 		return;
 	}
-	auto &function = root->Cast<FunctionExpression>();
+	auto &function = current_expr->Cast<FunctionExpression>();
 	if (function.children.size() < 2 || function.children.size() > 3) {
 		return;
 	}
@@ -198,8 +199,7 @@ void TryTransformStarLike(unique_ptr<ParsedExpression> &root) {
 		// unsupported op for * expression
 		throw BinderException(*root, "Function \"%s\" cannot be applied to a star expression", function.function_name);
 	}
-	auto &right = function.children[1];
-	if (right->GetExpressionClass() != ExpressionClass::CONSTANT) {
+	if (function.children[1]->GetExpressionClass() != ExpressionClass::CONSTANT) {
 		throw BinderException(*root, "Pattern applied to a star expression must be a constant");
 	}
 	if (!star.rename_list.empty()) {
@@ -209,25 +209,40 @@ void TryTransformStarLike(unique_ptr<ParsedExpression> &root) {
 		throw BinderException(*root, "Replace list cannot be combined with a filtering operation");
 	}
 	auto original_alias = root->GetAlias();
+	auto &original_function = current_expr->Cast<FunctionExpression>();
+	auto right = std::move(original_function.children[1]);
 	auto star_expr = std::move(left);
 	unique_ptr<ParsedExpression> child_expr;
-	if (function.function_name == "regexp_full_match" && star.exclude_list.empty()) {
+	if (!inverse && original_function.function_name == "regexp_full_match" && star.exclude_list.empty()) {
 		// * SIMILAR TO '[regex]' is equivalent to COLUMNS('[regex]') so we can just move the expression directly
 		child_expr = std::move(right);
 	} else {
-		// for other expressions -> generate a columns expression
-		// "* LIKE '%literal%'
-		// -> COLUMNS(list_filter(*, x -> x LIKE '%literal%'))
 		vector<string> named_parameters;
 		named_parameters.push_back("__lambda_col");
-		function.children[0] = make_uniq<ColumnRefExpression>("__lambda_col");
 
-		auto lambda = make_uniq<LambdaExpression>(std::move(named_parameters), std::move(root));
+		original_function.children[0] = make_uniq<ColumnRefExpression>("__lambda_col");
+		original_function.children[1] = std::move(right);
+
+		unique_ptr<ParsedExpression> root_child;
+		if (root->GetExpressionClass() == ExpressionClass::OPERATOR) {
+			root_child = std::move(root->Cast<OperatorExpression>().children[0]);
+		} else if (root->GetExpressionClass() == ExpressionClass::FUNCTION) {
+			root_child = std::move(root);
+		} else {
+			throw InternalException("Unrecognized expression type");
+		}
+		unique_ptr<ParsedExpression> lambda_body = std::move(root_child);
+		if (inverse) {
+			vector<unique_ptr<ParsedExpression>> root_children;
+			root_children.push_back(std::move(lambda_body));
+			lambda_body = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(root_children));
+		}
+		auto lambda = make_uniq<LambdaExpression>(std::move(named_parameters), std::move(lambda_body));
+
 		vector<unique_ptr<ParsedExpression>> filter_children;
 		filter_children.push_back(std::move(star_expr));
 		filter_children.push_back(std::move(lambda));
-		auto list_filter = make_uniq<FunctionExpression>("list_filter", std::move(filter_children));
-		child_expr = std::move(list_filter);
+		child_expr = make_uniq<FunctionExpression>("list_filter", std::move(filter_children));
 	}
 
 	auto columns_expr = make_uniq<StarExpression>();
