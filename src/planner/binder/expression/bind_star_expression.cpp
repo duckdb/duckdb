@@ -160,10 +160,6 @@ void TryTransformStarLike(unique_ptr<ParsedExpression> &root) {
 		if (op.GetExpressionType() != ExpressionType::OPERATOR_NOT) {
 			return;
 		}
-		if (op.children.empty() || !op.children[0]) {
-			return; // Malformed NOT operator.
-		}
-		// It's a NOT operator. Set the flag and inspect its child.
 		inverse = true;
 		current_expr = op.children[0].get();
 	}
