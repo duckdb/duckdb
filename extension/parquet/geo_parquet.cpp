@@ -215,11 +215,6 @@ unique_ptr<GeoParquetFileMetadata> GeoParquetFileMetadata::TryRead(const duckdb_
 				if (!yyjson_is_str(version_val)) {
 					throw InvalidInputException("Geoparquet metadata does not have a version");
 				}
-				result->version = yyjson_get_str(version_val);
-				if (StringUtil::StartsWith(result->version, "2")) {
-					// Guard against a breaking future 2.0 version
-					throw InvalidInputException("Geoparquet version %s is not supported", result->version);
-				}
 
 				// Check and parse the geometry columns
 				const auto columns_val = yyjson_obj_get(root, "columns");
