@@ -245,24 +245,6 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 			child = *child.get().children[0];
 			break;
 		}
-		case LogicalOperatorType::LOGICAL_UNNEST: {
-			source_operators.push_back(child);
-			VisitOperatorExpressions(child.get());
-			child = *child.get().children[0];
-			break;
-		}
-		case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
-			source_operators.push_back(child);
-			auto &aggregate = child.get().Cast<LogicalAggregate>();
-			column_references.clear();
-			for (auto &group : aggregate.groups) {
-				VisitExpression(&group);
-			}
-			auto &aggregate_val_expr = aggregate.expressions[0]->Cast<BoundFunctionExpression>().children[1];
-			D_ASSERT(aggregate_val_expr->type == ExpressionType::BOUND_COLUMN_REF);
-			VisitExpression(&aggregate_val_expr);
-			break;
-		}
 		default:
 			// unsupported operator for late materialization
 			return false;
