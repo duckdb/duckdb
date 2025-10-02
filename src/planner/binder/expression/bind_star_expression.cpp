@@ -152,22 +152,24 @@ string Binder::ReplaceColumnsAlias(const string &alias, const string &column_nam
 
 void TryTransformStarLike(unique_ptr<ParsedExpression> &root) {
 	// detect "* LIKE [literal]" and similar expressions
-	ParsedExpression *current_expr = root.get();
 	bool inverse = false;
 
-	if (current_expr->GetExpressionClass() == ExpressionClass::OPERATOR) {
+	if (root->GetExpressionClass() == ExpressionClass::OPERATOR) {
 		// Detect * NOT SIMILAR TO [literal] and similar expressions
-		auto &op = current_expr->Cast<OperatorExpression>();
+		auto &op = root->Cast<OperatorExpression>();
 		if (op.GetExpressionType() != ExpressionType::OPERATOR_NOT) {
 			return;
 		}
 		inverse = true;
-		current_expr = op.children[0].get();
 	}
-	if (current_expr->GetExpressionClass() != ExpressionClass::FUNCTION) {
+	auto &expr = inverse ? root->Cast<OperatorExpression>().children[0] : root;
+	if (!expr) {
 		return;
 	}
-	auto &function = current_expr->Cast<FunctionExpression>();
+	if (expr->GetExpressionClass() != ExpressionClass::FUNCTION) {
+		return;
+	}
+	auto &function = expr->Cast<FunctionExpression>();
 	if (function.children.size() < 2 || function.children.size() > 3) {
 		return;
 	}
@@ -206,19 +208,18 @@ void TryTransformStarLike(unique_ptr<ParsedExpression> &root) {
 		throw BinderException(*root, "Replace list cannot be combined with a filtering operation");
 	}
 	auto original_alias = root->GetAlias();
-	auto &original_function = current_expr->Cast<FunctionExpression>();
-	auto right = std::move(original_function.children[1]);
+	auto right = std::move(function.children[1]);
 	auto star_expr = std::move(left);
 	unique_ptr<ParsedExpression> child_expr;
-	if (!inverse && original_function.function_name == "regexp_full_match" && star.exclude_list.empty()) {
+	if (!inverse && function.function_name == "regexp_full_match" && star.exclude_list.empty()) {
 		// * SIMILAR TO '[regex]' is equivalent to COLUMNS('[regex]') so we can just move the expression directly
 		child_expr = std::move(right);
 	} else {
 		vector<string> named_parameters;
 		named_parameters.push_back("__lambda_col");
 
-		original_function.children[0] = make_uniq<ColumnRefExpression>("__lambda_col");
-		original_function.children[1] = std::move(right);
+		function.children[0] = make_uniq<ColumnRefExpression>("__lambda_col");
+		function.children[1] = std::move(right);
 
 		unique_ptr<ParsedExpression> root_child;
 		if (root->GetExpressionClass() == ExpressionClass::OPERATOR) {

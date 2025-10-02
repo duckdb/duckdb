@@ -14,11 +14,23 @@ select * similar to '(a|c)' from foo;
 ----
 d	f
 
-# should select the column a and c
+# should select the column b
 query I
 select * not similar to '(a|c)' from foo;
 ----
 e
+
+# should select the column b
+query I
+SELECT * similar to 'b' FROM (select * not similar to '(a|c)' from foo);
+----
+e
+
+statement error
+SELECT * similar to 'a' FROM (select * not similar to '(a|c)' from foo);
+----
+Binder Error: No matching columns found that match regex "a"
+
 
 statement ok
 CREATE TABLE t0(c0 VARCHAR);
