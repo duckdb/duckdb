@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// writer/list_column_writer.hpp
+// writer/variant_column_writer.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -9,29 +9,20 @@
 #pragma once
 
 #include "column_writer.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
 
-class ListColumnWriterState : public ColumnWriterState {
+class VariantColumnWriter : public ColumnWriter {
 public:
-	ListColumnWriterState(duckdb_parquet::RowGroup &row_group, idx_t col_idx) : row_group(row_group), col_idx(col_idx) {
+	VariantColumnWriter(ParquetWriter &writer, const ParquetColumnSchema &column_schema, vector<string> schema_path_p,
+	                    vector<unique_ptr<ColumnWriter>> child_writers_p, bool can_have_nulls)
+	    : ColumnWriter(writer, column_schema, std::move(schema_path_p), can_have_nulls),
+	      child_writers(std::move(child_writers_p)) {
 	}
-	~ListColumnWriterState() override = default;
+	~VariantColumnWriter() override = default;
 
-	duckdb_parquet::RowGroup &row_group;
-	idx_t col_idx;
-	unique_ptr<ColumnWriterState> child_state;
-	idx_t parent_index = 0;
-};
-
-class ListColumnWriter : public ColumnWriter {
-public:
-	ListColumnWriter(ParquetWriter &writer, const ParquetColumnSchema &column_schema, vector<string> schema_path_p,
-	                 unique_ptr<ColumnWriter> child_writer_p, bool can_have_nulls)
-	    : ColumnWriter(writer, column_schema, std::move(schema_path_p), can_have_nulls) {
-		child_writers.push_back(std::move(child_writer_p));
-	}
-	~ListColumnWriter() override = default;
+	vector<unique_ptr<ColumnWriter>> child_writers;
 
 public:
 	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::RowGroup &row_group) override;
@@ -45,8 +36,8 @@ public:
 	void Write(ColumnWriterState &state, Vector &vector, idx_t count) override;
 	void FinalizeWrite(ColumnWriterState &state) override;
 
-protected:
-	ColumnWriter &GetChildWriter();
+public:
+	static ScalarFunction GetTransformFunction();
 };
 
 } // namespace duckdb
