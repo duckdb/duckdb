@@ -58,10 +58,15 @@ static void ConstructPivots(PivotRef &ref, vector<PivotValueElement> &pivot_valu
 	}
 }
 
-static void ExtractPivotExpressions(ParsedExpression &root_expr, case_insensitive_set_t &handled_columns) {
+static void ExtractPivotExpressions(ParsedExpression &root_expr, case_insensitive_set_t &handled_columns,
+                                    optional_ptr<DummyBinding> macro_binding) {
 	ParsedExpressionIterator::VisitExpression<ColumnRefExpression>(
 	    root_expr, [&](const ColumnRefExpression &child_colref) {
 		    if (child_colref.IsQualified()) {
+			    if (child_colref.column_names[0].find(DummyBinding::DUMMY_NAME) != string::npos && macro_binding &&
+			        macro_binding->HasMatchingBinding(child_colref.GetName())) {
+				    throw ParameterNotResolvedException();
+			    }
 			    throw BinderException(child_colref, "PIVOT expression cannot contain qualified columns");
 		    }
 		    handled_columns.insert(child_colref.GetColumnName());
@@ -492,7 +497,7 @@ unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<Parsed
 		}
 	}
 	for (auto &aggr : pivot_aggregates) {
-		ExtractPivotExpressions(aggr.get(), handled_columns);
+		ExtractPivotExpressions(aggr.get(), handled_columns, macro_binding);
 	}
 
 	// first add all pivots to the set of handled columns, and check for duplicates
@@ -521,7 +526,7 @@ unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<Parsed
 		total_pivots *= pivot.entries.size();
 		// add the pivoted column to the columns that have been handled
 		for (auto &pivot_name : pivot.pivot_expressions) {
-			ExtractPivotExpressions(*pivot_name, handled_columns);
+			ExtractPivotExpressions(*pivot_name, handled_columns, macro_binding);
 		}
 		value_set_t pivots;
 		for (auto &entry : pivot.entries) {

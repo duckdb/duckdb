@@ -209,7 +209,8 @@
         "test/sql/logging/logging_file_bind_replace.test",
         "test/sql/optimizer/test_rowid_pushdown_plan.test",
         "test/sql/pg_catalog/system_functions.test",
-        "test/sql/storage/compression/test_using_compression.test"
+        "test/sql/storage/compression/test_using_compression.test",
+        "test/sql/error/error_position.test"
       ]
     },
     {

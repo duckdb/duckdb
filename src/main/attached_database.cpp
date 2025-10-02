@@ -22,6 +22,10 @@ StoredDatabasePath::~StoredDatabasePath() {
 	manager.EraseDatabasePath(path);
 }
 
+void StoredDatabasePath::OnDetach() {
+	manager.DetachDatabase(path);
+}
+
 //===--------------------------------------------------------------------===//
 // Attach Options
 //===--------------------------------------------------------------------===//
@@ -157,6 +161,13 @@ bool AttachedDatabase::NameIsReserved(const string &name) {
 	return name == DEFAULT_SCHEMA || name == TEMP_CATALOG || name == SYSTEM_CATALOG;
 }
 
+string AttachedDatabase::StoredPath() const {
+	if (stored_database_path) {
+		return stored_database_path->path;
+	}
+	return string();
+}
+
 static string RemoveQueryParams(const string &name) {
 	auto vec = StringUtil::Split(name, "?");
 	D_ASSERT(!vec.empty());
@@ -231,6 +242,9 @@ void AttachedDatabase::SetReadOnlyDatabase() {
 void AttachedDatabase::OnDetach(ClientContext &context) {
 	if (catalog) {
 		catalog->OnDetach(context);
+	}
+	if (stored_database_path) {
+		stored_database_path->OnDetach();
 	}
 }
 
