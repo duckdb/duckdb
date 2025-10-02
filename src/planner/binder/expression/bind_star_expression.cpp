@@ -215,6 +215,9 @@ void TryTransformStarLike(unique_ptr<ParsedExpression> &root) {
 		// * SIMILAR TO '[regex]' is equivalent to COLUMNS('[regex]') so we can just move the expression directly
 		child_expr = std::move(right);
 	} else {
+		// for other expressions -> generate a columns expression
+		// "* LIKE '%literal%'
+		// -> COLUMNS(list_filter(*, x -> x LIKE '%literal%'))
 		vector<string> named_parameters;
 		named_parameters.push_back("__lambda_col");
 		function.children[0] = make_uniq<ColumnRefExpression>("__lambda_col");
