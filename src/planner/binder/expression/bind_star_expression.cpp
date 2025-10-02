@@ -152,6 +152,20 @@ string Binder::ReplaceColumnsAlias(const string &alias, const string &column_nam
 
 void TryTransformStarLike(unique_ptr<ParsedExpression> &root) {
 	// detect "* LIKE [literal]" and similar expressions
+	if (root->GetExpressionClass() == ExpressionClass::OPERATOR) {
+		auto &op = root->Cast<OperatorExpression>();
+		if (op.GetExpressionType() == ExpressionType::OPERATOR_NOT) {
+			auto &func_child = op.children[0]->Cast<FunctionExpression>();
+			auto star_expr = make_uniq<StarExpression>();
+			star_expr->columns = true;
+			star_expr->expr = std::move(std::move(func_child.children[1]));
+			auto not_operator = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT);
+			not_operator->children.push_back(std::move(star_expr));
+			root = std::move(not_operator);
+			Printer::Print(root->ToString());
+			return;
+		}
+	}
 	if (root->GetExpressionClass() != ExpressionClass::FUNCTION) {
 		return;
 	}
