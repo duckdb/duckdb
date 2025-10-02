@@ -8,8 +8,7 @@
 
 namespace duckdb {
 
-unique_ptr<MultiFileReaderInterface>
-CSVMultiFileInfo::InitializeInterface(ClientContext &context, MultiFileReader &reader, MultiFileList &file_list) {
+unique_ptr<MultiFileReaderInterface> CSVMultiFileInfo::CreateInterface(ClientContext &context) {
 	return make_uniq<CSVMultiFileInfo>();
 }
 
@@ -415,6 +414,10 @@ double CSVFileScan::GetProgressInFile(ClientContext &context) {
 	}
 	double file_progress = total_bytes_read / static_cast<double>(file_size);
 	return file_progress * 100.0;
+}
+
+FileGlobInput CSVMultiFileInfo::GetGlobInput() {
+	return FileGlobInput(FileGlobOptions::FALLBACK_GLOB, "csv");
 }
 
 } // namespace duckdb

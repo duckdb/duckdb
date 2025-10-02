@@ -20,18 +20,14 @@ static string FormatETA(double seconds, bool elapsed = false) {
 	// the maximum length here is "(~10.35 minutes remaining)" (26 bytes)
 	// always pad to this amount
 	static constexpr idx_t RENDER_SIZE = 26;
-	// Desired formats:
-	//   00:00:00.00 remaining
-	//   unknown     remaining
-	//   00:00:00.00 elapsed
-	if (!elapsed && seconds > 3600 * 99) {
-		// estimate larger than 99 hours remaining
-		string result = "(>99 hours remaining)";
-		result += string(RENDER_SIZE - result.size(), ' ');
-		return result;
-	}
-	if (seconds < 0) {
+
+	if (seconds < 0 || seconds == 2147483647) {
 		// Invalid or unknown ETA, skip rendering estimate
+		return string(RENDER_SIZE, ' ');
+	}
+
+	if (!elapsed && seconds > 3600 * 99) {
+		// estimate larger than 99 hours remaining, treat this as invalid/unknown ETA
 		return string(RENDER_SIZE, ' ');
 	}
 
@@ -120,12 +116,28 @@ void TerminalProgressBarDisplay::Update(double percentage) {
 
 	// Filters go from 0 to 1, percentage is from 0-100
 	const double filter_percentage = percentage / 100.0;
+
 	ukf.Update(filter_percentage, current_time);
 
-	double estimated_seconds_remaining = ukf.GetEstimatedRemainingSeconds();
+	double estimated_seconds_remaining;
+	//  If the query is mostly completed, there can be oscillation of estimated
+	//  time to completion since the progress updates seem sparse near the very
+	//  end of the query, so clamp time remaining to not oscillate with estimates
+	//  that are unlikely to be correct.
+	if (filter_percentage > 0.99) {
+		estimated_seconds_remaining = 0.5;
+	} else {
+		estimated_seconds_remaining = std::min(ukf.GetEstimatedRemainingSeconds(), 2147483647.0);
+	}
 	auto percentage_int = NormalizePercentage(percentage);
-	PrintProgressInternal(percentage_int, estimated_seconds_remaining);
-	Printer::Flush(OutputStream::STREAM_STDOUT);
+
+	TerminalProgressBarDisplayedProgressInfo updated_progress_info = {(idx_t)percentage_int,
+	                                                                  (idx_t)estimated_seconds_remaining};
+	if (displayed_progress_info != updated_progress_info) {
+		PrintProgressInternal(percentage_int, estimated_seconds_remaining);
+		Printer::Flush(OutputStream::STREAM_STDOUT);
+		displayed_progress_info = updated_progress_info;
+	}
 }
 
 void TerminalProgressBarDisplay::Finish() {

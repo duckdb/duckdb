@@ -22,18 +22,16 @@ public:
 	~WindowConstantAggregator() override {
 	}
 
-	unique_ptr<WindowAggregatorState> GetGlobalState(ClientContext &context, idx_t group_count,
-	                                                 const ValidityMask &partition_mask) const override;
-	void Sink(ExecutionContext &context, WindowAggregatorState &gstate, WindowAggregatorState &lstate,
-	          DataChunk &sink_chunk, DataChunk &coll_chunk, idx_t input_idx, optional_ptr<SelectionVector> filter_sel,
-	          idx_t filtered, InterruptState &interrupt) override;
-	void Finalize(ExecutionContext &context, WindowAggregatorState &gstate, WindowAggregatorState &lstate,
-	              CollectionPtr collection, const FrameStats &stats, InterruptState &interrupt) override;
+	unique_ptr<GlobalSinkState> GetGlobalState(ClientContext &context, idx_t group_count,
+	                                           const ValidityMask &partition_mask) const override;
+	void Sink(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk, idx_t input_idx,
+	          optional_ptr<SelectionVector> filter_sel, idx_t filtered, OperatorSinkInput &sink) override;
+	void Finalize(ExecutionContext &context, CollectionPtr collection, const FrameStats &stats,
+	              OperatorSinkInput &sink) override;
 
-	unique_ptr<WindowAggregatorState> GetLocalState(const WindowAggregatorState &gstate) const override;
-	void Evaluate(ExecutionContext &context, const WindowAggregatorState &gsink, WindowAggregatorState &lstate,
-	              const DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx,
-	              InterruptState &interrupt) const override;
+	unique_ptr<LocalSinkState> GetLocalState(ExecutionContext &context, const GlobalSinkState &gstate) const override;
+	void Evaluate(ExecutionContext &context, const DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx,
+	              OperatorSinkInput &sink) const override;
 };
 
 } // namespace duckdb

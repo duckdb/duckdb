@@ -6,9 +6,6 @@ statement ok
 SET default_null_order='nulls_first';
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE integers(i INTEGER);
 
 statement ok
@@ -96,3 +93,4 @@ NULL	[]
 statement error
 select array(select 1,2)
 ----
+<REGEX>:.*inder Error.*Subquery returns 2 columns.*

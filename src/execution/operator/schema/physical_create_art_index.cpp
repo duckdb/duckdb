@@ -114,7 +114,7 @@ SinkResultType PhysicalCreateARTIndex::SinkSorted(OperatorSinkInput &input) cons
 	auto art = make_uniq<ART>(info->index_name, l_index->GetConstraintType(), l_index->GetColumnIds(),
 	                          l_index->table_io_manager, l_index->unbound_expressions, storage.db,
 	                          l_index->Cast<ART>().allocators);
-	if (!art->Construct(l_state.keys, l_state.row_ids, l_state.key_chunk.size())) {
+	if (art->Build(l_state.keys, l_state.row_ids, l_state.key_chunk.size()) != ARTConflictType::NO_CONFLICT) {
 		throw ConstraintException("Data contains duplicates on indexed column(s)");
 	}
 

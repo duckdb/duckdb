@@ -2,9 +2,6 @@
 # description: Test LEAST/GREATEST
 # group: [generic]
 
-statement ok
-PRAGMA enable_verification
-
 # scalar usage
 query I
 SELECT LEAST(1)

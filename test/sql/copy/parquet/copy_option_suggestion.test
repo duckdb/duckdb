@@ -1,0 +1,15 @@
+# name: test/sql/copy/parquet/copy_option_suggestion.test
+# description: Test suggestion of unknown copy options
+# group: [parquet]
+
+require parquet
+
+statement error
+copy (select 42) to 'file.parquet' (partition_b (a));
+----
+partition_by
+
+statement error
+copy (select 42) to 'file.csv' (partition_b (a));
+----
+partition_by

@@ -30,7 +30,8 @@ public:
 	void WriteTableData(Serializer &metadata_serializer);
 
 	virtual void WriteUnchangedTable(MetaBlockPointer pointer, idx_t total_rows) = 0;
-	virtual void FinalizeTable(const TableStatistics &global_stats, DataTableInfo *info, Serializer &serializer) = 0;
+	virtual void FinalizeTable(const TableStatistics &global_stats, DataTableInfo &info, RowGroupCollection &collection,
+	                           Serializer &serializer) = 0;
 	virtual unique_ptr<RowGroupWriter> GetRowGroupWriter(RowGroup &row_group) = 0;
 
 	virtual void AddRowGroup(RowGroupPointer &&row_group_pointer, unique_ptr<RowGroupWriter> writer);
@@ -54,7 +55,8 @@ public:
 
 public:
 	void WriteUnchangedTable(MetaBlockPointer pointer, idx_t total_rows) override;
-	void FinalizeTable(const TableStatistics &global_stats, DataTableInfo *info, Serializer &serializer) override;
+	void FinalizeTable(const TableStatistics &global_stats, DataTableInfo &info, RowGroupCollection &collection,
+	                   Serializer &serializer) override;
 	unique_ptr<RowGroupWriter> GetRowGroupWriter(RowGroup &row_group) override;
 	CheckpointType GetCheckpointType() const override;
 	MetadataManager &GetMetadataManager() override;

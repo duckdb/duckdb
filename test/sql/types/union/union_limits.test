@@ -91,9 +91,10 @@ CREATE TABLE tbl1 (u UNION(
     a249 INT, a250 INT, a251 INT, a252 INT, a253 INT, a254 INT, a255 INT, a256 INT, a257
 ))
 ----
-
+<REGEX>:.*Parser Error.*syntax error.*
 
 # Need at least one column
 statement error
 CREATE TABLE tbl1 (u UNION())
 ----
+<REGEX>:.*Parser Error.*syntax error.*

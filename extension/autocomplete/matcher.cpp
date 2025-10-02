@@ -845,11 +845,6 @@ void PEGParser::ParseRules(const char *grammar) {
 				token.type = PEGTokenType::LITERAL;
 				rule.tokens.push_back(token);
 				c++;
-				if (grammar[c] == 'i') {
-					// skip optional case insensitive marker
-					// note: all keywords we parse are case insensitive so we just ignore this marker
-					c++;
-				}
 			} else if (StringUtil::CharacterIsAlphaNumeric(grammar[c])) {
 				// alphanumeric character - this is a rule reference
 				idx_t rule_start = c;

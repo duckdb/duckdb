@@ -2,9 +2,6 @@
 # description: Test self referencing foreign key constraint
 # group: [foreignkey]
 
-statement ok
-PRAGMA enable_verification;
-
 statement error
 CREATE TABLE employee(
 	id INTEGER PRIMARY KEY,

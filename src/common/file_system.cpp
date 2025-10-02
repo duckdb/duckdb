@@ -18,7 +18,6 @@
 
 #include <cstdint>
 #include <cstdio>
-#include "duckdb/logging/file_system_logger.hpp"
 
 #ifndef _WIN32
 #include <dirent.h>
@@ -63,6 +62,7 @@ constexpr FileOpenFlags FileFlags::FILE_FLAGS_PARALLEL_ACCESS;
 constexpr FileOpenFlags FileFlags::FILE_FLAGS_EXCLUSIVE_CREATE;
 constexpr FileOpenFlags FileFlags::FILE_FLAGS_NULL_IF_EXISTS;
 constexpr FileOpenFlags FileFlags::FILE_FLAGS_MULTI_CLIENT_ACCESS;
+constexpr FileOpenFlags FileFlags::FILE_FLAGS_DISABLE_LOGGING;
 
 void FileOpenFlags::Verify() {
 #ifdef DEBUG
@@ -331,6 +331,17 @@ string FileSystem::ExtractBaseName(const string &path) {
 	auto vec = StringUtil::Split(ExtractName(path), ".");
 	D_ASSERT(!vec.empty());
 	return vec[0];
+}
+
+string FileSystem::ExtractExtension(const string &path) {
+	if (path.empty()) {
+		return string();
+	}
+	auto vec = StringUtil::Split(ExtractName(path), ".");
+	if (vec.size() < 2) {
+		return string();
+	}
+	return vec.back();
 }
 
 string FileSystem::GetHomeDirectory(optional_ptr<FileOpener> opener) {
@@ -605,6 +616,10 @@ void FileSystem::SetDisabledFileSystems(const vector<string> &names) {
 	throw NotImplementedException("%s: Can't disable file systems on a non-virtual file system", GetName());
 }
 
+bool FileSystem::SubSystemIsDisabled(const string &name) {
+	throw NotImplementedException("%s: Non-virtual file system does not have subsystems", GetName());
+}
+
 vector<string> FileSystem::ListSubSystems() {
 	throw NotImplementedException("%s: Can't list sub systems on a non-virtual file system", GetName());
 }
@@ -622,7 +637,7 @@ static string LookupExtensionForPattern(const string &pattern) {
 	return "";
 }
 
-vector<OpenFileInfo> FileSystem::GlobFiles(const string &pattern, ClientContext &context, FileGlobOptions options) {
+vector<OpenFileInfo> FileSystem::GlobFiles(const string &pattern, ClientContext &context, const FileGlobInput &input) {
 	auto result = Glob(pattern);
 	if (result.empty()) {
 		string required_extension = LookupExtensionForPattern(pattern);
@@ -644,9 +659,23 @@ vector<OpenFileInfo> FileSystem::GlobFiles(const string &pattern, ClientContext 
 				throw InternalException("Extension load \"%s\" did not throw but somehow the extension was not loaded",
 				                        required_extension);
 			}
-			return GlobFiles(pattern, context, options);
+			return GlobFiles(pattern, context, input);
 		}
-		if (options == FileGlobOptions::DISALLOW_EMPTY) {
+		if (input.behavior == FileGlobOptions::FALLBACK_GLOB && !HasGlob(pattern)) {
+			// if we have no glob in the pattern and we have an extension, we try to glob
+			if (!HasGlob(pattern)) {
+				if (input.extension.empty()) {
+					throw InternalException("FALLBACK_GLOB requires an extension to be specified");
+				}
+				string new_pattern = JoinPath(JoinPath(pattern, "**"), "*." + input.extension);
+				result = GlobFiles(new_pattern, context, FileGlobOptions::ALLOW_EMPTY);
+				if (!result.empty()) {
+					// we found files by globbing the target as if it was a directory - return them
+					return result;
+				}
+			}
+		}
+		if (input.behavior == FileGlobOptions::FALLBACK_GLOB || input.behavior == FileGlobOptions::DISALLOW_EMPTY) {
 			throw IOException("No files found that match the pattern \"%s\"", pattern);
 		}
 	}
@@ -694,7 +723,10 @@ int64_t FileHandle::Read(void *buffer, idx_t nr_bytes) {
 }
 
 int64_t FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes) {
-	// FIXME: Add profiling.
+	if (context.GetClientContext() != nullptr) {
+		context.GetClientContext()->client_data->profiler->AddBytesRead(nr_bytes);
+	}
+
 	return file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes));
 }
 
@@ -711,12 +743,18 @@ void FileHandle::Read(void *buffer, idx_t nr_bytes, idx_t location) {
 }
 
 void FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) {
-	// FIXME: Add profiling.
+	if (context.GetClientContext() != nullptr) {
+		context.GetClientContext()->client_data->profiler->AddBytesRead(nr_bytes);
+	}
+
 	file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
 }
 
 void FileHandle::Write(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) {
-	// FIXME: Add profiling.
+	if (context.GetClientContext() != nullptr) {
+		context.GetClientContext()->client_data->profiler->AddBytesWritten(nr_bytes);
+	}
+
 	file_system.Write(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
 }
 
@@ -793,11 +831,16 @@ FileType FileHandle::GetType() {
 }
 
 void FileHandle::TryAddLogger(FileOpener &opener) {
+	if (flags.DisableLogging()) {
+		return;
+	}
+
 	auto context = opener.TryGetClientContext();
 	if (context && Logger::Get(*context).ShouldLog(FileSystemLogType::NAME, FileSystemLogType::LEVEL)) {
 		logger = context->logger;
 		return;
 	}
+
 	auto database = opener.TryGetDatabase();
 	if (database && Logger::Get(*database).ShouldLog(FileSystemLogType::NAME, FileSystemLogType::LEVEL)) {
 		logger = database->GetLogManager().GlobalLoggerReference();

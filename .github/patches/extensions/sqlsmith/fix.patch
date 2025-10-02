@@ -1,0 +1,44 @@
+diff --git a/src/statement_generator.cpp b/src/statement_generator.cpp
+index fc34c7c..5defc4e 100644
+--- a/src/statement_generator.cpp
++++ b/src/statement_generator.cpp
+@@ -373,8 +373,9 @@ unique_ptr<QueryNode> StatementGenerator::GenerateQueryNode() {
+ 		GenerateCTEs(*setop);
+ 		setop->setop_type = Choose<SetOperationType>({SetOperationType::EXCEPT, SetOperationType::INTERSECT,
+ 		                                              SetOperationType::UNION, SetOperationType::UNION_BY_NAME});
+-		setop->left = GenerateQueryNode();
+-		setop->right = GenerateQueryNode();
++		for(idx_t i = 0; i < 2; i++) {
++			setop->children.push_back(GenerateQueryNode());
++		}
+ 		switch (setop->setop_type) {
+ 		case SetOperationType::EXCEPT:
+ 		case SetOperationType::INTERSECT:
+diff --git a/src/statement_simplifier.cpp b/src/statement_simplifier.cpp
+index 2cd7f06..4602928 100644
+--- a/src/statement_simplifier.cpp
++++ b/src/statement_simplifier.cpp
+@@ -196,8 +196,9 @@ void StatementSimplifier::Simplify(SelectNode &node) {
+ }
+ 
+ void StatementSimplifier::Simplify(SetOperationNode &node) {
+-	Simplify(node.left);
+-	Simplify(node.right);
++	for(auto &child : node.children) {
++		Simplify(child);
++	}
+ }
+ 
+ void StatementSimplifier::Simplify(CommonTableExpressionMap &cte) {
+@@ -218,8 +219,9 @@ void StatementSimplifier::Simplify(unique_ptr<QueryNode> &node) {
+ 		break;
+ 	case QueryNodeType::SET_OPERATION_NODE: {
+ 		auto &setop = node->Cast<SetOperationNode>();
+-		SimplifyReplace(node, setop.left);
+-		SimplifyReplace(node, setop.right);
++		for(auto &child : setop.children) {
++			SimplifyReplace(node, child);
++		}
+ 		Simplify(setop);
+ 		break;
+ 	}

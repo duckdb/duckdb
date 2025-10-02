@@ -15,6 +15,10 @@ bool WindowSegmentTree::CanAggregate(const BoundWindowExpression &wexpr) {
 		return false;
 	}
 
+	if (!wexpr.aggregate->CanAggregate()) {
+		return false;
+	}
+
 	return !wexpr.distinct && wexpr.arg_orders.empty();
 }
 
@@ -133,7 +137,7 @@ public:
 
 class WindowSegmentTreeLocalState : public WindowAggregatorLocalState {
 public:
-	WindowSegmentTreeLocalState() {
+	explicit WindowSegmentTreeLocalState(ExecutionContext &context) : WindowAggregatorLocalState(context) {
 	}
 
 	void Finalize(ExecutionContext &context, WindowAggregatorGlobalState &gastate, CollectionPtr collection) override;
@@ -145,11 +149,11 @@ public:
 	unique_ptr<WindowSegmentTreePart> right_part;
 };
 
-void WindowSegmentTree::Finalize(ExecutionContext &context, WindowAggregatorState &gsink, WindowAggregatorState &lstate,
-                                 CollectionPtr collection, const FrameStats &stats, InterruptState &interrupt) {
-	WindowAggregator::Finalize(context, gsink, lstate, collection, stats, interrupt);
+void WindowSegmentTree::Finalize(ExecutionContext &context, CollectionPtr collection, const FrameStats &stats,
+                                 OperatorSinkInput &sink) {
+	WindowAggregator::Finalize(context, collection, stats, sink);
 
-	auto &gasink = gsink.Cast<WindowSegmentTreeGlobalState>();
+	auto &gasink = sink.global_state.Cast<WindowSegmentTreeGlobalState>();
 	++gasink.finalized;
 }
 
@@ -182,13 +186,14 @@ WindowSegmentTreePart::WindowSegmentTreePart(ArenaAllocator &allocator, const Ag
 WindowSegmentTreePart::~WindowSegmentTreePart() {
 }
 
-unique_ptr<WindowAggregatorState> WindowSegmentTree::GetGlobalState(ClientContext &context, idx_t group_count,
-                                                                    const ValidityMask &partition_mask) const {
+unique_ptr<GlobalSinkState> WindowSegmentTree::GetGlobalState(ClientContext &context, idx_t group_count,
+                                                              const ValidityMask &partition_mask) const {
 	return make_uniq<WindowSegmentTreeGlobalState>(context, *this, group_count);
 }
 
-unique_ptr<WindowAggregatorState> WindowSegmentTree::GetLocalState(const WindowAggregatorState &gstate) const {
-	return make_uniq<WindowSegmentTreeLocalState>();
+unique_ptr<LocalSinkState> WindowSegmentTree::GetLocalState(ExecutionContext &context,
+                                                            const GlobalSinkState &gstate) const {
+	return make_uniq<WindowSegmentTreeLocalState>(context);
 }
 
 void WindowSegmentTreePart::FlushStates(bool combining) {
@@ -391,11 +396,10 @@ void WindowSegmentTreeLocalState::Finalize(ExecutionContext &context, WindowAggr
 	}
 }
 
-void WindowSegmentTree::Evaluate(ExecutionContext &context, const WindowAggregatorState &gsink,
-                                 WindowAggregatorState &lstate, const DataChunk &bounds, Vector &result, idx_t count,
-                                 idx_t row_idx, InterruptState &interrupt) const {
-	const auto &gtstate = gsink.Cast<WindowSegmentTreeGlobalState>();
-	auto &ltstate = lstate.Cast<WindowSegmentTreeLocalState>();
+void WindowSegmentTree::Evaluate(ExecutionContext &context, const DataChunk &bounds, Vector &result, idx_t count,
+                                 idx_t row_idx, OperatorSinkInput &sink) const {
+	const auto &gtstate = sink.global_state.Cast<WindowSegmentTreeGlobalState>();
+	auto &ltstate = sink.local_state.Cast<WindowSegmentTreeLocalState>();
 	ltstate.Evaluate(context, gtstate, bounds, result, count, row_idx);
 }
 

@@ -37,7 +37,13 @@ struct CScalarFunctionBindData : public FunctionData {
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
-		return make_uniq<CScalarFunctionBindData>(info);
+		auto copy = make_uniq<CScalarFunctionBindData>(info);
+		if (copy_callback) {
+			copy->bind_data = copy_callback(bind_data);
+			copy->delete_callback = delete_callback;
+			copy->copy_callback = copy_callback;
+		}
+		return std::move(copy);
 	}
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = other_p.Cast<CScalarFunctionBindData>();
@@ -47,6 +53,7 @@ struct CScalarFunctionBindData : public FunctionData {
 	CScalarFunctionInfo &info;
 	void *bind_data = nullptr;
 	duckdb_delete_callback_t delete_callback = nullptr;
+	duckdb_copy_callback_t copy_callback = nullptr;
 };
 
 struct CScalarFunctionInternalBindInfo {
@@ -318,6 +325,14 @@ void duckdb_scalar_function_set_bind_data(duckdb_bind_info info, void *bind_data
 	bind_info.bind_data.delete_callback = destroy;
 }
 
+void duckdb_scalar_function_set_bind_data_copy(duckdb_bind_info info, duckdb_copy_callback_t copy) {
+	if (!info) {
+		return;
+	}
+	auto &bind_info = GetCScalarFunctionBindInfo(info);
+	bind_info.bind_data.copy_callback = copy;
+}
+
 void duckdb_scalar_function_set_function(duckdb_scalar_function function, duckdb_scalar_function_t execute_func) {
 	if (!function || !execute_func) {
 		return;
@@ -391,6 +406,7 @@ duckdb_state duckdb_register_scalar_function_set(duckdb_connection connection, d
 		con->context->RunFunctionInTransaction([&]() {
 			auto &catalog = duckdb::Catalog::GetSystemCatalog(*con->context);
 			duckdb::CreateScalarFunctionInfo sf_info(scalar_function_set);
+			sf_info.on_conflict = duckdb::OnCreateConflict::ALTER_ON_CONFLICT;
 			catalog.CreateFunction(*con->context, sf_info);
 		});
 	} catch (...) {

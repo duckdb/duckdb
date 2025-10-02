@@ -143,6 +143,14 @@ vector<OpenFileInfo> VirtualFileSystem::Glob(const string &path, FileOpener *ope
 }
 
 void VirtualFileSystem::RegisterSubSystem(unique_ptr<FileSystem> fs) {
+	// Sub-filesystem number is not expected to be huge, also filesystem registration should be called infrequently.
+	const auto &name = fs->GetName();
+	for (auto sub_system = sub_systems.begin(); sub_system != sub_systems.end(); sub_system++) {
+		if (sub_system->get()->GetName() == name) {
+			throw InvalidInputException("Filesystem with name %s has already been registered, cannot re-register!",
+			                            name);
+		}
+	}
 	sub_systems.push_back(std::move(fs));
 }
 
@@ -210,6 +218,10 @@ void VirtualFileSystem::SetDisabledFileSystems(const vector<string> &names) {
 		}
 	}
 	disabled_file_systems = std::move(new_disabled_file_systems);
+}
+
+bool VirtualFileSystem::SubSystemIsDisabled(const string &name) {
+	return disabled_file_systems.find(name) != disabled_file_systems.end();
 }
 
 FileSystem &VirtualFileSystem::FindFileSystem(const string &path) {

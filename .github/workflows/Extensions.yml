@@ -53,7 +53,7 @@ on:
       - '!.github/workflows/_extension_distribution.yml'
   merge_group:
   pull_request:
-    types: [opened, reopened, ready_for_review]
+    types: [opened, reopened, ready_for_review, converted_to_draft]
     paths-ignore:
       - '**.md'
       - 'tools/**'
@@ -142,6 +142,7 @@ jobs:
       override_tag: ${{ inputs.override_git_describe }}
       duckdb_ref: ${{ inputs.git_ref }}
       skip_tests: ${{ inputs.skip_tests && true || false }}
+      save_cache: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
   # Build the extensions from .github/config/rust_based_extensions.cmake
   rust-based-extensions:
@@ -157,6 +158,7 @@ jobs:
       override_tag: ${{ inputs.override_git_describe }}
       duckdb_ref: ${{ inputs.git_ref }}
       skip_tests: ${{ inputs.skip_tests && true || false }}
+      save_cache: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
   # Merge all extensions into a single, versioned repository
   create-extension-repository:
@@ -223,11 +225,11 @@ jobs:
       - name: Deploy extensions
         shell: bash
         env:
-          AWS_ACCESS_KEY_ID: ${{secrets.S3_ID}}
-          AWS_SECRET_ACCESS_KEY: ${{secrets.S3_KEY}}
+          AWS_ENDPOINT_URL: ${{ secrets.DUCKDB_CORE_EXTENSION_S3_ENDPOINT }}
+          AWS_ACCESS_KEY_ID: ${{secrets.DUCKDB_CORE_EXTENSION_S3_ID}}
+          AWS_SECRET_ACCESS_KEY: ${{secrets.DUCKDB_CORE_EXTENSION_S3_SECRET}}
           DUCKDB_DEPLOY_SCRIPT_MODE: for_real
           DUCKDB_EXTENSION_SIGNING_PK: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
-          AWS_DEFAULT_REGION: us-east-1
         run: |
           pip install awscli
           ./scripts/extension-upload-repository.sh /tmp/extension-repository-${{ github.sha }}

@@ -1,4 +1,5 @@
 #include "duckdb/function/window/window_token_tree.hpp"
+#include "duckdb/function/window/window_collection.hpp"
 
 namespace duckdb {
 
@@ -83,7 +84,7 @@ static void BuildTokens(WindowTokenTree &token_tree, vector<T> &tokens) {
 	}
 }
 
-unique_ptr<WindowAggregatorState> WindowTokenTree::GetLocalState(ExecutionContext &context) {
+unique_ptr<LocalSinkState> WindowTokenTree::GetLocalState(ExecutionContext &context) {
 	return make_uniq<WindowTokenTreeLocalState>(context, *this);
 }
 

@@ -9,7 +9,7 @@
 #pragma once
 
 #include "column_writer.hpp"
-#include "writer/parquet_write_stats.hpp"
+#include "geo_parquet.hpp"
 
 namespace duckdb {
 
@@ -26,6 +26,10 @@ public:
 	virtual bool HasNaN();
 	virtual bool MinIsExact();
 	virtual bool MaxIsExact();
+
+	virtual bool HasGeoStats();
+	virtual optional_ptr<GeometryStats> GetGeoStats();
+	virtual void WriteGeoStats(duckdb_parquet::GeospatialStatistics &stats);
 
 public:
 	template <class TARGET>
@@ -245,6 +249,56 @@ public:
 	}
 	string GetMaxValue() override {
 		return HasStats() ? string(char_ptr_cast(max), 16) : string();
+	}
+};
+
+class GeoStatisticsState final : public ColumnWriterStatistics {
+public:
+	explicit GeoStatisticsState() : has_stats(false) {
+	}
+
+	bool has_stats;
+	GeometryStats geo_stats;
+
+public:
+	void Update(const string_t &val) {
+		geo_stats.Update(val);
+		has_stats = true;
+	}
+	bool HasGeoStats() override {
+		return has_stats;
+	}
+	optional_ptr<GeometryStats> GetGeoStats() override {
+		return geo_stats;
+	}
+	void WriteGeoStats(duckdb_parquet::GeospatialStatistics &stats) override {
+		const auto &types = geo_stats.types;
+		const auto &bbox = geo_stats.bbox;
+
+		if (bbox.IsSet()) {
+
+			stats.__isset.bbox = true;
+			stats.bbox.xmin = bbox.xmin;
+			stats.bbox.xmax = bbox.xmax;
+			stats.bbox.ymin = bbox.ymin;
+			stats.bbox.ymax = bbox.ymax;
+
+			if (bbox.HasZ()) {
+				stats.bbox.__isset.zmin = true;
+				stats.bbox.__isset.zmax = true;
+				stats.bbox.zmin = bbox.zmin;
+				stats.bbox.zmax = bbox.zmax;
+			}
+			if (bbox.HasM()) {
+				stats.bbox.__isset.mmin = true;
+				stats.bbox.__isset.mmax = true;
+				stats.bbox.mmin = bbox.mmin;
+				stats.bbox.mmax = bbox.mmax;
+			}
+		}
+
+		stats.__isset.geospatial_types = true;
+		stats.geospatial_types = types.ToList<int>();
 	}
 };
 

@@ -11,6 +11,7 @@ add_library_unity(
   in_memory_checkpoint.cpp
   update_segment.cpp
   persistent_table_data.cpp
+  row_id_column_data.cpp
   row_group.cpp
   row_group_collection.cpp
   row_version_manager.cpp

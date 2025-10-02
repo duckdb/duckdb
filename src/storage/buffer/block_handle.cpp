@@ -137,7 +137,7 @@ BufferHandle BlockHandle::LoadFromBuffer(BlockLock &l, data_ptr_t data, unique_p
 	return BufferHandle(shared_from_this(), buffer.get());
 }
 
-BufferHandle BlockHandle::Load(unique_ptr<FileBuffer> reusable_buffer) {
+BufferHandle BlockHandle::Load(QueryContext context, unique_ptr<FileBuffer> reusable_buffer) {
 	if (state == BlockState::BLOCK_LOADED) {
 		// already loaded
 		D_ASSERT(buffer);
@@ -147,7 +147,7 @@ BufferHandle BlockHandle::Load(unique_ptr<FileBuffer> reusable_buffer) {
 
 	if (block_id < MAXIMUM_BLOCK) {
 		auto block = AllocateBlock(block_manager, std::move(reusable_buffer), block_id);
-		block_manager.Read(*block);
+		block_manager.Read(context, *block);
 		buffer = std::move(block);
 	} else {
 		if (MustWriteToTemporaryFile()) {

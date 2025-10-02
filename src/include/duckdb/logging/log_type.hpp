@@ -17,6 +17,9 @@ struct FileHandle;
 struct BaseRequest;
 struct HTTPResponse;
 class PhysicalOperator;
+class AttachedDatabase;
+class RowGroup;
+struct DataTableInfo;
 
 //! Log types provide some structure to the formats that the different log messages can have
 //! For now, this holds a type that the VARCHAR value will be auto-cast into.
@@ -54,9 +57,7 @@ public:
 
 	QueryLogType() : LogType(NAME, LEVEL) {};
 
-	static string ConstructLogMessage(const string &str) {
-		return str;
-	}
+	static string ConstructLogMessage(const string &str);
 };
 
 class FileSystemLogType : public LogType {
@@ -103,6 +104,28 @@ public:
 
 	static string ConstructLogMessage(const PhysicalOperator &op, const string &class_p, const string &event,
 	                                  const vector<pair<string, string>> &info);
+};
+
+class CheckpointLogType : public LogType {
+public:
+	static constexpr const char *NAME = "Checkpoint";
+	static constexpr LogLevel LEVEL = LogLevel::LOG_DEBUG;
+
+	//! Construct the log type
+	CheckpointLogType();
+
+	static LogicalType GetLogType();
+
+	//! Vacuum
+	static string ConstructLogMessage(const AttachedDatabase &db, DataTableInfo &table, idx_t segment_idx,
+	                                  idx_t merge_count, idx_t target_count, idx_t merge_rows, idx_t row_start);
+	//! Checkpoint
+	static string ConstructLogMessage(const AttachedDatabase &db, DataTableInfo &table, idx_t segment_idx,
+	                                  RowGroup &row_group);
+
+private:
+	static string CreateLog(const AttachedDatabase &db, DataTableInfo &table, const char *op, vector<Value> map_keys,
+	                        vector<Value> map_values);
 };
 
 } // namespace duckdb

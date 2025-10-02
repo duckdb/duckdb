@@ -5,10 +5,7 @@
 require parquet
 
 statement ok
-pragma enable_logging
-
-statement ok
-set logging_level='DEBUG'
+CALL enable_logging('PhysicalOperator')
 
 # force external so we can see the external log message being added
 statement ok
@@ -32,7 +29,7 @@ statement ok
 from '__TEST_DIR__/physical_operator_logging.parquet' where i = 42
 
 statement ok
-pragma disable_logging
+CALL disable_logging()
 
 # enabling external hash join happens exactly once
 query I

@@ -221,6 +221,8 @@ public:
 	DUCKDB_API string ConvertSeparators(const string &path);
 	//! Extract the base name of a file (e.g. if the input is lib/example.dll the base name is 'example')
 	DUCKDB_API string ExtractBaseName(const string &path);
+	//! Extract the extension of a file (e.g. if the input is lib/example.dll the extension is 'dll')
+	DUCKDB_API string ExtractExtension(const string &path);
 	//! Extract the name of a file (e.g if the input is lib/example.dll the name is 'example.dll')
 	DUCKDB_API string ExtractName(const string &path);
 
@@ -232,7 +234,7 @@ public:
 	//! Runs a glob on the file system, returning a list of matching files
 	DUCKDB_API virtual vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr);
 	DUCKDB_API vector<OpenFileInfo> GlobFiles(const string &path, ClientContext &context,
-	                                          FileGlobOptions options = FileGlobOptions::DISALLOW_EMPTY);
+	                                          const FileGlobInput &input = FileGlobOptions::DISALLOW_EMPTY);
 
 	//! registers a sub-file system to handle certain file name prefixes, e.g. http:// etc.
 	DUCKDB_API virtual void RegisterSubSystem(unique_ptr<FileSystem> sub_fs);
@@ -279,6 +281,7 @@ public:
 	DUCKDB_API static bool IsRemoteFile(const string &path, string &extension);
 
 	DUCKDB_API virtual void SetDisabledFileSystems(const vector<string> &names);
+	DUCKDB_API virtual bool SubSystemIsDisabled(const string &name);
 
 	DUCKDB_API static bool IsDirectory(const OpenFileInfo &info);
 
