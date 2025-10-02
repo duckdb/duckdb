@@ -888,6 +888,7 @@ SortedRunMerger::SortedRunMerger(const Expression &decode_sort_key_p, shared_ptr
 unique_ptr<LocalSourceState> SortedRunMerger::GetLocalSourceState(ExecutionContext &,
                                                                   GlobalSourceState &gstate_p) const {
 	auto &gstate = gstate_p.Cast<SortedRunMergerGlobalState>();
+	auto guard = gstate.Lock();
 	return make_uniq<SortedRunMergerLocalState>(gstate);
 }
 
