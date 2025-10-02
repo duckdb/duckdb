@@ -349,8 +349,7 @@ static bool ConvertVariantToStruct(FromVariantConversionData &conversion_data, V
 	SelectionVector child_values_sel;
 	child_values_sel.Initialize(count);
 
-	SelectionVector row_sel;
-	row_sel.Initialize(count);
+	SelectionVector row_sel(0, count);
 	if (row.IsValid()) {
 		auto row_index = row.GetIndex();
 		for (idx_t i = 0; i < count; i++) {

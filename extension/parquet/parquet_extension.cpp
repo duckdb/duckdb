@@ -587,6 +587,7 @@ static void ParquetCopySerialize(Serializer &serializer, const FunctionData &bin
 	serializer.WritePropertyWithDefault(115, "string_dictionary_page_size_limit",
 	                                    bind_data.string_dictionary_page_size_limit,
 	                                    default_value.string_dictionary_page_size_limit);
+	serializer.WriteProperty(116, "shredding_types", bind_data.shredding_types);
 }
 
 static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserializer, CopyFunction &function) {
