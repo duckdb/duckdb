@@ -50,7 +50,7 @@ struct FSSTStorage {
 	static void Compress(CompressionState &state_p, Vector &scan_vector, idx_t count);
 	static void FinalizeCompress(CompressionState &state_p);
 
-	static unique_ptr<SegmentScanState> StringInitScan(ColumnSegment &segment);
+	static unique_ptr<SegmentScanState> StringInitScan(const QueryContext &context, ColumnSegment &segment);
 	template <bool ALLOW_FSST_VECTORS = false>
 	static void StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
 	                              idx_t result_offset);
@@ -569,7 +569,7 @@ struct FSSTScanState : public StringScanState {
 	}
 };
 
-unique_ptr<SegmentScanState> FSSTStorage::StringInitScan(ColumnSegment &segment) {
+unique_ptr<SegmentScanState> FSSTStorage::StringInitScan(const QueryContext &context, ColumnSegment &segment) {
 	auto block_size = segment.GetBlockManager().GetBlockSize();
 	auto string_block_limit = StringUncompressed::GetStringBlockLimit(block_size);
 	auto state = make_uniq<FSSTScanState>(string_block_limit);

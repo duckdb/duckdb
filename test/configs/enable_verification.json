@@ -217,6 +217,12 @@
       "paths": [
         "test/sql/alter/test_alter_database_rename.test"
       ]
+    },
+    {
+      "reason": "Profiling in combination with verification is disabled for SELECT statements",
+      "paths": [
+        "test/sql/pragma/profiling/test_profiling_fs.test"
+      ]
     }
   ]
 }

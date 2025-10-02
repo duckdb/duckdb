@@ -181,7 +181,7 @@ void AttachedDatabase::Initialize(optional_ptr<ClientContext> context) {
 		catalog->Initialize(context, false);
 	}
 	if (storage) {
-		storage->Initialize(QueryContext(context));
+		storage->Initialize(context);
 	}
 }
 
