@@ -198,7 +198,8 @@ void TryTransformStarLike(unique_ptr<ParsedExpression> &root) {
 		// unsupported op for * expression
 		throw BinderException(*root, "Function \"%s\" cannot be applied to a star expression", function.function_name);
 	}
-	if (function.children[1]->GetExpressionClass() != ExpressionClass::CONSTANT) {
+	auto &right = function.children[1];
+	if (right->GetExpressionClass() != ExpressionClass::CONSTANT) {
 		throw BinderException(*root, "Pattern applied to a star expression must be a constant");
 	}
 	if (!star.rename_list.empty()) {
@@ -208,7 +209,6 @@ void TryTransformStarLike(unique_ptr<ParsedExpression> &root) {
 		throw BinderException(*root, "Replace list cannot be combined with a filtering operation");
 	}
 	auto original_alias = root->GetAlias();
-	auto right = std::move(function.children[1]);
 	auto star_expr = std::move(left);
 	unique_ptr<ParsedExpression> child_expr;
 	if (!inverse && function.function_name == "regexp_full_match" && star.exclude_list.empty()) {
