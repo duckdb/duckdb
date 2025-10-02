@@ -59,8 +59,11 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 	map<idx_t, idx_t> group_idxs;
 	auto struct_input_exprs = GenerateAggregateArgs(new_bindings, window, generate_row_number, group_idxs);
 
+	idx_t group_offset;
+
 	auto limit = std::move(filter.expressions[0]->Cast<BoundComparisonExpression>().right);
 	auto current_op = CreateAggregateOperator(window, std::move(limit), std::move(struct_input_exprs));
+	group_offset = current_op->Cast<LogicalAggregate>().groups.size();
 	current_op = CreateUnnestListOperator(std::move(current_op), generate_row_number);
 	current_op = CreateUnnestStructOperator(std::move(current_op), generate_row_number, group_idxs);
 
@@ -81,8 +84,8 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 		aggregate_table_idx = group_table_idx;
 	}
 
-	UpdateBindings(window.window_index, group_table_idx, aggregate_table_idx, group_idxs, old_bindings, new_bindings,
-	               replacer);
+	UpdateBindings(window.window_index, group_table_idx, aggregate_table_idx, group_offset, group_idxs, old_bindings,
+	               new_bindings, replacer);
 	replacer.stop_operator = current_op.get();
 
 	return unique_ptr<LogicalOperator>(std::move(current_op));
@@ -241,20 +244,25 @@ TopNWindowElimination::CreateUnnestStructOperator(unique_ptr<LogicalOperator> op
 
 	if (input_type.InternalType() != PhysicalType::STRUCT) {
 		if (op->type != LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
-			return op;
-		}
-		for (const auto &group_idx_mapping : group_idxs) {
-			const idx_t group_idx = group_idx_mapping.second;
-			proj_exprs.push_back(
-			    make_uniq<BoundColumnRefExpression>(op->types[group_idx], op_column_bindings[group_idx]));
-		}
+			// Project out unwanted group columns
+			for (const auto &group_idx : group_idxs) {
+				proj_exprs.push_back(
+					make_uniq<BoundColumnRefExpression>(op->types[group_idx.second], op_column_bindings[group_idx.second]));
+			}
 
-		// We do not have to unpack anything but we still might have to create a 1 constant as a row number
-		const idx_t group_offset = op->Cast<LogicalAggregate>().groups.size();
-		for (idx_t i = group_offset; i < op->types.size(); i++) {
-			proj_exprs.push_back(make_uniq<BoundColumnRefExpression>(op->types[i], op_column_bindings[i]));
-		}
-		if (include_row_number) {
+			for (idx_t i = op->children[0]->types.size(); i < op->types.size(); i++) {
+				proj_exprs.push_back(make_uniq<BoundColumnRefExpression>(op->types[i], op_column_bindings[i]));
+			}
+		} else {
+			for (const auto &group_idx : group_idxs) {
+				proj_exprs.push_back(
+					make_uniq<BoundColumnRefExpression>(op->types[group_idx.second], op_column_bindings[group_idx.second]));
+			}
+
+			// We do not have to unpack anything but we still might have to create a 1 constant as a row number
+			for (idx_t i = op->Cast<LogicalAggregate>().groups.size(); i < op->types.size(); i++) {
+				proj_exprs.push_back(make_uniq<BoundColumnRefExpression>(op->types[i], op_column_bindings[i]));
+			}
 			proj_exprs.push_back(make_uniq<BoundConstantExpression>(static_cast<int64_t>(1)));
 		}
 	} else {
@@ -401,7 +409,8 @@ vector<unique_ptr<Expression>> TopNWindowElimination::GenerateAggregateArgs(cons
 		auto &binding = bindings[i];
 		auto group_binding = std::find(group_bindings.begin(), group_bindings.end(), binding);
 		if (group_binding != group_bindings.end()) {
-			group_idxs[i] = group_binding->column_index;
+			const auto position_in_group = static_cast<idx_t>(group_binding - group_bindings.begin());
+			group_idxs[i] = position_in_group;
 			continue;
 		}
 		if (binding.table_index == window.window_index) {
@@ -450,7 +459,8 @@ vector<ColumnBinding> TopNWindowElimination::TraverseProjectionBindings(const st
 }
 
 void TopNWindowElimination::UpdateBindings(const idx_t window_idx, const idx_t group_table_idx,
-                                           const idx_t aggregate_table_idx, const map<idx_t, idx_t> &group_idxs,
+                                           const idx_t aggregate_table_idx, const idx_t group_offset,
+                                           const map<idx_t, idx_t> &group_idxs,
                                            const vector<ColumnBinding> &old_bindings,
                                            vector<ColumnBinding> &new_bindings, ColumnBindingReplacer &replacer) {
 	D_ASSERT(old_bindings.size() == new_bindings.size());
@@ -458,15 +468,16 @@ void TopNWindowElimination::UpdateBindings(const idx_t window_idx, const idx_t g
 	replacer.replacement_bindings.reserve(new_bindings.size());
 	set<idx_t> row_id_binding_idxs;
 	// Project the group columns
+	idx_t struct_column_count = 0;
 	for (auto group_idx : group_idxs) {
 		new_bindings[group_idx.first].table_index = group_table_idx;
-		new_bindings[group_idx.first].column_index = group_idx.second;
+		new_bindings[group_idx.first].column_index = struct_column_count++;
 		replacer.replacement_bindings.emplace_back(old_bindings[group_idx.first], new_bindings[group_idx.first]);
 	}
 
 	// Project the args/value
 	// If this is a projection, all indexes are the same, so we start with group count as an offset
-	idx_t struct_column_count = group_table_idx == aggregate_table_idx ? group_idxs.size() : 0;
+	struct_column_count = group_table_idx == aggregate_table_idx ? group_idxs.size() : 0;
 	for (idx_t i = 0; i < new_bindings.size(); i++) {
 		auto &binding = new_bindings[i];
 		if (group_idxs.find(i) != group_idxs.end()) {

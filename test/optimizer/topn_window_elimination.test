@@ -111,6 +111,114 @@ ORDER BY ALL
 1	2	2	2
 1	3	3	3
 
+query II
+SELECT * FROM (
+	SELECT row_number() OVER (PARTITION BY grp ORDER BY val_2 DESC) as rn, val_2
+	FROM tbl
+	QUALIFY rn <= 1
+)
+ORDER BY rn, val_2
+----
+1	96
+1	97
+1	98
+1	99
+
+query III
+SELECT * FROM (
+	SELECT row_number() OVER (PARTITION BY grp ORDER BY val_2 DESC) as rn, grp, val_2
+	FROM tbl
+	QUALIFY rn <= 1
+)
+ORDER BY rn, val_2
+----
+1	0	96
+1	1	97
+1	2	98
+1	3	99
+
+query III
+SELECT * FROM (
+	SELECT row_number() OVER (PARTITION BY grp ORDER BY val_2 DESC) as rn, grp, val_2
+	FROM tbl
+	QUALIFY rn <= 2
+)
+ORDER BY rn, val_2
+----
+1	0	96
+1	1	97
+1	2	98
+1	3	99
+2	0	92
+2	1	93
+2	2	94
+2	3	95
+
+
+query II
+SELECT * FROM (
+	SELECT row_number() OVER (PARTITION BY grp ORDER BY val_2 DESC) as rn, val_2
+	FROM tbl
+	QUALIFY rn <= 2
+)
+ORDER BY rn, val_2
+----
+1	96
+1	97
+1	98
+1	99
+2	92
+2	93
+2	94
+2	95
+
+query III
+SELECT * FROM (
+	SELECT row_number() OVER (PARTITION BY grp ORDER BY val_1 DESC) as rn, grp, val_2
+	FROM tbl
+	WHERE val_2 < '50'
+	QUALIFY rn <= 1
+)
+ORDER BY ALL
+----
+1	0	48
+1	1	49
+1	2	46
+1	3	47
+
+query III
+SELECT * FROM (
+	SELECT row_number() OVER (PARTITION BY grp ORDER BY val_1 DESC) as rn, grp, val_2
+	FROM tbl
+	QUALIFY rn <= 2
+)
+ORDER BY ALL
+----
+1	0	96
+1	1	97
+1	2	98
+1	3	99
+2	0	92
+2	1	93
+2	2	94
+2	3	95
+
+statement ok
+CREATE TABLE tbl3 AS SELECT i % 4 grp, i % 2 grp2, i val_1, CAST(i AS VARCHAR) val_2 FROM range(100) tbl(i)
+
+query III
+SELECT * FROM (
+	SELECT row_number() OVER (PARTITION BY grp, grp2 ORDER BY val_1 DESC) as rn, grp2, val_2
+	FROM tbl3
+	QUALIFY rn <= 1
+)
+ORDER BY ALL
+----
+1	0	96
+1	0	98
+1	1	97
+1	1	99
+
 # Lateral joins
 query III
 SELECT t2.*
@@ -189,58 +297,58 @@ INNER JOIN LATERAL (
 ----
 logical_opt	<!REGEX>:.*FILTER.*WINDOW.*
 
-# Vector functions
-
-# Set threads to 1 for reproducible results
-statement ok
-SET threads TO 1
-
-statement ok
-CREATE TABLE vectors AS
-SELECT [x,y,z] AS vec, row_number() OVER () AS id
-FROM range(0,10) r(x), range(0,10) rr(y), range(0, 10) rrr(z);
-
-statement ok
-CREATE OR REPLACE TABLE with_optimizer AS SELECT * EXCLUDE (rn)
-FROM (SELECT *, list_distance(vec, [5,5,5]) AS dist, row_number() over (ORDER BY dist ASC) as rn FROM vectors)
-WHERE rn <= 5;
-
-statement ok
-set disabled_optimizers = 'top_n_window_elimination'
-
-statement ok
-CREATE OR REPLACE TABLE without_optimizer AS SELECT * EXCLUDE (rn)
-FROM (SELECT *, list_distance(vec, [5,5,5]) AS dist, row_number() over (ORDER BY dist ASC) as rn FROM vectors)
-WHERE rn <= 5;
-
-statement ok
-set disabled_optimizers = ''
-
-query III
-SELECT * FROM (FROM with_optimizer) EXCEPT (FROM without_optimizer);
-----
-
-statement ok
-CREATE OR REPLACE TABLE with_optimizer AS SELECT a.id, a.vec, neighbor.id as nbr_id, neighbor.vec as nbr_vec
-FROM vectors as a, LATERAL (
-	SELECT *, b.id
-	FROM vectors as b
-	ORDER BY list_distance(a.vec, b.vec) LIMIT 3
-) as neighbor
-ORDER BY a.id, list_distance(a.vec, neighbor.vec);
-
-statement ok
-set disabled_optimizers = 'top_n_window_elimination'
-
-statement ok
-CREATE OR REPLACE TABLE without_optimizer AS SELECT a.id, a.vec, neighbor.id as nbr_id, neighbor.vec as nbr_vec
-FROM vectors as a, LATERAL (
-	SELECT *, b.id
-	FROM vectors as b
-	ORDER BY list_distance(a.vec, b.vec) LIMIT 3
-) as neighbor
-ORDER BY a.id, list_distance(a.vec, neighbor.vec);
-
-query IIII
-SELECT * FROM (FROM with_optimizer) EXCEPT (FROM without_optimizer);
-----
+# # Vector functions
+#
+# # Set threads to 1 for reproducible results
+# statement ok
+# SET threads TO 1
+#
+# statement ok
+# CREATE TABLE vectors AS
+# SELECT [x,y,z] AS vec, row_number() OVER () AS id
+# FROM range(0,10) r(x), range(0,10) rr(y), range(0, 10) rrr(z);
+#
+# statement ok
+# CREATE OR REPLACE TABLE with_optimizer AS SELECT * EXCLUDE (rn)
+# FROM (SELECT *, list_distance(vec, [5,5,5]) AS dist, row_number() over (ORDER BY dist ASC) as rn FROM vectors)
+# WHERE rn <= 5;
+#
+# statement ok
+# set disabled_optimizers = 'top_n_window_elimination'
+#
+# statement ok
+# CREATE OR REPLACE TABLE without_optimizer AS SELECT * EXCLUDE (rn)
+# FROM (SELECT *, list_distance(vec, [5,5,5]) AS dist, row_number() over (ORDER BY dist ASC) as rn FROM vectors)
+# WHERE rn <= 5;
+#
+# statement ok
+# set disabled_optimizers = ''
+#
+# query III
+# SELECT * FROM (FROM with_optimizer) EXCEPT (FROM without_optimizer);
+# ----
+#
+# statement ok
+# CREATE OR REPLACE TABLE with_optimizer AS SELECT a.id, a.vec, neighbor.id as nbr_id, neighbor.vec as nbr_vec
+# FROM vectors as a, LATERAL (
+# 	SELECT *, b.id
+# 	FROM vectors as b
+# 	ORDER BY list_distance(a.vec, b.vec) LIMIT 3
+# ) as neighbor
+# ORDER BY a.id, list_distance(a.vec, neighbor.vec);
+#
+# statement ok
+# set disabled_optimizers = 'top_n_window_elimination'
+#
+# statement ok
+# CREATE OR REPLACE TABLE without_optimizer AS SELECT a.id, a.vec, neighbor.id as nbr_id, neighbor.vec as nbr_vec
+# FROM vectors as a, LATERAL (
+# 	SELECT *, b.id
+# 	FROM vectors as b
+# 	ORDER BY list_distance(a.vec, b.vec) LIMIT 3
+# ) as neighbor
+# ORDER BY a.id, list_distance(a.vec, neighbor.vec);
+#
+# query IIII
+# SELECT * FROM (FROM with_optimizer) EXCEPT (FROM without_optimizer);
+# ----

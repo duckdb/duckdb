@@ -32,7 +32,7 @@ private:
 	static vector<unique_ptr<Expression>> GenerateAggregateArgs(const vector<ColumnBinding> &bindings,
 	                                                            const LogicalWindow &window, bool &generate_row_ids,
 	                                                            map<idx_t, idx_t> &group_idxs);
-	static void UpdateBindings(idx_t window_idx, idx_t group_table_idx, idx_t aggregate_table_idx,
+	static void UpdateBindings(idx_t window_idx, idx_t group_table_idx, idx_t aggregate_table_idx, idx_t group_offset,
 	                           const map<idx_t, idx_t> &group_idxs, const vector<ColumnBinding> &old_bindings,
 	                           vector<ColumnBinding> &new_bindings, ColumnBindingReplacer &replacer);
 	static vector<ColumnBinding> TraverseProjectionBindings(const std::vector<ColumnBinding> &old_bindings,
