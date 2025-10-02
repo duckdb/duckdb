@@ -217,7 +217,6 @@ void TryTransformStarLike(unique_ptr<ParsedExpression> &root) {
 	} else {
 		vector<string> named_parameters;
 		named_parameters.push_back("__lambda_col");
-
 		function.children[0] = make_uniq<ColumnRefExpression>("__lambda_col");
 		function.children[1] = std::move(right);
 
