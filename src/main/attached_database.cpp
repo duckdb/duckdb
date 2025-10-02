@@ -243,7 +243,7 @@ void AttachedDatabase::OnDetach(ClientContext &context) {
 	if (catalog) {
 		catalog->OnDetach(context);
 	}
-	if (stored_database_path) {
+	if (stored_database_path && visibility != AttachVisibility::HIDDEN) {
 		stored_database_path->OnDetach();
 	}
 }
