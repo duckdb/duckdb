@@ -213,3 +213,10 @@ WITH tbl AS (SELECT [{'a': 1, 'b': 2}] as c)
 SELECT a, b, c FROM tbl, (SELECT UNNEST(c, recursive := TRUE));
 ----
 1	2	[{'a': 1, 'b': 2}]
+
+query II
+explain select foo, value from with_array
+cross join unnest(arr) as values(value)
+where foo = 1;
+----
+logical_opt	<!REGEX>:.*DELIM_JOIN.*
