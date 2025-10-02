@@ -8,6 +8,11 @@ RelationStatement::RelationStatement(shared_ptr<Relation> relation_p)
 	if (relation->type == RelationType::QUERY_RELATION) {
 		auto &query_relation = relation->Cast<QueryRelation>();
 		query = query_relation.query;
+	} else {
+		auto query_node = relation->GetQueryNode();
+		if (query_node) {
+			query = query_node->ToString();
+		}
 	}
 }
 
