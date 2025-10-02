@@ -240,7 +240,7 @@ bool ConvertVariantToVariant(ToVariantSourceData &source_data, ToVariantGlobalRe
 				}
 			} else if (source_type_id == VariantLogicalType::BITSTRING ||
 			           source_type_id == VariantLogicalType::BIGNUM || source_type_id == VariantLogicalType::VARCHAR ||
-			           source_type_id == VariantLogicalType::BLOB) {
+			           source_type_id == VariantLogicalType::BLOB || source_type_id == VariantLogicalType::GEOMETRY) {
 				auto str_blob_data = source_blob_data + source_byte_offset;
 				auto str_length = VarintDecode<uint32_t>(str_blob_data);
 				auto str_length_varint_size = GetVarintSize(str_length);
