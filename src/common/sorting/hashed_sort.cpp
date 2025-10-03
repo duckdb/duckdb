@@ -411,6 +411,15 @@ SinkResultType HashedSort::Sink(ExecutionContext &context, DataChunk &input_chun
 			payload_chunk.data[input_chunk.ColumnCount() + i].Reference(sort_chunk.data[i]);
 		}
 	}
+
+	//	Append a forced payload column
+	if (force_payload) {
+		auto &vec = payload_chunk.data[input_chunk.ColumnCount() + sort_chunk.ColumnCount()];
+		D_ASSERT(vec.GetType().id() == LogicalTypeId::BOOLEAN);
+		vec.SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::SetNull(vec, true);
+	}
+
 	payload_chunk.SetCardinality(input_chunk);
 
 	//	OVER(ORDER BY...)
@@ -678,7 +687,8 @@ void HashedSort::GenerateOrderings(Orders &partitions, Orders &orders,
 
 HashedSort::HashedSort(ClientContext &client, const vector<unique_ptr<Expression>> &partition_bys,
                        const vector<BoundOrderByNode> &order_bys, const Types &input_types,
-                       const vector<unique_ptr<BaseStatistics>> &partition_stats, idx_t estimated_cardinality)
+                       const vector<unique_ptr<BaseStatistics>> &partition_stats, idx_t estimated_cardinality,
+                       bool require_payload)
     : client(client), estimated_cardinality(estimated_cardinality), payload_types(input_types) {
 	GenerateOrderings(partitions, orders, partition_bys, order_bys, partition_stats);
 
@@ -709,6 +719,15 @@ HashedSort::HashedSort(ClientContext &client, const vector<unique_ptr<Expression
 
 	sort_col_count = orders.size() + partitions.size();
 	if (sort_col_count) {
+		// If a payload column is required, check whether there is one already
+		if (require_payload) {
+			//	Watch out for duplicate sort keys!
+			unordered_set<column_t> sort_set(sort_ids.begin(), sort_ids.end());
+			force_payload = (sort_set.size() >= payload_types.size());
+			if (force_payload) {
+				payload_types.emplace_back(LogicalType::BOOLEAN);
+			}
+		}
 		vector<idx_t> projection_map;
 		sort = make_uniq<Sort>(client, orders, payload_types, projection_map);
 	}

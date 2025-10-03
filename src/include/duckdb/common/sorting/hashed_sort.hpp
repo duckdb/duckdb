@@ -25,7 +25,8 @@ public:
 
 	HashedSort(ClientContext &context, const vector<unique_ptr<Expression>> &partition_bys,
 	           const vector<BoundOrderByNode> &order_bys, const Types &payload_types,
-	           const vector<unique_ptr<BaseStatistics>> &partitions_stats, idx_t estimated_cardinality);
+	           const vector<unique_ptr<BaseStatistics>> &partitions_stats, idx_t estimated_cardinality,
+	           bool require_payload = false);
 
 public:
 	//===--------------------------------------------------------------------===//
@@ -69,6 +70,8 @@ public:
 	Orders orders;
 	idx_t sort_col_count;
 	Types payload_types;
+	//! Are we creating a dummy payload column?
+	bool force_payload = false;
 	// Input columns in the sorted output
 	vector<column_t> scan_ids;
 	// Key columns in the sorted output

@@ -90,13 +90,13 @@ public:
 		const vector<unique_ptr<BaseStatistics>> partitions_stats;
 		auto &lhs = op.children[0].get();
 		auto sort = make_uniq<HashedSort>(client, op.lhs_partitions, op.lhs_orders, lhs.GetTypes(), partitions_stats,
-		                                  lhs.estimated_cardinality);
+		                                  lhs.estimated_cardinality, true);
 		hashed_sinks.emplace_back(sort->GetGlobalSinkState(client));
 		hashed_sorts.emplace_back(std::move(sort));
 
 		auto &rhs = op.children[1].get();
 		sort = make_uniq<HashedSort>(client, op.rhs_partitions, op.rhs_orders, rhs.GetTypes(), partitions_stats,
-		                             rhs.estimated_cardinality);
+		                             rhs.estimated_cardinality, true);
 		hashed_sinks.emplace_back(sort->GetGlobalSinkState(client));
 		hashed_sorts.emplace_back(std::move(sort));
 
@@ -560,7 +560,6 @@ bool AsOfProbeBuffer::NextLeft() {
 	} else {
 		lhs_payload.Reference(lhs_scanned);
 	}
-	lhs_payload.Print();
 
 	return true;
 }
