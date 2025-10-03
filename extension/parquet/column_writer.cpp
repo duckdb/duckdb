@@ -359,7 +359,12 @@ ParquetColumnSchema ColumnWriter::FillParquetSchema(const LogicalType &type, con
 		}
 		return map_column;
 	}
-	return ParquetColumnSchema::FromLogicalType(name, type, max_define, max_repeat, 0, null_type);
+	auto res = ParquetColumnSchema::FromLogicalType(name, type, max_define, max_repeat, 0, null_type);
+	if (field_id && field_id->set) {
+		res.field_id = field_id->field_id;
+	}
+
+	return res;
 }
 
 unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &context, ParquetWriter &writer,
