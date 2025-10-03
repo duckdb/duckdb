@@ -55,6 +55,7 @@ public:
 
 	// OVER(PARTITION BY...) (hash grouping)
 	unique_ptr<RadixPartitionedTupleData> CreatePartition(idx_t new_bits) const;
+	void SyncPartitioning(const HashedSortGlobalSinkState &other);
 	void UpdateLocalPartition(GroupingPartition &local_partition, GroupingAppend &partition_append);
 	void CombineLocalPartition(GroupingPartition &local_partition, GroupingAppend &local_append);
 	ProgressData GetSinkProgress(ClientContext &context, const ProgressData source_progress) const;
@@ -172,6 +173,15 @@ void HashedSortGlobalSinkState::UpdateLocalPartition(GroupingPartition &local_pa
 
 	//	Sync local partition to have the same bit count
 	SyncLocalPartition(local_partition, partition_append);
+}
+
+void HashedSortGlobalSinkState::SyncPartitioning(const HashedSortGlobalSinkState &other) {
+	fixed_bits = other.grouping_data ? other.grouping_data->GetRadixBits() : 0;
+
+	const auto old_bits = grouping_data ? grouping_data->GetRadixBits() : 0;
+	if (fixed_bits != old_bits) {
+		grouping_data = CreatePartition(fixed_bits);
+	}
 }
 
 void HashedSortGlobalSinkState::CombineLocalPartition(GroupingPartition &local_partition,
@@ -347,6 +357,12 @@ HashedSortLocalSinkState::HashedSortLocalSinkState(ExecutionContext &context, co
 		unsorted = make_uniq<ColumnDataCollection>(context.client, hashed_sort.payload_types);
 		unsorted->InitializeAppend(unsorted_append);
 	}
+}
+
+void HashedSort::Synchronize(const GlobalSinkState &source, GlobalSinkState &target) const {
+	auto &src = source.Cast<HashedSortGlobalSinkState>();
+	auto &tgt = target.Cast<HashedSortGlobalSinkState>();
+	tgt.SyncPartitioning(src);
 }
 
 void HashedSortLocalSinkState::Hash(DataChunk &input_chunk, Vector &hash_vector) {
@@ -760,6 +776,11 @@ SinkFinalizeType HashedSort::MaterializeSortedRuns(Pipeline &pipeline, Event &ev
 	event.InsertEvent(std::move(sort_event));
 
 	return SinkFinalizeType::READY;
+}
+
+vector<HashedSort::SortedRunPtr> &HashedSort::GetSortedRuns(GlobalSourceState &gstate) const {
+	auto &gsource = gstate.Cast<HashedSortGlobalSourceState>();
+	return gsource.runs;
 }
 
 } // namespace duckdb

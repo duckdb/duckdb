@@ -38,6 +38,7 @@ public:
 	SinkFinalizeType Finalize(ClientContext &client, OperatorSinkFinalizeInput &finalize) const;
 	ProgressData GetSinkProgress(ClientContext &context, GlobalSinkState &gstate,
 	                             const ProgressData source_progress) const;
+	void Synchronize(const GlobalSinkState &source, GlobalSinkState &target) const;
 
 public:
 	//===--------------------------------------------------------------------===//
@@ -56,7 +57,7 @@ public:
 
 	SinkFinalizeType MaterializeSortedRuns(Pipeline &pipeline, Event &event, const PhysicalOperator &op,
 	                                       OperatorSinkFinalizeInput &finalize) const;
-	vector<SortedRunPtr> &GetSortedRuns(GlobalSourceState &global_state);
+	vector<SortedRunPtr> &GetSortedRuns(GlobalSourceState &global_state) const;
 
 public:
 	ClientContext &client;
