@@ -1,6 +1,5 @@
 #include "duckdb/parser/statement/export_statement.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
-#include "duckdb/parser/query_node.hpp"
 
 namespace duckdb {
 
