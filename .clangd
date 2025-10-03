@@ -1,3 +1,3 @@
 CompileFlags:
-  CompilationDatabase: build/clangd
+  CompilationDatabase: build/debug
   Add: -Wno-unqualified-std-cast-call
