@@ -203,7 +203,10 @@ OperatorResultType PhysicalAsOfJoin::ExecuteInternal(ExecutionContext &context, 
 //===--------------------------------------------------------------------===//
 class AsOfPayloadScanner {
 public:
-	explicit AsOfPayloadScanner(const SortedRun &sorted_run);
+	using Types = vector<LogicalType>;
+	using Columns = vector<column_t>;
+
+	AsOfPayloadScanner(const SortedRun &sorted_run, const HashedSort &hashed_sort);
 	idx_t Base() const {
 		return base;
 	}
@@ -219,15 +222,16 @@ public:
 		block_state.SetPinPayload(true);
 
 		base = scanned;
-		const auto result = (this->*scan_func)(chunk);
-		scanned += chunk.size();
+		const auto result = (this->*scan_func)();
+		chunk.ReferenceColumns(scan_chunk, scan_ids);
+		scanned += scan_chunk.size();
 		++chunk_idx;
 		return result;
 	}
 
 private:
 	template <SortKeyType SORT_KEY_TYPE>
-	bool TemplatedScan(DataChunk &chunk) {
+	bool TemplatedScan() {
 		using SORT_KEY = SortKey<SORT_KEY_TYPE>;
 		using BLOCK_ITERATOR = block_iterator_t<ExternalBlockIteratorState, SORT_KEY>;
 		BLOCK_ITERATOR itr(block_state, chunk_idx, 0);
@@ -240,28 +244,32 @@ private:
 		}
 
 		// Scan
-		chunk.Reset();
-		scan_state.Scan(sorted_run, sort_key_pointers, result_count, chunk);
-		return chunk.size() > 0;
+		scan_chunk.Reset();
+		scan_state.Scan(sorted_run, sort_key_pointers, result_count, scan_chunk);
+		return scan_chunk.size() > 0;
 	}
 
 	//	Only figure out the scan function once.
-	using scan_t = bool (duckdb::AsOfPayloadScanner::*)(DataChunk &chunk);
+	using scan_t = bool (duckdb::AsOfPayloadScanner::*)();
 	scan_t scan_func;
 
 	const SortedRun &sorted_run;
 	ExternalBlockIteratorState block_state;
 	Vector sort_key_pointers = Vector(LogicalType::POINTER);
 	SortedRunScanState scan_state;
+	const Columns scan_ids;
+	DataChunk scan_chunk;
 	const idx_t count;
 	idx_t base = 0;
 	idx_t scanned = 0;
 	idx_t chunk_idx = 0;
 };
 
-AsOfPayloadScanner::AsOfPayloadScanner(const SortedRun &sorted_run)
+AsOfPayloadScanner::AsOfPayloadScanner(const SortedRun &sorted_run, const HashedSort &hashed_sort)
     : sorted_run(sorted_run), block_state(*sorted_run.key_data, sorted_run.payload_data.get()),
-      scan_state(sorted_run.context, sorted_run.sort), count(sorted_run.Count()) {
+      scan_state(sorted_run.context, sorted_run.sort), scan_ids(hashed_sort.scan_ids), count(sorted_run.Count()) {
+
+	scan_chunk.Initialize(sorted_run.context, hashed_sort.payload_types);
 	const auto sort_key_type = sorted_run.key_data->GetLayout().GetSortKeyType();
 	switch (sort_key_type) {
 	case SortKeyType::NO_PAYLOAD_FIXED_8:
@@ -387,7 +395,7 @@ public:
 	optional_ptr<SortedRun> right_group;
 	optional_ptr<OuterJoinMarker> right_outer;
 	unique_ptr<ExternalBlockIteratorState> right_itr;
-	idx_t right_pos = 0; // ExternalBlockIteratorState doesn't know this...
+	idx_t right_pos; // ExternalBlockIteratorState doesn't know this...
 	unique_ptr<AsOfPayloadScanner> rhs_scanner;
 	DataChunk rhs_payload;
 	idx_t right_bin = 0;
@@ -409,7 +417,6 @@ AsOfProbeBuffer::AsOfProbeBuffer(ClientContext &client, const PhysicalAsOfJoin &
 		lhs_executor.AddExpression(*cond.left);
 	}
 
-	//	We sort the row numbers of the incoming block, not the rows
 	lhs_scanned.Initialize(client, op.children[0].get().GetTypes());
 	lhs_payload.Initialize(client, op.children[0].get().GetTypes());
 	rhs_payload.Initialize(client, op.children[1].get().GetTypes());
@@ -485,17 +492,18 @@ void AsOfProbeBuffer::BeginLeftScan(hash_t scan_bin) {
 		throw NotImplementedException("Unsupported comparison type for ASOF join");
 	}
 
-	lhs_scanner = make_uniq<AsOfPayloadScanner>(*left_group);
+	lhs_scanner = make_uniq<AsOfPayloadScanner>(*left_group, *gsink.hashed_sorts[0]);
 	left_itr = CreateIteratorState(*left_group);
 
 	// We are only probing the corresponding right side bin, which may be empty
 	// If it is empty, we leave the iterator as null so we can emit left matches
+	right_pos = 0;
 	if (right_bin < rhs_groups.size()) {
 		right_group = rhs_groups[right_bin].get();
 		right_outer = gsink.right_outers.data() + right_bin;
 		if (right_group && right_group->Count()) {
 			right_itr = CreateIteratorState(*right_group);
-			rhs_scanner = make_uniq<AsOfPayloadScanner>(*right_group);
+			rhs_scanner = make_uniq<AsOfPayloadScanner>(*right_group, *gsink.hashed_sorts[1]);
 		}
 	}
 }
@@ -552,6 +560,7 @@ bool AsOfProbeBuffer::NextLeft() {
 	} else {
 		lhs_payload.Reference(lhs_scanned);
 	}
+	lhs_payload.Print();
 
 	return true;
 }
@@ -833,11 +842,15 @@ idx_t AsOfLocalSourceState::BeginRightScan(const idx_t hash_bin_p) {
 	hash_bin = hash_bin_p;
 
 	auto &rhs_groups = gsource.gsink.hash_groups[1];
-	hash_group = std::move(rhs_groups[hash_bin]);
-	if (!hash_group->Count()) {
+	if (hash_bin >= rhs_groups.size()) {
 		return 0;
 	}
-	scanner = make_uniq<AsOfPayloadScanner>(*hash_group);
+
+	hash_group = std::move(rhs_groups[hash_bin]);
+	if (!hash_group || !hash_group->Count()) {
+		return 0;
+	}
+	scanner = make_uniq<AsOfPayloadScanner>(*hash_group, *gsource.gsink.hashed_sorts[1]);
 
 	rhs_matches = gsource.gsink.right_outers[hash_bin].GetMatches();
 
