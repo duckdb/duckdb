@@ -1,0 +1,69 @@
+# name: test/geoparquet/versions.test
+# group: [geoparquet]
+
+require spatial
+
+require parquet
+
+statement ok
+COPY (SELECT st_point(1,2) as geometry)
+TO '__TEST_DIR__/test_default.parquet' (FORMAT PARQUET);
+
+query I
+SELECT (decode(value)) as col
+FROM parquet_kv_metadata('__TEST_DIR__/test_default.parquet');
+----
+{"version":"1.0.0","primary_column":"geometry","columns":{"geometry":{"encoding":"WKB","geometry_types":["Point"],"bbox":[1.0,2.0,1.0,2.0]}}}
+
+query I
+SELECT geo_types from parquet_metadata('__TEST_DIR__/test_default.parquet');
+----
+NULL
+
+
+statement ok
+COPY (SELECT st_point(1,2) as geometry)
+TO '__TEST_DIR__/test_v1.parquet' (FORMAT PARQUET, GEOPARQUET_VERSION 'V1');
+
+query I
+SELECT (decode(value)) as col
+FROM parquet_kv_metadata('__TEST_DIR__/test_v1.parquet');
+----
+{"version":"1.0.0","primary_column":"geometry","columns":{"geometry":{"encoding":"WKB","geometry_types":["Point"],"bbox":[1.0,2.0,1.0,2.0]}}}
+
+query I
+SELECT geo_types from parquet_metadata('__TEST_DIR__/test_v1.parquet');
+----
+NULL
+
+
+statement ok
+COPY (SELECT st_point(1,2) as geometry)
+TO '__TEST_DIR__/test_none.parquet' (FORMAT PARQUET, GEOPARQUET_VERSION 'NONE');
+
+query I
+SELECT (decode(value)) as col
+FROM parquet_kv_metadata('__TEST_DIR__/test_none.parquet');
+----
+
+query I
+SELECT geo_types from parquet_metadata('__TEST_DIR__/test_none.parquet');
+----
+[point]
+
+statement ok
+COPY (SELECT st_point(1,2) as geometry)
+TO '__TEST_DIR__/test_both.parquet' (FORMAT PARQUET, GEOPARQUET_VERSION 'BOTH');
+
+query I
+SELECT (decode(value)) as col
+FROM parquet_kv_metadata('__TEST_DIR__/test_both.parquet');
+----
+{"version":"1.0.0","primary_column":"geometry","columns":{"geometry":{"encoding":"WKB","geometry_types":["Point"],"bbox":[1.0,2.0,1.0,2.0]}}}
+
+query I
+SELECT geo_types from parquet_metadata('__TEST_DIR__/test_both.parquet');
+----
+[point]
+
+

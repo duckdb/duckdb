@@ -208,17 +208,19 @@ unique_ptr<GeoParquetFileMetadata> GeoParquetFileMetadata::TryRead(const duckdb_
 					throw InvalidInputException("Geoparquet metadata is not an object");
 				}
 
-				auto result = make_uniq<GeoParquetFileMetadata>();
+				// We dont actually care about the version for now, as we only support V1+native
+				auto result = make_uniq<GeoParquetFileMetadata>(GeoParquetVersion::BOTH);
 
 				// Check and parse the version
 				const auto version_val = yyjson_obj_get(root, "version");
 				if (!yyjson_is_str(version_val)) {
 					throw InvalidInputException("Geoparquet metadata does not have a version");
 				}
-				result->version = yyjson_get_str(version_val);
-				if (StringUtil::StartsWith(result->version, "2")) {
-					// Guard against a breaking future 2.0 version
-					throw InvalidInputException("Geoparquet version %s is not supported", result->version);
+
+				auto version = yyjson_get_str(version_val);
+				if (StringUtil::StartsWith(version, "3")) {
+					// Guard against a breaking future 3.0 version
+					throw InvalidInputException("Geoparquet version %s is not supported", version);
 				}
 
 				// Check and parse the geometry columns
@@ -344,7 +346,17 @@ void GeoParquetFileMetadata::Write(duckdb_parquet::FileMetaData &file_meta_data)
 	yyjson_mut_doc_set_root(doc, root);
 
 	// Add the version
-	yyjson_mut_obj_add_strncpy(doc, root, "version", version.c_str(), version.size());
+	switch (version) {
+	case GeoParquetVersion::V1:
+	case GeoParquetVersion::BOTH:
+		yyjson_mut_obj_add_strcpy(doc, root, "version", "1.0.0");
+		break;
+	case GeoParquetVersion::NONE:
+	default:
+		// Should never happen, we should not be writing anything
+		yyjson_mut_doc_free(doc);
+		throw InternalException("GeoParquetVersion::NONE should not write metadata");
+	}
 
 	// Add the primary column
 	yyjson_mut_obj_add_strncpy(doc, root, "primary_column", primary_geometry_column.c_str(),

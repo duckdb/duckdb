@@ -94,7 +94,7 @@ public:
 	}
 
 	static ParquetColumnSchema FillParquetSchema(vector<duckdb_parquet::SchemaElement> &schemas,
-	                                             const LogicalType &type, const string &name,
+	                                             const LogicalType &type, const string &name, bool allow_geometry,
 	                                             optional_ptr<const ChildFieldIDs> field_ids, idx_t max_repeat = 0,
 	                                             idx_t max_define = 1, bool can_have_nulls = true);
 	//! Create the column writer for a specific type recursively
