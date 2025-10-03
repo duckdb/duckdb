@@ -3,7 +3,6 @@
 # this script is used to format the source directory
 
 import os
-import shutil
 import time
 import sys
 import inspect
@@ -383,7 +382,7 @@ def format_file(f, full_path, directory, ext):
         tmpfile = os.path.join(tempfile.gettempdir(), str(uuid.uuid4()))
         with open_utf8(tmpfile, 'w+') as f:
             f.write(new_text)
-        os.rename(tmpfile, full_path)
+        shutil.move(tmpfile, full_path)
 
 
 class ToFormatFile:
