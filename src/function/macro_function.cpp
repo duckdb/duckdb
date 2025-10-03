@@ -47,7 +47,7 @@ MacroBindResult MacroFunction::BindMacroFunction(
     InsertionOrderPreservingMap<unique_ptr<ParsedExpression>> &named_arguments, idx_t depth) {
 
 	ExpressionBinder expr_binder(binder, binder.context);
-
+	expr_binder.lambda_bindings = binder.lambda_bindings;
 	// Find argument types and separate positional and default arguments
 	vector<LogicalType> positional_arg_types;
 	InsertionOrderPreservingMap<LogicalType> named_arg_types;

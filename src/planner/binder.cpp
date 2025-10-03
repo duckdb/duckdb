@@ -469,7 +469,6 @@ optional_ptr<Binding> Binder::GetMatchingBinding(const string &catalog_name, con
                                                  const string &table_name, const string &column_name,
                                                  ErrorData &error) {
 	optional_ptr<Binding> binding;
-	D_ASSERT(!lambda_bindings);
 	if (macro_binding && table_name == macro_binding->GetAlias()) {
 		binding = optional_ptr<Binding>(macro_binding.get());
 	} else {
