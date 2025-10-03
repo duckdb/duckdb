@@ -10,6 +10,7 @@
 
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/common.hpp"
+#include "duckdb/storage/table/add_column_checkpoint_state.hpp"
 
 namespace duckdb {
 
@@ -62,6 +63,12 @@ public:
 	//! The writer used to log queries, if logging is enabled.
 	//! DEPRECATED: Now, queries are written to the generic log.
 	unique_ptr<BufferedFileWriter> log_query_writer;
+
+	bool skip_bind_default = false;
+	bool is_replay_wal = false;
+	bool is_function_bound = false;
+	bool is_add_column = false;
+	unique_ptr<AddColumnCheckpointState> add_column_checkpoint_state;
 
 public:
 	DUCKDB_API static ClientData &Get(ClientContext &context);
