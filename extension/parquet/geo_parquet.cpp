@@ -351,6 +351,9 @@ void GeoParquetFileMetadata::Write(duckdb_parquet::FileMetaData &file_meta_data)
 	case GeoParquetVersion::BOTH:
 		yyjson_mut_obj_add_strcpy(doc, root, "version", "1.0.0");
 		break;
+	case GeoParquetVersion::V2:
+		yyjson_mut_obj_add_strcpy(doc, root, "version", "2.0.0");
+		break;
 	case GeoParquetVersion::NONE:
 	default:
 		// Should never happen, we should not be writing anything
