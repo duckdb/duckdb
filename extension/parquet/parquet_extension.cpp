@@ -240,7 +240,7 @@ struct ParquetWriteBindData : public TableFunctionData {
 	ParquetVersion parquet_version = ParquetVersion::V1;
 
 	//! Which geo-parquet version to use when writing
-	GeoParquetVersion geoparquet_version = GeoParquetVersion::BOTH;
+	GeoParquetVersion geoparquet_version = GeoParquetVersion::V1;
 };
 
 struct ParquetWriteGlobalState : public GlobalFunctionData {
