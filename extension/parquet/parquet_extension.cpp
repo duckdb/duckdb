@@ -436,6 +436,8 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 				bind_data->geoparquet_version = GeoParquetVersion::NONE;
 			} else if (roption == "V1") {
 				bind_data->geoparquet_version = GeoParquetVersion::V1;
+			} else if (roption == "V2") {
+				bind_data->geoparquet_version = GeoParquetVersion::V2;
 			} else if (roption == "BOTH") {
 				bind_data->geoparquet_version = GeoParquetVersion::BOTH;
 			} else {
@@ -649,6 +651,8 @@ const char *EnumUtil::ToChars<GeoParquetVersion>(GeoParquetVersion value) {
 		return "NONE";
 	case GeoParquetVersion::V1:
 		return "V1";
+	case GeoParquetVersion::V2:
+		return "V2";
 	case GeoParquetVersion::BOTH:
 		return "BOTH";
 	default:
@@ -663,6 +667,9 @@ GeoParquetVersion EnumUtil::FromString<GeoParquetVersion>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "V1")) {
 		return GeoParquetVersion::V1;
+	}
+	if (StringUtil::Equals(value, "V2")) {
+		return GeoParquetVersion::V2;
 	}
 	if (StringUtil::Equals(value, "BOTH")) {
 		return GeoParquetVersion::BOTH;

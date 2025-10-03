@@ -307,8 +307,10 @@ void PrimitiveColumnWriter::SetParquetStatistics(PrimitiveColumnWriterState &sta
 
 		auto gpq_version = writer.GetGeoParquetVersion();
 
-		const auto has_real_stats = gpq_version == GeoParquetVersion::NONE || gpq_version == GeoParquetVersion::BOTH;
-		const auto has_json_stats = gpq_version == GeoParquetVersion::V1 || gpq_version == GeoParquetVersion::BOTH;
+		const auto has_real_stats = gpq_version == GeoParquetVersion::NONE || gpq_version == GeoParquetVersion::BOTH ||
+		                            gpq_version == GeoParquetVersion::V2;
+		const auto has_json_stats = gpq_version == GeoParquetVersion::V1 || gpq_version == GeoParquetVersion::BOTH ||
+		                            gpq_version == GeoParquetVersion::V2;
 
 		if (has_real_stats) {
 			// Write the parquet native geospatial statistics

@@ -207,9 +207,10 @@ enum class GeoParquetVersion : uint8_t {
 	// Write GeoParquet 2.0
 	// The GeoParquet 2.0 options is identical to GeoParquet 1.0 except the underlying storage
 	// of spatial columns is Parquet native geometry, where the Parquet writer will include
-	// native statistics according to the underlying Parquet options.
-	// V2 isnt standardized yet, so this option is disabled for now.
-	// V2,
+	// native statistics according to the underlying Parquet options. Compared to 'BOTH', this will
+	// actually write the metadata as containing GeoParquet version 2.0.0
+	// However, V2 isnt standardized yet, so this option is still a bit experimental
+	V2,
 
 	// Write GeoParquet 1.0 metadata, with native Parquet geometry types
 	// This is a bit of a hold-over option for compatibility with systems that
