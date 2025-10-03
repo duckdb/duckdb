@@ -33,6 +33,8 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Windows.yml'
+      - '.github/config/extensions/*.cmake'
+      - '.github/patches/extensions/**/*.patch'
 
   merge_group:
   pull_request:
@@ -45,7 +47,8 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Windows.yml'
-
+      - '.github/config/extensions/*.cmake'
+      - '.github/patches/extensions/**/*.patch'
 
 concurrency:
   group: windows-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}-${{ inputs.override_git_describe }}
