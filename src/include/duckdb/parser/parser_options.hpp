@@ -18,6 +18,7 @@ struct ParserOptions {
 	bool integer_division = false;
 	idx_t max_expression_depth = 1000;
 	const vector<ParserExtension> *extensions = nullptr;
+	string parser_override_setting = "default";
 };
 
 } // namespace duckdb
