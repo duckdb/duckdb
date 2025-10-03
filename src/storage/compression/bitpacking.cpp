@@ -341,8 +341,6 @@ unique_ptr<AnalyzeState> BitpackingInitAnalyze(ColumnData &col_data, PhysicalTyp
 
 template <class T>
 bool BitpackingAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
-	auto &analyze_state = state.Cast<BitpackingAnalyzeState<T>>();
-
 	// We use BITPACKING_METADATA_GROUP_SIZE tuples, which can exceed the block size.
 	// In that case, we disable bitpacking.
 	// we are conservative here by multiplying by 2
@@ -351,6 +349,7 @@ bool BitpackingAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 		return false;
 	}
 
+	auto &analyze_state = state.Cast<BitpackingAnalyzeState<T>>();
 	UnifiedVectorFormat vdata;
 	input.ToUnifiedFormat(count, vdata);
 

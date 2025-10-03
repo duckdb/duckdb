@@ -570,7 +570,10 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 
 	auto file_meta_data = GetFileMetadata();
 	D_ASSERT(file_meta_data);
-	D_ASSERT(next_schema_idx < file_meta_data->schema.size());
+	if (next_schema_idx >= file_meta_data->schema.size()) {
+		throw InvalidInputException("Malformed Parquet schema in file \"%s\": invalid schema index %d", file.path,
+		                            next_schema_idx);
+	}
 	auto &s_ele = file_meta_data->schema[next_schema_idx];
 	auto this_idx = next_schema_idx;
 
