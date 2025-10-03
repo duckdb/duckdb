@@ -35,6 +35,7 @@ add_library_unity(
   statistics_propagator.cpp
   limit_pushdown.cpp
   topn_optimizer.cpp
+  topn_window_elimination.cpp
   unnest_rewriter.cpp
   sampling_pushdown.cpp
   sum_rewriter.cpp)

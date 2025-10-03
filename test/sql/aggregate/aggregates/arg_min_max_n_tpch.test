@@ -43,6 +43,10 @@ WHERE rid <= k
 GROUP BY ALL
 ORDER BY ALL;
 
+# Disable top_n_window_elimination to prevent comparing max and max_by
+statement ok
+SET disabled_optimizers = 'top_n_window_elimination'
+
 query II nosort top_resultset
 SELECT * FROM compute_top_k(lineitem, l_returnflag, l_orderkey, 3);
 
