@@ -232,10 +232,18 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 	auto bound_join_node = Bind(join);
 
 	auto root = CreatePlan(*bound_join_node);
+	auto join_ref = reference<LogicalOperator>(*root);
+	while (join_ref.get().children.size() == 1) {
+		join_ref = *join_ref.get().children[0];
+	}
+	if (join_ref.get().children.size() != 2) {
+		throw NotImplementedException("Expected a join after binding a join operator - but got a %s",
+		                              join_ref.get().type);
+	}
 	// kind of hacky, CreatePlan turns a RIGHT join into a LEFT join so the children get reversed from what we need
 	bool inverted = join.type == JoinType::RIGHT;
-	auto &source = root->children[inverted ? 1 : 0];
-	auto &get = root->children[inverted ? 0 : 1]->Cast<LogicalGet>();
+	auto &source = join_ref.get().children[inverted ? 1 : 0];
+	auto &get = join_ref.get().children[inverted ? 0 : 1]->Cast<LogicalGet>();
 
 	auto merge_into = make_uniq<LogicalMergeInto>(table);
 	merge_into->table_index = GenerateTableIndex();

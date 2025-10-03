@@ -256,7 +256,7 @@ void ArrayColumnData::FetchRow(TransactionData transaction, ColumnFetchState &st
 
 	// We need to fetch between [row_id * array_size, (row_id + 1) * array_size)
 	auto child_state = make_uniq<ColumnScanState>();
-	child_state->Initialize(child_type, nullptr);
+	child_state->Initialize(state.context, child_type, nullptr);
 
 	const auto child_offset = start + (UnsafeNumericCast<idx_t>(row_id) - start) * array_size;
 
@@ -332,12 +332,12 @@ void ArrayColumnData::InitializeColumn(PersistentColumnData &column_data, BaseSt
 	this->count = validity.count.load();
 }
 
-void ArrayColumnData::GetColumnSegmentInfo(idx_t row_group_index, vector<idx_t> col_path,
+void ArrayColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<idx_t> col_path,
                                            vector<ColumnSegmentInfo> &result) {
 	col_path.push_back(0);
-	validity.GetColumnSegmentInfo(row_group_index, col_path, result);
+	validity.GetColumnSegmentInfo(context, row_group_index, col_path, result);
 	col_path.back() = 1;
-	child_column->GetColumnSegmentInfo(row_group_index, col_path, result);
+	child_column->GetColumnSegmentInfo(context, row_group_index, col_path, result);
 }
 
 void ArrayColumnData::Verify(RowGroup &parent) {
