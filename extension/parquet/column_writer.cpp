@@ -97,7 +97,7 @@ bool ColumnWriterStatistics::HasGeoStats() {
 	return false;
 }
 
-optional_ptr<GeometryStats> ColumnWriterStatistics::GetGeoStats() {
+optional_ptr<GeometryStatsData> ColumnWriterStatistics::GetGeoStats() {
 	return nullptr;
 }
 

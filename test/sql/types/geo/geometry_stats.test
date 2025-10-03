@@ -1,0 +1,61 @@
+# name: test/sql/types/geo/geometry_stats.test
+# group: [geo]
+
+# Stats are not preserved when serialized in the stats() function, so this doesnt work
+require no_alternative_verify
+
+statement ok
+create table t1(id INT, g GEOMETRY);
+
+statement ok
+insert into t1 values (0, 'POINT(0 0)'::GEOMETRY);
+
+query I
+select stats(g) from t1 limit 1;
+----
+[Extent: [X: [0.000000, 0.000000], Y: [0.000000, 0.000000], Z: [inf, -inf], M: [inf, -inf]], Types: [point]][Has Null: false, Has No Null: true][Approx Unique: 1]
+
+statement ok
+insert into t1 values (1, 'POINT(-2 2)'::GEOMETRY);
+
+query I
+select stats(g) from t1 limit 1;
+----
+[Extent: [X: [-2.000000, 0.000000], Y: [0.000000, 2.000000], Z: [inf, -inf], M: [inf, -inf]], Types: [point]][Has Null: false, Has No Null: true][Approx Unique: 2]
+
+statement ok
+insert into t1 values (3, 'POINT(2 -2)'::GEOMETRY);
+
+query I
+select stats(g) from t1 limit 1;
+----
+[Extent: [X: [-2.000000, 2.000000], Y: [-2.000000, 2.000000], Z: [inf, -inf], M: [inf, -inf]], Types: [point]][Has Null: false, Has No Null: true][Approx Unique: 3]
+
+# Insert Z-Value Geometry
+statement ok
+insert into t1 values (4, 'LINESTRING Z (0 0 0, 1 1 1, 2 2 2)'::GEOMETRY);
+
+query I
+select stats(g) from t1 limit 1;
+----
+[Extent: [X: [-2.000000, 2.000000], Y: [-2.000000, 2.000000], Z: [0.000000, 2.000000], M: [inf, -inf]], Types: [point, linestring_z]][Has Null: false, Has No Null: true][Approx Unique: 4]
+
+# Insert M-Value Geometry
+statement ok
+insert into t1 values (5, 'POLYGON M ((0 0 2, 4 0 2, 4 4 2, 0 4 2, 0 0 2))'::GEOMETRY);
+
+query I
+select stats(g) from t1 limit 1;
+----
+[Extent: [X: [-2.000000, 4.000000], Y: [-2.000000, 4.000000], Z: [0.000000, 2.000000], M: [2.000000, 2.000000]], Types: [point, linestring_z, polygon_m]][Has Null: false, Has No Null: true][Approx Unique: 5]
+
+# Insert ZM-Value Geometry
+statement ok
+insert into t1 values (6, 'MULTILINESTRING ZM ((0 0 -10 10, 1 1 -10 10), (2 2 2 1, 3 3 3 1))'::GEOMETRY);
+
+query I
+select stats(g) from t1 limit 1;
+----
+[Extent: [X: [-2.000000, 4.000000], Y: [-2.000000, 4.000000], Z: [-10.000000, 3.000000], M: [1.000000, 10.000000]], Types: [point, linestring_z, polygon_m, multilinestring_zm]][Has Null: false, Has No Null: true][Approx Unique: 6]
+
+

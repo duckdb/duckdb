@@ -585,8 +585,9 @@ unique_ptr<SegmentScanState> FSSTStorage::StringInitScan(const QueryContext &con
 	}
 	state->duckdb_fsst_decoder_ptr = state->duckdb_fsst_decoder.get();
 
-	if (StringStats::HasMaxStringLength(segment.stats.statistics)) {
-		state->all_values_inlined = StringStats::MaxStringLength(segment.stats.statistics) <= string_t::INLINE_LENGTH;
+	const auto &stats = segment.stats.statistics;
+	if (stats.GetStatsType() == StatisticsType::STRING_STATS && StringStats::HasMaxStringLength(stats)) {
+		state->all_values_inlined = StringStats::MaxStringLength(stats) <= string_t::INLINE_LENGTH;
 	}
 
 	return std::move(state);
