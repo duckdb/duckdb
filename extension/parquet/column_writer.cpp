@@ -288,7 +288,7 @@ ParquetColumnSchema ColumnWriter::FillParquetSchema(const LogicalType &type, con
 			}
 		}
 
-		ParquetColumnSchema variant_column(name, type, max_define, max_repeat, 0, null_type);
+		auto variant_column = ParquetColumnSchema::FromLogicalType(name, type, max_define, max_repeat, 0, null_type);
 		variant_column.children.reserve(child_types.size());
 		for (auto &child_type : child_types) {
 			auto &child_name = child_type.first;
@@ -314,7 +314,7 @@ ParquetColumnSchema ColumnWriter::FillParquetSchema(const LogicalType &type, con
 	}
 
 	if (type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::UNION) {
-		ParquetColumnSchema struct_column(name, type, max_define, max_repeat, 0, null_type);
+		auto struct_column = ParquetColumnSchema::FromLogicalType(name, type, max_define, max_repeat, 0, null_type);
 		if (field_id && field_id->set) {
 			struct_column.field_id = field_id->field_id;
 		}
@@ -333,7 +333,7 @@ ParquetColumnSchema ColumnWriter::FillParquetSchema(const LogicalType &type, con
 		auto is_list = type.id() == LogicalTypeId::LIST;
 		auto &child_type = is_list ? ListType::GetChildType(type) : ArrayType::GetChildType(type);
 
-		ParquetColumnSchema list_column(name, type, max_define, max_repeat, 0, null_type);
+		auto list_column = ParquetColumnSchema::FromLogicalType(name, type, max_define, max_repeat, 0, null_type);
 		list_column.children.push_back(FillParquetSchema(child_type, "element", child_field_ids, shredding_type,
 		                                                 max_repeat + 1, max_define + 2, true));
 		return list_column;
@@ -345,7 +345,7 @@ ParquetColumnSchema ColumnWriter::FillParquetSchema(const LogicalType &type, con
 		key_value.emplace_back("key", MapType::KeyType(type));
 		key_value.emplace_back("value", MapType::ValueType(type));
 
-		ParquetColumnSchema map_column(name, type, max_define, max_repeat, 0, null_type);
+		auto map_column = ParquetColumnSchema::FromLogicalType(name, type, max_define, max_repeat, 0, null_type);
 		map_column.children.reserve(2);
 		for (idx_t i = 0; i < 2; i++) {
 			// key needs to be marked as REQUIRED
@@ -359,7 +359,7 @@ ParquetColumnSchema ColumnWriter::FillParquetSchema(const LogicalType &type, con
 		}
 		return map_column;
 	}
-	return ParquetColumnSchema(name, type, max_define, max_repeat, 0, null_type);
+	return ParquetColumnSchema::FromLogicalType(name, type, max_define, max_repeat, 0, null_type);
 }
 
 unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &context, ParquetWriter &writer,

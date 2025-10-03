@@ -16,6 +16,7 @@ using namespace duckdb_parquet; // NOLINT
 
 using duckdb_parquet::ConvertedType;
 using duckdb_parquet::FieldRepetitionType;
+using duckdb_parquet::SchemaElement;
 
 using duckdb_parquet::FileMetaData;
 struct ParquetOptions;
@@ -37,13 +38,29 @@ enum class ParquetExtraTypeInfo {
 struct ParquetColumnSchema {
 public:
 	ParquetColumnSchema() = default;
-	ParquetColumnSchema(idx_t max_define, idx_t max_repeat, idx_t schema_index, idx_t file_index,
-	                    ParquetColumnSchemaType schema_type = ParquetColumnSchemaType::COLUMN);
-	ParquetColumnSchema(
-	    string name, LogicalType type, idx_t max_define, idx_t max_repeat, idx_t column_index,
-	    duckdb_parquet::FieldRepetitionType::type repetition_type = duckdb_parquet::FieldRepetitionType::type::OPTIONAL,
-	    ParquetColumnSchemaType schema_type = ParquetColumnSchemaType::COLUMN);
-	ParquetColumnSchema(ParquetColumnSchema parent, LogicalType result_type, ParquetColumnSchemaType schema_type);
+	ParquetColumnSchema(ParquetColumnSchema &&other) = default;
+	ParquetColumnSchema(const ParquetColumnSchema &other) = default;
+	ParquetColumnSchema &operator=(ParquetColumnSchema &&other) = default;
+
+public:
+	//! Writer constructors
+	static ParquetColumnSchema FromLogicalType(const string &name, const LogicalType &type, idx_t max_define,
+	                                           idx_t max_repeat, idx_t column_index,
+	                                           duckdb_parquet::FieldRepetitionType::type repetition_type,
+	                                           ParquetColumnSchemaType schema_type = ParquetColumnSchemaType::COLUMN);
+
+public:
+	//! Reader constructors
+	static ParquetColumnSchema FromSchemaElement(const SchemaElement &element, idx_t max_define, idx_t max_repeat,
+	                                             idx_t schema_index, idx_t column_index, ParquetColumnSchemaType type,
+	                                             const ParquetOptions &options);
+	static ParquetColumnSchema FromParentSchema(ParquetColumnSchema parent, LogicalType result_type,
+	                                            ParquetColumnSchemaType schema_type);
+	static ParquetColumnSchema FromChildSchemas(const string &name, const LogicalType &type, idx_t max_define,
+	                                            idx_t max_repeat, idx_t schema_index, idx_t column_index,
+	                                            vector<ParquetColumnSchema> &&children,
+	                                            ParquetColumnSchemaType schema_type = ParquetColumnSchemaType::COLUMN);
+	static ParquetColumnSchema FileRowNumber();
 
 public:
 	unique_ptr<BaseStatistics> Stats(const FileMetaData &file_meta_data, const ParquetOptions &parquet_options,

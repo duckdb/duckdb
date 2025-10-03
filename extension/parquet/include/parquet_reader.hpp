@@ -195,6 +195,8 @@ public:
 	static unique_ptr<BaseStatistics> ReadStatistics(const ParquetUnionData &union_data, const string &name);
 
 	LogicalType DeriveLogicalType(const SchemaElement &s_ele, ParquetColumnSchema &schema) const;
+	static LogicalType DeriveLogicalType(const SchemaElement &s_ele, const ParquetOptions &options,
+	                                     ParquetColumnSchema &schema);
 
 	void AddVirtualColumn(column_t virtual_column_id) override;
 

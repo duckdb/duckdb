@@ -415,16 +415,19 @@ void ParquetWriter::PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGro
 	row_group.__isset.file_offset = true;
 
 	if (file_meta_data.schema.empty()) {
-		// populate root schema object
-		file_meta_data.schema.resize(1);
-		file_meta_data.schema[0].name = "duckdb_schema";
-		file_meta_data.schema[0].num_children = NumericCast<int32_t>(sql_types.size());
-		file_meta_data.schema[0].__isset.num_children = true;
-		file_meta_data.schema[0].repetition_type = duckdb_parquet::FieldRepetitionType::REQUIRED;
-		file_meta_data.schema[0].__isset.repetition_type = true;
+		lock_guard<mutex> glock(lock);
+		if (file_meta_data.schema.empty()) {
+			// populate root schema object
+			file_meta_data.schema.resize(1);
+			file_meta_data.schema[0].name = "duckdb_schema";
+			file_meta_data.schema[0].num_children = NumericCast<int32_t>(sql_types.size());
+			file_meta_data.schema[0].__isset.num_children = true;
+			file_meta_data.schema[0].repetition_type = duckdb_parquet::FieldRepetitionType::REQUIRED;
+			file_meta_data.schema[0].__isset.repetition_type = true;
 
-		for (auto &column_writer : column_writers) {
-			column_writer->FinalizeSchema(file_meta_data.schema);
+			for (auto &column_writer : column_writers) {
+				column_writer->FinalizeSchema(file_meta_data.schema);
+			}
 		}
 	}
 
