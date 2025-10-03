@@ -111,6 +111,11 @@ public:
 		return size;
 	}
 
+	//! Get the bytes size of the target stream
+	idx_t GetTargetStreamSize() const {
+		return target_stream.GetPosition();
+	}
+
 	//! If any of the inserts caused the dictionary to be full, this returns true
 	bool IsFull() const {
 		return full;
