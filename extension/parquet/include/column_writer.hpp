@@ -18,6 +18,7 @@ class ParquetWriter;
 class ColumnWriterPageState;
 class PrimitiveColumnWriterState;
 struct ChildFieldIDs;
+struct ShreddingType;
 class ResizeableBuffer;
 class ParquetBloomFilter;
 
@@ -88,10 +89,10 @@ public:
 		return column_schema.max_repeat;
 	}
 
-	static ParquetColumnSchema FillParquetSchema(vector<duckdb_parquet::SchemaElement> &schemas,
-	                                             const LogicalType &type, const string &name,
-	                                             optional_ptr<const ChildFieldIDs> field_ids, idx_t max_repeat = 0,
-	                                             idx_t max_define = 1, bool can_have_nulls = true);
+	static ParquetColumnSchema
+	FillParquetSchema(vector<duckdb_parquet::SchemaElement> &schemas, const LogicalType &type, const string &name,
+	                  optional_ptr<const ChildFieldIDs> field_ids, optional_ptr<const ShreddingType> shredding_types,
+	                  idx_t max_repeat = 0, idx_t max_define = 1, bool can_have_nulls = true);
 	//! Create the column writer for a specific type recursively
 	static unique_ptr<ColumnWriter> CreateWriterRecursive(ClientContext &context, ParquetWriter &writer,
 	                                                      const vector<duckdb_parquet::SchemaElement> &parquet_schemas,

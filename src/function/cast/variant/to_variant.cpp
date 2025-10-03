@@ -130,6 +130,9 @@ static bool WriteVariantResultData(ToVariantSourceData &source, ToVariantGlobalR
 }
 
 static bool CastToVARIANT(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+	if (!count) {
+		return true;
+	}
 	DataChunk offsets;
 	offsets.Initialize(Allocator::DefaultAllocator(),
 	                   {LogicalType::UINTEGER, LogicalType::UINTEGER, LogicalType::UINTEGER, LogicalType::UINTEGER},

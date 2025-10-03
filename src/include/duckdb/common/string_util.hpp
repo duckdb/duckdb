@@ -217,6 +217,7 @@ public:
 
 	//! Case insensitive hash
 	DUCKDB_API static uint64_t CIHash(const string &str);
+	DUCKDB_API static uint64_t CIHash(const char *str, idx_t size);
 
 	//! Case insensitive equals
 	DUCKDB_API static bool CIEquals(const string &l1, const string &l2);

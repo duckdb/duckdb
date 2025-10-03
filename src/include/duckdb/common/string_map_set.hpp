@@ -28,9 +28,26 @@ struct StringEquality {
 	}
 };
 
+struct StringCIHash {
+	std::size_t operator()(const string_t &k) const {
+		return StringUtil::CIHash(k.GetData(), k.GetSize());
+	}
+};
+
+struct StringCIEquality {
+	bool operator()(const string_t &a, const string_t &b) const {
+		return StringUtil::CIEquals(a.GetData(), a.GetSize(), b.GetData(), b.GetSize());
+	}
+};
+
 template <typename T>
 using string_map_t = unordered_map<string_t, T, StringHash, StringEquality>;
 
 using string_set_t = unordered_set<string_t, StringHash, StringEquality>;
+
+template <typename T>
+using case_insensitive_string_map_t = unordered_map<string_t, T, StringCIHash, StringCIEquality>;
+
+using case_insensitive_string_set_t = unordered_set<string_t, StringCIHash, StringCIEquality>;
 
 } // namespace duckdb

@@ -3,6 +3,7 @@
 #include "duckdb.hpp"
 #include "mbedtls_wrapper.hpp"
 #include "parquet_crypto.hpp"
+#include "parquet_shredding.hpp"
 #include "parquet_timestamp.hpp"
 #include "resizable_buffer.hpp"
 #include "duckdb/common/file_system.hpp"
@@ -34,29 +35,6 @@ using duckdb_parquet::PageHeader;
 using duckdb_parquet::PageType;
 using ParquetRowGroup = duckdb_parquet::RowGroup;
 using duckdb_parquet::Type;
-
-ChildFieldIDs::ChildFieldIDs() : ids(make_uniq<case_insensitive_map_t<FieldID>>()) {
-}
-
-ChildFieldIDs ChildFieldIDs::Copy() const {
-	ChildFieldIDs result;
-	for (const auto &id : *ids) {
-		result.ids->emplace(id.first, id.second.Copy());
-	}
-	return result;
-}
-
-FieldID::FieldID() : set(false) {
-}
-
-FieldID::FieldID(int32_t field_id_p) : set(true), field_id(field_id_p) {
-}
-
-FieldID FieldID::Copy() const {
-	auto result = set ? FieldID(field_id) : FieldID();
-	result.child_field_ids = child_field_ids.Copy();
-	return result;
-}
 
 class MyTransport : public TTransport {
 public:
@@ -352,14 +330,15 @@ public:
 
 ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file_name_p, vector<LogicalType> types_p,
                              vector<string> names_p, CompressionCodec::type codec, ChildFieldIDs field_ids_p,
-                             const vector<pair<string, string>> &kv_metadata,
+                             ShreddingType shredding_types_p, const vector<pair<string, string>> &kv_metadata,
                              shared_ptr<ParquetEncryptionConfig> encryption_config_p,
                              optional_idx dictionary_size_limit_p, idx_t string_dictionary_page_size_limit_p,
                              bool enable_bloom_filters_p, double bloom_filter_false_positive_ratio_p,
                              int64_t compression_level_p, bool debug_use_openssl_p, ParquetVersion parquet_version)
     : context(context), file_name(std::move(file_name_p)), sql_types(std::move(types_p)),
       column_names(std::move(names_p)), codec(codec), field_ids(std::move(field_ids_p)),
-      encryption_config(std::move(encryption_config_p)), dictionary_size_limit(dictionary_size_limit_p),
+      shredding_types(std::move(shredding_types_p)), encryption_config(std::move(encryption_config_p)),
+      dictionary_size_limit(dictionary_size_limit_p),
       string_dictionary_page_size_limit(string_dictionary_page_size_limit_p),
       enable_bloom_filters(enable_bloom_filters_p),
       bloom_filter_false_positive_ratio(bloom_filter_false_positive_ratio_p), compression_level(compression_level_p),
@@ -418,8 +397,8 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
 
 	// construct the child schemas
 	for (idx_t i = 0; i < sql_types.size(); i++) {
-		auto child_schema =
-		    ColumnWriter::FillParquetSchema(file_meta_data.schema, sql_types[i], unique_names[i], &field_ids);
+		auto child_schema = ColumnWriter::FillParquetSchema(file_meta_data.schema, sql_types[i], unique_names[i],
+		                                                    &field_ids, &shredding_types);
 		column_schemas.push_back(std::move(child_schema));
 	}
 	// now construct the writers based on the schemas
