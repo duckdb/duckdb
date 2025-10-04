@@ -63,8 +63,8 @@ public:
 	PersistentColumnData Serialize() override;
 	void InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats) override;
 
-	void GetColumnSegmentInfo(duckdb::idx_t row_group_index, vector<duckdb::idx_t> col_path,
-	                          vector<duckdb::ColumnSegmentInfo> &result) override;
+	void GetColumnSegmentInfo(const QueryContext &context, duckdb::idx_t row_group_index,
+	                          vector<duckdb::idx_t> col_path, vector<duckdb::ColumnSegmentInfo> &result) override;
 
 private:
 	uint64_t FetchListOffset(idx_t row_idx);

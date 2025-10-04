@@ -295,11 +295,12 @@ void StandardColumnData::InitializeColumn(PersistentColumnData &column_data, Bas
 	validity.InitializeColumn(column_data.child_columns[0], target_stats);
 }
 
-void StandardColumnData::GetColumnSegmentInfo(duckdb::idx_t row_group_index, vector<duckdb::idx_t> col_path,
+void StandardColumnData::GetColumnSegmentInfo(const QueryContext &context, duckdb::idx_t row_group_index,
+                                              vector<duckdb::idx_t> col_path,
                                               vector<duckdb::ColumnSegmentInfo> &result) {
-	ColumnData::GetColumnSegmentInfo(row_group_index, col_path, result);
+	ColumnData::GetColumnSegmentInfo(context, row_group_index, col_path, result);
 	col_path.push_back(0);
-	validity.GetColumnSegmentInfo(row_group_index, std::move(col_path), result);
+	validity.GetColumnSegmentInfo(context, row_group_index, std::move(col_path), result);
 }
 
 void StandardColumnData::Verify(RowGroup &parent) {
