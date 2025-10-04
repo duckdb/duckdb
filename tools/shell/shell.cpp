@@ -87,8 +87,11 @@
 typedef sqlite3_int64 i64;
 typedef sqlite3_uint64 u64;
 typedef unsigned char u8;
+#include <algorithm>
+#include <cctype>
 #include <ctype.h>
 #include <errno.h>
+#include <locale>
 
 #if !defined(_WIN32) && !defined(WIN32)
 #include <signal.h>
@@ -2384,12 +2387,13 @@ static const char *azHelp[] = {
     "     --bom                 Prefix output with a UTF8 byte-order mark",
     "     -e                    Send output to the system text editor",
     "     -x                    Send output as CSV to a spreadsheet",
-    ".pager on|off|<cmd>      Control pager usage for output",
-    "   on     Always use pager for output to stdout",
-    "   off    Never use pager",
-    "   <cmd>  Set custom pager command and enable pager",
-    "   Note:  Set DUCKDB_PAGER or PAGER environment variable or <cmd> to configure default pager,",
-    "          e.g. `.pager 'less -SR'` or `.pager 'pspg --csv'` with `.mode csv`",
+    ".pager ?on|off|<cmd>?   Control pager usage for output",
+    "   (no args) Display current pager status",
+    "   on        Always use pager for output to stdout",
+    "   off       Never use pager",
+    "   <cmd>     Set custom pager command and enable pager",
+    "   Note: Set DUCKDB_PAGER or PAGER environment variable or <cmd> to configure default pager,",
+    "         e.g. `.pager 'less -SR'` or `.pager 'pspg --csv'` with `.mode csv`",
     ".print STRING...         Print literal STRING",
     ".prompt MAIN CONTINUE    Replace the standard prompts",
     ".quit                    Exit this program",
@@ -2989,7 +2993,10 @@ static char *SQLITE_CDECL ascii_read_one_field(ImportCtx *p) {
 void ShellState::ResetOutput() {
 	if (outfile.size() > 1 && outfile[0] == '|') {
 #ifndef SQLITE_OMIT_POPEN
-		pclose(out);
+		int rc = pclose(out);
+		if (rc == -1) {
+			utf8_printf(stderr, "Warning: Failed to close pager: %s\n", strerror(errno));
+		}
 #endif
 	} else {
 		output_file_close(out);
@@ -4432,10 +4439,9 @@ MetadataResult SetUICommand(ShellState &state, const char **azArg, idx_t nArg) {
 	return MetadataResult::SUCCESS;
 }
 
-#include <algorithm>
-#include <cctype>
-#include <locale>
-
+/*
+** Helper function to trim whitespace from a string
+*/
 static inline std::string trim(const std::string &s) {
 	auto start = s.begin();
 	while (start != s.end() && std::isspace(*start, std::locale::classic())) {
@@ -4448,6 +4454,9 @@ static inline std::string trim(const std::string &s) {
 	return std::string(start, end + 1);
 }
 
+/*
+** Set or query the pager configuration
+*/
 MetadataResult SetPager(ShellState &state, const char **azArg, idx_t nArg) {
 	if (nArg == 1) {
 		// Show current pager status
@@ -4460,7 +4469,13 @@ MetadataResult SetPager(ShellState &state, const char **azArg, idx_t nArg) {
 			mode_str = "on";
 			break;
 		}
-		raw_printf(state.out, "current pager mode: %s\n", mode_str);
+		raw_printf(state.out, "Pager mode: %s\n", mode_str);
+		if (pager_mode == PagerMode::ON || !pager_command.empty()) {
+			string effective_pager = pager_command.empty() ? getSystemPager() : pager_command;
+			if (!effective_pager.empty()) {
+				raw_printf(state.out, "Pager command: %s\n", effective_pager.c_str());
+			}
+		}
 
 		return MetadataResult::SUCCESS;
 	}
