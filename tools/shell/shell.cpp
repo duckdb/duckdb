@@ -490,6 +490,42 @@ static string getSystemPager() {
 }
 
 /*
+** Check if a pager command is available
+** Returns true if the command can be found, false otherwise
+*/
+static bool isPagerAvailable(const string &pager_cmd) {
+	if (pager_cmd.empty()) {
+		return false;
+	}
+
+	// Extract just the command name (first word) without arguments
+	size_t space_pos = pager_cmd.find_first_of(" \t");
+	string cmd = (space_pos != string::npos) ? pager_cmd.substr(0, space_pos) : pager_cmd;
+
+	// If command contains a path separator, check if file exists and is executable
+	if (cmd.find('/') != string::npos || cmd.find('\\') != string::npos) {
+#if defined(_WIN32) || defined(WIN32)
+		// On Windows, just check if file exists
+		return access(cmd.c_str(), 0) == 0;
+#else
+		// On Unix, check if file exists and is executable
+		return access(cmd.c_str(), X_OK) == 0;
+#endif
+	}
+
+	// Otherwise, check if command is in PATH
+#if defined(_WIN32) || defined(WIN32)
+	// On Windows, try to find the command using where or check common extensions
+	string test_cmd = "where " + cmd + " >nul 2>nul";
+	return system(test_cmd.c_str()) == 0;
+#else
+	// On Unix, use 'which' or 'command -v' to check PATH
+	string test_cmd = "command -v " + cmd + " >/dev/null 2>&1";
+	return system(test_cmd.c_str()) == 0;
+#endif
+}
+
+/*
 ** Initialize pager settings
 */
 static void initializePager() {
@@ -4498,11 +4534,18 @@ MetadataResult SetPager(ShellState &state, const char **azArg, idx_t nArg) {
 			// Keep pager off since no command available
 			pager_mode = PagerMode::OFF;
 		} else {
-			// Only turn on if we have a command
+			// Validate the pager command
+			if (!isPagerAvailable(pager_command)) {
+				utf8_printf(stderr, "Warning: Pager command '%s' not found or not executable.\n", pager_command.c_str());
+			}
+			// Turn on pager even if command might not be available (user might install it later)
 			pager_mode = PagerMode::ON;
 		}
 	} else {
 		// Custom pager command
+		if (!isPagerAvailable(arg)) {
+			utf8_printf(stderr, "Warning: Pager command '%s' not found or not executable.\n", arg.c_str());
+		}
 		pager_command = arg;
 		pager_mode = PagerMode::ON;
 	}
