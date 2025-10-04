@@ -468,28 +468,6 @@ static PagerMode pager_mode = PagerMode::OFF;
 static string pager_command = "";
 
 /*
-** Get the system default pager command
-*/
-static string getSystemPager() {
-	const char *pager_env = getenv("DUCKDB_PAGER");
-	if (pager_env && strlen(pager_env) > 0) {
-		return string(pager_env);
-	}
-	pager_env = getenv("PAGER");
-	if (pager_env && strlen(pager_env) > 0) {
-		return string(pager_env);
-	}
-	// No pager environment variable set
-#if defined(_WIN32) || defined(WIN32)
-	// On Windows, use 'more' as default pager
-	return "more";
-#else
-	// On other systems, return empty string (no default)
-	return "";
-#endif
-}
-
-/*
 ** Check if a pager command is available
 ** Returns true if the command can be found, false otherwise
 */
@@ -526,12 +504,64 @@ static bool isPagerAvailable(const string &pager_cmd) {
 }
 
 /*
-** Initialize pager settings
+** Get the system default pager command with priority fallback and warnings
+** Priority: DUCKDB_PAGER > PAGER > platform default
+** Emits warnings for set but unavailable pagers
 */
-static void initializePager() {
+static string getSystemPager() {
+	const char *duckdb_pager = getenv("DUCKDB_PAGER");
+	const char *pager = getenv("PAGER");
+	
+	// Try DUCKDB_PAGER first (highest priority for env vars)
+	if (duckdb_pager && strlen(duckdb_pager) > 0) {
+		if (isPagerAvailable(duckdb_pager)) {
+			return string(duckdb_pager);
+		} else {
+			fprintf(stderr, "Warning: DUCKDB_PAGER='%s' not found or not executable.\n", duckdb_pager);
+		}
+	}
+	
+	// Try PAGER next
+	if (pager && strlen(pager) > 0) {
+		if (isPagerAvailable(pager)) {
+			return string(pager);
+		} else {
+			fprintf(stderr, "Warning: PAGER='%s' not found or not executable.\n", pager);
+		}
+	}
+	
+	// No valid pager environment variable set, use platform default
+#if defined(_WIN32) || defined(WIN32)
+	// On Windows, use 'more' as default pager
+	return "more";
+#else
+	// On other systems, return empty string (no default)
+	return "";
+#endif
+}
+
+/*
+** Initialize pager settings
+** This function checks command-line argument, environment variables, and sets up the pager with proper fallback
+** Priority: cmdline_pager > DUCKDB_PAGER > PAGER > platform default
+** Emits warnings for set but unavailable pagers
+*/
+static void initializePager(const char *cmdline_pager) {
+	// Highest priority: command-line -pager argument
+	if (cmdline_pager && strlen(cmdline_pager) > 0) {
+		if (isPagerAvailable(cmdline_pager)) {
+			pager_command = cmdline_pager;
+			return;
+		} else {
+			fprintf(stderr, "Warning: -pager '%s' not found or not executable.\n", cmdline_pager);
+			// Continue to try fallbacks
+		}
+	}
+	
+	// If no command-line pager or it failed, try environment variables
 	if (pager_command.empty()) {
 		string system_pager = getSystemPager();
-		if (!system_pager.empty() && isPagerAvailable(system_pager)) {
+		if (!system_pager.empty()) {
 			pager_command = system_pager;
 		}
 	}
@@ -5195,6 +5225,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 	char *zErrMsg = nullptr;
 	ShellState data;
 	const char *zInitFile = nullptr;
+	const char *cmdline_pager = nullptr;  // Store -pager command line argument
 	int i;
 	int rc = 0;
 	bool warnInmemoryDb = false;
@@ -5263,9 +5294,6 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 	SetConsoleCtrlHandler(ConsoleCtrlHandler, TRUE);
 #endif
 
-	/* Initialize pager settings */
-	initializePager();
-
 #ifdef SQLITE_SHELL_DBNAME_PROC
 	{
 		/* If the SQLITE_SHELL_DBNAME_PROC macro is defined, then it is the name
@@ -5306,8 +5334,10 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			z++;
 		}
 		if (strcmp(z, "-separator") == 0 || strcmp(z, "-nullvalue") == 0 || strcmp(z, "-newline") == 0 ||
-		    strcmp(z, "-cmd") == 0 || strcmp(z, "-pager") == 0) {
+		    strcmp(z, "-cmd") == 0) {
 			(void)cmdline_option_value(argc, argv, ++i);
+		} else if (strcmp(z, "-pager") == 0) {
+			cmdline_pager = cmdline_option_value(argc, argv, ++i);
 		} else if (strcmp(z, "-c") == 0 || strcmp(z, "-s") == 0 || strcmp(z, "-f") == 0) {
 			(void)cmdline_option_value(argc, argv, ++i);
 			stdin_is_interactive = false;
@@ -5342,6 +5372,9 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 		}
 	}
 	verify_uninitialized();
+
+	/* Initialize pager settings after parsing command-line arguments */
+	initializePager(cmdline_pager);
 
 #ifdef SQLITE_SHELL_INIT_PROC
 	{
@@ -5439,12 +5472,8 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 		} else if (strcmp(z, "-nullvalue") == 0) {
 			data.nullValue = cmdline_option_value(argc, argv, ++i);
 		} else if (strcmp(z, "-pager") == 0) {
-			char *pager_arg = cmdline_option_value(argc, argv, ++i);
-			if (!isPagerAvailable(pager_arg)) {
-				utf8_printf(stderr, "Warning: Pager command '%s' not found or not executable.\n", pager_arg);
-			} else {
-				pager_command = pager_arg;
-			}
+			// Pager argument already processed in first pass and initializePager()
+			i++;
 		} else if (strcmp(z, "-header") == 0) {
 			data.showHeader = 1;
 		} else if (strcmp(z, "-noheader") == 0) {
