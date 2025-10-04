@@ -94,7 +94,7 @@ def test_pager_custom_command(shell):
             .statement('.pager')
     )
     result = test.run()
-    result.check_stdout('Pager mode: on')
+    result.check_stdout('Pager mode: off')
     result.check_stdout('Pager command: cat')
 
 
@@ -106,7 +106,7 @@ def test_pager_custom_command_with_args(shell):
             .statement('.pager')
     )
     result = test.run()
-    result.check_stdout('Pager mode: on')
+    result.check_stdout('Pager mode: off')
     result.check_stdout('Pager command: less -SR')
 
 
@@ -116,10 +116,13 @@ def test_pager_toggle_on_off(shell):
         ShellTest(shell)
             .statement(".pager 'cat'")
             .statement('.pager')
+            .statement('.pager on')
+            .statement('.pager')
             .statement('.pager off')
             .statement('.pager')
     )
     result = test.run()
+    result.check_stdout('Pager mode: off')
     result.check_stdout('Pager mode: on')
     result.check_stdout('Pager mode: off')
 
@@ -231,7 +234,7 @@ def test_pager_command_trimming(shell):
             .statement('.pager')
     )
     result = test.run()
-    result.check_stdout('Pager mode: on')
+    result.check_stdout('Pager mode: off')
 
 
 def test_pager_empty_string(shell):
@@ -319,6 +322,7 @@ def test_pager_with_show_command(shell):
     test = (
         ShellTest(shell)
             .statement(".pager 'cat'")
+            .statement('.pager on')
             .statement('.show')
     )
     result = test.run()
@@ -329,7 +333,8 @@ def test_pager_reset_to_default(shell):
     """Test that custom pager command persists after toggling off/on"""
     test = (
         ShellTest(shell)
-            .statement(".pager 'custom_pager'")
+            .statement(".pager 'cat'")
+            .statement('.pager on')
             .statement('.pager off')
             .statement('.pager on')
             .statement('.pager')
@@ -338,7 +343,7 @@ def test_pager_reset_to_default(shell):
     result = test.run()
     # Custom pager command persists - it doesn't reset to env var
     result.check_stdout('Pager mode: on')
-    result.check_stdout('Pager command: custom_pager')
+    result.check_stdout('Pager command: cat')
 
 
 def test_pager_status_with_no_command_configured(shell):
@@ -385,6 +390,7 @@ def test_pager_config_persistence(shell):
     test = (
         ShellTest(shell)
             .statement(".pager 'cat'")
+            .statement('.pager on')
             .statement('SELECT 1')
             .statement('.pager')
             .statement('SELECT 2')
