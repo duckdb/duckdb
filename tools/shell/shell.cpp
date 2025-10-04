@@ -5107,6 +5107,7 @@ static const char zOptions[] =
     "   -newline SEP         set output row separator. Default: '\\n'\n"
     "   -no-stdin            exit after processing options instead of reading stdin\n"
     "   -nullvalue TEXT      set text string for NULL values. Default 'NULL'\n"
+    "   -pager COMMAND       set pager command for output\n"
     "   -quote               set output mode to 'quote'\n"
     "   -readonly            open the database read-only\n"
     "   -s COMMAND           run \"COMMAND\" and exit\n"
@@ -5305,7 +5306,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			z++;
 		}
 		if (strcmp(z, "-separator") == 0 || strcmp(z, "-nullvalue") == 0 || strcmp(z, "-newline") == 0 ||
-		    strcmp(z, "-cmd") == 0) {
+		    strcmp(z, "-cmd") == 0 || strcmp(z, "-pager") == 0) {
 			(void)cmdline_option_value(argc, argv, ++i);
 		} else if (strcmp(z, "-c") == 0 || strcmp(z, "-s") == 0 || strcmp(z, "-f") == 0) {
 			(void)cmdline_option_value(argc, argv, ++i);
@@ -5437,6 +5438,13 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			data.rowSeparator = cmdline_option_value(argc, argv, ++i);
 		} else if (strcmp(z, "-nullvalue") == 0) {
 			data.nullValue = cmdline_option_value(argc, argv, ++i);
+		} else if (strcmp(z, "-pager") == 0) {
+			char *pager_arg = cmdline_option_value(argc, argv, ++i);
+			if (!isPagerAvailable(pager_arg)) {
+				utf8_printf(stderr, "Warning: Pager command '%s' not found or not executable.\n", pager_arg);
+			} else {
+				pager_command = pager_arg;
+			}
 		} else if (strcmp(z, "-header") == 0) {
 			data.showHeader = 1;
 		} else if (strcmp(z, "-noheader") == 0) {
