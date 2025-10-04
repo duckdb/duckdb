@@ -4551,11 +4551,10 @@ MetadataResult SetPager(ShellState &state, const char **azArg, idx_t nArg) {
 		// Custom pager command
 		if (!isPagerAvailable(arg)) {
 			utf8_printf(stderr, "Warning: Pager command '%s' not found or not executable.\n", arg.c_str());
-			// Don't set pager command or turn on pager if command is not available
-			pager_mode = PagerMode::OFF;
+			// Don't change pager_mode or pager_command when invalid command is provided
 		} else {
+			// Valid pager command - set it but don't change pager_mode
 			pager_command = arg;
-			pager_mode = PagerMode::ON;
 		}
 	}
 
