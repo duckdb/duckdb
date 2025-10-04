@@ -530,7 +530,10 @@ static bool isPagerAvailable(const string &pager_cmd) {
 */
 static void initializePager() {
 	if (pager_command.empty()) {
-		pager_command = getSystemPager();
+		string system_pager = getSystemPager();
+		if (!system_pager.empty() && isPagerAvailable(system_pager)) {
+			pager_command = system_pager;
+		}
 	}
 }
 
@@ -4537,17 +4540,23 @@ MetadataResult SetPager(ShellState &state, const char **azArg, idx_t nArg) {
 			// Validate the pager command
 			if (!isPagerAvailable(pager_command)) {
 				utf8_printf(stderr, "Warning: Pager command '%s' not found or not executable.\n", pager_command.c_str());
+				// Don't turn on pager if command is not available
+				pager_mode = PagerMode::OFF;
+				pager_command = "";
+			} else {
+				pager_mode = PagerMode::ON;
 			}
-			// Turn on pager even if command might not be available (user might install it later)
-			pager_mode = PagerMode::ON;
 		}
 	} else {
 		// Custom pager command
 		if (!isPagerAvailable(arg)) {
 			utf8_printf(stderr, "Warning: Pager command '%s' not found or not executable.\n", arg.c_str());
+			// Don't set pager command or turn on pager if command is not available
+			pager_mode = PagerMode::OFF;
+		} else {
+			pager_command = arg;
+			pager_mode = PagerMode::ON;
 		}
-		pager_command = arg;
-		pager_mode = PagerMode::ON;
 	}
 
 	return MetadataResult::SUCCESS;
