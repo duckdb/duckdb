@@ -19,8 +19,6 @@
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/common/types/blob.hpp"
 
-#endif
-
 namespace duckdb {
 
 using namespace duckdb_apache::thrift;            // NOLINT
@@ -344,7 +342,7 @@ public:
 ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file_name_p, vector<LogicalType> types_p,
                              vector<string> names_p, CompressionCodec::type codec, ChildFieldIDs field_ids_p,
                              const vector<pair<string, string>> &kv_metadata,
-                             shared_ptr<ParquetEncryptionConfig> encryption_config_p, idx_t dictionary_size_limit_p,
+                             shared_ptr<ParquetEncryptionConfig> encryption_config_p, optional_idx dictionary_size_limit_p,
                              idx_t string_dictionary_page_size_limit_p, bool enable_bloom_filters_p,
                              double bloom_filter_false_positive_ratio_p, int64_t compression_level_p,
                              bool debug_use_openssl_p, ParquetVersion parquet_version)
@@ -471,7 +469,7 @@ void ParquetWriter::PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGro
 
 		for (auto &chunk : buffer.Chunks({column_ids})) {
 			for (idx_t i = 0; i < next; i++) {
-				col_writers[i].get().Prepare(*write_states[i], nullptr, chunk.data[i], chunk.size());
+				col_writers[i].get().Prepare(*write_states[i], nullptr, chunk.data[i], chunk.size(), true);
 			}
 		}
 
