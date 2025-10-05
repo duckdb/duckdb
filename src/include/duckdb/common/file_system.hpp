@@ -285,7 +285,6 @@ public:
 
 	DUCKDB_API static bool IsDirectory(const OpenFileInfo &info);
 
-protected:
 	DUCKDB_API virtual unique_ptr<FileHandle> OpenFileExtended(const OpenFileInfo &path, FileOpenFlags flags,
 	                                                           optional_ptr<FileOpener> opener);
 	DUCKDB_API virtual bool SupportsOpenFileExtended() const;
@@ -295,7 +294,6 @@ protected:
 	                                          optional_ptr<FileOpener> opener);
 	DUCKDB_API virtual bool SupportsListFilesExtended() const;
 
-public:
 	template <class TARGET>
 	TARGET &Cast() {
 		DynamicCastCheck<TARGET>(this);
