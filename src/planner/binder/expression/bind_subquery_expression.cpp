@@ -47,7 +47,7 @@ bool TypeIsUnnamedStruct(const LogicalType &type) {
 }
 
 void ExtractSubqueryChildren(unique_ptr<Expression> &child, vector<unique_ptr<Expression>> &result,
-                             const vector<LogicalType> &types) {
+                             const vector<LogicalType> &types, ExpressionType comparison_type) {
 	// two scenarios
 	// Single Expression (standard):
 	// x IN (...)
@@ -74,6 +74,17 @@ void ExtractSubqueryChildren(unique_ptr<Expression> &child, vector<unique_ptr<Ex
 		// old case: we have an unnamed struct INSIDE the subquery as well
 		// i.e. (a, b) IN (SELECT (a, b) ...)
 		// unnesting the struct is guaranteed to throw an error - match the structs against each-other instead
+		return;
+	}
+	// For ordered comparisons (<, <=, >, >=), we cannot extract children
+	// because row comparison is lexicographic, not element-wise
+	// e.g. (0, 0) < (1, 0) is TRUE (first element comparison wins)
+	// but if we split into separate conditions: 0 < 1 AND 0 < 0, this becomes FALSE
+	// Only equality and not-equal can be safely split into multiple conditions
+	if (comparison_type != ExpressionType::COMPARE_EQUAL && comparison_type != ExpressionType::COMPARE_NOTEQUAL &&
+	    comparison_type != ExpressionType::COMPARE_DISTINCT_FROM &&
+	    comparison_type != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+		// For ordered comparisons, keep the struct intact
 		return;
 	}
 	for (auto &row_child : function.children) {
@@ -114,13 +125,25 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 	vector<unique_ptr<Expression>> child_expressions;
 	if (expr.subquery_type != SubqueryType::EXISTS) {
 		idx_t expected_columns = 1;
+		bool has_unexpanded_struct = false;
 		if (expr.child) {
 			auto &child = BoundExpression::GetExpression(*expr.child);
-			ExtractSubqueryChildren(child, child_expressions, bound_subquery.bound_node->types);
+			// Check if child is an unexpanded struct before extraction
+			has_unexpanded_struct = TypeIsUnnamedStruct(child->return_type);
+			ExtractSubqueryChildren(child, child_expressions, bound_subquery.bound_node->types, expr.comparison_type);
 			if (child_expressions.empty()) {
 				child_expressions.push_back(std::move(child));
 			}
 			expected_columns = child_expressions.size();
+		}
+		// If we have an unexpanded struct (kept intact for ordered comparison),
+		// the subquery might return multiple columns that need to be combined into a struct
+		if (has_unexpanded_struct && expected_columns == 1 && 
+		    bound_subquery.bound_node->types.size() > 1 &&
+		    TypeIsUnnamedStruct(child_expressions[0]->return_type)) {
+			// The child is a struct with N elements, and the subquery returns N columns
+			// This is allowed - the subquery columns will be matched against the struct during execution
+			expected_columns = bound_subquery.bound_node->types.size();
 		}
 		if (bound_subquery.bound_node->types.size() != expected_columns) {
 			throw BinderException(expr, "Subquery returns %zu columns - expected %d",
@@ -141,20 +164,34 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 	if (expr.subquery_type == SubqueryType::ANY) {
 		// ANY comparison
 		// cast child and subquery child to equivalent types
-		for (idx_t child_idx = 0; child_idx < child_expressions.size(); child_idx++) {
-			auto &child = child_expressions[child_idx];
-			auto child_type = ExpressionBinder::GetExpressionReturnType(*child);
-			auto &subquery_type = bound_node->types[child_idx];
-			LogicalType compare_type;
-			if (!LogicalType::TryGetMaxLogicalType(context, child_type, subquery_type, compare_type)) {
-				throw BinderException(
-				    expr, "Cannot compare values of type %s and %s in IN/ANY/ALL clause - an explicit cast is required",
-				    child_type.ToString(), subquery_type);
+		// Special case: if we have a single struct child and multiple subquery types,
+		// this means we kept the struct intact for ordered comparison (e.g., (a,b) < ANY(...))
+		if (child_expressions.size() == 1 && bound_node->types.size() > 1 &&
+		    TypeIsUnnamedStruct(child_expressions[0]->return_type)) {
+			// Keep the struct as-is for proper lexicographic row comparison
+			result->children.push_back(std::move(child_expressions[0]));
+			// Store all the subquery types - they will be used to construct the RHS struct during planning
+			for (auto &subquery_type : bound_node->types) {
+				result->child_types.push_back(subquery_type);
+				result->child_targets.push_back(subquery_type);
 			}
-			child = BoundCastExpression::AddCastToType(context, std::move(child), compare_type);
-			result->child_types.push_back(subquery_type);
-			result->child_targets.push_back(compare_type);
-			result->children.push_back(std::move(child));
+		} else {
+			// Standard case: either no struct or struct was extracted into separate expressions
+			for (idx_t child_idx = 0; child_idx < child_expressions.size(); child_idx++) {
+				auto &child = child_expressions[child_idx];
+				auto child_type = ExpressionBinder::GetExpressionReturnType(*child);
+				auto &subquery_type = bound_node->types[child_idx];
+				LogicalType compare_type;
+				if (!LogicalType::TryGetMaxLogicalType(context, child_type, subquery_type, compare_type)) {
+					throw BinderException(
+					    expr, "Cannot compare values of type %s and %s in IN/ANY/ALL clause - an explicit cast is required",
+					    child_type.ToString(), subquery_type);
+				}
+				child = BoundCastExpression::AddCastToType(context, std::move(child), compare_type);
+				result->child_types.push_back(subquery_type);
+				result->child_targets.push_back(compare_type);
+				result->children.push_back(std::move(child));
+			}
 		}
 	}
 	result->binder = std::move(subquery_binder);

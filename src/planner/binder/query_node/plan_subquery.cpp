@@ -19,6 +19,7 @@
 #include "duckdb/planner/operator/logical_dependent_join.hpp"
 #include "duckdb/planner/subquery/recursive_dependent_join_planner.hpp"
 #include "duckdb/function/scalar/generic_functions.hpp"
+#include "duckdb/function/scalar/struct_functions.hpp"
 #include "duckdb/main/settings.hpp"
 
 namespace duckdb {
@@ -162,21 +163,54 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		join->mark_index = mark_index;
 		join->AddChild(std::move(root));
 		join->AddChild(std::move(plan));
+		
 		// create the JOIN condition
-		for (idx_t child_idx = 0; child_idx < expr.children.size(); child_idx++) {
+		// Special case: if we have a single struct child and multiple types,
+		// this means we kept the struct intact for ordered comparison (e.g., (a,b) < ANY(...))
+		// We need to construct a corresponding struct on the RHS from the subquery columns
+		if (expr.children.size() == 1 && expr.child_types.size() > 1) {
+			// Construct a struct on the RHS from the subquery columns
+			vector<unique_ptr<Expression>> struct_children;
+			struct_children.reserve(expr.child_types.size());
+			for (idx_t i = 0; i < expr.child_types.size(); i++) {
+				auto &child_type = expr.child_types[i];
+				auto &compare_type = expr.child_targets[i];
+				auto colref = BoundCastExpression::AddDefaultCastToType(
+				    make_uniq<BoundColumnRefExpression>(child_type, plan_columns[i]), compare_type);
+				struct_children.push_back(std::move(colref));
+			}
+			
+			// Create a struct expression from the subquery columns using the "row" function
+			FunctionBinder function_binder(binder);
+			auto struct_expr = function_binder.BindScalarFunction(RowFun::GetFunction(), std::move(struct_children));
+			
 			JoinCondition cond;
-			cond.left = std::move(expr.children[child_idx]);
-			auto &child_type = expr.child_types[child_idx];
-			auto &compare_type = expr.child_targets[child_idx];
-			cond.right = BoundCastExpression::AddDefaultCastToType(
-			    make_uniq<BoundColumnRefExpression>(child_type, plan_columns[child_idx]), compare_type);
+			cond.left = std::move(expr.children[0]);
+			cond.right = std::move(struct_expr);
 			cond.comparison = expr.comparison_type;
-
+			
 			// push collations
-			ExpressionBinder::PushCollation(binder.context, cond.left, compare_type);
-			ExpressionBinder::PushCollation(binder.context, cond.right, compare_type);
-
+			ExpressionBinder::PushCollation(binder.context, cond.left, cond.left->return_type);
+			ExpressionBinder::PushCollation(binder.context, cond.right, cond.right->return_type);
+			
 			join->conditions.push_back(std::move(cond));
+		} else {
+			// Standard case: compare each child separately
+			for (idx_t child_idx = 0; child_idx < expr.children.size(); child_idx++) {
+				JoinCondition cond;
+				cond.left = std::move(expr.children[child_idx]);
+				auto &child_type = expr.child_types[child_idx];
+				auto &compare_type = expr.child_targets[child_idx];
+				cond.right = BoundCastExpression::AddDefaultCastToType(
+				    make_uniq<BoundColumnRefExpression>(child_type, plan_columns[child_idx]), compare_type);
+				cond.comparison = expr.comparison_type;
+
+				// push collations
+				ExpressionBinder::PushCollation(binder.context, cond.left, compare_type);
+				ExpressionBinder::PushCollation(binder.context, cond.right, compare_type);
+
+				join->conditions.push_back(std::move(cond));
+			}
 		}
 		root = std::move(join);
 
