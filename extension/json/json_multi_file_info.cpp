@@ -530,8 +530,9 @@ void ReadJSONObjectsFunction(ClientContext &context, JSONReader &json_reader, JS
 	output.SetCardinality(count);
 }
 
-void JSONReader::Scan(ClientContext &context, GlobalTableFunctionState &global_state,
-                      LocalTableFunctionState &local_state, DataChunk &output) {
+SourceResultType JSONReader::Scan(ClientContext &context, GlobalTableFunctionState &global_state,
+                                  LocalTableFunctionState &local_state, DataChunk &output,
+                                  InterruptState &interrupt_state) {
 	auto &gstate = global_state.Cast<JSONGlobalTableFunctionState>().state;
 	auto &lstate = local_state.Cast<JSONLocalTableFunctionState>().state;
 	auto &json_data = gstate.bind_data.bind_data->Cast<JSONScanData>();
@@ -545,6 +546,7 @@ void JSONReader::Scan(ClientContext &context, GlobalTableFunctionState &global_s
 	default:
 		throw InternalException("Unsupported scan type for JSONMultiFileInfo::Scan");
 	}
+	return output.size() ? SourceResultType::HAVE_MORE_OUTPUT : SourceResultType::FINISHED;
 }
 
 void JSONReader::FinishFile(ClientContext &context, GlobalTableFunctionState &global_state) {

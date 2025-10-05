@@ -1,0 +1,32 @@
+diff --git a/src/avro_multi_file_info.cpp b/src/avro_multi_file_info.cpp
+index d67d744..e8717dd 100644
+--- a/src/avro_multi_file_info.cpp
++++ b/src/avro_multi_file_info.cpp
+@@ -122,9 +122,10 @@ bool AvroReader::TryInitializeScan(ClientContext &context, GlobalTableFunctionSt
+ 	return true;
+ }
+ 
+-void AvroReader::Scan(ClientContext &context, GlobalTableFunctionState &global_state,
+-                      LocalTableFunctionState &local_state_p, DataChunk &chunk) {
++SourceResultType AvroReader::Scan(ClientContext &context, GlobalTableFunctionState &global_state,
++                      LocalTableFunctionState &local_state_p, DataChunk &chunk, InterruptState &state) {
+ 	Read(chunk);
++	return chunk.size() ? SourceResultType::HAVE_MORE_OUTPUT : SourceResultType::FINISHED;
+ }
+ 
+ unique_ptr<NodeStatistics> AvroMultiFileInfo::GetCardinality(const MultiFileBindData &bind_data, idx_t file_count) {
+diff --git a/src/include/avro_reader.hpp b/src/include/avro_reader.hpp
+index 8d7820d..ef54ffd 100644
+--- a/src/include/avro_reader.hpp
++++ b/src/include/avro_reader.hpp
+@@ -24,8 +24,8 @@ public:
+ 
+ 	bool TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate,
+ 	                       LocalTableFunctionState &lstate) override;
+-	void Scan(ClientContext &context, GlobalTableFunctionState &global_state, LocalTableFunctionState &local_state,
+-	          DataChunk &chunk) override;
++	SourceResultType Scan(ClientContext &context, GlobalTableFunctionState &global_state, LocalTableFunctionState &local_state,
++	          DataChunk &chunk, InterruptState &interrupt_state) override;
+ 
+ public:
+ 	avro_file_reader_t reader;
