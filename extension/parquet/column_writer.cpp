@@ -270,7 +270,8 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 		shredding_type = shredding_types->GetChild(name);
 	}
 
-	if (type.id() == LogicalTypeId::STRUCT && type.GetAlias() == "PARQUET_VARIANT") {
+	// if (type.id() == LogicalTypeId::STRUCT && type.GetAlias() == "PARQUET_VARIANT") {
+	if (type.id() == LogicalTypeId::VARIANT) {
 		const bool is_shredded = shredding_type != nullptr;
 
 		//! Build the child types for the Parquet VARIANT

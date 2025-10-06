@@ -398,6 +398,49 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
 ParquetWriter::~ParquetWriter() {
 }
 
+static void AnalyzeSchema(ColumnDataCollection &buffer, vector<unique_ptr<ColumnWriter>> &column_writers) {
+	D_ASSERT(buffer.ColumnCount() == column_writers.size());
+	vector<unique_ptr<ParquetAnalyzeSchemaState>> states;
+	bool needs_analyze = false;
+	vector<column_t> column_ids;
+	for (idx_t i = 0; i < column_writers.size(); i++) {
+		auto &writer = column_writers[i];
+		auto state = writer->AnalyzeSchemaInit();
+		if (state) {
+			needs_analyze = true;
+			states.push_back(std::move(state));
+			column_ids.push_back(i);
+		} else {
+			states.push_back(nullptr);
+		}
+	}
+
+	if (!needs_analyze) {
+		return;
+	}
+
+	for (auto &chunk : buffer.Chunks(column_ids)) {
+		idx_t index = 0;
+		for (idx_t i = 0; i < column_writers.size(); i++) {
+			auto &state = states[i];
+			if (!state) {
+				continue;
+			}
+			auto &writer = column_writers[i];
+			writer->AnalyzeSchema(*state, chunk.data[index++], chunk.size());
+		}
+	}
+
+	for (idx_t i = 0; i < column_writers.size(); i++) {
+		auto &writer = column_writers[i];
+		auto &state = states[i];
+		if (!state) {
+			continue;
+		}
+		writer->AnalyzeSchemaFinalize(*state);
+	}
+}
+
 void ParquetWriter::PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGroup &result) {
 	// We write 8 columns at a time so that iterating over ColumnDataCollection is more efficient
 	static constexpr idx_t COLUMNS_PER_PASS = 8;
@@ -409,6 +452,8 @@ void ParquetWriter::PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGro
 	auto &row_group = result.row_group;
 	row_group.num_rows = NumericCast<int64_t>(buffer.Count());
 	row_group.__isset.file_offset = true;
+
+	AnalyzeSchema(buffer, column_writers);
 
 	if (file_meta_data.schema.empty()) {
 		lock_guard<mutex> glock(lock);

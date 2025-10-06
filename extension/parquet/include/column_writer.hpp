@@ -63,6 +63,26 @@ public:
 	}
 };
 
+struct ParquetAnalyzeSchemaState {
+public:
+	ParquetAnalyzeSchemaState() {
+	}
+	virtual ~ParquetAnalyzeSchemaState() {
+	}
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		return reinterpret_cast<const TARGET &>(*this);
+	}
+};
+
 class ColumnWriter {
 protected:
 	static constexpr uint16_t PARQUET_DEFINE_VALID = UINT16_C(65535);
@@ -92,12 +112,16 @@ public:
 		return column_schema.max_repeat;
 	}
 
-	virtual bool HasAnalyzeSchema() {
-		return false;
+	virtual unique_ptr<ParquetAnalyzeSchemaState> AnalyzeSchemaInit() {
+		return nullptr;
 	}
 
-	virtual void AnalyzeSchema() {
-		return;
+	virtual void AnalyzeSchema(ParquetAnalyzeSchemaState &state, Vector &input, idx_t count) {
+		throw NotImplementedException("Writer doesn't require an AnalyzeSchema pass");
+	}
+
+	virtual void AnalyzeSchemaFinalize(const ParquetAnalyzeSchemaState &state) {
+		throw NotImplementedException("Writer doesn't require an AnalyzeSchemaFinalize pass");
 	}
 
 	virtual void FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) = 0;

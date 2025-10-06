@@ -807,24 +807,25 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &inpu
 			cast_expr->SetAlias(name);
 			result.push_back(std::move(cast_expr));
 			any_change = true;
-		} else if (input.copy_to_type == CopyToType::COPY_TO_FILE && type.id() == LogicalTypeId::VARIANT) {
-			vector<unique_ptr<Expression>> arguments;
-			arguments.push_back(std::move(expr));
-
-			auto shredded_type_str = GetShredding(input.options, name);
-			if (!shredded_type_str.empty()) {
-				arguments.push_back(make_uniq<BoundConstantExpression>(Value(shredded_type_str)));
-			}
-
-			auto transform_func = VariantColumnWriter::GetTransformFunction();
-			transform_func.bind(context, transform_func, arguments);
-
-			auto func_expr = make_uniq<BoundFunctionExpression>(transform_func.return_type, transform_func,
-			                                                    std::move(arguments), nullptr, false);
-			func_expr->SetAlias(name);
-			result.push_back(std::move(func_expr));
-			any_change = true;
 		}
+		// else if (input.copy_to_type == CopyToType::COPY_TO_FILE && type.id() == LogicalTypeId::VARIANT) {
+		//	vector<unique_ptr<Expression>> arguments;
+		//	arguments.push_back(std::move(expr));
+
+		//	auto shredded_type_str = GetShredding(input.options, name);
+		//	if (!shredded_type_str.empty()) {
+		//		arguments.push_back(make_uniq<BoundConstantExpression>(Value(shredded_type_str)));
+		//	}
+
+		//	auto transform_func = VariantColumnWriter::GetTransformFunction();
+		//	transform_func.bind(context, transform_func, arguments);
+
+		//	auto func_expr = make_uniq<BoundFunctionExpression>(transform_func.return_type, transform_func,
+		//	                                                    std::move(arguments), nullptr, false);
+		//	func_expr->SetAlias(name);
+		//	result.push_back(std::move(func_expr));
+		//	any_change = true;
+		//}
 		// If this is an EXPORT DATABASE statement, we dont want to write "lossy" types, instead cast them to VARCHAR
 		else if (input.copy_to_type == CopyToType::EXPORT_DATABASE && TypeVisitor::Contains(type, IsTypeLossy)) {
 			// Replace all lossy types with VARCHAR
