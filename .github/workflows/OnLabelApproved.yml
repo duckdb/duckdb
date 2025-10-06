@@ -3,6 +3,20 @@ name: Re-run Checks on Label Approved
 on:
   pull_request_target:
     types: [labeled]
+  
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: "PR number to re-run (manual)"
+        required: true
+        type: number
+      dry_run:
+        description: "Only list; do not approve/rerun"
+        required: false
+        default: "true"
+        type: choice
+        options: ["true", "false"]
+        
 permissions:
   actions: write
   pull-requests: read
