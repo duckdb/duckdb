@@ -11,6 +11,7 @@
 #include "duckdb/common/bitset.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/vector_type.hpp"
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
 #include "duckdb/common/types/value.hpp"
@@ -309,6 +310,9 @@ protected:
 	//! The buffer holding precomputed hashes of the data in the vector
 	//! used for caching hashes of string dictionaries
 	buffer_ptr<VectorBuffer> cached_hashes;
+	//! Use a mutex to make the cached hashes getter thread-safe. This is necessary as the hashes are computed lazily.
+	//! In general, read-only operations on Vector should be thread-safe after the Vector is initialized.
+	mutable mutex cached_hashes_mutex;
 };
 
 //! The DictionaryBuffer holds a selection vector
