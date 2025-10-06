@@ -713,12 +713,12 @@ public:
 				result.push_back(std::move(statement));
 			}
 			return ParserOverrideResult(std::move(result));
-		} catch (const ParserException &) {
-			throw;
+		} catch (const ParserException &e) {
+			return ParserOverrideResult(e.what());
 		} catch (const NotImplementedException &e) {
-			Printer::PrintF("Found NotImplementedException: %s", e.what());
-			return ParserOverrideResult();
+			return ParserOverrideResult(e.what());
 		}
+		return ParserOverrideResult();
 	}
 };
 
