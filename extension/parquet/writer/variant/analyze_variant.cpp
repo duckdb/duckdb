@@ -1,4 +1,5 @@
 #include "writer/variant_column_writer.hpp"
+#include "parquet_writer.hpp"
 
 namespace duckdb {
 
@@ -174,7 +175,12 @@ static LogicalType ConstructShreddedType(const VariantAnalyzeData &state) {
 void VariantColumnWriter::AnalyzeSchemaFinalize(const ParquetAnalyzeSchemaState &state_p) {
 	auto &state = state_p.Cast<VariantAnalyzeSchemaState>();
 	auto shredded_type = ConstructShreddedType(state.analyze_data);
-	throw InternalException("Shredded type: %s", shredded_type.ToString());
+
+	auto typed_value = TransformTypedValueRecursive(shredded_type);
+
+	auto &context = writer.GetContext();
+	child_writers.push_back(ColumnWriter::CreateWriterRecursive(context, writer, schema_path, typed_value,
+	                                                            "typed_value", nullptr, nullptr));
 }
 
 } // namespace duckdb
