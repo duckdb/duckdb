@@ -862,34 +862,30 @@ unique_ptr<BoundTableRef> Binder::Bind(PivotRef &ref) {
 	} else {
 		select_node = BindUnpivot(*star_binder, ref, std::move(all_columns), where_clause);
 	}
-	throw InternalException("eek bind pivot");
-	// // bind the generated select node
-	// auto child_binder = Binder::CreateBinder(context, this);
-	// auto bound_select_node = child_binder->BindNode(*select_node);
-	// auto root_index = bound_select_node.plan->GetRootIndex();
-	// BoundQueryNode *bound_select_ptr = bound_select_node.get();
-	//
-	// unique_ptr<BoundTableRef> result;
-	// MoveCorrelatedExpressions(*child_binder);
-	// result = make_uniq<BoundSubqueryRef>(std::move(child_binder), std::move(bound_select_node));
-	// auto subquery_alias = ref.alias.empty() ? "__unnamed_pivot" : ref.alias;
-	// SubqueryRef subquery_ref(nullptr, subquery_alias);
-	// subquery_ref.column_name_alias = std::move(ref.column_name_alias);
-	// if (where_clause) {
-	// 	// if a WHERE clause was provided - bind a subquery holding the WHERE clause
-	// 	// we need to bind a new subquery here because the WHERE clause has to be applied AFTER the unnest
-	// 	child_binder = Binder::CreateBinder(context, this);
-	// 	child_binder->bind_context.AddSubquery(root_index, subquery_ref.alias, subquery_ref, *bound_select_ptr);
-	// 	auto where_query = make_uniq<SelectNode>();
-	// 	where_query->select_list.push_back(make_uniq<StarExpression>());
-	// 	where_query->where_clause = std::move(where_clause);
-	// 	bound_select_node = child_binder->BindSelectNode(*where_query, std::move(result));
-	// 	bound_select_ptr = bound_select_node.get();
-	// 	root_index = bound_select_node.plan->GetRootIndex();
-	// 	result = make_uniq<BoundSubqueryRef>(std::move(child_binder), std::move(bound_select_node));
-	// }
-	// bind_context.AddSubquery(root_index, subquery_ref.alias, subquery_ref, *bound_select_ptr);
-	// return result;
+	// bind the generated select node
+	auto child_binder = Binder::CreateBinder(context, this);
+	auto bound_select_node = child_binder->BindNode(*select_node);
+	auto root_index = bound_select_node.plan->GetRootIndex();
+
+	MoveCorrelatedExpressions(*child_binder);
+	auto result = make_uniq<BoundSubqueryRef>(std::move(child_binder), std::move(bound_select_node));
+	auto subquery_alias = ref.alias.empty() ? "__unnamed_pivot" : ref.alias;
+	SubqueryRef subquery_ref(nullptr, subquery_alias);
+	subquery_ref.column_name_alias = std::move(ref.column_name_alias);
+	if (where_clause) {
+		// if a WHERE clause was provided - bind a subquery holding the WHERE clause
+		// we need to bind a new subquery here because the WHERE clause has to be applied AFTER the unnest
+		child_binder = Binder::CreateBinder(context, this);
+		child_binder->bind_context.AddSubquery(root_index, subquery_ref.alias, subquery_ref, result->subquery);
+		auto where_query = make_uniq<SelectNode>();
+		where_query->select_list.push_back(make_uniq<StarExpression>());
+		where_query->where_clause = std::move(where_clause);
+		bound_select_node = child_binder->BindSelectNode(*where_query, std::move(result));
+		root_index = bound_select_node.plan->GetRootIndex();
+		result = make_uniq<BoundSubqueryRef>(std::move(child_binder), std::move(bound_select_node));
+	}
+	bind_context.AddSubquery(root_index, subquery_ref.alias, subquery_ref, result->subquery);
+	return std::move(result);
 }
 
 } // namespace duckdb
