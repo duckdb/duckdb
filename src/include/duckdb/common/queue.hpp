@@ -21,12 +21,12 @@ template <class DATA_TYPE, class CONTAINER = std::deque<DATA_TYPE>, bool SAFE = 
 class queue : public std::queue<DATA_TYPE, CONTAINER> { // NOLINT: matching name of std
 public:
 	using original = std::queue<DATA_TYPE, CONTAINER>;
-    using original::original;
-    using container_type = typename original::container_type;
-    using value_type = typename original::value_type;
-    using size_type = typename container_type::size_type;
-    using reference = typename container_type::reference;
-    using const_reference = typename container_type::const_reference;
+	using original::original;
+	using container_type = typename original::container_type;
+	using value_type = typename original::value_type;
+	using size_type = typename container_type::size_type;
+	using reference = typename container_type::reference;
+	using const_reference = typename container_type::const_reference;
 
 public:
 	// Because we create the other constructor, the implicitly created constructor

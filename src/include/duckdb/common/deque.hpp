@@ -21,19 +21,19 @@ template <class DATA_TYPE, bool SAFE = true>
 class deque : public std::deque<DATA_TYPE, std::allocator<DATA_TYPE>> { // NOLINT: matching name of std
 public:
 	using original = std::deque<DATA_TYPE, std::allocator<DATA_TYPE>>;
-    using original::original;
-    using value_type = typename original::value_type;
-    using allocator_type = typename original::allocator_type;
-    using size_type = typename original::size_type;
-    using difference_type = typename original::difference_type;
-    using reference = typename original::reference;
-    using const_reference = typename original::const_reference;
-    using pointer = typename original::pointer;
-    using const_pointer = typename original::const_pointer;
-    using iterator = typename original::iterator;
-    using const_iterator = typename original::const_iterator;
-    using reverse_iterator = typename original::reverse_iterator;
-    using const_reverse_iterator = typename original::const_reverse_iterator;
+	using original::original;
+	using value_type = typename original::value_type;
+	using allocator_type = typename original::allocator_type;
+	using size_type = typename original::size_type;
+	using difference_type = typename original::difference_type;
+	using reference = typename original::reference;
+	using const_reference = typename original::const_reference;
+	using pointer = typename original::pointer;
+	using const_pointer = typename original::const_pointer;
+	using iterator = typename original::iterator;
+	using const_iterator = typename original::const_iterator;
+	using reverse_iterator = typename original::reverse_iterator;
+	using const_reverse_iterator = typename original::const_reverse_iterator;
 
 private:
 	static inline void AssertIndexInBounds(idx_t index, idx_t size) {
@@ -51,7 +51,7 @@ public:
 	[[clang::reinitializes]]
 #endif
 	inline void
-    clear() noexcept { // NOLINT: hiding on purpose
+	clear() noexcept { // NOLINT: hiding on purpose
 		original::clear();
 	}
 
