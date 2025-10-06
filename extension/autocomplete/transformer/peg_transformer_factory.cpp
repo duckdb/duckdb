@@ -8,7 +8,9 @@ namespace duckdb {
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformStatement(PEGTransformer &transformer,
                                                                    optional_ptr<ParseResult> parse_result) {
-	throw NotImplementedException("'Statement' transformer rule has not been implemented yet.");
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	return transformer.Transform<unique_ptr<SQLStatement>>(choice_pr.result);
 }
 
 unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &tokens, const char *root_rule) {
@@ -56,7 +58,16 @@ PEGTransformerFactory &PEGTransformerFactory::GetInstance() {
 }
 
 PEGTransformerFactory::PEGTransformerFactory() {
-	// Registering transform functions using the macro for brevity
 	REGISTER_TRANSFORM(TransformStatement);
+	REGISTER_TRANSFORM(TransformUseStatement);
+	REGISTER_TRANSFORM(TransformSetStatement);
+	REGISTER_TRANSFORM(TransformResetStatement);
+	REGISTER_TRANSFORM(TransformUseTarget);
+	REGISTER_TRANSFORM(TransformStandardAssignment);
+	REGISTER_TRANSFORM(TransformSettingOrVariable);
+	REGISTER_TRANSFORM(TransformSetSetting);
+	REGISTER_TRANSFORM(TransformSetVariable);
+	REGISTER_TRANSFORM(TransformSetAssignment);
+	REGISTER_TRANSFORM(TransformVariableList);
 }
 } // namespace duckdb
