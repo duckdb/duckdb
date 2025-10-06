@@ -258,9 +258,13 @@ unique_ptr<BoundSetOperationNode> Binder::BindSetOpNode(SetOperationNode &statem
 		result.bound_children.push_back(BindSetOpChild(*child));
 	}
 
+	vector<reference<Binder>> binders;
+	for (auto &child : result.bound_children) {
+		GatherSetOpBinders(child, binders);
+	}
 	// move the correlated expressions from the child binders to this binder
-	for (auto &bound_child : result.bound_children) {
-		MoveCorrelatedExpressions(*bound_child.binder);
+	for (auto &child_binder : binders) {
+		MoveCorrelatedExpressions(child_binder.get());
 	}
 
 	if (result.setop_type == SetOperationType::UNION_BY_NAME) {
@@ -299,10 +303,6 @@ unique_ptr<BoundSetOperationNode> Binder::BindSetOpNode(SetOperationNode &statem
 		GatherAliases(result, bind_state);
 
 		// now we perform the actual resolution of the ORDER BY/DISTINCT expressions
-		vector<reference<Binder>> binders;
-		for (auto &child : result.bound_children) {
-			GatherSetOpBinders(child, binders);
-		}
 		OrderBinder order_binder(binders, bind_state);
 		PrepareModifiers(order_binder, statement, result);
 	}
