@@ -8,8 +8,8 @@
 
 namespace duckdb {
 
-unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
-	auto result = make_uniq<BoundRecursiveCTENode>();
+BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
+	BoundRecursiveCTENode result;
 
 	// first recursively visit the recursive CTE operations
 	// the left side is visited first and is added to the BindContext of the right side
@@ -19,53 +19,53 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 		throw BinderException("UNION ALL cannot be used with USING KEY in recursive CTE.");
 	}
 
-	result->ctename = statement.ctename;
-	result->union_all = statement.union_all;
-	result->setop_index = GenerateTableIndex();
+	result.ctename = statement.ctename;
+	result.union_all = statement.union_all;
+	result.setop_index = GenerateTableIndex();
 
-	result->left_binder = Binder::CreateBinder(context, this);
-	result->left = result->left_binder->BindNode(*statement.left);
+	result.left_binder = Binder::CreateBinder(context, this);
+	result.left = result.left_binder->BindNode(*statement.left);
 
 	// the result types of the CTE are the types of the LHS
-	result->types = result->left->types;
+	result.types = result.left.types;
 	// names are picked from the LHS, unless aliases are explicitly specified
-	result->names = result->left->names;
-	for (idx_t i = 0; i < statement.aliases.size() && i < result->names.size(); i++) {
-		result->names[i] = statement.aliases[i];
+	result.names = result.left.names;
+	for (idx_t i = 0; i < statement.aliases.size() && i < result.names.size(); i++) {
+		result.names[i] = statement.aliases[i];
 	}
 
 	// This allows the right side to reference the CTE recursively
-	bind_context.AddGenericBinding(result->setop_index, statement.ctename, result->names, result->types);
+	bind_context.AddGenericBinding(result.setop_index, statement.ctename, result.names, result.types);
 
-	result->right_binder = Binder::CreateBinder(context, this);
+	result.right_binder = Binder::CreateBinder(context, this);
 
 	// Add bindings of left side to temporary CTE bindings context
 	// If there is already a binding for the CTE, we need to remove it first
 	// as we are binding a CTE currently, we take precendence over the existing binding.
 	// This implements the CTE shadowing behavior.
-	result->right_binder->bind_context.RemoveCTEBinding(statement.ctename);
-	result->right_binder->bind_context.AddCTEBinding(result->setop_index, statement.ctename, result->names,
-	                                                 result->types, !statement.key_targets.empty());
+	result.right_binder->bind_context.RemoveCTEBinding(statement.ctename);
+	result.right_binder->bind_context.AddCTEBinding(result.setop_index, statement.ctename, result.names, result.types,
+	                                                !statement.key_targets.empty());
 
-	result->right = result->right_binder->BindNode(*statement.right);
-	for (auto &c : result->left_binder->correlated_columns) {
-		result->right_binder->AddCorrelatedColumn(c);
+	result.right = result.right_binder->BindNode(*statement.right);
+	for (auto &c : result.left_binder->correlated_columns) {
+		result.right_binder->AddCorrelatedColumn(c);
 	}
 
 	// move the correlated expressions from the child binders to this binder
-	MoveCorrelatedExpressions(*result->left_binder);
-	MoveCorrelatedExpressions(*result->right_binder);
+	MoveCorrelatedExpressions(*result.left_binder);
+	MoveCorrelatedExpressions(*result.right_binder);
 
 	// bind specified keys to the referenced column
 	auto expression_binder = ExpressionBinder(*this, context);
 	for (unique_ptr<ParsedExpression> &expr : statement.key_targets) {
 		auto bound_expr = expression_binder.Bind(expr);
 		D_ASSERT(bound_expr->type == ExpressionType::BOUND_COLUMN_REF);
-		result->key_targets.push_back(std::move(bound_expr));
+		result.key_targets.push_back(std::move(bound_expr));
 	}
 
 	// now both sides have been bound we can resolve types
-	if (result->left->types.size() != result->right->types.size()) {
+	if (result.left.types.size() != result.right.types.size()) {
 		throw BinderException("Set operations can only apply to expressions with the "
 		                      "same number of result columns");
 	}
@@ -74,7 +74,11 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 		throw NotImplementedException("FIXME: bind modifiers in recursive CTE");
 	}
 
-	return std::move(result);
+	BoundStatement result_statement;
+	result_statement.types = result.types;
+	result_statement.names = result.names;
+	result_statement.plan = CreatePlan(result);
+	return result_statement;
 }
 
 } // namespace duckdb

@@ -15,7 +15,7 @@
 namespace duckdb {
 
 struct BoundSetOpChild {
-	unique_ptr<BoundQueryNode> node;
+	BoundStatement node;
 	shared_ptr<Binder> binder;
 	//! Exprs used by the UNION BY NAME operations to add a new projection
 	vector<unique_ptr<Expression>> reorder_expressions;

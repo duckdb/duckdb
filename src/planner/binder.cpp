@@ -70,86 +70,19 @@ Binder::Binder(ClientContext &context, shared_ptr<Binder> parent_p, BinderType b
 	}
 }
 
-unique_ptr<BoundCTENode> Binder::BindMaterializedCTE(CommonTableExpressionMap &cte_map) {
-	// Extract materialized CTEs from cte_map
-	vector<unique_ptr<CTENode>> materialized_ctes;
-	for (auto &cte : cte_map.map) {
-		auto &cte_entry = cte.second;
-		auto mat_cte = make_uniq<CTENode>();
-		mat_cte->ctename = cte.first;
-		mat_cte->query = cte_entry->query->node->Copy();
-		mat_cte->aliases = cte_entry->aliases;
-		mat_cte->materialized = cte_entry->materialized;
-		materialized_ctes.push_back(std::move(mat_cte));
-	}
-
-	if (materialized_ctes.empty()) {
-		return nullptr;
-	}
-
-	unique_ptr<CTENode> cte_root = nullptr;
-	while (!materialized_ctes.empty()) {
-		unique_ptr<CTENode> node_result;
-		node_result = std::move(materialized_ctes.back());
-		node_result->cte_map = cte_map.Copy();
-		if (cte_root) {
-			node_result->child = std::move(cte_root);
-		} else {
-			node_result->child = nullptr;
-		}
-		cte_root = std::move(node_result);
-		materialized_ctes.pop_back();
-	}
-
-	AddCTEMap(cte_map);
-	auto bound_cte = BindCTE(cte_root->Cast<CTENode>());
-
-	return bound_cte;
-}
-
-template <class T>
-BoundStatement Binder::BindWithCTE(T &statement) {
-	BoundStatement bound_statement;
-	auto bound_cte = BindMaterializedCTE(statement.template Cast<T>().cte_map);
-	if (bound_cte) {
-		reference<BoundCTENode> tail_ref = *bound_cte;
-
-		while (tail_ref.get().child && tail_ref.get().child->type == QueryNodeType::CTE_NODE) {
-			tail_ref = tail_ref.get().child->Cast<BoundCTENode>();
-		}
-
-		auto &tail = tail_ref.get();
-		bound_statement = tail.child_binder->Bind(statement.template Cast<T>());
-
-		tail.types = bound_statement.types;
-		tail.names = bound_statement.names;
-
-		for (auto &c : tail.query_binder->correlated_columns) {
-			tail.child_binder->AddCorrelatedColumn(c);
-		}
-		MoveCorrelatedExpressions(*tail.child_binder);
-
-		auto plan = std::move(bound_statement.plan);
-		bound_statement.plan = CreatePlan(*bound_cte, std::move(plan));
-	} else {
-		bound_statement = Bind(statement.template Cast<T>());
-	}
-	return bound_statement;
-}
-
 BoundStatement Binder::Bind(SQLStatement &statement) {
 	root_statement = &statement;
 	switch (statement.type) {
 	case StatementType::SELECT_STATEMENT:
 		return Bind(statement.Cast<SelectStatement>());
 	case StatementType::INSERT_STATEMENT:
-		return BindWithCTE(statement.Cast<InsertStatement>());
+		return Bind(statement.Cast<InsertStatement>());
 	case StatementType::COPY_STATEMENT:
 		return Bind(statement.Cast<CopyStatement>(), CopyToType::COPY_TO_FILE);
 	case StatementType::DELETE_STATEMENT:
-		return BindWithCTE(statement.Cast<DeleteStatement>());
+		return Bind(statement.Cast<DeleteStatement>());
 	case StatementType::UPDATE_STATEMENT:
-		return BindWithCTE(statement.Cast<UpdateStatement>());
+		return Bind(statement.Cast<UpdateStatement>());
 	case StatementType::RELATION_STATEMENT:
 		return Bind(statement.Cast<RelationStatement>());
 	case StatementType::CREATE_STATEMENT:
@@ -191,7 +124,7 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 	case StatementType::UPDATE_EXTENSIONS_STATEMENT:
 		return Bind(statement.Cast<UpdateExtensionsStatement>());
 	case StatementType::MERGE_INTO_STATEMENT:
-		return BindWithCTE(statement.Cast<MergeIntoStatement>());
+		return Bind(statement.Cast<MergeIntoStatement>());
 	default: // LCOV_EXCL_START
 		throw NotImplementedException("Unimplemented statement type \"%s\" for Bind",
 		                              StatementTypeToString(statement.type));
@@ -204,54 +137,26 @@ void Binder::AddCTEMap(CommonTableExpressionMap &cte_map) {
 	}
 }
 
-unique_ptr<BoundQueryNode> Binder::BindNode(QueryNode &node) {
+BoundStatement Binder::BindNode(QueryNode &node) {
 	// first we visit the set of CTEs and add them to the bind context
 	AddCTEMap(node.cte_map);
 	// now we bind the node
-	unique_ptr<BoundQueryNode> result;
 	switch (node.type) {
 	case QueryNodeType::SELECT_NODE:
-		result = BindNode(node.Cast<SelectNode>());
-		break;
+		return BindNode(node.Cast<SelectNode>());
 	case QueryNodeType::RECURSIVE_CTE_NODE:
-		result = BindNode(node.Cast<RecursiveCTENode>());
-		break;
+		return BindNode(node.Cast<RecursiveCTENode>());
 	case QueryNodeType::CTE_NODE:
-		result = BindNode(node.Cast<CTENode>());
-		break;
+		return BindNode(node.Cast<CTENode>());
+	case QueryNodeType::SET_OPERATION_NODE:
+		return BindNode(node.Cast<SetOperationNode>());
 	default:
-		D_ASSERT(node.type == QueryNodeType::SET_OPERATION_NODE);
-		result = BindNode(node.Cast<SetOperationNode>());
-		break;
+		throw InternalException("Unsupported query node type");
 	}
-	return result;
 }
 
 BoundStatement Binder::Bind(QueryNode &node) {
-	BoundStatement result;
-	auto bound_node = BindNode(node);
-
-	result.names = bound_node->names;
-	result.types = bound_node->types;
-
-	// and plan it
-	result.plan = CreatePlan(*bound_node);
-	return result;
-}
-
-unique_ptr<LogicalOperator> Binder::CreatePlan(BoundQueryNode &node) {
-	switch (node.type) {
-	case QueryNodeType::SELECT_NODE:
-		return CreatePlan(node.Cast<BoundSelectNode>());
-	case QueryNodeType::SET_OPERATION_NODE:
-		return CreatePlan(node.Cast<BoundSetOperationNode>());
-	case QueryNodeType::RECURSIVE_CTE_NODE:
-		return CreatePlan(node.Cast<BoundRecursiveCTENode>());
-	case QueryNodeType::CTE_NODE:
-		return CreatePlan(node.Cast<BoundCTENode>());
-	default:
-		throw InternalException("Unsupported bound query node type");
-	}
+	return BindNode(node);
 }
 
 unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
