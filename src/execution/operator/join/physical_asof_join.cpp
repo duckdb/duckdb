@@ -20,9 +20,10 @@ PhysicalAsOfJoin::PhysicalAsOfJoin(PhysicalPlan &physical_plan, LogicalCompariso
                                    PhysicalOperator &right)
     : PhysicalComparisonJoin(physical_plan, op, PhysicalOperatorType::ASOF_JOIN, std::move(op.conditions), op.join_type,
                              op.estimated_cardinality),
-      comparison_type(ExpressionType::INVALID), predicate(std::move(op.predicate)) {
+      comparison_type(ExpressionType::INVALID) {
 
 	// Convert the conditions partitions and sorts
+	D_ASSERT(!op.predicate.get());
 	for (auto &cond : conditions) {
 		D_ASSERT(cond.left->return_type == cond.right->return_type);
 		join_key_types.push_back(cond.left->return_type);
@@ -406,8 +407,6 @@ public:
 
 	//	Predicate evaluation
 	SelectionVector tail_sel;
-	SelectionVector filter_sel;
-	ExpressionExecutor filterer;
 
 	idx_t lhs_match_count;
 	bool fetch_next_left;
@@ -415,7 +414,7 @@ public:
 
 AsOfProbeBuffer::AsOfProbeBuffer(ClientContext &client, const PhysicalAsOfJoin &op)
     : client(client), op(op), strict(IsStrictComparison(op.comparison_type)), left_outer(IsLeftOuterJoin(op.join_type)),
-      lhs_executor(client), rhs_executor(client), filterer(client), fetch_next_left(true) {
+      lhs_executor(client), rhs_executor(client), fetch_next_left(true) {
 
 	lhs_keys.Initialize(client, op.join_key_types);
 	for (const auto &cond : op.conditions) {
@@ -438,11 +437,6 @@ AsOfProbeBuffer::AsOfProbeBuffer(ClientContext &client, const PhysicalAsOfJoin &
 		for (const auto &cond : op.conditions) {
 			rhs_executor.AddExpression(*cond.right);
 		}
-	}
-
-	if (op.predicate) {
-		filter_sel.Initialize();
-		filterer.AddExpression(*op.predicate);
 	}
 }
 
@@ -765,16 +759,6 @@ void AsOfProbeBuffer::ResolveComplexJoin(ExecutionContext &context, DataChunk &c
 				//	Slice lhs_match_sel to the remaining lhs rows
 				lhs_match_count = lhs_match_sel.SliceInPlace(*sel, tail_count);
 			}
-		}
-	}
-
-	//	Apply the predicate filter
-	//	TODO: This is wrong - we have to search for a match
-	if (filterer.expressions.size() == 1) {
-		const auto filter_count = filterer.SelectExpression(chunk, filter_sel);
-		if (filter_count < chunk.size()) {
-			chunk.Slice(filter_sel, filter_count);
-			lhs_match_count = lhs_match_sel.SliceInPlace(filter_sel, filter_count);
 		}
 	}
 

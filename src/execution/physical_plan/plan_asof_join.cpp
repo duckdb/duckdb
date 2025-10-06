@@ -13,6 +13,7 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/main/settings.hpp"
 
 namespace duckdb {
@@ -43,9 +44,25 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 	const auto &probe_types = op.children[0]->types;
 	join_op.types.insert(join_op.types.end(), probe_types.begin(), probe_types.end());
 
-	// TODO: We can't handle predicates right now because we would have to remap column references.
+	// Remap predicate column references.
 	if (op.predicate) {
-		return nullptr;
+		vector<idx_t> swap_projection_map;
+		const auto lhs_width = op.children[0]->types.size();
+		const auto rhs_width = op.children[1]->types.size();
+		for (idx_t l = 0; l < lhs_width; ++l) {
+			swap_projection_map.emplace_back(l + rhs_width);
+		}
+		for (idx_t r = 0; r < rhs_width; ++r) {
+			swap_projection_map.emplace_back(r);
+		}
+		join_op.predicate = op.predicate->Copy();
+		ExpressionIterator::EnumerateExpression(join_op.predicate, [&](Expression &child) {
+			if (child.GetExpressionClass() == ExpressionClass::BOUND_REF) {
+				auto &col_idx = child.Cast<BoundReferenceExpression>().index;
+				const auto new_idx = swap_projection_map[col_idx];
+				col_idx = new_idx;
+			}
+		});
 	}
 
 	//	Fill in the projection maps to simplify the code below
@@ -275,10 +292,12 @@ PhysicalOperator &PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparisonJoin &op)
 	}
 	D_ASSERT(asof_idx < op.conditions.size());
 
-	bool force_asof_join = DBConfig::GetSetting<DebugAsofIejoinSetting>(context);
-	if (!force_asof_join) {
-		idx_t asof_join_threshold = DBConfig::GetSetting<AsofLoopJoinThresholdSetting>(context);
-		if (op.children[0]->has_estimated_cardinality && lhs_cardinality < asof_join_threshold) {
+	// If there is a non-comparison predicate, we have to use NLJ.
+	const bool has_predicate = op.predicate.get();
+	const bool force_asof_join = DBConfig::GetSetting<DebugAsofIejoinSetting>(context);
+	if (!force_asof_join || has_predicate) {
+		const idx_t asof_join_threshold = DBConfig::GetSetting<AsofLoopJoinThresholdSetting>(context);
+		if (has_predicate || (op.children[0]->has_estimated_cardinality && lhs_cardinality < asof_join_threshold)) {
 			auto result = PlanAsOfLoopJoin(op, left, right);
 			if (result) {
 				return *result;

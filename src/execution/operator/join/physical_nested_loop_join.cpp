@@ -286,7 +286,10 @@ public:
 		right_payload.Initialize(allocator, op.children[1].get().GetTypes());
 		left_outer.Initialize(STANDARD_VECTOR_SIZE);
 
-		pred_matches.Initialize();
+		if (op.predicate) {
+			pred_executor.AddExpression(*op.predicate);
+			pred_matches.Initialize();
+		}
 	}
 
 	bool fetch_next_left;
@@ -450,7 +453,6 @@ OperatorResultType PhysicalNestedLoopJoin::ResolveComplexJoin(ExecutionContext &
 
 			//	If we have a predicate, apply it to the result
 			if (predicate) {
-				ExpressionExecutor eval(context.client, *predicate);
 				auto &sel = state.pred_matches;
 				match_count = state.pred_executor.SelectExpression(chunk, sel);
 				chunk.Slice(sel, match_count);
