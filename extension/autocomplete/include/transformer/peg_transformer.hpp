@@ -74,7 +74,6 @@ public:
 	template <typename T>
 	T Transform(ListParseResult &parse_result, idx_t child_index) {
 		auto child_parse_result = parse_result.GetChild(child_index);
-
 		return Transform<T>(child_parse_result);
 	}
 

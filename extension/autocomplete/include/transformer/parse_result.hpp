@@ -132,19 +132,17 @@ public:
 		name = name_p;
 	}
 
-	template <class T>
-	T &Child(idx_t index) {
-		if (index >= children.size()) {
-			throw InternalException("Child index out of bounds");
-		}
-		return children[index]->Cast<T>();
-	}
-
 	optional_ptr<ParseResult> GetChild(idx_t index) {
 		if (index >= children.size()) {
 			throw InternalException("Child index out of bounds");
 		}
 		return children[index];
+	}
+
+	template <class T>
+	T &Child(idx_t index) {
+		auto child_ptr = GetChild(index);
+		return child_ptr->Cast<T>();
 	}
 
 	void ToStringInternal(std::stringstream &ss, std::unordered_set<const ParseResult *> &visited,
