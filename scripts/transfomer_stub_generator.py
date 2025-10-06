@@ -132,7 +132,7 @@ if __name__ == "__main__":
             is_new_file = not os.path.exists(target_cpp_filepath)
             with open(target_cpp_filepath, "a", encoding="utf-8") as f:
                 if is_new_file:
-                    f.write('#include "duckdb/parser/transformer.hpp"\n\n')
+                    f.write('#include "transformer/peg_transformer.hpp"\n\n')
                     f.write("namespace duckdb {\n")
                     newly_created_files.add(target_cpp_filepath)
                 f.write(source_body)
