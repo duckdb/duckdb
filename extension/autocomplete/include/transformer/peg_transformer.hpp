@@ -142,7 +142,7 @@ private:
 		}
 		sql_transform_functions[rule_name] =
 		    [function](PEGTransformer &transformer,
-		               optional_ptr<ParseResult> parse_result) -> unique_ptr<TransformResultValue> {
+		               optional_ptr<ListParseResult> parse_result) -> unique_ptr<TransformResultValue> {
 			auto result_value = function(transformer, parse_result);
 			return make_uniq<TypedTransformResult<decltype(result_value)>>(std::move(result_value));
 		};
