@@ -387,6 +387,7 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
 	VerifyUniqueNames(unique_names);
 
 	// construct the column writers
+	D_ASSERT(sql_types.size() == unique_names.size());
 	for (idx_t i = 0; i < sql_types.size(); i++) {
 		vector<string> path_in_schema;
 		column_writers.push_back(ColumnWriter::CreateWriterRecursive(context, *this, path_in_schema, sql_types[i],
