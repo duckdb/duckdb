@@ -59,15 +59,21 @@ PEGTransformerFactory &PEGTransformerFactory::GetInstance() {
 
 PEGTransformerFactory::PEGTransformerFactory() {
 	REGISTER_TRANSFORM(TransformStatement);
+
+	// use.gram
 	REGISTER_TRANSFORM(TransformUseStatement);
-	REGISTER_TRANSFORM(TransformSetStatement);
-	REGISTER_TRANSFORM(TransformResetStatement);
 	REGISTER_TRANSFORM(TransformUseTarget);
-	REGISTER_TRANSFORM(TransformStandardAssignment);
-	REGISTER_TRANSFORM(TransformSettingOrVariable);
-	REGISTER_TRANSFORM(TransformSetSetting);
-	REGISTER_TRANSFORM(TransformSetVariable);
+
+	// set.gram
+	REGISTER_TRANSFORM(TransformResetStatement);
 	REGISTER_TRANSFORM(TransformSetAssignment);
+	REGISTER_TRANSFORM(TransformSetSetting);
+	REGISTER_TRANSFORM(TransformSetStatement);
+	REGISTER_TRANSFORM(TransformSetTimeZone);
+	REGISTER_TRANSFORM(TransformSetVariable);
+	REGISTER_TRANSFORM(TransformSettingScope);
+	REGISTER_TRANSFORM(TransformStandardAssignment);
+	REGISTER_TRANSFORM(TransformVariableAssign);
 	REGISTER_TRANSFORM(TransformVariableList);
 }
 } // namespace duckdb

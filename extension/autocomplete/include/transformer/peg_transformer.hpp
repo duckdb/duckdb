@@ -152,21 +152,21 @@ private:
 
 	static unique_ptr<SQLStatement> TransformStatement(PEGTransformer &, optional_ptr<ParseResult> list);
 
+	// use.gram
+	static unique_ptr<SQLStatement> TransformUseStatement(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<SQLStatement> TransformUseTarget(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
-	static unique_ptr<SQLStatement> TransformUseStatement(PEGTransformer &, optional_ptr<ParseResult> identifier_pr);
-	static unique_ptr<SQLStatement> TransformSetStatement(PEGTransformer &, optional_ptr<ParseResult> choice_pr);
-	static unique_ptr<SQLStatement> TransformResetStatement(PEGTransformer &, optional_ptr<ParseResult> choice_pr);
-
-	static QualifiedName TransformUseTarget(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static unique_ptr<SQLStatement> TransformStandardAssignment(PEGTransformer &transformer,
-																optional_ptr<ParseResult> parse_result);
-	static SettingInfo TransformSettingOrVariable(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static SettingInfo TransformSetSetting(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static SettingInfo TransformSetVariable(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static vector<unique_ptr<ParsedExpression>> TransformSetAssignment(PEGTransformer &transformer,
-																	   optional_ptr<ParseResult> parse_result);
-	static vector<unique_ptr<ParsedExpression>> TransformVariableList(PEGTransformer &transformer,
-																	  optional_ptr<ParseResult> parse_result);
+	// set.gram
+	static unique_ptr<SQLStatement> TransformResetStatement(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<SQLStatement> TransformSetAssignment(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<SQLStatement> TransformSetSetting(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<SQLStatement> TransformSetStatement(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<SQLStatement> TransformSetTimeZone(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<SQLStatement> TransformSetVariable(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<SQLStatement> TransformSettingScope(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<SQLStatement> TransformStandardAssignment(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<SQLStatement> TransformVariableAssign(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<SQLStatement> TransformVariableList(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 private:
 	PEGParser parser;
