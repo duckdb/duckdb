@@ -689,15 +689,6 @@ void AsOfProbeBuffer::ResolveSimpleJoin(ExecutionContext &context, DataChunk &ch
 	}
 }
 
-static idx_t SliceSelectionVector(SelectionVector &target, const SelectionVector &source, const idx_t count) {
-	idx_t result = 0;
-	for (idx_t i = 0; i < count; ++i) {
-		target.set_index(result++, target.get_index(source.get_index(i)));
-	}
-
-	return result;
-}
-
 void AsOfProbeBuffer::ResolveComplexJoin(ExecutionContext &context, DataChunk &chunk) {
 	// perform the actual join
 	idx_t matches[STANDARD_VECTOR_SIZE];
@@ -772,7 +763,7 @@ void AsOfProbeBuffer::ResolveComplexJoin(ExecutionContext &context, DataChunk &c
 			} else {
 				chunk.Slice(*sel, tail_count);
 				//	Slice lhs_match_sel to the remaining lhs rows
-				lhs_match_count = SliceSelectionVector(lhs_match_sel, *sel, tail_count);
+				lhs_match_count = lhs_match_sel.SliceInPlace(*sel, tail_count);
 			}
 		}
 	}
@@ -783,7 +774,7 @@ void AsOfProbeBuffer::ResolveComplexJoin(ExecutionContext &context, DataChunk &c
 		const auto filter_count = filterer.SelectExpression(chunk, filter_sel);
 		if (filter_count < chunk.size()) {
 			chunk.Slice(filter_sel, filter_count);
-			lhs_match_count = SliceSelectionVector(lhs_match_sel, filter_sel, filter_count);
+			lhs_match_count = lhs_match_sel.SliceInPlace(filter_sel, filter_count);
 		}
 	}
 
