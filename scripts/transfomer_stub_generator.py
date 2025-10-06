@@ -8,6 +8,7 @@ HEADER_FILE = "../extension/autocomplete/transformer/peg_transformer.hpp"
 FACTORY_FILE = "../extension/autocomplete/transformer/peg_transformer_factory.cpp"
 SOURCE_DIR = "../extension/autocomplete/transformer"
 
+
 def extract_registrations_from_factory(code_content):
     """Extracts registered transformer rule names from the factory C++ code."""
     all_rules = set()
@@ -21,6 +22,7 @@ def extract_registrations_from_factory(code_content):
     pattern_enum = re.compile(r'RegisterEnum<.*?>\s*\(\s*"([A-Za-z0-9_]+)"')
     all_rules.update(pattern_enum.findall(code_content))
     return all_rules
+
 
 def extract_definitions_from_sources(directory_path):
     """Scans all .cpp files in a directory for implemented Transform functions."""
@@ -44,6 +46,7 @@ def extract_definitions_from_sources(directory_path):
                 print(f"Error reading source file {filepath}: {e}")
     return defined_rules
 
+
 def extract_grammar_rules_from_dir(directory_path):
     """Extracts grammar rule names and content from .gram files."""
     rules_map = {}
@@ -60,19 +63,18 @@ def extract_grammar_rules_from_dir(directory_path):
                     content = f.read()
                     matches = rule_pattern.findall(content)
                     for rule_name, rule_content in matches:
-                        rules_map[rule_name] = {
-                            "file": filename,
-                            "content": f"{rule_name} <- {rule_content.strip()}"
-                        }
+                        rules_map[rule_name] = {"file": filename, "content": f"{rule_name} <- {rule_content.strip()}"}
             except Exception as e:
                 print(f"Error reading file {filepath}: {e}")
     return rules_map
+
 
 def format_rule_as_comment(rule_content):
     """Formats a grammar rule as a C++ comment."""
     lines = rule_content.strip().split('\n')
     comment_lines = [f"// {line.strip()}" for line in lines]
     return "\n".join(comment_lines)
+
 
 if __name__ == "__main__":
     print("--- Running Transformer Stub Generator ---")
@@ -99,7 +101,9 @@ if __name__ == "__main__":
     missing_rules = sorted(list(all_grammar_rules - implemented_rules))
 
     if not missing_rules:
-        print("\nSUCCESS: All grammar rules have a corresponding transformer registration and/or definition. Nothing to do.")
+        print(
+            "\nSUCCESS: All grammar rules have a corresponding transformer registration and/or definition. Nothing to do."
+        )
         exit(0)
 
     print(f"\n{len(implemented_rules)} rules are already implemented (found in factory or source files).")
@@ -122,11 +126,13 @@ if __name__ == "__main__":
 
         header_snippet = f"static unique_ptr<SQLStatement> {transform_func_name}(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);"
         factory_snippet = f"    REGISTER_TRANSFORM({transform_func_name});"
-        source_body = (f'\n\n{rule_content_comment}\n'
-                       f'unique_ptr<SQLStatement> PEGTransformerFactory::{transform_func_name}(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {{\n'
-                       f'    auto &list_pr = parse_result->Cast<ListParseResult>();\n'
-                       f'    throw NotImplementedException("Rule \'{rule_name}\' has not been implemented yet");\n'
-                       f'}}')
+        source_body = (
+            f'\n\n{rule_content_comment}\n'
+            f'unique_ptr<SQLStatement> PEGTransformerFactory::{transform_func_name}(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {{\n'
+            f'    auto &list_pr = parse_result->Cast<ListParseResult>();\n'
+            f'    throw NotImplementedException("Rule \'{rule_name}\' has not been implemented yet");\n'
+            f'}}'
+        )
 
         try:
             is_new_file = not os.path.exists(target_cpp_filepath)

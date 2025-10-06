@@ -2,9 +2,9 @@
 
 namespace duckdb {
 
-
 // UseStatement <- 'USE' UseTarget
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformUseStatement(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformUseStatement(PEGTransformer &transformer,
+                                                                      optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto qn = transformer.Transform<QualifiedName>(list_pr, 1);
 
@@ -13,7 +13,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformUseStatement(PEGTransfo
 		value_str = KeywordHelper::WriteOptionallyQuoted(qn.name, '"');
 	} else {
 		value_str = KeywordHelper::WriteOptionallyQuoted(qn.schema, '"') + "." +
-					KeywordHelper::WriteOptionallyQuoted(qn.name, '"');
+		            KeywordHelper::WriteOptionallyQuoted(qn.name, '"');
 	}
 
 	auto value_expr = make_uniq<ConstantExpression>(Value(value_str));
@@ -21,7 +21,8 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformUseStatement(PEGTransfo
 }
 
 // UseTarget <- (CatalogName '.' ReservedSchemaName) / SchemaName / CatalogName
-QualifiedName PEGTransformerFactory::TransformUseTarget(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+QualifiedName PEGTransformerFactory::TransformUseTarget(PEGTransformer &transformer,
+                                                        optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
 	string qualified_name;
