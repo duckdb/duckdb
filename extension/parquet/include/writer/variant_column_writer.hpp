@@ -77,6 +77,26 @@ public:
 	void AnalyzeSchema(ParquetAnalyzeSchemaState &state, Vector &input, idx_t count) override;
 	void AnalyzeSchemaFinalize(const ParquetAnalyzeSchemaState &state) override;
 
+	bool HasTransform() override {
+		return true;
+	}
+	LogicalType TransformedType() override {
+		child_list_t<LogicalType> children;
+		for (auto &writer : child_writers) {
+			auto &child_name = writer->Schema().name;
+			auto &child_type = writer->Schema().type;
+			children.emplace_back(child_name, child_type);
+		}
+		return LogicalType::STRUCT(std::move(children));
+	}
+	unique_ptr<Expression> TransformExpression(unique_ptr<BoundReferenceExpression> expr) override {
+		vector<unique_ptr<Expression>> arguments;
+		arguments.push_back(unique_ptr_cast<BoundReferenceExpression, Expression>(std::move(expr)));
+
+		return make_uniq<BoundFunctionExpression>(TransformedType(), GetTransformFunction(), std::move(arguments),
+		                                          nullptr, false);
+	}
+
 public:
 	static ScalarFunction GetTransformFunction();
 	static LogicalType TransformTypedValueRecursive(const LogicalType &type);

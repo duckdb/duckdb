@@ -328,6 +328,23 @@ public:
 	vector<unique_ptr<ColumnStatsUnifier>> stats_unifiers;
 };
 
+ParquetWriteTransformData::ParquetWriteTransformData(ClientContext &context, vector<LogicalType> types,
+                                                     vector<unique_ptr<Expression>> expressions_p)
+    : buffer(context, types, ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR), expressions(std::move(expressions_p)),
+      executor(context, expressions) {
+	chunk.Initialize(buffer.GetAllocator(), types);
+}
+
+ColumnDataCollection &ParquetWriteTransformData::ApplyTransform(ColumnDataCollection &input) {
+	buffer.Reset();
+	for (auto &input_chunk : input.Chunks()) {
+		chunk.Reset();
+		executor.Execute(input_chunk, chunk);
+		buffer.Append(chunk);
+	}
+	return buffer;
+}
+
 ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file_name_p, vector<LogicalType> types_p,
                              vector<string> names_p, CompressionCodec::type codec, ChildFieldIDs field_ids_p,
                              ShreddingType shredding_types_p, const vector<pair<string, string>> &kv_metadata,
@@ -441,7 +458,48 @@ static void AnalyzeSchema(ColumnDataCollection &buffer, vector<unique_ptr<Column
 	}
 }
 
-void ParquetWriter::PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGroup &result) {
+void ParquetWriter::InitializePreprocessing() {
+	if (transform_data) {
+		return;
+	}
+
+	vector<LogicalType> transformed_types;
+	vector<unique_ptr<Expression>> transform_expressions;
+	for (idx_t col_idx = 0; col_idx < column_writers.size(); col_idx++) {
+		auto &column_writer = *column_writers[col_idx];
+		auto &original_type = sql_types[col_idx];
+		auto expr = make_uniq<BoundReferenceExpression>(original_type, col_idx);
+		if (!column_writer.HasTransform()) {
+			transformed_types.push_back(original_type);
+			transform_expressions.push_back(std::move(expr));
+			continue;
+		}
+		transformed_types.push_back(column_writer.TransformedType());
+		transform_expressions.push_back(column_writer.TransformExpression(std::move(expr)));
+	}
+	transform_data = make_uniq<ParquetWriteTransformData>(context, transformed_types, std::move(transform_expressions));
+}
+
+void ParquetWriter::PrepareRowGroup(ColumnDataCollection &raw_buffer, PreparedRowGroup &result) {
+	AnalyzeSchema(raw_buffer, column_writers);
+
+	bool requires_transform = false;
+	for (auto &writer_p : column_writers) {
+		auto &writer = *writer_p;
+
+		if (writer.HasTransform()) {
+			requires_transform = true;
+			break;
+		}
+	}
+
+	reference<ColumnDataCollection> buffer_ref(raw_buffer);
+	if (requires_transform) {
+		InitializePreprocessing();
+		buffer_ref = transform_data->ApplyTransform(raw_buffer);
+	}
+	auto &buffer = buffer_ref.get();
+
 	// We write 8 columns at a time so that iterating over ColumnDataCollection is more efficient
 	static constexpr idx_t COLUMNS_PER_PASS = 8;
 
@@ -453,9 +511,8 @@ void ParquetWriter::PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGro
 	row_group.num_rows = NumericCast<int64_t>(buffer.Count());
 	row_group.__isset.file_offset = true;
 
-	AnalyzeSchema(buffer, column_writers);
-
 	if (file_meta_data.schema.empty()) {
+		//! Populate the schema elements of the parquet file we're writing
 		lock_guard<mutex> glock(lock);
 		if (file_meta_data.schema.empty()) {
 			// populate root schema object
