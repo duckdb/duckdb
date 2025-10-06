@@ -30,8 +30,10 @@ void BaseLeaf<CAPACITY, TYPE>::InsertByteInternal(BaseLeaf &n, const uint8_t byt
 }
 
 template <uint8_t CAPACITY, NType TYPE>
-BaseLeaf<CAPACITY, TYPE> &BaseLeaf<CAPACITY, TYPE>::DeleteByteInternal(ART &art, Node &node, const uint8_t byte) {
-	auto &n = Node::Ref<BaseLeaf>(art, node, node.GetType());
+NodeHandle<BaseLeaf<CAPACITY, TYPE>> BaseLeaf<CAPACITY, TYPE>::DeleteByteInternal(ART &art, Node &node,
+                                                                                  const uint8_t byte) {
+	NodeHandle<BaseLeaf<CAPACITY, TYPE>> handle(art, node);
+	auto &n = handle.Get();
 	uint8_t child_pos = 0;
 
 	for (; child_pos < n.count; child_pos++) {
@@ -45,7 +47,7 @@ BaseLeaf<CAPACITY, TYPE> &BaseLeaf<CAPACITY, TYPE>::DeleteByteInternal(ART &art,
 	for (uint8_t i = child_pos; i < n.count; i++) {
 		n.key[i] = n.key[i + 1];
 	}
-	return n;
+	return handle;
 }
 
 //===--------------------------------------------------------------------===//
@@ -54,20 +56,20 @@ BaseLeaf<CAPACITY, TYPE> &BaseLeaf<CAPACITY, TYPE>::DeleteByteInternal(ART &art,
 
 void Node7Leaf::InsertByte(ART &art, Node &node, const uint8_t byte) {
 	// The node is full. Grow to Node15.
-	auto &n7 = Node::Ref<Node7Leaf>(art, node, NODE_7_LEAF);
+	NodeHandle<Node7Leaf> handle(art, node);
+	auto &n7 = handle.Get();
 	if (n7.count == CAPACITY) {
 		auto node7 = node;
 		Node15Leaf::GrowNode7Leaf(art, node, node7);
 		Node15Leaf::InsertByte(art, node, byte);
 		return;
 	}
-
 	InsertByteInternal(n7, byte);
 }
 
 void Node7Leaf::DeleteByte(ART &art, Node &node, Node &prefix, const uint8_t byte, const ARTKey &row_id) {
-	auto &n7 = DeleteByteInternal(art, node, byte);
-
+	auto n7_handle = DeleteByteInternal(art, node, byte);
+	auto &n7 = n7_handle.Get();
 	// Compress one-way nodes.
 	if (n7.count == 1) {
 		D_ASSERT(node.GetGateStatus() == GateStatus::GATE_NOT_SET);
@@ -90,8 +92,12 @@ void Node7Leaf::DeleteByte(ART &art, Node &node, Node &prefix, const uint8_t byt
 }
 
 void Node7Leaf::ShrinkNode15Leaf(ART &art, Node &node7_leaf, Node &node15_leaf) {
-	auto &n7 = New(art, node7_leaf);
-	auto &n15 = Node::Ref<Node15Leaf>(art, node15_leaf, NType::NODE_15_LEAF);
+	auto n7_handle = New(art, node7_leaf);
+	auto &n7 = n7_handle.Get();
+
+	NodeHandle<Node15Leaf> n15_handle(art, node15_leaf);
+	auto &n15 = n15_handle.Get();
+
 	node7_leaf.SetGateStatus(node15_leaf.GetGateStatus());
 
 	n7.count = n15.count;
@@ -108,7 +114,8 @@ void Node7Leaf::ShrinkNode15Leaf(ART &art, Node &node7_leaf, Node &node15_leaf) 
 
 void Node15Leaf::InsertByte(ART &art, Node &node, const uint8_t byte) {
 	// The node is full. Grow to Node256Leaf.
-	auto &n15 = Node::Ref<Node15Leaf>(art, node, NODE_15_LEAF);
+	NodeHandle<Node15Leaf> n15_handle(art, node);
+	auto &n15 = n15_handle.Get();
 	if (n15.count == CAPACITY) {
 		auto node15 = node;
 		Node256Leaf::GrowNode15Leaf(art, node, node15);
@@ -120,7 +127,8 @@ void Node15Leaf::InsertByte(ART &art, Node &node, const uint8_t byte) {
 }
 
 void Node15Leaf::DeleteByte(ART &art, Node &node, const uint8_t byte) {
-	auto &n15 = DeleteByteInternal(art, node, byte);
+	auto n15_handle = DeleteByteInternal(art, node, byte);
+	auto &n15 = n15_handle.Get();
 
 	// Shrink node to Node7.
 	if (n15.count < Node7Leaf::CAPACITY) {
@@ -130,8 +138,11 @@ void Node15Leaf::DeleteByte(ART &art, Node &node, const uint8_t byte) {
 }
 
 void Node15Leaf::GrowNode7Leaf(ART &art, Node &node15_leaf, Node &node7_leaf) {
-	auto &n7 = Node::Ref<Node7Leaf>(art, node7_leaf, NType::NODE_7_LEAF);
-	auto &n15 = New(art, node15_leaf);
+	NodeHandle<Node7Leaf> n7_handle(art, node7_leaf);
+	auto &n7 = n7_handle.Get();
+
+	auto n15_handle = New(art, node15_leaf);
+	auto &n15 = n15_handle.Get();
 	node15_leaf.SetGateStatus(node7_leaf.GetGateStatus());
 
 	n15.count = n7.count;
@@ -143,8 +154,12 @@ void Node15Leaf::GrowNode7Leaf(ART &art, Node &node15_leaf, Node &node7_leaf) {
 }
 
 void Node15Leaf::ShrinkNode256Leaf(ART &art, Node &node15_leaf, Node &node256_leaf) {
-	auto &n15 = New(art, node15_leaf);
-	auto &n256 = Node::Ref<Node256Leaf>(art, node256_leaf, NType::NODE_256_LEAF);
+	auto n15_handle = New(art, node15_leaf);
+	auto &n15 = n15_handle.Get();
+
+	NodeHandle<Node256Leaf> n256_handle(art, node256_leaf);
+	auto &n256 = n256_handle.Get();
+
 	node15_leaf.SetGateStatus(node256_leaf.GetGateStatus());
 
 	ValidityMask mask(&n256.mask[0], Node256::CAPACITY);
