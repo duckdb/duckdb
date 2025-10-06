@@ -700,7 +700,7 @@ public:
 
 		vector<unique_ptr<SQLStatement>> result;
 		try {
-			for (auto& tokenized_statement : tokenizer.statements) {
+			for (auto &tokenized_statement : tokenizer.statements) {
 				if (tokenized_statement.empty()) {
 					continue;
 				}
@@ -708,7 +708,9 @@ public:
 				auto statement = transformer.Transform(tokenized_statement, "Statement");
 				if (statement) {
 					statement->stmt_location = NumericCast<idx_t>(tokenized_statement[0].offset);
-					statement->stmt_length = NumericCast<idx_t>(tokenized_statement[tokenized_statement.size() - 1].offset + tokenized_statement[tokenized_statement.size() - 1].length);
+					statement->stmt_length =
+					    NumericCast<idx_t>(tokenized_statement[tokenized_statement.size() - 1].offset +
+					                       tokenized_statement[tokenized_statement.size() - 1].length);
 				}
 				result.push_back(std::move(statement));
 			}
