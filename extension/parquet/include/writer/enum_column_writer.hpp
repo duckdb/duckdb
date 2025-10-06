@@ -15,7 +15,7 @@ class EnumWriterPageState;
 
 class EnumColumnWriter : public PrimitiveColumnWriter {
 public:
-	EnumColumnWriter(ParquetWriter &writer, ParquetColumnSchema &column_schema, vector<string> schema_path_p);
+	EnumColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&column_schema, vector<string> schema_path_p);
 	~EnumColumnWriter() override = default;
 
 	uint32_t bit_width;

@@ -386,16 +386,11 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
 	auto &unique_names = column_names;
 	VerifyUniqueNames(unique_names);
 
-	// construct the child schemas
+	// construct the column writers
 	for (idx_t i = 0; i < sql_types.size(); i++) {
-		auto child_schema =
-		    ColumnWriter::FillParquetSchema(sql_types[i], unique_names[i], &field_ids, &shredding_types);
-		column_schemas.push_back(std::move(child_schema));
-	}
-	// now construct the writers based on the schemas
-	for (auto &child_schema : column_schemas) {
 		vector<string> path_in_schema;
-		column_writers.push_back(ColumnWriter::CreateWriterRecursive(context, *this, child_schema, path_in_schema));
+		column_writers.push_back(ColumnWriter::CreateWriterRecursive(context, *this, path_in_schema, sql_types[i],
+		                                                             unique_names[i], &field_ids, &shredding_types));
 	}
 }
 

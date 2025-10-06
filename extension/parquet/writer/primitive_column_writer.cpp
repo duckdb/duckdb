@@ -7,9 +7,9 @@ namespace duckdb {
 using duckdb_parquet::Encoding;
 using duckdb_parquet::PageType;
 
-PrimitiveColumnWriter::PrimitiveColumnWriter(ParquetWriter &writer, ParquetColumnSchema &column_schema,
+PrimitiveColumnWriter::PrimitiveColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&column_schema,
                                              vector<string> schema_path)
-    : ColumnWriter(writer, column_schema, std::move(schema_path)) {
+    : ColumnWriter(writer, std::move(column_schema), std::move(schema_path)) {
 }
 
 unique_ptr<ColumnWriterState> PrimitiveColumnWriter::InitializeWriteState(duckdb_parquet::RowGroup &row_group) {

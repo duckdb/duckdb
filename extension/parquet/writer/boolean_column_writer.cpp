@@ -35,9 +35,9 @@ public:
 	uint8_t byte_pos = 0;
 };
 
-BooleanColumnWriter::BooleanColumnWriter(ParquetWriter &writer, ParquetColumnSchema &column_schema,
+BooleanColumnWriter::BooleanColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&column_schema,
                                          vector<string> schema_path_p)
-    : PrimitiveColumnWriter(writer, column_schema, std::move(schema_path_p)) {
+    : PrimitiveColumnWriter(writer, std::move(column_schema), std::move(schema_path_p)) {
 }
 
 unique_ptr<ColumnWriterStatistics> BooleanColumnWriter::InitializeStatsState() {

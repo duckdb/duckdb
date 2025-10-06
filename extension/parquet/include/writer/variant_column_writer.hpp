@@ -15,9 +15,9 @@ namespace duckdb {
 
 class VariantColumnWriter : public StructColumnWriter {
 public:
-	VariantColumnWriter(ParquetWriter &writer, ParquetColumnSchema &column_schema, vector<string> schema_path_p,
+	VariantColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&column_schema, vector<string> schema_path_p,
 	                    vector<unique_ptr<ColumnWriter>> child_writers_p)
-	    : StructColumnWriter(writer, column_schema, std::move(schema_path_p), std::move(child_writers_p)) {
+	    : StructColumnWriter(writer, std::move(column_schema), std::move(schema_path_p), std::move(child_writers_p)) {
 	}
 	~VariantColumnWriter() override = default;
 

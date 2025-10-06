@@ -66,9 +66,9 @@ public:
 	}
 };
 
-FixedDecimalColumnWriter::FixedDecimalColumnWriter(ParquetWriter &writer, ParquetColumnSchema &column_schema,
+FixedDecimalColumnWriter::FixedDecimalColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&column_schema,
                                                    vector<string> schema_path_p)
-    : PrimitiveColumnWriter(writer, column_schema, std::move(schema_path_p)) {
+    : PrimitiveColumnWriter(writer, std::move(column_schema), std::move(schema_path_p)) {
 }
 
 unique_ptr<ColumnWriterStatistics> FixedDecimalColumnWriter::InitializeStatsState() {

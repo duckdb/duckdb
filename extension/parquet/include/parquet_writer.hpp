@@ -155,7 +155,6 @@ private:
 	bool debug_use_openssl;
 	shared_ptr<EncryptionUtil> encryption_util;
 	ParquetVersion parquet_version;
-	vector<ParquetColumnSchema> column_schemas;
 
 	unique_ptr<BufferedFileWriter> writer;
 	//! Atomics to reduce contention when rotating writes to multiple Parquet files
