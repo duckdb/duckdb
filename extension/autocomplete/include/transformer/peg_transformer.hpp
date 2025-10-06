@@ -72,6 +72,13 @@ public:
 	}
 
 	template <typename T>
+	T Transform(ListParseResult &parse_result, idx_t child_index) {
+		auto child_parse_result = parse_result.GetChild(child_index);
+
+		return Transform<T>(child_parse_result);
+	}
+
+	template <typename T>
 	T TransformEnum(optional_ptr<ParseResult> parse_result) {
 		auto enum_rule_name = parse_result->name;
 
@@ -142,7 +149,7 @@ private:
 		}
 		sql_transform_functions[rule_name] =
 		    [function](PEGTransformer &transformer,
-		               optional_ptr<ListParseResult> parse_result) -> unique_ptr<TransformResultValue> {
+		               optional_ptr<ParseResult> parse_result) -> unique_ptr<TransformResultValue> {
 			auto result_value = function(transformer, parse_result);
 			return make_uniq<TypedTransformResult<decltype(result_value)>>(std::move(result_value));
 		};
@@ -154,7 +161,7 @@ private:
 
 	// use.gram
 	static unique_ptr<SQLStatement> TransformUseStatement(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static unique_ptr<SQLStatement> TransformUseTarget(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static QualifiedName TransformUseTarget(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 	// set.gram
 	static unique_ptr<SQLStatement> TransformResetStatement(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);

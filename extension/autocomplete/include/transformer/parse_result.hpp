@@ -140,6 +140,13 @@ public:
 		return children[index]->Cast<T>();
 	}
 
+	optional_ptr<ParseResult> GetChild(idx_t index) {
+		if (index >= children.size()) {
+			throw InternalException("Child index out of bounds");
+		}
+		return children[index];
+	}
+
 	void ToStringInternal(std::stringstream &ss, std::unordered_set<const ParseResult *> &visited,
 	                      const std::string &indent, bool is_last) const override {
 		ss << indent << (is_last ? "└─" : "├─");
