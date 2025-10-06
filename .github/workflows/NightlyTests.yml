@@ -362,13 +362,20 @@ jobs:
         shell: bash
         run: CORE_EXTENSIONS="tpch" make
 
+      - name: Sparse-checkout duckdb-httpfs for scripts
+        uses: actions/checkout@v4
+        with:
+          repository: duckdb-httpfs
+          sparse-checkout: scripts
+          path: httpfs
+
       - name: Start Minio
         shell: bash
         run: |
-          sudo ./scripts/install_s3_test_server.sh
-          ./scripts/generate_presigned_url.sh
-          source ./scripts/run_s3_test_server.sh
-          source ./scripts/set_s3_test_server_variables.sh
+          sudo ./httpfs/scripts/install_s3_test_server.sh
+          ./httpfs/scripts/generate_presigned_url.sh
+          source ./httpfs/scripts/run_s3_test_server.sh
+          source ./httpfs/scripts/set_s3_test_server_variables.sh
           sleep 60
 
       - name: Build
