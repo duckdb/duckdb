@@ -163,28 +163,6 @@ private:
 	                                                      optional_ptr<ParseResult> parse_result);
 	static QualifiedName TransformUseTarget(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
-	// set.gram
-	static unique_ptr<SQLStatement> TransformResetStatement(PEGTransformer &transformer,
-	                                                        optional_ptr<ParseResult> parse_result);
-	static unique_ptr<SQLStatement> TransformSetAssignment(PEGTransformer &transformer,
-	                                                       optional_ptr<ParseResult> parse_result);
-	static unique_ptr<SQLStatement> TransformSetSetting(PEGTransformer &transformer,
-	                                                    optional_ptr<ParseResult> parse_result);
-	static unique_ptr<SQLStatement> TransformSetStatement(PEGTransformer &transformer,
-	                                                      optional_ptr<ParseResult> parse_result);
-	static unique_ptr<SQLStatement> TransformSetTimeZone(PEGTransformer &transformer,
-	                                                     optional_ptr<ParseResult> parse_result);
-	static unique_ptr<SQLStatement> TransformSetVariable(PEGTransformer &transformer,
-	                                                     optional_ptr<ParseResult> parse_result);
-	static unique_ptr<SQLStatement> TransformSettingScope(PEGTransformer &transformer,
-	                                                      optional_ptr<ParseResult> parse_result);
-	static unique_ptr<SQLStatement> TransformStandardAssignment(PEGTransformer &transformer,
-	                                                            optional_ptr<ParseResult> parse_result);
-	static unique_ptr<SQLStatement> TransformVariableAssign(PEGTransformer &transformer,
-	                                                        optional_ptr<ParseResult> parse_result);
-	static unique_ptr<SQLStatement> TransformVariableList(PEGTransformer &transformer,
-	                                                      optional_ptr<ParseResult> parse_result);
-
 private:
 	PEGParser parser;
 	case_insensitive_map_t<PEGTransformer::AnyTransformFunction> sql_transform_functions;
