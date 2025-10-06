@@ -218,6 +218,22 @@ ORDER BY ALL
 1	1	97
 1	1	99
 
+statement ok
+CREATE TABLE tbl4 AS SELECT i % 4 grp, i val_1, {'x' : i, 'y': i} struct_1 FROM range(100) tbl(i)
+
+query III
+SELECT * FROM (
+	SELECT row_number() OVER (PARTITION BY grp ORDER BY val_1 DESC) as rn, grp, struct_1
+	FROM tbl4
+	QUALIFY rn <= 1
+)
+ORDER BY ALL
+----
+1	0	{'x': 96, 'y': 96}
+1	1	{'x': 97, 'y': 97}
+1	2	{'x': 98, 'y': 98}
+1	3	{'x': 99, 'y': 99}
+
 # Lateral joins
 query III
 SELECT t2.*

@@ -120,7 +120,7 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 	bool generate_row_number = false;
 	map<idx_t, idx_t> group_projection_idxs;
 	auto struct_input_exprs = GenerateAggregateArgs(new_bindings, window, generate_row_number, group_projection_idxs);
-
+	const bool use_struct_packing = struct_input_exprs.size() > 1;
 	auto &limit_expr = filter.expressions[0]->Cast<BoundComparisonExpression>().right;
 
 	// Optimize window children
@@ -128,7 +128,8 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 
 	auto current_op = CreateAggregateOperator(window, std::move(limit_expr), std::move(struct_input_exprs));
 	current_op = TryCreateUnnestOperator(std::move(current_op), generate_row_number);
-	current_op = CreateProjectionOperator(std::move(current_op), generate_row_number, group_projection_idxs);
+	current_op =
+	    CreateProjectionOperator(std::move(current_op), generate_row_number, use_struct_packing, group_projection_idxs);
 
 	D_ASSERT(current_op->type != LogicalOperatorType::LOGICAL_UNNEST);
 
@@ -299,6 +300,7 @@ void TopNWindowElimination::AddStructExtractExprs(
 
 unique_ptr<LogicalOperator> TopNWindowElimination::CreateProjectionOperator(unique_ptr<LogicalOperator> op,
                                                                             const bool include_row_number,
+                                                                            const bool use_struct_packing,
                                                                             const map<idx_t, idx_t> &group_idxs) const {
 	const auto aggregate_type = GetAggregateType(op);
 	const idx_t aggregate_table_idx = GetAggregateIdx(op);
@@ -314,11 +316,11 @@ unique_ptr<LogicalOperator> TopNWindowElimination::CreateProjectionOperator(uniq
 	auto aggregate_column_ref =
 	    make_uniq<BoundColumnRefExpression>(aggregate_type, ColumnBinding(aggregate_table_idx, 0));
 
-	if (aggregate_type.InternalType() != PhysicalType::STRUCT) {
+	if (use_struct_packing) {
+		AddStructExtractExprs(proj_exprs, aggregate_type, aggregate_column_ref);
+	} else {
 		// No need for struct_unpack! Just reference the aggregate column
 		proj_exprs.push_back(std::move(aggregate_column_ref));
-	} else {
-		AddStructExtractExprs(proj_exprs, aggregate_type, aggregate_column_ref);
 	}
 
 	if (include_row_number) {
@@ -403,10 +405,17 @@ bool TopNWindowElimination::CanOptimize(LogicalOperator &op, optional_ptr<Client
 		return false;
 	}
 	const auto &window_expr = window.expressions[0]->Cast<BoundWindowExpression>();
+	if (window_expr.partitions.size() != 1) {
+		// Window Functions with multiple groups span limit over all groups but arg_max/min limits per group
+		return false;
+	}
 	if (window_expr.orders.size() != 1) {
 		return false;
 	}
 	if (window_expr.orders[0].type != OrderType::DESCENDING && window_expr.orders[0].type != OrderType::ASCENDING) {
+		return false;
+	}
+	if (window_expr.orders[0].null_order != OrderByNullType::NULLS_LAST) {
 		return false;
 	}
 

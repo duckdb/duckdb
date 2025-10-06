@@ -28,6 +28,7 @@ private:
 	                                                    vector<unique_ptr<Expression>> args) const;
 	unique_ptr<LogicalOperator> TryCreateUnnestOperator(unique_ptr<LogicalOperator> op, bool include_row_number) const;
 	unique_ptr<LogicalOperator> CreateProjectionOperator(unique_ptr<LogicalOperator> op, bool include_row_number,
+	                                                     bool use_struct_packing,
 	                                                     const map<idx_t, idx_t> &group_idxs) const;
 
 	vector<unique_ptr<Expression>> GenerateAggregateArgs(const vector<ColumnBinding> &bindings,
