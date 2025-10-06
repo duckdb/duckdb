@@ -8,6 +8,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/operator/join/outer_join_marker.hpp"
+#include "duckdb/execution/operator/join/physical_range_join.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/event.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
@@ -398,9 +399,13 @@ public:
 	idx_t right_pos; // ExternalBlockIteratorState doesn't know this...
 	unique_ptr<AsOfPayloadScanner> rhs_scanner;
 	DataChunk rhs_payload;
+	ExpressionExecutor rhs_executor;
+	DataChunk rhs_input;
+	DataChunk rhs_keys;
 	idx_t right_bin = 0;
 
 	//	Predicate evaluation
+	SelectionVector tail_sel;
 	SelectionVector filter_sel;
 	ExpressionExecutor filterer;
 
@@ -410,7 +415,7 @@ public:
 
 AsOfProbeBuffer::AsOfProbeBuffer(ClientContext &client, const PhysicalAsOfJoin &op)
     : client(client), op(op), strict(IsStrictComparison(op.comparison_type)), left_outer(IsLeftOuterJoin(op.join_type)),
-      lhs_executor(client), filterer(client), fetch_next_left(true) {
+      lhs_executor(client), rhs_executor(client), filterer(client), fetch_next_left(true) {
 
 	lhs_keys.Initialize(client, op.join_key_types);
 	for (const auto &cond : op.conditions) {
@@ -420,10 +425,20 @@ AsOfProbeBuffer::AsOfProbeBuffer(ClientContext &client, const PhysicalAsOfJoin &
 	lhs_scanned.Initialize(client, op.children[0].get().GetTypes());
 	lhs_payload.Initialize(client, op.children[0].get().GetTypes());
 	rhs_payload.Initialize(client, op.children[1].get().GetTypes());
+	rhs_input.Initialize(client, op.children[1].get().GetTypes());
 
 	lhs_scan_sel.Initialize();
 	lhs_match_sel.Initialize();
 	left_outer.Initialize(STANDARD_VECTOR_SIZE);
+
+	//	If we have equality predicates, we need some more buffers.
+	if (op.conditions.size() > 1) {
+		tail_sel.Initialize();
+		rhs_keys.Initialize(client, op.join_key_types);
+		for (const auto &cond : op.conditions) {
+			rhs_executor.AddExpression(*cond.right);
+		}
+	}
 
 	if (op.predicate) {
 		filter_sel.Initialize();
@@ -674,11 +689,22 @@ void AsOfProbeBuffer::ResolveSimpleJoin(ExecutionContext &context, DataChunk &ch
 	}
 }
 
+static idx_t SliceSelectionVector(SelectionVector &target, const SelectionVector &source, const idx_t count) {
+	idx_t result = 0;
+	for (idx_t i = 0; i < count; ++i) {
+		target.set_index(result++, target.get_index(source.get_index(i)));
+	}
+
+	return result;
+}
+
 void AsOfProbeBuffer::ResolveComplexJoin(ExecutionContext &context, DataChunk &chunk) {
 	// perform the actual join
 	idx_t matches[STANDARD_VECTOR_SIZE];
 	(this->*resolve_join_func)(nullptr, matches);
 
+	//	Extract the rhs input columns from the match
+	rhs_input.Reset();
 	for (idx_t i = 0; i < lhs_match_count; ++i) {
 		const auto idx = lhs_match_sel[i];
 		const auto match_pos = matches[idx];
@@ -690,30 +716,81 @@ void AsOfProbeBuffer::ResolveComplexJoin(ExecutionContext &context, DataChunk &c
 		// Append the individual values
 		// TODO: Batch the copies
 		const auto source_offset = match_pos - (rhs_scanner->Scanned() - rhs_payload.size());
-		for (column_t col_idx = 0; col_idx < op.right_projection_map.size(); ++col_idx) {
-			const auto rhs_idx = op.right_projection_map[col_idx];
-			auto &source = rhs_payload.data[rhs_idx];
-			auto &target = chunk.data[lhs_payload.ColumnCount() + col_idx];
+		for (column_t col_idx = 0; col_idx < rhs_payload.data.size(); ++col_idx) {
+			auto &source = rhs_payload.data[col_idx];
+			auto &target = rhs_input.data[col_idx];
 			VectorOperations::Copy(source, target, source_offset + 1, source_offset, i);
 		}
 	}
+	rhs_input.SetCardinality(lhs_match_count);
 
 	//	Slice the left payload into the result
 	for (column_t i = 0; i < lhs_payload.ColumnCount(); ++i) {
 		chunk.data[i].Slice(lhs_payload.data[i], lhs_match_sel, lhs_match_count);
 	}
+
+	//	Reference the projected right payload into the result
+	for (column_t col_idx = 0; col_idx < op.right_projection_map.size(); ++col_idx) {
+		const auto rhs_idx = op.right_projection_map[col_idx];
+		auto &source = rhs_input.data[rhs_idx];
+		auto &target = chunk.data[lhs_payload.ColumnCount() + col_idx];
+		target.Reference(source);
+	}
 	chunk.SetCardinality(lhs_match_count);
-	auto match_sel = &lhs_match_sel;
+
+	//	Filter out partition mismatches
+	const auto equal_cols = op.conditions.size() - 1;
+	if (equal_cols) {
+		//	Prepare the lhs keys
+		if (lhs_match_count < lhs_keys.size()) {
+			lhs_keys.Slice(lhs_match_sel, lhs_match_count);
+		}
+
+		rhs_keys.Reset();
+		rhs_executor.Execute(rhs_input, rhs_keys);
+
+		auto sel = FlatVector::IncrementalSelectionVector();
+		auto tail_count = lhs_match_count;
+		for (size_t cmp_idx = 0; cmp_idx < equal_cols; ++cmp_idx) {
+			auto &left = lhs_keys.data[cmp_idx];
+			auto &right = rhs_keys.data[cmp_idx];
+			if (tail_count < rhs_keys.size()) {
+				left.Slice(*sel, tail_count);
+				right.Slice(*sel, tail_count);
+			}
+			tail_count = PhysicalRangeJoin::SelectJoinTail(op.conditions[cmp_idx].comparison, left, right, sel,
+			                                               tail_count, &tail_sel);
+			sel = &tail_sel;
+		}
+
+		//	Did anything get filtered out?
+		if (tail_count < lhs_match_count) {
+			if (tail_count == 0) {
+				// Need to reset here otherwise we may use the non-flat chunk when constructing LEFT/OUTER
+				chunk.Reset();
+				lhs_match_count = tail_count;
+			} else {
+				chunk.Slice(*sel, tail_count);
+				//	Slice lhs_match_sel to the remaining lhs rows
+				lhs_match_count = SliceSelectionVector(lhs_match_sel, *sel, tail_count);
+			}
+		}
+	}
+
+	//	Apply the predicate filter
+	//	TODO: This is wrong - we have to search for a match
 	if (filterer.expressions.size() == 1) {
-		lhs_match_count = filterer.SelectExpression(chunk, filter_sel);
-		chunk.Slice(filter_sel, lhs_match_count);
-		match_sel = &filter_sel;
+		const auto filter_count = filterer.SelectExpression(chunk, filter_sel);
+		if (filter_count < chunk.size()) {
+			chunk.Slice(filter_sel, filter_count);
+			lhs_match_count = SliceSelectionVector(lhs_match_sel, filter_sel, filter_count);
+		}
 	}
 
 	//	Update the match masks for the rows we ended up with
 	left_outer.Reset();
 	for (idx_t i = 0; i < lhs_match_count; ++i) {
-		const auto idx = match_sel->get_index(i);
+		const auto idx = lhs_match_sel.get_index(i);
 		left_outer.SetMatch(idx);
 		const auto first = matches[idx];
 		right_outer->SetMatch(first);
