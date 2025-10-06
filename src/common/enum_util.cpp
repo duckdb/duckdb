@@ -82,7 +82,6 @@
 #include "duckdb/common/multi_file/multi_file_options.hpp"
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
 #include "duckdb/common/printer.hpp"
-#include "duckdb/common/sort/partition_state.hpp"
 #include "duckdb/common/sorting/sort_key.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/column/column_data_scan_states.hpp"
@@ -3264,28 +3263,6 @@ const char* EnumUtil::ToChars<ParserExtensionResultType>(ParserExtensionResultTy
 template<>
 ParserExtensionResultType EnumUtil::FromString<ParserExtensionResultType>(const char *value) {
 	return static_cast<ParserExtensionResultType>(StringUtil::StringToEnum(GetParserExtensionResultTypeValues(), 3, "ParserExtensionResultType", value));
-}
-
-const StringUtil::EnumStringLiteral *GetPartitionSortStageValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(PartitionSortStage::INIT), "INIT" },
-		{ static_cast<uint32_t>(PartitionSortStage::SCAN), "SCAN" },
-		{ static_cast<uint32_t>(PartitionSortStage::PREPARE), "PREPARE" },
-		{ static_cast<uint32_t>(PartitionSortStage::MERGE), "MERGE" },
-		{ static_cast<uint32_t>(PartitionSortStage::SORTED), "SORTED" },
-		{ static_cast<uint32_t>(PartitionSortStage::FINISHED), "FINISHED" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<PartitionSortStage>(PartitionSortStage value) {
-	return StringUtil::EnumToString(GetPartitionSortStageValues(), 6, "PartitionSortStage", static_cast<uint32_t>(value));
-}
-
-template<>
-PartitionSortStage EnumUtil::FromString<PartitionSortStage>(const char *value) {
-	return static_cast<PartitionSortStage>(StringUtil::StringToEnum(GetPartitionSortStageValues(), 6, "PartitionSortStage", value));
 }
 
 const StringUtil::EnumStringLiteral *GetPartitionedColumnDataTypeValues() {
