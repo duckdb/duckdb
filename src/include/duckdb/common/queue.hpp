@@ -25,16 +25,8 @@ public:
     using container_type         = typename original::container_type;
     using value_type             = typename original::value_type;
     using size_type              = typename container_type::size_type;
-    using difference_type        = typename container_type::difference_type;
     using reference              = typename container_type::reference;
     using const_reference        = typename container_type::const_reference;
-    using pointer                = typename container_type::pointer;
-    using const_pointer          = typename container_type::const_pointer;
-    using allocator_type         = typename container_type::allocator_type;
-    using iterator               = typename container_type::iterator;
-    using const_iterator         = typename container_type::const_iterator;
-    using reverse_iterator       = typename container_type::reverse_iterator;
-    using const_reverse_iterator = typename container_type::const_reverse_iterator;
 
 public:
     // Because we create the other constructor, the implicitly created constructor
