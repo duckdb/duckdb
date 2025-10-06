@@ -37,7 +37,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &
 			}
 			token_list += to_string(i) + ":" + tokens[i].text;
 		}
-		throw BinderException("Failed to parse query - did not consume all tokens (got to token %d - %s)\nTokens:\n%s",
+		throw ParserException("Failed to parse query - did not consume all tokens (got to token %d - %s)\nTokens:\n%s",
 		                      state.token_index, tokens[state.token_index].text, token_list);
 	}
 
@@ -47,6 +47,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &
 	auto &factory = GetInstance();
 	PEGTransformer transformer(transformer_allocator, transformer_state, factory.sql_transform_functions,
 	                           factory.parser.rules, factory.enum_mappings);
+	auto result = transformer.Transform<unique_ptr<SQLStatement>>(match_result);
 	return transformer.Transform<unique_ptr<SQLStatement>>(match_result);
 }
 

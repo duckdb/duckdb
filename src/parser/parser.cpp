@@ -228,6 +228,8 @@ void Parser::ParseQuery(const string &query) {
 					if (result.type == ParserExtensionResultType::DISPLAY_EXTENSION_ERROR) {
 						throw ParserException(result.error);
 					}
+				} else if (StringUtil::CIEquals(parser_override_option, "fallback")) {
+					continue;
 				}
 			}
 		}
