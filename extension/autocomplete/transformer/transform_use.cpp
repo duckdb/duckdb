@@ -1,4 +1,5 @@
 #include "transformer/peg_transformer.hpp"
+#include "duckdb/parser/sql_statement.hpp"
 
 namespace duckdb {
 
