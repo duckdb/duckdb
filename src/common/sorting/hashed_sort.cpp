@@ -1,4 +1,5 @@
 #include "duckdb/common/sorting/hashed_sort.hpp"
+#include "duckdb/common/sorting/sorted_run.hpp"
 #include "duckdb/common/radix_partitioning.hpp"
 #include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/parallel/thread_context.hpp"
