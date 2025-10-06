@@ -251,12 +251,6 @@ void Optimizer::RunBuiltInOptimizers() {
 		plan = topn.Optimize(std::move(plan));
 	});
 
-	// transform ORDER BY + LIMIT to TopN
-	RunOptimizer(OptimizerType::TOP_N_WINDOW_ELIMINATION, [&]() {
-		TopNWindowElimination topn_window_elimination(context, *this);
-		plan = topn_window_elimination.Optimize(std::move(plan));
-	});
-
 	// try to use late materialization
 	RunOptimizer(OptimizerType::LATE_MATERIALIZATION, [&]() {
 		LateMaterialization late_materialization(*this);
@@ -269,6 +263,12 @@ void Optimizer::RunBuiltInOptimizers() {
 		StatisticsPropagator propagator(*this, *plan);
 		propagator.PropagateStatistics(plan);
 		statistics_map = propagator.GetStatisticsMap();
+	});
+
+	// rewrite row_number window function + filter on row_number to aggregate
+	RunOptimizer(OptimizerType::TOP_N_WINDOW_ELIMINATION, [&]() {
+		TopNWindowElimination topn_window_elimination(context, *this, &statistics_map);
+		plan = topn_window_elimination.Optimize(std::move(plan));
 	});
 
 	// remove duplicate aggregates

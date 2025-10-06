@@ -68,8 +68,9 @@ vector<LogicalType> ExtractReturnTypes(const vector<unique_ptr<Expression>> &exp
 
 } // namespace
 
-TopNWindowElimination::TopNWindowElimination(ClientContext &context_p, Optimizer &optimizer)
-    : context(context_p), optimizer(optimizer) {
+TopNWindowElimination::TopNWindowElimination(ClientContext &context_p, Optimizer &optimizer,
+                                             column_binding_map_t<unique_ptr<BaseStatistics>> *stats_p)
+    : context(context_p), optimizer(optimizer), stats(stats_p) {
 }
 
 unique_ptr<LogicalOperator> TopNWindowElimination::Optimize(unique_ptr<LogicalOperator> op) {
@@ -83,7 +84,7 @@ unique_ptr<LogicalOperator> TopNWindowElimination::Optimize(unique_ptr<LogicalOp
 
 unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<LogicalOperator> op,
                                                                     ColumnBindingReplacer &replacer) {
-	if (!CanOptimize(*op, &context)) {
+	if (!CanOptimize(*op)) {
 		// Traverse through query plan to find grouped top-n pattern
 		if (op->children.size() > 1) {
 			// If an operator has multiple children, we do not want them to overwrite each other's stop operator.
@@ -343,7 +344,7 @@ unique_ptr<LogicalOperator> TopNWindowElimination::CreateProjectionOperator(uniq
 	return unique_ptr<LogicalOperator>(std::move(logical_projection));
 }
 
-bool TopNWindowElimination::CanOptimize(LogicalOperator &op, optional_ptr<ClientContext> context) {
+bool TopNWindowElimination::CanOptimize(LogicalOperator &op) {
 	if (op.type != LogicalOperatorType::LOGICAL_FILTER) {
 		return false;
 	}
@@ -404,20 +405,23 @@ bool TopNWindowElimination::CanOptimize(LogicalOperator &op, optional_ptr<Client
 	if (window.expressions[0]->type != ExpressionType::WINDOW_ROW_NUMBER) {
 		return false;
 	}
-	const auto &window_expr = window.expressions[0]->Cast<BoundWindowExpression>();
-	if (window_expr.partitions.size() != 1) {
-		// Window Functions with multiple groups span limit over all groups but arg_max/min limits per group
-		return false;
-	}
+	auto &window_expr = window.expressions[0]->Cast<BoundWindowExpression>();
+
 	if (window_expr.orders.size() != 1) {
 		return false;
 	}
 	if (window_expr.orders[0].type != OrderType::DESCENDING && window_expr.orders[0].type != OrderType::ASCENDING) {
 		return false;
 	}
-	if (window_expr.orders[0].null_order != OrderByNullType::NULLS_LAST) {
-		return false;
+
+	VisitExpression(&window_expr.orders[0].expression);
+	for (const auto &column_ref : column_references) {
+		const auto &column_stats = stats->find(column_ref.first);
+		if (column_stats == stats->end() || column_stats->second->CanHaveNull()) {
+			return false;
+		}
 	}
+	column_references.clear();
 
 	// We have found a grouped top-n window construct!
 	return true;
@@ -463,10 +467,12 @@ vector<unique_ptr<Expression>> TopNWindowElimination::GenerateAggregateArgs(cons
 
 	if (aggregate_args.size() == 1) {
 		VisitExpression(&window_expr.orders[0].expression);
+
 		const auto aggregate_value_binding = column_references.begin()->first;
 		column_references.clear();
-		// If we only project the aggregate value, we do not need arg_max/arg_min
-		if (aggregate_args[0]->Cast<BoundColumnRefExpression>().binding == aggregate_value_binding) {
+		// If we only project the aggregate value without any further projections, we do not need arg_max/arg_min
+		if (window_expr.orders[0].expression->type == ExpressionType::BOUND_COLUMN_REF &&
+		    aggregate_args[0]->Cast<BoundColumnRefExpression>().binding == aggregate_value_binding) {
 			return {};
 		}
 	}

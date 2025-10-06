@@ -16,12 +16,13 @@ namespace duckdb {
 
 class TopNWindowElimination : public BaseColumnPruner {
 public:
-	explicit TopNWindowElimination(ClientContext &context, Optimizer &optimizer);
+	explicit TopNWindowElimination(ClientContext &context, Optimizer &optimizer,
+	                               column_binding_map_t<unique_ptr<BaseStatistics>> *stats_p);
 
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> op);
 
 private:
-	static bool CanOptimize(LogicalOperator &op, optional_ptr<ClientContext> context = nullptr);
+	bool CanOptimize(LogicalOperator &op);
 	unique_ptr<LogicalOperator> OptimizeInternal(unique_ptr<LogicalOperator> op, ColumnBindingReplacer &replacer);
 
 	unique_ptr<LogicalOperator> CreateAggregateOperator(LogicalWindow &window, unique_ptr<Expression> limit,
@@ -49,5 +50,6 @@ private:
 private:
 	ClientContext &context;
 	Optimizer &optimizer;
+	column_binding_map_t<unique_ptr<BaseStatistics>> *stats;
 };
 } // namespace duckdb
