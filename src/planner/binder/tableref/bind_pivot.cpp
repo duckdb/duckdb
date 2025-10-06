@@ -862,6 +862,7 @@ unique_ptr<BoundTableRef> Binder::Bind(PivotRef &ref) {
 	} else {
 		select_node = BindUnpivot(*star_binder, ref, std::move(all_columns), where_clause);
 	}
+	throw InternalException("eek bind pivot");
 	// // bind the generated select node
 	// auto child_binder = Binder::CreateBinder(context, this);
 	// auto bound_select_node = child_binder->BindNode(*select_node);

@@ -69,6 +69,7 @@ struct PivotColumnEntry;
 struct UnpivotEntry;
 struct CopyInfo;
 struct CopyOption;
+struct BoundSetOpChild;
 
 template <class T, class INDEX_TYPE>
 class IndexVector;
@@ -418,6 +419,9 @@ private:
 	unique_ptr<LogicalOperator> CreatePlan(BoundSelectNode &statement);
 	unique_ptr<LogicalOperator> CreatePlan(BoundSetOperationNode &node);
 	unique_ptr<LogicalOperator> CreatePlan(BoundQueryNode &node);
+
+	BoundSetOpChild BindSetOpChild(QueryNode &child);
+	unique_ptr<BoundSetOperationNode> BindSetOpNode(SetOperationNode &statement);
 
 	unique_ptr<BoundTableRef> BindJoin(Binder &parent, TableRef &ref);
 	unique_ptr<BoundTableRef> Bind(BaseTableRef &ref);
