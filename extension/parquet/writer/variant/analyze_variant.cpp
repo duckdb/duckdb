@@ -4,7 +4,11 @@
 namespace duckdb {
 
 unique_ptr<ParquetAnalyzeSchemaState> VariantColumnWriter::AnalyzeSchemaInit() {
-	return make_uniq<VariantAnalyzeSchemaState>();
+	if (child_writers.size() == 2) {
+		return make_uniq<VariantAnalyzeSchemaState>();
+	}
+	//! Variant is already shredded explicitly, no need to analyze
+	return nullptr;
 }
 
 static void AnalyzeSchemaInternal(VariantAnalyzeData &state, UnifiedVariantVectorData &variant, idx_t row,

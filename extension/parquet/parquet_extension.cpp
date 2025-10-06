@@ -219,10 +219,7 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 			} else {
 				case_insensitive_set_t variant_names;
 				for (idx_t col_idx = 0; col_idx < names.size(); col_idx++) {
-					if (sql_types[col_idx].id() != LogicalTypeId::STRUCT) {
-						continue;
-					}
-					if (sql_types[col_idx].GetAlias() != "PARQUET_VARIANT") {
+					if (sql_types[col_idx].id() != LogicalTypeId::VARIANT) {
 						continue;
 					}
 					variant_names.emplace(names[col_idx]);
