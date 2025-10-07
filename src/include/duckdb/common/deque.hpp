@@ -114,17 +114,6 @@ public:
 		}
 		return get<SAFE>(original::size() - 1);
 	}
-
-	void unsafe_erase_at(idx_t idx) { // NOLINT: not using camelcase on purpose here
-		original::erase(original::begin() + static_cast<typename original::iterator::difference_type>(idx));
-	}
-
-	void erase_at(idx_t idx) { // NOLINT: not using camelcase on purpose here
-		if (MemorySafety<SAFE>::ENABLED && idx >= original::size()) {
-			throw InternalException("Can't remove offset %d from deque of size %d", idx, original::size());
-		}
-		unsafe_erase_at(idx);
-	}
 };
 
 template <typename T>
