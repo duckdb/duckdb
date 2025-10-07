@@ -372,6 +372,15 @@ BoundStatement Binder::BindNode(SelectNode &statement) {
 	return BindSelectNode(statement, std::move(from_table));
 }
 
+unique_ptr<BoundSelectNode> Binder::BindSelectNodeInternal(SelectNode &statement) {
+	D_ASSERT(statement.from_table);
+
+	// first bind the FROM table statement
+	auto from = std::move(statement.from_table);
+	auto from_table = Bind(*from);
+	return BindSelectNodeInternal(statement, std::move(from_table));
+}
+
 void Binder::BindWhereStarExpression(unique_ptr<ParsedExpression> &expr) {
 	// expand any expressions in the upper AND recursively
 	if (expr->GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
@@ -403,10 +412,12 @@ void Binder::BindWhereStarExpression(unique_ptr<ParsedExpression> &expr) {
 	}
 }
 
-BoundStatement Binder::BindSelectNode(SelectNode &statement, unique_ptr<BoundTableRef> from_table) {
+unique_ptr<BoundSelectNode> Binder::BindSelectNodeInternal(SelectNode &statement,
+                                                           unique_ptr<BoundTableRef> from_table) {
 	D_ASSERT(from_table);
 	D_ASSERT(!statement.from_table);
-	BoundSelectNode result;
+	auto result_ptr = make_uniq<BoundSelectNode>();
+	auto &result = *result_ptr;
 	result.projection_index = GenerateTableIndex();
 	result.group_index = GenerateTableIndex();
 	result.aggregate_index = GenerateTableIndex();
@@ -678,11 +689,16 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, unique_ptr<BoundTab
 
 	// now that the SELECT list is bound, we set the types of DISTINCT/ORDER BY expressions
 	BindModifiers(result, result.projection_index, result.names, internal_sql_types, bind_state);
+	return result_ptr;
+}
+
+BoundStatement Binder::BindSelectNode(SelectNode &statement, unique_ptr<BoundTableRef> from_table) {
+	auto result = BindSelectNodeInternal(statement, std::move(from_table));
 
 	BoundStatement result_statement;
-	result_statement.types = result.types;
-	result_statement.names = result.names;
-	result_statement.plan = CreatePlan(result);
+	result_statement.types = result->types;
+	result_statement.names = result->names;
+	result_statement.plan = CreatePlan(*result);
 	return result_statement;
 }
 

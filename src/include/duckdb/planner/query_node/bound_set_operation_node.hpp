@@ -45,6 +45,8 @@ struct BoundSetOpChild {
 	unique_ptr<BoundSetOperationNode> bound_node;
 	BoundStatement node;
 	shared_ptr<Binder> binder;
+	//! Original select list (if this was a SELECT statement)
+	vector<unique_ptr<ParsedExpression>> select_list;
 	//! Exprs used by the UNION BY NAME operations to add a new projection
 	vector<unique_ptr<Expression>> reorder_expressions;
 

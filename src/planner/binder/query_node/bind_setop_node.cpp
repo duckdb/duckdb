@@ -60,24 +60,23 @@ void SetOpAliasGatherer::GatherAliases(BoundSetOpChild &node, const vector<idx_t
 			bind_state.alias_map[name] = index;
 		}
 	}
-	// FIXME: add select_list
-	// // check if the expression matches one of the expressions in the original expression list
-	// for (idx_t i = 0; i < select.bind_state.original_expressions.size(); i++) {
-	// 	auto &expr = select.bind_state.original_expressions[i];
-	// 	idx_t index = reorder_idx[i];
-	// 	// now check if the node is already in the set of expressions
-	// 	auto expr_entry = bind_state.projection_map.find(*expr);
-	// 	if (expr_entry != bind_state.projection_map.end()) {
-	// 		// the node is in there
-	// 		// repeat the same as with the alias: if there is an ambiguity we insert "-1"
-	// 		if (expr_entry->second != index) {
-	// 			bind_state.projection_map[*expr] = DConstants::INVALID_INDEX;
-	// 		}
-	// 	} else {
-	// 		// not in there yet, just place it in there
-	// 		bind_state.projection_map[*expr] = index;
-	// 	}
-	// }
+	// check if the expression matches one of the expressions in the original expression list
+	for (idx_t i = 0; i < node.select_list.size(); i++) {
+		auto &expr = node.select_list[i];
+		idx_t index = reorder_idx[i];
+		// now check if the node is already in the set of expressions
+		auto expr_entry = bind_state.projection_map.find(*expr);
+		if (expr_entry != bind_state.projection_map.end()) {
+			// the node is in there
+			// repeat the same as with the alias: if there is an ambiguity we insert "-1"
+			if (expr_entry->second != index) {
+				bind_state.projection_map[*expr] = DConstants::INVALID_INDEX;
+			}
+		} else {
+			// not in there yet, just place it in there
+			bind_state.projection_map[*expr] = index;
+		}
+	}
 }
 
 void SetOpAliasGatherer::GatherAliases(BoundSetOperationNode &setop, const vector<idx_t> &reorder_idx) {
@@ -222,7 +221,18 @@ BoundSetOpChild Binder::BindSetOpChild(QueryNode &child) {
 	} else {
 		bound_child.binder = Binder::CreateBinder(context, this);
 		bound_child.binder->can_contain_nulls = true;
-		bound_child.node = bound_child.binder->BindNode(child);
+		if (child.type == QueryNodeType::SELECT_NODE) {
+			auto &select_node = child.Cast<SelectNode>();
+			auto bound_select_node = bound_child.binder->BindSelectNodeInternal(select_node);
+			for (auto &expr : bound_select_node->bind_state.original_expressions) {
+				bound_child.select_list.push_back(expr->Copy());
+			}
+			bound_child.node.names = bound_select_node->names;
+			bound_child.node.types = bound_select_node->types;
+			bound_child.node.plan = bound_child.binder->CreatePlan(*bound_select_node);
+		} else {
+			bound_child.node = bound_child.binder->BindNode(child);
+		}
 	}
 	return bound_child;
 }
