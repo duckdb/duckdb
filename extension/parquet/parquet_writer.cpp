@@ -922,20 +922,25 @@ static unique_ptr<ColumnStatsUnifier> GetBaseStatsUnifier(const LogicalType &typ
 	}
 }
 
-static void GetStatsUnifier(const ParquetColumnSchema &schema, vector<unique_ptr<ColumnStatsUnifier>> &unifiers,
+static void GetStatsUnifier(const ColumnWriter &column_writer, vector<unique_ptr<ColumnStatsUnifier>> &unifiers,
                             string base_name = string()) {
-	if (!base_name.empty()) {
-		base_name += ".";
+	auto &schema = column_writer.Schema();
+	if (schema.repetition_type != duckdb_parquet::FieldRepetitionType::REPEATED) {
+		if (!base_name.empty()) {
+			base_name += ".";
+		}
+		base_name += KeywordHelper::WriteQuoted(schema.name, '\"');
 	}
-	base_name += KeywordHelper::WriteQuoted(schema.name, '\"');
-	if (schema.children.empty()) {
+
+	auto &children = column_writer.ChildWriters();
+	if (children.empty()) {
 		auto unifier = GetBaseStatsUnifier(schema.type);
 		unifier->column_name = std::move(base_name);
 		unifiers.push_back(std::move(unifier));
 		return;
 	}
-	for (auto &child_schema : schema.children) {
-		GetStatsUnifier(child_schema, unifiers, base_name);
+	for (auto &child_writer : children) {
+		GetStatsUnifier(*child_writer, unifiers, base_name);
 	}
 }
 
@@ -1123,7 +1128,7 @@ void ParquetWriter::SetWrittenStatistics(CopyFunctionFileStatistics &written_sta
 	stats_accumulator = make_uniq<ParquetStatsAccumulator>();
 	// create the per-column stats unifiers
 	for (auto &column_writer : column_writers) {
-		GetStatsUnifier(column_writer->Schema(), stats_accumulator->stats_unifiers);
+		GetStatsUnifier(*column_writer, stats_accumulator->stats_unifiers);
 	}
 }
 

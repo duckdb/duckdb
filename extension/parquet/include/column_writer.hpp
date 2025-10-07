@@ -133,6 +133,10 @@ public:
 		return nullptr;
 	}
 
+	const vector<unique_ptr<ColumnWriter>> &ChildWriters() const {
+		return child_writers;
+	}
+
 	virtual void AnalyzeSchema(ParquetAnalyzeSchemaState &state, Vector &input, idx_t count) {
 		throw NotImplementedException("Writer doesn't require an AnalyzeSchema pass");
 	}
