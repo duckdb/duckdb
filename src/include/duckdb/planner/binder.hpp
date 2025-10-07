@@ -303,9 +303,6 @@ public:
 	void AddReplacementScan(const string &table_name, unique_ptr<TableRef> replacement);
 	const unordered_set<string> &GetTableNames();
 	case_insensitive_map_t<unique_ptr<TableRef>> &GetReplacementScans();
-	optional_ptr<SQLStatement> GetRootStatement() {
-		return root_statement;
-	}
 	CatalogEntryRetriever &EntryRetriever() {
 		return entry_retriever;
 	}
@@ -337,8 +334,6 @@ private:
 	BinderType binder_type = BinderType::REGULAR_BINDER;
 	//! Whether or not the binder can contain NULLs as the root of expressions
 	bool can_contain_nulls = false;
-	//! The root statement of the query that is currently being parsed
-	optional_ptr<SQLStatement> root_statement;
 	//! The set of bound views
 	reference_set_t<ViewCatalogEntry> bound_views;
 	//! Used to retrieve CatalogEntry's

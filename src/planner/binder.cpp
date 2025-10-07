@@ -101,7 +101,6 @@ BoundStatement Binder::BindWithCTE(T &statement) {
 }
 
 BoundStatement Binder::Bind(SQLStatement &statement) {
-	root_statement = &statement;
 	switch (statement.type) {
 	case StatementType::SELECT_STATEMENT:
 		return Bind(statement.Cast<SelectStatement>());
