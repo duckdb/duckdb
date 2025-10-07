@@ -365,7 +365,7 @@ jobs:
       - name: Sparse-checkout duckdb-httpfs for scripts
         uses: actions/checkout@v4
         with:
-          repository: duckdb-httpfs
+          repository: duckdb/duckdb-httpfs
           sparse-checkout: scripts
           path: httpfs
 
