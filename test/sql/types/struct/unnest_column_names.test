@@ -1,4 +1,4 @@
-# name: test/optimizer/unnest_column_names.test
+# name: test/sql/types/struct/unnest_column_names.test
 # description: Test the retantion of column names when doing recursive unnest
 # group: [optimizer]
 
@@ -27,3 +27,12 @@ PRAGMA table_info('test_v2')
 ----
 0	a.aa.aaa	INTEGER	0	NULL	0
 1	b.bb	INTEGER	0	NULL	0
+
+statement ok
+CREATE TABLE test_v3 AS SELECT unnest([{'a': 12, 'b': {'bb': {'bbb': 12}}}], recursive := true);
+
+query ITTTTT
+PRAGMA table_info('test_v3')
+----
+0	a	INTEGER	0	NULL	0
+1	b.bb.bbb	INTEGER	0	NULL	0
