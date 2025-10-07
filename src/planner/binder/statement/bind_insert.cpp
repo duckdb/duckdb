@@ -519,8 +519,6 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	}
 
 	auto insert = make_uniq<LogicalInsert>(table, GenerateTableIndex());
-	// Add CTEs as bindable
-	AddCTEMap(stmt.cte_map);
 
 	auto values_list = stmt.GetValuesList();
 

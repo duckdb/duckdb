@@ -31,9 +31,6 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 		properties.RegisterDBModify(table.catalog, context);
 	}
 
-	// Add CTEs as bindable
-	AddCTEMap(stmt.cte_map);
-
 	// plan any tables from the various using clauses
 	if (!stmt.using_clauses.empty()) {
 		unique_ptr<LogicalOperator> child_operator;

@@ -501,8 +501,6 @@ private:
 	BindingAlias RetrieveUsingBinding(Binder &current_binder, optional_ptr<UsingColumnSet> current_set,
 	                                  const string &column_name, const string &join_side);
 
-	void AddCTEMap(CommonTableExpressionMap &cte_map);
-
 	void ExpandStarExpressions(vector<unique_ptr<ParsedExpression>> &select_list,
 	                           vector<unique_ptr<ParsedExpression>> &new_select_list);
 	void ExpandStarExpression(unique_ptr<ParsedExpression> expr, vector<unique_ptr<ParsedExpression>> &new_select_list);

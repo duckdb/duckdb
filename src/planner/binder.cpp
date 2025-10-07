@@ -96,7 +96,6 @@ BoundStatement Binder::BindWithCTE(T &statement) {
 		materialized_ctes.pop_back();
 	}
 
-	AddCTEMap(cte_map);
 	return Bind(*cte_root);
 }
 
@@ -160,15 +159,7 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 	} // LCOV_EXCL_STOP
 }
 
-void Binder::AddCTEMap(CommonTableExpressionMap &cte_map) {
-	for (auto &cte_it : cte_map.map) {
-		AddCTE(cte_it.first);
-	}
-}
-
 BoundStatement Binder::BindNode(QueryNode &node) {
-	// first we visit the set of CTEs and add them to the bind context
-	AddCTEMap(node.cte_map);
 	// now we bind the node
 	switch (node.type) {
 	case QueryNodeType::SELECT_NODE:
