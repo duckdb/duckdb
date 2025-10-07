@@ -61,6 +61,63 @@ PEGTransformerFactory &PEGTransformerFactory::GetInstance() {
 PEGTransformerFactory::PEGTransformerFactory() {
 	REGISTER_TRANSFORM(TransformStatement);
 
+	// common.gram
+    // REGISTER_TRANSFORM(TransformArrayBounds);
+    // REGISTER_TRANSFORM(TransformBitType);
+    // REGISTER_TRANSFORM(TransformCatalogName);
+    // REGISTER_TRANSFORM(TransformCenturyKeyword);
+    // REGISTER_TRANSFORM(TransformCharacterType);
+    // REGISTER_TRANSFORM(TransformColIdType);
+    // REGISTER_TRANSFORM(TransformCollationName);
+    // REGISTER_TRANSFORM(TransformColumnName);
+    // REGISTER_TRANSFORM(TransformConstraintName);
+    // REGISTER_TRANSFORM(TransformCopyOptionName);
+    // REGISTER_TRANSFORM(TransformDayKeyword);
+    // REGISTER_TRANSFORM(TransformDecadeKeyword);
+    // REGISTER_TRANSFORM(TransformFunctionName);
+    // REGISTER_TRANSFORM(TransformHourKeyword);
+    // REGISTER_TRANSFORM(TransformIndexName);
+    // REGISTER_TRANSFORM(TransformInterval);
+    // REGISTER_TRANSFORM(TransformIntervalType);
+    // REGISTER_TRANSFORM(TransformMapType);
+    // REGISTER_TRANSFORM(TransformMicrosecondKeyword);
+    // REGISTER_TRANSFORM(TransformMillenniumKeyword);
+    // REGISTER_TRANSFORM(TransformMillisecondKeyword);
+    // REGISTER_TRANSFORM(TransformMinuteKeyword);
+    // REGISTER_TRANSFORM(TransformMonthKeyword);
+    REGISTER_TRANSFORM(TransformNumberLiteral);
+    // REGISTER_TRANSFORM(TransformNumericType);
+    // REGISTER_TRANSFORM(TransformPragmaName);
+    // REGISTER_TRANSFORM(TransformQualifiedTypeName);
+    // REGISTER_TRANSFORM(TransformQuarterKeyword);
+    // REGISTER_TRANSFORM(TransformReservedColumnName);
+    // REGISTER_TRANSFORM(TransformReservedFunctionName);
+    // REGISTER_TRANSFORM(TransformReservedIdentifier);
+    // REGISTER_TRANSFORM(TransformReservedSchemaName);
+    // REGISTER_TRANSFORM(TransformReservedTableName);
+    // REGISTER_TRANSFORM(TransformRowOrStruct);
+    // REGISTER_TRANSFORM(TransformRowType);
+    // REGISTER_TRANSFORM(TransformSchemaName);
+    // REGISTER_TRANSFORM(TransformSecondKeyword);
+    // REGISTER_TRANSFORM(TransformSecretName);
+    // REGISTER_TRANSFORM(TransformSequenceName);
+    // REGISTER_TRANSFORM(TransformSetofType);
+    // REGISTER_TRANSFORM(TransformSettingName);
+    // REGISTER_TRANSFORM(TransformSimpleType);
+    // REGISTER_TRANSFORM(TransformStringLiteral);
+    // REGISTER_TRANSFORM(TransformTableFunctionName);
+    // REGISTER_TRANSFORM(TransformTableName);
+    // REGISTER_TRANSFORM(TransformTimeOrTimestamp);
+    // REGISTER_TRANSFORM(TransformTimeType);
+    // REGISTER_TRANSFORM(TransformTimeZone);
+    // REGISTER_TRANSFORM(TransformType);
+    // REGISTER_TRANSFORM(TransformTypeModifiers);
+    // REGISTER_TRANSFORM(TransformUnionType);
+    // REGISTER_TRANSFORM(TransformWeekKeyword);
+    // REGISTER_TRANSFORM(TransformWithOrWithout);
+    // REGISTER_TRANSFORM(TransformYearKeyword);
+
+
 	// expression.gram
 	// REGISTER_TRANSFORM(TransformAnyAllOperator);
 	// REGISTER_TRANSFORM(TransformAnyOrAll);

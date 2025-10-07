@@ -29,7 +29,7 @@ namespace duckdb {
 
 // BaseExpression <- SingleExpression Indirection*
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBaseExpression(PEGTransformer &transformer,
-                                                                        optional_ptr<ParseResult> parse_result) {
+                                                                            optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0));
 	auto indirection_opt = list_pr.Child<OptionalParseResult>(1);
@@ -72,7 +72,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBaseExpression(PEGT
 //
 // // BoundedListExpression <- '[' List(Expression)? ']'
 // unique_ptr<SQLStatement> PEGTransformerFactory::TransformBoundedListExpression(PEGTransformer &transformer,
-//                                                                                optional_ptr<ParseResult> parse_result) {
+//                                                                                optional_ptr<ParseResult>
+//                                                                                parse_result) {
 // 	auto &list_pr = parse_result->Cast<ListParseResult>();
 // 	throw NotImplementedException("Rule 'BoundedListExpression' has not been implemented yet");
 // }
@@ -127,7 +128,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBaseExpression(PEGT
 // 	throw NotImplementedException("Rule 'CatalogReservedSchemaFunctionName' has not been implemented yet");
 // }
 //
-// // CatalogReservedSchemaTableColumnName <- CatalogQualification ReservedSchemaQualification ReservedTableQualification
+// // CatalogReservedSchemaTableColumnName <- CatalogQualification ReservedSchemaQualification
+// ReservedTableQualification
 // // ReservedColumnName
 // unique_ptr<SQLStatement>
 // PEGTransformerFactory::TransformCatalogReservedSchemaTableColumnName(PEGTransformer &transformer,
@@ -157,7 +159,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBaseExpression(PEGT
 // 	throw NotImplementedException("Rule 'CollateOperator' has not been implemented yet");
 // }
 //
-// // ColumnReference <- CatalogReservedSchemaTableColumnName / SchemaReservedTableColumnName / TableReservedColumnName /
+// // ColumnReference <- CatalogReservedSchemaTableColumnName / SchemaReservedTableColumnName / TableReservedColumnName
+// /
 // // ColumnName
 // unique_ptr<SQLStatement> PEGTransformerFactory::TransformColumnReference(PEGTransformer &transformer,
 //                                                                          optional_ptr<ParseResult> parse_result) {
@@ -181,7 +184,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBaseExpression(PEGT
 //
 // // ConjunctionOperator <- 'OR' / 'AND'
 // unique_ptr<SQLStatement> PEGTransformerFactory::TransformConjunctionOperator(PEGTransformer &transformer,
-//                                                                              optional_ptr<ParseResult> parse_result) {
+//                                                                              optional_ptr<ParseResult> parse_result)
+//                                                                              {
 // 	auto &list_pr = parse_result->Cast<ListParseResult>();
 // 	throw NotImplementedException("Rule 'ConjunctionOperator' has not been implemented yet");
 // }
@@ -244,7 +248,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBaseExpression(PEGT
 
 // Expression <- BaseExpression RecursiveExpression*
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformExpression(PEGTransformer &transformer,
-                                                                    optional_ptr<ParseResult> parse_result) {
+                                                                        optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto &base_expr_pr = list_pr.Child<ListParseResult>(0);
 	unique_ptr<ParsedExpression> base_expr = transformer.Transform<unique_ptr<ParsedExpression>>(base_expr_pr);
@@ -253,8 +257,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformExpression(PEGTrans
 		auto repeat_expression_pr = indirection_pr.optional_result->Cast<RepeatParseResult>();
 		vector<unique_ptr<ParsedExpression>> expr_children;
 		for (auto &child : repeat_expression_pr.children) {
-			auto expr =
-				transformer.Transform<unique_ptr<ParsedExpression>>(child);
+			auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(child);
 			if (expr->expression_class == ExpressionClass::COMPARISON) {
 				auto compare_expr = unique_ptr_cast<ParsedExpression, ComparisonExpression>(std::move(expr));
 				compare_expr->left = std::move(base_expr);
@@ -272,8 +275,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformExpression(PEGTrans
 				between_expr->input = std::move(base_expr);
 				base_expr = std::move(between_expr);
 			} else {
-				base_expr = make_uniq<OperatorExpression>(expr->type, std::move(base_expr),
-															 std::move(expr));
+				base_expr = make_uniq<OperatorExpression>(expr->type, std::move(base_expr), std::move(expr));
 			}
 		}
 	}
@@ -295,7 +297,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformExpression(PEGTrans
 // 	throw NotImplementedException("Rule 'FilterClause' has not been implemented yet");
 // }
 //
-// // FrameBound <- ('UNBOUNDED' 'PRECEDING') / ('UNBOUNDED' 'FOLLOWING') / ('CURRENT' 'ROW') / (Expression 'PRECEDING') /
+// // FrameBound <- ('UNBOUNDED' 'PRECEDING') / ('UNBOUNDED' 'FOLLOWING') / ('CURRENT' 'ROW') / (Expression 'PRECEDING')
+// /
 // // (Expression 'FOLLOWING')
 // unique_ptr<SQLStatement> PEGTransformerFactory::TransformFrameBound(PEGTransformer &transformer,
 //                                                                     optional_ptr<ParseResult> parse_result) {
@@ -324,7 +327,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformExpression(PEGTrans
 // 	throw NotImplementedException("Rule 'Framing' has not been implemented yet");
 // }
 //
-// // FunctionExpression <- FunctionIdentifier Parens(DistinctOrAll? List(FunctionArgument)? OrderByClause? IgnoreNulls?)
+// // FunctionExpression <- FunctionIdentifier Parens(DistinctOrAll? List(FunctionArgument)? OrderByClause?
+// IgnoreNulls?)
 // // WithinGroupClause? FilterClause? ExportClause? OverClause?
 // unique_ptr<SQLStatement> PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 //                                                                             optional_ptr<ParseResult> parse_result) {
@@ -348,7 +352,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformExpression(PEGTrans
 //
 // // GroupingOrGroupingId <- 'GROUPING' / 'GROUPING_ID'
 // unique_ptr<SQLStatement> PEGTransformerFactory::TransformGroupingOrGroupingId(PEGTransformer &transformer,
-//                                                                               optional_ptr<ParseResult> parse_result) {
+//                                                                               optional_ptr<ParseResult> parse_result)
+//                                                                               {
 // 	auto &list_pr = parse_result->Cast<ListParseResult>();
 // 	throw NotImplementedException("Rule 'GroupingOrGroupingId' has not been implemented yet");
 // }
@@ -455,7 +460,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformExpression(PEGTrans
 
 // LiteralExpression <- StringLiteral / NumberLiteral / 'NULL' / 'TRUE' / 'FALSE'
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformLiteralExpression(PEGTransformer &transformer,
-																			   optional_ptr<ParseResult> parse_result) {
+                                                                               optional_ptr<ParseResult> parse_result) {
 	auto &choice_result = parse_result->Cast<ListParseResult>();
 	auto &matched_rule_result = choice_result.Child<ChoiceParseResult>(0);
 	if (matched_rule_result.name == "StringLiteral") {
@@ -532,7 +537,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformLiteralExpression(P
 //
 // // ParenthesisExpression <- Parens(List(Expression))
 // unique_ptr<SQLStatement> PEGTransformerFactory::TransformParenthesisExpression(PEGTransformer &transformer,
-//                                                                                optional_ptr<ParseResult> parse_result) {
+//                                                                                optional_ptr<ParseResult>
+//                                                                                parse_result) {
 // 	auto &list_pr = parse_result->Cast<ListParseResult>();
 // 	throw NotImplementedException("Rule 'ParenthesisExpression' has not been implemented yet");
 // }
@@ -546,7 +552,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformLiteralExpression(P
 //
 // // PositionalExpression <- '#' NumberLiteral
 // unique_ptr<SQLStatement> PEGTransformerFactory::TransformPositionalExpression(PEGTransformer &transformer,
-//                                                                               optional_ptr<ParseResult> parse_result) {
+//                                                                               optional_ptr<ParseResult> parse_result)
+//                                                                               {
 // 	auto &list_pr = parse_result->Cast<ListParseResult>();
 // 	throw NotImplementedException("Rule 'PositionalExpression' has not been implemented yet");
 // }
@@ -574,7 +581,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformLiteralExpression(P
 //
 // // RecursiveExpression <- (Operator Expression)
 // unique_ptr<SQLStatement> PEGTransformerFactory::TransformRecursiveExpression(PEGTransformer &transformer,
-//                                                                              optional_ptr<ParseResult> parse_result) {
+//                                                                              optional_ptr<ParseResult> parse_result)
+//                                                                              {
 // 	auto &list_pr = parse_result->Cast<ListParseResult>();
 // 	throw NotImplementedException("Rule 'RecursiveExpression' has not been implemented yet");
 // }
@@ -651,7 +659,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformLiteralExpression(P
 // PositionalExpression /
 // DefaultExpression
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformSingleExpression(PEGTransformer &transformer,
-                                                                          optional_ptr<ParseResult> parse_result) {
+                                                                              optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ChoiceParseResult>(0).result);
 }
@@ -709,14 +717,16 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformSingleExpression(PE
 //
 // // SubstringExpression <- 'SUBSTRING' Parens(SubstringParameters / List(Expression))
 // unique_ptr<SQLStatement> PEGTransformerFactory::TransformSubstringExpression(PEGTransformer &transformer,
-//                                                                              optional_ptr<ParseResult> parse_result) {
+//                                                                              optional_ptr<ParseResult> parse_result)
+//                                                                              {
 // 	auto &list_pr = parse_result->Cast<ListParseResult>();
 // 	throw NotImplementedException("Rule 'SubstringExpression' has not been implemented yet");
 // }
 //
 // // SubstringParameters <- Expression 'FROM' NumberLiteral 'FOR' NumberLiteral
 // unique_ptr<SQLStatement> PEGTransformerFactory::TransformSubstringParameters(PEGTransformer &transformer,
-//                                                                              optional_ptr<ParseResult> parse_result) {
+//                                                                              optional_ptr<ParseResult> parse_result)
+//                                                                              {
 // 	auto &list_pr = parse_result->Cast<ListParseResult>();
 // 	throw NotImplementedException("Rule 'SubstringParameters' has not been implemented yet");
 // }
@@ -766,14 +776,16 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformSingleExpression(PE
 //
 // // WindowExcludeClause <- 'EXCLUDE' WindowExcludeElement
 // unique_ptr<SQLStatement> PEGTransformerFactory::TransformWindowExcludeClause(PEGTransformer &transformer,
-//                                                                              optional_ptr<ParseResult> parse_result) {
+//                                                                              optional_ptr<ParseResult> parse_result)
+//                                                                              {
 // 	auto &list_pr = parse_result->Cast<ListParseResult>();
 // 	throw NotImplementedException("Rule 'WindowExcludeClause' has not been implemented yet");
 // }
 //
 // // WindowExcludeElement <- ('CURRENT' 'ROW') / 'GROUP' / 'TIES' / ('NO' 'OTHERS')
 // unique_ptr<SQLStatement> PEGTransformerFactory::TransformWindowExcludeElement(PEGTransformer &transformer,
-//                                                                               optional_ptr<ParseResult> parse_result) {
+//                                                                               optional_ptr<ParseResult> parse_result)
+//                                                                               {
 // 	auto &list_pr = parse_result->Cast<ListParseResult>();
 // 	throw NotImplementedException("Rule 'WindowExcludeElement' has not been implemented yet");
 // }
@@ -787,14 +799,16 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformSingleExpression(PE
 //
 // // WindowFrameContents <- WindowPartition? OrderByClause? FrameClause?
 // unique_ptr<SQLStatement> PEGTransformerFactory::TransformWindowFrameContents(PEGTransformer &transformer,
-//                                                                              optional_ptr<ParseResult> parse_result) {
+//                                                                              optional_ptr<ParseResult> parse_result)
+//                                                                              {
 // 	auto &list_pr = parse_result->Cast<ListParseResult>();
 // 	throw NotImplementedException("Rule 'WindowFrameContents' has not been implemented yet");
 // }
 //
 // // WindowFrameDefinition <- Parens(BaseWindowName? WindowFrameContents) / Parens(WindowFrameContents)
 // unique_ptr<SQLStatement> PEGTransformerFactory::TransformWindowFrameDefinition(PEGTransformer &transformer,
-//                                                                                optional_ptr<ParseResult> parse_result) {
+//                                                                                optional_ptr<ParseResult>
+//                                                                                parse_result) {
 // 	auto &list_pr = parse_result->Cast<ListParseResult>();
 // 	throw NotImplementedException("Rule 'WindowFrameDefinition' has not been implemented yet");
 // }
