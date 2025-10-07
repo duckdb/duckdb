@@ -122,8 +122,6 @@ public:
 	void AddCTEBinding(idx_t index, const string &alias, const vector<string> &names, const vector<LogicalType> &types,
 	                   bool using_key = false);
 
-	void RemoveCTEBinding(const string &alias);
-
 	//! Add an implicit join condition (e.g. USING (x))
 	void AddUsingBinding(const string &column_name, UsingColumnSet &set);
 

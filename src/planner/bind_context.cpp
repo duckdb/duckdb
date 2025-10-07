@@ -726,17 +726,6 @@ void BindContext::AddCTEBinding(idx_t index, const string &alias, const vector<s
 	}
 }
 
-void BindContext::RemoveCTEBinding(const std::string &alias) {
-	auto it = cte_bindings.find(alias);
-	if (it != cte_bindings.end()) {
-		cte_bindings.erase(it);
-	}
-	auto it2 = cte_references.find(alias);
-	if (it2 != cte_references.end()) {
-		cte_references.erase(it2);
-	}
-}
-
 void BindContext::AddContext(BindContext other) {
 	for (auto &binding : other.bindings_list) {
 		AddBinding(std::move(binding));
