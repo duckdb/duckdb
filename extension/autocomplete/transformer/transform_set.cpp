@@ -17,8 +17,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformResetStatement(PEGTrans
 vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformSetAssignment(PEGTransformer &transformer,
                                                                        optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto &variable_list_pr = list_pr.children[1];
-	return transformer.Transform<vector<unique_ptr<ParsedExpression>>>(variable_list_pr);
+	return transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr, 1);
 }
 
 // SetSetting <- SettingScope? SettingName
