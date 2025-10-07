@@ -331,6 +331,8 @@ public:
 private:
 	//! The parent binder (if any)
 	shared_ptr<Binder> parent;
+	//! What kind of node we are binding using this binder
+	BinderType binder_type = BinderType::REGULAR_BINDER;
 	//! Global binder state
 	shared_ptr<GlobalBinderState> global_binder_state;
 	//! Query binder state
@@ -339,8 +341,6 @@ private:
 	bool has_unplanned_dependent_joins = false;
 	//! Whether or not outside dependent joins have been planned and flattened
 	bool is_outside_flattened = true;
-	//! What kind of node we are binding using this binder
-	BinderType binder_type = BinderType::REGULAR_BINDER;
 	//! Whether or not the binder can contain NULLs as the root of expressions
 	bool can_contain_nulls = false;
 	//! The set of bound views

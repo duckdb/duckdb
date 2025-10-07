@@ -43,9 +43,6 @@ class BindContext {
 public:
 	explicit BindContext(Binder &binder);
 
-	//! Keep track of recursive CTE references
-	case_insensitive_map_t<shared_ptr<idx_t>> cte_references;
-
 public:
 	//! Given a column name, find the matching table it belongs to. Throws an
 	//! exception if no table has a column of the given name.

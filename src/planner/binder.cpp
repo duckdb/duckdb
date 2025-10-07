@@ -47,11 +47,10 @@ shared_ptr<Binder> Binder::CreateBinder(ClientContext &context, optional_ptr<Bin
 
 Binder::Binder(ClientContext &context, shared_ptr<Binder> parent_p, BinderType binder_type)
     : context(context), bind_context(*this), parent(std::move(parent_p)), binder_type(binder_type),
-      entry_retriever(context),
       global_binder_state(parent ? parent->global_binder_state : make_shared_ptr<GlobalBinderState>()),
       query_binder_state(parent && binder_type == BinderType::REGULAR_BINDER ? parent->query_binder_state
                                                                              : make_shared_ptr<QueryBinderState>()),
-      depth(parent ? parent->GetBinderDepth() : 1) {
+      entry_retriever(context), depth(parent ? parent->GetBinderDepth() : 1) {
 	IncreaseDepth();
 	if (parent) {
 		entry_retriever.Inherit(parent->entry_retriever);
@@ -59,10 +58,6 @@ Binder::Binder(ClientContext &context, shared_ptr<Binder> parent_p, BinderType b
 		// We have to inherit macro and lambda parameter bindings and from the parent binder, if there is a parent.
 		macro_binding = parent->macro_binding;
 		lambda_bindings = parent->lambda_bindings;
-		if (binder_type == BinderType::REGULAR_BINDER) {
-			// We have to inherit CTE bindings from the parent bind_context, if there is a parent.
-			bind_context.cte_references = parent->bind_context.cte_references;
-		}
 	}
 }
 
@@ -276,7 +271,7 @@ void Binder::AddCTE(const string &name) {
 
 optional_ptr<Binding> Binder::GetCTEBinding(const string &name) {
 	reference<Binder> current_binder(*this);
-	while(true) {
+	while (true) {
 		auto &current = current_binder.get();
 		auto entry = current.bind_context.GetCTEBinding(name);
 		if (entry) {

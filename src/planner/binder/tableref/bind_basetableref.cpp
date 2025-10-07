@@ -147,19 +147,21 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 
 		bind_context.AddGenericBinding(index, alias, names, ctebinding->types);
 
-		auto cte_reference = ref.schema_name.empty() ? ref.table_name : ref.schema_name + "." + ref.table_name;
-
-		// Update references to CTE
-		auto cteref = bind_context.cte_references[cte_reference];
-
-		if (cteref == nullptr && ref.schema_name == "recurring") {
-			throw BinderException(error_context,
-			                      "There is a WITH item named \"%s\", but the recurring table cannot be "
-			                      "referenced from this part of the query.",
-			                      ref.table_name);
+		auto cte_ref = reference<CTEBinding>(ctebinding->Cast<CTEBinding>());
+		if (!ref.schema_name.empty()) {
+			auto cte_reference = ref.schema_name + "." + ref.table_name;
+			auto recurring_ref = GetCTEBinding(cte_reference);
+			if (!recurring_ref) {
+				throw BinderException(error_context,
+				                      "There is a WITH item named \"%s\", but the recurring table cannot be "
+				                      "referenced from this part of the query.",
+				                      ref.table_name);
+			}
+			cte_ref = reference<CTEBinding>(recurring_ref->Cast<CTEBinding>());
 		}
 
-		(*cteref)++;
+		// Update references to CTE
+		cte_ref.get().reference_count++;
 
 		result->types = ctebinding->types;
 		result->bound_columns = std::move(names);
