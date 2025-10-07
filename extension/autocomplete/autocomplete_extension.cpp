@@ -715,12 +715,9 @@ public:
 				result.push_back(std::move(statement));
 			}
 			return ParserOverrideResult(std::move(result));
-		} catch (const ParserException &e) {
-			return ParserOverrideResult(e.what());
-		} catch (const NotImplementedException &e) {
-			return ParserOverrideResult(e.what());
+		} catch (std::exception &e) {
+			return ParserOverrideResult(e);
 		}
-		return ParserOverrideResult();
 	}
 };
 

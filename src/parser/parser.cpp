@@ -224,11 +224,16 @@ void Parser::ParseQuery(const string &query) {
 						    "Parser override failed to return a valid statement: %s\n\nConsider restarting the "
 						    "database and "
 						    "using the setting \"set allow_parser_override_extension=fallback\" to fallback to the "
-						    "default parser.",
-						    result.error);
+						    "default parser.", result.error.RawMessage());
 					}
 					if (result.type == ParserExtensionResultType::DISPLAY_EXTENSION_ERROR) {
-						throw ParserException(result.error);
+						if (result.error.Type() == ExceptionType::NOT_IMPLEMENTED) {
+							throw NotImplementedException("Parser override has not yet implemented this transformer rule. (Original error: %s)", result.error.RawMessage());
+						} else if (result.error.Type() == ExceptionType::PARSER) {
+							throw ParserException("Parser override could not parse this query. (Original error: %s)", result.error.RawMessage());
+						} else {
+							result.error.Throw();
+						}
 					}
 				} else if (StringUtil::CIEquals(parser_override_option, "fallback")) {
 					continue;
