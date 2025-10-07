@@ -465,7 +465,7 @@ jobs:
       run: |
         ./build/release/test/unittest --test-config test/configs/prefetch_all_storage.json
 
-    - name: Test Parser override
+    - name: Test peg_parser
       if: (success() || failure()) && steps.build.conclusion == 'success'
       shell: bash
       run: |
