@@ -325,24 +325,21 @@ jobs:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
-      - name: Cleanup disk before build
-        run: |
-          echo "Disk usage before clean up:"
-          df -h
-          sudo apt-get clean
-          sudo rm -rf /var/lib/apt/lists/*
-          docker system prune -af || true
-          rm -rf ~/.cache
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /opt/ghc
-          sudo rm -rf "/usr/local/share/boost"
-          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
-          echo "Disk usage after clean up:"
-          df -h
+
+      - name: Free up disk space
+        uses: endersonmenezes/free-disk-space@v1
+        with:
+          remove_android: true
+          remove_dotnet: true
+          remove_haskell: true
+          remove_tool_cache: true
+          remove_swap: true
+          remove_packages: "azure-cli google-cloud-cli microsoft-edge-stable google-chrome-stable firefox postgresql* dotnet* temurin-* *llvm* mysql*"
+          testing: false
 
       - name: Install
         shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build docker.io docker-compose-plugin
 
       - uses: actions/setup-python@v4
         with:
