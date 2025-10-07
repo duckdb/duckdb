@@ -44,26 +44,9 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 	const auto &probe_types = op.children[0]->types;
 	join_op.types.insert(join_op.types.end(), probe_types.begin(), probe_types.end());
 
-	// Remap predicate column references.
-	if (op.predicate) {
-		vector<idx_t> swap_projection_map;
-		const auto lhs_width = op.children[0]->types.size();
-		const auto rhs_width = op.children[1]->types.size();
-		for (idx_t l = 0; l < lhs_width; ++l) {
-			swap_projection_map.emplace_back(l + rhs_width);
-		}
-		for (idx_t r = 0; r < rhs_width; ++r) {
-			swap_projection_map.emplace_back(r);
-		}
-		join_op.predicate = op.predicate->Copy();
-		ExpressionIterator::EnumerateExpression(join_op.predicate, [&](Expression &child) {
-			if (child.GetExpressionClass() == ExpressionClass::BOUND_REF) {
-				auto &col_idx = child.Cast<BoundReferenceExpression>().index;
-				const auto new_idx = swap_projection_map[col_idx];
-				col_idx = new_idx;
-			}
-		});
-	}
+	// Project pk
+	LogicalType pk_type = LogicalType::BIGINT;
+	join_op.types.emplace_back(pk_type);
 
 	//	Fill in the projection maps to simplify the code below
 	//	Since NLJ doesn't support projection, but ASOF does,
@@ -82,9 +65,25 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 		}
 	}
 
-	// Project pk
-	LogicalType pk_type = LogicalType::BIGINT;
-	join_op.types.emplace_back(pk_type);
+	// Remap predicate column references.
+	if (op.predicate) {
+		vector<idx_t> swap_projection_map;
+		const auto rhs_width = op.children[1]->types.size();
+		for (const auto &l : join_op.right_projection_map) {
+			swap_projection_map.emplace_back(l + rhs_width);
+		}
+		for (const auto &r : join_op.left_projection_map) {
+			swap_projection_map.emplace_back(r);
+		}
+		join_op.predicate = op.predicate->Copy();
+		ExpressionIterator::EnumerateExpression(join_op.predicate, [&](Expression &child) {
+			if (child.GetExpressionClass() == ExpressionClass::BOUND_REF) {
+				auto &col_idx = child.Cast<BoundReferenceExpression>().index;
+				const auto new_idx = swap_projection_map[col_idx];
+				col_idx = new_idx;
+			}
+		});
+	}
 
 	auto binder = Binder::CreateBinder(context);
 	FunctionBinder function_binder(*binder);
