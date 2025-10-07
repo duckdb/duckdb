@@ -1,5 +1,5 @@
 #include "duckdb/planner/operator/logical_vacuum.hpp"
-
+#include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
