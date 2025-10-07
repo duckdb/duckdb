@@ -169,6 +169,7 @@ bool SQLLogicParser::IsSingleLineStatement(SQLLogicToken &token) {
 	case SQLLogicTokenType::SQLLOGIC_RECONNECT:
 	case SQLLogicTokenType::SQLLOGIC_SLEEP:
 	case SQLLogicTokenType::SQLLOGIC_UNZIP:
+	case SQLLogicTokenType::SQLLOGIC_TAGS:
 		return true;
 
 	case SQLLogicTokenType::SQLLOGIC_SKIP_IF:
@@ -228,6 +229,8 @@ SQLLogicTokenType SQLLogicParser::CommandToToken(const string &token) {
 		return SQLLogicTokenType::SQLLOGIC_SLEEP;
 	} else if (token == "unzip") {
 		return SQLLogicTokenType::SQLLOGIC_UNZIP;
+	} else if (token == "tags") {
+		return SQLLogicTokenType::SQLLOGIC_TAGS;
 	}
 	Fail("Unrecognized parameter %s", token);
 	return SQLLogicTokenType::SQLLOGIC_INVALID;

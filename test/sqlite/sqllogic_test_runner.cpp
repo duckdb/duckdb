@@ -747,6 +747,8 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 		FAIL("Could not find test script '" + script + "'. Perhaps run `make sqlite`. ");
 	}
 
+	bool file_tags_seen = false;
+
 	/* Loop over all records in the file */
 	while (parser.NextStatement()) {
 		// tokenize the current line
@@ -803,6 +805,12 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			continue;
 		}
 		if (token.type == SQLLogicTokenType::SQLLOGIC_STATEMENT) {
+			// prereq -- file_tags match check -- if tags
+			if (!file_tags_seen && (!test_config.GetSelectTagSet().empty() || !test_config.GetSkipTagSet().empty())) {
+				SKIP_TEST("match-tag-set");
+				return;
+			}
+
 			// statement
 			if (token.parameters.size() < 1) {
 				parser.Fail("statement requires at least one parameter (statement ok/error)");
@@ -1172,6 +1180,20 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 
 			auto command = make_uniq<UnzipCommand>(*this, input_path, extraction_path);
 			ExecuteCommand(std::move(command));
+		} else if (token.type == SQLLogicTokenType::SQLLOGIC_TAGS) {
+			// Expects space-separate list of tags
+			if (token.parameters.empty()) {
+				parser.Fail("tags requires >= 1 argument: <tag1> [tag2 .. tagN]");
+			}
+			file_tags_seen = true;
+			if (!test_config.MatchSelectTagSet(token.parameters)) {
+				SKIP_TEST("match-tag-set");
+				return;
+			}
+			if (test_config.MatchSkipTagSet(token.parameters)) {
+				SKIP_TEST("match-tag-set");
+				return;
+			}
 		}
 	}
 	if (InLoop()) {

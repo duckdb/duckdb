@@ -57,6 +57,10 @@ static const TestConfigOption test_config_options[] = {
     {"storage_version", "Database storage version to use by default", LogicalType::VARCHAR, nullptr},
     {"data_location", "Directory where static test files are read (defaults to `data/`)", LogicalType::VARCHAR,
      nullptr},
+    {"select_tag_set", "Select only tests which match _all_ named tags", LogicalType::LIST(LogicalType::VARCHAR),
+     TestConfiguration::MakeSelectTagSet},
+    {"skip_tag_set", "Skip any tests which match _all_ named tags", LogicalType::LIST(LogicalType::VARCHAR),
+     TestConfiguration::MakeSkipTagSet},
     {nullptr, nullptr, LogicalType::INVALID, nullptr},
 };
 
@@ -430,6 +434,52 @@ DebugVectorVerification TestConfiguration::GetVectorVerification() {
 
 DebugInitialize TestConfiguration::GetDebugInitialize() {
 	return EnumUtil::FromString<DebugInitialize>(GetOptionOrDefault<string>("debug_initialize", "NO_INITIALIZE"));
+}
+
+unordered_set<string> TestConfiguration::GetSelectTagSet() {
+	return select_tag_set;
+}
+
+unordered_set<string> TestConfiguration::GetSkipTagSet() {
+	return skip_tag_set;
+}
+
+void TestConfiguration::MakeSelectTagSet(const Value &tag_set) {
+	auto &test_config = TestConfiguration::Get();
+	for (auto &tag : ListValue::GetChildren(tag_set)) {
+		test_config.select_tag_set.insert(tag.GetValue<string>());
+	}
+}
+
+void TestConfiguration::MakeSkipTagSet(const Value &tag_set) {
+	auto &test_config = TestConfiguration::Get();
+	for (auto &tag : ListValue::GetChildren(tag_set)) {
+		test_config.skip_tag_set.insert(tag.GetValue<string>());
+	}
+}
+
+bool TestConfiguration::MatchSelectTagSet(const vector<string> &test_tag_set) {
+	if (select_tag_set.empty()) {
+		return true; // vacuous true -- no select spec implies all pass
+	}
+	for (auto test_tag : test_tag_set) {
+		if (select_tag_set.find(test_tag) == select_tag_set.end()) {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool TestConfiguration::MatchSkipTagSet(const vector<string> &test_tag_set) {
+	if (skip_tag_set.empty()) {
+		return true; // vacuous true -- no skip spec implies all pass
+	}
+	for (auto test_tag : test_tag_set) {
+		if (skip_tag_set.find(test_tag) == skip_tag_set.end()) {
+			return false;
+		}
+	}
+	return true;
 }
 
 bool TestConfiguration::TestForceStorage() {

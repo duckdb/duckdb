@@ -16,6 +16,7 @@
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/enums/debug_initialize.hpp"
+#include <unordered_map>
 
 namespace duckdb {
 
@@ -61,6 +62,12 @@ public:
 	string GetStorageVersion();
 	string GetTestEnv(const string &key, const string &default_value);
 
+	unordered_set<string> GetSelectTagSet();
+	bool MatchSelectTagSet(const vector<string> &tag_set);
+
+	unordered_set<string> GetSkipTagSet();
+	bool MatchSkipTagSet(const vector<string> &tag_set);
+
 	static bool TestForceStorage();
 	static bool TestForceReload();
 	static bool TestMemoryLeaks();
@@ -70,11 +77,16 @@ public:
 	static void ParseConnectScript(const Value &input);
 	static void CheckSortStyle(const Value &input);
 	static bool TryParseSortStyle(const string &sort_style, SortStyle &result);
+	static void MakeSelectTagSet(const Value &input);
+	static void MakeSkipTagSet(const Value &input);
 
 private:
 	case_insensitive_map_t<Value> options;
 	unordered_set<string> tests_to_be_skipped;
 	unordered_map<string, string> test_env;
+
+	unordered_set<string> select_tag_set;
+	unordered_set<string> skip_tag_set;
 
 private:
 	template <class T, class VAL_T = T>
