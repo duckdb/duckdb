@@ -16,7 +16,7 @@ BoundStatement Binder::Bind(ColumnDataRef &ref) {
 	}
 	result.types = types;
 	auto bind_index = GenerateTableIndex();
-	bind_context.AddGenericBinding(bind_index, ref.alias, ref.expected_names, types);
+	bind_context.AddGenericBinding(bind_index, ref.alias, result.names, types);
 
 	result.plan =
 	    make_uniq_base<LogicalOperator, LogicalColumnDataGet>(bind_index, std::move(types), std::move(ref.collection));

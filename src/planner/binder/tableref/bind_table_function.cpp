@@ -188,11 +188,10 @@ static string GetAlias(const TableFunctionRef &ref) {
 	return string();
 }
 
-unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &table_function,
-                                                              const TableFunctionRef &ref, vector<Value> parameters,
-                                                              named_parameter_map_t named_parameters,
-                                                              vector<LogicalType> input_table_types,
-                                                              vector<string> input_table_names) {
+BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, const TableFunctionRef &ref,
+                                                 vector<Value> parameters, named_parameter_map_t named_parameters,
+                                                 vector<LogicalType> input_table_types,
+                                                 vector<string> input_table_names) {
 	auto function_name = GetAlias(ref);
 	auto &column_name_alias = ref.column_name_alias;
 	auto bind_index = GenerateTableIndex();
@@ -221,8 +220,12 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 						    table_function.name);
 					}
 				}
+				BoundStatement result;
 				bind_context.AddGenericBinding(bind_index, function_name, return_names, new_plan->types);
-				return new_plan;
+				result.names = return_names;
+				result.types = new_plan->types;
+				result.plan = std::move(new_plan);
+				return result;
 			}
 		}
 		if (table_function.bind_replace) {
@@ -234,7 +237,7 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 				if (!ref.column_name_alias.empty()) {
 					new_plan->column_name_alias = ref.column_name_alias;
 				}
-				return Bind(*new_plan).plan;
+				return Bind(*new_plan);
 			}
 		}
 		if (!table_function.bind) {
@@ -343,16 +346,24 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 
 		return_types.push_back(LogicalType::BIGINT);
 		bind_context.AddGenericBinding(projection_index, function_name, return_names, return_types);
-		return std::move(projection);
+		BoundStatement result;
+		result.names = std::move(return_names);
+		result.types = std::move(return_types);
+		result.plan = std::move(projection);
+		return result;
 	}
 
 	// now add the table function to the bind context so its columns can be bound
+	BoundStatement result;
 	bind_context.AddTableFunction(bind_index, function_name, return_names, return_types, get->GetMutableColumnIds(),
 	                              get->GetTable().get(), std::move(virtual_columns));
-	return std::move(get);
+	result.names = std::move(return_names);
+	result.types = std::move(return_types);
+	result.plan = std::move(get);
+	return result;
 }
 
-unique_ptr<LogicalOperator> Binder::BindTableFunction(TableFunction &function, vector<Value> parameters) {
+BoundStatement Binder::BindTableFunction(TableFunction &function, vector<Value> parameters) {
 	named_parameter_map_t named_parameters;
 	vector<LogicalType> input_table_types;
 	vector<string> input_table_names;
@@ -468,7 +479,7 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 		}
 	}
 
-	unique_ptr<LogicalOperator> get;
+	BoundStatement get;
 	try {
 		get = BindTableFunctionInternal(table_function, ref, std::move(parameters), std::move(named_parameters),
 		                                std::move(input_table_types), std::move(input_table_names));
@@ -477,10 +488,12 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 		error.AddQueryLocation(ref);
 		error.Throw();
 	}
-	auto table_function_ref = make_uniq<BoundTableFunction>(std::move(get));
+	auto table_function_ref = make_uniq<BoundTableFunction>(std::move(get.plan));
 	table_function_ref->subquery = std::move(subquery);
 
 	BoundStatement result_statement;
+	result_statement.names = get.names;
+	result_statement.types = get.types;
 	result_statement.plan = CreatePlan(*table_function_ref);
 	return result_statement;
 }

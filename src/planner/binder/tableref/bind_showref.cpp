@@ -145,6 +145,8 @@ BoundStatement Binder::BindShowQuery(ShowRef &ref) {
 	auto table_index = GenerateTableIndex();
 
 	BoundStatement result;
+	result.names = return_names;
+	result.types = return_types;
 	result.plan = make_uniq<LogicalColumnDataGet>(table_index, return_types, std::move(collection));
 	bind_context.AddGenericBinding(table_index, "__show_select", return_names, return_types);
 	return result;

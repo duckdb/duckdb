@@ -352,6 +352,10 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 	}
 
 	BoundStatement result_stmt;
+	result_stmt.types.insert(result_stmt.types.end(), result->left.types.begin(), result->left.types.end());
+	result_stmt.types.insert(result_stmt.types.end(), result->right.types.begin(), result->right.types.end());
+	result_stmt.names.insert(result_stmt.names.end(), result->left.names.begin(), result->left.names.end());
+	result_stmt.names.insert(result_stmt.names.end(), result->right.names.begin(), result->right.names.end());
 	result_stmt.plan = CreatePlan(*result);
 	return result_stmt;
 }
