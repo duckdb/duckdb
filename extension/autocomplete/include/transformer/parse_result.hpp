@@ -131,6 +131,10 @@ public:
 		name = name_p;
 	}
 
+	vector<optional_ptr<ParseResult>> GetChildren() const {
+		return children;
+	}
+
 	optional_ptr<ParseResult> GetChild(idx_t index) {
 		if (index >= children.size()) {
 			throw InternalException("Child index out of bounds");

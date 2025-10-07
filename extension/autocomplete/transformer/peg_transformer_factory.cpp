@@ -86,13 +86,13 @@ PEGTransformerFactory::ExtractParseResultsFromList(optional_ptr<ParseResult> par
 	// List(D) <- D (',' D)* ','?
 	vector<optional_ptr<ParseResult>> result;
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	result.push_back(list_pr.children[0]);
+	result.push_back(list_pr.GetChild(0));
 	auto opt_child = list_pr.Child<OptionalParseResult>(1);
 	if (opt_child.HasResult()) {
 		auto repeat_result = opt_child.optional_result->Cast<RepeatParseResult>();
 		for (auto &child : repeat_result.children) {
 			auto &list_child = child->Cast<ListParseResult>();
-			result.push_back(list_child.children[1]);
+			result.push_back(list_child.GetChild(1));
 		}
 	}
 

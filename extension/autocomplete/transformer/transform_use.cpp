@@ -29,7 +29,7 @@ QualifiedName PEGTransformerFactory::TransformUseTarget(PEGTransformer &transfor
 	if (choice_pr.result->type == ParseResultType::LIST) {
 		vector<string> entries;
 		auto use_target_children = choice_pr.result->Cast<ListParseResult>();
-		for (auto &child : use_target_children.children) {
+		for (auto &child : use_target_children.GetChildren()) {
 			if (child->type == ParseResultType::IDENTIFIER) {
 				entries.push_back(child->Cast<IdentifierParseResult>().identifier);
 			}
