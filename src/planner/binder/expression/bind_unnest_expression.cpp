@@ -18,7 +18,8 @@
 
 namespace duckdb {
 
-unique_ptr<Expression> CreateBoundStructExtract(ClientContext &context, unique_ptr<Expression> expr, string key) {
+unique_ptr<Expression> CreateBoundStructExtract(ClientContext &context, unique_ptr<Expression> expr, const string &key,
+                                                const vector<string> &key_path) {
 	vector<unique_ptr<Expression>> arguments;
 	arguments.push_back(std::move(expr));
 	arguments.push_back(make_uniq<BoundConstantExpression>(Value(key)));
@@ -27,7 +28,13 @@ unique_ptr<Expression> CreateBoundStructExtract(ClientContext &context, unique_p
 	auto return_type = extract_function.return_type;
 	auto result = make_uniq<BoundFunctionExpression>(return_type, std::move(extract_function), std::move(arguments),
 	                                                 std::move(bind_info));
-	result->SetAlias(std::move(key));
+	vector<string> full_path = key_path;
+	full_path.push_back(key);
+	auto alias = StringUtil::Join(full_path, ".");
+	if (!alias.empty() && alias[0] == '.') {
+		alias = alias.substr(1);
+	}
+	result->SetAlias(alias);
 	return std::move(result);
 }
 
@@ -216,7 +223,6 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 	if (struct_unnests > 0) {
 		vector<unique_ptr<Expression>> struct_expressions;
 		struct_expressions.push_back(std::move(unnest_expr));
-
 		for (idx_t i = 0; i < struct_unnests; i++) {
 			vector<unique_ptr<Expression>> new_expressions;
 			// check if there are any structs left
@@ -232,7 +238,13 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 						}
 					} else {
 						for (auto &entry : child_types) {
-							new_expressions.push_back(CreateBoundStructExtract(context, expr->Copy(), entry.first));
+							vector<string> current_key_path;
+							// During recursive expansion, not all expressions are BoundFunctionExpression
+							if (expr->type == ExpressionType::BOUND_FUNCTION) {
+								current_key_path.push_back(expr->alias);
+							}
+							new_expressions.push_back(
+							    CreateBoundStructExtract(context, expr->Copy(), entry.first, current_key_path));
 						}
 					}
 					has_structs = true;
