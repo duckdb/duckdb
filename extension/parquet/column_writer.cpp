@@ -372,6 +372,10 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 		auto key_value_type = LogicalType::STRUCT(key_value);
 
 		auto map_column = ParquetColumnSchema::FromLogicalType(name, type, max_define, max_repeat, 0, null_type);
+		if (field_id && field_id->set) {
+			map_column.field_id = field_id->field_id;
+		}
+
 		vector<unique_ptr<ColumnWriter>> child_writers;
 		child_writers.reserve(2);
 		for (idx_t i = 0; i < 2; i++) {
