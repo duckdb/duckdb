@@ -70,19 +70,52 @@ Binder::Binder(ClientContext &context, shared_ptr<Binder> parent_p, BinderType b
 	}
 }
 
+template <class T>
+BoundStatement Binder::BindWithCTE(T &statement) {
+	auto &cte_map = statement.cte_map;
+	if (cte_map.map.empty()) {
+		return Bind(statement);
+	}
+
+	// Extract materialized CTEs from cte_map
+	vector<unique_ptr<CTENode>> materialized_ctes;
+	for (auto &cte : cte_map.map) {
+		auto &cte_entry = cte.second;
+		auto mat_cte = make_uniq<CTENode>();
+		mat_cte->ctename = cte.first;
+		mat_cte->query = cte_entry->query->node->Copy();
+		mat_cte->aliases = cte_entry->aliases;
+		mat_cte->materialized = cte_entry->materialized;
+		materialized_ctes.push_back(std::move(mat_cte));
+	}
+
+	unique_ptr<QueryNode> cte_root = make_uniq<StatementNode>(statement);
+	while (!materialized_ctes.empty()) {
+		unique_ptr<CTENode> node_result;
+		node_result = std::move(materialized_ctes.back());
+		node_result->cte_map = cte_map.Copy();
+		node_result->child = std::move(cte_root);
+		cte_root = std::move(node_result);
+		materialized_ctes.pop_back();
+	}
+
+	AddCTEMap(cte_map);
+	return Bind(*cte_root);
+}
+
 BoundStatement Binder::Bind(SQLStatement &statement) {
 	root_statement = &statement;
 	switch (statement.type) {
 	case StatementType::SELECT_STATEMENT:
 		return Bind(statement.Cast<SelectStatement>());
 	case StatementType::INSERT_STATEMENT:
-		return Bind(statement.Cast<InsertStatement>());
+		return BindWithCTE(statement.Cast<InsertStatement>());
 	case StatementType::COPY_STATEMENT:
 		return Bind(statement.Cast<CopyStatement>(), CopyToType::COPY_TO_FILE);
 	case StatementType::DELETE_STATEMENT:
-		return Bind(statement.Cast<DeleteStatement>());
+		return BindWithCTE(statement.Cast<DeleteStatement>());
 	case StatementType::UPDATE_STATEMENT:
-		return Bind(statement.Cast<UpdateStatement>());
+		return BindWithCTE(statement.Cast<UpdateStatement>());
 	case StatementType::RELATION_STATEMENT:
 		return Bind(statement.Cast<RelationStatement>());
 	case StatementType::CREATE_STATEMENT:
@@ -124,7 +157,7 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 	case StatementType::UPDATE_EXTENSIONS_STATEMENT:
 		return Bind(statement.Cast<UpdateExtensionsStatement>());
 	case StatementType::MERGE_INTO_STATEMENT:
-		return Bind(statement.Cast<MergeIntoStatement>());
+		return BindWithCTE(statement.Cast<MergeIntoStatement>());
 	default: // LCOV_EXCL_START
 		throw NotImplementedException("Unimplemented statement type \"%s\" for Bind",
 		                              StatementTypeToString(statement.type));
@@ -150,6 +183,8 @@ BoundStatement Binder::BindNode(QueryNode &node) {
 		return BindNode(node.Cast<CTENode>());
 	case QueryNodeType::SET_OPERATION_NODE:
 		return BindNode(node.Cast<SetOperationNode>());
+	case QueryNodeType::STATEMENT_NODE:
+		return BindNode(node.Cast<StatementNode>());
 	default:
 		throw InternalException("Unsupported query node type");
 	}

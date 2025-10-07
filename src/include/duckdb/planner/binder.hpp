@@ -404,7 +404,6 @@ private:
 
 	unique_ptr<QueryNode> BindTableMacro(FunctionExpression &function, TableMacroCatalogEntry &macro_func, idx_t depth);
 
-	BoundStatement BindMaterializedCTE(CommonTableExpressionMap &cte_map);
 	BoundStatement BindCTE(CTENode &statement);
 
 	BoundStatement BindNode(SelectNode &node);
@@ -412,6 +411,7 @@ private:
 	BoundStatement BindNode(RecursiveCTENode &node);
 	BoundStatement BindNode(CTENode &node);
 	BoundStatement BindNode(QueryNode &node);
+	BoundStatement BindNode(StatementNode &node);
 
 	unique_ptr<LogicalOperator> VisitQueryNode(BoundQueryNode &node, unique_ptr<LogicalOperator> root);
 	unique_ptr<LogicalOperator> CreatePlan(BoundRecursiveCTENode &node);
