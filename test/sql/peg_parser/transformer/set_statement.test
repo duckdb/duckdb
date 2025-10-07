@@ -1,0 +1,27 @@
+# name: test/sql/peg_parser/transformer/use.test
+# description: Test lambda syntax in peg parser
+# group: [transformer]
+
+require autocomplete
+
+statement ok
+set allow_parser_override_extension=strict;
+
+statement ok
+SET threads=1;
+
+statement ok
+set VARIABLE dataset_size = 122880;
+
+statement error
+SET GLOBAL enable_progress_bar=true;
+----
+Catalog Error: option "enable_progress_bar" cannot be set globally
+
+statement ok
+RESET threads;
+
+statement error
+SET TimeZone='UTC';
+----
+Catalog Error: Setting with name "TimeZone" is not in the catalog, but it exists in the icu extension.
