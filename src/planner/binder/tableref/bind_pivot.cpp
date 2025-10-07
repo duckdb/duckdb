@@ -9,7 +9,6 @@
 #include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
-#include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/common/types/value_map.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
@@ -21,6 +20,7 @@
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/main/query_result.hpp"
+#include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/main/settings.hpp"
 
 namespace duckdb {
@@ -384,29 +384,31 @@ static unique_ptr<SelectNode> PivotFinalOperator(PivotBindState &bind_state, Piv
 }
 
 void ExtractPivotAggregates(BoundTableRef &node, vector<unique_ptr<Expression>> &aggregates) {
-	throw InternalException("FIXME: extract pivot aggregates");
-	// if (node.type != TableReferenceType::SUBQUERY) {
-	// 	throw InternalException("Pivot - Expected a subquery");
-	// }
-	// auto &subq = node.Cast<BoundSubqueryRef>();
-	// if (subq.subquery->type != QueryNodeType::SELECT_NODE) {
-	// 	throw InternalException("Pivot - Expected a select node");
-	// }
-	// auto &select = subq.subquery->Cast<BoundSelectNode>();
-	// if (select.from_table->type != TableReferenceType::SUBQUERY) {
-	// 	throw InternalException("Pivot - Expected another subquery");
-	// }
-	// auto &subq2 = select.from_table->Cast<BoundSubqueryRef>();
-	// if (subq2.subquery->type != QueryNodeType::SELECT_NODE) {
-	// 	throw InternalException("Pivot - Expected another select node");
-	// }
-	// auto &select2 = subq2.subquery->Cast<BoundSelectNode>();
-	// for (auto &aggr : select2.aggregates) {
-	// 	if (aggr->GetAlias() == "__collated_group") {
-	// 		continue;
-	// 	}
-	// 	aggregates.push_back(aggr->Copy());
-	// }
+	if (node.type != TableReferenceType::SUBQUERY) {
+		throw InternalException("Pivot - Expected a subquery");
+	}
+	auto &subq = node.Cast<BoundSubqueryRef>();
+	reference<LogicalOperator> op(*subq.subquery.plan);
+	bool found_first_aggregate = false;
+	while (true) {
+		if (op.get().type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
+			if (found_first_aggregate) {
+				break;
+			}
+			found_first_aggregate = true;
+		}
+		if (op.get().children.size() != 1) {
+			throw InternalException("Pivot - expected an aggregate");
+		}
+		op = *op.get().children[0];
+	}
+	auto &aggr_op = op.get().Cast<LogicalAggregate>();
+	for (auto &aggr : aggr_op.expressions) {
+		if (aggr->GetAlias() == "__collated_group") {
+			continue;
+		}
+		aggregates.push_back(aggr->Copy());
+	}
 }
 
 string GetPivotAggregateName(const PivotValueElement &pivot_value, const string &aggr_name, idx_t aggregate_count) {

@@ -14,7 +14,8 @@
 
 namespace duckdb {
 
-BoundSetOperationNode::~BoundSetOperationNode() {}
+BoundSetOperationNode::~BoundSetOperationNode() {
+}
 
 struct SetOpAliasGatherer {
 public:
@@ -23,7 +24,6 @@ public:
 
 	void GatherAliases(BoundSetOpChild &node, const vector<idx_t> &reorder_idx);
 	void GatherAliases(BoundSetOperationNode &node, const vector<idx_t> &reorder_idx);
-
 
 private:
 	SelectBindState &bind_state;
@@ -207,8 +207,8 @@ static void BuildUnionByNameInfo(ClientContext &context, BoundSetOperationNode &
 				// the column exists - reference it
 				auto col_idx_in_child = entry->second;
 				auto &child_col_type = child.GetTypes()[col_idx_in_child];
-				expr = make_uniq<BoundColumnRefExpression>(
-				    child_col_type, ColumnBinding(child.GetRootIndex(), col_idx_in_child));
+				expr = make_uniq<BoundColumnRefExpression>(child_col_type,
+				                                           ColumnBinding(child.GetRootIndex(), col_idx_in_child));
 			}
 			child.reorder_expressions.push_back(std::move(expr));
 		}
