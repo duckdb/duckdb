@@ -210,6 +210,7 @@ public:
 	bool ProcessDuckDBRC(const char *file);
 	bool ProcessFile(const string &file, bool is_duckdb_rc = false);
 	int ProcessInput(InputMode mode);
+	string ExecutePromptSQL(const string &sql);
 };
 
 } // namespace duckdb_shell

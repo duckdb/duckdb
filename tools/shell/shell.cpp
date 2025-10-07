@@ -147,6 +147,7 @@ typedef unsigned char u8;
 #include "shell_renderer.hpp"
 #include "shell_highlight.hpp"
 #include "shell_state.hpp"
+#include "shell_prompt_parser.hpp"
 
 using namespace duckdb_shell;
 
@@ -460,7 +461,7 @@ static bool HighlightResults() {
 ** Prompt strings. Initialized in main. Settable with
 **   .prompt main continue
 */
-static char mainPrompt[20];             /* First line prompt. default: "D "*/
+static char mainPrompt[1024];           /* First line prompt. default: "D "*/
 static char continuePrompt[20];         /* Continuation prompt. default: "   ...> " */
 static char continuePromptSelected[20]; /* Selected continuation prompt. default: "   ...> " */
 
@@ -766,13 +767,19 @@ static char *local_getline(char *zLine, FILE *in) {
 ** be freed by the caller or else passed back into this routine via the
 ** zPrior argument for reuse.
 */
-static char *one_input_line(FILE *in, char *zPrior, int isContinuation) {
-	char *zPrompt;
+static char *one_input_line(FILE *in, char *zPrior, int isContinuation, ShellState &state) {
+	const char *zPrompt;
 	char *zResult;
+	string dynamicPrompt;
 	if (in != 0) {
 		zResult = local_getline(zPrior, in);
 	} else {
-		zPrompt = isContinuation ? continuePrompt : mainPrompt;
+		if (isContinuation) {
+			zPrompt = continuePrompt;
+		} else {
+			dynamicPrompt = get_prompt(mainPrompt, state);
+			zPrompt = dynamicPrompt.c_str();
+		}
 #if SHELL_USE_LOCAL_GETLINE
 		printf("%s", zPrompt);
 		fflush(stdout);
@@ -4030,6 +4037,30 @@ MetadataResult SetWidths(ShellState &state, const char **azArg, idx_t nArg) {
 	return MetadataResult::SUCCESS;
 }
 
+// Execute a query that returns a single text row if it errors
+// return the empty string.
+string ShellState::ExecutePromptSQL(const string &sql) {
+	OpenDB(0);
+	string result;
+
+	sqlite3_stmt *stmt = NULL;
+	int rc = sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, NULL);
+	if (rc != SQLITE_OK) {
+		return result;
+	}
+
+	rc = sqlite3_step(stmt);
+	if (rc == SQLITE_ROW) {
+		const unsigned char *text = sqlite3_column_text(stmt, 0);
+		if (text) {
+			result = reinterpret_cast<const char *>(text);
+		}
+	}
+
+	sqlite3_finalize(stmt);
+	return result;
+}
+
 MetadataResult ShellState::DisplayEntries(const char **azArg, idx_t nArg, char type) {
 	sqlite3_stmt *pStmt;
 	char **azResult;
@@ -4503,7 +4534,7 @@ int ShellState::ProcessInput(InputMode mode) {
 	lineno = 0;
 	while (errCnt == 0 || !bail_on_error || (!in && stdin_is_interactive)) {
 		fflush(out);
-		zLine = one_input_line(in, zLine, nSql > 0);
+		zLine = one_input_line(in, zLine, nSql > 0, *this);
 		if (!zLine) {
 			/* End of input */
 			if (!in && stdin_is_interactive) {
