@@ -20,13 +20,13 @@ public:
 	static constexpr const TableReferenceType TYPE = TableReferenceType::SUBQUERY;
 
 public:
-	BoundSubqueryRef(shared_ptr<Binder> binder_p, unique_ptr<BoundQueryNode> subquery)
+	BoundSubqueryRef(shared_ptr<Binder> binder_p, BoundStatement subquery)
 	    : BoundTableRef(TableReferenceType::SUBQUERY), binder(std::move(binder_p)), subquery(std::move(subquery)) {
 	}
 
 	//! The binder used to bind the subquery
 	shared_ptr<Binder> binder;
 	//! The bound subquery node (if any)
-	unique_ptr<BoundQueryNode> subquery;
+	BoundStatement subquery;
 };
 } // namespace duckdb

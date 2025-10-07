@@ -13,16 +13,16 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundRecursiveCTENode &node) {
 	node.left_binder->is_outside_flattened = is_outside_flattened;
 	node.right_binder->is_outside_flattened = is_outside_flattened;
 
-	auto left_node = node.left_binder->CreatePlan(*node.left);
-	auto right_node = node.right_binder->CreatePlan(*node.right);
+	auto left_node = std::move(node.left.plan);
+	auto right_node = std::move(node.right.plan);
 
 	// check if there are any unplanned subqueries left in either child
 	has_unplanned_dependent_joins = has_unplanned_dependent_joins || node.left_binder->has_unplanned_dependent_joins ||
 	                                node.right_binder->has_unplanned_dependent_joins;
 
 	// for both the left and right sides, cast them to the same types
-	left_node = CastLogicalOperatorToTypes(node.left->types, node.types, std::move(left_node));
-	right_node = CastLogicalOperatorToTypes(node.right->types, node.types, std::move(right_node));
+	left_node = CastLogicalOperatorToTypes(node.left.types, node.types, std::move(left_node));
+	right_node = CastLogicalOperatorToTypes(node.right.types, node.types, std::move(right_node));
 
 	bool ref_recurring = node.right_binder->bind_context.cte_references["recurring." + node.ctename] &&
 	                     *node.right_binder->bind_context.cte_references["recurring." + node.ctename] != 0;

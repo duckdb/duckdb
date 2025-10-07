@@ -13,13 +13,7 @@
 #include "duckdb/planner/bound_query_node.hpp"
 
 namespace duckdb {
-
-struct BoundSetOpChild {
-	unique_ptr<BoundQueryNode> node;
-	shared_ptr<Binder> binder;
-	//! Exprs used by the UNION BY NAME operations to add a new projection
-	vector<unique_ptr<Expression>> reorder_expressions;
-};
+struct BoundSetOpChild;
 
 //! Bound equivalent of SetOperationNode
 class BoundSetOperationNode : public BoundQueryNode {
@@ -29,6 +23,7 @@ public:
 public:
 	BoundSetOperationNode() : BoundQueryNode(QueryNodeType::SET_OPERATION_NODE) {
 	}
+	~BoundSetOperationNode() override;
 
 	//! The type of set operation
 	SetOperationType setop_type = SetOperationType::NONE;
@@ -44,6 +39,20 @@ public:
 	idx_t GetRootIndex() override {
 		return setop_index;
 	}
+};
+
+struct BoundSetOpChild {
+	unique_ptr<BoundSetOperationNode> bound_node;
+	BoundStatement node;
+	shared_ptr<Binder> binder;
+	//! Original select list (if this was a SELECT statement)
+	vector<unique_ptr<ParsedExpression>> select_list;
+	//! Exprs used by the UNION BY NAME operations to add a new projection
+	vector<unique_ptr<Expression>> reorder_expressions;
+
+	const vector<string> &GetNames();
+	const vector<LogicalType> &GetTypes();
+	idx_t GetRootIndex();
 };
 
 } // namespace duckdb

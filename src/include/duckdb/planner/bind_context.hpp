@@ -23,7 +23,7 @@
 namespace duckdb {
 class Binder;
 class LogicalGet;
-class BoundQueryNode;
+struct BoundStatement;
 
 class StarExpression;
 
@@ -105,11 +105,11 @@ public:
 	                      const vector<LogicalType> &types, vector<ColumnIndex> &bound_column_ids,
 	                      optional_ptr<StandardEntry> entry, virtual_column_map_t virtual_columns);
 	//! Adds a table view with a given alias to the BindContext.
-	void AddView(idx_t index, const string &alias, SubqueryRef &ref, BoundQueryNode &subquery, ViewCatalogEntry &view);
+	void AddView(idx_t index, const string &alias, SubqueryRef &ref, BoundStatement &subquery, ViewCatalogEntry &view);
 	//! Adds a subquery with a given alias to the BindContext.
-	void AddSubquery(idx_t index, const string &alias, SubqueryRef &ref, BoundQueryNode &subquery);
+	void AddSubquery(idx_t index, const string &alias, SubqueryRef &ref, BoundStatement &subquery);
 	//! Adds a subquery with a given alias to the BindContext.
-	void AddSubquery(idx_t index, const string &alias, TableFunctionRef &ref, BoundQueryNode &subquery);
+	void AddSubquery(idx_t index, const string &alias, TableFunctionRef &ref, BoundStatement &subquery);
 	//! Adds a binding to a catalog entry with a given alias to the BindContext.
 	void AddEntryBinding(idx_t index, const string &alias, const vector<string> &names,
 	                     const vector<LogicalType> &types, StandardEntry &entry);
