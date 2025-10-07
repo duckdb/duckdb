@@ -10,11 +10,10 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformUseStatement(PEGTransfo
 	auto qn = transformer.Transform<QualifiedName>(list_pr, 1);
 
 	string value_str;
-	if (qn.schema.empty()) {
-		value_str = KeywordHelper::WriteOptionallyQuoted(qn.name, '"');
+	if (IsInvalidSchema(qn.schema)) {
+		value_str = qn.name;
 	} else {
-		value_str = KeywordHelper::WriteOptionallyQuoted(qn.schema, '"') + "." +
-		            KeywordHelper::WriteOptionallyQuoted(qn.name, '"');
+		value_str = qn.schema + "." + qn.name;
 	}
 
 	auto value_expr = make_uniq<ConstantExpression>(Value(value_str));
@@ -26,22 +25,27 @@ QualifiedName PEGTransformerFactory::TransformUseTarget(PEGTransformer &transfor
                                                         optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
-	string qualified_name;
+	QualifiedName result;
 	if (choice_pr.result->type == ParseResultType::LIST) {
+		vector<string> entries;
 		auto use_target_children = choice_pr.result->Cast<ListParseResult>();
 		for (auto &child : use_target_children.children) {
 			if (child->type == ParseResultType::IDENTIFIER) {
-				qualified_name += child->Cast<IdentifierParseResult>().identifier;
-			} else if (child->type == ParseResultType::KEYWORD) {
-				qualified_name += child->Cast<KeywordParseResult>().keyword;
+				entries.push_back(child->Cast<IdentifierParseResult>().identifier);
 			}
 		}
+		if (entries.size() == 2) {
+			result.catalog = INVALID_CATALOG;
+			result.schema = entries[0];
+			result.name = entries[1];
+		} else {
+			throw InternalException("Invalid amount of entries for use statement");
+		}
 	} else if (choice_pr.result->type == ParseResultType::IDENTIFIER) {
-		qualified_name = choice_pr.result->Cast<IdentifierParseResult>().identifier;
+		result.name = choice_pr.result->Cast<IdentifierParseResult>().identifier;
 	} else {
 		throw InternalException("Unexpected parse result type encountered in UseTarget");
 	}
-	auto result = QualifiedName::Parse(qualified_name);
 	return result;
 }
 } // namespace duckdb
