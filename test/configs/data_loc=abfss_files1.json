@@ -1,5 +1,10 @@
 {
   "description": "Run with the data-location=abfss://files1/",
   "on_init": "INSTALL '$PWD/build/release/extension/azure/azure.duckdb_extension'; LOAD azure; CREATE OR REPLACE SECRET ( TYPE azure, PROVIDER credential_chain, CHAIN 'env', ACCOUNT_NAME 'duckfiles' );",
-  "data_location": "abfss://files1/"
+  "test_env": [
+    {
+      "env_name": "DATA_PATH",
+      "env_value": "abfss://files1/"
+    }
+  ]
 }
