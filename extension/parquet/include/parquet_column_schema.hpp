@@ -70,14 +70,14 @@ public:
 	void SetSchemaIndex(idx_t schema_idx);
 
 public:
-	ParquetColumnSchemaType schema_type;
 	string name;
-	LogicalType type;
 	idx_t max_define;
 	idx_t max_repeat;
-	//! Populated by FinalizeSchema
+	//! Populated by FinalizeSchema if used in the parquet_writer path
 	optional_idx schema_index;
 	idx_t column_index;
+	ParquetColumnSchemaType schema_type;
+	LogicalType type;
 	optional_idx parent_schema_index;
 	uint32_t type_length = 0;
 	uint32_t type_scale = 0;
@@ -86,7 +86,7 @@ public:
 	vector<ParquetColumnSchema> children;
 	optional_idx field_id;
 	//! Whether a column is nullable or not
-	duckdb_parquet::FieldRepetitionType::type repetition_type;
+	duckdb_parquet::FieldRepetitionType::type repetition_type = duckdb_parquet::FieldRepetitionType::OPTIONAL;
 };
 
 } // namespace duckdb
