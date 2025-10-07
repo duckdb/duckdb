@@ -82,14 +82,11 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformStandardAssignment(PEGT
 // VariableList <- List(Expression)
 vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformVariableList(PEGTransformer &transformer,
                                                                       optional_ptr<ParseResult> parse_result) {
-	auto &variable_list = parse_result->Cast<ListParseResult>();
-	auto &list_pr = variable_list.Child<ListParseResult>(0);
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto expr_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(0));
 	vector<unique_ptr<ParsedExpression>> expressions;
-	expressions.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.children[0]));
-	idx_t child_idx = 1;
-	while (!list_pr.children[child_idx]->name.empty() && list_pr.children[child_idx]->type == ParseResultType::LIST) {
-		expressions.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.children[child_idx]));
-		child_idx++;
+	for (auto &expr : expr_list) {
+		expressions.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(expr));
 	}
 	return expressions;
 }

@@ -181,6 +181,9 @@ private:
 	static vector<unique_ptr<ParsedExpression>> TransformVariableList(PEGTransformer &transformer,
 	                                                      optional_ptr<ParseResult> parse_result);
 
+	//! Helper functions
+	static vector<optional_ptr<ParseResult>> ExtractParseResultsFromList(optional_ptr<ParseResult> parse_result);
+
 private:
 	PEGParser parser;
 	case_insensitive_map_t<PEGTransformer::AnyTransformFunction> sql_transform_functions;

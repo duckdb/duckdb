@@ -80,4 +80,22 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterEnum<SetScope>("SessionScope", SetScope::SESSION);
 	RegisterEnum<SetScope>("VariableScope", SetScope::VARIABLE);
 }
+
+vector<optional_ptr<ParseResult>>
+PEGTransformerFactory::ExtractParseResultsFromList(optional_ptr<ParseResult> parse_result) {
+	// List(D) <- D (',' D)* ','?
+	vector<optional_ptr<ParseResult>> result;
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	result.push_back(list_pr.children[0]);
+	auto opt_child = list_pr.Child<OptionalParseResult>(1);
+	if (opt_child.HasResult()) {
+		auto repeat_result = opt_child.optional_result->Cast<RepeatParseResult>();
+		for (auto &child : repeat_result.children) {
+			auto &list_child = child->Cast<ListParseResult>();
+			result.push_back(list_child.children[1]);
+		}
+	}
+
+	return result;
+}
 } // namespace duckdb
