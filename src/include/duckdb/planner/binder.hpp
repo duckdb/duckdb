@@ -160,6 +160,7 @@ private:
 	idx_t delim_index;
 };
 
+//! GlobalBinderState is state shared over the ENTIRE query, including subqueries, views, etc
 struct GlobalBinderState {
 	//! The count of bound_tables
 	idx_t bound_tables = 0;
@@ -173,6 +174,14 @@ struct GlobalBinderState {
 	case_insensitive_map_t<unique_ptr<TableRef>> replacement_scans;
 	//! Using column sets
 	vector<unique_ptr<UsingColumnSet>> using_column_sets;
+};
+
+// QueryBinderState is state shared WITHIN a query, a new query-binder state is created when binding inside e.g. a view
+struct QueryBinderState {
+	//! The vector of active binders
+	vector<reference<ExpressionBinder>> active_binders;
+	//! The set of parameter expressions bound by this binder
+	optional_ptr<BoundParameterMap> parameters;
 };
 
 //! Bind the parsed query tree to the actual columns present in the catalog.
@@ -198,8 +207,6 @@ public:
 	//! The set of correlated columns bound by this binder (FIXME: this should probably be an unordered_set and not a
 	//! vector)
 	CorrelatedColumns correlated_columns;
-	//! The set of parameter expressions bound by this binder
-	optional_ptr<BoundParameterMap> parameters;
 	//! The alias for the currently processing subquery, if it exists
 	string alias;
 	//! Macro parameter bindings (if any)
@@ -306,6 +313,8 @@ public:
 	CatalogEntryRetriever &EntryRetriever() {
 		return entry_retriever;
 	}
+	optional_ptr<BoundParameterMap> GetParameters();
+	void SetParameters(BoundParameterMap &parameters);
 	//! Returns a ColumnRefExpression after it was resolved (i.e. past the STAR expression/USING clauses)
 	static optional_ptr<ParsedExpression> GetResolvedColumnExpression(ParsedExpression &root_expr);
 
@@ -324,8 +333,8 @@ private:
 	shared_ptr<Binder> parent;
 	//! Global binder state
 	shared_ptr<GlobalBinderState> global_binder_state;
-	//! The vector of active binders
-	vector<reference<ExpressionBinder>> active_binders;
+	//! Query binder state
+	shared_ptr<QueryBinderState> query_binder_state;
 	//! Whether or not the binder has any unplanned dependent joins that still need to be planned/flattened
 	bool has_unplanned_dependent_joins = false;
 	//! Whether or not outside dependent joins have been planned and flattened

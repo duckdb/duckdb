@@ -49,6 +49,8 @@ Binder::Binder(ClientContext &context, shared_ptr<Binder> parent_p, BinderType b
     : context(context), bind_context(*this), parent(std::move(parent_p)), binder_type(binder_type),
       entry_retriever(context),
       global_binder_state(parent ? parent->global_binder_state : make_shared_ptr<GlobalBinderState>()),
+      query_binder_state(parent && binder_type == BinderType::REGULAR_BINDER ? parent->query_binder_state
+                                                                             : make_shared_ptr<QueryBinderState>()),
       depth(parent ? parent->GetBinderDepth() : 1) {
 	IncreaseDepth();
 	if (parent) {
@@ -62,7 +64,6 @@ Binder::Binder(ClientContext &context, shared_ptr<Binder> parent_p, BinderType b
 			// We have to inherit CTE bindings from the parent bind_context, if there is a parent.
 			bind_context.SetCTEBindings(parent->bind_context.GetCTEBindings());
 			bind_context.cte_references = parent->bind_context.cte_references;
-			parameters = parent->parameters;
 		}
 	}
 }
@@ -318,6 +319,14 @@ StatementProperties &Binder::GetStatementProperties() {
 	return global_binder_state->prop;
 }
 
+optional_ptr<BoundParameterMap> Binder::GetParameters() {
+	return query_binder_state->parameters;
+}
+
+void Binder::SetParameters(BoundParameterMap &parameters) {
+	query_binder_state->parameters = parameters;
+}
+
 void Binder::PushExpressionBinder(ExpressionBinder &binder) {
 	GetActiveBinders().push_back(binder);
 }
@@ -341,12 +350,7 @@ bool Binder::HasActiveBinder() {
 }
 
 vector<reference<ExpressionBinder>> &Binder::GetActiveBinders() {
-	reference<Binder> root = *this;
-	while (root.get().parent && root.get().binder_type == BinderType::REGULAR_BINDER) {
-		root = *root.get().parent;
-	}
-	auto &root_binder = root.get();
-	return root_binder.active_binders;
+	return query_binder_state->active_binders;
 }
 
 void Binder::AddUsingBindingSet(unique_ptr<UsingColumnSet> set) {
