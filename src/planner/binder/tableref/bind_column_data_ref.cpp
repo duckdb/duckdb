@@ -5,16 +5,22 @@
 
 namespace duckdb {
 
-unique_ptr<BoundTableRef> Binder::Bind(ColumnDataRef &ref) {
+BoundStatement Binder::Bind(ColumnDataRef &ref) {
 	auto &collection = *ref.collection;
 	auto types = collection.Types();
-	auto result = make_uniq<BoundColumnDataRef>(std::move(ref.collection));
-	result->bind_index = GenerateTableIndex();
-	for (idx_t i = ref.expected_names.size(); i < types.size(); i++) {
-		ref.expected_names.push_back("col" + to_string(i + 1));
+
+	BoundStatement result;
+	result.names = std::move(ref.expected_names);
+	for (idx_t i = result.names.size(); i < types.size(); i++) {
+		result.names.push_back("col" + to_string(i + 1));
 	}
-	bind_context.AddGenericBinding(result->bind_index, ref.alias, ref.expected_names, types);
-	return unique_ptr_cast<BoundColumnDataRef, BoundTableRef>(std::move(result));
+	result.types = types;
+	auto bind_index = GenerateTableIndex();
+	bind_context.AddGenericBinding(bind_index, ref.alias, ref.expected_names, types);
+
+	result.plan =
+	    make_uniq_base<LogicalOperator, LogicalColumnDataGet>(bind_index, std::move(types), std::move(ref.collection));
+	return result;
 }
 
 } // namespace duckdb

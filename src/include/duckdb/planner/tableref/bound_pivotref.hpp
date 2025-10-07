@@ -42,7 +42,7 @@ public:
 	//! The binder used to bind the child of the pivot
 	shared_ptr<Binder> child_binder;
 	//! The child node of the pivot
-	unique_ptr<BoundTableRef> child;
+	BoundStatement child;
 	//! The bound pivot info
 	BoundPivotInfo bound_pivot;
 };

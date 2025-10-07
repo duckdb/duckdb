@@ -234,7 +234,7 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 				if (!ref.column_name_alias.empty()) {
 					new_plan->column_name_alias = ref.column_name_alias;
 				}
-				return CreatePlan(*Bind(*new_plan));
+				return Bind(*new_plan).plan;
 			}
 		}
 		if (!table_function.bind) {
@@ -364,7 +364,7 @@ unique_ptr<LogicalOperator> Binder::BindTableFunction(TableFunction &function, v
 	                                 std::move(input_table_types), std::move(input_table_names));
 }
 
-unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
+BoundStatement Binder::Bind(TableFunctionRef &ref) {
 	QueryErrorContext error_context(ref.query_location);
 
 	D_ASSERT(ref.function->GetExpressionType() == ExpressionType::FUNCTION);
@@ -401,11 +401,10 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 		// string alias;
 		string alias = (ref.alias.empty() ? "unnamed_query" + to_string(bind_index) : ref.alias);
 
-		auto result = make_uniq<BoundSubqueryRef>(std::move(binder), std::move(query));
 		// remember ref here is TableFunctionRef and NOT base class
-		bind_context.AddSubquery(bind_index, alias, ref, result->subquery);
-		MoveCorrelatedExpressions(*result->binder);
-		return std::move(result);
+		bind_context.AddSubquery(bind_index, alias, ref, query);
+		MoveCorrelatedExpressions(*binder);
+		return query;
 	}
 	D_ASSERT(func_catalog.type == CatalogType::TABLE_FUNCTION_ENTRY);
 	auto &function = func_catalog.Cast<TableFunctionCatalogEntry>();
@@ -480,7 +479,10 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	}
 	auto table_function_ref = make_uniq<BoundTableFunction>(std::move(get));
 	table_function_ref->subquery = std::move(subquery);
-	return std::move(table_function_ref);
+
+	BoundStatement result_statement;
+	result_statement.plan = CreatePlan(*table_function_ref);
+	return result_statement;
 }
 
 } // namespace duckdb

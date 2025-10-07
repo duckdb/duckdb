@@ -31,9 +31,9 @@ public:
 	//! The binder used to bind the RHS of the join
 	shared_ptr<Binder> right_binder;
 	//! The left hand side of the join
-	unique_ptr<BoundTableRef> left;
+	BoundStatement left;
 	//! The right hand side of the join
-	unique_ptr<BoundTableRef> right;
+	BoundStatement right;
 	//! The join condition
 	unique_ptr<Expression> condition;
 	//! Duplicate Eliminated Columns (if any)

@@ -4,7 +4,7 @@
 
 namespace duckdb {
 
-unique_ptr<BoundTableRef> Binder::Bind(SubqueryRef &ref) {
+BoundStatement Binder::Bind(SubqueryRef &ref) {
 	auto binder = Binder::CreateBinder(context, this);
 	binder->can_contain_nulls = true;
 	auto subquery = binder->BindNode(*ref.subquery->node);
@@ -21,10 +21,14 @@ unique_ptr<BoundTableRef> Binder::Bind(SubqueryRef &ref) {
 	} else {
 		subquery_alias = ref.alias;
 	}
-	auto result = make_uniq<BoundSubqueryRef>(std::move(binder), std::move(subquery));
-	bind_context.AddSubquery(bind_index, subquery_alias, ref, result->subquery);
-	MoveCorrelatedExpressions(*result->binder);
-	return std::move(result);
+	binder->is_outside_flattened = is_outside_flattened;
+	if (binder->has_unplanned_dependent_joins) {
+		has_unplanned_dependent_joins = true;
+	}
+	bind_context.AddSubquery(bind_index, subquery_alias, ref, subquery);
+	MoveCorrelatedExpressions(*binder);
+
+	return subquery;
 }
 
 } // namespace duckdb

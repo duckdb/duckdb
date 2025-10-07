@@ -27,9 +27,9 @@ public:
 	//! The binder used to bind the RHS of the positional join
 	shared_ptr<Binder> right_binder;
 	//! The left hand side of the positional join
-	unique_ptr<BoundTableRef> left;
+	BoundStatement left;
 	//! The right hand side of the positional join
-	unique_ptr<BoundTableRef> right;
+	BoundStatement right;
 	//! Whether or not this is a lateral positional join
 	bool lateral;
 	//! The correlated columns of the right-side with the left-side

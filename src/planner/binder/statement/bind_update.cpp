@@ -110,11 +110,15 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 
 	// visit the table reference
 	auto bound_table = Bind(*stmt.table);
-	if (bound_table->type != TableReferenceType::BASE_TABLE) {
-		throw BinderException("Can only update base table!");
+	if (bound_table.plan->type != LogicalOperatorType::LOGICAL_GET) {
+		throw BinderException("Can only update base table");
 	}
-	auto &table_binding = bound_table->Cast<BoundBaseTableRef>();
-	auto &table = table_binding.table;
+	auto &bound_table_get = bound_table.plan->Cast<LogicalGet>();
+	auto table_ptr = bound_table_get.GetTable();
+	if (!table_ptr) {
+		throw BinderException("Can only update base table");
+	}
+	auto &table = *table_ptr;
 
 	optional_ptr<LogicalGet> get;
 	if (stmt.from_table) {
@@ -126,7 +130,7 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 		get = &root->children[0]->Cast<LogicalGet>();
 		bind_context.AddContext(std::move(from_binder->bind_context));
 	} else {
-		root = CreatePlan(*bound_table);
+		root = std::move(bound_table.plan);
 		get = &root->Cast<LogicalGet>();
 	}
 

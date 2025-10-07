@@ -20,10 +20,10 @@ public:
 	static constexpr const TableReferenceType TYPE = TableReferenceType::BOUND_TABLE_REF;
 
 public:
-	BoundRefWrapper(unique_ptr<BoundTableRef> bound_ref_p, shared_ptr<Binder> binder_p);
+	BoundRefWrapper(BoundStatement bound_ref_p, shared_ptr<Binder> binder_p);
 
 	//! The bound reference object
-	unique_ptr<BoundTableRef> bound_ref;
+	BoundStatement bound_ref;
 	//! The binder that was used to bind this table ref
 	shared_ptr<Binder> binder;
 

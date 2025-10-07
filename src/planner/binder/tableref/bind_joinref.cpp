@@ -122,14 +122,14 @@ static vector<string> RemoveDuplicateUsingColumns(const vector<string> &using_co
 	return result;
 }
 
-unique_ptr<BoundTableRef> Binder::BindJoin(Binder &parent_binder, TableRef &ref) {
+BoundStatement Binder::BindJoin(Binder &parent_binder, TableRef &ref) {
 	unnamed_subquery_index = parent_binder.unnamed_subquery_index;
 	auto result = Bind(ref);
 	parent_binder.unnamed_subquery_index = unnamed_subquery_index;
 	return result;
 }
 
-unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
+BoundStatement Binder::Bind(JoinRef &ref) {
 	auto result = make_uniq<BoundJoinRef>(ref.ref_type);
 	result->left_binder = Binder::CreateBinder(context, this);
 	result->right_binder = Binder::CreateBinder(context, this);
@@ -351,7 +351,9 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 		bind_context.RemoveContext(left_bindings);
 	}
 
-	return std::move(result);
+	BoundStatement result_stmt;
+	result_stmt.plan = CreatePlan(*result);
+	return result_stmt;
 }
 
 } // namespace duckdb

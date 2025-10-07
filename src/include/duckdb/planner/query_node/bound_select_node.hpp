@@ -47,7 +47,7 @@ public:
 	//! The projection list
 	vector<unique_ptr<Expression>> select_list;
 	//! The FROM clause
-	unique_ptr<BoundTableRef> from_table;
+	BoundStatement from_table;
 	//! The WHERE clause
 	unique_ptr<Expression> where_clause;
 	//! list of groups
