@@ -275,14 +275,18 @@ void Binder::AddCTE(const string &name) {
 }
 
 optional_ptr<Binding> Binder::GetCTEBinding(const string &name) {
-	auto entry = bind_context.GetCTEBinding(name);
-	if (entry) {
-		return entry;
+	reference<Binder> current_binder(*this);
+	while(true) {
+		auto &current = current_binder.get();
+		auto entry = current.bind_context.GetCTEBinding(name);
+		if (entry) {
+			return entry;
+		}
+		if (!current.parent || current.binder_type != BinderType::REGULAR_BINDER) {
+			return nullptr;
+		}
+		current_binder = *current.parent;
 	}
-	if (parent && binder_type == BinderType::REGULAR_BINDER) {
-		return parent->GetCTEBinding(name);
-	}
-	return nullptr;
 }
 
 bool Binder::CTEExists(const string &name) {
