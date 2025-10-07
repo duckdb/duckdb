@@ -44,11 +44,11 @@ atomic<idx_t> ACTIVE_WORKERS {0};
 // Queries that currently don't support profiling.
 vector<string> SKIP_PROFILING_QUERIES = {"ROLLBACK"};
 
-void add_log(const idx_t worker_id, const string &msg) {
+void AddLog(const idx_t worker_id, const string &msg) {
 	LOGGING[worker_id].push_back(msg);
 }
 
-duckdb::unique_ptr<MaterializedQueryResult> exec_query(Connection &conn, const string &query, const idx_t worker_id) {
+duckdb::unique_ptr<MaterializedQueryResult> ExecQuery(Connection &conn, const string &query, const idx_t worker_id) {
 	QUERY_COUNT[worker_id]++;
 
 	// Enable profiling for every 10th query, unless it's in the skip list.
@@ -59,7 +59,7 @@ duckdb::unique_ptr<MaterializedQueryResult> exec_query(Connection &conn, const s
 	}
 
 	if (profiling_enabled) {
-		add_log(worker_id, "Enabling profiling");
+		AddLog(worker_id, "Enabling profiling");
 		conn.EnableProfiling();
 		conn.Query("PRAGMA enable_profiling = 'no_output'");
 		conn.Query("SET profiling_coverage = 'ALL'");
@@ -72,7 +72,7 @@ duckdb::unique_ptr<MaterializedQueryResult> exec_query(Connection &conn, const s
 	}
 
 	if (profiling_enabled) {
-		add_log(worker_id, "Retrieving profiling info for " + query);
+		AddLog(worker_id, "Retrieving profiling info for " + query);
 		auto profile = conn.GetProfilingTree();
 		if (!profile) {
 			Printer::PrintF("Failed to get profiling info for query %s", query);
@@ -102,8 +102,8 @@ struct DBInfo {
 	vector<TableInfo> tables;
 };
 
-void interrupt_attach(Connection &conn, const idx_t worker_id) {
-	add_log(worker_id, "Interrupting connection");
+void InterruptAttach(Connection &conn, const idx_t worker_id) {
+	AddLog(worker_id, "Interrupting connection");
 	conn.Interrupt();
 }
 
@@ -114,7 +114,7 @@ public:
 	mutex mu;
 	map<idx_t, idx_t> m;
 
-	void add_worker(Connection &conn, const idx_t db_id, const idx_t worker_id) {
+	void AddWorker(Connection &conn, const idx_t db_id, const idx_t worker_id) {
 		lock_guard<mutex> lock(mu);
 
 		if (m.find(db_id) != m.end()) {
@@ -125,15 +125,15 @@ public:
 
 		if (rand() % 2 == 0) {
 			// 50% chance to spawn an interruption worker
-			std::thread interruption(interrupt_attach, std::ref(conn), worker_id);
+			std::thread interruption(InterruptAttach, std::ref(conn), worker_id);
 			interruption.join();
 		}
 
 		string query = "ATTACH IF NOT EXISTS'" + get_db_path(db_id) + "'";
-		exec_query(conn, query, worker_id);
+		ExecQuery(conn, query, worker_id);
 	}
 
-	void remove_worker(Connection &conn, const idx_t db_id, const idx_t worker_id) {
+	void RemoveWorker(Connection &conn, const idx_t db_id, const idx_t worker_id) {
 		lock_guard<mutex> lock(mu);
 
 		m[db_id]--;
@@ -143,13 +143,13 @@ public:
 
 		m.erase(db_id);
 		string query = "DETACH " + get_db_name(db_id);
-		exec_query(conn, query, worker_id);
+		ExecQuery(conn, query, worker_id);
 	}
 };
 
 DBPoolMgr db_pool;
 
-void create_tbl(Connection &conn, const idx_t db_id, const idx_t worker_id) {
+void CreateTbl(Connection &conn, const idx_t db_id, const idx_t worker_id) {
 	lock_guard<mutex> lock(db_infos[db_id].mu);
 	auto tbl_id = db_infos[db_id].table_count;
 	db_infos[db_id].tables.emplace_back(TableInfo {NR_INITIAL_ROWS});
@@ -160,8 +160,8 @@ void create_tbl(Connection &conn, const idx_t db_id, const idx_t worker_id) {
 	string create_sql = StringUtil::Format(
 	    "CREATE TABLE %s(i BIGINT PRIMARY KEY, s VARCHAR, ts TIMESTAMP, obj STRUCT(key1 UBIGINT, key2 VARCHAR))",
 	    tbl_path);
-	add_log(worker_id, "; q: " + create_sql);
-	exec_query(conn, create_sql, worker_id);
+	AddLog(worker_id, "; q: " + create_sql);
+	ExecQuery(conn, create_sql, worker_id);
 
 	// Insert initial rows.
 	string insert_sql = "INSERT INTO " + tbl_path +
@@ -173,11 +173,11 @@ void create_tbl(Connection &conn, const idx_t db_id, const idx_t worker_id) {
 	                    "{'key1': range::UBIGINT, 'key2': range::VARCHAR} AS obj "
 	                    "FROM range(" +
 	                    to_string(NR_INITIAL_ROWS) + ")";
-	add_log(worker_id, "; q: " + insert_sql);
-	exec_query(conn, insert_sql, worker_id);
+	AddLog(worker_id, "; q: " + insert_sql);
+	ExecQuery(conn, insert_sql, worker_id);
 }
 
-void lookup(Connection &conn, const idx_t db_id, const idx_t worker_id) {
+void Lookup(Connection &conn, const idx_t db_id, const idx_t worker_id) {
 	unique_lock<mutex> lock(db_infos[db_id].mu);
 	auto max_tbl_id = db_infos[db_id].table_count;
 
@@ -193,10 +193,10 @@ void lookup(Connection &conn, const idx_t db_id, const idx_t worker_id) {
 	// Run the query.
 	auto table_name = get_db_name(db_id) + ".tbl_" + to_string(tbl_id);
 	string query = "SELECT i, s, ts, obj FROM " + table_name + " WHERE i = " + to_string(expected_max_val);
-	add_log(worker_id, "q: " + query);
+	AddLog(worker_id, "q: " + query);
 
 	// Verify the results.
-	auto result = exec_query(conn, query, worker_id);
+	auto result = ExecQuery(conn, query, worker_id);
 	if (result->RowCount() == 0) {
 		Printer::PrintF("FAILURE - No rows returned from query");
 		IS_SUCCESS = false;
@@ -221,11 +221,11 @@ void lookup(Connection &conn, const idx_t db_id, const idx_t worker_id) {
 	}
 }
 
-void append_internal(Connection &conn, const idx_t db_id, const idx_t tbl_id, const idx_t worker_id,
-                     const vector<idx_t> &ids) {
+void AppendInternal(Connection &conn, const idx_t db_id, const idx_t tbl_id, const idx_t worker_id,
+                    const vector<idx_t> &ids) {
 	// Log appender command.
 	auto tbl_str = "tbl_" + to_string(tbl_id);
-	add_log(worker_id, "db: " + get_db_name(db_id) + "; table: " + tbl_str + "; append rows");
+	AddLog(worker_id, "db: " + get_db_name(db_id) + "; table: " + tbl_str + "; append rows");
 
 	try {
 		Appender appender(conn, get_db_name(db_id), DEFAULT_SCHEMA, tbl_str);
@@ -270,17 +270,17 @@ void append_internal(Connection &conn, const idx_t db_id, const idx_t tbl_id, co
 		appender.Close();
 
 	} catch (const std::exception &e) {
-		add_log(worker_id, "Caught exception when using Appender: " + string(e.what()));
+		AddLog(worker_id, "Caught exception when using Appender: " + string(e.what()));
 		IS_SUCCESS = false;
 		return;
 	} catch (...) {
-		add_log(worker_id, "Caught unknown exception when using Appender");
+		AddLog(worker_id, "Caught unknown exception when using Appender");
 		IS_SUCCESS = false;
 		return;
 	}
 }
 
-void append(Connection &conn, const idx_t db_id, const idx_t worker_id) {
+void Append(Connection &conn, const idx_t db_id, const idx_t worker_id) {
 	lock_guard<mutex> lock(db_infos[db_id].mu);
 	auto max_tbl_id = db_infos[db_id].table_count;
 	if (max_tbl_id == 0) {
@@ -296,12 +296,12 @@ void append(Connection &conn, const idx_t db_id, const idx_t worker_id) {
 		ids.push_back(current_num_rows + i);
 	}
 
-	append_internal(conn, db_id, tbl_id, worker_id, ids);
+	AppendInternal(conn, db_id, tbl_id, worker_id, ids);
 	db_infos[db_id].tables[tbl_id].size += append_count;
 }
 
-void delete_internal(Connection &conn, const idx_t db_id, const idx_t tbl_id, const idx_t worker_id,
-                     const vector<idx_t> &ids) {
+void DeleteInternal(Connection &conn, const idx_t db_id, const idx_t tbl_id, const idx_t worker_id,
+                    const vector<idx_t> &ids) {
 	auto tbl_str = "tbl_" + to_string(tbl_id);
 
 	string delete_list;
@@ -314,11 +314,11 @@ void delete_internal(Connection &conn, const idx_t db_id, const idx_t tbl_id, co
 	string delete_sql =
 	    StringUtil::Format("WITH ids (id) AS (VALUES %s) DELETE FROM %s.%s.%s AS t USING ids WHERE t.i = ids.id",
 	                       delete_list, get_db_name(db_id), DEFAULT_SCHEMA, tbl_str);
-	add_log(worker_id, "q: " + delete_sql);
-	exec_query(conn, delete_sql, worker_id);
+	AddLog(worker_id, "q: " + delete_sql);
+	ExecQuery(conn, delete_sql, worker_id);
 }
 
-void apply_changes(Connection &conn, const idx_t db_id, const idx_t worker_id) {
+void ApplyChanges(Connection &conn, const idx_t db_id, const idx_t worker_id) {
 	lock_guard<mutex> lock(db_infos[db_id].mu);
 	auto max_tbl_id = db_infos[db_id].table_count;
 	if (max_tbl_id == 0) {
@@ -345,21 +345,21 @@ void apply_changes(Connection &conn, const idx_t db_id, const idx_t worker_id) {
 
 	// Apply the changes.
 	ACTIVE_TRANSACTION[worker_id] = true;
-	exec_query(conn, "BEGIN", worker_id);
-	delete_internal(conn, db_id, tbl_id, worker_id, ids);
-	append_internal(conn, db_id, tbl_id, worker_id, ids);
+	ExecQuery(conn, "BEGIN", worker_id);
+	DeleteInternal(conn, db_id, tbl_id, worker_id, ids);
+	AppendInternal(conn, db_id, tbl_id, worker_id, ids);
 
 	// Randomly COMMIT or ROLLBACK.
 	auto commit = std::rand() % 2 == 0;
 	if (commit) {
-		exec_query(conn, "COMMIT", worker_id);
+		ExecQuery(conn, "COMMIT", worker_id);
 	} else {
-		exec_query(conn, "ROLLBACK", worker_id);
+		ExecQuery(conn, "ROLLBACK", worker_id);
 	}
 	ACTIVE_TRANSACTION[worker_id] = false;
 }
 
-void describe_tbl(Connection &conn, const idx_t db_id, const idx_t worker_id) {
+void DescribeTbl(Connection &conn, const idx_t db_id, const idx_t worker_id) {
 	unique_lock<mutex> lock(db_infos[db_id].mu);
 	auto max_tbl_id = db_infos[db_id].table_count;
 	if (max_tbl_id == 0) {
@@ -379,11 +379,11 @@ void describe_tbl(Connection &conn, const idx_t db_id, const idx_t worker_id) {
 		    StringUtil::Format("SELECT 1 FROM %s.%s.%s LIMIT 1", get_db_name(db_id), DEFAULT_SCHEMA, tbl_str);
 	}
 
-	add_log(worker_id, "q: " + describe_sql);
-	exec_query(conn, describe_sql, worker_id);
+	AddLog(worker_id, "q: " + describe_sql);
+	ExecQuery(conn, describe_sql, worker_id);
 }
 
-void work_unit(const idx_t worker_id) {
+void WorkUnit(const idx_t worker_id) {
 	auto &conn = *CONNECTIONS.at(worker_id);
 
 	for (idx_t i = 0; i < ITERATION_COUNT; i++) {
@@ -395,41 +395,41 @@ void work_unit(const idx_t worker_id) {
 			idx_t scenario_id = std::rand() % 9;
 			idx_t db_id = std::rand() % DB_COUNT;
 
-			db_pool.add_worker(conn, db_id, worker_id);
+			db_pool.AddWorker(conn, db_id, worker_id);
 
 			switch (scenario_id) {
 			case 0:
-				create_tbl(conn, db_id, worker_id);
+				CreateTbl(conn, db_id, worker_id);
 				break;
 			case 1:
-				lookup(conn, db_id, worker_id);
+				Lookup(conn, db_id, worker_id);
 				break;
 			case 2:
-				append(conn, db_id, worker_id);
+				Append(conn, db_id, worker_id);
 				break;
 			case 3:
-				apply_changes(conn, db_id, worker_id);
+				ApplyChanges(conn, db_id, worker_id);
 				break;
 			case 4:
 			case 5:
 			case 6:
 			case 7:
 			case 8:
-				describe_tbl(conn, db_id, worker_id);
+				DescribeTbl(conn, db_id, worker_id);
 				break;
 			default:
-				add_log(worker_id, "invalid scenario: " + to_string(scenario_id));
+				AddLog(worker_id, "invalid scenario: " + to_string(scenario_id));
 				IS_SUCCESS = false;
 				return;
 			}
-			db_pool.remove_worker(conn, db_id, worker_id);
+			db_pool.RemoveWorker(conn, db_id, worker_id);
 
 		} catch (const std::exception &e) {
-			add_log(worker_id, "Caught exception when running iterations: " + string(e.what()));
+			AddLog(worker_id, "Caught exception when running iterations: " + string(e.what()));
 			IS_SUCCESS = false;
 			return;
 		} catch (...) {
-			add_log(worker_id, "Caught unknown when using running iterations");
+			AddLog(worker_id, "Caught unknown when using running iterations");
 			IS_SUCCESS = false;
 			return;
 		}
@@ -438,7 +438,7 @@ void work_unit(const idx_t worker_id) {
 	--ACTIVE_WORKERS;
 }
 
-void worker_interruptor() {
+void WorkerInterruptor() {
 	while (ACTIVE_WORKERS > 0 || IS_SUCCESS) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
@@ -446,7 +446,7 @@ void worker_interruptor() {
 		auto &conn = *CONNECTIONS.at(worker_id);
 		if (ACTIVE_TRANSACTION[worker_id]) {
 			Printer::PrintF("INTERRUPTING worker %d\n", worker_id);
-			add_log(worker_id, "Interrupting connection");
+			AddLog(worker_id, "Interrupting connection");
 			conn.Interrupt();
 			conn.Rollback();
 		}
@@ -459,23 +459,23 @@ TEST_CASE("Run a concurrent ATTACH/DETACH scenario", "[interquery][.]") {
 	DuckDB db(nullptr);
 	Connection init_conn(db);
 
-	exec_query(init_conn, "SET catalog_error_max_schemas = '0'", 0);
-	exec_query(init_conn, "SET threads = '1'", 0);
-	exec_query(init_conn, "SET storage_compatibility_version = 'latest'", 0);
-	exec_query(init_conn, "CALL enable_logging()", 0);
-	exec_query(init_conn, "SET default_block_size = 16384", 0);
+	ExecQuery(init_conn, "SET catalog_error_max_schemas = '0'", 0);
+	ExecQuery(init_conn, "SET threads = '1'", 0);
+	ExecQuery(init_conn, "SET storage_compatibility_version = 'latest'", 0);
+	ExecQuery(init_conn, "CALL enable_logging()", 0);
+	ExecQuery(init_conn, "SET default_block_size = 16384", 0);
 
 	// Spawn workers.
 	vector<std::thread> workers;
 	for (idx_t worker_id = 0; worker_id < WORKER_COUNT; worker_id++) {
 		auto conn = make_uniq<Connection>(db);
 		CONNECTIONS.push_back(std::move(conn));
-		workers.emplace_back(work_unit, worker_id);
+		workers.emplace_back(WorkUnit, worker_id);
 	}
 
 	// Start the interrupter.
 	if (INTERRUPT_WORKERS) {
-		std::thread thread_interrupt(worker_interruptor);
+		std::thread thread_interrupt(WorkerInterruptor);
 		thread_interrupt.join();
 	}
 
