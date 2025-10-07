@@ -463,7 +463,7 @@ void ParquetWriter::AnalyzeSchema(ColumnDataCollection &buffer, vector<unique_pt
 	}
 }
 
-void ParquetWriter::InitializePreprocessing() {
+void ParquetWriter::InitializePreprocessing(unique_ptr<ParquetWriteTransformData> &transform_data) {
 	if (transform_data) {
 		return;
 	}
@@ -507,7 +507,8 @@ void ParquetWriter::InitializeSchemaElements() {
 	}
 }
 
-void ParquetWriter::PrepareRowGroup(ColumnDataCollection &raw_buffer, PreparedRowGroup &result) {
+void ParquetWriter::PrepareRowGroup(ColumnDataCollection &raw_buffer, PreparedRowGroup &result,
+                                    unique_ptr<ParquetWriteTransformData> &transform_data) {
 	AnalyzeSchema(raw_buffer, column_writers);
 
 	bool requires_transform = false;
@@ -522,7 +523,7 @@ void ParquetWriter::PrepareRowGroup(ColumnDataCollection &raw_buffer, PreparedRo
 
 	reference<ColumnDataCollection> buffer_ref(raw_buffer);
 	if (requires_transform) {
-		InitializePreprocessing();
+		InitializePreprocessing(transform_data);
 		buffer_ref = transform_data->ApplyTransform(raw_buffer);
 	}
 	auto &buffer = buffer_ref.get();
@@ -667,13 +668,13 @@ void ParquetWriter::FlushRowGroup(PreparedRowGroup &prepared) {
 	++num_row_groups;
 }
 
-void ParquetWriter::Flush(ColumnDataCollection &buffer) {
+void ParquetWriter::Flush(ColumnDataCollection &buffer, unique_ptr<ParquetWriteTransformData> &transform_data) {
 	if (buffer.Count() == 0) {
 		return;
 	}
 
 	PreparedRowGroup prepared_row_group;
-	PrepareRowGroup(buffer, prepared_row_group);
+	PrepareRowGroup(buffer, prepared_row_group, transform_data);
 	buffer.Reset();
 
 	FlushRowGroup(prepared_row_group);

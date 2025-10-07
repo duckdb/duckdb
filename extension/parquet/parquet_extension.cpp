@@ -96,34 +96,22 @@ struct ParquetWriteBindData : public TableFunctionData {
 	ParquetVersion parquet_version = ParquetVersion::V1;
 };
 
-struct ParquetWriteGlobalState : public GlobalFunctionData {
-	unique_ptr<ParquetWriter> writer;
-	optional_ptr<const PhysicalOperator> op;
-
-	void LogFlushingRowGroup(const ColumnDataCollection &buffer, const string &reason) {
-		if (!op) {
-			return;
-		}
-		DUCKDB_LOG(writer->GetContext(), PhysicalOperatorLogType, *op, "ParquetWriter", "FlushRowGroup",
-		           {{"file", writer->GetFileName()},
-		            {"rows", to_string(buffer.Count())},
-		            {"size", to_string(buffer.SizeInBytes())},
-		            {"reason", reason}});
+void ParquetWriteGlobalState::LogFlushingRowGroup(const ColumnDataCollection &buffer, const string &reason) {
+	if (!op) {
+		return;
 	}
+	DUCKDB_LOG(writer->GetContext(), PhysicalOperatorLogType, *op, "ParquetWriter", "FlushRowGroup",
+	           {{"file", writer->GetFileName()},
+	            {"rows", to_string(buffer.Count())},
+	            {"size", to_string(buffer.SizeInBytes())},
+	            {"reason", reason}});
+}
 
-	mutex lock;
-	unique_ptr<ColumnDataCollection> combine_buffer;
-};
-
-struct ParquetWriteLocalState : public LocalFunctionData {
-	explicit ParquetWriteLocalState(ClientContext &context, const vector<LogicalType> &types) : buffer(context, types) {
-		buffer.SetPartitionIndex(0); // Makes the buffer manager less likely to spill this data
-		buffer.InitializeAppend(append_state);
-	}
-
-	ColumnDataCollection buffer;
-	ColumnDataAppendState append_state;
-};
+ParquetWriteLocalState::ParquetWriteLocalState(ClientContext &context, const vector<LogicalType> &types)
+    : buffer(context, types) {
+	buffer.SetPartitionIndex(0); // Makes the buffer manager less likely to spill this data
+	buffer.InitializeAppend(append_state);
+}
 
 static void ParquetListCopyOptions(ClientContext &context, CopyOptionsInput &input) {
 	auto &copy_options = input.options;
@@ -388,7 +376,7 @@ static void ParquetWriteSink(ExecutionContext &context, FunctionData &bind_data_
 		global_state.LogFlushingRowGroup(local_state.buffer, reason);
 		// if the chunk collection exceeds a certain size (rows/bytes) we flush it to the parquet file
 		local_state.append_state.current_chunk_state.handles.clear();
-		global_state.writer->Flush(local_state.buffer);
+		global_state.writer->Flush(local_state.buffer, local_state.transform_data);
 		local_state.buffer.InitializeAppend(local_state.append_state);
 	}
 }
@@ -403,7 +391,7 @@ static void ParquetWriteCombine(ExecutionContext &context, FunctionData &bind_da
 	    local_state.buffer.SizeInBytes() >= bind_data.row_group_size_bytes / 2) {
 		// local state buffer is more than half of the row_group_size(_bytes), just flush it
 		global_state.LogFlushingRowGroup(local_state.buffer, "Combine");
-		global_state.writer->Flush(local_state.buffer);
+		global_state.writer->Flush(local_state.buffer, local_state.transform_data);
 		return;
 	}
 
@@ -418,7 +406,7 @@ static void ParquetWriteCombine(ExecutionContext &context, FunctionData &bind_da
 			guard.unlock();
 			global_state.LogFlushingRowGroup(*owned_combine_buffer, "Combine");
 			// Lock free, of course
-			global_state.writer->Flush(*owned_combine_buffer);
+			global_state.writer->Flush(*owned_combine_buffer, global_state.transform_data);
 		}
 		return;
 	}
@@ -432,7 +420,7 @@ static void ParquetWriteFinalize(ClientContext &context, FunctionData &bind_data
 	// flush the combine buffer (if it's there)
 	if (global_state.combine_buffer) {
 		global_state.LogFlushingRowGroup(*global_state.combine_buffer, "Finalize");
-		global_state.writer->Flush(*global_state.combine_buffer);
+		global_state.writer->Flush(*global_state.combine_buffer, global_state.transform_data);
 	}
 
 	// finalize: write any additional metadata to the file here
@@ -654,7 +642,8 @@ static unique_ptr<PreparedBatchData> ParquetWritePrepareBatch(ClientContext &con
                                                               unique_ptr<ColumnDataCollection> collection) {
 	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
 	auto result = make_uniq<ParquetWriteBatchData>();
-	global_state.writer->PrepareRowGroup(*collection, result->prepared_row_group);
+	unique_ptr<ParquetWriteTransformData> transform_data;
+	global_state.writer->PrepareRowGroup(*collection, result->prepared_row_group, global_state.transform_data);
 	return std::move(result);
 }
 

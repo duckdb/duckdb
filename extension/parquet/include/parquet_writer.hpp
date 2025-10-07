@@ -75,6 +75,34 @@ private:
 	DataChunk chunk;
 };
 
+struct ParquetWriteLocalState : public LocalFunctionData {
+public:
+	explicit ParquetWriteLocalState(ClientContext &context, const vector<LogicalType> &types);
+
+public:
+	ColumnDataCollection buffer;
+	ColumnDataAppendState append_state;
+	//! If any of the column writers require a transformation to a different shape, this will be initialized and used
+	unique_ptr<ParquetWriteTransformData> transform_data;
+};
+
+struct ParquetWriteGlobalState : public GlobalFunctionData {
+public:
+	ParquetWriteGlobalState() {
+	}
+
+public:
+	void LogFlushingRowGroup(const ColumnDataCollection &buffer, const string &reason);
+
+public:
+	unique_ptr<ParquetWriter> writer;
+	optional_ptr<const PhysicalOperator> op;
+	mutex lock;
+	unique_ptr<ColumnDataCollection> combine_buffer;
+	//! If any of the column writers require a transformation to a different shape, this will be initialized and used
+	unique_ptr<ParquetWriteTransformData> transform_data;
+};
+
 class ParquetWriter {
 public:
 	ParquetWriter(ClientContext &context, FileSystem &fs, string file_name, vector<LogicalType> types,
@@ -87,9 +115,10 @@ public:
 	~ParquetWriter();
 
 public:
-	void PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGroup &result);
+	void PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGroup &result,
+	                     unique_ptr<ParquetWriteTransformData> &transform_data);
 	void FlushRowGroup(PreparedRowGroup &row_group);
-	void Flush(ColumnDataCollection &buffer);
+	void Flush(ColumnDataCollection &buffer, unique_ptr<ParquetWriteTransformData> &transform_data);
 	void Finalize();
 
 	static duckdb_parquet::Type::type DuckDBTypeToParquetType(const LogicalType &duckdb_type);
@@ -154,7 +183,7 @@ public:
 	void SetWrittenStatistics(CopyFunctionFileStatistics &written_stats);
 	void FlushColumnStats(idx_t col_idx, duckdb_parquet::ColumnChunk &chunk,
 	                      optional_ptr<ColumnWriterStatistics> writer_stats);
-	void InitializePreprocessing();
+	void InitializePreprocessing(unique_ptr<ParquetWriteTransformData> &transform_data);
 	void InitializeSchemaElements();
 
 private:
@@ -193,7 +222,6 @@ private:
 
 	optional_ptr<CopyFunctionFileStatistics> written_stats;
 	unique_ptr<ParquetStatsAccumulator> stats_accumulator;
-	unique_ptr<ParquetWriteTransformData> transform_data;
 };
 
 } // namespace duckdb
