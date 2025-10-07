@@ -130,9 +130,13 @@ public:
 	static hugeint_t Abs(hugeint_t n);
 	// comparison operators
 	static bool Equals(hugeint_t lhs, hugeint_t rhs) {
-		bool lower_equals = lhs.lower == rhs.lower;
-		bool upper_equals = lhs.upper == rhs.upper;
-		return lower_equals && upper_equals;
+		// We'd like to do this here:
+		// bool lower_equals = lhs.lower == rhs.lower;
+		// bool upper_equals = lhs.upper == rhs.upper;
+		// return lower_equals && upper_equals;
+		// But this causes test/issues/general/test_17757.test to fail under GCC 14, presumably due to a compiler bug
+		// So, this will have to do for now
+		return memcmp(&lhs, &rhs, sizeof(hugeint_t)) == 0;
 	}
 
 	static bool NotEquals(hugeint_t lhs, hugeint_t rhs) {
