@@ -14,15 +14,15 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformResetStatement(PEGTrans
 }
 
 // SetAssignment <- VariableAssign VariableList
-vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformSetAssignment(PEGTransformer &transformer,
-                                                                       optional_ptr<ParseResult> parse_result) {
+vector<unique_ptr<ParsedExpression>>
+PEGTransformerFactory::TransformSetAssignment(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr, 1);
 }
 
 // SetSetting <- SettingScope? SettingName
 SettingInfo PEGTransformerFactory::TransformSetSetting(PEGTransformer &transformer,
-                                                                    optional_ptr<ParseResult> parse_result) {
+                                                       optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto &optional_scope_pr = list_pr.Child<OptionalParseResult>(0);
 
@@ -53,7 +53,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformSetTimeZone(PEGTransfor
 
 // SetVariable <- 'VARIABLE' Identifier
 SettingInfo PEGTransformerFactory::TransformSetVariable(PEGTransformer &transformer,
-                                                                     optional_ptr<ParseResult> parse_result) {
+                                                        optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 
 	SettingInfo result;
@@ -79,8 +79,8 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformStandardAssignment(PEGT
 }
 
 // VariableList <- List(Expression)
-vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformVariableList(PEGTransformer &transformer,
-                                                                      optional_ptr<ParseResult> parse_result) {
+vector<unique_ptr<ParsedExpression>>
+PEGTransformerFactory::TransformVariableList(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto expr_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(0));
 	vector<unique_ptr<ParsedExpression>> expressions;

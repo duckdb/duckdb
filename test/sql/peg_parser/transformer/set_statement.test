@@ -1,4 +1,4 @@
-# name: test/sql/peg_parser/transformer/use.test
+# name: test/sql/peg_parser/transformer/set_statement.test
 # description: Test lambda syntax in peg parser
 # group: [transformer]
 
