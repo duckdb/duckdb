@@ -175,9 +175,7 @@ void ListColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> &sch
 	}
 	schemas.push_back(std::move(optional_element));
 
-	//! When we're describing a MAP, we skip the dummy "list" element
 	if (type.id() != LogicalTypeId::MAP) {
-		// then a REPEATED element
 		duckdb_parquet::SchemaElement repeated_element;
 		repeated_element.repetition_type = FieldRepetitionType::REPEATED;
 		repeated_element.__isset.num_children = true;
@@ -187,10 +185,10 @@ void ListColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> &sch
 		repeated_element.name = "list";
 		schemas.push_back(std::move(repeated_element));
 	} else {
+		//! When we're describing a MAP, we skip the dummy "list" element
 		//! Instead, the "key_value" struct will be marked as REPEATED
 		D_ASSERT(GetChildWriter().Schema().repetition_type == FieldRepetitionType::REPEATED);
 	}
-
 	GetChildWriter().FinalizeSchema(schemas);
 }
 
