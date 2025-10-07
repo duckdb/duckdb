@@ -287,11 +287,15 @@ void Vector::Dictionary(idx_t dictionary_size, const SelectionVector &sel, idx_t
 }
 
 void Vector::Dictionary(Vector &dict, idx_t dictionary_size, const SelectionVector &sel, idx_t count) {
-	if (DictionaryVector::CanCacheHashes(dict.GetType()) && !dict.cached_hashes) {
-		// Create an empty hash vector for this dictionary, potentially to be used for caching hashes later
-		// This needs to happen here, as we need to add "cached_hashes" to the original input Vector "dict"
-		dict.cached_hashes = make_buffer<VectorChildBuffer>(Vector(LogicalType::HASH, false, false, 0));
+	if (DictionaryVector::CanCacheHashes(dict.GetType())) {
+		lock_guard<mutex> guard(dict.cached_hashes_lock);
+		if (!dict.cached_hashes) {
+			// Create an empty hash vector for this dictionary, potentially to be used for caching hashes later
+			// This needs to happen here, as we need to add "cached_hashes" to the original input Vector "dict"
+			dict.cached_hashes = make_buffer<VectorChildBuffer>(Vector(LogicalType::HASH, false, false, 0));
+		}
 	}
+
 	Reference(dict);
 	Dictionary(dictionary_size, sel, count);
 }
@@ -1930,7 +1934,7 @@ const Vector &DictionaryVector::GetCachedHashes(Vector &input) {
 	D_ASSERT(CanCacheHashes(input));
 	auto &dictionary = Child(input);
 
-	lock_guard<mutex> lock(dictionary.cached_hashes_mutex);
+	lock_guard<mutex> guard(dictionary.cached_hashes_lock);
 	auto &dictionary_hashes = dictionary.cached_hashes->Cast<VectorChildBuffer>().data;
 
 	if (!dictionary_hashes.data) {

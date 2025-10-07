@@ -312,7 +312,7 @@ protected:
 	buffer_ptr<VectorBuffer> cached_hashes;
 	//! Use a mutex to make the cached hashes getter thread-safe. This is necessary as the hashes are computed lazily.
 	//! In general, read-only operations on Vector should be thread-safe after the Vector is initialized.
-	mutable mutex cached_hashes_mutex;
+	mutable mutex cached_hashes_lock;
 };
 
 //! The DictionaryBuffer holds a selection vector

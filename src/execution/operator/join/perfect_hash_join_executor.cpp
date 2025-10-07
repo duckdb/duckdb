@@ -303,8 +303,8 @@ OperatorResultType PerfectHashJoinExecutor::ProbePerfectHashTable(ExecutionConte
 		auto &result_vector = result.data[lhs_output_columns.ColumnCount() + i];
 		D_ASSERT(result_vector.GetType() == ht.layout_ptr->GetTypes()[ht.output_columns[i]]);
 		auto &build_vec = perfect_hash_table[i];
-		result_vector.Reference(build_vec);
-		result_vector.Slice(state.build_sel_vec, probe_sel_count);
+		result_vector.Dictionary(build_vec, ht.Count(), state.build_sel_vec, probe_sel_count);
+		DictionaryVector::SetDictionaryId(result_vector, to_string(CastPointerToValue(&build_vec)));
 	}
 	return OperatorResultType::NEED_MORE_INPUT;
 }
