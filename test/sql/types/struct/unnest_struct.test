@@ -31,7 +31,7 @@ SELECT UNNEST({'a': 42, 'b': {'c': {'x': 4}, 'd': 99}}, max_depth := 2)
 42	{'x': 4}	99
 
 query III
-SELECT a, c, d FROM (SELECT UNNEST({'a': 42, 'b': {'c': 88, 'd': 99}}, recursive := true))
+SELECT a, "b.c", "b.d" FROM (SELECT UNNEST({'a': 42, 'b': {'c': 88, 'd': 99}}, recursive := true))
 ----
 42	88	99
 
@@ -96,7 +96,7 @@ SELECT UNNEST({'a': 44, 'b': 88}), UNNEST([[1, 2, 3], [4, 5]], recursive := true
 
 # duplicate names
 query III
-SELECT a, "a_1", b FROM (SELECT UNNEST({'a': 42, 'b': {'a': 88, 'b': 99}}, recursive := true))
+SELECT a, "b.a", "b.b" FROM (SELECT UNNEST({'a': 42, 'b': {'a': 88, 'b': 99}}, recursive := true))
 ----
 42	88	99
 
