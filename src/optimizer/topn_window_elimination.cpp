@@ -358,7 +358,7 @@ bool TopNWindowElimination::CanOptimize(LogicalOperator &op) {
 		return false;
 	}
 
-	const auto &filter_comparison = filter.expressions[0]->Cast<BoundComparisonExpression>();
+	auto &filter_comparison = filter.expressions[0]->Cast<BoundComparisonExpression>();
 	if (filter_comparison.right->type != ExpressionType::VALUE_CONSTANT) {
 		return false;
 	}
@@ -373,29 +373,36 @@ bool TopNWindowElimination::CanOptimize(LogicalOperator &op) {
 	if (filter_comparison.left->type != ExpressionType::BOUND_COLUMN_REF) {
 		return false;
 	}
-	const auto &filter_reference = filter_comparison.left->Cast<BoundColumnRefExpression>();
-	idx_t filter_table_idx = filter_reference.binding.table_index;
-	idx_t filter_column_idx = filter_reference.binding.column_index;
+	VisitExpression(&filter_comparison.left);
 
 	auto *child = filter.children[0].get();
 	while (child->type == LogicalOperatorType::LOGICAL_PROJECTION) {
-		const auto &projection = child->Cast<LogicalProjection>();
-		if (projection.table_index == filter_table_idx) {
-			if (projection.expressions[filter_column_idx]->type != ExpressionType::BOUND_COLUMN_REF) {
-				return false;
-			}
-			const auto &column_ref = projection.expressions[filter_column_idx]->Cast<BoundColumnRefExpression>();
-			filter_table_idx = column_ref.binding.table_index;
-			filter_column_idx = column_ref.binding.column_index;
+		auto &projection = child->Cast<LogicalProjection>();
+		if (column_references.size() != 1) {
+			column_references.clear();
+			return false;
 		}
+
+		const auto current_column_ref = column_references.begin()->first;
+		column_references.clear();
+		D_ASSERT(current_column_ref.table_index == projection.table_index);
+		VisitExpression(&projection.expressions[current_column_ref.column_index]);
+
 		child = child->children[0].get();
 	}
+
+	if (column_references.size() != 1) {
+		column_references.clear();
+		return false;
+	}
+	const auto filter_col_idx = column_references.begin()->first.table_index;
+	column_references.clear();
 
 	if (child->type != LogicalOperatorType::LOGICAL_WINDOW) {
 		return false;
 	}
 	const auto &window = child->Cast<LogicalWindow>();
-	if (window.window_index != filter_table_idx) {
+	if (window.window_index != filter_col_idx) {
 		return false;
 	}
 	if (window.expressions.size() != 1) {
@@ -442,6 +449,7 @@ vector<unique_ptr<Expression>> TopNWindowElimination::GenerateAggregateArgs(cons
 	const auto window_child_bindings = window.children[0]->GetColumnBindings();
 	auto &window_expr = window.expressions[0]->Cast<BoundWindowExpression>();
 
+	// Store group column bindings in order of appearance to recreate column order in group_idxs
 	vector<ColumnBinding> group_bindings;
 	for (auto &expr : window_expr.partitions) {
 		VisitExpression(&expr);
@@ -461,7 +469,7 @@ vector<unique_ptr<Expression>> TopNWindowElimination::GenerateAggregateArgs(cons
 			generate_row_ids = true;
 			continue;
 		}
-		const auto column_id = to_string(binding.column_index);
+		auto column_id = to_string(binding.column_index); // Use idx as struct pack/extract identifier
 		auto column_type = window_child_types[binding.column_index];
 		const auto &column_binding = window_child_bindings[binding.column_index];
 
@@ -469,11 +477,11 @@ vector<unique_ptr<Expression>> TopNWindowElimination::GenerateAggregateArgs(cons
 	}
 
 	if (aggregate_args.size() == 1) {
+		// If we only project the aggregate value itself, we do not need it as an arg
 		VisitExpression(&window_expr.orders[0].expression);
-
 		const auto aggregate_value_binding = column_references.begin()->first;
 		column_references.clear();
-		// If we only project the aggregate value without any further projections, we do not need arg_max/arg_min
+
 		if (window_expr.orders[0].expression->type == ExpressionType::BOUND_COLUMN_REF &&
 		    aggregate_args[0]->Cast<BoundColumnRefExpression>().binding == aggregate_value_binding) {
 			return {};
@@ -491,14 +499,12 @@ vector<ColumnBinding> TopNWindowElimination::TraverseProjectionBindings(const st
 	while (op->type == LogicalOperatorType::LOGICAL_PROJECTION) {
 		auto &projection = op->Cast<LogicalProjection>();
 
-		for (idx_t i = 0; i < old_bindings.size(); i++) {
+		for (idx_t i = 0; i < new_bindings.size(); i++) {
 			auto &new_binding = new_bindings[i];
-			if (new_binding.table_index == projection.table_index) {
-				D_ASSERT(projection.expressions[new_binding.column_index]->type == ExpressionType::BOUND_COLUMN_REF);
-				auto &column_ref = projection.expressions[new_binding.column_index]->Cast<BoundColumnRefExpression>();
-				new_binding.table_index = column_ref.binding.table_index;
-				new_binding.column_index = column_ref.binding.column_index;
-			}
+			D_ASSERT(new_binding.table_index == projection.table_index);
+			VisitExpression(&projection.expressions[new_binding.column_index]);
+			new_binding = column_references.begin()->first;
+			column_references.clear();
 		}
 		op = op->children[0].get();
 	}
