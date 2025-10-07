@@ -74,7 +74,7 @@ BoundStatement Binder::BindWithCTE(T &statement) {
 		auto &cte_entry = cte.second;
 		auto mat_cte = make_uniq<CTENode>();
 		mat_cte->ctename = cte.first;
-		mat_cte->query = cte_entry->query->node->Copy();
+		mat_cte->query = std::move(cte_entry->query->node);
 		mat_cte->aliases = cte_entry->aliases;
 		mat_cte->materialized = cte_entry->materialized;
 		materialized_ctes.push_back(std::move(mat_cte));
@@ -84,7 +84,6 @@ BoundStatement Binder::BindWithCTE(T &statement) {
 	while (!materialized_ctes.empty()) {
 		unique_ptr<CTENode> node_result;
 		node_result = std::move(materialized_ctes.back());
-		node_result->cte_map = cte_map.Copy();
 		node_result->child = std::move(cte_root);
 		cte_root = std::move(node_result);
 		materialized_ctes.pop_back();
