@@ -84,7 +84,6 @@ void VariantUtils::FindChildValues(const UnifiedVariantVectorData &variant, cons
 
 		auto &nested_data_entry = nested_data[i];
 		if (nested_data_entry.is_null) {
-			res_validity.SetInvalid(i);
 			continue;
 		}
 		if (component.lookup_mode == VariantChildLookupMode::BY_INDEX) {

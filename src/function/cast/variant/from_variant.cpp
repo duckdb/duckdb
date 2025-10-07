@@ -371,14 +371,12 @@ static bool ConvertVariantToStruct(FromVariantConversionData &conversion_data, V
 		if (!lookup_validity.AllValid()) {
 			optional_idx nested_index;
 			for (idx_t i = 0; i < count; i++) {
-				if (!lookup_validity.RowIsValid(i) && !child_data[i].is_null) {
+				if (!lookup_validity.RowIsValid(i)) {
 					nested_index = i;
 					break;
 				}
 			}
-			if (!nested_index.IsValid()) {
-				continue;
-			}
+			D_ASSERT(nested_index.IsValid());
 			auto row_index = row.IsValid() ? row.GetIndex() : nested_index.GetIndex();
 			auto object_keys =
 			    VariantUtils::GetObjectKeys(conversion_data.variant, row_index, child_data[nested_index.GetIndex()]);
