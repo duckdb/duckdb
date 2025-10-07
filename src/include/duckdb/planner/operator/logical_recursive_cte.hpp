@@ -36,8 +36,7 @@ public:
 	vector<unique_ptr<Expression>> key_targets;
 	vector<unique_ptr<Expression>> payload_aggregates;
 	vector<LogicalType> internal_types, result_types;
-	// BTODO: remove, nee another way to resolve result idx for payload aggregates
-	vector<string> names;
+	unordered_map<idx_t, unique_ptr<Expression>> payload_aggregate_dest_map;
 
 public:
 	InsertionOrderPreservingMap<string> ParamsToString() const override;

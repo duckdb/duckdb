@@ -612,8 +612,8 @@
       },
       {
         "id": 209,
-        "name": "names",
-        "type": "vector<string>"
+        "name": "payload_aggregate_dest_map",
+        "type": "unordered_map<idx_t, Expression*>"
       }
     ]
   },

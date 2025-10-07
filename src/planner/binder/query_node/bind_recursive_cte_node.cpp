@@ -76,12 +76,13 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 	}
 
 	// Bind user-defined aggregates
-	for (auto &expr : statement.payload_aggregates) {
+	for (idx_t payload_idx = 0; payload_idx < statement.payload_aggregates.size(); payload_idx++) {
+		auto& expr = statement.payload_aggregates[payload_idx];
 		D_ASSERT(expr->type == ExpressionType::FUNCTION);
-		auto &func_expr = expr->Cast<FunctionExpression>();
+		auto& func_expr = expr->Cast<FunctionExpression>();
 
 		// Look up the aggregate function in the catalog
-		auto &func = Catalog::GetSystemCatalog(context).GetEntry<AggregateFunctionCatalogEntry>(context, DEFAULT_SCHEMA,
+		auto& func = Catalog::GetSystemCatalog(context).GetEntry<AggregateFunctionCatalogEntry>(context, DEFAULT_SCHEMA,
 																								func_expr.function_name);
 		vector<LogicalType> aggregation_input_types;
 		vector<unique_ptr<Expression>> bound_children;
@@ -92,26 +93,26 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 			bound_children.push_back(std::move(bound_child));
 		}
 
-		// BTODO: change payload idx determination
-		auto& alias = func_expr.GetAlias();
 		idx_t aggregate_idx;
+		// If user provided an alias, prioritize that.
+		// Otherwise, we try to infer the target column from the first argument
 		if (func_expr.HasAlias()) {
-			bool found = false;
-			for (idx_t i = 0; i < result->names.size(); i++) {
-				if (result->names[i] == alias) {
-					aggregate_idx = i;
-					found = true;
-					break;
-				}
-			}
-			if (!found) {
+			auto names_iter = find(result->names.begin(), result->names.end(), func_expr.GetAlias());
+			if (names_iter == result->names.end()) {
 				throw BinderException(expr->GetQueryLocation(),
-				                      "Could not find column with name '%s' to bind aggregate to", alias);
+				                      "Could not find column with name '%s' to bind aggregate to.",
+				                      func_expr.GetAlias());
 			}
+			aggregate_idx = NumericCast<idx_t>(std::distance(result->names.begin(), names_iter));
+			// Create a new bound column reference for the target column
+			result->payload_aggregate_dest_map[payload_idx] =
+			    make_uniq<BoundColumnRefExpression>(result->types[aggregate_idx],
+			                                        ColumnBinding(result->setop_index, aggregate_idx));
 		} else {
 			if (bound_children[0]->type != ExpressionType::BOUND_COLUMN_REF) {
+				// No alias and no way to infer target column through first argument
 				throw BinderException(expr->GetQueryLocation(),
-				                      "Payload aggregate must be a column reference or have an alias");
+				                      "An aggregate must either have a column reference or an alias.");
 			}
 			aggregate_idx = bound_children[0]->Cast<BoundColumnRefExpression>().binding.column_index;
 		}
@@ -128,7 +129,6 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 		auto aggregate = function_binder.BindAggregateFunction(std::move(best_function), std::move(bound_children),
 		                                                       nullptr, AggregateType::NON_DISTINCT);
 
-		aggregate->SetAlias(func_expr.GetAlias());
 		if (column_references.find(aggregate_idx) != column_references.end()) {
 			throw BinderException(func_expr.GetQueryLocation(),
 			                      "Column '%s' referenced multiple times in recursive CTE aggregates",

@@ -155,6 +155,9 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		for (auto &expr : rec.payload_aggregates) {
 			VisitExpression(&expr);
 		}
+		for (auto &expr : rec.payload_aggregate_dest_map) {
+			VisitExpression(&expr.second);
+		}
 		types = op.types;
 		return;
 	}
