@@ -51,7 +51,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformSetTimeZone(PEGTransfor
 	throw NotImplementedException("Rule 'SetTimeZone' has not been implemented yet");
 }
 
-// SetVariable <- 'VARIABLE' Identifier
+// SetVariable <- VariableScope Identifier
 SettingInfo PEGTransformerFactory::TransformSetVariable(PEGTransformer &transformer,
                                                         optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();

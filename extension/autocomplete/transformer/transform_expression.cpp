@@ -469,6 +469,12 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformLiteralExpression(P
 	return transformer.Transform<unique_ptr<ParsedExpression>>(matched_rule_result.result);
 }
 
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformConstantLiteral(PEGTransformer &transformer,
+                                                                             optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return make_uniq<ConstantExpression>(transformer.TransformEnum<Value>(list_pr.Child<ChoiceParseResult>(0).result));
+}
+
 // // MapExpression <- 'MAP' StructExpression
 // unique_ptr<SQLStatement> PEGTransformerFactory::TransformMapExpression(PEGTransformer &transformer,
 //                                                                        optional_ptr<ParseResult> parse_result) {

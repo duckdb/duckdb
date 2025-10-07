@@ -190,7 +190,8 @@ namespace duckdb {
 // }
 
 // NumberLiteral <- < [+-]?[0-9]*([.][0-9]*)? >
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformNumberLiteral(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformNumberLiteral(PEGTransformer &transformer,
+                                                                           optional_ptr<ParseResult> parse_result) {
 	auto literal_pr = parse_result->Cast<NumberParseResult>();
 	string_t str_val(literal_pr.number);
 	bool try_cast_as_integer = true;
@@ -238,7 +239,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformNumberLiteral(PEGTr
 	}
 	idx_t decimal_offset = literal_pr.number[0] == '-' ? 3 : 2;
 	if (try_cast_as_decimal && decimal_position.IsValid() &&
-		str_val.GetSize() - num_underscores < Decimal::MAX_WIDTH_DECIMAL + decimal_offset) {
+	    str_val.GetSize() - num_underscores < Decimal::MAX_WIDTH_DECIMAL + decimal_offset) {
 		// figure out the width/scale based on the decimal position
 		auto width = NumericCast<uint8_t>(str_val.GetSize() - 1 - num_underscores);
 		auto scale = NumericCast<uint8_t>(width - decimal_position.GetIndex() + num_integer_underscores);
@@ -304,7 +305,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformNumberLiteral(PEGTr
 //
 // // ReservedFunctionName <- Identifier
 // unique_ptr<SQLStatement> PEGTransformerFactory::TransformReservedFunctionName(PEGTransformer &transformer,
-//                                                                               optional_ptr<ParseResult> parse_result) {
+//                                                                               optional_ptr<ParseResult> parse_result)
+//                                                                               {
 // 	auto &list_pr = parse_result->Cast<ListParseResult>();
 // 	throw NotImplementedException("Rule 'ReservedFunctionName' has not been implemented yet");
 // }
@@ -397,14 +399,14 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformNumberLiteral(PEGTr
 // 	auto &list_pr = parse_result->Cast<ListParseResult>();
 // 	throw NotImplementedException("Rule 'SimpleType' has not been implemented yet");
 // }
-//
-// // StringLiteral <- '\'' [^\']* '\''
-// unique_ptr<SQLStatement> PEGTransformerFactory::TransformStringLiteral(PEGTransformer &transformer,
-//                                                                        optional_ptr<ParseResult> parse_result) {
-// 	auto &list_pr = parse_result->Cast<ListParseResult>();
-// 	throw NotImplementedException("Rule 'StringLiteral' has not been implemented yet");
-// }
-//
+
+// StringLiteral <- '\'' [^\']* '\''
+string PEGTransformerFactory::TransformStringLiteral(PEGTransformer &transformer,
+                                                     optional_ptr<ParseResult> parse_result) {
+	auto &string_literal_pr = parse_result->Cast<StringLiteralParseResult>();
+	return string_literal_pr.result;
+}
+
 // // TableFunctionName <- Identifier
 // unique_ptr<SQLStatement> PEGTransformerFactory::TransformTableFunctionName(PEGTransformer &transformer,
 //                                                                            optional_ptr<ParseResult> parse_result) {

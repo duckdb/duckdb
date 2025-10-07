@@ -189,7 +189,7 @@ private:
 	// &transformer, optional_ptr<ParseResult> parse_result); static unique_ptr<SQLStatement>
 	// TransformMonthKeyword(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformNumberLiteral(PEGTransformer &transformer,
-	                                                       optional_ptr<ParseResult> parse_result);
+	                                                           optional_ptr<ParseResult> parse_result);
 	// static unique_ptr<SQLStatement> TransformNumericType(PEGTransformer &transformer, optional_ptr<ParseResult>
 	// parse_result); static unique_ptr<SQLStatement> TransformPragmaName(PEGTransformer &transformer,
 	// optional_ptr<ParseResult> parse_result); static unique_ptr<SQLStatement>
@@ -213,8 +213,9 @@ private:
 	// &transformer, optional_ptr<ParseResult> parse_result); static unique_ptr<SQLStatement>
 	// TransformSettingName(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result); static
 	// unique_ptr<SQLStatement> TransformSimpleType(PEGTransformer &transformer, optional_ptr<ParseResult>
-	// parse_result); static unique_ptr<SQLStatement> TransformStringLiteral(PEGTransformer &transformer,
-	// optional_ptr<ParseResult> parse_result); static unique_ptr<SQLStatement>
+	// parse_result);
+	static string TransformStringLiteral(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	// static unique_ptr<SQLStatement>
 	// TransformTableFunctionName(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result); static
 	// unique_ptr<SQLStatement> TransformTableName(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	// static unique_ptr<SQLStatement> TransformTimeOrTimestamp(PEGTransformer &transformer, optional_ptr<ParseResult>
@@ -294,6 +295,8 @@ private:
 	//                                                       optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformExpression(PEGTransformer &transformer,
 	                                                        optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformConstantLiteral(PEGTransformer &transformer,
+	                                                             optional_ptr<ParseResult> parse_result);
 	// static unique_ptr<SQLStatement> TransformExtractExpression(PEGTransformer &transformer,
 	//                                                            optional_ptr<ParseResult> parse_result);
 	// static unique_ptr<SQLStatement> TransformFilterClause(PEGTransformer &transformer,
