@@ -370,6 +370,9 @@ bool TopNWindowElimination::CanOptimize(LogicalOperator &op) {
 		return false;
 	}
 
+	if (filter_comparison.left->type != ExpressionType::BOUND_COLUMN_REF) {
+		return false;
+	}
 	const auto &filter_reference = filter_comparison.left->Cast<BoundColumnRefExpression>();
 	idx_t filter_table_idx = filter_reference.binding.table_index;
 	idx_t filter_column_idx = filter_reference.binding.column_index;
