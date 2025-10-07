@@ -607,8 +607,11 @@ void AsOfProbeBuffer::ResolveJoin(bool *found_match, idx_t *matches) {
 		return;
 	}
 
-	BLOCKS_ITERATOR right_key(*right_itr);
+	Repin(*left_itr);
 	BLOCKS_ITERATOR left_key(*left_itr);
+
+	Repin(*right_itr);
+	BLOCKS_ITERATOR right_key(*right_itr);
 
 	const auto count = lhs_payload.size();
 	const auto left_base = lhs_scanner->Base();
