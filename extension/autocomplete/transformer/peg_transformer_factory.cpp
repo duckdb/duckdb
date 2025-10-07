@@ -72,9 +72,12 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	REGISTER_TRANSFORM(TransformSetStatement);
 	REGISTER_TRANSFORM(TransformSetTimeZone);
 	REGISTER_TRANSFORM(TransformSetVariable);
-	REGISTER_TRANSFORM(TransformSettingScope);
 	REGISTER_TRANSFORM(TransformStandardAssignment);
-	REGISTER_TRANSFORM(TransformVariableAssign);
 	REGISTER_TRANSFORM(TransformVariableList);
+
+	RegisterEnum<SetScope>("LocalScope", SetScope::LOCAL);
+	RegisterEnum<SetScope>("GlobalScope", SetScope::GLOBAL);
+	RegisterEnum<SetScope>("SessionScope", SetScope::SESSION);
+	RegisterEnum<SetScope>("VariableScope", SetScope::VARIABLE);
 }
 } // namespace duckdb
