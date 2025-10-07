@@ -172,8 +172,7 @@ private:
 	vector<unique_ptr<Binding>> bindings_list;
 	//! The set of columns used in USING join conditions
 	case_insensitive_map_t<reference_set_t<UsingColumnSet>> using_columns;
-
 	//! The set of CTE bindings
-	case_insensitive_map_t<shared_ptr<Binding>> cte_bindings;
+	case_insensitive_map_t<unique_ptr<Binding>> cte_bindings;
 };
 } // namespace duckdb

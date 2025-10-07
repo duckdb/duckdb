@@ -710,7 +710,7 @@ void BindContext::AddGenericBinding(idx_t index, const string &alias, const vect
 
 void BindContext::AddCTEBinding(idx_t index, const string &alias, const vector<string> &names,
                                 const vector<LogicalType> &types, bool using_key) {
-	auto binding = make_shared_ptr<CTEBinding>(BindingAlias(alias), types, names, index);
+	auto binding = make_uniq<CTEBinding>(BindingAlias(alias), types, names, index);
 
 	if (cte_bindings.find(alias) != cte_bindings.end()) {
 		throw BinderException("Duplicate CTE binding \"%s\" in query!", alias);
@@ -719,7 +719,7 @@ void BindContext::AddCTEBinding(idx_t index, const string &alias, const vector<s
 
 	if (using_key) {
 		auto recurring_alias = "recurring." + alias;
-		cte_bindings[recurring_alias] = make_shared_ptr<CTEBinding>(BindingAlias(recurring_alias), types, names, index);
+		cte_bindings[recurring_alias] = make_uniq<CTEBinding>(BindingAlias(recurring_alias), types, names, index);
 	}
 }
 
