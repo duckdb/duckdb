@@ -160,6 +160,21 @@ private:
 	idx_t delim_index;
 };
 
+struct GlobalBinderState {
+	//! The count of bound_tables
+	idx_t bound_tables = 0;
+	//! Statement properties
+	StatementProperties prop;
+	//! Binding mode
+	BindingMode mode = BindingMode::STANDARD_BINDING;
+	//! Table names extracted for BindingMode::EXTRACT_NAMES or BindingMode::EXTRACT_QUALIFIED_NAMES.
+	unordered_set<string> table_names;
+	//! Replacement Scans extracted for BindingMode::EXTRACT_REPLACEMENT_SCANS
+	case_insensitive_map_t<unique_ptr<TableRef>> replacement_scans;
+	//! Using column sets
+	vector<unique_ptr<UsingColumnSet>> using_column_sets;
+};
+
 //! Bind the parsed query tree to the actual columns present in the catalog.
 /*!
   The binder is responsible for binding tables and columns to actual physical
@@ -310,10 +325,10 @@ public:
 private:
 	//! The parent binder (if any)
 	shared_ptr<Binder> parent;
+	//! Global binder state
+	shared_ptr<GlobalBinderState> global_binder_state;
 	//! The vector of active binders
 	vector<reference<ExpressionBinder>> active_binders;
-	//! The count of bound_tables
-	idx_t bound_tables;
 	//! Whether or not the binder has any unplanned dependent joins that still need to be planned/flattened
 	bool has_unplanned_dependent_joins = false;
 	//! Whether or not outside dependent joins have been planned and flattened
@@ -324,28 +339,16 @@ private:
 	bool can_contain_nulls = false;
 	//! The root statement of the query that is currently being parsed
 	optional_ptr<SQLStatement> root_statement;
-	//! Binding mode
-	BindingMode mode = BindingMode::STANDARD_BINDING;
-	//! Table names extracted for BindingMode::EXTRACT_NAMES or BindingMode::EXTRACT_QUALIFIED_NAMES.
-	unordered_set<string> table_names;
-	//! Replacement Scans extracted for BindingMode::EXTRACT_REPLACEMENT_SCANS
-	case_insensitive_map_t<unique_ptr<TableRef>> replacement_scans;
 	//! The set of bound views
 	reference_set_t<ViewCatalogEntry> bound_views;
 	//! Used to retrieve CatalogEntry's
 	CatalogEntryRetriever entry_retriever;
 	//! Unnamed subquery index
 	idx_t unnamed_subquery_index = 1;
-	//! Statement properties
-	StatementProperties prop;
-	//! Root binder
-	Binder &root_binder;
 	//! Binder depth
 	idx_t depth;
 
 private:
-	//! Get the root binder (binder with no parent)
-	Binder &GetRootBinder();
 	//! Determine the depth of the binder
 	idx_t GetBinderDepth() const;
 	//! Increase the depth of the binder

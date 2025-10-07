@@ -8,7 +8,7 @@ namespace duckdb {
 BoundStatement Binder::Bind(PrepareStatement &stmt) {
 	Planner prepared_planner(context);
 	auto prepared_data = prepared_planner.PrepareSQLStatement(std::move(stmt.statement));
-	this->bound_tables = prepared_planner.binder->bound_tables;
+	global_binder_state->bound_tables = prepared_planner.binder->global_binder_state->bound_tables;
 
 	if (prepared_planner.properties.always_require_rebind) {
 		// we always need to rebind - don't keep the plan around

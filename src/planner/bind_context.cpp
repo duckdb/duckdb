@@ -77,10 +77,6 @@ void BindContext::AddUsingBinding(const string &column_name, UsingColumnSet &set
 	using_columns[column_name].insert(set);
 }
 
-void BindContext::AddUsingBindingSet(unique_ptr<UsingColumnSet> set) {
-	using_column_sets.push_back(std::move(set));
-}
-
 optional_ptr<UsingColumnSet> BindContext::GetUsingBinding(const string &column_name) {
 	auto entry = using_columns.find(column_name);
 	if (entry == using_columns.end()) {

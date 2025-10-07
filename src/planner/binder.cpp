@@ -28,10 +28,6 @@
 
 namespace duckdb {
 
-Binder &Binder::GetRootBinder() {
-	return root_binder;
-}
-
 idx_t Binder::GetBinderDepth() const {
 	return depth;
 }
@@ -50,8 +46,9 @@ shared_ptr<Binder> Binder::CreateBinder(ClientContext &context, optional_ptr<Bin
 }
 
 Binder::Binder(ClientContext &context, shared_ptr<Binder> parent_p, BinderType binder_type)
-    : context(context), bind_context(*this), parent(std::move(parent_p)), bound_tables(0), binder_type(binder_type),
-      entry_retriever(context), root_binder(parent ? parent->GetRootBinder() : *this),
+    : context(context), bind_context(*this), parent(std::move(parent_p)), binder_type(binder_type),
+      entry_retriever(context),
+      global_binder_state(parent ? parent->global_binder_state : make_shared_ptr<GlobalBinderState>()),
       depth(parent ? parent->GetBinderDepth() : 1) {
 	IncreaseDepth();
 	if (parent) {
@@ -324,13 +321,11 @@ void Binder::AddBoundView(ViewCatalogEntry &view) {
 }
 
 idx_t Binder::GenerateTableIndex() {
-	auto &root_binder = GetRootBinder();
-	return root_binder.bound_tables++;
+	return global_binder_state->bound_tables++;
 }
 
 StatementProperties &Binder::GetStatementProperties() {
-	auto &root_binder = GetRootBinder();
-	return root_binder.prop;
+	return global_binder_state->prop;
 }
 
 void Binder::PushExpressionBinder(ExpressionBinder &binder) {
@@ -365,8 +360,7 @@ vector<reference<ExpressionBinder>> &Binder::GetActiveBinders() {
 }
 
 void Binder::AddUsingBindingSet(unique_ptr<UsingColumnSet> set) {
-	auto &root_binder = GetRootBinder();
-	root_binder.bind_context.AddUsingBindingSet(std::move(set));
+	global_binder_state->using_column_sets.push_back(std::move(set));
 }
 
 void Binder::MoveCorrelatedExpressions(Binder &other) {
@@ -414,13 +408,11 @@ optional_ptr<Binding> Binder::GetMatchingBinding(const string &catalog_name, con
 }
 
 void Binder::SetBindingMode(BindingMode mode) {
-	auto &root_binder = GetRootBinder();
-	root_binder.mode = mode;
+	global_binder_state->mode = mode;
 }
 
 BindingMode Binder::GetBindingMode() {
-	auto &root_binder = GetRootBinder();
-	return root_binder.mode;
+	return global_binder_state->mode;
 }
 
 void Binder::SetCanContainNulls(bool can_contain_nulls_p) {
@@ -433,30 +425,26 @@ void Binder::SetAlwaysRequireRebind() {
 }
 
 void Binder::AddTableName(string table_name) {
-	auto &root_binder = GetRootBinder();
-	root_binder.table_names.insert(std::move(table_name));
+	global_binder_state->table_names.insert(std::move(table_name));
 }
 
 void Binder::AddReplacementScan(const string &table_name, unique_ptr<TableRef> replacement) {
-	auto &root_binder = GetRootBinder();
-	auto it = root_binder.replacement_scans.find(table_name);
+	auto it = global_binder_state->replacement_scans.find(table_name);
 	replacement->column_name_alias.clear();
 	replacement->alias.clear();
-	if (it == root_binder.replacement_scans.end()) {
-		root_binder.replacement_scans[table_name] = std::move(replacement);
+	if (it == global_binder_state->replacement_scans.end()) {
+		global_binder_state->replacement_scans[table_name] = std::move(replacement);
 	} else {
 		// A replacement scan by this name was previously registered, we can just use it
 	}
 }
 
 const unordered_set<string> &Binder::GetTableNames() {
-	auto &root_binder = GetRootBinder();
-	return root_binder.table_names;
+	return global_binder_state->table_names;
 }
 
 case_insensitive_map_t<unique_ptr<TableRef>> &Binder::GetReplacementScans() {
-	auto &root_binder = GetRootBinder();
-	return root_binder.replacement_scans;
+	return global_binder_state->replacement_scans;
 }
 
 // FIXME: this is extremely naive
