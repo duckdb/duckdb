@@ -146,13 +146,6 @@ public:
 	string GetActualColumnName(const BindingAlias &binding_alias, const string &column_name);
 	string GetActualColumnName(Binding &binding, const string &column_name);
 
-	case_insensitive_map_t<shared_ptr<Binding>> GetCTEBindings() {
-		return cte_bindings;
-	}
-	void SetCTEBindings(case_insensitive_map_t<shared_ptr<Binding>> bindings) {
-		cte_bindings = std::move(bindings);
-	}
-
 	//! Alias a set of column names for the specified table, using the original names if there are not enough aliases
 	//! specified.
 	static vector<string> AliasColumnNames(const string &table_name, const vector<string> &names,

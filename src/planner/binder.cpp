@@ -59,10 +59,8 @@ Binder::Binder(ClientContext &context, shared_ptr<Binder> parent_p, BinderType b
 		// We have to inherit macro and lambda parameter bindings and from the parent binder, if there is a parent.
 		macro_binding = parent->macro_binding;
 		lambda_bindings = parent->lambda_bindings;
-
 		if (binder_type == BinderType::REGULAR_BINDER) {
 			// We have to inherit CTE bindings from the parent bind_context, if there is a parent.
-			bind_context.SetCTEBindings(parent->bind_context.GetCTEBindings());
 			bind_context.cte_references = parent->bind_context.cte_references;
 		}
 	}
@@ -276,17 +274,15 @@ void Binder::AddCTE(const string &name) {
 	CTE_bindings.insert(name);
 }
 
-vector<reference<Binding>> Binder::FindCTE(const string &name, bool skip) {
+optional_ptr<Binding> Binder::GetCTEBinding(const string &name) {
 	auto entry = bind_context.GetCTEBinding(name);
-	vector<reference<Binding>> ctes;
 	if (entry) {
-		ctes.push_back(*entry.get());
+		return entry;
 	}
 	if (parent && binder_type == BinderType::REGULAR_BINDER) {
-		auto parent_ctes = parent->FindCTE(name, name == alias);
-		ctes.insert(ctes.end(), parent_ctes.begin(), parent_ctes.end());
+		return parent->GetCTEBinding(name);
 	}
-	return ctes;
+	return nullptr;
 }
 
 bool Binder::CTEExists(const string &name) {
