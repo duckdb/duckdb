@@ -1113,6 +1113,10 @@ static void ToParquetVariant(DataChunk &input, ExpressionState &state, Vector &r
 	auto &metadata = *result_vectors[0];
 	CreateMetadata(variant, metadata, count);
 	WriteVariantValues(variant, result, nullptr, nullptr, nullptr, count);
+
+	if (input.AllConstant()) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	}
 }
 
 void VariantColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) {

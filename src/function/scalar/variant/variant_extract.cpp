@@ -151,26 +151,25 @@ static void VariantExtractFunction(DataChunk &input, ExpressionState &state, Vec
 	if (!lookup_validity.AllValid()) {
 		optional_idx index;
 		for (idx_t i = 0; i < count; i++) {
-			if (!lookup_validity.RowIsValid(i) && !nested_data[i].is_null) {
+			if (!lookup_validity.RowIsValid(i)) {
 				index = i;
 				break;
 			}
 		}
-		if (index.IsValid()) {
-			switch (component.lookup_mode) {
-			case VariantChildLookupMode::BY_INDEX: {
-				auto nested_index = index.GetIndex();
-				throw InvalidInputException("VARIANT(ARRAY(%d)) is missing index %d",
-				                            nested_data[nested_index].child_count, component.index);
-			}
-			case VariantChildLookupMode::BY_KEY: {
-				auto nested_index = index.GetIndex();
-				auto row_index = nested_index;
-				auto object_keys = VariantUtils::GetObjectKeys(variant, row_index, nested_data[nested_index]);
-				throw InvalidInputException("VARIANT(OBJECT(%s)) is missing key '%s'",
-				                            StringUtil::Join(object_keys, ","), component.key);
-			}
-			}
+		D_ASSERT(index.IsValid());
+		switch (component.lookup_mode) {
+		case VariantChildLookupMode::BY_INDEX: {
+			auto nested_index = index.GetIndex();
+			throw InvalidInputException("VARIANT(ARRAY(%d)) is missing index %d", nested_data[nested_index].child_count,
+			                            component.index);
+		}
+		case VariantChildLookupMode::BY_KEY: {
+			auto nested_index = index.GetIndex();
+			auto row_index = nested_index;
+			auto object_keys = VariantUtils::GetObjectKeys(variant, row_index, nested_data[nested_index]);
+			throw InvalidInputException("VARIANT(OBJECT(%s)) is missing key '%s'", StringUtil::Join(object_keys, ","),
+			                            component.key);
+		}
 		}
 	}
 
