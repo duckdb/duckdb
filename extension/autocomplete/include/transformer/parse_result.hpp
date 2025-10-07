@@ -124,7 +124,6 @@ struct KeywordParseResult : ParseResult {
 
 struct ListParseResult : ParseResult {
 	static constexpr ParseResultType TYPE = ParseResultType::LIST;
-	vector<optional_ptr<ParseResult>> children;
 
 public:
 	explicit ListParseResult(vector<optional_ptr<ParseResult>> results_p, string name_p)
@@ -170,6 +169,9 @@ public:
 			}
 		}
 	}
+
+private:
+	vector<optional_ptr<ParseResult>> children;
 };
 
 struct RepeatParseResult : ParseResult {
