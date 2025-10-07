@@ -348,6 +348,10 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 		                          shredding_type, max_repeat + 1, max_define + 2, true);
 
 		auto list_column = ParquetColumnSchema::FromLogicalType(name, type, max_define, max_repeat, 0, null_type);
+		if (field_id && field_id->set) {
+			list_column.field_id = field_id->field_id;
+		}
+
 		if (is_list) {
 			return make_uniq<ListColumnWriter>(writer, std::move(list_column), std::move(path_in_schema),
 			                                   std::move(child_writer));
