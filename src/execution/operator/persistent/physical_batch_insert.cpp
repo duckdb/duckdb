@@ -90,7 +90,7 @@ public:
 				auto &collection = data_table.GetOptimisticCollection(context, collection_indexes[i]);
 				TableScanState scan_state;
 				scan_state.Initialize(column_ids);
-				collection.collection->InitializeScan(scan_state.local_state, column_ids, nullptr);
+				collection.collection->InitializeScan(context, scan_state.local_state, column_ids, nullptr);
 
 				while (true) {
 					scan_chunk.Reset();
@@ -194,7 +194,10 @@ public:
 
 	void CreateNewCollection(ClientContext &context, DuckTableEntry &table_entry,
 	                         const vector<LogicalType> &insert_types) {
-		auto collection = OptimisticDataWriter::CreateCollection(table_entry.GetStorage(), insert_types);
+		if (!optimistic_writer) {
+			optimistic_writer = make_uniq<OptimisticDataWriter>(context, table_entry.GetStorage());
+		}
+		auto collection = optimistic_writer->CreateCollection(table_entry.GetStorage(), insert_types);
 		auto &row_collection = *collection->collection;
 		row_collection.InitializeEmpty();
 		row_collection.InitializeAppend(current_append_state);
@@ -526,9 +529,6 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, DataChunk &i
 		lock_guard<mutex> l(gstate.lock);
 		// no collection yet: create a new one
 		lstate.CreateNewCollection(context.client, table, insert_types);
-		if (!lstate.optimistic_writer) {
-			lstate.optimistic_writer = make_uniq<OptimisticDataWriter>(context.client, table.GetStorage());
-		}
 	}
 
 	if (lstate.current_index != batch_index) {

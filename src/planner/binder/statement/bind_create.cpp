@@ -345,11 +345,7 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 			try {
 				dummy_binder->Bind(*query_node);
 			} catch (const std::exception &ex) {
-				// TODO: we would like to do something like "error = ErrorData(ex);" here,
-				//  but that breaks macro's like "create macro m(x) as table (from query_table(x));",
-				//  because dummy-binding these always throws an error instead of a ParameterNotResolvedException.
-				//  So, for now, we allow macro's with bind errors to be created.
-				//  Binding is still useful because we can create the dependencies.
+				error = ErrorData(ex);
 			}
 		}
 

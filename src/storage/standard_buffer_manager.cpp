@@ -12,6 +12,7 @@
 #include "duckdb/storage/temporary_file_manager.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
 #include "duckdb/common/encryption_functions.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -246,14 +247,14 @@ void StandardBufferManager::BatchRead(vector<shared_ptr<BlockHandle>> &handles, 
                                       block_id_t first_block, block_id_t last_block) {
 	auto &block_manager = handles[0]->block_manager;
 	idx_t block_count = NumericCast<idx_t>(last_block - first_block + 1);
-#ifndef DUCKDB_ALTERNATIVE_VERIFY
 	if (block_count == 1) {
-		// prefetching with block_count == 1 has no performance impact since we can't batch reads
-		// skip the prefetch in this case
-		// we do it anyway if alternative_verify is on for extra testing
-		return;
+		if (DBConfig::GetSetting<StorageBlockPrefetchSetting>(db) != StorageBlockPrefetch::DEBUG_FORCE_ALWAYS) {
+			// prefetching with block_count == 1 has no performance impact since we can't batch reads
+			// skip the prefetch in this case
+			// we do it anyway if alternative_verify is on for extra testing
+			return;
+		}
 	}
-#endif
 
 	// allocate a buffer to hold the data of all of the blocks
 	auto total_block_size = block_count * block_manager.GetBlockAllocSize();
@@ -337,7 +338,7 @@ BufferHandle StandardBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 	return Pin(QueryContext(), handle);
 }
 
-BufferHandle StandardBufferManager::Pin(QueryContext context, shared_ptr<BlockHandle> &handle) {
+BufferHandle StandardBufferManager::Pin(const QueryContext &context, shared_ptr<BlockHandle> &handle) {
 	// we need to be careful not to return the BufferHandle to this block while holding the BlockHandle's lock
 	// as exiting this function's scope may cause the destructor of the BufferHandle to be called while holding the lock
 	// the destructor calls Unpin, which grabs the BlockHandle's lock again, causing a deadlock

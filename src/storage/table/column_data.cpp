@@ -673,7 +673,8 @@ void ColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, 
 unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, ColumnCheckpointInfo &checkpoint_info) {
 	// scan the segments of the column data
 	// set up the checkpoint state
-	auto checkpoint_state = CreateCheckpointState(row_group, checkpoint_info.info.manager);
+	auto &partial_block_manager = checkpoint_info.GetPartialBlockManager();
+	auto checkpoint_state = CreateCheckpointState(row_group, partial_block_manager);
 	checkpoint_state->global_stats = BaseStatistics::CreateEmpty(type).ToUnique();
 
 	auto &nodes = data.ReferenceSegments();
@@ -699,6 +700,7 @@ void ColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStatist
 	this->count = 0;
 	for (auto &data_pointer : column_data.pointers) {
 		// Update the count and statistics
+		data_pointer.row_start = start + count;
 		this->count += data_pointer.tuple_count;
 
 		// Merge the statistics. If this is a child column, the target_stats reference will point into the parents stats
@@ -909,7 +911,7 @@ shared_ptr<ColumnData> ColumnData::Deserialize(BlockManager &block_manager, Data
 	return entry;
 }
 
-void ColumnData::GetColumnSegmentInfo(idx_t row_group_index, vector<idx_t> col_path,
+void ColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<idx_t> col_path,
                                       vector<ColumnSegmentInfo> &result) {
 	D_ASSERT(!col_path.empty());
 
@@ -958,7 +960,7 @@ void ColumnData::GetColumnSegmentInfo(idx_t row_group_index, vector<idx_t> col_p
 			column_info.additional_blocks = segment_state->GetAdditionalBlocks();
 		}
 		if (compression_function.get_segment_info) {
-			auto segment_info = compression_function.get_segment_info(*segment);
+			auto segment_info = compression_function.get_segment_info(context, *segment);
 			vector<string> sinfo;
 			for (auto &item : segment_info) {
 				auto &mode = item.first;

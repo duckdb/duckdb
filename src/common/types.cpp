@@ -162,6 +162,8 @@ PhysicalType LogicalType::GetInternalType() {
 		return PhysicalType::UNKNOWN;
 	case LogicalTypeId::AGGREGATE_STATE:
 		return PhysicalType::VARCHAR;
+	case LogicalTypeId::GEOMETRY:
+		return PhysicalType::VARCHAR;
 	default:
 		throw InternalException("Invalid LogicalType %s", ToString());
 	}
@@ -1347,6 +1349,8 @@ static idx_t GetLogicalTypeScore(const LogicalType &type) {
 		return 102;
 	case LogicalTypeId::BIGNUM:
 		return 103;
+	case LogicalTypeId::GEOMETRY:
+		return 104;
 	// nested types
 	case LogicalTypeId::STRUCT:
 		return 125;
@@ -2015,6 +2019,15 @@ LogicalType LogicalType::VARIANT() {
 
 	auto info = make_shared_ptr<StructTypeInfo>(std::move(children));
 	return LogicalType(LogicalTypeId::VARIANT, std::move(info));
+}
+
+//===--------------------------------------------------------------------===//
+// Spatial Types
+//===--------------------------------------------------------------------===//
+
+LogicalType LogicalType::GEOMETRY() {
+	auto info = make_shared_ptr<GeoTypeInfo>();
+	return LogicalType(LogicalTypeId::GEOMETRY, std::move(info));
 }
 
 //===--------------------------------------------------------------------===//

@@ -29,7 +29,6 @@ class DatabaseInstance;
 class TableFilter;
 class Transaction;
 class UpdateSegment;
-
 struct ColumnAppendState;
 struct ColumnFetchState;
 struct ColumnScanState;

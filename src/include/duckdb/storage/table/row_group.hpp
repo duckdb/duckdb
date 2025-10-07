@@ -53,13 +53,22 @@ class StorageCommitState;
 
 struct RowGroupWriteInfo {
 	RowGroupWriteInfo(PartialBlockManager &manager, const vector<CompressionType> &compression_types,
-	                  CheckpointType checkpoint_type = CheckpointType::FULL_CHECKPOINT)
-	    : manager(manager), compression_types(compression_types), checkpoint_type(checkpoint_type) {
-	}
+	                  CheckpointType checkpoint_type = CheckpointType::FULL_CHECKPOINT);
+	RowGroupWriteInfo(PartialBlockManager &manager, const vector<CompressionType> &compression_types,
+	                  vector<unique_ptr<PartialBlockManager>> &column_partial_block_managers_p);
 
+private:
 	PartialBlockManager &manager;
+
+public:
 	const vector<CompressionType> &compression_types;
 	CheckpointType checkpoint_type;
+
+public:
+	PartialBlockManager &GetPartialBlockManager(idx_t column_idx);
+
+private:
+	optional_ptr<vector<unique_ptr<PartialBlockManager>>> column_partial_block_managers;
 };
 
 struct RowGroupWriteData {
@@ -174,7 +183,7 @@ public:
 	void MergeIntoStatistics(TableStatistics &other);
 	unique_ptr<BaseStatistics> GetStatistics(idx_t column_idx);
 
-	void GetColumnSegmentInfo(idx_t row_group_index, vector<ColumnSegmentInfo> &result);
+	void GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<ColumnSegmentInfo> &result);
 	PartitionStatistics GetPartitionStats() const;
 
 	idx_t GetAllocationSize() const {

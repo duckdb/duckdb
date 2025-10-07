@@ -24,8 +24,8 @@ string CatalogSearchEntry::ToString() const {
 
 string CatalogSearchEntry::WriteOptionallyQuoted(const string &input) {
 	for (idx_t i = 0; i < input.size(); i++) {
-		if (input[i] == '.' || input[i] == ',') {
-			return "\"" + input + "\"";
+		if (input[i] == '.' || input[i] == ',' || input[i] == '"') {
+			return "\"" + StringUtil::Replace(input, "\"", "\"\"") + "\"";
 		}
 	}
 	return input;

@@ -82,6 +82,10 @@ public:
 	}
 	//! Whether or not the attached database is in-memory
 	virtual bool InMemory() = 0;
+	//! Whether or not to prefetch
+	virtual bool Prefetch() {
+		return false;
+	}
 
 	//! Sync changes made to the block manager
 	virtual void FileSync() = 0;

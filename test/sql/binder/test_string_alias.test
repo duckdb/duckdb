@@ -33,4 +33,4 @@ SELECT "hello world".i FROM integers AS 'hello world'
 statement error
 SELECT "hello world".i FROM integers 'hello world'
 ----
-<REGEX>:.*Parser Error: syntax error.*
+Parser Error: syntax error
