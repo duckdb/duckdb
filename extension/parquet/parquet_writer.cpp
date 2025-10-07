@@ -335,6 +335,9 @@ ParquetWriteTransformData::ParquetWriteTransformData(ClientContext &context, vec
 	chunk.Initialize(buffer.GetAllocator(), types);
 }
 
+//! TODO: this doesnt work.. the ParquetWriteTransformData is shared with all threads, the method is stateful, but has
+//! no locks Either every local state needs its own copy of this or we need a lock so its used by one thread at a time..
+//! The former has my preference
 ColumnDataCollection &ParquetWriteTransformData::ApplyTransform(ColumnDataCollection &input) {
 	buffer.Reset();
 	for (auto &input_chunk : input.Chunks()) {
@@ -415,10 +418,12 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
 ParquetWriter::~ParquetWriter() {
 }
 
-static void AnalyzeSchema(ColumnDataCollection &buffer, vector<unique_ptr<ColumnWriter>> &column_writers) {
+void ParquetWriter::AnalyzeSchema(ColumnDataCollection &buffer, vector<unique_ptr<ColumnWriter>> &column_writers) {
 	D_ASSERT(buffer.ColumnCount() == column_writers.size());
 	vector<unique_ptr<ParquetAnalyzeSchemaState>> states;
 	bool needs_analyze = false;
+	lock_guard<mutex> glock(lock);
+
 	vector<column_t> column_ids;
 	for (idx_t i = 0; i < column_writers.size(); i++) {
 		auto &writer = column_writers[i];
@@ -480,6 +485,28 @@ void ParquetWriter::InitializePreprocessing() {
 	transform_data = make_uniq<ParquetWriteTransformData>(context, transformed_types, std::move(transform_expressions));
 }
 
+void ParquetWriter::InitializeSchemaElements() {
+	if (!file_meta_data.schema.empty()) {
+		return;
+	}
+	//! Populate the schema elements of the parquet file we're writing
+	lock_guard<mutex> glock(lock);
+	if (!file_meta_data.schema.empty()) {
+		return;
+	}
+	// populate root schema object
+	file_meta_data.schema.resize(1);
+	file_meta_data.schema[0].name = "duckdb_schema";
+	file_meta_data.schema[0].num_children = NumericCast<int32_t>(sql_types.size());
+	file_meta_data.schema[0].__isset.num_children = true;
+	file_meta_data.schema[0].repetition_type = duckdb_parquet::FieldRepetitionType::REQUIRED;
+	file_meta_data.schema[0].__isset.repetition_type = true;
+
+	for (auto &column_writer : column_writers) {
+		column_writer->FinalizeSchema(file_meta_data.schema);
+	}
+}
+
 void ParquetWriter::PrepareRowGroup(ColumnDataCollection &raw_buffer, PreparedRowGroup &result) {
 	AnalyzeSchema(raw_buffer, column_writers);
 
@@ -511,23 +538,7 @@ void ParquetWriter::PrepareRowGroup(ColumnDataCollection &raw_buffer, PreparedRo
 	row_group.num_rows = NumericCast<int64_t>(buffer.Count());
 	row_group.__isset.file_offset = true;
 
-	if (file_meta_data.schema.empty()) {
-		//! Populate the schema elements of the parquet file we're writing
-		lock_guard<mutex> glock(lock);
-		if (file_meta_data.schema.empty()) {
-			// populate root schema object
-			file_meta_data.schema.resize(1);
-			file_meta_data.schema[0].name = "duckdb_schema";
-			file_meta_data.schema[0].num_children = NumericCast<int32_t>(sql_types.size());
-			file_meta_data.schema[0].__isset.num_children = true;
-			file_meta_data.schema[0].repetition_type = duckdb_parquet::FieldRepetitionType::REQUIRED;
-			file_meta_data.schema[0].__isset.repetition_type = true;
-
-			for (auto &column_writer : column_writers) {
-				column_writer->FinalizeSchema(file_meta_data.schema);
-			}
-		}
-	}
+	InitializeSchemaElements();
 
 	auto &states = result.states;
 	// iterate over each of the columns of the chunk collection and write them
@@ -1018,6 +1029,7 @@ void ParquetWriter::GatherWrittenStatistics() {
 }
 
 void ParquetWriter::Finalize() {
+	InitializeSchemaElements();
 
 	// dump the bloom filters right before footer, not if stuff is encrypted
 

@@ -748,38 +748,6 @@ static bool IsGeometryType(const LogicalType &type, ClientContext &context) {
 	return GeoParquetFileMetadata::IsGeoParquetConversionEnabled(context);
 }
 
-static string GetShredding(case_insensitive_map_t<vector<Value>> &options, const string &col_name) {
-	//! At this point, the options haven't been parsed yet, so we have to parse them ourselves.
-	auto it = options.find("shredding");
-	if (it == options.end()) {
-		return string();
-	}
-	auto &shredding = it->second;
-	if (shredding.empty()) {
-		return string();
-	}
-
-	auto &shredding_val = shredding[0];
-	if (shredding_val.type().id() != LogicalTypeId::STRUCT) {
-		return string();
-	}
-
-	auto &shredded_variants = StructType::GetChildTypes(shredding_val.type());
-	auto &values = StructValue::GetChildren(shredding_val);
-	for (idx_t i = 0; i < shredded_variants.size(); i++) {
-		auto &shredded_variant = shredded_variants[i];
-		if (shredded_variant.first != col_name) {
-			continue;
-		}
-		auto &shredded_val = values[i];
-		if (shredded_val.type().id() != LogicalTypeId::VARCHAR) {
-			return string();
-		}
-		return shredded_val.GetValue<string>();
-	}
-	return string();
-}
-
 static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &input) {
 
 	auto &context = input.context;
@@ -805,24 +773,6 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &inpu
 			result.push_back(std::move(cast_expr));
 			any_change = true;
 		}
-		// else if (input.copy_to_type == CopyToType::COPY_TO_FILE && type.id() == LogicalTypeId::VARIANT) {
-		//	vector<unique_ptr<Expression>> arguments;
-		//	arguments.push_back(std::move(expr));
-
-		//	auto shredded_type_str = GetShredding(input.options, name);
-		//	if (!shredded_type_str.empty()) {
-		//		arguments.push_back(make_uniq<BoundConstantExpression>(Value(shredded_type_str)));
-		//	}
-
-		//	auto transform_func = VariantColumnWriter::GetTransformFunction();
-		//	transform_func.bind(context, transform_func, arguments);
-
-		//	auto func_expr = make_uniq<BoundFunctionExpression>(transform_func.return_type, transform_func,
-		//	                                                    std::move(arguments), nullptr, false);
-		//	func_expr->SetAlias(name);
-		//	result.push_back(std::move(func_expr));
-		//	any_change = true;
-		//}
 		// If this is an EXPORT DATABASE statement, we dont want to write "lossy" types, instead cast them to VARCHAR
 		else if (input.copy_to_type == CopyToType::EXPORT_DATABASE && TypeVisitor::Contains(type, IsTypeLossy)) {
 			// Replace all lossy types with VARCHAR

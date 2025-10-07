@@ -140,6 +140,7 @@ public:
 	const string &GetFileName() const {
 		return file_name;
 	}
+	void AnalyzeSchema(ColumnDataCollection &buffer, vector<unique_ptr<ColumnWriter>> &column_writers);
 
 	uint32_t Write(const duckdb_apache::thrift::TBase &object);
 	uint32_t WriteData(const const_data_ptr_t buffer, const uint32_t buffer_size);
@@ -154,6 +155,7 @@ public:
 	void FlushColumnStats(idx_t col_idx, duckdb_parquet::ColumnChunk &chunk,
 	                      optional_ptr<ColumnWriterStatistics> writer_stats);
 	void InitializePreprocessing();
+	void InitializeSchemaElements();
 
 private:
 	void GatherWrittenStatistics();

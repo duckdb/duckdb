@@ -4,7 +4,7 @@
 namespace duckdb {
 
 unique_ptr<ParquetAnalyzeSchemaState> VariantColumnWriter::AnalyzeSchemaInit() {
-	if (child_writers.size() == 2) {
+	if (child_writers.size() == 2 && !is_analyzed) {
 		return make_uniq<VariantAnalyzeSchemaState>();
 	}
 	//! Variant is already shredded explicitly, no need to analyze
@@ -132,7 +132,9 @@ static LogicalType ConstructShreddedType(const VariantAnalyzeData &state) {
 	CheckPrimitive<VariantLogicalType::INT64, LogicalTypeId::BIGINT>(state, result);
 	CheckPrimitive<VariantLogicalType::FLOAT, LogicalTypeId::FLOAT>(state, result);
 	CheckPrimitive<VariantLogicalType::DOUBLE, LogicalTypeId::DOUBLE>(state, result);
-	CheckPrimitive<VariantLogicalType::DECIMAL, LogicalTypeId::DECIMAL>(state, result);
+	//! FIXME: It's not enough for decimals to have the same PhysicalType, their width+scale has to match in order to
+	//! shred on the type.
+	// CheckPrimitive<VariantLogicalType::DECIMAL, LogicalTypeId::DECIMAL>(state, result);
 	CheckPrimitive<VariantLogicalType::DATE, LogicalTypeId::DATE>(state, result);
 	CheckPrimitive<VariantLogicalType::TIME_MICROS, LogicalTypeId::TIME>(state, result);
 	CheckPrimitive<VariantLogicalType::TIMESTAMP_MICROS, LogicalTypeId::TIMESTAMP>(state, result);
@@ -181,6 +183,7 @@ void VariantColumnWriter::AnalyzeSchemaFinalize(const ParquetAnalyzeSchemaState 
 	auto shredded_type = ConstructShreddedType(state.analyze_data);
 
 	auto typed_value = TransformTypedValueRecursive(shredded_type);
+	is_analyzed = true;
 
 	auto &schema = Schema();
 	auto &context = writer.GetContext();

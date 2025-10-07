@@ -100,6 +100,10 @@ public:
 public:
 	static ScalarFunction GetTransformFunction();
 	static LogicalType TransformTypedValueRecursive(const LogicalType &type);
+
+private:
+	//! Whether the schema of the variant has been analyzed already
+	bool is_analyzed = false;
 };
 
 } // namespace duckdb
