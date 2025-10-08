@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/planner/logical_operator.hpp"
-#include "duckdb/planner/tableref/bound_subqueryref.hpp"
 
 namespace duckdb {
 
@@ -23,7 +22,7 @@ public:
 	}
 
 	unique_ptr<LogicalOperator> get;
-	unique_ptr<BoundSubqueryRef> subquery;
+	BoundStatement subquery;
 };
 
 } // namespace duckdb

@@ -4,8 +4,8 @@
 namespace duckdb {
 
 unique_ptr<LogicalOperator> Binder::CreatePlan(BoundTableFunction &ref) {
-	if (ref.subquery) {
-		auto child_node = CreatePlan(*ref.subquery);
+	if (ref.subquery.plan) {
+		auto child_node = std::move(ref.subquery.plan);
 
 		reference<LogicalOperator> node = *ref.get;
 

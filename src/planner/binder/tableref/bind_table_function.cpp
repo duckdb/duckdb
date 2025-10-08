@@ -14,7 +14,6 @@
 #include "duckdb/planner/expression_binder/select_binder.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
-#include "duckdb/planner/tableref/bound_subqueryref.hpp"
 #include "duckdb/planner/tableref/bound_table_function.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
@@ -79,32 +78,28 @@ static TableFunctionBindType GetTableFunctionBindType(TableFunctionCatalogEntry 
 	                           : TableFunctionBindType::STANDARD_TABLE_FUNCTION;
 }
 
-void Binder::BindTableInTableOutFunction(vector<unique_ptr<ParsedExpression>> &expressions,
-                                         unique_ptr<BoundSubqueryRef> &subquery) {
+void Binder::BindTableInTableOutFunction(vector<unique_ptr<ParsedExpression>> &expressions, BoundStatement &subquery) {
 	auto binder = Binder::CreateBinder(this->context, this);
-	unique_ptr<QueryNode> subquery_node;
 	// generate a subquery and bind that (i.e. UNNEST([1,2,3]) becomes UNNEST((SELECT [1,2,3]))
 	auto select_node = make_uniq<SelectNode>();
 	select_node->select_list = std::move(expressions);
 	select_node->from_table = make_uniq<EmptyTableRef>();
-	subquery_node = std::move(select_node);
 	binder->can_contain_nulls = true;
-	auto node = binder->BindNode(*subquery_node);
-	subquery = make_uniq<BoundSubqueryRef>(std::move(binder), std::move(node));
-	MoveCorrelatedExpressions(*subquery->binder);
+	subquery = binder->BindNode(*select_node);
+	MoveCorrelatedExpressions(*binder);
 }
 
 bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_function,
                                          vector<unique_ptr<ParsedExpression>> &expressions,
                                          vector<LogicalType> &arguments, vector<Value> &parameters,
-                                         named_parameter_map_t &named_parameters,
-                                         unique_ptr<BoundSubqueryRef> &subquery, ErrorData &error) {
+                                         named_parameter_map_t &named_parameters, BoundStatement &subquery,
+                                         ErrorData &error) {
 	auto bind_type = GetTableFunctionBindType(table_function, expressions);
 	if (bind_type == TableFunctionBindType::TABLE_IN_OUT_FUNCTION) {
 		// bind table in-out function
 		BindTableInTableOutFunction(expressions, subquery);
 		// fetch the arguments from the subquery
-		arguments = subquery->subquery.types;
+		arguments = subquery.types;
 		return true;
 	}
 	bool seen_subquery = false;
@@ -142,9 +137,8 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 			auto binder = Binder::CreateBinder(this->context, this);
 			binder->can_contain_nulls = true;
 			auto &se = child->Cast<SubqueryExpression>();
-			auto node = binder->BindNode(*se.subquery->node);
-			subquery = make_uniq<BoundSubqueryRef>(std::move(binder), std::move(node));
-			MoveCorrelatedExpressions(*subquery->binder);
+			subquery = binder->BindNode(*se.subquery->node);
+			MoveCorrelatedExpressions(*binder);
 			seen_subquery = true;
 			arguments.emplace_back(LogicalTypeId::TABLE);
 			parameters.emplace_back(Value());
@@ -424,7 +418,7 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 	vector<LogicalType> arguments;
 	vector<Value> parameters;
 	named_parameter_map_t named_parameters;
-	unique_ptr<BoundSubqueryRef> subquery;
+	BoundStatement subquery;
 	ErrorData error;
 	if (!BindTableFunctionParameters(function, fexpr.children, arguments, parameters, named_parameters, subquery,
 	                                 error)) {
@@ -447,9 +441,9 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 	vector<LogicalType> input_table_types;
 	vector<string> input_table_names;
 
-	if (subquery) {
-		input_table_types = subquery->subquery.types;
-		input_table_names = subquery->subquery.names;
+	if (subquery.plan) {
+		input_table_types = subquery.types;
+		input_table_names = subquery.names;
 	} else if (table_function.in_out_function) {
 		for (auto &param : parameters) {
 			input_table_types.push_back(param.type());
@@ -467,7 +461,7 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 				parameters[i] = parameters[i].CastAs(context, target_type);
 			}
 		}
-	} else if (subquery) {
+	} else if (subquery.plan) {
 		for (idx_t i = 0; i < arguments.size(); i++) {
 			auto target_type =
 			    i < table_function.arguments.size() ? table_function.arguments[i] : table_function.varargs;

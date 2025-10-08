@@ -9,7 +9,6 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/tableref/bound_joinref.hpp"
 #include "duckdb/planner/operator/logical_dependent_join.hpp"
-#include "duckdb/planner/tableref/bound_subqueryref.hpp"
 
 namespace duckdb {
 

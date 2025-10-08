@@ -14,7 +14,6 @@ add_library_unity(
   bind_table_function.cpp
   bind_named_parameters.cpp
   plan_joinref.cpp
-  plan_subqueryref.cpp
   plan_table_function.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_bind_tableref>

@@ -46,7 +46,6 @@ class BoundWindowExpression;
 // TableRefs
 //===--------------------------------------------------------------------===//
 class BoundJoinRef;
-class BoundSubqueryRef;
 class BoundTableFunction;
 
 class BoundMergeIntoAction;
