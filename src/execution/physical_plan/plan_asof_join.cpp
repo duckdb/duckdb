@@ -224,7 +224,7 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 	auto window_types = probe.GetTypes();
 	window_types.emplace_back(pk_type);
 
-	idx_t probe_cardinality = op.children[0]->EstimateCardinality(context);
+	const auto probe_cardinality = op.EstimateCardinality(context);
 	auto &window = Make<PhysicalStreamingWindow>(window_types, std::move(window_select), probe_cardinality);
 	window.children.emplace_back(probe);
 

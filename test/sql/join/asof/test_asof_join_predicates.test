@@ -2,6 +2,9 @@
 # description: Test As-Of join NLJ rewrite for non-comparison predicates
 # group: [asof]
 
+statement ok
+PRAGMA enable_verification;
+
 # Issue 18309
 statement ok
 CREATE TABLE tt1 (i INTEGER, j VARCHAR);
