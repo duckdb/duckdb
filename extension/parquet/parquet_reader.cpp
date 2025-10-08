@@ -168,6 +168,12 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 		metadata->read(file_proto.get());
 	}
 
+	for (const auto &row_group : metadata->row_groups) {
+		if (row_group.columns.size() != metadata->schema.size()) {
+			throw InvalidInputException("File '%s' row group schema does not match metadata", file_handle.GetPath());
+		}
+	}
+
 	// Try to read the GeoParquet metadata (if present)
 	auto geo_metadata = GeoParquetFileMetadata::TryRead(*metadata, context);
 	return make_shared_ptr<ParquetFileMetadataCache>(std::move(metadata), file_handle, std::move(geo_metadata),
