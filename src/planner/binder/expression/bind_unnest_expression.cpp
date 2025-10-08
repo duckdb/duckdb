@@ -39,7 +39,7 @@ unique_ptr<Expression> CreateBoundStructExtract(ClientContext &context, unique_p
 		}
 		result->SetAlias(alias);
 	} else {
-		result->SetAlias(std::move(key));
+		result->SetAlias(key);
 	}
 	return std::move(result);
 }
