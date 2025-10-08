@@ -46,8 +46,6 @@ class BoundWindowExpression;
 // TableRefs
 //===--------------------------------------------------------------------===//
 class BoundJoinRef;
-class BoundTableFunction;
-
 class BoundMergeIntoAction;
 
 } // namespace duckdb

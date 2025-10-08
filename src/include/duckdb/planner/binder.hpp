@@ -462,7 +462,6 @@ private:
 	                                         vector<LogicalType> input_table_types, vector<string> input_table_names);
 
 	unique_ptr<LogicalOperator> CreatePlan(BoundJoinRef &ref);
-	unique_ptr<LogicalOperator> CreatePlan(BoundTableFunction &ref);
 
 	BoundStatement BindCopyTo(CopyStatement &stmt, const CopyFunction &function, CopyToType copy_to_type);
 	BoundStatement BindCopyFrom(CopyStatement &stmt, const CopyFunction &function);

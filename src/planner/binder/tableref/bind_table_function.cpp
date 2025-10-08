@@ -13,8 +13,6 @@
 #include "duckdb/planner/expression_binder/table_function_binder.hpp"
 #include "duckdb/planner/expression_binder/select_binder.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
-#include "duckdb/planner/query_node/bound_select_node.hpp"
-#include "duckdb/planner/tableref/bound_table_function.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
@@ -482,13 +480,29 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 		error.AddQueryLocation(ref);
 		error.Throw();
 	}
-	auto table_function_ref = make_uniq<BoundTableFunction>(std::move(get.plan));
-	table_function_ref->subquery = std::move(subquery);
 
+	if (subquery.plan) {
+		auto child_node = std::move(subquery.plan);
+
+		reference<LogicalOperator> node = *get.plan;
+
+		while (!node.get().children.empty()) {
+			D_ASSERT(node.get().children.size() == 1);
+			if (node.get().children.size() != 1) {
+				throw InternalException(
+				    "Binder::CreatePlan<BoundTableFunction>: linear path expected, but found node with %d children",
+				    node.get().children.size());
+			}
+			node = *node.get().children[0];
+		}
+
+		D_ASSERT(node.get().type == LogicalOperatorType::LOGICAL_GET);
+		node.get().children.push_back(std::move(child_node));
+	}
 	BoundStatement result_statement;
 	result_statement.names = get.names;
 	result_statement.types = get.types;
-	result_statement.plan = CreatePlan(*table_function_ref);
+	result_statement.plan = std::move(get.plan);
 	return result_statement;
 }
 
