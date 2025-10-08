@@ -45,17 +45,9 @@ class BoundWindowExpression;
 //===--------------------------------------------------------------------===//
 // TableRefs
 //===--------------------------------------------------------------------===//
-class BoundTableRef;
-
-class BoundBaseTableRef;
 class BoundJoinRef;
 class BoundSubqueryRef;
 class BoundTableFunction;
-class BoundEmptyTableRef;
-class BoundExpressionListRef;
-class BoundColumnDataRef;
-class BoundCTERef;
-class BoundPivotRef;
 
 class BoundMergeIntoAction;
 

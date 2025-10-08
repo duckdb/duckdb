@@ -11,19 +11,14 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/enums/joinref_type.hpp"
-#include "duckdb/planner/bound_tableref.hpp"
 #include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
 
 //! Represents a join
-class BoundJoinRef : public BoundTableRef {
+class BoundJoinRef {
 public:
-	static constexpr const TableReferenceType TYPE = TableReferenceType::JOIN;
-
-public:
-	explicit BoundJoinRef(JoinRefType ref_type)
-	    : BoundTableRef(TableReferenceType::JOIN), type(JoinType::INNER), ref_type(ref_type), lateral(false) {
+	explicit BoundJoinRef(JoinRefType ref_type) : type(JoinType::INNER), ref_type(ref_type), lateral(false) {
 	}
 
 	//! The binder used to bind the LHS of the join

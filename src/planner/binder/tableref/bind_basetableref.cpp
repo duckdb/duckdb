@@ -11,8 +11,6 @@
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
-#include "duckdb/planner/tableref/bound_basetableref.hpp"
-#include "duckdb/planner/tableref/bound_dummytableref.hpp"
 #include "duckdb/planner/tableref/bound_subqueryref.hpp"
 #include "duckdb/planner/operator/logical_cteref.hpp"
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
@@ -255,7 +253,7 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 
 	switch (table_or_view->type) {
 	case CatalogType::TABLE_ENTRY: {
-		// base table: create the BoundBaseTableRef node
+		// base table
 		auto table_index = GenerateTableIndex();
 		auto &table = table_or_view->Cast<TableCatalogEntry>();
 

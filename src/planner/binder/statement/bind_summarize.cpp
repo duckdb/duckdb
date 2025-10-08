@@ -9,7 +9,6 @@
 #include "duckdb/parser/tableref/showref.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
-#include "duckdb/planner/bound_tableref.hpp"
 
 namespace duckdb {
 

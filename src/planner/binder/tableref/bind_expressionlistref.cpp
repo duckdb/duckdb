@@ -1,5 +1,4 @@
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/tableref/bound_expressionlistref.hpp"
 #include "duckdb/parser/tableref/expressionlistref.hpp"
 #include "duckdb/planner/expression_binder/insert_binder.hpp"
 #include "duckdb/common/to_string.hpp"

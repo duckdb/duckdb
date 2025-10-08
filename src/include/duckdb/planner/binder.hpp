@@ -27,7 +27,6 @@
 #include "duckdb/planner/joinside.hpp"
 #include "duckdb/planner/bound_constraint.hpp"
 #include "duckdb/planner/logical_operator.hpp"
-#include "duckdb/planner/tableref/bound_delimgetref.hpp"
 #include "duckdb/common/enums/copy_option_mode.hpp"
 
 //! fwd declare
@@ -463,16 +462,9 @@ private:
 	                                         vector<Value> parameters, named_parameter_map_t named_parameters,
 	                                         vector<LogicalType> input_table_types, vector<string> input_table_names);
 
-	unique_ptr<LogicalOperator> CreatePlan(BoundBaseTableRef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundJoinRef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundSubqueryRef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundTableFunction &ref);
-	unique_ptr<LogicalOperator> CreatePlan(BoundEmptyTableRef &ref);
-	unique_ptr<LogicalOperator> CreatePlan(BoundExpressionListRef &ref);
-	unique_ptr<LogicalOperator> CreatePlan(BoundColumnDataRef &ref);
-	unique_ptr<LogicalOperator> CreatePlan(BoundCTERef &ref);
-	unique_ptr<LogicalOperator> CreatePlan(BoundPivotRef &ref);
-	unique_ptr<LogicalOperator> CreatePlan(BoundDelimGetRef &ref);
 
 	BoundStatement BindCopyTo(CopyStatement &stmt, const CopyFunction &function, CopyToType copy_to_type);
 	BoundStatement BindCopyFrom(CopyStatement &stmt, const CopyFunction &function);

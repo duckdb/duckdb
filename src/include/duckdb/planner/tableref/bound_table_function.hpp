@@ -8,20 +8,18 @@
 
 #pragma once
 
-#include "duckdb/planner/bound_tableref.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/tableref/bound_subqueryref.hpp"
 
 namespace duckdb {
 
 //! Represents a reference to a table-producing function call
-class BoundTableFunction : public BoundTableRef {
+class BoundTableFunction {
 public:
 	static constexpr const TableReferenceType TYPE = TableReferenceType::TABLE_FUNCTION;
 
 public:
-	explicit BoundTableFunction(unique_ptr<LogicalOperator> get)
-	    : BoundTableRef(TableReferenceType::TABLE_FUNCTION), get(std::move(get)) {
+	explicit BoundTableFunction(unique_ptr<LogicalOperator> get) : get(std::move(get)) {
 	}
 
 	unique_ptr<LogicalOperator> get;

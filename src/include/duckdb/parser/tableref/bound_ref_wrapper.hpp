@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/parser/tableref.hpp"
-#include "duckdb/planner/bound_tableref.hpp"
 #include "duckdb/planner/binder.hpp"
 
 namespace duckdb {

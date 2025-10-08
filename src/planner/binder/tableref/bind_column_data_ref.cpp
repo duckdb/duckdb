@@ -1,6 +1,5 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/tableref/column_data_ref.hpp"
-#include "duckdb/planner/tableref/bound_column_data_ref.hpp"
 #include "duckdb/planner/operator/logical_column_data_get.hpp"
 
 namespace duckdb {
