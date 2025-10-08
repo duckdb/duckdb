@@ -10,8 +10,8 @@
 namespace duckdb {
 
 // Optionally push a PROJECTION operator
-unique_ptr<LogicalOperator> Binder::CastLogicalOperatorToTypes(vector<LogicalType> &source_types,
-                                                               vector<LogicalType> &target_types,
+unique_ptr<LogicalOperator> Binder::CastLogicalOperatorToTypes(const vector<LogicalType> &source_types,
+                                                               const vector<LogicalType> &target_types,
                                                                unique_ptr<LogicalOperator> op) {
 	D_ASSERT(op);
 	// first check if we even need to cast
@@ -114,10 +114,15 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 	D_ASSERT(node.bound_children.size() >= 2);
 	vector<unique_ptr<LogicalOperator>> children;
 	for (auto &child : node.bound_children) {
-		child.binder->is_outside_flattened = is_outside_flattened;
+		unique_ptr<LogicalOperator> child_node;
+		if (child.bound_node) {
+			child_node = CreatePlan(*child.bound_node);
+		} else {
+			child.binder->is_outside_flattened = is_outside_flattened;
 
-		// construct the logical plan for the child node
-		auto child_node = child.binder->CreatePlan(*child.node);
+			// construct the logical plan for the child node
+			child_node = std::move(child.node.plan);
+		}
 		if (!child.reorder_expressions.empty()) {
 			// if we have re-order expressions push a projection
 			vector<LogicalType> child_types;
@@ -132,10 +137,10 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 			child_node = CastLogicalOperatorToTypes(child_types, node.types, std::move(child_node));
 		} else {
 			// otherwise push only casts
-			child_node = CastLogicalOperatorToTypes(child.node->types, node.types, std::move(child_node));
+			child_node = CastLogicalOperatorToTypes(child.GetTypes(), node.types, std::move(child_node));
 		}
 		// check if there are any unplanned subqueries left in any child
-		if (child.binder->has_unplanned_dependent_joins) {
+		if (child.binder && child.binder->has_unplanned_dependent_joins) {
 			has_unplanned_dependent_joins = true;
 		}
 		children.push_back(std::move(child_node));

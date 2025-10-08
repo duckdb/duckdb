@@ -202,7 +202,7 @@ enum class FunctionStability : uint8_t;
 
 enum class GateStatus : uint8_t;
 
-enum class GeometryType : uint32_t;
+enum class GeometryType : uint8_t;
 
 enum class HLLStorageType : uint8_t;
 
@@ -439,6 +439,8 @@ enum class VectorType : uint8_t;
 enum class VerificationType : uint8_t;
 
 enum class VerifyExistenceType : uint8_t;
+
+enum class VertexType : uint8_t;
 
 enum class WALType : uint8_t;
 
@@ -1062,6 +1064,9 @@ const char* EnumUtil::ToChars<VerificationType>(VerificationType value);
 
 template<>
 const char* EnumUtil::ToChars<VerifyExistenceType>(VerifyExistenceType value);
+
+template<>
+const char* EnumUtil::ToChars<VertexType>(VertexType value);
 
 template<>
 const char* EnumUtil::ToChars<WALType>(WALType value);
@@ -1690,6 +1695,9 @@ VerificationType EnumUtil::FromString<VerificationType>(const char *value);
 
 template<>
 VerifyExistenceType EnumUtil::FromString<VerifyExistenceType>(const char *value);
+
+template<>
+VertexType EnumUtil::FromString<VertexType>(const char *value);
 
 template<>
 WALType EnumUtil::FromString<WALType>(const char *value);
