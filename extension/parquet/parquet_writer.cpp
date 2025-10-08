@@ -486,9 +486,6 @@ void ParquetWriter::InitializePreprocessing(unique_ptr<ParquetWriteTransformData
 }
 
 void ParquetWriter::InitializeSchemaElements() {
-	if (!file_meta_data.schema.empty()) {
-		return;
-	}
 	//! Populate the schema elements of the parquet file we're writing
 	lock_guard<mutex> glock(lock);
 	if (!file_meta_data.schema.empty()) {
