@@ -9,7 +9,7 @@ unique_ptr<BoundTableRef> Binder::Bind(SubqueryRef &ref) {
 	binder->can_contain_nulls = true;
 	auto subquery = binder->BindNode(*ref.subquery->node);
 	binder->alias = ref.alias.empty() ? "unnamed_subquery" : ref.alias;
-	idx_t bind_index = subquery->GetRootIndex();
+	idx_t bind_index = subquery.plan->GetRootIndex();
 	string subquery_alias;
 	if (ref.alias.empty()) {
 		auto index = unnamed_subquery_index++;
@@ -22,7 +22,7 @@ unique_ptr<BoundTableRef> Binder::Bind(SubqueryRef &ref) {
 		subquery_alias = ref.alias;
 	}
 	auto result = make_uniq<BoundSubqueryRef>(std::move(binder), std::move(subquery));
-	bind_context.AddSubquery(bind_index, subquery_alias, ref, *result->subquery);
+	bind_context.AddSubquery(bind_index, subquery_alias, ref, result->subquery);
 	MoveCorrelatedExpressions(*result->binder);
 	return std::move(result);
 }

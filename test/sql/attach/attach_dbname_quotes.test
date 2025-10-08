@@ -15,6 +15,9 @@ INSERT INTO "my""db".tbl VALUES (42)
 statement ok
 USE "my""db";
 
+statement ok
+SET search_path=current_setting('search_path')
+
 query I
 SELECT * FROM tbl
 ----

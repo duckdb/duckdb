@@ -141,7 +141,7 @@ public:
 		D_ASSERT(!sorted_run);
 		// TODO: we want to pass "sort.is_index_sort" instead of just "false" here
 		//  so that we can do an approximate sort, but that causes issues in the ART
-		sorted_run = make_uniq<SortedRun>(context, sort.key_layout, sort.payload_layout, false);
+		sorted_run = make_uniq<SortedRun>(context, sort, false);
 	}
 
 public:
@@ -366,8 +366,7 @@ ProgressData Sort::GetSinkProgress(ClientContext &context, GlobalSinkState &gsta
 class SortGlobalSourceState : public GlobalSourceState {
 public:
 	SortGlobalSourceState(const Sort &sort, ClientContext &context, SortGlobalSinkState &sink_p)
-	    : sink(sink_p), merger(*sort.decode_sort_key, sort.key_layout, std::move(sink.sorted_runs),
-	                           sort.output_projection_columns, sink.partition_size, sink.external, false),
+	    : sink(sink_p), merger(sort, std::move(sink.sorted_runs), sink.partition_size, sink.external, false),
 	      merger_global_state(merger.total_count == 0 ? nullptr : merger.GetGlobalSourceState(context)) {
 		// TODO: we want to pass "sort.is_index_sort" instead of just "false" here
 		//  so that we can do an approximate sort, but that causes issues in the ART
@@ -502,12 +501,15 @@ SourceResultType Sort::MaterializeSortedRun(ExecutionContext &context, OperatorS
 	}
 	auto &lstate = input.local_state.Cast<SortLocalSourceState>();
 	OperatorSourceInput merger_input {*gstate.merger_global_state, *lstate.merger_local_state, input.interrupt_state};
-	return gstate.merger.MaterializeMerge(context, merger_input);
+	return gstate.merger.MaterializeSortedRun(context, merger_input);
 }
 
 unique_ptr<SortedRun> Sort::GetSortedRun(GlobalSourceState &global_state) {
 	auto &gstate = global_state.Cast<SortGlobalSourceState>();
-	return gstate.merger.GetMaterialized(gstate);
+	if (gstate.merger.total_count == 0) {
+		return nullptr;
+	}
+	return gstate.merger.GetSortedRun(*gstate.merger_global_state);
 }
 
 } // namespace duckdb
