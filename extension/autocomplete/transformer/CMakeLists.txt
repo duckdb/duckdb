@@ -4,7 +4,9 @@ add_library_unity(
   peg_transformer.cpp
   peg_transformer_factory.cpp
   transform_common.cpp
+  transform_create_table.cpp
   transform_expression.cpp
+  transform_load.cpp
   transform_set.cpp
   transform_use.cpp)
 set(AUTOCOMPLETE_EXTENSION_FILES

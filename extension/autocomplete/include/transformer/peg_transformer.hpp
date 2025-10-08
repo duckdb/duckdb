@@ -4,6 +4,7 @@
 #include "parse_result.hpp"
 #include "transform_enum_result.hpp"
 #include "transform_result.hpp"
+#include "ast/extension_repository_info.hpp"
 #include "ast/setting_info.hpp"
 #include "duckdb/function/macro_function.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
@@ -174,6 +175,23 @@ private:
 	                                                               optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformSingleExpression(PEGTransformer &transformer,
 	                                                              optional_ptr<ParseResult> parse_result);
+
+	// create_table.gram
+	static string TransformIdentifierOrStringLiteral(PEGTransformer &transformer,
+	                                                 optional_ptr<ParseResult> parse_result);
+	static string TransformColIdOrString(PEGTransformer &transformer,
+														 optional_ptr<ParseResult> parse_result);
+	static string TransformColId(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static string TransformIdentifier(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+
+	// load.gram
+	static unique_ptr<SQLStatement> TransformLoadStatement(PEGTransformer &transformer,
+	                                                       optional_ptr<ParseResult> parse_result);
+	static unique_ptr<SQLStatement> TransformInstallStatement(PEGTransformer &transformer,
+	                                                          optional_ptr<ParseResult> parse_result);
+	static ExtensionRepositoryInfo TransformFromSource(PEGTransformer &transformer,
+	                                                   optional_ptr<ParseResult> parse_result);
+	static string TransformVersionNumber(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 	// use.gram
 	static unique_ptr<SQLStatement> TransformUseStatement(PEGTransformer &transformer,

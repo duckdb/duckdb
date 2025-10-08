@@ -65,12 +65,24 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	REGISTER_TRANSFORM(TransformNumberLiteral);
 	REGISTER_TRANSFORM(TransformStringLiteral);
 
+	// create_table.gram
+	REGISTER_TRANSFORM(TransformIdentifierOrStringLiteral);
+	REGISTER_TRANSFORM(TransformColIdOrString);
+	REGISTER_TRANSFORM(TransformColId);
+	REGISTER_TRANSFORM(TransformIdentifier);
+
 	// expression.gram
 	REGISTER_TRANSFORM(TransformBaseExpression);
 	REGISTER_TRANSFORM(TransformExpression);
 	REGISTER_TRANSFORM(TransformLiteralExpression);
 	REGISTER_TRANSFORM(TransformSingleExpression);
 	REGISTER_TRANSFORM(TransformConstantLiteral);
+
+	// load.gram
+	REGISTER_TRANSFORM(TransformLoadStatement);
+	REGISTER_TRANSFORM(TransformInstallStatement);
+	REGISTER_TRANSFORM(TransformFromSource);
+	REGISTER_TRANSFORM(TransformVersionNumber);
 
 	// use.gram
 	REGISTER_TRANSFORM(TransformUseStatement);
