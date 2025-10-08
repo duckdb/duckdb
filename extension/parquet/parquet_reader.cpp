@@ -168,12 +168,6 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 		metadata->read(file_proto.get());
 	}
 
-	for (const auto &row_group : metadata->row_groups) {
-		if (row_group.columns.size() + 1 != metadata->schema.size()) {
-			throw InvalidInputException("File '%s' row group schema does not match metadata", file_handle.GetPath());
-		}
-	}
-
 	// Try to read the GeoParquet metadata (if present)
 	auto geo_metadata = GeoParquetFileMetadata::TryRead(*metadata, context);
 	return make_shared_ptr<ParquetFileMetadataCache>(std::move(metadata), file_handle, std::move(geo_metadata),
@@ -746,7 +740,9 @@ unique_ptr<ParquetColumnSchema> ParquetReader::ParseSchema(ClientContext &contex
 		throw InvalidInputException("Root element of Parquet file must be a struct");
 	}
 	D_ASSERT(next_schema_idx == file_meta_data->schema.size() - 1);
-	D_ASSERT(file_meta_data->row_groups.empty() || next_file_idx == file_meta_data->row_groups[0].columns.size());
+	if (!file_meta_data->row_groups.empty() && next_file_idx != file_meta_data->row_groups[0].columns.size()) {
+		throw InvalidInputException("Parquet reader: row group does not have enough columns");
+	}
 	if (parquet_options.file_row_number) {
 		for (auto &column : root.children) {
 			auto &name = column.name;
