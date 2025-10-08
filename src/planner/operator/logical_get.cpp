@@ -24,11 +24,11 @@ LogicalGet::LogicalGet(idx_t table_index, TableFunction function, unique_ptr<Fun
       virtual_columns(std::move(virtual_columns_p)), extra_info() {
 }
 
-optional_ptr<TableCatalogEntry> LogicalGet::GetTable() const {
+optional_ptr<TableCatalogEntry> LogicalGet::GetTable(ClientContext &context) const {
 	if (!function.get_bind_info) {
 		return nullptr;
 	}
-	return function.get_bind_info(bind_data.get()).table;
+	return function.get_bind_info(context, bind_data.get()).table;
 }
 
 InsertionOrderPreservingMap<string> LogicalGet::ParamsToString() const {
