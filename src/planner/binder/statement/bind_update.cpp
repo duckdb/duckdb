@@ -116,9 +116,6 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	auto &table_binding = bound_table->Cast<BoundBaseTableRef>();
 	auto &table = table_binding.table;
 
-	// Add CTEs as bindable
-	AddCTEMap(stmt.cte_map);
-
 	optional_ptr<LogicalGet> get;
 	if (stmt.from_table) {
 		auto from_binder = Binder::CreateBinder(context, this);

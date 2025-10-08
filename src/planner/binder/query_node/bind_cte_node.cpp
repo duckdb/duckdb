@@ -63,7 +63,6 @@ BoundStatement Binder::BindCTE(CTENode &statement) {
 	// If there is already a binding for the CTE, we need to remove it first
 	// as we are binding a CTE currently, we take precendence over the existing binding.
 	// This implements the CTE shadowing behavior.
-	result.child_binder->bind_context.RemoveCTEBinding(statement.ctename);
 	result.child_binder->bind_context.AddCTEBinding(result.setop_index, statement.ctename, names, result.types);
 
 	if (statement.child) {

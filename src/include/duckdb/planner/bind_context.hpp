@@ -43,9 +43,6 @@ class BindContext {
 public:
 	explicit BindContext(Binder &binder);
 
-	//! Keep track of recursive CTE references
-	case_insensitive_map_t<shared_ptr<idx_t>> cte_references;
-
 public:
 	//! Given a column name, find the matching table it belongs to. Throws an
 	//! exception if no table has a column of the given name.
@@ -122,8 +119,6 @@ public:
 	void AddCTEBinding(idx_t index, const string &alias, const vector<string> &names, const vector<LogicalType> &types,
 	                   bool using_key = false);
 
-	void RemoveCTEBinding(const string &alias);
-
 	//! Add an implicit join condition (e.g. USING (x))
 	void AddUsingBinding(const string &column_name, UsingColumnSet &set);
 
@@ -145,13 +140,6 @@ public:
 	//! (e.g. "column_name" might return "COLUMN_NAME")
 	string GetActualColumnName(const BindingAlias &binding_alias, const string &column_name);
 	string GetActualColumnName(Binding &binding, const string &column_name);
-
-	case_insensitive_map_t<shared_ptr<Binding>> GetCTEBindings() {
-		return cte_bindings;
-	}
-	void SetCTEBindings(case_insensitive_map_t<shared_ptr<Binding>> bindings) {
-		cte_bindings = std::move(bindings);
-	}
 
 	//! Alias a set of column names for the specified table, using the original names if there are not enough aliases
 	//! specified.
@@ -184,10 +172,7 @@ private:
 	vector<unique_ptr<Binding>> bindings_list;
 	//! The set of columns used in USING join conditions
 	case_insensitive_map_t<reference_set_t<UsingColumnSet>> using_columns;
-	//! Using column sets
-	vector<unique_ptr<UsingColumnSet>> using_column_sets;
-
 	//! The set of CTE bindings
-	case_insensitive_map_t<shared_ptr<Binding>> cte_bindings;
+	case_insensitive_map_t<unique_ptr<Binding>> cte_bindings;
 };
 } // namespace duckdb

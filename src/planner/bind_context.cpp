@@ -77,10 +77,6 @@ void BindContext::AddUsingBinding(const string &column_name, UsingColumnSet &set
 	using_columns[column_name].insert(set);
 }
 
-void BindContext::AddUsingBindingSet(unique_ptr<UsingColumnSet> set) {
-	using_column_sets.push_back(std::move(set));
-}
-
 optional_ptr<UsingColumnSet> BindContext::GetUsingBinding(const string &column_name) {
 	auto entry = using_columns.find(column_name);
 	if (entry == using_columns.end()) {
@@ -714,30 +710,16 @@ void BindContext::AddGenericBinding(idx_t index, const string &alias, const vect
 
 void BindContext::AddCTEBinding(idx_t index, const string &alias, const vector<string> &names,
                                 const vector<LogicalType> &types, bool using_key) {
-	auto binding = make_shared_ptr<Binding>(BindingType::BASE, BindingAlias(alias), types, names, index);
+	auto binding = make_uniq<CTEBinding>(BindingAlias(alias), types, names, index);
 
 	if (cte_bindings.find(alias) != cte_bindings.end()) {
 		throw BinderException("Duplicate CTE binding \"%s\" in query!", alias);
 	}
 	cte_bindings[alias] = std::move(binding);
-	cte_references[alias] = make_shared_ptr<idx_t>(0);
 
 	if (using_key) {
 		auto recurring_alias = "recurring." + alias;
-		cte_bindings[recurring_alias] =
-		    make_shared_ptr<Binding>(BindingType::BASE, BindingAlias(recurring_alias), types, names, index);
-		cte_references[recurring_alias] = make_shared_ptr<idx_t>(0);
-	}
-}
-
-void BindContext::RemoveCTEBinding(const std::string &alias) {
-	auto it = cte_bindings.find(alias);
-	if (it != cte_bindings.end()) {
-		cte_bindings.erase(it);
-	}
-	auto it2 = cte_references.find(alias);
-	if (it2 != cte_references.end()) {
-		cte_references.erase(it2);
+		cte_bindings[recurring_alias] = make_uniq<CTEBinding>(BindingAlias(recurring_alias), types, names, index);
 	}
 }
 
