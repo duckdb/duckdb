@@ -27,7 +27,7 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 	//
 	//		 ∏ * \ pk
 	//		 |
-	//		 Γ pk;first(P),arg_xxx(B,inequality)
+	//		 Γ pk;first(P),arg_xxx_null(B,inequality)
 	//		 |
 	//		 ∏ *,inequality
 	//		 |
@@ -88,13 +88,13 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 		case ExpressionType::COMPARE_GREATERTHAN:
 			D_ASSERT(asof_idx == op.conditions.size());
 			asof_idx = i;
-			arg_min_max = "arg_max";
+			arg_min_max = "arg_max_null";
 			break;
 		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
 		case ExpressionType::COMPARE_LESSTHAN:
 			D_ASSERT(asof_idx == op.conditions.size());
 			asof_idx = i;
-			arg_min_max = "arg_min";
+			arg_min_max = "arg_min_null";
 			break;
 		case ExpressionType::COMPARE_EQUAL:
 		case ExpressionType::COMPARE_NOTEQUAL:
