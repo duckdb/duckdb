@@ -14,10 +14,23 @@
 
 namespace duckdb {
 
+enum class TopNPayloadType { SINGLE_COLUMN, STRUCT_PACK };
+
+struct TopNWindowEliminationParameters {
+	//! Whether the sort is ASCENDING or DESCENDING
+	OrderType order_type;
+	//! The number of values in the LIMIT clause
+	int64_t limit;
+	//! How we fetch the payload columns
+	TopNPayloadType payload_type;
+	//! Whether to include row numbers
+	bool include_row_number;
+};
+
 class TopNWindowElimination : public BaseColumnPruner {
 public:
 	explicit TopNWindowElimination(ClientContext &context, Optimizer &optimizer,
-	                               column_binding_map_t<unique_ptr<BaseStatistics>> *stats_p);
+	                               optional_ptr<column_binding_map_t<unique_ptr<BaseStatistics>>> stats_p);
 
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> op);
 
@@ -25,17 +38,16 @@ private:
 	bool CanOptimize(LogicalOperator &op);
 	unique_ptr<LogicalOperator> OptimizeInternal(unique_ptr<LogicalOperator> op, ColumnBindingReplacer &replacer);
 
-	unique_ptr<LogicalOperator> CreateAggregateOperator(LogicalWindow &window, unique_ptr<Expression> limit,
-	                                                    vector<unique_ptr<Expression>> args) const;
-	unique_ptr<LogicalOperator> TryCreateUnnestOperator(unique_ptr<LogicalOperator> op, bool include_row_number) const;
-	unique_ptr<LogicalOperator> CreateProjectionOperator(unique_ptr<LogicalOperator> op, bool include_row_number,
-	                                                     bool use_struct_packing,
+	unique_ptr<LogicalOperator> CreateAggregateOperator(LogicalWindow &window, vector<unique_ptr<Expression>> args,
+	                                                    const TopNWindowEliminationParameters &params) const;
+	unique_ptr<LogicalOperator> TryCreateUnnestOperator(unique_ptr<LogicalOperator> op,
+	                                                    const TopNWindowEliminationParameters &params) const;
+	unique_ptr<LogicalOperator> CreateProjectionOperator(unique_ptr<LogicalOperator> op,
+	                                                     const TopNWindowEliminationParameters &params,
 	                                                     const map<idx_t, idx_t> &group_idxs) const;
 
-	vector<unique_ptr<Expression>> GenerateAggregateArgs(const vector<ColumnBinding> &bindings,
-	                                                     const LogicalWindow &window, bool &generate_row_ids,
-	                                                     map<idx_t, idx_t> &group_idxs);
-
+	vector<unique_ptr<Expression>> GenerateAggregatePayload(const vector<ColumnBinding> &bindings,
+	                                                        const LogicalWindow &window, map<idx_t, idx_t> &group_idxs);
 	vector<ColumnBinding> TraverseProjectionBindings(const std::vector<ColumnBinding> &old_bindings,
 	                                                 LogicalOperator *&op);
 	unique_ptr<Expression> CreateAggregateExpression(vector<unique_ptr<Expression>> aggregate_params, bool requires_arg,
@@ -43,13 +55,14 @@ private:
 	unique_ptr<Expression> CreateRowNumberGenerator(unique_ptr<Expression> aggregate_column_ref) const;
 	void AddStructExtractExprs(vector<unique_ptr<Expression>> &exprs, const LogicalType &struct_type,
 	                           const unique_ptr<BoundColumnRefExpression> &aggregate_column_ref) const;
-	static void UpdateBindings(idx_t window_idx, idx_t group_table_idx, idx_t aggregate_table_idx,
-	                           const map<idx_t, idx_t> &group_idxs, const vector<ColumnBinding> &old_bindings,
-	                           vector<ColumnBinding> &new_bindings, ColumnBindingReplacer &replacer);
+	static void UpdateTopmostBindings(idx_t window_idx, const unique_ptr<LogicalOperator> &op,
+	                                  const map<idx_t, idx_t> &group_idxs,
+	                                  const vector<ColumnBinding> &topmost_bindings,
+	                                  vector<ColumnBinding> &new_bindings, ColumnBindingReplacer &replacer);
 
 private:
 	ClientContext &context;
 	Optimizer &optimizer;
-	column_binding_map_t<unique_ptr<BaseStatistics>> *stats;
+	optional_ptr<column_binding_map_t<unique_ptr<BaseStatistics>>> stats;
 };
 } // namespace duckdb

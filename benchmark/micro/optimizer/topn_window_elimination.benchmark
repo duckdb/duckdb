@@ -17,21 +17,7 @@ CREATE TABLE tags AS (
 );
 
 run
-SELECT *
-FROM tags t
-INNER JOIN LATERAL (
-  SELECT *
-  FROM metrics m
-  WHERE m.k = t.k
-  ORDER BY tm DESC
-  LIMIT 1) AS b ON true
-ORDER BY t.k, b.tm DESC;
-SELECT *
-FROM tags t
-INNER JOIN LATERAL (
-  SELECT *
-  FROM metrics m
-  WHERE m.k = t.k
-  ORDER BY tm DESC
-  LIMIT 3) AS b ON true
-ORDER BY t.k, b.tm DESC;
+SELECT * FROM tags t INNER JOIN LATERAL (SELECT * FROM metrics m WHERE m.k = t.k ORDER BY tm DESC LIMIT 1) AS b ON true ORDER BY t.k, b.tm DESC;
+SELECT * FROM tags t INNER JOIN LATERAL (SELECT * FROM metrics m WHERE m.k = t.k ORDER BY tm DESC LIMIT 3) AS b ON true ORDER BY t.k, b.tm DESC;
+SELECT * FROM tags t, (SELECT *, row_number() OVER (PARTITION BY m.k ORDER BY m.tm DESC) rn FROM metrics m QUALIFY rn <= 1) m WHERE t.k = m.k;
+SELECT * FROM tags t, (SELECT *, row_number() OVER (PARTITION BY m.k ORDER BY m.tm DESC) rn FROM metrics m QUALIFY rn <= 3) m WHERE t.k = m.k;
