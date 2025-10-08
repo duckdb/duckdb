@@ -1,11 +1,9 @@
 #include "duckdb/parser/expression/lambda_expression.hpp"
 
 #include "duckdb/common/types/hash.hpp"
-#include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 
 #include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 

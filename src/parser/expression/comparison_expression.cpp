@@ -1,11 +1,5 @@
 #include "duckdb/parser/expression/comparison_expression.hpp"
 
-#include "duckdb/common/exception.hpp"
-#include "duckdb/parser/expression/cast_expression.hpp"
-
-#include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/serializer/deserializer.hpp"
-
 namespace duckdb {
 
 ComparisonExpression::ComparisonExpression(ExpressionType type) : ParsedExpression(type, ExpressionClass::COMPARISON) {

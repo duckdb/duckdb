@@ -15,6 +15,7 @@
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
 
 namespace duckdb {
