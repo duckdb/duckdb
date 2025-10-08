@@ -28,13 +28,18 @@ unique_ptr<Expression> CreateBoundStructExtract(ClientContext &context, unique_p
 	auto return_type = extract_function.return_type;
 	auto result = make_uniq<BoundFunctionExpression>(return_type, std::move(extract_function), std::move(arguments),
 	                                                 std::move(bind_info));
-	vector<string> full_path = key_path;
-	full_path.push_back(key);
-	auto alias = StringUtil::Join(full_path, ".");
-	if (!alias.empty() && alias[0] == '.') {
-		alias = alias.substr(1);
+
+	if (DBConfig::GetSetting<RetainUnnestParentNamesSetting>(context)) {
+		vector<string> full_path = key_path;
+		full_path.push_back(key);
+		auto alias = StringUtil::Join(full_path, ".");
+		if (!alias.empty() && alias[0] == '.') {
+			alias = alias.substr(1);
+		}
+		result->SetAlias(alias);
+	} else {
+		result->SetAlias(std::move(key));
 	}
-	result->SetAlias(alias);
 	return std::move(result);
 }
 

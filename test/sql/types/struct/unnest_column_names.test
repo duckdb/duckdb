@@ -5,6 +5,9 @@
 statement ok
 PRAGMA enable_verification
 
+statement ok
+set retain_unnest_parent_names=true;
+
 query II
 SELECT unnest([{'a':{ 'aa': 42}, 'b':{'bb': 84}}], recursive := true);
 ----

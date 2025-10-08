@@ -823,6 +823,13 @@
         "custom_implementation": true
     },
     {
+        "name": "retain_unnest_parent_names",
+        "description": "Keep parent names when unfolding an unnest",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
+    },
+    {
         "name": "scalar_subquery_error_on_multiple_rows",
         "description": "When a scalar subquery returns multiple rows - return a random row instead of returning an error.",
         "type": "BOOLEAN",

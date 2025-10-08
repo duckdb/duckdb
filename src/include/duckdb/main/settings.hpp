@@ -1141,6 +1141,15 @@ struct ProgressBarTimeSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct RetainUnnestParentNamesSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "retain_unnest_parent_names";
+	static constexpr const char *Description = "Keep parent names when unfolding an unnest";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SetScope DefaultScope = SetScope::SESSION;
+};
+
 struct ScalarSubqueryErrorOnMultipleRowsSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "scalar_subquery_error_on_multiple_rows";
