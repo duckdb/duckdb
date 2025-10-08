@@ -42,7 +42,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformSetStatement(PEGTransfo
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto &child_pr = list_pr.Child<ListParseResult>(1);
 	auto &assignment_or_timezone = child_pr.Child<ChoiceParseResult>(0);
-	return transformer.Transform<unique_ptr<SQLStatement>>(assignment_or_timezone);
+	return transformer.Transform<unique_ptr<SetVariableStatement>>(assignment_or_timezone);
 }
 
 // SetTimeZone <- 'TIME' 'ZONE' Expression
@@ -63,7 +63,7 @@ SettingInfo PEGTransformerFactory::TransformSetVariable(PEGTransformer &transfor
 }
 
 // StandardAssignment <- (SetVariable / SetSetting) SetAssignment
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformStandardAssignment(PEGTransformer &transformer,
+unique_ptr<SetVariableStatement> PEGTransformerFactory::TransformStandardAssignment(PEGTransformer &transformer,
                                                                             optional_ptr<ParseResult> parse_result) {
 	auto &choice_pr = parse_result->Cast<ChoiceParseResult>();
 	auto &list_pr = choice_pr.result->Cast<ListParseResult>();

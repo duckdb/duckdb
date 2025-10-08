@@ -454,7 +454,7 @@ private:
 	static unique_ptr<SQLStatement> TransformSetTimeZone(PEGTransformer &transformer,
 	                                                     optional_ptr<ParseResult> parse_result);
 	static SettingInfo TransformSetVariable(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static unique_ptr<SQLStatement> TransformStandardAssignment(PEGTransformer &transformer,
+	static unique_ptr<SetVariableStatement> TransformStandardAssignment(PEGTransformer &transformer,
 	                                                            optional_ptr<ParseResult> parse_result);
 	static vector<unique_ptr<ParsedExpression>> TransformVariableList(PEGTransformer &transformer,
 	                                                                  optional_ptr<ParseResult> parse_result);
