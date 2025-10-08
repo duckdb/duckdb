@@ -1,0 +1,12 @@
+# name: benchmark/micro/logger/file_handle_log/parquet/file_handle_logging_parquet_baseline.benchmark
+# description: 
+# group: [parquet]
+
+name File Handle Log (parquet, baseline)
+group logger
+
+load
+CREATE TABLE test AS select i from range(0,100000000) t(i);
+
+run
+copy test to '${BENCHMARK_DIR}/file_handle_logging.parquet';

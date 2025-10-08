@@ -114,14 +114,8 @@ unique_ptr<FunctionData> WriteLogBind(ClientContext &context, ScalarFunction &bo
 template <class T>
 void WriteLogValues(T &LogSource, LogLevel level, const string_t *data, const SelectionVector *sel, idx_t size,
                     const string &type) {
-	if (!type.empty()) {
-		for (idx_t i = 0; i < size; i++) {
-			DUCKDB_LOG_INTERNAL(LogSource, type.c_str(), level, data[sel->get_index(i)]);
-		}
-	} else {
-		for (idx_t i = 0; i < size; i++) {
-			DUCKDB_LOG_INTERNAL(LogSource, type.c_str(), level, data[sel->get_index(i)]);
-		}
+	for (idx_t i = 0; i < size; i++) {
+		DUCKDB_LOG_INTERNAL(LogSource, type.c_str(), level, data[sel->get_index(i)]);
 	}
 }
 

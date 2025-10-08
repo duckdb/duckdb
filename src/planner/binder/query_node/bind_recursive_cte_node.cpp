@@ -15,8 +15,8 @@
 
 namespace duckdb {
 
-unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
-	auto result = make_uniq<BoundRecursiveCTENode>();
+BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
+	BoundRecursiveCTENode result;
 
 	// first recursively visit the recursive CTE operations
 	// the left side is visited first and is added to the BindContext of the right side
@@ -26,37 +26,37 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 		throw BinderException("UNION ALL cannot be used with USING KEY in recursive CTE.");
 	}
 
-	result->ctename = statement.ctename;
-	result->union_all = statement.union_all;
-	result->setop_index = GenerateTableIndex();
+	result.ctename = statement.ctename;
+	result.union_all = statement.union_all;
+	result.setop_index = GenerateTableIndex();
 
-	result->left_binder = Binder::CreateBinder(context, this);
-	result->left = result->left_binder->BindNode(*statement.left);
+	result.left_binder = Binder::CreateBinder(context, this);
+	result.left = result.left_binder->BindNode(*statement.left);
 
 	// the result types of the CTE are the types of the LHS
-	result->types = result->left->types;
-	result->internal_types = result->left->types;
+	result.types = result.left.types;
+	result.internal_types = result.left.types;
 
 	// names are picked from the LHS, unless aliases are explicitly specified
-	result->names = result->left->names;
-	for (idx_t i = 0; i < statement.aliases.size() && i < result->names.size(); i++) {
-		result->names[i] = statement.aliases[i];
+	result.names = result.left.names;
+	for (idx_t i = 0; i < statement.aliases.size() && i < result.names.size(); i++) {
+		result.names[i] = statement.aliases[i];
 	}
 
 	// This allows the right side to reference the CTE recursively
-	bind_context.AddGenericBinding(result->setop_index, statement.ctename, result->names, result->types);
+	bind_context.AddGenericBinding(result.setop_index, statement.ctename, result.names, result.types);
 
 	// Create temporary binder to bind expressions
 	auto bin = Binder::CreateBinder(context, nullptr);
 	ErrorData error;
 	FunctionBinder function_binder(*bin);
-	bin->bind_context.AddGenericBinding(result->setop_index, statement.ctename, result->names, result->types);
+	bin->bind_context.AddGenericBinding(result.setop_index, statement.ctename, result.names, result.types);
 	ExpressionBinder expression_binder(*bin, context);
 
 	// Set contains column indices that are already bound
 	unordered_set<idx_t> column_references;
 	// Temporary copy of return types that we can modify without having a conflict with binding the aggregates
-	vector<LogicalType> return_types = result->types;
+	vector<LogicalType> return_types = result.types;
 
 	// Bind specified keys to the referenced column
 	for (unique_ptr<ParsedExpression> &expr : statement.key_targets) {
@@ -68,11 +68,11 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 		if (column_references.find(column_index) != column_references.end()) {
 			throw BinderException(bound_ref.GetQueryLocation(),
 			                      "Column '%s' referenced multiple times in recursive CTE aggregates",
-			                      result->names[column_index]);
+			                      result.names[column_index]);
 		}
 
 		column_references.insert(column_index);
-		result->key_targets.push_back(std::move(bound_expr));
+		result.key_targets.push_back(std::move(bound_expr));
 	}
 
 	// Bind user-defined aggregates
@@ -97,16 +97,16 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 		// If user provided an alias, prioritize that.
 		// Otherwise, we try to infer the target column from the first argument
 		if (func_expr.HasAlias()) {
-			auto names_iter = find(result->names.begin(), result->names.end(), func_expr.GetAlias());
-			if (names_iter == result->names.end()) {
+			auto names_iter = find(result.names.begin(), result.names.end(), func_expr.GetAlias());
+			if (names_iter == result.names.end()) {
 				throw BinderException(expr->GetQueryLocation(),
 				                      "Could not find column with name '%s' to bind aggregate to.",
 				                      func_expr.GetAlias());
 			}
-			aggregate_idx = NumericCast<idx_t>(std::distance(result->names.begin(), names_iter));
+			aggregate_idx = NumericCast<idx_t>(std::distance(result.names.begin(), names_iter));
 			// Create a new bound column reference for the target column
-			result->payload_aggregate_dest_map[payload_idx] = make_uniq<BoundColumnRefExpression>(
-			    result->types[aggregate_idx], ColumnBinding(result->setop_index, aggregate_idx));
+			result.payload_aggregate_dest_map[payload_idx] = make_uniq<BoundColumnRefExpression>(
+			    result.types[aggregate_idx], ColumnBinding(result.setop_index, aggregate_idx));
 		} else {
 			if (bound_children[0]->type != ExpressionType::BOUND_COLUMN_REF) {
 				// No alias and no way to infer target column through first argument
@@ -130,60 +130,57 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 		if (column_references.find(aggregate_idx) != column_references.end()) {
 			throw BinderException(func_expr.GetQueryLocation(),
 			                      "Column '%s' referenced multiple times in recursive CTE aggregates",
-			                      result->names[aggregate_idx]);
+			                      result.names[aggregate_idx]);
 		}
 
 		return_types[aggregate_idx] = aggregate->return_type;
-		result->payload_aggregates.push_back(std::move(aggregate));
+		result.payload_aggregates.push_back(std::move(aggregate));
 		column_references.insert(aggregate_idx);
 	}
 
 	// Now that we have finished binding all aggregates, we can update the operator types
-	result->types = std::move(return_types);
+	result.types = std::move(return_types);
 
 	// If we have key targets, then all the other columns must be aggregated
-	if (!result->key_targets.empty()) {
+	if (!result.key_targets.empty()) {
 		// Bind every column that is neither referenced as a key nor by an aggregate to a LAST aggregate
-		for (idx_t i = 0; i < result->left->types.size(); i++) {
+		for (idx_t i = 0; i < result.left.types.size(); i++) {
 			if (column_references.find(i) == column_references.end()) {
 				// Create a new bound column reference for the missing columns
 				vector<unique_ptr<Expression>> first_children;
 				auto bound =
-				    make_uniq<BoundColumnRefExpression>(result->types[i], ColumnBinding(result->setop_index, i));
+				    make_uniq<BoundColumnRefExpression>(result.types[i], ColumnBinding(result.setop_index, i));
 				first_children.push_back(std::move(bound));
 
 				// Create a last aggregate for the newly bound column reference
 				auto first_aggregate = function_binder.BindAggregateFunction(
-				    LastFunctionGetter::GetFunction(result->types[i]), std::move(first_children), nullptr,
+				    LastFunctionGetter::GetFunction(result.types[i]), std::move(first_children), nullptr,
 				    AggregateType::NON_DISTINCT);
 
-				result->payload_aggregates.push_back(std::move(first_aggregate));
+				result.payload_aggregates.push_back(std::move(first_aggregate));
 			}
 		}
 	}
 
-	result->right_binder = Binder::CreateBinder(context, this);
+	result.right_binder = Binder::CreateBinder(context, this);
 
 	// Add bindings of left side to temporary CTE bindings context
-	// If there is already a binding for the CTE, we need to remove it first
-	// as we are binding a CTE currently, we take precedence over the existing binding.
-	// This implements the CTE shadowing behavior.
-	result->right_binder->bind_context.RemoveCTEBinding(statement.ctename);
-	result->right_binder->bind_context.AddCTEBinding(result->setop_index, statement.ctename, result->names,
-	                                                 result->internal_types, result->types,
+	result.right_binder->bind_context.AddCTEBinding(result.setop_index, statement.ctename, result.names,
+	                                                 result.internal_types, result.types,
 	                                                 !statement.key_targets.empty());
 
-	result->right = result->right_binder->BindNode(*statement.right);
-	for (auto &c : result->left_binder->correlated_columns) {
-		result->right_binder->AddCorrelatedColumn(c);
+
+	result.right = result.right_binder->BindNode(*statement.right);
+	for (auto &c : result.left_binder->correlated_columns) {
+		result.right_binder->AddCorrelatedColumn(c);
 	}
 
 	// move the correlated expressions from the child binders to this binder
-	MoveCorrelatedExpressions(*result->left_binder);
-	MoveCorrelatedExpressions(*result->right_binder);
+	MoveCorrelatedExpressions(*result.left_binder);
+	MoveCorrelatedExpressions(*result.right_binder);
 
 	// now both sides have been bound we can resolve types
-	if (result->left->types.size() != result->right->types.size()) {
+	if (result.left.types.size() != result.right.types.size()) {
 		throw BinderException("Set operations can only apply to expressions with the "
 		                      "same number of result columns");
 	}
@@ -192,7 +189,11 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 		throw NotImplementedException("FIXME: bind modifiers in recursive CTE");
 	}
 
-	return std::move(result);
+	BoundStatement result_statement;
+	result_statement.types = result.types;
+	result_statement.names = result.names;
+	result_statement.plan = CreatePlan(result);
+	return result_statement;
 }
 
 } // namespace duckdb

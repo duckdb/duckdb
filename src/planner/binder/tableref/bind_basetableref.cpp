@@ -123,97 +123,53 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 
 	// CTE name should never be qualified (i.e. schema_name should be empty)
 	// unless we want to refer to the recurring table of "using key".
-	vector<reference<CommonTableExpressionInfo>> found_ctes;
-	if (ref.schema_name.empty() || ref.schema_name == "recurring") {
-		found_ctes = FindCTE(ref.table_name, ref.table_name == alias);
+	auto ctebinding = GetCTEBinding(ref.table_name);
+	if (ctebinding) {
+		// There is a CTE binding in the BindContext.
+		// This can only be the case if there is a recursive CTE,
+		// or a materialized CTE present.
+		auto index = GenerateTableIndex();
+
+		vector<LogicalType> types = ctebinding->types;
+		if (ref.schema_name == "recurring") {
+			auto recurring_bindings = GetCTEBinding("recurring." + ref.table_name);
+			if (!recurring_bindings) {
+				throw BinderException(error_context,
+				                      "There is a WITH item named \"%s\", but the recurring table cannot be "
+				                      "referenced from this part of the query."
+				                      " Hint: RECURRING can only be used with USING KEY in recursive CTE.",
+				                      ref.table_name);
+			}
+			types = recurring_bindings->types;
+		}
+
+		auto result = make_uniq<BoundCTERef>(index, ctebinding->index, ref.schema_name == "recurring");
+		auto alias = ref.alias.empty() ? ref.table_name : ref.alias;
+		auto names = BindContext::AliasColumnNames(alias, ctebinding->names, ref.column_name_alias);
+
+		bind_context.AddGenericBinding(index, alias, names, types);
+
+		auto cte_ref = reference<CTEBinding>(ctebinding->Cast<CTEBinding>());
+		if (!ref.schema_name.empty()) {
+			auto cte_reference = ref.schema_name + "." + ref.table_name;
+			auto recurring_ref = GetCTEBinding(cte_reference);
+			if (!recurring_ref) {
+				throw BinderException(error_context,
+				                      "There is a WITH item named \"%s\", but the recurring table cannot be "
+				                      "referenced from this part of the query.",
+				                      ref.table_name);
+			}
+			cte_ref = reference<CTEBinding>(recurring_ref->Cast<CTEBinding>());
+		}
+
+		// Update references to CTE
+		cte_ref.get().reference_count++;
+
+		result->types = types;
+		result->bound_columns = std::move(names);
+		return std::move(result);
 	}
 
-	if (!found_ctes.empty()) {
-		// Check if there is a CTE binding in the BindContext
-		bool circular_cte = false;
-		for (auto found_cte : found_ctes) {
-			auto &cte = found_cte.get();
-			// Check if we have a recurring scan, if so, we will also need the schema_name
-			auto cte_name = !ref.schema_name.empty() ? ref.schema_name + "." + ref.table_name : ref.table_name;
-			auto ctebinding = bind_context.GetCTEBinding(cte_name);
-			if (ctebinding) {
-				// There is a CTE binding in the BindContext.
-				// This can only be the case if there is a recursive CTE,
-				// or a materialized CTE present.
-				auto index = GenerateTableIndex();
-				auto materialized = cte.materialized;
-
-				if (ref.schema_name == "recurring" && cte.key_targets.empty()) {
-					throw InvalidInputException("RECURRING can only be used with USING KEY in recursive CTE.");
-				}
-
-				auto result =
-				    make_uniq<BoundCTERef>(index, ctebinding->index, materialized, ref.schema_name == "recurring");
-				auto alias = ref.alias.empty() ? ref.table_name : ref.alias;
-				auto names = BindContext::AliasColumnNames(alias, ctebinding->names, ref.column_name_alias);
-
-				bind_context.AddGenericBinding(index, alias, names, ctebinding->types);
-
-				auto cte_reference = ref.schema_name.empty() ? ref.table_name : ref.schema_name + "." + ref.table_name;
-
-				// Update references to CTE
-				auto cteref = bind_context.cte_references[cte_reference];
-
-				if (cteref == nullptr && ref.schema_name == "recurring") {
-					throw BinderException("There is a WITH item named \"%s\", but the recurring table cannot be "
-					                      "referenced from this part of the query.",
-					                      ref.table_name);
-				}
-
-				(*cteref)++;
-
-				result->types = ctebinding->types;
-				result->bound_columns = std::move(names);
-				return std::move(result);
-			} else {
-				if (CTEIsAlreadyBound(cte)) {
-					// remember error state
-					circular_cte = true;
-					// retry with next candidate CTE
-					continue;
-				}
-
-				// If we have found a materialized CTE, but no corresponding CTE binding,
-				// something is wrong.
-				if (cte.materialized == CTEMaterialize::CTE_MATERIALIZE_ALWAYS) {
-					throw BinderException(
-					    "There is a WITH item named \"%s\", but it cannot be referenced from this part of the query.",
-					    ref.table_name);
-				}
-
-				if (ref.schema_name == "recurring") {
-					if (cte.key_targets.empty()) {
-						throw BinderException("There is a WITH item named \"%s\", but the USING KEY clause is missing, "
-						                      "so there is no recurring table.",
-						                      ref.table_name);
-
-					} else {
-						throw BinderException("There is a WITH item named \"%s\", but the recurring table cannot be "
-						                      "referenced from this part of the query.",
-						                      ref.table_name);
-					}
-				}
-			}
-		}
-		if (circular_cte) {
-			auto replacement_scan_bind_result = BindWithReplacementScan(context, ref);
-			if (replacement_scan_bind_result) {
-				return replacement_scan_bind_result;
-			}
-
-			throw BinderException(
-			    "Circular reference to CTE \"%s\", There are two possible solutions. \n1. use WITH RECURSIVE to "
-			    "use recursive CTEs. \n2. If "
-			    "you want to use the TABLE name \"%s\" the same as the CTE name, please explicitly add "
-			    "\"SCHEMA\" before table name. You can try \"main.%s\" (main is the duckdb default schema)",
-			    ref.table_name, ref.table_name, ref.table_name);
-		}
-	}
 	// not a CTE
 	// extract a table or view from the catalog
 	auto at_clause = BindAtClause(ref.at_clause);
@@ -270,10 +226,23 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 			}
 		}
 
+		// remember that we did not find a CTE, but there is a CTE with the same name
+		// this means that there is a circular reference
+		// Otherwise, re-throw the original exception
+		if (!ctebinding && ref.schema_name.empty() && CTEExists(ref.table_name)) {
+			throw BinderException(
+			    error_context,
+			    "Circular reference to CTE \"%s\", There are two possible solutions. \n1. use WITH RECURSIVE to "
+			    "use recursive CTEs. \n2. If "
+			    "you want to use the TABLE name \"%s\" the same as the CTE name, please explicitly add "
+			    "\"SCHEMA\" before table name. You can try \"main.%s\" (main is the duckdb default schema)",
+			    ref.table_name, ref.table_name, ref.table_name);
+		}
 		// could not find an alternative: bind again to get the error
-		(void)entry_retriever.GetEntry(ref.catalog_name, ref.schema_name, table_lookup,
-		                               OnEntryNotFound::THROW_EXCEPTION);
-		throw InternalException("Catalog::GetEntry should have thrown an exception above");
+		// note: this will always throw when using DuckDB as a catalog, but a second look-up might succeed
+		// in catalogs that do not have transactional DDL
+		table_or_view =
+		    entry_retriever.GetEntry(ref.catalog_name, ref.schema_name, table_lookup, OnEntryNotFound::THROW_EXCEPTION);
 	}
 
 	switch (table_or_view->type) {
@@ -351,7 +320,6 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		while (!materialized_ctes.empty()) {
 			unique_ptr<CTENode> node_result;
 			node_result = std::move(materialized_ctes.back());
-			node_result->cte_map = root->cte_map.Copy();
 			node_result->child = std::move(root);
 			root = std::move(node_result);
 			materialized_ctes.pop_back();
@@ -391,7 +359,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 			// we bind the view subquery and the original view with different "can_contain_nulls",
 			// but we don't want to throw an error when SQLNULL does not match up with INTEGER,
 			// so we exchange all SQLNULL with INTEGER here before comparing
-			auto bound_types = ExchangeAllNullTypes(bound_subquery.subquery->types);
+			auto bound_types = ExchangeAllNullTypes(bound_subquery.subquery.types);
 			auto view_types = ExchangeAllNullTypes(view_catalog_entry.types);
 			if (bound_types != view_types) {
 				auto actual_types = StringUtil::ToString(bound_types, ", ");
@@ -400,17 +368,17 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 				    "Contents of view were altered: types don't match! Expected [%s], but found [%s] instead",
 				    expected_types, actual_types);
 			}
-			if (bound_subquery.subquery->names.size() == view_catalog_entry.names.size() &&
-			    bound_subquery.subquery->names != view_catalog_entry.names) {
-				auto actual_names = StringUtil::Join(bound_subquery.subquery->names, ", ");
+			if (bound_subquery.subquery.names.size() == view_catalog_entry.names.size() &&
+			    bound_subquery.subquery.names != view_catalog_entry.names) {
+				auto actual_names = StringUtil::Join(bound_subquery.subquery.names, ", ");
 				auto expected_names = StringUtil::Join(view_catalog_entry.names, ", ");
 				throw BinderException(
 				    "Contents of view were altered: names don't match! Expected [%s], but found [%s] instead",
 				    expected_names, actual_names);
 			}
 		}
-		bind_context.AddView(bound_subquery.subquery->GetRootIndex(), subquery.alias, subquery,
-		                     *bound_subquery.subquery, view_catalog_entry);
+		bind_context.AddView(bound_subquery.subquery.plan->GetRootIndex(), subquery.alias, subquery,
+		                     bound_subquery.subquery, view_catalog_entry);
 		return bound_child;
 	}
 	default:

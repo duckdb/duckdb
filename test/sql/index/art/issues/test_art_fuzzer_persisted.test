@@ -2,9 +2,6 @@
 # description: Test ART fuzzer issue with persisted database
 # group: [issues]
 
-statement ok
-PRAGMA enable_verification
-
 # issue 5984, number 41
 
 # load the DB from disk

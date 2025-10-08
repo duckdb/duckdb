@@ -131,6 +131,9 @@ public:
 	                                                  const string &table_name);
 	//! Get the table info of a specific table, or nullptr if it cannot be found. Uses INVALID_CATALOG.
 	DUCKDB_API unique_ptr<TableDescription> TableInfo(const string &schema_name, const string &table_name);
+	//! Execute a query with the given collection "attached" to the query using a CTE
+	DUCKDB_API void Append(ColumnDataCollection &collection, const string &query, const vector<string> &column_names,
+	                       const string &collection_name);
 	//! Appends a DataChunk and its default columns to the specified table.
 	DUCKDB_API void Append(TableDescription &description, ColumnDataCollection &collection,
 	                       optional_ptr<const vector<LogicalIndex>> column_ids = nullptr);
@@ -224,8 +227,7 @@ public:
 
 private:
 	//! Parse statements and resolve pragmas from a query
-	bool ParseStatements(ClientContextLock &lock, const string &query, vector<unique_ptr<SQLStatement>> &result,
-	                     ErrorData &error);
+	vector<unique_ptr<SQLStatement>> ParseStatements(ClientContextLock &lock, const string &query);
 	//! Issues a query to the database and returns a Pending Query Result
 	unique_ptr<PendingQueryResult> PendingQueryInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
 	                                                    const PendingQueryParameters &parameters, bool verify = true);
@@ -302,6 +304,8 @@ private:
 	CreatePreparedStatementInternal(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
 	                                optional_ptr<case_insensitive_map_t<BoundParameterData>> values);
 
+	SettingLookupResult TryGetCurrentSettingInternal(const string &key, Value &result) const;
+
 private:
 	//! Lock on using the ClientContext in parallel
 	mutex context_lock;
@@ -333,6 +337,11 @@ public:
 	}
 	QueryContext(optional_ptr<ClientContext> context) : context(context) { // NOLINT: allow implicit construction
 	}
+	QueryContext(ClientContext &context) : context(&context) { // NOLINT: allow implicit construction
+	}
+	QueryContext(weak_ptr<ClientContext> context) // NOLINT: allow implicit construction
+	    : owning_context(context.lock()), context(owning_context.get()) {
+	}
 
 public:
 	bool Valid() const {
@@ -343,6 +352,7 @@ public:
 	}
 
 private:
+	shared_ptr<ClientContext> owning_context;
 	optional_ptr<ClientContext> context;
 };
 

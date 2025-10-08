@@ -24,6 +24,7 @@ struct ClientProperties {
 	      arrow_lossless_conversion(lossless_conversion), arrow_output_version(arrow_output_version),
 	      client_context(client_context) {
 	}
+	ClientProperties() {};
 
 	string time_zone = "UTC";
 	ArrowOffsetSize arrow_offset_size = ArrowOffsetSize::REGULAR;

@@ -227,7 +227,13 @@ unique_ptr<HTTPResponse> HTTPUtil::SendRequest(BaseRequest &request, unique_ptr<
 	}
 
 	std::function<unique_ptr<HTTPResponse>(void)> on_request([&]() {
-		auto response = client->Request(request);
+		unique_ptr<HTTPResponse> response;
+		try {
+			response = client->Request(request);
+		} catch (...) {
+			LogRequest(request, nullptr);
+			throw;
+		}
 		LogRequest(request, response ? response.get() : nullptr);
 		return response;
 	});
@@ -361,7 +367,9 @@ HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)
 
 		try {
 			response = on_request();
-			response->url = request.url;
+			if (response) {
+				response->url = request.url;
+			}
 		} catch (IOException &e) {
 			exception_error = e.what();
 			caught_e = std::current_exception();
@@ -373,8 +381,12 @@ HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)
 		// Note: request errors will always be retried
 		bool should_retry = !response || response->ShouldRetry();
 		if (!should_retry) {
+			auto response_code = static_cast<uint16_t>(response->status);
+			if (response_code >= 200 && response_code < 300) {
+				response->success = true;
+				return response;
+			}
 			switch (response->status) {
-			case HTTPStatusCode::OK_200:
 			case HTTPStatusCode::NotModified_304:
 				response->success = true;
 				break;

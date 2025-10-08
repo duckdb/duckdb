@@ -17,10 +17,22 @@ namespace duckdb {
 struct string_t;
 struct interval_t; // NOLINT
 
-// efficient hash function that maximizes the avalanche effect and minimizes
-// bias
-// see: https://nullprogram.com/blog/2018/07/31/
+//! Combine two hashes by XORing them
+inline hash_t CombineHash(hash_t left, hash_t right) {
+	return left ^ right;
+}
 
+#ifdef DUCKDB_HASH_ZERO
+template <class T>
+hash_t Hash(T value) {
+	return 0;
+}
+
+DUCKDB_API hash_t Hash(const char *val, size_t size);
+DUCKDB_API hash_t Hash(uint8_t *val, size_t size);
+#else
+//! Efficient hash function that maximizes the avalanche effect and minimizes bias
+//! See: https://nullprogram.com/blog/2018/07/31/
 inline hash_t MurmurHash64(uint64_t x) {
 	x ^= x >> 32;
 	x *= 0xd6e8feb86659fd93U;
@@ -37,11 +49,6 @@ inline hash_t MurmurHash32(uint32_t x) {
 template <class T>
 hash_t Hash(T value) {
 	return MurmurHash32(static_cast<uint32_t>(value));
-}
-
-//! Combine two hashes by XORing them
-inline hash_t CombineHash(hash_t left, hash_t right) {
-	return left ^ right;
 }
 
 template <>
@@ -72,5 +79,6 @@ template <>
 DUCKDB_API hash_t Hash(dtime_tz_t val);
 DUCKDB_API hash_t Hash(const char *val, size_t size);
 DUCKDB_API hash_t Hash(uint8_t *val, size_t size);
+#endif
 
 } // namespace duckdb

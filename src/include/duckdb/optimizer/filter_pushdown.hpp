@@ -74,6 +74,9 @@ private:
 	unique_ptr<LogicalOperator> PushdownLeftJoin(unique_ptr<LogicalOperator> op, unordered_set<idx_t> &left_bindings,
 	                                             unordered_set<idx_t> &right_bindings);
 
+	// Pushdown an outer join
+	unique_ptr<LogicalOperator> PushdownOuterJoin(unique_ptr<LogicalOperator> op, unordered_set<idx_t> &left_bindings,
+	                                              unordered_set<idx_t> &right_bindings);
 	unique_ptr<LogicalOperator> PushdownSemiAntiJoin(unique_ptr<LogicalOperator> op);
 	// Pushdown a mark join
 	unique_ptr<LogicalOperator> PushdownMarkJoin(unique_ptr<LogicalOperator> op, unordered_set<idx_t> &left_bindings,
@@ -93,6 +96,8 @@ private:
 	unique_ptr<LogicalOperator> FinishPushdown(unique_ptr<LogicalOperator> op);
 	//! Adds a filter to the set of filters. Returns FilterResult::UNSATISFIABLE if the subtree should be stripped, or
 	//! FilterResult::SUCCESS otherwise
+
+	unique_ptr<LogicalOperator> PushFiltersIntoDelimJoin(unique_ptr<LogicalOperator> op);
 	FilterResult AddFilter(unique_ptr<Expression> expr);
 	//! Extract filter bindings to compare them with expressions in an operator and determine if the filter
 	//! can be pushed down

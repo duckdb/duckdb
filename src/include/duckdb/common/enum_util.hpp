@@ -50,6 +50,8 @@ enum class AggregateOrderDependent : uint8_t;
 
 enum class AggregateType : uint8_t;
 
+enum class AlterDatabaseType : uint8_t;
+
 enum class AlterForeignKeyType : uint8_t;
 
 enum class AlterScalarFunctionType : uint8_t;
@@ -200,6 +202,8 @@ enum class FunctionStability : uint8_t;
 
 enum class GateStatus : uint8_t;
 
+enum class GeometryType : uint8_t;
+
 enum class HLLStorageType : uint8_t;
 
 enum class HTTPStatusCode : uint16_t;
@@ -233,6 +237,8 @@ enum class LogContextScope : uint8_t;
 enum class LogLevel : uint8_t;
 
 enum class LogMode : uint8_t;
+
+enum class LoggingTargetTable : uint8_t;
 
 enum class LogicalOperatorType : uint8_t;
 
@@ -289,8 +295,6 @@ enum class OutputStream : uint8_t;
 enum class ParseInfoType : uint8_t;
 
 enum class ParserExtensionResultType : uint8_t;
-
-enum class PartitionSortStage : uint8_t;
 
 enum class PartitionedColumnDataType : uint8_t;
 
@@ -378,6 +382,8 @@ enum class StatisticsType : uint8_t;
 
 enum class StatsInfo : uint8_t;
 
+enum class StorageBlockPrefetch : uint8_t;
+
 enum class StrTimeSpecifier : uint8_t;
 
 enum class StreamExecutionResult : uint8_t;
@@ -420,6 +426,10 @@ enum class UndoFlags : uint32_t;
 
 enum class UnionInvalidReason : uint8_t;
 
+enum class VariantChildLookupMode : uint8_t;
+
+enum class VariantLogicalType : uint8_t;
+
 enum class VectorAuxiliaryDataType : uint8_t;
 
 enum class VectorBufferType : uint8_t;
@@ -429,6 +439,8 @@ enum class VectorType : uint8_t;
 enum class VerificationType : uint8_t;
 
 enum class VerifyExistenceType : uint8_t;
+
+enum class VertexType : uint8_t;
 
 enum class WALType : uint8_t;
 
@@ -467,6 +479,9 @@ const char* EnumUtil::ToChars<AggregateOrderDependent>(AggregateOrderDependent v
 
 template<>
 const char* EnumUtil::ToChars<AggregateType>(AggregateType value);
+
+template<>
+const char* EnumUtil::ToChars<AlterDatabaseType>(AlterDatabaseType value);
 
 template<>
 const char* EnumUtil::ToChars<AlterForeignKeyType>(AlterForeignKeyType value);
@@ -694,6 +709,9 @@ template<>
 const char* EnumUtil::ToChars<GateStatus>(GateStatus value);
 
 template<>
+const char* EnumUtil::ToChars<GeometryType>(GeometryType value);
+
+template<>
 const char* EnumUtil::ToChars<HLLStorageType>(HLLStorageType value);
 
 template<>
@@ -743,6 +761,9 @@ const char* EnumUtil::ToChars<LogLevel>(LogLevel value);
 
 template<>
 const char* EnumUtil::ToChars<LogMode>(LogMode value);
+
+template<>
+const char* EnumUtil::ToChars<LoggingTargetTable>(LoggingTargetTable value);
 
 template<>
 const char* EnumUtil::ToChars<LogicalOperatorType>(LogicalOperatorType value);
@@ -827,9 +848,6 @@ const char* EnumUtil::ToChars<ParseInfoType>(ParseInfoType value);
 
 template<>
 const char* EnumUtil::ToChars<ParserExtensionResultType>(ParserExtensionResultType value);
-
-template<>
-const char* EnumUtil::ToChars<PartitionSortStage>(PartitionSortStage value);
 
 template<>
 const char* EnumUtil::ToChars<PartitionedColumnDataType>(PartitionedColumnDataType value);
@@ -961,6 +979,9 @@ template<>
 const char* EnumUtil::ToChars<StatsInfo>(StatsInfo value);
 
 template<>
+const char* EnumUtil::ToChars<StorageBlockPrefetch>(StorageBlockPrefetch value);
+
+template<>
 const char* EnumUtil::ToChars<StrTimeSpecifier>(StrTimeSpecifier value);
 
 template<>
@@ -1024,6 +1045,12 @@ template<>
 const char* EnumUtil::ToChars<UnionInvalidReason>(UnionInvalidReason value);
 
 template<>
+const char* EnumUtil::ToChars<VariantChildLookupMode>(VariantChildLookupMode value);
+
+template<>
+const char* EnumUtil::ToChars<VariantLogicalType>(VariantLogicalType value);
+
+template<>
 const char* EnumUtil::ToChars<VectorAuxiliaryDataType>(VectorAuxiliaryDataType value);
 
 template<>
@@ -1037,6 +1064,9 @@ const char* EnumUtil::ToChars<VerificationType>(VerificationType value);
 
 template<>
 const char* EnumUtil::ToChars<VerifyExistenceType>(VerifyExistenceType value);
+
+template<>
+const char* EnumUtil::ToChars<VertexType>(VertexType value);
 
 template<>
 const char* EnumUtil::ToChars<WALType>(WALType value);
@@ -1080,6 +1110,9 @@ AggregateOrderDependent EnumUtil::FromString<AggregateOrderDependent>(const char
 
 template<>
 AggregateType EnumUtil::FromString<AggregateType>(const char *value);
+
+template<>
+AlterDatabaseType EnumUtil::FromString<AlterDatabaseType>(const char *value);
 
 template<>
 AlterForeignKeyType EnumUtil::FromString<AlterForeignKeyType>(const char *value);
@@ -1307,6 +1340,9 @@ template<>
 GateStatus EnumUtil::FromString<GateStatus>(const char *value);
 
 template<>
+GeometryType EnumUtil::FromString<GeometryType>(const char *value);
+
+template<>
 HLLStorageType EnumUtil::FromString<HLLStorageType>(const char *value);
 
 template<>
@@ -1356,6 +1392,9 @@ LogLevel EnumUtil::FromString<LogLevel>(const char *value);
 
 template<>
 LogMode EnumUtil::FromString<LogMode>(const char *value);
+
+template<>
+LoggingTargetTable EnumUtil::FromString<LoggingTargetTable>(const char *value);
 
 template<>
 LogicalOperatorType EnumUtil::FromString<LogicalOperatorType>(const char *value);
@@ -1440,9 +1479,6 @@ ParseInfoType EnumUtil::FromString<ParseInfoType>(const char *value);
 
 template<>
 ParserExtensionResultType EnumUtil::FromString<ParserExtensionResultType>(const char *value);
-
-template<>
-PartitionSortStage EnumUtil::FromString<PartitionSortStage>(const char *value);
 
 template<>
 PartitionedColumnDataType EnumUtil::FromString<PartitionedColumnDataType>(const char *value);
@@ -1574,6 +1610,9 @@ template<>
 StatsInfo EnumUtil::FromString<StatsInfo>(const char *value);
 
 template<>
+StorageBlockPrefetch EnumUtil::FromString<StorageBlockPrefetch>(const char *value);
+
+template<>
 StrTimeSpecifier EnumUtil::FromString<StrTimeSpecifier>(const char *value);
 
 template<>
@@ -1637,6 +1676,12 @@ template<>
 UnionInvalidReason EnumUtil::FromString<UnionInvalidReason>(const char *value);
 
 template<>
+VariantChildLookupMode EnumUtil::FromString<VariantChildLookupMode>(const char *value);
+
+template<>
+VariantLogicalType EnumUtil::FromString<VariantLogicalType>(const char *value);
+
+template<>
 VectorAuxiliaryDataType EnumUtil::FromString<VectorAuxiliaryDataType>(const char *value);
 
 template<>
@@ -1650,6 +1695,9 @@ VerificationType EnumUtil::FromString<VerificationType>(const char *value);
 
 template<>
 VerifyExistenceType EnumUtil::FromString<VerifyExistenceType>(const char *value);
+
+template<>
+VertexType EnumUtil::FromString<VertexType>(const char *value);
 
 template<>
 WALType EnumUtil::FromString<WALType>(const char *value);

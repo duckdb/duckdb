@@ -9,6 +9,7 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/function/function_list.hpp"
+#include "duckdb/common/encryption_state.hpp"
 
 namespace duckdb {
 
@@ -157,6 +158,14 @@ bool DuckCatalog::InMemory() {
 
 string DuckCatalog::GetDBPath() {
 	return db.GetStorageManager().GetDBPath();
+}
+
+bool DuckCatalog::IsEncrypted() const {
+	return IsSystemCatalog() ? false : db.GetStorageManager().IsEncrypted();
+}
+
+string DuckCatalog::GetEncryptionCipher() const {
+	return IsSystemCatalog() ? string() : EncryptionTypes::CipherToString(db.GetStorageManager().GetCipher());
 }
 
 void DuckCatalog::Verify() {

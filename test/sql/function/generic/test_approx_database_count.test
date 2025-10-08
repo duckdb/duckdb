@@ -1,5 +1,5 @@
 # name: test/sql/function/generic/test_approx_database_count.test
-# description: Test the approx_database_count scalar function.
+# description: Test the approx_database_count table function.
 # group: [generic]
 
 statement ok

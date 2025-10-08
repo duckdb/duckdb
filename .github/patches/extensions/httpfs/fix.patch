@@ -1,396 +1,157 @@
-diff --git a/extension/httpfs/create_secret_functions.cpp b/extension/httpfs/create_secret_functions.cpp
-index c9ae0a7..cf9997a 100644
---- a/extension/httpfs/create_secret_functions.cpp
-+++ b/extension/httpfs/create_secret_functions.cpp
-@@ -1,15 +1,15 @@
- #include "create_secret_functions.hpp"
- #include "s3fs.hpp"
--#include "duckdb/main/extension_util.hpp"
-+#include "duckdb/main/extension/extension_loader.hpp"
- #include "duckdb/common/local_file_system.hpp"
- 
- namespace duckdb {
- 
--void CreateS3SecretFunctions::Register(DatabaseInstance &instance) {
--	RegisterCreateSecretFunction(instance, "s3");
--	RegisterCreateSecretFunction(instance, "aws");
--	RegisterCreateSecretFunction(instance, "r2");
--	RegisterCreateSecretFunction(instance, "gcs");
-+void CreateS3SecretFunctions::Register(ExtensionLoader &loader) {
-+	RegisterCreateSecretFunction(loader, "s3");
-+	RegisterCreateSecretFunction(loader, "aws");
-+	RegisterCreateSecretFunction(loader, "r2");
-+	RegisterCreateSecretFunction(loader, "gcs");
- }
- 
- static Value MapToStruct(const Value &map) {
-@@ -212,7 +212,7 @@ void CreateS3SecretFunctions::SetBaseNamedParams(CreateSecretFunction &function,
+diff --git a/src/httpfs.cpp b/src/httpfs.cpp
+index 802581e..a11af95 100644
+--- a/src/httpfs.cpp
++++ b/src/httpfs.cpp
+@@ -729,7 +729,7 @@ void HTTPFileHandle::LoadFileInfo() {
+ 			return;
+ 		} else {
+ 			// HEAD request fail, use Range request for another try (read only one byte)
+-			if (flags.OpenForReading() && res->status != HTTPStatusCode::NotFound_404) {
++			if (flags.OpenForReading() && res->status != HTTPStatusCode::NotFound_404 && res->status != HTTPStatusCode::MovedPermanently_301) {
+ 				auto range_res = hfs.GetRangeRequest(*this, path, {}, 0, nullptr, 2);
+ 				if (range_res->status != HTTPStatusCode::PartialContent_206 &&
+ 				    range_res->status != HTTPStatusCode::Accepted_202 && range_res->status != HTTPStatusCode::OK_200) {
+diff --git a/src/httpfs_extension.cpp b/src/httpfs_extension.cpp
+index 79d9923..9070621 100644
+--- a/src/httpfs_extension.cpp
++++ b/src/httpfs_extension.cpp
+@@ -70,7 +70,7 @@ static void LoadInternal(ExtensionLoader &loader) {
+ 	config.AddExtensionOption("ca_cert_file", "Path to a custom certificate file for self-signed certificates.",
+ 	                          LogicalType::VARCHAR, Value(""));
+ 	// Global S3 config
+-	config.AddExtensionOption("s3_region", "S3 Region", LogicalType::VARCHAR, Value("us-east-1"));
++	config.AddExtensionOption("s3_region", "S3 Region", LogicalType::VARCHAR);
+ 	config.AddExtensionOption("s3_access_key_id", "S3 Access Key ID", LogicalType::VARCHAR);
+ 	config.AddExtensionOption("s3_secret_access_key", "S3 Access Key", LogicalType::VARCHAR);
+ 	config.AddExtensionOption("s3_session_token", "S3 Session Token", LogicalType::VARCHAR);
+diff --git a/src/include/s3fs.hpp b/src/include/s3fs.hpp
+index 525e0dd..a7e933e 100644
+--- a/src/include/s3fs.hpp
++++ b/src/include/s3fs.hpp
+@@ -231,7 +231,7 @@ public:
+ 		return true;
  	}
- }
  
--void CreateS3SecretFunctions::RegisterCreateSecretFunction(DatabaseInstance &instance, string type) {
-+void CreateS3SecretFunctions::RegisterCreateSecretFunction(ExtensionLoader &loader, string type) {
- 	// Register the new type
- 	SecretType secret_type;
- 	secret_type.name = type;
-@@ -220,31 +220,31 @@ void CreateS3SecretFunctions::RegisterCreateSecretFunction(DatabaseInstance &ins
- 	secret_type.default_provider = "config";
- 	secret_type.extension = "httpfs";
- 
--	ExtensionUtil::RegisterSecretType(instance, secret_type);
-+	loader.RegisterSecretType(secret_type);
- 
- 	CreateSecretFunction from_empty_config_fun2 = {type, "config", CreateS3SecretFromConfig};
- 	SetBaseNamedParams(from_empty_config_fun2, type);
--	ExtensionUtil::RegisterFunction(instance, from_empty_config_fun2);
-+	loader.RegisterFunction(from_empty_config_fun2);
- }
- 
--void CreateBearerTokenFunctions::Register(DatabaseInstance &instance) {
-+void CreateBearerTokenFunctions::Register(ExtensionLoader &loader) {
- 	// HuggingFace secret
- 	SecretType secret_type_hf;
- 	secret_type_hf.name = HUGGINGFACE_TYPE;
- 	secret_type_hf.deserializer = KeyValueSecret::Deserialize<KeyValueSecret>;
- 	secret_type_hf.default_provider = "config";
- 	secret_type_hf.extension = "httpfs";
--	ExtensionUtil::RegisterSecretType(instance, secret_type_hf);
-+	loader.RegisterSecretType(secret_type_hf);
- 
- 	// Huggingface config provider
- 	CreateSecretFunction hf_config_fun = {HUGGINGFACE_TYPE, "config", CreateBearerSecretFromConfig};
- 	hf_config_fun.named_parameters["token"] = LogicalType::VARCHAR;
--	ExtensionUtil::RegisterFunction(instance, hf_config_fun);
-+	loader.RegisterFunction(hf_config_fun);
- 
- 	// Huggingface credential_chain provider
- 	CreateSecretFunction hf_cred_fun = {HUGGINGFACE_TYPE, "credential_chain",
- 	                                    CreateHuggingFaceSecretFromCredentialChain};
--	ExtensionUtil::RegisterFunction(instance, hf_cred_fun);
-+	loader.RegisterFunction(hf_cred_fun);
- }
- 
- unique_ptr<BaseSecret> CreateBearerTokenFunctions::CreateSecretFunctionInternal(ClientContext &context,
-diff --git a/extension/httpfs/crypto.cpp b/extension/httpfs/crypto.cpp
-index 3a89ca5..3e61afa 100644
---- a/extension/httpfs/crypto.cpp
-+++ b/extension/httpfs/crypto.cpp
-@@ -21,11 +21,11 @@ AESStateSSL::~AESStateSSL() {
- 	EVP_CIPHER_CTX_free(context);
- }
- 
--const EVP_CIPHER *AESStateSSL::GetCipher(const string &key) {
-+const EVP_CIPHER *AESStateSSL::GetCipher(idx_t key_len) {
- 
- 	switch (cipher) {
- 	case GCM:
--		switch (key.size()) {
-+		switch (key_len) {
- 		case 16:
- 			return EVP_aes_128_gcm();
- 		case 24:
-@@ -36,7 +36,7 @@ const EVP_CIPHER *AESStateSSL::GetCipher(const string &key) {
- 			throw InternalException("Invalid AES key length");
- 		}
- 	case CTR:
--		switch (key.size()) {
-+		switch (key_len) {
- 		case 16:
- 			return EVP_aes_128_ctr();
- 		case 24:
-@@ -57,20 +57,34 @@ void AESStateSSL::GenerateRandomData(data_ptr_t data, idx_t len) {
- 	RAND_bytes(data, len);
- }
- 
--void AESStateSSL::InitializeEncryption(const_data_ptr_t iv, idx_t iv_len, const string *key) {
-+void AESStateSSL::InitializeEncryption(const_data_ptr_t iv, idx_t iv_len, const_data_ptr_t key, idx_t key_len, const_data_ptr_t aad, idx_t aad_len) {
- 	mode = ENCRYPT;
- 
--	if (1 != EVP_EncryptInit_ex(context, GetCipher(*key), NULL, const_data_ptr_cast(key->data()), iv)) {
-+	if (1 != EVP_EncryptInit_ex(context, GetCipher(key_len), NULL, key, iv)) {
- 		throw InternalException("EncryptInit failed");
- 	}
-+
-+	int len;
-+	if (aad_len > 0){
-+		if (!EVP_DecryptUpdate(context, NULL, &len, aad, aad_len)) {
-+			throw InternalException("Setting Additional Authenticated Data  failed");
-+		}
-+	}
- }
- 
--void AESStateSSL::InitializeDecryption(const_data_ptr_t iv, idx_t iv_len, const string *key) {
-+void AESStateSSL::InitializeDecryption(const_data_ptr_t iv, idx_t iv_len, const_data_ptr_t key, idx_t key_len, const_data_ptr_t aad, idx_t aad_len) {
- 	mode = DECRYPT;
- 
--	if (1 != EVP_DecryptInit_ex(context, GetCipher(*key), NULL, const_data_ptr_cast(key->data()), iv)) {
-+	if (1 != EVP_DecryptInit_ex(context, GetCipher(key_len), NULL, key, iv)) {
- 		throw InternalException("DecryptInit failed");
- 	}
-+
-+	int len;
-+	if (aad_len > 0){
-+		if (!EVP_DecryptUpdate(context, NULL, &len, aad, aad_len)) {
-+			throw InternalException("Setting Additional Authenticated Data  failed");
-+		}
-+	}
- }
- 
- size_t AESStateSSL::Process(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len) {
-diff --git a/extension/httpfs/httpfs.cpp b/extension/httpfs/httpfs.cpp
-index 20f85a6..50b7ae9 100644
---- a/extension/httpfs/httpfs.cpp
-+++ b/extension/httpfs/httpfs.cpp
-@@ -7,6 +7,7 @@
- #include "duckdb/common/http_util.hpp"
- #include "duckdb/common/thread.hpp"
- #include "duckdb/common/types/hash.hpp"
-+#include "duckdb/common/types/time.hpp"
- #include "duckdb/function/scalar/strftime_format.hpp"
- #include "duckdb/logging/file_system_logger.hpp"
- #include "duckdb/main/client_context.hpp"
-@@ -259,19 +260,6 @@ unique_ptr<HTTPResponse> HTTPFileSystem::GetRangeRequest(FileHandle &handle, str
- 	return response;
- }
- 
--void TimestampToTimeT(timestamp_t timestamp, time_t &result) {
--	auto components = Timestamp::GetComponents(timestamp);
--	struct tm tm {};
--	tm.tm_year = components.year - 1900;
--	tm.tm_mon = components.month - 1;
--	tm.tm_mday = components.day;
--	tm.tm_hour = components.hour;
--	tm.tm_min = components.minute;
--	tm.tm_sec = components.second;
--	tm.tm_isdst = 0;
--	result = mktime(&tm);
--}
--
- HTTPFileHandle::HTTPFileHandle(FileSystem &fs, const OpenFileInfo &file, FileOpenFlags flags,
-                                unique_ptr<HTTPParams> params_p)
-     : FileHandle(fs, file.path, flags), params(std::move(params_p)), http_params(params->Cast<HTTPFSParams>()),
-@@ -282,7 +270,7 @@ HTTPFileHandle::HTTPFileHandle(FileSystem &fs, const OpenFileInfo &file, FileOpe
- 		auto &info = file.extended_info->options;
- 		auto lm_entry = info.find("last_modified");
- 		if (lm_entry != info.end()) {
--			TimestampToTimeT(lm_entry->second.GetValue<timestamp_t>(), last_modified);
-+			last_modified = lm_entry->second.GetValue<timestamp_t>();
- 		}
- 		auto etag_entry = info.find("etag");
- 		if (etag_entry != info.end()) {
-@@ -462,7 +450,7 @@ int64_t HTTPFileSystem::GetFileSize(FileHandle &handle) {
- 	return sfh.length;
- }
- 
--time_t HTTPFileSystem::GetLastModifiedTime(FileHandle &handle) {
-+timestamp_t HTTPFileSystem::GetLastModifiedTime(FileHandle &handle) {
- 	auto &sfh = handle.Cast<HTTPFileHandle>();
- 	return sfh.last_modified;
- }
-@@ -545,20 +533,14 @@ void HTTPFileHandle::FullDownload(HTTPFileSystem &hfs, bool &should_write_cache)
- 	}
- }
- 
--bool HTTPFileSystem::TryParseLastModifiedTime(const string &timestamp, time_t &result) {
-+bool HTTPFileSystem::TryParseLastModifiedTime(const string &timestamp, timestamp_t &result) {
- 	StrpTimeFormat::ParseResult parse_result;
- 	if (!StrpTimeFormat::TryParse("%a, %d %h %Y %T %Z", timestamp, parse_result)) {
- 		return false;
- 	}
--	struct tm tm {};
--	tm.tm_year = parse_result.data[0] - 1900;
--	tm.tm_mon = parse_result.data[1] - 1;
--	tm.tm_mday = parse_result.data[2];
--	tm.tm_hour = parse_result.data[3];
--	tm.tm_min = parse_result.data[4];
--	tm.tm_sec = parse_result.data[5];
--	tm.tm_isdst = 0;
--	result = mktime(&tm);
-+	if (!parse_result.TryToTimestamp(result)) {
-+		return false;
-+	}
+-	static string GetS3BadRequestError(S3AuthParams &s3_auth_params);
++	static string GetS3BadRequestError(S3AuthParams &s3_auth_params, string correct_region = "");
+ 	static string GetS3AuthError(S3AuthParams &s3_auth_params);
+ 	static string GetGCSAuthError(S3AuthParams &s3_auth_params);
+ 	static HTTPException GetS3Error(S3AuthParams &s3_auth_params, const HTTPResponse &response, const string &url);
+diff --git a/src/s3fs.cpp b/src/s3fs.cpp
+index cbdecba..72eddc3 100644
+--- a/src/s3fs.cpp
++++ b/src/s3fs.cpp
+@@ -872,6 +872,7 @@ void S3FileHandle::Initialize(optional_ptr<FileOpener> opener) {
+ 		ErrorData error(ex);
+ 		bool refreshed_secret = false;
+ 		if (error.Type() == ExceptionType::IO || error.Type() == ExceptionType::HTTP) {
++			// legacy endpoint (no region) returns 400
+ 			auto context = opener->TryGetClientContext();
+ 			if (context) {
+ 				auto transaction = CatalogTransaction::GetSystemCatalogTransaction(*context);
+@@ -887,9 +888,13 @@ void S3FileHandle::Initialize(optional_ptr<FileOpener> opener) {
+ 			auto &extra_info = error.ExtraInfo();
+ 			auto entry = extra_info.find("status_code");
+ 			if (entry != extra_info.end()) {
+-				if (entry->second == "400") {
+-					// 400: BAD REQUEST
+-					auto extra_text = S3FileSystem::GetS3BadRequestError(auth_params);
++				if (entry->second == "301" || entry->second == "400") {
++					auto new_region = extra_info.find("header_x-amz-bucket-region");
++					string correct_region = "";
++					if (new_region != extra_info.end()) {
++						correct_region = new_region->second;
++					}
++					auto extra_text = S3FileSystem::GetS3BadRequestError(auth_params, correct_region);
+ 					throw Exception(error.Type(), error.RawMessage() + extra_text, extra_info);
+ 				}
+ 				if (entry->second == "403") {
+@@ -1138,12 +1143,15 @@ bool S3FileSystem::ListFiles(const string &directory, const std::function<void(c
  	return true;
  }
  
-diff --git a/extension/httpfs/httpfs_extension.cpp b/extension/httpfs/httpfs_extension.cpp
-index 392d249..15a90ba 100644
---- a/extension/httpfs/httpfs_extension.cpp
-+++ b/extension/httpfs/httpfs_extension.cpp
-@@ -1,5 +1,3 @@
--#define DUCKDB_EXTENSION_MAIN
+-string S3FileSystem::GetS3BadRequestError(S3AuthParams &s3_auth_params) {
++string S3FileSystem::GetS3BadRequestError(S3AuthParams &s3_auth_params, string correct_region) {
+ 	string extra_text = "\n\nBad Request - this can be caused by the S3 region being set incorrectly.";
+ 	if (s3_auth_params.region.empty()) {
+ 		extra_text += "\n* No region is provided.";
+ 	} else {
+-		extra_text += "\n* Provided region is \"" + s3_auth_params.region + "\"";
++		extra_text += "\n* Provided region is: \"" + s3_auth_params.region + "\"";
++	}
++	if (!correct_region.empty()) {
++		extra_text += "\n* Correct region is: \"" + correct_region + "\"";
+ 	}
+ 	return extra_text;
+ }
+diff --git a/test/sql/copy/csv/test_csv_remote.test b/test/sql/copy/csv/test_csv_remote.test
+index 4144082..9e51585 100644
+--- a/test/sql/copy/csv/test_csv_remote.test
++++ b/test/sql/copy/csv/test_csv_remote.test
+@@ -7,15 +7,26 @@ require httpfs
+ statement ok
+ PRAGMA enable_verification
+ 
++# Test load from url with query string
++query IIIIIIIIIIII
++FROM sniff_csv('https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv?v=1')
++----
++,	"	(empty)	\n	(empty)	0	0	[{'name': column00, 'type': BIGINT}, {'name': column01, 'type': VARCHAR}, {'name': column02, 'type': BIGINT}, {'name': column03, 'type': BIGINT}, {'name': column04, 'type': BIGINT}, {'name': column05, 'type': BIGINT}, {'name': column06, 'type': BIGINT}, {'name': column07, 'type': VARCHAR}, {'name': column08, 'type': VARCHAR}, {'name': column09, 'type': VARCHAR}, {'name': column10, 'type': VARCHAR}, {'name': column11, 'type': BIGINT}, {'name': column12, 'type': BIGINT}, {'name': column13, 'type': BIGINT}, {'name': column14, 'type': VARCHAR}, {'name': column15, 'type': VARCHAR}, {'name': column16, 'type': VARCHAR}, {'name': column17, 'type': BIGINT}]	NULL	NULL	NULL	FROM read_csv('https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv?v=1', auto_detect=false, delim=',', quote='"', escape='', new_line='\n', skip=0, comment='', header=false, columns={'column00': 'BIGINT', 'column01': 'VARCHAR', 'column02': 'BIGINT', 'column03': 'BIGINT', 'column04': 'BIGINT', 'column05': 'BIGINT', 'column06': 'BIGINT', 'column07': 'VARCHAR', 'column08': 'VARCHAR', 'column09': 'VARCHAR', 'column10': 'VARCHAR', 'column11': 'BIGINT', 'column12': 'BIGINT', 'column13': 'BIGINT', 'column14': 'VARCHAR', 'column15': 'VARCHAR', 'column16': 'VARCHAR', 'column17': 'BIGINT'});
++
++
++# This test abuses the LOCAL_EXTENSION_REPO env to make sure tests are only run when running extension tests
++# in duckdb/duckdb. Otherwise you need to pass a data dir when exex
++
++require-env LOCAL_EXTENSION_REPO
+ 
+ # regular csv file
+ query ITTTIITITTIIII nosort webpagecsv
+-SELECT * FROM read_csv_auto('duckdb/data/csv/real/web_page.csv') ORDER BY 1;
++SELECT * FROM read_csv_auto('data/csv/real/web_page.csv') ORDER BY 1;
+ ----
+ 
+ # file with gzip
+ query IIIIIIIIIIIIIII nosort lineitemcsv
+-SELECT * FROM read_csv_auto('duckdb/data/csv/lineitem1k.tbl.gz') ORDER BY ALL;
++SELECT * FROM read_csv_auto('data/csv/lineitem1k.tbl.gz') ORDER BY ALL;
+ ----
+ 
+ query ITTTIITITTIIII nosort webpagecsv
+@@ -25,10 +36,3 @@ SELECT * FROM read_csv_auto('https://raw.githubusercontent.com/duckdb/duckdb/mai
+ query IIIIIIIIIIIIIII nosort lineitemcsv
+ select * from read_csv_auto('https://raw.githubusercontent.com/duckdb/duckdb/main/data/csv/lineitem1k.tbl.gz') ORDER BY ALL;
+ ----
 -
- #include "httpfs_extension.hpp"
- 
- #include "create_secret_functions.hpp"
-@@ -31,7 +29,8 @@ static void SetHttpfsClientImplementation(DBConfig &config, const string &value)
- 		                            "`default` are currently supported");
- 	}
- 
--static void LoadInternal(DatabaseInstance &instance) {
-+static void LoadInternal(ExtensionLoader &loader) {
-+	auto &instance = loader.GetDatabaseInstance();
- 	auto &fs = instance.GetFileSystem();
- 
- 	fs.RegisterSubSystem(make_uniq<HTTPFileSystem>());
-@@ -98,16 +97,16 @@ static void LoadInternal(DatabaseInstance &instance) {
- 	auto provider = make_uniq<AWSEnvironmentCredentialsProvider>(config);
- 	provider->SetAll();
- 
--	CreateS3SecretFunctions::Register(instance);
--	CreateBearerTokenFunctions::Register(instance);
-+	CreateS3SecretFunctions::Register(loader);
-+	CreateBearerTokenFunctions::Register(loader);
- 
- #ifdef OVERRIDE_ENCRYPTION_UTILS
- 	// set pointer to OpenSSL encryption state
- 	config.encryption_util = make_shared_ptr<AESStateSSLFactory>();
- #endif // OVERRIDE_ENCRYPTION_UTILS
- }
--void HttpfsExtension::Load(DuckDB &db) {
--	LoadInternal(*db.instance);
-+void HttpfsExtension::Load(ExtensionLoader &loader) {
-+	LoadInternal(loader);
- }
- std::string HttpfsExtension::Name() {
- 	return "httpfs";
-@@ -125,15 +124,8 @@ std::string HttpfsExtension::Version() const {
- 
- extern "C" {
- 
--DUCKDB_EXTENSION_API void httpfs_init(duckdb::DatabaseInstance &db) {
--	LoadInternal(db);
-+DUCKDB_CPP_EXTENSION_ENTRY(httpfs, loader) {
-+	duckdb::LoadInternal(loader);
- }
- 
--DUCKDB_EXTENSION_API const char *httpfs_version() {
--	return duckdb::DuckDB::LibraryVersion();
--}
- }
 -
--#ifndef DUCKDB_EXTENSION_MAIN
--#error DUCKDB_EXTENSION_MAIN not defined
--#endif
-diff --git a/extension/httpfs/include/create_secret_functions.hpp b/extension/httpfs/include/create_secret_functions.hpp
-index 54b7566..bd3bc4a 100644
---- a/extension/httpfs/include/create_secret_functions.hpp
-+++ b/extension/httpfs/include/create_secret_functions.hpp
-@@ -8,11 +8,12 @@ struct S3AuthParams;
- class CreateSecretFunction;
- class BaseSecret;
- struct SecretEntry;
-+class ExtensionLoader;
+-# Test load from url with query string
+-query IIIIIIIIIIII
+-FROM sniff_csv('https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv?v=1')
+-----
+-,	"	(empty)	\n	(empty)	0	0	[{'name': column00, 'type': BIGINT}, {'name': column01, 'type': VARCHAR}, {'name': column02, 'type': BIGINT}, {'name': column03, 'type': BIGINT}, {'name': column04, 'type': BIGINT}, {'name': column05, 'type': BIGINT}, {'name': column06, 'type': BIGINT}, {'name': column07, 'type': VARCHAR}, {'name': column08, 'type': VARCHAR}, {'name': column09, 'type': VARCHAR}, {'name': column10, 'type': VARCHAR}, {'name': column11, 'type': BIGINT}, {'name': column12, 'type': BIGINT}, {'name': column13, 'type': BIGINT}, {'name': column14, 'type': VARCHAR}, {'name': column15, 'type': VARCHAR}, {'name': column16, 'type': VARCHAR}, {'name': column17, 'type': BIGINT}]	NULL	NULL	NULL	FROM read_csv('https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv?v=1', auto_detect=false, delim=',', quote='"', escape='', new_line='\n', skip=0, comment='', header=false, columns={'column00': 'BIGINT', 'column01': 'VARCHAR', 'column02': 'BIGINT', 'column03': 'BIGINT', 'column04': 'BIGINT', 'column05': 'BIGINT', 'column06': 'BIGINT', 'column07': 'VARCHAR', 'column08': 'VARCHAR', 'column09': 'VARCHAR', 'column10': 'VARCHAR', 'column11': 'BIGINT', 'column12': 'BIGINT', 'column13': 'BIGINT', 'column14': 'VARCHAR', 'column15': 'VARCHAR', 'column16': 'VARCHAR', 'column17': 'BIGINT'});
+diff --git a/test/sql/copy/s3/url_encode.test b/test/sql/copy/s3/url_encode.test
+index 66cbd5c..f5a5912 100644
+--- a/test/sql/copy/s3/url_encode.test
++++ b/test/sql/copy/s3/url_encode.test
+@@ -132,12 +132,20 @@ set s3_endpoint='';
+ statement error
+ SELECT * FROM 's3://test-bucket/whatever.parquet';
+ ----
+-<REGEX>:.*Unknown error for HTTP HEAD to 'http://test-bucket.s3.eu-west-1.amazonaws.com/whatever.parquet'.*
++<REGEX>:.*HTTP Error: Unable to connect to URL .*http://test-bucket.s3.eu-west-1.amazonaws.com/whatever.parquet.*: 301 .Moved Permanently..*
++.*
++.*Bad Request - this can be caused by the S3 region being set incorrectly.*
++.*Provided region is: .eu-west-1.*
++.*Correct region is: .us-east-1.*
  
- struct CreateS3SecretFunctions {
- public:
- 	//! Register all CreateSecretFunctions
--	static void Register(DatabaseInstance &instance);
-+	static void Register(ExtensionLoader &loader);
+ statement error
+ SELECT * FROM 'r2://test-bucket/whatever.parquet';
+ ----
+-<REGEX>:.*Unknown error for HTTP HEAD to 'http://test-bucket.s3.eu-west-1.amazonaws.com/whatever.parquet'.*
++<REGEX>:.*HTTP Error: Unable to connect to URL .*http://test-bucket.s3.eu-west-1.amazonaws.com/whatever.parquet.*: 301 .Moved Permanently..*
++.*
++.*Bad Request - this can be caused by the S3 region being set incorrectly.*
++.*Provided region is: .eu-west-1.*
++.*Correct region is: .us-east-1.*
  
- 	//! Secret refreshing mechanisms
- 	static CreateSecretInput GenerateRefreshSecretInfo(const SecretEntry &secret_entry, Value &refresh_info);
-@@ -30,7 +31,7 @@ protected:
- 	//! Helper function to set named params of secret function
- 	static void SetBaseNamedParams(CreateSecretFunction &function, string &type);
- 	//! Helper function to create secret types s3/r2/gcs
--	static void RegisterCreateSecretFunction(DatabaseInstance &instance, string type);
-+	static void RegisterCreateSecretFunction(ExtensionLoader &loader, string type);
- };
- 
- struct CreateBearerTokenFunctions {
-@@ -38,7 +39,7 @@ public:
- 	static constexpr const char *HUGGINGFACE_TYPE = "huggingface";
- 
- 	//! Register all CreateSecretFunctions
--	static void Register(DatabaseInstance &instance);
-+	static void Register(ExtensionLoader &loader);
- 
- protected:
- 	//! Internal function to create bearer token
-diff --git a/extension/httpfs/include/crypto.hpp b/extension/httpfs/include/crypto.hpp
-index f819356..1e142df 100644
---- a/extension/httpfs/include/crypto.hpp
-+++ b/extension/httpfs/include/crypto.hpp
-@@ -29,13 +29,13 @@ public:
- 	~AESStateSSL() override;
- 
- public:
--	void InitializeEncryption(const_data_ptr_t iv, idx_t iv_len, const std::string *key) override;
--	void InitializeDecryption(const_data_ptr_t iv, idx_t iv_len, const std::string *key) override;
-+	void InitializeEncryption(const_data_ptr_t iv, idx_t iv_len, const_data_ptr_t key, idx_t key_len, const_data_ptr_t aad, idx_t aad_len) override;
-+	void InitializeDecryption(const_data_ptr_t iv, idx_t iv_len, const_data_ptr_t key, idx_t key_len, const_data_ptr_t aad, idx_t aad_len) override;
- 	size_t Process(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len) override;
- 	size_t Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, idx_t tag_len) override;
- 	void GenerateRandomData(data_ptr_t data, idx_t len) override;
- 
--	const EVP_CIPHER *GetCipher(const string &key);
-+	const EVP_CIPHER *GetCipher(idx_t key_len);
- 	size_t FinalizeGCM(data_ptr_t out, idx_t out_len, data_ptr_t tag, idx_t tag_len);
- 
- private:
-@@ -53,7 +53,7 @@ public:
- 	explicit AESStateSSLFactory() {
- 	}
- 
--	duckdb::shared_ptr<duckdb::EncryptionState> CreateEncryptionState(const std::string *key = nullptr) const override {
-+	duckdb::shared_ptr<duckdb::EncryptionState> CreateEncryptionState(duckdb::const_data_ptr_t key = nullptr, duckdb::idx_t key_len = 0) const override {
- 		return duckdb::make_shared_ptr<duckdb::AESStateSSL>();
- 	}
- 
-diff --git a/extension/httpfs/include/http_metadata_cache.hpp b/extension/httpfs/include/http_metadata_cache.hpp
-index 8fc7909..83a05cc 100644
---- a/extension/httpfs/include/http_metadata_cache.hpp
-+++ b/extension/httpfs/include/http_metadata_cache.hpp
-@@ -17,7 +17,7 @@ namespace duckdb {
- 
- struct HTTPMetadataCacheEntry {
- 	idx_t length;
--	time_t last_modified;
-+	timestamp_t last_modified;
- 	string etag;
- };
- 
-diff --git a/extension/httpfs/include/httpfs.hpp b/extension/httpfs/include/httpfs.hpp
-index 62067d4..55c74cc 100644
---- a/extension/httpfs/include/httpfs.hpp
-+++ b/extension/httpfs/include/httpfs.hpp
-@@ -46,7 +46,7 @@ public:
- 	// File handle info
- 	FileOpenFlags flags;
- 	idx_t length;
--	time_t last_modified;
-+	timestamp_t last_modified;
- 	string etag;
- 	bool force_full_download;
- 	bool initialized = false;
-@@ -92,7 +92,7 @@ private:
- 
- class HTTPFileSystem : public FileSystem {
- public:
--	static bool TryParseLastModifiedTime(const string &timestamp, time_t &result);
-+	static bool TryParseLastModifiedTime(const string &timestamp, timestamp_t &result);
- 
- 	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr) override {
- 		return {path}; // FIXME
-@@ -121,7 +121,7 @@ public:
- 	int64_t Write(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
- 	void FileSync(FileHandle &handle) override;
- 	int64_t GetFileSize(FileHandle &handle) override;
--	time_t GetLastModifiedTime(FileHandle &handle) override;
-+	timestamp_t GetLastModifiedTime(FileHandle &handle) override;
- 	string GetVersionTag(FileHandle &handle) override;
- 	bool FileExists(const string &filename, optional_ptr<FileOpener> opener) override;
- 	void Seek(FileHandle &handle, idx_t location) override;
-diff --git a/extension/httpfs/include/httpfs_extension.hpp b/extension/httpfs/include/httpfs_extension.hpp
-index 3c4f3a1..eeca2c9 100644
---- a/extension/httpfs/include/httpfs_extension.hpp
-+++ b/extension/httpfs/include/httpfs_extension.hpp
-@@ -6,7 +6,7 @@ namespace duckdb {
- 
- class HttpfsExtension : public Extension {
- public:
--	void Load(DuckDB &db) override;
-+	void Load(ExtensionLoader &loader) override;
- 	std::string Name() override;
- 	std::string Version() const override;
- };
+ statement error
+ SELECT * FROM 'gcs://test-bucket/whatever.parquet';

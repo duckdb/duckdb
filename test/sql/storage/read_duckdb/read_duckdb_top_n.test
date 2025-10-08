@@ -1,0 +1,54 @@
+# name: test/sql/storage/read_duckdb/read_duckdb_top_n.test
+# group: [read_duckdb]
+
+# create a bunch of tables
+loop i 0 5
+
+statement ok
+ATTACH '__TEST_DIR__/read_duckdb_top_n${i}.db' AS rd
+
+statement ok
+CREATE TABLE rd.tbl AS SELECT ${i} grp, i val FROM range(${i} * 1000, ${i} * 1000 + 1000) t(i)
+
+statement ok
+DETACH rd
+
+endloop
+
+query II
+FROM '__TEST_DIR__/read_duckdb_top_n*.db' ORDER BY val DESC LIMIT 5
+----
+4	4999
+4	4998
+4	4997
+4	4996
+4	4995
+
+
+query II
+FROM '__TEST_DIR__/read_duckdb_top_n*.db' WHERE grp<=2 ORDER BY val DESC LIMIT 5
+----
+2	2999
+2	2998
+2	2997
+2	2996
+2	2995
+
+query I
+SELECT val FROM '__TEST_DIR__/read_duckdb_top_n*.db' WHERE grp<=2 ORDER BY val DESC LIMIT 5
+----
+2999
+2998
+2997
+2996
+2995
+
+query I
+SELECT SUM(val) FROM '__TEST_DIR__/read_duckdb_top_n*.db' WHERE grp%2=0
+----
+7498500
+
+query I
+SELECT SUM(val) FROM '__TEST_DIR__/read_duckdb_top_n*.db' WHERE grp::VARCHAR = '2'
+----
+2499500

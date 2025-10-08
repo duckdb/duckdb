@@ -32,22 +32,27 @@ NULL
 statement error
 SELECT ''::TIME
 ----
+<REGEX>:.*Conversion Error.*time field value out of range.*
 
 statement error
 SELECT '  '::TIME
 ----
+<REGEX>:.*Conversion Error.*time field value out of range.*
 
 statement error
 SELECT '  	'::TIME
 ----
+<REGEX>:.*Conversion Error.*time field value out of range.*
 
 statement error
 SELECT '1'::TIME
 ----
+<REGEX>:.*Conversion Error.*time field value out of range.*
 
 statement error
 SELECT '11'::TIME
 ----
+<REGEX>:.*Conversion Error.*time field value out of range.*
 
 query I
 SELECT '11:'::TIME
@@ -72,3 +77,4 @@ SELECT '11:11:'::TIME
 statement error
 SELECT '11:11:f'::TIME
 ----
+<REGEX>:.*Conversion Error.*time field value out of range.*

@@ -47,6 +47,10 @@ struct DuckDBSchemasFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct DuckDBConnectionCountFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct DuckDBApproxDatabaseCountFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
@@ -148,6 +152,10 @@ struct DuckDBVariablesFun {
 };
 
 struct DuckDBViewsFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct EnableLoggingFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

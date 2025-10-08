@@ -69,8 +69,10 @@ public:
 
 	//! Reallocate an in-memory buffer that is pinned.
 	void ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size) final;
-
 	BufferHandle Pin(shared_ptr<BlockHandle> &handle) final;
+
+	BufferHandle Pin(const QueryContext &context, shared_ptr<BlockHandle> &handle) final;
+
 	void Prefetch(vector<shared_ptr<BlockHandle>> &handles) final;
 	void Unpin(shared_ptr<BlockHandle> &handle) final;
 

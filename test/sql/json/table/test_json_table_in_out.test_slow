@@ -481,7 +481,7 @@ statement ok
 INSERT INTO t1(x) VALUES('{"a":{"b":{"c":"hello",},},}');
 
 query I
-SELECT fullkey FROM t1, json_tree(x);
+SELECT fullkey FROM t1, json_tree(x) order by json_tree.rowid;
 ----
 $
 $.a
@@ -731,7 +731,7 @@ create table json_table as
     select '{"my_array":[{"my_key":42},{"my_key":9001}]}' as my_json;
 
 query II
-select fullkey, path from json_table, json_tree(json_table.my_json);
+select fullkey, path from json_table, json_tree(json_table.my_json) order by json_tree.rowid;
 ----
 $	$
 $.my_array	$
@@ -739,3 +739,10 @@ $.my_array[0]	$.my_array
 $.my_array[0].my_key	$.my_array[0]
 $.my_array[1]	$.my_array
 $.my_array[1].my_key	$.my_array[1]
+
+# internal issues 5772 and 5776
+statement ok
+create table all_types as select * exclude(small_enum, medium_enum, large_enum) from test_all_types() limit 0;
+
+statement ok
+SELECT NULL FROM json_each(6051, NULL)

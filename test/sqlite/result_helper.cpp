@@ -8,6 +8,7 @@
 #include "sqllogic_test_runner.hpp"
 #include "termcolor.hpp"
 #include "test_helpers.hpp"
+#include "test_config.hpp"
 
 #include <thread>
 
@@ -74,7 +75,9 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 			runner.finished_processing_file = true;
 			return true;
 		}
-		logger.UnexpectedFailure(result);
+		if (!FailureSummary::SkipLoggingSameError(context.error_file)) {
+			logger.UnexpectedFailure(result);
+		}
 		return false;
 	}
 	idx_t row_count = result.RowCount();
@@ -90,9 +93,16 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 	}
 
 	vector<string> result_values_string;
-	DuckDBConvertResult(result, runner.original_sqlite_test, result_values_string);
-	if (runner.output_result_mode) {
-		logger.OutputResult(result, result_values_string);
+	try {
+		DuckDBConvertResult(result, runner.original_sqlite_test, result_values_string);
+		if (runner.output_result_mode) {
+			logger.OutputResult(result, result_values_string);
+		}
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		auto &original_error = error.Message();
+		logger.LogFailure(original_error);
+		return false;
 	}
 
 	SortQueryResult(sort_style, result_values_string, column_count);
@@ -299,14 +309,23 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
 			error = !error;
 		}
 		if (result.HasError() && !statement.expected_error.empty()) {
-			if (!StringUtil::Contains(result.GetError(), statement.expected_error)) {
+			// We run both comparions on purpose, we might move to only the second but might require some changes in
+			// tests
+			// This is due to some errors containing absolute paths, some relatives
+			if (!StringUtil::Contains(result.GetError(), statement.expected_error) &&
+			    !StringUtil::Contains(result.GetError(), runner.ReplaceKeywords(statement.expected_error))) {
 				bool success = false;
 				if (StringUtil::StartsWith(statement.expected_error, "<REGEX>:") ||
 				    StringUtil::StartsWith(statement.expected_error, "<!REGEX>:")) {
 					success = MatchesRegex(logger, result.ToString(), statement.expected_error);
 				}
 				if (!success) {
-					if (!SkipErrorMessage(result.GetError())) {
+					// don't log the same test failure many times:
+					// e.g. log only the first failure in
+					// `./build/debug/test/unittest --on-init "SET max_memory='400kb';"
+					// test/fuzzer/pedro/concurrent_catalog_usage.test`
+					if (!SkipErrorMessage(result.GetError()) &&
+					    !FailureSummary::SkipLoggingSameError(statement.file_name)) {
 						logger.ExpectedErrorMismatch(statement.expected_error, result);
 						return false;
 					}
@@ -325,7 +344,9 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
 			runner.finished_processing_file = true;
 			return true;
 		}
-		logger.UnexpectedStatement(expected_result == ExpectedResult::RESULT_SUCCESS, result);
+		if (!FailureSummary::SkipLoggingSameError(statement.file_name)) {
+			logger.UnexpectedStatement(expected_result == ExpectedResult::RESULT_SUCCESS, result);
+		}
 		return false;
 	}
 	if (error) {
@@ -470,7 +491,9 @@ bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, MaterializedQue
 	Value lvalue, rvalue;
 	bool error = false;
 	// simple first test: compare string value directly
-	if (lvalue_str == rvalue_str) {
+	// We run both comparions on purpose, we might move to only the second but might require some changes in tests
+	// This is due to some results containing absolute paths, some relatives
+	if (lvalue_str == rvalue_str || lvalue_str == runner.ReplaceKeywords(rvalue_str)) {
 		return true;
 	}
 	if (StringUtil::StartsWith(rvalue_str, "<REGEX>:") || StringUtil::StartsWith(rvalue_str, "<!REGEX>:")) {

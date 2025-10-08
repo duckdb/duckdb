@@ -23,7 +23,7 @@
 namespace duckdb {
 class Binder;
 class LogicalGet;
-class BoundQueryNode;
+struct BoundStatement;
 
 class StarExpression;
 
@@ -42,9 +42,6 @@ enum class ColumnBindType { EXPAND_GENERATED_COLUMNS, DO_NOT_EXPAND_GENERATED_CO
 class BindContext {
 public:
 	explicit BindContext(Binder &binder);
-
-	//! Keep track of recursive CTE references
-	case_insensitive_map_t<shared_ptr<idx_t>> cte_references;
 
 public:
 	//! Given a column name, find the matching table it belongs to. Throws an
@@ -105,11 +102,11 @@ public:
 	                      const vector<LogicalType> &types, vector<ColumnIndex> &bound_column_ids,
 	                      optional_ptr<StandardEntry> entry, virtual_column_map_t virtual_columns);
 	//! Adds a table view with a given alias to the BindContext.
-	void AddView(idx_t index, const string &alias, SubqueryRef &ref, BoundQueryNode &subquery, ViewCatalogEntry &view);
+	void AddView(idx_t index, const string &alias, SubqueryRef &ref, BoundStatement &subquery, ViewCatalogEntry &view);
 	//! Adds a subquery with a given alias to the BindContext.
-	void AddSubquery(idx_t index, const string &alias, SubqueryRef &ref, BoundQueryNode &subquery);
+	void AddSubquery(idx_t index, const string &alias, SubqueryRef &ref, BoundStatement &subquery);
 	//! Adds a subquery with a given alias to the BindContext.
-	void AddSubquery(idx_t index, const string &alias, TableFunctionRef &ref, BoundQueryNode &subquery);
+	void AddSubquery(idx_t index, const string &alias, TableFunctionRef &ref, BoundStatement &subquery);
 	//! Adds a binding to a catalog entry with a given alias to the BindContext.
 	void AddEntryBinding(idx_t index, const string &alias, const vector<string> &names,
 	                     const vector<LogicalType> &types, StandardEntry &entry);
@@ -121,8 +118,6 @@ public:
 	//! We need this to correctly bind recursive CTEs with multiple references.
 	void AddCTEBinding(idx_t index, const string &alias, const vector<string> &names, const vector<LogicalType> &types,
 	                   const vector<LogicalType> &recurring_types = {}, bool using_key = false);
-
-	void RemoveCTEBinding(const string &alias);
 
 	//! Add an implicit join condition (e.g. USING (x))
 	void AddUsingBinding(const string &column_name, UsingColumnSet &set);
@@ -145,13 +140,6 @@ public:
 	//! (e.g. "column_name" might return "COLUMN_NAME")
 	string GetActualColumnName(const BindingAlias &binding_alias, const string &column_name);
 	string GetActualColumnName(Binding &binding, const string &column_name);
-
-	case_insensitive_map_t<shared_ptr<Binding>> GetCTEBindings() {
-		return cte_bindings;
-	}
-	void SetCTEBindings(case_insensitive_map_t<shared_ptr<Binding>> bindings) {
-		cte_bindings = std::move(bindings);
-	}
 
 	//! Alias a set of column names for the specified table, using the original names if there are not enough aliases
 	//! specified.
@@ -184,10 +172,7 @@ private:
 	vector<unique_ptr<Binding>> bindings_list;
 	//! The set of columns used in USING join conditions
 	case_insensitive_map_t<reference_set_t<UsingColumnSet>> using_columns;
-	//! Using column sets
-	vector<unique_ptr<UsingColumnSet>> using_column_sets;
-
 	//! The set of CTE bindings
-	case_insensitive_map_t<shared_ptr<Binding>> cte_bindings;
+	case_insensitive_map_t<unique_ptr<Binding>> cte_bindings;
 };
 } // namespace duckdb

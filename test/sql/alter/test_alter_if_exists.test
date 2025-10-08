@@ -89,6 +89,7 @@ ALTER TABLE IF EXISTS t1 ALTER COLUMN c0 TYPE varchar;
 statement error
 ALTER TABLE IF EXISTS t1 ALTER COLUMN IF EXISTS c0 TYPE varchar;
 ----
+Parser Error: syntax error at or near "EXISTS"
 
 # 'rowid' pseudo-column
 statement ok

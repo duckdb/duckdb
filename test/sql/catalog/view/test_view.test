@@ -2,9 +2,6 @@
 # description: Test view creation
 # group: [view]
 
-statement ok
-PRAGMA enable_verification
-
 # create a table
 statement ok
 CREATE TABLE t1(i INTEGER)
@@ -20,7 +17,7 @@ FROM t1 WHERE i < 43
 statement error
 CREATE VIEW v1 AS SELECT 'whatever'
 ----
-Catalog Error: View with name "v1" already exists!
+<REGEX>:.*Catalog Error.*already exists.*
 
 query I
 SELECT j FROM v1 WHERE j > 41
@@ -39,6 +36,7 @@ DROP VIEW v1
 statement error
 SELECT j FROM v1 WHERE j > 41
 ----
+<REGEX>:.*Catalog Error.*does not exist.*
 
 statement ok
 CREATE VIEW v1 AS SELECT 'whatever'
@@ -59,6 +57,7 @@ SELECT * FROM v1
 statement error
 INSERT INTO v1 VALUES (1)
 ----
+<REGEX>:.*Catalog Error.*not an table.*
 
 statement ok
 DROP VIEW v1
@@ -66,6 +65,7 @@ DROP VIEW v1
 statement error
 DROP VIEW v1
 ----
+<REGEX>:.*Catalog Error.*does not exist.*
 
 statement ok
 DROP VIEW IF EXISTS v1
@@ -73,3 +73,4 @@ DROP VIEW IF EXISTS v1
 statement error
 CREATE VIEW v1 AS SELECT * FROM dontexist
 ----
+<REGEX>:.*Catalog Error.*does not exist.*

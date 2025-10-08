@@ -92,7 +92,7 @@ static shared_ptr<ParquetFileMetadataCache>
 LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &file_handle,
              const shared_ptr<const ParquetEncryptionConfig> &encryption_config, const EncryptionUtil &encryption_util,
              optional_idx footer_size) {
-	auto file_proto = CreateThriftFileProtocol(QueryContext(context), file_handle, false);
+	auto file_proto = CreateThriftFileProtocol(context, file_handle, false);
 	auto &transport = reinterpret_cast<ThriftFileTransport &>(*file_proto->getTransport());
 	auto file_size = transport.GetSize();
 	if (file_size < 12) {
@@ -225,6 +225,10 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, Parquet
 				return LogicalType::TIME_TZ;
 			}
 			return LogicalType::TIME;
+		} else if (s_ele.logicalType.__isset.GEOMETRY) {
+			return LogicalType::BLOB;
+		} else if (s_ele.logicalType.__isset.GEOGRAPHY) {
+			return LogicalType::BLOB;
 		}
 	}
 	if (s_ele.__isset.converted_type) {
@@ -403,7 +407,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
                                                               const ParquetColumnSchema &schema) {
 	switch (schema.schema_type) {
 	case ParquetColumnSchemaType::GEOMETRY:
-		return metadata->geo_metadata->CreateColumnReader(*this, schema, context);
+		return GeoParquetFileMetadata::CreateColumnReader(*this, schema, context);
 	case ParquetColumnSchemaType::FILE_ROW_NUMBER:
 		return make_uniq<RowNumberColumnReader>(*this, schema);
 	case ParquetColumnSchemaType::COLUMN: {
@@ -561,11 +565,15 @@ static bool IsVariantType(const SchemaElement &root, const vector<ParquetColumnS
 }
 
 ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_define, idx_t max_repeat,
-                                                        idx_t &next_schema_idx, idx_t &next_file_idx) {
+                                                        idx_t &next_schema_idx, idx_t &next_file_idx,
+                                                        ClientContext &context) {
 
 	auto file_meta_data = GetFileMetadata();
 	D_ASSERT(file_meta_data);
-	D_ASSERT(next_schema_idx < file_meta_data->schema.size());
+	if (next_schema_idx >= file_meta_data->schema.size()) {
+		throw InvalidInputException("Malformed Parquet schema in file \"%s\": invalid schema index %d", file.path,
+		                            next_schema_idx);
+	}
 	auto &s_ele = file_meta_data->schema[next_schema_idx];
 	auto this_idx = next_schema_idx;
 
@@ -583,7 +591,7 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 	// Check for geoparquet spatial types
 	if (depth == 1) {
 		// geoparquet types have to be at the root of the schema, and have to be present in the kv metadata.
-		// geoarrow types, although geometry columns, are structs and have chilren and are handled below.
+		// geoarrow types, although geometry columns, are structs and have children and are handled below.
 		if (metadata->geo_metadata && metadata->geo_metadata->IsGeometryColumn(s_ele.name) && s_ele.num_children == 0) {
 			auto root_schema = ParseColumnSchema(s_ele, max_define, max_repeat, this_idx, next_file_idx++);
 			return ParquetColumnSchema(std::move(root_schema), GeoParquetFileMetadata::GeometryType(),
@@ -598,7 +606,8 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 		while (c_idx < NumericCast<idx_t>(s_ele.num_children)) {
 			next_schema_idx++;
 
-			auto child_schema = ParseSchemaRecursive(depth + 1, max_define, max_repeat, next_schema_idx, next_file_idx);
+			auto child_schema =
+			    ParseSchemaRecursive(depth + 1, max_define, max_repeat, next_schema_idx, next_file_idx, context);
 			child_schemas.push_back(std::move(child_schema));
 			c_idx++;
 		}
@@ -698,6 +707,14 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 			list_schema.children.push_back(std::move(result));
 			return list_schema;
 		}
+
+		// Convert to geometry type if possible
+		if (s_ele.__isset.logicalType && (s_ele.logicalType.__isset.GEOMETRY || s_ele.logicalType.__isset.GEOGRAPHY) &&
+		    GeoParquetFileMetadata::IsGeoParquetConversionEnabled(context)) {
+			return ParquetColumnSchema(std::move(result), GeoParquetFileMetadata::GeometryType(),
+			                           ParquetColumnSchemaType::GEOMETRY);
+		}
+
 		return result;
 	}
 }
@@ -707,7 +724,7 @@ static ParquetColumnSchema FileRowNumberSchema() {
 	                           ParquetColumnSchemaType::FILE_ROW_NUMBER);
 }
 
-unique_ptr<ParquetColumnSchema> ParquetReader::ParseSchema() {
+unique_ptr<ParquetColumnSchema> ParquetReader::ParseSchema(ClientContext &context) {
 	auto file_meta_data = GetFileMetadata();
 	idx_t next_schema_idx = 0;
 	idx_t next_file_idx = 0;
@@ -718,7 +735,7 @@ unique_ptr<ParquetColumnSchema> ParquetReader::ParseSchema() {
 	if (file_meta_data->schema[0].num_children == 0) {
 		throw IOException("Parquet reader: root schema element has no children");
 	}
-	auto root = ParseSchemaRecursive(0, 0, 0, next_schema_idx, next_file_idx);
+	auto root = ParseSchemaRecursive(0, 0, 0, next_schema_idx, next_file_idx, context);
 	if (root.type.id() != LogicalTypeId::STRUCT) {
 		throw InvalidInputException("Root element of Parquet file must be a struct");
 	}
@@ -774,7 +791,7 @@ void ParquetReader::InitializeSchema(ClientContext &context) {
 		throw InvalidInputException("Failed to read Parquet file '%s': Need at least one non-root column in the file",
 		                            GetFileName());
 	}
-	root_schema = ParseSchema();
+	root_schema = ParseSchema(context);
 	for (idx_t i = 0; i < root_schema->children.size(); i++) {
 		auto &element = root_schema->children[i];
 		columns.push_back(ParseColumnDefinition(*file_meta_data, element));
@@ -823,7 +840,7 @@ ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, Parq
                              shared_ptr<ParquetFileMetadataCache> metadata_p)
     : BaseFileReader(std::move(file_p)), fs(CachingFileSystem::Get(context_p)),
       allocator(BufferAllocator::Get(context_p)), parquet_options(std::move(parquet_options_p)) {
-	file_handle = fs.OpenFile(QueryContext(context_p), file, FileFlags::FILE_FLAGS_READ);
+	file_handle = fs.OpenFile(context_p, file, FileFlags::FILE_FLAGS_READ);
 	if (!file_handle->CanSeek()) {
 		throw NotImplementedException(
 		    "Reading parquet files from a FIFO stream is not supported and cannot be efficiently supported since "
@@ -1018,7 +1035,9 @@ uint64_t ParquetReader::GetGroupCompressedSize(ParquetReaderScanState &state) {
 
 	if (total_compressed_size != 0 && calc_compressed_size != 0 &&
 	    (idx_t)total_compressed_size != calc_compressed_size) {
-		throw InvalidInputException("mismatch between calculated compressed size and reported compressed size");
+		throw InvalidInputException(
+		    "Failed to read file \"%s\": mismatch between calculated compressed size and reported compressed size",
+		    GetFileName());
 	}
 
 	return total_compressed_size ? total_compressed_size : calc_compressed_size;
@@ -1220,7 +1239,7 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 			state.prefetch_mode = false;
 		}
 
-		state.file_handle = fs.OpenFile(QueryContext(context), file, flags);
+		state.file_handle = fs.OpenFile(context, file, flags);
 	}
 	state.adaptive_filter.reset();
 	state.scan_filters.clear();
@@ -1231,7 +1250,7 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 		}
 	}
 
-	state.thrift_file_proto = CreateThriftFileProtocol(QueryContext(context), *state.file_handle, state.prefetch_mode);
+	state.thrift_file_proto = CreateThriftFileProtocol(context, *state.file_handle, state.prefetch_mode);
 	state.root_reader = CreateReader(context);
 	state.define_buf.resize(allocator, STANDARD_VECTOR_SIZE);
 	state.repeat_buf.resize(allocator, STANDARD_VECTOR_SIZE);

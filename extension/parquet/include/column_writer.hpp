@@ -27,7 +27,7 @@ public:
 
 	unsafe_vector<uint16_t> definition_levels;
 	unsafe_vector<uint16_t> repetition_levels;
-	vector<bool> is_empty;
+	unsafe_vector<uint8_t> is_empty;
 	idx_t parent_null_count = 0;
 	idx_t null_count = 0;
 
@@ -70,11 +70,6 @@ public:
 	ColumnWriter(ParquetWriter &writer, const ParquetColumnSchema &column_schema, vector<string> schema_path,
 	             bool can_have_nulls);
 	virtual ~ColumnWriter();
-
-	ParquetWriter &writer;
-	const ParquetColumnSchema &column_schema;
-	vector<string> schema_path;
-	bool can_have_nulls;
 
 public:
 	const LogicalType &Type() const {
@@ -119,7 +114,8 @@ public:
 		throw NotImplementedException("Writer does not need analysis");
 	}
 
-	virtual void Prepare(ColumnWriterState &state, ColumnWriterState *parent, Vector &vector, idx_t count) = 0;
+	virtual void Prepare(ColumnWriterState &state, ColumnWriterState *parent, Vector &vector, idx_t count,
+	                     bool vector_can_span_multiple_pages) = 0;
 
 	virtual void BeginWrite(ColumnWriterState &state) = 0;
 	virtual void Write(ColumnWriterState &state, Vector &vector, idx_t count) = 0;
@@ -128,10 +124,19 @@ public:
 protected:
 	void HandleDefineLevels(ColumnWriterState &state, ColumnWriterState *parent, const ValidityMask &validity,
 	                        const idx_t count, const uint16_t define_value, const uint16_t null_value) const;
-	void HandleRepeatLevels(ColumnWriterState &state_p, ColumnWriterState *parent, idx_t count, idx_t max_repeat) const;
+	void HandleRepeatLevels(ColumnWriterState &state_p, ColumnWriterState *parent, idx_t count) const;
 
 	void CompressPage(MemoryStream &temp_writer, size_t &compressed_size, data_ptr_t &compressed_data,
 	                  AllocatedData &compressed_buf);
+
+public:
+	ParquetWriter &writer;
+	const ParquetColumnSchema &column_schema;
+	vector<string> schema_path;
+	bool can_have_nulls;
+
+protected:
+	vector<unique_ptr<ColumnWriter>> child_writers;
 };
 
 } // namespace duckdb

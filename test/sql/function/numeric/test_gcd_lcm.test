@@ -2,9 +2,6 @@
 # description: Test gcd and lcm
 # group: [numeric]
 
-statement ok
-PRAGMA enable_verification
-
 query IIIIII
 SELECT a, b, gcd(a, b), gcd(a, -b), gcd(b, a), gcd(-b, a)
 FROM (VALUES (0::int8, 0::int8),

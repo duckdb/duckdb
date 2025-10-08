@@ -2,9 +2,6 @@
 # description: Test As-Of joins for strings
 # group: [asof]
 
-statement ok
-PRAGMA enable_verification
-
 # Join on a string range
 
 statement ok

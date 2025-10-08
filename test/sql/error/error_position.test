@@ -2,14 +2,12 @@
 # description: Test error position
 # group: [error]
 
-# error within table macro
-statement ok
-create macro checksum(x) as table SELECT bit_xor(md5_number(CAST(COLUMNS(*) AS VARCHAR))) FROM query_table(table_name);
-
 statement ok
 set errors_as_json=true;
 
+# error within table macro
 statement error
-select * from checksum('tbl');
+create macro checksum(x) as table SELECT bit_xor(md5_number(CAST(COLUMNS(*) AS VARCHAR))) FROM query_table(table_name);
 ----
-<REGEX>:.*"position".*:.*"14".*
+<REGEX>:.*"position".*:.*"95".*
+

@@ -89,7 +89,7 @@ void Transformer::TransformCTE(duckdb_libpgquery::PGWithClause &de_with_clause, 
 		}
 		// we need a query
 		if (!cte.ctequery || cte.ctequery->type != duckdb_libpgquery::T_PGSelectStmt) {
-			throw NotImplementedException("A CTE needs a SELECT");
+			throw ParserException("A CTE needs a SELECT");
 		}
 
 		// CTE transformation can either result in inlining for non recursive CTEs, or in recursive CTE bindings

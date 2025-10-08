@@ -112,6 +112,8 @@ unique_ptr<BoundMergeIntoAction> Binder::BindMergeAction(LogicalMergeInto &merge
 			// expand source bindings
 			action.expressions = GenerateColumnReferences(*this, source_aliases, source_names);
 		}
+		CheckInsertColumnCountMismatch(expected_types.size(), action.expressions.size(), !action.insert_columns.empty(),
+		                               table.name);
 		// explicit expressions - plan them
 		for (idx_t i = 0; i < action.expressions.size(); i++) {
 			auto &column = table.GetColumns().GetColumn(named_column_map[i]);
@@ -125,6 +127,7 @@ unique_ptr<BoundMergeIntoAction> Binder::BindMergeAction(LogicalMergeInto &merge
 			PlanSubqueries(insert_expr, root);
 			insert_expressions.push_back(std::move(insert_expr));
 		}
+
 		for (auto &insert_expr : insert_expressions) {
 			result->expressions.push_back(make_uniq<BoundColumnRefExpression>(
 			    insert_expr->return_type, ColumnBinding(proj_index, expressions.size())));
@@ -229,10 +232,18 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 	auto bound_join_node = Bind(join);
 
 	auto root = CreatePlan(*bound_join_node);
+	auto join_ref = reference<LogicalOperator>(*root);
+	while (join_ref.get().children.size() == 1) {
+		join_ref = *join_ref.get().children[0];
+	}
+	if (join_ref.get().children.size() != 2) {
+		throw NotImplementedException("Expected a join after binding a join operator - but got a %s",
+		                              join_ref.get().type);
+	}
 	// kind of hacky, CreatePlan turns a RIGHT join into a LEFT join so the children get reversed from what we need
 	bool inverted = join.type == JoinType::RIGHT;
-	auto &source = root->children[inverted ? 1 : 0];
-	auto &get = root->children[inverted ? 0 : 1]->Cast<LogicalGet>();
+	auto &source = join_ref.get().children[inverted ? 1 : 0];
+	auto &get = join_ref.get().children[inverted ? 0 : 1]->Cast<LogicalGet>();
 
 	auto merge_into = make_uniq<LogicalMergeInto>(table);
 	merge_into->table_index = GenerateTableIndex();

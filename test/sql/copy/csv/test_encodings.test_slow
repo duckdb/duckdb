@@ -30,7 +30,7 @@ The CSV Reader does not support the encoding: "Shift-JIS"
 statement error
 COPY test TO 'data/csv/test/test.csv' (encoding 'utf-16');
 ----
-Unrecognized option CSV writer "encoding"
+Option "encoding" is not supported for writing - only for reading
 
 statement error
 FROM read_csv('data/csv/encodings/latin1.csv')

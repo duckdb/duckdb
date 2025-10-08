@@ -1536,7 +1536,7 @@ typedef struct PGCopyStmt {
 								 * for all columns */
 	bool is_from;         /* TO or FROM */
 	bool is_program;      /* is 'filename' a program to popen? */
-	char *filename;       /* filename, or NULL for STDIN/STDOUT */
+	PGNode *filename;     /* filename */
 	PGList *options;      /* PGList of PGDefElem nodes */
 } PGCopyStmt;
 
@@ -2087,6 +2087,18 @@ typedef struct PGCopyDatabaseStmt {
 	const char *copy_database_flag;
 } PGCopyDatabaseStmt;
 
+typedef enum PGAlterDatabaseType {
+	PG_ALTER_DATABASE_RENAME
+} PGAlterDatabaseType;
+
+typedef struct PGAlterDatabaseStmt {
+	PGNodeTag type;
+	const char *dbname;
+	const char *new_name;
+	PGAlterDatabaseType alter_type;
+	bool missing_ok;
+} PGAlterDatabaseStmt;
+
 /* ----------------------
  *		Interval Constant
  * ----------------------
@@ -2299,5 +2311,17 @@ typedef struct PGMatchAction {
 	PGNode *errorMessage;                    /* Expression to generate the error message, if any */
 	bool defaultValues;                      /* DEFAULT VALUES */
 } PGMatchAction;
+
+/* ----------------------
+ *		Function Parameter
+ * ----------------------
+ */
+
+typedef struct PGFunctionParameter {
+	PGNodeTag type;
+	char *name;                   /* name of parameter */
+	PGTypeName *typeName;         /* type of parameter (optional) */
+	PGExpr *defaultValue;		  /* default value of parameter (optional) */
+} PGFunctionParameter;
 
 }

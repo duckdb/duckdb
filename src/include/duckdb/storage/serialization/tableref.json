@@ -198,7 +198,7 @@
       {
         "id": 202,
         "name": "collection",
-        "type": "shared_ptr<ColumnDataCollection>"
+        "type": "optionally_owned_ptr<ColumnDataCollection>"
       }
     ],
     "constructor": ["collection", "expected_names"]

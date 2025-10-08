@@ -3,9 +3,6 @@
 # group: [map]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE i AS SELECT str_split('my yay', ' ') AS l, range AS i FROM range(3);
 
 query I
