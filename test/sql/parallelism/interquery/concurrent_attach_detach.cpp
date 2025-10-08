@@ -16,22 +16,23 @@ string TEST_DIR_PATH;
 const string PREFIX = "db_";
 const string SUFFIX = ".db";
 
-string get_db_path(idx_t i) {
+string GetDBPath(idx_t i) {
 	return TEST_DIR_PATH + "/" + PREFIX + to_string(i) + SUFFIX;
 }
 
-string get_db_name(idx_t i) {
+string GetDBName(idx_t i) {
 	return PREFIX + to_string(i);
 }
 
 constexpr idx_t DB_COUNT = 10;
 constexpr idx_t WORKER_COUNT = 40;
-constexpr idx_t ITERATION_COUNT = 400;
+constexpr idx_t ITERATION_COUNT = 40;
 constexpr idx_t NR_INITIAL_ROWS = 2050;
 constexpr idx_t PROFILING_INTERVAL = 10;
 
 // Set to true to enable interruptions of workers.
-constexpr bool INTERRUPT_WORKERS = false;
+bool INTERRUPT_WORKERS = false;
+bool ENABLE_CHECKPOINTING = false;
 
 vector<string> LOGGING[WORKER_COUNT] = {{}};
 atomic<bool> IS_SUCCESS {true};
@@ -39,7 +40,6 @@ idx_t QUERY_COUNT[WORKER_COUNT] = {0};
 bool ACTIVE_TRANSACTION[WORKER_COUNT] = {false};
 
 vector<std::unique_ptr<Connection>> CONNECTIONS;
-atomic<idx_t> ACTIVE_WORKERS {0};
 
 // Queries that currently don't support profiling.
 vector<string> SKIP_PROFILING_QUERIES = {"ROLLBACK"};
@@ -48,7 +48,31 @@ void AddLog(const idx_t worker_id, const string &msg) {
 	LOGGING[worker_id].push_back(msg);
 }
 
-duckdb::unique_ptr<MaterializedQueryResult> ExecQuery(Connection &conn, const string &query, const idx_t worker_id) {
+void InterruptQuery(Connection &conn, const idx_t worker_id, idx_t percent_chance_to_interrupt) {
+	REQUIRE(!(percent_chance_to_interrupt > 100));
+	if (!INTERRUPT_WORKERS || (rand() % 100) < percent_chance_to_interrupt) {
+		return;
+	}
+	AddLog(worker_id, "Interrupting query!");
+	conn.Interrupt();
+}
+
+void RunQuery(duckdb::unique_ptr<MaterializedQueryResult> *result, Connection &conn, const string &query,
+              const idx_t worker_id) {
+	*result = conn.Query(query);
+	if ((*result)->HasError()) {
+		if ((*result)->GetErrorType() == ExceptionType::INTERRUPT) {
+			AddLog(worker_id, "Query interrupted! Trying again");
+			return RunQuery(result, conn, query, worker_id);
+		}
+		Printer::PrintF("Failed to execute query %s:\n------\n%s\n-------", query, (*result)->GetError());
+		IS_SUCCESS = false;
+	}
+}
+
+// chance_to_interrupt: between 0 and 100 (percentage). 100 means never, 0 means always.
+duckdb::unique_ptr<MaterializedQueryResult> ExecQuery(Connection &conn, const string &query, const idx_t worker_id,
+                                                      idx_t percent_chance_to_interrupt = 100) {
 	QUERY_COUNT[worker_id]++;
 
 	// Enable profiling for every 10th query, unless it's in the skip list.
@@ -60,16 +84,17 @@ duckdb::unique_ptr<MaterializedQueryResult> ExecQuery(Connection &conn, const st
 
 	if (profiling_enabled) {
 		AddLog(worker_id, "Enabling profiling");
-		conn.EnableProfiling();
 		conn.Query("PRAGMA enable_profiling = 'no_output'");
 		conn.Query("SET profiling_coverage = 'ALL'");
 	}
 
-	auto result = conn.Query(query);
-	if (result->HasError() && result->GetErrorType() != ExceptionType::INTERRUPT) {
-		Printer::PrintF("Failed to execute query %s:\n------\n%s\n-------", query, result->GetError());
-		IS_SUCCESS = false;
-	}
+	std::thread interruption_runner(InterruptQuery, std::ref(conn), worker_id, percent_chance_to_interrupt);
+
+	duckdb::unique_ptr<MaterializedQueryResult> result;
+	std::thread query_runner(RunQuery, &result, std::ref(conn), query, worker_id);
+
+	query_runner.join();
+	interruption_runner.join();
 
 	if (profiling_enabled) {
 		AddLog(worker_id, "Retrieving profiling info for " + query);
@@ -86,7 +111,7 @@ duckdb::unique_ptr<MaterializedQueryResult> ExecQuery(Connection &conn, const st
 			IS_SUCCESS = false;
 		}
 
-		conn.DisableProfiling();
+		conn.Query("PRAGMA disable_profiling;");
 	}
 
 	return result;
@@ -101,11 +126,6 @@ struct DBInfo {
 	idx_t table_count = 0;
 	vector<TableInfo> tables;
 };
-
-void InterruptAttach(Connection &conn, const idx_t worker_id) {
-	AddLog(worker_id, "Interrupting connection");
-	conn.Interrupt();
-}
 
 DBInfo db_infos[DB_COUNT];
 
@@ -123,14 +143,8 @@ public:
 			m[db_id] = 1;
 		}
 
-		if (rand() % 2 == 0) {
-			// 50% chance to spawn an interruption worker
-			std::thread interruption(InterruptAttach, std::ref(conn), worker_id);
-			interruption.join();
-		}
-
-		string query = "ATTACH IF NOT EXISTS'" + get_db_path(db_id) + "'";
-		ExecQuery(conn, query, worker_id);
+		string query = "ATTACH IF NOT EXISTS'" + GetDBPath(db_id) + "'";
+		ExecQuery(conn, query, worker_id, 50);
 	}
 
 	void RemoveWorker(Connection &conn, const idx_t db_id, const idx_t worker_id) {
@@ -142,7 +156,7 @@ public:
 		}
 
 		m.erase(db_id);
-		string query = "DETACH " + get_db_name(db_id);
+		string query = "DETACH " + GetDBName(db_id);
 		ExecQuery(conn, query, worker_id);
 	}
 };
@@ -156,7 +170,7 @@ void CreateTbl(Connection &conn, const idx_t db_id, const idx_t worker_id) {
 	db_infos[db_id].table_count++;
 
 	// Create the table.
-	string tbl_path = StringUtil::Format("%s.tbl_%d", get_db_name(db_id), tbl_id);
+	string tbl_path = StringUtil::Format("%s.tbl_%d", GetDBName(db_id), tbl_id);
 	string create_sql = StringUtil::Format(
 	    "CREATE TABLE %s(i BIGINT PRIMARY KEY, s VARCHAR, ts TIMESTAMP, obj STRUCT(key1 UBIGINT, key2 VARCHAR))",
 	    tbl_path);
@@ -191,12 +205,12 @@ void Lookup(Connection &conn, const idx_t db_id, const idx_t worker_id) {
 	lock.unlock();
 
 	// Run the query.
-	auto table_name = get_db_name(db_id) + ".tbl_" + to_string(tbl_id);
+	auto table_name = GetDBName(db_id) + ".tbl_" + to_string(tbl_id);
 	string query = "SELECT i, s, ts, obj FROM " + table_name + " WHERE i = " + to_string(expected_max_val);
 	AddLog(worker_id, "q: " + query);
 
 	// Verify the results.
-	auto result = ExecQuery(conn, query, worker_id);
+	auto result = ExecQuery(conn, query, worker_id, 25);
 	if (result->RowCount() == 0) {
 		Printer::PrintF("FAILURE - No rows returned from query");
 		IS_SUCCESS = false;
@@ -225,10 +239,10 @@ void AppendInternal(Connection &conn, const idx_t db_id, const idx_t tbl_id, con
                     const vector<idx_t> &ids) {
 	// Log appender command.
 	auto tbl_str = "tbl_" + to_string(tbl_id);
-	AddLog(worker_id, "db: " + get_db_name(db_id) + "; table: " + tbl_str + "; append rows");
+	AddLog(worker_id, "db: " + GetDBName(db_id) + "; table: " + tbl_str + "; append rows");
 
 	try {
-		Appender appender(conn, get_db_name(db_id), DEFAULT_SCHEMA, tbl_str);
+		Appender appender(conn, GetDBName(db_id), DEFAULT_SCHEMA, tbl_str);
 		DataChunk chunk;
 
 		child_list_t<LogicalType> struct_children;
@@ -313,7 +327,7 @@ void DeleteInternal(Connection &conn, const idx_t db_id, const idx_t tbl_id, con
 	}
 	string delete_sql =
 	    StringUtil::Format("WITH ids (id) AS (VALUES %s) DELETE FROM %s.%s.%s AS t USING ids WHERE t.i = ids.id",
-	                       delete_list, get_db_name(db_id), DEFAULT_SCHEMA, tbl_str);
+	                       delete_list, GetDBName(db_id), DEFAULT_SCHEMA, tbl_str);
 	AddLog(worker_id, "q: " + delete_sql);
 	ExecQuery(conn, delete_sql, worker_id);
 }
@@ -373,18 +387,22 @@ void DescribeTbl(Connection &conn, const idx_t db_id, const idx_t worker_id) {
 	auto actual_describe = std::rand() % 2 == 0;
 	string describe_sql;
 	if (actual_describe) {
-		describe_sql = StringUtil::Format("DESCRIBE %s.%s.%s", get_db_name(db_id), DEFAULT_SCHEMA, tbl_str);
+		describe_sql = StringUtil::Format("DESCRIBE %s.%s.%s", GetDBName(db_id), DEFAULT_SCHEMA, tbl_str);
 	} else {
-		describe_sql =
-		    StringUtil::Format("SELECT 1 FROM %s.%s.%s LIMIT 1", get_db_name(db_id), DEFAULT_SCHEMA, tbl_str);
+		describe_sql = StringUtil::Format("SELECT 1 FROM %s.%s.%s LIMIT 1", GetDBName(db_id), DEFAULT_SCHEMA, tbl_str);
 	}
 
 	AddLog(worker_id, "q: " + describe_sql);
-	ExecQuery(conn, describe_sql, worker_id);
+	ExecQuery(conn, describe_sql, worker_id, 50);
 }
 
 void WorkUnit(const idx_t worker_id) {
 	auto &conn = *CONNECTIONS.at(worker_id);
+
+	if (ENABLE_CHECKPOINTING) {
+		ExecQuery(conn, "PRAGMA wal_autocheckpoint='1TB';", worker_id);
+		ExecQuery(conn, "PRAGMA disable_checkpoint_on_shutdown;", worker_id);
+	}
 
 	for (idx_t i = 0; i < ITERATION_COUNT; i++) {
 		if (!IS_SUCCESS) {
@@ -434,26 +452,9 @@ void WorkUnit(const idx_t worker_id) {
 			return;
 		}
 	}
-
-	--ACTIVE_WORKERS;
 }
 
-void WorkerInterruptor() {
-	while (ACTIVE_WORKERS > 0 || IS_SUCCESS) {
-		std::this_thread::sleep_for(std::chrono::milliseconds(10));
-
-		auto worker_id = std::rand() % WORKER_COUNT;
-		auto &conn = *CONNECTIONS.at(worker_id);
-		if (ACTIVE_TRANSACTION[worker_id]) {
-			Printer::PrintF("INTERRUPTING worker %d\n", worker_id);
-			AddLog(worker_id, "Interrupting connection");
-			conn.Interrupt();
-			conn.Rollback();
-		}
-	}
-}
-
-TEST_CASE("Run a concurrent ATTACH/DETACH scenario", "[interquery][.]") {
+DuckDB Setup() {
 	TEST_DIR_PATH = TestDirectoryPath();
 
 	DuckDB db(nullptr);
@@ -465,18 +466,16 @@ TEST_CASE("Run a concurrent ATTACH/DETACH scenario", "[interquery][.]") {
 	ExecQuery(init_conn, "CALL enable_logging()", 0);
 	ExecQuery(init_conn, "SET default_block_size = 16384", 0);
 
+	return db;
+}
+
+void Run(DuckDB db) {
 	// Spawn workers.
 	vector<std::thread> workers;
 	for (idx_t worker_id = 0; worker_id < WORKER_COUNT; worker_id++) {
 		auto conn = make_uniq<Connection>(db);
 		CONNECTIONS.push_back(std::move(conn));
 		workers.emplace_back(WorkUnit, worker_id);
-	}
-
-	// Start the interrupter.
-	if (INTERRUPT_WORKERS) {
-		std::thread thread_interrupt(WorkerInterruptor);
-		thread_interrupt.join();
 	}
 
 	for (auto &worker : workers) {
@@ -497,6 +496,36 @@ TEST_CASE("Run a concurrent ATTACH/DETACH scenario", "[interquery][.]") {
 		}
 		FAIL();
 	}
+}
+
+TEST_CASE("Run a concurrent ATTACH/DETACH scenario", "[interquery][.]") {
+	INTERRUPT_WORKERS = false;
+
+	const auto db = Setup();
+	Run(db);
+}
+
+TEST_CASE("Run a concurrent ATTACH/DETACH scenario with interruptions", "[interquery][.]") {
+	INTERRUPT_WORKERS = true;
+
+	const auto db = Setup();
+	Run(db);
+}
+
+TEST_CASE("Run a concurrent ATTACH/DETACH scenario with checkpointing", "[interquery][.]") {
+	INTERRUPT_WORKERS = false;
+	ENABLE_CHECKPOINTING = true;
+
+	const auto db = Setup();
+	Run(db);
+}
+
+TEST_CASE("Run a concurrent ATTACH/DETACH scenario with checkpointing and interruptions", "[interquery][.]") {
+	INTERRUPT_WORKERS = true;
+	ENABLE_CHECKPOINTING = true;
+
+	const auto db = Setup();
+	Run(db);
 }
 
 } // anonymous namespace
