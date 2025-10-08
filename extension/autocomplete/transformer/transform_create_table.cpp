@@ -4,7 +4,7 @@ namespace duckdb {
 
 // IdentifierOrStringLiteral <- Identifier / StringLiteral
 string PEGTransformerFactory::TransformIdentifierOrStringLiteral(PEGTransformer &transformer,
-                                                          optional_ptr<ParseResult> parse_result) {
+                                                                 optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto choice_pr = list_pr.Child<ChoiceParseResult>(0);
 	if (choice_pr.result->type == ParseResultType::IDENTIFIER) {
@@ -17,7 +17,7 @@ string PEGTransformerFactory::TransformIdentifierOrStringLiteral(PEGTransformer 
 }
 
 string PEGTransformerFactory::TransformColIdOrString(PEGTransformer &transformer,
-													 optional_ptr<ParseResult> parse_result) {
+                                                     optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
 	return transformer.Transform<string>(choice_pr.result);

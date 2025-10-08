@@ -1,4 +1,4 @@
-# name: test/sql/peg_parser/transformer/peg_transformer.test
+# name: test/sql/peg_parser/transformer/load_statement.test
 # description: Test analyze and vacuum statements in peg parser
 # group: [transformer]
 
