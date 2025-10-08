@@ -65,19 +65,19 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 			// This aggregate hasn't specified an explicit mapping for its destination
 			// So the binder infer the destination from the first argument of the aggregate
 			switch (agg.children[0]->type) {
-				case ExpressionType::BOUND_REF: {
-				    // Cast the child to a BoundReferenceExpression and map its index to the aggregate index.
-				    bound_ref = &agg.children[0]->Cast<BoundReferenceExpression>();
-			    	break;
-			    }
-			    case ExpressionType::OPERATOR_CAST: {
-				    // We have a cast on top of the BoundRefExpression
-				    auto &bound_cast = agg.children[0]->Cast<BoundCastExpression>();
-				    bound_ref = *bound_cast.child;
-			    	break;
-			    }
-			    default:
-				    throw InternalException("Unexpected expression type for aggregate argument in recursive CTE");
+			case ExpressionType::BOUND_REF: {
+				// Cast the child to a BoundReferenceExpression and map its index to the aggregate index.
+				bound_ref = &agg.children[0]->Cast<BoundReferenceExpression>();
+				break;
+			}
+			case ExpressionType::OPERATOR_CAST: {
+				// We have a cast on top of the BoundRefExpression
+				auto &bound_cast = agg.children[0]->Cast<BoundCastExpression>();
+				bound_ref = *bound_cast.child;
+				break;
+			}
+			default:
+				throw InternalException("Unexpected expression type for aggregate argument in recursive CTE");
 			}
 		} else {
 			// We have an explicit mapping for the destination of this aggregate

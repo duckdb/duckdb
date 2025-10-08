@@ -53,14 +53,16 @@ void Transformer::TransformCTE(duckdb_libpgquery::PGWithClause &de_with_clause, 
 
 		auto &cte = *PGPointerCast<duckdb_libpgquery::PGCommonTableExpr>(cte_ele->data.ptr_value);
 		if (cte.usingKeyClause && cte.usingKeyClause->key_targets) {
-			auto key_target = PGPointerCast<duckdb_libpgquery::PGNode>(cte.usingKeyClause->key_targets->head->data.ptr_value);
+			auto key_target =
+			    PGPointerCast<duckdb_libpgquery::PGNode>(cte.usingKeyClause->key_targets->head->data.ptr_value);
 			if (key_target) {
 				TransformExpressionList(*cte.usingKeyClause->key_targets, info->key_targets);
 			}
 		}
 
 		if (cte.usingKeyClause && cte.usingKeyClause->payload_aggregates) {
-			auto payload_aggregate = PGPointerCast<duckdb_libpgquery::PGNode>(cte.usingKeyClause->payload_aggregates->head->data.ptr_value);
+			auto payload_aggregate =
+			    PGPointerCast<duckdb_libpgquery::PGNode>(cte.usingKeyClause->payload_aggregates->head->data.ptr_value);
 			if (payload_aggregate) {
 				TransformExpressionList(*cte.usingKeyClause->payload_aggregates, info->payload_aggregates);
 			}

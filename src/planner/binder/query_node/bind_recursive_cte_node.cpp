@@ -77,17 +77,17 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 
 	// Bind user-defined aggregates
 	for (idx_t payload_idx = 0; payload_idx < statement.payload_aggregates.size(); payload_idx++) {
-		auto& expr = statement.payload_aggregates[payload_idx];
+		auto &expr = statement.payload_aggregates[payload_idx];
 		D_ASSERT(expr->type == ExpressionType::FUNCTION);
-		auto& func_expr = expr->Cast<FunctionExpression>();
+		auto &func_expr = expr->Cast<FunctionExpression>();
 
 		// Look up the aggregate function in the catalog
-		auto& func = Catalog::GetSystemCatalog(context).GetEntry<AggregateFunctionCatalogEntry>(context, DEFAULT_SCHEMA,
-																								func_expr.function_name);
+		auto &func = Catalog::GetSystemCatalog(context).GetEntry<AggregateFunctionCatalogEntry>(
+		    context, DEFAULT_SCHEMA, func_expr.function_name);
 		vector<LogicalType> aggregation_input_types;
 		vector<unique_ptr<Expression>> bound_children;
 		// Bind the children of the aggregate function
-		for (auto& child : func_expr.children) {
+		for (auto &child : func_expr.children) {
 			auto bound_child = expression_binder.Bind(child);
 			aggregation_input_types.push_back(bound_child->return_type);
 			bound_children.push_back(std::move(bound_child));
@@ -105,9 +105,8 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 			}
 			aggregate_idx = NumericCast<idx_t>(std::distance(result->names.begin(), names_iter));
 			// Create a new bound column reference for the target column
-			result->payload_aggregate_dest_map[payload_idx] =
-			    make_uniq<BoundColumnRefExpression>(result->types[aggregate_idx],
-			                                        ColumnBinding(result->setop_index, aggregate_idx));
+			result->payload_aggregate_dest_map[payload_idx] = make_uniq<BoundColumnRefExpression>(
+			    result->types[aggregate_idx], ColumnBinding(result->setop_index, aggregate_idx));
 		} else {
 			if (bound_children[0]->type != ExpressionType::BOUND_COLUMN_REF) {
 				// No alias and no way to infer target column through first argument
@@ -118,9 +117,8 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 		}
 
 		// Find the best matching aggregate function
-		auto best_function_idx = function_binder.BindFunction(func.name, func.functions,
-		                                                      std::move(aggregation_input_types),
-		                                                      error);
+		auto best_function_idx =
+		    function_binder.BindFunction(func.name, func.functions, std::move(aggregation_input_types), error);
 		if (!best_function_idx.IsValid()) {
 			throw BinderException("No matching aggregate function\n%s", error.Message());
 		}
@@ -172,7 +170,8 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 	// This implements the CTE shadowing behavior.
 	result->right_binder->bind_context.RemoveCTEBinding(statement.ctename);
 	result->right_binder->bind_context.AddCTEBinding(result->setop_index, statement.ctename, result->names,
-	                                                 result->internal_types, result->types, !statement.key_targets.empty());
+	                                                 result->internal_types, result->types,
+	                                                 !statement.key_targets.empty());
 
 	result->right = result->right_binder->BindNode(*statement.right);
 	for (auto &c : result->left_binder->correlated_columns) {

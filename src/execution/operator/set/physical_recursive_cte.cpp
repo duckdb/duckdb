@@ -34,7 +34,7 @@ class RecursiveCTEState : public GlobalSinkState {
 public:
 	explicit RecursiveCTEState(ClientContext &context, const PhysicalRecursiveCTE &op)
 	    : executor(context), intermediate_table(context, op.using_key ? op.internal_types : op.types),
-	      new_groups(STANDARD_VECTOR_SIZE){
+	      new_groups(STANDARD_VECTOR_SIZE) {
 
 		vector<LogicalType> aggr_input_types;
 		vector<BoundAggregateExpression *> payload_aggregates_ptr;
@@ -300,7 +300,6 @@ void PhysicalRecursiveCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_
 
 	auto &executor = meta_pipeline.GetExecutor();
 	executor.AddRecursiveCTE(*this);
-
 
 	// the LHS of the recursive CTE is our initial state
 	auto &initial_state_pipeline = meta_pipeline.CreateChildMetaPipeline(current, *this);

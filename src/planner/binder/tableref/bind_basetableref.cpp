@@ -194,8 +194,8 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 
 					} else {
 						throw BinderException("There is a WITH item named \"%s\", but the recurring table cannot be "
-											  "referenced from this part of the query.",
-											  ref.table_name);
+						                      "referenced from this part of the query.",
+						                      ref.table_name);
 					}
 				}
 			}
