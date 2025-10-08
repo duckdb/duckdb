@@ -1,0 +1,179 @@
+# name: test/sql/subquery/complex/correlated_internal_issue_5975.test
+# description: Test internal issue 5975 - INTERNAL Error: Failed to bind column reference ""
+# group: [complex]
+
+statement ok
+CREATE TABLE my_logs (
+    featherEventId UUID,
+    "duckInfo.gooseEmail" VARCHAR,
+    "duckInfo.gooseSubject" VARCHAR
+);
+
+statement ok
+CREATE TYPE MY_ENUM AS ENUM (
+      'EnumField1',
+      'EnumField2',
+      'EnumField3',
+      'EnumField4',
+      'EnumField5',
+      'EnumField6',
+      'EnumField7',
+      'EnumField8'
+);
+
+statement ok
+CREATE OR REPLACE MACRO swan_MY_ENUM (sa) AS (
+    WITH sa_parts AS (
+        SELECT STRING_SPLIT(sa, '@') AS emailParts
+    )
+    SELECT 'EnumField2'::MY_ENUM
+    FROM sa_parts
+);
+
+statement ok
+CREATE OR REPLACE MACRO swan_email_info (duckEmail) AS (
+    SELECT
+        CASE
+            WHEN ENDS_WITH(duckEmail, 'duckdblabs.com') THEN STRUCT_PACK(
+                subject := 'serviceAccount:' || duckEmail,
+                type := swan_MY_ENUM (duckEmail)
+            )
+            WHEN duckEmail = 'my@duckdblabs.com'
+            OR duckEmail = 'EnumField8' THEN STRUCT_PACK(
+                subject := 'EnumField8',
+                type := 'EnumField8'::MY_ENUM
+            )
+            WHEN REGEXP_MATCHES(duckEmail, '[\w-.+]+@(([\w-]+).)+[\w-]{2,4}') THEN STRUCT_PACK(
+                subject := 'user:' || duckEmail,
+                type := 'EnumField1'::MY_ENUM
+            )
+        END AS duckInfo
+);
+
+statement ok
+CREATE OR REPLACE MACRO swan_subject_info (duckSubject) AS (
+    WITH
+        subjectComponents AS (
+            SELECT
+                duckSubject AS subject,
+                STRING_SPLIT(duckSubject, ':') AS parts
+        )
+    SELECT
+        CASE
+            WHEN parts[1] = 'EnumField2' THEN STRUCT_PACK(
+                subject := subject,
+                type := swan_MY_ENUM (parts[2])
+            )
+            WHEN parts[1] = 'EnumField1' THEN STRUCT_PACK(subject := subject, type := 'EnumField1'::MY_ENUM)
+            WHEN REGEXP_MATCHES(
+                subject,
+                'duckdb.org'
+            ) THEN STRUCT_PACK(
+                subject := subject,
+                type := 'EnumField6'::MY_ENUM
+            )
+            WHEN NOT REGEXP_FULL_MATCH(subject, '.+@.+\..+') THEN STRUCT_PACK(
+                subject := subject,
+                type := 'EnumField7'::MY_ENUM
+            )
+        END AS duckInfo
+    FROM
+        subjectComponents
+);
+
+statement ok
+WITH
+    duck_info AS (
+        SELECT
+            featherEventId,
+            "duckInfo.gooseEmail" AS email,
+            "duckInfo.gooseSubject" AS subject,
+            HASH('email' || "duckInfo.gooseEmail") AS emailHash,
+            HASH(
+                'subject' || "duckInfo.gooseSubject"
+            ) AS subjectHash,
+        FROM
+            my_logs
+    ),
+    unique_emails AS (
+        SELECT
+            email,
+            emailHash
+        FROM
+            duck_info
+        WHERE
+            email IS NOT NULL
+        GROUP BY
+            1,
+            2
+    ),
+    email_info AS (
+        SELECT
+            emailHash AS swanHash,
+            swan_email_info (email) AS swanInfo
+        FROM
+            unique_emails
+    ),
+    unique_subjects AS (
+        SELECT
+            subject,
+            subjectHash
+        FROM
+            duck_info
+        WHERE
+            subject IS NOT NULL
+        GROUP BY
+            1,
+            2
+    ),
+    subject_info AS (
+        SELECT
+            subjectHash AS swanHash,
+            swan_subject_info (subject) AS swanInfo
+        FROM
+            unique_subjects
+    ),
+    swan_info AS (
+        SELECT
+            *
+        FROM
+            email_info
+        UNION ALL
+        SELECT
+            *
+        FROM
+            subject_info
+    ),
+    goose_id AS (
+        SELECT
+            featherEventId,
+            CASE
+                WHEN subject IS NOT NULL THEN subjectHash
+                WHEN email IS NOT NULL THEN emailHash
+            END AS swanHash,
+        FROM
+            duck_info
+    ),
+    normalized_ids AS (
+        SELECT
+            featherEventId,
+            swanInfo.subject AS featherIdentityId,
+            swanInfo.type AS featherIdentityType,
+        FROM
+            goose_id
+            LEFT JOIN swan_info USING (swanHash)
+    ),
+    chicken_info AS (
+        SELECT
+            featherEventId,
+            featherIdentityId,
+            featherIdentityType,
+        FROM
+            normalized_ids
+    )
+SELECT
+    featherEventId,
+    featherIdentityId,
+    featherIdentityType,
+FROM
+    chicken_info;

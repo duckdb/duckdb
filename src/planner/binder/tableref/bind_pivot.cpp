@@ -9,7 +9,6 @@
 #include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
-#include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/common/types/value_map.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
@@ -21,6 +20,7 @@
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/main/query_result.hpp"
+#include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/main/settings.hpp"
 
 namespace duckdb {
@@ -58,10 +58,15 @@ static void ConstructPivots(PivotRef &ref, vector<PivotValueElement> &pivot_valu
 	}
 }
 
-static void ExtractPivotExpressions(ParsedExpression &root_expr, case_insensitive_set_t &handled_columns) {
+static void ExtractPivotExpressions(ParsedExpression &root_expr, case_insensitive_set_t &handled_columns,
+                                    optional_ptr<DummyBinding> macro_binding) {
 	ParsedExpressionIterator::VisitExpression<ColumnRefExpression>(
 	    root_expr, [&](const ColumnRefExpression &child_colref) {
 		    if (child_colref.IsQualified()) {
+			    if (child_colref.column_names[0].find(DummyBinding::DUMMY_NAME) != string::npos && macro_binding &&
+			        macro_binding->HasMatchingBinding(child_colref.GetName())) {
+				    throw ParameterNotResolvedException();
+			    }
 			    throw BinderException(child_colref, "PIVOT expression cannot contain qualified columns");
 		    }
 		    handled_columns.insert(child_colref.GetColumnName());
@@ -383,19 +388,22 @@ void ExtractPivotAggregates(BoundTableRef &node, vector<unique_ptr<Expression>> 
 		throw InternalException("Pivot - Expected a subquery");
 	}
 	auto &subq = node.Cast<BoundSubqueryRef>();
-	if (subq.subquery->type != QueryNodeType::SELECT_NODE) {
-		throw InternalException("Pivot - Expected a select node");
+	reference<LogicalOperator> op(*subq.subquery.plan);
+	bool found_first_aggregate = false;
+	while (true) {
+		if (op.get().type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
+			if (found_first_aggregate) {
+				break;
+			}
+			found_first_aggregate = true;
+		}
+		if (op.get().children.size() != 1) {
+			throw InternalException("Pivot - expected an aggregate");
+		}
+		op = *op.get().children[0];
 	}
-	auto &select = subq.subquery->Cast<BoundSelectNode>();
-	if (select.from_table->type != TableReferenceType::SUBQUERY) {
-		throw InternalException("Pivot - Expected another subquery");
-	}
-	auto &subq2 = select.from_table->Cast<BoundSubqueryRef>();
-	if (subq2.subquery->type != QueryNodeType::SELECT_NODE) {
-		throw InternalException("Pivot - Expected another select node");
-	}
-	auto &select2 = subq2.subquery->Cast<BoundSelectNode>();
-	for (auto &aggr : select2.aggregates) {
+	auto &aggr_op = op.get().Cast<LogicalAggregate>();
+	for (auto &aggr : aggr_op.expressions) {
 		if (aggr->GetAlias() == "__collated_group") {
 			continue;
 		}
@@ -492,7 +500,7 @@ unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<Parsed
 		}
 	}
 	for (auto &aggr : pivot_aggregates) {
-		ExtractPivotExpressions(aggr.get(), handled_columns);
+		ExtractPivotExpressions(aggr.get(), handled_columns, macro_binding);
 	}
 
 	// first add all pivots to the set of handled columns, and check for duplicates
@@ -521,7 +529,7 @@ unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<Parsed
 		total_pivots *= pivot.entries.size();
 		// add the pivoted column to the columns that have been handled
 		for (auto &pivot_name : pivot.pivot_expressions) {
-			ExtractPivotExpressions(*pivot_name, handled_columns);
+			ExtractPivotExpressions(*pivot_name, handled_columns, macro_binding);
 		}
 		value_set_t pivots;
 		for (auto &entry : pivot.entries) {
@@ -859,12 +867,10 @@ unique_ptr<BoundTableRef> Binder::Bind(PivotRef &ref) {
 	// bind the generated select node
 	auto child_binder = Binder::CreateBinder(context, this);
 	auto bound_select_node = child_binder->BindNode(*select_node);
-	auto root_index = bound_select_node->GetRootIndex();
-	BoundQueryNode *bound_select_ptr = bound_select_node.get();
+	auto root_index = bound_select_node.plan->GetRootIndex();
 
-	unique_ptr<BoundTableRef> result;
 	MoveCorrelatedExpressions(*child_binder);
-	result = make_uniq<BoundSubqueryRef>(std::move(child_binder), std::move(bound_select_node));
+	auto result = make_uniq<BoundSubqueryRef>(std::move(child_binder), std::move(bound_select_node));
 	auto subquery_alias = ref.alias.empty() ? "__unnamed_pivot" : ref.alias;
 	SubqueryRef subquery_ref(nullptr, subquery_alias);
 	subquery_ref.column_name_alias = std::move(ref.column_name_alias);
@@ -872,17 +878,16 @@ unique_ptr<BoundTableRef> Binder::Bind(PivotRef &ref) {
 		// if a WHERE clause was provided - bind a subquery holding the WHERE clause
 		// we need to bind a new subquery here because the WHERE clause has to be applied AFTER the unnest
 		child_binder = Binder::CreateBinder(context, this);
-		child_binder->bind_context.AddSubquery(root_index, subquery_ref.alias, subquery_ref, *bound_select_ptr);
+		child_binder->bind_context.AddSubquery(root_index, subquery_ref.alias, subquery_ref, result->subquery);
 		auto where_query = make_uniq<SelectNode>();
 		where_query->select_list.push_back(make_uniq<StarExpression>());
 		where_query->where_clause = std::move(where_clause);
 		bound_select_node = child_binder->BindSelectNode(*where_query, std::move(result));
-		bound_select_ptr = bound_select_node.get();
-		root_index = bound_select_node->GetRootIndex();
+		root_index = bound_select_node.plan->GetRootIndex();
 		result = make_uniq<BoundSubqueryRef>(std::move(child_binder), std::move(bound_select_node));
 	}
-	bind_context.AddSubquery(root_index, subquery_ref.alias, subquery_ref, *bound_select_ptr);
-	return result;
+	bind_context.AddSubquery(root_index, subquery_ref.alias, subquery_ref, result->subquery);
+	return std::move(result);
 }
 
 } // namespace duckdb

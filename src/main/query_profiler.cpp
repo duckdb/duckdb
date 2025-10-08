@@ -780,8 +780,10 @@ static yyjson_mut_val *ToJSONRecursive(yyjson_mut_doc *doc, ProfilingNode &node)
 	auto result_obj = yyjson_mut_obj(doc);
 	auto &profiling_info = node.GetProfilingInfo();
 
-	profiling_info.metrics[MetricsType::EXTRA_INFO] =
-	    QueryProfiler::JSONSanitize(profiling_info.metrics.at(MetricsType::EXTRA_INFO));
+	if (profiling_info.Enabled(profiling_info.settings, MetricsType::EXTRA_INFO)) {
+		profiling_info.metrics[MetricsType::EXTRA_INFO] =
+		    QueryProfiler::JSONSanitize(profiling_info.metrics.at(MetricsType::EXTRA_INFO));
+	}
 
 	profiling_info.WriteMetricsToJSON(doc, result_obj);
 
