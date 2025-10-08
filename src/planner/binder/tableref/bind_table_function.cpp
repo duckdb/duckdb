@@ -307,6 +307,40 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 	}
 
 	if (ref.with_ordinality == OrdinalityType::WITH_ORDINALITY && correlated_columns.empty()) {
+		// Prepare the GET
+		for (idx_t i = 0; i < return_types.size(); i++) {
+			get->AddColumnId(i);
+		}
+		auto &column_ids = get->GetColumnIds();
+		for (const auto &virtual_column : virtual_columns) {
+			if (virtual_column.second.name.empty()) {
+				continue;
+			}
+			bool found = false;
+			for (auto &column_id : column_ids) {
+				// Check if the virtual column is already projected
+				if (column_id.GetPrimaryIndex() == virtual_column.first) {
+					found = true;
+					break;
+				}
+			}
+			for (const auto &name : get->names) {
+				// Don't cause column name conflicts with this
+				if (name == virtual_column.second.name) {
+					found = true;
+					break;
+				}
+			}
+			if (found) {
+				continue; // This virtual column is already projected
+			}
+			// Not yet projected, add it
+			get->AddColumnId(virtual_column.first);
+			return_types.push_back(virtual_column.second.type);
+			return_names.push_back(virtual_column.second.name);
+		}
+
+		// Add a Window on top
 		auto window_index = GenerateTableIndex();
 		auto window = make_uniq<duckdb::LogicalWindow>(window_index);
 		auto row_number =
@@ -319,9 +353,6 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 			row_number->alias = ordinality_column_name;
 		}
 		window->expressions.push_back(std::move(row_number));
-		for (idx_t i = 0; i < return_types.size(); i++) {
-			get->AddColumnId(i);
-		}
 		window->children.push_back(std::move(get));
 
 		vector<unique_ptr<Expression>> select_list;
