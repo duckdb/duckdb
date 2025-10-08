@@ -20,4 +20,4 @@ Invalid data
 statement error
 from 'data/parquet-testing/internal_6129.parquet'
 ----
-row group schema does not match metadata
+invalid number of miniblocks per block

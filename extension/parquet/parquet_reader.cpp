@@ -169,7 +169,7 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 	}
 
 	for (const auto &row_group : metadata->row_groups) {
-		if (row_group.columns.size() != metadata->schema.size()) {
+		if (row_group.columns.size() + 1 != metadata->schema.size()) {
 			throw InvalidInputException("File '%s' row group schema does not match metadata", file_handle.GetPath());
 		}
 	}
