@@ -54,7 +54,7 @@ jobs:
       ENABLE_EXTENSION_AUTOLOADING: 1
       ENABLE_EXTENSION_AUTOINSTALL: 1
       GEN: ninja
-      OSX_BUILD_ARCH: ${{ matrix.architecture }}
+      OSX_BUILD_ARCH: ${{ matrix.xcode_target_flag }}
       DUCKDB_PLATFORM: osx_${{ matrix.architecture }}
 
     steps:
