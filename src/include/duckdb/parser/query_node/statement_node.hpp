@@ -19,7 +19,7 @@ public:
 	static constexpr const QueryNodeType TYPE = QueryNodeType::STATEMENT_NODE;
 
 public:
-	StatementNode(SQLStatement &stmt_p);
+	explicit StatementNode(SQLStatement &stmt_p);
 
 	SQLStatement &stmt;
 
