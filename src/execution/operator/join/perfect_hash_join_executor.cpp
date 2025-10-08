@@ -131,8 +131,8 @@ bool PerfectHashJoinExecutor::BuildPerfectHashTable(LogicalType &key_type) {
 	}
 
 	// and for duplicate_checking
-	bitmap_build_idx = make_unsafe_uniq_array_uninitialized<bool>(build_size);
-	memset(bitmap_build_idx.get(), 0, sizeof(bool) * build_size); // set false
+	bitmap_build_idx.Initialize(build_size);
+	bitmap_build_idx.SetAllInvalid(build_size);
 
 	// Now fill columns with build data
 	return FullScanHashTable(key_type);
@@ -179,11 +179,13 @@ bool PerfectHashJoinExecutor::FullScanHashTable(LogicalType &key_type) {
 		auto &vector = perfect_hash_table[i];
 		const auto output_col_idx = ht.output_columns[i];
 		D_ASSERT(vector.GetType() == ht.layout_ptr->GetTypes()[output_col_idx]);
+		auto &col_mask = FlatVector::Validity(vector);
 		if (build_size > STANDARD_VECTOR_SIZE) {
-			auto &col_mask = FlatVector::Validity(vector);
 			col_mask.Initialize(build_size);
 		}
 		data_collection.Gather(tuples_addresses, sel_tuples, key_count, output_col_idx, vector, sel_build, nullptr);
+		// This ensures the empty entries are set to NULL, so that the emitted dictionary vectors make sense
+		col_mask.Combine(bitmap_build_idx, perfect_join_statistics.build_range + 1);
 	}
 
 	return true;
@@ -236,10 +238,10 @@ bool PerfectHashJoinExecutor::TemplatedFillSelectionVectorBuild(Vector &source, 
 		if (min_value <= input_value && input_value <= max_value) {
 			auto idx = (idx_t)(input_value - min_value); // subtract min value to get the idx position
 			sel_vec.set_index(sel_idx, idx);
-			if (bitmap_build_idx[idx]) {
+			if (bitmap_build_idx.RowIsValidUnsafe(idx)) {
 				return false;
 			} else {
-				bitmap_build_idx[idx] = true;
+				bitmap_build_idx.SetValidUnsafe(idx);
 				unique_keys++;
 			}
 			seq_sel_vec.set_index(sel_idx++, i);
@@ -303,7 +305,8 @@ OperatorResultType PerfectHashJoinExecutor::ProbePerfectHashTable(ExecutionConte
 		auto &result_vector = result.data[lhs_output_columns.ColumnCount() + i];
 		D_ASSERT(result_vector.GetType() == ht.layout_ptr->GetTypes()[ht.output_columns[i]]);
 		auto &build_vec = perfect_hash_table[i];
-		result_vector.Dictionary(build_vec, ht.Count(), state.build_sel_vec, probe_sel_count);
+		result_vector.Dictionary(build_vec, perfect_join_statistics.build_range + 1, state.build_sel_vec,
+		                         probe_sel_count);
 		DictionaryVector::SetDictionaryId(result_vector, to_string(CastPointerToValue(&build_vec)));
 	}
 	return OperatorResultType::NEED_MORE_INPUT;
@@ -369,7 +372,7 @@ void PerfectHashJoinExecutor::TemplatedFillSelectionVectorProbe(Vector &source, 
 			if (min_value <= input_value && input_value <= max_value) {
 				auto idx = (idx_t)(input_value - min_value); // subtract min value to get the idx position
 				                                             // check for matches in the build
-				if (bitmap_build_idx[idx]) {
+				if (bitmap_build_idx.RowIsValidUnsafe(idx)) {
 					build_sel_vec.set_index(sel_idx, idx);
 					probe_sel_vec.set_index(sel_idx++, i);
 					probe_sel_count++;
@@ -388,7 +391,7 @@ void PerfectHashJoinExecutor::TemplatedFillSelectionVectorProbe(Vector &source, 
 			if (min_value <= input_value && input_value <= max_value) {
 				auto idx = (idx_t)(input_value - min_value); // subtract min value to get the idx position
 				                                             // check for matches in the build
-				if (bitmap_build_idx[idx]) {
+				if (bitmap_build_idx.RowIsValidUnsafe(idx)) {
 					build_sel_vec.set_index(sel_idx, idx);
 					probe_sel_vec.set_index(sel_idx++, i);
 					probe_sel_count++;

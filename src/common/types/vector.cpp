@@ -1943,7 +1943,7 @@ const Vector &DictionaryVector::GetCachedHashes(Vector &input) {
 		dictionary_hashes.Initialize(false, dictionary_count);
 		VectorOperations::Hash(dictionary, dictionary_hashes, dictionary_count);
 	}
-	return dictionary.cached_hashes->Cast<VectorChildBuffer>().data;
+	return dictionary_hashes;
 }
 
 //===--------------------------------------------------------------------===//

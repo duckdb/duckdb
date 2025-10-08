@@ -64,7 +64,7 @@ private:
 	//! Build statistics
 	PerfectHashJoinStats perfect_join_statistics;
 	//! Stores the occurrences of each value in the build side
-	unsafe_unique_array<bool> bitmap_build_idx;
+	ValidityMask bitmap_build_idx;
 	//! Stores the number of unique keys in the build side
 	idx_t unique_keys = 0;
 };
