@@ -807,7 +807,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 		if (token.type == SQLLogicTokenType::SQLLOGIC_STATEMENT) {
 			// prereq -- file_tags match check -- if tags
 			if (!file_tags_seen && (!test_config.GetSelectTagSet().empty() || !test_config.GetSkipTagSet().empty())) {
-				SKIP_TEST("match-tag-set");
+				SKIP_TEST("match tag-set");
 				return;
 			}
 
@@ -1187,11 +1187,11 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			}
 			file_tags_seen = true;
 			if (!test_config.MatchSelectTagSet(token.parameters)) {
-				SKIP_TEST("match-tag-set");
+				SKIP_TEST("match tag-set");
 				return;
 			}
 			if (test_config.MatchSkipTagSet(token.parameters)) {
-				SKIP_TEST("match-tag-set");
+				SKIP_TEST("match tag-set");
 				return;
 			}
 		}
