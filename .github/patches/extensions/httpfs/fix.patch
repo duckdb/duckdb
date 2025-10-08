@@ -1,0 +1,157 @@
+diff --git a/src/httpfs.cpp b/src/httpfs.cpp
+index 802581e..a11af95 100644
+--- a/src/httpfs.cpp
++++ b/src/httpfs.cpp
+@@ -729,7 +729,7 @@ void HTTPFileHandle::LoadFileInfo() {
+ 			return;
+ 		} else {
+ 			// HEAD request fail, use Range request for another try (read only one byte)
+-			if (flags.OpenForReading() && res->status != HTTPStatusCode::NotFound_404) {
++			if (flags.OpenForReading() && res->status != HTTPStatusCode::NotFound_404 && res->status != HTTPStatusCode::MovedPermanently_301) {
+ 				auto range_res = hfs.GetRangeRequest(*this, path, {}, 0, nullptr, 2);
+ 				if (range_res->status != HTTPStatusCode::PartialContent_206 &&
+ 				    range_res->status != HTTPStatusCode::Accepted_202 && range_res->status != HTTPStatusCode::OK_200) {
+diff --git a/src/httpfs_extension.cpp b/src/httpfs_extension.cpp
+index 79d9923..9070621 100644
+--- a/src/httpfs_extension.cpp
++++ b/src/httpfs_extension.cpp
+@@ -70,7 +70,7 @@ static void LoadInternal(ExtensionLoader &loader) {
+ 	config.AddExtensionOption("ca_cert_file", "Path to a custom certificate file for self-signed certificates.",
+ 	                          LogicalType::VARCHAR, Value(""));
+ 	// Global S3 config
+-	config.AddExtensionOption("s3_region", "S3 Region", LogicalType::VARCHAR, Value("us-east-1"));
++	config.AddExtensionOption("s3_region", "S3 Region", LogicalType::VARCHAR);
+ 	config.AddExtensionOption("s3_access_key_id", "S3 Access Key ID", LogicalType::VARCHAR);
+ 	config.AddExtensionOption("s3_secret_access_key", "S3 Access Key", LogicalType::VARCHAR);
+ 	config.AddExtensionOption("s3_session_token", "S3 Session Token", LogicalType::VARCHAR);
+diff --git a/src/include/s3fs.hpp b/src/include/s3fs.hpp
+index 525e0dd..a7e933e 100644
+--- a/src/include/s3fs.hpp
++++ b/src/include/s3fs.hpp
+@@ -231,7 +231,7 @@ public:
+ 		return true;
+ 	}
+ 
+-	static string GetS3BadRequestError(S3AuthParams &s3_auth_params);
++	static string GetS3BadRequestError(S3AuthParams &s3_auth_params, string correct_region = "");
+ 	static string GetS3AuthError(S3AuthParams &s3_auth_params);
+ 	static string GetGCSAuthError(S3AuthParams &s3_auth_params);
+ 	static HTTPException GetS3Error(S3AuthParams &s3_auth_params, const HTTPResponse &response, const string &url);
+diff --git a/src/s3fs.cpp b/src/s3fs.cpp
+index cbdecba..72eddc3 100644
+--- a/src/s3fs.cpp
++++ b/src/s3fs.cpp
+@@ -872,6 +872,7 @@ void S3FileHandle::Initialize(optional_ptr<FileOpener> opener) {
+ 		ErrorData error(ex);
+ 		bool refreshed_secret = false;
+ 		if (error.Type() == ExceptionType::IO || error.Type() == ExceptionType::HTTP) {
++			// legacy endpoint (no region) returns 400
+ 			auto context = opener->TryGetClientContext();
+ 			if (context) {
+ 				auto transaction = CatalogTransaction::GetSystemCatalogTransaction(*context);
+@@ -887,9 +888,13 @@ void S3FileHandle::Initialize(optional_ptr<FileOpener> opener) {
+ 			auto &extra_info = error.ExtraInfo();
+ 			auto entry = extra_info.find("status_code");
+ 			if (entry != extra_info.end()) {
+-				if (entry->second == "400") {
+-					// 400: BAD REQUEST
+-					auto extra_text = S3FileSystem::GetS3BadRequestError(auth_params);
++				if (entry->second == "301" || entry->second == "400") {
++					auto new_region = extra_info.find("header_x-amz-bucket-region");
++					string correct_region = "";
++					if (new_region != extra_info.end()) {
++						correct_region = new_region->second;
++					}
++					auto extra_text = S3FileSystem::GetS3BadRequestError(auth_params, correct_region);
+ 					throw Exception(error.Type(), error.RawMessage() + extra_text, extra_info);
+ 				}
+ 				if (entry->second == "403") {
+@@ -1138,12 +1143,15 @@ bool S3FileSystem::ListFiles(const string &directory, const std::function<void(c
+ 	return true;
+ }
+ 
+-string S3FileSystem::GetS3BadRequestError(S3AuthParams &s3_auth_params) {
++string S3FileSystem::GetS3BadRequestError(S3AuthParams &s3_auth_params, string correct_region) {
+ 	string extra_text = "\n\nBad Request - this can be caused by the S3 region being set incorrectly.";
+ 	if (s3_auth_params.region.empty()) {
+ 		extra_text += "\n* No region is provided.";
+ 	} else {
+-		extra_text += "\n* Provided region is \"" + s3_auth_params.region + "\"";
++		extra_text += "\n* Provided region is: \"" + s3_auth_params.region + "\"";
++	}
++	if (!correct_region.empty()) {
++		extra_text += "\n* Correct region is: \"" + correct_region + "\"";
+ 	}
+ 	return extra_text;
+ }
+diff --git a/test/sql/copy/csv/test_csv_remote.test b/test/sql/copy/csv/test_csv_remote.test
+index 4144082..9e51585 100644
+--- a/test/sql/copy/csv/test_csv_remote.test
++++ b/test/sql/copy/csv/test_csv_remote.test
+@@ -7,15 +7,26 @@ require httpfs
+ statement ok
+ PRAGMA enable_verification
+ 
++# Test load from url with query string
++query IIIIIIIIIIII
++FROM sniff_csv('https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv?v=1')
++----
++,	"	(empty)	\n	(empty)	0	0	[{'name': column00, 'type': BIGINT}, {'name': column01, 'type': VARCHAR}, {'name': column02, 'type': BIGINT}, {'name': column03, 'type': BIGINT}, {'name': column04, 'type': BIGINT}, {'name': column05, 'type': BIGINT}, {'name': column06, 'type': BIGINT}, {'name': column07, 'type': VARCHAR}, {'name': column08, 'type': VARCHAR}, {'name': column09, 'type': VARCHAR}, {'name': column10, 'type': VARCHAR}, {'name': column11, 'type': BIGINT}, {'name': column12, 'type': BIGINT}, {'name': column13, 'type': BIGINT}, {'name': column14, 'type': VARCHAR}, {'name': column15, 'type': VARCHAR}, {'name': column16, 'type': VARCHAR}, {'name': column17, 'type': BIGINT}]	NULL	NULL	NULL	FROM read_csv('https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv?v=1', auto_detect=false, delim=',', quote='"', escape='', new_line='\n', skip=0, comment='', header=false, columns={'column00': 'BIGINT', 'column01': 'VARCHAR', 'column02': 'BIGINT', 'column03': 'BIGINT', 'column04': 'BIGINT', 'column05': 'BIGINT', 'column06': 'BIGINT', 'column07': 'VARCHAR', 'column08': 'VARCHAR', 'column09': 'VARCHAR', 'column10': 'VARCHAR', 'column11': 'BIGINT', 'column12': 'BIGINT', 'column13': 'BIGINT', 'column14': 'VARCHAR', 'column15': 'VARCHAR', 'column16': 'VARCHAR', 'column17': 'BIGINT'});
++
++
++# This test abuses the LOCAL_EXTENSION_REPO env to make sure tests are only run when running extension tests
++# in duckdb/duckdb. Otherwise you need to pass a data dir when exex
++
++require-env LOCAL_EXTENSION_REPO
+ 
+ # regular csv file
+ query ITTTIITITTIIII nosort webpagecsv
+-SELECT * FROM read_csv_auto('duckdb/data/csv/real/web_page.csv') ORDER BY 1;
++SELECT * FROM read_csv_auto('data/csv/real/web_page.csv') ORDER BY 1;
+ ----
+ 
+ # file with gzip
+ query IIIIIIIIIIIIIII nosort lineitemcsv
+-SELECT * FROM read_csv_auto('duckdb/data/csv/lineitem1k.tbl.gz') ORDER BY ALL;
++SELECT * FROM read_csv_auto('data/csv/lineitem1k.tbl.gz') ORDER BY ALL;
+ ----
+ 
+ query ITTTIITITTIIII nosort webpagecsv
+@@ -25,10 +36,3 @@ SELECT * FROM read_csv_auto('https://raw.githubusercontent.com/duckdb/duckdb/mai
+ query IIIIIIIIIIIIIII nosort lineitemcsv
+ select * from read_csv_auto('https://raw.githubusercontent.com/duckdb/duckdb/main/data/csv/lineitem1k.tbl.gz') ORDER BY ALL;
+ ----
+-
+-
+-# Test load from url with query string
+-query IIIIIIIIIIII
+-FROM sniff_csv('https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv?v=1')
+-----
+-,	"	(empty)	\n	(empty)	0	0	[{'name': column00, 'type': BIGINT}, {'name': column01, 'type': VARCHAR}, {'name': column02, 'type': BIGINT}, {'name': column03, 'type': BIGINT}, {'name': column04, 'type': BIGINT}, {'name': column05, 'type': BIGINT}, {'name': column06, 'type': BIGINT}, {'name': column07, 'type': VARCHAR}, {'name': column08, 'type': VARCHAR}, {'name': column09, 'type': VARCHAR}, {'name': column10, 'type': VARCHAR}, {'name': column11, 'type': BIGINT}, {'name': column12, 'type': BIGINT}, {'name': column13, 'type': BIGINT}, {'name': column14, 'type': VARCHAR}, {'name': column15, 'type': VARCHAR}, {'name': column16, 'type': VARCHAR}, {'name': column17, 'type': BIGINT}]	NULL	NULL	NULL	FROM read_csv('https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv?v=1', auto_detect=false, delim=',', quote='"', escape='', new_line='\n', skip=0, comment='', header=false, columns={'column00': 'BIGINT', 'column01': 'VARCHAR', 'column02': 'BIGINT', 'column03': 'BIGINT', 'column04': 'BIGINT', 'column05': 'BIGINT', 'column06': 'BIGINT', 'column07': 'VARCHAR', 'column08': 'VARCHAR', 'column09': 'VARCHAR', 'column10': 'VARCHAR', 'column11': 'BIGINT', 'column12': 'BIGINT', 'column13': 'BIGINT', 'column14': 'VARCHAR', 'column15': 'VARCHAR', 'column16': 'VARCHAR', 'column17': 'BIGINT'});
+diff --git a/test/sql/copy/s3/url_encode.test b/test/sql/copy/s3/url_encode.test
+index 66cbd5c..f5a5912 100644
+--- a/test/sql/copy/s3/url_encode.test
++++ b/test/sql/copy/s3/url_encode.test
+@@ -132,12 +132,20 @@ set s3_endpoint='';
+ statement error
+ SELECT * FROM 's3://test-bucket/whatever.parquet';
+ ----
+-<REGEX>:.*Unknown error for HTTP HEAD to 'http://test-bucket.s3.eu-west-1.amazonaws.com/whatever.parquet'.*
++<REGEX>:.*HTTP Error: Unable to connect to URL .*http://test-bucket.s3.eu-west-1.amazonaws.com/whatever.parquet.*: 301 .Moved Permanently..*
++.*
++.*Bad Request - this can be caused by the S3 region being set incorrectly.*
++.*Provided region is: .eu-west-1.*
++.*Correct region is: .us-east-1.*
+ 
+ statement error
+ SELECT * FROM 'r2://test-bucket/whatever.parquet';
+ ----
+-<REGEX>:.*Unknown error for HTTP HEAD to 'http://test-bucket.s3.eu-west-1.amazonaws.com/whatever.parquet'.*
++<REGEX>:.*HTTP Error: Unable to connect to URL .*http://test-bucket.s3.eu-west-1.amazonaws.com/whatever.parquet.*: 301 .Moved Permanently..*
++.*
++.*Bad Request - this can be caused by the S3 region being set incorrectly.*
++.*Provided region is: .eu-west-1.*
++.*Correct region is: .us-east-1.*
+ 
+ statement error
+ SELECT * FROM 'gcs://test-bucket/whatever.parquet';

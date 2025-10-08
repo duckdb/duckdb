@@ -363,7 +363,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 			// we bind the view subquery and the original view with different "can_contain_nulls",
 			// but we don't want to throw an error when SQLNULL does not match up with INTEGER,
 			// so we exchange all SQLNULL with INTEGER here before comparing
-			auto bound_types = ExchangeAllNullTypes(bound_subquery.subquery->types);
+			auto bound_types = ExchangeAllNullTypes(bound_subquery.subquery.types);
 			auto view_types = ExchangeAllNullTypes(view_catalog_entry.types);
 			if (bound_types != view_types) {
 				auto actual_types = StringUtil::ToString(bound_types, ", ");
@@ -372,17 +372,17 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 				    "Contents of view were altered: types don't match! Expected [%s], but found [%s] instead",
 				    expected_types, actual_types);
 			}
-			if (bound_subquery.subquery->names.size() == view_catalog_entry.names.size() &&
-			    bound_subquery.subquery->names != view_catalog_entry.names) {
-				auto actual_names = StringUtil::Join(bound_subquery.subquery->names, ", ");
+			if (bound_subquery.subquery.names.size() == view_catalog_entry.names.size() &&
+			    bound_subquery.subquery.names != view_catalog_entry.names) {
+				auto actual_names = StringUtil::Join(bound_subquery.subquery.names, ", ");
 				auto expected_names = StringUtil::Join(view_catalog_entry.names, ", ");
 				throw BinderException(
 				    "Contents of view were altered: names don't match! Expected [%s], but found [%s] instead",
 				    expected_names, actual_names);
 			}
 		}
-		bind_context.AddView(bound_subquery.subquery->GetRootIndex(), subquery.alias, subquery,
-		                     *bound_subquery.subquery, view_catalog_entry);
+		bind_context.AddView(bound_subquery.subquery.plan->GetRootIndex(), subquery.alias, subquery,
+		                     bound_subquery.subquery, view_catalog_entry);
 		return bound_child;
 	}
 	default:

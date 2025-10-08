@@ -104,7 +104,7 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 		// bind table in-out function
 		BindTableInTableOutFunction(expressions, subquery);
 		// fetch the arguments from the subquery
-		arguments = subquery->subquery->types;
+		arguments = subquery->subquery.types;
 		return true;
 	}
 	bool seen_subquery = false;
@@ -388,7 +388,7 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 		binder->can_contain_nulls = true;
 
 		binder->alias = ref.alias.empty() ? "unnamed_query" : ref.alias;
-		unique_ptr<BoundQueryNode> query;
+		BoundStatement query;
 		try {
 			query = binder->BindNode(*query_node);
 		} catch (std::exception &ex) {
@@ -397,13 +397,13 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 			error.Throw();
 		}
 
-		idx_t bind_index = query->GetRootIndex();
+		idx_t bind_index = query.plan->GetRootIndex();
 		// string alias;
 		string alias = (ref.alias.empty() ? "unnamed_query" + to_string(bind_index) : ref.alias);
 
 		auto result = make_uniq<BoundSubqueryRef>(std::move(binder), std::move(query));
 		// remember ref here is TableFunctionRef and NOT base class
-		bind_context.AddSubquery(bind_index, alias, ref, *result->subquery);
+		bind_context.AddSubquery(bind_index, alias, ref, result->subquery);
 		MoveCorrelatedExpressions(*result->binder);
 		return std::move(result);
 	}
@@ -438,8 +438,8 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	vector<string> input_table_names;
 
 	if (subquery) {
-		input_table_types = subquery->subquery->types;
-		input_table_names = subquery->subquery->names;
+		input_table_types = subquery->subquery.types;
+		input_table_names = subquery->subquery.names;
 	} else if (table_function.in_out_function) {
 		for (auto &param : parameters) {
 			input_table_types.push_back(param.type());
@@ -469,8 +469,15 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 		}
 	}
 
-	auto get = BindTableFunctionInternal(table_function, ref, std::move(parameters), std::move(named_parameters),
-	                                     std::move(input_table_types), std::move(input_table_names));
+	unique_ptr<LogicalOperator> get;
+	try {
+		get = BindTableFunctionInternal(table_function, ref, std::move(parameters), std::move(named_parameters),
+		                                std::move(input_table_types), std::move(input_table_names));
+	} catch (std::exception &ex) {
+		error = ErrorData(ex);
+		error.AddQueryLocation(ref);
+		error.Throw();
+	}
 	auto table_function_ref = make_uniq<BoundTableFunction>(std::move(get));
 	table_function_ref->subquery = std::move(subquery);
 	return std::move(table_function_ref);

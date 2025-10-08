@@ -69,6 +69,7 @@ struct PivotColumnEntry;
 struct UnpivotEntry;
 struct CopyInfo;
 struct CopyOption;
+struct BoundSetOpChild;
 
 template <class T, class INDEX_TYPE>
 class IndexVector;
@@ -100,6 +101,65 @@ struct CorrelatedColumnInfo {
 	}
 };
 
+struct CorrelatedColumns {
+private:
+	using container_type = vector<CorrelatedColumnInfo>;
+
+public:
+	CorrelatedColumns() : delim_index(1ULL << 63) {
+	}
+
+	void AddColumn(container_type::value_type info) {
+		// Add to beginning
+		correlated_columns.insert(correlated_columns.begin(), std::move(info));
+		delim_index++;
+	}
+
+	void SetDelimIndexToZero() {
+		delim_index = 0;
+	}
+
+	idx_t GetDelimIndex() const {
+		return delim_index;
+	}
+
+	const container_type::value_type &operator[](const idx_t &index) const {
+		return correlated_columns.at(index);
+	}
+
+	idx_t size() const { // NOLINT: match stl case
+		return correlated_columns.size();
+	}
+
+	bool empty() const { // NOLINT: match stl case
+		return correlated_columns.empty();
+	}
+
+	void clear() { // NOLINT: match stl case
+		correlated_columns.clear();
+	}
+
+	container_type::iterator begin() { // NOLINT: match stl case
+		return correlated_columns.begin();
+	}
+
+	container_type::iterator end() { // NOLINT: match stl case
+		return correlated_columns.end();
+	}
+
+	container_type::const_iterator begin() const { // NOLINT: match stl case
+		return correlated_columns.begin();
+	}
+
+	container_type::const_iterator end() const { // NOLINT: match stl case
+		return correlated_columns.end();
+	}
+
+private:
+	container_type correlated_columns;
+	idx_t delim_index;
+};
+
 //! Bind the parsed query tree to the actual columns present in the catalog.
 /*!
   The binder is responsible for binding tables and columns to actual physical
@@ -122,7 +182,7 @@ public:
 	BindContext bind_context;
 	//! The set of correlated columns bound by this binder (FIXME: this should probably be an unordered_set and not a
 	//! vector)
-	vector<CorrelatedColumnInfo> correlated_columns;
+	CorrelatedColumns correlated_columns;
 	//! The set of parameter expressions bound by this binder
 	optional_ptr<BoundParameterMap> parameters;
 	//! The alias for the currently processing subquery, if it exists
@@ -198,7 +258,7 @@ public:
 
 	vector<reference<ExpressionBinder>> &GetActiveBinders();
 
-	void MergeCorrelatedColumns(vector<CorrelatedColumnInfo> &other);
+	void MergeCorrelatedColumns(CorrelatedColumns &other);
 	//! Add a correlated column to this binder (if it does not exist)
 	void AddCorrelatedColumn(const CorrelatedColumnInfo &info);
 
@@ -344,22 +404,24 @@ private:
 
 	unique_ptr<QueryNode> BindTableMacro(FunctionExpression &function, TableMacroCatalogEntry &macro_func, idx_t depth);
 
-	unique_ptr<BoundCTENode> BindMaterializedCTE(CommonTableExpressionMap &cte_map);
-	unique_ptr<BoundCTENode> BindCTE(CTENode &statement);
+	BoundStatement BindCTE(CTENode &statement);
 
-	unique_ptr<BoundQueryNode> BindNode(SelectNode &node);
-	unique_ptr<BoundQueryNode> BindNode(SetOperationNode &node);
-	unique_ptr<BoundQueryNode> BindNode(RecursiveCTENode &node);
-	unique_ptr<BoundQueryNode> BindNode(CTENode &node);
-	unique_ptr<BoundQueryNode> BindNode(QueryNode &node);
+	BoundStatement BindNode(SelectNode &node);
+	BoundStatement BindNode(SetOperationNode &node);
+	BoundStatement BindNode(RecursiveCTENode &node);
+	BoundStatement BindNode(CTENode &node);
+	BoundStatement BindNode(QueryNode &node);
+	BoundStatement BindNode(StatementNode &node);
 
 	unique_ptr<LogicalOperator> VisitQueryNode(BoundQueryNode &node, unique_ptr<LogicalOperator> root);
 	unique_ptr<LogicalOperator> CreatePlan(BoundRecursiveCTENode &node);
 	unique_ptr<LogicalOperator> CreatePlan(BoundCTENode &node);
-	unique_ptr<LogicalOperator> CreatePlan(BoundCTENode &node, unique_ptr<LogicalOperator> base);
 	unique_ptr<LogicalOperator> CreatePlan(BoundSelectNode &statement);
 	unique_ptr<LogicalOperator> CreatePlan(BoundSetOperationNode &node);
 	unique_ptr<LogicalOperator> CreatePlan(BoundQueryNode &node);
+
+	BoundSetOpChild BindSetOpChild(QueryNode &child);
+	unique_ptr<BoundSetOperationNode> BindSetOpNode(SetOperationNode &statement);
 
 	unique_ptr<BoundTableRef> BindJoin(Binder &parent, TableRef &ref);
 	unique_ptr<BoundTableRef> Bind(BaseTableRef &ref);
@@ -426,12 +488,12 @@ private:
 	void PlanSubqueries(unique_ptr<Expression> &expr, unique_ptr<LogicalOperator> &root);
 	unique_ptr<Expression> PlanSubquery(BoundSubqueryExpression &expr, unique_ptr<LogicalOperator> &root);
 	unique_ptr<LogicalOperator> PlanLateralJoin(unique_ptr<LogicalOperator> left, unique_ptr<LogicalOperator> right,
-	                                            vector<CorrelatedColumnInfo> &correlated_columns,
+	                                            CorrelatedColumns &correlated_columns,
 	                                            JoinType join_type = JoinType::INNER,
 	                                            unique_ptr<Expression> condition = nullptr);
 
-	unique_ptr<LogicalOperator> CastLogicalOperatorToTypes(vector<LogicalType> &source_types,
-	                                                       vector<LogicalType> &target_types,
+	unique_ptr<LogicalOperator> CastLogicalOperatorToTypes(const vector<LogicalType> &source_types,
+	                                                       const vector<LogicalType> &target_types,
 	                                                       unique_ptr<LogicalOperator> op);
 
 	BindingAlias FindBinding(const string &using_column, const string &join_side);
@@ -463,7 +525,9 @@ private:
 
 	LogicalType BindLogicalTypeInternal(const LogicalType &type, optional_ptr<Catalog> catalog, const string &schema);
 
-	unique_ptr<BoundQueryNode> BindSelectNode(SelectNode &statement, unique_ptr<BoundTableRef> from_table);
+	BoundStatement BindSelectNode(SelectNode &statement, unique_ptr<BoundTableRef> from_table);
+	unique_ptr<BoundSelectNode> BindSelectNodeInternal(SelectNode &statement);
+	unique_ptr<BoundSelectNode> BindSelectNodeInternal(SelectNode &statement, unique_ptr<BoundTableRef> from_table);
 
 	unique_ptr<LogicalOperator> BindCopyDatabaseSchema(Catalog &source_catalog, const string &target_database_name);
 	unique_ptr<LogicalOperator> BindCopyDatabaseData(Catalog &source_catalog, const string &target_database_name);

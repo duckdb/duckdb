@@ -686,7 +686,7 @@ vector<string> BindContext::AliasColumnNames(const string &table_name, const vec
 	return result;
 }
 
-void BindContext::AddSubquery(idx_t index, const string &alias, SubqueryRef &ref, BoundQueryNode &subquery) {
+void BindContext::AddSubquery(idx_t index, const string &alias, SubqueryRef &ref, BoundStatement &subquery) {
 	auto names = AliasColumnNames(alias, subquery.names, ref.column_name_alias);
 	AddGenericBinding(index, alias, names, subquery.types);
 }
@@ -696,13 +696,13 @@ void BindContext::AddEntryBinding(idx_t index, const string &alias, const vector
 	AddBinding(make_uniq<EntryBinding>(alias, types, names, index, entry));
 }
 
-void BindContext::AddView(idx_t index, const string &alias, SubqueryRef &ref, BoundQueryNode &subquery,
+void BindContext::AddView(idx_t index, const string &alias, SubqueryRef &ref, BoundStatement &subquery,
                           ViewCatalogEntry &view) {
 	auto names = AliasColumnNames(alias, subquery.names, ref.column_name_alias);
 	AddEntryBinding(index, alias, names, subquery.types, view.Cast<StandardEntry>());
 }
 
-void BindContext::AddSubquery(idx_t index, const string &alias, TableFunctionRef &ref, BoundQueryNode &subquery) {
+void BindContext::AddSubquery(idx_t index, const string &alias, TableFunctionRef &ref, BoundStatement &subquery) {
 	auto names = AliasColumnNames(alias, subquery.names, ref.column_name_alias);
 	AddGenericBinding(index, alias, names, subquery.types);
 }
