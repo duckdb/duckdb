@@ -16,11 +16,17 @@
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/enums/debug_initialize.hpp"
+#include <sys/types.h>
 #include <unordered_map>
 
 namespace duckdb {
 
 enum class SortStyle : uint8_t { NO_SORT, ROW_SORT, VALUE_SORT };
+enum class SelectPolicy : uint8_t {
+	NONE,   // does not match any explicit policy (thus intent=SELECT)
+	SELECT, // matches explicit select
+	SKIP    // matches explicit skip
+};
 
 class TestConfiguration {
 public:
@@ -63,10 +69,8 @@ public:
 	string GetTestEnv(const string &key, const string &default_value);
 
 	unordered_set<string> GetSelectTagSet();
-	bool MatchSelectTagSet(const vector<string> &tag_set);
-
 	unordered_set<string> GetSkipTagSet();
-	bool MatchSkipTagSet(const vector<string> &tag_set);
+	SelectPolicy GetPolicyForTagSet(const vector<string> &tag_set);
 
 	static bool TestForceStorage();
 	static bool TestForceReload();

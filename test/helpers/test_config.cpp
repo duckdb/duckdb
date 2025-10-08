@@ -458,28 +458,26 @@ void TestConfiguration::MakeSkipTagSet(const Value &tag_set) {
 	}
 }
 
-bool TestConfiguration::MatchSelectTagSet(const vector<string> &test_tag_set) {
-	if (select_tag_set.empty()) {
-		return true; // vacuous true -- no select spec implies all pass
-	}
-	for (auto test_tag : test_tag_set) {
-		if (select_tag_set.find(test_tag) == select_tag_set.end()) {
-			return false;
+SelectPolicy TestConfiguration::GetPolicyForTagSet(const vector<string> &subject_tag_set) {
+	// Apply select_tag_set first then skip_tag_set; if both empty always NO
+	auto policy = SelectPolicy::NONE;
+	if (!select_tag_set.empty()) {
+		for (auto subject_tag : subject_tag_set) {
+			if (select_tag_set.find(subject_tag) == select_tag_set.end()) {
+				return SelectPolicy::SKIP;
+			}
 		}
+		policy = SelectPolicy::SELECT;
 	}
-	return true;
-}
-
-bool TestConfiguration::MatchSkipTagSet(const vector<string> &test_tag_set) {
-	if (skip_tag_set.empty()) {
-		return true; // vacuous true -- no skip spec implies all pass
-	}
-	for (auto test_tag : test_tag_set) {
-		if (skip_tag_set.find(test_tag) == skip_tag_set.end()) {
-			return false;
+	if (!skip_tag_set.empty()) {
+		for (auto subject_tag : subject_tag_set) {
+			if (skip_tag_set.find(subject_tag) == skip_tag_set.end()) {
+				return policy; // NO || SELECT
+			}
 		}
+		return SelectPolicy::SKIP;
 	}
-	return true;
+	return policy;
 }
 
 bool TestConfiguration::TestForceStorage() {

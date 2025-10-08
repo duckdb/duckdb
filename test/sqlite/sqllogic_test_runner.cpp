@@ -1186,11 +1186,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				parser.Fail("tags requires >= 1 argument: <tag1> [tag2 .. tagN]");
 			}
 			file_tags_seen = true;
-			if (!test_config.MatchSelectTagSet(token.parameters)) {
-				SKIP_TEST("match tag-set");
-				return;
-			}
-			if (test_config.MatchSkipTagSet(token.parameters)) {
+			if (test_config.GetPolicyForTagSet(token.parameters) == SelectPolicy::SKIP) {
 				SKIP_TEST("match tag-set");
 				return;
 			}
