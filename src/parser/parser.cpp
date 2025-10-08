@@ -194,6 +194,7 @@ void Parser::ParseQuery(const string &query) {
 	Transformer transformer(options);
 	string parser_error;
 	optional_idx parser_error_location;
+	string parser_override_option = StringUtil::Lower(options.parser_override_setting);
 	{
 		// check if there are any unicode spaces in the string
 		string new_query;
@@ -209,12 +210,24 @@ void Parser::ParseQuery(const string &query) {
 				if (!ext.parser_override) {
 					continue;
 				}
+				if (StringUtil::CIEquals(parser_override_option, "default")) {
+					continue;
+				}
 				auto result = ext.parser_override(ext.parser_info.get(), query);
 				if (result.type == ParserExtensionResultType::PARSE_SUCCESSFUL) {
 					statements = std::move(result.statements);
 					return;
-				} else if (result.type == ParserExtensionResultType::DISPLAY_EXTENSION_ERROR) {
-					throw ParserException(result.error);
+				}
+				if (StringUtil::CIEquals(parser_override_option, "strict")) {
+					if (result.type == ParserExtensionResultType::DISPLAY_ORIGINAL_ERROR) {
+						throw ParserException(
+						    "Parser override failed to return a valid statement. Consider restarting the database and "
+						    "using the setting \"set allow_parser_override_extension=fallback\" to fallback to the "
+						    "default parser.");
+					}
+					if (result.type == ParserExtensionResultType::DISPLAY_EXTENSION_ERROR) {
+						throw ParserException(result.error);
+					}
 				}
 			}
 		}
