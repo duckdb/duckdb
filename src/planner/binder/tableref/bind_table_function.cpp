@@ -302,9 +302,6 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 	}
 
 	if (ref.with_ordinality == OrdinalityType::WITH_ORDINALITY && correlated_columns.empty()) {
-		for (idx_t i = 0; i < return_types.size(); i++) {
-			get->AddColumnId(i);
-		}
 		bind_context.AddTableFunction(bind_index, function_name, return_names, return_types, get->GetMutableColumnIds(),
 								  get->GetTable().get(), std::move(virtual_columns));
 
