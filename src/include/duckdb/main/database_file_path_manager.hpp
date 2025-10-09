@@ -12,6 +12,7 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/enums/on_create_conflict.hpp"
+#include "duckdb/common/enums/access_mode.hpp"
 
 namespace duckdb {
 struct AttachInfo;
