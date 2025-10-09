@@ -197,6 +197,8 @@ private:
 	static string TransformColIdOrString(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static string TransformColId(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static string TransformIdentifier(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static vector<string> TransformDottedIdentifier(PEGTransformer &transformer,
+															   optional_ptr<ParseResult> parse_result);
 
 	// load.gram
 	static unique_ptr<SQLStatement> TransformLoadStatement(PEGTransformer &transformer,

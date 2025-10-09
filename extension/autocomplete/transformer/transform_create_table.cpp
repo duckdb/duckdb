@@ -37,4 +37,23 @@ string PEGTransformerFactory::TransformIdentifier(PEGTransformer &transformer, o
 	return list_pr.Child<IdentifierParseResult>(0).identifier;
 }
 
+vector<string> PEGTransformerFactory::TransformDottedIdentifier(PEGTransformer &transformer,
+															   optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	vector<string> parts;
+
+	parts.push_back(list_pr.Child<IdentifierParseResult>(0).identifier);
+
+	auto &optional_elements = list_pr.Child<OptionalParseResult>(1);
+	if (optional_elements.HasResult()) {
+		auto repeat_elements = optional_elements.optional_result->Cast<RepeatParseResult>();
+		for (auto &child_ref : repeat_elements.children) {
+			auto &sub_list = child_ref->Cast<ListParseResult>();
+			parts.push_back(sub_list.Child<IdentifierParseResult>(1).identifier);
+		}
+	}
+	return parts;
+}
+
+
 } // namespace duckdb

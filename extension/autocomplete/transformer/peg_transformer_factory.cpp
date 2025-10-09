@@ -77,6 +77,7 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	REGISTER_TRANSFORM(TransformColIdOrString);
 	REGISTER_TRANSFORM(TransformColId);
 	REGISTER_TRANSFORM(TransformIdentifier);
+	REGISTER_TRANSFORM(TransformDottedIdentifier);
 
 	// expression.gram
 	REGISTER_TRANSFORM(TransformBaseExpression);
