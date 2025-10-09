@@ -117,10 +117,6 @@ public:
 		}
 		result += ")";
 
-		if (entry.GetAlias() != "") {
-			result += StringUtil::Format(" AS %s", SQLIdentifier(entry.GetAlias()));
-		}
-
 		// filtered aggregate
 		if (filter) {
 			result += " FILTER (WHERE " + filter->ToString() + ")";

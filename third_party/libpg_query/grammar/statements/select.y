@@ -472,29 +472,41 @@ common_table_expr:  name opt_name_list opt_on_key AS opt_materialized '(' Prepar
 		;
 
 opt_on_key:
-		USING KEY '(' uk_aggr_list ')' 							{ $$ = $4; }
+		USING KEY '(' using_key_list_opt_comma ')' 				{ $$ = $4; }
 		| /*EMPTY*/												{ $$ = NULL; }
 		;
 
-uk_aggr_list_opt_comma:
-		uk_aggr_list	 						{ $$ = $1; }
-		| uk_aggr_list ','						{ $$ = $1; }
+using_key_list_opt_comma:
+		using_key_list	 							{ $$ = $1; }
+		| using_key_list ','						{ $$ = $1; }
 		;
 
-uk_aggr_list:
-		uk_aggr_el 								{ $$ = list_make1($1); }
-		| uk_aggr_list ',' uk_aggr_el			{ $$ = lappend($1, $3); }
+using_key_list:
+		using_key_el 								{ $$ = list_make1($1); }
+		| using_key_list ',' using_key_el			{ $$ = lappend($1, $3); }
 		;
 
-uk_aggr_el:
+using_key_el:
 		columnref 									{ $$ = $1; }
+		| ColIdOrString COLON_EQUALS func_expr
+				{
+					PGNamedArgExpr *na = makeNode(PGNamedArgExpr);
+					na->name = $1;
+					na->arg = (PGExpr *) $3;
+					na->argnumber = -1;
+					na->location = @1;
+					$$ = (PGNode *) na;
+				}
 		| func_expr									{ $$ = $1; }
-		| func_expr AS opt_alias_clause
-        			{
-        				PGFuncCall *n = (PGFuncCall *) $1;
-        				n->alias = $3;
-        				$$ = (PGNode *) n;
-        			}
+		| func_expr AS ColIdOrString
+				{
+					PGNamedArgExpr *na = makeNode(PGNamedArgExpr);
+					na->name = $3;
+					na->arg = (PGExpr *) $1;
+					na->argnumber = -1;
+					na->location = @3;
+					$$ = (PGNode *) na;
+				}
 		;
 
 column_ref_list_opt_comma:

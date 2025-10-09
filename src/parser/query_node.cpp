@@ -84,6 +84,9 @@ string CommonTableExpressionMap::ToString() const {
 						result += ", ";
 					}
 					result += cte.payload_aggregates[k]->ToString();
+					if (cte.payload_aggregates[k]->HasAlias()) {
+						result += StringUtil::Format(" AS %s", SQLIdentifier(cte.payload_aggregates[k]->GetAlias()));
+					}
 				}
 			}
 			result += ") ";

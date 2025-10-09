@@ -20,7 +20,7 @@
 %type <str>		all_Op
 %type <conststr> MathOp
 
-%type <list>	distinct_clause opt_all_clause name_list_opt_comma opt_name_list name_list_opt_comma_opt_bracket column_ref_list_opt_comma column_ref_list
+%type <list>	distinct_clause opt_all_clause name_list_opt_comma opt_name_list name_list_opt_comma_opt_bracket opt_on_key column_ref_list_opt_comma column_ref_list
 				sort_clause opt_sort_clause sortby_list name_list from_clause from_list from_list_opt_comma opt_array_bounds
 				qualified_name_list any_name 				any_operator expr_list	attrs expr_list_opt_comma opt_expr_list_opt_comma c_expr_list c_expr_list_opt_comma
 				target_list			 			 opt_indirection target_list_opt_comma opt_target_list_opt_comma
@@ -31,8 +31,8 @@
 %type <node>	group_by_item empty_grouping_set rollup_clause cube_clause grouping_sets_clause grouping_or_grouping_id
 %type <range>	OptTempTableName
 %type <into>	into_clause
-%type <node>	uk_aggr_el
-%type <list> 	uk_aggr_list_opt_comma uk_aggr_list opt_on_key
+%type <node>	using_key_el
+%type <list> 	using_key_list_opt_comma using_key_list
 
 %type <lockstrength>	for_locking_strength
 %type <node>	for_locking_item
