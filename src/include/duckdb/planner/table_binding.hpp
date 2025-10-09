@@ -26,7 +26,6 @@ class SubqueryRef;
 class LogicalGet;
 class TableCatalogEntry;
 class TableFunctionCatalogEntry;
-class BoundTableFunction;
 class StandardEntry;
 struct ColumnBinding;
 

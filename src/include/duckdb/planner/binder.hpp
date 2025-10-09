@@ -27,7 +27,6 @@
 #include "duckdb/planner/joinside.hpp"
 #include "duckdb/planner/bound_constraint.hpp"
 #include "duckdb/planner/logical_operator.hpp"
-#include "duckdb/planner/tableref/bound_delimgetref.hpp"
 #include "duckdb/common/enums/copy_option_mode.hpp"
 
 //! fwd declare
@@ -253,8 +252,7 @@ public:
 	                                QueryErrorContext &error_context, string &func_name);
 	unique_ptr<BoundPragmaInfo> BindPragma(PragmaInfo &info, QueryErrorContext error_context);
 
-	unique_ptr<BoundTableRef> Bind(TableRef &ref);
-	unique_ptr<LogicalOperator> CreatePlan(BoundTableRef &ref);
+	BoundStatement Bind(TableRef &ref);
 
 	//! Generates an unused index for a table
 	idx_t GenerateTableIndex();
@@ -370,7 +368,7 @@ private:
 	void MoveCorrelatedExpressions(Binder &other);
 
 	//! Tries to bind the table name with replacement scans
-	unique_ptr<BoundTableRef> BindWithReplacementScan(ClientContext &context, BaseTableRef &ref);
+	BoundStatement BindWithReplacementScan(ClientContext &context, BaseTableRef &ref);
 
 	template <class T>
 	BoundStatement BindWithCTE(T &statement);
@@ -430,24 +428,24 @@ private:
 	BoundSetOpChild BindSetOpChild(QueryNode &child);
 	unique_ptr<BoundSetOperationNode> BindSetOpNode(SetOperationNode &statement);
 
-	unique_ptr<BoundTableRef> BindJoin(Binder &parent, TableRef &ref);
-	unique_ptr<BoundTableRef> Bind(BaseTableRef &ref);
-	unique_ptr<BoundTableRef> Bind(BoundRefWrapper &ref);
-	unique_ptr<BoundTableRef> Bind(JoinRef &ref);
-	unique_ptr<BoundTableRef> Bind(SubqueryRef &ref);
-	unique_ptr<BoundTableRef> Bind(TableFunctionRef &ref);
-	unique_ptr<BoundTableRef> Bind(EmptyTableRef &ref);
-	unique_ptr<BoundTableRef> Bind(DelimGetRef &ref);
-	unique_ptr<BoundTableRef> Bind(ExpressionListRef &ref);
-	unique_ptr<BoundTableRef> Bind(ColumnDataRef &ref);
-	unique_ptr<BoundTableRef> Bind(PivotRef &expr);
-	unique_ptr<BoundTableRef> Bind(ShowRef &ref);
+	BoundStatement BindJoin(Binder &parent, TableRef &ref);
+	BoundStatement Bind(BaseTableRef &ref);
+	BoundStatement Bind(BoundRefWrapper &ref);
+	BoundStatement Bind(JoinRef &ref);
+	BoundStatement Bind(SubqueryRef &ref);
+	BoundStatement Bind(TableFunctionRef &ref);
+	BoundStatement Bind(EmptyTableRef &ref);
+	BoundStatement Bind(DelimGetRef &ref);
+	BoundStatement Bind(ExpressionListRef &ref);
+	BoundStatement Bind(ColumnDataRef &ref);
+	BoundStatement Bind(PivotRef &expr);
+	BoundStatement Bind(ShowRef &ref);
 
 	unique_ptr<SelectNode> BindPivot(PivotRef &expr, vector<unique_ptr<ParsedExpression>> all_columns);
 	unique_ptr<SelectNode> BindUnpivot(Binder &child_binder, PivotRef &expr,
 	                                   vector<unique_ptr<ParsedExpression>> all_columns,
 	                                   unique_ptr<ParsedExpression> &where_clause);
-	unique_ptr<BoundTableRef> BindBoundPivot(PivotRef &expr);
+	BoundStatement BindBoundPivot(PivotRef &expr);
 	void ExtractUnpivotEntries(Binder &child_binder, PivotColumnEntry &entry, vector<UnpivotEntry> &unpivot_entries);
 	void ExtractUnpivotColumnName(ParsedExpression &expr, vector<string> &result);
 
@@ -456,26 +454,14 @@ private:
 	bool BindTableFunctionParameters(TableFunctionCatalogEntry &table_function,
 	                                 vector<unique_ptr<ParsedExpression>> &expressions, vector<LogicalType> &arguments,
 	                                 vector<Value> &parameters, named_parameter_map_t &named_parameters,
-	                                 unique_ptr<BoundSubqueryRef> &subquery, ErrorData &error);
-	void BindTableInTableOutFunction(vector<unique_ptr<ParsedExpression>> &expressions,
-	                                 unique_ptr<BoundSubqueryRef> &subquery);
-	unique_ptr<LogicalOperator> BindTableFunction(TableFunction &function, vector<Value> parameters);
-	unique_ptr<LogicalOperator> BindTableFunctionInternal(TableFunction &table_function, const TableFunctionRef &ref,
-	                                                      vector<Value> parameters,
-	                                                      named_parameter_map_t named_parameters,
-	                                                      vector<LogicalType> input_table_types,
-	                                                      vector<string> input_table_names);
+	                                 BoundStatement &subquery, ErrorData &error);
+	void BindTableInTableOutFunction(vector<unique_ptr<ParsedExpression>> &expressions, BoundStatement &subquery);
+	BoundStatement BindTableFunction(TableFunction &function, vector<Value> parameters);
+	BoundStatement BindTableFunctionInternal(TableFunction &table_function, const TableFunctionRef &ref,
+	                                         vector<Value> parameters, named_parameter_map_t named_parameters,
+	                                         vector<LogicalType> input_table_types, vector<string> input_table_names);
 
-	unique_ptr<LogicalOperator> CreatePlan(BoundBaseTableRef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundJoinRef &ref);
-	unique_ptr<LogicalOperator> CreatePlan(BoundSubqueryRef &ref);
-	unique_ptr<LogicalOperator> CreatePlan(BoundTableFunction &ref);
-	unique_ptr<LogicalOperator> CreatePlan(BoundEmptyTableRef &ref);
-	unique_ptr<LogicalOperator> CreatePlan(BoundExpressionListRef &ref);
-	unique_ptr<LogicalOperator> CreatePlan(BoundColumnDataRef &ref);
-	unique_ptr<LogicalOperator> CreatePlan(BoundCTERef &ref);
-	unique_ptr<LogicalOperator> CreatePlan(BoundPivotRef &ref);
-	unique_ptr<LogicalOperator> CreatePlan(BoundDelimGetRef &ref);
 
 	BoundStatement BindCopyTo(CopyStatement &stmt, const CopyFunction &function, CopyToType copy_to_type);
 	BoundStatement BindCopyFrom(CopyStatement &stmt, const CopyFunction &function);
@@ -530,16 +516,16 @@ private:
 
 	LogicalType BindLogicalTypeInternal(const LogicalType &type, optional_ptr<Catalog> catalog, const string &schema);
 
-	BoundStatement BindSelectNode(SelectNode &statement, unique_ptr<BoundTableRef> from_table);
+	BoundStatement BindSelectNode(SelectNode &statement, BoundStatement from_table);
 	unique_ptr<BoundSelectNode> BindSelectNodeInternal(SelectNode &statement);
-	unique_ptr<BoundSelectNode> BindSelectNodeInternal(SelectNode &statement, unique_ptr<BoundTableRef> from_table);
+	unique_ptr<BoundSelectNode> BindSelectNodeInternal(SelectNode &statement, BoundStatement from_table);
 
 	unique_ptr<LogicalOperator> BindCopyDatabaseSchema(Catalog &source_catalog, const string &target_database_name);
 	unique_ptr<LogicalOperator> BindCopyDatabaseData(Catalog &source_catalog, const string &target_database_name);
 
-	unique_ptr<BoundTableRef> BindShowQuery(ShowRef &ref);
-	unique_ptr<BoundTableRef> BindShowTable(ShowRef &ref);
-	unique_ptr<BoundTableRef> BindSummarize(ShowRef &ref);
+	BoundStatement BindShowQuery(ShowRef &ref);
+	BoundStatement BindShowTable(ShowRef &ref);
+	BoundStatement BindSummarize(ShowRef &ref);
 
 	void BindInsertColumnList(TableCatalogEntry &table, vector<string> &columns, bool default_values,
 	                          vector<LogicalIndex> &named_column_map, vector<LogicalType> &expected_types,
