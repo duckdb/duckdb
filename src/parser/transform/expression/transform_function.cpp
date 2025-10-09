@@ -438,13 +438,8 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 	auto function = make_uniq<FunctionExpression>(std::move(catalog), std::move(schema), lowercase_name.c_str(),
 	                                              std::move(children), std::move(filter_expr), std::move(order_bys),
 	                                              root.agg_distinct, false, root.export_state);
-	if (root.alias) {
-		vector<string> column_name_alias;
-		auto alias = TransformAlias(root.alias, column_name_alias);
-		function->SetAlias(alias);
-	}
-
 	SetQueryLocation(*function, root.location);
+
 	return std::move(function);
 }
 

@@ -122,7 +122,6 @@ WITH RECURSIVE tbl2(a,b) AS (SELECT 1, NULL UNION SELECT a.a+1, a.b FROM tbl2 AS
 ----
 <REGEX>:.*Binder Error.*cannot be referenced.*
 
-
 # second cte references recurring table of first cte while first cte does not
 statement error
 WITH RECURSIVE tbl(a, b) USING KEY (a) AS (SELECT 5, 1 UNION SELECT a, b + 1 FROM tbl WHERE b < a),

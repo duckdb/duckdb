@@ -3,14 +3,9 @@
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/query_node/recursive_cte_node.hpp"
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/query_node/bound_recursive_cte_node.hpp"
-#include "duckdb/planner/expression/bound_reference_expression.hpp"
-#include "duckdb/planner/expression/bound_cast_expression.hpp"
-#include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/function/function_binder.hpp"
-#include "duckdb/planner/expression_binder/aggregate_binder.hpp"
-
-#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/planner/query_node/bound_recursive_cte_node.hpp"
+#include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 
 namespace duckdb {
@@ -47,11 +42,11 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 	bind_context.AddGenericBinding(result.setop_index, statement.ctename, result.names, result.types);
 
 	// Create temporary binder to bind expressions
-	auto bin = Binder::CreateBinder(context, nullptr);
+	auto aggregate_binder = Binder::CreateBinder(context, nullptr);
 	ErrorData error;
-	FunctionBinder function_binder(*bin);
-	bin->bind_context.AddGenericBinding(result.setop_index, statement.ctename, result.names, result.types);
-	ExpressionBinder expression_binder(*bin, context);
+	FunctionBinder function_binder(*aggregate_binder);
+	aggregate_binder->bind_context.AddGenericBinding(result.setop_index, statement.ctename, result.names, result.types);
+	ExpressionBinder expression_binder(*aggregate_binder, context);
 
 	// Set contains column indices that are already bound
 	unordered_set<idx_t> column_references;

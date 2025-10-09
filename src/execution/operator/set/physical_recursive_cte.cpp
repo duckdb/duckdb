@@ -40,12 +40,12 @@ public:
 		vector<BoundAggregateExpression *> payload_aggregates_ptr;
 		for (idx_t i = 0; i < op.payload_aggregates.size(); i++) {
 			D_ASSERT(op.payload_aggregates[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
-			auto &dat = op.payload_aggregates[i]->Cast<BoundAggregateExpression>();
-			for (auto &expr : dat.children) {
-				executor.AddExpression(*expr);
-				aggr_input_types.push_back(expr->return_type);
+			auto &bound_aggr_expr = op.payload_aggregates[i]->Cast<BoundAggregateExpression>();
+			for (auto &child_expr : bound_aggr_expr.children) {
+				executor.AddExpression(*child_expr);
+				aggr_input_types.push_back(child_expr->return_type);
 			}
-			payload_aggregates_ptr.push_back(&dat);
+			payload_aggregates_ptr.push_back(&bound_aggr_expr);
 		}
 
 		payload_rows.Initialize(Allocator::DefaultAllocator(), aggr_input_types);
@@ -214,6 +214,7 @@ SourceResultType PhysicalRecursiveCTE::GetData(ExecutionContext &context, DataCh
 					if (!payload_types.empty()) {
 						payload_rows.Initialize(Allocator::DefaultAllocator(), payload_types);
 					}
+
 					gstate.ht->Scan(gstate.ht_scan_state, distinct_rows, payload_rows);
 					PopulateChunk(chunk, distinct_rows, distinct_idx, false);
 					PopulateChunk(chunk, payload_rows, payload_idx, false);

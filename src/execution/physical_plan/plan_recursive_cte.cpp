@@ -53,10 +53,10 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 	for (idx_t i = 0; i < op.payload_aggregates.size(); i++) {
 		// Ensure that the payload aggregate is of the expected type.
 		D_ASSERT(op.payload_aggregates[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
-		auto &agg = op.payload_aggregates[i]->Cast<BoundAggregateExpression>();
+		auto &bound_aggr = op.payload_aggregates[i]->Cast<BoundAggregateExpression>();
 
 		// add the logical type of the aggregate to the payload types
-		payload_types.push_back(agg.return_type);
+		payload_types.push_back(bound_aggr.return_type);
 		payload_aggregates.push_back(std::move(op.payload_aggregates[i]));
 
 		// Determine the destination of the aggregate result.
@@ -64,15 +64,15 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 		if (op.payload_aggregate_dest_map.find(i) == op.payload_aggregate_dest_map.end()) {
 			// This aggregate hasn't specified an explicit mapping for its destination
 			// So the binder infer the destination from the first argument of the aggregate
-			switch (agg.children[0]->type) {
+			switch (bound_aggr.children[0]->type) {
 			case ExpressionType::BOUND_REF: {
 				// Cast the child to a BoundReferenceExpression and map its index to the aggregate index.
-				bound_ref = &agg.children[0]->Cast<BoundReferenceExpression>();
+				bound_ref = &bound_aggr.children[0]->Cast<BoundReferenceExpression>();
 				break;
 			}
 			case ExpressionType::OPERATOR_CAST: {
 				// We have a cast on top of the BoundRefExpression
-				auto &bound_cast = agg.children[0]->Cast<BoundCastExpression>();
+				auto &bound_cast = bound_aggr.children[0]->Cast<BoundCastExpression>();
 				bound_ref = *bound_cast.child;
 				break;
 			}

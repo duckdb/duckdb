@@ -46,7 +46,6 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundRecursiveCTENode &node) {
 	root->ref_recurring = ref_recurring;
 	root->payload_aggregates = std::move(node.payload_aggregates);
 	root->internal_types = std::move(node.internal_types);
-	// BTODO: only here until i know how to fix ResolveTypes()
 	root->result_types = node.types;
 	root->payload_aggregate_dest_map = std::move(node.payload_aggregate_dest_map);
 	return VisitQueryNode(node, std::move(root));

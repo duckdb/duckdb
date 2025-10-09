@@ -292,7 +292,6 @@ typedef struct PGCollateClause {
 typedef struct PGFuncCall {
 	PGNodeTag type;
 	PGList *funcname;         /* qualified name of function */
-	PGAlias *alias; /* alias name */
 	PGList *args;             /* the arguments (list of exprs) */
 	PGList *agg_order;        /* ORDER BY (list of PGSortBy) */
 	PGNode *agg_filter;       /* FILTER clause, if any */
