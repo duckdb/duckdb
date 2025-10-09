@@ -1,0 +1,16 @@
+diff --git a/src/spatial/modules/main/spatial_functions_scalar.cpp b/src/spatial/modules/main/spatial_functions_scalar.cpp
+index 60ca7373ce..a44cfc7a82 100644
+--- a/src/spatial/modules/main/spatial_functions_scalar.cpp
++++ b/src/spatial/modules/main/spatial_functions_scalar.cpp
+@@ -9243,6 +9243,11 @@ struct ST_MMin : VertexAggFunctionBase<ST_MMin, VertexMinAggOp> {
+ 	static constexpr auto ORDINATE = VertexOrdinate::M;
+ };
+ 
++constexpr const char * ST_M::NAME;
++constexpr const char * ST_X::NAME;
++constexpr const char * ST_Y::NAME;
++constexpr const char * ST_Z::NAME;
++
+ } // namespace
+ 
+ // Helper to access the constant distance from the bind data

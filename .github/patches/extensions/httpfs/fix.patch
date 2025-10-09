@@ -1,3 +1,10 @@
+diff --git a/duckdb b/duckdb
+index b8a06e4..d37036a 160000
+--- a/duckdb
++++ b/duckdb
+@@ -1 +1 @@
+-Subproject commit b8a06e4a22672e254cd0baa68a3dbed2eb51c56e
++Subproject commit d37036a84214528e7b61ff599169cb27739df4ec
 diff --git a/src/httpfs.cpp b/src/httpfs.cpp
 index 802581e..a11af95 100644
 --- a/src/httpfs.cpp
@@ -31,14 +38,14 @@ index 525e0dd..a7e933e 100644
 @@ -231,7 +231,7 @@ public:
  		return true;
  	}
- 
+
 -	static string GetS3BadRequestError(S3AuthParams &s3_auth_params);
 +	static string GetS3BadRequestError(S3AuthParams &s3_auth_params, string correct_region = "");
  	static string GetS3AuthError(S3AuthParams &s3_auth_params);
  	static string GetGCSAuthError(S3AuthParams &s3_auth_params);
  	static HTTPException GetS3Error(S3AuthParams &s3_auth_params, const HTTPResponse &response, const string &url);
 diff --git a/src/s3fs.cpp b/src/s3fs.cpp
-index cbdecba..72eddc3 100644
+index cbdecba..601ecba 100644
 --- a/src/s3fs.cpp
 +++ b/src/s3fs.cpp
 @@ -872,6 +872,7 @@ void S3FileHandle::Initialize(optional_ptr<FileOpener> opener) {
@@ -49,13 +56,14 @@ index cbdecba..72eddc3 100644
  			auto context = opener->TryGetClientContext();
  			if (context) {
  				auto transaction = CatalogTransaction::GetSystemCatalogTransaction(*context);
-@@ -887,9 +888,13 @@ void S3FileHandle::Initialize(optional_ptr<FileOpener> opener) {
+@@ -887,10 +888,14 @@ void S3FileHandle::Initialize(optional_ptr<FileOpener> opener) {
  			auto &extra_info = error.ExtraInfo();
  			auto entry = extra_info.find("status_code");
  			if (entry != extra_info.end()) {
 -				if (entry->second == "400") {
 -					// 400: BAD REQUEST
 -					auto extra_text = S3FileSystem::GetS3BadRequestError(auth_params);
+-					throw Exception(error.Type(), error.RawMessage() + extra_text, extra_info);
 +				if (entry->second == "301" || entry->second == "400") {
 +					auto new_region = extra_info.find("header_x-amz-bucket-region");
 +					string correct_region = "";
@@ -63,9 +71,35 @@ index cbdecba..72eddc3 100644
 +						correct_region = new_region->second;
 +					}
 +					auto extra_text = S3FileSystem::GetS3BadRequestError(auth_params, correct_region);
- 					throw Exception(error.Type(), error.RawMessage() + extra_text, extra_info);
++					throw Exception(extra_info, error.Type(), error.RawMessage() + extra_text);
  				}
  				if (entry->second == "403") {
+ 					// 403: FORBIDDEN
+@@ -900,7 +905,7 @@ void S3FileHandle::Initialize(optional_ptr<FileOpener> opener) {
+ 					} else {
+ 						extra_text = S3FileSystem::GetS3AuthError(auth_params);
+ 					}
+-					throw Exception(error.Type(), error.RawMessage() + extra_text, extra_info);
++					throw Exception(extra_info, error.Type(), error.RawMessage() + extra_text);
+ 				}
+ 			}
+ 			throw;
+@@ -936,13 +941,13 @@ bool S3FileSystem::CanHandleFile(const string &fpath) {
+ void S3FileSystem::RemoveFile(const string &path, optional_ptr<FileOpener> opener) {
+ 	auto handle = OpenFile(path, FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS, opener);
+ 	if (!handle) {
+-		throw IOException("Could not remove file \"%s\": %s", {{"errno", "404"}}, path, "No such file or directory");
++		throw IOException({{"errno", "404"}}, "Could not remove file \"%s\": %s", path, "No such file or directory");
+ 	}
+
+ 	auto &s3fh = handle->Cast<S3FileHandle>();
+ 	auto res = DeleteRequest(*handle, s3fh.path, {});
+ 	if (res->status != HTTPStatusCode::OK_200 && res->status != HTTPStatusCode::NoContent_204) {
+-		throw IOException("Could not remove file \"%s\": %s", {{"errno", to_string(static_cast<int>(res->status))}},
++		throw IOException({{"errno", to_string(static_cast<int>(res->status))}}, "Could not remove file \"%s\": %s",
+ 		                  path, res->GetError());
+ 	}
+ }
 @@ -1138,12 +1143,15 @@ bool S3FileSystem::ListFiles(const string &directory, const std::function<void(c
  	return true;
  }

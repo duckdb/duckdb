@@ -748,6 +748,8 @@ void ToStringRecursive(BlobReader &reader, TextWriter &writer, idx_t depth, bool
 //----------------------------------------------------------------------------------------------------------------------
 namespace duckdb {
 
+constexpr const idx_t Geometry::MAX_RECURSION_DEPTH;
+
 bool Geometry::FromString(const string_t &wkt_text, string_t &result, Vector &result_vector, bool strict) {
 	TextReader reader(wkt_text.GetData(), static_cast<uint32_t>(wkt_text.GetSize()));
 	BlobWriter writer;

@@ -80,9 +80,9 @@ void ErrorData::Throw(const string &prepended_message) const {
 	D_ASSERT(initialized);
 	if (!prepended_message.empty()) {
 		string new_message = prepended_message + raw_message;
-		throw Exception(type, new_message, extra_info);
+		throw Exception(extra_info, type, new_message);
 	} else {
-		throw Exception(type, raw_message, extra_info);
+		throw Exception(extra_info, type, raw_message);
 	}
 }
 

@@ -186,7 +186,7 @@ public:
 
 class Geometry {
 public:
-	static constexpr auto MAX_RECURSION_DEPTH = 16;
+	static constexpr idx_t MAX_RECURSION_DEPTH = 16;
 
 	//! Convert from WKT
 	DUCKDB_API static bool FromString(const string_t &wkt_text, string_t &result, Vector &result_vector, bool strict);
