@@ -193,6 +193,8 @@ OperatorResultType PhysicalAsOfJoin::ExecuteInternal(ExecutionContext &context, 
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
+enum class AsOfJoinSourceStage : uint8_t { INNER, RIGHT, DONE };
+
 class AsOfPayloadScanner {
 public:
 	using Types = vector<LogicalType>;
@@ -296,6 +298,8 @@ AsOfPayloadScanner::AsOfPayloadScanner(const SortedRun &sorted_run, const Hashed
 	}
 }
 
+class AsOfLocalSourceState;
+
 class AsOfGlobalSourceState : public GlobalSourceState {
 public:
 	using HashGroupPtr = unique_ptr<SortedRun>;
@@ -303,8 +307,15 @@ public:
 
 	AsOfGlobalSourceState(ClientContext &client, const PhysicalAsOfJoin &op);
 
+	//! Assign a new task to the local state
+	bool AssignTask(AsOfLocalSourceState &lsource);
+	//! Can we shift to the next stage?
+	bool TryPrepareNextStage();
+
 	//! The parent operator
 	const PhysicalAsOfJoin &op;
+	//! For synchronizing the external hash join
+	atomic<AsOfJoinSourceStage> stage;
 	//! The child's hash groups
 	vector<HashGroups> hashed_groups;
 	//! Whether the right side is outer
@@ -314,9 +325,11 @@ public:
 	//! The next buffer to flush
 	atomic<size_t> next_left;
 	//! The number of flushed buffers
-	atomic<size_t> flushed;
+	atomic<size_t> flushed_left;
 	//! The right outer output read position.
 	atomic<idx_t> next_right;
+	//! The right outer output read position.
+	atomic<idx_t> flushed_right;
 
 public:
 	idx_t MaxThreads() override {
@@ -325,7 +338,8 @@ public:
 };
 
 AsOfGlobalSourceState::AsOfGlobalSourceState(ClientContext &client, const PhysicalAsOfJoin &op)
-    : op(op), is_right_outer(IsRightOuterJoin(op.join_type)), next_left(0), flushed(0), next_right(0) {
+    : op(op), stage(AsOfJoinSourceStage::INNER), is_right_outer(IsRightOuterJoin(op.join_type)), next_left(0),
+      flushed_left(0), next_right(0), flushed_right(0) {
 
 	//	 Take ownership of the hash groups
 	auto &gsink = op.sink_state->Cast<AsOfGlobalSinkState>();
@@ -870,6 +884,26 @@ public:
 
 	AsOfLocalSourceState(ExecutionContext &context, AsOfGlobalSourceState &gsource, const PhysicalAsOfJoin &op);
 
+	//! Task management
+	bool TaskFinished() const {
+		if (hash_group) {
+			return !scanner.get();
+		} else {
+			return !probe_buffer.Scanning();
+		}
+	}
+
+	void ExecuteInnerTask(DataChunk &chunk);
+	void ExecuteOuterTask(DataChunk &chunk);
+
+	void ExecuteTask(DataChunk &chunk) {
+		if (hash_group) {
+			ExecuteOuterTask(chunk);
+		} else {
+			ExecuteInnerTask(chunk);
+		}
+	}
+
 	idx_t BeginRightScan(const idx_t hash_bin);
 
 	AsOfGlobalSourceState &gsource;
@@ -878,18 +912,24 @@ public:
 	//! The left side partition being probed
 	AsOfProbeBuffer probe_buffer;
 
-	//! The read partition
+	//! The rhs group
 	idx_t hash_bin;
 	HashGroupPtr hash_group;
 	//! The read cursor
 	unique_ptr<AsOfPayloadScanner> scanner;
+	//! The right outer buffer
+	DataChunk rhs_chunk;
+	//! The right outer slicer
+	SelectionVector rsel;
 	//! Pointer to the right marker
 	const bool *rhs_matches = {};
 };
 
 AsOfLocalSourceState::AsOfLocalSourceState(ExecutionContext &context, AsOfGlobalSourceState &gsource,
                                            const PhysicalAsOfJoin &op)
-    : gsource(gsource), context(context), probe_buffer(context.client, op, gsource) {
+    : gsource(gsource), context(context), probe_buffer(context.client, op, gsource), rsel(STANDARD_VECTOR_SIZE) {
+
+	rhs_chunk.Initialize(context.client, op.children[1].get().GetTypes());
 }
 
 idx_t AsOfLocalSourceState::BeginRightScan(const idx_t hash_bin_p) {
@@ -918,106 +958,134 @@ unique_ptr<LocalSourceState> PhysicalAsOfJoin::GetLocalSourceState(ExecutionCont
 	return make_uniq<AsOfLocalSourceState>(context, gsource, *this);
 }
 
+bool AsOfGlobalSourceState::TryPrepareNextStage() {
+	//	Inside the lock.
+	auto &lhs_groups = hashed_groups[0];
+	auto &rhs_groups = hashed_groups[1];
+	switch (stage.load()) {
+	case AsOfJoinSourceStage::INNER:
+		if (flushed_left >= lhs_groups.size()) {
+			stage = IsRightOuterJoin(op.join_type) ? AsOfJoinSourceStage::RIGHT : AsOfJoinSourceStage::DONE;
+			return true;
+		}
+		break;
+	case AsOfJoinSourceStage::RIGHT:
+		if (flushed_right >= rhs_groups.size()) {
+			stage = AsOfJoinSourceStage::DONE;
+			return true;
+		}
+		break;
+	default:
+		break;
+	}
+	return false;
+}
+
+bool AsOfGlobalSourceState::AssignTask(AsOfLocalSourceState &lsource) {
+	auto guard = Lock();
+
+	auto &lhs_groups = hashed_groups[0];
+	auto &rhs_groups = hashed_groups[1];
+
+	switch (stage.load()) {
+	case AsOfJoinSourceStage::INNER:
+		while (next_left < lhs_groups.size()) {
+			//	More to flush
+			const auto left_bin = next_left++;
+			lsource.probe_buffer.BeginLeftScan(left_bin);
+			if (!lsource.TaskFinished()) {
+				return true;
+			} else {
+				++flushed_left;
+			}
+		}
+		break;
+	case AsOfJoinSourceStage::RIGHT:
+		while (next_right < rhs_groups.size()) {
+			const auto right_bin = next_right++;
+			lsource.BeginRightScan(right_bin);
+			if (!lsource.TaskFinished()) {
+				return true;
+			} else {
+				++flushed_right;
+			}
+		}
+		break;
+	default:
+		break;
+	}
+
+	return false;
+}
+
+void AsOfLocalSourceState::ExecuteInnerTask(DataChunk &chunk) {
+	while (probe_buffer.HasMoreData()) {
+		probe_buffer.GetData(context, chunk);
+		if (chunk.size()) {
+			return;
+		}
+	}
+	probe_buffer.EndLeftScan();
+	gsource.flushed_left++;
+}
+
 SourceResultType PhysicalAsOfJoin::GetData(ExecutionContext &context, DataChunk &chunk,
                                            OperatorSourceInput &input) const {
 	auto &gsource = input.global_state.Cast<AsOfGlobalSourceState>();
 	auto &lsource = input.local_state.Cast<AsOfLocalSourceState>();
-	auto &rhs_groups = gsource.hashed_groups[1];
-	auto &client = context.client;
 
-	//	Step 1: Join the partitions
-	auto &lhs_groups = gsource.hashed_groups[0];
-	const auto left_bins = lhs_groups.size();
-	while (gsource.flushed < left_bins) {
-		//	Make sure we have something to flush
-		if (!lsource.probe_buffer.Scanning()) {
-			const auto left_bin = gsource.next_left++;
-			if (left_bin < left_bins) {
-				//	More to flush
-				lsource.probe_buffer.BeginLeftScan(left_bin);
-			} else if (!IsRightOuterJoin(join_type) || client.interrupted) {
-				return SourceResultType::FINISHED;
-			} else {
-				//	Wait for all threads to finish
-				//	TODO: How to implement a spin wait correctly?
-				//	Returning BLOCKED seems to hang the system.
-				TaskScheduler::GetScheduler(client).YieldThread();
-				continue;
-			}
-		}
-
-		lsource.probe_buffer.GetData(context, chunk);
-		if (chunk.size()) {
-			return SourceResultType::HAVE_MORE_OUTPUT;
-		} else if (lsource.probe_buffer.HasMoreData()) {
-			//	Join the next partition
-			continue;
+	// Any call to GetData must produce tuples, otherwise the pipeline executor thinks that we're done
+	// Therefore, we loop until we've produced tuples, or until the operator is actually done
+	while (gsource.stage != AsOfJoinSourceStage::DONE && chunk.size() == 0) {
+		if (!lsource.TaskFinished() || gsource.AssignTask(lsource)) {
+			lsource.ExecuteTask(chunk);
 		} else {
-			lsource.probe_buffer.EndLeftScan();
-			gsource.flushed++;
+			auto guard = gsource.Lock();
+			if (gsource.TryPrepareNextStage() || gsource.stage == AsOfJoinSourceStage::DONE) {
+				gsource.UnblockTasks(guard);
+			} else {
+				return gsource.BlockSource(guard, input.interrupt_state);
+			}
 		}
 	}
 
-	//	Step 2: Emit right join matches
-	if (!IsRightOuterJoin(join_type)) {
-		return SourceResultType::FINISHED;
-	}
+	return chunk.size() > 0 ? SourceResultType::HAVE_MORE_OUTPUT : SourceResultType::FINISHED;
+}
 
-	DataChunk rhs_chunk;
-	rhs_chunk.Initialize(context.client, children[1].get().GetTypes());
-	SelectionVector rsel(STANDARD_VECTOR_SIZE);
-
-	while (chunk.size() == 0) {
-		//	Move to the next bin if we are done.
-		while (!lsource.scanner || !lsource.scanner->Remaining()) {
-			lsource.scanner.reset();
-			lsource.hash_group.reset();
-			auto hash_bin = gsource.next_right++;
-			if (hash_bin >= rhs_groups.size()) {
-				return SourceResultType::FINISHED;
-			}
-
-			for (; hash_bin < rhs_groups.size(); hash_bin = gsource.next_right++) {
-				if (rhs_groups[hash_bin]) {
-					break;
-				}
-			}
-			lsource.BeginRightScan(hash_bin);
-		}
-		const auto rhs_position = lsource.scanner->Scanned();
-		lsource.scanner->Scan(rhs_chunk);
+void AsOfLocalSourceState::ExecuteOuterTask(DataChunk &chunk) {
+	idx_t result_count = 0;
+	while (!result_count) {
+		const auto rhs_position = scanner->Scanned();
+		scanner->Scan(rhs_chunk);
 
 		const auto count = rhs_chunk.size();
 		if (count == 0) {
-			return SourceResultType::FINISHED;
+			scanner.reset();
+			++gsource.flushed_right;
+			return;
 		}
 
 		// figure out which tuples didn't find a match in the RHS
-		auto rhs_matches = lsource.rhs_matches;
-		idx_t result_count = 0;
+		result_count = 0;
 		for (idx_t i = 0; i < count; i++) {
 			if (!rhs_matches[rhs_position + i]) {
 				rsel.set_index(result_count++, i);
 			}
 		}
-
-		if (result_count > 0) {
-			// if there were any tuples that didn't find a match, output them
-			const idx_t left_column_count = children[0].get().GetTypes().size();
-			for (idx_t col_idx = 0; col_idx < left_column_count; ++col_idx) {
-				chunk.data[col_idx].SetVectorType(VectorType::CONSTANT_VECTOR);
-				ConstantVector::SetNull(chunk.data[col_idx], true);
-			}
-			for (idx_t col_idx = 0; col_idx < right_projection_map.size(); ++col_idx) {
-				const auto rhs_idx = right_projection_map[col_idx];
-				chunk.data[left_column_count + col_idx].Slice(rhs_chunk.data[rhs_idx], rsel, result_count);
-			}
-			chunk.SetCardinality(result_count);
-			break;
-		}
 	}
 
-	return chunk.size() > 0 ? SourceResultType::HAVE_MORE_OUTPUT : SourceResultType::FINISHED;
+	// if there were any tuples that didn't find a match, output them
+	const auto &op = gsource.op;
+	const idx_t left_column_count = op.children[0].get().GetTypes().size();
+	for (idx_t col_idx = 0; col_idx < left_column_count; ++col_idx) {
+		chunk.data[col_idx].SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::SetNull(chunk.data[col_idx], true);
+	}
+	for (idx_t col_idx = 0; col_idx < op.right_projection_map.size(); ++col_idx) {
+		const auto rhs_idx = op.right_projection_map[col_idx];
+		chunk.data[left_column_count + col_idx].Slice(rhs_chunk.data[rhs_idx], rsel, result_count);
+	}
+	chunk.SetCardinality(result_count);
 }
 
 //===--------------------------------------------------------------------===//
