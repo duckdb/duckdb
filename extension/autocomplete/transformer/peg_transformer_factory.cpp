@@ -61,6 +61,13 @@ PEGTransformerFactory &PEGTransformerFactory::GetInstance() {
 PEGTransformerFactory::PEGTransformerFactory() {
 	REGISTER_TRANSFORM(TransformStatement);
 
+	// attach.gram
+	REGISTER_TRANSFORM(TransformAttachStatement);
+	REGISTER_TRANSFORM(TransformAttachAlias);
+	REGISTER_TRANSFORM(TransformAttachOptions);
+	REGISTER_TRANSFORM(TransformGenericCopyOptionList);
+	REGISTER_TRANSFORM(TransformGenericCopyOption);
+
 	// common.gram
 	REGISTER_TRANSFORM(TransformNumberLiteral);
 	REGISTER_TRANSFORM(TransformStringLiteral);

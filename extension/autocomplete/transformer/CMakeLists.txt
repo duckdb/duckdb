@@ -3,6 +3,7 @@ add_library_unity(
   OBJECT
   peg_transformer.cpp
   peg_transformer_factory.cpp
+  transform_attach.cpp
   transform_common.cpp
   transform_create_table.cpp
   transform_expression.cpp

@@ -5,6 +5,7 @@
 #include "transform_enum_result.hpp"
 #include "transform_result.hpp"
 #include "ast/extension_repository_info.hpp"
+#include "ast/generic_copy_option.hpp"
 #include "ast/setting_info.hpp"
 #include "duckdb/function/macro_function.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
@@ -158,6 +159,18 @@ private:
 	PEGTransformerFactory(const PEGTransformerFactory &) = delete;
 
 	static unique_ptr<SQLStatement> TransformStatement(PEGTransformer &, optional_ptr<ParseResult> list);
+
+	// attach.gram
+	static unique_ptr<SQLStatement> TransformAttachStatement(PEGTransformer &transformer,
+																			 optional_ptr<ParseResult> parse_result);
+	static string TransformAttachAlias(PEGTransformer &transformer,
+												   optional_ptr<ParseResult> parse_result);
+	static unordered_map<string, Value> TransformAttachOptions(PEGTransformer &transformer,
+																		   optional_ptr<ParseResult> parse_result);
+	static unordered_map<string, vector<Value>> TransformGenericCopyOptionList(PEGTransformer &transformer,
+													  optional_ptr<ParseResult> parse_result);
+	static GenericCopyOption TransformGenericCopyOption(PEGTransformer &transformer,
+																	optional_ptr<ParseResult> parse_result);
 
 	// common.gram
 	static unique_ptr<ParsedExpression> TransformNumberLiteral(PEGTransformer &transformer,
