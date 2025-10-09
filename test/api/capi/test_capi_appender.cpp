@@ -1202,7 +1202,7 @@ TEST_CASE("Test appending default value to data chunk in the C API") {
 	tester.Cleanup();
 }
 
-TEST_CASE("Test upserting using the C API", "[capi]") {
+TEST_CASE("Test UPSERT using the C API", "[capi]") {
 	CAPITester tester;
 	duckdb::unique_ptr<CAPIResult> result;
 	REQUIRE(tester.OpenDatabase(nullptr));
@@ -1224,6 +1224,53 @@ TEST_CASE("Test upserting using the C API", "[capi]") {
 
 	auto status = duckdb_appender_create_query(tester.connection, query.c_str(), column_count, types,
 	                                           "my_appended_data", column_names, &appender);
+	duckdb_destroy_logical_type(&types[0]);
+	duckdb_destroy_logical_type(&types[1]);
+	REQUIRE(status == DuckDBSuccess);
+	REQUIRE(duckdb_appender_error(appender) == nullptr);
+
+	REQUIRE(duckdb_appender_begin_row(appender) == DuckDBSuccess);
+	REQUIRE(duckdb_append_int32(appender, 1) == DuckDBSuccess);
+	REQUIRE(duckdb_append_varchar(appender, "hello world") == DuckDBSuccess);
+	REQUIRE(duckdb_appender_end_row(appender) == DuckDBSuccess);
+
+	REQUIRE(duckdb_appender_begin_row(appender) == DuckDBSuccess);
+	REQUIRE(duckdb_append_int32(appender, 2) == DuckDBSuccess);
+	REQUIRE(duckdb_append_varchar(appender, "bye bye") == DuckDBSuccess);
+	REQUIRE(duckdb_appender_end_row(appender) == DuckDBSuccess);
+
+	REQUIRE(duckdb_appender_flush(appender) == DuckDBSuccess);
+	REQUIRE(duckdb_appender_close(appender) == DuckDBSuccess);
+	REQUIRE(duckdb_appender_destroy(&appender) == DuckDBSuccess);
+
+	result = tester.Query("SELECT * FROM tbl ORDER BY i");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<int32_t>(0, 0) == 1);
+	REQUIRE(result->Fetch<string>(1, 0) == "hello world");
+	REQUIRE(result->Fetch<int32_t>(0, 1) == 2);
+	REQUIRE(result->Fetch<string>(1, 1) == "bye bye");
+
+	tester.Cleanup();
+}
+
+TEST_CASE("Test UPSERT with type inference using the C API", "[capi]") {
+	CAPITester tester;
+	duckdb::unique_ptr<CAPIResult> result;
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	tester.Query("CREATE TABLE tbl (i INT PRIMARY KEY, value VARCHAR)");
+	tester.Query("INSERT INTO tbl VALUES (1, 'hello')");
+	duckdb_appender appender;
+
+	string query = "INSERT OR REPLACE INTO tbl FROM appended_data";
+	duckdb_logical_type types[2];
+	types[0] = duckdb_create_logical_type(DUCKDB_TYPE_ANY);
+	types[1] = duckdb_create_logical_type(DUCKDB_TYPE_ANY);
+
+	idx_t column_count = 2;
+
+	auto status = duckdb_appender_create_query(tester.connection, query.c_str(), column_count, types,
+	                                           "my_appended_data", nullptr, &appender);
 	duckdb_destroy_logical_type(&types[0]);
 	duckdb_destroy_logical_type(&types[1]);
 	REQUIRE(status == DuckDBSuccess);

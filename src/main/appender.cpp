@@ -712,7 +712,13 @@ QueryAppender::QueryAppender(Connection &con, string query_p, vector<LogicalType
 		if (prepared_stmt->HasError()) {
 			throw InvalidInputException(prepared_stmt->GetError());
 		}
+
 		types = prepared_stmt->GetTypes();
+		for (const auto &t : types) {
+			if (t.IsUnknown()) {
+				throw InvalidInputException("failed to create query appender: cannot infer types");
+			}
+		}
 	}
 
 	InitializeChunk();

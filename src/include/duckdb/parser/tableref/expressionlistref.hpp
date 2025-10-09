@@ -23,7 +23,6 @@ public:
 
 public:
 	ExpressionListRef() : TableRef(TableReferenceType::EXPRESSION_LIST) {
-		D_ASSERT(1);
 	}
 
 	//! Value list like in a VALUES statement.
