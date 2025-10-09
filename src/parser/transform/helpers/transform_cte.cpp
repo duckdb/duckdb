@@ -52,19 +52,15 @@ void Transformer::TransformCTE(duckdb_libpgquery::PGWithClause &de_with_clause, 
 		auto info = make_uniq<CommonTableExpressionInfo>();
 
 		auto &cte = *PGPointerCast<duckdb_libpgquery::PGCommonTableExpr>(cte_ele->data.ptr_value);
-		if (cte.usingKeyClause && cte.usingKeyClause->key_targets) {
-			auto key_target =
-			    PGPointerCast<duckdb_libpgquery::PGNode>(cte.usingKeyClause->key_targets->head->data.ptr_value);
-			if (key_target) {
-				TransformExpressionList(*cte.usingKeyClause->key_targets, info->key_targets);
-			}
-		}
 
-		if (cte.usingKeyClause && cte.usingKeyClause->payload_aggregates) {
-			auto payload_aggregate =
-			    PGPointerCast<duckdb_libpgquery::PGNode>(cte.usingKeyClause->payload_aggregates->head->data.ptr_value);
-			if (payload_aggregate) {
-				TransformExpressionList(*cte.usingKeyClause->payload_aggregates, info->payload_aggregates);
+		if (cte.using_key_list) {
+			for (auto key_ele = cte.using_key_list->head; key_ele != nullptr; key_ele = key_ele->next) {
+				auto expr_ele = TransformExpression(*PGPointerCast<duckdb_libpgquery::PGNode>(key_ele->data.ptr_value));
+				if (expr_ele->type == ExpressionType::COLUMN_REF) {
+					info->key_targets.push_back(std::move(expr_ele));
+				} else {
+					info->payload_aggregates.push_back(std::move(expr_ele));
+				}
 			}
 		}
 

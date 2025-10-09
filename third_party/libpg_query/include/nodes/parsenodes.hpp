@@ -1096,7 +1096,7 @@ typedef struct PGCommonTableExpr {
 	int location;     /* token location, or -1 if unknown */
 	/* These fields are set during parse analysis: */
 	bool cterecursive;        /* is this CTE actually recursive? */
-	PGUsingKeyClause *usingKeyClause; /* USING KEY clause, if any */
+	PGList *using_key_list; /* USING KEY clause, if any */
 	int cterefcount;          /* number of RTEs referencing this CTE
 								 * (excluding internal self-references) */
 	PGList *ctecolnames;      /* list of output column names */

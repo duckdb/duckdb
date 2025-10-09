@@ -1409,9 +1409,4 @@ typedef struct PGAtClause {
 	PGNode *expr;       /* the expression */
 } PGAtClause;
 
-typedef struct PGUsingKeyClause {
-	PGNodeTag type;
-	PGList *key_targets; /* list of target entries to use in key */
-	PGList *payload_aggregates; /* list of aggregates to use in payload */
-} PGUsingKeyClause;
 }

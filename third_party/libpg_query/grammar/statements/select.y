@@ -463,7 +463,7 @@ common_table_expr:  name opt_name_list opt_on_key AS opt_materialized '(' Prepar
 				PGCommonTableExpr *n = makeNode(PGCommonTableExpr);
 				n->ctename = $1;
 				n->aliascolnames = $2;
-				n->usingKeyClause = (PGUsingKeyClause *) $3;
+				n->using_key_list = $3;
 				n->ctematerialized = $5;
 				n->ctequery = $7;
 				n->location = @1;
@@ -472,31 +472,29 @@ common_table_expr:  name opt_name_list opt_on_key AS opt_materialized '(' Prepar
 		;
 
 opt_on_key:
-		USING KEY '(' column_ref_list_opt_comma ')'
-			{
-				PGUsingKeyClause* n = makeNode(PGUsingKeyClause);
-				n->key_targets = $4;
-				$$ = (PGNode *) n;
-			}
-		| USING KEY '(' column_ref_list_opt_comma ';' uk_aggr_list ')'
-			{
-				PGUsingKeyClause* n = makeNode(PGUsingKeyClause);
-				n->key_targets = $4;
-				n->payload_aggregates = $6;
-				$$ = (PGNode *) n;
-			}
+		USING KEY '(' uk_aggr_list ')' 							{ $$ = $4; }
 		| /*EMPTY*/												{ $$ = NULL; }
 		;
 
+uk_aggr_list_opt_comma:
+		uk_aggr_list	 						{ $$ = $1; }
+		| uk_aggr_list ','						{ $$ = $1; }
+		;
+
 uk_aggr_list:
-		func_expr AS opt_alias_clause
-			{
-				PGFuncCall *n = (PGFuncCall *) $1;
-				n->alias = $3;
-				$$ = list_make1(n);
-			}
-		| func_expr									{ $$ = list_make1($1); }
-		| uk_aggr_list ',' func_expr			{ $$ = lappend($1, $3); }
+		uk_aggr_el 								{ $$ = list_make1($1); }
+		| uk_aggr_list ',' uk_aggr_el			{ $$ = lappend($1, $3); }
+		;
+
+uk_aggr_el:
+		columnref 									{ $$ = $1; }
+		| func_expr									{ $$ = $1; }
+		| func_expr AS opt_alias_clause
+        			{
+        				PGFuncCall *n = (PGFuncCall *) $1;
+        				n->alias = $3;
+        				$$ = (PGNode *) n;
+        			}
 		;
 
 column_ref_list_opt_comma:

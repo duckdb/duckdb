@@ -768,8 +768,6 @@ std::string Transformer::NodetypeToString(duckdb_libpgquery::PGNodeTag type) { /
 		return "T_OnConflictClause";
 	case duckdb_libpgquery::T_PGCommonTableExpr:
 		return "T_CommonTableExpr";
-	case duckdb_libpgquery::T_PGUsingKeyClause:
-		return "T_UsingKeyClause";
 	case duckdb_libpgquery::T_PGRoleSpec:
 		return "T_RoleSpec";
 	case duckdb_libpgquery::T_PGTriggerTransition:

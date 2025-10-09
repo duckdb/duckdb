@@ -78,7 +78,7 @@ string CommonTableExpressionMap::ToString() const {
 				result += cte.key_targets[k]->ToString();
 			}
 			if (!cte.payload_aggregates.empty()) {
-				result += " ; ";
+				result += " , ";
 				for (idx_t k = 0; k < cte.payload_aggregates.size(); k++) {
 					if (k > 0) {
 						result += ", ";
