@@ -20,11 +20,14 @@ struct AttachOptions;
 enum class InsertDatabasePathResult { SUCCESS, ALREADY_EXISTS };
 
 struct DatabasePathInfo {
-	explicit DatabasePathInfo(string name_p) : name(std::move(name_p)), is_attached(true) {
+	explicit DatabasePathInfo(string name_p, AccessMode access_mode)
+	    : name(std::move(name_p)), access_mode(access_mode), is_attached(true) {
 	}
 
 	string name;
+	AccessMode access_mode;
 	bool is_attached;
+	idx_t reference_count = 1;
 };
 
 //! The DatabaseFilePathManager is used to ensure we only ever open a single database file once
