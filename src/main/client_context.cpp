@@ -1211,21 +1211,21 @@ unique_ptr<TableDescription> ClientContext::TableInfo(const string &schema_name,
 	return TableInfo(INVALID_CATALOG, schema_name, table_name);
 }
 
-CommonTableExpressionMap &GetCTEMap(SQLStatement &statement) {
-	switch (statement.type) {
-	case StatementType::INSERT_STATEMENT:
-		return statement.Cast<InsertStatement>().cte_map;
-	case StatementType::DELETE_STATEMENT:
-		return statement.Cast<DeleteStatement>().cte_map;
-	case StatementType::UPDATE_STATEMENT:
-		return statement.Cast<UpdateStatement>().cte_map;
-	case StatementType::MERGE_INTO_STATEMENT:
-		return statement.Cast<MergeIntoStatement>().cte_map;
-	default:
-		throw InvalidInputException(
-		    "Unsupported statement type for appender: expected INSERT, DELETE, UPDATE or MERGE INTO");
-	}
-}
+//CommonTableExpressionMap &GetCTEMap(SQLStatement &statement) {
+//	switch (statement.type) {
+//	case StatementType::INSERT_STATEMENT:
+//		return statement.Cast<InsertStatement>().cte_map;
+//	case StatementType::DELETE_STATEMENT:
+//		return statement.Cast<DeleteStatement>().cte_map;
+//	case StatementType::UPDATE_STATEMENT:
+//		return statement.Cast<UpdateStatement>().cte_map;
+//	case StatementType::MERGE_INTO_STATEMENT:
+//		return statement.Cast<MergeIntoStatement>().cte_map;
+//	default:
+//		throw InvalidInputException(
+//		    "Unsupported statement type for appender: expected INSERT, DELETE, UPDATE or MERGE INTO");
+//	}
+//}
 
 void ClientContext::Append(ColumnDataCollection &collection, const string &query, const vector<string> &column_names,
                            const string &collection_name) {

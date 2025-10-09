@@ -163,6 +163,9 @@ public:
 	                         vector<string> names = vector<string>(), string table_name = string());
 	DUCKDB_API ~QueryAppender() override;
 
+public:
+	unique_ptr<SQLStatement> ParseStatement();
+
 private:
 	//! A shared pointer to the context of this appender.
 	weak_ptr<ClientContext> context;
