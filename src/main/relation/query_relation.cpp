@@ -49,6 +49,10 @@ unique_ptr<QueryNode> QueryRelation::GetQueryNode() {
 	return std::move(select->node);
 }
 
+string QueryRelation::GetQuery() {
+	return query;
+}
+
 unique_ptr<TableRef> QueryRelation::GetTableRef() {
 	auto subquery_ref = make_uniq<SubqueryRef>(GetSelectStatement(), GetAlias());
 	return std::move(subquery_ref);

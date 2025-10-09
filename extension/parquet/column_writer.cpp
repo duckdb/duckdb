@@ -245,7 +245,7 @@ void ColumnWriter::HandleDefineLevels(ColumnWriterState &state, ColumnWriterStat
 //===--------------------------------------------------------------------===//
 
 ParquetColumnSchema ColumnWriter::FillParquetSchema(vector<duckdb_parquet::SchemaElement> &schemas,
-                                                    const LogicalType &type, const string &name,
+                                                    const LogicalType &type, const string &name, bool allow_geometry,
                                                     optional_ptr<const ChildFieldIDs> field_ids, idx_t max_repeat,
                                                     idx_t max_define, bool can_have_nulls) {
 	auto null_type = can_have_nulls ? FieldRepetitionType::OPTIONAL : FieldRepetitionType::REQUIRED;
@@ -298,7 +298,8 @@ ParquetColumnSchema ColumnWriter::FillParquetSchema(vector<duckdb_parquet::Schem
 		variant_column.children.reserve(child_types.size());
 		for (auto &child_type : child_types) {
 			variant_column.children.emplace_back(FillParquetSchema(schemas, child_type.second, child_type.first,
-			                                                       child_field_ids, max_repeat, max_define + 1, false));
+			                                                       allow_geometry, child_field_ids, max_repeat,
+			                                                       max_define + 1, false));
 		}
 		return variant_column;
 	}
@@ -324,7 +325,8 @@ ParquetColumnSchema ColumnWriter::FillParquetSchema(vector<duckdb_parquet::Schem
 		struct_column.children.reserve(child_types.size());
 		for (auto &child_type : child_types) {
 			struct_column.children.emplace_back(FillParquetSchema(schemas, child_type.second, child_type.first,
-			                                                      child_field_ids, max_repeat, max_define + 1));
+			                                                      allow_geometry, child_field_ids, max_repeat,
+			                                                      max_define + 1));
 		}
 		return struct_column;
 	}
@@ -360,8 +362,8 @@ ParquetColumnSchema ColumnWriter::FillParquetSchema(vector<duckdb_parquet::Schem
 		schemas.push_back(std::move(repeated_element));
 
 		ParquetColumnSchema list_column(name, type, max_define, max_repeat, schema_idx, 0);
-		list_column.children.push_back(
-		    FillParquetSchema(schemas, child_type, "element", child_field_ids, max_repeat + 1, max_define + 2));
+		list_column.children.push_back(FillParquetSchema(schemas, child_type, "element", allow_geometry,
+		                                                 child_field_ids, max_repeat + 1, max_define + 2));
 		return list_column;
 	}
 	if (type.id() == LogicalTypeId::MAP) {
@@ -408,8 +410,8 @@ ParquetColumnSchema ColumnWriter::FillParquetSchema(vector<duckdb_parquet::Schem
 		for (idx_t i = 0; i < 2; i++) {
 			// key needs to be marked as REQUIRED
 			bool is_key = i == 0;
-			auto child_schema = FillParquetSchema(schemas, kv_types[i], kv_names[i], child_field_ids, max_repeat + 1,
-			                                      max_define + 2, !is_key);
+			auto child_schema = FillParquetSchema(schemas, kv_types[i], kv_names[i], allow_geometry, child_field_ids,
+			                                      max_repeat + 1, max_define + 2, !is_key);
 
 			map_column.children.push_back(std::move(child_schema));
 		}
@@ -427,7 +429,7 @@ ParquetColumnSchema ColumnWriter::FillParquetSchema(vector<duckdb_parquet::Schem
 		schema_element.__isset.field_id = true;
 		schema_element.field_id = field_id->field_id;
 	}
-	ParquetWriter::SetSchemaProperties(type, schema_element);
+	ParquetWriter::SetSchemaProperties(type, schema_element, allow_geometry);
 	schemas.push_back(std::move(schema_element));
 	return ParquetColumnSchema(name, type, max_define, max_repeat, schema_idx, 0);
 }

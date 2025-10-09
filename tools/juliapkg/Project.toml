@@ -1,7 +1,7 @@
 name = "DuckDB"
 uuid = "d2f5444f-75bc-4fdf-ac35-56f514c445e1"
 authors = ["Mark Raasveldt <mark@duckdblabs.com", "Hannes Mühleisen <hannes@duckdblabs.com>"]
-version = "1.3.2"
+version = "1.4.1"
 
 [deps]
 DBInterface = "a10d1c49-ce27-4219-8d33-6db1a4562965"
@@ -14,7 +14,7 @@ WeakRefStrings = "ea10d353-3f73-51f8-a26c-33c1cb351aa5"
 
 [compat]
 DBInterface = "2.5"
-DuckDB_jll = "1.3.2"
+DuckDB_jll = "1.4.1"
 FixedPointDecimals = "0.4, 0.5, 0.6"
 Tables = "1.7"
 WeakRefStrings = "1.4"
