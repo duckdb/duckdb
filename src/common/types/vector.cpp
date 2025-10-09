@@ -1934,8 +1934,9 @@ const Vector &DictionaryVector::GetCachedHashes(Vector &input) {
 	D_ASSERT(CanCacheHashes(input));
 	auto &dictionary = Child(input);
 
-	lock_guard<mutex> guard(dictionary.cached_hashes_lock);
+	lock_guard<mutex> guard1(dictionary.cached_hashes_lock);
 	auto &dictionary_hashes = dictionary.cached_hashes->Cast<VectorChildBuffer>().data;
+	lock_guard<mutex> guard2(dictionary_hashes.cached_hashes_lock);
 
 	if (!dictionary_hashes.data) {
 		// Uninitialized: hash the dictionary
