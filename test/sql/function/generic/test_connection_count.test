@@ -1,0 +1,17 @@
+# name: test/sql/function/generic/test_connection_count.test
+# description: Test the connection_count table function.
+# group: [generic]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok con1
+BEGIN
+
+statement ok con2
+BEGIN
+
+query I
+SELECT count FROM duckdb_connection_count();
+----
+3
