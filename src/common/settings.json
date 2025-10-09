@@ -471,7 +471,7 @@
         "description": "EXPERIMENTAL: Re-use row group and table metadata when checkpointing.",
         "type": "BOOLEAN",
         "default_scope": "global",
-        "default_value": "false"
+        "default_value": "true"
     },
     {
         "name": "explain_output",

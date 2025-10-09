@@ -412,9 +412,8 @@ void Binder::BindWhereStarExpression(unique_ptr<ParsedExpression> &expr) {
 	}
 }
 
-unique_ptr<BoundSelectNode> Binder::BindSelectNodeInternal(SelectNode &statement,
-                                                           unique_ptr<BoundTableRef> from_table) {
-	D_ASSERT(from_table);
+unique_ptr<BoundSelectNode> Binder::BindSelectNodeInternal(SelectNode &statement, BoundStatement from_table) {
+	D_ASSERT(from_table.plan);
 	D_ASSERT(!statement.from_table);
 	auto result_ptr = make_uniq<BoundSelectNode>();
 	auto &result = *result_ptr;
@@ -692,7 +691,7 @@ unique_ptr<BoundSelectNode> Binder::BindSelectNodeInternal(SelectNode &statement
 	return result_ptr;
 }
 
-BoundStatement Binder::BindSelectNode(SelectNode &statement, unique_ptr<BoundTableRef> from_table) {
+BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from_table) {
 	auto result = BindSelectNodeInternal(statement, std::move(from_table));
 
 	BoundStatement result_statement;

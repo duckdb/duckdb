@@ -14,7 +14,6 @@
 #include <functional>
 
 namespace duckdb {
-class BoundTableRef;
 
 class ExpressionIterator {
 public:

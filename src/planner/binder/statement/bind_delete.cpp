@@ -5,8 +5,6 @@
 #include "duckdb/planner/operator/logical_delete.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
-#include "duckdb/planner/bound_tableref.hpp"
-#include "duckdb/planner/tableref/bound_basetableref.hpp"
 #include "duckdb/planner/operator/logical_cross_product.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
@@ -15,16 +13,16 @@ namespace duckdb {
 BoundStatement Binder::Bind(DeleteStatement &stmt) {
 	// visit the table reference
 	auto bound_table = Bind(*stmt.table);
-	if (bound_table->type != TableReferenceType::BASE_TABLE) {
-		throw BinderException("Can only delete from base table!");
+	auto root = std::move(bound_table.plan);
+	if (root->type != LogicalOperatorType::LOGICAL_GET) {
+		throw BinderException("Can only delete from base table");
 	}
-	auto &table_binding = bound_table->Cast<BoundBaseTableRef>();
-	auto &table = table_binding.table;
-
-	auto root = CreatePlan(*bound_table);
 	auto &get = root->Cast<LogicalGet>();
-	D_ASSERT(root->type == LogicalOperatorType::LOGICAL_GET);
-
+	auto table_ptr = get.GetTable();
+	if (!table_ptr) {
+		throw BinderException("Can only delete from base table");
+	}
+	auto &table = *table_ptr;
 	if (!table.temporary) {
 		// delete from persistent table: not read only!
 		auto &properties = GetStatementProperties();
@@ -37,13 +35,12 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 		for (auto &using_clause : stmt.using_clauses) {
 			// bind the using clause
 			auto using_binder = Binder::CreateBinder(context, this);
-			auto bound_node = using_binder->Bind(*using_clause);
-			auto op = CreatePlan(*bound_node);
+			auto op = using_binder->Bind(*using_clause);
 			if (child_operator) {
 				// already bound a child: create a cross product to unify the two
-				child_operator = LogicalCrossProduct::Create(std::move(child_operator), std::move(op));
+				child_operator = LogicalCrossProduct::Create(std::move(child_operator), std::move(op.plan));
 			} else {
-				child_operator = std::move(op);
+				child_operator = std::move(op.plan);
 			}
 			bind_context.AddContext(std::move(using_binder->bind_context));
 		}

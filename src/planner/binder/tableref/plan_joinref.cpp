@@ -298,8 +298,8 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 		// Set the flag to ensure that children do not flatten before the root
 		is_outside_flattened = false;
 	}
-	auto left = CreatePlan(*ref.left);
-	auto right = CreatePlan(*ref.right);
+	auto left = std::move(ref.left.plan);
+	auto right = std::move(ref.right.plan);
 	is_outside_flattened = old_is_outside_flattened;
 
 	// For joins, depth of the bindings will be one higher on the right because of the lateral binder
