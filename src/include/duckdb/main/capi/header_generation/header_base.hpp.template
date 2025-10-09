@@ -743,10 +743,10 @@ typedef struct _duckdb_copy_to_finalize_info {
 typedef void (*duckdb_copy_function_to_bind_t)(duckdb_bind_info info);
 
 //! The initialization function to use when initializing a COPY ... TO statement.
-typedef void (*duckdb_copy_function_to_init_t)(duckdb_init_info info);
+typedef void (*duckdb_copy_function_to_global_init_t)(duckdb_init_info info);
 
 //! The function to sink an input chunk into during COPY ... TO execution.
-typedef void (*duckdb_copy_function_to_sink_t)(duckdb_copy_to_sink_info, duckdb_data_chunk input);
+typedef void (*duckdb_copy_function_to_sink_t)(duckdb_copy_to_sink_info info, duckdb_data_chunk input);
 
 //! The function to finalize the COPY ... TO execution.
 typedef void (*duckdb_copy_function_to_finalize_t)(duckdb_copy_to_finalize_info info);

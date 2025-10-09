@@ -500,6 +500,47 @@ typedef struct {
 	duckdb_state (*duckdb_register_config_option)(duckdb_connection connection, duckdb_config_option option);
 	duckdb_value (*duckdb_client_context_get_config_option)(duckdb_client_context context, const char *name,
 	                                                        duckdb_config_option_scope *out_scope);
+	// API to define custom copy functions
+
+	duckdb_copy_function (*duckdb_create_copy_function)();
+	void (*duckdb_copy_function_set_name)(duckdb_copy_function copy_function, const char *name);
+	duckdb_state (*duckdb_register_copy_function)(duckdb_connection connection, duckdb_copy_function copy_function);
+	void (*duckdb_destroy_copy_function)(duckdb_copy_function *copy_function);
+	void (*duckdb_copy_function_to_add_option)(duckdb_copy_function copy_function, const char *name,
+	                                           duckdb_logical_type type, const char *description);
+	void (*duckdb_copy_function_to_set_bind)(duckdb_copy_function copy_function, duckdb_copy_function_to_bind_t bind);
+	void (*duckdb_copy_function_to_bind_set_error)(duckdb_bind_info info, const char *error);
+	idx_t (*duckdb_copy_function_to_bind_get_column_count)(duckdb_bind_info info);
+	duckdb_logical_type (*duckdb_copy_function_to_bind_get_column_type)(duckdb_bind_info info, idx_t col_idx);
+	duckdb_value (*duckdb_copy_function_to_bind_get_option)(duckdb_bind_info info, const char *name);
+	void (*duckdb_copy_function_to_bind_set_bind_data)(duckdb_bind_info info, void *bind_data,
+	                                                   duckdb_delete_callback_t destructor);
+	void (*duckdb_copy_function_to_set_global_init)(duckdb_copy_function copy_function,
+	                                                duckdb_copy_function_to_global_init_t init);
+	void (*duckdb_copy_function_to_global_init_set_error)(duckdb_init_info info, const char *error);
+	void *(*duckdb_copy_function_to_global_init_get_bind_data)(duckdb_init_info info);
+	void (*duckdb_copy_function_to_global_init_set_global_state)(duckdb_init_info info, void *global_state,
+	                                                             duckdb_delete_callback_t destructor);
+	void (*duckdb_copy_function_to_set_sink)(duckdb_copy_function copy_function,
+	                                         duckdb_copy_function_to_sink_t function);
+	void (*duckdb_copy_function_to_sink_set_error)(duckdb_copy_to_sink_info info, const char *error);
+	void *(*duckdb_copy_function_to_sink_get_bind_data)(duckdb_copy_to_sink_info info);
+	void *(*duckdb_copy_function_to_sink_get_global_state)(duckdb_copy_to_sink_info info);
+	void (*duckdb_copy_function_to_set_finalize)(duckdb_copy_function copy_function,
+	                                             duckdb_copy_function_to_finalize_t finalize);
+	void (*duckdb_copy_function_to_finalize_set_error)(duckdb_copy_to_finalize_info info, const char *error);
+	void *(*duckdb_copy_function_to_finalize_get_bind_data)(duckdb_copy_to_finalize_info info);
+	void *(*duckdb_copy_function_to_finalize_get_global_state)(duckdb_copy_to_finalize_info info);
+	void (*duckdb_copy_function_from_add_option)(duckdb_copy_function copy_function, const char *name,
+	                                             duckdb_logical_type type, const char *description);
+	void (*duckdb_copy_function_from_set_bind)(duckdb_copy_function copy_function,
+	                                           duckdb_copy_function_from_bind_t bind);
+	void (*duckdb_copy_function_from_bind_set_error)(duckdb_bind_info info, const char *error);
+	duckdb_value (*duckdb_copy_function_from_bind_get_option)(duckdb_bind_info info, const char *name);
+	void (*duckdb_copy_function_from_bind_set_bind_data)(duckdb_bind_info info, void *bind_data,
+	                                                     duckdb_delete_callback_t destructor);
+	void (*duckdb_copy_function_from_set_function)(duckdb_copy_function copy_function,
+	                                               duckdb_table_function table_function);
 	// New functions for duckdb error data
 
 	duckdb_error_data (*duckdb_create_error_data)(duckdb_error_type type, const char *message);
@@ -1025,6 +1066,35 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_config_option_set_description = duckdb_config_option_set_description;
 	result.duckdb_register_config_option = duckdb_register_config_option;
 	result.duckdb_client_context_get_config_option = duckdb_client_context_get_config_option;
+	result.duckdb_create_copy_function = duckdb_create_copy_function;
+	result.duckdb_copy_function_set_name = duckdb_copy_function_set_name;
+	result.duckdb_register_copy_function = duckdb_register_copy_function;
+	result.duckdb_destroy_copy_function = duckdb_destroy_copy_function;
+	result.duckdb_copy_function_to_add_option = duckdb_copy_function_to_add_option;
+	result.duckdb_copy_function_to_set_bind = duckdb_copy_function_to_set_bind;
+	result.duckdb_copy_function_to_bind_set_error = duckdb_copy_function_to_bind_set_error;
+	result.duckdb_copy_function_to_bind_get_column_count = duckdb_copy_function_to_bind_get_column_count;
+	result.duckdb_copy_function_to_bind_get_column_type = duckdb_copy_function_to_bind_get_column_type;
+	result.duckdb_copy_function_to_bind_get_option = duckdb_copy_function_to_bind_get_option;
+	result.duckdb_copy_function_to_bind_set_bind_data = duckdb_copy_function_to_bind_set_bind_data;
+	result.duckdb_copy_function_to_set_global_init = duckdb_copy_function_to_set_global_init;
+	result.duckdb_copy_function_to_global_init_set_error = duckdb_copy_function_to_global_init_set_error;
+	result.duckdb_copy_function_to_global_init_get_bind_data = duckdb_copy_function_to_global_init_get_bind_data;
+	result.duckdb_copy_function_to_global_init_set_global_state = duckdb_copy_function_to_global_init_set_global_state;
+	result.duckdb_copy_function_to_set_sink = duckdb_copy_function_to_set_sink;
+	result.duckdb_copy_function_to_sink_set_error = duckdb_copy_function_to_sink_set_error;
+	result.duckdb_copy_function_to_sink_get_bind_data = duckdb_copy_function_to_sink_get_bind_data;
+	result.duckdb_copy_function_to_sink_get_global_state = duckdb_copy_function_to_sink_get_global_state;
+	result.duckdb_copy_function_to_set_finalize = duckdb_copy_function_to_set_finalize;
+	result.duckdb_copy_function_to_finalize_set_error = duckdb_copy_function_to_finalize_set_error;
+	result.duckdb_copy_function_to_finalize_get_bind_data = duckdb_copy_function_to_finalize_get_bind_data;
+	result.duckdb_copy_function_to_finalize_get_global_state = duckdb_copy_function_to_finalize_get_global_state;
+	result.duckdb_copy_function_from_add_option = duckdb_copy_function_from_add_option;
+	result.duckdb_copy_function_from_set_bind = duckdb_copy_function_from_set_bind;
+	result.duckdb_copy_function_from_bind_set_error = duckdb_copy_function_from_bind_set_error;
+	result.duckdb_copy_function_from_bind_get_option = duckdb_copy_function_from_bind_get_option;
+	result.duckdb_copy_function_from_bind_set_bind_data = duckdb_copy_function_from_bind_set_bind_data;
+	result.duckdb_copy_function_from_set_function = duckdb_copy_function_from_set_function;
 	result.duckdb_create_error_data = duckdb_create_error_data;
 	result.duckdb_destroy_error_data = duckdb_destroy_error_data;
 	result.duckdb_error_data_error_type = duckdb_error_data_error_type;

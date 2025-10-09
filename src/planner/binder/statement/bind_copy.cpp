@@ -115,7 +115,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 	PreserveOrderType preserve_order = PreserveOrderType::AUTOMATIC;
 	CopyFunctionReturnType return_type = CopyFunctionReturnType::CHANGED_ROWS;
 
-	CopyFunctionBindInput bind_input(*stmt.info);
+	CopyFunctionBindInput bind_input(*stmt.info, function.function_info.get());
 
 	bind_input.file_extension = function.extension;
 
