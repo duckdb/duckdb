@@ -190,15 +190,6 @@ unique_ptr<LogicalOperator> Connection::ExtractPlan(const string &query) {
 	return context->ExtractPlan(query);
 }
 
-void Connection::Append(TableDescription &description, DataChunk &chunk) {
-	if (chunk.size() == 0) {
-		return;
-	}
-	ColumnDataCollection collection(Allocator::Get(*context), chunk.GetTypes());
-	collection.Append(chunk);
-	Append(description, collection);
-}
-
 void Connection::Append(TableDescription &description, ColumnDataCollection &collection) {
 	context->Append(description, collection);
 }

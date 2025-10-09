@@ -715,8 +715,10 @@ unique_ptr<PreparedStatement> ClientContext::PrepareInternal(ClientContextLock &
 
 unique_ptr<PreparedStatement> ClientContext::Prepare(unique_ptr<SQLStatement> statement) {
 	auto lock = LockContext();
-	// prepare the query
+	// Store the query in case of an error.
 	auto query = statement->query;
+
+	// Try to prepare.
 	try {
 		InitialCleanup(*lock);
 		return PrepareInternal(*lock, std::move(statement));
@@ -1211,86 +1213,21 @@ unique_ptr<TableDescription> ClientContext::TableInfo(const string &schema_name,
 	return TableInfo(INVALID_CATALOG, schema_name, table_name);
 }
 
-//CommonTableExpressionMap &GetCTEMap(SQLStatement &statement) {
-//	switch (statement.type) {
-//	case StatementType::INSERT_STATEMENT:
-//		return statement.Cast<InsertStatement>().cte_map;
-//	case StatementType::DELETE_STATEMENT:
-//		return statement.Cast<DeleteStatement>().cte_map;
-//	case StatementType::UPDATE_STATEMENT:
-//		return statement.Cast<UpdateStatement>().cte_map;
-//	case StatementType::MERGE_INTO_STATEMENT:
-//		return statement.Cast<MergeIntoStatement>().cte_map;
-//	default:
-//		throw InvalidInputException(
-//		    "Unsupported statement type for appender: expected INSERT, DELETE, UPDATE or MERGE INTO");
-//	}
-//}
-
-void ClientContext::Append(ColumnDataCollection &collection, const string &query, const vector<string> &column_names,
-                           const string &collection_name) {
-	// create the CTE for the appender
-	string alias = collection_name.empty() ? "appended_data" : collection_name;
-	auto column_data_ref = make_uniq<ColumnDataRef>(collection);
-	column_data_ref->alias = alias;
-	column_data_ref->expected_names = column_names;
-	auto cte = make_uniq<SelectNode>();
-	cte->select_list.push_back(make_uniq<StarExpression>());
-	cte->from_table = std::move(column_data_ref);
-	auto cte_select = make_uniq<SelectStatement>();
-	cte_select->node = std::move(cte);
-
-	// parse the query
-	Parser parser;
-	parser.ParseQuery(query);
-
-	// must be a single statement with CTEs
-	if (parser.statements.size() != 1) {
-		throw InvalidInputException("Expected exactly 1 query for appending data");
-	}
-
-	// add the appender data as a CTE to the cte map
-	auto &cte_map = GetCTEMap(*parser.statements[0]);
-	auto cte_info = make_uniq<CommonTableExpressionInfo>();
-	cte_info->query = std::move(cte_select);
-	cte_info->materialized = CTEMaterialize::CTE_MATERIALIZE_NEVER;
-
-	cte_map.map.insert(alias, std::move(cte_info));
-
-	// now we have the query - run it in a transaction
-	auto result = Query(std::move(parser.statements[0]), false);
+void ClientContext::Append(unique_ptr<SQLStatement> stmt) {
+	auto result = Query(std::move(stmt), false);
 	if (result->HasError()) {
 		result->GetErrorObject().Throw("Failed to append: ");
 	}
 }
 
-void ClientContext::Append(TableDescription &description, ColumnDataCollection &collection,
-                           optional_ptr<const vector<LogicalIndex>> column_ids) {
+void ClientContext::Append(TableDescription &description, ColumnDataCollection &collection) {
 	string table_name = "__duckdb_internal_appended_data";
-	string query = "INSERT INTO ";
-	if (!description.database.empty()) {
-		query += StringUtil::Format("%s.", SQLIdentifier(description.database));
-	}
-	if (!description.schema.empty()) {
-		query += StringUtil::Format("%s.", SQLIdentifier(description.schema));
-	}
-	query += StringUtil::Format("%s", SQLIdentifier(description.table));
-	if (column_ids && !column_ids->empty()) {
-		query += "(";
-		auto &ids = *column_ids;
-		for (idx_t i = 0; i < ids.size(); i++) {
-			if (i > 0) {
-				query += ", ";
-			}
-			auto &col_name = description.columns[ids[i].index].Name();
-			query += StringUtil::Format("%s", SQLIdentifier(col_name));
-		}
-		query += ")";
-	}
-	query += " FROM ";
-	query += table_name;
-	vector<string> column_names;
-	Append(collection, query, column_names, table_name);
+	vector<string> expected_names;
+	auto query = Appender::ConstructQuery(description, table_name, expected_names);
+
+	auto table_ref = BaseAppender::GetColumnDataTableRef(collection, table_name, expected_names);
+	auto stmt = BaseAppender::ParseStatement(std::move(table_ref), query, table_name);
+	Append(std::move(stmt));
 }
 
 void ClientContext::InternalTryBindRelation(Relation &relation, vector<ColumnDefinition> &result_columns) {

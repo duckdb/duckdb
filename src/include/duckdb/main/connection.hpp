@@ -129,9 +129,7 @@ public:
 	//! Extract the logical plan that corresponds to a query
 	DUCKDB_API unique_ptr<LogicalOperator> ExtractPlan(const string &query);
 
-	//! Appends a DataChunk to the specified table
-	DUCKDB_API void Append(TableDescription &description, DataChunk &chunk);
-	//! Appends a ColumnDataCollection to the specified table
+	//! Appends a ColumnDataCollection to the described table.
 	DUCKDB_API void Append(TableDescription &description, ColumnDataCollection &collection);
 
 	//! Returns a relation that produces a table from this connection

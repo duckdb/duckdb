@@ -22,6 +22,8 @@
 #include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/parser/statement/merge_into_statement.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/expression/parameter_expression.hpp"
+#include "duckdb/parser/tableref/expressionlistref.hpp"
 
 namespace duckdb {
 
@@ -426,6 +428,64 @@ void BaseAppender::ClearColumns() {
 	throw NotImplementedException("ClearColumns is only supported when directly appending to a table");
 }
 
+unique_ptr<TableRef> BaseAppender::GetColumnDataTableRef(ColumnDataCollection &collection, const string &table_name,
+                                                         const vector<string> &expected_names) {
+	auto column_data_ref = make_uniq<ColumnDataRef>(collection);
+	string alias = table_name.empty() ? "appended_data" : table_name;
+	column_data_ref->alias = alias;
+	column_data_ref->expected_names = expected_names;
+	return std::move(column_data_ref);
+}
+
+CommonTableExpressionMap &GetCTEMap(SQLStatement &statement) {
+	switch (statement.type) {
+	case StatementType::INSERT_STATEMENT:
+		return statement.Cast<InsertStatement>().cte_map;
+	case StatementType::DELETE_STATEMENT:
+		return statement.Cast<DeleteStatement>().cte_map;
+	case StatementType::UPDATE_STATEMENT:
+		return statement.Cast<UpdateStatement>().cte_map;
+	case StatementType::MERGE_INTO_STATEMENT:
+		return statement.Cast<MergeIntoStatement>().cte_map;
+	default:
+		throw InvalidInputException(
+		    "Unsupported statement type for appender: expected INSERT, DELETE, UPDATE or MERGE INTO");
+	}
+}
+
+unique_ptr<SQLStatement> BaseAppender::ParseStatement(unique_ptr<TableRef> table_ref, const string &query,
+                                                      const string &table_name) {
+	// Parse the query.
+	Parser parser;
+	parser.ParseQuery(query);
+
+	// Must be a single statement.
+	if (parser.statements.size() != 1) {
+		throw InvalidInputException("Expected exactly one query for appending data.");
+	}
+
+	// Create the CTE for the appender.
+	auto cte = make_uniq<SelectNode>();
+	cte->select_list.push_back(make_uniq<StarExpression>());
+	cte->from_table = std::move(table_ref);
+
+	// Create the SELECT CTE.
+	auto cte_select = make_uniq<SelectStatement>();
+	cte_select->node = std::move(cte);
+
+	// Create the CTE info.
+	auto cte_info = make_uniq<CommonTableExpressionInfo>();
+	cte_info->query = std::move(cte_select);
+	cte_info->materialized = CTEMaterialize::CTE_MATERIALIZE_NEVER;
+
+	// Add the appender data as a CTE to the CTE map of the statement.
+	string alias = table_name.empty() ? "appended_data" : table_name;
+	auto &cte_map = GetCTEMap(*parser.statements[0]);
+	cte_map.map.insert(alias, std::move(cte_info));
+
+	return std::move(parser.statements[0]);
+}
+
 //===--------------------------------------------------------------------===//
 // Table Appender
 //===--------------------------------------------------------------------===//
@@ -499,12 +559,53 @@ Appender::~Appender() {
 	Destructor();
 }
 
+vector<string> Appender::GetExpectedNames() {
+	vector<string> expected_names;
+	for (idx_t i = 0; i < column_ids.size(); i++) {
+		auto &col_name = description->columns[column_ids[i].index].Name();
+		expected_names.push_back(col_name);
+	}
+	return expected_names;
+}
+
+string Appender::ConstructQuery(TableDescription &description_p, const string &table_name,
+                                const vector<string> &expected_names) {
+	string query = "INSERT INTO ";
+	if (!description_p.database.empty()) {
+		query += StringUtil::Format("%s.", SQLIdentifier(description_p.database));
+	}
+	if (!description_p.schema.empty()) {
+		query += StringUtil::Format("%s.", SQLIdentifier(description_p.schema));
+	}
+	query += StringUtil::Format("%s", SQLIdentifier(description_p.table));
+	if (!expected_names.empty()) {
+		query += "(";
+		for (idx_t i = 0; i < expected_names.size(); i++) {
+			if (i > 0) {
+				query += ", ";
+			}
+			query += StringUtil::Format("%s", SQLIdentifier(expected_names[i]));
+		}
+		query += ")";
+	}
+	query += " FROM ";
+	query += table_name;
+	return query;
+}
+
 void Appender::FlushInternal(ColumnDataCollection &collection) {
 	auto context_ref = context.lock();
 	if (!context_ref) {
 		throw InvalidInputException("Appender: Attempting to flush data to a closed connection");
 	}
-	context_ref->Append(*description, collection, &column_ids);
+
+	string table_name = "__duckdb_internal_appended_data";
+	auto expected_names = GetExpectedNames();
+	auto query = ConstructQuery(*description, table_name, expected_names);
+
+	auto table_ref = GetColumnDataTableRef(collection, table_name, expected_names);
+	auto stmt = ParseStatement(std::move(table_ref), query, table_name);
+	context_ref->Append(std::move(stmt));
 }
 
 void Appender::AppendDefault() {
@@ -588,12 +689,32 @@ QueryAppender::QueryAppender(Connection &con, string query_p, vector<LogicalType
     : BaseAppender(Allocator::DefaultAllocator(), AppenderType::LOGICAL), context(con.context),
       query(std::move(query_p)), names(std::move(names_p)), table_name(std::move(table_name_p)) {
 
-	if (types.empty()) {
-		// Try to infer the types by binding the query.
-
+	types = std::move(types_p);
+	bool infer_types = true;
+	for (const auto &t : types) {
+		if (t.id() != LogicalTypeId::ANY) {
+			infer_types = false;
+			break;
+		}
 	}
 
-	types = std::move(types_p);
+	if (infer_types) {
+		auto context_ref = context.lock();
+		if (!context_ref) {
+			throw InvalidInputException("Attempting to create query appender on a closed connection");
+		}
+
+		// We need to parse and bind the query.
+		auto table_ref = GetUnknownParameterTableRef();
+		auto stmt = ParseStatement(std::move(table_ref), query, table_name);
+		auto prepared_stmt = context_ref->Prepare(std::move(stmt));
+
+		if (prepared_stmt->HasError()) {
+			throw InvalidInputException(prepared_stmt->GetError());
+		}
+		types = prepared_stmt->GetTypes();
+	}
+
 	InitializeChunk();
 	collection = make_uniq<ColumnDataCollection>(allocator, GetActiveTypes());
 }
@@ -601,63 +722,30 @@ QueryAppender::QueryAppender(Connection &con, string query_p, vector<LogicalType
 QueryAppender::~QueryAppender() {
 }
 
-CommonTableExpressionMap &GetCTEMap(SQLStatement &statement) {
-	switch (statement.type) {
-	case StatementType::INSERT_STATEMENT:
-		return statement.Cast<InsertStatement>().cte_map;
-	case StatementType::DELETE_STATEMENT:
-		return statement.Cast<DeleteStatement>().cte_map;
-	case StatementType::UPDATE_STATEMENT:
-		return statement.Cast<UpdateStatement>().cte_map;
-	case StatementType::MERGE_INTO_STATEMENT:
-		return statement.Cast<MergeIntoStatement>().cte_map;
-	default:
-		throw InvalidInputException(
-		    "Unsupported statement type for appender: expected INSERT, DELETE, UPDATE or MERGE INTO");
-	}
-}
+unique_ptr<TableRef> QueryAppender::GetUnknownParameterTableRef() {
+	auto expr_list_ref = make_uniq<ExpressionListRef>();
 
-unique_ptr<SQLStatement> QueryAppender::ParseStatement() {
-	// Parse the query.
-	Parser parser;
-	parser.ParseQuery(query);
-
-	// Must be a single statement.
-	if (parser.statements.size() != 1) {
-		throw InvalidInputException("Expected exactly one query for appending data.");
+	// Create the parameters as a VALUES list.
+	vector<unique_ptr<ParsedExpression>> parameters;
+	for (idx_t i = 0; i < types.size(); i++) {
+		auto param_expr = make_uniq<ParameterExpression>();
+		param_expr->identifier = StringUtil::Format("%d", i);
+		parameters.push_back(std::move(param_expr));
 	}
 
-
-	// Create the CTE for the appender.
-	string alias = table_name.empty() ? "appended_data" : table_name;
-
-	//	auto column_data_ref = make_uniq<ColumnDataRef>(*collection); // TODO: don't use collection
-	//	column_data_ref->alias = alias;
-	//	column_data_ref->expected_names = names;
-
-	auto cte = make_uniq<SelectNode>();
-	cte->select_list.push_back(make_uniq<StarExpression>());
-	//	cte->from_table = std::move(column_data_ref);
-
-	auto cte_select = make_uniq<SelectStatement>();
-	cte_select->node = std::move(cte);
-
-	// Add the appender data as a CTE to the CTE map.
-	auto &cte_map = GetCTEMap(*parser.statements[0]);
-	auto cte_info = make_uniq<CommonTableExpressionInfo>();
-	cte_info->query = std::move(cte_select);
-	cte_info->materialized = CTEMaterialize::CTE_MATERIALIZE_NEVER;
-	cte_map.map.insert(alias, std::move(cte_info));
-
-	return std::move(parser.statements[0]);
+	expr_list_ref->values.push_back(std::move(parameters));
+	expr_list_ref->alias = "valueslist";
+	return std::move(expr_list_ref);
 }
 
 void QueryAppender::FlushInternal(ColumnDataCollection &collection) {
 	auto context_ref = context.lock();
 	if (!context_ref) {
-		throw InvalidInputException("Appender: Attempting to flush data to a closed connection");
+		throw InvalidInputException("Attempting to flush query appender data on a closed connection");
 	}
-	context_ref->Append(collection, query, names, table_name);
+	auto table_ref = GetColumnDataTableRef(collection, table_name, names);
+	auto parsed_statement = ParseStatement(std::move(table_ref), query, table_name);
+	context_ref->Append(std::move(parsed_statement));
 }
 
 //===--------------------------------------------------------------------===//

@@ -42,7 +42,6 @@ public:
 	CommonTableExpressionMap Copy() const;
 
 	void Serialize(Serializer &serializer) const;
-	// static void Deserialize(Deserializer &deserializer, CommonTableExpressionMap &ret);
 	static CommonTableExpressionMap Deserialize(Deserializer &deserializer);
 };
 

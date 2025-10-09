@@ -14,11 +14,12 @@
 
 namespace duckdb {
 
-class ColumnDataCollection;
 class ClientContext;
-class DuckDB;
-class TableCatalogEntry;
+class ColumnDataCollection;
 class Connection;
+class DuckDB;
+class SQLStatement;
+class TableCatalogEntry;
 
 enum class AppenderType : uint8_t {
 	LOGICAL, // Cast input -> LogicalType
@@ -30,6 +31,14 @@ class BaseAppender {
 public:
 	//! The amount of tuples that are gathered in the column data collection before flushing.
 	static constexpr const idx_t DEFAULT_FLUSH_COUNT = STANDARD_VECTOR_SIZE * 100ULL;
+
+public:
+	//! Returns a table reference to the appended data.
+	static unique_ptr<TableRef> GetColumnDataTableRef(ColumnDataCollection &collection, const string &table_name,
+	                                                  const vector<string> &expected_names);
+	//! Parses the statement to append data.
+	static unique_ptr<SQLStatement> ParseStatement(unique_ptr<TableRef> table_ref, const string &query,
+	                                               const string &table_name);
 
 protected:
 	//! The allocator for the column data collection.
@@ -139,6 +148,11 @@ public:
 	void AppendDefault(DataChunk &chunk, idx_t col, idx_t row) override;
 	void AddColumn(const string &name) override;
 	void ClearColumns() override;
+	//! Get the expected names based on the active columns.
+	vector<string> GetExpectedNames();
+	//! Construct a query that appends data from, typically, a column data collection.
+	static string ConstructQuery(TableDescription &description_p, const string &table_name,
+	                             const vector<string> &expected_names);
 
 private:
 	//! A shared pointer to the context of this appender.
@@ -164,16 +178,16 @@ public:
 	DUCKDB_API ~QueryAppender() override;
 
 public:
-	unique_ptr<SQLStatement> ParseStatement();
+	unique_ptr<TableRef> GetUnknownParameterTableRef();
 
 private:
 	//! A shared pointer to the context of this appender.
 	weak_ptr<ClientContext> context;
-	//! The query to run
+	//! The query to run.
 	string query;
-	//! The column names of the to-be-appended data, or "col1, col2, ..." if empty
+	//! The column names of the to-be-appended data, or "col1, col2, ...", if empty.
 	vector<string> names;
-	//! The table name that we can reference in the query, or "appended_data" if empty
+	//! The table name that we can reference in the query, or "appended_data", if empty.
 	string table_name;
 
 protected:
