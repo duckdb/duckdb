@@ -68,28 +68,9 @@ BoundStatement Binder::BindWithCTE(T &statement) {
 		return Bind(statement);
 	}
 
-	// Extract materialized CTEs from cte_map
-	vector<unique_ptr<CTENode>> materialized_ctes;
-	for (auto &cte : cte_map.map) {
-		auto &cte_entry = cte.second;
-		auto mat_cte = make_uniq<CTENode>();
-		mat_cte->ctename = cte.first;
-		mat_cte->query = std::move(cte_entry->query->node);
-		mat_cte->aliases = cte_entry->aliases;
-		mat_cte->materialized = cte_entry->materialized;
-		materialized_ctes.push_back(std::move(mat_cte));
-	}
-
-	unique_ptr<QueryNode> cte_root = make_uniq<StatementNode>(statement);
-	while (!materialized_ctes.empty()) {
-		unique_ptr<CTENode> node_result;
-		node_result = std::move(materialized_ctes.back());
-		node_result->child = std::move(cte_root);
-		cte_root = std::move(node_result);
-		materialized_ctes.pop_back();
-	}
-
-	return Bind(*cte_root);
+	auto stmt_node = make_uniq<StatementNode>(statement);
+	stmt_node->cte_map = cte_map.Copy();
+	return Bind(*stmt_node);
 }
 
 BoundStatement Binder::Bind(SQLStatement &statement) {
@@ -150,24 +131,6 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 		throw NotImplementedException("Unimplemented statement type \"%s\" for Bind",
 		                              StatementTypeToString(statement.type));
 	} // LCOV_EXCL_STOP
-}
-
-BoundStatement Binder::BindNode(QueryNode &node) {
-	// now we bind the node
-	switch (node.type) {
-	case QueryNodeType::SELECT_NODE:
-		return BindNode(node.Cast<SelectNode>());
-	case QueryNodeType::RECURSIVE_CTE_NODE:
-		return BindNode(node.Cast<RecursiveCTENode>());
-	case QueryNodeType::CTE_NODE:
-		return BindNode(node.Cast<CTENode>());
-	case QueryNodeType::SET_OPERATION_NODE:
-		return BindNode(node.Cast<SetOperationNode>());
-	case QueryNodeType::STATEMENT_NODE:
-		return BindNode(node.Cast<StatementNode>());
-	default:
-		throw InternalException("Unsupported query node type");
-	}
 }
 
 BoundStatement Binder::Bind(QueryNode &node) {

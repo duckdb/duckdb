@@ -63,7 +63,6 @@ BoundStatement QueryRelation::Bind(Binder &binder) {
 	if (first_bind) {
 		auto &query_node = *select_stmt->node;
 		auto &cte_map = query_node.cte_map;
-		vector<unique_ptr<CTENode>> materialized_ctes;
 		for (auto &kv : replacements) {
 			auto &name = kv.first;
 			auto &tableref = kv.second;
@@ -84,28 +83,7 @@ BoundStatement QueryRelation::Bind(Binder &binder) {
 			cte_info->query = std::move(select);
 
 			cte_map.map[name] = std::move(cte_info);
-
-			// We can not rely on CTE inlining anymore, so we need to add a materialized CTE node
-			// to the query node to ensure that the CTE exists
-			auto &cte_entry = cte_map.map[name];
-			auto mat_cte = make_uniq<CTENode>();
-			mat_cte->ctename = name;
-			mat_cte->query = cte_entry->query->node->Copy();
-			mat_cte->aliases = cte_entry->aliases;
-			mat_cte->materialized = cte_entry->materialized;
-			materialized_ctes.push_back(std::move(mat_cte));
 		}
-
-		auto root = std::move(select_stmt->node);
-		while (!materialized_ctes.empty()) {
-			unique_ptr<CTENode> node_result;
-			node_result = std::move(materialized_ctes.back());
-			node_result->cte_map = root->cte_map.Copy();
-			node_result->child = std::move(root);
-			root = std::move(node_result);
-			materialized_ctes.pop_back();
-		}
-		select_stmt->node = std::move(root);
 	}
 	replacements.clear();
 	binder.SetBindingMode(saved_binding_mode);
