@@ -6,6 +6,7 @@ add_library_unity(
   transform_attach.cpp
   transform_common.cpp
   transform_create_table.cpp
+  transform_detach.cpp
   transform_expression.cpp
   transform_load.cpp
   transform_set.cpp

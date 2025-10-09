@@ -200,6 +200,10 @@ private:
 	static vector<string> TransformDottedIdentifier(PEGTransformer &transformer,
 															   optional_ptr<ParseResult> parse_result);
 
+	// detach.gram
+	static unique_ptr<SQLStatement> TransformDetachStatement(PEGTransformer &transformer,
+																		 optional_ptr<ParseResult> parse_result);
+
 	// load.gram
 	static unique_ptr<SQLStatement> TransformLoadStatement(PEGTransformer &transformer,
 	                                                       optional_ptr<ParseResult> parse_result);

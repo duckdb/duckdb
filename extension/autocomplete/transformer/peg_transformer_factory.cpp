@@ -79,6 +79,9 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	REGISTER_TRANSFORM(TransformIdentifier);
 	REGISTER_TRANSFORM(TransformDottedIdentifier);
 
+	// detach.gram
+	REGISTER_TRANSFORM(TransformDetachStatement);
+
 	// expression.gram
 	REGISTER_TRANSFORM(TransformBaseExpression);
 	REGISTER_TRANSFORM(TransformColumnReference);
