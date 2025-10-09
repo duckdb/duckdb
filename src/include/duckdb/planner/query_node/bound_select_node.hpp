@@ -35,12 +35,6 @@ struct BoundUnnestNode {
 //! Bound equivalent of SelectNode
 class BoundSelectNode : public BoundQueryNode {
 public:
-	static constexpr const QueryNodeType TYPE = QueryNodeType::SELECT_NODE;
-
-public:
-	BoundSelectNode() : BoundQueryNode(QueryNodeType::SELECT_NODE) {
-	}
-
 	//! Bind information
 	SelectBindState bind_state;
 	//! The projection list
