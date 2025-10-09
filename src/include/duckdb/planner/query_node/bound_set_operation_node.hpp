@@ -18,13 +18,6 @@ struct BoundSetOpChild;
 //! Bound equivalent of SetOperationNode
 class BoundSetOperationNode : public BoundQueryNode {
 public:
-	static constexpr const QueryNodeType TYPE = QueryNodeType::SET_OPERATION_NODE;
-
-public:
-	BoundSetOperationNode() : BoundQueryNode(QueryNodeType::SET_OPERATION_NODE) {
-	}
-	~BoundSetOperationNode() override;
-
 	//! The type of set operation
 	SetOperationType setop_type = SetOperationType::NONE;
 	//! whether the ALL modifier was used or not
