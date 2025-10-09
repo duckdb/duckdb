@@ -395,23 +395,21 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 		}
 		break;
 	case LogicalTypeId::VARCHAR: {
-		auto string_stats = StringStats::CreateEmpty(type);
+		auto string_stats = StringStats::CreateUnknown(type);
 		if (parquet_stats.__isset.min_value) {
 			StringColumnReader::VerifyString(parquet_stats.min_value.c_str(), parquet_stats.min_value.size(), true);
-			StringStats::Update(string_stats, parquet_stats.min_value);
+			StringStats::SetMin(string_stats, parquet_stats.min_value);
 		} else if (parquet_stats.__isset.min) {
 			StringColumnReader::VerifyString(parquet_stats.min.c_str(), parquet_stats.min.size(), true);
-			StringStats::Update(string_stats, parquet_stats.min);
+			StringStats::SetMin(string_stats, parquet_stats.min);
 		}
 		if (parquet_stats.__isset.max_value) {
 			StringColumnReader::VerifyString(parquet_stats.max_value.c_str(), parquet_stats.max_value.size(), true);
-			StringStats::Update(string_stats, parquet_stats.max_value);
+			StringStats::SetMax(string_stats, parquet_stats.max_value);
 		} else if (parquet_stats.__isset.max) {
 			StringColumnReader::VerifyString(parquet_stats.max.c_str(), parquet_stats.max.size(), true);
-			StringStats::Update(string_stats, parquet_stats.max);
+			StringStats::SetMax(string_stats, parquet_stats.max);
 		}
-		StringStats::SetContainsUnicode(string_stats);
-		StringStats::ResetMaxStringLength(string_stats);
 		row_group_stats = string_stats.ToUnique();
 		break;
 	}

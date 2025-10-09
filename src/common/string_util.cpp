@@ -706,6 +706,21 @@ string StringUtil::ToComplexJSONMap(const ComplexJSON &complex_json) {
 	return ComplexJSON::GetValueRecursive(complex_json);
 }
 
+string StringUtil::ValidateJSON(const char *data, const idx_t &len) {
+	// Same flags as in JSON extension
+	static constexpr auto READ_FLAG =
+	    YYJSON_READ_ALLOW_INF_AND_NAN | YYJSON_READ_ALLOW_TRAILING_COMMAS | YYJSON_READ_BIGNUM_AS_RAW;
+	yyjson_read_err error;
+	yyjson_doc *doc = yyjson_read_opts((char *)data, len, READ_FLAG, nullptr, &error); // NOLINT: for yyjson
+	if (error.code != YYJSON_READ_SUCCESS) {
+		return StringUtil::Format("Malformed JSON at byte %lld of input: %s. Input: \"%s\"", error.pos, error.msg,
+		                          string(data, len));
+	}
+
+	yyjson_doc_free(doc);
+	return string();
+}
+
 string StringUtil::ExceptionToJSONMap(ExceptionType type, const string &message,
                                       const unordered_map<string, string> &map) {
 	D_ASSERT(map.find("exception_type") == map.end());

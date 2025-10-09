@@ -26,11 +26,10 @@ class SubqueryRef;
 class LogicalGet;
 class TableCatalogEntry;
 class TableFunctionCatalogEntry;
-class BoundTableFunction;
 class StandardEntry;
 struct ColumnBinding;
 
-enum class BindingType { BASE, TABLE, DUMMY, CATALOG_ENTRY };
+enum class BindingType { BASE, TABLE, DUMMY, CATALOG_ENTRY, CTE };
 
 //! A Binding represents a binding to a table, table-producing function or subquery with a specified table index.
 struct Binding {
@@ -147,6 +146,16 @@ public:
 
 	//! Returns a copy of the col_ref parameter as a parsed expression
 	unique_ptr<ParsedExpression> ParamToArg(ColumnRefExpression &col_ref);
+};
+
+struct CTEBinding : public Binding {
+public:
+	static constexpr const BindingType TYPE = BindingType::CTE;
+
+public:
+	CTEBinding(BindingAlias alias, vector<LogicalType> types, vector<string> names, idx_t index);
+
+	idx_t reference_count;
 };
 
 } // namespace duckdb

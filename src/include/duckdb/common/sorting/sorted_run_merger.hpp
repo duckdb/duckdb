@@ -9,10 +9,10 @@
 #pragma once
 
 #include "duckdb/execution/physical_operator_states.hpp"
-#include "duckdb/common/sorting/sort_projection_column.hpp"
 
 namespace duckdb {
 
+class Sort;
 class TupleDataLayout;
 struct BoundOrderByNode;
 struct ProgressData;
@@ -24,9 +24,7 @@ class SortedRunMerger {
 	friend class SortedRunMergerGlobalState;
 
 public:
-	SortedRunMerger(const Expression &decode_sort_key, shared_ptr<TupleDataLayout> key_layout,
-	                vector<unique_ptr<SortedRun>> &&sorted_runs,
-	                const vector<SortProjectionColumn> &output_projection_columns, idx_t partition_size, bool external,
+	SortedRunMerger(const Sort &sort, vector<unique_ptr<SortedRun>> &&sorted_runs, idx_t partition_size, bool external,
 	                bool is_index_sort);
 
 public:
@@ -44,14 +42,12 @@ public:
 	//===--------------------------------------------------------------------===//
 	// Non-Standard Interface
 	//===--------------------------------------------------------------------===//
-	SourceResultType MaterializeMerge(ExecutionContext &context, OperatorSourceInput &input) const;
-	unique_ptr<SortedRun> GetMaterialized(GlobalSourceState &global_state);
+	SourceResultType MaterializeSortedRun(ExecutionContext &context, OperatorSourceInput &input) const;
+	unique_ptr<SortedRun> GetSortedRun(GlobalSourceState &global_state);
 
 public:
-	const Expression &decode_sort_key;
-	shared_ptr<TupleDataLayout> key_layout;
+	const Sort &sort;
 	vector<unique_ptr<SortedRun>> sorted_runs;
-	const vector<SortProjectionColumn> &output_projection_columns;
 	const idx_t total_count;
 
 	const idx_t partition_size;

@@ -13,7 +13,7 @@
 
 namespace duckdb {
 
-CleanupState::CleanupState(transaction_t lowest_active_transaction)
+CleanupState::CleanupState(const QueryContext &context, transaction_t lowest_active_transaction)
     : lowest_active_transaction(lowest_active_transaction), current_table(nullptr), count(0) {
 }
 
@@ -97,7 +97,7 @@ void CleanupState::Flush() {
 
 	// delete the tuples from all the indexes
 	try {
-		current_table->RemoveFromIndexes(row_identifiers, count);
+		current_table->RemoveFromIndexes(context, row_identifiers, count);
 	} catch (...) { // NOLINT: ignore errors here
 	}
 

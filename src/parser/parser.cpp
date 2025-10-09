@@ -165,33 +165,36 @@ end:
 	return ReplaceUnicodeSpaces(query_str, new_query, unicode_spaces);
 }
 
-vector<string> SplitQueryStringIntoStatements(const string &query) {
-	// Break sql string down into sql statements using the tokenizer
-	vector<string> query_statements;
-	auto tokens = Parser::Tokenize(query);
-	idx_t next_statement_start = 0;
-	for (idx_t i = 1; i < tokens.size(); ++i) {
-		auto &t_prev = tokens[i - 1];
-		auto &t = tokens[i];
-		if (t_prev.type == SimplifiedTokenType::SIMPLIFIED_TOKEN_OPERATOR) {
-			// LCOV_EXCL_START
-			for (idx_t c = t_prev.start; c <= t.start; ++c) {
-				if (query.c_str()[c] == ';') {
-					query_statements.emplace_back(query.substr(next_statement_start, t.start - next_statement_start));
-					next_statement_start = tokens[i].start;
-				}
+vector<string> SplitQueries(const string &input_query) {
+	vector<string> queries;
+	auto tokenized_input = Parser::Tokenize(input_query);
+	size_t last_split = 0;
+
+	for (const auto &token : tokenized_input) {
+		if (token.type == SimplifiedTokenType::SIMPLIFIED_TOKEN_OPERATOR && input_query[token.start] == ';') {
+			string segment = input_query.substr(last_split, token.start - last_split);
+			StringUtil::Trim(segment);
+			if (!segment.empty()) {
+				segment.append(";");
+				queries.push_back(std::move(segment));
 			}
-			// LCOV_EXCL_STOP
+			last_split = token.start + 1;
 		}
 	}
-	query_statements.emplace_back(query.substr(next_statement_start, query.size() - next_statement_start));
-	return query_statements;
+	string final_segment = input_query.substr(last_split);
+	StringUtil::Trim(final_segment);
+	if (!final_segment.empty()) {
+		final_segment.append(";");
+		queries.push_back(std::move(final_segment));
+	}
+	return queries;
 }
 
 void Parser::ParseQuery(const string &query) {
 	Transformer transformer(options);
 	string parser_error;
 	optional_idx parser_error_location;
+	string parser_override_option = StringUtil::Lower(options.parser_override_setting);
 	{
 		// check if there are any unicode spaces in the string
 		string new_query;
@@ -207,12 +210,24 @@ void Parser::ParseQuery(const string &query) {
 				if (!ext.parser_override) {
 					continue;
 				}
+				if (StringUtil::CIEquals(parser_override_option, "default")) {
+					continue;
+				}
 				auto result = ext.parser_override(ext.parser_info.get(), query);
 				if (result.type == ParserExtensionResultType::PARSE_SUCCESSFUL) {
 					statements = std::move(result.statements);
 					return;
-				} else if (result.type == ParserExtensionResultType::DISPLAY_EXTENSION_ERROR) {
-					throw ParserException(result.error);
+				}
+				if (StringUtil::CIEquals(parser_override_option, "strict")) {
+					if (result.type == ParserExtensionResultType::DISPLAY_ORIGINAL_ERROR) {
+						throw ParserException(
+						    "Parser override failed to return a valid statement. Consider restarting the database and "
+						    "using the setting \"set allow_parser_override_extension=fallback\" to fallback to the "
+						    "default parser.");
+					}
+					if (result.type == ParserExtensionResultType::DISPLAY_EXTENSION_ERROR) {
+						throw ParserException(result.error);
+					}
 				}
 			}
 		}
@@ -250,9 +265,9 @@ void Parser::ParseQuery(const string &query) {
 			throw ParserException::SyntaxError(query, parser_error, parser_error_location);
 		} else {
 			// split sql string into statements and re-parse using extension
-			auto query_statements = SplitQueryStringIntoStatements(query);
+			auto queries = SplitQueries(query);
 			idx_t stmt_loc = 0;
-			for (auto const &query_statement : query_statements) {
+			for (auto const &query_statement : queries) {
 				ErrorData another_parser_error;
 				// Creating a new scope to allow extensions to use PostgresParser, which is not reentrant
 				{

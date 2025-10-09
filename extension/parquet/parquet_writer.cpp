@@ -314,9 +314,9 @@ struct ColumnStatsUnifier {
 	bool can_have_nan = false;
 	bool has_nan = false;
 
-	unique_ptr<GeometryStats> geo_stats;
+	unique_ptr<GeometryStatsData> geo_stats;
 
-	virtual void UnifyGeoStats(const GeometryStats &other) {
+	virtual void UnifyGeoStats(const GeometryStatsData &other) {
 	}
 
 	virtual void UnifyMinMax(const string &new_min, const string &new_max) = 0;
@@ -665,14 +665,13 @@ struct BlobStatsUnifier : public BaseStringStatsUnifier {
 
 struct GeoStatsUnifier : public ColumnStatsUnifier {
 
-	void UnifyGeoStats(const GeometryStats &other) override {
+	void UnifyGeoStats(const GeometryStatsData &other) override {
 		if (geo_stats) {
-			geo_stats->bbox.Combine(other.bbox);
-			geo_stats->types.Combine(other.types);
+			geo_stats->Merge(other);
 		} else {
 			// Make copy
-			geo_stats = make_uniq<GeometryStats>();
-			geo_stats->bbox = other.bbox;
+			geo_stats = make_uniq<GeometryStatsData>();
+			geo_stats->extent = other.extent;
 			geo_stats->types = other.types;
 		}
 	}
@@ -686,17 +685,17 @@ struct GeoStatsUnifier : public ColumnStatsUnifier {
 			return string();
 		}
 
-		const auto &bbox = geo_stats->bbox;
+		const auto &bbox = geo_stats->extent;
 		const auto &types = geo_stats->types;
 
-		const auto bbox_value = Value::STRUCT({{"xmin", bbox.xmin},
-		                                       {"xmax", bbox.xmax},
-		                                       {"ymin", bbox.ymin},
-		                                       {"ymax", bbox.ymax},
-		                                       {"zmin", bbox.zmin},
-		                                       {"zmax", bbox.zmax},
-		                                       {"mmin", bbox.mmin},
-		                                       {"mmax", bbox.mmax}});
+		const auto bbox_value = Value::STRUCT({{"xmin", bbox.x_min},
+		                                       {"xmax", bbox.x_max},
+		                                       {"ymin", bbox.y_min},
+		                                       {"ymax", bbox.y_max},
+		                                       {"zmin", bbox.z_min},
+		                                       {"zmax", bbox.z_max},
+		                                       {"mmin", bbox.m_min},
+		                                       {"mmax", bbox.m_max}});
 
 		vector<Value> type_strings;
 		for (const auto &type : types.ToString(true)) {
@@ -882,22 +881,25 @@ void ParquetWriter::GatherWrittenStatistics() {
 			column_stats["has_nan"] = Value::BOOLEAN(stats_unifier->has_nan);
 		}
 		if (stats_unifier->geo_stats) {
-			const auto &bbox = stats_unifier->geo_stats->bbox;
+			const auto &bbox = stats_unifier->geo_stats->extent;
 			const auto &types = stats_unifier->geo_stats->types;
 
-			column_stats["bbox_xmin"] = Value::DOUBLE(bbox.xmin);
-			column_stats["bbox_xmax"] = Value::DOUBLE(bbox.xmax);
-			column_stats["bbox_ymin"] = Value::DOUBLE(bbox.ymin);
-			column_stats["bbox_ymax"] = Value::DOUBLE(bbox.ymax);
+			if (bbox.HasXY()) {
 
-			if (bbox.HasZ()) {
-				column_stats["bbox_zmin"] = Value::DOUBLE(bbox.zmin);
-				column_stats["bbox_zmax"] = Value::DOUBLE(bbox.zmax);
-			}
+				column_stats["bbox_xmin"] = Value::DOUBLE(bbox.x_min);
+				column_stats["bbox_xmax"] = Value::DOUBLE(bbox.x_max);
+				column_stats["bbox_ymin"] = Value::DOUBLE(bbox.y_min);
+				column_stats["bbox_ymax"] = Value::DOUBLE(bbox.y_max);
 
-			if (bbox.HasM()) {
-				column_stats["bbox_mmin"] = Value::DOUBLE(bbox.mmin);
-				column_stats["bbox_mmax"] = Value::DOUBLE(bbox.mmax);
+				if (bbox.HasZ()) {
+					column_stats["bbox_zmin"] = Value::DOUBLE(bbox.z_min);
+					column_stats["bbox_zmax"] = Value::DOUBLE(bbox.z_max);
+				}
+
+				if (bbox.HasM()) {
+					column_stats["bbox_mmin"] = Value::DOUBLE(bbox.m_min);
+					column_stats["bbox_mmax"] = Value::DOUBLE(bbox.m_max);
+				}
 			}
 
 			if (!types.IsEmpty()) {

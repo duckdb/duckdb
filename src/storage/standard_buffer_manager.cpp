@@ -338,7 +338,7 @@ BufferHandle StandardBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 	return Pin(QueryContext(), handle);
 }
 
-BufferHandle StandardBufferManager::Pin(QueryContext context, shared_ptr<BlockHandle> &handle) {
+BufferHandle StandardBufferManager::Pin(const QueryContext &context, shared_ptr<BlockHandle> &handle) {
 	// we need to be careful not to return the BufferHandle to this block while holding the BlockHandle's lock
 	// as exiting this function's scope may cause the destructor of the BufferHandle to be called while holding the lock
 	// the destructor calls Unpin, which grabs the BlockHandle's lock again, causing a deadlock
