@@ -40,6 +40,8 @@ public:
 	                  ExpressionExecutor &default_executor);
 	~LocalTableStorage();
 
+	QueryContext context;
+
 	reference<DataTable> table_ref;
 
 	Allocator &allocator;
@@ -188,6 +190,10 @@ public:
 	optional_ptr<LocalTableStorage> GetStorage(DataTable &table);
 
 	void VerifyNewConstraint(DataTable &parent, const BoundConstraint &constraint);
+
+	ClientContext &GetClientContext() const {
+		return context;
+	}
 
 private:
 	ClientContext &context;

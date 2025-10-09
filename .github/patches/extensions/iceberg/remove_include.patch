@@ -1,0 +1,12 @@
+diff --git a/src/storage/iceberg_insert.cpp b/src/storage/iceberg_insert.cpp
+index aa2371e8..cccc82d6 100644
+--- a/src/storage/iceberg_insert.cpp
++++ b/src/storage/iceberg_insert.cpp
+@@ -7,7 +7,6 @@
+ 
+ #include "iceberg_multi_file_list.hpp"
+ 
+-#include "duckdb/common/sort/partition_state.hpp"
+ #include "duckdb/catalog/catalog_entry/copy_function_catalog_entry.hpp"
+ #include "duckdb/main/client_data.hpp"
+ #include "duckdb/planner/operator/logical_copy_to_file.hpp"

@@ -25,9 +25,9 @@ public:
 	string ctename;
 
 	//! The cte node
-	unique_ptr<BoundQueryNode> query;
+	BoundStatement query;
 	//! The child node
-	unique_ptr<BoundQueryNode> child;
+	BoundStatement child;
 	//! Index used by the set operation
 	idx_t setop_index;
 	//! The binder used by the query side of the CTE
@@ -39,7 +39,7 @@ public:
 
 public:
 	idx_t GetRootIndex() override {
-		return child->GetRootIndex();
+		return child.plan->GetRootIndex();
 	}
 };
 

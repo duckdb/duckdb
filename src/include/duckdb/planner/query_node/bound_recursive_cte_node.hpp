@@ -27,9 +27,9 @@ public:
 
 	bool union_all;
 	//! The left side of the set operation
-	unique_ptr<BoundQueryNode> left;
+	BoundStatement left;
 	//! The right side of the set operation
-	unique_ptr<BoundQueryNode> right;
+	BoundStatement right;
 	//! Target columns for the recursive key variant
 	vector<unique_ptr<Expression>> key_targets;
 
