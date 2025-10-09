@@ -889,6 +889,7 @@ static idx_t DistinctSelectVariant(Vector &left, Vector &right, idx_t count, con
 		return count;
 	}
 
+	D_ASSERT(!null_mask);
 	D_ASSERT(left.GetType().id() == LogicalTypeId::VARIANT && right.GetType().id() == left.GetType().id());
 	RecursiveUnifiedVectorFormat left_variant_format, right_variant_format;
 	Vector::RecursiveToUnifiedFormat(left, count, left_variant_format);
