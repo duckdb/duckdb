@@ -152,16 +152,7 @@ string Binder::ReplaceColumnsAlias(const string &alias, const string &column_nam
 
 void TryTransformStarLike(unique_ptr<ParsedExpression> &root) {
 	// detect "* LIKE [literal]" and similar expressions
-	bool inverse = false;
-
-	if (root->GetExpressionClass() == ExpressionClass::OPERATOR) {
-		// Detect * NOT SIMILAR TO [literal] and similar expressions
-		auto &op = root->Cast<OperatorExpression>();
-		if (op.GetExpressionType() != ExpressionType::OPERATOR_NOT) {
-			return;
-		}
-		inverse = true;
-	}
+	bool inverse = root->GetExpressionType() == ExpressionType::OPERATOR_NOT;
 	auto &expr = inverse ? root->Cast<OperatorExpression>().children[0] : root;
 	if (!expr) {
 		return;
