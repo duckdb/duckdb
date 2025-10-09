@@ -2,6 +2,7 @@ add_library_unity(
   test_sql_capi
   OBJECT
   capi_aggregate_functions.cpp
+  capi_copy_function.cpp
   capi_custom_type.cpp
   capi_file_system.cpp
   capi_scalar_functions.cpp

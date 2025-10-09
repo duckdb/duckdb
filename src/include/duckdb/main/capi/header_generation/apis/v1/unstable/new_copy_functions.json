@@ -1,0 +1,41 @@
+{
+  "version": "unstable_new_copy_functions_api",
+  "description": "API to define custom copy functions",
+  "entries": [
+    "duckdb_create_copy_function",
+    "duckdb_copy_function_set_name",
+    "duckdb_register_copy_function",
+    "duckdb_destroy_copy_function",
+
+    "duckdb_copy_function_to_add_option",
+
+    "duckdb_copy_function_to_set_bind",
+    "duckdb_copy_function_to_bind_set_error",
+    "duckdb_copy_function_to_bind_get_column_count",
+    "duckdb_copy_function_to_bind_get_column_type",
+    "duckdb_copy_function_to_bind_get_option",
+    "duckdb_copy_function_to_bind_set_bind_data",
+
+    "duckdb_copy_function_to_set_global_init",
+    "duckdb_copy_function_to_global_init_set_error",
+    "duckdb_copy_function_to_global_init_get_bind_data",
+    "duckdb_copy_function_to_global_init_set_global_state",
+
+    "duckdb_copy_function_to_set_sink",
+    "duckdb_copy_function_to_sink_set_error",
+    "duckdb_copy_function_to_sink_get_bind_data",
+    "duckdb_copy_function_to_sink_get_global_state",
+
+    "duckdb_copy_function_to_set_finalize",
+    "duckdb_copy_function_to_finalize_set_error",
+    "duckdb_copy_function_to_finalize_get_bind_data",
+    "duckdb_copy_function_to_finalize_get_global_state",
+
+    "duckdb_copy_function_from_add_option",
+    "duckdb_copy_function_from_set_bind",
+    "duckdb_copy_function_from_bind_set_error",
+    "duckdb_copy_function_from_bind_get_option",
+    "duckdb_copy_function_from_bind_set_bind_data",
+    "duckdb_copy_function_from_set_function"
+  ]
+}
