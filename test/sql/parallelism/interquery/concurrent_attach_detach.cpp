@@ -26,18 +26,18 @@ string GetDBName(idx_t i) {
 
 constexpr idx_t DB_COUNT = 10;
 constexpr idx_t WORKER_COUNT = 40;
-constexpr idx_t ITERATION_COUNT = 40;
+constexpr idx_t ITERATION_COUNT = 100;
 constexpr idx_t NR_INITIAL_ROWS = 2050;
 constexpr idx_t PROFILING_INTERVAL = 10;
 
-// Set to true to enable interruptions of workers.
-bool INTERRUPT_WORKERS = false;
+bool ENABLE_INTERRUPTS = false;
 bool ENABLE_CHECKPOINTING = false;
 
 vector<string> LOGGING[WORKER_COUNT] = {{}};
 atomic<bool> IS_SUCCESS {true};
 idx_t QUERY_COUNT[WORKER_COUNT] = {0};
 bool ACTIVE_TRANSACTION[WORKER_COUNT] = {false};
+idx_t TOTAL_INTERRUPTIONS[WORKER_COUNT] = {0};
 
 vector<std::unique_ptr<Connection>> CONNECTIONS;
 
@@ -48,9 +48,8 @@ void AddLog(const idx_t worker_id, const string &msg) {
 	LOGGING[worker_id].push_back(msg);
 }
 
-void InterruptQuery(Connection &conn, const idx_t worker_id, idx_t percent_chance_to_interrupt) {
-	REQUIRE(!(percent_chance_to_interrupt > 100));
-	if (!INTERRUPT_WORKERS || (rand() % 100) < percent_chance_to_interrupt) {
+void InterruptQuery(Connection &conn, const idx_t worker_id, idx_t interrupt_probability) {
+	if (!ENABLE_INTERRUPTS || interrupt_probability <= (rand() % 100)) {
 		return;
 	}
 	AddLog(worker_id, "Interrupting query!");
@@ -63,6 +62,7 @@ void RunQuery(duckdb::unique_ptr<MaterializedQueryResult> *result, Connection &c
 	if ((*result)->HasError()) {
 		if ((*result)->GetErrorType() == ExceptionType::INTERRUPT) {
 			AddLog(worker_id, "Query interrupted! Trying again");
+			TOTAL_INTERRUPTIONS[worker_id]++;
 			return RunQuery(result, conn, query, worker_id);
 		}
 		Printer::PrintF("Failed to execute query %s:\n------\n%s\n-------", query, (*result)->GetError());
@@ -70,9 +70,9 @@ void RunQuery(duckdb::unique_ptr<MaterializedQueryResult> *result, Connection &c
 	}
 }
 
-// chance_to_interrupt: between 0 and 100 (percentage). 100 means never, 0 means always.
+// interrupt_probability: between 0 and 100 (percentage). 0 means never, 100 means always.
 duckdb::unique_ptr<MaterializedQueryResult> ExecQuery(Connection &conn, const string &query, const idx_t worker_id,
-                                                      idx_t percent_chance_to_interrupt = 100) {
+                                                      idx_t interrupt_probability = 0) {
 	QUERY_COUNT[worker_id]++;
 
 	// Enable profiling for every 10th query, unless it's in the skip list.
@@ -88,11 +88,9 @@ duckdb::unique_ptr<MaterializedQueryResult> ExecQuery(Connection &conn, const st
 		conn.Query("SET profiling_coverage = 'ALL'");
 	}
 
-	std::thread interruption_runner(InterruptQuery, std::ref(conn), worker_id, percent_chance_to_interrupt);
-
 	duckdb::unique_ptr<MaterializedQueryResult> result;
 	std::thread query_runner(RunQuery, &result, std::ref(conn), query, worker_id);
-
+	std::thread interruption_runner(InterruptQuery, std::ref(conn), worker_id, interrupt_probability);
 	query_runner.join();
 	interruption_runner.join();
 
@@ -452,6 +450,8 @@ void WorkUnit(const idx_t worker_id) {
 			return;
 		}
 	}
+
+	AddLog(worker_id, "Total interruptions: " + to_string(TOTAL_INTERRUPTIONS[worker_id]));
 }
 
 DuckDB Setup() {
@@ -481,11 +481,11 @@ void Run(DuckDB db) {
 	for (auto &worker : workers) {
 		worker.join();
 	}
+
 	if (!IS_SUCCESS) {
 		for (idx_t worker_id = 0; worker_id < WORKER_COUNT; worker_id++) {
 			for (auto &log : LOGGING[worker_id]) {
 				if (log.find("exception_type") != string::npos) {
-					// Make exceptions more visible.
 					Printer::PrintF("\n\n====================================================\n\n");
 					Printer::PrintF("thread %d; %s", worker_id, log);
 					Printer::PrintF("\n\n====================================================\n\n");
@@ -499,21 +499,21 @@ void Run(DuckDB db) {
 }
 
 TEST_CASE("Run a concurrent ATTACH/DETACH scenario", "[interquery][.]") {
-	INTERRUPT_WORKERS = false;
+	ENABLE_INTERRUPTS = false;
 
 	const auto db = Setup();
 	Run(db);
 }
 
 TEST_CASE("Run a concurrent ATTACH/DETACH scenario with interruptions", "[interquery][.]") {
-	INTERRUPT_WORKERS = true;
+	ENABLE_INTERRUPTS = true;
 
 	const auto db = Setup();
 	Run(db);
 }
 
 TEST_CASE("Run a concurrent ATTACH/DETACH scenario with checkpointing", "[interquery][.]") {
-	INTERRUPT_WORKERS = false;
+	ENABLE_INTERRUPTS = false;
 	ENABLE_CHECKPOINTING = true;
 
 	const auto db = Setup();
@@ -521,7 +521,7 @@ TEST_CASE("Run a concurrent ATTACH/DETACH scenario with checkpointing", "[interq
 }
 
 TEST_CASE("Run a concurrent ATTACH/DETACH scenario with checkpointing and interruptions", "[interquery][.]") {
-	INTERRUPT_WORKERS = true;
+	ENABLE_INTERRUPTS = true;
 	ENABLE_CHECKPOINTING = true;
 
 	const auto db = Setup();
