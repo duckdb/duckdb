@@ -90,7 +90,7 @@ WITH RECURSIVE tbl(a,b,c) USING KEY (a, b , list(c), max(c)) AS (
 	WHERE tbl.b > 0)
 SELECT * FROM tbl;
 ----
-Binder Error: Column 'c' referenced multiple times in recursive CTE aggregates
+<REGEX>:.*referenced multiple times.*
 
 # Duplicate column reference in aggregate list and key list
 statement error
@@ -102,19 +102,19 @@ WITH RECURSIVE tbl(a,b,c) USING KEY (a, c , list(b), max(c)) AS (
 	WHERE tbl.b > 0)
 SELECT * FROM tbl;
 ----
-Binder Error: Column 'c' referenced multiple times in recursive CTE aggregates
+<REGEX>:.*cannot be used as both key and aggregate.*
 
 # Duplicate column reference in key list
-statement error
+query III
 WITH RECURSIVE tbl(a,b,c) USING KEY (a, a , list(b)) AS (
-	SELECT 1, 1, NULL
+	SELECT 1, 1, NULL :: INT[]
     	UNION
     SELECT tbl.a, tbl.b - 1, a.b
 	FROM tbl, recurring.tbl AS a
 	WHERE tbl.b > 0)
 SELECT * FROM tbl;
 ----
-Binder Error: Column 'a' referenced multiple times in recursive CTE aggregates
+1	[1, 0]	[1]
 
 # Use alias to set aggregation destination
 query II
@@ -139,3 +139,27 @@ WITH RECURSIVE tbl(a,b) USING KEY (a , string_agg(b, ', ') ) AS (
 TABLE tbl;
 ----
 1	5, 4, 3, 2, 1, 0
+
+# All aggregate functions
+query II
+WITH RECURSIVE tbl(a,b) USING KEY (a , any_value(b) ) AS (
+	SELECT 1, 5
+		UNION
+	SELECT tbl.a, tbl.b - 1
+	FROM tbl
+	WHERE tbl.b > 0)
+TABLE tbl;
+----
+1	5
+
+query II
+WITH RECURSIVE tbl(a,b) USING KEY (a , arbitrary(b) ) AS (
+	SELECT 1, 5
+		UNION
+	SELECT tbl.a, tbl.b - 1
+	FROM tbl
+	WHERE tbl.b > 0)
+TABLE tbl;
+----
+1	5
+

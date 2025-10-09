@@ -49,7 +49,8 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 	ExpressionBinder expression_binder(*aggregate_binder, context);
 
 	// Set contains column indices that are already bound
-	unordered_set<idx_t> column_references;
+	unordered_set<idx_t> key_references;
+	unordered_set<idx_t> payload_references;
 	// Temporary copy of return types that we can modify without having a conflict with binding the aggregates
 	vector<LogicalType> return_types = result.types;
 
@@ -60,13 +61,11 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 		auto &bound_ref = bound_expr->Cast<BoundColumnRefExpression>();
 
 		idx_t column_index = bound_ref.binding.column_index;
-		if (column_references.find(column_index) != column_references.end()) {
-			throw BinderException(bound_ref.GetQueryLocation(),
-			                      "Column '%s' referenced multiple times in recursive CTE aggregates",
-			                      result.names[column_index]);
+		if (key_references.find(column_index) != key_references.end()) {
+			continue;
 		}
 
-		column_references.insert(column_index);
+		key_references.insert(column_index);
 		result.key_targets.push_back(std::move(bound_expr));
 	}
 
@@ -122,15 +121,23 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 		auto aggregate = function_binder.BindAggregateFunction(std::move(best_function), std::move(bound_children),
 		                                                       nullptr, AggregateType::NON_DISTINCT);
 
-		if (column_references.find(aggregate_idx) != column_references.end()) {
+		if (payload_references.find(aggregate_idx) != payload_references.end()) {
 			throw BinderException(func_expr.GetQueryLocation(),
-			                      "Column '%s' referenced multiple times in recursive CTE aggregates",
+			                      "Column '%s' referenced multiple times in USING KEY clause.\n"
+			                      "Try using an alias for one of the aggregates.",
+			                      result.names[aggregate_idx]);
+		}
+
+		if (key_references.find(aggregate_idx) != key_references.end()) {
+			throw BinderException(func_expr.GetQueryLocation(),
+			                      "Column '%s' cannot be used as both key and aggregate in USING KEY clause.\n"
+			                      " Try using an alias for the aggregation.",
 			                      result.names[aggregate_idx]);
 		}
 
 		return_types[aggregate_idx] = aggregate->return_type;
 		result.payload_aggregates.push_back(std::move(aggregate));
-		column_references.insert(aggregate_idx);
+		payload_references.insert(aggregate_idx);
 	}
 
 	// Now that we have finished binding all aggregates, we can update the operator types
@@ -140,11 +147,11 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 	if (!result.key_targets.empty()) {
 		// Bind every column that is neither referenced as a key nor by an aggregate to a LAST aggregate
 		for (idx_t i = 0; i < result.left.types.size(); i++) {
-			if (column_references.find(i) == column_references.end()) {
+			if (key_references.find(i) == key_references.end() &&
+			    payload_references.find(i) == payload_references.end()) {
 				// Create a new bound column reference for the missing columns
 				vector<unique_ptr<Expression>> first_children;
-				auto bound =
-				    make_uniq<BoundColumnRefExpression>(result.types[i], ColumnBinding(result.setop_index, i));
+				auto bound = make_uniq<BoundColumnRefExpression>(result.types[i], ColumnBinding(result.setop_index, i));
 				first_children.push_back(std::move(bound));
 
 				// Create a last aggregate for the newly bound column reference
@@ -161,9 +168,8 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 
 	// Add bindings of left side to temporary CTE bindings context
 	result.right_binder->bind_context.AddCTEBinding(result.setop_index, statement.ctename, result.names,
-	                                                 result.internal_types, result.types,
-	                                                 !statement.key_targets.empty());
-
+	                                                result.internal_types, result.types,
+	                                                !statement.key_targets.empty());
 
 	result.right = result.right_binder->BindNode(*statement.right);
 	for (auto &c : result.left_binder->correlated_columns) {

@@ -720,7 +720,8 @@ void BindContext::AddCTEBinding(idx_t index, const string &alias, const vector<s
 
 	if (using_key) {
 		auto recurring_alias = "recurring." + alias;
-		cte_bindings[recurring_alias] = make_uniq<CTEBinding>(BindingAlias(recurring_alias), recurring_types, names, index);
+		cte_bindings[recurring_alias] =
+		    make_uniq<CTEBinding>(BindingAlias(recurring_alias), recurring_types, names, index);
 	}
 }
 
