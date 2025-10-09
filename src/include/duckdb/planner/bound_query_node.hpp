@@ -19,8 +19,6 @@ class BoundQueryNode {
 public:
 	virtual ~BoundQueryNode() = default;
 
-	//! The type of the query node, either SetOperation or Select
-	QueryNodeType type;
 	//! The result modifiers that should be applied to this query node
 	vector<unique_ptr<BoundResultModifier>> modifiers;
 
