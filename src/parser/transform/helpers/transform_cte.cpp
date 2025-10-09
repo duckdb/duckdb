@@ -25,7 +25,7 @@ CommonTableExpressionInfo::~CommonTableExpressionInfo() {
 
 void Transformer::ExtractCTEsRecursive(CommonTableExpressionMap &cte_map) {
 	for (auto &cte_entry : stored_cte_map) {
-		for (auto &entry : cte_entry->map) {
+		for (auto &entry : cte_entry.get().map) {
 			auto found_entry = cte_map.map.find(entry.first);
 			if (found_entry != cte_map.map.end()) {
 				// entry already present - use top-most entry
@@ -40,7 +40,7 @@ void Transformer::ExtractCTEsRecursive(CommonTableExpressionMap &cte_map) {
 }
 
 void Transformer::TransformCTE(duckdb_libpgquery::PGWithClause &de_with_clause, CommonTableExpressionMap &cte_map) {
-	stored_cte_map.push_back(&cte_map);
+	stored_cte_map.push_back(cte_map);
 
 	// TODO: might need to update in case of future lawsuit
 	D_ASSERT(de_with_clause.ctes);
