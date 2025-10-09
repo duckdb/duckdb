@@ -23,10 +23,6 @@ public:
 	BoundStatement bound_node;
 	unique_ptr<SelectStatement> subquery;
 
-	const vector<unique_ptr<ParsedExpression>> &GetSelectList() const override {
-		throw InternalException("Cannot get select list of bound subquery node");
-	}
-
 	string ToString() const override {
 		throw InternalException("Cannot ToString bound subquery node");
 	}
