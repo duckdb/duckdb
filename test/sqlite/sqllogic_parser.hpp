@@ -62,6 +62,8 @@ public:
 public:
 	static bool EmptyOrComment(const string &line);
 	static bool IsSingleLineStatement(SQLLogicToken &token);
+	static bool IsContext(SQLLogicTokenType &type);
+	static bool IsTestCommand(SQLLogicTokenType &type);
 
 	//! Does the next line contain a comment, empty line, or is the end of the file
 	bool NextLineEmptyOrComment();

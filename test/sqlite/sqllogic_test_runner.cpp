@@ -718,6 +718,9 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 	file_name = script;
 	SQLLogicParser parser;
 	idx_t skip_level = 0;
+	bool test_executed = false;
+	bool file_tags_expr_count = 0;
+	vector<string> file_tags; // gets both implicit and file-spec'd
 
 	// for the original SQLite tests we convert floating point numbers to integers
 	// for our own tests this is undesirable since it hides certain errors
@@ -747,7 +750,10 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 		FAIL("Could not find test script '" + script + "'. Perhaps run `make sqlite`. ");
 	}
 
-	bool file_tags_seen = false;
+	if (script.rfind(".test_slow") != std::string::npos) {
+		file_tags.emplace_back("slow");
+	}
+	// bool is_coverage = script.rfind(".test_coverage") != script.end();
 
 	/* Loop over all records in the file */
 	while (parser.NextStatement()) {
@@ -757,6 +763,22 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 		// throw explicit error on single line statements that are not separated by a comment or newline
 		if (parser.IsSingleLineStatement(token) && !parser.NextLineEmptyOrComment()) {
 			parser.Fail("all test statements need to be separated by an empty line");
+		}
+
+		// enforce: file = context* statement*
+		bool token_is_context = parser.IsContext(token.type);
+		bool token_is_test_command = parser.IsTestCommand(token.type);
+		if (token_is_context && test_executed) {
+			parser.Fail("all context (e.g. tags, require-env) must precede test statements");
+		}
+
+		// Check tags first time we hit test statements, since all explicit & implicit tags now present
+		if (token_is_test_command && !test_executed) {
+			if (test_config.GetPolicyForTagSet(file_tags) == SelectPolicy::SKIP) {
+				SKIP_TEST("match tag-set");
+				return;
+			}
+			test_executed = true;
 		}
 
 		vector<Condition> conditions;
@@ -805,12 +827,6 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			continue;
 		}
 		if (token.type == SQLLogicTokenType::SQLLOGIC_STATEMENT) {
-			// prereq -- file_tags match check -- if tags
-			if (!file_tags_seen && (!test_config.GetSelectTagSet().empty() || !test_config.GetSkipTagSet().empty())) {
-				SKIP_TEST("match tag-set");
-				return;
-			}
-
 			// statement
 			if (token.parameters.size() < 1) {
 				parser.Fail("statement requires at least one parameter (statement ok/error)");
@@ -1060,6 +1076,9 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			if (environment_variables.count(env_var)) {
 				parser.Fail(StringUtil::Format("Environment/Test variable '%s' has already been defined", env_var));
 			}
+			// XXX: consider me: auto tag `test_env` -> "env[VAR]" + "env[VAR]=VALUE"
+			file_tags.emplace_back(StringUtil::Format("env[%s]", env_var));
+			file_tags.emplace_back(StringUtil::Format("env[%s]=%s", env_var, env_actual));
 			environment_variables[env_var] = env_actual;
 
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_REQUIRE_ENV) {
@@ -1087,6 +1106,9 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				return;
 			}
 
+			// XXX: consider me: auto tag `require env` -> "env[VAR]" + "env[VAR]=VALUE"
+			file_tags.emplace_back(StringUtil::Format("env[%s]", token.parameters[0]));
+
 			if (token.parameters.size() == 2) {
 				// Check that the value is the same as the expected value
 				auto env_value = token.parameters[1];
@@ -1095,6 +1117,8 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 					SKIP_TEST("require-env " + token.parameters[0] + " " + token.parameters[1]);
 					return;
 				}
+				// XXX: consider me: auto tag `require env` -> "env[VAR]" + "env[VAR]=VALUE"
+				file_tags.emplace_back(StringUtil::Format("env[%s]=%s", token.parameters[0], token.parameters[1]));
 			}
 
 			if (environment_variables.count(env_var)) {
@@ -1181,15 +1205,20 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			auto command = make_uniq<UnzipCommand>(*this, input_path, extraction_path);
 			ExecuteCommand(std::move(command));
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_TAGS) {
-			// Expects space-separate list of tags
+			// NOTE: consider off by default, CLI flag to enforce?
+			if (test_executed) {
+				parser.Fail("tags must precede tests");
+			}
+			if (file_tags_expr_count > 0) {
+				parser.Fail("tags may be only specified once");
+			}
 			if (token.parameters.empty()) {
 				parser.Fail("tags requires >= 1 argument: <tag1> [tag2 .. tagN]");
 			}
-			file_tags_seen = true;
-			if (test_config.GetPolicyForTagSet(token.parameters) == SelectPolicy::SKIP) {
-				SKIP_TEST("match tag-set");
-				return;
-			}
+			file_tags_expr_count += 1;
+
+			// extend file_tags for jit eval
+			file_tags.insert(file_tags.begin(), token.parameters.begin(), token.parameters.end());
 		}
 	}
 	if (InLoop()) {

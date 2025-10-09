@@ -184,6 +184,78 @@ bool SQLLogicParser::IsSingleLineStatement(SQLLogicToken &token) {
 	}
 }
 
+// (All) Context statements must precede all non-header statements
+bool SQLLogicParser::IsContext(SQLLogicTokenType &type) {
+	switch (type) {
+	case SQLLogicTokenType::SQLLOGIC_REQUIRE:
+	case SQLLogicTokenType::SQLLOGIC_REQUIRE_ENV:
+	case SQLLogicTokenType::SQLLOGIC_TAGS:
+	case SQLLogicTokenType::SQLLOGIC_TEST_ENV:
+		return true;
+
+	case SQLLogicTokenType::SQLLOGIC_CONCURRENT_FOREACH:
+	case SQLLogicTokenType::SQLLOGIC_CONCURRENT_LOOP:
+	case SQLLogicTokenType::SQLLOGIC_ENDLOOP:
+	case SQLLogicTokenType::SQLLOGIC_FOREACH:
+	case SQLLogicTokenType::SQLLOGIC_HALT:
+	case SQLLogicTokenType::SQLLOGIC_HASH_THRESHOLD:
+	case SQLLogicTokenType::SQLLOGIC_INVALID:
+	case SQLLogicTokenType::SQLLOGIC_LOAD:
+	case SQLLogicTokenType::SQLLOGIC_LOOP:
+	case SQLLogicTokenType::SQLLOGIC_MODE:
+	case SQLLogicTokenType::SQLLOGIC_ONLY_IF:
+	case SQLLogicTokenType::SQLLOGIC_QUERY:
+	case SQLLogicTokenType::SQLLOGIC_RECONNECT:
+	case SQLLogicTokenType::SQLLOGIC_RESET:
+	case SQLLogicTokenType::SQLLOGIC_RESTART:
+	case SQLLogicTokenType::SQLLOGIC_SET:
+	case SQLLogicTokenType::SQLLOGIC_SKIP_IF:
+	case SQLLogicTokenType::SQLLOGIC_SLEEP:
+	case SQLLogicTokenType::SQLLOGIC_STATEMENT:
+	case SQLLogicTokenType::SQLLOGIC_UNZIP:
+		return false;
+
+	default:
+		throw std::runtime_error("Unknown SQLLogic token found!");
+	}
+}
+
+// (All) Context statements must precede all non-header statements
+bool SQLLogicParser::IsTestCommand(SQLLogicTokenType &type) {
+	switch (type) {
+	case SQLLogicTokenType::SQLLOGIC_LOAD: // NOTE: questionable
+	case SQLLogicTokenType::SQLLOGIC_QUERY:
+	case SQLLogicTokenType::SQLLOGIC_RESET:
+	case SQLLogicTokenType::SQLLOGIC_SET:
+	case SQLLogicTokenType::SQLLOGIC_STATEMENT:
+		return true;
+
+	case SQLLogicTokenType::SQLLOGIC_CONCURRENT_FOREACH:
+	case SQLLogicTokenType::SQLLOGIC_CONCURRENT_LOOP:
+	case SQLLogicTokenType::SQLLOGIC_ENDLOOP:
+	case SQLLogicTokenType::SQLLOGIC_FOREACH:
+	case SQLLogicTokenType::SQLLOGIC_HALT:
+	case SQLLogicTokenType::SQLLOGIC_HASH_THRESHOLD:
+	case SQLLogicTokenType::SQLLOGIC_INVALID:
+	case SQLLogicTokenType::SQLLOGIC_LOOP:
+	case SQLLogicTokenType::SQLLOGIC_MODE:
+	case SQLLogicTokenType::SQLLOGIC_ONLY_IF:
+	case SQLLogicTokenType::SQLLOGIC_RECONNECT:
+	case SQLLogicTokenType::SQLLOGIC_REQUIRE:
+	case SQLLogicTokenType::SQLLOGIC_REQUIRE_ENV:
+	case SQLLogicTokenType::SQLLOGIC_RESTART:
+	case SQLLogicTokenType::SQLLOGIC_SKIP_IF:
+	case SQLLogicTokenType::SQLLOGIC_SLEEP:
+	case SQLLogicTokenType::SQLLOGIC_TAGS:
+	case SQLLogicTokenType::SQLLOGIC_TEST_ENV:
+	case SQLLogicTokenType::SQLLOGIC_UNZIP:
+		return false;
+
+	default:
+		throw std::runtime_error("Unknown SQLLogic token found!");
+	}
+}
+
 SQLLogicTokenType SQLLogicParser::CommandToToken(const string &token) {
 	if (token == "skipif") {
 		return SQLLogicTokenType::SQLLOGIC_SKIP_IF;

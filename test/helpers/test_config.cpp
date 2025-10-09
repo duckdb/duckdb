@@ -6,6 +6,7 @@
 #include "duckdb/common/types/uuid.hpp"
 #include <fstream>
 #include <sstream>
+#include <unordered_set>
 
 namespace duckdb {
 
@@ -57,10 +58,14 @@ static const TestConfigOption test_config_options[] = {
     {"storage_version", "Database storage version to use by default", LogicalType::VARCHAR, nullptr},
     {"data_location", "Directory where static test files are read (defaults to `data/`)", LogicalType::VARCHAR,
      nullptr},
-    {"select_tag_set", "Select only tests which match _all_ named tags", LogicalType::LIST(LogicalType::VARCHAR),
-     TestConfiguration::MakeSelectTagSet},
-    {"skip_tag_set", "Skip any tests which match _all_ named tags", LogicalType::LIST(LogicalType::VARCHAR),
-     TestConfiguration::MakeSkipTagSet},
+    {"select_tag", "Select tests which match named tag (as singleton set; multiple sets are OR'd)",
+     LogicalType::VARCHAR, TestConfiguration::AppendSelectTagSet},
+    {"select_tag_set", "Select tests which match _all_ named tags (multiple sets are OR'd)",
+     LogicalType::LIST(LogicalType::VARCHAR), TestConfiguration::AppendSelectTagSet},
+    {"skip_tag", "Skip tests which match named tag (as singleton set; multiple sets are OR'd)", LogicalType::VARCHAR,
+     TestConfiguration::AppendSkipTagSet},
+    {"skip_tag_set", "Skip tests which match _all_ named tags (multiple sets are OR'd)",
+     LogicalType::LIST(LogicalType::VARCHAR), TestConfiguration::AppendSkipTagSet},
     {nullptr, nullptr, LogicalType::INVALID, nullptr},
 };
 
@@ -436,46 +441,61 @@ DebugInitialize TestConfiguration::GetDebugInitialize() {
 	return EnumUtil::FromString<DebugInitialize>(GetOptionOrDefault<string>("debug_initialize", "NO_INITIALIZE"));
 }
 
-unordered_set<string> TestConfiguration::GetSelectTagSet() {
-	return select_tag_set;
+vector<unordered_set<string>> TestConfiguration::GetSelectTagSets() {
+	return select_tag_sets;
 }
 
-unordered_set<string> TestConfiguration::GetSkipTagSet() {
-	return skip_tag_set;
+vector<unordered_set<string>> TestConfiguration::GetSkipTagSets() {
+	return skip_tag_sets;
 }
 
-void TestConfiguration::MakeSelectTagSet(const Value &tag_set) {
-	auto &test_config = TestConfiguration::Get();
-	for (auto &tag : ListValue::GetChildren(tag_set)) {
-		test_config.select_tag_set.insert(tag.GetValue<string>());
+std::unordered_set<string> make_tag_set(const Value &src_val) {
+	// handle both cases -- singleton VARCHAR/string, and set of strings
+	auto dst_set = std::unordered_set<string>();
+	if (src_val.type() == LogicalType::VARCHAR) {
+		dst_set.insert(src_val.GetValue<string>());
+	} else /* LIST(VARCHAR) */ {
+		for (auto &tag : ListValue::GetChildren(src_val)) {
+			dst_set.insert(tag.GetValue<string>());
+		}
 	}
+	return dst_set; // XXX: ptr move thingy?
 }
 
-void TestConfiguration::MakeSkipTagSet(const Value &tag_set) {
-	auto &test_config = TestConfiguration::Get();
-	for (auto &tag : ListValue::GetChildren(tag_set)) {
-		test_config.skip_tag_set.insert(tag.GetValue<string>());
+void TestConfiguration::AppendSelectTagSet(const Value &tag_set) {
+	TestConfiguration::Get().select_tag_sets.push_back(make_tag_set(tag_set));
+}
+
+void TestConfiguration::AppendSkipTagSet(const Value &tag_set) {
+	TestConfiguration::Get().skip_tag_sets.push_back(make_tag_set(tag_set));
+}
+
+bool is_subset(const unordered_set<string> &sub, const vector<string> &super) {
+	for (const auto &elt : sub) {
+		if (std::find(super.begin(), super.end(), elt) == super.end()) {
+			return false;
+		}
 	}
+	return true;
 }
 
 SelectPolicy TestConfiguration::GetPolicyForTagSet(const vector<string> &subject_tag_set) {
 	// Apply select_tag_set first then skip_tag_set; if both empty always NO
 	auto policy = SelectPolicy::NONE;
-	if (!select_tag_set.empty()) {
-		for (auto subject_tag : subject_tag_set) {
-			if (select_tag_set.find(subject_tag) == select_tag_set.end()) {
-				return SelectPolicy::SKIP;
-			}
+	// select: if >= 1 select_tag_set is subset of subject_tag_set
+	// if count(select_tag_sets) > 0 && no matches, SKIP
+	for (const auto &select_tag_set : select_tag_sets) {
+		policy = SelectPolicy::SKIP; // >=1 sets => SKIP || SELECT
+		if (is_subset(select_tag_set, subject_tag_set)) {
+			policy = SelectPolicy::SELECT;
+			break;
 		}
-		policy = SelectPolicy::SELECT;
 	}
-	if (!skip_tag_set.empty()) {
-		for (auto subject_tag : subject_tag_set) {
-			if (skip_tag_set.find(subject_tag) == skip_tag_set.end()) {
-				return policy; // NO || SELECT
-			}
+	// skip: if >=1 skip_tag_set is subset of subject_tag_set, else passthrough
+	for (const auto &skip_tag_set : skip_tag_sets) {
+		if (is_subset(skip_tag_set, subject_tag_set)) {
+			return SelectPolicy::SKIP;
 		}
-		return SelectPolicy::SKIP;
 	}
 	return policy;
 }
