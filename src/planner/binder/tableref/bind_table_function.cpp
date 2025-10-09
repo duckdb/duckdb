@@ -313,9 +313,12 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 		row_number->end = WindowBoundary::CURRENT_ROW_ROWS;
 		if (return_names.size() < column_name_alias.size()) {
 			row_number->alias = column_name_alias[return_names.size()];
+			return_names.push_back(column_name_alias[return_names.size()]);
 		} else {
 			row_number->alias = ordinality_column_name;
+			return_names.push_back(ordinality_column_name);
 		}
+		return_types.push_back(LogicalType::BIGINT);
 		window->expressions.push_back(std::move(row_number));
 		window->children.push_back(std::move(get));
 		
