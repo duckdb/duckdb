@@ -123,6 +123,14 @@ struct QueryMetrics {
 	string query;
 	//! The timer used to time the excution time of the entire query
 	Profiler latency;
+	//! The timer used to time how long we spend waiting to attach
+	Profiler waiting_to_attach_latency;
+	//! The timer used to time how it takes to load from storage
+	Profiler attach_load_storage_latency;
+	//! The timer used to time how it takes to replay the WAL
+	Profiler attach_replay_wal_latency;
+	//! The timer used to time checkpoints
+	Profiler checkpoint_latency;
 	//! The total bytes read by the file system
 	atomic<idx_t> total_bytes_read;
 	//! The total bytes written by the file system
@@ -158,6 +166,10 @@ public:
 	DUCKDB_API void AddBytesRead(const idx_t nr_bytes);
 	//! Adds nr_bytes bytes to the total bytes written.
 	DUCKDB_API void AddBytesWritten(const idx_t nr_bytes);
+
+	//! Start/End a timer for a specific metric type.
+	DUCKDB_API void StartTimer(MetricsType type);
+	DUCKDB_API void EndTimer(MetricsType type);
 
 	DUCKDB_API void StartExplainAnalyze();
 
