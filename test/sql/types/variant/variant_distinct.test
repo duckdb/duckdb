@@ -382,3 +382,375 @@ false
 true
 true
 true
+
+foreach type <numeric>
+
+# Constant single integer column distinct
+query T
+SELECT {'x': 1::${type}}::VARIANT IS NOT DISTINCT FROM {'x': 2::${type}}
+----
+false
+
+query T
+SELECT {'x': 1::${type}}::VARIANT IS NOT DISTINCT FROM {'x': 1::${type}}
+----
+true
+
+query T
+SELECT NULL::VARIANT IS NOT DISTINCT FROM {'x': 1::${type}}
+----
+false
+
+query T
+SELECT {'x': 1::${type}}::VARIANT IS DISTINCT FROM {'x': 2::${type}}
+----
+true
+
+query T
+SELECT {'x': 1::${type}}::VARIANT IS DISTINCT FROM {'x': 1::${type}}
+----
+false
+
+query T
+SELECT {'x': 1::${type}}::VARIANT IS DISTINCT FROM NULL
+----
+true
+
+statement ok
+CREATE OR REPLACE VIEW struct_int AS SELECT COLUMNS(*)::VARIANT FROM (VALUES
+	({'x': 1::${type}}, {'x': 1::${type}}),
+	({'x': 1::${type}}, {'x': 2::${type}}),
+	({'x': 2::${type}}, {'x': 1::${type}}),
+	(NULL, {'x': 1::${type}}),
+	({'x': 2::${type}}, NULL),
+	(NULL, NULL)
+	) tbl(l, r);
+
+query T
+SELECT l IS NOT DISTINCT FROM r FROM struct_int
+----
+true
+false
+false
+false
+false
+true
+
+query T
+SELECT l IS DISTINCT FROM r FROM struct_int
+----
+false
+true
+true
+true
+true
+false
+
+endloop
+
+# Constant single string column distinct
+query T
+SELECT {'x': 'duck'}::VARIANT IS NOT DISTINCT FROM {'x': 'goose'}
+----
+false
+
+query T
+SELECT {'x': 'duck'}::VARIANT IS NOT DISTINCT FROM {'x': 'duck'}
+----
+true
+
+
+query T
+SELECT {'x': 'duck'}::VARIANT IS NOT DISTINCT FROM NULL
+----
+false
+
+query T
+SELECT NULL::VARIANT IS NOT DISTINCT FROM {'x': 'duck'}
+----
+false
+
+query T
+SELECT {'x': 'duck'}::VARIANT IS DISTINCT FROM {'x': 'goose'}
+----
+true
+
+query T
+SELECT {'x': 'duck'}::VARIANT IS DISTINCT FROM {'x': 'duck'}
+----
+false
+
+query T
+SELECT {'x': 'duck'}::VARIANT IS DISTINCT FROM NULL
+----
+true
+
+query T
+SELECT NULL::VARIANT IS DISTINCT FROM {'x': 'duck'}
+----
+true
+
+statement ok
+CREATE VIEW struct_str AS SELECT COLUMNS(*)::VARIANT FROM (VALUES
+	({'x': 'duck'}, {'x': 'duck'}),
+	({'x': 'duck'}, {'x': 'goose'}),
+	({'x': 'goose'}, {'x': 'duck'}),
+	(NULL, {'x': 'duck'}),
+	({'x': 'goose'}, NULL),
+	(NULL, NULL)
+	) tbl(l, r);
+
+query T
+SELECT l IS NOT DISTINCT FROM r FROM struct_str
+----
+true
+false
+false
+false
+false
+true
+
+query T
+SELECT l IS DISTINCT FROM r FROM struct_str
+----
+false
+true
+true
+true
+true
+false
+
+# Constant string, integer column distinct
+query T
+SELECT {'x': 'duck', 'y': 1}::VARIANT IS NOT DISTINCT FROM {'x': 'goose', 'y': 2}
+----
+false
+
+query T
+SELECT {'x': 'duck', 'y': 1}::VARIANT IS NOT DISTINCT FROM {'x': 'duck', 'y': 1}
+----
+true
+
+query T
+SELECT NULL::VARIANT IS NOT DISTINCT FROM {'x': 'duck', 'y': 1}
+----
+false
+
+query T
+SELECT {'x': 'duck', 'y': 1}::VARIANT IS NOT DISTINCT FROM NULL
+----
+false
+
+query T
+SELECT {'x': 'duck', 'y': 1}::VARIANT IS DISTINCT FROM {'x': 'goose', 'y': 2}
+----
+true
+
+query T
+SELECT {'x': 'duck', 'y': 1}::VARIANT IS DISTINCT FROM {'x': 'duck', 'y': 1}
+----
+false
+
+query T
+SELECT NULL::VARIANT IS DISTINCT FROM {'x': 'duck', 'y': 1}
+----
+true
+
+query T
+SELECT {'x': 'duck', 'y': 1}::VARIANT IS DISTINCT FROM NULL
+----
+true
+
+statement ok
+CREATE VIEW struct_str_int AS SELECT COLUMNS(*)::VARIANT FROM (VALUES
+	({'x': 'duck', 'y': 1}, {'x': 'duck', 'y': 1}),
+	({'x': 'duck', 'y': 1}, {'x': 'goose', 'y': 2}),
+	({'x': 'goose', 'y': 2}, {'x': 'duck', 'y': 1}),
+	(NULL, {'x': 'duck', 'y': 1}),
+	({'x': 'goose', 'y': 2}, NULL),
+	(NULL, NULL)
+	) tbl(l, r);
+
+query T
+SELECT l IS NOT DISTINCT FROM r FROM struct_str_int
+----
+true
+false
+false
+false
+false
+true
+
+query T
+SELECT l IS DISTINCT FROM r FROM struct_str_int
+----
+false
+true
+true
+true
+true
+false
+
+# Nested structs
+
+query T
+SELECT {'x': 1, 'y': {'a': 'duck', 'b': 1.5}}::VARIANT IS NOT DISTINCT FROM {'x': 2, 'y': {'a': 'goose', 'b': 2.5}}
+----
+false
+
+query T
+SELECT {'x': 1, 'y': {'a': 'duck', 'b': 1.5}}::VARIANT IS NOT DISTINCT FROM {'x': 1, 'y': {'a': 'duck', 'b': 1.5}}
+----
+true
+
+query T
+SELECT NULL::VARIANT IS NOT DISTINCT FROM {'x': 1, 'y': {'a': 'duck', 'b': 1.5}}
+----
+false
+
+query T
+SELECT {'x': 1, 'y': {'a': 'duck', 'b': 1.5}}::VARIANT IS NOT DISTINCT FROM NULL
+----
+false
+
+query T
+SELECT {'x': 1, 'y': {'a': 'duck', 'b': 1.5}}::VARIANT IS DISTINCT FROM {'x': 2, 'y': {'a': 'goose', 'b': 2.5}}
+----
+true
+
+query T
+SELECT {'x': 1, 'y': {'a': 'duck', 'b': 1.5}}::VARIANT IS DISTINCT FROM {'x': 1, 'y': {'a': 'duck', 'b': 1.5}}
+----
+false
+
+query T
+SELECT NULL::VARIANT IS DISTINCT FROM {'x': 1, 'y': {'a': 'duck', 'b': 1.5}}
+----
+true
+
+query T
+SELECT {'x': 1, 'y': {'a': 'duck', 'b': 1.5}} IS DISTINCT FROM NULL::VARIANT
+----
+true
+
+statement ok
+CREATE VIEW struct_nested AS SELECT COLUMNS(*)::VARIANT FROM (VALUES
+	({'x': 1, 'y': {'a': 'duck', 'b': 1.5}}, {'x': 1, 'y': {'a': 'duck', 'b': 1.5}}),
+	({'x': 1, 'y': {'a': 'duck', 'b': 1.5}}, {'x': 2, 'y': {'a': 'goose', 'b': 2.5}}),
+	({'x': 2, 'y': {'a': 'goose', 'b': 2.5}}, {'x': 1, 'y': {'a': 'duck', 'b': 1.5}}),
+	(NULL, {'x': 1, 'y': {'a': 'duck', 'b': 1.5}}),
+	({'x': 2, 'y': {'a': 'goose', 'b': 2.5}}, NULL),
+	(NULL, NULL)
+	) tbl(l, r);
+
+query T
+SELECT l IS NOT DISTINCT FROM r FROM struct_nested
+----
+true
+false
+false
+false
+false
+true
+
+query T
+SELECT l IS DISTINCT FROM r FROM struct_nested
+----
+false
+true
+true
+true
+true
+false
+
+# List nested inside struct
+query T
+SELECT {'x': 1, 'y': ['duck', 'somateria']}::VARIANT IS NOT DISTINCT FROM {'x': 2, 'y': ['goose']}
+----
+false
+
+query T
+SELECT {'x': 1, 'y': ['duck', 'somateria']}::VARIANT IS NOT DISTINCT FROM {'x': 1, 'y': ['duck', 'somateria']}
+----
+true
+
+query T
+SELECT NULL::VARIANT IS NOT DISTINCT FROM {'x': 1, 'y': ['duck', 'somateria']}
+----
+false
+
+query T
+SELECT {'x': 1, 'y': ['duck', 'somateria']}::VARIANT IS NOT DISTINCT FROM NULL
+----
+false
+
+query T
+SELECT {'x': 1, 'y': ['duck', 'somateria']}::VARIANT IS DISTINCT FROM {'x': 2, 'y': ['goose']}
+----
+true
+
+query T
+SELECT {'x': 1, 'y': ['duck', 'somateria']}::VARIANT IS DISTINCT FROM {'x': 1, 'y': ['duck', 'somateria']}
+----
+false
+
+query T
+SELECT NULL::VARIANT IS DISTINCT FROM {'x': 1, 'y': ['duck', 'somateria']}
+----
+true
+
+query T
+SELECT {'x': 1, 'y': ['duck', 'somateria']}::VARIANT IS DISTINCT FROM NULL
+----
+true
+
+statement ok
+CREATE VIEW list_in_struct AS SELECT COLUMNS(*)::VARIANT FROM (VALUES
+	({'x': 1, 'y': ['duck', 'somateria']}, {'x': 1, 'y': ['duck', 'somateria']}),
+	({'x': 1, 'y': ['duck', 'somateria']}, {'x': 2, 'y': ['goose']}),
+	({'x': 2, 'y': ['goose']}, {'x': 1, 'y': ['duck', 'somateria']}),
+	(NULL, {'x': 1, 'y': ['duck', 'somateria']}),
+	({'x': 2, 'y': ['goose']}, NULL),
+	(NULL, NULL)
+	) tbl(l, r);
+
+query T
+SELECT l IS NOT DISTINCT FROM r FROM list_in_struct
+----
+true
+false
+false
+false
+false
+true
+
+query T
+SELECT l IS DISTINCT FROM r FROM list_in_struct
+----
+false
+true
+true
+true
+true
+false
+
+# Filter by constant
+query T
+select CASE WHEN a < 4 THEN {'x': a, 'y': a+1, 'z': a+2}::VARIANT ELSE NULL END IS NOT DISTINCT FROM {'x': 1, 'y': 2, 'z': 3}
+from range(5) tbl(a);
+----
+false
+true
+false
+false
+false
+
+query T
+select CASE WHEN a < 4 THEN {'x': a, 'y': a+1, 'z': a+2}::VARIANT ELSE NULL END IS DISTINCT FROM {'x': 1, 'y': 2, 'z': 3}
+from range(5) tbl(a);
+----
+true
+false
+true
+true
+true
