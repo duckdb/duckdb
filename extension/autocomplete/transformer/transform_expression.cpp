@@ -160,14 +160,15 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBaseExpression(PEGT
 // }
 //
 // // ColumnReference <- CatalogReservedSchemaTableColumnName / SchemaReservedTableColumnName / TableReservedColumnName
-// /
-// // ColumnName
-// unique_ptr<SQLStatement> PEGTransformerFactory::TransformColumnReference(PEGTransformer &transformer,
-//                                                                          optional_ptr<ParseResult> parse_result) {
-// 	auto &list_pr = parse_result->Cast<ListParseResult>();
-// 	throw NotImplementedException("Rule 'ColumnReference' has not been implemented yet");
-// }
-//
+
+// ColumnName
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformColumnReference(PEGTransformer &transformer,
+																			 optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto identifiers = transformer.Transform<vector<string>>(list_pr.Child<ListParseResult>(0));
+	return make_uniq<ColumnRefExpression>(std::move(identifiers));
+}
+
 // // ColumnsExpression <- '*'? 'COLUMNS' Parens(Expression)
 // unique_ptr<SQLStatement> PEGTransformerFactory::TransformColumnsExpression(PEGTransformer &transformer,
 //                                                                            optional_ptr<ParseResult> parse_result) {

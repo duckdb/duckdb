@@ -5,26 +5,37 @@ FromOrTo <- 'FROM' / 'TO'
 
 CopySelect <- Parens(SelectStatement) 'TO' CopyFileName CopyOptions?
 
-CopyFileName <- Expression / StringLiteral / Identifier / (Identifier '.' ColId)
-CopyOptions <- 'WITH'? (Parens(GenericCopyOptionList) / (SpecializedOptions*))
-SpecializedOptions <-
-	'BINARY' / 'FREEZE' / 'OIDS' / 'CSV' / 'HEADER' /
-	SpecializedStringOption /
-	('ENCODING' StringLiteral) /
-	('FORCE' 'QUOTE' StarOrColumnList) /
-	('PARTITION' 'BY' StarOrColumnList) /
-	('FORCE' 'NOT'? 'NULL' ColumnList)
+CopyFileName <- StringLiteral / IdentifierColId / Identifier
+IdentifierColId <- Identifier '.' ColId
+
+CopyOptions <- 'WITH'? GenericCopyOptionListParens / SpecializedOptionList
+GenericCopyOptionListParens <- Parens(GenericCopyOptionList)
+SpecializedOptionList <- List(SpecializedOption)
+SpecializedOption <- SingleOption / SpecializedStringOption /
+	EncodingOption / QuoteAsOption / ForceQuoteOption / PartitionByOption / ForceNullOption
+
+SingleOption <- BinaryOption / FreezeOption / OidsOption / CsvOption / HeaderOption
+BinaryOption <- 'BINARY'
+FreezeOption <- 'FREEZE'
+OidsOption <- 'OIDS'
+CsvOption <- 'CSV'
+HeaderOption <- 'HEADER'
+EncodingOption <- 'ENCODING' StringLiteral
+QuoteAsOption <- 'QUOTE' 'AS'? StringLiteral
+ForceQuoteOption <- 'FORCE'? 'QUOTE' StarOrColumnList
+PartitionByOption <- 'PARTITION' 'BY' StarOrColumnList
+ForceNullOption <- 'FORCE' 'NOT'? 'NULL' ColumnList
 
 SpecializedStringOption <- ('DELIMITER' / 'NULL' / 'QUOTE' / 'ESCAPE') 'AS'? StringLiteral
 
 StarOrColumnList <- '*' / ColumnList
 
 GenericCopyOptionList <- List(GenericCopyOption)
-GenericCopyOption <- GenericCopyOptionName Expression?
-# FIXME: should not need to hard-code options here
-GenericCopyOptionName <- 'ARRAY' / 'NULL' / 'ANALYZE' / CopyOptionName
+GenericCopyOption <- CopyOptionName Expression?
 
 CopyFromDatabase <- 'FROM' 'DATABASE' ColId 'TO' ColId CopyDatabaseFlag?
 
 CopyDatabaseFlag <- Parens(SchemaOrData)
-SchemaOrData <- 'SCHEMA' / 'DATA'
+SchemaOrData <- CopySchema / CopyData
+CopySchema <- 'SCHEMA'
+CopyData <- 'DATA'

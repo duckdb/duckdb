@@ -28,12 +28,8 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformAttachStatement(PEGTran
 	}
 
 	info->path = list_pr.Child<ListParseResult>(4).Child<StringLiteralParseResult>(0).result;
-	auto &attach_alias = list_pr.Child<OptionalParseResult>(5);
-	info->name = attach_alias.HasResult() ? transformer.Transform<string>(attach_alias.optional_result) : string();
-	auto &attach_options = list_pr.Child<OptionalParseResult>(6);
-	if (attach_options.HasResult()) {
-		info->options = transformer.Transform<unordered_map<string, Value>>(attach_options.optional_result);
-	}
+	transformer.TransformOptional<string>(list_pr, 5, info->name);
+	transformer.TransformOptional<unordered_map<string, Value>>(list_pr, 6, info->options);
 	result->info = std::move(info);
 	return result;
 }

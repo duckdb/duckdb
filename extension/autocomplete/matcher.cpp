@@ -761,6 +761,7 @@ private:
 	Matcher &TableFunctionName() const;
 	Matcher &PragmaName() const;
 	Matcher &SettingName() const;
+	Matcher &CopyOptionName() const;
 	Matcher &ReservedSchemaName() const;
 	Matcher &ReservedTableName() const;
 	Matcher &ReservedColumnName() const;
@@ -863,6 +864,10 @@ Matcher &MatcherFactory::PragmaName() const {
 
 Matcher &MatcherFactory::SettingName() const {
 	return allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_SETTING_NAME));
+}
+
+Matcher &MatcherFactory::CopyOptionName() const {
+	return allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE));
 }
 
 Matcher &MatcherFactory::NumberLiteral() const {
@@ -1152,6 +1157,7 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	AddRuleOverride("ReservedFunctionName", ReservedScalarFunctionName());
 	AddRuleOverride("PragmaName", PragmaName());
 	AddRuleOverride("SettingName", SettingName());
+	AddRuleOverride("CopyOptionName", CopyOptionName());
 	AddRuleOverride("NumberLiteral", NumberLiteral());
 	AddRuleOverride("StringLiteral", StringLiteral());
 	AddRuleOverride("OperatorLiteral", Operator());

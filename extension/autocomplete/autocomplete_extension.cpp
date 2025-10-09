@@ -713,6 +713,9 @@ public:
 					                       tokenized_statement[tokenized_statement.size() - 1].length);
 				}
 				statement->query = query;
+				if (statement->type == StatementType::ATTACH_STATEMENT) {
+					Printer::Print("Successfully transformed attach statement");
+				}
 				result.push_back(std::move(statement));
 			}
 			return ParserOverrideResult(std::move(result));

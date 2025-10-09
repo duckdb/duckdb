@@ -240,6 +240,7 @@ void Parser::ParseQuery(const string &query) {
 						}
 					}
 				} else if (StringUtil::CIEquals(parser_override_option, "fallback")) {
+					Printer::PrintF("Failed to parse/transform %s", query);
 					continue;
 				}
 			}
