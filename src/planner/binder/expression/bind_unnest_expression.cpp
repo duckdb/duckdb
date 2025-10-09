@@ -119,8 +119,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 				}
 			} else if (alias == "keep_parent_names") {
 				keep_parent_names = value.GetValue<bool>();
-			}
-			else if (!alias.empty()) {
+			} else if (!alias.empty()) {
 				throw BinderException("Unsupported parameter \"%s\" for unnest", alias);
 			} else {
 				break;
@@ -128,8 +127,9 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 			supported_argument = true;
 		}
 		if (!supported_argument) {
-			return BindResult(BinderException(function, "UNNEST - unsupported extra argument, unnest only supports "
-			                                            "recursive := [true/false], max_depth := # or keep_parent_names := [true/false]"));
+			return BindResult(BinderException(
+			    function, "UNNEST - unsupported extra argument, unnest only supports "
+			              "recursive := [true/false], max_depth := # or keep_parent_names := [true/false]"));
 		}
 	}
 	unnest_level++;
@@ -248,8 +248,8 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 							if (keep_parent_names && expr->type == ExpressionType::BOUND_FUNCTION) {
 								current_key_path.push_back(expr->alias);
 							}
-							new_expressions.push_back(
-							    CreateBoundStructExtract(context, expr->Copy(), entry.first, current_key_path, keep_parent_names));
+							new_expressions.push_back(CreateBoundStructExtract(context, expr->Copy(), entry.first,
+							                                                   current_key_path, keep_parent_names));
 						}
 					}
 					has_structs = true;
