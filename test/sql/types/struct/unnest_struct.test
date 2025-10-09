@@ -35,16 +35,10 @@ SELECT a, c, d FROM (SELECT UNNEST({'a': 42, 'b': {'c': 88, 'd': 99}}, recursive
 ----
 42	88	99
 
-statement ok
-set retain_unnest_parent_names=true;
-
 query III
-SELECT a, "b.c", "b.d" FROM (SELECT UNNEST({'a': 42, 'b': {'c': 88, 'd': 99}}, recursive := true))
+SELECT a, "b.c", "b.d" FROM (SELECT UNNEST({'a': 42, 'b': {'c': 88, 'd': 99}}, recursive := true, keep_parent_names := true))
 ----
 42	88	99
-
-statement ok
-set retain_unnest_parent_names=false;
 
 # lists of structs
 query I
@@ -111,16 +105,10 @@ SELECT a, a_1, b FROM (SELECT UNNEST({'a': 42, 'b': {'a': 88, 'b': 99}}, recursi
 ----
 42	88	99
 
-statement ok
-set retain_unnest_parent_names=true;
-
 query III
-SELECT a, "b.a", "b.b" FROM (SELECT UNNEST({'a': 42, 'b': {'a': 88, 'b': 99}}, recursive := true))
+SELECT a, "b.a", "b.b" FROM (SELECT UNNEST({'a': 42, 'b': {'a': 88, 'b': 99}}, recursive := true, keep_parent_names := true))
 ----
 42	88	99
-
-statement ok
-set retain_unnest_parent_names=false;
 
 # unnest of struct must be the root
 statement error
