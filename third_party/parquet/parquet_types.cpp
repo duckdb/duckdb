@@ -679,7 +679,7 @@ static ENUM CastIntegerToEnum(const int32_t &ecast) {
 	} else {
 		throw std::runtime_error("Unimplemented ENUM for CastIntegerToEnum in parquet_types.cpp");
 	}
-	if (ecast >= values_to_names->size()) {
+	if (values_to_names->find(ecast) ==  values_to_names->end()) {
 		throw duckdb_apache::thrift::protocol::TProtocolException(
 				duckdb_apache::thrift::protocol::TProtocolException::INVALID_DATA);
 	}
