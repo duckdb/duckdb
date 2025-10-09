@@ -656,37 +656,6 @@ std::string to_string(const BoundaryOrder::type& val) {
 }
 
 
-//! Integer -> Enum cast that throws upon seeing an invalid Enum value
-template <class ENUM>
-static ENUM CastIntegerToEnum(const int32_t &ecast) {
-	const std::map<int, const char*> *values_to_names = nullptr;
-	if (std::is_same<Type::type, ENUM>::value) {
-		values_to_names = &_Type_VALUES_TO_NAMES;
-	} else if (std::is_same<ConvertedType::type, ENUM>::value) {
-		values_to_names = &_ConvertedType_VALUES_TO_NAMES;
-	} else if (std::is_same<FieldRepetitionType::type, ENUM>::value) {
-		values_to_names = &_FieldRepetitionType_VALUES_TO_NAMES;
-	} else if (std::is_same<EdgeInterpolationAlgorithm::type, ENUM>::value) {
-		values_to_names = &_EdgeInterpolationAlgorithm_VALUES_TO_NAMES;
-	} else if (std::is_same<Encoding::type, ENUM>::value) {
-		values_to_names = &_Encoding_VALUES_TO_NAMES;
-	} else if (std::is_same<CompressionCodec::type, ENUM>::value) {
-		values_to_names = &_CompressionCodec_VALUES_TO_NAMES;
-	} else if (std::is_same<PageType::type, ENUM>::value) {
-		values_to_names = &_PageType_VALUES_TO_NAMES;
-	} else if (std::is_same<BoundaryOrder::type, ENUM>::value) {
-		values_to_names = &_BoundaryOrder_VALUES_TO_NAMES;
-	} else {
-		throw std::runtime_error("Unimplemented ENUM for CastIntegerToEnum in parquet_types.cpp");
-	}
-	if (values_to_names->find(ecast) ==  values_to_names->end()) {
-		throw duckdb_apache::thrift::protocol::TProtocolException(
-				duckdb_apache::thrift::protocol::TProtocolException::INVALID_DATA);
-	}
-	return static_cast<ENUM>(ecast);
-}
-
-
 SizeStatistics::~SizeStatistics() noexcept {
 }
 
@@ -3477,7 +3446,7 @@ GeographyType::~GeographyType() noexcept {
 
 GeographyType::GeographyType() noexcept
    : crs(),
-     algorithm(CastIntegerToEnum<EdgeInterpolationAlgorithm::type>(0)) {
+     algorithm(static_cast<EdgeInterpolationAlgorithm::type>(0)) {
 }
 
 void GeographyType::__set_crs(const std::string& val) {
@@ -3529,7 +3498,7 @@ uint32_t GeographyType::read(::apache::thrift::protocol::TProtocol* iprot) {
         if (ftype == ::apache::thrift::protocol::T_I32) {
           int32_t ecast114;
           xfer += iprot->readI32(ecast114);
-          this->algorithm = CastIntegerToEnum<EdgeInterpolationAlgorithm::type>(ecast114);
+          this->algorithm = static_cast<EdgeInterpolationAlgorithm::type>(ecast114);
           this->__isset.algorithm = true;
         } else {
           xfer += iprot->skip(ftype);
@@ -4098,12 +4067,12 @@ SchemaElement::~SchemaElement() noexcept {
 }
 
 SchemaElement::SchemaElement() noexcept
-   : type(CastIntegerToEnum<Type::type>(0)),
+   : type(static_cast<Type::type>(0)),
      type_length(0),
-     repetition_type(CastIntegerToEnum<FieldRepetitionType::type>(0)),
+     repetition_type(static_cast<FieldRepetitionType::type>(0)),
      name(),
      num_children(0),
-     converted_type(CastIntegerToEnum<ConvertedType::type>(0)),
+     converted_type(static_cast<ConvertedType::type>(0)),
      scale(0),
      precision(0),
      field_id(0) {
@@ -4163,6 +4132,7 @@ std::ostream& operator<<(std::ostream& out, const SchemaElement& obj)
   return out;
 }
 
+
 uint32_t SchemaElement::read(::apache::thrift::protocol::TProtocol* iprot) {
 
   ::apache::thrift::protocol::TInputRecursionTracker tracker(*iprot);
@@ -4189,7 +4159,7 @@ uint32_t SchemaElement::read(::apache::thrift::protocol::TProtocol* iprot) {
         if (ftype == ::apache::thrift::protocol::T_I32) {
           int32_t ecast123;
           xfer += iprot->readI32(ecast123);
-          this->type = CastIntegerToEnum<Type::type>(ecast123);
+          this->type = static_cast<Type::type>(ecast123);
           this->__isset.type = true;
         } else {
           xfer += iprot->skip(ftype);
@@ -4207,7 +4177,7 @@ uint32_t SchemaElement::read(::apache::thrift::protocol::TProtocol* iprot) {
         if (ftype == ::apache::thrift::protocol::T_I32) {
           int32_t ecast124;
           xfer += iprot->readI32(ecast124);
-          this->repetition_type = CastIntegerToEnum<FieldRepetitionType::type>(ecast124);
+          this->repetition_type = static_cast<FieldRepetitionType::type>(ecast124);
           this->__isset.repetition_type = true;
         } else {
           xfer += iprot->skip(ftype);
@@ -4233,7 +4203,7 @@ uint32_t SchemaElement::read(::apache::thrift::protocol::TProtocol* iprot) {
         if (ftype == ::apache::thrift::protocol::T_I32) {
           int32_t ecast125;
           xfer += iprot->readI32(ecast125);
-          this->converted_type = CastIntegerToEnum<ConvertedType::type>(ecast125);
+          this->converted_type = static_cast<ConvertedType::type>(ecast125);
           this->__isset.converted_type = true;
         } else {
           xfer += iprot->skip(ftype);
@@ -4435,9 +4405,9 @@ DataPageHeader::~DataPageHeader() noexcept {
 
 DataPageHeader::DataPageHeader() noexcept
    : num_values(0),
-     encoding(CastIntegerToEnum<Encoding::type>(0)),
-     definition_level_encoding(CastIntegerToEnum<Encoding::type>(0)),
-     repetition_level_encoding(CastIntegerToEnum<Encoding::type>(0)) {
+     encoding(static_cast<Encoding::type>(0)),
+     definition_level_encoding(static_cast<Encoding::type>(0)),
+     repetition_level_encoding(static_cast<Encoding::type>(0)) {
 }
 
 void DataPageHeader::__set_num_values(const int32_t val) {
@@ -4504,7 +4474,7 @@ uint32_t DataPageHeader::read(::apache::thrift::protocol::TProtocol* iprot) {
         if (ftype == ::apache::thrift::protocol::T_I32) {
           int32_t ecast130;
           xfer += iprot->readI32(ecast130);
-          this->encoding = CastIntegerToEnum<Encoding::type>(ecast130);
+          this->encoding = static_cast<Encoding::type>(ecast130);
           isset_encoding = true;
         } else {
           xfer += iprot->skip(ftype);
@@ -4514,7 +4484,7 @@ uint32_t DataPageHeader::read(::apache::thrift::protocol::TProtocol* iprot) {
         if (ftype == ::apache::thrift::protocol::T_I32) {
           int32_t ecast131;
           xfer += iprot->readI32(ecast131);
-          this->definition_level_encoding = CastIntegerToEnum<Encoding::type>(ecast131);
+          this->definition_level_encoding = static_cast<Encoding::type>(ecast131);
           isset_definition_level_encoding = true;
         } else {
           xfer += iprot->skip(ftype);
@@ -4524,7 +4494,7 @@ uint32_t DataPageHeader::read(::apache::thrift::protocol::TProtocol* iprot) {
         if (ftype == ::apache::thrift::protocol::T_I32) {
           int32_t ecast132;
           xfer += iprot->readI32(ecast132);
-          this->repetition_level_encoding = CastIntegerToEnum<Encoding::type>(ecast132);
+          this->repetition_level_encoding = static_cast<Encoding::type>(ecast132);
           isset_repetition_level_encoding = true;
         } else {
           xfer += iprot->skip(ftype);
@@ -4727,7 +4697,7 @@ DictionaryPageHeader::~DictionaryPageHeader() noexcept {
 
 DictionaryPageHeader::DictionaryPageHeader() noexcept
    : num_values(0),
-     encoding(CastIntegerToEnum<Encoding::type>(0)),
+     encoding(static_cast<Encoding::type>(0)),
      is_sorted(0) {
 }
 
@@ -4785,7 +4755,7 @@ uint32_t DictionaryPageHeader::read(::apache::thrift::protocol::TProtocol* iprot
         if (ftype == ::apache::thrift::protocol::T_I32) {
           int32_t ecast141;
           xfer += iprot->readI32(ecast141);
-          this->encoding = CastIntegerToEnum<Encoding::type>(ecast141);
+          this->encoding = static_cast<Encoding::type>(ecast141);
           isset_encoding = true;
         } else {
           xfer += iprot->skip(ftype);
@@ -4889,7 +4859,7 @@ DataPageHeaderV2::DataPageHeaderV2() noexcept
    : num_values(0),
      num_nulls(0),
      num_rows(0),
-     encoding(CastIntegerToEnum<Encoding::type>(0)),
+     encoding(static_cast<Encoding::type>(0)),
      definition_levels_byte_length(0),
      repetition_levels_byte_length(0),
      is_compressed(true) {
@@ -4990,7 +4960,7 @@ uint32_t DataPageHeaderV2::read(::apache::thrift::protocol::TProtocol* iprot) {
         if (ftype == ::apache::thrift::protocol::T_I32) {
           int32_t ecast146;
           xfer += iprot->readI32(ecast146);
-          this->encoding = CastIntegerToEnum<Encoding::type>(ecast146);
+          this->encoding = static_cast<Encoding::type>(ecast146);
           isset_encoding = true;
         } else {
           xfer += iprot->skip(ftype);
@@ -5897,7 +5867,7 @@ PageHeader::~PageHeader() noexcept {
 }
 
 PageHeader::PageHeader() noexcept
-   : type(CastIntegerToEnum<PageType::type>(0)),
+   : type(static_cast<PageType::type>(0)),
      uncompressed_page_size(0),
      compressed_page_size(0),
      crc(0) {
@@ -5974,7 +5944,7 @@ uint32_t PageHeader::read(::apache::thrift::protocol::TProtocol* iprot) {
         if (ftype == ::apache::thrift::protocol::T_I32) {
           int32_t ecast179;
           xfer += iprot->readI32(ecast179);
-          this->type = CastIntegerToEnum<PageType::type>(ecast179);
+          this->type = static_cast<PageType::type>(ecast179);
           isset_type = true;
         } else {
           xfer += iprot->skip(ftype);
@@ -6465,8 +6435,8 @@ PageEncodingStats::~PageEncodingStats() noexcept {
 }
 
 PageEncodingStats::PageEncodingStats() noexcept
-   : page_type(CastIntegerToEnum<PageType::type>(0)),
-     encoding(CastIntegerToEnum<Encoding::type>(0)),
+   : page_type(static_cast<PageType::type>(0)),
+     encoding(static_cast<Encoding::type>(0)),
      count(0) {
 }
 
@@ -6516,7 +6486,7 @@ uint32_t PageEncodingStats::read(::apache::thrift::protocol::TProtocol* iprot) {
         if (ftype == ::apache::thrift::protocol::T_I32) {
           int32_t ecast192;
           xfer += iprot->readI32(ecast192);
-          this->page_type = CastIntegerToEnum<PageType::type>(ecast192);
+          this->page_type = static_cast<PageType::type>(ecast192);
           isset_page_type = true;
         } else {
           xfer += iprot->skip(ftype);
@@ -6526,7 +6496,7 @@ uint32_t PageEncodingStats::read(::apache::thrift::protocol::TProtocol* iprot) {
         if (ftype == ::apache::thrift::protocol::T_I32) {
           int32_t ecast193;
           xfer += iprot->readI32(ecast193);
-          this->encoding = CastIntegerToEnum<Encoding::type>(ecast193);
+          this->encoding = static_cast<Encoding::type>(ecast193);
           isset_encoding = true;
         } else {
           xfer += iprot->skip(ftype);
@@ -6623,8 +6593,8 @@ ColumnMetaData::~ColumnMetaData() noexcept {
 }
 
 ColumnMetaData::ColumnMetaData() noexcept
-   : type(CastIntegerToEnum<Type::type>(0)),
-     codec(CastIntegerToEnum<CompressionCodec::type>(0)),
+   : type(static_cast<Type::type>(0)),
+     codec(static_cast<CompressionCodec::type>(0)),
      num_values(0),
      total_uncompressed_size(0),
      total_compressed_size(0),
@@ -6751,7 +6721,7 @@ uint32_t ColumnMetaData::read(::apache::thrift::protocol::TProtocol* iprot) {
         if (ftype == ::apache::thrift::protocol::T_I32) {
           int32_t ecast198;
           xfer += iprot->readI32(ecast198);
-          this->type = CastIntegerToEnum<Type::type>(ecast198);
+          this->type = static_cast<Type::type>(ecast198);
           isset_type = true;
         } else {
           xfer += iprot->skip(ftype);
@@ -6770,7 +6740,7 @@ uint32_t ColumnMetaData::read(::apache::thrift::protocol::TProtocol* iprot) {
             {
               int32_t ecast204;
               xfer += iprot->readI32(ecast204);
-              this->encodings[_i203] = CastIntegerToEnum<Encoding::type>(ecast204);
+              this->encodings[_i203] = static_cast<Encoding::type>(ecast204);
             }
             xfer += iprot->readListEnd();
           }
@@ -6803,7 +6773,7 @@ uint32_t ColumnMetaData::read(::apache::thrift::protocol::TProtocol* iprot) {
         if (ftype == ::apache::thrift::protocol::T_I32) {
           int32_t ecast210;
           xfer += iprot->readI32(ecast210);
-          this->codec = CastIntegerToEnum<CompressionCodec::type>(ecast210);
+          this->codec = static_cast<CompressionCodec::type>(ecast210);
           isset_codec = true;
         } else {
           xfer += iprot->skip(ftype);
@@ -8681,7 +8651,7 @@ ColumnIndex::~ColumnIndex() noexcept {
 }
 
 ColumnIndex::ColumnIndex() noexcept
-   : boundary_order(CastIntegerToEnum<BoundaryOrder::type>(0)) {
+   : boundary_order(static_cast<BoundaryOrder::type>(0)) {
 }
 
 void ColumnIndex::__set_null_pages(const duckdb::vector<bool> & val) {
@@ -8810,7 +8780,7 @@ uint32_t ColumnIndex::read(::apache::thrift::protocol::TProtocol* iprot) {
         if (ftype == ::apache::thrift::protocol::T_I32) {
           int32_t ecast310;
           xfer += iprot->readI32(ecast310);
-          this->boundary_order = CastIntegerToEnum<BoundaryOrder::type>(ecast310);
+          this->boundary_order = static_cast<BoundaryOrder::type>(ecast310);
           isset_boundary_order = true;
         } else {
           xfer += iprot->skip(ftype);
