@@ -37,14 +37,26 @@ set(CMAKE_VERBOSE_MAKEFILE OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_MACOSX_RPATH 1)
 
-find_program(CCACHE_PROGRAM ccache)
-if(CCACHE_PROGRAM)
-  set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CCACHE_PROGRAM}")
-else()
-  find_program(CCACHE_PROGRAM sccache)
-  if(CCACHE_PROGRAM)
-    set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CCACHE_PROGRAM}")
-  endif()
+if(NOT DEFINED CMAKE_C_COMPILER_LAUNCHER AND NOT DEFINED
+        ENV{CMAKE_C_COMPILER_LAUNCHER})
+    find_program(COMPILER_LAUNCHER NAMES ccache sccache)
+    if(COMPILER_LAUNCHER)
+        message(STATUS "Using ${COMPILER_LAUNCHER} as C compiler launcher")
+        set(CMAKE_C_COMPILER_LAUNCHER
+                "${COMPILER_LAUNCHER}"
+                CACHE STRING "" FORCE)
+    endif()
+endif()
+
+if(NOT DEFINED CMAKE_CXX_COMPILER_LAUNCHER
+        AND NOT DEFINED ENV{CMAKE_CXX_COMPILER_LAUNCHER})
+    find_program(COMPILER_LAUNCHER NAMES ccache sccache)
+    if(COMPILER_LAUNCHER)
+        message(STATUS "Using ${COMPILER_LAUNCHER} as C++ compiler launcher")
+        set(CMAKE_CXX_COMPILER_LAUNCHER
+                "${COMPILER_LAUNCHER}"
+                CACHE STRING "" FORCE)
+    endif()
 endif()
 
 # Determine install paths
