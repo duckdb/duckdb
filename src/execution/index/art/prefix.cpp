@@ -100,6 +100,10 @@ void Prefix::Reduce(ART &art, Node &node, const idx_t pos) {
 	D_ASSERT(node.HasMetadata());
 	D_ASSERT(pos < Count(art));
 
+	// We always reduce by at least one byte,
+	// thus, if the prefix was a gate, it no longer is.
+	node.SetGateStatus(GateStatus::GATE_NOT_SET);
+
 	Prefix prefix(art, node);
 	if (pos == idx_t(prefix.data[Count(art)] - 1)) {
 		auto next = *prefix.ptr;

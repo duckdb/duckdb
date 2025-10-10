@@ -866,6 +866,20 @@ bool SingleFileBlockManager::IsRemote() {
 	return !handle->OnDiskFile();
 }
 
+bool SingleFileBlockManager::Prefetch() {
+	switch (DBConfig::GetSetting<StorageBlockPrefetchSetting>(db.GetDatabase())) {
+	case StorageBlockPrefetch::NEVER:
+		return false;
+	case StorageBlockPrefetch::DEBUG_FORCE_ALWAYS:
+	case StorageBlockPrefetch::ALWAYS_PREFETCH:
+		return !InMemory();
+	case StorageBlockPrefetch::REMOTE_ONLY:
+		return IsRemote();
+	default:
+		throw InternalException("Unknown StorageBlockPrefetch type");
+	}
+}
+
 unique_ptr<Block> SingleFileBlockManager::ConvertBlock(block_id_t block_id, FileBuffer &source_buffer) {
 	D_ASSERT(source_buffer.AllocSize() == GetBlockAllocSize());
 	// FIXME; maybe we should pass the block header size explicitly

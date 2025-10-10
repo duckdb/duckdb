@@ -66,12 +66,14 @@ struct VariantUtils {
 	                                                       uint32_t value_index);
 	DUCKDB_API static VariantNestedData DecodeNestedData(const UnifiedVariantVectorData &variant, idx_t row,
 	                                                     uint32_t value_index);
+	DUCKDB_API static string_t DecodeStringData(const UnifiedVariantVectorData &variant, idx_t row,
+	                                            uint32_t value_index);
 	DUCKDB_API static vector<string> GetObjectKeys(const UnifiedVariantVectorData &variant, idx_t row,
 	                                               const VariantNestedData &nested_data);
-	DUCKDB_API static VariantChildDataCollectionResult FindChildValues(const UnifiedVariantVectorData &variant,
-	                                                                   const VariantPathComponent &component,
-	                                                                   optional_idx row, SelectionVector &res,
-	                                                                   VariantNestedData *nested_data, idx_t count);
+	DUCKDB_API static void FindChildValues(const UnifiedVariantVectorData &variant,
+	                                       const VariantPathComponent &component,
+	                                       optional_ptr<const SelectionVector> sel, SelectionVector &res,
+	                                       ValidityMask &res_validity, VariantNestedData *nested_data, idx_t count);
 	DUCKDB_API static VariantNestedDataCollectionResult
 	CollectNestedData(const UnifiedVariantVectorData &variant, VariantLogicalType expected_type,
 	                  const SelectionVector &sel, idx_t count, optional_idx row, idx_t offset,

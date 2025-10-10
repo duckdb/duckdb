@@ -32,10 +32,6 @@ public:
 
 	CTEMaterialize materialized = CTEMaterialize::CTE_MATERIALIZE_DEFAULT;
 
-	const vector<unique_ptr<ParsedExpression>> &GetSelectList() const override {
-		return query->GetSelectList();
-	}
-
 public:
 	//! Convert the query node to a string
 	string ToString() const override;

@@ -166,8 +166,6 @@ runs:
 
       run: |
         ls
-        mkdir -p ~/.ssh
-        ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
         cd  ${{ inputs.build_dir}}
         ls -al
         pwd

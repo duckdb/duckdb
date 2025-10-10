@@ -28,6 +28,7 @@ class ClientContext;
 class DatabaseInstance;
 class TaskScheduler;
 struct AttachOptions;
+struct AlterInfo;
 
 //! The DatabaseManager is a class that sits at the root of all attached databases
 class DatabaseManager {
@@ -48,13 +49,14 @@ public:
 	void FinalizeStartup();
 	//! Get an attached database by its name
 	optional_ptr<AttachedDatabase> GetDatabase(ClientContext &context, const string &name);
+	shared_ptr<AttachedDatabase> GetDatabase(const string &name);
 	//! Attach a new database
 	shared_ptr<AttachedDatabase> AttachDatabase(ClientContext &context, AttachInfo &info, AttachOptions &options);
 
-	optional_ptr<AttachedDatabase> FinalizeAttach(ClientContext &context, AttachInfo &info,
-	                                              shared_ptr<AttachedDatabase> database);
 	//! Detach an existing database
 	void DetachDatabase(ClientContext &context, const string &name, OnEntryNotFound if_not_found);
+	//! Alter operation dispatcher
+	void Alter(ClientContext &context, AlterInfo &info);
 	//! Rollback the attach of a database
 	shared_ptr<AttachedDatabase> DetachInternal(const string &name);
 	//! Returns a reference to the system catalog
@@ -103,6 +105,12 @@ public:
 	//! Gets a list of all attached database paths
 	vector<string> GetAttachedDatabasePaths();
 
+	shared_ptr<AttachedDatabase> GetDatabaseInternal(const lock_guard<mutex> &, const string &name);
+
+private:
+	optional_ptr<AttachedDatabase> FinalizeAttach(ClientContext &context, AttachInfo &info,
+	                                              shared_ptr<AttachedDatabase> database);
+
 private:
 	//! The system database is a special database that holds system entries (e.g. functions)
 	shared_ptr<AttachedDatabase> system;
@@ -120,6 +128,11 @@ private:
 	string default_database;
 	//! Manager for ensuring we never open the same database file twice in the same program
 	shared_ptr<DatabaseFilePathManager> path_manager;
+
+private:
+	//! Rename an existing database
+	void RenameDatabase(ClientContext &context, const string &old_name, const string &new_name,
+	                    OnEntryNotFound if_not_found);
 };
 
 } // namespace duckdb

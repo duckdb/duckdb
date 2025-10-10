@@ -90,8 +90,9 @@ TEST_CASE("Test Table Functions C API", "[capi]") {
 
 	REQUIRE(tester.OpenDatabase(nullptr));
 	capi_register_table_function(tester.connection, "my_function", my_bind, my_init, my_function);
-	// registering again causes an error
-	capi_register_table_function(tester.connection, "my_function", my_bind, my_init, my_function, DuckDBError);
+
+	// registering again does not cause error, because we overload
+	capi_register_table_function(tester.connection, "my_function", my_bind, my_init, my_function);
 
 	// now call it
 	result = tester.Query("SELECT * FROM my_function(1)");
@@ -158,8 +159,8 @@ TEST_CASE("Test Table Function register errors in C API", "[capi]") {
 	REQUIRE(tester.OpenDatabase(nullptr));
 
 	capi_register_table_function(tester.connection, "x", my_error_bind, my_init, my_function, DuckDBSuccess);
-	// Try to register it again with the same name, name collision
-	capi_register_table_function(tester.connection, "x", my_error_bind, my_init, my_function, DuckDBError);
+	// Try to register it again with the same name, is ok (because of overloading)
+	capi_register_table_function(tester.connection, "x", my_error_bind, my_init, my_function, DuckDBSuccess);
 }
 
 struct my_named_bind_data_struct {

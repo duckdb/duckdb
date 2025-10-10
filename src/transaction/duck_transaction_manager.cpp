@@ -216,7 +216,7 @@ void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
 		options.type = CheckpointType::CONCURRENT_CHECKPOINT;
 	}
 
-	storage_manager.CreateCheckpoint(QueryContext(context), options);
+	storage_manager.CreateCheckpoint(context, options);
 }
 
 unique_ptr<StorageLockKey> DuckTransactionManager::SharedCheckpointLock() {
@@ -353,7 +353,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		options.type = checkpoint_decision.type;
 		auto &storage_manager = db.GetStorageManager();
 		try {
-			storage_manager.CreateCheckpoint(QueryContext(context), options);
+			storage_manager.CreateCheckpoint(context, options);
 		} catch (std::exception &ex) {
 			error.Merge(ErrorData(ex));
 		}
@@ -425,7 +425,6 @@ unique_ptr<DuckCleanupInfo> DuckTransactionManager::RemoveTransaction(DuckTransa
 	}
 	lowest_active_start = lowest_start_time;
 	lowest_active_id = lowest_transaction_id;
-	auto lowest_stored_query = lowest_start_time;
 	D_ASSERT(t_index != active_transactions.size());
 
 	// Decide if we need to store the transaction, or if we can schedule it for cleanup.
@@ -458,7 +457,6 @@ unique_ptr<DuckCleanupInfo> DuckTransactionManager::RemoveTransaction(DuckTransa
 	idx_t i = 0;
 	for (; i < recently_committed_transactions.size(); i++) {
 		D_ASSERT(recently_committed_transactions[i]);
-		lowest_stored_query = MinValue(recently_committed_transactions[i]->start_time, lowest_stored_query);
 		if (recently_committed_transactions[i]->commit_id >= lowest_start_time) {
 			// recently_committed_transactions is ordered on commit_id.
 			// Thus, if the current commit_id is greater than

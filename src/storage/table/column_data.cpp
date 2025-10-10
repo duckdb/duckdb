@@ -673,7 +673,8 @@ void ColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, 
 unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, ColumnCheckpointInfo &checkpoint_info) {
 	// scan the segments of the column data
 	// set up the checkpoint state
-	auto checkpoint_state = CreateCheckpointState(row_group, checkpoint_info.info.manager);
+	auto &partial_block_manager = checkpoint_info.GetPartialBlockManager();
+	auto checkpoint_state = CreateCheckpointState(row_group, partial_block_manager);
 	checkpoint_state->global_stats = BaseStatistics::CreateEmpty(type).ToUnique();
 
 	auto &nodes = data.ReferenceSegments();
@@ -699,6 +700,7 @@ void ColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStatist
 	this->count = 0;
 	for (auto &data_pointer : column_data.pointers) {
 		// Update the count and statistics
+		data_pointer.row_start = start + count;
 		this->count += data_pointer.tuple_count;
 
 		// Merge the statistics. If this is a child column, the target_stats reference will point into the parents stats
@@ -873,6 +875,17 @@ PersistentColumnData ColumnData::Serialize() {
 	return result;
 }
 
+void RealignColumnData(PersistentColumnData &column_data, idx_t new_start) {
+	idx_t current_start = new_start;
+	for (auto &pointer : column_data.pointers) {
+		pointer.row_start = current_start;
+		current_start += pointer.tuple_count;
+	}
+	for (auto &child : column_data.child_columns) {
+		RealignColumnData(child, new_start);
+	}
+}
+
 shared_ptr<ColumnData> ColumnData::Deserialize(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
                                                idx_t start_row, ReadStream &source, const LogicalType &type) {
 	auto entry = ColumnData::CreateColumn(block_manager, info, column_index, start_row, type, nullptr);
@@ -890,12 +903,15 @@ shared_ptr<ColumnData> ColumnData::Deserialize(BlockManager &block_manager, Data
 	deserializer.Unset<DatabaseInstance>();
 	deserializer.End();
 
+	// re-align data segments, in case our start_row has changed
+	RealignColumnData(persistent_column_data, start_row);
+
 	// initialize the column
 	entry->InitializeColumn(persistent_column_data, entry->stats->statistics);
 	return entry;
 }
 
-void ColumnData::GetColumnSegmentInfo(idx_t row_group_index, vector<idx_t> col_path,
+void ColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<idx_t> col_path,
                                       vector<ColumnSegmentInfo> &result) {
 	D_ASSERT(!col_path.empty());
 
@@ -944,7 +960,7 @@ void ColumnData::GetColumnSegmentInfo(idx_t row_group_index, vector<idx_t> col_p
 			column_info.additional_blocks = segment_state->GetAdditionalBlocks();
 		}
 		if (compression_function.get_segment_info) {
-			auto segment_info = compression_function.get_segment_info(*segment);
+			auto segment_info = compression_function.get_segment_info(context, *segment);
 			vector<string> sinfo;
 			for (auto &item : segment_info) {
 				auto &mode = item.first;

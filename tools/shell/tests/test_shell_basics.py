@@ -1132,5 +1132,10 @@ def test_tables_invalid_pattern_handling(shell):
     # Should show usage message for invalid pattern
     result.check_stderr("Usage: .tables ?TABLE?")
 
+def test_help_prints_to_stdout(shell):
+    test = ShellTest(shell, ["--help"])
+    result = test.run()
+    result.check_stdout("OPTIONS include:")
+
 
 # fmt: on
