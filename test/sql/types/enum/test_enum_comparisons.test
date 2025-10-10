@@ -26,6 +26,39 @@ CREATE TABLE robots (
 statement ok
 insert into robots values ('Timmynator','sad'), ('Tars', 'ok'), ('Diggernaut', NULL)
 
+# enums are ordered
+query I
+SELECT 'sad'::mood < 'ok'::mood AS comp;
+----
+True
+
+# strings are coerced to enums
+query I
+SELECT 'sad'::mood < 'ok' AS comp;
+----
+True
+
+query I
+SELECT 'sad'::mood = 'ok' AS comp;
+----
+False
+
+query I
+SELECT 'sad' = 'sad'::mood AS comp;
+----
+True
+
+# Comparing to a non-existent enum value should error
+statement error
+select 'sad'::mood = 'ecstatic'
+----
+Error: Enum value 'ecstatic' not found in enum type 'mood'
+
+statement error
+select 'sad'::mood < 'ecstatic'
+----
+Error: Enum value 'ecstatic' not found in enum type 'mood'
+
 # This just compares the actual uint value of the column since both are from the same mood type
 query II
 select person.name, robots.name from person inner join robots on (person.current_mood = robots.current_mood)
@@ -50,6 +83,28 @@ query II
 select person.name, pet.name from person inner join pet on (person.current_mood > pet.current_mood) where person.name = 'Pedro'
 ----
 Pedro	Vacilo
+
+query II
+select * from person where current_mood = 'happy'
+----
+Pedro	happy
+
+query II rowsort
+select * from person where current_mood >= 'happy'
+----
+Pedro	happy
+Tim	ok
+
+# Comparing to a non-existent enum value should error
+statement error
+select * from person where current_mood = 'ecstatic'
+----
+Error: Enum value 'ecstatic' not found in enum type 'mood'
+
+statement error
+select * from person where current_mood >= 'ecstatic'
+----
+Error: Enum value 'ecstatic' not found in enum type 'mood'
 
 
 # This actually performs the optimized comparison since they are both ENUMs but of different types.
