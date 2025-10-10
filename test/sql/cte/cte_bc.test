@@ -1,0 +1,22 @@
+# name: test/sql/cte/cte_bc.test
+# description: Test BC of reading CTEs
+# group: [cte]
+
+unzip data/storage/cte_v1.db.gz __TEST_DIR__/cte_v1.db
+
+load __TEST_DIR__/cte_v1.db readonly
+
+query I
+FROM v1
+----
+42
+
+query I
+FROM v2
+----
+42
+
+query I
+FROM v3
+----
+42
