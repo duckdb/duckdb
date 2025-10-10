@@ -41,11 +41,8 @@ BoundStatement Binder::BindNode(QueryNode &node) {
 		throw InternalException("Unsupported query node type");
 	}
 	for(idx_t i = bound_ctes.size(); i > 0; i--) {
-		result = current_binder.get().FinishCTE(bound_ctes[i - 1], std::move(result));
-		bound_ctes.pop_back();
-		if (!bound_ctes.empty()) {
-			current_binder = *bound_ctes.back().child_binder;
-		}
+		auto &finish_binder = i == 1 ? *this : *bound_ctes[i - 2].child_binder;
+		result = finish_binder.FinishCTE(bound_ctes[i - 1], std::move(result));
 	}
 	return result;
 }
