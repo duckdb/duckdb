@@ -726,7 +726,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 	file_name = script;
 	SQLLogicParser parser;
 	idx_t skip_level = 0;
-	bool test_executed = false;
+	bool test_expr_executed = false;
 	bool file_tags_expr_seen = false;
 	vector<string> file_tags; // gets both implicit and file-spec'd
 
@@ -776,17 +776,17 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 		// enforce: file = context* statement*
 		bool token_is_context = parser.IsContext(token.type);
 		bool token_is_test_command = parser.IsTestCommand(token.type);
-		if (token_is_context && test_executed) {
+		if (token_is_context && test_expr_executed) {
 			parser.Fail("all context (e.g. tags, require-env) must precede test statements");
 		}
 
 		// Check tags first time we hit test statements, since all explicit & implicit tags now present
-		if (token_is_test_command && !test_executed) {
+		if (token_is_test_command && !test_expr_executed) {
 			if (test_config.GetPolicyForTagSet(file_tags) == SelectPolicy::SKIP) {
 				SKIP_TEST("match tag-set");
 				return;
 			}
-			test_executed = true;
+			test_expr_executed = true;
 		}
 
 		vector<Condition> conditions;
@@ -1216,7 +1216,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			// - implicit tag scans of e.g. strings, vars, etc., like '${VAR}', '__TEST_DIR__', 'ATTACH'
 			// - faster subset runs
 			// - tag match runs to generate lists
-			if (test_executed) {
+			if (test_expr_executed) {
 				parser.Fail("tags expression must precede test commands");
 			}
 			if (file_tags_expr_seen) {
