@@ -55,6 +55,9 @@ static const TestConfigOption test_config_options[] = {
     {"storage_version", "Database storage version to use by default", LogicalType::VARCHAR, nullptr},
     {"data_location", "Directory where static test files are read (defaults to `data/`)", LogicalType::VARCHAR,
      nullptr},
+    {"settings", "Configuration settings to apply",
+     LogicalType::LIST(LogicalType::STRUCT({{"name", LogicalType::VARCHAR}, {"value", LogicalType::VARCHAR}})),
+     nullptr},
     {nullptr, nullptr, LogicalType::INVALID, nullptr},
 };
 
@@ -397,6 +400,22 @@ bool TestConfiguration::GetSkipCompiledTests() {
 
 string TestConfiguration::GetStorageVersion() {
 	return GetOptionOrDefault("storage_version", string());
+}
+
+vector<ConfigSetting> TestConfiguration::GetConfigSettings() {
+	vector<ConfigSetting> result;
+	if (options.find("settings") != options.end()) {
+		auto entry = options["settings"];
+		auto list_children = ListValue::GetChildren(entry);
+		for (const auto &value : list_children) {
+			auto &struct_children = StructValue::GetChildren(value);
+			ConfigSetting config_setting;
+			config_setting.name = StringValue::Get(struct_children[0]);
+			config_setting.value = StringValue::Get(struct_children[1]);
+			result.push_back(std::move(config_setting));
+		}
+	}
+	return result;
 }
 
 string TestConfiguration::GetTestEnv(const string &key, const string &default_value) {
