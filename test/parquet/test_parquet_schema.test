@@ -35,23 +35,9 @@ Binder Error: Parquet schema cannot be combined with union_by_name=true or hive_
 
 statement ok
 COPY (
-	SELECT
-		1 i1,
-		3 i3,
-		4 i4,
-		5 i5
-	UNION ALL
-	SELECT
-		2 i1,
-		3 i3,
-		4 i4,
-		5 i5
-) TO '__TEST_DIR__/partitioned' (FIELD_IDS {
-	i1: 5,
-	i3: 3,
-	i4: 2,
-	i5: 1
-}, PARTITION_BY i1, FORMAT parquet, WRITE_PARTITION_COLUMNS)
+    SELECT 1 i1, 3 i3, 4 i4, 5 i5 UNION ALL
+    SELECT 2 i1, 3 i3, 4 i4, 5 i5
+) TO '__TEST_DIR__/partitioned' (FIELD_IDS {i1: 5, i3: 3, i4: 2, i5: 1}, PARTITION_BY i1, FORMAT parquet, WRITE_PARTITION_COLUMNS)
 
 # auto-detection of hive partitioning is enabled by default,
 # but automatically disabled when a schema is supplied, so this should succeed
