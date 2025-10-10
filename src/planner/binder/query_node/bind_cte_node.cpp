@@ -18,7 +18,7 @@ struct BoundCTEData {
 BoundStatement Binder::BindNode(QueryNode &node) {
 	reference<Binder> current_binder(*this);
 	vector<BoundCTEData> bound_ctes;
-	for(auto &cte : node.cte_map.map) {
+	for (auto &cte : node.cte_map.map) {
 		bound_ctes.push_back(current_binder.get().PrepareCTE(cte.first, *cte.second));
 		current_binder = *bound_ctes.back().child_binder;
 	}
@@ -40,7 +40,7 @@ BoundStatement Binder::BindNode(QueryNode &node) {
 	default:
 		throw InternalException("Unsupported query node type");
 	}
-	for(idx_t i = bound_ctes.size(); i > 0; i--) {
+	for (idx_t i = bound_ctes.size(); i > 0; i--) {
 		auto &finish_binder = i == 1 ? *this : *bound_ctes[i - 2].child_binder;
 		result = finish_binder.FinishCTE(bound_ctes[i - 1], std::move(result));
 	}
@@ -114,12 +114,13 @@ BoundStatement Binder::FinishCTE(BoundCTEData &bound_cte, BoundStatement child) 
 	auto cte_query = std::move(bound_cte.query.plan);
 	auto cte_child = std::move(child.plan);
 
-	auto root = make_uniq<LogicalMaterializedCTE>(bound_cte.ctename, bound_cte.setop_index, result.types.size(), std::move(cte_query),
-												  std::move(cte_child), bound_cte.materialized);
+	auto root = make_uniq<LogicalMaterializedCTE>(bound_cte.ctename, bound_cte.setop_index, result.types.size(),
+	                                              std::move(cte_query), std::move(cte_child), bound_cte.materialized);
 
 	// check if there are any unplanned subqueries left in either child
-	has_unplanned_dependent_joins = has_unplanned_dependent_joins || bound_cte.child_binder->has_unplanned_dependent_joins ||
-									bound_cte.query_binder->has_unplanned_dependent_joins;
+	has_unplanned_dependent_joins = has_unplanned_dependent_joins ||
+	                                bound_cte.child_binder->has_unplanned_dependent_joins ||
+	                                bound_cte.query_binder->has_unplanned_dependent_joins;
 	result.plan = std::move(root);
 	return result;
 }
