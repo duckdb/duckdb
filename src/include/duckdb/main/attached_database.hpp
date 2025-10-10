@@ -35,9 +35,10 @@ enum class AttachedDatabaseType {
 class DatabaseFilePathManager;
 
 struct StoredDatabasePath {
-	StoredDatabasePath(DatabaseFilePathManager &manager, string path, const string &name);
+	StoredDatabasePath(DatabaseManager &db_manager, DatabaseFilePathManager &manager, string path, const string &name);
 	~StoredDatabasePath();
 
+	DatabaseManager &db_manager;
 	DatabaseFilePathManager &manager;
 	string path;
 

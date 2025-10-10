@@ -13,21 +13,21 @@
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/enums/on_create_conflict.hpp"
 #include "duckdb/common/enums/access_mode.hpp"
+#include "duckdb/common/reference_map.hpp"
 
 namespace duckdb {
 struct AttachInfo;
 struct AttachOptions;
+class DatabaseManager;
 
 enum class InsertDatabasePathResult { SUCCESS, ALREADY_EXISTS };
 
 struct DatabasePathInfo {
-	explicit DatabasePathInfo(string name_p, AccessMode access_mode)
-	    : name(std::move(name_p)), access_mode(access_mode), is_attached(true) {
-	}
+	DatabasePathInfo(DatabaseManager &manager, string name_p, AccessMode access_mode);
 
 	string name;
 	AccessMode access_mode;
-	bool is_attached;
+	reference_set_t<DatabaseManager> attached_databases;
 	idx_t reference_count = 1;
 };
 
@@ -35,12 +35,12 @@ struct DatabasePathInfo {
 class DatabaseFilePathManager {
 public:
 	idx_t ApproxDatabaseCount() const;
-	InsertDatabasePathResult InsertDatabasePath(const string &path, const string &name, OnCreateConflict on_conflict,
-	                                            AttachOptions &options);
+	InsertDatabasePathResult InsertDatabasePath(DatabaseManager &manager, const string &path, const string &name,
+	                                            OnCreateConflict on_conflict, AttachOptions &options);
 	//! Erase a database path - indicating we are done with using it
 	void EraseDatabasePath(const string &path);
 	//! Called when a database is detached, but before it is fully finished being used
-	void DetachDatabase(const string &path);
+	void DetachDatabase(DatabaseManager &manager, const string &path);
 
 private:
 	//! The lock to add entries to the database path map
