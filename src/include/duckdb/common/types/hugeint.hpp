@@ -129,38 +129,38 @@ public:
 	static int Sign(hugeint_t n);
 	static hugeint_t Abs(hugeint_t n);
 	// comparison operators
-	static bool Equals(hugeint_t lhs, hugeint_t rhs) {
+	static bool Equals(const hugeint_t &lhs, const hugeint_t &rhs) {
 		bool lower_equals = lhs.lower == rhs.lower;
 		bool upper_equals = lhs.upper == rhs.upper;
 		return lower_equals && upper_equals;
 	}
 
-	static bool NotEquals(hugeint_t lhs, hugeint_t rhs) {
+	static bool NotEquals(const hugeint_t &lhs, const hugeint_t &rhs) {
 		return !Equals(lhs, rhs);
 	}
 
-	static bool GreaterThan(hugeint_t lhs, hugeint_t rhs) {
+	static bool GreaterThan(const hugeint_t &lhs, const hugeint_t &rhs) {
 		bool upper_bigger = lhs.upper > rhs.upper;
 		bool upper_equal = lhs.upper == rhs.upper;
 		bool lower_bigger = lhs.lower > rhs.lower;
 		return upper_bigger || (upper_equal && lower_bigger);
 	}
 
-	static bool GreaterThanEquals(hugeint_t lhs, hugeint_t rhs) {
+	static bool GreaterThanEquals(const hugeint_t &lhs, const hugeint_t &rhs) {
 		bool upper_bigger = lhs.upper > rhs.upper;
 		bool upper_equal = lhs.upper == rhs.upper;
 		bool lower_bigger_equals = lhs.lower >= rhs.lower;
 		return upper_bigger || (upper_equal && lower_bigger_equals);
 	}
 
-	static bool LessThan(hugeint_t lhs, hugeint_t rhs) {
+	static bool LessThan(const hugeint_t &lhs, const hugeint_t &rhs) {
 		bool upper_smaller = lhs.upper < rhs.upper;
 		bool upper_equal = lhs.upper == rhs.upper;
 		bool lower_smaller = lhs.lower < rhs.lower;
 		return upper_smaller || (upper_equal && lower_smaller);
 	}
 
-	static bool LessThanEquals(hugeint_t lhs, hugeint_t rhs) {
+	static bool LessThanEquals(const hugeint_t &lhs, const hugeint_t &rhs) {
 		bool upper_smaller = lhs.upper < rhs.upper;
 		bool upper_equal = lhs.upper == rhs.upper;
 		bool lower_smaller_equals = lhs.lower <= rhs.lower;
