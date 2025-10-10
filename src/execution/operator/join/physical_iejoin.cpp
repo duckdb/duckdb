@@ -229,6 +229,8 @@ OperatorResultType PhysicalIEJoin::ExecuteInternal(ExecutionContext &context, Da
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
+enum class IEJoinSourceStage : uint8_t { INIT, INNER, OUTER, DONE };
+
 struct IEJoinUnion {
 	using SortedTable = PhysicalRangeJoin::GlobalSortedTable;
 	using ChunkRange = std::pair<idx_t, idx_t>;
@@ -864,6 +866,13 @@ public:
 		return count;
 	}
 
+	// resolve joins that can potentially output N*M elements (INNER, LEFT, FULL)
+	void ResolveComplexJoin(ExecutionContext &context, DataChunk &result);
+	//	Resolve left join results
+	void ExecuteLeftTask(ExecutionContext &context, DataChunk &result);
+	//	Resolve right join results
+	void ExecuteRightTask(ExecutionContext &context, DataChunk &result);
+
 	const PhysicalIEJoin &op;
 
 	// Joining
@@ -903,31 +912,19 @@ public:
 	bool *right_matches;
 };
 
-void PhysicalIEJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &result, LocalSourceState &state_p) const {
-	auto &state = state_p.Cast<IEJoinLocalSourceState>();
-	auto &ie_sink = sink_state->Cast<IEJoinGlobalState>();
+void IEJoinLocalSourceState::ResolveComplexJoin(ExecutionContext &context, DataChunk &result) {
+	auto &ie_sink = op.sink_state->Cast<IEJoinGlobalState>();
+	const auto &conditions = op.conditions;
 
-	auto &chunk = state.unprojected;
+	auto &chunk = unprojected;
 
 	auto &left_table = *ie_sink.tables[0];
-	auto &lsel = state.lsel;
-	auto &lpayload = state.lpayload;
-	auto &left_iterator = *state.left_iterator;
-	auto &left_chunk_state = state.left_chunk_state;
-	auto &left_block_index = state.left_block_index;
-	auto &left_scan_state = *state.left_scan_state;
-	const auto left_cols = children[0].get().GetTypes().size();
+	const auto left_cols = op.children[0].get().GetTypes().size();
 
 	auto &right_table = *ie_sink.tables[1];
-	auto &rsel = state.rsel;
-	auto &rpayload = state.rpayload;
-	auto &right_iterator = *state.right_iterator;
-	auto &right_chunk_state = state.right_chunk_state;
-	auto &right_block_index = state.right_block_index;
-	auto &right_scan_state = *state.right_scan_state;
 
 	do {
-		auto result_count = state.joiner->JoinComplexBlocks(lsel, rsel);
+		auto result_count = joiner->JoinComplexBlocks(lsel, rsel);
 		if (result_count == 0) {
 			// exhausted this pair
 			return;
@@ -935,13 +932,13 @@ void PhysicalIEJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &re
 
 		// found matches: extract them
 
-		left_table.Repin(left_iterator);
-		right_table.Repin(right_iterator);
+		left_table.Repin(*left_iterator);
+		right_table.Repin(*right_iterator);
 
-		SliceSortedPayload(lpayload, left_table, left_iterator, left_chunk_state, left_block_index, lsel, result_count,
-		                   left_scan_state);
-		SliceSortedPayload(rpayload, right_table, right_iterator, right_chunk_state, right_block_index, rsel,
-		                   result_count, right_scan_state);
+		op.SliceSortedPayload(lpayload, left_table, *left_iterator, left_chunk_state, left_block_index, lsel,
+		                      result_count, *left_scan_state);
+		op.SliceSortedPayload(rpayload, right_table, *right_iterator, right_chunk_state, right_block_index, rsel,
+		                      result_count, *right_scan_state);
 
 		auto sel = FlatVector::IncrementalSelectionVector();
 		if (conditions.size() > 2) {
@@ -950,24 +947,25 @@ void PhysicalIEJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &re
 			// to we can compute the values for comparison.
 			const auto tail_cols = conditions.size() - 2;
 
-			state.left_executor.SetChunk(lpayload);
-			state.right_executor.SetChunk(rpayload);
+			left_executor.SetChunk(lpayload);
+			right_executor.SetChunk(rpayload);
 
 			auto tail_count = result_count;
-			auto true_sel = &state.true_sel;
+			auto match_sel = &true_sel;
 			for (size_t cmp_idx = 0; cmp_idx < tail_cols; ++cmp_idx) {
-				auto &left = state.left_keys.data[cmp_idx];
-				state.left_executor.ExecuteExpression(cmp_idx, left);
+				auto &left = left_keys.data[cmp_idx];
+				left_executor.ExecuteExpression(cmp_idx, left);
 
-				auto &right = state.right_keys.data[cmp_idx];
-				state.right_executor.ExecuteExpression(cmp_idx, right);
+				auto &right = right_keys.data[cmp_idx];
+				right_executor.ExecuteExpression(cmp_idx, right);
 
 				if (tail_count < result_count) {
 					left.Slice(*sel, tail_count);
 					right.Slice(*sel, tail_count);
 				}
-				tail_count = SelectJoinTail(conditions[cmp_idx + 2].comparison, left, right, sel, tail_count, true_sel);
-				sel = true_sel;
+				tail_count =
+				    op.SelectJoinTail(conditions[cmp_idx + 2].comparison, left, right, sel, tail_count, match_sel);
+				sel = match_sel;
 			}
 
 			if (tail_count < result_count) {
@@ -990,17 +988,17 @@ void PhysicalIEJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &re
 
 		//	We need all of the data to compute other predicates,
 		//	but we only return what is in the projection map
-		ProjectResult(chunk, result);
+		op.ProjectResult(chunk, result);
 
 		// found matches: mark the found matches if required
 		if (left_table.found_match) {
 			for (idx_t i = 0; i < result_count; i++) {
-				left_table.found_match[state.left_base + lsel[sel->get_index(i)]] = true;
+				left_table.found_match[left_base + lsel[sel->get_index(i)]] = true;
 			}
 		}
 		if (right_table.found_match) {
 			for (idx_t i = 0; i < result_count; i++) {
-				right_table.found_match[state.right_base + rsel[sel->get_index(i)]] = true;
+				right_table.found_match[right_base + rsel[sel->get_index(i)]] = true;
 			}
 		}
 		result.Verify();
@@ -1010,13 +1008,13 @@ void PhysicalIEJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &re
 class IEJoinGlobalSourceState : public GlobalSourceState {
 public:
 	IEJoinGlobalSourceState(const PhysicalIEJoin &op, IEJoinGlobalState &gsink)
-	    : op(op), gsink(gsink), initialized(false), next_pair(0), completed(0), left_outers(0), next_left(0),
-	      right_outers(0), next_right(0) {
+	    : op(op), gsink(gsink), stage(IEJoinSourceStage::INIT), next_pair(0), completed(0), left_outers(0),
+	      next_left(0), right_outers(0), next_right(0) {
 	}
 
-	void Initialize(ClientContext &client) {
+	void Initialize() {
 		auto guard = Lock();
-		if (initialized) {
+		if (stage != IEJoinSourceStage::INIT) {
 			return;
 		}
 
@@ -1037,7 +1035,7 @@ public:
 		}
 
 		// Ready for action
-		initialized = true;
+		stage = IEJoinSourceStage::INNER;
 	}
 
 public:
@@ -1152,7 +1150,7 @@ public:
 	const PhysicalIEJoin &op;
 	IEJoinGlobalState &gsink;
 
-	bool initialized = false;
+	atomic<IEJoinSourceStage> stage;
 
 	// Join queue state
 	const idx_t left_per_thread = 1024;
@@ -1185,104 +1183,116 @@ ProgressData PhysicalIEJoin::GetProgress(ClientContext &context, GlobalSourceSta
 
 SourceResultType PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &result,
                                          OperatorSourceInput &input) const {
-	auto &ie_sink = sink_state->Cast<IEJoinGlobalState>();
-	auto &ie_gstate = input.global_state.Cast<IEJoinGlobalSourceState>();
-	auto &ie_lstate = input.local_state.Cast<IEJoinLocalSourceState>();
+	auto &gsource = input.global_state.Cast<IEJoinGlobalSourceState>();
+	auto &lsource = input.local_state.Cast<IEJoinLocalSourceState>();
 
-	ie_gstate.Initialize(context.client);
+	gsource.Initialize();
 
-	if (!ie_lstate.joiner && !ie_lstate.left_matches && !ie_lstate.right_matches) {
-		ie_gstate.GetNextPair(context, ie_lstate);
+	if (!lsource.joiner && !lsource.left_matches && !lsource.right_matches) {
+		gsource.GetNextPair(context, lsource);
 	}
 
 	// Process INNER results
-	while (ie_lstate.joiner) {
-		ResolveComplexJoin(context, result, ie_lstate);
+	while (lsource.joiner) {
+		lsource.ResolveComplexJoin(context, result);
 
 		if (result.size()) {
 			return SourceResultType::HAVE_MORE_OUTPUT;
 		}
 
-		ie_gstate.PairCompleted(context, ie_lstate);
+		gsource.PairCompleted(context, lsource);
 	}
 
 	// Process LEFT OUTER results
-	const auto left_cols = children[0].get().GetTypes().size();
-	auto &chunk = ie_lstate.unprojected;
-	while (ie_lstate.left_matches) {
-		const idx_t count = ie_lstate.SelectOuterRows(ie_lstate.left_matches);
-		if (!count) {
-			ie_gstate.GetNextPair(context, ie_lstate);
-			continue;
-		}
-		auto &left_table = *ie_sink.tables[0];
-		auto &lpayload = ie_lstate.lpayload;
-		auto &left_iterator = *ie_lstate.left_iterator;
-		auto &left_chunk_state = ie_lstate.left_chunk_state;
-		auto &left_block_index = ie_lstate.left_block_index;
-		auto &left_scan_state = *ie_lstate.left_scan_state;
+	while (lsource.left_matches) {
+		lsource.ExecuteLeftTask(context, result);
 
-		left_table.Repin(left_iterator);
-		SliceSortedPayload(lpayload, left_table, left_iterator, left_chunk_state, left_block_index, ie_lstate.true_sel,
-		                   count, left_scan_state);
-
-		// Fill in NULLs to the right
-		chunk.Reset();
-		for (column_t col_idx = 0; col_idx < chunk.ColumnCount(); ++col_idx) {
-			if (col_idx < left_cols) {
-				chunk.data[col_idx].Reference(lpayload.data[col_idx]);
-			} else {
-				chunk.data[col_idx].SetVectorType(VectorType::CONSTANT_VECTOR);
-				ConstantVector::SetNull(chunk.data[col_idx], true);
-			}
+		if (result.size()) {
+			return SourceResultType::HAVE_MORE_OUTPUT;
 		}
 
-		ProjectResult(chunk, result);
-		result.SetCardinality(count);
-		result.Verify();
-
-		return result.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
+		gsource.GetNextPair(context, lsource);
 	}
 
 	// Process RIGHT OUTER results
-	while (ie_lstate.right_matches) {
-		const idx_t count = ie_lstate.SelectOuterRows(ie_lstate.right_matches);
-		if (!count) {
-			ie_gstate.GetNextPair(context, ie_lstate);
-			continue;
+	while (lsource.right_matches) {
+		lsource.ExecuteRightTask(context, result);
+
+		if (result.size()) {
+			return SourceResultType::HAVE_MORE_OUTPUT;
 		}
 
-		auto &right_table = *ie_sink.tables[1];
-		auto &rsel = ie_lstate.true_sel;
-		auto &rpayload = ie_lstate.rpayload;
-		auto &right_iterator = *ie_lstate.right_iterator;
-		auto &right_chunk_state = ie_lstate.right_chunk_state;
-		auto &right_block_index = ie_lstate.right_block_index;
-		auto &right_scan_state = *ie_lstate.right_scan_state;
-
-		right_table.Repin(right_iterator);
-		SliceSortedPayload(rpayload, right_table, right_iterator, right_chunk_state, right_block_index, rsel, count,
-		                   right_scan_state);
-
-		// Fill in NULLs to the left
-		chunk.Reset();
-		for (column_t col_idx = 0; col_idx < chunk.ColumnCount(); ++col_idx) {
-			if (col_idx < left_cols) {
-				chunk.data[col_idx].SetVectorType(VectorType::CONSTANT_VECTOR);
-				ConstantVector::SetNull(chunk.data[col_idx], true);
-			} else {
-				chunk.data[col_idx].Reference(rpayload.data[col_idx - left_cols]);
-			}
-		}
-
-		ProjectResult(chunk, result);
-		result.SetCardinality(count);
-		result.Verify();
-
-		break;
+		gsource.GetNextPair(context, lsource);
 	}
 
 	return result.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
+}
+
+void IEJoinLocalSourceState::ExecuteLeftTask(ExecutionContext &context, DataChunk &result) {
+	auto &ie_sink = op.sink_state->Cast<IEJoinGlobalState>();
+
+	const auto left_cols = op.children[0].get().GetTypes().size();
+	auto &chunk = unprojected;
+
+	const idx_t count = SelectOuterRows(left_matches);
+	if (!count) {
+		return;
+	}
+
+	auto &left_table = *ie_sink.tables[0];
+
+	left_table.Repin(*left_iterator);
+	op.SliceSortedPayload(lpayload, left_table, *left_iterator, left_chunk_state, left_block_index, true_sel, count,
+	                      *left_scan_state);
+
+	// Fill in NULLs to the right
+	chunk.Reset();
+	for (column_t col_idx = 0; col_idx < chunk.ColumnCount(); ++col_idx) {
+		if (col_idx < left_cols) {
+			chunk.data[col_idx].Reference(lpayload.data[col_idx]);
+		} else {
+			chunk.data[col_idx].SetVectorType(VectorType::CONSTANT_VECTOR);
+			ConstantVector::SetNull(chunk.data[col_idx], true);
+		}
+	}
+
+	op.ProjectResult(chunk, result);
+	result.SetCardinality(count);
+	result.Verify();
+}
+
+void IEJoinLocalSourceState::ExecuteRightTask(ExecutionContext &context, DataChunk &result) {
+	auto &ie_sink = op.sink_state->Cast<IEJoinGlobalState>();
+	const auto left_cols = op.children[0].get().GetTypes().size();
+
+	auto &chunk = unprojected;
+
+	const idx_t count = SelectOuterRows(right_matches);
+	if (!count) {
+		return;
+	}
+
+	auto &right_table = *ie_sink.tables[1];
+	auto &rsel = true_sel;
+
+	right_table.Repin(*right_iterator);
+	op.SliceSortedPayload(rpayload, right_table, *right_iterator, right_chunk_state, right_block_index, rsel, count,
+	                      *right_scan_state);
+
+	// Fill in NULLs to the left
+	chunk.Reset();
+	for (column_t col_idx = 0; col_idx < chunk.ColumnCount(); ++col_idx) {
+		if (col_idx < left_cols) {
+			chunk.data[col_idx].SetVectorType(VectorType::CONSTANT_VECTOR);
+			ConstantVector::SetNull(chunk.data[col_idx], true);
+		} else {
+			chunk.data[col_idx].Reference(rpayload.data[col_idx - left_cols]);
+		}
+	}
+
+	op.ProjectResult(chunk, result);
+	result.SetCardinality(count);
+	result.Verify();
 }
 
 //===--------------------------------------------------------------------===//
