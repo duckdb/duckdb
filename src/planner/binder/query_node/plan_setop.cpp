@@ -118,22 +118,8 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 
 		// construct the logical plan for the child node
 		auto child_node = std::move(child.node.plan);
-		if (!child.reorder_expressions.empty()) {
-			// if we have re-order expressions push a projection
-			vector<LogicalType> child_types;
-			for (auto &expr : child.reorder_expressions) {
-				child_types.push_back(expr->return_type);
-			}
-			auto child_projection =
-			    make_uniq<LogicalProjection>(GenerateTableIndex(), std::move(child.reorder_expressions));
-			child_projection->children.push_back(std::move(child_node));
-			child_node = std::move(child_projection);
-
-			child_node = CastLogicalOperatorToTypes(child_types, node.types, std::move(child_node));
-		} else {
-			// otherwise push only casts
-			child_node = CastLogicalOperatorToTypes(child.node.types, node.types, std::move(child_node));
-		}
+		// push casts for the target types
+		child_node = CastLogicalOperatorToTypes(child.node.types, node.types, std::move(child_node));
 		// check if there are any unplanned subqueries left in any child
 		if (child.binder && child.binder->has_unplanned_dependent_joins) {
 			has_unplanned_dependent_joins = true;

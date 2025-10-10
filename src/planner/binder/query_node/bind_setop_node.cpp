@@ -10,6 +10,7 @@
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/query_node/bound_set_operation_node.hpp"
 #include "duckdb/planner/expression_binder/select_bind_state.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/common/enum_util.hpp"
 
 namespace duckdb {
@@ -110,7 +111,7 @@ static void GatherAliases(BoundSetOperationNode &root, BoundStatement &stmt, Sel
 	gatherer.GatherAliases(stmt, reorder_idx);
 }
 
-static void BuildUnionByNameInfo(ClientContext &context, BoundSetOperationNode &result, bool can_contain_nulls) {
+void Binder::BuildUnionByNameInfo(BoundSetOperationNode &result) {
 	D_ASSERT(result.setop_type == SetOperationType::UNION_BY_NAME);
 	vector<case_insensitive_map_t<idx_t>> node_name_maps;
 	case_insensitive_set_t global_name_set;
@@ -183,6 +184,8 @@ static void BuildUnionByNameInfo(ClientContext &context, BoundSetOperationNode &
 		return;
 	}
 	// If reorder is required, generate the expressions for each node
+	vector<vector<unique_ptr<Expression>>> reorder_expressions;
+	reorder_expressions.resize(result.bound_children.size());
 	for (idx_t i = 0; i < new_size; ++i) {
 		auto &col_name = result.names[i];
 		for (idx_t child_idx = 0; child_idx < result.bound_children.size(); ++child_idx) {
@@ -202,8 +205,24 @@ static void BuildUnionByNameInfo(ClientContext &context, BoundSetOperationNode &
 				expr = make_uniq<BoundColumnRefExpression>(child_col_type,
 				                                           ColumnBinding(root_idx, col_idx_in_child));
 			}
-			child.reorder_expressions.push_back(std::move(expr));
+			reorder_expressions[child_idx].push_back(std::move(expr));
 		}
+	}
+	// now push projections for each node
+	for (idx_t child_idx = 0; child_idx < result.bound_children.size(); ++child_idx) {
+		auto &child = result.bound_children[child_idx];
+		auto &child_reorder_expressions = reorder_expressions[child_idx];
+		// if we have re-order expressions push a projection
+		vector<LogicalType> child_types;
+		for (auto &expr : child_reorder_expressions) {
+			child_types.push_back(expr->return_type);
+		}
+		auto child_projection =
+			make_uniq<LogicalProjection>(GenerateTableIndex(), std::move(child_reorder_expressions));
+		child_projection->children.push_back(std::move(child.node.plan));
+		child.node.plan = std::move(child_projection);
+		child.node.types = std::move(child_types);
+		child.node.names = result.names;
 	}
 }
 
@@ -246,7 +265,7 @@ BoundStatement Binder::BindNode(SetOperationNode &statement) {
 
 	if (result.setop_type == SetOperationType::UNION_BY_NAME) {
 		// UNION BY NAME - merge the columns from all sides
-		BuildUnionByNameInfo(context, result, can_contain_nulls);
+		BuildUnionByNameInfo(result);
 	} else {
 		// UNION ALL BY POSITION - the columns of both sides must match exactly
 		result.names = result.bound_children[0].node.names;
