@@ -372,15 +372,6 @@ BoundStatement Binder::BindNode(SelectNode &statement) {
 	return BindSelectNode(statement, std::move(from_table));
 }
 
-unique_ptr<BoundSelectNode> Binder::BindSelectNodeInternal(SelectNode &statement) {
-	D_ASSERT(statement.from_table);
-
-	// first bind the FROM table statement
-	auto from = std::move(statement.from_table);
-	auto from_table = Bind(*from);
-	return BindSelectNodeInternal(statement, std::move(from_table));
-}
-
 void Binder::BindWhereStarExpression(unique_ptr<ParsedExpression> &expr) {
 	// expand any expressions in the upper AND recursively
 	if (expr->GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
@@ -412,7 +403,7 @@ void Binder::BindWhereStarExpression(unique_ptr<ParsedExpression> &expr) {
 	}
 }
 
-unique_ptr<BoundSelectNode> Binder::BindSelectNodeInternal(SelectNode &statement, BoundStatement from_table) {
+BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from_table) {
 	D_ASSERT(from_table.plan);
 	D_ASSERT(!statement.from_table);
 	auto result_ptr = make_uniq<BoundSelectNode>();
@@ -688,17 +679,12 @@ unique_ptr<BoundSelectNode> Binder::BindSelectNodeInternal(SelectNode &statement
 
 	// now that the SELECT list is bound, we set the types of DISTINCT/ORDER BY expressions
 	BindModifiers(result, result.projection_index, result.names, internal_sql_types, bind_state);
-	return result_ptr;
-}
-
-BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from_table) {
-	auto result = BindSelectNodeInternal(statement, std::move(from_table));
 
 	BoundStatement result_statement;
-	result_statement.types = result->types;
-	result_statement.names = result->names;
-	result_statement.plan = CreatePlan(*result);
-	result_statement.extra_info.original_expressions = std::move(result->bind_state.original_expressions);
+	result_statement.types = result.types;
+	result_statement.names = result.names;
+	result_statement.plan = CreatePlan(result);
+	result_statement.extra_info.original_expressions = std::move(result.bind_state.original_expressions);
 	return result_statement;
 }
 
