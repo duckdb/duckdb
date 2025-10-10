@@ -648,6 +648,11 @@ void *duckdb_copy_function_finalize_get_global_state(duckdb_copy_function_finali
 // Register
 //----------------------------------------------------------------------------------------------------------------------
 
+void duckdb_copy_function_set_copy_from_function(duckdb_copy_function copy_function,
+                                                 duckdb_table_function table_function) {
+	// TODO: Implement copy from
+}
+
 duckdb_state duckdb_register_copy_function(duckdb_connection connection, duckdb_copy_function copy_function) {
 	if (!connection || !copy_function) {
 		return DuckDBError;

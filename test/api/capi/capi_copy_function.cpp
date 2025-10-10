@@ -67,6 +67,7 @@ static void MyCopyFunctionBind(duckdb_copy_function_bind_info info) {
 		if (duckdb_get_type_id(child_type) != DUCKDB_TYPE_INTEGER) {
 			duckdb_destroy_value(&options);
 			duckdb_destroy_value(&child_value);
+			duckdb_free(child_name);
 			duckdb_copy_function_bind_set_error(info, "Options must be of type INT");
 			return;
 		}
@@ -77,9 +78,11 @@ static void MyCopyFunctionBind(duckdb_copy_function_bind_info info) {
 		} else {
 			duckdb_destroy_value(&options);
 			duckdb_destroy_value(&child_value);
+			duckdb_free(child_name);
 			duckdb_copy_function_bind_set_error(info, "Unknown option given");
 			return;
 		}
+		duckdb_free(child_name);
 		duckdb_destroy_value(&child_value);
 	}
 
@@ -107,6 +110,7 @@ static void MyCopyFunctionBind(duckdb_copy_function_bind_info info) {
 	auto column_type = duckdb_copy_function_bind_get_column_type(info, 0);
 	if (duckdb_get_type_id(column_type) != DUCKDB_TYPE_BIGINT) {
 		duckdb_copy_function_bind_set_error(info, "Expected column of type BIGINT");
+		duckdb_destroy_logical_type(&column_type);
 		return;
 	}
 
@@ -120,6 +124,7 @@ static void MyCopyFunctionBind(duckdb_copy_function_bind_info info) {
 	});
 
 	duckdb_destroy_value(&options);
+	duckdb_destroy_logical_type(&column_type);
 }
 
 static void MyCopyFunctionInit(duckdb_copy_function_global_init_info info) {
@@ -130,6 +135,7 @@ static void MyCopyFunctionInit(duckdb_copy_function_global_init_info info) {
 	if (bind_data->min_size == extra_info->illegal_min_value) {
 		// Ooops, forgot to check this in the bind!
 		duckdb_copy_function_global_init_set_error(info, "My bad, min_size cannot be set to that value!");
+		duckdb_destroy_client_context(&client_context);
 		return;
 	}
 
@@ -199,7 +205,25 @@ static void MyCopyFunctionFinalize(duckdb_copy_function_finalize_info info) {
 //----------------------------------------------------------------------------------------------------------------------
 // COPY (...) FROM (...)
 //----------------------------------------------------------------------------------------------------------------------
-// TODO: implement
+struct MyCopyFromFunctionBindData {
+	string file_path;
+	duckdb_file_system file_system = nullptr;
+
+	~MyCopyFromFunctionBindData() {
+		if (file_system) {
+			duckdb_destroy_file_system(&file_system);
+		}
+	}
+};
+
+static void MyCopyFromFunctionBind(duckdb_bind_info info) {
+}
+
+static void MyCopyFromFunctionInit(duckdb_init_info info) {
+}
+
+static void MyCopyFromFunction(duckdb_function_info info, duckdb_data_chunk output) {
+}
 
 //----------------------------------------------------------------------------------------------------------------------
 // Register
@@ -238,58 +262,76 @@ TEST_CASE("Test Copy Functions in C API", "[capi]") {
 	duckdb_copy_function_set_sink(func, MyCopyFunctionSink);
 	duckdb_copy_function_set_finalize(func, MyCopyFunctionFinalize);
 
+	// Also add a scan function
+	auto varchar_type = duckdb_create_logical_type(DUCKDB_TYPE_VARCHAR);
+	auto int_type = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
+
+	auto scan_func = duckdb_create_table_function();
+	duckdb_table_function_add_parameter(scan_func, varchar_type);
+	duckdb_table_function_add_named_parameter(scan_func, "MAX_VALUE", int_type);
+	duckdb_table_function_set_name(scan_func, "read_my_copy");
+	duckdb_table_function_set_bind(scan_func, MyCopyFromFunctionBind);
+	duckdb_table_function_set_init(scan_func, MyCopyFromFunctionInit);
+	duckdb_table_function_set_function(scan_func, MyCopyFromFunction);
+
+	duckdb_copy_function_set_copy_from_function(func, scan_func);
+
+	duckdb_destroy_table_function(&scan_func);
+
 	status = duckdb_register_copy_function(tester.connection, func);
 	REQUIRE(status == DuckDBSuccess);
 
-	auto file_path = TestDirectoryPath() + "/" + "test_copy.txt";
+	auto file_path = TestDirectoryPath() + "/" + "test_copy";
 
 	// Try write too little
 	result = tester.Query(StringUtil::Format(
-	    "COPY (SELECT i FROM range(10) as r(i)) TO '%s' (FORMAT MY_COPY, MIN_SIZE 2000, MAX_SIZE 1000)", file_path));
+	    "COPY (SELECT i FROM range(10) as r(i)) TO '%s1.txt' (FORMAT MY_COPY, MIN_SIZE 2000, MAX_SIZE 1000)",
+	    file_path));
 	REQUIRE_FAIL(result);
 	REQUIRE(StringUtil::Contains(result->ErrorMessage(), "Wrote too little data"));
 
 	// Try write too much
 	result = tester.Query(StringUtil::Format(
-	    "COPY (SELECT i FROM range(10) as r(i)) TO '%s' (FORMAT MY_COPY, MIN_SIZE 0, MAX_SIZE 5)", file_path));
+	    "COPY (SELECT i FROM range(10) as r(i)) TO '%s2.txt' (FORMAT MY_COPY, MIN_SIZE 0, MAX_SIZE 5)", file_path));
 	REQUIRE_FAIL(result);
 	REQUIRE(StringUtil::Contains(result->ErrorMessage(), "Wrote too much data"));
 
 	// Try write some non-int data
 	result = tester.Query(StringUtil::Format(
-	    "COPY (SELECT i::VARCHAR FROM range(10) as r(i)) TO '%s' (FORMAT MY_COPY, MIN_SIZE 0, MAX_SIZE 100)",
+	    "COPY (SELECT i::VARCHAR FROM range(10) as r(i)) TO '%s3.txt' (FORMAT MY_COPY, MIN_SIZE 0, MAX_SIZE 100)",
 	    file_path));
 	REQUIRE_FAIL(result);
 	REQUIRE(StringUtil::Contains(result->ErrorMessage(), "Expected column of type BIGINT"));
 
 	// Try write some data with illegal min-size
 	result = tester.Query(StringUtil::Format(
-	    "COPY (SELECT i FROM range(3) as r(i)) TO '%s' (FORMAT MY_COPY, MIN_SIZE 42, MAX_SIZE 100)", file_path));
+	    "COPY (SELECT i FROM range(3) as r(i)) TO '%s4.txt' (FORMAT MY_COPY, MIN_SIZE 42, MAX_SIZE 100)", file_path));
 	REQUIRE_FAIL(result);
 	REQUIRE(StringUtil::Contains(result->ErrorMessage(), "My bad, min_size cannot be set to that value!"));
 
 	// Try write with unknown option
 	result = tester.Query(StringUtil::Format(
-	    "COPY (SELECT i FROM range(10) as r(i)) TO '%s' (FORMAT MY_COPY, MIN_SIZE 0, UNKNOWN 5)", file_path));
+	    "COPY (SELECT i FROM range(10) as r(i)) TO '%s5.txt' (FORMAT MY_COPY, MIN_SIZE 0, UNKNOWN 5)", file_path));
 	REQUIRE_FAIL(result);
 	REQUIRE(StringUtil::Contains(result->ErrorMessage(), "Unknown option given"));
 
 	// Try write with too many options
 	result = tester.Query(StringUtil::Format(
-	    "COPY (SELECT i FROM range(10) as r(i)) TO '%s' (FORMAT MY_COPY, MIN_SIZE 0, MAX_SIZE 100, EXTRA 5)",
+	    "COPY (SELECT i FROM range(10) as r(i)) TO '%s6.txt' (FORMAT MY_COPY, MIN_SIZE 0, MAX_SIZE 100, EXTRA 5)",
 	    file_path));
 	REQUIRE_FAIL(result);
 	REQUIRE(StringUtil::Contains(result->ErrorMessage(), "Too many options given"));
 
 	// Try write with a non-int option
 	result = tester.Query(StringUtil::Format(
-	    "COPY (SELECT i FROM range(10) as r(i)) TO '%s' (FORMAT MY_COPY, MIN_SIZE 'hello', MAX_SIZE 100)", file_path));
+	    "COPY (SELECT i FROM range(10) as r(i)) TO '%s7.txt' (FORMAT MY_COPY, MIN_SIZE 'hello', MAX_SIZE 100)",
+	    file_path));
 	REQUIRE_FAIL(result);
 	REQUIRE(StringUtil::Contains(result->ErrorMessage(), "Options must be of type INT"));
 
 	// Try write just right
 	result = tester.Query(StringUtil::Format(
-	    "COPY (SELECT i FROM range(10) as r(i)) TO '%s' (FORMAT MY_COPY, MIN_SIZE 0, MAX_SIZE 100)", file_path));
+	    "COPY (SELECT i FROM range(10) as r(i)) TO '%s8.txt' (FORMAT MY_COPY, MIN_SIZE 0, MAX_SIZE 100)", file_path));
 	REQUIRE_NO_FAIL(*result);
 
 	// Destroy

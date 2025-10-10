@@ -5770,6 +5770,18 @@ Retrieves the global state provided during the init-phase of a `COPY ... TO` fun
 */
 DUCKDB_C_API void *duckdb_copy_function_finalize_get_global_state(duckdb_copy_function_finalize_info info);
 
+/*!
+Sets the `COPY ... FROM` table function to use when executing `COPY ... FROM` with this copy function.
+
+The table function must take a single VARCHAR argument (the file path).
+
+Options are passed as named parameters to the table function.
+
+* @param copy_function The copy function
+*/
+DUCKDB_C_API void duckdb_copy_function_set_copy_from_function(duckdb_copy_function copy_function,
+                                                              duckdb_table_function table_function);
+
 #endif
 
 #ifdef __cplusplus

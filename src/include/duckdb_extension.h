@@ -616,6 +616,8 @@ typedef struct {
 	duckdb_client_context (*duckdb_copy_function_finalize_get_client_context)(duckdb_copy_function_finalize_info info);
 	void *(*duckdb_copy_function_finalize_get_bind_data)(duckdb_copy_function_finalize_info info);
 	void *(*duckdb_copy_function_finalize_get_global_state)(duckdb_copy_function_finalize_info info);
+	void (*duckdb_copy_function_set_copy_from_function)(duckdb_copy_function copy_function,
+	                                                    duckdb_table_function table_function);
 #endif
 
 // New functions for duckdb error data
@@ -1213,6 +1215,7 @@ typedef struct {
 #define duckdb_copy_function_finalize_get_client_context duckdb_ext_api.duckdb_copy_function_finalize_get_client_context
 #define duckdb_copy_function_finalize_get_bind_data      duckdb_ext_api.duckdb_copy_function_finalize_get_bind_data
 #define duckdb_copy_function_finalize_get_global_state   duckdb_ext_api.duckdb_copy_function_finalize_get_global_state
+#define duckdb_copy_function_set_copy_from_function      duckdb_ext_api.duckdb_copy_function_set_copy_from_function
 
 // Version unstable_new_error_data_functions
 #define duckdb_create_error_data     duckdb_ext_api.duckdb_create_error_data
