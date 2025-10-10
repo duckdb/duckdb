@@ -1,0 +1,9 @@
+# name: test/sqlite/tags/tags-1-2-3.test_slow
+# group: [tags]
+
+tags 1 2 3
+
+require-env VALIDATE_TAGS
+
+statement ok
+SELECT 'tagged 1 2 3';
