@@ -127,7 +127,7 @@ bool PerfectHashJoinExecutor::BuildPerfectHashTable(LogicalType &key_type) {
 	// First, allocate memory for each build column
 	auto build_size = perfect_join_statistics.build_range + 1;
 	for (const auto &type : join.rhs_output_columns.col_types) {
-		perfect_hash_table.emplace_back(type, build_size);
+		perfect_hash_table.emplace_back(DictionaryVector::CreateReusableDictionary(type, build_size));
 	}
 
 	// and for duplicate_checking
@@ -176,7 +176,7 @@ bool PerfectHashJoinExecutor::FullScanHashTable(LogicalType &key_type) {
 	// Full scan the remaining build columns and fill the perfect hash table
 	const auto build_size = perfect_join_statistics.build_range + 1;
 	for (idx_t i = 0; i < join.rhs_output_columns.col_types.size(); i++) {
-		auto &vector = perfect_hash_table[i];
+		auto &vector = perfect_hash_table[i]->data;
 		const auto output_col_idx = ht.output_columns[i];
 		D_ASSERT(vector.GetType() == ht.layout_ptr->GetTypes()[output_col_idx]);
 		auto &col_mask = FlatVector::Validity(vector);
@@ -304,10 +304,7 @@ OperatorResultType PerfectHashJoinExecutor::ProbePerfectHashTable(ExecutionConte
 	for (idx_t i = 0; i < join.rhs_output_columns.col_types.size(); i++) {
 		auto &result_vector = result.data[lhs_output_columns.ColumnCount() + i];
 		D_ASSERT(result_vector.GetType() == ht.layout_ptr->GetTypes()[ht.output_columns[i]]);
-		auto &build_vec = perfect_hash_table[i];
-		result_vector.Dictionary(build_vec, perfect_join_statistics.build_range + 1, state.build_sel_vec,
-		                         probe_sel_count);
-		DictionaryVector::SetDictionaryId(result_vector, to_string(CastPointerToValue(&build_vec)));
+		result_vector.Dictionary(perfect_hash_table[i], state.build_sel_vec);
 	}
 	return OperatorResultType::NEED_MORE_INPUT;
 }

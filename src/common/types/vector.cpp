@@ -96,8 +96,7 @@ Vector::Vector(const Value &value) : type(value.type()) {
 
 Vector::Vector(Vector &&other) noexcept
     : vector_type(other.vector_type), type(std::move(other.type)), data(other.data),
-      validity(std::move(other.validity)), buffer(std::move(other.buffer)), auxiliary(std::move(other.auxiliary)),
-      cached_hashes(std::move(other.cached_hashes)) {
+      validity(std::move(other.validity)), buffer(std::move(other.buffer)), auxiliary(std::move(other.auxiliary)) {
 }
 
 void Vector::Reference(const Value &value) {
@@ -171,7 +170,6 @@ void Vector::Reinterpret(const Vector &other) {
 		auxiliary = make_shared_ptr<VectorChildBuffer>(std::move(new_vector));
 	} else {
 		AssignSharedPointer(auxiliary, other.auxiliary);
-		AssignSharedPointer(cached_hashes, other.cached_hashes);
 	}
 	data = other.data;
 	validity = other.validity;
@@ -276,7 +274,6 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 	vector_type = VectorType::DICTIONARY_VECTOR;
 	buffer = std::move(dict_buffer);
 	auxiliary = std::move(child_ref);
-	cached_hashes.reset();
 }
 
 void Vector::Dictionary(idx_t dictionary_size, const SelectionVector &sel, idx_t count) {
@@ -287,17 +284,18 @@ void Vector::Dictionary(idx_t dictionary_size, const SelectionVector &sel, idx_t
 }
 
 void Vector::Dictionary(Vector &dict, idx_t dictionary_size, const SelectionVector &sel, idx_t count) {
-	if (DictionaryVector::CanCacheHashes(dict.GetType())) {
-		lock_guard<mutex> guard(dict.cached_hashes_lock);
-		if (!dict.cached_hashes) {
-			// Create an empty hash vector for this dictionary, potentially to be used for caching hashes later
-			// This needs to happen here, as we need to add "cached_hashes" to the original input Vector "dict"
-			dict.cached_hashes = make_buffer<VectorChildBuffer>(Vector(LogicalType::HASH, false, false, 0));
-		}
-	}
-
 	Reference(dict);
 	Dictionary(dictionary_size, sel, count);
+}
+
+void Vector::Dictionary(buffer_ptr<VectorBuffer> reusable_dict, const SelectionVector &sel) {
+	D_ASSERT(type.InternalType() != PhysicalType::STRUCT);
+	D_ASSERT(type == reusable_dict->Cast<VectorChildBuffer>().data.GetType());
+	vector_type = VectorType::DICTIONARY_VECTOR;
+	data = nullptr;
+	validity.Reset();
+	buffer = make_buffer<DictionaryBuffer>(sel);
+	auxiliary = std::move(reusable_dict);
 }
 
 void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
@@ -1930,21 +1928,39 @@ void Vector::DebugShuffleNestedVector(Vector &vector, idx_t count) {
 //===--------------------------------------------------------------------===//
 // DictionaryVector
 //===--------------------------------------------------------------------===//
+buffer_ptr<VectorChildBuffer> DictionaryVector::CreateReusableDictionary(const LogicalType &type, const idx_t &size) {
+	D_ASSERT(type.InternalType() != PhysicalType::STRUCT);
+	auto res = make_buffer<VectorChildBuffer>(Vector(type, size));
+	res->size = size;
+	res->id = UUID::ToString(UUID::GenerateRandomUUID());
+	return res;
+}
+
+Vector DictionaryVector::FromReusableDictionary(buffer_ptr<VectorChildBuffer> child, const SelectionVector &sel) {
+	Vector res(child->data.GetType(), nullptr);
+	res.vector_type = VectorType::DICTIONARY_VECTOR;
+
+	auto dict_buffer = make_buffer<DictionaryBuffer>(sel);
+	dict_buffer->SetDictionarySize(child->size.GetIndex());
+	dict_buffer->SetDictionaryId(child->id);
+	res.buffer = std::move(dict_buffer);
+
+	res.auxiliary = std::move(child);
+	return res;
+}
+
 const Vector &DictionaryVector::GetCachedHashes(Vector &input) {
 	D_ASSERT(CanCacheHashes(input));
-	auto &dictionary = Child(input);
 
-	lock_guard<mutex> guard1(dictionary.cached_hashes_lock);
-	auto &dictionary_hashes = dictionary.cached_hashes->Cast<VectorChildBuffer>().data;
-	lock_guard<mutex> guard2(dictionary_hashes.cached_hashes_lock);
+	auto &child = input.auxiliary->Cast<VectorChildBuffer>();
+	lock_guard<mutex> guard(child.cached_hashes_lock);
 
-	if (!dictionary_hashes.data) {
+	if (!child.cached_hashes.data) {
 		// Uninitialized: hash the dictionary
-		const auto dictionary_count = DictionarySize(input).GetIndex();
-		dictionary_hashes.Initialize(false, dictionary_count);
-		VectorOperations::Hash(dictionary, dictionary_hashes, dictionary_count);
+		child.cached_hashes.Initialize(false, child.size.GetIndex());
+		VectorOperations::Hash(child.data, child.cached_hashes, child.size.GetIndex());
 	}
-	return dictionary_hashes;
+	return child.cached_hashes;
 }
 
 //===--------------------------------------------------------------------===//

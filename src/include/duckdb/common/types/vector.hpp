@@ -196,6 +196,8 @@ public:
 	DUCKDB_API void Dictionary(idx_t dictionary_size, const SelectionVector &sel, idx_t count);
 	//! Creates a reference to a dictionary of the other vector
 	DUCKDB_API void Dictionary(Vector &dict, idx_t dictionary_size, const SelectionVector &sel, idx_t count);
+	//! Creates a dictionary on the reusable dict
+	DUCKDB_API void Dictionary(buffer_ptr<VectorBuffer> reusable_dict, const SelectionVector &sel);
 
 	//! Creates the data of this vector with the specified type. Any data that
 	//! is currently in the vector is destroyed.
@@ -307,23 +309,24 @@ protected:
 	//! The buffer holding auxiliary data of the vector
 	//! e.g. a string vector uses this to store strings
 	buffer_ptr<VectorBuffer> auxiliary;
-	//! The buffer holding precomputed hashes of the data in the vector
-	//! used for caching hashes of string dictionaries
-	buffer_ptr<VectorBuffer> cached_hashes;
-	//! Use a mutex to make the cached hashes getter thread-safe. This is necessary as the hashes are computed lazily.
-	//! In general, read-only operations on Vector should be thread-safe after the Vector is initialized.
-	mutable mutex cached_hashes_lock;
 };
 
-//! The DictionaryBuffer holds a selection vector
+//! The VectorChildBuffer holds a child Vector
 class VectorChildBuffer : public VectorBuffer {
 public:
 	explicit VectorChildBuffer(Vector vector)
-	    : VectorBuffer(VectorBufferType::VECTOR_CHILD_BUFFER), data(std::move(vector)) {
+	    : VectorBuffer(VectorBufferType::VECTOR_CHILD_BUFFER), data(std::move(vector)),
+	      cached_hashes(LogicalType::HASH, nullptr) {
 	}
 
 public:
 	Vector data;
+	//! Optional size/id to uniquely identify re-occurring dictionaries
+	optional_idx size;
+	string id;
+	//! For caching the hashes of a child buffer
+	mutex cached_hashes_lock;
+	Vector cached_hashes;
 };
 
 struct ConstantVector {
@@ -429,6 +432,8 @@ struct DictionaryVector {
 	static inline bool CanCacheHashes(const Vector &vector) {
 		return DictionarySize(vector).IsValid() && CanCacheHashes(vector.GetType());
 	}
+	static buffer_ptr<VectorChildBuffer> CreateReusableDictionary(const LogicalType &type, const idx_t &size);
+	static Vector FromReusableDictionary(buffer_ptr<VectorChildBuffer> child, const SelectionVector &sel);
 	static const Vector &GetCachedHashes(Vector &input);
 };
 
