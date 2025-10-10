@@ -26,6 +26,7 @@ applications, and to alter it and redistribute it freely, subject to the followi
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/operator/numeric_cast.hpp"
 
 #include <algorithm>
 #include <cstddef>
