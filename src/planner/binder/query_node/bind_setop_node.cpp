@@ -58,8 +58,8 @@ void SetOpAliasGatherer::GatherAliases(BoundSetOpChild &node, const vector<idx_t
 		}
 	}
 	// check if the expression matches one of the expressions in the original expression list
-	for (idx_t i = 0; i < node.select_list.size(); i++) {
-		auto &expr = node.select_list[i];
+	for (idx_t i = 0; i < node.node.original_expressions.size(); i++) {
+		auto &expr = node.node.original_expressions[i];
 		idx_t index = reorder_idx[i];
 		// now check if the node is already in the set of expressions
 		auto expr_entry = bind_state.projection_map.find(*expr);
@@ -218,18 +218,7 @@ BoundSetOpChild Binder::BindSetOpChild(QueryNode &child) {
 	} else {
 		bound_child.binder = Binder::CreateBinder(context, this);
 		bound_child.binder->can_contain_nulls = true;
-		if (child.type == QueryNodeType::SELECT_NODE) {
-			auto &select_node = child.Cast<SelectNode>();
-			auto bound_select_node = bound_child.binder->BindSelectNodeInternal(select_node);
-			for (auto &expr : bound_select_node->bind_state.original_expressions) {
-				bound_child.select_list.push_back(expr->Copy());
-			}
-			bound_child.node.names = bound_select_node->names;
-			bound_child.node.types = bound_select_node->types;
-			bound_child.node.plan = bound_child.binder->CreatePlan(*bound_select_node);
-		} else {
-			bound_child.node = bound_child.binder->BindNode(child);
-		}
+		bound_child.node = bound_child.binder->BindNode(child);
 	}
 	return bound_child;
 }
