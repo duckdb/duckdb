@@ -1857,7 +1857,9 @@ void Vector::DebugTransformToDictionary(Vector &vector, idx_t count) {
 		inverted_sel.set_index(offset++, current_index);
 		inverted_sel.set_index(offset++, current_index);
 	}
-	Vector inverted_vector(vector, inverted_sel, verify_count);
+	auto reusable_dict = DictionaryVector::CreateReusableDictionary(vector.type, verify_count);
+	auto &inverted_vector = reusable_dict->data;
+	inverted_vector.Slice(vector, inverted_sel, verify_count);
 	inverted_vector.Flatten(verify_count);
 	// now insert the NULL values at every other position
 	for (idx_t i = 0; i < count; i++) {
@@ -1871,8 +1873,7 @@ void Vector::DebugTransformToDictionary(Vector &vector, idx_t count) {
 		original_sel.set_index(offset++, verify_count - 1 - i * 2);
 	}
 	// now slice the inverted vector with the inverted selection vector
-	vector.Dictionary(inverted_vector, verify_count, original_sel, count);
-	DictionaryVector::SetDictionaryId(vector, UUID::ToString(UUID::GenerateRandomUUID()));
+	vector.Dictionary(reusable_dict, original_sel);
 	vector.Verify(count);
 }
 
@@ -1949,8 +1950,10 @@ const Vector &DictionaryVector::GetCachedHashes(Vector &input) {
 
 	if (!child.cached_hashes.data) {
 		// Uninitialized: hash the dictionary
-		child.cached_hashes.Initialize(false, child.size.GetIndex());
-		VectorOperations::Hash(child.data, child.cached_hashes, child.size.GetIndex());
+		const auto dictionary_size = DictionarySize(input).GetIndex();
+		D_ASSERT(!child.size.IsValid() || child.size.GetIndex() == dictionary_size);
+		child.cached_hashes.Initialize(false, dictionary_size);
+		VectorOperations::Hash(child.data, child.cached_hashes, dictionary_size);
 	}
 	return child.cached_hashes;
 }

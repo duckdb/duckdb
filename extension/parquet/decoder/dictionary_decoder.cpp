@@ -19,21 +19,17 @@ void DictionaryDecoder::InitializeDictionary(idx_t new_dictionary_size, optional
 	filter_result.reset();
 	filter_count = 0;
 	can_have_nulls = has_defines;
-	// we use the first value in the dictionary to keep a NULL
-	if (!dictionary) {
-		dictionary = make_uniq<Vector>(reader.Type(), dictionary_size + 1);
-	} else if (dictionary_size > old_dict_size) {
-		dictionary->Resize(old_dict_size, dictionary_size + 1);
-	}
+	// we use the last value in the dictionary to keep a NULL
+	dictionary = DictionaryVector::CreateReusableDictionary(reader.Type(), dictionary_size + 1);
 	dictionary_id =
 	    reader.reader.GetFileName() + "_" + reader.Schema().name + "_" + std::to_string(reader.chunk_read_offset);
 	// we use the last entry as a NULL, dictionary vectors don't have a separate validity mask
-	auto &dict_validity = FlatVector::Validity(*dictionary);
+	auto &dict_validity = FlatVector::Validity(dictionary->data);
 	dict_validity.Reset(dictionary_size + 1);
 	if (can_have_nulls) {
 		dict_validity.SetInvalid(dictionary_size);
 	}
-	reader.Plain(reader.block, nullptr, dictionary_size, 0, *dictionary);
+	reader.Plain(reader.block, nullptr, dictionary_size, 0, dictionary->data);
 
 	if (filter && CanFilter(*filter, *filter_state)) {
 		// no filter result yet - apply filter to the dictionary
@@ -42,10 +38,10 @@ void DictionaryDecoder::InitializeDictionary(idx_t new_dictionary_size, optional
 
 		// apply the filter
 		UnifiedVectorFormat vdata;
-		dictionary->ToUnifiedFormat(dictionary_size, vdata);
+		dictionary->data.ToUnifiedFormat(dictionary_size, vdata);
 		SelectionVector dict_sel;
 		filter_count = dictionary_size;
-		ColumnSegment::FilterSelection(dict_sel, *dictionary, vdata, *filter, *filter_state, dictionary_size,
+		ColumnSegment::FilterSelection(dict_sel, dictionary->data, vdata, *filter, *filter_state, dictionary_size,
 		                               filter_count);
 
 		// now set all matching tuples to true
@@ -97,7 +93,8 @@ idx_t DictionaryDecoder::Read(uint8_t *defines, idx_t read_count, Vector &result
 	idx_t valid_count = GetValidValues(defines, read_count, result_offset);
 	if (valid_count == read_count) {
 		// all values are valid - we can directly decompress the offsets into the selection vector
-		dict_decoder->GetBatch<uint32_t>(data_ptr_cast(dictionary_selection_vector.data()), valid_count);
+		dict_decoder->GetBatch<uint32_t>(data_ptr_cast(dictionary_selection_vector.data()),
+		                                 NumericCast<uint32_t>(valid_count));
 		// we do still need to verify the offsets though
 		uint32_t max_index = 0;
 		for (idx_t idx = 0; idx < valid_count; idx++) {
@@ -109,19 +106,18 @@ idx_t DictionaryDecoder::Read(uint8_t *defines, idx_t read_count, Vector &result
 	} else if (valid_count > 0) {
 		// for the valid entries - decode the offsets
 		offset_buffer.resize(reader.reader.allocator, sizeof(uint32_t) * valid_count);
-		dict_decoder->GetBatch<uint32_t>(offset_buffer.ptr, valid_count);
+		dict_decoder->GetBatch<uint32_t>(offset_buffer.ptr, NumericCast<uint32_t>(valid_count));
 		ConvertDictToSelVec(reinterpret_cast<uint32_t *>(offset_buffer.ptr), valid_sel, valid_count);
 	}
 #ifdef DEBUG
 	dictionary_selection_vector.Verify(read_count, dictionary_size + can_have_nulls);
 #endif
 	if (result_offset == 0) {
-		result.Dictionary(*dictionary, dictionary_size + can_have_nulls, dictionary_selection_vector, read_count);
-		DictionaryVector::SetDictionaryId(result, dictionary_id);
+		result.Dictionary(dictionary, dictionary_selection_vector);
 		D_ASSERT(result.GetVectorType() == VectorType::DICTIONARY_VECTOR);
 	} else {
 		D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
-		VectorOperations::Copy(*dictionary, result, dictionary_selection_vector, read_count, 0, result_offset);
+		VectorOperations::Copy(dictionary->data, result, dictionary_selection_vector, read_count, 0, result_offset);
 	}
 	return valid_count;
 }
@@ -132,7 +128,7 @@ void DictionaryDecoder::Skip(uint8_t *defines, idx_t skip_count) {
 	}
 	idx_t valid_count = reader.GetValidCount(defines, skip_count);
 	// skip past the valid offsets
-	dict_decoder->Skip(valid_count);
+	dict_decoder->Skip(NumericCast<uint32_t>(valid_count));
 }
 
 bool DictionaryDecoder::DictionarySupportsFilter(const TableFilter &filter, TableFilterState &filter_state) {

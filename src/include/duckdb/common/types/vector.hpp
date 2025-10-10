@@ -417,15 +417,19 @@ struct DictionaryVector {
 	}
 	static inline optional_idx DictionarySize(const Vector &vector) {
 		VerifyDictionary(vector);
+		const auto &child_buffer = vector.auxiliary->Cast<VectorChildBuffer>();
+		if (child_buffer.size.IsValid()) {
+			return child_buffer.size;
+		}
 		return vector.buffer->Cast<DictionaryBuffer>().GetDictionarySize();
 	}
 	static inline const string &DictionaryId(const Vector &vector) {
 		VerifyDictionary(vector);
+		const auto &child_buffer = vector.auxiliary->Cast<VectorChildBuffer>();
+		if (!child_buffer.id.empty()) {
+			return child_buffer.id;
+		}
 		return vector.buffer->Cast<DictionaryBuffer>().GetDictionaryId();
-	}
-	static inline void SetDictionaryId(Vector &vector, string new_id) {
-		VerifyDictionary(vector);
-		vector.buffer->Cast<DictionaryBuffer>().SetDictionaryId(std::move(new_id));
 	}
 	static inline bool CanCacheHashes(const LogicalType &type) {
 		return type.InternalType() == PhysicalType::VARCHAR;
