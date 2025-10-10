@@ -7,7 +7,6 @@ add_library_unity(
   enum_column_writer.cpp
   list_column_writer.cpp
   primitive_column_writer.cpp
-  variant_column_writer.cpp
   struct_column_writer.cpp)
 
 add_subdirectory(variant)
