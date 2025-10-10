@@ -5512,6 +5512,16 @@ Sets the name of the copy function.
 DUCKDB_C_API void duckdb_copy_function_set_name(duckdb_copy_function copy_function, const char *name);
 
 /*!
+Sets the extra info pointer of the copy function, which can be used to store arbitrary data.
+
+* @param copy_function The copy function
+* @param extra_info The extra info pointer
+* @param destructor  A destructor function to call to destroy the extra info
+*/
+DUCKDB_C_API void duckdb_copy_function_set_extra_info(duckdb_copy_function copy_function, void *extra_info,
+                                                      duckdb_delete_callback_t destructor);
+
+/*!
 Registers the given copy function on the database connection under the specified name.
 
 * @param connection The database connection
@@ -5525,17 +5535,6 @@ Destroys the given copy function object.
 * @param copy_function The copy function to destroy.
 */
 DUCKDB_C_API void duckdb_destroy_copy_function(duckdb_copy_function *copy_function);
-
-/*!
-Adds an option to the `COPY ... TO` variant of the copy function.
-
-* @param copy_function The copy function
-* @param name The name of the option
-* @param type The type of the option
-* @param description (optional) The description of the option
-*/
-DUCKDB_C_API void duckdb_copy_function_to_add_option(duckdb_copy_function copy_function, const char *name,
-                                                     duckdb_logical_type type, const char *description);
 
 /*!
 Sets the bind function of the copy function, to use when binding `COPY ... TO`.
@@ -5552,6 +5551,22 @@ Report that an error occurred during the binding-phase of a `COPY ... TO` functi
 * @param error The error message
 */
 DUCKDB_C_API void duckdb_copy_function_to_bind_set_error(duckdb_bind_info info, const char *error);
+
+/*!
+Retrieves the extra info pointer of the copy function.
+
+* @param info The bind info provided to the bind function
+* @return The extra info pointer.
+*/
+DUCKDB_C_API void *duckdb_copy_function_to_bind_get_extra_info(duckdb_bind_info info);
+
+/*!
+Retrieves the client context of the current connection.
+
+Must be destroyed with `duckdb_destroy_client_context`* @param info The bind info provided to the bind function
+* @return The client context.
+*/
+DUCKDB_C_API duckdb_client_context duckdb_copy_function_to_bind_get_client_context(duckdb_bind_info info);
 
 /*!
 Retrieves the number of columns that will be provided to the `COPY ... TO` function.
@@ -5571,13 +5586,12 @@ Retrieves the type of a column that will be provided to the `COPY ... TO` functi
 DUCKDB_C_API duckdb_logical_type duckdb_copy_function_to_bind_get_column_type(duckdb_bind_info info, idx_t col_idx);
 
 /*!
-Retrieves the value of an option provided to the `COPY ... TO` function.
+Retrieves all values for the given options provided to the `COPY ... TO` function.
 
 * @param info The bind info provided to the bind function
-* @param name The name of the option to retrieve
-* @return The value of the option.
+* @return A STRUCT value containing all options as fields. Must be freed with `duckdb_destroy_value`.
 */
-DUCKDB_C_API duckdb_value duckdb_copy_function_to_bind_get_option(duckdb_bind_info info, const char *name);
+DUCKDB_C_API duckdb_value duckdb_copy_function_to_bind_get_options(duckdb_bind_info info);
 
 /*!
 Sets the bind data of the copy function, to be provided to the init, sink and finalize functions.
@@ -5606,12 +5620,36 @@ Report that an error occurred during the initialization-phase of a `COPY ... TO`
 DUCKDB_C_API void duckdb_copy_function_to_global_init_set_error(duckdb_init_info info, const char *error);
 
 /*!
+Retrieves the extra info pointer of the copy function.
+
+* @param info The init info provided to the init function
+* @return The extra info pointer.
+*/
+DUCKDB_C_API void *duckdb_copy_function_to_global_init_get_extra_info(duckdb_init_info info);
+
+/*!
+Retrieves the client context of the current connection.
+
+Must be destroyed with `duckdb_destroy_client_context`* @param info The init info provided to the init function
+* @return The client context.
+*/
+DUCKDB_C_API duckdb_client_context duckdb_copy_function_to_global_init_get_client_context(duckdb_init_info info);
+
+/*!
 Retrieves the bind data provided during the binding-phase of a `COPY ... TO` function.
 
 * @param info The init info provided to the init function
 * @return The bind data pointer.
 */
 DUCKDB_C_API void *duckdb_copy_function_to_global_init_get_bind_data(duckdb_init_info info);
+
+/*!
+Retrieves the file path provided to the `COPY ... TO` function.
+
+* @param info The init info provided to the init function
+* @return The file path.
+*/
+DUCKDB_C_API const char *duckdb_copy_function_to_global_init_get_file_path(duckdb_init_info info);
 
 /*!
 Sets the global state of the copy function, to be provided to all subsequent local init, sink and finalize functions.
@@ -5638,6 +5676,22 @@ Report that an error occurred during the sink-phase of a `COPY ... TO` function.
 * @param error The error message
 */
 DUCKDB_C_API void duckdb_copy_function_to_sink_set_error(duckdb_copy_to_sink_info info, const char *error);
+
+/*!
+Retrieves the extra info pointer of the copy function.
+
+* @param info The sink info provided to the sink function
+* @return The extra info pointer.
+*/
+DUCKDB_C_API void *duckdb_copy_function_to_sink_get_extra_info(duckdb_copy_to_sink_info info);
+
+/*!
+Retrieves the client context of the current connection.
+
+Must be destroyed with `duckdb_destroy_client_context`* @param info The sink info provided to the sink function
+* @return The client context.
+*/
+DUCKDB_C_API duckdb_client_context duckdb_copy_function_to_sink_get_client_context(duckdb_copy_to_sink_info info);
 
 /*!
 Retrieves the bind data provided during the binding-phase of a `COPY ... TO` function.
@@ -5672,6 +5726,23 @@ Report that an error occurred during the finalize-phase of a `COPY ... TO` funct
 DUCKDB_C_API void duckdb_copy_function_to_finalize_set_error(duckdb_copy_to_finalize_info info, const char *error);
 
 /*!
+Retrieves the extra info pointer of the copy function.
+
+* @param info The finalize info provided to the finalize function
+* @return The extra info pointer.
+*/
+DUCKDB_C_API void *duckdb_copy_function_to_finalize_get_extra_info(duckdb_copy_to_finalize_info info);
+
+/*!
+Retrieves the client context of the current connection.
+
+Must be destroyed with `duckdb_destroy_client_context`* @param info The finalize info provided to the finalize function
+* @return The client context.
+*/
+DUCKDB_C_API duckdb_client_context
+duckdb_copy_function_to_finalize_get_client_context(duckdb_copy_to_finalize_info info);
+
+/*!
 Retrieves the bind data provided during the binding-phase of a `COPY ... TO` function.
 
 * @param info The finalize info provided to the finalize function
@@ -5688,17 +5759,6 @@ Retrieves the global state provided during the init-phase of a `COPY ... TO` fun
 DUCKDB_C_API void *duckdb_copy_function_to_finalize_get_global_state(duckdb_copy_to_finalize_info info);
 
 /*!
-Adds an option to the `COPY ... FROM` variant of the copy function.
-
-* @param copy_function The copy function
-* @param name The name of the option
-* @param type The type of the option
-* @param description (optional) The description of the option
-*/
-DUCKDB_C_API void duckdb_copy_function_from_add_option(duckdb_copy_function copy_function, const char *name,
-                                                       duckdb_logical_type type, const char *description);
-
-/*!
 Sets the bind function of the copy function, to use when binding `COPY ... FROM`.
 
 * @param bind The bind function
@@ -5707,13 +5767,12 @@ DUCKDB_C_API void duckdb_copy_function_from_set_bind(duckdb_copy_function copy_f
                                                      duckdb_copy_function_from_bind_t bind);
 
 /*!
-Retrieves the value of an option provided to the `COPY ... FROM` function.
+Retrieves all values for the given options provided to the `COPY ... FROM` function.
 
 * @param info The bind info provided to the bind function
-* @param name The name of the option to retrieve
-* @return The value of the option.
+* @return A STRUCT value containing all options as fields. Must be freed with `duckdb_destroy_value`.
 */
-DUCKDB_C_API duckdb_value duckdb_copy_function_from_bind_get_option(duckdb_bind_info info, const char *name);
+DUCKDB_C_API duckdb_value duckdb_copy_function_from_bind_get_options(duckdb_bind_info info);
 
 /*!
 Sets the bind data of the copy function, to be provided to the underlying table function.
@@ -5732,6 +5791,22 @@ Report that an error occurred during the binding of a `COPY ... FROM` function.
 * @param error The error message
 */
 DUCKDB_C_API void duckdb_copy_function_from_bind_set_error(duckdb_bind_info info, const char *error);
+
+/*!
+Retrieves the extra info pointer of the copy function.
+
+* @param info The bind info provided to the bind function
+* @return The extra info pointer.
+*/
+DUCKDB_C_API void *duckdb_copy_function_from_bind_get_extra_info(duckdb_bind_info info);
+
+/*!
+Retrieves the client context of the current connection.
+
+Must be destroyed with `duckdb_destroy_client_context`* @param info The bind info provided to the bind function
+* @return The client context.
+*/
+DUCKDB_C_API duckdb_client_context duckdb_copy_function_from_bind_get_client_context(duckdb_bind_info info);
 
 /*!
 Sets the underlying table function to use when executing a `COPY ... FROM` function.

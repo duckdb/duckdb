@@ -33,6 +33,32 @@
       }
     },
     {
+      "name": "duckdb_copy_function_set_extra_info",
+      "return_type": "void",
+      "params": [
+        {
+          "type": "duckdb_copy_function",
+          "name": "copy_function"
+        },
+        {
+          "type": "void *",
+          "name": "extra_info"
+        },
+        {
+          "type": "duckdb_delete_callback_t",
+          "name": "destructor"
+        }
+      ],
+      "comment": {
+        "description": "Sets the extra info pointer of the copy function, which can be used to store arbitrary data.\n\n",
+        "param_comments": {
+          "copy_function": "The copy function",
+          "extra_info": "The extra info pointer",
+          "destructor": " A destructor function to call to destroy the extra info"
+        }
+      }
+    },
+    {
       "name": "duckdb_register_copy_function",
       "return_type": "duckdb_state",
       "params": [
@@ -67,37 +93,6 @@
         "description": "Destroys the given copy function object.\n",
         "param_comments": {
           "copy_function": "The copy function to destroy."
-        }
-      }
-    },
-    {
-      "name": "duckdb_copy_function_to_add_option",
-      "return_type": "void",
-      "params": [
-        {
-          "type": "duckdb_copy_function",
-          "name": "copy_function"
-        },
-        {
-          "type": "const char *",
-          "name": "name"
-        },
-        {
-          "type": "duckdb_logical_type",
-          "name": "type"
-        },
-        {
-          "type": "const char *",
-          "name": "description"
-        }
-      ],
-      "comment": {
-        "description": "Adds an option to the `COPY ... TO` variant of the copy function.\n\n",
-        "param_comments": {
-          "copy_function": "The copy function",
-          "name": "The name of the option",
-          "type": "The type of the option",
-          "description": "(optional) The description of the option"
         }
       }
     },
@@ -144,6 +139,40 @@
       }
     },
     {
+      "name": "duckdb_copy_function_to_bind_get_extra_info",
+        "return_type": "void *",
+        "params": [
+            {
+            "type": "duckdb_bind_info",
+            "name": "info"
+            }
+        ],
+        "comment": {
+            "description": "Retrieves the extra info pointer of the copy function.\n\n",
+            "param_comments": {
+            "info": "The bind info provided to the bind function"
+            },
+            "return_value": "The extra info pointer."
+        }
+    },
+    {
+      "name": "duckdb_copy_function_to_bind_get_client_context",
+      "return_type": "duckdb_client_context",
+        "params": [
+            {
+            "type": "duckdb_bind_info",
+            "name": "info"
+            }
+        ],
+        "comment": {
+            "description": "Retrieves the client context of the current connection.\n\nMust be destroyed with `duckdb_destroy_client_context`",
+            "param_comments": {
+            "info": "The bind info provided to the bind function"
+            },
+            "return_value": "The client context."
+        }
+    },
+    {
       "name": "duckdb_copy_function_to_bind_get_column_count",
       "return_type": "idx_t",
       "params": [
@@ -183,25 +212,20 @@
       }
     },
     {
-      "name": "duckdb_copy_function_to_bind_get_option",
+      "name": "duckdb_copy_function_to_bind_get_options",
       "return_type": "duckdb_value",
       "params": [
         {
           "type": "duckdb_bind_info",
           "name": "info"
-        },
-        {
-          "type": "const char *",
-          "name": "name"
         }
       ],
       "comment": {
-        "description": "Retrieves the value of an option provided to the `COPY ... TO` function.\n\n",
+        "description": "Retrieves all values for the given options provided to the `COPY ... TO` function.\n\n",
         "param_comments": {
-          "info": "The bind info provided to the bind function",
-          "name": "The name of the option to retrieve"
+          "info": "The bind info provided to the bind function"
         },
-        "return_value": "The value of the option."
+        "return_value": "A STRUCT value containing all options as fields. Must be freed with `duckdb_destroy_value`."
       }
     },
     {
@@ -273,6 +297,40 @@
       }
     },
     {
+      "name": "duckdb_copy_function_to_global_init_get_extra_info",
+      "return_type": "void *",
+      "params": [
+        {
+          "type": "duckdb_init_info",
+          "name": "info"
+        }
+      ],
+      "comment": {
+        "description": "Retrieves the extra info pointer of the copy function.\n\n",
+        "param_comments": {
+          "info": "The init info provided to the init function"
+        },
+        "return_value": "The extra info pointer."
+      }
+    },
+    {
+      "name": "duckdb_copy_function_to_global_init_get_client_context",
+      "return_type": "duckdb_client_context",
+      "params": [
+        {
+          "type": "duckdb_init_info",
+          "name": "info"
+        }
+      ],
+      "comment": {
+        "description": "Retrieves the client context of the current connection.\n\nMust be destroyed with `duckdb_destroy_client_context`",
+        "param_comments": {
+          "info": "The init info provided to the init function"
+        },
+        "return_value": "The client context."
+      }
+    },
+    {
       "name": "duckdb_copy_function_to_global_init_get_bind_data",
       "return_type": "void *",
       "params": [
@@ -287,6 +345,23 @@
           "info": "The init info provided to the init function"
         },
         "return_value": "The bind data pointer."
+      }
+    },
+    {
+      "name": "duckdb_copy_function_to_global_init_get_file_path",
+      "return_type": "const char *",
+      "params": [
+        {
+          "type": "duckdb_init_info",
+          "name": "info"
+        }
+      ],
+      "comment": {
+        "description": "Retrieves the file path provided to the `COPY ... TO` function.\n\nLives for the duration of the initialization callback, must not be freed.\n\n",
+        "param_comments": {
+          "info": "The init info provided to the init function"
+        },
+        "return_value": "The file path."
       }
     },
     {
@@ -355,6 +430,40 @@
           "info": "The sink info provided to the sink function",
           "error": "The error message"
         }
+      }
+    },
+    {
+      "name": "duckdb_copy_function_to_sink_get_extra_info",
+      "return_type": "void *",
+      "params": [
+        {
+          "type": "duckdb_copy_to_sink_info",
+          "name": "info"
+        }
+      ],
+      "comment": {
+        "description": "Retrieves the extra info pointer of the copy function.\n\n",
+        "param_comments": {
+          "info": "The sink info provided to the sink function"
+        },
+        "return_value": "The extra info pointer."
+      }
+    },
+    {
+      "name": "duckdb_copy_function_to_sink_get_client_context",
+      "return_type": "duckdb_client_context",
+      "params": [
+        {
+          "type": "duckdb_copy_to_sink_info",
+          "name": "info"
+        }
+      ],
+      "comment": {
+        "description": "Retrieves the client context of the current connection.\n\nMust be destroyed with `duckdb_destroy_client_context`",
+        "param_comments": {
+          "info": "The sink info provided to the sink function"
+        },
+        "return_value": "The client context."
       }
     },
     {
@@ -434,6 +543,40 @@
       }
     },
     {
+      "name": "duckdb_copy_function_to_finalize_get_extra_info",
+      "return_type": "void *",
+      "params": [
+        {
+          "type": "duckdb_copy_to_finalize_info",
+          "name": "info"
+        }
+      ],
+      "comment": {
+        "description": "Retrieves the extra info pointer of the copy function.\n\n",
+        "param_comments": {
+          "info": "The finalize info provided to the finalize function"
+        },
+        "return_value": "The extra info pointer."
+      }
+    },
+    {
+      "name": "duckdb_copy_function_to_finalize_get_client_context",
+      "return_type": "duckdb_client_context",
+      "params": [
+        {
+          "type": "duckdb_copy_to_finalize_info",
+          "name": "info"
+        }
+      ],
+      "comment": {
+        "description": "Retrieves the client context of the current connection.\n\nMust be destroyed with `duckdb_destroy_client_context`",
+        "param_comments": {
+          "info": "The finalize info provided to the finalize function"
+        },
+        "return_value": "The client context."
+      }
+    },
+    {
       "name": "duckdb_copy_function_to_finalize_get_bind_data",
       "return_type": "void *",
       "params": [
@@ -468,37 +611,6 @@
       }
     },
     {
-      "name": "duckdb_copy_function_from_add_option",
-      "return_type": "void",
-      "params": [
-        {
-          "type": "duckdb_copy_function",
-          "name": "copy_function"
-        },
-        {
-          "type": "const char *",
-          "name": "name"
-        },
-        {
-          "type": "duckdb_logical_type",
-          "name": "type"
-        },
-        {
-          "type": "const char *",
-          "name": "description"
-        }
-      ],
-      "comment": {
-        "description": "Adds an option to the `COPY ... FROM` variant of the copy function.\n\n",
-        "param_comments": {
-          "copy_function": "The copy function",
-          "name": "The name of the option",
-          "type": "The type of the option",
-          "description": "(optional) The description of the option"
-        }
-      }
-    },
-    {
       "name": "duckdb_copy_function_from_set_bind",
       "return_type": "void",
       "params": [
@@ -520,25 +632,20 @@
       }
     },
     {
-      "name": "duckdb_copy_function_from_bind_get_option",
+      "name": "duckdb_copy_function_from_bind_get_options",
       "return_type": "duckdb_value",
       "params": [
         {
           "type": "duckdb_bind_info",
           "name": "info"
-        },
-        {
-          "type": "const char *",
-          "name": "name"
         }
       ],
       "comment": {
-        "description": "Retrieves the value of an option provided to the `COPY ... FROM` function.\n\n",
+        "description": "Retrieves all values for the given options provided to the `COPY ... FROM` function.\n\n",
         "param_comments": {
-          "info": "The bind info provided to the bind function",
-          "name": "The name of the option to retrieve"
+          "info": "The bind info provided to the bind function"
         },
-        "return_value": "The value of the option."
+        "return_value": "A STRUCT value containing all options as fields. Must be freed with `duckdb_destroy_value`."
       }
     },
     {
@@ -586,6 +693,40 @@
           "info": "The bind info provided to the bind function",
           "error": "The error message"
         }
+      }
+    },
+    {
+      "name": "duckdb_copy_function_from_bind_get_extra_info",
+      "return_type": "void *",
+      "params": [
+        {
+          "type": "duckdb_bind_info",
+          "name": "info"
+        }
+      ],
+      "comment": {
+        "description": "Retrieves the extra info pointer of the copy function.\n\n",
+        "param_comments": {
+          "info": "The bind info provided to the bind function"
+        },
+        "return_value": "The extra info pointer."
+      }
+    },
+    {
+      "name": "duckdb_copy_function_from_bind_get_client_context",
+      "return_type": "duckdb_client_context",
+      "params": [
+        {
+          "type": "duckdb_bind_info",
+          "name": "info"
+        }
+      ],
+      "comment": {
+        "description": "Retrieves the client context of the current connection.\n\nMust be destroyed with `duckdb_destroy_client_context`",
+        "param_comments": {
+          "info": "The bind info provided to the bind function"
+        },
+        "return_value": "The client context."
       }
     },
     {
