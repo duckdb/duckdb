@@ -17,8 +17,12 @@ namespace duckdb {
 class LogicalOperator;
 struct LogicalType;
 struct BoundStatement;
+class Binder;
 
 struct ExtraBoundInfo {
+	SetOperationType setop_type = SetOperationType::NONE;
+	vector<shared_ptr<Binder>> child_binders;
+	vector<BoundStatement> bound_children;
 	vector<unique_ptr<ParsedExpression>> original_expressions;
 };
 

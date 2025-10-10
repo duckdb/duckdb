@@ -114,15 +114,10 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 	D_ASSERT(node.bound_children.size() >= 2);
 	vector<unique_ptr<LogicalOperator>> children;
 	for (auto &child : node.bound_children) {
-		unique_ptr<LogicalOperator> child_node;
-		if (child.bound_node) {
-			child_node = CreatePlan(*child.bound_node);
-		} else {
-			child.binder->is_outside_flattened = is_outside_flattened;
+		child.binder->is_outside_flattened = is_outside_flattened;
 
-			// construct the logical plan for the child node
-			child_node = std::move(child.node.plan);
-		}
+		// construct the logical plan for the child node
+		auto child_node = std::move(child.node.plan);
 		if (!child.reorder_expressions.empty()) {
 			// if we have re-order expressions push a projection
 			vector<LogicalType> child_types;
@@ -137,7 +132,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 			child_node = CastLogicalOperatorToTypes(child_types, node.types, std::move(child_node));
 		} else {
 			// otherwise push only casts
-			child_node = CastLogicalOperatorToTypes(child.GetTypes(), node.types, std::move(child_node));
+			child_node = CastLogicalOperatorToTypes(child.node.types, node.types, std::move(child_node));
 		}
 		// check if there are any unplanned subqueries left in any child
 		if (child.binder && child.binder->has_unplanned_dependent_joins) {

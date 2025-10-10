@@ -424,7 +424,6 @@ private:
 	unique_ptr<LogicalOperator> CreatePlan(BoundQueryNode &node);
 
 	BoundSetOpChild BindSetOpChild(QueryNode &child);
-	unique_ptr<BoundSetOperationNode> BindSetOpNode(SetOperationNode &statement);
 
 	BoundStatement BindJoin(Binder &parent, TableRef &ref);
 	BoundStatement Bind(BaseTableRef &ref);

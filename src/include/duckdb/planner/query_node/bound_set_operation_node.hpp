@@ -35,15 +35,10 @@ public:
 };
 
 struct BoundSetOpChild {
-	unique_ptr<BoundSetOperationNode> bound_node;
 	BoundStatement node;
 	shared_ptr<Binder> binder;
 	//! Exprs used by the UNION BY NAME operations to add a new projection
 	vector<unique_ptr<Expression>> reorder_expressions;
-
-	const vector<string> &GetNames();
-	const vector<LogicalType> &GetTypes();
-	idx_t GetRootIndex();
 };
 
 } // namespace duckdb
