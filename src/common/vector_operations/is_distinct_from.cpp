@@ -521,7 +521,10 @@ idx_t DistinctSelectStruct(Vector &left, Vector &right, idx_t count, const Selec
 	// In order to reuse the comparators, we have to track what passed and failed internally.
 	// To do that, we need local SVs that we then merge back into the real ones after every pass.
 	const auto vcount = count;
-	SelectionVector slice_sel(0, count);
+	SelectionVector slice_sel(count);
+	for (idx_t i = 0; i < count; ++i) {
+		slice_sel.set_index(i, i);
+	}
 
 	SelectionVector true_sel(count);
 	SelectionVector false_sel(count);
