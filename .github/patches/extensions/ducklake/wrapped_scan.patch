@@ -1,0 +1,39 @@
+diff --git a/src/include/storage/ducklake_inlined_data_reader.hpp b/src/include/storage/ducklake_inlined_data_reader.hpp
+index f0af8ec..43a3263 100644
+--- a/src/include/storage/ducklake_inlined_data_reader.hpp
++++ b/src/include/storage/ducklake_inlined_data_reader.hpp
+@@ -30,8 +30,8 @@ public:
+ public:
+ 	bool TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate,
+ 	                       LocalTableFunctionState &lstate) override;
+-	void Scan(ClientContext &context, GlobalTableFunctionState &global_state, LocalTableFunctionState &local_state,
+-	          DataChunk &chunk) override;
++	SourceResultType Scan(ClientContext &context, GlobalTableFunctionState &global_state, LocalTableFunctionState &local_state,
++	          DataChunk &chunk, InterruptState &interrupt_state) override;
+ 
+ 	string GetReaderType() const override;
+ 
+diff --git a/src/storage/ducklake_inlined_data_reader.cpp b/src/storage/ducklake_inlined_data_reader.cpp
+index 432ef24..3e9a0b5 100644
+--- a/src/storage/ducklake_inlined_data_reader.cpp
++++ b/src/storage/ducklake_inlined_data_reader.cpp
+@@ -154,8 +154,8 @@ bool DuckLakeInlinedDataReader::TryInitializeScan(ClientContext &context, Global
+ 	return true;
+ }
+ 
+-void DuckLakeInlinedDataReader::Scan(ClientContext &context, GlobalTableFunctionState &global_state,
+-                                     LocalTableFunctionState &local_state, DataChunk &chunk) {
++SourceResultType DuckLakeInlinedDataReader::Scan(ClientContext &context, GlobalTableFunctionState &global_state,
++                                     LocalTableFunctionState &local_state, DataChunk &chunk, InterruptState &interrupt_state) {
+ 	if (!virtual_columns.empty()) {
+ 		scan_chunk.Reset();
+ 		data->data->Scan(state, scan_chunk);
+@@ -210,6 +210,8 @@ void DuckLakeInlinedDataReader::Scan(ClientContext &context, GlobalTableFunction
+ 		}
+ 	}
+ 	file_row_number += NumericCast<int64_t>(scan_count);
++
++	return chunk.size() ? SourceResultType::HAVE_MORE_OUTPUT : SourceResultType::FINISHED;
+ }
+ 
+ void DuckLakeInlinedDataReader::AddVirtualColumn(column_t virtual_column_id) {

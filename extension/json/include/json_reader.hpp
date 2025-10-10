@@ -210,8 +210,9 @@ public:
 	void PrepareReader(ClientContext &context, GlobalTableFunctionState &) override;
 	bool TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate,
 	                       LocalTableFunctionState &lstate) override;
-	void Scan(ClientContext &context, GlobalTableFunctionState &global_state, LocalTableFunctionState &local_state,
-	          DataChunk &chunk) override;
+	SourceResultType Scan(ClientContext &context, GlobalTableFunctionState &global_state,
+	                      LocalTableFunctionState &local_state, DataChunk &chunk,
+	                      InterruptState &interrupt_state) override;
 	void FinishFile(ClientContext &context, GlobalTableFunctionState &gstate_p) override;
 	double GetProgressInFile(ClientContext &context) override;
 
