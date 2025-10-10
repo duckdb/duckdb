@@ -12,7 +12,7 @@ cd "$ROOT"
 export VALIDATE_TAGS=1
 
 run() {
-	$UNITTEST "$@" "$TESTS_SPEC" 2>&1 | grep 'SELECT "tagged'
+	$UNITTEST "$@" "$TESTS_SPEC" 2>&1 | grep "SELECT 'tagged"
 }
 
 expect() {
@@ -26,7 +26,7 @@ expect() {
 		}
 	else
 		for elt in "$@"; do
-			echo -n "$output" | grep -q "\"tagged $elt\"" || {
+			echo -n "$output" | grep -q "'tagged $elt'" || {
 				printf "\n  ❌ - error - missing %s" "$elt"
 				errs=$(($errs + 1))
 			}
