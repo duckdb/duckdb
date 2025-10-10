@@ -87,9 +87,6 @@ BoundCTEData Binder::PrepareCTE(const string &ctename, CommonTableExpressionInfo
 		ci_names.insert(name);
 	}
 
-	// This allows the right side to reference the CTE
-	bind_context.AddGenericBinding(result.setop_index, ctename, names, result.types);
-
 	result.child_binder = Binder::CreateBinder(context, this);
 
 	// Add bindings of left side to temporary CTE bindings context
