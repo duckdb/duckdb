@@ -609,6 +609,27 @@
         },
         "return_value": "The global state pointer."
       }
+    },
+    {
+      "name": "duckdb_copy_function_set_copy_from_function",
+      "return_type": "void",
+        "params": [
+            {
+            "type": "duckdb_copy_function",
+            "name": "copy_function"
+            },
+          {
+            "type": "duckdb_table_function",
+            "name": "table_function"
+          }
+        ],
+        "comment": {
+          "description": "Sets the `COPY ... FROM` table function to use when executing `COPY ... FROM` with this copy function.\n\nThe table function must take a single VARCHAR argument (the file path).\n\nOptions are passed as named parameters to the table function.\n\n",
+            "param_comments": {
+            "copy_function": "The copy function",
+            "function": "The table function to use for `COPY ... FROM`"
+          }
+        }
     }
   ]
 }
