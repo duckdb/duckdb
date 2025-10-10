@@ -21,11 +21,18 @@ InsertDatabasePathResult DatabaseFilePathManager::InsertDatabasePath(const strin
 	auto entry = db_paths.emplace(path, DatabasePathInfo(name, options.access_mode));
 	if (!entry.second) {
 		auto &existing = entry.first->second;
+		bool already_exists = false;
+		if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT && existing.name == name) {
+			already_exists = true;
+		}
 		if (options.access_mode == AccessMode::READ_ONLY && existing.access_mode == AccessMode::READ_ONLY) {
+			if (already_exists && existing.is_attached) {
+				return InsertDatabasePathResult::ALREADY_EXISTS;
+			}
 			// all attaches are in read-only mode - there is no conflict, just increase the reference count
 			existing.reference_count++;
 		} else {
-			if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT && existing.name == name) {
+			if (already_exists) {
 				if (existing.is_attached) {
 					return InsertDatabasePathResult::ALREADY_EXISTS;
 				}
