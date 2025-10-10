@@ -60,16 +60,15 @@ BoundStatement Binder::BindAlterAddIndex(BoundStatement &result, CatalogEntry &e
 	TableDescription table_description(table_info.catalog, table_info.schema, table_info.name);
 	auto table_ref = make_uniq<BaseTableRef>(table_description);
 	auto bound_table = Bind(*table_ref);
-	if (bound_table->type != TableReferenceType::BASE_TABLE) {
+	if (bound_table.plan->type != LogicalOperatorType::LOGICAL_GET) {
 		throw BinderException("can only add an index to a base table");
 	}
-	auto plan = CreatePlan(*bound_table);
-	auto &get = plan->Cast<LogicalGet>();
+	auto &get = bound_table.plan->Cast<LogicalGet>();
 	get.names = column_list.GetColumnNames();
 
 	auto alter_table_info = unique_ptr_cast<AlterInfo, AlterTableInfo>(std::move(alter_info));
-	result.plan = table.catalog.BindAlterAddIndex(*this, table, std::move(plan), std::move(create_index_info),
-	                                              std::move(alter_table_info));
+	result.plan = table.catalog.BindAlterAddIndex(*this, table, std::move(bound_table.plan),
+	                                              std::move(create_index_info), std::move(alter_table_info));
 	return std::move(result);
 }
 

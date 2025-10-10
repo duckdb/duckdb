@@ -174,8 +174,8 @@ BoundStatement Binder::Bind(QueryNode &node) {
 	return BindNode(node);
 }
 
-unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
-	unique_ptr<BoundTableRef> result;
+BoundStatement Binder::Bind(TableRef &ref) {
+	BoundStatement result;
 	switch (ref.type) {
 	case TableReferenceType::BASE_TABLE:
 		result = Bind(ref.Cast<BaseTableRef>());
@@ -215,52 +215,10 @@ unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
 	default:
 		throw InternalException("Unknown table ref type (%s)", EnumUtil::ToString(ref.type));
 	}
-	result->sample = std::move(ref.sample);
-	return result;
-}
-
-unique_ptr<LogicalOperator> Binder::CreatePlan(BoundTableRef &ref) {
-	unique_ptr<LogicalOperator> root;
-	switch (ref.type) {
-	case TableReferenceType::BASE_TABLE:
-		root = CreatePlan(ref.Cast<BoundBaseTableRef>());
-		break;
-	case TableReferenceType::SUBQUERY:
-		root = CreatePlan(ref.Cast<BoundSubqueryRef>());
-		break;
-	case TableReferenceType::JOIN:
-		root = CreatePlan(ref.Cast<BoundJoinRef>());
-		break;
-	case TableReferenceType::TABLE_FUNCTION:
-		root = CreatePlan(ref.Cast<BoundTableFunction>());
-		break;
-	case TableReferenceType::EMPTY_FROM:
-		root = CreatePlan(ref.Cast<BoundEmptyTableRef>());
-		break;
-	case TableReferenceType::EXPRESSION_LIST:
-		root = CreatePlan(ref.Cast<BoundExpressionListRef>());
-		break;
-	case TableReferenceType::COLUMN_DATA:
-		root = CreatePlan(ref.Cast<BoundColumnDataRef>());
-		break;
-	case TableReferenceType::CTE:
-		root = CreatePlan(ref.Cast<BoundCTERef>());
-		break;
-	case TableReferenceType::PIVOT:
-		root = CreatePlan(ref.Cast<BoundPivotRef>());
-		break;
-	case TableReferenceType::DELIM_GET:
-		root = CreatePlan(ref.Cast<BoundDelimGetRef>());
-		break;
-	case TableReferenceType::INVALID:
-	default:
-		throw InternalException("Unsupported bound table ref type (%s)", EnumUtil::ToString(ref.type));
-	}
-	// plan the sample clause
 	if (ref.sample) {
-		root = make_uniq<LogicalSample>(std::move(ref.sample), std::move(root));
+		result.plan = make_uniq<LogicalSample>(std::move(ref.sample), std::move(result.plan));
 	}
-	return root;
+	return result;
 }
 
 void Binder::AddCTE(const string &name) {
