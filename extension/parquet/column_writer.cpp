@@ -245,7 +245,7 @@ void ColumnWriter::HandleDefineLevels(ColumnWriterState &state, ColumnWriterStat
 
 unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &context, ParquetWriter &writer,
                                                              vector<string> path_in_schema, const LogicalType &type,
-                                                             const string &name,
+                                                             const string &name, bool allow_geometry,
                                                              optional_ptr<const ChildFieldIDs> field_ids,
                                                              optional_ptr<const ShreddingType> shredding_types,
                                                              idx_t max_repeat, idx_t max_define, bool can_have_nulls) {
@@ -286,7 +286,8 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 		}
 
 		//! Construct the column schema
-		auto variant_column = ParquetColumnSchema::FromLogicalType(name, type, max_define, max_repeat, 0, null_type);
+		auto variant_column =
+		    ParquetColumnSchema::FromLogicalType(name, type, max_define, max_repeat, 0, null_type, allow_geometry);
 		vector<unique_ptr<ColumnWriter>> child_writers;
 		child_writers.reserve(child_types.size());
 
@@ -310,15 +311,16 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 			}
 
 			child_writers.push_back(CreateWriterRecursive(context, writer, path_in_schema, child_type, child_name,
-			                                              child_field_ids, shredding_type, max_repeat, max_define + 1,
-			                                              is_optional));
+			                                              allow_geometry, child_field_ids, shredding_type, max_repeat,
+			                                              max_define + 1, is_optional));
 		}
 		return make_uniq<VariantColumnWriter>(writer, std::move(variant_column), path_in_schema,
 		                                      std::move(child_writers));
 	}
 
 	if (type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::UNION) {
-		auto struct_column = ParquetColumnSchema::FromLogicalType(name, type, max_define, max_repeat, 0, null_type);
+		auto struct_column =
+		    ParquetColumnSchema::FromLogicalType(name, type, max_define, max_repeat, 0, null_type, allow_geometry);
 		if (field_id && field_id->set) {
 			struct_column.field_id = field_id->field_id;
 		}
@@ -331,8 +333,8 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 			auto &child_type = entry.second;
 			auto &child_name = entry.first;
 			child_writers.push_back(CreateWriterRecursive(context, writer, path_in_schema, child_type, child_name,
-			                                              child_field_ids, shredding_type, max_repeat, max_define + 1,
-			                                              true));
+			                                              allow_geometry, child_field_ids, shredding_type, max_repeat,
+			                                              max_define + 1, true));
 		}
 		return make_uniq<StructColumnWriter>(writer, std::move(struct_column), std::move(path_in_schema),
 		                                     std::move(child_writers));
@@ -344,10 +346,11 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 
 		path_in_schema.push_back("list");
 		auto child_writer =
-		    CreateWriterRecursive(context, writer, path_in_schema, child_type, "element", child_field_ids,
-		                          shredding_type, max_repeat + 1, max_define + 2, true);
+		    CreateWriterRecursive(context, writer, path_in_schema, child_type, "element", allow_geometry,
+		                          child_field_ids, shredding_type, max_repeat + 1, max_define + 2, true);
 
-		auto list_column = ParquetColumnSchema::FromLogicalType(name, type, max_define, max_repeat, 0, null_type);
+		auto list_column =
+		    ParquetColumnSchema::FromLogicalType(name, type, max_define, max_repeat, 0, null_type, allow_geometry);
 		if (field_id && field_id->set) {
 			list_column.field_id = field_id->field_id;
 		}
@@ -371,7 +374,8 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 		key_value.emplace_back("value", MapType::ValueType(type));
 		auto key_value_type = LogicalType::STRUCT(key_value);
 
-		auto map_column = ParquetColumnSchema::FromLogicalType(name, type, max_define, max_repeat, 0, null_type);
+		auto map_column =
+		    ParquetColumnSchema::FromLogicalType(name, type, max_define, max_repeat, 0, null_type, allow_geometry);
 		if (field_id && field_id->set) {
 			map_column.field_id = field_id->field_id;
 		}
@@ -384,20 +388,22 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 			auto &child_name = key_value[i].first;
 			auto &child_type = key_value[i].second;
 			auto child_writer =
-			    CreateWriterRecursive(context, writer, path_in_schema, child_type, child_name, child_field_ids,
-			                          shredding_type, max_repeat + 1, max_define + 2, !is_key);
+			    CreateWriterRecursive(context, writer, path_in_schema, child_type, child_name, allow_geometry,
+			                          child_field_ids, shredding_type, max_repeat + 1, max_define + 2, !is_key);
 
 			child_writers.push_back(std::move(child_writer));
 		}
 
-		auto key_value_schema = ParquetColumnSchema::FromLogicalType("key_value", key_value_type, max_define + 1,
-		                                                             max_repeat + 1, 0, FieldRepetitionType::REPEATED);
+		auto key_value_schema =
+		    ParquetColumnSchema::FromLogicalType("key_value", key_value_type, max_define + 1, max_repeat + 1, 0,
+		                                         FieldRepetitionType::REPEATED, allow_geometry);
 		auto struct_writer = make_uniq<StructColumnWriter>(writer, std::move(key_value_schema), path_in_schema,
 		                                                   std::move(child_writers));
 		return make_uniq<ListColumnWriter>(writer, std::move(map_column), path_in_schema, std::move(struct_writer));
 	}
 
-	auto schema = ParquetColumnSchema::FromLogicalType(name, type, max_define, max_repeat, 0, null_type);
+	auto schema =
+	    ParquetColumnSchema::FromLogicalType(name, type, max_define, max_repeat, 0, null_type, allow_geometry);
 	if (field_id && field_id->set) {
 		schema.field_id = field_id->field_id;
 	}

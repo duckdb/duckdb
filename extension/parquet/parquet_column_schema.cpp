@@ -13,7 +13,7 @@ void ParquetColumnSchema::SetSchemaIndex(idx_t schema_idx) {
 ParquetColumnSchema ParquetColumnSchema::FromLogicalType(const string &name, const LogicalType &type, idx_t max_define,
                                                          idx_t max_repeat, idx_t column_index,
                                                          duckdb_parquet::FieldRepetitionType::type repetition_type,
-                                                         ParquetColumnSchemaType schema_type) {
+                                                         bool allow_geometry, ParquetColumnSchemaType schema_type) {
 	ParquetColumnSchema res;
 	res.name = name;
 	res.max_define = max_define;
@@ -22,6 +22,7 @@ ParquetColumnSchema ParquetColumnSchema::FromLogicalType(const string &name, con
 	res.repetition_type = repetition_type;
 	res.schema_type = schema_type;
 	res.type = type;
+	res.allow_geometry = allow_geometry;
 	return res;
 }
 

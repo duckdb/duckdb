@@ -36,6 +36,7 @@ struct CollectionCheckpointState;
 struct PersistentCollectionData;
 class CheckpointTask;
 class TableIOManager;
+class DataTable;
 
 class RowGroupCollection {
 public:
@@ -101,9 +102,10 @@ public:
 	void RemoveFromIndexes(const QueryContext &context, TableIndexList &indexes, Vector &row_identifiers, idx_t count);
 
 	idx_t Delete(TransactionData transaction, DataTable &table, row_t *ids, idx_t count);
-	void Update(TransactionData transaction, row_t *ids, const vector<PhysicalIndex> &column_ids, DataChunk &updates);
-	void UpdateColumn(TransactionData transaction, Vector &row_ids, const vector<column_t> &column_path,
-	                  DataChunk &updates);
+	void Update(TransactionData transaction, DataTable &table, row_t *ids, const vector<PhysicalIndex> &column_ids,
+	            DataChunk &updates);
+	void UpdateColumn(TransactionData transaction, DataTable &table, Vector &row_ids,
+	                  const vector<column_t> &column_path, DataChunk &updates);
 
 	void Checkpoint(TableDataWriter &writer, TableStatistics &global_stats);
 

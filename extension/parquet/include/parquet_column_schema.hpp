@@ -47,6 +47,7 @@ public:
 	static ParquetColumnSchema FromLogicalType(const string &name, const LogicalType &type, idx_t max_define,
 	                                           idx_t max_repeat, idx_t column_index,
 	                                           duckdb_parquet::FieldRepetitionType::type repetition_type,
+	                                           bool allow_geometry,
 	                                           ParquetColumnSchemaType schema_type = ParquetColumnSchemaType::COLUMN);
 
 public:
@@ -87,6 +88,8 @@ public:
 	optional_idx field_id;
 	//! Whether a column is nullable or not
 	duckdb_parquet::FieldRepetitionType::type repetition_type = duckdb_parquet::FieldRepetitionType::OPTIONAL;
+	//! Whether the column can be recognized as a GEOMETRY type
+	bool allow_geometry = false;
 };
 
 } // namespace duckdb

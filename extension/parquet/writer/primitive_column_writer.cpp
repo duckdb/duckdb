@@ -304,12 +304,24 @@ void PrimitiveColumnWriter::SetParquetStatistics(PrimitiveColumnWriterState &sta
 	}
 
 	if (state.stats_state->HasGeoStats()) {
-		column_chunk.meta_data.__isset.geospatial_statistics = true;
-		state.stats_state->WriteGeoStats(column_chunk.meta_data.geospatial_statistics);
 
-		// Add the geospatial statistics to the extra GeoParquet metadata
-		writer.GetGeoParquetData().AddGeoParquetStats(column_schema.name, column_schema.type,
-		                                              *state.stats_state->GetGeoStats());
+		auto gpq_version = writer.GetGeoParquetVersion();
+
+		const auto has_real_stats = gpq_version == GeoParquetVersion::NONE || gpq_version == GeoParquetVersion::BOTH ||
+		                            gpq_version == GeoParquetVersion::V2;
+		const auto has_json_stats = gpq_version == GeoParquetVersion::V1 || gpq_version == GeoParquetVersion::BOTH ||
+		                            gpq_version == GeoParquetVersion::V2;
+
+		if (has_real_stats) {
+			// Write the parquet native geospatial statistics
+			column_chunk.meta_data.__isset.geospatial_statistics = true;
+			state.stats_state->WriteGeoStats(column_chunk.meta_data.geospatial_statistics);
+		}
+		if (has_json_stats) {
+			// Add the geospatial statistics to the extra GeoParquet metadata
+			writer.GetGeoParquetData().AddGeoParquetStats(column_schema.name, column_schema.type,
+			                                              *state.stats_state->GetGeoStats());
+		}
 	}
 
 	for (const auto &write_info : state.write_info) {
@@ -427,6 +439,7 @@ void PrimitiveColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement>
 	auto &name = schema.name;
 	auto &field_id = schema.field_id;
 	auto &type = schema.type;
+	auto allow_geometry = schema.allow_geometry;
 
 	duckdb_parquet::SchemaElement schema_element;
 	schema_element.type = ParquetWriter::DuckDBTypeToParquetType(type);
@@ -439,7 +452,7 @@ void PrimitiveColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement>
 		schema_element.__isset.field_id = true;
 		schema_element.field_id = field_id.GetIndex();
 	}
-	ParquetWriter::SetSchemaProperties(type, schema_element);
+	ParquetWriter::SetSchemaProperties(type, schema_element, allow_geometry);
 	schemas.push_back(std::move(schema_element));
 
 	D_ASSERT(child_writers.empty());

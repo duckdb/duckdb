@@ -192,11 +192,11 @@ void VariantColumnWriter::AnalyzeSchemaFinalize(const ParquetAnalyzeSchemaState 
 	child_writers.pop_back();
 	//! Recreate the column writer for 'value' because this is now "optional"
 	child_writers.push_back(ColumnWriter::CreateWriterRecursive(context, writer, schema_path, LogicalType::BLOB,
-	                                                            "value", nullptr, nullptr, schema.max_repeat,
+	                                                            "value", false, nullptr, nullptr, schema.max_repeat,
 	                                                            schema.max_define + 1, true));
 	child_writers.push_back(ColumnWriter::CreateWriterRecursive(context, writer, schema_path, typed_value,
-	                                                            "typed_value", nullptr, nullptr, schema.max_repeat,
-	                                                            schema.max_define + 1, true));
+	                                                            "typed_value", false, nullptr, nullptr,
+	                                                            schema.max_repeat, schema.max_define + 1, true));
 }
 
 } // namespace duckdb
