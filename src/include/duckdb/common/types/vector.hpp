@@ -22,6 +22,7 @@
 namespace duckdb {
 
 class VectorCache;
+class VectorChildBuffer;
 class VectorStringBuffer;
 class VectorStructBuffer;
 class VectorListBuffer;
@@ -197,7 +198,7 @@ public:
 	//! Creates a reference to a dictionary of the other vector
 	DUCKDB_API void Dictionary(Vector &dict, idx_t dictionary_size, const SelectionVector &sel, idx_t count);
 	//! Creates a dictionary on the reusable dict
-	DUCKDB_API void Dictionary(buffer_ptr<VectorBuffer> reusable_dict, const SelectionVector &sel);
+	DUCKDB_API void Dictionary(buffer_ptr<VectorChildBuffer> reusable_dict, const SelectionVector &sel);
 
 	//! Creates the data of this vector with the specified type. Any data that
 	//! is currently in the vector is destroyed.

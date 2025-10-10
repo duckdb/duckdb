@@ -288,17 +288,16 @@ void Vector::Dictionary(Vector &dict, idx_t dictionary_size, const SelectionVect
 	Dictionary(dictionary_size, sel, count);
 }
 
-void Vector::Dictionary(buffer_ptr<VectorBuffer> reusable_dict, const SelectionVector &sel) {
+void Vector::Dictionary(buffer_ptr<VectorChildBuffer> reusable_dict, const SelectionVector &sel) {
 	D_ASSERT(type.InternalType() != PhysicalType::STRUCT);
-	auto &vector_child_buffer = reusable_dict->Cast<VectorChildBuffer>();
-	D_ASSERT(type == vector_child_buffer.data.GetType());
+	D_ASSERT(type == reusable_dict->data.GetType());
 	vector_type = VectorType::DICTIONARY_VECTOR;
 	data = nullptr;
 	validity.Reset();
 
 	auto dict_buffer = make_buffer<DictionaryBuffer>(sel);
-	dict_buffer->SetDictionarySize(vector_child_buffer.size.GetIndex());
-	dict_buffer->SetDictionaryId(vector_child_buffer.id);
+	dict_buffer->SetDictionarySize(reusable_dict->size.GetIndex());
+	dict_buffer->SetDictionaryId(reusable_dict->id);
 	buffer = std::move(dict_buffer);
 
 	auxiliary = std::move(reusable_dict);
