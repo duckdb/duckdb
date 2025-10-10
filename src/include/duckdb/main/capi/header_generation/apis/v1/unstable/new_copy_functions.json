@@ -37,6 +37,8 @@
     "duckdb_copy_function_finalize_get_extra_info",
     "duckdb_copy_function_finalize_get_client_context",
     "duckdb_copy_function_finalize_get_bind_data",
-    "duckdb_copy_function_finalize_get_global_state"
+    "duckdb_copy_function_finalize_get_global_state",
+
+    "duckdb_copy_function_set_copy_from_function"
   ]
 }
