@@ -708,6 +708,14 @@ bool TryParseConditions(SQLLogicParser &parser, const string &condition_text, ve
 	return true;
 }
 
+// add implicit tags from environment variables, with value if available
+void tag_env(vector<string> &tags, const string &name, const string *value = nullptr) {
+	tags.emplace_back(StringUtil::Format("env[%s]", name));
+	if (value != nullptr) {
+		tags.emplace_back(StringUtil::Format("env[%s]=%s", name, *value));
+	}
+}
+
 void SQLLogicTestRunner::ExecuteFile(string script) {
 	auto &test_config = TestConfiguration::Get();
 	if (test_config.ShouldSkipTest(script)) {
@@ -719,7 +727,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 	SQLLogicParser parser;
 	idx_t skip_level = 0;
 	bool test_executed = false;
-	bool file_tags_expr_count = 0;
+	bool file_tags_expr_seen = false;
 	vector<string> file_tags; // gets both implicit and file-spec'd
 
 	// for the original SQLite tests we convert floating point numbers to integers
@@ -1076,10 +1084,9 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			if (environment_variables.count(env_var)) {
 				parser.Fail(StringUtil::Format("Environment/Test variable '%s' has already been defined", env_var));
 			}
-			// XXX: consider me: auto tag `test_env` -> "env[VAR]" + "env[VAR]=VALUE"
-			file_tags.emplace_back(StringUtil::Format("env[%s]", env_var));
-			file_tags.emplace_back(StringUtil::Format("env[%s]=%s", env_var, env_actual));
+
 			environment_variables[env_var] = env_actual;
+			tag_env(file_tags, env_var, &env_actual);
 
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_REQUIRE_ENV) {
 			if (InLoop()) {
@@ -1106,9 +1113,6 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				return;
 			}
 
-			// XXX: consider me: auto tag `require env` -> "env[VAR]" + "env[VAR]=VALUE"
-			file_tags.emplace_back(StringUtil::Format("env[%s]", token.parameters[0]));
-
 			if (token.parameters.size() == 2) {
 				// Check that the value is the same as the expected value
 				auto env_value = token.parameters[1];
@@ -1117,7 +1121,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 					SKIP_TEST("require-env " + token.parameters[0] + " " + token.parameters[1]);
 					return;
 				}
-				// XXX: consider me: auto tag `require env` -> "env[VAR]" + "env[VAR]=VALUE"
+
 				file_tags.emplace_back(StringUtil::Format("env[%s]=%s", token.parameters[0], token.parameters[1]));
 			}
 
@@ -1125,6 +1129,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				parser.Fail(StringUtil::Format("Environment variable '%s' has already been defined", env_var));
 			}
 			environment_variables[env_var] = env_actual;
+			tag_env(file_tags, token.parameters[0], token.parameters.size() == 2 ? &token.parameters[1] : nullptr);
 
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_LOAD) {
 			auto &test_config = TestConfiguration::Get();
@@ -1205,17 +1210,22 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			auto command = make_uniq<UnzipCommand>(*this, input_path, extraction_path);
 			ExecuteCommand(std::move(command));
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_TAGS) {
-			// NOTE: consider off by default, CLI flag to enforce?
+			// NOTE: tags-before-test-commands is the lowest bar
+			// 1 better: all non-command lines precede command lines
+			// Mo better: parse first, build entire context before execution; allows e.g.
+			// - implicit tag scans of e.g. strings, vars, etc., like '${VAR}', '__TEST_DIR__', 'ATTACH'
+			// - faster subset runs
+			// - tag match runs to generate lists
 			if (test_executed) {
-				parser.Fail("tags must precede tests");
+				parser.Fail("tags expression must precede test commands");
 			}
-			if (file_tags_expr_count > 0) {
+			if (file_tags_expr_seen) {
 				parser.Fail("tags may be only specified once");
 			}
+			file_tags_expr_seen = true;
 			if (token.parameters.empty()) {
-				parser.Fail("tags requires >= 1 argument: <tag1> [tag2 .. tagN]");
+				parser.Fail("tags requires >= 1 argument, e.g.: <tag1> [tag2 .. tagN]");
 			}
-			file_tags_expr_count += 1;
 
 			// extend file_tags for jit eval
 			file_tags.insert(file_tags.begin(), token.parameters.begin(), token.parameters.end());
