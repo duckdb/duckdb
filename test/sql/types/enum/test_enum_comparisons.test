@@ -49,7 +49,7 @@ SELECT 'sad' = 'sad'::mood AS comp;
 True
 
 # Comparing to a non-existent enum value should error
-Error: Enum value 'ecstatic' not found in enum type 'mood'
+# Error: Enum value 'ecstatic' not found in enum type 'mood'
 statement error
 select 'sad'::mood = 'ecstatic'
 ----
