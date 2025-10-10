@@ -544,7 +544,7 @@ public:
 //------------------------------------------------------------------------------
 // Operation
 //------------------------------------------------------------------------------
-template <class STATE>
+template <class STATE, bool IGNORE_NULL>
 void ArgMinMaxNUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t input_count, Vector &state_vector,
                       idx_t count) {
 
@@ -571,7 +571,7 @@ void ArgMinMaxNUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t inp
 	for (idx_t i = 0; i < count; i++) {
 		const auto arg_idx = arg_format.sel->get_index(i);
 		const auto val_idx = val_format.sel->get_index(i);
-		if (!arg_format.validity.RowIsValid(arg_idx) || !val_format.validity.RowIsValid(val_idx)) {
+		if (IGNORE_NULL && (!arg_format.validity.RowIsValid(arg_idx) || !val_format.validity.RowIsValid(val_idx))) {
 			continue;
 		}
 		const auto state_idx = state_format.sel->get_index(i);
@@ -616,7 +616,7 @@ void SpecializeArgMinMaxNFunction(AggregateFunction &function) {
 	function.destructor = AggregateFunction::StateDestroy<STATE, OP>;
 
 	function.finalize = MinMaxNOperation::Finalize<STATE>;
-	function.update = ArgMinMaxNUpdate<STATE>;
+	function.update = ArgMinMaxNUpdate<STATE, true>;
 }
 
 template <class VAL_TYPE, class COMPARATOR>
@@ -671,7 +671,85 @@ void SpecializeArgMinMaxNFunction(PhysicalType val_type, PhysicalType arg_type, 
 	}
 }
 
-template <class COMPARATOR>
+template <class VAL_TYPE, class ARG_TYPE, bool NULLS_LAST, class COMPARATOR>
+void SpecializeArgMinMaxNullNFunction(AggregateFunction &function) {
+	using STATE = ArgMinMaxNState<VAL_TYPE, ARG_TYPE, COMPARATOR>;
+	using OP = MinMaxNOperation;
+
+	function.state_size = AggregateFunction::StateSize<STATE>;
+	function.initialize = AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>;
+	function.combine = AggregateFunction::StateCombine<STATE, OP>;
+	function.destructor = AggregateFunction::StateDestroy<STATE, OP>;
+
+	function.finalize = MinMaxNOperation::Finalize<STATE>;
+	function.update = ArgMinMaxNUpdate<STATE, false>;
+}
+
+template <class VAL_TYPE, bool NULLS_LAST, class COMPARATOR>
+void SpecializeArgMinMaxNullNFunction(PhysicalType arg_type, AggregateFunction &function) {
+	switch (arg_type) {
+#ifndef DUCKDB_SMALLER_BINARY
+	case PhysicalType::VARCHAR:
+		// SpecializeArgMinMaxNFunction<VAL_TYPE, MinMaxStringValue, COMPARATOR>(function);
+		throw InternalException("Not implemented.");
+		break;
+	case PhysicalType::INT32:
+		SpecializeArgMinMaxNullNFunction<VAL_TYPE, MinMaxInclNullValue<int32_t, NULLS_LAST>, NULLS_LAST, COMPARATOR>(
+		    function);
+		break;
+	case PhysicalType::INT64:
+		SpecializeArgMinMaxNullNFunction<VAL_TYPE, MinMaxInclNullValue<int64_t, NULLS_LAST>, NULLS_LAST, COMPARATOR>(
+		    function);
+		break;
+	case PhysicalType::FLOAT:
+		SpecializeArgMinMaxNullNFunction<VAL_TYPE, MinMaxInclNullValue<float, NULLS_LAST>, NULLS_LAST, COMPARATOR>(
+		    function);
+		break;
+	case PhysicalType::DOUBLE:
+		SpecializeArgMinMaxNullNFunction<VAL_TYPE, MinMaxInclNullValue<double, NULLS_LAST>, NULLS_LAST, COMPARATOR>(
+		    function);
+		break;
+#endif
+	default:
+		throw InternalException("Not implemented.");
+		// SpecializeArgMinMaxNFunction<VAL_TYPE, MinMaxFallbackValue, COMPARATOR>(function);
+		break;
+	}
+}
+
+template <bool NULLS_LAST, class COMPARATOR>
+void SpecializeArgMinMaxNullNFunction(PhysicalType val_type, PhysicalType arg_type, AggregateFunction &function) {
+	switch (val_type) {
+#ifndef DUCKDB_SMALLER_BINARY
+	case PhysicalType::VARCHAR:
+		// TODO: Check if we can leave it like this
+		SpecializeArgMinMaxNFunction<MinMaxStringValue, COMPARATOR>(arg_type, function);
+		break;
+	case PhysicalType::INT32:
+		SpecializeArgMinMaxNullNFunction<MinMaxInclNullValue<int32_t, NULLS_LAST>, NULLS_LAST, COMPARATOR>(arg_type,
+		                                                                                                   function);
+		break;
+	case PhysicalType::INT64:
+		SpecializeArgMinMaxNullNFunction<MinMaxInclNullValue<int64_t, NULLS_LAST>, NULLS_LAST, COMPARATOR>(arg_type,
+		                                                                                                   function);
+		break;
+	case PhysicalType::FLOAT:
+		SpecializeArgMinMaxNullNFunction<MinMaxInclNullValue<float, NULLS_LAST>, NULLS_LAST, COMPARATOR>(arg_type,
+		                                                                                                 function);
+		break;
+	case PhysicalType::DOUBLE:
+		SpecializeArgMinMaxNullNFunction<MinMaxInclNullValue<double, NULLS_LAST>, NULLS_LAST, COMPARATOR>(arg_type,
+		                                                                                                  function);
+		break;
+#endif
+	default:
+		// TODO: Check if we can leave it like this
+		SpecializeArgMinMaxNFunction<MinMaxFallbackValue, COMPARATOR>(arg_type, function);
+		break;
+	}
+}
+
+template <bool IGNORE_NULL, bool NULLS_LAST, class COMPARATOR>
 unique_ptr<FunctionData> ArgMinMaxNBind(ClientContext &context, AggregateFunction &function,
                                         vector<unique_ptr<Expression>> &arguments) {
 	for (auto &arg : arguments) {
@@ -684,17 +762,21 @@ unique_ptr<FunctionData> ArgMinMaxNBind(ClientContext &context, AggregateFunctio
 	const auto arg_type = arguments[1]->return_type.InternalType();
 
 	// Specialize the function based on the input types
-	SpecializeArgMinMaxNFunction<COMPARATOR>(val_type, arg_type, function);
+	if (!IGNORE_NULL) {
+		SpecializeArgMinMaxNullNFunction<NULLS_LAST, COMPARATOR>(val_type, arg_type, function);
+	} else {
+		SpecializeArgMinMaxNFunction<COMPARATOR>(val_type, arg_type, function);
+	}
 
 	function.return_type = LogicalType::LIST(arguments[0]->return_type);
 	return nullptr;
 }
 
-template <class COMPARATOR>
+template <bool IGNORE_NULL, bool NULLS_LAST, class COMPARATOR>
 void AddArgMinMaxNFunction(AggregateFunctionSet &set) {
 	AggregateFunction function({LogicalTypeId::ANY, LogicalTypeId::ANY, LogicalType::BIGINT},
 	                           LogicalType::LIST(LogicalType::ANY), nullptr, nullptr, nullptr, nullptr, nullptr,
-	                           nullptr, ArgMinMaxNBind<COMPARATOR>);
+	                           nullptr, ArgMinMaxNBind<IGNORE_NULL, NULLS_LAST, COMPARATOR>);
 
 	return set.AddFunction(function);
 }
@@ -708,14 +790,14 @@ void AddArgMinMaxNFunction(AggregateFunctionSet &set) {
 AggregateFunctionSet ArgMinFun::GetFunctions() {
 	AggregateFunctionSet fun;
 	AddArgMinMaxFunctions<LessThan, true, OrderType::ASCENDING>(fun);
-	AddArgMinMaxNFunction<LessThan>(fun);
+	AddArgMinMaxNFunction<true, true, LessThan>(fun);
 	return fun;
 }
 
 AggregateFunctionSet ArgMaxFun::GetFunctions() {
 	AggregateFunctionSet fun;
 	AddArgMinMaxFunctions<GreaterThan, true, OrderType::DESCENDING>(fun);
-	AddArgMinMaxNFunction<GreaterThan>(fun);
+	AddArgMinMaxNFunction<true, true, GreaterThan>(fun);
 	return fun;
 }
 
@@ -728,6 +810,18 @@ AggregateFunctionSet ArgMinNullFun::GetFunctions() {
 AggregateFunctionSet ArgMaxNullFun::GetFunctions() {
 	AggregateFunctionSet fun;
 	AddArgMinMaxFunctions<GreaterThan, false, OrderType::DESCENDING>(fun);
+	return fun;
+}
+
+AggregateFunctionSet ArgMinNullValFun::GetFunctions() {
+	AggregateFunctionSet fun;
+	AddArgMinMaxNFunction<false, false, LessThan>(fun);
+	return fun;
+}
+
+AggregateFunctionSet ArgMaxNullValFun::GetFunctions() {
+	AggregateFunctionSet fun;
+	AddArgMinMaxNFunction<false, true, GreaterThan>(fun);
 	return fun;
 }
 

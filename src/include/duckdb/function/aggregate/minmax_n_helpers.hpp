@@ -316,6 +316,50 @@ struct MinMaxFallbackValue {
 	}
 };
 
+template <class T, bool NULLS_LAST>
+struct ValueOrNull {
+	T value;
+	bool is_valid;
+
+	bool operator==(const ValueOrNull &other) const {
+		return is_valid == other.is_valid && value == other.value;
+	}
+
+	bool operator>(const ValueOrNull &other) const {
+		if (is_valid && other.is_valid) {
+			return value > other.value;
+		}
+		if (!is_valid && !other.is_valid) {
+			return false;
+		}
+
+		return (is_valid ^ NULLS_LAST);
+	}
+};
+
+template <class T, bool NULLS_LAST>
+struct MinMaxInclNullValue {
+	using TYPE = ValueOrNull<T, NULLS_LAST>;
+	using EXTRA_STATE = bool;
+
+	static TYPE Create(const UnifiedVectorFormat &format, const idx_t idx) {
+		return TYPE {UnifiedVectorFormat::GetData<T>(format)[idx], format.validity.RowIsValid(idx)};
+	}
+
+	static void Assign(Vector &vector, const idx_t idx, const TYPE &value) {
+		FlatVector::Validity(vector).Set(idx, value.is_valid);
+		FlatVector::GetData<T>(vector)[idx] = value.value;
+	}
+
+	static EXTRA_STATE CreateExtraState(Vector &input, idx_t count) {
+		return false;
+	}
+
+	static void PrepareData(Vector &input, const idx_t count, EXTRA_STATE &extra_state, UnifiedVectorFormat &format) {
+		input.ToUnifiedFormat(count, format);
+	}
+};
+
 //------------------------------------------------------------------------------
 // MinMaxN Operation (common for both ArgMinMaxN and MinMaxN)
 //------------------------------------------------------------------------------
