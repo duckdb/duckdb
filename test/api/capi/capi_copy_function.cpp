@@ -34,11 +34,11 @@ struct MyCopyFunctionGlobalState {
 	}
 };
 
-static void MyCopyFunctionBind(duckdb_bind_info info) {
+static void MyCopyFunctionBind(duckdb_copy_function_bind_info info) {
 
-	duckdb_value options = duckdb_copy_function_to_bind_get_options(info);
+	duckdb_value options = duckdb_copy_function_bind_get_options(info);
 	if (!options) {
-		duckdb_copy_function_to_bind_set_error(info, "No options given!");
+		duckdb_copy_function_bind_set_error(info, "No options given!");
 		return;
 	}
 
@@ -46,13 +46,13 @@ static void MyCopyFunctionBind(duckdb_bind_info info) {
 	auto options_type = duckdb_get_value_type(options);
 	if (duckdb_get_type_id(options_type) != DUCKDB_TYPE_STRUCT) {
 		duckdb_destroy_value(&options);
-		duckdb_copy_function_to_bind_set_error(info, "No options given!");
+		duckdb_copy_function_bind_set_error(info, "No options given!");
 		return;
 	}
 	auto struct_size = duckdb_struct_type_child_count(options_type);
 	if (struct_size > 2) {
 		duckdb_destroy_value(&options);
-		duckdb_copy_function_to_bind_set_error(info, "Too many options given!");
+		duckdb_copy_function_bind_set_error(info, "Too many options given!");
 		return;
 	}
 
@@ -67,7 +67,7 @@ static void MyCopyFunctionBind(duckdb_bind_info info) {
 		if (duckdb_get_type_id(child_type) != DUCKDB_TYPE_INTEGER) {
 			duckdb_destroy_value(&options);
 			duckdb_destroy_value(&child_value);
-			duckdb_copy_function_to_bind_set_error(info, "Options must be of type INT");
+			duckdb_copy_function_bind_set_error(info, "Options must be of type INT");
 			return;
 		}
 		if (strcmp(child_name, "MAX_SIZE") == 0) {
@@ -77,7 +77,7 @@ static void MyCopyFunctionBind(duckdb_bind_info info) {
 		} else {
 			duckdb_destroy_value(&options);
 			duckdb_destroy_value(&child_value);
-			duckdb_copy_function_to_bind_set_error(info, "Unknown option given");
+			duckdb_copy_function_bind_set_error(info, "Unknown option given");
 			return;
 		}
 		duckdb_destroy_value(&child_value);
@@ -85,12 +85,12 @@ static void MyCopyFunctionBind(duckdb_bind_info info) {
 
 	if (max_size < 0) {
 		duckdb_destroy_value(&options);
-		duckdb_copy_function_to_bind_set_error(info, "MAX_SIZE must be >= 0");
+		duckdb_copy_function_bind_set_error(info, "MAX_SIZE must be >= 0");
 		return;
 	}
 	if (min_size < 0) {
 		duckdb_destroy_value(&options);
-		duckdb_copy_function_to_bind_set_error(info, "MIN_SIZE must be >= 0");
+		duckdb_copy_function_bind_set_error(info, "MIN_SIZE must be >= 0");
 		return;
 	}
 
@@ -98,15 +98,15 @@ static void MyCopyFunctionBind(duckdb_bind_info info) {
 	duckdb_destroy_value(&options);
 
 	// Now inspect the input columns
-	auto column_count = duckdb_copy_function_to_bind_get_column_count(info);
+	auto column_count = duckdb_copy_function_bind_get_column_count(info);
 	if (column_count != 1) {
-		duckdb_copy_function_to_bind_set_error(info, "Expected exactly one column");
+		duckdb_copy_function_bind_set_error(info, "Expected exactly one column");
 		return;
 	}
 
-	auto column_type = duckdb_copy_function_to_bind_get_column_type(info, 0);
+	auto column_type = duckdb_copy_function_bind_get_column_type(info, 0);
 	if (duckdb_get_type_id(column_type) != DUCKDB_TYPE_BIGINT) {
-		duckdb_copy_function_to_bind_set_error(info, "Expected column of type BIGINT");
+		duckdb_copy_function_bind_set_error(info, "Expected column of type BIGINT");
 		return;
 	}
 
@@ -114,7 +114,7 @@ static void MyCopyFunctionBind(duckdb_bind_info info) {
 	my_bind_data->max_size = max_size;
 	my_bind_data->min_size = min_size;
 
-	duckdb_copy_function_to_bind_set_bind_data(info, my_bind_data, [](void *bind_data) {
+	duckdb_copy_function_bind_set_bind_data(info, my_bind_data, [](void *bind_data) {
 		auto my_bind_data = (MyCopyFunctionBindData *)bind_data;
 		delete my_bind_data;
 	});
@@ -122,20 +122,20 @@ static void MyCopyFunctionBind(duckdb_bind_info info) {
 	duckdb_destroy_value(&options);
 }
 
-static void MyCopyFunctionInit(duckdb_init_info info) {
-	auto bind_data = (MyCopyFunctionBindData *)duckdb_copy_function_to_global_init_get_bind_data(info);
-	auto extra_info = (MyCopyFunctionExtraInfo *)duckdb_copy_function_to_global_init_get_extra_info(info);
-	auto client_context = duckdb_copy_function_to_global_init_get_client_context(info);
+static void MyCopyFunctionInit(duckdb_copy_function_global_init_info info) {
+	auto bind_data = (MyCopyFunctionBindData *)duckdb_copy_function_global_init_get_bind_data(info);
+	auto extra_info = (MyCopyFunctionExtraInfo *)duckdb_copy_function_global_init_get_extra_info(info);
+	auto client_context = duckdb_copy_function_global_init_get_client_context(info);
 
 	if (bind_data->min_size == extra_info->illegal_min_value) {
 		// Ooops, forgot to check this in the bind!
-		duckdb_copy_function_to_global_init_set_error(info, "My bad, min_size cannot be set to that value!");
+		duckdb_copy_function_global_init_set_error(info, "My bad, min_size cannot be set to that value!");
 		return;
 	}
 
 	// Initialize state
 	auto g_state = new MyCopyFunctionGlobalState();
-	duckdb_copy_function_to_global_init_set_global_state(info, g_state, [](void *state) {
+	duckdb_copy_function_global_init_set_global_state(info, g_state, [](void *state) {
 		auto g_state = (MyCopyFunctionGlobalState *)state;
 		delete g_state;
 	});
@@ -144,14 +144,14 @@ static void MyCopyFunctionInit(duckdb_init_info info) {
 	g_state->total_written_bytes = 0;
 	g_state->file_system = duckdb_client_context_get_file_system(client_context);
 
-	auto file_path = duckdb_copy_function_to_global_init_get_file_path(info);
+	auto file_path = duckdb_copy_function_global_init_get_file_path(info);
 	auto file_flag = duckdb_create_file_open_options();
 	duckdb_file_open_options_set_flag(file_flag, DUCKDB_FILE_FLAG_WRITE, true);
 	duckdb_file_open_options_set_flag(file_flag, DUCKDB_FILE_FLAG_CREATE, true);
 
 	if (duckdb_file_system_open(g_state->file_system, file_path, file_flag, &g_state->file_handle) != DuckDBSuccess) {
 		auto error_data = duckdb_file_system_error_data(g_state->file_system);
-		duckdb_copy_function_to_global_init_set_error(info, duckdb_error_data_message(error_data));
+		duckdb_copy_function_global_init_set_error(info, duckdb_error_data_message(error_data));
 		duckdb_destroy_error_data(&error_data);
 	}
 
@@ -159,9 +159,9 @@ static void MyCopyFunctionInit(duckdb_init_info info) {
 	duckdb_destroy_client_context(&client_context);
 }
 
-static void MyCopyFunctionSink(duckdb_copy_to_sink_info info, duckdb_data_chunk input) {
-	auto bind_data = (MyCopyFunctionBindData *)duckdb_copy_function_to_sink_get_bind_data(info);
-	auto g_state = (MyCopyFunctionGlobalState *)duckdb_copy_function_to_sink_get_global_state(info);
+static void MyCopyFunctionSink(duckdb_copy_function_sink_info info, duckdb_data_chunk input) {
+	auto bind_data = (MyCopyFunctionBindData *)duckdb_copy_function_sink_get_bind_data(info);
+	auto g_state = (MyCopyFunctionGlobalState *)duckdb_copy_function_sink_get_global_state(info);
 
 	// Sink the data
 	auto row_count = duckdb_data_chunk_get_size(input);
@@ -172,26 +172,26 @@ static void MyCopyFunctionSink(duckdb_copy_to_sink_info info, duckdb_data_chunk 
 		auto written = duckdb_file_handle_write(g_state->file_handle, &col_data[r], sizeof(int64_t));
 		if (written != sizeof(int64_t)) {
 			auto error_data = duckdb_file_handle_error_data(g_state->file_handle);
-			duckdb_copy_function_to_sink_set_error(info, duckdb_error_data_message(error_data));
+			duckdb_copy_function_sink_set_error(info, duckdb_error_data_message(error_data));
 			duckdb_destroy_error_data(&error_data);
 			return;
 		}
 		g_state->total_written_bytes += written;
 
 		if (g_state->total_written_bytes > bind_data->max_size) {
-			duckdb_copy_function_to_sink_set_error(info, "Wrote too much data");
+			duckdb_copy_function_sink_set_error(info, "Wrote too much data");
 			return;
 		}
 	}
 }
 
-static void MyCopyFunctionFinalize(duckdb_copy_to_finalize_info info) {
-	auto bind_data = (MyCopyFunctionBindData *)duckdb_copy_function_to_finalize_get_bind_data(info);
-	auto g_state = (MyCopyFunctionGlobalState *)duckdb_copy_function_to_finalize_get_global_state(info);
+static void MyCopyFunctionFinalize(duckdb_copy_function_finalize_info info) {
+	auto bind_data = (MyCopyFunctionBindData *)duckdb_copy_function_finalize_get_bind_data(info);
+	auto g_state = (MyCopyFunctionGlobalState *)duckdb_copy_function_finalize_get_global_state(info);
 
 	// Check that we actually wrote enough!
 	if (g_state->total_written_bytes < bind_data->min_size) {
-		duckdb_copy_function_to_finalize_set_error(info, "Wrote too little data");
+		duckdb_copy_function_finalize_set_error(info, "Wrote too little data");
 		return;
 	}
 }
@@ -233,10 +233,10 @@ TEST_CASE("Test Copy Functions in C API", "[capi]") {
 	REQUIRE(status == DuckDBError);
 
 	// Need to have function pointers set
-	duckdb_copy_function_to_set_bind(func, MyCopyFunctionBind);
-	duckdb_copy_function_to_set_global_init(func, MyCopyFunctionInit);
-	duckdb_copy_function_to_set_sink(func, MyCopyFunctionSink);
-	duckdb_copy_function_to_set_finalize(func, MyCopyFunctionFinalize);
+	duckdb_copy_function_set_bind(func, MyCopyFunctionBind);
+	duckdb_copy_function_set_global_init(func, MyCopyFunctionInit);
+	duckdb_copy_function_set_sink(func, MyCopyFunctionSink);
+	duckdb_copy_function_set_finalize(func, MyCopyFunctionFinalize);
 
 	status = duckdb_register_copy_function(tester.connection, func);
 	REQUIRE(status == DuckDBSuccess);

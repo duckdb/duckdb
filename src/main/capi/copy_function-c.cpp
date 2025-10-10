@@ -22,10 +22,10 @@ struct CCopyFunctionInfo : public CopyFunctionInfo {
 		delete_callback = nullptr;
 	}
 
-	duckdb_copy_function_to_bind_t bind_to = nullptr;
-	duckdb_copy_function_to_global_init_t global_init = nullptr;
-	duckdb_copy_function_to_sink_t sink = nullptr;
-	duckdb_copy_function_to_finalize_t finalize = nullptr;
+	duckdb_copy_function_bind_t bind_to = nullptr;
+	duckdb_copy_function_global_init_t global_init = nullptr;
+	duckdb_copy_function_sink_t sink = nullptr;
+	duckdb_copy_function_finalize_t finalize = nullptr;
 
 	void *extra_info = nullptr;
 	duckdb_delete_callback_t delete_callback = nullptr;
@@ -170,10 +170,6 @@ struct CCopyFunctionToInternalBindInfo {
 	duckdb_delete_callback_t delete_callback = nullptr;
 };
 
-duckdb_bind_info ToCCopyToBindInfo(CCopyFunctionToInternalBindInfo &info) {
-	return reinterpret_cast<duckdb_bind_info>(&info);
-}
-
 unique_ptr<FunctionData> CCopyToBind(ClientContext &context, CopyFunctionBindInput &input, const vector<string> &names,
                                      const vector<LogicalType> &sql_types) {
 	auto &info = input.function_info->Cast<CCopyFunctionInfo>();
@@ -184,7 +180,7 @@ unique_ptr<FunctionData> CCopyToBind(ClientContext &context, CopyFunctionBindInp
 	if (info.bind_to) {
 		// Call the user-defined bind function
 		CCopyFunctionToInternalBindInfo bind_info(context, input, sql_types, names, info);
-		info.bind_to(ToCCopyToBindInfo(bind_info));
+		info.bind_to(reinterpret_cast<duckdb_copy_function_bind_info>(&bind_info));
 
 		// Pass on user bind data to the result
 		result->bind_data = bind_info.bind_data;
@@ -200,7 +196,7 @@ unique_ptr<FunctionData> CCopyToBind(ClientContext &context, CopyFunctionBindInp
 } // namespace
 } // namespace duckdb
 
-void duckdb_copy_function_to_set_bind(duckdb_copy_function copy_function, duckdb_copy_function_to_bind_t bind) {
+void duckdb_copy_function_set_bind(duckdb_copy_function copy_function, duckdb_copy_function_bind_t bind) {
 	if (!copy_function || !bind) {
 		return;
 	}
@@ -212,7 +208,7 @@ void duckdb_copy_function_to_set_bind(duckdb_copy_function copy_function, duckdb
 	info.bind_to = bind;
 }
 
-void duckdb_copy_function_to_bind_set_error(duckdb_bind_info info, const char *error) {
+void duckdb_copy_function_bind_set_error(duckdb_copy_function_bind_info info, const char *error) {
 	if (!info || !error) {
 		return;
 	}
@@ -223,7 +219,7 @@ void duckdb_copy_function_to_bind_set_error(duckdb_bind_info info, const char *e
 	info_ref.success = false;
 }
 
-void *duckdb_copy_function_to_bind_get_extra_info(duckdb_bind_info info) {
+void *duckdb_copy_function_bind_get_extra_info(duckdb_copy_function_bind_info info) {
 	if (!info) {
 		return nullptr;
 	}
@@ -231,7 +227,7 @@ void *duckdb_copy_function_to_bind_get_extra_info(duckdb_bind_info info) {
 	return info_ref.function_info.extra_info;
 }
 
-duckdb_client_context duckdb_copy_function_to_bind_get_client_context(duckdb_bind_info info) {
+duckdb_client_context duckdb_copy_function_bind_get_client_context(duckdb_copy_function_bind_info info) {
 	if (!info) {
 		return nullptr;
 	}
@@ -240,7 +236,7 @@ duckdb_client_context duckdb_copy_function_to_bind_get_client_context(duckdb_bin
 	return reinterpret_cast<duckdb_client_context>(wrapper);
 }
 
-idx_t duckdb_copy_function_to_bind_get_column_count(duckdb_bind_info info) {
+idx_t duckdb_copy_function_bind_get_column_count(duckdb_copy_function_bind_info info) {
 	if (!info) {
 		return 0;
 	}
@@ -248,7 +244,7 @@ idx_t duckdb_copy_function_to_bind_get_column_count(duckdb_bind_info info) {
 	return info_ref.sql_types.size();
 }
 
-duckdb_logical_type duckdb_copy_function_to_bind_get_column_type(duckdb_bind_info info, idx_t col_idx) {
+duckdb_logical_type duckdb_copy_function_bind_get_column_type(duckdb_copy_function_bind_info info, idx_t col_idx) {
 	if (!info) {
 		return nullptr;
 	}
@@ -259,7 +255,7 @@ duckdb_logical_type duckdb_copy_function_to_bind_get_column_type(duckdb_bind_inf
 	return reinterpret_cast<duckdb_logical_type>(new duckdb::LogicalType(info_ref.sql_types[col_idx]));
 }
 
-duckdb_value duckdb_copy_function_to_bind_get_options(duckdb_bind_info info) {
+duckdb_value duckdb_copy_function_bind_get_options(duckdb_copy_function_bind_info info) {
 	if (!info) {
 		return nullptr;
 	}
@@ -273,8 +269,8 @@ duckdb_value duckdb_copy_function_to_bind_get_options(duckdb_bind_info info) {
 	;
 }
 
-void duckdb_copy_function_to_bind_set_bind_data(duckdb_bind_info info, void *bind_data,
-                                                duckdb_delete_callback_t destructor) {
+void duckdb_copy_function_bind_set_bind_data(duckdb_copy_function_bind_info info, void *bind_data,
+                                             duckdb_delete_callback_t destructor) {
 	if (!info) {
 		return;
 	}
@@ -332,7 +328,7 @@ unique_ptr<GlobalFunctionData> CCopyToGlobalInit(ClientContext &context, Functio
 
 		// Call the user-defined global init function
 		CCopyToGlobalInitInfo global_init_info(context, bind_data, file_path);
-		function_info.global_init(reinterpret_cast<duckdb_init_info>(&global_init_info));
+		function_info.global_init(reinterpret_cast<duckdb_copy_function_global_init_info>(&global_init_info));
 
 		// Pass on user global state to the result
 		result->global_state = global_init_info.global_state;
@@ -349,8 +345,7 @@ unique_ptr<GlobalFunctionData> CCopyToGlobalInit(ClientContext &context, Functio
 } // namespace
 } // namespace duckdb
 
-void duckdb_copy_function_to_set_global_init(duckdb_copy_function copy_function,
-                                             duckdb_copy_function_to_global_init_t init) {
+void duckdb_copy_function_set_global_init(duckdb_copy_function copy_function, duckdb_copy_function_global_init_t init) {
 	if (!copy_function || !init) {
 		return;
 	}
@@ -361,7 +356,7 @@ void duckdb_copy_function_to_set_global_init(duckdb_copy_function copy_function,
 	info.global_init = init;
 }
 
-void duckdb_copy_function_to_global_init_set_error(duckdb_init_info info, const char *error) {
+void duckdb_copy_function_global_init_set_error(duckdb_copy_function_global_init_info info, const char *error) {
 	if (!info || !error) {
 		return;
 	}
@@ -372,7 +367,7 @@ void duckdb_copy_function_to_global_init_set_error(duckdb_init_info info, const 
 	info_ref.success = false;
 }
 
-void *duckdb_copy_function_to_global_init_get_extra_info(duckdb_init_info info) {
+void *duckdb_copy_function_global_init_get_extra_info(duckdb_copy_function_global_init_info info) {
 	if (!info) {
 		return nullptr;
 	}
@@ -382,7 +377,7 @@ void *duckdb_copy_function_to_global_init_get_extra_info(duckdb_init_info info) 
 	    .extra_info;
 }
 
-duckdb_client_context duckdb_copy_function_to_global_init_get_client_context(duckdb_init_info info) {
+duckdb_client_context duckdb_copy_function_global_init_get_client_context(duckdb_copy_function_global_init_info info) {
 	if (!info) {
 		return nullptr;
 	}
@@ -391,7 +386,7 @@ duckdb_client_context duckdb_copy_function_to_global_init_get_client_context(duc
 	return reinterpret_cast<duckdb_client_context>(wrapper);
 }
 
-void *duckdb_copy_function_to_global_init_get_bind_data(duckdb_init_info info) {
+void *duckdb_copy_function_global_init_get_bind_data(duckdb_copy_function_global_init_info info) {
 	if (!info) {
 		return nullptr;
 	}
@@ -401,8 +396,8 @@ void *duckdb_copy_function_to_global_init_get_bind_data(duckdb_init_info info) {
 	return bind_info.bind_data;
 }
 
-void duckdb_copy_function_to_global_init_set_global_state(duckdb_init_info info, void *global_state,
-                                                          duckdb_delete_callback_t destructor) {
+void duckdb_copy_function_global_init_set_global_state(duckdb_copy_function_global_init_info info, void *global_state,
+                                                       duckdb_delete_callback_t destructor) {
 	if (!info) {
 		return;
 	}
@@ -411,7 +406,7 @@ void duckdb_copy_function_to_global_init_set_global_state(duckdb_init_info info,
 	info_ref.delete_callback = destructor;
 }
 
-const char *duckdb_copy_function_to_global_init_get_file_path(duckdb_init_info info) {
+const char *duckdb_copy_function_global_init_get_file_path(duckdb_copy_function_global_init_info info) {
 	if (!info) {
 		return nullptr;
 	}
@@ -464,7 +459,7 @@ void CCopyToSink(ExecutionContext &context, FunctionData &bind_data, GlobalFunct
 	CCopyToSinkInfo copy_to_sink_info(context.client, bind_data, gstate);
 
 	// Sink is required!
-	function_info.sink(reinterpret_cast<duckdb_copy_to_sink_info>(&copy_to_sink_info),
+	function_info.sink(reinterpret_cast<duckdb_copy_function_sink_info>(&copy_to_sink_info),
 	                   reinterpret_cast<duckdb_data_chunk>(&input));
 
 	if (!copy_to_sink_info.success) {
@@ -475,7 +470,7 @@ void CCopyToSink(ExecutionContext &context, FunctionData &bind_data, GlobalFunct
 } // namespace
 } // namespace duckdb
 
-void duckdb_copy_function_to_set_sink(duckdb_copy_function copy_function, duckdb_copy_function_to_sink_t function) {
+void duckdb_copy_function_set_sink(duckdb_copy_function copy_function, duckdb_copy_function_sink_t function) {
 	if (!copy_function || !function) {
 		return;
 	}
@@ -486,7 +481,7 @@ void duckdb_copy_function_to_set_sink(duckdb_copy_function copy_function, duckdb
 	info.sink = function;
 }
 
-void duckdb_copy_function_to_sink_set_error(duckdb_copy_to_sink_info info, const char *error) {
+void duckdb_copy_function_sink_set_error(duckdb_copy_function_sink_info info, const char *error) {
 	if (!info || !error) {
 		return;
 	}
@@ -496,7 +491,7 @@ void duckdb_copy_function_to_sink_set_error(duckdb_copy_to_sink_info info, const
 	info_ref.success = false;
 }
 
-void *duckdb_copy_function_to_sink_get_extra_info(duckdb_copy_to_sink_info info) {
+void *duckdb_copy_function_sink_get_extra_info(duckdb_copy_function_sink_info info) {
 	if (!info) {
 		return nullptr;
 	}
@@ -506,7 +501,7 @@ void *duckdb_copy_function_to_sink_get_extra_info(duckdb_copy_to_sink_info info)
 	    .extra_info;
 }
 
-duckdb_client_context duckdb_copy_function_to_sink_get_client_context(duckdb_copy_to_sink_info info) {
+duckdb_client_context duckdb_copy_function_sink_get_client_context(duckdb_copy_function_sink_info info) {
 	if (!info) {
 		return nullptr;
 	}
@@ -515,7 +510,7 @@ duckdb_client_context duckdb_copy_function_to_sink_get_client_context(duckdb_cop
 	return reinterpret_cast<duckdb_client_context>(wrapper);
 }
 
-void *duckdb_copy_function_to_sink_get_bind_data(duckdb_copy_to_sink_info info) {
+void *duckdb_copy_function_sink_get_bind_data(duckdb_copy_function_sink_info info) {
 	if (!info) {
 		return nullptr;
 	}
@@ -525,7 +520,7 @@ void *duckdb_copy_function_to_sink_get_bind_data(duckdb_copy_to_sink_info info) 
 	return bind_info.bind_data;
 }
 
-void *duckdb_copy_function_to_sink_get_global_state(duckdb_copy_to_sink_info info) {
+void *duckdb_copy_function_sink_get_global_state(duckdb_copy_function_sink_info info) {
 	if (!info) {
 		return nullptr;
 	}
@@ -575,7 +570,7 @@ void CCopyToFinalize(ClientContext &context, FunctionData &bind_data, GlobalFunc
 	// Finalize is optional
 	if (function_info.finalize) {
 		CCopyToFinalizeInfo copy_to_finalize_info(context, bind_data, gstate);
-		function_info.finalize(reinterpret_cast<duckdb_copy_to_finalize_info>(&copy_to_finalize_info));
+		function_info.finalize(reinterpret_cast<duckdb_copy_function_finalize_info>(&copy_to_finalize_info));
 
 		if (!copy_to_finalize_info.success) {
 			throw InvalidInputException(copy_to_finalize_info.error);
@@ -586,8 +581,7 @@ void CCopyToFinalize(ClientContext &context, FunctionData &bind_data, GlobalFunc
 } // namespace
 } // namespace duckdb
 
-void duckdb_copy_function_to_set_finalize(duckdb_copy_function copy_function,
-                                          duckdb_copy_function_to_finalize_t finalize) {
+void duckdb_copy_function_set_finalize(duckdb_copy_function copy_function, duckdb_copy_function_finalize_t finalize) {
 	if (!copy_function || !finalize) {
 		return;
 	}
@@ -599,7 +593,7 @@ void duckdb_copy_function_to_set_finalize(duckdb_copy_function copy_function,
 	info.finalize = finalize;
 }
 
-void duckdb_copy_function_to_finalize_set_error(duckdb_copy_to_finalize_info info, const char *error) {
+void duckdb_copy_function_finalize_set_error(duckdb_copy_function_finalize_info info, const char *error) {
 	if (!info || !error) {
 		return;
 	}
@@ -610,7 +604,7 @@ void duckdb_copy_function_to_finalize_set_error(duckdb_copy_to_finalize_info inf
 	info_ref.success = false;
 }
 
-void *duckdb_copy_function_to_finalize_get_extra_info(duckdb_copy_to_finalize_info info) {
+void *duckdb_copy_function_finalize_get_extra_info(duckdb_copy_function_finalize_info info) {
 	if (!info) {
 		return nullptr;
 	}
@@ -621,7 +615,7 @@ void *duckdb_copy_function_to_finalize_get_extra_info(duckdb_copy_to_finalize_in
 	    .extra_info;
 }
 
-duckdb_client_context duckdb_copy_function_to_finalize_get_client_context(duckdb_copy_to_finalize_info info) {
+duckdb_client_context duckdb_copy_function_finalize_get_client_context(duckdb_copy_function_finalize_info info) {
 	if (!info) {
 		return nullptr;
 	}
@@ -630,7 +624,7 @@ duckdb_client_context duckdb_copy_function_to_finalize_get_client_context(duckdb
 	return reinterpret_cast<duckdb_client_context>(wrapper);
 }
 
-void *duckdb_copy_function_to_finalize_get_bind_data(duckdb_copy_to_finalize_info info) {
+void *duckdb_copy_function_finalize_get_bind_data(duckdb_copy_function_finalize_info info) {
 	if (!info) {
 		return nullptr;
 	}
@@ -640,7 +634,7 @@ void *duckdb_copy_function_to_finalize_get_bind_data(duckdb_copy_to_finalize_inf
 	return bind_info.bind_data;
 }
 
-void *duckdb_copy_function_to_finalize_get_global_state(duckdb_copy_to_finalize_info info) {
+void *duckdb_copy_function_finalize_get_global_state(duckdb_copy_function_finalize_info info) {
 	if (!info) {
 		return nullptr;
 	}
@@ -699,65 +693,4 @@ duckdb_state duckdb_register_copy_function(duckdb_connection connection, duckdb_
 		return DuckDBError;
 	} // LCOV_EXCL_STOP
 	return DuckDBSuccess;
-}
-//----------------------------------------------------------------------------------------------------------------------
-// Copy From Bind
-//----------------------------------------------------------------------------------------------------------------------
-
-void duckdb_copy_function_from_set_bind(duckdb_copy_function copy_function, duckdb_copy_function_from_bind_t bind) {
-	if (!copy_function || !bind) {
-		return;
-	}
-	// TODO: Implement
-}
-
-void duckdb_copy_function_from_bind_set_error(duckdb_bind_info info, const char *error) {
-	if (!info || !error) {
-		return;
-	}
-	// TODO: Implement
-}
-
-void *duckdb_copy_function_from_bind_get_extra_info(duckdb_bind_info info) {
-	if (!info) {
-		return nullptr;
-	}
-	// TODO: Implement
-	return nullptr;
-}
-
-duckdb_client_context duckdb_copy_function_from_bind_get_client_context(duckdb_bind_info info) {
-	if (!info) {
-		return nullptr;
-	}
-	// TODO: Implement
-	return nullptr;
-}
-
-duckdb_value duckdb_copy_function_from_bind_get_options(duckdb_bind_info info) {
-	if (!info) {
-		return nullptr;
-	}
-
-	auto &info_ref = *reinterpret_cast<duckdb::CCopyFunctionToInternalBindInfo *>(info);
-	auto &options = info_ref.input.info.options;
-
-	// return as struct of options
-	auto options_value = duckdb::MakeValueFromCopyOptions(options);
-	return reinterpret_cast<duckdb_value>(new duckdb::Value(options_value));
-}
-
-void duckdb_copy_function_from_bind_set_bind_data(duckdb_bind_info info, void *bind_data,
-                                                  duckdb_delete_callback_t destructor) {
-	if (!info) {
-		return;
-	}
-	// TODO: Implement
-}
-
-void duckdb_copy_function_from_set_function(duckdb_copy_function copy_function, duckdb_table_function table_function) {
-	if (!copy_function || !table_function) {
-		return;
-	}
-	// TODO: Implement
 }
