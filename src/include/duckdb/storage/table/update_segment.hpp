@@ -38,8 +38,8 @@ public:
 	void FetchUpdates(TransactionData transaction, idx_t vector_index, Vector &result);
 	void FetchCommitted(idx_t vector_index, Vector &result);
 	void FetchCommittedRange(idx_t start_row, idx_t count, Vector &result);
-	void Update(TransactionData transaction, idx_t column_index, Vector &update, row_t *ids, idx_t count,
-	            Vector &base_data);
+	void Update(TransactionData transaction, DataTable &data_table, idx_t column_index, Vector &update, row_t *ids,
+	            idx_t count, Vector &base_data);
 	void FetchRow(TransactionData transaction, idx_t row_id, Vector &result, idx_t result_idx);
 
 	void RollbackUpdate(UpdateInfo &info);
