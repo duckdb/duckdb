@@ -234,6 +234,7 @@ public:
 
 private:
 	static bool Compare(const STORAGE_TYPE &left, const STORAGE_TYPE &right) {
+		auto compare_result = K_COMPARATOR::Operation(left.first.value, right.first.value);
 		return K_COMPARATOR::Operation(left.first.value, right.first.value);
 	}
 
@@ -333,7 +334,7 @@ struct ValueOrNull {
 			return false;
 		}
 
-		return (is_valid ^ NULLS_LAST);
+		return !(is_valid ^ NULLS_LAST);
 	}
 };
 
