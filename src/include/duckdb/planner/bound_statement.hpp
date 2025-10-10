@@ -11,12 +11,14 @@
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/enums/set_operation_type.hpp"
+#include "duckdb/common/shared_ptr.hpp"
 
 namespace duckdb {
 
 class LogicalOperator;
 struct LogicalType;
 struct BoundStatement;
+class ParsedExpression;
 class Binder;
 
 struct ExtraBoundInfo {
