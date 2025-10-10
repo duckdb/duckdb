@@ -14,9 +14,6 @@
 
 namespace duckdb {
 
-BoundSetOperationNode::~BoundSetOperationNode() {
-}
-
 struct SetOpAliasGatherer {
 public:
 	explicit SetOpAliasGatherer(SelectBindState &bind_state_p) : bind_state(bind_state_p) {

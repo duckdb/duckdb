@@ -3,15 +3,13 @@
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/query_node/recursive_cte_node.hpp"
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/function/function_binder.hpp"
-#include "duckdb/planner/query_node/bound_recursive_cte_node.hpp"
-#include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/planner/operator/logical_set_operation.hpp"
+#include "duckdb/planner/operator/logical_recursive_cte.hpp"
 
 namespace duckdb {
 
 BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
-	BoundRecursiveCTENode result;
 
 	// first recursively visit the recursive CTE operations
 	// the left side is visited first and is added to the BindContext of the right side
@@ -21,31 +19,34 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 		throw BinderException("UNION ALL cannot be used with USING KEY in recursive CTE.");
 	}
 
-	result.ctename = statement.ctename;
-	result.union_all = statement.union_all;
-	result.setop_index = GenerateTableIndex();
+	auto ctename = statement.ctename;
+	auto union_all = statement.union_all;
+	auto setop_index = GenerateTableIndex();
 
-	result.left_binder = Binder::CreateBinder(context, this);
-	result.left = result.left_binder->BindNode(*statement.left);
+	auto left_binder = Binder::CreateBinder(context, this);
+	auto left = left_binder->BindNode(*statement.left);
 
+	BoundStatement result;
 	// the result types of the CTE are the types of the LHS
-	result.types = result.left.types;
-	result.internal_types = result.left.types;
+	result.types = left.types;
+	vector<LogicalType> internal_types = left.types;
+	vector<unique_ptr<Expression>> key_targets, payload_aggregates;
+	unordered_map<idx_t, unique_ptr<Expression>> payload_aggregate_dest_map;
 
 	// names are picked from the LHS, unless aliases are explicitly specified
-	result.names = result.left.names;
+	result.names = left.names;
 	for (idx_t i = 0; i < statement.aliases.size() && i < result.names.size(); i++) {
 		result.names[i] = statement.aliases[i];
 	}
 
 	// This allows the right side to reference the CTE recursively
-	bind_context.AddGenericBinding(result.setop_index, statement.ctename, result.names, result.types);
+	bind_context.AddGenericBinding(setop_index, statement.ctename, result.names, result.types);
 
 	// Create temporary binder to bind expressions
 	auto aggregate_binder = Binder::CreateBinder(context, nullptr);
 	ErrorData error;
 	FunctionBinder function_binder(*aggregate_binder);
-	aggregate_binder->bind_context.AddGenericBinding(result.setop_index, statement.ctename, result.names, result.types);
+	aggregate_binder->bind_context.AddGenericBinding(setop_index, statement.ctename, result.names, result.types);
 	ExpressionBinder expression_binder(*aggregate_binder, context);
 
 	// Set contains column indices that are already bound
@@ -66,7 +67,7 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 		}
 
 		key_references.insert(column_index);
-		result.key_targets.push_back(std::move(bound_expr));
+		key_targets.push_back(std::move(bound_expr));
 	}
 
 	// Bind user-defined aggregates
@@ -99,8 +100,8 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 			}
 			aggregate_idx = NumericCast<idx_t>(std::distance(result.names.begin(), names_iter));
 			// Create a new bound column reference for the target column
-			result.payload_aggregate_dest_map[payload_idx] = make_uniq<BoundColumnRefExpression>(
-			    result.types[aggregate_idx], ColumnBinding(result.setop_index, aggregate_idx));
+			payload_aggregate_dest_map[payload_idx] = make_uniq<BoundColumnRefExpression>(
+			    result.types[aggregate_idx], ColumnBinding(setop_index, aggregate_idx));
 		} else {
 			if (bound_children[0]->type != ExpressionType::BOUND_COLUMN_REF) {
 				// No alias and no way to infer target column through first argument
@@ -136,7 +137,7 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 		}
 
 		return_types[aggregate_idx] = aggregate->return_type;
-		result.payload_aggregates.push_back(std::move(aggregate));
+		payload_aggregates.push_back(std::move(aggregate));
 		payload_references.insert(aggregate_idx);
 	}
 
@@ -144,14 +145,14 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 	result.types = std::move(return_types);
 
 	// If we have key targets, then all the other columns must be aggregated
-	if (!result.key_targets.empty()) {
+	if (!key_targets.empty()) {
 		// Bind every column that is neither referenced as a key nor by an aggregate to a LAST aggregate
-		for (idx_t i = 0; i < result.left.types.size(); i++) {
+		for (idx_t i = 0; i < left.types.size(); i++) {
 			if (key_references.find(i) == key_references.end() &&
 			    payload_references.find(i) == payload_references.end()) {
 				// Create a new bound column reference for the missing columns
 				vector<unique_ptr<Expression>> first_children;
-				auto bound = make_uniq<BoundColumnRefExpression>(result.types[i], ColumnBinding(result.setop_index, i));
+				auto bound = make_uniq<BoundColumnRefExpression>(result.types[i], ColumnBinding(setop_index, i));
 				first_children.push_back(std::move(bound));
 
 				// Create a last aggregate for the newly bound column reference
@@ -159,29 +160,29 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 				    LastFunctionGetter::GetFunction(result.types[i]), std::move(first_children), nullptr,
 				    AggregateType::NON_DISTINCT);
 
-				result.payload_aggregates.push_back(std::move(first_aggregate));
+				payload_aggregates.push_back(std::move(first_aggregate));
 			}
 		}
 	}
 
-	result.right_binder = Binder::CreateBinder(context, this);
+	auto right_binder = Binder::CreateBinder(context, this);
 
 	// Add bindings of left side to temporary CTE bindings context
-	result.right_binder->bind_context.AddCTEBinding(result.setop_index, statement.ctename, result.names,
-	                                                result.internal_types, result.types,
-	                                                !statement.key_targets.empty());
+	right_binder->bind_context.AddCTEBinding(setop_index, statement.ctename, result.names,
+	                                         internal_types, result.types,
+	                                         !statement.key_targets.empty());
 
-	result.right = result.right_binder->BindNode(*statement.right);
-	for (auto &c : result.left_binder->correlated_columns) {
-		result.right_binder->AddCorrelatedColumn(c);
+	auto right = right_binder->BindNode(*statement.right);
+	for (auto &c : left_binder->correlated_columns) {
+		right_binder->AddCorrelatedColumn(c);
 	}
 
 	// move the correlated expressions from the child binders to this binder
-	MoveCorrelatedExpressions(*result.left_binder);
-	MoveCorrelatedExpressions(*result.right_binder);
+	MoveCorrelatedExpressions(*left_binder);
+	MoveCorrelatedExpressions(*right_binder);
 
 	// now both sides have been bound we can resolve types
-	if (result.left.types.size() != result.right.types.size()) {
+	if (left.types.size() != right.types.size()) {
 		throw BinderException("Set operations can only apply to expressions with the "
 		                      "same number of result columns");
 	}
@@ -190,11 +191,46 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 		throw NotImplementedException("FIXME: bind modifiers in recursive CTE");
 	}
 
-	BoundStatement result_statement;
-	result_statement.types = result.types;
-	result_statement.names = result.names;
-	result_statement.plan = CreatePlan(result);
-	return result_statement;
+	// Generate the logical plan for the left and right sides of the set operation
+	left_binder->is_outside_flattened = is_outside_flattened;
+	right_binder->is_outside_flattened = is_outside_flattened;
+
+	auto left_node = std::move(left.plan);
+	auto right_node = std::move(right.plan);
+
+	// check if there are any unplanned subqueries left in either child
+	has_unplanned_dependent_joins = has_unplanned_dependent_joins || left_binder->has_unplanned_dependent_joins ||
+	                                right_binder->has_unplanned_dependent_joins;
+
+	// for both the left and right sides, cast them to the same types
+	left_node = CastLogicalOperatorToTypes(left.types, internal_types, std::move(left_node));
+	right_node = CastLogicalOperatorToTypes(right.types, internal_types, std::move(right_node));
+
+	auto recurring_binding = right_binder->GetCTEBinding("recurring." + ctename);
+	bool ref_recurring = recurring_binding && recurring_binding->Cast<CTEBinding>().reference_count > 0;
+	if (key_targets.empty() && ref_recurring) {
+		throw InvalidInputException("RECURRING can only be used with USING KEY in recursive CTE.");
+	}
+
+	// Check if there is a reference to the recursive or recurring table, if not create a set operator.
+	auto cte_binding = right_binder->GetCTEBinding(ctename);
+	bool ref_cte = cte_binding && cte_binding->Cast<CTEBinding>().reference_count > 0;
+	if (!ref_cte && !ref_recurring) {
+		auto root =
+		    make_uniq<LogicalSetOperation>(setop_index, result.types.size(), std::move(left_node),
+		                                   std::move(right_node), LogicalOperatorType::LOGICAL_UNION, union_all);
+		result.plan = std::move(root);
+	} else {
+		auto root = make_uniq<LogicalRecursiveCTE>(ctename, setop_index, result.types.size(), union_all,
+		                                           std::move(key_targets), std::move(left_node), std::move(right_node));
+		root->ref_recurring = ref_recurring;
+		root->internal_types = std::move(internal_types);
+		root->payload_aggregates = std::move(payload_aggregates);
+		root->payload_aggregate_dest_map = std::move(payload_aggregate_dest_map);
+		root->result_types = result.types;
+		result.plan = std::move(root);
+	}
+	return result;
 }
 
 } // namespace duckdb

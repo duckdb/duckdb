@@ -35,10 +35,6 @@ public:
 	//! payload aggregates for the recursive CTE node
 	vector<unique_ptr<ParsedExpression>> payload_aggregates;
 
-	const vector<unique_ptr<ParsedExpression>> &GetSelectList() const override {
-		return left->GetSelectList();
-	}
-
 public:
 	//! Convert the query node to a string
 	string ToString() const override;

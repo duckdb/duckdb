@@ -11,15 +11,13 @@
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
-#include "duckdb/planner/tableref/bound_basetableref.hpp"
-#include "duckdb/planner/tableref/bound_cteref.hpp"
-#include "duckdb/planner/tableref/bound_dummytableref.hpp"
-#include "duckdb/planner/tableref/bound_subqueryref.hpp"
+#include "duckdb/planner/operator/logical_cteref.hpp"
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/planner/tableref/bound_at_clause.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/parser/query_node/cte_node.hpp"
+#include "duckdb/planner/operator/logical_dummy_scan.hpp"
 
 namespace duckdb {
 
@@ -48,10 +46,10 @@ static bool TryLoadExtensionForReplacementScan(ClientContext &context, const str
 	return false;
 }
 
-unique_ptr<BoundTableRef> Binder::BindWithReplacementScan(ClientContext &context, BaseTableRef &ref) {
+BoundStatement Binder::BindWithReplacementScan(ClientContext &context, BaseTableRef &ref) {
 	auto &config = DBConfig::GetConfig(context);
 	if (!context.config.use_replacement_scans) {
-		return nullptr;
+		return BoundStatement();
 	}
 	for (auto &scan : config.replacement_scans) {
 		ReplacementScanInput input(ref.catalog_name, ref.schema_name, ref.table_name);
@@ -80,7 +78,7 @@ unique_ptr<BoundTableRef> Binder::BindWithReplacementScan(ClientContext &context
 		}
 		return Bind(*replacement_function);
 	}
-	return nullptr;
+	return BoundStatement();
 }
 
 unique_ptr<BoundAtClause> Binder::BindAtClause(optional_ptr<AtClause> at_clause) {
@@ -116,7 +114,7 @@ static vector<LogicalType> ExchangeAllNullTypes(const vector<LogicalType> &types
 	return result;
 }
 
-unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
+BoundStatement Binder::Bind(BaseTableRef &ref) {
 	QueryErrorContext error_context(ref.query_location);
 	// CTEs and views are also referred to using BaseTableRefs, hence need to distinguish here
 	// check if the table name refers to a CTE
@@ -143,7 +141,6 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 			types = recurring_bindings->types;
 		}
 
-		auto result = make_uniq<BoundCTERef>(index, ctebinding->index, ref.schema_name == "recurring");
 		auto alias = ref.alias.empty() ? ref.table_name : ref.alias;
 		auto names = BindContext::AliasColumnNames(alias, ctebinding->names, ref.column_name_alias);
 
@@ -164,10 +161,15 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 
 		// Update references to CTE
 		cte_ref.get().reference_count++;
+		bool is_recurring = ref.schema_name == "recurring";
 
-		result->types = types;
-		result->bound_columns = std::move(names);
-		return std::move(result);
+		BoundStatement result;
+		result.types = types;
+		result.names = names;
+		result.plan =
+		    make_uniq<LogicalCTERef>(index, ctebinding->index, types, std::move(names), is_recurring);
+		return result;
+		;
 	}
 
 	// not a CTE
@@ -194,14 +196,19 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 			vector<LogicalType> types {LogicalType::INTEGER};
 			vector<string> names {"__dummy_col" + to_string(table_index)};
 			bind_context.AddGenericBinding(table_index, ref_alias, names, types);
-			return make_uniq_base<BoundTableRef, BoundEmptyTableRef>(table_index);
+
+			BoundStatement result;
+			result.types = std::move(types);
+			result.names = std::move(names);
+			result.plan = make_uniq<LogicalDummyScan>(table_index);
+			return result;
 		}
 	}
 	if (!table_or_view) {
 		// table could not be found: try to bind a replacement scan
 		// Try replacement scan bind
 		auto replacement_scan_bind_result = BindWithReplacementScan(context, ref);
-		if (replacement_scan_bind_result) {
+		if (replacement_scan_bind_result.plan) {
 			return replacement_scan_bind_result;
 		}
 
@@ -210,7 +217,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		auto extension_loaded = TryLoadExtensionForReplacementScan(context, full_path);
 		if (extension_loaded) {
 			replacement_scan_bind_result = BindWithReplacementScan(context, ref);
-			if (replacement_scan_bind_result) {
+			if (replacement_scan_bind_result.plan) {
 				return replacement_scan_bind_result;
 			}
 		}
@@ -247,7 +254,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 
 	switch (table_or_view->type) {
 	case CatalogType::TABLE_ENTRY: {
-		// base table: create the BoundBaseTableRef node
+		// base table
 		auto table_index = GenerateTableIndex();
 		auto &table = table_or_view->Cast<TableCatalogEntry>();
 
@@ -290,7 +297,11 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		} else {
 			bind_context.AddBaseTable(table_index, ref.alias, table_names, table_types, col_ids, *table_entry);
 		}
-		return make_uniq_base<BoundTableRef, BoundBaseTableRef>(table, std::move(logical_get));
+		BoundStatement result;
+		result.types = table_types;
+		result.names = table_names;
+		result.plan = std::move(logical_get);
+		return result;
 	}
 	case CatalogType::VIEW_ENTRY: {
 		// the node is a view: get the query that the view represents
@@ -351,15 +362,13 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 			throw BinderException("Contents of view were altered - view bound correlated columns");
 		}
 
-		D_ASSERT(bound_child->type == TableReferenceType::SUBQUERY);
 		// verify that the types and names match up with the expected types and names if the view has type info defined
-		auto &bound_subquery = bound_child->Cast<BoundSubqueryRef>();
 		if (GetBindingMode() != BindingMode::EXTRACT_NAMES &&
 		    GetBindingMode() != BindingMode::EXTRACT_QUALIFIED_NAMES && view_catalog_entry.HasTypes()) {
 			// we bind the view subquery and the original view with different "can_contain_nulls",
 			// but we don't want to throw an error when SQLNULL does not match up with INTEGER,
 			// so we exchange all SQLNULL with INTEGER here before comparing
-			auto bound_types = ExchangeAllNullTypes(bound_subquery.subquery.types);
+			auto bound_types = ExchangeAllNullTypes(bound_child.types);
 			auto view_types = ExchangeAllNullTypes(view_catalog_entry.types);
 			if (bound_types != view_types) {
 				auto actual_types = StringUtil::ToString(bound_types, ", ");
@@ -368,17 +377,17 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 				    "Contents of view were altered: types don't match! Expected [%s], but found [%s] instead",
 				    expected_types, actual_types);
 			}
-			if (bound_subquery.subquery.names.size() == view_catalog_entry.names.size() &&
-			    bound_subquery.subquery.names != view_catalog_entry.names) {
-				auto actual_names = StringUtil::Join(bound_subquery.subquery.names, ", ");
+			if (bound_child.names.size() == view_catalog_entry.names.size() &&
+			    bound_child.names != view_catalog_entry.names) {
+				auto actual_names = StringUtil::Join(bound_child.names, ", ");
 				auto expected_names = StringUtil::Join(view_catalog_entry.names, ", ");
 				throw BinderException(
 				    "Contents of view were altered: names don't match! Expected [%s], but found [%s] instead",
 				    expected_names, actual_names);
 			}
 		}
-		bind_context.AddView(bound_subquery.subquery.plan->GetRootIndex(), subquery.alias, subquery,
-		                     bound_subquery.subquery, view_catalog_entry);
+		bind_context.AddView(bound_child.plan->GetRootIndex(), subquery.alias, subquery, bound_child,
+		                     view_catalog_entry);
 		return bound_child;
 	}
 	default:
