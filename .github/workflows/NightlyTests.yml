@@ -82,6 +82,7 @@ jobs:
       DISABLE_SANITIZER: 1
       CRASH_ON_ASSERT: 1
       RUN_SLOW_VERIFIERS: 1
+      DUCKDB_DATA_DIR: ${{ github.workspace }}/duckdb
 
     steps:
     - uses: actions/checkout@v3
@@ -230,6 +231,7 @@ jobs:
       DISABLE_SANITIZER: 1
       CRASH_ON_ASSERT: 1
       RUN_SLOW_VERIFIERS: 1
+      DUCKDB_DATA_DIR: ${{ github.workspace }}/duckdb
 
     steps:
     - uses: actions/checkout@v3
