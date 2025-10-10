@@ -290,11 +290,17 @@ void Vector::Dictionary(Vector &dict, idx_t dictionary_size, const SelectionVect
 
 void Vector::Dictionary(buffer_ptr<VectorBuffer> reusable_dict, const SelectionVector &sel) {
 	D_ASSERT(type.InternalType() != PhysicalType::STRUCT);
-	D_ASSERT(type == reusable_dict->Cast<VectorChildBuffer>().data.GetType());
+	auto &vector_child_buffer = reusable_dict->Cast<VectorChildBuffer>();
+	D_ASSERT(type == vector_child_buffer.data.GetType());
 	vector_type = VectorType::DICTIONARY_VECTOR;
 	data = nullptr;
 	validity.Reset();
-	buffer = make_buffer<DictionaryBuffer>(sel);
+
+	auto dict_buffer = make_buffer<DictionaryBuffer>(sel);
+	dict_buffer->SetDictionarySize(vector_child_buffer.size.GetIndex());
+	dict_buffer->SetDictionaryId(vector_child_buffer.id);
+	buffer = std::move(dict_buffer);
+
 	auxiliary = std::move(reusable_dict);
 }
 
@@ -1933,19 +1939,6 @@ buffer_ptr<VectorChildBuffer> DictionaryVector::CreateReusableDictionary(const L
 	auto res = make_buffer<VectorChildBuffer>(Vector(type, size));
 	res->size = size;
 	res->id = UUID::ToString(UUID::GenerateRandomUUID());
-	return res;
-}
-
-Vector DictionaryVector::FromReusableDictionary(buffer_ptr<VectorChildBuffer> child, const SelectionVector &sel) {
-	Vector res(child->data.GetType(), nullptr);
-	res.vector_type = VectorType::DICTIONARY_VECTOR;
-
-	auto dict_buffer = make_buffer<DictionaryBuffer>(sel);
-	dict_buffer->SetDictionarySize(child->size.GetIndex());
-	dict_buffer->SetDictionaryId(child->id);
-	res.buffer = std::move(dict_buffer);
-
-	res.auxiliary = std::move(child);
 	return res;
 }
 

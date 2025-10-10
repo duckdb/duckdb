@@ -433,7 +433,6 @@ struct DictionaryVector {
 		return DictionarySize(vector).IsValid() && CanCacheHashes(vector.GetType());
 	}
 	static buffer_ptr<VectorChildBuffer> CreateReusableDictionary(const LogicalType &type, const idx_t &size);
-	static Vector FromReusableDictionary(buffer_ptr<VectorChildBuffer> child, const SelectionVector &sel);
 	static const Vector &GetCachedHashes(Vector &input);
 };
 
