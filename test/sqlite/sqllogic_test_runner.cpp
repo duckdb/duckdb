@@ -773,15 +773,8 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			parser.Fail("all test statements need to be separated by an empty line");
 		}
 
-		// enforce: file = context* statement*
-		bool token_is_context = parser.IsContext(token.type);
-		bool token_is_test_command = parser.IsTestCommand(token.type);
-		if (token_is_context && test_expr_executed) {
-			parser.Fail("all context (e.g. tags, require-env) must precede test statements");
-		}
-
 		// Check tags first time we hit test statements, since all explicit & implicit tags now present
-		if (token_is_test_command && !test_expr_executed) {
+		if (parser.IsTestCommand(token.type) && !test_expr_executed) {
 			if (test_config.GetPolicyForTagSet(file_tags) == SelectPolicy::SKIP) {
 				SKIP_TEST("match tag-set");
 				return;
