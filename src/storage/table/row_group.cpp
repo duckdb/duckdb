@@ -1093,8 +1093,10 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 		row_group_pointer.has_metadata_blocks = has_metadata_blocks;
 		row_group_pointer.extra_metadata_blocks = extra_metadata_blocks;
 		row_group_pointer.deletes_pointers = deletes_pointers;
-		metadata_manager->ClearModifiedBlocks(write_data.existing_pointers);
-		metadata_manager->ClearModifiedBlocks(deletes_pointers);
+		if (metadata_manager) {
+			metadata_manager->ClearModifiedBlocks(write_data.existing_pointers);
+			metadata_manager->ClearModifiedBlocks(deletes_pointers);
+		}
 		return row_group_pointer;
 	}
 	D_ASSERT(write_data.states.size() == columns.size());

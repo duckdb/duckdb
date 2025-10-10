@@ -3,6 +3,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/optimizer/optimizer.hpp"
 
 namespace duckdb {
 
@@ -29,6 +30,7 @@ static const DefaultOptimizerType internal_optimizer_types[] = {
     {"column_lifetime", OptimizerType::COLUMN_LIFETIME},
     {"limit_pushdown", OptimizerType::LIMIT_PUSHDOWN},
     {"top_n", OptimizerType::TOP_N},
+    {"top_n_window_elimination", OptimizerType::TOP_N_WINDOW_ELIMINATION},
     {"build_side_probe_side", OptimizerType::BUILD_SIDE_PROBE_SIDE},
     {"compressed_materialization", OptimizerType::COMPRESSED_MATERIALIZATION},
     {"duplicate_groups", OptimizerType::DUPLICATE_GROUPS},

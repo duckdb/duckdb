@@ -1,6 +1,5 @@
 #include "duckdb/parser/statement/drop_statement.hpp"
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/bound_tableref.hpp"
 #include "duckdb/planner/operator/logical_simple.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/standard_entry.hpp"
