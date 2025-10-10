@@ -806,13 +806,66 @@ idx_t IEJoinUnion::JoinComplexBlocks(SelectionVector &lsel, SelectionVector &rse
 	return result_count;
 }
 
+class IEJoinLocalSourceState;
+
+class IEJoinGlobalSourceState : public GlobalSourceState {
+public:
+	IEJoinGlobalSourceState(const PhysicalIEJoin &op, IEJoinGlobalState &gsink)
+	    : op(op), gsink(gsink), stage(IEJoinSourceStage::INIT), next_pair(0), completed(0), left_outers(0),
+	      next_left(0), right_outers(0), next_right(0) {
+		auto &left_table = *gsink.tables[0];
+		auto &right_table = *gsink.tables[1];
+
+		left_blocks = left_table.BlockCount();
+		left_ranges = (left_blocks + left_per_thread - 1) / left_per_thread;
+
+		right_blocks = right_table.BlockCount();
+		right_ranges = (right_blocks + right_per_thread - 1) / right_per_thread;
+
+		pair_count = left_ranges * right_ranges;
+	}
+
+	void Initialize();
+	bool TryPrepareNextStage();
+	bool AssignTask(ExecutionContext &context, IEJoinLocalSourceState &lstate);
+
+public:
+	idx_t MaxThreads() override;
+
+	ProgressData GetProgress() const;
+
+	const PhysicalIEJoin &op;
+	IEJoinGlobalState &gsink;
+
+	atomic<IEJoinSourceStage> stage;
+
+	// Join queue state
+	idx_t left_blocks = 0;
+	idx_t left_ranges = 0;
+	const idx_t left_per_thread = 1024;
+	idx_t right_blocks = 0;
+	idx_t right_ranges = 0;
+	const idx_t right_per_thread = 1024;
+	idx_t pair_count;
+	atomic<size_t> next_pair;
+	atomic<size_t> completed;
+
+	// Outer joins
+	atomic<idx_t> left_outers;
+	atomic<idx_t> next_left;
+
+	atomic<idx_t> right_outers;
+	atomic<idx_t> next_right;
+};
+
 class IEJoinLocalSourceState : public LocalSourceState {
 public:
-	IEJoinLocalSourceState(ClientContext &client, const PhysicalIEJoin &op)
-	    : op(op), lsel(STANDARD_VECTOR_SIZE), rsel(STANDARD_VECTOR_SIZE), true_sel(STANDARD_VECTOR_SIZE),
+	IEJoinLocalSourceState(ClientContext &client, IEJoinGlobalSourceState &gsource)
+	    : gsource(gsource), lsel(STANDARD_VECTOR_SIZE), rsel(STANDARD_VECTOR_SIZE), true_sel(STANDARD_VECTOR_SIZE),
 	      left_executor(client), right_executor(client), left_matches(nullptr), right_matches(nullptr)
 
 	{
+		auto &op = gsource.op;
 		auto &allocator = Allocator::Get(client);
 		unprojected.InitializeEmpty(op.unprojected_types);
 		lpayload.Initialize(allocator, op.children[0].get().GetTypes());
@@ -866,14 +919,21 @@ public:
 		return count;
 	}
 
+	//	Are we executing a task?
+	bool TaskFinished() const {
+		return !joiner && !left_matches && !right_matches;
+	}
+
 	// resolve joins that can potentially output N*M elements (INNER, LEFT, FULL)
 	void ResolveComplexJoin(ExecutionContext &context, DataChunk &result);
 	//	Resolve left join results
 	void ExecuteLeftTask(ExecutionContext &context, DataChunk &result);
 	//	Resolve right join results
 	void ExecuteRightTask(ExecutionContext &context, DataChunk &result);
+	//	Execute the current task
+	void ExecuteTask(ExecutionContext &context, DataChunk &result);
 
-	const PhysicalIEJoin &op;
+	IEJoinGlobalSourceState &gsource;
 
 	// Joining
 	unique_ptr<IEJoinUnion> joiner;
@@ -912,7 +972,18 @@ public:
 	bool *right_matches;
 };
 
+void IEJoinLocalSourceState::ExecuteTask(ExecutionContext &context, DataChunk &result) {
+	if (joiner) {
+		ResolveComplexJoin(context, result);
+	} else if (left_matches != nullptr) {
+		ExecuteLeftTask(context, result);
+	} else if (right_matches != nullptr) {
+		ExecuteRightTask(context, result);
+	}
+}
+
 void IEJoinLocalSourceState::ResolveComplexJoin(ExecutionContext &context, DataChunk &result) {
+	auto &op = gsource.op;
 	auto &ie_sink = op.sink_state->Cast<IEJoinGlobalState>();
 	const auto &conditions = op.conditions;
 
@@ -927,6 +998,8 @@ void IEJoinLocalSourceState::ResolveComplexJoin(ExecutionContext &context, DataC
 		auto result_count = joiner->JoinComplexBlocks(lsel, rsel);
 		if (result_count == 0) {
 			// exhausted this pair
+			joiner.reset();
+			++gsource.completed;
 			return;
 		}
 
@@ -1005,62 +1078,71 @@ void IEJoinLocalSourceState::ResolveComplexJoin(ExecutionContext &context, DataC
 	} while (result.size() == 0);
 }
 
-class IEJoinGlobalSourceState : public GlobalSourceState {
-public:
-	IEJoinGlobalSourceState(const PhysicalIEJoin &op, IEJoinGlobalState &gsink)
-	    : op(op), gsink(gsink), stage(IEJoinSourceStage::INIT), next_pair(0), completed(0), left_outers(0),
-	      next_left(0), right_outers(0), next_right(0) {
+void IEJoinGlobalSourceState::Initialize() {
+	auto guard = Lock();
+	if (stage != IEJoinSourceStage::INIT) {
+		return;
 	}
 
-	void Initialize() {
-		auto guard = Lock();
-		if (stage != IEJoinSourceStage::INIT) {
-			return;
-		}
+	// Compute the starting row for each block
+	auto &left_table = *gsink.tables[0];
+	const auto left_blocks = left_table.BlockCount();
 
-		// Compute the starting row for each block
-		auto &left_table = *gsink.tables[0];
-		const auto left_blocks = left_table.BlockCount();
+	auto &right_table = *gsink.tables[1];
+	const auto right_blocks = right_table.BlockCount();
 
-		auto &right_table = *gsink.tables[1];
-		const auto right_blocks = right_table.BlockCount();
-
-		// Outer join block counts
-		if (left_table.found_match) {
-			left_outers = left_blocks;
-		}
-
-		if (right_table.found_match) {
-			right_outers = right_blocks;
-		}
-
-		// Ready for action
-		stage = IEJoinSourceStage::INNER;
+	// Outer join block counts
+	if (left_table.found_match) {
+		left_outers = left_blocks;
 	}
 
-public:
-	idx_t MaxThreads() override {
-		// We can't leverage any more threads than block pairs.
-		const auto &sink_state = (op.sink_state->Cast<IEJoinGlobalState>());
-		return sink_state.tables[0]->BlockCount() * sink_state.tables[1]->BlockCount();
+	if (right_table.found_match) {
+		right_outers = right_blocks;
 	}
 
-	void GetNextPair(ExecutionContext &context, IEJoinLocalSourceState &lstate) {
-		using ChunkRange = IEJoinUnion::ChunkRange;
-		auto &left_table = *gsink.tables[0];
-		auto &right_table = *gsink.tables[1];
+	// Ready for action
+	stage = IEJoinSourceStage::INNER;
+}
+bool IEJoinGlobalSourceState::TryPrepareNextStage() {
+	//	Inside lock
+	switch (stage.load()) {
+	case IEJoinSourceStage::INNER:
+		if (completed >= pair_count) {
+			stage = IEJoinSourceStage::OUTER;
+			return true;
+		}
+		break;
+	case IEJoinSourceStage::OUTER:
+		if (next_left >= left_outers && next_right >= right_outers) {
+			stage = IEJoinSourceStage::DONE;
+			return true;
+		}
+		break;
+	default:
+		break;
+	}
 
-		const auto left_blocks = left_table.BlockCount();
-		const auto left_ranges = (left_blocks + left_per_thread - 1) / left_per_thread;
+	return false;
+}
 
-		const auto right_blocks = right_table.BlockCount();
-		const auto right_ranges = (right_blocks + right_per_thread - 1) / right_per_thread;
+idx_t IEJoinGlobalSourceState::MaxThreads() {
+	// We can't leverage any more threads than block pairs.
+	const auto &sink_state = (op.sink_state->Cast<IEJoinGlobalState>());
+	return sink_state.tables[0]->BlockCount() * sink_state.tables[1]->BlockCount();
+}
 
-		const auto pair_count = left_ranges * right_ranges;
+bool IEJoinGlobalSourceState::AssignTask(ExecutionContext &context, IEJoinLocalSourceState &lstate) {
+	auto guard = Lock();
 
-		// Regular block
-		const auto i = next_pair++;
-		if (i < pair_count) {
+	using ChunkRange = IEJoinUnion::ChunkRange;
+	auto &left_table = *gsink.tables[0];
+	auto &right_table = *gsink.tables[1];
+
+	// Regular block
+	switch (stage.load()) {
+	case IEJoinSourceStage::INNER:
+		if (next_pair < pair_count) {
+			const auto i = next_pair++;
 			const auto b1 = (i / right_ranges) * left_per_thread;
 			const auto b2 = (i % right_ranges) * right_per_thread;
 
@@ -1073,22 +1155,13 @@ public:
 			lstate.right_base = right_table.BlockStart(r_range.first);
 
 			lstate.joiner = make_uniq<IEJoinUnion>(context, op, left_table, l_range, right_table, r_range);
-			return;
+			return true;
 		}
-
-		// Outer joins
-		if (!left_outers && !right_outers) {
-			return;
-		}
-
-		// Spin wait for regular blocks to finish(!)
-		while (completed < pair_count) {
-			TaskScheduler::GetScheduler(context.client).YieldThread();
-		}
-
+		break;
+	case IEJoinSourceStage::OUTER:
 		// Left outer blocks
-		const auto l = next_left++;
-		if (l < left_outers) {
+		if (next_left < left_outers) {
+			const auto l = next_left++;
 			lstate.joiner = nullptr;
 			lstate.left_block_index = l;
 			lstate.left_base = left_table.BlockStart(l);
@@ -1096,14 +1169,14 @@ public:
 			lstate.left_matches = left_table.found_match.get() + lstate.left_base;
 			lstate.outer_idx = 0;
 			lstate.outer_count = left_table.BlockSize(l);
-			return;
+			return true;
 		} else {
 			lstate.left_matches = nullptr;
 		}
 
-		// Right outer block
-		const auto r = next_right++;
-		if (r < right_outers) {
+		// Right outer blocks
+		if (next_right < right_outers) {
+			const auto r = next_right++;
 			lstate.joiner = nullptr;
 			lstate.right_block_index = r;
 			lstate.right_base = right_table.BlockStart(r);
@@ -1111,61 +1184,34 @@ public:
 			lstate.right_matches = right_table.found_match.get() + lstate.right_base;
 			lstate.outer_idx = 0;
 			lstate.outer_count = right_table.BlockSize(r);
-			return;
+			return true;
 		} else {
 			lstate.right_matches = nullptr;
 		}
+		break;
+	default:
+		break;
 	}
 
-	void PairCompleted(ExecutionContext &context, IEJoinLocalSourceState &lstate) {
-		lstate.joiner.reset();
-		++completed;
-		GetNextPair(context, lstate);
+	return false;
+}
+
+ProgressData IEJoinGlobalSourceState::GetProgress() const {
+	const auto count = pair_count + left_outers + right_outers;
+
+	const auto l = MinValue(next_left.load(), left_outers.load());
+	const auto r = MinValue(next_right.load(), right_outers.load());
+	const auto returned = completed.load() + l + r;
+
+	ProgressData res;
+	if (count) {
+		res.done = double(returned);
+		res.total = double(count);
+	} else {
+		res.SetInvalid();
 	}
-
-	ProgressData GetProgress() const {
-		auto &left_table = *gsink.tables[0];
-		auto &right_table = *gsink.tables[1];
-
-		const auto left_blocks = left_table.BlockCount();
-		const auto right_blocks = right_table.BlockCount();
-		const auto pair_count = left_blocks * right_blocks;
-
-		const auto count = pair_count + left_outers + right_outers;
-
-		const auto l = MinValue(next_left.load(), left_outers.load());
-		const auto r = MinValue(next_right.load(), right_outers.load());
-		const auto returned = completed.load() + l + r;
-
-		ProgressData res;
-		if (count) {
-			res.done = double(returned);
-			res.total = double(count);
-		} else {
-			res.SetInvalid();
-		}
-		return res;
-	}
-
-	const PhysicalIEJoin &op;
-	IEJoinGlobalState &gsink;
-
-	atomic<IEJoinSourceStage> stage;
-
-	// Join queue state
-	const idx_t left_per_thread = 1024;
-	const idx_t right_per_thread = 1024;
-	atomic<size_t> next_pair;
-	atomic<size_t> completed;
-
-	// Outer joins
-	atomic<idx_t> left_outers;
-	atomic<idx_t> next_left;
-
-	atomic<idx_t> right_outers;
-	atomic<idx_t> next_right;
-};
-
+	return res;
+}
 unique_ptr<GlobalSourceState> PhysicalIEJoin::GetGlobalSourceState(ClientContext &context) const {
 	auto &gsink = sink_state->Cast<IEJoinGlobalState>();
 	return make_uniq<IEJoinGlobalSourceState>(*this, gsink);
@@ -1173,7 +1219,8 @@ unique_ptr<GlobalSourceState> PhysicalIEJoin::GetGlobalSourceState(ClientContext
 
 unique_ptr<LocalSourceState> PhysicalIEJoin::GetLocalSourceState(ExecutionContext &context,
                                                                  GlobalSourceState &gstate) const {
-	return make_uniq<IEJoinLocalSourceState>(context.client, *this);
+	auto &gsource = gstate.Cast<IEJoinGlobalSourceState>();
+	return make_uniq<IEJoinLocalSourceState>(context.client, gsource);
 }
 
 ProgressData PhysicalIEJoin::GetProgress(ClientContext &context, GlobalSourceState &gsource_p) const {
@@ -1188,47 +1235,25 @@ SourceResultType PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &r
 
 	gsource.Initialize();
 
-	if (!lsource.joiner && !lsource.left_matches && !lsource.right_matches) {
-		gsource.GetNextPair(context, lsource);
-	}
-
-	// Process INNER results
-	while (lsource.joiner) {
-		lsource.ResolveComplexJoin(context, result);
-
-		if (result.size()) {
-			return SourceResultType::HAVE_MORE_OUTPUT;
+	// Any call to GetData must produce tuples, otherwise the pipeline executor thinks that we're done
+	// Therefore, we loop until we've produced tuples, or until the operator is actually done
+	while (gsource.stage != IEJoinSourceStage::DONE && result.size() == 0) {
+		if (!lsource.TaskFinished() || gsource.AssignTask(context, lsource)) {
+			lsource.ExecuteTask(context, result);
+		} else {
+			auto guard = gsource.Lock();
+			if (gsource.TryPrepareNextStage() || gsource.stage == IEJoinSourceStage::DONE) {
+				gsource.UnblockTasks(guard);
+			} else {
+				return gsource.BlockSource(guard, input.interrupt_state);
+			}
 		}
-
-		gsource.PairCompleted(context, lsource);
 	}
-
-	// Process LEFT OUTER results
-	while (lsource.left_matches) {
-		lsource.ExecuteLeftTask(context, result);
-
-		if (result.size()) {
-			return SourceResultType::HAVE_MORE_OUTPUT;
-		}
-
-		gsource.GetNextPair(context, lsource);
-	}
-
-	// Process RIGHT OUTER results
-	while (lsource.right_matches) {
-		lsource.ExecuteRightTask(context, result);
-
-		if (result.size()) {
-			return SourceResultType::HAVE_MORE_OUTPUT;
-		}
-
-		gsource.GetNextPair(context, lsource);
-	}
-
 	return result.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
 void IEJoinLocalSourceState::ExecuteLeftTask(ExecutionContext &context, DataChunk &result) {
+	auto &op = gsource.op;
 	auto &ie_sink = op.sink_state->Cast<IEJoinGlobalState>();
 
 	const auto left_cols = op.children[0].get().GetTypes().size();
@@ -1236,6 +1261,7 @@ void IEJoinLocalSourceState::ExecuteLeftTask(ExecutionContext &context, DataChun
 
 	const idx_t count = SelectOuterRows(left_matches);
 	if (!count) {
+		left_matches = nullptr;
 		return;
 	}
 
@@ -1262,6 +1288,7 @@ void IEJoinLocalSourceState::ExecuteLeftTask(ExecutionContext &context, DataChun
 }
 
 void IEJoinLocalSourceState::ExecuteRightTask(ExecutionContext &context, DataChunk &result) {
+	auto &op = gsource.op;
 	auto &ie_sink = op.sink_state->Cast<IEJoinGlobalState>();
 	const auto left_cols = op.children[0].get().GetTypes().size();
 
@@ -1269,6 +1296,7 @@ void IEJoinLocalSourceState::ExecuteRightTask(ExecutionContext &context, DataChu
 
 	const idx_t count = SelectOuterRows(right_matches);
 	if (!count) {
+		right_matches = nullptr;
 		return;
 	}
 
