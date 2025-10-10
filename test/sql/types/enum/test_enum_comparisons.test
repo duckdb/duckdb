@@ -49,15 +49,24 @@ SELECT 'sad' = 'sad'::mood AS comp;
 True
 
 # Comparing to a non-existent enum value should error
+Error: Enum value 'ecstatic' not found in enum type 'mood'
 statement error
 select 'sad'::mood = 'ecstatic'
 ----
-Error: Enum value 'ecstatic' not found in enum type 'mood'
 
+# Error: Enum value 'ecstatic' not found in enum type 'mood'
 statement error
 select 'sad'::mood < 'ecstatic'
 ----
-Error: Enum value 'ecstatic' not found in enum type 'mood'
+
+# Should also error when compared to only-known-at-runtime strings
+statement error
+select name = 'sad'::mood from person
+----
+
+statement error
+select name > 'sad'::mood from person
+----
 
 # This just compares the actual uint value of the column since both are from the same mood type
 query II
@@ -99,13 +108,10 @@ Tim	ok
 statement error
 select * from person where current_mood = 'ecstatic'
 ----
-Error: Enum value 'ecstatic' not found in enum type 'mood'
 
 statement error
 select * from person where current_mood >= 'ecstatic'
 ----
-Error: Enum value 'ecstatic' not found in enum type 'mood'
-
 
 # This actually performs the optimized comparison since they are both ENUMs but of different types.
 
