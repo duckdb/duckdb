@@ -406,7 +406,7 @@ static void ParquetWriteCombine(ExecutionContext &context, FunctionData &bind_da
 			guard.unlock();
 			global_state.LogFlushingRowGroup(*owned_combine_buffer, "Combine");
 			// Lock free, of course
-			global_state.writer->Flush(*owned_combine_buffer, global_state.transform_data);
+			global_state.writer->Flush(*owned_combine_buffer, local_state.transform_data);
 		}
 		return;
 	}
