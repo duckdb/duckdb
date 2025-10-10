@@ -13,7 +13,6 @@
 #include "duckdb/planner/bound_query_node.hpp"
 
 namespace duckdb {
-struct BoundSetOpChild;
 
 //! Bound equivalent of SetOperationNode
 class BoundSetOperationNode : public BoundQueryNode {
@@ -23,7 +22,9 @@ public:
 	//! whether the ALL modifier was used or not
 	bool setop_all = false;
 	//! The bound children
-	vector<BoundSetOpChild> bound_children;
+	vector<BoundStatement> bound_children;
+	//! Child binders
+	vector<shared_ptr<Binder>> child_binders;
 
 	//! Index used by the set operation
 	idx_t setop_index;
@@ -32,11 +33,6 @@ public:
 	idx_t GetRootIndex() override {
 		return setop_index;
 	}
-};
-
-struct BoundSetOpChild {
-	BoundStatement node;
-	shared_ptr<Binder> binder;
 };
 
 } // namespace duckdb
