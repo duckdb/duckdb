@@ -481,21 +481,22 @@ void ExtractNestedSelection(const SelectionVector &slice_sel, const idx_t count,
 }
 
 void ExtractNestedMask(const SelectionVector &slice_sel, const idx_t count, const SelectionVector &sel,
-                       ValidityMask *child_mask, optional_ptr<ValidityMask> null_mask) {
+                       ValidityMask *child_mask_p, optional_ptr<ValidityMask> null_mask) {
 
-	if (!child_mask) {
+	if (!child_mask_p) {
 		return;
 	}
+	auto &child_mask = *child_mask_p;
 
 	for (idx_t i = 0; i < count; ++i) {
 		const auto slice_idx = slice_sel.get_index(i);
 		const auto result_idx = sel.get_index(slice_idx);
-		if (!child_mask->RowIsValid(slice_idx)) {
+		if (!child_mask.RowIsValid(slice_idx)) {
 			null_mask->SetInvalid(result_idx);
 		}
 	}
 
-	child_mask->Reset(null_mask->Capacity());
+	child_mask.Reset(null_mask->Capacity());
 }
 
 void DensifyNestedSelection(const SelectionVector &dense_sel, const idx_t count, SelectionVector &slice_sel) {
