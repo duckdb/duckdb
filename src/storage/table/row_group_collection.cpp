@@ -271,7 +271,7 @@ bool RowGroupCollection::Scan(DuckTransaction &transaction, const vector<Storage
 	// initialize the scan
 	TableScanState state;
 	state.Initialize(column_ids, nullptr);
-	InitializeScan(transaction.context, state.local_state, column_ids, nullptr);
+	InitializeScan(QueryContext(), state.local_state, column_ids, nullptr);
 
 	while (true) {
 		chunk.Reset();
