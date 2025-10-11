@@ -356,8 +356,20 @@ EscapeSequence Terminal::ReadEscapeSequence(int ifd) {
 		switch (seq[0]) {
 		case BACKSPACE:
 			return EscapeSequence::ALT_BACKSPACE;
-		case ESC:
-			return EscapeSequence::ESCAPE;
+		case ESC: {
+			// Double ESC - this might be ALT + arrow key
+			// Read the next escape sequence
+			auto next_escape = ReadEscapeSequence(ifd);
+			switch (next_escape) {
+			case EscapeSequence::LEFT:
+				return EscapeSequence::ALT_LEFT_ARROW;
+			case EscapeSequence::RIGHT:
+				return EscapeSequence::ALT_RIGHT_ARROW;
+			default:
+				// Not an arrow key, just return ESCAPE
+				return EscapeSequence::ESCAPE;
+			}
+		}
 		case '<':
 			return EscapeSequence::ALT_LEFT_ARROW;
 		case '>':
