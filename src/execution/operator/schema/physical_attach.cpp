@@ -36,7 +36,7 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 	if (info->on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT ||
 	    info->on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
 		// constant-time lookup in the catalog for the db name
-		auto existing_db = db_manager.GetDatabase(context.client, name);
+		auto existing_db = db_manager.GetDatabase(name);
 		if (existing_db) {
 			if ((existing_db->IsReadOnly() && options.access_mode == AccessMode::READ_WRITE) ||
 			    (!existing_db->IsReadOnly() && options.access_mode == AccessMode::READ_ONLY)) {
@@ -61,20 +61,7 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 		}
 	}
 
-	// attach the database.
-	auto attached_db = db_manager.AttachDatabase(context.client, *info, options);
-	if (!attached_db) {
-		return SourceResultType::FINISHED;
-	}
-
-	//! Initialize the database.
-	attached_db->Initialize(context.client);
-	if (!options.default_table.name.empty()) {
-		attached_db->GetCatalog().SetDefaultTable(options.default_table.schema, options.default_table.name);
-	}
-	attached_db->FinalizeLoad(context.client);
-
-	db_manager.FinalizeAttach(context.client, *info, std::move(attached_db));
+	db_manager.AttachDatabase(context.client, *info, options);
 	return SourceResultType::FINISHED;
 }
 

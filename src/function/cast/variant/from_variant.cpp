@@ -1,3 +1,4 @@
+#include "yyjson_utils.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/common/types/variant.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
@@ -47,22 +48,6 @@ public:
 public:
 	idx_t width;
 	idx_t scale;
-};
-
-struct ConvertedJSONHolder {
-public:
-	~ConvertedJSONHolder() {
-		if (doc) {
-			yyjson_mut_doc_free(doc);
-		}
-		if (stringified_json) {
-			free(stringified_json);
-		}
-	}
-
-public:
-	yyjson_mut_doc *doc = nullptr;
-	char *stringified_json = nullptr;
 };
 
 } // namespace
@@ -364,6 +349,14 @@ static bool ConvertVariantToStruct(FromVariantConversionData &conversion_data, V
 	SelectionVector child_values_sel;
 	child_values_sel.Initialize(count);
 
+	SelectionVector row_sel(0, count);
+	if (row.IsValid()) {
+		auto row_index = row.GetIndex();
+		for (idx_t i = 0; i < count; i++) {
+			row_sel[i] = static_cast<uint32_t>(row_index);
+		}
+	}
+
 	for (idx_t child_idx = 0; child_idx < child_types.size(); child_idx++) {
 		auto &child_name = child_types[child_idx].first;
 
@@ -372,14 +365,21 @@ static bool ConvertVariantToStruct(FromVariantConversionData &conversion_data, V
 		VariantPathComponent component;
 		component.key = child_name;
 		component.lookup_mode = VariantChildLookupMode::BY_KEY;
-		auto collection_result =
-		    VariantUtils::FindChildValues(conversion_data.variant, component, row, child_values_sel, child_data, count);
-		if (!collection_result.Success()) {
-			D_ASSERT(collection_result.type == VariantChildDataCollectionResult::Type::COMPONENT_NOT_FOUND);
-			auto nested_index = collection_result.nested_data_index;
-			auto row_index = row.IsValid() ? row.GetIndex() : nested_index;
+		ValidityMask lookup_validity(count);
+		VariantUtils::FindChildValues(conversion_data.variant, component, row_sel, child_values_sel, lookup_validity,
+		                              child_data, count);
+		if (!lookup_validity.AllValid()) {
+			optional_idx nested_index;
+			for (idx_t i = 0; i < count; i++) {
+				if (!lookup_validity.RowIsValid(i)) {
+					nested_index = i;
+					break;
+				}
+			}
+			D_ASSERT(nested_index.IsValid());
+			auto row_index = row.IsValid() ? row.GetIndex() : nested_index.GetIndex();
 			auto object_keys =
-			    VariantUtils::GetObjectKeys(conversion_data.variant, row_index, child_data[nested_index]);
+			    VariantUtils::GetObjectKeys(conversion_data.variant, row_index, child_data[nested_index.GetIndex()]);
 			conversion_data.error = StringUtil::Format("VARIANT(OBJECT(%s)) is missing key '%s'",
 			                                           StringUtil::Join(object_keys, ","), component.key);
 			return false;
@@ -550,6 +550,11 @@ static bool CastVariant(FromVariantConversionData &conversion_data, Vector &resu
 			return CastVariantToPrimitive<VariantDirectConversion<string_t, VariantLogicalType::BLOB>>(
 			    conversion_data, result, sel, offset, count, row, string_payload);
 		}
+		case LogicalTypeId::GEOMETRY: {
+			StringConversionPayload string_payload(result);
+			return CastVariantToPrimitive<VariantDirectConversion<string_t, VariantLogicalType::GEOMETRY>>(
+			    conversion_data, result, sel, offset, count, row, string_payload);
+		}
 		case LogicalTypeId::VARCHAR: {
 			if (target_type.IsJSONType()) {
 				return CastVariantToJSON(conversion_data, result, sel, offset, count, row);
@@ -685,6 +690,8 @@ BoundCastInfo DefaultCasts::VariantCastSwitch(BindCastInput &input, const Logica
 	case LogicalTypeId::UNION:
 	case LogicalTypeId::UUID:
 	case LogicalTypeId::ARRAY:
+		return BoundCastInfo(CastFromVARIANT);
+	case LogicalTypeId::GEOMETRY:
 		return BoundCastInfo(CastFromVARIANT);
 	case LogicalTypeId::VARCHAR: {
 		return BoundCastInfo(CastFromVARIANT);

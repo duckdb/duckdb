@@ -81,6 +81,7 @@
 #include <assert.h>
 #include "duckdb_shell_wrapper.h"
 #include "duckdb/common/box_renderer.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "sqlite3.h"
 typedef sqlite3_int64 i64;
@@ -2647,7 +2648,7 @@ static void output_file_close(FILE *f) {
 ** filename is "off".
 */
 static FILE *output_file_open(const char *zFile, int bTextMode) {
-	FILE *f;
+	FILE *f = nullptr;
 	if (strcmp(zFile, "stdout") == 0) {
 		f = stdout;
 	} else if (strcmp(zFile, "stderr") == 0) {
@@ -2655,7 +2656,8 @@ static FILE *output_file_open(const char *zFile, int bTextMode) {
 	} else if (strcmp(zFile, "off") == 0) {
 		f = 0;
 	} else {
-		f = fopen(zFile, bTextMode ? "w" : "wb");
+		const string expanded_path = duckdb::FileSystem::ExpandPath(zFile, /*opener=*/nullptr);
+		f = fopen(expanded_path.c_str(), bTextMode ? "w" : "wb");
 		if (f == 0) {
 			utf8_printf(stderr, "Error: cannot open \"%s\"\n", zFile);
 		}
@@ -4763,17 +4765,17 @@ static const char zOptions[] =
     "   -unsigned            allow loading of unsigned extensions\n"
     "   -version             show DuckDB version\n";
 static void usage(int showDetail) {
-	utf8_printf(stderr,
+	utf8_printf(stdout,
 	            "Usage: %s [OPTIONS] FILENAME [SQL]\n"
 	            "FILENAME is the name of a DuckDB database. A new database is created\n"
 	            "if the file does not previously exist.\n",
 	            program_name);
 	if (showDetail) {
-		utf8_printf(stderr, "OPTIONS include:\n%s", zOptions);
+		utf8_printf(stdout, "OPTIONS include:\n%s", zOptions);
 	} else {
-		raw_printf(stderr, "Use the -help option for additional information\n");
+		raw_printf(stdout, "Use the -help option for additional information\n");
 	}
-	exit(1);
+	exit(0);
 }
 
 /*

@@ -76,7 +76,7 @@ public:
 	                idx_t base_row);
 	void PushSequenceUsage(SequenceCatalogEntry &entry, const SequenceData &data);
 	void PushAppend(DataTable &table, idx_t row_start, idx_t row_count);
-	UndoBufferReference CreateUpdateInfo(idx_t type_size, idx_t entries);
+	UndoBufferReference CreateUpdateInfo(idx_t type_size, DataTable &data_table, idx_t entries);
 
 	bool IsDuckTransaction() const override {
 		return true;
@@ -90,6 +90,7 @@ public:
 	//! Get a shared lock on a table
 	shared_ptr<CheckpointLock> SharedLockTable(DataTableInfo &info);
 
+	//! Hold an owning reference of the table, needed to safely reference it inside the transaction commit/undo logic
 	void ModifyTable(DataTable &tbl);
 
 private:

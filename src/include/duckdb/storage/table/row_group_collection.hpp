@@ -36,6 +36,7 @@ struct CollectionCheckpointState;
 struct PersistentCollectionData;
 class CheckpointTask;
 class TableIOManager;
+class DataTable;
 
 class RowGroupCollection {
 public:
@@ -57,16 +58,18 @@ public:
 
 	void AppendRowGroup(SegmentLock &l, idx_t start_row);
 	//! Get the nth row-group, negative numbers start from the back (so -1 is the last row group, etc)
-	RowGroup *GetRowGroup(int64_t index);
+	optional_ptr<RowGroup> GetRowGroup(int64_t index);
 	void Verify();
+	void Destroy();
 
-	void InitializeScan(CollectionScanState &state, const vector<StorageIndex> &column_ids,
+	void InitializeScan(const QueryContext &context, CollectionScanState &state, const vector<StorageIndex> &column_ids,
 	                    optional_ptr<TableFilterSet> table_filters);
 	void InitializeCreateIndexScan(CreateIndexScanState &state);
-	void InitializeScanWithOffset(CollectionScanState &state, const vector<StorageIndex> &column_ids, idx_t start_row,
-	                              idx_t end_row);
-	static bool InitializeScanInRowGroup(CollectionScanState &state, RowGroupCollection &collection,
-	                                     RowGroup &row_group, idx_t vector_index, idx_t max_row);
+	void InitializeScanWithOffset(const QueryContext &context, CollectionScanState &state,
+	                              const vector<StorageIndex> &column_ids, idx_t start_row, idx_t end_row);
+	static bool InitializeScanInRowGroup(const QueryContext &context, CollectionScanState &state,
+	                                     RowGroupCollection &collection, RowGroup &row_group, idx_t vector_index,
+	                                     idx_t max_row);
 	void InitializeParallelScan(ParallelCollectionScanState &state);
 	bool NextParallelScan(ClientContext &context, ParallelCollectionScanState &state, CollectionScanState &scan_state);
 
@@ -96,12 +99,13 @@ public:
 	                  optional_ptr<StorageCommitState> commit_state);
 	bool IsPersistent() const;
 
-	void RemoveFromIndexes(TableIndexList &indexes, Vector &row_identifiers, idx_t count);
+	void RemoveFromIndexes(const QueryContext &context, TableIndexList &indexes, Vector &row_identifiers, idx_t count);
 
 	idx_t Delete(TransactionData transaction, DataTable &table, row_t *ids, idx_t count);
-	void Update(TransactionData transaction, row_t *ids, const vector<PhysicalIndex> &column_ids, DataChunk &updates);
-	void UpdateColumn(TransactionData transaction, Vector &row_ids, const vector<column_t> &column_path,
-	                  DataChunk &updates);
+	void Update(TransactionData transaction, DataTable &table, row_t *ids, const vector<PhysicalIndex> &column_ids,
+	            DataChunk &updates);
+	void UpdateColumn(TransactionData transaction, DataTable &table, Vector &row_ids,
+	                  const vector<column_t> &column_path, DataChunk &updates);
 
 	void Checkpoint(TableDataWriter &writer, TableStatistics &global_stats);
 
@@ -115,7 +119,7 @@ public:
 	void CommitDropTable();
 
 	vector<PartitionStatistics> GetPartitionStats() const;
-	vector<ColumnSegmentInfo> GetColumnSegmentInfo();
+	vector<ColumnSegmentInfo> GetColumnSegmentInfo(const QueryContext &context);
 	const vector<LogicalType> &GetTypes() const;
 
 	shared_ptr<RowGroupCollection> AddColumn(ClientContext &context, ColumnDefinition &new_column,
@@ -123,7 +127,7 @@ public:
 	shared_ptr<RowGroupCollection> RemoveColumn(idx_t col_idx);
 	shared_ptr<RowGroupCollection> AlterType(ClientContext &context, idx_t changed_idx, const LogicalType &target_type,
 	                                         vector<StorageIndex> bound_columns, Expression &cast_expr);
-	void VerifyNewConstraint(DataTable &parent, const BoundConstraint &constraint);
+	void VerifyNewConstraint(const QueryContext &context, DataTable &parent, const BoundConstraint &constraint);
 
 	void CopyStats(TableStatistics &stats);
 	unique_ptr<BaseStatistics> CopyStats(column_t column_id);

@@ -347,6 +347,7 @@ duckdb_state duckdb_register_table_function(duckdb_connection connection, duckdb
 		con->context->RunFunctionInTransaction([&]() {
 			auto &catalog = duckdb::Catalog::GetSystemCatalog(*con->context);
 			duckdb::CreateTableFunctionInfo tf_info(tf);
+			tf_info.on_conflict = duckdb::OnCreateConflict::ALTER_ON_CONFLICT;
 			catalog.CreateTableFunction(*con->context, tf_info);
 		});
 	} catch (...) { // LCOV_EXCL_START

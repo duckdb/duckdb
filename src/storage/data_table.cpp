@@ -245,7 +245,7 @@ void DataTable::InitializeScan(ClientContext &context, DuckTransaction &transact
 	state.checkpoint_lock = transaction.SharedLockTable(*info);
 	auto &local_storage = LocalStorage::Get(transaction);
 	state.Initialize(column_ids, context, table_filters);
-	row_groups->InitializeScan(state.table_state, column_ids, table_filters);
+	row_groups->InitializeScan(context, state.table_state, column_ids, table_filters);
 	local_storage.InitializeScan(*this, state.local_state, table_filters);
 }
 
@@ -253,7 +253,7 @@ void DataTable::InitializeScanWithOffset(DuckTransaction &transaction, TableScan
                                          const vector<StorageIndex> &column_ids, idx_t start_row, idx_t end_row) {
 	state.checkpoint_lock = transaction.SharedLockTable(*info);
 	state.Initialize(column_ids);
-	row_groups->InitializeScanWithOffset(state.table_state, column_ids, start_row, end_row);
+	row_groups->InitializeScanWithOffset(transaction.context, state.table_state, column_ids, start_row, end_row);
 }
 
 idx_t DataTable::GetRowGroupSize() const {
@@ -681,7 +681,7 @@ void DataTable::VerifyNewConstraint(LocalStorage &local_storage, DataTable &pare
 		throw NotImplementedException("FIXME: ALTER COLUMN with such constraint is not supported yet");
 	}
 
-	parent.row_groups->VerifyNewConstraint(parent, constraint);
+	parent.row_groups->VerifyNewConstraint(local_storage.GetClientContext(), parent, constraint);
 	local_storage.VerifyNewConstraint(parent, constraint);
 }
 
@@ -905,12 +905,14 @@ void DataTable::FinalizeLocalAppend(LocalAppendState &state) {
 	LocalStorage::FinalizeAppend(state);
 }
 
-PhysicalIndex DataTable::CreateOptimisticCollection(ClientContext &context, unique_ptr<RowGroupCollection> collection) {
+PhysicalIndex DataTable::CreateOptimisticCollection(ClientContext &context,
+                                                    unique_ptr<OptimisticWriteCollection> collection) {
 	auto &local_storage = LocalStorage::Get(context, db);
 	return local_storage.CreateOptimisticCollection(*this, std::move(collection));
 }
 
-RowGroupCollection &DataTable::GetOptimisticCollection(ClientContext &context, const PhysicalIndex collection_index) {
+OptimisticWriteCollection &DataTable::GetOptimisticCollection(ClientContext &context,
+                                                              const PhysicalIndex collection_index) {
 	auto &local_storage = LocalStorage::Get(context, db);
 	return local_storage.GetOptimisticCollection(*this, collection_index);
 }
@@ -925,7 +927,7 @@ OptimisticDataWriter &DataTable::GetOptimisticWriter(ClientContext &context) {
 	return local_storage.GetOptimisticWriter(*this);
 }
 
-void DataTable::LocalMerge(ClientContext &context, RowGroupCollection &collection) {
+void DataTable::LocalMerge(ClientContext &context, OptimisticWriteCollection &collection) {
 	auto &local_storage = LocalStorage::Get(context, db);
 	local_storage.LocalMerge(*this, collection);
 }
@@ -1268,9 +1270,9 @@ void DataTable::RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, Vec
 	});
 }
 
-void DataTable::RemoveFromIndexes(Vector &row_identifiers, idx_t count) {
+void DataTable::RemoveFromIndexes(const QueryContext &context, Vector &row_identifiers, idx_t count) {
 	D_ASSERT(IsMainTable());
-	row_groups->RemoveFromIndexes(info->indexes, row_identifiers, count);
+	row_groups->RemoveFromIndexes(context, info->indexes, row_identifiers, count);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1542,7 +1544,7 @@ void DataTable::Update(TableUpdateState &state, ClientContext &context, Vector &
 		row_ids_slice.Slice(row_ids, sel_global_update, n_global_update);
 		row_ids_slice.Flatten(n_global_update);
 
-		row_groups->Update(transaction, FlatVector::GetData<row_t>(row_ids_slice), column_ids, updates_slice);
+		row_groups->Update(transaction, *this, FlatVector::GetData<row_t>(row_ids_slice), column_ids, updates_slice);
 	}
 }
 
@@ -1566,7 +1568,7 @@ void DataTable::UpdateColumn(TableCatalogEntry &table, ClientContext &context, V
 
 	updates.Flatten();
 	row_ids.Flatten(updates.size());
-	row_groups->UpdateColumn(transaction, row_ids, column_path, updates);
+	row_groups->UpdateColumn(transaction, *this, row_ids, column_path, updates);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1620,6 +1622,10 @@ void DataTable::CommitDropColumn(const idx_t column_index) {
 	row_groups->CommitDropColumn(column_index);
 }
 
+void DataTable::Destroy() {
+	row_groups->Destroy();
+}
+
 idx_t DataTable::ColumnCount() const {
 	return column_definitions.size();
 }
@@ -1643,9 +1649,9 @@ void DataTable::CommitDropTable() {
 //===--------------------------------------------------------------------===//
 // Column Segment Info
 //===--------------------------------------------------------------------===//
-vector<ColumnSegmentInfo> DataTable::GetColumnSegmentInfo() {
+vector<ColumnSegmentInfo> DataTable::GetColumnSegmentInfo(const QueryContext &context) {
 	auto lock = GetSharedCheckpointLock();
-	return row_groups->GetColumnSegmentInfo();
+	return row_groups->GetColumnSegmentInfo(context);
 }
 
 //===--------------------------------------------------------------------===//

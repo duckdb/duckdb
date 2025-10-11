@@ -39,14 +39,16 @@ struct PersistentColumnData;
 using column_segment_vector_t = vector<SegmentNode<ColumnSegment>>;
 
 struct ColumnCheckpointInfo {
-	ColumnCheckpointInfo(RowGroupWriteInfo &info, idx_t column_idx) : info(info), column_idx(column_idx) {
-	}
+	ColumnCheckpointInfo(RowGroupWriteInfo &info, idx_t column_idx);
 
-	RowGroupWriteInfo &info;
 	idx_t column_idx;
 
 public:
+	PartialBlockManager &GetPartialBlockManager();
 	CompressionType GetCompressionType();
+
+private:
+	RowGroupWriteInfo &info;
 };
 
 class ColumnData {
@@ -154,10 +156,10 @@ public:
 	virtual void FetchRow(TransactionData transaction, ColumnFetchState &state, row_t row_id, Vector &result,
 	                      idx_t result_idx);
 
-	virtual void Update(TransactionData transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
-	                    idx_t update_count);
-	virtual void UpdateColumn(TransactionData transaction, const vector<column_t> &column_path, Vector &update_vector,
-	                          row_t *row_ids, idx_t update_count, idx_t depth);
+	virtual void Update(TransactionData transaction, DataTable &data_table, idx_t column_index, Vector &update_vector,
+	                    row_t *row_ids, idx_t update_count);
+	virtual void UpdateColumn(TransactionData transaction, DataTable &data_table, const vector<column_t> &column_path,
+	                          Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t depth);
 	virtual unique_ptr<BaseStatistics> GetUpdateStatistics();
 
 	virtual void CommitDropColumn();
@@ -178,7 +180,8 @@ public:
 	static shared_ptr<ColumnData> Deserialize(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
 	                                          idx_t start_row, ReadStream &source, const LogicalType &type);
 
-	virtual void GetColumnSegmentInfo(idx_t row_group_index, vector<idx_t> col_path, vector<ColumnSegmentInfo> &result);
+	virtual void GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<idx_t> col_path,
+	                                  vector<ColumnSegmentInfo> &result);
 	virtual void Verify(RowGroup &parent);
 
 	FilterPropagateResult CheckZonemap(TableFilter &filter);
@@ -217,8 +220,8 @@ protected:
 	void FetchUpdates(TransactionData transaction, idx_t vector_index, Vector &result, idx_t scan_count,
 	                  bool allow_updates, bool scan_committed);
 	void FetchUpdateRow(TransactionData transaction, row_t row_id, Vector &result, idx_t result_idx);
-	void UpdateInternal(TransactionData transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
-	                    idx_t update_count, Vector &base_vector);
+	void UpdateInternal(TransactionData transaction, DataTable &data_table, idx_t column_index, Vector &update_vector,
+	                    row_t *row_ids, idx_t update_count, Vector &base_vector);
 	idx_t FetchUpdateData(ColumnScanState &state, row_t *row_ids, Vector &base_vector);
 
 	idx_t GetVectorCount(idx_t vector_index) const;

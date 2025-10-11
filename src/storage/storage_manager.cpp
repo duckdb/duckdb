@@ -13,6 +13,9 @@
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/in_memory_checkpoint.hpp"
+#include "duckdb/catalog/duck_catalog.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "mbedtls_wrapper.hpp"
 
 namespace duckdb {
@@ -140,6 +143,9 @@ string StorageManager::GetWALPath() const {
 bool StorageManager::InMemory() const {
 	D_ASSERT(!path.empty());
 	return path == IN_MEMORY_PATH;
+}
+
+void StorageManager::Destroy() {
 }
 
 void StorageManager::Initialize(QueryContext context) {
@@ -487,6 +493,33 @@ void SingleFileStorageManager::CreateCheckpoint(QueryContext context, Checkpoint
 
 	if (db.GetStorageExtension()) {
 		db.GetStorageExtension()->OnCheckpointEnd(db, options);
+	}
+}
+
+void SingleFileStorageManager::Destroy() {
+	if (!load_complete) {
+		return;
+	}
+	vector<reference<SchemaCatalogEntry>> schemas;
+	// we scan the set of committed schemas
+	auto &catalog = Catalog::GetCatalog(db).Cast<DuckCatalog>();
+	catalog.ScanSchemas([&](SchemaCatalogEntry &entry) { schemas.push_back(entry); });
+
+	vector<reference<DuckTableEntry>> tables;
+	for (auto &schema : schemas) {
+		schema.get().Scan(CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
+			if (entry.internal) {
+				return;
+			}
+			if (entry.type == CatalogType::TABLE_ENTRY) {
+				tables.push_back(entry.Cast<DuckTableEntry>());
+			}
+		});
+	}
+
+	for (auto &table : tables) {
+		auto &data_table = table.get().GetStorage();
+		data_table.Destroy();
 	}
 }
 

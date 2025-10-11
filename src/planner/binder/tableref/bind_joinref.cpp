@@ -122,14 +122,14 @@ static vector<string> RemoveDuplicateUsingColumns(const vector<string> &using_co
 	return result;
 }
 
-unique_ptr<BoundTableRef> Binder::BindJoin(Binder &parent_binder, TableRef &ref) {
+BoundStatement Binder::BindJoin(Binder &parent_binder, TableRef &ref) {
 	unnamed_subquery_index = parent_binder.unnamed_subquery_index;
 	auto result = Bind(ref);
 	parent_binder.unnamed_subquery_index = unnamed_subquery_index;
 	return result;
 }
 
-unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
+BoundStatement Binder::Bind(JoinRef &ref) {
 	auto result = make_uniq<BoundJoinRef>(ref.ref_type);
 	result->left_binder = Binder::CreateBinder(context, this);
 	result->right_binder = Binder::CreateBinder(context, this);
@@ -351,7 +351,13 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 		bind_context.RemoveContext(left_bindings);
 	}
 
-	return std::move(result);
+	BoundStatement result_stmt;
+	result_stmt.types.insert(result_stmt.types.end(), result->left.types.begin(), result->left.types.end());
+	result_stmt.types.insert(result_stmt.types.end(), result->right.types.begin(), result->right.types.end());
+	result_stmt.names.insert(result_stmt.names.end(), result->left.names.begin(), result->left.names.end());
+	result_stmt.names.insert(result_stmt.names.end(), result->right.names.begin(), result->right.names.end());
+	result_stmt.plan = CreatePlan(*result);
+	return result_stmt;
 }
 
 } // namespace duckdb
