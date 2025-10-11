@@ -1297,6 +1297,10 @@ idx_t LocalFileSystem::SeekPosition(FileHandle &handle) {
 	return GetFilePointer(handle);
 }
 
+bool LocalFileSystem::IsInvalidated(FileHandle &handle) {
+	return false;
+}
+
 static bool IsCrawl(const string &glob) {
 	// glob must match exactly
 	return glob == "**";
