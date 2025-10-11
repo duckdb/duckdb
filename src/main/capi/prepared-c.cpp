@@ -88,7 +88,13 @@ duckdb_state duckdb_prepare(duckdb_connection connection, const char *query,
 
 const char *duckdb_prepare_error(duckdb_prepared_statement prepared_statement) {
 	auto wrapper = reinterpret_cast<PreparedStatementWrapper *>(prepared_statement);
-	if (!wrapper || !wrapper->statement || !wrapper->statement->HasError()) {
+	if (!wrapper) {
+		return nullptr;
+	}
+	if (!wrapper->success) {
+		return wrapper->error_data.Message().c_str();
+	}
+	if (!wrapper->statement || !wrapper->statement->HasError()) {
 		return nullptr;
 	}
 	return wrapper->statement->error.Message().c_str();
@@ -229,9 +235,10 @@ duckdb_state duckdb_bind_value(duckdb_prepared_statement prepared_statement, idx
 		return DuckDBError;
 	}
 	if (param_idx <= 0 || param_idx > wrapper->statement->named_param_map.size()) {
-		wrapper->statement->error =
+		wrapper->error_data =
 		    duckdb::InvalidInputException("Can not bind to parameter number %d, statement only has %d parameter(s)",
 		                                  param_idx, wrapper->statement->named_param_map.size());
+		wrapper->success = false;
 		return DuckDBError;
 	}
 	auto identifier = duckdb_parameter_name_internal(prepared_statement, param_idx);

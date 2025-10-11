@@ -541,6 +541,15 @@ TEST_CASE("Binding values", "[capi]") {
 	auto struct_value = duckdb_create_struct_value(struct_type, &value);
 	duckdb_destroy_logical_type(&struct_type);
 
+	// Fail with out-of-bounds.
+	duckdb_prepared_statement prepared_fail;
+	REQUIRE(duckdb_prepare(tester.connection, "SELECT ?, ?", &prepared_fail) == DuckDBSuccess);
+	auto state = duckdb_bind_value(prepared_fail, 3, struct_value);
+	REQUIRE(state == DuckDBError);
+	auto error_msg = duckdb_prepare_error(prepared_fail);
+	REQUIRE(StringUtil::Contains(string(error_msg), "Can not bind to parameter number"));
+	duckdb_destroy_prepare(&prepared_fail);
+
 	duckdb::vector<duckdb_value> list_values {value};
 	auto list_value = duckdb_create_list_value(member_type, list_values.data(), member_count);
 
