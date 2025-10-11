@@ -685,6 +685,10 @@ void LocalFileSystem::RemoveDirectory(const string &directory, optional_ptr<File
 void LocalFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
 	auto normalized_file = NormalizeLocalPath(filename);
 	if (std::remove(normalized_file) != 0) {
+		// If the file doesn't exist, that's fine - it's already in the desired state
+		if (errno == ENOENT) {
+			return;
+		}
 		throw IOException("Could not remove file \"%s\": %s", {{"errno", std::to_string(errno)}}, filename,
 		                  strerror(errno));
 	}
@@ -1190,6 +1194,10 @@ void LocalFileSystem::RemoveDirectory(const string &directory, optional_ptr<File
 void LocalFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
 	auto unicode_path = NormalizePathAndConvertToUnicode(filename);
 	if (!DeleteFileW(unicode_path.c_str())) {
+		// If the file doesn't exist, that's fine - it's already in the desired state
+		if (GetLastError() == ERROR_FILE_NOT_FOUND) {
+			return;
+		}
 		auto error = LocalFileSystem::GetLastErrorAsString();
 		throw IOException("Failed to delete file \"%s\": %s", filename, error);
 	}
