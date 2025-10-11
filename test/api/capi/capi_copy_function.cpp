@@ -274,6 +274,9 @@ TEST_CASE("Test Copy Functions in C API", "[capi]") {
 	duckdb_table_function_set_init(scan_func, MyCopyFromFunctionInit);
 	duckdb_table_function_set_function(scan_func, MyCopyFromFunction);
 
+	duckdb_destroy_logical_type(&varchar_type);
+	duckdb_destroy_logical_type(&int_type);
+
 	duckdb_copy_function_set_copy_from_function(func, scan_func);
 
 	duckdb_destroy_table_function(&scan_func);
