@@ -323,6 +323,7 @@ void Binder::BindDefaultValues(const ColumnList &columns, vector<unique_ptr<Expr
 			ConstantBinder default_value_binder(*default_binder, context, "DEFAULT value");
 			default_value_binder.target_type = column.Type();
 			bound_default = default_value_binder.Bind(default_copy);
+			is_function_bound = default_binder->is_function_bound;
 		} else {
 			// no default value specified: push a default value of constant null
 			bound_default = make_uniq<BoundConstantExpression>(Value(column.Type()));
@@ -577,7 +578,8 @@ static void BindCreateTableConstraints(CreateTableInfo &create_info, CatalogEntr
 }
 
 unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry &schema,
-                                                             vector<unique_ptr<Expression>> &bound_defaults) {
+                                                             vector<unique_ptr<Expression>> &bound_defaults,
+                                                             bool skip_bind_default) {
 	auto &base = info->Cast<CreateTableInfo>();
 	auto result = make_uniq<BoundCreateTableInfo>(schema, std::move(info));
 	auto &dependencies = result->dependencies;
@@ -660,10 +662,12 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 			throw BinderException("Constraints on generated columns are not supported yet");
 		}
 		bound_constraints = BindNewConstraints(base.constraints, base.table, base.columns);
-		// bind the default values
-		auto &catalog_name = schema.ParentCatalog().GetName();
-		auto &schema_name = schema.name;
-		BindDefaultValues(base.columns, bound_defaults, catalog_name, schema_name);
+		if (!skip_bind_default) {
+			// bind the default values
+			auto &catalog_name = schema.ParentCatalog().GetName();
+			auto &schema_name = schema.name;
+			BindDefaultValues(base.columns, bound_defaults, catalog_name, schema_name);
+		}
 	}
 
 	if (base.columns.PhysicalColumnCount() == 0) {
