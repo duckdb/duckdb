@@ -271,7 +271,7 @@ bool RowGroupCollection::Scan(DuckTransaction &transaction, const vector<Storage
 	// initialize the scan
 	TableScanState state;
 	state.Initialize(column_ids, nullptr);
-	InitializeScan(transaction.context, state.local_state, column_ids, nullptr);
+	InitializeScan(QueryContext(), state.local_state, column_ids, nullptr);
 
 	while (true) {
 		chunk.Reset();
@@ -650,14 +650,14 @@ optional_ptr<RowGroup> RowGroupCollection::NextUpdateRowGroup(row_t *ids, idx_t 
 	return row_group;
 }
 
-void RowGroupCollection::Update(TransactionData transaction, row_t *ids, const vector<PhysicalIndex> &column_ids,
-                                DataChunk &updates) {
+void RowGroupCollection::Update(TransactionData transaction, DataTable &data_table, row_t *ids,
+                                const vector<PhysicalIndex> &column_ids, DataChunk &updates) {
 	D_ASSERT(updates.size() >= 1);
 	idx_t pos = 0;
 	do {
 		idx_t start = pos;
 		auto row_group = NextUpdateRowGroup(ids, pos, updates.size());
-		row_group->Update(transaction, updates, ids, start, pos - start, column_ids);
+		row_group->Update(transaction, data_table, updates, ids, start, pos - start, column_ids);
 
 		auto l = stats.GetLock();
 		for (idx_t i = 0; i < column_ids.size(); i++) {
@@ -770,15 +770,15 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 	}
 }
 
-void RowGroupCollection::UpdateColumn(TransactionData transaction, Vector &row_ids, const vector<column_t> &column_path,
-                                      DataChunk &updates) {
+void RowGroupCollection::UpdateColumn(TransactionData transaction, DataTable &data_table, Vector &row_ids,
+                                      const vector<column_t> &column_path, DataChunk &updates) {
 	D_ASSERT(updates.size() >= 1);
 	auto ids = FlatVector::GetData<row_t>(row_ids);
 	idx_t pos = 0;
 	do {
 		idx_t start = pos;
 		auto row_group = NextUpdateRowGroup(ids, pos, updates.size());
-		row_group->UpdateColumn(transaction, updates, row_ids, start, pos - start, column_path);
+		row_group->UpdateColumn(transaction, data_table, updates, row_ids, start, pos - start, column_path);
 
 		auto lock = stats.GetLock();
 		auto primary_column_idx = column_path[0];

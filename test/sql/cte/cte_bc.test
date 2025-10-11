@@ -2,6 +2,9 @@
 # description: Test BC of reading CTEs
 # group: [cte]
 
+# The database is written with a vector size of 2048.
+require vector_size 2048
+
 unzip data/storage/cte_v1.db.gz __TEST_DIR__/cte_v1.db
 
 unzip data/storage/cte_v1_4.db.gz __TEST_DIR__/cte_v1_4.db
