@@ -170,10 +170,6 @@ duckdb_state duckdb_list_vector_set_size(duckdb_vector vector, idx_t size) {
 		return DuckDBError;
 	}
 	auto v = reinterpret_cast<duckdb::Vector *>(vector);
-	auto capacity = duckdb::ListVector::GetListCapacity(*v);
-	if (capacity < size) {
-		return DuckDBError;
-	}
 	duckdb::ListVector::SetListSize(*v, size);
 	return DuckDBSuccess;
 }
