@@ -299,7 +299,9 @@ void Parser::ParseQuery(const string &query) {
 				bool parsed_single_statement = false;
 				for (auto &ext : *options.extensions) {
 					D_ASSERT(!parsed_single_statement);
-					D_ASSERT(ext.parse_function);
+					if (!ext.parse_function) {
+						continue;
+					}
 					auto result = ext.parse_function(ext.parser_info.get(), query_statement);
 					if (result.type == ParserExtensionResultType::PARSE_SUCCESSFUL) {
 						auto statement = make_uniq<ExtensionStatement>(ext, std::move(result.parse_data));

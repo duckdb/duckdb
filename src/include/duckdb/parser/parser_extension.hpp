@@ -103,14 +103,14 @@ class ParserExtension {
 public:
 	//! The parse function of the parser extension.
 	//! Takes a query string as input and returns ParserExtensionParseData (on success) or an error
-	parse_function_t parse_function;
+	parse_function_t parse_function = nullptr;
 
 	//! The plan function of the parser extension
 	//! Takes as input the result of the parse_function, and outputs various properties of the resulting plan
-	plan_function_t plan_function;
+	plan_function_t plan_function = nullptr;
 
 	//! Override the current parser with a new parser and return a vector of SQL statements
-	parser_override_function_t parser_override;
+	parser_override_function_t parser_override = nullptr;
 
 	//! Additional parser info passed to the parse function
 	shared_ptr<ParserExtensionInfo> parser_info;
