@@ -1,0 +1,65 @@
+# name: test/sql/binder/not_similar_to.test
+# description: Correctly return all columns NOT similar to pattern
+# group: [binder]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create or replace table foo as select 'd' as a, 'e' as b, 'f' as c;
+
+# should select the column a and c
+query II
+select * similar to '(a|c)' from foo;
+----
+d	f
+
+# should select the column b
+query I
+select * not similar to '(a|c)' from foo;
+----
+e
+
+# should select the column b
+query I
+SELECT * similar to 'b' FROM (select * not similar to '(a|c)' from foo);
+----
+e
+
+statement error
+SELECT * similar to 'a' FROM (select * not similar to '(a|c)' from foo);
+----
+Binder Error: No matching columns found that match regex "a"
+
+
+statement ok
+CREATE TABLE t0(c0 VARCHAR);
+
+statement ok
+INSERT INTO t0(c0) VALUES (0.1);
+
+query T
+SELECT * FROM t0 WHERE REGEXP_MATCHES(t0.c0, '1');
+----
+0.1
+
+query T
+SELECT * FROM t0 WHERE NOT REGEXP_MATCHES(t0.c0, '1');
+----
+
+
+query I
+SELECT 'aaa' NOT SIMILAR TO '[b-z]{3}';
+----
+1
+
+statement ok
+CREATE TABLE integers(col1 INTEGER, col2 INTEGER, k INTEGER)
+
+statement ok
+INSERT INTO integers VALUES (1, 2, 3)
+
+query II
+SELECT * LIKE 'col%' FROM integers
+----
+1	2
