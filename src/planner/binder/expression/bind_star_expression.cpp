@@ -150,12 +150,25 @@ string Binder::ReplaceColumnsAlias(const string &alias, const string &column_nam
 	return result;
 }
 
-void TryTransformStarLike(unique_ptr<ParsedExpression> &root) {
+void TryTransformStarLike(unique_ptr<ParsedExpression> &root, bool inside_columns = false) {
 	// detect "* LIKE [literal]" and similar expressions
+	// also handle "COLUMNS(* LIKE [literal])" by checking if this is a COLUMNS expression with expr
+	if (root->GetExpressionClass() == ExpressionClass::STAR) {
+		auto &star_expr = root->Cast<StarExpression>();
+		if (star_expr.columns && star_expr.expr) {
+			// This is COLUMNS(expr) - recursively try to transform the inner expression
+			TryTransformStarLike(star_expr.expr, true);
+		}
+		return;
+	}
 	if (root->GetExpressionClass() != ExpressionClass::FUNCTION) {
 		return;
 	}
 	auto &function = root->Cast<FunctionExpression>();
+	// Skip list_filter and list_apply - they're already in the correct form (e.g., from lambda expressions)
+	if (function.function_name == "list_filter" || function.function_name == "list_apply") {
+		return;
+	}
 	if (function.children.size() < 2 || function.children.size() > 3) {
 		return;
 	}
@@ -216,11 +229,17 @@ void TryTransformStarLike(unique_ptr<ParsedExpression> &root) {
 		child_expr = std::move(list_filter);
 	}
 
-	auto columns_expr = make_uniq<StarExpression>();
-	columns_expr->columns = true;
-	columns_expr->expr = std::move(child_expr);
-	columns_expr->SetAlias(std::move(original_alias));
-	root = std::move(columns_expr);
+	if (inside_columns) {
+		// Already inside a COLUMNS expression, just replace root with the filter/regex expression
+		root = std::move(child_expr);
+	} else {
+		// Create a new COLUMNS expression
+		auto columns_expr = make_uniq<StarExpression>();
+		columns_expr->columns = true;
+		columns_expr->expr = std::move(child_expr);
+		columns_expr->SetAlias(std::move(original_alias));
+		root = std::move(columns_expr);
+	}
 }
 
 optional_ptr<ParsedExpression> Binder::GetResolvedColumnExpression(ParsedExpression &root_expr) {
