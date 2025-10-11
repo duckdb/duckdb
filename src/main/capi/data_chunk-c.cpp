@@ -167,20 +167,20 @@ idx_t duckdb_list_vector_get_size(duckdb_vector vector) {
 
 duckdb_state duckdb_list_vector_set_size(duckdb_vector vector, idx_t size) {
 	if (!vector) {
-		return duckdb_state::DuckDBError;
+		return DuckDBError;
 	}
 	auto v = reinterpret_cast<duckdb::Vector *>(vector);
 	duckdb::ListVector::SetListSize(*v, size);
-	return duckdb_state::DuckDBSuccess;
+	return DuckDBSuccess;
 }
 
 duckdb_state duckdb_list_vector_reserve(duckdb_vector vector, idx_t required_capacity) {
 	if (!vector) {
-		return duckdb_state::DuckDBError;
+		return DuckDBError;
 	}
 	auto v = reinterpret_cast<duckdb::Vector *>(vector);
 	duckdb::ListVector::Reserve(*v, required_capacity);
-	return duckdb_state::DuckDBSuccess;
+	return DuckDBSuccess;
 }
 
 duckdb_vector duckdb_struct_vector_get_child(duckdb_vector vector, idx_t index) {
