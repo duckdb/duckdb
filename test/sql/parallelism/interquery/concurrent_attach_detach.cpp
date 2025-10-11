@@ -497,8 +497,16 @@ TEST_CASE("Test FORCE DETACH syntax and protection", "[interquery][.]") {
 	REQUIRE_NO_FAIL(conn.Query("ATTACH '" + db_path + "' AS test_db3"));
 	REQUIRE_NO_FAIL(conn.Query("FORCE DETACH DATABASE IF EXISTS test_db3"));
 
-	// Test IF EXISTS with non-existent database
-	REQUIRE_NO_FAIL(conn.Query("FORCE DETACH DATABASE IF EXISTS nonexistent_db"));
+	// Test 5: Regular DETACH DATABASE IF EXISTS
+	REQUIRE_NO_FAIL(conn.Query("ATTACH '" + db_path + "' AS test_db4"));
+	REQUIRE_NO_FAIL(conn.Query("DETACH DATABASE IF EXISTS test_db4"));
+	result = conn.Query("SELECT COUNT(*) FROM duckdb_databases() WHERE database_name = 'test_db4'");
+	REQUIRE(!result->HasError());
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
+
+	// Test IF EXISTS with non-existent databases
+	REQUIRE_NO_FAIL(conn.Query("DETACH DATABASE IF EXISTS nonexistent_db1"));
+	REQUIRE_NO_FAIL(conn.Query("FORCE DETACH DATABASE IF EXISTS nonexistent_db2"));
 }
 
 } // anonymous namespace
