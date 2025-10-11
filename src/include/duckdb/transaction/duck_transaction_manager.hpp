@@ -72,6 +72,11 @@ public:
 	                      idx_t extra_data_size = 0);
 	void PushAttach(Transaction &transaction_p, AttachedDatabase &db);
 
+	//! Returns the mutex used to prevent new transactions from starting (used by FORCE operations)
+	mutex &GetStartTransactionLock() {
+		return start_transaction_lock;
+	}
+
 protected:
 	struct CheckpointDecision {
 		explicit CheckpointDecision(string reason_p);

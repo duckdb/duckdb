@@ -54,7 +54,7 @@ public:
 	optional_ptr<AttachedDatabase> FinalizeAttach(ClientContext &context, AttachInfo &info,
 	                                              shared_ptr<AttachedDatabase> database);
 	//! Detach an existing database
-	void DetachDatabase(ClientContext &context, const string &name, OnEntryNotFound if_not_found);
+	void DetachDatabase(ClientContext &context, const string &name, OnEntryNotFound if_not_found, bool force = false);
 	//! Rollback the attach of a database
 	shared_ptr<AttachedDatabase> DetachInternal(const string &name);
 	//! Returns a reference to the system catalog

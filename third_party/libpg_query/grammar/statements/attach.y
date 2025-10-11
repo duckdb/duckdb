@@ -38,6 +38,7 @@ DetachStmt:
 				{
 					PGDetachStmt *n = makeNode(PGDetachStmt);
 					n->missing_ok = false;
+					n->force = false;
 					n->db_name = $2;
 					$$ = (PGNode *)n;
 				}
@@ -45,6 +46,7 @@ DetachStmt:
 				{
 					PGDetachStmt *n = makeNode(PGDetachStmt);
 					n->missing_ok = false;
+					n->force = false;
 					n->db_name = $3;
 					$$ = (PGNode *)n;
 				}
@@ -52,7 +54,32 @@ DetachStmt:
 				{
 					PGDetachStmt *n = makeNode(PGDetachStmt);
 					n->missing_ok = true;
+					n->force = false;
 					n->db_name = $5;
+					$$ = (PGNode *)n;
+				}
+			|	FORCE DETACH ColLabel
+				{
+					PGDetachStmt *n = makeNode(PGDetachStmt);
+					n->missing_ok = false;
+					n->force = true;
+					n->db_name = $3;
+					$$ = (PGNode *)n;
+				}
+			|	FORCE DETACH DATABASE ColLabel
+				{
+					PGDetachStmt *n = makeNode(PGDetachStmt);
+					n->missing_ok = false;
+					n->force = true;
+					n->db_name = $4;
+					$$ = (PGNode *)n;
+				}
+			|	FORCE DETACH DATABASE IF_P EXISTS ColLabel
+				{
+					PGDetachStmt *n = makeNode(PGDetachStmt);
+					n->missing_ok = true;
+					n->force = true;
+					n->db_name = $6;
 					$$ = (PGNode *)n;
 				}
 		;

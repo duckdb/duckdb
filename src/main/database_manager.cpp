@@ -147,19 +147,54 @@ optional_ptr<AttachedDatabase> DatabaseManager::FinalizeAttach(ClientContext &co
 	return db_ref;
 }
 
-void DatabaseManager::DetachDatabase(ClientContext &context, const string &name, OnEntryNotFound if_not_found) {
+void DatabaseManager::DetachDatabase(ClientContext &context, const string &name, OnEntryNotFound if_not_found, bool force) {
 	if (GetDefaultDatabase(context) == name) {
 		throw BinderException("Cannot detach database \"%s\" because it is the default database. Select a different "
 		                      "database using `USE` to allow detaching this database",
 		                      name);
 	}
 
+	// Peek at the database to check use_count without removing it from the global map
+	shared_ptr<AttachedDatabase> attached_db_peek;
+	{
+		lock_guard<mutex> guard(databases_lock);
+		auto entry = databases.find(name);
+		if (entry == databases.end()) {
+			if (if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
+				throw BinderException("Failed to detach database with name \"%s\": database not found", name);
+			}
+			return;
+		}
+		attached_db_peek = entry->second; // Copy the shared_ptr to check use_count
+	}
+
+	// Check if database is still in use by transactions
+	// use_count() > 2 means: 1 from global map + 1 from our peek + others
+	if (!force) {
+		// not a force detach - check if database is in use
+		auto ref_count = attached_db_peek.use_count();
+		if (ref_count > 2) {
+			throw BinderException("Cannot detach database \"%s\" - it is still in use by %llu active transactions. "
+			                      "Use FORCE DETACH to wait for transactions to complete.",
+			                      name, ref_count - 2);
+		}
+	} else {
+		// force detach - wait for all active transactions to complete
+		// grab the start_transaction_lock to prevent new transactions from starting
+		auto &transaction_manager = DuckTransactionManager::Get(*attached_db_peek);
+		lock_guard<mutex> start_lock(transaction_manager.GetStartTransactionLock());
+		// wait until all transactions finish (use_count == 2 means: 1 from map + 1 from our peek)
+		while (attached_db_peek.use_count() > 2) {
+			if (context.interrupted) {
+				throw InterruptException();
+			}
+		}
+	}
+
+	// All checks passed - now actually remove from global map
 	auto attached_db = DetachInternal(name);
 	if (!attached_db) {
-		if (if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
-			throw BinderException("Failed to detach database with name \"%s\": database not found", name);
-		}
-		return;
+		throw BinderException("Failed to detach database with name \"%s\": database was removed concurrently", name);
 	}
 
 	attached_db->OnDetach(context);

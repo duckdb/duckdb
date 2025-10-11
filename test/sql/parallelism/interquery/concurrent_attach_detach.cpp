@@ -289,4 +289,71 @@ TEST_CASE("Run a concurrent ATTACH/DETACH scenario", "[interquery][.]") {
 	}
 }
 
+TEST_CASE("Test FORCE DETACH syntax and protection", "[interquery][.]") {
+	DuckDB db(nullptr);
+	Connection conn(db);
+
+	string db_path = TestCreatePath("force_detach_test.db");
+
+	// Test 1: FORCE DETACH syntax works and database is removed from schema
+	REQUIRE_NO_FAIL(conn.Query("ATTACH '" + db_path + "' AS test_db"));
+
+	// Verify database appears in schema
+	auto result = conn.Query("SELECT database_name FROM duckdb_databases() WHERE database_name = 'test_db'");
+	REQUIRE_NO_FAIL(result);
+	REQUIRE(CHECK_COLUMN(result, 0, {"test_db"}));
+
+	REQUIRE_NO_FAIL(conn.Query("CREATE TABLE test_db.test_table(i INTEGER)"));
+	REQUIRE_NO_FAIL(conn.Query("INSERT INTO test_db.test_table VALUES (1), (2), (3)"));
+	REQUIRE_NO_FAIL(conn.Query("FORCE DETACH test_db"));
+
+	// Verify database is gone from schema
+	result = conn.Query("SELECT COUNT(*) FROM duckdb_databases() WHERE database_name = 'test_db'");
+	REQUIRE_NO_FAIL(result);
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
+
+	// Test 2: DETACH fails with active transaction, then succeeds after commit
+	REQUIRE_NO_FAIL(conn.Query("ATTACH '" + db_path + "' AS test_db"));
+	REQUIRE_NO_FAIL(conn.Query("BEGIN TRANSACTION"));
+	REQUIRE_NO_FAIL(conn.Query("SELECT * FROM test_db.test_table"));
+
+	// Regular DETACH should fail - transaction is active
+	result = conn.Query("DETACH test_db");
+	REQUIRE(result->HasError());
+	REQUIRE(result->GetError().find("still in use") != string::npos);
+
+	// Commit the transaction
+	REQUIRE_NO_FAIL(conn.Query("COMMIT"));
+
+	// Now DETACH should work
+	REQUIRE_NO_FAIL(conn.Query("DETACH test_db"));
+
+	// Verify database is gone from schema
+	result = conn.Query("SELECT COUNT(*) FROM duckdb_databases() WHERE database_name = 'test_db'");
+	REQUIRE_NO_FAIL(result);
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
+
+	// Test 3: Verify FORCE DETACH with all syntax variations and schema removal
+	REQUIRE_NO_FAIL(conn.Query("ATTACH '" + db_path + "' AS test_db1"));
+	REQUIRE_NO_FAIL(conn.Query("FORCE DETACH test_db1"));
+	result = conn.Query("SELECT COUNT(*) FROM duckdb_databases() WHERE database_name = 'test_db1'");
+	REQUIRE_NO_FAIL(result);
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
+
+	REQUIRE_NO_FAIL(conn.Query("ATTACH '" + db_path + "' AS test_db2"));
+	REQUIRE_NO_FAIL(conn.Query("FORCE DETACH DATABASE test_db2"));
+	result = conn.Query("SELECT COUNT(*) FROM duckdb_databases() WHERE database_name = 'test_db2'");
+	REQUIRE_NO_FAIL(result);
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
+
+	REQUIRE_NO_FAIL(conn.Query("ATTACH '" + db_path + "' AS test_db3"));
+	REQUIRE_NO_FAIL(conn.Query("FORCE DETACH DATABASE IF EXISTS test_db3"));
+	result = conn.Query("SELECT COUNT(*) FROM duckdb_databases() WHERE database_name = 'test_db3'");
+	REQUIRE_NO_FAIL(result);
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
+
+	// Test IF EXISTS with non-existent database (should not fail)
+	REQUIRE_NO_FAIL(conn.Query("FORCE DETACH DATABASE IF EXISTS nonexistent_db"));
+}
+
 } // anonymous namespace
