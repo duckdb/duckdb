@@ -69,6 +69,7 @@ struct UnpivotEntry;
 struct CopyInfo;
 struct CopyOption;
 struct BoundSetOpChild;
+struct BoundCTEData;
 
 template <class T, class INDEX_TYPE>
 class IndexVector;
@@ -409,12 +410,11 @@ private:
 
 	unique_ptr<QueryNode> BindTableMacro(FunctionExpression &function, TableMacroCatalogEntry &macro_func, idx_t depth);
 
-	BoundStatement BindCTE(CTENode &statement);
+	BoundStatement BindCTE(const string &ctename, CommonTableExpressionInfo &info);
 
 	BoundStatement BindNode(SelectNode &node);
 	BoundStatement BindNode(SetOperationNode &node);
 	BoundStatement BindNode(RecursiveCTENode &node);
-	BoundStatement BindNode(CTENode &node);
 	BoundStatement BindNode(QueryNode &node);
 	BoundStatement BindNode(StatementNode &node);
 
@@ -540,6 +540,9 @@ private:
 
 	static void CheckInsertColumnCountMismatch(idx_t expected_columns, idx_t result_columns, bool columns_provided,
 	                                           const string &tname);
+
+	BoundCTEData PrepareCTE(const string &ctename, CommonTableExpressionInfo &statement);
+	BoundStatement FinishCTE(BoundCTEData &bound_cte, BoundStatement child_data);
 
 private:
 	Binder(ClientContext &context, shared_ptr<Binder> parent, BinderType binder_type);
