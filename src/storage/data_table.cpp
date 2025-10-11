@@ -253,7 +253,7 @@ void DataTable::InitializeScanWithOffset(DuckTransaction &transaction, TableScan
                                          const vector<StorageIndex> &column_ids, idx_t start_row, idx_t end_row) {
 	state.checkpoint_lock = transaction.SharedLockTable(*info);
 	state.Initialize(column_ids);
-	row_groups->InitializeScanWithOffset(transaction.context, state.table_state, column_ids, start_row, end_row);
+	row_groups->InitializeScanWithOffset(QueryContext(), state.table_state, column_ids, start_row, end_row);
 }
 
 idx_t DataTable::GetRowGroupSize() const {
