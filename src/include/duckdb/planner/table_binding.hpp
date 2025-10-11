@@ -44,10 +44,10 @@ public:
 	virtual BindResult Bind(ColumnRefExpression &colref, idx_t depth);
 	virtual optional_ptr<StandardEntry> GetStandardEntry();
 	string GetAlias() const;
-	;
+
 	BindingType GetBindingType();
 	const BindingAlias &GetBindingAlias();
-	const idx_t GetIndex();
+	idx_t GetIndex();
 	const vector<LogicalType> &GetColumnTypes();
 	const vector<string> &GetColumnNames();
 	idx_t GetColumnCount();

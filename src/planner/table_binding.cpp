@@ -38,7 +38,7 @@ const BindingAlias &Binding::GetBindingAlias() {
 	return alias;
 }
 
-const idx_t Binding::GetIndex() {
+idx_t Binding::GetIndex() {
 	return index;
 }
 
