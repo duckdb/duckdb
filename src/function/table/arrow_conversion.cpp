@@ -1369,9 +1369,16 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDBDictionary(Vector &vector, Arro
 	vector.Verify(size);
 }
 
+// Deprecated function, use the one with the rowid_column_index parameter removed
 void ArrowTableFunction::ArrowToDuckDB(ArrowScanLocalState &scan_state, const arrow_column_map_t &arrow_convert_data,
                                        DataChunk &output, idx_t start, bool arrow_scan_is_projected,
                                        idx_t rowid_column_index) {
+	ArrowTableFunction::ArrowToDuckDB(scan_state, arrow_convert_data, output, arrow_scan_is_projected,
+	                                  rowid_column_index);
+}
+
+void ArrowTableFunction::ArrowToDuckDB(ArrowScanLocalState &scan_state, const arrow_column_map_t &arrow_convert_data,
+                                       DataChunk &output, bool arrow_scan_is_projected, idx_t rowid_column_index) {
 	for (idx_t idx = 0; idx < output.ColumnCount(); idx++) {
 		auto col_idx = scan_state.column_ids.empty() ? idx : scan_state.column_ids[idx];
 
