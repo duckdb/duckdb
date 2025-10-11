@@ -221,13 +221,26 @@ void Parser::ParseQuery(const string &query) {
 				if (StringUtil::CIEquals(parser_override_option, "strict")) {
 					if (result.type == ParserExtensionResultType::DISPLAY_ORIGINAL_ERROR) {
 						throw ParserException(
-						    "Parser override failed to return a valid statement. Consider restarting the database and "
+						    "Parser override failed to return a valid statement: %s\n\nConsider restarting the "
+						    "database and "
 						    "using the setting \"set allow_parser_override_extension=fallback\" to fallback to the "
-						    "default parser.");
+						    "default parser.",
+						    result.error.RawMessage());
 					}
 					if (result.type == ParserExtensionResultType::DISPLAY_EXTENSION_ERROR) {
-						throw ParserException(result.error);
+						if (result.error.Type() == ExceptionType::NOT_IMPLEMENTED) {
+							throw NotImplementedException(
+							    "Parser override has not yet implemented this transformer rule. (Original error: %s)",
+							    result.error.RawMessage());
+						} else if (result.error.Type() == ExceptionType::PARSER) {
+							throw ParserException("Parser override could not parse this query. (Original error: %s)",
+							                      result.error.RawMessage());
+						} else {
+							result.error.Throw();
+						}
 					}
+				} else if (StringUtil::CIEquals(parser_override_option, "fallback")) {
+					continue;
 				}
 			}
 		}
@@ -299,7 +312,9 @@ void Parser::ParseQuery(const string &query) {
 				bool parsed_single_statement = false;
 				for (auto &ext : *options.extensions) {
 					D_ASSERT(!parsed_single_statement);
-					D_ASSERT(ext.parse_function);
+					if (!ext.parse_function) {
+						continue;
+					}
 					auto result = ext.parse_function(ext.parser_info.get(), query_statement);
 					if (result.type == ParserExtensionResultType::PARSE_SUCCESSFUL) {
 						auto statement = make_uniq<ExtensionStatement>(ext, std::move(result.parse_data));

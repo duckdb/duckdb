@@ -134,7 +134,7 @@ void BaseTokenizer::PushToken(idx_t start, idx_t end) {
 		return;
 	}
 	string last_token = sql.substr(start, end - start);
-	tokens.emplace_back(std::move(last_token));
+	tokens.emplace_back(std::move(last_token), start);
 }
 
 bool BaseTokenizer::IsValidDollarTagCharacter(char c) {
@@ -229,14 +229,14 @@ bool BaseTokenizer::TokenizeInput() {
 			idx_t op_len;
 			if (IsSpecialOperator(i, op_len)) {
 				// special operator - push the special operator
-				tokens.emplace_back(sql.substr(i, op_len));
+				tokens.emplace_back(sql.substr(i, op_len), last_pos);
 				i += op_len - 1;
 				last_pos = i + 1;
 				break;
 			}
 			if (IsSingleByteOperator(c)) {
 				// single-byte operator - directly push the token
-				tokens.emplace_back(string(1, c));
+				tokens.emplace_back(string(1, c), last_pos);
 				last_pos = i + 1;
 				break;
 			}
@@ -358,7 +358,7 @@ bool BaseTokenizer::TokenizeInput() {
 			size_t full_marker_len = dollar_quote_marker.size() + 2;
 			string quoted = sql.substr(last_pos, (start + dollar_quote_marker.size() + 1) - last_pos);
 			quoted = "'" + quoted.substr(full_marker_len, quoted.size() - 2 * full_marker_len) + "'";
-			tokens.emplace_back(quoted);
+			tokens.emplace_back(quoted, full_marker_len);
 			dollar_quote_marker = string();
 			state = TokenizeState::STANDARD;
 			i = end;
