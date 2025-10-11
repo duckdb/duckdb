@@ -423,8 +423,7 @@ private:
 	unique_ptr<LogicalOperator> CreatePlan(BoundSetOperationNode &node);
 	unique_ptr<LogicalOperator> CreatePlan(BoundQueryNode &node);
 
-	BoundSetOpChild BindSetOpChild(QueryNode &child);
-	unique_ptr<BoundSetOperationNode> BindSetOpNode(SetOperationNode &statement);
+	void BuildUnionByNameInfo(BoundSetOperationNode &result);
 
 	BoundStatement BindJoin(Binder &parent, TableRef &ref);
 	BoundStatement Bind(BaseTableRef &ref);
@@ -515,8 +514,6 @@ private:
 	LogicalType BindLogicalTypeInternal(const LogicalType &type, optional_ptr<Catalog> catalog, const string &schema);
 
 	BoundStatement BindSelectNode(SelectNode &statement, BoundStatement from_table);
-	unique_ptr<BoundSelectNode> BindSelectNodeInternal(SelectNode &statement);
-	unique_ptr<BoundSelectNode> BindSelectNodeInternal(SelectNode &statement, BoundStatement from_table);
 
 	unique_ptr<LogicalOperator> BindCopyDatabaseSchema(Catalog &source_catalog, const string &target_database_name);
 	unique_ptr<LogicalOperator> BindCopyDatabaseData(Catalog &source_catalog, const string &target_database_name);
