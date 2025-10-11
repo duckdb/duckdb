@@ -30,6 +30,34 @@ Binding::Binding(BindingType binding_type, BindingAlias alias_p, vector<LogicalT
 	}
 }
 
+BindingType Binding::GetBindingType() {
+	return binding_type;
+}
+
+const BindingAlias &Binding::GetBindingAlias() {
+	return alias;
+}
+
+const idx_t Binding::GetIndex() {
+	return index;
+}
+
+const vector<LogicalType> &Binding::GetColumnTypes() {
+	return types;
+}
+
+const vector<string> &Binding::GetColumnNames() {
+	return names;
+}
+
+idx_t Binding::GetColumnCount() {
+	return GetColumnNames().size();
+}
+
+void Binding::SetColumnType(idx_t col_idx, LogicalType type_p) {
+	types[col_idx] = std::move(type_p);
+}
+
 string Binding::GetAlias() const {
 	return alias.GetAlias();
 }

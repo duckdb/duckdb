@@ -140,9 +140,9 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		}
 
 		auto alias = ref.alias.empty() ? ref.table_name : ref.alias;
-		auto names = BindContext::AliasColumnNames(alias, ctebinding->names, ref.column_name_alias);
+		auto names = BindContext::AliasColumnNames(alias, ctebinding->GetColumnNames(), ref.column_name_alias);
 
-		bind_context.AddGenericBinding(index, alias, names, ctebinding->types);
+		bind_context.AddGenericBinding(index, alias, names, ctebinding->GetColumnTypes());
 
 		auto cte_ref = reference<CTEBinding>(ctebinding->Cast<CTEBinding>());
 		if (!ref.schema_name.empty()) {
@@ -162,10 +162,10 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		bool is_recurring = ref.schema_name == "recurring";
 
 		BoundStatement result;
-		result.types = ctebinding->types;
+		result.types = ctebinding->GetColumnTypes();
 		result.names = names;
 		result.plan =
-		    make_uniq<LogicalCTERef>(index, ctebinding->index, ctebinding->types, std::move(names), is_recurring);
+		    make_uniq<LogicalCTERef>(index, ctebinding->GetIndex(), result.types, std::move(names), is_recurring);
 		return result;
 		;
 	}

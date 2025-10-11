@@ -36,19 +36,6 @@ struct Binding {
 	Binding(BindingType binding_type, BindingAlias alias, vector<LogicalType> types, vector<string> names, idx_t index);
 	virtual ~Binding() = default;
 
-	//! The type of Binding
-	BindingType binding_type;
-	//! The alias of the binding
-	BindingAlias alias;
-	//! The table index of the binding
-	idx_t index;
-	//! The types of the bound columns
-	vector<LogicalType> types;
-	//! Column names of the subquery
-	vector<string> names;
-	//! Name -> index for the names
-	case_insensitive_map_t<column_t> name_map;
-
 public:
 	bool TryGetBindingIndex(const string &column_name, column_t &column_index);
 	column_t GetBindingIndex(const string &column_name);
@@ -57,6 +44,14 @@ public:
 	virtual BindResult Bind(ColumnRefExpression &colref, idx_t depth);
 	virtual optional_ptr<StandardEntry> GetStandardEntry();
 	string GetAlias() const;
+	;
+	BindingType GetBindingType();
+	const BindingAlias &GetBindingAlias();
+	const idx_t GetIndex();
+	const vector<LogicalType> &GetColumnTypes();
+	const vector<string> &GetColumnNames();
+	idx_t GetColumnCount();
+	void SetColumnType(idx_t col_idx, LogicalType type);
 
 	static BindingAlias GetAlias(const string &explicit_alias, const StandardEntry &entry);
 	static BindingAlias GetAlias(const string &explicit_alias, optional_ptr<StandardEntry> entry);
@@ -77,6 +72,20 @@ public:
 		}
 		return reinterpret_cast<const TARGET &>(*this);
 	}
+
+protected:
+	//! The type of Binding
+	BindingType binding_type;
+	//! The alias of the binding
+	BindingAlias alias;
+	//! The table index of the binding
+	idx_t index;
+	//! The types of the bound columns
+	vector<LogicalType> types;
+	//! Column names of the subquery
+	vector<string> names;
+	//! Name -> index for the names
+	case_insensitive_map_t<column_t> name_map;
 };
 
 struct EntryBinding : public Binding {
