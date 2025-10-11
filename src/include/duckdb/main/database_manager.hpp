@@ -54,7 +54,7 @@ public:
 	shared_ptr<AttachedDatabase> AttachDatabase(ClientContext &context, AttachInfo &info, AttachOptions &options);
 
 	//! Detach an existing database
-	void DetachDatabase(ClientContext &context, const string &name, OnEntryNotFound if_not_found);
+	void DetachDatabase(ClientContext &context, const string &name, OnEntryNotFound if_not_found, bool force = false);
 	//! Alter operation dispatcher
 	void Alter(ClientContext &context, AlterInfo &info);
 	//! Rollback the attach of a database

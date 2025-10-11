@@ -24,6 +24,8 @@ public:
 	string name;
 	//! Whether to throw an exception if alias is not found
 	OnEntryNotFound if_not_found;
+	//! Whether to force detach by waiting for active transactions to complete
+	bool force = false;
 
 public:
 	unique_ptr<DetachInfo> Copy() const;
