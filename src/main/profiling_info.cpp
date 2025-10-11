@@ -83,6 +83,10 @@ void ProfilingInfo::ResetMetrics() {
 		case MetricsType::BLOCKED_THREAD_TIME:
 		case MetricsType::CPU_TIME:
 		case MetricsType::OPERATOR_TIMING:
+		case MetricsType::WAITING_TO_ATTACH_LATENCY:
+		case MetricsType::ATTACH_LOAD_STORAGE_LATENCY:
+		case MetricsType::ATTACH_REPLAY_WAL_LATENCY:
+		case MetricsType::CHECKPOINT_LATENCY:
 			metrics[metric] = Value::CreateValue(0.0);
 			break;
 		case MetricsType::OPERATOR_NAME:
@@ -209,7 +213,11 @@ void ProfilingInfo::WriteMetricsToJSON(yyjson_mut_doc *doc, yyjson_mut_val *dest
 		case MetricsType::LATENCY:
 		case MetricsType::BLOCKED_THREAD_TIME:
 		case MetricsType::CPU_TIME:
-		case MetricsType::OPERATOR_TIMING: {
+		case MetricsType::OPERATOR_TIMING:
+		case MetricsType::WAITING_TO_ATTACH_LATENCY:
+		case MetricsType::ATTACH_LOAD_STORAGE_LATENCY:
+		case MetricsType::ATTACH_REPLAY_WAL_LATENCY:
+		case MetricsType::CHECKPOINT_LATENCY: {
 			yyjson_mut_obj_add_real(doc, dest, key_ptr, metrics[metric].GetValue<double>());
 			break;
 		}

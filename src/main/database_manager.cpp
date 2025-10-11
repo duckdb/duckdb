@@ -85,12 +85,15 @@ shared_ptr<AttachedDatabase> DatabaseManager::GetDatabaseInternal(const lock_gua
 shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &context, AttachInfo &info,
                                                              AttachOptions &options) {
 	if (options.db_type.empty() || StringUtil::CIEquals(options.db_type, "duckdb")) {
+		auto profiling = context.client_data->profiler;
+		profiling->StartTimer(MetricsType::WAITING_TO_ATTACH_LATENCY);
 		while (InsertDatabasePath(info, options) == InsertDatabasePathResult::ALREADY_EXISTS) {
 			// database with this name and path already exists
 			// first check if it exists within this transaction
 			auto &meta_transaction = MetaTransaction::Get(context);
 			auto existing_db = meta_transaction.GetReferencedDatabaseOwning(info.name);
 			if (existing_db) {
+				profiling->EndTimer(MetricsType::WAITING_TO_ATTACH_LATENCY);
 				// it does! return it
 				return existing_db;
 			}
@@ -99,6 +102,7 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 			lock_guard<mutex> guard(databases_lock);
 			auto entry = databases.find(info.name);
 			if (entry != databases.end()) {
+				profiling->EndTimer(MetricsType::WAITING_TO_ATTACH_LATENCY);
 				// database ACTUALLY exists - return it
 				return entry->second;
 			}
@@ -106,7 +110,9 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 				throw InterruptException();
 			}
 		}
+		profiling->EndTimer(MetricsType::WAITING_TO_ATTACH_LATENCY);
 	}
+
 	auto &config = DBConfig::GetConfig(context);
 	GetDatabaseType(context, info, config, options);
 	if (!options.db_type.empty()) {

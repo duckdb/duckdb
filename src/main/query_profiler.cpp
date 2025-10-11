@@ -282,6 +282,21 @@ void QueryProfiler::EndQuery() {
 			if (info.Enabled(settings, MetricsType::RESULT_SET_SIZE)) {
 				info.metrics[MetricsType::RESULT_SET_SIZE] = child_info.metrics[MetricsType::RESULT_SET_SIZE];
 			}
+			if (info.Enabled(settings, MetricsType::WAITING_TO_ATTACH_LATENCY)) {
+				info.metrics[MetricsType::WAITING_TO_ATTACH_LATENCY] =
+				    query_metrics.waiting_to_attach_latency.Elapsed();
+			}
+			if (info.Enabled(settings, MetricsType::ATTACH_LOAD_STORAGE_LATENCY)) {
+				info.metrics[MetricsType::ATTACH_LOAD_STORAGE_LATENCY] =
+				    query_metrics.attach_load_storage_latency.Elapsed();
+			}
+			if (info.Enabled(settings, MetricsType::ATTACH_REPLAY_WAL_LATENCY)) {
+				info.metrics[MetricsType::ATTACH_REPLAY_WAL_LATENCY] =
+				    query_metrics.attach_replay_wal_latency.Elapsed();
+			}
+			if (info.Enabled(settings, MetricsType::CHECKPOINT_LATENCY)) {
+				info.metrics[MetricsType::CHECKPOINT_LATENCY] = query_metrics.checkpoint_latency.Elapsed();
+			}
 
 			MoveOptimizerPhasesToRoot();
 			if (info.Enabled(settings, MetricsType::CUMULATIVE_OPTIMIZER_TIMING)) {
@@ -320,6 +335,52 @@ void QueryProfiler::AddBytesRead(const idx_t nr_bytes) {
 void QueryProfiler::AddBytesWritten(const idx_t nr_bytes) {
 	if (IsEnabled()) {
 		query_metrics.total_bytes_written += nr_bytes;
+	}
+}
+
+void QueryProfiler::StartTimer(MetricsType type) {
+	if (!IsEnabled()) {
+		return;
+	}
+
+	switch (type) {
+	case MetricsType::WAITING_TO_ATTACH_LATENCY:
+		query_metrics.waiting_to_attach_latency.Start();
+		break;
+	case MetricsType::ATTACH_LOAD_STORAGE_LATENCY:
+		query_metrics.attach_load_storage_latency.Start();
+		break;
+	case MetricsType::ATTACH_REPLAY_WAL_LATENCY:
+		query_metrics.attach_replay_wal_latency.Start();
+		break;
+	case MetricsType::CHECKPOINT_LATENCY:
+		query_metrics.checkpoint_latency.Start();
+		break;
+	default:
+		break;
+	}
+}
+
+void QueryProfiler::EndTimer(MetricsType type) {
+	if (!IsEnabled()) {
+		return;
+	}
+
+	switch (type) {
+	case MetricsType::WAITING_TO_ATTACH_LATENCY:
+		query_metrics.waiting_to_attach_latency.End();
+		break;
+	case MetricsType::ATTACH_LOAD_STORAGE_LATENCY:
+		query_metrics.attach_load_storage_latency.End();
+		break;
+	case MetricsType::ATTACH_REPLAY_WAL_LATENCY:
+		query_metrics.attach_replay_wal_latency.End();
+		break;
+	case MetricsType::CHECKPOINT_LATENCY:
+		query_metrics.checkpoint_latency.End();
+		break;
+	default:
+		break;
 	}
 }
 

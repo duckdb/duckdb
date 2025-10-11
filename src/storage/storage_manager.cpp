@@ -5,6 +5,7 @@
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/checkpoint_manager.hpp"
 #include "duckdb/storage/in_memory_block_manager.hpp"
@@ -324,10 +325,18 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 
 		// load the db from storage
 		auto checkpoint_reader = SingleFileCheckpointReader(*this);
+
+		auto profiler = context.GetClientContext()->client_data->profiler;
+
+		profiler->StartTimer(MetricsType::ATTACH_LOAD_STORAGE_LATENCY);
 		checkpoint_reader.LoadFromStorage();
+		profiler->EndTimer(MetricsType::ATTACH_LOAD_STORAGE_LATENCY);
 
 		auto wal_path = GetWALPath();
+
+		profiler->StartTimer(MetricsType::ATTACH_REPLAY_WAL_LATENCY);
 		wal = WriteAheadLog::Replay(fs, db, wal_path);
+		profiler->EndTimer(MetricsType::ATTACH_REPLAY_WAL_LATENCY);
 	}
 	if (row_group_size > 122880ULL && GetStorageVersion() < 4) {
 		throw InvalidInputException("Unsupported row group size %llu - row group sizes >= 122_880 are only supported "
@@ -473,8 +482,12 @@ void SingleFileStorageManager::CreateCheckpoint(QueryContext context, Checkpoint
 	if (read_only || !load_complete) {
 		return;
 	}
+
 	if (db.GetStorageExtension()) {
+		auto profiling = context.GetClientContext()->client_data->profiler;
+		profiling->StartTimer(MetricsType::CHECKPOINT_LATENCY);
 		db.GetStorageExtension()->OnCheckpointStart(db, options);
+		profiling->EndTimer(MetricsType::CHECKPOINT_LATENCY);
 	}
 	auto &config = DBConfig::Get(db);
 	if (GetWALSize() > 0 || config.options.force_checkpoint || options.action == CheckpointAction::ALWAYS_CHECKPOINT) {
