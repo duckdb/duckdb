@@ -414,9 +414,9 @@ string Node::ToString(ART &art, int indent) const {
 			return s + str;
 		}
 		string s = "";
-		for (int i = 0; i < indent; i++) {
-			s += " ";
-		}
+		// for (int i = 0; i < indent; i++) {
+		// 	s += " ";
+		// }
 		return s + str;
 	}
 	default:
