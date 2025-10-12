@@ -364,12 +364,17 @@ public:
 	                                       ClientContext &context, TableFunctionInput &data, DataChunk &output,
 	                                       InterruptState &interrupt_state) {
 		if (function) {
+			if (async_function) {
+				throw NotImplementedException(
+				    "Only one between function and async_function are expected, but both are provided");
+			}
 			function(context, data, output);
 			return output.size() ? SourceResultType::HAVE_MORE_OUTPUT : SourceResultType::FINISHED;
 		} else if (async_function) {
 			return async_function(context, data, output, interrupt_state);
 		} else {
-			throw NotImplementedException("Only one between function and async_function are expected");
+			throw NotImplementedException(
+			    "Only one between function and async_function are expected, but none is provided");
 		}
 	}
 	bool HasSimpleScan() const {
