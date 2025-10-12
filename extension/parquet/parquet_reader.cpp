@@ -1262,16 +1262,19 @@ SourceResultType ParquetReader::Scan(ClientContext &context, ParquetReaderScanSt
 		bool keep_going;
 		SourceResultType res = ScanInternal(context, state, result, interrupt_state, keep_going);
 
-		if (res == SourceResultType::BLOCKED)
+		if (res == SourceResultType::BLOCKED) {
 			return res;
+		}
 
-		if (result.size())
+		if (result.size()) {
 			return SourceResultType::HAVE_MORE_OUTPUT;
+		}
 
 		result.Reset();
 
-		if (keep_going == false)
+		if (keep_going == false) {
 			return SourceResultType::FINISHED;
+		}
 	}
 	return SourceResultType::FINISHED;
 }
