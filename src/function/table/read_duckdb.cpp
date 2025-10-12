@@ -87,8 +87,8 @@ public:
 public:
 	bool TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate,
 	                       LocalTableFunctionState &lstate) override;
-	void Scan(ClientContext &context, GlobalTableFunctionState &global_state, LocalTableFunctionState &local_state,
-	          DataChunk &chunk) override;
+	SourceResultType Scan(ClientContext &context, GlobalTableFunctionState &global_state,
+	                      LocalTableFunctionState &local_state, DataChunk &chunk, InterruptState &state) override;
 	shared_ptr<BaseUnionData> GetUnionData(idx_t file_idx) override;
 	void FinishFile(ClientContext &context, GlobalTableFunctionState &gstate) override;
 	double GetProgressInFile(ClientContext &context) override;
@@ -300,15 +300,23 @@ bool DuckDBReader::TryInitializeScan(ClientContext &context, GlobalTableFunction
 	return true;
 }
 
-void DuckDBReader::Scan(ClientContext &context, GlobalTableFunctionState &gstate_p, LocalTableFunctionState &lstate_p,
-                        DataChunk &chunk) {
+SourceResultType DuckDBReader::Scan(ClientContext &context, GlobalTableFunctionState &gstate_p,
+                                    LocalTableFunctionState &lstate_p, DataChunk &chunk,
+                                    InterruptState &interrupt_state) {
 	chunk.Reset();
 	auto &lstate = lstate_p.Cast<DuckDBReadLocalState>();
 	TableFunctionInput input(bind_data.get(), lstate.local_state, global_state);
-	scan_function.function(context, input, chunk);
-	if (chunk.size() == 0) {
+
+	if (!scan_function.HasSimpleScan()) {
+		throw InternalException("DuckDBReader works only with SimpleScans");
+	}
+
+	auto res = scan_function.SimpleScan(context, input, chunk, interrupt_state);
+
+	if (res == SourceResultType::FINISHED) {
 		finished = true;
 	}
+	return res;
 }
 
 void DuckDBReader::FinishFile(ClientContext &context, GlobalTableFunctionState &gstate) {

@@ -166,14 +166,16 @@ public:
 
 	bool TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate,
 	                       LocalTableFunctionState &lstate) override;
-	void Scan(ClientContext &context, GlobalTableFunctionState &global_state, LocalTableFunctionState &local_state,
-	          DataChunk &chunk) override;
+	SourceResultType Scan(ClientContext &context, GlobalTableFunctionState &global_state,
+	                      LocalTableFunctionState &local_state, DataChunk &chunk,
+	                      InterruptState &interrupt_state) override;
 	void FinishFile(ClientContext &context, GlobalTableFunctionState &gstate_p) override;
 	double GetProgressInFile(ClientContext &context) override;
 
 public:
 	void InitializeScan(ClientContext &context, ParquetReaderScanState &state, vector<idx_t> groups_to_read);
-	void Scan(ClientContext &context, ParquetReaderScanState &state, DataChunk &output);
+	SourceResultType Scan(ClientContext &context, ParquetReaderScanState &state, DataChunk &output,
+	                      InterruptState &interrupt_state);
 
 	idx_t NumRows() const;
 	idx_t NumRowGroups() const;
@@ -209,7 +211,8 @@ private:
 	              shared_ptr<ParquetFileMetadataCache> metadata);
 
 	void InitializeSchema(ClientContext &context);
-	bool ScanInternal(ClientContext &context, ParquetReaderScanState &state, DataChunk &output);
+	SourceResultType ScanInternal(ClientContext &context, ParquetReaderScanState &state, DataChunk &output,
+	                              InterruptState &interrupt_state, bool &keep_going);
 	//! Parse the schema of the file
 	unique_ptr<ParquetColumnSchema> ParseSchema(ClientContext &context);
 	ParquetColumnSchema ParseSchemaRecursive(idx_t depth, idx_t max_define, idx_t max_repeat, idx_t &next_schema_idx,

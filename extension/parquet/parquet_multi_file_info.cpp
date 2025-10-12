@@ -575,12 +575,13 @@ void ParquetReader::FinishFile(ClientContext &context, GlobalTableFunctionState 
 	gstate.row_group_index = 0;
 }
 
-void ParquetReader::Scan(ClientContext &context, GlobalTableFunctionState &gstate_p,
-                         LocalTableFunctionState &local_state_p, DataChunk &chunk) {
+SourceResultType ParquetReader::Scan(ClientContext &context, GlobalTableFunctionState &gstate_p,
+                                     LocalTableFunctionState &local_state_p, DataChunk &chunk,
+                                     InterruptState &interrupt_state) {
 	auto &gstate = gstate_p.Cast<ParquetReadGlobalState>();
 	auto &local_state = local_state_p.Cast<ParquetReadLocalState>();
 	local_state.scan_state.op = gstate.op;
-	Scan(context, local_state.scan_state, chunk);
+	return Scan(context, local_state.scan_state, chunk, interrupt_state);
 }
 
 unique_ptr<MultiFileReaderInterface> ParquetMultiFileInfo::Copy() {
