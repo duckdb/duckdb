@@ -443,6 +443,7 @@ string Node::ToString(ART &art, int indent) const {
 			byte++;
 			has_byte = GetNextByte(art, byte);
 		}
+		str += "\n";
 	} else {
 
 		auto child = GetNextChild(art, byte);
