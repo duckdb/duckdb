@@ -212,7 +212,7 @@ private:
 
 	void InitializeSchema(ClientContext &context);
 	SourceResultType ScanInternal(ClientContext &context, ParquetReaderScanState &state, DataChunk &output,
-	                              InterruptState &interrupt_state, bool &keep_going);
+	                              InterruptState &interrupt_state);
 	//! Parse the schema of the file
 	unique_ptr<ParquetColumnSchema> ParseSchema(ClientContext &context);
 	ParquetColumnSchema ParseSchemaRecursive(idx_t depth, idx_t max_define, idx_t max_repeat, idx_t &next_schema_idx,

@@ -1259,21 +1259,20 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 SourceResultType ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &state, DataChunk &result,
                                      InterruptState &interrupt_state) {
 	while (true) {
-		bool keep_going;
-		SourceResultType res = ScanInternal(context, state, result, interrupt_state, keep_going);
+		SourceResultType res = ScanInternal(context, state, result, interrupt_state);
 
 		if (res == SourceResultType::BLOCKED) {
+			result.Reset();
 			return res;
 		}
 
 		if (result.size()) {
 			return SourceResultType::HAVE_MORE_OUTPUT;
 		}
-
 		result.Reset();
 
-		if (keep_going == false) {
-			return SourceResultType::FINISHED;
+		if (res == SourceResultType::FINISHED) {
+			return res;
 		}
 	}
 	return SourceResultType::FINISHED;
@@ -1297,9 +1296,8 @@ void ParquetReader::GetPartitionStats(const duckdb_parquet::FileMetaData &metada
 }
 
 SourceResultType ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState &state, DataChunk &result,
-                                             InterruptState &interrupt_state, bool &keep_going) {
+                                             InterruptState &interrupt_state) {
 	if (state.finished) {
-		keep_going = false;
 		return SourceResultType::FINISHED;
 	}
 
@@ -1314,7 +1312,6 @@ SourceResultType ParquetReader::ScanInternal(ClientContext &context, ParquetRead
 
 		if ((idx_t)state.current_group == state.group_idx_list.size()) {
 			state.finished = true;
-			keep_going = true;
 			return SourceResultType::HAVE_MORE_OUTPUT;
 		}
 
@@ -1387,7 +1384,6 @@ SourceResultType ParquetReader::ScanInternal(ClientContext &context, ParquetRead
 				}
 			}
 		}
-		keep_going = true;
 		return SourceResultType::HAVE_MORE_OUTPUT;
 	}
 
@@ -1397,8 +1393,7 @@ SourceResultType ParquetReader::ScanInternal(ClientContext &context, ParquetRead
 	if (scan_count == 0) {
 		state.finished = true;
 		// end of last group, we are done
-		keep_going = false;
-		return SourceResultType::HAVE_MORE_OUTPUT;
+		return SourceResultType::FINISHED;
 	}
 
 	auto &deletion_filter = state.root_reader->Reader().deletion_filter;
@@ -1484,7 +1479,6 @@ SourceResultType ParquetReader::ScanInternal(ClientContext &context, ParquetRead
 
 	rows_read += scan_count;
 	state.offset_in_group += scan_count;
-	keep_going = true;
 	return SourceResultType::HAVE_MORE_OUTPUT;
 }
 
