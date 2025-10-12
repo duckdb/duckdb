@@ -106,6 +106,7 @@ public:
 	//! Transform the node storage to deprecated storage.
 	static void TransformToDeprecated(ART &art, Node &node,
 	                                  unsafe_unique_ptr<FixedSizeAllocator> &deprecated_prefix_allocator);
+	string ToString(ART &art, int index) const;
 
 	//! Returns the node type.
 	inline NType GetType() const {

@@ -123,6 +123,9 @@ public:
 	//! Verifies the index buffers.
 	void VerifyBuffers(IndexLock &l) override;
 
+	//! Returns string representation of the ART.
+	string ToString();
+
 private:
 	bool SearchEqual(ARTKey &key, idx_t max_count, set<row_t> &row_ids);
 	bool SearchGreater(ARTKey &key, bool equal, idx_t max_count, set<row_t> &row_ids);

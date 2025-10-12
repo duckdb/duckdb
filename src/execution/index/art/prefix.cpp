@@ -186,6 +186,23 @@ GateStatus Prefix::Split(ART &art, reference<Node> &node, Node &child, const uin
 	return GateStatus::GATE_NOT_SET;
 }
 
+string Prefix::ToString(ART &art, const Node &node, int indent) {
+	string str = "";
+	reference<const Node> ref(node);
+	for (int i = 0; i < indent; i++) {
+		str += " ";
+	}
+	Iterator(art, ref, true, false, [&](const Prefix &prefix) {
+		str += "Prefix: |";
+		for (idx_t i = 0; i < prefix.data[Count(art)]; i++) {
+			str += to_string(prefix.data[i]) + "|";
+		}
+	});
+
+	auto child = ref.get().ToString(art, indent);
+	return str + "\n" + child;
+}
+
 string Prefix::VerifyAndToString(ART &art, const Node &node, const bool only_verify) {
 	string str = "";
 	reference<const Node> ref(node);

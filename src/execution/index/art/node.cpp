@@ -391,6 +391,85 @@ void Node::TransformToDeprecated(ART &art, Node &node,
 // Verification
 //===--------------------------------------------------------------------===//
 
+string Node::ToString(ART &art, int indent) const {
+	auto type = GetType();
+	switch (type) {
+	case NType::LEAF_INLINED: {
+		string str = "";
+		for (int i = 0; i < indent; i++) {
+			str += " ";
+		}
+		return str + "Inlined Leaf [row ID: " + to_string(GetRowId()) + "]\n";
+	}
+	case NType::LEAF:
+		return "this message shouldn't be printing!";
+	case NType::PREFIX: {
+		string str = Prefix::ToString(art, *this, indent);
+		if (GetGateStatus() == GateStatus::GATE_SET) {
+			string s = "";
+			for (int i = 0; i < indent; i++) {
+				s += " ";
+			}
+			s += "Gate\n";
+			return s + str;
+		}
+		string s = "";
+		for (int i = 0; i < indent; i++) {
+			s += " ";
+		}
+		return s + str;
+	}
+	default:
+		break;
+	}
+	string str = "";
+	for (int i = 0; i < indent; i++) {
+		str += " ";
+	}
+	str = str + "Node" + to_string(GetCapacity(type)) += "\n";
+	uint8_t byte = 0;
+
+	if (IsLeafNode()) {
+		for (int i = 0; i < indent; i++) {
+			str += " ";
+		}
+		str += "Leaf |";
+		auto has_byte = GetNextByte(art, byte);
+		while (has_byte) {
+			str += to_string(byte) + "|";
+			if (byte == NumericLimits<uint8_t>::Maximum()) {
+				break;
+			}
+			byte++;
+			has_byte = GetNextByte(art, byte);
+		}
+	} else {
+
+		auto child = GetNextChild(art, byte);
+		while (child) {
+			string c = child->ToString(art, indent + 2);
+			for (int i = 0; i < indent; i++) {
+				str += " ";
+			}
+			str = str + to_string(byte) + ",\n" + c;
+			if (byte == NumericLimits<uint8_t>::Maximum()) {
+				break;
+			}
+			byte++;
+			child = GetNextChild(art, byte);
+		}
+	}
+
+	if (GetGateStatus() == GateStatus::GATE_SET) {
+		string s = "";
+		for (int i = 0; i < indent + 2; i++) {
+			s += " ";
+		}
+		str = "Gate\n" + s + str;
+	}
+	return str;
+}
+
 string Node::VerifyAndToString(ART &art, const bool only_verify) const {
 	D_ASSERT(HasMetadata());
 
