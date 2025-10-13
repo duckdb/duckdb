@@ -1321,6 +1321,8 @@ endforeach()
 if (BUILD_MAIN_DUCKDB_LIBRARY)
   add_subdirectory(src)
   add_subdirectory(tools)
+  add_subdirectory(extension)
+
 endif()
 
 # Add subdirectories for registered extensions

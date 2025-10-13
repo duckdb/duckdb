@@ -4,7 +4,7 @@ if(${DISABLE_THREADS})
   add_definitions(-DDUCKDB_NO_THREADS)
 endif()
 
-add_extension_definitions()
+#add_extension_definitions()
 
 if(NOT MSVC)
   set(CMAKE_CXX_FLAGS_DEBUG
@@ -68,13 +68,13 @@ if(AMALGAMATION_BUILD)
   endif()
   target_link_libraries(duckdb ${DUCKDB_SYSTEM_LIBS})
   link_threads(duckdb PUBLIC)
-  link_extension_libraries(duckdb PRIVATE)
+  #link_extension_libraries(duckdb PRIVATE)
 
   add_library(duckdb_static STATIC
               "${PROJECT_SOURCE_DIR}/src/amalgamation/duckdb.cpp")
   target_link_libraries(duckdb_static ${DUCKDB_SYSTEM_LIBS})
   link_threads(duckdb_static PUBLIC)
-  link_extension_libraries(duckdb_static PUBLIC)
+  #link_extension_libraries(duckdb_static PUBLIC)
 
   install(FILES "${PROJECT_SOURCE_DIR}/src/amalgamation/duckdb.hpp"
                 "${PROJECT_SOURCE_DIR}/src/include/duckdb.h"
@@ -145,12 +145,12 @@ else()
 
   target_link_libraries(duckdb PUBLIC ${DUCKDB_LINK_LIBS})
   link_threads(duckdb PUBLIC)
-  link_extension_libraries(duckdb PRIVATE)
+  #link_extension_libraries(duckdb PRIVATE)
 
   add_library(duckdb_static STATIC ${ALL_OBJECT_FILES})
   target_link_libraries(duckdb_static PUBLIC ${DUCKDB_LINK_LIBS})
   link_threads(duckdb_static PUBLIC)
-  link_extension_libraries(duckdb_static PUBLIC)
+  #link_extension_libraries(duckdb_static PUBLIC)
 
   target_include_directories(
     duckdb PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

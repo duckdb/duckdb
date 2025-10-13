@@ -50,6 +50,8 @@ endif()
 
 add_executable(unittest unittest.cpp ${ALL_OBJECT_FILES})
 
+
+
 if(NOT WIN32
    AND NOT SUN
    AND NOT ZOS)
@@ -60,3 +62,7 @@ if(NOT WIN32
 else()
   target_link_libraries(unittest duckdb_static test_helpers)
 endif()
+
+
+link_extension_libraries(unittest "")
+target_link_libraries(unittest duckdb_generated_extension_loader)

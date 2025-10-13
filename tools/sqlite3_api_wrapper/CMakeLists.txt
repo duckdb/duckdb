@@ -26,12 +26,6 @@ if(NOT AMALGAMATION_BUILD)
 endif()
 link_threads(sqlite3_api_wrapper_static "")
 
-if(NOT WIN32 AND NOT ZOS)
-  add_library(sqlite3_api_wrapper SHARED ${SQLITE_API_WRAPPER_FILES})
-  target_link_libraries(sqlite3_api_wrapper duckdb_static
-                        ${DUCKDB_EXTRA_LINK_FLAGS})
-  link_threads(sqlite3_api_wrapper "")
-endif()
 
 include_directories(../../third_party/catch)
 
@@ -39,8 +33,9 @@ include_directories(test/include)
 add_subdirectory(test)
 
 add_executable(test_sqlite3_api_wrapper ${SQLITE_TEST_FILES})
-if(WIN32 OR ZOS)
   target_link_libraries(test_sqlite3_api_wrapper sqlite3_api_wrapper_static)
-else()
-  target_link_libraries(test_sqlite3_api_wrapper sqlite3_api_wrapper)
-endif()
+
+
+
+link_extension_libraries(sqlite3_api_wrapper_static "")
+target_link_libraries(sqlite3_api_wrapper_static duckdb_generated_extension_loader)
