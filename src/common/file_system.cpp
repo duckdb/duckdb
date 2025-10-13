@@ -592,7 +592,13 @@ bool FileSystem::HasGlob(const string &str) {
 	return false;
 }
 
-vector<OpenFileInfo> FileSystem::Glob(const string &path, FileOpener *opener, const FileGlobInput &file_glob_input) {
+vector<OpenFileInfo> FileSystem::GlobHive(const string &path, FileOpener *opener, idx_t max_files,
+                                          optional_ptr<HiveFilterParams> hive_params) {
+	// Override this method to implement partial lazy loading and hive filtering optimization
+	return Glob(path, opener);
+}
+
+vector<OpenFileInfo> FileSystem::Glob(const string &path, FileOpener *opener) {
 	throw NotImplementedException("%s: Glob is not implemented!", GetName());
 }
 
@@ -637,8 +643,9 @@ static string LookupExtensionForPattern(const string &pattern) {
 	return "";
 }
 
-vector<OpenFileInfo> FileSystem::GlobFiles(const string &pattern, ClientContext &context, const FileGlobInput &input) {
-	auto result = Glob(pattern, nullptr, input);
+vector<OpenFileInfo> FileSystem::GlobFiles(const string &pattern, ClientContext &context, const FileGlobInput &input,
+                                           idx_t max_files, optional_ptr<HiveFilterParams> hive_params) {
+	auto result = GlobHive(pattern, nullptr, max_files, hive_params);
 	if (result.empty()) {
 		string required_extension = LookupExtensionForPattern(pattern);
 		if (!required_extension.empty() && !context.db->ExtensionIsLoaded(required_extension)) {
@@ -659,7 +666,7 @@ vector<OpenFileInfo> FileSystem::GlobFiles(const string &pattern, ClientContext 
 				throw InternalException("Extension load \"%s\" did not throw but somehow the extension was not loaded",
 				                        required_extension);
 			}
-			return GlobFiles(pattern, context, input);
+			return GlobFiles(pattern, context, input, max_files, hive_params);
 		}
 		if (input.behavior == FileGlobOptions::FALLBACK_GLOB && !HasGlob(pattern)) {
 			// if we have no glob in the pattern and we have an extension, we try to glob
@@ -668,9 +675,7 @@ vector<OpenFileInfo> FileSystem::GlobFiles(const string &pattern, ClientContext 
 					throw InternalException("FALLBACK_GLOB requires an extension to be specified");
 				}
 				string new_pattern = JoinPath(JoinPath(pattern, "**"), "*." + input.extension);
-				auto file_glob_input = input;
-				file_glob_input.behavior = FileGlobOptions::ALLOW_EMPTY;
-				result = GlobFiles(new_pattern, context, file_glob_input);
+				result = GlobFiles(new_pattern, context, FileGlobOptions::ALLOW_EMPTY, max_files, hive_params);
 				if (!result.empty()) {
 					// we found files by globbing the target as if it was a directory - return them
 					return result;

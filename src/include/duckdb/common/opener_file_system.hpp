@@ -117,11 +117,18 @@ public:
 		return GetFileSystem().PathSeparator(path);
 	}
 
-	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr,
-	                          const FileGlobInput &input = FileGlobOptions::DISALLOW_EMPTY) override {
+	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr) override {
 		VerifyNoOpener(opener);
 		VerifyCanAccessFile(path);
-		return GetFileSystem().Glob(path, GetOpener().get(), input);
+		return GetFileSystem().Glob(path, GetOpener().get());
+	}
+
+	vector<OpenFileInfo> GlobHive(const string &path = "", FileOpener *opener = nullptr,
+	                              idx_t max_files = std::numeric_limits<idx_t>::max(),
+	                              optional_ptr<HiveFilterParams> hive_params = nullptr) override {
+		VerifyNoOpener(opener);
+		VerifyCanAccessFile(path);
+		return GetFileSystem().GlobHive(path, GetOpener().get(), max_files, hive_params);
 	}
 
 	std::string GetName() const override {

@@ -187,10 +187,12 @@ protected:
 	//! Get the i-th expanded file
 	OpenFileInfo GetFileInternal(idx_t i, bool peek);
 	//! Grabs the next path and expands it into Expanded paths: returns false if no more files to expand
-	bool ExpandNextPath(const FileGlobInput &file_glob_input, bool peek = false);
+	bool ExpandNextPath(idx_t max_files = std::numeric_limits<idx_t>::max(), bool peek = false,
+	                    optional_ptr<HiveFilterParams> hive_filter_params = nullptr);
 	//! Grabs the next path and expands it into Expanded paths: returns false if no more files to expand
 	bool ExpandPathInternal(idx_t &current_path, vector<OpenFileInfo> &result,
-	                        const FileGlobInput &file_glob_input) const;
+	                        idx_t max_files = std::numeric_limits<idx_t>::max(),
+	                        optional_ptr<HiveFilterParams> hive_filter_params = nullptr) const;
 	//! Whether all files have been expanded
 	bool IsFullyExpanded() const;
 	//! Clear the first expanded files

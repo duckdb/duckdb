@@ -65,7 +65,10 @@ public:
 	void FileSync(FileHandle &handle) override;
 
 	//! Runs a glob on the file system, returning a list of matching files
-	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener, const FileGlobInput &glob_input) override;
+	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener) override;
+	vector<OpenFileInfo> GlobHive(const string &path = "", FileOpener *opener = nullptr,
+	                              idx_t max_files = std::numeric_limits<idx_t>::max(),
+	                              optional_ptr<HiveFilterParams> hive_params = nullptr) override;
 
 	bool CanHandleFile(const string &fpath) override {
 		//! Whether or not a sub-system can handle a specific file path

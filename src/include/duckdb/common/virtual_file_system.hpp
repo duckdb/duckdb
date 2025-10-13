@@ -48,9 +48,10 @@ public:
 	void RemoveFile(const string &filename, optional_ptr<FileOpener> opener) override;
 	bool TryRemoveFile(const string &filename, optional_ptr<FileOpener> opener) override;
 
-	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr,
-	                          const FileGlobInput &input = FileGlobOptions::DISALLOW_EMPTY) override;
-
+	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr) override;
+	vector<OpenFileInfo> GlobHive(const string &path = "", FileOpener *opener = nullptr,
+	                              idx_t max_files = std::numeric_limits<idx_t>::max(),
+	                              optional_ptr<HiveFilterParams> hive_params = nullptr) override;
 	void RegisterSubSystem(unique_ptr<FileSystem> fs) override;
 
 	void UnregisterSubSystem(const string &name) override;
