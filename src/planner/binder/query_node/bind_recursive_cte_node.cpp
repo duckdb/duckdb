@@ -168,8 +168,7 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 	auto right_binder = Binder::CreateBinder(context, this);
 
 	// Add bindings of left side to temporary CTE bindings context
-	right_binder->bind_context.AddCTEBinding(setop_index, statement.ctename, result.names,
-	                                         internal_types, result.types,
+	right_binder->bind_context.AddCTEBinding(setop_index, statement.ctename, result.names, internal_types, result.types,
 	                                         !statement.key_targets.empty());
 
 	auto right = right_binder->BindNode(*statement.right);

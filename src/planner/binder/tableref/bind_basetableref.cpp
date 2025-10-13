@@ -166,8 +166,7 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		BoundStatement result;
 		result.types = types;
 		result.names = names;
-		result.plan =
-		    make_uniq<LogicalCTERef>(index, ctebinding->index, types, std::move(names), is_recurring);
+		result.plan = make_uniq<LogicalCTERef>(index, ctebinding->index, types, std::move(names), is_recurring);
 		return result;
 		;
 	}
