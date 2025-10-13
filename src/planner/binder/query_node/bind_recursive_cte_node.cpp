@@ -91,14 +91,14 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 	right_node = CastLogicalOperatorToTypes(right.types, result.types, std::move(right_node));
 
 	auto recurring_binding = right_binder->GetCTEBinding(BindingAlias("recurring", ctename));
-	bool ref_recurring = recurring_binding && recurring_binding->Cast<CTEBinding>().reference_count > 0;
+	bool ref_recurring = recurring_binding && recurring_binding->IsReferenced();
 	if (key_targets.empty() && ref_recurring) {
 		throw InvalidInputException("RECURRING can only be used with USING KEY in recursive CTE.");
 	}
 
 	// Check if there is a reference to the recursive or recurring table, if not create a set operator.
 	auto cte_binding = right_binder->GetCTEBinding(BindingAlias(ctename));
-	bool ref_cte = cte_binding && cte_binding->Cast<CTEBinding>().reference_count > 0;
+	bool ref_cte = cte_binding && cte_binding->IsReferenced();
 	if (!ref_cte && !ref_recurring) {
 		auto root =
 		    make_uniq<LogicalSetOperation>(setop_index, result.types.size(), std::move(left_node),

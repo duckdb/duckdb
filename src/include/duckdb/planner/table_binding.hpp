@@ -74,6 +74,9 @@ public:
 	}
 
 protected:
+	void Initialize();
+
+protected:
 	//! The type of Binding
 	BindingType binding_type;
 	//! The alias of the binding
@@ -166,6 +169,12 @@ public:
 public:
 	CTEBinding(BindingAlias alias, vector<LogicalType> types, vector<string> names, idx_t index, CTEType type);
 
+public:
+	bool CanBeReferenced() const;
+	bool IsReferenced() const;
+	void Reference();
+
+private:
 	CTEType cte_type;
 	idx_t reference_count;
 };

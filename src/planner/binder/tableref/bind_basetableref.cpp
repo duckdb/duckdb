@@ -123,7 +123,9 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 	// unless we want to refer to the recurring table of "using key".
 	BindingAlias binding_alias(ref.schema_name, ref.table_name);
 	auto ctebinding = GetCTEBinding(binding_alias);
-	if (ctebinding && ctebinding->cte_type == CTEType::CAN_BE_REFERENCED) {
+	if (ctebinding && ctebinding->CanBeReferenced()) {
+		ctebinding->Reference();
+
 		// There is a CTE binding in the BindContext.
 		// This can only be the case if there is a recursive CTE,
 		// or a materialized CTE present.
@@ -134,8 +136,6 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 
 		bind_context.AddGenericBinding(index, alias, names, ctebinding->GetColumnTypes());
 
-		// Update references to CTE
-		ctebinding->reference_count++;
 		bool is_recurring = ref.schema_name == "recurring";
 
 		BoundStatement result;
@@ -208,7 +208,8 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		}
 
 		// if we found a CTE that cannot be referenced that means that there is a circular reference
-		if (ctebinding && ctebinding->cte_type == CTEType::CANNOT_BE_REFERENCED) {
+		if (ctebinding) {
+			D_ASSERT(!ctebinding->CanBeReferenced());
 			throw BinderException(error_context,
 			                      "Circular reference to CTE \"%s\", use WITH RECURSIVE to "
 			                      "use recursive CTEs.",

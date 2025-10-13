@@ -19,6 +19,10 @@ Binding::Binding(BindingType binding_type, BindingAlias alias_p, vector<LogicalT
                  idx_t index)
     : binding_type(binding_type), alias(std::move(alias_p)), index(index), types(std::move(coltypes)),
       names(std::move(colnames)) {
+	Initialize();
+}
+
+void Binding::Initialize() {
 	D_ASSERT(types.size() == names.size());
 	for (idx_t i = 0; i < names.size(); i++) {
 		auto &name = names[i];
@@ -336,6 +340,18 @@ CTEBinding::CTEBinding(BindingAlias alias, vector<LogicalType> types, vector<str
                        CTEType cte_type)
     : Binding(BindingType::CTE, std::move(alias), std::move(types), std::move(names), index), cte_type(cte_type),
       reference_count(0) {
+}
+
+bool CTEBinding::CanBeReferenced() const {
+	return cte_type == CTEType::CAN_BE_REFERENCED;
+}
+
+bool CTEBinding::IsReferenced() const {
+	return reference_count > 0;
+}
+
+void CTEBinding::Reference() {
+	reference_count++;
 }
 
 } // namespace duckdb

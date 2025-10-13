@@ -194,7 +194,7 @@ optional_ptr<CTEBinding> Binder::GetCTEBinding(const BindingAlias &name) {
 			// we only directly return the CTE if it can be referenced
 			// if it cannot be referenced (circular reference) we keep going up the stack
 			// to look for a CTE that can be referenced
-			if (entry->cte_type == CTEType::CAN_BE_REFERENCED) {
+			if (entry->CanBeReferenced()) {
 				return entry;
 			}
 			result = entry;
