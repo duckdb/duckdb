@@ -14,7 +14,6 @@ DictionaryDecoder::DictionaryDecoder(ColumnReader &reader)
 
 void DictionaryDecoder::InitializeDictionary(idx_t new_dictionary_size, optional_ptr<const TableFilter> filter,
                                              optional_ptr<TableFilterState> filter_state, bool has_defines) {
-	auto old_dict_size = dictionary_size;
 	dictionary_size = new_dictionary_size;
 	filter_result.reset();
 	filter_count = 0;

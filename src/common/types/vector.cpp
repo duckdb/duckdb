@@ -1873,7 +1873,13 @@ void Vector::DebugTransformToDictionary(Vector &vector, idx_t count) {
 		original_sel.set_index(offset++, verify_count - 1 - i * 2);
 	}
 	// now slice the inverted vector with the inverted selection vector
-	vector.Dictionary(reusable_dict, original_sel);
+	if (vector.GetType().InternalType() == PhysicalType::STRUCT) {
+		// Reusable dictionary API does not work for STRUCT
+		vector.Dictionary(inverted_vector, verify_count, original_sel, count);
+		vector.buffer->Cast<DictionaryBuffer>().SetDictionaryId(reusable_dict->id);
+	} else {
+		vector.Dictionary(reusable_dict, original_sel);
+	}
 	vector.Verify(count);
 }
 
@@ -1935,7 +1941,6 @@ void Vector::DebugShuffleNestedVector(Vector &vector, idx_t count) {
 // DictionaryVector
 //===--------------------------------------------------------------------===//
 buffer_ptr<VectorChildBuffer> DictionaryVector::CreateReusableDictionary(const LogicalType &type, const idx_t &size) {
-	D_ASSERT(type.InternalType() != PhysicalType::STRUCT);
 	auto res = make_buffer<VectorChildBuffer>(Vector(type, size));
 	res->size = size;
 	res->id = UUID::ToString(UUID::GenerateRandomUUID());
