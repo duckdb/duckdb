@@ -157,13 +157,16 @@ public:
 	unique_ptr<ParsedExpression> ParamToArg(ColumnRefExpression &col_ref);
 };
 
+enum class CTEType { CAN_BE_REFERENCED, CANNOT_BE_REFERENCED };
+
 struct CTEBinding : public Binding {
 public:
 	static constexpr const BindingType TYPE = BindingType::CTE;
 
 public:
-	CTEBinding(BindingAlias alias, vector<LogicalType> types, vector<string> names, idx_t index);
+	CTEBinding(BindingAlias alias, vector<LogicalType> types, vector<string> names, idx_t index, CTEType type);
 
+	CTEType cte_type;
 	idx_t reference_count;
 };
 

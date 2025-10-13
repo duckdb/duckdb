@@ -123,7 +123,7 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 	// unless we want to refer to the recurring table of "using key".
 	BindingAlias binding_alias(ref.schema_name, ref.table_name);
 	auto ctebinding = GetCTEBinding(binding_alias);
-	if (ctebinding) {
+	if (ctebinding && ctebinding->cte_type == CTEType::CAN_BE_REFERENCED) {
 		// There is a CTE binding in the BindContext.
 		// This can only be the case if there is a recursive CTE,
 		// or a materialized CTE present.
@@ -135,8 +135,7 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		bind_context.AddGenericBinding(index, alias, names, ctebinding->GetColumnTypes());
 
 		// Update references to CTE
-		auto &cte_ref = ctebinding->Cast<CTEBinding>();
-		cte_ref.reference_count++;
+		ctebinding->reference_count++;
 		bool is_recurring = ref.schema_name == "recurring";
 
 		BoundStatement result;
@@ -208,17 +207,12 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 			}
 		}
 
-		// remember that we did not find a CTE, but there is a CTE with the same name
-		// this means that there is a circular reference
-		// Otherwise, re-throw the original exception
-		if (!ctebinding && ref.schema_name.empty() && CTEExists(ref.table_name)) {
-			throw BinderException(
-			    error_context,
-			    "Circular reference to CTE \"%s\", There are two possible solutions. \n1. use WITH RECURSIVE to "
-			    "use recursive CTEs. \n2. If "
-			    "you want to use the TABLE name \"%s\" the same as the CTE name, please explicitly add "
-			    "\"SCHEMA\" before table name. You can try \"main.%s\" (main is the duckdb default schema)",
-			    ref.table_name, ref.table_name, ref.table_name);
+		// if we found a CTE that cannot be referenced that means that there is a circular reference
+		if (ctebinding && ctebinding->cte_type == CTEType::CANNOT_BE_REFERENCED) {
+			throw BinderException(error_context,
+			                      "Circular reference to CTE \"%s\", use WITH RECURSIVE to "
+			                      "use recursive CTEs.",
+			                      ref.table_name);
 		}
 		// could not find an alternative: bind again to get the error
 		// note: this will always throw when using DuckDB as a catalog, but a second look-up might succeed

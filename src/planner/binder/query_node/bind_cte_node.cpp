@@ -60,9 +60,11 @@ BoundCTEData Binder::PrepareCTE(const string &ctename, CommonTableExpressionInfo
 	result.materialized = statement.materialized;
 	result.setop_index = GenerateTableIndex();
 
-	AddCTE(ctename);
-
 	result.query_binder = Binder::CreateBinder(context, this);
+	// add this CTE to the query binder on the RHS with "CANNOT_BE_REFERENCED" to detect recursive references to
+	// ourselves
+	result.query_binder->bind_context.AddCTEBinding(result.setop_index, BindingAlias(ctename), vector<string>(),
+	                                                vector<LogicalType>(), CTEType::CANNOT_BE_REFERENCED);
 	result.query = result.query_binder->BindNode(*statement.query->node);
 
 	// the result types of the CTE are the types of the LHS

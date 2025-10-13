@@ -332,8 +332,10 @@ unique_ptr<ParsedExpression> DummyBinding::ParamToArg(ColumnRefExpression &colre
 	return arg;
 }
 
-CTEBinding::CTEBinding(BindingAlias alias, vector<LogicalType> types, vector<string> names, idx_t index)
-    : Binding(BindingType::CTE, std::move(alias), std::move(types), std::move(names), index), reference_count(0) {
+CTEBinding::CTEBinding(BindingAlias alias, vector<LogicalType> types, vector<string> names, idx_t index,
+                       CTEType cte_type)
+    : Binding(BindingType::CTE, std::move(alias), std::move(types), std::move(names), index), cte_type(cte_type),
+      reference_count(0) {
 }
 
 } // namespace duckdb

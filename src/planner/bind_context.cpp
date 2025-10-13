@@ -712,17 +712,17 @@ void BindContext::AddGenericBinding(idx_t index, const string &alias, const vect
 }
 
 void BindContext::AddCTEBinding(idx_t index, BindingAlias alias_p, const vector<string> &names,
-                                const vector<LogicalType> &types) {
+                                const vector<LogicalType> &types, CTEType cte_type) {
 	for (auto &cte_binding : cte_bindings) {
 		if (cte_binding->GetBindingAlias() == alias_p) {
 			throw BinderException("Duplicate CTE binding \"%s\" in query!", alias_p.ToString());
 		}
 	}
-	auto binding = make_uniq<CTEBinding>(std::move(alias_p), types, names, index);
+	auto binding = make_uniq<CTEBinding>(std::move(alias_p), types, names, index, cte_type);
 	cte_bindings.push_back(std::move(binding));
 }
 
-optional_ptr<Binding> BindContext::GetCTEBinding(const BindingAlias &ctename) {
+optional_ptr<CTEBinding> BindContext::GetCTEBinding(const BindingAlias &ctename) {
 	for (auto &binding : cte_bindings) {
 		if (binding->GetBindingAlias().Matches(ctename)) {
 			return binding.get();
