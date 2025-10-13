@@ -3337,12 +3337,13 @@ DUCKDB_C_API idx_t duckdb_list_vector_get_size(duckdb_vector vector);
 
 /*!
 Sets the size of the underlying child-vector of a list vector.
-Note that this does NOT reserve the memory in the child buffer.
-To do so, use `duckdb_list_vector_reserve`.
+Note that this does NOT reserve the memory in the child buffer,
+and that it is possible to set a size exceeding the capacity.
+To set the capacity, use `duckdb_list_vector_reserve`.
 
 * @param vector The list vector.
 * @param size The size of the child list.
-* @return The duckdb state. Returns DuckDBError, if the vector is nullptr, or if size > capacity.
+* @return The duckdb state. Returns DuckDBError, if the vector is nullptr.
 */
 DUCKDB_C_API duckdb_state duckdb_list_vector_set_size(duckdb_vector vector, idx_t size);
 

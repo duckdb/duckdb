@@ -212,12 +212,12 @@
                 }
             ],
             "comment": {
-                "description": "Sets the size of the underlying child-vector of a list vector.\nNote that this does NOT reserve the memory in the child buffer.\nTo do so, use `duckdb_list_vector_reserve`.\n\n",
+                "description": "Sets the size of the underlying child-vector of a list vector.\nNote that this does NOT reserve the memory in the child buffer,\nand that it is possible to set a size exceeding the capacity.\nTo set the capacity, use `duckdb_list_vector_reserve`.\n\n",
                 "param_comments": {
                     "vector": "The list vector.",
                     "size": "The size of the child list."
                 },
-                "return_value": "The duckdb state. Returns DuckDBError, if the vector is nullptr, or if size > capacity."
+                "return_value": "The duckdb state. Returns DuckDBError, if the vector is nullptr."
             }
         },
         {
