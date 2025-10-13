@@ -166,7 +166,7 @@ TopNWindowElimination::CreateAggregateExpression(vector<unique_ptr<Expression>> 
 	D_ASSERT(params.order_type == OrderType::ASCENDING || params.order_type == OrderType::DESCENDING);
 	string fun_name = requires_arg || change_to_arg ? "arg_" : "";
 	fun_name += params.order_type == OrderType::ASCENDING ? "min" : "max";
-	fun_name += params.can_be_null && params.limit > 0 ? "_nulls_last" : "";
+	fun_name += params.can_be_null && (requires_arg || change_to_arg) ? "_nulls_last" : "";
 
 	auto &fun_entry = catalog.GetEntry<AggregateFunctionCatalogEntry>(context, DEFAULT_SCHEMA, fun_name);
 	const auto fun = fun_entry.functions.GetFunctionByArguments(context, ExtractReturnTypes(aggregate_params));
