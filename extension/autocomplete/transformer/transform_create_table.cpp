@@ -38,7 +38,7 @@ string PEGTransformerFactory::TransformIdentifier(PEGTransformer &transformer, o
 }
 
 vector<string> PEGTransformerFactory::TransformDottedIdentifier(PEGTransformer &transformer,
-															   optional_ptr<ParseResult> parse_result) {
+                                                                optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	vector<string> parts;
 
@@ -54,6 +54,5 @@ vector<string> PEGTransformerFactory::TransformDottedIdentifier(PEGTransformer &
 	}
 	return parts;
 }
-
 
 } // namespace duckdb

@@ -4,7 +4,7 @@
 namespace duckdb {
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformDetachStatement(PEGTransformer &transformer,
-																		 optional_ptr<ParseResult> parse_result) {
+                                                                         optional_ptr<ParseResult> parse_result) {
 	auto result = make_uniq<DetachStatement>();
 	auto info = make_uniq<DetachInfo>();
 

@@ -163,7 +163,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBaseExpression(PEGT
 
 // ColumnName
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformColumnReference(PEGTransformer &transformer,
-																			 optional_ptr<ParseResult> parse_result) {
+                                                                             optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto identifiers = transformer.Transform<vector<string>>(list_pr.Child<ListParseResult>(0));
 	return make_uniq<ColumnRefExpression>(std::move(identifiers));

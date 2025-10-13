@@ -105,7 +105,8 @@ GenericCopyOption PEGTransformerFactory::TransformGenericCopyOption(PEGTransform
 				} else if (child->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 					copy_option.children.push_back(Value(child->Cast<ColumnRefExpression>().GetColumnName()));
 				} else {
-					throw InternalException("Unexpected expression type %s encountered for GenericCopyOption", ExpressionClassToString(child->GetExpressionClass()));
+					throw InternalException("Unexpected expression type %s encountered for GenericCopyOption",
+					                        ExpressionClassToString(child->GetExpressionClass()));
 				}
 			}
 		} else {
