@@ -3,8 +3,6 @@
 
 require parquet
 
-require json
-
 statement ok
 pragma variant_legacy_encoding = true;
 
