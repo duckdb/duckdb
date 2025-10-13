@@ -207,9 +207,26 @@ static void MyCopyFunctionFinalize(duckdb_copy_function_finalize_info info) {
 //----------------------------------------------------------------------------------------------------------------------
 struct MyCopyFromFunctionBindData {
 	string file_path;
-	duckdb_file_system file_system = nullptr;
+	int32_t max_size = 0;
+	int32_t min_size = 0;
+	duckdb_client_context client_context = nullptr;
 
 	~MyCopyFromFunctionBindData() {
+		if (client_context) {
+			duckdb_destroy_client_context(&client_context);
+		}
+	}
+};
+
+struct MyCopyFromFunctionState {
+	duckdb_file_system file_system = nullptr;
+	duckdb_file_handle file_handle = nullptr;
+	int64_t total_read_bytes = 0;
+
+	~MyCopyFromFunctionState() {
+		if (file_handle) {
+			duckdb_destroy_file_handle(&file_handle);
+		}
 		if (file_system) {
 			duckdb_destroy_file_system(&file_system);
 		}
@@ -217,12 +234,134 @@ struct MyCopyFromFunctionBindData {
 };
 
 static void MyCopyFromFunctionBind(duckdb_bind_info info) {
+
+	// Ensure we have exactly one expected column of type BIGINT
+	auto result_column_count = duckdb_table_function_bind_get_result_column_count(info);
+	if (result_column_count != 1) {
+		auto error_msg = "MY_COPY: Expected exactly one target column!";
+		duckdb_bind_set_error(info, error_msg);
+	}
+
+	for (idx_t i = 0; i < result_column_count; i++) {
+		auto col_type = duckdb_table_function_bind_get_result_column_type(info, i);
+		if (duckdb_get_type_id(col_type) != DUCKDB_TYPE_BIGINT) {
+			auto col_name = duckdb_table_function_bind_get_result_column_name(info, i);
+			auto error_msg = StringUtil::Format("MY_COPY: Target column '%s' is not of type BIGINT!", col_name);
+			duckdb_bind_set_error(info, error_msg.c_str());
+			duckdb_destroy_logical_type(&col_type);
+			return;
+		}
+		duckdb_destroy_logical_type(&col_type);
+	}
+
+	auto file_path = duckdb_bind_get_parameter(info, 0);
+	auto max_size = duckdb_bind_get_named_parameter(info, "MAX_SIZE");
+	auto min_size = duckdb_bind_get_named_parameter(info, "MIN_SIZE");
+
+	if (!file_path || !max_size || !min_size) {
+		duckdb_destroy_value(&file_path);
+		duckdb_destroy_value(&max_size);
+		duckdb_destroy_value(&min_size);
+		duckdb_bind_set_error(info, "MY_COPY: Error retrieving parameters!");
+		return;
+	}
+
+	auto bind_data = new MyCopyFromFunctionBindData();
+
+	// Get and set parameters
+	auto file_path_str = duckdb_get_varchar(file_path);
+	bind_data->file_path = string(file_path_str);
+	duckdb_free(file_path_str);
+
+	bind_data->max_size = duckdb_get_int32(max_size);
+	bind_data->min_size = duckdb_get_int32(min_size);
+
+	duckdb_destroy_value(&file_path);
+	duckdb_destroy_value(&max_size);
+	duckdb_destroy_value(&min_size);
+
+	// Also get file client context
+	duckdb_table_function_get_client_context(info, &bind_data->client_context);
+
+	duckdb_bind_set_bind_data(info, bind_data, [](void *bind_data) {
+		auto my_bind_data = (MyCopyFromFunctionBindData *)bind_data;
+		delete my_bind_data;
+	});
 }
 
 static void MyCopyFromFunctionInit(duckdb_init_info info) {
+
+	auto bind_data = (MyCopyFromFunctionBindData *)duckdb_init_get_bind_data(info);
+	auto state = new MyCopyFromFunctionState();
+
+	auto client_context = bind_data->client_context;
+	state->file_system = duckdb_client_context_get_file_system(client_context);
+	auto file_flag = duckdb_create_file_open_options();
+	duckdb_file_open_options_set_flag(file_flag, DUCKDB_FILE_FLAG_READ, true);
+
+	auto ok = duckdb_file_system_open(state->file_system, bind_data->file_path.c_str(), file_flag, &state->file_handle);
+	if (ok == DuckDBError) {
+		auto error_data = duckdb_file_system_error_data(state->file_system);
+		duckdb_init_set_error(info, duckdb_error_data_message(error_data));
+		duckdb_destroy_error_data(&error_data);
+		duckdb_destroy_file_open_options(&file_flag);
+		delete state;
+		return;
+	}
+
+	duckdb_destroy_file_open_options(&file_flag);
+	state->total_read_bytes = 0;
+
+	duckdb_init_set_init_data(info, state, [](void *state) {
+		auto my_state = (MyCopyFromFunctionState *)state;
+		delete my_state;
+	});
 }
 
 static void MyCopyFromFunction(duckdb_function_info info, duckdb_data_chunk output) {
+	// Now read data from file
+	auto bind_data = (MyCopyFromFunctionBindData *)duckdb_function_get_bind_data(info);
+	auto state = (MyCopyFromFunctionState *)duckdb_function_get_init_data(info);
+
+	auto col_vec = duckdb_data_chunk_get_vector(output, 0);
+	auto col_data = (int64_t *)duckdb_vector_get_data(col_vec);
+
+	idx_t read_count = 0;
+	for (read_count = 0; read_count < STANDARD_VECTOR_SIZE; read_count++) {
+		int64_t read_value;
+		auto read_bytes = duckdb_file_handle_read(state->file_handle, &read_value, sizeof(int64_t));
+		if (read_bytes == 0) {
+			// EOF
+			if (state->total_read_bytes < bind_data->min_size) {
+				duckdb_function_set_error(info, "Read too little data");
+			}
+			break;
+			;
+		}
+
+		if (read_bytes < 0) {
+			auto error_data = duckdb_file_handle_error_data(state->file_handle);
+			duckdb_function_set_error(info, duckdb_error_data_message(error_data));
+			duckdb_destroy_error_data(&error_data);
+			return;
+		}
+
+		if (read_bytes != sizeof(int64_t)) {
+			duckdb_function_set_error(info, "Could not read full value");
+			return;
+		}
+
+		col_data[read_count] = read_value;
+		state->total_read_bytes += read_bytes;
+
+		if (state->total_read_bytes > bind_data->max_size) {
+			duckdb_function_set_error(info, "Read too much data");
+			return;
+		}
+	}
+
+	// Set the output count
+	duckdb_data_chunk_set_size(output, read_count);
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -268,11 +407,12 @@ TEST_CASE("Test Copy Functions in C API", "[capi]") {
 
 	auto scan_func = duckdb_create_table_function();
 	duckdb_table_function_add_parameter(scan_func, varchar_type);
-	duckdb_table_function_add_named_parameter(scan_func, "MAX_VALUE", int_type);
-	duckdb_table_function_set_name(scan_func, "read_my_copy");
+	duckdb_table_function_add_named_parameter(scan_func, "MAX_SIZE", int_type);
+	duckdb_table_function_add_named_parameter(scan_func, "MIN_SIZE", int_type);
 	duckdb_table_function_set_bind(scan_func, MyCopyFromFunctionBind);
 	duckdb_table_function_set_init(scan_func, MyCopyFromFunctionInit);
 	duckdb_table_function_set_function(scan_func, MyCopyFromFunction);
+	duckdb_table_function_set_name(scan_func, "my_copy");
 
 	duckdb_destroy_logical_type(&varchar_type);
 	duckdb_destroy_logical_type(&int_type);
@@ -336,6 +476,65 @@ TEST_CASE("Test Copy Functions in C API", "[capi]") {
 	result = tester.Query(StringUtil::Format(
 	    "COPY (SELECT i FROM range(10) as r(i)) TO '%s8.txt' (FORMAT MY_COPY, MIN_SIZE 0, MAX_SIZE 100)", file_path));
 	REQUIRE_NO_FAIL(*result);
+
+	//----------------------------------
+	// Now read with COPY ... FROM (...)
+	//----------------------------------
+
+	// Now try to read it back in
+	result = tester.Query("CREATE TABLE my_table(i BIGINT)");
+	REQUIRE_NO_FAIL(*result);
+
+	// Read non-existing file
+	result = tester.Query("COPY my_table FROM 'non_existing_file.txt' (FORMAT MY_COPY, MIN_SIZE 0, MAX_SIZE 100)");
+	REQUIRE_FAIL(result);
+	REQUIRE(StringUtil::Contains(result->ErrorMessage(), "No such file or directory"));
+
+	// Read with too small max size
+	result = tester.Query(
+	    StringUtil::Format("COPY my_table FROM '%s8.txt' (FORMAT MY_COPY, MIN_SIZE 0, MAX_SIZE 10)", file_path));
+	REQUIRE_FAIL(result);
+	REQUIRE(StringUtil::Contains(result->ErrorMessage(), "Read too much data"));
+
+	// Read with too large min size
+	result = tester.Query(
+	    StringUtil::Format("COPY my_table FROM '%s8.txt' (FORMAT MY_COPY, MIN_SIZE 1000, MAX_SIZE 10000)", file_path));
+	REQUIRE_FAIL(result);
+	REQUIRE(StringUtil::Contains(result->ErrorMessage(), "Read too little data"));
+
+	// Read with non-int target column
+	result = tester.Query("CREATE TABLE my_varchar_table(i VARCHAR)");
+	REQUIRE_NO_FAIL(*result);
+	result = tester.Query(StringUtil::Format(
+	    "COPY my_varchar_table FROM '%s8.txt' (FORMAT MY_COPY, MIN_SIZE 0, MAX_SIZE 10000)", file_path));
+	REQUIRE_FAIL(result);
+	REQUIRE(StringUtil::Contains(result->ErrorMessage(), "Target column 'i' is not of type BIGINT!"));
+	result = tester.Query("DROP TABLE my_varchar_table");
+	REQUIRE_NO_FAIL(*result);
+
+	// Read with unknown option
+	result = tester.Query(StringUtil::Format(
+	    "COPY my_table FROM '%s8.txt' (FORMAT MY_COPY, MIN_SIZE 0, MAX_SIZE 10000, UNKNOWN 5)", file_path));
+	REQUIRE_FAIL(result);
+	REQUIRE(StringUtil::Contains(result->ErrorMessage(),
+	                             "'UNKNOWN' is not a supported option for copy function 'my_copy'"));
+
+	// Read with missing option
+	result =
+	    tester.Query(StringUtil::Format("COPY my_table FROM '%s8.txt' (FORMAT MY_COPY, MAX_SIZE 10000)", file_path));
+	REQUIRE_FAIL(result);
+	REQUIRE(StringUtil::Contains(result->ErrorMessage(), "MY_COPY: Error retrieving parameters!"));
+
+	// Read just right
+	result = tester.Query(
+	    StringUtil::Format("COPY my_table FROM '%s8.txt' (FORMAT MY_COPY, MIN_SIZE 0, MAX_SIZE 10000)", file_path));
+	REQUIRE_NO_FAIL(*result);
+	result = tester.Query("SELECT COUNT(*) FROM my_table");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<int64_t>(0, 0) == 10);
+	result = tester.Query("SELECT SUM(i) FROM my_table");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<int64_t>(0, 0) == 45);
 
 	// Destroy
 	duckdb_destroy_copy_function(&func);

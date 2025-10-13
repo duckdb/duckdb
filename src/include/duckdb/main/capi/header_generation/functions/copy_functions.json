@@ -624,12 +624,73 @@
           }
         ],
         "comment": {
-          "description": "Sets the `COPY ... FROM` table function to use when executing `COPY ... FROM` with this copy function.\n\nThe table function must take a single VARCHAR argument (the file path).\n\nOptions are passed as named parameters to the table function.\n\n",
+          "description": "Sets the table function to use when executing a `COPY ... FROM (...)` statement with this copy function.\n\nThe table function must have a `duckdb_table_function_bind_t`, `duckdb_table_function_init_t` and `duckdb_table_function_t` set.\n\nThe table function must take a single VARCHAR parameter (the file path).\n\nOptions passed to the `COPY ... FROM (...)` statement are forwarded as named parameters to the table function.\n\n",
             "param_comments": {
             "copy_function": "The copy function",
             "function": "The table function to use for `COPY ... FROM`"
           }
         }
+    },
+    {
+      "name": "duckdb_table_function_bind_get_result_column_count",
+      "return_type": "idx_t",
+      "params": [
+        {
+          "type": "duckdb_bind_info",
+          "name": "info"
+        }
+      ],
+      "comment": {
+        "description": "Retrieves the number of result columns of a table function.\n\nIf the table function is used in a `COPY ... FROM` statement, this can be used to retrieve the number of columns in the target table at the start of the bind callback.\n\n",
+        "param_comments": {
+          "info": "The bind info provided to the bind function"
+        },
+        "return_value": "The number of result columns."
+      }
+    },
+    {
+      "name": "duckdb_table_function_bind_get_result_column_name",
+      "return_type": "const char *",
+      "params": [
+        {
+          "type": "duckdb_bind_info",
+          "name": "info"
+        },
+        {
+          "type": "idx_t",
+          "name": "col_idx"
+        }
+      ],
+      "comment": {
+        "description": "Retrieves the name of a result column of a table function.\n\nIf the table function is used in a `COPY ... FROM` statement, this can be used to retrieve the names of the columns in the target table at the start of the bind callback.\n\nThe result is valid for the duration of the bind callback or until the next call to `duckdb_bind_add_result_column`, must not be freed.\n\n",
+        "param_comments": {
+          "info": "The bind info provided to the bind function",
+          "col_idx": "The index of the result column to retrieve the name for"
+        },
+        "return_value": "The name of the result column."
+      }
+    },
+    {
+      "name": "duckdb_table_function_bind_get_result_column_type",
+      "return_type": "duckdb_logical_type",
+      "params": [
+        {
+          "type": "duckdb_bind_info",
+          "name": "info"
+        },
+        {
+          "type": "idx_t",
+          "name": "col_idx"
+        }
+      ],
+      "comment": {
+        "description": "Retrieves the type of a result column of a table function.\n\nIf the table function is used in a `COPY ... FROM` statement, this can be used to retrieve the types of the columns in the target table at the start of the bind callback.\n\nThe result must be destroyed with `duckdb_destroy_logical_type`.\n\n",
+        "param_comments": {
+          "info": "The bind info provided to the bind function",
+          "col_idx": "The index of the result column to retrieve the type for"
+        },
+        "return_value": "The type of the result column."
+      }
     }
   ]
 }
