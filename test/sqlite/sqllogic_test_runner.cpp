@@ -775,8 +775,8 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 
 		// Check tags first time we hit test statements, since all explicit & implicit tags now present
 		if (parser.IsTestCommand(token.type) && !test_expr_executed) {
-			if (test_config.GetPolicyForTagSet(file_tags) == SelectPolicy::SKIP) {
-				SKIP_TEST("match tag-set");
+			if (test_config.GetPolicyForTagSet(file_tags) == TestConfiguration::SelectPolicy::SKIP) {
+				SKIP_TEST("select tag-set");
 				return;
 			}
 			test_expr_executed = true;
@@ -1206,7 +1206,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			// NOTE: tags-before-test-commands is the lowest bar
 			// 1 better: all non-command lines precede command lines
 			// Mo better: parse first, build entire context before execution; allows e.g.
-			// - implicit tag scans of e.g. strings, vars, etc., like '${VAR}', '__TEST_DIR__', 'ATTACH'
+			// - implicit tag scans of e.g. strings, vars, etc., like '${ENVVAR}', '__TEST_DIR__', 'ATTACH'
 			// - faster subset runs
 			// - tag match runs to generate lists
 			if (test_expr_executed) {

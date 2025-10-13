@@ -22,15 +22,16 @@
 namespace duckdb {
 
 enum class SortStyle : uint8_t { NO_SORT, ROW_SORT, VALUE_SORT };
-enum class SelectPolicy : uint8_t {
-	NONE,   // does not match any explicit policy (thus intent=SELECT)
-	SELECT, // matches explicit select
-	SKIP    // matches explicit skip
-};
 
 class TestConfiguration {
 public:
 	enum class ExtensionAutoLoadingMode { NONE = 0, AVAILABLE = 1, ALL = 2 };
+
+	enum class SelectPolicy : uint8_t {
+		NONE,   // does not match any explicit policy (default: policy=SELECT)
+		SELECT, // matches explicit select
+		SKIP    // matches explicit skip
+	};
 
 	static TestConfiguration &Get();
 

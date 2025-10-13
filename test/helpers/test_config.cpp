@@ -455,7 +455,7 @@ std::unordered_set<string> make_tag_set(const Value &src_val) {
 			dst_set.insert(tag.GetValue<string>());
 		}
 	}
-	return dst_set; // XXX: ptr move thingy?
+	return dst_set;
 }
 
 void TestConfiguration::AppendSelectTagSet(const Value &tag_set) {
@@ -475,22 +475,25 @@ bool is_subset(const unordered_set<string> &sub, const vector<string> &super) {
 	return true;
 }
 
-SelectPolicy TestConfiguration::GetPolicyForTagSet(const vector<string> &subject_tag_set) {
-	// Apply select_tag_set first then skip_tag_set; if both empty always NO
-	auto policy = SelectPolicy::NONE;
+// NOTE: this model of policy assumes simply that all selects are applied to the All set, then
+// all skips are applied to that result. (Typical alternative: CLI ordering where each
+// select/skip operation is applied in sequence.)
+TestConfiguration::SelectPolicy TestConfiguration::GetPolicyForTagSet(const vector<string> &subject_tag_set) {
+	// Apply select_tag_set first then skip_tag_set; if both empty always NONE
+	auto policy = TestConfiguration::SelectPolicy::NONE;
 	// select: if >= 1 select_tag_set is subset of subject_tag_set
 	// if count(select_tag_sets) > 0 && no matches, SKIP
 	for (const auto &select_tag_set : select_tag_sets) {
-		policy = SelectPolicy::SKIP; // >=1 sets => SKIP || SELECT
+		policy = TestConfiguration::SelectPolicy::SKIP; // >=1 sets => SKIP || SELECT
 		if (is_subset(select_tag_set, subject_tag_set)) {
-			policy = SelectPolicy::SELECT;
+			policy = TestConfiguration::SelectPolicy::SELECT;
 			break;
 		}
 	}
 	// skip: if >=1 skip_tag_set is subset of subject_tag_set, else passthrough
 	for (const auto &skip_tag_set : skip_tag_sets) {
 		if (is_subset(skip_tag_set, subject_tag_set)) {
-			return SelectPolicy::SKIP;
+			return TestConfiguration::SelectPolicy::SKIP;
 		}
 	}
 	return policy;
