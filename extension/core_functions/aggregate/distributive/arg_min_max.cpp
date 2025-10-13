@@ -15,7 +15,7 @@ namespace duckdb {
 namespace {
 
 struct ArgMinMaxStateBase {
-	ArgMinMaxStateBase() : is_initialized(false), arg_null(false) {
+	ArgMinMaxStateBase() : is_initialized(false), arg_null(false), val_null(false) {
 	}
 
 	template <class T>
@@ -34,6 +34,7 @@ struct ArgMinMaxStateBase {
 
 	bool is_initialized;
 	bool arg_null;
+	bool val_null;
 };
 
 // Out-of-line specialisations
@@ -81,7 +82,7 @@ struct ArgMinMaxState : public ArgMinMaxStateBase {
 	}
 };
 
-template <class COMPARATOR, bool IGNORE_NULL>
+template <class COMPARATOR, bool IGNORE_NULL, bool IGNORE_NULL_VAL>
 struct ArgMinMaxBase {
 	template <class STATE>
 	static void Initialize(STATE &state) {
@@ -94,25 +95,29 @@ struct ArgMinMaxBase {
 	}
 
 	template <class A_TYPE, class B_TYPE, class STATE>
-	static void Assign(STATE &state, const A_TYPE &x, const B_TYPE &y, const bool x_null,
+	static void Assign(STATE &state, const A_TYPE &x, const B_TYPE &y, const bool x_null, const bool y_null,
 	                   AggregateInputData &aggregate_input_data) {
 		if (IGNORE_NULL) {
 			STATE::template AssignValue<A_TYPE>(state.arg, x, aggregate_input_data);
 			STATE::template AssignValue<B_TYPE>(state.value, y, aggregate_input_data);
 		} else {
 			state.arg_null = x_null;
+			state.val_null = y_null;
 			if (!state.arg_null) {
 				STATE::template AssignValue<A_TYPE>(state.arg, x, aggregate_input_data);
 			}
-			STATE::template AssignValue<B_TYPE>(state.value, y, aggregate_input_data);
+			if (!state.val_null) {
+				STATE::template AssignValue<B_TYPE>(state.value, y, aggregate_input_data);
+			}
 		}
 	}
 
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
 	static void Operation(STATE &state, const A_TYPE &x, const B_TYPE &y, AggregateBinaryInput &binary) {
 		if (!state.is_initialized) {
-			if (IGNORE_NULL || binary.right_mask.RowIsValid(binary.ridx)) {
-				Assign(state, x, y, !binary.left_mask.RowIsValid(binary.lidx), binary.input);
+			if (IGNORE_NULL || !IGNORE_NULL_VAL || binary.right_mask.RowIsValid(binary.ridx)) {
+				Assign(state, x, y, !binary.left_mask.RowIsValid(binary.lidx),
+				       !binary.right_mask.RowIsValid(binary.ridx), binary.input);
 				state.is_initialized = true;
 			}
 		} else {
@@ -123,7 +128,7 @@ struct ArgMinMaxBase {
 	template <class A_TYPE, class B_TYPE, class STATE>
 	static void Execute(STATE &state, A_TYPE x_data, B_TYPE y_data, AggregateBinaryInput &binary) {
 		if ((IGNORE_NULL || binary.right_mask.RowIsValid(binary.ridx)) && COMPARATOR::Operation(y_data, state.value)) {
-			Assign(state, x_data, y_data, !binary.left_mask.RowIsValid(binary.lidx), binary.input);
+			Assign(state, x_data, y_data, !binary.left_mask.RowIsValid(binary.lidx), false, binary.input);
 		}
 	}
 
@@ -132,8 +137,8 @@ struct ArgMinMaxBase {
 		if (!source.is_initialized) {
 			return;
 		}
-		if (!target.is_initialized || COMPARATOR::Operation(source.value, target.value)) {
-			Assign(target, source.arg, source.value, source.arg_null, aggregate_input_data);
+		if (!target.is_initialized || (!target.val_null && COMPARATOR::Operation(source.value, target.value))) {
+			Assign(target, source.arg, source.value, source.arg_null, false, aggregate_input_data);
 			target.is_initialized = true;
 		}
 	}
@@ -186,9 +191,9 @@ struct GenericArgMinMaxState {
 	}
 };
 
-template <typename COMPARATOR, bool IGNORE_NULL, OrderType ORDER_TYPE,
+template <typename COMPARATOR, bool IGNORE_NULL, bool IGNORE_NULL_VAL, OrderType ORDER_TYPE,
           class UPDATE_TYPE = SpecializedGenericArgMinMaxState>
-struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR, IGNORE_NULL> {
+struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR, IGNORE_NULL, IGNORE_NULL_VAL> {
 	template <class STATE>
 	static void Update(Vector inputs[], AggregateInputData &aggregate_input_data, idx_t input_count,
 	                   Vector &state_vector, idx_t count) {
@@ -213,21 +218,36 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR, IGNORE_NULL> {
 
 		auto states = UnifiedVectorFormat::GetData<STATE *>(sdata);
 		for (idx_t i = 0; i < count; i++) {
-			const auto bidx = bdata.sel->get_index(i);
-			if (!bdata.validity.RowIsValid(bidx)) {
-				continue;
-			}
-			const auto bval = bys[bidx];
+			const auto sidx = sdata.sel->get_index(i);
+			auto &state = *states[sidx];
 
 			const auto aidx = adata.sel->get_index(i);
 			const auto arg_null = !adata.validity.RowIsValid(aidx);
+
 			if (IGNORE_NULL && arg_null) {
 				continue;
 			}
 
-			const auto sidx = sdata.sel->get_index(i);
-			auto &state = *states[sidx];
-			if (!state.is_initialized || COMPARATOR::template Operation<BY_TYPE>(bval, state.value)) {
+			const auto bidx = bdata.sel->get_index(i);
+
+			if (!bdata.validity.RowIsValid(bidx)) {
+				if (!IGNORE_NULL_VAL && !state.is_initialized) {
+					state.is_initialized = true;
+					state.val_null = true;
+					if (!arg_null) {
+						if (&state == last_state) {
+							assign_count--;
+						}
+						assign_sel[assign_count++] = UnsafeNumericCast<sel_t>(i);
+						last_state = &state;
+					}
+				}
+				continue;
+			}
+
+			const auto bval = bys[bidx];
+
+			if (!state.is_initialized || state.val_null || COMPARATOR::template Operation<BY_TYPE>(bval, state.value)) {
 				STATE::template AssignValue<BY_TYPE>(state.value, bval, aggregate_input_data);
 				state.arg_null = arg_null;
 				// micro-adaptivity: it is common we overwrite the same state repeatedly
@@ -486,12 +506,13 @@ void AddGenericArgMinMaxFunction(AggregateFunctionSet &fun) {
 	fun.AddFunction(GetGenericArgMinMaxFunction<OP>());
 }
 
-template <class COMPARATOR, bool IGNORE_NULL, OrderType ORDER_TYPE>
+template <class COMPARATOR, bool IGNORE_NULL, bool IGNORE_NULL_VAL, OrderType ORDER_TYPE>
 void AddArgMinMaxFunctions(AggregateFunctionSet &fun) {
-	using GENERIC_VECTOR_OP = VectorArgMinMaxBase<LessThan, IGNORE_NULL, ORDER_TYPE, GenericArgMinMaxState<ORDER_TYPE>>;
+	using GENERIC_VECTOR_OP =
+	    VectorArgMinMaxBase<LessThan, IGNORE_NULL, IGNORE_NULL_VAL, ORDER_TYPE, GenericArgMinMaxState<ORDER_TYPE>>;
 #ifndef DUCKDB_SMALLER_BINARY
-	using OP = ArgMinMaxBase<COMPARATOR, IGNORE_NULL>;
-	using VECTOR_OP = VectorArgMinMaxBase<COMPARATOR, IGNORE_NULL, ORDER_TYPE>;
+	using OP = ArgMinMaxBase<COMPARATOR, IGNORE_NULL, IGNORE_NULL_VAL>;
+	using VECTOR_OP = VectorArgMinMaxBase<COMPARATOR, IGNORE_NULL, IGNORE_NULL_VAL, ORDER_TYPE>;
 #else
 	using OP = GENERIC_VECTOR_OP;
 	using VECTOR_OP = GENERIC_VECTOR_OP;
@@ -789,38 +810,40 @@ void AddArgMinMaxNFunction(AggregateFunctionSet &set) {
 
 AggregateFunctionSet ArgMinFun::GetFunctions() {
 	AggregateFunctionSet fun;
-	AddArgMinMaxFunctions<LessThan, true, OrderType::ASCENDING>(fun);
+	AddArgMinMaxFunctions<LessThan, true, true, OrderType::ASCENDING>(fun);
 	AddArgMinMaxNFunction<true, true, LessThan>(fun);
 	return fun;
 }
 
 AggregateFunctionSet ArgMaxFun::GetFunctions() {
 	AggregateFunctionSet fun;
-	AddArgMinMaxFunctions<GreaterThan, true, OrderType::DESCENDING>(fun);
+	AddArgMinMaxFunctions<GreaterThan, true, true, OrderType::DESCENDING>(fun);
 	AddArgMinMaxNFunction<true, true, GreaterThan>(fun);
 	return fun;
 }
 
 AggregateFunctionSet ArgMinNullFun::GetFunctions() {
 	AggregateFunctionSet fun;
-	AddArgMinMaxFunctions<LessThan, false, OrderType::ASCENDING>(fun);
+	AddArgMinMaxFunctions<LessThan, false, true, OrderType::ASCENDING>(fun);
 	return fun;
 }
 
 AggregateFunctionSet ArgMaxNullFun::GetFunctions() {
 	AggregateFunctionSet fun;
-	AddArgMinMaxFunctions<GreaterThan, false, OrderType::DESCENDING>(fun);
+	AddArgMinMaxFunctions<GreaterThan, false, true, OrderType::DESCENDING>(fun);
 	return fun;
 }
 
 AggregateFunctionSet ArgMinNullsLastFun::GetFunctions() {
 	AggregateFunctionSet fun;
+	AddArgMinMaxFunctions<LessThan, false, false, OrderType::ASCENDING>(fun);
 	AddArgMinMaxNFunction<false, false, LessThan>(fun);
 	return fun;
 }
 
 AggregateFunctionSet ArgMaxNullsLastFun::GetFunctions() {
 	AggregateFunctionSet fun;
+	AddArgMinMaxFunctions<GreaterThan, false, false, OrderType::DESCENDING>(fun);
 	AddArgMinMaxNFunction<false, true, GreaterThan>(fun);
 	return fun;
 }
