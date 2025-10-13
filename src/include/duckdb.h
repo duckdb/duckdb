@@ -4676,6 +4676,14 @@ Check if the column at 'index' index of the table has a DEFAULT expression.
 DUCKDB_C_API duckdb_state duckdb_column_has_default(duckdb_table_description table_description, idx_t index, bool *out);
 
 /*!
+Return the number of columns of the described table.
+
+* @param table_description The table_description to query.
+* @return The column count.
+*/
+DUCKDB_C_API idx_t duckdb_table_description_get_column_count(duckdb_table_description table_description);
+
+/*!
 Obtain the column name at 'index'.
 The out result must be destroyed with `duckdb_free`.
 
@@ -4684,6 +4692,17 @@ The out result must be destroyed with `duckdb_free`.
 * @return The column name.
 */
 DUCKDB_C_API char *duckdb_table_description_get_column_name(duckdb_table_description table_description, idx_t index);
+
+/*!
+Obtain the column type at 'index'.
+The return value must be destroyed with `duckdb_destroy_logical_type`.
+
+* @param table_description The table_description to query.
+* @param index The index of the column to query.
+* @return The column type.
+*/
+DUCKDB_C_API duckdb_logical_type duckdb_table_description_get_column_type(duckdb_table_description table_description,
+                                                                          idx_t index);
 
 //===--------------------------------------------------------------------===//
 // Arrow Interface

@@ -92,7 +92,7 @@ idx_t VariantColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data
 		}
 	}
 	conversion_result =
-	    VariantShreddedConversion::Convert(metadata_intermediate, intermediate_group, 0, num_values, num_values);
+	    VariantShreddedConversion::Convert(metadata_intermediate, intermediate_group, 0, num_values, num_values, false);
 
 	for (idx_t i = 0; i < conversion_result.size(); i++) {
 		auto &variant = conversion_result[i];
