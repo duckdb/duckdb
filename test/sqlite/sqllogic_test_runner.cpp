@@ -709,7 +709,7 @@ bool TryParseConditions(SQLLogicParser &parser, const string &condition_text, ve
 }
 
 // add implicit tags from environment variables, with value if available
-void tag_env(vector<string> &tags, const string &name, const string *value = nullptr) {
+void add_env_tag(vector<string> &tags, const string &name, const string *value = nullptr) {
 	tags.emplace_back(StringUtil::Format("env[%s]", name));
 	if (value != nullptr) {
 		tags.emplace_back(StringUtil::Format("env[%s]=%s", name, *value));
@@ -758,10 +758,12 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 		FAIL("Could not find test script '" + script + "'. Perhaps run `make sqlite`. ");
 	}
 
-	if (script.rfind(".test_slow") != std::string::npos) {
+	if (StringUtil::EndsWith(script, ".test_slow")) {
 		file_tags.emplace_back("slow");
 	}
-	// bool is_coverage = script.rfind(".test_coverage") != script.end();
+	if (StringUtil::EndsWith(script, ".test_coverage")) {
+		file_tags.emplace_back("coverage");
+	}
 
 	/* Loop over all records in the file */
 	while (parser.NextStatement()) {
@@ -1079,7 +1081,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			}
 
 			environment_variables[env_var] = env_actual;
-			tag_env(file_tags, env_var, &env_actual);
+			add_env_tag(file_tags, env_var, &env_actual);
 
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_REQUIRE_ENV) {
 			if (InLoop()) {
@@ -1122,7 +1124,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				parser.Fail(StringUtil::Format("Environment variable '%s' has already been defined", env_var));
 			}
 			environment_variables[env_var] = env_actual;
-			tag_env(file_tags, token.parameters[0], token.parameters.size() == 2 ? &token.parameters[1] : nullptr);
+			add_env_tag(file_tags, token.parameters[0], token.parameters.size() == 2 ? &token.parameters[1] : nullptr);
 
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_LOAD) {
 			auto &test_config = TestConfiguration::Get();
@@ -1203,7 +1205,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			auto command = make_uniq<UnzipCommand>(*this, input_path, extraction_path);
 			ExecuteCommand(std::move(command));
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_TAGS) {
-			// NOTE: tags-before-test-commands is the lowest bar
+			// NOTE: tags-before-test-commands is the low bar right now
 			// 1 better: all non-command lines precede command lines
 			// Mo better: parse first, build entire context before execution; allows e.g.
 			// - implicit tag scans of e.g. strings, vars, etc., like '${ENVVAR}', '__TEST_DIR__', 'ATTACH'
