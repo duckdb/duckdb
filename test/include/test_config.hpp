@@ -23,6 +23,11 @@ namespace duckdb {
 
 enum class SortStyle : uint8_t { NO_SORT, ROW_SORT, VALUE_SORT };
 
+struct ConfigSetting {
+	string name;
+	Value value;
+};
+
 class TestConfiguration {
 public:
 	enum class ExtensionAutoLoadingMode { NONE = 0, AVAILABLE = 1, ALL = 2 };
@@ -69,10 +74,10 @@ public:
 	string GetStorageVersion();
 	string GetTestEnv(const string &key, const string &default_value);
 	const unordered_map<string, string> &GetTestEnvMap();
-
 	vector<unordered_set<string>> GetSelectTagSets();
 	vector<unordered_set<string>> GetSkipTagSets();
 	SelectPolicy GetPolicyForTagSet(const vector<string> &tag_set);
+	vector<ConfigSetting> GetConfigSettings();
 
 	static bool TestForceStorage();
 	static bool TestForceReload();

@@ -58,6 +58,9 @@ SQLLogicTestRunner::SQLLogicTestRunner(string dbpath) : dbpath(std::move(dbpath)
 	} else if (config->options.autoload_known_extensions) {
 		local_extension_repo = string(DUCKDB_BUILD_DIRECTORY) + "/repository";
 	}
+	for (auto &entry : test_config.GetConfigSettings()) {
+		config->SetOptionByName(entry.name, entry.value);
+	}
 }
 
 SQLLogicTestRunner::~SQLLogicTestRunner() {
