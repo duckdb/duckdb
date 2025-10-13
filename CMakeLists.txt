@@ -823,6 +823,7 @@ function(link_extension_libraries LIBRARY LINKAGE)
       target_link_libraries(${LIBRARY} ${LINKAGE} ${EXT_NAME}_extension)
     endif()
   endforeach()
+  target_link_libraries(${LIBRARY} ${LINKAGE} duckdb_generated_extension_loader)
 endfunction()
 
 function(link_threads LIBRARY LINKAGE)
