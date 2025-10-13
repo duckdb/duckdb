@@ -172,7 +172,7 @@ SinkFinalizeType PhysicalCreateARTIndex::Finalize(Pipeline &pipeline, Event &eve
 
 	// Vacuum excess memory and verify.
 	state.global_index->Vacuum();
-	D_ASSERT(!state.global_index->ToString().empty());
+	state.global_index->Verify();
 	state.global_index->VerifyAllocations();
 
 	auto &storage = table.GetStorage();
