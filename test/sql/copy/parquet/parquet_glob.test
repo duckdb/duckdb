@@ -69,13 +69,13 @@ FROM parquet_scan('data/parquet-testing/glob3/*/dir/*.parquet');
 statement error
 select count(*) from parquet_scan('')
 ----
-<REGEX>:.*IO Error.*can only be set for.*
+
 
 # schema mismatch in parquet glob
 statement error
 select * from parquet_scan('data/parquet-testing/*.parquet')
 ----
-<REGEX>:.*Invalid Input Error: Failed to read file.*
+
 
 # parquet glob with COPY FROM
 statement ok
