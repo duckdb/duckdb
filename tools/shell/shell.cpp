@@ -1983,6 +1983,68 @@ static void toggleSelectOrder(sqlite3 *db) {
 }
 
 /*
+** Lookup the schema for a table using the information schema.
+*/
+static char *getTableSchema(sqlite3 *db, const char *zTable) {
+	char *zSchema = NULL;
+	sqlite3_stmt *pStmt = NULL;
+	char *zSql = sqlite3_mprintf(
+		"SELECT table_schema FROM information_schema.tables "
+		"WHERE table_name = %Q AND table_type='BASE TABLE' "
+		"ORDER BY (table_schema='main') DESC LIMIT 1", zTable);
+	
+	if (!zSql) return NULL;
+	
+	int rc = sqlite3_prepare_v2(db, zSql, -1, &pStmt, 0);
+	sqlite3_free(zSql);
+	
+	if (rc == SQLITE_OK && pStmt) {
+		if (sqlite3_step(pStmt) == SQLITE_ROW) {
+			const char *schema = (const char *)sqlite3_column_text(pStmt, 0);
+			if (schema) zSchema = sqlite3_mprintf("%s", schema);
+		}
+		sqlite3_finalize(pStmt);
+	}
+	
+	return zSchema;
+}
+
+/*
+** Quote an identifier if needed.
+*/
+static char *quoteIdentifier(const char *zIdent) {
+	if (!zIdent) return NULL;
+	
+	bool needsQuote = !isalpha((unsigned char)zIdent[0]) && zIdent[0] != '_';
+	if (!needsQuote) {
+		for (const char *p = zIdent; *p; p++) {
+			if (!isalnum((unsigned char)*p) && *p != '_') {
+				needsQuote = true;
+				break;
+			}
+		}
+	}
+	
+	return needsQuote ? sqlite3_mprintf("\"%w\"", zIdent) : sqlite3_mprintf("%s", zIdent);
+}
+
+/*
+** Build a qualified name: schema.table
+*/
+static char *buildQualifiedName(const char *zSchema, const char *zTable) {
+	char *quotedSchema = quoteIdentifier(zSchema);
+	char *quotedTable = quoteIdentifier(zTable);
+	char *result = NULL;
+	
+	if (quotedSchema && quotedTable) {
+		result = sqlite3_mprintf("%s.%s", quotedSchema, quotedTable);
+	}
+	sqlite3_free(quotedSchema);
+	sqlite3_free(quotedTable);
+	return result;
+}
+
+/*
 ** This is a different callback routine used for dumping the database.
 ** Each row received by this callback consists of a table name,
 ** the table type ("index" or "table") and SQL to create the table.
@@ -2027,16 +2089,32 @@ static int dump_callback(void *pArg, int nArg, char **azArg, char **azNotUsed) {
 		int i;
 		char *savedDestTable;
 		RenderMode savedMode;
+		char *zSchema = NULL;
+		char *zQualifiedName = NULL;
 
-		azCol = p->TableColumnList(zTable);
-		if (azCol == 0) {
+		zSchema = getTableSchema(p->db, zTable);
+		if (!zSchema) zSchema = sqlite3_mprintf("main");
+
+		zQualifiedName = buildQualifiedName(zSchema, zTable);
+		if (!zQualifiedName) {
+			sqlite3_free(zSchema);
 			p->nErr++;
 			return 0;
 		}
 
-		/* Always quote the table name, even if it appears to be pure ascii,
-		** in case it is a keyword. Ex:  INSERT INTO "table" ... */
-		appendText(sTable, zTable, quoteChar(zTable));
+		azCol = p->TableColumnList(zQualifiedName);
+		if (azCol == 0) {
+			sqlite3_free(zQualifiedName);
+			sqlite3_free(zSchema);
+			p->nErr++;
+			return 0;
+		}
+
+		if (strcmp(zSchema, "main") != 0) {
+			appendText(sTable, zQualifiedName, 0);
+		} else {
+			appendText(sTable, zTable, quoteChar(zTable));
+		}
 		/* If preserving the rowid, add a column list after the table name.
 		** In other words:  "INSERT INTO tab(rowid,a,b,c,...) VALUES(...)"
 		** instead of the usual "INSERT INTO tab VALUES(...)".
@@ -2065,7 +2143,7 @@ static int dump_callback(void *pArg, int nArg, char **azArg, char **azNotUsed) {
 		}
 		freeColumnList(azCol);
 		appendText(sSelect, " FROM ", 0);
-		appendText(sSelect, zTable, quoteChar(zTable));
+		appendText(sSelect, zQualifiedName, 0);
 
 		savedDestTable = p->zDestTable;
 		savedMode = p->mode;
@@ -2080,8 +2158,9 @@ static int dump_callback(void *pArg, int nArg, char **azArg, char **azNotUsed) {
 		}
 		p->zDestTable = savedDestTable;
 		p->mode = savedMode;
-		if (rc)
-			p->nErr++;
+		sqlite3_free(zQualifiedName);
+		sqlite3_free(zSchema);
+		if (rc != SQLITE_OK && rc != SQLITE_DONE) p->nErr++;
 	}
 	return 0;
 }
@@ -3117,8 +3196,31 @@ MetadataResult DumpTable(ShellState &state, const char **azArg, idx_t nArg) {
 	raw_printf(state.out, "BEGIN TRANSACTION;\n");
 	state.showHeader = 0;
 	state.nErr = 0;
-	if (zLike == 0)
-		zLike = sqlite3_mprintf("true");
+	if (zLike == 0) zLike = sqlite3_mprintf("true");
+	
+	// Emit CREATE SCHEMA for non-main schemas first
+	zSql = sqlite3_mprintf(
+		"SELECT DISTINCT table_schema FROM information_schema.tables "
+		"WHERE table_schema != 'main' AND table_schema NOT LIKE 'pg_%%' "
+		"AND table_schema != 'information_schema' "
+		"AND table_name IN (SELECT name FROM sqlite_schema WHERE (%s) AND type=='table') "
+		"ORDER BY table_schema", zLike);
+	sqlite3_stmt *pStmt = NULL;
+	if (sqlite3_prepare_v2(state.db, zSql, -1, &pStmt, 0) == SQLITE_OK) {
+		while (sqlite3_step(pStmt) == SQLITE_ROW) {
+			const char *schema = (const char *)sqlite3_column_text(pStmt, 0);
+			if (schema) {
+				char *quotedSchema = quoteIdentifier(schema);
+				if (quotedSchema) {
+					raw_printf(state.out, "CREATE SCHEMA IF NOT EXISTS %s;\n", quotedSchema);
+					sqlite3_free(quotedSchema);
+				}
+			}
+		}
+		sqlite3_finalize(pStmt);
+	}
+	sqlite3_free(zSql);
+	
 	zSql = sqlite3_mprintf("SELECT name, type, sql FROM sqlite_schema "
 	                       "WHERE (%s) AND type=='table'"
 	                       "  AND sql NOT NULL"
