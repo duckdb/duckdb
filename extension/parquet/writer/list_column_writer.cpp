@@ -114,7 +114,12 @@ void ListColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *pa
 	auto child_length = GetConsecutiveChildList(vector, child_list, 0, count);
 	// The elements of a single list should not span multiple Parquet pages
 	// So, we force the entire vector to fit on a single page by setting "vector_can_span_multiple_pages=false"
-	child_writer->Prepare(*state.child_state, &state_p, child_list, child_length, false);
+	if (child_length > static_cast<idx_t>(NumericLimits<int32_t>::Maximum())) {
+		// Allow child to span multiple pages for very large lists
+		child_writer->Prepare(*state.child_state, &state_p, child_list, child_length, true);
+	} else {
+		child_writer->Prepare(*state.child_state, &state_p, child_list, child_length, false);
+	}
 }
 
 void ListColumnWriter::BeginWrite(ColumnWriterState &state_p) {
