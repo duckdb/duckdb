@@ -323,21 +323,40 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 			}
 		}
 
-		// load the db from storage
+		// Start timing the storage load step.
+		auto client_context = context.GetClientContext();
+		if (client_context) {
+			auto profiler = client_context->client_data->profiler;
+			profiler->StartTimer(MetricsType::ATTACH_LOAD_STORAGE_LATENCY);
+		}
+
+		// Load the checkpoint from storage.
 		auto checkpoint_reader = SingleFileCheckpointReader(*this);
-
-		auto profiler = context.GetClientContext()->client_data->profiler;
-
-		profiler->StartTimer(MetricsType::ATTACH_LOAD_STORAGE_LATENCY);
 		checkpoint_reader.LoadFromStorage();
-		profiler->EndTimer(MetricsType::ATTACH_LOAD_STORAGE_LATENCY);
 
+		// End timing the storage load step.
+		if (client_context) {
+			auto profiler = client_context->client_data->profiler;
+			profiler->EndTimer(MetricsType::ATTACH_LOAD_STORAGE_LATENCY);
+		}
+
+		// Start timing the WAL replay step.
+		if (client_context) {
+			auto profiler = client_context->client_data->profiler;
+			profiler->StartTimer(MetricsType::ATTACH_REPLAY_WAL_LATENCY);
+		}
+
+		// Replay the WAL.
 		auto wal_path = GetWALPath();
-
-		profiler->StartTimer(MetricsType::ATTACH_REPLAY_WAL_LATENCY);
 		wal = WriteAheadLog::Replay(fs, db, wal_path);
-		profiler->EndTimer(MetricsType::ATTACH_REPLAY_WAL_LATENCY);
+
+		// End timing the WAL replay step.
+		if (client_context) {
+			auto profiler = client_context->client_data->profiler;
+			profiler->EndTimer(MetricsType::ATTACH_REPLAY_WAL_LATENCY);
+		}
 	}
+
 	if (row_group_size > 122880ULL && GetStorageVersion() < 4) {
 		throw InvalidInputException("Unsupported row group size %llu - row group sizes >= 122_880 are only supported "
 		                            "with STORAGE_VERSION '1.2.0' or above.\nExplicitly specify a newer storage "
@@ -482,24 +501,38 @@ void SingleFileStorageManager::CreateCheckpoint(QueryContext context, Checkpoint
 	if (read_only || !load_complete) {
 		return;
 	}
-
 	if (db.GetStorageExtension()) {
-		auto profiling = context.GetClientContext()->client_data->profiler;
-		profiling->StartTimer(MetricsType::CHECKPOINT_LATENCY);
 		db.GetStorageExtension()->OnCheckpointStart(db, options);
-		profiling->EndTimer(MetricsType::CHECKPOINT_LATENCY);
 	}
+
 	auto &config = DBConfig::Get(db);
+	// We only need to checkpoint if there is anything in the WAL.
 	if (GetWALSize() > 0 || config.options.force_checkpoint || options.action == CheckpointAction::ALWAYS_CHECKPOINT) {
-		// we only need to checkpoint if there is anything in the WAL
 		try {
+
+			// Start timing the checkpoint.
+			auto client_context = context.GetClientContext();
+			if (client_context) {
+				auto profiler = client_context->client_data->profiler;
+				profiler->StartTimer(MetricsType::CHECKPOINT_LATENCY);
+			}
+
+			// Write the checkpoint.
 			auto checkpointer = CreateCheckpointWriter(context, options);
 			checkpointer->CreateCheckpoint();
+
+			// End timing the checkpoint.
+			if (client_context) {
+				auto profiler = client_context->client_data->profiler;
+				profiler->EndTimer(MetricsType::CHECKPOINT_LATENCY);
+			}
+
 		} catch (std::exception &ex) {
 			ErrorData error(ex);
 			throw FatalException("Failed to create checkpoint because of error: %s", error.RawMessage());
 		}
 	}
+
 	if (!InMemory() && options.wal_action == CheckpointWALAction::DELETE_WAL) {
 		ResetWAL();
 	}

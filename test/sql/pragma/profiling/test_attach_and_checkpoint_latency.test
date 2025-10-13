@@ -7,6 +7,8 @@ require noforcestorage
 
 require skip_reload
 
+# Setup.
+
 statement ok
 SET threads = 1;
 
@@ -14,13 +16,7 @@ statement ok
 SET wal_autocheckpoint = '1TB';
 
 statement ok
-ATTACH '__TEST_DIR__/profile_fs.db';
-
-statement ok
-CREATE TABLE profile_fs.tbl AS SELECT range AS id FROM range(10000);
-
-statement ok
-PRAGMA enable_profiling = 'json';
+PRAGMA disable_checkpoint_on_shutdown;
 
 statement ok
 PRAGMA profiling_output = '__TEST_DIR__/profile_fs.json';
@@ -31,6 +27,19 @@ PRAGMA custom_profiling_settings='{"WAITING_TO_ATTACH_LATENCY": "true", "ATTACH_
 statement ok
 SET profiling_coverage='ALL';
 
+# Finished setup.
+
+# CHECKPOINT_LATENCY.
+
+statement ok
+ATTACH '__TEST_DIR__/profile_fs.db';
+
+statement ok
+CREATE TABLE profile_fs.tbl AS SELECT range AS id FROM range(100_000);
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
 statement ok
 CHECKPOINT profile_fs;
 
@@ -40,8 +49,33 @@ PRAGMA disable_profiling;
 statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profile_fs.json';
 
+query I
+SELECT
+	CASE WHEN checkpoint_latency > 0 THEN 'true'
+	ELSE 'false' END
+FROM metrics_output;
+----
+true
+
+# WAITING_TO_ATTACH_LATENCY, ATTACH_LOAD_STORAGE_LATENCY and ATTACH_REPLAY_WAL_LATENCY.
+
 statement ok
-SELECT waiting_to_attach_latency FROM metrics_output;
+CREATE TABLE profile_fs.other_tbl AS SELECT range AS id FROM range(100_000);
+
+statement ok
+DETACH profile_fs;
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+ATTACH '__TEST_DIR__/profile_fs.db';
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profile_fs.json';
 
 query I
 SELECT
@@ -51,9 +85,6 @@ FROM metrics_output;
 ----
 true
 
-statement ok
-SELECT attach_load_storage_latency FROM metrics_output;
-
 query I
 SELECT
 	CASE WHEN attach_load_storage_latency > 0 THEN 'true'
@@ -62,23 +93,9 @@ FROM metrics_output;
 ----
 true
 
-statement ok
-SELECT attach_replay_wal_latency FROM metrics_output;
-
 query I
 SELECT
 	CASE WHEN attach_replay_wal_latency > 0 THEN 'true'
-	ELSE 'false' END
-FROM metrics_output;
-----
-true
-
-statement ok
-SELECT checkpoint_latency FROM metrics_output;
-
-query I
-SELECT
-	CASE WHEN checkpoint_latency > 0 THEN 'true'
 	ELSE 'false' END
 FROM metrics_output;
 ----

@@ -94,7 +94,6 @@ public:
 	DUCKDB_API void Flush(const PhysicalOperator &phys_op);
 	DUCKDB_API OperatorInformation &GetOperatorInfo(const PhysicalOperator &phys_op);
 	DUCKDB_API bool OperatorInfoIsInitialized(const PhysicalOperator &phys_op);
-	DUCKDB_API void AddExtraInfo(InsertionOrderPreservingMap<string> extra_info);
 
 public:
 	ClientContext &context;
@@ -117,23 +116,35 @@ private:
 struct QueryMetrics {
 	QueryMetrics() : total_bytes_read(0), total_bytes_written(0) {};
 
+	//! Reset the query metrics.
+	void Reset() {
+		query = "";
+		latency.Reset();
+		waiting_to_attach_latency.Reset();
+		attach_load_storage_latency.Reset();
+		attach_replay_wal_latency.Reset();
+		checkpoint_latency.Reset();
+		total_bytes_read = 0;
+		total_bytes_written = 0;
+	}
+
 	ProfilingInfo query_global_info;
 
-	//! The SQL string of the query
+	//! The SQL string of the query.
 	string query;
-	//! The timer used to time the excution time of the entire query
+	//! The timer of the execution of the entire query.
 	Profiler latency;
-	//! The timer used to time how long we spend waiting to attach
+	//! The timer of the delay when waiting to ATTACH a file.
 	Profiler waiting_to_attach_latency;
-	//! The timer used to time how it takes to load from storage
+	//! The timer for loading from storage.
 	Profiler attach_load_storage_latency;
-	//! The timer used to time how it takes to replay the WAL
+	//! The timer for replaying the WAL file.
 	Profiler attach_replay_wal_latency;
-	//! The timer used to time checkpoints
+	//! The timer for running checkpoints.
 	Profiler checkpoint_latency;
-	//! The total bytes read by the file system
+	//! The total bytes read by the file system.
 	atomic<idx_t> total_bytes_read;
-	//! The total bytes written by the file system
+	//! The total bytes written by the file system.
 	atomic<idx_t> total_bytes_written;
 };
 
@@ -146,9 +157,6 @@ public:
 	DUCKDB_API explicit QueryProfiler(ClientContext &context);
 
 public:
-	//! Propagate save_location, enabled, detailed_enabled and automatic_print_format.
-	void Propagate(QueryProfiler &qp);
-
 	DUCKDB_API bool IsEnabled() const;
 	DUCKDB_API bool IsDetailedEnabled() const;
 	DUCKDB_API ProfilerPrintFormat GetPrintFormat(ExplainFormat format = ExplainFormat::DEFAULT) const;

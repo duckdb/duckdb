@@ -103,9 +103,7 @@ void QueryProfiler::Reset() {
 	phase_timings.clear();
 	phase_stack.clear();
 	running = false;
-	query_metrics.query = "";
-	query_metrics.total_bytes_read = 0;
-	query_metrics.total_bytes_written = 0;
+	query_metrics.Reset();
 }
 
 void QueryProfiler::StartQuery(const string &query, bool is_explain_analyze_p, bool start_at_optimizer) {
@@ -346,18 +344,18 @@ void QueryProfiler::StartTimer(MetricsType type) {
 	switch (type) {
 	case MetricsType::WAITING_TO_ATTACH_LATENCY:
 		query_metrics.waiting_to_attach_latency.Start();
-		break;
+		return;
 	case MetricsType::ATTACH_LOAD_STORAGE_LATENCY:
 		query_metrics.attach_load_storage_latency.Start();
-		break;
+		return;
 	case MetricsType::ATTACH_REPLAY_WAL_LATENCY:
 		query_metrics.attach_replay_wal_latency.Start();
-		break;
+		return;
 	case MetricsType::CHECKPOINT_LATENCY:
 		query_metrics.checkpoint_latency.Start();
-		break;
+		return;
 	default:
-		break;
+		return;
 	}
 }
 
@@ -369,18 +367,18 @@ void QueryProfiler::EndTimer(MetricsType type) {
 	switch (type) {
 	case MetricsType::WAITING_TO_ATTACH_LATENCY:
 		query_metrics.waiting_to_attach_latency.End();
-		break;
+		return;
 	case MetricsType::ATTACH_LOAD_STORAGE_LATENCY:
 		query_metrics.attach_load_storage_latency.End();
-		break;
+		return;
 	case MetricsType::ATTACH_REPLAY_WAL_LATENCY:
 		query_metrics.attach_replay_wal_latency.End();
-		break;
+		return;
 	case MetricsType::CHECKPOINT_LATENCY:
 		query_metrics.checkpoint_latency.End();
-		break;
+		return;
 	default:
-		break;
+		return;
 	}
 }
 
@@ -466,7 +464,7 @@ OperatorProfiler::OperatorProfiler(ClientContext &context) : context(context) {
 	}
 
 	// Reduce.
-	auto root_metrics = ProfilingInfo::DefaultRootSettings();
+	auto root_metrics = ProfilingInfo::RootScopeSettings();
 	for (const auto metric : root_metrics) {
 		settings.erase(metric);
 	}
@@ -1033,9 +1031,6 @@ void QueryProfiler::MoveOptimizerPhasesToRoot() {
 			root_metrics[phase] = Value::CreateValue(timing);
 		}
 	}
-}
-
-void QueryProfiler::Propagate(QueryProfiler &) {
 }
 
 } // namespace duckdb

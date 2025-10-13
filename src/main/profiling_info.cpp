@@ -23,12 +23,12 @@ ProfilingInfo::ProfilingInfo(const profiler_settings_t &n_settings, const idx_t 
 
 	// Reduce.
 	if (depth == 0) {
-		auto op_metrics = DefaultOperatorSettings();
+		auto op_metrics = OperatorScopeSettings();
 		for (const auto metric : op_metrics) {
 			settings.erase(metric);
 		}
 	} else {
-		auto root_metrics = DefaultRootSettings();
+		auto root_metrics = RootScopeSettings();
 		for (const auto metric : root_metrics) {
 			settings.erase(metric);
 		}
@@ -57,12 +57,20 @@ profiler_settings_t ProfilingInfo::DefaultSettings() {
 	        MetricsType::TOTAL_BYTES_WRITTEN};
 }
 
-profiler_settings_t ProfilingInfo::DefaultRootSettings() {
-	return {MetricsType::QUERY_NAME, MetricsType::BLOCKED_THREAD_TIME, MetricsType::LATENCY,
-	        MetricsType::ROWS_RETURNED};
+profiler_settings_t ProfilingInfo::RootScopeSettings() {
+	return {MetricsType::QUERY_NAME,
+	        MetricsType::BLOCKED_THREAD_TIME,
+	        MetricsType::LATENCY,
+	        MetricsType::ROWS_RETURNED,
+	        MetricsType::TOTAL_BYTES_READ,
+	        MetricsType::TOTAL_BYTES_WRITTEN,
+	        MetricsType::CHECKPOINT_LATENCY,
+	        MetricsType::WAITING_TO_ATTACH_LATENCY,
+	        MetricsType::ATTACH_LOAD_STORAGE_LATENCY,
+	        MetricsType::ATTACH_REPLAY_WAL_LATENCY};
 }
 
-profiler_settings_t ProfilingInfo::DefaultOperatorSettings() {
+profiler_settings_t ProfilingInfo::OperatorScopeSettings() {
 	return {MetricsType::OPERATOR_CARDINALITY, MetricsType::OPERATOR_ROWS_SCANNED, MetricsType::OPERATOR_TIMING,
 	        MetricsType::OPERATOR_NAME, MetricsType::OPERATOR_TYPE};
 }
