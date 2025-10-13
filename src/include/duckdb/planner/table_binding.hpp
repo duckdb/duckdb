@@ -17,6 +17,7 @@
 #include "duckdb/planner/binding_alias.hpp"
 #include "duckdb/common/column_index.hpp"
 #include "duckdb/common/table_column.hpp"
+#include "duckdb/planner/bound_statement.hpp"
 
 namespace duckdb {
 class BindContext;
@@ -161,6 +162,25 @@ public:
 };
 
 enum class CTEType { CAN_BE_REFERENCED, CANNOT_BE_REFERENCED };
+struct CTEBinding;
+
+struct CTEBindState {
+	CTEBindState(Binder &parent_binder, QueryNode &cte_def, const vector<string> &aliases);
+	~CTEBindState();
+
+	Binder &parent_binder;
+	QueryNode &cte_def;
+	const vector<string> &aliases;
+	idx_t active_binder_count;
+	shared_ptr<Binder> query_binder;
+	BoundStatement query;
+	vector<string> names;
+	vector<LogicalType> types;
+
+public:
+	bool IsBound() const;
+	void Bind(CTEBinding &binding);
+};
 
 struct CTEBinding : public Binding {
 public:
@@ -168,6 +188,7 @@ public:
 
 public:
 	CTEBinding(BindingAlias alias, vector<LogicalType> types, vector<string> names, idx_t index, CTEType type);
+	CTEBinding(BindingAlias alias, shared_ptr<CTEBindState> bind_state, idx_t index);
 
 public:
 	bool CanBeReferenced() const;
@@ -177,6 +198,7 @@ public:
 private:
 	CTEType cte_type;
 	idx_t reference_count;
+	shared_ptr<CTEBindState> bind_state;
 };
 
 } // namespace duckdb

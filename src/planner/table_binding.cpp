@@ -342,6 +342,11 @@ CTEBinding::CTEBinding(BindingAlias alias, vector<LogicalType> types, vector<str
       reference_count(0) {
 }
 
+CTEBinding::CTEBinding(BindingAlias alias_p, shared_ptr<CTEBindState> bind_state_p, idx_t index)
+    : Binding(BindingType::CTE, std::move(alias_p), vector<LogicalType>(), vector<string>(), index),
+      cte_type(CTEType::CAN_BE_REFERENCED), reference_count(0), bind_state(std::move(bind_state_p)) {
+}
+
 bool CTEBinding::CanBeReferenced() const {
 	return cte_type == CTEType::CAN_BE_REFERENCED;
 }
@@ -351,6 +356,21 @@ bool CTEBinding::IsReferenced() const {
 }
 
 void CTEBinding::Reference() {
+	if (!CanBeReferenced()) {
+		throw InternalException("CTE cannot be referenced!");
+	}
+	if (bind_state) {
+		// we have not bound the CTE yet - bind it
+		bind_state->Bind(*this);
+
+		// copy over the names / types and initialize the binding
+		this->names = bind_state->names;
+		this->types = bind_state->types;
+		Initialize();
+
+		// finalize binding
+		bind_state.reset();
+	}
 	reference_count++;
 }
 

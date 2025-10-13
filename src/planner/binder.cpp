@@ -228,11 +228,11 @@ StatementProperties &Binder::GetStatementProperties() {
 }
 
 optional_ptr<BoundParameterMap> Binder::GetParameters() {
-	return query_binder_state->parameters;
+	return global_binder_state->parameters;
 }
 
 void Binder::SetParameters(BoundParameterMap &parameters) {
-	query_binder_state->parameters = parameters;
+	global_binder_state->parameters = parameters;
 }
 
 void Binder::PushExpressionBinder(ExpressionBinder &binder) {

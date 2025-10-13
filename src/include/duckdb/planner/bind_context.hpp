@@ -118,6 +118,7 @@ public:
 	//! We need this to correctly bind recursive CTEs with multiple references.
 	void AddCTEBinding(idx_t index, BindingAlias alias, const vector<string> &names, const vector<LogicalType> &types,
 	                   CTEType cte_type = CTEType::CAN_BE_REFERENCED);
+	void AddCTEBinding(unique_ptr<CTEBinding> binding);
 
 	//! Add an implicit join condition (e.g. USING (x))
 	void AddUsingBinding(const string &column_name, UsingColumnSet &set);

@@ -174,14 +174,14 @@ struct GlobalBinderState {
 	case_insensitive_map_t<unique_ptr<TableRef>> replacement_scans;
 	//! Using column sets
 	vector<unique_ptr<UsingColumnSet>> using_column_sets;
+	//! The set of parameter expressions bound by this binder
+	optional_ptr<BoundParameterMap> parameters;
 };
 
 // QueryBinderState is state shared WITHIN a query, a new query-binder state is created when binding inside e.g. a view
 struct QueryBinderState {
 	//! The vector of active binders
 	vector<reference<ExpressionBinder>> active_binders;
-	//! The set of parameter expressions bound by this binder
-	optional_ptr<BoundParameterMap> parameters;
 };
 
 //! Bind the parsed query tree to the actual columns present in the catalog.

@@ -711,15 +711,19 @@ void BindContext::AddGenericBinding(idx_t index, const string &alias, const vect
 	AddBinding(make_uniq<Binding>(BindingType::BASE, BindingAlias(alias), types, names, index));
 }
 
-void BindContext::AddCTEBinding(idx_t index, BindingAlias alias_p, const vector<string> &names,
-                                const vector<LogicalType> &types, CTEType cte_type) {
+void BindContext::AddCTEBinding(unique_ptr<CTEBinding> binding) {
 	for (auto &cte_binding : cte_bindings) {
-		if (cte_binding->GetBindingAlias() == alias_p) {
-			throw BinderException("Duplicate CTE binding \"%s\" in query!", alias_p.ToString());
+		if (cte_binding->GetBindingAlias() == binding->GetBindingAlias()) {
+			throw BinderException("Duplicate CTE binding \"%s\" in query!", binding->GetBindingAlias().ToString());
 		}
 	}
-	auto binding = make_uniq<CTEBinding>(std::move(alias_p), types, names, index, cte_type);
 	cte_bindings.push_back(std::move(binding));
+}
+
+void BindContext::AddCTEBinding(idx_t index, BindingAlias alias_p, const vector<string> &names,
+                                const vector<LogicalType> &types, CTEType cte_type) {
+	auto binding = make_uniq<CTEBinding>(std::move(alias_p), types, names, index, cte_type);
+	AddCTEBinding(std::move(binding));
 }
 
 optional_ptr<CTEBinding> BindContext::GetCTEBinding(const BindingAlias &ctename) {
