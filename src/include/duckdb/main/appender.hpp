@@ -48,6 +48,8 @@ protected:
 	AppenderType appender_type;
 	//! The amount of rows after which the appender flushes automatically.
 	idx_t flush_count = DEFAULT_FLUSH_COUNT;
+	//! Peak allocation threshold at which to flush the allocator when appender flushs chunk.
+	optional_idx flush_memory_threshold;
 
 protected:
 	DUCKDB_API BaseAppender(Allocator &allocator, const AppenderType type);
@@ -107,6 +109,9 @@ protected:
 	void InitializeChunk();
 	void FlushChunk();
 
+	bool ShouldFlushChunk() const;
+	bool ShouldFlush() const;
+
 	template <class T>
 	void AppendValueInternal(T value);
 	template <class SRC, class DST>
@@ -131,9 +136,11 @@ protected:
 class Appender : public BaseAppender {
 public:
 	DUCKDB_API Appender(Connection &con, const string &database_name, const string &schema_name,
-	                    const string &table_name);
-	DUCKDB_API Appender(Connection &con, const string &schema_name, const string &table_name);
-	DUCKDB_API Appender(Connection &con, const string &table_name);
+	                    const string &table_name, const idx_t flush_memory_threshold = DConstants::INVALID_INDEX);
+	DUCKDB_API Appender(Connection &con, const string &schema_name, const string &table_name,
+	                    const idx_t flush_memory_threshold = DConstants::INVALID_INDEX);
+	DUCKDB_API Appender(Connection &con, const string &table_name,
+	                    const idx_t flush_memory_threshold = DConstants::INVALID_INDEX);
 	DUCKDB_API ~Appender() override;
 
 public:
@@ -162,7 +169,8 @@ protected:
 class QueryAppender : public BaseAppender {
 public:
 	DUCKDB_API QueryAppender(Connection &con, string query, vector<LogicalType> types,
-	                         vector<string> names = vector<string>(), string table_name = string());
+	                         vector<string> names = vector<string>(), string table_name = string(),
+	                         const idx_t flush_memory_threshold = DConstants::INVALID_INDEX);
 	DUCKDB_API ~QueryAppender() override;
 
 private:
@@ -187,7 +195,8 @@ class InternalAppender : public BaseAppender {
 
 public:
 	DUCKDB_API InternalAppender(ClientContext &context, TableCatalogEntry &table,
-	                            const idx_t flush_count = DEFAULT_FLUSH_COUNT);
+	                            const idx_t flush_count = DEFAULT_FLUSH_COUNT,
+	                            const idx_t flush_memory_threshold = DConstants::INVALID_INDEX);
 	DUCKDB_API ~InternalAppender() override;
 
 protected:
