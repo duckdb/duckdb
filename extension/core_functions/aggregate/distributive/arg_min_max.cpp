@@ -690,7 +690,8 @@ void SpecializeArgMinMaxNullNFunction(PhysicalType arg_type, AggregateFunction &
 	switch (arg_type) {
 #ifndef DUCKDB_SMALLER_BINARY
 	case PhysicalType::VARCHAR:
-		SpecializeArgMinMaxNullNFunction<VAL_TYPE, MinMaxFallbackValueOrNull<NULLS_LAST>, NULLS_LAST, COMPARATOR>(function);
+		SpecializeArgMinMaxNullNFunction<VAL_TYPE, MinMaxFallbackValueOrNull<NULLS_LAST>, NULLS_LAST, COMPARATOR>(
+		    function);
 		break;
 	case PhysicalType::INT32:
 		SpecializeArgMinMaxNullNFunction<VAL_TYPE, MinMaxInclNullValue<int32_t, NULLS_LAST>, NULLS_LAST, COMPARATOR>(
@@ -710,7 +711,8 @@ void SpecializeArgMinMaxNullNFunction(PhysicalType arg_type, AggregateFunction &
 		break;
 #endif
 	default:
-		SpecializeArgMinMaxNullNFunction<VAL_TYPE, MinMaxFallbackValueOrNull<NULLS_LAST>, NULLS_LAST, COMPARATOR>(function);
+		SpecializeArgMinMaxNullNFunction<VAL_TYPE, MinMaxFallbackValueOrNull<NULLS_LAST>, NULLS_LAST, COMPARATOR>(
+		    function);
 		break;
 	}
 }
@@ -720,7 +722,8 @@ void SpecializeArgMinMaxNullNFunction(PhysicalType val_type, PhysicalType arg_ty
 	switch (val_type) {
 #ifndef DUCKDB_SMALLER_BINARY
 	case PhysicalType::VARCHAR:
-		SpecializeArgMinMaxNullNFunction<MinMaxFallbackValueOrNull<NULLS_LAST>, NULLS_LAST, COMPARATOR>(arg_type, function);
+		SpecializeArgMinMaxNullNFunction<MinMaxFallbackValueOrNull<NULLS_LAST>, NULLS_LAST, COMPARATOR>(arg_type,
+		                                                                                                function);
 		break;
 	case PhysicalType::INT32:
 		SpecializeArgMinMaxNullNFunction<MinMaxInclNullValue<int32_t, NULLS_LAST>, NULLS_LAST, COMPARATOR>(arg_type,
@@ -740,7 +743,8 @@ void SpecializeArgMinMaxNullNFunction(PhysicalType val_type, PhysicalType arg_ty
 		break;
 #endif
 	default:
-		SpecializeArgMinMaxNullNFunction<MinMaxFallbackValueOrNull<NULLS_LAST>, NULLS_LAST, COMPARATOR>(arg_type, function);
+		SpecializeArgMinMaxNullNFunction<MinMaxFallbackValueOrNull<NULLS_LAST>, NULLS_LAST, COMPARATOR>(arg_type,
+		                                                                                                function);
 		break;
 	}
 }
