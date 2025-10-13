@@ -1,6 +1,7 @@
 add_library_unity(
   duckdb_table_func_system
   OBJECT
+  duckdb_connection_count.cpp
   duckdb_approx_database_count.cpp
   duckdb_columns.cpp
   duckdb_constraints.cpp

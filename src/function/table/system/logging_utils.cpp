@@ -43,7 +43,7 @@ static void EnableLogging(ClientContext &context, TableFunctionInput &data, Data
 static unique_ptr<FunctionData> BindEnableLogging(ClientContext &context, TableFunctionBindInput &input,
                                                   vector<LogicalType> &return_types, vector<string> &names) {
 	if (input.inputs.size() > 1) {
-		throw InvalidInputException("PragmaEnableLogging: expected 0 or 1 parameter");
+		throw InvalidInputException("EnableLogging: expected 0 or 1 parameter");
 	}
 
 	auto result = make_uniq<EnableLoggingBindData>();
@@ -59,6 +59,9 @@ static unique_ptr<FunctionData> BindEnableLogging(ClientContext &context, TableF
 			storage_isset = true;
 			result->config.storage = param.second.ToString();
 		} else if (key == "storage_config") {
+			if (param.second.type().id() != LogicalTypeId::STRUCT) {
+				throw InvalidInputException("EnableLogging: storage_config must be a struct");
+			}
 			auto &children = StructValue::GetChildren(param.second);
 			for (idx_t i = 0; i < children.size(); i++) {
 				result->storage_config[StructType::GetChildName(param.second.type(), i)] = children[i];
@@ -71,7 +74,7 @@ static unique_ptr<FunctionData> BindEnableLogging(ClientContext &context, TableF
 		} else if (key == "storage_buffer_size") {
 			result->storage_config["buffer_size"] = param.second;
 		} else {
-			throw InvalidInputException("PragmaEnableLogging: unknown named parameter: %s", param.first.c_str());
+			throw InvalidInputException("EnableLogging: unknown named parameter: %s", param.first.c_str());
 		}
 	}
 

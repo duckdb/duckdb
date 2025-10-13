@@ -10,6 +10,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
+#include "transformer/peg_transformer.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "matcher.hpp"
 #include "duckdb/catalog/default/builtin_types/types.hpp"
@@ -491,7 +492,8 @@ static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(Clien
 	// tokenize the input
 	vector<MatcherToken> tokens;
 	vector<MatcherSuggestion> suggestions;
-	MatchState state(tokens, suggestions);
+	ParseResultAllocator parse_allocator;
+	MatchState state(tokens, suggestions, parse_allocator);
 	vector<UnicodeSpace> unicode_spaces;
 	string clean_sql;
 	const string &sql_ref = StripUnicodeSpaces(sql, clean_sql) ? clean_sql : sql;
@@ -654,7 +656,8 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 			continue;
 		}
 		vector<MatcherSuggestion> suggestions;
-		MatchState state(tokens, suggestions);
+		ParseResultAllocator parse_allocator;
+		MatchState state(tokens, suggestions, parse_allocator);
 
 		MatcherAllocator allocator;
 		auto &matcher = Matcher::RootMatcher(allocator);
@@ -681,6 +684,37 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 void CheckPEGParserFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 }
 
+class PEGParserExtension : public ParserExtension {
+public:
+	PEGParserExtension() {
+		parser_override = PEGParser;
+	}
+
+	static ParserOverrideResult PEGParser(ParserExtensionInfo *info, const string &query) {
+		vector<MatcherToken> root_tokens;
+		string clean_sql;
+
+		ParserTokenizer tokenizer(query, root_tokens);
+		tokenizer.TokenizeInput();
+		tokenizer.statements.push_back(std::move(root_tokens));
+
+		vector<unique_ptr<SQLStatement>> result;
+		try {
+			for (auto tokenized_statement : tokenizer.statements) {
+				if (tokenized_statement.empty()) {
+					continue;
+				}
+				auto &transformer = PEGTransformerFactory::GetInstance();
+				auto statement = transformer.Transform(tokenizer.statements[0], "Statement");
+				result.push_back(std::move(statement));
+			}
+			return ParserOverrideResult(std::move(result));
+		} catch (const ParserException &) {
+			return ParserOverrideResult();
+		}
+	}
+};
+
 static void LoadInternal(ExtensionLoader &loader) {
 	TableFunction auto_complete_fun("sql_auto_complete", {LogicalType::VARCHAR}, SQLAutoCompleteFunction,
 	                                SQLAutoCompleteBind, SQLAutoCompleteInit);
@@ -689,6 +723,9 @@ static void LoadInternal(ExtensionLoader &loader) {
 	TableFunction check_peg_parser_fun("check_peg_parser", {LogicalType::VARCHAR}, CheckPEGParserFunction,
 	                                   CheckPEGParserBind, nullptr);
 	loader.RegisterFunction(check_peg_parser_fun);
+
+	auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
+	config.parser_extensions.push_back(PEGParserExtension());
 }
 
 void AutocompleteExtension::Load(ExtensionLoader &loader) {

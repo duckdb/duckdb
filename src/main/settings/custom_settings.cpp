@@ -73,7 +73,7 @@ bool AllocatorBackgroundThreadsSetting::OnGlobalSet(DatabaseInstance *db, DBConf
 
 bool AllocatorBackgroundThreadsSetting::OnGlobalReset(DatabaseInstance *db, DBConfig &config) {
 	if (db) {
-		TaskScheduler::GetScheduler(*db).SetAllocatorBackgroundThreads(DBConfig().options.allocator_background_threads);
+		TaskScheduler::GetScheduler(*db).SetAllocatorBackgroundThreads(DBConfigOptions().allocator_background_threads);
 	}
 	return true;
 }
@@ -92,7 +92,7 @@ void AllocatorBulkDeallocationFlushThresholdSetting::SetGlobal(DatabaseInstance 
 
 void AllocatorBulkDeallocationFlushThresholdSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	config.options.allocator_bulk_deallocation_flush_threshold =
-	    DBConfig().options.allocator_bulk_deallocation_flush_threshold;
+	    DBConfigOptions().allocator_bulk_deallocation_flush_threshold;
 	if (db) {
 		BufferManager::GetBufferManager(*db).GetBufferPool().SetAllocatorBulkDeallocationFlushThreshold(
 		    config.options.allocator_bulk_deallocation_flush_threshold);
@@ -115,7 +115,7 @@ void AllocatorFlushThresholdSetting::SetGlobal(DatabaseInstance *db, DBConfig &c
 }
 
 void AllocatorFlushThresholdSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.allocator_flush_threshold = DBConfig().options.allocator_flush_threshold;
+	config.options.allocator_flush_threshold = DBConfigOptions().allocator_flush_threshold;
 	if (db) {
 		TaskScheduler::GetScheduler(*db).SetAllocatorFlushTreshold(config.options.allocator_flush_threshold);
 	}
@@ -142,11 +142,29 @@ bool AllowCommunityExtensionsSetting::OnGlobalSet(DatabaseInstance *db, DBConfig
 
 bool AllowCommunityExtensionsSetting::OnGlobalReset(DatabaseInstance *db, DBConfig &config) {
 	if (db && !config.options.allow_community_extensions) {
-		if (DBConfig().options.allow_community_extensions) {
+		if (DBConfigOptions().allow_community_extensions) {
 			throw InvalidInputException("Cannot upgrade allow_community_extensions setting while database is running");
 		}
 		return false;
 	}
+	return true;
+}
+
+//===----------------------------------------------------------------------===//
+// Allow Parser Override
+//===----------------------------------------------------------------------===//
+bool AllowParserOverrideExtensionSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto new_value = input.GetValue<string>();
+	if (!StringUtil::CIEquals(new_value, "default") && !StringUtil::CIEquals(new_value, "fallback") &&
+	    !StringUtil::CIEquals(new_value, "strict")) {
+		throw InvalidInputException("Unrecognized value for parser override setting. Valid options are: \"default\", "
+		                            "\"fallback\", \"strict\".");
+	}
+	return true;
+}
+
+bool AllowParserOverrideExtensionSetting::OnGlobalReset(DatabaseInstance *db, DBConfig &config) {
+	config.options.allow_parser_override_extension = "default";
 	return true;
 }
 
@@ -239,7 +257,7 @@ void AllowedDirectoriesSetting::ResetGlobal(DatabaseInstance *db, DBConfig &conf
 	if (!config.options.enable_external_access) {
 		throw InvalidInputException("Cannot change allowed_directories when enable_external_access is disabled");
 	}
-	config.options.allowed_directories = DBConfig().options.allowed_directories;
+	config.options.allowed_directories = DBConfigOptions().allowed_directories;
 }
 
 Value AllowedDirectoriesSetting::GetSetting(const ClientContext &context) {
@@ -273,7 +291,7 @@ void AllowedPathsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	if (!config.options.enable_external_access) {
 		throw InvalidInputException("Cannot change allowed_paths when enable_external_access is disabled");
 	}
-	config.options.allowed_paths = DBConfig().options.allowed_paths;
+	config.options.allowed_paths = DBConfigOptions().allowed_paths;
 }
 
 Value AllowedPathsSetting::GetSetting(const ClientContext &context) {
@@ -406,7 +424,7 @@ void CustomUserAgentSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config)
 	if (db) {
 		throw InvalidInputException("Cannot change custom_user_agent setting while database is running");
 	}
-	config.options.custom_user_agent = DBConfig().options.custom_user_agent;
+	config.options.custom_user_agent = DBConfigOptions().custom_user_agent;
 }
 
 //===----------------------------------------------------------------------===//
@@ -419,7 +437,7 @@ void DefaultBlockSizeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, 
 }
 
 void DefaultBlockSizeSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.default_block_alloc_size = DBConfig().options.default_block_alloc_size;
+	config.options.default_block_alloc_size = DBConfigOptions().default_block_alloc_size;
 }
 
 Value DefaultBlockSizeSetting::GetSetting(const ClientContext &context) {
@@ -494,7 +512,7 @@ Value DefaultSecretStorageSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 void DisabledCompressionMethodsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	auto list = StringUtil::Split(input.ToString(), ",");
-	set<CompressionType> disabled_compression_methods;
+	vector<CompressionType> disabled_compression_methods;
 	for (auto &entry : list) {
 		auto param = StringUtil::Lower(entry);
 		StringUtil::Trim(param);
@@ -512,19 +530,20 @@ void DisabledCompressionMethodsSetting::SetGlobal(DatabaseInstance *db, DBConfig
 		if (compression_type == CompressionType::COMPRESSION_AUTO) {
 			throw InvalidInputException("Unrecognized compression method \"%s\"", entry);
 		}
-		disabled_compression_methods.insert(compression_type);
+		disabled_compression_methods.push_back(compression_type);
 	}
-	config.options.disabled_compression_methods = std::move(disabled_compression_methods);
+	config.SetDisabledCompressionMethods(disabled_compression_methods);
 }
 
 void DisabledCompressionMethodsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.disabled_compression_methods = DBConfig().options.disabled_compression_methods;
+	vector<CompressionType> disabled_compression_methods;
+	config.SetDisabledCompressionMethods(disabled_compression_methods);
 }
 
 Value DisabledCompressionMethodsSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	string result;
-	for (auto &optimizer : config.options.disabled_compression_methods) {
+	for (auto &optimizer : config.GetDisabledCompressionMethods()) {
 		if (!result.empty()) {
 			result += ",";
 		}
@@ -571,7 +590,7 @@ void DisabledOptimizersSetting::SetGlobal(DatabaseInstance *db, DBConfig &config
 }
 
 void DisabledOptimizersSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.disabled_optimizers = DBConfig().options.disabled_optimizers;
+	config.options.disabled_optimizers = DBConfigOptions().disabled_optimizers;
 }
 
 Value DisabledOptimizersSetting::GetSetting(const ClientContext &context) {
@@ -653,7 +672,7 @@ void EnableExternalFileCacheSetting::SetGlobal(DatabaseInstance *db, DBConfig &c
 }
 
 void EnableExternalFileCacheSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.enable_external_file_cache = DBConfig().options.enable_external_file_cache;
+	config.options.enable_external_file_cache = DBConfigOptions().enable_external_file_cache;
 	if (db) {
 		ExternalFileCache::Get(*db).SetEnabled(config.options.enable_external_file_cache);
 	}
@@ -904,7 +923,7 @@ bool ExternalThreadsSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &config,
 }
 
 bool ExternalThreadsSetting::OnGlobalReset(DatabaseInstance *db, DBConfig &config) {
-	idx_t new_external_threads = DBConfig().options.external_threads;
+	idx_t new_external_threads = DBConfigOptions().external_threads;
 	if (db) {
 		TaskScheduler::GetScheduler(*db).SetThreads(config.options.maximum_threads, new_external_threads);
 	}
@@ -944,7 +963,7 @@ void ForceBitpackingModeSetting::SetGlobal(DatabaseInstance *db, DBConfig &confi
 }
 
 void ForceBitpackingModeSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.force_bitpacking_mode = DBConfig().options.force_bitpacking_mode;
+	config.options.force_bitpacking_mode = DBConfigOptions().force_bitpacking_mode;
 }
 
 Value ForceBitpackingModeSetting::GetSetting(const ClientContext &context) {
@@ -974,7 +993,7 @@ void ForceCompressionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, 
 }
 
 void ForceCompressionSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.force_compression = DBConfig().options.force_compression;
+	config.options.force_compression = DBConfigOptions().force_compression;
 }
 
 Value ForceCompressionSetting::GetSetting(const ClientContext &context) {
@@ -1088,8 +1107,7 @@ void LogQueryPathSetting::SetLocal(ClientContext &context, const Value &input) {
 
 void LogQueryPathSetting::ResetLocal(ClientContext &context) {
 	auto &client_data = ClientData::Get(context);
-	// TODO: verify that this does the right thing
-	client_data.log_query_writer = std::move(ClientData(context).log_query_writer);
+	client_data.log_query_writer = nullptr;
 }
 
 Value LogQueryPathSetting::GetSetting(const ClientContext &context) {
@@ -1369,7 +1387,7 @@ void StorageCompatibilityVersionSetting::SetGlobal(DatabaseInstance *db, DBConfi
 }
 
 void StorageCompatibilityVersionSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.serialization_compatibility = DBConfig().options.serialization_compatibility;
+	config.options.serialization_compatibility = DBConfigOptions().serialization_compatibility;
 }
 
 Value StorageCompatibilityVersionSetting::GetSetting(const ClientContext &context) {
@@ -1417,7 +1435,7 @@ void TempDirectorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 		throw PermissionException("Modifying the temp_directory has been disabled by configuration");
 	}
 	config.SetDefaultTempDirectory();
-	config.options.use_temporary_directory = DBConfig().options.use_temporary_directory;
+	config.options.use_temporary_directory = DBConfigOptions().use_temporary_directory;
 	if (db) {
 		auto &buffer_manager = BufferManager::GetBufferManager(*db);
 		buffer_manager.SetTemporaryDirectory(config.options.temporary_directory);

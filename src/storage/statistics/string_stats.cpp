@@ -170,6 +170,14 @@ void StringStats::Update(BaseStatistics &stats, const string_t &value) {
 	}
 }
 
+void StringStats::SetMin(BaseStatistics &stats, const string_t &value) {
+	ConstructValue(const_data_ptr_cast(value.GetData()), value.GetSize(), GetDataUnsafe(stats).min);
+}
+
+void StringStats::SetMax(BaseStatistics &stats, const string_t &value) {
+	ConstructValue(const_data_ptr_cast(value.GetData()), value.GetSize(), GetDataUnsafe(stats).max);
+}
+
 void StringStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 	if (other.GetType().id() == LogicalTypeId::VALIDITY) {
 		return;

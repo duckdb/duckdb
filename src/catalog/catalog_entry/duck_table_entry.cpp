@@ -23,6 +23,7 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
+#include "duckdb/common/type_visitor.hpp"
 
 namespace duckdb {
 
@@ -54,6 +55,9 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 	// create the physical storage
 	vector<ColumnDefinition> column_defs;
 	for (auto &col_def : columns.Physical()) {
+		if (TypeVisitor::Contains(col_def.Type(), LogicalTypeId::VARIANT)) {
+			throw NotImplementedException("A table cannot be created from a VARIANT column yet");
+		}
 		column_defs.push_back(col_def.Copy());
 	}
 	storage = make_shared_ptr<DataTable>(catalog.GetAttached(), StorageManager::Get(catalog).GetTableIOManager(&info),
@@ -1281,8 +1285,8 @@ TableFunction DuckTableEntry::GetScanFunction(ClientContext &context, unique_ptr
 	return TableScanFunction::GetFunction();
 }
 
-vector<ColumnSegmentInfo> DuckTableEntry::GetColumnSegmentInfo() {
-	return storage->GetColumnSegmentInfo();
+vector<ColumnSegmentInfo> DuckTableEntry::GetColumnSegmentInfo(const QueryContext &context) {
+	return storage->GetColumnSegmentInfo(context);
 }
 
 TableStorageInfo DuckTableEntry::GetStorageInfo(ClientContext &context) {

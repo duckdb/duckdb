@@ -8,14 +8,33 @@ require parquet
 #------------------------------------------------------------------------------
 # Test unsupported geometry type
 #------------------------------------------------------------------------------
+# This is now ok, but we dont write the geoparquet metadata
 
-statement error
-COPY (SELECT 'POINT ZM (0 1 2 3)'::GEOMETRY) TO '__TEST_DIR__/t1.parquet' (FORMAT 'parquet');
+statement ok
+COPY (SELECT 'POINT ZM (0 1 2 3)'::GEOMETRY as geometry) TO '__TEST_DIR__/t1.parquet' (FORMAT 'parquet');
+
+# Not a geoparquet file
+query I
+SELECT (decode(value)) as col
+FROM parquet_kv_metadata('__TEST_DIR__/t1.parquet');
 ----
-Invalid Input Error: Geoparquet does not support geometries with M coordinates
 
-
-statement error
-COPY (SELECT 'POINT M (0 1 2)'::GEOMETRY) TO '__TEST_DIR__/t1.parquet' (FORMAT 'parquet');
+# But still a normal parquet file
+query I
+SELECT st_astext(st_geomfromwkb(geometry)) FROM '__TEST_DIR__/t1.parquet';
 ----
-Invalid Input Error: Geoparquet does not support geometries with M coordinates
+POINT ZM (0 1 2 3)
+
+statement ok
+COPY (SELECT 'POINT M (0 1 2)'::GEOMETRY as geometry) TO '__TEST_DIR__/t1.parquet' (FORMAT 'parquet');
+
+query I
+SELECT (decode(value)) as col
+FROM parquet_kv_metadata('__TEST_DIR__/t1.parquet');
+----
+
+# But still a normal parquet file
+query I
+SELECT st_astext(st_geomfromwkb(geometry)) FROM '__TEST_DIR__/t1.parquet';
+----
+POINT M (0 1 2)

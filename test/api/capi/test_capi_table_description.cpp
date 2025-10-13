@@ -64,17 +64,36 @@ TEST_CASE("Test the table description in the C API", "[capi]") {
 	REQUIRE(status == DuckDBSuccess);
 	REQUIRE(duckdb_table_description_error(table_description) == nullptr);
 
+	SECTION("Passing nullptr to get_column_count") {
+		REQUIRE(duckdb_table_description_get_column_count(nullptr) == 0);
+	}
 	SECTION("Passing nullptr to get_name") {
 		REQUIRE(duckdb_table_description_get_column_name(nullptr, 0) == nullptr);
 	}
+	SECTION("Passing nullptr to get_type") {
+		REQUIRE(duckdb_table_description_get_column_type(nullptr, 0) == nullptr);
+	}
 	SECTION("Out of range column for get_name") {
 		REQUIRE(duckdb_table_description_get_column_name(table_description, 1) == nullptr);
+	}
+	SECTION("Out of range column for get_type") {
+		REQUIRE(duckdb_table_description_get_column_type(table_description, 1) == nullptr);
+	}
+	SECTION("get the column count") {
+		auto column_count = duckdb_table_description_get_column_count(table_description);
+		REQUIRE(column_count == 1);
 	}
 	SECTION("In range column - get the name") {
 		auto column_name = duckdb_table_description_get_column_name(table_description, 0);
 		string expected = "my_column";
 		REQUIRE(!expected.compare(column_name));
 		duckdb_free(column_name);
+	}
+	SECTION("In range column - get the type") {
+		auto column_type = duckdb_table_description_get_column_type(table_description, 0);
+		auto type_id = duckdb_get_type_id(column_type);
+		REQUIRE(type_id == DUCKDB_TYPE_INTEGER);
+		duckdb_destroy_logical_type(&column_type);
 	}
 	duckdb_table_description_destroy(&table_description);
 }

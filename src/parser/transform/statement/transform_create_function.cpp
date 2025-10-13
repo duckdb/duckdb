@@ -47,6 +47,8 @@ unique_ptr<MacroFunction> Transformer::TransformMacroFunction(duckdb_libpgquery:
 			default_expr = make_uniq<ConstantExpression>(std::move(default_value));
 			default_expr->SetAlias(param.name);
 			macro_func->default_parameters[param.name] = std::move(default_expr);
+		} else if (!macro_func->default_parameters.empty()) {
+			throw ParserException("Parameter without a default follows parameter with a default");
 		}
 	}
 

@@ -47,8 +47,12 @@ unique_ptr<AnalyzeState> AlpRDInitAnalyze(ColumnData &col_data, PhysicalType typ
  */
 template <class T>
 bool AlpRDAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
+	if (state.info.GetBlockSize() + state.info.GetBlockHeaderSize() < DEFAULT_BLOCK_ALLOC_SIZE) {
+		return false;
+	}
+
 	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
-	auto &analyze_state = (AlpRDAnalyzeState<T> &)state;
+	auto &analyze_state = state.Cast<AlpRDAnalyzeState<T>>();
 
 	bool must_skip_current_vector = alp::AlpUtils::MustSkipSamplingFromCurrentVector(
 	    analyze_state.vectors_count, analyze_state.vectors_sampled_count, count);

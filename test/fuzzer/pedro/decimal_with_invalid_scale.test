@@ -5,3 +5,4 @@
 statement error
 CREATE TABLE x(x DECIMAL(38763269, 77914819));
 ----
+Parser Error: Width must be between 1 and 38

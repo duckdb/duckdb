@@ -1,0 +1,114 @@
+# name: test/sql/join/asof/test_asof_join_predicates.test
+# description: Test As-Of join NLJ rewrite for non-comparison predicates
+# group: [asof]
+
+statement ok
+PRAGMA enable_verification;
+
+# Issue 18309
+statement ok
+CREATE TABLE tt1 (i INTEGER, j VARCHAR);
+
+statement ok
+ INSERT INTO tt1 VALUES 
+     (2, 'A'),
+     (4, 'B'),
+     (5, 'A');
+
+statement ok
+CREATE TABLE tt2 (i INTEGER, j VARCHAR, k VARCHAR);
+
+statement ok
+INSERT INTO tt2 VALUES 
+	(1, 'A', 'I'),
+	(3, 'B', 'II');
+
+query II
+explain
+SELECT tt1.i, tt2.k
+   FROM tt1
+   ASOF JOIN tt2 ON
+  tt1.j = tt2.j AND tt1.i >= tt2.i
+  ORDER BY tt1.i;
+----
+physical_plan	<REGEX>:.*NESTED_LOOP_JOIN.*
+
+query II
+SELECT tt1.i, tt2.k
+   FROM tt1
+   ASOF JOIN tt2 ON
+  (tt1.j = tt2.j OR tt1.j = tt2.j) AND tt1.i >= tt2.i
+  ORDER BY tt1.i;
+----
+2	I
+4	II
+5	I
+
+# Issue 19027
+statement ok
+create table l (id integer, date timestamp, item varchar);
+
+statement ok
+insert into l values
+    (0, '2025-01-01', 'A');
+
+statement ok
+create table r (id integer, date timestamp, item varchar, valuei double);
+
+statement ok
+insert into r values
+    (0, '2025-01-01', 'A', 8.0),
+    (0, '2025-01-01', 'B', 12.0);
+
+query II
+explain
+select 
+    l.id,
+    l.date,
+    l.item as litem,
+    r.item as ritem,
+    valuei
+from l
+asof left join r
+    on l.id = r.id and l.date >= r.date
+    and (l.item = r.item or l.item = '*');
+----
+physical_plan	<REGEX>:.*NESTED_LOOP_JOIN.*
+
+query IIIII
+select 
+    l.id,
+    l.date,
+    l.item as litem,
+    r.item as ritem,
+    valuei
+from l
+asof left join r
+    on l.id = r.id and l.date >= r.date
+    and (l.item = r.item or l.item = '*');
+----
+0	2025-01-01 00:00:00	A	A	8.0
+
+# Issue 19251
+statement ok
+create temp table tbl1 as 
+	select unnest(range(1000)) % 10 as x, '2022-01-01'::timestamp + to_days(unnest(range(1000))) as ts;
+
+statement ok
+create temp table tbl2 as 
+	select unnest(range(1000)) % 10 as x, '2022-01-01'::timestamp + to_hours(unnest(range(1000))) as ts;
+
+query II
+explain
+from tbl1 asof join 
+tbl2 on tbl1.x = tbl2.x 
+	and tbl1.ts >= tbl2.ts 
+	and (tbl1.ts - tbl2.ts) < interval '1' hours;
+----
+physical_plan	<REGEX>:.*NESTED_LOOP_JOIN.*
+
+statement ok
+from tbl1 asof join 
+tbl2 on tbl1.x = tbl2.x 
+	and tbl1.ts >= tbl2.ts 
+	and (tbl1.ts - tbl2.ts) < interval '1' hours;

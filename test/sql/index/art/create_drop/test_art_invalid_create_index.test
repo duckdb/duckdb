@@ -11,22 +11,27 @@ CREATE TABLE integers(i integer, j integer, k BOOLEAN)
 statement error
 CREATE INDEX ON integers(i)
 ----
+<REGEX>:.*Not implemented Error.*provide an index name.*
 
 statement error
 CREATE INDEX i_index ON integers(i COLLATE "NOCASE")
 ----
+<REGEX>:.*Not implemented Error.*Index with collation not supported yet.*
 
 statement error
 CREATE INDEX i_index ON integers(i COLLATE "de_DE")
 ----
+<REGEX>:.*Not implemented Error.*Index with collation not supported yet.*
 
 statement error
 CREATE INDEX i_index ON integers using blabla(i)
 ----
+<REGEX>:.*Binder Error.*Unknown index type.*
 
 statement error
 CREATE INDEX i_index ON integers(f)
 ----
+<REGEX>:.*Binder Error.*does not have a column.*
 
 # index on list columns
 statement ok
@@ -35,12 +40,15 @@ create table lists(id int, l int[]);
 statement error
 create index i_index on lists(l);
 ----
+<REGEX>:.*Invalid type Error.*Invalid type for index key.*
 
 statement error
 create index i_index on lists(id, l);
 ----
+<REGEX>:.*Invalid type Error.*Invalid type for index key.*
 
 # index on constant columns
 statement error
 create index i_index on integers(('hello'));
 ----
+<REGEX>:.*Binder Error.*does not refer to any columns.*

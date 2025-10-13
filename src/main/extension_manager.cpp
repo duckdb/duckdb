@@ -24,6 +24,14 @@ void ExtensionActiveLoad::FinishLoad(ExtensionInstallInfo &install_info) {
 	DUCKDB_LOG_INFO(db, extension_name);
 }
 
+void ExtensionActiveLoad::LoadFail(const ErrorData &error) {
+	auto &callbacks = DBConfig::GetConfig(db).extension_callbacks;
+	for (auto &callback : callbacks) {
+		callback->OnExtensionLoadFail(db, extension_name, error);
+	}
+	DUCKDB_LOG_INFO(db, "Failed to load extension '%s': %s", extension_name, error.Message());
+}
+
 ExtensionManager::ExtensionManager(DatabaseInstance &db) : db(db) {
 }
 
@@ -95,6 +103,10 @@ unique_ptr<ExtensionActiveLoad> ExtensionManager::BeginLoad(const string &name) 
 	// HOWEVER - another thread might have finished loading in the meantime - double check to avoid a double load
 	if (info->is_loaded) {
 		return nullptr;
+	}
+	auto &callbacks = DBConfig::GetConfig(db).extension_callbacks;
+	for (auto &callback : callbacks) {
+		callback->OnBeginExtensionLoad(db, extension_name);
 	}
 	// extension is not loaded yet and we are in charge of loading it - return
 	return result;

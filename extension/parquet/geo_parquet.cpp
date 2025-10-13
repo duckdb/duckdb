@@ -16,158 +16,6 @@ namespace duckdb {
 
 using namespace duckdb_yyjson; // NOLINT
 
-const char *WKBGeometryTypes::ToString(WKBGeometryType type) {
-	switch (type) {
-	case WKBGeometryType::POINT:
-		return "Point";
-	case WKBGeometryType::LINESTRING:
-		return "LineString";
-	case WKBGeometryType::POLYGON:
-		return "Polygon";
-	case WKBGeometryType::MULTIPOINT:
-		return "MultiPoint";
-	case WKBGeometryType::MULTILINESTRING:
-		return "MultiLineString";
-	case WKBGeometryType::MULTIPOLYGON:
-		return "MultiPolygon";
-	case WKBGeometryType::GEOMETRYCOLLECTION:
-		return "GeometryCollection";
-	case WKBGeometryType::POINT_Z:
-		return "Point Z";
-	case WKBGeometryType::LINESTRING_Z:
-		return "LineString Z";
-	case WKBGeometryType::POLYGON_Z:
-		return "Polygon Z";
-	case WKBGeometryType::MULTIPOINT_Z:
-		return "MultiPoint Z";
-	case WKBGeometryType::MULTILINESTRING_Z:
-		return "MultiLineString Z";
-	case WKBGeometryType::MULTIPOLYGON_Z:
-		return "MultiPolygon Z";
-	case WKBGeometryType::GEOMETRYCOLLECTION_Z:
-		return "GeometryCollection Z";
-	default:
-		throw NotImplementedException("Unsupported geometry type");
-	}
-}
-
-//------------------------------------------------------------------------------
-// GeoParquetColumnMetadataWriter
-//------------------------------------------------------------------------------
-GeoParquetColumnMetadataWriter::GeoParquetColumnMetadataWriter(ClientContext &context) {
-	executor = make_uniq<ExpressionExecutor>(context);
-
-	auto &catalog = Catalog::GetSystemCatalog(context);
-
-	// These functions are required to extract the geometry type, ZM flag and bounding box from a WKB blob
-	auto &type_func_set = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "st_geometrytype");
-	auto &flag_func_set = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "st_zmflag");
-	auto &bbox_func_set = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "st_extent");
-
-	auto wkb_type = LogicalType(LogicalTypeId::BLOB);
-	wkb_type.SetAlias("WKB_BLOB");
-
-	auto type_func = type_func_set.functions.GetFunctionByArguments(context, {wkb_type});
-	auto flag_func = flag_func_set.functions.GetFunctionByArguments(context, {wkb_type});
-	auto bbox_func = bbox_func_set.functions.GetFunctionByArguments(context, {wkb_type});
-
-	auto type_type = LogicalType::UTINYINT;
-	auto flag_type = flag_func.return_type;
-	auto bbox_type = bbox_func.return_type;
-
-	vector<unique_ptr<Expression>> type_args;
-	type_args.push_back(make_uniq<BoundReferenceExpression>(wkb_type, 0));
-
-	vector<unique_ptr<Expression>> flag_args;
-	flag_args.push_back(make_uniq<BoundReferenceExpression>(wkb_type, 0));
-
-	vector<unique_ptr<Expression>> bbox_args;
-	bbox_args.push_back(make_uniq<BoundReferenceExpression>(wkb_type, 0));
-
-	type_expr = make_uniq<BoundFunctionExpression>(type_type, type_func, std::move(type_args), nullptr);
-	flag_expr = make_uniq<BoundFunctionExpression>(flag_type, flag_func, std::move(flag_args), nullptr);
-	bbox_expr = make_uniq<BoundFunctionExpression>(bbox_type, bbox_func, std::move(bbox_args), nullptr);
-
-	// Add the expressions to the executor
-	executor->AddExpression(*type_expr);
-	executor->AddExpression(*flag_expr);
-	executor->AddExpression(*bbox_expr);
-
-	// Initialize the input and result chunks
-	// The input chunk should be empty, as we always reference the input vector
-	input_chunk.InitializeEmpty({wkb_type});
-	result_chunk.Initialize(BufferAllocator::Get(context), {type_type, flag_type, bbox_type});
-}
-
-void GeoParquetColumnMetadataWriter::Update(GeoParquetColumnMetadata &meta, Vector &vector, idx_t count) {
-	input_chunk.Reset();
-	result_chunk.Reset();
-
-	// Reference the vector
-	input_chunk.data[0].Reference(vector);
-	input_chunk.SetCardinality(count);
-
-	// Execute the expression
-	executor->Execute(input_chunk, result_chunk);
-
-	// The first column is the geometry type
-	// The second column is the zm flag
-	// The third column is the bounding box
-
-	UnifiedVectorFormat type_format;
-	UnifiedVectorFormat flag_format;
-	UnifiedVectorFormat bbox_format;
-
-	result_chunk.data[0].ToUnifiedFormat(count, type_format);
-	result_chunk.data[1].ToUnifiedFormat(count, flag_format);
-	result_chunk.data[2].ToUnifiedFormat(count, bbox_format);
-
-	const auto &bbox_components = StructVector::GetEntries(result_chunk.data[2]);
-	D_ASSERT(bbox_components.size() == 4);
-
-	UnifiedVectorFormat xmin_format;
-	UnifiedVectorFormat ymin_format;
-	UnifiedVectorFormat xmax_format;
-	UnifiedVectorFormat ymax_format;
-
-	bbox_components[0]->ToUnifiedFormat(count, xmin_format);
-	bbox_components[1]->ToUnifiedFormat(count, ymin_format);
-	bbox_components[2]->ToUnifiedFormat(count, xmax_format);
-	bbox_components[3]->ToUnifiedFormat(count, ymax_format);
-
-	for (idx_t in_idx = 0; in_idx < count; in_idx++) {
-		const auto type_idx = type_format.sel->get_index(in_idx);
-		const auto flag_idx = flag_format.sel->get_index(in_idx);
-		const auto bbox_idx = bbox_format.sel->get_index(in_idx);
-
-		const auto type_valid = type_format.validity.RowIsValid(type_idx);
-		const auto flag_valid = flag_format.validity.RowIsValid(flag_idx);
-		const auto bbox_valid = bbox_format.validity.RowIsValid(bbox_idx);
-
-		if (!type_valid || !flag_valid || !bbox_valid) {
-			continue;
-		}
-
-		// Update the geometry type
-		const auto flag = UnifiedVectorFormat::GetData<uint8_t>(flag_format)[flag_idx];
-		const auto type = UnifiedVectorFormat::GetData<uint8_t>(type_format)[type_idx];
-		if (flag == 1 || flag == 3) {
-			// M or ZM
-			throw InvalidInputException("Geoparquet does not support geometries with M coordinates");
-		}
-		const auto has_z = flag == 2;
-		auto wkb_type = static_cast<WKBGeometryType>((type + 1) + (has_z ? 1000 : 0));
-		meta.geometry_types.insert(wkb_type);
-
-		// Update the bounding box
-		const auto min_x = UnifiedVectorFormat::GetData<double>(xmin_format)[bbox_idx];
-		const auto min_y = UnifiedVectorFormat::GetData<double>(ymin_format)[bbox_idx];
-		const auto max_x = UnifiedVectorFormat::GetData<double>(xmax_format)[bbox_idx];
-		const auto max_y = UnifiedVectorFormat::GetData<double>(ymax_format)[bbox_idx];
-		meta.bbox.Combine(min_x, max_x, min_y, max_y);
-	}
-}
-
 //------------------------------------------------------------------------------
 // GeoParquetFileMetadata
 //------------------------------------------------------------------------------
@@ -195,25 +43,20 @@ unique_ptr<GeoParquetFileMetadata> GeoParquetFileMetadata::TryRead(const duckdb_
 					throw InvalidInputException("Geoparquet metadata is not an object");
 				}
 
-				auto result = make_uniq<GeoParquetFileMetadata>();
+				// We dont actually care about the version for now, as we only support V1+native
+				auto result = make_uniq<GeoParquetFileMetadata>(GeoParquetVersion::BOTH);
 
 				// Check and parse the version
 				const auto version_val = yyjson_obj_get(root, "version");
 				if (!yyjson_is_str(version_val)) {
 					throw InvalidInputException("Geoparquet metadata does not have a version");
 				}
-				result->version = yyjson_get_str(version_val);
-				if (StringUtil::StartsWith(result->version, "2")) {
-					// Guard against a breaking future 2.0 version
-					throw InvalidInputException("Geoparquet version %s is not supported", result->version);
-				}
 
-				// Check and parse the primary geometry column
-				const auto primary_geometry_column_val = yyjson_obj_get(root, "primary_column");
-				if (!yyjson_is_str(primary_geometry_column_val)) {
-					throw InvalidInputException("Geoparquet metadata does not have a primary column");
+				auto version = yyjson_get_str(version_val);
+				if (StringUtil::StartsWith(version, "3")) {
+					// Guard against a breaking future 3.0 version
+					throw InvalidInputException("Geoparquet version %s is not supported", version);
 				}
-				result->primary_geometry_column = yyjson_get_str(primary_geometry_column_val);
 
 				// Check and parse the geometry columns
 				const auto columns_val = yyjson_obj_get(root, "columns");
@@ -285,25 +128,71 @@ unique_ptr<GeoParquetFileMetadata> GeoParquetFileMetadata::TryRead(const duckdb_
 	return nullptr;
 }
 
-void GeoParquetFileMetadata::FlushColumnMeta(const string &column_name, const GeoParquetColumnMetadata &meta) {
+void GeoParquetFileMetadata::AddGeoParquetStats(const string &column_name, const LogicalType &type,
+                                                const GeometryStatsData &stats) {
+
 	// Lock the metadata
 	lock_guard<mutex> glock(write_lock);
 
-	auto &column = geometry_columns[column_name];
+	auto it = geometry_columns.find(column_name);
+	if (it == geometry_columns.end()) {
+		auto &column = geometry_columns[column_name];
 
-	// Combine the metadata
-	column.geometry_types.insert(meta.geometry_types.begin(), meta.geometry_types.end());
-	column.bbox.Combine(meta.bbox);
+		column.stats.Merge(stats);
+		column.insertion_index = geometry_columns.size() - 1;
+	} else {
+		it->second.stats.Merge(stats);
+	}
 }
 
-void GeoParquetFileMetadata::Write(duckdb_parquet::FileMetaData &file_meta_data) const {
+void GeoParquetFileMetadata::Write(duckdb_parquet::FileMetaData &file_meta_data) {
+
+	// GeoParquet does not support M or ZM coordinates. So remove any columns that have them.
+	unordered_set<string> invalid_columns;
+	for (auto &column : geometry_columns) {
+		if (column.second.stats.extent.HasM()) {
+			invalid_columns.insert(column.first);
+		}
+	}
+	for (auto &col_name : invalid_columns) {
+		geometry_columns.erase(col_name);
+	}
+	// No columns remaining, nothing to write
+	if (geometry_columns.empty()) {
+		return;
+	}
+
+	// Find the primary geometry column
+	const auto &random_first_column = *geometry_columns.begin();
+	auto primary_geometry_column = random_first_column.first;
+	auto primary_insertion_index = random_first_column.second.insertion_index;
+
+	for (auto &column : geometry_columns) {
+		if (column.second.insertion_index < primary_insertion_index) {
+			primary_insertion_index = column.second.insertion_index;
+			primary_geometry_column = column.first;
+		}
+	}
 
 	yyjson_mut_doc *doc = yyjson_mut_doc_new(nullptr);
 	yyjson_mut_val *root = yyjson_mut_obj(doc);
 	yyjson_mut_doc_set_root(doc, root);
 
 	// Add the version
-	yyjson_mut_obj_add_strncpy(doc, root, "version", version.c_str(), version.size());
+	switch (version) {
+	case GeoParquetVersion::V1:
+	case GeoParquetVersion::BOTH:
+		yyjson_mut_obj_add_strcpy(doc, root, "version", "1.0.0");
+		break;
+	case GeoParquetVersion::V2:
+		yyjson_mut_obj_add_strcpy(doc, root, "version", "2.0.0");
+		break;
+	case GeoParquetVersion::NONE:
+	default:
+		// Should never happen, we should not be writing anything
+		yyjson_mut_doc_free(doc);
+		throw InternalException("GeoParquetVersion::NONE should not write metadata");
+	}
 
 	// Add the primary column
 	yyjson_mut_obj_add_strncpy(doc, root, "primary_column", primary_geometry_column.c_str(),
@@ -313,18 +202,35 @@ void GeoParquetFileMetadata::Write(duckdb_parquet::FileMetaData &file_meta_data)
 	const auto json_columns = yyjson_mut_obj_add_obj(doc, root, "columns");
 
 	for (auto &column : geometry_columns) {
+
 		const auto column_json = yyjson_mut_obj_add_obj(doc, json_columns, column.first.c_str());
 		yyjson_mut_obj_add_str(doc, column_json, "encoding", "WKB");
 		const auto geometry_types = yyjson_mut_obj_add_arr(doc, column_json, "geometry_types");
-		for (auto &geometry_type : column.second.geometry_types) {
-			const auto type_name = WKBGeometryTypes::ToString(geometry_type);
-			yyjson_mut_arr_add_str(doc, geometry_types, type_name);
+
+		for (auto &type_name : column.second.stats.types.ToString(false)) {
+			yyjson_mut_arr_add_strcpy(doc, geometry_types, type_name.c_str());
 		}
-		const auto bbox = yyjson_mut_obj_add_arr(doc, column_json, "bbox");
-		yyjson_mut_arr_add_real(doc, bbox, column.second.bbox.min_x);
-		yyjson_mut_arr_add_real(doc, bbox, column.second.bbox.min_y);
-		yyjson_mut_arr_add_real(doc, bbox, column.second.bbox.max_x);
-		yyjson_mut_arr_add_real(doc, bbox, column.second.bbox.max_y);
+
+		const auto &bbox = column.second.stats.extent;
+
+		if (bbox.HasXY()) {
+
+			const auto bbox_arr = yyjson_mut_obj_add_arr(doc, column_json, "bbox");
+
+			if (!column.second.stats.extent.HasZ()) {
+				yyjson_mut_arr_add_real(doc, bbox_arr, bbox.x_min);
+				yyjson_mut_arr_add_real(doc, bbox_arr, bbox.y_min);
+				yyjson_mut_arr_add_real(doc, bbox_arr, bbox.x_max);
+				yyjson_mut_arr_add_real(doc, bbox_arr, bbox.y_max);
+			} else {
+				yyjson_mut_arr_add_real(doc, bbox_arr, bbox.x_min);
+				yyjson_mut_arr_add_real(doc, bbox_arr, bbox.y_min);
+				yyjson_mut_arr_add_real(doc, bbox_arr, bbox.z_min);
+				yyjson_mut_arr_add_real(doc, bbox_arr, bbox.x_max);
+				yyjson_mut_arr_add_real(doc, bbox_arr, bbox.y_max);
+				yyjson_mut_arr_add_real(doc, bbox_arr, bbox.z_max);
+			}
+		}
 
 		// If the CRS is present, add it
 		if (!column.second.projjson.empty()) {
@@ -366,14 +272,6 @@ bool GeoParquetFileMetadata::IsGeometryColumn(const string &column_name) const {
 	return geometry_columns.find(column_name) != geometry_columns.end();
 }
 
-void GeoParquetFileMetadata::RegisterGeometryColumn(const string &column_name) {
-	lock_guard<mutex> glock(write_lock);
-	if (primary_geometry_column.empty()) {
-		primary_geometry_column = column_name;
-	}
-	geometry_columns[column_name] = GeoParquetColumnMetadata();
-}
-
 bool GeoParquetFileMetadata::IsGeoParquetConversionEnabled(const ClientContext &context) {
 	Value geoparquet_enabled;
 	if (!context.TryGetCurrentSetting("enable_geoparquet_conversion", geoparquet_enabled)) {
@@ -396,20 +294,19 @@ LogicalType GeoParquetFileMetadata::GeometryType() {
 	return blob_type;
 }
 
+const unordered_map<string, GeoParquetColumnMetadata> &GeoParquetFileMetadata::GetColumnMeta() const {
+	return geometry_columns;
+}
+
 unique_ptr<ColumnReader> GeoParquetFileMetadata::CreateColumnReader(ParquetReader &reader,
                                                                     const ParquetColumnSchema &schema,
                                                                     ClientContext &context) {
-
-	D_ASSERT(IsGeometryColumn(schema.name));
-
-	const auto &column = geometry_columns[schema.name];
 
 	// Get the catalog
 	auto &catalog = Catalog::GetSystemCatalog(context);
 
 	// WKB encoding
-	if (schema.children[0].type.id() == LogicalTypeId::BLOB &&
-	    column.geometry_encoding == GeoParquetColumnEncoding::WKB) {
+	if (schema.children[0].type.id() == LogicalTypeId::BLOB) {
 		// Look for a conversion function in the catalog
 		auto &conversion_func_set =
 		    catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "st_geomfromwkb");

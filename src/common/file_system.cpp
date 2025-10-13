@@ -634,40 +634,10 @@ bool FileSystem::CanHandleFile(const string &fpath) {
 	throw NotImplementedException("%s: CanHandleFile is not implemented!", GetName());
 }
 
-static string LookupExtensionForPattern(const string &pattern) {
-	for (const auto &entry : EXTENSION_FILE_PREFIXES) {
-		if (StringUtil::StartsWith(pattern, entry.name)) {
-			return entry.extension;
-		}
-	}
-	return "";
-}
-
 vector<OpenFileInfo> FileSystem::GlobFiles(const string &pattern, ClientContext &context, const FileGlobInput &input,
                                            idx_t max_files, optional_ptr<HiveFilterParams> hive_params) {
 	auto result = GlobHive(pattern, nullptr, max_files, hive_params);
 	if (result.empty()) {
-		string required_extension = LookupExtensionForPattern(pattern);
-		if (!required_extension.empty() && !context.db->ExtensionIsLoaded(required_extension)) {
-			auto &dbconfig = DBConfig::GetConfig(context);
-			if (!ExtensionHelper::CanAutoloadExtension(required_extension) ||
-			    !dbconfig.options.autoload_known_extensions) {
-				auto error_message =
-				    "File " + pattern + " requires the extension " + required_extension + " to be loaded";
-				error_message =
-				    ExtensionHelper::AddExtensionInstallHintToErrorMsg(context, error_message, required_extension);
-				throw MissingExtensionException(error_message);
-			}
-			// an extension is required to read this file, but it is not loaded - try to load it
-			ExtensionHelper::AutoLoadExtension(context, required_extension);
-			// success! glob again
-			// check the extension is loaded just in case to prevent an infinite loop here
-			if (!context.db->ExtensionIsLoaded(required_extension)) {
-				throw InternalException("Extension load \"%s\" did not throw but somehow the extension was not loaded",
-				                        required_extension);
-			}
-			return GlobFiles(pattern, context, input, max_files, hive_params);
-		}
 		if (input.behavior == FileGlobOptions::FALLBACK_GLOB && !HasGlob(pattern)) {
 			// if we have no glob in the pattern and we have an extension, we try to glob
 			if (!HasGlob(pattern)) {

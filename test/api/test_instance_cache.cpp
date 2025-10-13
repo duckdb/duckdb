@@ -101,3 +101,71 @@ TEST_CASE("Test db creation does not block instance cache", "[api]") {
 	REQUIRE(opening_slow_db_takes_remaining_time);
 	REQUIRE(no_delay_for_db_creation);
 }
+
+TEST_CASE("Test attaching the same database path from different databases", "[api][.]") {
+	DBInstanceCache instance_cache;
+	auto test_path = TestCreatePath("instance_cache_reuse.db");
+
+	DBConfig config;
+	auto db1 = instance_cache.GetOrCreateInstance(":memory:", config, false);
+	auto db2 = instance_cache.GetOrCreateInstance(":memory:", config, false);
+
+	string attach_query = "ATTACH '" + test_path + "' AS db_ref";
+
+	Connection con1(*db1);
+	REQUIRE_NO_FAIL(con1.Query(attach_query));
+
+	// fails - already attached in db1
+	Connection con2(*db2);
+	REQUIRE_FAIL(con2.Query(attach_query));
+
+	// if we detach from con1, we can now attach in con2
+	REQUIRE_NO_FAIL(con1.Query("DETACH db_ref"));
+
+	REQUIRE_NO_FAIL(con2.Query(attach_query));
+
+	// .. but not in con1 anymore!
+	REQUIRE_FAIL(con1.Query(attach_query));
+}
+
+TEST_CASE("Test attaching the same database path from different databases in read-only mode", "[api][.]") {
+	DBInstanceCache instance_cache;
+	auto test_path = TestCreatePath("instance_cache_reuse_readonly.db");
+
+	// create an empty database
+	{
+		DuckDB db(test_path);
+		Connection con(db);
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers AS FROM (VALUES (1), (2), (3)) t(i)"));
+	}
+
+	DBConfig config;
+	auto db1 = instance_cache.GetOrCreateInstance(":memory:", config, false);
+	auto db2 = instance_cache.GetOrCreateInstance(":memory:", config, false);
+	auto db3 = instance_cache.GetOrCreateInstance(":memory:", config, false);
+
+	string attach_query = "ATTACH '" + test_path + "' AS db_ref";
+	string read_only_attach = attach_query + " (READ_ONLY)";
+
+	Connection con1(*db1);
+	REQUIRE_NO_FAIL(con1.Query(read_only_attach));
+
+	// succeeds - we can attach the same database multiple times in read-only mode
+	Connection con2(*db2);
+	REQUIRE_NO_FAIL(con2.Query(read_only_attach));
+
+	// fails - we cannot attach in read-write
+	Connection con3(*db3);
+	REQUIRE_FAIL(con3.Query(attach_query));
+
+	// if we detach from con1, we still cannot attach in read-write in con3
+	REQUIRE_NO_FAIL(con1.Query("DETACH db_ref"));
+	REQUIRE_FAIL(con3.Query(attach_query));
+
+	// but if we detach in con2, we can attach in read-write mode now
+	REQUIRE_NO_FAIL(con2.Query("DETACH db_ref"));
+	REQUIRE_NO_FAIL(con3.Query(attach_query));
+
+	// and now we can no longer attach in read-only mode
+	REQUIRE_FAIL(con1.Query(read_only_attach));
+}

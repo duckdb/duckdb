@@ -50,9 +50,11 @@ static unique_ptr<BaseStatistics> InStrPropagateStats(ClientContext &context, Fu
 }
 
 ScalarFunction InstrFun::GetFunction() {
-	return ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BIGINT,
-	                      ScalarFunction::BinaryFunction<string_t, string_t, int64_t, InstrOperator>, nullptr, nullptr,
-	                      InStrPropagateStats);
+	auto function = ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BIGINT,
+	                               ScalarFunction::BinaryFunction<string_t, string_t, int64_t, InstrOperator>, nullptr,
+	                               nullptr, InStrPropagateStats);
+	function.collation_handling = FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS;
+	return function;
 }
 
 } // namespace duckdb
