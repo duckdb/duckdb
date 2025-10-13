@@ -22,7 +22,7 @@
         "type": "aggregate_function_set"
     },
     {
-        "name": "arg_min_null_val",
+        "name": "arg_min_nulls_last",
         "parameters": "arg,val,N",
         "description": "Finds the rows with N minimum vals, including nulls. Calculates the arg expression at that row.",
         "example": "arg_min_null_val(A, B, N)",
@@ -44,7 +44,7 @@
         "type": "aggregate_function_set"
     },
     {
-        "name": "arg_max_null_val",
+        "name": "arg_max_nulls_last",
         "parameters": "arg,val,N",
         "description": "Finds the rows with N maximum vals, including nulls. Calculates the arg expression at that row.",
         "example": "arg_min_null_val(A, B, N)",

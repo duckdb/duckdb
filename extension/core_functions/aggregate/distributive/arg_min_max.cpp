@@ -690,8 +690,7 @@ void SpecializeArgMinMaxNullNFunction(PhysicalType arg_type, AggregateFunction &
 	switch (arg_type) {
 #ifndef DUCKDB_SMALLER_BINARY
 	case PhysicalType::VARCHAR:
-		// SpecializeArgMinMaxNFunction<VAL_TYPE, MinMaxStringValue, COMPARATOR>(function);
-		throw InternalException("Not implemented.");
+		SpecializeArgMinMaxNullNFunction<VAL_TYPE, MinMaxFallbackValueOrNull<NULLS_LAST>, NULLS_LAST, COMPARATOR>(function);
 		break;
 	case PhysicalType::INT32:
 		SpecializeArgMinMaxNullNFunction<VAL_TYPE, MinMaxInclNullValue<int32_t, NULLS_LAST>, NULLS_LAST, COMPARATOR>(
@@ -711,8 +710,7 @@ void SpecializeArgMinMaxNullNFunction(PhysicalType arg_type, AggregateFunction &
 		break;
 #endif
 	default:
-		throw InternalException("Not implemented.");
-		// SpecializeArgMinMaxNFunction<VAL_TYPE, MinMaxFallbackValue, COMPARATOR>(function);
+		SpecializeArgMinMaxNullNFunction<VAL_TYPE, MinMaxFallbackValueOrNull<NULLS_LAST>, NULLS_LAST, COMPARATOR>(function);
 		break;
 	}
 }
@@ -722,8 +720,7 @@ void SpecializeArgMinMaxNullNFunction(PhysicalType val_type, PhysicalType arg_ty
 	switch (val_type) {
 #ifndef DUCKDB_SMALLER_BINARY
 	case PhysicalType::VARCHAR:
-		// TODO: Check if we can leave it like this
-		SpecializeArgMinMaxNFunction<MinMaxStringValue, COMPARATOR>(arg_type, function);
+		SpecializeArgMinMaxNullNFunction<MinMaxFallbackValueOrNull<NULLS_LAST>, NULLS_LAST, COMPARATOR>(arg_type, function);
 		break;
 	case PhysicalType::INT32:
 		SpecializeArgMinMaxNullNFunction<MinMaxInclNullValue<int32_t, NULLS_LAST>, NULLS_LAST, COMPARATOR>(arg_type,
@@ -743,8 +740,7 @@ void SpecializeArgMinMaxNullNFunction(PhysicalType val_type, PhysicalType arg_ty
 		break;
 #endif
 	default:
-		// TODO: Check if we can leave it like this
-		SpecializeArgMinMaxNFunction<MinMaxFallbackValue, COMPARATOR>(arg_type, function);
+		SpecializeArgMinMaxNullNFunction<MinMaxFallbackValueOrNull<NULLS_LAST>, NULLS_LAST, COMPARATOR>(arg_type, function);
 		break;
 	}
 }
@@ -813,13 +809,13 @@ AggregateFunctionSet ArgMaxNullFun::GetFunctions() {
 	return fun;
 }
 
-AggregateFunctionSet ArgMinNullValFun::GetFunctions() {
+AggregateFunctionSet ArgMinNullsLastFun::GetFunctions() {
 	AggregateFunctionSet fun;
 	AddArgMinMaxNFunction<false, false, LessThan>(fun);
 	return fun;
 }
 
-AggregateFunctionSet ArgMaxNullValFun::GetFunctions() {
+AggregateFunctionSet ArgMaxNullsLastFun::GetFunctions() {
 	AggregateFunctionSet fun;
 	AddArgMinMaxNFunction<false, true, GreaterThan>(fun);
 	return fun;

@@ -234,7 +234,6 @@ public:
 
 private:
 	static bool Compare(const STORAGE_TYPE &left, const STORAGE_TYPE &right) {
-		auto compare_result = K_COMPARATOR::Operation(left.first.value, right.first.value);
 		return K_COMPARATOR::Operation(left.first.value, right.first.value);
 	}
 
@@ -311,6 +310,34 @@ struct MinMaxFallbackValue {
 
 	static void PrepareData(Vector &input, const idx_t count, EXTRA_STATE &extra_state, UnifiedVectorFormat &format) {
 		const OrderModifiers modifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST);
+		CreateSortKeyHelpers::CreateSortKeyWithValidity(input, extra_state, modifiers, count);
+		input.Flatten(count);
+		extra_state.ToUnifiedFormat(count, format);
+	}
+};
+
+template <bool NULLS_LAST>
+struct MinMaxFallbackValueOrNull {
+	using TYPE = string_t;
+	using EXTRA_STATE = Vector;
+
+	static TYPE Create(const UnifiedVectorFormat &format, const idx_t idx) {
+		return UnifiedVectorFormat::GetData<string_t>(format)[idx];
+	}
+
+	static void Assign(Vector &vector, const idx_t idx, const TYPE &value) {
+		auto order_by_null_type = NULLS_LAST ? OrderByNullType::NULLS_LAST : OrderByNullType::NULLS_FIRST;
+		OrderModifiers modifiers(OrderType::ASCENDING, order_by_null_type);
+		CreateSortKeyHelpers::DecodeSortKey(value, vector, idx, modifiers);
+	}
+
+	static EXTRA_STATE CreateExtraState(Vector &input, idx_t count) {
+		return Vector(LogicalTypeId::BLOB);
+	}
+
+	static void PrepareData(Vector &input, const idx_t count, EXTRA_STATE &extra_state, UnifiedVectorFormat &format) {
+		auto order_by_null_type = NULLS_LAST ? OrderByNullType::NULLS_LAST : OrderByNullType::NULLS_FIRST;
+		const OrderModifiers modifiers(OrderType::ASCENDING, order_by_null_type);
 		CreateSortKeyHelpers::CreateSortKeyWithValidity(input, extra_state, modifiers, count);
 		input.Flatten(count);
 		extra_state.ToUnifiedFormat(count, format);
