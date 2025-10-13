@@ -1,8 +1,6 @@
 #include "capi_tester.hpp"
 #include "duckdb.h"
 
-#include <sys/stat.h>
-
 using namespace duckdb;
 using namespace std;
 
