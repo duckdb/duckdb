@@ -22,9 +22,6 @@
 #include "duckdb/planner/expression/bound_default_expression.hpp"
 #include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/planner/bound_tableref.hpp"
-#include "duckdb/planner/tableref/bound_basetableref.hpp"
-#include "duckdb/planner/tableref/bound_dummytableref.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
@@ -519,8 +516,6 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	}
 
 	auto insert = make_uniq<LogicalInsert>(table, GenerateTableIndex());
-	// Add CTEs as bindable
-	AddCTEMap(stmt.cte_map);
 
 	auto values_list = stmt.GetValuesList();
 

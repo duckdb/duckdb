@@ -27,9 +27,13 @@ BindResult TableFunctionBinder::BindColumnReference(unique_ptr<ParsedExpression>
 		if (lambda_ref) {
 			return BindLambdaReference(lambda_ref->Cast<LambdaRefExpression>(), depth);
 		}
+
 		if (binder.macro_binding && binder.macro_binding->HasMatchingBinding(col_ref.GetName())) {
 			throw ParameterNotResolvedException();
 		}
+	} else if (col_ref.column_names[0].find(DummyBinding::DUMMY_NAME) != string::npos && binder.macro_binding &&
+	           binder.macro_binding->HasMatchingBinding(col_ref.GetName())) {
+		throw ParameterNotResolvedException();
 	}
 
 	auto query_location = col_ref.GetQueryLocation();

@@ -18,15 +18,34 @@ InsertDatabasePathResult DatabaseFilePathManager::InsertDatabasePath(const strin
 	}
 
 	lock_guard<mutex> path_lock(db_paths_lock);
-	auto entry = db_paths.emplace(path, DatabasePathInfo(name));
+	auto entry = db_paths.emplace(path, DatabasePathInfo(name, options.access_mode));
 	if (!entry.second) {
 		auto &existing = entry.first->second;
+		bool already_exists = false;
 		if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT && existing.name == name) {
-			return InsertDatabasePathResult::ALREADY_EXISTS;
+			already_exists = true;
 		}
-		throw BinderException("Unique file handle conflict: Cannot attach \"%s\" - the database file \"%s\" is already "
-		                      "attached by database \"%s\"",
-		                      name, path, existing.name);
+		if (options.access_mode == AccessMode::READ_ONLY && existing.access_mode == AccessMode::READ_ONLY) {
+			if (already_exists && existing.is_attached) {
+				return InsertDatabasePathResult::ALREADY_EXISTS;
+			}
+			// all attaches are in read-only mode - there is no conflict, just increase the reference count
+			existing.reference_count++;
+		} else {
+			if (already_exists) {
+				if (existing.is_attached) {
+					return InsertDatabasePathResult::ALREADY_EXISTS;
+				}
+				throw BinderException(
+				    "Unique file handle conflict: Cannot attach \"%s\" - the database file \"%s\" is in "
+				    "the process of being detached",
+				    name, path);
+			}
+			throw BinderException(
+			    "Unique file handle conflict: Cannot attach \"%s\" - the database file \"%s\" is already "
+			    "attached by database \"%s\"",
+			    name, path, existing.name);
+		}
 	}
 	options.stored_database_path = make_uniq<StoredDatabasePath>(*this, path, name);
 	return InsertDatabasePathResult::SUCCESS;
@@ -37,7 +56,25 @@ void DatabaseFilePathManager::EraseDatabasePath(const string &path) {
 		return;
 	}
 	lock_guard<mutex> path_lock(db_paths_lock);
-	db_paths.erase(path);
+	auto entry = db_paths.find(path);
+	if (entry != db_paths.end()) {
+		if (entry->second.reference_count <= 1) {
+			db_paths.erase(entry);
+		} else {
+			entry->second.reference_count--;
+		}
+	}
+}
+
+void DatabaseFilePathManager::DetachDatabase(const string &path) {
+	if (path.empty() || path == IN_MEMORY_PATH) {
+		return;
+	}
+	lock_guard<mutex> path_lock(db_paths_lock);
+	auto entry = db_paths.find(path);
+	if (entry != db_paths.end()) {
+		entry->second.is_attached = false;
+	}
 }
 
 } // namespace duckdb

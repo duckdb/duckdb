@@ -78,7 +78,8 @@ public:
 
 public:
 	DUCKDB_API virtual const vector<ColumnDefinition> &Columns() = 0;
-	DUCKDB_API virtual unique_ptr<QueryNode> GetQueryNode();
+	DUCKDB_API virtual unique_ptr<QueryNode> GetQueryNode() = 0;
+	DUCKDB_API virtual string GetQuery();
 	DUCKDB_API virtual BoundStatement Bind(Binder &binder);
 	DUCKDB_API virtual string GetAlias();
 

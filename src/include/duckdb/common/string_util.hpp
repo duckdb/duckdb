@@ -217,6 +217,7 @@ public:
 
 	//! Case insensitive hash
 	DUCKDB_API static uint64_t CIHash(const string &str);
+	DUCKDB_API static uint64_t CIHash(const char *str, idx_t size);
 
 	//! Case insensitive equals
 	DUCKDB_API static bool CIEquals(const string &l1, const string &l2);
@@ -317,6 +318,8 @@ public:
 	DUCKDB_API static string ToJSONMap(const unordered_map<string, string> &map);
 	//! Transforms an complex JSON to a JSON string
 	DUCKDB_API static string ToComplexJSONMap(const ComplexJSON &complex_json);
+
+	DUCKDB_API static string ValidateJSON(const char *data, const idx_t &len);
 
 	DUCKDB_API static string GetFileName(const string &file_path);
 	DUCKDB_API static string GetFileExtension(const string &file_name);

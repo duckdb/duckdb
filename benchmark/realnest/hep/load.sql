@@ -1,4 +1,4 @@
-CREATE TABLE hep_singleMu AS SELECT * FROM READ_PARQUET('s3://duckdb-blobs/data/realnest/Run2012B_SingleMu_restructured_1000.parquet');
+CREATE TABLE hep_singleMu AS SELECT * FROM READ_PARQUET('https://blobs.duckdb.org/data/realnest/Run2012B_SingleMu_restructured_1000.parquet');
 
 CREATE FUNCTION Pi() AS (ACOS(-1));
 
