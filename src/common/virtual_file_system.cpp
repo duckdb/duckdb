@@ -144,10 +144,10 @@ vector<OpenFileInfo> VirtualFileSystem::Glob(const string &path, FileOpener *ope
 	return FindFileSystem(path, opener).Glob(path, opener);
 }
 
-vector<OpenFileInfo> VirtualFileSystem::GlobHive(const string &path, FileOpener *opener, idx_t max_files,
-                                                 optional_ptr<HiveFilterParams> hive_params) {
-	return FindFileSystem(path).GlobHive(path, opener, max_files, hive_params);
-}
+vector<OpenFileInfo> VirtualFileSystem::Glob(const string &path, const FileGlobInput &glob_input,
+                                             optional_ptr<FileOpener> opener) {
+	return FindFileSystem(path, opener).Glob(path, glob_input, opener);
+};
 
 void VirtualFileSystem::RegisterSubSystem(unique_ptr<FileSystem> fs) {
 	// Sub-filesystem number is not expected to be huge, also filesystem registration should be called infrequently.

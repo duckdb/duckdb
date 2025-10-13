@@ -285,13 +285,16 @@ unique_ptr<MultiFileList> GlobMultiFileList::ComplexFilterPushdown(ClientContext
 
 	if (options.hive_lazy_listing) {
 		HiveFilterParams hive_filter_params(context, filters, options, info);
-		while (ExpandNextPath(std::numeric_limits<idx_t>::max(), false, &hive_filter_params)) {
+		FileGlobInput file_glob_input = glob_input;
+
+		file_glob_input.hive_params = hive_filter_params;
+		while (ExpandNextPath(file_glob_input, false)) {
 		}
 		return make_uniq<SimpleMultiFileList>(expanded_files);
 	}
 
 	// Expand all
-	while (ExpandNextPath()) {
+	while (ExpandNextPath(glob_input)) {
 	}
 
 	if (!options.hive_partitioning && !options.filename) {
@@ -317,7 +320,7 @@ GlobMultiFileList::DynamicFilterPushdown(ClientContext &context, const MultiFile
 	// Expand all paths into a copy
 	idx_t path_index = current_path;
 	auto file_list = expanded_files;
-	while (ExpandPathInternal(path_index, file_list)) {
+	while (ExpandPathInternal(path_index, file_list, glob_input)) {
 	}
 
 	auto res = PushdownInternal(context, options, names, types, column_ids, filters, file_list);
@@ -330,14 +333,14 @@ GlobMultiFileList::DynamicFilterPushdown(ClientContext &context, const MultiFile
 
 vector<OpenFileInfo> GlobMultiFileList::GetAllFiles() {
 	lock_guard<mutex> lck(lock);
-	while (ExpandNextPath(std::numeric_limits<idx_t>::max())) {
+	while (ExpandNextPath(glob_input)) {
 	}
 	return expanded_files;
 }
 
 idx_t GlobMultiFileList::GetTotalFileCount() {
 	lock_guard<mutex> lck(lock);
-	while (ExpandNextPath(std::numeric_limits<idx_t>::max())) {
+	while (ExpandNextPath(glob_input)) {
 	}
 	return expanded_files.size();
 }
@@ -380,7 +383,11 @@ OpenFileInfo GlobMultiFileList::PeekFirstFile() {
 OpenFileInfo GlobMultiFileList::GetFileInternal(idx_t i, bool peek) {
 	auto &files = peek ? peeked_files : expanded_files;
 	while (files.size() <= i) {
-		if (!ExpandNextPath(peek ? i + 1 : std::numeric_limits<idx_t>::max(), peek)) {
+		FileGlobInput file_glob_input = glob_input;
+		if (peek) {
+			file_glob_input.max_files = i + 1;
+		}
+		if (!ExpandNextPath(file_glob_input, peek)) {
 			return OpenFileInfo("");
 		}
 	}
@@ -393,14 +400,14 @@ void GlobMultiFileList::ClearPeekInternal() {
 	peeked_current_path = 0;
 }
 
-bool GlobMultiFileList::ExpandPathInternal(idx_t &current_path, vector<OpenFileInfo> &result, idx_t max_files,
-                                           optional_ptr<HiveFilterParams> hive_filter_params) const {
+bool GlobMultiFileList::ExpandPathInternal(idx_t &current_path, vector<OpenFileInfo> &result,
+                                           const FileGlobInput &file_glob_input) const {
 	if (current_path >= paths.size()) {
 		return false;
 	}
 
 	auto &fs = FileSystem::GetFileSystem(context);
-	auto glob_files = fs.GlobFiles(paths[current_path].path, context, glob_input, max_files, hive_filter_params);
+	auto glob_files = fs.GlobFiles(paths[current_path].path, context, file_glob_input);
 	std::sort(glob_files.begin(), glob_files.end());
 	result.insert(result.end(), glob_files.begin(), glob_files.end());
 
@@ -408,9 +415,9 @@ bool GlobMultiFileList::ExpandPathInternal(idx_t &current_path, vector<OpenFileI
 	return true;
 }
 
-bool GlobMultiFileList::ExpandNextPath(idx_t max_files, bool peek, optional_ptr<HiveFilterParams> hive_filter_params) {
+bool GlobMultiFileList::ExpandNextPath(const FileGlobInput &file_glob_input, bool peek) {
 	return ExpandPathInternal(peek ? peeked_current_path : current_path, peek ? peeked_files : expanded_files,
-	                          max_files, hive_filter_params);
+	                          file_glob_input);
 }
 
 bool GlobMultiFileList::IsFullyExpanded() const {
