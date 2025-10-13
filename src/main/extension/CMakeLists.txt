@@ -4,5 +4,5 @@ add_library(
   extension_load.cpp extension_loader.cpp)
 
 set(ALL_OBJECT_FILES
-        ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_main_extension>
-        PARENT_SCOPE)
+    ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_main_extension>
+    PARENT_SCOPE)

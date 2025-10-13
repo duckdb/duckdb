@@ -26,13 +26,12 @@ if(NOT AMALGAMATION_BUILD)
 endif()
 link_threads(sqlite3_api_wrapper_static "")
 
-
 include_directories(../../third_party/catch)
 
 include_directories(test/include)
 add_subdirectory(test)
 
 add_executable(test_sqlite3_api_wrapper ${SQLITE_TEST_FILES})
-  target_link_libraries(test_sqlite3_api_wrapper sqlite3_api_wrapper_static)
+target_link_libraries(test_sqlite3_api_wrapper sqlite3_api_wrapper_static)
 
 link_extension_libraries(sqlite3_api_wrapper_static "")

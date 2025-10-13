@@ -61,5 +61,4 @@ else()
   target_link_libraries(unittest duckdb_static test_helpers)
 endif()
 
-
 link_extension_libraries(unittest "")
