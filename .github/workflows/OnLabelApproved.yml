@@ -28,7 +28,7 @@ env:
 
 jobs:
   approved:
-    if: github.event.label.name == 'approved'
+    if: github.event.label.name == 'Ready For Review'
     runs-on: ubuntu-latest
     steps:
     - name: Check actor is org member
