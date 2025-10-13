@@ -60,12 +60,14 @@ public:
 	//! If it returns GATE_SET, then the caller must set the gate for the node replacing the split byte,
 	//! after its creation.
 	static GateStatus Split(ART &art, reference<Node> &node, Node &child, const uint8_t pos);
-	static string ToString(ART &art, const Node &node, int indent);
 
 	//! Returns the string representation of the node, or only traverses and verifies the node and its subtree
-	static string VerifyAndToString(ART &art, const Node &node, const bool only_verify);
+	static void Verify(ART &art, const Node &node);
 	//! Transform the child of the node.
 	static void TransformToDeprecated(ART &art, Node &node, unsafe_unique_ptr<FixedSizeAllocator> &allocator);
+
+	//! Returns the string representation of the node at indentation level.
+	static string ToString(ART &art, const Node &node, int indent_level);
 
 private:
 	static Prefix NewInternal(ART &art, Node &node, const data_ptr_t data, const uint8_t count, const idx_t offset);

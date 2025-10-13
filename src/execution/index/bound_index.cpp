@@ -79,10 +79,16 @@ bool BoundIndex::MergeIndexes(BoundIndex &other_index) {
 	return MergeIndexes(state, other_index);
 }
 
-string BoundIndex::VerifyAndToString(const bool only_verify) {
+void BoundIndex::Verify() {
 	IndexLock l;
 	InitializeLock(l);
-	return VerifyAndToString(l, only_verify);
+	Verify(l);
+}
+
+string BoundIndex::ToString() {
+	IndexLock l;
+	InitializeLock(l);
+	return ToString(l);
 }
 
 void BoundIndex::VerifyAllocations() {

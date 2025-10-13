@@ -125,9 +125,14 @@ public:
 	idx_t GetInMemorySize();
 
 	//! Returns the string representation of an index, or only traverses and verifies the index.
-	virtual string VerifyAndToString(IndexLock &l, const bool only_verify) = 0;
+	virtual void Verify(IndexLock &l) = 0;
 	//! Obtains a lock and calls VerifyAndToString.
-	string VerifyAndToString(const bool only_verify);
+	void Verify();
+
+	//! Returns the string representation of an index.
+	virtual string ToString(IndexLock &l) = 0;
+	//! Obtains a lock and calls ToString.
+	string ToString();
 
 	//! Ensures that the node allocation counts match the node counts.
 	virtual void VerifyAllocations(IndexLock &l) = 0;

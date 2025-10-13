@@ -484,7 +484,6 @@ ErrorData ART::Insert(IndexLock &l, DataChunk &chunk, Vector &row_ids, IndexAppe
 		}
 		conflict_type = ARTOperator::Insert(arena, *this, tree, keys[i], 0, row_id_keys[i], GateStatus::GATE_NOT_SET,
 		                                    delete_art, info.append_mode);
-		Printer::Print(ToString());
 		if (conflict_type != ARTConflictType::NO_CONFLICT) {
 			conflict_idx = i;
 			break;
@@ -1206,22 +1205,25 @@ bool ART::MergeIndexes(IndexLock &state, BoundIndex &other_index) {
 // Verification
 //===--------------------------------------------------------------------===//
 
-string ART::ToString() {
+string ART::ToString(IndexLock &l) {
+	return ToStringInternal();
+}
+
+string ART::ToStringInternal() {
 	if (tree.HasMetadata()) {
 		return "\nART: \n" + tree.ToString(*this, 0);
 	}
 	return "[empty]";
 }
 
-string ART::VerifyAndToString(IndexLock &l, const bool only_verify) {
-	return VerifyAndToStringInternal(only_verify);
+void ART::Verify(IndexLock &l) {
+	VerifyInternal();
 }
 
-string ART::VerifyAndToStringInternal(const bool only_verify) {
+void ART::VerifyInternal() {
 	if (tree.HasMetadata()) {
-		return "ART: \n" + tree.VerifyAndToString(*this, only_verify);
+		tree.Verify(*this);
 	}
-	return "[empty]";
 }
 
 void ART::VerifyAllocations(IndexLock &l) {
