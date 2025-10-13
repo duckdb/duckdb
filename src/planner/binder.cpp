@@ -189,7 +189,7 @@ void Binder::AddCTE(const string &name) {
 	CTE_bindings.insert(name);
 }
 
-optional_ptr<Binding> Binder::GetCTEBinding(const string &name) {
+optional_ptr<Binding> Binder::GetCTEBinding(const BindingAlias &name) {
 	reference<Binder> current_binder(*this);
 	while (true) {
 		auto &current = current_binder.get();

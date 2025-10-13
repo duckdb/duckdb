@@ -121,44 +121,22 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 
 	// CTE name should never be qualified (i.e. schema_name should be empty)
 	// unless we want to refer to the recurring table of "using key".
-	auto ctebinding = GetCTEBinding(ref.table_name);
+	BindingAlias binding_alias(ref.schema_name, ref.table_name);
+	auto ctebinding = GetCTEBinding(binding_alias);
 	if (ctebinding) {
 		// There is a CTE binding in the BindContext.
 		// This can only be the case if there is a recursive CTE,
 		// or a materialized CTE present.
 		auto index = GenerateTableIndex();
 
-		if (ref.schema_name == "recurring") {
-			auto recurring_bindings = GetCTEBinding("recurring." + ref.table_name);
-			if (!recurring_bindings) {
-				throw BinderException(error_context,
-				                      "There is a WITH item named \"%s\", but the recurring table cannot be "
-				                      "referenced from this part of the query."
-				                      " Hint: RECURRING can only be used with USING KEY in recursive CTE.",
-				                      ref.table_name);
-			}
-		}
-
 		auto alias = ref.alias.empty() ? ref.table_name : ref.alias;
 		auto names = BindContext::AliasColumnNames(alias, ctebinding->GetColumnNames(), ref.column_name_alias);
 
 		bind_context.AddGenericBinding(index, alias, names, ctebinding->GetColumnTypes());
 
-		auto cte_ref = reference<CTEBinding>(ctebinding->Cast<CTEBinding>());
-		if (!ref.schema_name.empty()) {
-			auto cte_reference = ref.schema_name + "." + ref.table_name;
-			auto recurring_ref = GetCTEBinding(cte_reference);
-			if (!recurring_ref) {
-				throw BinderException(error_context,
-				                      "There is a WITH item named \"%s\", but the recurring table cannot be "
-				                      "referenced from this part of the query.",
-				                      ref.table_name);
-			}
-			cte_ref = reference<CTEBinding>(recurring_ref->Cast<CTEBinding>());
-		}
-
 		// Update references to CTE
-		cte_ref.get().reference_count++;
+		auto &cte_ref = ctebinding->Cast<CTEBinding>();
+		cte_ref.reference_count++;
 		bool is_recurring = ref.schema_name == "recurring";
 
 		BoundStatement result;
@@ -167,7 +145,6 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		result.plan =
 		    make_uniq<LogicalCTERef>(index, ctebinding->GetIndex(), result.types, std::move(names), is_recurring);
 		return result;
-		;
 	}
 
 	// not a CTE

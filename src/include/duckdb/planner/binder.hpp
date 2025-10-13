@@ -264,7 +264,7 @@ public:
 	//! Add a common table expression to the binder
 	void AddCTE(const string &name);
 	//! Find all candidate common table expression by name; returns empty vector if none exists
-	optional_ptr<Binding> GetCTEBinding(const string &name);
+	optional_ptr<Binding> GetCTEBinding(const BindingAlias &name);
 
 	bool CTEExists(const string &name);
 

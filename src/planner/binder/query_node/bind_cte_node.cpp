@@ -92,7 +92,7 @@ BoundCTEData Binder::PrepareCTE(const string &ctename, CommonTableExpressionInfo
 	// Add bindings of left side to temporary CTE bindings context
 	// as we are binding a CTE currently, we take precendence over the existing binding.
 	// This implements the CTE shadowing behavior.
-	result.child_binder->bind_context.AddCTEBinding(result.setop_index, ctename, names, result.types);
+	result.child_binder->bind_context.AddCTEBinding(result.setop_index, BindingAlias(ctename), names, result.types);
 	return result;
 }
 

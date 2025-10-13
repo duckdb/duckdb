@@ -256,14 +256,6 @@ unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &sc
 	return CreateColumnReference(catalog_name, schema_name, table_name, column_name, bind_type);
 }
 
-optional_ptr<Binding> BindContext::GetCTEBinding(const string &ctename) {
-	auto match = cte_bindings.find(ctename);
-	if (match == cte_bindings.end()) {
-		return nullptr;
-	}
-	return match->second.get();
-}
-
 string GetCandidateAlias(const BindingAlias &main_alias, const BindingAlias &new_alias) {
 	string candidate;
 	if (!main_alias.GetCatalog().empty() && !new_alias.GetCatalog().empty()) {
@@ -719,19 +711,24 @@ void BindContext::AddGenericBinding(idx_t index, const string &alias, const vect
 	AddBinding(make_uniq<Binding>(BindingType::BASE, BindingAlias(alias), types, names, index));
 }
 
-void BindContext::AddCTEBinding(idx_t index, const string &alias, const vector<string> &names,
-                                const vector<LogicalType> &types, bool using_key) {
-	auto binding = make_uniq<CTEBinding>(BindingAlias(alias), types, names, index);
-
-	if (cte_bindings.find(alias) != cte_bindings.end()) {
-		throw BinderException("Duplicate CTE binding \"%s\" in query!", alias);
+void BindContext::AddCTEBinding(idx_t index, BindingAlias alias_p, const vector<string> &names,
+                                const vector<LogicalType> &types) {
+	for (auto &cte_binding : cte_bindings) {
+		if (cte_binding->GetBindingAlias() == alias_p) {
+			throw BinderException("Duplicate CTE binding \"%s\" in query!", alias_p.ToString());
+		}
 	}
-	cte_bindings[alias] = std::move(binding);
+	auto binding = make_uniq<CTEBinding>(std::move(alias_p), types, names, index);
+	cte_bindings.push_back(std::move(binding));
+}
 
-	if (using_key) {
-		auto recurring_alias = "recurring." + alias;
-		cte_bindings[recurring_alias] = make_uniq<CTEBinding>(BindingAlias(recurring_alias), types, names, index);
+optional_ptr<Binding> BindContext::GetCTEBinding(const BindingAlias &ctename) {
+	for (auto &binding : cte_bindings) {
+		if (binding->GetBindingAlias().Matches(ctename)) {
+			return binding.get();
+		}
 	}
+	return nullptr;
 }
 
 void BindContext::AddContext(BindContext other) {
