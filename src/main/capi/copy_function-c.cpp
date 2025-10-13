@@ -2,7 +2,9 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/function/copy_function.hpp"
+#include "duckdb/function/table_function.hpp"
 #include "duckdb/main/capi/capi_internal.hpp"
+#include "duckdb/main/capi/capi_internal_table.hpp"
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
 
 //----------------------------------------------------------------------------------------------------------------------

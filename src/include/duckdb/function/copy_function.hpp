@@ -84,7 +84,7 @@ struct PreparedBatchData {
 };
 
 struct CopyFunctionBindInput {
-	explicit CopyFunctionBindInput(const CopyInfo &info_p, shared_ptr<CopyFunctionInfo> function_info)
+	explicit CopyFunctionBindInput(const CopyInfo &info_p, shared_ptr<CopyFunctionInfo> function_info = nullptr)
 	    : info(info_p), function_info(std::move(function_info)) {
 	}
 
