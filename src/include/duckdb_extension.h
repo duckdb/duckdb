@@ -618,6 +618,9 @@ typedef struct {
 	void *(*duckdb_copy_function_finalize_get_global_state)(duckdb_copy_function_finalize_info info);
 	void (*duckdb_copy_function_set_copy_from_function)(duckdb_copy_function copy_function,
 	                                                    duckdb_table_function table_function);
+	idx_t (*duckdb_table_function_bind_get_result_column_count)(duckdb_bind_info info);
+	const char *(*duckdb_table_function_bind_get_result_column_name)(duckdb_bind_info info, idx_t col_idx);
+	duckdb_logical_type (*duckdb_table_function_bind_get_result_column_type)(duckdb_bind_info info, idx_t col_idx);
 #endif
 
 // New functions for duckdb error data
@@ -1216,6 +1219,12 @@ typedef struct {
 #define duckdb_copy_function_finalize_get_bind_data      duckdb_ext_api.duckdb_copy_function_finalize_get_bind_data
 #define duckdb_copy_function_finalize_get_global_state   duckdb_ext_api.duckdb_copy_function_finalize_get_global_state
 #define duckdb_copy_function_set_copy_from_function      duckdb_ext_api.duckdb_copy_function_set_copy_from_function
+#define duckdb_table_function_bind_get_result_column_count                                                             \
+	duckdb_ext_api.duckdb_table_function_bind_get_result_column_count
+#define duckdb_table_function_bind_get_result_column_name                                                              \
+	duckdb_ext_api.duckdb_table_function_bind_get_result_column_name
+#define duckdb_table_function_bind_get_result_column_type                                                              \
+	duckdb_ext_api.duckdb_table_function_bind_get_result_column_type
 
 // Version unstable_new_error_data_functions
 #define duckdb_create_error_data     duckdb_ext_api.duckdb_create_error_data
