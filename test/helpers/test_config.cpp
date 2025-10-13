@@ -425,6 +425,10 @@ string TestConfiguration::GetTestEnv(const string &key, const string &default_va
 	return test_env[key];
 }
 
+const unordered_map<string, string> &TestConfiguration::GetTestEnvMap() {
+	return test_env;
+}
+
 DebugVectorVerification TestConfiguration::GetVectorVerification() {
 	return EnumUtil::FromString<DebugVectorVerification>(GetOptionOrDefault<string>("verify_vector", "NONE"));
 }

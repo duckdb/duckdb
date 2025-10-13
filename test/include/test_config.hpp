@@ -67,9 +67,7 @@ public:
 	vector<string> ErrorMessagesToBeSkipped();
 	string GetStorageVersion();
 	string GetTestEnv(const string &key, const string &default_value);
-	const unordered_map<string, string> &ReadTestEnv() {
-		return test_env;
-	}
+	const unordered_map<string, string> &GetTestEnvMap();
 
 	vector<unordered_set<string>> GetSelectTagSets();
 	vector<unordered_set<string>> GetSkipTagSets();
