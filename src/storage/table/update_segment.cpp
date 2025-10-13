@@ -7,6 +7,7 @@
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/update_info.hpp"
 #include "duckdb/transaction/undo_buffer.hpp"
+#include "duckdb/storage/data_table.hpp"
 
 #include <algorithm>
 
@@ -104,9 +105,10 @@ idx_t UpdateInfo::GetAllocSize(idx_t type_size) {
 	return AlignValue<idx_t>(sizeof(UpdateInfo) + (sizeof(sel_t) + type_size) * STANDARD_VECTOR_SIZE);
 }
 
-void UpdateInfo::Initialize(UpdateInfo &info, transaction_t transaction_id) {
+void UpdateInfo::Initialize(UpdateInfo &info, DataTable &data_table, transaction_t transaction_id) {
 	info.max = STANDARD_VECTOR_SIZE;
 	info.version_number = transaction_id;
+	info.table = &data_table;
 	info.segment = nullptr;
 	info.prev.entry = nullptr;
 	info.next.entry = nullptr;
@@ -1236,11 +1238,11 @@ static idx_t SortSelectionVector(SelectionVector &sel, idx_t count, row_t *ids) 
 	return pos;
 }
 
-UpdateInfo *CreateEmptyUpdateInfo(TransactionData transaction, idx_t type_size, idx_t count,
+UpdateInfo *CreateEmptyUpdateInfo(TransactionData transaction, DataTable &data_table, idx_t type_size, idx_t count,
                                   unsafe_unique_array<char> &data) {
 	data = make_unsafe_uniq_array_uninitialized<char>(UpdateInfo::GetAllocSize(type_size));
 	auto update_info = reinterpret_cast<UpdateInfo *>(data.get());
-	UpdateInfo::Initialize(*update_info, transaction.transaction_id);
+	UpdateInfo::Initialize(*update_info, data_table, transaction.transaction_id);
 	return update_info;
 }
 
@@ -1258,8 +1260,8 @@ void UpdateSegment::InitializeUpdateInfo(idx_t vector_idx) {
 	}
 }
 
-void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vector &update_p, row_t *ids, idx_t count,
-                           Vector &base_data) {
+void UpdateSegment::Update(TransactionData transaction, DataTable &data_table, idx_t column_index, Vector &update_p,
+                           row_t *ids, idx_t count, Vector &base_data) {
 	// obtain an exclusive lock
 	auto write_lock = lock.GetExclusiveLock();
 
@@ -1322,10 +1324,10 @@ void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vect
 			// no updates made yet by this transaction: initially the update info to empty
 			if (transaction.transaction) {
 				auto &dtransaction = transaction.transaction->Cast<DuckTransaction>();
-				node_ref = dtransaction.CreateUpdateInfo(type_size, count);
+				node_ref = dtransaction.CreateUpdateInfo(type_size, data_table, count);
 				node = &UpdateInfo::Get(node_ref);
 			} else {
-				node = CreateEmptyUpdateInfo(transaction, type_size, count, update_info_data);
+				node = CreateEmptyUpdateInfo(transaction, data_table, type_size, count, update_info_data);
 			}
 			node->segment = this;
 			node->vector_index = vector_index;
@@ -1360,7 +1362,7 @@ void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vect
 		idx_t alloc_size = UpdateInfo::GetAllocSize(type_size);
 		auto handle = root->allocator.Allocate(alloc_size);
 		auto &update_info = UpdateInfo::Get(handle);
-		UpdateInfo::Initialize(update_info, TRANSACTION_ID_START - 1);
+		UpdateInfo::Initialize(update_info, data_table, TRANSACTION_ID_START - 1);
 		update_info.column_index = column_index;
 
 		InitializeUpdateInfo(update_info, ids, sel, count, vector_index, vector_offset);
@@ -1370,10 +1372,10 @@ void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vect
 		UndoBufferReference node_ref;
 		optional_ptr<UpdateInfo> transaction_node;
 		if (transaction.transaction) {
-			node_ref = transaction.transaction->CreateUpdateInfo(type_size, count);
+			node_ref = transaction.transaction->CreateUpdateInfo(type_size, data_table, count);
 			transaction_node = &UpdateInfo::Get(node_ref);
 		} else {
-			transaction_node = CreateEmptyUpdateInfo(transaction, type_size, count, update_info_data);
+			transaction_node = CreateEmptyUpdateInfo(transaction, data_table, type_size, count, update_info_data);
 		}
 
 		InitializeUpdateInfo(*transaction_node, ids, sel, count, vector_index, vector_offset);

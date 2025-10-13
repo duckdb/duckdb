@@ -377,6 +377,15 @@ public:
 		return merger_global_state ? merger_global_state->MaxThreads() : 1;
 	}
 
+	void Destroy() {
+		if (!merger_global_state) {
+			return;
+		}
+		auto guard = merger_global_state->Lock();
+		merger.sorted_runs.clear();
+		sink.temporary_memory_state.reset();
+	}
+
 public:
 	//! The global sink state
 	SortGlobalSinkState &sink;
@@ -476,16 +485,26 @@ SourceResultType Sort::MaterializeColumnData(ExecutionContext &context, Operator
 	}
 
 	// Merge into global output collection
-	auto guard = gstate.Lock();
-	if (!gstate.column_data) {
-		gstate.column_data = std::move(local_column_data);
-	} else {
-		gstate.column_data->Merge(*local_column_data);
+	{
+		auto guard = gstate.Lock();
+		if (!gstate.column_data) {
+			gstate.column_data = std::move(local_column_data);
+		} else {
+			gstate.column_data->Merge(*local_column_data);
+		}
 	}
+
+	// Destroy local state before returning
+	input.local_state.Cast<SortLocalSourceState>().merger_local_state.reset();
 
 	// Return type indicates whether materialization is done
 	const auto progress_data = GetProgress(context.client, input.global_state);
-	return progress_data.done == progress_data.total ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
+	if (progress_data.done == progress_data.total) {
+		// Destroy global state before returning
+		gstate.Destroy();
+		return SourceResultType::FINISHED;
+	}
+	return SourceResultType::HAVE_MORE_OUTPUT;
 }
 
 unique_ptr<ColumnDataCollection> Sort::GetColumnData(OperatorSourceInput &input) const {

@@ -35,6 +35,14 @@ BoundStatement CreateViewRelation::Bind(Binder &binder) {
 	return binder.Bind(stmt.Cast<SQLStatement>());
 }
 
+unique_ptr<QueryNode> CreateViewRelation::GetQueryNode() {
+	throw InternalException("Cannot create a query node from an update relation");
+}
+
+string CreateViewRelation::GetQuery() {
+	return string();
+}
+
 const vector<ColumnDefinition> &CreateViewRelation::Columns() {
 	return columns;
 }

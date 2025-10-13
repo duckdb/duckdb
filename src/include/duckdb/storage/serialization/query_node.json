@@ -21,6 +21,11 @@
         "name": "cte_map",
         "type": "CommonTableExpressionMap"
       }
+    ],
+    "finalize_deserialization": [
+        "if (type == QueryNodeType::CTE_NODE) {",
+        "\tresult = std::move(result->Cast<CTENode>().child);",
+        "}"
     ]
   },
   {

@@ -38,6 +38,9 @@ unique_ptr<QueryNode> QueryNode::Deserialize(Deserializer &deserializer) {
 	}
 	result->modifiers = std::move(modifiers);
 	result->cte_map = std::move(cte_map);
+	if (type == QueryNodeType::CTE_NODE) {
+		result = std::move(result->Cast<CTENode>().child);
+	}
 	return result;
 }
 
