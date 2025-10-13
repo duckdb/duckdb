@@ -645,14 +645,142 @@ void *duckdb_copy_function_finalize_get_global_state(duckdb_copy_function_finali
 }
 
 //----------------------------------------------------------------------------------------------------------------------
-// Register
+// Copy FROM
 //----------------------------------------------------------------------------------------------------------------------
+namespace duckdb {
+namespace {
+
+unique_ptr<FunctionData> CCopyFromBind(ClientContext &context, CopyFromFunctionBindInput &info,
+                                       vector<string> &expected_names, vector<LogicalType> &expected_types) {
+
+	auto &tf_info = info.tf.function_info->Cast<CTableFunctionInfo>();
+	auto result = make_uniq<CTableBindData>(tf_info);
+
+	named_parameter_map_t named_parameters;
+
+	// Turn all options into named parameters
+	for (auto opt : info.info.options) {
+
+		auto param_it = info.tf.named_parameters.find(opt.first);
+		if (param_it == info.tf.named_parameters.end()) {
+			// Option not found in the table function's named parameters
+			throw BinderException("'%s' is not a supported option for copy function '%s'", opt.first.c_str(),
+			                      info.tf.name.c_str());
+		}
+
+		// Try to convert a list of values into a single Value, either by extracting or unifying into a list
+		Value param_value;
+		if (opt.second.empty()) {
+			continue;
+		}
+		if (opt.second.size() == 1) {
+			param_value = opt.second[0];
+		} else {
+			auto first_type = opt.second[0].type();
+			auto is_same_type = true;
+			for (auto &val : opt.second) {
+				if (val.type() != first_type) {
+					is_same_type = false;
+					break;
+				}
+			}
+			if (is_same_type) {
+				param_value = Value::LIST(first_type, opt.second);
+			} else {
+				throw BinderException("Cannot pass multiple values of different types for copy option '%s'",
+				                      opt.first.c_str());
+			}
+		}
+
+		// Assing the option as a named parameter
+		named_parameters[opt.first] = param_value;
+	}
+
+	// Also pass file path as a regular parameter
+	vector<Value> parameters;
+	parameters.push_back(Value(info.info.file_path));
+
+	// Now bind, using the normal table function bind mechanism
+	CTableInternalBindInfo bind_info(context, parameters, named_parameters, expected_types, expected_names, *result,
+	                                 tf_info);
+	tf_info.bind(reinterpret_cast<duckdb_bind_info>(&bind_info));
+	if (!bind_info.success) {
+		throw BinderException(bind_info.error);
+	}
+
+	return std::move(result);
+}
+
+} // namespace
+} // namespace duckdb
 
 void duckdb_copy_function_set_copy_from_function(duckdb_copy_function copy_function,
                                                  duckdb_table_function table_function) {
-	// TODO: Implement copy from
+
+	auto &copy_function_ref = *reinterpret_cast<duckdb::CopyFunction *>(copy_function);
+	if (!copy_function || !table_function) {
+		return;
+	}
+	auto &tf = *reinterpret_cast<duckdb::TableFunction *>(table_function);
+	auto &tf_info = tf.function_info->Cast<duckdb::CTableFunctionInfo>();
+
+	if (tf.name.empty()) {
+		// Take the name from the copy function if not set
+		tf.name = copy_function_ref.name;
+	}
+
+	if (!tf_info.bind || !tf_info.init || !tf_info.function) {
+		return;
+	}
+	for (auto it = tf.named_parameters.begin(); it != tf.named_parameters.end(); it++) {
+		if (duckdb::TypeVisitor::Contains(it->second, duckdb::LogicalTypeId::INVALID)) {
+			return;
+		}
+	}
+	for (const auto &argument : tf.arguments) {
+		if (duckdb::TypeVisitor::Contains(argument, duckdb::LogicalTypeId::INVALID)) {
+			return;
+		}
+	}
+
+	// Set the bind callback to mark this as a "copy from" capable function
+	copy_function_ref.copy_from_bind = duckdb::CCopyFromBind;
+	copy_function_ref.copy_from_function = tf;
 }
 
+idx_t duckdb_table_function_bind_get_result_column_count(duckdb_bind_info bind_info) {
+	if (!bind_info) {
+		return 0;
+	}
+	auto &bind_info_ref = *reinterpret_cast<duckdb::CTableInternalBindInfo *>(bind_info);
+	return bind_info_ref.return_types.size();
+}
+
+duckdb_logical_type duckdb_table_function_bind_get_result_column_type(duckdb_bind_info bind_info, idx_t col_idx) {
+	if (!bind_info) {
+		return nullptr;
+	}
+	auto &bind_info_ref = *reinterpret_cast<duckdb::CTableInternalBindInfo *>(bind_info);
+	if (col_idx >= bind_info_ref.return_types.size()) {
+		return nullptr;
+	}
+	return reinterpret_cast<duckdb_logical_type>(new duckdb::LogicalType(bind_info_ref.return_types[col_idx]));
+}
+
+const char *duckdb_table_function_bind_get_result_column_name(duckdb_bind_info bind_info, idx_t col_idx) {
+	if (!bind_info) {
+		return nullptr;
+	}
+	auto &bind_info_ref = *reinterpret_cast<duckdb::CTableInternalBindInfo *>(bind_info);
+	if (col_idx >= bind_info_ref.names.size()) {
+		return nullptr;
+	}
+	return bind_info_ref.names[col_idx].c_str();
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// Register
+//----------------------------------------------------------------------------------------------------------------------
 duckdb_state duckdb_register_copy_function(duckdb_connection connection, duckdb_copy_function copy_function) {
 	if (!connection || !copy_function) {
 		return DuckDBError;
@@ -668,7 +796,7 @@ duckdb_state duckdb_register_copy_function(duckdb_connection connection, duckdb_
 	auto &info = copy_function_ref.function_info->Cast<duckdb::CCopyFunctionInfo>();
 
 	auto is_copy_to = false;
-	auto is_copy_from = false;
+	auto is_copy_from = copy_function_ref.copy_from_bind != nullptr;
 
 	if (info.sink) {
 		// Set the copy function callbacks
