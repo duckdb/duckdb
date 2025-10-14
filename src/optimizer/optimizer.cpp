@@ -32,6 +32,7 @@
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/optimizer/sum_rewriter.hpp"
 #include "duckdb/optimizer/topn_optimizer.hpp"
+#include "duckdb/optimizer/topn_window_elimination.hpp"
 #include "duckdb/optimizer/unnest_rewriter.hpp"
 #include "duckdb/optimizer/late_materialization.hpp"
 #include "duckdb/optimizer/common_subplan_optimizer.hpp"
@@ -262,6 +263,12 @@ void Optimizer::RunBuiltInOptimizers() {
 		StatisticsPropagator propagator(*this, *plan);
 		propagator.PropagateStatistics(plan);
 		statistics_map = propagator.GetStatisticsMap();
+	});
+
+	// rewrite row_number window function + filter on row_number to aggregate
+	RunOptimizer(OptimizerType::TOP_N_WINDOW_ELIMINATION, [&]() {
+		TopNWindowElimination topn_window_elimination(context, *this, &statistics_map);
+		plan = topn_window_elimination.Optimize(std::move(plan));
 	});
 
 	// remove duplicate aggregates

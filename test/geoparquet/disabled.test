@@ -51,7 +51,7 @@ query I
 SELECT (decode(value)) as col
 FROM parquet_kv_metadata('__TEST_DIR__/data-point-out-enabled.parquet');
 ----
-{"version":"1.1.0","primary_column":"geometry","columns":{"geometry":{"encoding":"WKB","geometry_types":["Point"],"bbox":[30.0,10.0,40.0,40.0]}}}
+{"version":"1.0.0","primary_column":"geometry","columns":{"geometry":{"encoding":"WKB","geometry_types":["Point"],"bbox":[30.0,10.0,40.0,40.0]}}}
 
 
 # Now disable conversion

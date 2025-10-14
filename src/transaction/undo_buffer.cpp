@@ -177,7 +177,7 @@ void UndoBuffer::Cleanup(transaction_t lowest_active_transaction) {
 	//      the chunks)
 	//  (2) there is no active transaction with start_id < commit_id of this
 	//  transaction
-	CleanupState state(transaction.context, lowest_active_transaction);
+	CleanupState state(QueryContext(), lowest_active_transaction);
 	UndoBuffer::IteratorState iterator_state;
 	IterateEntries(iterator_state, [&](UndoFlags type, data_ptr_t data) { state.CleanupEntry(type, data); });
 

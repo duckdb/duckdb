@@ -772,4 +772,116 @@ string_t Geometry::ToString(Vector &result, const string_t &geom) {
 	return StringVector::AddString(result, buffer.data(), buffer.size());
 }
 
+pair<GeometryType, VertexType> Geometry::GetType(const string_t &wkb) {
+	BlobReader reader(wkb.GetData(), static_cast<uint32_t>(wkb.GetSize()));
+
+	// Read the byte order (should always be 1 for little-endian)
+	const auto byte_order = reader.Read<uint8_t>();
+	if (byte_order != 1) {
+		throw InvalidInputException("Unsupported byte order %d in WKB", byte_order);
+	}
+
+	const auto meta = reader.Read<uint32_t>();
+	const auto type_id = meta % 1000;
+	const auto flag_id = meta / 1000;
+
+	if (type_id < 1 || type_id > 7) {
+		throw InvalidInputException("Unsupported geometry type %d in WKB", type_id);
+	}
+	if (flag_id > 3) {
+		throw InvalidInputException("Unsupported geometry flag %d in WKB", flag_id);
+	}
+
+	const auto geom_type = static_cast<GeometryType>(type_id);
+	const auto vert_type = static_cast<VertexType>(flag_id);
+
+	return {geom_type, vert_type};
+}
+
+template <class VERTEX_TYPE = VertexXY>
+static uint32_t ParseVerticesInternal(BlobReader &reader, GeometryExtent &extent, uint32_t vert_count, bool check_nan) {
+	uint32_t count = 0;
+
+	// Issue a single .Reserve() for all vertices, to minimize bounds checking overhead
+	const auto ptr = const_data_ptr_cast(reader.Reserve(vert_count * sizeof(VERTEX_TYPE)));
+
+	for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
+		VERTEX_TYPE vertex = Load<VERTEX_TYPE>(ptr + vert_idx * sizeof(VERTEX_TYPE));
+		if (check_nan && vertex.AllNan()) {
+			continue;
+		}
+
+		extent.Extend(vertex);
+		count++;
+	}
+	return count;
+}
+
+static uint32_t ParseVertices(BlobReader &reader, GeometryExtent &extent, uint32_t vert_count, VertexType type,
+                              bool check_nan) {
+	switch (type) {
+	case VertexType::XY:
+		return ParseVerticesInternal<VertexXY>(reader, extent, vert_count, check_nan);
+	case VertexType::XYZ:
+		return ParseVerticesInternal<VertexXYZ>(reader, extent, vert_count, check_nan);
+	case VertexType::XYM:
+		return ParseVerticesInternal<VertexXYM>(reader, extent, vert_count, check_nan);
+	case VertexType::XYZM:
+		return ParseVerticesInternal<VertexXYZM>(reader, extent, vert_count, check_nan);
+	default:
+		throw InvalidInputException("Unsupported vertex type %d in WKB", static_cast<int>(type));
+	}
+}
+
+uint32_t Geometry::GetExtent(const string_t &wkb, GeometryExtent &extent) {
+	BlobReader reader(wkb.GetData(), static_cast<uint32_t>(wkb.GetSize()));
+
+	uint32_t vertex_count = 0;
+
+	while (!reader.IsAtEnd()) {
+		const auto byte_order = reader.Read<uint8_t>();
+		if (byte_order != 1) {
+			throw InvalidInputException("Unsupported byte order %d in WKB", byte_order);
+		}
+		const auto meta = reader.Read<uint32_t>();
+		const auto type_id = meta % 1000;
+		const auto flag_id = meta / 1000;
+		if (type_id < 1 || type_id > 7) {
+			throw InvalidInputException("Unsupported geometry type %d in WKB", type_id);
+		}
+		if (flag_id > 3) {
+			throw InvalidInputException("Unsupported geometry flag %d in WKB", flag_id);
+		}
+		const auto geom_type = static_cast<GeometryType>(type_id);
+		const auto vert_type = static_cast<VertexType>(flag_id);
+
+		switch (geom_type) {
+		case GeometryType::POINT: {
+			vertex_count += ParseVertices(reader, extent, 1, vert_type, true);
+		} break;
+		case GeometryType::LINESTRING: {
+			const auto vert_count = reader.Read<uint32_t>();
+			vertex_count += ParseVertices(reader, extent, vert_count, vert_type, false);
+		} break;
+		case GeometryType::POLYGON: {
+			const auto ring_count = reader.Read<uint32_t>();
+			for (uint32_t ring_idx = 0; ring_idx < ring_count; ring_idx++) {
+				const auto vert_count = reader.Read<uint32_t>();
+				vertex_count += ParseVertices(reader, extent, vert_count, vert_type, false);
+			}
+		} break;
+		case GeometryType::MULTIPOINT:
+		case GeometryType::MULTILINESTRING:
+		case GeometryType::MULTIPOLYGON:
+		case GeometryType::GEOMETRYCOLLECTION: {
+			// Skip count. We don't need it for extent calculation.
+			reader.Skip(sizeof(uint32_t));
+		} break;
+		default:
+			throw InvalidInputException("Unsupported geometry type %d in WKB", static_cast<int>(geom_type));
+		}
+	}
+	return vertex_count;
+}
+
 } // namespace duckdb

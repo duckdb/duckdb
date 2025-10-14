@@ -854,8 +854,8 @@ void RowGroup::CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_
 	vinfo.CleanupAppend(lowest_transaction, start, count);
 }
 
-void RowGroup::Update(TransactionData transaction, DataChunk &update_chunk, row_t *ids, idx_t offset, idx_t count,
-                      const vector<PhysicalIndex> &column_ids) {
+void RowGroup::Update(TransactionData transaction, DataTable &data_table, DataChunk &update_chunk, row_t *ids,
+                      idx_t offset, idx_t count, const vector<PhysicalIndex> &column_ids) {
 #ifdef DEBUG
 	for (size_t i = offset; i < offset + count; i++) {
 		D_ASSERT(ids[i] >= row_t(this->start) && ids[i] < row_t(this->start + this->count));
@@ -868,16 +868,16 @@ void RowGroup::Update(TransactionData transaction, DataChunk &update_chunk, row_
 		if (offset > 0) {
 			Vector sliced_vector(update_chunk.data[i], offset, offset + count);
 			sliced_vector.Flatten(count);
-			col_data.Update(transaction, column.index, sliced_vector, ids + offset, count);
+			col_data.Update(transaction, data_table, column.index, sliced_vector, ids + offset, count);
 		} else {
-			col_data.Update(transaction, column.index, update_chunk.data[i], ids, count);
+			col_data.Update(transaction, data_table, column.index, update_chunk.data[i], ids, count);
 		}
 		MergeStatistics(column.index, *col_data.GetUpdateStatistics());
 	}
 }
 
-void RowGroup::UpdateColumn(TransactionData transaction, DataChunk &updates, Vector &row_ids, idx_t offset, idx_t count,
-                            const vector<column_t> &column_path) {
+void RowGroup::UpdateColumn(TransactionData transaction, DataTable &data_table, DataChunk &updates, Vector &row_ids,
+                            idx_t offset, idx_t count, const vector<column_t> &column_path) {
 	D_ASSERT(updates.ColumnCount() == 1);
 	auto ids = FlatVector::GetData<row_t>(row_ids);
 
@@ -887,9 +887,9 @@ void RowGroup::UpdateColumn(TransactionData transaction, DataChunk &updates, Vec
 	if (offset > 0) {
 		Vector sliced_vector(updates.data[0], offset, offset + count);
 		sliced_vector.Flatten(count);
-		col_data.UpdateColumn(transaction, column_path, sliced_vector, ids + offset, count, 1);
+		col_data.UpdateColumn(transaction, data_table, column_path, sliced_vector, ids + offset, count, 1);
 	} else {
-		col_data.UpdateColumn(transaction, column_path, updates.data[0], ids, count, 1);
+		col_data.UpdateColumn(transaction, data_table, column_path, updates.data[0], ids, count, 1);
 	}
 	MergeStatistics(primary_column_idx, *col_data.GetUpdateStatistics());
 }
@@ -1093,8 +1093,10 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 		row_group_pointer.has_metadata_blocks = has_metadata_blocks;
 		row_group_pointer.extra_metadata_blocks = extra_metadata_blocks;
 		row_group_pointer.deletes_pointers = deletes_pointers;
-		metadata_manager->ClearModifiedBlocks(write_data.existing_pointers);
-		metadata_manager->ClearModifiedBlocks(deletes_pointers);
+		if (metadata_manager) {
+			metadata_manager->ClearModifiedBlocks(write_data.existing_pointers);
+			metadata_manager->ClearModifiedBlocks(deletes_pointers);
+		}
 		return row_group_pointer;
 	}
 	D_ASSERT(write_data.states.size() == columns.size());
