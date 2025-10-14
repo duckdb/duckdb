@@ -320,15 +320,16 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 		}
 		return_types.push_back(LogicalType::BIGINT);
 		window->expressions.push_back(std::move(row_number));
+		window->types.push_back(LogicalType::BIGINT);
 		window->children.push_back(std::move(get));
-		
+		bind_context.AddGenericBinding(window_index, function_name, {ordinality_column_name}, {LogicalType::BIGINT});
+
 		BoundStatement result;
 		result.names = std::move(return_names);
 		result.types = std::move(return_types);
 		result.plan = std::move(window);
 		return result;
 	}
-
 	// now add the table function to the bind context so its columns can be bound
 	BoundStatement result;
 	bind_context.AddTableFunction(bind_index, function_name, return_names, return_types, get->GetMutableColumnIds(),
