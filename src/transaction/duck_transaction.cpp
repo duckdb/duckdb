@@ -32,8 +32,8 @@ TransactionData::TransactionData(transaction_t transaction_id_p, transaction_t s
 DuckTransaction::DuckTransaction(DuckTransactionManager &manager, ClientContext &context_p, transaction_t start_time,
                                  transaction_t transaction_id, idx_t catalog_version_p)
     : Transaction(manager, context_p), start_time(start_time), transaction_id(transaction_id), commit_id(0),
-      highest_active_query(0), catalog_version(catalog_version_p), awaiting_cleanup(false),
-      transaction_manager(manager), undo_buffer(*this, context_p), storage(make_uniq<LocalStorage>(context_p, *this)) {
+      catalog_version(catalog_version_p), awaiting_cleanup(false), transaction_manager(manager),
+      undo_buffer(*this, context_p), storage(make_uniq<LocalStorage>(context_p, *this)) {
 }
 
 DuckTransaction::~DuckTransaction() {
