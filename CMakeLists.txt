@@ -398,10 +398,6 @@ endif()
 
 message(STATUS "git hash ${GIT_COMMIT_HASH}, version ${DUCKDB_VERSION}, extension folder ${DUCKDB_NORMALIZED_VERSION}")
 
-option(AMALGAMATION_BUILD
-       "Build from the amalgamation files, rather than from the normal sources."
-       FALSE)
-
 option(BUILD_MAIN_DUCKDB_LIBRARY
         "Build the main duckdb library and executable."
         TRUE)

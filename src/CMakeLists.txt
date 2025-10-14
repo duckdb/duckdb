@@ -55,105 +55,99 @@ function(ensure_variable_is_number INPUT_VERSION OUT_RESULT)
   endif()
 endfunction()
 
-if(AMALGAMATION_BUILD)
-  error(Amalgamation build is discontinued)
-else()
+add_definitions(-DDUCKDB_MAIN_LIBRARY)
 
-  add_definitions(-DDUCKDB_MAIN_LIBRARY)
+add_subdirectory(optimizer)
+add_subdirectory(planner)
+add_subdirectory(parser)
+add_subdirectory(function)
+add_subdirectory(catalog)
+add_subdirectory(common)
+add_subdirectory(logging)
+add_subdirectory(execution)
+add_subdirectory(main)
+add_subdirectory(parallel)
+add_subdirectory(storage)
+add_subdirectory(transaction)
+add_subdirectory(verification)
 
-  add_subdirectory(optimizer)
-  add_subdirectory(planner)
-  add_subdirectory(parser)
-  add_subdirectory(function)
-  add_subdirectory(catalog)
-  add_subdirectory(common)
-  add_subdirectory(logging)
-  add_subdirectory(execution)
-  add_subdirectory(main)
-  add_subdirectory(parallel)
-  add_subdirectory(storage)
-  add_subdirectory(transaction)
-  add_subdirectory(verification)
+set(DUCKDB_LINK_LIBS
+    duckdb_fsst
+    duckdb_fmt
+    duckdb_pg_query
+    duckdb_re2
+    duckdb_miniz
+    duckdb_utf8proc
+    duckdb_hyperloglog
+    duckdb_fastpforlib
+    duckdb_skiplistlib
+    duckdb_mbedtls
+    duckdb_yyjson
+    duckdb_zstd)
 
-  set(DUCKDB_LINK_LIBS
-      duckdb_fsst
-      duckdb_fmt
-      duckdb_pg_query
-      duckdb_re2
-      duckdb_miniz
-      duckdb_utf8proc
-      duckdb_hyperloglog
-      duckdb_fastpforlib
-      duckdb_skiplistlib
-      duckdb_mbedtls
-      duckdb_yyjson
-      duckdb_zstd)
+foreach(LINK_LIB ${DUCKDB_LINK_LIBS})
+  list(APPEND LINK_OBJECTS $<TARGET_OBJECTS:${LINK_LIB}>)
+endforeach(LINK_LIB)
 
-  foreach(LINK_LIB ${DUCKDB_LINK_LIBS})
-    list(APPEND LINK_OBJECTS $<TARGET_OBJECTS:${LINK_LIB}>)
-  endforeach(LINK_LIB)
+add_library(
+  duckdb_static STATIC ${ALL_OBJECT_FILES} ${LINK_OBJECTS}
+                       $<TARGET_OBJECTS:dummy_static_extension_loader>)
+target_link_libraries(duckdb_static PUBLIC ${DUCKDB_SYSTEM_LIBS})
+link_threads(duckdb_static PUBLIC)
 
-  add_library(duckdb_static STATIC ${ALL_OBJECT_FILES} ${LINK_OBJECTS} $<TARGET_OBJECTS:dummy_static_extension_loader>)
-  target_link_libraries(duckdb_static PUBLIC ${DUCKDB_SYSTEM_LIBS})
-  link_threads(duckdb_static PUBLIC)
+add_library(duckdb SHARED ${ALL_OBJECT_FILES} ${LINK_OBJECTS})
+target_link_libraries(
+  duckdb PUBLIC ${DUCKDB_SYSTEM_LIBS}
+                $<TARGET_OBJECTS:dummy_static_extension_loader>)
+link_threads(duckdb PUBLIC)
 
-  # FIXME
-#  add_library(duckdb SHARED ${ALL_OBJECT_FILES} ${LINK_OBJECTS})
-#  target_link_libraries(
-#    duckdb PUBLIC ${DUCKDB_SYSTEM_LIBS}
-#                  $<TARGET_OBJECTS:dummy_static_extension_loader>)
-#  link_threads(duckdb PUBLIC)
-#
-#  if(SET_DUCKDB_LIBRARY_VERSION)
-#    set_target_properties(
-#      duckdb
-#      PROPERTIES VERSION ${DUCKDB_VERSION_NUMBER}
-#                 SOVERSION ${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION})
-#
-#  endif()
-
-  if(WIN32 AND NOT MINGW)
-    ensure_variable_is_number(DUCKDB_MAJOR_VERSION RC_MAJOR_VERSION)
-    ensure_variable_is_number(DUCKDB_MINOR_VERSION RC_MINOR_VERSION)
-    ensure_variable_is_number(DUCKDB_PATCH_VERSION RC_PATCH_VERSION)
-    ensure_variable_is_number(DUCKDB_DEV_ITERATION RC_DEV_ITERATION)
-
-    set(CMAKE_RC_FLAGS
-        "${CMAKE_RC_FLAGS} -D DUCKDB_VERSION=\"${DUCKDB_VERSION}\"")
-    set(CMAKE_RC_FLAGS
-        "${CMAKE_RC_FLAGS} -D DUCKDB_MAJOR_VERSION=\"${RC_MAJOR_VERSION}\"")
-    set(CMAKE_RC_FLAGS
-        "${CMAKE_RC_FLAGS} -D DUCKDB_MINOR_VERSION=\"${RC_MINOR_VERSION}\"")
-    set(CMAKE_RC_FLAGS
-        "${CMAKE_RC_FLAGS} -D DUCKDB_PATCH_VERSION=\"${RC_PATCH_VERSION}\"")
-    set(CMAKE_RC_FLAGS
-        "${CMAKE_RC_FLAGS} -D DUCKDB_DEV_ITERATION=\"${RC_DEV_ITERATION}\"")
-
-    target_sources(duckdb PRIVATE version.rc)
-  endif()
-
-#  target_include_directories(
-#    duckdb PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-#                  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
-
-  target_include_directories(
-    duckdb_static PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-                         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
-
-  install(
-    DIRECTORY "${PROJECT_SOURCE_DIR}/src/include/duckdb"
-    DESTINATION "${INSTALL_INCLUDE_DIR}"
-    FILES_MATCHING
-    PATTERN "*.hpp"
-    PATTERN "*.ipp")
-  install(FILES "${PROJECT_SOURCE_DIR}/src/include/duckdb.hpp"
-                "${PROJECT_SOURCE_DIR}/src/include/duckdb.h"
-          DESTINATION "${INSTALL_INCLUDE_DIR}")
+if(SET_DUCKDB_LIBRARY_VERSION)
+  set_target_properties(
+    duckdb PROPERTIES VERSION ${DUCKDB_VERSION_NUMBER}
+                      SOVERSION ${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION})
 
 endif()
 
+if(WIN32 AND NOT MINGW)
+  ensure_variable_is_number(DUCKDB_MAJOR_VERSION RC_MAJOR_VERSION)
+  ensure_variable_is_number(DUCKDB_MINOR_VERSION RC_MINOR_VERSION)
+  ensure_variable_is_number(DUCKDB_PATCH_VERSION RC_PATCH_VERSION)
+  ensure_variable_is_number(DUCKDB_DEV_ITERATION RC_DEV_ITERATION)
+
+  set(CMAKE_RC_FLAGS
+      "${CMAKE_RC_FLAGS} -D DUCKDB_VERSION=\"${DUCKDB_VERSION}\"")
+  set(CMAKE_RC_FLAGS
+      "${CMAKE_RC_FLAGS} -D DUCKDB_MAJOR_VERSION=\"${RC_MAJOR_VERSION}\"")
+  set(CMAKE_RC_FLAGS
+      "${CMAKE_RC_FLAGS} -D DUCKDB_MINOR_VERSION=\"${RC_MINOR_VERSION}\"")
+  set(CMAKE_RC_FLAGS
+      "${CMAKE_RC_FLAGS} -D DUCKDB_PATCH_VERSION=\"${RC_PATCH_VERSION}\"")
+  set(CMAKE_RC_FLAGS
+      "${CMAKE_RC_FLAGS} -D DUCKDB_DEV_ITERATION=\"${RC_DEV_ITERATION}\"")
+
+  target_sources(duckdb PRIVATE version.rc)
+endif()
+
+target_include_directories(
+  duckdb PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+                $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+
+target_include_directories(
+  duckdb_static PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+                       $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+
 install(
-  TARGETS duckdb_static
+  DIRECTORY "${PROJECT_SOURCE_DIR}/src/include/duckdb"
+  DESTINATION "${INSTALL_INCLUDE_DIR}"
+  FILES_MATCHING
+  PATTERN "*.hpp"
+  PATTERN "*.ipp")
+install(FILES "${PROJECT_SOURCE_DIR}/src/include/duckdb.hpp"
+              "${PROJECT_SOURCE_DIR}/src/include/duckdb.h"
+        DESTINATION "${INSTALL_INCLUDE_DIR}")
+
+install(
+  TARGETS duckdb duckdb_static
   EXPORT "${DUCKDB_EXPORT_SET}"
   LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
   ARCHIVE DESTINATION "${INSTALL_LIB_DIR}"

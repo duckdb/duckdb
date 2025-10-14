@@ -8,7 +8,7 @@ void ExtensionHelper::LoadAllExtensions(DuckDB &db) {
 	// nop
 }
 
-vector<string> ExtensionHelper::LoadedExtensionTestPaths(){
+vector<string> ExtensionHelper::LoadedExtensionTestPaths() {
 	return {};
 }
 

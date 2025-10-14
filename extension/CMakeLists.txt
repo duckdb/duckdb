@@ -98,4 +98,3 @@ set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_main_extension>
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_generated_extension_loader>
     PARENT_SCOPE)
-
