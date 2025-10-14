@@ -56,27 +56,7 @@ function(ensure_variable_is_number INPUT_VERSION OUT_RESULT)
 endfunction()
 
 if(AMALGAMATION_BUILD)
-
-  add_library(duckdb SHARED "${PROJECT_SOURCE_DIR}/src/amalgamation/duckdb.cpp")
-  if(SET_DUCKDB_LIBRARY_VERSION)
-    set_target_properties(
-      duckdb
-      PROPERTIES VERSION ${DUCKDB_VERSION_NUMBER}
-                 SOVERSION ${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION})
-  endif()
-  target_link_libraries(duckdb ${DUCKDB_SYSTEM_LIBS})
-  link_threads(duckdb PUBLIC)
-
-  add_library(duckdb_static STATIC
-              "${PROJECT_SOURCE_DIR}/src/amalgamation/duckdb.cpp")
-  target_link_libraries(duckdb_static ${DUCKDB_SYSTEM_LIBS})
-  link_threads(duckdb_static PUBLIC)
-
-  install(FILES "${PROJECT_SOURCE_DIR}/src/amalgamation/duckdb.hpp"
-                "${PROJECT_SOURCE_DIR}/src/include/duckdb.h"
-          DESTINATION "${INSTALL_INCLUDE_DIR}")
-  install(FILES "${PROJECT_SOURCE_DIR}/src/include/duckdb/common/winapi.hpp"
-          DESTINATION "${INSTALL_INCLUDE_DIR}/duckdb/common")
+  error(Amalgamation build is discontinued)
 else()
 
   add_definitions(-DDUCKDB_MAIN_LIBRARY)
@@ -96,7 +76,6 @@ else()
   add_subdirectory(verification)
 
   set(DUCKDB_LINK_LIBS
-      ${DUCKDB_SYSTEM_LIBS}
       duckdb_fsst
       duckdb_fmt
       duckdb_pg_query
@@ -110,12 +89,28 @@ else()
       duckdb_yyjson
       duckdb_zstd)
 
-  add_library(duckdb SHARED ${ALL_OBJECT_FILES})
+  foreach(LINK_LIB ${DUCKDB_LINK_LIBS})
+    list(APPEND LINK_OBJECTS $<TARGET_OBJECTS:${LINK_LIB}>)
+  endforeach(LINK_LIB)
+
+  add_library(duckdb_static STATIC ${ALL_OBJECT_FILES} ${LINK_OBJECTS})
+
+  target_link_libraries(duckdb_static PUBLIC ${DUCKDB_SYSTEM_LIBS})
+  link_threads(duckdb_static PUBLIC)
+
+  add_library(duckdb SHARED ${ALL_OBJECT_FILES} ${LINK_OBJECTS})
+  target_link_libraries(
+    duckdb PUBLIC ${DUCKDB_SYSTEM_LIBS}
+                  $<TARGET_OBJECTS:dummy_static_extension_loader>)
+
+  link_threads(duckdb PUBLIC)
+
   if(SET_DUCKDB_LIBRARY_VERSION)
     set_target_properties(
       duckdb
       PROPERTIES VERSION ${DUCKDB_VERSION_NUMBER}
                  SOVERSION ${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION})
+
   endif()
 
   if(WIN32 AND NOT MINGW)
@@ -137,13 +132,6 @@ else()
 
     target_sources(duckdb PRIVATE version.rc)
   endif()
-
-  target_link_libraries(duckdb PUBLIC ${DUCKDB_LINK_LIBS})
-  link_threads(duckdb PUBLIC)
-
-  add_library(duckdb_static STATIC ${ALL_OBJECT_FILES})
-  target_link_libraries(duckdb_static PUBLIC ${DUCKDB_LINK_LIBS})
-  link_threads(duckdb_static PUBLIC)
 
   target_include_directories(
     duckdb PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

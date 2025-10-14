@@ -52,10 +52,10 @@ foreach(EXT_NAME IN LISTS STATICALLY_LINKED_EXTENSIONS)
     set(EXT_LOADER_NAME_LIST "${EXT_LOADER_NAME_LIST},\n\t\"${EXT_NAME}\"")
     set(EXT_LOADER_BODY
         "${EXT_LOADER_BODY}\
-  if (extension==\"${EXT_NAME}\") {
-      db.LoadStaticExtension<${EXT_NAME_CAMELCASE}Extension>();
-      return true;
-  }
+    if (extension==\"${EXT_NAME}\") {
+        db.LoadStaticExtension<${EXT_NAME_CAMELCASE}Extension>();
+        return ExtensionLoadResult::LOADED_EXTENSION;
+    }
 ")
   endif()
 endforeach()
@@ -93,10 +93,10 @@ add_definitions(-DDUCKDB_MINOR_VERSION=${DUCKDB_MINOR_VERSION})
 add_definitions(-DDUCKDB_PATCH_VERSION=${DUCKDB_PATCH_VERSION})
 
 add_library(duckdb_generated_extension_loader OBJECT ${GENERATED_CPP_FILE})
-set(generated_loader_obj_files
-    $<TARGET_OBJECTS:duckdb_generated_extension_loader>)
 
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_main_extension>
-    ${ALL_OBJECT_FILES} ${generated_loader_obj_files}
+    ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_generated_extension_loader>
     PARENT_SCOPE)
+
+add_library(dummy_static_extension_loader dummy_static_extension_loader.cpp)

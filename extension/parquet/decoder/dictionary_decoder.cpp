@@ -91,7 +91,7 @@ idx_t DictionaryDecoder::GetValidValues(uint8_t *defines, idx_t read_count, idx_
 }
 
 idx_t DictionaryDecoder::Read(uint8_t *defines, idx_t read_count, Vector &result, idx_t result_offset) {
-	if (!dictionary || dictionary_size < 0) {
+	if (!dictionary) {
 		throw std::runtime_error("Parquet file is likely corrupted, missing dictionary");
 	}
 	idx_t valid_count = GetValidValues(defines, read_count, result_offset);
@@ -127,7 +127,7 @@ idx_t DictionaryDecoder::Read(uint8_t *defines, idx_t read_count, Vector &result
 }
 
 void DictionaryDecoder::Skip(uint8_t *defines, idx_t skip_count) {
-	if (!dictionary || dictionary_size < 0) {
+	if (!dictionary) {
 		throw std::runtime_error("Parquet file is likely corrupted, missing dictionary");
 	}
 	idx_t valid_count = reader.GetValidCount(defines, skip_count);
@@ -193,7 +193,7 @@ bool DictionaryDecoder::CanFilter(const TableFilter &filter, TableFilterState &f
 
 void DictionaryDecoder::Filter(uint8_t *defines, const idx_t read_count, Vector &result, SelectionVector &sel,
                                idx_t &approved_tuple_count) {
-	if (!dictionary || dictionary_size < 0) {
+	if (!dictionary) {
 		throw std::runtime_error("Parquet file is likely corrupted, missing dictionary");
 	}
 	D_ASSERT(filter_count > 0);
