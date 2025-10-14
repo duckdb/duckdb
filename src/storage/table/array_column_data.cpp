@@ -257,7 +257,7 @@ void ArrayColumnData::FetchRow(TransactionData transaction, ColumnFetchState &st
 
 	// We need to fetch between [row_id * array_size, (row_id + 1) * array_size)
 	auto child_state = make_uniq<ColumnScanState>();
-	child_state->Initialize(child_type, nullptr);
+	child_state->Initialize(state.context, child_type, nullptr);
 
 	const auto child_offset = start + (UnsafeNumericCast<idx_t>(row_id) - start) * array_size;
 
@@ -303,8 +303,8 @@ unique_ptr<ColumnCheckpointState> ArrayColumnData::CreateCheckpointState(RowGrou
 
 unique_ptr<ColumnCheckpointState> ArrayColumnData::Checkpoint(RowGroup &row_group,
                                                               ColumnCheckpointInfo &checkpoint_info) {
-
-	auto checkpoint_state = make_uniq<ArrayColumnCheckpointState>(row_group, *this, checkpoint_info.info.manager);
+	auto &partial_block_manager = checkpoint_info.GetPartialBlockManager();
+	auto checkpoint_state = make_uniq<ArrayColumnCheckpointState>(row_group, *this, partial_block_manager);
 	checkpoint_state->validity_state = validity.Checkpoint(row_group, checkpoint_info);
 	checkpoint_state->child_state = child_column->Checkpoint(row_group, checkpoint_info);
 	return std::move(checkpoint_state);
@@ -333,12 +333,12 @@ void ArrayColumnData::InitializeColumn(PersistentColumnData &column_data, BaseSt
 	this->count = validity.count.load();
 }
 
-void ArrayColumnData::GetColumnSegmentInfo(idx_t row_group_index, vector<idx_t> col_path,
+void ArrayColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<idx_t> col_path,
                                            vector<ColumnSegmentInfo> &result) {
 	col_path.push_back(0);
-	validity.GetColumnSegmentInfo(row_group_index, col_path, result);
+	validity.GetColumnSegmentInfo(context, row_group_index, col_path, result);
 	col_path.back() = 1;
-	child_column->GetColumnSegmentInfo(row_group_index, col_path, result);
+	child_column->GetColumnSegmentInfo(context, row_group_index, col_path, result);
 }
 
 void ArrayColumnData::Verify(RowGroup &parent) {

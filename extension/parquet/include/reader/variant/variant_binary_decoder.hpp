@@ -137,10 +137,8 @@ public:
 	static VariantValue Decode(const VariantMetadata &metadata, const_data_ptr_t data);
 
 public:
-	static VariantValue PrimitiveTypeDecode(const VariantMetadata &metadata, const VariantValueMetadata &value_metadata,
-	                                        const_data_ptr_t data);
-	static VariantValue ShortStringDecode(const VariantMetadata &metadata, const VariantValueMetadata &value_metadata,
-	                                      const_data_ptr_t data);
+	static VariantValue PrimitiveTypeDecode(const VariantValueMetadata &value_metadata, const_data_ptr_t data);
+	static VariantValue ShortStringDecode(const VariantValueMetadata &value_metadata, const_data_ptr_t data);
 	static VariantValue ObjectDecode(const VariantMetadata &metadata, const VariantValueMetadata &value_metadata,
 	                                 const_data_ptr_t data);
 	static VariantValue ArrayDecode(const VariantMetadata &metadata, const VariantValueMetadata &value_metadata,

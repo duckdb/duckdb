@@ -3,7 +3,7 @@
 #include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_subquery_expression.hpp"
-#include "duckdb/planner/tableref/bound_joinref.hpp"
+#include "duckdb/planner/operator/logical_dependent_join.hpp"
 
 namespace duckdb {
 
@@ -79,34 +79,35 @@ static void ReduceColumnDepth(CorrelatedColumns &columns, const CorrelatedColumn
 	}
 }
 
-class ExpressionDepthReducerRecursive : public BoundNodeVisitor {
+class ExpressionDepthReducerRecursive : public LogicalOperatorVisitor {
 public:
 	explicit ExpressionDepthReducerRecursive(const CorrelatedColumns &correlated) : correlated_columns(correlated) {
 	}
 
-	void VisitExpression(unique_ptr<Expression> &expression) override {
-		if (expression->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-			ReduceColumnRefDepth(expression->Cast<BoundColumnRefExpression>(), correlated_columns);
-		} else if (expression->GetExpressionType() == ExpressionType::SUBQUERY) {
-			ReduceExpressionSubquery(expression->Cast<BoundSubqueryExpression>(), correlated_columns);
+	void VisitExpression(unique_ptr<Expression> *expression) override {
+		auto &expr = **expression;
+		if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
+			ReduceColumnRefDepth(expr.Cast<BoundColumnRefExpression>(), correlated_columns);
+		} else if (expr.GetExpressionType() == ExpressionType::SUBQUERY) {
+			ReduceExpressionSubquery(expr.Cast<BoundSubqueryExpression>(), correlated_columns);
 		}
-		BoundNodeVisitor::VisitExpression(expression);
+		LogicalOperatorVisitor::VisitExpression(expression);
 	}
 
-	void VisitBoundTableRef(BoundTableRef &ref) override {
-		if (ref.type == TableReferenceType::JOIN) {
+	void VisitOperator(LogicalOperator &op) override {
+		if (op.type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {
 			// rewrite correlated columns in child joins
-			auto &bound_join = ref.Cast<BoundJoinRef>();
+			auto &bound_join = op.Cast<LogicalDependentJoin>();
 			ReduceColumnDepth(bound_join.correlated_columns, correlated_columns);
 		}
 		// visit the children of the table ref
-		BoundNodeVisitor::VisitBoundTableRef(ref);
+		LogicalOperatorVisitor::VisitOperator(op);
 	}
 
 	static void ReduceExpressionSubquery(BoundSubqueryExpression &expr, const CorrelatedColumns &correlated_columns) {
 		ReduceColumnDepth(expr.binder->correlated_columns, correlated_columns);
 		ExpressionDepthReducerRecursive recursive(correlated_columns);
-		recursive.VisitBoundQueryNode(*expr.subquery);
+		recursive.VisitOperator(*expr.subquery.plan);
 	}
 
 private:

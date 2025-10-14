@@ -23,12 +23,12 @@ ProfilingInfo::ProfilingInfo(const profiler_settings_t &n_settings, const idx_t 
 
 	// Reduce.
 	if (depth == 0) {
-		auto op_metrics = DefaultOperatorSettings();
+		auto op_metrics = OperatorScopeSettings();
 		for (const auto metric : op_metrics) {
 			settings.erase(metric);
 		}
 	} else {
-		auto root_metrics = DefaultRootSettings();
+		auto root_metrics = RootScopeSettings();
 		for (const auto metric : root_metrics) {
 			settings.erase(metric);
 		}
@@ -37,32 +37,40 @@ ProfilingInfo::ProfilingInfo(const profiler_settings_t &n_settings, const idx_t 
 }
 
 profiler_settings_t ProfilingInfo::DefaultSettings() {
-	return {MetricsType::QUERY_NAME,
-	        MetricsType::BLOCKED_THREAD_TIME,
-	        MetricsType::SYSTEM_PEAK_BUFFER_MEMORY,
-	        MetricsType::SYSTEM_PEAK_TEMP_DIR_SIZE,
+	return {MetricsType::BLOCKED_THREAD_TIME,
 	        MetricsType::CPU_TIME,
-	        MetricsType::EXTRA_INFO,
 	        MetricsType::CUMULATIVE_CARDINALITY,
-	        MetricsType::OPERATOR_NAME,
-	        MetricsType::OPERATOR_TYPE,
-	        MetricsType::OPERATOR_CARDINALITY,
 	        MetricsType::CUMULATIVE_ROWS_SCANNED,
+	        MetricsType::EXTRA_INFO,
+	        MetricsType::LATENCY,
+	        MetricsType::OPERATOR_CARDINALITY,
+	        MetricsType::OPERATOR_NAME,
 	        MetricsType::OPERATOR_ROWS_SCANNED,
 	        MetricsType::OPERATOR_TIMING,
+	        MetricsType::OPERATOR_TYPE,
 	        MetricsType::RESULT_SET_SIZE,
+	        MetricsType::ROWS_RETURNED,
+	        MetricsType::SYSTEM_PEAK_BUFFER_MEMORY,
+	        MetricsType::SYSTEM_PEAK_TEMP_DIR_SIZE,
+	        MetricsType::TOTAL_BYTES_READ,
+	        MetricsType::TOTAL_BYTES_WRITTEN,
+	        MetricsType::QUERY_NAME};
+}
+
+profiler_settings_t ProfilingInfo::RootScopeSettings() {
+	return {MetricsType::ATTACH_LOAD_STORAGE_LATENCY,
+	        MetricsType::ATTACH_REPLAY_WAL_LATENCY,
+	        MetricsType::BLOCKED_THREAD_TIME,
+	        MetricsType::CHECKPOINT_LATENCY,
 	        MetricsType::LATENCY,
 	        MetricsType::ROWS_RETURNED,
 	        MetricsType::TOTAL_BYTES_READ,
-	        MetricsType::TOTAL_BYTES_WRITTEN};
+	        MetricsType::TOTAL_BYTES_WRITTEN,
+	        MetricsType::WAITING_TO_ATTACH_LATENCY,
+	        MetricsType::QUERY_NAME};
 }
 
-profiler_settings_t ProfilingInfo::DefaultRootSettings() {
-	return {MetricsType::QUERY_NAME, MetricsType::BLOCKED_THREAD_TIME, MetricsType::LATENCY,
-	        MetricsType::ROWS_RETURNED};
-}
-
-profiler_settings_t ProfilingInfo::DefaultOperatorSettings() {
+profiler_settings_t ProfilingInfo::OperatorScopeSettings() {
 	return {MetricsType::OPERATOR_CARDINALITY, MetricsType::OPERATOR_ROWS_SCANNED, MetricsType::OPERATOR_TIMING,
 	        MetricsType::OPERATOR_NAME, MetricsType::OPERATOR_TYPE};
 }
@@ -83,6 +91,10 @@ void ProfilingInfo::ResetMetrics() {
 		case MetricsType::BLOCKED_THREAD_TIME:
 		case MetricsType::CPU_TIME:
 		case MetricsType::OPERATOR_TIMING:
+		case MetricsType::WAITING_TO_ATTACH_LATENCY:
+		case MetricsType::ATTACH_LOAD_STORAGE_LATENCY:
+		case MetricsType::ATTACH_REPLAY_WAL_LATENCY:
+		case MetricsType::CHECKPOINT_LATENCY:
 			metrics[metric] = Value::CreateValue(0.0);
 			break;
 		case MetricsType::OPERATOR_NAME:
@@ -104,6 +116,7 @@ void ProfilingInfo::ResetMetrics() {
 			metrics[metric] = Value::CreateValue<uint64_t>(0);
 			break;
 		case MetricsType::EXTRA_INFO:
+			metrics[metric] = Value::MAP(InsertionOrderPreservingMap<string>());
 			break;
 		default:
 			throw InternalException("MetricsType" + EnumUtil::ToString(metric) + "not implemented");
@@ -149,21 +162,10 @@ string ProfilingInfo::GetMetricAsString(const MetricsType metric) const {
 		throw InternalException("Metric %s not enabled", EnumUtil::ToString(metric));
 	}
 
-	if (metric == MetricsType::EXTRA_INFO) {
-		string result;
-		for (auto &it : extra_info) {
-			if (!result.empty()) {
-				result += ", ";
-			}
-			result += StringUtil::Format("%s: %s", it.first, it.second);
-		}
-		return "\"" + result + "\"";
-	}
-
 	// The metric cannot be NULL and must be initialized.
 	D_ASSERT(!metrics.at(metric).IsNull());
 	if (metric == MetricsType::OPERATOR_TYPE) {
-		auto type = PhysicalOperatorType(metrics.at(metric).GetValue<uint8_t>());
+		const auto type = PhysicalOperatorType(metrics.at(metric).GetValue<uint8_t>());
 		return EnumUtil::ToString(type);
 	}
 	return metrics.at(metric).ToString();
@@ -178,18 +180,25 @@ void ProfilingInfo::WriteMetricsToJSON(yyjson_mut_doc *doc, yyjson_mut_val *dest
 		if (metric == MetricsType::EXTRA_INFO) {
 			auto extra_info_obj = yyjson_mut_obj(doc);
 
-			for (auto &it : extra_info) {
-				auto &key = it.first;
-				auto &value = it.second;
-				auto splits = StringUtil::Split(value, "\n");
+			auto extra_info = metrics.at(metric);
+			auto children = MapValue::GetChildren(extra_info);
+			for (auto &child : children) {
+				auto struct_children = StructValue::GetChildren(child);
+				auto key = struct_children[0].GetValue<string>();
+				auto value = struct_children[1].GetValue<string>();
+
+				auto key_mut = unsafe_yyjson_mut_strncpy(doc, key.c_str(), key.size());
+				auto value_mut = unsafe_yyjson_mut_strncpy(doc, value.c_str(), value.size());
+
+				auto splits = StringUtil::Split(value_mut, "\n");
 				if (splits.size() > 1) {
 					auto list_items = yyjson_mut_arr(doc);
 					for (auto &split : splits) {
 						yyjson_mut_arr_add_strcpy(doc, list_items, split.c_str());
 					}
-					yyjson_mut_obj_add_val(doc, extra_info_obj, key.c_str(), list_items);
+					yyjson_mut_obj_add_val(doc, extra_info_obj, key_mut, list_items);
 				} else {
-					yyjson_mut_obj_add_strcpy(doc, extra_info_obj, key.c_str(), value.c_str());
+					yyjson_mut_obj_add_strcpy(doc, extra_info_obj, key_mut, value_mut);
 				}
 			}
 			yyjson_mut_obj_add_val(doc, dest, key_ptr, extra_info_obj);
@@ -212,7 +221,11 @@ void ProfilingInfo::WriteMetricsToJSON(yyjson_mut_doc *doc, yyjson_mut_val *dest
 		case MetricsType::LATENCY:
 		case MetricsType::BLOCKED_THREAD_TIME:
 		case MetricsType::CPU_TIME:
-		case MetricsType::OPERATOR_TIMING: {
+		case MetricsType::OPERATOR_TIMING:
+		case MetricsType::WAITING_TO_ATTACH_LATENCY:
+		case MetricsType::ATTACH_LOAD_STORAGE_LATENCY:
+		case MetricsType::ATTACH_REPLAY_WAL_LATENCY:
+		case MetricsType::CHECKPOINT_LATENCY: {
 			yyjson_mut_obj_add_real(doc, dest, key_ptr, metrics[metric].GetValue<double>());
 			break;
 		}

@@ -406,6 +406,7 @@ duckdb_state duckdb_register_scalar_function_set(duckdb_connection connection, d
 		con->context->RunFunctionInTransaction([&]() {
 			auto &catalog = duckdb::Catalog::GetSystemCatalog(*con->context);
 			duckdb::CreateScalarFunctionInfo sf_info(scalar_function_set);
+			sf_info.on_conflict = duckdb::OnCreateConflict::ALTER_ON_CONFLICT;
 			catalog.CreateFunction(*con->context, sf_info);
 		});
 	} catch (...) {

@@ -1,0 +1,152 @@
+# name: test/optimizer/common_subplan.test
+# description: Test the Common Subplan optimizer
+# group: [optimizer]
+
+statement ok
+pragma explain_output='optimized_only'
+
+# this should be automatically detected and materialized
+query I
+select t1.s + t2.s
+from (select sum(range) s from range(10)) t1,
+     (select sum(range) s from range(10)) t2
+----
+90
+
+query II
+explain select t1.s + t2.s
+from (select sum(range) s from range(10)) t1,
+     (select sum(range) s from range(10)) t2
+----
+logical_opt	<REGEX>:.*CTE.*
+
+# this shouldn't because random() is volatile
+query II
+explain select t1.s + t2.s
+from (select sum(random()) s from range(10)) t1,
+     (select sum(random()) s from range(10)) t2
+----
+logical_opt	<!REGEX>:.*CTE.*
+
+# common subplan inside of a materialized cte and outside of it
+# should yield two ctes
+query I
+with cte as materialized (
+    select sum(range) s from range(10)
+)
+select t1.s + t2.s
+from cte t1,
+     (select sum(range) s from range(10)) t2
+----
+90
+
+query II
+explain with cte as materialized (
+    select sum(range) s from range(10)
+)
+select t1.s + t2.s
+from cte t1,
+     (select sum(range) s from range(10)) t2
+----
+logical_opt	<REGEX>:.*CTE.*CTE.*
+
+require tpcds
+
+statement ok
+call dsdgen(sf=0)
+
+# q44
+query II
+explain
+SELECT asceding.rnk,
+       i1.i_product_name best_performing,
+       i2.i_product_name worst_performing
+FROM
+  (SELECT *
+   FROM
+     (SELECT item_sk,
+             rank() OVER (
+                          ORDER BY rank_col ASC) rnk
+      FROM
+        (SELECT ss_item_sk item_sk,
+                avg(ss_net_profit) rank_col
+         FROM store_sales ss1
+         WHERE ss_store_sk = 4
+         GROUP BY ss_item_sk
+         HAVING avg(ss_net_profit) > 0.9*
+           (SELECT avg(ss_net_profit) rank_col
+            FROM store_sales
+            WHERE ss_store_sk = 4
+              AND ss_addr_sk IS NULL
+            GROUP BY ss_store_sk))V1)V11
+   WHERE rnk < 11) asceding,
+  (SELECT *
+   FROM
+     (SELECT item_sk,
+             rank() OVER (
+                          ORDER BY rank_col DESC) rnk
+      FROM
+        (SELECT ss_item_sk item_sk,
+                avg(ss_net_profit) rank_col
+         FROM store_sales ss1
+         WHERE ss_store_sk = 4
+         GROUP BY ss_item_sk
+         HAVING avg(ss_net_profit) > 0.9*
+           (SELECT avg(ss_net_profit) rank_col
+            FROM store_sales
+            WHERE ss_store_sk = 4
+              AND ss_addr_sk IS NULL
+            GROUP BY ss_store_sk))V2)V21
+   WHERE rnk < 11) descending,
+     item i1,
+     item i2
+WHERE asceding.rnk = descending.rnk
+  AND i1.i_item_sk=asceding.item_sk
+  AND i2.i_item_sk=descending.item_sk
+ORDER BY asceding.rnk
+LIMIT 100;
+----
+logical_opt	<REGEX>:.*CTE.*
+
+# q65
+query II
+explain
+SELECT s_store_name,
+       i_item_desc,
+       sc.revenue,
+       i_current_price,
+       i_wholesale_cost,
+       i_brand
+FROM store,
+     item,
+  (SELECT ss_store_sk,
+          avg(revenue) AS ave
+   FROM
+     (SELECT ss_store_sk,
+             ss_item_sk,
+             sum(ss_sales_price) AS revenue
+      FROM store_sales,
+           date_dim
+      WHERE ss_sold_date_sk = d_date_sk
+        AND d_month_seq BETWEEN 1176 AND 1176+11
+      GROUP BY ss_store_sk,
+               ss_item_sk) sa
+   GROUP BY ss_store_sk) sb,
+  (SELECT ss_store_sk,
+          ss_item_sk,
+          sum(ss_sales_price) AS revenue
+   FROM store_sales,
+        date_dim
+   WHERE ss_sold_date_sk = d_date_sk
+     AND d_month_seq BETWEEN 1176 AND 1176+11
+   GROUP BY ss_store_sk,
+            ss_item_sk) sc
+WHERE sb.ss_store_sk = sc.ss_store_sk
+  AND sc.revenue <= 0.1 * sb.ave
+  AND s_store_sk = sc.ss_store_sk
+  AND i_item_sk = sc.ss_item_sk
+ORDER BY s_store_name NULLS FIRST,
+         i_item_desc NULLS FIRST
+LIMIT 100;
+----
+logical_opt	<REGEX>:.*CTE.*

@@ -7,6 +7,18 @@
 
 namespace duckdb {
 
+PhysicalType VariantDecimalData::GetPhysicalType() const {
+	if (width > DecimalWidth<int64_t>::max) {
+		return PhysicalType::INT128;
+	} else if (width > DecimalWidth<int32_t>::max) {
+		return PhysicalType::INT64;
+	} else if (width > DecimalWidth<int16_t>::max) {
+		return PhysicalType::INT32;
+	} else {
+		return PhysicalType::INT16;
+	}
+}
+
 bool VariantUtils::IsNestedType(const UnifiedVariantVectorData &variant, idx_t row, uint32_t value_index) {
 	auto type_id = variant.GetTypeId(row, value_index);
 	return type_id == VariantLogicalType::ARRAY || type_id == VariantLogicalType::OBJECT;
@@ -19,10 +31,19 @@ VariantDecimalData VariantUtils::DecodeDecimalData(const UnifiedVariantVectorDat
 	auto data = const_data_ptr_cast(variant.GetData(row).GetData());
 	auto ptr = data + byte_offset;
 
-	VariantDecimalData result;
-	result.width = VarintDecode<uint32_t>(ptr);
-	result.scale = VarintDecode<uint32_t>(ptr);
-	return result;
+	auto width = VarintDecode<uint32_t>(ptr);
+	auto scale = VarintDecode<uint32_t>(ptr);
+	auto value_ptr = ptr;
+	return VariantDecimalData(width, scale, value_ptr);
+}
+
+string_t VariantUtils::DecodeStringData(const UnifiedVariantVectorData &variant, idx_t row, uint32_t value_index) {
+	auto byte_offset = variant.GetByteOffset(row, value_index);
+	auto data = const_data_ptr_cast(variant.GetData(row).GetData());
+	auto ptr = data + byte_offset;
+
+	auto length = VarintDecode<uint32_t>(ptr);
+	return string_t(reinterpret_cast<const char *>(ptr), length);
 }
 
 VariantNestedData VariantUtils::DecodeNestedData(const UnifiedVariantVectorData &variant, idx_t row,
@@ -53,13 +74,13 @@ vector<string> VariantUtils::GetObjectKeys(const UnifiedVariantVectorData &varia
 	return object_keys;
 }
 
-VariantChildDataCollectionResult VariantUtils::FindChildValues(const UnifiedVariantVectorData &variant,
-                                                               const VariantPathComponent &component, optional_idx row,
-                                                               SelectionVector &res, VariantNestedData *nested_data,
-                                                               idx_t count) {
+//! FIXME: this shouldn't return a "result", it should populate a validity mask instead.
+void VariantUtils::FindChildValues(const UnifiedVariantVectorData &variant, const VariantPathComponent &component,
+                                   optional_ptr<const SelectionVector> sel, SelectionVector &res,
+                                   ValidityMask &res_validity, VariantNestedData *nested_data, idx_t count) {
 
 	for (idx_t i = 0; i < count; i++) {
-		auto row_index = row.IsValid() ? row.GetIndex() : i;
+		auto row_index = sel ? sel->get_index(i) : i;
 
 		auto &nested_data_entry = nested_data[i];
 		if (nested_data_entry.is_null) {
@@ -67,13 +88,10 @@ VariantChildDataCollectionResult VariantUtils::FindChildValues(const UnifiedVari
 		}
 		if (component.lookup_mode == VariantChildLookupMode::BY_INDEX) {
 			auto child_idx = component.index;
-			if (child_idx == 0) {
-				return VariantChildDataCollectionResult::IndexZero();
-			}
-			child_idx--;
 			if (child_idx >= nested_data_entry.child_count) {
 				//! The list is too small to contain this index
-				return VariantChildDataCollectionResult::NotFound(i);
+				res_validity.SetInvalid(i);
+				continue;
 			}
 			auto value_id = variant.GetValuesIndex(row_index, nested_data_entry.children_idx + child_idx);
 			res[i] = static_cast<uint8_t>(value_id);
@@ -93,10 +111,9 @@ VariantChildDataCollectionResult VariantUtils::FindChildValues(const UnifiedVari
 			}
 		}
 		if (!found_child) {
-			return VariantChildDataCollectionResult::NotFound(i);
+			res_validity.SetInvalid(i);
 		}
 	}
-	return VariantChildDataCollectionResult();
 }
 
 vector<uint32_t> VariantUtils::ValueIsNull(const UnifiedVariantVectorData &variant, const SelectionVector &sel,
@@ -352,12 +369,14 @@ bool VariantUtils::Verify(Vector &variant, const SelectionVector &sel_p, idx_t c
 			if (key_id.validity.RowIsValid(key_id_index)) {
 				auto children_key_id = key_id_data[key_id_index];
 				D_ASSERT(children_key_id < keys_list_entry.length);
+				(void)children_key_id;
 			}
 
 			auto value_id_index = value_id.sel->get_index(j + children_list_entry.offset);
 			D_ASSERT(value_id.validity.RowIsValid(value_id_index));
 			auto children_value_id = value_id_data[value_id_index];
 			D_ASSERT(children_value_id < values_list_entry.length);
+			(void)children_value_id;
 		}
 
 		//! verify values
@@ -397,6 +416,7 @@ bool VariantUtils::Verify(Vector &variant, const SelectionVector &sel_p, idx_t c
 					} else {
 						D_ASSERT(!key_id.validity.RowIsValid(child_key_id_index));
 					}
+					(void)child_key_id_index;
 				}
 				break;
 			}

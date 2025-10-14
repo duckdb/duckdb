@@ -18,6 +18,7 @@ class ParquetWriter;
 class ColumnWriterPageState;
 class PrimitiveColumnWriterState;
 struct ChildFieldIDs;
+struct ShreddingType;
 class ResizeableBuffer;
 class ParquetBloomFilter;
 
@@ -71,11 +72,6 @@ public:
 	             bool can_have_nulls);
 	virtual ~ColumnWriter();
 
-	ParquetWriter &writer;
-	const ParquetColumnSchema &column_schema;
-	vector<string> schema_path;
-	bool can_have_nulls;
-
 public:
 	const LogicalType &Type() const {
 		return column_schema.type;
@@ -95,8 +91,10 @@ public:
 
 	static ParquetColumnSchema FillParquetSchema(vector<duckdb_parquet::SchemaElement> &schemas,
 	                                             const LogicalType &type, const string &name, bool allow_geometry,
-	                                             optional_ptr<const ChildFieldIDs> field_ids, idx_t max_repeat = 0,
-	                                             idx_t max_define = 1, bool can_have_nulls = true);
+	                                             optional_ptr<const ChildFieldIDs> field_ids,
+	                                             optional_ptr<const ShreddingType> shredding_types,
+	                                             idx_t max_repeat = 0, idx_t max_define = 1,
+	                                             bool can_have_nulls = true);
 	//! Create the column writer for a specific type recursively
 	static unique_ptr<ColumnWriter> CreateWriterRecursive(ClientContext &context, ParquetWriter &writer,
 	                                                      const vector<duckdb_parquet::SchemaElement> &parquet_schemas,
@@ -129,10 +127,19 @@ public:
 protected:
 	void HandleDefineLevels(ColumnWriterState &state, ColumnWriterState *parent, const ValidityMask &validity,
 	                        const idx_t count, const uint16_t define_value, const uint16_t null_value) const;
-	void HandleRepeatLevels(ColumnWriterState &state_p, ColumnWriterState *parent, idx_t count, idx_t max_repeat) const;
+	void HandleRepeatLevels(ColumnWriterState &state_p, ColumnWriterState *parent, idx_t count) const;
 
 	void CompressPage(MemoryStream &temp_writer, size_t &compressed_size, data_ptr_t &compressed_data,
 	                  AllocatedData &compressed_buf);
+
+public:
+	ParquetWriter &writer;
+	const ParquetColumnSchema &column_schema;
+	vector<string> schema_path;
+	bool can_have_nulls;
+
+protected:
+	vector<unique_ptr<ColumnWriter>> child_writers;
 };
 
 } // namespace duckdb
