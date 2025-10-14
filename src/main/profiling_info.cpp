@@ -37,37 +37,37 @@ ProfilingInfo::ProfilingInfo(const profiler_settings_t &n_settings, const idx_t 
 }
 
 profiler_settings_t ProfilingInfo::DefaultSettings() {
-	return {MetricsType::QUERY_NAME,
-	        MetricsType::BLOCKED_THREAD_TIME,
-	        MetricsType::SYSTEM_PEAK_BUFFER_MEMORY,
-	        MetricsType::SYSTEM_PEAK_TEMP_DIR_SIZE,
+	return {MetricsType::BLOCKED_THREAD_TIME,
 	        MetricsType::CPU_TIME,
-	        MetricsType::EXTRA_INFO,
 	        MetricsType::CUMULATIVE_CARDINALITY,
-	        MetricsType::OPERATOR_NAME,
-	        MetricsType::OPERATOR_TYPE,
-	        MetricsType::OPERATOR_CARDINALITY,
 	        MetricsType::CUMULATIVE_ROWS_SCANNED,
+	        MetricsType::EXTRA_INFO,
+	        MetricsType::LATENCY,
+	        MetricsType::OPERATOR_CARDINALITY,
+	        MetricsType::OPERATOR_NAME,
 	        MetricsType::OPERATOR_ROWS_SCANNED,
 	        MetricsType::OPERATOR_TIMING,
+	        MetricsType::OPERATOR_TYPE,
 	        MetricsType::RESULT_SET_SIZE,
-	        MetricsType::LATENCY,
 	        MetricsType::ROWS_RETURNED,
+	        MetricsType::SYSTEM_PEAK_BUFFER_MEMORY,
+	        MetricsType::SYSTEM_PEAK_TEMP_DIR_SIZE,
 	        MetricsType::TOTAL_BYTES_READ,
-	        MetricsType::TOTAL_BYTES_WRITTEN};
+	        MetricsType::TOTAL_BYTES_WRITTEN,
+	        MetricsType::QUERY_NAME};
 }
 
 profiler_settings_t ProfilingInfo::RootScopeSettings() {
-	return {MetricsType::QUERY_NAME,
+	return {MetricsType::ATTACH_LOAD_STORAGE_LATENCY,
+	        MetricsType::ATTACH_REPLAY_WAL_LATENCY,
 	        MetricsType::BLOCKED_THREAD_TIME,
+	        MetricsType::CHECKPOINT_LATENCY,
 	        MetricsType::LATENCY,
 	        MetricsType::ROWS_RETURNED,
 	        MetricsType::TOTAL_BYTES_READ,
 	        MetricsType::TOTAL_BYTES_WRITTEN,
-	        MetricsType::CHECKPOINT_LATENCY,
 	        MetricsType::WAITING_TO_ATTACH_LATENCY,
-	        MetricsType::ATTACH_LOAD_STORAGE_LATENCY,
-	        MetricsType::ATTACH_REPLAY_WAL_LATENCY};
+	        MetricsType::QUERY_NAME};
 }
 
 profiler_settings_t ProfilingInfo::OperatorScopeSettings() {
