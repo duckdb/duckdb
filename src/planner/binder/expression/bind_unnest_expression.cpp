@@ -31,7 +31,8 @@ unique_ptr<Expression> CreateBoundStructExtract(ClientContext &context, unique_p
 	                                                 std::move(bind_info));
 
 	if (keep_parent_names) {
-		auto alias = StringUtil::Join(key_path, ".");
+		vector<string> full_path = key_path;
+		auto alias = StringUtil::Join(full_path, ".");
 		if (!alias.empty() && alias[0] == '.') {
 			alias = alias.substr(1);
 		}
