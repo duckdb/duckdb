@@ -94,7 +94,7 @@ unique_ptr<LocalSinkState> PhysicalBufferedBatchCollector::GetLocalSinkState(Exe
 unique_ptr<GlobalSinkState> PhysicalBufferedBatchCollector::GetGlobalSinkState(ClientContext &context) const {
 	auto state = make_uniq<BufferedBatchCollectorGlobalState>();
 	state->context = context.shared_from_this();
-	state->buffered_data = make_shared_ptr<BatchedBufferedData>(state->context);
+	state->buffered_data = make_shared_ptr<BatchedBufferedData>(context);
 	return std::move(state);
 }
 
