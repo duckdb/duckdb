@@ -1988,24 +1988,26 @@ static void toggleSelectOrder(sqlite3 *db) {
 static char *getTableSchema(sqlite3 *db, const char *zTable) {
 	char *zSchema = NULL;
 	sqlite3_stmt *pStmt = NULL;
-	char *zSql = sqlite3_mprintf(
-		"SELECT table_schema FROM information_schema.tables "
-		"WHERE table_name = %Q AND table_type='BASE TABLE' "
-		"ORDER BY (table_schema='main') DESC LIMIT 1", zTable);
-	
-	if (!zSql) return NULL;
-	
+	char *zSql = sqlite3_mprintf("SELECT table_schema FROM information_schema.tables "
+	                             "WHERE table_name = %Q AND table_type='BASE TABLE' "
+	                             "ORDER BY (table_schema='main') DESC LIMIT 1",
+	                             zTable);
+
+	if (!zSql)
+		return NULL;
+
 	int rc = sqlite3_prepare_v2(db, zSql, -1, &pStmt, 0);
 	sqlite3_free(zSql);
-	
+
 	if (rc == SQLITE_OK && pStmt) {
 		if (sqlite3_step(pStmt) == SQLITE_ROW) {
 			const char *schema = (const char *)sqlite3_column_text(pStmt, 0);
-			if (schema) zSchema = sqlite3_mprintf("%s", schema);
+			if (schema)
+				zSchema = sqlite3_mprintf("%s", schema);
 		}
 		sqlite3_finalize(pStmt);
 	}
-	
+
 	return zSchema;
 }
 
@@ -2013,8 +2015,9 @@ static char *getTableSchema(sqlite3 *db, const char *zTable) {
 ** Quote an identifier if needed.
 */
 static char *quoteIdentifier(const char *zIdent) {
-	if (!zIdent) return NULL;
-	
+	if (!zIdent)
+		return NULL;
+
 	bool needsQuote = !isalpha((unsigned char)zIdent[0]) && zIdent[0] != '_';
 	if (!needsQuote) {
 		for (const char *p = zIdent; *p; p++) {
@@ -2024,7 +2027,7 @@ static char *quoteIdentifier(const char *zIdent) {
 			}
 		}
 	}
-	
+
 	return needsQuote ? sqlite3_mprintf("\"%w\"", zIdent) : sqlite3_mprintf("%s", zIdent);
 }
 
@@ -2035,7 +2038,7 @@ static char *buildQualifiedName(const char *zSchema, const char *zTable) {
 	char *quotedSchema = quoteIdentifier(zSchema);
 	char *quotedTable = quoteIdentifier(zTable);
 	char *result = NULL;
-	
+
 	if (quotedSchema && quotedTable) {
 		result = sqlite3_mprintf("%s.%s", quotedSchema, quotedTable);
 	}
@@ -2093,7 +2096,8 @@ static int dump_callback(void *pArg, int nArg, char **azArg, char **azNotUsed) {
 		char *zQualifiedName = NULL;
 
 		zSchema = getTableSchema(p->db, zTable);
-		if (!zSchema) zSchema = sqlite3_mprintf("main");
+		if (!zSchema)
+			zSchema = sqlite3_mprintf("main");
 
 		zQualifiedName = buildQualifiedName(zSchema, zTable);
 		if (!zQualifiedName) {
@@ -2160,7 +2164,8 @@ static int dump_callback(void *pArg, int nArg, char **azArg, char **azNotUsed) {
 		p->mode = savedMode;
 		sqlite3_free(zQualifiedName);
 		sqlite3_free(zSchema);
-		if (rc != SQLITE_OK && rc != SQLITE_DONE) p->nErr++;
+		if (rc != SQLITE_OK && rc != SQLITE_DONE)
+			p->nErr++;
 	}
 	return 0;
 }
@@ -3196,15 +3201,16 @@ MetadataResult DumpTable(ShellState &state, const char **azArg, idx_t nArg) {
 	raw_printf(state.out, "BEGIN TRANSACTION;\n");
 	state.showHeader = 0;
 	state.nErr = 0;
-	if (zLike == 0) zLike = sqlite3_mprintf("true");
-	
+	if (zLike == 0)
+		zLike = sqlite3_mprintf("true");
+
 	// Emit CREATE SCHEMA for non-main schemas first
-	zSql = sqlite3_mprintf(
-		"SELECT DISTINCT table_schema FROM information_schema.tables "
-		"WHERE table_schema != 'main' AND table_schema NOT LIKE 'pg_%%' "
-		"AND table_schema != 'information_schema' "
-		"AND table_name IN (SELECT name FROM sqlite_schema WHERE (%s) AND type=='table') "
-		"ORDER BY table_schema", zLike);
+	zSql = sqlite3_mprintf("SELECT DISTINCT table_schema FROM information_schema.tables "
+	                       "WHERE table_schema != 'main' AND table_schema NOT LIKE 'pg_%%' "
+	                       "AND table_schema != 'information_schema' "
+	                       "AND table_name IN (SELECT name FROM sqlite_schema WHERE (%s) AND type=='table') "
+	                       "ORDER BY table_schema",
+	                       zLike);
 	sqlite3_stmt *pStmt = NULL;
 	if (sqlite3_prepare_v2(state.db, zSql, -1, &pStmt, 0) == SQLITE_OK) {
 		while (sqlite3_step(pStmt) == SQLITE_ROW) {
@@ -3220,7 +3226,7 @@ MetadataResult DumpTable(ShellState &state, const char **azArg, idx_t nArg) {
 		sqlite3_finalize(pStmt);
 	}
 	sqlite3_free(zSql);
-	
+
 	zSql = sqlite3_mprintf("SELECT name, type, sql FROM sqlite_schema "
 	                       "WHERE (%s) AND type=='table'"
 	                       "  AND sql NOT NULL"

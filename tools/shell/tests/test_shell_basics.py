@@ -937,7 +937,7 @@ def test_dump_schema_with_data(shell):
     result = test.run()
     result.check_stdout('CREATE SCHEMA IF NOT EXISTS test_schema;')
     result.check_stdout('CREATE TABLE test_schema.tbl(x INTEGER, y VARCHAR);')
-    result.check_stdout('INSERT INTO test_schema.tbl VALUES(1,\'hello\');')
+    result.check_stdout("INSERT INTO test_schema.tbl VALUES(1,'hello');")
     result.check_stdout('COMMIT')
 
 def test_dump_multiple_schemas(shell):
@@ -967,7 +967,7 @@ def test_dump_quoted_schema(shell):
     )
     result = test.run()
     result.check_stdout('CREATE SCHEMA IF NOT EXISTS "my-schema";')
-    result.check_stdout('CREATE TABLE "my-schema"."my-table"(a INTEGER);')
+    result.check_stdout('CREATE TABLE IF NOT EXISTS "my-schema"."my-table"(a INTEGER);')
 
 def test_dump_if_not_exists(shell):
     test = (
