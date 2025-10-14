@@ -13,7 +13,6 @@
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/string_type.hpp"
-#include "duckdb/common/value_operations/value_operations.hpp"
 
 #include <cstring>
 
@@ -89,20 +88,12 @@ struct DistinctFrom {
 		}
 		return NotEquals::Operation(left, right);
 	}
-
-	static inline bool ValueOperation(const Value &left, const Value &right) {
-		return ValueOperations::DistinctFrom(left, right);
-	}
 };
 
 struct NotDistinctFrom {
 	template <class T>
 	static inline bool Operation(const T &left, const T &right, bool left_null, bool right_null) {
 		return !DistinctFrom::Operation(left, right, left_null, right_null);
-	}
-
-	static inline bool ValueOperation(const Value &left, const Value &right) {
-		return ValueOperations::NotDistinctFrom(left, right);
 	}
 };
 
@@ -114,20 +105,12 @@ struct DistinctGreaterThan {
 		}
 		return GreaterThan::Operation(left, right);
 	}
-
-	static inline bool ValueOperation(const Value &left, const Value &right) {
-		return ValueOperations::DistinctGreaterThan(left, right);
-	}
 };
 
 struct DistinctGreaterThanNullsFirst {
 	template <class T>
 	static inline bool Operation(const T &left, const T &right, bool left_null, bool right_null) {
 		return DistinctGreaterThan::Operation(left, right, right_null, left_null);
-	}
-
-	static inline bool ValueOperation(const Value &left, const Value &right) {
-		return ValueOperations::DistinctGreaterThan(right, left);
 	}
 };
 
@@ -136,20 +119,12 @@ struct DistinctGreaterThanEquals {
 	static inline bool Operation(const T &left, const T &right, bool left_null, bool right_null) {
 		return !DistinctGreaterThan::Operation(right, left, right_null, left_null);
 	}
-
-	static inline bool ValueOperation(const Value &left, const Value &right) {
-		return !ValueOperations::DistinctGreaterThan(right, left);
-	}
 };
 
 struct DistinctLessThan {
 	template <class T>
 	static inline bool Operation(const T &left, const T &right, bool left_null, bool right_null) {
 		return DistinctGreaterThan::Operation(right, left, right_null, left_null);
-	}
-
-	static inline bool ValueOperation(const Value &left, const Value &right) {
-		return ValueOperations::DistinctGreaterThan(right, left);
 	}
 };
 
@@ -158,20 +133,12 @@ struct DistinctLessThanNullsFirst {
 	static inline bool Operation(const T &left, const T &right, bool left_null, bool right_null) {
 		return DistinctGreaterThan::Operation(right, left, left_null, right_null);
 	}
-
-	static inline bool ValueOperation(const Value &left, const Value &right) {
-		return ValueOperations::DistinctGreaterThan(right, left);
-	}
 };
 
 struct DistinctLessThanEquals {
 	template <class T>
 	static inline bool Operation(const T &left, const T &right, bool left_null, bool right_null) {
 		return !DistinctGreaterThan::Operation(left, right, left_null, right_null);
-	}
-
-	static inline bool ValueOperation(const Value &left, const Value &right) {
-		return ValueOperations::DistinctLessThanEquals(left, right);
 	}
 };
 

@@ -366,7 +366,7 @@ false
 
 # Filter by constant
 query T
-select CASE WHEN a::VARIANT < 4 THEN [a,a+1,a+2] ELSE NULL END IS NOT DISTINCT FROM [1,2,3] from range(5) tbl(a);
+select CASE WHEN a::INT32::VARIANT < 4 THEN [a,a+1,a+2] ELSE NULL END IS NOT DISTINCT FROM [1::INT32,2,3] from range(5) tbl(a);
 ----
 false
 true
@@ -375,7 +375,7 @@ false
 false
 
 query T
-select CASE WHEN a::VARIANT < 4 THEN [a,a+1,a+2] ELSE NULL END IS DISTINCT FROM [1,2,3] from range(5) tbl(a);
+select CASE WHEN a::INT32::VARIANT < 4 THEN [a,a+1,a+2] ELSE NULL END IS DISTINCT FROM [1::INT32,2,3] from range(5) tbl(a);
 ----
 true
 false
@@ -736,8 +736,24 @@ false
 
 # Filter by constant
 query T
-select CASE WHEN a < 4 THEN {'x': a, 'y': a+1, 'z': a+2}::VARIANT ELSE NULL END IS NOT DISTINCT FROM {'x': 1, 'y': 2, 'z': 3}
-from range(5) tbl(a);
+WITH cte as (
+	select a::INT32 a from range(5) tbl(a)
+)
+select
+	CASE
+		WHEN a::VARIANT < 4
+		THEN {
+			'x': a,
+			'y': a+1,
+			'z': a+2
+		}::VARIANT
+		ELSE NULL
+	END IS NOT DISTINCT FROM {
+		'x': 1::INT32,
+		'y': 2::INT32,
+		'z': 3::INT32
+	}
+from cte;
 ----
 false
 true
@@ -746,8 +762,11 @@ false
 false
 
 query T
+WITH cte as (
+	select a::INT32 a from range(5) tbl(a)
+)
 select CASE WHEN a < 4 THEN {'x': a, 'y': a+1, 'z': a+2}::VARIANT ELSE NULL END IS DISTINCT FROM {'x': 1, 'y': 2, 'z': 3}
-from range(5) tbl(a);
+from cte;
 ----
 true
 false

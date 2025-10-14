@@ -886,40 +886,6 @@ idx_t DistinctSelectArray(Vector &left, Vector &right, idx_t count, const Select
 }
 
 template <class OP>
-static idx_t DistinctSelectVariant(Vector &left, Vector &right, idx_t count, const SelectionVector &sel,
-                                   OptionalSelection &true_opt, OptionalSelection &false_opt,
-                                   optional_ptr<ValidityMask> null_mask) {
-	if (count == 0) {
-		return count;
-	}
-
-	D_ASSERT(!null_mask);
-	D_ASSERT(left.GetType().id() == LogicalTypeId::VARIANT && right.GetType().id() == left.GetType().id());
-	RecursiveUnifiedVectorFormat left_variant_format, right_variant_format;
-	Vector::RecursiveToUnifiedFormat(left, count, left_variant_format);
-	Vector::RecursiveToUnifiedFormat(right, count, right_variant_format);
-
-	UnifiedVariantVectorData left_variant(left_variant_format);
-	UnifiedVariantVectorData right_variant(right_variant_format);
-	idx_t true_count = 0, false_count = 0;
-	for (idx_t i = 0; i < count; i++) {
-		auto left_val = VariantUtils::ConvertVariantToValue(left_variant, i, 0);
-		auto right_val = VariantUtils::ConvertVariantToValue(right_variant, i, 0);
-
-		idx_t result_idx = sel.get_index(i);
-		auto res = OP::ValueOperation(left_val, right_val);
-
-		if (!res) {
-			false_opt.Append(false_count, result_idx);
-		} else {
-			true_opt.Append(true_count, result_idx);
-		}
-	}
-
-	return true_count;
-}
-
-template <class OP>
 idx_t DistinctSelectNested(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel, const idx_t count,
                            optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel,
                            optional_ptr<ValidityMask> null_mask) {
@@ -957,13 +923,8 @@ idx_t DistinctSelectNested(Vector &left, Vector &right, optional_ptr<const Selec
 		    DistinctSelectList<OP>(l_not_null, r_not_null, unknown, maybe_vec, true_opt, false_opt, null_mask);
 		break;
 	case PhysicalType::STRUCT:
-		if (left_type.id() == LogicalTypeId::VARIANT) {
-			match_count +=
-			    DistinctSelectVariant<OP>(l_not_null, r_not_null, unknown, maybe_vec, true_opt, false_opt, null_mask);
-		} else {
-			match_count +=
-			    DistinctSelectStruct<OP>(l_not_null, r_not_null, unknown, maybe_vec, true_opt, false_opt, null_mask);
-		}
+		match_count +=
+		    DistinctSelectStruct<OP>(l_not_null, r_not_null, unknown, maybe_vec, true_opt, false_opt, null_mask);
 		break;
 	case PhysicalType::ARRAY:
 		match_count +=
