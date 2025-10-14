@@ -95,6 +95,18 @@ struct AllowExtensionsMetadataMismatchSetting {
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
 
+struct AllowParserOverrideExtensionSetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "allow_parser_override_extension";
+	static constexpr const char *Description = "Allow extensions to override the current parser";
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static bool OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input);
+	static bool OnGlobalReset(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct AllowPersistentSecretsSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "allow_persistent_secrets";
@@ -645,7 +657,7 @@ struct ExperimentalMetadataReuseSetting {
 	static constexpr const char *Name = "experimental_metadata_reuse";
 	static constexpr const char *Description = "EXPERIMENTAL: Re-use row group and table metadata when checkpointing.";
 	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "false";
+	static constexpr const char *DefaultValue = "true";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
 
