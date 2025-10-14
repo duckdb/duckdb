@@ -6,13 +6,13 @@ require parquet
 
 # boolean values
 query IIII
-select stats_min, stats_max, stats_min_value, stats_max_value from parquet_metadata('data/parquet-testing/boolean_stats.parquet');
+select stats_min, stats_max, stats_min_value, stats_max_value from parquet_metadata('${TEST_DATA_LOC}/parquet-testing/boolean_stats.parquet');
 ----
 false	true	false	true
 
 # signed numbers
 query IIII
-select stats_min, stats_max, stats_min_value, stats_max_value from parquet_metadata('data/parquet-testing/signed_stats.parquet');
+select stats_min, stats_max, stats_min_value, stats_max_value from parquet_metadata('${TEST_DATA_LOC}/parquet-testing/signed_stats.parquet');
 ----
 -128	127	-128	127
 -32768	32767	-32768	32767
@@ -20,14 +20,14 @@ select stats_min, stats_max, stats_min_value, stats_max_value from parquet_metad
 -9223372036854775808	9223372036854775807	-9223372036854775808	9223372036854775807
 
 query IIII
-select * from 'data/parquet-testing/signed_stats.parquet';
+select * from '${TEST_DATA_LOC}/parquet-testing/signed_stats.parquet';
 ----
 -128	-32768	-2147483648	-9223372036854775808
 127	32767	2147483647	9223372036854775807
 
 # unsigned numbers
 query IIII
-select stats_min, stats_max, stats_min_value, stats_max_value from parquet_metadata('data/parquet-testing/unsigned_stats.parquet');
+select stats_min, stats_max, stats_min_value, stats_max_value from parquet_metadata('${TEST_DATA_LOC}/parquet-testing/unsigned_stats.parquet');
 ----
 NULL	NULL	0	255
 NULL	NULL	0	65535
@@ -35,14 +35,14 @@ NULL	NULL	0	65535
 NULL	NULL	0	18446744073709551615
 
 query IIII
-select * from 'data/parquet-testing/unsigned_stats.parquet';
+select * from '${TEST_DATA_LOC}/parquet-testing/unsigned_stats.parquet';
 ----
 0	0	0	0
 255	65535	4294967295	18446744073709551615
 
 # dates/times/timestamps
 query IIII
-select stats_min, stats_max, stats_min_value, stats_max_value from parquet_metadata('data/parquet-testing/date_stats.parquet');
+select stats_min, stats_max, stats_min_value, stats_max_value from parquet_metadata('${TEST_DATA_LOC}/parquet-testing/date_stats.parquet');
 ----
 1900-01-01	2030-12-31	1900-01-01	2030-12-31
 00:00:00+00	23:59:59+00	00:00:00+00	23:59:59+00
@@ -52,33 +52,33 @@ select stats_min, stats_max, stats_min_value, stats_max_value from parquet_metad
 1900-01-01 00:00:00	2030-12-31 23:59:59	1900-01-01 00:00:00	2030-12-31 23:59:59
 
 query IIIIII
-select * from 'data/parquet-testing/date_stats.parquet';
+select * from '${TEST_DATA_LOC}/parquet-testing/date_stats.parquet';
 ----
 1900-01-01	00:00:00+00	1990-01-01 00:00:00	1900-01-01 00:00:00	1900-01-01 00:00:00	1900-01-01 00:00:00
 2030-12-31	23:59:59+00	2030-12-31 23:59:59	2030-12-31 23:59:59	2030-12-31 23:59:59	2030-12-31 23:59:59
 
 # varchar/blob stats
 query IIII
-select stats_min, stats_max, stats_min_value, stats_max_value from parquet_metadata('data/parquet-testing/varchar_stats.parquet');
+select stats_min, stats_max, stats_min_value, stats_max_value from parquet_metadata('${TEST_DATA_LOC}/parquet-testing/varchar_stats.parquet');
 ----
 NULL	NULL	hello world	world hello
 NULL	NULL	hello\x00world	world\x00hello
 
 # should be the same as computing min/max over these columns
 query IIII
-select min(str_val), max(str_val), min("hello\x00world"), max("hello\x00world") from 'data/parquet-testing/varchar_stats.parquet';
+select min(str_val), max(str_val), min("hello\x00world"), max("hello\x00world") from '${TEST_DATA_LOC}/parquet-testing/varchar_stats.parquet';
 ----
 hello world	world hello	hello\x00world	world\x00hello
 
 query II
-select * from 'data/parquet-testing/varchar_stats.parquet';
+select * from '${TEST_DATA_LOC}/parquet-testing/varchar_stats.parquet';
 ----
 hello world	hello\x00world
 world hello	world\x00hello
 
 # decimal stats
 query IIII
-select stats_min, stats_max, stats_min_value, stats_max_value from parquet_metadata('data/parquet-testing/decimal_stats.parquet');
+select stats_min, stats_max, stats_min_value, stats_max_value from parquet_metadata('${TEST_DATA_LOC}/parquet-testing/decimal_stats.parquet');
 ----
 -999.9	999.9	-999.9	999.9
 -999999.999	999999.999	-999999.999	999999.999
@@ -86,19 +86,19 @@ select stats_min, stats_max, stats_min_value, stats_max_value from parquet_metad
 -999999999999999999999999999999999.99999	999999999999999999999999999999999.99999	-999999999999999999999999999999999.99999	999999999999999999999999999999999.99999
 
 query IIII
-select * from 'data/parquet-testing/decimal_stats.parquet';
+select * from '${TEST_DATA_LOC}/parquet-testing/decimal_stats.parquet';
 ----
 -999.9	-999999.999	-9999999999999.99999	-999999999999999999999999999999999.99999
 999.9	999999.999	9999999999999.99999	999999999999999999999999999999999.99999
 
 # int32 decimal stats
 query IIII
-select stats_min, stats_max, stats_min_value, stats_max_value from parquet_metadata('data/parquet-testing/arrow/int32_decimal.parquet');
+select stats_min, stats_max, stats_min_value, stats_max_value from parquet_metadata('${TEST_DATA_LOC}/parquet-testing/arrow/int32_decimal.parquet');
 ----
 1.00	24.00	NULL	NULL
 
 query I
-SELECT * FROM 'data/parquet-testing/arrow/int32_decimal.parquet'
+SELECT * FROM '${TEST_DATA_LOC}/parquet-testing/arrow/int32_decimal.parquet'
 ----
 1.00
 2.00
@@ -127,12 +127,12 @@ SELECT * FROM 'data/parquet-testing/arrow/int32_decimal.parquet'
 
 # int64 decimal stats
 query IIII
-select stats_min, stats_max, stats_min_value, stats_max_value from parquet_metadata('data/parquet-testing/arrow/int64_decimal.parquet');
+select stats_min, stats_max, stats_min_value, stats_max_value from parquet_metadata('${TEST_DATA_LOC}/parquet-testing/arrow/int64_decimal.parquet');
 ----
 1.00	24.00	NULL	NULL
 
 query I
-SELECT * FROM 'data/parquet-testing/arrow/int64_decimal.parquet'
+SELECT * FROM '${TEST_DATA_LOC}/parquet-testing/arrow/int64_decimal.parquet'
 ----
 1.00
 2.00
@@ -161,7 +161,7 @@ SELECT * FROM 'data/parquet-testing/arrow/int64_decimal.parquet'
 
 # data-types stats
 query IIII
-SELECT stats_min, stats_max, stats_min_value, stats_max_value FROM parquet_metadata('data/parquet-testing/data-types.parquet')
+SELECT stats_min, stats_max, stats_min_value, stats_max_value FROM parquet_metadata('${TEST_DATA_LOC}/parquet-testing/data-types.parquet')
 ----
 -127	127	-127	127
 -32767	32767	-32767	32767
@@ -177,7 +177,7 @@ false	true	false	true
 2020-01-10	2020-01-10	2020-01-10	2020-01-10
 
 query IIIIIIIIIIII
-SELECT * FROM 'data/parquet-testing/data-types.parquet'
+SELECT * FROM '${TEST_DATA_LOC}/parquet-testing/data-types.parquet'
 ----
 NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL
 42	43	44	45	4.600000	4.700000	4.80	49	50	True	2019-11-26 20:11:42.501	2020-01-10
@@ -186,7 +186,7 @@ NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL
 NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL
 
 # parquet stats for all parquet files
-foreach parquet_file data/parquet-testing/manyrowgroups.parquet data/parquet-testing/map.parquet data/parquet-testing/arrow/int32_decimal.parquet data/parquet-testing/arrow/nonnullable.impala.parquet data/parquet-testing/bug687_nulls.parquet data/parquet-testing/bug1554.parquet data/parquet-testing/apkwan.parquet data/parquet-testing/arrow/nested_lists.snappy.parquet data/parquet-testing/arrow/nulls.snappy.parquet data/parquet-testing/nan-float.parquet data/parquet-testing/manyrowgroups2.parquet data/parquet-testing/struct.parquet data/parquet-testing/arrow/list_columns.parquet data/parquet-testing/timestamp-ms.parquet data/parquet-testing/arrow/alltypes_dictionary.parquet data/parquet-testing/arrow/binary.parquet data/parquet-testing/arrow/nation.dict-malformed.parquet data/parquet-testing/lineitem-top10000.gzip.parquet data/parquet-testing/arrow/nested_maps.snappy.parquet data/parquet-testing/arrow/dict-page-offset-zero.parquet data/parquet-testing/silly-names.parquet data/parquet-testing/zstd.parquet data/parquet-testing/bug1618_struct_strings.parquet data/parquet-testing/arrow/single_nan.parquet data/parquet-testing/arrow/int64_decimal.parquet data/parquet-testing/filter_bug1391.parquet data/parquet-testing/arrow/fixed_length_decimal_legacy.parquet data/parquet-testing/timestamp.parquet data/parquet-testing/arrow/fixed_length_decimal.parquet data/parquet-testing/leftdate3_192_loop_1.parquet data/parquet-testing/blob.parquet data/parquet-testing/bug1588.parquet data/parquet-testing/bug1589.parquet data/parquet-testing/arrow/alltypes_plain.parquet data/parquet-testing/arrow/repeated_no_annotation.parquet data/parquet-testing/data-types.parquet data/parquet-testing/unsigned.parquet data/parquet-testing/pandas-date.parquet data/parquet-testing/date.parquet data/parquet-testing/arrow/nullable.impala.parquet data/parquet-testing/fixed.parquet data/parquet-testing/arrow/alltypes_plain.snappy.parquet data/parquet-testing/decimal/int32_decimal.parquet data/parquet-testing/decimal/pandas_decimal.parquet data/parquet-testing/decimal/decimal_dc.parquet data/parquet-testing/decimal/int64_decimal.parquet data/parquet-testing/decimal/fixed_length_decimal_legacy.parquet data/parquet-testing/decimal/fixed_length_decimal.parquet data/parquet-testing/glob2/t1.parquet data/parquet-testing/cache/cache1.parquet data/parquet-testing/cache/cache2.parquet data/parquet-testing/glob/t2.parquet data/parquet-testing/glob/t1.parquet data/parquet-testing/bug2557.parquet
+foreach parquet_file ${TEST_DATA_LOC}/parquet-testing/manyrowgroups.parquet ${TEST_DATA_LOC}/parquet-testing/map.parquet ${TEST_DATA_LOC}/parquet-testing/arrow/int32_decimal.parquet ${TEST_DATA_LOC}/parquet-testing/arrow/nonnullable.impala.parquet ${TEST_DATA_LOC}/parquet-testing/bug687_nulls.parquet ${TEST_DATA_LOC}/parquet-testing/bug1554.parquet ${TEST_DATA_LOC}/parquet-testing/apkwan.parquet ${TEST_DATA_LOC}/parquet-testing/arrow/nested_lists.snappy.parquet ${TEST_DATA_LOC}/parquet-testing/arrow/nulls.snappy.parquet ${TEST_DATA_LOC}/parquet-testing/nan-float.parquet ${TEST_DATA_LOC}/parquet-testing/manyrowgroups2.parquet ${TEST_DATA_LOC}/parquet-testing/struct.parquet ${TEST_DATA_LOC}/parquet-testing/arrow/list_columns.parquet ${TEST_DATA_LOC}/parquet-testing/timestamp-ms.parquet ${TEST_DATA_LOC}/parquet-testing/arrow/alltypes_dictionary.parquet ${TEST_DATA_LOC}/parquet-testing/arrow/binary.parquet ${TEST_DATA_LOC}/parquet-testing/arrow/nation.dict-malformed.parquet ${TEST_DATA_LOC}/parquet-testing/lineitem-top10000.gzip.parquet ${TEST_DATA_LOC}/parquet-testing/arrow/nested_maps.snappy.parquet ${TEST_DATA_LOC}/parquet-testing/arrow/dict-page-offset-zero.parquet ${TEST_DATA_LOC}/parquet-testing/silly-names.parquet ${TEST_DATA_LOC}/parquet-testing/zstd.parquet ${TEST_DATA_LOC}/parquet-testing/bug1618_struct_strings.parquet ${TEST_DATA_LOC}/parquet-testing/arrow/single_nan.parquet ${TEST_DATA_LOC}/parquet-testing/arrow/int64_decimal.parquet ${TEST_DATA_LOC}/parquet-testing/filter_bug1391.parquet ${TEST_DATA_LOC}/parquet-testing/arrow/fixed_length_decimal_legacy.parquet ${TEST_DATA_LOC}/parquet-testing/timestamp.parquet ${TEST_DATA_LOC}/parquet-testing/arrow/fixed_length_decimal.parquet ${TEST_DATA_LOC}/parquet-testing/leftdate3_192_loop_1.parquet ${TEST_DATA_LOC}/parquet-testing/blob.parquet ${TEST_DATA_LOC}/parquet-testing/bug1588.parquet ${TEST_DATA_LOC}/parquet-testing/bug1589.parquet ${TEST_DATA_LOC}/parquet-testing/arrow/alltypes_plain.parquet ${TEST_DATA_LOC}/parquet-testing/arrow/repeated_no_annotation.parquet ${TEST_DATA_LOC}/parquet-testing/data-types.parquet ${TEST_DATA_LOC}/parquet-testing/unsigned.parquet ${TEST_DATA_LOC}/parquet-testing/pandas-date.parquet ${TEST_DATA_LOC}/parquet-testing/date.parquet ${TEST_DATA_LOC}/parquet-testing/arrow/nullable.impala.parquet ${TEST_DATA_LOC}/parquet-testing/fixed.parquet ${TEST_DATA_LOC}/parquet-testing/arrow/alltypes_plain.snappy.parquet ${TEST_DATA_LOC}/parquet-testing/decimal/int32_decimal.parquet ${TEST_DATA_LOC}/parquet-testing/decimal/pandas_decimal.parquet ${TEST_DATA_LOC}/parquet-testing/decimal/decimal_dc.parquet ${TEST_DATA_LOC}/parquet-testing/decimal/int64_decimal.parquet ${TEST_DATA_LOC}/parquet-testing/decimal/fixed_length_decimal_legacy.parquet ${TEST_DATA_LOC}/parquet-testing/decimal/fixed_length_decimal.parquet ${TEST_DATA_LOC}/parquet-testing/glob2/t1.parquet ${TEST_DATA_LOC}/parquet-testing/cache/cache1.parquet ${TEST_DATA_LOC}/parquet-testing/cache/cache2.parquet ${TEST_DATA_LOC}/parquet-testing/glob/t2.parquet ${TEST_DATA_LOC}/parquet-testing/glob/t1.parquet ${TEST_DATA_LOC}/parquet-testing/bug2557.parquet
 
 statement ok
 select * from parquet_metadata('${parquet_file}');
@@ -195,25 +195,25 @@ endloop
 
 # internal issue 2037
 statement ok
-copy (select '' i) to '__TEST_DIR__/test.parquet';
+copy (select '' i) to '${TEST_TEMP_LOC}/test.parquet';
 
 query I
-select i is null c0 from '__TEST_DIR__/test.parquet';
+select i is null c0 from '${TEST_TEMP_LOC}/test.parquet';
 ----
 false
 
 query II
-select stats_min_value is null c0, stats_max_value is null c1 from parquet_metadata('__TEST_DIR__/test.parquet');
+select stats_min_value is null c0, stats_max_value is null c1 from parquet_metadata('${TEST_TEMP_LOC}/test.parquet');
 ----
 false	false
 
 query II
-select row_group_bytes, row_group_compressed_bytes from parquet_metadata('__TEST_DIR__/test.parquet');
+select row_group_bytes, row_group_compressed_bytes from parquet_metadata('${TEST_TEMP_LOC}/test.parquet');
 ----
 27	1
 
 query II
-select row_group_bytes, row_group_compressed_bytes from parquet_metadata('data/parquet-testing/varchar_stats.parquet');
+select row_group_bytes, row_group_compressed_bytes from parquet_metadata('${TEST_DATA_LOC}/parquet-testing/varchar_stats.parquet');
 ----
 200	1
 200	1

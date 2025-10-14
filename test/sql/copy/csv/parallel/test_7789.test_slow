@@ -7,6 +7,6 @@ PRAGMA enable_verification
 
 query I
 select count(*)
-from  read_csv_auto('data/csv/CrashStatistics.csv', SAMPLE_SIZE = -1)
+from  read_csv_auto('${TEST_DATA_LOC}/csv/CrashStatistics.csv', SAMPLE_SIZE = -1)
 ----
 4980

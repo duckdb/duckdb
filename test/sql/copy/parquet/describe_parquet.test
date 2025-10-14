@@ -5,10 +5,10 @@
 require parquet
 
 query IIIIII nosort describeresult
-DESCRIBE 'data/parquet-testing/delta_byte_array.parquet'
+DESCRIBE '${TEST_DATA_LOC}/parquet-testing/delta_byte_array.parquet'
 
 query IIIIII nosort describeresult
-DESCRIBE "data/parquet-testing/delta_byte_array.parquet"
+DESCRIBE "${TEST_DATA_LOC}/parquet-testing/delta_byte_array.parquet"
 
 query IIIIII nosort describeresult
-DESCRIBE FROM read_parquet("data/parquet-testing/delta_byte_array.parquet")
+DESCRIBE FROM read_parquet("${TEST_DATA_LOC}/parquet-testing/delta_byte_array.parquet")

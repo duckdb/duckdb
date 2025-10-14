@@ -9,7 +9,7 @@ statement ok
 CREATE TYPE mood AS ENUM ('happy', 'sad', 'angry')
 
 query I
-FROM read_csv('data/csv/enum_type.csv', types=[mood])
+FROM read_csv('${TEST_DATA_LOC}/csv/enum_type.csv', types=[mood])
 ----
 sad
 happy

@@ -9,33 +9,33 @@ foreach codec UNCOMPRESSED SNAPPY GZIP ZSTD LZ4 LZ4_RAW BROTLI
 
 # codec uncompressed
 statement ok
-COPY (SELECT 42, 'hello') TO '__TEST_DIR__/${codec}.parquet' (FORMAT 'parquet', CODEC '${codec}');
+COPY (SELECT 42, 'hello') TO '${TEST_TEMP_LOC}/${codec}.parquet' (FORMAT 'parquet', CODEC '${codec}');
 
 query II
-SELECT * FROM parquet_scan('__TEST_DIR__/${codec}.parquet');
+SELECT * FROM parquet_scan('${TEST_TEMP_LOC}/${codec}.parquet');
 ----
 42	hello
 
 statement ok
-COPY (FROM "data/parquet-testing/userdata1.parquet") TO '__TEST_DIR__/userdata-${codec}.parquet' (FORMAT 'parquet', CODEC '${codec}', ROW_GROUP_SIZE 10);
+COPY (FROM "${TEST_DATA_LOC}/parquet-testing/userdata1.parquet") TO '${TEST_TEMP_LOC}/userdata-${codec}.parquet' (FORMAT 'parquet', CODEC '${codec}', ROW_GROUP_SIZE 10);
 
 statement ok
-FROM "__TEST_DIR__/userdata-${codec}.parquet";
+FROM "${TEST_TEMP_LOC}/userdata-${codec}.parquet";
 
 endloop
 
 
 # unsupported codec
 statement error
-COPY (SELECT 42, 'hello') TO '__TEST_DIR__/gzip.parquet' (FORMAT 'parquet', CODEC 'BLABLABLA');
+COPY (SELECT 42, 'hello') TO '${TEST_TEMP_LOC}/gzip.parquet' (FORMAT 'parquet', CODEC 'BLABLABLA');
 ----
 
 # empty codec
 statement error
-COPY (SELECT 42, 'hello') TO '__TEST_DIR__/gzip.parquet' (FORMAT 'parquet', CODEC);
+COPY (SELECT 42, 'hello') TO '${TEST_TEMP_LOC}/gzip.parquet' (FORMAT 'parquet', CODEC);
 ----
 
 # integer codec
 statement error
-COPY (SELECT 42, 'hello') TO '__TEST_DIR__/gzip.parquet' (FORMAT 'parquet', CODEC 3);
+COPY (SELECT 42, 'hello') TO '${TEST_TEMP_LOC}/gzip.parquet' (FORMAT 'parquet', CODEC 3);
 ----

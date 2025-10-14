@@ -56,7 +56,7 @@ query III
 SELECT hits_0.access.page."pageTitle" as "pageTitle",
 COUNT(DISTINCT CONCAT(ga_sessions."__distinct_key", 'x', hits_0.__row_id)) as "hits_count",
 COUNT(DISTINCT CASE WHEN product_0.access."productQuantity">0 THEN CONCAT(ga_sessions."__distinct_key", 'x', hits_0."__row_id") END) as "sold_count"
-FROM (SELECT GEN_RANDOM_UUID() as __distinct_key, * FROM 'data/parquet-testing/test_unnest_rewriter.parquet' as x) as ga_sessions,
+FROM (SELECT GEN_RANDOM_UUID() as __distinct_key, * FROM '${TEST_DATA_LOC}/parquet-testing/test_unnest_rewriter.parquet' as x) as ga_sessions,
 (SELECT GEN_RANDOM_UUID() as __row_id, x.access FROM (SELECT UNNEST(ga_sessions.hits)) as x(access)) as hits_0,
 (SELECT GEN_RANDOM_UUID() as __row_id, x.access FROM (SELECT UNNEST(hits_0.access.product)) as x(access)) as product_0
 GROUP BY 1 ORDER BY 1, 2, 3 LIMIT 2;
@@ -90,7 +90,7 @@ query II
 EXPLAIN SELECT hits_0.access.page."pageTitle" as "pageTitle",
 COUNT(DISTINCT CONCAT(ga_sessions."__distinct_key", 'x', hits_0.__row_id)) as "hits_count",
 COUNT(DISTINCT CASE WHEN product_0.access."productQuantity">0 THEN CONCAT(ga_sessions."__distinct_key", 'x', hits_0."__row_id") END) as "sold_count"
-FROM (SELECT GEN_RANDOM_UUID() as __distinct_key, * FROM 'data/parquet-testing/test_unnest_rewriter.parquet' as x) as ga_sessions,
+FROM (SELECT GEN_RANDOM_UUID() as __distinct_key, * FROM '${TEST_DATA_LOC}/parquet-testing/test_unnest_rewriter.parquet' as x) as ga_sessions,
 (SELECT GEN_RANDOM_UUID() as __row_id, x.access FROM (SELECT UNNEST(ga_sessions.hits)) as x(access)) as hits_0,
 (SELECT GEN_RANDOM_UUID() as __row_id, x.access FROM (SELECT UNNEST(hits_0.access.product)) as x(access)) as product_0
 GROUP BY 1 LIMIT 2;

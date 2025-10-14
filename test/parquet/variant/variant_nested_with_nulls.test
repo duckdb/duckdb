@@ -4,7 +4,7 @@
 require parquet
 
 query IIIIII
-describe from parquet_scan('data/parquet-testing/variant_unshredded_nested_nulls.parquet')
+describe from parquet_scan('${TEST_DATA_LOC}/parquet-testing/variant_unshredded_nested_nulls.parquet')
 ----
 id	BIGINT	YES	NULL	NULL	NULL
 v	STRUCT("value" BLOB, metadata BLOB)	YES	NULL	NULL	NULL
@@ -19,7 +19,7 @@ set variant_legacy_encoding=true;
 
 # Now the variant column gets emitted as JSON
 query IIIIII
-describe from parquet_scan('data/parquet-testing/variant_unshredded_nested_nulls.parquet')
+describe from parquet_scan('${TEST_DATA_LOC}/parquet-testing/variant_unshredded_nested_nulls.parquet')
 ----
 id	BIGINT	YES	NULL	NULL	NULL
 v	JSON	YES	NULL	NULL	NULL
@@ -30,7 +30,7 @@ array_of_struct_of_variants	STRUCT(v JSON)[]	YES	NULL	NULL	NULL
 struct_of_array_of_variants	STRUCT(v JSON[])	YES	NULL	NULL	NULL
 
 query IIIIIII
-select * from parquet_scan('data/parquet-testing/variant_unshredded_nested_nulls.parquet') order by id limit 10;
+select * from parquet_scan('${TEST_DATA_LOC}/parquet-testing/variant_unshredded_nested_nulls.parquet') order by id limit 10;
 ----
 0	{"key":0}	['{"key":0}', NULL, '{"key":0}', NULL, '{"key":0}']	{'v': '{"key":0}'}	{0='{"key":0}', nullKey=NULL}	[{'v': '{"key":0}'}, {'v': NULL}, NULL, {'v': '{"key":0}'}, NULL, {'v': '{"key":0}'}]	{'v': [NULL, '{"key":0}']}
 0	{"key":0}	['{"key":0}', NULL, '{"key":0}', NULL, '{"key":0}']	{'v': '{"key":0}'}	{0='{"key":0}', nullKey=NULL}	[{'v': '{"key":0}'}, {'v': NULL}, NULL, {'v': '{"key":0}'}, NULL, {'v': '{"key":0}'}]	{'v': [NULL, '{"key":0}']}

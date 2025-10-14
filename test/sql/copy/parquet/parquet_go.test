@@ -8,7 +8,7 @@ statement ok
 PRAGMA enable_verification
 
 query II
-SELECT * FROM 'data/parquet-testing/parquet_go.parquet'
+SELECT * FROM '${TEST_DATA_LOC}/parquet-testing/parquet_go.parquet'
 ----
 John	Hello World
 John	Hello World

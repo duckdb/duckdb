@@ -11,7 +11,7 @@ statement ok
 CREATE TABLE test (a INTEGER, b VARCHAR, c INTEGER);
 
 query I
-COPY test FROM 'data/csv/test/test_long_line.csv';
+COPY test FROM '${TEST_DATA_LOC}/csv/test/test_long_line.csv';
 ----
 2
 

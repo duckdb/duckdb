@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 statement error
-FROM sniff_csv('data/csv/14512.csv', names := [NULL]);
+FROM sniff_csv('${TEST_DATA_LOC}/csv/14512.csv', names := [NULL]);
 ----
 Binder Error: read_csv names parameter cannot have a NULL value
 

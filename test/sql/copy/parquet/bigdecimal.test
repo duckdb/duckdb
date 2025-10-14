@@ -8,7 +8,7 @@ statement ok
 PRAGMA enable_verification
 
 query I
-FROM 'data/parquet-testing/bigdecimal.parquet'
+FROM '${TEST_DATA_LOC}/parquet-testing/bigdecimal.parquet'
 ----
 0.5
 -0.5
