@@ -62,6 +62,63 @@ public:
 		return nullptr;
 	}
 
+	//! NestedLookup returns true if rowid is in the nested ART starting at gate_node,
+	//! and returns false otherwise.
+	static bool NestedLookup(ART &art, const Node &gate_node, const ARTKey &rowid) {
+		reference<const Node> ref(gate_node);
+		D_ASSERT(ref.get().GetGateStatus() == GateStatus::GATE_SET);
+
+		idx_t depth = 0;
+
+		while (ref.get().HasMetadata()) {
+			const auto type = ref.get().GetType();
+			switch (type) {
+			case NType::LEAF_INLINED: {
+				return ref.get().GetRowId() == rowid.GetRowId();
+			}
+			case NType::LEAF: {
+				throw InternalException("Invalid node type (LEAF) for ARTOperator::NestedLookup.");
+			}
+			case NType::NODE_7_LEAF:
+			case NType::NODE_15_LEAF:
+			case NType::NODE_256_LEAF: {
+				D_ASSERT(depth + 1 == rowid.len);
+				const auto byte = rowid[Prefix::ROW_ID_COUNT];
+				return ref.get().HasByte(art, byte);
+			}
+			case NType::NODE_4:
+			case NType::NODE_16:
+			case NType::NODE_48:
+			case NType::NODE_256: {
+				D_ASSERT(depth < rowid.len);
+				auto child = ref.get().GetChild(art, rowid[depth]);
+				if (child) {
+					// Continue in the child.
+					ref = *child;
+					depth++;
+					D_ASSERT(ref.get().HasMetadata());
+					continue;
+				}
+				return false;
+			}
+			case NType::PREFIX: {
+				Prefix prefix(art, ref.get());
+				for (idx_t i = 0; i < prefix.data[Prefix::Count(art)]; i++) {
+					if (prefix.data[i] != rowid[depth]) {
+						// The key and the prefix don't match.
+						return false;
+					}
+					depth++;
+				}
+				ref = *prefix.ptr;
+			}
+			}
+		}
+		return false;
+	}
+
+
+
 	//! Insert a key and its row ID into the node.
 	//! Starts at depth (in the key).
 	//! status indicates if the insert happens inside a gate or not.
