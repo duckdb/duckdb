@@ -20,6 +20,7 @@
 #include "duckdb/planner/expression/bound_unnest_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/function/function_binder.hpp"
+#include "duckdb/main/database.hpp"
 
 namespace duckdb {
 
@@ -83,6 +84,11 @@ TopNWindowElimination::TopNWindowElimination(ClientContext &context_p, Optimizer
 }
 
 unique_ptr<LogicalOperator> TopNWindowElimination::Optimize(unique_ptr<LogicalOperator> op) {
+	auto &extension_manager = context.db->GetExtensionManager();
+	if (!extension_manager.ExtensionIsLoaded("core_functions")) {
+		return op;
+	}
+
 	ColumnBindingReplacer replacer;
 	op = OptimizeInternal(std::move(op), replacer);
 	if (!replacer.replacement_bindings.empty()) {

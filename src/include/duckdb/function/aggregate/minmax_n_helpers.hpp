@@ -242,11 +242,13 @@ private:
 	idx_t size;
 };
 
-enum class ArgMinMaxNullHandling { IGNORE_ALL_NULLS, IGNORE_NULL_VALS, IGNORE_NOTHING };
+enum class ArgMinMaxNullHandling { IGNORE_ANY_NULL, HANDLE_ARG_NULL, HANDLE_ANY_NULL };
 
 struct ArgMinMaxFunctionData : FunctionData {
-	ArgMinMaxNullHandling null_handling;
-	bool nulls_last = true;
+	ArgMinMaxFunctionData(ArgMinMaxNullHandling null_handling_p = ArgMinMaxNullHandling::IGNORE_ANY_NULL,
+	                      bool nulls_last_p = true)
+	    : null_handling(null_handling_p), nulls_last(nulls_last_p) {
+	}
 
 	unique_ptr<FunctionData> Copy() const override {
 		auto copy = make_uniq<ArgMinMaxFunctionData>();
@@ -259,6 +261,9 @@ struct ArgMinMaxFunctionData : FunctionData {
 		auto &other = other_p.Cast<ArgMinMaxFunctionData>();
 		return other.null_handling == null_handling && other.nulls_last == nulls_last;
 	}
+
+	ArgMinMaxNullHandling null_handling;
+	bool nulls_last;
 };
 
 //------------------------------------------------------------------------------

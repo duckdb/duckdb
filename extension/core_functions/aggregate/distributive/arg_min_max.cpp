@@ -10,8 +10,6 @@
 #include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/function/aggregate/minmax_n_helpers.hpp"
 
-#include <sys/socket.h>
-
 namespace duckdb {
 
 namespace {
@@ -102,7 +100,7 @@ struct ArgMinMaxBase {
 		D_ASSERT(aggregate_input_data.bind_data);
 		const auto &bind_data = aggregate_input_data.bind_data->Cast<ArgMinMaxFunctionData>();
 
-		if (bind_data.null_handling == ArgMinMaxNullHandling::IGNORE_ALL_NULLS) {
+		if (bind_data.null_handling == ArgMinMaxNullHandling::IGNORE_ANY_NULL) {
 			STATE::template AssignValue<A_TYPE>(state.arg, x, aggregate_input_data);
 			STATE::template AssignValue<B_TYPE>(state.value, y, aggregate_input_data);
 		} else {
@@ -111,7 +109,7 @@ struct ArgMinMaxBase {
 			if (!state.arg_null) {
 				STATE::template AssignValue<A_TYPE>(state.arg, x, aggregate_input_data);
 			}
-			if (bind_data.null_handling == ArgMinMaxNullHandling::IGNORE_NULL_VALS || !state.val_null) {
+			if (!state.val_null) {
 				STATE::template AssignValue<B_TYPE>(state.value, y, aggregate_input_data);
 			}
 		}
@@ -122,21 +120,21 @@ struct ArgMinMaxBase {
 		D_ASSERT(binary.input.bind_data);
 		const auto &bind_data = binary.input.bind_data->Cast<ArgMinMaxFunctionData>();
 		if (!state.is_initialized) {
-			if (bind_data.null_handling == ArgMinMaxNullHandling::IGNORE_ALL_NULLS &&
+			if (bind_data.null_handling == ArgMinMaxNullHandling::IGNORE_ANY_NULL &&
 			    binary.left_mask.RowIsValid(binary.lidx) && binary.right_mask.RowIsValid(binary.ridx)) {
 				Assign(state, x, y, !binary.left_mask.RowIsValid(binary.lidx),
 				       !binary.right_mask.RowIsValid(binary.ridx), binary.input);
 				state.is_initialized = true;
 				return;
 			}
-			if (bind_data.null_handling == ArgMinMaxNullHandling::IGNORE_NULL_VALS &&
+			if (bind_data.null_handling == ArgMinMaxNullHandling::HANDLE_ARG_NULL &&
 			    binary.right_mask.RowIsValid(binary.ridx)) {
 				Assign(state, x, y, !binary.left_mask.RowIsValid(binary.lidx),
 				       !binary.right_mask.RowIsValid(binary.ridx), binary.input);
 				state.is_initialized = true;
 				return;
 			}
-			if (bind_data.null_handling == ArgMinMaxNullHandling::IGNORE_NOTHING) {
+			if (bind_data.null_handling == ArgMinMaxNullHandling::HANDLE_ANY_NULL) {
 				Assign(state, x, y, !binary.left_mask.RowIsValid(binary.lidx),
 				       !binary.right_mask.RowIsValid(binary.ridx), binary.input);
 				state.is_initialized = true;
@@ -152,7 +150,7 @@ struct ArgMinMaxBase {
 		const auto &bind_data = binary.input.bind_data->Cast<ArgMinMaxFunctionData>();
 
 		if (binary.right_mask.RowIsValid(binary.ridx) && COMPARATOR::Operation(y_data, state.value)) {
-			if (bind_data.null_handling != ArgMinMaxNullHandling::IGNORE_ALL_NULLS ||
+			if (bind_data.null_handling != ArgMinMaxNullHandling::IGNORE_ANY_NULL ||
 			    binary.left_mask.RowIsValid(binary.lidx)) {
 				Assign(state, x_data, y_data, !binary.left_mask.RowIsValid(binary.lidx), false, binary.input);
 			}
@@ -194,8 +192,7 @@ struct ArgMinMaxBase {
 		function.arguments[0] = arguments[0]->return_type;
 		function.return_type = arguments[0]->return_type;
 
-		auto function_data = make_uniq<ArgMinMaxFunctionData>();
-		function_data->null_handling = NULL_HANDLING;
+		auto function_data = make_uniq<ArgMinMaxFunctionData>(NULL_HANDLING);
 		return unique_ptr<FunctionData>(std::move(function_data));
 	}
 };
@@ -259,14 +256,14 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR> {
 			const auto aidx = adata.sel->get_index(i);
 			const auto arg_null = !adata.validity.RowIsValid(aidx);
 
-			if (bind_data.null_handling == ArgMinMaxNullHandling::IGNORE_ALL_NULLS && arg_null) {
+			if (bind_data.null_handling == ArgMinMaxNullHandling::IGNORE_ANY_NULL && arg_null) {
 				continue;
 			}
 
 			const auto bidx = bdata.sel->get_index(i);
 
 			if (!bdata.validity.RowIsValid(bidx)) {
-				if (bind_data.null_handling == ArgMinMaxNullHandling::IGNORE_NOTHING && !state.is_initialized) {
+				if (bind_data.null_handling == ArgMinMaxNullHandling::HANDLE_ANY_NULL && !state.is_initialized) {
 					state.is_initialized = true;
 					state.val_null = true;
 					if (!arg_null) {
@@ -358,8 +355,7 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR> {
 		function.arguments[0] = arguments[0]->return_type;
 		function.return_type = arguments[0]->return_type;
 
-		auto function_data = make_uniq<ArgMinMaxFunctionData>();
-		function_data->null_handling = NULL_HANDLING;
+		auto function_data = make_uniq<ArgMinMaxFunctionData>(NULL_HANDLING);
 		return unique_ptr<FunctionData>(std::move(function_data));
 	}
 };
@@ -367,12 +363,12 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR> {
 template <class OP>
 bind_aggregate_function_t GetBindFunction(const ArgMinMaxNullHandling null_handling) {
 	switch (null_handling) {
-	case ArgMinMaxNullHandling::IGNORE_NULL_VALS:
-		return OP::template Bind<ArgMinMaxNullHandling::IGNORE_NULL_VALS>;
-	case ArgMinMaxNullHandling::IGNORE_NOTHING:
-		return OP::template Bind<ArgMinMaxNullHandling::IGNORE_NOTHING>;
+	case ArgMinMaxNullHandling::HANDLE_ARG_NULL:
+		return OP::template Bind<ArgMinMaxNullHandling::HANDLE_ARG_NULL>;
+	case ArgMinMaxNullHandling::HANDLE_ANY_NULL:
+		return OP::template Bind<ArgMinMaxNullHandling::HANDLE_ANY_NULL>;
 	default:
-		return OP::template Bind<ArgMinMaxNullHandling::IGNORE_ALL_NULLS>;
+		return OP::template Bind<ArgMinMaxNullHandling::IGNORE_ANY_NULL>;
 	}
 }
 
@@ -556,8 +552,7 @@ unique_ptr<FunctionData> BindDecimalArgMinMax(ClientContext &context, AggregateF
 	function.name = std::move(name);
 	function.return_type = decimal_type;
 
-	auto function_data = make_uniq<ArgMinMaxFunctionData>();
-	function_data->null_handling = NULL_HANDLING;
+	auto function_data = make_uniq<ArgMinMaxFunctionData>(NULL_HANDLING);
 	return unique_ptr<FunctionData>(std::move(function_data));
 }
 
@@ -565,20 +560,20 @@ template <class OP>
 void AddDecimalArgMinMaxFunctionBy(AggregateFunctionSet &fun, const LogicalType &by_type,
                                    const ArgMinMaxNullHandling null_handling) {
 	switch (null_handling) {
-	case ArgMinMaxNullHandling::IGNORE_ALL_NULLS:
+	case ArgMinMaxNullHandling::IGNORE_ANY_NULL:
 		fun.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL, by_type}, LogicalTypeId::DECIMAL, nullptr, nullptr,
 		                                  nullptr, nullptr, nullptr, nullptr,
-		                                  BindDecimalArgMinMax<OP, ArgMinMaxNullHandling::IGNORE_ALL_NULLS>));
+		                                  BindDecimalArgMinMax<OP, ArgMinMaxNullHandling::IGNORE_ANY_NULL>));
 		break;
-	case ArgMinMaxNullHandling::IGNORE_NULL_VALS:
+	case ArgMinMaxNullHandling::HANDLE_ARG_NULL:
 		fun.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL, by_type}, LogicalTypeId::DECIMAL, nullptr, nullptr,
 		                                  nullptr, nullptr, nullptr, nullptr,
-		                                  BindDecimalArgMinMax<OP, ArgMinMaxNullHandling::IGNORE_NULL_VALS>));
+		                                  BindDecimalArgMinMax<OP, ArgMinMaxNullHandling::HANDLE_ARG_NULL>));
 		break;
-	case ArgMinMaxNullHandling::IGNORE_NOTHING:
+	case ArgMinMaxNullHandling::HANDLE_ANY_NULL:
 		fun.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL, by_type}, LogicalTypeId::DECIMAL, nullptr, nullptr,
 		                                  nullptr, nullptr, nullptr, nullptr,
-		                                  BindDecimalArgMinMax<OP, ArgMinMaxNullHandling::IGNORE_NOTHING>));
+		                                  BindDecimalArgMinMax<OP, ArgMinMaxNullHandling::HANDLE_ANY_NULL>));
 		break;
 	}
 }
@@ -676,11 +671,11 @@ void ArgMinMaxNUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t inp
 		const auto arg_idx = arg_format.sel->get_index(i);
 		const auto val_idx = val_format.sel->get_index(i);
 
-		if (bind_data.null_handling == ArgMinMaxNullHandling::IGNORE_ALL_NULLS &&
+		if (bind_data.null_handling == ArgMinMaxNullHandling::IGNORE_ANY_NULL &&
 		    (!arg_format.validity.RowIsValid(arg_idx) || !val_format.validity.RowIsValid(val_idx))) {
 			continue;
 		}
-		if (bind_data.null_handling == ArgMinMaxNullHandling::IGNORE_NULL_VALS &&
+		if (bind_data.null_handling == ArgMinMaxNullHandling::HANDLE_ARG_NULL &&
 		    !val_format.validity.RowIsValid(val_idx)) {
 			continue;
 		}
@@ -866,10 +861,8 @@ unique_ptr<FunctionData> ArgMinMaxNBind(ClientContext &context, AggregateFunctio
 	function.return_type = LogicalType::LIST(arguments[0]->return_type);
 
 	// Specialize the function based on the input types
-	auto function_data = make_uniq<ArgMinMaxFunctionData>();
-	function_data->null_handling = NULL_HANDLING;
-	function_data->nulls_last = NULLS_LAST;
-	if (NULL_HANDLING != ArgMinMaxNullHandling::IGNORE_ALL_NULLS) {
+	auto function_data = make_uniq<ArgMinMaxFunctionData>(NULL_HANDLING, NULLS_LAST);
+	if (NULL_HANDLING != ArgMinMaxNullHandling::IGNORE_ANY_NULL) {
 		SpecializeArgMinMaxNullNFunction<NULLS_LAST, COMPARATOR>(val_type, arg_type, function);
 	} else {
 		SpecializeArgMinMaxNFunction<COMPARATOR>(val_type, arg_type, function);
@@ -895,41 +888,41 @@ void AddArgMinMaxNFunction(AggregateFunctionSet &set) {
 
 AggregateFunctionSet ArgMinFun::GetFunctions() {
 	AggregateFunctionSet fun;
-	AddArgMinMaxFunctions<LessThan, OrderType::ASCENDING>(fun, ArgMinMaxNullHandling::IGNORE_ALL_NULLS);
-	AddArgMinMaxNFunction<ArgMinMaxNullHandling::IGNORE_ALL_NULLS, false, LessThan>(fun);
+	AddArgMinMaxFunctions<LessThan, OrderType::ASCENDING>(fun, ArgMinMaxNullHandling::IGNORE_ANY_NULL);
+	AddArgMinMaxNFunction<ArgMinMaxNullHandling::IGNORE_ANY_NULL, false, LessThan>(fun);
 	return fun;
 }
 
 AggregateFunctionSet ArgMaxFun::GetFunctions() {
 	AggregateFunctionSet fun;
-	AddArgMinMaxFunctions<GreaterThan, OrderType::DESCENDING>(fun, ArgMinMaxNullHandling::IGNORE_ALL_NULLS);
-	AddArgMinMaxNFunction<ArgMinMaxNullHandling::IGNORE_ALL_NULLS, true, GreaterThan>(fun);
+	AddArgMinMaxFunctions<GreaterThan, OrderType::DESCENDING>(fun, ArgMinMaxNullHandling::IGNORE_ANY_NULL);
+	AddArgMinMaxNFunction<ArgMinMaxNullHandling::IGNORE_ANY_NULL, true, GreaterThan>(fun);
 	return fun;
 }
 
 AggregateFunctionSet ArgMinNullFun::GetFunctions() {
 	AggregateFunctionSet fun;
-	AddArgMinMaxFunctions<LessThan, OrderType::ASCENDING>(fun, ArgMinMaxNullHandling::IGNORE_NULL_VALS);
+	AddArgMinMaxFunctions<LessThan, OrderType::ASCENDING>(fun, ArgMinMaxNullHandling::HANDLE_ARG_NULL);
 	return fun;
 }
 
 AggregateFunctionSet ArgMaxNullFun::GetFunctions() {
 	AggregateFunctionSet fun;
-	AddArgMinMaxFunctions<GreaterThan, OrderType::DESCENDING>(fun, ArgMinMaxNullHandling::IGNORE_NULL_VALS);
+	AddArgMinMaxFunctions<GreaterThan, OrderType::DESCENDING>(fun, ArgMinMaxNullHandling::HANDLE_ARG_NULL);
 	return fun;
 }
 
 AggregateFunctionSet ArgMinNullsLastFun::GetFunctions() {
 	AggregateFunctionSet fun;
-	AddArgMinMaxFunctions<LessThan, OrderType::ASCENDING>(fun, ArgMinMaxNullHandling::IGNORE_NOTHING);
-	AddArgMinMaxNFunction<ArgMinMaxNullHandling::IGNORE_NOTHING, false, LessThan>(fun);
+	AddArgMinMaxFunctions<LessThan, OrderType::ASCENDING>(fun, ArgMinMaxNullHandling::HANDLE_ANY_NULL);
+	AddArgMinMaxNFunction<ArgMinMaxNullHandling::HANDLE_ANY_NULL, false, LessThan>(fun);
 	return fun;
 }
 
 AggregateFunctionSet ArgMaxNullsLastFun::GetFunctions() {
 	AggregateFunctionSet fun;
-	AddArgMinMaxFunctions<GreaterThan, OrderType::DESCENDING>(fun, ArgMinMaxNullHandling::IGNORE_NOTHING);
-	AddArgMinMaxNFunction<ArgMinMaxNullHandling::IGNORE_NOTHING, true, GreaterThan>(fun);
+	AddArgMinMaxFunctions<GreaterThan, OrderType::DESCENDING>(fun, ArgMinMaxNullHandling::HANDLE_ANY_NULL);
+	AddArgMinMaxNFunction<ArgMinMaxNullHandling::HANDLE_ANY_NULL, true, GreaterThan>(fun);
 	return fun;
 }
 
