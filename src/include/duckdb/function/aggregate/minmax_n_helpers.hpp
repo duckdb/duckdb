@@ -245,8 +245,8 @@ private:
 enum class ArgMinMaxNullHandling { IGNORE_ANY_NULL, HANDLE_ARG_NULL, HANDLE_ANY_NULL };
 
 struct ArgMinMaxFunctionData : FunctionData {
-	ArgMinMaxFunctionData(ArgMinMaxNullHandling null_handling_p = ArgMinMaxNullHandling::IGNORE_ANY_NULL,
-	                      bool nulls_last_p = true)
+	explicit ArgMinMaxFunctionData(ArgMinMaxNullHandling null_handling_p = ArgMinMaxNullHandling::IGNORE_ANY_NULL,
+	                               bool nulls_last_p = true)
 	    : null_handling(null_handling_p), nulls_last(nulls_last_p) {
 	}
 
