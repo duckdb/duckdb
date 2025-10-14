@@ -6,3 +6,5 @@ add_library(
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_main_extension>
     PARENT_SCOPE)
+
+add_library(dummy_static_extension_loader dummy_static_extension_loader.cpp)

@@ -93,25 +93,24 @@ else()
     list(APPEND LINK_OBJECTS $<TARGET_OBJECTS:${LINK_LIB}>)
   endforeach(LINK_LIB)
 
-  add_library(duckdb_static STATIC ${ALL_OBJECT_FILES} ${LINK_OBJECTS})
-
+  add_library(duckdb_static STATIC ${ALL_OBJECT_FILES} ${LINK_OBJECTS} $<TARGET_OBJECTS:dummy_static_extension_loader>)
   target_link_libraries(duckdb_static PUBLIC ${DUCKDB_SYSTEM_LIBS})
   link_threads(duckdb_static PUBLIC)
 
-  add_library(duckdb SHARED ${ALL_OBJECT_FILES} ${LINK_OBJECTS})
-  target_link_libraries(
-    duckdb PUBLIC ${DUCKDB_SYSTEM_LIBS}
-                  $<TARGET_OBJECTS:dummy_static_extension_loader>)
-
-  link_threads(duckdb PUBLIC)
-
-  if(SET_DUCKDB_LIBRARY_VERSION)
-    set_target_properties(
-      duckdb
-      PROPERTIES VERSION ${DUCKDB_VERSION_NUMBER}
-                 SOVERSION ${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION})
-
-  endif()
+  # FIXME
+#  add_library(duckdb SHARED ${ALL_OBJECT_FILES} ${LINK_OBJECTS})
+#  target_link_libraries(
+#    duckdb PUBLIC ${DUCKDB_SYSTEM_LIBS}
+#                  $<TARGET_OBJECTS:dummy_static_extension_loader>)
+#  link_threads(duckdb PUBLIC)
+#
+#  if(SET_DUCKDB_LIBRARY_VERSION)
+#    set_target_properties(
+#      duckdb
+#      PROPERTIES VERSION ${DUCKDB_VERSION_NUMBER}
+#                 SOVERSION ${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION})
+#
+#  endif()
 
   if(WIN32 AND NOT MINGW)
     ensure_variable_is_number(DUCKDB_MAJOR_VERSION RC_MAJOR_VERSION)
@@ -133,9 +132,9 @@ else()
     target_sources(duckdb PRIVATE version.rc)
   endif()
 
-  target_include_directories(
-    duckdb PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-                  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+#  target_include_directories(
+#    duckdb PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+#                  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 
   target_include_directories(
     duckdb_static PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -154,7 +153,7 @@ else()
 endif()
 
 install(
-  TARGETS duckdb duckdb_static
+  TARGETS duckdb_static
   EXPORT "${DUCKDB_EXPORT_SET}"
   LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
   ARCHIVE DESTINATION "${INSTALL_LIB_DIR}"
