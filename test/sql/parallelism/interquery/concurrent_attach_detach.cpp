@@ -470,11 +470,15 @@ DuckDB Setup() {
 }
 
 void Run(DuckDB db) {
-	// Spawn workers.
-	vector<std::thread> workers;
+	// Create connections
 	for (idx_t worker_id = 0; worker_id < WORKER_COUNT; worker_id++) {
 		auto conn = make_uniq<Connection>(db);
 		CONNECTIONS.push_back(std::move(conn));
+	}
+
+	// Spawn workers.
+	vector<std::thread> workers;
+	for (idx_t worker_id = 0; worker_id < WORKER_COUNT; worker_id++) {
 		workers.emplace_back(WorkUnit, worker_id);
 	}
 
