@@ -311,18 +311,19 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 		    make_uniq<BoundWindowExpression>(ExpressionType::WINDOW_ROW_NUMBER, LogicalType::BIGINT, nullptr, nullptr);
 		row_number->start = WindowBoundary::UNBOUNDED_PRECEDING;
 		row_number->end = WindowBoundary::CURRENT_ROW_ROWS;
+		string ordinality_alias = ordinality_column_name;
 		if (return_names.size() < column_name_alias.size()) {
 			row_number->alias = column_name_alias[return_names.size()];
-			return_names.push_back(column_name_alias[return_names.size()]);
+			ordinality_alias = column_name_alias[return_names.size()];
 		} else {
 			row_number->alias = ordinality_column_name;
-			return_names.push_back(ordinality_column_name);
 		}
+		return_names.push_back(ordinality_alias);
 		return_types.push_back(LogicalType::BIGINT);
 		window->expressions.push_back(std::move(row_number));
 		window->types.push_back(LogicalType::BIGINT);
 		window->children.push_back(std::move(get));
-		bind_context.AddGenericBinding(window_index, function_name, {ordinality_column_name}, {LogicalType::BIGINT});
+		bind_context.AddGenericBinding(window_index, function_name, {ordinality_alias}, {LogicalType::BIGINT});
 
 		BoundStatement result;
 		result.names = std::move(return_names);
