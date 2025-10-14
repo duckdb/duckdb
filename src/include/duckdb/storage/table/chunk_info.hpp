@@ -108,7 +108,7 @@ public:
 
 public:
 	explicit ChunkVectorInfo(FixedSizeAllocator &allocator, idx_t start, transaction_t insert_id = 0);
-	~ChunkVectorInfo() final;
+	~ChunkVectorInfo() override;
 
 public:
 	idx_t GetSelVector(transaction_t start_time, transaction_t transaction_id, SelectionVector &sel_vector,
