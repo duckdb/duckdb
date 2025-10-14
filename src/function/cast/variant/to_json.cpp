@@ -32,7 +32,9 @@ struct JSONConverter {
 	}
 
 	template <typename T>
-	static yyjson_mut_val *VisitInteger(T val, yyjson_mut_doc *doc);
+	static yyjson_mut_val *VisitInteger(T val, yyjson_mut_doc *doc) {
+		throw InternalException("JSONConverter::VisitInteger not implemented!");
+	}
 
 	template <>
 	yyjson_mut_val *VisitInteger<int8_t>(int8_t val, yyjson_mut_doc *doc) {

@@ -178,7 +178,9 @@ struct ValueConverter {
 	}
 
 	template <typename T>
-	static Value VisitInteger(T val);
+	static Value VisitInteger(T val) {
+		throw InternalException("ValueConverter::VisitInteger not implemented!");
+	}
 
 	// Explicit specializations for each integer type
 	template <>

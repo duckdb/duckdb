@@ -4,6 +4,7 @@
 #include "duckdb/function/scalar/variant_utils.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/types/decimal.hpp"
 
 namespace duckdb {
 
