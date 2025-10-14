@@ -5,9 +5,6 @@
 statement ok
 PRAGMA enable_verification
 
-# statement ok
-# set retain_unnest_parent_names=true;
-
 query II
 SELECT unnest([{'a':{ 'aa': 42}, 'b':{'bb': 84}}], recursive := true, keep_parent_names := true);
 ----
@@ -48,3 +45,21 @@ PRAGMA table_info('test_v4')
 ----
 0	a	INTEGER	0	NULL	0
 1	bbb	INTEGER	0	NULL	0
+
+statement ok
+CREATE TABLE test_v5 AS SELECT unnest([{'a': 12, 'b': {'bb': {'bbb': 12}}}], recursive := true, max_depth := 3, keep_parent_names := true);
+
+query ITTTTT
+PRAGMA table_info('test_v5')
+----
+0	a	INTEGER	0	NULL	0
+1	b.bb	STRUCT(bbb INTEGER)	0	NULL	0
+
+statement ok
+CREATE TABLE test_v6 AS SELECT unnest([{'a': 12, 'b': {'bb': {'bbb': 12}}}], recursive := true, max_depth := 2, keep_parent_names := true);
+
+query ITTTTT
+PRAGMA table_info('test_v6')
+----
+0	a	INTEGER	0	NULL	0
+1	b	STRUCT(bb STRUCT(bbb INTEGER))	0	NULL	0

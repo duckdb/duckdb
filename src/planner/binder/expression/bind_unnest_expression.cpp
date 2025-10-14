@@ -19,11 +19,11 @@
 
 namespace duckdb {
 
-unique_ptr<Expression> CreateBoundStructExtract(ClientContext &context, unique_ptr<Expression> expr, const string &key,
+unique_ptr<Expression> CreateBoundStructExtract(ClientContext &context, unique_ptr<Expression> expr,
                                                 const vector<string> &key_path, bool keep_parent_names) {
 	vector<unique_ptr<Expression>> arguments;
 	arguments.push_back(std::move(expr));
-	arguments.push_back(make_uniq<BoundConstantExpression>(Value(key)));
+	arguments.push_back(make_uniq<BoundConstantExpression>(Value(key_path.back())));
 	auto extract_function = GetKeyExtractFunction();
 	auto bind_info = extract_function.bind(context, extract_function, arguments);
 	auto return_type = extract_function.return_type;
@@ -32,14 +32,13 @@ unique_ptr<Expression> CreateBoundStructExtract(ClientContext &context, unique_p
 
 	if (keep_parent_names) {
 		vector<string> full_path = key_path;
-		full_path.push_back(key);
 		auto alias = StringUtil::Join(full_path, ".");
 		if (!alias.empty() && alias[0] == '.') {
 			alias = alias.substr(1);
 		}
 		result->SetAlias(alias);
 	} else {
-		result->SetAlias(key);
+		result->SetAlias(key_path[0]);
 	}
 	return std::move(result);
 }
@@ -248,8 +247,9 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 							if (keep_parent_names && expr->type == ExpressionType::BOUND_FUNCTION) {
 								current_key_path.push_back(expr->alias);
 							}
-							new_expressions.push_back(CreateBoundStructExtract(context, expr->Copy(), entry.first,
-							                                                   current_key_path, keep_parent_names));
+							current_key_path.push_back(entry.first);
+							new_expressions.push_back(
+							    CreateBoundStructExtract(context, expr->Copy(), current_key_path, keep_parent_names));
 						}
 					}
 					has_structs = true;
