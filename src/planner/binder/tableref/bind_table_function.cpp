@@ -303,7 +303,7 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 
 	if (ref.with_ordinality == OrdinalityType::WITH_ORDINALITY && correlated_columns.empty()) {
 		bind_context.AddTableFunction(bind_index, function_name, return_names, return_types, get->GetMutableColumnIds(),
-								  get->GetTable().get(), std::move(virtual_columns));
+		                              get->GetTable().get(), std::move(virtual_columns));
 
 		auto window_index = GenerateTableIndex();
 		auto window = make_uniq<duckdb::LogicalWindow>(window_index);
