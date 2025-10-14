@@ -292,7 +292,7 @@ void Vector::Dictionary(buffer_ptr<VectorChildBuffer> reusable_dict, const Selec
 	D_ASSERT(type.InternalType() != PhysicalType::STRUCT);
 	D_ASSERT(type == reusable_dict->data.GetType());
 	vector_type = VectorType::DICTIONARY_VECTOR;
-	data = nullptr;
+	data = reusable_dict->data.data;
 	validity.Reset();
 
 	auto dict_buffer = make_buffer<DictionaryBuffer>(sel);
