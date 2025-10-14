@@ -200,9 +200,10 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 	vector<string> source_names;
 	for (auto &binding_entry : source_binder->bind_context.GetBindingsList()) {
 		auto &binding = *binding_entry;
-		for (idx_t c = 0; c < binding.names.size(); c++) {
-			source_aliases.push_back(binding.alias);
-			source_names.push_back(binding.names[c]);
+		auto &column_names = binding.GetColumnNames();
+		for (idx_t c = 0; c < column_names.size(); c++) {
+			source_aliases.push_back(binding.GetBindingAlias());
+			source_names.push_back(column_names[c]);
 		}
 	}
 

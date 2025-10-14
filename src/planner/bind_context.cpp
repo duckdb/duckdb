@@ -38,16 +38,17 @@ optional_ptr<Binding> BindContext::GetMatchingBinding(const string &column_name)
 	optional_ptr<Binding> result;
 	for (auto &binding_ptr : bindings_list) {
 		auto &binding = *binding_ptr;
-		auto is_using_binding = GetUsingBinding(column_name, binding.alias);
+		auto is_using_binding = GetUsingBinding(column_name, binding.GetBindingAlias());
 		if (is_using_binding) {
 			continue;
 		}
 		if (binding.HasMatchingBinding(column_name)) {
 			if (result || is_using_binding) {
-				throw BinderException("Ambiguous reference to column name \"%s\" (use: \"%s.%s\" "
-				                      "or \"%s.%s\")",
-				                      column_name, MinimumUniqueAlias(result->alias, binding.alias), column_name,
-				                      MinimumUniqueAlias(binding.alias, result->alias), column_name);
+				throw BinderException(
+				    "Ambiguous reference to column name \"%s\" (use: \"%s.%s\" "
+				    "or \"%s.%s\")",
+				    column_name, MinimumUniqueAlias(result->GetBindingAlias(), binding.GetBindingAlias()), column_name,
+				    MinimumUniqueAlias(binding.GetBindingAlias(), result->GetBindingAlias()), column_name);
 			}
 			result = &binding;
 		}
@@ -58,8 +59,8 @@ optional_ptr<Binding> BindContext::GetMatchingBinding(const string &column_name)
 vector<string> BindContext::GetSimilarBindings(const string &column_name) {
 	vector<pair<string, double>> scores;
 	for (auto &binding_ptr : bindings_list) {
-		auto binding = *binding_ptr;
-		for (auto &name : binding.names) {
+		auto &binding = *binding_ptr;
+		for (auto &name : binding.GetColumnNames()) {
 			double distance = StringUtil::SimilarityRating(name, column_name);
 			// check if we need to qualify the column
 			auto matching_bindings = GetMatchingBindings(name);
@@ -157,7 +158,7 @@ string BindContext::GetActualColumnName(Binding &binding, const string &column_n
 		throw InternalException("Binding with name \"%s\" does not have a column named \"%s\"", binding.GetAlias(),
 		                        column_name);
 	} // LCOV_EXCL_STOP
-	return binding.names[binding_index];
+	return binding.GetColumnNames()[binding_index];
 }
 
 string BindContext::GetActualColumnName(const BindingAlias &binding_alias, const string &column_name) {
@@ -200,7 +201,7 @@ unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &ta
 }
 
 static bool ColumnIsGenerated(Binding &binding, column_t index) {
-	if (binding.binding_type != BindingType::TABLE) {
+	if (binding.GetBindingType() != BindingType::TABLE) {
 		return false;
 	}
 	auto &table_binding = binding.Cast<TableBinding>();
@@ -239,10 +240,12 @@ unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &ca
 	auto column_index = binding->GetBindingIndex(column_name);
 	if (bind_type == ColumnBindType::EXPAND_GENERATED_COLUMNS && ColumnIsGenerated(*binding, column_index)) {
 		return ExpandGeneratedColumn(binding->Cast<TableBinding>(), column_name);
-	} else if (column_index < binding->names.size() && binding->names[column_index] != column_name) {
+	}
+	auto &column_names = binding->GetColumnNames();
+	if (column_index < column_names.size() && column_names[column_index] != column_name) {
 		// because of case insensitivity in the binder we rename the column to the original name
 		// as it appears in the binding itself
-		result->SetAlias(binding->names[column_index]);
+		result->SetAlias(column_names[column_index]);
 	}
 	return std::move(result);
 }
@@ -251,14 +254,6 @@ unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &sc
                                                                 const string &column_name, ColumnBindType bind_type) {
 	string catalog_name;
 	return CreateColumnReference(catalog_name, schema_name, table_name, column_name, bind_type);
-}
-
-optional_ptr<Binding> BindContext::GetCTEBinding(const string &ctename) {
-	auto match = cte_bindings.find(ctename);
-	if (match == cte_bindings.end()) {
-		return nullptr;
-	}
-	return match->second.get();
 }
 
 string GetCandidateAlias(const BindingAlias &main_alias, const BindingAlias &new_alias) {
@@ -279,7 +274,7 @@ vector<reference<Binding>> BindContext::GetBindings(const BindingAlias &alias, E
 	}
 	vector<reference<Binding>> matching_bindings;
 	for (auto &binding : bindings_list) {
-		if (binding->alias.Matches(alias)) {
+		if (binding->GetBindingAlias().Matches(alias)) {
 			matching_bindings.push_back(*binding);
 		}
 	}
@@ -287,7 +282,7 @@ vector<reference<Binding>> BindContext::GetBindings(const BindingAlias &alias, E
 		// alias not found in this BindContext
 		vector<string> candidates;
 		for (auto &binding : bindings_list) {
-			candidates.push_back(GetCandidateAlias(alias, binding->alias));
+			candidates.push_back(GetCandidateAlias(alias, binding->GetBindingAlias()));
 		}
 		auto main_alias = GetCandidateAlias(alias, alias);
 		string candidate_str =
@@ -311,14 +306,14 @@ string BindContext::AmbiguityException(const BindingAlias &alias, const vector<r
 			}
 		}
 		// find the minimum alias that uniquely describes this table reference
-		auto &current_alias = bindings[i].get().alias;
+		auto &current_alias = bindings[i].get().GetBindingAlias();
 		string minimum_alias;
 		bool duplicate_alias = false;
 		for (idx_t k = 0; k < bindings.size(); k++) {
 			if (k == i) {
 				continue;
 			}
-			auto &other_alias = bindings[k].get().alias;
+			auto &other_alias = bindings[k].get().GetBindingAlias();
 			if (current_alias == other_alias) {
 				duplicate_alias = true;
 			}
@@ -417,16 +412,17 @@ string BindContext::BindColumn(PositionalReferenceExpression &ref, string &table
 	idx_t current_position = ref.index - 1;
 	for (auto &entry : bindings_list) {
 		auto &binding = *entry;
-		idx_t entry_column_count = binding.names.size();
+		auto &column_names = binding.GetColumnNames();
+		idx_t entry_column_count = column_names.size();
 		if (ref.index == 0) {
 			// this is a row id
-			table_name = binding.alias.GetAlias();
+			table_name = binding.GetAlias();
 			column_name = "rowid";
 			return string();
 		}
 		if (current_position < entry_column_count) {
-			table_name = binding.alias.GetAlias();
-			column_name = binding.names[current_position];
+			table_name = binding.GetAlias();
+			column_name = column_names[current_position];
 			return string();
 		} else {
 			total_columns += entry_column_count;
@@ -491,13 +487,15 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 		reference_set_t<UsingColumnSet> handled_using_columns;
 		for (auto &entry : bindings_list) {
 			auto &binding = *entry;
-			for (auto &column_name : binding.names) {
-				QualifiedColumnName qualified_column(binding.alias, column_name);
+			auto &column_names = binding.GetColumnNames();
+			auto &binding_alias = binding.GetBindingAlias();
+			for (auto &column_name : column_names) {
+				QualifiedColumnName qualified_column(binding_alias, column_name);
 				if (CheckExclusionList(expr, qualified_column, exclusion_info)) {
 					continue;
 				}
 				// check if this column is a USING column
-				auto using_binding_ptr = GetUsingBinding(column_name, binding.alias);
+				auto using_binding_ptr = GetUsingBinding(column_name, binding_alias);
 				if (using_binding_ptr) {
 					auto &using_binding = *using_binding_ptr;
 					// it is!
@@ -526,7 +524,7 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 					continue;
 				}
 				auto new_expr =
-				    CreateColumnReference(binding.alias, column_name, ColumnBindType::DO_NOT_EXPAND_GENERATED_COLUMNS);
+				    CreateColumnReference(binding_alias, column_name, ColumnBindType::DO_NOT_EXPAND_GENERATED_COLUMNS);
 				HandleRename(expr, qualified_column, *new_expr);
 				new_select_list.push_back(std::move(new_expr));
 			}
@@ -544,17 +542,20 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 			}
 			is_struct_ref = true;
 		}
+		auto &binding_alias = binding->GetBindingAlias();
+		auto &column_names = binding->GetColumnNames();
+		auto &column_types = binding->GetColumnTypes();
 
 		if (is_struct_ref) {
 			auto col_idx = binding->GetBindingIndex(expr.relation_name);
-			auto col_type = binding->types[col_idx];
+			auto col_type = column_types[col_idx];
 			if (col_type.id() != LogicalTypeId::STRUCT) {
 				throw BinderException(StringUtil::Format(
 				    "Cannot extract field from expression \"%s\" because it is not a struct", expr.ToString()));
 			}
 			auto &struct_children = StructType::GetChildTypes(col_type);
 			vector<string> column_names(3);
-			column_names[0] = binding->alias.GetAlias();
+			column_names[0] = binding->GetAlias();
 			column_names[1] = expr.relation_name;
 			for (auto &child : struct_children) {
 				QualifiedColumnName qualified_name(child.first);
@@ -567,13 +568,13 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 				new_select_list.push_back(std::move(new_expr));
 			}
 		} else {
-			for (auto &column_name : binding->names) {
-				QualifiedColumnName qualified_name(binding->alias, column_name);
+			for (auto &column_name : column_names) {
+				QualifiedColumnName qualified_name(binding_alias, column_name);
 				if (CheckExclusionList(expr, qualified_name, exclusion_info)) {
 					continue;
 				}
 				auto new_expr =
-				    CreateColumnReference(binding->alias, column_name, ColumnBindType::DO_NOT_EXPAND_GENERATED_COLUMNS);
+				    CreateColumnReference(binding_alias, column_name, ColumnBindType::DO_NOT_EXPAND_GENERATED_COLUMNS);
 				HandleRename(expr, qualified_name, *new_expr);
 				new_select_list.push_back(std::move(new_expr));
 			}
@@ -609,10 +610,12 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 void BindContext::GetTypesAndNames(vector<string> &result_names, vector<LogicalType> &result_types) {
 	for (auto &binding_entry : bindings_list) {
 		auto &binding = *binding_entry;
-		D_ASSERT(binding.names.size() == binding.types.size());
-		for (idx_t i = 0; i < binding.names.size(); i++) {
-			result_names.push_back(binding.names[i]);
-			result_types.push_back(binding.types[i]);
+		auto &column_names = binding.GetColumnNames();
+		auto &column_types = binding.GetColumnTypes();
+		D_ASSERT(column_names.size() == column_types.size());
+		for (idx_t i = 0; i < column_names.size(); i++) {
+			result_names.push_back(column_names[i]);
+			result_types.push_back(column_types[i]);
 		}
 	}
 }
@@ -708,19 +711,28 @@ void BindContext::AddGenericBinding(idx_t index, const string &alias, const vect
 	AddBinding(make_uniq<Binding>(BindingType::BASE, BindingAlias(alias), types, names, index));
 }
 
-void BindContext::AddCTEBinding(idx_t index, const string &alias, const vector<string> &names,
-                                const vector<LogicalType> &types, bool using_key) {
-	auto binding = make_uniq<CTEBinding>(BindingAlias(alias), types, names, index);
-
-	if (cte_bindings.find(alias) != cte_bindings.end()) {
-		throw BinderException("Duplicate CTE binding \"%s\" in query!", alias);
+void BindContext::AddCTEBinding(unique_ptr<CTEBinding> binding) {
+	for (auto &cte_binding : cte_bindings) {
+		if (cte_binding->GetBindingAlias() == binding->GetBindingAlias()) {
+			throw BinderException("Duplicate CTE binding \"%s\" in query!", binding->GetBindingAlias().ToString());
+		}
 	}
-	cte_bindings[alias] = std::move(binding);
+	cte_bindings.push_back(std::move(binding));
+}
 
-	if (using_key) {
-		auto recurring_alias = "recurring." + alias;
-		cte_bindings[recurring_alias] = make_uniq<CTEBinding>(BindingAlias(recurring_alias), types, names, index);
+void BindContext::AddCTEBinding(idx_t index, BindingAlias alias_p, const vector<string> &names,
+                                const vector<LogicalType> &types, CTEType cte_type) {
+	auto binding = make_uniq<CTEBinding>(std::move(alias_p), types, names, index, cte_type);
+	AddCTEBinding(std::move(binding));
+}
+
+optional_ptr<CTEBinding> BindContext::GetCTEBinding(const BindingAlias &ctename) {
+	for (auto &binding : cte_bindings) {
+		if (binding->GetBindingAlias().Matches(ctename)) {
+			return binding.get();
+		}
 	}
+	return nullptr;
 }
 
 void BindContext::AddContext(BindContext other) {
@@ -737,7 +749,7 @@ void BindContext::AddContext(BindContext other) {
 vector<BindingAlias> BindContext::GetBindingAliases() {
 	vector<BindingAlias> result;
 	for (auto &binding : bindings_list) {
-		result.push_back(BindingAlias(binding->alias));
+		result.push_back(binding->GetBindingAlias());
 	}
 	return result;
 }
@@ -764,7 +776,7 @@ void BindContext::RemoveContext(const vector<BindingAlias> &aliases) {
 
 		// remove the binding from the list of bindings
 		auto it = std::remove_if(bindings_list.begin(), bindings_list.end(),
-		                         [&](unique_ptr<Binding> &x) { return x->alias == alias; });
+		                         [&](unique_ptr<Binding> &x) { return x->GetBindingAlias() == alias; });
 		bindings_list.erase(it, bindings_list.end());
 	}
 }

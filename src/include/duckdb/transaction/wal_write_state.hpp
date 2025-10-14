@@ -31,7 +31,7 @@ public:
 	void CommitEntry(UndoFlags type, data_ptr_t data);
 
 private:
-	void SwitchTable(DataTableInfo *table, UndoFlags new_op);
+	void SwitchTable(DataTableInfo &table, UndoFlags new_op);
 
 	void WriteCatalogEntry(CatalogEntry &entry, data_ptr_t extra_data);
 	void WriteDelete(DeleteInfo &info);
