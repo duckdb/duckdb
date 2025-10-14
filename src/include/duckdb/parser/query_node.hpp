@@ -60,8 +60,6 @@ public:
 	//! CTEs (used by SelectNode and SetOperationNode)
 	CommonTableExpressionMap cte_map;
 
-	virtual const vector<unique_ptr<ParsedExpression>> &GetSelectList() const = 0;
-
 public:
 	//! Convert the query node to a string
 	virtual string ToString() const = 0;
