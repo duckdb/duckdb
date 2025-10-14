@@ -317,7 +317,7 @@ def main():
     if args.allow_no_checks:
         common_clang_tidy_args.append("--allow-no-checks")
     for arg in args.extra_arg:
-        common_clang_tidy_args.append("-extra-arg=%s" % arg)
+        common_clang_tidy_args.append("--extra-arg=%s" % arg)
     for arg in args.extra_arg_before:
         common_clang_tidy_args.append("-extra-arg-before=%s" % arg)
     for plugin in args.plugins:

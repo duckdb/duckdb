@@ -95,7 +95,7 @@ def get_tidy_invocation(
         os.close(handle)
         start.append(name)
     for arg in extra_arg:
-        start.append('-extra-arg=%s' % arg)
+        start.append('--extra-arg=%s' % arg)
     for arg in extra_arg_before:
         start.append('-extra-arg-before=%s' % arg)
     start.append('-p=' + build_path)
