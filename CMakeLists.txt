@@ -398,10 +398,6 @@ endif()
 
 message(STATUS "git hash ${GIT_COMMIT_HASH}, version ${DUCKDB_VERSION}, extension folder ${DUCKDB_NORMALIZED_VERSION}")
 
-option(AMALGAMATION_BUILD
-       "Build from the amalgamation files, rather than from the normal sources."
-       FALSE)
-
 option(BUILD_MAIN_DUCKDB_LIBRARY
         "Build the main duckdb library and executable."
         TRUE)
@@ -823,6 +819,7 @@ function(link_extension_libraries LIBRARY LINKAGE)
       target_link_libraries(${LIBRARY} ${LINKAGE} ${EXT_NAME}_extension)
     endif()
   endforeach()
+  target_link_libraries(${LIBRARY} ${LINKAGE} duckdb_generated_extension_loader)
 endfunction()
 
 function(link_threads LIBRARY LINKAGE)
@@ -1321,6 +1318,8 @@ endforeach()
 if (BUILD_MAIN_DUCKDB_LIBRARY)
   add_subdirectory(src)
   add_subdirectory(tools)
+  add_subdirectory(extension)
+
 endif()
 
 # Add subdirectories for registered extensions

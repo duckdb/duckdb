@@ -1,7 +1,6 @@
 # don't export any symbols from the third party stuff
 set(CMAKE_C_VISIBILITY_PRESET hidden)
 
-if(NOT AMALGAMATION_BUILD)
   add_subdirectory(fmt)
   add_subdirectory(libpg_query)
   add_subdirectory(re2)
@@ -14,13 +13,11 @@ if(NOT AMALGAMATION_BUILD)
   add_subdirectory(fsst)
   add_subdirectory(yyjson)
   add_subdirectory(zstd)
+
+if(${BUILD_TPCE})
+  add_subdirectory(tpce-tool)
 endif()
 
-if(NOT WIN32
-   AND NOT SUN
-   AND ${BUILD_UNITTESTS})
+if (${BUILD_BENCHMARKS})
   add_subdirectory(imdb)
-  if(${BUILD_TPCE})
-    add_subdirectory(tpce-tool)
-  endif()
 endif()
