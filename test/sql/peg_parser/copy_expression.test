@@ -5,7 +5,7 @@
 require autocomplete
 
 statement ok
-CALL check_peg_parser($TEST_PEG_PARSER$COPY (SELECT * FROM foo) TO ('foo') WITH (HEADER)$TEST_PEG_PARSER$);
+CALL check_peg_parser($TEST_PEG_PARSER$COPY (SELECT * FROM foo) TO ('foo')$TEST_PEG_PARSER$);
 
 statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$COPY (SELECT * FROM range(5) t(i)) TO (getvariable('copy_target')) WITH (HEADER)$TEST_PEG_PARSER$);
