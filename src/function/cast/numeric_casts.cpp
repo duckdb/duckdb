@@ -44,6 +44,8 @@ static BoundCastInfo InternalNumericCastSwitch(const LogicalType &source, const 
 		return BoundCastInfo(&VectorCastHelpers::StringCast<SRC, duckdb::NumericTryCastToBit>);
 	case LogicalTypeId::BIGNUM:
 		return Bignum::NumericToBignumCastSwitch(source);
+	case LogicalTypeId::UUID:
+		return BoundCastInfo(&VectorCastHelpers::TryCastStringLoop<SRC, hugeint_t, duckdb::TryCastToUUID>);
 	default:
 		return DefaultCasts::TryVectorNullCast;
 	}

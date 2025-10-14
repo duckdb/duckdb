@@ -1525,6 +1525,15 @@ bool TryCastToUUID::Operation(string_t input, hugeint_t &result, Vector &result_
 	return UUID::FromString(input.GetString(), result, parameters.strict);
 }
 
+template <>
+bool TryCastToUUID::Operation(hugeint_t input, hugeint_t &result, Vector &result_vector, CastParameters &parameters) {
+	result.lower = input.lower;
+	result.upper = input.upper;
+	// Flip the first bit to make `order by uuid` same as `order by uuid::varchar`
+	result.upper ^= NumericLimits<int64_t>::Minimum();
+	return true;
+}
+
 //===--------------------------------------------------------------------===//
 // Cast Blob To UUID
 //===--------------------------------------------------------------------===//
