@@ -23,6 +23,7 @@ unique_ptr<Expression> CreateBoundStructExtract(ClientContext &context, unique_p
                                                 const vector<string> &key_path, bool keep_parent_names) {
 	vector<unique_ptr<Expression>> arguments;
 	arguments.push_back(std::move(expr));
+	D_ASSERT(!key_path.empty());
 	arguments.push_back(make_uniq<BoundConstantExpression>(Value(key_path.back())));
 	auto extract_function = GetKeyExtractFunction();
 	auto bind_info = extract_function.bind(context, extract_function, arguments);

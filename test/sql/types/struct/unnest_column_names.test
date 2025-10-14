@@ -63,3 +63,18 @@ PRAGMA table_info('test_v6')
 ----
 0	a	INTEGER	0	NULL	0
 1	b	STRUCT(bb STRUCT(bbb INTEGER))	0	NULL	0
+
+query I
+select column_name from (describe SELECT unnest([{'a':{ 'aa': 42}, 'b': 84}], recursive := true, keep_parent_names := true));
+----
+a.aa
+b
+
+statement ok
+CREATE TABLE test_v7 as select * from (select unnest({'a': {'aa':1}, 'b':2}, recursive := true, keep_parent_names := true));
+
+query ITTTTT
+PRAGMA table_info('test_v7')
+----
+0	a.aa	INTEGER	0	NULL	0
+1	b	INTEGER	0	NULL	0
