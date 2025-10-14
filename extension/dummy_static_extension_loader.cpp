@@ -7,4 +7,9 @@ namespace duckdb {
 void ExtensionHelper::LoadAllExtensions(DuckDB &db) {
 	// nop
 }
+
+vector<string> ExtensionHelper::LoadedExtensionTestPaths(){
+	return {};
+}
+
 } // namespace duckdb
