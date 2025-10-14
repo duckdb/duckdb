@@ -198,18 +198,6 @@ void CSVWriter::ResetInternal(optional_ptr<CSVWriterState> local_state) {
 	bytes_written = 0;
 }
 
-unique_ptr<CSVWriterState> CSVWriter::InitializeLocalWriteState(ClientContext &context, idx_t flush_size) {
-	auto res = make_uniq<CSVWriterState>(context, flush_size);
-	res->stream = make_uniq<MemoryStream>();
-	return res;
-}
-
-unique_ptr<CSVWriterState> CSVWriter::InitializeLocalWriteState(DatabaseInstance &db, idx_t flush_size) {
-	auto res = make_uniq<CSVWriterState>(db, flush_size);
-	res->stream = make_uniq<MemoryStream>();
-	return res;
-}
-
 idx_t CSVWriter::BytesWritten() {
 	if (shared) {
 		lock_guard<mutex> flock(lock);
