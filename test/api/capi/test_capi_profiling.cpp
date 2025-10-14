@@ -320,3 +320,59 @@ TEST_CASE("Test profiling with Extra Info enabled", "[capi]") {
 	duckdb_destroy_value(&map);
 	tester.Cleanup();
 }
+
+TEST_CASE("Test profiling with the appender", "[capi]") {
+	CAPITester tester;
+	duckdb::unique_ptr<CAPIResult> result;
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	tester.Query("CREATE TABLE tbl (i INT PRIMARY KEY, value VARCHAR)");
+	tester.Query("INSERT INTO tbl VALUES (1, 'hello')");
+	REQUIRE_NO_FAIL(tester.Query("PRAGMA enable_profiling = 'no_output'"));
+	duckdb_appender appender;
+
+	string query = "INSERT OR REPLACE INTO tbl SELECT i, val FROM my_appended_data";
+	duckdb_logical_type types[2];
+	types[0] = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
+	types[1] = duckdb_create_logical_type(DUCKDB_TYPE_VARCHAR);
+
+	const char *column_names[2];
+	column_names[0] = "i";
+	column_names[1] = "val";
+
+	idx_t column_count = 2;
+
+	auto status = duckdb_appender_create_query(tester.connection, query.c_str(), column_count, types,
+	                                           "my_appended_data", column_names, &appender);
+	duckdb_destroy_logical_type(&types[0]);
+	duckdb_destroy_logical_type(&types[1]);
+	REQUIRE(status == DuckDBSuccess);
+	REQUIRE(duckdb_appender_error(appender) == nullptr);
+
+	REQUIRE(duckdb_appender_begin_row(appender) == DuckDBSuccess);
+	REQUIRE(duckdb_append_int32(appender, 1) == DuckDBSuccess);
+	REQUIRE(duckdb_append_varchar(appender, "hello world") == DuckDBSuccess);
+	REQUIRE(duckdb_appender_end_row(appender) == DuckDBSuccess);
+
+	REQUIRE(duckdb_appender_flush(appender) == DuckDBSuccess);
+	REQUIRE(duckdb_appender_close(appender) == DuckDBSuccess);
+	REQUIRE(duckdb_appender_destroy(&appender) == DuckDBSuccess);
+
+	auto info = duckdb_get_profiling_info(tester.connection);
+	REQUIRE(info);
+
+	// Check that the query name matches the appender query.
+	auto query_name = duckdb_profiling_info_get_value(info, "QUERY_NAME");
+	REQUIRE(query_name);
+	auto query_name_c_str = duckdb_get_varchar(query_name);
+	auto query_name_str = duckdb::string(query_name_c_str);
+	REQUIRE(query_name_str == "INSERT OR REPLACE INTO tbl SELECT i, val FROM my_appended_data");
+	duckdb_destroy_value(&query_name);
+	duckdb_free(query_name_c_str);
+
+	duckdb::map<string, double> cumulative_counter;
+	duckdb::map<string, double> cumulative_result;
+
+	TraverseTree(info, cumulative_counter, cumulative_result, 0);
+	tester.Cleanup();
+}
