@@ -1,5 +1,5 @@
 {
-  "description": "Test PEG Parser + transformer with fallback mode",
+  "description": "Test PEG Parser + transformer in strict mode",
   "skip_compiled": "true",
   "on_init": "set allow_parser_override_extension=strict;",
   "statically_loaded_extensions": [
