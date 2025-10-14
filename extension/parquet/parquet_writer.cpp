@@ -36,8 +36,6 @@ using duckdb_parquet::PageType;
 using ParquetRowGroup = duckdb_parquet::RowGroup;
 using duckdb_parquet::Type;
 
-constexpr const char *FieldID::DUCKDB_FIELD_ID;
-
 class MyTransport : public TTransport {
 public:
 	explicit MyTransport(WriteStream &serializer) : serializer(serializer) {
