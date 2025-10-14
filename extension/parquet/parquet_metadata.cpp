@@ -61,6 +61,9 @@ public:
 	virtual void InitializeInternal(ClientContext &context) {};
 	virtual idx_t TotalRowCount() = 0;
 	virtual void ReadRow(vector<Vector *> &output, idx_t output_idx, idx_t row_idx) = 0;
+	virtual bool ForceFlush() {
+		return false;
+	}
 
 protected:
 	ParquetReader *reader;
@@ -824,15 +827,17 @@ public:
 	void InitializeInternal(ClientContext &context) override;
 	idx_t TotalRowCount() override;
 	void ReadRow(vector<Vector *> &output, idx_t output_idx, idx_t row_idx) override;
+	bool ForceFlush() override {
+		return true;
+	}
+
+private:
+	void PopulateMetadata(ParquetMetadataFileProcessor &processor, Vector &output, idx_t output_idx);
 
 	ParquetFileMetadataProcessor file_processor;
 	ParquetRowGroupMetadataProcessor row_group_processor;
 	ParquetSchemaProcessor schema_processor;
 	ParquetKeyValueMetadataProcessor kv_processor;
-
-private:
-	// Helper function to populate metadata for a specific processor
-	void PopulateMetadata(ParquetMetadataFileProcessor &processor, Vector &output, idx_t output_idx);
 };
 
 void FullMetadataProcessor::PopulateMetadata(ParquetMetadataFileProcessor &processor, Vector &output,
@@ -1039,6 +1044,10 @@ void ParquetMetaDataOperator::Function(ClientContext &context, TableFunctionInpu
 		}
 		output_count += rows_to_output;
 		local_state.row_idx += rows_to_output;
+
+		if (local_state.processor->ForceFlush()) {
+			break;
+		}
 	}
 }
 
