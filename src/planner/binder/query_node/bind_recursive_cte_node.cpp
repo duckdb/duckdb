@@ -76,6 +76,18 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 		D_ASSERT(expr->type == ExpressionType::FUNCTION);
 		auto &func_expr = expr->Cast<FunctionExpression>();
 
+		if (func_expr.filter) {
+			throw BinderException(func_expr.filter->GetQueryLocation(), "FILTER clause is not yet supported for aggregates in USING KEY");
+		}
+
+		if (!func_expr.order_bys->orders.empty()) {
+			throw BinderException(func_expr.GetQueryLocation(), "ORDER BY clause is not yet supported for aggregates in USING KEY");
+		}
+
+		if (func_expr.distinct) {
+			throw BinderException(func_expr.GetQueryLocation(), "DISTINCT is not yet supported for aggregates in USING KEY");
+		}
+
 		// Look up the aggregate function in the catalog
 		auto &func = Catalog::GetSystemCatalog(context).GetEntry<AggregateFunctionCatalogEntry>(
 		    context, DEFAULT_SCHEMA, func_expr.function_name);
