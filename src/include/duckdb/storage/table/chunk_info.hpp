@@ -153,11 +153,9 @@ private:
 	//! The transaction ids of the transactions that inserted the tuples (if any)
 	IndexPointer inserted_data;
 	transaction_t insert_id;
-	bool same_inserted_id;
 
 	//! The transaction ids of the transactions that deleted the tuples (if any)
 	IndexPointer deleted_data;
-	bool any_deleted;
 };
 
 } // namespace duckdb

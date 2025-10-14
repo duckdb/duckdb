@@ -131,13 +131,10 @@ unique_ptr<ChunkInfo> ChunkConstantInfo::Read(ReadStream &reader) {
 // Vector info
 //===--------------------------------------------------------------------===//
 ChunkVectorInfo::ChunkVectorInfo(FixedSizeAllocator &allocator_p, idx_t start, transaction_t insert_id_p)
-    : ChunkInfo(start, ChunkInfoType::VECTOR_INFO), allocator(allocator_p), insert_id(insert_id_p),
-      same_inserted_id(true), any_deleted(false) {
+    : ChunkInfo(start, ChunkInfoType::VECTOR_INFO), allocator(allocator_p), insert_id(insert_id_p) {
 }
 
 ChunkVectorInfo::~ChunkVectorInfo() {
-	D_ASSERT(any_deleted || deleted_data.Get() == 0);
-	D_ASSERT(!HasSingleInsertionId() || inserted_data.Get() == 0);
 	if (AnyDeleted()) {
 		allocator.Free(deleted_data);
 	}
@@ -253,9 +250,8 @@ IndexPointer ChunkVectorInfo::GetDeletedPointer() const {
 
 IndexPointer ChunkVectorInfo::GetInitializedInsertedPointer() {
 	if (HasSingleInsertionId()) {
-		same_inserted_id = false;
-
 		inserted_data = allocator.New();
+		inserted_data.SetMetadata(1);
 		auto segment = allocator.GetHandle(inserted_data);
 		auto inserted = segment.GetPtr<transaction_t>();
 		for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
@@ -267,9 +263,8 @@ IndexPointer ChunkVectorInfo::GetInitializedInsertedPointer() {
 
 IndexPointer ChunkVectorInfo::GetInitializedDeletedPointer() {
 	if (!AnyDeleted()) {
-		any_deleted = true;
-
 		deleted_data = allocator.New();
+		deleted_data.SetMetadata(1);
 		auto segment = allocator.GetHandle(deleted_data);
 		auto deleted = segment.GetPtr<transaction_t>();
 		for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
@@ -327,7 +322,7 @@ void ChunkVectorInfo::Append(idx_t start, idx_t end, transaction_t commit_id) {
 		insert_id = commit_id;
 		return;
 	}
-	if (same_inserted_id && insert_id == commit_id) {
+	if (HasSingleInsertionId() && insert_id == commit_id) {
 		// we are inserting again, but we have the same id as before - still the same insert id
 		return;
 	}
@@ -382,11 +377,11 @@ bool ChunkVectorInfo::HasDeletes() const {
 }
 
 bool ChunkVectorInfo::AnyDeleted() const {
-	return any_deleted;
+	return deleted_data.HasMetadata();
 }
 
 bool ChunkVectorInfo::HasSingleInsertionId() const {
-	return same_inserted_id;
+	return !inserted_data.HasMetadata();
 }
 
 idx_t ChunkVectorInfo::GetCommittedDeletedCount(idx_t max_count) const {
