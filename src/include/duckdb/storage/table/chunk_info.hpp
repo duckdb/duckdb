@@ -133,7 +133,8 @@ public:
 
 	bool HasDeletes() const override;
 	bool AnyDeleted() const;
-	bool HasSingleInsertionId() const;
+	bool HasConstantInsertionId() const;
+	transaction_t ConstantInsertId() const;
 
 	void Write(WriteStream &writer) const override;
 	static unique_ptr<ChunkInfo> Read(FixedSizeAllocator &allocator, ReadStream &reader);
@@ -152,7 +153,8 @@ private:
 	FixedSizeAllocator &allocator;
 	//! The transaction ids of the transactions that inserted the tuples (if any)
 	IndexPointer inserted_data;
-	transaction_t insert_id;
+	//! The constant insert id (if there is only one)
+	transaction_t constant_insert_id;
 
 	//! The transaction ids of the transactions that deleted the tuples (if any)
 	IndexPointer deleted_data;

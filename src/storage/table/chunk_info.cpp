@@ -131,14 +131,14 @@ unique_ptr<ChunkInfo> ChunkConstantInfo::Read(ReadStream &reader) {
 // Vector info
 //===--------------------------------------------------------------------===//
 ChunkVectorInfo::ChunkVectorInfo(FixedSizeAllocator &allocator_p, idx_t start, transaction_t insert_id_p)
-    : ChunkInfo(start, ChunkInfoType::VECTOR_INFO), allocator(allocator_p), insert_id(insert_id_p) {
+    : ChunkInfo(start, ChunkInfoType::VECTOR_INFO), allocator(allocator_p), constant_insert_id(insert_id_p) {
 }
 
 ChunkVectorInfo::~ChunkVectorInfo() {
 	if (AnyDeleted()) {
 		allocator.Free(deleted_data);
 	}
-	if (!HasSingleInsertionId()) {
+	if (!HasConstantInsertionId()) {
 		allocator.Free(inserted_data);
 	}
 }
@@ -146,16 +146,16 @@ ChunkVectorInfo::~ChunkVectorInfo() {
 template <class OP>
 idx_t ChunkVectorInfo::TemplatedGetSelVector(transaction_t start_time, transaction_t transaction_id,
                                              SelectionVector &sel_vector, idx_t max_count) const {
-	if (HasSingleInsertionId()) {
+	if (HasConstantInsertionId()) {
 		if (!AnyDeleted()) {
 			// all tuples have the same inserted id: and no tuples were deleted
-			if (OP::UseInsertedVersion(start_time, transaction_id, insert_id)) {
+			if (OP::UseInsertedVersion(start_time, transaction_id, ConstantInsertId())) {
 				return max_count;
 			} else {
 				return 0;
 			}
 		}
-		if (!OP::UseInsertedVersion(start_time, transaction_id, insert_id)) {
+		if (!OP::UseInsertedVersion(start_time, transaction_id, ConstantInsertId())) {
 			return 0;
 		}
 		// have to check deleted flag
@@ -216,8 +216,8 @@ idx_t ChunkVectorInfo::GetSelVector(TransactionData transaction, SelectionVector
 bool ChunkVectorInfo::Fetch(TransactionData transaction, row_t row) {
 	transaction_t fetch_insert_id;
 	transaction_t fetch_deleted_id;
-	if (HasSingleInsertionId()) {
-		fetch_insert_id = insert_id;
+	if (HasConstantInsertionId()) {
+		fetch_insert_id = ConstantInsertId();
 	} else {
 		auto insert_segment = allocator.GetHandle(GetInsertedPointer());
 		auto inserted = insert_segment.GetPtr<transaction_t>();
@@ -235,7 +235,7 @@ bool ChunkVectorInfo::Fetch(TransactionData transaction, row_t row) {
 }
 
 IndexPointer ChunkVectorInfo::GetInsertedPointer() const {
-	if (HasSingleInsertionId()) {
+	if (HasConstantInsertionId()) {
 		throw InternalException("ChunkVectorInfo: insert id requested but insertions were not initialized");
 	}
 	return inserted_data;
@@ -249,13 +249,15 @@ IndexPointer ChunkVectorInfo::GetDeletedPointer() const {
 }
 
 IndexPointer ChunkVectorInfo::GetInitializedInsertedPointer() {
-	if (HasSingleInsertionId()) {
+	if (HasConstantInsertionId()) {
+		transaction_t constant_id = ConstantInsertId();
+
 		inserted_data = allocator.New();
 		inserted_data.SetMetadata(1);
 		auto segment = allocator.GetHandle(inserted_data);
 		auto inserted = segment.GetPtr<transaction_t>();
 		for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
-			inserted[i] = insert_id;
+			inserted[i] = constant_id;
 		}
 	}
 	return inserted_data;
@@ -319,10 +321,10 @@ void ChunkVectorInfo::CommitDelete(transaction_t commit_id, const DeleteInfo &in
 void ChunkVectorInfo::Append(idx_t start, idx_t end, transaction_t commit_id) {
 	if (start == 0) {
 		// first insert to this vector - just assign the commit id
-		insert_id = commit_id;
+		constant_insert_id = commit_id;
 		return;
 	}
-	if (HasSingleInsertionId() && insert_id == commit_id) {
+	if (HasConstantInsertionId() && ConstantInsertId() == commit_id) {
 		// we are inserting again, but we have the same id as before - still the same insert id
 		return;
 	}
@@ -335,8 +337,8 @@ void ChunkVectorInfo::Append(idx_t start, idx_t end, transaction_t commit_id) {
 }
 
 void ChunkVectorInfo::CommitAppend(transaction_t commit_id, idx_t start, idx_t end) {
-	if (HasSingleInsertionId()) {
-		insert_id = commit_id;
+	if (HasConstantInsertionId()) {
+		constant_insert_id = commit_id;
 		return;
 	}
 	auto segment = allocator.GetHandle(GetInsertedPointer());
@@ -353,7 +355,7 @@ bool ChunkVectorInfo::Cleanup(transaction_t lowest_transaction, unique_ptr<Chunk
 		return false;
 	}
 	// check if the insertion markers have to be used by all transactions going forward
-	if (!HasSingleInsertionId()) {
+	if (!HasConstantInsertionId()) {
 		auto segment = allocator.GetHandle(GetInsertedPointer());
 		auto inserted = segment.GetPtr<transaction_t>();
 
@@ -364,7 +366,7 @@ bool ChunkVectorInfo::Cleanup(transaction_t lowest_transaction, unique_ptr<Chunk
 				return false;
 			}
 		}
-	} else if (insert_id > lowest_transaction) {
+	} else if (ConstantInsertId() > lowest_transaction) {
 		// transaction was inserted after the lowest transaction start
 		// we still need to use an older version - cannot compress
 		return false;
@@ -380,8 +382,15 @@ bool ChunkVectorInfo::AnyDeleted() const {
 	return deleted_data.HasMetadata();
 }
 
-bool ChunkVectorInfo::HasSingleInsertionId() const {
+bool ChunkVectorInfo::HasConstantInsertionId() const {
 	return !inserted_data.HasMetadata();
+}
+
+transaction_t ChunkVectorInfo::ConstantInsertId() const {
+	if (!HasConstantInsertionId()) {
+		throw InternalException("ConstantInsertId() called but vector info does not have a constant insertion id");
+	}
+	return constant_insert_id;
 }
 
 idx_t ChunkVectorInfo::GetCommittedDeletedCount(idx_t max_count) const {
