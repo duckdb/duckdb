@@ -399,7 +399,7 @@ void Node::Verify(ART &art) const {
 	case NType::LEAF_INLINED:
 		return;
 	case NType::LEAF:
-		Leaf::Verify(art, *this);
+		Leaf::DeprecatedVerify(art, *this);
 		return;
 	case NType::PREFIX: {
 		Prefix::Verify(art, *this);

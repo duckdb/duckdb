@@ -209,7 +209,7 @@ string Leaf::DeprecatedToString(ART &art, const Node &node) {
 	return str;
 }
 
-void Leaf::Verify(ART &art, const Node &node) {
+void Leaf::DeprecatedVerify(ART &art, const Node &node) {
 	D_ASSERT(node.GetType() == LEAF);
 
 	reference<const Node> ref(node);

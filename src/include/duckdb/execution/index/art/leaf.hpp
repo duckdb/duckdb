@@ -59,7 +59,7 @@ public:
 	static void DeprecatedVacuum(ART &art, Node &node);
 
 	//! Traverses and verifies the linked list of leaves.
-	static void Verify(ART &art, const Node &node);
+	static void DeprecatedVerify(ART &art, const Node &node);
 	//! Count the number of leaves.
 	void DeprecatedVerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_counts) const;
 
