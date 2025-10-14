@@ -45,7 +45,7 @@ unique_ptr<QueryNode> CTENode::Copy() const {
 // the below code fixes backwards and forwards compatibility of CTEs with the somewhat broken version of CTEs in v1.4
 // all of this code has been made obsolete with the CTE binding rework
 void QueryNode::ExtractCTENodes(unique_ptr<QueryNode> &query_node) {
-	if (!query_node->cte_map.map.empty()) {
+	if (query_node->cte_map.map.empty()) {
 		return;
 	}
 	vector<unique_ptr<CTENode>> materialized_ctes;
