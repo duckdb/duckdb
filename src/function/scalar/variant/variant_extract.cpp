@@ -28,8 +28,11 @@ BindData::BindData(const string &str) : FunctionData() {
 	component.key = str;
 }
 BindData::BindData(uint32_t index) : FunctionData() {
+	if (index == 0) {
+		throw BinderException("Extracting index 0 from VARIANT(ARRAY) is invalid, indexes are 1-based");
+	}
 	component.lookup_mode = VariantChildLookupMode::BY_INDEX;
-	component.index = index;
+	component.index = index - 1;
 }
 
 unique_ptr<FunctionData> BindData::Copy() const {
@@ -142,22 +145,26 @@ static void VariantExtractFunction(DataChunk &input, ExpressionState &state, Vec
 	}
 
 	//! Look up the value_index of the child we're extracting
-	auto child_collection_result =
-	    VariantUtils::FindChildValues(variant, component, optional_idx(), new_value_index_sel, nested_data, count);
-	if (!child_collection_result.Success()) {
-		if (child_collection_result.type == VariantChildDataCollectionResult::Type::INDEX_ZERO) {
-			throw InvalidInputException("Extracting index 0 from VARIANT(ARRAY) is invalid, indexes are 1-based");
+	ValidityMask lookup_validity(count);
+	VariantUtils::FindChildValues(variant, component, nullptr, new_value_index_sel, lookup_validity, nested_data,
+	                              count);
+	if (!lookup_validity.AllValid()) {
+		optional_idx index;
+		for (idx_t i = 0; i < count; i++) {
+			if (!lookup_validity.RowIsValid(i)) {
+				index = i;
+				break;
+			}
 		}
+		D_ASSERT(index.IsValid());
 		switch (component.lookup_mode) {
 		case VariantChildLookupMode::BY_INDEX: {
-			D_ASSERT(child_collection_result.type == VariantChildDataCollectionResult::Type::COMPONENT_NOT_FOUND);
-			auto nested_index = child_collection_result.nested_data_index;
+			auto nested_index = index.GetIndex();
 			throw InvalidInputException("VARIANT(ARRAY(%d)) is missing index %d", nested_data[nested_index].child_count,
 			                            component.index);
 		}
 		case VariantChildLookupMode::BY_KEY: {
-			D_ASSERT(child_collection_result.type == VariantChildDataCollectionResult::Type::COMPONENT_NOT_FOUND);
-			auto nested_index = child_collection_result.nested_data_index;
+			auto nested_index = index.GetIndex();
 			auto row_index = nested_index;
 			auto object_keys = VariantUtils::GetObjectKeys(variant, row_index, nested_data[nested_index]);
 			throw InvalidInputException("VARIANT(OBJECT(%s)) is missing key '%s'", StringUtil::Join(object_keys, ","),

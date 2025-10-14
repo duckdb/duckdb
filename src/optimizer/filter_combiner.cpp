@@ -1,5 +1,6 @@
 #include "duckdb/optimizer/filter_combiner.hpp"
 
+#include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/expression.hpp"
@@ -907,6 +908,12 @@ FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &com
 	idx_t left_equivalence_set = GetEquivalenceSet(left_node);
 	idx_t right_equivalence_set = GetEquivalenceSet(right_node);
 	if (left_equivalence_set == right_equivalence_set) {
+		if (comparison.GetExpressionType() == ExpressionType::COMPARE_GREATERTHAN ||
+		    comparison.GetExpressionType() == ExpressionType::COMPARE_LESSTHAN) {
+			// non equal comparison has equal equivalence set, then it is unsatisfiable
+			// e.g., j > i AND i < j is unsatisfiable
+			return FilterResult::UNSATISFIABLE;
+		}
 		// this equality filter already exists, prune it
 		return FilterResult::SUCCESS;
 	}

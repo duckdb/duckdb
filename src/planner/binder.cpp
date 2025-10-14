@@ -68,28 +68,9 @@ BoundStatement Binder::BindWithCTE(T &statement) {
 		return Bind(statement);
 	}
 
-	// Extract materialized CTEs from cte_map
-	vector<unique_ptr<CTENode>> materialized_ctes;
-	for (auto &cte : cte_map.map) {
-		auto &cte_entry = cte.second;
-		auto mat_cte = make_uniq<CTENode>();
-		mat_cte->ctename = cte.first;
-		mat_cte->query = std::move(cte_entry->query->node);
-		mat_cte->aliases = cte_entry->aliases;
-		mat_cte->materialized = cte_entry->materialized;
-		materialized_ctes.push_back(std::move(mat_cte));
-	}
-
-	unique_ptr<QueryNode> cte_root = make_uniq<StatementNode>(statement);
-	while (!materialized_ctes.empty()) {
-		unique_ptr<CTENode> node_result;
-		node_result = std::move(materialized_ctes.back());
-		node_result->child = std::move(cte_root);
-		cte_root = std::move(node_result);
-		materialized_ctes.pop_back();
-	}
-
-	return Bind(*cte_root);
+	auto stmt_node = make_uniq<StatementNode>(statement);
+	stmt_node->cte_map = cte_map.Copy();
+	return Bind(*stmt_node);
 }
 
 BoundStatement Binder::Bind(SQLStatement &statement) {
@@ -152,30 +133,12 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 	} // LCOV_EXCL_STOP
 }
 
-BoundStatement Binder::BindNode(QueryNode &node) {
-	// now we bind the node
-	switch (node.type) {
-	case QueryNodeType::SELECT_NODE:
-		return BindNode(node.Cast<SelectNode>());
-	case QueryNodeType::RECURSIVE_CTE_NODE:
-		return BindNode(node.Cast<RecursiveCTENode>());
-	case QueryNodeType::CTE_NODE:
-		return BindNode(node.Cast<CTENode>());
-	case QueryNodeType::SET_OPERATION_NODE:
-		return BindNode(node.Cast<SetOperationNode>());
-	case QueryNodeType::STATEMENT_NODE:
-		return BindNode(node.Cast<StatementNode>());
-	default:
-		throw InternalException("Unsupported query node type");
-	}
-}
-
 BoundStatement Binder::Bind(QueryNode &node) {
 	return BindNode(node);
 }
 
-unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
-	unique_ptr<BoundTableRef> result;
+BoundStatement Binder::Bind(TableRef &ref) {
+	BoundStatement result;
 	switch (ref.type) {
 	case TableReferenceType::BASE_TABLE:
 		result = Bind(ref.Cast<BaseTableRef>());
@@ -215,82 +178,33 @@ unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
 	default:
 		throw InternalException("Unknown table ref type (%s)", EnumUtil::ToString(ref.type));
 	}
-	result->sample = std::move(ref.sample);
+	if (ref.sample) {
+		result.plan = make_uniq<LogicalSample>(std::move(ref.sample), std::move(result.plan));
+	}
 	return result;
 }
 
-unique_ptr<LogicalOperator> Binder::CreatePlan(BoundTableRef &ref) {
-	unique_ptr<LogicalOperator> root;
-	switch (ref.type) {
-	case TableReferenceType::BASE_TABLE:
-		root = CreatePlan(ref.Cast<BoundBaseTableRef>());
-		break;
-	case TableReferenceType::SUBQUERY:
-		root = CreatePlan(ref.Cast<BoundSubqueryRef>());
-		break;
-	case TableReferenceType::JOIN:
-		root = CreatePlan(ref.Cast<BoundJoinRef>());
-		break;
-	case TableReferenceType::TABLE_FUNCTION:
-		root = CreatePlan(ref.Cast<BoundTableFunction>());
-		break;
-	case TableReferenceType::EMPTY_FROM:
-		root = CreatePlan(ref.Cast<BoundEmptyTableRef>());
-		break;
-	case TableReferenceType::EXPRESSION_LIST:
-		root = CreatePlan(ref.Cast<BoundExpressionListRef>());
-		break;
-	case TableReferenceType::COLUMN_DATA:
-		root = CreatePlan(ref.Cast<BoundColumnDataRef>());
-		break;
-	case TableReferenceType::CTE:
-		root = CreatePlan(ref.Cast<BoundCTERef>());
-		break;
-	case TableReferenceType::PIVOT:
-		root = CreatePlan(ref.Cast<BoundPivotRef>());
-		break;
-	case TableReferenceType::DELIM_GET:
-		root = CreatePlan(ref.Cast<BoundDelimGetRef>());
-		break;
-	case TableReferenceType::INVALID:
-	default:
-		throw InternalException("Unsupported bound table ref type (%s)", EnumUtil::ToString(ref.type));
-	}
-	// plan the sample clause
-	if (ref.sample) {
-		root = make_uniq<LogicalSample>(std::move(ref.sample), std::move(root));
-	}
-	return root;
-}
-
-void Binder::AddCTE(const string &name) {
-	D_ASSERT(!name.empty());
-	CTE_bindings.insert(name);
-}
-
-optional_ptr<Binding> Binder::GetCTEBinding(const string &name) {
+optional_ptr<CTEBinding> Binder::GetCTEBinding(const BindingAlias &name) {
 	reference<Binder> current_binder(*this);
+	optional_ptr<CTEBinding> result;
 	while (true) {
 		auto &current = current_binder.get();
 		auto entry = current.bind_context.GetCTEBinding(name);
 		if (entry) {
-			return entry;
+			// we only directly return the CTE if it can be referenced
+			// if it cannot be referenced (circular reference) we keep going up the stack
+			// to look for a CTE that can be referenced
+			if (entry->CanBeReferenced()) {
+				return entry;
+			}
+			result = entry;
 		}
 		if (!current.parent || current.binder_type != BinderType::REGULAR_BINDER) {
-			return nullptr;
+			break;
 		}
 		current_binder = *current.parent;
 	}
-}
-
-bool Binder::CTEExists(const string &name) {
-	if (CTE_bindings.find(name) != CTE_bindings.end()) {
-		return true;
-	}
-	if (parent && binder_type == BinderType::REGULAR_BINDER) {
-		return parent->CTEExists(name);
-	}
-	return false;
+	return result;
 }
 
 void Binder::AddBoundView(ViewCatalogEntry &view) {
@@ -314,11 +228,11 @@ StatementProperties &Binder::GetStatementProperties() {
 }
 
 optional_ptr<BoundParameterMap> Binder::GetParameters() {
-	return query_binder_state->parameters;
+	return global_binder_state->parameters;
 }
 
 void Binder::SetParameters(BoundParameterMap &parameters) {
-	query_binder_state->parameters = parameters;
+	global_binder_state->parameters = parameters;
 }
 
 void Binder::PushExpressionBinder(ExpressionBinder &binder) {
@@ -385,7 +299,6 @@ optional_ptr<Binding> Binder::GetMatchingBinding(const string &catalog_name, con
                                                  const string &table_name, const string &column_name,
                                                  ErrorData &error) {
 	optional_ptr<Binding> binding;
-	D_ASSERT(!lambda_bindings);
 	if (macro_binding && table_name == macro_binding->GetAlias()) {
 		binding = optional_ptr<Binding>(macro_binding.get());
 	} else {

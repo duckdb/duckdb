@@ -25,6 +25,14 @@ BoundStatement WriteParquetRelation::Bind(Binder &binder) {
 	return binder.Bind(copy.Cast<SQLStatement>());
 }
 
+unique_ptr<QueryNode> WriteParquetRelation::GetQueryNode() {
+	throw InternalException("Cannot create a query node from a write parquet relation");
+}
+
+string WriteParquetRelation::GetQuery() {
+	return string();
+}
+
 const vector<ColumnDefinition> &WriteParquetRelation::Columns() {
 	return columns;
 }

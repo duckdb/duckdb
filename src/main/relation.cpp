@@ -394,8 +394,8 @@ string Relation::ToString() {
 }
 
 // LCOV_EXCL_START
-unique_ptr<QueryNode> Relation::GetQueryNode() {
-	throw InternalException("Cannot create a query node from this node type");
+string Relation::GetQuery() {
+	return GetQueryNode()->ToString();
 }
 
 void Relation::Head(idx_t limit) {
