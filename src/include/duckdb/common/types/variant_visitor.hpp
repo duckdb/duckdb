@@ -5,6 +5,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/types/decimal.hpp"
+#include "duckdb/common/enum_util.hpp"
 
 namespace duckdb {
 

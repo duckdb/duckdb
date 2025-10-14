@@ -182,57 +182,6 @@ struct ValueConverter {
 		throw InternalException("ValueConverter::VisitInteger not implemented!");
 	}
 
-	// Explicit specializations for each integer type
-	template <>
-	Value VisitInteger<int8_t>(int8_t val) {
-		return Value::TINYINT(val);
-	}
-
-	template <>
-	Value VisitInteger<int16_t>(int16_t val) {
-		return Value::SMALLINT(val);
-	}
-
-	template <>
-	Value VisitInteger<int32_t>(int32_t val) {
-		return Value::INTEGER(val);
-	}
-
-	template <>
-	Value VisitInteger<int64_t>(int64_t val) {
-		return Value::BIGINT(val);
-	}
-
-	template <>
-	Value VisitInteger<hugeint_t>(hugeint_t val) {
-		return Value::HUGEINT(val);
-	}
-
-	template <>
-	Value VisitInteger<uint8_t>(uint8_t val) {
-		return Value::UTINYINT(val);
-	}
-
-	template <>
-	Value VisitInteger<uint16_t>(uint16_t val) {
-		return Value::USMALLINT(val);
-	}
-
-	template <>
-	Value VisitInteger<uint32_t>(uint32_t val) {
-		return Value::UINTEGER(val);
-	}
-
-	template <>
-	Value VisitInteger<uint64_t>(uint64_t val) {
-		return Value::UBIGINT(val);
-	}
-
-	template <>
-	Value VisitInteger<uhugeint_t>(uhugeint_t val) {
-		return Value::UHUGEINT(val);
-	}
-
 	static Value VisitTime(dtime_t val) {
 		return Value::TIME(val);
 	}
@@ -326,6 +275,56 @@ struct ValueConverter {
 		throw InternalException("VariantLogicalType(%s) not handled", EnumUtil::ToString(type_id));
 	}
 };
+
+template <>
+Value ValueConverter::VisitInteger<int8_t>(int8_t val) {
+	return Value::TINYINT(val);
+}
+
+template <>
+Value ValueConverter::VisitInteger<int16_t>(int16_t val) {
+	return Value::SMALLINT(val);
+}
+
+template <>
+Value ValueConverter::VisitInteger<int32_t>(int32_t val) {
+	return Value::INTEGER(val);
+}
+
+template <>
+Value ValueConverter::VisitInteger<int64_t>(int64_t val) {
+	return Value::BIGINT(val);
+}
+
+template <>
+Value ValueConverter::VisitInteger<hugeint_t>(hugeint_t val) {
+	return Value::HUGEINT(val);
+}
+
+template <>
+Value ValueConverter::VisitInteger<uint8_t>(uint8_t val) {
+	return Value::UTINYINT(val);
+}
+
+template <>
+Value ValueConverter::VisitInteger<uint16_t>(uint16_t val) {
+	return Value::USMALLINT(val);
+}
+
+template <>
+Value ValueConverter::VisitInteger<uint32_t>(uint32_t val) {
+	return Value::UINTEGER(val);
+}
+
+template <>
+Value ValueConverter::VisitInteger<uint64_t>(uint64_t val) {
+	return Value::UBIGINT(val);
+}
+
+template <>
+Value ValueConverter::VisitInteger<uhugeint_t>(uhugeint_t val) {
+	return Value::UHUGEINT(val);
+}
 
 } // namespace
 

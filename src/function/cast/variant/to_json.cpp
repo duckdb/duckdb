@@ -36,58 +36,6 @@ struct JSONConverter {
 		throw InternalException("JSONConverter::VisitInteger not implemented!");
 	}
 
-	template <>
-	yyjson_mut_val *VisitInteger<int8_t>(int8_t val, yyjson_mut_doc *doc) {
-		return yyjson_mut_sint(doc, val);
-	}
-
-	template <>
-	yyjson_mut_val *VisitInteger<int16_t>(int16_t val, yyjson_mut_doc *doc) {
-		return yyjson_mut_sint(doc, val);
-	}
-
-	template <>
-	yyjson_mut_val *VisitInteger<int32_t>(int32_t val, yyjson_mut_doc *doc) {
-		return yyjson_mut_sint(doc, val);
-	}
-
-	template <>
-	yyjson_mut_val *VisitInteger<int64_t>(int64_t val, yyjson_mut_doc *doc) {
-		return yyjson_mut_sint(doc, val);
-	}
-
-	template <>
-	yyjson_mut_val *VisitInteger<hugeint_t>(hugeint_t val, yyjson_mut_doc *doc) {
-		auto val_str = val.ToString();
-		return yyjson_mut_rawncpy(doc, val_str.c_str(), val_str.size());
-	}
-
-	template <>
-	yyjson_mut_val *VisitInteger<uint8_t>(uint8_t val, yyjson_mut_doc *doc) {
-		return yyjson_mut_sint(doc, val);
-	}
-
-	template <>
-	yyjson_mut_val *VisitInteger<uint16_t>(uint16_t val, yyjson_mut_doc *doc) {
-		return yyjson_mut_sint(doc, val);
-	}
-
-	template <>
-	yyjson_mut_val *VisitInteger<uint32_t>(uint32_t val, yyjson_mut_doc *doc) {
-		return yyjson_mut_sint(doc, val);
-	}
-
-	template <>
-	yyjson_mut_val *VisitInteger<uint64_t>(uint64_t val, yyjson_mut_doc *doc) {
-		return yyjson_mut_uint(doc, val);
-	}
-
-	template <>
-	yyjson_mut_val *VisitInteger<uhugeint_t>(uhugeint_t val, yyjson_mut_doc *doc) {
-		auto val_str = val.ToString();
-		return yyjson_mut_rawncpy(doc, val_str.c_str(), val_str.size());
-	}
-
 	static yyjson_mut_val *VisitTime(dtime_t val, yyjson_mut_doc *doc) {
 		auto val_str = Time::ToString(val);
 		return yyjson_mut_strncpy(doc, val_str.c_str(), val_str.size());
@@ -216,6 +164,58 @@ struct JSONConverter {
 		throw InternalException("VariantLogicalType(%s) not handled", EnumUtil::ToString(type_id));
 	}
 };
+
+template <>
+yyjson_mut_val *JSONConverter::VisitInteger<int8_t>(int8_t val, yyjson_mut_doc *doc) {
+	return yyjson_mut_sint(doc, val);
+}
+
+template <>
+yyjson_mut_val *JSONConverter::VisitInteger<int16_t>(int16_t val, yyjson_mut_doc *doc) {
+	return yyjson_mut_sint(doc, val);
+}
+
+template <>
+yyjson_mut_val *JSONConverter::VisitInteger<int32_t>(int32_t val, yyjson_mut_doc *doc) {
+	return yyjson_mut_sint(doc, val);
+}
+
+template <>
+yyjson_mut_val *JSONConverter::VisitInteger<int64_t>(int64_t val, yyjson_mut_doc *doc) {
+	return yyjson_mut_sint(doc, val);
+}
+
+template <>
+yyjson_mut_val *JSONConverter::VisitInteger<hugeint_t>(hugeint_t val, yyjson_mut_doc *doc) {
+	auto val_str = val.ToString();
+	return yyjson_mut_rawncpy(doc, val_str.c_str(), val_str.size());
+}
+
+template <>
+yyjson_mut_val *JSONConverter::VisitInteger<uint8_t>(uint8_t val, yyjson_mut_doc *doc) {
+	return yyjson_mut_sint(doc, val);
+}
+
+template <>
+yyjson_mut_val *JSONConverter::VisitInteger<uint16_t>(uint16_t val, yyjson_mut_doc *doc) {
+	return yyjson_mut_sint(doc, val);
+}
+
+template <>
+yyjson_mut_val *JSONConverter::VisitInteger<uint32_t>(uint32_t val, yyjson_mut_doc *doc) {
+	return yyjson_mut_sint(doc, val);
+}
+
+template <>
+yyjson_mut_val *JSONConverter::VisitInteger<uint64_t>(uint64_t val, yyjson_mut_doc *doc) {
+	return yyjson_mut_uint(doc, val);
+}
+
+template <>
+yyjson_mut_val *JSONConverter::VisitInteger<uhugeint_t>(uhugeint_t val, yyjson_mut_doc *doc) {
+	auto val_str = val.ToString();
+	return yyjson_mut_rawncpy(doc, val_str.c_str(), val_str.size());
+}
 
 } // namespace
 
