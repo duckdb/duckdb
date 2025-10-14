@@ -121,54 +121,29 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 
 	// CTE name should never be qualified (i.e. schema_name should be empty)
 	// unless we want to refer to the recurring table of "using key".
-	auto ctebinding = GetCTEBinding(ref.table_name);
-	if (ctebinding) {
+	BindingAlias binding_alias(ref.schema_name, ref.table_name);
+	auto ctebinding = GetCTEBinding(binding_alias);
+	if (ctebinding && ctebinding->CanBeReferenced()) {
+		ctebinding->Reference();
+
 		// There is a CTE binding in the BindContext.
 		// This can only be the case if there is a recursive CTE,
 		// or a materialized CTE present.
 		auto index = GenerateTableIndex();
 
-		vector<LogicalType> types = ctebinding->types;
-		if (ref.schema_name == "recurring") {
-			auto recurring_bindings = GetCTEBinding("recurring." + ref.table_name);
-			if (!recurring_bindings) {
-				throw BinderException(error_context,
-				                      "There is a WITH item named \"%s\", but the recurring table cannot be "
-				                      "referenced from this part of the query."
-				                      " Hint: RECURRING can only be used with USING KEY in recursive CTE.",
-				                      ref.table_name);
-			}
-			types = recurring_bindings->types;
-		}
-
 		auto alias = ref.alias.empty() ? ref.table_name : ref.alias;
-		auto names = BindContext::AliasColumnNames(alias, ctebinding->names, ref.column_name_alias);
+		auto names = BindContext::AliasColumnNames(alias, ctebinding->GetColumnNames(), ref.column_name_alias);
 
-		bind_context.AddGenericBinding(index, alias, names, types);
+		bind_context.AddGenericBinding(index, alias, names, ctebinding->GetColumnTypes());
 
-		auto cte_ref = reference<CTEBinding>(ctebinding->Cast<CTEBinding>());
-		if (!ref.schema_name.empty()) {
-			auto cte_reference = ref.schema_name + "." + ref.table_name;
-			auto recurring_ref = GetCTEBinding(cte_reference);
-			if (!recurring_ref) {
-				throw BinderException(error_context,
-				                      "There is a WITH item named \"%s\", but the recurring table cannot be "
-				                      "referenced from this part of the query.",
-				                      ref.table_name);
-			}
-			cte_ref = reference<CTEBinding>(recurring_ref->Cast<CTEBinding>());
-		}
-
-		// Update references to CTE
-		cte_ref.get().reference_count++;
 		bool is_recurring = ref.schema_name == "recurring";
 
 		BoundStatement result;
-		result.types = types;
+		result.types = ctebinding->GetColumnTypes();
 		result.names = names;
-		result.plan = make_uniq<LogicalCTERef>(index, ctebinding->index, types, std::move(names), is_recurring);
+		result.plan =
+		    make_uniq<LogicalCTERef>(index, ctebinding->GetIndex(), result.types, std::move(names), is_recurring);
 		return result;
-		;
 	}
 
 	// not a CTE
@@ -232,17 +207,13 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 			}
 		}
 
-		// remember that we did not find a CTE, but there is a CTE with the same name
-		// this means that there is a circular reference
-		// Otherwise, re-throw the original exception
-		if (!ctebinding && ref.schema_name.empty() && CTEExists(ref.table_name)) {
-			throw BinderException(
-			    error_context,
-			    "Circular reference to CTE \"%s\", There are two possible solutions. \n1. use WITH RECURSIVE to "
-			    "use recursive CTEs. \n2. If "
-			    "you want to use the TABLE name \"%s\" the same as the CTE name, please explicitly add "
-			    "\"SCHEMA\" before table name. You can try \"main.%s\" (main is the duckdb default schema)",
-			    ref.table_name, ref.table_name, ref.table_name);
+		// if we found a CTE that cannot be referenced that means that there is a circular reference
+		if (ctebinding) {
+			D_ASSERT(!ctebinding->CanBeReferenced());
+			throw BinderException(error_context,
+			                      "Circular reference to CTE \"%s\", use WITH RECURSIVE to "
+			                      "use recursive CTEs.",
+			                      ref.table_name);
 		}
 		// could not find an alternative: bind again to get the error
 		// note: this will always throw when using DuckDB as a catalog, but a second look-up might succeed
