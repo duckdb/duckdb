@@ -8,7 +8,8 @@
 namespace duckdb {
 
 RowVersionManager::RowVersionManager(BufferManager &buffer_manager_p, idx_t start) noexcept
-    : allocator(STANDARD_VECTOR_SIZE * sizeof(transaction_t), buffer_manager_p.GetTemporaryBlockManager()),
+    : allocator(STANDARD_VECTOR_SIZE * sizeof(transaction_t), buffer_manager_p.GetTemporaryBlockManager(),
+                MemoryTag::BASE_TABLE),
       start(start), has_changes(false) {
 }
 
