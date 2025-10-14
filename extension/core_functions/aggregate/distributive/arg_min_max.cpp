@@ -196,7 +196,7 @@ struct ArgMinMaxBase {
 
 		auto function_data = make_uniq<ArgMinMaxFunctionData>();
 		function_data->null_handling = NULL_HANDLING;
-		return function_data;
+		return unique_ptr<FunctionData>(std::move(function_data));
 	}
 };
 
@@ -360,19 +360,19 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR> {
 
 		auto function_data = make_uniq<ArgMinMaxFunctionData>();
 		function_data->null_handling = NULL_HANDLING;
-		return function_data;
+		return unique_ptr<FunctionData>(std::move(function_data));
 	}
 };
 
 template <class OP>
 bind_aggregate_function_t GetBindFunction(const ArgMinMaxNullHandling null_handling) {
 	switch (null_handling) {
-	case ArgMinMaxNullHandling::IGNORE_ALL_NULLS:
-		return OP::template Bind<ArgMinMaxNullHandling::IGNORE_ALL_NULLS>;
 	case ArgMinMaxNullHandling::IGNORE_NULL_VALS:
 		return OP::template Bind<ArgMinMaxNullHandling::IGNORE_NULL_VALS>;
 	case ArgMinMaxNullHandling::IGNORE_NOTHING:
 		return OP::template Bind<ArgMinMaxNullHandling::IGNORE_NOTHING>;
+	default:
+		return OP::template Bind<ArgMinMaxNullHandling::IGNORE_ALL_NULLS>;
 	}
 }
 
@@ -558,7 +558,7 @@ unique_ptr<FunctionData> BindDecimalArgMinMax(ClientContext &context, AggregateF
 
 	auto function_data = make_uniq<ArgMinMaxFunctionData>();
 	function_data->null_handling = NULL_HANDLING;
-	return function_data;
+	return unique_ptr<FunctionData>(std::move(function_data));
 }
 
 template <class OP>
@@ -804,16 +804,16 @@ void SpecializeArgMinMaxNullNFunction(PhysicalType arg_type, AggregateFunction &
 		SpecializeArgMinMaxNullNFunction<VAL_TYPE, MinMaxFallbackValue, COMPARATOR>(function);
 		break;
 	case PhysicalType::INT32:
-		SpecializeArgMinMaxNullNFunction<VAL_TYPE, MinMaxInclNullValue<int32_t, NULLS_LAST>, COMPARATOR>(function);
+		SpecializeArgMinMaxNullNFunction<VAL_TYPE, MinMaxFixedValueOrNull<int32_t, NULLS_LAST>, COMPARATOR>(function);
 		break;
 	case PhysicalType::INT64:
-		SpecializeArgMinMaxNullNFunction<VAL_TYPE, MinMaxInclNullValue<int64_t, NULLS_LAST>, COMPARATOR>(function);
+		SpecializeArgMinMaxNullNFunction<VAL_TYPE, MinMaxFixedValueOrNull<int64_t, NULLS_LAST>, COMPARATOR>(function);
 		break;
 	case PhysicalType::FLOAT:
-		SpecializeArgMinMaxNullNFunction<VAL_TYPE, MinMaxInclNullValue<float, NULLS_LAST>, COMPARATOR>(function);
+		SpecializeArgMinMaxNullNFunction<VAL_TYPE, MinMaxFixedValueOrNull<float, NULLS_LAST>, COMPARATOR>(function);
 		break;
 	case PhysicalType::DOUBLE:
-		SpecializeArgMinMaxNullNFunction<VAL_TYPE, MinMaxInclNullValue<double, NULLS_LAST>, COMPARATOR>(function);
+		SpecializeArgMinMaxNullNFunction<VAL_TYPE, MinMaxFixedValueOrNull<double, NULLS_LAST>, COMPARATOR>(function);
 		break;
 #endif
 	default:
@@ -830,20 +830,20 @@ void SpecializeArgMinMaxNullNFunction(PhysicalType val_type, PhysicalType arg_ty
 		SpecializeArgMinMaxNullNFunction<MinMaxFallbackValue, NULLS_LAST, COMPARATOR>(arg_type, function);
 		break;
 	case PhysicalType::INT32:
-		SpecializeArgMinMaxNullNFunction<MinMaxInclNullValue<int32_t, NULLS_LAST>, NULLS_LAST, COMPARATOR>(arg_type,
-		                                                                                                   function);
+		SpecializeArgMinMaxNullNFunction<MinMaxFixedValueOrNull<int32_t, NULLS_LAST>, NULLS_LAST, COMPARATOR>(arg_type,
+		                                                                                                      function);
 		break;
 	case PhysicalType::INT64:
-		SpecializeArgMinMaxNullNFunction<MinMaxInclNullValue<int64_t, NULLS_LAST>, NULLS_LAST, COMPARATOR>(arg_type,
-		                                                                                                   function);
+		SpecializeArgMinMaxNullNFunction<MinMaxFixedValueOrNull<int64_t, NULLS_LAST>, NULLS_LAST, COMPARATOR>(arg_type,
+		                                                                                                      function);
 		break;
 	case PhysicalType::FLOAT:
-		SpecializeArgMinMaxNullNFunction<MinMaxInclNullValue<float, NULLS_LAST>, NULLS_LAST, COMPARATOR>(arg_type,
-		                                                                                                 function);
+		SpecializeArgMinMaxNullNFunction<MinMaxFixedValueOrNull<float, NULLS_LAST>, NULLS_LAST, COMPARATOR>(arg_type,
+		                                                                                                    function);
 		break;
 	case PhysicalType::DOUBLE:
-		SpecializeArgMinMaxNullNFunction<MinMaxInclNullValue<double, NULLS_LAST>, NULLS_LAST, COMPARATOR>(arg_type,
-		                                                                                                  function);
+		SpecializeArgMinMaxNullNFunction<MinMaxFixedValueOrNull<double, NULLS_LAST>, NULLS_LAST, COMPARATOR>(arg_type,
+		                                                                                                     function);
 		break;
 #endif
 	default:
@@ -875,7 +875,7 @@ unique_ptr<FunctionData> ArgMinMaxNBind(ClientContext &context, AggregateFunctio
 		SpecializeArgMinMaxNFunction<COMPARATOR>(val_type, arg_type, function);
 	}
 
-	return function_data;
+	return unique_ptr<FunctionData>(std::move(function_data));
 }
 
 template <ArgMinMaxNullHandling NULL_HANDLING, bool NULLS_LAST, class COMPARATOR>

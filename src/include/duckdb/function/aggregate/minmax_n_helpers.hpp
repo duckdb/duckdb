@@ -357,12 +357,12 @@ struct ValueOrNull {
 			return false;
 		}
 
-		return !(is_valid ^ NULLS_LAST);
+		return is_valid ^ !NULLS_LAST;
 	}
 };
 
 template <class T, bool NULLS_LAST>
-struct MinMaxInclNullValue {
+struct MinMaxFixedValueOrNull {
 	using TYPE = ValueOrNull<T, NULLS_LAST>;
 	using EXTRA_STATE = bool;
 
