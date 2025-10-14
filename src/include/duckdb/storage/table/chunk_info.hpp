@@ -132,6 +132,8 @@ public:
 	void CommitDelete(transaction_t commit_id, const DeleteInfo &info);
 
 	bool HasDeletes() const override;
+	bool AnyDeleted() const;
+	bool HasSingleInsertionId() const;
 
 	void Write(WriteStream &writer) const override;
 	static unique_ptr<ChunkInfo> Read(FixedSizeAllocator &allocator, ReadStream &reader);

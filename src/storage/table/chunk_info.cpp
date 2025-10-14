@@ -137,11 +137,11 @@ ChunkVectorInfo::ChunkVectorInfo(FixedSizeAllocator &allocator_p, idx_t start, t
 
 ChunkVectorInfo::~ChunkVectorInfo() {
 	D_ASSERT(any_deleted || deleted_data.Get() == 0);
-	D_ASSERT(!same_inserted_id || inserted_data.Get() == 0);
-	if (any_deleted) {
+	D_ASSERT(!HasSingleInsertionId() || inserted_data.Get() == 0);
+	if (AnyDeleted()) {
 		allocator.Free(deleted_data);
 	}
-	if (!same_inserted_id) {
+	if (!HasSingleInsertionId()) {
 		allocator.Free(inserted_data);
 	}
 }
@@ -149,8 +149,8 @@ ChunkVectorInfo::~ChunkVectorInfo() {
 template <class OP>
 idx_t ChunkVectorInfo::TemplatedGetSelVector(transaction_t start_time, transaction_t transaction_id,
                                              SelectionVector &sel_vector, idx_t max_count) const {
-	if (same_inserted_id) {
-		if (!any_deleted) {
+	if (HasSingleInsertionId()) {
+		if (!AnyDeleted()) {
 			// all tuples have the same inserted id: and no tuples were deleted
 			if (OP::UseInsertedVersion(start_time, transaction_id, insert_id)) {
 				return max_count;
@@ -172,7 +172,7 @@ idx_t ChunkVectorInfo::TemplatedGetSelVector(transaction_t start_time, transacti
 		}
 		return count;
 	}
-	if (!any_deleted) {
+	if (!AnyDeleted()) {
 		// have to check inserted flag
 		auto insert_segment = allocator.GetHandle(GetInsertedPointer());
 		auto inserted = insert_segment.GetPtr<transaction_t>();
@@ -219,14 +219,14 @@ idx_t ChunkVectorInfo::GetSelVector(TransactionData transaction, SelectionVector
 bool ChunkVectorInfo::Fetch(TransactionData transaction, row_t row) {
 	transaction_t fetch_insert_id;
 	transaction_t fetch_deleted_id;
-	if (same_inserted_id) {
+	if (HasSingleInsertionId()) {
 		fetch_insert_id = insert_id;
 	} else {
 		auto insert_segment = allocator.GetHandle(GetInsertedPointer());
 		auto inserted = insert_segment.GetPtr<transaction_t>();
 		fetch_insert_id = inserted[row];
 	}
-	if (!any_deleted) {
+	if (!AnyDeleted()) {
 		fetch_deleted_id = NOT_DELETED_ID;
 	} else {
 		auto delete_segment = allocator.GetHandle(GetDeletedPointer());
@@ -238,21 +238,21 @@ bool ChunkVectorInfo::Fetch(TransactionData transaction, row_t row) {
 }
 
 IndexPointer ChunkVectorInfo::GetInsertedPointer() const {
-	if (same_inserted_id) {
+	if (HasSingleInsertionId()) {
 		throw InternalException("ChunkVectorInfo: insert id requested but insertions were not initialized");
 	}
 	return inserted_data;
 }
 
 IndexPointer ChunkVectorInfo::GetDeletedPointer() const {
-	if (!any_deleted) {
+	if (!AnyDeleted()) {
 		throw InternalException("ChunkVectorInfo: deleted id requested but deletions were not initialized");
 	}
 	return deleted_data;
 }
 
 IndexPointer ChunkVectorInfo::GetInitializedInsertedPointer() {
-	if (same_inserted_id) {
+	if (HasSingleInsertionId()) {
 		same_inserted_id = false;
 
 		inserted_data = allocator.New();
@@ -266,7 +266,7 @@ IndexPointer ChunkVectorInfo::GetInitializedInsertedPointer() {
 }
 
 IndexPointer ChunkVectorInfo::GetInitializedDeletedPointer() {
-	if (!any_deleted) {
+	if (!AnyDeleted()) {
 		any_deleted = true;
 
 		deleted_data = allocator.New();
@@ -340,7 +340,7 @@ void ChunkVectorInfo::Append(idx_t start, idx_t end, transaction_t commit_id) {
 }
 
 void ChunkVectorInfo::CommitAppend(transaction_t commit_id, idx_t start, idx_t end) {
-	if (same_inserted_id) {
+	if (HasSingleInsertionId()) {
 		insert_id = commit_id;
 		return;
 	}
@@ -353,12 +353,12 @@ void ChunkVectorInfo::CommitAppend(transaction_t commit_id, idx_t start, idx_t e
 }
 
 bool ChunkVectorInfo::Cleanup(transaction_t lowest_transaction, unique_ptr<ChunkInfo> &result) const {
-	if (any_deleted) {
+	if (AnyDeleted()) {
 		// if any rows are deleted we can't clean-up
 		return false;
 	}
 	// check if the insertion markers have to be used by all transactions going forward
-	if (!same_inserted_id) {
+	if (!HasSingleInsertionId()) {
 		auto segment = allocator.GetHandle(GetInsertedPointer());
 		auto inserted = segment.GetPtr<transaction_t>();
 
@@ -378,11 +378,19 @@ bool ChunkVectorInfo::Cleanup(transaction_t lowest_transaction, unique_ptr<Chunk
 }
 
 bool ChunkVectorInfo::HasDeletes() const {
+	return AnyDeleted();
+}
+
+bool ChunkVectorInfo::AnyDeleted() const {
 	return any_deleted;
 }
 
+bool ChunkVectorInfo::HasSingleInsertionId() const {
+	return same_inserted_id;
+}
+
 idx_t ChunkVectorInfo::GetCommittedDeletedCount(idx_t max_count) const {
-	if (!any_deleted) {
+	if (!AnyDeleted()) {
 		return 0;
 	}
 	auto segment = allocator.GetHandle(GetDeletedPointer());
