@@ -9,8 +9,8 @@ using namespace duckdb;
 using namespace Catch::Matchers;
 
 struct TestClientContextState : ClientContextState {
-	vector<string> query_errors;
-	vector<string> transaction_errors;
+	duckdb::vector<string> query_errors;
+	duckdb::vector<string> transaction_errors;
 
 	TestClientContextState() = default;
 	TestClientContextState(const TestClientContextState &) = delete;
@@ -29,7 +29,7 @@ struct TestClientContextState : ClientContextState {
 	}
 };
 
-shared_ptr<TestClientContextState> WithLifecycleState(const Connection &conn) {
+duckdb::shared_ptr<TestClientContextState> WithLifecycleState(const Connection &conn) {
 	auto &register_state = conn.context->registered_state;
 	auto state = make_shared_ptr<TestClientContextState>();
 	register_state->Insert("test_state", state);
@@ -47,8 +47,8 @@ TEST_CASE("Test ClientContextState", "[api]") {
 	    [](ClientContext &, TableFunctionInput &, DataChunk &) {
 		    throw std::runtime_error("This is a test exception.");
 	    },
-	    [](ClientContext &, TableFunctionBindInput &, vector<LogicalType> &return_types,
-	       vector<string> &names) -> unique_ptr<FunctionData> {
+	    [](ClientContext &, TableFunctionBindInput &, duckdb::vector<LogicalType> &return_types,
+	       duckdb::vector<string> &names) -> duckdb::unique_ptr<FunctionData> {
 		    return_types.push_back(LogicalType::VARCHAR);
 		    names.push_back("message");
 		    return nullptr;

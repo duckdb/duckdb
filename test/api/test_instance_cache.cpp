@@ -4,6 +4,7 @@
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 #include <chrono>
 #include <iostream>
@@ -40,12 +41,12 @@ TEST_CASE("Test parallel connection and destruction of connections with database
 struct DelayingStorageExtension : StorageExtension {
 	DelayingStorageExtension() {
 		attach = [](optional_ptr<StorageExtensionInfo>, ClientContext &, AttachedDatabase &db, const string &,
-		            AttachInfo &info, AttachOptions &) -> unique_ptr<Catalog> {
+		            AttachInfo &info, AttachOptions &) -> duckdb::unique_ptr<Catalog> {
 			std::this_thread::sleep_for(std::chrono::seconds(5));
 			return make_uniq_base<Catalog, DuckCatalog>(db);
 		};
 		create_transaction_manager = [](optional_ptr<StorageExtensionInfo>, AttachedDatabase &db,
-		                                Catalog &) -> unique_ptr<TransactionManager> {
+		                                Catalog &) -> duckdb::unique_ptr<TransactionManager> {
 			return make_uniq<DuckTransactionManager>(db);
 		};
 	}
@@ -56,7 +57,7 @@ TEST_CASE("Test db creation does not block instance cache", "[api]") {
 	using namespace std::chrono;
 
 	auto second_creation_was_quick = false;
-	shared_ptr<DuckDB> stick_around;
+	duckdb::shared_ptr<DuckDB> stick_around;
 	std::thread t1 {[&instance_cache, &second_creation_was_quick, &stick_around]() {
 		DBConfig db_config;
 
