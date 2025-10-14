@@ -63,13 +63,7 @@ void ArrayColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *p
 	auto &array_child = ArrayVector::GetEntry(vector);
 	// The elements of a single array should not span multiple Parquet pages
 	// So, we force the entire vector to fit on a single page by setting "vector_can_span_multiple_pages=false"
-	idx_t child_length = count * array_size;
-	if (child_length > static_cast<idx_t>(NumericLimits<int32_t>::Maximum())) {
-		// Allow child to span multiple pages for very large lists
-		child_writer->Prepare(*state.child_state, &state_p, array_child, child_length, true);
-	} else {
-		child_writer->Prepare(*state.child_state, &state_p, array_child, child_length, false);
-	}
+	child_writer->Prepare(*state.child_state, &state_p, array_child, count * array_size, false);
 }
 
 void ArrayColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t count) {
