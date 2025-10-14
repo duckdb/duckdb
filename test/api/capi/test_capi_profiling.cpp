@@ -327,23 +327,17 @@ TEST_CASE("Test profiling with the appender", "[capi]") {
 	REQUIRE(tester.OpenDatabase(nullptr));
 
 	tester.Query("CREATE TABLE tbl (i INT PRIMARY KEY, value VARCHAR)");
-	tester.Query("INSERT INTO tbl VALUES (1, 'hello')");
 	REQUIRE_NO_FAIL(tester.Query("PRAGMA enable_profiling = 'no_output'"));
+	REQUIRE_NO_FAIL(tester.Query("SET profiling_coverage='ALL'"));
 	duckdb_appender appender;
 
-	string query = "INSERT OR REPLACE INTO tbl SELECT i, val FROM my_appended_data";
+	string query = "INSERT INTO tbl FROM my_appended_data";
 	duckdb_logical_type types[2];
 	types[0] = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
 	types[1] = duckdb_create_logical_type(DUCKDB_TYPE_VARCHAR);
 
-	const char *column_names[2];
-	column_names[0] = "i";
-	column_names[1] = "val";
-
-	idx_t column_count = 2;
-
-	auto status = duckdb_appender_create_query(tester.connection, query.c_str(), column_count, types,
-	                                           "my_appended_data", column_names, &appender);
+	auto status = duckdb_appender_create_query(tester.connection, query.c_str(), 2, types, "my_appended_data", nullptr,
+	                                           &appender);
 	duckdb_destroy_logical_type(&types[0]);
 	duckdb_destroy_logical_type(&types[1]);
 	REQUIRE(status == DuckDBSuccess);
@@ -366,13 +360,57 @@ TEST_CASE("Test profiling with the appender", "[capi]") {
 	REQUIRE(query_name);
 	auto query_name_c_str = duckdb_get_varchar(query_name);
 	auto query_name_str = duckdb::string(query_name_c_str);
-	REQUIRE(query_name_str == "INSERT OR REPLACE INTO tbl SELECT i, val FROM my_appended_data");
+	REQUIRE(query_name_str == query);
 	duckdb_destroy_value(&query_name);
 	duckdb_free(query_name_c_str);
 
 	duckdb::map<string, double> cumulative_counter;
 	duckdb::map<string, double> cumulative_result;
+	TraverseTree(info, cumulative_counter, cumulative_result, 0);
+	tester.Cleanup();
+}
 
+TEST_CASE("Test profiling with the non-query appender", "[capi]") {
+	CAPITester tester;
+	duckdb::unique_ptr<CAPIResult> result;
+	duckdb_state status;
+
+	REQUIRE(tester.OpenDatabase(nullptr));
+	tester.Query("CREATE TABLE test (i INTEGER)");
+	REQUIRE_NO_FAIL(tester.Query("PRAGMA enable_profiling = 'no_output'"));
+	REQUIRE_NO_FAIL(tester.Query("SET profiling_coverage='ALL'"));
+
+	duckdb_appender appender;
+	REQUIRE(duckdb_appender_create(tester.connection, nullptr, "test", &appender) == DuckDBSuccess);
+	REQUIRE(duckdb_appender_error(appender) == nullptr);
+
+	// Appending a row.
+	REQUIRE(duckdb_appender_begin_row(appender) == DuckDBSuccess);
+	REQUIRE(duckdb_append_int32(appender, 42) == DuckDBSuccess);
+	// Finish and flush.
+	REQUIRE(duckdb_appender_end_row(appender) == DuckDBSuccess);
+	REQUIRE(duckdb_appender_flush(appender) == DuckDBSuccess);
+	REQUIRE(duckdb_appender_close(appender) == DuckDBSuccess);
+	REQUIRE(duckdb_appender_destroy(&appender) == DuckDBSuccess);
+
+	auto info = duckdb_get_profiling_info(tester.connection);
+	REQUIRE(info);
+
+	// Check that the query name matches the appender query.
+	auto query_name = duckdb_profiling_info_get_value(info, "QUERY_NAME");
+	REQUIRE(query_name);
+
+	auto query_name_c_str = duckdb_get_varchar(query_name);
+	auto query_name_str = duckdb::string(query_name_c_str);
+
+	auto query = "INSERT INTO main.test FROM __duckdb_internal_appended_data";
+	REQUIRE(query_name_str == query);
+
+	duckdb_destroy_value(&query_name);
+	duckdb_free(query_name_c_str);
+
+	duckdb::map<string, double> cumulative_counter;
+	duckdb::map<string, double> cumulative_result;
 	TraverseTree(info, cumulative_counter, cumulative_result, 0);
 	tester.Cleanup();
 }
