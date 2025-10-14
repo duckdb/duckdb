@@ -117,8 +117,6 @@ public:
 		return false;
 	}
 
-
-
 	//! Insert a key and its row ID into the node.
 	//! Starts at depth (in the key).
 	//! status indicates if the insert happens inside a gate or not.
