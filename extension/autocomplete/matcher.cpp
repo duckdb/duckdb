@@ -61,10 +61,14 @@ public:
 	}
 
 	optional_ptr<ParseResult> MatchParseResult(MatchState &state) const override {
+		if (state.token_index >= state.tokens.size()) {
+			return nullptr;
+		}
+		auto &token_text = state.tokens[state.token_index].text;
 		if (!MatchKeyword(state)) {
 			return nullptr;
 		}
-		auto result = state.allocator.Allocate(make_uniq<KeywordParseResult>(keyword));
+		auto result = state.allocator.Allocate(make_uniq<KeywordParseResult>(token_text));
 		result->name = name;
 		return result;
 	}
