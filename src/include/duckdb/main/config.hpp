@@ -110,6 +110,8 @@ struct DBConfigOptions {
 #else
 	bool autoinstall_known_extensions = false;
 #endif
+	//! Setting for the parser override registered by extensions. Allowed options: "default, "fallback", "strict"
+	string allow_parser_override_extension = "default";
 	//! Override for the default extension repository
 	string custom_extension_repo = "";
 	//! Override for the default autoload extension repository

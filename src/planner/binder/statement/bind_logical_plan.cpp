@@ -32,7 +32,7 @@ BoundStatement Binder::Bind(LogicalPlanStatement &stmt) {
 	if (parent) {
 		throw InternalException("LogicalPlanStatement should be bound in root binder");
 	}
-	bound_tables = GetMaxTableIndex(*result.plan) + 1;
+	global_binder_state->bound_tables = GetMaxTableIndex(*result.plan) + 1;
 	return result;
 }
 

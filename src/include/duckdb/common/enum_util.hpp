@@ -204,6 +204,8 @@ enum class FunctionStability : uint8_t;
 
 enum class GateStatus : uint8_t;
 
+enum class GeometryType : uint8_t;
+
 enum class HLLStorageType : uint8_t;
 
 enum class HTTPStatusCode : uint16_t;
@@ -296,8 +298,6 @@ enum class ParseInfoType : uint8_t;
 
 enum class ParserExtensionResultType : uint8_t;
 
-enum class PartitionSortStage : uint8_t;
-
 enum class PartitionedColumnDataType : uint8_t;
 
 enum class PartitionedTupleDataType : uint8_t;
@@ -388,6 +388,8 @@ enum class StatisticsType : uint8_t;
 
 enum class StatsInfo : uint8_t;
 
+enum class StorageBlockPrefetch : uint8_t;
+
 enum class StrTimeSpecifier : uint8_t;
 
 enum class StreamExecutionResult : uint8_t;
@@ -443,6 +445,8 @@ enum class VectorType : uint8_t;
 enum class VerificationType : uint8_t;
 
 enum class VerifyExistenceType : uint8_t;
+
+enum class VertexType : uint8_t;
 
 enum class WALType : uint8_t;
 
@@ -714,6 +718,9 @@ template<>
 const char* EnumUtil::ToChars<GateStatus>(GateStatus value);
 
 template<>
+const char* EnumUtil::ToChars<GeometryType>(GeometryType value);
+
+template<>
 const char* EnumUtil::ToChars<HLLStorageType>(HLLStorageType value);
 
 template<>
@@ -852,9 +859,6 @@ template<>
 const char* EnumUtil::ToChars<ParserExtensionResultType>(ParserExtensionResultType value);
 
 template<>
-const char* EnumUtil::ToChars<PartitionSortStage>(PartitionSortStage value);
-
-template<>
 const char* EnumUtil::ToChars<PartitionedColumnDataType>(PartitionedColumnDataType value);
 
 template<>
@@ -990,6 +994,9 @@ template<>
 const char* EnumUtil::ToChars<StatsInfo>(StatsInfo value);
 
 template<>
+const char* EnumUtil::ToChars<StorageBlockPrefetch>(StorageBlockPrefetch value);
+
+template<>
 const char* EnumUtil::ToChars<StrTimeSpecifier>(StrTimeSpecifier value);
 
 template<>
@@ -1072,6 +1079,9 @@ const char* EnumUtil::ToChars<VerificationType>(VerificationType value);
 
 template<>
 const char* EnumUtil::ToChars<VerifyExistenceType>(VerifyExistenceType value);
+
+template<>
+const char* EnumUtil::ToChars<VertexType>(VertexType value);
 
 template<>
 const char* EnumUtil::ToChars<WALType>(WALType value);
@@ -1348,6 +1358,9 @@ template<>
 GateStatus EnumUtil::FromString<GateStatus>(const char *value);
 
 template<>
+GeometryType EnumUtil::FromString<GeometryType>(const char *value);
+
+template<>
 HLLStorageType EnumUtil::FromString<HLLStorageType>(const char *value);
 
 template<>
@@ -1486,9 +1499,6 @@ template<>
 ParserExtensionResultType EnumUtil::FromString<ParserExtensionResultType>(const char *value);
 
 template<>
-PartitionSortStage EnumUtil::FromString<PartitionSortStage>(const char *value);
-
-template<>
 PartitionedColumnDataType EnumUtil::FromString<PartitionedColumnDataType>(const char *value);
 
 template<>
@@ -1624,6 +1634,9 @@ template<>
 StatsInfo EnumUtil::FromString<StatsInfo>(const char *value);
 
 template<>
+StorageBlockPrefetch EnumUtil::FromString<StorageBlockPrefetch>(const char *value);
+
+template<>
 StrTimeSpecifier EnumUtil::FromString<StrTimeSpecifier>(const char *value);
 
 template<>
@@ -1706,6 +1719,9 @@ VerificationType EnumUtil::FromString<VerificationType>(const char *value);
 
 template<>
 VerifyExistenceType EnumUtil::FromString<VerifyExistenceType>(const char *value);
+
+template<>
+VertexType EnumUtil::FromString<VertexType>(const char *value);
 
 template<>
 WALType EnumUtil::FromString<WALType>(const char *value);

@@ -353,6 +353,8 @@ public:
 	}
 	QueryContext(optional_ptr<ClientContext> context) : context(context) { // NOLINT: allow implicit construction
 	}
+	QueryContext(ClientContext &context) : context(&context) { // NOLINT: allow implicit construction
+	}
 
 public:
 	bool Valid() const {

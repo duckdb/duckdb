@@ -183,10 +183,11 @@ void RowGroup::InitializeEmpty(const vector<LogicalType> &types) {
 	}
 }
 
-void ColumnScanState::Initialize(const LogicalType &type, const vector<StorageIndex> &children,
-                                 optional_ptr<TableScanOptions> options) {
+void ColumnScanState::Initialize(const QueryContext &context_p, const LogicalType &type,
+                                 const vector<StorageIndex> &children, optional_ptr<TableScanOptions> options) {
 	// Register the options in the state
 	scan_options = options;
+	context = context_p;
 
 	if (type.id() == LogicalTypeId::VALIDITY) {
 		// validity - nothing to initialize
@@ -201,7 +202,7 @@ void ColumnScanState::Initialize(const LogicalType &type, const vector<StorageIn
 			// scan all struct children
 			scan_child_column.resize(struct_children.size(), true);
 			for (idx_t i = 0; i < struct_children.size(); i++) {
-				child_states[i + 1].Initialize(struct_children[i].second, options);
+				child_states[i + 1].Initialize(context, struct_children[i].second, options);
 			}
 		} else {
 			// only scan the specified subset of columns
@@ -211,20 +212,20 @@ void ColumnScanState::Initialize(const LogicalType &type, const vector<StorageIn
 				auto index = child.GetPrimaryIndex();
 				auto &child_indexes = child.GetChildIndexes();
 				scan_child_column[index] = true;
-				child_states[index + 1].Initialize(struct_children[index].second, child_indexes, options);
+				child_states[index + 1].Initialize(context, struct_children[index].second, child_indexes, options);
 			}
 		}
 		child_states[0].scan_options = options;
 	} else if (type.InternalType() == PhysicalType::LIST) {
 		// validity + list child
 		child_states.resize(2);
-		child_states[1].Initialize(ListType::GetChildType(type), options);
+		child_states[1].Initialize(context, ListType::GetChildType(type), options);
 		child_states[0].scan_options = options;
 	} else if (type.InternalType() == PhysicalType::ARRAY) {
 		// validity + array child
 		child_states.resize(2);
 		child_states[0].scan_options = options;
-		child_states[1].Initialize(ArrayType::GetChildType(type), options);
+		child_states[1].Initialize(context, ArrayType::GetChildType(type), options);
 	} else {
 		// validity
 		child_states.resize(1);
@@ -232,12 +233,13 @@ void ColumnScanState::Initialize(const LogicalType &type, const vector<StorageIn
 	}
 }
 
-void ColumnScanState::Initialize(const LogicalType &type, optional_ptr<TableScanOptions> options) {
+void ColumnScanState::Initialize(const QueryContext &context_p, const LogicalType &type,
+                                 optional_ptr<TableScanOptions> options) {
 	vector<StorageIndex> children;
-	Initialize(type, children, options);
+	Initialize(context_p, type, children, options);
 }
 
-void CollectionScanState::Initialize(const vector<LogicalType> &types) {
+void CollectionScanState::Initialize(const QueryContext &context, const vector<LogicalType> &types) {
 	auto &column_ids = GetColumnIds();
 	column_scans = make_unsafe_uniq_array<ColumnScanState>(column_ids.size());
 	for (idx_t i = 0; i < column_ids.size(); i++) {
@@ -245,7 +247,7 @@ void CollectionScanState::Initialize(const vector<LogicalType> &types) {
 			continue;
 		}
 		auto col_id = column_ids[i].GetPrimaryIndex();
-		column_scans[i].Initialize(types[col_id], column_ids[i].GetChildIndexes(), &GetOptions());
+		column_scans[i].Initialize(context, types[col_id], column_ids[i].GetChildIndexes(), &GetOptions());
 	}
 }
 
@@ -310,7 +312,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 	column_data->InitializeAppend(append_state);
 
 	// scan the original table, and fill the new column with the transformed value
-	scan_state.Initialize(GetCollection().GetTypes());
+	scan_state.Initialize(executor.GetContext(), GetCollection().GetTypes());
 	InitializeScan(scan_state);
 
 	DataChunk append_chunk;
@@ -551,14 +553,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 			count = max_count;
 		}
 		auto &block_manager = GetBlockManager();
-#ifndef DUCKDB_ALTERNATIVE_VERIFY
-		// // in regular operation we only prefetch from remote file systems
-		// // when alternative verify is set, we always prefetch for testing purposes
-		if (block_manager.IsRemote())
-#else
-		if (!block_manager.InMemory())
-#endif
-		{
+		if (block_manager.Prefetch()) {
 			PrefetchState prefetch_state;
 			for (idx_t i = 0; i < column_ids.size(); i++) {
 				const auto &column = column_ids[i];
@@ -728,7 +723,8 @@ shared_ptr<RowVersionManager> RowGroup::GetOrCreateVersionInfoInternal() {
 	// version info does not exist - need to create it
 	lock_guard<mutex> lock(row_group_lock);
 	if (!owned_version_info) {
-		auto new_info = make_shared_ptr<RowVersionManager>(start);
+		auto &buffer_manager = GetBlockManager().GetBufferManager();
+		auto new_info = make_shared_ptr<RowVersionManager>(buffer_manager, start);
 		SetVersionInfo(std::move(new_info));
 	}
 	return owned_version_info;
@@ -859,8 +855,8 @@ void RowGroup::CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_
 	vinfo.CleanupAppend(lowest_transaction, start, count);
 }
 
-void RowGroup::Update(TransactionData transaction, DataChunk &update_chunk, row_t *ids, idx_t offset, idx_t count,
-                      const vector<PhysicalIndex> &column_ids) {
+void RowGroup::Update(TransactionData transaction, DataTable &data_table, DataChunk &update_chunk, row_t *ids,
+                      idx_t offset, idx_t count, const vector<PhysicalIndex> &column_ids) {
 #ifdef DEBUG
 	for (size_t i = offset; i < offset + count; i++) {
 		D_ASSERT(ids[i] >= row_t(this->start) && ids[i] < row_t(this->start + this->count));
@@ -873,16 +869,16 @@ void RowGroup::Update(TransactionData transaction, DataChunk &update_chunk, row_
 		if (offset > 0) {
 			Vector sliced_vector(update_chunk.data[i], offset, offset + count);
 			sliced_vector.Flatten(count);
-			col_data.Update(transaction, column.index, sliced_vector, ids + offset, count);
+			col_data.Update(transaction, data_table, column.index, sliced_vector, ids + offset, count);
 		} else {
-			col_data.Update(transaction, column.index, update_chunk.data[i], ids, count);
+			col_data.Update(transaction, data_table, column.index, update_chunk.data[i], ids, count);
 		}
 		MergeStatistics(column.index, *col_data.GetUpdateStatistics());
 	}
 }
 
-void RowGroup::UpdateColumn(TransactionData transaction, DataChunk &updates, Vector &row_ids, idx_t offset, idx_t count,
-                            const vector<column_t> &column_path) {
+void RowGroup::UpdateColumn(TransactionData transaction, DataTable &data_table, DataChunk &updates, Vector &row_ids,
+                            idx_t offset, idx_t count, const vector<column_t> &column_path) {
 	D_ASSERT(updates.ColumnCount() == 1);
 	auto ids = FlatVector::GetData<row_t>(row_ids);
 
@@ -892,9 +888,9 @@ void RowGroup::UpdateColumn(TransactionData transaction, DataChunk &updates, Vec
 	if (offset > 0) {
 		Vector sliced_vector(updates.data[0], offset, offset + count);
 		sliced_vector.Flatten(count);
-		col_data.UpdateColumn(transaction, column_path, sliced_vector, ids + offset, count, 1);
+		col_data.UpdateColumn(transaction, data_table, column_path, sliced_vector, ids + offset, count, 1);
 	} else {
-		col_data.UpdateColumn(transaction, column_path, updates.data[0], ids, count, 1);
+		col_data.UpdateColumn(transaction, data_table, column_path, updates.data[0], ids, count, 1);
 	}
 	MergeStatistics(primary_column_idx, *col_data.GetUpdateStatistics());
 }
@@ -919,6 +915,32 @@ void RowGroup::MergeIntoStatistics(TableStatistics &other) {
 	for (idx_t i = 0; i < columns.size(); i++) {
 		MergeIntoStatistics(i, other.GetStats(*stats_lock, i).Statistics());
 	}
+}
+
+ColumnCheckpointInfo::ColumnCheckpointInfo(RowGroupWriteInfo &info, idx_t column_idx)
+    : column_idx(column_idx), info(info) {
+}
+
+RowGroupWriteInfo::RowGroupWriteInfo(PartialBlockManager &manager, const vector<CompressionType> &compression_types,
+                                     CheckpointType checkpoint_type)
+    : manager(manager), compression_types(compression_types), checkpoint_type(checkpoint_type) {
+}
+
+RowGroupWriteInfo::RowGroupWriteInfo(PartialBlockManager &manager, const vector<CompressionType> &compression_types,
+                                     vector<unique_ptr<PartialBlockManager>> &column_partial_block_managers_p)
+    : manager(manager), compression_types(compression_types), checkpoint_type(CheckpointType::FULL_CHECKPOINT),
+      column_partial_block_managers(column_partial_block_managers_p) {
+}
+
+PartialBlockManager &RowGroupWriteInfo::GetPartialBlockManager(idx_t column_idx) {
+	if (column_partial_block_managers && !column_partial_block_managers->empty()) {
+		return *column_partial_block_managers->at(column_idx);
+	}
+	return manager;
+}
+
+PartialBlockManager &ColumnCheckpointInfo::GetPartialBlockManager() {
+	return info.GetPartialBlockManager(column_idx);
 }
 
 CompressionType ColumnCheckpointInfo::GetCompressionType() {
@@ -1072,8 +1094,10 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 		row_group_pointer.has_metadata_blocks = has_metadata_blocks;
 		row_group_pointer.extra_metadata_blocks = extra_metadata_blocks;
 		row_group_pointer.deletes_pointers = deletes_pointers;
-		metadata_manager->ClearModifiedBlocks(write_data.existing_pointers);
-		metadata_manager->ClearModifiedBlocks(deletes_pointers);
+		if (metadata_manager) {
+			metadata_manager->ClearModifiedBlocks(write_data.existing_pointers);
+			metadata_manager->ClearModifiedBlocks(deletes_pointers);
+		}
 		return row_group_pointer;
 	}
 	D_ASSERT(write_data.states.size() == columns.size());
@@ -1227,10 +1251,11 @@ PartitionStatistics RowGroup::GetPartitionStats() const {
 //===--------------------------------------------------------------------===//
 // GetColumnSegmentInfo
 //===--------------------------------------------------------------------===//
-void RowGroup::GetColumnSegmentInfo(idx_t row_group_index, vector<ColumnSegmentInfo> &result) {
+void RowGroup::GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index,
+                                    vector<ColumnSegmentInfo> &result) {
 	for (idx_t col_idx = 0; col_idx < GetColumnCount(); col_idx++) {
 		auto &col_data = GetColumn(col_idx);
-		col_data.GetColumnSegmentInfo(row_group_index, {col_idx}, result);
+		col_data.GetColumnSegmentInfo(context, row_group_index, {col_idx}, result);
 	}
 }
 

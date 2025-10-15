@@ -29,8 +29,18 @@ struct VariantNestedData {
 };
 
 struct VariantDecimalData {
+public:
+	VariantDecimalData(uint32_t width, uint32_t scale, const_data_ptr_t value_ptr)
+	    : width(width), scale(scale), value_ptr(value_ptr) {
+	}
+
+public:
+	PhysicalType GetPhysicalType() const;
+
+public:
 	uint32_t width;
 	uint32_t scale;
+	const_data_ptr_t value_ptr = nullptr;
 };
 
 struct VariantVectorData {
@@ -105,6 +115,7 @@ enum class VariantLogicalType : uint8_t {
 	ARRAY = 30,
 	BIGNUM = 31,
 	BITSTRING = 32,
+	GEOMETRY = 33,
 	ENUM_SIZE /* always kept as last item of the enum */
 };
 

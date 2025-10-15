@@ -85,28 +85,38 @@ shared_ptr<AttachedDatabase> DatabaseManager::GetDatabaseInternal(const lock_gua
 shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &context, AttachInfo &info,
                                                              AttachOptions &options) {
 	if (options.db_type.empty() || StringUtil::CIEquals(options.db_type, "duckdb")) {
+		// Start timing the ATTACH-delay step.
+		auto profiler = context.client_data->profiler;
+		profiler->StartTimer(MetricsType::WAITING_TO_ATTACH_LATENCY);
+
 		while (InsertDatabasePath(info, options) == InsertDatabasePathResult::ALREADY_EXISTS) {
 			// database with this name and path already exists
 			// first check if it exists within this transaction
 			auto &meta_transaction = MetaTransaction::Get(context);
 			auto existing_db = meta_transaction.GetReferencedDatabaseOwning(info.name);
 			if (existing_db) {
+				profiler->EndTimer(MetricsType::WAITING_TO_ATTACH_LATENCY);
 				// it does! return it
 				return existing_db;
 			}
+
 			// ... but it might not be done attaching yet!
 			// verify the database has actually finished attaching prior to returning
 			lock_guard<mutex> guard(databases_lock);
 			auto entry = databases.find(info.name);
 			if (entry != databases.end()) {
-				// database ACTUALLY exists - return it
+				// The database ACTUALLY exists, so we return it.
+				profiler->EndTimer(MetricsType::WAITING_TO_ATTACH_LATENCY);
 				return entry->second;
 			}
 			if (context.interrupted) {
+				profiler->EndTimer(MetricsType::WAITING_TO_ATTACH_LATENCY);
 				throw InterruptException();
 			}
 		}
+		profiler->EndTimer(MetricsType::WAITING_TO_ATTACH_LATENCY);
 	}
+
 	auto &config = DBConfig::GetConfig(context);
 	GetDatabaseType(context, info, config, options);
 	if (!options.db_type.empty()) {
@@ -303,7 +313,7 @@ void DatabaseManager::GetDatabaseType(ClientContext &context, AttachInfo &info, 
 	// Try to extract the database type from the path.
 	if (options.db_type.empty()) {
 		auto &fs = FileSystem::GetFileSystem(context);
-		DBPathAndType::CheckMagicBytes(QueryContext(context), fs, info.path, options.db_type);
+		DBPathAndType::CheckMagicBytes(context, fs, info.path, options.db_type);
 	}
 
 	if (options.db_type.empty()) {

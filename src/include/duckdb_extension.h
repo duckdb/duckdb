@@ -643,6 +643,13 @@ typedef struct {
 	char *(*duckdb_value_to_string)(duckdb_value value);
 #endif
 
+// New functions around the table description
+#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+	idx_t (*duckdb_table_description_get_column_count)(duckdb_table_description table_description);
+	duckdb_logical_type (*duckdb_table_description_get_column_type)(duckdb_table_description table_description,
+	                                                                idx_t index);
+#endif
+
 // New functions around table function binding
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
 	void (*duckdb_table_function_get_client_context)(duckdb_bind_info info, duckdb_client_context *out_context);
@@ -1163,6 +1170,10 @@ typedef struct {
 
 // Version unstable_new_string_functions
 #define duckdb_value_to_string duckdb_ext_api.duckdb_value_to_string
+
+// Version unstable_new_table_description_functions
+#define duckdb_table_description_get_column_count duckdb_ext_api.duckdb_table_description_get_column_count
+#define duckdb_table_description_get_column_type  duckdb_ext_api.duckdb_table_description_get_column_type
 
 // Version unstable_new_table_function_functions
 #define duckdb_table_function_get_client_context duckdb_ext_api.duckdb_table_function_get_client_context

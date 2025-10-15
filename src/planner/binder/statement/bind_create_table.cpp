@@ -289,7 +289,7 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 			col.SetType(bound_expression->return_type);
 
 			// Update the type in the binding, for future expansions
-			table_binding->types[i.index] = col.Type();
+			table_binding->SetColumnType(i.index, col.Type());
 		}
 		bound_indices.insert(i);
 	}

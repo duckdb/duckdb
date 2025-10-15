@@ -1514,6 +1514,7 @@ ParserOptions ClientContext::GetParserOptions() const {
 	options.integer_division = DBConfig::GetSetting<IntegerDivisionSetting>(*this);
 	options.max_expression_depth = client_config.max_expression_depth;
 	options.extensions = &DBConfig::GetConfig(*this).parser_extensions;
+	options.parser_override_setting = DBConfig::GetConfig(*this).options.allow_parser_override_extension;
 	return options;
 }
 

@@ -35,7 +35,8 @@ uint8_t GetVarintSize(T val) {
 }
 
 template <class T>
-void VarintEncode(T val, data_ptr_t ptr) {
+idx_t VarintEncode(T val, data_ptr_t ptr) {
+	idx_t size = 0;
 	do {
 		uint8_t byte = val & 127;
 		val >>= 7;
@@ -44,11 +45,14 @@ void VarintEncode(T val, data_ptr_t ptr) {
 		}
 		*ptr = byte;
 		ptr++;
+		size++;
 	} while (val != 0);
+	return size;
 }
 
 template <class T>
-void VarintEncode(T val, MemoryStream &ser) {
+idx_t VarintEncode(T val, MemoryStream &ser) {
+	idx_t size = 0;
 	do {
 		uint8_t byte = val & 127;
 		val >>= 7;
@@ -56,7 +60,9 @@ void VarintEncode(T val, MemoryStream &ser) {
 			byte |= 128;
 		}
 		ser.WriteData(&byte, sizeof(uint8_t));
+		size++;
 	} while (val != 0);
+	return size;
 }
 
 } // namespace duckdb

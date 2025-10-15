@@ -724,6 +724,10 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		auto str = reinterpret_cast<bignum_t *>(data)[index];
 		return Value::BIGNUM(const_data_ptr_cast(str.data.GetData()), str.data.GetSize());
 	}
+	case LogicalTypeId::GEOMETRY: {
+		auto str = reinterpret_cast<string_t *>(data)[index];
+		return Value::GEOMETRY(const_data_ptr_cast(str.GetData()), str.GetSize());
+	}
 	case LogicalTypeId::AGGREGATE_STATE: {
 		auto str = reinterpret_cast<string_t *>(data)[index];
 		return Value::AGGREGATE_STATE(vector->GetType(), const_data_ptr_cast(str.GetData()), str.GetSize());

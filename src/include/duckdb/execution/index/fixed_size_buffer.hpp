@@ -43,7 +43,7 @@ public:
 
 public:
 	//! Constructor for a new in-memory buffer
-	explicit FixedSizeBuffer(BlockManager &block_manager);
+	explicit FixedSizeBuffer(BlockManager &block_manager, MemoryTag memory_tag);
 	//! Constructor for deserializing buffer metadata from disk
 	FixedSizeBuffer(BlockManager &block_manager, const idx_t segment_count, const idx_t allocation_size,
 	                const BlockPointer &block_pointer);

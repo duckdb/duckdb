@@ -1063,6 +1063,15 @@ TEST_CASE("Test Relation Pending Query API", "[relation_api]") {
 	}
 }
 
+TEST_CASE("Test Relation Query setting query", "[relation_api]") {
+	DuckDB db;
+	Connection con(db);
+
+	auto query = con.RelationFromQuery("SELECT current_query()");
+	auto result = query->Limit(1)->Execute();
+	REQUIRE(!result->Fetch()->GetValue(0, 0).ToString().empty());
+}
+
 TEST_CASE("Construct ValueRelation with RelationContextWrapper and operate on it", "[relation_api][txn][wrapper]") {
 	DuckDB db;
 	Connection con(db);

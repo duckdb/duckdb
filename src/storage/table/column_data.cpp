@@ -293,13 +293,13 @@ void ColumnData::FetchUpdateRow(TransactionData transaction, row_t row_id, Vecto
 	updates->FetchRow(transaction, NumericCast<idx_t>(row_id), result, result_idx);
 }
 
-void ColumnData::UpdateInternal(TransactionData transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
-                                idx_t update_count, Vector &base_vector) {
+void ColumnData::UpdateInternal(TransactionData transaction, DataTable &data_table, idx_t column_index,
+                                Vector &update_vector, row_t *row_ids, idx_t update_count, Vector &base_vector) {
 	lock_guard<mutex> update_guard(update_lock);
 	if (!updates) {
 		updates = make_uniq<UpdateSegment>(*this);
 	}
-	updates->Update(transaction, column_index, update_vector, row_ids, update_count, base_vector);
+	updates->Update(transaction, data_table, column_index, update_vector, row_ids, update_count, base_vector);
 }
 
 idx_t ColumnData::ScanVector(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
@@ -578,20 +578,20 @@ idx_t ColumnData::FetchUpdateData(ColumnScanState &state, row_t *row_ids, Vector
 	return fetch_count;
 }
 
-void ColumnData::Update(TransactionData transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
-                        idx_t update_count) {
+void ColumnData::Update(TransactionData transaction, DataTable &data_table, idx_t column_index, Vector &update_vector,
+                        row_t *row_ids, idx_t update_count) {
 	Vector base_vector(type);
 	ColumnScanState state;
 	FetchUpdateData(state, row_ids, base_vector);
 
-	UpdateInternal(transaction, column_index, update_vector, row_ids, update_count, base_vector);
+	UpdateInternal(transaction, data_table, column_index, update_vector, row_ids, update_count, base_vector);
 }
 
-void ColumnData::UpdateColumn(TransactionData transaction, const vector<column_t> &column_path, Vector &update_vector,
-                              row_t *row_ids, idx_t update_count, idx_t depth) {
+void ColumnData::UpdateColumn(TransactionData transaction, DataTable &data_table, const vector<column_t> &column_path,
+                              Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t depth) {
 	// this method should only be called at the end of the path in the base column case
 	D_ASSERT(depth >= column_path.size());
-	ColumnData::Update(transaction, column_path[0], update_vector, row_ids, update_count);
+	ColumnData::Update(transaction, data_table, column_path[0], update_vector, row_ids, update_count);
 }
 
 void ColumnData::AppendTransientSegment(SegmentLock &l, idx_t start_row) {
@@ -673,7 +673,8 @@ void ColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, 
 unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, ColumnCheckpointInfo &checkpoint_info) {
 	// scan the segments of the column data
 	// set up the checkpoint state
-	auto checkpoint_state = CreateCheckpointState(row_group, checkpoint_info.info.manager);
+	auto &partial_block_manager = checkpoint_info.GetPartialBlockManager();
+	auto checkpoint_state = CreateCheckpointState(row_group, partial_block_manager);
 	checkpoint_state->global_stats = BaseStatistics::CreateEmpty(type).ToUnique();
 
 	auto &nodes = data.ReferenceSegments();
@@ -699,6 +700,7 @@ void ColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStatist
 	this->count = 0;
 	for (auto &data_pointer : column_data.pointers) {
 		// Update the count and statistics
+		data_pointer.row_start = start + count;
 		this->count += data_pointer.tuple_count;
 
 		// Merge the statistics. If this is a child column, the target_stats reference will point into the parents stats
@@ -909,7 +911,7 @@ shared_ptr<ColumnData> ColumnData::Deserialize(BlockManager &block_manager, Data
 	return entry;
 }
 
-void ColumnData::GetColumnSegmentInfo(idx_t row_group_index, vector<idx_t> col_path,
+void ColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<idx_t> col_path,
                                       vector<ColumnSegmentInfo> &result) {
 	D_ASSERT(!col_path.empty());
 
@@ -958,7 +960,7 @@ void ColumnData::GetColumnSegmentInfo(idx_t row_group_index, vector<idx_t> col_p
 			column_info.additional_blocks = segment_state->GetAdditionalBlocks();
 		}
 		if (compression_function.get_segment_info) {
-			auto segment_info = compression_function.get_segment_info(*segment);
+			auto segment_info = compression_function.get_segment_info(context, *segment);
 			vector<string> sinfo;
 			for (auto &item : segment_info) {
 				auto &mode = item.first;

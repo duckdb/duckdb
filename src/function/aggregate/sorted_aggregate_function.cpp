@@ -10,6 +10,7 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/parallel/thread_context.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/main/settings.hpp"
 
 namespace duckdb {

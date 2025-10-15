@@ -33,11 +33,14 @@ Referenced table "s1.t" not found
 statement error
 SELECT s1.x.c FROM s1.v AS x
 ----
+Referenced table "s1.x" not found
 
 statement error
 SELECT s1.v.c FROM s1.v AS x
 ----
+Referenced table "s1.v" not found
 
 statement error
 SELECT s1.v.c FROM s1.v AS v
 ----
+Referenced table "s1.v" not found

@@ -41,7 +41,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 	bool parameters_resolved = true;
 	try {
 		profiler.StartPhase(MetricsType::PLANNER_BINDING);
-		binder->parameters = &bound_parameters;
+		binder->SetParameters(bound_parameters);
 		auto bound_statement = binder->Bind(statement);
 		profiler.EndPhase();
 

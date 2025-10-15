@@ -287,9 +287,13 @@ bool StringUtil::IsUpper(const string &str) {
 
 // Jenkins hash function: https://en.wikipedia.org/wiki/Jenkins_hash_function
 uint64_t StringUtil::CIHash(const string &str) {
+	return StringUtil::CIHash(str.c_str(), str.size());
+}
+
+uint64_t StringUtil::CIHash(const char *str, idx_t size) {
 	uint32_t hash = 0;
-	for (auto c : str) {
-		hash += static_cast<uint32_t>(StringUtil::CharacterToLower(static_cast<char>(c)));
+	for (idx_t i = 0; i < size; i++) {
+		hash += static_cast<uint32_t>(StringUtil::CharacterToLower(static_cast<char>(str[i])));
 		hash += hash << 10;
 		hash ^= hash >> 6;
 	}
@@ -700,6 +704,21 @@ string ComplexJSON::GetValueRecursive(const ComplexJSON &child) {
 }
 string StringUtil::ToComplexJSONMap(const ComplexJSON &complex_json) {
 	return ComplexJSON::GetValueRecursive(complex_json);
+}
+
+string StringUtil::ValidateJSON(const char *data, const idx_t &len) {
+	// Same flags as in JSON extension
+	static constexpr auto READ_FLAG =
+	    YYJSON_READ_ALLOW_INF_AND_NAN | YYJSON_READ_ALLOW_TRAILING_COMMAS | YYJSON_READ_BIGNUM_AS_RAW;
+	yyjson_read_err error;
+	yyjson_doc *doc = yyjson_read_opts((char *)data, len, READ_FLAG, nullptr, &error); // NOLINT: for yyjson
+	if (error.code != YYJSON_READ_SUCCESS) {
+		return StringUtil::Format("Malformed JSON at byte %lld of input: %s. Input: \"%s\"", error.pos, error.msg,
+		                          string(data, len));
+	}
+
+	yyjson_doc_free(doc);
+	return string();
 }
 
 string StringUtil::ExceptionToJSONMap(ExceptionType type, const string &message,

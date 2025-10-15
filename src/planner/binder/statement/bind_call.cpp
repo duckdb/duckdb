@@ -1,8 +1,6 @@
 #include "duckdb/parser/statement/call_statement.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/operator/logical_get.hpp"
-#include "duckdb/planner/tableref/bound_table_function.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 

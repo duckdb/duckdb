@@ -14,12 +14,25 @@
 namespace duckdb {
 
 class StringColumnReader : public ColumnReader {
+	enum class StringColumnType : uint8_t { VARCHAR, JSON, OTHER };
+
+	static StringColumnType GetStringColumnType(const LogicalType &type) {
+		if (type.IsJSONType()) {
+			return StringColumnType::JSON;
+		}
+		if (type.id() == LogicalTypeId::VARCHAR) {
+			return StringColumnType::VARCHAR;
+		}
+		return StringColumnType::OTHER;
+	}
+
 public:
 	static constexpr const PhysicalType TYPE = PhysicalType::VARCHAR;
 
 public:
 	StringColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema);
 	idx_t fixed_width_string_length;
+	const StringColumnType string_column_type;
 
 public:
 	static void VerifyString(const char *str_data, uint32_t str_len, const bool isVarchar);
