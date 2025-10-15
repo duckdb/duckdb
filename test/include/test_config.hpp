@@ -16,14 +16,27 @@
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/enums/debug_initialize.hpp"
+#include <sys/types.h>
+#include <unordered_map>
 
 namespace duckdb {
 
 enum class SortStyle : uint8_t { NO_SORT, ROW_SORT, VALUE_SORT };
 
+struct ConfigSetting {
+	string name;
+	Value value;
+};
+
 class TestConfiguration {
 public:
 	enum class ExtensionAutoLoadingMode { NONE = 0, AVAILABLE = 1, ALL = 2 };
+
+	enum class SelectPolicy : uint8_t {
+		NONE,   // does not match any explicit policy (default: policy=SELECT)
+		SELECT, // matches explicit select
+		SKIP    // matches explicit skip
+	};
 
 	static TestConfiguration &Get();
 
@@ -60,6 +73,11 @@ public:
 	vector<string> ErrorMessagesToBeSkipped();
 	string GetStorageVersion();
 	string GetTestEnv(const string &key, const string &default_value);
+	const unordered_map<string, string> &GetTestEnvMap();
+	vector<unordered_set<string>> GetSelectTagSets();
+	vector<unordered_set<string>> GetSkipTagSets();
+	SelectPolicy GetPolicyForTagSet(const vector<string> &tag_set);
+	vector<ConfigSetting> GetConfigSettings();
 
 	static bool TestForceStorage();
 	static bool TestForceReload();
@@ -70,11 +88,16 @@ public:
 	static void ParseConnectScript(const Value &input);
 	static void CheckSortStyle(const Value &input);
 	static bool TryParseSortStyle(const string &sort_style, SortStyle &result);
+	static void AppendSelectTagSet(const Value &tag_set);
+	static void AppendSkipTagSet(const Value &tag_set);
 
 private:
 	case_insensitive_map_t<Value> options;
 	unordered_set<string> tests_to_be_skipped;
 	unordered_map<string, string> test_env;
+
+	vector<unordered_set<string>> select_tag_sets;
+	vector<unordered_set<string>> skip_tag_sets;
 
 private:
 	template <class T, class VAL_T = T>
