@@ -22,7 +22,7 @@ LateMaterialization::LateMaterialization(Optimizer &optimizer) : optimizer(optim
 	max_row_count = DBConfig::GetSetting<LateMaterializationMaxRowsSetting>(optimizer.context);
 }
 
-vector<idx_t> LateMaterialization::GetOrInsertRowIds(LogicalGet &get) {
+vector<idx_t> LateMaterialization::GetOrInsertRowIds(LogicalGet &get) { // TODO: Reference a common method
 	auto &column_ids = get.GetMutableColumnIds();
 
 	vector<idx_t> result;

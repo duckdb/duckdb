@@ -5,6 +5,7 @@
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
+#include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
@@ -587,6 +588,275 @@ void TopNWindowElimination::UpdateTopmostBindings(const idx_t window_idx, const 
 		binding.column_index = op->types.size() - 1;
 		replacer.replacement_bindings.emplace_back(topmost_bindings[row_id_binding_idx], binding);
 	}
+}
+
+// TODO: Reference a common method with LateMaterializationRule
+vector<idx_t> GetOrInsertRowIds(LogicalGet &get, const vector<column_t> &row_id_column_ids,
+                                const vector<TableColumn> &row_id_columns) {
+	auto &column_ids = get.GetMutableColumnIds();
+
+	vector<idx_t> result;
+	for (idx_t r_idx = 0; r_idx < row_id_column_ids.size(); ++r_idx) {
+		// check if it is already projected
+		auto row_id_column_id = row_id_column_ids[r_idx];
+		auto &row_id_column = row_id_columns[r_idx];
+		optional_idx row_id_index;
+		for (idx_t i = 0; i < column_ids.size(); ++i) {
+			if (column_ids[i].GetPrimaryIndex() == row_id_column_id) {
+				// already projected - return the id
+				row_id_index = i;
+				break;
+			}
+		}
+		if (row_id_index.IsValid()) {
+			result.push_back(row_id_index.GetIndex());
+			continue;
+		}
+		// row id is not yet projected - push it and return the new index
+		column_ids.push_back(ColumnIndex(row_id_column_id));
+		if (!get.projection_ids.empty()) {
+			get.projection_ids.push_back(column_ids.size() - 1);
+		}
+		if (!get.types.empty()) {
+			get.types.push_back(row_id_column.type);
+		}
+		result.push_back(column_ids.size() - 1);
+	}
+	return result;
+}
+
+unique_ptr<LogicalGet> ConstructLHS(LogicalGet &get, const Optimizer &optimizer) {
+	// we need to construct a new scan of the same table
+	auto table_index = optimizer.binder.GenerateTableIndex();
+	auto new_get = make_uniq<LogicalGet>(table_index, get.function, get.bind_data->Copy(), get.returned_types,
+	                                     get.names, get.virtual_columns);
+	new_get->GetMutableColumnIds() = get.GetColumnIds();
+	new_get->projection_ids = get.projection_ids;
+	new_get->parameters = get.parameters;
+	new_get->named_parameters = get.named_parameters;
+	new_get->input_table_types = get.input_table_types;
+	new_get->input_table_names = get.input_table_names;
+	return new_get;
+}
+
+unique_ptr<LogicalOperator> TopNWindowElimination::TryReplaceTableScanForSemiJoin(const LogicalWindow &window,
+                                                                                  const idx_t topmost_table_idx) {
+	// First, check if window function references come from a single table scan
+	auto &window_expr = window.expressions[0]->Cast<BoundWindowExpression>();
+
+	vector<reference<LogicalOperator>> stack;
+	reference<LogicalOperator> child = *window.children[0];
+
+	while (child.get().type != LogicalOperatorType::LOGICAL_GET) {
+		stack.push_back(child);
+		if (child.get().children.size() > 1) {
+			if (child.get().type != LogicalOperatorType::LOGICAL_DELIM_JOIN) {
+				auto &comp_join = child.get().Cast<LogicalComparisonJoin>();
+				child = comp_join.delim_flipped ? *comp_join.children[1] : *comp_join.children[0];
+			} else {
+				// For now, we do not support late materialization for joins that are not delim joins
+				return nullptr;
+			}
+		}
+	}
+
+	// We have found a single logical get!
+	auto &logical_get = child.get().Cast<LogicalGet>();
+	if (!logical_get.function.late_materialization || !logical_get.function.get_row_id_columns) {
+		return nullptr;
+	}
+
+	const auto rowid_column_idxs = logical_get.function.get_row_id_columns(context, logical_get.bind_data.get());
+	if (rowid_column_idxs.size() > 1) {
+		// TODO: support multi-rowids for parquet
+		return nullptr;
+	}
+	vector<TableColumn> rowid_columns;
+	for (const auto &col_idx : rowid_column_idxs) {
+		auto entry = logical_get.virtual_columns.find(col_idx);
+		if (entry == logical_get.virtual_columns.end()) {
+			return nullptr;
+		}
+		rowid_columns.push_back(entry->second);
+	}
+
+	// Create LHS logical get
+	auto lhs_get = ConstructLHS(logical_get, optimizer);
+	const auto lhs_rowid_idxs = GetOrInsertRowIds(*lhs_get, rowid_column_idxs, rowid_columns);
+	const auto rhs_rowid_idxs = GetOrInsertRowIds(logical_get, rowid_column_idxs, rowid_columns);
+
+	// Add LHS rowid projections to operators
+	vector<ColumnBinding> row_id_bindings;
+	for (auto &row_id_index : rhs_rowid_idxs) {
+		row_id_bindings.emplace_back(logical_get.table_index, row_id_index);
+	}
+
+	// At the topmost child, delete the unused columns
+	for (auto &order : window_expr.orders) {
+		VisitExpression(&order.expression);
+	}
+	for (auto &partition : window_expr.partitions) {
+		VisitExpression(&partition);
+	}
+	bool references_deleted = false;
+	for (auto op : stack) {
+		switch (op.get().type) {
+		case LogicalOperatorType::LOGICAL_PROJECTION: {
+			auto &proj = op.get().Cast<LogicalProjection>();
+			for (idx_t i = proj.expressions.size(); i > 0; i--) {
+				bool proj_is_used = false;
+				for (auto &column_ref : column_references) {
+					D_ASSERT(column_ref.first.table_index == proj.table_index);
+					if (column_ref.first.column_index == i - 1) {
+						proj_is_used = true;
+						break;
+					}
+				}
+				if (!proj_is_used) {
+					proj.expressions.erase(proj.expressions.begin() + i - 1);
+				}
+			}
+			references_deleted = true;
+			break;
+		}
+		case LogicalOperatorType::LOGICAL_FILTER: {
+			auto &filter = op.get().Cast<LogicalFilter>();
+			if (filter.HasProjectionMap()) {
+				for (idx_t i = filter.projection_map.size(); i > 0; i--) {
+					bool proj_is_used = false;
+					for (auto &column_ref : column_references) {
+						if (column_ref.first.column_index == i - 1) {
+							proj_is_used = true;
+							break;
+						}
+					}
+					if (!proj_is_used) {
+						filter.projection_map.erase(filter.projection_map.begin() + i - 1);
+					}
+				}
+				references_deleted = true;
+				break;
+			}
+		}
+		case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
+			auto &delim_join = op.get().Cast<LogicalComparisonJoin>();
+			auto &projection_map =
+			    delim_join.delim_flipped ? delim_join.right_projection_map : delim_join.left_projection_map;
+			if (!projection_map.empty()) {
+				for (idx_t i = projection_map.size(); i > 0; i--) {
+					bool proj_is_used = false;
+					for (auto &column_ref : column_references) {
+						if (column_ref.first.column_index == i - 1) {
+							proj_is_used = true;
+							break;
+						}
+					}
+					if (!proj_is_used) {
+						projection_map.erase(projection_map.begin() + i - 1);
+					}
+				}
+				references_deleted = true;
+				break;
+			}
+		}
+		default: {
+			throw InternalException("Just no");
+		}
+		}
+	}
+
+	if (!references_deleted) {
+		// Seems like we have to remove the projections directly in the logical get
+		if (logical_get.projection_ids.empty()) {
+			auto &column_ids = logical_get.GetMutableColumnIds();
+			for (idx_t i = column_ids.size(); i > 0; i--) {
+				bool proj_is_used = false;
+				for (auto &column_ref : column_references) {
+					D_ASSERT(column_ref.first.table_index == logical_get.table_index);
+					if (column_ref.first.column_index == i - 1) {
+						proj_is_used = true;
+						break;
+					}
+				}
+				if (!proj_is_used) {
+					column_ids.erase(column_ids.begin() + i - 1);
+				}
+			}
+		} else {
+			bool proj_is_used = false;
+			for (idx_t i = logical_get.projection_ids.size(); i > 0; i--) {
+				for (auto &column_ref : column_references) {
+					if (column_ref.first.column_index == i - 1) {
+						proj_is_used = true;
+						break;
+					}
+				}
+				if (!proj_is_used) {
+					logical_get.projection_ids.erase(logical_get.projection_ids.begin() + i - 1);
+				}
+			}
+		}
+	}
+
+	column_references.clear();
+
+	idx_t column_count =
+	    logical_get.projection_ids.empty() ? logical_get.GetColumnIds().size() : logical_get.projection_ids.size();
+
+	for (idx_t i = stack.size(); i > 0; i--) {
+		auto &op = stack[i - 1].get();
+		switch (op.type) {
+		case LogicalOperatorType::LOGICAL_PROJECTION: {
+			auto &proj = op.Cast<LogicalProjection>();
+			// push projection of the row-id columns
+			for (idx_t r_idx = 0; r_idx < rowid_columns.size(); r_idx++) {
+				auto &r_col = rowid_columns[r_idx];
+				proj.expressions.push_back(
+				    make_uniq<BoundColumnRefExpression>(r_col.name, r_col.type, row_id_bindings[r_idx]));
+				// modify the row-id-binding to the new projection
+				row_id_bindings[r_idx] = ColumnBinding(proj.table_index, proj.expressions.size() - 1);
+			}
+			column_count = proj.expressions.size();
+			break;
+		}
+		case LogicalOperatorType::LOGICAL_FILTER: {
+			auto &filter = op.Cast<LogicalFilter>();
+			// column bindings pass-through this operator as-is UNLESS the filter has a projection map
+			if (filter.HasProjectionMap()) {
+				// if the filter has a projection map, we need to project the new column
+				// TODO: What if there are multiple columns??
+				filter.projection_map.push_back(column_count - 1);
+			}
+			break;
+		}
+		case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
+			auto &delim_join = op.Cast<LogicalComparisonJoin>();
+			auto &projection_map =
+			    delim_join.delim_flipped ? delim_join.right_projection_map : delim_join.left_projection_map;
+			if (!projection_map.empty()) {
+				projection_map.push_back(column_count - 1);
+			}
+		}
+		default:
+			throw InternalException("Unsupported logical operator in LateMaterialization::ConstructRHS");
+		}
+	}
+
+	auto join = make_uniq<LogicalComparisonJoin>(JoinType::SEMI);
+	join->children.push_back(std::move(lhs_get));
+
+	for (idx_t r_idx = 0; r_idx < rowid_columns.size(); r_idx++) {
+		auto &row_id_col = rowid_columns[r_idx];
+		JoinCondition condition;
+		condition.comparison = ExpressionType::COMPARE_EQUAL;
+		condition.left = make_uniq<BoundColumnRefExpression>(
+		    row_id_col.name, row_id_col.type, ColumnBinding {lhs_get->table_index, lhs_rowid_idxs[r_idx]});
+		condition.right = make_uniq<BoundColumnRefExpression>(row_id_col.name, row_id_col.type,
+		                                                      ColumnBinding {topmost_table_idx, r_idx});
+		join->conditions.push_back(std::move(condition));
+	}
+
+	return unique_ptr<LogicalOperator>(std::move(join));
 }
 
 } // namespace duckdb

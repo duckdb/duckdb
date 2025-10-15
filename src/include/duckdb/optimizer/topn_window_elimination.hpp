@@ -59,6 +59,8 @@ private:
 	                                  const map<idx_t, idx_t> &group_idxs,
 	                                  const vector<ColumnBinding> &topmost_bindings,
 	                                  vector<ColumnBinding> &new_bindings, ColumnBindingReplacer &replacer);
+	// Semi-join reduction methods
+	unique_ptr<LogicalOperator> TryReplaceTableScanForSemiJoin(const LogicalWindow &window, idx_t topmost_table_idx);
 
 private:
 	ClientContext &context;
