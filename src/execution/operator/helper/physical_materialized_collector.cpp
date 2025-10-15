@@ -2,7 +2,7 @@
 
 #include "duckdb/main/materialized_query_result.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/main/result_set_manager.hpp"
 
 namespace duckdb {
 
@@ -67,7 +67,7 @@ unique_ptr<QueryResult> PhysicalMaterializedCollector::GetResult(GlobalSinkState
 	if (!gstate.collection) {
 		gstate.collection = CreateCollection(*gstate.context);
 	}
-	auto result_set = ResultSetManager::Get(*gstate.context).Add(std::move(gstate.collection), properties.memory_type);
+	auto result_set = ResultSetManager::Get(*gstate.context).Add(std::move(gstate.collection), memory_type);
 	auto result = make_uniq<MaterializedQueryResult>(statement_type, properties, names, std::move(result_set),
 	                                                 gstate.context->GetClientProperties());
 	return std::move(result);

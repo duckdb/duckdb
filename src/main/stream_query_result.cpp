@@ -4,6 +4,7 @@
 #include "duckdb/main/materialized_query_result.hpp"
 #include "duckdb/common/box_renderer.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/result_set_manager.hpp"
 
 namespace duckdb {
 
@@ -146,14 +147,9 @@ unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
 		return make_uniq<MaterializedQueryResult>(GetErrorObject());
 	}
 
-	unique_ptr<ColumnDataCollection> result_collection;
-	if (properties.memory_type == QueryResultMemoryType::IN_MEMORY) {
-		result_collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
-	} else {
-		D_ASSERT(properties.memory_type == QueryResultMemoryType::BUFFER_MANAGED);
-		result_collection = make_uniq<ColumnDataCollection>(BufferManager::GetBufferManager(*context->db), types);
-	}
-	auto managed_result = ResultSetManager::Get(*context).Add(std::move(result_collection), properties.memory_type);
+	// For now, always use QueryResultMemoryType::IN_MEMORY, as we don't have the original QueryParameters here
+	auto managed_result = ResultSetManager::Get(*context).Add(
+	    make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), types), QueryResultMemoryType::IN_MEMORY);
 	auto pinned_result_set = managed_result->Pin();
 	auto &collection = pinned_result_set->collection;
 

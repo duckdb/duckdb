@@ -27,6 +27,7 @@ public:
 
 	StatementType statement_type;
 	StatementProperties properties;
+	QueryResultMemoryType memory_type;
 	PhysicalOperator &plan;
 	vector<string> names;
 

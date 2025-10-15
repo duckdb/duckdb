@@ -46,7 +46,7 @@ class BatchCollectorGlobalState : public GlobalSinkState {
 public:
 	BatchCollectorGlobalState(ClientContext &context, const PhysicalBatchCollector &op)
 	    : data(context, op.types,
-	           op.properties.memory_type == QueryResultMemoryType::BUFFER_MANAGED
+	           op.memory_type == QueryResultMemoryType::BUFFER_MANAGED
 	               ? ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR
 	               : ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR,
 	           BatchedDataCollectionBufferManagerType::DATABASE_INSTANCE) {
@@ -61,7 +61,7 @@ class BatchCollectorLocalState : public LocalSinkState {
 public:
 	BatchCollectorLocalState(ClientContext &context, const PhysicalBatchCollector &op)
 	    : data(context, op.types,
-	           op.properties.memory_type == QueryResultMemoryType::BUFFER_MANAGED
+	           op.memory_type == QueryResultMemoryType::BUFFER_MANAGED
 	               ? ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR
 	               : ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR,
 	           BatchedDataCollectionBufferManagerType::DATABASE_INSTANCE) {

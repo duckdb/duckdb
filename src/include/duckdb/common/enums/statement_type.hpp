@@ -69,8 +69,8 @@ class ClientContext;
 struct StatementProperties {
 	StatementProperties()
 	    : requires_valid_transaction(true), output_type(QueryResultOutputType::MATERIALIZED),
-	      memory_type(QueryResultMemoryType::IN_MEMORY), bound_all_parameters(true),
-	      return_type(StatementReturnType::QUERY_RESULT), parameter_count(0), always_require_rebind(false) {
+	      bound_all_parameters(true), return_type(StatementReturnType::QUERY_RESULT), parameter_count(0),
+	      always_require_rebind(false) {
 	}
 
 	struct CatalogIdentity {
@@ -95,8 +95,6 @@ struct StatementProperties {
 	bool requires_valid_transaction;
 	//! Whether or not the result can be streamed to the client
 	QueryResultOutputType output_type;
-	//! Whether or not the result can be buffer-managed
-	QueryResultMemoryType memory_type;
 	//! Whether or not all parameters have successfully had their types determined
 	bool bound_all_parameters;
 	//! What type of data the statement returns

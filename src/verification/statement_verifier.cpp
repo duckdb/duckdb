@@ -143,6 +143,7 @@ bool StatementVerifier::Run(
 		if (result->HasError()) {
 			failed = true;
 		}
+		D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
 		materialized_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(result));
 	} catch (std::exception &ex) {
 		failed = true;

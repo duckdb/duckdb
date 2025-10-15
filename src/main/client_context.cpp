@@ -550,6 +550,7 @@ ClientContext::PendingPreparedStatementInternal(ClientContextLock &lock,
 		get_collector = client_config.get_result_collector;
 	}
 	statement_data.output_type = stream_result ? QueryResultOutputType::STREAMING : QueryResultOutputType::MATERIALIZED;
+	statement_data.memory_type = parameters.query_parameters.memory_type;
 
 	// Get the result collector and initialize the executor.
 	auto &collector = get_collector(*this, statement_data);
