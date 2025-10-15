@@ -230,14 +230,14 @@ bool PerfectHashJoinExecutor::TemplatedFillSelectionVectorBuild(Vector &source, 
 	auto max_value = perfect_join_statistics.build_max.GetValueUnsafe<T>();
 	UnifiedVectorFormat vector_data;
 	source.ToUnifiedFormat(count, vector_data);
-	auto data = reinterpret_cast<T *>(vector_data.data);
+	const auto data = vector_data.GetData<T>();
 	// generate the selection vector
 	for (idx_t i = 0, sel_idx = 0; i < count; ++i) {
 		auto data_idx = vector_data.sel->get_index(i);
 		auto input_value = data[data_idx];
 		// add index to selection vector if value in the range
 		if (min_value <= input_value && input_value <= max_value) {
-			auto idx = (idx_t)(input_value - min_value); // subtract min value to get the idx position
+			auto idx = UnsafeNumericCast<idx_t>(input_value - min_value); // subtract min value to get the idx position
 			sel_vec.set_index(sel_idx, idx);
 			if (bitmap_build_idx.RowIsValidUnsafe(idx)) {
 				return false;
@@ -368,9 +368,9 @@ void PerfectHashJoinExecutor::TemplatedFillSelectionVectorProbe(Vector &source, 
 			auto input_value = data[data_idx];
 			// add index to selection vector if value in the range
 			if (min_value <= input_value && input_value <= max_value) {
-				auto idx = (idx_t)(input_value - min_value); // subtract min value to get the idx position
-				                                             // check for matches in the build
-				if (bitmap_build_idx.RowIsValidUnsafe(idx)) {
+				auto idx = UnsafeNumericCast<idx_t>(input_value - min_value); // subtract min value to get the idx
+				                                                              // position check for matches in the build
+				if (bitmap_build_idx.RowIsValid(idx)) {
 					build_sel_vec.set_index(sel_idx, idx);
 					probe_sel_vec.set_index(sel_idx++, i);
 					probe_sel_count++;
@@ -387,9 +387,9 @@ void PerfectHashJoinExecutor::TemplatedFillSelectionVectorProbe(Vector &source, 
 			auto input_value = data[data_idx];
 			// add index to selection vector if value in the range
 			if (min_value <= input_value && input_value <= max_value) {
-				auto idx = (idx_t)(input_value - min_value); // subtract min value to get the idx position
-				                                             // check for matches in the build
-				if (bitmap_build_idx.RowIsValidUnsafe(idx)) {
+				auto idx = UnsafeNumericCast<idx_t>(input_value - min_value); // subtract min value to get the idx
+				                                                              // position check for matches in the build
+				if (bitmap_build_idx.RowIsValid(idx)) {
 					build_sel_vec.set_index(sel_idx, idx);
 					probe_sel_vec.set_index(sel_idx++, i);
 					probe_sel_count++;
