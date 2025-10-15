@@ -75,11 +75,14 @@ enum class TokenType { WORD };
 
 struct MatcherToken {
 	// NOLINTNEXTLINE: allow implicit conversion from text
-	MatcherToken(string text_p) : text(std::move(text_p)) {
+	MatcherToken(string text_p, idx_t offset_p) : text(std::move(text_p)), offset(offset_p) {
+		length = text.length();
 	}
 
 	TokenType type = TokenType::WORD;
 	string text;
+	idx_t offset = 0;
+	idx_t length = 0;
 };
 
 struct MatcherSuggestion {

@@ -12,6 +12,7 @@ struct BindData : public FunctionData {
 public:
 	explicit BindData(const string &str);
 	explicit BindData(uint32_t index);
+	BindData(const BindData &other) = default;
 
 public:
 	unique_ptr<FunctionData> Copy() const override;
@@ -36,10 +37,7 @@ BindData::BindData(uint32_t index) : FunctionData() {
 }
 
 unique_ptr<FunctionData> BindData::Copy() const {
-	if (component.lookup_mode == VariantChildLookupMode::BY_INDEX) {
-		return make_uniq<BindData>(component.index);
-	}
-	return make_uniq<BindData>(component.key);
+	return make_uniq<BindData>(*this);
 }
 
 bool BindData::Equals(const FunctionData &other) const {

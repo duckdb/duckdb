@@ -4,6 +4,7 @@
 #include "parse_result.hpp"
 #include "transform_enum_result.hpp"
 #include "transform_result.hpp"
+#include "ast/setting_info.hpp"
 #include "duckdb/function/macro_function.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
@@ -68,6 +69,12 @@ public:
 		}
 
 		return std::move(typed_result_ptr->value);
+	}
+
+	template <typename T>
+	T Transform(ListParseResult &parse_result, idx_t child_index) {
+		auto child_parse_result = parse_result.GetChild(child_index);
+		return Transform<T>(child_parse_result);
 	}
 
 	template <typename T>
@@ -150,6 +157,11 @@ private:
 	PEGTransformerFactory(const PEGTransformerFactory &) = delete;
 
 	static unique_ptr<SQLStatement> TransformStatement(PEGTransformer &, optional_ptr<ParseResult> list);
+
+	// use.gram
+	static unique_ptr<SQLStatement> TransformUseStatement(PEGTransformer &transformer,
+	                                                      optional_ptr<ParseResult> parse_result);
+	static QualifiedName TransformUseTarget(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 private:
 	PEGParser parser;
