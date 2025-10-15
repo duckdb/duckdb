@@ -36,7 +36,7 @@ void IsFormatExtensionKnown(const string &format) {
 			// It's a match, we must throw
 			throw CatalogException(
 			    "Copy Function with name \"%s\" is not in the catalog, but it exists in the %s extension.", format,
-			    file_postfixes.extension);
+			    std::string(file_postfixes.extension));
 		}
 	}
 }
