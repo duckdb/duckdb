@@ -169,8 +169,9 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformColumnReference(PEG
 	return make_uniq<ColumnRefExpression>(std::move(identifiers));
 }
 
-
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+unique_ptr<ParsedExpression>
+PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
+                                                   optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto qualified_function = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(0));
 	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(1))->Cast<ListParseResult>();
@@ -217,10 +218,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 		return window_function;
 	}
 
-	auto result = make_uniq<FunctionExpression>(qualified_function.catalog,
-		qualified_function.schema,
-		qualified_function.name,
-		std::move(function_children));
+	auto result = make_uniq<FunctionExpression>(qualified_function.catalog, qualified_function.schema,
+	                                            qualified_function.name, std::move(function_children));
 
 	result->distinct = distinct;
 	if (!order_by.empty()) {
@@ -235,7 +234,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 }
 
 QualifiedName PEGTransformerFactory::TransformFunctionIdentifier(PEGTransformer &transformer,
-																 optional_ptr<ParseResult> parse_result) {
+                                                                 optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto choice_pr = list_pr.Child<ChoiceParseResult>(0);
 	if (choice_pr.result->type == ParseResultType::IDENTIFIER) {
@@ -247,7 +246,6 @@ QualifiedName PEGTransformerFactory::TransformFunctionIdentifier(PEGTransformer 
 	}
 	return transformer.Transform<QualifiedName>(list_pr.Child<ChoiceParseResult>(0).result);
 }
-
 
 // // ColumnsExpression <- '*'? 'COLUMNS' Parens(Expression)
 // unique_ptr<SQLStatement> PEGTransformerFactory::TransformColumnsExpression(PEGTransformer &transformer,

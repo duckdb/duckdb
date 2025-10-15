@@ -190,7 +190,7 @@ namespace duckdb {
 // }
 
 string PEGTransformerFactory::TransformIdentifierOrKeyword(PEGTransformer &transformer,
-														   optional_ptr<ParseResult> parse_result) {
+                                                           optional_ptr<ParseResult> parse_result) {
 	if (parse_result->type == ParseResultType::IDENTIFIER) {
 		return parse_result->Cast<IdentifierParseResult>().identifier;
 	}
@@ -221,12 +221,11 @@ string PEGTransformerFactory::TransformIdentifierOrKeyword(PEGTransformer &trans
 				return child->Cast<IdentifierParseResult>().identifier;
 			}
 			throw InternalException("Unexpected IdentifierOrKeyword type encountered %s.",
-									ParseResultToString(child->type));
+			                        ParseResultToString(child->type));
 		}
 	}
 	throw ParserException("Unexpected ParseResult type in identifier transformation.");
 }
-
 
 // NumberLiteral <- < [+-]?[0-9]*([.][0-9]*)? >
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformNumberLiteral(PEGTransformer &transformer,

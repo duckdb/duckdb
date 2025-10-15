@@ -98,6 +98,9 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	REGISTER_TRANSFORM(TransformFromSource);
 	REGISTER_TRANSFORM(TransformVersionNumber);
 
+	// select.gram
+	REGISTER_TRANSFORM(TransformFunctionArgument);
+
 	// use.gram
 	REGISTER_TRANSFORM(TransformUseStatement);
 	REGISTER_TRANSFORM(TransformUseTarget);
@@ -157,7 +160,6 @@ optional_ptr<ParseResult> PEGTransformerFactory::ExtractResultFromParens(optiona
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return list_pr.GetChild(1);
 }
-
 
 bool PEGTransformerFactory::ExpressionIsEmptyStar(ParsedExpression &expr) {
 	if (expr.GetExpressionClass() != ExpressionClass::STAR) {

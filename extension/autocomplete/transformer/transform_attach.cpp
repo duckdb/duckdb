@@ -29,7 +29,21 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformAttachStatement(PEGTran
 
 	info->path = list_pr.Child<ListParseResult>(4).Child<StringLiteralParseResult>(0).result;
 	transformer.TransformOptional<string>(list_pr, 5, info->name);
-	transformer.TransformOptional<unordered_map<string, Value>>(list_pr, 6, info->options);
+	vector<GenericCopyOption> copy_options;
+	transformer.TransformOptional<vector<GenericCopyOption>>(list_pr, 6, copy_options);
+	for (auto &copy_option : copy_options) {
+		if (copy_option.expression) {
+			info->parsed_options[copy_option.name] = std::move(copy_option.expression);
+			continue;
+		}
+		if (copy_option.children.empty()) {
+			info->options[copy_option.name] = Value(true);
+		} else if (copy_option.children.size() == 1) {
+			info->options[copy_option.name] = std::move(copy_option.children[0]);
+		} else {
+			throw ParserException("Option %s can only have one argument", copy_option.name);
+		}
+	}
 	result->info = std::move(info);
 	return result;
 }
@@ -44,41 +58,29 @@ string PEGTransformerFactory::TransformAttachAlias(PEGTransformer &transformer,
 	return transformer.Transform<string>(col_id.result);
 }
 
-unordered_map<string, Value> PEGTransformerFactory::TransformAttachOptions(PEGTransformer &transformer,
+vector<GenericCopyOption> PEGTransformerFactory::TransformAttachOptions(PEGTransformer &transformer,
                                                                            optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto &parens = list_pr.Child<ListParseResult>(0);
 	auto &generic_copy_option_list = parens.Child<ListParseResult>(1);
 
-	auto generic_options = transformer.Transform<unordered_map<string, vector<Value>>>(generic_copy_option_list);
-	unordered_map<string, Value> option_result;
-	for (auto &option : generic_options) {
-		if (option.second.empty()) {
-			option_result[option.first] = Value(true);
-		} else {
-			option_result[option.first] = option.second[0];
-		}
-	}
-	return option_result;
+	return transformer.Transform<vector<GenericCopyOption>>(generic_copy_option_list);
 }
 
-unordered_map<string, vector<Value>>
+vector<GenericCopyOption>
 PEGTransformerFactory::TransformGenericCopyOptionList(PEGTransformer &transformer,
                                                       optional_ptr<ParseResult> parse_result) {
-	unordered_map<string, vector<Value>> result;
+	vector<GenericCopyOption> result;
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto &list = list_pr.Child<ListParseResult>(0);
 	auto &first_element = list.Child<ListParseResult>(0);
-	GenericCopyOption copy_option = transformer.Transform<GenericCopyOption>(first_element);
-	result[copy_option.name] = copy_option.children;
+	result.push_back(transformer.Transform<GenericCopyOption>(first_element));
 	auto &extra_elements = list.Child<OptionalParseResult>(1);
 	if (extra_elements.HasResult()) {
 		auto &repeat_pr = extra_elements.optional_result->Cast<RepeatParseResult>();
 		for (auto &element : repeat_pr.children) {
 			auto &child = element->Cast<ListParseResult>();
-			GenericCopyOption extra_copy_option =
-			    transformer.Transform<GenericCopyOption>(child.Child<ListParseResult>(1));
-			result[extra_copy_option.name] = extra_copy_option.children;
+			result.push_back(transformer.Transform<GenericCopyOption>(child.Child<ListParseResult>(1)));
 		}
 	}
 	return result;
@@ -109,6 +111,8 @@ GenericCopyOption PEGTransformerFactory::TransformGenericCopyOption(PEGTransform
 					                        ExpressionClassToString(child->GetExpressionClass()));
 				}
 			}
+		} else if (expression->GetExpressionType() == ExpressionType::FUNCTION) {
+			copy_option.expression = std::move(expression);
 		} else {
 			throw NotImplementedException("Unrecognized expression type %s",
 			                              ExpressionTypeToString(expression->GetExpressionType()));

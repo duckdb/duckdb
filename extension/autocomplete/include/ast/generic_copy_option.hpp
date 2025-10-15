@@ -8,6 +8,7 @@ namespace duckdb {
 struct GenericCopyOption {
 	string name;
 	vector<Value> children; // Default value
+	unique_ptr<ParsedExpression> expression;
 
 	GenericCopyOption() {
 

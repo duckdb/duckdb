@@ -9,6 +9,7 @@ add_library_unity(
   transform_detach.cpp
   transform_expression.cpp
   transform_load.cpp
+  transform_select.cpp
   transform_set.cpp
   transform_use.cpp)
 set(AUTOCOMPLETE_EXTENSION_FILES
