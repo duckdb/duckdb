@@ -1220,7 +1220,7 @@ hugeint_t InterpolateOperator::Operation(const hugeint_t &lo, const double d, co
 
 template <>
 uhugeint_t InterpolateOperator::Operation(const uhugeint_t &lo, const double d, const uhugeint_t &hi) {
-	return Hugeint::Convert(Operation(Uhugeint::Cast<double>(lo), d, Uhugeint::Cast<double>(hi)));
+	return Uhugeint::Convert(Operation(Uhugeint::Cast<double>(lo), d, Uhugeint::Cast<double>(hi)));
 }
 
 static interval_t MultiplyByDouble(const interval_t &i, const double &d) { // NOLINT

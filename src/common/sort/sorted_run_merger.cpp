@@ -844,6 +844,7 @@ SortedRunMerger::SortedRunMerger(const Sort &sort_p, vector<unique_ptr<SortedRun
 unique_ptr<LocalSourceState> SortedRunMerger::GetLocalSourceState(ExecutionContext &,
                                                                   GlobalSourceState &gstate_p) const {
 	auto &gstate = gstate_p.Cast<SortedRunMergerGlobalState>();
+	auto guard = gstate.Lock();
 	return make_uniq<SortedRunMergerLocalState>(gstate);
 }
 

@@ -25,8 +25,6 @@ const vector<unique_ptr<ParsedExpression>> &StatementVerifier::GetSelectList(Que
 		return node.Cast<SelectNode>().select_list;
 	case QueryNodeType::SET_OPERATION_NODE:
 		return GetSelectList(*node.Cast<SetOperationNode>().children[0]);
-	case QueryNodeType::CTE_NODE:
-		return GetSelectList(*node.Cast<CTENode>().query);
 	default:
 		return empty_select_list;
 	}

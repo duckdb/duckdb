@@ -1,0 +1,102 @@
+# name: test/sql/pragma/profiling/test_attach_and_checkpoint_latency.test
+# group: [profiling]
+
+require json
+
+require noforcestorage
+
+require skip_reload
+
+# Setup.
+
+statement ok
+SET threads = 1;
+
+statement ok
+SET wal_autocheckpoint = '1TB';
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown;
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profile_fs.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"WAITING_TO_ATTACH_LATENCY": "true", "ATTACH_LOAD_STORAGE_LATENCY": "true", "ATTACH_REPLAY_WAL_LATENCY": "true", "CHECKPOINT_LATENCY": "true"}';
+
+statement ok
+SET profiling_coverage='ALL';
+
+# Finished setup.
+
+# CHECKPOINT_LATENCY.
+
+statement ok
+ATTACH '__TEST_DIR__/profile_fs.db';
+
+statement ok
+CREATE TABLE profile_fs.tbl AS SELECT range AS id FROM range(100_000);
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+CHECKPOINT profile_fs;
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profile_fs.json';
+
+query I
+SELECT
+	CASE WHEN checkpoint_latency > 0 THEN 'true'
+	ELSE 'false' END
+FROM metrics_output;
+----
+true
+
+# WAITING_TO_ATTACH_LATENCY, ATTACH_LOAD_STORAGE_LATENCY and ATTACH_REPLAY_WAL_LATENCY.
+
+statement ok
+CREATE TABLE profile_fs.other_tbl AS SELECT range AS id FROM range(100_000);
+
+statement ok
+DETACH profile_fs;
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+ATTACH '__TEST_DIR__/profile_fs.db';
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profile_fs.json';
+
+query I
+SELECT
+	CASE WHEN waiting_to_attach_latency > 0 THEN 'true'
+	ELSE 'false' END
+FROM metrics_output;
+----
+true
+
+query I
+SELECT
+	CASE WHEN attach_load_storage_latency > 0 THEN 'true'
+	ELSE 'false' END
+FROM metrics_output;
+----
+true
+
+query I
+SELECT
+	CASE WHEN attach_replay_wal_latency > 0 THEN 'true'
+	ELSE 'false' END
+FROM metrics_output;
+----
+true

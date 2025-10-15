@@ -40,8 +40,12 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 	auto right_binder = Binder::CreateBinder(context, this);
 
 	// Add bindings of left side to temporary CTE bindings context
-	right_binder->bind_context.AddCTEBinding(setop_index, statement.ctename, result.names, result.types,
-	                                         !statement.key_targets.empty());
+	BindingAlias cte_alias(statement.ctename);
+	right_binder->bind_context.AddCTEBinding(setop_index, std::move(cte_alias), result.names, result.types);
+	if (!statement.key_targets.empty()) {
+		BindingAlias recurring_alias("recurring", statement.ctename);
+		right_binder->bind_context.AddCTEBinding(setop_index, std::move(recurring_alias), result.names, result.types);
+	}
 
 	auto right = right_binder->BindNode(*statement.right);
 	for (auto &c : left_binder->correlated_columns) {
@@ -86,15 +90,15 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 	left_node = CastLogicalOperatorToTypes(left.types, result.types, std::move(left_node));
 	right_node = CastLogicalOperatorToTypes(right.types, result.types, std::move(right_node));
 
-	auto recurring_binding = right_binder->GetCTEBinding("recurring." + ctename);
-	bool ref_recurring = recurring_binding && recurring_binding->Cast<CTEBinding>().reference_count > 0;
+	auto recurring_binding = right_binder->GetCTEBinding(BindingAlias("recurring", ctename));
+	bool ref_recurring = recurring_binding && recurring_binding->IsReferenced();
 	if (key_targets.empty() && ref_recurring) {
 		throw InvalidInputException("RECURRING can only be used with USING KEY in recursive CTE.");
 	}
 
 	// Check if there is a reference to the recursive or recurring table, if not create a set operator.
-	auto cte_binding = right_binder->GetCTEBinding(ctename);
-	bool ref_cte = cte_binding && cte_binding->Cast<CTEBinding>().reference_count > 0;
+	auto cte_binding = right_binder->GetCTEBinding(BindingAlias(ctename));
+	bool ref_cte = cte_binding && cte_binding->IsReferenced();
 	if (!ref_cte && !ref_recurring) {
 		auto root =
 		    make_uniq<LogicalSetOperation>(setop_index, result.types.size(), std::move(left_node),

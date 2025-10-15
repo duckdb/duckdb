@@ -723,7 +723,8 @@ shared_ptr<RowVersionManager> RowGroup::GetOrCreateVersionInfoInternal() {
 	// version info does not exist - need to create it
 	lock_guard<mutex> lock(row_group_lock);
 	if (!owned_version_info) {
-		auto new_info = make_shared_ptr<RowVersionManager>(start);
+		auto &buffer_manager = GetBlockManager().GetBufferManager();
+		auto new_info = make_shared_ptr<RowVersionManager>(buffer_manager, start);
 		SetVersionInfo(std::move(new_info));
 	}
 	return owned_version_info;
@@ -854,8 +855,8 @@ void RowGroup::CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_
 	vinfo.CleanupAppend(lowest_transaction, start, count);
 }
 
-void RowGroup::Update(TransactionData transaction, DataChunk &update_chunk, row_t *ids, idx_t offset, idx_t count,
-                      const vector<PhysicalIndex> &column_ids) {
+void RowGroup::Update(TransactionData transaction, DataTable &data_table, DataChunk &update_chunk, row_t *ids,
+                      idx_t offset, idx_t count, const vector<PhysicalIndex> &column_ids) {
 #ifdef DEBUG
 	for (size_t i = offset; i < offset + count; i++) {
 		D_ASSERT(ids[i] >= row_t(this->start) && ids[i] < row_t(this->start + this->count));
@@ -868,16 +869,16 @@ void RowGroup::Update(TransactionData transaction, DataChunk &update_chunk, row_
 		if (offset > 0) {
 			Vector sliced_vector(update_chunk.data[i], offset, offset + count);
 			sliced_vector.Flatten(count);
-			col_data.Update(transaction, column.index, sliced_vector, ids + offset, count);
+			col_data.Update(transaction, data_table, column.index, sliced_vector, ids + offset, count);
 		} else {
-			col_data.Update(transaction, column.index, update_chunk.data[i], ids, count);
+			col_data.Update(transaction, data_table, column.index, update_chunk.data[i], ids, count);
 		}
 		MergeStatistics(column.index, *col_data.GetUpdateStatistics());
 	}
 }
 
-void RowGroup::UpdateColumn(TransactionData transaction, DataChunk &updates, Vector &row_ids, idx_t offset, idx_t count,
-                            const vector<column_t> &column_path) {
+void RowGroup::UpdateColumn(TransactionData transaction, DataTable &data_table, DataChunk &updates, Vector &row_ids,
+                            idx_t offset, idx_t count, const vector<column_t> &column_path) {
 	D_ASSERT(updates.ColumnCount() == 1);
 	auto ids = FlatVector::GetData<row_t>(row_ids);
 
@@ -887,9 +888,9 @@ void RowGroup::UpdateColumn(TransactionData transaction, DataChunk &updates, Vec
 	if (offset > 0) {
 		Vector sliced_vector(updates.data[0], offset, offset + count);
 		sliced_vector.Flatten(count);
-		col_data.UpdateColumn(transaction, column_path, sliced_vector, ids + offset, count, 1);
+		col_data.UpdateColumn(transaction, data_table, column_path, sliced_vector, ids + offset, count, 1);
 	} else {
-		col_data.UpdateColumn(transaction, column_path, updates.data[0], ids, count, 1);
+		col_data.UpdateColumn(transaction, data_table, column_path, updates.data[0], ids, count, 1);
 	}
 	MergeStatistics(primary_column_idx, *col_data.GetUpdateStatistics());
 }
