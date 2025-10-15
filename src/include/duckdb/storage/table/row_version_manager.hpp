@@ -12,19 +12,24 @@
 #include "duckdb/storage/table/chunk_info.hpp"
 #include "duckdb/storage/storage_info.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/execution/index/fixed_size_allocator.hpp"
 
 namespace duckdb {
 
 struct DeleteInfo;
 class MetadataManager;
+class BufferManager;
 struct MetaBlockPointer;
 
 class RowVersionManager {
 public:
-	explicit RowVersionManager(idx_t start) noexcept;
+	explicit RowVersionManager(BufferManager &buffer_manager, idx_t start) noexcept;
 
-	idx_t GetStart() {
+	idx_t GetStart() const {
 		return start;
+	}
+	FixedSizeAllocator &GetAllocator() {
+		return allocator;
 	}
 	void SetStart(idx_t start);
 	idx_t GetCommittedDeletedCount(idx_t count);
@@ -48,6 +53,7 @@ public:
 
 private:
 	mutex version_lock;
+	FixedSizeAllocator allocator;
 	idx_t start;
 	vector<unique_ptr<ChunkInfo>> vector_info;
 	bool has_changes;

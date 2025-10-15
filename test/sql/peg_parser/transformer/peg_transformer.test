@@ -14,4 +14,4 @@ set allow_parser_override_extension=strict;
 statement error
 select 1;
 ----
-Not implemented Error: 'Statement' transformer rule has not been implemented yet.
+Not implemented Error: Parser override has not yet implemented this transformer rule. (Original error: No transformer function found for rule 'SelectStatement')
