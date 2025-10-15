@@ -8,7 +8,9 @@ namespace duckdb {
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformStatement(PEGTransformer &transformer,
                                                                    optional_ptr<ParseResult> parse_result) {
-	throw NotImplementedException("'Statement' transformer rule has not been implemented yet.");
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	return transformer.Transform<unique_ptr<SQLStatement>>(choice_pr.result);
 }
 
 unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &tokens, const char *root_rule) {
@@ -35,7 +37,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &
 			}
 			token_list += to_string(i) + ":" + tokens[i].text;
 		}
-		throw BinderException("Failed to parse query - did not consume all tokens (got to token %d - %s)\nTokens:\n%s",
+		throw ParserException("Failed to parse query - did not consume all tokens (got to token %d - %s)\nTokens:\n%s",
 		                      state.token_index, tokens[state.token_index].text, token_list);
 	}
 
@@ -45,6 +47,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &
 	auto &factory = GetInstance();
 	PEGTransformer transformer(transformer_allocator, transformer_state, factory.sql_transform_functions,
 	                           factory.parser.rules, factory.enum_mappings);
+	auto result = transformer.Transform<unique_ptr<SQLStatement>>(match_result);
 	return transformer.Transform<unique_ptr<SQLStatement>>(match_result);
 }
 
@@ -56,7 +59,10 @@ PEGTransformerFactory &PEGTransformerFactory::GetInstance() {
 }
 
 PEGTransformerFactory::PEGTransformerFactory() {
-	// Registering transform functions using the macro for brevity
 	REGISTER_TRANSFORM(TransformStatement);
+
+	// use.gram
+	REGISTER_TRANSFORM(TransformUseStatement);
+	REGISTER_TRANSFORM(TransformUseTarget);
 }
 } // namespace duckdb
