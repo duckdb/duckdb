@@ -295,6 +295,7 @@ static void VariantNormalizeFunction(DataChunk &input, ExpressionState &state, V
 	}
 
 	VariantUtils::FinalizeVariantKeys(result, dictionary, keys_selvec, ListVector::GetListSize(keys));
+	keys_entry.Slice(keys_selvec, ListVector::GetListSize(keys));
 
 	if (input.AllConstant()) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
