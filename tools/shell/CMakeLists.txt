@@ -9,20 +9,9 @@ endif()
 set(SHELL_SOURCES ${SHELL_SOURCES} shell.cpp shell_renderer.cpp
                   shell_highlight.cpp)
 
-option(STATIC_LIBCPP "Statically link CLI to libc++" FALSE)
-
 add_executable(shell ${SHELL_SOURCES})
 target_link_libraries(shell sqlite3_api_wrapper_static
                       ${DUCKDB_EXTRA_LINK_FLAGS})
-link_threads(shell "")
-if(STATIC_LIBCPP)
-  message("Statically linking CLI")
-  target_link_libraries(shell -static-libstdc++ -static-libgcc)
-endif()
-
-if(NOT WIN32)
-  target_link_libraries(shell duckdb_utf8proc)
-endif()
 
 function(ensure_variable_is_number INPUT_VERSION OUT_RESULT)
   if(NOT "${${INPUT_VERSION}}" MATCHES "^[0-9]+$")

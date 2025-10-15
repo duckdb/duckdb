@@ -1,3 +1,4 @@
+
 include_directories(include)
 add_subdirectory(sqlite3)
 
@@ -21,8 +22,6 @@ set(SQLITE_API_WRAPPER_FILES shell_extension.cpp sqlite3_api_wrapper.cpp
 
 add_library(sqlite3_api_wrapper_static STATIC ${SQLITE_API_WRAPPER_FILES})
 target_link_libraries(sqlite3_api_wrapper_static duckdb_static)
-target_link_libraries(sqlite3_api_wrapper_static duckdb_utf8proc)
-link_threads(sqlite3_api_wrapper_static "")
 
 include_directories(../../third_party/catch)
 
@@ -31,5 +30,4 @@ add_subdirectory(test)
 
 add_executable(test_sqlite3_api_wrapper ${SQLITE_TEST_FILES})
 target_link_libraries(test_sqlite3_api_wrapper sqlite3_api_wrapper_static)
-
 link_extension_libraries(sqlite3_api_wrapper_static "")

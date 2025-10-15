@@ -89,6 +89,7 @@ foreach(LINK_LIB ${DUCKDB_LINK_LIBS})
   list(APPEND LINK_OBJECTS $<TARGET_OBJECTS:${LINK_LIB}>)
 endforeach(LINK_LIB)
 
+
 add_library(
   duckdb_static STATIC ${ALL_OBJECT_FILES} ${LINK_OBJECTS}
                        $<TARGET_OBJECTS:dummy_static_extension_loader>)
@@ -127,14 +128,6 @@ if(WIN32 AND NOT MINGW)
 
   target_sources(duckdb PRIVATE version.rc)
 endif()
-
-target_include_directories(
-  duckdb PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-                $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
-
-target_include_directories(
-  duckdb_static PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-                       $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 
 install(
   DIRECTORY "${PROJECT_SOURCE_DIR}/src/include/duckdb"
