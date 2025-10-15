@@ -37,6 +37,9 @@ public:
 	BufferManager &buffer_manager;
 
 public:
+	BufferManager &GetBufferManager() const {
+		return buffer_manager;
+	}
 	//! Creates a new block inside the block manager
 	virtual unique_ptr<Block> ConvertBlock(block_id_t block_id, FileBuffer &source_buffer) = 0;
 	virtual unique_ptr<Block> CreateBlock(block_id_t block_id, FileBuffer *source_buffer) = 0;
