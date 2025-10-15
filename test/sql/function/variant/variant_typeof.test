@@ -1,6 +1,9 @@
 # name: test/sql/function/variant/variant_typeof.test
 # group: [variant]
 
+statement ok
+pragma enable_verification;
+
 query I
 select variant_typeof({'a': 42}::VARIANT);
 ----
