@@ -60,8 +60,8 @@ DROP TABLE strings_temp;
 statement ok
 CREATE INDEX idx ON art USING ART(id);
 
-# we disable verification for thes last queries as verification stores multiple query results in main memory
-# query results are now buffer-managed, so they add to the memory usage.
+# we disable verification for these last queries as verification stores multiple query results in main memory
+# query results are buffer-managed, so they add to the memory usage.
 # the memory usage goes up (slightly) with each query, causing, e.g., "Copied statement differs from original result!"
 statement ok
 PRAGMA disable_verification;

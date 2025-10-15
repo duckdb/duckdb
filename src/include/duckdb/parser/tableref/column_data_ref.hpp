@@ -26,7 +26,7 @@ public:
 	                       vector<string> expected_names = vector<string>());
 	explicit ColumnDataRef(unique_ptr<PinnedResultSet> pinned_query_result_p,
 	                       vector<string> expected_names = vector<string>());
-	~ColumnDataRef();
+	~ColumnDataRef() override;
 
 public:
 	//! The set of expected names
