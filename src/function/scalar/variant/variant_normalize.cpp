@@ -192,16 +192,16 @@ struct KeysVisitor {
 
 		//! Then visit the fields in sorted order
 		for (auto &entry : sorted_fields) {
-			auto children_idx = nested_data.children_idx + entry.second;
+			auto source_children_idx = nested_data.children_idx + entry.second;
 
 			//! Add the key of the field to the result
-			auto keys_index = variant.GetKeysIndex(row, children_idx);
+			auto keys_index = variant.GetKeysIndex(row, source_children_idx);
 			auto &key = variant.GetKey(row, keys_index);
 			auto dict_index = state.result_data.GetOrCreateIndex(key);
 			state.result_data.keys_selvec.set_index(state.keys_offset + keys_idx, dict_index);
 
 			//! Visit the child value
-			auto values_index = variant.GetValuesIndex(row, children_idx);
+			auto values_index = variant.GetValuesIndex(row, source_children_idx);
 			state.values_indexes[children_idx] = state.values_size;
 			state.keys_indexes[children_idx] = keys_idx;
 			children_idx++;
