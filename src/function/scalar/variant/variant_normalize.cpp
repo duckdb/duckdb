@@ -11,10 +11,10 @@ namespace duckdb {
 
 namespace {
 
-struct KeysVisitorState {
+struct VariantNormalizerState {
 public:
-	KeysVisitorState(idx_t result_row, VariantVectorData &source, OrderedOwningStringMap<uint32_t> &dictionary,
-	                 SelectionVector &keys_selvec)
+	VariantNormalizerState(idx_t result_row, VariantVectorData &source, OrderedOwningStringMap<uint32_t> &dictionary,
+	                       SelectionVector &keys_selvec)
 	    : source(source), dictionary(dictionary), keys_selvec(keys_selvec),
 	      keys_index_validity(source.keys_index_validity) {
 		auto keys_list_entry = source.keys_data[result_row];
@@ -62,93 +62,91 @@ public:
 	uint32_t *keys_indexes;
 };
 
-//! Only cares about the keys of a VARIANT, maps which keys are reachable (i.e not orphaned by a 'variant_extract'
-//! operation)
-struct KeysVisitor {
+struct VariantNormalizer {
 	using result_type = void;
 
-	static void VisitNull(KeysVisitorState &state) {
+	static void VisitNull(VariantNormalizerState &state) {
 		return;
 	}
-	static void VisitBoolean(bool val, KeysVisitorState &state) {
+	static void VisitBoolean(bool val, VariantNormalizerState &state) {
 		return;
 	}
 
-	static void VisitMetadata(VariantLogicalType type_id, KeysVisitorState &state) {
+	static void VisitMetadata(VariantLogicalType type_id, VariantNormalizerState &state) {
 		state.type_ids[state.values_size] = static_cast<uint8_t>(type_id);
 		state.byte_offsets[state.values_size] = state.blob_size;
 		state.values_size++;
 	}
 
 	template <typename T>
-	static void VisitInteger(T val, KeysVisitorState &state) {
+	static void VisitInteger(T val, VariantNormalizerState &state) {
 		Store<T>(val, state.GetDestination());
 		state.blob_size += sizeof(T);
 	}
-	static void VisitFloat(float val, KeysVisitorState &state) {
+	static void VisitFloat(float val, VariantNormalizerState &state) {
 		VisitInteger(val, state);
 	}
-	static void VisitDouble(double val, KeysVisitorState &state) {
+	static void VisitDouble(double val, VariantNormalizerState &state) {
 		VisitInteger(val, state);
 	}
-	static void VisitUUID(hugeint_t val, KeysVisitorState &state) {
+	static void VisitUUID(hugeint_t val, VariantNormalizerState &state) {
 		VisitInteger(val, state);
 	}
-	static void VisitDate(date_t val, KeysVisitorState &state) {
+	static void VisitDate(date_t val, VariantNormalizerState &state) {
 		VisitInteger(val, state);
 	}
-	static void VisitInterval(interval_t val, KeysVisitorState &state) {
+	static void VisitInterval(interval_t val, VariantNormalizerState &state) {
 		VisitInteger(val, state);
 	}
-	static void VisitTime(dtime_t val, KeysVisitorState &state) {
+	static void VisitTime(dtime_t val, VariantNormalizerState &state) {
 		VisitInteger(val, state);
 	}
-	static void VisitTimeNanos(dtime_ns_t val, KeysVisitorState &state) {
+	static void VisitTimeNanos(dtime_ns_t val, VariantNormalizerState &state) {
 		VisitInteger(val, state);
 	}
-	static void VisitTimeTZ(dtime_tz_t val, KeysVisitorState &state) {
+	static void VisitTimeTZ(dtime_tz_t val, VariantNormalizerState &state) {
 		VisitInteger(val, state);
 	}
-	static void VisitTimestampSec(timestamp_sec_t val, KeysVisitorState &state) {
+	static void VisitTimestampSec(timestamp_sec_t val, VariantNormalizerState &state) {
 		VisitInteger(val, state);
 	}
-	static void VisitTimestampMs(timestamp_ms_t val, KeysVisitorState &state) {
+	static void VisitTimestampMs(timestamp_ms_t val, VariantNormalizerState &state) {
 		VisitInteger(val, state);
 	}
-	static void VisitTimestamp(timestamp_t val, KeysVisitorState &state) {
+	static void VisitTimestamp(timestamp_t val, VariantNormalizerState &state) {
 		VisitInteger(val, state);
 	}
-	static void VisitTimestampNanos(timestamp_ns_t val, KeysVisitorState &state) {
+	static void VisitTimestampNanos(timestamp_ns_t val, VariantNormalizerState &state) {
 		VisitInteger(val, state);
 	}
-	static void VisitTimestampTZ(timestamp_tz_t val, KeysVisitorState &state) {
+	static void VisitTimestampTZ(timestamp_tz_t val, VariantNormalizerState &state) {
 		VisitInteger(val, state);
 	}
 
-	static void WriteStringInternal(const string_t &str, KeysVisitorState &state) {
+	static void WriteStringInternal(const string_t &str, VariantNormalizerState &state) {
 	}
 
-	static void VisitString(const string_t &str, KeysVisitorState &state) {
+	static void VisitString(const string_t &str, VariantNormalizerState &state) {
 		auto length = str.GetSize();
 		state.blob_size += VarintEncode(length, state.GetDestination());
 		memcpy(state.GetDestination(), str.GetData(), length);
 		state.blob_size += length;
 	}
-	static void VisitBlob(const string_t &blob, KeysVisitorState &state) {
+	static void VisitBlob(const string_t &blob, VariantNormalizerState &state) {
 		return VisitString(blob, state);
 	}
-	static void VisitBignum(const string_t &bignum, KeysVisitorState &state) {
+	static void VisitBignum(const string_t &bignum, VariantNormalizerState &state) {
 		return VisitString(bignum, state);
 	}
-	static void VisitGeometry(const string_t &geom, KeysVisitorState &state) {
+	static void VisitGeometry(const string_t &geom, VariantNormalizerState &state) {
 		return VisitString(geom, state);
 	}
-	static void VisitBitstring(const string_t &bits, KeysVisitorState &state) {
+	static void VisitBitstring(const string_t &bits, VariantNormalizerState &state) {
 		return VisitString(bits, state);
 	}
 
 	template <typename T>
-	static void VisitDecimal(T val, uint32_t width, uint32_t scale, KeysVisitorState &state) {
+	static void VisitDecimal(T val, uint32_t width, uint32_t scale, VariantNormalizerState &state) {
 		state.blob_size += VarintEncode(width, state.GetDestination());
 		state.blob_size += VarintEncode(scale, state.GetDestination());
 		Store<T>(val, state.GetDestination());
@@ -156,7 +154,7 @@ struct KeysVisitor {
 	}
 
 	static void VisitArray(const UnifiedVariantVectorData &variant, idx_t row, const VariantNestedData &nested_data,
-	                       KeysVisitorState &state) {
+	                       VariantNormalizerState &state) {
 		state.blob_size += VarintEncode(nested_data.child_count, state.GetDestination());
 		if (!nested_data.child_count) {
 			return;
@@ -175,12 +173,12 @@ struct KeysVisitor {
 			result_children_idx++;
 
 			//! Visit the child value
-			VariantVisitor<KeysVisitor>::Visit(variant, row, values_index, state);
+			VariantVisitor<VariantNormalizer>::Visit(variant, row, values_index, state);
 		}
 	}
 
 	static void VisitObject(const UnifiedVariantVectorData &variant, idx_t row, const VariantNestedData &nested_data,
-	                        KeysVisitorState &state) {
+	                        VariantNormalizerState &state) {
 		state.blob_size += VarintEncode(nested_data.child_count, state.GetDestination());
 		if (!nested_data.child_count) {
 			return;
@@ -215,11 +213,11 @@ struct KeysVisitor {
 			state.keys_indexes[children_idx] = keys_idx;
 			children_idx++;
 			keys_idx++;
-			VariantVisitor<KeysVisitor>::Visit(variant, row, values_index, state);
+			VariantVisitor<VariantNormalizer>::Visit(variant, row, values_index, state);
 		}
 	}
 
-	static void VisitDefault(VariantLogicalType type_id, const_data_ptr_t, KeysVisitorState &state) {
+	static void VisitDefault(VariantLogicalType type_id, const_data_ptr_t, VariantNormalizerState &state) {
 		throw InternalException("VariantLogicalType(%s) not handled", EnumUtil::ToString(type_id));
 	}
 };
@@ -283,8 +281,8 @@ static void VariantNormalizeFunction(DataChunk &input, ExpressionState &state, V
 		values_list_entry.offset = ListVector::GetListSize(values);
 
 		//! Visit the source to populate the result
-		KeysVisitorState visitor_state(i, variant_data, dictionary, keys_selvec);
-		VariantVisitor<KeysVisitor>::Visit(variant, i, 0, visitor_state);
+		VariantNormalizerState visitor_state(i, variant_data, dictionary, keys_selvec);
+		VariantVisitor<VariantNormalizer>::Visit(variant, i, 0, visitor_state);
 
 		blob_data.SetSizeAndFinalize(visitor_state.blob_size, original_data.GetSize());
 		keys_list_entry.length = visitor_state.keys_size;
