@@ -13,25 +13,32 @@ namespace {
 
 struct KeysVisitorState {
 public:
-	KeysVisitorState(idx_t result_row, variant::ToVariantGlobalResultData &result_data)
-	    : result_data(result_data), keys_index_validity(result_data.variant.keys_index_validity) {
-		auto keys_list_entry = result_data.variant.keys_data[result_row];
-		auto values_list_entry = result_data.variant.values_data[result_row];
-		auto children_list_entry = result_data.variant.children_data[result_row];
+	KeysVisitorState(idx_t result_row, VariantVectorData &source, OrderedOwningStringMap<uint32_t> &dictionary,
+	                 SelectionVector &keys_selvec)
+	    : source(source), dictionary(dictionary), keys_selvec(keys_selvec),
+	      keys_index_validity(source.keys_index_validity) {
+		auto keys_list_entry = source.keys_data[result_row];
+		auto values_list_entry = source.values_data[result_row];
+		auto children_list_entry = source.children_data[result_row];
 
 		keys_offset = keys_list_entry.offset;
 		children_offset = children_list_entry.offset;
 
-		blob_data = data_ptr_cast(result_data.variant.blob_data[result_row].GetDataWriteable());
-		type_ids = result_data.variant.type_ids_data + values_list_entry.offset;
-		byte_offsets = result_data.variant.byte_offset_data + values_list_entry.offset;
-		values_indexes = result_data.variant.values_index_data + children_list_entry.offset;
-		keys_indexes = result_data.variant.keys_index_data + children_list_entry.offset;
+		blob_data = data_ptr_cast(source.blob_data[result_row].GetDataWriteable());
+		type_ids = source.type_ids_data + values_list_entry.offset;
+		byte_offsets = source.byte_offset_data + values_list_entry.offset;
+		values_indexes = source.values_index_data + children_list_entry.offset;
+		keys_indexes = source.keys_index_data + children_list_entry.offset;
 	}
 
 public:
 	data_ptr_t GetDestination() {
 		return blob_data + blob_size;
+	}
+	uint32_t GetOrCreateIndex(const string_t &key) {
+		auto unsorted_idx = dictionary.size();
+		//! This will later be remapped to the sorted idx (see FinalizeVariantKeys in 'to_variant.cpp')
+		return dictionary.emplace(std::make_pair(key, unsorted_idx)).first->second;
 	}
 
 public:
@@ -40,7 +47,9 @@ public:
 	uint32_t values_size = 0;
 	uint32_t blob_size = 0;
 
-	variant::ToVariantGlobalResultData &result_data;
+	VariantVectorData &source;
+	OrderedOwningStringMap<uint32_t> &dictionary;
+	SelectionVector &keys_selvec;
 
 	uint64_t keys_offset;
 	uint64_t children_offset;
@@ -197,8 +206,8 @@ struct KeysVisitor {
 			//! Add the key of the field to the result
 			auto keys_index = variant.GetKeysIndex(row, source_children_idx);
 			auto &key = variant.GetKey(row, keys_index);
-			auto dict_index = state.result_data.GetOrCreateIndex(key);
-			state.result_data.keys_selvec.set_index(state.keys_offset + keys_idx, dict_index);
+			auto dict_index = state.GetOrCreateIndex(key);
+			state.keys_selvec.set_index(state.keys_offset + keys_idx, dict_index);
 
 			//! Visit the child value
 			auto values_index = variant.GetValuesIndex(row, source_children_idx);
@@ -223,18 +232,11 @@ static void VariantNormalizeFunction(DataChunk &input, ExpressionState &state, V
 	D_ASSERT(input.ColumnCount() == 1);
 	auto &variant_vec = input.data[0];
 	D_ASSERT(variant_vec.GetType() == LogicalType::VARIANT());
-	auto &allocator = Allocator::DefaultAllocator();
 
 	//! Set up the access helper for the source VARIANT
 	RecursiveUnifiedVectorFormat source_format;
 	Vector::RecursiveToUnifiedFormat(variant_vec, count, source_format);
 	UnifiedVariantVectorData variant(source_format);
-
-	//! Set up the state for populating the result VARIANT
-	DataChunk offsets;
-	offsets.Initialize(
-	    allocator, {LogicalType::UINTEGER, LogicalType::UINTEGER, LogicalType::UINTEGER, LogicalType::UINTEGER}, count);
-	offsets.SetCardinality(count);
 
 	//! Take the original sizes of the lists, the result will be similar size, never bigger
 	auto original_keys_size = ListVector::GetListSize(VariantVector::GetKeys(variant_vec));
@@ -253,15 +255,13 @@ static void VariantNormalizeFunction(DataChunk &input, ExpressionState &state, V
 	ListVector::Reserve(values, original_values_size);
 	ListVector::SetListSize(values, 0);
 
-	SelectionVector keys_selvec;
-	keys_selvec.Initialize(original_keys_size);
-
 	//! Initialize the dictionary
 	auto &keys_entry = ListVector::GetEntry(keys);
 	OrderedOwningStringMap<uint32_t> dictionary(StringVector::GetStringBuffer(keys_entry).GetStringAllocator());
 
 	VariantVectorData variant_data(result);
-	variant::ToVariantGlobalResultData result_variant(variant_data, offsets, dictionary, keys_selvec);
+	SelectionVector keys_selvec;
+	keys_selvec.Initialize(original_keys_size);
 
 	for (idx_t i = 0; i < count; i++) {
 		if (!variant.RowIsValid(i)) {
@@ -283,7 +283,7 @@ static void VariantNormalizeFunction(DataChunk &input, ExpressionState &state, V
 		values_list_entry.offset = ListVector::GetListSize(values);
 
 		//! Visit the source to populate the result
-		KeysVisitorState visitor_state(keys_list_entry.offset, result_variant);
+		KeysVisitorState visitor_state(i, variant_data, dictionary, keys_selvec);
 		VariantVisitor<KeysVisitor>::Visit(variant, i, 0, visitor_state);
 
 		blob_data.SetSizeAndFinalize(visitor_state.blob_size, original_data.GetSize());
