@@ -125,7 +125,7 @@ bool PerfectHashJoinExecutor::CanDoPerfectHashJoin(const PhysicalHashJoin &op, c
 //===--------------------------------------------------------------------===//
 bool PerfectHashJoinExecutor::BuildPerfectHashTable(LogicalType &key_type) {
 	// First, allocate memory for each build column
-	auto build_size = perfect_join_statistics.build_range + 1;
+	const auto build_size = perfect_join_statistics.build_range + 1;
 	for (const auto &type : join.rhs_output_columns.col_types) {
 		perfect_hash_table.emplace_back(DictionaryVector::CreateReusableDictionary(type, build_size));
 	}
@@ -168,24 +168,25 @@ bool PerfectHashJoinExecutor::FullScanHashTable(LogicalType &key_type) {
 	if (!success) {
 		return false;
 	}
-	if (unique_keys == perfect_join_statistics.build_range + 1 && !ht.has_null) {
+
+	const auto build_size = perfect_join_statistics.build_range + 1;
+	if (unique_keys == build_size && !ht.has_null) {
 		perfect_join_statistics.is_build_dense = true;
+		bitmap_build_idx.Reset(build_size); // All valid
 	}
 	key_count = unique_keys; // do not consider keys out of the range
 
 	// Full scan the remaining build columns and fill the perfect hash table
-	const auto build_size = perfect_join_statistics.build_range + 1;
+
 	for (idx_t i = 0; i < join.rhs_output_columns.col_types.size(); i++) {
 		auto &vector = perfect_hash_table[i]->data;
 		const auto output_col_idx = ht.output_columns[i];
 		D_ASSERT(vector.GetType() == ht.layout_ptr->GetTypes()[output_col_idx]);
 		auto &col_mask = FlatVector::Validity(vector);
-		if (build_size > STANDARD_VECTOR_SIZE) {
-			col_mask.Initialize(build_size);
-		}
+		col_mask.Reset(build_size);
 		data_collection.Gather(tuples_addresses, sel_tuples, key_count, output_col_idx, vector, sel_build, nullptr);
 		// This ensures the empty entries are set to NULL, so that the emitted dictionary vectors make sense
-		col_mask.Combine(bitmap_build_idx, perfect_join_statistics.build_range + 1);
+		col_mask.Combine(bitmap_build_idx, build_size);
 	}
 
 	return true;

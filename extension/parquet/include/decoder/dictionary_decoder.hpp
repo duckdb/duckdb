@@ -51,7 +51,6 @@ private:
 	unsafe_unique_array<bool> filter_result;
 	idx_t filter_count;
 	bool can_have_nulls;
-	string dictionary_id;
 };
 
 } // namespace duckdb

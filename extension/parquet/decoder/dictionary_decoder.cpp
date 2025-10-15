@@ -18,30 +18,32 @@ void DictionaryDecoder::InitializeDictionary(idx_t new_dictionary_size, optional
 	filter_result.reset();
 	filter_count = 0;
 	can_have_nulls = has_defines;
-	// we use the last value in the dictionary to keep a NULL
-	dictionary = DictionaryVector::CreateReusableDictionary(reader.Type(), dictionary_size + 1);
-	dictionary_id =
-	    reader.reader.GetFileName() + "_" + reader.Schema().name + "_" + std::to_string(reader.chunk_read_offset);
+
 	// we use the last entry as a NULL, dictionary vectors don't have a separate validity mask
+	const auto duckdb_dictionary_size = dictionary_size + can_have_nulls;
+	dictionary = DictionaryVector::CreateReusableDictionary(reader.Type(), duckdb_dictionary_size);
 	auto &dict_validity = FlatVector::Validity(dictionary->data);
-	dict_validity.Reset(dictionary_size + 1);
+	dict_validity.Reset(duckdb_dictionary_size);
 	if (can_have_nulls) {
 		dict_validity.SetInvalid(dictionary_size);
 	}
+
+	// now read the non-NULL values from Parquet
 	reader.Plain(reader.block, nullptr, dictionary_size, 0, dictionary->data);
 
+	// immediately filter the dictionary, if applicable
 	if (filter && CanFilter(*filter, *filter_state)) {
 		// no filter result yet - apply filter to the dictionary
 		// initialize the filter result - setting everything to false
-		filter_result = make_unsafe_uniq_array<bool>(dictionary_size);
+		filter_result = make_unsafe_uniq_array<bool>(duckdb_dictionary_size);
 
 		// apply the filter
 		UnifiedVectorFormat vdata;
-		dictionary->data.ToUnifiedFormat(dictionary_size, vdata);
+		dictionary->data.ToUnifiedFormat(duckdb_dictionary_size, vdata);
 		SelectionVector dict_sel;
-		filter_count = dictionary_size;
-		ColumnSegment::FilterSelection(dict_sel, dictionary->data, vdata, *filter, *filter_state, dictionary_size,
-		                               filter_count);
+		filter_count = duckdb_dictionary_size;
+		ColumnSegment::FilterSelection(dict_sel, dictionary->data, vdata, *filter, *filter_state,
+		                               duckdb_dictionary_size, filter_count);
 
 		// now set all matching tuples to true
 		for (idx_t i = 0; i < filter_count; i++) {
