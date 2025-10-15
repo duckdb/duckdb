@@ -8,6 +8,8 @@ CREATE TABLE integers(i integer);
 statement ok
 CREATE INDEX i_index ON integers(i);
 
+
+# Node7 Leaf Insertion and Deletion Coverage.
 loop i 0 7
 
 statement ok
@@ -23,6 +25,7 @@ SELECT COUNT(*) FROM integers;
 ----
 6
 
+# Node15 Leaf Insertion and Deletion Coverage.
 loop i 0 7
 
 statement ok
@@ -38,6 +41,7 @@ SELECT COUNT(*) FROM integers
 ----
 12
 
+# Node256 Leaf Insertion and Deletion Coverage.
 loop i 0 10
 
 statement ok

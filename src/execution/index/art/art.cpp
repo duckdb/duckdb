@@ -610,7 +610,8 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 			if (leaf->GetType() == NType::LEAF_INLINED) {
 				D_ASSERT(leaf->GetRowId() != row_id_keys[i].GetRowId());
 			} else if (leaf->GetGateStatus() == GateStatus::GATE_SET) {
-				D_ASSERT(!ARTOperator::NestedLookup(*this, *leaf, row_id_keys[i]));
+				auto lookup_result = ARTOperator::NestedLookup(*this, *leaf, row_id_keys[i]);
+				D_ASSERT(!lookup_result);
 			}
 		}
 	}
