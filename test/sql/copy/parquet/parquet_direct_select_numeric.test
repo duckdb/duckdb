@@ -1,0 +1,28 @@
+# name: parquet_direct_select_numeric
+
+statement ok
+INSTALL parquet;
+
+statement ok
+LOAD parquet;
+
+# Create a table with many numeric values to ensure PLAIN encoding for doubles
+statement ok
+CREATE TABLE pdn_source AS SELECT i AS id, random() AS column_0, random() AS column_1 FROM range(200000) i;
+
+statement ok
+COPY (SELECT * FROM pdn_source) TO '__parquet_dir__/pdn_numeric.parquet' (FORMAT PARQUET);
+
+# Compare counts are equal between in-memory and Parquet scan
+query I
+WITH a AS (
+  SELECT COUNT(*) AS cnt FROM read_parquet('__parquet_dir__/pdn_numeric.parquet') WHERE sqrt(column_0) < 0.01
+), b AS (
+  SELECT COUNT(*) AS cnt FROM pdn_source WHERE sqrt(column_0) < 0.01
+)
+SELECT (SELECT cnt FROM a) = (SELECT cnt FROM b);
+----
+1
+
+statement ok
+DROP TABLE pdn_source;

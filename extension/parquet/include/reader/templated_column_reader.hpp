@@ -74,6 +74,15 @@ public:
 	bool SupportsDirectFilter() const override {
 		return true;
 	}
+	bool SupportsDirectSelect() const override {
+		return true;
+	}
+
+	void PlainSelect(shared_ptr<ResizeableBuffer> &plain_data, uint8_t *defines, idx_t num_values, Vector &result,
+	                const SelectionVector &sel, idx_t approved_tuple_count) override {
+		PlainSelectTemplated<VALUE_TYPE, VALUE_CONVERSION>(*plain_data, defines, num_values, result, sel,
+		                                                 approved_tuple_count);
+	}
 };
 
 template <class PARQUET_PHYSICAL_TYPE, class DUCKDB_PHYSICAL_TYPE,
