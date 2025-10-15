@@ -93,15 +93,29 @@ public:
 		}
 	}
 
-	template <typename... Args>
-	static vector<ReturnType> VisitArrayItems(const UnifiedVariantVectorData &variant, idx_t row,
-	                                          const VariantNestedData &array_data, Args &&...args) {
-		vector<ReturnType> array_items;
+	// Non-void version
+	template <typename R = ReturnType, typename... Args>
+	static typename std::enable_if<!std::is_void<R>::value, vector<R>>::type
+	VisitArrayItems(const UnifiedVariantVectorData &variant, idx_t row, const VariantNestedData &array_data,
+	                Args &&...args) {
+		vector<R> array_items;
+		array_items.reserve(array_data.child_count);
 		for (idx_t i = 0; i < array_data.child_count; i++) {
 			auto values_index = variant.GetValuesIndex(row, array_data.children_idx + i);
 			array_items.emplace_back(Visit(variant, row, values_index, std::forward<Args>(args)...));
 		}
 		return array_items;
+	}
+
+	// Void version
+	template <typename R = ReturnType, typename... Args>
+	static typename std::enable_if<std::is_void<R>::value, void>::type
+	VisitArrayItems(const UnifiedVariantVectorData &variant, idx_t row, const VariantNestedData &array_data,
+	                Args &&...args) {
+		for (idx_t i = 0; i < array_data.child_count; i++) {
+			auto values_index = variant.GetValuesIndex(row, array_data.children_idx + i);
+			Visit(variant, row, values_index, std::forward<Args>(args)...);
+		}
 	}
 
 	template <typename... Args>
