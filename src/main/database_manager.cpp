@@ -280,7 +280,7 @@ idx_t DatabaseManager::ApproxDatabaseCount() {
 }
 
 InsertDatabasePathResult DatabaseManager::InsertDatabasePath(const AttachInfo &info, AttachOptions &options) {
-	return path_manager->InsertDatabasePath(info.path, info.name, info.on_conflict, options);
+	return path_manager->InsertDatabasePath(*this, info.path, info.name, info.on_conflict, options);
 }
 
 vector<string> DatabaseManager::GetAttachedDatabasePaths() {
