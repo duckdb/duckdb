@@ -10,11 +10,15 @@ unique_ptr<DetachInfo> DetachInfo::Copy() const {
 	auto result = make_uniq<DetachInfo>();
 	result->name = name;
 	result->if_not_found = if_not_found;
+	result->force = force;
 	return result;
 }
 
 string DetachInfo::ToString() const {
 	string result = "";
+	if (force) {
+		result += "FORCE ";
+	}
 	result += "DETACH DATABASE";
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += " IF EXISTS";

@@ -1,5 +1,7 @@
 #include "duckdb/main/database_manager.hpp"
 
+#include <thread>
+#include <chrono>
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/main/attached_database.hpp"
@@ -7,9 +9,11 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/database_path_and_type.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/main/connection_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
+#include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/parser/parsed_data/alter_database_info.hpp"
 
 namespace duckdb {
@@ -195,19 +199,84 @@ optional_ptr<AttachedDatabase> DatabaseManager::FinalizeAttach(ClientContext &co
 	return db_ref;
 }
 
-void DatabaseManager::DetachDatabase(ClientContext &context, const string &name, OnEntryNotFound if_not_found) {
+void DatabaseManager::DetachDatabase(ClientContext &context, const string &name, OnEntryNotFound if_not_found, bool force) {
 	if (GetDefaultDatabase(context) == name) {
 		throw BinderException("Cannot detach database \"%s\" because it is the default database. Select a different "
 		                      "database using `USE` to allow detaching this database",
 		                      name);
 	}
 
+	// Peek at the database to check use_count without removing it from the global map
+	shared_ptr<AttachedDatabase> attached_db_peek;
+	{
+		lock_guard<mutex> guard(databases_lock);
+		auto entry = databases.find(name);
+		if (entry == databases.end()) {
+			if (if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
+				throw BinderException("Failed to detach database with name \"%s\": database not found", name);
+			}
+			return;
+		}
+		attached_db_peek = entry->second; // Copy the shared_ptr to check use_count
+	}
+
+	// Check if database is still in use by transactions
+	// use_count() > 2 means: 1 from global map + 1 from our peek + others
+	auto ref_count = attached_db_peek.use_count();
+	if (ref_count > 2) {
+		// Database is in use by other transactions
+		auto &transaction_manager = DuckTransactionManager::Get(*attached_db_peek);
+
+		if (!force) {
+			// Regular DETACH: wait for transactions to complete gracefully
+			// Grab the start_transaction_lock to prevent new transactions from starting
+			lock_guard<mutex> start_lock(transaction_manager.GetStartTransactionLock());
+			// Wait until all transactions finish (use_count == 2 means: 1 from map + 1 from our peek)
+			while (attached_db_peek.use_count() > 2) {
+				if (context.interrupted) {
+					throw InterruptException();
+				}
+			}
+		} else {
+			// FORCE DETACH: interrupt all connections using this database to abort their transactions
+			auto &db_instance = attached_db_peek->GetDatabase();
+			auto &connection_manager = ConnectionManager::Get(db_instance);
+			auto connections = connection_manager.GetConnectionList();
+
+			// Interrupt all connections that have transactions using this database
+			for (auto &client_context : connections) {
+				if (!client_context || client_context.get() == &context) {
+					continue; // Skip null and current context
+				}
+				try {
+					auto &meta_transaction = MetaTransaction::Get(*client_context);
+					auto transaction = meta_transaction.TryGetTransaction(*attached_db_peek);
+					if (transaction) {
+						// This connection has a transaction for our database - interrupt it
+						client_context->Interrupt();
+					}
+				} catch (...) {
+					// Ignore errors during interruption check
+				}
+			}
+
+			// Wait briefly for interrupted transactions to abort
+			// Grab start_transaction_lock to prevent new transactions
+			lock_guard<mutex> start_lock(transaction_manager.GetStartTransactionLock());
+			idx_t wait_iterations = 0;
+			constexpr idx_t max_wait_iterations = 100; // 1 second max
+			while (attached_db_peek.use_count() > 2 && wait_iterations < max_wait_iterations) {
+				std::this_thread::sleep_for(std::chrono::milliseconds(10));
+				wait_iterations++;
+			}
+			// If transactions didn't abort in time, we'll detach anyway (force!)
+		}
+	}
+
+	// All checks passed - now actually remove from global map
 	auto attached_db = DetachInternal(name);
 	if (!attached_db) {
-		if (if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
-			throw BinderException("Failed to detach database with name \"%s\": database not found", name);
-		}
-		return;
+		throw BinderException("Failed to detach database with name \"%s\": database was removed concurrently", name);
 	}
 
 	attached_db->OnDetach(context);

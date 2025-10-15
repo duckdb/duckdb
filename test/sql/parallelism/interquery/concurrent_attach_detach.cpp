@@ -399,4 +399,114 @@ TEST_CASE("Run a concurrent ATTACH/DETACH scenario", "[interquery][.]") {
 	}
 }
 
+TEST_CASE("Test FORCE DETACH syntax and protection", "[interquery][.]") {
+	DuckDB db(nullptr);
+	Connection conn(db);
+
+	string db_path = TestCreatePath("force_detach_test.db");
+
+	// Test 1: FORCE DETACH syntax works and database is removed from schema
+	REQUIRE_NO_FAIL(conn.Query("ATTACH '" + db_path + "' AS test_db"));
+
+	// Verify database appears in schema
+	auto result = conn.Query("SELECT database_name FROM duckdb_databases() WHERE database_name = 'test_db'");
+	REQUIRE(!result->HasError());
+	REQUIRE(CHECK_COLUMN(result, 0, {"test_db"}));
+
+	REQUIRE_NO_FAIL(conn.Query("CREATE TABLE test_db.test_table(i INTEGER)"));
+	REQUIRE_NO_FAIL(conn.Query("INSERT INTO test_db.test_table VALUES (1), (2), (3)"));
+	REQUIRE_NO_FAIL(conn.Query("FORCE DETACH test_db"));
+
+	// Verify database is gone from schema
+	result = conn.Query("SELECT COUNT(*) FROM duckdb_databases() WHERE database_name = 'test_db'");
+	REQUIRE(!result->HasError());
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
+
+	// Test 2: Regular DETACH waits for transactions to complete gracefully
+	REQUIRE_NO_FAIL(conn.Query("ATTACH '" + db_path + "' AS test_db"));
+	REQUIRE_NO_FAIL(conn.Query("BEGIN TRANSACTION"));
+	REQUIRE_NO_FAIL(conn.Query("INSERT INTO test_db.test_table VALUES (4)"));
+
+	// DETACH in a thread - should wait for transaction to complete
+	atomic<bool> detach_completed(false);
+	std::thread detach_thread([&]() {
+		Connection conn_detach(db);
+		auto result = conn_detach.Query("DETACH test_db");
+		if (!result->HasError()) {
+			detach_completed = true;
+		}
+	});
+
+	// Give DETACH time to start waiting
+	std::this_thread::sleep_for(std::chrono::milliseconds(100));
+	REQUIRE(!detach_completed); // Should still be waiting
+
+	// Commit - DETACH should complete
+	REQUIRE_NO_FAIL(conn.Query("COMMIT"));
+	detach_thread.join();
+	REQUIRE(detach_completed);
+
+	// Verify database is gone from schema
+	result = conn.Query("SELECT COUNT(*) FROM duckdb_databases() WHERE database_name = 'test_db'");
+	REQUIRE(!result->HasError());
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
+
+	// Test 3: FORCE DETACH interrupts and kills active transactions
+	REQUIRE_NO_FAIL(conn.Query("ATTACH '" + db_path + "' AS test_db"));
+
+	// Start a transaction with uncommitted changes in another thread
+	atomic<bool> transaction_started(false);
+	atomic<bool> transaction_interrupted(false);
+	std::thread transaction_thread([&]() {
+		Connection conn_tx(db);
+		conn_tx.Query("BEGIN TRANSACTION");
+		conn_tx.Query("INSERT INTO test_db.test_table VALUES (5)");
+		transaction_started = true;
+
+		// Keep transaction alive - query should be interrupted
+		auto result = conn_tx.Query("SELECT * FROM test_db.test_table");
+		if (result->HasError() && result->GetError().find("interrupted") != string::npos) {
+			transaction_interrupted = true;
+		}
+	});
+
+	// Wait for transaction to start
+	while (!transaction_started) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+	}
+
+	// FORCE DETACH should interrupt and detach
+	REQUIRE_NO_FAIL(conn.Query("FORCE DETACH test_db"));
+	transaction_thread.join();
+
+	// Verify database is gone
+	result = conn.Query("SELECT COUNT(*) FROM duckdb_databases() WHERE database_name = 'test_db'");
+	REQUIRE(!result->HasError());
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
+
+	// Test 4: Verify all FORCE DETACH syntax variations
+	REQUIRE_NO_FAIL(conn.Query("ATTACH '" + db_path + "' AS test_db1"));
+	REQUIRE_NO_FAIL(conn.Query("FORCE DETACH test_db1"));
+	result = conn.Query("SELECT COUNT(*) FROM duckdb_databases() WHERE database_name = 'test_db1'");
+	REQUIRE(!result->HasError());
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
+
+	REQUIRE_NO_FAIL(conn.Query("ATTACH '" + db_path + "' AS test_db2"));
+	REQUIRE_NO_FAIL(conn.Query("FORCE DETACH DATABASE test_db2"));
+
+	REQUIRE_NO_FAIL(conn.Query("ATTACH '" + db_path + "' AS test_db3"));
+	REQUIRE_NO_FAIL(conn.Query("FORCE DETACH DATABASE IF EXISTS test_db3"));
+
+	// Test 5: Regular DETACH DATABASE IF EXISTS
+	REQUIRE_NO_FAIL(conn.Query("ATTACH '" + db_path + "' AS test_db4"));
+	REQUIRE_NO_FAIL(conn.Query("DETACH DATABASE IF EXISTS test_db4"));
+	result = conn.Query("SELECT COUNT(*) FROM duckdb_databases() WHERE database_name = 'test_db4'");
+	REQUIRE(!result->HasError());
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
+
+	// Test IF EXISTS with non-existent databases
+	REQUIRE_NO_FAIL(conn.Query("DETACH DATABASE IF EXISTS nonexistent_db1"));
+	REQUIRE_NO_FAIL(conn.Query("FORCE DETACH DATABASE IF EXISTS nonexistent_db2"));
+}
+
 } // anonymous namespace

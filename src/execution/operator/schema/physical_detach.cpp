@@ -14,7 +14,7 @@ namespace duckdb {
 SourceResultType PhysicalDetach::GetData(ExecutionContext &context, DataChunk &chunk,
                                          OperatorSourceInput &input) const {
 	auto &db_manager = DatabaseManager::Get(context.client);
-	db_manager.DetachDatabase(context.client, info->name, info->if_not_found);
+	db_manager.DetachDatabase(context.client, info->name, info->if_not_found, info->force);
 
 	return SourceResultType::FINISHED;
 }
