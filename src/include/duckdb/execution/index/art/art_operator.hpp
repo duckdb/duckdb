@@ -82,7 +82,7 @@ public:
 			case NType::NODE_7_LEAF:
 			case NType::NODE_15_LEAF:
 			case NType::NODE_256_LEAF: {
-				D_ASSERT(depth + 1 == rowid.len);
+				D_ASSERT(depth + 1 == Prefix::ROW_ID_SIZE);
 				const auto byte = rowid[Prefix::ROW_ID_COUNT];
 				return ref.get().HasByte(art, byte);
 			}
@@ -90,7 +90,7 @@ public:
 			case NType::NODE_16:
 			case NType::NODE_48:
 			case NType::NODE_256: {
-				D_ASSERT(depth < rowid.len);
+				D_ASSERT(depth < Prefix::ROW_ID_SIZE);
 				auto child = ref.get().GetChild(art, rowid[depth]);
 				if (child) {
 					// Continue in the child.
