@@ -765,7 +765,32 @@ query T
 WITH cte as (
 	select a::INT32 a from range(5) tbl(a)
 )
-select CASE WHEN a < 4 THEN {'x': a, 'y': a+1, 'z': a+2}::VARIANT ELSE NULL END IS DISTINCT FROM {'x': 1, 'y': 2, 'z': 3}
+select CASE WHEN a < 4 THEN {'x': a, 'z': a+2, 'y': a+1}::VARIANT ELSE NULL END IS DISTINCT FROM {'x': 1, 'y': 2, 'z': 3}
+from cte;
+----
+true
+false
+true
+true
+true
+
+# Without the collation that pushes 'variant_normalize',
+# the 'variant_extract' (performed by the ['nested'] call) will break the comparison
+query T
+WITH cte as (
+	select a::INT32 a from range(5) tbl(a)
+)
+select CASE WHEN a < 4 THEN ({
+	'nested': {
+		'x': a,
+		'z': a+2,
+		'y': a+1
+	}
+}::VARIANT)['nested'] ELSE NULL END IS DISTINCT FROM {
+	'x': 1,
+	'y': 2,
+	'z': 3
+}
 from cte;
 ----
 true
