@@ -416,6 +416,7 @@ public:
 		if (!MatchIdentifier(state)) {
 			return nullptr;
 		}
+		Printer::PrintF("Matched identifier: %s", token_text);
 		return state.allocator.Allocate(make_uniq<IdentifierParseResult>(token_text));
 	}
 

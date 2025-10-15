@@ -18,7 +18,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &
 	for (auto &token : tokens) {
 		token_stream += token.text + " ";
 	}
-
+	Printer::PrintF("Token stream: %s", token_stream.c_str());
 	vector<MatcherSuggestion> suggestions;
 	ParseResultAllocator parse_result_allocator;
 	MatchState state(tokens, suggestions, parse_result_allocator);
@@ -40,7 +40,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &
 		throw ParserException("Failed to parse query - did not consume all tokens (got to token %d - %s)\nTokens:\n%s",
 		                      state.token_index, tokens[state.token_index].text, token_list);
 	}
-
+	Printer::Print(match_result->ToString());
 	match_result->name = root_rule;
 	ArenaAllocator transformer_allocator(Allocator::DefaultAllocator());
 	PEGTransformerState transformer_state(tokens);
@@ -48,6 +48,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &
 	PEGTransformer transformer(transformer_allocator, transformer_state, factory.sql_transform_functions,
 	                           factory.parser.rules, factory.enum_mappings);
 	auto result = transformer.Transform<unique_ptr<SQLStatement>>(match_result);
+	Printer::Print(result->ToString());
 	return transformer.Transform<unique_ptr<SQLStatement>>(match_result);
 }
 
