@@ -54,19 +54,15 @@ class ParquetMetadataFileProcessor {
 public:
 	ParquetMetadataFileProcessor() = default;
 	virtual ~ParquetMetadataFileProcessor() = default;
-	void Initialize(ClientContext &context, ParquetReader *reader_p) {
-		reader = reader_p;
-		InitializeInternal(context);
+	void Initialize(ClientContext &context, ParquetReader &reader) {
+		InitializeInternal(context, reader);
 	}
-	virtual void InitializeInternal(ClientContext &context) {};
-	virtual idx_t TotalRowCount() = 0;
-	virtual void ReadRow(vector<Vector *> &output, idx_t output_idx, idx_t row_idx) = 0;
+	virtual void InitializeInternal(ClientContext &context, ParquetReader &reader) {};
+	virtual idx_t TotalRowCount(ParquetReader &reader) = 0;
+	virtual void ReadRow(vector<reference<Vector>> &output, idx_t output_idx, idx_t row_idx, ParquetReader &reader) = 0;
 	virtual bool ForceFlush() {
 		return false;
 	}
-
-protected:
-	ParquetReader *reader;
 };
 
 struct ParquetMetaDataBindData;
@@ -128,8 +124,8 @@ struct ParquetMetadataLocalState : public LocalTableFunctionState {
 	void Initialize(ClientContext &context, OpenFileInfo &file_info) {
 		ParquetOptions parquet_options(context);
 		reader = make_uniq<ParquetReader>(context, file_info, parquet_options);
-		processor->Initialize(context, reader.get());
-		total_rows = processor->TotalRowCount();
+		processor->Initialize(context, *reader);
+		total_rows = processor->TotalRowCount(*reader);
 		row_idx = 0;
 		file_exhausted = false;
 	}
@@ -193,9 +189,9 @@ static Value ParquetElementBoolean(bool value, bool is_iset) {
 
 class ParquetRowGroupMetadataProcessor : public ParquetMetadataFileProcessor {
 public:
-	void InitializeInternal(ClientContext &context) override;
-	idx_t TotalRowCount() override;
-	void ReadRow(vector<Vector *> &output, idx_t output_idx, idx_t row_idx) override;
+	void InitializeInternal(ClientContext &context, ParquetReader &reader) override;
+	idx_t TotalRowCount(ParquetReader &reader) override;
+	void ReadRow(vector<reference<Vector>> &output, idx_t output_idx, idx_t row_idx, ParquetReader &reader) override;
 
 private:
 	vector<ParquetColumnSchema> column_schemas;
@@ -367,8 +363,8 @@ static Value ConvertParquetGeoStatsTypes(const duckdb_parquet::GeospatialStatist
 	return Value::LIST(LogicalType::VARCHAR, types);
 }
 
-void ParquetRowGroupMetadataProcessor::InitializeInternal(ClientContext &context) {
-	auto meta_data = reader->GetFileMetadata();
+void ParquetRowGroupMetadataProcessor::InitializeInternal(ClientContext &context, ParquetReader &reader) {
+	auto meta_data = reader.GetFileMetadata();
 	column_schemas.clear();
 	for (idx_t schema_idx = 0; schema_idx < meta_data->schema.size(); schema_idx++) {
 		auto &schema_element = meta_data->schema[schema_idx];
@@ -376,18 +372,19 @@ void ParquetRowGroupMetadataProcessor::InitializeInternal(ClientContext &context
 			continue;
 		}
 		ParquetColumnSchema column_schema;
-		column_schema.type = reader->DeriveLogicalType(schema_element, column_schema);
+		column_schema.type = reader.DeriveLogicalType(schema_element, column_schema);
 		column_schemas.push_back(std::move(column_schema));
 	}
 }
 
-idx_t ParquetRowGroupMetadataProcessor::TotalRowCount() {
-	auto meta_data = reader->GetFileMetadata();
+idx_t ParquetRowGroupMetadataProcessor::TotalRowCount(ParquetReader &reader) {
+	auto meta_data = reader.GetFileMetadata();
 	return meta_data->row_groups.size() * column_schemas.size();
 }
 
-void ParquetRowGroupMetadataProcessor::ReadRow(vector<Vector *> &output, idx_t output_idx, idx_t row_idx) {
-	auto meta_data = reader->GetFileMetadata();
+void ParquetRowGroupMetadataProcessor::ReadRow(vector<reference<Vector>> &output, idx_t output_idx, idx_t row_idx,
+                                               ParquetReader &reader) {
+	auto meta_data = reader.GetFileMetadata();
 	idx_t col_idx = row_idx % column_schemas.size();
 	idx_t row_group_idx = row_idx / column_schemas.size();
 
@@ -400,86 +397,90 @@ void ParquetRowGroupMetadataProcessor::ReadRow(vector<Vector *> &output, idx_t o
 	auto &column_type = column_schema.type;
 
 	// file_name
-	output[0]->SetValue(output_idx, reader->file.path);
+	output[0].get().SetValue(output_idx, reader.file.path);
 	// row_group_id
-	output[1]->SetValue(output_idx, Value::BIGINT(UnsafeNumericCast<int64_t>(row_group_idx)));
+	output[1].get().SetValue(output_idx, Value::BIGINT(UnsafeNumericCast<int64_t>(row_group_idx)));
 	// row_group_num_rows
-	output[2]->SetValue(output_idx, Value::BIGINT(row_group.num_rows));
+	output[2].get().SetValue(output_idx, Value::BIGINT(row_group.num_rows));
 	// row_group_num_columns
-	output[3]->SetValue(output_idx, Value::BIGINT(UnsafeNumericCast<int64_t>(row_group.columns.size())));
+	output[3].get().SetValue(output_idx, Value::BIGINT(UnsafeNumericCast<int64_t>(row_group.columns.size())));
 	// row_group_bytes
-	output[4]->SetValue(output_idx, Value::BIGINT(row_group.total_byte_size));
+	output[4].get().SetValue(output_idx, Value::BIGINT(row_group.total_byte_size));
 	// column_id
-	output[5]->SetValue(output_idx, Value::BIGINT(UnsafeNumericCast<int64_t>(col_idx)));
+	output[5].get().SetValue(output_idx, Value::BIGINT(UnsafeNumericCast<int64_t>(col_idx)));
 	// file_offset
-	output[6]->SetValue(output_idx, ParquetElementBigint(column.file_offset, row_group.__isset.file_offset));
+	output[6].get().SetValue(output_idx, ParquetElementBigint(column.file_offset, row_group.__isset.file_offset));
 	// num_values
-	output[7]->SetValue(output_idx, Value::BIGINT(col_meta.num_values));
+	output[7].get().SetValue(output_idx, Value::BIGINT(col_meta.num_values));
 	// path_in_schema
-	output[8]->SetValue(output_idx, StringUtil::Join(col_meta.path_in_schema, ", "));
+	output[8].get().SetValue(output_idx, StringUtil::Join(col_meta.path_in_schema, ", "));
 	// type
-	output[9]->SetValue(output_idx, ConvertParquetElementToString(col_meta.type));
+	output[9].get().SetValue(output_idx, ConvertParquetElementToString(col_meta.type));
 	// stats_min
-	output[10]->SetValue(output_idx, ConvertParquetStats(column_type, column_schema, stats.__isset.min, stats.min));
+	output[10].get().SetValue(output_idx,
+	                          ConvertParquetStats(column_type, column_schema, stats.__isset.min, stats.min));
 	// stats_max
-	output[11]->SetValue(output_idx, ConvertParquetStats(column_type, column_schema, stats.__isset.max, stats.max));
+	output[11].get().SetValue(output_idx,
+	                          ConvertParquetStats(column_type, column_schema, stats.__isset.max, stats.max));
 	// stats_null_count
-	output[12]->SetValue(output_idx, ParquetElementBigint(stats.null_count, stats.__isset.null_count));
+	output[12].get().SetValue(output_idx, ParquetElementBigint(stats.null_count, stats.__isset.null_count));
 	// stats_distinct_count
-	output[13]->SetValue(output_idx, ParquetElementBigint(stats.distinct_count, stats.__isset.distinct_count));
+	output[13].get().SetValue(output_idx, ParquetElementBigint(stats.distinct_count, stats.__isset.distinct_count));
 	// stats_min_value
-	output[14]->SetValue(output_idx,
-	                     ConvertParquetStats(column_type, column_schema, stats.__isset.min_value, stats.min_value));
+	output[14].get().SetValue(
+	    output_idx, ConvertParquetStats(column_type, column_schema, stats.__isset.min_value, stats.min_value));
 	// stats_max_value
-	output[15]->SetValue(output_idx,
-	                     ConvertParquetStats(column_type, column_schema, stats.__isset.max_value, stats.max_value));
+	output[15].get().SetValue(
+	    output_idx, ConvertParquetStats(column_type, column_schema, stats.__isset.max_value, stats.max_value));
 	// compression
-	output[16]->SetValue(output_idx, ConvertParquetElementToString(col_meta.codec));
+	output[16].get().SetValue(output_idx, ConvertParquetElementToString(col_meta.codec));
 	// encodings
 	vector<string> encoding_string;
 	encoding_string.reserve(col_meta.encodings.size());
 	for (auto &encoding : col_meta.encodings) {
 		encoding_string.push_back(ConvertParquetElementToString(encoding));
 	}
-	output[17]->SetValue(output_idx, Value(StringUtil::Join(encoding_string, ", ")));
+	output[17].get().SetValue(output_idx, Value(StringUtil::Join(encoding_string, ", ")));
 	// index_page_offset
-	output[18]->SetValue(output_idx,
-	                     ParquetElementBigint(col_meta.index_page_offset, col_meta.__isset.index_page_offset));
+	output[18].get().SetValue(output_idx,
+	                          ParquetElementBigint(col_meta.index_page_offset, col_meta.__isset.index_page_offset));
 	// dictionary_page_offset
-	output[19]->SetValue(
+	output[19].get().SetValue(
 	    output_idx, ParquetElementBigint(col_meta.dictionary_page_offset, col_meta.__isset.dictionary_page_offset));
 	// data_page_offset
-	output[20]->SetValue(output_idx, Value::BIGINT(col_meta.data_page_offset));
+	output[20].get().SetValue(output_idx, Value::BIGINT(col_meta.data_page_offset));
 	// total_compressed_size
-	output[21]->SetValue(output_idx, Value::BIGINT(col_meta.total_compressed_size));
+	output[21].get().SetValue(output_idx, Value::BIGINT(col_meta.total_compressed_size));
 	// total_uncompressed_size
-	output[22]->SetValue(output_idx, Value::BIGINT(col_meta.total_uncompressed_size));
+	output[22].get().SetValue(output_idx, Value::BIGINT(col_meta.total_uncompressed_size));
 	// key_value_metadata
 	vector<Value> map_keys, map_values;
 	for (auto &entry : col_meta.key_value_metadata) {
 		map_keys.push_back(Value::BLOB_RAW(entry.key));
 		map_values.push_back(Value::BLOB_RAW(entry.value));
 	}
-	output[23]->SetValue(output_idx,
-	                     Value::MAP(LogicalType::BLOB, LogicalType::BLOB, std::move(map_keys), std::move(map_values)));
+	output[23].get().SetValue(
+	    output_idx, Value::MAP(LogicalType::BLOB, LogicalType::BLOB, std::move(map_keys), std::move(map_values)));
 	// bloom_filter_offset
-	output[24]->SetValue(output_idx,
-	                     ParquetElementBigint(col_meta.bloom_filter_offset, col_meta.__isset.bloom_filter_offset));
+	output[24].get().SetValue(output_idx,
+	                          ParquetElementBigint(col_meta.bloom_filter_offset, col_meta.__isset.bloom_filter_offset));
 	// bloom_filter_length
-	output[25]->SetValue(output_idx,
-	                     ParquetElementBigint(col_meta.bloom_filter_length, col_meta.__isset.bloom_filter_length));
+	output[25].get().SetValue(output_idx,
+	                          ParquetElementBigint(col_meta.bloom_filter_length, col_meta.__isset.bloom_filter_length));
 	// min_is_exact
-	output[26]->SetValue(output_idx, ParquetElementBoolean(stats.is_min_value_exact, stats.__isset.is_min_value_exact));
+	output[26].get().SetValue(output_idx,
+	                          ParquetElementBoolean(stats.is_min_value_exact, stats.__isset.is_min_value_exact));
 	// max_is_exact
-	output[27]->SetValue(output_idx, ParquetElementBoolean(stats.is_max_value_exact, stats.__isset.is_max_value_exact));
+	output[27].get().SetValue(output_idx,
+	                          ParquetElementBoolean(stats.is_max_value_exact, stats.__isset.is_max_value_exact));
 	// row_group_compressed_bytes
-	output[28]->SetValue(
+	output[28].get().SetValue(
 	    output_idx, ParquetElementBigint(row_group.total_compressed_size, row_group.__isset.total_compressed_size));
 	// geo_stats_bbox, LogicalType::STRUCT(...)
-	output[29]->SetValue(output_idx, ConvertParquetGeoStatsBBOX(col_meta.geospatial_statistics));
+	output[29].get().SetValue(output_idx, ConvertParquetGeoStatsBBOX(col_meta.geospatial_statistics));
 
 	// geo_stats_types, LogicalType::LIST(LogicalType::VARCHAR)
-	output[30]->SetValue(output_idx, ConvertParquetGeoStatsTypes(col_meta.geospatial_statistics));
+	output[30].get().SetValue(output_idx, ConvertParquetGeoStatsTypes(col_meta.geospatial_statistics));
 }
 
 //===--------------------------------------------------------------------===//
@@ -488,8 +489,8 @@ void ParquetRowGroupMetadataProcessor::ReadRow(vector<Vector *> &output, idx_t o
 
 class ParquetSchemaProcessor : public ParquetMetadataFileProcessor {
 public:
-	idx_t TotalRowCount() override;
-	void ReadRow(vector<Vector *> &output, idx_t output_idx, idx_t row_idx) override;
+	idx_t TotalRowCount(ParquetReader &reader) override;
+	void ReadRow(vector<reference<Vector>> &output, idx_t output_idx, idx_t row_idx, ParquetReader &reader) override;
 };
 
 template <>
@@ -590,45 +591,46 @@ static Value ParquetLogicalTypeToString(const duckdb_parquet::LogicalType &type,
 	return Value();
 }
 
-idx_t ParquetSchemaProcessor::TotalRowCount() {
-	return reader->GetFileMetadata()->schema.size();
+idx_t ParquetSchemaProcessor::TotalRowCount(ParquetReader &reader) {
+	return reader.GetFileMetadata()->schema.size();
 }
 
-void ParquetSchemaProcessor::ReadRow(vector<Vector *> &output, idx_t output_idx, idx_t row_idx) {
-	auto meta_data = reader->GetFileMetadata();
+void ParquetSchemaProcessor::ReadRow(vector<reference<Vector>> &output, idx_t output_idx, idx_t row_idx,
+                                     ParquetReader &reader) {
+	auto meta_data = reader.GetFileMetadata();
 	const auto &column = meta_data->schema[row_idx];
 
 	// file_name
-	output[0]->SetValue(output_idx, reader->file.path);
+	output[0].get().SetValue(output_idx, reader.file.path);
 	// name
-	output[1]->SetValue(output_idx, column.name);
+	output[1].get().SetValue(output_idx, column.name);
 	// type
-	output[2]->SetValue(output_idx, ParquetElementString(column.type, column.__isset.type));
+	output[2].get().SetValue(output_idx, ParquetElementString(column.type, column.__isset.type));
 	// type_length
-	output[3]->SetValue(output_idx, ParquetElementInteger(column.type_length, column.__isset.type_length));
+	output[3].get().SetValue(output_idx, ParquetElementInteger(column.type_length, column.__isset.type_length));
 	// repetition_type
-	output[4]->SetValue(output_idx, ParquetElementString(column.repetition_type, column.__isset.repetition_type));
+	output[4].get().SetValue(output_idx, ParquetElementString(column.repetition_type, column.__isset.repetition_type));
 	// num_children
-	output[5]->SetValue(output_idx, ParquetElementBigint(column.num_children, column.__isset.num_children));
+	output[5].get().SetValue(output_idx, ParquetElementBigint(column.num_children, column.__isset.num_children));
 	// converted_type
-	output[6]->SetValue(output_idx, ParquetElementString(column.converted_type, column.__isset.converted_type));
+	output[6].get().SetValue(output_idx, ParquetElementString(column.converted_type, column.__isset.converted_type));
 	// scale
-	output[7]->SetValue(output_idx, ParquetElementBigint(column.scale, column.__isset.scale));
+	output[7].get().SetValue(output_idx, ParquetElementBigint(column.scale, column.__isset.scale));
 	// precision
-	output[8]->SetValue(output_idx, ParquetElementBigint(column.precision, column.__isset.precision));
+	output[8].get().SetValue(output_idx, ParquetElementBigint(column.precision, column.__isset.precision));
 	// field_id
-	output[9]->SetValue(output_idx, ParquetElementBigint(column.field_id, column.__isset.field_id));
+	output[9].get().SetValue(output_idx, ParquetElementBigint(column.field_id, column.__isset.field_id));
 	// logical_type
-	output[10]->SetValue(output_idx, ParquetLogicalTypeToString(column.logicalType, column.__isset.logicalType));
+	output[10].get().SetValue(output_idx, ParquetLogicalTypeToString(column.logicalType, column.__isset.logicalType));
 	// duckdb_type
 	ParquetColumnSchema column_schema;
 	Value duckdb_type;
 	if (column.__isset.type) {
-		duckdb_type = reader->DeriveLogicalType(column, column_schema).ToString();
+		duckdb_type = reader.DeriveLogicalType(column, column_schema).ToString();
 	}
-	output[11]->SetValue(output_idx, duckdb_type);
+	output[11].get().SetValue(output_idx, duckdb_type);
 	// column_id
-	output[12]->SetValue(output_idx, Value::BIGINT(UnsafeNumericCast<int64_t>(row_idx)));
+	output[12].get().SetValue(output_idx, Value::BIGINT(UnsafeNumericCast<int64_t>(row_idx)));
 }
 
 //===--------------------------------------------------------------------===//
@@ -637,8 +639,8 @@ void ParquetSchemaProcessor::ReadRow(vector<Vector *> &output, idx_t output_idx,
 
 class ParquetKeyValueMetadataProcessor : public ParquetMetadataFileProcessor {
 public:
-	idx_t TotalRowCount() override;
-	void ReadRow(vector<Vector *> &output, idx_t output_idx, idx_t row_idx) override;
+	idx_t TotalRowCount(ParquetReader &reader) override;
+	void ReadRow(vector<reference<Vector>> &output, idx_t output_idx, idx_t row_idx, ParquetReader &reader) override;
 };
 
 template <>
@@ -654,17 +656,18 @@ void ParquetMetaDataOperator::BindSchema<ParquetMetadataOperatorType::KEY_VALUE_
 	return_types.emplace_back(LogicalType::BLOB);
 }
 
-idx_t ParquetKeyValueMetadataProcessor::TotalRowCount() {
-	return reader->GetFileMetadata()->key_value_metadata.size();
+idx_t ParquetKeyValueMetadataProcessor::TotalRowCount(ParquetReader &reader) {
+	return reader.GetFileMetadata()->key_value_metadata.size();
 }
 
-void ParquetKeyValueMetadataProcessor::ReadRow(vector<Vector *> &output, idx_t output_idx, idx_t row_idx) {
-	auto meta_data = reader->GetFileMetadata();
+void ParquetKeyValueMetadataProcessor::ReadRow(vector<reference<Vector>> &output, idx_t output_idx, idx_t row_idx,
+                                               ParquetReader &reader) {
+	auto meta_data = reader.GetFileMetadata();
 	auto &entry = meta_data->key_value_metadata[row_idx];
 
-	output[0]->SetValue(output_idx, Value(reader->file.path));
-	output[1]->SetValue(output_idx, Value::BLOB_RAW(entry.key));
-	output[2]->SetValue(output_idx, Value::BLOB_RAW(entry.value));
+	output[0].get().SetValue(output_idx, Value(reader.file.path));
+	output[1].get().SetValue(output_idx, Value::BLOB_RAW(entry.key));
+	output[2].get().SetValue(output_idx, Value::BLOB_RAW(entry.value));
 }
 
 //===--------------------------------------------------------------------===//
@@ -673,8 +676,8 @@ void ParquetKeyValueMetadataProcessor::ReadRow(vector<Vector *> &output, idx_t o
 
 class ParquetFileMetadataProcessor : public ParquetMetadataFileProcessor {
 public:
-	idx_t TotalRowCount() override;
-	void ReadRow(vector<Vector *> &output, idx_t output_idx, idx_t row_idx) override;
+	idx_t TotalRowCount(ParquetReader &reader) override;
+	void ReadRow(vector<reference<Vector>> &output, idx_t output_idx, idx_t row_idx, ParquetReader &reader) override;
 };
 
 template <>
@@ -708,33 +711,34 @@ void ParquetMetaDataOperator::BindSchema<ParquetMetadataOperatorType::FILE_META_
 	return_types.emplace_back(LogicalType::UBIGINT);
 }
 
-idx_t ParquetFileMetadataProcessor::TotalRowCount() {
+idx_t ParquetFileMetadataProcessor::TotalRowCount(ParquetReader &reader) {
 	return 1;
 }
 
-void ParquetFileMetadataProcessor::ReadRow(vector<Vector *> &output, idx_t output_idx, idx_t row_idx) {
-	auto meta_data = reader->GetFileMetadata();
+void ParquetFileMetadataProcessor::ReadRow(vector<reference<Vector>> &output, idx_t output_idx, idx_t row_idx,
+                                           ParquetReader &reader) {
+	auto meta_data = reader.GetFileMetadata();
 
 	// file_name
-	output[0]->SetValue(output_idx, Value(reader->file.path));
+	output[0].get().SetValue(output_idx, Value(reader.file.path));
 	// created_by
-	output[1]->SetValue(output_idx, ParquetElementStringVal(meta_data->created_by, meta_data->__isset.created_by));
+	output[1].get().SetValue(output_idx, ParquetElementStringVal(meta_data->created_by, meta_data->__isset.created_by));
 	// num_rows
-	output[2]->SetValue(output_idx, Value::BIGINT(meta_data->num_rows));
+	output[2].get().SetValue(output_idx, Value::BIGINT(meta_data->num_rows));
 	// num_row_groups
-	output[3]->SetValue(output_idx, Value::BIGINT(UnsafeNumericCast<int64_t>(meta_data->row_groups.size())));
+	output[3].get().SetValue(output_idx, Value::BIGINT(UnsafeNumericCast<int64_t>(meta_data->row_groups.size())));
 	// format_version
-	output[4]->SetValue(output_idx, Value::BIGINT(meta_data->version));
+	output[4].get().SetValue(output_idx, Value::BIGINT(meta_data->version));
 	// encryption_algorithm
-	output[5]->SetValue(output_idx,
-	                    ParquetElementString(meta_data->encryption_algorithm, meta_data->__isset.encryption_algorithm));
+	output[5].get().SetValue(
+	    output_idx, ParquetElementString(meta_data->encryption_algorithm, meta_data->__isset.encryption_algorithm));
 	// footer_signing_key_metadata
-	output[6]->SetValue(output_idx, ParquetElementStringVal(meta_data->footer_signing_key_metadata,
-	                                                        meta_data->__isset.footer_signing_key_metadata));
+	output[6].get().SetValue(output_idx, ParquetElementStringVal(meta_data->footer_signing_key_metadata,
+	                                                             meta_data->__isset.footer_signing_key_metadata));
 	// file_size_bytes
-	output[7]->SetValue(output_idx, Value::UBIGINT(reader->GetHandle().GetFileSize()));
+	output[7].get().SetValue(output_idx, Value::UBIGINT(reader.GetHandle().GetFileSize()));
 	// footer_size
-	output[8]->SetValue(output_idx, Value::UBIGINT(reader->metadata->footer_size));
+	output[8].get().SetValue(output_idx, Value::UBIGINT(reader.metadata->footer_size));
 }
 
 //===--------------------------------------------------------------------===//
@@ -745,9 +749,9 @@ class ParquetBloomProbeProcessor : public ParquetMetadataFileProcessor {
 public:
 	ParquetBloomProbeProcessor(const string &probe_column, const Value &probe_value);
 
-	void InitializeInternal(ClientContext &context) override;
-	idx_t TotalRowCount() override;
-	void ReadRow(vector<Vector *> &output, idx_t output_idx, idx_t row_idx) override;
+	void InitializeInternal(ClientContext &context, ParquetReader &reader) override;
+	idx_t TotalRowCount(ParquetReader &reader) override;
+	void ReadRow(vector<reference<Vector>> &output, idx_t output_idx, idx_t row_idx, ParquetReader &reader) override;
 
 private:
 	string probe_column_name;
@@ -776,34 +780,35 @@ ParquetBloomProbeProcessor::ParquetBloomProbeProcessor(const string &probe_colum
     : probe_column_name(probe_column), probe_constant(probe_value) {
 }
 
-void ParquetBloomProbeProcessor::InitializeInternal(ClientContext &context) {
+void ParquetBloomProbeProcessor::InitializeInternal(ClientContext &context, ParquetReader &reader) {
 	probe_column_idx = optional_idx::Invalid();
 
-	for (idx_t column_idx = 0; column_idx < reader->columns.size(); column_idx++) {
-		if (reader->columns[column_idx].name == probe_column_name) {
+	for (idx_t column_idx = 0; column_idx < reader.columns.size(); column_idx++) {
+		if (reader.columns[column_idx].name == probe_column_name) {
 			probe_column_idx = column_idx;
 			break;
 		}
 	}
 
 	if (!probe_column_idx.IsValid()) {
-		throw InvalidInputException("Column %s not found in %s", probe_column_name, reader->file.path);
+		throw InvalidInputException("Column %s not found in %s", probe_column_name, reader.file.path);
 	}
 
-	auto transport = duckdb_base_std::make_shared<ThriftFileTransport>(reader->GetHandle(), false);
+	auto transport = duckdb_base_std::make_shared<ThriftFileTransport>(reader.GetHandle(), false);
 	protocol = make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
 	allocator = &BufferAllocator::Get(context);
 	filter = make_uniq<ConstantFilter>(
 	    ExpressionType::COMPARE_EQUAL,
-	    probe_constant.CastAs(context, reader->GetColumns()[probe_column_idx.GetIndex()].type));
+	    probe_constant.CastAs(context, reader.GetColumns()[probe_column_idx.GetIndex()].type));
 }
 
-idx_t ParquetBloomProbeProcessor::TotalRowCount() {
-	return reader->GetFileMetadata()->row_groups.size();
+idx_t ParquetBloomProbeProcessor::TotalRowCount(ParquetReader &reader) {
+	return reader.GetFileMetadata()->row_groups.size();
 }
 
-void ParquetBloomProbeProcessor::ReadRow(vector<Vector *> &output, idx_t output_idx, idx_t row_idx) {
-	auto meta_data = reader->GetFileMetadata();
+void ParquetBloomProbeProcessor::ReadRow(vector<reference<Vector>> &output, idx_t output_idx, idx_t row_idx,
+                                         ParquetReader &reader) {
+	auto meta_data = reader.GetFileMetadata();
 	auto &row_group = meta_data->row_groups[row_idx];
 	auto &column = row_group.columns[probe_column_idx.GetIndex()];
 
@@ -811,9 +816,9 @@ void ParquetBloomProbeProcessor::ReadRow(vector<Vector *> &output, idx_t output_
 
 	auto bloom_excludes = ParquetStatisticsUtils::BloomFilterExcludes(*filter, column.meta_data, *protocol, *allocator);
 
-	output[0]->SetValue(output_idx, Value(reader->file.path));
-	output[1]->SetValue(output_idx, Value::BIGINT(NumericCast<int64_t>(row_idx)));
-	output[2]->SetValue(output_idx, Value::BOOLEAN(bloom_excludes));
+	output[0].get().SetValue(output_idx, Value(reader.file.path));
+	output[1].get().SetValue(output_idx, Value::BIGINT(NumericCast<int64_t>(row_idx)));
+	output[2].get().SetValue(output_idx, Value::BOOLEAN(bloom_excludes));
 }
 
 //===--------------------------------------------------------------------===//
@@ -824,15 +829,16 @@ class FullMetadataProcessor : public ParquetMetadataFileProcessor {
 public:
 	FullMetadataProcessor() = default;
 
-	void InitializeInternal(ClientContext &context) override;
-	idx_t TotalRowCount() override;
-	void ReadRow(vector<Vector *> &output, idx_t output_idx, idx_t row_idx) override;
+	void InitializeInternal(ClientContext &context, ParquetReader &reader) override;
+	idx_t TotalRowCount(ParquetReader &reader) override;
+	void ReadRow(vector<reference<Vector>> &output, idx_t output_idx, idx_t row_idx, ParquetReader &reader) override;
 	bool ForceFlush() override {
 		return true;
 	}
 
 private:
-	void PopulateMetadata(ParquetMetadataFileProcessor &processor, Vector &output, idx_t output_idx);
+	void PopulateMetadata(ParquetMetadataFileProcessor &processor, Vector &output, idx_t output_idx,
+	                      ParquetReader &reader);
 
 	ParquetFileMetadataProcessor file_processor;
 	ParquetRowGroupMetadataProcessor row_group_processor;
@@ -840,9 +846,9 @@ private:
 	ParquetKeyValueMetadataProcessor kv_processor;
 };
 
-void FullMetadataProcessor::PopulateMetadata(ParquetMetadataFileProcessor &processor, Vector &output,
-                                             idx_t output_idx) {
-	auto count = processor.TotalRowCount();
+void FullMetadataProcessor::PopulateMetadata(ParquetMetadataFileProcessor &processor, Vector &output, idx_t output_idx,
+                                             ParquetReader &reader) {
+	auto count = processor.TotalRowCount(reader);
 	auto *result_data = FlatVector::GetData<list_entry_t>(output);
 	auto &result_struct = ListVector::GetEntry(output);
 	auto &result_struct_entries = StructVector::GetEntries(result_struct);
@@ -855,15 +861,15 @@ void FullMetadataProcessor::PopulateMetadata(ParquetMetadataFileProcessor &proce
 
 	FlatVector::Validity(output).SetValid(output_idx);
 
-	vector<Vector *> vectors;
+	vector<reference<Vector>> vectors;
 	for (auto &entry : result_struct_entries) {
-		vectors.push_back(entry.get());
+		vectors.push_back(std::ref(*entry.get()));
 		entry->SetVectorType(VectorType::FLAT_VECTOR);
 		auto &validity = FlatVector::Validity(*entry);
 		validity.Initialize(count);
 	}
 	for (idx_t i = 0; i < count; i++) {
-		processor.ReadRow(vectors, i, i);
+		processor.ReadRow(vectors, i, i, reader);
 	}
 }
 
@@ -911,22 +917,23 @@ void ParquetMetaDataOperator::BindSchema<ParquetMetadataOperatorType::FULL_METAD
 	return_types.emplace_back(LogicalType::LIST(LogicalType::STRUCT(std::move(kv_children))));
 }
 
-void FullMetadataProcessor::InitializeInternal(ClientContext &context) {
+void FullMetadataProcessor::InitializeInternal(ClientContext &context, ParquetReader &reader) {
 	file_processor.Initialize(context, reader);
 	row_group_processor.Initialize(context, reader);
 	schema_processor.Initialize(context, reader);
 	kv_processor.Initialize(context, reader);
 }
 
-idx_t FullMetadataProcessor::TotalRowCount() {
+idx_t FullMetadataProcessor::TotalRowCount(ParquetReader &reader) {
 	return 1;
 }
 
-void FullMetadataProcessor::ReadRow(vector<Vector *> &output, idx_t output_idx, idx_t row_idx) {
-	PopulateMetadata(file_processor, *output[0], output_idx);
-	PopulateMetadata(row_group_processor, *output[1], output_idx);
-	PopulateMetadata(schema_processor, *output[2], output_idx);
-	PopulateMetadata(kv_processor, *output[3], output_idx);
+void FullMetadataProcessor::ReadRow(vector<reference<Vector>> &output, idx_t output_idx, idx_t row_idx,
+                                    ParquetReader &reader) {
+	PopulateMetadata(file_processor, output[0].get(), output_idx, reader);
+	PopulateMetadata(row_group_processor, output[1].get(), output_idx, reader);
+	PopulateMetadata(schema_processor, output[2].get(), output_idx, reader);
+	PopulateMetadata(kv_processor, output[3].get(), output_idx, reader);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1011,9 +1018,9 @@ void ParquetMetaDataOperator::Function(ClientContext &context, TableFunctionInpu
 
 	idx_t output_count = 0;
 
-	vector<Vector *> output_vectors;
+	vector<reference<Vector>> output_vectors;
 	for (idx_t i = 0; i < output.ColumnCount(); i++) {
-		output_vectors.push_back(&output.data[i]);
+		output_vectors.push_back(std::ref(output.data[i]));
 	}
 
 	while (output_count < STANDARD_VECTOR_SIZE) {
@@ -1040,7 +1047,8 @@ void ParquetMetaDataOperator::Function(ClientContext &context, TableFunctionInpu
 		output.SetCardinality(output_count + rows_to_output);
 
 		for (idx_t i = 0; i < rows_to_output; ++i) {
-			local_state.processor->ReadRow(output_vectors, output_count + i, local_state.row_idx + i);
+			local_state.processor->ReadRow(output_vectors, output_count + i, local_state.row_idx + i,
+			                               *local_state.reader);
 		}
 		output_count += rows_to_output;
 		local_state.row_idx += rows_to_output;
