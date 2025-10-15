@@ -1105,9 +1105,7 @@ SpecializedStringOption <- ('DELIMITER' / 'NULL' / 'QUOTE' / 'ESCAPE') 'AS'? Str
 StarOrColumnList <- '*' / ColumnList
 
 GenericCopyOptionList <- List(GenericCopyOption)
-GenericCopyOption <- GenericCopyOptionName Expression?
-# FIXME: should not need to hard-code options here
-GenericCopyOptionName <- 'ARRAY' / 'NULL' / 'ANALYZE' / CopyOptionName
+GenericCopyOption <- CopyOptionName Expression?
 
 CopyFromDatabase <- 'FROM' 'DATABASE' ColId 'TO' ColId CopyDatabaseFlag?
 

@@ -89,6 +89,8 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	REGISTER_TRANSFORM(TransformLiteralExpression);
 	REGISTER_TRANSFORM(TransformSingleExpression);
 	REGISTER_TRANSFORM(TransformConstantLiteral);
+	REGISTER_TRANSFORM(TransformFunctionExpression);
+	REGISTER_TRANSFORM(TransformFunctionIdentifier);
 
 	// load.gram
 	REGISTER_TRANSFORM(TransformLoadStatement);
@@ -109,6 +111,18 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	REGISTER_TRANSFORM(TransformSetVariable);
 	REGISTER_TRANSFORM(TransformStandardAssignment);
 	REGISTER_TRANSFORM(TransformVariableList);
+
+	Register("PragmaName", &TransformIdentifierOrKeyword);
+	Register("TypeName", &TransformIdentifierOrKeyword);
+	Register("ColLabel", &TransformIdentifierOrKeyword);
+	Register("PlainIdentifier", &TransformIdentifierOrKeyword);
+	Register("QuotedIdentifier", &TransformIdentifierOrKeyword);
+	Register("ReservedKeyword", &TransformIdentifierOrKeyword);
+	Register("UnreservedKeyword", &TransformIdentifierOrKeyword);
+	Register("ColumnNameKeyword", &TransformIdentifierOrKeyword);
+	Register("FuncNameKeyword", &TransformIdentifierOrKeyword);
+	Register("TypeNameKeyword", &TransformIdentifierOrKeyword);
+	Register("SettingName", &TransformIdentifierOrKeyword);
 
 	RegisterEnum<SetScope>("LocalScope", SetScope::LOCAL);
 	RegisterEnum<SetScope>("GlobalScope", SetScope::GLOBAL);
@@ -137,4 +151,23 @@ PEGTransformerFactory::ExtractParseResultsFromList(optional_ptr<ParseResult> par
 
 	return result;
 }
+
+optional_ptr<ParseResult> PEGTransformerFactory::ExtractResultFromParens(optional_ptr<ParseResult> parse_result) {
+	// Parens(D) <- '(' D ')'
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return list_pr.GetChild(1);
+}
+
+
+bool PEGTransformerFactory::ExpressionIsEmptyStar(ParsedExpression &expr) {
+	if (expr.GetExpressionClass() != ExpressionClass::STAR) {
+		return false;
+	}
+	auto &star = expr.Cast<StarExpression>();
+	if (!star.columns && star.exclude_list.empty() && star.replace_list.empty()) {
+		return true;
+	}
+	return false;
+}
+
 } // namespace duckdb

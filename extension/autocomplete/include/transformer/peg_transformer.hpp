@@ -130,7 +130,10 @@ class PEGTransformerFactory {
 public:
 	static PEGTransformerFactory &GetInstance();
 	explicit PEGTransformerFactory();
+
 	static unique_ptr<SQLStatement> Transform(vector<MatcherToken> &tokens, const char *root_rule = "Statement");
+	static optional_ptr<ParseResult> ExtractResultFromParens(optional_ptr<ParseResult> parse_result);
+	static bool ExpressionIsEmptyStar(ParsedExpression &expr);
 
 private:
 	template <typename T>
@@ -189,6 +192,10 @@ private:
 	                                                               optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformSingleExpression(PEGTransformer &transformer,
 	                                                              optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformFunctionExpression(PEGTransformer &transformer,
+																optional_ptr<ParseResult> parse_result);
+	static QualifiedName TransformFunctionIdentifier(PEGTransformer &transformer,
+																 optional_ptr<ParseResult> parse_result);
 
 	// create_table.gram
 	static string TransformIdentifierOrStringLiteral(PEGTransformer &transformer,
@@ -232,6 +239,9 @@ private:
 	                                                                    optional_ptr<ParseResult> parse_result);
 	static vector<unique_ptr<ParsedExpression>> TransformVariableList(PEGTransformer &transformer,
 	                                                                  optional_ptr<ParseResult> parse_result);
+
+	static string TransformIdentifierOrKeyword(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+
 
 	//! Helper functions
 	static vector<optional_ptr<ParseResult>> ExtractParseResultsFromList(optional_ptr<ParseResult> parse_result);

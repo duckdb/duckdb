@@ -189,6 +189,45 @@ namespace duckdb {
 // 	throw NotImplementedException("Rule 'MonthKeyword' has not been implemented yet");
 // }
 
+string PEGTransformerFactory::TransformIdentifierOrKeyword(PEGTransformer &transformer,
+														   optional_ptr<ParseResult> parse_result) {
+	if (parse_result->type == ParseResultType::IDENTIFIER) {
+		return parse_result->Cast<IdentifierParseResult>().identifier;
+	}
+	if (parse_result->type == ParseResultType::KEYWORD) {
+		return parse_result->Cast<KeywordParseResult>().keyword;
+	}
+	if (parse_result->type == ParseResultType::CHOICE) {
+		auto &choice_pr = parse_result->Cast<ChoiceParseResult>();
+		return transformer.Transform<string>(choice_pr.result);
+	}
+	if (parse_result->type == ParseResultType::LIST) {
+		auto &list_pr = parse_result->Cast<ListParseResult>();
+		for (auto &child : list_pr.GetChildren()) {
+			if (child->type == ParseResultType::LIST && child->Cast<ListParseResult>().GetChildren().empty()) {
+				continue;
+			}
+			if (child->type == ParseResultType::CHOICE) {
+				auto &choice_pr = child->Cast<ChoiceParseResult>();
+				if (choice_pr.result->type == ParseResultType::IDENTIFIER) {
+					return choice_pr.result->Cast<IdentifierParseResult>().identifier;
+				}
+				if (choice_pr.result->type == ParseResultType::KEYWORD) {
+					return choice_pr.result->Cast<KeywordParseResult>().keyword;
+				}
+				return transformer.Transform<string>(choice_pr.result);
+			}
+			if (child->type == ParseResultType::IDENTIFIER) {
+				return child->Cast<IdentifierParseResult>().identifier;
+			}
+			throw InternalException("Unexpected IdentifierOrKeyword type encountered %s.",
+									ParseResultToString(child->type));
+		}
+	}
+	throw ParserException("Unexpected ParseResult type in identifier transformation.");
+}
+
+
 // NumberLiteral <- < [+-]?[0-9]*([.][0-9]*)? >
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformNumberLiteral(PEGTransformer &transformer,
                                                                            optional_ptr<ParseResult> parse_result) {

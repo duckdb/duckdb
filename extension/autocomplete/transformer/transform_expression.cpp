@@ -169,6 +169,86 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformColumnReference(PEG
 	return make_uniq<ColumnRefExpression>(std::move(identifiers));
 }
 
+
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto qualified_function = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(0));
+	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(1))->Cast<ListParseResult>();
+	bool distinct = false;
+	transformer.TransformOptional<bool>(extract_parens, 0, distinct);
+	auto function_arg_opt = extract_parens.Child<OptionalParseResult>(1);
+	vector<unique_ptr<ParsedExpression>> function_children;
+	if (function_arg_opt.HasResult()) {
+		auto function_argument_list = ExtractParseResultsFromList(function_arg_opt.optional_result);
+		for (auto function_argument : function_argument_list) {
+			function_children.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(function_argument));
+		}
+	}
+
+	if (function_children.size() == 1 && ExpressionIsEmptyStar(*function_children[0])) {
+		// COUNT(*) gets converted into COUNT()
+		function_children.clear();
+	}
+
+	vector<OrderByNode> order_by;
+	transformer.TransformOptional<vector<OrderByNode>>(list_pr, 2, order_by);
+	auto ignore_nulls_opt = extract_parens.Child<OptionalParseResult>(3);
+	if (ignore_nulls_opt.HasResult()) {
+		throw NotImplementedException("Ignore nulls has not yet been implemented");
+	}
+	auto within_group_opt = list_pr.Child<OptionalParseResult>(2);
+	if (within_group_opt.HasResult()) {
+		throw NotImplementedException("Within group has not yet been implemented");
+	}
+	unique_ptr<ParsedExpression> filter_expr;
+	transformer.TransformOptional<unique_ptr<ParsedExpression>>(list_pr, 3, filter_expr);
+	auto export_opt = list_pr.Child<OptionalParseResult>(4);
+	if (export_opt.HasResult()) {
+		throw NotImplementedException("Export has not yet been implemented");
+	}
+	auto over_opt = list_pr.Child<OptionalParseResult>(5);
+	if (over_opt.HasResult()) {
+		auto window_function = transformer.Transform<unique_ptr<WindowExpression>>(over_opt.optional_result);
+		window_function->catalog = qualified_function.catalog;
+		window_function->schema = qualified_function.schema;
+		window_function->function_name = qualified_function.name;
+		window_function->children = std::move(function_children);
+		window_function->type = WindowExpression::WindowToExpressionType(window_function->function_name);
+		return window_function;
+	}
+
+	auto result = make_uniq<FunctionExpression>(qualified_function.catalog,
+		qualified_function.schema,
+		qualified_function.name,
+		std::move(function_children));
+
+	result->distinct = distinct;
+	if (!order_by.empty()) {
+		auto order_by_modifier = make_uniq<OrderModifier>();
+		order_by_modifier->orders = std::move(order_by);
+		result->order_bys = std::move(order_by_modifier);
+	}
+	if (filter_expr) {
+		result->filter = std::move(filter_expr);
+	}
+	return result;
+}
+
+QualifiedName PEGTransformerFactory::TransformFunctionIdentifier(PEGTransformer &transformer,
+																 optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	if (choice_pr.result->type == ParseResultType::IDENTIFIER) {
+		QualifiedName result;
+		result.catalog = INVALID_CATALOG;
+		result.schema = INVALID_SCHEMA;
+		result.name = choice_pr.result->Cast<IdentifierParseResult>().identifier;
+		return result;
+	}
+	return transformer.Transform<QualifiedName>(list_pr.Child<ChoiceParseResult>(0).result);
+}
+
+
 // // ColumnsExpression <- '*'? 'COLUMNS' Parens(Expression)
 // unique_ptr<SQLStatement> PEGTransformerFactory::TransformColumnsExpression(PEGTransformer &transformer,
 //                                                                            optional_ptr<ParseResult> parse_result) {
