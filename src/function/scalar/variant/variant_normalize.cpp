@@ -299,6 +299,7 @@ static void VariantNormalizeFunction(DataChunk &input, ExpressionState &state, V
 	if (input.AllConstant()) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
+	result.Verify(count);
 }
 
 ScalarFunction VariantNormalizeFun::GetFunction() {
