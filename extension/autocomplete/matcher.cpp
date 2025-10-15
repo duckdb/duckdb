@@ -1059,26 +1059,18 @@ Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name, ve
 				if (list_matcher.matchers.empty()) {
 					throw InternalException("OR rule found as first token");
 				}
-				// Get the previous rule, which is the left-hand side of the '/'
 				auto &previous_matcher = list_matcher.matchers.back();
 
-				// Check if we are already building a choice (e.g., handling the second '/' in A / B / C)
 				if (previous_matcher.get().Type() == MatcherType::CHOICE) {
-					// If it's already a choice, we don't need to do anything to the list_matcher.
-					// We just set the existing ChoiceMatcher as the root so the *next* rule is added to it.
 					list.AddRootMatcher(previous_matcher);
 				} else {
-					// This is a new choice (e.g., handling the first '/' in A / B)
-					// Create a new ChoiceMatcher containing the previous rule.
 					vector<reference<Matcher>> choice_options;
 					choice_options.push_back(previous_matcher);
 					auto &new_choice_matcher = Choice(choice_options);
 
-					// Replace the previous rule in the list with our new ChoiceMatcher.
 					list_matcher.matchers.pop_back();
 					list_matcher.matchers.push_back(new_choice_matcher);
 
-					// Set the new ChoiceMatcher as the root so the *next* rule is added to it.
 					list.AddRootMatcher(new_choice_matcher);
 				}
 				break;

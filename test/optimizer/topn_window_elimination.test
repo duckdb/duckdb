@@ -50,6 +50,24 @@ EXPLAIN SELECT * FROM window_fun('tbl', ['grp', 'a', 'b'], '${sort_order}', ${to
 ----
 logical_opt	<!REGEX>:.*FILTER.*WINDOW.*
 
+# min/max and nulls
+query II
+EXPLAIN SELECT * FROM window_fun('tbl_with_null', ['grp'], '${sort_order}', ${topn})
+----
+logical_opt	<!REGEX>:.*FILTER.*WINDOW.*
+
+# arg_min/max, no struct_pack and nulls
+query II
+EXPLAIN SELECT * FROM window_fun('tbl_with_null', ['grp', 'a'], '${sort_order}', ${topn})
+----
+logical_opt	<!REGEX>:.*FILTER.*WINDOW.*
+
+# arg_min/max with struct_pack and nulls
+query II
+EXPLAIN SELECT * FROM window_fun('tbl_with_null', ['grp', 'a', 'b'], '${sort_order}', ${topn})
+----
+logical_opt	<!REGEX>:.*FILTER.*WINDOW.*
+
 # test lateral join
 query II
 EXPLAIN SELECT * FROM lateral_join('${sort_order}', ${topn})

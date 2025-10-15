@@ -80,7 +80,8 @@ struct VariantUtils {
 	                  VariantNestedData *child_data, ValidityMask &validity);
 	DUCKDB_API static vector<uint32_t> ValueIsNull(const UnifiedVariantVectorData &variant, const SelectionVector &sel,
 	                                               idx_t count, optional_idx row);
-	DUCKDB_API static Value ConvertVariantToValue(const UnifiedVariantVectorData &variant, idx_t row, idx_t values_idx);
+	DUCKDB_API static Value ConvertVariantToValue(const UnifiedVariantVectorData &variant, idx_t row,
+	                                              uint32_t values_idx);
 	DUCKDB_API static bool Verify(Vector &variant, const SelectionVector &sel_p, idx_t count);
 };
 
