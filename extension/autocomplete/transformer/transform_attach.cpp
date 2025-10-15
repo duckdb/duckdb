@@ -39,6 +39,10 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformAttachStatement(PEGTran
 		if (copy_option.children.empty()) {
 			info->options[copy_option.name] = Value(true);
 		} else if (copy_option.children.size() == 1) {
+			auto val = copy_option.children[0];
+			if (val.IsNull()) {
+				throw BinderException("NULL is not supported as a valid option for ATTACH option \"%s\"", copy_option.name);
+			}
 			info->options[copy_option.name] = std::move(copy_option.children[0]);
 		} else {
 			throw ParserException("Option %s can only have one argument", copy_option.name);
