@@ -13,8 +13,20 @@ namespace {
 
 struct KeysVisitorState {
 public:
-	KeysVisitorState(uint64_t keys_offset, data_ptr_t blob_data, variant::ToVariantGlobalResultData &result_data)
-	    : keys_offset(keys_offset), blob_data(blob_data), result_data(result_data) {
+	KeysVisitorState(idx_t result_row, variant::ToVariantGlobalResultData &result_data)
+	    : result_data(result_data), keys_index_validity(result_data.variant.keys_index_validity) {
+		auto keys_list_entry = result_data.variant.keys_data[result_row];
+		auto values_list_entry = result_data.variant.values_data[result_row];
+		auto children_list_entry = result_data.variant.children_data[result_row];
+
+		keys_offset = keys_list_entry.offset;
+		children_offset = children_list_entry.offset;
+
+		blob_data = data_ptr_cast(result_data.variant.blob_data[result_row].GetDataWriteable());
+		type_ids = result_data.variant.type_ids_data + values_list_entry.offset;
+		byte_offsets = result_data.variant.byte_offset_data + values_list_entry.offset;
+		values_indexes = result_data.variant.values_index_data + children_list_entry.offset;
+		keys_indexes = result_data.variant.keys_index_data + children_list_entry.offset;
 	}
 
 public:
@@ -23,15 +35,22 @@ public:
 	}
 
 public:
-	uint64_t keys_offset;
-
-	idx_t keys_size = 0;
-	idx_t children_size = 0;
-	idx_t values_size = 0;
+	uint32_t keys_size = 0;
+	uint32_t children_size = 0;
+	uint32_t values_size = 0;
 	uint32_t blob_size = 0;
 
-	data_ptr_t blob_data;
 	variant::ToVariantGlobalResultData &result_data;
+
+	uint64_t keys_offset;
+	uint64_t children_offset;
+	ValidityMask &keys_index_validity;
+
+	data_ptr_t blob_data;
+	uint8_t *type_ids;
+	uint32_t *byte_offsets;
+	uint32_t *values_indexes;
+	uint32_t *keys_indexes;
 };
 
 //! Only cares about the keys of a VARIANT, maps which keys are reachable (i.e not orphaned by a 'variant_extract'
@@ -40,17 +59,20 @@ struct KeysVisitor {
 	using result_type = void;
 
 	static void VisitNull(KeysVisitorState &state) {
-		state.values_size++;
 		return;
 	}
-	static void VisitBoolean(bool, KeysVisitorState &state) {
-		state.values_size++;
+	static void VisitBoolean(bool val, KeysVisitorState &state) {
 		return;
+	}
+
+	static void VisitMetadata(VariantLogicalType type_id, KeysVisitorState &state) {
+		state.type_ids[state.values_size] = static_cast<uint8_t>(type_id);
+		state.byte_offsets[state.values_size] = state.blob_size;
+		state.values_size++;
 	}
 
 	template <typename T>
 	static void VisitInteger(T val, KeysVisitorState &state) {
-		state.values_size++;
 		Store<T>(val, state.GetDestination());
 		state.blob_size += sizeof(T);
 	}
@@ -94,8 +116,10 @@ struct KeysVisitor {
 		VisitInteger(val, state);
 	}
 
+	static void WriteStringInternal(const string_t &str, KeysVisitorState &state) {
+	}
+
 	static void VisitString(const string_t &str, KeysVisitorState &state) {
-		state.values_size++;
 		auto length = str.GetSize();
 		state.blob_size += VarintEncode(length, state.GetDestination());
 		memcpy(state.GetDestination(), str.GetData(), length);
@@ -116,7 +140,6 @@ struct KeysVisitor {
 
 	template <typename T>
 	static void VisitDecimal(T val, uint32_t width, uint32_t scale, KeysVisitorState &state) {
-		state.values_size++;
 		state.blob_size += VarintEncode(width, state.GetDestination());
 		state.blob_size += VarintEncode(scale, state.GetDestination());
 		Store<T>(val, state.GetDestination());
@@ -125,25 +148,39 @@ struct KeysVisitor {
 
 	static void VisitArray(const UnifiedVariantVectorData &variant, idx_t row, const VariantNestedData &nested_data,
 	                       KeysVisitorState &state) {
-		state.values_size++;
 		state.blob_size += VarintEncode(nested_data.child_count, state.GetDestination());
-		if (nested_data.child_count) {
-			state.blob_size += VarintEncode(state.children_size, state.GetDestination());
-			state.children_size += nested_data.child_count;
+		if (!nested_data.child_count) {
+			return;
+		}
+		idx_t result_children_idx = state.children_size;
+		state.blob_size += VarintEncode(result_children_idx, state.GetDestination());
+		state.children_size += nested_data.child_count;
 
-			VariantVisitor<KeysVisitor>::VisitArrayItems(variant, row, nested_data, state);
+		for (idx_t i = 0; i < nested_data.child_count; i++) {
+			auto source_children_idx = nested_data.children_idx + i;
+			auto values_index = variant.GetValuesIndex(row, source_children_idx);
+
+			//! Set the 'values_index' for the child, and set the 'keys_index' to NULL
+			state.values_indexes[result_children_idx] = state.values_size;
+			state.keys_index_validity.SetInvalid(state.children_offset + result_children_idx);
+			result_children_idx++;
+
+			//! Visit the child value
+			VariantVisitor<KeysVisitor>::Visit(variant, row, values_index, state);
 		}
 	}
 
 	static void VisitObject(const UnifiedVariantVectorData &variant, idx_t row, const VariantNestedData &nested_data,
 	                        KeysVisitorState &state) {
-		state.values_size++;
 		state.blob_size += VarintEncode(nested_data.child_count, state.GetDestination());
 		if (!nested_data.child_count) {
 			return;
 		}
-		state.blob_size += VarintEncode(state.children_size, state.GetDestination());
+		uint32_t children_idx = state.children_size;
+		uint32_t keys_idx = state.keys_size;
+		state.blob_size += VarintEncode(children_idx, state.GetDestination());
 		state.children_size += nested_data.child_count;
+		state.keys_size += nested_data.child_count;
 
 		//! First iterate through all fields to populate the map of key -> field
 		map<string, idx_t> sorted_fields;
@@ -161,10 +198,14 @@ struct KeysVisitor {
 			auto keys_index = variant.GetKeysIndex(row, children_idx);
 			auto &key = variant.GetKey(row, keys_index);
 			auto dict_index = state.result_data.GetOrCreateIndex(key);
-			state.result_data.keys_selvec.set_index(state.keys_offset + state.keys_size, dict_index);
+			state.result_data.keys_selvec.set_index(state.keys_offset + keys_idx, dict_index);
 
 			//! Visit the child value
 			auto values_index = variant.GetValuesIndex(row, children_idx);
+			state.values_indexes[children_idx] = state.values_size;
+			state.keys_indexes[children_idx] = keys_idx;
+			children_idx++;
+			keys_idx++;
 			VariantVisitor<KeysVisitor>::Visit(variant, row, values_index, state);
 		}
 	}
@@ -222,32 +263,27 @@ static void VariantNormalizeFunction(DataChunk &input, ExpressionState &state, V
 	VariantVectorData variant_data(result);
 	variant::ToVariantGlobalResultData result_variant(variant_data, offsets, dictionary, keys_selvec);
 
-	auto result_data = FlatVector::GetData<string_t>(data);
-	auto result_keys = FlatVector::GetData<list_entry_t>(keys);
-	auto result_children = FlatVector::GetData<list_entry_t>(children);
-	auto result_values = FlatVector::GetData<list_entry_t>(values);
 	for (idx_t i = 0; i < count; i++) {
 		if (!variant.RowIsValid(i)) {
 			FlatVector::SetNull(result, i, true);
 			continue;
 		}
 		//! Allocate for the new data, use the same size as source
-		auto &blob_data = result_data[i];
+		auto &blob_data = variant_data.blob_data[i];
 		auto original_data = variant.GetData(i);
 		blob_data = StringVector::EmptyString(data, original_data.GetSize());
 
-		auto &keys_list_entry = result_keys[i];
+		auto &keys_list_entry = variant_data.keys_data[i];
 		keys_list_entry.offset = ListVector::GetListSize(keys);
 
-		auto &children_list_entry = result_children[i];
+		auto &children_list_entry = variant_data.children_data[i];
 		children_list_entry.offset = ListVector::GetListSize(children);
 
-		auto &values_list_entry = result_values[i];
+		auto &values_list_entry = variant_data.values_data[i];
 		values_list_entry.offset = ListVector::GetListSize(values);
 
 		//! Visit the source to populate the result
-		KeysVisitorState visitor_state(keys_list_entry.offset, data_ptr_cast(blob_data.GetDataWriteable()),
-		                               result_variant);
+		KeysVisitorState visitor_state(keys_list_entry.offset, result_variant);
 		VariantVisitor<KeysVisitor>::Visit(variant, i, 0, visitor_state);
 
 		blob_data.SetSizeAndFinalize(visitor_state.blob_size, original_data.GetSize());
@@ -259,6 +295,8 @@ static void VariantNormalizeFunction(DataChunk &input, ExpressionState &state, V
 		ListVector::SetListSize(children, ListVector::GetListSize(children) + visitor_state.children_size);
 		ListVector::SetListSize(values, ListVector::GetListSize(values) + visitor_state.values_size);
 	}
+
+	VariantUtils::FinalizeVariantKeys(result, dictionary, keys_selvec, ListVector::GetListSize(keys));
 
 	if (input.AllConstant()) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
