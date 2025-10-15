@@ -306,6 +306,20 @@ TEST_CASE("Test prepared statements in C API", "[capi]") {
 	REQUIRE(duckdb_prepared_statement_column_type(stmt, 0) == DUCKDB_TYPE_HUGEINT);
 
 	duckdb_destroy_prepare(&stmt);
+
+	// UUID binding
+	status = duckdb_prepare(tester.connection, "SELECT CAST($1 AS UUID)", &stmt);
+	REQUIRE(status == DuckDBSuccess);
+	REQUIRE(stmt != nullptr);
+
+	REQUIRE(duckdb_prepared_statement_column_count(stmt) == 1);
+	REQUIRE(duckdb_prepared_statement_column_type(stmt, 0) == DUCKDB_TYPE_UUID);
+
+	duckdb_bind_hugeint(stmt, 1, duckdb_double_to_hugeint(101.0));
+	status = duckdb_execute_prepared(stmt, &res);
+	REQUIRE(status == DuckDBSuccess);
+	duckdb_destroy_result(&res);
+	duckdb_destroy_prepare(&stmt);
 }
 
 TEST_CASE("Test duckdb_prepared_statement return value APIs", "[capi]") {
