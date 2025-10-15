@@ -2,14 +2,13 @@
 # description: test comparison logic for VARIANT columns
 # group: [filter]
 
-# Values are equal when cast
 query I
 WITH cte as (
 	select '12'::VARIANT a
 )
 select IF(a == 12, 1, 0) from cte
 ----
-1
+0
 
 query I
 WITH cte as (
@@ -19,14 +18,13 @@ select IF(a == [1,2,3], 1, 0) from cte
 ----
 0
 
-# String representation is the same as the list
 query I
 WITH cte as (
 	select '[1,2,3]'::VARIANT a
 )
 select IF(a == [1,2,3], 1, 0) from cte
 ----
-1
+0
 
 # Different lists, not equal
 query I
@@ -46,14 +44,13 @@ select IF(a == [1,2,3], 1, 0) from cte
 ----
 1
 
-# Elements are equal when cast
 query I
 WITH cte as (
 	select [1::VARIANT,'2',3]::VARIANT a
 )
 select IF(a == [1,2,3], 1, 0) from cte
 ----
-1
+0
 
 # Not even remotely equal
 query I
@@ -89,4 +86,4 @@ WITH cte as (
 )
 select IF(a > [1,2,3], 1, 0) from cte
 ----
-0
+1
