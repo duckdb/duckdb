@@ -20,6 +20,8 @@ class TaskScheduler;
 //! The TaskExecutor is a helper class that enables parallel scheduling and execution of tasks
 class TaskExecutor {
 public:
+	explicit TaskExecutor(ClientContext &context, ProducerToken &token);
+	explicit TaskExecutor(TaskScheduler &scheduler, ProducerToken &token);
 	explicit TaskExecutor(ClientContext &context);
 	explicit TaskExecutor(TaskScheduler &scheduler);
 	~TaskExecutor();
@@ -45,7 +47,8 @@ public:
 private:
 	TaskScheduler &scheduler;
 	TaskErrorManager error_manager;
-	unique_ptr<ProducerToken> token;
+	unique_ptr<ProducerToken> owned_token;
+	ProducerToken &token;
 	atomic<idx_t> completed_tasks;
 	atomic<idx_t> total_tasks;
 	friend class BaseExecutorTask;

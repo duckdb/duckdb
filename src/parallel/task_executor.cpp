@@ -4,8 +4,18 @@
 
 namespace duckdb {
 
+TaskExecutor::TaskExecutor(TaskScheduler &scheduler, ProducerToken &token)
+    : scheduler(scheduler), owned_token(nullptr), token(token), completed_tasks(0), total_tasks(0) {
+}
+
+TaskExecutor::TaskExecutor(ClientContext &context_p, ProducerToken &token)
+    : TaskExecutor(TaskScheduler::GetScheduler(context_p), token) {
+	context = context_p;
+}
+
 TaskExecutor::TaskExecutor(TaskScheduler &scheduler)
-    : scheduler(scheduler), token(scheduler.CreateProducer()), completed_tasks(0), total_tasks(0) {
+    : scheduler(scheduler), owned_token(scheduler.CreateProducer()), token(*owned_token), completed_tasks(0),
+      total_tasks(0) {
 }
 
 TaskExecutor::TaskExecutor(ClientContext &context_p) : TaskExecutor(TaskScheduler::GetScheduler(context_p)) {
@@ -29,8 +39,9 @@ void TaskExecutor::ThrowError() {
 
 void TaskExecutor::ScheduleTask(unique_ptr<Task> task) {
 	++total_tasks;
-	scheduler.ScheduleTask(*token, std::move(task));
+	scheduler.ScheduleTask(token, std::move(task));
 }
+
 void TaskExecutor::FinishTask() {
 	++completed_tasks;
 }
@@ -38,7 +49,7 @@ void TaskExecutor::FinishTask() {
 void TaskExecutor::WorkOnTasks() {
 	// repeatedly execute tasks until we are finished
 	shared_ptr<Task> task_from_producer;
-	while (scheduler.GetTaskFromProducer(*token, task_from_producer)) {
+	while (scheduler.GetTaskFromProducer(token, task_from_producer)) {
 		auto res = task_from_producer->Execute(TaskExecutionMode::PROCESS_ALL);
 		(void)res;
 		D_ASSERT(res != TaskExecutionResult::TASK_BLOCKED);
@@ -56,7 +67,7 @@ void TaskExecutor::WorkOnTasks() {
 }
 
 bool TaskExecutor::GetTask(shared_ptr<Task> &task) {
-	return scheduler.GetTaskFromProducer(*token, task);
+	return scheduler.GetTaskFromProducer(token, task);
 }
 
 BaseExecutorTask::BaseExecutorTask(TaskExecutor &executor) : executor(executor) {
