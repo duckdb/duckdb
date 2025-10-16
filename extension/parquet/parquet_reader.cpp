@@ -593,8 +593,11 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 		// geoarrow types, although geometry columns, are structs and have children and are handled below.
 		if (metadata->geo_metadata && metadata->geo_metadata->IsGeometryColumn(s_ele.name) && s_ele.num_children == 0) {
 			auto root_schema = ParseColumnSchema(s_ele, max_define, max_repeat, this_idx, next_file_idx++);
-			return ParquetColumnSchema(std::move(root_schema), LogicalType::GEOMETRY(),
-			                           ParquetColumnSchemaType::GEOMETRY);
+			// overwrite the derived type with GEOMETRY
+			root_schema.type = LogicalType::GEOMETRY();
+			return root_schema;
+			// return ParquetColumnSchema(std::move(root_schema), LogicalType::GEOMETRY(),
+			//                           ParquetColumnSchemaType::COLUMN);
 		}
 	}
 
