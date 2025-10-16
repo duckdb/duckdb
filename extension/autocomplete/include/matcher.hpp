@@ -11,8 +11,10 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/reference_map.hpp"
+#include "transformer/parse_result.hpp"
 
 namespace duckdb {
+class ParseResultAllocator;
 class Matcher;
 class MatcherAllocator;
 
@@ -73,11 +75,14 @@ enum class TokenType { WORD };
 
 struct MatcherToken {
 	// NOLINTNEXTLINE: allow implicit conversion from text
-	MatcherToken(string text_p) : text(std::move(text_p)) {
+	MatcherToken(string text_p, idx_t offset_p) : text(std::move(text_p)), offset(offset_p) {
+		length = text.length();
 	}
 
 	TokenType type = TokenType::WORD;
 	string text;
+	idx_t offset = 0;
+	idx_t length = 0;
 };
 
 struct MatcherSuggestion {
@@ -96,17 +101,19 @@ struct MatcherSuggestion {
 };
 
 struct MatchState {
-	MatchState(vector<MatcherToken> &tokens, vector<MatcherSuggestion> &suggestions)
-	    : tokens(tokens), suggestions(suggestions), token_index(0) {
+	MatchState(vector<MatcherToken> &tokens, vector<MatcherSuggestion> &suggestions, ParseResultAllocator &allocator)
+	    : tokens(tokens), suggestions(suggestions), token_index(0), allocator(allocator) {
 	}
 	MatchState(MatchState &state)
-	    : tokens(state.tokens), suggestions(state.suggestions), token_index(state.token_index) {
+	    : tokens(state.tokens), suggestions(state.suggestions), token_index(state.token_index),
+	      allocator(state.allocator) {
 	}
 
 	vector<MatcherToken> &tokens;
 	vector<MatcherSuggestion> &suggestions;
 	reference_set_t<const Matcher> added_suggestions;
 	idx_t token_index;
+	ParseResultAllocator &allocator;
 
 	void AddSuggestion(MatcherSuggestion suggestion);
 };
@@ -121,6 +128,7 @@ public:
 
 	//! Match
 	virtual MatchResultType Match(MatchState &state) const = 0;
+	virtual optional_ptr<ParseResult> MatchParseResult(MatchState &state) const = 0;
 	virtual SuggestionType AddSuggestion(MatchState &state) const;
 	virtual SuggestionType AddSuggestionInternal(MatchState &state) const = 0;
 	virtual string ToString() const = 0;
@@ -164,6 +172,14 @@ public:
 
 private:
 	vector<unique_ptr<Matcher>> matchers;
+};
+
+class ParseResultAllocator {
+public:
+	optional_ptr<ParseResult> Allocate(unique_ptr<ParseResult> parse_result);
+
+private:
+	vector<unique_ptr<ParseResult>> parse_results;
 };
 
 } // namespace duckdb

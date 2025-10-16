@@ -7,6 +7,9 @@ namespace duckdb {
 using duckdb_parquet::Encoding;
 using duckdb_parquet::PageType;
 
+constexpr const idx_t PrimitiveColumnWriter::MAX_UNCOMPRESSED_PAGE_SIZE;
+constexpr const idx_t PrimitiveColumnWriter::MAX_UNCOMPRESSED_DICT_PAGE_SIZE;
+
 PrimitiveColumnWriter::PrimitiveColumnWriter(ParquetWriter &writer, const ParquetColumnSchema &column_schema,
                                              vector<string> schema_path, bool can_have_nulls)
     : ColumnWriter(writer, column_schema, std::move(schema_path), can_have_nulls) {
@@ -111,7 +114,7 @@ void PrimitiveColumnWriter::BeginWrite(ColumnWriterState &state_p) {
 		hdr.type = PageType::DATA_PAGE;
 		hdr.__isset.data_page_header = true;
 
-		hdr.data_page_header.num_values = UnsafeNumericCast<int32_t>(page_info.row_count);
+		hdr.data_page_header.num_values = NumericCast<int32_t>(page_info.row_count);
 		hdr.data_page_header.encoding = GetEncoding(state);
 		hdr.data_page_header.definition_level_encoding = Encoding::RLE;
 		hdr.data_page_header.repetition_level_encoding = Encoding::RLE;

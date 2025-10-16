@@ -1,0 +1,13 @@
+diff --git a/src/field_ids.cpp b/src/field_ids.cpp
+index d197f8d..52fb48c 100644
+--- a/src/field_ids.cpp
++++ b/src/field_ids.cpp
+@@ -5,6 +5,8 @@ namespace duckdb {
+ 
+ namespace avro {
+ 
++constexpr const char *FieldID::DUCKDB_FIELD_ID;
++
+ FieldID::FieldID() : set(false) {
+ }
+ 

@@ -251,7 +251,8 @@ public:
 				statements.push_back(std::move(select_statement));
 			}
 			if (StringUtil::CIEquals(query_input, "over")) {
-				return ParserOverrideResult("Parser overridden, query equaled \"over\" but not \"override\"");
+				auto exception = ParserException("Parser overridden, query equaled \"over\" but not \"override\"");
+				return ParserOverrideResult(exception);
 			}
 		}
 		if (statements.empty()) {
