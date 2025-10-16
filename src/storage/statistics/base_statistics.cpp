@@ -65,6 +65,9 @@ StatisticsType BaseStatistics::GetStatsType(const LogicalType &type) {
 	if (type.id() == LogicalTypeId::GEOMETRY) {
 		return StatisticsType::GEOMETRY_STATS;
 	}
+	if (type.id() == LogicalTypeId::VARIANT) {
+		return StatisticsType::VARIANT_STATS;
+	}
 	switch (type.InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
@@ -182,6 +185,8 @@ BaseStatistics BaseStatistics::CreateUnknownType(LogicalType type) {
 		return ArrayStats::CreateUnknown(std::move(type));
 	case StatisticsType::GEOMETRY_STATS:
 		return GeometryStats::CreateUnknown(std::move(type));
+	case StatisticsType::VARIANT_STATS:
+		return VariantStats::CreateUnknown(std::move(type));
 	default:
 		return BaseStatistics(std::move(type));
 	}
@@ -201,6 +206,8 @@ BaseStatistics BaseStatistics::CreateEmptyType(LogicalType type) {
 		return ArrayStats::CreateEmpty(std::move(type));
 	case StatisticsType::GEOMETRY_STATS:
 		return GeometryStats::CreateEmpty(std::move(type));
+	case StatisticsType::VARIANT_STATS:
+		return VariantStats::CreateEmpty(std::move(type));
 	default:
 		return BaseStatistics(std::move(type));
 	}
@@ -534,6 +541,12 @@ BaseStatistics BaseStatistics::FromConstantType(const Value &input) {
 			GeometryStats::Update(result, string_t(string_value));
 		}
 		return result;
+	}
+	case StatisticsType::VARIANT_STATS: {
+		auto result = VariantStats::CreateEmpty(input.type());
+		if (!input.IsNull()) {
+			VariantStats::Update(result, input);
+		}
 	}
 	default:
 		return BaseStatistics(input.type());
