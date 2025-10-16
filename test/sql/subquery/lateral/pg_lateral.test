@@ -192,7 +192,7 @@ CREATE TABLE tenk1 (
 );
 
 statement ok
-COPY tenk1 FROM 'data/csv/tenk.tsv.gz' (DELIMITER '\t')
+COPY tenk1 FROM '{DATA_DIR}/csv/tenk.tsv.gz' (DELIMITER '\t')
 
 query II rowsort
 select * from

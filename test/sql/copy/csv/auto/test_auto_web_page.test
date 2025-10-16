@@ -3,7 +3,7 @@
 # group: [auto]
 
 statement ok
-CREATE TABLE web_page AS SELECT * FROM read_csv_auto ('data/csv/real/web_page.csv');
+CREATE TABLE web_page AS SELECT * FROM read_csv_auto ('{DATA_DIR}/csv/real/web_page.csv');
 
 query I
 SELECT COUNT(*) FROM web_page;
@@ -22,7 +22,7 @@ statement ok
 PRAGMA verify_parallelism
 
 statement ok
-CREATE TABLE web_page2 AS SELECT * FROM read_csv_auto ('data/csv/real/web_page.csv');
+CREATE TABLE web_page2 AS SELECT * FROM read_csv_auto ('{DATA_DIR}/csv/real/web_page.csv');
 
 query IIIIIIIIIIIIII
 (SELECT * FROM web_page EXCEPT SELECT * FROM web_page2)

@@ -231,7 +231,6 @@ string SQLLogicTestRunner::ReplaceKeywords(string input) {
 	for (auto &it : environment_variables) {
 		auto &name = it.first;
 		auto &value = it.second;
-		input = StringUtil::Replace(input, StringUtil::Format("{%s}", name), value);
 		input = StringUtil::Replace(input, StringUtil::Format("${%s}", name), value);
 		input = StringUtil::Replace(input, StringUtil::Format("{%s}", name), value);
 	}

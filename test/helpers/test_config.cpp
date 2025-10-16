@@ -111,28 +111,17 @@ void TestConfiguration::Initialize() {
 }
 
 void TestConfiguration::UpdateEnvironment() {
-	// Setup test env vars TEST_DATA_LOC TEST_TEMP_LOC
+	// Setup standard vars
 
 	// XXX: UUID used by ducklake to avoid collisions, is there a better way?
 	test_env["TEST_UUID"] = test_uuid;
 	test_env["BUILD_DIR"] = string(DUCKDB_BUILD_DIRECTORY);
-	test_env["WORKING_DIR"] = working_dir;             // can be overridden per runner
-	test_env["TEST_DATA_LOC"] = working_dir + "/data"; // default: data/
+	test_env["WORKING_DIR"] = working_dir;        // can be overridden per runner
+	test_env["DATA_DIR"] = working_dir + "/data"; // default: data/
 
-	string temp_loc = TestDirectoryPath();
-	test_env["TEST_TEMP_LOC"] = temp_loc;                      // default: duckdb_unittest_tempdir/$PID
-	test_env["TEST_CATALOG_LOC"] = temp_loc + "/" + test_uuid; // _not_ guaranteed to exist
-
-#if 0
-	{ // XXX: testing
-		auto vars = {"TEST_UUID", "BUILD_DIR", "WORKING_DIR", "TEST_DATA_LOC", "TEST_TEMP_LOC", "TEST_CATALOG_LOC"};
-
-		std::cerr << "TestConfiguration Env:" << std::endl;
-		for (const auto &var : vars) {
-			std::cerr << "env[\"" << var << "\"]=\"" << test_env[var] << '"' << std::endl;
-		}
-	}
-#endif
+	string temp_dir = TestDirectoryPath();
+	test_env["TEMP_DIR"] = temp_dir;                      // default: duckdb_unittest_tempdir/$PID
+	test_env["CATALOG_DIR"] = temp_dir + "/" + test_uuid; // _not_ guaranteed to exist
 }
 
 string TestConfiguration::GetWorkingDirectory() {

@@ -9,7 +9,7 @@ require no_extension_autoloading "EXPECTED: zstd requires the parquet extension,
 
 # zstd requires the parquet extension
 statement error
-CREATE TABLE test_zst AS SELECT * FROM read_csv('data/csv/broken/test.csv.zst', AUTO_DETECT=TRUE);
+CREATE TABLE test_zst AS SELECT * FROM read_csv('{DATA_DIR}/csv/broken/test.csv.zst', AUTO_DETECT=TRUE);
 ----
 Attempting to open a compressed file, but the compression type is not supported
 
@@ -18,27 +18,27 @@ CREATE TABLE test_zst(a INTEGER, b INTEGER, c INTEGER, d VARCHAR, e VARCHAR);
 
 # what if we try to load this with random other compressions
 statement error
-COPY test_zst FROM 'data/csv/broken/test.csv.zst' (COMPRESSION ZSTD);
+COPY test_zst FROM '{DATA_DIR}/csv/broken/test.csv.zst' (COMPRESSION ZSTD);
 ----
 Attempting to open a compressed file, but the compression type is not supported
 
 statement error
-COPY test_zst FROM 'data/csv/broken/test.csv.zst' (COMPRESSION GZIP);
+COPY test_zst FROM '{DATA_DIR}/csv/broken/test.csv.zst' (COMPRESSION GZIP);
 ----
-Input is not a GZIP stream: data/csv/broken/test.csv.zst
+Input is not a GZIP stream: {DATA_DIR}/csv/broken/test.csv.zst
 
 statement error
-COPY test_zst FROM 'data/csv/broken/test.csv.zst' (COMPRESSION NONE);
+COPY test_zst FROM '{DATA_DIR}/csv/broken/test.csv.zst' (COMPRESSION NONE);
 ----
 * Check you are using the correct file compression, otherwise set it (e.g., compression = 'zstd')
 
 statement error
-COPY test_zst FROM 'data/csv/broken/test.csv.zst' (COMPRESSION INFER);
+COPY test_zst FROM '{DATA_DIR}/csv/broken/test.csv.zst' (COMPRESSION INFER);
 ----
 Attempting to open a compressed file, but the compression type is not supported
 
 statement error
-COPY test_zst FROM 'data/csv/broken/test.csv.zst' (COMPRESSION UNKNOWN);
+COPY test_zst FROM '{DATA_DIR}/csv/broken/test.csv.zst' (COMPRESSION UNKNOWN);
 ----
 Unrecognized file compression type "UNKNOWN"
 
@@ -46,20 +46,20 @@ Unrecognized file compression type "UNKNOWN"
 require parquet
 
 statement ok
-COPY test_zst FROM 'data/csv/broken/test.csv.zst' (COMPRESSION ZSTD, HEADER);
+COPY test_zst FROM '{DATA_DIR}/csv/broken/test.csv.zst' (COMPRESSION ZSTD, HEADER);
 
 statement ok
-COPY test_zst FROM 'data/csv/broken/test.csv.zst' (COMPRESSION ZSTD, AUTO_DETECT 1);
+COPY test_zst FROM '{DATA_DIR}/csv/broken/test.csv.zst' (COMPRESSION ZSTD, AUTO_DETECT 1);
 
 # what if we try to load a gzip file with zstd
 statement error
-COPY test_zst FROM 'data/csv/lineitem1k.tbl.gz' (COMPRESSION ZSTD);
+COPY test_zst FROM '{DATA_DIR}/csv/lineitem1k.tbl.gz' (COMPRESSION ZSTD);
 ----
 Unknown frame descriptor
 
 # we can read/write a ZSTD file also without the extension if we specify the compression type
 statement ok
-COPY test_zst TO '__TEST_DIR__/noext.csv' (COMPRESSION ZSTD);
+COPY test_zst TO '{TEMP_DIR}/noext.csv' (COMPRESSION ZSTD);
 
 statement ok
-COPY test_zst FROM '__TEST_DIR__/noext.csv' (COMPRESSION ZSTD);
+COPY test_zst FROM '{TEMP_DIR}/noext.csv' (COMPRESSION ZSTD);
