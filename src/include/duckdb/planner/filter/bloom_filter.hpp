@@ -207,9 +207,8 @@ public:
 	void HashInternal(Vector &keys_v, const SelectionVector &sel, idx_t &approved_count,
 	                                            BloomFilterState &state) const {
 		if (sel.IsSet()) {
-			VectorOperations::Copy(keys_v, state.keys_flat_v, sel, approved_count, 0, 0);
-			D_ASSERT(state.keys_flat_v.GetVectorType() == VectorType::FLAT_VECTOR);
-			VectorOperations::Hash(state.keys_flat_v, state.hashes_v,
+			state.keys_sliced_v.Slice(keys_v, sel, approved_count);
+			VectorOperations::Hash(state.keys_sliced_v, state.hashes_v,
 			                       approved_count); // todo: we actually only want to hash the sel!
 
 		} else {
@@ -223,13 +222,15 @@ public:
 	__attribute__((noinline)) idx_t Filter(Vector &keys_v, UnifiedVectorFormat &keys_uvf, SelectionVector &sel, idx_t &approved_tuple_count,
 	             BloomFilterState &state) const {
 
+		printf("Approved tuple count: %llu \n", approved_tuple_count);
+
 		// printf("Filter bf: bf has %llu sectors and initialized=%hd \n", filter.num_sectors, filter.IsInitialized());
 		if (!this->filter.IsInitialized() || !state.continue_filtering) {
 			return approved_tuple_count; // todo: may
 		}
 
 		if (state.current_capacity < approved_tuple_count) {
-			state.keys_flat_v.Initialize(false, approved_tuple_count);
+			state.keys_sliced_v.Initialize(false, approved_tuple_count);
 			state.hashes_v.Initialize(false, approved_tuple_count);
 			state.bf_sel.Initialize(approved_tuple_count);
 			state.current_capacity = approved_tuple_count;

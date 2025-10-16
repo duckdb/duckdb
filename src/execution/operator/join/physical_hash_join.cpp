@@ -774,6 +774,7 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, o
 		for (auto &info : probe_info) {
 
 			bool create_bloom_filter = true;
+			const bool can_use_bf = ht && ht->conditions.size() == 1 && cmp == ExpressionType::COMPARE_EQUAL;
 
 			auto filter_col_idx = info.columns[filter_idx].probe_column_index.column_index;
 			auto min_idx = filter_idx * 2;
@@ -811,7 +812,12 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, o
 				case ExpressionType::COMPARE_GREATERTHANOREQUALTO: {
 					auto greater_equals =
 					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, std::move(min_val));
-					info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(greater_equals));
+					if (can_use_bf && false) {
+						auto optional_greater_equals = make_uniq<OptionalFilter>(std::move(greater_equals));
+						info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(optional_greater_equals));
+					} else {
+						info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(greater_equals));
+					}
 					break;
 				}
 				default:
@@ -823,14 +829,18 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, o
 				case ExpressionType::COMPARE_LESSTHANOREQUALTO: {
 					auto less_equals =
 					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO, std::move(max_val));
-					info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(less_equals));
+					// if we use a bloom filter, we only use the min/max filter for zone map pruning
+					if (can_use_bf) {
+						auto optional_less_equals = make_uniq<OptionalFilter>(std::move(less_equals));
+						info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(optional_less_equals));
+					} else {
+						info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(less_equals));
+					}
 					break;
 				}
 				default:
 					break;
 				}
-
-				const bool can_use_bf = ht && ht->conditions.size() == 1 && cmp == ExpressionType::COMPARE_EQUAL;
 
 				// bloom filter is only supported for single key equality joins so far
 				if (ht && can_use_bf) {
@@ -840,7 +850,7 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, o
 					    static_cast<double>(ht->Count());
 					const bool should_use_bf = create_bloom_filter && rhs_has_filter && build_to_probe_ratio > 4;
 
-					if (should_use_bf) {
+					if (true) {
 						// If the nulls are equal, we let nulls pass. If not, we filter them
 						auto filters_null_values = !ht->NullValuesAreEqual(join_condition[filter_idx]);
 						const auto key_name = ht->conditions[0].right->ToString();
