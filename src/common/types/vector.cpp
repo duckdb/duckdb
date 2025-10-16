@@ -233,6 +233,9 @@ void Vector::Slice(const Vector &other, const SelectionVector &sel, idx_t count)
 }
 
 void Vector::Slice(const SelectionVector &sel, idx_t count) {
+	if (!sel.IsSet() || count == 0) {
+		return; // Nothing to do here
+	}
 	if (GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		// dictionary on a constant is just a constant
 		return;
