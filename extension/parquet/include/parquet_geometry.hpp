@@ -96,7 +96,6 @@ public:
 	bool IsGeometryColumn(const string &column_name) const;
 
 	static bool IsGeoParquetConversionEnabled(const ClientContext &context);
-	static LogicalType GeometryType();
 
 private:
 	mutex write_lock;
