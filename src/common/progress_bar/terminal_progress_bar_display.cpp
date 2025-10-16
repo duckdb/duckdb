@@ -1,11 +1,8 @@
 #include "duckdb/common/progress_bar/display/terminal_progress_bar_display.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/to_string.hpp"
-#include <thread>
 
 namespace duckdb {
-
-#define UPDATE_INTERVAL_MS 100
 
 int32_t TerminalProgressBarDisplay::NormalizePercentage(double percentage) {
 	if (percentage > 100) {
@@ -17,16 +14,21 @@ int32_t TerminalProgressBarDisplay::NormalizePercentage(double percentage) {
 	return int32_t(percentage);
 }
 
-static std::string format_eta(double seconds, bool elapsed = false) {
-	// Desired formats:
-	//   00:00:00.00 remaining
-	//   unknown     remaining
-	//   00:00:00.00 elapsed
-	const char *suffix = elapsed ? " elapsed)  " : " remaining)";
+static string FormatETA(double seconds, bool elapsed = false) {
+	// for terminal rendering purposes, we need to make sure the length is always the same
+	// we pad the end with spaces if that is not the case
+	// the maximum length here is "(~10.35 minutes remaining)" (26 bytes)
+	// always pad to this amount
+	static constexpr idx_t RENDER_SIZE = 26;
 
-	if (seconds < 0 || seconds > 3600 * 99) {
-		// Invalid or unknown ETA, or if its longer than 99 hours.
-		return StringUtil::Format("(%11s%s", "unknown", suffix);
+	if (seconds < 0 || seconds == 2147483647) {
+		// Invalid or unknown ETA, skip rendering estimate
+		return string(RENDER_SIZE, ' ');
+	}
+
+	if (!elapsed && seconds > 3600 * 99) {
+		// estimate larger than 99 hours remaining, treat this as invalid/unknown ETA
+		return string(RENDER_SIZE, ' ');
 	}
 
 	// Round to nearest centisecond as integer
@@ -40,21 +42,33 @@ static std::string format_eta(double seconds, bool elapsed = false) {
 	uint64_t hours = total_seconds / 3600;
 	uint32_t minutes = static_cast<uint32_t>((total_seconds % 3600) / 60);
 	uint32_t secs = static_cast<uint32_t>(total_seconds % 60);
-
-	return StringUtil::Format("(%02llu:%02u:%02u.%02llu%s", hours, minutes, secs, centiseconds, suffix);
+	string result;
+	result = "(";
+	if (!elapsed) {
+		if (hours == 0 && minutes == 0 && secs == 0) {
+			result += StringUtil::Format("<1 second");
+		} else if (hours == 0 && minutes == 0) {
+			result += StringUtil::Format("~%u second%s", secs, secs > 1 ? "s" : "");
+		} else if (hours == 0) {
+			auto minute_fraction = static_cast<uint32_t>(static_cast<double>(secs) / 60.0 * 10);
+			result += StringUtil::Format("~%u.%u minutes", minutes, minute_fraction);
+		} else {
+			auto hour_fraction = static_cast<uint32_t>(static_cast<double>(minutes) / 60.0 * 10);
+			result += StringUtil::Format("~%llu.%u hours", hours, hour_fraction);
+		}
+		result += " remaining";
+	} else {
+		result += StringUtil::Format("%02llu:%02u:%02u.%02llu", hours, minutes, secs, centiseconds);
+		result += " elapsed";
+	}
+	result += ")";
+	if (result.size() < RENDER_SIZE) {
+		result += string(RENDER_SIZE - result.size(), ' ');
+	}
+	return result;
 }
 
 void TerminalProgressBarDisplay::PrintProgressInternal(int32_t percentage, double seconds, bool finished) {
-	if (!run_periodic_updates && !finished) {
-		run_periodic_updates = true;
-
-		// Since the progress reports may not come at a regular interval,
-		// we start a thread that will periodically update the display,
-		// with the new estimated completion time, but we're doing this
-		// here since we only want periodic updates if the progress bar is
-		// being displayed.
-		periodic_update_thread = std::thread([this]() { PeriodicUpdate(); });
-	}
 	string result;
 	// we divide the number of blocks by the percentage
 	// 0%   = 0
@@ -72,8 +86,6 @@ void TerminalProgressBarDisplay::PrintProgressInternal(int32_t percentage, doubl
 		result += " ";
 	}
 	result += to_string(percentage) + "%";
-	result += " ";
-	result += format_eta(seconds, finished);
 	result += " ";
 	result += PROGRESS_START;
 	idx_t i;
@@ -94,77 +106,41 @@ void TerminalProgressBarDisplay::PrintProgressInternal(int32_t percentage, doubl
 	}
 	result += PROGRESS_END;
 	result += " ";
+	result += FormatETA(seconds, finished);
 
 	Printer::RawPrint(OutputStream::STREAM_STDOUT, result);
 }
 
 void TerminalProgressBarDisplay::Update(double percentage) {
-	std::lock_guard<std::mutex> lock(mtx);
 	const double current_time = GetElapsedDuration();
 
-	if (current_time - last_update_time >= UPDATE_INTERVAL_MS / 1000.0) {
-		// Filters go from 0 to 1, percentage is from 0-100
-		const double filter_percentage = percentage / 100.0;
-		if (!udf_initialized) {
-			ukf.Initialize(filter_percentage, current_time);
-			udf_initialized = true;
-		} else {
-			ukf.Predict(current_time);
-			if (percentage != last_percentage) {
-				ukf.Update(filter_percentage);
-			}
-		}
+	// Filters go from 0 to 1, percentage is from 0-100
+	const double filter_percentage = percentage / 100.0;
 
-		double estimated_seconds_remaining = ukf.GetEstimatedRemainingSeconds();
-		auto percentage_int = NormalizePercentage(percentage);
+	ukf.Update(filter_percentage, current_time);
+
+	double estimated_seconds_remaining;
+	//  If the query is mostly completed, there can be oscillation of estimated
+	//  time to completion since the progress updates seem sparse near the very
+	//  end of the query, so clamp time remaining to not oscillate with estimates
+	//  that are unlikely to be correct.
+	if (filter_percentage > 0.99) {
+		estimated_seconds_remaining = 0.5;
+	} else {
+		estimated_seconds_remaining = std::min(ukf.GetEstimatedRemainingSeconds(), 2147483647.0);
+	}
+	auto percentage_int = NormalizePercentage(percentage);
+
+	TerminalProgressBarDisplayedProgressInfo updated_progress_info = {(idx_t)percentage_int,
+	                                                                  (idx_t)estimated_seconds_remaining};
+	if (displayed_progress_info != updated_progress_info) {
 		PrintProgressInternal(percentage_int, estimated_seconds_remaining);
 		Printer::Flush(OutputStream::STREAM_STDOUT);
-		last_update_time = current_time;
-		last_percentage = percentage;
+		displayed_progress_info = updated_progress_info;
 	}
-}
-
-void TerminalProgressBarDisplay::PeriodicUpdate() {
-	std::unique_lock<std::mutex> lock(mtx);
-	while (true) {
-		const double current_time = GetElapsedDuration();
-
-		// Only advance the time, but not the progress.
-		ukf.Predict(current_time);
-		double estimated_seconds_remaining = ukf.GetEstimatedRemainingSeconds();
-
-		if (last_percentage < 100) {
-			auto percentage_int = NormalizePercentage(last_percentage);
-			PrintProgressInternal(percentage_int, estimated_seconds_remaining);
-			Printer::Flush(OutputStream::STREAM_STDOUT);
-		}
-
-		// Wait for an interval then do an update.
-		if (cv.wait_for(lock, std::chrono::milliseconds(UPDATE_INTERVAL_MS),
-		                [this] { return !run_periodic_updates; })) {
-			break;
-		}
-	}
-}
-
-void TerminalProgressBarDisplay::StopPeriodicUpdates() {
-	if (run_periodic_updates) {
-		{
-			std::lock_guard<std::mutex> lock(mtx);
-			run_periodic_updates = false;
-		}
-		cv.notify_one();
-		if (periodic_update_thread.joinable()) {
-			periodic_update_thread.join();
-		}
-	}
-	run_periodic_updates = false;
 }
 
 void TerminalProgressBarDisplay::Finish() {
-	StopPeriodicUpdates();
-
-	std::lock_guard<std::mutex> lock(mtx);
 	PrintProgressInternal(100, GetElapsedDuration(), true);
 	Printer::RawPrint(OutputStream::STREAM_STDOUT, "\n");
 	Printer::Flush(OutputStream::STREAM_STDOUT);

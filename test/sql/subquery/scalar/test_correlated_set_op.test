@@ -1,0 +1,37 @@
+# name: test/sql/subquery/scalar/test_correlated_set_op.test
+# description: Test correlated subqueries with set operations
+# group: [scalar]
+
+statement ok
+SET default_null_order='nulls_first';
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3), (NULL);
+
+# scalar select with correlation in different UNION ALL branches
+query II
+SELECT i, (SELECT SUM(x) FROM (SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT i1.i) t(x)) FROM integers i1 ORDER BY i;
+----
+NULL	3
+1	4
+2	5
+3	6
+
+query II
+SELECT i, (SELECT SUM(x) FROM (SELECT i1.i UNION ALL SELECT 2 UNION ALL SELECT 1) t(x)) FROM integers i1 ORDER BY i;
+----
+NULL	3
+1	4
+2	5
+3	6
+
+query II
+SELECT i, (SELECT SUM(x) FROM (SELECT 2 UNION ALL SELECT i1.i UNION ALL SELECT 1) t(x)) FROM integers i1 ORDER BY i;
+----
+NULL	3
+1	4
+2	5
+3	6

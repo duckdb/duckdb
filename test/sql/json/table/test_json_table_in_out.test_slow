@@ -739,3 +739,10 @@ $.my_array[0]	$.my_array
 $.my_array[0].my_key	$.my_array[0]
 $.my_array[1]	$.my_array
 $.my_array[1].my_key	$.my_array[1]
+
+# internal issues 5772 and 5776
+statement ok
+create table all_types as select * exclude(small_enum, medium_enum, large_enum) from test_all_types() limit 0;
+
+statement ok
+SELECT NULL FROM json_each(6051, NULL)

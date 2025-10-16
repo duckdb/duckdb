@@ -51,6 +51,8 @@ struct PreparedStatementWrapper {
 	//! Map of name -> values
 	case_insensitive_map_t<BoundParameterData> values;
 	unique_ptr<PreparedStatement> statement;
+	bool success = true;
+	ErrorData error_data;
 };
 
 struct ExtractStatementsWrapper {
@@ -69,7 +71,7 @@ struct ArrowResultWrapper {
 };
 
 struct AppenderWrapper {
-	unique_ptr<Appender> appender;
+	unique_ptr<BaseAppender> appender;
 	ErrorData error_data;
 };
 

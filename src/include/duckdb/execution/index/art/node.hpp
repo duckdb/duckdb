@@ -86,7 +86,7 @@ public:
 	//! Get the immutable child at byte.
 	const unsafe_optional_ptr<Node> GetChild(ART &art, const uint8_t byte) const;
 	//! Get the child at byte.
-	unsafe_optional_ptr<Node> GetChildMutable(ART &art, const uint8_t byte) const;
+	unsafe_optional_ptr<Node> GetChildMutable(ART &art, const uint8_t byte, const bool unsafe = false) const;
 	//! Get the first immutable child greater than or equal to the byte.
 	const unsafe_optional_ptr<Node> GetNextChild(ART &art, uint8_t &byte) const;
 	//! Returns true, if the byte exists, else false.

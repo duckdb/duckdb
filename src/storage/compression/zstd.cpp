@@ -81,7 +81,7 @@ struct ZSTDStorage {
 	static void Compress(CompressionState &state_p, Vector &scan_vector, idx_t count);
 	static void FinalizeCompress(CompressionState &state_p);
 
-	static unique_ptr<SegmentScanState> StringInitScan(ColumnSegment &segment);
+	static unique_ptr<SegmentScanState> StringInitScan(const QueryContext &context, ColumnSegment &segment);
 	static void StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
 	                              idx_t result_offset);
 	static void StringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result);
@@ -900,16 +900,15 @@ public:
 		for (idx_t i = 0; i < count; i++) {
 			uncompressed_length += string_lengths[i];
 		}
-		auto empty_string = StringVector::EmptyString(result, uncompressed_length);
-		auto uncompressed_data = empty_string.GetDataWriteable();
+		auto &buffer = StringVector::GetStringBuffer(result);
+		auto uncompressed_data = buffer.AllocateShrinkableBuffer(uncompressed_length);
 		auto string_data = FlatVector::GetData<string_t>(result);
 
-		DecompressString(scan_state, reinterpret_cast<data_ptr_t>(uncompressed_data), uncompressed_length);
+		DecompressString(scan_state, uncompressed_data, uncompressed_length);
 
 		idx_t offset = 0;
-		auto uncompressed_data_const = empty_string.GetData();
 		for (idx_t i = 0; i < count; i++) {
-			string_data[result_offset + i] = string_t(uncompressed_data_const + offset, string_lengths[i]);
+			string_data[result_offset + i] = string_t(char_ptr_cast(uncompressed_data + offset), string_lengths[i]);
 			offset += string_lengths[i];
 		}
 		scan_state.scanned_count += count;
@@ -962,7 +961,7 @@ public:
 	AllocatedData skip_buffer;
 };
 
-unique_ptr<SegmentScanState> ZSTDStorage::StringInitScan(ColumnSegment &segment) {
+unique_ptr<SegmentScanState> ZSTDStorage::StringInitScan(const QueryContext &context, ColumnSegment &segment) {
 	auto result = make_uniq<ZSTDScanState>(segment);
 	return std::move(result);
 }

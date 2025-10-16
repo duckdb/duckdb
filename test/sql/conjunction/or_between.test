@@ -3,9 +3,6 @@
 # group: [conjunction]
 
 statement ok
-PRAGMA enable_verification;
-
-statement ok
 CREATE TABLE tab0(pk INTEGER PRIMARY KEY, col0 INTEGER, col1 FLOAT, col2 VARCHAR, col3 INTEGER, col4 FLOAT, col5 VARCHAR);
 
 statement ok

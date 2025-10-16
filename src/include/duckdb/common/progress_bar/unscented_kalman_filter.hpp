@@ -20,38 +20,44 @@ private:
 	static constexpr size_t SIGMA_POINTS = 2 * STATE_DIM + 1;
 
 	// UKF parameters
-	static constexpr double ALPHA = 0.1;
+	static constexpr double ALPHA = 0.044;
 	static constexpr double BETA = 1.0;
 	static constexpr double KAPPA = 0.0;
 
 	double lambda;
-	std::vector<double> wm, wc; // weights for mean and covariance
+	vector<double> wm, wc; // weights for mean and covariance
 
 	// State: [progress (0-1), velocity (progress/second)]
-	std::vector<double> x;              // state estimate
-	std::vector<std::vector<double>> P; // covariance matrix
-	std::vector<std::vector<double>> Q; // process noise
-	std::vector<std::vector<double>> R; // measurement noise
+	vector<double> x;         // state estimate
+	vector<vector<double>> P; // covariance matrix
+	vector<vector<double>> Q; // process noise
+	vector<vector<double>> R; // measurement noise
 
 	double last_time;
 	bool initialized;
+	double last_progress;
+	double scale_factor;
 
 	// Helper functions
-	std::vector<std::vector<double>> MatrixSqrt(const std::vector<std::vector<double>> &mat);
-	std::vector<std::vector<double>> GenerateSigmaPoints();
-	std::vector<double> StateTransition(const std::vector<double> &state, double dt);
-	std::vector<double> MeasurementFunction(const std::vector<double> &state);
+	vector<vector<double>> MatrixSqrt(const vector<vector<double>> &mat);
+	vector<vector<double>> GenerateSigmaPoints();
+	vector<double> StateTransition(const vector<double> &state, double dt);
+	vector<double> MeasurementFunction(const vector<double> &state);
 
 public:
 	UnscentedKalmanFilter();
 
+	void Update(double progress, double time);
+
+	double GetEstimatedRemainingSeconds() const;
+
+private:
 	void Initialize(double initial_progress, double current_time);
 	void Predict(double current_time);
-	void Update(double measured_progress);
+	void UpdateInternal(double measured_progress);
 
 	double GetProgress() const;
 	double GetVelocity() const;
-	double GetEstimatedRemainingSeconds() const;
 	double GetProgressVariance() const;
 	double GetVelocityVariance() const;
 };

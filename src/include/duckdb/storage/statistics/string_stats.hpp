@@ -71,6 +71,8 @@ struct StringStats {
 	                                                     ExpressionType comparison_type, const string &value);
 
 	DUCKDB_API static void Update(BaseStatistics &stats, const string_t &value);
+	DUCKDB_API static void SetMin(BaseStatistics &stats, const string_t &value);
+	DUCKDB_API static void SetMax(BaseStatistics &stats, const string_t &value);
 	DUCKDB_API static void Merge(BaseStatistics &stats, const BaseStatistics &other);
 	DUCKDB_API static void Verify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count);
 

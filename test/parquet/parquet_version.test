@@ -4,13 +4,10 @@
 
 require parquet
 
-statement ok
-pragma enable_verification
-
 statement error
 copy (select range i from range(20000)) to '__TEST_DIR__/parquet_version.parquet' (parquet_version)
 ----
-Binder Error
+Invalid Input Error
 
 statement error
 copy (select range i from range(20000)) to '__TEST_DIR__/parquet_version.parquet' (parquet_version v3)

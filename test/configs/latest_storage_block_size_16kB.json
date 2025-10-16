@@ -3,6 +3,9 @@
   "on_init": "ATTACH '__TEST_DIR__/{BASE_TEST_NAME}__test__config__latest_storage_block_size_16kB.db' AS __test__config__latest_storage_block_size_16kB (STORAGE_VERSION 'latest'); SET storage_compatibility_version='latest';",
   "on_new_connection": "USE __test__config__latest_storage_block_size_16kB;",
   "on_load": "skip",
+  "settings": [
+    {"name": "storage_compatibility_version", "value": "latest"}
+  ],
   "skip_compiled": "true",
   "block_size": "16384",
   "skip_tests": [
@@ -27,7 +30,14 @@
         "test/sql/show_select/test_describe_all.test",
         "test/sql/storage/buffer_manager_temp_dir.test",
         "test/sql/table_function/duckdb_databases.test",
-        "test/sql/tpch/dbgen_error.test"
+        "test/sql/tpch/dbgen_error.test",
+        "test/sql/storage/read_duckdb/read_duckdb_basic.test"
+      ]
+    },
+    {
+      "reason": "ALP is disabled for non-default block sizes.",
+      "paths": [
+        "test/sql/storage/compression/alp/alp_min_max.test"
       ]
     }
   ]

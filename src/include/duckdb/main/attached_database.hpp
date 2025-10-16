@@ -23,12 +23,29 @@ class StorageExtension;
 class DatabaseManager;
 
 struct AttachInfo;
+struct StoredDatabasePath;
 
 enum class AttachedDatabaseType {
 	READ_WRITE_DATABASE,
 	READ_ONLY_DATABASE,
 	SYSTEM_DATABASE,
 	TEMP_DATABASE,
+};
+
+enum class AttachVisibility { SHOWN, HIDDEN };
+
+class DatabaseFilePathManager;
+
+struct StoredDatabasePath {
+	StoredDatabasePath(DatabaseManager &db_manager, DatabaseFilePathManager &manager, string path, const string &name);
+	~StoredDatabasePath();
+
+	DatabaseManager &db_manager;
+	DatabaseFilePathManager &manager;
+	string path;
+
+public:
+	void OnDetach();
 };
 
 //! AttachOptions holds information about a database we plan to attach. These options are generalized, i.e.,
@@ -47,10 +64,16 @@ struct AttachOptions {
 	unordered_map<string, Value> options;
 	//! (optionally) a catalog can be provided with a default table
 	QualifiedName default_table;
+	//! Whether or not this is the main database
+	bool is_main_database = false;
+	//! The visibility of the attached database
+	AttachVisibility visibility = AttachVisibility::SHOWN;
+	//! The stored database path (in the path manager)
+	unique_ptr<StoredDatabasePath> stored_database_path;
 };
 
 //! The AttachedDatabase represents an attached database instance.
-class AttachedDatabase : public CatalogEntry {
+class AttachedDatabase : public CatalogEntry, public enable_shared_from_this<AttachedDatabase> {
 public:
 	//! Create the built-in system database (without storage).
 	explicit AttachedDatabase(DatabaseInstance &db, AttachedDatabaseType type = AttachedDatabaseType::SYSTEM_DATABASE);
@@ -68,6 +91,7 @@ public:
 
 	Catalog &ParentCatalog() override;
 	const Catalog &ParentCatalog() const override;
+	bool HasStorageManager() const;
 	StorageManager &GetStorageManager();
 	Catalog &GetCatalog();
 	TransactionManager &GetTransactionManager();
@@ -82,6 +106,9 @@ public:
 	const string &GetName() const {
 		return name;
 	}
+	void SetName(const string &new_name) {
+		name = new_name;
+	}
 	bool IsSystem() const;
 	bool IsTemporary() const;
 	bool IsReadOnly() const;
@@ -89,18 +116,24 @@ public:
 	void SetInitialDatabase();
 	void SetReadOnlyDatabase();
 	void OnDetach(ClientContext &context);
+	AttachVisibility GetVisibility() const {
+		return visibility;
+	}
+	string StoredPath() const;
 
 	static bool NameIsReserved(const string &name);
 	static string ExtractDatabaseName(const string &dbpath, FileSystem &fs);
 
 private:
 	DatabaseInstance &db;
+	unique_ptr<StoredDatabasePath> stored_database_path;
 	unique_ptr<StorageManager> storage;
 	unique_ptr<Catalog> catalog;
 	unique_ptr<TransactionManager> transaction_manager;
 	AttachedDatabaseType type;
 	optional_ptr<Catalog> parent_catalog;
 	optional_ptr<StorageExtension> storage_extension;
+	AttachVisibility visibility = AttachVisibility::SHOWN;
 	bool is_initial_database = false;
 	bool is_closed = false;
 };

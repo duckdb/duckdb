@@ -471,8 +471,10 @@ BoundCastInfo DefaultCasts::StringCastSwitch(BindCastInput &input, const Logical
 	case LogicalTypeId::TIME_TZ:
 		return BoundCastInfo(&VectorCastHelpers::TryCastErrorLoop<string_t, dtime_tz_t, duckdb::TryCastErrorMessage>);
 	case LogicalTypeId::TIMESTAMP:
-	case LogicalTypeId::TIMESTAMP_TZ:
 		return BoundCastInfo(&VectorCastHelpers::TryCastErrorLoop<string_t, timestamp_t, duckdb::TryCastErrorMessage>);
+	case LogicalTypeId::TIMESTAMP_TZ:
+		return BoundCastInfo(
+		    &VectorCastHelpers::TryCastErrorLoop<string_t, timestamp_tz_t, duckdb::TryCastErrorMessage>);
 	case LogicalTypeId::TIMESTAMP_NS:
 		return BoundCastInfo(
 		    &VectorCastHelpers::TryCastStrictLoop<string_t, timestamp_ns_t, duckdb::TryCastToTimestampNS>);
@@ -488,6 +490,8 @@ BoundCastInfo DefaultCasts::StringCastSwitch(BindCastInput &input, const Logical
 		return BoundCastInfo(&VectorCastHelpers::TryCastStringLoop<string_t, string_t, duckdb::TryCastToBit>);
 	case LogicalTypeId::UUID:
 		return BoundCastInfo(&VectorCastHelpers::TryCastStringLoop<string_t, hugeint_t, duckdb::TryCastToUUID>);
+	case LogicalTypeId::GEOMETRY:
+		return BoundCastInfo(&VectorCastHelpers::TryCastStringLoop<string_t, string_t, duckdb::TryCastToGeometry>);
 	case LogicalTypeId::SQLNULL:
 		return &DefaultCasts::TryVectorNullCast;
 	case LogicalTypeId::VARCHAR:

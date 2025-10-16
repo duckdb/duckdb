@@ -15,6 +15,24 @@ SET merge_join_threshold=0
 
 # Stream tables with minimal overlap that require merge tasks on both sides.
 query II
+EXPLAIN
+SELECT lhs.begin, rhs.begin
+FROM (
+	SELECT
+		i AS id,
+		i AS begin,
+		i + 1 AS end
+	FROM range(1, 10000002) tbl(i)) lhs,
+	(SELECT
+		i - 100000000 AS id,
+		i AS begin,
+		i + 1 AS end
+	FROM range(10000001, 20000002) tbl(i)) rhs
+WHERE lhs.begin < rhs.end AND rhs.begin < lhs.end
+----
+physical_plan	<REGEX>:.*IE_JOIN.*
+
+query II
 SELECT lhs.begin, rhs.begin
 FROM (
 	SELECT

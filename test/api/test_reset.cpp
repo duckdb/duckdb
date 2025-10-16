@@ -54,7 +54,6 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"disabled_compression_methods", {"RLE"}},
 	    {"disabled_optimizers", {"extension"}},
 	    {"debug_force_external", {Value(true)}},
-	    {"wal_encryption", {Value(false)}},
 	    {"old_implicit_casting", {Value(true)}},
 	    {"prefer_range_joins", {Value(true)}},
 	    {"allow_persistent_secrets", {Value(false)}},
@@ -63,6 +62,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"custom_extension_repository", {"duckdb.org/no-extensions-here", "duckdb.org/no-extensions-here"}},
 	    {"autoinstall_extension_repository", {"duckdb.org/no-extensions-here", "duckdb.org/no-extensions-here"}},
 	    {"lambda_syntax", {EnumUtil::ToString(LambdaSyntax::DISABLE_SINGLE_ARROW)}},
+	    {"allow_parser_override_extension", {"fallback"}},
 	    {"profiling_coverage", {EnumUtil::ToString(ProfilingCoverage::ALL)}},
 #ifdef DUCKDB_EXTENSION_AUTOLOAD_DEFAULT
 	    {"autoload_known_extensions", {!DUCKDB_EXTENSION_AUTOLOAD_DEFAULT}},
@@ -89,7 +89,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"memory_limit", {"4.0 GiB"}},
 	    {"storage_compatibility_version", {"v0.10.0"}},
 	    {"ordered_aggregate_threshold", {Value::UBIGINT(idx_t(1) << 12)}},
-	    {"null_order", {"nulls_first"}},
+	    {"null_order", {"NULLS_FIRST"}},
 	    {"debug_verify_vector", {"dictionary_expression"}},
 	    {"perfect_ht_threshold", {0}},
 	    {"pivot_filter_threshold", {999}},
@@ -121,6 +121,8 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"allocator_bulk_deallocation_flush_threshold", {"4.0 GiB"}},
 	    {"arrow_output_version", {"1.5"}},
 	    {"enable_external_file_cache", {false}},
+	    {"experimental_metadata_reuse", {false}},
+	    {"storage_block_prefetch", {"always_prefetch"}},
 	    {"pin_threads", {"off"}}};
 	// Every option that's not excluded has to be part of this map
 	if (!value_map.count(name)) {

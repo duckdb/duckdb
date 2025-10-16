@@ -5,6 +5,7 @@
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/checkpoint_manager.hpp"
 #include "duckdb/storage/in_memory_block_manager.hpp"
@@ -13,6 +14,9 @@
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/in_memory_checkpoint.hpp"
+#include "duckdb/catalog/duck_catalog.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "mbedtls_wrapper.hpp"
 
 namespace duckdb {
@@ -39,12 +43,18 @@ void StorageOptions::Initialize(const unordered_map<string, Value> &options) {
 			block_header_size = DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE;
 			encryption = true;
 		} else if (entry.first == "encryption_cipher") {
-			throw BinderException("\"%s\" is not a valid cipher. Only AES GCM is supported.", entry.second.ToString());
+			auto parsed_cipher = EncryptionTypes::StringToCipher(entry.second.ToString());
+			if (parsed_cipher != EncryptionTypes::CipherType::GCM &&
+			    parsed_cipher != EncryptionTypes::CipherType::CTR) {
+				throw BinderException("\"%s\" is not a valid cipher. Try 'GCM' or 'CTR'.", entry.second.ToString());
+			}
+			encryption_cipher = parsed_cipher;
 		} else if (entry.first == "row_group_size") {
 			row_group_size = entry.second.GetValue<uint64_t>();
 		} else if (entry.first == "storage_version") {
 			storage_version_user_provided = entry.second.ToString();
-			storage_version = SerializationCompatibility::FromString(entry.second.ToString()).serialization_version;
+			storage_version =
+			    SerializationCompatibility::FromString(storage_version_user_provided).serialization_version;
 		} else if (entry.first == "compress") {
 			if (entry.second.DefaultCastAs(LogicalType::BOOLEAN).GetValue<bool>()) {
 				compress_in_memory = CompressInMemory::COMPRESS;
@@ -136,6 +146,9 @@ bool StorageManager::InMemory() const {
 	return path == IN_MEMORY_PATH;
 }
 
+void StorageManager::Destroy() {
+}
+
 void StorageManager::Initialize(QueryContext context) {
 	bool in_memory = InMemory();
 	if (in_memory && read_only) {
@@ -205,7 +218,6 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 		// key is given upon ATTACH
 		D_ASSERT(storage_options.block_header_size == DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
 		options.encryption_options.encryption_enabled = true;
-		options.encryption_options.cipher = EncryptionTypes::StringToCipher(storage_options.encryption_cipher);
 		options.encryption_options.user_key = std::move(storage_options.user_key);
 	}
 
@@ -311,13 +323,40 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 			}
 		}
 
-		// load the db from storage
+		// Start timing the storage load step.
+		auto client_context = context.GetClientContext();
+		if (client_context) {
+			auto profiler = client_context->client_data->profiler;
+			profiler->StartTimer(MetricsType::ATTACH_LOAD_STORAGE_LATENCY);
+		}
+
+		// Load the checkpoint from storage.
 		auto checkpoint_reader = SingleFileCheckpointReader(*this);
 		checkpoint_reader.LoadFromStorage();
 
+		// End timing the storage load step.
+		if (client_context) {
+			auto profiler = client_context->client_data->profiler;
+			profiler->EndTimer(MetricsType::ATTACH_LOAD_STORAGE_LATENCY);
+		}
+
+		// Start timing the WAL replay step.
+		if (client_context) {
+			auto profiler = client_context->client_data->profiler;
+			profiler->StartTimer(MetricsType::ATTACH_REPLAY_WAL_LATENCY);
+		}
+
+		// Replay the WAL.
 		auto wal_path = GetWALPath();
 		wal = WriteAheadLog::Replay(fs, db, wal_path);
+
+		// End timing the WAL replay step.
+		if (client_context) {
+			auto profiler = client_context->client_data->profiler;
+			profiler->EndTimer(MetricsType::ATTACH_REPLAY_WAL_LATENCY);
+		}
 	}
+
 	if (row_group_size > 122880ULL && GetStorageVersion() < 4) {
 		throw InvalidInputException("Unsupported row group size %llu - row group sizes >= 122_880 are only supported "
 		                            "with STORAGE_VERSION '1.2.0' or above.\nExplicitly specify a newer storage "
@@ -465,23 +504,68 @@ void SingleFileStorageManager::CreateCheckpoint(QueryContext context, Checkpoint
 	if (db.GetStorageExtension()) {
 		db.GetStorageExtension()->OnCheckpointStart(db, options);
 	}
+
 	auto &config = DBConfig::Get(db);
+	// We only need to checkpoint if there is anything in the WAL.
 	if (GetWALSize() > 0 || config.options.force_checkpoint || options.action == CheckpointAction::ALWAYS_CHECKPOINT) {
-		// we only need to checkpoint if there is anything in the WAL
 		try {
+
+			// Start timing the checkpoint.
+			auto client_context = context.GetClientContext();
+			if (client_context) {
+				auto profiler = client_context->client_data->profiler;
+				profiler->StartTimer(MetricsType::CHECKPOINT_LATENCY);
+			}
+
+			// Write the checkpoint.
 			auto checkpointer = CreateCheckpointWriter(context, options);
 			checkpointer->CreateCheckpoint();
+
+			// End timing the checkpoint.
+			if (client_context) {
+				auto profiler = client_context->client_data->profiler;
+				profiler->EndTimer(MetricsType::CHECKPOINT_LATENCY);
+			}
+
 		} catch (std::exception &ex) {
 			ErrorData error(ex);
 			throw FatalException("Failed to create checkpoint because of error: %s", error.RawMessage());
 		}
 	}
+
 	if (!InMemory() && options.wal_action == CheckpointWALAction::DELETE_WAL) {
 		ResetWAL();
 	}
 
 	if (db.GetStorageExtension()) {
 		db.GetStorageExtension()->OnCheckpointEnd(db, options);
+	}
+}
+
+void SingleFileStorageManager::Destroy() {
+	if (!load_complete) {
+		return;
+	}
+	vector<reference<SchemaCatalogEntry>> schemas;
+	// we scan the set of committed schemas
+	auto &catalog = Catalog::GetCatalog(db).Cast<DuckCatalog>();
+	catalog.ScanSchemas([&](SchemaCatalogEntry &entry) { schemas.push_back(entry); });
+
+	vector<reference<DuckTableEntry>> tables;
+	for (auto &schema : schemas) {
+		schema.get().Scan(CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
+			if (entry.internal) {
+				return;
+			}
+			if (entry.type == CatalogType::TABLE_ENTRY) {
+				tables.push_back(entry.Cast<DuckTableEntry>());
+			}
+		});
+	}
+
+	for (auto &table : tables) {
+		auto &data_table = table.get().GetStorage();
+		data_table.Destroy();
 	}
 }
 

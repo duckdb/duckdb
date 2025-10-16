@@ -24,7 +24,7 @@ public:
 	    : WindowTokenTree(context, order_bys.orders, order_idx, count, unique) {
 	}
 
-	unique_ptr<WindowAggregatorState> GetLocalState(ExecutionContext &context) override;
+	unique_ptr<LocalSinkState> GetLocalState(ExecutionContext &context) override;
 
 	//! Thread-safe post-sort cleanup
 	void Finished() override;

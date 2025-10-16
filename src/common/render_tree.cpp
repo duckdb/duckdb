@@ -103,7 +103,7 @@ static unique_ptr<RenderTreeNode> CreateNode(const ProfilingNode &op) {
 	auto &info = op.GetProfilingInfo();
 	InsertionOrderPreservingMap<string> extra_info;
 	if (info.Enabled(info.settings, MetricsType::EXTRA_INFO)) {
-		extra_info = op.GetProfilingInfo().extra_info;
+		extra_info = op.GetProfilingInfo().GetMetricValue<InsertionOrderPreservingMap<string>>(MetricsType::EXTRA_INFO);
 	}
 
 	string node_name = "QUERY";

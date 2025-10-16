@@ -3,9 +3,9 @@
 namespace duckdb {
 
 UnscentedKalmanFilter::UnscentedKalmanFilter()
-    : x(STATE_DIM, 0.0), P(STATE_DIM, std::vector<double>(STATE_DIM, 0.0)),
-      Q(STATE_DIM, std::vector<double>(STATE_DIM, 0.0)), R(OBS_DIM, std::vector<double>(OBS_DIM, 0.0)), last_time(0.0),
-      initialized(false) {
+    : x(STATE_DIM, 0.0), P(STATE_DIM, vector<double>(STATE_DIM, 0.0)), Q(STATE_DIM, vector<double>(STATE_DIM, 0.0)),
+      R(OBS_DIM, vector<double>(OBS_DIM, 0.0)), last_time(0.0), initialized(false), last_progress(-1.0),
+      scale_factor(1.0) {
 
 	// Calculate UKF parameters
 	lambda = ALPHA * ALPHA * (STATE_DIM + KAPPA) - STATE_DIM;
@@ -22,26 +22,55 @@ UnscentedKalmanFilter::UnscentedKalmanFilter()
 	}
 
 	// Initialize covariance matrices
-	P[0][0] = 0.01;  // progress variance
-	P[1][1] = 0.001; // velocity variance
+	P[0][0] = 0.165;  // progress variance
+	P[1][1] = 0.0098; // velocity variance
 
-	Q[0][0] = 1e-6; // process noise for progress
-	Q[1][1] = 1e-4; // process noise for velocity
+	Q[0][0] = 0.01; // process noise for progress
+	Q[1][1] = 0.0;  // process noise for velocity
 
-	R[0][0] = 0.05; // measurement noise for progress
+	R[0][0] = 0.000077; // measurement noise for progress
+}
+
+void UnscentedKalmanFilter::Update(double progress, double time) {
+	progress *= scale_factor;
+	if (!initialized) {
+		Initialize(progress, time);
+		return;
+	}
+	Predict(time);
+	if (last_progress != progress) {
+		UpdateInternal(progress);
+		last_progress = progress;
+	}
 }
 
 void UnscentedKalmanFilter::Initialize(double initial_progress, double current_time) {
+	// If the initial progress is zero we can't yet initalize, since the filter
+	// wont' have a reasonable guess about query velocity, just wait until some
+	// progress has been made.
+	if (initial_progress == 0.0 || current_time == 0.0) {
+		return;
+	}
+	// If the initial progress value is very small, it needs to be scaled up so
+	// its the same relative magnitude of updates that was used to determine
+	// the P, Q, and R parameters of the Kalman filter.
+	//
+	// The settings for the Kalman filter make assumptions around the magnitude of
+	// measurement noise.  If the progress updates are very small, the updates
+	// could be considered noise by the Kalman filter.
+	scale_factor = std::max(1.0, 0.1 / initial_progress);
+	initial_progress *= scale_factor;
 	x[0] = initial_progress;
-	x[1] = current_time == 0 ? 0.01 : initial_progress / current_time; // initial velocity guess
+	x[1] = initial_progress / current_time; // initial velocity guess
 	last_time = current_time;
+	last_progress = initial_progress;
 	initialized = true;
 }
 
 // Matrix operations
-std::vector<std::vector<double>> UnscentedKalmanFilter::MatrixSqrt(const std::vector<std::vector<double>> &mat) {
+vector<vector<double>> UnscentedKalmanFilter::MatrixSqrt(const vector<vector<double>> &mat) {
 	size_t n = mat.size();
-	std::vector<std::vector<double>> L(n, std::vector<double>(n, 0.0));
+	vector<vector<double>> L(n, vector<double>(n, 0.0));
 
 	// Cholesky decomposition
 	for (size_t i = 0; i < n; i++) {
@@ -65,8 +94,8 @@ std::vector<std::vector<double>> UnscentedKalmanFilter::MatrixSqrt(const std::ve
 }
 
 // Generate sigma points
-std::vector<std::vector<double>> UnscentedKalmanFilter::GenerateSigmaPoints() {
-	std::vector<std::vector<double>> sigma_points(SIGMA_POINTS, std::vector<double>(STATE_DIM));
+vector<vector<double>> UnscentedKalmanFilter::GenerateSigmaPoints() {
+	vector<vector<double>> sigma_points(SIGMA_POINTS, vector<double>(STATE_DIM));
 
 	// Calculate sqrt((n + lambda) * P)
 	auto scaled_P = P;
@@ -94,8 +123,8 @@ std::vector<std::vector<double>> UnscentedKalmanFilter::GenerateSigmaPoints() {
 }
 
 // State transition function
-std::vector<double> UnscentedKalmanFilter::StateTransition(const std::vector<double> &state, double dt) {
-	std::vector<double> new_state(STATE_DIM);
+vector<double> UnscentedKalmanFilter::StateTransition(const vector<double> &state, double dt) {
+	vector<double> new_state(STATE_DIM);
 	new_state[0] = state[0] + state[1] * dt; // progress += velocity * dt
 	new_state[1] = state[1];                 // velocity remains constant
 
@@ -106,14 +135,12 @@ std::vector<double> UnscentedKalmanFilter::StateTransition(const std::vector<dou
 }
 
 // Measurement function (identity for progress)
-std::vector<double> UnscentedKalmanFilter::MeasurementFunction(const std::vector<double> &state) {
+vector<double> UnscentedKalmanFilter::MeasurementFunction(const vector<double> &state) {
 	return {state[0]};
 }
 
 void UnscentedKalmanFilter::Predict(double current_time) {
-	if (!initialized) {
-		return;
-	}
+	D_ASSERT(initialized);
 
 	double dt = current_time - last_time;
 	last_time = current_time;
@@ -126,7 +153,7 @@ void UnscentedKalmanFilter::Predict(double current_time) {
 	auto sigma_points = GenerateSigmaPoints();
 
 	// Propagate sigma points through state transition
-	std::vector<std::vector<double>> sigma_points_pred(SIGMA_POINTS, std::vector<double>(STATE_DIM));
+	vector<vector<double>> sigma_points_pred(SIGMA_POINTS, vector<double>(STATE_DIM));
 	for (size_t i = 0; i < SIGMA_POINTS; i++) {
 		sigma_points_pred[i] = StateTransition(sigma_points[i], dt);
 	}
@@ -160,22 +187,19 @@ void UnscentedKalmanFilter::Predict(double current_time) {
 	}
 }
 
-void UnscentedKalmanFilter::Update(double measured_progress) {
-	if (!initialized) {
-		return;
-	}
-
+void UnscentedKalmanFilter::UpdateInternal(double measured_progress) {
+	D_ASSERT(initialized);
 	// Generate sigma points
 	auto sigma_points = GenerateSigmaPoints();
 
 	// Transform sigma points through measurement function
-	std::vector<std::vector<double>> Z_sigma(SIGMA_POINTS, std::vector<double>(OBS_DIM));
+	vector<vector<double>> Z_sigma(SIGMA_POINTS, vector<double>(OBS_DIM));
 	for (size_t i = 0; i < SIGMA_POINTS; i++) {
 		Z_sigma[i] = MeasurementFunction(sigma_points[i]);
 	}
 
 	// Predict measurement mean
-	std::vector<double> z_pred(OBS_DIM, 0.0);
+	vector<double> z_pred(OBS_DIM, 0.0);
 	for (size_t i = 0; i < SIGMA_POINTS; i++) {
 		for (size_t j = 0; j < OBS_DIM; j++) {
 			z_pred[j] += wm[i] * Z_sigma[i][j];
@@ -183,7 +207,7 @@ void UnscentedKalmanFilter::Update(double measured_progress) {
 	}
 
 	// Innovation covariance
-	std::vector<std::vector<double>> S(OBS_DIM, std::vector<double>(OBS_DIM, 0.0));
+	vector<vector<double>> S(OBS_DIM, vector<double>(OBS_DIM, 0.0));
 	for (size_t i = 0; i < SIGMA_POINTS; i++) {
 		for (size_t j = 0; j < OBS_DIM; j++) {
 			for (size_t k = 0; k < OBS_DIM; k++) {
@@ -200,7 +224,7 @@ void UnscentedKalmanFilter::Update(double measured_progress) {
 	}
 
 	// Cross correlation
-	std::vector<std::vector<double>> T(STATE_DIM, std::vector<double>(OBS_DIM, 0.0));
+	vector<vector<double>> T(STATE_DIM, vector<double>(OBS_DIM, 0.0));
 	for (size_t i = 0; i < SIGMA_POINTS; i++) {
 		for (size_t j = 0; j < STATE_DIM; j++) {
 			for (size_t k = 0; k < OBS_DIM; k++) {
@@ -210,14 +234,14 @@ void UnscentedKalmanFilter::Update(double measured_progress) {
 	}
 
 	// Kalman gain (simplified for 1D measurement)
-	std::vector<std::vector<double>> K(STATE_DIM, std::vector<double>(OBS_DIM));
+	vector<vector<double>> K(STATE_DIM, vector<double>(OBS_DIM));
 	double S_inv = 1.0 / S[0][0];
 	for (size_t i = 0; i < STATE_DIM; i++) {
 		K[i][0] = T[i][0] * S_inv;
 	}
 
 	// Update state
-	std::vector<double> innovation = {measured_progress - z_pred[0]};
+	vector<double> innovation = {measured_progress - z_pred[0]};
 	for (size_t i = 0; i < STATE_DIM; i++) {
 		x[i] += K[i][0] * innovation[0];
 	}
@@ -230,11 +254,11 @@ void UnscentedKalmanFilter::Update(double measured_progress) {
 	}
 
 	// Ensure progress stays in bounds
-	x[0] = std::max(0.0, std::min(1.0, x[0]));
+	x[0] = std::max(0.0, std::min(scale_factor, x[0]));
 }
 
 double UnscentedKalmanFilter::GetProgress() const {
-	return x[0];
+	return x[0] / scale_factor;
 }
 
 double UnscentedKalmanFilter::GetVelocity() const {
@@ -242,11 +266,15 @@ double UnscentedKalmanFilter::GetVelocity() const {
 }
 
 double UnscentedKalmanFilter::GetEstimatedRemainingSeconds() const {
-	if (!initialized || x[1] <= 0) {
-		return -1.0;
+	if (!initialized) {
+		return 2147483647.0;
 	}
-	double remaining_progress = 1.0 - x[0];
-	return remaining_progress / x[1];
+	if (x[1] <= 0) {
+		// velocity is negative or zero - we estimate this will never finish
+		return NumericLimits<double>::Maximum();
+	}
+	double remaining_progress = (1.0 * scale_factor) - x[0];
+	return std::max(remaining_progress / x[1], 0.0);
 }
 
 double UnscentedKalmanFilter::GetProgressVariance() const {

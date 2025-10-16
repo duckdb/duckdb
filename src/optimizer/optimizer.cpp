@@ -32,8 +32,10 @@
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/optimizer/sum_rewriter.hpp"
 #include "duckdb/optimizer/topn_optimizer.hpp"
+#include "duckdb/optimizer/topn_window_elimination.hpp"
 #include "duckdb/optimizer/unnest_rewriter.hpp"
 #include "duckdb/optimizer/late_materialization.hpp"
+#include "duckdb/optimizer/common_subplan_optimizer.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/planner.hpp"
 
@@ -46,6 +48,7 @@ Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context),
 	rewriter.rules.push_back(make_uniq<CaseSimplificationRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<ConjunctionSimplificationRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<DatePartSimplificationRule>(rewriter));
+	rewriter.rules.push_back(make_uniq<DateTruncSimplificationRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<ComparisonSimplificationRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<InClauseSimplificationRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<EqualOrNullSimplification>(rewriter));
@@ -126,6 +129,12 @@ void Optimizer::RunBuiltInOptimizers() {
 		plan = cte_inlining.Optimize(std::move(plan));
 	});
 
+	// convert common subplans into materialized CTEs
+	RunOptimizer(OptimizerType::COMMON_SUBPLAN, [&]() {
+		CommonSubplanOptimizer common_subplan_optimizer(*this);
+		plan = common_subplan_optimizer.Optimize(std::move(plan));
+	});
+
 	// Rewrites SUM(x + C) into SUM(x) + C * COUNT(x)
 	RunOptimizer(OptimizerType::SUM_REWRITER, [&]() {
 		SumRewriterOptimizer optimizer(*this);
@@ -166,6 +175,12 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::DELIMINATOR, [&]() {
 		Deliminator deliminator;
 		plan = deliminator.Optimize(std::move(plan));
+	});
+
+	// try to inline CTEs instead of materialization
+	RunOptimizer(OptimizerType::CTE_INLINING, [&]() {
+		CTEInlining cte_inlining(*this);
+		plan = cte_inlining.Optimize(std::move(plan));
 	});
 
 	// Pulls up empty results
@@ -248,6 +263,12 @@ void Optimizer::RunBuiltInOptimizers() {
 		StatisticsPropagator propagator(*this, *plan);
 		propagator.PropagateStatistics(plan);
 		statistics_map = propagator.GetStatisticsMap();
+	});
+
+	// rewrite row_number window function + filter on row_number to aggregate
+	RunOptimizer(OptimizerType::TOP_N_WINDOW_ELIMINATION, [&]() {
+		TopNWindowElimination topn_window_elimination(context, *this, &statistics_map);
+		plan = topn_window_elimination.Optimize(std::move(plan));
 	});
 
 	// remove duplicate aggregates

@@ -5,6 +5,7 @@
 //
 //
 //===----------------------------------------------------------------------===//
+
 #pragma once
 
 #include "duckdb/execution/index/art/art_key.hpp"

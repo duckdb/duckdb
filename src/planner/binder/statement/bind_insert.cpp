@@ -22,9 +22,6 @@
 #include "duckdb/planner/expression/bound_default_expression.hpp"
 #include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/planner/bound_tableref.hpp"
-#include "duckdb/planner/tableref/bound_basetableref.hpp"
-#include "duckdb/planner/tableref/bound_dummytableref.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
@@ -33,8 +30,8 @@
 
 namespace duckdb {
 
-static void CheckInsertColumnCountMismatch(idx_t expected_columns, idx_t result_columns, bool columns_provided,
-                                           const char *tname) {
+void Binder::CheckInsertColumnCountMismatch(idx_t expected_columns, idx_t result_columns, bool columns_provided,
+                                            const string &tname) {
 	if (result_columns != expected_columns) {
 		string msg = StringUtil::Format(!columns_provided ? "table %s has %lld columns but %lld values were supplied"
 		                                                  : "Column name/value mismatch for insert on %s: "
@@ -74,8 +71,7 @@ void Binder::ExpandDefaultInValuesList(InsertStatement &stmt, TableCatalogEntry 
 		expr_list.expected_names.resize(expected_columns);
 
 		D_ASSERT(!expr_list.values.empty());
-		CheckInsertColumnCountMismatch(expected_columns, expr_list.values[0].size(), !stmt.columns.empty(),
-		                               table.name.c_str());
+		CheckInsertColumnCountMismatch(expected_columns, expr_list.values[0].size(), !stmt.columns.empty(), table.name);
 
 		// VALUES list!
 		for (idx_t col_idx = 0; col_idx < expected_columns; col_idx++) {
@@ -520,8 +516,6 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	}
 
 	auto insert = make_uniq<LogicalInsert>(table, GenerateTableIndex());
-	// Add CTEs as bindable
-	AddCTEMap(stmt.cte_map);
 
 	auto values_list = stmt.GetValuesList();
 
@@ -572,8 +566,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 			MoveCorrelatedExpressions(*select_binder);
 		}
 		// inserting from a select - check if the column count matches
-		CheckInsertColumnCountMismatch(expected_columns, root_select.types.size(), !stmt.columns.empty(),
-		                               table.name.c_str());
+		CheckInsertColumnCountMismatch(expected_columns, root_select.types.size(), !stmt.columns.empty(), table.name);
 
 		root = CastLogicalOperatorToTypes(root_select.types, insert->expected_types, std::move(root_select.plan));
 	} else {

@@ -87,13 +87,14 @@ static const StorageVersionInfo storage_version_info[] = {
 	{"v1.3.1", 66},
 	{"v1.3.2", 66},
 	{"v1.4.0", 67},
+	{"v1.5.0", 67},
 	{nullptr, 0}
 };
 // END OF STORAGE VERSION INFO
 static_assert(DEFAULT_STORAGE_VERSION_INFO == VERSION_NUMBER, "Check on VERSION_INFO");
 
 // START OF SERIALIZATION VERSION INFO
-const uint64_t LATEST_SERIALIZATION_VERSION_INFO = 6;
+const uint64_t LATEST_SERIALIZATION_VERSION_INFO = 7;
 const uint64_t DEFAULT_SERIALIZATION_VERSION_INFO = 1;
 static const SerializationVersionInfo serialization_version_info[] = {
 	{"v0.10.0", 1},
@@ -112,7 +113,8 @@ static const SerializationVersionInfo serialization_version_info[] = {
 	{"v1.3.1", 5},
 	{"v1.3.2", 5},
 	{"v1.4.0", 6},
-	{"latest", 6},
+	{"v1.5.0", 7},
+	{"latest", 7},
 	{nullptr, 0}
 };
 // END OF SERIALIZATION VERSION INFO
@@ -121,7 +123,7 @@ static const SerializationVersionInfo serialization_version_info[] = {
 static_assert(DEFAULT_SERIALIZATION_VERSION_INFO <= LATEST_SERIALIZATION_VERSION_INFO,
               "Check on SERIALIZATION_VERSION_INFO");
 
-string GetStorageVersionName(idx_t serialization_version) {
+string GetStorageVersionName(const idx_t serialization_version, const bool add_suffix) {
 	if (serialization_version < 4) {
 		// special handling for lower serialization versions
 		return "v1.0.0+";
@@ -142,8 +144,12 @@ string GetStorageVersionName(idx_t serialization_version) {
 		D_ASSERT(0);
 		return "--UNKNOWN--";
 	}
-	auto min_name = serialization_version_info[min_idx.GetIndex()].version_name;
-	return string(min_name) + "+";
+
+	auto min_name = string(serialization_version_info[min_idx.GetIndex()].version_name);
+	if (add_suffix) {
+		min_name += "+";
+	}
+	return min_name;
 }
 
 optional_idx GetStorageVersion(const char *version_string) {
@@ -172,7 +178,7 @@ vector<string> GetSerializationCandidates() {
 	return candidates;
 }
 
-string GetDuckDBVersion(idx_t version_number) {
+string GetDuckDBVersions(idx_t version_number) {
 	vector<string> versions;
 	for (idx_t i = 0; storage_version_info[i].version_name; i++) {
 		if (version_number == storage_version_info[i].storage_version) {

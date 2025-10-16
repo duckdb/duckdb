@@ -10,6 +10,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
+#include "transformer/peg_transformer.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "matcher.hpp"
 #include "duckdb/catalog/default/builtin_types/types.hpp"
@@ -44,9 +45,11 @@ static vector<AutoCompleteSuggestion> ComputeSuggestions(vector<AutoCompleteCand
 	case_insensitive_map_t<idx_t> matches;
 	bool prefix_is_lower = StringUtil::IsLower(prefix);
 	bool prefix_is_upper = StringUtil::IsUpper(prefix);
+	auto lower_prefix = StringUtil::Lower(prefix);
 	for (idx_t i = 0; i < available_suggestions.size(); i++) {
 		auto &suggestion = available_suggestions[i];
 		const int32_t BASE_SCORE = 10;
+		const int32_t SUBSTRING_PENALTY = 10;
 		auto str = suggestion.candidate;
 		if (suggestion.extra_char != '\0') {
 			str += suggestion.extra_char;
@@ -65,6 +68,9 @@ static vector<AutoCompleteSuggestion> ComputeSuggestions(vector<AutoCompleteCand
 			score += StringUtil::SimilarityScore(str.substr(0, prefix.size()), prefix);
 		} else {
 			score += StringUtil::SimilarityScore(str, prefix);
+		}
+		if (!StringUtil::Contains(StringUtil::Lower(str), lower_prefix)) {
+			score += SUBSTRING_PENALTY;
 		}
 		scores.emplace_back(str, score);
 	}
@@ -96,13 +102,13 @@ static vector<AutoCompleteSuggestion> ComputeSuggestions(vector<AutoCompleteCand
 	return results;
 }
 
-static vector<reference<AttachedDatabase>> GetAllCatalogs(ClientContext &context) {
-	vector<reference<AttachedDatabase>> result;
+static vector<shared_ptr<AttachedDatabase>> GetAllCatalogs(ClientContext &context) {
+	vector<shared_ptr<AttachedDatabase>> result;
 
 	auto &database_manager = DatabaseManager::Get(context);
 	auto databases = database_manager.GetDatabases(context);
 	for (auto &database : databases) {
-		result.push_back(database.get());
+		result.push_back(database);
 	}
 	return result;
 }
@@ -145,7 +151,7 @@ static vector<AutoCompleteCandidate> SuggestCatalogName(ClientContext &context) 
 	vector<AutoCompleteCandidate> suggestions;
 	auto all_entries = GetAllCatalogs(context);
 	for (auto &entry_ref : all_entries) {
-		auto &entry = entry_ref.get();
+		auto &entry = *entry_ref;
 		AutoCompleteCandidate candidate(entry.name, 0);
 		candidate.extra_char = '.';
 		suggestions.push_back(std::move(candidate));
@@ -238,6 +244,15 @@ static vector<AutoCompleteCandidate> SuggestSettingName(ClientContext &context) 
 	vector<AutoCompleteCandidate> suggestions;
 	for (const auto &option : options) {
 		AutoCompleteCandidate candidate(option.name, 0);
+		suggestions.push_back(std::move(candidate));
+	}
+	const auto &option_aliases = db_config.GetAliases();
+	for (const auto &option_alias : option_aliases) {
+		AutoCompleteCandidate candidate(option_alias.alias, 0);
+		suggestions.push_back(std::move(candidate));
+	}
+	for (auto &entry : db_config.extension_parameters) {
+		AutoCompleteCandidate candidate(entry.first, 0);
 		suggestions.push_back(std::move(candidate));
 	}
 	return suggestions;
@@ -477,7 +492,8 @@ static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(Clien
 	// tokenize the input
 	vector<MatcherToken> tokens;
 	vector<MatcherSuggestion> suggestions;
-	MatchState state(tokens, suggestions);
+	ParseResultAllocator parse_allocator;
+	MatchState state(tokens, suggestions, parse_allocator);
 	vector<UnicodeSpace> unicode_spaces;
 	string clean_sql;
 	const string &sql_ref = StripUnicodeSpaces(sql, clean_sql) ? clean_sql : sql;
@@ -604,11 +620,11 @@ public:
 		statements.push_back(std::move(tokens));
 		tokens.clear();
 	}
-	void OnLastToken(TokenizeState state, string last_word, idx_t) override {
+	void OnLastToken(TokenizeState state, string last_word, idx_t last_pos) override {
 		if (last_word.empty()) {
 			return;
 		}
-		tokens.push_back(std::move(last_word));
+		tokens.emplace_back(std::move(last_word), last_pos);
 	}
 
 	vector<vector<MatcherToken>> statements;
@@ -640,7 +656,8 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 			continue;
 		}
 		vector<MatcherSuggestion> suggestions;
-		MatchState state(tokens, suggestions);
+		ParseResultAllocator parse_allocator;
+		MatchState state(tokens, suggestions, parse_allocator);
 
 		MatcherAllocator allocator;
 		auto &matcher = Matcher::RootMatcher(allocator);
@@ -667,6 +684,43 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 void CheckPEGParserFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 }
 
+class PEGParserExtension : public ParserExtension {
+public:
+	PEGParserExtension() {
+		parser_override = PEGParser;
+	}
+
+	static ParserOverrideResult PEGParser(ParserExtensionInfo *info, const string &query) {
+		vector<MatcherToken> root_tokens;
+		string clean_sql;
+
+		ParserTokenizer tokenizer(query, root_tokens);
+		tokenizer.TokenizeInput();
+		tokenizer.statements.push_back(std::move(root_tokens));
+
+		vector<unique_ptr<SQLStatement>> result;
+		try {
+			for (auto &tokenized_statement : tokenizer.statements) {
+				if (tokenized_statement.empty()) {
+					continue;
+				}
+				auto &transformer = PEGTransformerFactory::GetInstance();
+				auto statement = transformer.Transform(tokenized_statement, "Statement");
+				if (statement) {
+					statement->stmt_location = NumericCast<idx_t>(tokenized_statement[0].offset);
+					statement->stmt_length =
+					    NumericCast<idx_t>(tokenized_statement[tokenized_statement.size() - 1].offset +
+					                       tokenized_statement[tokenized_statement.size() - 1].length);
+				}
+				result.push_back(std::move(statement));
+			}
+			return ParserOverrideResult(std::move(result));
+		} catch (std::exception &e) {
+			return ParserOverrideResult(e);
+		}
+	}
+};
+
 static void LoadInternal(ExtensionLoader &loader) {
 	TableFunction auto_complete_fun("sql_auto_complete", {LogicalType::VARCHAR}, SQLAutoCompleteFunction,
 	                                SQLAutoCompleteBind, SQLAutoCompleteInit);
@@ -675,6 +729,9 @@ static void LoadInternal(ExtensionLoader &loader) {
 	TableFunction check_peg_parser_fun("check_peg_parser", {LogicalType::VARCHAR}, CheckPEGParserFunction,
 	                                   CheckPEGParserBind, nullptr);
 	loader.RegisterFunction(check_peg_parser_fun);
+
+	auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
+	config.parser_extensions.push_back(PEGParserExtension());
 }
 
 void AutocompleteExtension::Load(ExtensionLoader &loader) {

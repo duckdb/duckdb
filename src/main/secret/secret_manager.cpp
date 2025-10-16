@@ -98,8 +98,8 @@ unique_ptr<BaseSecret> SecretManager::DeserializeSecret(Deserializer &deserializ
 	vector<string> scope;
 	deserializer.ReadList(103, "scope",
 	                      [&](Deserializer::List &list, idx_t i) { scope.push_back(list.ReadElement<string>()); });
-	auto serialization_type =
-	    deserializer.ReadPropertyWithExplicitDefault(104, "serialization_type", SecretSerializationType::CUSTOM);
+	auto serialization_type = deserializer.ReadPropertyWithExplicitDefault(104, "serialization_type",
+	                                                                       SecretSerializationType::KEY_VALUE_SECRET);
 
 	switch (serialization_type) {
 	// This allows us to skip looking up the secret type for deserialization altogether

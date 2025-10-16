@@ -56,13 +56,8 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 		// Is the constant cast invertible?
 		if (!cast_constant.IsNull() &&
 		    !BoundCastExpression::CastIsInvertible(cast_expression.return_type, target_type)) {
-			// Is it actually invertible?
-			Value uncast_constant;
-			if (!cast_constant.TryCastAs(rewriter.context, constant_value.type(), uncast_constant, &error_message,
-			                             true) ||
-			    uncast_constant != constant_value) {
-				return nullptr;
-			}
+			// Cast is not invertible, so we do not rewrite this expression to ensure that the cast is executed
+			return nullptr;
 		}
 
 		//! We can cast, now we change our column_ref_expression from an operator cast to a column reference
@@ -75,6 +70,7 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 			expr.left = std::move(new_constant_expr);
 			expr.right = std::move(child_expression);
 		}
+		changes_made = true;
 	}
 	return nullptr;
 }

@@ -7077,7 +7077,12 @@ inline bool ClientImpl::redirect(Request &req, Response &res, Error &error) {
   }
 
   auto location = res.get_header_value("location");
-  if (location.empty()) { return false; }
+  if (location.empty()) {
+    // s3 requests will not return a location header, and instead a
+    // X-Amx-Region-Bucket header. Return true so all response headers
+    // are returned to the httpfs/calling extension
+    return true;
+  }
 
   const Regex re(
       R"((?:(https?):)?(?://(?:\[([\d:]+)\]|([^:/?#]+))(?::(\d+))?)?([^?#]*)(\?[^#]*)?(?:#.*)?)");
@@ -8555,7 +8560,11 @@ inline long SSLClient::get_openssl_verify_result() const {
 inline SSL_CTX *SSLClient::ssl_context() const { return ctx_; }
 
 inline bool SSLClient::create_and_connect_socket(Socket &socket, Error &error) {
-  return is_valid() && ClientImpl::create_and_connect_socket(socket, error);
+  if (!is_valid()) {
+    error = Error::SSLConnection;
+    return false;
+  }
+  return ClientImpl::create_and_connect_socket(socket, error);
 }
 
 // Assumes that socket_mutex_ is locked and that there are no requests in flight

@@ -6,7 +6,13 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
+PRAGMA explain_output = PHYSICAL_ONLY;
+
+statement ok
 SET merge_join_threshold=0
+
+statement ok
+SET nested_loop_join_threshold=0;
 
 # create tables
 statement ok
@@ -26,6 +32,15 @@ CREATE TABLE west AS SELECT * FROM (VALUES
 
 # Qs
 query II
+EXPLAIN
+SELECT s1.rid, s2.rid
+FROM west s1, west s2
+WHERE s1.time > s2.time
+ORDER BY 1, 2
+----
+physical_plan	<REGEX>:.*PIECEWISE_MERGE_JOIN.*
+
+query II
 SELECT s1.rid, s2.rid
 FROM west s1, west s2
 WHERE s1.time > s2.time
@@ -40,6 +55,15 @@ s4	s3
 
 # Qp
 query II
+EXPLAIN
+SELECT s1.rid, s2.rid
+FROM west s1, west s2
+WHERE s1.time > s2.time AND s1.cost < s2.cost
+ORDER BY 1, 2
+----
+physical_plan	<REGEX>:.*IE_JOIN.*
+
+query II
 SELECT s1.rid, s2.rid
 FROM west s1, west s2
 WHERE s1.time > s2.time AND s1.cost < s2.cost
@@ -50,6 +74,15 @@ s4	s3
 
 # Qt
 query II
+EXPLAIN
+SELECT east.rid, west.rid
+FROM east, west
+WHERE east.dur < west.time AND east.rev > west.cost
+ORDER BY 1, 2
+----
+physical_plan	<REGEX>:.*IE_JOIN.*
+
+query II
 SELECT east.rid, west.rid
 FROM east, west
 WHERE east.dur < west.time AND east.rev > west.cost
@@ -58,11 +91,22 @@ ORDER BY 1, 2
 r2	s2
 
 # Test string comparisons
-query II
-WITH weststr AS (
+statement ok
+CREATE TABLE weststr AS (
 	SELECT rid, time::VARCHAR AS time, cost::VARCHAR as cost
 	FROM west
-)
+);
+
+query II
+EXPLAIN
+SELECT s1.rid, s2.rid
+FROM weststr s1, weststr s2
+WHERE s1.time > s2.time AND s1.cost < s2.cost
+ORDER BY 1, 2
+----
+physical_plan	<REGEX>:.*IE_JOIN.*
+
+query II
 SELECT s1.rid, s2.rid
 FROM weststr s1, weststr s2
 WHERE s1.time > s2.time AND s1.cost < s2.cost

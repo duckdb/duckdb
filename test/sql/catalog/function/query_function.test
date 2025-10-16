@@ -114,6 +114,17 @@ SELECT * FROM query('CREATE TABLE tbl (a INT)');
 ----
 Parser Error: Expected a single SELECT statement
 
+# test PIVOT statements in query() function
+query I
+SELECT * FROM query('SELECT * FROM (PIVOT (SELECT 1 AS col) ON col IN (1) using first(col))');
+----
+1
+
+# PIVOT without explicit IN clause should give helpful error message
+statement error
+SELECT * FROM query('SELECT * FROM (PIVOT (SELECT 1 AS col) ON col using first(col))');
+----
+Parser Error: PIVOT statements without explicit IN clauses are not supported in query() function. Please specify the pivot values explicitly, e.g.: PIVOT ... ON col IN (val1, val2, ...)
 
 # test query_table()
 statement ok

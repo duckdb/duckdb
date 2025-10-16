@@ -34,7 +34,9 @@
         "test/sql/attach/attach_views.test",
         "test/sql/table_function/duckdb_databases.test",
         "test/sql/copy_database/copy_table_with_sequence.test",
-        "test/sql/logging/file_system_logging_attach.test"
+        "test/sql/logging/file_system_logging_attach.test",
+        "test/sql/logging/file_system_logging_attach_deadlock.test",
+        "test/sql/storage/read_duckdb/read_duckdb_basic.test"
       ]
     },
     {

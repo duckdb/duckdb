@@ -35,12 +35,12 @@ void PartialBlockForIndex::Clear() {
 constexpr idx_t FixedSizeBuffer::BASE[];
 constexpr uint8_t FixedSizeBuffer::SHIFT[];
 
-FixedSizeBuffer::FixedSizeBuffer(BlockManager &block_manager)
+FixedSizeBuffer::FixedSizeBuffer(BlockManager &block_manager, MemoryTag memory_tag)
     : block_manager(block_manager), readers(0), segment_count(0), allocation_size(0), dirty(false), vacuum(false),
       loaded(false), block_pointer(), block_handle(nullptr) {
 
 	auto &buffer_manager = block_manager.buffer_manager;
-	buffer_handle = buffer_manager.Allocate(MemoryTag::ART_INDEX, &block_manager, false);
+	buffer_handle = buffer_manager.Allocate(memory_tag, &block_manager, false);
 	block_handle = buffer_handle.GetBlockHandle();
 
 	// Zero-initialize the buffer as it might get serialized to storage.
@@ -146,13 +146,13 @@ void FixedSizeBuffer::LoadFromDisk() {
 
 	// Pin the partial block.
 	auto &buffer_manager = block_manager.buffer_manager;
-	buffer_handle = buffer_manager.Pin(block_handle);
+	auto pinned_buffer_handle = buffer_manager.Pin(block_handle);
 
 	// Copy the (partial) data into a new (not yet disk-backed) buffer handle.
 	shared_ptr<BlockHandle> new_block_handle;
 	auto new_buffer_handle = buffer_manager.Allocate(MemoryTag::ART_INDEX, &block_manager, false);
 	new_block_handle = new_buffer_handle.GetBlockHandle();
-	memcpy(new_buffer_handle.Ptr(), buffer_handle.Ptr() + block_pointer.offset, allocation_size);
+	memcpy(new_buffer_handle.Ptr(), pinned_buffer_handle.Ptr() + block_pointer.offset, allocation_size);
 
 	buffer_handle = std::move(new_buffer_handle);
 	block_handle = std::move(new_block_handle);

@@ -20,6 +20,7 @@ BEGIN TRANSACTION
 statement error
 SELEC 42
 ----
+Parser Error: syntax error at or near "SELEC"
 
 query I
 SELECT 42

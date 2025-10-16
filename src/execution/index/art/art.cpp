@@ -4,7 +4,11 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/index/art/art_builder.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
+#include "duckdb/execution/index/art/art_merger.hpp"
+#include "duckdb/execution/index/art/art_operator.hpp"
+#include "duckdb/execution/index/art/art_scanner.hpp"
 #include "duckdb/execution/index/art/base_leaf.hpp"
 #include "duckdb/execution/index/art/base_node.hpp"
 #include "duckdb/execution/index/art/iterator.hpp"
@@ -21,9 +25,6 @@
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
-#include "duckdb/execution/index/art/art_scanner.hpp"
-#include "duckdb/execution/index/art/art_merger.hpp"
-#include "duckdb/execution/index/art/art_operator.hpp"
 
 namespace duckdb {
 
@@ -424,76 +425,17 @@ void ART::GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, Vector
 }
 
 //===--------------------------------------------------------------------===//
-// Construct from sorted data.
+// Build from sorted data.
 //===--------------------------------------------------------------------===//
 
-bool ART::ConstructInternal(const unsafe_vector<ARTKey> &keys, const unsafe_vector<ARTKey> &row_ids, Node &node,
-                            ARTKeySection &section) {
-	D_ASSERT(section.start < keys.size());
-	D_ASSERT(section.end < keys.size());
-	D_ASSERT(section.start <= section.end);
+ARTConflictType ART::Build(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_ids, const idx_t row_count) {
+	ArenaAllocator arena(BufferAllocator::Get(db));
+	ARTBuilder builder(arena, *this, keys, row_ids);
+	builder.Init(tree, row_count - 1);
 
-	auto &start = keys[section.start];
-	auto &end = keys[section.end];
-	D_ASSERT(start.len != 0);
-
-	// Increment the depth until we reach a leaf or find a mismatching byte.
-	auto prefix_depth = section.depth;
-	while (start.len != section.depth && start.ByteMatches(end, section.depth)) {
-		section.depth++;
-	}
-
-	if (start.len == section.depth) {
-		// We reached a leaf. All the bytes of start_key and end_key match.
-		auto row_id_count = section.end - section.start + 1;
-		if (IsUnique() && row_id_count != 1) {
-			return false;
-		}
-
-		reference<Node> ref(node);
-		auto count = UnsafeNumericCast<uint8_t>(start.len - prefix_depth);
-		Prefix::New(*this, ref, start, prefix_depth, count);
-		if (row_id_count == 1) {
-			Leaf::New(ref, row_ids[section.start].GetRowId());
-		} else {
-			// Loop and insert the row IDs.
-			// We cannot use Construct in the leaf because row IDs are not sorted.
-			ArenaAllocator arena(BufferAllocator::Get(db));
-			for (idx_t i = section.start; i < section.start + row_id_count; i++) {
-				ARTOperator::Insert(arena, *this, ref, row_ids[i], 0, row_ids[i], GateStatus::GATE_SET, nullptr,
-				                    IndexAppendMode::DEFAULT);
-			}
-			ref.get().SetGateStatus(GateStatus::GATE_SET);
-		}
-		return true;
-	}
-
-	// Create a new node and recurse.
-	unsafe_vector<ARTKeySection> children;
-	section.GetChildSections(children, keys);
-
-	// Create the prefix.
-	reference<Node> ref(node);
-	auto prefix_length = section.depth - prefix_depth;
-	Prefix::New(*this, ref, start, prefix_depth, prefix_length);
-
-	// Create the node.
-	Node::New(*this, ref, Node::GetNodeType(children.size()));
-	for (auto &child : children) {
-		Node new_child;
-		auto success = ConstructInternal(keys, row_ids, new_child, child);
-		Node::InsertChild(*this, ref, child.key_byte, new_child);
-		if (!success) {
-			return false;
-		}
-	}
-	return true;
-}
-
-bool ART::Construct(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_ids, const idx_t row_count) {
-	ARTKeySection section(0, row_count - 1, 0, 0);
-	if (!ConstructInternal(keys, row_ids, tree, section)) {
-		return false;
+	auto result = builder.Build();
+	if (result != ARTConflictType::NO_CONFLICT) {
+		return result;
 	}
 
 #ifdef DEBUG
@@ -504,7 +446,8 @@ bool ART::Construct(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_ids,
 	it.Scan(empty_key, NumericLimits<row_t>().Maximum(), row_ids_debug, false);
 	D_ASSERT(row_count == row_ids_debug.size());
 #endif
-	return true;
+
+	return ARTConflictType::NO_CONFLICT;
 }
 
 //===--------------------------------------------------------------------===//

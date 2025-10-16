@@ -67,10 +67,11 @@ public:
 	//! Create a MultiFileList from a vector of paths. Any globs will be expanded using the default filesystem
 	DUCKDB_API virtual shared_ptr<MultiFileList>
 	CreateFileList(ClientContext &context, const vector<string> &paths,
-	               FileGlobOptions options = FileGlobOptions::DISALLOW_EMPTY);
+	               const FileGlobInput &glob_input = FileGlobOptions::DISALLOW_EMPTY);
 	//! Shorthand for ParsePaths + CreateFileList
-	DUCKDB_API shared_ptr<MultiFileList> CreateFileList(ClientContext &context, const Value &input,
-	                                                    FileGlobOptions options = FileGlobOptions::DISALLOW_EMPTY);
+	DUCKDB_API shared_ptr<MultiFileList>
+	CreateFileList(ClientContext &context, const Value &input,
+	               const FileGlobInput &glob_input = FileGlobOptions::DISALLOW_EMPTY);
 
 	//! Parse the named parameters of a multi-file reader
 	DUCKDB_API virtual bool ParseOption(const string &key, const Value &val, MultiFileOptions &options,
@@ -185,6 +186,8 @@ public:
 	                           optional_ptr<MultiFileColumnDefinition> &global_column_reference);
 
 	DUCKDB_API virtual unique_ptr<MultiFileReader> Copy() const;
+
+	DUCKDB_API virtual FileGlobInput GetGlobInput(MultiFileReaderInterface &interface);
 
 protected:
 	//! Used in errors to report which function is using this MultiFileReader

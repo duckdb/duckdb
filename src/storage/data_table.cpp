@@ -57,6 +57,12 @@ DataTable::DataTable(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_m
 	this->row_groups = make_shared_ptr<RowGroupCollection>(info, io_manager, types, 0);
 	if (data && data->row_group_count > 0) {
 		this->row_groups->Initialize(*data);
+		if (!HasIndexes()) {
+			// if we don't have indexes, always append a new row group upon appending
+			// we can clean up this row group again when vacuuming
+			// since we don't yet support vacuum when there are indexes, we only do this when there are no indexes
+			row_groups->SetAppendRequiresNewRowGroup();
+		}
 	} else {
 		this->row_groups->InitializeEmpty();
 		D_ASSERT(row_groups->GetTotalRows() == 0);
@@ -239,7 +245,7 @@ void DataTable::InitializeScan(ClientContext &context, DuckTransaction &transact
 	state.checkpoint_lock = transaction.SharedLockTable(*info);
 	auto &local_storage = LocalStorage::Get(transaction);
 	state.Initialize(column_ids, context, table_filters);
-	row_groups->InitializeScan(state.table_state, column_ids, table_filters);
+	row_groups->InitializeScan(context, state.table_state, column_ids, table_filters);
 	local_storage.InitializeScan(*this, state.local_state, table_filters);
 }
 
@@ -247,7 +253,7 @@ void DataTable::InitializeScanWithOffset(DuckTransaction &transaction, TableScan
                                          const vector<StorageIndex> &column_ids, idx_t start_row, idx_t end_row) {
 	state.checkpoint_lock = transaction.SharedLockTable(*info);
 	state.Initialize(column_ids);
-	row_groups->InitializeScanWithOffset(state.table_state, column_ids, start_row, end_row);
+	row_groups->InitializeScanWithOffset(QueryContext(), state.table_state, column_ids, start_row, end_row);
 }
 
 idx_t DataTable::GetRowGroupSize() const {
@@ -675,7 +681,7 @@ void DataTable::VerifyNewConstraint(LocalStorage &local_storage, DataTable &pare
 		throw NotImplementedException("FIXME: ALTER COLUMN with such constraint is not supported yet");
 	}
 
-	parent.row_groups->VerifyNewConstraint(parent, constraint);
+	parent.row_groups->VerifyNewConstraint(local_storage.GetClientContext(), parent, constraint);
 	local_storage.VerifyNewConstraint(parent, constraint);
 }
 
@@ -883,7 +889,8 @@ void DataTable::LocalAppend(LocalAppendState &state, ClientContext &context, Dat
 	}
 
 	// Append to the transaction-local data.
-	LocalStorage::Append(state, chunk);
+	auto data_table_info = GetDataTableInfo();
+	LocalStorage::Append(state, chunk, *data_table_info);
 }
 
 void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
@@ -898,12 +905,14 @@ void DataTable::FinalizeLocalAppend(LocalAppendState &state) {
 	LocalStorage::FinalizeAppend(state);
 }
 
-PhysicalIndex DataTable::CreateOptimisticCollection(ClientContext &context, unique_ptr<RowGroupCollection> collection) {
+PhysicalIndex DataTable::CreateOptimisticCollection(ClientContext &context,
+                                                    unique_ptr<OptimisticWriteCollection> collection) {
 	auto &local_storage = LocalStorage::Get(context, db);
 	return local_storage.CreateOptimisticCollection(*this, std::move(collection));
 }
 
-RowGroupCollection &DataTable::GetOptimisticCollection(ClientContext &context, const PhysicalIndex collection_index) {
+OptimisticWriteCollection &DataTable::GetOptimisticCollection(ClientContext &context,
+                                                              const PhysicalIndex collection_index) {
 	auto &local_storage = LocalStorage::Get(context, db);
 	return local_storage.GetOptimisticCollection(*this, collection_index);
 }
@@ -918,7 +927,7 @@ OptimisticDataWriter &DataTable::GetOptimisticWriter(ClientContext &context) {
 	return local_storage.GetOptimisticWriter(*this);
 }
 
-void DataTable::LocalMerge(ClientContext &context, RowGroupCollection &collection) {
+void DataTable::LocalMerge(ClientContext &context, OptimisticWriteCollection &collection) {
 	auto &local_storage = LocalStorage::Get(context, db);
 	local_storage.LocalMerge(*this, collection);
 }
@@ -1172,14 +1181,12 @@ void DataTable::RevertAppend(DuckTransaction &transaction, idx_t start_row, idx_
 // Indexes
 //===--------------------------------------------------------------------===//
 ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<TableIndexList> delete_indexes,
-                                     DataChunk &chunk, row_t row_start, const IndexAppendMode index_append_mode) {
-	if (indexes.Empty()) {
-		return ErrorData();
-	}
-
+                                     DataChunk &table_chunk, DataChunk &index_chunk,
+                                     const vector<StorageIndex> &mapped_column_ids, row_t row_start,
+                                     const IndexAppendMode index_append_mode) {
 	// Generate the vector of row identifiers.
 	Vector row_ids(LogicalType::ROW_TYPE);
-	VectorOperations::GenerateSequence(row_ids, chunk.size(), row_start, 1);
+	VectorOperations::GenerateSequence(row_ids, table_chunk.size(), row_start, 1);
 
 	vector<reference<BoundIndex>> already_appended;
 	bool append_failed = false;
@@ -1188,8 +1195,9 @@ ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<Table
 	ErrorData error;
 	indexes.Scan([&](Index &index) {
 		if (!index.IsBound()) {
+			// Buffer only the key columns, and store their mapping.
 			auto &unbound_index = index.Cast<UnboundIndex>();
-			unbound_index.BufferChunk(chunk, row_ids);
+			unbound_index.BufferChunk(index_chunk, row_ids, mapped_column_ids);
 			return false;
 		}
 
@@ -1204,8 +1212,9 @@ ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<Table
 		}
 
 		try {
+			// Append the mock chunk containing empty columns for non-key columns.
 			IndexAppendInfo index_append_info(index_append_mode, delete_index);
-			error = bound_index.Append(chunk, row_ids, index_append_info);
+			error = bound_index.Append(table_chunk, row_ids, index_append_info);
 		} catch (std::exception &ex) {
 			error = ErrorData(ex);
 		}
@@ -1222,16 +1231,18 @@ ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<Table
 	if (append_failed) {
 		// Constraint violation: remove any appended entries from previous indexes (if any).
 		for (auto index : already_appended) {
-			index.get().Delete(chunk, row_ids);
+			index.get().Delete(table_chunk, row_ids);
 		}
 	}
 	return error;
 }
 
-ErrorData DataTable::AppendToIndexes(optional_ptr<TableIndexList> delete_indexes, DataChunk &chunk, row_t row_start,
-                                     const IndexAppendMode index_append_mode) {
+ErrorData DataTable::AppendToIndexes(optional_ptr<TableIndexList> delete_indexes, DataChunk &table_chunk,
+                                     DataChunk &index_chunk, const vector<StorageIndex> &mapped_column_ids,
+                                     row_t row_start, const IndexAppendMode index_append_mode) {
 	D_ASSERT(IsMainTable());
-	return AppendToIndexes(info->indexes, delete_indexes, chunk, row_start, index_append_mode);
+	return AppendToIndexes(info->indexes, delete_indexes, table_chunk, index_chunk, mapped_column_ids, row_start,
+	                       index_append_mode);
 }
 
 void DataTable::RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, row_t row_start) {
@@ -1259,9 +1270,9 @@ void DataTable::RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, Vec
 	});
 }
 
-void DataTable::RemoveFromIndexes(Vector &row_identifiers, idx_t count) {
+void DataTable::RemoveFromIndexes(const QueryContext &context, Vector &row_identifiers, idx_t count) {
 	D_ASSERT(IsMainTable());
-	row_groups->RemoveFromIndexes(info->indexes, row_identifiers, count);
+	row_groups->RemoveFromIndexes(context, info->indexes, row_identifiers, count);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1533,7 +1544,7 @@ void DataTable::Update(TableUpdateState &state, ClientContext &context, Vector &
 		row_ids_slice.Slice(row_ids, sel_global_update, n_global_update);
 		row_ids_slice.Flatten(n_global_update);
 
-		row_groups->Update(transaction, FlatVector::GetData<row_t>(row_ids_slice), column_ids, updates_slice);
+		row_groups->Update(transaction, *this, FlatVector::GetData<row_t>(row_ids_slice), column_ids, updates_slice);
 	}
 }
 
@@ -1557,7 +1568,7 @@ void DataTable::UpdateColumn(TableCatalogEntry &table, ClientContext &context, V
 
 	updates.Flatten();
 	row_ids.Flatten(updates.size());
-	row_groups->UpdateColumn(transaction, row_ids, column_path, updates);
+	row_groups->UpdateColumn(transaction, *this, row_ids, column_path, updates);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1595,17 +1606,24 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 	TableStatistics global_stats;
 	row_groups->CopyStats(global_stats);
 	row_groups->Checkpoint(writer, global_stats);
+	if (!HasIndexes()) {
+		row_groups->SetAppendRequiresNewRowGroup();
+	}
 	// The row group payload data has been written. Now write:
 	//   sample
 	//   column stats
 	//   row-group pointers
 	//   table pointer
 	//   index data
-	writer.FinalizeTable(global_stats, info.get(), serializer);
+	writer.FinalizeTable(global_stats, *info, *row_groups, serializer);
 }
 
 void DataTable::CommitDropColumn(const idx_t column_index) {
 	row_groups->CommitDropColumn(column_index);
+}
+
+void DataTable::Destroy() {
+	row_groups->Destroy();
 }
 
 idx_t DataTable::ColumnCount() const {
@@ -1631,9 +1649,9 @@ void DataTable::CommitDropTable() {
 //===--------------------------------------------------------------------===//
 // Column Segment Info
 //===--------------------------------------------------------------------===//
-vector<ColumnSegmentInfo> DataTable::GetColumnSegmentInfo() {
+vector<ColumnSegmentInfo> DataTable::GetColumnSegmentInfo(const QueryContext &context) {
 	auto lock = GetSharedCheckpointLock();
-	return row_groups->GetColumnSegmentInfo();
+	return row_groups->GetColumnSegmentInfo(context);
 }
 
 //===--------------------------------------------------------------------===//

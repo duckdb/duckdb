@@ -3,9 +3,6 @@
 # group: [issues]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE key_value_pairs (key VARCHAR PRIMARY KEY, value VARCHAR)
 
 statement ok

@@ -26,6 +26,7 @@
 #include <functional>
 
 namespace duckdb {
+struct AttachOptions;
 struct CreateSchemaInfo;
 struct DropInfo;
 struct BoundCreateTableInfo;
@@ -321,6 +322,12 @@ public:
 	virtual bool SupportsTimeTravel() const {
 		return false;
 	}
+	virtual bool IsEncrypted() const {
+		return false;
+	}
+	virtual string GetEncryptionCipher() const {
+		return string();
+	}
 
 	//! Whether or not this catalog should search a specific type with the standard priority
 	DUCKDB_API virtual CatalogLookupBehavior CatalogTypeLookupRule(CatalogType type) const {
@@ -339,6 +346,9 @@ public:
 
 	//! Returns the dependency manager of this catalog - if the catalog has anye
 	virtual optional_ptr<DependencyManager> GetDependencyManager();
+
+	//! Whether attaching a catalog with the given path and attach options would be considered a conflict
+	virtual bool HasConflictingAttachOptions(const string &path, const AttachOptions &options);
 
 public:
 	template <class T>
@@ -407,15 +417,16 @@ private:
 	CatalogEntryLookup TryLookupEntry(CatalogEntryRetriever &retriever, const string &schema,
 	                                  const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found);
 	static CatalogEntryLookup TryLookupEntry(CatalogEntryRetriever &retriever, const vector<CatalogLookup> &lookups,
-	                                         const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found);
+	                                         const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found,
+	                                         bool allow_default_table_lookup);
 	static CatalogEntryLookup TryLookupEntry(CatalogEntryRetriever &retriever, const string &catalog,
 	                                         const string &schema, const EntryLookupInfo &lookup_info,
 	                                         OnEntryNotFound if_not_found);
 
 	//! Looks for a Catalog with a DefaultTable that matches the lookup
-	static CatalogEntryLookup TryLookupDefaultTable(CatalogEntryRetriever &retriever, const string &catalog,
-	                                                const string &schema, const EntryLookupInfo &lookup_info,
-	                                                OnEntryNotFound if_not_found);
+	static CatalogEntryLookup TryLookupDefaultTable(CatalogEntryRetriever &retriever,
+	                                                const EntryLookupInfo &lookup_info,
+	                                                bool allow_ignore_at_clause = false);
 
 	//! Return an exception with did-you-mean suggestion.
 	static CatalogException CreateMissingEntryException(CatalogEntryRetriever &retriever,
