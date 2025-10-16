@@ -71,7 +71,7 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 		return false; // Dictionary is too large, bail
 	}
 
-	if (!output_dictionary || input_dictionary_id != output_dictionary->id) {
+	if (!output_dictionary || current_input_dictionary_id != input_dictionary_id) {
 		// We haven't seen this dictionary before
 		const auto chunk_fill_ratio = static_cast<double>(args.size()) / STANDARD_VECTOR_SIZE;
 		if (input_dictionary_size > STANDARD_VECTOR_SIZE && chunk_fill_ratio <= CHUNK_FILL_RATIO_THRESHOLD) {
@@ -83,6 +83,7 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 
 		// We can do dictionary optimization! Re-initialize
 		output_dictionary = DictionaryVector::CreateReusableDictionary(result.GetType(), input_dictionary_size);
+		current_input_dictionary_id = input_dictionary_id;
 
 		// Set up the input chunk
 		DataChunk input_chunk;

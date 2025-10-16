@@ -77,6 +77,8 @@ private:
 	optional_idx input_col_idx;
 	//! Vector holding the expression executed on the entire dictionary
 	buffer_ptr<VectorChildBuffer> output_dictionary;
+	//! ID of the input dictionary Vector
+	string current_input_dictionary_id;
 };
 
 struct ExpressionExecutorState {
