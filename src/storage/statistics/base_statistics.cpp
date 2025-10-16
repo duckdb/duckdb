@@ -165,6 +165,9 @@ void BaseStatistics::Merge(const BaseStatistics &other) {
 	case StatisticsType::GEOMETRY_STATS:
 		GeometryStats::Merge(*this, other);
 		break;
+	case StatisticsType::VARIANT_STATS:
+		VariantStats::Merge(*this, other);
+		break;
 	default:
 		break;
 	}
@@ -298,6 +301,10 @@ void BaseStatistics::Set(StatsInfo info) {
 
 void BaseStatistics::SetHasNull() {
 	has_null = true;
+	if (type.id() == LogicalTypeId::VARIANT) {
+		VariantStats::GetUnshreddedStats(*this).SetHasNull();
+		return;
+	}
 	if (type.InternalType() == PhysicalType::STRUCT) {
 		for (idx_t c = 0; c < StructType::GetChildCount(type); c++) {
 			StructStats::GetChildStats(*this, c).SetHasNull();
@@ -307,6 +314,10 @@ void BaseStatistics::SetHasNull() {
 
 void BaseStatistics::SetHasNoNull() {
 	has_no_null = true;
+	if (type.id() == LogicalTypeId::VARIANT) {
+		VariantStats::GetUnshreddedStats(*this).SetHasNoNull();
+		return;
+	}
 	if (type.InternalType() == PhysicalType::STRUCT) {
 		for (idx_t c = 0; c < StructType::GetChildCount(type); c++) {
 			StructStats::GetChildStats(*this, c).SetHasNoNull();

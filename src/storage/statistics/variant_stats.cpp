@@ -10,31 +10,38 @@
 namespace duckdb {
 
 void VariantStatsData::SetEmpty() {
-	throw NotImplementedException("VariantStatsData::SetEmpty");
+	// throw NotImplementedException("VariantStatsData::SetEmpty");
 }
 
 void VariantStatsData::SetUnknown() {
-	throw NotImplementedException("VariantStatsData::SetUnknown");
+	// throw NotImplementedException("VariantStatsData::SetUnknown");
 }
 
 void VariantStatsData::Merge(const VariantStatsData &other) {
-	throw NotImplementedException("VariantStatsData::Merge");
+	// throw NotImplementedException("VariantStatsData::Merge");
 }
 
 void VariantStatsData::Update(const Value &value) {
-	throw NotImplementedException("VariantStatsData::Update");
+	// throw NotImplementedException("VariantStatsData::Update");
+}
+
+static LogicalType GetUnshreddedType(const LogicalType &variant_type) {
+	return LogicalType::STRUCT(StructType::GetChildTypes(variant_type));
+}
+
+void VariantStats::CreateUnshreddedStats(BaseStatistics &stats) {
+	BaseStatistics::Construct(stats.child_stats[0], GetUnshreddedType(stats.GetType()));
 }
 
 void VariantStats::Construct(BaseStatistics &stats) {
 	stats.child_stats = unsafe_unique_array<BaseStatistics>(new BaseStatistics[1]);
-	auto unshredded_type = LogicalType::STRUCT(StructType::GetChildTypes(stats.GetType()));
-	BaseStatistics::Construct(stats.child_stats[0], unshredded_type);
+	CreateUnshreddedStats(stats);
 }
 
 BaseStatistics VariantStats::CreateUnknown(LogicalType type) {
 	BaseStatistics result(std::move(type));
 	result.InitializeUnknown();
-	GetDataUnsafe(result).SetUnknown();
+	result.child_stats[0].Copy(BaseStatistics::CreateUnknown(GetUnshreddedType(type)));
 	return result;
 }
 
@@ -42,6 +49,7 @@ BaseStatistics VariantStats::CreateEmpty(LogicalType type) {
 	BaseStatistics result(std::move(type));
 	result.InitializeEmpty();
 	GetDataUnsafe(result).SetEmpty();
+	result.child_stats[0].Copy(BaseStatistics::CreateEmpty(GetUnshreddedType(result.GetType())));
 	return result;
 }
 
@@ -57,6 +65,22 @@ BaseStatistics &VariantStats::GetUnshreddedStats(BaseStatistics &stats) {
 		throw InternalException("Calling VariantStats::GetChildStats on stats that is not a variant");
 	}
 	return stats.child_stats[0];
+}
+
+void VariantStats::SetUnshreddedStats(BaseStatistics &stats, const BaseStatistics &new_stats) {
+	D_ASSERT(stats.GetStatsType() == StatisticsType::VARIANT_STATS);
+	stats.child_stats[0].Copy(new_stats);
+}
+
+void VariantStats::SetUnshreddedStats(BaseStatistics &stats, unique_ptr<BaseStatistics> new_stats) {
+	if (stats.GetStatsType() != StatisticsType::VARIANT_STATS) {
+		throw InternalException("Calling VariantStats::GetChildStats on stats that is not a variant");
+	}
+	if (!new_stats) {
+		CreateUnshreddedStats(stats);
+	} else {
+		SetUnshreddedStats(stats, *new_stats);
+	}
 }
 
 // void VariantStats::UpdateFromVector(Vector &vector, idx_t count) {
@@ -263,13 +287,12 @@ void VariantStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 	if (other.GetType().id() == LogicalTypeId::VALIDITY) {
 		return;
 	}
-	if (other.GetType().id() == LogicalTypeId::SQLNULL) {
-		return;
-	}
+	//! Merge the unshredded stats
+	stats.child_stats[0].Merge(other.child_stats[0]);
+}
 
-	auto &target = GetDataUnsafe(stats);
-	auto &source = GetDataUnsafe(other);
-	target.Merge(source);
+void VariantStats::Copy(BaseStatistics &stats, const BaseStatistics &other) {
+	stats.child_stats[0].Copy(other.child_stats[0]);
 }
 
 void VariantStats::Verify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count) {

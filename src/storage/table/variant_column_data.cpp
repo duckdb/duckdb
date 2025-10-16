@@ -14,16 +14,12 @@ VariantColumnData::VariantColumnData(BlockManager &block_manager, DataTableInfo 
     : ColumnData(block_manager, info, column_index, start_row, std::move(type_p), parent),
       validity(block_manager, info, 0, start_row, *this) {
 	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
-	auto &child_types = StructType::GetChildTypes(type);
-	D_ASSERT(!child_types.empty());
 
 	// the sub column index, starting at 1 (0 is the validity mask)
 	idx_t sub_column_index = 1;
-	for (auto &child_type : child_types) {
-		sub_columns.push_back(
-		    ColumnData::CreateColumnUnique(block_manager, info, sub_column_index, start_row, child_type.second, this));
-		sub_column_index++;
-	}
+	auto unshredded_type = LogicalType::STRUCT(StructType::GetChildTypes(type));
+	sub_columns.push_back(
+	    ColumnData::CreateColumnUnique(block_manager, info, sub_column_index, start_row, unshredded_type, this));
 }
 
 void VariantColumnData::SetStart(idx_t new_start) {
@@ -168,10 +164,8 @@ void VariantColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, 
 	// append the null values
 	validity.Append(stats, state.child_appends[0], vector, count);
 
-	auto &child_entries = StructVector::GetEntries(vector);
-	for (idx_t i = 0; i < child_entries.size(); i++) {
-		sub_columns[i]->Append(StructStats::GetChildStats(stats, i), state.child_appends[i + 1], *child_entries[i],
-		                       count);
+	for (idx_t i = 0; i < 1; i++) {
+		sub_columns[i]->Append(VariantStats::GetUnshreddedStats(stats), state.child_appends[i + 1], vector, count);
 	}
 	this->count += count;
 }
@@ -238,11 +232,9 @@ unique_ptr<BaseStatistics> VariantColumnData::GetUpdateStatistics() {
 	if (validity_stats) {
 		stats.Merge(*validity_stats);
 	}
-	for (idx_t i = 0; i < sub_columns.size(); i++) {
-		auto child_stats = sub_columns[i]->GetUpdateStatistics();
-		if (child_stats) {
-			StructStats::SetChildStats(stats, i, std::move(child_stats));
-		}
+	auto child_stats = sub_columns[0]->GetUpdateStatistics();
+	if (child_stats) {
+		VariantStats::SetUnshreddedStats(stats, std::move(child_stats));
 	}
 	return stats.ToUnique();
 }
@@ -275,7 +267,7 @@ struct VariantColumnCheckpointState : public ColumnCheckpointState {
 	VariantColumnCheckpointState(RowGroup &row_group, ColumnData &column_data,
 	                             PartialBlockManager &partial_block_manager)
 	    : ColumnCheckpointState(row_group, column_data, partial_block_manager) {
-		global_stats = StructStats::CreateEmpty(column_data.type).ToUnique();
+		global_stats = VariantStats::CreateEmpty(column_data.type).ToUnique();
 	}
 
 	unique_ptr<ColumnCheckpointState> validity_state;
@@ -284,9 +276,7 @@ struct VariantColumnCheckpointState : public ColumnCheckpointState {
 public:
 	unique_ptr<BaseStatistics> GetStatistics() override {
 		D_ASSERT(global_stats);
-		for (idx_t i = 0; i < child_states.size(); i++) {
-			StructStats::SetChildStats(*global_stats, i, child_states[i]->GetStatistics());
-		}
+		VariantStats::SetUnshreddedStats(*global_stats, child_states[0]->GetStatistics());
 		return std::move(global_stats);
 	}
 
@@ -351,10 +341,8 @@ PersistentColumnData VariantColumnData::Serialize() {
 
 void VariantColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats) {
 	validity.InitializeColumn(column_data.child_columns[0], target_stats);
-	for (idx_t c_idx = 0; c_idx < sub_columns.size(); c_idx++) {
-		auto &child_stats = StructStats::GetChildStats(target_stats, c_idx);
-		sub_columns[c_idx]->InitializeColumn(column_data.child_columns[c_idx + 1], child_stats);
-	}
+	auto &unshredded_stats = VariantStats::GetUnshreddedStats(target_stats);
+	sub_columns[0]->InitializeColumn(column_data.child_columns[1], unshredded_stats);
 	this->count = validity.count.load();
 }
 
