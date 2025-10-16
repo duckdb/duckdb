@@ -1003,10 +1003,10 @@ void ColumnData::Verify(RowGroup &parent) {
 template <class RET, class OP>
 static RET CreateColumnInternal(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
                                 const LogicalType &type, optional_ptr<ColumnData> parent) {
+	if (type.id() == LogicalTypeId::VARIANT) {
+		return OP::template Create<VariantColumnData>(block_manager, info, column_index, start_row, type, parent);
+	}
 	if (type.InternalType() == PhysicalType::STRUCT) {
-		if (type.id() == LogicalTypeId::VARIANT) {
-			return OP::template Create<VariantColumnData>(block_manager, info, column_index, start_row, type, parent);
-		}
 		return OP::template Create<StructColumnData>(block_manager, info, column_index, start_row, type, parent);
 	} else if (type.InternalType() == PhysicalType::LIST) {
 		return OP::template Create<ListColumnData>(block_manager, info, column_index, start_row, type, parent);
