@@ -37,6 +37,7 @@ add_library_unity(
   vector.cpp
   vector_cache.cpp
   vector_constants.cpp
+  variant.cpp
   geometry.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_common_types>

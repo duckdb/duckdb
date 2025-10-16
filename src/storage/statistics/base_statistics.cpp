@@ -31,6 +31,9 @@ void BaseStatistics::Construct(BaseStatistics &stats, LogicalType type) {
 	case StatisticsType::ARRAY_STATS:
 		ArrayStats::Construct(stats);
 		break;
+	case StatisticsType::VARIANT_STATS:
+		VariantStats::Construct(stats);
+		break;
 	default:
 		break;
 	}
@@ -547,6 +550,7 @@ BaseStatistics BaseStatistics::FromConstantType(const Value &input) {
 		if (!input.IsNull()) {
 			VariantStats::Update(result, input);
 		}
+		return result;
 	}
 	default:
 		return BaseStatistics(input.type());
