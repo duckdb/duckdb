@@ -170,12 +170,6 @@ GeometryStatsData &GeometryStats::GetDataUnsafe(BaseStatistics &stats) {
 	return stats.stats_union.geometry_data;
 }
 
-// Constant comparison pruning
-FilterPropagateResult GeometryStats::CheckZonemap(const BaseStatistics &stats, ExpressionType comparison_type,
-                                                  array_ptr<const Value> constants) {
-	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-}
-
 // Expression comparison pruning
 static FilterPropagateResult CheckIntersectionFilter(const GeometryStatsData &data, const Value &constant) {
 	if (constant.IsNull() || constant.type().id() != LogicalTypeId::GEOMETRY) {

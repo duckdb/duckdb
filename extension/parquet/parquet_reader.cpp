@@ -226,9 +226,10 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, Parquet
 			}
 			return LogicalType::TIME;
 		} else if (s_ele.logicalType.__isset.GEOMETRY) {
-			return LogicalType::BLOB;
+			// TODO: Set CRS too
+			return LogicalType::GEOMETRY();
 		} else if (s_ele.logicalType.__isset.GEOGRAPHY) {
-			return LogicalType::BLOB;
+			return LogicalType::GEOMETRY();
 		}
 	}
 	if (s_ele.__isset.converted_type) {
@@ -406,8 +407,6 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
                                                               const vector<ColumnIndex> &indexes,
                                                               const ParquetColumnSchema &schema) {
 	switch (schema.schema_type) {
-	case ParquetColumnSchemaType::GEOMETRY:
-		return GeoParquetFileMetadata::CreateColumnReader(*this, schema, context);
 	case ParquetColumnSchemaType::FILE_ROW_NUMBER:
 		return make_uniq<RowNumberColumnReader>(*this, schema);
 	case ParquetColumnSchemaType::COLUMN: {
@@ -594,7 +593,7 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 		// geoarrow types, although geometry columns, are structs and have children and are handled below.
 		if (metadata->geo_metadata && metadata->geo_metadata->IsGeometryColumn(s_ele.name) && s_ele.num_children == 0) {
 			auto root_schema = ParseColumnSchema(s_ele, max_define, max_repeat, this_idx, next_file_idx++);
-			return ParquetColumnSchema(std::move(root_schema), GeoParquetFileMetadata::GeometryType(),
+			return ParquetColumnSchema(std::move(root_schema), LogicalType::GEOMETRY(),
 			                           ParquetColumnSchemaType::GEOMETRY);
 		}
 	}
@@ -706,13 +705,6 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 			                                next_file_idx);
 			list_schema.children.push_back(std::move(result));
 			return list_schema;
-		}
-
-		// Convert to geometry type if possible
-		if (s_ele.__isset.logicalType && (s_ele.logicalType.__isset.GEOMETRY || s_ele.logicalType.__isset.GEOGRAPHY) &&
-		    GeoParquetFileMetadata::IsGeoParquetConversionEnabled(context)) {
-			return ParquetColumnSchema(std::move(result), GeoParquetFileMetadata::GeometryType(),
-			                           ParquetColumnSchemaType::GEOMETRY);
 		}
 
 		return result;

@@ -289,9 +289,7 @@ bool GeoParquetFileMetadata::IsGeoParquetConversionEnabled(const ClientContext &
 }
 
 LogicalType GeoParquetFileMetadata::GeometryType() {
-	auto blob_type = LogicalType(LogicalTypeId::BLOB);
-	blob_type.SetAlias("GEOMETRY");
-	return blob_type;
+	return LogicalType::GEOMETRY();
 }
 
 const unordered_map<string, GeoParquetColumnMetadata> &GeoParquetFileMetadata::GetColumnMeta() const {

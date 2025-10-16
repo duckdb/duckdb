@@ -792,7 +792,7 @@ static bool IsTypeLossy(const LogicalType &type) {
 	return type.id() == LogicalTypeId::HUGEINT || type.id() == LogicalTypeId::UHUGEINT;
 }
 
-static bool IsGeometryType(const LogicalType &type, ClientContext &context) {
+static bool IsExtensionGeometryType(const LogicalType &type, ClientContext &context) {
 	if (type.id() != LogicalTypeId::BLOB) {
 		return false;
 	}
@@ -852,12 +852,11 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &inpu
 
 		// Spatial types need to be encoded into WKB when writing GeoParquet.
 		// But dont perform this conversion if this is a EXPORT DATABASE statement
-		if (input.copy_to_type == CopyToType::COPY_TO_FILE && IsGeometryType(type, context)) {
+		if (input.copy_to_type == CopyToType::COPY_TO_FILE && IsExtensionGeometryType(type, context)) {
 
-			LogicalType wkb_blob_type(LogicalTypeId::BLOB);
-			wkb_blob_type.SetAlias("WKB_BLOB");
-
-			auto cast_expr = BoundCastExpression::AddCastToType(context, std::move(expr), wkb_blob_type, false);
+			// Cast the column to GEOMETRY
+			auto cast_expr =
+			    BoundCastExpression::AddCastToType(context, std::move(expr), LogicalType::GEOMETRY(), false);
 			cast_expr->SetAlias(name);
 			result.push_back(std::move(cast_expr));
 			any_change = true;

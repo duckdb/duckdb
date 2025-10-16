@@ -61,9 +61,6 @@ FilterPropagateResult ConstantFilter::CheckStatistics(BaseStatistics &stats) con
 		case StatisticsType::STRING_STATS:
 			result = StringStats::CheckZonemap(stats, comparison_type, array_ptr<const Value>(&constant, 1));
 			break;
-		case StatisticsType::GEOMETRY_STATS:
-			result = GeometryStats::CheckZonemap(stats, comparison_type, array_ptr<const Value>(&constant, 1));
-			break;
 		default:
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
