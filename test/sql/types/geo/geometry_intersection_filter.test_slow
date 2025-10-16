@@ -1,4 +1,4 @@
-# name: test/sql/types/geo/geometry_intersection_filter.test
+# name: test/sql/types/geo/geometry_intersection_filter.test_slow
 # group: [geo]
 
 # Stats are not preserved when serialized in the stats() function, so this doesnt work
