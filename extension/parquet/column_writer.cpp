@@ -1,7 +1,7 @@
 #include "column_writer.hpp"
 
 #include "duckdb.hpp"
-#include "geo_parquet.hpp"
+#include "parquet_geometry.hpp"
 #include "parquet_rle_bp_decoder.hpp"
 #include "parquet_bss_encoder.hpp"
 #include "parquet_statistics.hpp"
