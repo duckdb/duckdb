@@ -14,9 +14,11 @@ select i, j, parse_path(filename)[-2:] from parquet_scan('${TEST_DATA_LOC}/parqu
 
 # Filter on filename col
 query III
-SELECT i, j, parse_path(filename)[-2:] FROM parquet_scan('${TEST_DATA_LOC}/parquet-testing/glob*/t?.parquet', FILENAME=1) WHERE filename LIKE '%/parquet-testing/glob2/t1.parquet';
+SELECT i, j, filename_tail3: array_to_string(parse_path(filename)[-3:], '/')
+FROM parquet_scan('${TEST_DATA_LOC}/parquet-testing/glob*/t?.parquet', FILENAME=1)
+WHERE filename_tail3 = 'parquet-testing/glob2/t1.parquet'
 ----
-3	c	[glob2, t1.parquet]
+3	c	parquet-testing/glob2/t1.parquet
 
 # filter on multiple vector sizes of rows
 query I
