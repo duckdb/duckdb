@@ -72,17 +72,8 @@ void QueryNode::ExtractCTENodes(unique_ptr<QueryNode> &query_node) {
 }
 
 void CTENode::Serialize(Serializer &serializer) const {
-	if (materialized == CTEMaterialize::CTE_MATERIALIZE_NEVER) {
-		// for non-materialized CTEs - don't serialize CTENode
-		// older DuckDB versions only expect a CTENode to be there for materialized CTEs
-		child->Serialize(serializer);
-		return;
-	}
-	QueryNode::Serialize(serializer);
-	serializer.WritePropertyWithDefault<string>(200, "cte_name", ctename);
-	serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(201, "query", query);
-	serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(202, "child", child);
-	serializer.WritePropertyWithDefault<vector<string>>(203, "aliases", aliases);
+	// never serialize CTE nodes for backwards compatibility
+	child->Serialize(serializer);
 }
 
 // In QueryNode::ExtractCTENodes we create a bunch of CTENodes from the CommonTableExpressionMap in the QueryNode
