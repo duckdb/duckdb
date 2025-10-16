@@ -15,6 +15,32 @@
 
 namespace duckdb {
 
+struct StGeomfromwkbFun {
+	static constexpr const char *Name = "st_geomfromwkb";
+	static constexpr const char *Parameters = "wkb";
+	static constexpr const char *Description = "Creates a geometry from Well-Known Binary (WKB) representation";
+	static constexpr const char *Example = "ST_GeomFromWKB(X'01010000000000000000000000000000000000000000000000')";
+	static constexpr const char *Categories = "geometry";
+
+	static ScalarFunction GetFunction();
+};
+
+struct StAstextFun {
+	static constexpr const char *Name = "st_astext";
+	static constexpr const char *Parameters = "geom";
+	static constexpr const char *Description = "Returns the Well-Known Text (WKT) representation of the geometry";
+	static constexpr const char *Example = "ST_AsText(ST_GeomFromWKB(X'01010000000000000000000000000000000000000000000000'))";
+	static constexpr const char *Categories = "geometry";
+
+	static ScalarFunction GetFunction();
+};
+
+struct StAswktFun {
+	using ALIAS = StAstextFun;
+
+	static constexpr const char *Name = "st_aswkt";
+};
+
 struct StIntersectsExtentFun {
 	static constexpr const char *Name = "st_intersects_extent";
 	static constexpr const char *Parameters = "geom1,geom2";

@@ -4,6 +4,31 @@
 
 namespace duckdb {
 
+static void FromWKBFunction(DataChunk &input, ExpressionState &state, Vector &result) {
+	UnaryExecutor::Execute<string_t, string_t>(input.data[0], result, input.size(), [&](const string_t &wkb) {
+		// TODO: Parse WKB properly
+		return wkb;
+	});
+
+	// Add a heap reference to the input WKB to prevent it from being freed
+	StringVector::AddHeapReference(input.data[0], result);
+}
+
+ScalarFunction StGeomfromwkbFun::GetFunction() {
+	ScalarFunction function({LogicalType::BLOB}, LogicalType::GEOMETRY(), FromWKBFunction);
+	return function;
+}
+
+static void ToWKTFunction(DataChunk &input, ExpressionState &state, Vector &result) {
+	UnaryExecutor::Execute<string_t, string_t>(input.data[0], result, input.size(),
+	                                           [&](const string_t &geom) { return Geometry::ToString(result, geom); });
+}
+
+ScalarFunction StAstextFun::GetFunction() {
+	ScalarFunction function({LogicalType::GEOMETRY()}, LogicalType::VARCHAR, ToWKTFunction);
+	return function;
+}
+
 static void IntersectsExtentFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<string_t, string_t, bool>(
 	    input.data[0], input.data[1], result, input.size(), [](const string_t &lhs_geom, const string_t &rhs_geom) {
