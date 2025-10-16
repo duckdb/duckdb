@@ -4,6 +4,8 @@
 
 namespace duckdb {
 
+constexpr const char *TableFunctionCatalogEntry::Name;
+
 TableFunctionCatalogEntry::TableFunctionCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema,
                                                      CreateTableFunctionInfo &info)
     : FunctionEntry(CatalogType::TABLE_FUNCTION_ENTRY, catalog, schema, info), functions(std::move(info.functions)) {

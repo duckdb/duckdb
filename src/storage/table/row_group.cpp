@@ -723,7 +723,8 @@ shared_ptr<RowVersionManager> RowGroup::GetOrCreateVersionInfoInternal() {
 	// version info does not exist - need to create it
 	lock_guard<mutex> lock(row_group_lock);
 	if (!owned_version_info) {
-		auto new_info = make_shared_ptr<RowVersionManager>(start);
+		auto &buffer_manager = GetBlockManager().GetBufferManager();
+		auto new_info = make_shared_ptr<RowVersionManager>(buffer_manager, start);
 		SetVersionInfo(std::move(new_info));
 	}
 	return owned_version_info;
