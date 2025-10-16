@@ -50,35 +50,6 @@ jobs:
       - name: Preliminary checks on CI 
         run: echo "Event name is ${{ github.event_name }}"
 
- forwards-compatibility:
-    name: Forwards Compatibility Test
-    needs: check-draft
-    runs-on: ubuntu-24.04
-    env:
-      GEN: ninja
-
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Install
-        shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-
-      - name: Setup Ccache
-        uses: hendrikmuhs/ccache-action@main
-        with:
-          key: ${{ github.job }}
-          save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
-
-      - name: Build
-        shell: bash
-        run: make release
-
-      - name: Run forwards compatibility tests
-        shell: bash
-        run: |
-          python3 scripts/test_storage_compatibility.py --versions "1.2.1|1.3.2" --new-unittest build/release/test/unittest
-
  linux-debug:
     name: Linux Debug
     # This tests release build while enabling slow verifiers (masked by #ifdef DEBUG) and sanitizers
@@ -493,3 +464,9 @@ jobs:
       shell: bash
       run: |
         ./build/release/test/unittest --test-config test/configs/compressed_in_memory.json
+
+    - name: Forwards compatibility tests
+      if: (success() || failure()) && steps.build.conclusion == 'success'
+      shell: bash
+      run: |
+        python3 scripts/test_storage_compatibility.py --versions "1.2.1|1.3.2" --new-unittest build/release/test/unittest
