@@ -3,16 +3,16 @@
 # group: [multidelimiter]
 
 statement error
-FROM read_csv('data/csv/multidelimiter/aaa_delim.csv', delim = '"\', quote ='"')
+FROM read_csv('{DATA_DIR}/csv/multidelimiter/aaa_delim.csv', delim = '"\', quote ='"')
 ----
 QUOTE must not appear in the DELIMITER specification and vice versa
 
 statement error
-FROM read_csv('data/csv/multidelimiter/aaa_delim.csv', delim = '\\', escape ='\')
+FROM read_csv('{DATA_DIR}/csv/multidelimiter/aaa_delim.csv', delim = '\\', escape ='\')
 ----
 ESCAPE must not appear in the DELIMITER specification and vice versa
 
 statement error
-FROM read_csv('data/csv/multidelimiter/aaa_delim.csv', delim = '|#', comment ='#', auto_detect = false, columns = {'a': 'varchar'})
+FROM read_csv('{DATA_DIR}/csv/multidelimiter/aaa_delim.csv', delim = '|#', comment ='#', auto_detect = false, columns = {'a': 'varchar'})
 ----
 COMMENT must not appear in the DELIMITER specification and vice versa

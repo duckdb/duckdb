@@ -6,12 +6,12 @@ statement ok
 PRAGMA enable_verification
 
 query I
-SELECT count(*) from read_csv_auto('data/csv/header_left_space.csv')
+SELECT count(*) from read_csv_auto('{DATA_DIR}/csv/header_left_space.csv')
 ----
 3
 
 statement ok
-create table t as select * from read_csv_auto('data/csv/header_normalize.csv', normalize_names=1)
+create table t as select * from read_csv_auto('{DATA_DIR}/csv/header_normalize.csv', normalize_names=1)
 
 query IIIIII
 describe t
@@ -24,7 +24,7 @@ _3b	BIGINT	YES	NULL	NULL	NULL
 
 
 query III
-FROM read_csv(['data/csv/auto/sample.csv','data/csv/auto/sample.csv','data/csv/auto/sample.csv'])
+FROM read_csv(['{DATA_DIR}/csv/auto/sample.csv','{DATA_DIR}/csv/auto/sample.csv','{DATA_DIR}/csv/auto/sample.csv'])
 ----
 c1	pedro	1992
 c2	mark	1992

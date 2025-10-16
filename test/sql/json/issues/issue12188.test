@@ -5,16 +5,16 @@
 require parquet
 
 query II
-SELECT typeof(field1), typeof(field2) FROM 'data/parquet-testing/parquet_with_json.parquet' LIMIT 1
+SELECT typeof(field1), typeof(field2) FROM '{DATA_DIR}/parquet-testing/parquet_with_json.parquet' LIMIT 1
 ----
 JSON	JSON
 
 require json
 
 statement ok
-COPY (SELECT * FROM read_ndjson('data/json/12188.ndjson', maximum_depth=1)) TO '__TEST_DIR__/my.parquet';
+COPY (SELECT * FROM read_ndjson('{DATA_DIR}/json/12188.ndjson', maximum_depth=1)) TO '{TEMP_DIR}/my.parquet';
 
 query II
-SELECT typeof(field1), typeof(field2) FROM '__TEST_DIR__/my.parquet' LIMIT 1
+SELECT typeof(field1), typeof(field2) FROM '{TEMP_DIR}/my.parquet' LIMIT 1
 ----
 JSON	JSON

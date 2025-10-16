@@ -11,19 +11,19 @@ statement ok
 CREATE TABLE test (col_a INTEGER, col_b VARCHAR(10), col_c VARCHAR(10));
 
 query I
-COPY test FROM 'data/csv/test/force_quote.csv' (HEADER 0);
+COPY test FROM '{DATA_DIR}/csv/test/force_quote.csv' (HEADER 0);
 ----
 3
 
 # test FORCE_QUOTE *
 query I
-COPY test TO '__TEST_DIR__/test_star.csv' (FORCE_QUOTE *, HEADER 0);
+COPY test TO '{TEMP_DIR}/test_star.csv' (FORCE_QUOTE *, HEADER 0);
 ----
 3
 
 # test FORCE_QUOTE with specific columns and non-default quote character and non-default null character
 query I
-COPY test TO '__TEST_DIR__/test_chosen_columns.csv' (FORCE_QUOTE (col_a, col_c), QUOTE 't', NULL 'ea');
+COPY test TO '{TEMP_DIR}/test_chosen_columns.csv' (FORCE_QUOTE (col_a, col_c), QUOTE 't', NULL 'ea');
 ----
 3
 
@@ -32,7 +32,7 @@ statement ok
 CREATE TABLE test2 (col_a INTEGER, col_b VARCHAR(10), col_c VARCHAR(10));
 
 query I
-COPY test2 FROM '__TEST_DIR__/test_chosen_columns.csv' (QUOTE 't', NULL 'ea');
+COPY test2 FROM '{TEMP_DIR}/test_chosen_columns.csv' (QUOTE 't', NULL 'ea');
 ----
 3
 
@@ -45,7 +45,7 @@ SELECT * FROM test2
 
 # test FORCE_QUOTE with reordered columns
 query I
-COPY test (col_b, col_c, col_a) TO '__TEST_DIR__/test_reorder.csv' (FORCE_QUOTE (col_c, col_b), NULL 'test');
+COPY test (col_b, col_c, col_a) TO '{TEMP_DIR}/test_reorder.csv' (FORCE_QUOTE (col_c, col_b), NULL 'test');
 ----
 3
 
@@ -53,7 +53,7 @@ statement ok
 CREATE TABLE test3 (col_a INTEGER, col_b VARCHAR(10), col_c VARCHAR(10));
 
 query I
-COPY test3(col_b, col_c, col_a) FROM '__TEST_DIR__/test_reorder.csv' (NULL 'test');
+COPY test3(col_b, col_c, col_a) FROM '{TEMP_DIR}/test_reorder.csv' (NULL 'test');
 ----
 3
 
@@ -67,30 +67,30 @@ SELECT * FROM test2
 
 # test using a column in FORCE_QUOTE that is not set as output, but that is a column of the table
 statement error
-COPY test (col_b, col_a) TO '__TEST_DIR__/test_reorder.csv' (FORCE_QUOTE (col_c, col_b));
+COPY test (col_b, col_a) TO '{TEMP_DIR}/test_reorder.csv' (FORCE_QUOTE (col_c, col_b));
 ----
 "force_quote" expected to find col_c, but it was not found in the table
 
 # test using a column in FORCE_QUOTE that is not a column of the table
 statement error
-COPY test TO '__TEST_DIR__/test_reorder.csv' (FORCE_QUOTE (col_c, col_d));
+COPY test TO '{TEMP_DIR}/test_reorder.csv' (FORCE_QUOTE (col_c, col_d));
 ----
 "force_quote" expected to find col_d, but it was not found in the table
 
 # FORCE_QUOTE is only supported in COPY ... TO ...
 statement error
-COPY test FROM '__TEST_DIR__/test_reorder.csv' (FORCE_QUOTE (col_c, col_d));
+COPY test FROM '{TEMP_DIR}/test_reorder.csv' (FORCE_QUOTE (col_c, col_d));
 ----
 Option "FORCE_QUOTE" is not supported for reading - only for writing
 
 # FORCE_QUOTE must not be empty and must have the correct parameter type
 statement error
-COPY test TO '__TEST_DIR__/test_reorder.csv' (FORCE_QUOTE);
+COPY test TO '{TEMP_DIR}/test_reorder.csv' (FORCE_QUOTE);
 ----
 "force_quote" expects a column list or * as parameter
 
 statement error
-COPY test TO '__TEST_DIR__/test_reorder.csv' (FORCE_QUOTE 42);
+COPY test TO '{TEMP_DIR}/test_reorder.csv' (FORCE_QUOTE 42);
 ----
 "force_quote" expected to find 42, but it was not found in the table
 

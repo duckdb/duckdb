@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 query IIIIII
-DESCRIBE FROM read_csv('data/csv/18579/*.csv', union_by_name = true);
+DESCRIBE FROM read_csv('{DATA_DIR}/csv/18579/*.csv', union_by_name = true);
 ----
 billingAccountName	VARCHAR	YES	NULL	NULL	NULL
 partnerName	VARCHAR	YES	NULL	NULL	NULL

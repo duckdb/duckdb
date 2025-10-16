@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-FROM read_csv('data/csv/click_mini.tsv.gz')
+FROM read_csv('{DATA_DIR}/csv/click_mini.tsv.gz')
 
 statement ok
-FROM read_csv('data/csv/click_mini.tsv.gz', quote = '')
+FROM read_csv('{DATA_DIR}/csv/click_mini.tsv.gz', quote = '')

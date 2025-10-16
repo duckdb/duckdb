@@ -6,6 +6,6 @@ statement ok
 PRAGMA enable_verification
 
 query I
-FROM 'data/csv/struct.csv'
+FROM '{DATA_DIR}/csv/struct.csv'
 ----
 {'a': 1, 'b': 2}

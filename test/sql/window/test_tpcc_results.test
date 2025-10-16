@@ -18,7 +18,7 @@ select
     first_value(dbsystem order by tps desc) over w AS best_system,
     lead(tps order by tps desc) over w AS second_performance,
     lead(dbsystem order by tps desc, dbsystem) over w AS second_system,
-from 'data/csv/tpcc_results.csv'
+from '{DATA_DIR}/csv/tpcc_results.csv'
 window w as (
     order by submission_date
     range between unbounded preceding and current row

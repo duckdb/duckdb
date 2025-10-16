@@ -6,7 +6,7 @@ require json
 
 # these two succeeded
 statement ok
-SELECT MAX(JSON_ARRAY_LENGTH(filter_keystage))::int - 1 FROM read_json_auto('data/json/filter_keystage.ndjson');
+SELECT MAX(JSON_ARRAY_LENGTH(filter_keystage))::int - 1 FROM read_json_auto('{DATA_DIR}/json/filter_keystage.ndjson');
 
 statement ok
 WITH RECURSIVE nums AS (
@@ -23,6 +23,6 @@ WITH RECURSIVE nums AS (
     SELECT 0 AS n
     UNION ALL
     SELECT n + 1 FROM nums
-    WHERE n < (SELECT MAX(JSON_ARRAY_LENGTH(filter_keystage))::int - 1 FROM read_json_auto('data/json/filter_keystage.ndjson'))
+    WHERE n < (SELECT MAX(JSON_ARRAY_LENGTH(filter_keystage))::int - 1 FROM read_json_auto('{DATA_DIR}/json/filter_keystage.ndjson'))
 )
 SELECT * FROM nums;

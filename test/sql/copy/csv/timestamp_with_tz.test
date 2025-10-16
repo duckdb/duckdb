@@ -10,7 +10,7 @@ CREATE TABLE tbl(id int, ts timestamp);
 
 # this fails without ICU loaded
 statement error
-COPY tbl FROM 'data/csv/timestamp_with_tz.csv' (HEADER)
+COPY tbl FROM '{DATA_DIR}/csv/timestamp_with_tz.csv' (HEADER)
 ----
 Error when converting column "ts". Could not convert string "2021-05-25 04:55:03.382494 EST" to 'TIMESTAMP'
 
@@ -28,7 +28,7 @@ statement ok
 CREATE TABLE tbl_tz(id int, ts timestamptz);
 
 statement ok
-COPY tbl_tz FROM 'data/csv/timestamp_with_tz.csv' (HEADER)
+COPY tbl_tz FROM '{DATA_DIR}/csv/timestamp_with_tz.csv' (HEADER)
 
 statement ok
 SET TimeZone='UTC'
@@ -40,7 +40,7 @@ SELECT * FROM tbl_tz
 2	2021-05-25 09:55:03.382494+00
 
 query III
-FROM read_csv('data/csv/17705.csv')
+FROM read_csv('{DATA_DIR}/csv/17705.csv')
 ----
 Night	38615452	2022/01/27 11:04:57 PM
 Night	38615452	2022/01/27 11:04:57 PM

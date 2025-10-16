@@ -4,7 +4,7 @@
 
 # read a single column from a file
 query I
-SELECT l_returnflag FROM read_csv('data/csv/real/lineitem_sample.csv', delim='|', columns={'l_orderkey': 'INTEGER','l_partkey': 'INTEGER','l_suppkey': 'INTEGER','l_linenumber': 'INTEGER','l_quantity': 'INTEGER','l_extendedprice': 'DECIMAL(15,2)','l_discount': 'DECIMAL(15,2)','l_tax': 'DECIMAL(15,2)','l_returnflag': 'VARCHAR','l_linestatus': 'VARCHAR','l_shipdate': 'DATE','l_commitdate': 'DATE','l_receiptdate': 'DATE','l_shipinstruct': 'VARCHAR','l_shipmode': 'VARCHAR','l_comment': 'VARCHAR'});
+SELECT l_returnflag FROM read_csv('{DATA_DIR}/csv/real/lineitem_sample.csv', delim='|', columns={'l_orderkey': 'INTEGER','l_partkey': 'INTEGER','l_suppkey': 'INTEGER','l_linenumber': 'INTEGER','l_quantity': 'INTEGER','l_extendedprice': 'DECIMAL(15,2)','l_discount': 'DECIMAL(15,2)','l_tax': 'DECIMAL(15,2)','l_returnflag': 'VARCHAR','l_linestatus': 'VARCHAR','l_shipdate': 'DATE','l_commitdate': 'DATE','l_receiptdate': 'DATE','l_shipinstruct': 'VARCHAR','l_shipmode': 'VARCHAR','l_comment': 'VARCHAR'});
 ----
 N
 N
@@ -19,19 +19,19 @@ A
 
 # verify the projection pushdown is correctly displayed
 query II
-explain SELECT l_returnflag FROM read_csv('data/csv/real/lineitem_sample.csv', delim='|', columns={'l_orderkey': 'INTEGER','l_partkey': 'INTEGER','l_suppkey': 'INTEGER','l_linenumber': 'INTEGER','l_quantity': 'INTEGER','l_extendedprice': 'DECIMAL(15,2)','l_discount': 'DECIMAL(15,2)','l_tax': 'DECIMAL(15,2)','l_returnflag': 'VARCHAR','l_linestatus': 'VARCHAR','l_shipdate': 'DATE','l_commitdate': 'DATE','l_receiptdate': 'DATE','l_shipinstruct': 'VARCHAR','l_shipmode': 'VARCHAR','l_comment': 'VARCHAR'});
+explain SELECT l_returnflag FROM read_csv('{DATA_DIR}/csv/real/lineitem_sample.csv', delim='|', columns={'l_orderkey': 'INTEGER','l_partkey': 'INTEGER','l_suppkey': 'INTEGER','l_linenumber': 'INTEGER','l_quantity': 'INTEGER','l_extendedprice': 'DECIMAL(15,2)','l_discount': 'DECIMAL(15,2)','l_tax': 'DECIMAL(15,2)','l_returnflag': 'VARCHAR','l_linestatus': 'VARCHAR','l_shipdate': 'DATE','l_commitdate': 'DATE','l_receiptdate': 'DATE','l_shipinstruct': 'VARCHAR','l_shipmode': 'VARCHAR','l_comment': 'VARCHAR'});
 ----
 physical_plan	<REGEX>:.*READ_CSV.*l_returnflag.*
 
 # read a column as the incorrect type (l_shipinstruct is not a date)
 statement error
-SELECT l_shipinstruct FROM read_csv('data/csv/real/lineitem_sample.csv', delim='|', columns={'l_orderkey': 'INTEGER','l_partkey': 'INTEGER','l_suppkey': 'INTEGER','l_linenumber': 'INTEGER','l_quantity': 'INTEGER','l_extendedprice': 'DECIMAL(15,2)','l_discount': 'DECIMAL(15,2)','l_tax': 'DECIMAL(15,2)','l_returnflag': 'VARCHAR','l_linestatus': 'VARCHAR','l_shipdate': 'DATE','l_commitdate': 'DATE','l_receiptdate': 'DATE','l_shipinstruct': 'DATE','l_shipmode': 'VARCHAR','l_comment': 'VARCHAR'});
+SELECT l_shipinstruct FROM read_csv('{DATA_DIR}/csv/real/lineitem_sample.csv', delim='|', columns={'l_orderkey': 'INTEGER','l_partkey': 'INTEGER','l_suppkey': 'INTEGER','l_linenumber': 'INTEGER','l_quantity': 'INTEGER','l_extendedprice': 'DECIMAL(15,2)','l_discount': 'DECIMAL(15,2)','l_tax': 'DECIMAL(15,2)','l_returnflag': 'VARCHAR','l_linestatus': 'VARCHAR','l_shipdate': 'DATE','l_commitdate': 'DATE','l_receiptdate': 'DATE','l_shipinstruct': 'DATE','l_shipmode': 'VARCHAR','l_comment': 'VARCHAR'});
 ----
 Column at position: 13 Set type: DATE Sniffed type: VARCHAR
 
 # conversion is skipped if we don't read the value - so even with the incorrect type specified this still works
 query I
-SELECT l_returnflag FROM read_csv('data/csv/real/lineitem_sample.csv', delim='|', columns={'l_orderkey': 'INTEGER','l_partkey': 'INTEGER','l_suppkey': 'INTEGER','l_linenumber': 'INTEGER','l_quantity': 'INTEGER','l_extendedprice': 'DECIMAL(15,2)','l_discount': 'DECIMAL(15,2)','l_tax': 'DECIMAL(15,2)','l_returnflag': 'VARCHAR','l_linestatus': 'VARCHAR','l_shipdate': 'DATE','l_commitdate': 'DATE','l_receiptdate': 'DATE','l_shipinstruct': 'DATE','l_shipmode': 'VARCHAR','l_comment': 'VARCHAR'}, header = 0);
+SELECT l_returnflag FROM read_csv('{DATA_DIR}/csv/real/lineitem_sample.csv', delim='|', columns={'l_orderkey': 'INTEGER','l_partkey': 'INTEGER','l_suppkey': 'INTEGER','l_linenumber': 'INTEGER','l_quantity': 'INTEGER','l_extendedprice': 'DECIMAL(15,2)','l_discount': 'DECIMAL(15,2)','l_tax': 'DECIMAL(15,2)','l_returnflag': 'VARCHAR','l_linestatus': 'VARCHAR','l_shipdate': 'DATE','l_commitdate': 'DATE','l_receiptdate': 'DATE','l_shipinstruct': 'DATE','l_shipmode': 'VARCHAR','l_comment': 'VARCHAR'}, header = 0);
 ----
 N
 N
@@ -46,17 +46,17 @@ A
 
 # ignore errors
 query I
-SELECT l_shipinstruct FROM read_csv('data/csv/real/lineitem_sample.csv', delim='|', columns={'l_orderkey': 'INTEGER','l_partkey': 'INTEGER','l_suppkey': 'INTEGER','l_linenumber': 'INTEGER','l_quantity': 'INTEGER','l_extendedprice': 'DECIMAL(15,2)','l_discount': 'DECIMAL(15,2)','l_tax': 'DECIMAL(15,2)','l_returnflag': 'VARCHAR','l_linestatus': 'VARCHAR','l_shipdate': 'DATE','l_commitdate': 'DATE','l_receiptdate': 'DATE','l_shipinstruct': 'DATE','l_shipmode': 'VARCHAR','l_comment': 'VARCHAR'}, ignore_errors=true);
+SELECT l_shipinstruct FROM read_csv('{DATA_DIR}/csv/real/lineitem_sample.csv', delim='|', columns={'l_orderkey': 'INTEGER','l_partkey': 'INTEGER','l_suppkey': 'INTEGER','l_linenumber': 'INTEGER','l_quantity': 'INTEGER','l_extendedprice': 'DECIMAL(15,2)','l_discount': 'DECIMAL(15,2)','l_tax': 'DECIMAL(15,2)','l_returnflag': 'VARCHAR','l_linestatus': 'VARCHAR','l_shipdate': 'DATE','l_commitdate': 'DATE','l_receiptdate': 'DATE','l_shipinstruct': 'DATE','l_shipmode': 'VARCHAR','l_comment': 'VARCHAR'}, ignore_errors=true);
 ----
 
 # ignore errors partially
 statement error
-SELECT l_orderkey, l_partkey, l_extendedprice FROM read_csv('data/csv/real/lineitem_sample.csv', delim='|', columns={'l_orderkey': 'INTEGER','l_partkey': 'INTEGER','l_suppkey': 'INTEGER','l_linenumber': 'INTEGER','l_quantity': 'INTEGER','l_extendedprice': 'SMALLINT','l_discount': 'DECIMAL(15,2)','l_tax': 'DECIMAL(15,2)','l_returnflag': 'VARCHAR','l_linestatus': 'VARCHAR','l_shipdate': 'DATE','l_commitdate': 'DATE','l_receiptdate': 'DATE','l_shipinstruct': 'DATE','l_shipmode': 'VARCHAR','l_comment': 'VARCHAR'});
+SELECT l_orderkey, l_partkey, l_extendedprice FROM read_csv('{DATA_DIR}/csv/real/lineitem_sample.csv', delim='|', columns={'l_orderkey': 'INTEGER','l_partkey': 'INTEGER','l_suppkey': 'INTEGER','l_linenumber': 'INTEGER','l_quantity': 'INTEGER','l_extendedprice': 'SMALLINT','l_discount': 'DECIMAL(15,2)','l_tax': 'DECIMAL(15,2)','l_returnflag': 'VARCHAR','l_linestatus': 'VARCHAR','l_shipdate': 'DATE','l_commitdate': 'DATE','l_receiptdate': 'DATE','l_shipinstruct': 'DATE','l_shipmode': 'VARCHAR','l_comment': 'VARCHAR'});
 ----
 l_extendedprice
 
 query III
-SELECT l_orderkey, l_partkey, l_extendedprice FROM read_csv('data/csv/real/lineitem_sample.csv', delim='|', columns={'l_orderkey': 'INTEGER','l_partkey': 'INTEGER','l_suppkey': 'INTEGER','l_linenumber': 'INTEGER','l_quantity': 'INTEGER','l_extendedprice': 'SMALLINT','l_discount': 'DECIMAL(15,2)','l_tax': 'DECIMAL(15,2)','l_returnflag': 'VARCHAR','l_linestatus': 'VARCHAR','l_shipdate': 'DATE','l_commitdate': 'DATE','l_receiptdate': 'DATE','l_shipinstruct': 'DATE','l_shipmode': 'VARCHAR','l_comment': 'VARCHAR'}, ignore_errors=true, header = 0);
+SELECT l_orderkey, l_partkey, l_extendedprice FROM read_csv('{DATA_DIR}/csv/real/lineitem_sample.csv', delim='|', columns={'l_orderkey': 'INTEGER','l_partkey': 'INTEGER','l_suppkey': 'INTEGER','l_linenumber': 'INTEGER','l_quantity': 'INTEGER','l_extendedprice': 'SMALLINT','l_discount': 'DECIMAL(15,2)','l_tax': 'DECIMAL(15,2)','l_returnflag': 'VARCHAR','l_linestatus': 'VARCHAR','l_shipdate': 'DATE','l_commitdate': 'DATE','l_receiptdate': 'DATE','l_shipinstruct': 'DATE','l_shipmode': 'VARCHAR','l_comment': 'VARCHAR'}, ignore_errors=true, header = 0);
 ----
 1	15519	24387
 1	6370	10211
@@ -64,12 +64,12 @@ SELECT l_orderkey, l_partkey, l_extendedprice FROM read_csv('data/csv/real/linei
 1	2403	31330
 
 statement error
-SELECT l_orderkey, l_partkey, l_extendedprice FROM read_csv('data/csv/real/lineitem_sample.csv', delim='|', columns={'l_orderkey': 'INTEGER','l_partkey': 'INTEGER','l_suppkey': 'INTEGER','l_linenumber': 'INTEGER','l_quantity': 'INTEGER','l_extendedprice': 'USMALLINT','l_discount': 'DECIMAL(15,2)','l_tax': 'DECIMAL(15,2)','l_returnflag': 'VARCHAR','l_linestatus': 'VARCHAR','l_shipdate': 'DATE','l_commitdate': 'DATE','l_receiptdate': 'DATE','l_shipinstruct': 'DATE','l_shipmode': 'VARCHAR','l_comment': 'VARCHAR'});
+SELECT l_orderkey, l_partkey, l_extendedprice FROM read_csv('{DATA_DIR}/csv/real/lineitem_sample.csv', delim='|', columns={'l_orderkey': 'INTEGER','l_partkey': 'INTEGER','l_suppkey': 'INTEGER','l_linenumber': 'INTEGER','l_quantity': 'INTEGER','l_extendedprice': 'USMALLINT','l_discount': 'DECIMAL(15,2)','l_tax': 'DECIMAL(15,2)','l_returnflag': 'VARCHAR','l_linestatus': 'VARCHAR','l_shipdate': 'DATE','l_commitdate': 'DATE','l_receiptdate': 'DATE','l_shipinstruct': 'DATE','l_shipmode': 'VARCHAR','l_comment': 'VARCHAR'});
 ----
 l_extendedprice
 
 query III
-SELECT l_orderkey, l_partkey, l_extendedprice FROM read_csv('data/csv/real/lineitem_sample.csv', delim='|', columns={'l_orderkey': 'INTEGER','l_partkey': 'INTEGER','l_suppkey': 'INTEGER','l_linenumber': 'INTEGER','l_quantity': 'INTEGER','l_extendedprice': 'USMALLINT','l_discount': 'DECIMAL(15,2)','l_tax': 'DECIMAL(15,2)','l_returnflag': 'VARCHAR','l_linestatus': 'VARCHAR','l_shipdate': 'DATE','l_commitdate': 'DATE','l_receiptdate': 'DATE','l_shipinstruct': 'DATE','l_shipmode': 'VARCHAR','l_comment': 'VARCHAR'}, ignore_errors=true, header = 0);
+SELECT l_orderkey, l_partkey, l_extendedprice FROM read_csv('{DATA_DIR}/csv/real/lineitem_sample.csv', delim='|', columns={'l_orderkey': 'INTEGER','l_partkey': 'INTEGER','l_suppkey': 'INTEGER','l_linenumber': 'INTEGER','l_quantity': 'INTEGER','l_extendedprice': 'USMALLINT','l_discount': 'DECIMAL(15,2)','l_tax': 'DECIMAL(15,2)','l_returnflag': 'VARCHAR','l_linestatus': 'VARCHAR','l_shipdate': 'DATE','l_commitdate': 'DATE','l_receiptdate': 'DATE','l_shipinstruct': 'DATE','l_shipmode': 'VARCHAR','l_comment': 'VARCHAR'}, ignore_errors=true, header = 0);
 ----
 1	15519	24387
 1	6731	58958

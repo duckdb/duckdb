@@ -8,7 +8,7 @@ PRAGMA enable_verification
 loop i 1 46
 
 statement maybe
-FROM read_csv('data/csv/afl/null_padding/${i}.csv', null_padding=true)
+FROM read_csv('{DATA_DIR}/csv/afl/null_padding/${i}.csv', null_padding=true)
 ----
 
 endloop

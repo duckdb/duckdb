@@ -6,12 +6,12 @@ statement ok
 PRAGMA enable_verification
 
 statement error
-FROM read_csv('data/csv/num.tsv.gz',quote = '"')
+FROM read_csv('{DATA_DIR}/csv/num.tsv.gz',quote = '"')
 ----
 * Disable the parser's strict mode (strict_mode=false) to allow reading rows that do not comply with the CSV standard.
 
 statement ok
-FROM read_csv('data/csv/num.tsv.gz',quote = '"', strict_mode = false)
+FROM read_csv('{DATA_DIR}/csv/num.tsv.gz',quote = '"', strict_mode = false)
 
 statement ok
-FROM read_csv('data/csv/num.tsv.gz')
+FROM read_csv('{DATA_DIR}/csv/num.tsv.gz')

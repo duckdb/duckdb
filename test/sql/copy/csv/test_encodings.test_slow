@@ -6,34 +6,34 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-FROM read_csv('data/csv/test/test.csv', encoding = 'utf-8')
+FROM read_csv('{DATA_DIR}/csv/test/test.csv', encoding = 'utf-8')
 
 statement ok
-FROM read_csv('data/csv/test/test.csv', encoding = 'utf-16')
+FROM read_csv('{DATA_DIR}/csv/test/test.csv', encoding = 'utf-16')
 
 statement ok
-FROM read_csv('data/csv/test/test.csv', encoding = 'latin-1')
+FROM read_csv('{DATA_DIR}/csv/test/test.csv', encoding = 'latin-1')
 
 statement ok
 create table test (a INTEGER, b INTEGER, c VARCHAR(10));
 
 statement ok
-COPY test FROM 'data/csv/test/test.csv' (encoding 'utf-8');
+COPY test FROM '{DATA_DIR}/csv/test/test.csv' (encoding 'utf-8');
 
 # We error for not supported encodings, sorry goku, but soon.
 statement error
-FROM read_csv('data/csv/test/test.csv', encoding = 'Shift-JIS')
+FROM read_csv('{DATA_DIR}/csv/test/test.csv', encoding = 'Shift-JIS')
 ----
 The CSV Reader does not support the encoding: "Shift-JIS"
 
 # Writing not supported
 statement error
-COPY test TO 'data/csv/test/test.csv' (encoding 'utf-16');
+COPY test TO '{DATA_DIR}/csv/test/test.csv' (encoding 'utf-16');
 ----
 Option "encoding" is not supported for writing - only for reading
 
 statement error
-FROM read_csv('data/csv/encodings/latin1.csv')
+FROM read_csv('{DATA_DIR}/csv/encodings/latin1.csv')
 ----
 Invalid unicode (byte sequence mismatch) detected.
 
@@ -44,7 +44,7 @@ statement ok
 create table test (a varchar, b integer)
 
 statement ok
-COPY test FROM 'data/csv/encodings/latin1.csv' (encoding 'latin-1');
+COPY test FROM '{DATA_DIR}/csv/encodings/latin1.csv' (encoding 'latin-1');
 
 query II
 FROM test
@@ -63,7 +63,7 @@ André Lefèvre	36
 Léonard Dubois	29
 
 query II
-FROM read_csv('data/csv/encodings/latin1.csv', encoding = 'latin-1')
+FROM read_csv('{DATA_DIR}/csv/encodings/latin1.csv', encoding = 'latin-1')
 ----
 José Álvarez	30
 Müller	25
@@ -79,12 +79,12 @@ André Lefèvre	36
 Léonard Dubois	29
 
 statement error
-FROM read_csv('data/csv/encodings/utf16.csv')
+FROM read_csv('{DATA_DIR}/csv/encodings/utf16.csv')
 ----
 Make sure you are using the correct file encoding. If not, set it (e.g., encoding = 'utf-16').
 
 query II
-FROM read_csv('data/csv/encodings/utf16.csv', encoding = 'utf-16')
+FROM read_csv('{DATA_DIR}/csv/encodings/utf16.csv', encoding = 'utf-16')
 ----
 José Álvarez	30
 Müller	25
@@ -108,17 +108,17 @@ Sigurður Jónsson	55
 Krystýna Novák	23
 
 statement error
-FROM read_csv('data/csv/encodings/shift_jis.csv', encoding = 'utf-16')
+FROM read_csv('{DATA_DIR}/csv/encodings/shift_jis.csv', encoding = 'utf-16')
 ----
 File is not utf-16 encoded
 
 statement error
-FROM read_csv('data/csv/encodings/shift_jis.csv', encoding = 'latin-1')
+FROM read_csv('{DATA_DIR}/csv/encodings/shift_jis.csv', encoding = 'latin-1')
 ----
 File is not latin-1 encoded
 
 query II
-FROM read_csv('data/csv/encodings/only_utf16.csv', encoding = 'utf-16', header = 0)
+FROM read_csv('{DATA_DIR}/csv/encodings/only_utf16.csv', encoding = 'utf-16', header = 0)
 ----
 ŁŁŁŁŁŁŁ ŁŁŁŁŁŁŁŁ	Ł
 ŁŁŁ ŁŁŁŁŁŁŁŁŁ	Ł
@@ -130,7 +130,7 @@ FROM read_csv('data/csv/encodings/only_utf16.csv', encoding = 'utf-16', header =
 loop buffer_size 30 50
 
 query II
-FROM read_csv('data/csv/encodings/latin1.csv', encoding = 'latin-1', buffer_size = ${buffer_size})
+FROM read_csv('{DATA_DIR}/csv/encodings/latin1.csv', encoding = 'latin-1', buffer_size = ${buffer_size})
 ----
 José Álvarez	30
 Müller	25
@@ -146,7 +146,7 @@ André Lefèvre	36
 Léonard Dubois	29
 
 query II
-FROM read_csv('data/csv/encodings/latin1.csv.gz', encoding = 'latin-1', buffer_size = ${buffer_size})
+FROM read_csv('{DATA_DIR}/csv/encodings/latin1.csv.gz', encoding = 'latin-1', buffer_size = ${buffer_size})
 ----
 José Álvarez	30
 Müller	25
@@ -162,7 +162,7 @@ André Lefèvre	36
 Léonard Dubois	29
 
 query II
-FROM read_csv('data/csv/encodings/utf16.csv', encoding = 'utf-16', buffer_size = ${buffer_size})
+FROM read_csv('{DATA_DIR}/csv/encodings/utf16.csv', encoding = 'utf-16', buffer_size = ${buffer_size})
 ----
 José Álvarez	30
 Müller	25
@@ -186,7 +186,7 @@ Sigurður Jónsson	55
 Krystýna Novák	23
 
 query II
-FROM read_csv('data/csv/encodings/utf16.csv.gz', encoding = 'utf-16', buffer_size = ${buffer_size})
+FROM read_csv('{DATA_DIR}/csv/encodings/utf16.csv.gz', encoding = 'utf-16', buffer_size = ${buffer_size})
 ----
 José Álvarez	30
 Müller	25
@@ -214,7 +214,7 @@ endloop
 loop buffer_size 40 60
 
 query II
-FROM read_csv('data/csv/encodings/only_utf16.csv', encoding = 'utf-16', buffer_size = ${buffer_size}, header = 0)
+FROM read_csv('{DATA_DIR}/csv/encodings/only_utf16.csv', encoding = 'utf-16', buffer_size = ${buffer_size}, header = 0)
 ----
 ŁŁŁŁŁŁŁ ŁŁŁŁŁŁŁŁ	Ł
 ŁŁŁ ŁŁŁŁŁŁŁŁŁ	Ł
@@ -224,7 +224,7 @@ FROM read_csv('data/csv/encodings/only_utf16.csv', encoding = 'utf-16', buffer_s
 ŁŁŁŁ ŁŁŁŁŁŁ	ŁŁ
 
 query II
-FROM read_csv('data/csv/encodings/only_latin1.csv', encoding = 'latin-1', buffer_size = ${buffer_size}, header = 0)
+FROM read_csv('{DATA_DIR}/csv/encodings/only_latin1.csv', encoding = 'latin-1', buffer_size = ${buffer_size}, header = 0)
 ----
 ýýýýýýý ýýýýýýýý	ý
 ýýý ýýýýýýýýý	ý
@@ -236,7 +236,7 @@ FROM read_csv('data/csv/encodings/only_latin1.csv', encoding = 'latin-1', buffer
 endloop
 
 query I
-FROM read_csv('data/csv/encodings/all_latin1.csv', encoding = 'latin-1', header = 0, quote = '', auto_detect = false, columns = {'a':'varchar'}, delim = '')
+FROM read_csv('{DATA_DIR}/csv/encodings/all_latin1.csv', encoding = 'latin-1', header = 0, quote = '', auto_detect = false, columns = {'a':'varchar'}, delim = '')
 ----
 !
 """"
@@ -431,6 +431,6 @@ z
 
 
 query I
-SELECT count (*) FROM read_csv('data/csv/encodings/all_utf16.csv', encoding = 'utf-16', header = 0, quote = '', auto_detect = false, columns = {'a':'varchar'}, delim = '')
+SELECT count (*) FROM read_csv('{DATA_DIR}/csv/encodings/all_utf16.csv', encoding = 'utf-16', header = 0, quote = '', auto_detect = false, columns = {'a':'varchar'}, delim = '')
 ----
 63489

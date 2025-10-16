@@ -5,7 +5,7 @@
 require parquet
 
 query TTT
-select "önë", "C1", "🦆" from parquet_scan('data/parquet-testing/silly-names.parquet') order by 1
+select "önë", "C1", "🦆" from parquet_scan('{DATA_DIR}/parquet-testing/silly-names.parquet') order by 1
 ----
 1	foo	1
 2	bar	0

@@ -6,7 +6,7 @@ require parquet
 
 query II
 select * 
-from parquet_scan('data/parquet-testing/hive-partitioning/empty_string/*/*.parquet')
+from parquet_scan('{DATA_DIR}/parquet-testing/hive-partitioning/empty_string/*/*.parquet')
 ORDER BY ALL
 ----
 a	a
@@ -16,7 +16,7 @@ c	NULL
 # filter on hive partitioning with NULL values
 query II
 select *
-from parquet_scan('data/parquet-testing/hive-partitioning/empty_string/*/*.parquet')
+from parquet_scan('{DATA_DIR}/parquet-testing/hive-partitioning/empty_string/*/*.parquet')
 WHERE key IS NULL
 ----
 c	NULL
@@ -24,14 +24,14 @@ c	NULL
 
 query II
 select *
-from parquet_scan('data/parquet-testing/hive-partitioning/empty_string/*/*.parquet')
+from parquet_scan('{DATA_DIR}/parquet-testing/hive-partitioning/empty_string/*/*.parquet')
 WHERE key='a'
 ----
 a	a
 
 query II
 select *
-from parquet_scan('data/parquet-testing/hive-partitioning/empty_string/*/*.parquet')
+from parquet_scan('{DATA_DIR}/parquet-testing/hive-partitioning/empty_string/*/*.parquet')
 WHERE key=''
 ----
 b	(empty)

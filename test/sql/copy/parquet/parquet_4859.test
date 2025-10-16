@@ -5,4 +5,4 @@
 require parquet
 
 statement ok
-select "repositoryTopics.edges" from "data/parquet-testing/bug4859.parquet"
+select "repositoryTopics.edges" from "{DATA_DIR}/parquet-testing/bug4859.parquet"

@@ -13,13 +13,13 @@ require json
 
 # we can set allowed_directories as much as we want
 statement ok
-SET allowed_directories=['data/csv/glob']
+SET allowed_directories=['{DATA_DIR}/csv/glob']
 
 statement ok
 RESET allowed_directories
 
 statement ok
-SET allowed_directories=['data/csv/glob', 'data/csv/glob/1', 'data/parquet-testing/glob', 'data/json', '__TEST_DIR__']
+SET allowed_directories=['{DATA_DIR}/csv/glob', '{DATA_DIR}/csv/glob/1', '{DATA_DIR}/parquet-testing/glob', '{DATA_DIR}/json', '{TEMP_DIR}']
 
 statement ok
 SET enable_external_access=false
@@ -37,7 +37,7 @@ Cannot change allowed_directories when enable_external_access is disabled
 
 # we can read CSV files from the allowed_directories
 query III
-SELECT * FROM 'data/csv/glob/f_1.csv'
+SELECT * FROM '{DATA_DIR}/csv/glob/f_1.csv'
 ----
 1	alice	alice@email.com
 2	eve	eve@email.com
@@ -45,7 +45,7 @@ SELECT * FROM 'data/csv/glob/f_1.csv'
 
 # also within contained directories
 query I
-SELECT * FROM 'data/csv/glob/a1/a1.csv'
+SELECT * FROM '{DATA_DIR}/csv/glob/a1/a1.csv'
 ----
 2019-06-05
 2019-06-15
@@ -53,7 +53,7 @@ SELECT * FROM 'data/csv/glob/a1/a1.csv'
 
 # we can also use "..", as long as we remain inside our directory
 query III
-SELECT * FROM 'data/csv/glob/a1/../f_1.csv'
+SELECT * FROM '{DATA_DIR}/csv/glob/a1/../f_1.csv'
 ----
 1	alice	alice@email.com
 2	eve	eve@email.com
@@ -61,7 +61,7 @@ SELECT * FROM 'data/csv/glob/a1/../f_1.csv'
 
 # and we can use ./
 query III
-SELECT * FROM 'data/csv/glob/./f_1.csv'
+SELECT * FROM '{DATA_DIR}/csv/glob/./f_1.csv'
 ----
 1	alice	alice@email.com
 2	eve	eve@email.com
@@ -69,59 +69,59 @@ SELECT * FROM 'data/csv/glob/./f_1.csv'
 
 # we cannot read files that are not in the allowed directories
 statement error
-SELECT * FROM 'data/csv/all_quotes.csv'
+SELECT * FROM '{DATA_DIR}/csv/all_quotes.csv'
 ----
 Permission Error
 
 # also not through usage of ".."
 statement error
-SELECT * FROM 'data/csv/glob/../all_quotes.csv'
+SELECT * FROM '{DATA_DIR}/csv/glob/../all_quotes.csv'
 ----
 Permission Error
 
 # //.. edge case
 statement error
-SELECT * FROM 'data/csv/glob//../all_quotes.csv'
+SELECT * FROM '{DATA_DIR}/csv/glob//../all_quotes.csv'
 ----
 Permission Error
 
 statement error
-SELECT * FROM 'data/csv/glob/a1/../../all_quotes.csv'
+SELECT * FROM '{DATA_DIR}/csv/glob/a1/../../all_quotes.csv'
 ----
 Permission Error
 
 # we can also sniff csv files
 statement ok
-SELECT * FROM sniff_csv('data/csv/glob/f_1.csv')
+SELECT * FROM sniff_csv('{DATA_DIR}/csv/glob/f_1.csv')
 
 # but not outside of allowed directories
 statement error
-SELECT * FROM sniff_csv('data/csv/all_quotes.csv')
+SELECT * FROM sniff_csv('{DATA_DIR}/csv/all_quotes.csv')
 ----
 Permission Error
 
 # we can also glob allowed directories
 query I
-SELECT replace(fname, '\', '/') as fname FROM glob('data/csv/glob/*.csv') t(fname)
+SELECT parse_filename(fname) as fname FROM glob('{DATA_DIR}/csv/glob/*.csv') t(fname)
 ----
-data/csv/glob/f_1.csv
-data/csv/glob/f_2.csv
-data/csv/glob/f_3.csv
+f_1.csv
+f_2.csv
+f_3.csv
 
 statement error
-SELECT * FROM glob('data/csv/**.csv')
+SELECT * FROM glob('{DATA_DIR}/csv/**.csv')
 ----
 Permission Error
 
 # we can write to our test dir
 statement ok
-COPY (SELECT 42 i) TO '__TEST_DIR__/permission_test.csv' (FORMAT csv)
+COPY (SELECT 42 i) TO '{TEMP_DIR}/permission_test.csv' (FORMAT csv)
 
 statement ok
 CREATE TABLE integers(i INT);
 
 statement ok
-COPY integers FROM '__TEST_DIR__/permission_test.csv'
+COPY integers FROM '{TEMP_DIR}/permission_test.csv'
 
 query I
 FROM integers
@@ -141,7 +141,7 @@ Permission Error
 
 # we can attach databases in allowed directories
 statement ok
-ATTACH '__TEST_DIR__/attached_dir.db' AS a1
+ATTACH '{TEMP_DIR}/attached_dir.db' AS a1
 
 statement ok
 CREATE TABLE a1.integers(i INTEGER);
@@ -165,7 +165,7 @@ Permission Error
 
 # export/import also work with allowed_directories
 statement ok
-EXPORT DATABASE a1 TO '__TEST_DIR__/export_test'
+EXPORT DATABASE a1 TO '{TEMP_DIR}/export_test'
 
 statement error
 EXPORT DATABASE a1 TO 'export_test'
@@ -173,7 +173,7 @@ EXPORT DATABASE a1 TO 'export_test'
 Permission Error
 
 statement error
-IMPORT DATABASE '__TEST_DIR__/export_test'
+IMPORT DATABASE '{TEMP_DIR}/export_test'
 ----
 Table with name "integers" already exists!
 
@@ -184,16 +184,16 @@ Permission Error
 
 # we can read parquet/json files
 query II
-SELECT * FROM 'data/parquet-testing/glob/t1.parquet'
+SELECT * FROM '{DATA_DIR}/parquet-testing/glob/t1.parquet'
 ----
 1	a
 
 statement error
-SELECT * FROM 'data/parquet-testing/aws2.parquet'
+SELECT * FROM '{DATA_DIR}/parquet-testing/aws2.parquet'
 ----
 Permission Error
 
 query II
-SELECT * FROM 'data/parquet-testing/glob/t1.parquet'
+SELECT * FROM '{DATA_DIR}/parquet-testing/glob/t1.parquet'
 ----
 1	a

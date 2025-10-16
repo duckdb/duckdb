@@ -3,7 +3,7 @@
 # group: [update]
 
 statement ok
-CREATE VIEW test_table_view AS SELECT * FROM 'data/csv/issue2471.csv'
+CREATE VIEW test_table_view AS SELECT * FROM '{DATA_DIR}/csv/issue2471.csv'
 
 statement ok
 create table test_table (isin VARCHAR(20), value VARCHAR(1));

@@ -5,12 +5,12 @@
 require parquet
 
 query I
-SELECT COUNT(backlink_count) FROM parquet_scan('data/parquet-testing/bug1554.parquet') WHERE http_status_code=200
+SELECT COUNT(backlink_count) FROM parquet_scan('{DATA_DIR}/parquet-testing/bug1554.parquet') WHERE http_status_code=200
 ----
 0
 
 query II
-SELECT http_status_code, COUNT(backlink_count) FROM parquet_scan('data/parquet-testing/bug1554.parquet') GROUP BY http_status_code ORDER BY http_status_code
+SELECT http_status_code, COUNT(backlink_count) FROM parquet_scan('{DATA_DIR}/parquet-testing/bug1554.parquet') GROUP BY http_status_code ORDER BY http_status_code
 ----
 200	0
 301	0

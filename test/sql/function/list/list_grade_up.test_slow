@@ -300,7 +300,7 @@ select k, v, map(k,v), map(k,v)[(list_grade_up(k,'DESC'))[1]] from (values ([1,2
 require parquet
 
 statement ok
-CREATE TABLE stage AS SELECT * FROM 'data/parquet-testing/list_sort_segfault.parquet';
+CREATE TABLE stage AS SELECT * FROM '{DATA_DIR}/parquet-testing/list_sort_segfault.parquet';
 
 statement ok
 CREATE TABLE health (a VARCHAR[]);

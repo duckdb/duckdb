@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-CREATE TABLE phone_numbers AS SELECT * FROM read_csv_auto('data/csv/phonenumbers.csv')
+CREATE TABLE phone_numbers AS SELECT * FROM read_csv_auto('{DATA_DIR}/csv/phonenumbers.csv')
 
 query I
 SELECT phone FROM phone_numbers;

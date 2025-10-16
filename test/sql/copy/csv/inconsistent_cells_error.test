@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 query IIIII
-from 'data/csv/inconsistent_cells.csv'
+from '{DATA_DIR}/csv/inconsistent_cells.csv'
 ----
 1	2	3	4	5
 1	2	3	4	5

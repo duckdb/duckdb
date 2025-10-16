@@ -4,47 +4,49 @@
 
 require parquet
 
-# Simple glob with filenames, note that we replace \ for / to make tests pass on windows
+# Simple glob with filenames
 query III
-select i, j, replace(filename, '\', '/') from parquet_scan('data/parquet-testing/glob*/t?.parquet', FILENAME=1) order by i;
+select i, j, parse_path(filename)[-2:] from parquet_scan('{DATA_DIR}/parquet-testing/glob*/t?.parquet', FILENAME=1) order by i;
 ----
-1	a	data/parquet-testing/glob/t1.parquet
-2	b	data/parquet-testing/glob/t2.parquet
-3	c	data/parquet-testing/glob2/t1.parquet
+1	a	[glob, t1.parquet]
+2	b	[glob, t2.parquet]
+3	c	[glob2, t1.parquet]
 
 # Filter on filename col
 query III
-select i, j, replace(filename, '\', '/') as file from parquet_scan('data/parquet-testing/glob*/t?.parquet', FILENAME=1) where file='data/parquet-testing/glob2/t1.parquet';
+SELECT i, j, filename_tail3: array_to_string(parse_path(filename)[-3:], '/')
+FROM parquet_scan('{DATA_DIR}/parquet-testing/glob*/t?.parquet', FILENAME=1)
+WHERE filename_tail3 = 'parquet-testing/glob2/t1.parquet'
 ----
-3	c	data/parquet-testing/glob2/t1.parquet
+3	c	parquet-testing/glob2/t1.parquet
 
 # filter on multiple vector sizes of rows
 query I
-SELECT count(filename) FROM parquet_scan('data/parquet-testing/p2.parquet', FILENAME=1) where id < 1000;
+SELECT count(filename) FROM parquet_scan('{DATA_DIR}/parquet-testing/p2.parquet', FILENAME=1) where id < 1000;
 ----
 479
 
 # filter pushdown on filename
 query I
-SELECT count(id) FROM parquet_scan('data/parquet-testing/p2.parquet', FILENAME=1) where filename >= 'data';
+SELECT count(id) FROM parquet_scan('{DATA_DIR}/parquet-testing/p2.parquet', FILENAME=1) where filename >= '{DATA_DIR}';
 ----
 4979
 
 # Filter on non-filename col
 query I
-select replace(filename, '\', '/') from parquet_scan('data/parquet-testing/glob*/t?.parquet', FILENAME=1) where i=2;
+select parse_path(filename)[-2:] from parquet_scan('{DATA_DIR}/parquet-testing/glob*/t?.parquet', FILENAME=1) where i=2;
 ----
-data/parquet-testing/glob/t2.parquet
+[glob, t2.parquet]
 
 statement ok
 CREATE TABLE test_csv AS SELECT 1 as id, 'test_csv_content' as filename;
 
 statement ok
-COPY test_csv TO '__TEST_DIR__/filename_as_column.csv' WITH HEADER;
+COPY test_csv TO '{TEMP_DIR}/filename_as_column.csv' WITH HEADER;
 
 # This currently fails with a binder error
 statement error
-SELECT id, filename FROM read_csv_auto('__TEST_DIR__/filename_as_column.csv',  FILENAME=1);
+SELECT id, filename FROM read_csv_auto('{TEMP_DIR}/filename_as_column.csv',  FILENAME=1);
 ----
 
 # Parquet filename name conflict
@@ -52,11 +54,11 @@ statement ok
 CREATE TABLE test AS SELECT 1 as id, 'test' as filename;
 
 statement ok
-COPY test TO '__TEST_DIR__/filename_as_column.parquet';
+COPY test TO '{TEMP_DIR}/filename_as_column.parquet';
 
 # we currently don't support filename as a column name when using the filename option
 statement error
-SELECT * FROM parquet_scan('__TEST_DIR__/filename_as_column.parquet', FILENAME=1);
+SELECT * FROM parquet_scan('{TEMP_DIR}/filename_as_column.parquet', FILENAME=1);
 ----
 
 # Now also test copy
@@ -64,24 +66,24 @@ statement ok
 CREATE TABLE test_copy (i INT, j VARCHAR, filename VARCHAR);
 
 statement ok
-INSERT INTO test_copy FROM read_parquet('data/parquet-testing/glob/t1.parquet', filename=1, binary_as_string=1);
+INSERT INTO test_copy FROM read_parquet('{DATA_DIR}/parquet-testing/glob/t1.parquet', filename=1, binary_as_string=1);
 
 query III
-SELECT i, j, replace(filename, '\', '/') FROM test_copy
+SELECT i, j, parse_path(filename)[-2:] FROM test_copy
 ----
-1	a	data/parquet-testing/glob/t1.parquet
+1	a	[glob, t1.parquet]
 
 statement ok
-INSERT INTO test_copy FROM read_parquet('data/parquet-testing/glob/t1.parquet', filename=1);
+INSERT INTO test_copy FROM read_parquet('{DATA_DIR}/parquet-testing/glob/t1.parquet', filename=1);
 
 query III
-SELECT i, j, replace(filename, '\', '/') FROM test_copy
+SELECT i, j, parse_path(filename)[-2:] FROM test_copy
 ----
-1	a	data/parquet-testing/glob/t1.parquet
-1	a	data/parquet-testing/glob/t1.parquet
+1	a	[glob, t1.parquet]
+1	a	[glob, t1.parquet]
 
 statement error
-COPY test_copy FROM 'data/parquet-testing/glob/t1.parquet';
+COPY test_copy FROM '{DATA_DIR}/parquet-testing/glob/t1.parquet';
 ----
 column count mismatch
 
@@ -90,18 +92,18 @@ statement ok
 CREATE TABLE test_table_large AS SELECT * FROM range(0,10000) tbl(i);
 
 statement ok
-COPY test_table_large TO '__TEST_DIR__/test_table_large.parquet' (ROW_GROUP_SIZE 1000);
+COPY test_table_large TO '{TEMP_DIR}/test_table_large.parquet' (ROW_GROUP_SIZE 1000);
 
 query II
-SELECT sum(i), max(regexp_replace(filename, '^.*/', '')) FROM parquet_scan('__TEST_DIR__/test_table_large.parquet', FILENAME=1) where i>5000;
+SELECT sum(i), max(parse_filename(filename)) FROM parquet_scan('{TEMP_DIR}/test_table_large.parquet', FILENAME=1) where i>5000;
 ----
 37492500	test_table_large.parquet
 
 # Same file twice
 query III
-SELECT i, j, replace(filename, '\', '/') as file FROM parquet_scan(['data/parquet-testing/glob/t1.parquet', 'data/parquet-testing/glob/t1.parquet', 'data/parquet-testing/glob/t2.parquet'], FILENAME=1) where file like '%t1%'
+SELECT i, j, parse_path(filename)[-2:] as file FROM parquet_scan(['{DATA_DIR}/parquet-testing/glob/t1.parquet', '{DATA_DIR}/parquet-testing/glob/t1.parquet', '{DATA_DIR}/parquet-testing/glob/t2.parquet'], FILENAME=1) where filename like '%t1%'
 ----
-1	a	data/parquet-testing/glob/t1.parquet
-1	a	data/parquet-testing/glob/t1.parquet
+1	a	[glob, t1.parquet]
+1	a	[glob, t1.parquet]
 
 

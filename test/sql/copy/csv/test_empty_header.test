@@ -9,7 +9,7 @@ loop i 1 5
 
 query IIIII
 select columns[1].name,columns[2].name,columns[3].name,columns[4].name,columns[5].name
-from sniff_csv('data/csv/headers/empty_${i}.csv')
+from sniff_csv('{DATA_DIR}/csv/headers/empty_${i}.csv')
 ----
 a	b	c	column3	e
 

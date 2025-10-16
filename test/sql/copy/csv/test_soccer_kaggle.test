@@ -6,6 +6,6 @@ statement ok
 PRAGMA enable_verification
 
 query I
-select count(*) from 'data/csv/soccer_kaggle.csv'
+select count(*) from '{DATA_DIR}/csv/soccer_kaggle.csv'
 ----
 14

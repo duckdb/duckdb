@@ -18,7 +18,7 @@ require parquet
 
 
 query I
-SELECT id FROM 'data/parquet-testing/p2.parquet' offset 4968;
+SELECT id FROM '{DATA_DIR}/parquet-testing/p2.parquet' offset 4968;
 ----
 1436
 2596
@@ -34,7 +34,7 @@ SELECT id FROM 'data/parquet-testing/p2.parquet' offset 4968;
 
 
 query I
-SELECT id FROM 'data/parquet-testing/p2.parquet' limit 10;
+SELECT id FROM '{DATA_DIR}/parquet-testing/p2.parquet' limit 10;
 ----
 2644
 8534
@@ -50,7 +50,7 @@ SELECT id FROM 'data/parquet-testing/p2.parquet' limit 10;
 
 
 query I
-SELECT id FROM 'data/parquet-testing/p2.parquet' limit 100;
+SELECT id FROM '{DATA_DIR}/parquet-testing/p2.parquet' limit 100;
 ----
 2644
 8534
@@ -156,7 +156,7 @@ SELECT id FROM 'data/parquet-testing/p2.parquet' limit 100;
 
 
 query I
-SELECT id_with_null FROM 'data/parquet-testing/p2.parquet' limit 100;
+SELECT id_with_null FROM '{DATA_DIR}/parquet-testing/p2.parquet' limit 100;
 ----
 2644
 8534
@@ -261,20 +261,20 @@ NULL
 
 
 query IIIIIIII
-select min(id), max(id), sum(id), count(id), min(id_with_null), max(id_with_null), sum(id_with_null), count(id_with_null) from 'data/parquet-testing/p2.parquet'
+select min(id), max(id), sum(id), count(id), min(id_with_null), max(id_with_null), sum(id_with_null), count(id_with_null) from '{DATA_DIR}/parquet-testing/p2.parquet'
 ----
 42	9998	24994580	4979	42	9998	19999680	3984
 
 
 query IIII
-select min(id_int), max(id_int), sum(id_int), count(id_int) from 'data/parquet-testing/p2.parquet'
+select min(id_int), max(id_int), sum(id_int), count(id_int) from '{DATA_DIR}/parquet-testing/p2.parquet'
 ----
 42	9998	19999680	3984
 
 
 # from bug 2882
 query I
-select * from 'data/parquet-testing/7-set.snappy.arrow2.parquet';
+select * from '{DATA_DIR}/parquet-testing/7-set.snappy.arrow2.parquet';
 ----
 0
 1
