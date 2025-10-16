@@ -9,13 +9,26 @@ static void FromWKBFunction(DataChunk &input, ExpressionState &state, Vector &re
 		// TODO: Parse WKB properly
 		return wkb;
 	});
-
 	// Add a heap reference to the input WKB to prevent it from being freed
 	StringVector::AddHeapReference(input.data[0], result);
 }
 
 ScalarFunction StGeomfromwkbFun::GetFunction() {
 	ScalarFunction function({LogicalType::BLOB}, LogicalType::GEOMETRY(), FromWKBFunction);
+	return function;
+}
+
+static void ToWKBFunction(DataChunk &input, ExpressionState &state, Vector &result) {
+	UnaryExecutor::Execute<string_t, string_t>(input.data[0], result, input.size(), [&](const string_t &geom) {
+		// TODO: convert to internal representation
+		return geom;
+	});
+	// Add a heap reference to the input WKB to prevent it from being freed
+	StringVector::AddHeapReference(input.data[0], result);
+}
+
+ScalarFunction StAswkbFun::GetFunction() {
+	ScalarFunction function({LogicalType::GEOMETRY()}, LogicalType::BLOB, ToWKBFunction);
 	return function;
 }
 
