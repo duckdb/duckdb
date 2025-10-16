@@ -16,6 +16,7 @@
 #include "duckdb/storage/statistics/node_statistics.hpp"
 #include "duckdb/common/column_index.hpp"
 #include "duckdb/common/table_column.hpp"
+#include "duckdb/parallel/async_result.hpp"
 #include "duckdb/function/partition_stats.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
 
@@ -280,6 +281,7 @@ typedef unique_ptr<LocalTableFunctionState> (*table_function_init_local_t)(Execu
 typedef unique_ptr<BaseStatistics> (*table_statistics_t)(ClientContext &context, const FunctionData *bind_data,
                                                          column_t column_index);
 typedef void (*table_function_t)(ClientContext &context, TableFunctionInput &data, DataChunk &output);
+typedef AsyncResultType (*async_table_function_t)(ClientContext &context, TableFunctionInput &data, DataChunk &output);
 typedef OperatorResultType (*table_in_out_function_t)(ExecutionContext &context, TableFunctionInput &data,
                                                       DataChunk &input, DataChunk &output);
 typedef OperatorFinalizeResultType (*table_in_out_function_final_t)(ExecutionContext &context, TableFunctionInput &data,
@@ -329,14 +331,56 @@ enum class TableFunctionInitialization { INITIALIZE_ON_EXECUTE, INITIALIZE_ON_SC
 
 class TableFunction : public SimpleNamedParameterFunction { // NOLINT: work-around bug in clang-tidy
 public:
+	// Overloads taking table_function_t
 	DUCKDB_API
-	TableFunction(string name, vector<LogicalType> arguments, table_function_t function,
+	TableFunction(string name, const vector<LogicalType> &arguments, table_function_t function,
 	              table_function_bind_t bind = nullptr, table_function_init_global_t init_global = nullptr,
 	              table_function_init_local_t init_local = nullptr);
 	DUCKDB_API
 	TableFunction(const vector<LogicalType> &arguments, table_function_t function, table_function_bind_t bind = nullptr,
 	              table_function_init_global_t init_global = nullptr, table_function_init_local_t init_local = nullptr);
+	// Overloads taking std::nullptr
+	DUCKDB_API
+	TableFunction(string name, const vector<LogicalType> &arguments, std::nullptr_t function,
+	              table_function_bind_t bind = nullptr, table_function_init_global_t init_global = nullptr,
+	              table_function_init_local_t init_local = nullptr);
+	DUCKDB_API
+	TableFunction(const vector<LogicalType> &arguments, std::nullptr_t function, table_function_bind_t bind = nullptr,
+	              table_function_init_global_t init_global = nullptr, table_function_init_local_t init_local = nullptr);
+
+	// Overloads taking async_table_function_t
+	DUCKDB_API
+	TableFunction(string name, const vector<LogicalType> &arguments, async_table_function_t function,
+	              table_function_bind_t bind = nullptr, table_function_init_global_t init_global = nullptr,
+	              table_function_init_local_t init_local = nullptr);
+	DUCKDB_API
+	TableFunction(const vector<LogicalType> &arguments, async_table_function_t function,
+	              table_function_bind_t bind = nullptr, table_function_init_global_t init_global = nullptr,
+	              table_function_init_local_t init_local = nullptr);
 	DUCKDB_API TableFunction();
+
+	static AsyncResultType SimpleScanImpl(table_function_t function, async_table_function_t async_function,
+	                                      ClientContext &context, TableFunctionInput &data, DataChunk &output) {
+		if (function) {
+			if (async_function) {
+				throw NotImplementedException(
+				    "Only one between function and async_function are expected, but both are provided");
+			}
+			function(context, data, output);
+			return output.size() ? SourceResultType::HAVE_MORE_OUTPUT : SourceResultType::FINISHED;
+		} else if (async_function) {
+			return async_function(context, data, output);
+		} else {
+			throw NotImplementedException(
+			    "Only one between function and async_function are expected, but none is provided");
+		}
+	}
+	bool HasSimpleScan() const {
+		return function || async_function;
+	}
+	AsyncResultType SimpleScan(ClientContext &context, TableFunctionInput &data, DataChunk &output) const {
+		return SimpleScanImpl(function, async_function, context, data, output);
+	}
 
 	//! Bind function
 	//! This function is used for determining the return type of a table producing function and returning bind data
@@ -360,6 +404,8 @@ public:
 	//! Initialize the local operator state of the function.
 	//! The local operator state is used to keep track of the progress in the table function and is thread-local.
 	table_function_init_local_t init_local;
+	//! The main function, new version, already wrapped
+	async_table_function_t async_function;
 	//! The main function
 	table_function_t function;
 	//! The table in-out function (if this is an in-out function)
