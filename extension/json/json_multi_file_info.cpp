@@ -1,6 +1,11 @@
 #include "json_multi_file_info.hpp"
 #include "json_scan.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/parallel/async_result.hpp"
+
+#ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
+#include "duckdb/parallel/sleep_async_task.hpp"
+#endif
 
 namespace duckdb {
 
@@ -530,8 +535,25 @@ void ReadJSONObjectsFunction(ClientContext &context, JSONReader &json_reader, JS
 	output.SetCardinality(count);
 }
 
-void JSONReader::Scan(ClientContext &context, GlobalTableFunctionState &global_state,
-                      LocalTableFunctionState &local_state, DataChunk &output) {
+AsyncResultType JSONReader::Scan(ClientContext &context, GlobalTableFunctionState &global_state,
+                                 LocalTableFunctionState &local_state, DataChunk &output) {
+
+#ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
+	{
+		auto random_number = rand() % 16;
+		switch (random_number) {
+		case 0:
+			return AsyncResultType(std::move(make_uniq<SleepAsyncTask>(rand() % 32)));
+#ifndef AVOID_DUCKDB_DEBUG_ASYNC_THROW
+		case 1:
+			return AsyncResultType(std::move(make_uniq<ThrowAsyncTask>(rand() % 32)));
+#endif
+		default:
+			break;
+		}
+	}
+#endif
+
 	auto &gstate = global_state.Cast<JSONGlobalTableFunctionState>().state;
 	auto &lstate = local_state.Cast<JSONLocalTableFunctionState>().state;
 	auto &json_data = gstate.bind_data.bind_data->Cast<JSONScanData>();
@@ -545,6 +567,7 @@ void JSONReader::Scan(ClientContext &context, GlobalTableFunctionState &global_s
 	default:
 		throw InternalException("Unsupported scan type for JSONMultiFileInfo::Scan");
 	}
+	return output.size() ? SourceResultType::HAVE_MORE_OUTPUT : SourceResultType::FINISHED;
 }
 
 void JSONReader::FinishFile(ClientContext &context, GlobalTableFunctionState &global_state) {
