@@ -173,8 +173,7 @@ TEST_CASE("Test buffer reallocation", "[storage][.]") {
 		      BufferManager::GetAllocSize(requested_size + block->block_manager.GetBlockHeaderSize()));
 		// unpin and make sure it's evicted
 		handle.Destroy();
-		REQUIRE_NO_FAIL(con.Query(
-		    StringUtil::Format("PRAGMA memory_limit='%lldB'", requested_size + minimum_size_to_execute_pragma)));
+		REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", minimum_size_to_execute_pragma)));
 		CHECK(buffer_manager.GetUsedMemory() == 0);
 		// re-pin
 		REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", limit)));
