@@ -62,11 +62,14 @@ private:
 	                                  const vector<ColumnBinding> &topmost_bindings,
 	                                  vector<ColumnBinding> &new_bindings, ColumnBindingReplacer &replacer);
 	TopNWindowEliminationParameters ExtractOptimizerParameters(const LogicalWindow &window, const LogicalFilter &filter,
-															   const vector<ColumnBinding> &bindings,
-															   vector<unique_ptr<Expression>> &aggregate_payload);
+	                                                           const vector<ColumnBinding> &bindings,
+	                                                           vector<unique_ptr<Expression>> &aggregate_payload);
 
 	// Semi-join reduction methods
-	unique_ptr<LogicalOperator> TryReplaceTableScanForSemiJoin(const LogicalWindow &window, idx_t topmost_table_idx);
+	unique_ptr<LogicalOperator> TryReplaceTableScanForSemiJoin(const LogicalWindow &window,
+	                                                           const vector<unique_ptr<Expression>> &args,
+	                                                           idx_t topmost_table_idx);
+
 private:
 	ClientContext &context;
 	Optimizer &optimizer;
