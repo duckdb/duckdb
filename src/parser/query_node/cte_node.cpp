@@ -72,7 +72,7 @@ void QueryNode::ExtractCTENodes(unique_ptr<QueryNode> &query_node) {
 }
 
 void CTENode::Serialize(Serializer &serializer) const {
-	if (materialized == CTEMaterialize::CTE_MATERIALIZE_NEVER) {
+	if (materialized != CTEMaterialize::CTE_MATERIALIZE_ALWAYS) {
 		// for non-materialized CTEs - don't serialize CTENode
 		// older DuckDB versions only expect a CTENode to be there for materialized CTEs
 		child->Serialize(serializer);
@@ -85,25 +85,6 @@ void CTENode::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<string>>(203, "aliases", aliases);
 }
 
-// In QueryNode::ExtractCTENodes we create a bunch of CTENodes from the CommonTableExpressionMap in the QueryNode
-// however, we might ALSO have a CTENode present depending on how the serialization is set up
-// if we ended up creating duplicate CTE nodes in QueryNode::ExtractCTENodes - this ends up de-duplicating them again
-void EraseDuplicateCTE(unique_ptr<QueryNode> &node, const string &ctename) {
-	if (node->type != QueryNodeType::CTE_NODE) {
-		// not a CTE
-		return;
-	}
-	auto &cte_node = node->Cast<CTENode>();
-	if (cte_node.ctename == ctename) {
-		// duplicate CTE - erase this CTE node
-		node = std::move(cte_node.child);
-		EraseDuplicateCTE(node, ctename);
-	} else {
-		// not a duplicate - recurse into child
-		EraseDuplicateCTE(cte_node.child, ctename);
-	}
-}
-
 unique_ptr<QueryNode> CTENode::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<CTENode>(new CTENode());
 	deserializer.ReadPropertyWithDefault<string>(200, "cte_name", result->ctename);
@@ -113,8 +94,7 @@ unique_ptr<QueryNode> CTENode::Deserialize(Deserializer &deserializer) {
 	// v1.4.0 and v1.4.1 wrote this property - deserialize it for BC with these versions
 	deserializer.ReadPropertyWithExplicitDefault<CTEMaterialize>(204, "materialized", result->materialized,
 	                                                             CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
-	EraseDuplicateCTE(result->child, result->ctename);
-	return std::move(result);
+	return std::move(result->child);
 }
 // TEMPORARY BUGFIX WARNING - none of this code should make it into main - this is a temporary work-around for v1.4
 // TEMPORARY BUGFIX END
