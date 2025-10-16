@@ -7,7 +7,7 @@
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
-#include "geo_parquet.hpp"
+#include "parquet_geometry.hpp"
 #include "parquet_crypto.hpp"
 #include "parquet_metadata.hpp"
 #include "parquet_reader.hpp"
