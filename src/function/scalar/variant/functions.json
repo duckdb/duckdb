@@ -40,6 +40,16 @@
 		"type": "scalar_function_set"
 	},
 	{
+		"name": "variant_normalize",
+		"parameters": "input_variant",
+		"description": "Normalizes the `input_variant` to a canonical representation.",
+		"example": "variant_normalize({'b': [1,2,3], 'a': 42})::VARIANT)",
+		"categories": [
+			"variant"
+		],
+		"type": "scalar_function"
+	},
+	{
 		"name": "variant_typeof",
 		"parameters": "input_variant",
 		"description": "Returns the internal type of the `input_variant`.",

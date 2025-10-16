@@ -23,12 +23,12 @@ ProfilingInfo::ProfilingInfo(const profiler_settings_t &n_settings, const idx_t 
 
 	// Reduce.
 	if (depth == 0) {
-		auto op_metrics = DefaultOperatorSettings();
+		auto op_metrics = OperatorScopeSettings();
 		for (const auto metric : op_metrics) {
 			settings.erase(metric);
 		}
 	} else {
-		auto root_metrics = DefaultRootSettings();
+		auto root_metrics = RootScopeSettings();
 		for (const auto metric : root_metrics) {
 			settings.erase(metric);
 		}
@@ -37,32 +37,40 @@ ProfilingInfo::ProfilingInfo(const profiler_settings_t &n_settings, const idx_t 
 }
 
 profiler_settings_t ProfilingInfo::DefaultSettings() {
-	return {MetricsType::QUERY_NAME,
-	        MetricsType::BLOCKED_THREAD_TIME,
-	        MetricsType::SYSTEM_PEAK_BUFFER_MEMORY,
-	        MetricsType::SYSTEM_PEAK_TEMP_DIR_SIZE,
+	return {MetricsType::BLOCKED_THREAD_TIME,
 	        MetricsType::CPU_TIME,
-	        MetricsType::EXTRA_INFO,
 	        MetricsType::CUMULATIVE_CARDINALITY,
-	        MetricsType::OPERATOR_NAME,
-	        MetricsType::OPERATOR_TYPE,
-	        MetricsType::OPERATOR_CARDINALITY,
 	        MetricsType::CUMULATIVE_ROWS_SCANNED,
+	        MetricsType::EXTRA_INFO,
+	        MetricsType::LATENCY,
+	        MetricsType::OPERATOR_CARDINALITY,
+	        MetricsType::OPERATOR_NAME,
 	        MetricsType::OPERATOR_ROWS_SCANNED,
 	        MetricsType::OPERATOR_TIMING,
+	        MetricsType::OPERATOR_TYPE,
 	        MetricsType::RESULT_SET_SIZE,
+	        MetricsType::ROWS_RETURNED,
+	        MetricsType::SYSTEM_PEAK_BUFFER_MEMORY,
+	        MetricsType::SYSTEM_PEAK_TEMP_DIR_SIZE,
+	        MetricsType::TOTAL_BYTES_READ,
+	        MetricsType::TOTAL_BYTES_WRITTEN,
+	        MetricsType::QUERY_NAME};
+}
+
+profiler_settings_t ProfilingInfo::RootScopeSettings() {
+	return {MetricsType::ATTACH_LOAD_STORAGE_LATENCY,
+	        MetricsType::ATTACH_REPLAY_WAL_LATENCY,
+	        MetricsType::BLOCKED_THREAD_TIME,
+	        MetricsType::CHECKPOINT_LATENCY,
 	        MetricsType::LATENCY,
 	        MetricsType::ROWS_RETURNED,
 	        MetricsType::TOTAL_BYTES_READ,
-	        MetricsType::TOTAL_BYTES_WRITTEN};
+	        MetricsType::TOTAL_BYTES_WRITTEN,
+	        MetricsType::WAITING_TO_ATTACH_LATENCY,
+	        MetricsType::QUERY_NAME};
 }
 
-profiler_settings_t ProfilingInfo::DefaultRootSettings() {
-	return {MetricsType::QUERY_NAME, MetricsType::BLOCKED_THREAD_TIME, MetricsType::LATENCY,
-	        MetricsType::ROWS_RETURNED};
-}
-
-profiler_settings_t ProfilingInfo::DefaultOperatorSettings() {
+profiler_settings_t ProfilingInfo::OperatorScopeSettings() {
 	return {MetricsType::OPERATOR_CARDINALITY, MetricsType::OPERATOR_ROWS_SCANNED, MetricsType::OPERATOR_TIMING,
 	        MetricsType::OPERATOR_NAME, MetricsType::OPERATOR_TYPE};
 }
@@ -83,6 +91,10 @@ void ProfilingInfo::ResetMetrics() {
 		case MetricsType::BLOCKED_THREAD_TIME:
 		case MetricsType::CPU_TIME:
 		case MetricsType::OPERATOR_TIMING:
+		case MetricsType::WAITING_TO_ATTACH_LATENCY:
+		case MetricsType::ATTACH_LOAD_STORAGE_LATENCY:
+		case MetricsType::ATTACH_REPLAY_WAL_LATENCY:
+		case MetricsType::CHECKPOINT_LATENCY:
 			metrics[metric] = Value::CreateValue(0.0);
 			break;
 		case MetricsType::OPERATOR_NAME:
@@ -209,7 +221,11 @@ void ProfilingInfo::WriteMetricsToJSON(yyjson_mut_doc *doc, yyjson_mut_val *dest
 		case MetricsType::LATENCY:
 		case MetricsType::BLOCKED_THREAD_TIME:
 		case MetricsType::CPU_TIME:
-		case MetricsType::OPERATOR_TIMING: {
+		case MetricsType::OPERATOR_TIMING:
+		case MetricsType::WAITING_TO_ATTACH_LATENCY:
+		case MetricsType::ATTACH_LOAD_STORAGE_LATENCY:
+		case MetricsType::ATTACH_REPLAY_WAL_LATENCY:
+		case MetricsType::CHECKPOINT_LATENCY: {
 			yyjson_mut_obj_add_real(doc, dest, key_ptr, metrics[metric].GetValue<double>());
 			break;
 		}
