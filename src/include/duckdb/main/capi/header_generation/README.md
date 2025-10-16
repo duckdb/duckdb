@@ -79,27 +79,11 @@ Another thing to consider is grouping additions to the stable version, thus, avo
 
 As mentioned before, DuckDB's C API headers are code generated from JSON definition files.
 
-### Function group schema
-
-
-
-### Function entry schema
-
-```json
-
+- A schema to define a list of unstable functions. Describes the files in `./apis/v1/unstable`:
 ```
-
-### Unstable function group schema
-
-Describes the schema of the files in `src/include/duckdb/main/capi/header_generation/apis/v1/unstable/*`.
-
-```json
-{
-  "version": "Version name for ifdef, e.g., unstable_new_x_functions",
-  "description": "Describe your function group.",
-  "entries": [
-    "the_actual_function_entries",
-    "for_example_duckdb_expression_fold"
-  ]
-}
+./schemata/unstable_function_list_schema.json
+```
+- A schema to define a function group. Describes the files in `./functions`:
+```
+./schemata/function_group_schema.json
 ```
