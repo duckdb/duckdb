@@ -47,7 +47,7 @@ LambdaRefExpression::FindMatchingBinding(optional_ptr<vector<DummyBinding>> &lam
 	if (lambda_bindings) {
 		for (idx_t i = lambda_bindings->size(); i > 0; i--) {
 			if ((*lambda_bindings)[i - 1].HasMatchingBinding(column_name)) {
-				D_ASSERT((*lambda_bindings)[i - 1].alias.IsSet());
+				D_ASSERT((*lambda_bindings)[i - 1].GetBindingAlias().IsSet());
 				return make_uniq<LambdaRefExpression>(i - 1, column_name);
 			}
 		}

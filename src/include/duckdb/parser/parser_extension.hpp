@@ -86,12 +86,12 @@ struct ParserOverrideResult {
 	explicit ParserOverrideResult(vector<unique_ptr<SQLStatement>> statements_p)
 	    : type(ParserExtensionResultType::PARSE_SUCCESSFUL), statements(std::move(statements_p)) {};
 
-	explicit ParserOverrideResult(const string &error_p)
+	explicit ParserOverrideResult(std::exception &error_p)
 	    : type(ParserExtensionResultType::DISPLAY_EXTENSION_ERROR), error(error_p) {};
 
 	ParserExtensionResultType type;
 	vector<unique_ptr<SQLStatement>> statements;
-	string error;
+	ErrorData error;
 };
 
 typedef ParserOverrideResult (*parser_override_function_t)(ParserExtensionInfo *info, const string &query);

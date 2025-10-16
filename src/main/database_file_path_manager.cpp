@@ -5,35 +5,43 @@
 
 namespace duckdb {
 
+DatabasePathInfo::DatabasePathInfo(DatabaseManager &manager, string name_p, AccessMode access_mode)
+    : name(std::move(name_p)), access_mode(access_mode) {
+	attached_databases.insert(manager);
+}
+
 idx_t DatabaseFilePathManager::ApproxDatabaseCount() const {
 	lock_guard<mutex> path_lock(db_paths_lock);
 	return db_paths.size();
 }
 
-InsertDatabasePathResult DatabaseFilePathManager::InsertDatabasePath(const string &path, const string &name,
-                                                                     OnCreateConflict on_conflict,
+InsertDatabasePathResult DatabaseFilePathManager::InsertDatabasePath(DatabaseManager &manager, const string &path,
+                                                                     const string &name, OnCreateConflict on_conflict,
                                                                      AttachOptions &options) {
 	if (path.empty() || path == IN_MEMORY_PATH) {
 		return InsertDatabasePathResult::SUCCESS;
 	}
 
 	lock_guard<mutex> path_lock(db_paths_lock);
-	auto entry = db_paths.emplace(path, DatabasePathInfo(name, options.access_mode));
+	auto entry = db_paths.emplace(path, DatabasePathInfo(manager, name, options.access_mode));
 	if (!entry.second) {
 		auto &existing = entry.first->second;
 		bool already_exists = false;
+		bool attached_in_this_system = false;
 		if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT && existing.name == name) {
 			already_exists = true;
+			attached_in_this_system = existing.attached_databases.find(manager) != existing.attached_databases.end();
 		}
 		if (options.access_mode == AccessMode::READ_ONLY && existing.access_mode == AccessMode::READ_ONLY) {
-			if (already_exists && existing.is_attached) {
+			if (attached_in_this_system) {
 				return InsertDatabasePathResult::ALREADY_EXISTS;
 			}
 			// all attaches are in read-only mode - there is no conflict, just increase the reference count
+			existing.attached_databases.insert(manager);
 			existing.reference_count++;
 		} else {
 			if (already_exists) {
-				if (existing.is_attached) {
+				if (attached_in_this_system) {
 					return InsertDatabasePathResult::ALREADY_EXISTS;
 				}
 				throw BinderException(
@@ -47,7 +55,7 @@ InsertDatabasePathResult DatabaseFilePathManager::InsertDatabasePath(const strin
 			    name, path, existing.name);
 		}
 	}
-	options.stored_database_path = make_uniq<StoredDatabasePath>(*this, path, name);
+	options.stored_database_path = make_uniq<StoredDatabasePath>(manager, *this, path, name);
 	return InsertDatabasePathResult::SUCCESS;
 }
 
@@ -66,14 +74,14 @@ void DatabaseFilePathManager::EraseDatabasePath(const string &path) {
 	}
 }
 
-void DatabaseFilePathManager::DetachDatabase(const string &path) {
+void DatabaseFilePathManager::DetachDatabase(DatabaseManager &manager, const string &path) {
 	if (path.empty() || path == IN_MEMORY_PATH) {
 		return;
 	}
 	lock_guard<mutex> path_lock(db_paths_lock);
 	auto entry = db_paths.find(path);
 	if (entry != db_paths.end()) {
-		entry->second.is_attached = false;
+		entry->second.attached_databases.erase(manager);
 	}
 }
 

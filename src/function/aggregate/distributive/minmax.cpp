@@ -368,7 +368,7 @@ unique_ptr<FunctionData> BindMinMax(ClientContext &context, AggregateFunction &f
 			// Bind function like arg_min/arg_max.
 			function.arguments[0] = arguments[0]->return_type;
 			function.return_type = arguments[0]->return_type;
-			return nullptr;
+			return make_uniq<ArgMinMaxFunctionData>();
 		}
 	}
 
@@ -431,7 +431,6 @@ public:
 template <class STATE>
 void MinMaxNUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t input_count, Vector &state_vector,
                    idx_t count) {
-
 	auto &val_vector = inputs[0];
 	auto &n_vector = inputs[1];
 
@@ -441,7 +440,7 @@ void MinMaxNUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t input_
 
 	auto val_extra_state = STATE::VAL_TYPE::CreateExtraState(val_vector, count);
 
-	STATE::VAL_TYPE::PrepareData(val_vector, count, val_extra_state, val_format);
+	STATE::VAL_TYPE::PrepareData(val_vector, count, val_extra_state, val_format, true);
 
 	n_vector.ToUnifiedFormat(count, n_format);
 	state_vector.ToUnifiedFormat(count, state_format);

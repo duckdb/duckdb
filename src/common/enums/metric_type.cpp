@@ -50,12 +50,12 @@ profiler_settings_t MetricsUtils::GetPhaseTimingMetrics() {
     return {
         MetricsType::ALL_OPTIMIZERS,
         MetricsType::CUMULATIVE_OPTIMIZER_TIMING,
-        MetricsType::PLANNER,
-        MetricsType::PLANNER_BINDING,
         MetricsType::PHYSICAL_PLANNER,
         MetricsType::PHYSICAL_PLANNER_COLUMN_BINDING,
-        MetricsType::PHYSICAL_PLANNER_RESOLVE_TYPES,
         MetricsType::PHYSICAL_PLANNER_CREATE_PLAN,
+        MetricsType::PHYSICAL_PLANNER_RESOLVE_TYPES,
+        MetricsType::PLANNER,
+        MetricsType::PLANNER_BINDING,
     };
 }
 
@@ -235,12 +235,12 @@ bool MetricsUtils::IsPhaseTimingMetric(MetricsType type) {
     switch(type) {
         case MetricsType::ALL_OPTIMIZERS:
         case MetricsType::CUMULATIVE_OPTIMIZER_TIMING:
-        case MetricsType::PLANNER:
-        case MetricsType::PLANNER_BINDING:
         case MetricsType::PHYSICAL_PLANNER:
         case MetricsType::PHYSICAL_PLANNER_COLUMN_BINDING:
-        case MetricsType::PHYSICAL_PLANNER_RESOLVE_TYPES:
         case MetricsType::PHYSICAL_PLANNER_CREATE_PLAN:
+        case MetricsType::PHYSICAL_PLANNER_RESOLVE_TYPES:
+        case MetricsType::PLANNER:
+        case MetricsType::PLANNER_BINDING:
             return true;
         default:
             return false;
@@ -249,9 +249,13 @@ bool MetricsUtils::IsPhaseTimingMetric(MetricsType type) {
 
 bool MetricsUtils::IsQueryGlobalMetric(MetricsType type) {
     switch(type) {
+        case MetricsType::ATTACH_LOAD_STORAGE_LATENCY:
+        case MetricsType::ATTACH_REPLAY_WAL_LATENCY:
         case MetricsType::BLOCKED_THREAD_TIME:
+        case MetricsType::CHECKPOINT_LATENCY:
         case MetricsType::SYSTEM_PEAK_BUFFER_MEMORY:
         case MetricsType::SYSTEM_PEAK_TEMP_DIR_SIZE:
+        case MetricsType::WAITING_TO_ATTACH_LATENCY:
             return true;
         default:
             return false;
