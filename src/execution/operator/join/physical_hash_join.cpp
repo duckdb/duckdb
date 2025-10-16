@@ -848,15 +848,14 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, o
 					const double build_to_probe_ratio =
 					    static_cast<double>(op.children[0].get().estimated_cardinality) /
 					    static_cast<double>(ht->Count());
-					const bool should_use_bf = create_bloom_filter && rhs_has_filter && build_to_probe_ratio > 4;
+					const bool should_use_bf = create_bloom_filter && build_side_has_filter && build_to_probe_ratio > 2;
 
-					if (true) {
+					if (should_use_bf) {
 						// If the nulls are equal, we let nulls pass. If not, we filter them
 						auto filters_null_values = !ht->NullValuesAreEqual(join_condition[filter_idx]);
 						const auto key_name = ht->conditions[0].right->ToString();
 						const auto key_type = ht->conditions[0].left->return_type;
-						auto bf_filter =
-						    make_uniq<BloomFilter>(ht->GetBloomFilter(), filters_null_values, key_name, key_type);
+						auto bf_filter = make_uniq<BloomFilter>(ht->GetBloomFilter(), filters_null_values, key_name, key_type);
 						ht->SetBuildBloomFilter(true);
 						info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(bf_filter));
 					}

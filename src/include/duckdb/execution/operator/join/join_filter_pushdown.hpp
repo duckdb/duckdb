@@ -64,8 +64,8 @@ struct JoinFilterPushdownInfo {
 	//! Min/Max aggregates
 	vector<unique_ptr<Expression>> min_max_aggregates;
 
-	//! Whether the RHS has filters
-	idx_t rhs_has_filter;
+	//! Whether the build side has a filter -> we might be able to push down a bloom filter into the probe side
+	idx_t build_side_has_filter;
 
 public:
 	unique_ptr<JoinFilterGlobalState> GetGlobalState(ClientContext &context, const PhysicalOperator &op) const;

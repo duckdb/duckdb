@@ -402,6 +402,9 @@ bool ExtractComparisonsAndInFilters(TableFilter &filter, vector<reference<Consta
 		in_filters.push_back(filter.Cast<InFilter>());
 		return true;
 	}
+	case TableFilterType::BLOOM_FILTER: {
+		return true; // We can't use it for finding cmp/in filters, but we can just ignore it
+	}
 	case TableFilterType::CONJUNCTION_AND: {
 		auto &conjunction_and = filter.Cast<ConjunctionAndFilter>();
 		for (idx_t i = 0; i < conjunction_and.child_filters.size(); i++) {

@@ -272,7 +272,13 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 		}
 	}
 	if (!pushdown_info->probe_info.empty()) {
-		pushdown_info->rhs_has_filter = HasFilter(join.children[1]);
+
+		const auto &rhs_child = join.children[1];
+		if (rhs_child->type == LogicalOperatorType::LOGICAL_DELIM_GET) {
+			pushdown_info->build_side_has_filter = HasFilter(join.children[0]);
+		} else {
+			pushdown_info->build_side_has_filter = HasFilter(join.children[1]);
+		}
 	}
 	// set up the filter pushdown in the join itself
 	join.filter_pushdown = std::move(pushdown_info);
