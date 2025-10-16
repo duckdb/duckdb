@@ -26,13 +26,17 @@ private:
 	InterruptState interrupt_state;
 };
 
-AsyncResultType::AsyncResultType(SourceResultType t) : mode(t) {
+AsyncResultType::AsyncResultType(SourceResultType t) : result_type(t) {
+	D_ASSERT(result_type != SourceResultType::BLOCKED);
 }
+
 AsyncResultType::AsyncResultType(unique_ptr<AsyncTask> &&task)
-    : mode(SourceResultType::BLOCKED), async_task(std::move(task)) {
+    : result_type(SourceResultType::BLOCKED), async_task(std::move(task)) {
 }
 
 void AsyncResultType::ScheduleTasks(InterruptState &interrupt_state, Executor &executor) {
+	D_ASSERT(result_type == SourceResultType::BLOCKED);
+
 	auto task = make_uniq<AsyncExecutionTask>(executor, std::move(async_task), interrupt_state);
 	//	executor.ScheduleTask(std::move(task));
 	TaskScheduler::GetScheduler(executor.context).ScheduleTask(executor.GetToken(), std::move(task));

@@ -312,7 +312,7 @@ AsyncResultType DuckDBReader::Scan(ClientContext &context, GlobalTableFunctionSt
 
 	auto res = scan_function.SimpleScan(context, input, chunk);
 
-	if (res.mode == SourceResultType::FINISHED) {
+	if (res.GetResultType() == SourceResultType::FINISHED) {
 		finished = true;
 	}
 

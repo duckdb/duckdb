@@ -603,7 +603,7 @@ public:
 
 			auto res = data.reader->Scan(context, *gstate.global_state, *data.local_state, scan_chunk);
 
-			if (res.mode == SourceResultType::BLOCKED) {
+			if (res.GetResultType() == SourceResultType::BLOCKED) {
 				return res;
 			}
 

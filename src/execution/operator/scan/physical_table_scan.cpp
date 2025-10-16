@@ -104,7 +104,7 @@ SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk
 	if (function.HasSimpleScan()) {
 		auto res = function.SimpleScan(context.client, data, chunk);
 
-		if (res.mode == SourceResultType::BLOCKED) {
+		if (res.GetResultType() == SourceResultType::BLOCKED) {
 			auto guard = g_state.Lock();
 			auto inner_result = g_state.BlockSource(guard, input.interrupt_state);
 			if (inner_result == SourceResultType::FINISHED) {
@@ -119,12 +119,12 @@ SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk
 
 		auto expected_res = chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 
-		if (res.mode != expected_res) {
+		if (res.GetResultType() != expected_res) {
 			throw NotImplementedException(
 			    "Currently this differs from the reference implementation for `async_function`");
 		}
 
-		return res.mode;
+		return res.GetResultType();
 	}
 
 	if (g_state.in_out_final) {

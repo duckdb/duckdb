@@ -19,9 +19,12 @@ public:
 	AsyncResultType(SourceResultType t);
 	AsyncResultType(unique_ptr<AsyncTask> &&task);
 	void ScheduleTasks(InterruptState &interrupt_state, Executor &executor);
+	SourceResultType GetResultType() const {
+		return result_type;
+	}
 
-public:
-	SourceResultType mode;
+private:
+	SourceResultType result_type;
 	unique_ptr<AsyncTask> async_task;
 };
 } // namespace duckdb
