@@ -281,10 +281,6 @@ bool GeoParquetFileMetadata::IsGeoParquetConversionEnabled(const ClientContext &
 		// Disabled by setting
 		return false;
 	}
-	if (!context.db->ExtensionIsLoaded("spatial")) {
-		// Spatial extension is not loaded, we cant convert anyway
-		return false;
-	}
 	return true;
 }
 
