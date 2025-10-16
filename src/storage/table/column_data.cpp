@@ -11,6 +11,7 @@
 #include "duckdb/storage/table/standard_column_data.hpp"
 #include "duckdb/storage/table/array_column_data.hpp"
 #include "duckdb/storage/table/struct_column_data.hpp"
+#include "duckdb/storage/table/variant_column_data.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/storage/table/append_state.hpp"
@@ -1003,6 +1004,9 @@ template <class RET, class OP>
 static RET CreateColumnInternal(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
                                 const LogicalType &type, optional_ptr<ColumnData> parent) {
 	if (type.InternalType() == PhysicalType::STRUCT) {
+		if (type.id() == LogicalTypeId::VARIANT) {
+			return OP::template Create<VariantColumnData>(block_manager, info, column_index, start_row, type, parent);
+		}
 		return OP::template Create<StructColumnData>(block_manager, info, column_index, start_row, type, parent);
 	} else if (type.InternalType() == PhysicalType::LIST) {
 		return OP::template Create<ListColumnData>(block_manager, info, column_index, start_row, type, parent);
