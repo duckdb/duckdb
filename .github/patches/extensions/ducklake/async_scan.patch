@@ -1,0 +1,34 @@
+diff --git a/src/include/storage/ducklake_inlined_data_reader.hpp b/src/include/storage/ducklake_inlined_data_reader.hpp
+index f0af8ec..5648aef 100644
+--- a/src/include/storage/ducklake_inlined_data_reader.hpp
++++ b/src/include/storage/ducklake_inlined_data_reader.hpp
+@@ -30,7 +30,7 @@ public:
+ public:
+ 	bool TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate,
+ 	                       LocalTableFunctionState &lstate) override;
+-	void Scan(ClientContext &context, GlobalTableFunctionState &global_state, LocalTableFunctionState &local_state,
++	AsyncResultType Scan(ClientContext &context, GlobalTableFunctionState &global_state, LocalTableFunctionState &local_state,
+ 	          DataChunk &chunk) override;
+ 
+ 	string GetReaderType() const override;
+diff --git a/src/storage/ducklake_inlined_data_reader.cpp b/src/storage/ducklake_inlined_data_reader.cpp
+index 432ef24..9e7d3c6 100644
+--- a/src/storage/ducklake_inlined_data_reader.cpp
++++ b/src/storage/ducklake_inlined_data_reader.cpp
+@@ -154,7 +154,7 @@ bool DuckLakeInlinedDataReader::TryInitializeScan(ClientContext &context, Global
+ 	return true;
+ }
+ 
+-void DuckLakeInlinedDataReader::Scan(ClientContext &context, GlobalTableFunctionState &global_state,
++AsyncResultType DuckLakeInlinedDataReader::Scan(ClientContext &context, GlobalTableFunctionState &global_state,
+                                      LocalTableFunctionState &local_state, DataChunk &chunk) {
+ 	if (!virtual_columns.empty()) {
+ 		scan_chunk.Reset();
+@@ -210,6 +210,7 @@ void DuckLakeInlinedDataReader::Scan(ClientContext &context, GlobalTableFunction
+ 		}
+ 	}
+ 	file_row_number += NumericCast<int64_t>(scan_count);
++	return chunk.size() ? SourceResultType::HAVE_MORE_OUTPUT : SourceResultType::FINISHED;
+ }
+ 
+ void DuckLakeInlinedDataReader::AddVirtualColumn(column_t virtual_column_id) {
