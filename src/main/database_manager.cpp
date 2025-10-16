@@ -189,7 +189,8 @@ optional_ptr<AttachedDatabase> DatabaseManager::FinalizeAttach(ClientContext &co
 	return db_ref;
 }
 
-void DatabaseManager::DetachDatabase(ClientContext &context, const string &name, OnEntryNotFound if_not_found, bool force) {
+void DatabaseManager::DetachDatabase(ClientContext &context, const string &name, OnEntryNotFound if_not_found,
+                                     bool force) {
 	if (GetDefaultDatabase(context) == name) {
 		throw BinderException("Cannot detach database \"%s\" because it is the default database. Select a different "
 		                      "database using `USE` to allow detaching this database",
