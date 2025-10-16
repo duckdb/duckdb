@@ -49,7 +49,7 @@ AsyncResultType DirectFileReader::Scan(ClientContext &context, GlobalTableFuncti
 	auto &state = global_state.Cast<ReadFileGlobalState>();
 	if (done || file_list_idx.GetIndex() >= state.file_list->GetTotalFileCount()) {
 
-		return SourceResultType::FINISHED;
+		return AsyncResultType(SourceResultType::FINISHED);
 	}
 
 	auto files = state.file_list;
@@ -164,7 +164,7 @@ AsyncResultType DirectFileReader::Scan(ClientContext &context, GlobalTableFuncti
 	}
 	output.SetCardinality(1);
 	done = true;
-	return SourceResultType::HAVE_MORE_OUTPUT;
+	return AsyncResultType(SourceResultType::HAVE_MORE_OUTPUT);
 };
 
 void DirectFileReader::FinishFile(ClientContext &context, GlobalTableFunctionState &gstate) {

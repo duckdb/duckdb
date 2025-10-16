@@ -540,16 +540,21 @@ AsyncResultType JSONReader::Scan(ClientContext &context, GlobalTableFunctionStat
 
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
 	{
+		vector<unique_ptr<AsyncTask>> tasks;
 		auto random_number = rand() % 16;
 		switch (random_number) {
 		case 0:
-			return AsyncResultType(std::move(make_uniq<SleepAsyncTask>(rand() % 32)));
+			tasks.push_back(make_uniq<SleepAsyncTask>(rand() % 32));
 #ifndef AVOID_DUCKDB_DEBUG_ASYNC_THROW
 		case 1:
-			return AsyncResultType(std::move(make_uniq<ThrowAsyncTask>(rand() % 32)));
+			tasks.push_back(make_uniq<ThrowAsyncTask>(rand() % 32));
 #endif
 		default:
 			break;
+		}
+		if (!tasks.empty()) {
+			D_ASSERT(tasks.size() == 1);
+			return AsyncResultType(std::move(tasks));
 		}
 	}
 #endif
@@ -567,7 +572,8 @@ AsyncResultType JSONReader::Scan(ClientContext &context, GlobalTableFunctionStat
 	default:
 		throw InternalException("Unsupported scan type for JSONMultiFileInfo::Scan");
 	}
-	return output.size() ? SourceResultType::HAVE_MORE_OUTPUT : SourceResultType::FINISHED;
+	return output.size() ? AsyncResultType(SourceResultType::HAVE_MORE_OUTPUT)
+	                     : AsyncResultType(SourceResultType::FINISHED);
 }
 
 void JSONReader::FinishFile(ClientContext &context, GlobalTableFunctionState &global_state) {

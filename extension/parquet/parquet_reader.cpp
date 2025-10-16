@@ -1255,11 +1255,11 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 AsyncResultType ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &state, DataChunk &result) {
 	while (ScanInternal(context, state, result)) {
 		if (result.size() > 0) {
-			return SourceResultType::HAVE_MORE_OUTPUT;
+			return AsyncResultType(SourceResultType::HAVE_MORE_OUTPUT);
 		}
 		result.Reset();
 	}
-	return SourceResultType::FINISHED;
+	return AsyncResultType(SourceResultType::FINISHED);
 }
 
 void ParquetReader::GetPartitionStats(vector<PartitionStatistics> &result) {

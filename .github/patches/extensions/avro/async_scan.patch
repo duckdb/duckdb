@@ -1,5 +1,5 @@
 diff --git a/src/avro_multi_file_info.cpp b/src/avro_multi_file_info.cpp
-index 176f6e0..b20993c 100644
+index 176f6e0..14a648f 100644
 --- a/src/avro_multi_file_info.cpp
 +++ b/src/avro_multi_file_info.cpp
 @@ -121,9 +121,10 @@ bool AvroReader::TryInitializeScan(ClientContext &context, GlobalTableFunctionSt
@@ -10,7 +10,7 @@ index 176f6e0..b20993c 100644
 +AsyncResultType AvroReader::Scan(ClientContext &context, GlobalTableFunctionState &global_state,
                        LocalTableFunctionState &local_state_p, DataChunk &chunk) {
  	Read(chunk);
-+	return chunk.size() ? SourceResultType::HAVE_MORE_OUTPUT : SourceResultType::FINISHED;
++	return chunk.size() ? AsyncResultType(SourceResultType::HAVE_MORE_OUTPUT) : AsyncResultType(SourceResultType::FINISHED);
  }
  
  unique_ptr<NodeStatistics> AvroMultiFileInfo::GetCardinality(const MultiFileBindData &bind_data, idx_t file_count) {

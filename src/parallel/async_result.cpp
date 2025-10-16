@@ -30,15 +30,20 @@ AsyncResultType::AsyncResultType(SourceResultType t) : result_type(t) {
 	D_ASSERT(result_type != SourceResultType::BLOCKED);
 }
 
-AsyncResultType::AsyncResultType(unique_ptr<AsyncTask> &&task)
-    : result_type(SourceResultType::BLOCKED), async_task(std::move(task)) {
+AsyncResultType::AsyncResultType(vector<unique_ptr<AsyncTask>> &&tasks)
+    : result_type(SourceResultType::BLOCKED), async_tasks(std::move(tasks)) {
 }
 
 void AsyncResultType::ScheduleTasks(InterruptState &interrupt_state, Executor &executor) {
 	D_ASSERT(result_type == SourceResultType::BLOCKED);
 
-	auto task = make_uniq<AsyncExecutionTask>(executor, std::move(async_task), interrupt_state);
-	//	executor.ScheduleTask(std::move(task));
+	if (async_tasks.size() > 1) {
+		throw InternalException("AsyncResultType with more that 1 task found");
+	} else if (async_tasks.empty()) {
+		throw InternalException("AsyncResultType with no task found");
+	}
+
+	auto task = make_uniq<AsyncExecutionTask>(executor, std::move(async_tasks[0]), interrupt_state);
 	TaskScheduler::GetScheduler(executor.context).ScheduleTask(executor.GetToken(), std::move(task));
 }
 

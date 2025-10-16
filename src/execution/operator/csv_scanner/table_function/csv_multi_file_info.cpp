@@ -369,10 +369,11 @@ AsyncResultType CSVFileScan::Scan(ClientContext &context, GlobalTableFunctionSta
                                   LocalTableFunctionState &local_state, DataChunk &chunk) {
 	auto &lstate = local_state.Cast<CSVLocalState>();
 	if (lstate.csv_reader->FinishedIterator()) {
-		return SourceResultType::FINISHED;
+		return AsyncResultType(SourceResultType::FINISHED);
 	}
 	lstate.csv_reader->Flush(chunk);
-	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
+	return chunk.size() == 0 ? AsyncResultType(SourceResultType::FINISHED)
+	                         : AsyncResultType(SourceResultType::HAVE_MORE_OUTPUT);
 }
 
 void CSVFileScan::FinishFile(ClientContext &context, GlobalTableFunctionState &global_state) {

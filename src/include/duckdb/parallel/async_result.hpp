@@ -1,4 +1,6 @@
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
 
 #pragma once
 
@@ -16,15 +18,18 @@ public:
 
 class AsyncResultType {
 public:
-	AsyncResultType(SourceResultType t);
-	AsyncResultType(unique_ptr<AsyncTask> &&task);
+	explicit AsyncResultType(SourceResultType t);
+	explicit AsyncResultType(vector<unique_ptr<AsyncTask>> &&task);
 	void ScheduleTasks(InterruptState &interrupt_state, Executor &executor);
 	SourceResultType GetResultType() const {
 		return result_type;
 	}
+	vector<unique_ptr<AsyncTask>> &&GetAsyncTasks() {
+		return std::move(async_tasks);
+	}
 
 private:
 	SourceResultType result_type;
-	unique_ptr<AsyncTask> async_task;
+	vector<unique_ptr<AsyncTask>> async_tasks;
 };
 } // namespace duckdb

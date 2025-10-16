@@ -104,13 +104,15 @@ SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk
 	if (function.HasSimpleScan()) {
 		auto res = function.SimpleScan(context.client, data, chunk);
 
-		if (res.GetResultType() == SourceResultType::BLOCKED) {
+		if (res == SourceResultType::BLOCKED) {
 			auto guard = g_state.Lock();
 			auto inner_result = g_state.BlockSource(guard, input.interrupt_state);
 			if (inner_result == SourceResultType::FINISHED) {
 				return SourceResultType::FINISHED;
 			} else if (inner_result == SourceResultType::BLOCKED) {
-				res.ScheduleTasks(input.interrupt_state, context.pipeline->executor);
+				D_ASSERT(!data.async_tasks.empty());
+				AsyncResultType async_handler(std::move(data.async_tasks));
+				async_handler.ScheduleTasks(input.interrupt_state, context.pipeline->executor);
 				return SourceResultType::BLOCKED;
 			} else {
 				throw InternalException("Unexpected result from BlockSource");
@@ -119,12 +121,12 @@ SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk
 
 		auto expected_res = chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 
-		if (res.GetResultType() != expected_res) {
+		if (res != expected_res) {
 			throw NotImplementedException(
-			    "Currently this differs from the reference implementation for `async_function`");
+			    "Currently this differs from the reference implementation for `function_ext`");
 		}
 
-		return res.GetResultType();
+		return res;
 	}
 
 	if (g_state.in_out_final) {
@@ -282,7 +284,7 @@ bool PhysicalTableScan::Equals(const PhysicalOperator &other_p) const {
 	if (function.function != other.function.function) {
 		return false;
 	}
-	if (function.async_function != other.function.async_function) {
+	if (function.function_ext != other.function.function_ext) {
 		return false;
 	}
 	if (column_ids != other.column_ids) {

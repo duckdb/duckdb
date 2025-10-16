@@ -12,7 +12,7 @@ index f0af8ec..5648aef 100644
  
  	string GetReaderType() const override;
 diff --git a/src/storage/ducklake_inlined_data_reader.cpp b/src/storage/ducklake_inlined_data_reader.cpp
-index 432ef24..9e7d3c6 100644
+index 432ef24..b5f6827 100644
 --- a/src/storage/ducklake_inlined_data_reader.cpp
 +++ b/src/storage/ducklake_inlined_data_reader.cpp
 @@ -154,7 +154,7 @@ bool DuckLakeInlinedDataReader::TryInitializeScan(ClientContext &context, Global
@@ -28,7 +28,7 @@ index 432ef24..9e7d3c6 100644
  		}
  	}
  	file_row_number += NumericCast<int64_t>(scan_count);
-+	return chunk.size() ? SourceResultType::HAVE_MORE_OUTPUT : SourceResultType::FINISHED;
++	return chunk.size() ? AsyncResultType(SourceResultType::HAVE_MORE_OUTPUT) : AsyncResultType(SourceResultType::FINISHED);
  }
  
  void DuckLakeInlinedDataReader::AddVirtualColumn(column_t virtual_column_id) {

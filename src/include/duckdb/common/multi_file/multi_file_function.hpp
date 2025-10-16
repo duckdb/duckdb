@@ -588,7 +588,7 @@ public:
 		return partition_data;
 	}
 
-	static AsyncResultType MultiFileScan(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	static SourceResultType MultiFileScan(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 
 		if (!data_p.local_state) {
 			return SourceResultType::FINISHED;
@@ -604,7 +604,8 @@ public:
 			auto res = data.reader->Scan(context, *gstate.global_state, *data.local_state, scan_chunk);
 
 			if (res.GetResultType() == SourceResultType::BLOCKED) {
-				return res;
+				data_p.async_tasks = std::move(res.GetAsyncTasks());
+				return SourceResultType::BLOCKED;
 			}
 
 			output.SetCardinality(scan_chunk.size());
