@@ -5,13 +5,19 @@
 
 namespace duckdb {
 
+static constexpr idx_t MAX_NUM_SECTORS = (1ULL << 26);
+static constexpr idx_t MIN_NUM_BITS_PER_KEY = 16;
+static constexpr idx_t MIN_NUM_BITS = 512;
+static constexpr idx_t LOG_SECTOR_SIZE = 5;
+static constexpr idx_t SIMD_BATCH_SIZE = 16;
+
+
 void CacheSectorizedBloomFilter::Initialize(ClientContext &context_p, idx_t est_num_rows) {
 	context = &context_p;
 	buffer_manager = &BufferManager::GetBufferManager(*context);
 
 	const idx_t min_bits = std::max<idx_t>(MIN_NUM_BITS, est_num_rows * MIN_NUM_BITS_PER_KEY);
 	num_sectors = std::min(NextPowerOfTwo(min_bits) >> LOG_SECTOR_SIZE, MAX_NUM_SECTORS);
-	num_sectors_log = static_cast<uint32_t>(std::log2(num_sectors));
 
 	buf_ = buffer_manager->GetBufferAllocator().Allocate(64 + num_sectors * sizeof(uint32_t));
 	// make sure blocks is a 64-byte aligned pointer, i.e., cache-line aligned

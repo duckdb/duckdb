@@ -19,13 +19,8 @@ namespace duckdb {
 
 class CacheSectorizedBloomFilter {
 
-	static constexpr idx_t MAX_NUM_SECTORS = (1ULL << 26);
-	static constexpr idx_t MIN_NUM_BITS_PER_KEY = 16;
-	static constexpr idx_t MIN_NUM_BITS = 512;
-	static constexpr idx_t LOG_SECTOR_SIZE = 5;
-	static constexpr idx_t SIMD_BATCH_SIZE = 16;
-
 public:
+
 	CacheSectorizedBloomFilter() = default;
 	void Initialize(ClientContext &context_p, idx_t est_num_rows);
 
@@ -51,7 +46,6 @@ private:
 	bool active = false;
 
 	idx_t num_sectors;
-	idx_t num_sectors_log;
 
 	ClientContext *context;
 	BufferManager *buffer_manager;
