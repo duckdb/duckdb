@@ -41,7 +41,8 @@ void VariantStats::Construct(BaseStatistics &stats) {
 BaseStatistics VariantStats::CreateUnknown(LogicalType type) {
 	BaseStatistics result(std::move(type));
 	result.InitializeUnknown();
-	result.child_stats[0].Copy(BaseStatistics::CreateUnknown(GetUnshreddedType(type)));
+	GetDataUnsafe(result).SetUnknown();
+	result.child_stats[0].Copy(BaseStatistics::CreateUnknown(GetUnshreddedType(result.GetType())));
 	return result;
 }
 

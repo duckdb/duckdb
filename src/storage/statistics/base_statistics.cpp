@@ -253,6 +253,9 @@ void BaseStatistics::Copy(const BaseStatistics &other) {
 	case StatisticsType::ARRAY_STATS:
 		ArrayStats::Copy(*this, other);
 		break;
+	case StatisticsType::VARIANT_STATS:
+		VariantStats::Copy(*this, other);
+		break;
 	default:
 		break;
 	}
@@ -363,6 +366,9 @@ void BaseStatistics::Serialize(Serializer &serializer) const {
 		case StatisticsType::GEOMETRY_STATS:
 			GeometryStats::Serialize(*this, serializer);
 			break;
+		case StatisticsType::VARIANT_STATS:
+			VariantStats::Serialize(*this, serializer);
+			break;
 		default:
 			break;
 		}
@@ -404,6 +410,9 @@ BaseStatistics BaseStatistics::Deserialize(Deserializer &deserializer) {
 		case StatisticsType::GEOMETRY_STATS:
 			GeometryStats::Deserialize(obj, stats);
 			break;
+		case StatisticsType::VARIANT_STATS:
+			VariantStats::Deserialize(obj, stats);
+			break;
 		default:
 			break;
 		}
@@ -437,6 +446,9 @@ string BaseStatistics::ToString() const {
 	case StatisticsType::GEOMETRY_STATS:
 		result = GeometryStats::ToString(*this) + result;
 		break;
+	case StatisticsType::VARIANT_STATS:
+		result = VariantStats::ToString(*this) + result;
+		break;
 	default:
 		break;
 	}
@@ -463,6 +475,9 @@ void BaseStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t co
 		break;
 	case StatisticsType::GEOMETRY_STATS:
 		GeometryStats::Verify(*this, vector, sel, count);
+		break;
+	case StatisticsType::VARIANT_STATS:
+		VariantStats::Verify(*this, vector, sel, count);
 		break;
 	default:
 		break;
@@ -558,6 +573,7 @@ BaseStatistics BaseStatistics::FromConstantType(const Value &input) {
 	}
 	case StatisticsType::VARIANT_STATS: {
 		auto result = VariantStats::CreateEmpty(input.type());
+		VariantStats::SetUnshreddedStats(result, nullptr);
 		if (!input.IsNull()) {
 			VariantStats::Update(result, input);
 		}
