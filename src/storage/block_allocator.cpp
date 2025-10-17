@@ -27,7 +27,7 @@ static data_ptr_t AllocateVirtualMemory(const idx_t size) {
 	// Windows returns nullptr if the map fails
 	return data_ptr_t(VirtualAlloc(nullptr, size, MEM_RESERVE, PAGE_NOACCESS));
 #else
-	const auto ptr = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	const auto ptr = mmap(nullptr, size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 	return ptr == MAP_FAILED ? nullptr : data_ptr_cast(ptr);
 #endif
 }
