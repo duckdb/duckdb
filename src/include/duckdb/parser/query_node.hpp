@@ -77,9 +77,6 @@ public:
 	virtual void Serialize(Serializer &serializer) const;
 	static unique_ptr<QueryNode> Deserialize(Deserializer &deserializer);
 
-	//! TEMPORARY BUG FIX WORKAROUND: extract elements from the CommonTableExpressionMap and construct CTENodes
-	static void ExtractCTENodes(unique_ptr<QueryNode> &query_node);
-
 protected:
 	//! Copy base QueryNode properties from another expression to this one,
 	//! used in Copy method
