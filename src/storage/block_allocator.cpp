@@ -61,16 +61,28 @@ static void ProtectMemory(const data_ptr_t pointer, const idx_t size, const Memo
 #endif
 }
 
-static void ReturnMemory(const data_ptr_t pointer, const idx_t size) {
-	// Tell the OS that it can lazily reclaim/zero these pages
+static void CommitMemory(const data_ptr_t pointer, const idx_t size) {
 #if defined(_WIN32)
-	if (!VirtualAlloc(pointer, size, MEM_RESET, PAGE_READWRITE)) {
+	// Windows cannot do this lazily
+	if (!VirtualAlloc(pointer, size, MEM_COMMIT, PAGE_NOACCESS)) {
+		throw InternalException("ReturnMemory failed");
+	}
+#endif
+}
+
+static void ReturnMemory(const data_ptr_t pointer, const idx_t size) {
+#if defined(_WIN32)
+	if (!VirtualAlloc(pointer, size, MEM_RESET, PAGE_NOACCESS)) {
 		throw InternalException("ReturnMemory failed");
 	}
 #else
+	// Tell the OS that it can lazily reclaim/zero these pages
+	// On MacOS, this immediately reduces RSS (not actually lazy), but on Linux it doesn't (actually lazy)
 	if (madvise(pointer, size, MADV_FREE) != 0) {
 		throw InternalException("ReturnMemory failed");
 	}
+	// Protect after madvise, otherwise it's already inaccessible
+	ProtectMemory(pointer, size, MemoryProtectionType::NO_ACCESS);
 #endif
 }
 
@@ -171,13 +183,16 @@ data_ptr_t BlockAllocator::AllocateData(const idx_t size) const {
 
 	// Try to get a block ID. Reuse previously touched blocks first before getting an untouched block
 	uint32_t block_id;
-	if (!touched->q.try_dequeue(block_id) && !untouched->q.try_dequeue(block_id)) {
-		// We did not get a block ID, use fallback allocator
-		return allocator.AllocateData(size);
+	if (!touched->q.try_dequeue(block_id)) {
+		if (!untouched->q.try_dequeue(block_id)) {
+			// We did not get a block ID, use fallback allocator
+			return allocator.AllocateData(size);
+		}
+		// First touch: commit
+		CommitMemory(GetPointer(block_id), size);
 	}
 
 	// Allow read/write on this block again
-	// We don't need to do the inverse of "ReturnMemory", as the OS will lazily back this with physical memory again
 	const auto pointer = GetPointer(block_id);
 	ProtectMemory(pointer, size, MemoryProtectionType::ALLOW_READ_WRITE);
 	return pointer;
@@ -189,9 +204,8 @@ void BlockAllocator::FreeData(const data_ptr_t pointer, const idx_t size) const 
 	}
 	D_ASSERT(size == block_size);
 
-	// Return memory to OS before disallowing access, otherwise it's already inaccessible
+	// Give pages back to the OS
 	ReturnMemory(pointer, size);
-	ProtectMemory(pointer, size, MemoryProtectionType::NO_ACCESS);
 
 	// Add block ID to touched queue now
 	touched->q.enqueue(GetBlockID(pointer));
