@@ -182,6 +182,10 @@ public:
 		         z_min > other.z_max || z_max < other.z_min || m_min > other.m_max || m_max < other.m_min);
 	}
 
+	bool ContainsXY(const GeometryExtent &other) const {
+		return x_min <= other.x_min && x_max >= other.x_max && y_min <= other.y_min && y_max >= other.y_max;
+	}
+
 	double x_min;
 	double y_min;
 	double z_min;
