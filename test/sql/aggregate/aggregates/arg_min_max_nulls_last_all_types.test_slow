@@ -22,11 +22,11 @@ CREATE OR REPLACE TABLE arg_min_result AS SELECT unnest(arg_min_nulls_last("${co
 statement ok
 CREATE OR REPLACE TABLE arg_max_result AS SELECT unnest(arg_max_nulls_last("${col}", "${col}", 3)) FROM all_types
 
-query I
-SELECT * FROM (SELECT * FROM asc_ordered ORDER BY rowid) EXCEPT SELECT * FROM (SELECT * FROM arg_min_result ORDER BY rowid);
+query II
+SELECT * FROM (SELECT rowid, * FROM asc_ordered ORDER BY rowid) EXCEPT SELECT * FROM (SELECT rowid, * FROM arg_min_result ORDER BY rowid);
 
-query I
-SELECT * FROM (SELECT * FROM desc_ordered ORDER BY rowid) EXCEPT SELECT * FROM (SELECT * FROM arg_max_result ORDER BY rowid);
+query II
+SELECT * FROM (SELECT rowid, * FROM desc_ordered ORDER BY rowid) EXCEPT SELECT * FROM (SELECT rowid, * FROM arg_max_result ORDER BY rowid);
 
 statement ok
 CREATE OR REPLACE TABLE arg_min_result AS SELECT arg_min_nulls_last("${col}", "${col}") FROM all_types
@@ -34,10 +34,10 @@ CREATE OR REPLACE TABLE arg_min_result AS SELECT arg_min_nulls_last("${col}", "$
 statement ok
 CREATE OR REPLACE TABLE arg_max_result AS SELECT arg_max_nulls_last("${col}", "${col}") FROM all_types
 
-query I
-SELECT * FROM (SELECT * FROM asc_ordered ORDER BY rowid LIMIT 1) EXCEPT SELECT * FROM (SELECT * FROM arg_min_result ORDER BY rowid);
+query II
+SELECT * FROM (SELECT rowid, * FROM asc_ordered ORDER BY rowid LIMIT 1) EXCEPT SELECT * FROM (SELECT rowid, * FROM arg_min_result ORDER BY rowid);
 
-query I
-SELECT * FROM (SELECT * FROM desc_ordered ORDER BY rowid LIMIT 1) EXCEPT SELECT * FROM (SELECT * FROM arg_max_result ORDER BY rowid);
+query II
+SELECT * FROM (SELECT rowid, * FROM desc_ordered ORDER BY rowid LIMIT 1) EXCEPT SELECT * FROM (SELECT rowid, * FROM arg_max_result ORDER BY rowid);
 
 endloop
