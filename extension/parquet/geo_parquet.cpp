@@ -17,171 +17,6 @@ namespace duckdb {
 using namespace duckdb_yyjson; // NOLINT
 
 //------------------------------------------------------------------------------
-// WKB stats
-//------------------------------------------------------------------------------
-namespace {
-
-class BinaryReader {
-public:
-	const char *beg;
-	const char *end;
-	const char *ptr;
-
-	BinaryReader(const char *beg, uint32_t len) : beg(beg), end(beg + len), ptr(beg) {
-	}
-
-	template <class T>
-	T Read() {
-		if (ptr + sizeof(T) > end) {
-			throw InvalidInputException("Unexpected end of WKB data");
-		}
-		T val;
-		memcpy(&val, ptr, sizeof(T));
-		ptr += sizeof(T);
-		return val;
-	}
-
-	void Skip(idx_t len) {
-		if (ptr + len > end) {
-			throw InvalidInputException("Unexpected end of WKB data");
-		}
-		ptr += len;
-	}
-
-	const char *Reserve(idx_t len) {
-		if (ptr + len > end) {
-			throw InvalidInputException("Unexpected end of WKB data");
-		}
-		auto ret = ptr;
-		ptr += len;
-		return ret;
-	}
-
-	bool IsAtEnd() const {
-		return ptr >= end;
-	}
-};
-
-} // namespace
-
-static void UpdateBoundsFromVertexArray(GeometryExtent &bbox, uint32_t flag, const char *vert_array,
-                                        uint32_t vert_count) {
-	switch (flag) {
-	case 0: { // XY
-		constexpr auto vert_width = sizeof(double) * 2;
-		for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
-			double vert[2];
-			memcpy(vert, vert_array + vert_idx * vert_width, vert_width);
-			bbox.ExtendX(vert[0]);
-			bbox.ExtendY(vert[1]);
-		}
-	} break;
-	case 1: { // XYZ
-		constexpr auto vert_width = sizeof(double) * 3;
-		for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
-			double vert[3];
-			memcpy(vert, vert_array + vert_idx * vert_width, vert_width);
-			bbox.ExtendX(vert[0]);
-			bbox.ExtendY(vert[1]);
-			bbox.ExtendZ(vert[2]);
-		}
-	} break;
-	case 2: { // XYM
-		constexpr auto vert_width = sizeof(double) * 3;
-		for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
-			double vert[3];
-			memcpy(vert, vert_array + vert_idx * vert_width, vert_width);
-			bbox.ExtendX(vert[0]);
-			bbox.ExtendY(vert[1]);
-			bbox.ExtendM(vert[2]);
-		}
-	} break;
-	case 3: { // XYZM
-		constexpr auto vert_width = sizeof(double) * 4;
-		for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
-			double vert[4];
-			memcpy(vert, vert_array + vert_idx * vert_width, vert_width);
-			bbox.ExtendX(vert[0]);
-			bbox.ExtendY(vert[1]);
-			bbox.ExtendZ(vert[2]);
-			bbox.ExtendM(vert[3]);
-		}
-	} break;
-	default:
-		break;
-	}
-}
-
-void GeometryStats::Update(const string_t &wkb) {
-	BinaryReader reader(wkb.GetData(), wkb.GetSize());
-
-	bool first_geom = true;
-	while (!reader.IsAtEnd()) {
-		reader.Read<uint8_t>(); // byte order
-		auto type = reader.Read<uint32_t>();
-		auto kind = type % 1000;
-		auto flag = type / 1000;
-		const auto hasz = (flag & 0x01) != 0;
-		const auto hasm = (flag & 0x02) != 0;
-
-		if (first_geom) {
-			// Only add the top-level geometry type
-			types.Add(type);
-			first_geom = false;
-		}
-
-		const auto vert_width = sizeof(double) * (2 + (hasz ? 1 : 0) + (hasm ? 1 : 0));
-
-		switch (kind) {
-		case 1: { // POINT
-
-			// Point are special in that they are considered "empty" if they are all-nan
-			const auto vert_array = reader.Reserve(vert_width);
-			const auto dims_count = 2 + (hasz ? 1 : 0) + (hasm ? 1 : 0);
-			double vert_point[4] = {0, 0, 0, 0};
-
-			memcpy(vert_point, vert_array, vert_width);
-
-			for (auto dim_idx = 0; dim_idx < dims_count; dim_idx++) {
-				if (!std::isnan(vert_point[dim_idx])) {
-					bbox.ExtendX(vert_point[0]);
-					bbox.ExtendY(vert_point[1]);
-					if (hasz && hasm) {
-						bbox.ExtendZ(vert_point[2]);
-						bbox.ExtendM(vert_point[3]);
-					} else if (hasz) {
-						bbox.ExtendZ(vert_point[2]);
-					} else if (hasm) {
-						bbox.ExtendM(vert_point[2]);
-					}
-					break;
-				}
-			}
-		} break;
-		case 2: { // LINESTRING
-			const auto vert_count = reader.Read<uint32_t>();
-			const auto vert_array = reader.Reserve(vert_count * vert_width);
-			UpdateBoundsFromVertexArray(bbox, flag, vert_array, vert_count);
-		} break;
-		case 3: { // POLYGON
-			const auto ring_count = reader.Read<uint32_t>();
-			for (uint32_t ring_idx = 0; ring_idx < ring_count; ring_idx++) {
-				const auto vert_count = reader.Read<uint32_t>();
-				const auto vert_array = reader.Reserve(vert_count * vert_width);
-				UpdateBoundsFromVertexArray(bbox, flag, vert_array, vert_count);
-			}
-		} break;
-		case 4:   // MULTIPOINT
-		case 5:   // MULTILINESTRING
-		case 6:   // MULTIPOLYGON
-		case 7: { // GEOMETRYCOLLECTION
-			reader.Skip(sizeof(uint32_t));
-		} break;
-		}
-	}
-}
-
-//------------------------------------------------------------------------------
 // GeoParquetFileMetadata
 //------------------------------------------------------------------------------
 
@@ -208,17 +43,19 @@ unique_ptr<GeoParquetFileMetadata> GeoParquetFileMetadata::TryRead(const duckdb_
 					throw InvalidInputException("Geoparquet metadata is not an object");
 				}
 
-				auto result = make_uniq<GeoParquetFileMetadata>();
+				// We dont actually care about the version for now, as we only support V1+native
+				auto result = make_uniq<GeoParquetFileMetadata>(GeoParquetVersion::BOTH);
 
 				// Check and parse the version
 				const auto version_val = yyjson_obj_get(root, "version");
 				if (!yyjson_is_str(version_val)) {
 					throw InvalidInputException("Geoparquet metadata does not have a version");
 				}
-				result->version = yyjson_get_str(version_val);
-				if (StringUtil::StartsWith(result->version, "2")) {
-					// Guard against a breaking future 2.0 version
-					throw InvalidInputException("Geoparquet version %s is not supported", result->version);
+
+				auto version = yyjson_get_str(version_val);
+				if (StringUtil::StartsWith(version, "3")) {
+					// Guard against a breaking future 3.0 version
+					throw InvalidInputException("Geoparquet version %s is not supported", version);
 				}
 
 				// Check and parse the geometry columns
@@ -292,7 +129,7 @@ unique_ptr<GeoParquetFileMetadata> GeoParquetFileMetadata::TryRead(const duckdb_
 }
 
 void GeoParquetFileMetadata::AddGeoParquetStats(const string &column_name, const LogicalType &type,
-                                                const GeometryStats &stats) {
+                                                const GeometryStatsData &stats) {
 
 	// Lock the metadata
 	lock_guard<mutex> glock(write_lock);
@@ -301,12 +138,10 @@ void GeoParquetFileMetadata::AddGeoParquetStats(const string &column_name, const
 	if (it == geometry_columns.end()) {
 		auto &column = geometry_columns[column_name];
 
-		column.stats.types.Combine(stats.types);
-		column.stats.bbox.Combine(stats.bbox);
+		column.stats.Merge(stats);
 		column.insertion_index = geometry_columns.size() - 1;
 	} else {
-		it->second.stats.types.Combine(stats.types);
-		it->second.stats.bbox.Combine(stats.bbox);
+		it->second.stats.Merge(stats);
 	}
 }
 
@@ -315,7 +150,7 @@ void GeoParquetFileMetadata::Write(duckdb_parquet::FileMetaData &file_meta_data)
 	// GeoParquet does not support M or ZM coordinates. So remove any columns that have them.
 	unordered_set<string> invalid_columns;
 	for (auto &column : geometry_columns) {
-		if (column.second.stats.bbox.HasM()) {
+		if (column.second.stats.extent.HasM()) {
 			invalid_columns.insert(column.first);
 		}
 	}
@@ -344,7 +179,20 @@ void GeoParquetFileMetadata::Write(duckdb_parquet::FileMetaData &file_meta_data)
 	yyjson_mut_doc_set_root(doc, root);
 
 	// Add the version
-	yyjson_mut_obj_add_strncpy(doc, root, "version", version.c_str(), version.size());
+	switch (version) {
+	case GeoParquetVersion::V1:
+	case GeoParquetVersion::BOTH:
+		yyjson_mut_obj_add_strcpy(doc, root, "version", "1.0.0");
+		break;
+	case GeoParquetVersion::V2:
+		yyjson_mut_obj_add_strcpy(doc, root, "version", "2.0.0");
+		break;
+	case GeoParquetVersion::NONE:
+	default:
+		// Should never happen, we should not be writing anything
+		yyjson_mut_doc_free(doc);
+		throw InternalException("GeoParquetVersion::NONE should not write metadata");
+	}
 
 	// Add the primary column
 	yyjson_mut_obj_add_strncpy(doc, root, "primary_column", primary_geometry_column.c_str(),
@@ -358,24 +206,30 @@ void GeoParquetFileMetadata::Write(duckdb_parquet::FileMetaData &file_meta_data)
 		const auto column_json = yyjson_mut_obj_add_obj(doc, json_columns, column.first.c_str());
 		yyjson_mut_obj_add_str(doc, column_json, "encoding", "WKB");
 		const auto geometry_types = yyjson_mut_obj_add_arr(doc, column_json, "geometry_types");
+
 		for (auto &type_name : column.second.stats.types.ToString(false)) {
 			yyjson_mut_arr_add_strcpy(doc, geometry_types, type_name.c_str());
 		}
-		const auto bbox_arr = yyjson_mut_obj_add_arr(doc, column_json, "bbox");
-		const auto &bbox = column.second.stats.bbox;
 
-		if (!column.second.stats.bbox.HasZ()) {
-			yyjson_mut_arr_add_real(doc, bbox_arr, bbox.xmin);
-			yyjson_mut_arr_add_real(doc, bbox_arr, bbox.ymin);
-			yyjson_mut_arr_add_real(doc, bbox_arr, bbox.xmax);
-			yyjson_mut_arr_add_real(doc, bbox_arr, bbox.ymax);
-		} else {
-			yyjson_mut_arr_add_real(doc, bbox_arr, bbox.xmin);
-			yyjson_mut_arr_add_real(doc, bbox_arr, bbox.ymin);
-			yyjson_mut_arr_add_real(doc, bbox_arr, bbox.zmin);
-			yyjson_mut_arr_add_real(doc, bbox_arr, bbox.xmax);
-			yyjson_mut_arr_add_real(doc, bbox_arr, bbox.ymax);
-			yyjson_mut_arr_add_real(doc, bbox_arr, bbox.zmax);
+		const auto &bbox = column.second.stats.extent;
+
+		if (bbox.HasXY()) {
+
+			const auto bbox_arr = yyjson_mut_obj_add_arr(doc, column_json, "bbox");
+
+			if (!column.second.stats.extent.HasZ()) {
+				yyjson_mut_arr_add_real(doc, bbox_arr, bbox.x_min);
+				yyjson_mut_arr_add_real(doc, bbox_arr, bbox.y_min);
+				yyjson_mut_arr_add_real(doc, bbox_arr, bbox.x_max);
+				yyjson_mut_arr_add_real(doc, bbox_arr, bbox.y_max);
+			} else {
+				yyjson_mut_arr_add_real(doc, bbox_arr, bbox.x_min);
+				yyjson_mut_arr_add_real(doc, bbox_arr, bbox.y_min);
+				yyjson_mut_arr_add_real(doc, bbox_arr, bbox.z_min);
+				yyjson_mut_arr_add_real(doc, bbox_arr, bbox.x_max);
+				yyjson_mut_arr_add_real(doc, bbox_arr, bbox.y_max);
+				yyjson_mut_arr_add_real(doc, bbox_arr, bbox.z_max);
+			}
 		}
 
 		// If the CRS is present, add it

@@ -46,6 +46,7 @@ public:
 	optional_ptr<TableCatalogEntry> current_table;
 	MetaBlockPointer checkpoint_id;
 	idx_t wal_version = 1;
+	optional_idx expected_checkpoint_id;
 
 	struct ReplayIndexInfo {
 		ReplayIndexInfo(TableIndexList &index_list, unique_ptr<Index> index, const string &table_schema,
@@ -141,9 +142,10 @@ public:
 			auto &keys = EncryptionKeyManager::Get(state_p.db.GetDatabase());
 			auto &catalog = state_p.db.GetCatalog().Cast<DuckCatalog>();
 			auto derived_key = keys.GetKey(catalog.GetEncryptionKeyId());
+
 			//! initialize the decryption
 			auto encryption_state = database.GetEncryptionUtil()->CreateEncryptionState(
-			    derived_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+			    state_p.db.GetStorageManager().GetCipher(), MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 			encryption_state->InitializeDecryption(nonce.data(), nonce.size(), derived_key,
 			                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 
@@ -192,9 +194,11 @@ public:
 		return false;
 	}
 
-	bool DeserializeOnly() {
+	bool DeserializeOnly() const {
 		return deserialize_only;
 	}
+
+	static void ThrowVersionError(idx_t checkpoint_iteration, idx_t expected_checkpoint_iteration);
 
 protected:
 	void ReplayEntry(WALType wal_type);
@@ -246,6 +250,7 @@ private:
 	MemoryStream stream;
 	BinaryDeserializer deserializer;
 	bool deserialize_only;
+	optional_idx expected_checkpoint_id;
 };
 
 //===--------------------------------------------------------------------===//
@@ -311,6 +316,11 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(AttachedDatabase &databa
 			return nullptr;
 		}
 	}
+	if (checkpoint_state.expected_checkpoint_id.IsValid()) {
+		// we expected a checkpoint id - but no checkpoint has happened - abort!
+		auto expected_id = checkpoint_state.expected_checkpoint_id.GetIndex();
+		WriteAheadLogDeserializer::ThrowVersionError(expected_id - 1, expected_id);
+	}
 
 	// we need to recover from the WAL: actually set up the replay state
 	ReplayState state(database, *con.context);
@@ -336,7 +346,7 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(AttachedDatabase &databa
 				}
 				state.replay_index_infos.clear();
 
-				successful_offset = reader.offset;
+				successful_offset = reader.CurrentOffset();
 				// check if the file is exhausted
 				if (reader.Finished()) {
 					// we finished reading the file: break
@@ -454,31 +464,45 @@ void WriteAheadLogDeserializer::ReplayEntry(WALType entry_type) {
 //===--------------------------------------------------------------------===//
 // Replay Version
 //===--------------------------------------------------------------------===//
+void WriteAheadLogDeserializer::ThrowVersionError(idx_t checkpoint_iteration, idx_t expected_checkpoint_iteration) {
+	string relation = checkpoint_iteration < expected_checkpoint_iteration ? "an older" : "a newer";
+	throw IOException("This WAL was created for this database file, but the WAL checkpoint iteration does not "
+	                  "match the database file. "
+	                  "That means the WAL was created for %s version of this database. File checkpoint "
+	                  "iteration: %d, WAL checkpoint iteration: %d",
+	                  relation, expected_checkpoint_iteration, checkpoint_iteration);
+}
+
 void WriteAheadLogDeserializer::ReplayVersion() {
 	state.wal_version = deserializer.ReadProperty<idx_t>(101, "version");
 
 	auto &single_file_block_manager = db.GetStorageManager().GetBlockManager().Cast<SingleFileBlockManager>();
-	auto file_version_number = single_file_block_manager.GetVersionNumber();
-	if (file_version_number > 66) {
-		data_t db_identifier[MainHeader::DB_IDENTIFIER_LEN];
-		deserializer.ReadList(102, "db_identifier", [&](Deserializer::List &list, idx_t i) {
-			db_identifier[i] = list.ReadElement<uint8_t>();
-		});
-		auto expected_db_identifier = single_file_block_manager.GetDBIdentifier();
-		if (!MainHeader::CompareDBIdentifiers(db_identifier, expected_db_identifier)) {
-			throw IOException("WAL does not match database file.");
-		}
+	data_t db_identifier[MainHeader::DB_IDENTIFIER_LEN];
+	bool is_set = false;
+	deserializer.ReadOptionalList(102, "db_identifier", [&](Deserializer::List &list, idx_t i) {
+		db_identifier[i] = list.ReadElement<uint8_t>();
+		is_set = true;
+	});
+	auto checkpoint_iteration = deserializer.ReadPropertyWithDefault<optional_idx>(103, "checkpoint_iteration");
+	if (!is_set || !checkpoint_iteration.IsValid()) {
+		return;
+	}
+	auto expected_db_identifier = single_file_block_manager.GetDBIdentifier();
+	if (!MainHeader::CompareDBIdentifiers(db_identifier, expected_db_identifier)) {
+		throw IOException("WAL does not match database file.");
+	}
 
-		auto expected_checkpoint_iteration = single_file_block_manager.GetCheckpointIteration();
-		auto checkpoint_iteration = deserializer.ReadProperty<uint64_t>(103, "checkpoint_iteration");
-		if (expected_checkpoint_iteration != checkpoint_iteration) {
-			string relation = checkpoint_iteration < expected_checkpoint_iteration ? "older" : "newer";
-			throw IOException("This WAL was created for this database file, but the WAL checkpoint iteration does not "
-			                  "match the database file. "
-			                  "That means the WAL was created for a %s version of this database. File checkpoint "
-			                  "iteration: %d, WAL checkpoint iteration: %d",
-			                  relation, expected_checkpoint_iteration, checkpoint_iteration);
+	auto wal_checkpoint_iteration = checkpoint_iteration.GetIndex();
+	auto expected_checkpoint_iteration = single_file_block_manager.GetCheckpointIteration();
+	if (expected_checkpoint_iteration != wal_checkpoint_iteration) {
+		if (wal_checkpoint_iteration + 1 == expected_checkpoint_iteration) {
+			// this iteration is exactly one lower than the expected iteration
+			// this can happen if we aborted AFTER checkpointing the file, but BEFORE truncating the WAL
+			// expect this situation to occur - we will throw an error if it does not later on
+			state.expected_checkpoint_id = expected_checkpoint_iteration;
+			return;
 		}
+		ThrowVersionError(wal_checkpoint_iteration, expected_checkpoint_iteration);
 	}
 }
 
@@ -549,7 +573,7 @@ void WriteAheadLogDeserializer::ReplayIndexData(IndexStorageInfo &info) {
 			// Convert the buffer handle to a persistent block and store the block id.
 			if (!deserialize_only) {
 				auto block_id = block_manager->GetFreeBlockId();
-				block_manager->ConvertToPersistent(QueryContext(context), block_id, std::move(block_handle),
+				block_manager->ConvertToPersistent(context, block_id, std::move(block_handle),
 				                                   std::move(buffer_handle));
 				data_info.block_pointers[j].block_id = block_id;
 			}

@@ -608,6 +608,7 @@ static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_m
 	case LogicalTypeId::ANY:
 	case LogicalTypeId::USER:
 	case LogicalTypeId::TEMPLATE:
+	case LogicalTypeId::VARIANT:
 	case LogicalTypeId::CHAR:
 	case LogicalTypeId::STRING_LITERAL:
 	case LogicalTypeId::INTEGER_LITERAL:
@@ -615,6 +616,7 @@ static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_m
 	case LogicalTypeId::VALIDITY:
 	case LogicalTypeId::TABLE:
 	case LogicalTypeId::LAMBDA:
+	case LogicalTypeId::GEOMETRY: // TODO! Add support for GEOMETRY
 		throw InternalException("Unsupported type arrived at JSON create function");
 	}
 }

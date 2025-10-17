@@ -6,10 +6,13 @@
 statement error
 PRAGMA enable_profiling()
 ----
+Parser Error: syntax error at or near ")"
+
 
 statement error
 PRAGMA enable_profiling='unsupported'
 ----
+Parser Error: Unrecognized print format unsupported, supported formats: [json, query_tree, query_tree_optimizer, no_output]
 
 statement error
 PRAGMA profiling_output

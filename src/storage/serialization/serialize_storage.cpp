@@ -25,7 +25,9 @@ BlockPointer BlockPointer::Deserialize(Deserializer &deserializer) {
 }
 
 void DataPointer::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<uint64_t>(100, "row_start", row_start);
+	if (!serializer.ShouldSerialize(7)) {
+		serializer.WritePropertyWithDefault<uint64_t>(100, "row_start", row_start);
+	}
 	serializer.WritePropertyWithDefault<uint64_t>(101, "tuple_count", tuple_count);
 	serializer.WriteProperty<BlockPointer>(102, "block_pointer", block_pointer);
 	serializer.WriteProperty<CompressionType>(103, "compression_type", compression_type);
@@ -34,13 +36,12 @@ void DataPointer::Serialize(Serializer &serializer) const {
 }
 
 DataPointer DataPointer::Deserialize(Deserializer &deserializer) {
-	auto row_start = deserializer.ReadPropertyWithDefault<uint64_t>(100, "row_start");
+	deserializer.ReadDeletedProperty<uint64_t>(100, "row_start");
 	auto tuple_count = deserializer.ReadPropertyWithDefault<uint64_t>(101, "tuple_count");
 	auto block_pointer = deserializer.ReadProperty<BlockPointer>(102, "block_pointer");
 	auto compression_type = deserializer.ReadProperty<CompressionType>(103, "compression_type");
 	auto statistics = deserializer.ReadProperty<BaseStatistics>(104, "statistics");
 	DataPointer result(std::move(statistics));
-	result.row_start = row_start;
 	result.tuple_count = tuple_count;
 	result.block_pointer = block_pointer;
 	result.compression_type = compression_type;

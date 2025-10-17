@@ -23,7 +23,7 @@ fi
 
 # CONFIG
 FROM_BUCKET=duckdb-extensions-nightly
-TO_BUCKET=duckdb-extensions
+TO_BUCKET=duckdb-core-extensions
 CLOUDFRONT_DISTRIBUTION_ID=E2Z28NDMI4PVXP
 
 ### COPY THE FILES

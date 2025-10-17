@@ -217,9 +217,6 @@ void ARTMerger::MergeNodeAndPrefix(Node &node, Node &prefix, const GateStatus pa
 	auto child = node.GetChildMutable(art, byte);
 
 	// Reduce the prefix to the bytes after pos.
-	// We always reduce by at least one byte,
-	// thus, if the prefix was a gate, it no longer is.
-	prefix.SetGateStatus(GateStatus::GATE_NOT_SET);
 	Prefix::Reduce(art, prefix, pos);
 
 	if (child) {
