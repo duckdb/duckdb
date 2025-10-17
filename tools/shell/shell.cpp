@@ -3301,10 +3301,8 @@ bool ShellState::ImportData(const char **azArg, idx_t nArg) {
 	const char *zFile = nullptr;               /* Name of file to extra content from */
 	sqlite3_stmt *pStmt = nullptr;             /* A statement */
 	int nCol;                                  /* Number of columns in the table */
-	int nByte;                                 /* Number of bytes in an SQL string */
 	int j;                                     /* Loop counters */
 	int needCommit;                            /* True to COMMIT or ROLLBACK at end */
-	char *zSql;                                /* An SQL statement */
 	ImportCtx sCtx;                            /* Reader context */
 	char *(SQLITE_CDECL * xRead)(ImportCtx *); /* Func to read one value */
 	int eVerbose = 0;                          /* Larger for more console output */
@@ -3427,13 +3425,8 @@ bool ShellState::ImportData(const char **azArg, idx_t nArg) {
 		while (xRead(&sCtx) && sCtx.cTerm == sCtx.cColSep) {
 		}
 	}
-	zSql = sqlite3_mprintf("SELECT * FROM %s", zTable);
-	if (zSql == 0) {
-		import_cleanup(&sCtx);
-		shell_out_of_memory();
-	}
-	nByte = StringLength(zSql);
-	rc = sqlite3_prepare_v2(db, zSql, -1, &pStmt, 0);
+	auto zSql = StringUtil::Format("SELECT * FROM %s", zTable);
+	rc = sqlite3_prepare_v2(db, zSql.c_str(), -1, &pStmt, 0);
 	import_append_char(&sCtx, 0); /* To ensure sCtx.z is allocated */
 	if (rc && sqlite3_strglob("Catalog Error: Table with name *", sqlite3_errmsg(db)) == 0) {
 		char *zCreate = sqlite3_mprintf("CREATE TABLE %s", zTable);
@@ -3461,9 +3454,8 @@ bool ShellState::ImportData(const char **azArg, idx_t nArg) {
 			import_cleanup(&sCtx);
 			return false;
 		}
-		rc = sqlite3_prepare_v2(db, zSql, -1, &pStmt, 0);
+		rc = sqlite3_prepare_v2(db, zSql.c_str(), -1, &pStmt, 0);
 	}
-	sqlite3_free(zSql);
 	if (rc) {
 		if (pStmt)
 			sqlite3_finalize(pStmt);
@@ -3474,26 +3466,18 @@ bool ShellState::ImportData(const char **azArg, idx_t nArg) {
 	nCol = sqlite3_column_count(pStmt);
 	sqlite3_finalize(pStmt);
 	pStmt = 0;
-	if (nCol == 0)
+	if (nCol == 0) {
 		return 0; /* no columns, no error */
-	zSql = (char *)sqlite3_malloc64(nByte * 2 + 20 + nCol * 2);
-	if (zSql == 0) {
-		import_cleanup(&sCtx);
-		shell_out_of_memory();
 	}
-	sqlite3_snprintf(nByte + 20, zSql, "INSERT INTO \"%w\" VALUES(?", zTable);
-	j = StringLength(zSql);
+	zSql = StringUtil::Format("INSERT INTO %s VALUES(?", SQLIdentifier(zTable));
 	for (int i = 1; i < nCol; i++) {
-		zSql[j++] = ',';
-		zSql[j++] = '?';
+		zSql += ",?";
 	}
-	zSql[j++] = ')';
-	zSql[j] = 0;
+	zSql += ")";
 	if (eVerbose >= 2) {
-		utf8_printf(out, "Insert using: %s\n", zSql);
+		utf8_printf(out, "Insert using: %s\n", zSql.c_str());
 	}
-	rc = sqlite3_prepare_v2(db, zSql, -1, &pStmt, 0);
-	sqlite3_free(zSql);
+	rc = sqlite3_prepare_v2(db, zSql.c_str(), -1, &pStmt, 0);
 	if (rc) {
 		ShellDatabaseError(db);
 		if (pStmt)
@@ -3906,17 +3890,15 @@ MetadataResult RunShellCommand(ShellState &state, const char **azArg, idx_t nArg
 		utf8_printf(stderr, ".sh/.system cannot be used in -safe mode\n");
 		return MetadataResult::FAIL;
 	}
-	char *zCmd;
 	int x;
 	if (nArg < 2) {
 		return MetadataResult::PRINT_USAGE;
 	}
-	zCmd = sqlite3_mprintf(strchr(azArg[1], ' ') == 0 ? "%s" : "\"%s\"", azArg[1]);
+	auto zCmd = StringUtil::Format(strchr(azArg[1], ' ') == 0 ? "%s" : "\"%s\"", azArg[1]);
 	for (idx_t i = 2; i < nArg; i++) {
-		zCmd = sqlite3_mprintf(strchr(azArg[i], ' ') == 0 ? "%z %s" : "%z \"%s\"", zCmd, azArg[i]);
+		zCmd += StringUtil::Format(strchr(azArg[i], ' ') == 0 ? " %s" : " \"%s\"", azArg[i]);
 	}
-	x = system(zCmd);
-	sqlite3_free(zCmd);
+	x = system(zCmd.c_str());
 	if (x) {
 		raw_printf(stderr, "System command returns %d\n", x);
 	}
