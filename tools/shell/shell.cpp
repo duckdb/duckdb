@@ -148,7 +148,10 @@ typedef unsigned char u8;
 #include "shell_highlight.hpp"
 #include "shell_state.hpp"
 
+using duckdb::KeywordHelper;
 using duckdb::StringUtil;
+using duckdb::SQLIdentifier;
+using duckdb::SQLString;
 using namespace duckdb_shell;
 
 #if defined(_WIN32) || defined(WIN32)
@@ -1166,13 +1169,7 @@ static const char needCsvQuote[] = {
 };
 
 void ShellState::PrintOptionallyQuotedIdentifier(const char *input) {
-	if (quoteChar(input)) {
-		char *quoted = sqlite3_mprintf("\"%w\"", input);
-		Print(quoted);
-		sqlite3_free(quoted);
-	} else {
-		Print(input);
-	}
+	Print(StringUtil::Format("%s", SQLIdentifier(input)));
 }
 
 /*
@@ -1879,17 +1876,12 @@ static void freeColumnList(char **azCol) {
 char **ShellState::TableColumnList(const char *zTab) {
 	char **azCol = 0;
 	sqlite3_stmt *pStmt;
-	char *zSql;
 	int nCol = 0;
 	int nAlloc = 0;
-	int nPK = 0;   /* Number of PRIMARY KEY columns seen */
-	int isIPK = 0; /* True if one PRIMARY KEY column of type INTEGER */
-	int preserveRowid = ShellHasFlag(SHFLG_PreserveRowid);
 	int rc;
 
-	zSql = sqlite3_mprintf("PRAGMA table_info=%Q", zTab);
-	rc = sqlite3_prepare_v2(db, zSql, -1, &pStmt, 0);
-	sqlite3_free(zSql);
+	auto zSql = StringUtil::Format("PRAGMA table_info=%s", SQLString(zTab));
+	rc = sqlite3_prepare_v2(db, zSql.c_str(), -1, &pStmt, 0);
 	if (rc)
 		return 0;
 	while (sqlite3_step(pStmt) == SQLITE_ROW) {
@@ -1900,14 +1892,6 @@ char **ShellState::TableColumnList(const char *zTab) {
 				shell_out_of_memory();
 		}
 		azCol[++nCol] = sqlite3_mprintf("%s", sqlite3_column_text(pStmt, 1));
-		if (sqlite3_column_int(pStmt, 5)) {
-			nPK++;
-			if (nPK == 1 && StringUtil::CIEquals((const char *)sqlite3_column_text(pStmt, 2), "INTEGER")) {
-				isIPK = 1;
-			} else {
-				isIPK = 0;
-			}
-		}
 	}
 	sqlite3_finalize(pStmt);
 	if (azCol == 0)
@@ -1915,55 +1899,6 @@ char **ShellState::TableColumnList(const char *zTab) {
 	azCol[0] = 0;
 	azCol[nCol + 1] = 0;
 
-	/* The decision of whether or not a rowid really needs to be preserved
-	** is tricky.  We never need to preserve a rowid for a WITHOUT ROWID table
-	** or a table with an INTEGER PRIMARY KEY.  We are unable to preserve
-	** rowids on tables where the rowid is inaccessible because there are other
-	** columns in the table named "rowid", "_rowid_", and "oid".
-	*/
-	if (preserveRowid && isIPK) {
-		/* If a single PRIMARY KEY column with type INTEGER was seen, then it
-		** might be an alise for the ROWID.  But it might also be a WITHOUT ROWID
-		** table or a INTEGER PRIMARY KEY DESC column, neither of which are
-		** ROWID aliases.  To distinguish these cases, check to see if
-		** there is a "pk" entry in "PRAGMA index_list".  There will be
-		** no "pk" index if the PRIMARY KEY really is an alias for the ROWID.
-		*/
-		zSql = sqlite3_mprintf("SELECT 1 FROM pragma_index_list(%Q)"
-		                       " WHERE origin='pk'",
-		                       zTab);
-		rc = sqlite3_prepare_v2(db, zSql, -1, &pStmt, 0);
-		sqlite3_free(zSql);
-		if (rc) {
-			freeColumnList(azCol);
-			return 0;
-		}
-		rc = sqlite3_step(pStmt);
-		sqlite3_finalize(pStmt);
-		preserveRowid = rc == SQLITE_ROW;
-	}
-	if (preserveRowid) {
-		/* Only preserve the rowid if we can find a name to use for the
-		** rowid */
-		static const char *azRowid[] = {"rowid", "_rowid_", "oid"};
-		int i, j;
-		for (j = 0; j < 3; j++) {
-			for (i = 1; i <= nCol; i++) {
-				if (StringUtil::CIEquals(azRowid[j], azCol[i]))
-					break;
-			}
-			if (i > nCol) {
-				/* At this point, we know that azRowid[j] is not the name of any
-				** ordinary column in the table.  Verify that azRowid[j] is a valid
-				** name for the rowid before adding it to azCol[0].  WITHOUT ROWID
-				** tables will fail this last check */
-				rc = sqlite3_table_column_metadata(db, 0, zTab, azRowid[j], 0, 0, 0, 0, 0);
-				if (rc == SQLITE_OK)
-					azCol[0] = (char *)azRowid[j];
-				break;
-			}
-		}
-	}
 	return azCol;
 }
 
@@ -1986,25 +1921,22 @@ static void toggleSelectOrder(sqlite3 *db) {
 /*
 ** Lookup the schema for a table using the information schema.
 */
-static char *getTableSchema(sqlite3 *db, const char *zTable) {
-	char *zSchema = NULL;
-	sqlite3_stmt *pStmt = NULL;
-	char *zSql = sqlite3_mprintf("SELECT table_schema FROM information_schema.tables "
-	                             "WHERE table_name = %Q AND table_type='BASE TABLE' "
+static string getTableSchema(sqlite3 *db, const char *zTable) {
+	string zSchema;
+	auto zSql = StringUtil::Format("SELECT table_schema FROM information_schema.tables "
+	                             "WHERE table_name = %s AND table_type='BASE TABLE' "
 	                             "ORDER BY (table_schema='main') DESC LIMIT 1",
-	                             zTable);
+	                             SQLString(zTable));
 
-	if (!zSql)
-		return NULL;
-
-	int rc = sqlite3_prepare_v2(db, zSql, -1, &pStmt, 0);
-	sqlite3_free(zSql);
+	sqlite3_stmt *pStmt = NULL;
+	int rc = sqlite3_prepare_v2(db, zSql.c_str(), -1, &pStmt, 0);
 
 	if (rc == SQLITE_OK && pStmt) {
 		if (sqlite3_step(pStmt) == SQLITE_ROW) {
 			const char *schema = (const char *)sqlite3_column_text(pStmt, 0);
-			if (schema)
-				zSchema = sqlite3_mprintf("%s", schema);
+			if (schema) {
+				zSchema = schema;
+			}
 		}
 		sqlite3_finalize(pStmt);
 	}
@@ -2013,39 +1945,10 @@ static char *getTableSchema(sqlite3 *db, const char *zTable) {
 }
 
 /*
-** Quote an identifier if needed.
-*/
-static char *quoteIdentifier(const char *zIdent) {
-	if (!zIdent)
-		return NULL;
-
-	bool needsQuote = !isalpha((unsigned char)zIdent[0]) && zIdent[0] != '_';
-	if (!needsQuote) {
-		for (const char *p = zIdent; *p; p++) {
-			if (!isalnum((unsigned char)*p) && *p != '_') {
-				needsQuote = true;
-				break;
-			}
-		}
-	}
-
-	return needsQuote ? sqlite3_mprintf("\"%w\"", zIdent) : sqlite3_mprintf("%s", zIdent);
-}
-
-/*
 ** Build a qualified name: schema.table
 */
-static char *buildQualifiedName(const char *zSchema, const char *zTable) {
-	char *quotedSchema = quoteIdentifier(zSchema);
-	char *quotedTable = quoteIdentifier(zTable);
-	char *result = NULL;
-
-	if (quotedSchema && quotedTable) {
-		result = sqlite3_mprintf("%s.%s", quotedSchema, quotedTable);
-	}
-	sqlite3_free(quotedSchema);
-	sqlite3_free(quotedTable);
-	return result;
+static string buildQualifiedName(const char *zSchema, const char *zTable) {
+	return StringUtil::Format("%s.%s", SQLIdentifier(zSchema), SQLIdentifier(zTable));
 }
 
 /*
@@ -2075,12 +1978,10 @@ static int dump_callback(void *pArg, int nArg, char **azArg, char **azNotUsed) {
 	} else if (strncmp(zTable, "sqlite_", 7) == 0) {
 		return 0;
 	} else if (strncmp(zSql, "CREATE VIRTUAL TABLE", 20) == 0) {
-		char *zIns;
-		zIns = sqlite3_mprintf("INSERT INTO sqlite_schema(type,name,tbl_name,rootpage,sql)"
-		                       "VALUES('table','%q','%q',0,'%q');",
-		                       zTable, zTable, zSql);
-		utf8_printf(p->out, "%s\n", zIns);
-		sqlite3_free(zIns);
+		auto zIns = StringUtil::Format("INSERT INTO sqlite_schema(type,name,tbl_name,rootpage,sql)"
+		                       "VALUES('table',%s,%s,0,%s);",
+		                       SQLString(zTable), SQLString(zTable), SQLString(zSql));
+		utf8_printf(p->out, "%s\n", zIns.c_str());
 		return 0;
 	} else {
 		p->PrintSchemaLine(zSql, ";\n");
@@ -2093,30 +1994,20 @@ static int dump_callback(void *pArg, int nArg, char **azArg, char **azNotUsed) {
 		int i;
 		char *savedDestTable;
 		RenderMode savedMode;
-		char *zSchema = NULL;
-		char *zQualifiedName = NULL;
+		string zSchema;
+		string zQualifiedName;
 
 		zSchema = getTableSchema(p->db, zTable);
-		if (!zSchema)
-			zSchema = sqlite3_mprintf("main");
+		zQualifiedName = buildQualifiedName(zSchema.c_str(), zTable);
 
-		zQualifiedName = buildQualifiedName(zSchema, zTable);
-		if (!zQualifiedName) {
-			sqlite3_free(zSchema);
-			p->nErr++;
-			return 0;
-		}
-
-		azCol = p->TableColumnList(zQualifiedName);
+		azCol = p->TableColumnList(zQualifiedName.c_str());
 		if (azCol == 0) {
-			sqlite3_free(zQualifiedName);
-			sqlite3_free(zSchema);
 			p->nErr++;
 			return 0;
 		}
 
-		if (strcmp(zSchema, "main") != 0) {
-			appendText(sTable, zQualifiedName, 0);
+		if (!zSchema.empty()) {
+			appendText(sTable, zQualifiedName.c_str(), 0);
 		} else {
 			appendText(sTable, zTable, quoteChar(zTable));
 		}
@@ -2148,7 +2039,7 @@ static int dump_callback(void *pArg, int nArg, char **azArg, char **azNotUsed) {
 		}
 		freeColumnList(azCol);
 		appendText(sSelect, " FROM ", 0);
-		appendText(sSelect, zQualifiedName, 0);
+		appendText(sSelect, zQualifiedName.c_str(), 0);
 
 		savedDestTable = p->zDestTable;
 		savedMode = p->mode;
@@ -2163,8 +2054,6 @@ static int dump_callback(void *pArg, int nArg, char **azArg, char **azNotUsed) {
 		}
 		p->zDestTable = savedDestTable;
 		p->mode = savedMode;
-		sqlite3_free(zQualifiedName);
-		sqlite3_free(zSchema);
 		if (rc != SQLITE_OK && rc != SQLITE_DONE)
 			p->nErr++;
 	}
@@ -2237,7 +2126,6 @@ static const char *azHelp[] = {
     ".decimal_sep SEP         Sets the decimal separator used when rendering numbers. Only for duckbox mode.",
     ".dump ?TABLE?            Render database content as SQL",
     "   Options:",
-    "     --preserve-rowids      Include ROWID values in the output",
     "     --newlines             Allow unescaped newline characters in output",
     "   TABLE is a LIKE pattern for the tables to dump",
     "   Additional LIKE patterns can be given in subsequent arguments",
@@ -3174,7 +3062,7 @@ MetadataResult DumpTable(ShellState &state, const char **azArg, idx_t nArg) {
 	char *zSql;
 	bool savedShowHeader = state.showHeader;
 	int savedShellFlags = state.shellFlgs;
-	state.ShellClearFlag(SHFLG_PreserveRowid | SHFLG_Newlines | SHFLG_Echo);
+	state.ShellClearFlag(SHFLG_Newlines | SHFLG_Echo);
 	for (idx_t i = 1; i < nArg; i++) {
 		if (azArg[i][0] == '-') {
 			const char *z = azArg[i] + 1;
@@ -3217,11 +3105,8 @@ MetadataResult DumpTable(ShellState &state, const char **azArg, idx_t nArg) {
 		while (sqlite3_step(pStmt) == SQLITE_ROW) {
 			const char *schema = (const char *)sqlite3_column_text(pStmt, 0);
 			if (schema) {
-				char *quotedSchema = quoteIdentifier(schema);
-				if (quotedSchema) {
-					raw_printf(state.out, "CREATE SCHEMA IF NOT EXISTS %s;\n", quotedSchema);
-					sqlite3_free(quotedSchema);
-				}
+				auto create_schema = StringUtil::Format("CREATE SCHEMA IF NOT EXISTS %s;", SQLIdentifier(schema));
+				raw_printf(state.out, "%s;\n", create_schema.c_str());
 			}
 		}
 		sqlite3_finalize(pStmt);
