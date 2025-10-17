@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/string.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/enums/set_operation_type.hpp"
 #include "duckdb/common/shared_ptr.hpp"

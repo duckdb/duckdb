@@ -83,6 +83,8 @@ struct VariantUtils {
 	DUCKDB_API static Value ConvertVariantToValue(const UnifiedVariantVectorData &variant, idx_t row,
 	                                              uint32_t values_idx);
 	DUCKDB_API static bool Verify(Vector &variant, const SelectionVector &sel_p, idx_t count);
+	DUCKDB_API static void FinalizeVariantKeys(Vector &variant, OrderedOwningStringMap<uint32_t> &dictionary,
+	                                           SelectionVector &sel, idx_t sel_size);
 };
 
 } // namespace duckdb

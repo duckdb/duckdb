@@ -7,10 +7,28 @@
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/enum_util.hpp"
 
+#include <type_traits>
+
 namespace duckdb {
 
 template <typename Visitor, typename ReturnType = typename Visitor::result_type>
 class VariantVisitor {
+	// Detects if T has a static VisitMetadata with signature
+	// void VisitMetadata(VariantLogicalType, Args...)
+	template <typename T, typename... Args>
+	class has_visit_metadata {
+	private:
+		template <typename U>
+		static auto test(int) -> decltype(U::VisitMetadata(std::declval<VariantLogicalType>(), std::declval<Args>()...),
+		                                  std::true_type {});
+
+		template <typename>
+		static std::false_type test(...);
+
+	public:
+		static constexpr bool value = decltype(test<T>(0))::value;
+	};
+
 public:
 	template <typename... Args>
 	static ReturnType Visit(const UnifiedVariantVectorData &variant, idx_t row, uint32_t values_idx, Args &&...args) {
@@ -22,6 +40,8 @@ public:
 		auto byte_offset = variant.GetByteOffset(row, values_idx);
 		auto blob_data = const_data_ptr_cast(variant.GetData(row).GetData());
 		auto ptr = const_data_ptr_cast(blob_data + byte_offset);
+
+		VisitMetadata(type_id, std::forward<Args>(args)...);
 
 		switch (type_id) {
 		case VariantLogicalType::VARIANT_NULL:
@@ -93,15 +113,29 @@ public:
 		}
 	}
 
-	template <typename... Args>
-	static vector<ReturnType> VisitArrayItems(const UnifiedVariantVectorData &variant, idx_t row,
-	                                          const VariantNestedData &array_data, Args &&...args) {
-		vector<ReturnType> array_items;
+	// Non-void version
+	template <typename R = ReturnType, typename... Args>
+	static typename std::enable_if<!std::is_void<R>::value, vector<R>>::type
+	VisitArrayItems(const UnifiedVariantVectorData &variant, idx_t row, const VariantNestedData &array_data,
+	                Args &&...args) {
+		vector<R> array_items;
+		array_items.reserve(array_data.child_count);
 		for (idx_t i = 0; i < array_data.child_count; i++) {
 			auto values_index = variant.GetValuesIndex(row, array_data.children_idx + i);
 			array_items.emplace_back(Visit(variant, row, values_index, std::forward<Args>(args)...));
 		}
 		return array_items;
+	}
+
+	// Void version
+	template <typename R = ReturnType, typename... Args>
+	static typename std::enable_if<std::is_void<R>::value, void>::type
+	VisitArrayItems(const UnifiedVariantVectorData &variant, idx_t row, const VariantNestedData &array_data,
+	                Args &&...args) {
+		for (idx_t i = 0; i < array_data.child_count; i++) {
+			auto values_index = variant.GetValuesIndex(row, array_data.children_idx + i);
+			Visit(variant, row, values_index, std::forward<Args>(args)...);
+		}
 	}
 
 	template <typename... Args>
@@ -121,6 +155,19 @@ public:
 	}
 
 private:
+	template <typename V = Visitor, typename... Args>
+	static typename std::enable_if<has_visit_metadata<V, Args...>::value, void>::type
+	VisitMetadata(VariantLogicalType type_id, Args &&...args) {
+		Visitor::VisitMetadata(type_id, std::forward<Args>(args)...);
+	}
+
+	// Fallback if the method does not exist
+	template <typename V = Visitor, typename... Args>
+	static typename std::enable_if<!has_visit_metadata<V, Args...>::value, void>::type VisitMetadata(VariantLogicalType,
+	                                                                                                 Args &&...) {
+		// do nothing
+	}
+
 	template <typename... Args>
 	static ReturnType VisitArray(const UnifiedVariantVectorData &variant, idx_t row, uint32_t values_idx,
 	                             Args &&...args) {
