@@ -46,8 +46,10 @@
         "test/fuzzer/pedro/view_not_rebound_error_no_view_dependencies.test",
         "test/issues/rigger/assertion_scale.test",
         "test/issues/general/test_16662.test",
-        "test/sql/copy/csv/test_null_padding_projection.test"
-
+        "test/sql/copy/csv/test_null_padding_projection.test",
+        "test/sql/types/geo/geometry.test",
+        "test/sql/types/geo/geometry_stats.test",
+        "test/sql/types/variant/variant_distinct.test"
       ]
     }
   ]
