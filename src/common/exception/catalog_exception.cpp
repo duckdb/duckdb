@@ -9,8 +9,8 @@ namespace duckdb {
 CatalogException::CatalogException(const string &msg) : Exception(ExceptionType::CATALOG, msg) {
 }
 
-CatalogException::CatalogException(const string &msg, const unordered_map<string, string> &extra_info)
-    : Exception(ExceptionType::CATALOG, msg, extra_info) {
+CatalogException::CatalogException(const unordered_map<string, string> &extra_info, const string &msg)
+    : Exception(extra_info, ExceptionType::CATALOG, msg) {
 }
 
 CatalogException CatalogException::MissingEntry(const EntryLookupInfo &lookup_info, const string &suggestion) {
@@ -35,9 +35,9 @@ CatalogException CatalogException::MissingEntry(const EntryLookupInfo &lookup_in
 	if (!suggestion.empty()) {
 		extra_info["candidates"] = suggestion;
 	}
-	return CatalogException(StringUtil::Format("%s with name %s does not exist%s!%s", CatalogTypeToString(type), name,
-	                                           version_info, did_you_mean),
-	                        extra_info);
+	return CatalogException(extra_info,
+	                        StringUtil::Format("%s with name %s does not exist%s!%s", CatalogTypeToString(type), name,
+	                                           version_info, did_you_mean));
 }
 
 CatalogException CatalogException::MissingEntry(CatalogType type, const string &name, const string &suggestion,
@@ -55,17 +55,17 @@ CatalogException CatalogException::MissingEntry(const string &type, const string
 	if (!suggestions.empty()) {
 		extra_info["candidates"] = StringUtil::Join(suggestions, ", ");
 	}
-	return CatalogException(StringUtil::Format("unrecognized %s \"%s\"\n%s", type, name,
-	                                           StringUtil::CandidatesErrorMessage(suggestions, name, "Did you mean")),
-	                        extra_info);
+	return CatalogException(extra_info,
+	                        StringUtil::Format("unrecognized %s \"%s\"\n%s", type, name,
+	                                           StringUtil::CandidatesErrorMessage(suggestions, name, "Did you mean")));
 }
 
 CatalogException CatalogException::EntryAlreadyExists(CatalogType type, const string &name, QueryErrorContext context) {
 	auto extra_info = Exception::InitializeExtraInfo("ENTRY_ALREADY_EXISTS", optional_idx());
 	extra_info["name"] = name;
 	extra_info["type"] = CatalogTypeToString(type);
-	return CatalogException(StringUtil::Format("%s with name \"%s\" already exists!", CatalogTypeToString(type), name),
-	                        extra_info);
+	return CatalogException(extra_info,
+	                        StringUtil::Format("%s with name \"%s\" already exists!", CatalogTypeToString(type), name));
 }
 
 } // namespace duckdb
