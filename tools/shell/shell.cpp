@@ -1192,9 +1192,8 @@ void ShellState::OutputCSV(const char *z, int bSep) {
 			}
 		}
 		if (i == 0) {
-			char *zQuoted = sqlite3_mprintf("\"%w\"", z);
+			auto zQuoted = StringUtil::Format("%s", SQLIdentifier(z));
 			Print(zQuoted);
-			sqlite3_free(zQuoted);
 		} else {
 			Print(z);
 		}
@@ -3620,7 +3619,7 @@ bool ShellState::OpenDatabase(const char **azArg, idx_t nArg) {
 		utf8_printf(stderr, ".open cannot be used in -safe mode\n");
 		return false;
 	}
-	char *zNewFilename;   /* Name of the database file to open */
+	string zNewFilename;   /* Name of the database file to open */
 	idx_t iName = 1;      /* Index in azArg[] of the filename */
 	bool newFlag = false; /* True to delete file before opening */
 	/* Close the existing database */
@@ -3646,16 +3645,17 @@ bool ShellState::OpenDatabase(const char **azArg, idx_t nArg) {
 		}
 	}
 	/* If a filename is specified, try to open it first */
-	zNewFilename = nArg > iName ? sqlite3_mprintf("%s", azArg[iName]) : 0;
-	if (zNewFilename || openMode == SHELL_OPEN_HEXDB) {
+	if (nArg > iName) {
+		zNewFilename = azArg[iName];
+	}
+	if (!zNewFilename.empty() || openMode == SHELL_OPEN_HEXDB) {
 		if (newFlag) {
-			shellDeleteFile(zNewFilename);
+			shellDeleteFile(zNewFilename.c_str());
 		}
 		zDbFilename = zNewFilename;
-		sqlite3_free(zNewFilename);
 		OpenDB(OPEN_DB_KEEPALIVE);
 		if (!db) {
-			utf8_printf(stderr, "Error: cannot open '%s'\n", zNewFilename);
+			utf8_printf(stderr, "Error: cannot open '%s'\n", zNewFilename.c_str());
 		}
 	}
 	if (!db) {
@@ -3897,7 +3897,7 @@ bool ShellState::DisplaySchemas(const char **azArg, idx_t nArg) {
 	if (zDiv) {
 		appendText(sSelect, "SELECT sql FROM sqlite_master WHERE ", 0);
 		if (zName) {
-			char *zQarg = sqlite3_mprintf("%Q", zName);
+			auto zQarg = StringUtil::Format("%s", SQLString(zName));
 			int bGlob = strchr(zName, '*') != 0 || strchr(zName, '?') != 0 || strchr(zName, '[') != 0;
 			if (strchr(zName, '.')) {
 				appendText(sSelect, "lower(printf('%s.%s',sname,tbl_name))", 0);
@@ -3905,12 +3905,11 @@ bool ShellState::DisplaySchemas(const char **azArg, idx_t nArg) {
 				appendText(sSelect, "lower(tbl_name)", 0);
 			}
 			appendText(sSelect, bGlob ? " GLOB " : " LIKE ", 0);
-			appendText(sSelect, zQarg, 0);
+			appendText(sSelect, zQarg.c_str(), 0);
 			if (!bGlob) {
 				appendText(sSelect, " ESCAPE '\\' ", 0);
 			}
 			appendText(sSelect, " AND ", 0);
-			sqlite3_free(zQarg);
 		}
 		appendText(sSelect,
 		           "type!='meta' AND sql IS NOT NULL"
