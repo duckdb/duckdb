@@ -4,7 +4,7 @@
 
 namespace duckdb {
 
-PhysicalSetVariable::PhysicalSetVariable(PhysicalPlan &physical_plan, string name_p, idx_t estimated_cardinality)
+PhysicalSetVariable::PhysicalSetVariable(PhysicalPlan &physical_plan, const string &name_p, idx_t estimated_cardinality)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::SET_VARIABLE, {LogicalType::BOOLEAN},
                        estimated_cardinality),
       name(physical_plan.ArenaRef().MakeString(name_p)) {
