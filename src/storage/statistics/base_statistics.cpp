@@ -573,8 +573,12 @@ BaseStatistics BaseStatistics::FromConstantType(const Value &input) {
 	}
 	case StatisticsType::VARIANT_STATS: {
 		auto result = VariantStats::CreateEmpty(input.type());
-		VariantStats::SetUnshreddedStats(result, nullptr);
-		if (!input.IsNull()) {
+		auto unshredded_type = VariantStats::GetUnshreddedType();
+		if (input.IsNull()) {
+			VariantStats::SetUnshreddedStats(result, FromConstant(Value(unshredded_type)));
+		} else {
+			VariantStats::SetUnshreddedStats(
+			    result, FromConstant(Value::STRUCT(unshredded_type, StructValue::GetChildren(input))));
 			VariantStats::Update(result, input);
 		}
 		return result;

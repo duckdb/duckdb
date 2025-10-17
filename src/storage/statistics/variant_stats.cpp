@@ -25,12 +25,12 @@ void VariantStatsData::Update(const Value &value) {
 	// throw NotImplementedException("VariantStatsData::Update");
 }
 
-static LogicalType GetUnshreddedType(const LogicalType &variant_type) {
-	return LogicalType::STRUCT(StructType::GetChildTypes(variant_type));
+LogicalType VariantStats::GetUnshreddedType() {
+	return LogicalType::STRUCT(StructType::GetChildTypes(LogicalType::VARIANT()));
 }
 
 void VariantStats::CreateUnshreddedStats(BaseStatistics &stats) {
-	BaseStatistics::Construct(stats.child_stats[0], GetUnshreddedType(stats.GetType()));
+	BaseStatistics::Construct(stats.child_stats[0], GetUnshreddedType());
 }
 
 void VariantStats::Construct(BaseStatistics &stats) {
@@ -42,7 +42,7 @@ BaseStatistics VariantStats::CreateUnknown(LogicalType type) {
 	BaseStatistics result(std::move(type));
 	result.InitializeUnknown();
 	GetDataUnsafe(result).SetUnknown();
-	result.child_stats[0].Copy(BaseStatistics::CreateUnknown(GetUnshreddedType(result.GetType())));
+	result.child_stats[0].Copy(BaseStatistics::CreateUnknown(GetUnshreddedType()));
 	return result;
 }
 
@@ -50,7 +50,7 @@ BaseStatistics VariantStats::CreateEmpty(LogicalType type) {
 	BaseStatistics result(std::move(type));
 	result.InitializeEmpty();
 	GetDataUnsafe(result).SetEmpty();
-	result.child_stats[0].Copy(BaseStatistics::CreateEmpty(GetUnshreddedType(result.GetType())));
+	result.child_stats[0].Copy(BaseStatistics::CreateEmpty(GetUnshreddedType()));
 	return result;
 }
 
@@ -222,53 +222,24 @@ void VariantStats::SetUnshreddedStats(BaseStatistics &stats, unique_ptr<BaseStat
 //}
 
 void VariantStats::Serialize(const BaseStatistics &stats, Serializer &serializer) {
-	const auto &data = GetDataUnsafe(stats);
+	auto &unshredded_stats = VariantStats::GetUnshreddedStats(stats);
 
-	throw NotImplementedException("VariantStats::Serialize");
-	//// Write extent
-	// serializer.WriteObject(200, "extent", [&](Serializer &extent) {
-	//	extent.WriteProperty<double>(101, "x_min", data.extent.x_min);
-	//	extent.WriteProperty<double>(102, "x_max", data.extent.x_max);
-	//	extent.WriteProperty<double>(103, "y_min", data.extent.y_min);
-	//	extent.WriteProperty<double>(104, "y_max", data.extent.y_max);
-	//	extent.WriteProperty<double>(105, "z_min", data.extent.z_min);
-	//	extent.WriteProperty<double>(106, "z_max", data.extent.z_max);
-	//	extent.WriteProperty<double>(107, "m_min", data.extent.m_min);
-	//	extent.WriteProperty<double>(108, "m_max", data.extent.m_max);
-	//});
-
-	//// Write types
-	// serializer.WriteObject(201, "types", [&](Serializer &types) {
-	//	types.WriteProperty<uint8_t>(101, "types_xy", data.types.sets[0]);
-	//	types.WriteProperty<uint8_t>(102, "types_xyz", data.types.sets[1]);
-	//	types.WriteProperty<uint8_t>(103, "types_xym", data.types.sets[2]);
-	//	types.WriteProperty<uint8_t>(104, "types_xyzm", data.types.sets[3]);
-	//});
+	serializer.WriteList(200, "child_stats", 1,
+	                     [&](Serializer::List &list, idx_t i) { list.WriteElement(unshredded_stats); });
 }
 
 void VariantStats::Deserialize(Deserializer &deserializer, BaseStatistics &base) {
-	auto &data = GetDataUnsafe(base);
+	auto &type = base.GetType();
+	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
+	D_ASSERT(type.id() == LogicalTypeId::VARIANT);
 
-	throw NotImplementedException("VariantStats::Deserialize");
-	//// Read extent
-	// deserializer.ReadObject(200, "extent", [&](Deserializer &extent) {
-	//	extent.ReadProperty<double>(101, "x_min", data.extent.x_min);
-	//	extent.ReadProperty<double>(102, "x_max", data.extent.x_max);
-	//	extent.ReadProperty<double>(103, "y_min", data.extent.y_min);
-	//	extent.ReadProperty<double>(104, "y_max", data.extent.y_max);
-	//	extent.ReadProperty<double>(105, "z_min", data.extent.z_min);
-	//	extent.ReadProperty<double>(106, "z_max", data.extent.z_max);
-	//	extent.ReadProperty<double>(107, "m_min", data.extent.m_min);
-	//	extent.ReadProperty<double>(108, "m_max", data.extent.m_max);
-	//});
-
-	//// Read types
-	// deserializer.ReadObject(201, "types", [&](Deserializer &types) {
-	//	types.ReadProperty<uint8_t>(101, "types_xy", data.types.sets[0]);
-	//	types.ReadProperty<uint8_t>(102, "types_xyz", data.types.sets[1]);
-	//	types.ReadProperty<uint8_t>(103, "types_xym", data.types.sets[2]);
-	//	types.ReadProperty<uint8_t>(104, "types_xyzm", data.types.sets[3]);
-	//});
+	auto unshredded_type = GetUnshreddedType();
+	deserializer.ReadList(200, "child_stats", [&](Deserializer::List &list, idx_t i) {
+		deserializer.Set<const LogicalType &>(unshredded_type);
+		auto stat = list.ReadElement<BaseStatistics>();
+		base.child_stats[i].Copy(stat);
+		deserializer.Unset<LogicalType>();
+	});
 }
 
 string VariantStats::ToString(const BaseStatistics &stats) {
