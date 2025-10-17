@@ -537,7 +537,8 @@ static int get_schema(struct ArrowArrayStream *stream, struct ArrowSchema *out) 
 	auto count = duckdb_column_count(&result_wrapper->result);
 	std::vector<duckdb_logical_type> types(count);
 
-	std::vector<std::string> owned_names(count);
+	std::vector<std::string> owned_names;
+	owned_names.reserve(count);
 	duckdb::vector<const char *> names(count);
 	for (idx_t i = 0; i < count; i++) {
 		types[i] = duckdb_column_logical_type(&result_wrapper->result, i);
@@ -793,7 +794,8 @@ AdbcStatusCode StatementGetParameterSchema(struct AdbcStatement *statement, stru
 		count = 1;
 	}
 	std::vector<duckdb_logical_type> types(count);
-	std::vector<std::string> owned_names(count);
+	std::vector<std::string> owned_names;
+	owned_names.reserve(count);
 	duckdb::vector<const char *> names(count);
 
 	for (idx_t i = 0; i < count; i++) {
