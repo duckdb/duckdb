@@ -156,6 +156,14 @@
         "scope": "global"
     },
     {
+        "name": "block_memory_pool_size",
+        "description": "Size of the memory pool for fixed-size blocks that is retained once used.",
+        "type": "VARCHAR",
+        "scope": "global",
+        "custom_implementation": true,
+        "default_value": 0
+    },
+    {
         "name": "catalog_error_max_schemas",
         "description": "The maximum number of schemas the system will scan for \\\"did you mean...\\\" style errors in the catalog",
         "type": "UBIGINT",

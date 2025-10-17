@@ -421,6 +421,12 @@ jobs:
       if: (success() || failure()) && steps.build.conclusion == 'success'
       shell: bash
       run: |
+        ./build/release/test/unittest --test-config test/configs/block_memory_pool_size_100mib.json
+
+    - name: test/configs/enable_verification.json
+      if: (success() || failure()) && steps.build.conclusion == 'success'
+      shell: bash
+      run: |
         ./build/release/test/unittest --test-config test/configs/enable_verification.json
 
     - name: Test dictionary_expression
