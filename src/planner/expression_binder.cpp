@@ -320,12 +320,6 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 	// bind the main expression
 	auto error_msg = Bind(expr, 0, root_expression);
 	if (error_msg.HasError()) {
-		// If the error is unsupported functionality, then we should give up NOW
-		for (auto &info : error_msg.ExtraInfo()) {
-			if (info.first == "error_subtype" && info.second == "UNSUPPORTED") {
-				error_msg.Throw();
-			}
-		}
 		// Try binding the correlated column. If binding the correlated column
 		// has error messages, those should be propagated up. So for the test case
 		// having subquery failed to bind:14 the real error message should be something like

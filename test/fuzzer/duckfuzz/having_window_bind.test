@@ -1,5 +1,5 @@
 # name: test/fuzzer/duckfuzz/having_window_bind.test
-# description: Don't try to bind correlated columns for invalid queries
+# description: Throw window having errors immediately
 # group: [duckfuzz]
 
 require tpch
@@ -44,4 +44,4 @@ FROM
 	) AS t12 
 ORDER BY * ASC;
 ----
-HAVING
+HAVING clause cannot contain window functions
