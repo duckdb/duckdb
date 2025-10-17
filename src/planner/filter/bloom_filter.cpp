@@ -11,7 +11,6 @@ static constexpr idx_t MIN_NUM_BITS = 512;
 static constexpr idx_t LOG_SECTOR_SIZE = 5;
 static constexpr idx_t SIMD_BATCH_SIZE = 16;
 
-
 void CacheSectorizedBloomFilter::Initialize(ClientContext &context_p, idx_t est_num_rows) {
 	context = &context_p;
 	buffer_manager = &BufferManager::GetBufferManager(*context);
@@ -167,8 +166,8 @@ string BloomFilter::ToString(const string &column_name) const {
 	}
 }
 
-void BloomFilter::HashInternal(Vector &keys_v, const SelectionVector &sel, idx_t &approved_count,
-                               BloomFilterState &state) {
+void BloomFilter::HashInternal(Vector &keys_v, const SelectionVector &sel, const idx_t approved_count,
+                               BloomFilterState &state) const {
 	if (sel.IsSet()) {
 		state.keys_sliced_v.Slice(keys_v, sel, approved_count);
 		VectorOperations::Hash(state.keys_sliced_v, state.hashes_v, approved_count);
@@ -177,14 +176,15 @@ void BloomFilter::HashInternal(Vector &keys_v, const SelectionVector &sel, idx_t
 	}
 }
 
-idx_t BloomFilter::Filter(Vector &keys_v, SelectionVector &sel, idx_t &approved_tuple_count, BloomFilterState &state) const {
+idx_t BloomFilter::Filter(Vector &keys_v, SelectionVector &sel, idx_t &approved_tuple_count,
+                          BloomFilterState &state) const {
 
 	if (!FilterInitializedAndActive()) {
 		return approved_tuple_count;
 	}
 
 	if (state.current_capacity < approved_tuple_count) {
-		state.hashes_v.Initialize(approved_tuple_count);
+		state.hashes_v.Initialize(false, approved_tuple_count);
 		state.bf_sel.Initialize(approved_tuple_count);
 		state.current_capacity = approved_tuple_count;
 	}
@@ -209,7 +209,7 @@ idx_t BloomFilter::Filter(Vector &keys_v, SelectionVector &sel, idx_t &approved_
 
 		if (state.vectors_processed == 20) {
 			const double selectivity =
-				static_cast<double>(state.tuples_accepted) / static_cast<double>(state.tuples_processed);
+			    static_cast<double>(state.tuples_accepted) / static_cast<double>(state.tuples_processed);
 			if (selectivity > 0.5) {
 				this->filter.SetActive(false);
 			}
@@ -239,7 +239,6 @@ bool BloomFilter::FilterValue(const Value &value) const {
 	const auto hash = value.Hash();
 	return filter.LookupHash(hash);
 }
-
 
 FilterPropagateResult BloomFilter::CheckStatistics(BaseStatistics &stats) const {
 	if (FilterInitializedAndActive()) {
@@ -280,6 +279,5 @@ unique_ptr<TableFilter> BloomFilter::Deserialize(Deserializer &deserializer) {
 	auto result = make_uniq<BloomFilter>(filter, filters_null_values, key_column_name, key_type);
 	return std::move(result);
 }
-
 
 } // namespace duckdb

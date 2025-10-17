@@ -108,8 +108,8 @@ public:
 	FilterPropagateResult CheckStatistics(BaseStatistics &stats) const override;
 
 private:
-	static void HashInternal(Vector &keys_v, const SelectionVector &sel, idx_t &approved_count,
-	                         BloomFilterState &state);
+	void HashInternal(Vector &keys_v, const SelectionVector &sel, const idx_t approved_count,
+	                         BloomFilterState &state) const;
 
 	bool Equals(const TableFilter &other) const override;
 	unique_ptr<TableFilter> Copy() const override;
