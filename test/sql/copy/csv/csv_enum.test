@@ -9,7 +9,7 @@ statement ok
 CREATE TYPE bla AS ENUM ('Y', 'N');
 
 query I
-select * from read_csv_auto('data/csv/response.csv', header = 0)
+select * from read_csv_auto('{DATA_DIR}/csv/response.csv', header = 0)
 ----
 Y
 Y
@@ -17,7 +17,7 @@ N
 Null
 
 query I
-FROM read_csv('data/csv/response.csv', columns={'response': 'bla'}, nullstr = 'Null');
+FROM read_csv('{DATA_DIR}/csv/response.csv', columns={'response': 'bla'}, nullstr = 'Null');
 ----
 Y
 Y
@@ -26,7 +26,7 @@ NULL
 
 
 query I
-FROM read_csv_auto('data/csv/response.csv', types={'column0': 'bla'}, nullstr = 'Null', header = 0);
+FROM read_csv_auto('{DATA_DIR}/csv/response.csv', types={'column0': 'bla'}, nullstr = 'Null', header = 0);
 ----
 Y
 Y
@@ -34,7 +34,7 @@ N
 NULL
 
 statement error
-FROM read_csv_auto('data/csv/response.csv', auto_type_candidates=['bla'], nullstr = 'Null');
+FROM read_csv_auto('{DATA_DIR}/csv/response.csv', auto_type_candidates=['bla'], nullstr = 'Null');
 ----
 Auto Type Candidate of type ENUM is not accepted as a valid input
 

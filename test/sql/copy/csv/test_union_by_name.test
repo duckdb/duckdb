@@ -33,18 +33,18 @@ INSERT INTO ubn3 VALUES (100,101), (102, 103);
 # Write them to temporary files
 
 statement ok
-COPY ubn1 TO '__TEST_DIR__/ubn1.csv' WITH ( DELIMITER ',');
+COPY ubn1 TO '{TEMP_DIR}/ubn1.csv' WITH ( DELIMITER ',');
 
 statement ok
-COPY ubn2 TO '__TEST_DIR__/ubn2.csv' WITH (DELIMITER ',');
+COPY ubn2 TO '{TEMP_DIR}/ubn2.csv' WITH (DELIMITER ',');
 
 statement ok
-COPY ubn3 TO '__TEST_DIR__/ubn3.csv' WITH (DELIMITER ',');
+COPY ubn3 TO '{TEMP_DIR}/ubn3.csv' WITH (DELIMITER ',');
 
 # Read from them (the order matters)
 
 query I
-SELECT * FROM read_csv_auto(['__TEST_DIR__/ubn1.csv', '__TEST_DIR__/ubn2.csv', '__TEST_DIR__/ubn3.csv']);
+SELECT * FROM read_csv_auto(['{TEMP_DIR}/ubn1.csv', '{TEMP_DIR}/ubn2.csv', '{TEMP_DIR}/ubn3.csv']);
 ----
 1
 2
@@ -56,7 +56,7 @@ SELECT * FROM read_csv_auto(['__TEST_DIR__/ubn1.csv', '__TEST_DIR__/ubn2.csv', '
 
 query III
 SELECT a, b, c
-FROM  read_csv_auto(['__TEST_DIR__/ubn1.csv', '__TEST_DIR__/ubn2.csv', '__TEST_DIR__/ubn3.csv'], UNION_BY_NAME=TRUE)
+FROM  read_csv_auto(['{TEMP_DIR}/ubn1.csv', '{TEMP_DIR}/ubn2.csv', '{TEMP_DIR}/ubn3.csv'], UNION_BY_NAME=TRUE)
 ORDER BY a;
 ----
 1	NULL	NULL
@@ -68,8 +68,8 @@ ORDER BY a;
 9223372036854775807	NULL	NULL
 
 query IIII
-SELECT a, b, c, replace(replace(filename, '__TEST_DIR__', ''), '\', '/')[2:]
-FROM  read_csv_auto(['__TEST_DIR__/ubn1.csv', '__TEST_DIR__/ubn2.csv', '__TEST_DIR__/ubn3.csv'], UNION_BY_NAME=TRUE)
+SELECT a, b, c, replace(replace(filename, '{TEMP_DIR}', ''), '\', '/')[2:]
+FROM  read_csv_auto(['{TEMP_DIR}/ubn1.csv', '{TEMP_DIR}/ubn2.csv', '{TEMP_DIR}/ubn3.csv'], UNION_BY_NAME=TRUE)
 ORDER BY a;
 ----
 1	NULL	NULL	ubn1.csv
@@ -82,26 +82,26 @@ ORDER BY a;
 
 query IIII
 SELECT COUNT(a), COUNT(b), COUNT(c), COUNT(filename)
-FROM  read_csv_auto(['__TEST_DIR__/ubn1.csv', '__TEST_DIR__/ubn2.csv', '__TEST_DIR__/ubn3.csv'], UNION_BY_NAME=TRUE)
+FROM  read_csv_auto(['{TEMP_DIR}/ubn1.csv', '{TEMP_DIR}/ubn2.csv', '{TEMP_DIR}/ubn3.csv'], UNION_BY_NAME=TRUE)
 ----
 7	2	2	7
 
 query TTT
 SELECT typeof(a), typeof(b), typeof(c)
-FROM read_csv_auto(['__TEST_DIR__/ubn1.csv', '__TEST_DIR__/ubn2.csv', '__TEST_DIR__/ubn3.csv'], UNION_BY_NAME=TRUE)
+FROM read_csv_auto(['{TEMP_DIR}/ubn1.csv', '{TEMP_DIR}/ubn2.csv', '{TEMP_DIR}/ubn3.csv'], UNION_BY_NAME=TRUE)
 LIMIT 1;
 ----
 BIGINT	BIGINT	BIGINT
 
 # Test timestamp type
 statement error
-SELECT * FROM read_csv_auto(['data/csv/union-by-name/ubn1.csv', 'data/csv/union-by-name/ubn2.csv', 'data/csv/union-by-name/ubn3.csv', 'data/csv/union-by-name/ubn4.csv'])
+SELECT * FROM read_csv_auto(['{DATA_DIR}/csv/union-by-name/ubn1.csv', '{DATA_DIR}/csv/union-by-name/ubn2.csv', '{DATA_DIR}/csv/union-by-name/ubn3.csv', '{DATA_DIR}/csv/union-by-name/ubn4.csv'])
 ----
 is missing
 
 query IIIII
 SELECT  a, b, c, ts, k
-FROM read_csv_auto('data/csv/union-by-name/ubn*.csv',UNION_BY_NAME=TRUE)
+FROM read_csv_auto('{DATA_DIR}/csv/union-by-name/ubn*.csv',UNION_BY_NAME=TRUE)
 ORDER BY a, c, ts
 ----
 NULL	NULL	3	2003-06-30 12:03:10	6
@@ -120,7 +120,7 @@ test	88	NULL	2020-12-30 01:25:58.745232+01	NULL
 
 query TTTTT
 SELECT  typeof(a), typeof(b), typeof(c), typeof(ts), typeof(k)
-FROM read_csv_auto('data/csv/union-by-name/ubn*.csv',UNION_BY_NAME=TRUE)
+FROM read_csv_auto('{DATA_DIR}/csv/union-by-name/ubn*.csv',UNION_BY_NAME=TRUE)
 LIMIT 1;
 ----
 VARCHAR	BIGINT	BIGINT	VARCHAR	BIGINT
@@ -128,7 +128,7 @@ VARCHAR	BIGINT	BIGINT	VARCHAR	BIGINT
 # projection pushdown
 query II
 SELECT  c, k
-FROM read_csv_auto('data/csv/union-by-name/ubn*.csv',UNION_BY_NAME=TRUE)
+FROM read_csv_auto('{DATA_DIR}/csv/union-by-name/ubn*.csv',UNION_BY_NAME=TRUE)
 ORDER BY c NULLS LAST, k NULLS LAST
 ----
 3	6
@@ -148,7 +148,7 @@ NULL	NULL
 # projection pushdown
 query I
 SELECT  ts
-FROM read_csv_auto('data/csv/union-by-name/ubn*.csv',UNION_BY_NAME=TRUE)
+FROM read_csv_auto('{DATA_DIR}/csv/union-by-name/ubn*.csv',UNION_BY_NAME=TRUE)
 ORDER BY ts NULLS LAST
 ----
 2003-06-30 12:03:10
@@ -166,27 +166,27 @@ NULL
 NULL
 
 query TTT
-SELECT typeof(a), typeof(b), typeof(ts) FROM read_csv_auto('data/csv/union-by-name/ubn2.csv') LIMIT 1;
+SELECT typeof(a), typeof(b), typeof(ts) FROM read_csv_auto('{DATA_DIR}/csv/union-by-name/ubn2.csv') LIMIT 1;
 ----
 VARCHAR	BIGINT	TIMESTAMP WITH TIME ZONE
 
 # Test glob pattern [12] and union_by_name with filename options
 query IIIII
-SELECT a, b, c, ts, replace(filename, '\', '/')
-FROM read_csv_auto('data/csv/union-by-name/ubn[12].csv',FILENAME=TRUE ,UNION_BY_NAME=TRUE)
+SELECT a, b, c, ts, parse_filename(filename)
+FROM read_csv_auto('{DATA_DIR}/csv/union-by-name/ubn[12].csv',FILENAME=TRUE ,UNION_BY_NAME=TRUE)
 ORDER BY a, c, ts
 ----
-1	2	3	NULL	data/csv/union-by-name/ubn1.csv
-3	4	5	NULL	data/csv/union-by-name/ubn1.csv
-34fd321	91	NULL	2020-12-30 02:25:58.745232+00	data/csv/union-by-name/ubn2.csv
-4	5	6	NULL	data/csv/union-by-name/ubn1.csv
-8cb123cb8	90	NULL	2020-12-30 01:25:58.745232+00	data/csv/union-by-name/ubn2.csv
-fg5391jn4	92	NULL	2020-12-30 03:25:58.745232+00	data/csv/union-by-name/ubn2.csv
-test	88	NULL	2020-12-30 00:25:58.745232+00	data/csv/union-by-name/ubn2.csv
+1	2	3	NULL	ubn1.csv
+3	4	5	NULL	ubn1.csv
+34fd321	91	NULL	2020-12-30 02:25:58.745232+00	ubn2.csv
+4	5	6	NULL	ubn1.csv
+8cb123cb8	90	NULL	2020-12-30 01:25:58.745232+00	ubn2.csv
+fg5391jn4	92	NULL	2020-12-30 03:25:58.745232+00	ubn2.csv
+test	88	NULL	2020-12-30 00:25:58.745232+00	ubn2.csv
 
 query TTTT
 SELECT typeof(a), typeof(b), typeof(c), typeof(ts)
-FROM read_csv_auto('data/csv/union-by-name/ubn[12].csv',UNION_BY_NAME=TRUE)
+FROM read_csv_auto('{DATA_DIR}/csv/union-by-name/ubn[12].csv',UNION_BY_NAME=TRUE)
 LIMIT 1
 ----
 VARCHAR	BIGINT	BIGINT	TIMESTAMP WITH TIME ZONE
@@ -195,33 +195,33 @@ VARCHAR	BIGINT	BIGINT	TIMESTAMP WITH TIME ZONE
 # Test ubn[23] timestamp type casting
 query T
 SELECT typeof(ts)
-FROM read_csv_auto('data/csv/union-by-name/ubn[23].csv',UNION_BY_NAME=TRUE)
+FROM read_csv_auto('{DATA_DIR}/csv/union-by-name/ubn[23].csv',UNION_BY_NAME=TRUE)
 LIMIT 1
 ----
 TIMESTAMP WITH TIME ZONE
 
 # Test glob pattern [!1-2] and union_by_name with filename options
 query IIII
-SELECT k, c, ts, replace(filename, '\', '/')
-FROM read_csv_auto('data/csv/union-by-name/ubn[!1-2].csv',FILENAME=TRUE ,UNION_BY_NAME=TRUE)
+SELECT k, c, ts, parse_filename(filename)
+FROM read_csv_auto('{DATA_DIR}/csv/union-by-name/ubn[!1-2].csv',FILENAME=TRUE ,UNION_BY_NAME=TRUE)
 ORDER BY c
 ----
-6	3	2003-06-30 12:03:10	data/csv/union-by-name/ubn3.csv
-6	5	2003-06-30 12:03:10	data/csv/union-by-name/ubn3.csv
-6	6	2003-06-30 12:03:10	data/csv/union-by-name/ubn3.csv
-NULL	100	Monday	data/csv/union-by-name/ubn4.csv
-NULL	200	Sunday	data/csv/union-by-name/ubn4.csv
-NULL	300	Friday	data/csv/union-by-name/ubn4.csv
+6	3	2003-06-30 12:03:10	ubn3.csv
+6	5	2003-06-30 12:03:10	ubn3.csv
+6	6	2003-06-30 12:03:10	ubn3.csv
+NULL	100	Monday	ubn4.csv
+NULL	200	Sunday	ubn4.csv
+NULL	300	Friday	ubn4.csv
 
 # Test hive_partition with union_by_name
 statement error
-SELECT * FROM read_csv_auto('data/csv/union-by-name/part=[ab]/*',HIVE_PARTITIONING=TRUE, null_padding=0)
+SELECT * FROM read_csv_auto('{DATA_DIR}/csv/union-by-name/part=[ab]/*',HIVE_PARTITIONING=TRUE, null_padding=0)
 ----
 If you are trying to read files with different schemas, try setting union_by_name=True
 
 query IIII
 SELECT id, value, a, part
-FROM read_csv_auto('data/csv/union-by-name/part=[ab]/*',HIVE_PARTITIONING=TRUE ,UNION_BY_NAME=TRUE)
+FROM read_csv_auto('{DATA_DIR}/csv/union-by-name/part=[ab]/*',HIVE_PARTITIONING=TRUE ,UNION_BY_NAME=TRUE)
 ORDER BY id
 ----
 1	value1	aaa	a
@@ -229,12 +229,12 @@ ORDER BY id
 
 # Test hive_partition with union_by_name 
 statement error
-SELECT * FROM read_csv_auto('data/csv/union-by-name/*[!a]/*',HIVE_PARTITIONING=TRUE ,UNION_BY_NAME=TRUE)
+SELECT * FROM read_csv_auto('{DATA_DIR}/csv/union-by-name/*[!a]/*',HIVE_PARTITIONING=TRUE ,UNION_BY_NAME=TRUE)
 ----
 
 # Test one thread per file CSV union by name where file only had header.
 query IIII
-from read_csv('data/csv/union_by_name_2/*.csv', union_by_name=True, parallel = false);
+from read_csv('{DATA_DIR}/csv/union_by_name_2/*.csv', union_by_name=True, parallel = false);
 ----
 1	1	1	NULL
 

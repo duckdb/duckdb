@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-CREATE TABLE greek_utf8 AS SELECT i, nfc_normalize(j) j, k FROM read_csv('data/csv/real/greek_utf8.csv', columns=STRUCT_PACK(i := 'INTEGER', j := 'VARCHAR', k := 'INTEGER'), delim='|')
+CREATE TABLE greek_utf8 AS SELECT i, nfc_normalize(j) j, k FROM read_csv('{DATA_DIR}/csv/real/greek_utf8.csv', columns=STRUCT_PACK(i := 'INTEGER', j := 'VARCHAR', k := 'INTEGER'), delim='|')
 
 query ITI
 SELECT * FROM greek_utf8 ORDER BY 1;
@@ -21,7 +21,7 @@ SELECT * FROM greek_utf8 ORDER BY 1;
 607808	poverty‪	1
 
 query I
-COPY greek_utf8 TO '__TEST_DIR__/greek_utf8.csv' DELIMITER ' ' HEADER;
+COPY greek_utf8 TO '{TEMP_DIR}/greek_utf8.csv' DELIMITER ' ' HEADER;
 ----
 8
 
@@ -35,7 +35,7 @@ SELECT * FROM greek_utf8;
 
 # now copy back into the table
 query I
-COPY greek_utf8 FROM '__TEST_DIR__/greek_utf8.csv' DELIMITER ' ' HEADER;
+COPY greek_utf8 FROM '{TEMP_DIR}/greek_utf8.csv' DELIMITER ' ' HEADER;
 ----
 8
 

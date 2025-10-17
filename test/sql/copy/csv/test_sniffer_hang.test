@@ -6,6 +6,6 @@ statement ok
 PRAGMA enable_verification
 
 statement error
-FROM read_csv('data/csv/bad_csv_file_2047.csv', sample_size = -1)
+FROM read_csv('{DATA_DIR}/csv/bad_csv_file_2047.csv', sample_size = -1)
 ----
 Error when sniffing file

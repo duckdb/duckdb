@@ -9,11 +9,11 @@ PRAGMA enable_verification
 require notwindows
 
 query I
-SELECT COUNT(*) FROM 'data/csv/quoted_newline.csv'
+SELECT COUNT(*) FROM '{DATA_DIR}/csv/quoted_newline.csv'
 ----
 1
 
 query I
-SELECT quote FROM sniff_csv('data/csv/quoted_newline.csv')
+SELECT quote FROM sniff_csv('{DATA_DIR}/csv/quoted_newline.csv')
 ----
 "

@@ -6,12 +6,12 @@ statement ok
 PRAGMA enable_verification
 
 query I
-select columns FROM sniff_csv('data/csv/headers/escaped_quote.csv');
+select columns FROM sniff_csv('{DATA_DIR}/csv/headers/escaped_quote.csv');
 ----
 [{'name': Name, 'type': VARCHAR}, {'name': 'Escaped\'\'Quote', 'type': BIGINT}]
 
 
 query I
-select columns FROM sniff_csv('data/csv/headers/unescaped_quote.csv');
+select columns FROM sniff_csv('{DATA_DIR}/csv/headers/unescaped_quote.csv');
 ----
 [{'name': Name, 'type': VARCHAR}, {'name': 'Unescaped\'Quote', 'type': BIGINT}]

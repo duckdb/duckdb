@@ -8,10 +8,10 @@ statement ok
 PRAGMA enable_verification
 
 statement maybe
-FROM read_csv('data/csv/afl/5194/crashes/case_0.csv', auto_detect=false, buffer_size=8, columns={'a': 'integer','b': 'integer','c': 'integer'}, header=true, maximum_line_size=0);
+FROM read_csv('{DATA_DIR}/csv/afl/5194/crashes/case_0.csv', auto_detect=false, buffer_size=8, columns={'a': 'integer','b': 'integer','c': 'integer'}, header=true, maximum_line_size=0);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/5194/crashes/case_4.csv', buffer_size=30, delim=';', union_by_name=false, header=false, null_padding=true);
+FROM read_csv('{DATA_DIR}/csv/afl/5194/crashes/case_4.csv', buffer_size=30, delim=';', union_by_name=false, header=false, null_padding=true);
 ----
 

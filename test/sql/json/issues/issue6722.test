@@ -9,13 +9,13 @@ PRAGMA enable_verification
 
 # this file has 4 columns, name "id", "Id", "iD", and "ID"
 query IIII
-FROM 'data/json/duplicate_column_names.json'
+FROM '{DATA_DIR}/json/duplicate_column_names.json'
 ----
 42	43	44	45
 
 # due to case-insensitivity these column names would cause an error, but we add a number to de-duplicate them
 query IIIIII
-DESCRIBE FROM 'data/json/duplicate_column_names.json'
+DESCRIBE FROM '{DATA_DIR}/json/duplicate_column_names.json'
 ----
 id	BIGINT	YES	NULL	NULL	NULL
 Id_1	BIGINT	YES	NULL	NULL	NULL

@@ -25,7 +25,7 @@ CREATE TABLE lineitem(l_orderkey INT NOT NULL,
                       l_comment VARCHAR(44) NOT NULL);
 
 statement ok
-COPY lineitem FROM 'data/csv/lineitem1k.tbl.gz' DELIMITER '|';
+COPY lineitem FROM '{DATA_DIR}/csv/lineitem1k.tbl.gz' DELIMITER '|';
 
 query I
 SELECT COUNT(*) FROM lineitem
@@ -44,10 +44,10 @@ SELECT l_partkey FROM lineitem WHERE l_orderkey=1 ORDER BY l_linenumber
 
 # round trip
 statement ok
-COPY lineitem TO '__TEST_DIR__/lineitem1k.csv.gz' (DELIMITER '|', HEADER);
+COPY lineitem TO '{TEMP_DIR}/lineitem1k.csv.gz' (DELIMITER '|', HEADER);
 
 statement ok
-CREATE TABLE lineitem_rt AS FROM '__TEST_DIR__/lineitem1k.csv.gz';
+CREATE TABLE lineitem_rt AS FROM '{TEMP_DIR}/lineitem1k.csv.gz';
 
 query I
 SELECT COUNT(*) FROM (FROM lineitem EXCEPT FROM lineitem_rt)

@@ -14,27 +14,27 @@ PRAGMA verify_parallelism
 
 query IIII
 SELECT id, value, a, part
-FROM read_csv_auto('data/csv/union-by-name/part=[ab]/*',HIVE_PARTITIONING=TRUE ,UNION_BY_NAME=TRUE)
+FROM read_csv_auto('{DATA_DIR}/csv/union-by-name/part=[ab]/*',HIVE_PARTITIONING=TRUE ,UNION_BY_NAME=TRUE)
 ORDER BY id
 ----
 1	value1	aaa	a
 2	value2	NULL	b
 
 query IIII
-SELECT k, c, ts, replace(filename, '\', '/')
-FROM read_csv_auto('data/csv/union-by-name/ubn[!1-2].csv',FILENAME=TRUE ,UNION_BY_NAME=TRUE)
+SELECT k, c, ts, parse_filename(filename)
+FROM read_csv_auto('{DATA_DIR}/csv/union-by-name/ubn[!1-2].csv',FILENAME=TRUE ,UNION_BY_NAME=TRUE)
 ORDER BY c
 ----
-6	3	2003-06-30 12:03:10	data/csv/union-by-name/ubn3.csv
-6	5	2003-06-30 12:03:10	data/csv/union-by-name/ubn3.csv
-6	6	2003-06-30 12:03:10	data/csv/union-by-name/ubn3.csv
-NULL	100	Monday	data/csv/union-by-name/ubn4.csv
-NULL	200	Sunday	data/csv/union-by-name/ubn4.csv
-NULL	300	Friday	data/csv/union-by-name/ubn4.csv
+6	3	2003-06-30 12:03:10	ubn3.csv
+6	5	2003-06-30 12:03:10	ubn3.csv
+6	6	2003-06-30 12:03:10	ubn3.csv
+NULL	100	Monday	ubn4.csv
+NULL	200	Sunday	ubn4.csv
+NULL	300	Friday	ubn4.csv
 
 query IIIII
 SELECT  a, b, c, ts, k
-FROM read_csv_auto('data/csv/union-by-name/ubn*.csv',UNION_BY_NAME=TRUE)
+FROM read_csv_auto('{DATA_DIR}/csv/union-by-name/ubn*.csv',UNION_BY_NAME=TRUE)
 ORDER BY a, c, ts
 ----
 NULL	NULL	3	2003-06-30 12:03:10	6
@@ -55,7 +55,7 @@ mode unskip
 
 query TTTTT
 SELECT  typeof(a), typeof(b), typeof(c), typeof(ts), typeof(k)
-FROM read_csv_auto('data/csv/union-by-name/ubn*.csv',UNION_BY_NAME=TRUE)
+FROM read_csv_auto('{DATA_DIR}/csv/union-by-name/ubn*.csv',UNION_BY_NAME=TRUE)
 LIMIT 1;
 ----
 VARCHAR	BIGINT	BIGINT	VARCHAR	BIGINT
@@ -65,7 +65,7 @@ mode skip
 # projection pushdown
 query II
 SELECT  c, k
-FROM read_csv_auto('data/csv/union-by-name/ubn*.csv',UNION_BY_NAME=TRUE)
+FROM read_csv_auto('{DATA_DIR}/csv/union-by-name/ubn*.csv',UNION_BY_NAME=TRUE)
 ORDER BY c NULLS LAST, k NULLS LAST
 ----
 3	6
@@ -85,7 +85,7 @@ NULL	NULL
 # projection pushdown
 query I
 SELECT  ts
-FROM read_csv_auto('data/csv/union-by-name/ubn*.csv',UNION_BY_NAME=TRUE)
+FROM read_csv_auto('{DATA_DIR}/csv/union-by-name/ubn*.csv',UNION_BY_NAME=TRUE)
 ORDER BY ts NULLS LAST
 ----
 2003-06-30 12:03:10

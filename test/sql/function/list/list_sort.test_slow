@@ -471,7 +471,7 @@ Binder Error: In a DISTINCT aggregate, ORDER BY expressions must appear in the a
 require parquet
 
 statement ok
-CREATE TABLE stage AS SELECT * FROM 'data/parquet-testing/list_sort_segfault.parquet';
+CREATE TABLE stage AS SELECT * FROM '{DATA_DIR}/parquet-testing/list_sort_segfault.parquet';
 
 statement ok
 CREATE TABLE health (a VARCHAR[]);

@@ -8,7 +8,7 @@ require notwindows
 
 query III rowsort
 SELECT * FROM read_csv(
-    'data/csv/error/mismatch/bad.csv',
+    '{DATA_DIR}/csv/error/mismatch/bad.csv',
     columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'VARCHAR'},
     store_rejects = true, auto_detect=true);
 ----
@@ -29,7 +29,7 @@ DROP TABLE reject_scans;
 # Test with multiple columns on the same row
 query III rowsort
 SELECT * FROM read_csv(
-    'data/csv/error/mismatch/bad2.csv',
+    '{DATA_DIR}/csv/error/mismatch/bad2.csv',
     columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'INTEGER'},
     store_rejects = true, auto_detect=false);
 ----
@@ -51,7 +51,7 @@ DROP TABLE reject_scans;
 # Test with multiple files
 query III rowsort
 SELECT * FROM read_csv(
-    'data/csv/error/mismatch/bad*.csv',
+    '{DATA_DIR}/csv/error/mismatch/bad*.csv',
     columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'VARCHAR'},
     store_rejects = true, auto_detect=false);
 ----
@@ -76,7 +76,7 @@ DROP TABLE reject_scans;
 
 query III rowsort
 SELECT * FROM read_csv(
-    'data/csv/error/mismatch/bad*.csv',
+    '{DATA_DIR}/csv/error/mismatch/bad*.csv',
     columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'VARCHAR'},
     store_rejects = true,rejects_limit=2, ignore_errors=true, auto_detect=false);
 ----
@@ -100,7 +100,7 @@ DROP TABLE reject_scans;
 # Try with bigger files
 query I
 SELECT SUM(num) FROM read_csv(
-    'data/csv/error/mismatch/big_bad.csv',
+    '{DATA_DIR}/csv/error/mismatch/big_bad.csv',
     columns = {'num': 'INTEGER', 'str': 'VARCHAR'},
     store_rejects = true, auto_detect=false);
 ----
@@ -120,7 +120,7 @@ DROP TABLE reject_scans;
 
 query I
 SELECT SUM(num) FROM read_csv(
-    'data/csv/error/mismatch/big_bad2.csv',
+    '{DATA_DIR}/csv/error/mismatch/big_bad2.csv',
     columns = {'num': 'INTEGER', 'str': 'VARCHAR'},
     store_rejects = true,  auto_detect=false)
 ----
@@ -142,7 +142,7 @@ DROP TABLE reject_scans;
 # Test with multiple big files
 query I
 SELECT SUM(num) FROM read_csv(
-    'data/csv/error/mismatch/big_*.csv',
+    '{DATA_DIR}/csv/error/mismatch/big_*.csv',
     columns = {'num': 'INTEGER', 'str': 'VARCHAR'},
     store_rejects = true, auto_detect=false);
 ----
@@ -166,11 +166,11 @@ DROP TABLE reject_scans;
 query IIII rowsort
 SELECT *
 FROM read_csv(
-    'data/csv/error/mismatch/small1.csv',
+    '{DATA_DIR}/csv/error/mismatch/small1.csv',
     columns = {'num': 'INTEGER', 'str': 'VARCHAR'},
     store_rejects = true) as L
 JOIN read_csv(
-    'data/csv/error/mismatch/small2.csv',
+    '{DATA_DIR}/csv/error/mismatch/small2.csv',
     columns = {'num': 'INTEGER', 'str': 'VARCHAR'},
    store_rejects = true) as R
 ON L.num = R.num;
@@ -181,8 +181,8 @@ ON L.num = R.num;
 query IIIIIIIIIII
 SELECT * EXCLUDE (scan_id, file_id) FROM reject_scans ORDER BY ALL;
 ----
-data/csv/error/mismatch/small1.csv	,	(empty)	(empty)	\n	0	1	{'num': 'INTEGER','str': 'VARCHAR'}	NULL	NULL	store_rejects=true
-data/csv/error/mismatch/small2.csv	,	(empty)	(empty)	\n	0	1	{'num': 'INTEGER','str': 'VARCHAR'}	NULL	NULL	store_rejects=true
+{DATA_DIR}/csv/error/mismatch/small1.csv	,	(empty)	(empty)	\n	0	1	{'num': 'INTEGER','str': 'VARCHAR'}	NULL	NULL	store_rejects=true
+{DATA_DIR}/csv/error/mismatch/small2.csv	,	(empty)	(empty)	\n	0	1	{'num': 'INTEGER','str': 'VARCHAR'}	NULL	NULL	store_rejects=true
 
 query IIIIIIII
 SELECT * EXCLUDE (scan_id, file_id) FROM reject_errors ORDER BY ALL;
@@ -203,11 +203,11 @@ DROP TABLE reject_scans;
 query IIII rowsort
 SELECT *
 FROM read_csv(
-    'data/csv/error/mismatch/small1.csv',
+    '{DATA_DIR}/csv/error/mismatch/small1.csv',
     columns = {'num': 'INTEGER', 'str': 'VARCHAR'},
     store_rejects = true) as L
 JOIN read_csv(
-    'data/csv/error/mismatch/small2.csv',
+    '{DATA_DIR}/csv/error/mismatch/small2.csv',
     columns = {'num': 'INTEGER', 'str': 'VARCHAR'},
     store_rejects = true, rejects_limit=1) as R
 ON L.num = R.num;
@@ -231,7 +231,7 @@ statement ok
 DROP TABLE reject_scans;
 
 query IIIII rowsort
-FROM read_csv('data/csv/rejects/dr_who.csv', columns={ 'date': 'DATE', 'datetime': 'TIMESTAMPTZ', 'time': 'TIME', 'timestamp': 'TIMESTAMP', 'time_tz': 'TIMETZ' }, store_rejects=true);
+FROM read_csv('{DATA_DIR}/csv/rejects/dr_who.csv', columns={ 'date': 'DATE', 'datetime': 'TIMESTAMPTZ', 'time': 'TIME', 'timestamp': 'TIMESTAMP', 'time_tz': 'TIMETZ' }, store_rejects=true);
 ----
 
 
@@ -253,7 +253,7 @@ DROP TABLE reject_scans;
 
 # Test rejects table with comments
 statement ok
-FROM read_csv('data/csv/comments/error.csv', store_rejects = true, comment = '#');
+FROM read_csv('{DATA_DIR}/csv/comments/error.csv', store_rejects = true, comment = '#');
 
 query IIIIIIII
 SELECT * EXCLUDE (scan_id, file_id) FROM reject_errors ORDER BY column_name;
@@ -270,7 +270,7 @@ statement ok
 DROP TABLE reject_scans;
 
 query II
-FROM read_csv('data/csv/error.csv', store_rejects=1, strict_mode=True);
+FROM read_csv('{DATA_DIR}/csv/error.csv', store_rejects=1, strict_mode=True);
 ----
 true	false
 

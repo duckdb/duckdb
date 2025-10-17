@@ -11,7 +11,7 @@ CREATE TABLE tmp_edges(from_v VARCHAR, to_v VARCHAR, PRIMARY KEY(from_v, to_v));
 
 statement ok
 INSERT INTO tmp_edges
-    from 'data/parquet-testing/upsert_bug.parquet'
+    from '{DATA_DIR}/parquet-testing/upsert_bug.parquet'
     ON CONFLICT DO UPDATE SET
         from_v = excluded.from_v
 ;

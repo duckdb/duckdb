@@ -8,7 +8,7 @@ query II
 select
 	distinct name,
    true as is_suspended_or_cancelled
-from read_parquet('data/parquet-testing/issue6630_*.parquet',union_by_name=True)
+from read_parquet('{DATA_DIR}/parquet-testing/issue6630_*.parquet',union_by_name=True)
 where "timestamp" between '2023-01-26 20:00:00' and '2023-01-28 04:00:00'
    and (suspended = true or cancelled <> '' or state='SUSPENDED')
    and actual_time is null;
@@ -18,7 +18,7 @@ query II
 select
 	distinct name,
    true as is_suspended_or_cancelled
-from read_parquet('data/parquet-testing/issue6630_*.parquet', union_by_name=False)
+from read_parquet('{DATA_DIR}/parquet-testing/issue6630_*.parquet', union_by_name=False)
 where "timestamp" between '2023-01-26 20:00:00' and '2023-01-28 04:00:00'
    and (suspended = true or cancelled <> '' or state='SUSPENDED')
    and actual_time is null;

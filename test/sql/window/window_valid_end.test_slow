@@ -26,7 +26,7 @@ select * from
         range between 1 following and 1 following
       ) 
     ) as recompute_next_year,
-  from 'data/csv/issue_16098.csv'	
+  from '{DATA_DIR}/csv/issue_16098.csv'	
 )
 where next_year is distinct from recompute_next_year
 order by all;

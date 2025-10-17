@@ -5,6 +5,6 @@
 require json
 
 statement error
-from 'data/json/internal_3197.json'
+from '{DATA_DIR}/json/internal_3197.json'
 ----
 Invalid Input Error

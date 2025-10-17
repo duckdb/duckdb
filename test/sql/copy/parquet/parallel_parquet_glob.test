@@ -11,27 +11,27 @@ statement ok
 PRAGMA threads=4
 
 query I
-select count(*) from parquet_scan('data/parquet-testing/glob/t?.parquet')
+select count(*) from parquet_scan('{DATA_DIR}/parquet-testing/glob/t?.parquet')
 ----
 2
 
 query I
-select count(*) from parquet_scan('data/parquet-testing/glob/*')
+select count(*) from parquet_scan('{DATA_DIR}/parquet-testing/glob/*')
 ----
 2
 
 query I
-select count(*) from parquet_scan('data/parquet-testing/glob/*.parquet')
+select count(*) from parquet_scan('{DATA_DIR}/parquet-testing/glob/*.parquet')
 ----
 2
 
 query I
-select count(*) from parquet_scan('data/parquet-testing/g*/*.parquet')
+select count(*) from parquet_scan('{DATA_DIR}/parquet-testing/g*/*.parquet')
 ----
 3
 
 query I
-select count(*) from parquet_scan('data/parquet-testing/g*/t1.parquet')
+select count(*) from parquet_scan('{DATA_DIR}/parquet-testing/g*/t1.parquet')
 ----
 2
 
@@ -39,11 +39,11 @@ statement ok
 SET parquet_metadata_cache=true
 
 query I
-select count(*) from parquet_scan('data/parquet-testing/g*/t1.parquet')
+select count(*) from parquet_scan('{DATA_DIR}/parquet-testing/g*/t1.parquet')
 ----
 2
 
 query I
-select count(*) from parquet_scan('data/parquet-testing/g*/t1.parquet')
+select count(*) from parquet_scan('{DATA_DIR}/parquet-testing/g*/t1.parquet')
 ----
 2

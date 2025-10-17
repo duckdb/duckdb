@@ -5,7 +5,7 @@
 require parquet
 
 query I
-SELECT CDCONO FROM 'data/parquet-testing/bug10148-wide-decimal-stats.parquet'
+SELECT CDCONO FROM '{DATA_DIR}/parquet-testing/bug10148-wide-decimal-stats.parquet'
 ----
 0
 0

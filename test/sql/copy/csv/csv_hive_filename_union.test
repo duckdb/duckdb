@@ -7,49 +7,49 @@ PRAGMA enable_verification
 
 # projection pushdown
 query I
-select filename.replace('\', '/').split('/')[-2] from read_csv_auto('data/csv/hive-partitioning/simple/*/*/test.csv', HIVE_PARTITIONING=1,  FILENAME=1)  order by 1
+select filename.replace('\', '/').split('/')[-2] from read_csv_auto('{DATA_DIR}/csv/hive-partitioning/simple/*/*/test.csv', HIVE_PARTITIONING=1,  FILENAME=1)  order by 1
 ----
 date=2012-01-01
 date=2013-01-01
 
 query III
-select part, filename.replace('\', '/').split('/')[-2], value from read_csv_auto('data/csv/hive-partitioning/simple/*/*/test.csv', HIVE_PARTITIONING=1,  FILENAME=1)  order by 1
+select part, filename.replace('\', '/').split('/')[-2], value from read_csv_auto('{DATA_DIR}/csv/hive-partitioning/simple/*/*/test.csv', HIVE_PARTITIONING=1,  FILENAME=1)  order by 1
 ----
 a	date=2012-01-01	value1
 b	date=2013-01-01	value2
 
 query III
-select part, filename.replace('\', '/').split('/')[-2], value from read_csv_auto('data/csv/hive-partitioning/simple/*/*/test.csv', HIVE_PARTITIONING=1,  FILENAME=1, UNION_BY_NAME=1)  order by 1
+select part, filename.replace('\', '/').split('/')[-2], value from read_csv_auto('{DATA_DIR}/csv/hive-partitioning/simple/*/*/test.csv', HIVE_PARTITIONING=1,  FILENAME=1, UNION_BY_NAME=1)  order by 1
 ----
 a	date=2012-01-01	value1
 b	date=2013-01-01	value2
 
 query III
-select * exclude(filename) from read_csv_auto('data/csv/hive-partitioning/mismatching_types/*/*.csv', HIVE_PARTITIONING=1, FILENAME=1)  order by 1
+select * exclude(filename) from read_csv_auto('{DATA_DIR}/csv/hive-partitioning/mismatching_types/*/*.csv', HIVE_PARTITIONING=1, FILENAME=1)  order by 1
 ----
 99	world	2
 xxx	42	1
 
 query III
-select * from read_csv_auto('data/csv/hive-partitioning/mismatching_types/*/*.csv', HIVE_PARTITIONING=1,  UNION_BY_NAME=1)  order by 1
+select * from read_csv_auto('{DATA_DIR}/csv/hive-partitioning/mismatching_types/*/*.csv', HIVE_PARTITIONING=1,  UNION_BY_NAME=1)  order by 1
 ----
 99	world	2
 xxx	42	1
 
 query IIII
-select * exclude(filename), filename.replace('\', '/').split('/')[-2] from read_csv_auto('data/csv/hive-partitioning/mismatching_types/*/*.csv', HIVE_PARTITIONING=1, FILENAME=1, UNION_BY_NAME=1)  order by 1
+select * exclude(filename), filename.replace('\', '/').split('/')[-2] from read_csv_auto('{DATA_DIR}/csv/hive-partitioning/mismatching_types/*/*.csv', HIVE_PARTITIONING=1, FILENAME=1, UNION_BY_NAME=1)  order by 1
 ----
 99	world	2	part=2
 xxx	42	1	part=1
 
 query IIII
-select part, filename.replace('\', '/').split('/')[-2], a, b from read_csv_auto('data/csv/hive-partitioning/mismatching_types/*/*.csv', HIVE_PARTITIONING=1, FILENAME=1, UNION_BY_NAME=1)  order by 1
+select part, filename.replace('\', '/').split('/')[-2], a, b from read_csv_auto('{DATA_DIR}/csv/hive-partitioning/mismatching_types/*/*.csv', HIVE_PARTITIONING=1, FILENAME=1, UNION_BY_NAME=1)  order by 1
 ----
 1	part=1	xxx	42
 2	part=2	99	world
 
 query II
-select * exclude (filename) from read_csv_auto('data/csv/hive-partitioning/mismatching_types/*/*.csv', HIVE_PARTITIONING=0,  FILENAME=1, UNION_BY_NAME=1)  order by 1
+select * exclude (filename) from read_csv_auto('{DATA_DIR}/csv/hive-partitioning/mismatching_types/*/*.csv', HIVE_PARTITIONING=0,  FILENAME=1, UNION_BY_NAME=1)  order by 1
 ----
 99	world
 xxx	42
@@ -57,18 +57,18 @@ xxx	42
 # This can either throw a cast error or a schema mismatch error depending on what is executed first because of
 # parallelism
 statement error
-select * from read_csv_auto(['data/csv/hive-partitioning/mismatching_contents/part=1/test.csv', 'data/csv/hive-partitioning/mismatching_contents/part=2/test.csv'])  order by 1
+select * from read_csv_auto(['{DATA_DIR}/csv/hive-partitioning/mismatching_contents/part=1/test.csv', '{DATA_DIR}/csv/hive-partitioning/mismatching_contents/part=2/test.csv'])  order by 1
 ----
 If you are trying to read files with different schemas, try setting union_by_name=True
 
 query III
-select a, b, c from read_csv_auto('data/csv/hive-partitioning/mismatching_contents/*/*.csv', UNION_BY_NAME=1)  order by 2 NULLS LAST
+select a, b, c from read_csv_auto('{DATA_DIR}/csv/hive-partitioning/mismatching_contents/*/*.csv', UNION_BY_NAME=1)  order by 2 NULLS LAST
 ----
 42	world	NULL
 42	NULL	1992-01-01
 
 query IIII
-select a, b, part, c from read_csv_auto('data/csv/hive-partitioning/mismatching_contents/*/*.csv',  UNION_BY_NAME=1, HIVE_PARTITIONING=1)  order by 2 NULLS LAST
+select a, b, part, c from read_csv_auto('{DATA_DIR}/csv/hive-partitioning/mismatching_contents/*/*.csv',  UNION_BY_NAME=1, HIVE_PARTITIONING=1)  order by 2 NULLS LAST
 ----
 42	world	2	NULL
 42	NULL	1	1992-01-01

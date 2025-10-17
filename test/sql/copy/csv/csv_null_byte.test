@@ -6,27 +6,27 @@ statement ok
 PRAGMA enable_verification
 
 query III
-select * from 'data/csv/nullbyte.csv';
+select * from '{DATA_DIR}/csv/nullbyte.csv';
 ----
 val1	val\02	val3
 
 query III
-select * from read_csv('data/csv/nullbyte.csv', columns={'col1': 'VARCHAR', 'col2': 'VARCHAR', 'col3': 'VARCHAR'}, delim='|');
+select * from read_csv('{DATA_DIR}/csv/nullbyte.csv', columns={'col1': 'VARCHAR', 'col2': 'VARCHAR', 'col3': 'VARCHAR'}, delim='|');
 ----
 val1	val\02	val3
 
 query II
-select * from 'data/csv/nullbyte_header.csv';
+select * from '{DATA_DIR}/csv/nullbyte_header.csv';
 ----
 val1	val2
 
 query II
-select * from read_csv('data/csv/nullbyte_header.csv', columns={'col1': 'VARCHAR', 'col2': 'VARCHAR'}, delim='|', header=False);
+select * from read_csv('{DATA_DIR}/csv/nullbyte_header.csv', columns={'col1': 'VARCHAR', 'col2': 'VARCHAR'}, delim='|', header=False);
 ----
 col1	col\02
 val1	val2
 
 query II
-select * from read_csv('data/csv/nullbyte_header.csv', columns={'col1': 'VARCHAR', 'col2': 'VARCHAR'}, delim='|', header=True);
+select * from read_csv('{DATA_DIR}/csv/nullbyte_header.csv', columns={'col1': 'VARCHAR', 'col2': 'VARCHAR'}, delim='|', header=True);
 ----
 val1	val2

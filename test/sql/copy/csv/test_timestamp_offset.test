@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 query II
-SELECT col1, typeof(col1) FROM 'data/csv/test/timestampoffset.csv' t1(col1);
+SELECT col1, typeof(col1) FROM '{DATA_DIR}/csv/test/timestampoffset.csv' t1(col1);
 ----
 2020-12-30 00:25:58.745232+00	TIMESTAMP WITH TIME ZONE
 2020-12-30 01:25:58.745232+00	TIMESTAMP WITH TIME ZONE

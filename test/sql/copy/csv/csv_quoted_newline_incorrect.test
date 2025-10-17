@@ -11,5 +11,5 @@ PRAGMA verify_parallelism
 
 # CSV reader skips malformed lines
 statement ok
-from 'data/csv/csv_quoted_newline_odd.csv';
+from '{DATA_DIR}/csv/csv_quoted_newline_odd.csv';
 

@@ -10,33 +10,33 @@ CREATE TABLE test (a INTEGER, b VARCHAR, c INTEGER);
 
 # Linesize exceeds maximum_line_size
 statement error
-insert into test select * from read_csv('data/csv/test/test_long_line.csv', columns={'a': 'INTEGER',  'b': 'VARCHAR', 'c': 'INTEGER'}, maximum_line_size=0);
+insert into test select * from read_csv('{DATA_DIR}/csv/test/test_long_line.csv', columns={'a': 'INTEGER',  'b': 'VARCHAR', 'c': 'INTEGER'}, maximum_line_size=0);
 ----
 Possible Solution: Change the maximum length size, e.g., max_line_size=10009
 
 # Single line too long
 # "a".repeat(2 * 1024 * 1024 + 10);
 statement error
-select * from read_csv_auto('data/csv/issue_8320_1.csv.gz');
+select * from read_csv_auto('{DATA_DIR}/csv/issue_8320_1.csv.gz');
 ----
 Maximum line size of 2000000 bytes exceeded
 
 # Single line too long, but with actual newline at the end
 # "a".repeat(2 * 1024 * 1024 + 10) + "\n";
 statement error
-select * from read_csv_auto('data/csv/issue_8320_2.csv.gz');
+select * from read_csv_auto('{DATA_DIR}/csv/issue_8320_2.csv.gz');
 ----
 Possible Solution: Change the maximum length size, e.g., max_line_size=2097165
 
 # Multiple lines too long
 # String value = "a".repeat(2 * 1024 * 1024 + 10) + "\n"; String data = value + value + value + value;
 statement error
-select * from read_csv_auto('data/csv/issue_8320_3.csv.gz');
+select * from read_csv_auto('{DATA_DIR}/csv/issue_8320_3.csv.gz');
 ----
 Possible Solution: Change the maximum length size, e.g., max_line_size=2097165
 
 # Add a test to verify we throw if max line size below a buffer size
 statement error
-select * from read_csv_auto('data/csv/issue_8320_3.csv.gz', max_line_size = 2097152, buffer_size = 10);
+select * from read_csv_auto('{DATA_DIR}/csv/issue_8320_3.csv.gz', max_line_size = 2097152, buffer_size = 10);
 ----
 Buffer Size of 10 must be a higher value than the maximum line size 2097152

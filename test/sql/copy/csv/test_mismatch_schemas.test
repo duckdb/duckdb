@@ -7,8 +7,8 @@ PRAGMA enable_verification
 
 # We will use the header from the first file (the one identified in the binder) as our schema. If other files have extra columns, these columns will be ignored
 query III
-SELECT * FROM read_csv(['data/csv/multiple_files/more_columns/file_1.csv','data/csv/multiple_files/more_columns/file_2.csv',
-'data/csv/multiple_files/more_columns/file_3.csv','data/csv/multiple_files/more_columns/file_4.csv'])
+SELECT * FROM read_csv(['{DATA_DIR}/csv/multiple_files/more_columns/file_1.csv','{DATA_DIR}/csv/multiple_files/more_columns/file_2.csv',
+'{DATA_DIR}/csv/multiple_files/more_columns/file_3.csv','{DATA_DIR}/csv/multiple_files/more_columns/file_4.csv'])
 ORDER BY ALL;
 ----
 1	2	3
@@ -22,30 +22,30 @@ ORDER BY ALL;
 
 # If there is a mismatch, all files must have a header, or error.
 statement error
-SELECT * FROM read_csv(['data/csv/multiple_files/more_columns/file_1.csv','data/csv/multiple_files/more_columns/file_2.csv',
-'data/csv/multiple_files/more_columns/file_3.csv','data/csv/multiple_files/more_columns/file_no_header.csv'])
+SELECT * FROM read_csv(['{DATA_DIR}/csv/multiple_files/more_columns/file_1.csv','{DATA_DIR}/csv/multiple_files/more_columns/file_2.csv',
+'{DATA_DIR}/csv/multiple_files/more_columns/file_3.csv','{DATA_DIR}/csv/multiple_files/more_columns/file_no_header.csv'])
 ORDER BY ALL;
 ----
-Current file: data/csv/multiple_files/more_columns/file_no_header.csv
+Current file: {DATA_DIR}/csv/multiple_files/more_columns/file_no_header.csv
 
 # What if we add file 5, has 3 columns but with a name mismatch
 statement error
-SELECT * FROM read_csv(['data/csv/multiple_files/more_columns/file_1.csv','data/csv/multiple_files/more_columns/file_2.csv',
-'data/csv/multiple_files/more_columns/file_3.csv','data/csv/multiple_files/more_columns/file_5.csv'])
+SELECT * FROM read_csv(['{DATA_DIR}/csv/multiple_files/more_columns/file_1.csv','{DATA_DIR}/csv/multiple_files/more_columns/file_2.csv',
+'{DATA_DIR}/csv/multiple_files/more_columns/file_3.csv','{DATA_DIR}/csv/multiple_files/more_columns/file_5.csv'])
 ORDER BY ALL;
 ----
 Column with name: "c" is missing
 
 # file_1 missing column from file_2 that is not ok
 statement error
-SELECT * FROM read_csv(['data/csv/multiple_files/more_columns/file_2.csv','data/csv/multiple_files/more_columns/file_1.csv',
-'data/csv/multiple_files/more_columns/file_3.csv','data/csv/multiple_files/more_columns/file_4.csv'])
+SELECT * FROM read_csv(['{DATA_DIR}/csv/multiple_files/more_columns/file_2.csv','{DATA_DIR}/csv/multiple_files/more_columns/file_1.csv',
+'{DATA_DIR}/csv/multiple_files/more_columns/file_3.csv','{DATA_DIR}/csv/multiple_files/more_columns/file_4.csv'])
 ----
 Column with name: "d" is missing
 
 # Test files with different order
 query III
-SELECT * FROM read_csv(['data/csv/multiple_files/different_order/file_1.csv','data/csv/multiple_files/different_order/file_2.csv'])
+SELECT * FROM read_csv(['{DATA_DIR}/csv/multiple_files/different_order/file_1.csv','{DATA_DIR}/csv/multiple_files/different_order/file_2.csv'])
 ORDER BY ALL;
 ----
 1	2	3
@@ -55,7 +55,7 @@ ORDER BY ALL;
 
 # Test that minimal sniffer properly detects types of new columns
 query III
-SELECT * FROM read_csv(['data/csv/multiple_files/more_columns/file_1.csv','data/csv/multiple_files/more_columns/file_6.csv'])
+SELECT * FROM read_csv(['{DATA_DIR}/csv/multiple_files/more_columns/file_1.csv','{DATA_DIR}/csv/multiple_files/more_columns/file_6.csv'])
 ORDER BY ALL;
 ----
 1	2	3
@@ -68,13 +68,13 @@ ORDER BY ALL;
 1	2	3
 
 statement error
-SELECT * FROM read_csv(['data/csv/multiple_files/more_columns/file_6.csv','data/csv/multiple_files/more_columns/file_1.csv'])
+SELECT * FROM read_csv(['{DATA_DIR}/csv/multiple_files/more_columns/file_6.csv','{DATA_DIR}/csv/multiple_files/more_columns/file_1.csv'])
 ORDER BY ALL;
 ----
 Column with name: "d" is missing
 
 query IIII
-SELECT * FROM read_csv(['data/csv/multiple_files/more_columns/file_6.csv','data/csv/multiple_files/more_columns/file_6.csv'])
+SELECT * FROM read_csv(['{DATA_DIR}/csv/multiple_files/more_columns/file_6.csv','{DATA_DIR}/csv/multiple_files/more_columns/file_6.csv'])
 ORDER BY ALL;
 ----
 1	2	3	4.0

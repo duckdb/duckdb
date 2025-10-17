@@ -5,28 +5,28 @@
 require parquet
 
 query TTT
-select * from parquet_scan('data/parquet-testing/nan-float.parquet') order by 1
+select * from parquet_scan('{DATA_DIR}/parquet-testing/nan-float.parquet') order by 1
 ----
 -1	foo	1
 2.5	baz	1
 inf	bar	0
 
 query II
-select * from parquet_scan('data/parquet-testing/arrow_nan.parquet', can_have_nan := true) where f='nan';
+select * from parquet_scan('{DATA_DIR}/parquet-testing/arrow_nan.parquet', can_have_nan := true) where f='nan';
 ----
 nan	nan
 
 query II
-select * from parquet_scan('data/parquet-testing/arrow_nan.parquet', can_have_nan := true) where f>10;
+select * from parquet_scan('{DATA_DIR}/parquet-testing/arrow_nan.parquet', can_have_nan := true) where f>10;
 ----
 nan	nan
 
 query II
-select * from parquet_scan('data/parquet-testing/arrow_nan.parquet', can_have_nan := true) where d='nan';
+select * from parquet_scan('{DATA_DIR}/parquet-testing/arrow_nan.parquet', can_have_nan := true) where d='nan';
 ----
 nan	nan
 
 query II
-select * from parquet_scan('data/parquet-testing/arrow_nan.parquet', can_have_nan := true) where d>10;
+select * from parquet_scan('{DATA_DIR}/parquet-testing/arrow_nan.parquet', can_have_nan := true) where d>10;
 ----
 nan	nan

@@ -6,15 +6,15 @@
 require notwindows
 
 # load the DB from disk
-load __TEST_DIR__/logging_file_persistence.test
+load {TEMP_DIR}/logging_file_persistence.test
 
 # Enable FileSystem logging to single csv file  
 statement ok
-CALL enable_logging('FileSystem', storage='file', storage_config={'path': '__TEST_DIR__/logging_file_persistence.csv'});
+CALL enable_logging('FileSystem', storage='file', storage_config={'path': '{TEMP_DIR}/logging_file_persistence.csv'});
 
 # Read some data to trigger FileSystem log
 statement ok
-FROM "data/csv/big_number.csv"
+FROM "{DATA_DIR}/csv/big_number.csv"
 
 statement ok
 CALL disable_logging();
@@ -27,7 +27,7 @@ restart
 
 # TODO: configuring log storage config is clunky now
 statement ok
-CALL enable_logging('FileSystem', storage='file', storage_config={'path': '__TEST_DIR__/logging_file_persistence.csv'});
+CALL enable_logging('FileSystem', storage='file', storage_config={'path': '{TEMP_DIR}/logging_file_persistence.csv'});
 
 statement ok
 CALL disable_logging();

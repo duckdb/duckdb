@@ -9,7 +9,7 @@ statement ok
 CREATE TABLE cranlogs (date date,time string,size int,r_version string,r_arch string,r_os string,package string,version string,country string,ip_id int)
 
 query I
-COPY cranlogs FROM 'data/csv/real/tmp2013-06-15.csv.gz';
+COPY cranlogs FROM '{DATA_DIR}/csv/real/tmp2013-06-15.csv.gz';
 ----
 37459
 

@@ -6,10 +6,10 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-FROM read_csv_auto('data/csv/comma_decimal_null.csv',SEP=',',SAMPLE_SIZE=-1,decimal_separator=',')
+FROM read_csv_auto('{DATA_DIR}/csv/comma_decimal_null.csv',SEP=',',SAMPLE_SIZE=-1,decimal_separator=',')
 
 query I
-SELECT FINANZ_STATO_FSC FROM read_csv_auto('data/csv/comma_decimal_null.csv',SEP=',',SAMPLE_SIZE=-1,decimal_separator=',')
+SELECT FINANZ_STATO_FSC FROM read_csv_auto('{DATA_DIR}/csv/comma_decimal_null.csv',SEP=',',SAMPLE_SIZE=-1,decimal_separator=',')
 ----
 80000000.0
 1400000.0

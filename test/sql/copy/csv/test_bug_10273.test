@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 query II
-FROM read_csv('data/csv/bug_10273.csv', header=0)
+FROM read_csv('{DATA_DIR}/csv/bug_10273.csv', header=0)
 ----
 这是alice的苹果，所以你不能吃。	This is Alice's apple, so you can't eat it.
 这是alice的苹果，所以你不能吃。	This is "Alice's apple", so you can't eat it.

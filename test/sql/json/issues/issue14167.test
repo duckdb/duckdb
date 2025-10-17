@@ -6,6 +6,6 @@ require json
 
 # the auto-detected type is a MAP, but we can still extract using the dot syntax because we rewrite to map_extract
 query I
-select columns.v4_c6 from read_ndjson_auto('data/json/14167.json');
+select columns.v4_c6 from read_ndjson_auto('{DATA_DIR}/json/14167.json');
 ----
 {'statistics': {'nonNullCount': 0}}

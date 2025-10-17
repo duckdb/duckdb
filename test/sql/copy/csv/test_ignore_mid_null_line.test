@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 query III
-FROM read_csv('data/csv/error/mid_null.csv', delim = ';',
+FROM read_csv('{DATA_DIR}/csv/error/mid_null.csv', delim = ';',
      columns = {'a':'integer','b':'integer','c':'integer'}, auto_detect = false, header = true, ignore_errors = true, strict_mode=True)
 ----
 1	2	3

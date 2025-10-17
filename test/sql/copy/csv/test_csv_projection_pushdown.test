@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 query II
-select l_returnflag, l_linenumber from read_csv('data/csv/real/lineitem_sample.csv', delim='|', header=False, columns={
+select l_returnflag, l_linenumber from read_csv('{DATA_DIR}/csv/real/lineitem_sample.csv', delim='|', header=False, columns={
 	'l_orderkey': 'INT',
 	'l_partkey': 'INT',
 	'l_suppkey': 'INT',
@@ -37,12 +37,12 @@ R	2
 A	3
 
 query I
-SELECT COUNT(*) FROM 'data/csv/real/lineitem_sample.csv'
+SELECT COUNT(*) FROM '{DATA_DIR}/csv/real/lineitem_sample.csv'
 ----
 10
 
 statement ok
-CREATE VIEW lineitem_csv AS SELECT * FROM read_csv('data/csv/real/lineitem_sample.csv', delim='|', header=False, columns={
+CREATE VIEW lineitem_csv AS SELECT * FROM read_csv('{DATA_DIR}/csv/real/lineitem_sample.csv', delim='|', header=False, columns={
 	'l_orderkey': 'INT',
 	'l_partkey': 'INT',
 	'l_suppkey': 'INT',
@@ -62,7 +62,7 @@ CREATE VIEW lineitem_csv AS SELECT * FROM read_csv('data/csv/real/lineitem_sampl
 })
 
 statement ok
-CREATE VIEW lineitem_csv_auto AS SELECT * FROM read_csv_auto('data/csv/real/lineitem_sample.csv', header=False) lineitem(l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment)
+CREATE VIEW lineitem_csv_auto AS SELECT * FROM read_csv_auto('{DATA_DIR}/csv/real/lineitem_sample.csv', header=False) lineitem(l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment)
 
 foreach lineitem lineitem_csv lineitem_csv_auto
 
@@ -117,12 +117,12 @@ endloop
 
 # Test Projection over multiple buffers
 query I
-select count(*) from read_csv('data/csv/projection_buffer.csv', quote = '"', escape = '"',  buffer_size=35)
+select count(*) from read_csv('{DATA_DIR}/csv/projection_buffer.csv', quote = '"', escape = '"',  buffer_size=35)
 ----
 27
 
 query III
-select d,b,a from read_csv('data/csv/projection_buffer.csv', quote = '"', escape = '"',  buffer_size=35)
+select d,b,a from read_csv('{DATA_DIR}/csv/projection_buffer.csv', quote = '"', escape = '"',  buffer_size=35)
 ----
 d"	b"	a"
 d"	b"	a"

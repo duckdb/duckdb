@@ -9,7 +9,7 @@ statement ok
 CREATE TABLE web_page(wp_web_page_sk integer not null, wp_web_page_id char(16) not null, wp_rec_start_date date, wp_rec_end_date date, wp_creation_date_sk integer, wp_access_date_sk integer, wp_autogen_flag char(1), wp_customer_sk integer, wp_url varchar(100), wp_type char(50), wp_char_count integer, wp_link_count integer, wp_image_count integer, wp_max_ad_count integer, primary key (wp_web_page_sk));
 
 query I
-COPY web_page FROM 'data/csv/real/web_page.csv' DELIMITER '|';
+COPY web_page FROM '{DATA_DIR}/csv/real/web_page.csv' DELIMITER '|';
 ----
 60
 
@@ -21,7 +21,7 @@ SELECT * FROM web_page ORDER BY wp_web_page_sk LIMIT 3;
 3	AAAAAAAACAAAAAAA	2000-09-03	NULL	2450814	2452611	N	NULL	http://www.foo.com	feedback	1564	4	3	4
 
 query I
-COPY web_page TO '__TEST_DIR__/web_page.csv' DELIMITER ' ' HEADER;
+COPY web_page TO '{TEMP_DIR}/web_page.csv' DELIMITER ' ' HEADER;
 ----
 60
 
@@ -35,7 +35,7 @@ SELECT * FROM web_page;
 
 # now copy back into the table
 query I
-COPY web_page FROM '__TEST_DIR__/web_page.csv' DELIMITER ' ' HEADER;
+COPY web_page FROM '{TEMP_DIR}/web_page.csv' DELIMITER ' ' HEADER;
 ----
 60
 
