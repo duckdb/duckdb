@@ -159,14 +159,14 @@ public:
 	TableFunctionInput(optional_ptr<const FunctionData> bind_data_p,
 	                   optional_ptr<LocalTableFunctionState> local_state_p,
 	                   optional_ptr<GlobalTableFunctionState> global_state_p)
-	    : bind_data(bind_data_p), local_state(local_state_p), global_state(global_state_p), async_tasks() {
+	    : bind_data(bind_data_p), local_state(local_state_p), global_state(global_state_p), async_result() {
 	}
 
 public:
 	optional_ptr<const FunctionData> bind_data;
 	optional_ptr<LocalTableFunctionState> local_state;
 	optional_ptr<GlobalTableFunctionState> global_state;
-	vector<unique_ptr<AsyncTask>> async_tasks;
+	AsyncResultType async_result {};
 };
 
 struct TableFunctionPartitionInput {
@@ -282,7 +282,6 @@ typedef unique_ptr<LocalTableFunctionState> (*table_function_init_local_t)(Execu
 typedef unique_ptr<BaseStatistics> (*table_statistics_t)(ClientContext &context, const FunctionData *bind_data,
                                                          column_t column_index);
 typedef void (*table_function_t)(ClientContext &context, TableFunctionInput &data, DataChunk &output);
-typedef SourceResultType (*table_function_ext_t)(ClientContext &context, TableFunctionInput &data, DataChunk &output);
 typedef OperatorResultType (*table_in_out_function_t)(ExecutionContext &context, TableFunctionInput &data,
                                                       DataChunk &input, DataChunk &output);
 typedef OperatorFinalizeResultType (*table_in_out_function_final_t)(ExecutionContext &context, TableFunctionInput &data,
@@ -332,6 +331,7 @@ enum class TableFunctionInitialization { INITIALIZE_ON_EXECUTE, INITIALIZE_ON_SC
 
 class TableFunction : public SimpleNamedParameterFunction { // NOLINT: work-around bug in clang-tidy
 public:
+	DUCKDB_API TableFunction();
 	// Overloads taking table_function_t
 	DUCKDB_API
 	TableFunction(string name, const vector<LogicalType> &arguments, table_function_t function,
@@ -349,35 +349,21 @@ public:
 	TableFunction(const vector<LogicalType> &arguments, std::nullptr_t function, table_function_bind_t bind = nullptr,
 	              table_function_init_global_t init_global = nullptr, table_function_init_local_t init_local = nullptr);
 
-	// Overloads taking table_function_ext_t
-	DUCKDB_API
-	TableFunction(string name, const vector<LogicalType> &arguments, table_function_ext_t function,
-	              table_function_bind_t bind = nullptr, table_function_init_global_t init_global = nullptr,
-	              table_function_init_local_t init_local = nullptr);
-	DUCKDB_API
-	TableFunction(const vector<LogicalType> &arguments, table_function_ext_t function,
-	              table_function_bind_t bind = nullptr, table_function_init_global_t init_global = nullptr,
-	              table_function_init_local_t init_local = nullptr);
-	DUCKDB_API TableFunction();
-
-	static SourceResultType SimpleScanImpl(table_function_t function, table_function_ext_t function_ext,
-	                                       ClientContext &context, TableFunctionInput &data, DataChunk &output) {
-		if (function) {
-			D_ASSERT(!function_ext);
-			function(context, data, output);
-			return output.size() ? SourceResultType::HAVE_MORE_OUTPUT : SourceResultType::FINISHED;
-		} else {
-			D_ASSERT(function_ext);
-			auto res = function_ext(context, data, output);
-			D_ASSERT((res == SourceResultType::BLOCKED) == (!data.async_tasks.empty()));
-			return res;
-		}
-	}
 	bool HasSimpleScan() const {
-		return function || function_ext;
+		return function;
 	}
 	SourceResultType SimpleScan(ClientContext &context, TableFunctionInput &data, DataChunk &output) const {
-		return SimpleScanImpl(function, function_ext, context, data, output);
+		data.async_result = AsyncResultType();
+		function(context, data, output);
+		TableFunctionResultType table_res = data.async_result.GetResultType();
+		SourceResultType source_res;
+		if (ExtractSourceResultType(table_res, source_res)) {
+			return source_res;
+		}
+		if (output.size() > 0) {
+			return SourceResultType::HAVE_MORE_OUTPUT;
+		}
+		return SourceResultType::FINISHED;
 	}
 
 	//! Bind function
@@ -402,8 +388,6 @@ public:
 	//! Initialize the local operator state of the function.
 	//! The local operator state is used to keep track of the progress in the table function and is thread-local.
 	table_function_init_local_t init_local;
-	//! The main function, new version, already wrapped
-	table_function_ext_t function_ext;
 	//! The main function
 	table_function_t function;
 	//! The table in-out function (if this is an in-out function)

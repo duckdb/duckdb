@@ -4432,6 +4432,27 @@ TableFilterType EnumUtil::FromString<TableFilterType>(const char *value) {
 	return static_cast<TableFilterType>(StringUtil::StringToEnum(GetTableFilterTypeValues(), 10, "TableFilterType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetTableFunctionResultTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(TableFunctionResultType::HAVE_MORE_OUTPUT), "HAVE_MORE_OUTPUT" },
+		{ static_cast<uint32_t>(TableFunctionResultType::FINISHED), "FINISHED" },
+		{ static_cast<uint32_t>(TableFunctionResultType::BLOCKED), "BLOCKED" },
+		{ static_cast<uint32_t>(TableFunctionResultType::DEFAULT), "DEFAULT" },
+		{ static_cast<uint32_t>(TableFunctionResultType::INVALID), "INVALID" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<TableFunctionResultType>(TableFunctionResultType value) {
+	return StringUtil::EnumToString(GetTableFunctionResultTypeValues(), 5, "TableFunctionResultType", static_cast<uint32_t>(value));
+}
+
+template<>
+TableFunctionResultType EnumUtil::FromString<TableFunctionResultType>(const char *value) {
+	return static_cast<TableFunctionResultType>(StringUtil::StringToEnum(GetTableFunctionResultTypeValues(), 5, "TableFunctionResultType", value));
+}
+
 const StringUtil::EnumStringLiteral *GetTablePartitionInfoValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(TablePartitionInfo::NOT_PARTITIONED), "NOT_PARTITIONED" },

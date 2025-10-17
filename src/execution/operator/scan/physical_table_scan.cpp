@@ -105,13 +105,13 @@ SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk
 		auto res = function.SimpleScan(context.client, data, chunk);
 
 		if (res == SourceResultType::BLOCKED) {
+			D_ASSERT(data.async_result.HasTasks());
 			auto guard = g_state.Lock();
 			auto inner_result = g_state.BlockSource(guard, input.interrupt_state);
 			if (inner_result == SourceResultType::FINISHED) {
 				return SourceResultType::FINISHED;
 			} else if (inner_result == SourceResultType::BLOCKED) {
-				D_ASSERT(!data.async_tasks.empty());
-				AsyncResultType async_handler(std::move(data.async_tasks));
+				AsyncResultType async_handler(std::move(data.async_result));
 				async_handler.ScheduleTasks(input.interrupt_state, context.pipeline->executor);
 				return SourceResultType::BLOCKED;
 			} else {
@@ -282,9 +282,6 @@ bool PhysicalTableScan::Equals(const PhysicalOperator &other_p) const {
 	}
 	auto &other = other_p.Cast<PhysicalTableScan>();
 	if (function.function != other.function.function) {
-		return false;
-	}
-	if (function.function_ext != other.function.function_ext) {
 		return false;
 	}
 	if (column_ids != other.column_ids) {

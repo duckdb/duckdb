@@ -313,7 +313,7 @@ AsyncResultType DuckDBReader::Scan(ClientContext &context, GlobalTableFunctionSt
 	auto res = scan_function.SimpleScan(context, input, chunk);
 
 	if (res == SourceResultType::BLOCKED) {
-		return AsyncResultType(std::move(input.async_tasks));
+		return std::move(input.async_result);
 	}
 	if (res == SourceResultType::FINISHED) {
 		finished = true;

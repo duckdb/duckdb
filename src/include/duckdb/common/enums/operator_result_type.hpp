@@ -42,6 +42,19 @@ enum class OperatorFinalResultType : uint8_t { FINISHED, BLOCKED };
 //! BLOCKED means the source is currently blocked, e.g. by some async I/O
 enum class SourceResultType : uint8_t { HAVE_MORE_OUTPUT, FINISHED, BLOCKED };
 
+//! TableFunctionResultType is used to indicate the result of data being pulled out of a TableFunction.
+//! There are four possible results:
+//! HAVE_MORE_OUTPUT means the source has more output
+//! FINISHED means the source is exhausted
+//! BLOCKED means the source is currently blocked, e.g. by some async I/O
+//! DEFAULT means impliying the result from the context (that is FINISHED if output is empty and HAVE_MORE_OUTPUT
+//! otherwise)
+enum class TableFunctionResultType : uint8_t { HAVE_MORE_OUTPUT, FINISHED, BLOCKED, DEFAULT, INVALID };
+
+bool ExtractSourceResultType(TableFunctionResultType in, SourceResultType &out);
+
+TableFunctionResultType GetTableFunctionResultType(SourceResultType s);
+
 //! The SinkResultType is used to indicate the result of data flowing into a sink
 //! There are three possible results:
 //! NEED_MORE_INPUT means the sink needs more input
