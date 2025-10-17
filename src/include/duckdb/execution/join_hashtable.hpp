@@ -402,12 +402,13 @@ public:
 	static constexpr double DEFAULT_LOAD_FACTOR = 2.0;
 	//! For a LOAD_FACTOR of 1.5, the HT is between 33% and 67% full
 	static constexpr double EXTERNAL_LOAD_FACTOR = 1.5;
+	//! Minimum capacity of the pointer table
+	static constexpr idx_t MINIMUM_CAPACITY = 16384;
 
 	double load_factor = DEFAULT_LOAD_FACTOR;
 
 	//! Capacity of the pointer table given the ht count
 	idx_t PointerTableCapacity(idx_t count) const {
-		static constexpr idx_t MINIMUM_CAPACITY = 16384;
 
 		const auto capacity = NextPowerOfTwo(LossyNumericCast<idx_t>(static_cast<double>(count) * load_factor));
 		return MaxValue<idx_t>(capacity, MINIMUM_CAPACITY);

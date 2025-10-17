@@ -773,9 +773,6 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, o
 		const auto cmp = op.conditions[join_condition[filter_idx]].comparison;
 		for (auto &info : probe_info) {
 
-			bool create_bloom_filter = true;
-			const bool can_use_bf = ht && ht->conditions.size() == 1 && cmp == ExpressionType::COMPARE_EQUAL;
-
 			auto filter_col_idx = info.columns[filter_idx].probe_column_index.column_index;
 			auto min_idx = filter_idx * 2;
 			auto max_idx = min_idx + 1;
@@ -790,10 +787,36 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, o
 			}
 			// if the HT is small we can generate a complete "OR" filter
 			// but only if the join condition is equality.
+			bool has_in_filter = false;
 			if (ht && ht->Count() > 1 && ht->Count() <= dynamic_or_filter_threshold &&
 			    cmp == ExpressionType::COMPARE_EQUAL) {
 				PushInFilter(info, *ht, op, filter_idx, filter_col_idx);
-				create_bloom_filter = false;
+				has_in_filter = true;
+			}
+
+			bool use_bloom_filter = false;
+			if (ht) {
+				// bf is only supported for single key joins with equality condition as the Filter API only allows
+				// single-column filters so far
+				const bool can_use_bf = ht->conditions.size() == 1 && cmp == ExpressionType::COMPARE_EQUAL;
+
+
+				// building the bloom filter is costly on the build to make probing faster, so only use it if there are
+				// more probing tuples than build tuples
+				const double build_to_probe_ratio =
+				    static_cast<double>(op.children[0].get().estimated_cardinality) / static_cast<double>(ht->Count());
+				const bool probe_larger_then_build = build_to_probe_ratio > 1.0;
+
+				// only use bloom filter if there is no in-filter already
+				use_bloom_filter =
+				    can_use_bf && !has_in_filter && build_side_has_filter && probe_larger_then_build;
+				//
+				// printf("Dynamic Bloom Filter for column %s: min=%s, max=%s, build_to_probe_ratio=%.2f, has_in_filter=%s can_use_bf=%s use_bloom_filter=%s\n",
+				//        op.conditions[join_condition[filter_idx]].right->ToString().c_str(),
+				//        min_val.ToString().c_str(), max_val.ToString().c_str(), build_to_probe_ratio,
+				//        has_in_filter ? "true" : "false", can_use_bf ? "true" : "false",
+				//        use_bloom_filter ? "true" : "false");
+
 			}
 
 			if (Value::NotDistinctFrom(min_val, max_val)) {
@@ -812,7 +835,7 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, o
 				case ExpressionType::COMPARE_GREATERTHANOREQUALTO: {
 					auto greater_equals =
 					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, std::move(min_val));
-					if (can_use_bf) {
+					if (use_bloom_filter) {
 						auto optional_greater_equals = make_uniq<OptionalFilter>(std::move(greater_equals));
 						info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(optional_greater_equals));
 					} else {
@@ -830,7 +853,7 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, o
 					auto less_equals =
 					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO, std::move(max_val));
 					// if we use a bloom filter, we only use the min/max filter for zone map pruning
-					if (can_use_bf) {
+					if (use_bloom_filter) {
 						auto optional_less_equals = make_uniq<OptionalFilter>(std::move(less_equals));
 						info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(optional_less_equals));
 					} else {
@@ -842,23 +865,14 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, o
 					break;
 				}
 
-				// bloom filter is only supported for single key equality joins so far
-				if (ht && can_use_bf) {
-
-					const double build_to_probe_ratio =
-					    static_cast<double>(op.children[0].get().estimated_cardinality) /
-					    static_cast<double>(ht->Count());
-					const bool should_use_bf = create_bloom_filter && build_side_has_filter && build_to_probe_ratio > 1;
-
-					if (should_use_bf) {
-						// If the nulls are equal, we let nulls pass. If not, we filter them
-						auto filters_null_values = !ht->NullValuesAreEqual(join_condition[filter_idx]);
-						const auto key_name = ht->conditions[0].right->ToString();
-						const auto key_type = ht->conditions[0].left->return_type;
-						auto bf_filter = make_uniq<BloomFilter>(ht->GetBloomFilter(), filters_null_values, key_name, key_type);
-						ht->SetBuildBloomFilter(true);
-						info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(bf_filter));
-					}
+				if (ht && use_bloom_filter) {
+					// If the nulls are equal, we let nulls pass. If not, we filter them
+					auto filters_null_values = !ht->NullValuesAreEqual(join_condition[filter_idx]);
+					const auto key_name = ht->conditions[0].right->ToString();
+					const auto key_type = ht->conditions[0].left->return_type;
+					auto bf_filter = make_uniq<BloomFilter>(ht->GetBloomFilter(), filters_null_values, key_name, key_type);
+					ht->SetBuildBloomFilter(true);
+					info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(bf_filter));
 				}
 			}
 		}
