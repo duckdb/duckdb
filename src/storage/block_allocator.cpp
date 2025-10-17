@@ -195,6 +195,12 @@ data_ptr_t BlockAllocator::AllocateData(const idx_t size) const {
 	// Allow read/write on this block again
 	const auto pointer = GetPointer(block_id);
 	ProtectMemory(pointer, size, MemoryProtectionType::ALLOW_READ_WRITE);
+
+	// Trigger page faults immediately
+	for (idx_t i = 0; i < size; i += 4096) {
+		pointer[i] = 0;
+	}
+
 	return pointer;
 }
 
