@@ -846,29 +846,6 @@ static sqlite3_int64 integerValue(const char *zArg) {
 	return isNeg ? -v : v;
 }
 
-/* zIn is either a pointer to a NULL-terminated string in memory obtained
-** from malloc(), or a NULL pointer. The string pointed to by zAppend is
-** added to zIn, and the result returned in memory obtained from malloc().
-** zIn, if it was not NULL, is freed.
-**
-** If the third argument, quote, is not '\0', then it is used as a
-** quote character for zAppend.
-*/
-static void appendText(string &text, char const *zAppend, char quote) {
-	if (!quote) {
-		text += zAppend;
-		return;
-	}
-	text += quote;
-	for (const char *c = zAppend; *c; c++) {
-		text += *c;
-		if (*c == quote) {
-			text += quote;
-		}
-	}
-	text += quote;
-}
-
 /* Allowed values for ShellState.openMode
  */
 #define SHELL_OPEN_UNSPEC      0 /* No open-mode specified */
@@ -1928,21 +1905,21 @@ static int dump_callback(void *pArg, int nArg, char **azArg, char **azNotUsed) {
 		}
 
 		if (!zSchema.empty()) {
-			appendText(sTable, zQualifiedName.c_str(), 0);
+			sTable += zQualifiedName;
 		} else {
 			sTable += StringUtil::Format("%s", SQLIdentifier(zTable));
 		}
 
 		/* Build an appropriate SELECT statement */
-		appendText(sSelect, "SELECT ", 0);
+		sSelect += "SELECT ";
 		for (idx_t i = 0; i < table_columns.size(); i++) {
 			if (i > 0) {
 				sSelect += ", ";
 			}
 			sSelect += StringUtil::Format("%s", SQLIdentifier(table_columns[i]));
 		}
-		appendText(sSelect, " FROM ", 0);
-		appendText(sSelect, zQualifiedName.c_str(), 0);
+		sSelect += " FROM ";
+		sSelect += zQualifiedName;
 
 		auto savedDestTable = p->zDestTable;
 		auto savedMode = p->mode;
@@ -3750,26 +3727,24 @@ bool ShellState::DisplaySchemas(const char **azArg, idx_t nArg) {
 	auto renderer = GetRowRenderer(mode);
 	renderer->show_header = false;
 	if (zDiv) {
-		appendText(sSelect, "SELECT sql FROM sqlite_master WHERE ", 0);
+		sSelect += "SELECT sql FROM sqlite_master WHERE ";
 		if (zName) {
 			auto zQarg = StringUtil::Format("%s", SQLString(zName));
 			int bGlob = strchr(zName, '*') != 0 || strchr(zName, '?') != 0 || strchr(zName, '[') != 0;
 			if (strchr(zName, '.')) {
-				appendText(sSelect, "lower(printf('%s.%s',sname,tbl_name))", 0);
+				sSelect += "lower(printf('%s.%s',sname,tbl_name))";
 			} else {
-				appendText(sSelect, "lower(tbl_name)", 0);
+				sSelect += "lower(tbl_name)";
 			}
-			appendText(sSelect, bGlob ? " GLOB " : " LIKE ", 0);
-			appendText(sSelect, zQarg.c_str(), 0);
+			sSelect += bGlob ? " GLOB " : " LIKE ";
+			sSelect += zQarg.c_str();
 			if (!bGlob) {
-				appendText(sSelect, " ESCAPE '\\' ", 0);
+				sSelect += " ESCAPE '\\' ";
 			}
-			appendText(sSelect, " AND ", 0);
+			sSelect += " AND ";
 		}
-		appendText(sSelect,
-		           "type!='meta' AND sql IS NOT NULL"
-		           " ORDER BY name",
-		           0);
+		sSelect += "type!='meta' AND sql IS NOT NULL"
+		           " ORDER BY name";
 		if (bDebug) {
 			utf8_printf(out, "SQL: %s;\n", sSelect.c_str());
 		} else {
@@ -3912,46 +3887,41 @@ MetadataResult ShellState::DisplayEntries(const char **azArg, idx_t nArg, char t
 
 	// Use DuckDB's system tables instead of SQLite's sqlite_schema
 	if (type == 't') {
-		// For tables, we need to handle schema disambiguation
-		appendText(s, "WITH all_objects AS (", 0);
-		appendText(s, "  SELECT schema_name, table_name as name FROM duckdb_tables", 0);
+		string schema_filter_str;
+		string name_filter = "WHERE ao.name LIKE ?1";
 		if (!schema_filter.empty()) {
-			appendText(s, "  WHERE schema_name LIKE ?1", 0);
+			schema_filter_str = "\n  WHERE schema_name LIKE ?1";
+			name_filter = "WHERE ao.name LIKE ?2";
 		}
-		appendText(s, "  UNION ALL", 0);
-		appendText(s, "  SELECT schema_name, view_name as name FROM duckdb_views", 0);
-		if (!schema_filter.empty()) {
-			appendText(s, "  WHERE schema_name LIKE ?1", 0);
-		}
-		appendText(s, "),", 0);
-		appendText(s, "name_counts AS (", 0);
-		appendText(s, "  SELECT name, COUNT(*) as count FROM all_objects", 0);
-		appendText(s, "  GROUP BY name", 0);
-		appendText(s, "),", 0);
-		appendText(s, "disambiguated AS (", 0);
-		appendText(s, "  SELECT", 0);
-		appendText(s, "    CASE", 0);
-		appendText(s, "      WHEN nc.count > 1 THEN ao.schema_name || '.' || ao.name", 0);
-		appendText(s, "      ELSE ao.name", 0);
-		appendText(s, "    END as display_name", 0);
-		appendText(s, "  FROM all_objects ao", 0);
-		appendText(s, "  JOIN name_counts nc ON ao.name = nc.name", 0);
-		if (!schema_filter.empty()) {
-			appendText(s, "  WHERE ao.name LIKE ?2", 0);
-		} else {
-			appendText(s, "  WHERE ao.name LIKE ?1", 0);
-		}
-		appendText(s, ")", 0);
-		appendText(s, "SELECT DISTINCT display_name FROM disambiguated ORDER BY display_name", 0);
+		s = StringUtil::Format(R"(
+WITH all_objects AS (
+  SELECT schema_name, table_name as name FROM duckdb_tables%s
+  UNION ALL
+  SELECT schema_name, view_name as name FROM duckdb_views%s
+),
+name_counts AS (
+  SELECT name, COUNT(*) as count FROM all_objects
+  GROUP BY name
+),
+disambiguated AS (
+  SELECT
+    CASE
+      WHEN nc.count > 1 THEN ao.schema_name || '.' || ao.name
+      ELSE ao.name
+    END as display_name
+  FROM all_objects ao
+  JOIN name_counts nc ON ao.name = nc.name
+  %s
+)
+SELECT DISTINCT display_name FROM disambiguated ORDER BY display_name
+)",
+		                       schema_filter_str, schema_filter_str, name_filter);
 	} else {
 		// For indexes, use the original SQLite approach
-		appendText(s, "SELECT name FROM ", 0);
-		appendText(s, "sqlite_schema ", 0);
-		appendText(s,
-		           " WHERE type='index'"
-		           "   AND tbl_name LIKE ?1",
-		           0);
-		appendText(s, " ORDER BY 1", 0);
+		s = R"(
+SELECT name FROM
+sqlite_schema
+WHERE type='index' AND tbl_name LIKE ?1)";
 	}
 
 	int rc = sqlite3_prepare_v2(db, s.c_str(), -1, &pStmt, 0);
