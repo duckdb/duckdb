@@ -149,9 +149,9 @@ typedef unsigned char u8;
 #include "shell_state.hpp"
 
 using duckdb::KeywordHelper;
-using duckdb::StringUtil;
 using duckdb::SQLIdentifier;
 using duckdb::SQLString;
+using duckdb::StringUtil;
 using namespace duckdb_shell;
 
 #if defined(_WIN32) || defined(WIN32)
@@ -869,25 +869,6 @@ static void appendText(string &text, char const *zAppend, char quote) {
 	text += quote;
 }
 
-/*
-** Attempt to determine if identifier zName needs to be quoted, either
-** because it contains non-alphanumeric characters, or because it is an
-** SQLite keyword.  Be conservative in this estimate:  When in doubt assume
-** that quoting is required.
-**
-** Return '"' if quoting is required.  Return 0 if no quoting is required.
-*/
-static char quoteChar(const char *zName) {
-	int i;
-	if (!isalpha((unsigned char)zName[0]) && zName[0] != '_')
-		return '"';
-	for (i = 0; zName[i]; i++) {
-		if (!isalnum((unsigned char)zName[i]) && zName[i] != '_')
-			return '"';
-	}
-	return sqlite3_keyword_check(zName, i) ? '"' : 0;
-}
-
 /* Allowed values for ShellState.openMode
  */
 #define SHELL_OPEN_UNSPEC      0 /* No open-mode specified */
@@ -1342,36 +1323,7 @@ static int callback(void *pArg, int nArg, char **azArg, char **azCol) {
 ** table name.
 */
 void ShellState::SetTableName(const char *zName) {
-	if (zDestTable) {
-		free(zDestTable);
-		zDestTable = nullptr;
-	}
-	if (!zName) {
-		return;
-	}
-	auto cQuote = quoteChar(zName);
-	idx_t n = StringLength(zName);
-	if (cQuote) {
-		n += n + 2;
-	}
-	auto z = zDestTable = (char *)malloc(n + 1);
-	if (!z) {
-		shell_out_of_memory();
-	}
-	n = 0;
-	if (cQuote) {
-		z[n++] = cQuote;
-	}
-	for (idx_t i = 0; zName[i]; i++) {
-		z[n++] = zName[i];
-		if (zName[i] == cQuote) {
-			z[n++] = cQuote;
-		}
-	}
-	if (cQuote) {
-		z[n++] = cQuote;
-	}
-	z[n] = 0;
+	zDestTable = zName ? StringUtil::Format("%s", SQLIdentifier(zName)) : string();
 }
 
 /*
@@ -1392,7 +1344,7 @@ int ShellState::RunTableDumpQuery(const char *zSelect /* SELECT statement to ext
 	if (rc != SQLITE_OK || !pSelect) {
 		utf8_printf(out, "/**** ERROR: (%d) %s *****/\n", rc, sqlite3_errmsg(db));
 		if ((rc & 0xff) != SQLITE_CORRUPT) {
-			nErr++;
+			AddError();
 		}
 		return rc;
 	}
@@ -1421,7 +1373,7 @@ int ShellState::RunTableDumpQuery(const char *zSelect /* SELECT statement to ext
 	if (rc != SQLITE_OK) {
 		utf8_printf(out, "/**** ERROR: (%d) %s *****/\n", rc, sqlite3_errmsg(db));
 		if ((rc & 0xff) != SQLITE_CORRUPT) {
-			nErr++;
+			AddError();
 		}
 	}
 	return rc;
@@ -1849,17 +1801,6 @@ int ShellState::ExecuteSQL(const char *zSql, /* SQL to be evaluated */
 }
 
 /*
-** Release memory previously allocated by tableColumnList().
-*/
-static void freeColumnList(char **azCol) {
-	for (idx_t i = 1; azCol[i]; i++) {
-		sqlite3_free(azCol[i]);
-	}
-	/* azCol[0] is a static string */
-	sqlite3_free(azCol);
-}
-
-/*
 ** Return a list of pointers to strings which are the names of all
 ** columns in table zTab.   The memory to hold the names is dynamically
 ** allocated and must be released by the caller using a subsequent call
@@ -1872,33 +1813,20 @@ static void freeColumnList(char **azCol) {
 ** The first regular column in the table is azCol[1].  The list is terminated
 ** by an entry with azCol[i]==0.
 */
-char **ShellState::TableColumnList(const char *zTab) {
-	char **azCol = 0;
+vector<string> ShellState::TableColumnList(const char *zTab) {
+	vector<string> result;
 	sqlite3_stmt *pStmt;
-	int nCol = 0;
-	int nAlloc = 0;
-	int rc;
 
 	auto zSql = StringUtil::Format("PRAGMA table_info=%s", SQLString(zTab));
-	rc = sqlite3_prepare_v2(db, zSql.c_str(), -1, &pStmt, 0);
-	if (rc)
-		return 0;
+	int rc = sqlite3_prepare_v2(db, zSql.c_str(), -1, &pStmt, 0);
+	if (rc) {
+		return result;
+	}
 	while (sqlite3_step(pStmt) == SQLITE_ROW) {
-		if (nCol >= nAlloc - 2) {
-			nAlloc = nAlloc * 2 + nCol + 10;
-			azCol = (char **)sqlite3_realloc(azCol, nAlloc * sizeof(azCol[0]));
-			if (azCol == 0)
-				shell_out_of_memory();
-		}
-		azCol[++nCol] = sqlite3_mprintf("%s", sqlite3_column_text(pStmt, 1));
+		result.push_back(string((const char *)sqlite3_column_text(pStmt, 1)));
 	}
 	sqlite3_finalize(pStmt);
-	if (azCol == 0)
-		return 0;
-	azCol[0] = 0;
-	azCol[nCol + 1] = 0;
-
-	return azCol;
+	return result;
 }
 
 /*
@@ -1923,9 +1851,9 @@ static void toggleSelectOrder(sqlite3 *db) {
 static string getTableSchema(sqlite3 *db, const char *zTable) {
 	string zSchema;
 	auto zSql = StringUtil::Format("SELECT table_schema FROM information_schema.tables "
-	                             "WHERE table_name = %s AND table_type='BASE TABLE' "
-	                             "ORDER BY (table_schema='main') DESC LIMIT 1",
-	                             SQLString(zTable));
+	                               "WHERE table_name = %s AND table_type='BASE TABLE' "
+	                               "ORDER BY (table_schema='main') DESC LIMIT 1",
+	                               SQLString(zTable));
 
 	sqlite3_stmt *pStmt = NULL;
 	int rc = sqlite3_prepare_v2(db, zSql.c_str(), -1, &pStmt, 0);
@@ -1978,8 +1906,8 @@ static int dump_callback(void *pArg, int nArg, char **azArg, char **azNotUsed) {
 		return 0;
 	} else if (strncmp(zSql, "CREATE VIRTUAL TABLE", 20) == 0) {
 		auto zIns = StringUtil::Format("INSERT INTO sqlite_schema(type,name,tbl_name,rootpage,sql)"
-		                       "VALUES('table',%s,%s,0,%s);",
-		                       SQLString(zTable), SQLString(zTable), SQLString(zSql));
+		                               "VALUES('table',%s,%s,0,%s);",
+		                               SQLString(zTable), SQLString(zTable), SQLString(zSql));
 		utf8_printf(p->out, "%s\n", zIns.c_str());
 		return 0;
 	} else {
@@ -1989,60 +1917,36 @@ static int dump_callback(void *pArg, int nArg, char **azArg, char **azNotUsed) {
 	if (strcmp(zType, "table") == 0) {
 		string sSelect;
 		string sTable;
-		char **azCol;
-		int i;
-		char *savedDestTable;
-		RenderMode savedMode;
-		string zSchema;
-		string zQualifiedName;
 
-		zSchema = getTableSchema(p->db, zTable);
-		zQualifiedName = buildQualifiedName(zSchema.c_str(), zTable);
+		auto zSchema = getTableSchema(p->db, zTable);
+		auto zQualifiedName = buildQualifiedName(zSchema.c_str(), zTable);
 
-		azCol = p->TableColumnList(zQualifiedName.c_str());
-		if (azCol == 0) {
-			p->nErr++;
+		auto table_columns = p->TableColumnList(zQualifiedName.c_str());
+		if (table_columns.empty()) {
+			p->AddError();
 			return 0;
 		}
 
 		if (!zSchema.empty()) {
 			appendText(sTable, zQualifiedName.c_str(), 0);
 		} else {
-			appendText(sTable, zTable, quoteChar(zTable));
-		}
-		/* If preserving the rowid, add a column list after the table name.
-		** In other words:  "INSERT INTO tab(rowid,a,b,c,...) VALUES(...)"
-		** instead of the usual "INSERT INTO tab VALUES(...)".
-		*/
-		if (azCol[0]) {
-			appendText(sTable, "(", 0);
-			appendText(sTable, azCol[0], 0);
-			for (i = 1; azCol[i]; i++) {
-				appendText(sTable, ",", 0);
-				appendText(sTable, azCol[i], quoteChar(azCol[i]));
-			}
-			appendText(sTable, ")", 0);
+			sTable += StringUtil::Format("%s", SQLIdentifier(zTable));
 		}
 
 		/* Build an appropriate SELECT statement */
 		appendText(sSelect, "SELECT ", 0);
-		if (azCol[0]) {
-			appendText(sSelect, azCol[0], 0);
-			appendText(sSelect, ",", 0);
-		}
-		for (i = 1; azCol[i]; i++) {
-			appendText(sSelect, azCol[i], quoteChar(azCol[i]));
-			if (azCol[i + 1]) {
-				appendText(sSelect, ",", 0);
+		for (idx_t i = 0; i < table_columns.size(); i++) {
+			if (i > 0) {
+				sSelect += ", ";
 			}
+			sSelect += StringUtil::Format("%s", SQLIdentifier(table_columns[i]));
 		}
-		freeColumnList(azCol);
 		appendText(sSelect, " FROM ", 0);
 		appendText(sSelect, zQualifiedName.c_str(), 0);
 
-		savedDestTable = p->zDestTable;
-		savedMode = p->mode;
-		p->zDestTable = (char *)sTable.c_str();
+		auto savedDestTable = p->zDestTable;
+		auto savedMode = p->mode;
+		p->zDestTable = sTable;
 		p->mode = p->cMode = RenderMode::INSERT;
 		rc = p->ExecuteSQL(sSelect.c_str(), 0);
 		if ((rc & 0xff) == SQLITE_CORRUPT) {
@@ -2054,11 +1958,14 @@ static int dump_callback(void *pArg, int nArg, char **azArg, char **azNotUsed) {
 		p->zDestTable = savedDestTable;
 		p->mode = savedMode;
 		if (rc != SQLITE_OK && rc != SQLITE_DONE)
-			p->nErr++;
+			p->AddError();
 	}
 	return 0;
 }
 
+void ShellState::AddError() {
+	nErr++;
+}
 /*
 ** Run zQuery.  Use dump_callback() as the callback routine so that
 ** the contents of the query are output as SQL statements.
@@ -2621,6 +2528,10 @@ struct ImportCtx {
 	int cTerm;                          /* Character that terminated the most recent field */
 	int cColSep;                        /* The column separator character.  (Usually ",") */
 	int cRowSep;                        /* The row separator character.  (Usually "\n") */
+
+	void AddError() {
+		nErr++;
+	}
 };
 
 /* Clean up resourced used by an ImportCtx */
@@ -3058,11 +2969,11 @@ MetadataResult DumpTable(ShellState &state, const char **azArg, idx_t nArg) {
 
 	// Emit CREATE SCHEMA for non-main schemas first
 	auto zSql = StringUtil::Format("SELECT DISTINCT table_schema FROM information_schema.tables "
-	                       "WHERE table_schema != 'main' AND table_schema NOT LIKE 'pg_%%' "
-	                       "AND table_schema != 'information_schema' "
-	                       "AND table_name IN (SELECT name FROM sqlite_schema WHERE (%s) AND type=='table') "
-	                       "ORDER BY table_schema",
-	                       zLike);
+	                               "WHERE table_schema != 'main' AND table_schema NOT LIKE 'pg_%%' "
+	                               "AND table_schema != 'information_schema' "
+	                               "AND table_name IN (SELECT name FROM sqlite_schema WHERE (%s) AND type=='table') "
+	                               "ORDER BY table_schema",
+	                               zLike);
 	sqlite3_stmt *pStmt = NULL;
 	if (sqlite3_prepare_v2(state.db, zSql.c_str(), -1, &pStmt, 0) == SQLITE_OK) {
 		while (sqlite3_step(pStmt) == SQLITE_ROW) {
@@ -3076,15 +2987,15 @@ MetadataResult DumpTable(ShellState &state, const char **azArg, idx_t nArg) {
 	}
 
 	zSql = StringUtil::Format("SELECT name, type, sql FROM sqlite_schema "
-	                       "WHERE (%s) AND type=='table'"
-	                       "  AND sql NOT NULL"
-	                       " ORDER BY tbl_name='sqlite_sequence'",
-	                       zLike);
+	                          "WHERE (%s) AND type=='table'"
+	                          "  AND sql NOT NULL"
+	                          " ORDER BY tbl_name='sqlite_sequence'",
+	                          zLike);
 	state.RunSchemaDumpQuery(zSql.c_str());
 	zSql = StringUtil::Format("SELECT sql FROM sqlite_schema "
-	                       "WHERE (%s) AND sql NOT NULL"
-	                       "  AND type IN ('index','trigger','view')",
-	                       zLike);
+	                          "WHERE (%s) AND sql NOT NULL"
+	                          "  AND type IN ('index','trigger','view')",
+	                          zLike);
 	state.RunTableDumpQuery(zSql.c_str());
 	raw_printf(state.out, state.nErr ? "ROLLBACK; -- due to errors\n" : "COMMIT;\n");
 	state.showHeader = savedShowHeader;
@@ -3301,7 +3212,6 @@ bool ShellState::ImportData(const char **azArg, idx_t nArg) {
 	const char *zFile = nullptr;               /* Name of file to extra content from */
 	sqlite3_stmt *pStmt = nullptr;             /* A statement */
 	int nCol;                                  /* Number of columns in the table */
-	int j;                                     /* Loop counters */
 	int needCommit;                            /* True to COMMIT or ROLLBACK at end */
 	ImportCtx sCtx;                            /* Reader context */
 	char *(SQLITE_CDECL * xRead)(ImportCtx *); /* Func to read one value */
@@ -3534,7 +3444,7 @@ bool ShellState::ImportData(const char **azArg, idx_t nArg) {
 			rc = sqlite3_reset(pStmt);
 			if (rc != SQLITE_OK) {
 				utf8_printf(stderr, "%s:%d: INSERT failed: %s\n", sCtx.zFile, startLine, sqlite3_errmsg(db));
-				sCtx.nErr++;
+				sCtx.AddError();
 			} else {
 				sCtx.nRow++;
 			}
@@ -3564,7 +3474,7 @@ bool ShellState::OpenDatabase(const char **azArg, idx_t nArg) {
 		utf8_printf(stderr, ".open cannot be used in -safe mode\n");
 		return false;
 	}
-	string zNewFilename;   /* Name of the database file to open */
+	string zNewFilename;  /* Name of the database file to open */
 	idx_t iName = 1;      /* Index in azArg[] of the filename */
 	bool newFlag = false; /* True to delete file before opening */
 	/* Close the existing database */

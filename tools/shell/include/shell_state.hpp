@@ -102,7 +102,7 @@ public:
 	unsigned shellFlgs = 0;                   /* Various flags */
 	unsigned priorShFlgs = 0;                 /* Saved copy of flags */
 	int64_t szMax = 0;                        /* --maxsize argument to .open */
-	char *zDestTable = nullptr;               /* Name of destination table when RenderMode::Insert */
+	string zDestTable;                        /* Name of destination table when RenderMode::Insert */
 	string zTempFile;                         /* Temporary file that might need deleting */
 	string colSeparator;                      /* Column separator character for several modes */
 	string rowSeparator;                      /* Row separator character for RenderMode::Ascii */
@@ -173,12 +173,13 @@ public:
 	unique_ptr<RowRenderer> GetRowRenderer();
 	unique_ptr<RowRenderer> GetRowRenderer(RenderMode mode);
 	void ExecutePreparedStatementColumnar(sqlite3_stmt *pStmt);
-	char **TableColumnList(const char *zTab);
+	vector<string> TableColumnList(const char *zTab);
 	void ExecutePreparedStatement(sqlite3_stmt *pStmt);
 
 	void PrintDatabaseError(const char *zErr);
 	int ShellDatabaseError(sqlite3 *db);
 	int RunInitialCommand(char *sql, bool bail);
+	void AddError();
 
 	int RenderRow(RowRenderer &renderer, RowResult &result);
 
