@@ -2256,7 +2256,7 @@ static int showHelp(FILE *out, const char *zPattern) {
 	int i = 0;
 	int j = 0;
 	int n = 0;
-	char *zPat;
+	string zPat;
 	if (zPattern == 0 || zPattern[0] == '0' || strcmp(zPattern, "-a") == 0 || strcmp(zPattern, "-all") == 0 ||
 	    strcmp(zPattern, "--all") == 0) {
 		/* Show all commands, but only one line per command */
@@ -2270,15 +2270,14 @@ static int showHelp(FILE *out, const char *zPattern) {
 		}
 	} else {
 		/* Look for commands that for which zPattern is an exact prefix */
-		zPat = sqlite3_mprintf(".%s*", zPattern);
+		zPat = StringUtil::Format(".%s*", zPattern);
 		for (i = 0; i < ArraySize(azHelp); i++) {
-			if (sqlite3_strglob(zPat, azHelp[i]) == 0) {
+			if (sqlite3_strglob(zPat.c_str(), azHelp[i]) == 0) {
 				utf8_printf(out, "%s\n", azHelp[i]);
 				j = i + 1;
 				n++;
 			}
 		}
-		sqlite3_free(zPat);
 		if (n) {
 			if (n == 1) {
 				/* when zPattern is a prefix of exactly one command, then include the
@@ -2292,11 +2291,11 @@ static int showHelp(FILE *out, const char *zPattern) {
 		}
 		/* Look for commands that contain zPattern anywhere.  Show the complete
 		** text of all commands that match. */
-		zPat = sqlite3_mprintf("%%%s%%", zPattern);
+		zPat = StringUtil::Format("%%%s%%", zPattern);
 		for (i = 0; i < ArraySize(azHelp); i++) {
 			if (azHelp[i][0] == '.')
 				j = i;
-			if (sqlite3_strlike(zPat, azHelp[i], 0) == 0) {
+			if (sqlite3_strlike(zPat.c_str(), azHelp[i], 0) == 0) {
 				utf8_printf(out, "%s\n", azHelp[j]);
 				while (j < ArraySize(azHelp) - 1 && azHelp[j + 1][0] != '.') {
 					j++;
@@ -2306,7 +2305,6 @@ static int showHelp(FILE *out, const char *zPattern) {
 				n++;
 			}
 		}
-		sqlite3_free(zPat);
 	}
 	return n;
 }
@@ -2404,37 +2402,7 @@ void close_db(sqlite3 *db) {
 	}
 }
 
-#if HAVE_READLINE || HAVE_EDITLINE
-/*
-** Readline completion callbacks
-*/
-static char *readline_completion_generator(const char *text, int state) {
-	static sqlite3_stmt *pStmt = 0;
-	char *zRet;
-	if (state == 0) {
-		char *zSql;
-		sqlite3_finalize(pStmt);
-		zSql = sqlite3_mprintf("SELECT DISTINCT candidate COLLATE nocase"
-		                       "  FROM completion(%Q) ORDER BY 1",
-		                       text);
-		sqlite3_prepare_v2(globalDb, zSql, -1, &pStmt, 0);
-		sqlite3_free(zSql);
-	}
-	if (sqlite3_step(pStmt) == SQLITE_ROW) {
-		zRet = strdup((const char *)sqlite3_column_text(pStmt, 0));
-	} else {
-		sqlite3_finalize(pStmt);
-		pStmt = 0;
-		zRet = 0;
-	}
-	return zRet;
-}
-static char **readline_completion(const char *zText, int iStart, int iEnd) {
-	rl_attempted_completion_over = 1;
-	return rl_completion_matches(zText, readline_completion_generator);
-}
-
-#elif HAVE_LINENOISE
+#ifdef HAVE_LINENOISE
 /*
 ** Linenoise completion callback
 */
@@ -2443,7 +2411,6 @@ static void linenoise_completion(const char *zLine, linenoiseCompletions *lc) {
 	idx_t nLine = ShellState::StringLength(zLine);
 	int copiedSuggestion = 0;
 	sqlite3_stmt *pStmt = 0;
-	char *zSql;
 	char zBuf[1000];
 
 	if (nLine > sizeof(zBuf) - 30) {
@@ -2479,15 +2446,14 @@ static void linenoise_completion(const char *zLine, linenoiseCompletions *lc) {
 		return;
 	}
 	//  if( i==nLine-1 ) return;
-	zSql = sqlite3_mprintf("CALL sql_auto_complete(%Q)", zLine);
+	auto zSql = StringUtil::Format("CALL sql_auto_complete(%s)", SQLString(zLine));
 	sqlite3 *localDb = NULL;
 	if (!globalDb) {
 		sqlite3_open_v2(":memory:", &localDb, linenoise_open_flags, 0);
-		sqlite3_prepare_v2(localDb, zSql, -1, &pStmt, 0);
+		sqlite3_prepare_v2(localDb, zSql.c_str(), -1, &pStmt, 0);
 	} else {
-		sqlite3_prepare_v2(globalDb, zSql, -1, &pStmt, 0);
+		sqlite3_prepare_v2(globalDb, zSql.c_str(), -1, &pStmt, 0);
 	}
-	sqlite3_free(zSql);
 	while (sqlite3_step(pStmt) == SQLITE_ROW) {
 		const char *zCompletion = (const char *)sqlite3_column_text(pStmt, 0);
 		int nCompletion = sqlite3_column_bytes(pStmt, 0);
@@ -3056,8 +3022,7 @@ MetadataResult SetLargeNumberRendering(ShellState &state, const char **azArg, id
 }
 
 MetadataResult DumpTable(ShellState &state, const char **azArg, idx_t nArg) {
-	char *zLike = 0;
-	char *zSql;
+	string zLike;
 	bool savedShowHeader = state.showHeader;
 	int savedShellFlags = state.shellFlgs;
 	state.ShellClearFlag(SHFLG_Newlines | SHFLG_Echo);
@@ -3070,13 +3035,12 @@ MetadataResult DumpTable(ShellState &state, const char **azArg, idx_t nArg) {
 				state.ShellSetFlag(SHFLG_Newlines);
 			} else {
 				raw_printf(stderr, "Unknown option \"%s\" on \".dump\"\n", azArg[i]);
-				sqlite3_free(zLike);
 				return MetadataResult::FAIL;
 			}
-		} else if (zLike) {
-			zLike = sqlite3_mprintf("%z OR name LIKE %Q ESCAPE '\\'", zLike, azArg[i]);
+		} else if (!zLike.empty()) {
+			zLike = StringUtil::Format("%s OR name LIKE %s ESCAPE '\\'", zLike, SQLString(azArg[i]));
 		} else {
-			zLike = sqlite3_mprintf("name LIKE %Q ESCAPE '\\'", azArg[i]);
+			zLike = StringUtil::Format("name LIKE %s ESCAPE '\\'", SQLString(azArg[i]));
 		}
 	}
 
@@ -3088,18 +3052,19 @@ MetadataResult DumpTable(ShellState &state, const char **azArg, idx_t nArg) {
 	raw_printf(state.out, "BEGIN TRANSACTION;\n");
 	state.showHeader = 0;
 	state.nErr = 0;
-	if (zLike == 0)
-		zLike = sqlite3_mprintf("true");
+	if (zLike.empty()) {
+		zLike = "true";
+	}
 
 	// Emit CREATE SCHEMA for non-main schemas first
-	zSql = sqlite3_mprintf("SELECT DISTINCT table_schema FROM information_schema.tables "
+	auto zSql = StringUtil::Format("SELECT DISTINCT table_schema FROM information_schema.tables "
 	                       "WHERE table_schema != 'main' AND table_schema NOT LIKE 'pg_%%' "
 	                       "AND table_schema != 'information_schema' "
 	                       "AND table_name IN (SELECT name FROM sqlite_schema WHERE (%s) AND type=='table') "
 	                       "ORDER BY table_schema",
 	                       zLike);
 	sqlite3_stmt *pStmt = NULL;
-	if (sqlite3_prepare_v2(state.db, zSql, -1, &pStmt, 0) == SQLITE_OK) {
+	if (sqlite3_prepare_v2(state.db, zSql.c_str(), -1, &pStmt, 0) == SQLITE_OK) {
 		while (sqlite3_step(pStmt) == SQLITE_ROW) {
 			const char *schema = (const char *)sqlite3_column_text(pStmt, 0);
 			if (schema) {
@@ -3109,22 +3074,18 @@ MetadataResult DumpTable(ShellState &state, const char **azArg, idx_t nArg) {
 		}
 		sqlite3_finalize(pStmt);
 	}
-	sqlite3_free(zSql);
 
-	zSql = sqlite3_mprintf("SELECT name, type, sql FROM sqlite_schema "
+	zSql = StringUtil::Format("SELECT name, type, sql FROM sqlite_schema "
 	                       "WHERE (%s) AND type=='table'"
 	                       "  AND sql NOT NULL"
 	                       " ORDER BY tbl_name='sqlite_sequence'",
 	                       zLike);
-	state.RunSchemaDumpQuery(zSql);
-	sqlite3_free(zSql);
-	zSql = sqlite3_mprintf("SELECT sql FROM sqlite_schema "
+	state.RunSchemaDumpQuery(zSql.c_str());
+	zSql = StringUtil::Format("SELECT sql FROM sqlite_schema "
 	                       "WHERE (%s) AND sql NOT NULL"
 	                       "  AND type IN ('index','trigger','view')",
 	                       zLike);
-	state.RunTableDumpQuery(zSql);
-	sqlite3_free(zSql);
-	sqlite3_free(zLike);
+	state.RunTableDumpQuery(zSql.c_str());
 	raw_printf(state.out, state.nErr ? "ROLLBACK; -- due to errors\n" : "COMMIT;\n");
 	state.showHeader = savedShowHeader;
 	state.shellFlgs = savedShellFlags;
