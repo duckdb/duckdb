@@ -103,7 +103,7 @@ public:
 	unsigned priorShFlgs = 0;                 /* Saved copy of flags */
 	int64_t szMax = 0;                        /* --maxsize argument to .open */
 	char *zDestTable = nullptr;               /* Name of destination table when RenderMode::Insert */
-	char *zTempFile = nullptr;                /* Temporary file that might need deleting */
+	string zTempFile;                         /* Temporary file that might need deleting */
 	string colSeparator;                      /* Column separator character for several modes */
 	string rowSeparator;                      /* Row separator character for RenderMode::Ascii */
 	string colSepPrior;                       /* Saved column separator */

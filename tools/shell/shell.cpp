@@ -2829,17 +2829,15 @@ void ShellState::ResetOutput() {
 #else
 			    "xdg-open";
 #endif
-			char *zCmd;
-			zCmd = sqlite3_mprintf("%s %s", zXdgOpenCmd, zTempFile);
-			if (system(zCmd)) {
-				utf8_printf(stderr, "Failed: [%s]\n", zCmd);
+			auto zCmd = StringUtil::Format("%s %s", zXdgOpenCmd, zTempFile);
+			if (system(zCmd.c_str())) {
+				utf8_printf(stderr, "Failed: [%s]\n", zCmd.c_str());
 			} else {
 				/* Give the start/open/xdg-open command some time to get
 				** going before we continue, and potential delete the
 				** zTempFile data file out from under it */
 				sqlite3_sleep(2000);
 			}
-			sqlite3_free(zCmd);
 			PopOutputMode();
 			doXdgOpen = 0;
 		}
@@ -2901,14 +2899,16 @@ int shellDeleteFile(const char *zFilename) {
 ** memory used to hold the name of the temp file.
 */
 void ShellState::ClearTempFile() {
-	if (zTempFile == 0)
+	if (!zTempFile.empty()) {
 		return;
-	if (doXdgOpen)
+	}
+	if (doXdgOpen) {
 		return;
-	if (shellDeleteFile(zTempFile))
+	}
+	if (shellDeleteFile(zTempFile.c_str())) {
 		return;
-	sqlite3_free(zTempFile);
-	zTempFile = 0;
+	}
+	zTempFile = string();
 }
 
 /*
@@ -2916,12 +2916,11 @@ void ShellState::ClearTempFile() {
 */
 void ShellState::NewTempFile(const char *zSuffix) {
 	ClearTempFile();
-	sqlite3_free(zTempFile);
-	zTempFile = 0;
+	zTempFile = string();
 	if (db) {
 		sqlite3_file_control(db, 0, SQLITE_FCNTL_TEMPFILENAME, &zTempFile);
 	}
-	if (zTempFile == 0) {
+	if (zTempFile.empty()) {
 		/* If db is an in-memory database then the TEMPFILENAME file-control
 		** will not work and we will need to fallback to guessing */
 		const char *zTemp;
@@ -2937,11 +2936,11 @@ void ShellState::NewTempFile(const char *zSuffix) {
 			zTemp = "/tmp";
 #endif
 		}
-		zTempFile = sqlite3_mprintf("%s/temp%llx.%s", zTemp, r, zSuffix);
+		zTempFile = StringUtil::Format("%s/temp%llx.%s", zTemp, r, zSuffix);
 	} else {
-		zTempFile = sqlite3_mprintf("%z.%s", zTempFile, zSuffix);
+		zTempFile = StringUtil::Format("%z.%s", zTempFile, zSuffix);
 	}
-	if (zTempFile == 0) {
+	if (zTempFile.empty()) {
 		raw_printf(stderr, "out of memory\n");
 		exit(1);
 	}
@@ -3718,7 +3717,7 @@ bool ShellState::SetOutputFile(const char **azArg, idx_t nArg, char output_mode)
 		utf8_printf(stderr, ".output/.once/.excel cannot be used in -safe mode\n");
 		return false;
 	}
-	const char *zFile = nullptr;
+	string zFile;
 	int bTxtMode = 0;
 	int eMode = 0;
 	bool bBOM = false;
@@ -3749,7 +3748,7 @@ bool ShellState::SetOutputFile(const char **azArg, idx_t nArg, char output_mode)
 				showHelp(out, azArg[0]);
 				return false;
 			}
-		} else if (!zFile) {
+		} else if (zFile.empty()) {
 			zFile = z;
 		} else {
 			utf8_printf(out, "ERROR: extra parameter: \"%s\".  Usage:\n", azArg[i]);
@@ -3757,7 +3756,7 @@ bool ShellState::SetOutputFile(const char **azArg, idx_t nArg, char output_mode)
 			return false;
 		}
 	}
-	if (!zFile) {
+	if (zFile.empty()) {
 		zFile = "stdout";
 	}
 	if (bOnce) {
@@ -3791,9 +3790,9 @@ bool ShellState::SetOutputFile(const char **azArg, idx_t nArg, char output_mode)
 		out = stdout;
 		return false;
 #else
-		out = popen(zFile + 1, "w");
+		out = popen(zFile.c_str() + 1, "w");
 		if (out == 0) {
-			utf8_printf(stderr, "Error: cannot open pipe \"%s\"\n", zFile + 1);
+			utf8_printf(stderr, "Error: cannot open pipe \"%s\"\n", zFile.c_str() + 1);
 			out = stdout;
 			return false;
 		} else {
@@ -3804,10 +3803,10 @@ bool ShellState::SetOutputFile(const char **azArg, idx_t nArg, char output_mode)
 		}
 #endif
 	} else {
-		out = output_file_open(zFile, bTxtMode);
+		out = output_file_open(zFile.c_str(), bTxtMode);
 		if (!out) {
-			if (strcmp(zFile, "off") != 0) {
-				utf8_printf(stderr, "Error: cannot write to \"%s\"\n", zFile);
+			if (zFile == "off") {
+				utf8_printf(stderr, "Error: cannot write to \"%s\"\n", zFile.c_str());
 			}
 			out = stdout;
 			return false;
