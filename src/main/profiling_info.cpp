@@ -37,7 +37,10 @@ ProfilingInfo::ProfilingInfo(const profiler_settings_t &n_settings, const idx_t 
 }
 
 profiler_settings_t ProfilingInfo::DefaultSettings() {
-	return {MetricsType::BLOCKED_THREAD_TIME,
+	return {MetricsType::ATTACH_LOAD_STORAGE_LATENCY,
+	        MetricsType::ATTACH_REPLAY_WAL_LATENCY,
+	        MetricsType::BLOCKED_THREAD_TIME,
+	        MetricsType::CHECKPOINT_LATENCY,
 	        MetricsType::CPU_TIME,
 	        MetricsType::CUMULATIVE_CARDINALITY,
 	        MetricsType::CUMULATIVE_ROWS_SCANNED,
@@ -54,6 +57,7 @@ profiler_settings_t ProfilingInfo::DefaultSettings() {
 	        MetricsType::SYSTEM_PEAK_TEMP_DIR_SIZE,
 	        MetricsType::TOTAL_BYTES_READ,
 	        MetricsType::TOTAL_BYTES_WRITTEN,
+	        MetricsType::WAITING_TO_ATTACH_LATENCY,
 	        MetricsType::QUERY_NAME};
 }
 
