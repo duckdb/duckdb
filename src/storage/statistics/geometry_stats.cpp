@@ -170,12 +170,31 @@ GeometryStatsData &GeometryStats::GetDataUnsafe(BaseStatistics &stats) {
 	return stats.stats_union.geometry_data;
 }
 
+GeometryExtent &GeometryStats::GetExtent(BaseStatistics &stats) {
+	return GetDataUnsafe(stats).extent;
+}
+
+GeometryTypeSet &GeometryStats::GetTypes(BaseStatistics &stats) {
+	return GetDataUnsafe(stats).types;
+}
+
+const GeometryExtent &GeometryStats::GetExtent(const BaseStatistics &stats) {
+	return GetDataUnsafe(stats).extent;
+}
+
+const GeometryTypeSet &GeometryStats::GetTypes(const BaseStatistics &stats) {
+	return GetDataUnsafe(stats).types;
+}
+
 // Expression comparison pruning
 static FilterPropagateResult CheckIntersectionFilter(const GeometryStatsData &data, const Value &constant) {
 	if (constant.IsNull() || constant.type().id() != LogicalTypeId::GEOMETRY) {
 		// Cannot prune against NULL
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
+
+	// This has been checked before and needs to be true for the checks below to be valid
+	D_ASSERT(data.extent.HasXY());
 
 	const auto &geom = StringValue::Get(constant);
 	auto extent = GeometryExtent::Empty();
@@ -185,9 +204,14 @@ static FilterPropagateResult CheckIntersectionFilter(const GeometryStatsData &da
 	}
 
 	// Check if the bounding boxes intersect
-	if (!data.extent.IntersectsXY(extent)) {
-		// If the bounding boxes do not intersect, the predicate will never match
+	// If the bounding boxes do not intersect, the predicate will never match
+	if (!extent.IntersectsXY(data.extent)) {
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
+
+	// If the column is completely inside the bounds, the predicate will always match
+	if (extent.ContainsXY(data.extent)) {
+		return FilterPropagateResult::FILTER_ALWAYS_TRUE;
 	}
 
 	// We cannot prune, as this column may contain geometries that intersect
@@ -237,6 +261,12 @@ FilterPropagateResult GeometryStats::CheckZonemap(const BaseStatistics &stats, c
 	}
 
 	auto &data = GetDataUnsafe(stats);
+
+	if (!data.extent.HasXY()) {
+		// If the extent is empty or unknown, we cannot prune
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+
 	if (lhs_is_const) {
 		return CheckIntersectionFilter(data, func.children[0]->Cast<BoundConstantExpression>().value);
 	}

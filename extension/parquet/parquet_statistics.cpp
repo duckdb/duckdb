@@ -413,6 +413,41 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 		row_group_stats = string_stats.ToUnique();
 		break;
 	}
+	case LogicalTypeId::GEOMETRY: {
+		auto geo_stats = GeometryStats::CreateUnknown(type);
+		if (column_chunk.meta_data.__isset.geospatial_statistics) {
+			if (column_chunk.meta_data.geospatial_statistics.__isset.bbox) {
+				auto &bbox = column_chunk.meta_data.geospatial_statistics.bbox;
+				auto &stats_bbox = GeometryStats::GetExtent(geo_stats);
+
+				stats_bbox.x_min = bbox.xmin;
+				stats_bbox.y_min = bbox.ymin;
+				stats_bbox.x_max = bbox.xmax;
+				stats_bbox.y_max = bbox.ymax;
+				if (bbox.__isset.zmin && bbox.__isset.zmax) {
+					stats_bbox.z_min = bbox.zmin;
+					stats_bbox.z_max = bbox.zmax;
+				}
+				if (bbox.__isset.mmin && bbox.__isset.mmax) {
+					stats_bbox.m_min = bbox.mmin;
+					stats_bbox.m_max = bbox.mmax;
+				}
+			}
+			if (column_chunk.meta_data.geospatial_statistics.__isset.geospatial_types) {
+				auto &types = column_chunk.meta_data.geospatial_statistics.geospatial_types;
+				auto &stats_types = GeometryStats::GetTypes(geo_stats);
+
+				// Make empty
+				stats_types.Clear();
+
+				for (auto &geom_type : types) {
+					stats_types.AddWKBType(geom_type);
+				}
+			}
+		}
+		row_group_stats = geo_stats.ToUnique();
+		break;
+	}
 	default:
 		// no stats for you
 		break;
