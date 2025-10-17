@@ -79,10 +79,12 @@
 #include <string.h>
 #include <stdio.h>
 #include <assert.h>
+
 #include "duckdb_shell_wrapper.h"
 #include "duckdb/common/box_renderer.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/parser/qualified_name.hpp"
+#include "duckdb/common/local_file_system.hpp"
 #include "sqlite3.h"
 typedef sqlite3_int64 i64;
 typedef sqlite3_uint64 u64;
@@ -4394,85 +4396,13 @@ int ShellState::ProcessInput(InputMode mode) {
 	return errCnt > 0;
 }
 
-/*
-** Return a pathname which is the user's home directory.  A
-** 0 return indicates an error of some kind.
-*/
-static char *find_home_dir(int clearFlag) {
-	static char *home_dir = nullptr;
-	if (clearFlag) {
-		free(home_dir);
-		home_dir = nullptr;
-		return nullptr;
-	}
-	if (home_dir) {
-		return home_dir;
-	}
-
-#if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN32_WCE) && !defined(__RTP__) && !defined(_WRS_KERNEL)
-	{
-		struct passwd *pwent;
-		uid_t uid = getuid();
-		if ((pwent = getpwuid(uid)) != NULL) {
-			home_dir = pwent->pw_dir;
-		}
-	}
-#endif
-
-#if defined(_WIN32_WCE)
-	/* Windows CE (arm-wince-mingw32ce-gcc) does not provide getenv()
-	 */
-	home_dir = "/";
-#else
-
-#if defined(_WIN32) || defined(WIN32)
-	if (!home_dir) {
-		home_dir = getenv("USERPROFILE");
-	}
-#endif
-
-	if (!home_dir) {
-		home_dir = getenv("HOME");
-	}
-
-#if defined(_WIN32) || defined(WIN32)
-	if (!home_dir) {
-		char *zDrive, *zPath;
-		idx_t n;
-		zDrive = getenv("HOMEDRIVE");
-		zPath = getenv("HOMEPATH");
-		if (zDrive && zPath) {
-			n = ShellState::StringLength(zDrive) + ShellState::StringLength(zPath) + 1;
-			home_dir = (char *)malloc(n);
-			if (home_dir == 0)
-				return 0;
-			sqlite3_snprintf(n, home_dir, "%s%s", zDrive, zPath);
-			return home_dir;
-		}
-		home_dir = "c:\\";
-	}
-#endif
-
-#endif /* !_WIN32_WCE */
-
-	if (home_dir) {
-		int n = ShellState::StringLength(home_dir) + 1;
-		char *z = (char *)malloc(n);
-		if (z) {
-			memcpy(z, home_dir, n);
-		}
-		home_dir = z;
-	}
-
-	return home_dir;
+static string GetHomeDirectory() {
+	duckdb::LocalFileSystem lfs;
+	return lfs.GetHomeDirectory();
 }
 
 string ShellState::GetDefaultDuckDBRC() {
-	auto home_dir = find_home_dir(0);
-	if (!home_dir) {
-		return string();
-	}
-	return string(home_dir) + "/.duckdbrc";
+	return GetHomeDirectory() + "/.duckdbrc";
 }
 
 /*
@@ -4980,9 +4910,8 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 		/* Run commands received from standard input
 		 */
 		if (stdin_is_interactive) {
-			char *zHome;
-			char *zHistory;
-			int nHistory;
+			string zHome;
+			const char *zHistory;
 			printf("DuckDB %s (%s) %.19s\n" /*extra-version-info*/
 			       "Enter \".help\" for usage hints.\n",
 			       duckdb::DuckDB::LibraryVersion(), duckdb::DuckDB::ReleaseCodename(), duckdb::DuckDB::SourceID());
@@ -4995,13 +4924,9 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 				       "persistent database.\n");
 			}
 			zHistory = getenv("DUCKDB_HISTORY");
-			if (zHistory) {
-				zHistory = strdup(zHistory);
-			} else if ((zHome = find_home_dir(0)) != 0) {
-				nHistory = ShellState::StringLength(zHome) + 20;
-				if ((zHistory = (char *)malloc(nHistory)) != 0) {
-					sqlite3_snprintf(nHistory, zHistory, "%s/.duckdb_history", zHome);
-				}
+			if (!zHistory) {
+				zHome = GetHomeDirectory() + "/.duckdb_history";
+				zHistory = zHome.c_str();
 			}
 			if (zHistory) {
 				shell_read_history(zHistory);
@@ -5017,7 +4942,6 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			if (zHistory) {
 				shell_stifle_history(2000);
 				shell_write_history(zHistory);
-				free(zHistory);
 			}
 		} else {
 			data.in = stdin;
@@ -5028,7 +4952,6 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 	if (data.db) {
 		close_db(data.db);
 	}
-	find_home_dir(1);
 	data.ResetOutput();
 	data.doXdgOpen = 0;
 	data.ClearTempFile();
