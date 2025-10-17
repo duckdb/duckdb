@@ -176,7 +176,7 @@ public:
 	vector<string> TableColumnList(const char *zTab);
 	void ExecutePreparedStatement(sqlite3_stmt *pStmt);
 
-	void PrintDatabaseError(const char *zErr);
+	void PrintDatabaseError(const string &zErr);
 	int ShellDatabaseError(sqlite3 *db);
 	int RunInitialCommand(char *sql, bool bail);
 	void AddError();
@@ -184,7 +184,7 @@ public:
 	int RenderRow(RowRenderer &renderer, RowResult &result);
 
 	int ExecuteSQL(const char *zSql, /* SQL to be evaluated */
-	               char **pzErrMsg   /* Error msg written here */
+	               string *pzErrMsg   /* Error msg written here */
 	);
 	int RunSchemaDumpQuery(const char *zQuery);
 	void OpenDB(int openFlags);

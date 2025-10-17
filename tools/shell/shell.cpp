@@ -655,14 +655,13 @@ int ShellState::RunInitialCommand(char *sql, bool bail) {
 			return rc == 2 ? false : rc;
 		}
 	} else {
-		char *zErrMsg = nullptr;
+		string zErrMsg;
 		OpenDB(0);
 		BEGIN_TIMER;
 		rc = ExecuteSQL(sql, &zErrMsg);
 		END_TIMER;
-		if (zErrMsg != 0) {
+		if (!zErrMsg.empty()) {
 			PrintDatabaseError(zErrMsg);
-			sqlite3_free(zErrMsg);
 			if (bail) {
 				return rc != 0 ? rc : 1;
 			}
@@ -1361,13 +1360,9 @@ int ShellState::RunTableDumpQuery(const char *zSelect /* SELECT statement to ext
 /*
 ** Allocate space and save off current error string.
 */
-static char *SaveErrorMessage(sqlite3 *db) {
-	idx_t nErrMsg = 1 + ShellState::StringLength(sqlite3_errmsg(db));
-	auto zErrMsg = (char *)sqlite3_malloc64(nErrMsg);
-	if (zErrMsg) {
-		memcpy(zErrMsg, sqlite3_errmsg(db), nErrMsg);
-	}
-	return zErrMsg;
+static string SaveErrorMessage(sqlite3 *db) {
+	auto err_msg = sqlite3_errmsg(db);
+	return err_msg ? err_msg : string();
 }
 
 string ShellState::strdup_handle_newline(const char *z) {
@@ -1699,7 +1694,7 @@ void ShellState::ExecutePreparedStatement(sqlite3_stmt *pStmt) {
 ** and callback data argument.
 */
 int ShellState::ExecuteSQL(const char *zSql, /* SQL to be evaluated */
-                           char **pzErrMsg   /* Error msg written here */
+                           string *pzErrMsg   /* Error msg written here */
 ) {
 	sqlite3_stmt *pStmt = NULL; /* Statement to execute. */
 	int rc = SQLITE_OK;         /* Return Code */
@@ -1707,7 +1702,7 @@ int ShellState::ExecuteSQL(const char *zSql, /* SQL to be evaluated */
 	const char *zLeftover; /* Tail of unprocessed SQL */
 
 	if (pzErrMsg) {
-		*pzErrMsg = NULL;
+		*pzErrMsg = string();
 	}
 
 	while (zSql[0] && (SQLITE_OK == rc)) {
@@ -2703,9 +2698,9 @@ void ShellState::ResetOutput() {
 	stdout_is_console = true;
 }
 
-void ShellState::PrintDatabaseError(const char *zErr) {
+void ShellState::PrintDatabaseError(const string &zErr) {
 	if (!HighlightErrors()) {
-		utf8_printf(stderr, "%s\n", zErr);
+		utf8_printf(stderr, "%s\n", zErr.c_str());
 		return;
 	}
 	ShellHighlight shell_highlight(*this);
@@ -4246,7 +4241,7 @@ static bool _all_whitespace(const char *z) {
 */
 int ShellState::RunOneSqlLine(InputMode mode, char *zSql) {
 	int rc;
-	char *zErrMsg = nullptr;
+	string zErrMsg;
 
 	OpenDB(0);
 	if (ShellHasFlag(SHFLG_Backslash)) {
@@ -4260,11 +4255,9 @@ int ShellState::RunOneSqlLine(InputMode mode, char *zSql) {
 	BEGIN_TIMER;
 	rc = ExecuteSQL(zSql, &zErrMsg);
 	END_TIMER;
-	if (rc || zErrMsg) {
-		if (zErrMsg != 0) {
+	if (rc || !zErrMsg.empty()) {
+		if (!zErrMsg.empty()) {
 			PrintDatabaseError(zErrMsg);
-			sqlite3_free(zErrMsg);
-			zErrMsg = 0;
 		} else {
 			ShellDatabaseError(db);
 		}
@@ -4559,7 +4552,6 @@ int SQLITE_CDECL main(int argc, char **argv) {
 int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 	char **argv;
 #endif
-	char *zErrMsg = nullptr;
 	ShellState data;
 	const char *zInitFile = nullptr;
 	int i;
@@ -4892,10 +4884,10 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 				}
 			} else {
 				data.OpenDB(0);
-				rc = data.ExecuteSQL(azCmd[i], &zErrMsg);
-				if (zErrMsg != 0) {
-					data.PrintDatabaseError(zErrMsg);
-					sqlite3_free(zErrMsg);
+				string errMsg;
+				rc = data.ExecuteSQL(azCmd[i], &errMsg);
+				if (!errMsg.empty()) {
+					data.PrintDatabaseError(errMsg);
 					free(azCmd);
 					return rc != 0 ? rc : 1;
 				} else if (rc != 0) {
