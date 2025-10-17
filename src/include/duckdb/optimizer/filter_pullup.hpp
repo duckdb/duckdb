@@ -30,7 +30,7 @@ private:
 	// only pull up filters when there is a fork
 	bool can_pullup = false;
 
-	// identifiy case the branch is a set operation (INTERSECT or EXCEPT)
+	// identify case the branch is a set operation (INTERSECT or EXCEPT)
 	bool can_add_column = false;
 
 private:
@@ -40,30 +40,26 @@ private:
 
 	//! Pull up a LogicalFilter op
 	unique_ptr<LogicalOperator> PullupFilter(unique_ptr<LogicalOperator> op);
-
 	//! Pull up filter in a LogicalProjection op
 	unique_ptr<LogicalOperator> PullupProjection(unique_ptr<LogicalOperator> op);
-
 	//! Pull up filter in a LogicalCrossProduct op
 	unique_ptr<LogicalOperator> PullupCrossProduct(unique_ptr<LogicalOperator> op);
-
+	//! Pullup a filter in a LogicalJoin
 	unique_ptr<LogicalOperator> PullupJoin(unique_ptr<LogicalOperator> op);
-
-	// PPullup filter in a left join
+	//! Pullup filter in a left join
 	unique_ptr<LogicalOperator> PullupFromLeft(unique_ptr<LogicalOperator> op);
-
-	// Pullup filter in a inner join
+	//! Pullup filter in an inner join
 	unique_ptr<LogicalOperator> PullupInnerJoin(unique_ptr<LogicalOperator> op);
-
-	// Pullup filter in LogicalIntersect or LogicalExcept op
+	//! Pullup filter through a distinct
+	unique_ptr<LogicalOperator> PullupDistinct(unique_ptr<LogicalOperator> op);
+	//! Pullup filter in LogicalIntersect or LogicalExcept op
 	unique_ptr<LogicalOperator> PullupSetOperation(unique_ptr<LogicalOperator> op);
-
+	//! Pullup filter in both sides of a join
 	unique_ptr<LogicalOperator> PullupBothSide(unique_ptr<LogicalOperator> op);
 
-	// Finish pull up at this operator
+	//! Finish pull up at this operator
 	unique_ptr<LogicalOperator> FinishPullup(unique_ptr<LogicalOperator> op);
-
-	// special treatment for SetOperations and projections
+	//! special treatment for SetOperations and projections
 	void ProjectSetOperation(LogicalProjection &proj);
 
 }; // end FilterPullup
