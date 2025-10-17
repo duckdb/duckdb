@@ -148,6 +148,7 @@ typedef unsigned char u8;
 #include "shell_highlight.hpp"
 #include "shell_state.hpp"
 
+using duckdb::StringUtil;
 using namespace duckdb_shell;
 
 #if defined(_WIN32) || defined(WIN32)
@@ -834,7 +835,7 @@ static sqlite3_int64 integerValue(const char *zArg) {
 		}
 	}
 	for (i = 0; i < ArraySize(aMult); i++) {
-		if (sqlite3_stricmp(aMult[i].zSuffix, zArg) == 0) {
+		if (StringUtil::CIEquals(aMult[i].zSuffix, zArg)) {
 			v *= aMult[i].iMult;
 			break;
 		}
@@ -1901,7 +1902,7 @@ char **ShellState::TableColumnList(const char *zTab) {
 		azCol[++nCol] = sqlite3_mprintf("%s", sqlite3_column_text(pStmt, 1));
 		if (sqlite3_column_int(pStmt, 5)) {
 			nPK++;
-			if (nPK == 1 && sqlite3_stricmp((const char *)sqlite3_column_text(pStmt, 2), "INTEGER") == 0) {
+			if (nPK == 1 && StringUtil::CIEquals((const char *)sqlite3_column_text(pStmt, 2), "INTEGER")) {
 				isIPK = 1;
 			} else {
 				isIPK = 0;
@@ -1948,7 +1949,7 @@ char **ShellState::TableColumnList(const char *zTab) {
 		int i, j;
 		for (j = 0; j < 3; j++) {
 			for (i = 1; i <= nCol; i++) {
-				if (sqlite3_stricmp(azRowid[j], azCol[i]) == 0)
+				if (StringUtil::CIEquals(azRowid[j], azCol[i]))
 					break;
 			}
 			if (i > nCol) {
@@ -2697,10 +2698,10 @@ static bool booleanValue(const char *zArg) {
 	}
 	if (i > 0 && zArg[i] == 0)
 		return bool(integerValue(zArg) & 0xffffffff);
-	if (sqlite3_stricmp(zArg, "on") == 0 || sqlite3_stricmp(zArg, "yes") == 0) {
+	if (StringUtil::CIEquals(zArg, "on") || StringUtil::CIEquals(zArg, "yes")) {
 		return true;
 	}
-	if (sqlite3_stricmp(zArg, "off") == 0 || sqlite3_stricmp(zArg, "no") == 0) {
+	if (StringUtil::CIEquals(zArg, "off") || StringUtil::CIEquals(zArg, "no")) {
 		return false;
 	}
 	utf8_printf(stderr, "ERROR: Not a boolean value: \"%s\". Assuming \"no\".\n", zArg);
