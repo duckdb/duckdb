@@ -737,11 +737,12 @@ vector<DataPointer> ColumnData::GetDataPointers() {
 	return pointers;
 }
 
-PersistentColumnData::PersistentColumnData(PhysicalType physical_type_p) : physical_type(physical_type_p) {
+PersistentColumnData::PersistentColumnData(const LogicalType &logical_type_p)
+    : logical_type(logical_type_p), physical_type(logical_type.InternalType()) {
 }
 
-PersistentColumnData::PersistentColumnData(PhysicalType physical_type, vector<DataPointer> pointers_p)
-    : physical_type(physical_type), pointers(std::move(pointers_p)) {
+PersistentColumnData::PersistentColumnData(const LogicalType &logical_type_p, vector<DataPointer> pointers_p)
+    : logical_type(logical_type_p), physical_type(logical_type.InternalType()), pointers(std::move(pointers_p)) {
 	D_ASSERT(!pointers.empty());
 }
 
@@ -759,6 +760,21 @@ void PersistentColumnData::Serialize(Serializer &serializer) const {
 		return;
 	}
 	serializer.WriteProperty(101, "validity", child_columns[0]);
+
+	if (logical_type.id() == LogicalTypeId::VARIANT) {
+		D_ASSERT(physical_type == PhysicalType::STRUCT);
+		D_ASSERT(child_columns.size() == 2 || child_columns.size() == 3);
+
+		auto unshredded_type = VariantStats::GetUnshreddedType();
+		serializer.WriteProperty<PersistentColumnData>(102, "unshredded", child_columns[1]);
+
+		if (child_columns.size() == 3) {
+			serializer.WriteProperty<LogicalType>(115, "shredded_type", child_columns[2].logical_type);
+			serializer.WriteProperty<PersistentColumnData>(120, "shredded", child_columns[2]);
+		}
+		return;
+	}
+
 	if (physical_type == PhysicalType::ARRAY || physical_type == PhysicalType::LIST) {
 		D_ASSERT(child_columns.size() == 2);
 		serializer.WriteProperty(102, "child_column", child_columns[1]);
@@ -778,13 +794,31 @@ void PersistentColumnData::DeserializeField(Deserializer &deserializer, field_id
 PersistentColumnData PersistentColumnData::Deserialize(Deserializer &deserializer) {
 	auto &type = deserializer.Get<const LogicalType &>();
 	auto physical_type = type.InternalType();
-	PersistentColumnData result(physical_type);
+	PersistentColumnData result(type);
 	deserializer.ReadPropertyWithDefault(100, "data_pointers", static_cast<vector<DataPointer> &>(result.pointers));
 	if (result.physical_type == PhysicalType::BIT) {
 		// validity: return
 		return result;
 	}
 	result.DeserializeField(deserializer, 101, "validity", LogicalTypeId::VALIDITY);
+
+	if (type.id() == LogicalTypeId::VARIANT) {
+		auto unshredded_type = VariantStats::GetUnshreddedType();
+
+		deserializer.Set<const LogicalType &>(unshredded_type);
+		result.child_columns.push_back(deserializer.ReadProperty<PersistentColumnData>(102, "unshredded"));
+		deserializer.Unset<LogicalType>();
+
+		auto shredded_type =
+		    deserializer.ReadPropertyWithExplicitDefault<LogicalType>(115, "shredded_type", LogicalType());
+		if (shredded_type.id() == LogicalTypeId::STRUCT) {
+			deserializer.Set<const LogicalType &>(shredded_type);
+			result.child_columns.push_back(deserializer.ReadProperty<PersistentColumnData>(120, "shredded"));
+			deserializer.Unset<LogicalType>();
+		}
+		return result;
+	}
+
 	switch (physical_type) {
 	case PhysicalType::ARRAY:
 		result.DeserializeField(deserializer, 102, "child_column", ArrayType::GetChildType(type));
@@ -871,7 +905,7 @@ bool PersistentCollectionData::HasUpdates() const {
 }
 
 PersistentColumnData ColumnData::Serialize() {
-	PersistentColumnData result(type.InternalType(), GetDataPointers());
+	PersistentColumnData result(type, GetDataPointers());
 	result.has_updates = HasUpdates();
 	return result;
 }

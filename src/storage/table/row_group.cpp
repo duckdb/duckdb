@@ -193,6 +193,18 @@ void ColumnScanState::Initialize(const QueryContext &context_p, const LogicalTyp
 		// validity - nothing to initialize
 		return;
 	}
+
+	if (type.id() == LogicalTypeId::VARIANT) {
+		child_states.resize(2);
+
+		D_ASSERT(children.empty());
+		scan_child_column.resize(1, true);
+		auto unshredded_type = VariantStats::GetUnshreddedType();
+		child_states[1].Initialize(context_p, unshredded_type, options);
+		child_states[0].scan_options = options;
+		return;
+	}
+
 	if (type.InternalType() == PhysicalType::STRUCT) {
 		// validity + struct children
 		auto &struct_children = StructType::GetChildTypes(type);

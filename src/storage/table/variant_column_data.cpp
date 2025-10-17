@@ -81,17 +81,18 @@ void VariantColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t r
 idx_t VariantColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                               idx_t target_count) {
 	auto scan_count = validity.Scan(transaction, vector_index, state.child_states[0], result, target_count);
-	auto &child_entries = StructVector::GetEntries(result);
-	for (idx_t i = 0; i < sub_columns.size(); i++) {
-		auto &target_vector = *child_entries[i];
-		if (!state.scan_child_column[i]) {
-			// if we are not scanning this vector - set it to NULL
-			target_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(target_vector, true);
-			continue;
-		}
-		sub_columns[i]->Scan(transaction, vector_index, state.child_states[i + 1], target_vector, target_count);
-	}
+	sub_columns[0]->Scan(transaction, vector_index, state.child_states[1], result, target_count);
+	// auto &child_entries = StructVector::GetEntries(result);
+	// for (idx_t i = 0; i < sub_columns.size(); i++) {
+	//	auto &target_vector = *child_entries[i];
+	//	if (!state.scan_child_column[i]) {
+	//		// if we are not scanning this vector - set it to NULL
+	//		target_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
+	//		ConstantVector::SetNull(target_vector, true);
+	//		continue;
+	//	}
+	//	sub_columns[i]->Scan(transaction, vector_index, state.child_states[i + 1], target_vector, target_count);
+	//}
 	return scan_count;
 }
 
@@ -284,7 +285,7 @@ public:
 	}
 
 	PersistentColumnData ToPersistentData() override {
-		PersistentColumnData data(PhysicalType::STRUCT);
+		PersistentColumnData data(column_data.type);
 		data.child_columns.push_back(validity_state->ToPersistentData());
 		for (auto &child_state : child_states) {
 			data.child_columns.push_back(child_state->ToPersistentData());
@@ -303,9 +304,11 @@ unique_ptr<ColumnCheckpointState> VariantColumnData::Checkpoint(RowGroup &row_gr
 	auto &partial_block_manager = checkpoint_info.GetPartialBlockManager();
 	auto checkpoint_state = make_uniq<VariantColumnCheckpointState>(row_group, *this, partial_block_manager);
 	checkpoint_state->validity_state = validity.Checkpoint(row_group, checkpoint_info);
-	for (auto &sub_column : sub_columns) {
-		checkpoint_state->child_states.push_back(sub_column->Checkpoint(row_group, checkpoint_info));
-	}
+	checkpoint_state->child_states.push_back(sub_columns[0]->Checkpoint(row_group, checkpoint_info));
+
+	// auto unshredded_type = VariantStats::GetUnshreddedType();
+	// dummy = ColumnData::CreateColumnUnique(block_manager, info, 2, sub_columns[0]->start, unshredded_type, this);
+	// checkpoint_state->child_states.push_back(dummy->Checkpoint(row_group, checkpoint_info));
 	return std::move(checkpoint_state);
 }
 
@@ -334,7 +337,7 @@ bool VariantColumnData::HasAnyChanges() const {
 }
 
 PersistentColumnData VariantColumnData::Serialize() {
-	PersistentColumnData persistent_data(PhysicalType::STRUCT);
+	PersistentColumnData persistent_data(type);
 	persistent_data.child_columns.push_back(validity.Serialize());
 	for (auto &sub_column : sub_columns) {
 		persistent_data.child_columns.push_back(sub_column->Serialize());

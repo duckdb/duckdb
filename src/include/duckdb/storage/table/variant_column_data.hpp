@@ -23,6 +23,7 @@ public:
 	vector<unique_ptr<ColumnData>> sub_columns;
 	//! The validity column data of the struct
 	ValidityColumnData validity;
+	unique_ptr<ColumnData> dummy;
 
 public:
 	void SetStart(idx_t new_start) override;
