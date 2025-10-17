@@ -165,6 +165,8 @@ void VariantColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, 
 	// append the null values
 	validity.Append(stats, state.child_appends[0], vector, count);
 
+	//! FIXME: We could potentially use the min/max stats of the 'type_id' column to skip the iteration in
+	//! 'VariantStats' if they are the same, and there are no children (i.e, only primitives)
 	for (idx_t i = 0; i < 1; i++) {
 		sub_columns[i]->Append(VariantStats::GetUnshreddedStats(stats), state.child_appends[i + 1], vector, count);
 	}
