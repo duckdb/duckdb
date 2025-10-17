@@ -3852,8 +3852,6 @@ MetadataResult SetWidths(ShellState &state, const char **azArg, idx_t nArg) {
 
 MetadataResult ShellState::DisplayEntries(const char **azArg, idx_t nArg, char type) {
 	sqlite3_stmt *pStmt;
-	char **azResult;
-	int nRow, nAlloc;
 	int ii;
 	string s;
 	OpenDB(0);
@@ -3929,11 +3927,6 @@ WHERE type='index' AND tbl_name LIKE ?1)";
 		return MetadataResult::FAIL;
 	}
 
-	/* Run the SQL statement prepared by the above block. Store the results
-	** as an array of nul-terminated strings in azResult[].  */
-	nRow = nAlloc = 0;
-	azResult = nullptr;
-
 	if (type == 't') {
 		// Bind parameters for the new DuckDB query
 		if (!schema_filter.empty()) {
@@ -3951,52 +3944,36 @@ WHERE type='index' AND tbl_name LIKE ?1)";
 		}
 	}
 
+	vector<string> result;
 	while (sqlite3_step(pStmt) == SQLITE_ROW) {
-		if (nRow >= nAlloc) {
-			char **azNew;
-			int n2 = nAlloc * 2 + 10;
-			azNew = (char **)sqlite3_realloc64(azResult, sizeof(azResult[0]) * n2);
-			if (azNew == 0)
-				shell_out_of_memory();
-			nAlloc = n2;
-			azResult = azNew;
-		}
-		azResult[nRow] = sqlite3_mprintf("%s", sqlite3_column_text(pStmt, 0));
-		if (0 == azResult[nRow])
-			shell_out_of_memory();
-		nRow++;
+		result.push_back((const char *)sqlite3_column_text(pStmt, 0));
 	}
 	if (sqlite3_finalize(pStmt) != SQLITE_OK) {
 		rc = ShellDatabaseError(db);
 	}
 
 	/* Pretty-print the contents of array azResult[] to the output */
-	if (rc == 0 && nRow > 0) {
-		int len, maxlen = 0;
-		int i, j;
-		int nPrintCol, nPrintRow;
-		for (i = 0; i < nRow; i++) {
-			len = StringLength(azResult[i]);
-			if (len > maxlen)
+	if (rc == 0 && !result.empty()) {
+		idx_t maxlen = 0;
+		for (auto &r : result) {
+			idx_t len = r.size();
+			if (len > maxlen) {
 				maxlen = len;
+			}
 		}
-		nPrintCol = 80 / (maxlen + 2);
-		if (nPrintCol < 1)
+		idx_t nPrintCol = 80 / (maxlen + 2);
+		if (nPrintCol < 1) {
 			nPrintCol = 1;
-		nPrintRow = (nRow + nPrintCol - 1) / nPrintCol;
-		for (i = 0; i < nPrintRow; i++) {
-			for (j = i; j < nRow; j += nPrintRow) {
+		}
+		idx_t nPrintRow = (result.size() + nPrintCol - 1) / nPrintCol;
+		for (idx_t i = 0; i < nPrintRow; i++) {
+			for (idx_t j = i; j < result.size(); j += nPrintRow) {
 				const char *zSp = j < nPrintRow ? "" : "  ";
-				utf8_printf(out, "%s%-*s", zSp, maxlen, azResult[j] ? azResult[j] : "");
+				utf8_printf(out, "%s%-*s", zSp, static_cast<int>(maxlen), result[j].c_str());
 			}
 			raw_printf(out, "\n");
 		}
 	}
-
-	for (ii = 0; ii < nRow; ii++) {
-		sqlite3_free(azResult[ii]);
-	}
-	sqlite3_free(azResult);
 	return rc == 0 ? MetadataResult::SUCCESS : MetadataResult::FAIL;
 }
 
