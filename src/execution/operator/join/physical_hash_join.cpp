@@ -812,7 +812,7 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, o
 				case ExpressionType::COMPARE_GREATERTHANOREQUALTO: {
 					auto greater_equals =
 					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, std::move(min_val));
-					if (can_use_bf && false) {
+					if (can_use_bf) {
 						auto optional_greater_equals = make_uniq<OptionalFilter>(std::move(greater_equals));
 						info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(optional_greater_equals));
 					} else {
@@ -848,7 +848,7 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, o
 					const double build_to_probe_ratio =
 					    static_cast<double>(op.children[0].get().estimated_cardinality) /
 					    static_cast<double>(ht->Count());
-					const bool should_use_bf = create_bloom_filter && build_side_has_filter && build_to_probe_ratio > 2;
+					const bool should_use_bf = create_bloom_filter && build_side_has_filter && build_to_probe_ratio > 1;
 
 					if (should_use_bf) {
 						// If the nulls are equal, we let nulls pass. If not, we filter them

@@ -35,12 +35,7 @@ bool CacheSectorizedBloomFilter::LookupHash(hash_t hash) const {
 }
 
 void CacheSectorizedBloomFilter::InsertHashes(const Vector &hashes, const idx_t count, const bool parallel) {
-	if (parallel) {
-		std::lock_guard<std::mutex> lock(insert_lock); // todo: we should think about a block based locking, this reduces bf insert to 40% on only 8 threads
-		BloomFilterInsert(count, reinterpret_cast<uint64_t *>(hashes.GetData()), blocks);
-	} else {
-		BloomFilterInsert(count, reinterpret_cast<uint64_t *>(hashes.GetData()), blocks);
-	}
+	BloomFilterInsert(count, reinterpret_cast<uint64_t *>(hashes.GetData()), blocks);
 }
 
 } // namespace duckdb

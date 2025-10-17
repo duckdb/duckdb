@@ -62,7 +62,6 @@ public:
 	idx_t num_sectors;
 	idx_t num_sectors_log;
 
-	std::mutex insert_lock;
 	uint32_t *blocks;
 
 private:
@@ -93,9 +92,13 @@ private:
 		const uint32_t mask1 = GetMask1(key_lo);
 		const uint32_t sector2 = GetSector2(key_hi, sector1);
 		const uint32_t mask2 = GetMask2(key_hi);
-		bf[sector1] |= mask1;
-		bf[sector2] |= mask2;
-		// todo: There is duplicate code here we should get one function to get the two masks
+
+		// Perform atomic OR operation on the bf array elements using std::atomic
+		std::atomic<uint32_t>& atomic_bf1 = *reinterpret_cast<std::atomic<uint32_t>*>(&bf[sector1]);
+		std::atomic<uint32_t>& atomic_bf2 = *reinterpret_cast<std::atomic<uint32_t>*>(&bf[sector2]);
+
+		atomic_bf1.fetch_or(mask1, std::memory_order_relaxed);
+		atomic_bf2.fetch_or(mask2, std::memory_order_relaxed);
 	}
 	inline bool LookupOne(uint32_t key_lo, uint32_t key_hi, const uint32_t *__restrict bf) const {
 		const uint32_t sector1 = GetSector1(key_lo, key_hi);
@@ -157,8 +160,12 @@ private:
 			}
 
 			for (idx_t j = 0; j < SIMD_BATCH_SIZE; j++) {
-				bf[block1[j]] |= mask1[j];
-				bf[block2[j]] |= mask2[j];
+				// Atomic OR operation
+				std::atomic<uint32_t>& atomic_bf1 = *reinterpret_cast<std::atomic<uint32_t>*>(&bf[block1[j]]);
+				std::atomic<uint32_t>& atomic_bf2 = *reinterpret_cast<std::atomic<uint32_t>*>(&bf[block2[j]]);
+
+				atomic_bf1.fetch_or(mask1[j], std::memory_order_relaxed);
+				atomic_bf2.fetch_or(mask2[j], std::memory_order_relaxed);
 			}
 		}
 

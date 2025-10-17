@@ -30,7 +30,7 @@ void CompressedMaterialization::CompressComparisonJoin(unique_ptr<LogicalOperato
 	auto &right_child = *join.children[1];
 
 	// fixme: if we compress a join key we can't use it anymore for bloom filter pushdown, disable for now as bf performance
-	// fixme: is higher then compression (4% faster for TPC-H)
+	// fixme: is higher then compression (11% faster for TPC-H SF30 on M4 MacBook)
 	return;
 
 #ifndef DEBUG
