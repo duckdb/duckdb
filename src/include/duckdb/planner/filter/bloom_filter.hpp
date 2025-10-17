@@ -17,96 +17,55 @@
 
 namespace duckdb {
 
-static constexpr const idx_t MAX_NUM_SECTORS = (1ULL << 26);
-static constexpr const idx_t MIN_NUM_BITS_PER_KEY = 16;
-static constexpr const idx_t MIN_NUM_BITS = 512;
-static constexpr const idx_t LOG_SECTOR_SIZE = 5;
-static constexpr const idx_t SIMD_BATCH_SIZE = 16;
-
 class CacheSectorizedBloomFilter {
+
+	static constexpr idx_t MAX_NUM_SECTORS = (1ULL << 26);
+	static constexpr idx_t MIN_NUM_BITS_PER_KEY = 16;
+	static constexpr idx_t MIN_NUM_BITS = 512;
+	static constexpr idx_t LOG_SECTOR_SIZE = 5;
+	static constexpr idx_t SIMD_BATCH_SIZE = 16;
 
 public:
 	CacheSectorizedBloomFilter() = default;
-	void Initialize(ClientContext &context_p, idx_t est_num_rows) {
+	void Initialize(ClientContext &context_p, idx_t est_num_rows);
 
-		context = &context_p;
-		buffer_manager = &BufferManager::GetBufferManager(*context);
-
-		const idx_t min_bits = std::max<idx_t>(MIN_NUM_BITS, est_num_rows * MIN_NUM_BITS_PER_KEY);
-		num_sectors = std::min(NextPowerOfTwo(min_bits) >> LOG_SECTOR_SIZE, MAX_NUM_SECTORS);
-		num_sectors_log = static_cast<uint32_t>(std::log2(num_sectors));
-
-		buf_ = buffer_manager->GetBufferAllocator().Allocate(64 + num_sectors * sizeof(uint32_t));
-		// make sure blocks is a 64-byte aligned pointer, i.e., cache-line aligned
-		blocks = reinterpret_cast<uint32_t *>((64ULL + reinterpret_cast<uint64_t>(buf_.get())) & ~63ULL);
-		std::fill_n(blocks, num_sectors, 0);
-
-		initialized = true;
-	}
-
-	ClientContext *context;
-	BufferManager *buffer_manager;
-
-	bool initialized = false;
-	bool finalized_;
-
-public:
-	idx_t LookupHashes(Vector &hashes, SelectionVector &result_sel, const idx_t count_p) const;
+	idx_t LookupHashes(const Vector &hashes, SelectionVector &result_sel, idx_t count) const;
 	bool LookupHash(hash_t hash) const;
-	void InsertHashes(const Vector &hashes, idx_t count, bool parallel);
+	void InsertHashes(const Vector &hashes, idx_t count) const;
 
 	bool IsInitialized() const {
 		return initialized;
 	}
 
+	bool IsActive() const {
+		return active;
+	}
+
+	void SetActive(const bool val) {
+		active = val;
+	}
+
+private:
+	bool initialized = false;
+	bool active = false;
+
 	idx_t num_sectors;
 	idx_t num_sectors_log;
 
+	ClientContext *context;
+	BufferManager *buffer_manager;
 	uint32_t *blocks;
 
-private:
 	// key_lo |5:bit3|5:bit2|5:bit1|  13:block    |4:sector1 | bit layout (32:total)
 	// key_hi |5:bit4|5:bit3|5:bit2|5:bit1|9:block|3:sector2 | bit layout (32:total)
-	inline uint32_t GetMask1(uint32_t key_lo) const {
-		// 3 bits in key_lo
-		return (1u << ((key_lo >> 17) & 31)) | (1u << ((key_lo >> 22) & 31)) | (1u << ((key_lo >> 27) & 31));
-	}
-	inline uint32_t GetMask2(uint32_t key_hi) const {
-		// 4 bits in key_hi
-		return (1u << ((key_hi >> 12) & 31)) | (1u << ((key_hi >> 17) & 31)) | (1u << ((key_hi >> 22) & 31)) |
-		       (1u << ((key_hi >> 27) & 31));
-	}
+	static uint32_t GetMask1(uint32_t key_lo);
+	static uint32_t GetMask2(uint32_t key_hi);
 
-	inline uint32_t GetSector1(uint32_t key_lo, uint32_t key_hi) const {
-		// block: 13 bits in key_lo and 9 bits in key_hi
-		// sector 1: 4 bits in key_lo
-		return ((key_lo & ((1 << 17) - 1)) + ((key_hi << 14) & (((1 << 9) - 1) << 17))) & (num_sectors - 1);
-	}
-	inline uint32_t GetSector2(uint32_t key_hi, uint32_t block1) const {
-		// sector 2: 3 bits in key_hi
-		return block1 ^ (8 + (key_hi & 7));
-	}
+	uint32_t GetSector1(uint32_t key_lo, uint32_t key_hi) const;
+	uint32_t GetSector2(uint32_t key_hi, uint32_t block1) const;
 
-	inline void InsertOne(const uint32_t key_lo, const uint32_t key_hi, uint32_t *__restrict bf) const {
-		const uint32_t sector1 = GetSector1(key_lo, key_hi);
-		const uint32_t mask1 = GetMask1(key_lo);
-		const uint32_t sector2 = GetSector2(key_hi, sector1);
-		const uint32_t mask2 = GetMask2(key_hi);
-
-		// Perform atomic OR operation on the bf array elements using std::atomic
-		std::atomic<uint32_t>& atomic_bf1 = *reinterpret_cast<std::atomic<uint32_t>*>(&bf[sector1]);
-		std::atomic<uint32_t>& atomic_bf2 = *reinterpret_cast<std::atomic<uint32_t>*>(&bf[sector2]);
-
-		atomic_bf1.fetch_or(mask1, std::memory_order_relaxed);
-		atomic_bf2.fetch_or(mask2, std::memory_order_relaxed);
-	}
-	inline bool LookupOne(uint32_t key_lo, uint32_t key_hi, const uint32_t *__restrict bf) const {
-		const uint32_t sector1 = GetSector1(key_lo, key_hi);
-		const uint32_t mask1 = GetMask1(key_lo);
-		const uint32_t sector2 = GetSector2(key_hi, sector1);
-		const uint32_t mask2 = GetMask2(key_hi);
-		return ((bf[sector1] & mask1) == mask1) & ((bf[sector2] & mask2) == mask2);
-	}
+	void InsertOne(uint32_t key_lo, uint32_t key_hi, uint32_t *bf) const;
+	bool LookupOne(uint32_t key_lo, uint32_t key_hi, const uint32_t *__restrict bf) const;
 
 private:
 	idx_t BloomFilterLookup(const hash_t *__restrict hashes, const uint32_t *__restrict bf, SelectionVector &found_sel,
@@ -161,8 +120,8 @@ private:
 
 			for (idx_t j = 0; j < SIMD_BATCH_SIZE; j++) {
 				// Atomic OR operation
-				std::atomic<uint32_t>& atomic_bf1 = *reinterpret_cast<std::atomic<uint32_t>*>(&bf[block1[j]]);
-				std::atomic<uint32_t>& atomic_bf2 = *reinterpret_cast<std::atomic<uint32_t>*>(&bf[block2[j]]);
+				std::atomic<uint32_t> &atomic_bf1 = *reinterpret_cast<std::atomic<uint32_t> *>(&bf[block1[j]]);
+				std::atomic<uint32_t> &atomic_bf2 = *reinterpret_cast<std::atomic<uint32_t> *>(&bf[block2[j]]);
 
 				atomic_bf1.fetch_or(mask1[j], std::memory_order_relaxed);
 				atomic_bf2.fetch_or(mask2[j], std::memory_order_relaxed);
@@ -210,43 +169,41 @@ public:
 public:
 	string ToString(const string &column_name) const override;
 
-	// todo: we can remove this
-	void HashInternal(Vector &keys_v, const SelectionVector &sel, idx_t &approved_count,
-	                                            BloomFilterState &state) const {
+	static void HashInternal(Vector &keys_v, const SelectionVector &sel, idx_t &approved_count,
+	                         BloomFilterState &state) {
 		if (sel.IsSet()) {
 			state.keys_sliced_v.Slice(keys_v, sel, approved_count);
-			VectorOperations::Hash(state.keys_sliced_v, state.hashes_v,
-			                       approved_count); // todo: we actually only want to hash the sel!
-
+			VectorOperations::Hash(state.keys_sliced_v, state.hashes_v, approved_count);
 		} else {
-			VectorOperations::Hash(keys_v, state.hashes_v,
-			                       approved_count); // todo: we actually only want to hash the sel!
+			VectorOperations::Hash(keys_v, state.hashes_v, approved_count);
 		}
+	}
+
+	bool FilterInitializedAndActive() const {
+		return this->filter.IsInitialized() && this->filter.IsActive();
 	}
 
 	// Filters the data by first hashing and then probing the bloom filter. The &sel will hold
 	// the remaining tuples, &approved_tuple_count will hold the approved count.
-	__attribute__((noinline)) idx_t Filter(Vector &keys_v, UnifiedVectorFormat &keys_uvf, SelectionVector &sel, idx_t &approved_tuple_count,
-	             BloomFilterState &state) const {
+	__attribute__((noinline)) idx_t Filter(Vector &keys_v, UnifiedVectorFormat &keys_uvf, SelectionVector &sel,
+	                                       idx_t &approved_tuple_count, BloomFilterState &state) const {
 
-		// printf("Filter bf: bf has %llu sectors and initialized=%hd \n", filter.num_sectors, filter.IsInitialized());
-		if (!this->filter.IsInitialized() || !state.continue_filtering) {
-			return approved_tuple_count; // todo: may
+		if (!FilterInitializedAndActive()) {
+			return approved_tuple_count;
 		}
 
 		if (state.current_capacity < approved_tuple_count) {
-			state.hashes_v.Initialize(false, approved_tuple_count);
+			state.hashes_v.Initialize(approved_tuple_count);
 			state.bf_sel.Initialize(approved_tuple_count);
 			state.current_capacity = approved_tuple_count;
 		}
 
 		HashInternal(keys_v, sel, approved_tuple_count, state);
 
-		// todo: we need to properly find out how one would densify the hashes here!
 		idx_t found_count;
 		if (state.hashes_v.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-			const auto &hash = *ConstantVector::GetData<hash_t>(state.hashes_v);
-			const bool found = this->filter.LookupHash(hash);
+			const auto constant_hash = *ConstantVector::GetData<hash_t>(state.hashes_v);
+			const bool found = this->filter.LookupHash(constant_hash);
 			found_count = found ? approved_tuple_count : 0;
 		} else {
 			state.hashes_v.Flatten(approved_tuple_count);
@@ -254,17 +211,16 @@ public:
 		}
 
 		// add the runtime statistics to stop using the bf if not selective
-		if (state.vectors_processed < 40) {
+		if (state.vectors_processed < 20) {
 			state.vectors_processed += 1;
 			state.tuples_accepted += found_count;
 			state.tuples_processed += approved_tuple_count;
 
-			if (state.vectors_processed == 40) {
+			if (state.vectors_processed == 20) {
 				const double selectivity =
 				    static_cast<double>(state.tuples_accepted) / static_cast<double>(state.tuples_processed);
-				// printf("%f\n", selectivity);
-				if (selectivity > 0.8) {
-					state.continue_filtering = false;
+				if (selectivity > 0.5) {
+					this->filter.SetActive(false);
 				}
 			}
 		}
@@ -281,7 +237,7 @@ public:
 				sel.set_index(idx, original_sel_idx);
 			}
 		} else {
-			sel.Initialize(state.bf_sel); // maybe we could also reference here?
+			sel.Initialize(state.bf_sel);
 		}
 
 		approved_tuple_count = found_count;
@@ -294,15 +250,17 @@ public:
 	}
 
 	FilterPropagateResult CheckStatistics(BaseStatistics &stats) const override {
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		if (FilterInitializedAndActive()) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+		return FilterPropagateResult::FILTER_ALWAYS_TRUE;
 	}
 
 	bool Equals(const TableFilter &other) const override {
 		if (!TableFilter::Equals(other)) {
 			return false;
 		}
-
-		// todo: not really sure what to do here :(
+		// todo: How to compare bloom filters?
 		return false;
 	}
 	unique_ptr<TableFilter> Copy() const override {
@@ -316,13 +274,12 @@ public:
 		serializer.WriteProperty<bool>(200, "filters_null_values", filters_null_values);
 		serializer.WriteProperty<string>(201, "key_column_name", key_column_name);
 		serializer.WriteProperty<LogicalType>(202, "key_type", key_type);
-
 		// todo: How/Should be serialize the bloom filter?
 	}
 	static unique_ptr<TableFilter> Deserialize(Deserializer &deserializer) {
-		bool filters_null_values = deserializer.ReadProperty<bool>(200, "filters_null_values");
-		string key_column_name = deserializer.ReadProperty<string>(201, "key_column_name");
-		LogicalType key_type = deserializer.ReadProperty<LogicalType>(202, "key_type");
+		auto filters_null_values = deserializer.ReadProperty<bool>(200, "filters_null_values");
+		auto key_column_name = deserializer.ReadProperty<string>(201, "key_column_name");
+		auto key_type = deserializer.ReadProperty<LogicalType>(202, "key_type");
 
 		CacheSectorizedBloomFilter filter;
 		auto result = make_uniq<BloomFilter>(filter, filters_null_values, key_column_name, key_type);

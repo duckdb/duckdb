@@ -422,7 +422,7 @@ public:
 		this->should_build_bloom_filter = should_build;
 	}
 
-	CacheSectorizedBloomFilter& GetBloomFilter() {
+	CacheSectorizedBloomFilter &GetBloomFilter() {
 		return bloom_filter;
 	}
 

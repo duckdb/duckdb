@@ -188,8 +188,7 @@ void AddProjectionNames(const ColumnIndex &index, const string &name, const Logi
 	}
 }
 
-
-static string GetFilterInfo(const PhysicalTableScan* scan, const unique_ptr<TableFilterSet> &filter_set) {
+static string GetFilterInfo(const PhysicalTableScan *scan, const unique_ptr<TableFilterSet> &filter_set) {
 	string filters_info;
 	bool first_item = true;
 	for (auto &f : filter_set->filters) {

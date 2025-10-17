@@ -800,7 +800,6 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, o
 				// single-column filters so far
 				const bool can_use_bf = ht->conditions.size() == 1 && cmp == ExpressionType::COMPARE_EQUAL;
 
-
 				// building the bloom filter is costly on the build to make probing faster, so only use it if there are
 				// more probing tuples than build tuples
 				const double build_to_probe_ratio =
@@ -808,15 +807,7 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, o
 				const bool probe_larger_then_build = build_to_probe_ratio > 1.0;
 
 				// only use bloom filter if there is no in-filter already
-				use_bloom_filter =
-				    can_use_bf && !has_in_filter && build_side_has_filter && probe_larger_then_build;
-				//
-				// printf("Dynamic Bloom Filter for column %s: min=%s, max=%s, build_to_probe_ratio=%.2f, has_in_filter=%s can_use_bf=%s use_bloom_filter=%s\n",
-				//        op.conditions[join_condition[filter_idx]].right->ToString().c_str(),
-				//        min_val.ToString().c_str(), max_val.ToString().c_str(), build_to_probe_ratio,
-				//        has_in_filter ? "true" : "false", can_use_bf ? "true" : "false",
-				//        use_bloom_filter ? "true" : "false");
-
+				use_bloom_filter = can_use_bf && !has_in_filter && build_side_has_filter && probe_larger_then_build;
 			}
 
 			if (Value::NotDistinctFrom(min_val, max_val)) {
@@ -870,7 +861,8 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, o
 					auto filters_null_values = !ht->NullValuesAreEqual(join_condition[filter_idx]);
 					const auto key_name = ht->conditions[0].right->ToString();
 					const auto key_type = ht->conditions[0].left->return_type;
-					auto bf_filter = make_uniq<BloomFilter>(ht->GetBloomFilter(), filters_null_values, key_name, key_type);
+					auto bf_filter =
+					    make_uniq<BloomFilter>(ht->GetBloomFilter(), filters_null_values, key_name, key_type);
 					ht->SetBuildBloomFilter(true);
 					info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(bf_filter));
 				}

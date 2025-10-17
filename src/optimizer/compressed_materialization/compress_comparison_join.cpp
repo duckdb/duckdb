@@ -29,8 +29,8 @@ void CompressedMaterialization::CompressComparisonJoin(unique_ptr<LogicalOperato
 	auto &left_child = *join.children[0];
 	auto &right_child = *join.children[1];
 
-	// fixme: if we compress a join key we can't use it anymore for bloom filter pushdown, disable for now as bf performance
-	// fixme: is higher then compression (11% faster for TPC-H SF30 on M4 MacBook)
+	// fixme: if we compress a join key we can't use it anymore for bloom filter pushdown, disable for now as bf
+	// performance fixme: is higher then compression (11% faster for TPC-H SF30 on M4 MacBook)
 	return;
 
 #ifndef DEBUG
@@ -51,7 +51,6 @@ void CompressedMaterialization::CompressComparisonJoin(unique_ptr<LogicalOperato
 		}
 	}
 #endif
-
 
 	// Find all bindings referenced by non-colref expressions in the conditions
 	// These are excluded from compression by projection
