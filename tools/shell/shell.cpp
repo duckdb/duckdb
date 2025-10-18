@@ -2321,6 +2321,7 @@ static const char *azHelp[] = {
     "        --new           Initialize FILE to an empty database",
     "        --nofollow      Do not follow symbolic links",
     "        --readonly      Open FILE readonly",
+    "        --sql           Specify the file path or connection string with a SQL query",
     ".output ?FILE?           Send output to FILE or stdout if FILE is omitted",
     "   If FILE begins with '|' then open it as a pipe.",
     "   Options:",
@@ -3738,10 +3739,7 @@ bool ShellState::OpenDatabase(const char **azArg, idx_t nArg) {
 	char *zNewFilename;   /* Name of the database file to open */
 	idx_t iName = 1;      /* Index in azArg[] of the filename */
 	bool newFlag = false; /* True to delete file before opening */
-	/* Close the existing database */
-	close_db(db);
-	db = nullptr;
-	globalDb = nullptr;
+	bool has_sql = false; /* True to use a query to derive the file path or connection string */
 	zDbFilename = string();
 	openMode = SHELL_OPEN_UNSPEC;
 	openFlags = openFlags & ~(SQLITE_OPEN_NOFOLLOW); // don't overwrite settings loaded in the command line
@@ -3755,13 +3753,80 @@ bool ShellState::OpenDatabase(const char **azArg, idx_t nArg) {
 			openMode = SHELL_OPEN_READONLY;
 		} else if (optionMatch(z, "nofollow")) {
 			openFlags |= SQLITE_OPEN_NOFOLLOW;
-		} else if (z[0] == '-') {
+        } else if (optionMatch(z, "sql")) {
+            if (has_sql) {
+                utf8_printf(stderr, "Error: --sql specified multiple times\n");
+                return false;
+            }
+            if (iName + 1 >= nArg) {
+                utf8_printf(stderr, "Error: missing SQL query after --sql\n");
+                return false;
+            }
+            if (!db) {
+                utf8_printf(stderr, "Error: no database open to execute --sql query\n");
+                return false;
+            }
+            const char *query = azArg[++iName];
+            sqlite3_stmt *pStmt = nullptr;
+            int rc = sqlite3_prepare_v2(db, query, -1, &pStmt, nullptr);
+            if (rc != SQLITE_OK) {
+                PrintDatabaseError(sqlite3_errmsg(db));
+                return false;
+            }
+            int nCol = sqlite3_column_count(pStmt);
+            if (nCol != 1) {
+                utf8_printf(stderr, "Error: query must produce exactly one value, one row with one column\n");
+                sqlite3_finalize(pStmt);
+                return false;
+            }
+            rc = sqlite3_step(pStmt);
+            if (rc != SQLITE_ROW) {
+                utf8_printf(stderr, "Error: query did not produce a row\n");
+                sqlite3_finalize(pStmt);
+                return false;
+            }
+            const char *zVal = (const char *)sqlite3_column_text(pStmt, 0);
+            if (!zVal) {
+                utf8_printf(stderr, "Error: query produced a NULL value\n");
+                sqlite3_finalize(pStmt);
+                return false;
+            }
+            zNewFilename = sqlite3_mprintf("%s", zVal);
+            if (!zNewFilename) {
+                shell_out_of_memory();
+            }
+            rc = sqlite3_step(pStmt);
+            if (rc == SQLITE_ROW) {
+                utf8_printf(stderr, "Error: query produced multiple rows\n");
+                sqlite3_finalize(pStmt);
+                sqlite3_free(zNewFilename);
+                return false;
+            }
+            if (rc != SQLITE_DONE) {
+                PrintDatabaseError(sqlite3_errmsg(db));
+                sqlite3_finalize(pStmt);
+                sqlite3_free(zNewFilename);
+                return false;
+            }
+            sqlite3_finalize(pStmt);
+            has_sql = true;	} else if (z[0] == '-') {
 			utf8_printf(stderr, "unknown option: %s\n", z);
 			return false;
 		}
 	}
-	/* If a filename is specified, try to open it first */
-	zNewFilename = nArg > iName ? sqlite3_mprintf("%s", azArg[iName]) : 0;
+	/* Close the existing database */
+	close_db(db);
+	db = nullptr;
+	globalDb = nullptr;
+	if (!has_sql) {
+		 /* If a filename is specified, try to open it first */
+		zNewFilename = nArg > iName ? sqlite3_mprintf("%s", azArg[iName]) : 0;
+    }
+    if (has_sql && nArg > iName) {
+        utf8_printf(stderr, "Error: cannot specify both --sql and a FILE argument\n");
+        sqlite3_free(zNewFilename);
+        return false;
+    }
 	if (zNewFilename || openMode == SHELL_OPEN_HEXDB) {
 		if (newFlag) {
 			shellDeleteFile(zNewFilename);
@@ -3771,6 +3836,8 @@ bool ShellState::OpenDatabase(const char **azArg, idx_t nArg) {
 		OpenDB(OPEN_DB_KEEPALIVE);
 		if (!db) {
 			utf8_printf(stderr, "Error: cannot open '%s'\n", zNewFilename);
+            zDbFilename = string();
+            return false;
 		}
 	}
 	if (!db) {
