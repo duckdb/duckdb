@@ -327,9 +327,9 @@ void DBConfig::ResetOption(optional_ptr<DatabaseInstance> db, const Configuratio
 	option.reset_global(db.get(), *this);
 }
 
-void DBConfig::SetOption(const string &name, Value value) {
+void DBConfig::SetOption(const String &name, Value value) {
 	lock_guard<mutex> l(config_lock);
-	options.set_variables[name] = std::move(value);
+	options.set_variables[name.ToStdString()] = std::move(value);
 }
 
 void DBConfig::ResetOption(const String &name) {

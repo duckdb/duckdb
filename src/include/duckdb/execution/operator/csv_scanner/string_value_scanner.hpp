@@ -253,7 +253,7 @@ public:
 	//! We store borked rows so we can generate multiple errors during flushing
 	unordered_set<idx_t> borked_rows;
 
-	const string path;
+	String path;
 
 	//! Variable used when trying to figure out where a new segment starts, we must always start from a Valid
 	//! (i.e., non-comment) line.
