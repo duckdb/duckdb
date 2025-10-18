@@ -450,6 +450,7 @@ struct ExclusionListInfo {
 	vector<unique_ptr<ParsedExpression>> &new_select_list;
 	case_insensitive_set_t excluded_columns;
 	qualified_column_set_t excluded_qualified_columns;
+	case_insensitive_set_t replaced_columns;
 };
 
 bool CheckExclusionList(StarExpression &expr, const QualifiedColumnName &qualified_name, ExclusionListInfo &info) {
@@ -459,10 +460,14 @@ bool CheckExclusionList(StarExpression &expr, const QualifiedColumnName &qualifi
 	}
 	auto entry = expr.replace_list.find(qualified_name.column);
 	if (entry != expr.replace_list.end()) {
-		auto new_entry = entry->second->Copy();
-		new_entry->SetAlias(entry->first);
-		info.excluded_columns.insert(entry->first);
-		info.new_select_list.push_back(std::move(new_entry));
+		// Check if we've already added the replacement for this column
+		if (info.replaced_columns.find(entry->first) == info.replaced_columns.end()) {
+			auto new_entry = entry->second->Copy();
+			new_entry->SetAlias(entry->first);
+			info.excluded_columns.insert(entry->first);
+			info.new_select_list.push_back(std::move(new_entry));
+			info.replaced_columns.insert(entry->first);
+		}
 		return true;
 	}
 	return false;
