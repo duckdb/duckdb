@@ -32,9 +32,9 @@ public:
 	void Resize(idx_t new_physical_memory_size);
 
 	//! Allocation functions (same API as Allocator)
-	data_ptr_t AllocateData(idx_t size) const;
-	void FreeData(data_ptr_t pointer, idx_t size) const;
-	data_ptr_t ReallocateData(data_ptr_t pointer, idx_t old_size, idx_t new_size) const;
+	data_ptr_t AllocateData(idx_t size);
+	void FreeData(data_ptr_t pointer, idx_t size);
+	data_ptr_t ReallocateData(data_ptr_t pointer, idx_t old_size, idx_t new_size);
 
 private:
 	bool IsActive() const;
@@ -45,6 +45,9 @@ private:
 
 	uint32_t GetBlockID(data_ptr_t pointer) const;
 	data_ptr_t GetPointer(uint32_t block_id) const;
+
+	void FreeInternal();
+	void FreeContiguousBlocks(uint32_t block_id_start, uint32_t block_id_end_including);
 
 	void VerifyBlockID(uint32_t block_id) const;
 
@@ -70,6 +73,17 @@ private:
 	unsafe_unique_ptr<BlockQueue> untouched;
 	//! Touched by block IDs
 	unsafe_unique_ptr<BlockQueue> touched;
+
+	//! Blocks that should be freed
+	unsafe_unique_ptr<BlockQueue> to_free;
+	//! Actually free freed blocks once queue size hits this threshold
+	static constexpr idx_t TO_FREE_SIZE_THRESHOLD = 128;
+	//! Free up to this many blocks in one go
+	static constexpr idx_t MAXIMUM_FREE_COUNT = 8192;
+	//! Vector to dequeue to free blocks into
+	uint32_t to_free_buffer[MAXIMUM_FREE_COUNT];
+	//! Lock so that only one thread at a time frees
+	mutex to_free_lock;
 };
 
 } // namespace duckdb

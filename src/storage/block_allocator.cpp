@@ -100,7 +100,8 @@ BlockAllocator::BlockAllocator(Allocator &allocator_p, const idx_t block_size_p,
     : allocator(allocator_p), block_size(block_size_p), block_size_div_shift(CountZeros<idx_t>::Trailing(block_size)),
       virtual_memory_size(AlignValue(virtual_memory_size_p, block_size)),
       virtual_memory_space(AllocateVirtualMemory(virtual_memory_size)), physical_memory_size(0),
-      untouched(make_unsafe_uniq<BlockQueue>()), touched(make_unsafe_uniq<BlockQueue>()) {
+      untouched(make_unsafe_uniq<BlockQueue>()), touched(make_unsafe_uniq<BlockQueue>()),
+      to_free(make_unsafe_uniq<BlockQueue>()) {
 	D_ASSERT(IsPowerOfTwo(block_size));
 	Resize(physical_memory_size);
 }
@@ -176,7 +177,7 @@ data_ptr_t BlockAllocator::GetPointer(const uint32_t block_id) const {
 	return virtual_memory_space + UnsafeNumericCast<idx_t>(block_id) * block_size;
 }
 
-data_ptr_t BlockAllocator::AllocateData(const idx_t size) const {
+data_ptr_t BlockAllocator::AllocateData(const idx_t size) {
 	if (!IsActive() || size != block_size) {
 		return allocator.AllocateData(size);
 	}
@@ -204,20 +205,22 @@ data_ptr_t BlockAllocator::AllocateData(const idx_t size) const {
 	return pointer;
 }
 
-void BlockAllocator::FreeData(const data_ptr_t pointer, const idx_t size) const {
+void BlockAllocator::FreeData(const data_ptr_t pointer, const idx_t size) {
 	if (!IsActive() || !IsInPool(pointer)) {
 		return allocator.FreeData(pointer, size);
 	}
 	D_ASSERT(size == block_size);
 
-	// Give pages back to the OS
-	ReturnMemory(pointer, size);
+	// Add to queue to free later
+	to_free->q.enqueue(GetBlockID(pointer));
 
-	// Add block ID to touched queue now
-	touched->q.enqueue(GetBlockID(pointer));
+	// Free many blocks in one go once we exceed the threshold
+	if (to_free->q.size_approx() >= TO_FREE_SIZE_THRESHOLD) {
+		FreeInternal();
+	}
 }
 
-data_ptr_t BlockAllocator::ReallocateData(const data_ptr_t pointer, const idx_t old_size, const idx_t new_size) const {
+data_ptr_t BlockAllocator::ReallocateData(const data_ptr_t pointer, const idx_t old_size, const idx_t new_size) {
 	if (old_size == new_size) {
 		return pointer;
 	}
@@ -232,6 +235,58 @@ data_ptr_t BlockAllocator::ReallocateData(const data_ptr_t pointer, const idx_t 
 	memcpy(new_pointer, pointer, MinValue(old_size, new_size));
 	FreeData(pointer, old_size);
 	return new_pointer;
+}
+
+void BlockAllocator::FreeInternal() {
+	const unique_lock<mutex> guard(to_free_lock, std::try_to_lock);
+	if (!guard.owns_lock()) {
+		return;
+	}
+
+	Printer::Print("i got through");
+
+	const auto count = to_free->q.try_dequeue_bulk(to_free_buffer, MAXIMUM_FREE_COUNT);
+	if (count == 0) {
+		return;
+	}
+
+	// Sort so we can coalesce freeing
+	std::sort(to_free_buffer, to_free_buffer + count);
+
+	idx_t free_count = 0;
+
+	// Coalesce and free
+	uint32_t block_id_start = to_free_buffer[0];
+	for (idx_t i = 1; i < count; i++) {
+		const auto &previous_block_id = to_free_buffer[i - 1];
+		const auto &current_block_id = to_free_buffer[i];
+		if (previous_block_id == current_block_id - 1) {
+			continue; // Current is contiguous with previous block
+		}
+
+		// Previous block is the last contiguous block starting from block_id_start, free them in one go
+		FreeContiguousBlocks(block_id_start, previous_block_id);
+		free_count++;
+
+		// Continue coalescing from the current
+		block_id_start = current_block_id;
+	}
+
+	// Don't forget the last one
+	FreeContiguousBlocks(block_id_start, to_free_buffer[count - 1]);
+	free_count++;
+
+	Printer::PrintF("freed %llu in %llu", count, free_count);
+
+	// Make freed blocks available to allocate again
+	touched->q.enqueue_bulk(to_free_buffer, count);
+}
+
+void BlockAllocator::FreeContiguousBlocks(uint32_t block_id_start, uint32_t block_id_end_including) {
+	const auto pointer = GetPointer(block_id_start);
+	const auto num_blocks = block_id_end_including - block_id_start + 1;
+	const auto size = num_blocks * block_size;
+	ReturnMemory(pointer, size);
 }
 
 } // namespace duckdb
