@@ -2,7 +2,9 @@
 
 #include "duckdb/common/types/batched_data_collection.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/main/materialized_query_result.hpp"
+#include "duckdb/main/result_set_manager.hpp"
 
 namespace duckdb {
 
@@ -33,7 +35,8 @@ SinkFinalizeType PhysicalBatchCollector::Finalize(Pipeline &pipeline, Event &eve
 	auto &gstate = input.global_state.Cast<BatchCollectorGlobalState>();
 	auto collection = gstate.data.FetchCollection();
 	D_ASSERT(collection);
-	auto result = make_uniq<MaterializedQueryResult>(statement_type, properties, names, std::move(collection),
+	auto result_set = ResultSetManager::Get(context).Add(std::move(collection), memory_type);
+	auto result = make_uniq<MaterializedQueryResult>(statement_type, properties, names, std::move(result_set),
 	                                                 context.GetClientProperties());
 	gstate.result = std::move(result);
 	return SinkFinalizeType::READY;
@@ -47,7 +50,7 @@ unique_ptr<GlobalSinkState> PhysicalBatchCollector::GetGlobalSinkState(ClientCon
 	return make_uniq<BatchCollectorGlobalState>(context, *this);
 }
 
-unique_ptr<QueryResult> PhysicalBatchCollector::GetResult(GlobalSinkState &state) {
+unique_ptr<QueryResult> PhysicalBatchCollector::GetResult(GlobalSinkState &state) const {
 	auto &gstate = state.Cast<BatchCollectorGlobalState>();
 	D_ASSERT(gstate.result);
 	return std::move(gstate.result);

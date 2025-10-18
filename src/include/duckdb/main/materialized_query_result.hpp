@@ -15,6 +15,8 @@
 namespace duckdb {
 
 class ClientContext;
+class ManagedResultSet;
+class PinnedResultSet;
 
 class MaterializedQueryResult : public QueryResult {
 public:
@@ -24,7 +26,7 @@ public:
 	friend class ClientContext;
 	//! Creates a successful query result with the specified names and types
 	DUCKDB_API MaterializedQueryResult(StatementType statement_type, StatementProperties properties,
-	                                   vector<string> names, unique_ptr<ColumnDataCollection> collection,
+	                                   vector<string> names, shared_ptr<ManagedResultSet> result_set,
 	                                   ClientProperties client_properties);
 	//! Creates an unsuccessful query result with error condition
 	DUCKDB_API explicit MaterializedQueryResult(ErrorData error);
@@ -50,18 +52,21 @@ public:
 
 	DUCKDB_API idx_t RowCount() const;
 
-	//! Returns a reference to the underlying column data collection
-	ColumnDataCollection &Collection();
+	bool HasManagedResult() const;
 
-	//! Takes ownership of the collection, 'collection' is null after this operation
-	unique_ptr<ColumnDataCollection> TakeCollection();
+	//! Returns the underlying column data collection
+	unique_ptr<PinnedResultSet> Pin() const;
+
+	//! Get the managed result, leaving the one in here intact
+	shared_ptr<ManagedResultSet> GetManagedResultSet();
 
 private:
-	unique_ptr<ColumnDataCollection> collection;
+	void ValidateManagedResultInternal() const;
+
+private:
+	shared_ptr<ManagedResultSet> result_set;
 	//! Row collection, only created if GetValue is called
 	unique_ptr<ColumnDataRowCollection> row_collection;
-	//! Scan state for Fetch calls
-	ColumnDataScanState scan_state;
 	bool scan_initialized;
 };
 

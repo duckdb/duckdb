@@ -37,12 +37,14 @@ bool RunVariableBuffer(const string &path, idx_t buffer_size, bool set_temp_dir,
 	    multi_conn.Query("SELECT * FROM read_csv_auto('" + path + "'" + add_parameters +
 	                     ", buffer_size = " + to_string(buffer_size) + ") ORDER BY ALL");
 	bool variable_buffer_size_passed;
+	duckdb::unique_ptr<PinnedResultSet> pinned_result_set;
 	ColumnDataCollection *result = nullptr;
 	if (variable_buffer_size_result->HasError()) {
 		variable_buffer_size_passed = false;
 	} else {
 		variable_buffer_size_passed = true;
-		result = &variable_buffer_size_result->Collection();
+		pinned_result_set = variable_buffer_size_result->Pin();
+		result = &pinned_result_set->collection;
 	}
 	if (!ground_truth && !variable_buffer_size_passed) {
 		// Two wrongs can make a right
@@ -88,10 +90,12 @@ bool RunFull(const std::string &path, std::set<std::string> *skip = nullptr, con
 	conn.context->client_data->debug_set_max_line_length = true;
 	conn.context->client_data->debug_max_line_length = 0;
 	duckdb::unique_ptr<MaterializedQueryResult> full_buffer_res;
+	duckdb::unique_ptr<PinnedResultSet> pinned_result_set;
 	ColumnDataCollection *ground_truth = nullptr;
 	full_buffer_res = conn.Query("SELECT * FROM read_csv_auto('" + path + "'" + add_parameters + ") ORDER BY ALL");
 	if (!full_buffer_res->HasError()) {
-		ground_truth = &full_buffer_res->Collection();
+		pinned_result_set = full_buffer_res->Pin();
+		ground_truth = &pinned_result_set->collection;
 	}
 	if (!ground_truth) {
 		return true;

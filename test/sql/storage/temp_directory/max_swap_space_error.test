@@ -18,7 +18,7 @@ set temp_directory='__TEST_DIR__/max_swap_space_reached'
 
 # Ensure the temp_directory is used
 statement ok
-PRAGMA memory_limit='1024KiB'
+PRAGMA memory_limit='3MiB'
 
 # Zero blocks
 statement ok

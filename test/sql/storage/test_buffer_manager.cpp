@@ -164,6 +164,8 @@ TEST_CASE("Test buffer reallocation", "[storage][.]") {
 	CHECK(buffer_manager.GetUsedMemory() ==
 	      BufferManager::GetAllocSize(requested_size + block->block_manager.GetBlockHeaderSize()));
 
+	// We need at least one block for the query result of a PRAGMA
+	const auto minimum_size_to_execute_pragma = requested_size;
 	for (; requested_size < limit; requested_size *= 2) {
 		// increase size
 		buffer_manager.ReAllocate(block, requested_size);
@@ -171,7 +173,7 @@ TEST_CASE("Test buffer reallocation", "[storage][.]") {
 		      BufferManager::GetAllocSize(requested_size + block->block_manager.GetBlockHeaderSize()));
 		// unpin and make sure it's evicted
 		handle.Destroy();
-		REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", requested_size)));
+		REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", minimum_size_to_execute_pragma)));
 		CHECK(buffer_manager.GetUsedMemory() == 0);
 		// re-pin
 		REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", limit)));
