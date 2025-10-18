@@ -102,6 +102,9 @@ AsyncResultType GetAsyncResultType(SourceResultType s) {
 	case SourceResultType::BLOCKED:
 		return AsyncResultType::BLOCKED;
 	}
+	D_ASSERT(false);
+	// This is an impossible path
+	return AsyncResultType::INVALID;
 }
 
 } // namespace duckdb
