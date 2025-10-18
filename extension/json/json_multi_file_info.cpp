@@ -535,8 +535,8 @@ void ReadJSONObjectsFunction(ClientContext &context, JSONReader &json_reader, JS
 	output.SetCardinality(count);
 }
 
-AsyncResultType JSONReader::Scan(ClientContext &context, GlobalTableFunctionState &global_state,
-                                 LocalTableFunctionState &local_state, DataChunk &output) {
+AsyncResult JSONReader::Scan(ClientContext &context, GlobalTableFunctionState &global_state,
+                             LocalTableFunctionState &local_state, DataChunk &output) {
 
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
 	{
@@ -554,7 +554,7 @@ AsyncResultType JSONReader::Scan(ClientContext &context, GlobalTableFunctionStat
 		}
 		if (!tasks.empty()) {
 			D_ASSERT(tasks.size() == 1);
-			return AsyncResultType(std::move(tasks));
+			return AsyncResult(std::move(tasks));
 		}
 	}
 #endif
@@ -572,8 +572,7 @@ AsyncResultType JSONReader::Scan(ClientContext &context, GlobalTableFunctionStat
 	default:
 		throw InternalException("Unsupported scan type for JSONMultiFileInfo::Scan");
 	}
-	return output.size() ? AsyncResultType(SourceResultType::HAVE_MORE_OUTPUT)
-	                     : AsyncResultType(SourceResultType::FINISHED);
+	return AsyncResult(output.size() ? SourceResultType::HAVE_MORE_OUTPUT : SourceResultType::FINISHED);
 }
 
 void JSONReader::FinishFile(ClientContext &context, GlobalTableFunctionState &global_state) {

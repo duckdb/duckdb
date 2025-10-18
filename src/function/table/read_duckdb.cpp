@@ -87,8 +87,8 @@ public:
 public:
 	bool TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate,
 	                       LocalTableFunctionState &lstate) override;
-	AsyncResultType Scan(ClientContext &context, GlobalTableFunctionState &global_state,
-	                     LocalTableFunctionState &local_state, DataChunk &chunk) override;
+	AsyncResult Scan(ClientContext &context, GlobalTableFunctionState &global_state,
+	                 LocalTableFunctionState &local_state, DataChunk &chunk) override;
 	shared_ptr<BaseUnionData> GetUnionData(idx_t file_idx) override;
 	void FinishFile(ClientContext &context, GlobalTableFunctionState &gstate) override;
 	double GetProgressInFile(ClientContext &context) override;
@@ -300,8 +300,8 @@ bool DuckDBReader::TryInitializeScan(ClientContext &context, GlobalTableFunction
 	return true;
 }
 
-AsyncResultType DuckDBReader::Scan(ClientContext &context, GlobalTableFunctionState &gstate_p,
-                                   LocalTableFunctionState &lstate_p, DataChunk &chunk) {
+AsyncResult DuckDBReader::Scan(ClientContext &context, GlobalTableFunctionState &gstate_p,
+                               LocalTableFunctionState &lstate_p, DataChunk &chunk) {
 	chunk.Reset();
 	auto &lstate = lstate_p.Cast<DuckDBReadLocalState>();
 	TableFunctionInput input(bind_data.get(), lstate.local_state, global_state);
@@ -319,7 +319,7 @@ AsyncResultType DuckDBReader::Scan(ClientContext &context, GlobalTableFunctionSt
 		finished = true;
 	}
 
-	return AsyncResultType(res);
+	return AsyncResult(res);
 }
 
 void DuckDBReader::FinishFile(ClientContext &context, GlobalTableFunctionState &gstate) {

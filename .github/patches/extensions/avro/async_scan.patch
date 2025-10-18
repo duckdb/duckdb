@@ -7,10 +7,10 @@ index 176f6e0..14a648f 100644
  }
  
 -void AvroReader::Scan(ClientContext &context, GlobalTableFunctionState &global_state,
-+AsyncResultType AvroReader::Scan(ClientContext &context, GlobalTableFunctionState &global_state,
++AsyncResult AvroReader::Scan(ClientContext &context, GlobalTableFunctionState &global_state,
                        LocalTableFunctionState &local_state_p, DataChunk &chunk) {
  	Read(chunk);
-+	return chunk.size() ? AsyncResultType(SourceResultType::HAVE_MORE_OUTPUT) : AsyncResultType(SourceResultType::FINISHED);
++	return chunk.size() ? AsyncResult(SourceResultType::HAVE_MORE_OUTPUT) : AsyncResult(SourceResultType::FINISHED);
  }
  
  unique_ptr<NodeStatistics> AvroMultiFileInfo::GetCardinality(const MultiFileBindData &bind_data, idx_t file_count) {
@@ -23,7 +23,7 @@ index 8d7820d..5e646c8 100644
  	bool TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate,
  	                       LocalTableFunctionState &lstate) override;
 -	void Scan(ClientContext &context, GlobalTableFunctionState &global_state, LocalTableFunctionState &local_state,
-+	AsyncResultType Scan(ClientContext &context, GlobalTableFunctionState &global_state, LocalTableFunctionState &local_state,
++	AsyncResult Scan(ClientContext &context, GlobalTableFunctionState &global_state, LocalTableFunctionState &local_state,
  	          DataChunk &chunk) override;
  
  public:

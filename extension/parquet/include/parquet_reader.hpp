@@ -166,14 +166,14 @@ public:
 
 	bool TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate,
 	                       LocalTableFunctionState &lstate) override;
-	AsyncResultType Scan(ClientContext &context, GlobalTableFunctionState &global_state,
-	                     LocalTableFunctionState &local_state, DataChunk &chunk) override;
+	AsyncResult Scan(ClientContext &context, GlobalTableFunctionState &global_state,
+	                 LocalTableFunctionState &local_state, DataChunk &chunk) override;
 	void FinishFile(ClientContext &context, GlobalTableFunctionState &gstate_p) override;
 	double GetProgressInFile(ClientContext &context) override;
 
 public:
 	void InitializeScan(ClientContext &context, ParquetReaderScanState &state, vector<idx_t> groups_to_read);
-	AsyncResultType Scan(ClientContext &context, ParquetReaderScanState &state, DataChunk &output);
+	AsyncResult Scan(ClientContext &context, ParquetReaderScanState &state, DataChunk &output);
 
 	idx_t NumRows() const;
 	idx_t NumRowGroups() const;

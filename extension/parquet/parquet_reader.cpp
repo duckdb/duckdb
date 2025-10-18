@@ -1252,14 +1252,14 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 	state.repeat_buf.resize(allocator, STANDARD_VECTOR_SIZE);
 }
 
-AsyncResultType ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &state, DataChunk &result) {
+AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &state, DataChunk &result) {
 	while (ScanInternal(context, state, result)) {
 		if (result.size() > 0) {
-			return AsyncResultType(SourceResultType::HAVE_MORE_OUTPUT);
+			return AsyncResult(SourceResultType::HAVE_MORE_OUTPUT);
 		}
 		result.Reset();
 	}
-	return AsyncResultType(SourceResultType::FINISHED);
+	return AsyncResult(SourceResultType::FINISHED);
 }
 
 void ParquetReader::GetPartitionStats(vector<PartitionStatistics> &result) {

@@ -575,8 +575,8 @@ void ParquetReader::FinishFile(ClientContext &context, GlobalTableFunctionState 
 	gstate.row_group_index = 0;
 }
 
-AsyncResultType ParquetReader::Scan(ClientContext &context, GlobalTableFunctionState &gstate_p,
-                                    LocalTableFunctionState &local_state_p, DataChunk &chunk) {
+AsyncResult ParquetReader::Scan(ClientContext &context, GlobalTableFunctionState &gstate_p,
+                                LocalTableFunctionState &local_state_p, DataChunk &chunk) {
 	auto &gstate = gstate_p.Cast<ParquetReadGlobalState>();
 	auto &local_state = local_state_p.Cast<ParquetReadLocalState>();
 	local_state.scan_state.op = gstate.op;

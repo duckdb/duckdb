@@ -44,12 +44,12 @@ static inline void VERIFY(const string &filename, const string_t &content) {
 	}
 }
 
-AsyncResultType DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionState &global_state,
-                                       LocalTableFunctionState &local_state, DataChunk &output) {
+AsyncResult DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionState &global_state,
+                                   LocalTableFunctionState &local_state, DataChunk &output) {
 	auto &state = global_state.Cast<ReadFileGlobalState>();
 	if (done || file_list_idx.GetIndex() >= state.file_list->GetTotalFileCount()) {
 
-		return AsyncResultType(SourceResultType::FINISHED);
+		return AsyncResult(SourceResultType::FINISHED);
 	}
 
 	auto files = state.file_list;
@@ -164,7 +164,7 @@ AsyncResultType DirectFileReader::Scan(ClientContext &context, GlobalTableFuncti
 	}
 	output.SetCardinality(1);
 	done = true;
-	return AsyncResultType(SourceResultType::HAVE_MORE_OUTPUT);
+	return AsyncResult(SourceResultType::HAVE_MORE_OUTPUT);
 };
 
 void DirectFileReader::FinishFile(ClientContext &context, GlobalTableFunctionState &gstate) {

@@ -166,7 +166,7 @@ public:
 	optional_ptr<const FunctionData> bind_data;
 	optional_ptr<LocalTableFunctionState> local_state;
 	optional_ptr<GlobalTableFunctionState> global_state;
-	AsyncResultType async_result {};
+	AsyncResult async_result {};
 };
 
 struct TableFunctionPartitionInput {
@@ -353,7 +353,7 @@ public:
 		return function;
 	}
 	SourceResultType SimpleScan(ClientContext &context, TableFunctionInput &data, DataChunk &output) const {
-		data.async_result = AsyncResultType();
+		data.async_result = AsyncResult();
 		function(context, data, output);
 		TableFunctionResultType table_res = data.async_result.GetResultType();
 		SourceResultType source_res;

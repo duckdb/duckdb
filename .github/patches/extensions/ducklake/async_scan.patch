@@ -7,7 +7,7 @@ index f0af8ec..5648aef 100644
  	bool TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate,
  	                       LocalTableFunctionState &lstate) override;
 -	void Scan(ClientContext &context, GlobalTableFunctionState &global_state, LocalTableFunctionState &local_state,
-+	AsyncResultType Scan(ClientContext &context, GlobalTableFunctionState &global_state, LocalTableFunctionState &local_state,
++	AsyncResult Scan(ClientContext &context, GlobalTableFunctionState &global_state, LocalTableFunctionState &local_state,
  	          DataChunk &chunk) override;
  
  	string GetReaderType() const override;
@@ -20,7 +20,7 @@ index 432ef24..b5f6827 100644
  }
  
 -void DuckLakeInlinedDataReader::Scan(ClientContext &context, GlobalTableFunctionState &global_state,
-+AsyncResultType DuckLakeInlinedDataReader::Scan(ClientContext &context, GlobalTableFunctionState &global_state,
++AsyncResult DuckLakeInlinedDataReader::Scan(ClientContext &context, GlobalTableFunctionState &global_state,
                                       LocalTableFunctionState &local_state, DataChunk &chunk) {
  	if (!virtual_columns.empty()) {
  		scan_chunk.Reset();
@@ -28,7 +28,7 @@ index 432ef24..b5f6827 100644
  		}
  	}
  	file_row_number += NumericCast<int64_t>(scan_count);
-+	return chunk.size() ? AsyncResultType(SourceResultType::HAVE_MORE_OUTPUT) : AsyncResultType(SourceResultType::FINISHED);
++	return chunk.size() ? AsyncResult(SourceResultType::HAVE_MORE_OUTPUT) : AsyncResult(SourceResultType::FINISHED);
  }
  
  void DuckLakeInlinedDataReader::AddVirtualColumn(column_t virtual_column_id) {

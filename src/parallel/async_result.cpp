@@ -26,34 +26,34 @@ private:
 	InterruptState interrupt_state;
 };
 
-AsyncResultType::AsyncResultType(SourceResultType t) : result_type(GetTableFunctionResultType(t)) {
+AsyncResult::AsyncResult(SourceResultType t) : result_type(GetTableFunctionResultType(t)) {
 	D_ASSERT(t != SourceResultType::BLOCKED);
 }
 
-AsyncResultType::AsyncResultType(vector<unique_ptr<AsyncTask>> &&tasks)
+AsyncResult::AsyncResult(vector<unique_ptr<AsyncTask>> &&tasks)
     : result_type(TableFunctionResultType::BLOCKED), async_tasks(std::move(tasks)) {
 	if (async_tasks.empty()) {
-		throw InternalException("AsyncResultType constructed from empty vector of tasks");
+		throw InternalException("AsyncResult constructed from empty vector of tasks");
 	}
 }
 
-AsyncResultType &AsyncResultType::operator=(duckdb::SourceResultType t) {
-	return operator=(AsyncResultType(t));
+AsyncResult &AsyncResult::operator=(duckdb::SourceResultType t) {
+	return operator=(AsyncResult(t));
 }
 
-AsyncResultType &AsyncResultType::operator=(AsyncResultType &&other) noexcept {
+AsyncResult &AsyncResult::operator=(AsyncResult &&other) noexcept {
 	result_type = other.result_type;
 	async_tasks = std::move(other.async_tasks);
 	return *this;
 }
 
-void AsyncResultType::ScheduleTasks(InterruptState &interrupt_state, Executor &executor) {
+void AsyncResult::ScheduleTasks(InterruptState &interrupt_state, Executor &executor) {
 	D_ASSERT(result_type == TableFunctionResultType::BLOCKED);
 
 	if (async_tasks.size() > 1) {
-		throw InternalException("AsyncResultType with more that 1 task found");
+		throw InternalException("AsyncResult with more that 1 task found");
 	} else if (async_tasks.empty()) {
-		throw InternalException("AsyncResultType with no task found");
+		throw InternalException("AsyncResult with no task found");
 	}
 
 	auto task = make_uniq<AsyncExecutionTask>(executor, std::move(async_tasks[0]), interrupt_state);

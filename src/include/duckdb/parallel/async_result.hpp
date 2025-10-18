@@ -17,14 +17,14 @@ public:
 	virtual void Execute() = 0;
 };
 
-class AsyncResultType {
+class AsyncResult {
 public:
-	AsyncResultType() = default;
-	AsyncResultType(AsyncResultType &&) = default;
-	explicit AsyncResultType(SourceResultType t);
-	explicit AsyncResultType(vector<unique_ptr<AsyncTask>> &&task);
-	AsyncResultType &operator=(SourceResultType t);
-	AsyncResultType &operator=(AsyncResultType &&) noexcept;
+	AsyncResult() = default;
+	AsyncResult(AsyncResult &&) = default;
+	explicit AsyncResult(SourceResultType t);
+	explicit AsyncResult(vector<unique_ptr<AsyncTask>> &&task);
+	AsyncResult &operator=(SourceResultType t);
+	AsyncResult &operator=(AsyncResult &&) noexcept;
 	void ScheduleTasks(InterruptState &interrupt_state, Executor &executor);
 	bool HasTasks() const {
 		D_ASSERT((result_type == TableFunctionResultType::BLOCKED) != async_tasks.empty());
