@@ -79,7 +79,7 @@ private:
 	//! Actually free freed blocks once queue size hits this threshold
 	static constexpr idx_t TO_FREE_SIZE_THRESHOLD = 128;
 	//! Free up to this many blocks in one go
-	static constexpr idx_t MAXIMUM_FREE_COUNT = 8192;
+	static constexpr idx_t MAXIMUM_FREE_COUNT = 32768;
 	//! Vector to dequeue to free blocks into
 	uint32_t to_free_buffer[MAXIMUM_FREE_COUNT];
 	//! Lock so that only one thread at a time frees

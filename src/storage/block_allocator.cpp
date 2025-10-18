@@ -18,7 +18,10 @@ namespace duckdb {
 // Memory Helpers
 //===--------------------------------------------------------------------===//
 static data_ptr_t AllocateVirtualMemory(const idx_t size) {
-#if INTPTR_MAX == INT32_MAX
+#if defined(__APPLE__)
+	// Can't beat the MacOS allocator (presumably does stuff asynchronously)
+	return nullptr;
+#elif INTPTR_MAX == INT32_MAX
 	// Disable on 32-bit
 	return nullptr;
 #endif
@@ -243,7 +246,7 @@ void BlockAllocator::FreeInternal() {
 		return;
 	}
 
-	Printer::Print("i got through");
+	// Printer::Print("i got through");
 
 	const auto count = to_free->q.try_dequeue_bulk(to_free_buffer, MAXIMUM_FREE_COUNT);
 	if (count == 0) {
@@ -276,10 +279,11 @@ void BlockAllocator::FreeInternal() {
 	FreeContiguousBlocks(block_id_start, to_free_buffer[count - 1]);
 	free_count++;
 
-	Printer::PrintF("freed %llu in %llu", count, free_count);
+	// Printer::PrintF("freed %llu in %llu", count, free_count);
 
 	// Make freed blocks available to allocate again
 	touched->q.enqueue_bulk(to_free_buffer, count);
+	// Printer::PrintF("remaining %llu", to_free->q.size_approx());
 }
 
 void BlockAllocator::FreeContiguousBlocks(uint32_t block_id_start, uint32_t block_id_end_including) {
