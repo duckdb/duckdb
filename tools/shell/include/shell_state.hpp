@@ -201,6 +201,7 @@ public:
 		shellFlgs &= ~flag;
 	}
 	void ResetOutput();
+	bool SetupPager();
 	void ClearTempFile();
 	void NewTempFile(const char *zSuffix);
 	int DoMetaCommand(char *zLine);
