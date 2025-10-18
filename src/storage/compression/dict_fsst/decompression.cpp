@@ -98,17 +98,18 @@ void CompressedStringScanState::Initialize(bool initialize_dictionary) {
 		return;
 	}
 
-	dictionary = make_buffer<Vector>(segment.type, dict_count);
-	auto dict_child_data = FlatVector::GetData<string_t>(*(dictionary));
-	auto &validity = FlatVector::Validity(*dictionary);
+	dictionary = DictionaryVector::CreateReusableDictionary(segment.type, dict_count);
+	auto dict_child_data = FlatVector::GetData<string_t>(dictionary->data);
+	auto &validity = FlatVector::Validity(dictionary->data);
 	D_ASSERT(dict_count >= 1);
 	validity.SetInvalid(0);
 
+	auto &dict_data = dictionary->data;
 	uint32_t offset = 0;
 	for (uint32_t i = 0; i < dict_count; i++) {
 		//! We can uncompress during fetching, we need the length of the string inside the dictionary
 		auto string_len = string_lengths[i];
-		dict_child_data[i] = FetchStringFromDict(*dictionary, offset, i);
+		dict_child_data[i] = FetchStringFromDict(dict_data, offset, i);
 		offset += string_len;
 	}
 }
@@ -158,7 +159,7 @@ void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_of
 
 	if (dictionary) {
 		// We have prepared the full dictionary, we can reference these strings directly
-		auto dictionary_values = FlatVector::GetData<string_t>(*dictionary);
+		auto dictionary_values = FlatVector::GetData<string_t>(dictionary->data);
 		for (idx_t i = 0; i < scan_count; i++) {
 			// Lookup dict offset in index buffer
 			auto string_number = selvec.get_index(i + start_offset);
@@ -223,8 +224,7 @@ void CompressedStringScanState::ScanToDictionaryVector(ColumnSegment &segment, V
 	D_ASSERT(result_offset == 0);
 
 	auto &selvec = GetSelVec(start, scan_count);
-	result.Dictionary(*(dictionary), dict_count, selvec, scan_count);
-	DictionaryVector::SetDictionaryId(result, to_string(CastPointerToValue(&segment)));
+	result.Dictionary(dictionary, selvec);
 	result.Verify(result_offset + scan_count);
 }
 

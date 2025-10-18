@@ -75,12 +75,10 @@ private:
 	//! Only valid when the expression is eligible for the dictionary expression optimization
 	//! This is the case when the input is "practically unary", i.e., only one non-const input column
 	optional_idx input_col_idx;
-	//! Storage ID of the input dictionary vector
-	string current_input_dictionary_id;
 	//! Vector holding the expression executed on the entire dictionary
-	unique_ptr<Vector> output_dictionary;
-	//! ID of the output dictionary_vector
-	string output_dictionary_id;
+	buffer_ptr<VectorChildBuffer> output_dictionary;
+	//! ID of the input dictionary Vector
+	string current_input_dictionary_id;
 };
 
 struct ExpressionExecutorState {
