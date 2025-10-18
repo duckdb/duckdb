@@ -360,6 +360,7 @@ public:
 		if (ExtractSourceResultType(table_res, source_res)) {
 			return source_res;
 		}
+		// data.async_result is IMPLICIT, so implicit handling:
 		if (output.size() > 0) {
 			return SourceResultType::HAVE_MORE_OUTPUT;
 		}
