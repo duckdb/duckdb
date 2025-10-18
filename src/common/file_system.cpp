@@ -592,8 +592,31 @@ bool FileSystem::HasGlob(const string &str) {
 	return false;
 }
 
+vector<OpenFileInfo> FileSystem::GlobExtended(const string &path, const FileGlobInput &glob_input,
+                                              optional_ptr<FileOpener> opener) {
+	// Override this method to implement partial lazy loading and hive filtering optimization
+	throw NotImplementedException("%s: GlobExtended is not implemented!", GetName());
+}
+
+bool FileSystem::SupportsGlobExtended() const {
+	return false;
+}
+
 vector<OpenFileInfo> FileSystem::Glob(const string &path, FileOpener *opener) {
+	if (SupportsGlobExtended()) {
+		FileGlobInput empty_glob_input(FileGlobOptions::DISALLOW_EMPTY);
+		return GlobExtended(path, empty_glob_input, opener);
+	}
 	throw NotImplementedException("%s: Glob is not implemented!", GetName());
+}
+
+vector<OpenFileInfo> FileSystem::Glob(const string &path, const FileGlobInput &glob_input,
+                                      optional_ptr<FileOpener> opener) {
+	if (SupportsGlobExtended()) {
+		return GlobExtended(path, glob_input, opener);
+	} else {
+		return Glob(path, opener.get());
+	}
 }
 
 void FileSystem::RegisterSubSystem(unique_ptr<FileSystem> sub_fs) {
@@ -629,7 +652,7 @@ bool FileSystem::CanHandleFile(const string &fpath) {
 }
 
 vector<OpenFileInfo> FileSystem::GlobFiles(const string &pattern, ClientContext &context, const FileGlobInput &input) {
-	auto result = Glob(pattern);
+	auto result = Glob(pattern, input, nullptr);
 	if (result.empty()) {
 		if (input.behavior == FileGlobOptions::FALLBACK_GLOB && !HasGlob(pattern)) {
 			// if we have no glob in the pattern and we have an extension, we try to glob
@@ -638,7 +661,9 @@ vector<OpenFileInfo> FileSystem::GlobFiles(const string &pattern, ClientContext 
 					throw InternalException("FALLBACK_GLOB requires an extension to be specified");
 				}
 				string new_pattern = JoinPath(JoinPath(pattern, "**"), "*." + input.extension);
-				result = GlobFiles(new_pattern, context, FileGlobOptions::ALLOW_EMPTY);
+				FileGlobInput allow_empty_input = input;
+				allow_empty_input.behavior = FileGlobOptions::ALLOW_EMPTY;
+				result = GlobFiles(new_pattern, context, allow_empty_input);
 				if (!result.empty()) {
 					// we found files by globbing the target as if it was a directory - return them
 					return result;

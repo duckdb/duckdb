@@ -25,6 +25,7 @@ struct MultiFileOptions {
 	bool auto_detect_hive_partitioning = true;
 	bool union_by_name = false;
 	bool hive_types_autocast = true;
+	bool hive_lazy_listing = false;
 	MultiFileColumnMappingMode mapping = MultiFileColumnMappingMode::BY_NAME;
 
 	case_insensitive_map_t<LogicalType> hive_types_schema;
@@ -39,7 +40,7 @@ struct MultiFileOptions {
 	DUCKDB_API static MultiFileOptions Deserialize(Deserializer &source);
 	DUCKDB_API void AddBatchInfo(BindInfo &bind_info) const;
 	DUCKDB_API void AutoDetectHivePartitioning(MultiFileList &files, ClientContext &context);
-	DUCKDB_API static bool AutoDetectHivePartitioningInternal(MultiFileList &files, ClientContext &context);
+	DUCKDB_API bool AutoDetectHivePartitioningInternal(MultiFileList &files, ClientContext &context);
 	DUCKDB_API void AutoDetectHiveTypesInternal(MultiFileList &files, ClientContext &context);
 	DUCKDB_API void VerifyHiveTypesArePartitions(const std::map<string, string> &partitions) const;
 	DUCKDB_API LogicalType GetHiveLogicalType(const string &hive_partition_column) const;

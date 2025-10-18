@@ -144,6 +144,11 @@ vector<OpenFileInfo> VirtualFileSystem::Glob(const string &path, FileOpener *ope
 	return FindFileSystem(path, opener).Glob(path, opener);
 }
 
+vector<OpenFileInfo> VirtualFileSystem::Glob(const string &path, const FileGlobInput &glob_input,
+                                             optional_ptr<FileOpener> opener) {
+	return FindFileSystem(path, opener).Glob(path, glob_input, opener);
+};
+
 void VirtualFileSystem::RegisterSubSystem(unique_ptr<FileSystem> fs) {
 	// Sub-filesystem number is not expected to be huge, also filesystem registration should be called infrequently.
 	const auto &name = fs->GetName();
