@@ -75,32 +75,32 @@ bool TableFunction::Equal(const TableFunction &rhs) const {
 	return true; // they are equal
 }
 
-bool ExtractSourceResultType(TableFunctionResultType in, SourceResultType &out) {
+bool ExtractSourceResultType(AsyncResultType in, SourceResultType &out) {
 	switch (in) {
-	case TableFunctionResultType::DEFAULT:
-	case TableFunctionResultType::INVALID:
+	case AsyncResultType::IMPLICIT:
+	case AsyncResultType::INVALID:
 		return false;
-	case TableFunctionResultType::HAVE_MORE_OUTPUT:
+	case AsyncResultType::HAVE_MORE_OUTPUT:
 		out = SourceResultType::HAVE_MORE_OUTPUT;
 		break;
-	case TableFunctionResultType::FINISHED:
+	case AsyncResultType::FINISHED:
 		out = SourceResultType::FINISHED;
 		break;
-	case TableFunctionResultType::BLOCKED:
+	case AsyncResultType::BLOCKED:
 		out = SourceResultType::BLOCKED;
 		break;
 	}
 	return true;
 }
 
-TableFunctionResultType GetTableFunctionResultType(SourceResultType s) {
+AsyncResultType GetAsyncResultType(SourceResultType s) {
 	switch (s) {
 	case SourceResultType::HAVE_MORE_OUTPUT:
-		return TableFunctionResultType::HAVE_MORE_OUTPUT;
+		return AsyncResultType::HAVE_MORE_OUTPUT;
 	case SourceResultType::FINISHED:
-		return TableFunctionResultType::FINISHED;
+		return AsyncResultType::FINISHED;
 	case SourceResultType::BLOCKED:
-		return TableFunctionResultType::BLOCKED;
+		return AsyncResultType::BLOCKED;
 	}
 }
 

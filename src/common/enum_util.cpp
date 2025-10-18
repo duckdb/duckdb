@@ -631,6 +631,27 @@ ArrowVariableSizeType EnumUtil::FromString<ArrowVariableSizeType>(const char *va
 	return static_cast<ArrowVariableSizeType>(StringUtil::StringToEnum(GetArrowVariableSizeTypeValues(), 4, "ArrowVariableSizeType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetAsyncResultTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(AsyncResultType::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(AsyncResultType::IMPLICIT), "IMPLICIT" },
+		{ static_cast<uint32_t>(AsyncResultType::HAVE_MORE_OUTPUT), "HAVE_MORE_OUTPUT" },
+		{ static_cast<uint32_t>(AsyncResultType::FINISHED), "FINISHED" },
+		{ static_cast<uint32_t>(AsyncResultType::BLOCKED), "BLOCKED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<AsyncResultType>(AsyncResultType value) {
+	return StringUtil::EnumToString(GetAsyncResultTypeValues(), 5, "AsyncResultType", static_cast<uint32_t>(value));
+}
+
+template<>
+AsyncResultType EnumUtil::FromString<AsyncResultType>(const char *value) {
+	return static_cast<AsyncResultType>(StringUtil::StringToEnum(GetAsyncResultTypeValues(), 5, "AsyncResultType", value));
+}
+
 const StringUtil::EnumStringLiteral *GetBinderTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(BinderType::REGULAR_BINDER), "REGULAR_BINDER" },
@@ -4430,27 +4451,6 @@ const char* EnumUtil::ToChars<TableFilterType>(TableFilterType value) {
 template<>
 TableFilterType EnumUtil::FromString<TableFilterType>(const char *value) {
 	return static_cast<TableFilterType>(StringUtil::StringToEnum(GetTableFilterTypeValues(), 10, "TableFilterType", value));
-}
-
-const StringUtil::EnumStringLiteral *GetTableFunctionResultTypeValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(TableFunctionResultType::HAVE_MORE_OUTPUT), "HAVE_MORE_OUTPUT" },
-		{ static_cast<uint32_t>(TableFunctionResultType::FINISHED), "FINISHED" },
-		{ static_cast<uint32_t>(TableFunctionResultType::BLOCKED), "BLOCKED" },
-		{ static_cast<uint32_t>(TableFunctionResultType::DEFAULT), "DEFAULT" },
-		{ static_cast<uint32_t>(TableFunctionResultType::INVALID), "INVALID" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<TableFunctionResultType>(TableFunctionResultType value) {
-	return StringUtil::EnumToString(GetTableFunctionResultTypeValues(), 5, "TableFunctionResultType", static_cast<uint32_t>(value));
-}
-
-template<>
-TableFunctionResultType EnumUtil::FromString<TableFunctionResultType>(const char *value) {
-	return static_cast<TableFunctionResultType>(StringUtil::StringToEnum(GetTableFunctionResultTypeValues(), 5, "TableFunctionResultType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetTablePartitionInfoValues() {

@@ -604,7 +604,7 @@ public:
 
 			auto res = data.reader->Scan(context, *gstate.global_state, *data.local_state, scan_chunk);
 
-			if (res.GetResultType() == TableFunctionResultType::BLOCKED) {
+			if (res.GetResultType() == AsyncResultType::BLOCKED) {
 				data_p.async_result = std::move(res);
 				return;
 			}
