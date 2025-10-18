@@ -1929,7 +1929,10 @@ void Vector::DebugShuffleNestedVector(Vector &vector, idx_t count) {
 const Vector &DictionaryVector::GetCachedHashes(Vector &input) {
 	D_ASSERT(CanCacheHashes(input));
 	auto &dictionary = Child(input);
+
+	lock_guard<mutex> lock(dictionary.cached_hashes_mutex);
 	auto &dictionary_hashes = dictionary.cached_hashes->Cast<VectorChildBuffer>().data;
+
 	if (!dictionary_hashes.data) {
 		// Uninitialized: hash the dictionary
 		const auto dictionary_count = DictionarySize(input).GetIndex();
