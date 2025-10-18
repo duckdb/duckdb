@@ -712,6 +712,7 @@ public:
 					    NumericCast<idx_t>(tokenized_statement[tokenized_statement.size() - 1].offset +
 					                       tokenized_statement[tokenized_statement.size() - 1].length);
 				}
+				statement->query = query;
 				result.push_back(std::move(statement));
 			}
 			return ParserOverrideResult(std::move(result));

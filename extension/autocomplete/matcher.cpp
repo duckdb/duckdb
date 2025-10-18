@@ -555,6 +555,7 @@ public:
 
 public:
 	explicit StringLiteralMatcher() : Matcher(TYPE) {
+		name = "StringLiteral";
 	}
 
 	MatchResultType Match(MatchState &state) const override {
@@ -605,6 +606,7 @@ public:
 
 public:
 	explicit NumberLiteralMatcher() : Matcher(TYPE) {
+		name = "NumberLiteral";
 	}
 
 	MatchResultType Match(MatchState &state) const override {

@@ -61,8 +61,56 @@ PEGTransformerFactory &PEGTransformerFactory::GetInstance() {
 PEGTransformerFactory::PEGTransformerFactory() {
 	REGISTER_TRANSFORM(TransformStatement);
 
+	// common.gram
+	REGISTER_TRANSFORM(TransformNumberLiteral);
+	REGISTER_TRANSFORM(TransformStringLiteral);
+
+	// expression.gram
+	REGISTER_TRANSFORM(TransformBaseExpression);
+	REGISTER_TRANSFORM(TransformExpression);
+	REGISTER_TRANSFORM(TransformLiteralExpression);
+	REGISTER_TRANSFORM(TransformSingleExpression);
+	REGISTER_TRANSFORM(TransformConstantLiteral);
+
 	// use.gram
 	REGISTER_TRANSFORM(TransformUseStatement);
 	REGISTER_TRANSFORM(TransformUseTarget);
+
+	// set.gram
+	REGISTER_TRANSFORM(TransformResetStatement);
+	REGISTER_TRANSFORM(TransformSetAssignment);
+	REGISTER_TRANSFORM(TransformSetSetting);
+	REGISTER_TRANSFORM(TransformSetStatement);
+	REGISTER_TRANSFORM(TransformSetTimeZone);
+	REGISTER_TRANSFORM(TransformSetVariable);
+	REGISTER_TRANSFORM(TransformStandardAssignment);
+	REGISTER_TRANSFORM(TransformVariableList);
+
+	RegisterEnum<SetScope>("LocalScope", SetScope::LOCAL);
+	RegisterEnum<SetScope>("GlobalScope", SetScope::GLOBAL);
+	RegisterEnum<SetScope>("SessionScope", SetScope::SESSION);
+	RegisterEnum<SetScope>("VariableScope", SetScope::VARIABLE);
+
+	RegisterEnum<Value>("FalseLiteral", Value(false));
+	RegisterEnum<Value>("TrueLiteral", Value(true));
+	RegisterEnum<Value>("NullLiteral", Value());
+}
+
+vector<optional_ptr<ParseResult>>
+PEGTransformerFactory::ExtractParseResultsFromList(optional_ptr<ParseResult> parse_result) {
+	// List(D) <- D (',' D)* ','?
+	vector<optional_ptr<ParseResult>> result;
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	result.push_back(list_pr.GetChild(0));
+	auto opt_child = list_pr.Child<OptionalParseResult>(1);
+	if (opt_child.HasResult()) {
+		auto repeat_result = opt_child.optional_result->Cast<RepeatParseResult>();
+		for (auto &child : repeat_result.children) {
+			auto &list_child = child->Cast<ListParseResult>();
+			result.push_back(list_child.GetChild(1));
+		}
+	}
+
+	return result;
 }
 } // namespace duckdb
