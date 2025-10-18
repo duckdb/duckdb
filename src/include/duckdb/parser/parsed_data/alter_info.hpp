@@ -61,6 +61,8 @@ public:
 	string name;
 	//! Allow altering internal entries
 	bool allow_internal;
+	//! is replaying WAL
+	bool is_replay_wal = false;
 
 public:
 	virtual CatalogType GetCatalogType() const = 0;

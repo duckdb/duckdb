@@ -38,6 +38,7 @@ class WriteAheadLog;
 class TableDataWriter;
 class ConflictManager;
 class TableScanState;
+class AddColumnCheckpointState;
 struct TableDeleteState;
 struct ConstraintState;
 struct TableUpdateState;
@@ -58,7 +59,8 @@ public:
 	          const string &table, vector<ColumnDefinition> column_definitions_p,
 	          unique_ptr<PersistentTableData> data = nullptr);
 	//! Constructs a DataTable as a delta on an existing data table with a newly added column
-	DataTable(ClientContext &context, DataTable &parent, ColumnDefinition &new_column, Expression &default_value);
+	DataTable(ClientContext &context, DataTable &parent, ColumnDefinition &new_column, Expression &default_value,
+	          bool is_replay_wal, unique_ptr<AddColumnCheckpointState> add_column_checkpoint_state);
 	//! Constructs a DataTable as a delta on an existing data table but with one column removed
 	DataTable(ClientContext &context, DataTable &parent, idx_t removed_column);
 	//! Constructs a DataTable as a delta on an existing data table but with one column changed type
@@ -281,6 +283,9 @@ public:
 	//! Returns a list of the partition stats
 	vector<PartitionStatistics> GetPartitionStats(ClientContext &context);
 
+	//! Release the data blocks used by added column
+	void RollbackAddedColumnIfNeeded();
+
 private:
 	//! Verify the new added constraints against current persistent&local data
 	void VerifyNewConstraint(LocalStorage &local_storage, DataTable &parent, const BoundConstraint &constraint);
@@ -316,5 +321,7 @@ private:
 	shared_ptr<RowGroupCollection> row_groups;
 	//! The version of the data table
 	atomic<DataTableVersion> version;
+	//! Whether the last added column is persisted
+	bool persist_added_column = false;
 };
 } // namespace duckdb
