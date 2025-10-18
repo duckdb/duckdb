@@ -428,6 +428,15 @@ void utf8_printf(FILE *out, const char *zFormat, ...) {
 #define utf8_printf fprintf
 #endif
 
+/* Used with ShellState::EvaluateSQL to indicate special result states */
+const string EVAL_SQL_ERROR = "#ERROR#:";
+const string EVAL_SQL_NOT_A_QUERY = "#NOT A QUERY#";
+const string EVAL_SQL_NO_RESULT = "#NO RESULT#";
+const string EVAL_SQL_TOO_MANY_ROWS = "#TOO MANY ROWS#";
+const string EVAL_SQL_TOO_MANY_COLUMNS = "#TOO MANY COLUMNS#";
+const string EVAL_SQL_NULL = "#NULL#";
+const string EVAL_SQL_EMPTY = "#EMPTY#";
+
 void ShellState::Print(PrintOutput output, const char *str) {
 	utf8_printf(output == PrintOutput::STDOUT ? out : stderr, "%s", str);
 }
@@ -819,18 +828,19 @@ void ShellState::OutputQuotedString(const char *z) {
 	if (c == 0) {
 		PrintF("'%s'", z);
 	} else {
-		PrintF("'");
+		Print("'");
 		while (*z) {
 			for (i = 0; (c = z[i]) != 0 && c != '\''; i++) {
 			}
-			if (c == '\'')
+			if (c == '\'') {
 				i++;
+			};
 			if (i) {
-				PrintF("%.*s", i, z);
+				Print(string(z, i));
 				z += i;
 			}
 			if (c == '\'') {
-				PrintF("'");
+				Print("'");
 				continue;
 			}
 			if (c == 0) {
@@ -838,7 +848,7 @@ void ShellState::OutputQuotedString(const char *z) {
 			}
 			z++;
 		}
-		PrintF("'");
+		Print("'");
 	}
 	SetTextMode();
 }
@@ -2191,6 +2201,43 @@ bool ShellState::ImportData(const vector<string> &args) {
 	return true;
 }
 
+string ShellState::EvaluateSQL(const string &sql) {
+	if (!db) {
+		OpenDB();
+	}
+	auto &con = *conn;
+	auto result = con.Query(sql);
+	if (result->HasError()) {
+		return EVAL_SQL_ERROR;
+	}
+	auto is_query = result->properties.return_type == duckdb::StatementReturnType::QUERY_RESULT;
+	if (is_query == false) {
+		return EVAL_SQL_NOT_A_QUERY;
+	}
+	auto &collection = result->Collection();
+	if (collection.Count() == 0) {
+		return EVAL_SQL_NO_RESULT;
+	}
+	if (collection.Count() > 1) {
+		return EVAL_SQL_TOO_MANY_ROWS;
+	}
+	if (collection.ColumnCount() != 1) {
+		return EVAL_SQL_TOO_MANY_COLUMNS;
+	}
+
+	auto value = collection.GetRows().GetValue(0, 0);
+	if (value.IsNull()) {
+		return EVAL_SQL_NULL;
+	}
+
+	auto str = value.ToString();
+	if (str.empty()) {
+		return EVAL_SQL_EMPTY;
+	}
+
+	return str;
+}
+
 bool ShellState::OpenDatabase(const vector<string> &args) {
 	if (safe_mode) {
 		PrintF(PrintOutput::STDERR, ".open cannot be used in -safe mode\n");
@@ -2199,9 +2246,7 @@ bool ShellState::OpenDatabase(const vector<string> &args) {
 	string zNewFilename;  /* Name of the database file to open */
 	idx_t iName = 1;      /* Index in azArg[] of the filename */
 	bool newFlag = false; /* True to delete file before opening */
-	/* Close the existing database */
-	db.reset();
-	conn.reset();
+	bool has_sql = false; /* True to use a query to derive the file path or connection string */
 	zDbFilename = string();
 	szMax = 0;
 	/* Check for command-line arguments */
@@ -2213,15 +2258,62 @@ bool ShellState::OpenDatabase(const vector<string> &args) {
 		} else if (optionMatch(z, "readonly")) {
 			config.options.access_mode = duckdb::AccessMode::READ_ONLY;
 		} else if (optionMatch(z, "nofollow")) {
+		} else if (optionMatch(z, "sql")) {
+			if (has_sql) {
+				Print(PrintOutput::STDERR, "Error: --sql provided multiple times\n");
+				return false;
+			}
+			if (iName + 1 >= args.size()) {
+				Print(PrintOutput::STDERR, "Error: missing SQL query after --sql\n");
+				return false;
+			}
+			const char *query = args[++iName].c_str();
+
+			auto val = EvaluateSQL(query);
+			if (val == EVAL_SQL_ERROR) {
+				PrintF(PrintOutput::STDERR, "Error: failed to evaluate --sql query: '%s'\n", query);
+				return false;
+			} else if (val == EVAL_SQL_NOT_A_QUERY) {
+				PrintF(PrintOutput::STDERR, "Error: the --sql argument, '%s', is not a valid query\n");
+				return false;
+			} else if (val == EVAL_SQL_TOO_MANY_ROWS) {
+				Print(PrintOutput::STDERR, "Error: --sql query returned multiple rows, expected single value\n");
+				return false;
+			} else if (val == EVAL_SQL_TOO_MANY_COLUMNS) {
+				Print(PrintOutput::STDERR, "Error: --sql query returned multiple columns, expected single value\n");
+				return false;
+			} else if (val == EVAL_SQL_NULL) {
+				Print(PrintOutput::STDERR, "Error: --sql query returned a null value\n");
+				return false;
+			} else if (val == EVAL_SQL_NO_RESULT) {
+				Print(PrintOutput::STDERR, "Error: --sql query returned no value\n");
+				return false;
+			} else if (val == EVAL_SQL_EMPTY) {
+				Print(PrintOutput::STDERR, "Error: --sql query returned an empty string\n");
+				return false;
+			}
+			zNewFilename = val;
+			has_sql = true;
 		} else if (z[0] == '-') {
 			PrintF(PrintOutput::STDERR, "unknown option: %s\n", z);
 			return false;
 		}
 	}
+
+	if (has_sql && args.size() > iName) {
+		Print(PrintOutput::STDERR, "Error: cannot use both --sql and a FILE argument\n");
+		return false;
+	}
+
 	/* If a filename is specified, try to open it first */
-	if (args.size() > iName) {
+	if (!has_sql && args.size() > iName) {
 		zNewFilename = args[iName];
 	}
+
+	/* Close the existing database */
+	db.reset();
+	conn.reset();
+
 	if (!zNewFilename.empty()) {
 		if (newFlag) {
 			shellDeleteFile(zNewFilename.c_str());
@@ -2232,6 +2324,7 @@ bool ShellState::OpenDatabase(const vector<string> &args) {
 			PrintF(PrintOutput::STDERR, "Error: cannot open '%s'\n", zNewFilename.c_str());
 		}
 	}
+
 	if (!db) {
 		/* As a fall-back open a TEMP database */
 		zDbFilename = string();
@@ -2578,10 +2671,11 @@ WHERE type='index' AND tbl_name LIKE ?1)";
 		idx_t nPrintRow = (result.size() + nPrintCol - 1) / nPrintCol;
 		for (idx_t i = 0; i < nPrintRow; i++) {
 			for (idx_t j = i; j < result.size(); j += nPrintRow) {
-				const char *zSp = j < nPrintRow ? "" : "  ";
-				PrintF("%s%-*s", zSp, static_cast<int>(maxlen), result[j].c_str());
+				string prefix = (j < nPrintRow) ? "" : "  ";
+				string padded = result[j] + string(maxlen - result[j].length(), ' ');
+				Print(prefix + padded);
 			}
-			PrintF("\n");
+			Print("\n");
 		}
 	}
 	return MetadataResult::SUCCESS;
