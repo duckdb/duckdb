@@ -1,5 +1,5 @@
 
-#include "geo_parquet.hpp"
+#include "parquet_geometry.hpp"
 
 #include "column_reader.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
@@ -281,17 +281,7 @@ bool GeoParquetFileMetadata::IsGeoParquetConversionEnabled(const ClientContext &
 		// Disabled by setting
 		return false;
 	}
-	if (!context.db->ExtensionIsLoaded("spatial")) {
-		// Spatial extension is not loaded, we cant convert anyway
-		return false;
-	}
 	return true;
-}
-
-LogicalType GeoParquetFileMetadata::GeometryType() {
-	auto blob_type = LogicalType(LogicalTypeId::BLOB);
-	blob_type.SetAlias("GEOMETRY");
-	return blob_type;
 }
 
 const unordered_map<string, GeoParquetColumnMetadata> &GeoParquetFileMetadata::GetColumnMeta() const {
