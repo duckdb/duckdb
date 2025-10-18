@@ -101,9 +101,32 @@ SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk
 
 	TableFunctionInput data(bind_data.get(), l_state.local_state.get(), g_state.global_state.get());
 
-	if (function.function) {
-		function.function(context.client, data, chunk);
-		return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
+	if (function.HasSimpleScan()) {
+		auto res = function.SimpleScan(context.client, data, chunk);
+
+		if (res == SourceResultType::BLOCKED) {
+			D_ASSERT(data.async_result.HasTasks());
+			auto guard = g_state.Lock();
+			auto inner_result = g_state.BlockSource(guard, input.interrupt_state);
+			if (inner_result == SourceResultType::FINISHED) {
+				return SourceResultType::FINISHED;
+			} else if (inner_result == SourceResultType::BLOCKED) {
+				AsyncResult async_handler(std::move(data.async_result));
+				async_handler.ScheduleTasks(input.interrupt_state, context.pipeline->executor);
+				return SourceResultType::BLOCKED;
+			} else {
+				throw InternalException("Unexpected result from BlockSource");
+			}
+		}
+
+		auto expected_res = chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
+
+		if (res != expected_res) {
+			throw NotImplementedException(
+			    "Currently this differs from the reference implementation for `function_ext`");
+		}
+
+		return res;
 	}
 
 	if (g_state.in_out_final) {
@@ -272,7 +295,7 @@ bool PhysicalTableScan::Equals(const PhysicalOperator &other_p) const {
 }
 
 bool PhysicalTableScan::ParallelSource() const {
-	if (!function.function) {
+	if (!function.HasSimpleScan()) {
 		// table in-out functions cannot be executed in parallel as part of a PhysicalTableScan
 		// since they have only a single input row
 		return false;
