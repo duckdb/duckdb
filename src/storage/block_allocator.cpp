@@ -18,19 +18,16 @@ namespace duckdb {
 // Memory Helpers
 //===--------------------------------------------------------------------===//
 static data_ptr_t AllocateVirtualMemory(const idx_t size) {
-#if defined(__APPLE__)
-	// Can't beat the MacOS allocator (presumably does stuff asynchronously)
-	return nullptr;
-#elif INTPTR_MAX == INT32_MAX
+#if INTPTR_MAX == INT32_MAX
 	// Disable on 32-bit
 	return nullptr;
 #endif
 
 #if defined(_WIN32)
 	// Windows returns nullptr if the map fails
-	return data_ptr_t(VirtualAlloc(nullptr, size, MEM_RESERVE, PAGE_NOACCESS));
+	return data_ptr_t(VirtualAlloc(nullptr, size, MEM_RESERVE, PAGE_READWRITE));
 #else
-	const auto ptr = mmap(nullptr, size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	const auto ptr = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 	return ptr == MAP_FAILED ? nullptr : data_ptr_cast(ptr);
 #endif
 }
@@ -47,27 +44,10 @@ static void FreeVirtualMemory(const data_ptr_t pointer, const idx_t size) {
 #endif
 }
 
-enum class MemoryProtectionType { NO_ACCESS, ALLOW_READ_WRITE };
-
-static void ProtectMemory(const data_ptr_t pointer, const idx_t size, const MemoryProtectionType type) {
-#if defined(_WIN32)
-	DWORD previous_flag;
-	const auto flag = type == MemoryProtectionType::NO_ACCESS ? PAGE_NOACCESS : PAGE_READWRITE;
-	if (!VirtualProtect(pointer, size, flag, &previous_flag)) {
-		throw InternalException("ProtectMemory failed");
-	}
-#else
-	const auto flag = type == MemoryProtectionType::NO_ACCESS ? PROT_NONE : PROT_READ | PROT_WRITE;
-	if (mprotect(pointer, size, flag) != 0) {
-		throw InternalException("ProtectMemory failed");
-	}
-#endif
-}
-
 static void CommitMemory(const data_ptr_t pointer, const idx_t size) {
 #if defined(_WIN32)
 	// Windows cannot do this lazily
-	if (!VirtualAlloc(pointer, size, MEM_COMMIT, PAGE_NOACCESS)) {
+	if (!VirtualAlloc(pointer, size, MEM_COMMIT, PAGE_READWRITE)) {
 		throw InternalException("ReturnMemory failed");
 	}
 #endif
@@ -75,17 +55,9 @@ static void CommitMemory(const data_ptr_t pointer, const idx_t size) {
 
 static void ReturnMemory(const data_ptr_t pointer, const idx_t size) {
 #if defined(_WIN32)
-	if (!VirtualAlloc(pointer, size, MEM_RESET, PAGE_NOACCESS)) {
-		throw InternalException("ReturnMemory failed");
-	}
+	VirtualAlloc(pointer, size, MEM_RESET, PAGE_READWRITE);
 #else
-	// Tell the OS that it can lazily reclaim/zero these pages
-	// On MacOS, this immediately reduces RSS (not actually lazy), but on Linux it doesn't (actually lazy)
-	if (madvise(pointer, size, MADV_FREE) != 0) {
-		throw InternalException("ReturnMemory failed");
-	}
-	// Protect after madvise, otherwise it's already inaccessible
-	ProtectMemory(pointer, size, MemoryProtectionType::NO_ACCESS);
+	madvise(pointer, size, MADV_FREE);
 #endif
 }
 
@@ -196,16 +168,7 @@ data_ptr_t BlockAllocator::AllocateData(const idx_t size) {
 		CommitMemory(GetPointer(block_id), size);
 	}
 
-	// Allow read/write on this block again
-	const auto pointer = GetPointer(block_id);
-	ProtectMemory(pointer, size, MemoryProtectionType::ALLOW_READ_WRITE);
-
-	// Trigger page faults immediately
-	for (idx_t i = 0; i < size; i += 4096) {
-		pointer[i] = 0;
-	}
-
-	return pointer;
+	return GetPointer(block_id);
 }
 
 void BlockAllocator::FreeData(const data_ptr_t pointer, const idx_t size) {
@@ -246,17 +209,14 @@ void BlockAllocator::FreeInternal() {
 		return;
 	}
 
-	// Printer::Print("i got through");
-
+	uint32_t to_free_buffer[MAXIMUM_FREE_COUNT];
 	const auto count = to_free->q.try_dequeue_bulk(to_free_buffer, MAXIMUM_FREE_COUNT);
 	if (count == 0) {
 		return;
 	}
 
-	// Sort so we can coalesce freeing
+	// Sort so we can coalesce free calls
 	std::sort(to_free_buffer, to_free_buffer + count);
-
-	idx_t free_count = 0;
 
 	// Coalesce and free
 	uint32_t block_id_start = to_free_buffer[0];
@@ -269,7 +229,6 @@ void BlockAllocator::FreeInternal() {
 
 		// Previous block is the last contiguous block starting from block_id_start, free them in one go
 		FreeContiguousBlocks(block_id_start, previous_block_id);
-		free_count++;
 
 		// Continue coalescing from the current
 		block_id_start = current_block_id;
@@ -277,13 +236,9 @@ void BlockAllocator::FreeInternal() {
 
 	// Don't forget the last one
 	FreeContiguousBlocks(block_id_start, to_free_buffer[count - 1]);
-	free_count++;
-
-	// Printer::PrintF("freed %llu in %llu", count, free_count);
 
 	// Make freed blocks available to allocate again
 	touched->q.enqueue_bulk(to_free_buffer, count);
-	// Printer::PrintF("remaining %llu", to_free->q.size_approx());
 }
 
 void BlockAllocator::FreeContiguousBlocks(uint32_t block_id_start, uint32_t block_id_end_including) {
