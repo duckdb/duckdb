@@ -98,7 +98,10 @@ void CleanupState::Flush() {
 	// delete the tuples from all the indexes
 	try {
 		current_table->RemoveFromIndexes(context, row_identifiers, count);
-	} catch (...) { // NOLINT: ignore errors here
+	} catch (std::exception &ex) {
+		throw FatalException(ErrorData(ex).Message());
+	} catch (...) {
+		throw FatalException("unknown failure in CleanupState::Flush");
 	}
 
 	count = 0;
