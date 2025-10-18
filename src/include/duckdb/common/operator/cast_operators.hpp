@@ -1045,6 +1045,9 @@ struct TryCastToUUID {
 template <>
 DUCKDB_API bool TryCastToUUID::Operation(string_t input, hugeint_t &result, Vector &result_vector,
                                          CastParameters &parameters);
+template <>
+DUCKDB_API bool TryCastToUUID::Operation(hugeint_t input, hugeint_t &result, Vector &result_vector,
+                                         CastParameters &parameters);
 
 struct CastFromUUIDToBlob {
 	template <class SRC>
