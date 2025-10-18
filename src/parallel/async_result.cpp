@@ -6,14 +6,24 @@
 
 namespace duckdb {
 
+struct Counter {
+	explicit Counter(uint32_t size) : counter(size) {
+	}
+	atomic<uint32_t> counter;
+};
+
 class AsyncExecutionTask : public ExecutorTask {
 public:
-	AsyncExecutionTask(Executor &executor, unique_ptr<AsyncTask> &&async_task, InterruptState &interrupt_state)
-	    : ExecutorTask(executor, nullptr), async_task(std::move(async_task)), interrupt_state(interrupt_state) {
+	AsyncExecutionTask(Executor &executor, unique_ptr<AsyncTask> &&async_task, InterruptState &interrupt_state,
+	                   shared_ptr<Counter> counter)
+	    : ExecutorTask(executor, nullptr), async_task(std::move(async_task)), interrupt_state(interrupt_state),
+	      counter(std::move(counter)) {
 	}
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
 		async_task->Execute();
-		interrupt_state.Callback();
+		if (counter->counter-- == 0) {
+			interrupt_state.Callback();
+		}
 		return TaskExecutionResult::TASK_FINISHED;
 	}
 
@@ -23,7 +33,8 @@ public:
 
 private:
 	unique_ptr<AsyncTask> async_task;
-	InterruptState interrupt_state;
+	InterruptState &interrupt_state;
+	shared_ptr<Counter> counter;
 };
 
 AsyncResult::AsyncResult(AsyncResultType t) : result_type(t) {
@@ -53,14 +64,16 @@ AsyncResult &AsyncResult::operator=(AsyncResult &&other) noexcept {
 void AsyncResult::ScheduleTasks(InterruptState &interrupt_state, Executor &executor) {
 	D_ASSERT(result_type == AsyncResultType::BLOCKED);
 
-	if (async_tasks.size() > 1) {
-		throw InternalException("AsyncResult with more that 1 task found");
-	} else if (async_tasks.empty()) {
-		throw InternalException("AsyncResult with no task found");
+	if (async_tasks.empty()) {
+		throw InternalException("AsyncResultType with no task found");
 	}
 
-	auto task = make_uniq<AsyncExecutionTask>(executor, std::move(async_tasks[0]), interrupt_state);
-	TaskScheduler::GetScheduler(executor.context).ScheduleTask(executor.GetToken(), std::move(task));
+	shared_ptr<Counter> counter = make_shared_ptr<Counter>(async_tasks.size());
+
+	for (auto &async_task : async_tasks) {
+		auto task = make_uniq<AsyncExecutionTask>(executor, std::move(async_task), interrupt_state, counter);
+		TaskScheduler::GetScheduler(executor.context).ScheduleTask(executor.GetToken(), std::move(task));
+	}
 }
 
 } // namespace duckdb

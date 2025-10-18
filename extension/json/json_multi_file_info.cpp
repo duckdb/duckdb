@@ -545,6 +545,13 @@ AsyncResult JSONReader::Scan(ClientContext &context, GlobalTableFunctionState &g
 		switch (random_number) {
 		case 0:
 			tasks.push_back(make_uniq<SleepAsyncTask>(rand() % 32));
+			tasks.push_back(make_uniq<SleepAsyncTask>(rand() % 32));
+			tasks.push_back(make_uniq<SleepAsyncTask>(rand() % 32));
+			tasks.push_back(make_uniq<SleepAsyncTask>(rand() % 32));
+			tasks.push_back(make_uniq<SleepAsyncTask>(rand() % 32));
+			tasks.push_back(make_uniq<SleepAsyncTask>(rand() % 32));
+			tasks.push_back(make_uniq<SleepAsyncTask>(rand() % 32));
+			tasks.push_back(make_uniq<SleepAsyncTask>(rand() % 32));
 #ifndef AVOID_DUCKDB_DEBUG_ASYNC_THROW
 		case 1:
 			tasks.push_back(make_uniq<ThrowAsyncTask>(rand() % 32));
@@ -553,7 +560,6 @@ AsyncResult JSONReader::Scan(ClientContext &context, GlobalTableFunctionState &g
 			break;
 		}
 		if (!tasks.empty()) {
-			D_ASSERT(tasks.size() == 1);
 			return AsyncResult(std::move(tasks));
 		}
 	}
