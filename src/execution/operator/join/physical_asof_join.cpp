@@ -8,7 +8,6 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/operator/join/outer_join_marker.hpp"
-#include "duckdb/execution/operator/join/physical_range_join.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/event.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
@@ -366,6 +365,68 @@ AsOfGlobalSourceState::AsOfGlobalSourceState(ClientContext &client, const Physic
 	}
 }
 
+enum class SortKeyPrefixComparisonType : uint8_t { FIXED, VARCHAR, BLOB, STRUCT, LIST, ARRAY };
+
+struct SortKeyPrefixComparisonColumn {
+	SortKeyPrefixComparisonType type;
+	idx_t size;
+};
+
+struct SortKeyPrefixComparisonResult {
+	//! The column at which the sides are no longer equal,
+	//! e.g., Compare([42, 84], [42, 83]) would return {1, COMPARE_GREATERTHAN}
+	idx_t column_index;
+	//! Either COMPARE_EQUAL, COMPARE_LESSTHAN, COMPARE_GREATERTHAN
+	ExpressionType type;
+};
+
+struct SortKeyPrefixComparison {
+	unsafe_vector<SortKeyPrefixComparisonColumn> columns;
+
+	template <class SORT_KEY>
+	SortKeyPrefixComparisonResult Compare(const SORT_KEY &lhs, const SORT_KEY &rhs) const {
+		SortKeyPrefixComparisonResult result {0, ExpressionType::COMPARE_EQUAL};
+
+		auto lhs_copy = lhs;
+		string_t lhs_bytes;
+		lhs_copy.Deconstruct(lhs_bytes);
+		auto lhs_ptr = lhs_bytes.GetData();
+
+		auto rhs_copy = rhs;
+		string_t rhs_bytes;
+		rhs_copy.Deconstruct(rhs_bytes);
+		auto rhs_ptr = rhs_bytes.GetData();
+
+		for (const auto &col : columns) {
+			auto width = col.size;
+			int cmp = 1;
+			switch (col.type) {
+			case SortKeyPrefixComparisonType::FIXED:
+				break;
+			case SortKeyPrefixComparisonType::BLOB:
+			case SortKeyPrefixComparisonType::VARCHAR:
+				//	Include first null byte.
+				width = 1 + MinValue<size_t>(strlen(lhs_ptr), strlen(rhs_ptr));
+				break;
+			default:
+				break;
+			}
+
+			cmp = memcmp(lhs_ptr, rhs_ptr, width);
+			if (cmp) {
+				result.type = (cmp < 0) ? ExpressionType::COMPARE_LESSTHAN : ExpressionType::COMPARE_GREATERTHAN;
+				return result;
+			}
+
+			++result.column_index;
+			lhs_ptr += width;
+			rhs_ptr += width;
+		}
+
+		return result;
+	}
+};
+
 class AsOfProbeBuffer {
 public:
 	using Orders = vector<BoundOrderByNode>;
@@ -462,21 +523,19 @@ public:
 	idx_t right_pos; // ExternalBlockIteratorState doesn't know this...
 	unique_ptr<AsOfPayloadScanner> rhs_scanner;
 	DataChunk rhs_payload;
-	ExpressionExecutor rhs_executor;
 	DataChunk rhs_input;
-	DataChunk rhs_keys;
 	idx_t right_bin = 0;
 
 	//	Predicate evaluation
-	SelectionVector tail_sel;
-
 	idx_t lhs_match_count;
 	bool fetch_next_left;
+
+	SortKeyPrefixComparison prefix;
 };
 
 AsOfProbeBuffer::AsOfProbeBuffer(ClientContext &client, const PhysicalAsOfJoin &op, AsOfGlobalSourceState &gsource)
     : client(client), op(op), gsource(gsource), strict(IsStrictComparison(op.comparison_type)),
-      left_outer(IsLeftOuterJoin(op.join_type)), lhs_executor(client), rhs_executor(client), fetch_next_left(true) {
+      left_outer(IsLeftOuterJoin(op.join_type)), lhs_executor(client), fetch_next_left(true) {
 
 	lhs_keys.Initialize(client, op.join_key_types);
 	for (const auto &cond : op.conditions) {
@@ -492,13 +551,34 @@ AsOfProbeBuffer::AsOfProbeBuffer(ClientContext &client, const PhysicalAsOfJoin &
 	lhs_match_sel.Initialize();
 	left_outer.Initialize(STANDARD_VECTOR_SIZE);
 
-	//	If we have equality predicates, we need some more buffers.
-	if (op.conditions.size() > 1) {
-		tail_sel.Initialize();
-		rhs_keys.Initialize(client, op.join_key_types);
-		for (const auto &cond : op.conditions) {
-			rhs_executor.AddExpression(*cond.right);
+	//	If we have equality predicates, set up the prefix data.
+	for (idx_t i = 0; i < op.conditions.size() - 1; ++i) {
+		const auto &cond = op.conditions[i];
+		const auto &type = cond.left->return_type;
+		SortKeyPrefixComparisonColumn col;
+		col.size = DConstants::INVALID_INDEX;
+		switch (type.id()) {
+		case LogicalTypeId::VARCHAR:
+			col.type = SortKeyPrefixComparisonType::VARCHAR;
+			break;
+		case LogicalTypeId::BLOB:
+			col.type = SortKeyPrefixComparisonType::BLOB;
+			break;
+		case LogicalTypeId::STRUCT:
+			col.type = SortKeyPrefixComparisonType::STRUCT;
+			break;
+		case LogicalTypeId::LIST:
+			col.type = SortKeyPrefixComparisonType::LIST;
+			break;
+		case LogicalTypeId::ARRAY:
+			col.type = SortKeyPrefixComparisonType::ARRAY;
+			break;
+		default:
+			col.type = SortKeyPrefixComparisonType::FIXED;
+			col.size = 1 + GetTypeIdSize(type.InternalType());
+			break;
 		}
+		prefix.columns.emplace_back(col);
 	}
 }
 
@@ -712,10 +792,13 @@ void AsOfProbeBuffer::ResolveJoin(bool *found_match, idx_t *matches) {
 		}
 		right_pos = --first;
 
-		//	TODO: Check partitions for strict equality
-		// 		if (right_group->ComparePartitions(*left_itr, *right_itr)) {
-		// 			continue;
-		// 		}
+		//	Check partitions for strict equality
+		if (!prefix.columns.empty()) {
+			const auto cmp = prefix.Compare(left_key[left_pos], right_key[right_pos]);
+			if (cmp.column_index < prefix.columns.size()) {
+				continue;
+			}
+		}
 
 		// Emit match data
 		if (found_match) {
@@ -785,45 +868,6 @@ void AsOfProbeBuffer::ResolveComplexJoin(ExecutionContext &context, DataChunk &c
 		target.Reference(source);
 	}
 	chunk.SetCardinality(lhs_match_count);
-
-	//	Filter out partition mismatches
-	const auto equal_cols = op.conditions.size() - 1;
-	if (equal_cols) {
-		//	Prepare the lhs keys
-		if (lhs_match_count < lhs_keys.size()) {
-			lhs_keys.Slice(lhs_match_sel, lhs_match_count);
-		}
-
-		rhs_keys.Reset();
-		rhs_executor.Execute(rhs_input, rhs_keys);
-
-		auto sel = FlatVector::IncrementalSelectionVector();
-		auto tail_count = lhs_match_count;
-		for (size_t cmp_idx = 0; cmp_idx < equal_cols; ++cmp_idx) {
-			auto &left = lhs_keys.data[cmp_idx];
-			auto &right = rhs_keys.data[cmp_idx];
-			if (tail_count < rhs_keys.size()) {
-				left.Slice(*sel, tail_count);
-				right.Slice(*sel, tail_count);
-			}
-			tail_count = PhysicalRangeJoin::SelectJoinTail(op.conditions[cmp_idx].comparison, left, right, sel,
-			                                               tail_count, &tail_sel);
-			sel = &tail_sel;
-		}
-
-		//	Did anything get filtered out?
-		if (tail_count < lhs_match_count) {
-			if (tail_count == 0) {
-				// Need to reset here otherwise we may use the non-flat chunk when constructing LEFT/OUTER
-				chunk.Reset();
-				lhs_match_count = tail_count;
-			} else {
-				chunk.Slice(*sel, tail_count);
-				//	Slice lhs_match_sel to the remaining lhs rows
-				lhs_match_count = lhs_match_sel.SliceInPlace(*sel, tail_count);
-			}
-		}
-	}
 
 	//	Update the match masks for the rows we ended up with
 	left_outer.Reset();
