@@ -458,26 +458,29 @@ bool CheckExclusionList(StarExpression &expr, const QualifiedColumnName &qualifi
 		info.excluded_qualified_columns.insert(qualified_name);
 		return true;
 	}
-	auto entry = expr.replace_list.find(qualified_name.column);
-	if (entry != expr.replace_list.end()) {
-		// Check if we've already added the replacement for this column
-		if (info.replaced_columns.find(entry->first) == info.replaced_columns.end()) {
-			auto new_entry = entry->second->Copy();
-			new_entry->SetAlias(entry->first);
-			info.excluded_columns.insert(entry->first);
-			info.new_select_list.push_back(std::move(new_entry));
-			info.replaced_columns.insert(entry->first);
-		}
-		return true;
-	}
 	return false;
 }
 
-void HandleRename(StarExpression &expr, const QualifiedColumnName &qualified_name, ParsedExpression &new_expr) {
+bool HandleRename(StarExpression &expr, const QualifiedColumnName &qualified_name,
+                  unique_ptr<ParsedExpression> &new_expr, ExclusionListInfo &info) {
+	auto replace_entry = expr.replace_list.find(qualified_name.column);
+	if (replace_entry != expr.replace_list.end()) {
+		if (info.replaced_columns.find(replace_entry->first) == info.replaced_columns.end()) {
+			new_expr = replace_entry->second->Copy();
+			new_expr->SetAlias(replace_entry->first);
+			info.replaced_columns.insert(replace_entry->first);
+			info.excluded_columns.insert(replace_entry->first);
+		} else {
+			return false;
+		}
+	}
 	auto rename_entry = expr.rename_list.find(qualified_name);
 	if (rename_entry != expr.rename_list.end()) {
-		new_expr.SetAlias(rename_entry->second);
+		if (new_expr) {
+			new_expr->SetAlias(rename_entry->second);
+		}
 	}
+	return true;
 }
 
 void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
@@ -512,26 +515,32 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 					// we have not! output the using column
 					if (!using_binding.primary_binding.IsSet()) {
 						// no primary binding: output a coalesce
-						auto coalesce = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
+						auto coalesce_ptr = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
 						for (auto &child_binding : using_binding.bindings) {
-							coalesce->children.push_back(make_uniq<ColumnRefExpression>(column_name, child_binding));
+							coalesce_ptr->children.push_back(
+							    make_uniq<ColumnRefExpression>(column_name, child_binding));
 						}
-						coalesce->SetAlias(column_name);
-						HandleRename(expr, qualified_column, *coalesce);
-						new_select_list.push_back(std::move(coalesce));
+						coalesce_ptr->SetAlias(column_name);
+						unique_ptr<ParsedExpression> coalesce = std::move(coalesce_ptr);
+						if (HandleRename(expr, qualified_column, coalesce, exclusion_info)) {
+							new_select_list.push_back(std::move(coalesce));
+						}
 					} else {
 						// primary binding: output the qualified column ref
-						auto new_expr = make_uniq<ColumnRefExpression>(column_name, using_binding.primary_binding);
-						HandleRename(expr, qualified_column, *new_expr);
-						new_select_list.push_back(std::move(new_expr));
+						unique_ptr<ParsedExpression> new_expr =
+						    make_uniq<ColumnRefExpression>(column_name, using_binding.primary_binding);
+						if (HandleRename(expr, qualified_column, new_expr, exclusion_info)) {
+							new_select_list.push_back(std::move(new_expr));
+						}
 					}
 					handled_using_columns.insert(using_binding);
 					continue;
 				}
-				auto new_expr =
+				unique_ptr<ParsedExpression> new_expr =
 				    CreateColumnReference(binding_alias, column_name, ColumnBindType::DO_NOT_EXPAND_GENERATED_COLUMNS);
-				HandleRename(expr, qualified_column, *new_expr);
-				new_select_list.push_back(std::move(new_expr));
+				if (HandleRename(expr, qualified_column, new_expr, exclusion_info)) {
+					new_select_list.push_back(std::move(new_expr));
+				}
 			}
 		}
 	} else {
@@ -568,9 +577,10 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 					continue;
 				}
 				column_names[2] = child.first;
-				auto new_expr = make_uniq<ColumnRefExpression>(column_names);
-				HandleRename(expr, qualified_name, *new_expr);
-				new_select_list.push_back(std::move(new_expr));
+				unique_ptr<ParsedExpression> new_expr = make_uniq<ColumnRefExpression>(column_names);
+				if (HandleRename(expr, qualified_name, new_expr, exclusion_info)) {
+					new_select_list.push_back(std::move(new_expr));
+				}
 			}
 		} else {
 			for (auto &column_name : column_names) {
@@ -578,10 +588,12 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 				if (CheckExclusionList(expr, qualified_name, exclusion_info)) {
 					continue;
 				}
-				auto new_expr =
+				unique_ptr<ParsedExpression> new_expr =
 				    CreateColumnReference(binding_alias, column_name, ColumnBindType::DO_NOT_EXPAND_GENERATED_COLUMNS);
-				HandleRename(expr, qualified_name, *new_expr);
-				new_select_list.push_back(std::move(new_expr));
+				if (HandleRename(expr, qualified_name, new_expr, exclusion_info)) {
+					new_select_list.push_back(std::move(new_expr));
+				}
+
 			}
 		}
 	}
