@@ -52,7 +52,7 @@ public:
 	};
 
 	CacheSectorizedBloomFilter() = default;
-	void Initialize(ClientContext &context_p, idx_t est_num_rows);
+	void Initialize(ClientContext &context_p, idx_t number_of_rows);
 
 	void InsertHashes(const Vector &hashes, idx_t count) const;
 

@@ -14,11 +14,11 @@ static constexpr id_t SELECTIVITY_N_VECTORS_TO_CHECK = 20;
 // if the selectivity is higher than this, we disable the BF
 static constexpr double SELECTIVITY_THRESHOLD = 0.33;
 
-void CacheSectorizedBloomFilter::Initialize(ClientContext &context_p, idx_t est_num_rows) {
+void CacheSectorizedBloomFilter::Initialize(ClientContext &context_p, idx_t number_of_rows) {
 
 	BufferManager &buffer_manager = BufferManager::GetBufferManager(context_p);
 
-	const idx_t min_bits = std::max<idx_t>(MIN_NUM_BITS, est_num_rows * MIN_NUM_BITS_PER_KEY);
+	const idx_t min_bits = std::max<idx_t>(MIN_NUM_BITS, number_of_rows * MIN_NUM_BITS_PER_KEY);
 	num_sectors = std::min(NextPowerOfTwo(min_bits) >> LOG_SECTOR_SIZE, MAX_NUM_SECTORS);
 
 	buf_ = buffer_manager.GetBufferAllocator().Allocate(64 + num_sectors * sizeof(uint32_t));
