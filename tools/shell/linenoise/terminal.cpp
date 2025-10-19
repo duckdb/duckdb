@@ -451,7 +451,13 @@ EscapeSequence Terminal::ReadEscapeSequence(int ifd) {
 		}
 		break;
 	case 5:
-		if (memcmp(seq, "[1;5C", 5) == 0 || memcmp(seq, "[1;3C", 5) == 0) {
+		if (memcmp(seq, "[1;5A", 5) == 0) {
+			// [1;5A: ctrl-up
+			return EscapeSequence::CTRL_UP;
+		} else if (memcmp(seq, "[1;5B", 5) == 0) {
+			// [1;5B: ctrl-down
+			return EscapeSequence::CTRL_DOWN;
+		} else if (memcmp(seq, "[1;5C", 5) == 0 || memcmp(seq, "[1;3C", 5) == 0) {
 			// [1;5C: move word right
 			return EscapeSequence::CTRL_MOVE_FORWARDS;
 		} else if (memcmp(seq, "[1;5D", 5) == 0 || memcmp(seq, "[1;3D", 5) == 0) {
